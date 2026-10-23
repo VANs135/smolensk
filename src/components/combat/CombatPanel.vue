@@ -110,14 +110,10 @@ const retreatPlan = computed(() => mapView.retreatSidePlan)
 /** 正在选落点的那一枚（点行即切换；地图点格后自动跳到下一枚未选的） */
 const retreatUnit = computed(() => mapView.retreatUnit)
 
-/* ── 9.12g 推进候选勾选 ── */
-
-function toggleAdvanceUnit(unitId: string): void {
-  const current = workbench.combatInputs.advanceUnitIds
-  workbench.combatInputs.advanceUnitIds = current.includes(unitId)
-    ? current.filter((id) => id !== unitId)
-    : [...current, unitId]
-}
+/*
+ * 9.12g 推进候选勾选：**入口已收口到地图小窗**（批 F·E4），勾选动作上移到 store
+ * （`workbench.toggleAdvanceUnit`），本面板只读 `combatAdvanceChoices` 展示。
+ */
 
 /* ── 快捷模式（9.9 一键查表）用 ── */
 
@@ -203,18 +199,6 @@ const attackerArItems = computed(() =>
 /** 2.3b：NKVD 边防团在场时候选已收窄到它们，故阵列里出现的就是"唯一能选的那几个" */
 const defenderArItems = computed(() =>
   arItems(workbench.combatDefenderArChoices, workbench.combatInputs.defenderArUnitId),
-)
-
-/** 9.12g-A / 9.12b：战后推进的候选（未付补给 / 不可移动者灰显，原因由 store 给） */
-const advanceItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.combatAdvanceChoices.map((choice) => ({
-    id: choice.unit.instanceId,
-    imageUrl: counterImageUrlOf(choice.unit),
-    name: `${choice.unit.name}（军力 ${choice.unit.steps}）@ ${hexLabel(choice.unit.hex)}`,
-    selected: choice.selected,
-    disabledReason: choice.disabledReason,
-    hex: choice.unit.hex,
-  })),
 )
 
 /** 快捷模式（9.9）的守方行动值阵列 */
@@ -852,24 +836,25 @@ const quickDefenderArItems = computed(() =>
             9.12g-A：只有**付了战斗补给**的单位（含战斗值为零的）才能推进；9.13：取得进击标记须满足
             攻击阶段、非 DG、非突袭、攻方把全部选项选为军力损失等条件。
           </p>
-          <!-- B14c：推进候选＝**算子图阵列**（原来是逐单位文字复选框；未付补给/不可移动者灰显） -->
-          <CounterPicker
-            title="可推进单位（点一枚即选中 / 再点取消）"
-            hint="9.12g-A：只有付了战斗补给的攻击单位才能推进（含战斗值为零者）；9.12b：不可移动者不得推进"
-            :items="advanceItems"
-            :size="40"
-            @pick="toggleAdvanceUnit($event)"
-            @hover="hoverUnit"
-          />
-          <div class="row">
-            <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatAdvance()">
-              {{
-                workbench.combatAdvanceMandatory
-                  ? '收束突袭推进（9.12g-D）'
-                  : '确认战后推进（9.12g）'
-              }}
-            </BaseButton>
-          </div>
+          <!--
+            批 F·E4：**推进入口唯一** ⇒ 本面板的推进块改为**只读**，勾选与确认都在
+            **地图上的推进格小窗**（`MapActionPopover`）里做（规则书里推进的对象就是那个格）。
+            9.12g-D 的逐单位勾选因此没有丢失，只是换到了地图上。
+          -->
+          <p class="muted">
+            勾选「哪些单位推进」与确认收束 ⇒ 请点地图上高亮的推进格（就近小窗）。突袭（9.12g-D）
+            由系统自动收束，无需操作。
+          </p>
+          <ul class="list">
+            <li
+              v-for="choice in workbench.combatAdvanceChoices"
+              :key="choice.unit.instanceId"
+              class="num"
+            >
+              {{ choice.unit.name }}（军力 {{ choice.unit.steps }}）——
+              {{ choice.disabledReason ?? (choice.selected ? '已选推进' : '可推进') }}
+            </li>
+          </ul>
           <p v-if="state.finished" class="ok">
             <BaseTag kind="success">战斗结束</BaseTag>
             9.2 九步流程已走完。

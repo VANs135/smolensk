@@ -430,16 +430,23 @@ function pickDump(): void {
             · 已选 {{ advanceChosen.length }} 个推进单位
           </span>
         </p>
+        <!--
+          9.12g-D：「由拥有者玩家选择**哪些**攻击单位进行推进（如果有的话）」
+          ⇒ 逐单位勾选必须存在（不可只有"全推 / 全不推"）；批 F·E4 把它收口到**地图小窗**这一处。
+          灰显者（9.12g-A 未付战斗补给 / 9.12b 不可移动）点不动，原因由 store 给。
+        -->
         <ul class="list">
-          <li v-for="row in workbench.combatAdvanceCandidates" :key="row.id" class="num">
-            {{ row.label
-            }}{{
-              row.immobile
-                ? '（任何模式下都不可移动 ⇒ 不得推进，9.12b）'
-                : row.paid
-                  ? '（已付战斗补给）'
-                  : '（未付 ⇒ 不可推进，9.12g-A）'
-            }}
+          <li v-for="choice in workbench.combatAdvanceChoices" :key="choice.unit.instanceId">
+            <BaseButton
+              variant="ghost"
+              size="sm"
+              :disabled="choice.disabledReason !== null"
+              @click="workbench.toggleAdvanceUnit(choice.unit.instanceId)"
+            >
+              {{ choice.selected ? '☑' : '☐' }} {{ choice.unit.name }}（军力
+              {{ choice.unit.steps }}）
+              <span v-if="choice.disabledReason !== null"> · {{ choice.disabledReason }}</span>
+            </BaseButton>
           </li>
         </ul>
         <div class="row">

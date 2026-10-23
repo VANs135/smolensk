@@ -2498,9 +2498,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', '防御方尚未离开该格（9.12g：全被消灭或撤退后才可推进）', '9.12g')
       return false
     }
-    const eligible = combatAdvanceCandidates.value.filter((item) => item.paid)
+    /*
+     * 9.12g-A + 9.12b：可推进者＝**付了战斗补给**且**并非任何模式下都不可移动**。
+     * ★ 修前只筛 `paid`（漏了 9.12b）⇒ 会把不可移动单位也选进 `advanceUnitIds`，
+     *   随后 `confirmCombatAdvance` 被引擎以 `immobileUnitCannotAdvance` 拒（9.12b）
+     *   ⇒ 玩家点「推进到该格」后再点确认却报错。判据与 `resolveAdvanceAfterCombat` 对齐。
+     */
+    const eligible = combatAdvanceCandidates.value.filter(
+      (item) => item.paid && item.immobile !== true,
+    )
     if (eligible.length === 0) {
-      pushLog('warning', '没有付过战斗补给的攻击单位可以推进（9.12g-A）', '9.12g-A')
+      pushLog(
+        'warning',
+        combatAdvanceCandidates.value.length === 0
+          ? '没有可推进的攻击单位（9.12g）'
+          : '没有付过战斗补给、且在任何模式下都非不可移动的攻击单位可以推进（9.12g-A / 9.12b）',
+        '9.12g-A',
+      )
       return false
     }
     combatInputs.value = { ...combatInputs.value, advanceUnitIds: eligible.map((item) => item.id) }
@@ -2511,6 +2525,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** C16：放弃推进（9.12g：常规战斗可都不推） */
   function clearAdvanceNow(): void {
     combatInputs.value = { ...combatInputs.value, advanceUnitIds: [] }
+  }
+
+  /**
+   * 9.12g-D：逐单位勾选推进单位 —— 「由拥有者玩家选择**哪些**攻击单位进行推进（如果有的话）」
+   *
+   * 只写 `combatInputs.advanceUnitIds`；能不能推由引擎在 `confirmCombatAdvance` 里裁定
+   * （9.12g-A 未付战斗补给 / 9.12b 不可移动 ⇒ 界面灰显，判据见 `combatAdvanceChoices`）。
+   * 突袭（`mandatory`）下引擎一律取全部合格单位，勾选不影响结果（8.0 / 9.12g-D）。
+   */
+  function toggleAdvanceUnit(unitId: string): void {
+    const current = combatInputs.value.advanceUnitIds
+    combatInputs.value = {
+      ...combatInputs.value,
+      advanceUnitIds: current.includes(unitId)
+        ? current.filter((id) => id !== unitId)
+        : [...current, unitId],
+    }
   }
 
   /**
@@ -18570,6 +18601,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     clearRetreatDestinationNow,
     advanceNow,
     clearAdvanceNow,
+    toggleAdvanceUnit,
     pickCombatSupplyDump,
     clearCombatSupplyDump,
     setBattleMode,

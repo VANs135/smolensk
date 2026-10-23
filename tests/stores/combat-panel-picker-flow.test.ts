@@ -358,6 +358,43 @@ describe('B14c：战后推进阵列（9.12g-A / 9.12b）', () => {
     expect(store.confirmCombatAdvance()).toBe(false)
     expect(store.combatError).toMatchObject({ rule: '9.12g-A' })
   })
+
+  /*
+   * 批 F·E4：推进的逐单位勾选动作上移到 store（`workbench.toggleAdvanceUnit`），
+   * 面板与小窗共用一份。9.12g-D 的「由拥有者玩家选择**哪些**攻击单位进行推进」是规则要求，
+   * 故入口换了地方、能力必须还在 —— 本例钉住「点一次进、再点一次出，且引擎只推被选中的那些」。
+   */
+  it('批 F·E4：`toggleAdvanceUnit` 逐单位勾选（点进 / 点出），且引擎只推被选中者', () => {
+    const store = newStore()
+    // 三枚攻方（强）：战果再差也留得下人来推进，故断言不随骰点飘
+    setupBattle(store, 2)
+    driveToAdvanceStep(store)
+
+    const all = store.combatAdvanceChoices.map((choice) => choice.unit.instanceId)
+    expect(all.length).toBeGreaterThanOrEqual(2)
+    expect(store.combatInputs.advanceUnitIds).toEqual([])
+
+    // 点第一枚 ⇒ 进
+    const first = all[0]!
+    store.toggleAdvanceUnit(first)
+    expect(store.combatInputs.advanceUnitIds).toEqual([first])
+    expect(
+      store.combatAdvanceChoices.find((item) => item.unit.instanceId === first)?.selected,
+    ).toBe(true)
+
+    // 再点一次 ⇒ 出（幂等往返）
+    store.toggleAdvanceUnit(first)
+    expect(store.combatInputs.advanceUnitIds).toEqual([])
+
+    // 只选第二枚 ⇒ 引擎只推它（9.12g-D 的"哪些"落在结果上，不是摆设）
+    const second = all[1]!
+    store.toggleAdvanceUnit(second)
+    expect(store.confirmCombatAdvance()).toBe(true)
+    expect(store.combatState?.finished).toBe(true)
+    const advanced = store.combatState?.advance?.advanceUnitIds ?? []
+    expect(advanced).toEqual([second])
+    expect(advanced).not.toContain(first)
+  })
 })
 
 describe('B14c：战斗面板的替换（源码守卫）', () => {
@@ -372,9 +409,32 @@ describe('B14c：战斗面板的替换（源码守卫）', () => {
     expect(panel).not.toContain('<select v-model="workbench.battleDefenderArId"')
     // 点选直连 store 的动作 / 输入项
     expect(panel).toContain('@pick="workbench.toggleCombatSupplyAttacker($event)"')
-    expect(panel).toContain('@pick="toggleAdvanceUnit($event)"')
     expect(panel).toContain('@pick="workbench.combatInputs.attackerArUnitId = $event"')
     expect(panel).toContain('@pick="workbench.combatInputs.defenderArUnitId = $event"')
+  })
+
+  /*
+   * ★ 契约变更（批 F·E4，2026-10-24）：**推进入口唯一** ⇒ 推进的逐单位勾选从本面板
+   *   收口到**地图小窗**（`MapActionPopover`），本面板的推进块改为**只读**。
+   *   修前本例钉 `@pick="toggleAdvanceUnit($event)"` 在面板里；现改为钉「面板不再挂这个入口，
+   *   但能力没丢——勾选动作上移到 store、由小窗调用」。
+   *   9.12g-D 的「由玩家选择**哪些**单位推进」是规则要求，故只准搬、**不准删**。
+   */
+  it('批 F·E4：推进勾选**唯一入口在地图小窗**（面板只读，但能力未丢）', () => {
+    expect(panel).not.toContain('@pick="toggleAdvanceUnit($event)"')
+    expect(panel).toContain('workbench.combatAdvanceChoices')
+    // 面板只展示、不含推进的确认按钮
+    expect(panel).not.toContain('@click="workbench.confirmCombatAdvance()"')
+
+    const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
+    // 小窗里逐单位勾选直连 store（灰显者点不动 ⇒ 9.12g-A / 9.12b 由 store 给原因）
+    expect(popover).toContain('workbench.combatAdvanceChoices')
+    expect(popover).toContain('workbench.toggleAdvanceUnit(')
+    expect(popover).toContain(':disabled="choice.disabledReason !== null"')
+
+    // 勾选动作上移到 store（面板与小窗共用一份，不各写一遍）
+    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    expect(store).toContain('function toggleAdvanceUnit(')
   })
 
   it('候选与灰显原因取自 store（面板不自己筛「付过补给/不可移动」）', () => {
