@@ -347,3 +347,37 @@ describe('W7 C16：撤退落点 / 推进格 / 补给站 / 飞机令牌的绘制'
     expect(rec.texts).toContain('A')
   })
 })
+
+describe('条 27：SP 补给站令牌画出实数（最近面额图 + 角标）', () => {
+  const stackOverlay = (tokens: UnitToken[]): MovementOverlay => ({
+    tokens,
+    reachable: [],
+    path: [],
+    startHex: null,
+    selectedIds: [],
+  })
+
+  it('非标总额（9 SP）在令牌上画出实数标签', () => {
+    const { ctx, rec } = makeCtx()
+    const sp: UnitToken = {
+      ...token(NEAR, 'sp:36,17'),
+      noncombatKind: 'sp',
+      spPoints: 9,
+      label: '9 SP',
+    }
+    drawMovementOverlay(ctx, stackOverlay([sp]), 1)
+    expect(rec.texts).toContain('9 SP')
+  })
+
+  it('同格多站合并后的总额（15 SP）与单站都照样画标签', () => {
+    const { ctx, rec } = makeCtx()
+    const sp: UnitToken = {
+      ...token(NEAR, 'sp:36,17'),
+      noncombatKind: 'sp',
+      spPoints: 15,
+      label: '15 SP',
+    }
+    drawMovementOverlay(ctx, stackOverlay([sp]), 1)
+    expect(rec.texts).toContain('15 SP')
+  })
+})

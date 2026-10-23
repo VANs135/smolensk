@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag } from '@/components/base'
 import UiField from '@/components/UiField.vue'
+import { useUiMode } from '@/components/ui-mode'
 import { formations } from '@/data'
 import type { Side } from '@/data'
 import type { BoxView, ScenarioDrawBoxView } from '@/engine/rules'
@@ -23,6 +24,9 @@ import { useContainersStore, useWorkbenchStore } from '@/stores'
  */
 
 const containers = useContainersStore()
+
+/** 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输） */
+const uiMode = useUiMode()
 const workbench = useWorkbenchStore()
 
 /** 返场落点（死亡堆 → 图；13.5a / 1.6c 的落点规则见 2.1 / 3.1） */
@@ -744,6 +748,7 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
       <label class="field">
         2.3a Alarm 单位（单位库 `alarmLimit` 自动取；手输即临时覆盖，清空即回到数据）
         <input
+          v-if="uiMode === 'verify'"
           class="input path-input"
           placeholder="逗号分隔（留空 = 用数据里的三种）"
           :value="(containers.alarmUnitIds ?? []).join(',')"
@@ -753,6 +758,9 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
               .filter((item) => item !== '')
           "
         />
+        <span v-else class="ui-field-readonly">
+          {{ (containers.alarmUnitIds ?? []).join(',') || '（数据默认）' }}
+        </span>
       </label>
       <BaseButton variant="ghost" size="sm" @click="containers.resetContainers()"
         >重置盒账本</BaseButton
