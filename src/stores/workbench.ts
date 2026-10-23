@@ -4335,6 +4335,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     refitTargetBaseId.value === null ? [] : airRefitPayDumps.value(refitTargetBaseId.value),
   )
 
+  /**
+   * 条 4：**可整备的机场格**（地图高亮；15.1 / 15.1B；本轮补的 27 条核对缺口）
+   *
+   * 判据：**当前在 A 整备段** ∧ 本方基地 ∧ 本阶段尚未整备过 ∧ 格内有非激活飞机 ∧ 能拖到补给（1T）。
+   * 「整备完高亮消失」自动成立：整备后该基地进 `refitDoneBaseIds`、飞机转激活 ⇒ 两个条件都不再成立。
+   */
+  const refitAirbaseHexes = computed<readonly HexRef[]>(() => {
+    if (phase.value !== 'aircraftRefit') return []
+    return ownAirBases.value
+      .filter((base) => !refitDoneBaseIds.value.includes(base.id))
+      .filter((base) => airInactiveAtBase.value(base.id).length > 0)
+      .filter((base) => airRefitPayDumps.value(base.id).length > 0)
+      .map((base) => ({ col: base.hex.col, row: base.hex.row }))
+  })
+
   /** C9：本阶段已缩减过的基地（15.4；视图用） */
   const reducedBases = computed(() =>
     ownAirBases.value.filter((base) => reducedBaseIds.value.includes(base.id)),
@@ -19007,6 +19022,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 15.1 整备交互（点基地 → 勾飞机 → 点地图上的补给付款）
     refitBase,
     refitCandidates,
+    refitAirbaseHexes,
     refitSelectedIds,
     refitPayDumps,
     airReductionCandidates,

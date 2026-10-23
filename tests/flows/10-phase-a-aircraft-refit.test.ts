@@ -278,3 +278,35 @@ describe('Ⓐ 段闸：A 段不得出现其他环节的动作（2.2 / ACTIONS_BY
     expect(unit.movementEnded).toBe(false)
   })
 })
+
+describe('条 4：可整备机场格的地图投影（15.1 / 15.1B）', () => {
+  it('A 段有非激活机 + 可达补给 ⇒ 该基地格进 refitAirbaseHexes；整备后消失', () => {
+    const store = newConsole()
+    store.setAirActive(true)
+    setupRefitBase(store)
+    store.setPhase('aircraftRefit')
+
+    expect(store.refitAirbaseHexes).toContainEqual(CORE_HEX)
+    expect(store.refitBaseNow('base-1')).toBe(true)
+    // 整备后：飞机转激活 + 基地进 refitDoneBaseIds ⇒ 两个条件都不再成立 ⇒ 不再高亮
+    expect(store.refitAirbaseHexes).toHaveLength(0)
+  })
+
+  it('非整备段不高亮（C 移动段）', () => {
+    const store = newConsole()
+    store.setAirActive(true)
+    setupRefitBase(store)
+    store.setPhase('movement')
+    expect(store.refitAirbaseHexes).toHaveLength(0)
+  })
+
+  it('没有可达补给时不列（有非激活机也整备不了）', () => {
+    const store = newConsole()
+    store.setAirActive(true)
+    // 只摆基地 + 飞机，不加 SP
+    placeGround(store, airBaseRecord(undefined), CORE_HEX, 'axis', 'base-1')
+    placeAir(store, fighterRecord('axis'), CORE_HEX, 'axis', 'air-1', 'inactive')
+    store.setPhase('aircraftRefit')
+    expect(store.refitAirbaseHexes).toHaveLength(0)
+  })
+})

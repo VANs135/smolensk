@@ -407,6 +407,8 @@ export const useMapViewStore = defineStore('mapView', () => {
         setup.placing?.candidates ?? (setup.truckPickActive ? setup.truckPickHexes : null),
       // 15.1：整备付款的补给站候选（用户口径：与其它补给消耗一样，点地图上高亮的补给）
       refitPay: refitPayHints.value,
+      // 条 4：可整备机场格（15.1）——青蓝环，整备后随状态自动消失
+      refitAirbases: workbench.refitAirbaseHexes,
     }
   })
 

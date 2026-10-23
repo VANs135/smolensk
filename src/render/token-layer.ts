@@ -217,6 +217,14 @@ export interface MovementOverlay {
    */
   refitPay?: readonly SupplyPickHint[] | null
   /**
+   * 条 4：**可整备的机场格**（15.1/15.1B；本轮补的 27 条核对缺口）
+   *
+   * 判据在状态层 `workbench.refitAirbaseHexes`（本方基地 ∧ 本阶段未整备过 ∧ 有非激活机 ∧ 能拖到 1T）。
+   * 与付款来源的金黄方框**不同色**（青蓝实线环），让玩家先看到"哪些机场此刻能整备"；
+   * 整备后该基地进 `refitDoneBaseIds`、飞机转激活 ⇒ 下一帧自动不再高亮。
+   */
+  refitAirbases?: readonly HexRef[] | null
+  /**
    * 条 6（R3）：**可突围堆叠**高亮（12.8e）
    *
    * 突围环节里，能真正突围（过 `canBreakout` 判据）的单位所在格在此高亮——琥珀金实心环，
@@ -397,6 +405,9 @@ export const OVERLAY_PALETTE = {
   combatAttackable: 'rgba(176, 42, 38, 0.20)',
   combatAttackableEdge: 'rgba(176, 42, 38, 0.95)',
   combatAttackableText: '#8a1f1c',
+  /** 条 4：可整备机场格（15.1）——青蓝环，与付款来源金黄、可攻击暖红区分 */
+  refitAirbase: 'rgba(26, 116, 138, 0.18)',
+  refitAirbaseEdge: 'rgba(26, 116, 138, 0.95)',
 } as const
 
 /**
@@ -489,6 +500,9 @@ export function cullOverlay(
     ...(overlay.refitPay === undefined || overlay.refitPay === null
       ? { refitPay: overlay.refitPay }
       : { refitPay: overlay.refitPay.filter((hint) => visible(hint.hex)) }),
+    ...(overlay.refitAirbases === undefined || overlay.refitAirbases === null
+      ? { refitAirbases: overlay.refitAirbases }
+      : { refitAirbases: overlay.refitAirbases.filter((hex) => visible(hex)) }),
     ...(overlay.supply === undefined || overlay.supply === null
       ? { supply: overlay.supply }
       : {
@@ -587,6 +601,24 @@ export function drawMovementOverlay(
       ctx.fill()
       ctx.strokeStyle = OVERLAY_PALETTE.combatAttackableEdge
       ctx.setLineDash([4 / scale, 3 / scale])
+      ctx.stroke()
+      ctx.setLineDash([])
+    }
+  }
+
+  // ①-a2 条 4：可整备机场格（15.1）——青蓝点线环（与付款来源金黄、可攻击暖红区分）
+  if (
+    visible.refitAirbases !== undefined &&
+    visible.refitAirbases !== null &&
+    visible.refitAirbases.length > 0
+  ) {
+    ctx.lineWidth = 3 / scale
+    for (const hex of visible.refitAirbases) {
+      traceHex(ctx, hex)
+      ctx.fillStyle = OVERLAY_PALETTE.refitAirbase
+      ctx.fill()
+      ctx.strokeStyle = OVERLAY_PALETTE.refitAirbaseEdge
+      ctx.setLineDash([2 / scale, 2 / scale])
       ctx.stroke()
       ctx.setLineDash([])
     }

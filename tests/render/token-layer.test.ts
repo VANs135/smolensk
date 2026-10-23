@@ -381,3 +381,19 @@ describe('条 27：SP 补给站令牌画出实数（最近面额图 + 角标）'
     expect(rec.texts).toContain('15 SP')
   })
 })
+
+describe('条 4：可整备机场格高亮（15.1）', () => {
+  it('画出青蓝点线环（有描边、不抛错）', () => {
+    const { ctx, rec } = makeCtx()
+    const overlay: MovementOverlay = {
+      tokens: [],
+      reachable: [],
+      path: [],
+      startHex: null,
+      selectedIds: [],
+      refitAirbases: [NEAR],
+    }
+    drawMovementOverlay(ctx, overlay, 1)
+    expect(rec.strokes).toBeGreaterThan(0)
+  })
+})
