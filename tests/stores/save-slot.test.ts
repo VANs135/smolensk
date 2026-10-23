@@ -469,10 +469,11 @@ describe('B48 P0：存档带盘面（摆子 → 存 → 读 → 盘面一致）'
     // 存档 payload 里**有** board —— 修的正是"修前这里什么都没有"
     expect(boardPayloadOf(adapter)).toBeDefined()
     /*
-     * 契约变更（**不是放宽**）：批 A 切片 3 往字段表里加了 9.1c 的两个攻击账本 ⇒
-     * `BOARD_SNAPSHOT_VERSION` 按声明递增到 2（旧档一律拒读，见 store 里那行注释）。
+     * 契约变更（**不是放宽**）：批 A 切片 3 加了 9.1c 两个攻击账本 ⇒ 版本 2；
+     * 第六批条 5 又加到达"已投放"账本（`arrivalPlacedKey`/`arrivalPlacedRaw`）⇒ 版本递增到 3
+     * （旧档一律拒读，见 store 里那行注释）。
      */
-    expect(boardPayloadOf(adapter)['version']).toBe(2)
+    expect(boardPayloadOf(adapter)['version']).toBe(3)
 
     // 把盘面改乱：清算子、清补给站、把城市账本改回去
     workbench.units.splice(0, workbench.units.length)

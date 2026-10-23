@@ -18444,6 +18444,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ['specialPending', specialPending],
     ['breakoutReturns', breakoutReturns],
     ['arrivalHexOverrides', arrivalHexOverrides],
+    // 13.6：到达"已投放"账本（不存则读档后同一条目可再放一次 ⇒ 凭空多出算子）
+    ['arrivalPlacedKey', arrivalPlacedKey],
+    ['arrivalPlacedRaw', arrivalPlacedRaw],
   ]
 
   /**
@@ -18452,8 +18455,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ★ 2（2026-09-18，批 A 切片 3）：字段表新增 9.1c 的两个攻击账本 ⇒ 按本行的纪律递增。
    *   递增的代价是**旧存档一律拒读**（"先验后改"，不会把盘面读成半截）；不递增则更糟：
    *   旧构建读到含新字段的档会**静默丢掉**这两个账本（它的字段表里没有这两项，逐项在场检查放行）。
+   *
+   * ★ 3（2026-10-24，第六批条 5）：字段表新增到达"已投放"账本（`arrivalPlacedKey`/`arrivalPlacedRaw`）
+   *   —— 不存则在**增援段中途存档→读档**后，同一条目可再投放一次（凭空多出算子）⇒ 必须进档。
    */
-  const BOARD_SNAPSHOT_VERSION = 2
+  const BOARD_SNAPSHOT_VERSION = 3
 
   /**
    * 抓取盘面快照
