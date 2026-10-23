@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
+import UiField from '@/components/UiField.vue'
 import {
   aircraftRecordImageUrlOf,
   counterImageUrlOf,
@@ -476,12 +477,12 @@ function setAircraftRoll(unitId: string, value: number): void {
           <div class="row">
             <label v-for="unit in lossTargets" :key="unit.instanceId" class="field">
               {{ unit.name }}
-              <input
+              <UiField
                 class="input"
                 type="number"
                 min="0"
-                :value="lossValue(unit.instanceId)"
-                @input="setLoss(unit.instanceId, Number(($event.target as HTMLInputElement).value))"
+                :model-value="lossValue(unit.instanceId)"
+                @update:model-value="setLoss(unit.instanceId, Number($event))"
               />
             </label>
           </div>
@@ -498,8 +499,8 @@ function setAircraftRoll(unitId: string, value: number): void {
             </label>
             <label class="field">
               空军基地当前等级（10.0c-A）
-              <input
-                v-model.number="workbench.barrageInputs.baseLevel"
+              <UiField
+                v-model="workbench.barrageInputs.baseLevel"
                 class="input"
                 type="number"
                 min="1"
@@ -512,8 +513,8 @@ function setAircraftRoll(unitId: string, value: number): void {
             </label>
             <label class="field">
               港口既有伤害（10.0c-B）
-              <input
-                v-model.number="workbench.barrageInputs.portDamageBefore"
+              <UiField
+                v-model="workbench.barrageInputs.portDamageBefore"
                 class="input"
                 type="number"
                 min="0"
@@ -525,18 +526,13 @@ function setAircraftRoll(unitId: string, value: number): void {
           <div class="row">
             <label v-for="unit in aircraftRollTargets" :key="unit.instanceId" class="field">
               {{ unit.name }}
-              <input
+              <UiField
                 class="input"
                 type="number"
                 min="1"
                 max="6"
-                :value="aircraftValue(unit.instanceId)"
-                @input="
-                  setAircraftRoll(
-                    unit.instanceId,
-                    Number(($event.target as HTMLInputElement).value),
-                  )
-                "
+                :model-value="aircraftValue(unit.instanceId)"
+                @update:model-value="setAircraftRoll(unit.instanceId, Number($event))"
               />
             </label>
           </div>

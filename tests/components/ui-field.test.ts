@@ -43,7 +43,7 @@ describe('条 24：正式/验证模式门控', () => {
     // 逐行核对：凡以 `<input` 起头且非 checkbox 的，必须紧邻 v-if="uiMode === 'verify'"。
     const lines = src.split('\n')
     for (let i = 0; i < lines.length; i += 1) {
-      if (!/^\s*<input\b/.test(lines[i])) continue
+      if (!/^\s*<input\b/.test(lines[i] ?? '')) continue
       const block = lines.slice(i, i + 8).join('\n')
       const isCheckboxOrRadio = /type="(checkbox|radio)"/.test(block)
       if (isCheckboxOrRadio) continue
@@ -53,5 +53,19 @@ describe('条 24：正式/验证模式门控', () => {
         /v-if="uiMode === 'verify'"/,
       )
     }
+  })
+
+  it('CombatPanel：攻/守可用 T 两个数值已走 UiField', () => {
+    const src = read('src/components/combat/CombatPanel.vue')
+    expect(src).toMatch(/import UiField from/)
+    expect(src.match(/<UiField\b/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+  })
+
+  it('BarragePanel：4 个数值已走 UiField（基地格属「补缺」保留手输）', () => {
+    const src = read('src/components/barrage/BarragePanel.vue')
+    expect(src).toMatch(/import UiField from/)
+    expect(src.match(/<UiField\b/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
+    // 基地格没有点图按钮（旁边是"摆放飞机"），按 §5-E「补缺的 4 处」暂留手输
+    expect(src).toMatch(/<input v-model="workbench\.airPlacement\.hexText"/)
   })
 })

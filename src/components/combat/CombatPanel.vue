@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { DerivationSteps } from '@/components/session'
+import UiField from '@/components/UiField.vue'
 import {
   counterImageUrlOf,
   hexLabel,
@@ -337,8 +338,8 @@ const quickDefenderArItems = computed(() =>
           <div class="row">
             <label class="field">
               攻方可用 T
-              <input
-                v-model.number="workbench.combatInputs.attackerAvailableT"
+              <UiField
+                v-model="workbench.combatInputs.attackerAvailableT"
                 class="num-input"
                 type="number"
                 min="0"
@@ -346,8 +347,8 @@ const quickDefenderArItems = computed(() =>
             </label>
             <label class="field">
               守方可用 T
-              <input
-                v-model.number="workbench.combatInputs.defenderAvailableT"
+              <UiField
+                v-model="workbench.combatInputs.defenderAvailableT"
                 class="num-input"
                 type="number"
                 min="0"
