@@ -13,6 +13,7 @@ import {
   counterImages,
   exploitTextureUrl,
   markerTextureUrl,
+  spDenominationDiffers,
   tokenImageUrl,
 } from './token-images'
 
@@ -1265,6 +1266,36 @@ function drawToken(
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(token.label, centerX, centerY)
+  }
+
+  /*
+   * 条 27：**SP 非标总额的实数角标**（§4-7「最近面额 + 角标实数」）
+   *
+   * SP 图按最近面额取（9 ⇒ 取 10 面额图），图面印的是面额，**不是真实总额**。
+   * 故只要「面额 ≠ 实数」就必须额外标出实数——注意这一步**与 `image === null` 无关**：
+   * 真机上 SP 图会加载成功，若只在回退画法里画 label，实数 9 就被图面的 10 盖住了。
+   * 画在令牌下沿（`.28·size`），小底块 + 深色字，压在图面数字上仍可读。
+   */
+  if (
+    token.noncombatKind === 'sp' &&
+    token.spPoints != null &&
+    spDenominationDiffers(token.spPoints)
+  ) {
+    const text = String(token.spPoints)
+    const bx = centerX
+    const by = centerY + size * 0.28
+    const w = (text.length * 6 + 8) / scale
+    const h = 12 / scale
+    ctx.fillStyle = OVERLAY_PALETTE.stackBadge
+    ctx.fillRect(bx - w / 2, by - h / 2, w, h)
+    ctx.strokeStyle = OVERLAY_PALETTE.stackBadgeEdge
+    ctx.lineWidth = 1 / scale
+    ctx.strokeRect(bx - w / 2, by - h / 2, w, h)
+    ctx.fillStyle = OVERLAY_PALETTE.stackBadgeText
+    ctx.font = `bold ${(10 / scale).toFixed(1)}px ui-monospace, monospace`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text, bx, by)
   }
 
   // ③ 模式字母（右上角）

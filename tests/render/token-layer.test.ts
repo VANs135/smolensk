@@ -420,3 +420,25 @@ describe('条 27：SP 与算子同格不互相遮挡', () => {
     expect(rec.texts).toContain('9 SP')
   })
 })
+
+describe('条 27：SP 非标总额的实数角标（图面印面额、角标补实数）', () => {
+  const one = (spPoints: number, label: string): MovementOverlay => ({
+    tokens: [{ ...token(NEAR, `sp:${spPoints}`), noncombatKind: 'sp', spPoints, label }],
+    reachable: [],
+    path: [],
+    startHex: null,
+    selectedIds: [],
+  })
+
+  it('9 SP ⇒ 额外标出实数 9（不能只靠图面那枚 10）', () => {
+    const { ctx, rec } = makeCtx()
+    drawMovementOverlay(ctx, one(9, '9 SP'), 1)
+    expect(rec.texts).toContain('9')
+  })
+
+  it('5 SP 正好是面额 ⇒ 不画多余角标（图面已印 5）', () => {
+    const { ctx, rec } = makeCtx()
+    drawMovementOverlay(ctx, one(5, '5 SP'), 1)
+    expect(rec.texts).not.toContain('5')
+  })
+})
