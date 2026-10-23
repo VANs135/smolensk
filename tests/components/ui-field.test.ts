@@ -93,4 +93,11 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).toMatch(/v-if="uiMode === 'verify'"/)
     expect(src).toMatch(/class="ui-field-readonly"/)
   })
+
+  it('ReinforcementPanel：重建行键从重建表数据取下拉（§5-B，不再自由手输）', () => {
+    const src = read('src/components/reinforcement/ReinforcementPanel.vue')
+    expect(src).toMatch(/rebuildChartRows/)
+    expect(src).toMatch(/v-for="row in rebuildRowChoices"/)
+    expect(src).not.toMatch(/<input v-model="rebuildType"/)
+  })
 })

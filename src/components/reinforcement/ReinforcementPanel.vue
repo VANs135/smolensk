@@ -6,6 +6,7 @@ import UiField from '@/components/UiField.vue'
 import { useUiMode } from '@/components/ui-mode'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { auxCardImageUrl } from '@/components/game/aux-card-image'
+import { rebuildChartRows } from '@/engine/rules'
 import { counterImages } from '@/render/token-images'
 import { ooaScanOf } from '@/render/charts-view'
 import { counterImageUrlOf, hexLabel } from '@/stores'
@@ -28,6 +29,12 @@ const workbench = useWorkbenchStore()
 
 /** 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输） */
 const uiMode = useUiMode()
+
+/**
+ * §5-B：重建表行键**从数据取**（`charts-supply-repl.json` 按当前方）——不再自由手输，
+ * 保证只能选到合法行键。真正的「算子 → 行」自动映射需逐单位类型数据，暂不做（避免启发式把费用判错）。
+ */
+const rebuildRowChoices = computed(() => rebuildChartRows(workbench.activeSide))
 
 /**
  * B34 余项②：**本方的到达卡（OOA）**
@@ -509,7 +516,11 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
     <div v-if="showsRebuild" class="row">
       <label class="field">
         重建表行键
-        <input v-model="rebuildType" class="input" placeholder="Infantry Div step" />
+        <select v-model="rebuildType" class="select">
+          <option v-for="row in rebuildRowChoices" :key="row.unitType" :value="row.unitType">
+            {{ row.unitType }}（{{ row.sourceLabel }}）
+          </option>
+        </select>
       </label>
       <label class="field">
         补员所在格
