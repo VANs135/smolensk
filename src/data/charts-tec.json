@@ -1,0 +1,472 @@
+{
+  "meta": {
+    "version": "0.4.0",
+    "description": "Terrain Effects Chart（地形效果表 TEC）：格内/格边地形 → Combat Line（选表行）/ 三种机动的 MP / 攻方倍率",
+    "source": [
+      "smolensk_charts_db.json -> tec（status: image_verified；原键名整体右移一格已于 2026-09-10 按英文原版 OCS_Chartsv4.3.pdf 与 Smolensk TEC 图逐格重排）",
+      "规则书内页与 Air Bases 表页 Docling 提取（两份一致）",
+      "skills/smolensk-rules/chapters/ch06-terrain-effects-chart.md（四源交叉校验记录）"
+    ]
+  },
+  "tec": {
+    "id": "tec",
+    "name": "Terrain Effects Chart",
+    "mobilityModes": ["track", "truck", "leg"],
+    "attackerTypes": ["armor", "mech", "other"],
+    "combatLines": ["Open", "Close", "Very Close", "Extr Close"],
+    "legend": {
+      "multiplier": "[x#] Attack times the multiple in brackets; Defend at x1（攻方乘括号内倍率；守方恒为 x1，见 9.4d）",
+      "prohibited": "P Movement Prohibited（禁止该类机动通过）",
+      "hexProperty": "* 格子属性：移动为 P 的单位必须沿路才能进入并攻击该格（OCS 9.1f）。适用于整格，含 Other 列",
+      "otherTerrain": "ot Dependent on other terrain in hex（取决于格内其他地形；本身不产生独立数值）"
+    },
+    "features": [
+      {
+        "feature": "Open",
+        "kind": "hex",
+        "combatLine": "Open",
+        "mp": {
+          "track": {
+            "kind": "fixed",
+            "value": 1
+          },
+          "truck": {
+            "kind": "fixed",
+            "value": 1
+          },
+          "leg": {
+            "kind": "fixed",
+            "value": 1
+          }
+        },
+        "attack": {
+          "armor": {
+            "kind": "multiplier",
+            "mult": [2, 1],
+            "attackerOnly": true
+          },
+          "mech": {
+            "kind": "multiplier",
+            "mult": [2, 1],
+            "attackerOnly": true
+          },
+          "other": {
+            "kind": "multiplier",
+            "mult": [1, 1],
+            "attackerOnly": false
+          }
+        }
+      },
+      {
+        "feature": "Woods",
+        "kind": "hex",
+        "combatLine": "Close",
+        "mp": {
+          "track": {
+            "kind": "fixed",
+            "value": 2
+          },
+          "truck": {
+            "kind": "fixed",
+            "value": 3
+          },
+          "leg": {
+            "kind": "fixed",
+            "value": 1
+          }
+        },
+        "attack": {
+          "armor": {
+            "kind": "multiplier",
+            "mult": [1, 1],
+            "attackerOnly": false
+          },
+          "mech": {
+            "kind": "multiplier",
+            "mult": [1, 1],
+            "attackerOnly": false
+          },
+          "other": {
+            "kind": "multiplier",
+            "mult": [1, 1],
+            "attackerOnly": false
+          }
+        }
+      },
+      {
+        "feature": "Forest",
+        "kind": "hex",
+        "combatLine": "Close",
+        "mp": {
+          "track": {
+            "kind": "fixed",
+            "value": 3
+          },
+          "truck": {
+            "kind": "fixed",
+            "value": 4
+          },
+          "leg": {
+            "kind": "fixed",
+            "value": 2
+          }
+        },
+        "attack": {
+          "armor": {
+            "kind": "multiplier",
+            "mult": [1, 2],
+            "attackerOnly": false
+          },
+          "mech": {
+            "kind": "multiplier",
+            "mult": [1, 1],
+            "attackerOnly": false
+          },
+          "other": {
+            "kind": "multiplier",
+            "mult": [1, 1],
+            "attackerOnly": false
+          }
+        }
+      },
+      {
+        "feature": "Swamp",
+        "kind": "hex",
+        "combatLine": "Very Close",
+        "hexProperty": true,
+        "mp": {
+          "track": {
+            "kind": "prohibited"
+          },
+          "truck": {
+            "kind": "prohibited"
+          },
+          "leg": {
+            "kind": "fixed",
+            "value": 3
+          }
+        },
+        "attack": {
+          "armor": {
+            "kind": "multiplier",
+            "mult": [1, 2],
+            "attackerOnly": true
+          },
+          "mech": {
+            "kind": "multiplier",
+            "mult": [1, 2],
+            "attackerOnly": true
+          },
+          "other": {
+            "kind": "multiplier",
+            "mult": [1, 1],
+            "attackerOnly": true
+          }
+        },
+        "note": "Track/Truck 列 P → 轮式与履带必须沿路才能进入与攻击（9.1f）；Leg 可不依赖道路进入（3 MP）"
+      },
+      {
+        "feature": "Village",
+        "kind": "hex",
+        "combatLine": "Close",
+        "hexProperty": true,
+        "mp": {
+          "track": {
+            "kind": "otherTerrain"
+          },
+          "truck": {
+            "kind": "otherTerrain"
+          },
+          "leg": {
+            "kind": "otherTerrain"
+          }
+        },
+        "attack": {
+          "armor": {
+            "kind": "multiplier",
+            "mult": [1, 1],
+            "attackerOnly": false
+          },
+          "mech": {
+            "kind": "multiplier",
+            "mult": [1, 1],
+            "attackerOnly": false
+          },
+          "other": {
+            "kind": "multiplier",
+            "mult": [1, 1],
+            "attackerOnly": false
+          }
+        },
+        "note": "MP 为 ot → 取该格主地形成本；6.2d 例外：城市/村庄的微小延伸（nub）不改变格内主地形"
+      },
+      {
+        "feature": "Minor City",
+        "kind": "hex",
+        "combatLine": "Very Close",
+        "hexProperty": true,
+        "mp": {
+          "track": {
+            "kind": "otherTerrain"
+          },
+          "truck": {
+            "kind": "otherTerrain"
+          },
+          "leg": {
+            "kind": "otherTerrain"
+          }
+        },
+        "attack": {
+          "armor": {
+            "kind": "multiplier",
+            "mult": [1, 2],
+            "attackerOnly": false
+          },
+          "mech": {
+            "kind": "multiplier",
+            "mult": [1, 2],
+            "attackerOnly": true
+          },
+          "other": {
+            "kind": "multiplier",
+            "mult": [1, 1],
+            "attackerOnly": false
+          }
+        }
+      },
+      {
+        "feature": "Major City",
+        "kind": "hex",
+        "combatLine": "Extr Close",
+        "hexProperty": true,
+        "mp": {
+          "track": {
+            "kind": "otherTerrain"
+          },
+          "truck": {
+            "kind": "otherTerrain"
+          },
+          "leg": {
+            "kind": "otherTerrain"
+          }
+        },
+        "attack": {
+          "armor": {
+            "kind": "multiplier",
+            "mult": [1, 3],
+            "attackerOnly": false
+          },
+          "mech": {
+            "kind": "multiplier",
+            "mult": [1, 2],
+            "attackerOnly": true
+          },
+          "other": {
+            "kind": "multiplier",
+            "mult": [1, 1],
+            "attackerOnly": false
+          }
+        }
+      },
+      {
+        "feature": "Secondary Road",
+        "kind": "hexside",
+        "combatLine": "ot",
+        "mp": {
+          "track": {
+            "kind": "fixed",
+            "value": 0.5
+          },
+          "truck": {
+            "kind": "fixed",
+            "value": 0.5
+          },
+          "leg": {
+            "kind": "fixed",
+            "value": 0.5
+          }
+        },
+        "attack": {
+          "armor": {
+            "kind": "otherTerrain"
+          },
+          "mech": {
+            "kind": "otherTerrain"
+          },
+          "other": {
+            "kind": "otherTerrain"
+          }
+        },
+        "note": "沿路移动时按本行取成本（6.2a road override），无视格内地形"
+      },
+      {
+        "feature": "Track",
+        "kind": "hexside",
+        "combatLine": "ot",
+        "mp": {
+          "track": {
+            "kind": "fixed",
+            "value": 1
+          },
+          "truck": {
+            "kind": "fixed",
+            "value": 1
+          },
+          "leg": {
+            "kind": "fixed",
+            "value": 1
+          }
+        },
+        "attack": {
+          "armor": {
+            "kind": "otherTerrain"
+          },
+          "mech": {
+            "kind": "otherTerrain"
+          },
+          "other": {
+            "kind": "otherTerrain"
+          }
+        }
+      },
+      {
+        "feature": "Railroad",
+        "kind": "hexside",
+        "combatLine": "ot",
+        "mp": {
+          "track": {
+            "kind": "fixed",
+            "value": 1
+          },
+          "truck": {
+            "kind": "fixed",
+            "value": 1
+          },
+          "leg": {
+            "kind": "fixed",
+            "value": 1
+          }
+        },
+        "attack": {
+          "armor": {
+            "kind": "otherTerrain"
+          },
+          "mech": {
+            "kind": "otherTerrain"
+          },
+          "other": {
+            "kind": "otherTerrain"
+          }
+        },
+        "note": "本表 Railroad 不区分多轨/单轨；单轨/多轨差别见专规 13.3a"
+      },
+      {
+        "feature": "Minor River",
+        "kind": "hexside",
+        "combatLine": "ot",
+        "mp": {
+          "track": {
+            "kind": "delta",
+            "value": 3
+          },
+          "truck": {
+            "kind": "delta",
+            "value": 5
+          },
+          "leg": {
+            "kind": "delta",
+            "value": 1
+          }
+        },
+        "attack": {
+          "armor": {
+            "kind": "multiplier",
+            "mult": [1, 2],
+            "attackerOnly": true
+          },
+          "mech": {
+            "kind": "multiplier",
+            "mult": [1, 2],
+            "attackerOnly": true
+          },
+          "other": {
+            "kind": "multiplier",
+            "mult": [1, 2],
+            "attackerOnly": true
+          }
+        },
+        "note": "MP 为跨河追加值（+N），叠加在进入格成本之上；河流不改变格子 Combat Line"
+      },
+      {
+        "feature": "Major River",
+        "kind": "hexside",
+        "combatLine": "ot",
+        "hexProperty": true,
+        "mp": {
+          "track": {
+            "kind": "prohibited"
+          },
+          "truck": {
+            "kind": "prohibited"
+          },
+          "leg": {
+            "kind": "all"
+          }
+        },
+        "attack": {
+          "armor": {
+            "kind": "multiplier",
+            "mult": [1, 4],
+            "attackerOnly": true
+          },
+          "mech": {
+            "kind": "multiplier",
+            "mult": [1, 3],
+            "attackerOnly": true
+          },
+          "other": {
+            "kind": "multiplier",
+            "mult": [1, 2],
+            "attackerOnly": true
+          }
+        },
+        "note": "Leg 列为 All（已实物核对，不是 P）——原样保留为标记，不得臆改为数字；有桥时可 overrun，无桥不可（8.1b）"
+      },
+      {
+        "feature": "Lake/Blocked",
+        "kind": "hexside",
+        "combatLine": "ot",
+        "hexProperty": true,
+        "mp": {
+          "track": {
+            "kind": "prohibited"
+          },
+          "truck": {
+            "kind": "prohibited"
+          },
+          "leg": {
+            "kind": "prohibited"
+          }
+        },
+        "attack": {
+          "armor": {
+            "kind": "multiplier",
+            "mult": [1, 4],
+            "attackerOnly": true
+          },
+          "mech": {
+            "kind": "multiplier",
+            "mult": [1, 4],
+            "attackerOnly": true
+          },
+          "other": {
+            "kind": "multiplier",
+            "mult": [1, 4],
+            "attackerOnly": true
+          }
+        },
+        "note": "地图图例中的 Lake Hexside 走本行；本行同时覆盖 Blocked（不可通行）地形"
+      }
+    ]
+  }
+}

@@ -1,0 +1,141 @@
+/* ═══════════════════════════════════════════════════════════
+ * 设计令牌（唯一颜色与尺度来源）
+ *
+ * 与 smolensk-ocs-positioning 系列文档共用同一套视觉系统：
+ * 暖纸底 + 墨色文字 + 暗红强调 + 橄榄绿第二强调。
+ * 组件与视图一律引用令牌，禁止硬编码十六进制值。
+ * ═══════════════════════════════════════════════════════════ */
+
+/* ── 字体资源 ──────────────────────────────────────────── */
+@font-face {
+  font-family: 'Outfit';
+  src: url('/fonts/Outfit-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Outfit';
+  src: url('/fonts/Outfit-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'InstrumentSans';
+  src: url('/fonts/InstrumentSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'InstrumentSans';
+  src: url('/fonts/InstrumentSans-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBMPlexMono';
+  src: url('/fonts/IBMPlexMono-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ── 字体族 ─────────────────────────────────────────── */
+  --font-cjk:
+    'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
+  --font-head: 'Outfit', var(--font-cjk);
+  --font-body: 'InstrumentSans', var(--font-cjk);
+  --font-mono: 'IBMPlexMono', var(--font-cjk);
+
+  /* ── 颜色：核心调色板（写死于文档系统，勿改） ───────── */
+  --color-bg: #f6f4ee; /* 页面底 */
+  --color-bg-2: #ece8de; /* 次级块底 */
+  --color-panel: #ffffff; /* 面板底 */
+  --color-ink: #201e1a; /* 主文字 */
+  --color-muted: #6a655c; /* 次要文字 */
+  --color-rule: #d9d4c8; /* 分隔线 */
+  --color-border: #3a342b; /* 描边（弹层 / 浮起块的硬边） */
+  --color-accent: #8c2f22; /* 强调（品牌红） */
+  --color-accent-2: #46604c; /* 第二强调（引擎绿） */
+  --color-gold: #8a6420; /* 数据/警示金 */
+
+  /* ── 语义色 ────────────────────────────────────────── */
+  --color-info: #3a5a78;
+  --color-success: var(--color-accent-2);
+  --color-warning: #a06a1f;
+  --color-danger: #8c2f22;
+  --color-info-bg: #e8eef4;
+  --color-success-bg: #e7ece8;
+  --color-warning-bg: #f2eade;
+  --color-danger-bg: #f2e6e3;
+
+  /* ── 文字 ──────────────────────────────────────────── */
+  --text-base-size: 16px;
+  --text-base-height: 1.75;
+  --text-sm: 0.86rem;
+  --text-xs: 0.78rem;
+  --text-lg: 1.12rem;
+  --text-xl: 1.4rem;
+
+  /* ── 间距（4 步进） ────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ── 圆角 ──────────────────────────────────────────── */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-pill: 999px;
+
+  /* ── 阴影 ──────────────────────────────────────────── */
+  --shadow-sm: 0 1px 2px rgb(32 30 26 / 0.1);
+  --shadow-md: 0 4px 12px rgb(32 30 26 / 0.12);
+  --shadow-lg: 0 12px 32px rgb(32 30 26 / 0.18);
+
+  /* ── 层级 ──────────────────────────────────────────── */
+  --z-sidebar: 100;
+  --z-panel: 200;
+  /* 需盖在其它面板之上、但仍在通知之下的对话框（W7 C15：存档 / 读档 —— 待答面板也是模态，
+     两者同层时由 DOM 顺序决定谁在上，故给存档对话框一个更高的层，保证待答时也能存档） */
+  --z-dialog-top: 250;
+  --z-toast: 300;
+
+  /* ── 动效 ──────────────────────────────────────────── */
+  --dur-fast: 120ms;
+  --dur-base: 220ms;
+  --dur-slow: 360ms;
+
+  /* ── UI 重做（B0 预置）─────────────────────────────────
+     见 docs/UI重做方案.md §3：阵营色、候选/禁用态、以及面板层级。
+     ★ 先声明后使用：架构门禁会把「引用了未定义变量」的写法判红，故这些令牌在此一次性定义，
+       具体使用随 B1–B17 各批接线（本批不引用，纯预置，行为零变化）。 */
+  --color-axis: #2f5d8f; /* 轴心方标识（环节灯 / 堆叠边 / 日志行） */
+  --color-axis-bg: #e6eef7;
+  --color-soviet: #8c2f22; /* 苏联方标识（与既有 accent 同系） */
+  --color-soviet-bg: #f2e6e3;
+  --color-cand: #c8a24a; /* 候选高亮（可落子 / 可攻击 / 可炮击） */
+  --color-blocked: #d9d4c8; /* 禁止（点了没用；不响应 hover） */
+  --color-active: #8a6420; /* 当前环节 / 当前方描边 */
+  --layer-map: 0; /* 地图画布 */
+  --layer-map-popup: 20; /* 地图内小窗（含唯一会话框） */
+  --layer-shell: 30; /* 流程条 / 右侧栏 / 底部托盘 */
+  --layer-modal: 40; /* 模态对话框与热坐遮罩 */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* ── 控件尺寸 ──────────────────────────────────────── */
+  --control-height: 36px;
+  --control-height-sm: 28px;
+  --focus-ring: 0 0 0 3px rgb(140 47 34 / 0.22);
+}

@@ -1,0 +1,376 @@
+{
+  "meta": {
+    "version": "0.4.0",
+    "description": "规则常量库（A9 全量 + A7.1 空战/防空 + A6 天气）：通用规则数值与 Smolensk 专规数值；网格表在 charts-*.json",
+    "source": [
+      "smolensk_rules_db.json（系列规则 v4.3 与专规 1.0–5.0 已逐条核对，含 SmolenskErrata）",
+      "smolensk_charts_db.json（air_combat 14.3e / flak 14.4e / weather 表阈值）"
+    ]
+  },
+  "supply": {
+    "spToT": 4,
+    "tracePerTwoReT": 1,
+    "traceRePerT": 2,
+    "extenderCreationMaFraction": 0.5,
+    "combatAttackerTPerStep": 1,
+    "combatDefenderT": 2,
+    "combatDefenderMinT": 1,
+    "directDrawRangeMp": 5,
+    "stockLowTPerRe": 2,
+    "stockLowTPerUnit": 2,
+    "stockExhaustedMult": 2,
+    "attritionDrm": {
+      "minSteps": 5,
+      "modifier": 3
+    },
+    "extenderTransportPoints": 5,
+    "breakoutRangeHexes": 15,
+    "breakoutFirstTurnDrm": 1,
+    "breakoutMinPrintedMa": 1,
+    "breakoutSuccessMinDice": 5,
+    "dumpBlowPct": {
+      "1": 25,
+      "6": 100,
+      "2-3": 50,
+      "4-5": 75
+    }
+  },
+  "fuel": {
+    "formationSp": 1,
+    "hqSp": 1,
+    "singleUnitT": 1
+  },
+  "repl": {
+    "truckRebuildEquipment": 1,
+    "airReplStepsPerCounter": 1,
+    "rebuildHqRangeHexes": 2
+  },
+  "breakdown": {
+    "minParentStepsToCreate": 2,
+    "breakdownRe": 1,
+    "breakdownSteps": 1
+  },
+  "modes": {
+    "dgArMod": -1,
+    "dgCombatMult": 0.5,
+    "dgMaMult": 0.5,
+    "dgBarrageMult": 0.5,
+    "stratMaMult": 2,
+    "reserveDefendMult": 0.5,
+    "reserveMaNormalMult": 0.25,
+    "reserveMaReactionMult": 0.5,
+    "reserveMaExploitMult": 1,
+    "exploitMaMult": 0.5
+  },
+  "movement": {
+    "minimumMoveHexes": 1,
+    "stackingLimitRe": 10,
+    "reScaleBattalion": 0.5,
+    "reScaleReplacement": 0.25,
+    "loadingCostFraction": 0.1,
+    "railConversionMaxPerPhase": 4,
+    "railPreLoadMaFraction": 0.5,
+    "railShortLegMaMin": 1,
+    "railShortLegMaMax": 6,
+    "railShortLegEquivalentMultiplier": 0.5,
+    "railTrainbustingMultiplier": 2,
+    "railMultiTrackMultiplier": 0.5,
+    "edgeBoxEntryMp": 1
+  },
+  "combat": {
+    "overrunMpCost": 3,
+    "overrunMaxEntryMp": 3,
+    "hedgehogSurpriseDrm": -1,
+    "retreatDgMinHexes": 2,
+    "airBaseCaptureNoLossMinDice": 7,
+    "airBaseCaptureDrm": {
+      "active": 2,
+      "byAdvanceAfterCombat": 2
+    }
+  },
+  "barrage": {
+    "maxAircraftPerMission": 4,
+    "minBarrageValue": 1,
+    "noSpotterShiftLeft": 3,
+    "shortRangeHexes": 10,
+    "densityCapRe": 3,
+    "densityShifts": [
+      {
+        "maxRe": 1,
+        "shift": -1
+      },
+      {
+        "maxRe": 3,
+        "shift": 0
+      },
+      {
+        "maxRe": 4,
+        "shift": 1
+      },
+      {
+        "maxRe": 5,
+        "shift": 2
+      },
+      {
+        "maxRe": 6,
+        "shift": 3
+      },
+      {
+        "maxRe": null,
+        "shift": 4
+      }
+    ],
+    "columnShifts": {
+      "hedgehogAnyLevel": -1,
+      "stratModeInHex": 3,
+      "allAircraftInShortRange": 1,
+      "terrainByCombatLine": {
+        "Open": 0,
+        "Close": -1,
+        "Very Close": -1,
+        "Extr Close": -2
+      }
+    },
+    "bracketHedgehogMinLevel": 3,
+    "halfResultStepLossMinDie": 4
+  },
+  "air": {
+    "aircraftSteps": 2,
+    "refitTPerBase": 1,
+    "refitAircraftPerLevel": 2,
+    "unloadTPerLevelPerPhase": 2,
+    "activeStackingBase": 4,
+    "patrolZoneMaxHexes": 10,
+    "flakKillMinDice": 11,
+    "airCombatAttackerAbortMaxDice": 6,
+    "airCombatBothAbortDice": 7,
+    "airCombatDefenderAbortMinDice": 8,
+    "airCombatLossNoLossMaxDice": 4,
+    "airCombatLossStepLossMinDice": 5,
+    "activeStackingPerLevel": 1,
+    "baseAaPerLevel": 1,
+    "airstripAaValue": 0,
+    "paradropPlanningTurnsAdvance": 2,
+    "flakModifiers": {
+      "missionThreePlusAircraft": 1,
+      "targetHasHQ": 1,
+      "airBaseLevelPerLevel": 1,
+      "inEnemyPatrolZoneWithFighter": 1,
+      "inEnemyPatrolZoneNoFighter": 2,
+      "trainbustingInPatrolZone": 1
+    },
+    "flakApplies": {
+      "always": ["barrage", "hip_shoot", "trainbusting"],
+      "onlyInPatrolZone": ["air_transport", "air_drop", "base_transfer"],
+      "never": ["fighter_sweep", "interception"]
+    },
+    "airTransportSuccess": {
+      "friendlyClearMin": 5,
+      "friendlyClosedMin": 6,
+      "enemyClearMin": 6,
+      "enemyClosedMin": 7,
+      "sovietAirdropDrm": -1,
+      "gliderDrm": 1,
+      "optional21_12eVeryCloseDrm": -1,
+      "optional21_12eExtrCloseDrm": -2
+    }
+  },
+  "construction": {
+    "hedgehogMaxLevel": 1,
+    "hedgehogCostSpPerLevel": 2,
+    "hedgehogLevelsPerTurn": 1,
+    "printedHedgehogLevel": 1,
+    "constructionRadiusHexes": 2,
+    "minBuilderRe": 1,
+    "airBaseMaxLevel": 3,
+    "airBaseMinLevel": 1,
+    "airBaseCostSpPerLevel": 1,
+    "airBaseLevelsPerTurn": 1,
+    "airstripBuildT": 1,
+    "airstripUpgradeT": 3,
+    "airstripRefitAircraft": 1
+  },
+  "specialCombat": {
+    "transportDisplaceMaxHexes": 10
+  },
+  "smolensk": {
+    "entryRangeAxisHexes": 30,
+    "entryRangeSovietHexes": 20,
+    "edgeBoxTraceSupply": true,
+    "frontalReservesSp": 2,
+    "frontalReserves": {
+      "source": "专规 2.3c + Soviet Arrivals 卡（ch09：三批 22 Jul / 1 Aug / 1 Sep；转化对象逐条照卡）",
+      "batches": [
+        {
+          "date": "1941-07-22",
+          "sp": 2,
+          "convertFrom": "12-1-4 Mtr Div (69)",
+          "convertTo": "16-2-5 Mtr Div (107)",
+          "freeRebuilds": ["IL.2", "HQ or artillery"]
+        },
+        {
+          "date": "1941-08-01",
+          "sp": 2,
+          "convertFrom": "16-1-3 Tk Div (57)",
+          "convertTo": "8-1-5 Tk Rgt (114)",
+          "freeRebuilds": ["IL.2", "HQ or artillery"]
+        },
+        {
+          "date": "1941-09-01",
+          "sp": 2,
+          "convertFrom": "12-1-4 Mtr Div (103)",
+          "convertTo": "10-0-1 Inf Div (103)",
+          "freeRebuilds": ["IL.2", "HQ or artillery"]
+        }
+      ]
+    },
+    "slowMobilization": {
+      "source": "专规 2.4 表 2-2（原样复现）",
+      "table": [
+        {
+          "date": "1941-07-12",
+          "army": "30th",
+          "unlockDivisions": 2
+        },
+        {
+          "date": "1941-07-15",
+          "army": "30th",
+          "unlockDivisions": 3
+        },
+        {
+          "date": "1941-07-15",
+          "army": "28th",
+          "unlockDivisions": 3
+        },
+        {
+          "date": "1941-07-15",
+          "army": "24th",
+          "unlockDivisions": 3
+        },
+        {
+          "date": "1941-07-19",
+          "army": "28th",
+          "unlockDivisions": 5
+        },
+        {
+          "date": "1941-07-19",
+          "army": "24th",
+          "unlockDivisions": 5
+        },
+        {
+          "date": "1941-07-22",
+          "army": "24th",
+          "unlockDivisions": 3
+        }
+      ]
+    },
+    "supplyCachePerSide": 2,
+    "supplyCacheShellsT": 2,
+    "counterLimits": {
+      "source": "专规 1.8a 拆解单位上限（工程库 rules.json → counter_limits 原样搬运）",
+      "axisBreakdown": [
+        {
+          "ar": 4,
+          "count": 28
+        },
+        {
+          "ar": 5,
+          "count": 2
+        }
+      ],
+      "sovietBreakdown": [
+        {
+          "ar": 2,
+          "count": 6
+        },
+        {
+          "ar": 3,
+          "count": 2
+        }
+      ]
+    },
+    "randomEventFrom": "1941-07-19",
+    "randomEventTo": "1941-08-15",
+    "railCapBoostDate": "1941-07-19",
+    "railCapBefore": {
+      "axis": 0,
+      "soviet": 2
+    },
+    "railCapAfter": {
+      "axis": 1,
+      "soviet": 3
+    },
+    "railGauge": {
+      "printed": "broad",
+      "usableBySide": {
+        "axis": "standard",
+        "soviet": "broad"
+      }
+    },
+    "variableExitStart": "1941-08-19",
+    "variableExitTable": {
+      "1": "remove SS Reich (all)",
+      "6": "remove 14 Mtr (all)",
+      "2-5": "roll again next turn"
+    },
+    "earlyDecisionStart": "1941-08-19",
+    "specialReplEndDate": "1941-08-19",
+    "panzerGroupConstraintEnd": "1941-08-19",
+    "sovietStratModeFrom": "1941-08-01",
+    "sovietHedgehogBuildFrom": "1941-08-01",
+    "constructionMarkersPerSetup": 3,
+    "supplyShutdown": {
+      "entryL": "1941-07-19",
+      "southSources": "1941-08-19"
+    },
+    "victory": {
+      "source": "专规 5.0a / 5.0b + 剧本 2·4 明文例外（工程库 rules.json → victory 原样搬运；清单格见 map-config.victoryLocations 与 scenarios.victory.scenario2HexList）",
+      "final": {
+        "sovietListedHexes": 7,
+        "axisListedHexes": 6,
+        "scenarios": ["1", "3", "5", "6", "7"]
+      },
+      "decisive": {
+        "sovietListedHexes": 9,
+        "axisListedHexes": 8,
+        "scenarios": ["1", "3", "5", "6", "7"]
+      },
+      "scenario2And4": {
+        "sovietListedHexes": 6,
+        "axisListedHexes": 7,
+        "scenarios": ["2", "4"]
+      }
+    },
+    "weather": {
+      "dieCount": 1,
+      "limitedFlightMaxDice": 1,
+      "normalFlightMinDice": 2,
+      "groundAlwaysGood": true
+    },
+    "air": {
+      "soviet": {
+        "noHipShoot": true,
+        "noPlannedAirdrop": true,
+        "noReactionOrExploitationMission": true,
+        "il2SingleStep": true
+      },
+      "axis": {
+        "hipShootWhenWeatherPermits": true
+      }
+    },
+    "offMapBox": {
+      "noCombatOrBarrage": true,
+      "air": {
+        "infiniteCapacity": true,
+        "freeRefitPerTurn": true
+      },
+      "edge": {
+        "sovietOnly": true,
+        "noRetreatEntryExit": true,
+        "mustStopOnEntry": true,
+        "exitFuelsFree": true,
+        "onMapUnitsCannotDraw": true
+      }
+    }
+  }
+}

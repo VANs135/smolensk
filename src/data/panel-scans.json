@@ -1,0 +1,138 @@
+{
+  "meta": {
+    "version": "0.4.0",
+    "description": "印卡扫描图清单：底部「表格」屏直接显示**官方印刷卡面**（用户口径 2026-09-16「盒还有表格可以直接用素材库里辅助卡图片」）。每张给出屏归属、标题与像素尺寸；尺寸逐张读 PNG 头写入，测试每次运行再核一遍。",
+    "source": [
+      "图片素材库\\地图及辅助卡（v4.3 Charts (final)-1..4 1000、Smolensk Supply & Repl、Smolensk Axis rebuilds、Smolensk Soviet rebuilds、Smolensk TEC、Smolensk terrain key、Smolensk weather and turns、Smolensk Axis Variables、Rail-Sea-Cap）",
+      "尺寸读 PNG 头（宽 = 偏移 16 的 UInt32BE、高 = 偏移 20），与 aux-cards.json 同一套核对口径"
+    ]
+  },
+  "scans": [
+    {
+      "id": "charts-1",
+      "screen": "crt",
+      "title": "官方图表 v4.3 · 第 1 页（Air Combat / Air Transport / Air Base Capture / Flak / Sequence of Play）",
+      "note": "结算与查表时对照的官方原表（本作按卡图原样展示，不做二次排版）",
+      "image": "v4.3 Charts (final)-1 1000.png",
+      "imageSize": {
+        "w": 1000,
+        "h": 736
+      }
+    },
+    {
+      "id": "charts-2",
+      "screen": "crt",
+      "title": "官方图表 v4.3 · 第 2 页（Combat Sequence / Anti-Tank / Capture / Attrition / Surprise / CRT 结果释义）",
+      "image": "v4.3 Charts (final)-2 1000.png",
+      "imageSize": {
+        "w": 1000,
+        "h": 736
+      }
+    },
+    {
+      "id": "charts-3",
+      "screen": "crt",
+      "title": "官方图表 v4.3 · 第 3 页",
+      "image": "v4.3 Charts (final)-3 1000.png",
+      "imageSize": {
+        "w": 1000,
+        "h": 736
+      }
+    },
+    {
+      "id": "charts-4",
+      "screen": "crt",
+      "title": "官方图表 v4.3 · 第 4 页",
+      "image": "v4.3 Charts (final)-4 1000.png",
+      "imageSize": {
+        "w": 1000,
+        "h": 736
+      }
+    },
+    {
+      "id": "supply-repl",
+      "screen": "supply",
+      "title": "补给表与补员表（1.6b / 1.6c 特殊补员 / 13.5 重建）",
+      "image": "Smolensk Supply & Repl.png",
+      "imageSize": {
+        "w": 1414,
+        "h": 1051
+      }
+    },
+    {
+      "id": "rebuilds-axis",
+      "screen": "supply",
+      "title": "重建表 · 轴心国（13.5：按单位类型给补员费用）",
+      "image": "Smolensk Axis rebuilds.png",
+      "imageSize": {
+        "w": 475,
+        "h": 1073
+      }
+    },
+    {
+      "id": "rebuilds-soviet",
+      "screen": "supply",
+      "title": "重建表 · 苏联（13.5）",
+      "image": "Smolensk Soviet rebuilds.png",
+      "imageSize": {
+        "w": 480,
+        "h": 977
+      }
+    },
+    {
+      "id": "tec",
+      "screen": "tec",
+      "title": "地形效果表 TEC（6.2d / 9.3b：逐移动模式的 MP 与攻方修正）",
+      "image": "Smolensk TEC.png",
+      "imageSize": {
+        "w": 1254,
+        "h": 845
+      }
+    },
+    {
+      "id": "terrain-key",
+      "screen": "tec",
+      "title": "地形图例（Terrain Key：地图上各图标的含义）",
+      "image": "Smolensk terrain key.png",
+      "imageSize": {
+        "w": 882,
+        "h": 529
+      }
+    },
+    {
+      "id": "axis-variables",
+      "screen": "vars",
+      "title": "变量撤离（3.3c）与随机事件（3.6）· 轴心国",
+      "note": "3.3c 每回合掷 1d6（1 移除 SS Reich / 6 移除 14 Mtr / 2–5 下回合再掷）；3.6 在 7 月 19 日至 8 月 15 日掷 2d6",
+      "image": "Smolensk Axis Variables.png",
+      "imageSize": {
+        "w": 428,
+        "h": 1222
+      }
+    },
+    {
+      "id": "ooa-axis",
+      "screen": "ooa",
+      "side": "axis",
+      "title": "轴心到达卡（OOA）",
+      "note": "专规 1.6a / 13.6：轴方增援的到达日与落位（地图外盒与铁路到货格的入口）",
+      "image": "Smolensk AxOOA.png",
+      "imageSize": {
+        "w": 1203,
+        "h": 1208
+      }
+    },
+    {
+      "id": "ooa-soviet",
+      "screen": "ooa",
+      "side": "soviet",
+      "title": "苏军到达卡（OOA）",
+      "note": "专规 1.6a / 13.6：苏军增援的到达日与落位（含方面军预备队 2.3c）",
+      "image": "Smolensk SvOOA.png",
+      "imageSize": {
+        "w": 1518,
+        "h": 1160
+      }
+    }
+  ]
+}

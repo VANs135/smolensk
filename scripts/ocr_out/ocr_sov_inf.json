@@ -1,0 +1,7920 @@
+{
+  "count": 190,
+  "source": "苏联单位\\步兵师",
+  "records": [
+    {
+      "file": "S S1 R11 C05.png",
+      "re_folder": "1RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 11,
+            "x1": 30,
+            "y0": 37,
+            "y1": 58,
+            "n": 2
+          },
+          "value": "10",
+          "score": 0.867
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 42,
+            "y0": 37,
+            "y1": 48,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.989
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 49,
+            "y0": 37,
+            "y1": 58,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "S S1 R11 C05B.png",
+      "re_folder": "1RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 27,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.66
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 39,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "0",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 50,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.958
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S2 S1 R13 C05.png",
+      "re_folder": "1RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 12,
+            "x1": 30,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "0",
+          "score": 0.699
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.994
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 50,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.684
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S2 S1 R13 C05B.png",
+      "re_folder": "1RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 30,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.533
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 42,
+            "y0": 39,
+            "y1": 52,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.997
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 52,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.919
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S S1 R01 C13.png",
+      "re_folder": "1RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 30,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.961
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 40,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.978
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 49,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.875
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S S1 R01 C13B.png",
+      "re_folder": "1RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 27,
+            "y0": 37,
+            "y1": 58,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.678
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 37,
+            "y0": 37,
+            "y1": 48,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.992
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 50,
+            "y0": 37,
+            "y1": 58,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.915
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S S1 R09 C03.png",
+      "re_folder": "1RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.994
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 38,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.783
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 50,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.759
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S S1 R09 C03B.png",
+      "re_folder": "1RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 27,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.672
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 37,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.916
+        },
+        "MA": {
+          "box": {
+            "x0": 39,
+            "x1": 49,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.593
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S S1 R09 C04.png",
+      "re_folder": "1RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 29,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.868
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 38,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.783
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 48,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.773
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S S1 R09 C04B.png",
+      "re_folder": "1RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.708
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.916
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.642
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S5 S1 R01 C18.png",
+      "re_folder": "1RE2AR不可重建",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 39,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.999
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.929
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "S5 S1 R01 C18B.png",
+      "re_folder": "1RE2AR不可重建",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.775
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 41,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.994
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "S5 S1 R12 C01.png",
+      "re_folder": "1RE2AR不可重建",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 30,
+            "y0": 38,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.61
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 42,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 52,
+            "y0": 38,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.768
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S5 S1 R12 C01B.png",
+      "re_folder": "1RE2AR不可重建",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 28,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.816
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 40,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.999
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.882
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C14.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 12,
+            "x1": 30,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "10",
+          "score": 0.913
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 38,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.996
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 50,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.723
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C14B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 30,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.851
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.999
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 52,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "BD2 S1 R02 C17.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 39,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "10",
+          "score": 0.976
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 38,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.991
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 50,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.636
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C17B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "17",
+          "score": 0.625
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 41,
+            "y0": 38,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "BD2 S1 R13 C09.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 38,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "10",
+          "score": 0.773
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 37,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.99
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 50,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.566
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R13 C09B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 28,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.589
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 40,
+            "y0": 38,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 50,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "BD2 S1 R14 C05.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "10",
+          "score": 0.982
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 37,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.997
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 50,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "BD2 S1 R14 C05B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 27,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.503
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 39,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "0",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 50,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "BD2 S1 R01 C15.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 31,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "1",
+          "score": 0.611
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 50,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.835
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C15B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.894
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 40,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.994
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C18.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 31,
+            "y0": 41,
+            "y1": 62,
+            "n": 2
+          },
+          "value": "11",
+          "score": 0.922
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 40,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 50,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.83
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C18B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 39,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.844
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R01 C20.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 31,
+            "y0": 41,
+            "y1": 62,
+            "n": 2
+          },
+          "value": "11",
+          "score": 0.952
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 40,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 50,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.944
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C20B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.789
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 38,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.701
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C12.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "11",
+          "score": 0.796
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.987
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 50,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.967
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C12B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 21,
+            "x1": 31,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.83
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 39,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.999
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 54,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "20",
+          "score": 0.524
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C13.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 31,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 50,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["A空", "MA空"]
+    },
+    {
+      "file": "BD2 S1 R02 C13B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 30,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.809
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 40,
+            "y0": 40,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.999
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.816
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C16.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "11",
+          "score": 0.853
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 50,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.762
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C16B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "17",
+          "score": 0.625
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "BD2 S1 R02 C18.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 42,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 50,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.666
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R02 C18B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.557
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.994
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C19.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 42,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 50,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.944
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R02 C19B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.557
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "20",
+          "score": 0.555
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R03 C19.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 29,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 48,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["A空", "MA空"]
+    },
+    {
+      "file": "BD2 S1 R03 C19B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 21,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.561
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.604
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R03 C20.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 29,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 48,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["A空", "MA空"]
+    },
+    {
+      "file": "BD2 S1 R03 C20B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.606
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.992
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R04 C12.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 30,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.708
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 40,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.987
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 49,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.875
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R04 C12B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 21,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "17",
+          "score": 0.546
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.566
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R04 C13.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 30,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 40,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 49,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["A空", "MA空"]
+    },
+    {
+      "file": "BD2 S1 R04 C13B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 21,
+            "x1": 31,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.561
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 40,
+            "y1": 52,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.73
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C01.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 32,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "11",
+          "score": 0.709
+        },
+        "AR": {
+          "box": {
+            "x0": 37,
+            "x1": 42,
+            "y0": 40,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 51,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.971
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C01B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.916
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 40,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.838
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C04.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 31,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "1",
+          "score": 0.6
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 42,
+            "y0": 40,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.999
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 50,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.885
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C04B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 30,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.943
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 40,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.945
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 52,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.562
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C06.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 32,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "1",
+          "score": 0.75
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 42,
+            "y0": 40,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.999
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 51,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.972
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C06B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 21,
+            "x1": 31,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.916
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 40,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.871
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.885
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R13 C04.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "11",
+          "score": 1.0
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 40,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.991
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 48,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.589
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R13 C04B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 28,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.999
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 38,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.978
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 50,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.955
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R13 C07.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 32,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "11",
+          "score": 0.689
+        },
+        "AR": {
+          "box": {
+            "x0": 37,
+            "x1": 42,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.972
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 51,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.902
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R13 C07B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 26,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.571
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 36,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 38,
+            "x1": 48,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.993
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R13 C08.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 42,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.991
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 50,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.589
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R13 C08B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 26,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.574
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 36,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 38,
+            "x1": 48,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.993
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C01.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 32,
+            "y0": 40,
+            "y1": 60,
+            "n": 2
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 42,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 51,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["A空", "MA空"]
+    },
+    {
+      "file": "BD2 S1 R14 C01B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 28,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.869
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 38,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 50,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.978
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C10.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "1",
+          "score": 0.837
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 38,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.925
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 50,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.638
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C10B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 28,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.88
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 38,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 50,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.956
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S S1 R03 C12.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 30,
+            "y0": 39,
+            "y1": 59,
+            "n": 2
+          },
+          "value": "1",
+          "score": 0.716
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 40,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 49,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.847
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S S1 R03 C12B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 30,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.68
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 40,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 52,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "22",
+          "score": 0.56
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S4 S1 R04 C11.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 30,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.63
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 40,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.992
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 49,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.875
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S4 S1 R04 C11B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.904
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 38,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.986
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S4 S1 R10 C08.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 30,
+            "y0": 41,
+            "y1": 62,
+            "n": 2
+          },
+          "value": "11",
+          "score": 0.868
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 40,
+            "y0": 40,
+            "y1": 52,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 49,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.762
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S4 S1 R10 C08B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.604
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 40,
+            "y1": 52,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 52,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.533
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C11.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.959
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 55,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.719
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C11B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.898
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.899
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C12.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 32,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.987
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 54,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.753
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C12B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.666
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 41,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 52,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.885
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C13.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 32,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.987
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 54,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.847
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C13B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.798
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 41,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 52,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.803
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C17.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 41,
+            "y1": 62,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.973
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 54,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.855
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C17B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 29,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "20",
+          "score": 0.726
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 41,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 52,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.996
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C19.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 41,
+            "y1": 62,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.902
+        },
+        "AR": {
+          "box": null,
+          "value": null,
+          "score": 0.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.831
+        }
+      },
+      "review": ["AR空"]
+    },
+    {
+      "file": "BD2 S1 R01 C19B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 30,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["A空", "MA空"]
+    },
+    {
+      "file": "BD2 S1 R02 C11.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 12,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.983
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 38,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.907
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C11B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 30,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.641
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "7",
+          "score": 0.542
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C14.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.982
+        },
+        "AR": {
+          "box": null,
+          "value": null,
+          "score": 0.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["AR空", "MA空"]
+    },
+    {
+      "file": "BD2 S1 R02 C14B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 29,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.676
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 41,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 52,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.999
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C15.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 12,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.889
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.861
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C15B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "20",
+          "score": 0.723
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 42,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.972
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C20.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.98
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 38,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.996
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C20B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 29,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.671
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 41,
+            "y0": 38,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 52,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.999
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R03 C11.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 11,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.809
+        },
+        "AR": {
+          "box": null,
+          "value": null,
+          "score": 0.0
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 52,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["AR空", "MA空"]
+    },
+    {
+      "file": "BD2 S1 R03 C11B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.604
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 40,
+            "y1": 52,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 42,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.997
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R03 C12.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 11,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.956
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 41,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 52,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.751
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R03 C12B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 22,
+            "x1": 33,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.569
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 45,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 45,
+            "x1": 56,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.971
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R03 C13.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 11,
+            "x1": 30,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.97
+        },
+        "AR": {
+          "box": null,
+          "value": null,
+          "score": 0.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.64
+        }
+      },
+      "review": ["AR空"]
+    },
+    {
+      "file": "BD2 S1 R03 C13B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.842
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.889
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R03 C14.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 11,
+            "x1": 30,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.97
+        },
+        "AR": {
+          "box": null,
+          "value": null,
+          "score": 0.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.996
+        }
+      },
+      "review": ["AR空"]
+    },
+    {
+      "file": "BD2 S1 R03 C14B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "20",
+          "score": 0.68
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "BD2 S1 R03 C15.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 11,
+            "x1": 30,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.909
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 52,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.884
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R03 C15B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.766
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.662
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R03 C16.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 11,
+            "x1": 30,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.978
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 52,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.791
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R03 C16B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.766
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.98
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R03 C17.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 11,
+            "x1": 30,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.97
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.718
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R03 C17B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "22",
+          "score": 0.664
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.999
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R03 C18.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 11,
+            "x1": 30,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.938
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.672
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R03 C18B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 30,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.704
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.991
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R10 C09.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 32,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.969
+        },
+        "AR": {
+          "box": null,
+          "value": null,
+          "score": 0.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 55,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.888
+        }
+      },
+      "review": ["AR空"]
+    },
+    {
+      "file": "BD2 S1 R10 C09B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.731
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.999
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C02.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 32,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.87
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 44,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 55,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.998
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C02B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 29,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 52,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.668
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R11 C03.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.964
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.998
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C03B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 29,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "20",
+          "score": 0.87
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 52,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.999
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C05.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 32,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.914
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.868
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C05B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 30,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "20",
+          "score": 0.747
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.885
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C07.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.938
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.992
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C07B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 30,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "9",
+          "score": 0.636
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "BD2 S1 R11 C08.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.938
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.99
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C08B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "20",
+          "score": 0.571
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.707
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R11 C09.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 12,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.976
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "BD2 S1 R11 C09B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 52,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["A空", "MA空"]
+    },
+    {
+      "file": "BD2 S1 R11 C10.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 32,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.98
+        },
+        "AR": {
+          "box": null,
+          "value": null,
+          "score": 0.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 55,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.995
+        }
+      },
+      "review": ["AR空"]
+    },
+    {
+      "file": "BD2 S1 R11 C10B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.601
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.999
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R12 C01.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 32,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.921
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 54,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.643
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R12 C01B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 30,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "20",
+          "score": 0.806
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.964
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R12 C03.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 32,
+            "y0": 41,
+            "y1": 62,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.986
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.988
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R12 C03B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.668
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.517
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R12 C04.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.953
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.99
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R12 C04B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "20",
+          "score": 0.737
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.998
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R12 C05.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.952
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.99
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R12 C05B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "20",
+          "score": 0.797
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.999
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R12 C07.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.872
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.878
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R12 C07B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 30,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.812
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 42,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.885
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R12 C09.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 12,
+            "x1": 31,
+            "y0": 39,
+            "y1": 59,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.826
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.996
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R12 C09B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 29,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.668
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 52,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.67
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R12 C10.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 12,
+            "x1": 31,
+            "y0": 39,
+            "y1": 59,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.826
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.998
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R12 C10B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 29,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.887
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 41,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 52,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.96
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R13 C01.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 12,
+            "x1": 30,
+            "y0": 38,
+            "y1": 59,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.894
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 38,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.607
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R13 C01B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.63
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 42,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.987
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R13 C02.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 11,
+            "x1": 30,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.974
+        },
+        "AR": {
+          "box": null,
+          "value": null,
+          "score": 0.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 1.0
+        }
+      },
+      "review": ["AR空"]
+    },
+    {
+      "file": "BD2 S1 R13 C02B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 26,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.932
+        },
+        "AR": {
+          "box": {
+            "x0": 30,
+            "x1": 38,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 39,
+            "x1": 49,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "7",
+          "score": 0.565
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R13 C06.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 11,
+            "x1": 30,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.859
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 41,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.633
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R13 C06B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 27,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.564
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 39,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 39,
+            "x1": 50,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.882
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R13 C10.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.949
+        },
+        "AR": {
+          "box": null,
+          "value": null,
+          "score": 0.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["AR空", "MA空"]
+    },
+    {
+      "file": "BD2 S1 R13 C10B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 28,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "12",
+          "score": 0.631
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 40,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 51,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.662
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C02.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 32,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.92
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 54,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.754
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C02B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 28,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "12",
+          "score": 0.617
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 40,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 51,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.882
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C04.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.988
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.586
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C04B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 28,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "12",
+          "score": 0.924
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 40,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 51,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.981
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C06.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.997
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 54,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.906
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C06B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 28,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.877
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 40,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 51,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.565
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C07.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.878
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 54,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.927
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C07B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 26,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "12",
+          "score": 0.935
+        },
+        "AR": {
+          "box": {
+            "x0": 29,
+            "x1": 38,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 38,
+            "x1": 49,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.998
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C08.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.907
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 54,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.885
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C08B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 26,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "12",
+          "score": 0.909
+        },
+        "AR": {
+          "box": {
+            "x0": 29,
+            "x1": 38,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 38,
+            "x1": 49,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.997
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C09.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 12,
+            "x1": 31,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.907
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.815
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R14 C09B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 28,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "12",
+          "score": 0.905
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 40,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 51,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.999
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S S1 R01 C18.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 10,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.968
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 40,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "6",
+          "score": 0.845
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S S1 R01 C18B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 38,
+            "y1": 59,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 37,
+            "y1": 48,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 38,
+            "y1": 59,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["A空", "MA空"]
+    },
+    {
+      "file": "S3 S1 R09 C06.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 12,
+            "x1": 31,
+            "y0": 38,
+            "y1": 59,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.97
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 38,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.744
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R09 C06B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 28,
+            "y0": 38,
+            "y1": 58,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.808
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 40,
+            "y0": 37,
+            "y1": 48,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 51,
+            "y0": 38,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.999
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R11 C09.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 11,
+            "x1": 30,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.947
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.743
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R11 C09B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.631
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.515
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R14 C08.png",
+      "re_folder": "2RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 12,
+            "x1": 31,
+            "y0": 40,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.946
+        },
+        "AR": {
+          "box": null,
+          "value": null,
+          "score": 0.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.996
+        }
+      },
+      "review": ["AR空"]
+    },
+    {
+      "file": "S3 S1 R14 C08B.png",
+      "re_folder": "2RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 30,
+            "y0": 38,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "12",
+          "score": 0.991
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 42,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.847
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R05 C12.png",
+      "re_folder": "2RE民兵",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 32,
+            "y0": 39,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "10",
+          "score": 0.96
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 44,
+            "y0": 38,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.992
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 51,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.532
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R05 C12B.png",
+      "re_folder": "2RE民兵",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.812
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 41,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "S3 S1 R05 C13.png",
+      "re_folder": "2RE民兵",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 38,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "10",
+          "score": 0.618
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 44,
+            "y0": 37,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.994
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 51,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.561
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R05 C13B.png",
+      "re_folder": "2RE民兵",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 30,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.53
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 42,
+            "y0": 37,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 52,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "S3 S1 R05 C16.png",
+      "re_folder": "2RE民兵",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 12,
+            "x1": 30,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "10",
+          "score": 0.837
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 49,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.745
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R05 C16B.png",
+      "re_folder": "2RE民兵",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 30,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.568
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 37,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "0",
+          "score": 0.999
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "S3 S1 R04 C16.png",
+      "re_folder": "2RE民兵",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 30,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "1",
+          "score": 0.562
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 40,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 49,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.847
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R04 C16B.png",
+      "re_folder": "2RE民兵",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "10",
+          "score": 0.575
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 40,
+            "y1": 52,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.978
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R04 C17.png",
+      "re_folder": "2RE民兵",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 32,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "1",
+          "score": 0.562
+        },
+        "AR": {
+          "box": {
+            "x0": 37,
+            "x1": 42,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 51,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.847
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R04 C17B.png",
+      "re_folder": "2RE民兵",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.899
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 51,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.706
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R04 C18.png",
+      "re_folder": "2RE民兵",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 32,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "1",
+          "score": 0.795
+        },
+        "AR": {
+          "box": {
+            "x0": 37,
+            "x1": 42,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.992
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 51,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.847
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R04 C18B.png",
+      "re_folder": "2RE民兵",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 30,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": "17",
+          "score": 0.631
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 40,
+            "y1": 52,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.992
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 41,
+            "y1": 62,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "S3 S1 R04 C19.png",
+      "re_folder": "2RE民兵",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 33,
+            "y0": 41,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "1",
+          "score": 0.733
+        },
+        "AR": {
+          "box": {
+            "x0": 38,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.992
+        },
+        "MA": {
+          "box": {
+            "x0": 45,
+            "x1": 52,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.875
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R04 C19B.png",
+      "re_folder": "2RE民兵",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.994
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.796
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R05 C11.png",
+      "re_folder": "2RE民兵",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 32,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 37,
+            "x1": 42,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 51,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.596
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "S3 S1 R05 C11B.png",
+      "re_folder": "2RE民兵",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 38,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.9
+        },
+        "AR": {
+          "box": {
+            "x0": 36,
+            "x1": 41,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.972
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 38,
+            "y1": 58,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.995
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R05 C15.png",
+      "re_folder": "2RE民兵",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 30,
+            "y0": 40,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "1",
+          "score": 0.565
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 41,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 49,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.745
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R05 C15B.png",
+      "re_folder": "2RE民兵",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "20",
+          "score": 0.663
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 40,
+            "y0": 38,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 52,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.509
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R04 C15.png",
+      "re_folder": "2RE民兵",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 32,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.963
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 44,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 44,
+            "x1": 55,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.675
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R04 C15B.png",
+      "re_folder": "2RE民兵",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 30,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "9",
+          "score": 0.891
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 42,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "S3 S1 R04 C20.png",
+      "re_folder": "2RE民兵",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 14,
+            "x1": 33,
+            "y0": 40,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "12",
+          "score": 0.954
+        },
+        "AR": {
+          "box": null,
+          "value": null,
+          "score": 0.0
+        },
+        "MA": {
+          "box": {
+            "x0": 45,
+            "x1": 56,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["AR空", "MA空"]
+    },
+    {
+      "file": "S3 S1 R04 C20B.png",
+      "re_folder": "2RE民兵",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 31,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.635
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 43,
+            "y0": 39,
+            "y1": 51,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 41,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.981
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R05 C14.png",
+      "re_folder": "2RE民兵",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 12,
+            "x1": 30,
+            "y0": 39,
+            "y1": 60,
+            "n": 2
+          },
+          "value": "2",
+          "score": 0.981
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "2",
+          "score": 0.951
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S3 S1 R05 C14B.png",
+      "re_folder": "2RE民兵",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 18,
+            "x1": 29,
+            "y0": 38,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.691
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 41,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 52,
+            "y0": 38,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "4",
+          "score": 0.986
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S4 S1 R11 C03.png",
+      "re_folder": "3RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 39,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "8",
+          "score": 0.98
+        },
+        "AR": {
+          "box": {
+            "x0": 35,
+            "x1": 43,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "3",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 54,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["MA空"]
+    },
+    {
+      "file": "S4 S1 R11 C03B.png",
+      "re_folder": "3RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 29,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "22",
+          "score": 0.705
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 41,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "3",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 52,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.85
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S4 S1 R12 C05.png",
+      "re_folder": "3RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 12,
+            "x1": 30,
+            "y0": 39,
+            "y1": 61,
+            "n": 2
+          },
+          "value": "8",
+          "score": 0.994
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "3",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.995
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S4 S1 R12 C05B.png",
+      "re_folder": "3RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 19,
+            "x1": 30,
+            "y0": 40,
+            "y1": 61,
+            "n": 1
+          },
+          "value": "20",
+          "score": 0.888
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 42,
+            "y0": 38,
+            "y1": 50,
+            "n": 1
+          },
+          "value": "3",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 42,
+            "x1": 53,
+            "y0": 40,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.853
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "S4 S1 R12 C07.png",
+      "re_folder": "3RE",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 31,
+            "y0": 38,
+            "y1": 59,
+            "n": 2
+          },
+          "value": "8",
+          "score": 0.907
+        },
+        "AR": {
+          "box": {
+            "x0": 29,
+            "x1": 43,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "13",
+          "score": 0.893
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 38,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "3",
+          "score": 0.688
+        }
+      },
+      "review": ["AR非单位数"]
+    },
+    {
+      "file": "S4 S1 R12 C07B.png",
+      "re_folder": "3RE",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 20,
+            "x1": 30,
+            "y0": 39,
+            "y1": 60,
+            "n": 1
+          },
+          "value": "1",
+          "score": 0.762
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 42,
+            "y0": 37,
+            "y1": 49,
+            "n": 1
+          },
+          "value": "3",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 43,
+            "x1": 53,
+            "y0": 39,
+            "y1": 59,
+            "n": 1
+          },
+          "value": "5",
+          "score": 0.826
+        }
+      },
+      "review": []
+    }
+  ]
+}

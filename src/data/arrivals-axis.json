@@ -1,0 +1,1337 @@
+{
+  "meta": {
+    "version": "0.4.0",
+    "description": "到达表（A8·德）：日期块（原文串）+ 结构化单位视图 + 该方到达规则备注与判定表",
+    "source": [
+      "arrivals.json（按到达卡逐栏实物核对，status = verified）",
+      "arrivals.json roster_entries（同一来源的单位名单结构化展开）",
+      "rules.json exclusive_rules_smolensk.axis_special（variable_exit / random_events）"
+    ]
+  },
+  "side": "axis",
+  "header": "New units enter play per 3.1. All types of Transport Points arrive loaded (with extra SP).",
+  "blocks": [
+    {
+      "date": "8 Jul 41",
+      "entries": {},
+      "notes": [
+        "Axis Rail Cap is 0 at start.",
+        "No hedgerows above L-1 (1.3b).",
+        "Begin Security Needs (3.3b).",
+        "Begin Guderian & Hoth (3.4)."
+      ]
+    },
+    {
+      "date": "12 Jul 41",
+      "entries": {
+        "Entry K": [
+          "5th Corps HQ",
+          "20-4-3 Inf Div (5, 35; one is -1 step)",
+          "7-5-7 Flm Pz Bn (101)",
+          "2-4-8 PJ Bn (643)",
+          "3-5-10 PJ Co (1-8)",
+          "3 Truck Points (loaded with SP)",
+          "3 Wagon Points (loaded with SP)"
+        ],
+        "Entry I or J": [
+          "2x Corps HQ (9, 12)",
+          "20-4-3 Inf Div (17, 31, 34, 137, 263, 292; two are -1 step)",
+          "5-5-3 MG Bn (5)",
+          "7-5-7 Flm Pz Bn (100)",
+          "2-4-6 PJ Bn (611)",
+          "2-3-8 PJ Bn (529)",
+          "5-5-8 AG Bn (192, 203, 226)",
+          "5-3-8 AG Bn (201)",
+          "18-2-3 Werfer Bn (6, 8, 105)",
+          "1 Truck Point (loaded with SP)",
+          "2 Wagon Points (loaded with SP)"
+        ],
+        "Entry G or H": [
+          "20-4-3 Inf Div (255; -1 step)",
+          "3-5-8 Aufk Bn (Lehr)",
+          "2-4-8 PJ Bn (521)",
+          "1 Truck Point (loaded with SP)",
+          "2 Wagon Points (loaded with SP)"
+        ]
+      },
+      "remove": ["Ju.87b"],
+      "groups": [
+        {
+          "label": "Entry K",
+          "units": [
+            {
+              "raw": "5th Corps HQ",
+              "kind": "hq",
+              "name": "5th Corps HQ",
+              "locationKind": "entry",
+              "location": "Entry K"
+            },
+            {
+              "raw": "20-4-3 Inf Div (5, 35; one is -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "5 Inf Div",
+              "designation": "5",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry K"
+            },
+            {
+              "raw": "20-4-3 Inf Div (5, 35; one is -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "35 Inf Div",
+              "designation": "35",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry K"
+            },
+            {
+              "raw": "7-5-7 Flm Pz Bn (101)",
+              "factors": "7-5-7",
+              "count": 1,
+              "kind": "unit",
+              "name": "101 Flm Bn",
+              "designation": "101",
+              "parentType": "Flm Pz Bn",
+              "locationKind": "entry",
+              "location": "Entry K"
+            },
+            {
+              "raw": "2-4-8 PJ Bn (643)",
+              "factors": "2-4-8",
+              "count": 1,
+              "kind": "unit",
+              "name": "643 PJ Bn",
+              "designation": "643",
+              "parentType": "PJ Bn",
+              "locationKind": "entry",
+              "location": "Entry K"
+            },
+            {
+              "raw": "3-5-10 PJ Co (1-8)",
+              "factors": "3-5-10",
+              "count": 1,
+              "kind": "unit",
+              "name": "1-8 PJ Co",
+              "designation": "1-8",
+              "parentType": "PJ Co",
+              "locationKind": "entry",
+              "location": "Entry K"
+            },
+            {
+              "raw": "3 Truck Points (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry K"
+            },
+            {
+              "raw": "3 Wagon Points (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry K"
+            }
+          ]
+        },
+        {
+          "label": "Entry I or J",
+          "units": [
+            {
+              "raw": "2x Corps HQ (9, 12)",
+              "kind": "hq",
+              "name": "2x Corps HQ (9, 12)",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-4-3 Inf Div (17, 31, 34, 137, 263, 292; two are -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "17 Inf Div",
+              "designation": "17",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-4-3 Inf Div (17, 31, 34, 137, 263, 292; two are -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "31 Inf Div",
+              "designation": "31",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-4-3 Inf Div (17, 31, 34, 137, 263, 292; two are -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "34 Inf Div",
+              "designation": "34",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-4-3 Inf Div (17, 31, 34, 137, 263, 292; two are -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "137 Inf Div",
+              "designation": "137",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-4-3 Inf Div (17, 31, 34, 137, 263, 292; two are -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "263 Inf Div",
+              "designation": "263",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-4-3 Inf Div (17, 31, 34, 137, 263, 292; two are -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "292 Inf Div",
+              "designation": "292",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "5-5-3 MG Bn (5)",
+              "factors": "5-5-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "5 MG Bn",
+              "designation": "5",
+              "parentType": "MG Bn",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "7-5-7 Flm Pz Bn (100)",
+              "factors": "7-5-7",
+              "count": 1,
+              "kind": "unit",
+              "name": "100 Flm Bn",
+              "designation": "100",
+              "parentType": "Flm Pz Bn",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "2-4-6 PJ Bn (611)",
+              "factors": "2-4-6",
+              "count": 1,
+              "kind": "unit",
+              "name": "611 PJ Bn",
+              "designation": "611",
+              "parentType": "PJ Bn",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "2-3-8 PJ Bn (529)",
+              "factors": "2-3-8",
+              "count": 1,
+              "kind": "unit",
+              "name": "529 PJ Bn",
+              "designation": "529",
+              "parentType": "PJ Bn",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "5-5-8 AG Bn (192, 203, 226)",
+              "factors": "5-5-8",
+              "count": 1,
+              "kind": "unit",
+              "name": "192 AG Bn",
+              "designation": "192",
+              "parentType": "AG Bn",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "5-5-8 AG Bn (192, 203, 226)",
+              "factors": "5-5-8",
+              "count": 1,
+              "kind": "unit",
+              "name": "203 AG Bn",
+              "designation": "203",
+              "parentType": "AG Bn",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "5-5-8 AG Bn (192, 203, 226)",
+              "factors": "5-5-8",
+              "count": 1,
+              "kind": "unit",
+              "name": "226 AG Bn",
+              "designation": "226",
+              "parentType": "AG Bn",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "5-3-8 AG Bn (201)",
+              "factors": "5-3-8",
+              "count": 1,
+              "kind": "unit",
+              "name": "201 AG Bn",
+              "designation": "201",
+              "parentType": "AG Bn",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "18-2-3 Werfer Bn (6, 8, 105)",
+              "factors": "18-2-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "6 Werfer Bn",
+              "designation": "6",
+              "parentType": "Werfer Bn",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "18-2-3 Werfer Bn (6, 8, 105)",
+              "factors": "18-2-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "8 Werfer Bn",
+              "designation": "8",
+              "parentType": "Werfer Bn",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "18-2-3 Werfer Bn (6, 8, 105)",
+              "factors": "18-2-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "105 Werfer Bn",
+              "designation": "105",
+              "parentType": "Werfer Bn",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "1 Truck Point (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "2 Wagon Points (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            }
+          ]
+        },
+        {
+          "label": "Entry G or H",
+          "units": [
+            {
+              "raw": "20-4-3 Inf Div (255; -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "255 Inf Div",
+              "designation": "255",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry G or H"
+            },
+            {
+              "raw": "3-5-8 Aufk Bn (Lehr)",
+              "factors": "3-5-8",
+              "count": 1,
+              "kind": "unit",
+              "name": "Lehr Aufk Bn",
+              "designation": "Lehr",
+              "parentType": "Aufk Bn",
+              "locationKind": "entry",
+              "location": "Entry G or H"
+            },
+            {
+              "raw": "2-4-8 PJ Bn (521)",
+              "factors": "2-4-8",
+              "count": 1,
+              "kind": "unit",
+              "name": "521 PJ Bn",
+              "designation": "521",
+              "parentType": "PJ Bn",
+              "locationKind": "entry",
+              "location": "Entry G or H"
+            },
+            {
+              "raw": "1 Truck Point (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry G or H"
+            },
+            {
+              "raw": "2 Wagon Points (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry G or H"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "15 Jul 41",
+      "entries": {
+        "Entry K": [
+          "30-2-3 Werfer Rgt (51)",
+          "2x 26-2-2 Arty Grp",
+          "3 Truck Points (loaded with SP)"
+        ],
+        "Entry I or J": [
+          "7th Corps HQ",
+          "20-4-3 Inf Div (28, 258, 268; one is -1 step)",
+          "5-5-8 AG Bn (184)",
+          "(2)-3-3 PJ Bn (654)",
+          "30-2-3 Werfer Rgt (53)",
+          "2x 26-2-2 Arty Grp",
+          "2 Truck Points (loaded with SP)"
+        ],
+        "Entry G or H": ["53rd Corps HQ", "2x 26-2-2 Arty Grp", "2 Truck Points (loaded with SP)"],
+        "Entry F": ["1 Cav Div (I-1 Cav, II-1 Cav, I-2 Cav, II-2 Cav, 1 BC)"]
+      },
+      "remove": ["Hs.123", "He.111", "Ju.87b"],
+      "groups": [
+        {
+          "label": "Entry K",
+          "units": [
+            {
+              "raw": "30-2-3 Werfer Rgt (51)",
+              "factors": "30-2-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "51 Werfer Rgt",
+              "designation": "51",
+              "parentType": "Werfer Rgt",
+              "locationKind": "entry",
+              "location": "Entry K"
+            },
+            {
+              "raw": "2x 26-2-2 Arty Grp",
+              "factors": "26-2-2",
+              "count": 2,
+              "kind": "unit",
+              "name": "Arty Grp",
+              "locationKind": "entry",
+              "location": "Entry K"
+            },
+            {
+              "raw": "3 Truck Points (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry K"
+            }
+          ]
+        },
+        {
+          "label": "Entry I or J",
+          "units": [
+            {
+              "raw": "7th Corps HQ",
+              "kind": "hq",
+              "name": "7th Corps HQ",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-4-3 Inf Div (28, 258, 268; one is -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "28 Inf Div",
+              "designation": "28",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-4-3 Inf Div (28, 258, 268; one is -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "258 Inf Div",
+              "designation": "258",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-4-3 Inf Div (28, 258, 268; one is -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "268 Inf Div",
+              "designation": "268",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "5-5-8 AG Bn (184)",
+              "factors": "5-5-8",
+              "count": 1,
+              "kind": "unit",
+              "name": "184 AG Bn",
+              "designation": "184",
+              "parentType": "AG Bn",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "(2)-3-3 PJ Bn (654)",
+              "factors": "(2)-3-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "654 PJ Bn",
+              "designation": "654",
+              "parentType": "PJ Bn",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "30-2-3 Werfer Rgt (53)",
+              "factors": "30-2-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "53 Werfer Rgt",
+              "designation": "53",
+              "parentType": "Werfer Rgt",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "2x 26-2-2 Arty Grp",
+              "factors": "26-2-2",
+              "count": 2,
+              "kind": "unit",
+              "name": "Arty Grp",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "2 Truck Points (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            }
+          ]
+        },
+        {
+          "label": "Entry G or H",
+          "units": [
+            {
+              "raw": "53rd Corps HQ",
+              "kind": "hq",
+              "name": "53rd Corps HQ",
+              "locationKind": "entry",
+              "location": "Entry G or H"
+            },
+            {
+              "raw": "2x 26-2-2 Arty Grp",
+              "factors": "26-2-2",
+              "count": 2,
+              "kind": "unit",
+              "name": "Arty Grp",
+              "locationKind": "entry",
+              "location": "Entry G or H"
+            },
+            {
+              "raw": "2 Truck Points (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry G or H"
+            }
+          ]
+        },
+        {
+          "label": "Entry F",
+          "units": [
+            {
+              "raw": "1 Cav Div (I-1 Cav, II-1 Cav, I-2 Cav, II-2 Cav, 1 BC)",
+              "count": 1,
+              "kind": "unit",
+              "name": "I-1 Cav Cav Div",
+              "designation": "I-1 Cav",
+              "parentType": "1 Cav Div",
+              "locationKind": "entry",
+              "location": "Entry F"
+            },
+            {
+              "raw": "1 Cav Div (I-1 Cav, II-1 Cav, I-2 Cav, II-2 Cav, 1 BC)",
+              "count": 1,
+              "kind": "unit",
+              "name": "II-1 Cav Cav Div",
+              "designation": "II-1 Cav",
+              "parentType": "1 Cav Div",
+              "locationKind": "entry",
+              "location": "Entry F"
+            },
+            {
+              "raw": "1 Cav Div (I-1 Cav, II-1 Cav, I-2 Cav, II-2 Cav, 1 BC)",
+              "count": 1,
+              "kind": "unit",
+              "name": "I-2 Cav Cav Div",
+              "designation": "I-2 Cav",
+              "parentType": "1 Cav Div",
+              "locationKind": "entry",
+              "location": "Entry F"
+            },
+            {
+              "raw": "1 Cav Div (I-1 Cav, II-1 Cav, I-2 Cav, II-2 Cav, 1 BC)",
+              "count": 1,
+              "kind": "unit",
+              "name": "II-2 Cav Cav Div",
+              "designation": "II-2 Cav",
+              "parentType": "1 Cav Div",
+              "locationKind": "entry",
+              "location": "Entry F"
+            },
+            {
+              "raw": "1 Cav Div (I-1 Cav, II-1 Cav, I-2 Cav, II-2 Cav, 1 BC)",
+              "count": 1,
+              "kind": "unit",
+              "name": "1 BC Cav Div",
+              "designation": "1 BC",
+              "parentType": "1 Cav Div",
+              "locationKind": "entry",
+              "location": "Entry F"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "19 Jul 41",
+      "entries": {
+        "Entry K or L": [
+          "57th Mtr Corps HQ",
+          "19 Pz Div (I-27 Pz, II-27 Pz, 19 Krd, 73 Inf, 74 Inf, 19 Arty, 'F' Truck)",
+          "18 Mtr Div (38 Krd, 30 Inf, 51 Inf, 18 Arty, 'F' Truck)",
+          "20-4-3 Inf Div (129; -1 step)",
+          "3-3-6 PJ Bn (561)",
+          "18-2-3 Werfer Bn (3, 103)",
+          "2x 26-2-2 Arty Grp",
+          "2 Truck Points (loaded with SP)"
+        ],
+        "Entry I or J": [
+          "13th Corps HQ",
+          "20-5-4 Inf Div (78)",
+          "20-4-3 Inf Div (7, 23)",
+          "2x 26-2-2 Arty Grp"
+        ],
+        "Entry G or H": ["20-4-3 Inf Div (167; -1 step)"]
+      },
+      "notes": ["Axis Rail Cap is now 1.", "Begin Random Events (3.6)."],
+      "anyAirbase": ["2x He.111"],
+      "deadPile": ["19 Pz Div (19 Aufk, III-27 Pz)", "18 Mtr Div (18 Aufk)"],
+      "anyWestEdge": ["(1)-2-5 RR Eng Bn (I-2, II-2)"],
+      "groups": [
+        {
+          "label": "Entry K or L",
+          "units": [
+            {
+              "raw": "57th Mtr Corps HQ",
+              "kind": "hq",
+              "name": "57th Mtr Corps HQ",
+              "locationKind": "entry",
+              "location": "Entry K or L"
+            },
+            {
+              "raw": "19 Pz Div (I-27 Pz, II-27 Pz, 19 Krd, 73 Inf, 74 Inf, 19 Arty, 'F' Truck)",
+              "count": 1,
+              "kind": "formation",
+              "name": "19 Pz Div",
+              "locationKind": "entry",
+              "location": "Entry K or L"
+            },
+            {
+              "raw": "18 Mtr Div (38 Krd, 30 Inf, 51 Inf, 18 Arty, 'F' Truck)",
+              "count": 1,
+              "kind": "formation",
+              "name": "18 Mtr Div",
+              "locationKind": "entry",
+              "location": "Entry K or L"
+            },
+            {
+              "raw": "20-4-3 Inf Div (129; -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "129 Inf Div",
+              "designation": "129",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry K or L"
+            },
+            {
+              "raw": "3-3-6 PJ Bn (561)",
+              "factors": "3-3-6",
+              "count": 1,
+              "kind": "unit",
+              "name": "561 PJ Bn",
+              "designation": "561",
+              "parentType": "PJ Bn",
+              "locationKind": "entry",
+              "location": "Entry K or L"
+            },
+            {
+              "raw": "18-2-3 Werfer Bn (3, 103)",
+              "factors": "18-2-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "3 Werfer Bn",
+              "designation": "3",
+              "parentType": "Werfer Bn",
+              "locationKind": "entry",
+              "location": "Entry K or L"
+            },
+            {
+              "raw": "18-2-3 Werfer Bn (3, 103)",
+              "factors": "18-2-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "103 Werfer Bn",
+              "designation": "103",
+              "parentType": "Werfer Bn",
+              "locationKind": "entry",
+              "location": "Entry K or L"
+            },
+            {
+              "raw": "2x 26-2-2 Arty Grp",
+              "factors": "26-2-2",
+              "count": 2,
+              "kind": "unit",
+              "name": "Arty Grp",
+              "locationKind": "entry",
+              "location": "Entry K or L"
+            },
+            {
+              "raw": "2 Truck Points (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry K or L"
+            }
+          ]
+        },
+        {
+          "label": "Entry I or J",
+          "units": [
+            {
+              "raw": "13th Corps HQ",
+              "kind": "hq",
+              "name": "13th Corps HQ",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-5-4 Inf Div (78)",
+              "factors": "20-5-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "78 Inf Div",
+              "designation": "78",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-4-3 Inf Div (7, 23)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "7 Inf Div",
+              "designation": "7",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-4-3 Inf Div (7, 23)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "23 Inf Div",
+              "designation": "23",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "2x 26-2-2 Arty Grp",
+              "factors": "26-2-2",
+              "count": 2,
+              "kind": "unit",
+              "name": "Arty Grp",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            }
+          ]
+        },
+        {
+          "label": "Entry G or H",
+          "units": [
+            {
+              "raw": "20-4-3 Inf Div (167; -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "167 Inf Div",
+              "designation": "167",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry G or H"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "22 Jul 41",
+      "entries": {
+        "Entry K": ["20th Corps HQ", "20-4-3 Inf Div (6)", "5-5-8 AG Bn (210)", "26-2-2 Arty Grp"],
+        "Entry F": ["20-4-3 Inf Div (112, 131; one is -1 step)"]
+      },
+      "groups": [
+        {
+          "label": "Entry K",
+          "units": [
+            {
+              "raw": "20th Corps HQ",
+              "kind": "hq",
+              "name": "20th Corps HQ",
+              "locationKind": "entry",
+              "location": "Entry K"
+            },
+            {
+              "raw": "20-4-3 Inf Div (6)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "6 Inf Div",
+              "designation": "6",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry K"
+            },
+            {
+              "raw": "5-5-8 AG Bn (210)",
+              "factors": "5-5-8",
+              "count": 1,
+              "kind": "unit",
+              "name": "210 AG Bn",
+              "designation": "210",
+              "parentType": "AG Bn",
+              "locationKind": "entry",
+              "location": "Entry K"
+            },
+            {
+              "raw": "26-2-2 Arty Grp",
+              "factors": "26-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "Arty Grp",
+              "locationKind": "entry",
+              "location": "Entry K"
+            }
+          ]
+        },
+        {
+          "label": "Entry F",
+          "units": [
+            {
+              "raw": "20-4-3 Inf Div (112, 131; one is -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "112 Inf Div",
+              "designation": "112",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry F"
+            },
+            {
+              "raw": "20-4-3 Inf Div (112, 131; one is -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "131 Inf Div",
+              "designation": "131",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry F"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "26 Jul 41",
+      "entries": {
+        "Entry K": ["20-4-3 Inf Div (106; -1 step)"],
+        "Entry I or J": ["20-4-3 Inf Div (8, 15)"],
+        "Entry G or H": ["20-4-3 Inf Div (197; -1 step)"]
+      },
+      "groups": [
+        {
+          "label": "Entry K",
+          "units": [
+            {
+              "raw": "20-4-3 Inf Div (106; -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "106 Inf Div",
+              "designation": "106",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry K"
+            }
+          ]
+        },
+        {
+          "label": "Entry I or J",
+          "units": [
+            {
+              "raw": "20-4-3 Inf Div (8, 15)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "8 Inf Div",
+              "designation": "8",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-4-3 Inf Div (8, 15)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "15 Inf Div",
+              "designation": "15",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            }
+          ]
+        },
+        {
+          "label": "Entry G or H",
+          "units": [
+            {
+              "raw": "20-4-3 Inf Div (197; -1 step)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "197 Inf Div",
+              "designation": "197",
+              "parentType": "Inf Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry G or H"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "29 Jul 41",
+      "entries": {
+        "Entry I or J": ["8th Corps HQ", "20-4-3 Inf Div (161)", "4-3-2 Sec Div (286)"]
+      },
+      "remove": ["(2)-3-3 PJ Bn (654)"],
+      "groups": [
+        {
+          "label": "Entry I or J",
+          "units": [
+            {
+              "raw": "8th Corps HQ",
+              "kind": "hq",
+              "name": "8th Corps HQ",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-4-3 Inf Div (161)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "161 Inf Div",
+              "designation": "161",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "4-3-2 Sec Div (286)",
+              "factors": "4-3-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "286 Sec Div",
+              "designation": "286",
+              "parentType": "Sec Div",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "1 Aug 41",
+      "entries": {},
+      "remove": ["7x Reserve Markers", "Bf.109e-7", "2x Bf.110", "2x Do.17z", "He.111"]
+    },
+    {
+      "date": "5 Aug 41",
+      "entries": {
+        "Entry I or J": ["5-5-8 AG Bn (189)"],
+        "Entry G or H": ["7-3-2 Sec Div (221)"]
+      },
+      "remove": ["Bf.109e", "Ju.52", "2x Ju.87b", "Ju.88"],
+      "groups": [
+        {
+          "label": "Entry I or J",
+          "units": [
+            {
+              "raw": "5-5-8 AG Bn (189)",
+              "factors": "5-5-8",
+              "count": 1,
+              "kind": "unit",
+              "name": "189 AG Bn",
+              "designation": "189",
+              "parentType": "AG Bn",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            }
+          ]
+        },
+        {
+          "label": "Entry G or H",
+          "units": [
+            {
+              "raw": "7-3-2 Sec Div (221)",
+              "factors": "7-3-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "221 Sec Div",
+              "designation": "221",
+              "parentType": "Sec Div",
+              "locationKind": "entry",
+              "location": "Entry G or H"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "19 Aug 41",
+      "entries": {
+        "Entry F": ["20-4-3 Inf Div (162, 267; both -2 steps)"],
+        "Entry K or L": ["14 Mtr Div (14 Aufk, 11 Inf, 14 Arty, 'F' Truck)"]
+      },
+      "notes": [
+        "Begin checks for Variable Exit (3.3c).",
+        "Begin checks for Early Decision (5.0b).",
+        "No more Special Repls.",
+        "No more Guderian & Hoth (3.4).",
+        "No more Random Events (3.6)."
+      ],
+      "remove": [
+        "5x Mtr Corps HQ (24, 39, 46, 47, 57)",
+        "2x Corps HQ (12, 13)",
+        "7x Pz Div (3, 4, 12, 17, 18, 19, 20; all units)",
+        "4x Mtr Div (10, 18, 20, 29; all units)",
+        "1 Cav Div (all 9 units)",
+        "20-4-3 Inf Div (17, 31, 34, 112, 131, 167; must total at least 12 steps)",
+        "3-5-8 Aufk Bn (Lehr)",
+        "2-4-8 PJ Bn (521, 643)",
+        "2-3-8 PJ Bn (529)",
+        "2-4-6 PJ Bn (611)",
+        "3-5-10 PJ Co (1-8)",
+        "10-5-4 Inf Rgt (IRGD)",
+        "7-5-7 Flm Pz Bn (100, 101)",
+        "5-5-3 Mtr MG Bn (5)",
+        "5-5-8 AG Bn (192, 203, 226)",
+        "5-3-8 AG Bn (201)",
+        "30-2-3 Werfer Rgt (51, 53)",
+        "18-2-3 Werfer Bn (6, 8, 105)",
+        "6x 26-2-2 Arty Grp",
+        "10 Truck Points",
+        "6 Wagon Points",
+        "2x Bf.110",
+        "2x Ju.87b"
+      ],
+      "deadPile": ["14 Mtr Div (54 Krd, 53 Inf)"],
+      "groups": [
+        {
+          "label": "Entry F",
+          "units": [
+            {
+              "raw": "20-4-3 Inf Div (162, 267; both -2 steps)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "162 Inf Div",
+              "designation": "162",
+              "parentType": "Inf Div",
+              "stepsLost": 2,
+              "locationKind": "entry",
+              "location": "Entry F"
+            },
+            {
+              "raw": "20-4-3 Inf Div (162, 267; both -2 steps)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "267 Inf Div",
+              "designation": "267",
+              "parentType": "Inf Div",
+              "stepsLost": 2,
+              "locationKind": "entry",
+              "location": "Entry F"
+            }
+          ]
+        },
+        {
+          "label": "Entry K or L",
+          "units": [
+            {
+              "raw": "14 Mtr Div (14 Aufk, 11 Inf, 14 Arty, 'F' Truck)",
+              "count": 1,
+              "kind": "formation",
+              "name": "14 Mtr Div",
+              "locationKind": "entry",
+              "location": "Entry K or L"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "22 Aug 41",
+      "entries": {
+        "Entry I or J": ["6-2-2 Sec Div (403)", "20-4-3 Inf Div (87; -2 steps)"],
+        "Entry F": ["20-4-3 Inf Div (252; -2 steps)"]
+      },
+      "groups": [
+        {
+          "label": "Entry I or J",
+          "units": [
+            {
+              "raw": "6-2-2 Sec Div (403)",
+              "factors": "6-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "403 Sec Div",
+              "designation": "403",
+              "parentType": "Sec Div",
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            },
+            {
+              "raw": "20-4-3 Inf Div (87; -2 steps)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "87 Inf Div",
+              "designation": "87",
+              "parentType": "Inf Div",
+              "stepsLost": 2,
+              "locationKind": "entry",
+              "location": "Entry I or J"
+            }
+          ]
+        },
+        {
+          "label": "Entry F",
+          "units": [
+            {
+              "raw": "20-4-3 Inf Div (252; -2 steps)",
+              "factors": "20-4-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "252 Inf Div",
+              "designation": "252",
+              "parentType": "Inf Div",
+              "stepsLost": 2,
+              "locationKind": "entry",
+              "location": "Entry F"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "1 Sep 41",
+      "entries": {
+        "Entry F": ["2-4-6 PJ Bn (611; returning)"]
+      },
+      "groups": [
+        {
+          "label": "Entry F",
+          "units": [
+            {
+              "raw": "2-4-6 PJ Bn (611; returning)",
+              "factors": "2-4-6",
+              "count": 1,
+              "kind": "unit",
+              "name": "611 PJ Bn",
+              "designation": "611",
+              "parentType": "PJ Bn",
+              "locationKind": "entry",
+              "location": "Entry F"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Some German divisions arrive with steps lost (combat losses plus personnel herding POWs and keeping supply routes open).",
+    "The removals of air units and Reserve markers in early August show the offensive focus shifting north and south, with a defensive posture taken here.",
+    "The Axis player may leave behind as many breakdowns as possible from the infantry divisions withdrawn on 19 August."
+  ],
+  "errataApplied": [
+    "78 Inf Div：战斗模式面 20-5-4 / 移动模式面 10-5-6（同一算子的两个模式面，非版本冲突）",
+    "35 Inf Div：战斗模式面 20-4-3 / 移动模式面 10-4-5",
+    "57 Tk Div：16-1-3（SmolenskErrata 覆盖）",
+    "苏联 1 Sept 抵达的坦克营：4-2-4（SmolenskErrata 覆盖）",
+    "Frontal Reserves 的 SP：2（SmolenskErrata 覆盖）",
+    "Scenario 3/5/7 的 Rail Cap：轴 1 / 苏 3（SmolenskErrata 覆盖）"
+  ],
+  "dataQualityNotes": [
+    "到达卡为多栏排版且存在跨栏续排：按栏读会把相邻日期的部队记错日期，必须按“日期标题→下一日期标题”归并。",
+    "AxOOA 卡第 2 栏栏首区块与 SvOOA 卡第 2 栏栏首区块均无独立日期标题，属跨栏续排；其归属已按逐栏核对裁定，见 meta.resolved_assignments。",
+    "AxOOA 第 4 栏 Remove 块中 “2-3-8 PJ Bn 529)” 原文缺左括号。",
+    "两卡分辨率偏低（正文约 7-8 px），militia 编制号中的字母 M 与数字 5/8 极易混淆。",
+    "两张卡均未印回合编号，需与回合轨日期表对照（见 smolensk_charts_db.json -> weather.turn_track）。"
+  ],
+  "resolvedAssignments": [
+    {
+      "items": [
+        "7th Corps HQ",
+        "20-4-3 Inf Div (28, 258, 268)",
+        "5-5-8 AG Bn (184)",
+        "(2)-3-3 PJ Bn (654)",
+        "30-2-3 Werfer Rgt (53)",
+        "2x 26-2-2 Arty Grp",
+        "2 Truck Points"
+      ],
+      "resolved": "15 Jul 41 / Entry I or J",
+      "supersededReadings": ["8 Jul 41 / Entry I or J（PDF 文本层）"],
+      "basis": "逐栏核对：该区块属 15 Jul 日期块，承接同一日期块续排"
+    },
+    {
+      "items": ["53rd Corps HQ", "2x 26-2-2 Arty Grp", "2 Truck Points"],
+      "resolved": "15 Jul 41 / Entry G or H",
+      "supersededReadings": ["22 Jul 41（旧图版目检）"],
+      "basis": "53rd Corps HQ 属 15 Jul；旧记录与 20th Corps HQ 混为一组导致误记"
+    },
+    {
+      "items": ["20th Corps HQ", "20-4-3 Inf Div (6)", "5-5-8 AG Bn (210)", "26-2-2 Arty Grp"],
+      "resolved": "22 Jul 41 / Entry K",
+      "supersededReadings": ["15 Jul 41 / 22 Jul 41 混合（PDF 文本层）"],
+      "basis": "20th Corps HQ 属 22 Jul，与 53rd Corps HQ 分属不同日期块"
+    },
+    {
+      "items": [
+        "19 Pz Div (I-27 Pz, II-27 Pz, 19 Krd, 73 Inf, 74 Inf, 19 Arty, 'F' Truck)",
+        "18 Mtr Div (38 Krd, 30 Inf, 51 Inf, 18 Arty, 'F' Truck)"
+      ],
+      "resolved": "19 Jul 41 / Entry K or L",
+      "supersededReadings": ["29 Jul 41 / Entry I or J（PDF 文本层）"],
+      "basis": "逐栏核对；死亡堆中 19 Aufk/III/27 Pz 与 18 Aufk 的加入时机同日"
+    },
+    {
+      "items": [
+        "13th Corps HQ",
+        "20-5-4 Inf Div (78)",
+        "20-4-3 Inf Div (7, 23)",
+        "2x 26-2-2 Arty Grp"
+      ],
+      "resolved": "19 Jul 41 / Entry I or J",
+      "supersededReadings": ["1 Aug 41 / Entry I or J（PDF 文本层）"],
+      "basis": "逐栏核对；78 Inf Div 的 20-5-4 与 10-5-6 是两个模式面，非冲突"
+    },
+    {
+      "items": ["2x Bf.110"],
+      "resolved": "1 Aug 41 的 Remove 块",
+      "supersededReadings": ["5 Aug 41（旧图版目检）"],
+      "basis": "逐栏核对：2x Bf.110 印在 1 Aug 的 Remove 块内"
+    },
+    {
+      "items": ["(1)-2-5 RR Eng Bn (I-2, II-2)"],
+      "resolved": "19 Jul 41 / Any west edge hexes",
+      "supersededReadings": ["Any hexes in 01.xx row（旧记法）"],
+      "basis": "入场卡原文为 Any west edge hexes；01.xx row 属可选规则 4.1c，其要求改为从 01.xx 行入场后赶往 Entry H / J"
+    }
+  ],
+  "variableExit": {
+    "starts": "19 August",
+    "rollIn": "Axis Reinforcement Phase, every turn until a division is removed",
+    "table": {
+      "1": "remove SS Reich (all)",
+      "6": "remove 14 Mtr (all)",
+      "2-5": "roll again next turn"
+    }
+  },
+  "randomEvents": {
+    "period": "19 July - 15 August inclusive, Axis Reinforcement Phase",
+    "table": {
+      "4": "He.111",
+      "10": "Ju.52",
+      "2-3": "Bf.110",
+      "5-9": "Supply Train",
+      "11-12": "Ju.88"
+    },
+    "airResult": "all air units of the listed type immediately become Inactive (assigned off-map missions this turn)",
+    "supplyTrain": "the Axis gets 2 SP of extra supply at any one detrainable hex (no Rail Cap used)",
+    "option4_1b": "the Supply Train event occurs automatically on both 8 July and 12 July"
+  }
+}

@@ -1,0 +1,4004 @@
+{
+  "count": 481,
+  "items": [
+    {
+      "unit": "su-armor_tk-ru-26-tk-div",
+      "file": "S S1 R09 C03.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "4",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-armor_tk-ru-26-tk-div",
+      "file": "S S1 R09 C03.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-armor_tk-ru-26-tk-div",
+      "file": "S S1 R09 C03B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-armor_tk-ru-26-tk-div",
+      "file": "S S1 R09 C03B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-armor_tk-ru-26-tk-div",
+      "file": "S S1 R09 C03B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-armor_tk-ru-38-tk-div",
+      "file": "S S1 R09 C04.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "3",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-armor_tk-ru-38-tk-div",
+      "file": "S S1 R09 C04.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-armor_tk-ru-38-tk-div",
+      "file": "S S1 R09 C04B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-armor_tk-ru-38-tk-div",
+      "file": "S S1 R09 C04B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-armor_tk-ru-38-tk-div",
+      "file": "S S1 R09 C04B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-6-rifle-div",
+      "file": "BD2 S1 R10 C09B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-17-rifle-div",
+      "file": "S3 S1 R09 C06.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-18-rifle-div",
+      "file": "BD2 S1 R11 C01.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "11",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-18-rifle-div",
+      "file": "BD2 S1 R11 C01.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-18-rifle-div",
+      "file": "BD2 S1 R11 C01B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-18-rifle-div",
+      "file": "BD2 S1 R11 C01B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-18-rifle-div",
+      "file": "BD2 S1 R11 C01B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-19-rifle-div",
+      "file": "BD2 S1 R11 C02.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-19-rifle-div",
+      "file": "BD2 S1 R11 C02B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-24-rifle-div",
+      "file": "BD2 S1 R11 C03.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-24-rifle-div",
+      "file": "BD2 S1 R11 C03.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-24-rifle-div",
+      "file": "BD2 S1 R11 C03B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "20",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-24-rifle-div",
+      "reason": "双面违反: front.A(2) <= back.A(20)"
+    },
+    {
+      "unit": "su-infantry-ru-38-rifle-div",
+      "file": "BD2 S1 R11 C04.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-38-rifle-div",
+      "file": "BD2 S1 R11 C04.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-38-rifle-div",
+      "file": "BD2 S1 R11 C04B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-38-rifle-div",
+      "file": "BD2 S1 R11 C04B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-38-rifle-div",
+      "file": "BD2 S1 R11 C04B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-38-rifle-div",
+      "reason": "双面违反: front.A(1) <= back.A(5)"
+    },
+    {
+      "unit": "su-infantry-ru-42-rifle-div",
+      "file": "BD2 S1 R11 C05.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-42-rifle-div",
+      "file": "BD2 S1 R11 C05.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-42-rifle-div",
+      "file": "BD2 S1 R11 C05B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "20",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-42-rifle-div",
+      "reason": "双面违反: front.A(2) <= back.A(20)"
+    },
+    {
+      "unit": "su-infantry-ru-46-rifle-div",
+      "file": "BD2 S1 R11 C06.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-46-rifle-div",
+      "file": "BD2 S1 R11 C06.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-46-rifle-div",
+      "file": "BD2 S1 R11 C06B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-46-rifle-div",
+      "file": "BD2 S1 R11 C06B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-46-rifle-div",
+      "file": "BD2 S1 R11 C06B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-46-rifle-div",
+      "reason": "双面违反: front.A(1) <= back.A(5)"
+    },
+    {
+      "unit": "su-infantry-ru-49-rifle-div",
+      "file": "BD2 S1 R11 C07.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-49-rifle-div",
+      "file": "BD2 S1 R11 C07B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "9",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-50-rifle-div",
+      "file": "BD2 S1 R11 C08.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-50-rifle-div",
+      "file": "BD2 S1 R11 C08B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "20",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-50-rifle-div",
+      "file": "BD2 S1 R11 C08B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-50-rifle-div",
+      "reason": "双面违反: front.A(12) <= back.A(20)"
+    },
+    {
+      "unit": "su-infantry-ru-55-rifle-div",
+      "file": "BD2 S1 R11 C10.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-55-rifle-div",
+      "file": "BD2 S1 R11 C10B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-61-rifle-div",
+      "file": "BD2 S1 R12 C01.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-61-rifle-div",
+      "file": "BD2 S1 R12 C01B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "20",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-61-rifle-div",
+      "reason": "双面违反: front.A(12) <= back.A(20)"
+    },
+    {
+      "unit": "su-infantry-ru-64-rifle-div",
+      "file": "S4 S1 R10 C08.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "11",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-64-rifle-div",
+      "file": "S4 S1 R10 C08.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-64-rifle-div",
+      "file": "S4 S1 R10 C08B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-64-rifle-div",
+      "file": "S4 S1 R10 C08B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-64-rifle-div",
+      "file": "S4 S1 R10 C08B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-73-rifle-div",
+      "file": "BD2 S1 R12 C03.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-73-rifle-div",
+      "file": "BD2 S1 R12 C03.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-73-rifle-div",
+      "file": "BD2 S1 R12 C03B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-73-rifle-div",
+      "reason": "双面违反: front.A(2) <= back.A(2)"
+    },
+    {
+      "unit": "su-infantry-ru-89-rifle-div",
+      "file": "BD2 S1 R12 C04.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-89-rifle-div",
+      "file": "BD2 S1 R12 C04B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "20",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-89-rifle-div",
+      "reason": "双面违反: front.A(12) <= back.A(20)"
+    },
+    {
+      "unit": "su-infantry-ru-91-rifle-div",
+      "file": "BD2 S1 R12 C05.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-91-rifle-div",
+      "file": "BD2 S1 R12 C05B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "20",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-91-rifle-div",
+      "reason": "双面违反: front.A(12) <= back.A(20)"
+    },
+    {
+      "unit": "su-infantry-ru-100-rifle-div",
+      "file": "S4 S1 R11 C03.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "8",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-100-rifle-div",
+      "file": "S4 S1 R11 C03.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-100-rifle-div",
+      "file": "S4 S1 R11 C03B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "22",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-100-rifle-div",
+      "file": "S4 S1 R11 C03B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-100-rifle-div",
+      "file": "S4 S1 R11 C03B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "5",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-100-rifle-div",
+      "reason": "双面违反: front.A(8) <= back.A(22)"
+    },
+    {
+      "unit": "su-infantry-ru-102-rifle-div",
+      "file": "BD2 S1 R12 C07.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-102-rifle-div",
+      "file": "BD2 S1 R12 C07B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-103-rifle-div",
+      "file": "S S1 R11 C05.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-103-rifle-div",
+      "file": "S S1 R11 C05.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-103-rifle-div",
+      "file": "S S1 R11 C05B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-103-rifle-div",
+      "file": "S S1 R11 C05B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-103-rifle-div",
+      "file": "S S1 R11 C05B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-107-rifle-div",
+      "file": "S3 S1 R11 C09B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "0",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-107-rifle-div",
+      "file": "S3 S1 R11 C09B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-108-rifle-div",
+      "file": "BD2 S1 R12 C09.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-108-rifle-div",
+      "file": "BD2 S1 R12 C09B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "1",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-108-rifle-div",
+      "reason": "双面违反: back.MA(1) <= front.MA(2)"
+    },
+    {
+      "unit": "su-infantry-ru-109-rifle-div",
+      "file": "S5 S1 R12 C01.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-109-rifle-div",
+      "file": "S5 S1 R12 C01.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-109-rifle-div",
+      "file": "S5 S1 R12 C01B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "3",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-109-rifle-div",
+      "file": "S5 S1 R12 C01B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "10",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-110-rifle-div",
+      "file": "BD2 S1 R12 C10.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-110-rifle-div",
+      "file": "BD2 S1 R12 C10B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-117-rifle-div",
+      "file": "BD2 S1 R13 C01.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-119-rifle-div",
+      "file": "BD2 S1 R13 C02B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-119-rifle-div",
+      "file": "BD2 S1 R13 C02B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "7",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-120-rifle-div",
+      "file": "S4 S1 R12 C05.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "8",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-120-rifle-div",
+      "file": "S4 S1 R12 C05.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-120-rifle-div",
+      "file": "S4 S1 R12 C05.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-120-rifle-div",
+      "file": "S4 S1 R12 C05B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "20",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-120-rifle-div",
+      "file": "S4 S1 R12 C05B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-120-rifle-div",
+      "file": "S4 S1 R12 C05B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "5",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-120-rifle-div",
+      "reason": "双面违反: front.A(8) <= back.A(20)"
+    },
+    {
+      "unit": "su-infantry-ru-121-rifle-div",
+      "file": "BD2 S1 R13 C04.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "11",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-121-rifle-div",
+      "file": "BD2 S1 R13 C04.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-121-rifle-div",
+      "file": "BD2 S1 R13 C04B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-121-rifle-div",
+      "file": "BD2 S1 R13 C04B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-121-rifle-div",
+      "file": "BD2 S1 R13 C04B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-126-rifle-div",
+      "file": "S4 S1 R04 C11.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-126-rifle-div",
+      "file": "S4 S1 R04 C11.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-126-rifle-div",
+      "file": "S4 S1 R04 C11B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-126-rifle-div",
+      "file": "S4 S1 R04 C11B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-126-rifle-div",
+      "file": "S4 S1 R04 C11B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-126-rifle-div",
+      "reason": "双面违反: front.A(1) <= back.A(1)"
+    },
+    {
+      "unit": "su-infantry-ru-127-rifle-div",
+      "file": "S4 S1 R12 C07.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "8",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-127-rifle-div",
+      "file": "S4 S1 R12 C07.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "13",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-127-rifle-div",
+      "file": "S4 S1 R12 C07.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-127-rifle-div",
+      "file": "S4 S1 R12 C07B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-127-rifle-div",
+      "file": "S4 S1 R12 C07B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-127-rifle-div",
+      "file": "S4 S1 R12 C07B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "5",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-129-rifle-div",
+      "file": "BD2 S1 R13 C06.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-129-rifle-div",
+      "file": "BD2 S1 R13 C06B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-132-rifle-div",
+      "file": "BD2 S1 R13 C07.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "11",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-132-rifle-div",
+      "file": "BD2 S1 R13 C07.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-132-rifle-div",
+      "file": "BD2 S1 R13 C07B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-132-rifle-div",
+      "file": "BD2 S1 R13 C07B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-133-rifle-div",
+      "file": "BD2 S1 R13 C08.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-133-rifle-div",
+      "file": "BD2 S1 R13 C08B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-133-rifle-div",
+      "file": "BD2 S1 R13 C08B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-134-rifle-div",
+      "file": "BD2 S1 R13 C09.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-134-rifle-div",
+      "file": "BD2 S1 R13 C09.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-134-rifle-div",
+      "file": "BD2 S1 R13 C09B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-134-rifle-div",
+      "reason": "双面违反: front.A(10) <= back.A(10)"
+    },
+    {
+      "unit": "su-infantry-ru-137-rifle-div",
+      "file": "BD2 S1 R13 C10B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "12",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-137-rifle-div",
+      "file": "BD2 S1 R13 C10B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "1",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-137-rifle-div",
+      "reason": "双面违反: front.A(12) <= back.A(12)"
+    },
+    {
+      "unit": "su-infantry-ru-143-rifle-div",
+      "file": "BD2 S1 R14 C01.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-143-rifle-div",
+      "file": "BD2 S1 R14 C01B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-143-rifle-div",
+      "file": "BD2 S1 R14 C01B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-143-rifle-div",
+      "file": "BD2 S1 R14 C01B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-144-rifle-div",
+      "file": "BD2 S1 R14 C02.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-144-rifle-div",
+      "file": "BD2 S1 R14 C02B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "12",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-144-rifle-div",
+      "file": "BD2 S1 R14 C02B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "1",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-144-rifle-div",
+      "reason": "双面违反: front.A(12) <= back.A(12)"
+    },
+    {
+      "unit": "su-infantry-ru-144-rifle-div",
+      "reason": "双面违反: back.MA(1) <= front.MA(2)"
+    },
+    {
+      "unit": "su-infantry-ru-145-rifle-div",
+      "file": "S2 S1 R13 C05.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "0",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-145-rifle-div",
+      "file": "S2 S1 R13 C05.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-145-rifle-div",
+      "file": "S2 S1 R13 C05B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-145-rifle-div",
+      "file": "S2 S1 R13 C05B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-145-rifle-div",
+      "reason": "双面违反: front.A(0) <= back.A(10)"
+    },
+    {
+      "unit": "su-infantry-ru-148-rifle-div",
+      "file": "BD2 S1 R14 C04.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-148-rifle-div",
+      "file": "BD2 S1 R14 C04B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "12",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-148-rifle-div",
+      "reason": "双面违反: front.A(12) <= back.A(12)"
+    },
+    {
+      "unit": "su-infantry-ru-149-rifle-div",
+      "file": "BD2 S1 R14 C05.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-149-rifle-div",
+      "file": "BD2 S1 R14 C05.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-149-rifle-div",
+      "file": "BD2 S1 R14 C05B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-149-rifle-div",
+      "reason": "双面违反: front.A(10) <= back.A(10)"
+    },
+    {
+      "unit": "su-infantry-ru-151-rifle-div",
+      "file": "BD2 S1 R14 C06.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-151-rifle-div",
+      "file": "BD2 S1 R14 C06.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-151-rifle-div",
+      "file": "BD2 S1 R14 C06B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "0",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-152-rifle-div",
+      "file": "BD2 S1 R14 C07.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-152-rifle-div",
+      "file": "BD2 S1 R14 C07.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-152-rifle-div",
+      "file": "BD2 S1 R14 C07B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "12",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-152-rifle-div",
+      "reason": "双面违反: front.A(2) <= back.A(12)"
+    },
+    {
+      "unit": "su-infantry-ru-153-rifle-div",
+      "file": "BD2 S1 R14 C08.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-153-rifle-div",
+      "file": "BD2 S1 R14 C08B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "12",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-153-rifle-div",
+      "reason": "双面违反: front.A(12) <= back.A(12)"
+    },
+    {
+      "unit": "su-infantry-ru-154-rifle-div",
+      "file": "BD2 S1 R14 C09.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-154-rifle-div",
+      "file": "BD2 S1 R14 C09.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-154-rifle-div",
+      "file": "BD2 S1 R14 C09B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "12",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-154-rifle-div",
+      "reason": "双面违反: front.A(2) <= back.A(12)"
+    },
+    {
+      "unit": "su-infantry-ru-155-rifle-div",
+      "file": "BD2 S1 R14 C10.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-155-rifle-div",
+      "file": "BD2 S1 R14 C10.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-155-rifle-div",
+      "file": "BD2 S1 R14 C10B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-155-rifle-div",
+      "file": "BD2 S1 R14 C10B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-155-rifle-div",
+      "file": "BD2 S1 R14 C10B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-155-rifle-div",
+      "reason": "双面违反: front.A(1) <= back.A(1)"
+    },
+    {
+      "unit": "su-infantry-ru-158-rifle-div",
+      "file": "BD2 S1 R01 C11.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-158-rifle-div",
+      "file": "BD2 S1 R01 C11.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-158-rifle-div",
+      "file": "BD2 S1 R01 C11B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-158-rifle-div",
+      "reason": "双面违反: front.A(2) <= back.A(2)"
+    },
+    {
+      "unit": "su-infantry-ru-160-rifle-div",
+      "file": "BD2 S1 R01 C12.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-160-rifle-div",
+      "file": "BD2 S1 R01 C12.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-160-rifle-div",
+      "reason": "双面违反: front.A(2) <= back.A(10)"
+    },
+    {
+      "unit": "su-infantry-ru-161-rifle-div",
+      "file": "BD2 S1 R01 C13.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-161-rifle-div",
+      "file": "BD2 S1 R01 C13.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-161-rifle-div",
+      "file": "BD2 S1 R01 C13B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-162-rifle-div",
+      "file": "BD2 S1 R01 C14.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-162-rifle-div",
+      "file": "BD2 S1 R01 C14.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-162-rifle-div",
+      "file": "BD2 S1 R01 C14B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-162-rifle-div",
+      "file": "BD2 S1 R01 C14B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-166-rifle-div",
+      "file": "BD2 S1 R01 C15.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-166-rifle-div",
+      "file": "BD2 S1 R01 C15.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-166-rifle-div",
+      "file": "BD2 S1 R01 C15B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-166-rifle-div",
+      "file": "BD2 S1 R01 C15B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-166-rifle-div",
+      "file": "BD2 S1 R01 C15B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-166-rifle-div",
+      "reason": "双面违反: front.A(1) <= back.A(5)"
+    },
+    {
+      "unit": "su-infantry-ru-167-rifle-div",
+      "file": "S3 S1 R14 C08.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-167-rifle-div",
+      "file": "S3 S1 R14 C08B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "12",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-167-rifle-div",
+      "file": "S3 S1 R14 C08B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "1",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-167-rifle-div",
+      "reason": "双面违反: front.A(12) <= back.A(12)"
+    },
+    {
+      "unit": "su-infantry-ru-167-rifle-div",
+      "reason": "双面违反: back.MA(1) <= front.MA(2)"
+    },
+    {
+      "unit": "su-infantry-ru-172-rifle-div",
+      "file": "BD2 S1 R01 C17.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-172-rifle-div",
+      "file": "BD2 S1 R01 C17.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-172-rifle-div",
+      "file": "BD2 S1 R01 C17B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "20",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-172-rifle-div",
+      "reason": "双面违反: front.A(2) <= back.A(20)"
+    },
+    {
+      "unit": "su-infantry-ru-178-rifle-div",
+      "file": "BD2 S1 R01 C18.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "11",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-178-rifle-div",
+      "file": "BD2 S1 R01 C18.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-178-rifle-div",
+      "file": "BD2 S1 R01 C18B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-178-rifle-div",
+      "file": "BD2 S1 R01 C18B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-186-rifle-div",
+      "file": "BD2 S1 R01 C19.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-187-rifle-div",
+      "file": "BD2 S1 R01 C20.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "11",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-187-rifle-div",
+      "file": "BD2 S1 R01 C20.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-187-rifle-div",
+      "file": "BD2 S1 R01 C20B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-187-rifle-div",
+      "file": "BD2 S1 R01 C20B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-187-rifle-div",
+      "file": "BD2 S1 R01 C20B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-210-rifle-div",
+      "file": "S S1 R01 C13.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "4",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-210-rifle-div",
+      "file": "S S1 R01 C13.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-210-rifle-div",
+      "file": "S S1 R01 C13B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-210-rifle-div",
+      "file": "S S1 R01 C13B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-210-rifle-div",
+      "file": "S S1 R01 C13B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-211-rifle-div",
+      "file": "BD2 S1 R02 C11.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-211-rifle-div",
+      "file": "BD2 S1 R02 C11.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-211-rifle-div",
+      "file": "BD2 S1 R02 C11B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "7",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-211-rifle-div",
+      "reason": "双面违反: front.A(2) <= back.A(10)"
+    },
+    {
+      "unit": "su-infantry-ru-214-rifle-div",
+      "file": "BD2 S1 R02 C12.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "11",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-214-rifle-div",
+      "file": "BD2 S1 R02 C12.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-214-rifle-div",
+      "file": "BD2 S1 R02 C12B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-214-rifle-div",
+      "file": "BD2 S1 R02 C12B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-214-rifle-div",
+      "file": "BD2 S1 R02 C12B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "20",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-217-rifle-div",
+      "file": "BD2 S1 R02 C13.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-217-rifle-div",
+      "file": "BD2 S1 R02 C13B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-217-rifle-div",
+      "file": "BD2 S1 R02 C13B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-217-rifle-div",
+      "file": "BD2 S1 R02 C13B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-219-rifle-div",
+      "file": "S5 S1 R01 C18.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-219-rifle-div",
+      "file": "S5 S1 R01 C18B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "3",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-220-rifle-div",
+      "file": "S S1 R01 C18.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "6",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-222-rifle-div",
+      "file": "BD2 S1 R02 C14B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-229-rifle-div",
+      "file": "BD2 S1 R02 C15.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-229-rifle-div",
+      "file": "BD2 S1 R02 C15B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "20",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-229-rifle-div",
+      "reason": "双面违反: front.A(12) <= back.A(20)"
+    },
+    {
+      "unit": "su-infantry-ru-233-rifle-div",
+      "file": "BD2 S1 R02 C16.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "11",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-233-rifle-div",
+      "file": "BD2 S1 R02 C16.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-233-rifle-div",
+      "file": "BD2 S1 R02 C16B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "17",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-233-rifle-div",
+      "file": "BD2 S1 R02 C16B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-233-rifle-div",
+      "reason": "双面违反: front.A(11) <= back.A(17)"
+    },
+    {
+      "unit": "su-infantry-ru-242-rifle-div",
+      "file": "BD2 S1 R02 C17.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-242-rifle-div",
+      "file": "BD2 S1 R02 C17.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-242-rifle-div",
+      "file": "BD2 S1 R02 C17B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "17",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-242-rifle-div",
+      "file": "BD2 S1 R02 C17B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-242-rifle-div",
+      "reason": "双面违反: front.A(10) <= back.A(17)"
+    },
+    {
+      "unit": "su-infantry-ru-243-rifle-div",
+      "file": "BD2 S1 R02 C18.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-243-rifle-div",
+      "file": "BD2 S1 R02 C18B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-243-rifle-div",
+      "file": "BD2 S1 R02 C18B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-244-rifle-div",
+      "file": "BD2 S1 R02 C19.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-244-rifle-div",
+      "file": "BD2 S1 R02 C19B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-244-rifle-div",
+      "file": "BD2 S1 R02 C19B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "20",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-246-rifle-div",
+      "file": "BD2 S1 R02 C20.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-246-rifle-div",
+      "file": "BD2 S1 R02 C20B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-247-rifle-div",
+      "file": "BD2 S1 R03 C11B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-248-rifle-div",
+      "file": "BD2 S1 R03 C12.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-248-rifle-div",
+      "file": "BD2 S1 R03 C12.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-248-rifle-div",
+      "reason": "双面违反: front.A(2) <= back.A(10)"
+    },
+    {
+      "unit": "su-infantry-ru-249-rifle-div",
+      "file": "BD2 S1 R03 C13B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-249-rifle-div",
+      "file": "BD2 S1 R03 C13B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "1",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-249-rifle-div",
+      "reason": "双面违反: back.MA(1) <= front.MA(1)"
+    },
+    {
+      "unit": "su-infantry-ru-250-rifle-div",
+      "file": "BD2 S1 R03 C14.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-250-rifle-div",
+      "file": "BD2 S1 R03 C14B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "20",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-250-rifle-div",
+      "reason": "双面违反: front.A(12) <= back.A(20)"
+    },
+    {
+      "unit": "su-infantry-ru-251-rifle-div",
+      "file": "BD2 S1 R03 C15.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-251-rifle-div",
+      "file": "BD2 S1 R03 C15B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "1",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-251-rifle-div",
+      "reason": "双面违反: back.MA(1) <= front.MA(2)"
+    },
+    {
+      "unit": "su-infantry-ru-252-rifle-div",
+      "file": "S S1 R03 C12.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-252-rifle-div",
+      "file": "S S1 R03 C12.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-252-rifle-div",
+      "file": "S S1 R03 C12B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-252-rifle-div",
+      "file": "S S1 R03 C12B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-252-rifle-div",
+      "file": "S S1 R03 C12B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "22",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-252-rifle-div",
+      "reason": "双面违反: front.A(1) <= back.A(5)"
+    },
+    {
+      "unit": "su-infantry-ru-269-rifle-div",
+      "file": "BD2 S1 R03 C16.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-269-rifle-div",
+      "file": "BD2 S1 R03 C16.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-269-rifle-div",
+      "reason": "双面违反: front.A(2) <= back.A(10)"
+    },
+    {
+      "unit": "su-infantry-ru-278-rifle-div",
+      "file": "BD2 S1 R03 C17.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-278-rifle-div",
+      "file": "BD2 S1 R03 C17B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "22",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-278-rifle-div",
+      "reason": "双面违反: front.A(12) <= back.A(22)"
+    },
+    {
+      "unit": "su-infantry-ru-279-rifle-div",
+      "file": "BD2 S1 R03 C18.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-infantry-ru-280-rifle-div",
+      "file": "BD2 S1 R03 C19.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-280-rifle-div",
+      "file": "BD2 S1 R03 C19B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-280-rifle-div",
+      "file": "BD2 S1 R03 C19B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-282-rifle-div",
+      "file": "BD2 S1 R03 C20.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-282-rifle-div",
+      "file": "BD2 S1 R03 C20B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-282-rifle-div",
+      "file": "BD2 S1 R03 C20B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-303-rifle-div",
+      "file": "BD2 S1 R04 C12.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-infantry-ru-303-rifle-div",
+      "file": "BD2 S1 R04 C12.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-303-rifle-div",
+      "file": "BD2 S1 R04 C12B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "17",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-infantry-ru-303-rifle-div",
+      "file": "BD2 S1 R04 C12B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-303-rifle-div",
+      "file": "BD2 S1 R04 C12B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-infantry-ru-303-rifle-div",
+      "reason": "双面违反: front.A(1) <= back.A(17)"
+    },
+    {
+      "unit": "su-infantry-ru-309-rifle-div",
+      "file": "BD2 S1 R04 C13.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-infantry-ru-309-rifle-div",
+      "file": "BD2 S1 R04 C13B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-infantry-ru-309-rifle-div",
+      "file": "BD2 S1 R04 C13B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-militia-ru-1-militia-div",
+      "file": "S3 S1 R04 C15.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-militia-ru-1-militia-div",
+      "file": "S3 S1 R04 C15B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "9",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-militia-ru-2-militia-div",
+      "file": "S3 S1 R04 C16.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-militia-ru-2-militia-div",
+      "file": "S3 S1 R04 C16.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-militia-ru-2-militia-div",
+      "file": "S3 S1 R04 C16B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-militia-ru-2-militia-div",
+      "file": "S3 S1 R04 C16B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-militia-ru-2-militia-div",
+      "reason": "双面违反: front.A(1) <= back.A(10)"
+    },
+    {
+      "unit": "su-militia-ru-4-militia-div",
+      "file": "S3 S1 R04 C17.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-militia-ru-4-militia-div",
+      "file": "S3 S1 R04 C17.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-militia-ru-4-militia-div",
+      "file": "S3 S1 R04 C17B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-militia-ru-4-militia-div",
+      "file": "S3 S1 R04 C17B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-militia-ru-4-militia-div",
+      "file": "S3 S1 R04 C17B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-militia-ru-4-militia-div",
+      "reason": "双面违反: front.A(1) <= back.A(5)"
+    },
+    {
+      "unit": "su-militia-ru-5-militia-div",
+      "file": "S3 S1 R04 C18.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-militia-ru-5-militia-div",
+      "file": "S3 S1 R04 C18.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-militia-ru-5-militia-div",
+      "file": "S3 S1 R04 C18B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "17",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-militia-ru-5-militia-div",
+      "file": "S3 S1 R04 C18B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-militia-ru-5-militia-div",
+      "reason": "双面违反: front.A(1) <= back.A(17)"
+    },
+    {
+      "unit": "su-militia-ru-6-militia-div",
+      "file": "S3 S1 R04 C19.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-militia-ru-6-militia-div",
+      "file": "S3 S1 R04 C19.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-militia-ru-6-militia-div",
+      "file": "S3 S1 R04 C19B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-militia-ru-6-militia-div",
+      "file": "S3 S1 R04 C19B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-militia-ru-6-militia-div",
+      "file": "S3 S1 R04 C19B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-militia-ru-6-militia-div",
+      "reason": "双面违反: front.A(1) <= back.A(5)"
+    },
+    {
+      "unit": "su-militia-ru-7-militia-div",
+      "file": "S3 S1 R04 C20B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-militia-ru-8-militia-div",
+      "file": "S3 S1 R05 C11.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-militia-ru-8-militia-div",
+      "file": "S3 S1 R05 C11B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-militia-ru-8-militia-div",
+      "file": "S3 S1 R05 C11B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-militia-ru-8-militia-div",
+      "file": "S3 S1 R05 C11B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-militia-ru-9-militia-div",
+      "file": "S3 S1 R05 C12.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-militia-ru-9-militia-div",
+      "file": "S3 S1 R05 C12.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-militia-ru-9-militia-div",
+      "file": "S3 S1 R05 C12B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-militia-ru-9-militia-div",
+      "file": "S3 S1 R05 C12B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-militia-ru-13-militia-div",
+      "file": "S3 S1 R05 C13.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-militia-ru-13-militia-div",
+      "file": "S3 S1 R05 C13.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-militia-ru-13-militia-div",
+      "file": "S3 S1 R05 C13B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-militia-ru-13-militia-div",
+      "reason": "双面违反: front.A(10) <= back.A(10)"
+    },
+    {
+      "unit": "su-militia-ru-17-militia-div",
+      "file": "S3 S1 R05 C14.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-militia-ru-17-militia-div",
+      "file": "S3 S1 R05 C14.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "1",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (39张)"
+    },
+    {
+      "unit": "su-militia-ru-17-militia-div",
+      "file": "S3 S1 R05 C14B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "5",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-militia-ru-17-militia-div",
+      "reason": "双面违反: front.A(2) <= back.A(5)"
+    },
+    {
+      "unit": "su-militia-ru-18-militia-div",
+      "file": "S3 S1 R05 C15.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-militia-ru-18-militia-div",
+      "file": "S3 S1 R05 C15.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-militia-ru-18-militia-div",
+      "file": "S3 S1 R05 C15B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "20",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-militia-ru-18-militia-div",
+      "file": "S3 S1 R05 C15B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "1",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "su-militia-ru-18-militia-div",
+      "file": "S3 S1 R05 C15B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (32张)"
+    },
+    {
+      "unit": "su-militia-ru-18-militia-div",
+      "reason": "双面违反: front.A(1) <= back.A(20)"
+    },
+    {
+      "unit": "su-militia-ru-21-militia-div",
+      "file": "S3 S1 R05 C16.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "12",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (34张)"
+    },
+    {
+      "unit": "su-militia-ru-21-militia-div",
+      "file": "S3 S1 R05 C16.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (40张)"
+    },
+    {
+      "unit": "su-militia-ru-21-militia-div",
+      "file": "S3 S1 R05 C16B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "10",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (21张)"
+    },
+    {
+      "unit": "su-militia-ru-21-militia-div",
+      "file": "S3 S1 R05 C16B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "0",
+      "suggested": "2",
+      "reason": "批次[苏联单位\\步兵师] 众数偏离 (51张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-3-pz-3-mot-inf",
+      "file": "BD2 S2 R05 C06.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "4",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\3PZ] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-3-pz-3-mot-inf",
+      "file": "BD2 S2 R05 C06.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\3PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-3-pz-3-mot-inf",
+      "file": "BD2 S2 R05 C06B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "4",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\3PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-3-pz-394-mot-inf",
+      "file": "BD2 S2 R05 C07.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "4",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\3PZ] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-3-pz-394-mot-inf",
+      "file": "BD2 S2 R05 C07.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\3PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-3-pz-1-arm-rec",
+      "file": "BD2 S2 R05 C10B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\3PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-3-pz-3-mc",
+      "file": "BD2 S2 R05 C02B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\3PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-3-pz-75-arty",
+      "file": "BD2 S2 R05 C08.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\3PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-4-pz-i-35-pz",
+      "reason": "双面违反: back.MA(1) <= front.MA(8)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-4-pz-ii-35-pz",
+      "reason": "双面违反: back.MA(1) <= front.MA(8)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-4-pz-12-mot-inf",
+      "file": "S5 S2 R06 C06.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "4",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\4PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-4-pz-33-mot-inf",
+      "file": "S5 S2 R06 C07.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "4",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\4PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-4-pz-103-arty",
+      "file": "S5 S2 R06 C08.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\4PZ] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-7-pz-6-mot-inf",
+      "file": "S4 S2 R07 C06.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\7PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-7-pz-6-mot-inf",
+      "file": "S4 S2 R07 C06B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "4",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\7PZ] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-7-pz-7-mot-inf",
+      "file": "S4 S2 R07 C07.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\7PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-7-pz-7-mot-inf",
+      "file": "S4 S2 R07 C07B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "4",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\7PZ] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-7-pz-37-arm-rec",
+      "file": "S4 S2 R07 C10.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "3",
+      "suggested": "7",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\7PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-7-pz-7-mc",
+      "file": "S4 S2 R07 C02.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "3",
+      "suggested": "7",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\7PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-7-pz-78-arty",
+      "file": "S4 S2 R07 C08.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\7PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-7-pz-truck",
+      "file": "S4 S2 R07 C09B.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "7",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\7PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-10-pz-69-pg",
+      "file": "BD2 S2 R08 C07.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "14",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\10PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-10-pz-69-pg",
+      "file": "BD2 S2 R08 C07.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "6",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\10PZ] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-10-pz-69-pg",
+      "file": "BD2 S2 R08 C07B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "4",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\10PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-10-pz-69-pg",
+      "file": "BD2 S2 R08 C07B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "14",
+      "suggested": "16",
+      "reason": "批次[轴心单位\\编队单位\\10PZ] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-10-pz-86-mot-inf",
+      "file": "BD2 S2 R08 C06.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "4",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\10PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-10-pz-86-mot-inf",
+      "file": "BD2 S2 R08 C06.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\10PZ] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-10-pz-90-arty",
+      "file": "BD2 S2 R08 C08.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "3",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\10PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-10-pz-90-arty",
+      "file": "BD2 S2 R08 C08.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\10PZ] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-12-pz-5-mot-inf",
+      "file": "S5 S2 R09 C06.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\12PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-12-pz-25-mot-inf",
+      "file": "S5 S2 R09 C07.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\12PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-12-pz-25-mot-inf",
+      "file": "S5 S2 R09 C07B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "4",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\12PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-12-pz-2-arm-rec",
+      "file": "S5 S2 R09 C10B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\12PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-12-pz-22-mc",
+      "file": "S5 S2 R09 C02.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "5",
+      "suggested": "4",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\12PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-12-pz-22-mc",
+      "file": "S5 S2 R09 C02B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\12PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-17-pz-i-39-pz",
+      "reason": "双面违反: front.A(2) <= back.A(3)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-17-pz-40-mot-inf",
+      "file": "S S2 R10 C06.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "4",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\17PZ] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-17-pz-40-mot-inf",
+      "file": "S S2 R10 C06.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\17PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-17-pz-63-mot-inf",
+      "file": "S S2 R10 C07.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "4",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\17PZ] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-17-pz-63-mot-inf",
+      "file": "S S2 R10 C07.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\17PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-17-pz-27-arm-rec",
+      "file": "S S2 R10 C10B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\17PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-17-pz-17-mc",
+      "file": "S S2 R10 C02B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\17PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-17-pz-22-arty",
+      "file": "S S2 R10 C08.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\17PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-18-pz-52-mot-inf",
+      "file": "BD2 S2 R11 C06.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "4",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\18PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-18-pz-52-mot-inf",
+      "file": "BD2 S2 R11 C06.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\18PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-18-pz-52-mot-inf",
+      "file": "BD2 S2 R11 C06B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "4",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\18PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-18-pz-52-mot-inf",
+      "file": "BD2 S2 R11 C06B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "4",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\18PZ] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-18-pz-101-mot-inf",
+      "file": "BD2 S2 R11 C07.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "4",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\18PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-18-pz-101-mot-inf",
+      "file": "BD2 S2 R11 C07.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\18PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-18-pz-101-mot-inf",
+      "file": "BD2 S2 R11 C07B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "4",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\18PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-18-pz-101-mot-inf",
+      "file": "BD2 S2 R11 C07B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "4",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\18PZ] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-18-pz-88-arm-rec",
+      "file": "BD2 S2 R11 C10B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\18PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-18-pz-18-mc",
+      "file": "BD2 S2 R11 C02B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\18PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-18-pz-88-arty",
+      "file": "BD2 S2 R11 C08.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "3",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\编队单位\\18PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-18-pz-88-arty",
+      "file": "BD2 S2 R11 C08.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\18PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-19-pz-73-mot-inf",
+      "file": "S4 S2 R12 C06.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\19PZ] 众数偏离 (6张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-19-pz-19-arm-rec",
+      "file": "S4 S2 R12 C10.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "15",
+      "suggested": "4",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\19PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-19-pz-19-mc",
+      "file": "S4 S2 R12 C02.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "5",
+      "suggested": "4",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\19PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-19-pz-19-mc",
+      "file": "S4 S2 R12 C02B.png",
+      "face": "back",
+      "field": "AR",
+      "ocr": "5",
+      "suggested": "4",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\19PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-19-pz-19-arty",
+      "file": "S4 S2 R12 C08.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\19PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-20-pz-iii-21-pz",
+      "file": "S4 S2 R13 C05B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\20PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-20-pz-59-mot-inf",
+      "file": "S4 S2 R13 C06.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\20PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-20-pz-59-mot-inf",
+      "file": "S4 S2 R13 C06B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\20PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-20-pz-112-mot-inf",
+      "file": "S4 S2 R13 C07.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\20PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-20-pz-112-mot-inf",
+      "file": "S4 S2 R13 C07B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\20PZ] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-20-pz-92-arm-rec",
+      "file": "S4 S2 R13 C10.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "5",
+      "suggested": "4",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\20PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-20-pz-92-arm-rec",
+      "reason": "双面违反: front.A(2) <= back.A(2)"
+    },
+    {
+      "unit": "ax-armor_pz-ge-20-pz-20-mc",
+      "file": "S4 S2 R13 C02.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "5",
+      "suggested": "4",
+      "reason": "批次[轴心单位\\编队单位\\3rd_Panzer_Group\\20PZ] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-arm_rec-ge-10-mtr-10-arm-rec",
+      "file": "S3 S2 R01 C12.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "8",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\10MTR] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-motorized-ge-10-mtr-40-mc",
+      "file": "S3 S2 R01 C15.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "8",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\10MTR] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-motorized-ge-14-mtr-53-mot-inf",
+      "reason": "双面违反: front.A(3) <= back.A(7)"
+    },
+    {
+      "unit": "ax-arm_rec-ge-14-mtr-14-arm-rec",
+      "reason": "双面违反: front.A(3) <= back.A(21)"
+    },
+    {
+      "unit": "ax-arm_rec-ge-18-mtr-18-arm-rec",
+      "reason": "双面违反: front.A(8) <= back.A(25)"
+    },
+    {
+      "unit": "ax-motorized-ge-18-mtr-51-mot-inf",
+      "reason": "双面违反: front.A(3) <= back.A(3)"
+    },
+    {
+      "unit": "ax-arm_rec-ge-ss-r-r-arm-rec",
+      "file": "S4 S2 R14 C06.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "3",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\SS-R] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-arm_rec-ge-ss-r-r-arm-rec",
+      "file": "S4 S2 R14 C06.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "8",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\SS-R] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-arm_rec-ge-ss-r-r-arm-rec",
+      "file": "S4 S2 R14 C06B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "25",
+      "suggested": "4",
+      "reason": "批次[轴心单位\\编队单位\\SS-R] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-arm_rec-ge-ss-r-r-arm-rec",
+      "reason": "双面违反: front.A(3) <= back.A(25)"
+    },
+    {
+      "unit": "ax-motorcycle-ge-ss-r-r-mc",
+      "file": "S4 S2 R14 C07.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "4",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\SS-R] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-motorcycle-ge-ss-r-r-mc",
+      "file": "S4 S2 R14 C07.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "8",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\SS-R] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-motorcycle-ge-ss-r-r-mc",
+      "file": "S4 S2 R14 C07B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "2",
+      "suggested": "4",
+      "reason": "批次[轴心单位\\编队单位\\SS-R] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-artillery-ge-ss-r-r-arty",
+      "file": "S4 S2 R14 C02B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[轴心单位\\编队单位\\SS-R] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-artillery-ge-ss-r-r-arty",
+      "file": "S4 S2 R14 C02B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "14",
+      "suggested": "16",
+      "reason": "批次[轴心单位\\编队单位\\SS-R] 众数偏离 (5张)"
+    },
+    {
+      "unit": "ax-transport-ge-ss-r-truck",
+      "file": "S4 S2 R14 C08B.png",
+      "face": "front",
+      "field": "A",
+      "ocr": "1",
+      "suggested": "8",
+      "reason": "批次[轴心单位\\编队单位\\SS-R] 众数偏离 (3张)"
+    },
+    {
+      "unit": "ax-transport-ge-ss-r-truck",
+      "file": "S4 S2 R14 C08B.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "45",
+      "suggested": "3",
+      "reason": "批次[轴心单位\\编队单位\\SS-R] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-cavalry-ge-1-cav-ii-1-cav",
+      "file": "BD2 S2 R05 C13.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[轴心单位\\编队单位\\1CAV] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-cavalry-ge-1-cav-i-2-cav",
+      "file": "BD2 S2 R05 C14.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[轴心单位\\编队单位\\1CAV] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-cavalry-ge-1-cav-i-21-cav",
+      "file": "BD2 S2 R05 C16.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "4",
+      "reason": "批次[轴心单位\\编队单位\\1CAV] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-cavalry-ge-1-cav-1-arty",
+      "file": "BD2 S2 R05 C20B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "12",
+      "reason": "批次[轴心单位\\编队单位\\1CAV] 众数偏离 (8张)"
+    },
+    {
+      "unit": "ax-cavalry-ge-1-cav-1-arty",
+      "reason": "双面违反: back.MA(2) <= front.MA(4)"
+    },
+    {
+      "unit": "ax-infantry-ge-5-inf-div",
+      "file": "BD2 S2 R07 C11B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-6-inf-div",
+      "file": "BD2 S2 R07 C12.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (20张)"
+    },
+    {
+      "unit": "ax-infantry-ge-6-inf-div",
+      "file": "BD2 S2 R07 C12B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-7-inf-div",
+      "file": "BD2 S2 R07 C13.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (20张)"
+    },
+    {
+      "unit": "ax-infantry-ge-15-inf-div",
+      "file": "BD2 S2 R07 C15B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-23-inf-div",
+      "file": "BD2 S2 R07 C16B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-31-inf-div",
+      "file": "BD2 S2 R07 C18B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-35-inf-div",
+      "file": "BD2 S2 R07 C20B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "10",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (22张)"
+    },
+    {
+      "unit": "ax-infantry-ge-78-inf-div",
+      "file": "BD2 S2 R08 C11.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "5",
+      "suggested": "4",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (27张)"
+    },
+    {
+      "unit": "ax-infantry-ge-78-inf-div",
+      "file": "BD2 S2 R08 C11.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "4",
+      "suggested": "2",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (20张)"
+    },
+    {
+      "unit": "ax-infantry-ge-78-inf-div",
+      "file": "BD2 S2 R08 C11B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-78-inf-div",
+      "file": "BD2 S2 R08 C11B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "35",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (22张)"
+    },
+    {
+      "unit": "ax-infantry-ge-106-inf-div",
+      "file": "BD2 S2 R08 C13B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "01",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-129-inf-div",
+      "file": "BD2 S2 R08 C14B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "01",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-131-inf-div",
+      "file": "S5 S2 R08 C14B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "01",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-131-inf-div",
+      "file": "S5 S2 R08 C14B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (22张)"
+    },
+    {
+      "unit": "ax-infantry-ge-131-inf-div",
+      "reason": "双面违反: back.MA(2) <= front.MA(2)"
+    },
+    {
+      "unit": "ax-infantry-ge-137-inf-div",
+      "file": "BD2 S2 R08 C15B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "01",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-161-inf-div",
+      "file": "BD2 S2 R08 C16.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (20张)"
+    },
+    {
+      "unit": "ax-infantry-ge-161-inf-div",
+      "file": "BD2 S2 R08 C16B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "01",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-162-inf-div",
+      "file": "BD2 S2 R08 C17.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (20张)"
+    },
+    {
+      "unit": "ax-infantry-ge-252-inf-div",
+      "file": "S6 S2 R08 C20B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-252-inf-div",
+      "file": "S6 S2 R08 C20B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "2",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (22张)"
+    },
+    {
+      "unit": "ax-infantry-ge-252-inf-div",
+      "reason": "双面违反: back.MA(2) <= front.MA(2)"
+    },
+    {
+      "unit": "ax-infantry-ge-263-inf-div",
+      "file": "BD2 S2 R09 C11B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-263-inf-div",
+      "file": "BD2 S2 R09 C11B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "1",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (22张)"
+    },
+    {
+      "unit": "ax-infantry-ge-263-inf-div",
+      "reason": "双面违反: back.MA(1) <= front.MA(2)"
+    },
+    {
+      "unit": "ax-infantry-ge-267-inf-div",
+      "file": "S6 S2 R09 C14.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (20张)"
+    },
+    {
+      "unit": "ax-infantry-ge-267-inf-div",
+      "file": "S6 S2 R09 C14B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-268-inf-div",
+      "file": "BD2 S2 R09 C12.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (20张)"
+    },
+    {
+      "unit": "ax-infantry-ge-268-inf-div",
+      "file": "BD2 S2 R09 C12B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-268-inf-div",
+      "file": "BD2 S2 R09 C12B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "1",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (22张)"
+    },
+    {
+      "unit": "ax-infantry-ge-268-inf-div",
+      "reason": "双面违反: back.MA(1) <= front.MA(3)"
+    },
+    {
+      "unit": "ax-infantry-ge-292-inf-div",
+      "file": "BD2 S2 R09 C13.png",
+      "face": "front",
+      "field": "MA",
+      "ocr": "3",
+      "suggested": "2",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (20张)"
+    },
+    {
+      "unit": "ax-infantry-ge-292-inf-div",
+      "file": "BD2 S2 R09 C13B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "10",
+      "suggested": "0",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (13张)"
+    },
+    {
+      "unit": "ax-infantry-ge-292-inf-div",
+      "file": "BD2 S2 R09 C13B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "10",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\步兵师] 众数偏离 (22张)"
+    },
+    {
+      "unit": "ax-security-ge-403-sec-div",
+      "reason": "双面违反: front.A(0) <= back.A(22)"
+    },
+    {
+      "unit": "ax-artillery-ge-201-ag-bn",
+      "file": "BD2 S2 R02 C07.png",
+      "face": "front",
+      "field": "AR",
+      "ocr": "3",
+      "suggested": "5",
+      "reason": "批次[轴心单位\\独立装甲\\可重建\\AG] 众数偏离 (6张)"
+    },
+    {
+      "unit": "ax-artillery-ge-201-ag-bn",
+      "file": "BD2 S2 R02 C07B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "21",
+      "suggested": "2",
+      "reason": "批次[轴心单位\\独立装甲\\可重建\\AG] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-artillery-ge-201-ag-bn",
+      "file": "BD2 S2 R02 C07B.png",
+      "face": "back",
+      "field": "MA",
+      "ocr": "13",
+      "suggested": "16",
+      "reason": "批次[轴心单位\\独立装甲\\可重建\\AG] 众数偏离 (6张)"
+    },
+    {
+      "unit": "ax-artillery-ge-203-ag-bn",
+      "file": "BD2 S2 R02 C08B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "21",
+      "suggested": "2",
+      "reason": "批次[轴心单位\\独立装甲\\可重建\\AG] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-artillery-ge-210-ag-bn",
+      "file": "BD2 S2 R02 C09B.png",
+      "face": "back",
+      "field": "A",
+      "ocr": "21",
+      "suggested": "2",
+      "reason": "批次[轴心单位\\独立装甲\\可重建\\AG] 众数偏离 (4张)"
+    },
+    {
+      "unit": "ax-artillery-ge-226-ag-bn",
+      "reason": "双面违反: front.A(1) <= back.A(2)"
+    },
+    {
+      "unit": "ax-motorized-ge-irgd-mot-inf-rgt",
+      "reason": "双面违反: front.A(01) <= back.A(5)"
+    }
+  ]
+}

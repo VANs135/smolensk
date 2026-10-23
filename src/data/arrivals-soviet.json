@@ -1,0 +1,1582 @@
+{
+  "meta": {
+    "version": "0.4.0",
+    "description": "到达表（A8·苏）：日期块（原文串）+ 结构化单位视图 + 该方到达规则备注与判定表",
+    "source": [
+      "arrivals.json（按到达卡逐栏实物核对，status = verified）",
+      "arrivals.json roster_entries（同一来源的单位名单结构化展开）",
+      "rules.json exclusive_rules_smolensk.special_repls（1.6c）"
+    ]
+  },
+  "side": "soviet",
+  "header": "New units enter play per 2.1. All types of Transport Points arrive loaded with SP.",
+  "blocks": [
+    {
+      "date": "8 July",
+      "entries": {
+        "Entry D or E": ["3x Reserve Markers"]
+      },
+      "notes": [
+        "Soviet Rail Cap is 2 at start.",
+        "Soviet MA halved on this turn.",
+        "Begin Operational Limits (2.3e)."
+      ],
+      "groups": [
+        {
+          "label": "Entry D or E",
+          "units": [
+            {
+              "raw": "3x Reserve Markers",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry D or E"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "12 July",
+      "entries": {
+        "w/i 3 of 60.34": [
+          "30th Army HQ (see 2.4)",
+          "12-2-2 Inf Div (119, 250, 251)",
+          "10-0-1 Inf Div (242)",
+          "14-1-3 Tk Div (51; -1 step)",
+          "(2)-2-2 Alarm AT Rgt",
+          "26-1-1 Arty Bde",
+          "1 Wagon Point (loaded with SP)"
+        ],
+        "Entry B or C": [
+          "12-1-3 Tk Div (101)",
+          "12-1-4 Mtr Div (69)",
+          "2 Truck Points (loaded with SP)"
+        ]
+      },
+      "anyAirbase": ["MiG.3", "SB.2"],
+      "groups": [
+        {
+          "label": "w/i 3 of 60.34",
+          "units": [
+            {
+              "raw": "30th Army HQ (see 2.4)",
+              "kind": "hq",
+              "name": "30th Army HQ (see 2.4)",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 60.34"
+            },
+            {
+              "raw": "12-2-2 Inf Div (119, 250, 251)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "119 Inf Div",
+              "designation": "119",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 60.34"
+            },
+            {
+              "raw": "12-2-2 Inf Div (119, 250, 251)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "250 Inf Div",
+              "designation": "250",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 60.34"
+            },
+            {
+              "raw": "12-2-2 Inf Div (119, 250, 251)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "251 Inf Div",
+              "designation": "251",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 60.34"
+            },
+            {
+              "raw": "10-0-1 Inf Div (242)",
+              "factors": "10-0-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "242 Inf Div",
+              "designation": "242",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 60.34"
+            },
+            {
+              "raw": "14-1-3 Tk Div (51; -1 step)",
+              "factors": "14-1-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "51 Tk Div",
+              "designation": "51",
+              "parentType": "Tk Div",
+              "stepsLost": 1,
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 60.34"
+            },
+            {
+              "raw": "(2)-2-2 Alarm AT Rgt",
+              "factors": "(2)-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "Alarm AT Rgt",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 60.34"
+            },
+            {
+              "raw": "26-1-1 Arty Bde",
+              "factors": "26-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "Arty Bde",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 60.34"
+            },
+            {
+              "raw": "1 Wagon Point (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 60.34"
+            }
+          ]
+        },
+        {
+          "label": "Entry B or C",
+          "units": [
+            {
+              "raw": "12-1-3 Tk Div (101)",
+              "factors": "12-1-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "101 Tk Div",
+              "designation": "101",
+              "parentType": "Tk Div",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "12-1-4 Mtr Div (69)",
+              "factors": "12-1-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "69 Mtr Div",
+              "designation": "69",
+              "parentType": "Mtr Div",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "2 Truck Points (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "15 Jul 41",
+      "entries": {
+        "w/i 3 of 56.20": [
+          "24th Army HQ (see 2.4)",
+          "18-1-3 Tk Div (102; -1 step)",
+          "12-1-4 Mtr Div (103)",
+          "12-2-2 Inf Div (19, 91, 107, 248)",
+          "11-1-1 Inf Div (133, 166, 178)",
+          "11-1-1 Militia Div (4M, 6M; each -1 step)",
+          "(2)-2-2 Alarm AT Rgt",
+          "26-1-1 Arty Bde"
+        ],
+        "w/i 3 of 52.09": [
+          "28th Army HQ (see 2.4)",
+          "18-1-3 Tk Div (104)",
+          "12-1-4 Mtr Div (106)",
+          "13-3-3 Inf Div (120)",
+          "12-2-2 Inf Div (89, 222)",
+          "11-1-1 Inf Div (217)",
+          "10-0-1 Inf Div (145, 149)",
+          "4-3-6 MC Rgt (31)",
+          "(2)-2-2 Alarm AT Rgt",
+          "26-1-1 Arty Bde",
+          "1 Wagon Point (loaded with SP)"
+        ]
+      },
+      "notes": ["1x Reserve Marker"],
+      "anyAirbase": ["LaGG.3", "SB.2"],
+      "groups": [
+        {
+          "label": "w/i 3 of 56.20",
+          "units": [
+            {
+              "raw": "24th Army HQ (see 2.4)",
+              "kind": "hq",
+              "name": "24th Army HQ (see 2.4)",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 56.20"
+            },
+            {
+              "raw": "18-1-3 Tk Div (102; -1 step)",
+              "factors": "18-1-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "102 Tk Div",
+              "designation": "102",
+              "parentType": "Tk Div",
+              "stepsLost": 1,
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 56.20"
+            },
+            {
+              "raw": "12-1-4 Mtr Div (103)",
+              "factors": "12-1-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "103 Mtr Div",
+              "designation": "103",
+              "parentType": "Mtr Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 56.20"
+            },
+            {
+              "raw": "12-2-2 Inf Div (19, 91, 107, 248)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "19 Inf Div",
+              "designation": "19",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 56.20"
+            },
+            {
+              "raw": "12-2-2 Inf Div (19, 91, 107, 248)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "91 Inf Div",
+              "designation": "91",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 56.20"
+            },
+            {
+              "raw": "12-2-2 Inf Div (19, 91, 107, 248)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "107 Inf Div",
+              "designation": "107",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 56.20"
+            },
+            {
+              "raw": "12-2-2 Inf Div (19, 91, 107, 248)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "248 Inf Div",
+              "designation": "248",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 56.20"
+            },
+            {
+              "raw": "11-1-1 Inf Div (133, 166, 178)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "133 Inf Div",
+              "designation": "133",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 56.20"
+            },
+            {
+              "raw": "11-1-1 Inf Div (133, 166, 178)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "166 Inf Div",
+              "designation": "166",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 56.20"
+            },
+            {
+              "raw": "11-1-1 Inf Div (133, 166, 178)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "178 Inf Div",
+              "designation": "178",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 56.20"
+            },
+            {
+              "raw": "11-1-1 Militia Div (4M, 6M; each -1 step)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "4M Mil Div",
+              "designation": "4M",
+              "parentType": "Militia Div",
+              "stepsLost": 1,
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 56.20"
+            },
+            {
+              "raw": "11-1-1 Militia Div (4M, 6M; each -1 step)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "6M Mil Div",
+              "designation": "6M",
+              "parentType": "Militia Div",
+              "stepsLost": 1,
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 56.20"
+            },
+            {
+              "raw": "(2)-2-2 Alarm AT Rgt",
+              "factors": "(2)-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "Alarm AT Rgt",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 56.20"
+            },
+            {
+              "raw": "26-1-1 Arty Bde",
+              "factors": "26-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "Arty Bde",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 56.20"
+            }
+          ]
+        },
+        {
+          "label": "w/i 3 of 52.09",
+          "units": [
+            {
+              "raw": "28th Army HQ (see 2.4)",
+              "kind": "hq",
+              "name": "28th Army HQ (see 2.4)",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 52.09"
+            },
+            {
+              "raw": "18-1-3 Tk Div (104)",
+              "factors": "18-1-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "104 Tk Div",
+              "designation": "104",
+              "parentType": "Tk Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 52.09"
+            },
+            {
+              "raw": "12-1-4 Mtr Div (106)",
+              "factors": "12-1-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "106 Mtr Div",
+              "designation": "106",
+              "parentType": "Mtr Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 52.09"
+            },
+            {
+              "raw": "13-3-3 Inf Div (120)",
+              "factors": "13-3-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "120 Inf Div",
+              "designation": "120",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 52.09"
+            },
+            {
+              "raw": "12-2-2 Inf Div (89, 222)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "89 Inf Div",
+              "designation": "89",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 52.09"
+            },
+            {
+              "raw": "12-2-2 Inf Div (89, 222)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "222 Inf Div",
+              "designation": "222",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 52.09"
+            },
+            {
+              "raw": "11-1-1 Inf Div (217)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "217 Inf Div",
+              "designation": "217",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 52.09"
+            },
+            {
+              "raw": "10-0-1 Inf Div (145, 149)",
+              "factors": "10-0-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "145 Inf Div",
+              "designation": "145",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 52.09"
+            },
+            {
+              "raw": "10-0-1 Inf Div (145, 149)",
+              "factors": "10-0-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "149 Inf Div",
+              "designation": "149",
+              "parentType": "Inf Div",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 52.09"
+            },
+            {
+              "raw": "4-3-6 MC Rgt (31)",
+              "factors": "4-3-6",
+              "count": 1,
+              "kind": "unit",
+              "name": "31 MC Rgt",
+              "designation": "31",
+              "parentType": "MC Rgt",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 52.09"
+            },
+            {
+              "raw": "(2)-2-2 Alarm AT Rgt",
+              "factors": "(2)-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "Alarm AT Rgt",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 52.09"
+            },
+            {
+              "raw": "26-1-1 Arty Bde",
+              "factors": "26-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "Arty Bde",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 52.09"
+            },
+            {
+              "raw": "1 Wagon Point (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "relative_hex",
+              "location": "w/i 3 of 52.09"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "19 Jul 41",
+      "entries": {
+        "North edge, east of 32.xx": [
+          "29th Army HQ",
+          "11-1-1 Inf Div (243, 252)",
+          "7-3-4 Cav Div (50, 53)",
+          "4-2-3 NKVD Inf Rgt (1)",
+          "26-1-1 Arty Bde"
+        ]
+      },
+      "notes": ["Soviet Rail Cap is now 3.", "Entry L is shutdown (2.1a)."],
+      "anyAirbase": ["I.16", "SB.2", "Yak.4"],
+      "remove": [
+        "22nd Army HQ",
+        "12-2-2 Inf Div (186)",
+        "11-1-1 Inf Div (126, 214)",
+        "14-1-3 Tk Div (48)",
+        "26-1-1 Arty Bde",
+        "1 Wagon Point"
+      ],
+      "groups": [
+        {
+          "label": "North edge, east of 32.xx",
+          "units": [
+            {
+              "raw": "29th Army HQ",
+              "kind": "hq",
+              "name": "29th Army HQ",
+              "locationKind": "other",
+              "location": "North edge, east of 32.xx"
+            },
+            {
+              "raw": "11-1-1 Inf Div (243, 252)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "243 Inf Div",
+              "designation": "243",
+              "parentType": "Inf Div",
+              "locationKind": "other",
+              "location": "North edge, east of 32.xx"
+            },
+            {
+              "raw": "11-1-1 Inf Div (243, 252)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "252 Inf Div",
+              "designation": "252",
+              "parentType": "Inf Div",
+              "locationKind": "other",
+              "location": "North edge, east of 32.xx"
+            },
+            {
+              "raw": "7-3-4 Cav Div (50, 53)",
+              "factors": "7-3-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "50 Cav Div",
+              "designation": "50",
+              "parentType": "Cav Div",
+              "locationKind": "other",
+              "location": "North edge, east of 32.xx"
+            },
+            {
+              "raw": "7-3-4 Cav Div (50, 53)",
+              "factors": "7-3-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "53 Cav Div",
+              "designation": "53",
+              "parentType": "Cav Div",
+              "locationKind": "other",
+              "location": "North edge, east of 32.xx"
+            },
+            {
+              "raw": "4-2-3 NKVD Inf Rgt (1)",
+              "factors": "4-2-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "1 NKVD Inf Rgt",
+              "designation": "1",
+              "parentType": "NKVD Inf Rgt",
+              "locationKind": "other",
+              "location": "North edge, east of 32.xx"
+            },
+            {
+              "raw": "26-1-1 Arty Bde",
+              "factors": "26-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "Arty Bde",
+              "locationKind": "other",
+              "location": "North edge, east of 32.xx"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "22 Jul 41",
+      "entries": {
+        "Entry A": [
+          "31st Army HQ",
+          "18-1-3 Tk Div (110; -1 step)",
+          "12-2-2 Inf Div (246, 247, 249)",
+          "11-1-1 Inf Div (244)",
+          "2x 2-1-3 Alarm Tk Bn",
+          "26-1-1 Arty Bde",
+          "1 Wagon Point (loaded with SP)"
+        ],
+        "Entry D or E": ["6-2-4 Cav Div (32, 47)", "2-1-4 Cav Div (43)"]
+      },
+      "anyAirbase": ["I.16", "Pe.2"],
+      "groups": [
+        {
+          "label": "Entry A",
+          "units": [
+            {
+              "raw": "31st Army HQ",
+              "kind": "hq",
+              "name": "31st Army HQ",
+              "locationKind": "entry",
+              "location": "Entry A"
+            },
+            {
+              "raw": "18-1-3 Tk Div (110; -1 step)",
+              "factors": "18-1-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "110 Tk Div",
+              "designation": "110",
+              "parentType": "Tk Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry A"
+            },
+            {
+              "raw": "12-2-2 Inf Div (246, 247, 249)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "246 Inf Div",
+              "designation": "246",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry A"
+            },
+            {
+              "raw": "12-2-2 Inf Div (246, 247, 249)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "247 Inf Div",
+              "designation": "247",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry A"
+            },
+            {
+              "raw": "12-2-2 Inf Div (246, 247, 249)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "249 Inf Div",
+              "designation": "249",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry A"
+            },
+            {
+              "raw": "11-1-1 Inf Div (244)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "244 Inf Div",
+              "designation": "244",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry A"
+            },
+            {
+              "raw": "2x 2-1-3 Alarm Tk Bn",
+              "factors": "2-1-3",
+              "count": 2,
+              "kind": "unit",
+              "name": "Alarm Tk Bn",
+              "locationKind": "entry",
+              "location": "Entry A"
+            },
+            {
+              "raw": "26-1-1 Arty Bde",
+              "factors": "26-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "Arty Bde",
+              "locationKind": "entry",
+              "location": "Entry A"
+            },
+            {
+              "raw": "1 Wagon Point (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry A"
+            }
+          ]
+        },
+        {
+          "label": "Entry D or E",
+          "units": [
+            {
+              "raw": "6-2-4 Cav Div (32, 47)",
+              "factors": "6-2-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "32 Cav Div",
+              "designation": "32",
+              "parentType": "Cav Div",
+              "locationKind": "entry",
+              "location": "Entry D or E"
+            },
+            {
+              "raw": "6-2-4 Cav Div (32, 47)",
+              "factors": "6-2-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "47 Cav Div",
+              "designation": "47",
+              "parentType": "Cav Div",
+              "locationKind": "entry",
+              "location": "Entry D or E"
+            },
+            {
+              "raw": "2-1-4 Cav Div (43)",
+              "factors": "2-1-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "43 Cav Div",
+              "designation": "43",
+              "parentType": "Cav Div",
+              "locationKind": "entry",
+              "location": "Entry D or E"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "26 Jul 41",
+      "entries": {
+        "Entry D or E": ["7-3-4 Cav Div (21 Mtn, 52)"]
+      },
+      "anyAirbase": ["MiG.3"],
+      "groups": [
+        {
+          "label": "Entry D or E",
+          "units": [
+            {
+              "raw": "7-3-4 Cav Div (21 Mtn, 52)",
+              "factors": "7-3-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "21 Mtn Cav Div",
+              "designation": "21 Mtn",
+              "parentType": "Cav Div",
+              "locationKind": "entry",
+              "location": "Entry D or E"
+            },
+            {
+              "raw": "7-3-4 Cav Div (21 Mtn, 52)",
+              "factors": "7-3-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "52 Cav Div",
+              "designation": "52",
+              "parentType": "Cav Div",
+              "locationKind": "entry",
+              "location": "Entry D or E"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "29 Jul 41",
+      "entries": {
+        "Entry B or C": ["2 Truck Points (loaded with SP)"],
+        "Entry D": ["43rd Army HQ", "18-1-3 Tk Div (105)", "26-1-1 Arty Bde"]
+      },
+      "notes": ["1x Reserve Marker"],
+      "groups": [
+        {
+          "label": "Entry B or C",
+          "units": [
+            {
+              "raw": "2 Truck Points (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            }
+          ]
+        },
+        {
+          "label": "Entry D",
+          "units": [
+            {
+              "raw": "43rd Army HQ",
+              "kind": "hq",
+              "name": "43rd Army HQ",
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "18-1-3 Tk Div (105)",
+              "factors": "18-1-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "105 Tk Div",
+              "designation": "105",
+              "parentType": "Tk Div",
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "26-1-1 Arty Bde",
+              "factors": "26-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "Arty Bde",
+              "locationKind": "entry",
+              "location": "Entry D"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "1 Aug 41",
+      "entries": {
+        "Entry B or C": ["18-1-3 Tk Div (109)", "13-3-3 Mtn Inf Div (194)", "4-3-6 MC Rgt (9)"],
+        "Entry D": [
+          "3rd Army HQ",
+          "5-4-4 Abn Bde (214)",
+          "8-1-5 Tk Rgt (18)",
+          "4-3-6 MC Rgt (20)",
+          "(5)-1-1 UR Bde (68)",
+          "26-1-1 Arty Bde",
+          "1 Wagon Point (loaded with SP)"
+        ]
+      },
+      "notes": ["No hedgerows above L-1 (1.3b).", "No more Operational Limits (2.3e)."],
+      "anyAirbase": ["Yak.1", "2x IL.2"],
+      "groups": [
+        {
+          "label": "Entry B or C",
+          "units": [
+            {
+              "raw": "18-1-3 Tk Div (109)",
+              "factors": "18-1-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "109 Tk Div",
+              "designation": "109",
+              "parentType": "Tk Div",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "13-3-3 Mtn Inf Div (194)",
+              "factors": "13-3-3",
+              "count": 1,
+              "kind": "unit",
+              "name": "194 Mtn Inf Div",
+              "designation": "194",
+              "parentType": "Mtn Inf Div",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "4-3-6 MC Rgt (9)",
+              "factors": "4-3-6",
+              "count": 1,
+              "kind": "unit",
+              "name": "9 MC Rgt",
+              "designation": "9",
+              "parentType": "MC Rgt",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            }
+          ]
+        },
+        {
+          "label": "Entry D",
+          "units": [
+            {
+              "raw": "3rd Army HQ",
+              "kind": "hq",
+              "name": "3rd Army HQ",
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "5-4-4 Abn Bde (214)",
+              "factors": "5-4-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "214 Abn Bde",
+              "designation": "214",
+              "parentType": "Abn Bde",
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "8-1-5 Tk Rgt (18)",
+              "factors": "8-1-5",
+              "count": 1,
+              "kind": "unit",
+              "name": "18 Tk Rgt",
+              "designation": "18",
+              "parentType": "Tk Rgt",
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "4-3-6 MC Rgt (20)",
+              "factors": "4-3-6",
+              "count": 1,
+              "kind": "unit",
+              "name": "20 MC Rgt",
+              "designation": "20",
+              "parentType": "MC Rgt",
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "(5)-1-1 UR Bde (68)",
+              "factors": "(5)-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "68 UR Bde",
+              "designation": "68",
+              "parentType": "UR Bde",
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "26-1-1 Arty Bde",
+              "factors": "26-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "Arty Bde",
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "1 Wagon Point (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry D"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "5 Aug 41",
+      "entries": {
+        "Entry B or C": [
+          "32nd Army HQ",
+          "49th Army HQ",
+          "11-1-1 Inf Div (309)",
+          "12-2-2 Militia Div (7M; -1 step)",
+          "11-1-1 Militia Div (2M)",
+          "11-1-1 Militia Div (8M, 18M; each -1 step)",
+          "10-0-1 Militia Div (13M; -1 step)",
+          "(2)-2-2 Alarm AT Rgt",
+          "2x 26-1-1 Arty Bde",
+          "1 Wagon Point (loaded with SP)",
+          "2 Truck Points (loaded with SP)"
+        ],
+        "Entry D": ["12-2-2 Inf Div (269)", "11-1-1 Inf Div (280, 282)"]
+      },
+      "notes": ["1x Reserve Marker"],
+      "groups": [
+        {
+          "label": "Entry B or C",
+          "units": [
+            {
+              "raw": "32nd Army HQ",
+              "kind": "hq",
+              "name": "32nd Army HQ",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "49th Army HQ",
+              "kind": "hq",
+              "name": "49th Army HQ",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "11-1-1 Inf Div (309)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "309 Inf Div",
+              "designation": "309",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "12-2-2 Militia Div (7M; -1 step)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "7M Militia Div",
+              "designation": "7M",
+              "parentType": "Militia Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "11-1-1 Militia Div (2M)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "2M Militia Div",
+              "designation": "2M",
+              "parentType": "Militia Div",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "11-1-1 Militia Div (8M, 18M; each -1 step)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "8M Militia Div",
+              "designation": "8M",
+              "parentType": "Militia Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "11-1-1 Militia Div (8M, 18M; each -1 step)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "18M Militia Div",
+              "designation": "18M",
+              "parentType": "Militia Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "10-0-1 Militia Div (13M; -1 step)",
+              "factors": "10-0-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "13M Militia Div",
+              "designation": "13M",
+              "parentType": "Militia Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "(2)-2-2 Alarm AT Rgt",
+              "factors": "(2)-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "Alarm AT Rgt",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "2x 26-1-1 Arty Bde",
+              "factors": "26-1-1",
+              "count": 2,
+              "kind": "unit",
+              "name": "Arty Bde",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "1 Wagon Point (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "2 Truck Points (loaded with SP)",
+              "kind": "unclassified",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            }
+          ]
+        },
+        {
+          "label": "Entry D",
+          "units": [
+            {
+              "raw": "12-2-2 Inf Div (269)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "269 Inf Div",
+              "designation": "269",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "11-1-1 Inf Div (280, 282)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "280 Inf Div",
+              "designation": "280",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "11-1-1 Inf Div (280, 282)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "282 Inf Div",
+              "designation": "282",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry D"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "8 Aug 41",
+      "entries": {
+        "Entry A": ["6-1-4 Cav Div (45)"],
+        "Entry D": [
+          "33rd Army HQ",
+          "12-2-2 Militia Div (1M)",
+          "12-2-2 Militia Div (17M; -1 step)",
+          "11-1-1 Militia Div (5M)",
+          "10-0-1 Militia Div (9M, 21M; each -1 step)",
+          "26-1-1 Arty Bde"
+        ]
+      },
+      "groups": [
+        {
+          "label": "Entry A",
+          "units": [
+            {
+              "raw": "6-1-4 Cav Div (45)",
+              "factors": "6-1-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "45 Cav Div",
+              "designation": "45",
+              "parentType": "Cav Div",
+              "locationKind": "entry",
+              "location": "Entry A"
+            }
+          ]
+        },
+        {
+          "label": "Entry D",
+          "units": [
+            {
+              "raw": "33rd Army HQ",
+              "kind": "hq",
+              "name": "33rd Army HQ",
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "12-2-2 Militia Div (1M)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "1M Militia Div",
+              "designation": "1M",
+              "parentType": "Militia Div",
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "12-2-2 Militia Div (17M; -1 step)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "17M Militia Div",
+              "designation": "17M",
+              "parentType": "Militia Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "11-1-1 Militia Div (5M)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "5M Militia Div",
+              "designation": "5M",
+              "parentType": "Militia Div",
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "10-0-1 Militia Div (9M, 21M; each -1 step)",
+              "factors": "10-0-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "9M Militia Div",
+              "designation": "9M",
+              "parentType": "Militia Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "10-0-1 Militia Div (9M, 21M; each -1 step)",
+              "factors": "10-0-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "21M Militia Div",
+              "designation": "21M",
+              "parentType": "Militia Div",
+              "stepsLost": 1,
+              "locationKind": "entry",
+              "location": "Entry D"
+            },
+            {
+              "raw": "26-1-1 Arty Bde",
+              "factors": "26-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "Arty Bde",
+              "locationKind": "entry",
+              "location": "Entry D"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "15 Aug 41",
+      "entries": {
+        "Entry A": ["11-1-1 Inf Div (303)"],
+        "Entry D or E": ["12-2-2 Inf Div (211, 278, 279)"]
+      },
+      "groups": [
+        {
+          "label": "Entry A",
+          "units": [
+            {
+              "raw": "11-1-1 Inf Div (303)",
+              "factors": "11-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "303 Inf Div",
+              "designation": "303",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry A"
+            }
+          ]
+        },
+        {
+          "label": "Entry D or E",
+          "units": [
+            {
+              "raw": "12-2-2 Inf Div (211, 278, 279)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "211 Inf Div",
+              "designation": "211",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry D or E"
+            },
+            {
+              "raw": "12-2-2 Inf Div (211, 278, 279)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "278 Inf Div",
+              "designation": "278",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry D or E"
+            },
+            {
+              "raw": "12-2-2 Inf Div (211, 278, 279)",
+              "factors": "12-2-2",
+              "count": 1,
+              "kind": "unit",
+              "name": "279 Inf Div",
+              "designation": "279",
+              "parentType": "Inf Div",
+              "locationKind": "entry",
+              "location": "Entry D or E"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "date": "19 Aug 41",
+      "entries": {},
+      "notes": [
+        "Entry E is shutdown (2.1a).",
+        "Begin checks for Early Decision (5.0b).",
+        "No more Special Repls."
+      ],
+      "remove": [
+        "4x Army HQ (3, 4, 13, 21)",
+        "20-1-3 Tk Div (13)",
+        "18-1-3 Tk Div (50)",
+        "14-1-3 Tk Div (55)",
+        "8-1-5 Tk Rgt (18)",
+        "6-2-3 Inf Div (219)",
+        "13-3-3 Inf Div (127)",
+        "12-2-2 Inf Div (17, 24, 42, 49, 55, 102, 117, 137, 148, 151, 154, 160, 167, 172, 269)",
+        "11-1-1 Inf Div (18, 121, 132, 143, 155, 187, 280, 282)",
+        "5-4-4 Abn Bde (8, 214)",
+        "5-3-3 Abn Bde (7)",
+        "4-3-6 MC Rgt (12)",
+        "7-3-4 Cav Div (21 Mtn, 52)",
+        "6-2-4 Cav Div (32, 47)",
+        "2-1-4 Cav Div (43)",
+        "6x 26-1-1 Arty Bde",
+        "2 Truck Points",
+        "4 Wagon Points"
+      ]
+    },
+    {
+      "date": "22 Aug 41",
+      "entries": {},
+      "anyAirbase": ["2x IL.2"]
+    },
+    {
+      "date": "1 Sep 41",
+      "entries": {
+        "Entry B or C": [
+          "6-2-5 Tk Bde (121, 129)",
+          "5-1-6 Tk Bde (143)",
+          "4-2-4 Tk Bn (43, 49, 52, 54, 56, 59, 64, 66, 113, 184, 186)",
+          "(5)-1-1 UR Bde (64)"
+        ]
+      },
+      "groups": [
+        {
+          "label": "Entry B or C",
+          "units": [
+            {
+              "raw": "6-2-5 Tk Bde (121, 129)",
+              "factors": "6-2-5",
+              "count": 1,
+              "kind": "unit",
+              "name": "121 Tk Bde",
+              "designation": "121",
+              "parentType": "Tk Bde",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "6-2-5 Tk Bde (121, 129)",
+              "factors": "6-2-5",
+              "count": 1,
+              "kind": "unit",
+              "name": "129 Tk Bde",
+              "designation": "129",
+              "parentType": "Tk Bde",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "5-1-6 Tk Bde (143)",
+              "factors": "5-1-6",
+              "count": 1,
+              "kind": "unit",
+              "name": "143 Tk Bde",
+              "designation": "143",
+              "parentType": "Tk Bde",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "4-2-4 Tk Bn (43, 49, 52, 54, 56, 59, 64, 66, 113, 184, 186)",
+              "factors": "4-2-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "43 Tk Bn",
+              "designation": "43",
+              "parentType": "Tk Bn",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "4-2-4 Tk Bn (43, 49, 52, 54, 56, 59, 64, 66, 113, 184, 186)",
+              "factors": "4-2-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "49 Tk Bn",
+              "designation": "49",
+              "parentType": "Tk Bn",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "4-2-4 Tk Bn (43, 49, 52, 54, 56, 59, 64, 66, 113, 184, 186)",
+              "factors": "4-2-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "52 Tk Bn",
+              "designation": "52",
+              "parentType": "Tk Bn",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "4-2-4 Tk Bn (43, 49, 52, 54, 56, 59, 64, 66, 113, 184, 186)",
+              "factors": "4-2-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "54 Tk Bn",
+              "designation": "54",
+              "parentType": "Tk Bn",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "4-2-4 Tk Bn (43, 49, 52, 54, 56, 59, 64, 66, 113, 184, 186)",
+              "factors": "4-2-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "56 Tk Bn",
+              "designation": "56",
+              "parentType": "Tk Bn",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "4-2-4 Tk Bn (43, 49, 52, 54, 56, 59, 64, 66, 113, 184, 186)",
+              "factors": "4-2-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "59 Tk Bn",
+              "designation": "59",
+              "parentType": "Tk Bn",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "4-2-4 Tk Bn (43, 49, 52, 54, 56, 59, 64, 66, 113, 184, 186)",
+              "factors": "4-2-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "64 Tk Bn",
+              "designation": "64",
+              "parentType": "Tk Bn",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "4-2-4 Tk Bn (43, 49, 52, 54, 56, 59, 64, 66, 113, 184, 186)",
+              "factors": "4-2-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "66 Tk Bn",
+              "designation": "66",
+              "parentType": "Tk Bn",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "4-2-4 Tk Bn (43, 49, 52, 54, 56, 59, 64, 66, 113, 184, 186)",
+              "factors": "4-2-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "113 Tk Bn",
+              "designation": "113",
+              "parentType": "Tk Bn",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "4-2-4 Tk Bn (43, 49, 52, 54, 56, 59, 64, 66, 113, 184, 186)",
+              "factors": "4-2-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "184 Tk Bn",
+              "designation": "184",
+              "parentType": "Tk Bn",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "4-2-4 Tk Bn (43, 49, 52, 54, 56, 59, 64, 66, 113, 184, 186)",
+              "factors": "4-2-4",
+              "count": 1,
+              "kind": "unit",
+              "name": "186 Tk Bn",
+              "designation": "186",
+              "parentType": "Tk Bn",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            },
+            {
+              "raw": "(5)-1-1 UR Bde (64)",
+              "factors": "(5)-1-1",
+              "count": 1,
+              "kind": "unit",
+              "name": "64 UR Bde",
+              "designation": "64",
+              "parentType": "UR Bde",
+              "locationKind": "entry",
+              "location": "Entry B or C"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Some divisions arrive with steps lost, reflecting incomplete mobilization.",
+    "The Frontal Reserves give SP for attacks and easy rebuilds of artillery, HQs and Sturmoviks."
+  ],
+  "errataApplied": [
+    "78 Inf Div：战斗模式面 20-5-4 / 移动模式面 10-5-6（同一算子的两个模式面，非版本冲突）",
+    "35 Inf Div：战斗模式面 20-4-3 / 移动模式面 10-4-5",
+    "57 Tk Div：16-1-3（SmolenskErrata 覆盖）",
+    "苏联 1 Sept 抵达的坦克营：4-2-4（SmolenskErrata 覆盖）",
+    "Frontal Reserves 的 SP：2（SmolenskErrata 覆盖）",
+    "Scenario 3/5/7 的 Rail Cap：轴 1 / 苏 3（SmolenskErrata 覆盖）"
+  ],
+  "dataQualityNotes": [
+    "到达卡为多栏排版且存在跨栏续排：按栏读会把相邻日期的部队记错日期，必须按“日期标题→下一日期标题”归并。",
+    "AxOOA 卡第 2 栏栏首区块与 SvOOA 卡第 2 栏栏首区块均无独立日期标题，属跨栏续排；其归属已按逐栏核对裁定，见 meta.resolved_assignments。",
+    "AxOOA 第 4 栏 Remove 块中 “2-3-8 PJ Bn 529)” 原文缺左括号。",
+    "两卡分辨率偏低（正文约 7-8 px），militia 编制号中的字母 M 与数字 5/8 极易混淆。",
+    "两张卡均未印回合编号，需与回合轨日期表对照（见 smolensk_charts_db.json -> weather.turn_track）。"
+  ],
+  "resolvedAssignments": [
+    {
+      "items": ["(5)-1-1 UR Bde (64)"],
+      "resolved": "1 Sep 41 / Entry B or C",
+      "supersededReadings": ["8 Aug 41 / Entry A（PDF 文本层）"],
+      "basis": "逐栏核对：1 Sep / Entry B or C 行内印有该旅"
+    },
+    {
+      "items": ["Any Airbase: LaGG.3 / SB.2"],
+      "resolved": "15 Jul 41",
+      "supersededReadings": ["曾标为跨栏歧义；PDF 文本层未出现"],
+      "basis": "逐栏核对：该 Any Airbase 块属 15 Jul；12 Jul 的 Any Airbase 为 MiG.3 / SB.2"
+    }
+  ],
+  "specialRepl": {
+    "period": "before 19 August, each turn, roll one die",
+    "table": {
+      "1-2": "Division & Supply Cache",
+      "3-6": "Division & Alarm unit"
+    }
+  }
+}

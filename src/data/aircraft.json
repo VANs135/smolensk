@@ -1,0 +1,648 @@
+{
+  "meta": {
+    "version": "0.4.0",
+    "description": "空军专表（A5）：22 型，含类型/空战值/轰炸值/射程/运量/军力；能力（hip shoot 限制等）另行消费",
+    "source": ["aircraft.json（印值目检落库，2026-09-11）"]
+  },
+  "aircraft": [
+    {
+      "aircraftId": "su-aircraft-ru-i-153",
+      "name": "Ru I.153",
+      "images": {
+        "front": "Ru_I.153_F.png",
+        "back": "Ru_I.153_B.png"
+      },
+      "side": "soviet",
+      "aircraftType": "F",
+      "airCombatRating": 1,
+      "airCombatRatingBack": 0,
+      "barrageStrength": 1,
+      "barrageStrengthBack": 0,
+      "rangeHexes": 15,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["no_hip_shoots", "no_reaction_exploit_mission", "no_planned_airdrop"],
+      "airAbilities": {
+        "canHipShoot": false,
+        "missionInReactionPhase": false,
+        "missionInExploitationPhase": false,
+        "canInitiateAirCombat": true,
+        "canBarrage": true,
+        "canEscort": true,
+        "canPatrolZone": true,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "su-aircraft-ru-i-16",
+      "name": "Ru I.16",
+      "images": {
+        "front": "Ru_I.16_F.png",
+        "back": "Ru_I.16_B.png"
+      },
+      "side": "soviet",
+      "aircraftType": "F",
+      "airCombatRating": 2,
+      "airCombatRatingBack": 1,
+      "barrageStrength": 1,
+      "barrageStrengthBack": 0,
+      "rangeHexes": 25,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["no_hip_shoots", "no_reaction_exploit_mission", "no_planned_airdrop"],
+      "airAbilities": {
+        "canHipShoot": false,
+        "missionInReactionPhase": false,
+        "missionInExploitationPhase": false,
+        "canInitiateAirCombat": true,
+        "canBarrage": true,
+        "canEscort": true,
+        "canPatrolZone": true,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "su-aircraft-ru-lagg-3",
+      "name": "Ru LaGG.3",
+      "images": {
+        "front": "Ru_LaGG.3_F.png",
+        "back": "Ru_LaGG.3_B.png"
+      },
+      "side": "soviet",
+      "aircraftType": "F",
+      "airCombatRating": 2,
+      "airCombatRatingBack": 1,
+      "barrageStrength": 1,
+      "barrageStrengthBack": 0,
+      "rangeHexes": 20,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["no_hip_shoots", "no_reaction_exploit_mission", "no_planned_airdrop"],
+      "airAbilities": {
+        "canHipShoot": false,
+        "missionInReactionPhase": false,
+        "missionInExploitationPhase": false,
+        "canInitiateAirCombat": true,
+        "canBarrage": true,
+        "canEscort": true,
+        "canPatrolZone": true,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "su-aircraft-ru-mig-3",
+      "name": "Ru MiG.3",
+      "images": {
+        "front": "Ru_MiG.3_F.png",
+        "back": "Ru_MiG.3_B.png"
+      },
+      "side": "soviet",
+      "aircraftType": "F",
+      "airCombatRating": 2,
+      "airCombatRatingBack": 1,
+      "barrageStrength": 1,
+      "barrageStrengthBack": 0,
+      "rangeHexes": 26,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["no_hip_shoots", "no_reaction_exploit_mission", "no_planned_airdrop"],
+      "airAbilities": {
+        "canHipShoot": false,
+        "missionInReactionPhase": false,
+        "missionInExploitationPhase": false,
+        "canInitiateAirCombat": true,
+        "canBarrage": true,
+        "canEscort": true,
+        "canPatrolZone": true,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "su-aircraft-ru-yak-1",
+      "name": "Ru Yak.1",
+      "images": {
+        "front": "Ru_Yak.1_F.png",
+        "back": "Ru_Yak.1_B.png"
+      },
+      "side": "soviet",
+      "aircraftType": "F",
+      "airCombatRating": 2,
+      "airCombatRatingBack": 1,
+      "barrageStrength": 1,
+      "barrageStrengthBack": 0,
+      "rangeHexes": 22,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["no_hip_shoots", "no_reaction_exploit_mission", "no_planned_airdrop"],
+      "airAbilities": {
+        "canHipShoot": false,
+        "missionInReactionPhase": false,
+        "missionInExploitationPhase": false,
+        "canInitiateAirCombat": true,
+        "canBarrage": true,
+        "canEscort": true,
+        "canPatrolZone": true,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "su-aircraft-ru-db-3",
+      "name": "Ru DB.3",
+      "images": {
+        "front": "Ru_DB.3_F.png",
+        "back": "Ru_DB.3_B.png"
+      },
+      "side": "soviet",
+      "aircraftType": "S",
+      "airCombatRating": 0,
+      "barrageStrength": 9,
+      "barrageStrengthBack": 5,
+      "rangeHexes": 118,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["no_hip_shoots", "no_reaction_exploit_mission", "no_planned_airdrop"],
+      "airAbilities": {
+        "canHipShoot": false,
+        "missionInReactionPhase": false,
+        "missionInExploitationPhase": false,
+        "canInitiateAirCombat": false,
+        "canBarrage": true,
+        "canEscort": false,
+        "canPatrolZone": false,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "su-aircraft-ru-il-2",
+      "name": "Ru IL.2",
+      "images": {
+        "front": "Ru_IL.2_F.png",
+        "back": "Ru_IL.2_B.png"
+      },
+      "side": "soviet",
+      "aircraftType": "T",
+      "airCombatRating": 2,
+      "barrageStrength": 4,
+      "rangeHexes": 24,
+      "transportCapacity": null,
+      "steps": 1,
+      "specialAbilities": [
+        "no_hip_shoots",
+        "no_reaction_exploit_mission",
+        "no_planned_airdrop",
+        "early_sturmovik_one_step"
+      ],
+      "airAbilities": {
+        "canHipShoot": false,
+        "missionInReactionPhase": false,
+        "missionInExploitationPhase": false,
+        "canInitiateAirCombat": false,
+        "canBarrage": true,
+        "canEscort": false,
+        "canPatrolZone": false,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "su-aircraft-ru-pe-2",
+      "name": "Ru Pe.2",
+      "images": {
+        "front": "Ru_Pe.2_F.png",
+        "back": "Ru_Pe.2_B.png"
+      },
+      "side": "soviet",
+      "aircraftType": "T",
+      "airCombatRating": 1,
+      "airCombatRatingBack": 0,
+      "barrageStrength": 5,
+      "barrageStrengthBack": 3,
+      "rangeHexes": 47,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["no_hip_shoots", "no_reaction_exploit_mission", "no_planned_airdrop"],
+      "airAbilities": {
+        "canHipShoot": false,
+        "missionInReactionPhase": false,
+        "missionInExploitationPhase": false,
+        "canInitiateAirCombat": false,
+        "canBarrage": true,
+        "canEscort": false,
+        "canPatrolZone": false,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "su-aircraft-ru-sb-2",
+      "name": "Ru SB.2",
+      "images": {
+        "front": "Ru_SB.2_F.png",
+        "back": "Ru_SB.2_B.png"
+      },
+      "side": "soviet",
+      "aircraftType": "T",
+      "airCombatRating": 1,
+      "airCombatRatingBack": 0,
+      "barrageStrength": 2,
+      "barrageStrengthBack": 1,
+      "rangeHexes": 38,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["no_hip_shoots", "no_reaction_exploit_mission", "no_planned_airdrop"],
+      "airAbilities": {
+        "canHipShoot": false,
+        "missionInReactionPhase": false,
+        "missionInExploitationPhase": false,
+        "canInitiateAirCombat": false,
+        "canBarrage": true,
+        "canEscort": false,
+        "canPatrolZone": false,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "su-aircraft-ru-su-2",
+      "name": "Ru Su.2",
+      "images": {
+        "front": "Ru_Su.2_F.png",
+        "back": "Ru_Su.2_B.png"
+      },
+      "side": "soviet",
+      "aircraftType": "T",
+      "airCombatRating": 2,
+      "airCombatRatingBack": 1,
+      "barrageStrength": 3,
+      "barrageStrengthBack": 2,
+      "rangeHexes": 38,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["no_hip_shoots", "no_reaction_exploit_mission", "no_planned_airdrop"],
+      "airAbilities": {
+        "canHipShoot": false,
+        "missionInReactionPhase": false,
+        "missionInExploitationPhase": false,
+        "canInitiateAirCombat": false,
+        "canBarrage": true,
+        "canEscort": false,
+        "canPatrolZone": false,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "su-aircraft-ru-tb-3",
+      "name": "Ru TB.3",
+      "images": {
+        "front": "Ru_TB.3_F.png",
+        "back": "Ru_TB.3_B.png"
+      },
+      "side": "soviet",
+      "aircraftType": "comb",
+      "airCombatRating": 0,
+      "barrageStrength": 8,
+      "barrageStrengthBack": 4,
+      "rangeHexes": 97,
+      "transportCapacity": 1,
+      "transportCapacityBack": 0.5,
+      "steps": 2,
+      "specialAbilities": ["no_hip_shoots", "no_reaction_exploit_mission", "no_planned_airdrop"],
+      "airAbilities": {
+        "canHipShoot": false,
+        "missionInReactionPhase": false,
+        "missionInExploitationPhase": false,
+        "canInitiateAirCombat": false,
+        "canBarrage": true,
+        "canEscort": false,
+        "canPatrolZone": false,
+        "canAirDrop": true
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "su-aircraft-ru-yak-4",
+      "name": "Ru Yak 4",
+      "images": {
+        "front": "Ru_Yak_4_F.png",
+        "back": "Ru_Yak_4_B.png"
+      },
+      "side": "soviet",
+      "aircraftType": "T",
+      "airCombatRating": 1,
+      "airCombatRatingBack": 0,
+      "barrageStrength": 3,
+      "barrageStrengthBack": 2,
+      "rangeHexes": 27,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["no_hip_shoots", "no_reaction_exploit_mission", "no_planned_airdrop"],
+      "airAbilities": {
+        "canHipShoot": false,
+        "missionInReactionPhase": false,
+        "missionInExploitationPhase": false,
+        "canInitiateAirCombat": false,
+        "canBarrage": true,
+        "canEscort": false,
+        "canPatrolZone": false,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "ax-aircraft-ge-hs-123",
+      "name": "Ge Hs.123",
+      "images": {
+        "front": "Ge_Hs.123_F.png",
+        "back": "Ge_Hs.123_B.png"
+      },
+      "side": "axis",
+      "aircraftType": "F",
+      "airCombatRating": 2,
+      "airCombatRatingBack": 1,
+      "barrageStrength": 3,
+      "barrageStrengthBack": 2,
+      "rangeHexes": 53,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["hip_shoot_allowed"],
+      "airAbilities": {
+        "canHipShoot": true,
+        "missionInReactionPhase": true,
+        "missionInExploitationPhase": true,
+        "canInitiateAirCombat": true,
+        "canBarrage": true,
+        "canEscort": true,
+        "canPatrolZone": true,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "ax-aircraft-ge-bf-109e",
+      "name": "Ge Bf.109e",
+      "images": {
+        "front": "Ge_Bf.109e_F.png",
+        "back": "Ge_Bf.109e_B.png"
+      },
+      "side": "axis",
+      "aircraftType": "F",
+      "airCombatRating": 4,
+      "airCombatRatingBack": 3,
+      "barrageStrength": 1,
+      "barrageStrengthBack": 0,
+      "rangeHexes": 41,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["hip_shoot_allowed"],
+      "airAbilities": {
+        "canHipShoot": true,
+        "missionInReactionPhase": true,
+        "missionInExploitationPhase": true,
+        "canInitiateAirCombat": true,
+        "canBarrage": true,
+        "canEscort": true,
+        "canPatrolZone": true,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "ax-aircraft-ge-bf-109e-7",
+      "name": "Ge Bf.109e-7",
+      "images": {
+        "front": "Ge_Bf.109e-7_F.png",
+        "back": "Ge_Bf.109e-7_B.png"
+      },
+      "side": "axis",
+      "aircraftType": "F",
+      "airCombatRating": 3,
+      "airCombatRatingBack": 2,
+      "barrageStrength": 3,
+      "barrageStrengthBack": 2,
+      "rangeHexes": 41,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["hip_shoot_allowed"],
+      "airAbilities": {
+        "canHipShoot": true,
+        "missionInReactionPhase": true,
+        "missionInExploitationPhase": true,
+        "canInitiateAirCombat": true,
+        "canBarrage": true,
+        "canEscort": true,
+        "canPatrolZone": true,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "ax-aircraft-ge-bf-109f",
+      "name": "Ge Bf.109f",
+      "images": {
+        "front": "Ge_Bf.109f_F.png",
+        "back": "Ge_Bf.109f_B.png"
+      },
+      "side": "axis",
+      "aircraftType": "F",
+      "airCombatRating": 4,
+      "airCombatRatingBack": 3,
+      "barrageStrength": 1,
+      "barrageStrengthBack": 0,
+      "rangeHexes": 44,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["hip_shoot_allowed"],
+      "airAbilities": {
+        "canHipShoot": true,
+        "missionInReactionPhase": true,
+        "missionInExploitationPhase": true,
+        "canInitiateAirCombat": true,
+        "canBarrage": true,
+        "canEscort": true,
+        "canPatrolZone": true,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "ax-aircraft-ge-bf-110",
+      "name": "Ge Bf.110",
+      "images": {
+        "front": "Ge_Bf.110_F.png",
+        "back": "Ge_Bf.110_B.png"
+      },
+      "side": "axis",
+      "aircraftType": "F",
+      "airCombatRating": 3,
+      "airCombatRatingBack": 2,
+      "barrageStrength": 5,
+      "barrageStrengthBack": 3,
+      "rangeHexes": 68,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["hip_shoot_allowed"],
+      "airAbilities": {
+        "canHipShoot": true,
+        "missionInReactionPhase": true,
+        "missionInExploitationPhase": true,
+        "canInitiateAirCombat": true,
+        "canBarrage": true,
+        "canEscort": true,
+        "canPatrolZone": true,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "ax-aircraft-ge-do-17z",
+      "name": "Ge Do.17z",
+      "images": {
+        "front": "Ge_Do.17z_F.png",
+        "back": "Ge_Do.17z_B.png"
+      },
+      "side": "axis",
+      "aircraftType": "T",
+      "airCombatRating": 2,
+      "airCombatRatingBack": 1,
+      "barrageStrength": 8,
+      "barrageStrengthBack": 4,
+      "rangeHexes": 72,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["hip_shoot_allowed"],
+      "airAbilities": {
+        "canHipShoot": true,
+        "missionInReactionPhase": true,
+        "missionInExploitationPhase": true,
+        "canInitiateAirCombat": false,
+        "canBarrage": true,
+        "canEscort": false,
+        "canPatrolZone": false,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "ax-aircraft-ge-he-111",
+      "name": "Ge He.111",
+      "images": {
+        "front": "Ge_He.111_F.png",
+        "back": "Ge_He.111_B.png"
+      },
+      "side": "axis",
+      "aircraftType": "comb",
+      "airCombatRating": 2,
+      "airCombatRatingBack": 1,
+      "barrageStrength": 12,
+      "barrageStrengthBack": 6,
+      "rangeHexes": 183,
+      "transportCapacity": 0.5,
+      "steps": 2,
+      "specialAbilities": ["hip_shoot_allowed"],
+      "airAbilities": {
+        "canHipShoot": true,
+        "missionInReactionPhase": true,
+        "missionInExploitationPhase": true,
+        "canInitiateAirCombat": false,
+        "canBarrage": true,
+        "canEscort": false,
+        "canPatrolZone": false,
+        "canAirDrop": true
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "ax-aircraft-ge-ju-87b",
+      "name": "Ge Ju.87b",
+      "images": {
+        "front": "Ge_Ju.87b_F.png",
+        "back": "Ge_Ju.87b_B.png"
+      },
+      "side": "axis",
+      "aircraftType": "T",
+      "airCombatRating": 1,
+      "airCombatRatingBack": 0,
+      "barrageStrength": 12,
+      "barrageStrengthBack": 6,
+      "rangeHexes": 49,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["hip_shoot_allowed"],
+      "airAbilities": {
+        "canHipShoot": true,
+        "missionInReactionPhase": true,
+        "missionInExploitationPhase": true,
+        "canInitiateAirCombat": false,
+        "canBarrage": true,
+        "canEscort": false,
+        "canPatrolZone": false,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "ax-aircraft-ge-ju-88",
+      "name": "Ge Ju.88",
+      "images": {
+        "front": "Ge_Ju.88_F.png",
+        "back": "Ge_Ju.88_B.png"
+      },
+      "side": "axis",
+      "aircraftType": "T",
+      "airCombatRating": 2,
+      "airCombatRatingBack": 1,
+      "barrageStrength": 12,
+      "barrageStrengthBack": 6,
+      "rangeHexes": 106,
+      "transportCapacity": null,
+      "steps": 2,
+      "specialAbilities": ["hip_shoot_allowed"],
+      "airAbilities": {
+        "canHipShoot": true,
+        "missionInReactionPhase": true,
+        "missionInExploitationPhase": true,
+        "canInitiateAirCombat": false,
+        "canBarrage": true,
+        "canEscort": false,
+        "canPatrolZone": false,
+        "canAirDrop": false
+      },
+      "status": "valued"
+    },
+    {
+      "aircraftId": "ax-aircraft-ge-ju-52",
+      "name": "Ge Ju.52",
+      "images": {
+        "front": "Ge_Ju.52_F.png",
+        "back": "Ge_Ju.52_B.png"
+      },
+      "side": "axis",
+      "aircraftType": "Tpt",
+      "airCombatRating": 0,
+      "barrageStrength": 0,
+      "rangeHexes": 62,
+      "transportCapacity": 1,
+      "transportCapacityBack": 0.5,
+      "steps": 2,
+      "specialAbilities": ["hip_shoot_allowed"],
+      "airAbilities": {
+        "canHipShoot": true,
+        "missionInReactionPhase": true,
+        "missionInExploitationPhase": true,
+        "canInitiateAirCombat": false,
+        "canBarrage": false,
+        "canEscort": false,
+        "canPatrolZone": false,
+        "canAirDrop": true
+      },
+      "status": "valued"
+    }
+  ]
+}

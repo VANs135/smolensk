@@ -1,0 +1,1488 @@
+{
+  "count": 38,
+  "source": "苏联坦克师+独立装甲",
+  "records": [
+    {
+      "file": "BD2 S1 R08 C10.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "other",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 6,
+            "x1": 28,
+            "y0": 40,
+            "y1": 61
+          },
+          "value": "20",
+          "score": 0.996
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 39,
+            "y1": 51
+          },
+          "value": "1",
+          "score": 0.978
+        },
+        "MA": {
+          "box": {
+            "x0": 48,
+            "x1": 58,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "3",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R08 C10B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 10,
+            "x1": 29,
+            "y0": 38,
+            "y1": 60
+          },
+          "value": "10",
+          "score": 0.942
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 41,
+            "y0": 37,
+            "y1": 50
+          },
+          "value": "0",
+          "score": 0.999
+        },
+        "MA": {
+          "box": {
+            "x0": 47,
+            "x1": 58,
+            "y0": 40,
+            "y1": 62
+          },
+          "value": "8",
+          "score": 0.999
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R09 C01.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 6,
+            "x1": 28,
+            "y0": 40,
+            "y1": 61
+          },
+          "value": "20",
+          "score": 0.994
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 39,
+            "y0": 40,
+            "y1": 52
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 47,
+            "x1": 58,
+            "y0": 42,
+            "y1": 63
+          },
+          "value": "3",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R09 C01B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 10,
+            "x1": 29,
+            "y0": 39,
+            "y1": 60
+          },
+          "value": "10",
+          "score": 0.736
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 41,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "0",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 48,
+            "x1": 58,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "8",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R09 C02.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "other",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 7,
+            "x1": 29,
+            "y0": 39,
+            "y1": 61
+          },
+          "value": "20",
+          "score": 0.999
+        },
+        "AR": {
+          "box": {
+            "x0": 34,
+            "x1": 39,
+            "y0": 39,
+            "y1": 51
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 48,
+            "x1": 58,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "3",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R09 C02B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 10,
+            "x1": 28,
+            "y0": 39,
+            "y1": 60
+          },
+          "value": "10",
+          "score": 0.666
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 40,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "0",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 47,
+            "x1": 58,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "8",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R07 C03.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 26,
+            "y0": 39,
+            "y1": 60
+          },
+          "value": "2",
+          "score": 0.761
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 38,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 46,
+            "x1": 57,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "5",
+          "score": 0.999
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R07 C03B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 14,
+            "x1": 25,
+            "y0": 39,
+            "y1": 60
+          },
+          "value": "4",
+          "score": 0.994
+        },
+        "AR": {
+          "box": {
+            "x0": 30,
+            "x1": 38,
+            "y0": 37,
+            "y1": 50
+          },
+          "value": "0",
+          "score": 0.997
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 60,
+            "y0": 40,
+            "y1": 61
+          },
+          "value": "12",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R07 C04.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 26,
+            "y0": 40,
+            "y1": 60
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 33,
+            "x1": 38,
+            "y0": 39,
+            "y1": 50
+          },
+          "value": "1",
+          "score": 0.965
+        },
+        "MA": {
+          "box": {
+            "x0": 46,
+            "x1": 57,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "5",
+          "score": 1.0
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R07 C04B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 13,
+            "x1": 24,
+            "y0": 40,
+            "y1": 60
+          },
+          "value": "4",
+          "score": 0.996
+        },
+        "AR": {
+          "box": {
+            "x0": 29,
+            "x1": 37,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "0",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 39,
+            "x1": 59,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "12",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R07 C05.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 27,
+            "y0": 40,
+            "y1": 60
+          },
+          "value": "3",
+          "score": 0.62
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 40,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 47,
+            "x1": 58,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "4",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R07 C05B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 14,
+            "x1": 25,
+            "y0": 40,
+            "y1": 61
+          },
+          "value": "2",
+          "score": 0.813
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 36,
+            "y0": 39,
+            "y1": 51
+          },
+          "value": "1",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 60,
+            "y0": 42,
+            "y1": 62
+          },
+          "value": "12",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R07 C06.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 26,
+            "y0": 40,
+            "y1": 61
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 39,
+            "y0": 39,
+            "y1": 51
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 46,
+            "x1": 57,
+            "y0": 42,
+            "y1": 62
+          },
+          "value": "4",
+          "score": 1.0
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R07 C06B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 25,
+            "y0": 39,
+            "y1": 60
+          },
+          "value": "2",
+          "score": 0.748
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 37,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "1",
+          "score": 0.997
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 60,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "12",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R07 C07.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 27,
+            "y0": 40,
+            "y1": 60
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 40,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 46,
+            "x1": 58,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "4",
+          "score": 1.0
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R07 C07B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 14,
+            "x1": 24,
+            "y0": 40,
+            "y1": 61
+          },
+          "value": "2",
+          "score": 0.569
+        },
+        "AR": {
+          "box": {
+            "x0": 30,
+            "x1": 35,
+            "y0": 39,
+            "y1": 51
+          },
+          "value": "1",
+          "score": 0.998
+        },
+        "MA": {
+          "box": {
+            "x0": 39,
+            "x1": 59,
+            "y0": 42,
+            "y1": 63
+          },
+          "value": "12",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R07 C08.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 26,
+            "y0": 41,
+            "y1": 61
+          },
+          "value": "4",
+          "score": 0.639
+        },
+        "AR": {
+          "box": {
+            "x0": 30,
+            "x1": 39,
+            "y0": 39,
+            "y1": 51
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 45,
+            "x1": 56,
+            "y0": 42,
+            "y1": 63
+          },
+          "value": "4",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R07 C08B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 25,
+            "y0": 39,
+            "y1": 60
+          },
+          "value": "2",
+          "score": 0.914
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 36,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 36,
+            "x1": 60,
+            "y0": 38,
+            "y1": 61
+          },
+          "value": "12",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R07 C09.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 27,
+            "y0": 40,
+            "y1": 60
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 40,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 47,
+            "x1": 58,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "4",
+          "score": 1.0
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R07 C09B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 25,
+            "y0": 39,
+            "y1": 60
+          },
+          "value": "2",
+          "score": 0.845
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 36,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 60,
+            "y0": 40,
+            "y1": 61
+          },
+          "value": "12",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R07 C10.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 26,
+            "y0": 41,
+            "y1": 61
+          },
+          "value": "4",
+          "score": 0.639
+        },
+        "AR": {
+          "box": {
+            "x0": 30,
+            "x1": 39,
+            "y0": 39,
+            "y1": 51
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 45,
+            "x1": 56,
+            "y0": 42,
+            "y1": 63
+          },
+          "value": "4",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R07 C10B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 14,
+            "x1": 25,
+            "y0": 40,
+            "y1": 61
+          },
+          "value": "2",
+          "score": 0.729
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 36,
+            "y0": 39,
+            "y1": 51
+          },
+          "value": "1",
+          "score": 0.995
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 60,
+            "y0": 42,
+            "y1": 62
+          },
+          "value": "12",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R08 C01.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 26,
+            "y0": 40,
+            "y1": 60
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 30,
+            "x1": 39,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 45,
+            "x1": 56,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "4",
+          "score": 1.0
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R08 C01B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 26,
+            "y0": 40,
+            "y1": 60
+          },
+          "value": "2",
+          "score": 0.996
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 37,
+            "y0": 39,
+            "y1": 50
+          },
+          "value": "1",
+          "score": 0.992
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 61,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "12",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R08 C02.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 26,
+            "y0": 39,
+            "y1": 60
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 39,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 46,
+            "x1": 57,
+            "y0": 41,
+            "y1": 61
+          },
+          "value": "4",
+          "score": 1.0
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R08 C02B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 26,
+            "y0": 40,
+            "y1": 61
+          },
+          "value": "2",
+          "score": 0.9
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 37,
+            "y0": 39,
+            "y1": 51
+          },
+          "value": "1",
+          "score": 0.972
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 61,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "12",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R08 C03.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 26,
+            "y0": 40,
+            "y1": 60
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 30,
+            "x1": 38,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 45,
+            "x1": 56,
+            "y0": 42,
+            "y1": 62
+          },
+          "value": "4",
+          "score": 1.0
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R08 C03B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 26,
+            "y0": 40,
+            "y1": 60
+          },
+          "value": "2",
+          "score": 0.995
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 37,
+            "y0": 39,
+            "y1": 50
+          },
+          "value": "1",
+          "score": 0.925
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 60,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "12",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R08 C04.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 26,
+            "y0": 39,
+            "y1": 60
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 39,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 46,
+            "x1": 57,
+            "y0": 41,
+            "y1": 61
+          },
+          "value": "4",
+          "score": 1.0
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R08 C04B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 26,
+            "y0": 39,
+            "y1": 60
+          },
+          "value": "2",
+          "score": 0.884
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 37,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "1",
+          "score": 0.972
+        },
+        "MA": {
+          "box": {
+            "x0": 41,
+            "x1": 61,
+            "y0": 40,
+            "y1": 61
+          },
+          "value": "12",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R08 C05.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 26,
+            "y0": 40,
+            "y1": 60
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 30,
+            "x1": 38,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 45,
+            "x1": 56,
+            "y0": 42,
+            "y1": 62
+          },
+          "value": "4",
+          "score": 1.0
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R08 C05B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 25,
+            "y0": 39,
+            "y1": 60
+          },
+          "value": "2",
+          "score": 0.845
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 36,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 36,
+            "x1": 60,
+            "y0": 39,
+            "y1": 61
+          },
+          "value": "12",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R08 C06.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 26,
+            "y0": 40,
+            "y1": 60
+          },
+          "value": "35",
+          "score": 0.641
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 39,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 46,
+            "x1": 57,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "5",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R08 C06B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 25,
+            "y0": 40,
+            "y1": 61
+          },
+          "value": "2",
+          "score": 0.772
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 36,
+            "y0": 40,
+            "y1": 51
+          },
+          "value": "1",
+          "score": 0.999
+        },
+        "MA": {
+          "box": {
+            "x0": 36,
+            "x1": 60,
+            "y0": 41,
+            "y1": 63
+          },
+          "value": "10",
+          "score": 1.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R08 C07.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 17,
+            "x1": 27,
+            "y0": 39,
+            "y1": 60
+          },
+          "value": "12",
+          "score": 0.684
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 40,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "2",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 47,
+            "x1": 58,
+            "y0": 40,
+            "y1": 61
+          },
+          "value": "5",
+          "score": 0.999
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R08 C07B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 25,
+            "y0": 40,
+            "y1": 60
+          },
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "box": {
+            "x0": 31,
+            "x1": 36,
+            "y0": 39,
+            "y1": 51
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 36,
+            "x1": 60,
+            "y0": 39,
+            "y1": 62
+          },
+          "value": "10",
+          "score": 1.0
+        }
+      },
+      "review": ["A空"]
+    },
+    {
+      "file": "BD2 S1 R08 C08.png",
+      "re_folder": "苏联单位",
+      "face": "front",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 16,
+            "x1": 26,
+            "y0": 40,
+            "y1": 60
+          },
+          "value": "5",
+          "score": 0.764
+        },
+        "AR": {
+          "box": {
+            "x0": 32,
+            "x1": 38,
+            "y0": 39,
+            "y1": 50
+          },
+          "value": "1",
+          "score": 0.986
+        },
+        "MA": {
+          "box": {
+            "x0": 46,
+            "x1": 57,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "6",
+          "score": 0.991
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R08 C08B.png",
+      "re_folder": "苏联单位",
+      "face": "back",
+      "base": "regular",
+      "fields": {
+        "A": {
+          "box": {
+            "x0": 15,
+            "x1": 25,
+            "y0": 40,
+            "y1": 60
+          },
+          "value": "2",
+          "score": 0.885
+        },
+        "AR": {
+          "box": {
+            "x0": 30,
+            "x1": 38,
+            "y0": 38,
+            "y1": 50
+          },
+          "value": "0",
+          "score": 1.0
+        },
+        "MA": {
+          "box": {
+            "x0": 40,
+            "x1": 60,
+            "y0": 41,
+            "y1": 62
+          },
+          "value": "12",
+          "score": 1.0
+        }
+      },
+      "review": []
+    }
+  ]
+}

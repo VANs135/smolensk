@@ -1,0 +1,512 @@
+{
+  "meta": {
+    "version": "0.4.0",
+    "description": "标记库（rule_class 按 3.6 / 5.0c / 13.3 / 15.0 / 16.0 / 专规 1.7）+ 记录轨（回合轨 19 半周 / 铁路容量轨 1–10+0–3T）+ 容器（死亡堆 / 边缘盒 / 空军盒）初始结构",
+    "source": [
+      "markers.json（2026-09-11 重构：47 件保留，含清理留痕）",
+      "charts.json weather.turn_track（19 回合日号轨）",
+      "rules.json exclusive_rules_smolensk（off_map / rail_gauge）"
+    ]
+  },
+  "markers": [
+    {
+      "id": "mk-10",
+      "name": "DG",
+      "side": "neutral",
+      "ruleClass": "3.6b",
+      "classLabel": "模式标记（预备／混乱 DG／进击／战略）",
+      "front": "Neutral_DG.png"
+    },
+    {
+      "id": "mk-11",
+      "name": "Exploit",
+      "side": "neutral",
+      "ruleClass": "3.6b",
+      "classLabel": "模式标记（预备／混乱 DG／进击／战略）",
+      "front": "Neutral_Exploit.png"
+    },
+    {
+      "id": "mk-13",
+      "name": "Fueled - Allied",
+      "side": "soviet",
+      "ruleClass": "3.6a",
+      "classLabel": "补给标记（断补／部队储备低／耗尽／燃料状态）",
+      "front": "Ru_Fueled_-_Allied.png"
+    },
+    {
+      "id": "mk-14",
+      "name": "Fueled - Axis",
+      "side": "axis",
+      "ruleClass": "3.6a",
+      "classLabel": "补给标记（断补／部队储备低／耗尽／燃料状态）",
+      "front": "Ge_Fueled_-_Axis.png"
+    },
+    {
+      "id": "mk-15",
+      "name": "Hedgehog",
+      "side": "neutral",
+      "ruleClass": "16.0",
+      "classLabel": "环形工事等级标记（16.0）",
+      "front": "Neutral_Hedgehog_1.png"
+    },
+    {
+      "id": "mk-21",
+      "name": "Low/Exhausted",
+      "side": "neutral",
+      "ruleClass": "3.6a",
+      "classLabel": "补给标记（断补／部队储备低／耗尽／燃料状态）",
+      "front": "Neutral_Low-Exhausted.png"
+    },
+    {
+      "id": "mk-22",
+      "name": "Out of Supply",
+      "side": "neutral",
+      "ruleClass": "3.6a",
+      "classLabel": "补给标记（断补／部队储备低／耗尽／燃料状态）",
+      "front": "Neutral_Out_of_Supply.png"
+    },
+    {
+      "id": "mk-26",
+      "name": "Strategic Movement",
+      "side": "neutral",
+      "ruleClass": "3.6b",
+      "classLabel": "模式标记（预备／混乱 DG／进击／战略）",
+      "front": "Neutral_Strategic_Movement.png"
+    },
+    {
+      "id": "mk-30",
+      "name": "Trainbusting - Allied",
+      "side": "soviet",
+      "ruleClass": "14.8c",
+      "classLabel": "运输破坏标记（效果 14.8c：Zone 内敌移动 +1 MP/格、铁路容量加倍；生成流程 10.0c：Barrage vs Facility 结果含 * 时放置）",
+      "front": "Ru_Trainbusting_-_Allied.png"
+    },
+    {
+      "id": "mk-31",
+      "name": "Trainbusting - Axis",
+      "side": "axis",
+      "ruleClass": "14.8c",
+      "classLabel": "运输破坏标记（效果 14.8c：Zone 内敌移动 +1 MP/格、铁路容量加倍；生成流程 10.0c：Barrage vs Facility 结果含 * 时放置）",
+      "front": "Ge_Trainbusting_-_Axis.png"
+    },
+    {
+      "id": "mk-38",
+      "name": "Railhead",
+      "side": "neutral",
+      "ruleClass": "13.3d",
+      "classLabel": "铁路端点标记（13.3d）",
+      "front": "Neutral_Railhead.png"
+    },
+    {
+      "id": "mk-50",
+      "name": "Supply Cache Marker",
+      "side": "neutral",
+      "ruleClass": "spec_1.7",
+      "classLabel": "补给缓存标记（专规 1.7）",
+      "front": "Neutral_Supply_Cache_Marker_F.png"
+    },
+    {
+      "id": "mk-51",
+      "name": "Control Marker",
+      "side": "neutral",
+      "ruleClass": "5.0c",
+      "classLabel": "占领／胜利格标记（5.0c；兼作专规胜利格归属表示）",
+      "front": "Neutral_Control_Marker_F.png"
+    },
+    {
+      "id": "mk-52",
+      "name": "Ground",
+      "side": "neutral",
+      "ruleClass": "3.6c",
+      "classLabel": "天气标记（本作无算子）",
+      "front": "Neutral_Ground.png"
+    },
+    {
+      "id": "mk-53",
+      "name": "Flight",
+      "side": "neutral",
+      "ruleClass": "3.6c",
+      "classLabel": "天气标记（本作无算子）",
+      "front": "Neutral_Flight.png"
+    },
+    {
+      "id": "mk-54",
+      "name": "Turn",
+      "side": "neutral",
+      "ruleClass": "3.6d",
+      "classLabel": "回合与阶段标记",
+      "front": "Neutral_Turn_F.png"
+    },
+    {
+      "id": "mk-55",
+      "name": "Allied Rail Cap",
+      "side": "soviet",
+      "ruleClass": "13.3b",
+      "classLabel": "铁路容量记录轨（13.3b／专规 1.2）",
+      "front": "Ru_Rail_Cap.png"
+    },
+    {
+      "id": "mk-56",
+      "name": "Axis Rail Cap",
+      "side": "axis",
+      "ruleClass": "13.3b",
+      "classLabel": "铁路容量记录轨（13.3b／专规 1.2）",
+      "front": "Ge_Rail_Cap.png"
+    },
+    {
+      "id": "mk-67",
+      "name": "Russian Reserve",
+      "side": "soviet",
+      "ruleClass": "3.6b",
+      "classLabel": "模式标记（预备／混乱 DG／进击／战略）",
+      "front": "Ru_Russian_Reserve.png"
+    },
+    {
+      "id": "mk-276",
+      "name": "German Reserve",
+      "side": "axis",
+      "ruleClass": "3.6b",
+      "classLabel": "模式标记（预备／混乱 DG／进击／战略）",
+      "front": "Ge_Reserve_F.png"
+    },
+    {
+      "id": "mk-airbase-axis-air-strip-bridge",
+      "name": "Ge Air Strip/Bridge",
+      "side": "axis",
+      "ruleClass": "spec_3.5",
+      "classLabel": "建设标记（专规 3.5：一次性建桥／建空军基地）",
+      "front": "Ge_Air_Strip-Bridge_F.png"
+    },
+    {
+      "id": "mk-exploit-2",
+      "name": "Exploit 2",
+      "side": "both",
+      "ruleClass": "3.6b",
+      "classLabel": "进击标记（3.6b：e# 进击，半 MA）",
+      "front": "Neutral_Exploit_2.png"
+    },
+    {
+      "id": "mk-exploit-3",
+      "name": "Exploit 3",
+      "side": "both",
+      "ruleClass": "3.6b",
+      "classLabel": "进击标记（3.6b：e# 进击，半 MA）",
+      "front": "Neutral_Exploit_3.png"
+    },
+    {
+      "id": "mk-exhausted",
+      "name": "Exhausted",
+      "side": "both",
+      "ruleClass": "3.6a",
+      "classLabel": "部队储备耗尽标记（12.10：Internal Stocks 用尽；恢复加倍）",
+      "front": "Neutral_Exhausted.png"
+    },
+    {
+      "id": "mk-510",
+      "name": "10.Mtr Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_10_Mtr_Draw_F.png"
+    },
+    {
+      "id": "mk-511",
+      "name": "14.Mtr Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_14_Mtr_Draw_F.png"
+    },
+    {
+      "id": "mk-512",
+      "name": "18.Mtr Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_18_Mtr_Draw_F.png"
+    },
+    {
+      "id": "mk-513",
+      "name": "20.Mtr Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_20_Mtr_Draw_F.png"
+    },
+    {
+      "id": "mk-514",
+      "name": "29.Mtr Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_29_Mtr_Draw_F.png"
+    },
+    {
+      "id": "mk-515",
+      "name": "SS-R.Mtr Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_SS-R_Mtr_Draw_F.png"
+    },
+    {
+      "id": "mk-516",
+      "name": "3.Pz Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_3_Pz_Draw_F.png"
+    },
+    {
+      "id": "mk-517",
+      "name": "4.Pz Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_4_Pz_Draw_F.png"
+    },
+    {
+      "id": "mk-518",
+      "name": "7.Pz Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_7_Pz_Draw_F.png"
+    },
+    {
+      "id": "mk-519",
+      "name": "10.Pz Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_10_Pz_Draw_F.png"
+    },
+    {
+      "id": "mk-520",
+      "name": "12.Pz Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_12_Pz_Draw_F.png"
+    },
+    {
+      "id": "mk-521",
+      "name": "17.Pz Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_17_Pz_Draw_F.png"
+    },
+    {
+      "id": "mk-522",
+      "name": "18.Pz Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_18_Pz_Draw_F.png"
+    },
+    {
+      "id": "mk-523",
+      "name": "19.Pz Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_19_Pz_Draw_F.png"
+    },
+    {
+      "id": "mk-524",
+      "name": "20.Pz Draw",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_20_Pz_Draw_F.png"
+    },
+    {
+      "id": "mk-1cav",
+      "name": "Ge 1.Cav",
+      "side": "axis",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属装甲集群）",
+      "front": "Ge_1_Cav_Draw.png"
+    },
+    {
+      "id": "mk-steploss-2-soviet",
+      "name": "Step Loss 2 Allied",
+      "side": "soviet",
+      "ruleClass": "3.6e",
+      "classLabel": "军力损失标记（3.6e）",
+      "front": null
+    },
+    {
+      "id": "mk-steploss-2-axis",
+      "name": "Step Loss 2 Axis",
+      "side": "axis",
+      "ruleClass": "3.6e",
+      "classLabel": "军力损失标记（3.6e）",
+      "front": null
+    },
+    {
+      "id": "mk-steploss-3-soviet",
+      "name": "Step Loss 3 Allied",
+      "side": "soviet",
+      "ruleClass": "3.6e",
+      "classLabel": "军力损失标记（3.6e）",
+      "front": null
+    },
+    {
+      "id": "mk-steploss-3-axis",
+      "name": "Step Loss 3 Axis",
+      "side": "axis",
+      "ruleClass": "3.6e",
+      "classLabel": "军力损失标记（3.6e）",
+      "front": null
+    },
+    {
+      "id": "mk-steploss-4-soviet",
+      "name": "Step Loss 4 Allied",
+      "side": "soviet",
+      "ruleClass": "3.6e",
+      "classLabel": "军力损失标记（3.6e）",
+      "front": null
+    },
+    {
+      "id": "mk-steploss-4-axis",
+      "name": "Step Loss 4 Axis",
+      "side": "axis",
+      "ruleClass": "3.6e",
+      "classLabel": "军力损失标记（3.6e）",
+      "front": null
+    },
+    {
+      "id": "mk-sov-1-mot-draw",
+      "name": "1 Mtr Div",
+      "side": "soviet",
+      "ruleClass": "3.6f",
+      "classLabel": "编队标记（3.6f：正面＝普通／背面＝已加油；随所属多单位编队）",
+      "front": "Ru_1_Mtr_Div_F.png"
+    }
+  ],
+  "turnTrack": [
+    {
+      "turn": 1,
+      "date": "1941-07-08"
+    },
+    {
+      "turn": 2,
+      "date": "1941-07-12"
+    },
+    {
+      "turn": 3,
+      "date": "1941-07-15"
+    },
+    {
+      "turn": 4,
+      "date": "1941-07-19"
+    },
+    {
+      "turn": 5,
+      "date": "1941-07-22"
+    },
+    {
+      "turn": 6,
+      "date": "1941-07-26"
+    },
+    {
+      "turn": 7,
+      "date": "1941-07-29"
+    },
+    {
+      "turn": 8,
+      "date": "1941-08-01"
+    },
+    {
+      "turn": 9,
+      "date": "1941-08-05"
+    },
+    {
+      "turn": 10,
+      "date": "1941-08-08"
+    },
+    {
+      "turn": 11,
+      "date": "1941-08-12"
+    },
+    {
+      "turn": 12,
+      "date": "1941-08-15"
+    },
+    {
+      "turn": 13,
+      "date": "1941-08-19"
+    },
+    {
+      "turn": 14,
+      "date": "1941-08-22"
+    },
+    {
+      "turn": 15,
+      "date": "1941-08-26"
+    },
+    {
+      "turn": 16,
+      "date": "1941-08-29"
+    },
+    {
+      "turn": 17,
+      "date": "1941-09-01"
+    },
+    {
+      "turn": 18,
+      "date": "1941-09-05"
+    },
+    {
+      "turn": 19,
+      "date": "1941-09-08"
+    }
+  ],
+  "railCap": {
+    "maxMain": 10,
+    "maxSub": 3,
+    "initial": {
+      "axis": 0,
+      "soviet": 2
+    },
+    "boostDate": "1941-07-19",
+    "boostTo": {
+      "axis": 1,
+      "soviet": 3
+    }
+  },
+  "containers": {
+    "deadPile": {
+      "axis": [],
+      "soviet": []
+    },
+    "edgeBoxes": [
+      {
+        "id": "edge-northeast",
+        "name": "Northeast Box",
+        "traceSupply": true
+      },
+      {
+        "id": "edge-southeast",
+        "name": "Southeast Box",
+        "traceSupply": true
+      }
+    ],
+    "airBoxes": [
+      {
+        "id": "axis-air-box",
+        "side": "axis",
+        "rangeHexes": 30,
+        "edgeRow": 1
+      },
+      {
+        "id": "soviet-air-box",
+        "side": "soviet",
+        "rangeHexes": 20,
+        "edgeRow": 62
+      }
+    ]
+  }
+}

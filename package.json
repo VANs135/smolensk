@@ -1,0 +1,44 @@
+{
+  "name": "smolensk-ocs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OCS 斯摩棱斯克兵棋推演程序（Smolensk: Barbarossa Derailed 电子裁判台）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "serve:dist": "node scripts/serve-dist.mjs",
+    "pack": "npm run build && node scripts/pack-release.mjs",
+    "typecheck": "vue-tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "arch": "node scripts/check-arch.mjs",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm run test && npm run arch"
+  },
+  "dependencies": {
+    "pinia": "^3.0.1",
+    "vue": "^3.5.13",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@rolldown/binding-win32-x64-msvc": "1.2.8",
+    "@types/node": "^22.10.1",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-vue": "^9.32.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "typescript": "~5.7.2",
+    "typescript-eslint": "^8.18.2",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.11",
+    "vue-tsc": "^2.2.0"
+  }
+}

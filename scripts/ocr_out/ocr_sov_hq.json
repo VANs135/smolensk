@@ -1,0 +1,822 @@
+{
+  "count": 34,
+  "source": "苏联单位\\HQ",
+  "records": [
+    {
+      "file": "BD2 S1 R01 C01.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "1",
+          "score": 0.722
+        },
+        "MA": {
+          "value": "0",
+          "score": 0.999
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C01B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 1.0
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C02.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "1",
+          "score": 0.722
+        },
+        "MA": {
+          "value": "0",
+          "score": 0.999
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C02B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 1.0
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C03.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "1",
+          "score": 0.722
+        },
+        "MA": {
+          "value": "0",
+          "score": 0.999
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C03B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 1.0
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C04.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "1",
+          "score": 0.722
+        },
+        "MA": {
+          "value": "0",
+          "score": 0.999
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C04B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 1.0
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C05.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "1",
+          "score": 0.722
+        },
+        "MA": {
+          "value": "0",
+          "score": 0.999
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C05B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 1.0
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C06.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "1",
+          "score": 0.713
+        },
+        "MA": {
+          "value": "0",
+          "score": 0.999
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C06B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 1.0
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C07.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "1",
+          "score": 0.713
+        },
+        "MA": {
+          "value": "0",
+          "score": 0.999
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C07B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 1.0
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C08.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "10",
+          "score": 1.0
+        },
+        "MA": {
+          "value": "0",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C08B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 1.0
+        },
+        "MA": {
+          "value": "10",
+          "score": 0.999
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C09.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "10",
+          "score": 1.0
+        },
+        "MA": {
+          "value": "0",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C09B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 1.0
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C10.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "10",
+          "score": 1.0
+        },
+        "MA": {
+          "value": "0",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R01 C10B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 1.0
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C01.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "1",
+          "score": 0.897
+        },
+        "MA": {
+          "value": "0",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C01B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 0.987
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C02.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "1",
+          "score": 0.864
+        },
+        "MA": {
+          "value": "0",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C02B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 0.996
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C03.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "1",
+          "score": 0.864
+        },
+        "MA": {
+          "value": "0",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C03B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 0.998
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C04.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "1",
+          "score": 0.864
+        },
+        "MA": {
+          "value": "0",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C04B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 0.998
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C05.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "1",
+          "score": 0.833
+        },
+        "MA": {
+          "value": "0",
+          "score": 0.999
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C05B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 0.998
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C06.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": null,
+          "score": 0.0
+        },
+        "MA": {
+          "value": "0",
+          "score": 0.999
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": ["delivery空"]
+    },
+    {
+      "file": "BD2 S1 R02 C06B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 0.998
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C07.png",
+      "face": "front",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "10",
+          "score": 1.0
+        },
+        "MA": {
+          "value": "0",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    },
+    {
+      "file": "BD2 S1 R02 C07B.png",
+      "face": "back",
+      "base": "guards_orange",
+      "fields": {
+        "delivery": {
+          "value": "7",
+          "score": 0.997
+        },
+        "MA": {
+          "value": "10",
+          "score": 1.0
+        },
+        "A": {
+          "value": null,
+          "score": 0.0
+        },
+        "AR": {
+          "value": null,
+          "score": 0.0
+        }
+      },
+      "review": []
+    }
+  ]
+}

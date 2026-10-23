@@ -1,0 +1,186 @@
+{
+  "meta": {
+    "version": "0.4.0",
+    "description": "网格标定（A3）：行列范围 / 格心公式 / 奇偶列偏移 / rowDecode(恒等) / 入口字母 A–L / 胜利格 11 / 分界线端点；坐标约定 = 无字母前缀的 {col,row}",
+    "source": [
+      "map_hexes.json（2026-09-12 标定，2156 格，几何公式 VERIFIED）",
+      "entry_hexes.json（入口字母人工目检录入）",
+      "rules.json victory.listed_hexes / guderian_hoth.boundary"
+    ]
+  },
+  "orientation": "flat",
+  "offset": "even-q",
+  "bounds": {
+    "colStart": 1,
+    "colEnd": 62,
+    "rowStart": 0,
+    "rowEnd": 35
+  },
+  "geometry": {
+    "hexWidthPx": 94.905,
+    "hexHeightPx": 109.584,
+    "originX": 112.5,
+    "originY": 3947.5
+  },
+  "rowDecode": {},
+  "entryHexes": {
+    "A": [
+      {
+        "col": 62,
+        "row": 33
+      },
+      {
+        "col": 62,
+        "row": 34
+      },
+      {
+        "col": 62,
+        "row": 35
+      }
+    ],
+    "B": [
+      {
+        "col": 62,
+        "row": 22
+      },
+      {
+        "col": 62,
+        "row": 23
+      }
+    ],
+    "C": [
+      {
+        "col": 62,
+        "row": 12
+      }
+    ],
+    "D": [
+      {
+        "col": 62,
+        "row": 3
+      },
+      {
+        "col": 62,
+        "row": 4
+      }
+    ],
+    "E": [
+      {
+        "col": 42,
+        "row": 0
+      },
+      {
+        "col": 43,
+        "row": 1
+      },
+      {
+        "col": 44,
+        "row": 0
+      }
+    ],
+    "F": [
+      {
+        "col": 8,
+        "row": 0
+      }
+    ],
+    "G": [
+      {
+        "col": 1,
+        "row": 3
+      },
+      {
+        "col": 1,
+        "row": 4
+      }
+    ],
+    "H": [
+      {
+        "col": 1,
+        "row": 7
+      }
+    ],
+    "I": [
+      {
+        "col": 1,
+        "row": 12
+      }
+    ],
+    "J": [
+      {
+        "col": 1,
+        "row": 19
+      }
+    ],
+    "K": [
+      {
+        "col": 1,
+        "row": 26
+      }
+    ],
+    "L": [
+      {
+        "col": 20,
+        "row": 35
+      }
+    ]
+  },
+  "victoryLocations": [
+    {
+      "col": 36,
+      "row": 13
+    },
+    {
+      "col": 37,
+      "row": 24
+    },
+    {
+      "col": 38,
+      "row": 5
+    },
+    {
+      "col": 40,
+      "row": 31
+    },
+    {
+      "col": 41,
+      "row": 21
+    },
+    {
+      "col": 43,
+      "row": 14
+    },
+    {
+      "col": 46,
+      "row": 17
+    },
+    {
+      "col": 46,
+      "row": 20
+    },
+    {
+      "col": 46,
+      "row": 29
+    },
+    {
+      "col": 48,
+      "row": 25
+    },
+    {
+      "col": 52,
+      "row": 9
+    }
+  ],
+  "panzerGroupBoundary": [
+    [
+      {
+        "col": 19,
+        "row": 19
+      },
+      {
+        "col": 62,
+        "row": 23
+      }
+    ]
+  ]
+}

@@ -1,0 +1,392 @@
+{
+  "meta": {
+    "version": "0.4.0",
+    "description": "编队库（A8）：17 个多单位编队（13.7）的双方口径代号、下属组成与各剧本初设分布（by_location）；另登记名称改判留痕",
+    "source": ["formations.json（formation_index + unit_groups.service_arm_matrix）"]
+  },
+  "formations": [
+    {
+      "formationId": "1 Cav Div",
+      "side": "axis",
+      "formationCode": "1CAV",
+      "subordinates": [
+        "1 Arty",
+        "1 BC",
+        "Arty",
+        "I-1 Cav",
+        "I-2 Cav",
+        "I-21 Cav",
+        "I-22 Cav",
+        "II-1 Cav",
+        "II-2 Cav",
+        "II-22 Cav"
+      ],
+      "byLocation": {
+        "14.04": [
+          "1 Arty",
+          "1 BC",
+          "I-1 Cav",
+          "I-2 Cav",
+          "I-21 Cav",
+          "I-22 Cav",
+          "II-1 Cav",
+          "II-2 Cav",
+          "II-22 Cav"
+        ],
+        "2.02": ["Arty", "I-21 Cav", "I-22 Cav", "II-22 Cav"],
+        "20.07": [
+          "1 Arty",
+          "1 BC",
+          "I-1 Cav",
+          "I-2 Cav",
+          "I-21 Cav",
+          "I-22 Cav",
+          "II-1 Cav",
+          "II-2 Cav",
+          "II-22 Cav"
+        ]
+      },
+      "sources": ["S1·axis", "S3·axis", "S5·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "1 Mtr Div",
+      "side": "soviet",
+      "formationCode": "1.Mot",
+      "subordinates": ["12 Tk", "13 Arty", "20 Inf", "41 Inf", "93 Recon", "Boris Tk"],
+      "byLocation": {
+        "18.17": ["12 Tk", "13 Arty", "20 Inf", "41 Inf", "93 Recon", "Boris Tk"],
+        "23.12": ["12 Tk", "13 Arty", "20 Inf", "41 Inf", "93 Recon"],
+        "46.18": ["12 Tk", "13 Arty", "20 Inf", "93 Recon"],
+        "死亡堆": ["12 Tk", "41 Inf", "93 Recon", "Boris Tk"]
+      },
+      "sources": ["S1·soviet", "S3·soviet", "S5·soviet", "S7·soviet"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应",
+      "sidePrevByNameRule": "axis"
+    },
+    {
+      "formationId": "10 Mtr Div",
+      "side": "axis",
+      "formationCode": "10MTR",
+      "subordinates": ["10 Arty", "10 Aufk", "20 Inf", "40 Krd", "41 Inf", "Truck"],
+      "byLocation": {
+        "8.00": ["10 Arty", "20 Inf", "40 Krd", "41 Inf", "Truck"],
+        "死亡堆": ["10 Aufk", "41 Inf"]
+      },
+      "sources": ["S1·axis", "S3·axis", "S5·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "10 Pz Div",
+      "side": "axis",
+      "formationCode": "10PZ",
+      "subordinates": [
+        "10 Krd",
+        "69 PG",
+        "86 Inf",
+        "90 Arty",
+        "90 Aufk",
+        "I-7 Pz",
+        "II-7 Pz",
+        "Truck"
+      ],
+      "byLocation": {
+        "43.14": ["10 Krd", "69 PG", "86 Inf", "90 Arty", "90 Aufk", "II-7 Pz", "Truck"],
+        "8.12": ["10 Krd", "69 PG", "86 Inf", "90 Arty", "II-7 Pz", "Truck"],
+        "死亡堆": ["69 PG", "90 Aufk", "I-7 Pz"]
+      },
+      "sources": ["S1·axis", "S3·axis", "S5·axis", "S7·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "12 Pz Div",
+      "side": "axis",
+      "formationCode": "12PZ",
+      "subordinates": [
+        "2 Arty",
+        "2 Aufk",
+        "22 Krd",
+        "25 Inf",
+        "5 Inf",
+        "I-29 Pz",
+        "II-29 Pz",
+        "III-29 Pz",
+        "Truck"
+      ],
+      "byLocation": {
+        "32.25": ["2 Arty", "22 Krd", "25 Inf", "5 Inf", "I-29 Pz", "II-29 Pz", "Truck"],
+        "37.21": ["2 Arty", "2 Aufk", "22 Krd", "5 Inf", "I-29 Pz", "II-29 Pz", "Truck"],
+        "4.25": ["2 Arty", "22 Krd", "25 Inf", "5 Inf", "I-29 Pz", "II-29 Pz", "Truck"],
+        "死亡堆": ["2 Aufk", "25 Inf", "III-29 Pz"]
+      },
+      "sources": ["S1·axis", "S3·axis", "S5·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "14 Mtr Div",
+      "side": "axis",
+      "formationCode": "14MTR",
+      "subordinates": ["'F' Truck", "11 Inf", "14 Arty", "14 Aufk", "53 Inf", "54 Krd", "Truck"],
+      "byLocation": {
+        "39.24": ["11 Inf", "14 Arty", "14 Aufk", "Truck"],
+        "Entry K or L": ["'F' Truck", "11 Inf", "14 Arty", "14 Aufk"],
+        "死亡堆": ["53 Inf", "54 Krd"]
+      },
+      "sources": ["OOA·axis", "S7·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "17 Pz Div",
+      "side": "axis",
+      "formationCode": "17PZ",
+      "subordinates": [
+        "17 Krd",
+        "22 Arty",
+        "27 Aufk",
+        "40 Inf",
+        "63 Inf",
+        "I-39 Pz",
+        "II-39 Pz",
+        "III-39 Pz",
+        "Truck"
+      ],
+      "byLocation": {
+        "13.22": ["17 Krd", "22 Arty", "40 Inf", "63 Inf", "II-39 Pz", "III-39 Pz", "Truck"],
+        "34.17": ["17 Krd", "22 Arty", "40 Inf", "63 Inf", "II-39 Pz", "III-39 Pz", "Truck"],
+        "41.16": ["17 Krd", "22 Arty", "27 Aufk", "40 Inf", "I-39 Pz", "II-39 Pz", "Truck"],
+        "死亡堆": ["27 Aufk", "63 Inf", "I-39 Pz", "III-39 Pz"]
+      },
+      "sources": ["S1·axis", "S3·axis", "S5·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "18 Mtr Div",
+      "side": "axis",
+      "formationCode": "18MTR",
+      "subordinates": [
+        "'F' Truck",
+        "18 Arty",
+        "18 Aufk",
+        "30 Inf",
+        "38 Krd",
+        "51 Inf",
+        "‘F’ Truck"
+      ],
+      "byLocation": {
+        "33.29": ["18 Arty", "30 Inf", "38 Krd", "51 Inf", "‘F’ Truck"],
+        "39.28": ["18 Arty", "18 Aufk", "30 Inf", "38 Krd", "‘F’ Truck"],
+        "Entry K or L": ["'F' Truck", "18 Arty", "30 Inf", "38 Krd", "51 Inf"],
+        "死亡堆": ["18 Aufk", "51 Inf"]
+      },
+      "sources": ["OOA·axis", "S3·axis", "S5·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "18 Pz Div",
+      "side": "axis",
+      "formationCode": "18PZ",
+      "subordinates": [
+        "101 Inf",
+        "18 Krd",
+        "52 Inf",
+        "88 Arty",
+        "88 Aufk",
+        "I-18 Pz",
+        "II-18 Pz",
+        "III-18 Pz",
+        "Truck"
+      ],
+      "byLocation": {
+        "26.16": ["101 Inf", "18 Krd", "52 Inf", "88 Arty", "I-18 Pz", "III-18 Pz", "Truck"],
+        "36.13": ["18 Krd", "52 Inf", "88 Arty", "88 Aufk", "I-18 Pz", "III-18 Pz", "Truck"],
+        "9.18": ["101 Inf", "18 Krd", "52 Inf", "88 Arty", "I-18 Pz", "III-18 Pz", "Truck"],
+        "死亡堆": ["101 Inf", "88 Aufk", "II-18 Pz"]
+      },
+      "sources": ["S1·axis", "S3·axis", "S5·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "19 Pz Div",
+      "side": "axis",
+      "formationCode": "19PZ",
+      "subordinates": [
+        "'F' Truck",
+        "19 Arty",
+        "19 Aufk",
+        "19 Krd",
+        "73 Inf",
+        "74 Inf",
+        "I-27 Pz",
+        "I-27 Pz",
+        "II-27 Pz",
+        "II-27 Pz",
+        "III-27 Pz",
+        "Truck",
+        "‘F’ Truck"
+      ],
+      "byLocation": {
+        "29.29": ["19 Arty", "19 Krd", "73 Inf", "74 Inf", "I-27 Pz", "II-27 Pz", "‘F’ Truck"],
+        "32.25": ["19 Arty", "19 Aufk", "19 Krd", "73 Inf", "I-27 Pz", "II-27 Pz", "Truck"],
+        "Entry K or L": [
+          "'F' Truck",
+          "19 Arty",
+          "19 Krd",
+          "73 Inf",
+          "74 Inf",
+          "I-27 Pz",
+          "II-27 Pz"
+        ],
+        "死亡堆": ["19 Aufk", "74 Inf", "III-27 Pz"]
+      },
+      "sources": ["OOA·axis", "S3·axis", "S5·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "20 Mtr Div",
+      "side": "axis",
+      "formationCode": "20MTR",
+      "subordinates": ["20 Arty", "20 Aufk", "30 Krd", "76 Inf", "90 Inf", "Truck"],
+      "byLocation": {
+        "14.27": ["20 Arty", "30 Krd", "76 Inf", "90 Inf", "Truck"],
+        "34.18": ["20 Arty", "20 Aufk", "30 Krd", "76 Inf", "Truck"],
+        "35.25": ["20 Arty", "30 Krd", "76 Inf", "90 Inf", "Truck"],
+        "死亡堆": ["20 Aufk", "90 Inf"]
+      },
+      "sources": ["S1·axis", "S3·axis", "S5·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "20 Pz Div",
+      "side": "axis",
+      "formationCode": "20PZ",
+      "subordinates": [
+        "112 Inf",
+        "20 Krd",
+        "59 Inf",
+        "92 Arty",
+        "92 Aufk",
+        "I-21 Pz",
+        "II-21 Pz",
+        "III-21 Pz",
+        "Truck"
+      ],
+      "byLocation": {
+        "10.30": ["112 Inf", "20 Krd", "59 Inf", "92 Arty", "I-21 Pz", "II-21 Pz", "Truck"],
+        "37.24": ["20 Krd", "59 Inf", "92 Arty", "92 Aufk", "I-21 Pz", "II-21 Pz", "Truck"],
+        "39.23": ["112 Inf", "20 Krd", "59 Inf", "92 Arty", "I-21 Pz", "II-21 Pz", "Truck"],
+        "死亡堆": ["112 Inf", "92 Aufk", "III-21 Pz"]
+      },
+      "sources": ["S1·axis", "S3·axis", "S5·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "29 Mtr Div",
+      "side": "axis",
+      "formationCode": "29MTR",
+      "subordinates": ["15 Inf", "29 Arty", "29 Aufk", "29 Krd", "71 Inf", "Truck"],
+      "byLocation": {
+        "34.17": ["15 Inf", "29 Arty", "29 Krd", "71 Inf", "Truck"],
+        "38.16": ["15 Inf", "29 Arty", "29 Aufk", "29 Krd", "Truck"],
+        "4.18": ["15 Inf", "29 Arty", "29 Krd", "71 Inf", "Truck"],
+        "死亡堆": ["29 Aufk", "71 Inf"]
+      },
+      "sources": ["S1·axis", "S3·axis", "S5·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "3 Pz Div",
+      "side": "axis",
+      "formationCode": "3PZ",
+      "subordinates": [
+        "1 Aufk",
+        "3 Inf",
+        "3 Krd",
+        "394 Inf",
+        "75 Arty",
+        "I-6 Pz",
+        "II-6 Pz",
+        "III-6 Pz",
+        "Truck"
+      ],
+      "byLocation": {
+        "11.03": ["3 Inf", "3 Krd", "394 Inf", "75 Arty", "I-6 Pz", "III-6 Pz", "Truck"],
+        "27.05": ["3 Inf", "3 Krd", "394 Inf", "75 Arty", "I-6 Pz", "III-6 Pz", "Truck"],
+        "32.04": ["1 Aufk", "3 Inf", "3 Krd", "75 Arty", "I-6 Pz", "III-6 Pz", "Truck"],
+        "死亡堆": ["1 Aufk", "394 Inf", "II-6 Pz"]
+      },
+      "sources": ["S1·axis", "S3·axis", "S5·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "4 Pz Div",
+      "side": "axis",
+      "formationCode": "4PZ",
+      "subordinates": [
+        "103 Arty",
+        "12 Inf",
+        "33 Inf",
+        "34 Krd",
+        "7 Aufk",
+        "I-35 Pz",
+        "II-35 Pz",
+        "Truck"
+      ],
+      "byLocation": {
+        "25.06": ["103 Arty", "12 Inf", "33 Inf", "34 Krd", "I-35 Pz", "Truck"],
+        "35.06": ["103 Arty", "12 Inf", "34 Krd", "7 Aufk", "I-35 Pz", "Truck"],
+        "8.08": ["103 Arty", "12 Inf", "33 Inf", "34 Krd", "I-35 Pz", "Truck"],
+        "死亡堆": ["33 Inf", "7 Aufk", "II-35 Pz"]
+      },
+      "sources": ["S1·axis", "S3·axis", "S5·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "7 Pz Div",
+      "side": "axis",
+      "formationCode": "7PZ",
+      "subordinates": [
+        "37 Aufk",
+        "6 Inf",
+        "7 Inf",
+        "7 Krd",
+        "78 Arty",
+        "I-25 Pz",
+        "II-25 Pz",
+        "III-25 Pz",
+        "Truck"
+      ],
+      "byLocation": {
+        "15.25": ["6 Inf", "7 Inf", "7 Krd", "78 Arty", "I-25 Pz", "II-25 Pz", "Truck"],
+        "35.22": ["37 Aufk", "6 Inf", "7 Krd", "78 Arty", "I-25 Pz", "II-25 Pz", "Truck"],
+        "40.21": ["6 Inf", "7 Inf", "7 Krd", "78 Arty", "I-25 Pz", "II-25 Pz", "Truck"],
+        "死亡堆": ["37 Aufk", "7 Inf", "III-25 Pz"]
+      },
+      "sources": ["S1·axis", "S3·axis", "S5·axis", "S7·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    },
+    {
+      "formationId": "SS-R Mtr Div",
+      "side": "axis",
+      "formationCode": "SS-R",
+      "subordinates": [
+        "11 Inf",
+        "11SS Inf",
+        "Deutld Inf",
+        "Fuhrer Inf",
+        "R Arty",
+        "R Aufk",
+        "R Krd",
+        "Truck"
+      ],
+      "byLocation": {
+        "34.18": ["11SS Inf", "Fuhrer Inf", "R Arty", "R Aufk", "Truck"],
+        "39.15": ["11SS Inf", "Deutld Inf", "Fuhrer Inf", "R Arty", "R Krd", "Truck"],
+        "41.15": ["11SS Inf", "Fuhrer Inf", "R Arty", "R Aufk", "R Krd", "Truck"],
+        "6.06": ["11 Inf", "Deutld Inf", "Fuhrer Inf", "R Arty", "R Krd", "Truck"],
+        "死亡堆": ["Deutld Inf", "R Aufk", "R Krd"]
+      },
+      "sources": ["S1·axis", "S3·axis", "S5·axis", "S7·axis"],
+      "formationCodeNote": "算子库 units.json 的 formation 字段用此代号；两侧一一对应"
+    }
+  ]
+}

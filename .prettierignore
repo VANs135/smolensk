@@ -1,0 +1,14 @@
+# 大文件与构建产物不参与格式检查
+dist/
+release/
+node_modules/
+public/map/
+public/counters/
+public/fonts/
+# 人工备份（本工程无版本控制 ⇒ 只能靠手工备份；备份须**逐字节**保持原样，不做格式化）
+backup/
+*.ttf
+*.png
+*.jpg
+*.jpeg
+*.vsav

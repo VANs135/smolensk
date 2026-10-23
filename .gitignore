@@ -1,0 +1,41 @@
+# 依赖与构建产物
+node_modules/
+dist/
+release/
+coverage/
+
+# 本地环境覆盖（机密变量不入库）
+.env.local
+.env.*.local
+
+# 编辑器与系统
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# 临时文件
+*.tsbuildinfo
+node_modules/.tmp/
+
+# 人工备份（约 1.2 GB，逐字节保留原样，不入库）
+backup/
+
+# 根目录误重定向产生的空文件（PowerShell 事故残留，非工程文件）
+/(item.specialized
+/0)
+/best.airCombatRating
+/hexDistance(first
+/item.instanceId
+/item.kind
+/m\[1\]).join('
+/record.branch
+/record.noncombatKind
+/unit.name).join('、')}
+
+# 临时草稿（规则/测试名抓取结果，非工程文件）
+/o9.txt
+/o11.txt
+/tmp-receipt.txt

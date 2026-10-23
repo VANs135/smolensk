@@ -1,0 +1,1151 @@
+{
+  "meta": {
+    "version": "0.4.0",
+    "description": "剧本库（A8）：7 个剧本的起止日期/回合数/首次行动方/布设顺序/初设数值与选项（含继承）、生效补给源、胜利条件、共识开关与可选规则",
+    "source": [
+      "scenarios.json（rules_scenarios / victory / items[].supply_sources）",
+      "rules.json exclusive_rules_smolensk（agreed_options / optional_rules）"
+    ]
+  },
+  "agreedOptions": {
+    "note": "需双方一致同意才生效，必须写入存档",
+    "items": [
+      "地图外盒是否隐藏（1.4）",
+      "秘密掷骰（4.9e）",
+      "同步操作回合（2.4）",
+      "可选规则与房规（4.1a、4.1b、4.1c、4.2a、4.2b、4.2c、4.3）",
+      "装甲集群 SP 归属约束（3.4b，4.1a 可选）"
+    ]
+  },
+  "optionalRules": {
+    "4.1a": "ignore 2.3e and/or 3.4",
+    "4.1b": "apply the 'Supply Train' event on 8–15 July（19 July 事件掷骰开始前的三个回合，即 8 / 12 / 15 July）",
+    "4.1c": "the two Axis RR repair units are restricted early (Entry H to Mogilev, Entry J to Orsha)",
+    "4.2a": "the player who moved first last turn wins ties on initiative",
+    "4.2b": "Axis 4-step infantry division on its last step: attack x1/4, defend x1/2",
+    "4.2c": "minimal fueling: 2 T instead of 1 SP, MA x1/4, remove fuel marker at phase end",
+    "4.3": "Scenario 5.1/5.2：六个满员苏军步兵师各可派出一个拆分团（置于母师两格内）；已有两个 AR2 拆分团在场，因此可用 4 个 AR2 与 2 个 AR3；1.Mot Div 可在 18.17 一格内初设，其 4-3-3 移至 17.18 与 18.18；勘误附示例：229 RD→19.25、73 RD→17.20、137 RD→18.20、102 RD→13.05、127 RD→AR3 23.23、100 RD→AR3 15.09"
+  },
+  "setupNotes": {
+    "spOwnership": "开局地图内的 SP 须在初设期按 Setup Note F 归属某一装甲集群（分界线仅作参考，补给站的归属由玩家自定）",
+    "newSpAssignment": "所有新到轴方 SP 必须立即归属某一装甲集群"
+  },
+  "victory": {
+    "final": {
+      "sovietWin": "Vyazma + Rzhev + at least 7 listed hexes",
+      "axisWin": "all hexes of Smolensk, Vitebsk, Orsha, Mogilev, Bobruysk + at least 6 listed hexes",
+      "else": "draw",
+      "rule": "5.0a"
+    },
+    "decisive": {
+      "from": "any turn starting 19 August or later",
+      "soviet": "Vyazma + Rzhev + at least 9 listed hexes",
+      "axis": "5 cities + at least 8 listed hexes",
+      "rule": "5.0b"
+    },
+    "scenarios2And4": {
+      "soviet": "Vyazma + Rzhev + at least 6 listed hexes",
+      "axis": "5 cities + at least 7 listed hexes",
+      "rule": "scenario 2/4"
+    },
+    "control": "hex contains an attack-capable unit; if empty, last side to have one",
+    "listedHexes": [
+      "36.13 Pochinok",
+      "37.24 Dukhovshchina",
+      "38.05 Roslavl",
+      "40.31 Zharkoyskyy",
+      "41.21 Yartsevo",
+      "43.14 Yeln'ya",
+      "46.17 Dorogobyzh",
+      "46.20 Safonovo",
+      "46.29 Bel'yy",
+      "48.25 Pusii",
+      "52.09 Spas Demyansk"
+    ],
+    "scenario2HexList": [
+      "27.05 Krichev",
+      "32.25 Demidov",
+      "36.13",
+      "37.24",
+      "38.05",
+      "40.31",
+      "41.21",
+      "43.14",
+      "46.17",
+      "46.20",
+      "46.29"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "1",
+      "name": "Smolensk Campaign",
+      "firstTurn": "8 Jul 41",
+      "lastTurn": "8 Sep 41",
+      "turns": 19,
+      "firstPlayer": "axis",
+      "setupFirst": "soviet",
+      "firstWeather": "normal",
+      "setup": {
+        "railCap": {
+          "axis": 0,
+          "soviet": 2
+        },
+        "convertedAxisRails": {
+          "rule": "专规 1.2 剧本页 \"Converted Axis Rails: <A> to <B>\"：剧本页只给两个端点（端点处驻执行换轨的 RR Bn，4.1c），给的是那条铁路线；逐格清单由引擎沿铁路邻接图取唯一最短路径推导（engine/rules/rail.ts#convertedRailRun，歧义即失败）",
+          "runs": ["01.03 to 2.02"],
+          "notes": "印刷初设卡原文 \"1.03 to 2.02, place in 2.02\"——RR Bn 驻 2.02"
+        },
+        "reserveMarkers": {
+          "axis": 14,
+          "soviet": 0
+        },
+        "supplyCache": 2,
+        "constructionMarkers": 3,
+        "organicTrucks": {
+          "mode": "all_loaded",
+          "raw": "德军全部满载"
+        },
+        "weatherFirstTurnRaw": "Normal Flight on 8 July",
+        "formationDrawRaw": "12 个多单位编队标记入杯，抽 4 个沿道路西移 3 格、另 4 个以摩托化团换死亡堆中的侦察营",
+        "formationDraw": {
+          "pool": 12,
+          "poolFrom": "formations.json 中该剧本的轴方装甲/摩托化多单位编队（formationId 以 'Pz Div' / 'Mtr Div' 结尾，骑兵师不入杯）",
+          "groups": [
+            {
+              "kind": "shiftWest",
+              "count": 4,
+              "shiftHexes": 3,
+              "label": "A 组：沿道路西移 3 格",
+              "rule": "ch10 Formation Chit Draw",
+              "effect": "抽中的师必须沿道路向所列位置西移三格（例 11.03 → 9.01）"
+            },
+            {
+              "kind": "mtrAufkSwap",
+              "count": 4,
+              "label": "B 组：摩托化团 ↔ 死亡堆中的侦察营互换",
+              "rule": "ch10 Formation Chit Draw",
+              "effect": "抽中的师让一个 Mtr 团与开局在 Dead Pile 里的 Aufk 营互换（Mtr 进入死亡堆、Aufk 返场）"
+            }
+          ],
+          "reducedCount": 2,
+          "raw": "12 个多单位编队标记入杯，抽 4 个沿道路西移 3 格、另 4 个以摩托化团换死亡堆中的侦察营",
+          "note": "原文未逐条列出被抽中的师：入杯名单＝池成员，抽取结果由抽签决定；'No Counterattack' 选项下 A/B 两组各只抽 2 个（ch10）"
+        },
+        "airSetup": {
+          "axis": {
+            "policy": "all_inactive",
+            "statedInRules": true,
+            "raw": "All planes must begin Inactive.（剧本 1 德军初设栏，8 Jul 41；无 `*` 减损机型）"
+          },
+          "soviet": {
+            "policy": "half_inactive_round_up",
+            "reducedTypes": ["Pe.2"],
+            "statedInRules": true,
+            "raw": "\"*\" = one unit begins reduced；Half of the counters of each plane type (I.153, I.16, etc.) must begin Inactive. Round fractions up.（剧本 1 苏军初设栏）"
+          }
+        },
+        "printedHedgehogOwners": {
+          "rule": "本作裁定：地图印刷工事（专规 1.3a，永久不可降低）视为一类特殊工事单位，按剧本初设归属。剧本 1（8 Jul 41 战役开局）全部属苏联；剧本 3/5/7 按德军推进线判定（推导口径：该格到剧本初设双方地面战斗单位的最近距离，严格更近德军者属德军，其余属苏军；边界模糊处按更近方归属）。9.14e 可攻击单位进入该格时归属翻转，等级按 1.3a 不变。",
+          "axisOwned": []
+        },
+        "options": {
+          "construction_markers": 3,
+          "supply_cache": 2,
+          "reserve_markers": {
+            "axis": 14,
+            "soviet": 0
+          },
+          "option_no_counterattack": "苏方所有师满编开局；编队抽取只抽两枚（非四枚）；苏方首回合拥有完整移动力（原文该行前有一个来源不明的孤立词 tank，按原句 All Soviet divisions 理解，待目检）"
+        },
+        "source": ["专规剧本页按栏提取（2026-09-10）；剧本 3/5/7 的 Rail Cap 依 SmolenskErrata"]
+      },
+      "sharedSetupWith": ["2"],
+      "hasSetup": true,
+      "setupInfo": {
+        "axis": {
+          "Rail Cap": "0 at start",
+          "Reserve Markers": "14 available",
+          "Construction Markers": "3 available",
+          "Supply Cache Markers": "2 available",
+          "Reinforcements": "Per Order of Arrival",
+          "Variable Repls": "Per Repl Table"
+        },
+        "soviet": {
+          "Rail Cap": "2 at start",
+          "Reserve Markers": "0 available",
+          "Supply Cache Markers": "2 available",
+          "Reinforcements": "Per Order of Arrival",
+          "Variable Repls": "Per Repl Table"
+        }
+      },
+      "sovietFirstTurnHalfMa": "苏方所有地面单位首回合以 1/2 移动力移动（1.5 / 剧本页；可被混乱等模式效果再下调）",
+      "counts": {
+        "soviet": {
+          "groups": 65,
+          "entries": 145,
+          "formations": 1,
+          "subordinates": 6,
+          "units": 95,
+          "hq": 7,
+          "sp": 15,
+          "aircraft": 10,
+          "transport_point": 8
+        },
+        "axis": {
+          "groups": 22,
+          "entries": 52,
+          "formations": 25,
+          "subordinates": 99,
+          "units": 3,
+          "hq": 4,
+          "sp": 5,
+          "aircraft": 11,
+          "transport_point": 2
+        }
+      },
+      "supplySources": {
+        "rule": "专规 2.1（苏）／3.1 + errata 5（德）；关闭按 2.1a",
+        "firstTurn": "8 Jul 41",
+        "sovietLive": [
+          "13.01",
+          "20.35",
+          "29.01",
+          "37.35",
+          "42.00",
+          "43.01",
+          "44.00",
+          "51.01",
+          "61.35",
+          "62.03",
+          "62.04",
+          "62.12",
+          "62.16",
+          "62.22",
+          "62.23",
+          "62.24",
+          "62.33",
+          "62.35",
+          "14.00",
+          "20.00",
+          "42.35",
+          "50.35",
+          "56.00",
+          "58.00",
+          "58.35",
+          "60.35",
+          "62.34"
+        ],
+        "sovietClosed": [],
+        "axisLive": ["1.03", "1.04", "1.07", "1.12", "1.19", "1.26", "4.00", "8.00"],
+        "axisClosed": [],
+        "enteringLoaded": "两类到达：来自 Repl Table 的掷骰结果与到达卡列出的单位；所有运输点均满载（带额外 SP）入场（2.1／3.1 首段）",
+        "placement": "Pax／Eq／特殊补员／突围返场：直接到能直接拖取追溯补给的指挥部（12.6a），或地图边缘补给源格；新造与重建飞机在处于追溯补给的空军基地以激活态出现",
+        "entrainOffMap": "增援与新增 SP 可在入场格登车（13.6b / 13.3b：其入场格须含铁路）；该格若同时满足 13.3c 可卸载与 13.3e 不在敌方 ZOC，即可铁路机动（用户 2026-09-13 第 1 条）",
+        "freeRailCap": {
+          "rule": "2.1/3.1 + 通规 13.3c",
+          "value": "每个可卸载城市格 1 SP（免费铁运），其余 SP 放图边补给源格",
+          "hexes": "detrainable_hexes.json → free_rail_cap_city=true"
+        },
+        "source": "按专规 2.1／2.1a／3.1 与 errata 5/6 从 supply_sources.json 派生（2026-09-13）"
+      }
+    },
+    {
+      "id": "2",
+      "name": "Short Campaign",
+      "firstTurn": "8 Jul 41",
+      "lastTurn": "1 Aug 41",
+      "turns": 8,
+      "firstPlayer": "axis",
+      "setupFirst": "soviet",
+      "firstWeather": "normal",
+      "setup": {
+        "railCap": {
+          "axis": 0,
+          "soviet": 2
+        },
+        "convertedAxisRails": {
+          "rule": "专规 1.2 剧本页 \"Converted Axis Rails: <A> to <B>\"：剧本页只给两个端点（端点处驻执行换轨的 RR Bn，4.1c），给的是那条铁路线；逐格清单由引擎沿铁路邻接图取唯一最短路径推导（engine/rules/rail.ts#convertedRailRun，歧义即失败）",
+          "runs": ["01.03 to 2.02"],
+          "notes": "同剧本 1；RR Bn 驻 2.02"
+        },
+        "reserveMarkers": {
+          "axis": 14,
+          "soviet": 0
+        },
+        "supplyCache": 2,
+        "constructionMarkers": 3,
+        "organicTrucks": {
+          "mode": "all_loaded",
+          "raw": "德军全部满载"
+        },
+        "weatherFirstTurnRaw": "Normal Flight on 8 July",
+        "options": {
+          "note": "初设与特殊规则同剧本 1"
+        },
+        "source": ["专规剧本页按栏提取（2026-09-10）；剧本 3/5/7 的 Rail Cap 依 SmolenskErrata"]
+      },
+      "inherits": "1",
+      "sharedSetupWith": ["1"],
+      "hasSetup": false,
+      "setupInfo": {},
+      "sovietFirstTurnHalfMa": "苏方所有地面单位首回合以 1/2 移动力移动（1.5 / 剧本页；可被混乱等模式效果再下调）",
+      "counts": {},
+      "supplySources": {
+        "rule": "专规 2.1（苏）／3.1 + errata 5（德）；关闭按 2.1a",
+        "firstTurn": "8 Jul 41",
+        "sovietLive": [
+          "13.01",
+          "20.35",
+          "29.01",
+          "37.35",
+          "42.00",
+          "43.01",
+          "44.00",
+          "51.01",
+          "61.35",
+          "62.03",
+          "62.04",
+          "62.12",
+          "62.16",
+          "62.22",
+          "62.23",
+          "62.24",
+          "62.33",
+          "62.35",
+          "14.00",
+          "20.00",
+          "42.35",
+          "50.35",
+          "56.00",
+          "58.00",
+          "58.35",
+          "60.35",
+          "62.34"
+        ],
+        "sovietClosed": [],
+        "axisLive": ["1.03", "1.04", "1.07", "1.12", "1.19", "1.26", "4.00", "8.00"],
+        "axisClosed": [],
+        "enteringLoaded": "两类到达：来自 Repl Table 的掷骰结果与到达卡列出的单位；所有运输点均满载（带额外 SP）入场（2.1／3.1 首段）",
+        "placement": "Pax／Eq／特殊补员／突围返场：直接到能直接拖取追溯补给的指挥部（12.6a），或地图边缘补给源格；新造与重建飞机在处于追溯补给的空军基地以激活态出现",
+        "entrainOffMap": "增援与新增 SP 可在入场格登车（13.6b / 13.3b：其入场格须含铁路）；该格若同时满足 13.3c 可卸载与 13.3e 不在敌方 ZOC，即可铁路机动（用户 2026-09-13 第 1 条）",
+        "freeRailCap": {
+          "rule": "2.1/3.1 + 通规 13.3c",
+          "value": "每个可卸载城市格 1 SP（免费铁运），其余 SP 放图边补给源格",
+          "hexes": "detrainable_hexes.json → free_rail_cap_city=true"
+        },
+        "source": "按专规 2.1／2.1a／3.1 与 errata 5/6 从 supply_sources.json 派生（2026-09-13）"
+      }
+    },
+    {
+      "id": "3",
+      "name": "Late July Start",
+      "firstTurn": "22 Jul 41",
+      "lastTurn": "8 Sep 41",
+      "turns": 15,
+      "firstPlayer": "soviet",
+      "setupFirst": "axis",
+      "firstWeather": "normal",
+      "setup": {
+        "railCap": {
+          "axis": 1,
+          "soviet": 3
+        },
+        "convertedAxisRails": {
+          "rule": "专规 1.2 剧本页 \"Converted Axis Rails: <A> to <B>\"：剧本页只给两个端点（端点处驻执行换轨的 RR Bn，4.1c），给的是那条铁路线；逐格清单由引擎沿铁路邻接图取唯一最短路径推导（engine/rules/rail.ts#convertedRailRun，歧义即失败）",
+          "runs": ["01.03 to 2.02", "01.19 to 4.18", "01.07 to 4.07"],
+          "notes": "端点为 4.07 与 4.18，两个 (1)-2-5 RR Bn 分别驻此"
+        },
+        "reserveMarkers": {
+          "axis": 14,
+          "soviet": 4
+        },
+        "supplyCache": 2,
+        "constructionMarkers": 0,
+        "organicTrucks": {
+          "mode": "choose_loaded",
+          "count": 4,
+          "raw": "德军自选 4 辆满载，其余空载"
+        },
+        "weatherFirstTurnRaw": "Normal Flight on 22 July",
+        "formationDrawRaw": "14 个师中抽 5 个全部以移动模式初设、另 5 个以摩托化团换侦察营",
+        "formationDraw": {
+          "pool": 14,
+          "poolFrom": "formations.json 中该剧本的轴方装甲/摩托化多单位编队（formationId 以 'Pz Div' / 'Mtr Div' 结尾，骑兵师不入杯）",
+          "groups": [
+            {
+              "kind": "moveMode",
+              "count": 5,
+              "label": "A 组：全部战斗单位以 Move Mode 初设",
+              "rule": "ch11 Scenario 3/4 随机化（Move-Mode Draw）",
+              "effect": "抽中的 5 个师，其全部战斗单位以 Move Mode 初设（战斗值减半，暴露反击脆弱性）"
+            },
+            {
+              "kind": "mtrAufkSwap",
+              "count": 5,
+              "label": "B 组：摩托化团 ↔ 死亡堆中的侦察营互换",
+              "rule": "ch11 Scenario 3/4 随机化",
+              "effect": "抽中的 5 个师让一个 Mtr 团与 Dead Pile 中的 Aufk 营互换（Mtr 死、Aufk 活）"
+            }
+          ],
+          "raw": "14 个师中抽 5 个全部以移动模式初设、另 5 个以摩托化团换侦察营",
+          "note": "余下 4 个师保持初设原样；本剧本另禁任何单位以 Reserve Mode 初设（ch11）"
+        },
+        "airSetup": {
+          "axis": {
+            "policy": "half_inactive_round_up",
+            "reducedTypes": ["Do.17z", "He.111"],
+            "statedInRules": true,
+            "raw": "\"*\" = one unit begins reduced；Half of the counters of each plane type (Bf.109e-7, Ju.87b, etc.) must begin Inactive. Round fractions up.（剧本 3 德军初设栏）"
+          },
+          "soviet": {
+            "policy": "all_active",
+            "reducedTypes": ["Pe.2", "Su.2", "Yak.4"],
+            "statedInRules": false,
+            "raw": "\"*\" = one unit begins reduced（剧本 3 苏军初设栏仅标 `*`、未述激活态 ⇒ 按通规 IV-E 默认全 Active）"
+          }
+        },
+        "printedHedgehogOwners": {
+          "rule": "同剧本 1 的裁定口径；剧本 3（22 Jul 41 开局）按德军推进线推导：该格到剧本初设双方地面战斗单位的最近距离，严格更近德军者属德军，其余属苏军（边界模糊 3 处按更近方归属）。",
+          "axisOwned": [
+            "20.28",
+            "18.28",
+            "19.28",
+            "18.27",
+            "19.27",
+            "19.26",
+            "24.24",
+            "25.23",
+            "19.21",
+            "18.20",
+            "17.20",
+            "22.19",
+            "24.19",
+            "17.19",
+            "18.18",
+            "17.18",
+            "18.17",
+            "18.16",
+            "07.08",
+            "20.07",
+            "21.07",
+            "20.05",
+            "27.05"
+          ]
+        },
+        "options": {
+          "reserve_markers": {
+            "axis": 14,
+            "soviet": 4
+          },
+          "note": "任何单位不得以预备模式初设"
+        },
+        "source": ["专规剧本页按栏提取（2026-09-10）；剧本 3/5/7 的 Rail Cap 依 SmolenskErrata"]
+      },
+      "sharedSetupWith": ["4"],
+      "hasSetup": true,
+      "setupInfo": {
+        "axis": {
+          "Rail Cap": "",
+          "Reserve Markers": "14 available",
+          "Supply Cache Markers": "2 available",
+          "Reinforcements": "Per Order of Arrival",
+          "Variable Repls": "Per Repl Table"
+        },
+        "soviet": {
+          "Rail Cap": "",
+          "Reserve Markers": "4 available",
+          "Supply Cache Markers": "2 available",
+          "Reinforcements": "Per Order of Arrival",
+          "Variable Repls": "Per Repl Table"
+        }
+      },
+      "daggerRule": "带 † 的轴方师可在所列位置 1 格内初设（剧本 3、4、5、6、7）",
+      "counts": {
+        "axis": {
+          "groups": 46,
+          "entries": 129,
+          "formations": 28,
+          "subordinates": 114,
+          "units": 57,
+          "hq": 11,
+          "sp": 12,
+          "aircraft": 9,
+          "transport_point": 2
+        },
+        "soviet": {
+          "groups": 81,
+          "entries": 184,
+          "formations": 2,
+          "subordinates": 6,
+          "units": 128,
+          "hq": 10,
+          "sp": 14,
+          "aircraft": 13,
+          "transport_point": 11
+        }
+      },
+      "supplySources": {
+        "rule": "专规 2.1（苏）／3.1 + errata 5（德）；关闭按 2.1a",
+        "firstTurn": "22 Jul 41",
+        "sovietLive": [
+          "13.01",
+          "29.01",
+          "37.35",
+          "42.00",
+          "43.01",
+          "44.00",
+          "51.01",
+          "61.35",
+          "62.03",
+          "62.04",
+          "62.12",
+          "62.16",
+          "62.22",
+          "62.23",
+          "62.24",
+          "62.33",
+          "62.35",
+          "14.00",
+          "20.00",
+          "42.35",
+          "50.35",
+          "56.00",
+          "58.00",
+          "58.35",
+          "60.35",
+          "62.34"
+        ],
+        "sovietClosed": [
+          {
+            "hexId": "20.35",
+            "hexIdUser": "20.35",
+            "date": "19 July",
+            "rule": "2.1a"
+          }
+        ],
+        "axisLive": ["1.03", "1.04", "1.07", "1.12", "1.19", "1.26", "4.00", "8.00"],
+        "axisClosed": [],
+        "enteringLoaded": "两类到达：来自 Repl Table 的掷骰结果与到达卡列出的单位；所有运输点均满载（带额外 SP）入场（2.1／3.1 首段）",
+        "placement": "Pax／Eq／特殊补员／突围返场：直接到能直接拖取追溯补给的指挥部（12.6a），或地图边缘补给源格；新造与重建飞机在处于追溯补给的空军基地以激活态出现",
+        "entrainOffMap": "增援与新增 SP 可在入场格登车（13.6b / 13.3b：其入场格须含铁路）；该格若同时满足 13.3c 可卸载与 13.3e 不在敌方 ZOC，即可铁路机动（用户 2026-09-13 第 1 条）",
+        "freeRailCap": {
+          "rule": "2.1/3.1 + 通规 13.3c",
+          "value": "每个可卸载城市格 1 SP（免费铁运），其余 SP 放图边补给源格",
+          "hexes": "detrainable_hexes.json → free_rail_cap_city=true"
+        },
+        "source": "按专规 2.1／2.1a／3.1 与 errata 5/6 从 supply_sources.json 派生（2026-09-13）"
+      }
+    },
+    {
+      "id": "4",
+      "name": "1st Counteroffensive",
+      "firstTurn": "22 Jul 41",
+      "lastTurn": "1 Aug 41",
+      "turns": 4,
+      "firstPlayer": "soviet",
+      "setupFirst": "axis",
+      "firstWeather": "normal",
+      "setup": {
+        "railCap": {
+          "axis": 1,
+          "soviet": 3
+        },
+        "convertedAxisRails": {
+          "rule": "专规 1.2 剧本页 \"Converted Axis Rails: <A> to <B>\"：剧本页只给两个端点（端点处驻执行换轨的 RR Bn，4.1c），给的是那条铁路线；逐格清单由引擎沿铁路邻接图取唯一最短路径推导（engine/rules/rail.ts#convertedRailRun，歧义即失败）",
+          "runs": ["01.03 to 2.02", "01.19 to 4.18", "01.07 to 4.07"],
+          "notes": "同剧本 3"
+        },
+        "reserveMarkers": {
+          "axis": 14,
+          "soviet": 4
+        },
+        "supplyCache": 2,
+        "constructionMarkers": 0,
+        "organicTrucks": {
+          "mode": "choose_loaded",
+          "count": 4,
+          "raw": "德军自选 4 辆满载，其余空载"
+        },
+        "weatherFirstTurnRaw": "Normal Flight on 22 July",
+        "source": ["专规剧本页按栏提取（2026-09-10）；剧本 3/5/7 的 Rail Cap 依 SmolenskErrata"]
+      },
+      "inherits": "3",
+      "sharedSetupWith": ["3"],
+      "hasSetup": false,
+      "setupInfo": {},
+      "daggerRule": "带 † 的轴方师可在所列位置 1 格内初设（剧本 3、4、5、6、7）",
+      "counts": {},
+      "supplySources": {
+        "rule": "专规 2.1（苏）／3.1 + errata 5（德）；关闭按 2.1a",
+        "firstTurn": "22 Jul 41",
+        "sovietLive": [
+          "13.01",
+          "29.01",
+          "37.35",
+          "42.00",
+          "43.01",
+          "44.00",
+          "51.01",
+          "61.35",
+          "62.03",
+          "62.04",
+          "62.12",
+          "62.16",
+          "62.22",
+          "62.23",
+          "62.24",
+          "62.33",
+          "62.35",
+          "14.00",
+          "20.00",
+          "42.35",
+          "50.35",
+          "56.00",
+          "58.00",
+          "58.35",
+          "60.35",
+          "62.34"
+        ],
+        "sovietClosed": [
+          {
+            "hexId": "20.35",
+            "hexIdUser": "20.35",
+            "date": "19 July",
+            "rule": "2.1a"
+          }
+        ],
+        "axisLive": ["1.03", "1.04", "1.07", "1.12", "1.19", "1.26", "4.00", "8.00"],
+        "axisClosed": [],
+        "enteringLoaded": "两类到达：来自 Repl Table 的掷骰结果与到达卡列出的单位；所有运输点均满载（带额外 SP）入场（2.1／3.1 首段）",
+        "placement": "Pax／Eq／特殊补员／突围返场：直接到能直接拖取追溯补给的指挥部（12.6a），或地图边缘补给源格；新造与重建飞机在处于追溯补给的空军基地以激活态出现",
+        "entrainOffMap": "增援与新增 SP 可在入场格登车（13.6b / 13.3b：其入场格须含铁路）；该格若同时满足 13.3c 可卸载与 13.3e 不在敌方 ZOC，即可铁路机动（用户 2026-09-13 第 1 条）",
+        "freeRailCap": {
+          "rule": "2.1/3.1 + 通规 13.3c",
+          "value": "每个可卸载城市格 1 SP（免费铁运），其余 SP 放图边补给源格",
+          "hexes": "detrainable_hexes.json → free_rail_cap_city=true"
+        },
+        "source": "按专规 2.1／2.1a／3.1 与 errata 5/6 从 supply_sources.json 派生（2026-09-13）"
+      }
+    },
+    {
+      "id": "5",
+      "name": "Early August Start",
+      "firstTurn": "8 Aug 41",
+      "lastTurn": "8 Sep 41",
+      "turns": 10,
+      "firstPlayer": "soviet",
+      "setupFirst": "axis",
+      "firstWeather": "normal",
+      "setup": {
+        "railCap": {
+          "axis": 1,
+          "soviet": 3
+        },
+        "convertedAxisRails": {
+          "rule": "专规 1.2 剧本页 \"Converted Axis Rails: <A> to <B>\"：剧本页只给两个端点（端点处驻执行换轨的 RR Bn，4.1c），给的是那条铁路线；逐格清单由引擎沿铁路邻接图取唯一最短路径推导（engine/rules/rail.ts#convertedRailRun，歧义即失败）",
+          "runs": ["01.03 to 2.02", "01.19 to 24.19", "01.07 to 24.06"],
+          "notes": "端点为 24.19 与 24.06"
+        },
+        "reserveMarkers": {
+          "axis": 7,
+          "soviet": 6
+        },
+        "supplyCache": 2,
+        "constructionMarkers": 0,
+        "organicTrucks": {
+          "mode": "choose_loaded",
+          "count": 2,
+          "raw": "德军自选 2 辆满载，其余空载"
+        },
+        "weatherFirstTurnRaw": "Normal Flight on 8 Aug",
+        "formationDrawRaw": "抽 5 个把摩托营放入死亡堆、另 7 个把侦察营放入死亡堆",
+        "formationDraw": {
+          "pool": 14,
+          "poolFrom": "formations.json 中该剧本的轴方装甲/摩托化多单位编队（formationId 以 'Pz Div' / 'Mtr Div' 结尾，骑兵师不入杯）",
+          "groups": [
+            {
+              "kind": "deadPileKrd",
+              "count": 5,
+              "label": "A 组：摩托化侦察（Krd）营加入死亡堆",
+              "rule": "ch11 Scenario 5/6 随机化（Dead-Pile-Subunit Draw）",
+              "effect": "抽中的 5 个师，其 Krd 营直接加入死亡堆"
+            },
+            {
+              "kind": "deadPileAufk",
+              "count": 7,
+              "label": "B 组：装甲侦察（Aufk）营加入死亡堆",
+              "rule": "ch11 Scenario 5/6 随机化（Dead-Pile-Subunit Draw）",
+              "effect": "抽中的 7 个师，其 Aufk 营直接加入死亡堆"
+            }
+          ],
+          "raw": "抽 5 个把摩托营放入死亡堆、另 7 个把侦察营放入死亡堆",
+          "note": "共 12 个营进入死亡堆（ch11：开局兵力结构被显著重塑）"
+        },
+        "airSetup": {
+          "axis": {
+            "policy": "half_inactive_round_up",
+            "reducedTypes": ["Bf-109e", "Bf.109f", "He.111", "Ju.87b"],
+            "statedInRules": true,
+            "raw": "\"*\" = one unit begins reduced；Half of the counters of each plane type (Bf.109e-7, Ju.87b, etc.) must begin Inactive. Round fractions up.（剧本 5 德军初设栏）"
+          },
+          "soviet": {
+            "policy": "all_active",
+            "reducedTypes": ["I.153", "I.16", "MiG.3", "Pe.2", "Su.2"],
+            "statedInRules": false,
+            "raw": "\"*\" = one unit begins reduced（剧本 5 苏军初设栏仅标 `*`、未述激活态 ⇒ 按通规 IV-E 默认全 Active）"
+          }
+        },
+        "printedHedgehogOwners": {
+          "rule": "同剧本 1 的裁定口径；剧本 5（8 Aug 41 开局）按德军推进线推导：该格到剧本初设双方地面战斗单位的最近距离，严格更近德军者属德军，其余属苏军（边界模糊 2 处按更近方归属）。",
+          "axisOwned": [
+            "20.28",
+            "18.28",
+            "19.28",
+            "18.27",
+            "19.27",
+            "19.26",
+            "24.24",
+            "25.23",
+            "19.21",
+            "18.20",
+            "17.20",
+            "22.19",
+            "24.19",
+            "26.19",
+            "17.19",
+            "18.18",
+            "17.18",
+            "18.17",
+            "18.16",
+            "23.12",
+            "15.11",
+            "15.10",
+            "17.10",
+            "07.08",
+            "20.07",
+            "21.07",
+            "20.05",
+            "27.05",
+            "28.04"
+          ]
+        },
+        "options": {
+          "reserve_markers": {
+            "axis": 7,
+            "soviet": 6
+          },
+          "setup_wiggle": "专规 4.3：六个满员步兵师各部署一个拆分团（母师两格内），1.Mot 师可在 18.17 一格内初设"
+        },
+        "source": ["专规剧本页按栏提取（2026-09-10）；剧本 3/5/7 的 Rail Cap 依 SmolenskErrata"]
+      },
+      "sharedSetupWith": ["6"],
+      "hasSetup": true,
+      "setupInfo": {
+        "axis": {
+          "Rail Cap": "",
+          "Reserve Markers": "7 available",
+          "Supply Cache Markers": "2 available",
+          "Reinforcements": "Per Order of Arrival",
+          "Variable Repls": "Per Repl Table"
+        },
+        "soviet": {
+          "Rail Cap": "",
+          "Reserve Markers": "6 available",
+          "Supply Cache Markers": "2 available",
+          "Reinforcements": "Per Order of Arrival",
+          "Variable Repls": "Per Repl Table"
+        }
+      },
+      "daggerRule": "带 † 的轴方师可在所列位置 1 格内初设（剧本 3、4、5、6、7）",
+      "counts": {
+        "axis": {
+          "groups": 50,
+          "entries": 146,
+          "formations": 28,
+          "subordinates": 114,
+          "units": 68,
+          "hq": 13,
+          "sp": 15,
+          "aircraft": 7,
+          "transport_point": 3
+        },
+        "soviet": {
+          "groups": 62,
+          "entries": 229,
+          "formations": 2,
+          "subordinates": 6,
+          "units": 162,
+          "hq": 15,
+          "sp": 15,
+          "aircraft": 15,
+          "transport_point": 16
+        }
+      },
+      "supplySources": {
+        "rule": "专规 2.1（苏）／3.1 + errata 5（德）；关闭按 2.1a",
+        "firstTurn": "8 Aug 41",
+        "sovietLive": [
+          "13.01",
+          "29.01",
+          "37.35",
+          "42.00",
+          "43.01",
+          "44.00",
+          "51.01",
+          "61.35",
+          "62.03",
+          "62.04",
+          "62.12",
+          "62.16",
+          "62.22",
+          "62.23",
+          "62.24",
+          "62.33",
+          "62.35",
+          "14.00",
+          "20.00",
+          "42.35",
+          "50.35",
+          "56.00",
+          "58.00",
+          "58.35",
+          "60.35",
+          "62.34"
+        ],
+        "sovietClosed": [
+          {
+            "hexId": "20.35",
+            "hexIdUser": "20.35",
+            "date": "19 July",
+            "rule": "2.1a"
+          }
+        ],
+        "axisLive": ["1.03", "1.04", "1.07", "1.12", "1.19", "1.26", "4.00", "8.00"],
+        "axisClosed": [],
+        "enteringLoaded": "两类到达：来自 Repl Table 的掷骰结果与到达卡列出的单位；所有运输点均满载（带额外 SP）入场（2.1／3.1 首段）",
+        "placement": "Pax／Eq／特殊补员／突围返场：直接到能直接拖取追溯补给的指挥部（12.6a），或地图边缘补给源格；新造与重建飞机在处于追溯补给的空军基地以激活态出现",
+        "entrainOffMap": "增援与新增 SP 可在入场格登车（13.6b / 13.3b：其入场格须含铁路）；该格若同时满足 13.3c 可卸载与 13.3e 不在敌方 ZOC，即可铁路机动（用户 2026-09-13 第 1 条）",
+        "freeRailCap": {
+          "rule": "2.1/3.1 + 通规 13.3c",
+          "value": "每个可卸载城市格 1 SP（免费铁运），其余 SP 放图边补给源格",
+          "hexes": "detrainable_hexes.json → free_rail_cap_city=true"
+        },
+        "source": "按专规 2.1／2.1a／3.1 与 errata 5/6 从 supply_sources.json 派生（2026-09-13）"
+      }
+    },
+    {
+      "id": "6",
+      "name": "2nd Counteroffensive",
+      "firstTurn": "8 Aug 41",
+      "lastTurn": "22 Aug 41",
+      "turns": 5,
+      "firstPlayer": "soviet",
+      "setupFirst": "axis",
+      "firstWeather": "normal",
+      "setup": {
+        "railCap": {
+          "axis": 1,
+          "soviet": 3
+        },
+        "convertedAxisRails": {
+          "rule": "专规 1.2 剧本页 \"Converted Axis Rails: <A> to <B>\"：剧本页只给两个端点（端点处驻执行换轨的 RR Bn，4.1c），给的是那条铁路线；逐格清单由引擎沿铁路邻接图取唯一最短路径推导（engine/rules/rail.ts#convertedRailRun，歧义即失败）",
+          "runs": ["01.03 to 2.02", "01.19 to 24.19", "01.07 to 24.06"],
+          "notes": "同剧本 5"
+        },
+        "reserveMarkers": {
+          "axis": 7,
+          "soviet": 6
+        },
+        "supplyCache": 2,
+        "constructionMarkers": 0,
+        "organicTrucks": {
+          "mode": "choose_loaded",
+          "count": 2,
+          "raw": "德军自选 2 辆满载，其余空载"
+        },
+        "weatherFirstTurnRaw": "Normal Flight on 8 Aug",
+        "options": {
+          "note": "须掷可变撤离",
+          "supply_cache": "每方各 2 枚",
+          "variable_exit_note": "剧本页未点名，依全局 3.3c：19 Aug 起每个德军增援阶段掷"
+        },
+        "source": ["专规剧本页按栏提取（2026-09-10）；剧本 3/5/7 的 Rail Cap 依 SmolenskErrata"]
+      },
+      "inherits": "5",
+      "sharedSetupWith": ["5"],
+      "hasSetup": false,
+      "setupInfo": {},
+      "daggerRule": "带 † 的轴方师可在所列位置 1 格内初设（剧本 3、4、5、6、7）",
+      "variableExitRequired": true,
+      "counts": {},
+      "supplySources": {
+        "rule": "专规 2.1（苏）／3.1 + errata 5（德）；关闭按 2.1a",
+        "firstTurn": "8 Aug 41",
+        "sovietLive": [
+          "13.01",
+          "29.01",
+          "37.35",
+          "42.00",
+          "43.01",
+          "44.00",
+          "51.01",
+          "61.35",
+          "62.03",
+          "62.04",
+          "62.12",
+          "62.16",
+          "62.22",
+          "62.23",
+          "62.24",
+          "62.33",
+          "62.35",
+          "14.00",
+          "20.00",
+          "42.35",
+          "50.35",
+          "56.00",
+          "58.00",
+          "58.35",
+          "60.35",
+          "62.34"
+        ],
+        "sovietClosed": [
+          {
+            "hexId": "20.35",
+            "hexIdUser": "20.35",
+            "date": "19 July",
+            "rule": "2.1a"
+          }
+        ],
+        "axisLive": ["1.03", "1.04", "1.07", "1.12", "1.19", "1.26", "4.00", "8.00"],
+        "axisClosed": [],
+        "enteringLoaded": "两类到达：来自 Repl Table 的掷骰结果与到达卡列出的单位；所有运输点均满载（带额外 SP）入场（2.1／3.1 首段）",
+        "placement": "Pax／Eq／特殊补员／突围返场：直接到能直接拖取追溯补给的指挥部（12.6a），或地图边缘补给源格；新造与重建飞机在处于追溯补给的空军基地以激活态出现",
+        "entrainOffMap": "增援与新增 SP 可在入场格登车（13.6b / 13.3b：其入场格须含铁路）；该格若同时满足 13.3c 可卸载与 13.3e 不在敌方 ZOC，即可铁路机动（用户 2026-09-13 第 1 条）",
+        "freeRailCap": {
+          "rule": "2.1/3.1 + 通规 13.3c",
+          "value": "每个可卸载城市格 1 SP（免费铁运），其余 SP 放图边补给源格",
+          "hexes": "detrainable_hexes.json → free_rail_cap_city=true"
+        },
+        "source": "按专规 2.1／2.1a／3.1 与 errata 5/6 从 supply_sources.json 派生（2026-09-13）"
+      }
+    },
+    {
+      "id": "7",
+      "name": "3rd Counteroffensive",
+      "firstTurn": "26 Aug 41",
+      "lastTurn": "8 Sep 41",
+      "turns": 5,
+      "firstPlayer": "soviet",
+      "setupFirst": "axis",
+      "firstWeather": "normal",
+      "setup": {
+        "railCap": {
+          "axis": 1,
+          "soviet": 3
+        },
+        "convertedAxisRails": {
+          "rule": "专规 1.2 剧本页 \"Converted Axis Rails: <A> to <B>\"：剧本页只给两个端点（端点处驻执行换轨的 RR Bn，4.1c），给的是那条铁路线；逐格清单由引擎沿铁路邻接图取唯一最短路径推导（engine/rules/rail.ts#convertedRailRun，歧义即失败）",
+          "runs": ["01.03 to 2.02", "01.19 to 34.18", "01.07 to 38.05", "15.10 to 18.18"],
+          "notes": "第四段 15.10 → 18.18 为北向支线，两营 RR Bn 驻 18.18"
+        },
+        "reserveMarkers": {
+          "axis": 7,
+          "soviet": 6
+        },
+        "supplyCache": 2,
+        "constructionMarkers": 0,
+        "organicTrucks": {
+          "mode": "all_unloaded",
+          "raw": "德军全部空载"
+        },
+        "weatherFirstTurnRaw": "Normal Flight on 26 Aug",
+        "airSetup": {
+          "axis": {
+            "policy": "half_inactive_round_up",
+            "reducedTypes": ["Bf-109e", "He.111"],
+            "statedInRules": true,
+            "raw": "\"*\" = one unit begins reduced；Half of the counters of each plane type (Bf.109e, Ju.88, etc.) must begin Inactive. Round fractions up.（剧本 7 德军初设栏）"
+          },
+          "soviet": {
+            "policy": "all_active",
+            "reducedTypes": ["I.153", "LaGG.3", "Yak.1", "Pe.2", "SB.2"],
+            "statedInRules": false,
+            "raw": "\"*\" = one unit begins reduced（剧本 7 苏军初设栏仅标 `*`、未述激活态 ⇒ 按通规 IV-E 默认全 Active）"
+          }
+        },
+        "printedHedgehogOwners": {
+          "rule": "同剧本 1 的裁定口径；剧本 7（26 Aug 41 开局，德军推进最远）按推导：该格到剧本初设双方地面战斗单位的最近距离，严格更近德军者属德军，其余属苏军（无边界模糊格）。",
+          "axisOwned": [
+            "20.28",
+            "18.28",
+            "19.28",
+            "18.27",
+            "19.27",
+            "19.26",
+            "24.24",
+            "25.23",
+            "19.21",
+            "18.20",
+            "17.20",
+            "22.19",
+            "24.19",
+            "26.19",
+            "17.19",
+            "18.18",
+            "17.18",
+            "18.17",
+            "18.16",
+            "23.12",
+            "15.11",
+            "15.10",
+            "17.10",
+            "07.08",
+            "20.07",
+            "21.07",
+            "20.05",
+            "27.05",
+            "28.04",
+            "20.03",
+            "20.02"
+          ]
+        },
+        "options": {
+          "note": "须掷可变撤离"
+        },
+        "source": ["专规剧本页按栏提取（2026-09-10）；剧本 3/5/7 的 Rail Cap 依 SmolenskErrata"]
+      },
+      "inherits": "5",
+      "hasSetup": true,
+      "setupInfo": {
+        "axis": {
+          "Rail Cap": "",
+          "Reserve Markers": "7 available",
+          "Supply Cache Markers": "2 available",
+          "Reinforcements": "Per Order of Arrival",
+          "Variable Repls": "Per Repl Table"
+        },
+        "soviet": {
+          "Rail Cap": "",
+          "Reserve Markers": "6 available",
+          "Supply Cache Markers": "2 available",
+          "Reinforcements": "Per Order of Arrival",
+          "Variable Repls": "Per Repl Table"
+        }
+      },
+      "daggerRule": "带 † 的轴方师可在所列位置 1 格内初设（剧本 3、4、5、6、7）",
+      "variableExitRequired": true,
+      "counts": {
+        "axis": {
+          "groups": 33,
+          "entries": 78,
+          "formations": 6,
+          "subordinates": 19,
+          "units": 40,
+          "hq": 6,
+          "sp": 8,
+          "aircraft": 6,
+          "transport_point": 2
+        },
+        "soviet": {
+          "groups": 51,
+          "entries": 190,
+          "formations": 2,
+          "subordinates": 6,
+          "units": 127,
+          "hq": 12,
+          "sp": 13,
+          "aircraft": 18,
+          "transport_point": 14
+        }
+      },
+      "supplySources": {
+        "rule": "专规 2.1（苏）／3.1 + errata 5（德）；关闭按 2.1a",
+        "firstTurn": "26 Aug 41",
+        "sovietLive": [
+          "37.35",
+          "51.01",
+          "61.35",
+          "62.03",
+          "62.04",
+          "62.12",
+          "62.16",
+          "62.22",
+          "62.23",
+          "62.24",
+          "62.33",
+          "62.35",
+          "42.35",
+          "50.35",
+          "56.00",
+          "58.00",
+          "58.35",
+          "60.35",
+          "62.34"
+        ],
+        "sovietClosed": [
+          {
+            "hexId": "13.1",
+            "hexIdUser": "13.01",
+            "date": "19 August",
+            "rule": "2.1a"
+          },
+          {
+            "hexId": "20.35",
+            "hexIdUser": "20.35",
+            "date": "19 July",
+            "rule": "2.1a"
+          },
+          {
+            "hexId": "29.1",
+            "hexIdUser": "29.01",
+            "date": "19 August",
+            "rule": "2.1a"
+          },
+          {
+            "hexId": "42.0",
+            "hexIdUser": "42.00",
+            "date": "19 August",
+            "rule": "2.1a"
+          },
+          {
+            "hexId": "43.1",
+            "hexIdUser": "43.01",
+            "date": "19 August",
+            "rule": "2.1a"
+          },
+          {
+            "hexId": "44.0",
+            "hexIdUser": "44.00",
+            "date": "19 August",
+            "rule": "2.1a"
+          },
+          {
+            "hexId": "14.0",
+            "hexIdUser": "14.00",
+            "date": "19 August",
+            "rule": "2.1a"
+          },
+          {
+            "hexId": "20.0",
+            "hexIdUser": "20.00",
+            "date": "19 August",
+            "rule": "2.1a"
+          }
+        ],
+        "axisLive": ["1.03", "1.04", "1.07", "1.12", "1.19", "1.26", "4.00", "8.00"],
+        "axisClosed": [],
+        "enteringLoaded": "两类到达：来自 Repl Table 的掷骰结果与到达卡列出的单位；所有运输点均满载（带额外 SP）入场（2.1／3.1 首段）",
+        "placement": "Pax／Eq／特殊补员／突围返场：直接到能直接拖取追溯补给的指挥部（12.6a），或地图边缘补给源格；新造与重建飞机在处于追溯补给的空军基地以激活态出现",
+        "entrainOffMap": "增援与新增 SP 可在入场格登车（13.6b / 13.3b：其入场格须含铁路）；该格若同时满足 13.3c 可卸载与 13.3e 不在敌方 ZOC，即可铁路机动（用户 2026-09-13 第 1 条）",
+        "freeRailCap": {
+          "rule": "2.1/3.1 + 通规 13.3c",
+          "value": "每个可卸载城市格 1 SP（免费铁运），其余 SP 放图边补给源格",
+          "hexes": "detrainable_hexes.json → free_rail_cap_city=true"
+        },
+        "source": "按专规 2.1／2.1a／3.1 与 errata 5/6 从 supply_sources.json 派生（2026-09-13）"
+      }
+    }
+  ]
+}

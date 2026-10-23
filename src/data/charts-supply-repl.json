@@ -1,0 +1,684 @@
+{
+  "meta": {
+    "version": "0.4.0",
+    "description": "补给表(1.6b) / 补员表(1.6b) / 特殊补员表(1.6c) / 重建费用表(13.5c)：19 Aug 起补给与补员掷骰 -1、特殊补员停止；freeSpecialReplFactors 为 1.6c 免费重建资格（仅 12-2-2/11-1-1/10-0-1 型）",
+    "source": [
+      "smolensk_charts_db.json（2026-09-10 按英文原版核对）+ Smolensk_Rules_v1.1（1.6b/1.6c）"
+    ]
+  },
+  "supply": {
+    "axis": {
+      "rows": ["2-3", "4-5", "6-8", "9-10", "11-12"],
+      "spBefore19Aug": [3, 5, 7, 9, 11],
+      "spFrom19Aug": [1, 2, 3, 4, 5]
+    },
+    "soviet": {
+      "rows": ["2-3", "4-5", "6-8", "9-10", "11-12"],
+      "spBefore19Aug": [5, 7, 9, 11, 13],
+      "spFrom19Aug": [3, 4, 5, 6, 7]
+    }
+  },
+  "repl": {
+    "axis": {
+      "rows": ["7 or less", "8", "9", "10", "11-12"],
+      "columns": ["Ftr", "Tac", "Pax", "Eq"],
+      "grid": [
+        [0, 0, 0, 0],
+        [0, 0, 1, 0],
+        [1, 0, 1, 0],
+        [1, 1, 2, 1],
+        [2, 1, 2, 1]
+      ],
+      "drmFrom19Aug": -1
+    },
+    "soviet": {
+      "rows": ["6 or less", "7-8", "9", "10", "11-12"],
+      "columns": ["Ftr", "Tac", "Pax", "Eq"],
+      "grid": [
+        [0, 0, 0, 0],
+        [0, 0, 1, 0],
+        [1, 0, 2, 1],
+        [1, 1, 2, 1],
+        [2, 1, 2, 1]
+      ],
+      "drmFrom19Aug": -1
+    }
+  },
+  "specialRepl": {
+    "axis": [
+      {
+        "dieFrom": 1,
+        "dieTo": 4,
+        "resultKind": "supply_cache",
+        "label": "Supply Cache"
+      },
+      {
+        "dieFrom": 5,
+        "dieTo": 6,
+        "resultKind": "aufk_krd",
+        "label": "Aufk/Krd battalion"
+      }
+    ],
+    "soviet": [
+      {
+        "dieFrom": 1,
+        "dieTo": 2,
+        "resultKind": "division_caches",
+        "label": "Division & Supply Cache"
+      },
+      {
+        "dieFrom": 3,
+        "dieTo": 6,
+        "resultKind": "division_alarm",
+        "label": "Division & Alarm unit"
+      }
+    ]
+  },
+  "rebuild": {
+    "axis": [
+      {
+        "unitType": "Aircraft",
+        "rebuild": {
+          "kind": "replOnly"
+        },
+        "sourceLabel": "only via Repl Table"
+      },
+      {
+        "unitType": "Anti-Tank Bn (German)",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Eq"
+      },
+      {
+        "unitType": "Artillery Rgt or Bde",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 2
+            }
+          ]
+        },
+        "sourceLabel": "2x Eq"
+      },
+      {
+        "unitType": "Arm Car Bn",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Eq"
+      },
+      {
+        "unitType": "Assault Gun (AG) Bn",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Eq"
+      },
+      {
+        "unitType": "Aufk (Arm Recon) Bn",
+        "rebuild": {
+          "kind": "special"
+        },
+        "sourceLabel": "Special (1.6c)"
+      },
+      {
+        "unitType": "Bicycle Cavalry Bn",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Pax"
+      },
+      {
+        "unitType": "Breakdown Rgt",
+        "rebuild": {
+          "kind": "pool"
+        },
+        "sourceLabel": "return to pool"
+      },
+      {
+        "unitType": "Cavalry Bn",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Pax"
+      },
+      {
+        "unitType": "Flm Panzer Bn",
+        "rebuild": {
+          "kind": "none"
+        },
+        "sourceLabel": "No Rebuild"
+      },
+      {
+        "unitType": "HQ (any size or type)",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 1
+            },
+            {
+              "resource": "pax",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Eq + 1x Pax"
+      },
+      {
+        "unitType": "Infantry Bde or Rgt",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 2
+            }
+          ]
+        },
+        "sourceLabel": "2x Pax"
+      },
+      {
+        "unitType": "Infantry Div step",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 2
+            }
+          ]
+        },
+        "sourceLabel": "2x Pax"
+      },
+      {
+        "unitType": "Krd (Motorcycle) Bn",
+        "rebuild": {
+          "kind": "special"
+        },
+        "sourceLabel": "Special (1.6c)"
+      },
+      {
+        "unitType": "MG Bn",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Pax"
+      },
+      {
+        "unitType": "Mtn Inf Div step",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 2
+            }
+          ]
+        },
+        "sourceLabel": "2x Pax"
+      },
+      {
+        "unitType": "Panzer Bn",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Eq"
+      },
+      {
+        "unitType": "PG (Arm Inf) Rgt",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 1
+            },
+            {
+              "resource": "pax",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Eq + 1x Pax"
+      },
+      {
+        "unitType": "Pio Bn",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 2
+            }
+          ]
+        },
+        "sourceLabel": "2x Pax"
+      },
+      {
+        "unitType": "PJ Bn",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Eq"
+      },
+      {
+        "unitType": "RR Bn",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Pax"
+      },
+      {
+        "unitType": "Sec Rgt",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Pax"
+      },
+      {
+        "unitType": "Sec Div step",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Pax"
+      },
+      {
+        "unitType": "Transport Points",
+        "rebuild": {
+          "kind": "regulation",
+          "label": "see OCS 13.5e"
+        },
+        "sourceLabel": "see OCS 13.5e"
+      },
+      {
+        "unitType": "Werfer Bn",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Eq"
+      },
+      {
+        "unitType": "Werfer Rgt",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 2
+            }
+          ]
+        },
+        "sourceLabel": "2x Eq"
+      }
+    ],
+    "soviet": [
+      {
+        "unitType": "Aircraft",
+        "rebuild": {
+          "kind": "replOnly"
+        },
+        "sourceLabel": "only via Repl Table"
+      },
+      {
+        "unitType": "AT Alarm Rgt",
+        "rebuild": {
+          "kind": "special"
+        },
+        "sourceLabel": "Special (1.6c)"
+      },
+      {
+        "unitType": "Artillery Rgt or Bde",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 2
+            }
+          ]
+        },
+        "sourceLabel": "2x Eq"
+      },
+      {
+        "unitType": "Arm Car Bn",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Eq"
+      },
+      {
+        "unitType": "Arm Recon Bn (Soviet)",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Eq"
+      },
+      {
+        "unitType": "Breakdown Rgt",
+        "rebuild": {
+          "kind": "pool"
+        },
+        "sourceLabel": "return to pool"
+      },
+      {
+        "unitType": "Cavalry Div (Soviet)",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 2
+            }
+          ]
+        },
+        "sourceLabel": "2x Pax"
+      },
+      {
+        "unitType": "HQ (any size or type)",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 1
+            },
+            {
+              "resource": "pax",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Eq + 1x Pax"
+      },
+      {
+        "unitType": "Infantry Div step",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 2
+            }
+          ]
+        },
+        "sourceLabel": "2x Pax"
+      },
+      {
+        "unitType": "Infantry Div (Red)",
+        "rebuild": {
+          "kind": "none"
+        },
+        "sourceLabel": "No Rebuild"
+      },
+      {
+        "unitType": "Infantry Rgt",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 2
+            }
+          ]
+        },
+        "sourceLabel": "2x Pax"
+      },
+      {
+        "unitType": "Militia Div step",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Pax"
+      },
+      {
+        "unitType": "Militia Alarm Rgt",
+        "rebuild": {
+          "kind": "special"
+        },
+        "sourceLabel": "Special (1.6c)"
+      },
+      {
+        "unitType": "Motorcycle (MC) Rgt",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 2
+            }
+          ]
+        },
+        "sourceLabel": "2x Pax"
+      },
+      {
+        "unitType": "Mtn Inf Div step",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 2
+            }
+          ]
+        },
+        "sourceLabel": "2x Pax"
+      },
+      {
+        "unitType": "NKVD Border Rgt",
+        "rebuild": {
+          "kind": "none"
+        },
+        "sourceLabel": "No Rebuild"
+      },
+      {
+        "unitType": "Para Inf Bde (Soviet)",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 3
+            }
+          ]
+        },
+        "sourceLabel": "3x Pax"
+      },
+      {
+        "unitType": "RR Rgt",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Pax"
+      },
+      {
+        "unitType": "Sec Rgt",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Pax"
+      },
+      {
+        "unitType": "Tank Alarm Bn",
+        "rebuild": {
+          "kind": "special"
+        },
+        "sourceLabel": "Special (1.6c)"
+      },
+      {
+        "unitType": "Tank Bn, Rgt, or Bde",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Eq"
+      },
+      {
+        "unitType": "Tank Div step",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "eq",
+              "amount": 1
+            },
+            {
+              "resource": "pax",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Eq + 1x Pax"
+      },
+      {
+        "unitType": "Transport Points",
+        "rebuild": {
+          "kind": "regulation",
+          "label": "see OCS 13.5e"
+        },
+        "sourceLabel": "see OCS 13.5e"
+      },
+      {
+        "unitType": "UR Bde",
+        "rebuild": {
+          "kind": "normal",
+          "cost": [
+            {
+              "resource": "pax",
+              "amount": 1
+            }
+          ]
+        },
+        "sourceLabel": "1x Pax"
+      }
+    ]
+  },
+  "freeSpecialReplFactors": [
+    {
+      "attack": 12,
+      "ar": 2,
+      "ma": 2
+    },
+    {
+      "attack": 11,
+      "ar": 1,
+      "ma": 1
+    },
+    {
+      "attack": 10,
+      "ar": 0,
+      "ma": 1
+    }
+  ]
+}

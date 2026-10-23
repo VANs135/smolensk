@@ -1,0 +1,422 @@
+{
+  "meta": {
+    "version": "0.4.0",
+    "description": "辅助卡分区（地图外盒 / 死人堆 / 空军盒）：每张卡的卡面尺寸与分区矩形（卡面图像素坐标），供界面把盒内算子摆进真实分区",
+    "source": [
+      "aux_cards.json（6 张卡 / 12 个分区；用户 2026-09-16 交付，工具：六角格标定测试 · 辅助卡标定）",
+      "卡面图：图片素材库\\地图及辅助卡（German/Russian Dead Pile、German-Offboard-2、Russian-Offboard4、German Airfields1、RussianAirfields）"
+    ]
+  },
+  "cards": [
+    {
+      "id": "axis-airfields",
+      "side": "axis",
+      "boxKind": "air_box",
+      "name": "轴心空军地图外盒",
+      "image": "German Airfields1.png",
+      "imageSize": {
+        "w": 906,
+        "h": 700
+      },
+      "regions": [
+        {
+          "id": "box-1",
+          "label": "激活",
+          "boxKind": "air_box_active",
+          "rect": {
+            "x": 45,
+            "y": 223,
+            "w": 366,
+            "h": 357
+          }
+        },
+        {
+          "id": "box-2",
+          "label": "未激活",
+          "boxKind": "air_box_inactive",
+          "rect": {
+            "x": 412,
+            "y": 222,
+            "w": 271,
+            "h": 356
+          }
+        }
+      ]
+    },
+    {
+      "id": "axis-dead-pile",
+      "side": "axis",
+      "boxKind": "dead_pile",
+      "name": "轴心死人堆",
+      "image": "German Dead Pile.png",
+      "imageSize": {
+        "w": 731,
+        "h": 344
+      },
+      "regions": [
+        {
+          "id": "box-1",
+          "label": "德国死人堆",
+          "boxKind": "dead_pile",
+          "rect": {
+            "x": 32,
+            "y": 87,
+            "w": 664,
+            "h": 225
+          }
+        }
+      ]
+    },
+    {
+      "id": "axis-offboard",
+      "side": "axis",
+      "boxKind": "offboard",
+      "name": "轴心地图外盒",
+      "image": "German-Offboard-2.png",
+      "imageSize": {
+        "w": 805,
+        "h": 621
+      },
+      "regions": [
+        {
+          "id": "box-1",
+          "label": "标记存放",
+          "boxKind": "markers",
+          "rect": {
+            "x": 17,
+            "y": 79,
+            "w": 365,
+            "h": 203
+          }
+        },
+        {
+          "id": "box-2",
+          "label": "拆分单位存放",
+          "boxKind": "breakdown_pool",
+          "rect": {
+            "x": 418,
+            "y": 78,
+            "w": 370,
+            "h": 202
+          }
+        },
+        {
+          "id": "box-3",
+          "label": "编队标记抽取盒",
+          "boxKind": "formation_draw",
+          "rect": {
+            "x": 20,
+            "y": 387,
+            "w": 361,
+            "h": 206
+          }
+        }
+      ]
+    },
+    {
+      "id": "rail-sea-cap",
+      "side": "both",
+      "boxKind": "capacity_track",
+      "name": "铁路 / 海运容量记录轨",
+      "image": "Rail-Sea-Cap.png",
+      "imageSize": {
+        "w": 807,
+        "h": 332
+      },
+      "regions": [
+        {
+          "id": "box-1",
+          "label": "1SP",
+          "boxKind": "capacity_track",
+          "rect": {
+            "x": 20,
+            "y": 85,
+            "w": 75,
+            "h": 75
+          }
+        },
+        {
+          "id": "box-2",
+          "label": "2SP",
+          "boxKind": "capacity_track",
+          "rect": {
+            "x": 96,
+            "y": 86,
+            "w": 73,
+            "h": 73
+          }
+        },
+        {
+          "id": "box-3",
+          "label": "3SP",
+          "boxKind": "capacity_track",
+          "rect": {
+            "x": 170,
+            "y": 85,
+            "w": 73,
+            "h": 76
+          }
+        },
+        {
+          "id": "box-4",
+          "label": "4SP",
+          "boxKind": "capacity_track",
+          "rect": {
+            "x": 242,
+            "y": 85,
+            "w": 74,
+            "h": 76
+          }
+        },
+        {
+          "id": "box-5",
+          "label": "5SP",
+          "boxKind": "capacity_track",
+          "rect": {
+            "x": 316,
+            "y": 86,
+            "w": 74,
+            "h": 76
+          }
+        },
+        {
+          "id": "box-6",
+          "label": "6SP",
+          "boxKind": "capacity_track",
+          "rect": {
+            "x": 390,
+            "y": 86,
+            "w": 75,
+            "h": 74
+          }
+        },
+        {
+          "id": "box-7",
+          "label": "7SP",
+          "boxKind": "capacity_track",
+          "rect": {
+            "x": 465,
+            "y": 86,
+            "w": 74,
+            "h": 74
+          }
+        },
+        {
+          "id": "box-8",
+          "label": "8SP",
+          "boxKind": "capacity_track",
+          "rect": {
+            "x": 540,
+            "y": 86,
+            "w": 73,
+            "h": 75
+          }
+        },
+        {
+          "id": "box-9",
+          "label": "9SP",
+          "boxKind": "capacity_track",
+          "rect": {
+            "x": 613,
+            "y": 85,
+            "w": 75,
+            "h": 76
+          }
+        },
+        {
+          "id": "box-10",
+          "label": "10SP",
+          "boxKind": "capacity_track",
+          "rect": {
+            "x": 687,
+            "y": 86,
+            "w": 76,
+            "h": 75
+          }
+        },
+        {
+          "id": "box-11",
+          "label": "0T",
+          "boxKind": "capacity_track",
+          "rect": {
+            "x": 21,
+            "y": 179,
+            "w": 74,
+            "h": 74
+          }
+        },
+        {
+          "id": "box-12",
+          "label": "1T",
+          "boxKind": "capacity_track",
+          "rect": {
+            "x": 95,
+            "y": 181,
+            "w": 75,
+            "h": 73
+          }
+        },
+        {
+          "id": "box-13",
+          "label": "2T",
+          "boxKind": "capacity_track",
+          "rect": {
+            "x": 170,
+            "y": 180,
+            "w": 74,
+            "h": 74
+          }
+        },
+        {
+          "id": "box-15",
+          "label": "3T",
+          "boxKind": "capacity_track",
+          "rect": {
+            "x": 243,
+            "y": 180,
+            "w": 73,
+            "h": 75
+          }
+        }
+      ]
+    },
+    {
+      "id": "soviet-airfields",
+      "side": "soviet",
+      "boxKind": "air_box",
+      "name": "苏联空军地图外盒",
+      "image": "RussianAirfields.png",
+      "imageSize": {
+        "w": 906,
+        "h": 700
+      },
+      "regions": [
+        {
+          "id": "box-1",
+          "label": "激活",
+          "boxKind": "air_box_active",
+          "rect": {
+            "x": 110,
+            "y": 222,
+            "w": 302,
+            "h": 348
+          }
+        },
+        {
+          "id": "box-2",
+          "label": "未激活",
+          "boxKind": "air_box_inactive",
+          "rect": {
+            "x": 412,
+            "y": 223,
+            "w": 295,
+            "h": 346
+          }
+        }
+      ]
+    },
+    {
+      "id": "soviet-dead-pile",
+      "side": "soviet",
+      "boxKind": "dead_pile",
+      "name": "苏联死人堆",
+      "image": "Russian Dead Pile.png",
+      "imageSize": {
+        "w": 731,
+        "h": 344
+      },
+      "regions": [
+        {
+          "id": "box-1",
+          "label": "苏联死人堆",
+          "boxKind": "dead_pile",
+          "rect": {
+            "x": 31,
+            "y": 87,
+            "w": 663,
+            "h": 225
+          }
+        }
+      ]
+    },
+    {
+      "id": "soviet-offboard",
+      "side": "soviet",
+      "boxKind": "offboard",
+      "name": "苏联地图外盒",
+      "image": "Russian-Offboard4.png",
+      "imageSize": {
+        "w": 888,
+        "h": 1032
+      },
+      "regions": [
+        {
+          "id": "box-1",
+          "label": "标记存放",
+          "boxKind": "markers",
+          "rect": {
+            "x": 19,
+            "y": 87,
+            "w": 403,
+            "h": 224
+          }
+        },
+        {
+          "id": "box-2",
+          "label": "拆分单位存放",
+          "boxKind": "breakdown_pool",
+          "rect": {
+            "x": 464,
+            "y": 87,
+            "w": 405,
+            "h": 225
+          }
+        },
+        {
+          "id": "box-3",
+          "label": "可抽取步兵师存放",
+          "boxKind": "special_repl_division_pool",
+          "rect": {
+            "x": 16,
+            "y": 431,
+            "w": 406,
+            "h": 226
+          }
+        },
+        {
+          "id": "box-4",
+          "label": "警戒单位存放",
+          "boxKind": "alarm_pool",
+          "rect": {
+            "x": 463,
+            "y": 430,
+            "w": 404,
+            "h": 225
+          }
+        },
+        {
+          "id": "box-5",
+          "label": "地图外东北盒",
+          "boxKind": "edge_box_northeast",
+          "rect": {
+            "x": 17,
+            "y": 774,
+            "w": 405,
+            "h": 225
+          }
+        },
+        {
+          "id": "box-6",
+          "label": "地图外东南盒",
+          "boxKind": "edge_box_southeast",
+          "rect": {
+            "x": 464,
+            "y": 774,
+            "w": 404,
+            "h": 225
+          }
+        }
+      ]
+    }
+  ]
+}
