@@ -836,7 +836,9 @@ const quickDefenderArItems = computed(() =>
           <!-- B33：突袭的推进是**强制**的（9.12g-D）⇒ 说明与按钮按这个口径给 -->
           <p v-if="workbench.combatAdvanceMandatory" class="warn num">
             <BaseTag kind="danger">9.12g-D</BaseTag>
-            本次是**突袭**：成功的突袭**必须**战后推进（无人可推时也照常收束，不给"不推进"）。
+            本次是**突袭**：成功的突袭**必须**战后推进（8.0：防御方撤退或被摧毁 ⇒ 所有攻击单位都必须
+            进入该格，无需额外 MP）⇒ 撤退收束后**自动收束**，不给"不推进"。若因 9.14 位移待决而停在
+            本步，位移落点选定后即自动收束。
           </p>
           <p class="num">
             防御格 {{ workbench.combatDefendingHexCleared ? '已空' : '未空' }}；
@@ -861,7 +863,11 @@ const quickDefenderArItems = computed(() =>
           />
           <div class="row">
             <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatAdvance()">
-              确认战后推进（9.12g）
+              {{
+                workbench.combatAdvanceMandatory
+                  ? '收束突袭推进（9.12g-D）'
+                  : '确认战后推进（9.12g）'
+              }}
             </BaseButton>
           </div>
           <p v-if="state.finished" class="ok">

@@ -9038,6 +9038,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       return confirmCombatAdvance()
     }
+    /*
+     * 8.0 / 9.12g-D：突袭的战后推进是**规则强制项** ⇒ 撤退收束后自动收推进步（详见
+     *   `settleOverrunAdvanceIfRequired`）。常规战斗（9.12g-D 末句）仍停在推进步由玩家选择。
+     */
+    if (settleOverrunAdvanceIfRequired()) return true
     return true
   }
 
@@ -9045,6 +9050,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function confirmCombatAdvance(): boolean {
     const state = combatState.value
     if (state === null) return false
+    /*
+     * 幂等守卫：推进步已收束（突袭自动推进会先收一次，见 9.12g-D）⇒ 再点一次只报成功，
+     * **不重复落盘**（否则补丁会二次应用：单位被再挪一次、进击标记再发一遍）。
+     */
+    if (state.finished === true) return true
     const arUnit = units.value.find((unit) => unit.instanceId === state.ar?.attackerUnitId)
     const candidates = combatAdvanceCandidates.value.map((item) => ({
       id: item.id,
@@ -13832,7 +13842,40 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       },
     })
     specialPending.value = null
+    /*
+     * 8.0 / 9.12g-D：位移待决解除后，若停在推进步的是一场**突袭**，则在此续上自动收束。
+     * 时序说明：`confirmCombatRetreats` 遇到 `specialPending` 会先停在推进步（落点要玩家在地图上选），
+     *   待决清空后没有第二次调用点 ⇒ 不在这里续上的话，突袭会永久卡在推进步。
+     */
+    settleOverrunAdvanceIfRequired()
     return true
+  }
+
+  /**
+   * 8.0 / 9.12g-D：突袭的战后推进是**规则强制项**，不是玩家可选项。
+   *
+   *   8.0：「……如果该防御方撤退或被摧毁，**所有攻击单位都必须进入该格**（无需额外的移动消耗）。」
+   *   9.12g-D：「**成功的突袭后必须战后推进**。但常规战斗后并非必须如此，由拥有者玩家选择
+   *     哪些攻击单位进行推进（如果有的话）。」
+   *
+   * ⇒ 引擎 `resolveAdvanceAfterCombat` 对突袭一律返回「全部合格单位 + mandatory=true」，玩家的
+   *   勾选对其无效；界面还让玩家再点一次"确认推进"，等于把强制项摆成可选项。故由 store 自动收束。
+   *   常规战斗（9.12g-D 末句）**不**自动收束，仍停在推进步由玩家选择。
+   *
+   * 「是否成功」（防御格是否清空）由引擎依 `defendingHexCleared` 判，本处不另设口径。
+   *
+   * @returns 是否已收束推进步（false ⇒ 本场不是"待收束的突袭推进"，调用方按原路继续）
+   */
+  function settleOverrunAdvanceIfRequired(): boolean {
+    const state = combatState.value
+    if (state === null || state.finished) return false
+    if (state.step !== 'advance' || state.attackType !== 'overrun') return false
+    pushLog(
+      'info',
+      '8.0 / 9.12g-D：成功的突袭后**必须**战后推进（所有攻击单位进入该格，无额外 MP）⇒ 自动收束推进步',
+      '9.12g-D',
+    )
+    return confirmCombatAdvance()
   }
 
   /** 9.14：放弃本次待决（位移不落盘；已即时落盘者不回滚） */
@@ -13840,6 +13883,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (specialPending.value === null) return
     specialPending.value = null
     pushLog('info', '9.14 待决已关闭（位移未落盘；已定案的夺取不回滚）', '9.14')
+    settleOverrunAdvanceIfRequired()
   }
 
   /** C9 第 3 步（14.2f-D / 14.5）：拦截应答（由对手决定，拦与不拦都不违法） */
