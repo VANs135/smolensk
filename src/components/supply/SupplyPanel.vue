@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
+import UiField from '@/components/UiField.vue'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import {
   counterImageUrlOf,
@@ -343,28 +344,18 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
         <div class="row">
           <label class="field">
             格号（列.行）
-            <input v-model="workbench.spDumpDraft.hexText" class="input" placeholder="36.13" />
+            <UiField v-model="workbench.spDumpDraft.hexText" class="input" placeholder="36.13" />
             <BaseButton variant="secondary" size="sm" @click="workbench.beginSpDumpHexPickNow()">
               点地图选格
             </BaseButton>
           </label>
           <label class="field">
             SP
-            <input
-              v-model.number="workbench.spDumpDraft.sp"
-              class="input num"
-              type="number"
-              min="0"
-            />
+            <UiField v-model="workbench.spDumpDraft.sp" class="input num" type="number" min="0" />
           </label>
           <label class="field">
             T
-            <input
-              v-model.number="workbench.spDumpDraft.t"
-              class="input num"
-              type="number"
-              min="0"
-            />
+            <UiField v-model="workbench.spDumpDraft.t" class="input num" type="number" min="0" />
           </label>
           <BaseButton variant="secondary" size="sm" @click="workbench.addSpDump()">
             新增补给站（12.1b）
@@ -380,8 +371,8 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
           </span>
           <label class="field">
             拆
-            <input
-              v-model.number="workbench.supplyInputs.spToSplit"
+            <UiField
+              v-model="workbench.supplyInputs.spToSplit"
               class="input num"
               type="number"
               min="0"
@@ -424,8 +415,8 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
         <div class="row">
           <label class="field">
             销毁量（T；留空＝全部 SP）
-            <input
-              v-model.number="destroyT"
+            <UiField
+              v-model="destroyT"
               class="input num"
               type="number"
               min="1"
@@ -462,7 +453,7 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
           </BaseButton>
           <label class="field">
             拆分为（空格分隔各份规模）
-            <input
+            <UiField
               v-model="workbench.transportPointInputs.splitSizesText"
               class="input"
               placeholder="2 3"
@@ -523,8 +514,8 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
         <div class="row">
           <label class="field">
             SP 数（1 SP = 4 T）
-            <input
-              v-model.number="workbench.transportLoadInputs.amount"
+            <UiField
+              v-model="workbench.transportLoadInputs.amount"
               class="input num"
               type="number"
               min="1"
@@ -554,7 +545,7 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
         <div class="row">
           <label class="field">
             转换格号
-            <input v-model="workbench.convertTargetHexText" class="input" placeholder="36.13" />
+            <UiField v-model="workbench.convertTargetHexText" class="input" placeholder="36.13" />
             <BaseButton
               variant="secondary"
               size="sm"
@@ -628,7 +619,7 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
         <div class="row">
           <label class="field">
             格号
-            <input
+            <UiField
               v-model="workbench.supplySourceDraft.hexText"
               class="input"
               placeholder="36.13"
@@ -706,7 +697,7 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
         <div class="row">
           <label class="field">
             目标铁路格
-            <input v-model="workbench.railGaugeTargetHexText" class="input" placeholder="36.13" />
+            <UiField v-model="workbench.railGaugeTargetHexText" class="input" placeholder="36.13" />
             <BaseButton
               variant="secondary"
               size="sm"
@@ -761,7 +752,11 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
         <div class="row">
           <label class="field">
             卸货格（列.行）
-            <input v-model="workbench.railMoveInputs.toHexText" class="input" placeholder="36.13" />
+            <UiField
+              v-model="workbench.railMoveInputs.toHexText"
+              class="input"
+              placeholder="36.13"
+            />
             <BaseButton variant="secondary" size="sm" @click="workbench.beginRailMoveHexPickNow()">
               点地图选格
             </BaseButton>
@@ -782,8 +777,8 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
         <div class="row">
           <label class="field">
             SP 货量
-            <input
-              v-model.number="workbench.railMoveInputs.spAmount"
+            <UiField
+              v-model="workbench.railMoveInputs.spAmount"
               class="input num"
               type="number"
               min="1"
@@ -926,17 +921,15 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
                 <div v-for="unitId in duty.unitIds" :key="unitId" class="row">
                   <label class="field">
                     {{ workbench.unitNameOf(unitId) }} 分摊军力
-                    <input
-                      :value="workbench.attritionInputs[dutyKey(duty)]?.allocation[unitId] ?? 0"
+                    <UiField
+                      :model-value="
+                        workbench.attritionInputs[dutyKey(duty)]?.allocation[unitId] ?? 0
+                      "
                       class="input num"
                       type="number"
                       min="0"
-                      @change="
-                        workbench.setAttritionAllocation(
-                          dutyKey(duty),
-                          unitId,
-                          Number(($event.target as HTMLInputElement).value),
-                        )
+                      @update:model-value="
+                        workbench.setAttritionAllocation(dutyKey(duty), unitId, Number($event))
                       "
                     />
                   </label>
@@ -1066,8 +1059,8 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
               -->
               <label v-if="pickupRequirement !== null && pickupRequirement.manual" class="field">
                 拖取/投递 T 数
-                <input
-                  v-model.number="workbench.supplyInputs.amountT"
+                <UiField
+                  v-model="workbench.supplyInputs.amountT"
                   class="input num"
                   type="number"
                   min="1"

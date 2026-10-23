@@ -68,4 +68,19 @@ describe('条 24：正式/验证模式门控', () => {
     // 基地格没有点图按钮（旁边是"摆放飞机"），按 §5-E「补缺的 4 处」暂留手输
     expect(src).toMatch(/<input v-model="workbench\.airPlacement\.hexText"/)
   })
+
+  it('其余面板：容器(3)/专规(8)/增援(8)/补给(14) 的数值与格号已走 UiField', () => {
+    const cases: Array<[string, number]> = [
+      ['src/components/containers/ContainersPanel.vue', 3],
+      ['src/components/exclusive/ExclusiveRulesPanel.vue', 8],
+      ['src/components/reinforcement/ReinforcementPanel.vue', 8],
+      ['src/components/supply/SupplyPanel.vue', 14],
+    ]
+    for (const [file, min] of cases) {
+      const src = read(file)
+      expect(src, `${file} 未引入 UiField`).toMatch(/import UiField from/)
+      const uses = src.match(/<UiField\b/g)?.length ?? 0
+      expect(uses, `${file} 的 UiField 用量不足（${uses} < ${min}）`).toBeGreaterThanOrEqual(min)
+    }
+  })
 })
