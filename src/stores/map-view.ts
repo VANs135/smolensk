@@ -216,6 +216,17 @@ export const useMapViewStore = defineStore('mapView', () => {
       exploit: unit.mode.exploit === true,
       strat: unit.mode.mode === 'strat',
       outOfSupply: !unit.hasTraceSupply,
+      /*
+       * 3.6e / 4.6：多军力单位的**军力损失**角标 `(-N)`（N ＝ 印值军力 − 当前军力）。
+       * ★ 4.9a 字段级裁剪：**敌方那一枚不给**（「无权获取部队储备或损失军力的情况」）⇒
+       *   非当前方的算子这里恒为 0 —— 可见顶牌只透露模式 / DG / 断补，**不透露**掉到几成。
+       *   「多军力」按**印值**判（3.2d：算子上印有 RE 数值），不是按当前军力判：
+       *   已经打残到 1 的师仍是多军力单位，照样要标 `(-N)`。
+       */
+      stepsLost:
+        unit.side === hotseat.viewerSide && unit.printedSteps > 1
+          ? Math.max(0, unit.printedSteps - unit.steps)
+          : 0,
     }))
   }
 

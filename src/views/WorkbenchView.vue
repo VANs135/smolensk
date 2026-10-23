@@ -20,6 +20,7 @@ import {
 import { SupplyPanel } from '@/components/supply'
 import { VictoryPanel } from '@/components/victory'
 import { SetupPanel } from '@/components/setup'
+import { provideUiMode } from '@/components/ui-mode'
 import { ChartsTable } from '@/components/game'
 import type { HexRef } from '@/data'
 import { DEFAULT_MAP_LAYERS } from '@/render/map-render'
@@ -78,6 +79,13 @@ const hotseat = useHotseatStore()
 const ui = useUiStore()
 const setup = useSetupStore()
 const mapView = useMapViewStore()
+
+/*
+ * ★ 条 24 / §5-F：**模式声明**（引擎验证页＝验证）。
+ *   这一页的全部手输**一个都不能删**：逐步复核、复现、裁判补记都靠它；
+ *   对局台那份声明 formal 才会收起手输。
+ */
+provideUiMode('verify')
 
 /** 地图图层开关（C2 的 MapCanvas 消费） */
 const mapLayerToggles = reactive({ ...DEFAULT_MAP_LAYERS })

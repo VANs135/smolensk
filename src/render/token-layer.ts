@@ -92,6 +92,21 @@ export interface UnitToken {
    */
   hiddenStack?: boolean
   /**
+   * 3.6e / 4.6：**已损失军力点数**（多军力单位专用 ⇒ 左上角标 `(-N)`）
+   *
+   * 规则原文（通规 v4.3）：
+   *   3.6e「**军力损失标记**。用于显示**多军力单位**的军力损失。」
+   *   4.6「一个多军力单位每损失 1 点军力，其 RE 规模便减一（9.11）。所有其他战斗单位在承受
+   *        军力损失时，都视为只有 1 点军力，与其 RE 规模无关。」
+   *   ⇒ 只有**多军力**单位（印值军力 > 1）才用得上这个标记，N ＝ 印值军力 − 当前军力。
+   *
+   * ★ **战雾纪律（4.9a）**：「虽然敌方玩家会得知最上方单位是否处于战略模式、DG，或是否断补，
+   *   但**无权获取部队储备或损失军力**的情况」⇒ 敌方那一枚**不画**这个角标。
+   *   裁剪在 store 的令牌投影里做（只给己方算 `stepsLost`），本模块**只画传进来的数**，
+   *   不自己判敌我——判据只有一处，免得两处口径打架。
+   */
+  stepsLost?: number
+  /**
    * W7 C16：该枚是**飞机**（14.1a：停在其空军基地格）
    *
    * 飞机与地面算子画法不同（菱形 + 机型字母），以免玩家把停在同一基地格的飞机当地面单位。
@@ -321,6 +336,8 @@ export const OVERLAY_PALETTE = {
   tokenText: '#ffffff',
   badge: '#201e1a',
   fuel: '#a06a1f',
+  /** 3.6e：多军力单位的**军力损失**角标 `(-N)`（醒目但不压过 DG / 断补这些状态色） */
+  lossBadge: '#8c2f22',
   /** W7 C13（4.9a）：敌方格「其下还有不可见单位」的提示环（只用虚线描边，不透露枚数） */
   hiddenStackEdge: 'rgba(232, 226, 210, 0.9)',
   // C8 补给覆盖层（与移动范围的绿色区分：用青色系）
@@ -1225,8 +1242,20 @@ function drawToken(
   ctx.textBaseline = 'middle'
   ctx.fillText(token.modeLetter, left + size - 5 / scale, top + 5 / scale)
 
-  // 状态角标：DG / 待加注燃料
-  if (token.dg) {
+  /*
+   * 状态角标（左上角）：
+   *   3.6e 的 `(-N)` **优先**——它是"这一枚已经掉到几成"的长期事实，比 DG 这种瞬时状态更该占位；
+   *   DG 同时成立时顺延到下一行（两者不互斥，都不能丢）。
+   */
+  const stepsLost = token.stepsLost ?? 0
+  if (stepsLost > 0) {
+    ctx.fillStyle = OVERLAY_PALETTE.lossBadge
+    ctx.fillText(`(-${stepsLost})`, left + 13 / scale, top + 5 / scale)
+    if (token.dg) {
+      ctx.fillStyle = OVERLAY_PALETTE.zocEdge
+      ctx.fillText('DG', left + 7 / scale, top + 17 / scale)
+    }
+  } else if (token.dg) {
     ctx.fillStyle = OVERLAY_PALETTE.zocEdge
     ctx.fillText('DG', left + 7 / scale, top + 5 / scale)
   } else if (token.awaitingFuel) {

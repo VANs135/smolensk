@@ -28,6 +28,7 @@ import {
 } from '@/components/session'
 import { SetupPanel } from '@/components/setup'
 import { SupplyPanel } from '@/components/supply'
+import { provideUiMode } from '@/components/ui-mode'
 import { VictoryPanel } from '@/components/victory'
 import type { HexRef } from '@/data'
 import { DEFAULT_MAP_LAYERS } from '@/render/map-render'
@@ -67,6 +68,14 @@ const hotkeys = useHotkeyStore()
 const setup = useSetupStore()
 /** B36：交接（切方）走 hotseat 的流程 —— 与热键 T 同一条路 */
 const hotseat = useHotseatStore()
+
+/*
+ * ★ 条 24 / §5-F：**模式声明**（对局台＝正式）。
+ *   对局台与验证页共用同一批面板，故"要不要显示手输"只能由**宿主**说了算：
+ *   这里声明 formal ⇒ 各面板按它收起手输（格号类改点图、数值类由引擎/骰子自动带出）；
+ *   验证页那份声明 verify ⇒ 全部输入照旧保留（逐步复核与裁判补记都要它）。
+ */
+provideUiMode('formal')
 
 /** 地图能力（`MapCanvas` 通过 defineExpose 暴露；用结构类型接，避免跨层耦合组件类型） */
 interface MapBridge {

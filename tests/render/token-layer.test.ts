@@ -231,6 +231,38 @@ describe('4.8 / 6.1f：一格只画一枚（堆叠不越格），点格再展开
   })
 })
 
+describe('条 24：多军力单位的军力损失角标（-N）（3.6e / 4.6）', () => {
+  const stackOverlay = (tokens: UnitToken[]): MovementOverlay => ({
+    tokens,
+    reachable: [],
+    path: [],
+    startHex: null,
+    selectedIds: [],
+  })
+
+  it('受损 ⇒ 左上角画 (-N)', () => {
+    const { ctx, rec } = makeCtx()
+    drawMovementOverlay(ctx, stackOverlay([{ ...token(NEAR, 'a'), stepsLost: 2 }]), 1)
+    expect(rec.texts).toContain('(-2)')
+  })
+
+  it('未受损（stepsLost 0 / 未给）⇒ 不画角标', () => {
+    const { ctx, rec } = makeCtx()
+    drawMovementOverlay(ctx, stackOverlay([{ ...token(NEAR, 'a'), stepsLost: 0 }]), 1)
+    expect(rec.texts.some((text) => text.startsWith('(-'))).toBe(false)
+    const { ctx: ctx2, rec: rec2 } = makeCtx()
+    drawMovementOverlay(ctx2, stackOverlay([token(NEAR, 'a')]), 1)
+    expect(rec2.texts.some((text) => text.startsWith('(-'))).toBe(false)
+  })
+
+  it('带损且 DG ⇒ 两个角标都在（-N 优先占位，DG 顺延，不互相吃掉）', () => {
+    const { ctx, rec } = makeCtx()
+    drawMovementOverlay(ctx, stackOverlay([{ ...token(NEAR, 'a'), stepsLost: 1, dg: true }]), 1)
+    expect(rec.texts).toContain('(-1)')
+    expect(rec.texts).toContain('DG')
+  })
+})
+
 describe('W7 C16：可突袭目标（8.0/8.1）的绘制', () => {
   it('C16：每个可突袭格画一个环 + 「突袭 3 MP」代价文字（8.1a）', () => {
     const { ctx, rec } = makeCtx()
