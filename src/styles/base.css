@@ -102,6 +102,16 @@ a:hover {
   border: 0;
 }
 
+/* 条 24 / §5-F：正式界面把「手输」收敛为只读展示（验证页仍渲染可编辑 input） */
+.ui-field-readonly {
+  display: inline-block;
+  min-width: 2.5em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.12);
+  font-variant-numeric: tabular-nums;
+}
+
 #app {
   min-height: 100vh;
 }

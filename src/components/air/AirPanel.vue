@@ -3,6 +3,8 @@ import { computed } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
+import UiField from '@/components/UiField.vue'
+import { useUiMode } from '@/components/ui-mode'
 import {
   aircraftRecordImageUrlOf,
   counterImageUrlOf,
@@ -30,6 +32,9 @@ import {
  */
 
 const workbench = useWorkbenchStore()
+
+/** 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输） */
+const uiMode = useUiMode()
 
 /** 步骤清单（14.2f A–G） */
 const checklist = computed(() => workbench.airChecklist)
@@ -317,7 +322,7 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
           />
           <label class="field">
             基地格
-            <input v-model="workbench.airPlacement.hexText" class="input" placeholder="36.13" />
+            <UiField v-model="workbench.airPlacement.hexText" class="input" placeholder="36.13" />
             <BaseButton
               variant="secondary"
               size="sm"
@@ -347,7 +352,7 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
         <div class="row">
           <label class="field">
             转移目的地
-            <input
+            <UiField
               v-model="workbench.airInputs.transferToHexText"
               class="input"
               placeholder="列.行"
@@ -427,11 +432,15 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
           <label class="field">
             任务格（列.行）
             <input
+              v-if="uiMode === 'verify'"
               class="input"
               :value="workbench.airInputs.targetHexText"
               placeholder="36.13"
               @change="workbench.setAirTargetFromText(($event.target as HTMLInputElement).value)"
             />
+            <span v-else class="ui-field-readonly">{{
+              workbench.airInputs.targetHexText || '—'
+            }}</span>
           </label>
           <!-- B29a：任务格改成**点地图选**（14.2f-B；文本框留着作退路） -->
           <BaseButton variant="secondary" size="sm" @click="workbench.beginAirTargetHexPickNow()">
@@ -474,8 +483,8 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
           <div class="row">
             <label class="field">
               装载 SP（T）
-              <input
-                v-model.number="workbench.airInputs.cargoSpT"
+              <UiField
+                v-model="workbench.airInputs.cargoSpT"
                 class="input num"
                 type="number"
                 min="0"
@@ -495,8 +504,8 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
             </label>
             <label class="field">
               计划回合（14.10b）
-              <input
-                v-model.number="workbench.airInputs.airdropPlannedTurn"
+              <UiField
+                v-model="workbench.airInputs.airdropPlannedTurn"
                 class="input num"
                 type="number"
                 min="0"
@@ -504,8 +513,8 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
             </label>
             <label class="field">
               执行回合
-              <input
-                v-model.number="workbench.airInputs.airdropScheduledTurn"
+              <UiField
+                v-model="workbench.airInputs.airdropScheduledTurn"
                 class="input num"
                 type="number"
                 min="0"
@@ -753,8 +762,8 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
               </label>
               <label class="field">
                 印刷防空值
-                <input
-                  v-model.number="workbench.airInputs.printedFlakValue"
+                <UiField
+                  v-model="workbench.airInputs.printedFlakValue"
                   class="input num"
                   type="number"
                   min="0"
@@ -780,7 +789,7 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
             <div class="row">
               <label class="field">
                 任务结果（如 C7 的轰炸结论）
-                <input v-model="workbench.airInputs.missionNote" class="input" />
+                <UiField v-model="workbench.airInputs.missionNote" class="input" />
               </label>
               <BaseButton variant="primary" size="sm" @click="workbench.confirmAirMissionNow()">
                 ⑤ 记录任务结算（14.2f-F）
@@ -802,6 +811,7 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
               >
                 {{ origin.aircraftId }} → 基地格
                 <input
+                  v-if="uiMode === 'verify'"
                   class="input"
                   :placeholder="hexLabel(origin.baseHex)"
                   :value="workbench.airInputs.returnHexText[origin.aircraftId] ?? ''"
@@ -812,6 +822,9 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
                     }
                   "
                 />
+                <span v-else class="ui-field-readonly">{{
+                  workbench.airInputs.returnHexText[origin.aircraftId] || hexLabel(origin.baseHex)
+                }}</span>
                 <!-- B27：返航基地格改成**点地图**（留空仍＝回原起飞基地） -->
                 <BaseButton
                   variant="secondary"
@@ -896,7 +909,7 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
         <div class="row">
           <label class="field">
             目标格
-            <input
+            <UiField
               v-model="workbench.constructionInputs.hexText"
               class="input"
               placeholder="36.13"
