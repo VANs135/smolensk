@@ -6,6 +6,7 @@ import {
   refitEligibility,
   resolveWeather,
 } from '@/engine/rules'
+import { useMapViewStore } from '@/stores'
 import {
   CORE_HEX,
   NEAR_HEX,
@@ -287,9 +288,13 @@ describe('条 4：可整备机场格的地图投影（15.1 / 15.1B）', () => {
     store.setPhase('aircraftRefit')
 
     expect(store.refitAirbaseHexes).toContainEqual(CORE_HEX)
+    // 接入 overlay：地图层也能看到这一格（不是只在 store 里算）
+    const mv = useMapViewStore()
+    expect(mv.overlay.refitAirbases).toContainEqual(CORE_HEX)
     expect(store.refitBaseNow('base-1')).toBe(true)
     // 整备后：飞机转激活 + 基地进 refitDoneBaseIds ⇒ 两个条件都不再成立 ⇒ 不再高亮
     expect(store.refitAirbaseHexes).toHaveLength(0)
+    expect(mv.overlay.refitAirbases ?? []).toHaveLength(0)
   })
 
   it('非整备段不高亮（C 移动段）', () => {
