@@ -2,6 +2,8 @@
 import { computed, ref, watchEffect } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
+import UiField from '@/components/UiField.vue'
+import { useUiMode } from '@/components/ui-mode'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { auxCardImageUrl } from '@/components/game/aux-card-image'
 import { counterImages } from '@/render/token-images'
@@ -23,6 +25,9 @@ import { useWorkbenchStore } from '@/stores'
  * 这里只画表、收点击、把输入写回 store。 */
 
 const workbench = useWorkbenchStore()
+
+/** 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输） */
+const uiMode = useUiMode()
 
 /**
  * B34 余项②：**本方的到达卡（OOA）**
@@ -288,11 +293,13 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       </template>
       <template v-if="showsActions">
         <input
+          v-if="uiMode === 'verify'"
           v-model="rebuildHexText"
           class="input"
           placeholder="手改落点 列.行"
           @change="workbench.setArrivalHexOverride(index, rebuildHexText)"
         />
+        <span v-else class="ui-field-readonly">{{ rebuildHexText || '—' }}</span>
         <!-- B27：落点改成**点地图**（13.6 的入场格由裁判按卡面判定；文本框留着作退路） -->
         <BaseButton variant="secondary" size="sm" @click="workbench.beginArrivalHexPickNow(index)">
           点地图选落点
@@ -381,7 +388,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
     <div v-if="showsActions" class="row">
       <label class="field">
         到货 SP（掷补给表后自动填，可手改）
-        <input v-model.number="workbench.supplyArrivalSp" type="number" min="0" step="1" />
+        <UiField v-model="workbench.supplyArrivalSp" type="number" min="0" step="1" />
       </label>
       <BaseTag kind="neutral">铁路运量消耗 0（免费）</BaseTag>
     </div>
@@ -460,39 +467,19 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <template v-if="showsActions">
         <label class="field">
           Pax
-          <input
-            v-model.number="workbench.replHoldings.pax"
-            class="input num"
-            type="number"
-            min="0"
-          />
+          <UiField v-model="workbench.replHoldings.pax" class="input num" type="number" min="0" />
         </label>
         <label class="field">
           Eq
-          <input
-            v-model.number="workbench.replHoldings.eq"
-            class="input num"
-            type="number"
-            min="0"
-          />
+          <UiField v-model="workbench.replHoldings.eq" class="input num" type="number" min="0" />
         </label>
         <label class="field">
           Ftr
-          <input
-            v-model.number="workbench.replHoldings.ftr"
-            class="input num"
-            type="number"
-            min="0"
-          />
+          <UiField v-model="workbench.replHoldings.ftr" class="input num" type="number" min="0" />
         </label>
         <label class="field">
           Tac
-          <input
-            v-model.number="workbench.replHoldings.tac"
-            class="input num"
-            type="number"
-            min="0"
-          />
+          <UiField v-model="workbench.replHoldings.tac" class="input num" type="number" min="0" />
         </label>
       </template>
       <span class="num">
@@ -526,7 +513,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       </label>
       <label class="field">
         补员所在格
-        <input v-model="workbench.rebuildReplHexText" class="input" placeholder="36.13" />
+        <UiField v-model="workbench.rebuildReplHexText" class="input" placeholder="36.13" />
         <BaseButton
           variant="secondary"
           size="sm"
@@ -574,14 +561,12 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
     <div v-if="showsRebuild" class="row">
       <label class="field">
         国籍池存量
-        <input
+        <UiField
           class="input num"
           type="number"
           min="0"
-          :value="workbench.breakdownPool['ax'] ?? 0"
-          @change="
-            workbench.setBreakdownPoolNow('ax', Number(($event.target as HTMLInputElement).value))
-          "
+          :model-value="workbench.breakdownPool['ax'] ?? 0"
+          @update:model-value="workbench.setBreakdownPoolNow('ax', Number($event))"
         />
       </label>
       <CounterPicker
@@ -742,7 +727,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <div v-if="showsActions" class="row">
         <label class="field">
           落点格（列.行；2 SP 与新单位都落这里）
-          <input
+          <UiField
             v-model="workbench.frontalReservesInputs.hexText"
             class="input"
             placeholder="60.34"
