@@ -5025,6 +5025,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     zocStoppedMoveUnitIds.value = []
     // 条 17（批 F·F2）：移动收束 ⇒ 4.5a 标记作废
     overrunZocHeldHex.value = null
+    // 条 22（批 T）：移动收束 ⇒ 20.0a 的「开始移动」时机窗口随之关闭
+    closeBreakdownWindows('startMove')
   }
 
   /**
@@ -5435,7 +5437,47 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     moveInteraction.value = result.data
     moveBlocked.value = null
     pendingZocConfirm.value = null
+    // 条 22（批 T）：20.0a 的**创建时机**＝「开始移动」这个**事件**（不是"当前在移动段"这个状态）
+    openBreakdownWindow('startMove', unitIds)
     return true
+  }
+
+  /*
+   * 条 22（批 T）：20.0a 创建拆分单位的**时机窗口**
+   *
+   * 原文 20.0a：「多军力单位在**开始移动、战后推进或战后撤退**时，可以创建一个或多个拆分单位。
+   *   **只有在这些时机**才能创建拆分单位。」
+   * ⇒ 时机是**事件**，不是"当前处在哪个阶段"。修前 `createBreakdownNow` 用
+   *   `phase === 'movement' ? 'startMove' : 'advanceAfterCombat'` **按阶段猜**：
+   *   ① 战后**撤退**被错记为 advanceAfterCombat（20.0a 的三个时机里没有这条）；
+   *   ② C 段里"根本还没开拔"的单位也能创建。
+   *   现在由三个真实事件各自开窗，`createBreakdownNow` 只认这里的记录（且母单位须在该事件的名单里）。
+   */
+  const breakdownWindows = ref<{ timing: BreakdownCreateTiming; unitIds: string[] }[]>([])
+
+  /** 开/换一个时机窗口（同一时机只留最新一份） */
+  function openBreakdownWindow(timing: BreakdownCreateTiming, unitIds: readonly string[]): void {
+    if (unitIds.length === 0) return
+    breakdownWindows.value = [
+      ...breakdownWindows.value.filter((window) => window.timing !== timing),
+      { timing, unitIds: [...unitIds] },
+    ]
+  }
+
+  /** 关闭窗口（不传时机＝全关） */
+  function closeBreakdownWindows(timing?: BreakdownCreateTiming): void {
+    breakdownWindows.value =
+      timing === undefined
+        ? []
+        : breakdownWindows.value.filter((window) => window.timing !== timing)
+  }
+
+  /** 该单位当前处在 20.0a 的哪一个时机里（null＝不在任何合法时机） */
+  const breakdownTimingOf = (unitId: string): BreakdownCreateTiming | null => {
+    for (const window of breakdownWindows.value) {
+      if (window.unitIds.includes(unitId)) return window.timing
+    }
+    return null
   }
 
   /** 因燃料/模式等原因没能开始移动时，条件满足后自动重试，省得玩家再点一次 */
@@ -9052,6 +9094,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     triggerSpecialCombatAfterRetreat()
     /*
+     * 条 22（批 T）：20.0a 的第三个时机＝**战后撤退**。撤退方（含 9.12d 跟随者）此刻可创建拆分单位。
+     * 途中被消灭者已不在盘上 ⇒ 不给窗（无从创建）。
+     */
+    openBreakdownWindow('retreatAfterCombat', [
+      ...data.results.filter((result) => !result.destroyed).map((result) => result.unitId),
+      ...combatTagalongIds.value,
+    ])
+    /*
      * 9.14 的位移 / 分配待决时**不**自动收束推进步——与移动一致（落点须玩家在地图上选），
      * 否则玩家还没选位移落点，战斗就先结束了。
      */
@@ -9162,6 +9212,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         exploitReason: data.exploit.reason,
       },
     })
+    /*
+     * 条 22（批 T）：20.0a 的第二个时机＝**战后推进**（仅真正推进进去的那些单位）。
+     * 一个都没推进 ⇒ 不开窗（没有单位处在"战后推进"这件事里）。
+     */
+    if (data.advanceUnitIds.length > 0)
+      openBreakdownWindow('advanceAfterCombat', data.advanceUnitIds)
     // W7 C16：若本场是**突袭**（8.0），推进步就是它的收束点 ⇒ 把 3 MP 与进格记回移动交互
     if (overrunContext.value !== null) {
       // 「防御方是否离开该格」取事实（推进步落盘后重算，8.0 的进入判据就是它）
@@ -16247,11 +16303,30 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /** B18：创建拆分单位（20.0a：开始移动 / 战后推进 / 战后撤退） */
+  /** 条 22（批 T）：20.0a 三个时机的中文名（日志与界面如实报"是哪一件事"） */
+  const BREAKDOWN_TIMING_LABEL: Record<BreakdownCreateTiming, string> = {
+    startMove: '开始移动',
+    advanceAfterCombat: '战后推进',
+    retreatAfterCombat: '战后撤退',
+  }
+
   function createBreakdownNow(parentId: string, breakdownRecordId: string): boolean {
-    // 20.0a：创建拆分单位只在「开始移动」（C 段）与战后推进/撤退（F/G 段的战斗环节）
+    // 20.0a：创建拆分单位只在「开始移动」「战后推进」「战后撤退」这三个**时机**
     if (!requireAction('move.breakdown', '创建拆分单位')) return false
-    const timing: BreakdownCreateTiming =
-      phase.value === 'movement' ? 'startMove' : 'advanceAfterCombat'
+    /*
+     * 条 22（批 T）：时机改由**事件来源**判定（`breakdownWindows`），不再按"当前在哪个阶段"猜。
+     * 修前：C 段一律 'startMove'（未开拔也能建）、非 C 段一律 'advanceAfterCombat'（战后**撤退**
+     *   被错记成推进）。现在母单位必须真的处在那个事件里，否则拒绝并给规则号。
+     */
+    const timing = breakdownTimingOf(parentId)
+    if (timing === null) {
+      pushLog(
+        'warning',
+        '20.0a：只有在**开始移动 / 战后推进 / 战后撤退**这三个时机才能创建拆分单位（该单位当前不处在其中任何一个）',
+        '20.0a',
+      )
+      return false
+    }
     const parent = units.value.find((unit) => unit.instanceId === parentId)
     if (parent === undefined) return false
     const nationality = nationalityOfUnit(parent)
@@ -16291,7 +16366,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       [nationality]: Math.max(0, (breakdownPool.value[nationality] ?? 0) - 1),
     }
     lastBreakdown.value = data
-    pushLog('success', data.detail, data.rule)
+    // 条 22（批 T）：如实报"是哪一件事"开的窗（修前战后撤退会被记成战后推进）
+    pushLog('success', `${data.detail}（20.0a 时机：${BREAKDOWN_TIMING_LABEL[timing]}）`, data.rule)
     // ⑭ 接线：创建拆分单位（20.0a）入会话日志（本笔不掷骰）
     recordSettlement({
       action: 'breakdown',
@@ -16301,6 +16377,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         parentId,
         breakdownRecordId,
         nationality,
+        // 条 22（批 T）：20.0a 的时机如实入账（开始移动 / 战后推进 / 战后撤退）
+        timing,
         parentStepsAfter: data.parentStepsAfter,
         detail: data.detail,
       },
