@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
+import UiField from '@/components/UiField.vue'
 import { hexLabel } from '@/stores'
 import { useWorkbenchStore } from '@/stores'
 
@@ -222,12 +223,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
       <div v-if="showsActions && workbench.panzerGroupRulesOn" class="row">
         <label class="field">
           Supply Table 到货 SP
-          <input
-            v-model.number="workbench.supplyTableSpInput"
-            class="input num"
-            type="number"
-            min="0"
-          />
+          <UiField v-model="workbench.supplyTableSpInput" class="input num" type="number" min="0" />
         </label>
         <span class="num">
           均分（3.4b）：Hoth {{ spSplit.hoth }} / Guderian {{ spSplit.guderian }}（奇数点归
@@ -309,7 +305,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         <template v-if="showsActions">
           <label class="field">
             城市格（列.行）
-            <input v-model="workbench.cityControlHexText" class="input" placeholder="18.18" />
+            <UiField v-model="workbench.cityControlHexText" class="input" placeholder="18.18" />
             <BaseButton
               variant="secondary"
               size="sm"
@@ -433,7 +429,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         </label>
         <label class="field">
           目标格
-          <input v-model="workbench.hedgehogInputs.hexText" class="input" placeholder="36.13" />
+          <UiField v-model="workbench.hedgehogInputs.hexText" class="input" placeholder="36.13" />
           <BaseButton
             variant="secondary"
             size="sm"
@@ -527,16 +523,12 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         </BaseTag>
         <template v-if="showsActions">
           <label class="field">
-            <input
+            <UiField
               class="input num"
               type="number"
               min="0"
-              :value="workbench.constructionMarkers"
-              @change="
-                workbench.setConstructionMarkersNow(
-                  Number(($event.target as HTMLInputElement).value),
-                )
-              "
+              :model-value="workbench.constructionMarkers"
+              @update:model-value="workbench.setConstructionMarkersNow(Number($event))"
             />
             手改枚数
           </label>
@@ -554,7 +546,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
           </label>
           <label class="field">
             放置格
-            <input
+            <UiField
               v-model="workbench.constructionMarkerHexText"
               class="input"
               placeholder="36.13"
@@ -630,7 +622,11 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         </label>
         <label class="field">
           友方 HQ 格
-          <input v-model="workbench.supplyCacheInputs.hexText" class="input" placeholder="36.13" />
+          <UiField
+            v-model="workbench.supplyCacheInputs.hexText"
+            class="input"
+            placeholder="36.13"
+          />
           <BaseButton variant="secondary" size="sm" @click="workbench.beginSupplyCacheHexPickNow()">
             点地图选格
           </BaseButton>
@@ -638,8 +634,8 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         <template v-if="workbench.supplyCacheInputs.use === 'shells'">
           <label class="field">
             本次投递成本 T
-            <input
-              v-model.number="workbench.supplyCacheInputs.barrageCostT"
+            <UiField
+              v-model="workbench.supplyCacheInputs.barrageCostT"
               class="input num"
               type="number"
               min="1"
@@ -653,8 +649,8 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         <template v-else>
           <label class="field">
             HQ 投递距离（格）
-            <input
-              v-model.number="workbench.supplyCacheInputs.hqThrowRangeHexes"
+            <UiField
+              v-model="workbench.supplyCacheInputs.hqThrowRangeHexes"
               class="input num"
               type="number"
               min="0"

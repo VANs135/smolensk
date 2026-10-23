@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag } from '@/components/base'
+import UiField from '@/components/UiField.vue'
 import { formations } from '@/data'
 import type { Side } from '@/data'
 import type { BoxView, ScenarioDrawBoxView } from '@/engine/rules'
@@ -404,7 +405,7 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
         </label>
         <label class="field">
           AR 档
-          <input v-model.number="breakdownAr" class="input num" type="number" min="0" max="5" />
+          <UiField v-model="breakdownAr" class="input num" type="number" min="0" max="5" />
         </label>
         <BaseButton
           variant="primary"
@@ -652,7 +653,11 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
         </label>
         <label class="field">
           标记格
-          <input v-model="workbench.formationMarkerHexText" class="input num" placeholder="列.行" />
+          <UiField
+            v-model="workbench.formationMarkerHexText"
+            class="input num"
+            placeholder="列.行"
+          />
           <BaseButton
             variant="secondary"
             size="sm"
@@ -727,7 +732,7 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
     <div v-if="showsActions" class="row">
       <label class="field">
         返场落点（死亡堆 → 图）
-        <input v-model="workbench.deadPileReturnHexText" class="input num" placeholder="列.行" />
+        <UiField v-model="workbench.deadPileReturnHexText" class="input num" placeholder="列.行" />
         <BaseButton
           variant="secondary"
           size="sm"
