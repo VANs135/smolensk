@@ -49,7 +49,7 @@ docs/         方案、清单与修改记录
 
 以下内容**不入库**：
 
-- `backup/`：手工备份，约 1.2 GB，须逐字节保持原样
+- `backup/`：手工备份，须逐字节保持原样
 - `dist/`、`release/`、`node_modules/`、`coverage/`：构建与依赖产物
 - `.env.local` / `.env.*.local`：本地环境覆盖
 
