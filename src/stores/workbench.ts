@@ -4485,6 +4485,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   } | null>(null)
 
   /**
+   * 条 17（批 F·F2）：4.5a 标记——**突袭强行进入敌方 ZOC 的格**后，该格的单位
+   * 「不得离开、须再突袭或停」（8.0 的进入是强制的，故 4.5a 的约束在其后就位）。
+   *
+   * 仅作**事实标记 + UI 提示**用（不改移动引擎的 ZOC 停车逻辑）：突袭记账把单位落进
+   * `context.target` 且该格处于敌方 ZOC 时置位；新开一场突袭（重置意图）或移动交互收束时清掉。
+   */
+  const overrunZocHeldHex = ref<HexRef | null>(null)
+
+  /** 4.5a：当前移动交互里是否有一格"须再突袭或停"的 ZOC 约束（UI 提示用） */
+  const overrunZocHeld = computed(() =>
+    overrunZocHeldHex.value === null ? null : { ...overrunZocHeldHex.value },
+  )
+
+  /**
    * 8.1g：本次突袭的**参突单位**（空数组 ＝ 仍在移动的全部单位）
    *
    * 「一个堆叠进行突袭时，堆叠中的**部分单位**可以留在原地（8.1h：它们仍计入 4.8a，
@@ -4615,6 +4629,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function overrunNow(hex: HexRef): boolean {
     if (!requireAction('move.overrun', '突袭')) return false
+    // 条 17（批 F·F2）：新开一场突袭＝"再突袭"意图，旧的 4.5a 约束作废
+    overrunZocHeldHex.value = null
     const interaction = moveInteraction.value
     // 4.5a-A：发起格取突袭候选（含"进 ZOC 停车但仍可突袭"者），不是 `activeMoveUnits`
     const from = overrunStackHex.value
@@ -4848,6 +4864,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         zocStoppedMoveUnitIds.value = zocStoppedMoveUnitIds.value.filter(
           (id) => !context.participantIds.includes(id),
         )
+        /*
+         * 条 17（批 F·F2）：4.5a 标记。防御方离格 ⇒ 参突者强行进入防御方格（8.0 的进入是强制的）；
+         * 若该格处于敌方 ZOC（"挺进 ZOC"），按 4.5a 此单位"不得离开、须再突袭或停"。
+         * 仅置事实标记（UI 提示用），不改移动引擎的 ZOC 停车逻辑。
+         */
+        if (defenderLeftHex && inEnemyZocAt(moveContext.value, context.target, activeSide.value)) {
+          overrunZocHeldHex.value = { ...context.target }
+          pushLog(
+            'warning',
+            `4.5a：突袭进入 ${hexLabel(context.target)}（敌方 ZOC）⇒ 该单位不得离开、须再突袭或停`,
+            '4.5a',
+          )
+        }
       } else {
         pushLog('warning', `突袭记账被拒：${applied.reason}（${applied.rule}）`, applied.rule)
       }
@@ -4903,6 +4932,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     lastStep.value = null
     // 4.5a-A：本次移动已收束 ⇒ 停车账本随之作废
     zocStoppedMoveUnitIds.value = []
+    // 条 17（批 F·F2）：移动收束 ⇒ 4.5a 标记作废
+    overrunZocHeldHex.value = null
   }
 
   /**
@@ -18389,6 +18420,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     overrunTargets,
     overrunTargetHexes,
     overrunNow,
+    overrunZocHeld,
     settleOverrunMove,
     // C7 轰炸交互
     barrageActive,

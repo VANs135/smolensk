@@ -371,6 +371,15 @@ function hoverDump(id: string | null): void {
       </div>
     </div>
 
+    <!-- ⑦ 条 17（批 F·F2）：4.5a 约束 —— 突袭强行进入敌方 ZOC 后，该格单位"不得离开、须再突袭或停" -->
+    <div v-if="workbench.overrunZocHeld !== null" class="block">
+      <p class="num">
+        <BaseTag kind="warning">4.5a</BaseTag>
+        突袭进入 {{ hexLabel(workbench.overrunZocHeld) }}（敌方 ZOC）：该格单位**不得离开**，
+        须**再突袭**（点相邻敌方格）或**停**在原格。
+      </p>
+    </div>
+
     <!-- ③ 突袭（8.0/8.1a）：目标格在地图上高亮，点它即发起 -->
     <p class="num">
       突袭（8.0）：把光标移到本方可攻击单位选定的格上时，可突袭的相邻格会高亮 ——
