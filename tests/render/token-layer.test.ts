@@ -397,3 +397,26 @@ describe('条 4：可整备机场格高亮（15.1）', () => {
     expect(rec.strokes).toBeGreaterThan(0)
   })
 })
+
+describe('条 27：SP 与算子同格不互相遮挡', () => {
+  it('同格 [SP, 算子]：算子当顶牌（满尺寸）、SP 走设施层，两者标签都画出', () => {
+    const sp: UnitToken = {
+      ...token(NEAR, 'sp:36,17'),
+      noncombatKind: 'sp',
+      spPoints: 9,
+      label: '9 SP',
+    }
+    const unit = token(NEAR, 'u1')
+    // 顺序与 map-view 一致：SP 在前、算子在后 ⇒ 顶牌是算子
+    expect(topTokenOf([sp, unit]).id).toBe('u1')
+    const { ctx, rec } = makeCtx()
+    drawMovementOverlay(
+      ctx,
+      { tokens: [sp, unit], reachable: [], path: [], startHex: null, selectedIds: [] },
+      1,
+    )
+    // 算子印值与 SP 实数都可见（SP 未被顶掉、也未顶掉算子）
+    expect(rec.texts).toContain('5-4-6')
+    expect(rec.texts).toContain('9 SP')
+  })
+})

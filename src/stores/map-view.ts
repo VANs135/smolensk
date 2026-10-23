@@ -318,7 +318,13 @@ export const useMapViewStore = defineStore('mapView', () => {
   const overlay = computed<MovementOverlay>(() => {
     const movingIds = workbench.moveInteraction?.unitIds ?? []
     const groundAndAir = [...fogVisibleTokens(groundTokens()), ...airTokens()]
-    const visibleTokens = [...groundAndAir, ...spDumpTokens()]
+    /*
+     * 条 27：SP 令牌**排在算子之前**——`topTokenOf` 的兜底是「取最后一枚」，
+     * 若把 SP 放在后面，同格有算子时 SP 会当顶牌把算子顶掉。排前面则同格必然是算子当顶牌、
+     * SP 走 `isFacilityToken` 的「设施单独一层」（0.6 尺寸、格内下侧），两者同时可见；
+     * 只有 SP 的格仍由它自己当顶牌（满尺寸）。
+     */
+    const visibleTokens = [...spDumpTokens(), ...groundAndAir]
     return {
       tokens: visibleTokens,
       /*
