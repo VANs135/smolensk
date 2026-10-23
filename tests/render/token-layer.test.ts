@@ -127,6 +127,8 @@ const BASE: MovementOverlay = {
   patrolZone: { friendly: [NEAR], enemy: [FAR] },
   // 9.14c/d：位移落点（候选 / 已选）
   specialDisplace: { candidates: [NEAR, FAR], chosen: [FAR] },
+  // 条 21（批 F·F2）：战斗段「可攻击位置」高亮
+  combatAttackableHexes: [NEAR, FAR],
 }
 
 describe('W7 C16：覆盖层的视口裁剪（性能底线）', () => {
@@ -153,6 +155,11 @@ describe('W7 C16：覆盖层的视口裁剪（性能底线）', () => {
     const culled = cullOverlay(BASE, new Set([overlayHexKey(NEAR)]))
     expect(culled.specialDisplace?.candidates).toEqual([NEAR])
     expect(culled.specialDisplace?.chosen).toEqual([FAR])
+  })
+
+  it('条 21（批 F·F2）：可攻击位置高亮按视口裁剪（只画视口内的敌方格）', () => {
+    const culled = cullOverlay(BASE, new Set([overlayHexKey(NEAR)]))
+    expect(culled.combatAttackableHexes).toEqual([NEAR])
   })
 
   it('C16：预览路径与起点格**不裁剪**（玩家刚点的路线必须在，哪怕端点出视口）', () => {
@@ -247,6 +254,28 @@ describe('W7 C16：可突袭目标（8.0/8.1）的绘制', () => {
     // 可到达格的 MP 数字仍在（近格 1 / 远格 2）
     expect(rec.texts).toContain('1')
     expect(rec.texts).toContain('2')
+  })
+})
+
+describe('条 21（批 F·F2）：战斗段「可攻击位置」高亮的绘制', () => {
+  it('F2：每个可攻击格画一个暖红环（无文字，区别于突袭紫环）', () => {
+    const { ctx, rec } = makeCtx()
+    drawMovementOverlay(ctx, BASE, 1)
+    // BASE 带 combatAttackableHexes＝[NEAR, FAR] ⇒ 两格各一圈描边（dashed）
+    const attackableStrokes = rec.strokes
+    expect(attackableStrokes).toBeGreaterThan(0)
+  })
+
+  it('F2：不带该字段时也安全（不画、不崩）', () => {
+    const noAttack: MovementOverlay = {
+      tokens: BASE.tokens,
+      reachable: BASE.reachable,
+      path: BASE.path,
+      startHex: BASE.startHex,
+      selectedIds: BASE.selectedIds,
+    }
+    const { ctx } = makeCtx()
+    expect(() => drawMovementOverlay(ctx, noAttack, 1)).not.toThrow()
   })
 })
 

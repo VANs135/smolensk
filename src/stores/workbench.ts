@@ -4617,6 +4617,66 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const overrunTargetHexes = computed<HexRef[]>(() => overrunTargets.value.map((hint) => hint.hex))
 
   /**
+   * 条 21（批 F·F2）：战斗段「可攻击位置」高亮（随选人实时算）
+   *
+   * 触发：战斗工具已开（`battleMode` 非 null）且尚未选定防御格（`battleTarget` 为 null）。
+   * 含义：把「当前攻方选择集能合法攻击的敌方战斗单位所在格」实时算出来画到地图上，
+   * 玩家点它即 `selectCombatDefenderHex` 选定防御格（9.0/9.1）。
+   *
+   * 攻方选择集：
+   *   · 已点选攻方（`combatAttackerIds` 非空）⇒ 取该集合（群攻要求**全部**攻方都邻接防御格，故取交集）；
+   *   · 尚未点选 ⇒ 取全部己方战斗单位（「本方可攻击的格」全集，便于玩家先点防御格再自动收攻方）。
+   *
+   * 每枚候选防御格的合法性一律交给引擎 `checkLegality`（`action:'attack'`），本层不重算规则。
+   * 只在战斗工具态、且未选防御格时给（选定后高亮即撤，避免与战斗流程图层打架）。
+   */
+  const combatAttackableHexes = computed<HexRef[]>(() => {
+    // 战斗工具（「打一仗」）激活、且尚未选定防御格时，才把可攻击位置画到地图上
+    if (tool.value !== 'battle') return []
+    if (battleTarget.value !== null) return []
+    const side = activeSide.value
+    const attackers =
+      combatAttackerIds.value.length > 0
+        ? combatAttackerIds.value
+            .map((id) => units.value.find((unit) => unit.instanceId === id))
+            .filter((unit): unit is ConsoleUnit => unit !== undefined)
+        : units.value.filter((unit) => unit.side === side && unit.isCombat && unit.steps > 0)
+    if (attackers.length === 0) return []
+    // 候选防御格＝所有敌方战斗单位所在格（去重）
+    const enemyHexKey = new Map<string, HexRef>()
+    for (const unit of units.value) {
+      if (unit.side !== side && unit.isCombat && unit.steps > 0) {
+        enemyHexKey.set(`${unit.hex.col}.${unit.hex.row}`, unit.hex)
+      }
+    }
+    const result: HexRef[] = []
+    for (const hex of enemyHexKey.values()) {
+      const adjacencyOk = attackers.every((unit) => areAdjacent(unit.hex, hex))
+      const someAdjacent = attackers.some((unit) => areAdjacent(unit.hex, hex))
+      // 群攻（已点选）→ 全部攻方须邻接且该格合法；未点选 → 任一己方邻接且合法即可
+      const candidateOk = combatAttackerIds.value.length > 0 ? adjacencyOk : someAdjacent
+      if (!candidateOk) continue
+      const legal = attackers.some((unit) => {
+        if (!areAdjacent(unit.hex, hex)) return false
+        const verdict = checkLegality(
+          buildLegalityRequest({
+            action: 'attack',
+            unit,
+            context: moveContext.value,
+            units: units.value,
+            date: date.value,
+            target: hex,
+            phase: phase.value,
+          }),
+        )
+        return verdict.ok
+      })
+      if (legal) result.push(hex)
+    }
+    return result
+  })
+
+  /**
    * 发起突袭（8.0 / 8.1a）
    *
    * 流程：资格判定（引擎）→ 记下突袭前状态 → 以 `attackType:'overrun'` 走 9.2 九步流程
@@ -18419,6 +18479,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     moveMinRemainingMp,
     overrunTargets,
     overrunTargetHexes,
+    combatAttackableHexes,
     overrunNow,
     overrunZocHeld,
     settleOverrunMove,

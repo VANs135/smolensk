@@ -279,6 +279,8 @@ export const useMapViewStore = defineStore('mapView', () => {
       expandedStack: expandedStack.value,
       // W7 C16：可突袭目标（8.0/8.1）——移动中随位置实时重算，点它即发起突袭
       overrunTargets: workbench.overrunTargets,
+      // 条 21（批 F·F2）：战斗段「可攻击位置」高亮（随选人实时算）；仅在战斗工具态且未选防御格时给
+      combatAttackableHexes: workbench.combatAttackableHexes,
       // W7 C16：9.12 撤退落点（只画「当前该轮到的这一方」，实现「攻方先、守方后」的渲染次序；
       // 只在 9.2 的撤退步铺出，避免在其他步误导玩家）
       // 条 15/16（批 F·F1）：选项页「撤退」草稿模式下，同三色铺「本堆叠可撤退格」预览

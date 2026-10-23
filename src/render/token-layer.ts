@@ -139,6 +139,14 @@ export interface MovementOverlay {
    */
   overrunTargets?: readonly OverrunTargetHint[]
   /**
+   * 条 21（批 F·F2）：战斗段「可攻击位置」高亮（9.0/9.1）
+   *
+   * 战斗工具已开、且尚未选定防御格时，把「当前攻方选择集能合法攻击的敌方战斗单位所在格」
+   * 实时算出来画一个与前两者**不同色**的环，让玩家一眼看出「这里能打」。判定一律来自
+   * 状态层的 `combatAttackableHexes`（引擎 `checkLegality` 裁决），本模块只画环。
+   */
+  combatAttackableHexes?: readonly HexRef[]
+  /**
    * 9.12 撤退落点（W7 C16：战斗收尾的「就在地图上选撤退格」）
    *
    * 分两组画：`safe`＝不在敌方未抵消 ZOC 内的落点，`zoc`＝在 ZOC 内（9.12e：进入即 DG）。
@@ -368,6 +376,10 @@ export const OVERLAY_PALETTE = {
   breakout: 'rgba(214, 138, 30, 0.24)',
   breakoutEdge: 'rgba(214, 138, 30, 0.96)',
   breakoutText: '#8a5a14',
+  /** 条 21（批 F·F2）：战斗段「可攻击位置」高亮——暖红环（攻击=红，与突袭紫、到达绿区分） */
+  combatAttackable: 'rgba(176, 42, 38, 0.20)',
+  combatAttackableEdge: 'rgba(176, 42, 38, 0.95)',
+  combatAttackableText: '#8a1f1c',
 } as const
 
 /**
@@ -435,6 +447,11 @@ export function cullOverlay(
     ...(overlay.overrunTargets === undefined
       ? {}
       : { overrunTargets: overlay.overrunTargets.filter((hint) => visible(hint.hex)) }),
+    ...(overlay.combatAttackableHexes === undefined
+      ? {}
+      : {
+          combatAttackableHexes: overlay.combatAttackableHexes.filter((hint) => visible(hint)),
+        }),
     ...(overlay.retreat === undefined || overlay.retreat === null
       ? { retreat: overlay.retreat }
       : {
@@ -541,6 +558,20 @@ export function drawMovementOverlay(
         center.x,
         center.y + REACHABLE_RADIUS_PX * 1.1,
       )
+    }
+  }
+
+  // ①-a 条 21（批 F·F2）：战斗段「可攻击位置」高亮（9.0/9.1）——暖红环，画在可突袭环之上、撤退格之下
+  if (visible.combatAttackableHexes !== undefined && visible.combatAttackableHexes.length > 0) {
+    ctx.lineWidth = 3 / scale
+    for (const hex of visible.combatAttackableHexes) {
+      traceHex(ctx, hex)
+      ctx.fillStyle = OVERLAY_PALETTE.combatAttackable
+      ctx.fill()
+      ctx.strokeStyle = OVERLAY_PALETTE.combatAttackableEdge
+      ctx.setLineDash([4 / scale, 3 / scale])
+      ctx.stroke()
+      ctx.setLineDash([])
     }
   }
 

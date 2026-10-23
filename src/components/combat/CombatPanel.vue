@@ -294,6 +294,11 @@ const quickDefenderArItems = computed(() =>
         <p class="muted">
           在「打一仗」工具下：点己方算子＝加入攻方（可跨多个相邻格，9.1b/9.1c）；点敌方算子所在格＝选定防御格。
         </p>
+        <p v-if="workbench.battleTarget === null" class="num">
+          <BaseTag kind="danger">可攻击</BaseTag>
+          地图上<span v-if="workbench.combatAttackableHexes.length > 0">高亮</span
+          >{{ workbench.combatAttackableHexes.length }} 处敌方格（随选人实时算；点它即选定防御格）。
+        </p>
         <p class="num">
           攻方（{{ attackerList.length }}）：
           {{ attackerList.map((unit) => unit.name).join('、') || '—' }}
