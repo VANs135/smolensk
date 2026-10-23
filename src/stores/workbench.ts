@@ -8898,6 +8898,40 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     return combatState.value?.finished === true
   }
+  /**
+   * 9.12f（批 F·E1）：撤退**穿越**敌方非战斗单位 / 设施时的处置
+   *
+   * 原文：「撤退不可穿越在战斗开始时包含敌方战斗单位的格（因此撤退不能穿越攻击单位承受损失或
+   *   选项后空出的格）。撤退穿越**非战斗单位、飞机和舰船**时，同**移动时**穿越它们那样进行处理
+   *   （根据 9.14）。」
+   *
+   * ⇒ 移动时是**逐格**触发 9.14（见 `triggerSpecialCombatAfterStep`：沿路径每走一格都问一次），
+   *   故撤退也沿路径逐格触发；处置对象、判据、夺取表骰与移动**完全同一份**（`resolveSpecialCombatAt`），
+   *   不另造一套流程。
+   *
+   * 边界（取保守值，不无中生有）：
+   *   · 9.12「必须穿过敌方占据的格或禁入地形 ⇒ 消灭」：该格不构成 9.14 意义上的「进入」，
+   *     故**该格及其之后**的路径都不判（与 `resolveRetreat` 用同一套 facts，判据一致）；
+   *   · 途中被消灭的单位已不在盘上，无从确认「可攻击单位进入」，整条路径不判；
+   *   · 9.14 的位移 / 分配待决（`specialPending`）时**停住**——与移动一致（落点须玩家在地图上选）。
+   */
+  function triggerSpecialCombatAfterRetreat(): void {
+    for (const [unitId, text] of Object.entries(combatInputs.value.retreatPaths)) {
+      const path = parseHexPath(text)
+      if (path.length === 0) continue
+      const unit = units.value.find((item) => item.instanceId === unitId)
+      if (unit === undefined || unit.steps <= 0) continue
+      const mobility = effectiveMobilityOf(unit)
+      for (const hex of path) {
+        if (specialPending.value !== null) return
+        // 9.12：本格「敌方占据 / 禁入」⇒ 单位在此被消灭，不算进入 ⇒ 到此为止
+        if (combatRetreatFacts.value.enemyCombatUnitAt(hex, unit.side)) break
+        if (combatRetreatFacts.value.prohibitedFor(mobility, hex)) break
+        resolveSpecialCombatAt(hex, unit.side, false, [unitId])
+      }
+    }
+  }
+
   /** C6 第 9 步：撤退（9.12：撤退格数＝剩余选项数；落点须满足完整撤退距离） */
   function confirmCombatRetreats(): boolean {
     const state = combatState.value
@@ -8981,6 +9015,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         extraLossPoints: extra.points,
       },
     })
+    /*
+     * 9.12f（批 F·E1）：撤退**穿越**敌方非战斗单位 / 设施 ⇒ 按 9.14 处置（同移动时穿越）。
+     * 放在撤退落盘与入账**之后**（骰序与会话日志时序＝先撤退、后夺取，与物理先后一致）。
+     */
+    triggerSpecialCombatAfterRetreat()
+    /*
+     * 9.14 的位移 / 分配待决时**不**自动收束推进步——与移动一致（落点须玩家在地图上选），
+     * 否则玩家还没选位移落点，战斗就先结束了。
+     */
+    if (specialPending.value !== null) return true
     /*
      * 9.12g-D：「常规战斗后并非必须如此，由拥有者玩家选择哪些攻击单位进行推进（**如果有的话**）。」
      * ⇒ **一个可推进的单位都没有**时，这一页没有任何可选项（只能"不推进"）⇒ 直接收束整场战斗：
@@ -13397,11 +13441,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   ⑤ **需要玩家定的挂起**：运输点组分配（9.14c 混合类型时由原主挑）与**位移落点**（9.14c/d 由原主选）。
    *
    * @param byAdvance 是否由**战后推进**进入（9.14f 的 +2 DRM 来自此）
+   * @param passingUnitIds 9.12f（撤退穿越）：给**途经**该格的单位 id。
+   *   撤退结算时单位已落在终点格，中间格上没有它 ⇒ 默认「本格须有进入方可攻击单位」的判据会落空。
+   *   9.12f 原文「撤退穿越非战斗单位、飞机和舰船时，同移动时穿越它们那样进行处理（根据 9.14）」
+   *   ⇒ 穿越格也要按 9.14 处置，故这里允许以「途经名单」替代「此刻站在该格」。
+   *   不给时维持原判据（移动 / 推进）。
    */
-  function resolveSpecialCombatAt(hex: HexRef, enteringSide: Side, byAdvance = false): boolean {
-    const entered = units.value.some(
-      (unit) => unit.side === enteringSide && unit.attackCapable && sameHex(unit.hex, hex),
-    )
+  function resolveSpecialCombatAt(
+    hex: HexRef,
+    enteringSide: Side,
+    byAdvance = false,
+    passingUnitIds?: readonly string[],
+  ): boolean {
+    const entered =
+      passingUnitIds === undefined
+        ? units.value.some(
+            (unit) => unit.side === enteringSide && unit.attackCapable && sameHex(unit.hex, hex),
+          )
+        : passingUnitIds.some((id) => {
+            const unit = units.value.find((item) => item.instanceId === id)
+            return unit !== undefined && unit.side === enteringSide && unit.attackCapable
+          })
     if (!entered) return false
     const objects = specialObjectsAt(hex)
     // 只处理**敌方**物件（友军进入自家设施无效果，引擎也会返回 unchanged）

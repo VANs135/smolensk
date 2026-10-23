@@ -431,3 +431,174 @@ describe('Ⓕ 9.13 / 9.14：进击标记与特殊战斗判据', () => {
     expect(combatRecord('axis').noncombatKind ?? null).toBeNull()
   })
 })
+
+describe('Ⓕ 9.12f：撤退穿越敌方非战斗单位 ⇒ 按 9.14 处置（批 F·E1）', () => {
+  /**
+   * 规则原文（通规 9.12f，第二段）
+   * 「撤退穿越**非战斗单位、飞机和舰船**时，同**移动时**穿越它们那样进行处理（根据 9.14）。」
+   *
+   * ⇒ 移动时是**逐格**触发 9.14（`triggerSpecialCombatAfterStep` 每走一格问一次），
+   *   故撤退也沿撤退路径逐格触发；处置对象与判据完全复用移动那份，不另造流程。
+   * 第一段（不可穿越「战斗开始时」含敌方战斗单位的格）早已由 `combatStartSnapshot` 落地。
+   */
+
+  /** 强攻方（高攻防比 ⇒ CRT 给攻方选项，从而能用「撤退」满足 9.10a） */
+  const strongAttackerRecord = () =>
+    groundRecord(
+      'axis',
+      (record) =>
+        record.isCombat === true &&
+        record.attackCapable === true &&
+        (record.factors?.combat?.attack ?? 0) >= 8,
+    )
+
+  /**
+   * 弱守方（1 步；被强制损失消灭 ⇒ 守方选项按 9.10c 可忽略）
+   *
+   * ★ 下限 `attack >= 2` 不可去掉：战斗值 0 的补充队会让攻防比冲到最右列（9.14a），
+   *   CRT 只给**攻方**进击结果而**不给攻方选项** ⇒ 本用例要的「攻方以撤退满足选项」无从构造。
+   */
+  const weakDefenderRecord = () =>
+    groundRecord('soviet', (record) => {
+      const attack = record.factors?.combat?.attack ?? 99
+      const ar = record.factors?.combat?.ar ?? 99
+      return record.isCombat === true && attack >= 2 && attack <= 3 && ar <= 2
+    })
+
+  /** 该格对该机动类型是否**非禁入**（与 `RetreatFacts#prohibitedFor` 同一判据：9.12 禁入者被消灭） */
+  function notProhibited(mobility: 'leg' | 'truck' | 'track', hex: HexRef): boolean {
+    const result = selectMovementTerrain({
+      terrainsPresent: mapFacts.terrainsAt(hex),
+      mobility,
+      crossing: null,
+      followingRoad: false,
+      forOverrun: false,
+    })
+    return result.ok || result.reason !== 'prohibited'
+  }
+
+  /** 从 `from` 直线走 `count` 格，避开 `avoid`，且每格都非禁入（9.12f 第一段 + 9.12 禁入消灭） */
+  function straightPathAvoiding(
+    from: HexRef,
+    count: number,
+    avoid: readonly HexRef[],
+    mobility: 'leg' | 'truck' | 'track',
+  ): HexRef[] {
+    for (const direction of HEX_DIRECTIONS) {
+      const path: HexRef[] = []
+      let current = from
+      let valid = true
+      for (let index = 0; index < count; index += 1) {
+        const next = neighbor(current, direction)
+        if (
+          !isOnMap(next) ||
+          !mapLayers.hexes.some((h) => h.col === next.col && h.row === next.row) ||
+          !notProhibited(mobility, next)
+        ) {
+          valid = false
+          break
+        }
+        path.push(next)
+        current = next
+      }
+      if (!valid || hexDistance(from, current) !== count) continue
+      if (path.some((hex) => avoid.some((item) => item.col === hex.col && item.row === hex.row)))
+        continue
+      return path
+    }
+    throw new Error(`找不到避开指定格的 ${count} 格直线撤退路径`)
+  }
+
+  /** 走到「撤退」步：攻方把**全部选项选为撤退**（9.10a 允许的满足方式之一） */
+  function driveToAttackerRetreat(store: Store): {
+    distance: number
+    mobility: 'leg' | 'truck' | 'track'
+  } {
+    store.setPhase('combat')
+    goToActionStep(store, 'combat.declare')
+    store.setTool('battle')
+    store.setFuelPool(0, 20)
+    const attacker = placeGround(store, strongAttackerRecord(), ATTACKER_HEX, 'axis', 'a1')
+    placeGround(store, weakDefenderRecord(), DEFENDER_HEX, 'soviet', 'd1')
+    store.clickHex(ATTACKER_HEX)
+    store.clickHex(DEFENDER_HEX)
+    expect(store.beginCombatNow()).toBe(true)
+    declareSupplyForBoth(store)
+
+    expect(store.confirmCombatSupply()).toBe(true)
+    store.combatInputs.attackerArUnitId = 'a1'
+    expect(store.declareCombatArStep('attacker')).toBe(true)
+    store.combatInputs.defenderArUnitId = 'd1'
+    expect(store.declareCombatArStep('defender')).toBe(true)
+    expect(store.declareCombatTerrainStep()).toBe(true)
+    expect(store.rollCombatSurprise()).toBe(true)
+    if (store.combatAwaitingShiftDie) expect(store.rollCombatShiftDie()).toBe(true)
+    expect(store.rollCombatDice()).toBe(true)
+
+    // 9.10b：攻方先结算（强制损失 → 选项）
+    expect(store.confirmCombatLosses()).toBe(true)
+    const requirement = store.combatRequirement
+    expect(requirement?.side).toBe('attacker')
+    const distance = requirement?.options ?? 0
+    expect(distance).toBeGreaterThan(0)
+    store.combatInputs.optionRetreatHexes = distance
+    store.combatInputs.optionLossPoints = 0
+    expect(store.confirmCombatOptions()).toBe(true)
+
+    // 守方结算（本夹具里守方被强制损失消灭 ⇒ 其选项按 9.10c 可忽略）
+    expect(store.confirmCombatLosses()).toBe(true)
+    if (store.combatState?.resolution.stage === 'defenderOptions') {
+      store.combatInputs.ignoreOptions = true
+      expect(store.confirmCombatOptions()).toBe(true)
+    }
+    expect(store.combatState?.step).toBe('retreat')
+    expect(store.combatRetreatRequirement.attacker).toBe(distance)
+    return { distance, mobility: attacker.raw.mobility as 'leg' | 'truck' | 'track' }
+  }
+
+  it('撤退**途经**有敌方补给站的格 ⇒ 该补给站按 9.14b 处置（夺取/摧毁，不再留在原主账上）', () => {
+    const store: Store = newConsole()
+    const { distance, mobility } = driveToAttackerRetreat(store)
+    const path = straightPathAvoiding(ATTACKER_HEX, distance, [DEFENDER_HEX], mobility)
+
+    // 9.12f：在撤退**途经的第一格**放一座苏军补给站（敌方非战斗单位）
+    const dumpId = 'sd-soviet-retreat'
+    store.spDumps.push({ id: dumpId, hex: { ...path[0]! }, side: 'soviet', sp: 4, t: 0 })
+
+    store.combatInputs.retreatPaths = { a1: path.map(label).join(',') }
+    expect(store.confirmCombatRetreats()).toBe(true)
+    // 前提：攻方确实活着退到了落点（否则「可攻击单位进入」无从谈起）
+    const mover = store.units.find((item) => item.instanceId === 'a1')
+    expect(mover?.steps ?? 0).toBeGreaterThan(0)
+    expect(`${mover?.hex.col}.${mover?.hex.row}`).toBe(label(path[path.length - 1]!))
+
+    // 9.14b：夺取值进进入方账本，其余摧毁 ⇒ 无论如何这座苏军补给站都不再存在
+    expect(store.spDumps.some((item) => item.id === dumpId)).toBe(false)
+  })
+
+  it('对照：撤退途经**空**格 ⇒ 不触发 9.14（盘面补给站不变）', () => {
+    const store: Store = newConsole()
+    const { distance, mobility } = driveToAttackerRetreat(store)
+    const path = straightPathAvoiding(ATTACKER_HEX, distance, [DEFENDER_HEX], mobility)
+
+    const before = store.spDumps.map((item) => item.id).sort()
+    store.combatInputs.retreatPaths = { a1: path.map(label).join(',') }
+    expect(store.confirmCombatRetreats()).toBe(true)
+
+    expect(store.spDumps.map((item) => item.id).sort()).toEqual(before)
+  })
+
+  it('「穿越」判据：单位已不在该格时，不给途经名单即不处置（9.14 的前提是可攻击单位进入）', () => {
+    const store: Store = newConsole()
+    const attacker = placeGround(store, strongAttackerRecord(), ATTACKER_HEX, 'axis', 'a1')
+    const target = straightPathAvoiding(ATTACKER_HEX, 1, [DEFENDER_HEX], attacker.raw.mobility)[0]!
+    store.spDumps.push({ id: 'sd-soviet-far', hex: { ...target }, side: 'soviet', sp: 4, t: 0 })
+
+    // 该格没有己方可攻击单位 ⇒ 处置不成立（9.14 的统一前提）
+    expect(store.resolveSpecialCombatAt(target, 'axis')).toBe(false)
+    expect(store.spDumps.some((item) => item.id === 'sd-soviet-far')).toBe(true)
+    // 给了「途经名单」⇒ 按 9.12f 的「同移动时穿越那样处理」成立
+    expect(store.resolveSpecialCombatAt(target, 'axis', false, ['a1'])).toBe(true)
+    expect(store.spDumps.some((item) => item.id === 'sd-soviet-far')).toBe(false)
+  })
+})
