@@ -67,10 +67,29 @@ describe('条 27：SP 账本 → 地图令牌', () => {
     expect(spTokensOf(mv)).toHaveLength(0)
   })
 
-  it('只有 T 的站在地图上仍可见（运输点数也是补给站）', () => {
+  it('只有 T 的站在地图上仍可见（运输点数走运输面 B，不是"0 SP"）', () => {
     const wb = useWorkbenchStore()
     const mv = useMapViewStore()
     wb.spDumps.push({ id: 'd1', hex: { col: 8, row: 8 }, side: wb.activeSide, sp: 0, t: 3 })
-    expect(spTokensOf(mv)).toHaveLength(1)
+    const tokens = spTokensOf(mv)
+    expect(tokens).toHaveLength(1)
+    expect(tokens[0]).toMatchObject({ spPoints: 3, face: 'move', label: '3 T' })
+  })
+
+  it('有整 SP 时走补给面 F（t 作为余数不改变面）', () => {
+    const wb = useWorkbenchStore()
+    const mv = useMapViewStore()
+    wb.spDumps.push({ id: 'd1', hex: { col: 9, row: 9 }, side: wb.activeSide, sp: 2, t: 2 })
+    expect(spTokensOf(mv)[0]).toMatchObject({ spPoints: 2, face: 'combat', label: '2 SP' })
+  })
+
+  it('同格合并时 sp 与 t 分别求和（不会把 T 当成 SP 加进去）', () => {
+    const wb = useWorkbenchStore()
+    const mv = useMapViewStore()
+    const side = wb.activeSide
+    wb.spDumps.push({ id: 'd1', hex: { col: 4, row: 4 }, side, sp: 1, t: 2 })
+    wb.spDumps.push({ id: 'd2', hex: { col: 4, row: 4 }, side, sp: 1, t: 1 })
+    // sp=2、t=3 ⇒ 有整 SP ⇒ 补给面、点数 2
+    expect(spTokensOf(mv)[0]).toMatchObject({ spPoints: 2, face: 'combat', label: '2 SP' })
   })
 })

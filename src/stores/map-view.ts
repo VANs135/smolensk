@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 
-import type { HexRef } from '@/data'
+import type { HexRef, Side } from '@/data'
 import { useHotseatStore } from './hotseat'
 import {
   useWorkbenchStore,
@@ -281,37 +281,43 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 实数由 `label`（角标）显示。消耗改的是 `spDumps` ⇒ 本 computed 自动重算 ⇒ 贴图/角标即时刷新。
    *
    * 空站（SP 与 T 都为 0）不画，避免"幽灵站"。
+   *
+   * ★ 面（12.1a）：账本一条同时带"整 SP"（`sp`）与"运输点数"（`t`，1 SP = 4T 的余数）。
+   *   · **有整 SP** ⇒ 补给面 F（印 n SP）；
+   *   · **只有运输点数**（sp=0, t>0）⇒ 运输面 B（印 nT）——否则会变成"0 SP"且取不到 SP 图。
    */
   function spDumpTokens(): UnitToken[] {
-    const merged = new Map<string, UnitToken>()
+    const merged = new Map<string, { hex: HexRef; side: Side; sp: number; t: number }>()
     for (const dump of workbench.spDumpsOfSide) {
       if (dump.sp <= 0 && dump.t <= 0) continue
       const key = `${dump.hex.col},${dump.hex.row}`
       const cur = merged.get(key)
       if (cur === undefined) {
-        merged.set(key, {
-          id: `sp:${key}`,
-          hex: { ...dump.hex },
-          side: dump.side,
-          noncombatKind: 'sp',
-          spPoints: dump.sp,
-          face: 'combat',
-          images: null,
-          label: `${dump.sp} SP`,
-          selected: false,
-          ended: false,
-          modeLetter: '',
-          dg: false,
-          awaitingFuel: false,
-          fuelled: false,
-        })
+        merged.set(key, { hex: { ...dump.hex }, side: dump.side, sp: dump.sp, t: dump.t })
       } else {
-        const total = (cur.spPoints ?? 0) + dump.sp
-        cur.spPoints = total
-        cur.label = `${total} SP`
+        cur.sp += dump.sp
+        cur.t += dump.t
       }
     }
-    return [...merged.values()]
+    return [...merged.entries()].map(([key, m]) => {
+      const hasSp = m.sp > 0
+      return {
+        id: `sp:${key}`,
+        hex: m.hex,
+        side: m.side,
+        noncombatKind: 'sp',
+        spPoints: hasSp ? m.sp : m.t,
+        face: hasSp ? ('combat' as const) : ('move' as const),
+        images: null,
+        label: hasSp ? `${m.sp} SP` : `${m.t} T`,
+        selected: false,
+        ended: false,
+        modeLetter: '',
+        dg: false,
+        awaitingFuel: false,
+        fuelled: false,
+      }
+    })
   }
 
   /** 当前覆盖层（地图要画的一切；视图直接把它交给 `MapCanvas`） */
