@@ -366,7 +366,13 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
             </BaseButton>
           </label>
         </div>
-        <p v-for="air in workbench.ownAirUnits" :key="air.instanceId" class="num">
+        <p v-for="air in workbench.ownAirUnits" :key="air.instanceId" class="num air-row">
+          <img
+            class="air-row__thumb"
+            :src="counterImageUrlOf(air) ?? undefined"
+            :alt="air.name"
+            loading="lazy"
+          />
           <BaseButton
             variant="ghost"
             size="sm"
@@ -1121,5 +1127,20 @@ hr {
   border: none;
   border-top: 1px solid var(--color-rule);
   margin: var(--space-3) 0;
+}
+/* 条 24「单位信息改图」：飞机清单每行带算子缩略图（文本仍保留，便于核对数值） */
+.air-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.air-row__thumb {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  vertical-align: middle;
+  flex: 0 0 auto;
 }
 </style>

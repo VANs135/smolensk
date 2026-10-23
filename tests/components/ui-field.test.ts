@@ -36,6 +36,8 @@ describe('条 24：正式/验证模式门控', () => {
     const src = read('src/components/air/AirPanel.vue')
     // 采用门控
     expect(src).toMatch(/useUiMode\(\)/)
+    // 条 24「单位信息改图」：飞机清单每行带算子缩略图
+    expect(src).toMatch(/air-row__thumb/)
     // @change 类字段（任务格/返航格）走 v-if=verify + 只读 span
     expect(src).toMatch(/v-if="uiMode === 'verify'"/)
     expect(src.match(/class="ui-field-readonly"/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
