@@ -137,10 +137,16 @@ const TARGET_KINDS = [
   { key: 'trainbusting', label: '运输破坏（10.0c-C）' },
 ] as const
 
-/** 10.0e-F：参炸单位类别（**全部**；实际显示哪些由本环节允许的来源决定） */
+/**
+ * 10.0e-F：参炸单位类别（**全部**；实际显示哪些由本环节允许的来源决定）
+ *
+ * ★ 条 19（批 A）：**`air` 不再作为本面板的"起点类别"** —— C 段空军轰炸 / 低空扫射改走
+ *   空军任务链（点机场基地 ⇒ 选机 ⇒ 点任务格 ⇒ `runAirMissionNow`），由此 14.3 / 14.5 / 14.4
+ *   （空战 / 拦截 / 防空）不再被"面板直调 beginBarrageNow"绕过。`air` **段本身保留**：
+ *   空军任务的轰炸结算（`beginAirBarrageNow` 置 `barrageState` ⇒ 本面板以 air 段显示其结果）。
+ */
 const KINDS = [
   { key: 'artillery', label: '火炮（F 段）' },
-  { key: 'air', label: '空军（C 段）' },
   { key: 'ship', label: '海军（本作无）' },
 ] as const
 
@@ -209,6 +215,12 @@ function setAircraftRoll(unitId: string, value: number): void {
           >未选定 —— 在本**轰炸环节**点地图上的目标格（10.0d；目标可以是任意格：敌单位 / 空军基地 /
           铁路格）</template
         >
+      </p>
+
+      <!-- 条 19（批 A）：空军起点已从本面板移除 ⇒ C 段给一句指引（空军任务走机场基地入口） -->
+      <p v-if="workbench.barrageKindsInSegment.includes('air')" class="muted num">
+        空军任务（轰炸 / 低空扫射）请点**机场基地**发起：选机 → 点任务格 → 自动结算（14.2f，含空战 /
+        拦截 / 防空，不再由本面板直调 beginBarrageNow）。
       </p>
 
       <!-- ── ① 宣布整体目标与轰炸值分配（10.0d / 10.0e）── -->

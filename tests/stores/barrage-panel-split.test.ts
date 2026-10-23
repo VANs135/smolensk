@@ -125,4 +125,16 @@ describe('H②：轰炸结算页按类别分家（10.0e-F）', () => {
     expect(dumpGate).toBeGreaterThan(gunGate)
     expect(panel.slice(dumpGate, panel.indexOf('</template>', dumpGate))).toContain('dumpItems')
   })
+
+  it('★ 条 19（批 A）：`air` 不再是本面板起点类别（旁路已废），air 段保留供空军任务轰炸显示', () => {
+    const panel = readFileSync('src/components/barrage/BarragePanel.vue', 'utf8')
+    // 起点类别 KINDS 里不再有 air ⇒ 无法从本面板直调 beginBarrageNow 发起空军（14.3/14.5/14.4 不再可绕）
+    expect(panel).not.toContain("{ key: 'air'")
+    expect(panel).toContain("{ key: 'artillery'")
+    // air 段本身仍在：空军任务的轰炸结算（beginAirBarrageNow 置 barrageState）经本段显示其结果
+    expect(panel).toContain(`v-if="workbench.barrageKind === 'air'"`)
+    // C 段给一句指引：空军任务改走机场基地入口
+    expect(panel).toContain("barrageKindsInSegment.includes('air')")
+    expect(panel).toContain('机场基地')
+  })
 })
