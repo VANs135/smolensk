@@ -1,7 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { HexRef } from '@/data'
+import { mapLayers, type HexRef } from '@/data'
+import { HEX_DIRECTIONS, isOnMap, neighbor } from '@/engine/hex-geometry'
 import {
   aircraftChoices,
   toConsoleAirUnit,
@@ -177,5 +178,105 @@ describe('条 12（M2）：点非战斗单位开 unit 会话', () => {
     workbench.toggleAirMissionUnit('ac-1')
     expect(workbench.airMissionAirIds).toContain('ac-1')
     expect(mapView.session?.kind).toBe('air')
+  })
+
+  it('★ 批 A：C 段点空格（有飞机按航程够到、无己方算子）⇒ 开空军任务入口（target-first）', () => {
+    const { workbench, mapView } = stores
+    workbench.setPhase('movement')
+    // 进 C 段移动环节（14.7d 低空扫射就在此宣布；该环节允许 air 来源，且非轰炸工具态 ⇒ isIdleForStack 为真）
+    const idx = workbench.playerSegmentSteps.findIndex(
+      (step) => step.id === 'movement.modeAndMovement',
+    )
+    expect(workbench.setSegmentStepIndex(idx)).toBe(true)
+    expect(workbench.barrageKindsInSegment.includes('air')).toBe(true)
+    // 空军基地 + 一架激活飞机停在其格
+    placeNonCombat(workbench, 'air_base', START, 'base-1')
+    workbench.airUnits.push(
+      toConsoleAirUnit({
+        aircraft: aircraftChoices('axis')[0]!,
+        instanceId: 'ac-1',
+        hex: START,
+        side: 'axis',
+        airStatus: 'active',
+      }),
+    )
+    // 找一个"在图内、无任何单位、飞机够得到"的邻格
+    const target = HEX_DIRECTIONS.map((direction) => neighbor(START, direction)).find(
+      (hex) =>
+        isOnMap(hex) &&
+        mapLayers.hexes.some((item) => item.col === hex.col && item.row === hex.row) &&
+        !workbench.units.some((unit) => unit.hex.col === hex.col && unit.hex.row === hex.row),
+    )
+    expect(target, '应找到图内的空邻格').toBeDefined()
+
+    // 点这一格 ⇒ 开空军任务入口：预填任务格 + 开空军工具 + 置引导态 ⇒ air 会话
+    mapView.onHexClick(target!, { x: 40, y: 40 })
+    expect(mapView.session?.kind).toBe('air')
+    expect(mapView.airEntryTarget).toEqual(target)
+    expect(workbench.airTargetHex).toEqual(target)
+    expect(workbench.airActive).toBe(true)
+    // 单框纪律：开了会话就不再另开小窗
+    expect(mapView.popup).toBeNull()
+  })
+
+  it('★ 批 A：空军引导态在勾到第一架参战机后交棒（airEntryTarget 清空、会话续跑）', () => {
+    const { workbench, mapView } = stores
+    workbench.setPhase('movement')
+    const idx = workbench.playerSegmentSteps.findIndex(
+      (step) => step.id === 'movement.modeAndMovement',
+    )
+    expect(workbench.setSegmentStepIndex(idx)).toBe(true)
+    placeNonCombat(workbench, 'air_base', START, 'base-1')
+    workbench.airUnits.push(
+      toConsoleAirUnit({
+        aircraft: aircraftChoices('axis')[0]!,
+        instanceId: 'ac-1',
+        hex: START,
+        side: 'axis',
+        airStatus: 'active',
+      }),
+    )
+    const target = HEX_DIRECTIONS.map((direction) => neighbor(START, direction)).find(
+      (hex) =>
+        isOnMap(hex) &&
+        mapLayers.hexes.some((item) => item.col === hex.col && item.row === hex.row) &&
+        !workbench.units.some((unit) => unit.hex.col === hex.col && unit.hex.row === hex.row),
+    )!
+    mapView.onHexClick(target, { x: 40, y: 40 })
+    expect(mapView.airEntryTarget).toEqual(target)
+
+    workbench.toggleAirMissionUnit('ac-1')
+    expect(mapView.airEntryTarget).toBeNull() // 引导态交棒
+    expect(mapView.session?.kind).toBe('air') // 会话续跑（由选机驱动）
+
+    // 取消会话 ⇒ airEntryTarget 仍空、会话消失
+    expect(mapView.cancelSession()).toBe(true)
+    expect(mapView.session).toBeNull()
+    expect(mapView.airEntryTarget).toBeNull()
+  })
+
+  it('★ 批 A：按航程列机——任务格在航程内时该机不灰显（14.1 只在超航程时触发）', () => {
+    const { workbench } = stores
+    workbench.setPhase('movement')
+    workbench.airUnits.push(
+      toConsoleAirUnit({
+        aircraft: aircraftChoices('axis')[0]!,
+        instanceId: 'ac-1',
+        hex: START,
+        side: 'axis',
+        airStatus: 'active',
+      }),
+    )
+    // 相邻格在航程内 ⇒ 该机在候选阵列里**不**被 14.1 灰显
+    const near = neighbor(START, HEX_DIRECTIONS[0]!)
+    workbench.setAirTargetFromText(`${near.col}.${near.row}`)
+    expect(
+      workbench.airMissionJoinChoices.find((c) => c.air.instanceId === 'ac-1')?.disabledReason,
+    ).toBeNull()
+    /*
+     * 注：本作斯摩棱斯克图上任一格距都在轴方各机航程内（最小航程 41 > 图内最大格距 35），
+     * 故"超航程灰显"的 TRUE 分支在此图不可达；逻辑已实现（airMissionJoinChoices 的 14.1 判据），
+     * 更大图 / 更短航程机出现时即生效。这里只钉"航程内不误灰显"。
+     */
   })
 })

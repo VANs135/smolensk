@@ -595,6 +595,24 @@ export const useMapViewStore = defineStore('mapView', () => {
   const unitActionHex = ref<HexRef | null>(null)
 
   /**
+   * 条 19（A1）：**点地面格 ⇒ 空军任务入口**（target-first）的引导态
+   *
+   * 移动/轰炸环节点到「无己方地面算子、且有飞机按航程够得到」的地面格时置位，
+   * 并把该格预填为 `airTargetHex`、打开空军工具 ⇒ `air` 会话弹出（AirPanel mission 段按航程列机）。
+   * 一旦玩家勾选了参战机（`airMissionAirIds>0`）即由 watcher 清空（会话改由选机续跑）；
+   * 取消会话 / 点别处也清。它只是**一次性引导触发**，不长期存活（区别于会存活的 `airTargetHex`）。
+   */
+  const airEntryTarget = ref<HexRef | null>(null)
+  // 勾到第一架参战机 ⇒ 引导态使命完成，交棒给 airMissionAirIds（sync：本击内即交棒，测试可同步断言）
+  watch(
+    () => workbench.airMissionAirIds.length,
+    (count) => {
+      if (count > 0) airEntryTarget.value = null
+    },
+    { flush: 'sync' },
+  )
+
+  /**
    * 该格**画出来的**全部令牌（地面＋飞机）——B26：渲染与命中必须同源
    *
    * ★ 修前这里（与摊开的命中判定）只取 `groundTokens()`，而**渲染**用的是
@@ -969,7 +987,9 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     if (
       workbench.airActive &&
-      (workbench.airState !== null || workbench.airMissionAirIds.length > 0)
+      (workbench.airState !== null ||
+        workbench.airMissionAirIds.length > 0 ||
+        airEntryTarget.value !== null)
     ) {
       return {
         kind: 'air',
@@ -1223,8 +1243,10 @@ export const useMapViewStore = defineStore('mapView', () => {
       }
     }
     // B15d/B15e：空军的"放弃本次任务"与补给的"放弃本次检查"各自已有 cancelXxx（会清掉选子/中间态）
-    else if (current.kind === 'air') workbench.cancelAir()
-    else if (current.kind === 'supply') workbench.cancelSupply()
+    else if (current.kind === 'air') {
+      workbench.cancelAir()
+      airEntryTarget.value = null
+    } else if (current.kind === 'supply') workbench.cancelSupply()
     // B17a：增援段的动作面板没有状态机可回滚 ⇒ 收起它（记在环节键上，换环节自然重现）
     else if (current.kind === 'reinforce') collapsedSessionKey.value = currentStepKey.value
     // B17a-2：盒内动作同理——收起 = 把那张盒卡也合上（它正是这个会话的触发源）
@@ -1365,6 +1387,24 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
+   * 条 19（A1）：这一点是否值得开**空军任务入口**（target-first）
+   *
+   * 三条件（都满足才开，避免打扰常规的点选 / 移动 / 小窗）：
+   *   ① 当前环节允许空军来源（`barrageKindsInSegment` 含 air：C/E/G 段）；
+   *   ② 该格**没有己方地面算子**（有 ⇒ 这是选子 / 移动，不是空军入口；非战斗单位格已由 M2 先拦）；
+   *   ③ 有飞机**按航程**够得到该格（`anyOwnAircraftReaches`）。
+   */
+  function airEntryEligible(hex: HexRef): boolean {
+    if (!workbench.barrageKindsInSegment.includes('air')) return false
+    const friendlyHere = workbench.units.some(
+      (unit) =>
+        unit.hex.col === hex.col && unit.hex.row === hex.row && unit.side === workbench.activeSide,
+    )
+    if (friendlyHere) return false
+    return workbench.anyOwnAircraftReaches(hex)
+  }
+
+  /**
    * 点地图（地图优先交互的**唯一入口**）
    *
    * ★ B26 重排（用户报告「一次点击出现两个框」「点堆叠总是默认移动第一枚」「炮击选不中炮兵」）：
@@ -1494,8 +1534,23 @@ export const useMapViewStore = defineStore('mapView', () => {
         closePopup()
         return
       }
-      // 点别处（战斗单位 / 空格 / 走一步）⇒ 收掉可能开着的单位会话
+      /*
+       * 条 19（A1）：**点地面格 ⇒ 空军任务对话框**（target-first：按航程列机）。
+       * 三条件见 `airEntryEligible`；命中即把该格预填为任务格、打开空军工具、置引导态 ⇒
+       * `air` 会话弹出（AirPanel mission 段列出够得到该格的机，选机/编队＋任务类型 → `runAirMissionNow`）。
+       * 单框纪律：开会话即不再另开小窗。
+       */
+      if (isIdleForStack() && airEntryEligible(hex)) {
+        // ★ 顺序：先确保空军工具开（`setAirActive` 内部 `clearAir` 会清 airTargetHex），**再**填任务格
+        if (!workbench.airActive) workbench.setAirActive(true)
+        workbench.setAirTargetFromText(`${hex.col}.${hex.row}`)
+        airEntryTarget.value = { col: hex.col, row: hex.row }
+        closePopup()
+        return
+      }
+      // 点别处（战斗单位 / 空格 / 走一步）⇒ 收掉可能开着的单位会话 + 空军引导态
       if (unitActionHex.value !== null) unitActionHex.value = null
+      if (airEntryTarget.value !== null) airEntryTarget.value = null
       // ③ 闲置态点到有堆叠的格 ⇒ **就地摊开**（用户口径：默认全选、点枚即取消）
       if (idleBefore && isIdleForStack() && stackTokenIdsAt(hex).length >= STACK_FAN_MIN_TOKENS) {
         expandStackAt(hex)
@@ -1569,6 +1624,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     // 条 12（M2）：点非战斗单位开的动作会话（按类型分派到补给账本 / 空军整备 / 工事）
     unitActionHex,
     unitActionFamily,
+    airEntryTarget,
     // 点什么
     popup,
     popupContent,

@@ -12344,11 +12344,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
               : selectedCount >= max
                 ? `14.2a：一次任务合计上限 ${max} 架 ⇒ 已满`
                 : canPerformMissionThisPhase(air.missionsFlownThisPhase)
-                  ? null
+                  ? // 条 19（A1）：**按航程列机** —— 已定任务格时，够不到目标格的机在阵列里灰显（14.1）
+                    airTargetHex.value !== null &&
+                    airRangeFromBase(air, airTargetHex.value) > air.rangeHexes
+                    ? '14.1：该机航程够不到任务格'
+                    : null
                   : '14.2e：本机本阶段已执行过一次任务'
       return { air, selected, disabledReason }
     })
   })
+
+  /**
+   * 条 19（A1）：**按航程**判断——本方是否有**可出击**的飞机够得到目标格
+   *
+   * 用于「点地面格出空军对话框」的入口闸门（点一格才决定要不要开空军会话）。
+   * 判据与 `barrageAirFacts` 的 `inRange` 同源：`airRangeFromBase(air, hex) <= air.rangeHexes`，
+   * 另要求 14.1a 的 `canFlyMission`（非激活不出击）。真正航程校验仍在 `beginAirMissionNow`，
+   * 此处只判"这一格值不值得开空军入口"。
+   */
+  function anyOwnAircraftReaches(hex: HexRef): boolean {
+    return ownAirUnits.value.some(
+      (air) => canFlyMission(air.airStatus) && airRangeFromBase(air, hex) <= air.rangeHexes,
+    )
+  }
 
   /** C9 第 1 步（14.2f-A/B）：宣布任务并分配飞机（含起飞基地归属与航程校验） */
   function beginAirMissionNow(): boolean {
@@ -18448,6 +18466,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     airJoinRemaining,
     // B14：参战机的算子图阵列（逐机可选性 + 原因）
     airMissionJoinChoices,
+    anyOwnAircraftReaches,
     toggleAirReductionUnit,
     missionSegmentOf,
     airTargetBaseIsAirstrip,
