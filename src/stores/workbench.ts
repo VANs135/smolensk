@@ -15236,6 +15236,40 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })
   })
 
+  /*
+   * 13.6：**到达条目"已投放"账本**（R1 缺口补全）
+   *
+   * 修前只有"落点解算"（`arrivalPlacements`），**没有"这条是否已投放"的记录** ⇒
+   *   ① 同一到达条目可以反复投放，凭空多出算子；
+   *   ② 判不了"当日到达是否已放完"，会话也就无法据实提示/推进。
+   * 计划键＝日期 + 方 + 条目原文序列：换日/换方/换计划即**惰性作废**（不另写重置点，避免漏清）。
+   */
+  const arrivalPlanKey = computed(() => {
+    const plan = arrivalPlan.value
+    if (plan === null) return ''
+    return `${date.value}|${activeSide.value}|${plan.units.map((unit) => unit.raw).join('|')}`
+  })
+  const arrivalPlacedKey = ref('')
+  const arrivalPlacedRaw = ref<Record<number, boolean>>({})
+  const arrivalPlaced = computed<Record<number, boolean>>(() =>
+    arrivalPlacedKey.value === arrivalPlanKey.value ? arrivalPlacedRaw.value : {},
+  )
+  /** 当日到达是否**已全部投放**（sp / unclassified 走卡面手工记账，不要求投放） */
+  const arrivalAllPlaced = computed(() => {
+    const plan = arrivalPlan.value
+    if (plan === null) return false
+    return plan.units.every((unit, index) => {
+      if (unit.kind === 'sp' || unit.kind === 'unclassified') return true
+      return arrivalPlaced.value[index] === true
+    })
+  })
+
+  /** 记账：把第 index 条到达标为已投放（内部用；仅在投放成功路径上调用） */
+  function markArrivalPlaced(index: number): void {
+    arrivalPlacedKey.value = arrivalPlanKey.value
+    arrivalPlacedRaw.value = { ...arrivalPlacedRaw.value, [index]: true }
+  }
+
   /**
    * B34：**图上本方单位**（给"拆分母单位 / 慢动员锁定 / 合并保留·移除"四处阵列当候选）
    *
@@ -15812,6 +15846,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (plan === null) return false
     const demand = plan.units[index]
     if (demand === undefined) return false
+    // 13.6：同一到达条目只能投放一次（修前无账本，可反复投放凭空多出算子）
+    if (arrivalPlaced.value[index] === true) {
+      pushLog('warning', `${demand.raw}：该到达条目已投放，勿重复（13.6）`, '13.6')
+      return false
+    }
     if (demand.kind === 'sp' || demand.kind === 'unclassified') {
       pushLog(
         'warning',
@@ -15918,6 +15957,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           aircraftId: air.instanceId,
         },
       })
+      markArrivalPlaced(index)
       return true
     }
 
@@ -15942,6 +15982,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         loadedWithSp: demand.loadedWithSp,
       },
     })
+    markArrivalPlaced(index)
     return true
   }
 
@@ -19101,6 +19142,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     reinforcementError,
     arrivalPlan,
     arrivalPlacements,
+    arrivalPlaced,
+    arrivalAllPlaced,
     ownUnitsOnMap,
     rebuildCandidates,
     rebuildCandidateHexes,

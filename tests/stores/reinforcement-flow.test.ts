@@ -259,6 +259,43 @@ describe('W6 B18：到达表执行（13.6 / 13.6b / 1.6a）', () => {
     // 但只有耗油单位**受这条规则约束**（12.5a 末句：步行/卡车/舰船/飞机永不需燃料）
     expect(typeof needsFuelToMove(toMoveUnitView(placed))).toBe('boolean')
   })
+
+  it('13.6：同一到达条目投放后不可重复投放（到达已放账本，修前会凭空多出算子）', () => {
+    const store = newStore()
+    store.setTurn(2)
+    store.setPhase('reinforcement')
+    const plan = store.arrivalPlan!
+    const index = plan.units.findIndex((unit) => unit.name === '5 Inf Div')
+    expect(index).toBeGreaterThanOrEqual(0)
+    const record = pickRecord('axis', (item) => /Inf Div/i.test(item.vassalName ?? ''))
+
+    expect(store.arrivalPlaced[index]).not.toBe(true)
+    expect(store.placeArrivalNow(index, record.id)).toBe(true)
+    expect(store.arrivalPlaced[index]).toBe(true)
+
+    const before = store.units.length
+    expect(store.placeArrivalNow(index, record.id)).toBe(false)
+    expect(store.units.length).toBe(before)
+  })
+
+  it('13.6：换日/换方（到达计划变）⇒ 已投放账本惰性作废', () => {
+    const store = newStore()
+    store.setTurn(2)
+    store.setPhase('reinforcement')
+    const dateBefore = store.date
+    const plan = store.arrivalPlan!
+    const index = plan.units.findIndex((unit) => unit.name === '5 Inf Div')
+    expect(index).toBeGreaterThanOrEqual(0)
+    const record = pickRecord('axis', (item) => /Inf Div/i.test(item.vassalName ?? ''))
+    expect(store.placeArrivalNow(index, record.id)).toBe(true)
+    expect(store.arrivalPlaced[index]).toBe(true)
+
+    store.setTurn(3)
+    // 换了日期 ⇒ 计划键不同 ⇒ 账本按新计划归零（不把上一日的"已放"带过来）
+    if (store.date !== dateBefore) {
+      expect(Object.keys(store.arrivalPlaced)).toHaveLength(0)
+    }
+  })
 })
 
 describe('W6 B18：可变增援与补员账本（1.6b / 1.6c）', () => {

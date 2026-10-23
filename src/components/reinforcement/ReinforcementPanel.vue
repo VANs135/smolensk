@@ -322,8 +322,13 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
             {{ item.nameZh ?? item.nameEn ?? item.id }}
           </option>
         </select>
-        <BaseButton variant="primary" size="sm" @click="onPlaceArrival(index)">
-          投放（13.6）
+        <BaseButton
+          variant="primary"
+          size="sm"
+          :disabled="workbench.arrivalPlaced[index] === true"
+          @click="onPlaceArrival(index)"
+        >
+          {{ workbench.arrivalPlaced[index] === true ? '已投放' : '投放（13.6）' }}
         </BaseButton>
       </template>
     </p>
