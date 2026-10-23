@@ -61,12 +61,13 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src.match(/<UiField\b/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
   })
 
-  it('BarragePanel：4 个数值已走 UiField（基地格属「补缺」保留手输）', () => {
+  it('BarragePanel：5 处（含补了点图按钮的基地格）已走 UiField', () => {
     const src = read('src/components/barrage/BarragePanel.vue')
     expect(src).toMatch(/import UiField from/)
-    expect(src.match(/<UiField\b/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
-    // 基地格没有点图按钮（旁边是"摆放飞机"），按 §5-E「补缺的 4 处」暂留手输
-    expect(src).toMatch(/<input v-model="workbench\.airPlacement\.hexText"/)
+    expect(src.match(/<UiField\b/g)?.length ?? 0).toBeGreaterThanOrEqual(5)
+    // 基地格已补「点地图选基地格」按钮 ⇒ 正式界面不必手输
+    expect(src).toMatch(/beginAirPlacementHexPickNow/)
+    expect(src).not.toMatch(/<input v-model="workbench\.airPlacement\.hexText"/)
   })
 
   it('其余面板：容器(3)/专规(8)/增援(8)/补给(14) 的数值与格号已走 UiField', () => {
@@ -82,5 +83,14 @@ describe('条 24：正式/验证模式门控', () => {
       const uses = src.match(/<UiField\b/g)?.length ?? 0
       expect(uses, `${file} 的 UiField 用量不足（${uses} < ${min}）`).toBeGreaterThanOrEqual(min)
     }
+  })
+
+  it('SetupPanel：西移落点已补「点地图选落点」+ 只读分支（§5-E 补缺）', () => {
+    const src = read('src/components/setup/SetupPanel.vue')
+    expect(src).toMatch(/function pickShiftWestHex/)
+    expect(src).toMatch(/beginHexPick\(\{/)
+    expect(src).toMatch(/点地图选落点/)
+    expect(src).toMatch(/v-if="uiMode === 'verify'"/)
+    expect(src).toMatch(/class="ui-field-readonly"/)
   })
 })

@@ -2,12 +2,14 @@
 import { computed } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
+import { useUiMode } from '@/components/ui-mode'
 import { scenarios } from '@/data'
 import type { Side } from '@/data'
 import { setupHexLabel } from '@/engine/rules'
 import {
   useContainersStore,
   useSetupStore,
+  useWorkbenchStore,
   type SetupPlacing,
   type SetupPlacingCategory,
 } from '@/stores'
@@ -31,6 +33,25 @@ import {
 
 const setup = useSetupStore()
 const containers = useContainersStore()
+const workbench = useWorkbenchStore()
+
+/** 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输） */
+const uiMode = useUiMode()
+
+/**
+ * 条 26 / S4：西移落点**点地图选**（补 §5-E「补缺的 4 处」之一）
+ *
+ * 原处只能手输「列.行」（原文：位置印在剧本卡上、数据里没有）；这里接上统一的格选择——
+ * 选中后由 `containers.setDrawShiftHexNow` 校验并写回，正式界面因此可以只读展示。
+ */
+function pickShiftWestHex(formationId: string): void {
+  workbench.beginHexPick({
+    label: `西移落点（${formationId}）`,
+    rule: 'ch10',
+    candidates: 'any',
+    apply: (hex) => containers.setDrawShiftHexNow(formationId, setupHexLabel(hex)),
+  })
+}
 
 /** 剧本下拉 */
 const scenarioChoices = computed(() =>
@@ -331,6 +352,7 @@ function sideLabel(side: Side): string {
             {{ item.shiftHexes }} 格）
           </span>
           <input
+            v-if="uiMode === 'verify'"
             class="input num"
             :value="item.hexText ?? ''"
             placeholder="列.行"
@@ -341,6 +363,10 @@ function sideLabel(side: Side): string {
               )
             "
           />
+          <span v-else class="ui-field-readonly">{{ item.hexText || '—' }}</span>
+          <BaseButton variant="secondary" size="sm" @click="pickShiftWestHex(item.formationId)">
+            点地图选落点
+          </BaseButton>
         </div>
         <BaseButton variant="primary" size="sm" @click="containers.applyShiftWestPlacementsNow()">
           照此摆位（ch10）

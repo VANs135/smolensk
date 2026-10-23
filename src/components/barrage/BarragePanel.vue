@@ -316,7 +316,14 @@ function setAircraftRoll(unitId: string, value: number): void {
           />
           <label class="field">
             基地格（列.行）
-            <input v-model="workbench.airPlacement.hexText" class="input" placeholder="36.13" />
+            <UiField v-model="workbench.airPlacement.hexText" class="input" placeholder="36.13" />
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              @click="workbench.beginAirPlacementHexPickNow()"
+            >
+              点地图选基地格
+            </BaseButton>
           </label>
           <BaseButton
             variant="secondary"
