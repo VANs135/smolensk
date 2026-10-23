@@ -273,10 +273,52 @@ export const useMapViewStore = defineStore('mapView', () => {
     }))
   })
 
+  /**
+   * 条 27 / §5-C：**补给站账本 → 地图令牌**（同格合并成**一枚**补给站令牌）
+   *
+   * 现状 `spDumps` 只在面板选择器里用、**地图上完全看不到补给站**。这里把本方账本按格聚合：
+   * 同格多枚合并成一条（点数相加），地图贴图由 `tokenImageUrl` 按点数取**最近面额**图，
+   * 实数由 `label`（角标）显示。消耗改的是 `spDumps` ⇒ 本 computed 自动重算 ⇒ 贴图/角标即时刷新。
+   *
+   * 空站（SP 与 T 都为 0）不画，避免"幽灵站"。
+   */
+  function spDumpTokens(): UnitToken[] {
+    const merged = new Map<string, UnitToken>()
+    for (const dump of workbench.spDumpsOfSide) {
+      if (dump.sp <= 0 && dump.t <= 0) continue
+      const key = `${dump.hex.col},${dump.hex.row}`
+      const cur = merged.get(key)
+      if (cur === undefined) {
+        merged.set(key, {
+          id: `sp:${key}`,
+          hex: { ...dump.hex },
+          side: dump.side,
+          noncombatKind: 'sp',
+          spPoints: dump.sp,
+          face: 'combat',
+          images: null,
+          label: `${dump.sp} SP`,
+          selected: false,
+          ended: false,
+          modeLetter: '',
+          dg: false,
+          awaitingFuel: false,
+          fuelled: false,
+        })
+      } else {
+        const total = (cur.spPoints ?? 0) + dump.sp
+        cur.spPoints = total
+        cur.label = `${total} SP`
+      }
+    }
+    return [...merged.values()]
+  }
+
   /** 当前覆盖层（地图要画的一切；视图直接把它交给 `MapCanvas`） */
   const overlay = computed<MovementOverlay>(() => {
     const movingIds = workbench.moveInteraction?.unitIds ?? []
-    const visibleTokens = [...fogVisibleTokens(groundTokens()), ...airTokens()]
+    const groundAndAir = [...fogVisibleTokens(groundTokens()), ...airTokens()]
+    const visibleTokens = [...groundAndAir, ...spDumpTokens()]
     return {
       tokens: visibleTokens,
       /*
@@ -286,7 +328,7 @@ export const useMapViewStore = defineStore('mapView', () => {
        * 泄露地图本身没画出来的信息。投射判据（可攻击 + 战斗模式 + 有追溯补给）由引擎的
        * `zocHexes` 内部按 `projectsZoc` 裁定，本处不另行判定。
        */
-      zoc: zocLayerVisible.value ? zocLayerFromTokens(visibleTokens) : null,
+      zoc: zocLayerVisible.value ? zocLayerFromTokens(groundAndAir) : null,
       reachable: workbench.groupReachable.hexes.map((node) => ({
         hex: node.hex,
         mpSpent: node.mpSpent,

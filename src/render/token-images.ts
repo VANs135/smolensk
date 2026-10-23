@@ -178,6 +178,27 @@ export function counterImageUrlForFace(
 /* ────────────────────────────── 计数类非战斗算子：图随**当前数值**走 ────────────────────────────── */
 
 /**
+ * 条 27 / §4-7：素材只有 1/2/3/4/5/10/15 七种面额 ⇒ 任意总额取**最近面额**的图，
+ * 实数（真实总额）由角标补上（见 `spDenominationDiffers`）。
+ *
+ * 距离相同时取**小面额**（整数区间内只有 5↔10 的 7.5 是中点，整数不会撞平局；
+ * 此处仍显式定序，避免将来加面额时行为漂移）。
+ */
+export const SP_DENOMINATIONS: readonly number[] = [1, 2, 3, 4, 5, 10, 15]
+
+/** 任意总额 → 最近的可取面额（≤0 / 非整数 ⇒ null） */
+export function nearestSpDenomination(points: number): number | null {
+  if (!Number.isInteger(points) || points <= 0) return null
+  let best = SP_DENOMINATIONS[0]! // 非空常量表，取首项一定存在
+  for (const denom of SP_DENOMINATIONS) {
+    const d = Math.abs(denom - points)
+    const b = Math.abs(best - points)
+    if (d < b || (d === b && denom < best)) best = denom
+  }
+  return best
+}
+
+/**
  * 12.1a：SP 算子的图 —— **由当前点数决定**（不是记录里那枚静态图）
  *
  * 素材库按面额各有一张（`Neutral_SP_1..5/10/15`）；其中 1/2/3 是**双面**算子的两面：
@@ -185,12 +206,20 @@ export function counterImageUrlForFace(
  * 4/5/10/15 只有单面图。
  *
  * 「由当前点数决定」的意义：拆并补给台（12.1a）后点数会变，图必须跟着变。
+ * 非标总额（如 9）取最近面额（10）的图，实数 9 由角标显示。
  */
 export function spCounterImageUrl(points: number, face: 'combat' | 'move'): string | null {
-  if (!Number.isInteger(points) || points <= 0) return null
-  const base = `Neutral_SP_${points}`
-  if (points <= 3) return markerTextureUrl(`${base}_${face === 'move' ? 'B' : 'F'}.png`)
+  const denom = nearestSpDenomination(points)
+  if (denom === null) return null
+  const base = `Neutral_SP_${denom}`
+  if (denom <= 3) return markerTextureUrl(`${base}_${face === 'move' ? 'B' : 'F'}.png`)
   return markerTextureUrl(`${base}.png`)
+}
+
+/** 该总额的贴图面额是否与实数不一致（不一致 ⇒ 需要画实数角标） */
+export function spDenominationDiffers(points: number): boolean {
+  const denom = nearestSpDenomination(points)
+  return denom !== null && denom !== points
 }
 
 /**
