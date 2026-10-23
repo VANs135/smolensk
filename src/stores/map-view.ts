@@ -51,11 +51,22 @@ const MODE_LETTER: Record<string, string> = {
 }
 
 /** 地图小窗的状态（点某格后打开；内容由视图按格推出） */
+/**
+ * 小窗的两种**变体**（条 25）
+ *
+ * · `content`：常规小窗（330px，含该格算子清单 / 飞机 / 各类动作）——有内容或正在办事时用它；
+ * · `label`：**只读格号浮签**——空闲时点一个空格，玩家只要知道"我点的是哪一格"，
+ *   不需要"该格算子 0 枚"这种空清单（用户清单条 25 的原话：要的是"只读格号小文字框"）。
+ */
+export type MapPopupVariant = 'content' | 'label'
+
 export interface MapPopupState {
   hex: HexRef
   /** 锚点（视口内 CSS 像素） */
   x: number
   y: number
+  /** 变体（条 25；缺省 `content`，与既有调用一致） */
+  variant: MapPopupVariant
 }
 
 /** 小窗里「这一格有什么」的清单（地面 + 本方飞机；按战雾纪律裁剪） */
@@ -1284,8 +1295,25 @@ export const useMapViewStore = defineStore('mapView', () => {
   const popup = ref<MapPopupState | null>(null)
 
   /** 打开小窗（锚点由视图用 `MapCanvas.hexToLocal` 换算后传入） */
-  function openPopup(hex: HexRef, x: number, y: number): void {
-    popup.value = { hex: { col: hex.col, row: hex.row }, x, y }
+  function openPopup(
+    hex: HexRef,
+    x: number,
+    y: number,
+    variant: MapPopupVariant = 'content',
+  ): void {
+    popup.value = { hex: { col: hex.col, row: hex.row }, x, y, variant }
+  }
+
+  /**
+   * 条 25：**空闲点空格 ⇒ 只读格号浮签**
+   *
+   * 判据只有一句——"这一格**没有任何可列内容**"（无地面算子令牌、无本方飞机）。
+   * 注意这里**不动 `clickHex` 的既有选中语义**：那一击照样清选中、照样写"选中格 X.Y（空格）"
+   * 日志（既有契约，别的用例钉着）；本条只把**显示**从 330px 空清单换成格号浮签。
+   */
+  function popupVariantFor(hex: HexRef): MapPopupVariant {
+    // 与"摊开/命中"同一份令牌口径（地面 + 本方飞机，已过战雾裁剪）
+    return stackTokensAt(hex).length > 0 ? 'content' : 'label'
   }
 
   /** 关闭小窗 */
@@ -1609,7 +1637,14 @@ export const useMapViewStore = defineStore('mapView', () => {
     const sessionKindAfter = session.value?.kind ?? ''
     if (sessionKindAfter !== sessionKindBefore) return
     if (sessionKindAfter !== '' && !consumed) return
-    if (anchor !== undefined) openPopup(hex, anchor.x, anchor.y)
+    /*
+     * 条 25：**空闲点空格 ⇒ 只读格号浮签**。
+     * 会话在跑时（本击被会话当成"地图点选"消费掉）一定是 `content`：那时小窗是会话的辅助窗，
+     * 玩家要在里面选东西；只有"什么都没发生、纯粹点了个空格"这一击才降级成格号浮签。
+     */
+    if (anchor !== undefined) {
+      openPopup(hex, anchor.x, anchor.y, sessionKindAfter !== '' ? 'content' : popupVariantFor(hex))
+    }
   }
   return {
     // 画什么
