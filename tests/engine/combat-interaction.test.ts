@@ -1144,6 +1144,11 @@ describe('9.12g / 9.13 战后推进与进击', () => {
     )
     expect(advance.exploit).toMatchObject({ granted: true, reason: 'ok' })
     expect(advance.patches).toContainEqual({ unitId: 'a1', exploit: true })
+    /*
+     * E3（批 F·F2）：修前 store 的日志写死"授予 AR 单位"，而 9.13b-A 是**逐单位**授予
+     * ⇒ 文案与事实不符。引擎必须把实际受标单位交给调用方（日志据此列名单）。
+     */
+    expect(advance.exploit.unitIds).toEqual(['a1'])
   })
 
   it('9.13b-B：进击阶段的攻击不给进击标记（e# 只在战斗阶段生效）', () => {

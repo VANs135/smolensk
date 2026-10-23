@@ -9054,7 +9054,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       'success',
       `战后推进（9.12g）：${data.advanceUnitIds.length === 0 ? '不推进' : data.advanceUnitIds.map(nameOf).join('、')}` +
         `${data.state.advance?.mandatory === true ? '（突袭后必须推进）' : ''}；` +
-        `进击标记（9.13）：${data.exploit.granted ? '授予 AR 单位' : `不授予（${data.exploit.reason}）`}`,
+        /*
+         * E3（批 F·F2）：修前写死"授予 AR 单位"——而 9.13b-A 是**逐单位**授予
+         * （AR ≥ e# 且自身未 DG 的参战单位各自获得）⇒ 文案与事实不符。
+         * 现在改为列出引擎实际授予的那些单位（`exploit.unitIds`）。
+         */
+        `进击标记（9.13）：${
+          data.exploit.granted
+            ? `授予 ${(data.exploit.unitIds ?? []).map(nameOf).join('、') || '（无单位）'}（逐单位，9.13b-A）`
+            : `不授予（${data.exploit.reason}）`
+        }`,
       '9.12g',
     )
     // ⑭ 接线：战后推进与进击标记（9.12g / 9.13）入会话日志（本笔不掷骰）
@@ -18325,6 +18334,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     advanceSegmentNow,
     pickRecord,
     setTool,
+    /**
+     * 2.2 流程表**段**的中文名（只读常量表）
+     *
+     * 暴露给流程条（E5）：未开局时 `gameSession.records?.phase` 不存在，
+     * 界面要与「环节」行同源 ⇒ 需要把 `phase`（ConsolePhase）翻成段名。
+     * 只**读**，不含任何回退口径（回退仍是 `phase` 自己的事）。
+     */
+    PHASE_LABELS,
     combatPickActive,
     placeAt,
     removeAt,

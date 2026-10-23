@@ -69,10 +69,17 @@ const mapView = useMapViewStore()
 /** 当前步序号（null = 无法确定） */
 const currentIndex = computed<number | null>(() => gameSession.guidance?.index ?? null)
 
-/** 阶段的中文名（2.2 流程表的**段**：天气 / 先手 / A–H / 推进回合标记） */
+/**
+ * 阶段的中文名（2.2 流程表的**段**：天气 / 先手 / A–H / 推进回合标记）
+ *
+ * E5（批 F·F2）：修前本行**只读** `gameSession.records?.phase` ⇒ 初设期（会话未建）恒报
+ * '—'，而「环节」行读的是 `workbench` 的段/子步 ⇒ 两行必然错配（一行空、一行有内容）。
+ * 现在：未开局时改与「环节」行**同源**（`workbench.phase` 本身就是"会话优先、否则本地演练"），
+ * 只把它翻成段名；**不动 store 的回退口径**（那是验证页与既有测试依赖的）。
+ */
 const phaseLabel = computed<string>(() => {
   const phase = gameSession.records?.phase
-  if (phase === undefined) return '—'
+  if (phase === undefined) return workbench.PHASE_LABELS[workbench.phase] ?? '—'
   // Pre-Turn 的原文把两项列在段一级，但引擎建成一个段的两个子步 ⇒ 这里只报段名，
   // 「天气判定 / 先手判定」由下面的**环节**行显示（否则同一件事在两行里各说一遍）
   if (phase === 'preTurn') return '回合准备'
@@ -160,6 +167,18 @@ const advanceLabel = computed<string>(() => {
  * 才知道下一步能做什么。故流程条给出：第几环 / 共几环 + 环节名 + 规则号 + **本环节可参与 N 枚**。
  */
 const segmentLabel = computed<string>(() => {
+  /*
+   * E5（批 F·F2）：Pre-Turn 时 `workbench.phase` **表达不了**「回合准备」——
+   * `ConsolePhase` 里没有 `preTurn`，`fromRecords` 取不到 ⇒ 回退到 `localPhase='movement'`，
+   * 于是「阶段」行报「回合准备」、本行却报**移动**环节（错配）。
+   * 现在：会话已建且处在 Pre-Turn ⇒ 改报**会话自己的子步**（天气判定 / 先手判定，见
+   * `gameSession.guidance?.step`），不问 `workbench`。未开局（无会话）仍走原路（验证页依赖它）。
+   */
+  const phase = gameSession.records?.phase
+  if (phase === 'preTurn' && gameSession.guidance !== null) {
+    const step = gameSession.guidance.step
+    return `${step.label}（${step.rule}）`
+  }
   const step = workbench.segmentStep
   if (step === null)
     return workbench.segmentSteps.length === 0 ? '（本段无环节）' : '（本段无玩家环节）'

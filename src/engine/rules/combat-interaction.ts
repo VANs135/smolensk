@@ -1119,7 +1119,13 @@ export function resolveAdvance(
   state: CombatInteractionState
   patches: CombatUnitPatch[]
   advanceUnitIds: string[]
-  exploit: { granted: boolean; reason: string }
+  /**
+   * 9.13b-A：进击标记是**逐单位**授予的（AR ≥ e# 且自身未 DG 的参战单位各自获得）
+   *
+   * `granted` 只是"有没有人拿到"；真正拿到的是 `unitIds`（E3：日志要列实际受标单位，
+   * 不能写死"授予 AR 单位"）。实现里已在 `exploit.ok` 时带上本字段。
+   */
+  exploit: { granted: boolean; reason: string; unitIds?: readonly string[] }
 }> {
   if (state.step !== 'advance') return fail('9.2', `notAtAdvanceStep:${state.step}`)
   if (state.ar === undefined || state.dice === undefined)
