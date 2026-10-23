@@ -7516,6 +7516,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C6：清空本场战斗的全部交互状态（换方/换阶段/重置/关闭时调用） */
   function clearCombat(): void {
+    resetOptionDraft()
     combatAttackerIds.value = []
     combatState.value = null
     combatError.value = null
@@ -8573,9 +8574,239 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     combatInputs.value.optionLossPoints = 0
     combatInputs.value.optionLossAllocation = {}
     combatInputs.value.ignoreOptions = false
+    resetOptionDraft()
     return true
   }
 
+  /*
+   * ───────────────────────────────────────────────────────────────────────────
+   * 条 15/16（批 F·F1）：选项战果页「草稿账本」＋「受损 / 撤退（1 格）」双按钮
+   *
+   * 用户口径：选项点数的消耗改成**逐次点选**（点单位图即受损、点可撤退格即撤退），
+   * 每次应用只进**草稿账本**（不落盘）；最后按「提交」才一次性交给引擎
+   * （`planOptions` 仍是一发结算，引擎不改）。
+   *
+   * 草稿直接寄居在 `combatInputs.option*` 三个字段上（提交路径完全复用旧链路），
+   * 另配 `optionDraftLog` 记流水供「撤销上一次」。
+   * ───────────────────────────────────────────────────────────────────────────
+   */
+
+  /** 草稿应用模式：idle＝待选 / loss＝点单位图受损 / retreat＝点可撤退格撤退 */
+  const optionDraftMode = ref<'idle' | 'loss' | 'retreat'>('idle')
+  /** 草稿流水（逐次应用；撤销按此回退） */
+  const optionDraftLog = ref<{ kind: 'loss' | 'retreat'; unitId?: string; amount: number }[]>([])
+
+  /** 当前结算方的可用选项点数（9.10a） */
+  const optionDraftPoints = computed(() => {
+    const state = combatState.value
+    if (state === null || state.dice === undefined || state.step !== 'options') return 0
+    return optionsOf(state.dice.result, currentResolver(state))
+  })
+
+  /** 草稿已用点数 */
+  const optionDraftUsed = computed(
+    () => combatInputs.value.optionLossPoints + combatInputs.value.optionRetreatHexes,
+  )
+
+  /** 草稿剩余点数（9.10a：总数必须完全满足 ⇒ 提交时须为 0） */
+  const optionDraftRemaining = computed(() =>
+    Math.max(0, optionDraftPoints.value - optionDraftUsed.value),
+  )
+
+  /** 草稿流水（面板展示用；最新在末尾） */
+  const optionDraftEntries = computed(() =>
+    optionDraftLog.value.map((entry, index) => ({
+      index,
+      kind: entry.kind,
+      unitId: entry.unitId ?? null,
+      amount: entry.amount,
+      label:
+        entry.kind === 'loss'
+          ? `${nameOf(entry.unitId ?? '')} 受损 ${entry.amount} 军力`
+          : `撤退 ${entry.amount} 格`,
+    })),
+  )
+
+  /** 切换应用模式（再点一次同一模式＝收起） */
+  function setOptionDraftMode(mode: 'idle' | 'loss' | 'retreat'): void {
+    optionDraftMode.value = optionDraftMode.value === mode ? 'idle' : mode
+  }
+
+  /** 草稿层容量护栏：该单位当前军力（9.11d 的承受上限由提交时引擎严格校验） */
+  function optionLossRoomOf(unitId: string): number {
+    const target = combatOptionLossTargets.value.find((item) => item.id === unitId)
+    return target === undefined ? 0 : Math.max(0, target.steps)
+  }
+
+  /**
+   * 「受损」：给某参战单位记 1 点军力损失（草稿；9.11a 的逐单位分配）
+   *
+   * 约束（草稿层只做护栏，严格校验仍归提交时的 `validateBattleLossAllocation`）：
+   * ① 剩余选项点数 > 0；② 该单位还有军力可损。
+   */
+  function applyOptionDraftLoss(unitId: string): boolean {
+    const state = combatState.value
+    if (state === null || state.step !== 'options') return false
+    if (optionDraftRemaining.value <= 0) return false
+    if (optionLossRoomOf(unitId) - (combatInputs.value.optionLossAllocation[unitId] ?? 0) <= 0) {
+      return false
+    }
+    combatInputs.value.optionLossAllocation = {
+      ...combatInputs.value.optionLossAllocation,
+      [unitId]: (combatInputs.value.optionLossAllocation[unitId] ?? 0) + 1,
+    }
+    combatInputs.value.optionLossPoints += 1
+    optionDraftLog.value = [...optionDraftLog.value, { kind: 'loss', unitId, amount: 1 }]
+    return true
+  }
+
+  /** 「撤退（1 格）」：记 distance 格撤退（草稿；点数不够时按剩余截断） */
+  function applyOptionDraftRetreat(distance = 1): boolean {
+    const state = combatState.value
+    if (state === null || state.step !== 'options') return false
+    const room = optionDraftRemaining.value
+    if (room <= 0) return false
+    const applied = Math.min(Math.max(1, Math.round(distance)), room)
+    combatInputs.value.optionRetreatHexes += applied
+    optionDraftLog.value = [...optionDraftLog.value, { kind: 'retreat', amount: applied }]
+    return true
+  }
+
+  /** 点地图上的高亮撤退格 ⇒ 按该格距起点的直线距离记撤退（点数不够截断） */
+  function applyOptionDraftRetreatAt(hex: HexRef): boolean {
+    const preview = optionDraftRetreatPreview.value
+    if (preview === null) return false
+    const distance = preview.distanceOf[`${hex.col},${hex.row}`]
+    if (distance === undefined) return false
+    return applyOptionDraftRetreat(distance)
+  }
+
+  /** 撤销上一次草稿应用（流水末条按 amount 精确回退） */
+  function undoOptionDraftLast(): boolean {
+    const last = optionDraftLog.value[optionDraftLog.value.length - 1]
+    if (last === undefined) return false
+    optionDraftLog.value = optionDraftLog.value.slice(0, -1)
+    if (last.kind === 'loss' && last.unitId !== undefined) {
+      const next = (combatInputs.value.optionLossAllocation[last.unitId] ?? 0) - last.amount
+      const allocation = { ...combatInputs.value.optionLossAllocation }
+      if (next <= 0) delete allocation[last.unitId]
+      else allocation[last.unitId] = next
+      combatInputs.value.optionLossAllocation = allocation
+      combatInputs.value.optionLossPoints = Math.max(
+        0,
+        combatInputs.value.optionLossPoints - last.amount,
+      )
+    } else {
+      combatInputs.value.optionRetreatHexes = Math.max(
+        0,
+        combatInputs.value.optionRetreatHexes - last.amount,
+      )
+    }
+    return true
+  }
+
+  /** 收起草稿（提交后 / 离开选项步 / 清理战斗时调用） */
+  function resetOptionDraft(): void {
+    optionDraftMode.value = 'idle'
+    optionDraftLog.value = []
+  }
+
+  /**
+   * 条 15/16（批 F·F1）：「撤退」草稿模式下，地图上铺「本堆叠可撤退格」预览。
+   *
+   * 取当前结算方各参战单位在 **1..剩余点数** 各距离上撤退落点（`planRetreatDestinations`，
+   * 9.12）的并集；每格记**最小直线距离** ⇒ 玩家点格即按该距离消耗点数。
+   * 分类沿用撤退步的三色（安全 / 敌方 ZOC / 必被消灭 9.12b）。
+   */
+  const optionDraftRetreatPreview = computed<{
+    safe: HexRef[]
+    zoc: HexRef[]
+    doomed: HexRef[]
+    distanceOf: Record<string, number>
+  } | null>(() => {
+    const state = combatState.value
+    if (state === null || state.step !== 'options' || optionDraftMode.value !== 'retreat') {
+      return null
+    }
+    const side = currentResolver(state)
+    const views = side === 'attacker' ? combatAttackerViews.value : combatDefenderViews.value
+    const maxDistance = Math.max(1, optionDraftRemaining.value)
+    const byKey = new Map<
+      string,
+      { hex: HexRef; distance: number; kind: 'safe' | 'zoc' | 'doomed' }
+    >()
+    const keyOf = (hex: HexRef) => `${hex.col},${hex.row}`
+    for (const view of views) {
+      for (let distance = 1; distance <= maxDistance; distance += 1) {
+        for (const destination of planRetreatDestinations({
+          from: view.hex,
+          distance,
+          mobility: view.mobility,
+          side: view.side,
+          facts: combatRetreatFacts.value,
+          immobile: combatRetreatFacts.value.immobile(view.id),
+        })) {
+          const key = keyOf(destination.hex)
+          const kind = destination.forcedDestruction
+            ? 'doomed'
+            : destination.inEnemyZoc
+              ? 'zoc'
+              : 'safe'
+          const prev = byKey.get(key)
+          if (prev === undefined || distance < prev.distance) {
+            byKey.set(key, { hex: { ...destination.hex }, distance, kind })
+          } else if (distance === prev.distance && kind === 'doomed' && prev.kind !== 'doomed') {
+            byKey.set(key, { ...prev, kind })
+          }
+        }
+      }
+    }
+    const safe: HexRef[] = []
+    const zoc: HexRef[] = []
+    const doomed: HexRef[] = []
+    const distanceOf: Record<string, number> = {}
+    for (const item of byKey.values()) {
+      if (item.kind === 'doomed') doomed.push(item.hex)
+      else if (item.kind === 'zoc') zoc.push(item.hex)
+      else safe.push(item.hex)
+      distanceOf[keyOf(item.hex)] = item.distance
+    }
+    return { safe, zoc, doomed, distanceOf }
+  })
+
+  /**
+   * 9.10c 例 B / 条 16（批 F·F1）：攻方参战单位是否已全灭。
+   *
+   * 此时守方选项页给「不选 / 结束战斗」一键：无人需撤、无人可推 ⇒ 一键收尾。
+   */
+  const attackerWipedNow = computed(() => {
+    const state = combatState.value
+    if (state === null || state.resolution.stage !== 'defenderOptions') return false
+    return combatAttackerViews.value.every((view) => view.steps <= 0)
+  })
+
+  /**
+   * 条 16（批 F·F1）：「结束战斗」一键（仅攻方全灭的守方选项页可用）。
+   *
+   * 走既有链路：9.10c 忽略守方选项 → 无人需撤 → 无可推进单位 ⇒ 战斗自动收束
+   * （`confirmCombatRetreats` 尾部对「一个可推进单位都没有」直接收整场）。
+   */
+  function concludeCombatAfterWipe(): boolean {
+    const state = combatState.value
+    if (state === null || !attackerWipedNow.value) return false
+    combatInputs.value.ignoreOptions = true
+    if (!confirmCombatOptions()) return false
+    if (combatState.value?.step === 'retreat' && !confirmCombatRetreats()) return false
+    // 「一个可推进单位都没有」时 confirmCombatRetreats 已自行收束（finished=true）⇒ 不重复推进
+    if (
+      combatState.value !== null &&
+      combatState.value.finished !== true &&
+      combatState.value.step === 'advance'
+    ) {
+      if (!confirmCombatAdvance()) return false
+    }
+    return combatState.value?.finished === true
+  }
   /** C6 第 9 步：撤退（9.12：撤退格数＝剩余选项数；落点须满足完整撤退距离） */
   function confirmCombatRetreats(): boolean {
     const state = combatState.value
@@ -18076,6 +18307,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     combatResolver,
     combatRequirement,
     combatOptionLossTargets,
+    optionDraftMode,
+    optionDraftPoints,
+    optionDraftUsed,
+    optionDraftRemaining,
+    optionDraftEntries,
+    optionDraftRetreatPreview,
+    attackerWipedNow,
+    setOptionDraftMode,
+    applyOptionDraftLoss,
+    applyOptionDraftRetreat,
+    applyOptionDraftRetreatAt,
+    undoOptionDraftLast,
+    resetOptionDraft,
+    concludeCombatAfterWipe,
     combatCanonicalLosses,
     // 批 F 切片 2（9.11a）：拥有者可以把"多受的那一点"改派给谁（候选与提交分配的唯一出处）
     combatLossSwapChoices,

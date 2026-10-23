@@ -281,14 +281,24 @@ export const useMapViewStore = defineStore('mapView', () => {
       overrunTargets: workbench.overrunTargets,
       // W7 C16：9.12 撤退落点（只画「当前该轮到的这一方」，实现「攻方先、守方后」的渲染次序；
       // 只在 9.2 的撤退步铺出，避免在其他步误导玩家）
+      // 条 15/16（批 F·F1）：选项页「撤退」草稿模式下，同三色铺「本堆叠可撤退格」预览
+      // （点格即按该格距离记撤退草稿；正式撤退仍走 9.2 撤退步）
       retreat:
-        workbench.combatState?.step !== 'retreat' || retreatSidePlan.value === null
-          ? null
-          : {
-              safe: retreatSidePlan.value.safe,
-              zoc: retreatSidePlan.value.zoc,
-              doomed: retreatSidePlan.value.doomed,
-            },
+        workbench.combatState?.step === 'retreat'
+          ? retreatSidePlan.value === null
+            ? null
+            : {
+                safe: retreatSidePlan.value.safe,
+                zoc: retreatSidePlan.value.zoc,
+                doomed: retreatSidePlan.value.doomed,
+              }
+          : workbench.optionDraftMode === 'retreat' && workbench.optionDraftRetreatPreview !== null
+            ? {
+                safe: workbench.optionDraftRetreatPreview.safe,
+                zoc: workbench.optionDraftRetreatPreview.zoc,
+                doomed: workbench.optionDraftRetreatPreview.doomed,
+              }
+            : null,
       // W7 C16：9.12g 战后推进格（只在推进步铺出）
       advance:
         workbench.combatState?.step === 'advance' && workbench.combatAdvanceHex !== null
@@ -1458,6 +1468,24 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 它排在所有待决分派之前：玩家已经明确表达"我在选一个格"，这一击就该归它。
      */
     if (workbench.pickHexFor(hex)) {
+      closePopup()
+      return
+    }
+    /*
+     * 条 15/16（批 F·F1）：选项页草稿的**地图点选**（模态式，优先于常规分派）。
+     *   · 「受损」模式：点本结算方参战单位 ⇒ 该单位记 1 点军力损失（草稿）
+     *   · 「撤退」模式：点高亮的可撤退格 ⇒ 按该格距离记撤退（草稿）
+     * 两种模式下点不到合法目标都只当「取消选择」——不让这一击落到别的分派上。
+     */
+    if (workbench.optionDraftMode !== 'idle') {
+      if (workbench.optionDraftMode === 'loss') {
+        const target = workbench.combatOptionLossTargets.find(
+          (item) => item.hex.col === hex.col && item.hex.row === hex.row,
+        )
+        if (target !== undefined) workbench.applyOptionDraftLoss(target.id)
+      } else {
+        workbench.applyOptionDraftRetreatAt(hex)
+      }
       closePopup()
       return
     }

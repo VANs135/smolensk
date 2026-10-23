@@ -641,46 +641,6 @@ const quickDefenderArItems = computed(() =>
             选项点数 {{ workbench.combatRequirement?.options ?? 0 }}：可把「撤退格数 +
             损失军力」任意组合， 但总数必须**完全满足**（9.10a）。
           </p>
-          <div class="row">
-            <label class="field">
-              撤退格数
-              <input
-                v-model.number="workbench.combatInputs.optionRetreatHexes"
-                class="num-input"
-                type="number"
-                min="0"
-              />
-            </label>
-            <label class="field">
-              损失军力
-              <input
-                v-model.number="workbench.combatInputs.optionLossPoints"
-                class="num-input"
-                type="number"
-                min="0"
-              />
-            </label>
-          </div>
-          <!-- 9.11a/9.11c（第五批 A3）：选项损失的逐单位分配。全 0（缺省）＝按规范分配
-               （AR 优先＋均匀展开）；给出正数时由引擎严格校验（validateBattleLossAllocation）。
-               候选由 store 投影给出（当前结算方的参战单位），面板不自己算。 -->
-          <div v-if="workbench.combatInputs.optionLossPoints > 0" class="row">
-            <label v-for="unit in workbench.combatOptionLossTargets" :key="unit.id" class="field">
-              {{ unit.name }}（{{ unit.steps }} 步）
-              <input
-                class="num-input"
-                type="number"
-                min="0"
-                :max="unit.steps"
-                :value="workbench.combatInputs.optionLossAllocation[unit.id] ?? 0"
-                @input="
-                  workbench.combatInputs.optionLossAllocation[unit.id] = Number(
-                    ($event.target as HTMLInputElement).value,
-                  )
-                "
-              />
-            </label>
-          </div>
           <p v-if="workbench.combatInputs.optionLossPoints > 0" class="muted">
             9.11c：第一点必须由 AR 单位承受；各单位各受一点后才能有单位受第二点。 全部留 0 ＝
             按规范分配（同样合法）。
@@ -695,9 +655,99 @@ const quickDefenderArItems = computed(() =>
             <input v-model="workbench.combatInputs.ignoreOptions" type="checkbox" />
             行使 9.10c：忽略守方自己的选项
           </label>
+          <!--
+            ★ 条 15/16（批 F·F1）：选项点数的消耗改成「受损 / 撤退（1 格）」双按钮逐次点选。
+            点"受损"⇒ 点本堆叠单位图即受损；点"撤退"⇒ 地图高亮可撤退格、点格即撤退。
+            每次应用只进**草稿账本**（不落盘）；最后按「提交」才一次性交给引擎（planOptions）。
+          -->
+          <p class="num">
+            可用选项点数 <b>{{ workbench.optionDraftPoints }}</b
+            >｜草稿已用 <b>{{ workbench.optionDraftUsed }}</b
+            >｜剩余 <b>{{ workbench.optionDraftRemaining }}</b
+            >（9.10a：提交时须完全满足）
+          </p>
           <div class="row">
-            <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatOptions()">
-              确认选项（9.10）
+            <BaseButton
+              :variant="workbench.optionDraftMode === 'loss' ? 'primary' : 'secondary'"
+              size="sm"
+              :disabled="workbench.optionDraftRemaining <= 0"
+              @click="workbench.setOptionDraftMode('loss')"
+            >
+              受损（点单位图）
+            </BaseButton>
+            <BaseButton
+              :variant="workbench.optionDraftMode === 'retreat' ? 'primary' : 'secondary'"
+              size="sm"
+              :disabled="workbench.optionDraftRemaining <= 0"
+              @click="workbench.setOptionDraftMode('retreat')"
+            >
+              撤退（1 格）
+            </BaseButton>
+            <BaseButton
+              variant="ghost"
+              size="sm"
+              :disabled="workbench.optionDraftEntries.length === 0"
+              @click="workbench.undoOptionDraftLast()"
+            >
+              撤销上一次
+            </BaseButton>
+          </div>
+          <p v-if="workbench.optionDraftMode === 'loss'" class="muted num">
+            点**地图上本堆叠的单位图**记 1 点军力损失；也可直接点下面各单位。
+          </p>
+          <p v-else-if="workbench.optionDraftMode === 'retreat'" class="muted num">
+            地图上已按三色铺出**本堆叠可撤退格**（青绿＝安全 / 橙红＝敌方 ZOC / 暗红＝必被消灭
+            9.12b）；点格即按该格距离记撤退草稿。
+          </p>
+          <!-- 「受损」模式：面板内也给出各单位（不看地图也能点） -->
+          <div v-if="workbench.optionDraftMode === 'loss'" class="row">
+            <BaseButton
+              v-for="unit in workbench.combatOptionLossTargets"
+              :key="unit.id"
+              variant="secondary"
+              size="sm"
+              :disabled="
+                workbench.optionDraftRemaining <= 0 ||
+                (workbench.combatInputs.optionLossAllocation[unit.id] ?? 0) >= unit.steps
+              "
+              @click="workbench.applyOptionDraftLoss(unit.id)"
+            >
+              {{ unit.name }}（{{ unit.steps }} 步，已损
+              {{ workbench.combatInputs.optionLossAllocation[unit.id] ?? 0 }}）
+            </BaseButton>
+          </div>
+          <!-- 草稿账本（流水；最新在末尾） -->
+          <div v-if="workbench.optionDraftEntries.length > 0" class="row">
+            <span class="muted num">草稿账本：</span>
+            <BaseTag
+              v-for="entry in workbench.optionDraftEntries"
+              :key="entry.index"
+              kind="neutral"
+            >
+              {{ entry.label }}
+            </BaseTag>
+          </div>
+          <!-- 条 16（批 F·F1）：攻方全灭 ⇒ 守方「不选 / 结束战斗」一键 -->
+          <div v-if="workbench.attackerWipedNow" class="row">
+            <span class="warn num">攻方已全灭：</span>
+            <BaseButton variant="primary" size="sm" @click="workbench.concludeCombatAfterWipe()">
+              结束战斗（9.10c 例 B）
+            </BaseButton>
+          </div>
+          <p v-else-if="workbench.combatInputs.optionLossPoints > 0" class="muted">
+            9.11c：第一点必须由 AR 单位承受；各单位各受一点后才能有单位受第二点。 全部留 0 ＝
+            按规范分配（同样合法）。
+          </p>
+          <div class="row">
+            <BaseButton
+              variant="primary"
+              size="sm"
+              :disabled="
+                workbench.optionDraftRemaining > 0 && !workbench.combatInputs.ignoreOptions
+              "
+              @click="workbench.confirmCombatOptions()"
+            >
+              提交选项（9.10）
             </BaseButton>
           </div>
         </section>
