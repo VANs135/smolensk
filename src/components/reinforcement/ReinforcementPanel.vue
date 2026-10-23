@@ -266,6 +266,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <span class="num">
         投放需求 {{ plan?.units.length ?? 0 }} 条｜强制移除 {{ plan?.removals.length ?? 0 }} 条
       </span>
+      <BaseTag v-if="workbench.arrivalAllPlaced" kind="success">当日到达已全部投放</BaseTag>
       <BaseButton
         v-if="showsActions"
         variant="secondary"

@@ -278,6 +278,13 @@ describe('W6 B18：到达表执行（13.6 / 13.6b / 1.6a）', () => {
     expect(store.units.length).toBe(before)
   })
 
+  it('13.6：当日到达未放完 ⇒ arrivalAllPlaced 为假（有可投放条目但未逐个放完）', () => {
+    const store = newStore()
+    store.setTurn(2)
+    store.setPhase('reinforcement')
+    expect(store.arrivalAllPlaced).toBe(false)
+  })
+
   it('13.6：换日/换方（到达计划变）⇒ 已投放账本惰性作废', () => {
     const store = newStore()
     store.setTurn(2)

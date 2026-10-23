@@ -15273,6 +15273,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const arrivalAllPlaced = computed(() => {
     const plan = arrivalPlan.value
     if (plan === null) return false
+    // 没有"可投放算子条目"时不算"已放完"（否则只有 SP 的当天会误报完成）
+    const placeable = plan.units.filter(
+      (unit) => unit.kind !== 'sp' && unit.kind !== 'unclassified',
+    )
+    if (placeable.length === 0) return false
     return plan.units.every((unit, index) => {
       if (unit.kind === 'sp' || unit.kind === 'unclassified') return true
       return arrivalPlaced.value[index] === true
