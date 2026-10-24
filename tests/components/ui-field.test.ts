@@ -126,4 +126,14 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).toMatch(/v-for="row in rebuildRowChoices"/)
     expect(src).not.toMatch(/<input v-model="rebuildType"/)
   })
+
+  it('ContainersPanel：编队收纳改「盒选」（正式界面点选图上单位、验证页保留文本框）', () => {
+    const src = read('src/components/containers/ContainersPanel.vue')
+    expect(src).toMatch(/function hideNowFromBox/)
+    expect(src).toMatch(/formationUnitsOnMap/)
+    expect(src).toMatch(/toggleFormationHide/)
+    expect(src).toMatch(/formation-chip/)
+    // 3 个 id 文本框只在验证页
+    expect(src).toMatch(/v-if="uiMode === 'verify'"/)
+  })
 })

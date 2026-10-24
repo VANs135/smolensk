@@ -7,7 +7,7 @@ import { useUiMode } from '@/components/ui-mode'
 import { formations } from '@/data'
 import type { Side } from '@/data'
 import type { BoxView, ScenarioDrawBoxView } from '@/engine/rules'
-import { useContainersStore, useWorkbenchStore } from '@/stores'
+import { useContainersStore, useWorkbenchStore, counterImageUrlOf } from '@/stores'
 
 /**
  * 记录轨与容器面板（W7 C12）
@@ -174,7 +174,7 @@ function applyDrawNow(): boolean {
   return containers.applyDraw(group, {})
 }
 
-/** 编队收纳：按文本输入执行 */
+/** 编队收纳：按文本输入执行（验证页） */
 function hideNow(): boolean {
   const members = splitIds(formationMembersText.value)
   const onMap = splitIds(formationOnMapText.value)
@@ -186,6 +186,45 @@ function hideNow(): boolean {
     onMapIds: onMap,
     markerHexText: workbench.formationMarkerHexText,
     hideUnitIds: hide,
+  })
+}
+
+/**
+ * 条 24 / §5-E「改盒选」：正式界面**按图上该编队单位点选**要收纳的，不再手输 id。
+ *
+ * 成员＝「图上该编队单位」∪「**既有盒成员**」（`containers.formationBoxes[..].memberIds`）——
+ * 后者必须有：先前已收纳的单位已不在图上，若只按图上推成员，盒的成员清单会越收越少。
+ */
+const formationCode = computed(
+  () =>
+    formations.formations.find((item) => item.formationId === formationId.value)?.formationCode ??
+    null,
+)
+const formationUnitsOnMap = computed(() =>
+  formationCode.value === null
+    ? []
+    : workbench.units.filter(
+        (unit) =>
+          unit.formation === formationCode.value && unit.side === formationSide(formationId.value),
+      ),
+)
+const formationHideSelection = ref<string[]>([])
+function toggleFormationHide(id: string): void {
+  formationHideSelection.value = formationHideSelection.value.includes(id)
+    ? formationHideSelection.value.filter((item) => item !== id)
+    : [...formationHideSelection.value, id]
+}
+function hideNowFromBox(): boolean {
+  const onMap = formationUnitsOnMap.value.map((unit) => unit.instanceId)
+  const existing = containers.formationBoxes[formationId.value]?.memberIds ?? []
+  const members = [...new Set([...existing, ...onMap])]
+  return containers.hideInFormationBox({
+    formationId: formationId.value,
+    side: formationSide(formationId.value),
+    memberIds: members,
+    onMapIds: onMap,
+    markerHexText: workbench.formationMarkerHexText,
+    hideUnitIds: formationHideSelection.value,
   })
 }
 
@@ -659,14 +698,16 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
             </option>
           </select>
         </label>
-        <label class="field">
-          全部成员 id
-          <input v-model="formationMembersText" class="input path-input" placeholder="逗号分隔" />
-        </label>
-        <label class="field">
-          图上成员 id
-          <input v-model="formationOnMapText" class="input path-input" placeholder="逗号分隔" />
-        </label>
+        <template v-if="uiMode === 'verify'">
+          <label class="field">
+            全部成员 id
+            <input v-model="formationMembersText" class="input path-input" placeholder="逗号分隔" />
+          </label>
+          <label class="field">
+            图上成员 id
+            <input v-model="formationOnMapText" class="input path-input" placeholder="逗号分隔" />
+          </label>
+        </template>
         <label class="field">
           标记格
           <UiField
@@ -682,13 +723,45 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
             点地图选格
           </BaseButton>
         </label>
-        <label class="field">
-          本次收纳 id
-          <input v-model="formationHideText" class="input path-input" placeholder="逗号分隔" />
-        </label>
-        <BaseButton variant="primary" size="sm" :disabled="formationId === ''" @click="hideNow()">
-          收纳进盒（13.7：至少一个所属单位须与标记同格）
-        </BaseButton>
+        <template v-if="uiMode === 'verify'">
+          <label class="field">
+            本次收纳 id
+            <input v-model="formationHideText" class="input path-input" placeholder="逗号分隔" />
+          </label>
+          <BaseButton variant="primary" size="sm" :disabled="formationId === ''" @click="hideNow()">
+            收纳进盒（13.7：至少一个所属单位须与标记同格）
+          </BaseButton>
+        </template>
+        <!-- 条 24 / §5-E「改盒选」：正式界面没有 id 文本框，改为点选图上该编队的单位 -->
+        <template v-else>
+          <p class="muted">点选要收纳的图上单位（13.7：至少一个须与标记同格）：</p>
+          <div class="row formation-pick">
+            <button
+              v-for="unit in formationUnitsOnMap"
+              :key="unit.instanceId"
+              type="button"
+              class="formation-chip"
+              :class="{ 'formation-chip--on': formationHideSelection.includes(unit.instanceId) }"
+              @click="toggleFormationHide(unit.instanceId)"
+            >
+              <img
+                v-if="counterImageUrlOf(unit) !== null"
+                :src="counterImageUrlOf(unit) ?? undefined"
+                alt=""
+              />
+              <span class="num">{{ unit.name }}</span>
+            </button>
+          </div>
+          <p v-if="formationUnitsOnMap.length === 0" class="muted">该编队当前在图上没有单位。</p>
+          <BaseButton
+            variant="primary"
+            size="sm"
+            :disabled="formationId === '' || formationHideSelection.length === 0"
+            @click="hideNowFromBox()"
+          >
+            收纳进盒（13.7）
+          </BaseButton>
+        </template>
       </div>
 
       <!--
@@ -902,5 +975,36 @@ hr {
   border: none;
   border-top: 1px solid var(--color-rule);
   margin: var(--space-3) 0;
+}
+
+/* 条 24：编队收纳盒的「点选单位」芯片（正式界面替代 id 文本框） */
+.formation-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.formation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--color-rule);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.formation-chip img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.formation-chip--on {
+  outline: 2px solid var(--color-accent-2);
+  background: rgba(128, 128, 128, 0.12);
 }
 </style>
