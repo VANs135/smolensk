@@ -128,6 +128,40 @@ describe('3.4b：SP 归属账本', () => {
     expect(store.panzerGroupUnassignedDumps.map((item) => item.id)).not.toContain(dump.id)
   })
 
+  it('3.4b / 12.1b：同格再落 SP 是**并入**同一条账（沿用原 id），已声明的归属不作废', () => {
+    const store = newStore()
+    store.setTurn(1)
+    store.setActiveSide('axis')
+    store.spDumpDraft = { hexText: `${CORE_HEX.col}.${CORE_HEX.row}`, sp: 4, t: 0 }
+    expect(store.addSpDump()).toBe(true)
+    const dump = store.spDumps[0]!
+    store.setDumpPanzerGroupNow(dump.id, 'guderian')
+    expect(store.pendingSpGroupAssignment).toEqual([])
+
+    // 同一格再落 2 SP：并入同一条（不是新增第二条），归属沿用
+    store.spDumpDraft = { hexText: `${CORE_HEX.col}.${CORE_HEX.row}`, sp: 2, t: 0 }
+    expect(store.addSpDump()).toBe(true)
+    expect(store.spDumps).toHaveLength(1)
+    expect(store.spDumps[0]).toMatchObject({ id: dump.id, sp: 6 })
+    // 已有归属 ⇒ 不因"多加了几点"退回待归属
+    expect(store.panzerGroupOfDump(dump.id)).toBe('guderian')
+    expect(store.pendingSpGroupAssignment).toEqual([])
+  })
+
+  it('3.4b / 12.1b：并入**未声明**的站 ⇒ 该站仍在待归属里（新到的 SP 必须立即归属）', () => {
+    const store = newStore()
+    store.setTurn(1)
+    store.setActiveSide('axis')
+    store.spDumpDraft = { hexText: `${CORE_HEX.col}.${CORE_HEX.row}`, sp: 4, t: 0 }
+    expect(store.addSpDump()).toBe(true)
+    const dump = store.spDumps[0]!
+    store.spDumpDraft = { hexText: `${CORE_HEX.col}.${CORE_HEX.row}`, sp: 2, t: 0 }
+    expect(store.addSpDump()).toBe(true)
+    expect(store.spDumps).toHaveLength(1)
+    expect(store.spDumps[0]!.id).toBe(dump.id)
+    expect(store.pendingSpGroupAssignment).toEqual([dump.id])
+  })
+
   it('3.4b：19 August 起自动失效（待归属与未归属清单都空）', () => {
     const store = newStore()
     const dump = axisDump(store, 'legacy')
