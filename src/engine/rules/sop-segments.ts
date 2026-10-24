@@ -216,7 +216,7 @@ export const SOP_SEGMENT_CHAINS: readonly SopSegmentChain[] = [
         actions: [],
         sides: ['axis'],
         implemented: true,
-        note: '从抽取盒抽编队标记（辅助卡 `formation_draw` 分区，仅轴方）。★批 E 切片 2：入口已接线 —— `containers.drawAndApplyStepNow()`（B 段该环节内：抽签 → 落盘 → 回写初设台账），闸门照 `ACTION_GATES.rein.formationDraw`（仅轴方）',
+        note: '★第六批 §6-A：**抽签已移到初设自动执行**（ch10「Formation Chit Draw」/ ch11 的剧本随机化都是开局前的剧本随机化，不属 B 段）⇒ 选剧本时由 `containers.runSetupDrawsNow()` 一次抽完并把不依赖落点的处置当场落盘，西移落点则进初设 box 由玩家点地图给。B 段此处只作回执；`containers.drawAndApplyStepNow()` 仍是裁判在 B 段重抽/补做的退路（闸门照 `ACTION_GATES.rein.formationDraw`，仅轴方）',
       },
       {
         id: 'reinforcement.specialRepl',

@@ -122,7 +122,9 @@ function isActive(item: SetupPlacing): boolean {
   return (
     current.kind === item.kind &&
     current.entryIndex === item.entryIndex &&
-    current.side === item.side
+    current.side === item.side &&
+    // §6-A：ch10 西移项没有 entryIndex ⇒ 按编队 id 比对
+    (item.kind !== 'shift' || current.formationId === item.formationId)
   )
 }
 
@@ -132,6 +134,11 @@ function pick(item: SetupPlacing): void {
   if (item.blockedReason !== null) {
     // 不能落位的原因已在卡上写着，点了只把它顶到眼前（不弹窗、不换页）
     setup.cancelPlacement()
+    return
+  }
+  // §6-A：ch10 抽中西移的师（落点印在剧本卡上 ⇒ 由玩家点地图给）
+  if (item.kind === 'shift') {
+    if (item.formationId !== undefined) setup.beginShiftPlacement(item.formationId)
     return
   }
   if (item.kind === 'self') setup.beginSelfPlacement(item.entryIndex)

@@ -157,7 +157,9 @@ function boxItems(category: SetupPlacingCategory): readonly SetupPlacing[] {
 /** 点一项 ⇒ 地图高亮其合法落点 */
 function begin(item: SetupPlacing): void {
   if (item.kind === 'air') setup.beginAirPlacement(item.side, item.entryIndex)
-  else setup.beginSelfPlacement(item.entryIndex)
+  else if (item.kind === 'shift') {
+    if (item.formationId !== undefined) setup.beginShiftPlacement(item.formationId)
+  } else setup.beginSelfPlacement(item.entryIndex)
 }
 
 /** 当前正在放置的项是否就是这一条 */
@@ -166,7 +168,9 @@ function isPlacing(item: SetupPlacing): boolean {
     setup.placing !== null &&
     setup.placing.kind === item.kind &&
     setup.placing.entryIndex === item.entryIndex &&
-    setup.placing.side === item.side
+    setup.placing.side === item.side &&
+    // §6-A：西移项按 formationId 比对（它没有 entryIndex）
+    (item.kind !== 'shift' || setup.placing.formationId === item.formationId)
   )
 }
 
@@ -231,6 +235,23 @@ function sideLabel(side: Side): string {
         在地图上点**青柠色高亮格**落位（候选格由引擎按 IV-A / IV-I / 14.1a 给出）。
       </p>
     </div>
+
+    <!-- ── ②b 编队抽签（ch10 / ch11：选剧本时已自动抽取） ── -->
+    <RuleNote
+      v-if="drawGroups.length > 0"
+      title="编队抽签（ch10 / ch11）：选剧本时已自动抽取"
+      rule="ch10 / ch11"
+      :open="true"
+    >
+      <p v-for="group in drawGroups" :key="`auto-${group.kind}`" class="muted num">
+        {{ group.label }}（×{{ group.count }}）：抽中
+        {{ drawnOf(group.kind).join('、') || '（尚未抽取）' }} ⇒ {{ group.effect }}
+      </p>
+      <p class="muted">
+        落点不依赖玩家的处置（Move Mode / 与死亡堆互换 / 营入死亡堆）**当场已落盘**； 西移的落点印在
+        **剧本卡**上、数据里没有 ⇒ 在下面「地面单位与基地」里点那一项，再点地图给落点。
+      </p>
+    </RuleNote>
 
     <!-- ── ③ 初设单位 box（三分类） ── -->
     <section v-for="category in CATEGORIES" :key="category.key" class="box">
@@ -313,11 +334,11 @@ function sideLabel(side: Side): string {
         </li>
       </ul>
 
-      <!-- 编制抽取（抽签入口；池与 rng 在 C12 的剧本抽取盒） -->
+      <!-- 编制抽取（★ 第六批 §6-A：抽签已移到初设自动执行，此处只留明细与退路） -->
       <p class="muted">
-        编制抽取（ch10 /
-        ch11）：入杯池与抽签在「记录轨与容器」面板的**剧本抽取盒**里做（那里才有池成员 与种子化
-        rng）；抽中后的三项处置（沿道路西移 / 以 Move Mode 初设 / 与死亡堆互换）也在该盒里落盘。
+        编制抽取（ch10 / ch11）：**选剧本时已自动抽取**（开局前的剧本随机化，骰走种子化 rng，与其
+        余抽取同一口径）。B 增援段不再有这一步 —— 抽签带来的变化（位置 / 模式 / 进死亡堆）都属初
+        设。此处只作明细与手改退路（池成员与 rng 仍在「记录轨与容器」的剧本抽取盒里）。
       </p>
       <p v-if="drawGroups.length === 0" class="muted">
         本剧本的剧本页没有编队抽签条目 ⇒ 该步不适用。
@@ -325,9 +346,6 @@ function sideLabel(side: Side): string {
       <div v-for="group in drawGroups" :key="group.kind" class="row">
         <BaseTag kind="info">{{ group.label }} ×{{ group.count }}</BaseTag>
         <span class="num">{{ group.effect }}</span>
-        <BaseButton variant="secondary" size="sm" @click="containers.drawFormations(group)">
-          抽签（{{ group.count }} 个）
-        </BaseButton>
         <span class="num">抽中：{{ drawnOf(group.kind).join('、') || '尚未抽签' }}</span>
       </div>
       <!--
@@ -372,7 +390,8 @@ function sideLabel(side: Side): string {
           照此摆位（ch10）
         </BaseButton>
         <p class="muted num">
-          位置印在剧本卡上、数据里没有 ⇒ 只能由你给；缺任一条即整笔拒绝（不猜）。
+          位置印在剧本卡上、数据里没有 ⇒ 只能由你给；缺任一条即整笔拒绝（不猜）。 通常直接在上方 box
+          里点那一项、再点地图即可（这里留作逐条手改 / 对照的退路）。
         </p>
       </RuleNote>
       <!--

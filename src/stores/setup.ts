@@ -36,6 +36,7 @@ import {
   type SetupPlan,
   type SupplyDumpRef,
 } from '@/engine/rules'
+import { hexesWithin, isOnMap } from '@/engine/hex-geometry'
 import { createId } from '@/shared'
 
 import { useContainersStore } from './containers'
@@ -106,14 +107,22 @@ export type SetupPlacingCategory = 'air' | 'supply' | 'ground'
 /**
  * 初设里**待在地图上落位**的一项
  *
- * 三类：`self` = 剧本页只给了条件（`w/i N` / 任一指挥部）的地面项；`air` = 某一型飞机
+ * 四类：`self` = 剧本页只给了条件（`w/i N` / 任一指挥部）的地面项；`air` = 某一型飞机
  * （候选＝本方空军基地格）；`truck` = 需指定**满载 / 空载**的编内卡车（13.2h，不在图上落位，
- * 故 `candidates` 为空）。
+ * 故 `candidates` 为空）；`shift` = ch10 抽中西移的那个师（落点印在剧本卡上 ⇒ 由玩家点地图给，
+ * 候选＝原格 N 格半径内的图上格）。
  * 候选格一律来自引擎，故界面高亮的格一定合法。
  */
 export interface SetupPlacing {
-  kind: 'self' | 'air' | 'truck'
+  kind: 'self' | 'air' | 'truck' | 'shift'
   entryIndex: number
+  /**
+   * ch10 西移项的**编队 id**（`kind === 'shift'` 时有值；该组抽中的师）
+   *
+   * ★ 为什么不用 `entryIndex`：西移的不是「剧本页某条初设项」，而是**抽签抽中的一个师**
+   * （初设清单里没有这一条 ⇒ 没有 entryIndex 可指）。
+   */
+  formationId?: string
   /** 卡车的实例 id（`kind === 'truck'` 时有值） */
   instanceId?: string
   side: Side
@@ -460,6 +469,68 @@ export const useSetupStore = defineStore('setup', () => {
   }
 
   /** 取消地图点选（不改任何已落盘的东西） */
+  /**
+   * 第六批 §6-A：开始在地图上给**某个抽中西移的师**定落点（ch10）
+   *
+   * 与 `beginSelfPlacement` 不同：这一项的来源不是剧本页条目，而是**抽签结果**
+   * （`containers.pendingShiftWestPlacements`）⇒ 以 `formationId` 为主键，没有 `entryIndex`。
+   */
+  function beginShiftPlacement(formationId: string): boolean {
+    const item = containers.pendingShiftWestPlacements.find(
+      (entry) => entry.formationId === formationId,
+    )
+    if (item === undefined) {
+      return record({ ok: false, rule: SETUP_RULE, reason: `shiftEntryNotFound:${formationId}` })
+    }
+    const from = item.fromHexText === null ? null : parseSetupHexText(item.fromHexText)
+    const candidates =
+      from === null
+        ? []
+        : hexesWithin(from, Math.max(item.shiftHexes, 0), { onMapOnly: true }).filter(
+            (hex) => hex.col <= from.col,
+          )
+    placing.value = {
+      kind: 'shift',
+      formationId,
+      entryIndex: -1,
+      side: 'axis',
+      label: `${formationId}（ch10 西移 ${String(item.shiftHexes)} 格）`,
+      raw: formationId,
+      count: 1,
+      total: 1,
+      placed: 0,
+      remaining: 1,
+      chunk: 1,
+      candidates,
+      category: 'ground',
+      imageUrl: item.unitIds[0] === undefined ? null : counterImageUrlOfUnit(item.unitIds[0]),
+      blockedReason: null,
+    }
+    lastAction.value = null
+    return true
+  }
+
+  /** ch10：把抽中西移的那个师摆到玩家点定的格（落点由玩家给，摆位由容器 store 落盘） */
+  function placeShiftFormation(formationId: string | undefined, hex: HexRef): boolean {
+    if (formationId === undefined) {
+      return record({ ok: false, rule: SETUP_RULE, reason: 'shiftFormationIdMissing' })
+    }
+    if (!containers.applyShiftWestAtNow(formationId, setupHexLabel(hex))) {
+      return record({
+        ok: false,
+        rule: 'ch10',
+        reason: containers.lastAction?.detail ?? 'shiftPlacementRejected',
+      })
+    }
+    completed.value = { ...completed.value, [`shift:${formationId}`]: true }
+    placing.value = null
+    return record({
+      ok: true,
+      rule: 'ch10',
+      data: { detail: containers.lastAction?.detail ?? `${formationId} → ${setupHexLabel(hex)}` },
+    })
+  }
+
   function cancelPlacement(): void {
     placing.value = null
   }
@@ -475,21 +546,33 @@ export const useSetupStore = defineStore('setup', () => {
   function placeAtHex(hex: HexRef): boolean {
     const current = placing.value
     if (current === null) return false
-    const hit = current.candidates.some(
-      (candidate) => candidate.col === hex.col && candidate.row === hex.row,
-    )
-    if (!hit) {
-      record({
-        ok: false,
-        rule: current.kind === 'air' ? AIR_BASE_SITE_RULE : SETUP_RULE,
-        reason: `notSetupCandidate:${hex.col}.${hex.row}`,
-      })
+    /*
+     * ★ ch10 西移项**不按候选校验**：落点印在剧本卡上、数据里没有 ⇒ 候选只是「半径内的提示范围」，
+     *   真正的口径是"玩家给一个格"（与 `containers.beginDrawShiftHexPickNow` 的 `candidates: 'any'`
+     *   同一口径）⇒ 这里只校验在图上（IV-I 的一半），不给玩家添一层会被拒的框。
+     */
+    if (current.kind !== 'shift') {
+      const hit = current.candidates.some(
+        (candidate) => candidate.col === hex.col && candidate.row === hex.row,
+      )
+      if (!hit) {
+        record({
+          ok: false,
+          rule: current.kind === 'air' ? AIR_BASE_SITE_RULE : SETUP_RULE,
+          reason: `notSetupCandidate:${hex.col}.${hex.row}`,
+        })
+        return true
+      }
+    } else if (!isOnMap(hex)) {
+      record({ ok: false, rule: SETUP_RULE, reason: `setupHexOffMap:${hex.col}.${hex.row}` })
       return true
     }
     const ok =
       current.kind === 'self'
         ? placeSelfOneInstance(current.entryIndex, hex, current.chunk)
-        : placeAirRowNow(current.entryIndex, hex, current.side)
+        : current.kind === 'air'
+          ? placeAirRowNow(current.entryIndex, hex, current.side)
+          : placeShiftFormation(current.formationId, hex)
     if (!ok) return true
     // 还差就继续开着（换到别的格去落剩下的），落满即收
     const key =
@@ -650,6 +733,47 @@ export const useSetupStore = defineStore('setup', () => {
               : null,
         })
       }
+    }
+    /*
+     * 第六批 §6-A：**ch10 西移组抽中的师** —— 落点印在剧本卡上、数据里没有 ⇒ 由玩家在初设里给
+     *
+     * 修前这些师只在折叠的「开局流程明细」里给一个小输入框（还写着"先在 B 段抽签"），
+     * 玩家根本看不见 ⇒ 抽签带来的位置调整实际上落不到盘上。
+     * 现在它与自由项并列进「初设单位 box」，点一项 ⇒ 地图高亮候选 ⇒ 点格即摆（ch10）。
+     *
+     * 候选＝**原格 N 格半径内**（ch10 是"沿道路西移 N 格"，路径长 N ⇒ 落点必在半径 N 内；
+     * 这是从规则推得的**必要条件**，不是猜）。原格推不出（初设行没给图上格号）⇒ 候选为空并说清原因。
+     */
+    for (const item of containers.pendingShiftWestPlacements) {
+      if (completed.value[`shift:${item.formationId}`] === true) continue
+      const from = item.fromHexText === null ? null : parseSetupHexText(item.fromHexText)
+      const candidates =
+        from === null
+          ? []
+          : hexesWithin(from, Math.max(item.shiftHexes, 0), { onMapOnly: true }).filter(
+              (hex) => hex.col <= from.col,
+            )
+      items.push({
+        kind: 'shift',
+        formationId: item.formationId,
+        entryIndex: -1,
+        side: 'axis',
+        label: `${item.formationId}（ch10 西移 ${String(item.shiftHexes)} 格）`,
+        raw: item.formationId,
+        count: 1,
+        total: 1,
+        placed: 0,
+        remaining: 1,
+        chunk: 1,
+        candidates,
+        category: 'ground',
+        // 条 1（S1）：该师第一枚图上的算子作缩略图（与地图同一条选图实现）
+        imageUrl: item.unitIds[0] === undefined ? null : counterImageUrlOfUnit(item.unitIds[0]),
+        blockedReason:
+          candidates.length === 0
+            ? `该师的初设行没有图上格号 ⇒ 推不出候选范围（原格 ${item.fromHexText ?? '—'}）`
+            : null,
+      })
     }
     return items
   })
@@ -1023,6 +1147,19 @@ export const useSetupStore = defineStore('setup', () => {
   function finishSetup(): boolean {
     const remaining = pendingPlacement.value
     for (const item of remaining) {
+      /*
+       * ★ ch10 西移项**不适用**「未落位 ⇒ 本局移除」：它不是"放一个新单位"，而是把一个
+       *   **已在图上**的师挪位置 ⇒ 没给落点就该**留在剧本页原格**（不施加未定的移动），
+       *   移除一整个师是规则没写的效果（CODE_SPEC：不无中生有）。
+       */
+      if (item.kind === 'shift') {
+        completed.value = { ...completed.value, [`shift:${item.formationId ?? ''}`]: true }
+        notes.value = [
+          ...notes.value,
+          `西移落点未给 ⇒ ${item.label} 留在剧本页原格（ch10 的西移不施加）`,
+        ]
+        continue
+      }
       if (item.kind === 'air') {
         completed.value = { ...completed.value, [`air:${item.side}:${item.entryIndex}`]: true }
       } else {
@@ -1269,6 +1406,43 @@ export const useSetupStore = defineStore('setup', () => {
     // 换剧本 = 重新开局 ⇒ 先清盘面，再自动落盘固定初设（不叠加、不残留上一剧本的算子）
     resetAll()
     runAutoSetup()
+    /*
+     * ★ 第六批 §6-A：**编队抽签在初设自动跑**（ch10「Formation Chit Draw」/ ch11 的剧本随机化
+     *   都是**开局前**的随机化，不是 B 增援段的动作）。
+     *   必须在 `runAutoSetup()` **之后**：三项处置（进死亡堆 / 转 Move Mode / Mtr↔Aufk 互换）
+     *   改的是**盘上那几枚算子**，而实例 id 是自动初设这一步生成的。
+     */
+    runSetupDraws()
+    return true
+  }
+
+  /**
+   * ch10 / ch11：**初设自动抽签**（用户 2026-10-25 口径：「初设里的德军抽取编队放置或替换单位，
+   * 应该放在初设时自动抽取后给玩家初设」）
+   *
+   * 判据与落盘全在容器 store（`containers.runSetupDrawsNow`），本处只负责：
+   * 把结论写进本流程的回执与提示，并如实报失败（不静默）。
+   */
+  function runSetupDraws(): boolean {
+    const result = containers.runSetupDrawsNow()
+    if (result.drawnGroups === 0) return true // 本剧本没有编队抽签 ⇒ 不算错
+    /*
+     * ★ 成功时**不覆盖** `lastAction`：紧接着自动初设之后跑，那条回执（棋子数 / SP /
+     *   卡车按剧本落账）正是玩家要看的"选剧本后发生了什么"，被抽签结论顶掉就看不见了
+     *   （实测：`setup-truck-autoload-flow` 的"编内卡车按剧本自动落账"曾因此丢失）⇒
+     *   抽签结论进 `notes`（面板的「数据缺口与提示」里逐条列出）。
+     *   失败则**必须**顶上来写 `lastAction`：规则没落实是玩家该立刻看见的事。
+     */
+    notes.value = [...notes.value, result.detail]
+    if (result.pendingShift.length > 0) {
+      notes.value = [
+        ...notes.value,
+        `ch10 西移：${result.pendingShift.join('、')} 的落点印在剧本卡上 ⇒ 在「初设单位 box」的「地面单位与基地」里点一项、再点地图给落点`,
+      ]
+    }
+    if (!result.ok) {
+      return record({ ok: false, rule: 'ch10 / ch11', reason: result.detail })
+    }
     return true
   }
 
@@ -1964,6 +2138,8 @@ export const useSetupStore = defineStore('setup', () => {
     finished,
     beginSelfPlacement,
     beginAirPlacement,
+    // 第六批 §6-A：ch10 西移编队的落点（抽签抽中的师，与自由项并列进初设 box）
+    beginShiftPlacement,
     cancelPlacement,
     placeAtHex,
     setPlacingChunk,
@@ -1979,6 +2155,8 @@ export const useSetupStore = defineStore('setup', () => {
     resetInputs,
     resetAll,
     runAutoSetup,
+    // 第六批 §6-A：初设时的**自动编队抽签**（ch10 / ch11 属开局前的剧本随机化）
+    runSetupDraws,
     setSelfChoice,
     placeSelfEntry,
     toggleTruckFull,

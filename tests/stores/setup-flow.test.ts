@@ -115,15 +115,18 @@ describe('W7 C14：开局流程进度与剧本选择', () => {
     expect(setup.flow.find((step) => step.id === 'scenario')?.detail).toContain('8 Jul 41')
   })
 
-  it('C14：编制抽取的完成度取自 C12 的剧本抽取盒（抽完两组即打勾）', () => {
+  it('C14：编制抽取的完成度取自 C12 的剧本抽取盒（★ §6-A：抽签在初设自动跑完 ⇒ 选剧本即打勾）', () => {
     setup.selectScenario('1')
     const groups =
       scenarios.scenarios.find((item) => item.id === '1')?.setup.formationDraw?.groups ?? []
     expect(groups.length).toBeGreaterThan(0)
-    expect(setup.stepDone['formationDraw']).toBe(false)
-    containers.drawFormations(groups[0]!)
-    expect(setup.stepDone['formationDraw']).toBe(false)
-    containers.drawFormations(groups[1]!)
+    // ch10 / ch11 是**开局前**的剧本随机化 ⇒ 初设时自动抽完，不必等玩家去点「抽签」
+    expect(setup.stepDone['formationDraw']).toBe(true)
+    for (const group of groups) {
+      expect(containers.drawnOf(group).length).toBe(group.count)
+    }
+    // 完成度仍读的是 C12 抽取盒那本账（换剧本 ⇒ 该剧本名下没有抽取 ⇒ 重新抽）
+    setup.selectScenario('3')
     expect(setup.stepDone['formationDraw']).toBe(true)
   })
 })

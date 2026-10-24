@@ -31,6 +31,8 @@ import {
   planTurnMarkerAdvance,
   railCapPositionValid,
   railCapTrackView,
+  scenarioDrawBoxView,
+  setupSourceOf,
   turnTrackView,
   weatherTrackView,
   type BoxHolding,
@@ -952,9 +954,17 @@ export const useContainersStore = defineStore('containers', () => {
    * 抽签：在池内用 rng 均匀抽 `count` 个编队（不重复）
    *
    * 规则原文只给「入杯名单＝池成员」与「抽几个」，未逐条列出抽中者 ⇒ 由本次抽签决定。
+   *
+   * ★ `poolScenarioId`（第六批 §6-A）：池**按初设源剧本**取（1–2 / 3–4 / 5–6 共用初设，
+   *   而 `formations.json` 的 `sources` 只标在源剧本上 ⇒ 剧本 2 直接取池会是空的）；
+   *   结果仍记在**当前剧本**名下（界面与 `pendingShiftWestPlacements` 都按当前剧本读）。
    */
-  function drawFormations(group: ScenarioDrawGroup, reduced = false): string[] {
-    const pool = axisDrawPool(scenarioId.value).map((entry) => entry.formationId)
+  function drawFormations(
+    group: ScenarioDrawGroup,
+    reduced = false,
+    poolScenarioId?: string,
+  ): string[] {
+    const pool = axisDrawPool(poolScenarioId ?? scenarioId.value).map((entry) => entry.formationId)
     const count = reduced
       ? pool.length > 0
         ? Math.min(pool.length, Math.ceil(group.count / 2))
@@ -1246,6 +1256,95 @@ export const useContainersStore = defineStore('containers', () => {
   }
 
   /**
+   * ch10 / ch11：**初设源剧本的编队抽签组**
+   *
+   * 池成员只挂在源剧本上（`formations.json` 的 `sources` 只标 `S1·axis` / `S3·axis` / `S5·axis`），
+   * 而剧本 2 / 4 / 6 是「与 1 / 3 / 5 共用初设」⇒ 抽签必须按**初设源**取池（否则池为空、抽不出来）。
+   * 口径与 `setup.ts` 的初设源解析同一处（`setupSourceOf`）。
+   */
+  const setupDrawGroups = computed<readonly ScenarioDrawGroup[]>(() => {
+    const sourceId = setupSourceOf(scenarioId.value).source
+    return scenarioDrawBoxView(sourceId).groups
+  })
+
+  /**
+   * 初设时的**自动抽签**（用户 2026-10-25：「初设里的德军抽取编队放置或替换单位，
+   * 应该放在初设时自动抽取后给玩家初设」）
+   *
+   * 规则依据：ch10「Formation Chit Draw」/ ch11「Scenario 3–6 随机化」——这两处都是**开局前**
+   * 的剧本随机化（抽中的师西移 / 以 Move Mode 初设 / 与死亡堆互换），属**初设**而非 B 增援段。
+   * 故抽签在「选剧本 ⇒ 自动初设落盘」之后**自动**跑一次（骰走种子化 `rng`，与 B28「随机数一律
+   * 自动结算」同一口径），随后：
+   *   · **不依赖玩家落点**的组（moveMode / mtrAufkSwap / deadPileKrd / deadPileAufk）⇒ 当场落盘；
+   *   · **西移组**（shiftWest）⇒ 只抽不落盘：落点印在剧本卡上、数据里没有 ⇒ 交给玩家在初设里给
+   *     （`pendingShiftWestPlacements` ⇒ 初设 box 的一项，见 `setup.ts`）。
+   *
+   * 幂等：某组已抽过（`drawResults` 里有该 kind）⇒ **保留既有抽取结果**，不重抽
+   * （`selectScenario` / `ensureSetupLoaded` 可能被反复调用，重抽会让盘面与已落盘的处置对不上）。
+   */
+  function runSetupDrawsNow(): {
+    ok: boolean
+    /** 本次抽了几个组 / 落盘了几个组 */
+    drawnGroups: number
+    appliedGroups: number
+    /** 抽中、但**仍在等玩家给落点**的西移编队 */
+    pendingShift: readonly string[]
+    detail: string
+  } {
+    const groups = setupDrawGroups.value
+    if (groups.length === 0) {
+      return {
+        ok: true,
+        drawnGroups: 0,
+        appliedGroups: 0,
+        pendingShift: [],
+        detail: `剧本 ${scenarioId.value}（初设源 ${setupSourceOf(scenarioId.value).source}）的剧本页没有编队抽签条目 ⇒ 该步不适用`,
+      }
+    }
+    const sourceId = setupSourceOf(scenarioId.value).source
+    let drawnGroups = 0
+    let appliedGroups = 0
+    const pendingShift: string[] = []
+    const failures: string[] = []
+
+    for (const group of groups) {
+      const already = drawnOf(group)
+      const drawn = already.length > 0 ? already : drawFormations(group, false, sourceId)
+      if (drawn.length === 0) {
+        failures.push(`${group.label}：入杯池为空（formations.json 未推导出该剧本的装甲/摩托化师）`)
+        continue
+      }
+      drawnGroups += 1
+      /*
+       * 西移组**只抽不落盘**：引擎 `planScenarioDraw` 缺落点即按 `shiftWestDestinationMissing` 拒，
+       * 而落点印在剧本卡上、数据里没有 ⇒ 等玩家在初设 box 里给（给了才摆）。
+       */
+      if (group.kind === 'shiftWest') {
+        pendingShift.push(...drawn)
+        continue
+      }
+      if (applyDraw(group)) appliedGroups += 1
+      else failures.push(`${group.label}：${lastAction.value?.detail ?? '落盘被拒'}`)
+    }
+
+    const detail =
+      `编队抽签（ch10 / ch11，初设自动）：${drawnGroups} 组已抽` +
+      `（初设源 ${sourceId}）⇒ 落盘 ${appliedGroups} 组` +
+      (pendingShift.length > 0
+        ? `；西移组 ${String(pendingShift.length)} 个师待玩家给落点：${pendingShift.join('、')}`
+        : '') +
+      (failures.length > 0 ? `；未成：${failures.join('；')}` : '')
+    lastAction.value = {
+      ok: failures.length === 0,
+      rule: groups[0]?.rule ?? 'ch10',
+      detail,
+      scope: '初设·编队抽取',
+    }
+    workbench.pushLog(failures.length === 0 ? 'success' : 'warning', detail, 'ch10 / ch11')
+    return { ok: failures.length === 0, drawnGroups, appliedGroups, pendingShift, detail }
+  }
+
+  /**
    * 用户 2026-09-18 报告第 5 条：**编队组成由初设索引自动推出**（不再让玩家手输 unit id）
    *
    * `scenario-setup.json` 的编队行里，每个下属都直接带单位库 `unitId` 与落点 ⇒
@@ -1266,7 +1365,13 @@ export const useContainersStore = defineStore('containers', () => {
     /** 该编队**图上**的单位（盘上实例 id；初设摆位要用全部，不筛战斗单位） */
     onMapInstanceIds: readonly string[]
   } | null {
-    const rows = scenarioSetup.entries.filter((entry) => entry.scenarioId === scenarioId.value)
+    /*
+     * ★ 第六批 §6-A：初设行按**初设源**取（1–2 / 3–4 / 5–6 共用初设，`scenario-setup.json` 的
+     *   `scenarioId` 只标在源剧本上）⇒ 剧本 2 / 4 / 6 原先会"组成推不出来"（rows 为空）。
+     */
+    const rows = scenarioSetup.entries.filter(
+      (entry) => entry.scenarioId === setupSourceOf(scenarioId.value).source,
+    )
     const outcome = deriveDrawComposition({ rows, formationId })
     if (!outcome.ok) {
       lastAction.value = {
@@ -1409,7 +1514,7 @@ export const useContainersStore = defineStore('containers', () => {
       lastAction.value = {
         ok: false,
         rule: 'ch10',
-        detail: '没有待摆位的编队（先在 B 段的「编队抽取」里抽签）',
+        detail: '没有待摆位的编队（抽签在选剧本时已自动执行；本剧本可能没有西移组）',
         scope: '初设·编队抽取摆位',
       }
       return false
@@ -1432,45 +1537,18 @@ export const useContainersStore = defineStore('containers', () => {
     let moved = 0
     const notes: string[] = []
     for (const item of pending) {
-      const hex = parseHexOf(item.hexText!)!
-      for (const instanceId of item.unitIds) {
-        const unit = workbench.units.find((entry) => entry.instanceId === instanceId)
-        if (unit === undefined) continue
-        unit.hex = { ...hex }
-        moved += 1
-      }
-      const from = item.fromHexText === null ? undefined : parseHexOf(item.fromHexText)
-      if (from !== undefined && from.col - hex.col !== item.shiftHexes)
-        notes.push(
-          `${item.formationId}：${item.fromHexText ?? '—'} → ${item.hexText!} 的列差 ${String(from.col - hex.col)} ≠ ch10 的西移 ${String(item.shiftHexes)} 格（与剧本卡不符就改一下落点）`,
-        )
+      const placed = placeShiftWestItem(item)
+      if (placed === null) continue
+      moved += placed.moved
+      if (placed.note !== null) notes.push(placed.note)
     }
     /*
      * 台账**补记/更新**西移组的落点（初设面板读它即可显示"抽中谁、摆到哪"）——
      * 走的是"先给落点、再落盘"的顺序，故这里可能是**第一次**写下该组（用 upsert，不假设已有行）。
      */
-    const destinations = pending.map((item) => ({
-      formationId: item.formationId,
-      hexText: item.hexText!,
-    }))
-    const existing = formationDrawOutcomes.value.find((row) => row.groupKind === 'shiftWest')
-    formationDrawOutcomes.value =
-      existing === undefined
-        ? [
-            ...formationDrawOutcomes.value,
-            {
-              groupKind: 'shiftWest',
-              groupLabel:
-                scenarioDrawBox.value?.groups.find((item) => item.kind === 'shiftWest')?.label ??
-                'A 组：沿道路西移',
-              formationIds: pending.map((item) => item.formationId),
-              detail: `沿道路西移 ${String(pending[0]?.shiftHexes ?? 0)} 格（落点由玩家在初设里给定）`,
-              destinations,
-            },
-          ]
-        : formationDrawOutcomes.value.map((row) =>
-            row.groupKind === 'shiftWest' ? { ...row, destinations } : row,
-          )
+    noteShiftWestDestinations(
+      pending.map((item) => ({ formationId: item.formationId, hexText: item.hexText! })),
+    )
     lastAction.value = {
       ok: true,
       rule: 'ch10',
@@ -1483,6 +1561,126 @@ export const useContainersStore = defineStore('containers', () => {
       'ch10',
     )
     for (const note of notes) workbench.pushLog('info', `编队抽取摆位提示：${note}`, 'ch10')
+    return true
+  }
+
+  /**
+   * 把**一个**西移编队按已记的落点摆过去（整笔与单条共用这一段）
+   *
+   * 落点与原初设格的**列差**若与 ch10 的「西移 N 格」不符，只**如实记一行提示**
+   * （位置印在剧本卡上、数据里没有，引擎不替它判对错）。
+   */
+  function placeShiftWestItem(item: {
+    formationId: string
+    hexText: string | null
+    unitIds: readonly string[]
+    fromHexText: string | null
+    shiftHexes: number
+  }): { moved: number; note: string | null } | null {
+    if (item.hexText === null) return null
+    const hex = parseHexOf(item.hexText)
+    if (hex === undefined) return null
+    let moved = 0
+    for (const instanceId of item.unitIds) {
+      const unit = workbench.units.find((entry) => entry.instanceId === instanceId)
+      if (unit === undefined) continue
+      unit.hex = { ...hex }
+      moved += 1
+    }
+    const from = item.fromHexText === null ? undefined : parseHexOf(item.fromHexText)
+    const note =
+      from !== undefined && from.col - hex.col !== item.shiftHexes
+        ? `${item.formationId}：${item.fromHexText ?? '—'} → ${item.hexText} 的列差 ${String(from.col - hex.col)} ≠ ch10 的西移 ${String(item.shiftHexes)} 格（与剧本卡不符就改一下落点）`
+        : null
+    return { moved, note }
+  }
+
+  /** 台账 upsert：西移组的落点（同编队覆盖、其余保留 ⇒ 单条摆位不会抹掉已摆的） */
+  function noteShiftWestDestinations(
+    destinations: readonly { formationId: string; hexText: string }[],
+  ): void {
+    const existing = formationDrawOutcomes.value.find((row) => row.groupKind === 'shiftWest')
+    if (existing === undefined) {
+      formationDrawOutcomes.value = [
+        ...formationDrawOutcomes.value,
+        {
+          groupKind: 'shiftWest',
+          groupLabel:
+            setupDrawGroups.value.find((group) => group.kind === 'shiftWest')?.label ??
+            'A 组：沿道路西移',
+          formationIds: pendingShiftWestPlacements.value.map((item) => item.formationId),
+          detail: `沿道路西移 ${String(pendingShiftWestPlacements.value[0]?.shiftHexes ?? 0)} 格（落点由玩家在初设里给定）`,
+          destinations: destinations.map((item) => ({ ...item })),
+        },
+      ]
+      return
+    }
+    const merged = existing.destinations.map((item) => ({ ...item }))
+    for (const entry of destinations) {
+      const at = merged.findIndex((item) => item.formationId === entry.formationId)
+      if (at === -1) merged.push({ ...entry })
+      else merged[at] = { ...entry }
+    }
+    formationDrawOutcomes.value = formationDrawOutcomes.value.map((row) =>
+      row.groupKind === 'shiftWest' ? { ...row, destinations: merged } : row,
+    )
+  }
+
+  /**
+   * 第六批 §6-A：**单条**西移摆位（初设 box 里点一格即用这个）
+   *
+   * 先记落点（ch10 的落点印在剧本卡上、数据里没有 ⇒ 只能由玩家给），再按它摆位并 upsert 台账。
+   * 修前只有「整笔」入口（缺任一落点即整笔拒绝）⇒ 玩家在初设里给一个落点也摆不了一个师。
+   */
+  function applyShiftWestAtNow(formationId: string, hexText: string): boolean {
+    if (!setDrawShiftHexNow(formationId, hexText)) return false
+    return applyShiftWestOneNow(formationId)
+  }
+
+  /** 单条：按**已记**的落点摆位（落点缺失 / 不在待摆名单里即拒，不猜） */
+  function applyShiftWestOneNow(formationId: string): boolean {
+    const item = pendingShiftWestPlacements.value.find((entry) => entry.formationId === formationId)
+    if (item === undefined) {
+      lastAction.value = {
+        ok: false,
+        rule: 'ch10',
+        detail: `${formationId} 不在待摆位名单里（本组没抽中它）`,
+        scope: '初设·编队抽取摆位',
+      }
+      return false
+    }
+    if (item.hexText === null) {
+      lastAction.value = {
+        ok: false,
+        rule: 'ch10',
+        detail: `${formationId} 还没给西移落点`,
+        scope: '初设·编队抽取摆位',
+      }
+      return false
+    }
+    const placed = placeShiftWestItem(item)
+    if (placed === null) {
+      lastAction.value = {
+        ok: false,
+        rule: 'ch10',
+        detail: `${formationId} 的落点“${item.hexText}”不是“列.行”格式`,
+        scope: '初设·编队抽取摆位',
+      }
+      return false
+    }
+    noteShiftWestDestinations([{ formationId, hexText: item.hexText }])
+    lastAction.value = {
+      ok: true,
+      rule: 'ch10',
+      detail: `${formationId} → ${item.hexText}：${String(placed.moved)} 枚算子`,
+      scope: '初设·编队抽取摆位',
+    }
+    workbench.pushLog(
+      'success',
+      `编队抽取摆位（ch10）：${formationId} → ${item.hexText}；共 ${String(placed.moved)} 枚`,
+      'ch10',
+    )
+    if (placed.note !== null) workbench.pushLog('info', `编队抽取摆位提示：${placed.note}`, 'ch10')
     return true
   }
 
@@ -1735,6 +1933,11 @@ export const useContainersStore = defineStore('containers', () => {
     pendingShiftWestPlacements,
     setDrawShiftHexNow,
     applyShiftWestPlacementsNow,
+    // 第六批 §6-A：初设自动抽签 + 单条西移摆位（初设 box 里点一格即摆一个师）
+    setupDrawGroups,
+    runSetupDrawsNow,
+    applyShiftWestAtNow,
+    applyShiftWestOneNow,
     beginDrawShiftHexPickNow,
     formationDrawOutcomes,
     alarmUnitIds,
