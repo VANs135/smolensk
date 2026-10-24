@@ -24,7 +24,13 @@ const workbench = useWorkbenchStore()
 
 /** 3.4：装甲集群声明表 */
 const panzerUnitId = ref('')
-const panzerGroupChoice = ref<'guderian' | 'hoth'>('guderian')
+/**
+ * 3.4：该算子属 Guderian 还是 Hoth —— **必须显式选**
+ *
+ * 修前默认 `'guderian'`：不动下拉就点「手工覆盖归属」，会把任何一个算子静默判成 Guderian，
+ * 连 3.4b 的分界线义务也随之算错。故默认空串，未选集群时按钮禁用。
+ */
+const panzerGroupChoice = ref<'' | 'guderian' | 'hoth'>('')
 const panzerMultiUnit = ref(true)
 
 /** 3.4b：Supply Table 到货点数（绑定 store，均分结果由引擎给出） */
@@ -85,10 +91,13 @@ const railCapBoostDate = computed(
   () => workbench.exclusiveTimings.find((item) => item.kind === 'railCapBoost')?.date ?? '—',
 )
 
-/** 3.4：一次性写入「是否多单位编队」与「所属集群」两个声明 */
+/** 3.4：一次性写入「是否多单位编队」与「所属集群」两个声明（未选算子/未选集群即不动作） */
 function declarePanzerGroup(): void {
-  workbench.setMultiUnitFormationNow(panzerUnitId.value, panzerMultiUnit.value)
-  workbench.setPanzerGroupNow(panzerUnitId.value, panzerGroupChoice.value)
+  const group = panzerGroupChoice.value
+  const unitId = panzerUnitId.value
+  if (group === '' || unitId === '') return
+  workbench.setMultiUnitFormationNow(unitId, panzerMultiUnit.value)
+  workbench.setPanzerGroupNow(unitId, group)
 }
 
 /**
@@ -194,6 +203,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         <label class="field">
           集群
           <select v-model="panzerGroupChoice" class="select">
+            <option value="">— 选集群（3.4：不替裁判默认）—</option>
             <option value="guderian">Guderian</option>
             <option value="hoth">Hoth</option>
           </select>
@@ -202,12 +212,18 @@ const pins = computed(() => workbench.exclusiveSectionPins)
           <input v-model="panzerMultiUnit" type="checkbox" />
           属多单位编队（3.4）
         </label>
-        <BaseButton variant="primary" size="sm" @click="declarePanzerGroup()">
+        <BaseButton
+          variant="primary"
+          size="sm"
+          :disabled="panzerUnitId === '' || panzerGroupChoice === ''"
+          @click="declarePanzerGroup()"
+        >
           手工覆盖归属（3.4）
         </BaseButton>
         <BaseButton
           variant="ghost"
           size="sm"
+          :disabled="panzerUnitId === ''"
           @click="workbench.setPanzerGroupNow(panzerUnitId, null)"
         >
           撤销覆盖

@@ -146,4 +146,11 @@ describe('条 24：正式/验证模式门控', () => {
     // 3 个 id 文本框只在验证页
     expect(src).toMatch(/v-if="uiMode === 'verify'"/)
   })
+
+  it('ExclusiveRulesPanel：3.4 装甲集群**不替裁判默认**（修前默认 Guderian）', () => {
+    const src = read('src/components/exclusive/ExclusiveRulesPanel.vue')
+    expect(src).toMatch(/const panzerGroupChoice = ref<'' \| 'guderian' \| 'hoth'>\(''\)/)
+    expect(src).not.toMatch(/panzerGroupChoice = ref<'guderian' \| 'hoth'>\('guderian'\)/)
+    expect(src).toMatch(/:disabled="panzerUnitId === '' \|\| panzerGroupChoice === ''"/)
+  })
 })
