@@ -132,6 +132,13 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).toMatch(/const rebuildType = ref\(''\)/)
     expect(src).not.toMatch(/ref\('Infantry Div step'\)/)
     expect(src).toMatch(/:disabled="rebuildType === ''"/)
+    /*
+     * §5-B：**建议行只能由裁判显式采用**（引擎 `suggestRebuildRow` 出建议，界面不自动写值）。
+     * 断言"写 rebuildType 的地方只有那一次点击"——若将来有人加 watch 自动采用，这里会红。
+     */
+    expect(src).toMatch(/suggestRebuildRow/)
+    expect(src).toMatch(/采用建议/)
+    expect(src.match(/rebuildType = rebuildSuggestion/g)?.length ?? 0).toBe(1)
     // §5-A：到货行按"显示名自动匹配"出图
     expect(src).toMatch(/arrivalImageUrl/)
     expect(src).toMatch(/arrival-thumb/)

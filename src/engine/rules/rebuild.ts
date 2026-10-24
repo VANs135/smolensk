@@ -117,6 +117,122 @@ export function rebuildRow(side: Side, unitType: string): RebuildChartRow | null
   return chartsSupplyRepl.rebuild[side].find((row) => row.unitType === unitType) ?? null
 }
 
+/**
+ * 13.5：**「建议行键」的输入**（由记录的分类字段填，**不含任何费用判断**）
+ *
+ * 「建议」只是替裁判省一次下拉搜索，**不是**规则判定：费用完全由最终选中的行决定，
+ * 界面必须让裁判显式采用（不得在未选行时静默取建议行）。
+ */
+export interface RebuildRowHint {
+  side: Side
+  /** 单位库 `branch`（infantry / armor_pz / armor_tk / artillery / hq / …） */
+  branch?: string | null
+  /** 单位库 `echelon`（div / bde / rgt / bn / coy），`echelonStatus` 类记录为空 */
+  echelon?: string | null
+  /** 单位库 `specialized`（hq / artillery / breakdown / engineer / rail_repair …） */
+  specialized?: readonly string[]
+  /** 印刷名（只用于分辨同兵种下重建表**分了多行**的亚型，如 Flm / Aufk / Werfer / Bicycle） */
+  name?: string | null
+  /** 专规 1.6 Notes：飞机（走 Repl Table，行键恒 `Aircraft`） */
+  isAircraft?: boolean
+  /** 13.5e：普通运输点数（行 `Transport Points`） */
+  isTransportPoint?: boolean
+}
+
+/**
+ * 13.5：由**记录自身的分类字段**推出重建表行键（推不出唯一行 ⇒ null）
+ *
+ * 判据逐条对回 `charts-supply-repl.json` 的 `unitType` 原文，且**只在该行确实存在于本方的表里**时才给：
+ * - 兵种 × 编制层级对得上唯一一行（`hq→HQ`、`armor_pz/bn→Panzer Bn`、`armor_tk/div→Tank Div step`…）；
+ * - 同兵种在表里被拆成多行时，只能用**印名里的亚型词**分辨（`Flm`→Flm Panzer Bn、`Aufk`→Aufk、
+ *   `Werfer`→Werfer Bn、`Bike/Bicycle`→Bicycle Cavalry Bn、`PJ`→PJ Bn、`alarm`→Militia Alarm Rgt）；
+ * - **不猜**的情形（返回 null，交裁判人工选行）：
+ *   · `motorized/rgt`（究竟是 `PG (Arm Inf) Rgt`〔1Eq+1Pax〕还是 `Infantry Bde or Rgt`〔2Pax〕，费用不同）；
+ *   · `armor_pz/rgt`（表里没有"装甲团"一行）、`artillery/bn` 而印名不带 Werfer；
+ *   · 苏军 `infantry/div`（表里 `Infantry Div step`〔2Pax〕与 `Infantry Div (Red)`〔No Rebuild〕并存，
+ *     而记录字段分辨不出"Red"）；
+ *   · 任何 `specialized` 含 `artillery` 的**非炮兵兵种**记录（如装甲师属炮兵团，不能按装甲行计）；
+ *   · 表里没有对应行的兵种（airbase / supply / extender / hedgehog / replacement / fortified_region 之外…）。
+ */
+export function suggestRebuildRow(hint: RebuildRowHint): string | null {
+  /** 行必须**存在于本方的表**里才给（表是唯一来源，不凭空造行键） */
+  const row = (unitType: string): string | null =>
+    rebuildRow(hint.side, unitType) === null ? null : unitType
+  if (hint.isAircraft === true) return row('Aircraft')
+  const specialized = hint.specialized ?? []
+  if (specialized.includes('breakdown')) return row('Breakdown Rgt')
+  if (hint.isTransportPoint === true) return row('Transport Points')
+  // 师属炮兵团/营混在别的兵种里：按"炮兵行"计会与表不符，按原兵种计也不对 ⇒ 不猜
+  if (specialized.includes('artillery') && hint.branch !== 'artillery') return null
+  const branch = hint.branch ?? ''
+  const echelon = hint.echelon ?? ''
+  const name = (hint.name ?? '').toLowerCase()
+  switch (branch) {
+    case 'hq':
+      return row('HQ (any size or type)')
+    case 'armor_pz':
+      if (echelon !== 'bn') return null
+      return /\bflm\b/.test(name) ? row('Flm Panzer Bn') : row('Panzer Bn')
+    case 'armor_tk':
+      if (echelon === 'div') return row('Tank Div step')
+      // 苏军另有独立的 `Tank Alarm Bn` 行（Special 1.6c），不能并到常规坦克行
+      if (/alarm/.test(name)) return row('Tank Alarm Bn')
+      if (echelon === 'bn' || echelon === 'rgt' || echelon === 'bde') {
+        return row('Tank Bn, Rgt, or Bde')
+      }
+      return null
+    case 'anti_tank':
+      if (hint.side === 'soviet') return echelon === 'rgt' ? row('AT Alarm Rgt') : null
+      if (echelon !== 'bn') return null
+      return /\bpj\b/.test(name) ? row('PJ Bn') : row('Anti-Tank Bn (German)')
+    case 'arm_rec':
+      if (echelon !== 'bn') return null
+      if (hint.side === 'soviet') return row('Arm Recon Bn (Soviet)')
+      return /\baufk\b/.test(name) ? row('Aufk (Arm Recon) Bn') : row('Arm Car Bn')
+    case 'artillery':
+      if (echelon === 'rgt' || echelon === 'bde') {
+        // 表里 Werfer Rgt 与 Artillery Rgt or Bde 同价（2x Eq），但仍按印名取对应行
+        return /werfer/.test(name) ? row('Werfer Rgt') : row('Artillery Rgt or Bde')
+      }
+      return /werfer/.test(name) ? row('Werfer Bn') : null
+    case 'cavalry':
+      if (hint.side === 'soviet' && echelon === 'div') return row('Cavalry Div (Soviet)')
+      if (echelon !== 'bn') return null
+      return /bike|bicycle/.test(name) ? row('Bicycle Cavalry Bn') : row('Cavalry Bn')
+    case 'machine_gun':
+      return echelon === 'bn' ? row('MG Bn') : null
+    case 'motorcycle':
+      return hint.side === 'soviet' ? row('Motorcycle (MC) Rgt') : row('Krd (Motorcycle) Bn')
+    case 'engineer':
+      if (specialized.includes('rail_repair')) {
+        return hint.side === 'soviet' ? row('RR Rgt') : row('RR Bn')
+      }
+      return hint.side === 'axis' && echelon === 'bn' ? row('Pio Bn') : null
+    case 'security':
+      if (echelon === 'div') return row('Sec Div step')
+      return echelon === 'rgt' ? row('Sec Rgt') : null
+    case 'infantry':
+      // 苏军 Inf Div 在表里分了两行（step / (Red)=No Rebuild），字段分辨不出 ⇒ 不猜
+      if (hint.side === 'axis' && echelon === 'div') return row('Infantry Div step')
+      if (hint.side === 'soviet' && echelon === 'rgt') return row('Infantry Rgt')
+      if (hint.side === 'soviet' && echelon === 'bde' && /para/.test(name)) {
+        return row('Para Inf Bde (Soviet)')
+      }
+      return null
+    case 'mountain':
+      return echelon === 'div' ? row('Mtn Inf Div step') : null
+    case 'militia':
+      if (echelon === 'div') return row('Militia Div step')
+      return /alarm/.test(name) ? row('Militia Alarm Rgt') : null
+    case 'fortified_region':
+      return echelon === 'bde' ? row('UR Bde') : null
+    case 'nkvd_border':
+      return row('NKVD Border Rgt')
+    default:
+      return null
+  }
+}
+
 /** 13.5c：AR 后有黄点（`rebuildable: false`）的单位永久不可重建 */
 export const NO_REBUILD_RULE = '13.5c'
 

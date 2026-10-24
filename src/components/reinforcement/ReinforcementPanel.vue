@@ -6,10 +6,10 @@ import UiField from '@/components/UiField.vue'
 import { useUiMode } from '@/components/ui-mode'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { auxCardImageUrl } from '@/components/game/aux-card-image'
-import { rebuildChartRows } from '@/engine/rules'
+import { rebuildChartRows, suggestRebuildRow } from '@/engine/rules'
 import { counterImages, tokenImageUrl } from '@/render/token-images'
 import { ooaScanOf } from '@/render/charts-view'
-import { counterImageUrlOf, hexLabel } from '@/stores'
+import { counterImageUrlOf, hexLabel, recordNameOf, unitChoices } from '@/stores'
 import { useWorkbenchStore } from '@/stores'
 
 /**
@@ -35,6 +35,37 @@ const uiMode = useUiMode()
  * 保证只能选到合法行键。真正的「算子 → 行」自动映射需逐单位类型数据，暂不做（避免启发式把费用判错）。
  */
 const rebuildRowChoices = computed(() => rebuildChartRows(workbench.activeSide))
+
+/**
+ * 13.5：**建议行键**（只按该算子自身类型推出，且推不出唯一行就给 null）
+ *
+ * 判据在引擎 `suggestRebuildRow`（唯一出处，逐条对回重建表原文）。这里只做「记录视图 → 判据输入」的搬运：
+ * 界面**不会**自动采用建议——必须裁判点「采用建议」，否则宁可让他手选（默认值不能代替规则判定）。
+ */
+const rebuildSuggestion = computed<string | null>(() => {
+  const unit = workbench.rebuildCandidates.find((item) => item.instanceId === rebuildUnitId.value)
+  if (unit === undefined) return null
+  // 空军：重建表恒为 `Aircraft`（专规 1.6 Notes：飞机只经 Repl Table）
+  if ('aircraftId' in unit)
+    return suggestRebuildRow({ side: workbench.activeSide, isAircraft: true })
+  const record = unitChoices(workbench.activeSide).find((item) => item.id === unit.unitId)
+  if (record === undefined) return null
+  return suggestRebuildRow({
+    side: workbench.activeSide,
+    branch: record.branch ?? null,
+    echelon: record.echelon ?? null,
+    specialized: record.specialized ?? [],
+    name: recordNameOf(record),
+    isTransportPoint: unit.noncombatKind === 'transport_point',
+  })
+})
+
+/** 建议行的费用摘要（取自同一份重建表，界面不自算） */
+const rebuildSuggestionLabel = computed<string | null>(() => {
+  const suggestion = rebuildSuggestion.value
+  if (suggestion === null) return null
+  return rebuildRowChoices.value.find((row) => row.unitType === suggestion)?.sourceLabel ?? null
+})
 
 /**
  * B34 余项②：**本方的到达卡（OOA）**
@@ -555,6 +586,24 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           </option>
         </select>
       </label>
+      <!--
+        13.5：**建议行**——由该算子自身类型推出（引擎唯一出处），但**不自动采用**：
+        裁判必须点一下「采用建议」，未点就保持未选行、按钮禁用（默认值不能代替规则判定）。
+      -->
+      <span v-if="rebuildSuggestion !== null" class="muted">
+        建议行：{{ rebuildSuggestion }}（{{ rebuildSuggestionLabel }}）
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :disabled="rebuildType === rebuildSuggestion"
+          @click="rebuildType = rebuildSuggestion"
+        >
+          采用建议
+        </BaseButton>
+      </span>
+      <span v-else-if="rebuildUnitId !== ''" class="muted">
+        该算子的行键无法从类型唯一确定（重建表把同兵种拆成了多行）⇒ 请人工选行（13.5）。
+      </span>
       <label class="field">
         补员所在格
         <UiField v-model="workbench.rebuildReplHexText" class="input" placeholder="36.13" />
