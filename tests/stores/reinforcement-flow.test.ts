@@ -285,6 +285,22 @@ describe('W6 B18：到达表执行（13.6 / 13.6b / 1.6a）', () => {
     expect(store.arrivalAllPlaced).toBe(false)
   })
 
+  it('13.6 / §5-A：卡面名去方前缀后唯一命中 ⇒ 有记录可出图，且不选型号也能自动投放', () => {
+    const store = newStore()
+    store.setTurn(2)
+    store.setPhase('reinforcement')
+    const plan = store.arrivalPlan!
+    const index = plan.units.findIndex((unit) => unit.name === '5 Inf Div')
+    expect(index).toBeGreaterThanOrEqual(0)
+    // 库内印刷名是 "Ge 5 Inf Div"、卡面名是 "5 Inf Div" ⇒ 归一（去方前缀）后唯一命中
+    const record = store.arrivalRecordOf(index)
+    expect(record).not.toBeNull()
+    expect(record!.id).toBeTruthy()
+    // 于是不手选"库中型号"也能投放（修前精确匹配 0/90，永远要手选）
+    expect(store.placeArrivalNow(index)).toBe(true)
+    expect(store.arrivalPlaced[index]).toBe(true)
+  })
+
   it('13.6：换日/换方（到达计划变）⇒ 已投放账本惰性作废', () => {
     const store = newStore()
     store.setTurn(2)

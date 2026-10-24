@@ -7,7 +7,7 @@ import { useUiMode } from '@/components/ui-mode'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { auxCardImageUrl } from '@/components/game/aux-card-image'
 import { rebuildChartRows } from '@/engine/rules'
-import { counterImages } from '@/render/token-images'
+import { counterImages, tokenImageUrl } from '@/render/token-images'
 import { ooaScanOf } from '@/render/charts-view'
 import { counterImageUrlOf, hexLabel } from '@/stores'
 import { useWorkbenchStore } from '@/stores'
@@ -154,6 +154,20 @@ function onPlaceArrival(index: number): void {
   workbench.placeArrivalNow(index, picked === '' ? undefined : picked)
 }
 
+/**
+ * 13.6 / §5-A：到货行**出图**——只有「按显示名自动匹配」成功时才给那一枚的图（不臆造映射）。
+ * 自动匹配的判据与 `placeArrivalNow` 同源（`workbench.arrivalRecordOf`）。
+ */
+function arrivalImageUrl(index: number): string | null {
+  const record = workbench.arrivalRecordOf(index)
+  if (record === null) return null
+  return tokenImageUrl({
+    side: workbench.activeSide,
+    face: 'combat',
+    images: record.images ?? null,
+  })
+}
+
 /** 图上的拆分单位（20.0d 的吸收对象只能是**已在图上**的那些） */
 const breakdownUnitsOnMap = computed(() =>
   workbench.units.filter((unit) => unit.specialized.includes('breakdown')),
@@ -283,6 +297,12 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
     </p>
 
     <p v-for="(unit, index) in plan?.units ?? []" :key="`${index}-${unit.raw}`" class="num">
+      <img
+        v-if="arrivalImageUrl(index) !== null"
+        :src="arrivalImageUrl(index) ?? undefined"
+        alt=""
+        class="arrival-thumb"
+      />
       <BaseTag :kind="unit.kind === 'aircraft' ? 'warning' : 'neutral'">{{ unit.kind }}</BaseTag>
       {{ unit.raw }}
       <template v-if="unit.designation !== null">｜番号 {{ unit.designation }}</template>
@@ -880,5 +900,14 @@ hr {
   border: none;
   border-top: 1px solid var(--color-rule);
   margin: var(--space-3) 0;
+}
+
+/* 13.6 / §5-A：到货行出图（自动匹配成功才有） */
+.arrival-thumb {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  vertical-align: middle;
+  margin-right: 4px;
 }
 </style>

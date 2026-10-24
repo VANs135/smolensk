@@ -366,6 +366,22 @@ export function recordNameOf(record: UnitRecordView): string {
   return record.nameZh ?? record.nameEn ?? record.vassalName ?? record.id
 }
 
+/**
+ * 13.6 / §5-A：**单位名的规则化归一**（到达卡条目 ↔ 算子库记录的匹配用）
+ *
+ * 为什么需要：到达卡面名**不带方前缀**（"5 Inf Div"），而算子库的印刷名**带**（"Ge 5 Inf Div"）——
+ * 精确相等匹配实测 **0/90**（轴）、**0/117**（苏）⇒ 玩家永远要手选"库中型号"。
+ * 这里只做**几件确定的事**：去掉方前缀（Ge/Ru/So/Fi/It/Hu/Ro/Ax/Su）、折叠空白、转小写。
+ * ★ 匹配方仍有"**归一后唯一命中**"守卫：同名歧义 ⇒ 不匹配（绝不猜一个）。
+ */
+export function normalizeUnitName(name: string | null | undefined): string {
+  return (name ?? '')
+    .trim()
+    .replace(/^(?:Ge|Ru|So|Fi|It|Hu|Ro|Ax|Su)\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+}
+
 /** 由单位记录造一个操作台算子（默认朝向战斗面、战斗模式，补给与燃料视为已就绪） */
 export function toConsoleUnit(input: {
   record: UnitRecordView

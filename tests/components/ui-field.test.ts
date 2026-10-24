@@ -120,11 +120,14 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).toMatch(/class="ui-field-readonly"/)
   })
 
-  it('ReinforcementPanel：重建行键从重建表数据取下拉（§5-B，不再自由手输）', () => {
+  it('ReinforcementPanel：重建行键从重建表数据取下拉（§5-B）+ 到货行出图（§5-A）', () => {
     const src = read('src/components/reinforcement/ReinforcementPanel.vue')
     expect(src).toMatch(/rebuildChartRows/)
     expect(src).toMatch(/v-for="row in rebuildRowChoices"/)
     expect(src).not.toMatch(/<input v-model="rebuildType"/)
+    // §5-A：到货行按"显示名自动匹配"出图
+    expect(src).toMatch(/arrivalImageUrl/)
+    expect(src).toMatch(/arrival-thumb/)
   })
 
   it('ContainersPanel：编队收纳改「盒选」（正式界面点选图上单位、验证页保留文本框）', () => {

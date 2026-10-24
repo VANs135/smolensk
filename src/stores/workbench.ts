@@ -404,6 +404,7 @@ import {
   railNeighborHexes,
   railNeighborSource,
   recordNameOf,
+  normalizeUnitName,
   resolveBattle,
   toAirBarrageUnitRequest,
   // 第五批批 C 切片 1（14.1b）：减损机的**当前面**取值（轰炸/空战）与印值军力判据
@@ -15291,6 +15292,34 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 13.6 / §5-A：按**卡面名**匹配库中型号——先精确，再「归一后唯一命中」（去方前缀）。
+   * 归一后有歧义 ⇒ null（不猜）；玩家用「库中型号」下拉覆盖。
+   */
+  function matchArrivalRecord(demandName: string | null | undefined): UnitRecordView | null {
+    const target = demandName ?? ''
+    if (target === '') return null
+    const exact = choices.value.find((item) => recordNameOf(item) === target)
+    if (exact !== undefined) return exact
+    const key = normalizeUnitName(target)
+    if (key === '') return null
+    const matches = choices.value.filter((item) => normalizeUnitName(recordNameOf(item)) === key)
+    return matches.length === 1 ? matches[0]! : null
+  }
+
+  /**
+   * 13.6：该到达条目自动匹配的库中型号（与 `placeArrivalNow` 同一判据；无唯一匹配 ⇒ null）
+   *
+   * 供界面"到货行出图"用（§5-A 的安全版：不臆造映射，只在匹配成功时给出那一枚的图）。
+   */
+  function arrivalRecordOf(index: number): UnitRecordView | null {
+    const plan = arrivalPlan.value
+    if (plan === null) return null
+    const demand = plan.units[index]
+    if (demand === undefined) return null
+    return matchArrivalRecord(demand.name ?? demand.raw)
+  }
+
+  /**
    * B34：**图上本方单位**（给"拆分母单位 / 慢动员锁定 / 合并保留·移除"四处阵列当候选）
    *
    * 这只是"盘面上有哪些本方单位"这一份**数据**，不含任何合法性判断 ——
@@ -15889,9 +15918,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
     const record =
       recordId === undefined
-        ? choices.value.find((item) => recordNameOf(item) === (demand.name ?? demand.raw))
-        : choices.value.find((item) => item.id === recordId)
-    if (record === undefined) {
+        ? matchArrivalRecord(demand.name ?? demand.raw)
+        : (choices.value.find((item) => item.id === recordId) ?? null)
+    if (record === null) {
       reinforcementError.value = { rule: '13.6', reason: `arrivalUnitNotResolved:${demand.raw}` }
       pushLog(
         'danger',
@@ -19171,6 +19200,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     arrivalPlacements,
     arrivalPlaced,
     arrivalAllPlaced,
+    arrivalRecordOf,
     ownUnitsOnMap,
     rebuildCandidates,
     rebuildCandidateHexes,
