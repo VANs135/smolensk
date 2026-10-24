@@ -201,6 +201,8 @@ import {
   planSpSplit,
   planStep,
   planTransportSplit,
+  // 12.1a：同格并入时保持「尽可能并为 SP」的规范形（`holdingsToT` 已在上方导入）
+  tToHoldings,
   planVariableReinforcement,
   previewStep,
   railSupplyPath,
@@ -10154,6 +10156,51 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const sp = Math.max(0, Math.trunc(input.sp))
     const t = Math.max(0, Math.trunc(input.t))
     if (sp === 0 && t === 0) return null
+    /*
+     * 12.1b / §5-C：**同格同方只有一条账本**（补给站是"位置"，不是"条目"）
+     *
+     * 修前这里无条件 `createId('sp')` 再 push：同一格再落一次就多出**第二条**账本，
+     * 而付款路径全是 `find(dump => dump.side===.. && sameHex(..))` 只取**第一条** ⇒
+     * 第二条的 SP 变成"看得见、付不出"的死额（装载/整备/轰炸会误报"SP 不足"），
+     * 且 3.4b 的待归属与装甲集群归属挂在 id 上，同格两 id 会各记一半。
+     * 并入既有条（**沿用原 id**）可同时消掉这两件事：既有引用（`spDumpPanzerGroups` /
+     * `pendingSpGroupAssignment` / `barrageSupplyDumpId`）不会悬空。
+     */
+    const existing = spDumps.value.find(
+      (dump) => dump.side === input.side && sameHex(dump.hex, input.hex),
+    )
+    if (existing !== undefined) {
+      // 12.1a：并入后仍保持「尽可能并为 SP」的规范形（2T + 2T ⇒ 1 SP + 0 T，而不是留成 4T）
+      const merged = tToHoldings(holdingsToT({ sp: existing.sp + sp, t: existing.t + t }))
+      spDumps.value = spDumps.value.map((dump) =>
+        dump.id === existing.id ? { ...dump, sp: merged.sp, t: merged.t } : dump,
+      )
+      pushLog(
+        'info',
+        `并入既有补给站 ${hexLabel(existing.hex)}：+${String(sp)} SP +${String(t)} T ⇒ ${String(merged.sp)} SP + ${String(merged.t)} T（12.1a）`,
+        '12.1a',
+      )
+      /*
+       * 3.4b：并进去之后，这笔新到的轴方 SP 归属**跟随该站已有的归属**——
+       * 已声明过的站不再进待办（那是一次显式裁定，不该因为多加了几点就作废）；
+       * 未声明的站照旧登记待办，交玩家一键归属。
+       */
+      if (
+        panzerGroupRulesOn.value &&
+        input.side === 'axis' &&
+        panzerGroupOfDump(existing.id) === null
+      ) {
+        pendingSpGroupAssignment.value = [
+          ...new Set([...pendingSpGroupAssignment.value, existing.id]),
+        ]
+        pushLog(
+          'warning',
+          `新到的轴方 SP（${hexLabel(existing.hex)}）尚未归属装甲集群（3.4b）⇒ 请在专规面板声明`,
+          '3.4b',
+        )
+      }
+      return existing.id
+    }
     const id = createId('sp')
     spDumps.value = [...spDumps.value, { id, hex: input.hex, side: input.side, sp, t }]
     /*
@@ -18607,11 +18654,51 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     for (const [key, target] of boardSnapshotFields()) {
       target.value = JSON.parse(JSON.stringify(table[key])) as unknown
     }
+    const merged = normalizeSpDumpsOnLoad()
     syncVictoryControlFromBoard()
     pushLog(
       'info',
       `读档：盘面已还原 ${String(boardSnapshotFields().length)} 项（算子 ${String(units.value.length)} 枚 / 补给站 ${String(spDumps.value.length)} 处 / 飞机 ${String(airUnits.value.length)} 架）`,
     )
+    if (merged > 0) {
+      pushLog(
+        'info',
+        `读档：同格同方的补给站账本按 12.1b 归并了 ${String(merged)} 条（旧档/改档兼容）`,
+        '12.1b',
+      )
+    }
+  }
+
+  /**
+   * 12.1b / §5-C：**读档后把同格同方的补给站账本并成一条**
+   *
+   * 为什么要在读档做一次：本次修复前 `addSpAtHex` 会无条件新建条目，故**旧档**里可能已在同一格同一方
+   * 留下多条账本；手工改过的档同理。而付款路径是 `find(side + sameHex)` 只取第一条 ⇒ 其余 SP
+   * 变成"看得见、付不出"的死额（13.2f 装载 / 15.1B 整备 / 轰炸会误报"SP 不足"）。
+   *
+   * 归并规则：按**首次出现顺序**保留第一条的 id（使 `spDumpPanzerGroups` 等按 id 的引用仍有效），
+   * 金额相加后按 12.1a 折算成「尽可能并为 SP」的规范形。对本来就一致的盘面**幂等**（返回 0）。
+   */
+  function normalizeSpDumpsOnLoad(): number {
+    const kept: SpDump[] = []
+    const byKey = new Map<string, SpDump>()
+    let merged = 0
+    for (const dump of spDumps.value) {
+      const key = `${dump.side}|${String(dump.hex.col)},${String(dump.hex.row)}`
+      const first = byKey.get(key)
+      if (first === undefined) {
+        const copy = { ...dump }
+        byKey.set(key, copy)
+        kept.push(copy)
+        continue
+      }
+      const holdings = tToHoldings(holdingsToT({ sp: first.sp + dump.sp, t: first.t + dump.t }))
+      first.sp = holdings.sp
+      first.t = holdings.t
+      merged += 1
+    }
+    if (merged > 0) spDumps.value = kept
+    return merged
   }
 
   /*
