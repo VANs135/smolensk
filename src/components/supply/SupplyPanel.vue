@@ -422,6 +422,7 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
               type="number"
               min="1"
               placeholder="全部"
+              readonly
             />
           </label>
           <BaseButton

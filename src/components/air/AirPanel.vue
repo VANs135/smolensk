@@ -815,6 +815,7 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
                   class="input num"
                   type="number"
                   min="0"
+                  stepper
                 />
               </label>
               <label class="field"> 目标基地等级（自动 {{ workbench.airTargetBaseLevel }}） </label>

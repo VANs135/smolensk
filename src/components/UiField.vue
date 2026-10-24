@@ -10,11 +10,11 @@ defineOptions({ inheritAttrs: false })
  *
  * - 验证页（`uiMode === 'verify'`）：渲染可编辑 `<input>`，保留裁判/复核的全部手输退路；
  * - 正式界面（`uiMode === 'formal'`）：
- *   · 默认渲染**只读** `<span>`（格号改点图、数值由引擎/骰子自动带出，见 §5-E）；
- *   · 传 `stepper` 时渲染 `－ 值 ＋` **步进**——用于"是玩家真实选择、又无点图替代"的数量
- *     （拆分/销毁/装载/拖取量等）：正式界面**不手输**但仍可操作，验证页仍是可输入框。
+ *   · **数字型默认渲染 `－ 值 ＋` 步进**——不手输但仍可操作（数量、结果、裁判补记都能点）；
+ *   · **文本型默认只读**（格号改点图、备注/名称这类不在这里改）；
+ *   · 传 `readonly` 可强制只读（"空 = 全部/自动"这类步进表达不了的语义，如销毁量）。
  *
- * 用法替代原 `<input v-model="x" ... />`：`<UiField v-model="x" type="number" stepper />`。
+ * 用法替代原 `<input v-model="x" ... />`：`<UiField v-model="x" type="number" />`。
  * 其余属性（class、min/max、@change 等）经 `$attrs` 透传到 `<input>` 分支。
  */
 const props = withDefaults(
@@ -22,12 +22,14 @@ const props = withDefaults(
     modelValue?: string | number | null
     type?: string
     placeholder?: string
-    /** 正式界面用步进代替只读（用于真实选择的数量；默认只读） */
+    /** 正式界面用步进代替只读（**数字型默认就是步进**，此开关保留作显式声明） */
     stepper?: boolean
+    /** 强制只读（即便数字型）——用于"空 = 全部/自动"这类步进表达不了的语义（如销毁量） */
+    readonly?: boolean
     /** 步进下限（默认 0；接受 number|string，兼容模板里的静态 `min="0"`） */
     min?: number | string
   }>(),
-  { type: 'text', modelValue: '', placeholder: '', stepper: false, min: 0 },
+  { type: 'text', modelValue: '', placeholder: '', stepper: false, readonly: false, min: 0 },
 )
 
 const emit = defineEmits<{ (e: 'update:modelValue', v: string | number): void }>()
@@ -44,6 +46,13 @@ const numeric = computed<number>(() => {
 const floor = computed<number>(() =>
   typeof props.min === 'number' ? props.min : Number(props.min),
 )
+
+/**
+ * 正式界面是否用步进：
+ *   · **数字型默认步进**（不手输但仍可操作；格号那种文本型仍是只读 + 点图）；
+ *   · `readonly` 强制只读（"空 = 全部/自动"这类步进表达不了的语义）。
+ */
+const useStepper = computed<boolean>(() => props.type === 'number' && props.readonly !== true)
 
 function onInput(event: Event): void {
   const el = event.target as HTMLInputElement
@@ -69,8 +78,8 @@ function step(delta: number): void {
     v-bind="$attrs"
     @input="onInput"
   />
-  <!-- 条 24：正式界面"可操作但不手输"的步进（用于真实选择的数量） -->
-  <span v-else-if="stepper" class="ui-field-stepper">
+  <!-- 条 24：正式界面"可操作但不手输"的步进（数字型默认走这里；readonly 除外） -->
+  <span v-else-if="useStepper" class="ui-field-stepper">
     <button
       type="button"
       class="ui-field-stepper__btn"

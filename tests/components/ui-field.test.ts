@@ -14,11 +14,13 @@ const root = join(process.cwd())
 const read = (p: string): string => readFileSync(join(root, p), 'utf8')
 
 describe('条 24：正式/验证模式门控', () => {
-  it('UiField：验证页渲染 input、正式界面渲染只读 span（或 stepper 步进）', () => {
+  it('UiField：验证页渲染 input、正式界面数字型默认步进（readonly 例外）', () => {
     const src = read('src/components/UiField.vue')
     expect(src).toMatch(/v-if="uiMode === 'verify'"/)
     expect(src).toMatch(/<input/)
-    expect(src).toMatch(/v-else-if="stepper"/)
+    expect(src).toMatch(/v-else-if="useStepper"/)
+    expect(src).toMatch(/const useStepper = computed/)
+    expect(src).toMatch(/props\.type === 'number'/)
     expect(src).toMatch(/function step\(/)
     expect(src).toMatch(/v-else[^>]*class="ui-field-readonly"/)
     expect(src).toMatch(/useUiMode\(\)/)
@@ -89,10 +91,10 @@ describe('条 24：正式/验证模式门控', () => {
     }
   })
 
-  it('条 24：真实选择的数量用「步进」而非只读（补给拆分/装载/拖取/分摊）', () => {
+  it('条 24：数字型默认步进；销毁量（空=全部）强制只读；拆分规模保留普通输入', () => {
     const src = read('src/components/supply/SupplyPanel.vue')
-    // 5 处启用了 stepper（spToSplit/装载量/铁路调动量/分摊/拖取投递量）
-    expect(src.match(/\bstepper\b/g)?.length ?? 0).toBeGreaterThanOrEqual(5)
+    // 销毁量：空 = 全部，步进表达不了 ⇒ 显式 readonly
+    expect(src).toMatch(/v-model="destroyT"[\s\S]{0,140}?readonly/)
     // 拆分规模是列表，保留普通输入（否则 13.2c 在正式界面不可用）
     expect(src).toMatch(/v-model="workbench\.transportPointInputs\.splitSizesText"/)
   })
