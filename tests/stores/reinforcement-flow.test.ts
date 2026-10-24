@@ -381,6 +381,36 @@ describe('W6 B18：重建与死亡堆（13.5a–c）', () => {
     expect(store.lastRebuild?.cost).toEqual({ pax: 2 })
   })
 
+  it('13.5：未选行键（空串）⇒ 拒绝且不扣款（不替裁判猜行）', () => {
+    const store = newStore()
+    store.setTurn(2)
+    store.setPhase('reinforcement')
+    goToSegmentStep(store, 'reinforcement.rebuild')
+    store.setReplHoldingsNow({ pax: 4, eq: 4, ftr: 0, tac: 0 })
+
+    const hq = place(
+      store,
+      pickRecord('axis', (record) => record.specialized?.includes('hq') === true),
+      DEFENDER_HEX,
+      'axis',
+      'hq-1',
+    )
+    const unit = place(store, infDivRecord(), DEFENDER_HEX, 'axis', 'u1')
+    unit.steps = unit.printedSteps - 1
+
+    // 修前面板默认 `'Infantry Div step'`：重建别的兵种不动下拉就按那一行扣款（静默扣错费用）
+    expect(
+      store.rebuildUnitNow({
+        unitId: 'u1',
+        rebuildType: '',
+        replHexText: `${hq.hex.col}.${hq.hex.row}`,
+      }),
+    ).toBe(false)
+    expect(store.reinforcementError).toMatchObject({ rule: '13.5' })
+    expect(store.replHoldings).toEqual({ pax: 4, eq: 4, ftr: 0, tac: 0 })
+    expect(unit.steps).toBe(unit.printedSteps - 1)
+  })
+
   it('13.5c / 13.5b：不可重建（黄点）与拆分单位都被拒；死亡堆中的单位可重建', () => {
     const store = newStore()
     store.setTurn(2)

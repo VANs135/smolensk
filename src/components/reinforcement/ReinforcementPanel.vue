@@ -55,8 +55,14 @@ watchEffect(() => {
   if (ooaImageUrl.value !== null) void counterImages.preload([ooaImageUrl.value])
 })
 
-/** 重建表行键（裁判按重建表选定；工程库未落「算子 → 行」映射） */
-const rebuildType = ref('Infantry Div step')
+/**
+ * 重建表行键（裁判按重建表选定；工程库未落「算子 → 行」映射）
+ *
+ * ★ 空串＝**未选行**，且「重建」按钮在未选行时禁用。修前默认 `'Infantry Div step'`：
+ *   重建一辆坦克营却不动下拉，就会按那一行的「2x Pax」扣款 —— **静默扣错费用**。
+ *   宁可让按钮禁用，也不替裁判猜行（13.5：重建费用完全由行决定）。
+ */
+const rebuildType = ref('')
 const rebuildUnitId = ref('')
 const rebuildHexText = ref('')
 
@@ -543,6 +549,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <label class="field">
         重建表行键
         <select v-model="rebuildType" class="select">
+          <option value="">— 按重建表选行（13.5：费用由行决定）—</option>
           <option v-for="row in rebuildRowChoices" :key="row.unitType" :value="row.unitType">
             {{ row.unitType }}（{{ row.sourceLabel }}）
           </option>
@@ -563,6 +570,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <BaseButton
         variant="primary"
         size="sm"
+        :disabled="rebuildType === ''"
         @click="
           workbench.rebuildUnitNow({
             unitId: rebuildUnitId,

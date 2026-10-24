@@ -125,6 +125,13 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).toMatch(/rebuildChartRows/)
     expect(src).toMatch(/v-for="row in rebuildRowChoices"/)
     expect(src).not.toMatch(/<input v-model="rebuildType"/)
+    /*
+     * 13.5：**不替裁判默认一行**。修前 `ref('Infantry Div step')`，重建坦克营不动下拉就按
+     * 那一行的「2x Pax」扣款（静默扣错费用）⇒ 默认必须是空串，且未选行时按钮禁用。
+     */
+    expect(src).toMatch(/const rebuildType = ref\(''\)/)
+    expect(src).not.toMatch(/ref\('Infantry Div step'\)/)
+    expect(src).toMatch(/:disabled="rebuildType === ''"/)
     // §5-A：到货行按"显示名自动匹配"出图
     expect(src).toMatch(/arrivalImageUrl/)
     expect(src).toMatch(/arrival-thumb/)
