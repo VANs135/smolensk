@@ -470,10 +470,11 @@ describe('B48 P0：存档带盘面（摆子 → 存 → 读 → 盘面一致）'
     expect(boardPayloadOf(adapter)).toBeDefined()
     /*
      * 契约变更（**不是放宽**）：批 A 切片 3 加了 9.1c 两个攻击账本 ⇒ 版本 2；
-     * 第六批条 5 又加到达"已投放"账本（`arrivalPlacedKey`/`arrivalPlacedRaw`）⇒ 版本递增到 3
-     * （旧档一律拒读，见 store 里那行注释）。
+     * 第六批条 5 又加到达"已投放"账本（`arrivalPlacedKey`/`arrivalPlacedRaw`）⇒ 版本 3；
+     * §5-D 补员盘面化（`replHoldings` → `replPending`/`replFtrTac`，Pax/Eq 改随 `units` 存档）
+     * ⇒ 版本 4（v3 旧档由 `migrateBoardV3ToV4` 迁成盘面算子，见 store 里那行注释）。
      */
-    expect(boardPayloadOf(adapter)['version']).toBe(3)
+    expect(boardPayloadOf(adapter)['version']).toBe(4)
 
     // 把盘面改乱：清算子、清补给站、把城市账本改回去
     workbench.units.splice(0, workbench.units.length)
@@ -534,6 +535,45 @@ describe('B48 P0：存档带盘面（摆子 → 存 → 读 → 盘面一致）'
     const info = classifySaveError(session.saveError?.reason ?? '')
     expect(info.kind).toBe('versionMismatch')
     expect(info.layer).toBe('盘面快照')
+  })
+
+  it('§5-D：v3 旧档（补员还是账本）⇒ 读档迁成盘面补员算子', () => {
+    const { workbench, session, adapter } = newBoardStore()
+    session.startGame()
+    // 摆一座己方指挥部：迁移规则是"落到档里记的补员格，没有则落到第一座己方 HQ"
+    // （SOP 游戏提示的"训练分队"），再不行才退回待放置
+    workbench.units.push(
+      toConsoleUnit({
+        record: unitChoices('axis').find((item) => item.specialized?.includes('hq') === true)!,
+        instanceId: 'p0-hq',
+        hex: P0_HEX_B,
+        side: 'axis',
+      }),
+    )
+    placeFixtureUnit(workbench, 'axis', 'p0-repl', P0_HEX_A)
+    expect(session.saveNow()).toBe(true)
+
+    // 手工把存档改成 v3 形态：补员是账本四个数字，没有 replPending/replFtrTac
+    tamperSlot(adapter, (file) => {
+      const board = file['board'] as { version: number; fields: Record<string, unknown> }
+      board.version = 3
+      board.fields['replHoldings'] = { pax: 3, eq: 1, ftr: 0, tac: 0 }
+      delete board.fields['replPending']
+      delete board.fields['replFtrTac']
+    })
+
+    // 读档不拒（只接受上一个版本），且迁移把账本摆成盘面算子
+    expect(session.loadNow()).toBe(true)
+    const repls = workbench.units.filter((unit) => unit.replKind != null)
+    expect(repls).toHaveLength(4)
+    expect(repls.filter((unit) => unit.replKind === 'pax')).toHaveLength(3)
+    expect(repls.filter((unit) => unit.replKind === 'eq')).toHaveLength(1)
+    // 盘面为唯一事实：投影读出来就是那四个数
+    expect(workbench.replHoldings).toMatchObject({ pax: 3, eq: 1 })
+    // 落点＝第一座己方 HQ（P0_HEX_B），不是任意格
+    expect(
+      repls.every((unit) => unit.hex.col === P0_HEX_B.col && unit.hex.row === P0_HEX_B.row),
+    ).toBe(true)
   })
 
   it('P0：快照字段表缺项（结构改过却忘了递增版本号）⇒ 拒读', () => {

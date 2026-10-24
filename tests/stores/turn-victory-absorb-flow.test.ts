@@ -139,7 +139,7 @@ describe('13.5：可保存的补员由引擎判定', () => {
 
   it('store：清零后只留可保存的那两类', () => {
     const store = newStore()
-    store.replHoldings = { ftr: 3, tac: 2, pax: 5, eq: 4 }
+    store.setReplHoldingsNow({ ftr: 3, tac: 2, pax: 5, eq: 4 }, CORE_HEX)
     store.clearNonSavableReplNow()
     expect(store.replHoldings).toMatchObject({ ftr: 0, tac: 0, pax: 5, eq: 4 })
   })

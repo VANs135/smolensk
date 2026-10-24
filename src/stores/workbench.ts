@@ -61,7 +61,6 @@ import {
   validateConstructionBase,
   EXTENDER_REQUIRED_POINTS,
   isVariableExitActive,
-  addReplHoldings,
   airInteractionChecklist,
   airTransportTerrainIsClosed,
   // B44（14.9e）：逐机飞法（A 双程 / B 正常 / C 半程容量翻倍）
@@ -113,7 +112,6 @@ import {
   checkLegality,
   chooseSupplySource,
   isSavableRepl,
-  clearNonSavableRepl,
   clearReleasedFromReserve,
   completeAirReturnStep,
   computeCombatSupplyCost,
@@ -145,7 +143,6 @@ import {
   declareInterceptionStep,
   describeCost,
   drawableDumpsFor,
-  emptyReplHoldings,
   endMoveEarly,
   flipOrientation,
   fuelExpiresOnPhaseChange,
@@ -400,6 +397,9 @@ import {
   // B14b：13.4a 预备/战略模式判据（参炸单位阵列的灰显原因与引擎请求共用一处）
   isInReserveOrStrat,
   isRailHexAt,
+  isReplUnit,
+  replRecordOf,
+  type ReplKind,
   isStrategicBomberAircraft,
   modeUnitClassOf,
   parseConvertedRailRun,
@@ -6054,6 +6054,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     for (const id of ids) {
       const unit = units.value.find((item) => item.instanceId === id)
       if (unit === undefined) continue
+      /*
+       * 13.5（§5-D）：「补员永远无法进入战斗模式，但可以进入所有其他模式」⇒ 目标若为战斗模式
+       * （或战斗面朝向），对补员算子直接拒。移动/战略/预备照常放行（它们都是"其他模式"）。
+       */
+      if (isReplUnit(unit) && to === 'combat') {
+        pushLog('warning', `${unit.name} 是补员算子，不能进入战斗模式（13.5）`, '13.5')
+        continue
+      }
       // 朝向：战斗/移动面＝模式本身；战略必为移动面（5.8）；预备可任选（5.7a）
       const target: Orientation =
         to === 'combat'
@@ -7740,6 +7748,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       units.value = units.value.filter((item) => item.instanceId !== entry.instanceId)
       // 选中态可能正指着这个单位；不清会留下悬空选中
       if (selectedId.value === entry.instanceId) selectedId.value = null
+    }
+    /*
+     * §5-D（用户 2026-10-25 裁定）：**补员算子被摧毁即直接消灭移除，不进死亡堆**。
+     * 依据：13.5b「一般来说，只有死亡堆中的单位，和地图上有军力损失的单位才能被重建」，
+     * 而补员本身不是"可重建的单位"（它是被消耗的资源）；进死亡堆反而会被 13.5 重建链
+     * 与 1.6c 的随机重建误当候选。故这里只移出盘面、不打进死亡堆。
+     */
+    if (!isAirDeadPileEntry(entry) && isReplUnit(entry)) {
+      pushLog('danger', `${text}（13.5：补员算子被摧毁即消灭，不进死亡堆）`, rule)
+      return
     }
     deadPile.value = [...deadPile.value, entry]
     pushLog('danger', text, rule)
@@ -14952,8 +14970,102 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 13.3f / 专规 1.2：初始换轨账本由**下方 `refreshScenarioBoundLedgers` 的 watch**（`immediate: true`）
    * 统一落账——本处**不再**各写一遍，避免"多入口各自刷新"再次漏掉某一条路径（读档就是漏网的那条）。
    */
-  /** 补员账本（13.5：Pax/Eq 可跨回合保存，Ftr/Tac 不可保存） */
-  const replHoldings = ref<ReplHoldings>(emptyReplHoldings())
+  /*
+   * 13.5 / §5-D（用户 2026-10-25 裁定「规则字面，一次掷骰给 5 点就摆 5 枚」）：
+   * **Pax / Eq 补员是盘面算子**（每 1 点一枚 `Pax Repl` / `EQ Repl`），
+   * 与普通算子同链移动、堆叠、被攻击、被轰炸摧毁；Ftr / Tac 按专规 1.6（只补 1 step 且
+   * **不可保存**）继续走账本，不做盘面算子。
+   *
+   * 于是这里只剩两份状态：
+   *   · `replPending`：掷出后**尚未放置**的 Pax / Eq（SOP：「掷可变增援表，并将相应的结果放置在
+   *     地图上」——落点由裁判选格，放置前不在盘面、也不能用于重建）；
+   *   · `replFtrTac`：Ftr / Tac 账本（增援阶段末清零，见 `clearNonSavableReplNow`）。
+   * 盘面上的枚数一律**从 `units` 现算**（`replBoardCounts`）——不另存一份，避免双源漂移。
+   */
+  const replPending = ref<{ pax: number; eq: number }>({ pax: 0, eq: 0 })
+  const replFtrTac = ref<{ ftr: number; tac: number }>({ ftr: 0, tac: 0 })
+
+  /** 盘面上（当前方）的补员算子枚数（§5-D：唯一事实，按格可再筛） */
+  const replBoardUnits = computed<ConsoleUnit[]>(() =>
+    units.value.filter((unit) => unit.side === activeSide.value && isReplUnit(unit)),
+  )
+
+  /** 全盘（不分格）的 Pax / Eq 合计——面板显示与"够不够重建"的总量口径 */
+  const replBoardCounts = computed<{ pax: number; eq: number }>(() => {
+    let pax = 0
+    let eq = 0
+    for (const unit of replBoardUnits.value) {
+      if (unit.replKind === 'pax') pax += 1
+      else if (unit.replKind === 'eq') eq += 1
+    }
+    return { pax, eq }
+  })
+
+  /**
+   * 补员总账（**投影**：盘面 Pax/Eq + 账本 Ftr/Tac）
+   *
+   * 只读——写路径是"摆/移除补员算子"与 `replFtrTac`；保留这个 computed 是为了让面板
+   * 与引擎请求继续用同一个 `ReplHoldings` 形状，不必各处各拼一份。
+   */
+  const replHoldings = computed<ReplHoldings>(() => ({
+    pax: replBoardCounts.value.pax,
+    eq: replBoardCounts.value.eq,
+    ftr: replFtrTac.value.ftr,
+    tac: replFtrTac.value.tac,
+  }))
+
+  /** 13.5a：某一格里的 Pax / Eq 补员枚数（"所需补员必须都在一个格中"由结构保证） */
+  function replCountsAtHex(hex: HexRef): { pax: number; eq: number } {
+    let pax = 0
+    let eq = 0
+    for (const unit of replBoardUnits.value) {
+      if (unit.hex.col !== hex.col || unit.hex.row !== hex.row) continue
+      if (unit.replKind === 'pax') pax += 1
+      else if (unit.replKind === 'eq') eq += 1
+    }
+    return { pax, eq }
+  }
+
+  /**
+   * §5-D：在指定格摆 `count` 枚补员算子（每点一枚；库里没有该族记录 ⇒ 拒绝并说明）
+   *
+   * 实例 id 走 `arr-repl` 前缀，与到达投放区分（便于日志与存档核对）。
+   */
+  function placeReplCounters(hex: HexRef, kind: ReplKind, count: number): boolean {
+    const total = Math.max(0, Math.trunc(count))
+    if (total === 0) return true
+    const record = replRecordOf(activeSide.value, kind)
+    if (record === null) {
+      pushLog('danger', `单位库里没有 ${kind === 'pax' ? 'Pax' : 'EQ'} 补员算子（13.5）`, '13.5')
+      return false
+    }
+    const created: ConsoleUnit[] = []
+    for (let index = 0; index < total; index += 1) {
+      created.push(
+        toConsoleUnit({
+          record,
+          instanceId: createId('arr-repl'),
+          hex: { ...hex },
+          side: activeSide.value,
+        }),
+      )
+    }
+    units.value = [...units.value, ...created]
+    return true
+  }
+
+  /** §5-D：从盘面移除 `count` 枚某一族的补员（重建成功路径调用；按实例 id 逐枚摘） */
+  function removeReplCounters(hex: HexRef, kind: ReplKind, count: number): void {
+    const total = Math.max(0, Math.trunc(count))
+    if (total === 0) return
+    const victims = replBoardUnits.value.filter(
+      (unit) => unit.replKind === kind && unit.hex.col === hex.col && unit.hex.row === hex.row,
+    )
+    const doomed = new Set(victims.slice(0, total).map((unit) => unit.instanceId))
+    if (doomed.size === 0) return
+    units.value = units.value.filter((unit) => !doomed.has(unit.instanceId))
+    if (selectedId.value !== null && doomed.has(selectedId.value)) selectedId.value = null
+  }
   /**
    * 死亡堆（13.5a 重建来源；**地面与空军共用**——用户裁定，依据 14.1b 飞机亦可重建）
    *
@@ -15927,34 +16039,91 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     arrivalHexOverrides.value = { ...arrivalHexOverrides.value, [index]: hex }
   }
 
-  /** B18：补员账本（13.5） */
-  function setReplHoldingsNow(holdings: ReplHoldings): void {
-    replHoldings.value = holdings
+  /**
+   * §5-D：**摆补员算子**（测试夹具 / 裁判订正；`hex` 为落点，缺省取当前"补员所在格"）
+   *
+   * 语义：把当前方的补员算子**重置**成给定数量（Pax / Eq 各 `holdings` 点 ⇒ 各那么多枚），
+   * Ftr / Tac 仍是账本（专规 1.6：只补 1 step 且不可保存，不做盘面算子）。
+   * ★ 与修前的区别：修前只改四个数字；现在 Pax / Eq 必须**落在某一格**（13.5a：补员是盘面算子）。
+   */
+  function setReplHoldingsNow(holdings: ReplHoldings, hex?: HexRef): void {
+    const target = hex ?? parseHexPath(rebuildReplHexText.value)[0] ?? null
+    if (target === null) {
+      pushLog('warning', '摆补员需要落点格（13.5a：补员是盘面算子）', '13.5')
+      return
+    }
+    // 先清掉当前方已有补员，再按给定数量重摆（"设置为"语义，不是叠加）
+    for (const unit of replBoardUnits.value) {
+      units.value = units.value.filter((item) => item.instanceId !== unit.instanceId)
+    }
+    placeReplCounters(target, 'pax', holdings.pax)
+    placeReplCounters(target, 'eq', holdings.eq)
+    replFtrTac.value = { ftr: holdings.ftr, tac: holdings.tac }
   }
 
+  /**
+   * 13.5 / 1.6b：补员入账
+   *
+   * §5-D 后分两种去向：**Pax / Eq 进"待放置"**（SOP：「掷可变增援表，并将相应的结果放置在地图上」
+   * ——落点由裁判选格，放置前不在盘面、也不能用于重建）；**Ftr / Tac 直接进账本**（专规 1.6）。
+   */
   function addReplHoldingsNow(delta: Partial<ReplHoldings>): void {
-    replHoldings.value = addReplHoldings(replHoldings.value, delta)
+    const pax = Math.max(0, Math.trunc(delta.pax ?? 0))
+    const eq = Math.max(0, Math.trunc(delta.eq ?? 0))
+    if (pax > 0 || eq > 0) {
+      replPending.value = { pax: replPending.value.pax + pax, eq: replPending.value.eq + eq }
+    }
+    if ((delta.ftr ?? 0) > 0 || (delta.tac ?? 0) > 0) {
+      replFtrTac.value = {
+        ftr: replFtrTac.value.ftr + Math.max(0, Math.trunc(delta.ftr ?? 0)),
+        tac: replFtrTac.value.tac + Math.max(0, Math.trunc(delta.tac ?? 0)),
+      }
+    }
     const kept = (['pax', 'eq'] as const).filter((key) => isSavableRepl(key))
     pushLog(
       'info',
-      `补员 +${describeCost(delta)}（1.6b；可保存的仅有 ${kept.join(' / ')}，13.5）`,
+      `补员 +${describeCost(delta)}（1.6b；可保存的仅有 ${kept.join(' / ')}，13.5）` +
+        (pax > 0 || eq > 0 ? '；Pax/Eq 待放置到地图上（13.5a）' : ''),
       '13.5',
     )
   }
 
+  /**
+   * §5-D：把**待放置**的 Pax / Eq 补员摆到指定格（每点一枚）
+   *
+   * SOP 13.5：「掷可变增援表，并将相应的结果放置在地图上」——该条没有规定入场格，
+   * 故落点由裁判选（游戏提示建议放在前线后方的指挥部附近，即"训练分队"）。
+   */
+  function placePendingReplNow(hex: HexRef): boolean {
+    const pending = replPending.value
+    const total = pending.pax + pending.eq
+    if (total === 0) {
+      pushLog('warning', '没有待放置的补员（13.5）', '13.5')
+      return false
+    }
+    if (!placeReplCounters(hex, 'pax', pending.pax)) return false
+    if (!placeReplCounters(hex, 'eq', pending.eq)) return false
+    replPending.value = { pax: 0, eq: 0 }
+    pushLog(
+      'success',
+      `补员已放置于 ${hexLabel(hex)}：${pending.pax} Pax + ${pending.eq} Eq（13.5a：每点一枚，可随后移动）`,
+      '13.5',
+    )
+    return true
+  }
+
   /** 13.5 + 专规 1.6 Notes：清零不可保存的 Ftr / Tac 补员（增援阶段结束时） */
   function clearNonSavableReplNow(): void {
-    const before = replHoldings.value
     /*
      * 13.5：**哪些补员可跨回合保存**由引擎的 `isSavableRepl` 判（Pax / Eq 可存、Ftr / Tac 不可），
-     * 本处只按它的结论清零；修前这里把「不可保存的是 Ftr/Tac」写死在日志与计数里。
+     * 本处只按它的结论清零；Pax / Eq 是盘面算子（§5-D），本来就不会被这条清零。
      */
     const doomed: Partial<ReplHoldings> = {}
     for (const key of ['ftr', 'tac', 'pax', 'eq'] as const) {
       if (!isSavableRepl(key)) doomed[key] = 0
     }
-    replHoldings.value = clearNonSavableRepl(before)
-    const lost = before.ftr + before.tac
+    const lost = replFtrTac.value.ftr + replFtrTac.value.tac
+    replFtrTac.value = { ftr: 0, tac: 0 }
     pushLog(
       'info',
       lost === 0
@@ -16522,7 +16691,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         ...(input.stepsToRestore === undefined ? {} : { stepsToRestore: input.stepsToRestore }),
         ...(input.pairSize === undefined ? {} : { pairSize: input.pairSize }),
         ...(input.unitsRequested === undefined ? {} : { unitsRequested: input.unitsRequested }),
-        holdings: replHoldings.value,
+        /*
+         * 13.5a / §5-D：**可用补员按"所在格"取**（「所需的补员必须都在一个格中」由结构保证——
+         * 只数这一格里的补员算子）。飞机走 Ftr / Tac 账本（13.5f + 专规 1.6：Eq 不重建飞机）。
+         */
+        holdings: isAir
+          ? { pax: 0, eq: 0, ftr: replFtrTac.value.ftr, tac: replFtrTac.value.tac }
+          : {
+              ...replCountsAtHex(replHex ?? candidateUnit.hex ?? { col: 0, row: 0 }),
+              ftr: 0,
+              tac: 0,
+            },
         facts: {
           // 13.5a：该格须在「战斗模式的友方 HQ（或 DG 但朝战斗面）」2 格内
           withinHqThrowOfFriendlyHq: (hex) =>
@@ -16539,8 +16718,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '重建',
     )
     if (data === null) return false
-    // 落盘：扣补员、改军力、从死亡堆取回
-    replHoldings.value = data.holdingsAfter
+    /*
+     * 落盘：** Pax / Eq 从盘面摘掉被消耗的补员算子**（§5-D：每点一枚，13.5a"将所需的补员移除"），
+     * Ftr / Tac 仍走账本（专规 1.6：只补 1 step 且不可保存，不做盘面算子）。
+     * 飞机重建只吃 Ftr / Tac 账本（13.5f + 专规 1.6：Eq 不重建飞机）。
+     */
+    const replHexForCost =
+      input.replHexText === undefined ? null : (parseHexPath(input.replHexText)[0] ?? null)
+    if (!isAir && replHexForCost !== null) {
+      removeReplCounters(replHexForCost, 'pax', data.cost.pax ?? 0)
+      removeReplCounters(replHexForCost, 'eq', data.cost.eq ?? 0)
+    }
+    if (isAir) {
+      replFtrTac.value = {
+        ftr: Math.max(0, replFtrTac.value.ftr - (data.cost.ftr ?? 0)),
+        tac: Math.max(0, replFtrTac.value.tac - (data.cost.tac ?? 0)),
+      }
+    }
     lastRebuild.value = data
     const placement = data.placements[0]
     if (placement !== undefined) {
@@ -18725,7 +18919,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ['deadPile', deadPile],
     ['removedForever', removedForever],
     // ② 账本（补员 / 拆解 / 补给缓存 / 装甲集群与编队归属）
-    ['replHoldings', replHoldings],
+    // §5-D：补员的**盘面外**状态（Pax/Eq 的枚数在 `units` 里，随算子一并存档）
+    ['replPending', replPending],
+    ['replFtrTac', replFtrTac],
     ['breakdownPool', breakdownPool],
     ['supplyCacheHoldings', supplyCacheHoldings],
     ['supplySourceDecls', supplySourceDecls],
@@ -18787,8 +18983,46 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *
    * ★ 3（2026-10-24，第六批条 5）：字段表新增到达"已投放"账本（`arrivalPlacedKey`/`arrivalPlacedRaw`）
    *   —— 不存则在**增援段中途存档→读档**后，同一条目可再投放一次（凭空多出算子）⇒ 必须进档。
+   *
+   * ★ 4（2026-10-25，§5-D 补员盘面化）：字段表用 `replPending`/`replFtrTac` 取代 `replHoldings`
+   *   —— Pax/Eq 从"账本数字"变成**盘面算子**（每 1 点一枚，随 `units` 存档），
+   *   账本只剩"待放置"与 Ftr/Tac 两小块。旧档（≤3）由 `migrateBoardV3ToV4` 迁移：
+   *   把 `replHoldings` 的 Pax/Eq 按点摆成补员算子（盘面为唯一事实，用户裁定⑨）。
    */
-  const BOARD_SNAPSHOT_VERSION = 3
+  const BOARD_SNAPSHOT_VERSION = 4
+
+  /**
+   * §5-D：把 v3 及更早的补员账本迁成 v4 的盘面算子
+   *
+   * 旧档只有四个数字（`replHoldings`）与一个"补员所在格"文本，没有补员算子；
+   * 迁移按**确定性规则**摆：Pax/Eq 各按点数摆那么多枚，落点取该档记的补员格，
+   * 没有则放到当前方第一座己方指挥部（SOP 游戏提示的"训练分队"），再不行就退回待放置。
+   */
+  function migrateBoardV3ToV4(fields: Record<string, unknown>): void {
+    const holdings = fields['replHoldings'] as Partial<ReplHoldings> | undefined
+    if (holdings === undefined) return
+    const pax = Math.max(0, Math.trunc(holdings.pax ?? 0))
+    const eq = Math.max(0, Math.trunc(holdings.eq ?? 0))
+    const ftr = Math.max(0, Math.trunc(holdings.ftr ?? 0))
+    const tac = Math.max(0, Math.trunc(holdings.tac ?? 0))
+    replFtrTac.value = { ftr, tac }
+    const declared = parseHexPath(rebuildReplHexText.value)[0] ?? null
+    const hqHex =
+      units.value.find((unit) => unit.side === activeSide.value && unit.specialized.includes('hq'))
+        ?.hex ?? null
+    const hex = declared ?? hqHex
+    if (hex === null) {
+      replPending.value = { pax, eq }
+      return
+    }
+    placeReplCounters(hex, 'pax', pax)
+    placeReplCounters(hex, 'eq', eq)
+    pushLog(
+      'info',
+      `读档迁移（v3→v4，§5-D）：补员账本 ${pax} Pax + ${eq} Eq 已按点摆成盘面算子于 ${hexLabel(hex)}`,
+      '13.5',
+    )
+  }
 
   /**
    * 抓取盘面快照
@@ -18819,13 +19053,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   · 数组 ⇒ 快照必须是数组（这一类从不为 null，故这条足够严）；
    *   · 非空对象 ⇒ 快照必须是非空对象；标量 ⇒ `typeof` 相同。
    */
+  /** 读档时的**旧版本次数**（`accepts` 记下、`restore` 消费；null ＝ 当前版本，无需迁移） */
+  let boardLegacyVersion: number | null = null
+
   function boardSnapshotFits(board: unknown): boolean {
     if (typeof board !== 'object' || board === null) return false
     const payload = board as { version?: unknown; fields?: unknown }
-    if (payload.version !== BOARD_SNAPSHOT_VERSION) return false
+    /*
+     * §5-D：**只接受上一个版本**（3 → 4）的旧档，并由 `restoreBoard` 跑确定性迁移
+     * （补员账本 → 盘面算子）。再往前的版本一律拒读（不猜更老的结构）。
+     * ★ 当前版本**仍要走下面逐字段的在场检查**（缺一项即拒：那是"结构改过却忘了递增版本"的信号），
+     *   旧版本则跳过该检查——它的字段表本来就没有本版本的新键，缺项由迁移补。
+     */
+    boardLegacyVersion = null
+    const legacy = payload.version === BOARD_SNAPSHOT_VERSION - 1
+    if (legacy) boardLegacyVersion = payload.version as number
+    else if (payload.version !== BOARD_SNAPSHOT_VERSION) return false
     if (typeof payload.fields !== 'object' || payload.fields === null) return false
     const table = payload.fields as Record<string, unknown>
     for (const [key, source] of boardSnapshotFields()) {
+      // 旧档（≤上一版）没有本版本的新键 ⇒ 由迁移补，不当场拒
+      if (legacy) continue
       if (!(key in table)) return false
       const shape: unknown = source.value
       const next: unknown = table[key]
@@ -18853,7 +19101,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function restoreBoard(board: unknown): void {
     const table = (board as { fields: Record<string, unknown> }).fields
     for (const [key, target] of boardSnapshotFields()) {
+      // 旧档没有本版本的字段（如 v3 没有 replPending/replFtrTac）⇒ 跳过，别把 undefined 写进 ref
+      if (!(key in table)) continue
       target.value = JSON.parse(JSON.stringify(table[key])) as unknown
+    }
+    // §5-D：v3 → v4 的补员账本迁移（在字段还原之后跑，此刻盘面与当前方都已就位）
+    if (boardLegacyVersion !== null) {
+      migrateBoardV3ToV4(table)
+      boardLegacyVersion = null
     }
     const merged = normalizeSpDumpsOnLoad()
     syncVictoryControlFromBoard()
@@ -19008,6 +19263,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 6.1f：把某枚从正在移动的堆叠里放下（就地停住，其余继续）
     dropUnitFromMove,
     switchUnitMode,
+    eliminateEntry,
+    beginMoveFor,
     flipUnitOrientation,
     // 5.7b：E/G 段释放预备（把预备标记摘掉，回朝向面）
     releaseReserveNow,
@@ -19551,6 +19808,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setScenarioId,
     setArrivalHexOverride,
     setReplHoldingsNow,
+    placePendingReplNow,
+    replCountsAtHex,
+    replPending,
     clearNonSavableReplNow,
     rollVariableReplNow,
     placeArrivalNow,

@@ -9,7 +9,7 @@ import { auxCardImageUrl } from '@/components/game/aux-card-image'
 import { arrivalCopiesOf, rebuildChartRows, suggestRebuildRow } from '@/engine/rules'
 import { counterImages, tokenImageUrl } from '@/render/token-images'
 import { ooaScanOf } from '@/render/charts-view'
-import { counterImageUrlOf, hexLabel, recordNameOf, unitChoices } from '@/stores'
+import { counterImageUrlOf, hexLabel, parseHexPath, recordNameOf, unitChoices } from '@/stores'
 import { useWorkbenchStore } from '@/stores'
 
 /**
@@ -259,6 +259,32 @@ const plan = computed(() => workbench.arrivalPlan)
 const placements = computed(() => workbench.arrivalPlacements)
 /** 补员账本（13.5） */
 const holdings = computed(() => workbench.replHoldings)
+
+/** §5-D：盘面上的补员枚数（当前方；投影，不含待放置） */
+const replCounts = computed(() => ({
+  pax: workbench.replHoldings.pax,
+  eq: workbench.replHoldings.eq,
+}))
+
+/** §5-D：待放置的补员点数（掷出后还没放到地图上） */
+const replPendingTotal = computed(() => workbench.replPending.pax + workbench.replPending.eq)
+
+/** 补员落点输入（与其余格输入同一套路；正式界面只读展示） */
+const replPlaceHexText = ref('')
+const replHexOk = computed(() => parseHexPath(replPlaceHexText.value)[0] !== undefined)
+
+/**
+ * §5-D：把待放置的补员摆到选定格（SOP 13.5：「掷可变增援表，并将相应的结果放置在地图上」）
+ *
+ * 落点由裁判给（该条没有规定入场格；游戏提示建议放前线后方的指挥部附近，即"训练分队"）。
+ */
+function placePendingRepl(): boolean {
+  const hex = parseHexPath(replPlaceHexText.value)[0]
+  if (hex === undefined) return false
+  if (!workbench.placePendingReplNow(hex)) return false
+  replPlaceHexText.value = ''
+  return true
+}
 
 /**
  * **待重建单位**的算子图阵列（B13；用户口径⑪「把当前可选的算子图片紧凑排出来」）
@@ -583,33 +609,39 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
 
     <!-- ── · 补员账本（13.5） ── -->
     <hr />
-    <p class="muted">
-      补员账本（13.5）：Pax / Eq 可跨回合保存；Ftr / Tac 只补 1 step 且**不可保存**（专规 1.6
-      Notes）。
-    </p>
+    <RuleNote title="补员（13.5 / §5-D）" rule="13.5 / 专规 1.6 Notes">
+      <p class="muted">
+        **Pax / Eq 是盘面算子**——每 1 点一枚 `Pax Repl` / `EQ Repl`，与普通算子一样移动、堆叠、
+        可被攻击/轰炸摧毁（摧毁即消灭，不进死亡堆）；掷出后按 SOP「放置在地图上」由裁判选落点。 Ftr
+        / Tac 只补 1 step 且**不可保存**，仍走账本（增援阶段末清零）。
+      </p>
+    </RuleNote>
     <div class="row">
-      <template v-if="showsActions">
-        <label class="field">
-          Pax
-          <UiField v-model="workbench.replHoldings.pax" class="input num" type="number" min="0" />
-        </label>
-        <label class="field">
-          Eq
-          <UiField v-model="workbench.replHoldings.eq" class="input num" type="number" min="0" />
-        </label>
-        <label class="field">
-          Ftr
-          <UiField v-model="workbench.replHoldings.ftr" class="input num" type="number" min="0" />
-        </label>
-        <label class="field">
-          Tac
-          <UiField v-model="workbench.replHoldings.tac" class="input num" type="number" min="0" />
-        </label>
-      </template>
       <span class="num">
-        当前：Pax {{ holdings.pax }} / Eq {{ holdings.eq }} / Ftr {{ holdings.ftr }} / Tac
-        {{ holdings.tac }}
+        盘面：Pax {{ replCounts.pax }} 枚 / Eq {{ replCounts.eq }} 枚｜账本：Ftr
+        {{ holdings.ftr }} / Tac {{ holdings.tac }}
       </span>
+      <span v-if="replPendingTotal > 0" class="num">
+        <BaseTag kind="warning">待放置</BaseTag>
+        Pax {{ workbench.replPending.pax }} / Eq {{ workbench.replPending.eq }}
+      </span>
+    </div>
+    <div v-if="showsActions && replPendingTotal > 0" class="row">
+      <label class="field">
+        补员落点（13.5a：每点一枚，放好后可正常移动）
+        <UiField v-model="replPlaceHexText" class="input num" placeholder="列.行" />
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :disabled="replPlaceHexText === ''"
+          @click="placePendingRepl()"
+        >
+          点地图选格后放置
+        </BaseButton>
+      </label>
+      <BaseButton variant="primary" size="sm" :disabled="!replHexOk" @click="placePendingRepl()">
+        放置补员（13.5）
+      </BaseButton>
     </div>
 
     <!-- ── · 重建（13.5） ── -->

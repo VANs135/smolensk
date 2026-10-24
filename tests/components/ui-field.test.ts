@@ -76,11 +76,11 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).not.toMatch(/<input v-model="workbench\.airPlacement\.hexText"/)
   })
 
-  it('其余面板：容器(2)/专规(8)/增援(8)/补给(13) 的数值与格号已走 UiField', () => {
+  it('其余面板：容器(2)/专规(8)/增援(5)/补给(13) 的数值与格号已走 UiField', () => {
     const cases: Array<[string, number]> = [
       ['src/components/containers/ContainersPanel.vue', 2],
       ['src/components/exclusive/ExclusiveRulesPanel.vue', 8],
-      ['src/components/reinforcement/ReinforcementPanel.vue', 8],
+      ['src/components/reinforcement/ReinforcementPanel.vue', 5],
       ['src/components/supply/SupplyPanel.vue', 13],
     ]
     for (const [file, min] of cases) {

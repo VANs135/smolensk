@@ -351,6 +351,26 @@ export interface ConsoleUnit {
    * 非装甲集群单位（步兵师 / 独立单位 / 中立单位）为 null。
    */
   panzerGroup: 'guderian' | 'hoth' | null
+  /**
+   * 13.5：**补员算子标记**（`null` ＝ 普通算子）
+   *
+   * §5-D（用户 2026-10-25 裁定「规则字面，一次掷骰给 5 点就摆 5 枚」）：补员从"账本数字"
+   * 升级为**盘面算子**——每 1 点 Pax / Eq 就是一枚独立的 `Pax Repl` / `EQ Repl` 算子，
+   * 与普通算子同链移动、堆叠、被攻击、被轰炸摧毁。判据只用这一个字段（不另立实体类型），
+   * 于是移动/战斗/损失/渲染全部复用既有链路，只在下列几处按 13.5 特判：
+   *   · 恒为**移动模式**（「补员永远无法进入战斗模式」）⇒ 创建即 move，切面被拒；
+   *   · 被摧毁 ⇒ **直接消灭移除，不进死亡堆**（用户裁定）；
+   *   · 重建时按「所在格内的枚数」供给（13.5a「所需补员必须都在一个格中」由结构保证）。
+   */
+  replKind: ReplKind | null
+}
+
+/** 13.5：补员种类（Pax＝人员补员 / Eq＝装备补员；Ftr/Tac 按专规 1.6 只走账本，不做盘面算子） */
+export type ReplKind = 'pax' | 'eq'
+
+/** 是否补员算子（§5-D：盘面补员的唯一判据） */
+export function isReplUnit(unit: { replKind?: ReplKind | null }): boolean {
+  return unit.replKind != null
 }
 
 /**
@@ -488,8 +508,15 @@ export function toConsoleUnit(input: {
   side: Side
   face?: 'combat' | 'move'
 }): ConsoleUnit {
-  // 13.0（用户 2026-09-15 裁定）：**运输单位只有移动模式**，不因调用方传了 combat 面就变成战斗模式
-  const face: UnitFace = isTransportUnit(input.record) ? 'move' : (input.face ?? 'combat')
+  /*
+   * 13.0（用户 2026-09-15 裁定）：**运输单位只有移动模式**，不因调用方传了 combat 面就变成战斗模式
+   * 13.5（§5-D）：**补员算子同样恒为移动模式**——「补员永远无法进入战斗模式，但可以进入所有其他模式」。
+   *   两条都写死在这里（创建即 move），切换面由 store 的 `switchUnitMode` 拒绝。
+   */
+  const face: UnitFace =
+    isTransportUnit(input.record) || replKindOfRecord(input.record) !== null
+      ? 'move'
+      : (input.face ?? 'combat')
   const { record } = input
   const faces = { combat: faceFactorsOf(record, 'combat'), move: faceFactorsOf(record, 'move') }
   return {
@@ -585,13 +612,57 @@ export function toConsoleUnit(input: {
     destroyedByEnemy: false,
     // 3.4：装甲集群归属（取自素材库编队目录 ⇒ 落进单位数据；玩家不用设置）
     panzerGroup: record.panzerGroup ?? null,
+    /*
+     * 13.5 / §5-D：补员算子标记。
+     * 补员记录（`branch === 'replacement'`）按 Pax / EQ 两族区分；**创建即移动模式**
+     * （13.5「补员永远无法进入战斗模式」）——与运输点数同一处理（13.0 用户裁定）。
+     */
+    replKind: replKindOfRecord(record),
   }
+}
+
+/**
+ * §5-D：这条记录是哪一种补员算子（`null` ＝ 不是补员）
+ *
+ * 判据只用单位库的结构化字段：`branch === 'replacement'` + 印刷名里的 `Pax` / `EQ`
+ * （两侧各两条：`Ge/Ru Pax Repl`、`Ge/Ru EQ Repl`），不靠猜。
+ */
+export function replKindOfRecord(record: UnitRecordView): ReplKind | null {
+  if (record.branch !== 'replacement') return null
+  const name = (record.vassalName ?? record.nameEn ?? record.nameZh ?? record.id).toUpperCase()
+  if (/\bPAX\b/.test(name)) return 'pax'
+  if (/\bEQ\b/.test(name)) return 'eq'
+  return null
+}
+
+/** §5-D：该方的补员算子记录（每点一枚；库里没有 ⇒ null，调用方据此拒绝摆放） */
+export function replRecordOf(side: Side, kind: ReplKind): UnitRecordView | null {
+  const wanted = kind === 'pax' ? 'pax' : 'eq'
+  // 直取原始库（不经 `unitChoices`：那里按 §5-D 把补员滤掉了）
+  const source = side === 'axis' ? unitsAxis.units : unitsSoviet.units
+  return (
+    source.find(
+      (record) =>
+        (record.status === 'valued' || record.status === 'verified') &&
+        replKindOfRecord(record) === wanted,
+    ) ?? null
+  )
 }
 
 /** 摆子清单里可选的单位（按方取单位库；只列已落值/已核对的记录） */
 export function unitChoices(side: Side): UnitRecordView[] {
   const source = side === 'axis' ? unitsAxis.units : unitsSoviet.units
-  return source.filter((record) => record.status === 'valued' || record.status === 'verified')
+  return source.filter(
+    (record) =>
+      (record.status === 'valued' || record.status === 'verified') &&
+      /*
+       * §5-D：**补员算子不进挑选清单**——它只由"掷可变补员表 → 放置"产生（13.5），
+       * 不是裁判从库里挑来摆子的对象（到达/拆分/初设都不该出现它）。
+       * ★ 也顺带避免夹具谓词误取：`Pax Repl` 同样是 leg/可攻击/MA 5，
+       *   出现在通用清单里会让"随便挑一个步兵/摩托化单位"的测试挑到它。
+       */
+      record.branch !== 'replacement',
+  )
 }
 
 /* ────────────────────────────── 操作反馈（M9②） ────────────────────────────── */

@@ -135,7 +135,7 @@ describe('第五批 C3：飞机重建入口（13.5f / 专规 1.6）', () => {
     const store = newStore()
     setupRebuild(store, true)
     placeInDeadPile(store, 'su-aircraft-ru-il-2', 'air-il2')
-    store.replHoldings = { ...emptyReplHoldings(), tac: 1 }
+    store.setReplHoldingsNow({ ...emptyReplHoldings(), tac: 1 }, CORE_HEX)
 
     expect(store.rebuildUnitNow({ unitId: 'air-il2', rebuildType: 'Aircraft' })).toBe(true)
     const onMap = store.airUnits.find((item) => item.instanceId === 'air-il2')
@@ -152,7 +152,7 @@ describe('第五批 C3：飞机重建入口（13.5f / 专规 1.6）', () => {
     const store = newStore()
     setupRebuild(store, true)
     placeInDeadPile(store, 'su-aircraft-ru-lagg-3', 'air-lagg')
-    store.replHoldings = { ...emptyReplHoldings(), ftr: 1, tac: 3 }
+    store.setReplHoldingsNow({ ...emptyReplHoldings(), ftr: 1, tac: 3 }, CORE_HEX)
 
     expect(store.rebuildUnitNow({ unitId: 'air-lagg', rebuildType: 'Aircraft' })).toBe(true)
     const onMap = store.airUnits.find((item) => item.instanceId === 'air-lagg')
@@ -167,7 +167,7 @@ describe('第五批 C3：飞机重建入口（13.5f / 专规 1.6）', () => {
     const store = newStore()
     setupRebuild(store, false) // 不声明任何来源
     placeInDeadPile(store, 'su-aircraft-ru-il-2', 'air-il2')
-    store.replHoldings = { ...emptyReplHoldings(), tac: 1 }
+    store.setReplHoldingsNow({ ...emptyReplHoldings(), tac: 1 }, CORE_HEX)
 
     expect(store.rebuildUnitNow({ unitId: 'air-il2', rebuildType: 'Aircraft' })).toBe(false)
     expect(store.reinforcementError).toMatchObject({ rule: '13.5f' })

@@ -49,7 +49,14 @@ const TANK_RECORD = unitChoices('axis').find(
   (record) =>
     record.isCombat === true &&
     record.attackCapable === true &&
-    (record.classes?.movementClass === 'tracked' || record.classes?.movementClass === 'truck'),
+    (record.classes?.movementClass === 'tracked' || record.classes?.movementClass === 'truck') &&
+    /*
+     * B40（12.5c-B / 3.2f）：HQ 法只覆盖**独立单位**——既不属于多单位编队（3.1c）、
+     * 也不是多军力单位（3.2d）。故夹具要的是"单车、无编队"的那一枚
+     * （§5-D 之后补员算子已从 `unitChoices` 滤掉，不会再被误取）。
+     */
+    (record.formation ?? null) === null &&
+    (record.steps?.total ?? 1) <= 1,
 )!
 /**
  * 承运算子（13.2f：运输点数算子）

@@ -334,12 +334,23 @@ describe('W6 B18：可变增援与补员账本（1.6b / 1.6c）', () => {
     expect(store.rollVariableReplNow()).toBe(true)
     const plan = store.lastVariableRepl!
     expect(plan.sp).toBeGreaterThan(0)
+    /*
+     * §5-D：Pax / Eq 掷出后进**待放置**（SOP 13.5：「掷可变增援表，并将相应的结果放置在地图上」
+     * ——落点由裁判选格），Ftr / Tac 直接进账本（专规 1.6：只补 1 step 且不可保存）。
+     */
+    expect(store.replPending).toMatchObject({ pax: plan.repl.pax, eq: plan.repl.eq })
     expect(store.replHoldings).toMatchObject({
       ftr: plan.repl.ftr,
       tac: plan.repl.tac,
-      pax: plan.repl.pax,
-      eq: plan.repl.eq,
+      pax: 0,
+      eq: 0,
     })
+    // 放置到地图上后才进盘面账本（每点一枚）
+    expect(store.placePendingReplNow(DEFENDER_HEX)).toBe(true)
+    expect(store.replHoldings).toMatchObject({ pax: plan.repl.pax, eq: plan.repl.eq })
+    expect(store.units.filter((unit) => unit.replKind != null)).toHaveLength(
+      plan.repl.pax + plan.repl.eq,
+    )
     // 轴方特殊补员表 1–4 ⇒ Supply Cache（1.6c + 表 3-5）
     expect(plan.special).toMatchObject({ supplyCache: true })
 
@@ -371,7 +382,7 @@ describe('W6 B18：重建与死亡堆（13.5a–c）', () => {
     store.setTurn(2)
     store.setPhase('reinforcement')
     goToSegmentStep(store, 'reinforcement.rebuild')
-    store.setReplHoldingsNow({ pax: 4, eq: 0, ftr: 0, tac: 0 })
+    store.setReplHoldingsNow({ pax: 4, eq: 0, ftr: 0, tac: 0 }, DEFENDER_HEX)
 
     const hq = place(
       store,
@@ -400,7 +411,7 @@ describe('W6 B18：重建与死亡堆（13.5a–c）', () => {
     store.setTurn(2)
     store.setPhase('reinforcement')
     goToSegmentStep(store, 'reinforcement.rebuild')
-    store.setReplHoldingsNow({ pax: 4, eq: 4, ftr: 0, tac: 0 })
+    store.setReplHoldingsNow({ pax: 4, eq: 4, ftr: 0, tac: 0 }, DEFENDER_HEX)
 
     const hq = place(
       store,
@@ -430,7 +441,7 @@ describe('W6 B18：重建与死亡堆（13.5a–c）', () => {
     store.setTurn(2)
     store.setPhase('reinforcement')
     goToSegmentStep(store, 'reinforcement.rebuild')
-    store.setReplHoldingsNow({ pax: 8, eq: 0, ftr: 0, tac: 0 })
+    store.setReplHoldingsNow({ pax: 8, eq: 0, ftr: 0, tac: 0 }, DEFENDER_HEX)
     place(
       store,
       pickRecord('axis', (record) => record.specialized?.includes('hq') === true),

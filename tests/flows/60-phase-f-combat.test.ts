@@ -97,11 +97,27 @@ const attackerRecord = () =>
     (record) =>
       record.isCombat === true &&
       record.attackCapable === true &&
-      (record.factors?.combat?.attack ?? 0) >= 3,
+      (record.factors?.combat?.attack ?? 0) >= 3 &&
+      /*
+       * §5-D：守方改成多军力单位后，攻方也必须是**多军力**单位——九步流程用例要一路走到
+       * 推进/撤退，不是要其中一方一笔损失就被打光（9.10c：攻方全灭 ⇒ 跳过攻方选项步）。
+       */
+      (record.steps?.total ?? 1) >= 2,
   )
 
 const defenderRecord = () =>
-  groundRecord('soviet', (record) => record.isCombat === true && record.attackCapable === true)
+  groundRecord(
+    'soviet',
+    (record) =>
+      record.isCombat === true &&
+      record.attackCapable === true &&
+      /*
+       * §5-D：补员算子（单军力、可攻击）也曾满足前两条，取到它会让攻方一笔损失就被打光
+       * （9.10c：攻方全灭 ⇒ 跳过攻方选项步），把九步流程的后半段整段跳过。
+       * 故守方也要取**多军力**单位（流程用例要打完九步，不是要全灭）。
+       */
+      (record.steps?.total ?? 1) >= 2,
+  )
 
 /** 摆好攻守并选定防御格（9.1） */
 function setupBattle(store: Store, phase: 'combat' | 'exploitation' = 'combat') {

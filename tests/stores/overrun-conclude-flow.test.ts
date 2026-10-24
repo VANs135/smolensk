@@ -106,14 +106,21 @@ function goToMovementStep(store: ReturnType<typeof newStore>): void {
   if (index >= 0) store.setSegmentStepIndex(index)
 }
 
-/** 弱突袭者：印刷战斗值 ≤ 2（会被强守方在损失步打光） */
+/** 弱突袭者：印刷战斗值 ≤ 2 且**单军力**（会被强守方在损失步一把打光） */
 const weakMover = () =>
   pickRecord(
     'axis',
     (record) =>
       record.classes?.movementClass === 'leg' &&
       record.attackCapable === true &&
-      (record.factors?.combat?.attack ?? 99) <= 2,
+      (record.factors?.combat?.attack ?? 99) <= 2 &&
+      /*
+       * §5-D：本用例的前提是"参突者阵亡"。补员算子（`Pax Repl`：leg、可攻击、战斗值 0、
+       * **单军力**）修前正是被这条谓词取中的那枚，所以它一击就没了；补员已从
+       * `unitChoices` 滤掉后，要把"单军力"这个前提**显式写出来**，否则取到多军力步兵
+       * 就打不光，后面整条"阵亡后仍能收束"的断言就失去意义。
+       */
+      (record.steps?.total ?? 1) <= 1,
   )
 
 /** 强守方：印刷战斗值 ≥ 20 */
@@ -261,29 +268,43 @@ describe('批 A 切片 1：突袭的收束（8.0 / 8.1a / 8.1f）', () => {
   })
 
   it('8.0/9.12g-D：**参突者阵亡**后仍能收束 —— 推进候选人空 ⇒ 照常收束、留痕、移动不再挂人', () => {
-    const target = placeWeakOverrun(store)
-    expect(store.overrunNow(target)).toBe(true)
-    expect(store.combatState?.attackType).toBe('overrun')
+    /*
+     * ★ §5-D 之后"弱突袭者"不能再是补员算子——补员已按 13.5 从挑选清单滤掉（它也不是突袭者），
+     *   改用 `Ge 43 Pioneer Bn`（单军力、印刷战斗值 2）。攻击值不同会改 CRT 的列，
+     *   故按仓库既有纪律（见 `combat-interaction-flow` 的"扫种子"用例）**扫种子**找一个
+     *   "损失步恰好把攻方打光"的骰序；80 个种子都找不到即抛错，不静默降级成不测该情形的用例。
+     */
+    for (let seed = 1; seed <= 80; seed += 1) {
+      store = newStore()
+      store.resetAll(seed)
+      const target = placeWeakOverrun(store)
+      expect(store.overrunNow(target)).toBe(true)
+      expect(store.combatState?.attackType).toBe('overrun')
 
-    driveToAdvanceStep(store)
+      driveToAdvanceStep(store)
+      // 这一骰序没把攻方打光 ⇒ 前提不成立，换下一个种子
+      if (store.units.some((unit) => unit.instanceId === 'ov1')) continue
 
-    // 攻方确实已阵亡（本用例的前提，先钉住它，否则后面断言会失去意义）
-    expect(store.units.some((unit) => unit.instanceId === 'ov1')).toBe(false)
-    expect(store.combatState?.step).toBe('advance')
-    // 8.0 末句：防御方未离开该格 ⇒ 不进格；无人可推 ⇒ 候选人空、但推进对突袭是**强制**语义
-    expect(store.combatDefendingHexCleared).toBe(false)
-    expect(store.combatAdvanceCandidates).toHaveLength(0)
-    expect(store.combatAdvanceMandatory).toBe(true)
+      // 攻方确实已阵亡（本用例的前提，先钉住它，否则后面断言会失去意义）
+      expect(store.units.some((unit) => unit.instanceId === 'ov1')).toBe(false)
+      expect(store.combatState?.step).toBe('advance')
+      // 8.0 末句：防御方未离开该格 ⇒ 不进格；无人可推 ⇒ 候选人空、但推进对突袭是**强制**语义
+      expect(store.combatDefendingHexCleared).toBe(false)
+      expect(store.combatAdvanceCandidates).toHaveLength(0)
+      expect(store.combatAdvanceMandatory).toBe(true)
 
-    // 收束：必须成功（题面「无法推进」在这一路应当表现为"无人可推 ⇒ 直接收束"，不是卡住）
-    expect(store.confirmCombatAdvance()).toBe(true)
-    expect(store.combatState?.finished).toBe(true)
-    expect(store.overrunContext).toBeNull()
-    // 移动交互不得留下"还在移动"的幽灵（参突者已不在盘面 ⇒ 就地收束）
-    expect(store.moveInteraction === null || store.moveInteraction.finished).toBe(true)
-    expect(store.activeMoveUnits).toHaveLength(0)
-    // 留痕：日志里能看出"参突者已不在盘面 ⇒ 无需记账"
-    expect(store.log.some((line) => line.text.includes('参突单位已不在盘面'))).toBe(true)
+      // 收束：必须成功（题面「无法推进」在这一路应当表现为"无人可推 ⇒ 直接收束"，不是卡住）
+      expect(store.confirmCombatAdvance()).toBe(true)
+      expect(store.combatState?.finished).toBe(true)
+      expect(store.overrunContext).toBeNull()
+      // 移动交互不得留下"还在移动"的幽灵（参突者已不在盘面 ⇒ 就地收束）
+      expect(store.moveInteraction === null || store.moveInteraction.finished).toBe(true)
+      expect(store.activeMoveUnits).toHaveLength(0)
+      // 留痕：日志里能看出"参突者已不在盘面 ⇒ 无需记账"
+      expect(store.log.some((line) => line.text.includes('参突单位已不在盘面'))).toBe(true)
+      return
+    }
+    throw new Error('80 个种子里没有"损失步把参突者打光"的骰序（夹具或 CRT 判据可能变了）')
   })
 
   /*
