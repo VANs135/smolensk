@@ -6,7 +6,7 @@ import UiField from '@/components/UiField.vue'
 import { useUiMode } from '@/components/ui-mode'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { auxCardImageUrl } from '@/components/game/aux-card-image'
-import { rebuildChartRows, suggestRebuildRow } from '@/engine/rules'
+import { arrivalCopiesOf, rebuildChartRows, suggestRebuildRow } from '@/engine/rules'
 import { counterImages, tokenImageUrl } from '@/render/token-images'
 import { ooaScanOf } from '@/render/charts-view'
 import { counterImageUrlOf, hexLabel, recordNameOf, unitChoices } from '@/stores'
@@ -345,7 +345,11 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <template v-if="unit.designation !== null">｜番号 {{ unit.designation }}</template>
       <template v-if="unit.parentType !== null">｜母体 {{ unit.parentType }}</template>
       <template v-if="unit.factors !== null">｜印值 {{ unit.factors }}</template>
-      <template v-if="unit.count > 1">｜×{{ unit.count }}</template>
+      <template v-if="arrivalCopiesOf(unit) > 1">｜同型 {{ arrivalCopiesOf(unit) }} 枚</template>
+      <template v-else-if="unit.count > 1 && unit.kind === 'transportPoint'">
+        ｜运力 {{ unit.count }}（13.6c：运力即装载 SP 数，仍是一枚算子）
+      </template>
+      <template v-else-if="unit.count > 1">｜卡面数量 {{ unit.count }}</template>
       <template v-if="unit.stepsLost > 0">｜到场带损 {{ unit.stepsLost }} step</template>
       <template v-if="unit.loadedWithSp">｜满载 SP（13.6c）</template>
       ｜落点：{{ unit.label }} →

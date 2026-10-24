@@ -395,6 +395,31 @@ function buildDemand(input: {
   }
 }
 
+/**
+ * 13.6：该条目**应当投放几枚算子**
+ *
+ * 修前 `count` 只写进了 `detail` 文案、**投放侧从不读**：卡面写 `2x ...`（两枚一模一样的算子）
+ * 时，界面只能放一枚，且放完即被"已投放"账本挡住 ⇒ 另一半永远进不了场。
+ *
+ * 只有**同型复制**才是多枚：
+ * - `2x 26-2-2 Arty Grp` / `2x 2-1-3 Alarm Tk Bn` / `2x 26-1-1 Arty Bde` ⇒ 2 枚；
+ * - 但卡面在括号里**逐枚点名**的（`2x Corps HQ (9, 12)`：第 9 与第 12 军部是两枚**不同**算子）
+ *   ⇒ 不是复制，仍按一枚算（裁判各挑各的记录分别投放，13.6 不臆造"哪两枚"）；
+ * - 运输点数/补给点（`3 Truck Points`）的"3"是**运力点数**而不是枚数（13.6c）⇒ 恒 1 枚；
+ * - 编成条目（`19 Pz Div (I-27 Pz, …)`）由数枚**不同**算子共同到场，本函数也返回 1
+ *   （其逐枚投放需要「条目→多枚记录」的映射数据，属 §5-A 剩余项，不由本函数臆造）。
+ */
+export function arrivalCopiesOf(demand: ArrivalUnitDemand): number {
+  if (demand.kind !== 'unit' && demand.kind !== 'hq' && demand.kind !== 'aircraft') return 1
+  if (!/^\d+\s*x\s/i.test(demand.raw.trim())) return 1
+  // 括号里有逗号 ⇒ 卡面在逐枚点名（不同算子），不能拿同一枚复制
+  if (/\([^)]*,[^)]*\)/.test(demand.raw)) return 1
+  return Math.max(1, Math.min(demand.count, MAX_ARRIVAL_COPIES))
+}
+
+/** 一次投放最多复制几枚（防数据错写成 `99x` 时把盘面刷爆） */
+export const MAX_ARRIVAL_COPIES = 8
+
 /** 落点描述（日志与界面用） */
 export function describePlacement(placement: ArrivalPlacement): string {
   switch (placement.kind) {

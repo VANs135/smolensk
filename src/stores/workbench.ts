@@ -173,6 +173,7 @@ import {
   needsRetreat,
   nkvdDefenderOptionOverride,
   optionsOf,
+  arrivalCopiesOf,
   patrolZoneHexes,
   planArrivals,
   planAirBaseReduction,
@@ -16015,6 +16016,65 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const hex = hexText === undefined ? placed.hex : (parseHexPath(hexText)[0] ?? placed.hex)
 
+    /*
+     * 13.6：**飞机到达**单独一条分支
+     *
+     * 修前这里与地面共用同一条记录解析（`choices` = 陆战单位库），而飞机根本不在那张表里
+     * ⇒ 每条飞机到达都必然 `arrivalUnitNotResolved`（实测 `2x He.111` 在基地就位时仍拒绝），
+     * 于是增援卡上的飞机条目只能靠初设面板手工摆。现在按 `aircraftChoices` 解析，
+     * 同一套「精确 → 归一唯一命中」判据（`He.111` ↔ `Ge He.111`），并遵守卡面的 `2x` 枚数。
+     */
+    if (demand.kind === 'aircraft') {
+      const name = demand.name ?? demand.raw
+      const pool = aircraftChoices(activeSide.value)
+      const exact = pool.find((item) => item.name === name)
+      const key = unitNameKey(name)
+      const sameKey =
+        exact === undefined ? pool.filter((item) => unitNameKey(item.name) === key) : []
+      const aircraft = exact ?? (sameKey.length === 1 ? sameKey[0] : undefined)
+      if (aircraft === undefined) {
+        reinforcementError.value = { rule: '13.6', reason: `arrivalUnitNotResolved:${demand.raw}` }
+        pushLog(
+          'danger',
+          `机型库里找不到「${name}」对应机型 ⇒ 请在"库中型号"里挑一架再投放（13.6）`,
+          '13.6',
+        )
+        return false
+      }
+      const copies = arrivalCopiesOf(demand)
+      const arrived = Array.from({ length: copies }, () =>
+        toConsoleAirUnit({
+          aircraft,
+          instanceId: createId('arr-air'),
+          hex,
+          side: activeSide.value,
+          airStatus: 'active',
+        }),
+      )
+      airUnits.value = [...airUnits.value, ...arrived]
+      pushLog(
+        'success',
+        `${demand.raw} 投放于 ${hexLabel(hex)}（13.6：飞机在友方空军基地以激活状态到达${
+          copies > 1 ? `，共 ${String(copies)} 架` : ''
+        }）`,
+        '13.6',
+      )
+      // ⑭ 接线：到达投放（13.6，飞机）入会话日志（本笔不掷骰）
+      recordSettlement({
+        action: 'arrival',
+        rule: '13.6',
+        data: {
+          index,
+          kind: demand.kind,
+          raw: demand.raw,
+          hex: { ...hex },
+          aircraftId: arrived[0]!.instanceId,
+        },
+      })
+      markArrivalPlaced(index)
+      return true
+    }
+
     const record =
       recordId === undefined
         ? matchArrivalRecord(demand.name ?? demand.raw)
@@ -16075,38 +16135,38 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     units.value = [...units.value, unit]
 
-    // 13.6：飞机在**任一友方空军基地**以**激活**状态到达
-    if (demand.kind === 'aircraft') {
-      const air = toConsoleAirUnit({
-        aircraft:
-          aircraftChoices(activeSide.value).find(
-            (item) => item.aircraftId === record.id || item.name === record.vassalName,
-          ) ?? aircraftChoices(activeSide.value)[0]!,
-        instanceId: createId('arr-air'),
-        hex,
-        side: activeSide.value,
-        airStatus: 'active',
-      })
-      airUnits.value = [...airUnits.value, air]
+    /*
+     * 13.6：**同型复制**（卡面 `2x 26-2-2 Arty Grp` 之类 ⇒ 两枚一模一样的算子都应到场）
+     *
+     * 修前 `count` 只进了文案、投放只落一枚，且随后被「已投放」账本挡住 ⇒ 另一半永远进不了场。
+     * 枚数判据在引擎 `arrivalCopiesOf`（逐枚点名的括号、运输点数的运力数字都不算枚数）。
+     */
+    const copies = arrivalCopiesOf(demand)
+    if (copies > 1) {
+      const extras: ConsoleUnit[] = []
+      for (let copy = 1; copy < copies; copy += 1) {
+        const extra = toConsoleUnit({
+          record,
+          instanceId: createId('arr'),
+          hex,
+          side: activeSide.value,
+        })
+        if (demand.stepsLost > 0) extra.steps = Math.max(0, extra.steps - demand.stepsLost)
+        if (demand.loadedWithSp && extra.noncombatTransport > 0) {
+          extra.loadedSpT = extra.noncombatTransport * SP_TO_T
+        }
+        if (needsFuelToMove(toMoveUnitView(extra))) {
+          extra.fuelled = false
+          extra.fuelMethod = null
+        }
+        extras.push(extra)
+      }
+      units.value = [...units.value, ...extras]
       pushLog(
-        'success',
-        `${demand.raw} 投放于 ${hexLabel(hex)}（13.6：飞机在友方空军基地以激活状态到达）`,
+        'info',
+        `${demand.raw}：卡面为 ${String(copies)} 枚同型算子 ⇒ 一并投放（13.6）`,
         '13.6',
       )
-      // ⑭ 接线：到达投放（13.6，飞机）入会话日志（本笔不掷骰）
-      recordSettlement({
-        action: 'arrival',
-        rule: '13.6',
-        data: {
-          index,
-          kind: demand.kind,
-          raw: demand.raw,
-          hex: { ...hex },
-          aircraftId: air.instanceId,
-        },
-      })
-      markArrivalPlaced(index)
-      return true
     }
 
     pushLog(
