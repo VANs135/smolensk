@@ -382,6 +382,103 @@ export function normalizeUnitName(name: string | null | undefined): string {
     .toLowerCase()
 }
 
+/**
+ * 13.6 / §5-A：**兵种/编成的同义词归一表**（卡面用词 ↔ 算子库印刷用词）
+ *
+ * 只收"两边确实同一件事、只是写法不同"的对应，**不做语义推断**：
+ * - `Inf`（卡面）↔ `Rifle`（苏军库）——同一批步兵师，库内统一叫 Rifle Div；
+ * - `Mtr`/`Motorized`（卡面）↔ `Mot`（库）；
+ * - `Mil` ↔ `Militia`、`Abn`/`Para` ↔ `Airborne`、`Mtn` ↔ `Mountain`、
+ *   `AT`/`PJ` ↔ `AntiTank`、`Tk` ↔ `Tank`、`Pz` ↔ `Panzer`、`Cav` ↔ `Cavalry`、`Arty` ↔ `Artillery`。
+ * ★ 表里没有的词**不做任何假设**（原样保留），故不会把"A 兵种"匹配成"B 兵种"。
+ */
+const UNIT_NAME_ALIASES: Readonly<Record<string, string>> = {
+  inf: 'rifle',
+  mil: 'militia',
+  mtr: 'mot',
+  motorized: 'mot',
+  mtn: 'mountain',
+  abn: 'airborne',
+  para: 'airborne',
+  tk: 'tank',
+  pz: 'panzer',
+  cav: 'cavalry',
+  arty: 'artillery',
+  at: 'antitank',
+  pj: 'antitank',
+  bde: 'brigade',
+  rgt: 'regiment',
+  bn: 'battalion',
+  co: 'company',
+  div: 'division',
+}
+
+/** 归一化时**丢弃**的修饰词（对"哪一枚算子"没有区分力） */
+const UNIT_NAME_NOISE = new Set([
+  'each',
+  'step',
+  'loaded',
+  'with',
+  'sp',
+  '2x',
+  '3x',
+  '4x',
+  'see',
+  'and',
+  'the',
+  'points',
+  'point',
+  'markers',
+  'reserve',
+])
+
+/**
+ * 13.6 / §5-A：**单位名的词集键**（顺序无关、强度无关）
+ *
+ * 与 `normalizeUnitName` 的区别：卡面与库里的**词序不同、多带强度/修饰**——
+ * 如卡面 `5th Corps HQ` vs 库 `Ge HQ 5th Corps`；卡面 `1 NKVD Inf Rgt` vs 库 `Ru 1 NKVD Mot Inf Rgt`；
+ * 卡面 `194 Mtn Inf Div` vs 库 `Ru 194 Mtn Div`。所以键必须**丢顺序、丢强度**。
+ *
+ * 确定地做这几件事（每一条都能对回原文，不做语义猜测）：
+ * 1. 去方前缀、小写、`1.Cav` 的点当分隔、`/` 当分隔；
+ * 2. 丢**括号内容**（`(2)-2-2`、`(see 2.4)`、`(9, 12)`）；
+ * 3. 丢**纯强度数码**（`12-2-2`）、丢只由数字与连字符组成的残片；
+ * 4. 序数词归基数（`5th`→`5`、`53rd`→`53`）；
+ * 5. 走同义词表（`Inf`→`rifle`…）；`4M` 在含 militia 时归 `4`（民兵师的"M"是编成标记）；
+ * 6. 丢修饰词（`loaded with SP`、`each -1 step`、`2x`…）。
+ *
+ * 结果按字典序拼接成字符串，可直接当 Map 键比较。
+ */
+export function unitNameKey(name: string | null | undefined): string {
+  const raw = normalizeUnitName(name)
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\./g, ' ')
+    .replace(/['’]/g, '')
+    .replace(/\//g, ' ')
+  // 字母之间的连字符是分隔（`2-8 PJ`→`2 8 PJ`、`I-1` 保留编号语义则不动）
+  const spaced = /[a-z]-[a-z]/.test(raw) ? raw.replace(/-/g, ' ') : raw
+  const tokens: string[] = []
+  for (const rawToken of spaced.split(/[\s,]+/)) {
+    let token = rawToken.replace(/^[.,;:-]+|[.,;:-]+$/g, '')
+    if (token === '' || UNIT_NAME_NOISE.has(token)) continue
+    // 纯强度数码（12-2-2 / 2-1-3）与"数字+连字符"残片（-2-2）
+    if (token.includes('-') && /^[\d-]+$/.test(token)) continue
+    token = token.replace(/^(\d+)(?:st|nd|rd|th)$/, '$1')
+    tokens.push(UNIT_NAME_ALIASES[token] ?? token)
+  }
+  // 民兵：`4M Mil Div` 的 "4M" 就是 `4`（含 militia 才归，避免动到别的番号）
+  const keyed = tokens.includes('militia')
+    ? tokens.map((token) => token.replace(/^(\d+)m$/, '$1'))
+    : tokens
+  return [...new Set(keyed)].sort().join(' ')
+}
+
+/** 词集键切成 set（子集容错比较用） */
+export function unitNameTokenSet(name: string | null | undefined): Set<string> {
+  const key = unitNameKey(name)
+  return new Set(key === '' ? [] : key.split(' '))
+}
+
 /** 由单位记录造一个操作台算子（默认朝向战斗面、战斗模式，补给与燃料视为已就绪） */
 export function toConsoleUnit(input: {
   record: UnitRecordView

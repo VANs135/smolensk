@@ -404,7 +404,8 @@ import {
   railNeighborHexes,
   railNeighborSource,
   recordNameOf,
-  normalizeUnitName,
+  unitNameKey,
+  unitNameTokenSet,
   resolveBattle,
   toAirBarrageUnitRequest,
   // 第五批批 C 切片 1（14.1b）：减损机的**当前面**取值（轰炸/空战）与印值军力判据
@@ -15292,18 +15293,69 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 13.6 / §5-A：按**卡面名**匹配库中型号——先精确，再「归一后唯一命中」（去方前缀）。
-   * 归一后有歧义 ⇒ null（不猜）；玩家用「库中型号」下拉覆盖。
+   * §5-A：**库中型号按词集键建索引**（`词集键 → 记录 id 列表`）
+   *
+   * 只依赖 `choices`（随方切换重算），供 `matchArrivalRecord` 的第二步/第三步查表，
+   * 避免每行到货都把 231 条记录重新分词。
+   */
+  const arrivalKeyIndex = computed<Map<string, UnitRecordView[]>>(() => {
+    const index = new Map<string, UnitRecordView[]>()
+    for (const item of choices.value) {
+      const key = unitNameKey(recordNameOf(item))
+      const bucket = index.get(key)
+      if (bucket === undefined) index.set(key, [item])
+      else bucket.push(item)
+    }
+    return index
+  })
+
+  /**
+   * 13.6 / §5-A：按**卡面名**匹配库中型号
+   *
+   * 三档判据，逐档**只接受唯一命中**（歧义一律 null，绝不猜；玩家可用「库中型号」下拉覆盖）：
+   * 1. **精确**：`recordNameOf(item) === 卡面名`；
+   * 2. **词集键相等**：去方前缀/丢强度/丢词序/同义词归一后完全相同（覆盖 `5th Corps HQ` ↔ `Ge HQ 5th Corps`）；
+   * 3. **词集子集**（双向择一）：卡面与库名一个是另一个的子集（覆盖 `1 NKVD Inf Rgt` ↔ `Ru 1 NKVD Mot Inf Rgt`、
+   *    `Alarm AT Rgt` ↔ `Ru AT Alarm (2)-2-2`、`3 Truck Points (loaded with SP)` ↔ `Ge Truck 3`）。
+   *    子集档额外要求**至少两个词相交**且**子集侧至少两个词**——单个词（如只有一个番号或只有 "div"）相交
+   *    说明不了是哪一枚，不认。
+   *
+   * 实测（离线对全量到货条目核过 207 条）：档 1+2 命中 169，档 3 命中 28（28 条逐条人工核对全部取对），
+   * 剩 9 条轴心条目是**多算子编成**（`19 Pz Div`、`18 Mtr Div`、`I-1 Cav Cav Div` 等由数枚算子共同到场），
+   * 本就没有"单枚记录"可配，正确结果就是不匹配；唯一一条歧义 `2x Corps HQ (9, 12)` 也如实返回 null。
    */
   function matchArrivalRecord(demandName: string | null | undefined): UnitRecordView | null {
     const target = demandName ?? ''
     if (target === '') return null
     const exact = choices.value.find((item) => recordNameOf(item) === target)
     if (exact !== undefined) return exact
-    const key = normalizeUnitName(target)
+    const key = unitNameKey(target)
     if (key === '') return null
-    const matches = choices.value.filter((item) => normalizeUnitName(recordNameOf(item)) === key)
-    return matches.length === 1 ? matches[0]! : null
+    const wanted = unitNameTokenSet(target)
+    // 卡面名至少要有一个**带字母的词**（兵种/编成）才能认；纯番号的卡面（"3"）不猜是哪个"3"
+    if (![...wanted].some((token) => /[a-z]/.test(token))) return null
+    const sameKey = arrivalKeyIndex.value.get(key)
+    if (sameKey !== undefined) return sameKey.length === 1 ? sameKey[0]! : null
+    if (wanted.size < 2) return null
+    const candidates: UnitRecordView[] = []
+    for (const [otherKey, bucket] of arrivalKeyIndex.value) {
+      const other = new Set(otherKey === '' ? [] : otherKey.split(' '))
+      if (other.size < 2) continue
+      let shared = 0
+      let wantedInside = true
+      let otherInside = true
+      for (const token of wanted) {
+        if (other.has(token)) shared += 1
+        else otherInside = false
+      }
+      for (const token of other) {
+        if (!wanted.has(token)) wantedInside = false
+      }
+      if (shared < 2) continue
+      if (wantedInside || otherInside) candidates.push(...bucket)
+      if (candidates.length > 1) return null
+    }
+    return candidates.length === 1 ? candidates[0]! : null
   }
 
   /**
@@ -19201,6 +19253,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     arrivalPlaced,
     arrivalAllPlaced,
     arrivalRecordOf,
+    matchArrivalRecord,
     ownUnitsOnMap,
     rebuildCandidates,
     rebuildCandidateHexes,
