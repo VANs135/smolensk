@@ -257,8 +257,15 @@ const rebuildItems = computed<readonly CounterPickerItem[]>(() =>
     /*
      * 空军已接线（第五批批 C 切片 3）：飞机走 Ftr / Tac 补员重建（专规 1.6，13.5f），
      * 与地面同列于此；不再有"空军不走地面重建"的灰显。
+     *
+     * 13.5c：AR 后有黄点（数据层 `rebuildable === false`）者**永久不可重建**——
+     * 用户 2026-10-24 裁定该字段可信（只有少数单位如此）。这里按惯例只**转述**一句人话：
+     * 置灰 + 悬停/点击给原因，而不是让裁判点进去再吃一次引擎拒绝。
      */
-    const reason = null
+    const reason =
+      'rebuildable' in unit && unit.rebuildable === false
+        ? '13.5c：AR 后有黄点（rebuildable: false）⇒ 永久不可重建'
+        : null
     return {
       id: unit.instanceId,
       imageUrl: counterImageUrlOf(unit),

@@ -352,6 +352,20 @@ describe('W6 B18：可变增援与补员账本（1.6b / 1.6c）', () => {
 })
 
 describe('W6 B18：重建与死亡堆（13.5a–c）', () => {
+  it('13.5c：不可重建的单位**仍在**重建候选里（界面置灰说明原因，不静默隐藏）', () => {
+    const store = newStore()
+    store.setTurn(2)
+    store.setPhase('reinforcement')
+    goToSegmentStep(store, 'reinforcement.rebuild')
+    const unit = place(store, infDivRecord(), DEFENDER_HEX, 'axis', 'u1')
+    unit.steps = unit.printedSteps - 1
+    store.sendToDeadPileNow('u1')
+    const dead = store.deadPile.find((item) => item.instanceId === 'u1')!
+    dead.rebuildable = false
+    // 13.5c 的单位仍然列出（否则裁判会以为"死亡堆里没有它"），由界面置灰 + 说明原因
+    expect(store.rebuildCandidates.some((item) => item.instanceId === 'u1')).toBe(true)
+  })
+
   it('13.5a：图上有损的单位与补员同格、且在 HQ 2 格内 ⇒ 重建补满（扣 Pax）', () => {
     const store = newStore()
     store.setTurn(2)

@@ -135,6 +135,8 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).toMatch(/const canRebuildNow = computed<boolean>/)
     expect(src).toMatch(/:disabled="!canRebuildNow"/)
     expect(src).toMatch(/rebuildCandidateBlocked/)
+    // 13.5c：不可重建的候选在算子图阵列里**置灰并给原因**（不静默隐藏、也不让人点进引擎再被拒）
+    expect(src).toMatch(/rebuildable === false/)
     /*
      * §5-B：**建议行只能由裁判显式采用**（引擎 `suggestRebuildRow` 出建议，界面不自动写值）。
      * 断言"写 rebuildType 的地方只有那一次点击"——若将来有人加 watch 自动采用，这里会红。
