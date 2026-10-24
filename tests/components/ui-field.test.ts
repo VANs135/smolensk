@@ -131,7 +131,10 @@ describe('条 24：正式/验证模式门控', () => {
      */
     expect(src).toMatch(/const rebuildType = ref\(''\)/)
     expect(src).not.toMatch(/ref\('Infantry Div step'\)/)
-    expect(src).toMatch(/:disabled="rebuildType === ''"/)
+    // 未选行、或该候选是 13.5c 的永久不可重建 ⇒ 按钮禁用
+    expect(src).toMatch(/const canRebuildNow = computed<boolean>/)
+    expect(src).toMatch(/:disabled="!canRebuildNow"/)
+    expect(src).toMatch(/rebuildCandidateBlocked/)
     /*
      * §5-B：**建议行只能由裁判显式采用**（引擎 `suggestRebuildRow` 出建议，界面不自动写值）。
      * 断言"写 rebuildType 的地方只有那一次点击"——若将来有人加 watch 自动采用，这里会红。

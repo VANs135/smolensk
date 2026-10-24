@@ -57,6 +57,8 @@ const rebuildSuggestion = computed<string | null>(() => {
     specialized: record.specialized ?? [],
     name: recordNameOf(record),
     isTransportPoint: unit.noncombatKind === 'transport_point',
+    // 13.5c：数据层的 rebuildable 可信（用户 2026-10-24 裁定）⇒ 苏军步兵师据此分 step / (Red)
+    rebuildable: unit.rebuildable !== false,
   })
 })
 
@@ -66,6 +68,19 @@ const rebuildSuggestionLabel = computed<string | null>(() => {
   if (suggestion === null) return null
   return rebuildRowChoices.value.find((row) => row.unitType === suggestion)?.sourceLabel ?? null
 })
+
+/** 13.5c：该候选**不可重建**（数据层 `rebuildable === false`：AR 后有黄点，永久移除） */
+const rebuildCandidateBlocked = computed<boolean>(() => {
+  const unit = workbench.rebuildCandidates.find((item) => item.instanceId === rebuildUnitId.value)
+  if (unit === undefined) return false
+  // 空军条目没有该字段（飞机只经 Ftr/Tac 补员重建，13.5f）⇒ 不算被 13.5c 挡
+  return 'rebuildable' in unit && unit.rebuildable === false
+})
+
+/** 「重建」按钮的启用条件：选了行键 ∧ 该候选不是 13.5c 的永久不可重建 */
+const canRebuildNow = computed<boolean>(
+  () => rebuildType.value !== '' && rebuildUnitId.value !== '' && !rebuildCandidateBlocked.value,
+)
 
 /**
  * B34 余项②：**本方的到达卡（OOA）**
@@ -605,8 +620,13 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           采用建议
         </BaseButton>
       </span>
-      <span v-else-if="rebuildUnitId !== ''" class="muted">
+      <span v-else-if="rebuildUnitId !== '' && !rebuildCandidateBlocked" class="muted">
         该算子的行键无法从类型唯一确定（重建表把同兵种拆成了多行）⇒ 请人工选行（13.5）。
+      </span>
+      <!-- 13.5c：AR 后有黄点（数据层 rebuildable=false）⇒ 永久不可重建，不必让裁判点一次被拒 -->
+      <span v-if="rebuildCandidateBlocked" class="warn">
+        <BaseTag kind="danger">13.5c</BaseTag>
+        该单位 AR 后有黄点（`rebuildable: false`）⇒ **永久不可重建**，被摧毁即移除。
       </span>
       <label class="field">
         补员所在格
@@ -623,7 +643,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <BaseButton
         variant="primary"
         size="sm"
-        :disabled="rebuildType === ''"
+        :disabled="!canRebuildNow"
         @click="
           workbench.rebuildUnitNow({
             unitId: rebuildUnitId,

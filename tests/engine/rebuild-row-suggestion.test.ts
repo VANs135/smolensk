@@ -29,6 +29,7 @@ function hintOf(side: 'axis' | 'soviet', name: string) {
     specialized: record.specialized ?? [],
     name: recordNameOf(record),
     isTransportPoint: record.noncombatKind === 'transport_point',
+    rebuildable: record.rebuildable !== false,
   }
 }
 
@@ -81,6 +82,9 @@ describe('13.5：苏军各兵种 → 重建表行（含表里被拆成多行的�
     ['Ru Arty Bde', 'Artillery Rgt or Bde'],
     ['Ru Truck 3', 'Transport Points'],
     ['Ru 3-3-3 Breakdown', 'Breakdown Rgt'],
+    // 表里 `Infantry Div step`（2Pax）/ `Infantry Div (Red)`（No Rebuild）按数据层 rebuildable 分
+    ['Ru 6 Rifle Div', 'Infantry Div step'],
+    ['Ru 109 Rifle Div', 'Infantry Div (Red)'],
   ]
   for (const [name, row] of cases) {
     it(`${name} ⇒ ${row}`, () => {
@@ -97,8 +101,6 @@ describe('13.5：推不出唯一行 ⇒ 一律 null（交人工选行，不猜�
     ['axis', 'Ge 10.Mtr 20 Mot Inf'],
     // 师属炮兵团（specialized=artillery 但兵种不是 artillery）不能按装甲行计
     ['axis', 'Ge 3.Pz 75 Arty'],
-    // 苏军步兵师在表里分 `Infantry Div step`（2Pax）与 `Infantry Div (Red)`（No Rebuild）两行，字段分辨不出
-    ['soviet', 'Ru 6 Rifle Div'],
     // 表里没有"摩托化师"一行
     ['soviet', 'Ru 69 Mot Div'],
     ['soviet', 'Ru 1.Mot 20 Mot Inf'],
@@ -131,6 +133,7 @@ describe('13.5：建议行必定是**本方重建表里真实存在**的行（�
           specialized: record.specialized ?? [],
           name: recordNameOf(record),
           isTransportPoint: record.noncombatKind === 'transport_point',
+          rebuildable: record.rebuildable !== false,
         })
         if (suggestion === null) continue
         suggested += 1
@@ -141,11 +144,11 @@ describe('13.5：建议行必定是**本方重建表里真实存在**的行（�
         expect(rebuildRow(side, suggestion)).not.toBeNull()
       }
       /*
-       * 覆盖率下限（实测：轴 142/231、苏 111/218 有唯一建议）。未给建议的正是**不该猜**的那些：
+       * 覆盖率下限（实测：轴 142/231、苏 192/218 有唯一建议）。未给建议的正是**不该猜**的那些：
        * 轴心的摩托化团/营（两行费用不同）、`armor_pz/rgt`（表里无装甲团行）、师属炮兵；
-       * 苏军的步兵师（表里 step 与 (Red) 两行并存）。故下限只防"大幅退化"，不追求高覆盖。
+       * 苏军的摩托化师/团（表里无对应行）。步兵师自 `rebuildable` 分流后已全部有建议。
        */
-      expect(suggested).toBeGreaterThan(side === 'axis' ? 135 : 105)
+      expect(suggested).toBeGreaterThan(side === 'axis' ? 140 : 188)
     }
   })
 })

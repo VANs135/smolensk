@@ -137,6 +137,14 @@ export interface RebuildRowHint {
   isAircraft?: boolean
   /** 13.5e：普通运输点数（行 `Transport Points`） */
   isTransportPoint?: boolean
+  /**
+   * 13.5c：数据层的 `rebuildable`（`false`＝AR 后有黄点，**永久不可重建**）
+   *
+   * 用户 2026-10-24 裁定：**该字段是对的**——「只有少数单位不能重建」。
+   * 故苏军步兵师的行键按它分：`false → Infantry Div (Red)`（表里那行就是 No Rebuild），其余 → `Infantry Div step`。
+   * 实测与表中 No-Rebuild 行完全对齐：轴心 2 条 `Flm`、苏军 3 条 `NKVD Border`、4 条 `Mot Div`、2 条 `Rifle Div`（109/219）。
+   */
+  rebuildable?: boolean
 }
 
 /**
@@ -146,13 +154,13 @@ export interface RebuildRowHint {
  * - 兵种 × 编制层级对得上唯一一行（`hq→HQ`、`armor_pz/bn→Panzer Bn`、`armor_tk/div→Tank Div step`…）；
  * - 同兵种在表里被拆成多行时，只能用**印名里的亚型词**分辨（`Flm`→Flm Panzer Bn、`Aufk`→Aufk、
  *   `Werfer`→Werfer Bn、`Bike/Bicycle`→Bicycle Cavalry Bn、`PJ`→PJ Bn、`alarm`→Militia Alarm Rgt）；
+ * - 苏军步兵师的 `step / (Red)` 两行按**数据层的 `rebuildable`** 分（用户 2026-10-24 裁定该字段可信：
+ *   「只有少数单位不能重建」⇒ `false → Infantry Div (Red)`，其余 → `Infantry Div step`）；
  * - **不猜**的情形（返回 null，交裁判人工选行）：
  *   · `motorized/rgt`（究竟是 `PG (Arm Inf) Rgt`〔1Eq+1Pax〕还是 `Infantry Bde or Rgt`〔2Pax〕，费用不同）；
  *   · `armor_pz/rgt`（表里没有"装甲团"一行）、`artillery/bn` 而印名不带 Werfer；
- *   · 苏军 `infantry/div`（表里 `Infantry Div step`〔2Pax〕与 `Infantry Div (Red)`〔No Rebuild〕并存，
- *     而记录字段分辨不出"Red"）；
  *   · 任何 `specialized` 含 `artillery` 的**非炮兵兵种**记录（如装甲师属炮兵团，不能按装甲行计）；
- *   · 表里没有对应行的兵种（airbase / supply / extender / hedgehog / replacement / fortified_region 之外…）。
+ *   · 表里没有对应行的兵种（airbase / supply / extender / hedgehog / replacement…）。
  */
 export function suggestRebuildRow(hint: RebuildRowHint): string | null {
   /** 行必须**存在于本方的表**里才给（表是唯一来源，不凭空造行键） */
@@ -212,7 +220,14 @@ export function suggestRebuildRow(hint: RebuildRowHint): string | null {
       if (echelon === 'div') return row('Sec Div step')
       return echelon === 'rgt' ? row('Sec Rgt') : null
     case 'infantry':
-      // 苏军 Inf Div 在表里分了两行（step / (Red)=No Rebuild），字段分辨不出 ⇒ 不猜
+      /*
+       * 苏军步兵师在表里分了两行：`Infantry Div step`（2x Pax）与 `Infantry Div (Red)`（No Rebuild）。
+       * 用户 2026-10-24 裁定：**按数据层的 `rebuildable` 分**（「只有少数单位不能重建」）——
+       * `rebuildable === false` 的才是 (Red)（实测 109/219 Rifle Div），其余走 step 行。
+       */
+      if (hint.side === 'soviet' && echelon === 'div') {
+        return hint.rebuildable === false ? row('Infantry Div (Red)') : row('Infantry Div step')
+      }
       if (hint.side === 'axis' && echelon === 'div') return row('Infantry Div step')
       if (hint.side === 'soviet' && echelon === 'rgt') return row('Infantry Rgt')
       if (hint.side === 'soviet' && echelon === 'bde' && /para/.test(name)) {
