@@ -36,6 +36,18 @@ const workbench = useWorkbenchStore()
 /** 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输） */
 const uiMode = useUiMode()
 
+/** 条 24：装货 SP 改**步进**（点选，不手输）；值仍写回 store，引擎照常判 14.9/14.10 */
+function adjustCargoSp(delta: number): void {
+  const next = Math.max(0, Math.trunc(workbench.airInputs.cargoSpT) + delta)
+  workbench.airInputs.cargoSpT = next
+}
+
+/** 条 24：空投回合改**步进**（点选，不手输）；14.10b 的"计划早于执行 ≥2"仍由引擎判 */
+function adjustAirNum(key: 'airdropPlannedTurn' | 'airdropScheduledTurn', delta: number): void {
+  const next = Math.max(0, Math.trunc(workbench.airInputs[key]) + delta)
+  workbench.airInputs[key] = next
+}
+
 /** 步骤清单（14.2f A–G） */
 const checklist = computed(() => workbench.airChecklist)
 /** 对手的拦截资格（14.5） */
@@ -489,12 +501,18 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
           <div class="row">
             <label class="field">
               装载 SP（T）
-              <UiField
-                v-model="workbench.airInputs.cargoSpT"
-                class="input num"
-                type="number"
-                min="0"
-              />
+              <span class="row">
+                <BaseButton
+                  size="sm"
+                  variant="secondary"
+                  :disabled="workbench.airInputs.cargoSpT <= 0"
+                  @click="adjustCargoSp(-1)"
+                >
+                  －
+                </BaseButton>
+                <span class="num cargo-sp">{{ workbench.airInputs.cargoSpT }}</span>
+                <BaseButton size="sm" variant="secondary" @click="adjustCargoSp(1)">＋</BaseButton>
+              </span>
             </label>
             <label class="field">
               <input v-model="workbench.airInputs.cargoUnitsParaCapable" type="checkbox" />
@@ -510,21 +528,45 @@ const showsAdmin = computed(() => props.only === null || props.only === 'admin')
             </label>
             <label class="field">
               计划回合（14.10b）
-              <UiField
-                v-model="workbench.airInputs.airdropPlannedTurn"
-                class="input num"
-                type="number"
-                min="0"
-              />
+              <span class="row">
+                <BaseButton
+                  size="sm"
+                  variant="secondary"
+                  :disabled="workbench.airInputs.airdropPlannedTurn <= 0"
+                  @click="adjustAirNum('airdropPlannedTurn', -1)"
+                >
+                  －
+                </BaseButton>
+                <span class="num cargo-sp">{{ workbench.airInputs.airdropPlannedTurn }}</span>
+                <BaseButton
+                  size="sm"
+                  variant="secondary"
+                  @click="adjustAirNum('airdropPlannedTurn', 1)"
+                >
+                  ＋
+                </BaseButton>
+              </span>
             </label>
             <label class="field">
               执行回合
-              <UiField
-                v-model="workbench.airInputs.airdropScheduledTurn"
-                class="input num"
-                type="number"
-                min="0"
-              />
+              <span class="row">
+                <BaseButton
+                  size="sm"
+                  variant="secondary"
+                  :disabled="workbench.airInputs.airdropScheduledTurn <= 0"
+                  @click="adjustAirNum('airdropScheduledTurn', -1)"
+                >
+                  －
+                </BaseButton>
+                <span class="num cargo-sp">{{ workbench.airInputs.airdropScheduledTurn }}</span>
+                <BaseButton
+                  size="sm"
+                  variant="secondary"
+                  @click="adjustAirNum('airdropScheduledTurn', 1)"
+                >
+                  ＋
+                </BaseButton>
+              </span>
             </label>
           </div>
           <!-- 14.10a：单位货物＝算子图阵列（点一枚加入 / 再点一枚移出） -->
@@ -1142,5 +1184,12 @@ hr {
   object-fit: contain;
   vertical-align: middle;
   flex: 0 0 auto;
+}
+
+/* 条 24：步进控件里的数值显示（等宽、居中，避免加减按钮跳动） */
+.cargo-sp {
+  display: inline-block;
+  min-width: 2.5ch;
+  text-align: center;
 }
 </style>

@@ -33,6 +33,8 @@ const workbench = useWorkbenchStore()
 /** 拆分单位取用：母单位与档位 */
 const breakdownParentId = ref('')
 const breakdownAr = ref(4)
+/** 条 24：AR 档改用**点选**（0–5），正式界面无需手输；具体合法性仍由引擎在提交时判 */
+const BREAKDOWN_AR_LEVELS = [0, 1, 2, 3, 4, 5]
 /** 剧本抽签：当前组下标（每组一边抽签一边落盘） */
 const drawGroupIndex = ref(0)
 /** 编队抽签落盘的组成事实（编队 id → Mtr/Aufk/Krd 单位 id） */
@@ -409,7 +411,17 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
         </label>
         <label class="field">
           AR 档
-          <UiField v-model="breakdownAr" class="input num" type="number" min="0" max="5" />
+          <span class="row">
+            <BaseButton
+              v-for="ar in BREAKDOWN_AR_LEVELS"
+              :key="ar"
+              :variant="breakdownAr === ar ? 'primary' : 'secondary'"
+              size="sm"
+              @click="breakdownAr = ar"
+            >
+              AR{{ ar }}
+            </BaseButton>
+          </span>
         </label>
         <BaseButton
           variant="primary"

@@ -14,10 +14,12 @@ const root = join(process.cwd())
 const read = (p: string): string => readFileSync(join(root, p), 'utf8')
 
 describe('条 24：正式/验证模式门控', () => {
-  it('UiField：验证页渲染 input、正式界面渲染只读 span', () => {
+  it('UiField：验证页渲染 input、正式界面渲染只读 span（或 stepper 步进）', () => {
     const src = read('src/components/UiField.vue')
     expect(src).toMatch(/v-if="uiMode === 'verify'"/)
     expect(src).toMatch(/<input/)
+    expect(src).toMatch(/v-else-if="stepper"/)
+    expect(src).toMatch(/function step\(/)
     expect(src).toMatch(/v-else[^>]*class="ui-field-readonly"/)
     expect(src).toMatch(/useUiMode\(\)/)
   })
@@ -72,12 +74,12 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).not.toMatch(/<input v-model="workbench\.airPlacement\.hexText"/)
   })
 
-  it('其余面板：容器(3)/专规(8)/增援(8)/补给(14) 的数值与格号已走 UiField', () => {
+  it('其余面板：容器(2)/专规(8)/增援(8)/补给(13) 的数值与格号已走 UiField', () => {
     const cases: Array<[string, number]> = [
-      ['src/components/containers/ContainersPanel.vue', 3],
+      ['src/components/containers/ContainersPanel.vue', 2],
       ['src/components/exclusive/ExclusiveRulesPanel.vue', 8],
       ['src/components/reinforcement/ReinforcementPanel.vue', 8],
-      ['src/components/supply/SupplyPanel.vue', 14],
+      ['src/components/supply/SupplyPanel.vue', 13],
     ]
     for (const [file, min] of cases) {
       const src = read(file)
@@ -85,6 +87,26 @@ describe('条 24：正式/验证模式门控', () => {
       const uses = src.match(/<UiField\b/g)?.length ?? 0
       expect(uses, `${file} 的 UiField 用量不足（${uses} < ${min}）`).toBeGreaterThanOrEqual(min)
     }
+  })
+
+  it('条 24：真实选择的数量用「步进」而非只读（补给拆分/装载/拖取/分摊）', () => {
+    const src = read('src/components/supply/SupplyPanel.vue')
+    // 5 处启用了 stepper（spToSplit/装载量/铁路调动量/分摊/拖取投递量）
+    expect(src.match(/\bstepper\b/g)?.length ?? 0).toBeGreaterThanOrEqual(5)
+    // 拆分规模是列表，保留普通输入（否则 13.2c 在正式界面不可用）
+    expect(src).toMatch(/v-model="workbench\.transportPointInputs\.splitSizesText"/)
+  })
+
+  it('条 24：真实选择的数值改「点选」（拆分 AR / 装货 SP / 空投回合）', () => {
+    const containers = read('src/components/containers/ContainersPanel.vue')
+    expect(containers).toMatch(/BREAKDOWN_AR_LEVELS/)
+    expect(containers).toMatch(/@click="breakdownAr = ar"/)
+    expect(containers).not.toMatch(/v-model="breakdownAr"/)
+
+    const air = read('src/components/air/AirPanel.vue')
+    expect(air).toMatch(/function adjustCargoSp/)
+    expect(air).toMatch(/adjustAirNum\('airdropPlannedTurn'/)
+    expect(air).not.toMatch(/v-model="workbench\.airInputs\.cargoSpT"/)
   })
 
   it('SetupPanel：西移落点已补「点地图选落点」+ 只读分支（§5-E 补缺）', () => {

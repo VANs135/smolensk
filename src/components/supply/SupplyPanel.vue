@@ -377,6 +377,7 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
               type="number"
               min="0"
               :max="dump.sp"
+              stepper
             />
             SP
           </label>
@@ -453,7 +454,8 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
           </BaseButton>
           <label class="field">
             拆分为（空格分隔各份规模）
-            <UiField
+            <!-- 13.2c：各份规模是**列表**（如 "2 3"），步进表达不了 ⇒ 保留普通输入（正式界面也可用） -->
+            <input
               v-model="workbench.transportPointInputs.splitSizesText"
               class="input"
               placeholder="2 3"
@@ -519,6 +521,7 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
               class="input num"
               type="number"
               min="1"
+              stepper
             />
           </label>
           <BaseButton
@@ -782,6 +785,7 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
               class="input num"
               type="number"
               min="1"
+              stepper
             />
           </label>
           <BaseButton variant="secondary" size="sm" @click="workbench.railMoveNow('sp')">
@@ -928,6 +932,7 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
                       class="input num"
                       type="number"
                       min="0"
+                      stepper
                       @update:model-value="
                         workbench.setAttritionAllocation(dutyKey(duty), unitId, Number($event))
                       "
@@ -1064,6 +1069,7 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
                   class="input num"
                   type="number"
                   min="1"
+                  stepper
                 />
               </label>
               <p v-else-if="pickupRequirement !== null" class="num">

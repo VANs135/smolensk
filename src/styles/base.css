@@ -112,6 +112,30 @@ a:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* 条 24：正式界面的「步进」控件（可操作、不手输）——用于真实选择的数量 */
+.ui-field-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ui-field-stepper__btn {
+  min-width: 1.7em;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.ui-field-stepper__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 #app {
   min-height: 100vh;
 }
