@@ -42,6 +42,21 @@ function boot() {
   return { workbench, containers }
 }
 
+/**
+ * 只**摆盘**、不跑自动抽签（§6-A 后抽签在初设自动跑 ⇒ 这里要的是"抽完签还没给落点"的确定性场景）
+ */
+function bootManual() {
+  setActivePinia(createPinia())
+  const game = useGameSessionStore()
+  const workbench = useWorkbenchStore()
+  const containers = useContainersStore()
+  const setup = useSetupStore()
+  game.setScenarioId('1')
+  containers.setScenario('1')
+  setup.runAutoSetup()
+  return { workbench, containers, setup }
+}
+
 /** 抽一次西移组并落盘（落点稍后由玩家在初设里给） */
 function drawShiftWest(containers: ReturnType<typeof boot>['containers'], workbench: Workbench) {
   goToDrawStep(workbench)
@@ -55,7 +70,9 @@ function drawShiftWest(containers: ReturnType<typeof boot>['containers'], workbe
 
 describe('I② 切片 2：西移编队进初设摆位（ch10）', () => {
   it('★ 抽签后初设列出待摆位编队：带原初设格号、西移格数、图上单位数；未给落点为 null', () => {
-    const { containers, workbench } = boot()
+    // §6-A：走「只摆盘、不自动抽签」的盘面（自动抽签那条路径的落点已当场算出，见
+    // `formation-draw-at-setup`）；本例要的是"抽完签还没给落点"这一支。
+    const { containers, workbench } = bootManual()
     const group = drawShiftWest(containers, workbench)
     const pending = containers.pendingShiftWestPlacements
     expect(pending.length).toBe(group.count)
@@ -93,15 +110,20 @@ describe('I② 切片 2：西移编队进初设摆位（ch10）', () => {
       if (unit === undefined) continue
       expect([unit.hex.col, unit.hex.row]).toEqual([target[0], target[1]])
     }
-    // 台账里记下落点（初设面板读它）
+    // 台账里记下落点（初设面板读它）——upsert 按编队合并；**摆位后重读**投影再比对
     const row = containers.formationDrawOutcomes.find((item) => item.groupKind === 'shiftWest')
-    expect(row?.destinations.length).toBe(pending.length)
+    for (const item of placed) {
+      expect(row?.destinations.find((d) => d.formationId === item.formationId)?.hexText).toBe(
+        item.hexText,
+      )
+    }
     // 列差与 ch10 相符 ⇒ 不该有"列差 ≠ 西移格数"的提示
     expect(workbench.log.map((entry) => entry.text).join('\n')).not.toContain('≠ ch10 的西移')
   })
 
   it('★ 缺落点 ⇒ **整笔拒绝**（不改动任何算子）；格式非法的落点当场拒', () => {
-    const { containers, workbench } = boot()
+    // §6-A：走**只摆盘、不自动抽签**的盘面 ⇒ 抽完签还没落点（确定性场景）
+    const { containers, workbench } = bootManual()
     drawShiftWest(containers, workbench)
     const pending = containers.pendingShiftWestPlacements
     expect(containers.applyShiftWestPlacementsNow()).toBe(false) // 一个落点都没给

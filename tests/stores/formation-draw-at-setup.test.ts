@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
 import { scenarios } from '@/data'
+import { shiftWestDestination } from '@/engine/rules'
 import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -53,6 +54,27 @@ describe('§6-A：编队抽签在初设自动执行（ch10 / ch11）', () => {
     expect(containers.lastAction?.scope).toBe('初设·编队抽取')
   })
 
+  it('★ ch10「4 others」：A/B 两组**不重叠**（B 只从 A 抽剩的那些里再抽）', () => {
+    const { containers } = boot('1')
+    const groups = groupsOf('1')
+    const a = containers.drawnOf(groups[0]!)
+    const b = containers.drawnOf(groups[1]!)
+    expect(a.length).toBe(groups[0]!.count)
+    expect(b.length).toBe(groups[1]!.count)
+    // 同一个师不能既"西移三格"又"Mtr↔Aufk 互换"（原文是"4 others"）
+    expect(a.filter((id) => b.includes(id))).toEqual([])
+    expect(new Set([...a, ...b]).size).toBe(a.length + b.length)
+  })
+
+  it('★ 重抽某组时也排除**其它组**已抽中的（手动入口同口径）', () => {
+    const { containers } = boot('1')
+    const groups = groupsOf('1')
+    const b = containers.drawnOf(groups[1]!)
+    const again = containers.drawFormations(groups[0]!)
+    expect(again.length).toBe(groups[0]!.count)
+    expect(again.filter((id) => b.includes(id))).toEqual([])
+  })
+
   it('★ 不依赖落点的组当场落盘；西移组只抽不落盘（落点还没给）', () => {
     const { containers } = boot('1')
     const groups = groupsOf('1')
@@ -61,11 +83,14 @@ describe('§6-A：编队抽签在初设自动执行（ch10 / ch11）', () => {
     const others = groups.filter((group) => group.kind !== 'shiftWest')
     expect(others.length).toBeGreaterThan(0)
 
-    // 西移：抽中 ⇒ 进"待摆位"，但**没有**落盘台账（落点缺失，引擎按 shiftWestDestinationMissing 拒）
+    // 西移：抽中 ⇒ 按「视为有道路」**当场算出落点并摆位**（台账有该组的落点）
     expect(containers.pendingShiftWestPlacements.length).toBe(shift?.count ?? 0)
-    expect(containers.formationDrawOutcomes.some((row) => row.groupKind === 'shiftWest')).toBe(
-      false,
-    )
+    const shiftRow = containers.formationDrawOutcomes.find((row) => row.groupKind === 'shiftWest')
+    expect(shiftRow).toBeDefined()
+    expect(shiftRow?.destinations.length).toBe(shift?.count ?? 0)
+    for (const item of containers.pendingShiftWestPlacements) {
+      expect(item.hexText).not.toBeNull() // 落点已自动算出（不再等玩家给）
+    }
     // 其余组：已落盘（台账有该组）
     for (const group of others) {
       expect(containers.formationDrawOutcomes.some((row) => row.groupKind === group.kind)).toBe(
@@ -86,38 +111,32 @@ describe('§6-A：编队抽签在初设自动执行（ch10 / ch11）', () => {
     expect(workbench.deadPile.length).toBeGreaterThan(0)
   })
 
-  it('★ 西移编队进初设 box（ground 类）⇒ 点一项、点地图即摆一个师', () => {
+  it('★ 西移已**自动摆位**⇒ 不占待办；仍可点地图改落点（ch10）', () => {
     const { workbench, containers, setup } = boot('1')
-    const items = setup.pendingPlacement.filter((item) => item.kind === 'shift')
-    expect(items.length).toBeGreaterThan(0)
-    const first = items[0]!
-    expect(first.category).toBe('ground')
-    expect(first.formationId).toBeDefined()
+    // 自动摆好了 ⇒ 待办里不该再有西移项（玩家不必为抽签点地图）
+    expect(setup.pendingPlacement.filter((item) => item.kind === 'shift').length).toBe(0)
+    const item = containers.pendingShiftWestPlacements[0]!
+    expect(item.hexText).not.toBeNull()
 
-    // 候选＝原格 N 格半径内且不比原格更靠东（ch10 是"西移"）
-    const item = containers.pendingShiftWestPlacements.find(
-      (entry) => entry.formationId === first.formationId,
+    // 落点＝沿 SW 从所列位置走 N 格（引擎 `shiftWestDestination` 的口径）
+    const target = item.hexText!.split('.').map(Number)
+    expect(target[0]!).toBeLessThan(item.fromHexText!.split('.').map(Number)[0]!)
+    const onTarget = workbench.units.filter(
+      (unit) => item.unitIds.includes(unit.instanceId) && unit.hex.col === target[0],
     )
-    expect(item).toBeDefined()
-    const from = item!.fromHexText!.split('.').map(Number)
-    expect(first.candidates.length).toBeGreaterThan(0)
-    expect(first.candidates.some((hex) => hex.col === from[0] && hex.row === from[1])).toBe(true)
-    expect(first.candidates.every((hex) => hex.col <= (from[0] ?? 0))).toBe(true)
+    expect(onTarget.length).toBe(item.unitIds.length)
 
-    // 点一项 ⇒ 点地图（西移 3 列，与 ch10 一致）
-    expect(setup.beginShiftPlacement(first.formationId!)).toBe(true)
-    const target = { col: (from[0] ?? 0) - 3, row: from[1] ?? 0 }
-    expect(setup.placeAtHex(target)).toBe(true)
-
-    // 该师图上的算子真的搬过去了
-    const moved = workbench.units.filter(
-      (unit) => item!.unitIds.includes(unit.instanceId) && unit.hex.col === target.col,
+    // 仍可改：点一项 ⇒ 地图高亮候选（原格 N 格半径内且不更靠东）⇒ 点地图换一格
+    expect(setup.beginShiftPlacement(item.formationId)).toBe(true)
+    const from = item.fromHexText!.split('.').map(Number)
+    expect(setup.placing?.candidates.length).toBeGreaterThan(0)
+    expect(setup.placing!.candidates.every((hex) => hex.col <= (from[0] ?? 0))).toBe(true)
+    const moved = { col: Math.max(1, (target[0] ?? 1) - 1), row: target[1] ?? 0 }
+    expect(setup.placeAtHex(moved)).toBe(true)
+    const after = workbench.units.filter(
+      (unit) => item.unitIds.includes(unit.instanceId) && unit.hex.col === moved.col,
     )
-    expect(moved.length).toBe(item!.unitIds.length)
-    // 摆完即从待办里消失
-    expect(setup.pendingPlacement.some((entry) => entry.formationId === first.formationId)).toBe(
-      false,
-    )
+    expect(after.length).toBe(item.unitIds.length)
   })
 
   it('★ 幂等：重复进入不重抽（换剧本再回来 / 重挂载不会搅乱抽签结果与已落盘处置）', () => {
@@ -139,22 +158,34 @@ describe('§6-A：编队抽签在初设自动执行（ch10 / ch11）', () => {
     expect(workbench.units.length).toBeGreaterThan(0)
   })
 
-  it('★ 完成初设时**没给落点**的西移师留在剧本页原格（不施加未定的移动，也不移除）', () => {
-    const { workbench, setup } = boot('1')
-    const pending = setup.pendingPlacement.filter((item) => item.kind === 'shift')
-    expect(pending.length).toBeGreaterThan(0)
-    const before = new Map(
-      workbench.units.map((unit) => [unit.instanceId, `${unit.hex.col}.${unit.hex.row}`]),
-    )
+  it('★ 落点＝沿 SW 从所列位置走 N 格（「视为那个格子有道路」）：11.03 → 8.01', () => {
+    const dest = shiftWestDestination({ col: 11, row: 3 }, 3)
+    expect([dest.hex.col, dest.hex.row]).toEqual([8, 1])
+    expect(dest.walked).toBe(3)
+    expect(dest.exact).toBe(true)
+    // 与原文示例（11.03 → 9.01）**同向**：向西（列减）且向南（行减）；
+    // 差一格是道路拐弯所致（数据里该区域没有 road 边）⇒ 回执与界面已如实写明
+    expect(dest.hex.col).toBeLessThan(11)
+    expect(dest.hex.row).toBeLessThan(3)
+  })
+
+  it('★ 完成初设：西移师停在**自动算出的落点**（不移除、也不留在原格）', () => {
+    const { workbench, setup, containers } = boot('1')
+    const item = containers.pendingShiftWestPlacements[0]!
+    const target = item.hexText!.split('.').map(Number)
     const countBefore = workbench.units.length
 
     expect(setup.finishSetup()).toBe(true)
 
     // 一个算子都没少（不是"未落位即移除"）
     expect(workbench.units.length).toBe(countBefore)
-    for (const unit of workbench.units) {
-      expect(`${unit.hex.col}.${unit.hex.row}`).toBe(before.get(unit.instanceId))
-    }
-    expect(setup.notes.join('\n')).toContain('留在剧本页原格')
+    expect(setup.notes.join('\n')).not.toContain('留在剧本页原格')
+    const moved = workbench.units.filter(
+      (unit) =>
+        item.unitIds.includes(unit.instanceId) &&
+        unit.hex.col === target[0] &&
+        unit.hex.row === target[1],
+    )
+    expect(moved.length).toBe(item.unitIds.length)
   })
 })

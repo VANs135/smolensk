@@ -136,7 +136,7 @@ function pick(item: SetupPlacing): void {
     setup.cancelPlacement()
     return
   }
-  // §6-A：ch10 抽中西移的师（落点印在剧本卡上 ⇒ 由玩家点地图给）
+  // §6-A：ch10 抽中西移的师（落点按原文算法（沿道路西移 3 格）得出，道路数据不全 ⇒ 由玩家点地图给）
   if (item.kind === 'shift') {
     if (item.formationId !== undefined) setup.beginShiftPlacement(item.formationId)
     return

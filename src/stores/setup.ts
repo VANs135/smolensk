@@ -109,7 +109,7 @@ export type SetupPlacingCategory = 'air' | 'supply' | 'ground'
  *
  * 四类：`self` = 剧本页只给了条件（`w/i N` / 任一指挥部）的地面项；`air` = 某一型飞机
  * （候选＝本方空军基地格）；`truck` = 需指定**满载 / 空载**的编内卡车（13.2h，不在图上落位，
- * 故 `candidates` 为空）；`shift` = ch10 抽中西移的那个师（落点印在剧本卡上 ⇒ 由玩家点地图给，
+ * 故 `candidates` 为空）；`shift` = ch10 抽中西移的那个师（落点按原文算法（沿道路西移 3 格）得出，道路数据不全 ⇒ 由玩家点地图给，
  * 候选＝原格 N 格半径内的图上格）。
  * 候选格一律来自引擎，故界面高亮的格一定合法。
  */
@@ -547,7 +547,7 @@ export const useSetupStore = defineStore('setup', () => {
     const current = placing.value
     if (current === null) return false
     /*
-     * ★ ch10 西移项**不按候选校验**：落点印在剧本卡上、数据里没有 ⇒ 候选只是「半径内的提示范围」，
+     * ★ ch10 西移项**不按候选校验**：原文只给算法（沿道路西移 3 格，例 11.03 → 9.01）、道路拓扑数据未覆盖该区域 ⇒ 候选只是「半径内的提示范围」，
      *   真正的口径是"玩家给一个格"（与 `containers.beginDrawShiftHexPickNow` 的 `candidates: 'any'`
      *   同一口径）⇒ 这里只校验在图上（IV-I 的一半），不给玩家添一层会被拒的框。
      */
@@ -735,17 +735,20 @@ export const useSetupStore = defineStore('setup', () => {
       }
     }
     /*
-     * 第六批 §6-A：**ch10 西移组抽中的师** —— 落点印在剧本卡上、数据里没有 ⇒ 由玩家在初设里给
+     * 第六批 §6-A：**ch10 西移组抽中的师**
      *
-     * 修前这些师只在折叠的「开局流程明细」里给一个小输入框（还写着"先在 B 段抽签"），
-     * 玩家根本看不见 ⇒ 抽签带来的位置调整实际上落不到盘上。
-     * 现在它与自由项并列进「初设单位 box」，点一项 ⇒ 地图高亮候选 ⇒ 点格即摆（ch10）。
+     * 抽签时已按「视为有道路」**自动算出落点并摆位**（`containers.runSetupDrawsNow`）
+     * ⇒ 这里**只列自动摆不出来的**（该师没有图上格号 / 西边到图边了）—— 玩家不点任何东西，
+     * 抽签带来的位置调整也已经落到盘上（修前：只在折叠明细里给个小输入框、还写着"先在 B 段抽签"）。
+     * 自动摆好的那些仍可在「开局流程明细」里照剧本卡改（`containers.setDrawShiftHexNow`）。
      *
-     * 候选＝**原格 N 格半径内**（ch10 是"沿道路西移 N 格"，路径长 N ⇒ 落点必在半径 N 内；
+     * 候选＝**原格 N 格半径内且不更靠东**（ch10 是"沿道路西移 N 格"，路径长 N ⇒ 落点必在半径 N 内；
      * 这是从规则推得的**必要条件**，不是猜）。原格推不出（初设行没给图上格号）⇒ 候选为空并说清原因。
      */
     for (const item of containers.pendingShiftWestPlacements) {
       if (completed.value[`shift:${item.formationId}`] === true) continue
+      // 已自动摆位（有落点）⇒ 不占待办；只有算不出来的才要玩家给
+      if (item.hexText !== null) continue
       const from = item.fromHexText === null ? null : parseSetupHexText(item.fromHexText)
       const candidates =
         from === null
@@ -1437,7 +1440,7 @@ export const useSetupStore = defineStore('setup', () => {
     if (result.pendingShift.length > 0) {
       notes.value = [
         ...notes.value,
-        `ch10 西移：${result.pendingShift.join('、')} 的落点印在剧本卡上 ⇒ 在「初设单位 box」的「地面单位与基地」里点一项、再点地图给落点`,
+        `ch10 西移：${result.pendingShift.join('、')} 的落点＝沿道路从所列位置西移 N 格（ch10 写 3 格，例 11.03 → 9.01）⇒ 在「初设单位 box」的「地面单位与基地」里点一项、再点地图给落点`,
       ]
     }
     if (!result.ok) {

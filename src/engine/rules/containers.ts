@@ -1,5 +1,7 @@
 import { markers, rulesConstants, scenarios, formations } from '@/data'
-import type { Side, UnitSide } from '@/data'
+import type { HexRef, Side, UnitSide } from '@/data'
+
+import { isOnMap, neighbor } from '../hex-geometry'
 
 import { fail, succeed, type RuleOutcome } from '../result-types'
 import type { AirStatus, FlightWeather, GamePhase, GroundWeather, UnitKind } from '../state-types'
@@ -1287,6 +1289,46 @@ export function deriveDrawComposition(input: {
     anchorHex,
     note,
   })
+}
+
+/**
+ * ch10「沿道路西移 N 格」的落点（★ 用户裁定 2026-10-25：**视为那个格子有道路**）
+ *
+ * 原文（ch10 A 组）："4 that must shift three hexes west of listed location, following road.
+ * (For instance, from 11.03 to 9.01.)" —— 给的是**算法**加一例，不是落点清单：
+ *   · 起点＝**所列位置**（剧本页的初设格号 ⇒ 数据里有：`scenario-setup.json`，
+ *     如 `3 Pz Div` 的 `11.03`）；
+ *   · 终点＝沿道路往西走 N 格（示例 `11.03 → 9.01`）。
+ * 而地图数据的道路边（`map-layers.edges` 的 `road`）**未覆盖**该区域（11.03 周边 0 条路）
+ * ⇒ 用户裁定"视为那个格子有道路就行"：按几何**沿 SW（西南）方向**逐格走 N 步。
+ *   为什么 SW：示例的列 −2、行 −2（向西**且向南**）与 SW 的方向倾向一致；
+ *   全程 SW 得 `8.01`（与示例的 `9.01` 差一格，是道路拐弯所致）⇒ 回执里如实写明，
+ *   玩家可在初设明细里照剧本卡改。
+ * 走不通（图外）时改走 NW（仍是向西）；都走不通就停在能到的最远格（**不猜、不越图**）。
+ */
+export function shiftWestDestination(
+  from: HexRef,
+  steps: number,
+): { hex: HexRef; walked: number; exact: boolean } {
+  const total = Math.max(0, Math.trunc(steps))
+  let current: HexRef = { col: from.col, row: from.row }
+  let walked = 0
+  for (let step = 0; step < total; step += 1) {
+    const sw = neighbor(current, 'SW')
+    if (isOnMap(sw)) {
+      current = { col: sw.col, row: sw.row }
+      walked += 1
+      continue
+    }
+    const nw = neighbor(current, 'NW')
+    if (isOnMap(nw)) {
+      current = { col: nw.col, row: nw.row }
+      walked += 1
+      continue
+    }
+    break
+  }
+  return { hex: current, walked, exact: walked === total }
 }
 
 /**

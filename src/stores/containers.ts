@@ -28,6 +28,7 @@ import {
   deriveDrawComposition,
   planScenarioDraw,
   planSpecialReplDraw,
+  shiftWestDestination,
   planTurnMarkerAdvance,
   railCapPositionValid,
   railCapTrackView,
@@ -959,12 +960,29 @@ export const useContainersStore = defineStore('containers', () => {
    *   而 `formations.json` 的 `sources` 只标在源剧本上 ⇒ 剧本 2 直接取池会是空的）；
    *   结果仍记在**当前剧本**名下（界面与 `pendingShiftWestPlacements` 都按当前剧本读）。
    */
+  /**
+   * ch10「4 **others**」/ ch11「5 **others**」：本剧本**其它组**已抽中的编队
+   *
+   * 原文是「抽 4 个…；**另**抽 4 个…」⇒ 一个师不能同时进两组（同一个师既西移三格又做
+   * Mtr↔Aufk 互换是规则没写的效果）。修前各组各自从**整池**抽 ⇒ 实测 A/B 两组都抽到了
+   * `29 Mtr Div`（重叠期望 ≈ 4×4/12 ≈ 1.3 个）。
+   */
+  function drawnByOtherGroups(kind: string): readonly string[] {
+    const rows = drawResults.value[scenarioId.value] ?? []
+    return rows.filter((row) => row.kind !== kind).flatMap((row) => row.formationIds)
+  }
+
   function drawFormations(
     group: ScenarioDrawGroup,
     reduced = false,
     poolScenarioId?: string,
+    /** 附加排除（调用方已知"这些不该再被抽到"） */
+    exclude: readonly string[] = [],
   ): string[] {
-    const pool = axisDrawPool(poolScenarioId ?? scenarioId.value).map((entry) => entry.formationId)
+    const excluded = new Set([...drawnByOtherGroups(group.kind), ...exclude])
+    const pool = axisDrawPool(poolScenarioId ?? scenarioId.value)
+      .map((entry) => entry.formationId)
+      .filter((formationId) => !excluded.has(formationId))
     const count = reduced
       ? pool.length > 0
         ? Math.min(pool.length, Math.ceil(group.count / 2))
@@ -1006,7 +1024,9 @@ export const useContainersStore = defineStore('containers', () => {
   /**
    * ch10：**点地图选某个抽中编队的西移落点**（B27 通用待点格）
    *
-   * 为什么由玩家给：原文的"所列位置"印在剧本卡上，数据里没有；地图事实也不足以推出
+   * 为什么由玩家给：原文只给"沿道路从所列位置西移三格"这个算法（例 11.03 → 9.01），
+   *   所列位置数据里有（scenario-setup.json），但**道路拓扑未覆盖该区域**（11.03 周边 0 条 road 边）
+   *   ⇒ 走不出那条路、算不出落点 ⇒ 由玩家照剧本卡给
    * （要看剧本卡的那张示意图）。候选给 `'any'`（合法性在**落盘时**由引擎按剧本卡口径判：
    * 只校验"给了落点"这一形状），与 B27 的二类口径一致。
    */
@@ -1046,7 +1066,7 @@ export const useContainersStore = defineStore('containers', () => {
    * ★ 用户 2026-09-18 报告第 5 条起，`facts` **不再要求调用方注入**：缺哪个编队的组成就用
    *   `deriveFactsFor` 从**初设索引**自动推（判据在引擎 `deriveDrawComposition`）；
    *   传入的 facts 仍是**覆盖**（验证页/裁判用）。
-   *   · shiftWest：抽中师沿道路西移 3 格（落点印在剧本卡上、数据里没有 ⇒ 仍由玩家点地图给出）；
+   *   · shiftWest：抽中师沿道路西移 3 格（原文只给算法（沿道路西移 3 格，例 11.03 → 9.01）、道路拓扑数据未覆盖该区域 ⇒ 仍由玩家点地图给出）；
    *   · moveMode：把抽中师的**战斗**单位转为 Move Mode；
    *   · mtrAufkSwap / deadPileKrd / deadPileAufk：把指定单位送进死亡堆 / 从死亡堆返场
    *     （返场落点＝该编队初设行里的图上格号，不再写死）。
@@ -1276,7 +1296,7 @@ export const useContainersStore = defineStore('containers', () => {
    * 故抽签在「选剧本 ⇒ 自动初设落盘」之后**自动**跑一次（骰走种子化 `rng`，与 B28「随机数一律
    * 自动结算」同一口径），随后：
    *   · **不依赖玩家落点**的组（moveMode / mtrAufkSwap / deadPileKrd / deadPileAufk）⇒ 当场落盘；
-   *   · **西移组**（shiftWest）⇒ 只抽不落盘：落点印在剧本卡上、数据里没有 ⇒ 交给玩家在初设里给
+   *   · **西移组**（shiftWest）⇒ 只抽不落盘：原文只给算法（沿道路西移 3 格，例 11.03 → 9.01）、道路拓扑数据未覆盖该区域 ⇒ 交给玩家在初设里给
    *     （`pendingShiftWestPlacements` ⇒ 初设 box 的一项，见 `setup.ts`）。
    *
    * 幂等：某组已抽过（`drawResults` 里有该 kind）⇒ **保留既有抽取结果**，不重抽
@@ -1305,6 +1325,8 @@ export const useContainersStore = defineStore('containers', () => {
     let drawnGroups = 0
     let appliedGroups = 0
     const pendingShift: string[] = []
+    /** 已按「视为有道路」自动摆位的西移师（`原格 → 落点`） */
+    const placedShift: string[] = []
     const failures: string[] = []
 
     for (const group of groups) {
@@ -1316,11 +1338,35 @@ export const useContainersStore = defineStore('containers', () => {
       }
       drawnGroups += 1
       /*
-       * 西移组**只抽不落盘**：引擎 `planScenarioDraw` 缺落点即按 `shiftWestDestinationMissing` 拒，
-       * 而落点印在剧本卡上、数据里没有 ⇒ 等玩家在初设 box 里给（给了才摆）。
+       * 西移组：**当场算落点并摆位**（★ 用户 2026-10-25「视为那个格子有道路就行」）
+       *
+       * 原文只给"沿道路从所列位置西移 N 格"这个算法（例 11.03 → 9.01），所列位置**数据里有**
+       * （`scenario-setup.json`）⇒ 按"视为有道路"由引擎 `shiftWestDestination` 算落点，
+       * 算出即摆（玩家不必再为抽签点地图）。算不出（该师没有图上格号 / 走不到）才留进
+       * `pendingShift`，由玩家在初设里补（不猜）。
        */
       if (group.kind === 'shiftWest') {
-        pendingShift.push(...drawn)
+        for (const formationId of drawn) {
+          const derived = deriveFactsFor(formationId)
+          const anchorText = derived?.facts.anchorHexText
+          const anchor = anchorText === undefined ? undefined : parseHexOf(anchorText)
+          const steps = group.shiftHexes ?? 0
+          if (anchor === undefined || steps <= 0) {
+            pendingShift.push(formationId)
+            continue
+          }
+          const target = shiftWestDestination(anchor, steps)
+          if (
+            !setDrawShiftHexNow(formationId, `${target.hex.col}.${target.hex.row}`) ||
+            !applyShiftWestOneNow(formationId)
+          ) {
+            pendingShift.push(formationId)
+            continue
+          }
+          placedShift.push(
+            `${formationId} ${anchorText ?? '—'} → ${target.hex.col}.${String(target.hex.row).padStart(2, '0')}${target.exact ? '' : `（只走了 ${String(target.walked)} 格：西边到图边了）`}`,
+          )
+        }
         continue
       }
       if (applyDraw(group)) appliedGroups += 1
@@ -1330,8 +1376,11 @@ export const useContainersStore = defineStore('containers', () => {
     const detail =
       `编队抽签（ch10 / ch11，初设自动）：${drawnGroups} 组已抽` +
       `（初设源 ${sourceId}）⇒ 落盘 ${appliedGroups} 组` +
+      (placedShift.length > 0
+        ? `；西移组按「视为有道路」自动摆位：${placedShift.join('、')}`
+        : '') +
       (pendingShift.length > 0
-        ? `；西移组 ${String(pendingShift.length)} 个师待玩家给落点：${pendingShift.join('、')}`
+        ? `；西移组 ${String(pendingShift.length)} 个师**算不出落点**，待玩家给：${pendingShift.join('、')}`
         : '') +
       (failures.length > 0 ? `；未成：${failures.join('；')}` : '')
     lastAction.value = {
@@ -1426,7 +1475,7 @@ export const useContainersStore = defineStore('containers', () => {
         ...(aufkBattalionUnitId === undefined ? {} : { aufkBattalionUnitId }),
         ...(krdBattalionUnitId === undefined ? {} : { krdBattalionUnitId }),
         ...(combatUnitIds.length === 0 ? {} : { combatUnitIds }),
-        // ch10 的西移落点印在剧本卡上、数据里没有 ⇒ 仍由玩家点地图给出（本函数不猜）
+        // ch10 的西移落点：原文只给算法（沿道路西移 3 格，例 11.03 → 9.01）、道路拓扑数据未覆盖该区域 ⇒ 仍由玩家点地图给出（本函数不猜）
         ...(data.anchorHex === null
           ? {}
           : { anchorHexText: `${data.anchorHex.col}.${data.anchorHex.row}` }),
@@ -1506,7 +1555,7 @@ export const useContainersStore = defineStore('containers', () => {
    * 照玩家给定的落点把西移编队的**图上单位**摆过去（初设里点「照此摆位」）
    *
    * 缺任一落点即**整笔拒绝**（用户口径的"不猜"）；落点与原初设格的**列差**若与 ch10 的
-   * 「西移 N 格」不符，只**如实记一行提示**（位置印在剧本卡上、数据里没有，引擎不替它判对错）。
+   * 「西移 N 格」不符，只**如实记一行提示**（原文只给算法（沿道路从所列位置西移 3 格，例 11.03 → 9.01）、道路拓扑数据未覆盖该区域，引擎不替它判对错）。
    */
   function applyShiftWestPlacementsNow(): boolean {
     const pending = pendingShiftWestPlacements.value
@@ -1568,7 +1617,7 @@ export const useContainersStore = defineStore('containers', () => {
    * 把**一个**西移编队按已记的落点摆过去（整笔与单条共用这一段）
    *
    * 落点与原初设格的**列差**若与 ch10 的「西移 N 格」不符，只**如实记一行提示**
-   * （位置印在剧本卡上、数据里没有，引擎不替它判对错）。
+   * （原文只给算法（沿道路从所列位置西移 3 格，例 11.03 → 9.01）、道路拓扑数据未覆盖该区域，引擎不替它判对错）。
    */
   function placeShiftWestItem(item: {
     formationId: string
@@ -1629,7 +1678,7 @@ export const useContainersStore = defineStore('containers', () => {
   /**
    * 第六批 §6-A：**单条**西移摆位（初设 box 里点一格即用这个）
    *
-   * 先记落点（ch10 的落点印在剧本卡上、数据里没有 ⇒ 只能由玩家给），再按它摆位并 upsert 台账。
+   * 先记落点（ch10 的落点：原文只给算法（沿道路西移 3 格，例 11.03 → 9.01）、道路拓扑数据未覆盖该区域 ⇒ 只能由玩家给），再按它摆位并 upsert 台账。
    * 修前只有「整笔」入口（缺任一落点即整笔拒绝）⇒ 玩家在初设里给一个落点也摆不了一个师。
    */
   function applyShiftWestAtNow(formationId: string, hexText: string): boolean {

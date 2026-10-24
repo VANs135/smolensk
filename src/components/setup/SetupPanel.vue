@@ -41,7 +41,7 @@ const uiMode = useUiMode()
 /**
  * 条 26 / S4：西移落点**点地图选**（补 §5-E「补缺的 4 处」之一）
  *
- * 原处只能手输「列.行」（原文：位置印在剧本卡上、数据里没有）；这里接上统一的格选择——
+ * 原处只能手输「列.行」（原文：沿道路从所列位置西移三格，例 11.03 → 9.01）；这里接上统一的格选择——
  * 选中后由 `containers.setDrawShiftHexNow` 校验并写回，正式界面因此可以只读展示。
  */
 function pickShiftWestHex(formationId: string): void {
@@ -356,7 +356,7 @@ function sideLabel(side: Side): string {
       -->
       <RuleNote
         v-if="containers.pendingShiftWestPlacements.length > 0"
-        title="ch10 西移：抽中的师在此设定落点（初设摆位）"
+        title="ch10 西移：落点已按「视为有道路」自动算出（此处可照剧本卡改）"
         rule="ch10"
         :open="true"
       >
@@ -390,8 +390,10 @@ function sideLabel(side: Side): string {
           照此摆位（ch10）
         </BaseButton>
         <p class="muted num">
-          位置印在剧本卡上、数据里没有 ⇒ 只能由你给；缺任一条即整笔拒绝（不猜）。 通常直接在上方 box
-          里点那一项、再点地图即可（这里留作逐条手改 / 对照的退路）。
+          原文只给算法（**沿道路**从所列位置西移 3 格，例 11.03 → 9.01）、道路拓扑数据未覆盖该区域 ⇒
+          按你的裁定「视为那个格子有道路」：**沿 SW 方向逐格走 N 格**自动算落点并当场摆位 （全程 SW
+          会得到 8.01，与原文的 9.01 差一格——那是道路拐弯所致）。
+          若与你的剧本卡不符，在这里改落点后按「照此摆位」；缺任一条即整笔拒绝（不猜）。
         </p>
       </RuleNote>
       <!--
