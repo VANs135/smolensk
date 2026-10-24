@@ -324,10 +324,16 @@ export const SOP_SEGMENT_CHAINS: readonly SopSegmentChain[] = [
       {
         id: 'reaction.movement',
         label: '反应移动',
-        rule: '7.0a / 5.7b',
+        rule: '7.0a / 5.7b / 8.0',
         driver: 'player',
-        actions: ['reserveRelease', 'move'],
-        note: '非行动方的**已释放预备**单位才可动（7.0a）；释放动作本身即 5.7b',
+        /*
+         * 7.0 首句：「反应阶段是非阶段玩家可利用**移动、突袭和轰炸**打乱敌方计划的机会」；
+         * 7.0b：「反应阶段中，轰炸和**突袭**的结算照常」。
+         * ⇒ 突袭属本环（8.0 亦云「发生在各个移动环节」）。修前本环只给了 `move`
+         *   ⇒ 反应阶段按 4.5a-A 停车的轮式单位**无处突袭**（第六批 BUG ①）。
+         */
+        actions: ['reserveRelease', 'move', 'overrun'],
+        note: '非行动方的**已释放预备**单位才可动（7.0a）；释放动作本身即 5.7b；7.0b：本阶段的轰炸与**突袭**照常结算',
       },
       {
         id: 'reaction.barrage',
@@ -534,7 +540,8 @@ export const OPERATION_TIMINGS: readonly OperationTiming[] = [
     operation: 'overrun',
     label: '突袭',
     rule: '12.5b',
-    segments: ['movement.modeAndMovement', 'exploitation.movement'],
+    // 8.0「各个移动环节」+ 7.0 首句 / 7.0b（反应阶段的突袭照常结算）⇒ 三个移动环节都在内
+    segments: ['movement.modeAndMovement', 'reaction.movement', 'exploitation.movement'],
     needsFuel: true,
     note: '★ 与"已相邻"无关：堆叠开始移动时就与防御方相邻，也要先付燃料（`canOverrun` 逐单位无条件判）',
   },

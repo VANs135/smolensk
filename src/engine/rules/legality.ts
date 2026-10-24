@@ -312,7 +312,9 @@ export const ACTIONS_BY_PHASE: Record<GamePhase, readonly ActionKind[]> = {
     'breakdown',
   ],
   supply: ['supplyTrace', 'hqThrow'],
-  reaction: ['reserveRelease', 'move', 'barrage'],
+  // 7.0 首句「反应阶段是非阶段玩家可利用移动、**突袭**和轰炸打乱敌方计划的机会」+
+  // 7.0b「反应阶段中，轰炸和突袭的结算照常」⇒ 反应段也允许突袭（8.0「各个移动环节」）
+  reaction: ['reserveRelease', 'move', 'overrun', 'barrage'],
   // F 战斗：20.0a 的「战后推进 / 战后撤退」同属战斗结算，故允许创建拆分单位
   combat: ['barrage', 'attack', 'breakdown'],
   exploitation: ['reserveRelease', 'move', 'overrun', 'barrage', 'attack', 'breakdown'],

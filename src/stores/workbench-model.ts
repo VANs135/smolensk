@@ -2451,8 +2451,14 @@ export const ACTION_GATES: readonly ActionGate[] = [
     key: 'move.overrun',
     label: '突袭',
     rule: '8.0',
+    /*
+     * 8.0 首句：「突袭是在**各个移动环节**中，可能发生的一种战斗形式。」
+     * ⇒ C 移动 / E 反应 / G 进击 三个移动环节**都要给**（引擎 `OVERRUN_SEGMENTS` 同口径）；
+     *   修前缺 E 反应 ⇒ 反应阶段的轮式单位按 4.5a-A 停车后**无处突袭**（第六批 BUG ①）。
+     */
     where: [
       { phase: 'movement', segment: 'movement.modeAndMovement' },
+      { phase: 'reaction', segment: 'reaction.movement', role: 'nonActive' },
       { phase: 'exploitation', segment: 'exploitation.movement' },
     ],
   },

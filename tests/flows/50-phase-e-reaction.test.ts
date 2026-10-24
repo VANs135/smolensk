@@ -36,8 +36,9 @@ import {
  */
 
 describe('Ⓔ E 段许可动作与段闸（2.2 / 10.x）', () => {
-  it('2.2：E 段只有预备释放 / 移动 / 轰炸——**没有战斗环节**（不含攻击）', () => {
-    expect([...ACTIONS_BY_PHASE.reaction]).toEqual(['reserveRelease', 'move', 'barrage'])
+  it('2.2：E 段只有预备释放 / 移动 / 突袭 / 轰炸——**没有战斗环节**（不含攻击）', () => {
+    // 7.0 首句「可利用移动、**突袭**和轰炸」+ 7.0b「轰炸和突袭的结算照常」⇒ 突袭属 E 段
+    expect([...ACTIONS_BY_PHASE.reaction]).toEqual(['reserveRelease', 'move', 'overrun', 'barrage'])
     expect([...ACTIONS_BY_PHASE.reaction]).not.toContain('attack')
     const attack = checkTiming({
       action: 'attack',

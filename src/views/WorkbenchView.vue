@@ -24,6 +24,7 @@ import { provideUiMode } from '@/components/ui-mode'
 import { ChartsTable } from '@/components/game'
 import type { HexRef } from '@/data'
 import { DEFAULT_MAP_LAYERS } from '@/render/map-render'
+import { OVERRUN_COST_MP } from '@/engine/rules/overrun'
 import {
   arrivalNotesOf,
   arrivalTableView,
@@ -850,6 +851,28 @@ onMounted(() => {
           workbench.pendingZocConfirm.preview.zocStoppingIds.map(nameOfUnit).join('、') || '—'
         }}
       </p>
+      <!-- 4.5a-A 的后一支：**进入并立即突袭**（8.0；资格由引擎 8.1 系列给出） -->
+      <div v-if="workbench.zocOverrunChoices.length > 0" class="zoc__branch">
+        <p class="muted num">
+          或选「突袭」这一支：进入后**立即**对相邻的敌方格发起突袭（8.1a：每次
+          {{ OVERRUN_COST_MP }} MP；8.1b：进格消耗 ≤ {{ OVERRUN_COST_MP }} MP）。
+        </p>
+        <div class="row">
+          <BaseButton
+            v-for="choice in workbench.zocOverrunChoices"
+            :key="`${choice.hex.col}.${choice.hex.row}`"
+            variant="primary"
+            @click="workbench.confirmZocEntryAndOverrun(choice.hex)"
+          >
+            进入并突袭 {{ choice.hex.col }}.{{ choice.hex.row }}（进格 {{ choice.entryCost }} MP +
+            突袭 {{ choice.mpCost }} MP）
+          </BaseButton>
+        </div>
+      </div>
+      <p v-else class="muted num">
+        进入后**没有**可突袭的目标（8.1a 的剩余 MP ≥ {{ OVERRUN_COST_MP }}、8.1b 的进格 ≤
+        {{ OVERRUN_COST_MP }} MP、8.1 的可攻击与同格，缺一即不可）⇒ 只能就地停止。
+      </p>
       <template #footer>
         <BaseButton variant="secondary" @click="workbench.dismissZocConfirm()">留在原格</BaseButton>
         <BaseButton variant="primary" @click="workbench.confirmZocEntry()"
@@ -914,6 +937,11 @@ onMounted(() => {
   align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-2);
+}
+
+/* 4.5a-A 的后一支：进入敌方 ZOC 后立即突袭（8.0/8.1） */
+.zoc__branch {
+  margin-top: var(--space-2);
 }
 
 .wb__field {

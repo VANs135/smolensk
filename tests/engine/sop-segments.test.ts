@@ -136,12 +136,18 @@ describe('B6：两处原文次序（用户原话的例子）', () => {
     ])
   })
 
-  it('E 反应：移动 → 轰炸；且反应移动只许"已释放预备"（7.0a）', () => {
+  it('E 反应：移动 → 轰炸；且反应移动只许"已释放预备"（7.0a；突袭照常 7.0 首句 / 7.0b）', () => {
     expect(sopStepsOf('reaction').map((step) => step.id)).toEqual([
       'reaction.movement',
       'reaction.barrage',
     ])
-    expect(sopStepById('reaction.movement')!.actions).toEqual(['reserveRelease', 'move'])
+    /*
+     * 7.0 首句：「反应阶段是非阶段玩家可利用**移动、突袭和轰炸**打乱敌方计划的机会」；
+     * 7.0b：「反应阶段中，轰炸和**突袭**的结算照常」。
+     * ⇒ 本环含 `overrun`（8.0 亦云突袭「发生在各个移动环节」）。
+     *   修前本环只给了 `move` ⇒ 反应阶段按 4.5a-A 停车的轮式单位**无处突袭**（第六批 BUG ①）。
+     */
+    expect(sopStepById('reaction.movement')!.actions).toEqual(['reserveRelease', 'move', 'overrun'])
     expect(sopStepById('reaction.movement')!.rule).toContain('7.0a')
   })
 })
@@ -466,13 +472,13 @@ describe('B6：各操作的环节与燃料时机（12.5a / 12.5b / 12.5c）', ()
     const segmentsOf = (operation: 'move' | 'overrun' | 'barrage' | 'attack' | 'retreat') =>
       operationTimingOf(operation)!.segments
 
-    // 移动与突袭：三个/两个移动环节
+    // 移动与突袭：**同三个**移动环节（8.0「各个移动环节」+ 7.0 首句 / 7.0b「反应阶段中……突袭的结算照常」）
     expect(segmentsOf('move')).toEqual([
       'movement.modeAndMovement',
       'reaction.movement',
       'exploitation.movement',
     ])
-    expect(segmentsOf('overrun')).toEqual(['movement.modeAndMovement', 'exploitation.movement'])
+    expect(segmentsOf('overrun')).toEqual(segmentsOf('move'))
     /*
      * 轰炸：四个段的轰炸环节（与 BARRAGE_SOURCES_BY_PHASE 的四个段一致）＋ **C 段的移动环节**。
      * ★ G① 契约变更（2026-09-19，**不是放宽**）：14.7d 明写「低空扫射是在**移动环节**而非轰炸环节中

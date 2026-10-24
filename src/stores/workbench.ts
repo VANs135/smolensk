@@ -543,6 +543,39 @@ export interface WorkbenchOverrunTarget {
 }
 
 /**
+ * 4.5a-A：**进入该格之后可立即突袭**的敌方格（8.0/8.1）
+ *
+ * 原文给的是两个分支——「要么必须在此处结束移动，要么必须进行突袭」（`_ocs_v43_clean.txt:508-515`）。
+ * 在**进入之前**就把后一支算出来（否则玩家只能先停车、再靠记忆去找紫环），
+ * 资格一律由引擎 `overrunEligibility` 给（8.1 系列），本层不重算规则。
+ */
+export interface ZocOverrunChoice {
+  /** 可突袭的敌方格 */
+  hex: HexRef
+  /** 8.1g：参突者＝本次因进 ZOC 被迫停车的那几枚（与预览同一口径） */
+  participantIds: string[]
+  /** 8.1a：每次突袭的 MP 消耗（恒为 3） */
+  mpCost: number
+  /** 8.1b：进入该格的 MP（须 ≤ 3） */
+  entryCost: number
+  /** 走进 ZOC 那一格后，参突者中最紧的剩余 MP */
+  mpRemaining: number
+}
+
+/**
+ * 9.2 / 10.0：**结算进行中**（一场战斗或轰炸已开局、尚未收束）
+ *
+ * 用途：见 `settlementInProgress` 的说明 —— 它是「结算期间不许动任何单位」的唯一判据。
+ */
+export interface SettlementLock {
+  kind: 'combat' | 'barrage'
+  /** 流程所在的规则条文 */
+  rule: string
+  /** 给界面/日志看的中文名 */
+  label: string
+}
+
+/**
  * W7 C16：**一名**需撤退单位的落点规划（9.12；地图优先交互）
  *
  * `destinations` 来自引擎 `planRetreatDestinations`（已在完整撤退距离上的合法落点），
@@ -4413,9 +4446,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ),
   )
 
-  /** 突袭发起格（4.5a-A：停车后仍在原地 ⇒ 取候选里第一枚的当前格） */
+  /**
+   * 突袭发起格（4.5a-A：停车后仍在原地 ⇒ 取候选里第一枚的当前格）
+   *
+   * ★ 8.1g：已锁定参突者（`overrunParticipantIds`）时**以它们所在格为准**——
+   *   参突者必须同格（8.1 的资格判据之一），而候选里第一枚未必是被锁定的那一枚
+   *   （例：混编堆叠里步行单位走到了别处，停车的轮式单位才是要突袭的那一批）。
+   *   不按参突者取格的话，"进 ZOC 后立即突袭"这一路会从错误的格子发起（第六批 BUG ①）。
+   */
   const overrunStackHex = computed<HexRef | null>(() => {
-    const unit = overrunCandidateUnits.value[0]
+    const pinned = overrunParticipantIds.value
+    const pool =
+      pinned.length > 0
+        ? moveUnits.value.filter((unit) => pinned.includes(unit.instanceId))
+        : overrunCandidateUnits.value
+    const unit = pool[0]
     return unit === undefined ? null : { col: unit.hex.col, row: unit.hex.row }
   })
 
@@ -5416,6 +5461,44 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 9.2 / 10.0：**结算进行中**（一场战斗或轰炸已开局、尚未收束）
+   *
+   * 用户口径（第六批 BUG ②）：「在**任何**结算战斗或者轰炸的时候**不应该有单位能动**」。
+   * 规则依据：
+   *   · 8.0 突袭**照 9.2 的九步流程**结算（8.0 原文「请像结算其他战斗一样来结算突袭」），
+   *     故突袭一开局就**在 9.2 流程里**；9.2 的流程走完前，8.1a 的 3 MP、8.0 的进格、
+   *     9.12 的推进与撤退**都还没有落盘**（`finishMove` 早已按这个理由拒绝收束）；
+   *   · 10.0 的轰炸同样是「宣布 → 逐项结算 → 收束」的单一流程，DG 与军力损失同理。
+   * 流程没收束就插入移动 ⇒ 同一批单位同时处在两个流程里，两边都要写同一批事实，
+   * 记账无从收束。故这里给出**唯一判据**：收束或按 Esc 放弃（`cancelCombat` / `cancelBarrage`）后自动解除。
+   */
+  const settlementInProgress = computed<SettlementLock | null>(() => {
+    const combat = combatState.value
+    if (combat !== null && !combat.finished)
+      return { kind: 'combat', rule: '9.2', label: '战斗（含 8.0 突袭，照 9.2 结算）' }
+    const barrage = barrageState.value
+    if (barrage !== null && !barrage.finished)
+      return { kind: 'barrage', rule: '10.0', label: '轰炸（10.0 流程）' }
+    return null
+  })
+
+  /**
+   * 9.2 / 10.0：结算进行中 ⇒ 拒绝移动（唯一的拒绝出口；三个移动入口都问它）
+   *
+   * 不静默：`moveBlocked` 给对局台状态条、日志给侧栏，玩家看得见"为什么动不了"以及怎么办。
+   */
+  function refuseWhileSettling(action: string): boolean {
+    const lock = settlementInProgress.value
+    if (lock === null) return false
+    const reason =
+      `${lock.label}正在结算：先走完流程或按 Esc 放弃，之后才能${action}（${lock.rule}）——` +
+      `否则这一场的结果（8.1a 的 3 MP / 9.12 的推进与撤退 / 10.0 的 DG 与损失）无处落盘`
+    moveBlocked.value = { rule: lock.rule, reason }
+    pushLog('warning', reason, lock.rule)
+    return true
+  }
+
+  /**
    * 开始一次移动（1 个单位或 1 个堆叠，6.1）
    *
    * 可行性一律问引擎 `beginMove`（阶段 6.0 / MA 6.1b / 垫人锁 4.5b / 燃料 12.5a / 延补队面 12.7）；
@@ -5424,6 +5507,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function beginMoveFor(unitIds: readonly string[]): boolean {
     // 2.2：回合准备环节（天气 / 先手判定）不属于任何段 ⇒ 先于「段」判断题拦下
     if (segmentLocked.value) return refuseWhileLocked('移动')
+    // 9.2 / 10.0：战斗或轰炸正在结算 ⇒ 任何单位都不得开拔（第六批 BUG ②）
+    if (refuseWhileSettling('移动')) return false
     // 2.2：A 整备 / B 增援 / D 补给 / F 战斗 / H 清理都没有移动环节（只有 C/E/G 有）
     if (NO_MOVEMENT_PHASES.includes(phase.value)) {
       const reason = `${PHASE_LABELS[phase.value]}段没有移动环节，不能移动（2.2）`
@@ -5812,6 +5897,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function tryMoveTo(hex: HexRef): void {
     const interaction = moveInteraction.value
     if (interaction === null) return
+    // 9.2 / 10.0：战斗或轰炸正在结算 ⇒ 这一步也不许走（第六批 BUG ②）
+    if (refuseWhileSettling('继续移动')) return
     const node = reachableNodeAt(groupReachable.value.hexes, hex)
     if (node === null) {
       // 不在可到达范围内：给出引擎对该单步的判定，说明为什么不能走
@@ -5840,10 +5927,76 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     advanceAlongPath(node.path)
   }
 
+  /**
+   * 4.5a-A：**进入该格之后可立即突袭**的敌方格（8.0 / 8.1，第六批 BUG ①）
+   *
+   * 原文（`_ocs_v43_clean.txt:508-515`）给的是**两个分支**：轮式单位进入敌方 ZOC 后
+   * 「要么必须在此处结束移动，要么必须**进行突袭**」。修前界面只给了前一支（「确认进入并停止」），
+   * 后一支要靠玩家**先停车、再自己在地图上找紫环**——实测等同于"停下即不能突袭"。
+   *
+   * 口径：
+   *   · 参突者＝本次因进 ZOC 被停车的那几枚（`preview.zocStoppingIds`，4.5a-A 的主语就是它们）；
+   *   · 剩余 MP＝各参突者「MA − 已耗 − **本步**消耗」的最小者（8.1a 的 3 MP 门槛取最紧的一枚）；
+   *   · 资格**全部交给引擎** `overrunEligibility`（8.1 系列），为此把上下文里这几枚的位置
+   *     **临时前移**到目标格——它们此刻还没走进去，不前移的话 8.1d 的相邻判定会按原格算。
+   */
+  const zocOverrunChoices = computed<ZocOverrunChoice[]>(() => {
+    const pending = pendingZocConfirm.value
+    if (pending === null) return []
+    const participants = pending.preview.zocStoppingIds
+    if (participants.length === 0) return []
+    let mpRemaining = Number.POSITIVE_INFINITY
+    for (const id of participants) {
+      const unit = units.value.find((item) => item.instanceId === id)
+      const step = pending.preview.moving.find((item) => item.unitId === id)
+      if (unit === undefined || step === undefined) return []
+      mpRemaining = Math.min(
+        mpRemaining,
+        availableMaOf(unit, movementPhaseOf(phase.value)) - unit.mpSpent - step.cost,
+      )
+    }
+    // 8.1d：突袭从**进入后的那一格**发起 ⇒ 上下文里这几枚的位置前移到目标格（其余一律不动）
+    const entered = {
+      ...moveContext.value,
+      units: moveContext.value.units.map((unit) =>
+        participants.includes(unit.id) ? { ...unit, hex: { ...pending.to } } : unit,
+      ),
+    }
+    const found: ZocOverrunChoice[] = []
+    for (const item of neighbors(pending.to)) {
+      const defenders = unitsAt(item.hex).filter(
+        (unit) => unit.side !== activeSide.value && unit.isCombat,
+      )
+      if (defenders.length === 0) continue
+      const eligibility = overrunEligibility({
+        phase: movementPhaseOf(phase.value),
+        context: entered,
+        unitIds: participants,
+        target: item.hex,
+        mpRemaining,
+        // 6.1：参突者是从同一格一起开拔的（界面只允许选中一堆叠 ⇒ 恒为真）
+        startedStackedTogether: true,
+        defenders: defenders.map((unit) => ({ id: unit.instanceId, isCombat: unit.isCombat })),
+      })
+      if (eligibility.ok) {
+        found.push({
+          hex: { ...item.hex },
+          participantIds: [...participants],
+          mpCost: eligibility.mpCost,
+          entryCost: eligibility.entryCost,
+          mpRemaining,
+        })
+      }
+    }
+    return found
+  })
+
   /** C5：确认进入敌方 ZOC（4.5a-A 的「就地停止」分支） */
   function confirmZocEntry(): void {
     const pending = pendingZocConfirm.value
     if (pending === null) return
+    // 9.2 / 10.0：战斗或轰炸正在结算 ⇒ 这一格也进不去（第六批 BUG ②）
+    if (refuseWhileSettling('继续移动')) return
     pushLog(
       'warning',
       `确认进入 ${pending.to.col}.${pending.to.row} 的敌方 ZOC：轮式单位进入后**就地停止**，` +
@@ -5854,6 +6007,54 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (!commitStep(pending.to, pending.preview.path)) return
     // 4.5a-A 只停住轮式单位；同行而仍能移动的步行/履带单位继续沿原路径走
     if (remaining.length > 1) advanceAlongPath(remaining)
+  }
+
+  /**
+   * 4.5a-A 的**后一支**：进入该格并**立即突袭**相邻的敌方格（8.0）
+   *
+   * 次序照原文：先「进入敌方 ZOC」（这一步照 6.1 记账，含 4.5a-A 的就地停止），
+   * 再从该格宣布突袭（8.0：突袭从**相邻格**发起）。两笔账各自落在自己的流程里——
+   * 进格记 6.1a 的消耗，突袭的 3 MP 由 9.2 的推进步记（8.1a）。
+   *
+   * 参突者锁定为「因进 ZOC 被停车」的那几枚（与 `zocOverrunChoices` 的预览同一口径，8.1g），
+   * 其余同行的单位按 8.1h 留在格内、不参突也不受结果影响。
+   */
+  function confirmZocEntryAndOverrun(target: HexRef): boolean {
+    const pending = pendingZocConfirm.value
+    if (pending === null) return false
+    // 9.2 / 10.0：上一场还没收束 ⇒ 不许再开一场（同 `overrunNow` 的口径）
+    if (refuseWhileSettling('突袭')) return false
+    const choice = zocOverrunChoices.value.find((item) => sameHex(item.hex, target))
+    if (choice === undefined) {
+      const reason =
+        `不能从 ${hexLabel(pending.to)} 突袭 ${hexLabel(target)}：` +
+        `进入后不满足 8.1 的资格（8.1a 剩余 MP ≥ 3 / 8.1b 进格 ≤ 3 MP / 8.1 须可攻击且同格）`
+      moveBlocked.value = { rule: '8.1', reason }
+      pushLog('warning', reason, '8.1')
+      return false
+    }
+    // 8.1g：参突者＝停车的那几枚（预览与发起必须是同一口径，否则会"看见能突、点下去被拒"）
+    overrunParticipantIds.value = [...choice.participantIds]
+    /*
+     * 4.5a-A 前一支的进格照走，但**不顺带沿原路径继续推进**：
+     *   玩家选的是"进这一格并就地突袭"，其余单位若继续走下去，突袭的发起格就散了。
+     */
+    if (!commitStep(pending.to, pending.preview.path)) {
+      overrunParticipantIds.value = []
+      return false
+    }
+    // 9.14：这一步若触发了设施夺取的待决 ⇒ 先让玩家处置，突袭延后（两条待决不能叠着开）
+    if (specialPending.value !== null) {
+      pushLog(
+        'warning',
+        `${hexLabel(pending.to)} 触发了 9.14 的位移待决：先选位移落点，之后再突袭（9.14）`,
+        '9.14',
+      )
+      return false
+    }
+    const started = overrunNow(target)
+    if (!started) overrunParticipantIds.value = []
+    return started
   }
 
   /** C5：放弃进入敌方 ZOC（留在原格） */
@@ -19254,6 +19455,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setHoverHex,
     setStackSelect,
     confirmZocEntry,
+    // 4.5a-A 的后一支：进入该格并**立即突袭**（第六批 BUG ①）
+    confirmZocEntryAndOverrun,
     dismissZocConfirm,
     undoLastStep,
     cancelWholeMove,
@@ -19403,6 +19606,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     moveMinRemainingMp,
     overrunTargets,
     overrunTargetHexes,
+    // 4.5a-A：进 ZOC 那一格之后**可立即突袭**的敌方格（8.0/8.1；第六批 BUG ①）
+    zocOverrunChoices,
+    // 9.2 / 10.0：结算进行中 ⇒ 任何单位都不得移动（第六批 BUG ②）
+    settlementInProgress,
     combatAttackableHexes,
     overrunNow,
     overrunZocHeld,

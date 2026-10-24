@@ -224,6 +224,15 @@ function hoverDump(id: string | null): void {
     </p>
     <p v-else class="muted">地图上还没选中算子：点一格即可就地摊开堆叠并逐枚选择（6.1）。</p>
 
+    <!-- 9.2 / 10.0：结算进行中 ⇒ 任何单位都不得移动 -->
+    <div v-if="workbench.settlementInProgress !== null" class="block">
+      <p class="num">
+        <BaseTag kind="warning">{{ workbench.settlementInProgress.rule }}</BaseTag>
+        {{ workbench.settlementInProgress.label }}正在结算：**任何单位都不能移动** ——
+        先走完流程（或按 Esc 放弃），之后才能开始 / 继续移动。
+      </p>
+    </div>
+
     <!-- 条 10（M1）：开拔前的取子勾选（6.1f / 8.1h）——点地图也可勾选，这里给一个面板内入口 -->
     <div v-if="preBegin" class="block">
       <p class="num">勾选要一起开拔的单位（6.1；点地图也可勾选 / 取消）：</p>
@@ -369,6 +378,24 @@ function hoverDump(id: string | null): void {
           留在原格
         </BaseButton>
       </div>
+      <!-- 4.5a-A 的后一支：进入后**立即突袭**（8.0） -->
+      <template v-if="workbench.zocOverrunChoices.length > 0">
+        <p class="muted num">或选「突袭」这一支（8.0）：进入后立刻打相邻的敌方格。</p>
+        <div class="row">
+          <BaseButton
+            v-for="choice in workbench.zocOverrunChoices"
+            :key="`${choice.hex.col}.${choice.hex.row}`"
+            variant="primary"
+            size="sm"
+            @click="workbench.confirmZocEntryAndOverrun(choice.hex)"
+          >
+            进入并突袭 {{ hexLabel(choice.hex) }}（{{ choice.entryCost }}+{{ choice.mpCost }} MP）
+          </BaseButton>
+        </div>
+      </template>
+      <p v-else class="muted num">
+        进入后没有可突袭目标（8.1a 的剩余 MP ≥ 3、8.1b 的进格 ≤ 3 MP）⇒ 只能就地停止。
+      </p>
     </div>
 
     <!-- ⑦ 条 17（批 F·F2）：4.5a 约束 —— 突袭强行进入敌方 ZOC 后，该格单位"不得离开、须再突袭或停" -->

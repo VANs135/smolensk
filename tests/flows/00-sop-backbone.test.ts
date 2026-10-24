@@ -120,7 +120,8 @@ describe('2.2 流程表：段的顺序与许可动作矩阵', () => {
      */
     expect([...ACTIONS_BY_PHASE.supply]).toEqual(['supplyTrace', 'hqThrow'])
     expect([...ACTIONS_BY_PHASE.supply]).not.toContain('fuel')
-    expect([...ACTIONS_BY_PHASE.reaction]).toEqual(['reserveRelease', 'move', 'barrage'])
+    // 7.0 首句 / 7.0b：反应阶段的**突袭**照常结算 ⇒ E 段含 `overrun`（仍不含 `attack`）
+    expect([...ACTIONS_BY_PHASE.reaction]).toEqual(['reserveRelease', 'move', 'overrun', 'barrage'])
     // F/G 段另含 20.0a 的「战后推进/撤退时创建拆分单位」
     expect([...ACTIONS_BY_PHASE.combat]).toEqual(['barrage', 'attack', 'breakdown'])
     expect([...ACTIONS_BY_PHASE.exploitation]).toEqual([
