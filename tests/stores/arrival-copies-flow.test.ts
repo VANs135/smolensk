@@ -135,3 +135,132 @@ describe('13.6：飞机到达（修前共用陆战库解析 ⇒ 一律投放失�
     expect(store.reinforcementError).toBeNull()
   })
 })
+
+describe('13.6 / §5-A：编成条目逐枚投放', () => {
+  it('编成条目现在是 unit 需求，并带部件名（修前落 unclassified ⇒ 直接被拒）', () => {
+    const store = newStore()
+    store.setActiveSide('axis')
+    const found = findDemand(store, '19 Pz Div')
+    expect(found.demand.kind).toBe('unit')
+    expect(found.demand.formationComponents).toEqual([
+      'I-27 Pz',
+      'II-27 Pz',
+      '19 Krd',
+      '73 Inf',
+      '74 Inf',
+      '19 Arty',
+      "'F' Truck",
+    ])
+  })
+
+  it('非编成条目不带部件名（`20-4-3 Inf Div (5, 35; …)` 是点名不是编成）', () => {
+    const store = newStore()
+    store.setActiveSide('axis')
+    const found = findDemand(store, '20-4-3 Inf Div')
+    expect(found.demand.formationComponents).toEqual([])
+  })
+
+  it('19 Pz Div：7 枚全部唯一映射 ⇒ 一次投放全部到场', () => {
+    const store = newStore()
+    store.setActiveSide('axis')
+    const { turn, index } = findDemand(store, '19 Pz Div')
+    store.setTurn(turn)
+    store.setPhase('reinforcement')
+    goToActionStep(store, 'rein.arrival')
+    const before = store.units.length
+    expect(store.placeArrivalNow(index)).toBe(true)
+    expect(store.units.length).toBe(before + 7)
+    // 全部落在同一入场格
+    const placed = store.units.slice(before)
+    expect(new Set(placed.map((unit) => `${unit.hex.col},${unit.hex.row}`)).size).toBe(1)
+    expect(store.reinforcementError).toBeNull()
+    // 13.6：整条已投放 ⇒ 不能重放
+    expect(store.placeArrivalNow(index)).toBe(false)
+  })
+
+  it('每部件一条的写法（1 Cav Div 的 5 条）：各投自己那一枚', () => {
+    for (const [entryName, expected] of [
+      ['I-1 Cav Cav Div', 'Ge 1.Cav I-1 Cav'],
+      ['1 BC Cav Div', 'Ge 1.Cav 1 Bikes'],
+    ] as const) {
+      const store = newStore()
+      store.setActiveSide('axis')
+      const { turn, index } = findDemand(store, entryName)
+      store.setTurn(turn)
+      store.setPhase('reinforcement')
+      goToActionStep(store, 'rein.arrival')
+      // 卡面原文是整师的编成（同一条 raw），本条由 name 指明自己是哪一枚
+      expect(store.arrivalPlan!.units[index]!.raw).toContain('1 Cav Div (')
+      const before = store.units.length
+      expect(store.placeArrivalNow(index)).toBe(true)
+      expect(store.units.length).toBe(before + 1)
+      expect(store.units.at(-1)!.name).toBe(expected)
+    }
+  })
+
+  it('18 / 14 Mtr Div：`Krd`→MC、`Aufk`→Arm Rec、`F Truck`→Truck 都能唯一命中', () => {
+    for (const [entry, expected] of [
+      [
+        '18 Mtr Div',
+        [
+          'Ge 18.Mtr 38 MC',
+          'Ge 18.Mtr 30 Mot Inf',
+          'Ge 18.Mtr 51 Mot Inf',
+          'Ge 18.Mtr 18 Arty',
+          'Ge 18.Mtr Truck',
+        ],
+      ],
+      [
+        '14 Mtr Div',
+        ['Ge 14.Mtr 14 Arm Rec', 'Ge 14.Mtr 11 Mot Inf', 'Ge 14.Mtr 14 Arty', 'Ge 14.Mtr Truck'],
+      ],
+    ] as const) {
+      const store = newStore()
+      store.setActiveSide('axis')
+      const { turn, index } = findDemand(store, entry)
+      const resolved = store.resolveArrivalFormation(index)
+      expect(resolved, entry).not.toBeNull()
+      expect(resolved!.missing).toEqual([])
+      expect(resolved!.records.map((record) => record.vassalName)).toEqual(expected)
+      store.setTurn(turn)
+      store.setPhase('reinforcement')
+      goToActionStep(store, 'rein.arrival')
+      const before = store.units.length
+      expect(store.placeArrivalNow(index)).toBe(true)
+      expect(store.units.length).toBe(before + expected.length)
+    }
+  })
+})
+
+describe('13.6 / §5-A：全量到达表里没有「未映射」的编成部件', () => {
+  it('逐回合扫双方到达表：能识别为编成的条目必须逐枚映射成功', () => {
+    let resolvedEntries = 0
+    for (const side of ['axis', 'soviet'] as const) {
+      const store = newStore()
+      store.setActiveSide(side)
+      for (let turn = 1; turn <= 40; turn += 1) {
+        store.setTurn(turn)
+        store.setPhase('reinforcement')
+        const plan = store.arrivalPlan
+        if (plan === null) continue
+        for (let index = 0; index < plan.units.length; index += 1) {
+          const demand = plan.units[index]!
+          const resolved = store.resolveArrivalFormation(index)
+          if (resolved === null) continue
+          resolvedEntries += 1
+          expect(
+            resolved.missing,
+            `${side} ${String(store.date)}「${demand.raw}」有未映射部件`,
+          ).toEqual([])
+          expect(resolved.records.length).toBe(resolved.components.length)
+        }
+      }
+    }
+    /*
+     * 实测：轴心 8 条编成条目（`1 Cav Div` 每部件 5 条 + `19 Pz Div` 7 枚 +
+     * `18 Mtr Div` 5 枚 + `14 Mtr Div` 4 枚），苏联方到达表没有编成条目（0 条）。
+     * 下限只为防"解析器整体失效"，不追求数字精确。
+     */
+    expect(resolvedEntries).toBeGreaterThanOrEqual(8)
+  })
+})

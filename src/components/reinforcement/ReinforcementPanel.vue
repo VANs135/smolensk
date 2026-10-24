@@ -212,12 +212,29 @@ function onPlaceArrival(index: number): void {
  */
 function arrivalImageUrl(index: number): string | null {
   const record = workbench.arrivalRecordOf(index)
-  if (record === null) return null
-  return tokenImageUrl({
-    side: workbench.activeSide,
-    face: 'combat',
-    images: record.images ?? null,
-  })
+  if (record !== null) {
+    return tokenImageUrl({
+      side: workbench.activeSide,
+      face: 'combat',
+      images: record.images ?? null,
+    })
+  }
+  // §5-A：编成条目没有"单枚记录"可配 ⇒ 取**第一枚部件**的图作行首缩略图（不臆造整条映射）
+  const first = workbench.resolveArrivalFormation(index)?.records[0]
+  if (first === undefined) return null
+  return tokenImageUrl({ side: workbench.activeSide, face: 'combat', images: first.images ?? null })
+}
+
+/**
+ * §5-A：编成条目的**逐枚映射状态**（组件 → 库中记录；未映射的枚数原样转述）
+ *
+ * 判据在 store `resolveArrivalFormation`（编队号前缀内按番号 + 兵种别名唯一命中）；
+ * 这里只负责把它渲染出来，**不做任何匹配**。
+ */
+function formationState(
+  index: number,
+): { components: string[]; records: unknown[]; missing: string[] } | null {
+  return workbench.resolveArrivalFormation(index)
 }
 
 /** 图上的拆分单位（20.0d 的吸收对象只能是**已在图上**的那些） */
@@ -372,6 +389,17 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         ｜运力 {{ unit.count }}（13.6c：运力即装载 SP 数，仍是一枚算子）
       </template>
       <template v-else-if="unit.count > 1">｜卡面数量 {{ unit.count }}</template>
+      <!-- §5-A：编成条目（多枚算子共同到场）——显示枚数与逐枚映射状态 -->
+      <template v-if="unit.formationComponents.length > 0">
+        ｜编成 {{ unit.formationComponents.length }} 枚：
+        <template v-if="formationState(index)?.missing.length === 0">
+          已逐枚映射（{{ formationState(index)?.records.length ?? 0 }} 枚，投放即一次到场）
+        </template>
+        <template v-else>
+          <BaseTag kind="danger">{{ formationState(index)?.missing.length ?? 0 }} 枚未映射</BaseTag>
+          ⇒ 请按卡面手工逐枚摆入
+        </template>
+      </template>
       <template v-if="unit.stepsLost > 0">｜到场带损 {{ unit.stepsLost }} step</template>
       <template v-if="unit.loadedWithSp">｜满载 SP（13.6c）</template>
       ｜落点：{{ unit.label }} →

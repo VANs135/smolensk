@@ -122,6 +122,13 @@ export interface ArrivalUnitDemand {
   factors: string | null
   /** 条目数量（`2x IL.2` ⇒ 2；缺省 1） */
   count: number
+  /**
+   * **编成条目的部件名**（`19 Pz Div (I-27 Pz, II-27 Pz, …)` ⇒ 那几枚的名字；非编成条目为空数组）
+   *
+   * 卡面把"多枚算子共同到场"写成一个条目。投放侧据此逐枚解析记录（§5-A）；
+   * 解析不出唯一记录时不猜——整条交裁判手工逐枚摆入。
+   */
+  formationComponents: readonly string[]
   /** 13.6 / 到达卡：`-N step(s)` ⇒ 到场即带损的军力数 */
   stepsLost: number
   /** 13.6c / 卡头：运输点数**满载 SP** 入场 */
@@ -197,9 +204,28 @@ export function parseArrivalPlacement(label: string): ArrivalPlacement | null {
   return null
 }
 
+/**
+ * 编成条目的**部件名**：括号里以逗号分隔的每一项（去掉卡面附带的说明性尾巴）
+ *
+ * 只认「括号里有逗号」的形态，且**丢掉非部件**的片段（`; one is -1 step`、`each -1 step` 之类）——
+ * 那些是卡面批注，不是算子名。
+ */
+export function arrivalComponentNames(raw: string): readonly string[] {
+  const inner = /\(([^)]*)\)/.exec(raw)
+  if (inner === null) return []
+  const body = inner[1] ?? ''
+  if (!body.includes(',')) return []
+  return body
+    .split(',')
+    .map((part) => part.replace(/;.*$/, '').trim())
+    .filter((part) => part !== '' && !/^(each|one|two|three)\b/i.test(part))
+}
+
 /** 卡面条目类别 → 需求类别 */
 function demandKindOf(rosterKind: string | undefined, raw: string): ArrivalUnitDemand['kind'] {
   if (rosterKind === 'hq') return 'hq'
+  // 编成条目（`19 Pz Div (I-27 Pz, …)`）是**若干枚算子共同到场**，按算子需求走投放（逐枚，见 `formationComponents`）
+  if (rosterKind === 'formation') return 'unit'
   if (rosterKind === 'unit') {
     return /(Truck|Wagon|Mule)\s+Point/i.test(raw) ? 'transportPoint' : 'unit'
   }
@@ -368,6 +394,8 @@ function buildDemand(input: {
 
   const count = countOf(raw, item.count)
   const stepsLost = Math.max(0, Math.trunc(item.stepsLost ?? 0))
+  // 编成条目的部件名（只有 rosterKind === 'formation' 才算；`20-4-3 Inf Div (5, 35; …)` 那种点名**不是**编成）
+  const formationComponents = item.kind === 'formation' ? arrivalComponentNames(raw) : []
   // 13.6c：运输点满载 SP 入场；其余依卡头「All types of Transport Points arrive loaded with SP.」
   const loadedWithSp = kind === 'transportPoint' || /loaded with SP/i.test(raw)
 
@@ -383,6 +411,7 @@ function buildDemand(input: {
     parentType: item.parentType ?? null,
     factors: item.factors ?? null,
     count,
+    formationComponents,
     stepsLost,
     loadedWithSp,
     placement,

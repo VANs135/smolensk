@@ -174,6 +174,7 @@ import {
   nkvdDefenderOptionOverride,
   optionsOf,
   arrivalCopiesOf,
+  arrivalComponentNames,
   patrolZoneHexes,
   planArrivals,
   planAirBaseReduction,
@@ -15358,6 +15359,98 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
+   * 13.6 / §5-A：**编成条目逐枚解析**（`19 Pz Div (I-27 Pz, …)` / `1 Cav Div (… , 1 BC)`）
+   *
+   * 为什么可以比"条目→单枚"更敢解析：编成条目相关部件全都在**同一个编队的记录池**里
+   * （库内命名即「Ge <编队号>.<兵种> <部件名>」，如 `19 Pz Div` → `Ge 19.Pz *`），
+   * 故判据是「池内按 **番号 + 兵种别名** 唯一命中」——两条同时满足才不会认错。
+   *
+   * 到达卡里编成有**两种写法**，都走这一套：
+   * ① **整条一个条目**（`19 Pz Div (I-27 Pz, II-27 Pz, …)`，rosterKind='formation'）⇒ 逐枚全到场；
+   * ② **每部件一条**（`1 Cav Div (…)` 被拆成 5 条，各带 `name` 指明自己是哪一枚）⇒ 只投本条那一枚。
+   *
+   * 兵种别名只收**德/苏军缩写在卡面与库内的对应**（都在同一编队池内验证过，非全库猜测）：
+   * `Krd`→`MC`（Kradschützen＝摩托车）、`Aufk`→`Arm Rec`（Aufklärungs＝侦察）、`BC`→`Bikes`、
+   * `'F' Truck`→`Truck`（编队属卡车）。
+   *
+   * ★ 有任何一枚命中不了唯一记录 ⇒ `missing` 非空，调用方**整条不投**（不猜）。
+   */
+  function resolveArrivalFormation(index: number): {
+    components: string[]
+    records: UnitRecordView[]
+    missing: string[]
+  } | null {
+    const plan = arrivalPlan.value
+    if (plan === null) return null
+    const demand = plan.units[index]
+    if (demand === undefined) return null
+    /*
+     * 本条要点名的部件：整条编成 ⇒ 全部部件；每部件一条 ⇒ 由 `name` 认出自己是哪一枚
+     * （`name` 形如 `I-1 Cav Cav Div`，卡面部件名 `I-1 Cav` 正是它的前缀）。
+     * ★ 用前缀而不是正则剥尾：部件名本身带空格与连字符（`I-1 Cav`、`II-27 Pz`），
+     *   剥尾正则一贪就会把部件名切短（`I-1 Cav Cav Div` → `I-1`），匹配不到任何一枚。
+     */
+    const roster = arrivalComponentNames(demand.raw)
+    let wanted: string[] = [...demand.formationComponents]
+    if (wanted.length === 0 && roster.length > 0 && demand.name !== null) {
+      const name = demand.name.trim()
+      const self = roster.filter((component) => name.startsWith(component))
+      if (self.length === 1) wanted = [self[0]!]
+    }
+    if (wanted.length === 0) return null
+    // 编队号前缀：`19 Pz Div (…)` → `Ge 19.Pz `（取括号前的编队名，去掉尾部 Div，空格在库内写成点）
+    // ★ 先 trim 再剥 Div：括号前那段以空格结尾（"18 Mtr Div "），直接 `/Div$/` 匹配不上
+    const base = (demand.raw.split('(')[0] ?? '')
+      .trim()
+      .replace(/\s+Div$/i, '')
+      .trim()
+    if (base === '') return null
+    const prefix = `Ge ${base.replace(/\s+/g, '.')} `
+    const pool = choices.value.filter((item) => (item.vassalName ?? '').startsWith(prefix))
+    if (pool.length === 0) return null
+
+    /** 番号（`I-27` / `73` / `19`；`'F' Truck` 没有）与兵种别名 */
+    const parse = (text: string): { number: string | null; kind: string | null } => {
+      const cleaned = text.replace(/^['‘’"\s]+|['‘’"\s]+$/g, '')
+      const number = /^([A-Z]{0,2}-?\d+[A-Z]?|\d+[A-Z]?)/i.exec(cleaned)?.[1] ?? null
+      const kind =
+        /\bKrd\b/i.test(cleaned) || /\bMC\b/i.test(cleaned)
+          ? 'mc'
+          : /\bAufk\b|\bRec\b/i.test(cleaned)
+            ? 'rec'
+            : /\bBC\b|\bBike/i.test(cleaned)
+              ? 'bike'
+              : /\bTruck\b/i.test(cleaned)
+                ? 'truck'
+                : /\bArty\b/i.test(cleaned)
+                  ? 'arty'
+                  : /\bPz\b/i.test(cleaned)
+                    ? 'pz'
+                    : /\bCav\b/i.test(cleaned)
+                      ? 'cav'
+                      : /\bInf\b/i.test(cleaned)
+                        ? 'inf'
+                        : null
+      return { number: number === null ? null : number.toLowerCase(), kind }
+    }
+
+    const records: UnitRecordView[] = []
+    const missing: string[] = []
+    for (const component of wanted) {
+      const target = parse(component)
+      const hits = pool.filter((item) => {
+        const own = parse((item.vassalName ?? '').slice(prefix.length))
+        if (target.number !== null && own.number !== target.number) return false
+        if (target.number === null && own.number !== null) return false
+        return target.kind !== null && own.kind === target.kind
+      })
+      if (hits.length === 1) records.push(hits[0]!)
+      else missing.push(component)
+    }
+    return { components: wanted, records, missing }
+  }
+
+  /**
    * 13.6 / §5-A：按**卡面名**匹配库中型号
    *
    * 三档判据，逐档**只接受唯一命中**（歧义一律 null，绝不猜；玩家可用「库中型号」下拉覆盖）：
@@ -16075,6 +16168,111 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return true
     }
 
+    /*
+     * 13.6c / 12.5f：一枚到达算子的**到场修正**（带损 / 满载 SP / 未加油）
+     *
+     * 单枚、`Nx` 同型复制、编成条目逐枚投放**共用**这一份，避免三处各写一遍后漂移。
+     * `quiet` 供复制/编成的后续枚用：逐枚都刷一遍日志只会把日志刷爆。
+     */
+    const buildArrivalUnit = (record: UnitRecordView, quiet = false): ConsoleUnit => {
+      const created = toConsoleUnit({
+        record,
+        instanceId: createId('arr'),
+        hex,
+        side: activeSide.value,
+      })
+      // 到达卡 `-N step`：到场即带损
+      if (demand.stepsLost > 0) {
+        created.steps = Math.max(0, created.steps - demand.stepsLost)
+      }
+      /*
+       * 13.6c：**运输点数满载 SP 入场**（用户 2026-09-15 裁定）
+       *
+       * 「通用的运输点数**有几点运力就是几**（例如该回合有 3 点马车点数增援，就视为装着 3 SP 进场）；
+       *   **编内卡车全部只有 1 点运力**（印值 1F-45），故编内卡车恒为 1 SP。」
+       * 即：装载量 = 该算子的**运力点数**（`noncombatTransport`）——编内卡车的数据里运力就是 1 ✓。
+       * 修前只落一句「请在 SP 账本登记」的提示，把数字留给玩家手填。
+       */
+      if (demand.loadedWithSp && created.noncombatTransport > 0) {
+        const cargoSp = created.noncombatTransport
+        created.loadedSpT = cargoSp * SP_TO_T
+        if (!quiet) {
+          pushLog(
+            'info',
+            `${created.name} 满载进场：${cargoSp} 点运力 ⇒ 载 ${cargoSp} SP（13.6c）`,
+            '13.6c',
+          )
+        }
+      }
+      /*
+       * 12.5f：「增援单位的**部署不需要燃料补给**，但是**移动离开入场格时**，则需要支付燃料补给。
+       *   增援单位在抵达的回合，不会获得『免费的燃料补给』。」
+       *
+       * ★ 落点即置**未加油**：部署本身不花 MP（故不需燃料），而一旦要消耗 MP 就必须先付——
+       *   这正是 12.5f 的两半。此前依赖 `toConsoleUnit` 的便利缺省 `fuelled: true`，
+       *   于是刚到的增援可以直接开走、**一分燃料都不付**。
+       */
+      if (needsFuelToMove(toMoveUnitView(created))) {
+        created.fuelled = false
+        created.fuelMethod = null
+        if (!quiet) {
+          pushLog(
+            'info',
+            `${created.name} 以**未加油**到场：部署不需燃料，但移动离开入场格须先付燃料（12.5f）`,
+            '12.5f',
+          )
+        }
+      }
+      return created
+    }
+
+    /*
+     * 13.6 / §5-A：**编成条目逐枚投放**（`19 Pz Div (I-27 Pz, II-27 Pz, …)`）
+     *
+     * 卡面把"数枚算子共同到场"写成一个条目；修前这类条目连 kind 都落到 `unclassified`
+     * ⇒ 直接被"不是算子"挡掉，整条永远进不了场。
+     * 判据：编队号前缀内按「番号 + 兵种别名」**唯一**命中才投；有任何一枚命中不了就不猜，
+     * 整条交裁判手工逐枚摆入（`resolveArrivalFormation` 给出缺哪几枚）。
+     */
+    const formation = resolveArrivalFormation(index)
+    if (formation !== null) {
+      if (formation.missing.length > 0) {
+        reinforcementError.value = {
+          rule: '13.6',
+          reason: `arrivalFormationUnresolved:${demand.raw}`,
+        }
+        pushLog(
+          'danger',
+          `${demand.raw}：编成里 ${String(formation.missing.length)} 枚在单位库里命中不了唯一算子` +
+            `（${formation.missing.join('、')}）⇒ 请按卡面手工逐枚摆入（13.6：引擎不臆造条目→算子的映射）`,
+          '13.6',
+        )
+        return false
+      }
+      const arrived = formation.records.map((record) => buildArrivalUnit(record))
+      units.value = [...units.value, ...arrived]
+      pushLog(
+        'success',
+        `${demand.raw} 投放于 ${hexLabel(hex)}：编成共 ${String(arrived.length)} 枚（13.6）`,
+        '13.6',
+      )
+      recordSettlement({
+        action: 'arrival',
+        rule: '13.6',
+        data: {
+          index,
+          kind: demand.kind,
+          raw: demand.raw,
+          hex: { ...hex },
+          unitId: arrived[0]!.instanceId,
+          formationCount: arrived.length,
+          formationComponents: formation.components,
+        },
+      })
+      markArrivalPlaced(index)
+      return true
+    }
+
     const record =
       recordId === undefined
         ? matchArrivalRecord(demand.name ?? demand.raw)
@@ -16089,50 +16287,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
 
-    const unit = toConsoleUnit({
-      record,
-      instanceId: createId('arr'),
-      hex,
-      side: activeSide.value,
-    })
-    // 到达卡 `-N step`：到场即带损
-    if (demand.stepsLost > 0) {
-      unit.steps = Math.max(0, unit.steps - demand.stepsLost)
-    }
-    /*
-     * 13.6c：**运输点数满载 SP 入场**（用户 2026-09-15 裁定）
-     *
-     * 「通用的运输点数**有几点运力就是几**（例如该回合有 3 点马车点数增援，就视为装着 3 SP 进场）；
-     *   **编内卡车全部只有 1 点运力**（印值 1F-45），故编内卡车恒为 1 SP。」
-     * 即：装载量 = 该算子的**运力点数**（`noncombatTransport`）——编内卡车的数据里运力就是 1 ✓。
-     * 修前只落一句「请在 SP 账本登记」的提示，把数字留给玩家手填。
-     */
-    if (demand.loadedWithSp && unit.noncombatTransport > 0) {
-      const cargoSp = unit.noncombatTransport
-      unit.loadedSpT = cargoSp * SP_TO_T
-      pushLog(
-        'info',
-        `${unit.name} 满载进场：${cargoSp} 点运力 ⇒ 载 ${cargoSp} SP（13.6c）`,
-        '13.6c',
-      )
-    }
-    /*
-     * 12.5f：「增援单位的**部署不需要燃料补给**，但是**移动离开入场格时**，则需要支付燃料补给。
-     *   增援单位在抵达的回合，不会获得『免费的燃料补给』。」
-     *
-     * ★ 落点即置**未加油**：部署本身不花 MP（故不需燃料），而一旦要消耗 MP 就必须先付——
-     *   这正是 12.5f 的两半。此前依赖 `toConsoleUnit` 的便利缺省 `fuelled: true`，
-     *   于是刚到的增援可以直接开走、**一分燃料都不付**。
-     */
-    if (needsFuelToMove(toMoveUnitView(unit))) {
-      unit.fuelled = false
-      unit.fuelMethod = null
-      pushLog(
-        'info',
-        `${unit.name} 以**未加油**到场：部署不需燃料，但移动离开入场格须先付燃料（12.5f）`,
-        '12.5f',
-      )
-    }
+    const unit = buildArrivalUnit(record)
     units.value = [...units.value, unit]
 
     /*
@@ -16145,21 +16300,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (copies > 1) {
       const extras: ConsoleUnit[] = []
       for (let copy = 1; copy < copies; copy += 1) {
-        const extra = toConsoleUnit({
-          record,
-          instanceId: createId('arr'),
-          hex,
-          side: activeSide.value,
-        })
-        if (demand.stepsLost > 0) extra.steps = Math.max(0, extra.steps - demand.stepsLost)
-        if (demand.loadedWithSp && extra.noncombatTransport > 0) {
-          extra.loadedSpT = extra.noncombatTransport * SP_TO_T
-        }
-        if (needsFuelToMove(toMoveUnitView(extra))) {
-          extra.fuelled = false
-          extra.fuelMethod = null
-        }
-        extras.push(extra)
+        extras.push(buildArrivalUnit(record, true))
       }
       units.value = [...units.value, ...extras]
       pushLog(
@@ -19401,6 +19542,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     arrivalAllPlaced,
     arrivalRecordOf,
     matchArrivalRecord,
+    resolveArrivalFormation,
     ownUnitsOnMap,
     rebuildCandidates,
     rebuildCandidateHexes,

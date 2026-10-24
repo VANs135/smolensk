@@ -361,7 +361,7 @@ describe('W6 B18：重建与死亡堆（13.5a–c）', () => {
     unit.steps = unit.printedSteps - 1
     store.sendToDeadPileNow('u1')
     const dead = store.deadPile.find((item) => item.instanceId === 'u1')!
-    dead.rebuildable = false
+    if ('rebuildable' in dead) dead.rebuildable = false
     // 13.5c 的单位仍然列出（否则裁判会以为"死亡堆里没有它"），由界面置灰 + 说明原因
     expect(store.rebuildCandidates.some((item) => item.instanceId === 'u1')).toBe(true)
   })
