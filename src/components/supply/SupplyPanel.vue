@@ -425,8 +425,8 @@ const showsLedger = computed(
               移除
             </BaseButton>
           </div>
-
-          <template v-if="showsDumpBlow"> </template>
+        </template>
+        <template v-if="showsDumpBlow">
           <!-- ── ①b 12.11a 销毁补给站（只在移动环节；每阶段每站一次；运输点数不能以此摧毁） ── -->
           <p class="muted">
             销毁补给站（12.11a）：担心被夺时可在**移动环节**销毁本站 SP（掷 1 骰查百分比，损失按 T
@@ -465,8 +465,8 @@ const showsLedger = computed(
               销毁（12.11a）
             </BaseButton>
           </div>
-
-          <template v-if="showsTransport"> </template>
+        </template>
+        <template v-if="showsTransport">
           <!-- ── ①c 运输点数（13.2c 合并/拆分、12.7 与延补队双向转换） ── -->
           <RuleNote title="合并 / 拆分运输点数：同格、同类、本方移动阶段（不耗 MP）" rule="13.2c">
             <p class="muted">
@@ -524,8 +524,8 @@ const showsLedger = computed(
           <p v-if="workbench.transportPointsOfSide.length === 0" class="muted">
             （当前方图上没有运输点数算子）
           </p>
-
-          <template v-if="showsLoadUnload"> </template>
+        </template>
+        <template v-if="showsLoadUnload">
           <!-- ── ①d 13.2f 运输点数的装载 / 卸载 SP ── -->
           <RuleNote
             title="装载 / 卸载 SP：装载须与补给站同格、卸载须在有战斗单位/设施或已卸站的格"
@@ -580,7 +580,8 @@ const showsLedger = computed(
             <BaseTag kind="danger">{{ workbench.transportLoadError.rule }}</BaseTag>
             {{ workbench.transportLoadError.reason }}
           </p>
-          <template v-if="showsExtender"> </template>
+        </template>
+        <template v-if="showsExtender">
           <div class="row">
             <label class="field">
               转换格号

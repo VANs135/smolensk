@@ -57,6 +57,27 @@ const pickItems = computed<readonly CounterPickerItem[]>(() =>
 /** 条 10（M1）：是否处于"开拔前"状态（有待开拔清单、且尚未真正开始移动） */
 const preBegin = computed(() => workbench.movePick !== null && workbench.moveInteraction === null)
 
+/**
+ * ★ 用户 2026-10-25「**每个阶段/环节只能出现该环节可用 UI**」：本面板每一块都问闸门。
+ *
+ * 逐条对原文：
+ *   · **5.4a 改模式**「只在本方**移动阶段**、开始移动前」⇒ 只有 `movement.modeAndMovement`
+ *     （`move.modeChange` 的闸门）；
+ *   · **6.1 移动**（开拔 / 走 / 结束）⇒ C/E/G 的**移动环节**（`move.order`）；
+ *   · **8.0 突袭**⇒ 同三处（`move.overrun`）；
+ *   · **5.7b 释放预备**「本方**反应阶段**（MA ×½）或**进击阶段**（MA ×1）」⇒ **只在 E/G**
+ *     （`reserve.release`）—— 修前这一块在 C 段也常显；
+ *   · **12.5c 燃料**「在发生燃料消耗的**任何阶段**…在燃料消耗时支付」⇒ 跟着移动走
+ *     （`supply.fuel`：C/E/G 移动环节）。
+ *
+ * 界面只读这几个投影，**不在这里写死阶段名或规则号**（判据的唯一定义在 `ACTION_GATES`）。
+ */
+const canChangeMode = computed(() => workbench.actionAllowedNow('move.modeChange'))
+const canMove = computed(() => workbench.actionAllowedNow('move.order'))
+const canOverrun = computed(() => workbench.actionAllowedNow('move.overrun'))
+const canReleaseReserve = computed(() => workbench.actionAllowedNow('reserve.release'))
+const canPayFuel = computed(() => workbench.actionAllowedNow('supply.fuel'))
+
 /** 6.1f：本次移动中的单位阵列（已放下的灰显） */
 const moveUnitItems = computed<readonly CounterPickerItem[]>(() =>
   movingUnits.value.map((unit) => ({
@@ -233,8 +254,21 @@ function hoverDump(id: string | null): void {
       </p>
     </div>
 
+    <!--
+      ★ 用户 2026-10-25「每个环节只出现该环节可用 UI」：本环节**不做移动**时明说一句，
+      而不是照旧铺一屏点不动的移动按钮（点下去只会被判据拒绝）。
+    -->
+    <div v-if="!canMove" class="block">
+      <p class="num">
+        <BaseTag kind="warning">{{ workbench.segmentStep?.rule ?? '6.1' }}</BaseTag>
+        本环节（{{ workbench.segmentStep?.label ?? '—' }}）**不做移动**：移动与突袭只在 「C
+        移动·模式与移动」「E 反应·反应移动」「G 进击·进击移动」三个环节进行（6.1 / 8.0）。
+        下方只留与当前流程有关的信息。
+      </p>
+    </div>
+
     <!-- 条 10（M1）：开拔前的取子勾选（6.1f / 8.1h）——点地图也可勾选，这里给一个面板内入口 -->
-    <div v-if="preBegin" class="block">
+    <div v-if="preBegin && canMove" class="block">
       <p class="num">勾选要一起开拔的单位（6.1；点地图也可勾选 / 取消）：</p>
       <CounterPicker
         title="待开拔单位（点一枚＝勾选 / 取消，6.1）"
@@ -254,44 +288,51 @@ function hoverDump(id: string | null): void {
       </div>
     </div>
 
-    <!-- ① 统一操作条（条 9 / 条 10，M1）：模式批量切换 + 开始移动 -->
+    <!--
+      ① 统一操作条（条 9 / 条 10，M1）：模式批量切换 + 开始移动
+      ★ 两半的时点不同（用户 2026-10-25）：5.4a 改模式「只在本方**移动阶段**」⇒ 只有 C 段；
+        6.1 开拔在 C/E/G 的移动环节都成立 ⇒ 由 `canMove` 管。
+    -->
     <div class="row">
-      <span class="muted"
-        >改模式（5.4a：切换不耗 MP，只在本方移动阶段、开始移动前；按选中集合批量）</span
-      >
+      <template v-if="canChangeMode">
+        <span class="muted"
+          >改模式（5.4a：切换不耗 MP，只在本方移动阶段、开始移动前；按选中集合批量）</span
+        >
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :disabled="!modeTargetReady"
+          @click="workbench.switchUnitMode('combat')"
+        >
+          切到战斗面
+        </BaseButton>
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :disabled="!modeTargetReady"
+          @click="workbench.switchUnitMode('move')"
+        >
+          切到移动面
+        </BaseButton>
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :disabled="!modeTargetReady"
+          @click="workbench.switchUnitMode('reserve')"
+        >
+          转入预备
+        </BaseButton>
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :disabled="!modeTargetReady"
+          @click="workbench.switchUnitMode('strat')"
+        >
+          转入战略
+        </BaseButton>
+      </template>
       <BaseButton
-        variant="secondary"
-        size="sm"
-        :disabled="!modeTargetReady"
-        @click="workbench.switchUnitMode('combat')"
-      >
-        切到战斗面
-      </BaseButton>
-      <BaseButton
-        variant="secondary"
-        size="sm"
-        :disabled="!modeTargetReady"
-        @click="workbench.switchUnitMode('move')"
-      >
-        切到移动面
-      </BaseButton>
-      <BaseButton
-        variant="secondary"
-        size="sm"
-        :disabled="!modeTargetReady"
-        @click="workbench.switchUnitMode('reserve')"
-      >
-        转入预备
-      </BaseButton>
-      <BaseButton
-        variant="secondary"
-        size="sm"
-        :disabled="!modeTargetReady"
-        @click="workbench.switchUnitMode('strat')"
-      >
-        转入战略
-      </BaseButton>
-      <BaseButton
+        v-if="canMove"
         variant="primary"
         size="sm"
         :disabled="workbench.movePick === null"
@@ -300,7 +341,7 @@ function hoverDump(id: string | null): void {
         开始移动
       </BaseButton>
     </div>
-    <p v-if="workbench.movePick !== null" class="num">
+    <p v-if="canMove && workbench.movePick !== null" class="num">
       已选 {{ workbench.movePick.ids.length }} 枚待开拔：在地图上点枚勾选 /
       取消，改完模式与（如需）付燃料后点「开始移动」。
     </p>
@@ -313,7 +354,9 @@ function hoverDump(id: string | null): void {
       本面板只提供"在哪按"。
     -->
     <div class="row">
+      <!-- 5.7b：只在 E 反应 / G 进击的移动环节（修前在 C 段也常显，点了才被拒） -->
       <BaseButton
+        v-if="canReleaseReserve"
         variant="secondary"
         size="sm"
         :disabled="selected === null"
@@ -321,7 +364,9 @@ function hoverDump(id: string | null): void {
       >
         释放预备（5.7b：仅反应 / 进击段）
       </BaseButton>
+      <!-- 4.5b 垫人：属"移动中的 ZOC 处置" ⇒ 跟着 canMove 走 -->
       <BaseButton
+        v-if="canMove"
         variant="ghost"
         size="sm"
         :disabled="selected === null"
@@ -330,7 +375,11 @@ function hoverDump(id: string | null): void {
         许诺不再耗 MP（垫人，4.5b：抵消该格敌方 ZOC）
       </BaseButton>
     </div>
-    <RuleNote title="释放预备：本方反应阶段（MA ×½）或进击阶段（MA ×1）" rule="5.7b">
+    <RuleNote
+      v-if="canReleaseReserve"
+      title="释放预备：本方反应阶段（MA ×½）或进击阶段（MA ×1）"
+      rule="5.7b"
+    >
       <p class="muted">
         5.7b：预备单位在**本方反应阶段**（非阶段玩家，MA ×½）或**进击阶段**（阶段玩家，MA
         ×1）可被释放 ——摘掉预备标记即回到朝向面；4.5b：该格只要有一个处于「已承诺不再耗
@@ -408,127 +457,133 @@ function hoverDump(id: string | null): void {
     </div>
 
     <!-- ③ 突袭（8.0/8.1a）：目标格在地图上高亮，点它即发起 -->
-    <p class="num">
+    <p v-if="canOverrun" class="num">
       突袭（8.0）：把光标移到本方可攻击单位选定的格上时，可突袭的相邻格会高亮 ——
       **点那个高亮格**即发起 （8.1a：3 MP 记在 9.2 的推进步；8.0：进格会立刻展开战斗会话）。
       本面板**不替你选目标**：候选格由引擎按 8.1 的资格给出（`overrunTargets`）。突袭**需要燃料**
       （12.5b：即使堆叠开始移动时就与防御方相邻也要付）。
     </p>
 
-    <!-- ── 燃料（12.5；用户 2026-09-16 指正：不是在补给阶段算，而是"消耗的那一刻"付） ── -->
-    <hr />
-    <p class="muted num">
-      燃料（12.5）：12.5a「轮式/履带**战斗单位**要消耗 MP
-      的话，玩家必须消耗燃料补给，否则不能消耗任何
-      MP——**即使就移动一格**」；12.5c「在发生燃料消耗的**任何阶段**，单位都应在**燃料消耗时**支付」。
-      故燃料不属补给段某一步，而是**每次开拔的当口**在这里付：付完即自动继续刚才被挡下的那次移动。
-      12.5b 的另一半：**攻击 / 防御 / 轰炸 / 撤退 / 战后推进不需燃料**（只有移动与突袭需要）。
-    </p>
-    <div v-if="!workbench.fuelPaymentDue" class="ok">
-      本次要动的单位**不需要燃料**（或都已加注）：步行单位、运输点数（卡车）与飞机永不需燃料（12.5a）。
-    </div>
-    <template v-else>
-      <!-- 12.5a：谁耗油、谁已加注（已加注的灰显，免得重复付） -->
-      <CounterPicker
-        title="本次加油的受益单位（12.5c：谁付、付给谁）"
-        hint="12.5a：轮式/履带战斗单位耗 MP 前必须已付；12.5c-C 的加注只在本阶段有效（12.5d 的清理阶段移除 A/B 标记）"
-        :items="fuelTargetItems"
-        :size="40"
-        @pick="workbench.setUnitFuelled($event, false)"
-        @hover="hoverUnit"
-      />
-      <!--
-        12.5c（用户 2026-09-17）：**点谁决定能点哪一法** ——
-          单独单位法对任何单位都成立；编队法要"一整个多单位编队"；HQ 法要选中里有指挥部
-          （用户：「点击 HQ 时才能加 HQ 法，因为 HQ 要移动本身也要按自身属性和规则来判断」）。
-        可用性判据在引擎（`fuelMethodAvailability`），本处只按结论灰显并附原因。
-      -->
-      <div class="row">
-        <label
-          v-for="option in fuelMethodOptions"
-          :key="option.method"
-          class="field"
-          :title="option.reason ?? ''"
-        >
-          <input
-            v-model="workbench.fuelMethod"
-            type="radio"
-            :value="option.method"
-            :disabled="!option.available"
-          />
-          {{ option.label }}
-          <span v-if="!option.available" class="muted">（{{ option.reason }}）</span>
-        </label>
+    <!--
+      ★ 12.5c「在发生燃料消耗的**任何阶段**…在燃料消耗时支付」⇒ 燃料跟着**移动**走：
+      本环节不做移动（`supply.fuel` 闸门不放行）时，这一整块不出现（不铺点不动的付款按钮）。
+    -->
+    <template v-if="canPayFuel">
+      <!-- ── 燃料（12.5；用户 2026-09-16 指正：不是在补给阶段算，而是"消耗的那一刻"付） ── -->
+      <hr />
+      <p class="muted num">
+        燃料（12.5）：12.5a「轮式/履带**战斗单位**要消耗 MP
+        的话，玩家必须消耗燃料补给，否则不能消耗任何
+        MP——**即使就移动一格**」；12.5c「在发生燃料消耗的**任何阶段**，单位都应在**燃料消耗时**支付」。
+        故燃料不属补给段某一步，而是**每次开拔的当口**在这里付：付完即自动继续刚才被挡下的那次移动。
+        12.5b 的另一半：**攻击 / 防御 / 轰炸 / 撤退 / 战后推进不需燃料**（只有移动与突袭需要）。
+      </p>
+      <div v-if="!workbench.fuelPaymentDue" class="ok">
+        本次要动的单位**不需要燃料**（或都已加注）：步行单位、运输点数（卡车）与飞机永不需燃料（12.5a）。
       </div>
-      <!--
-        ★ B32 步骤 4：**"来源共用"不再由玩家勾** —— 13.7a / 12.5c-A 要求按盘面事实算同源组；
-        这一行如实显示算出来的划分（同源组走编队/HQ 法，其余按 13.7a 用单独单位法）。
-      -->
-      <p v-if="workbench.fuelMethod !== 'singleUnit'" class="num">
-        来源划分（13.7a）：
-        <template v-if="workbench.fuelSourcePartition.shared">
-          同源 ⇒ {{ workbench.fuelSourcePartition.commonUnitIds.length }} 枚可走
-          {{ workbench.fuelMethod === 'hq' ? 'HQ' : '编队' }}法
-        </template>
-        <template v-else>
-          **不同源** ⇒ 能共用的 {{ workbench.fuelSourcePartition.commonUnitIds.length }} 枚走
-          {{ workbench.fuelMethod === 'hq' ? 'HQ' : '编队' }}法，其余
-          {{ workbench.fuelSourcePartition.singleUnitIds.length }} 枚须按 13.7a 用单独单位法
-        </template>
-      </p>
-      <!--
-        ★ 12.5e（批 B 切片 3）：**HQ 法的覆盖是"付了 1SP 就覆盖投递距离内的所有独立单位"**，且
-          投递距离在付款那一刻**算定**、同一阶段**只能在一个位置**投递。这里如实显示本阶段的投递基点，
-          免得玩家在 HQ 移动后又去点 HQ 法、却只得到一条 12.5e 拒绝（原因文字在日志/状态条里）。
-      -->
-      <p v-for="line in hqFuelThrowLines" :key="line.instanceId" class="num">
-        12.5e：{{ line.name }} 本阶段已在 <b>{{ line.originLabel }}</b>
-        投递（投递距离在付款时算定；每阶段只能在这一个位置投递）
-      </p>
-      <!--
-        ★ I①（12.5c-A，用户 2026-09-18 第 7 条）：**编队法的覆盖预览** ——
-          「为一整个多单位编队支付 1SP，便可为整个多单位编队提供燃料补给」⇒ 付款前先说清这一付会覆盖谁：
-          同编队、能从本次来源取到的**全部**单位（含未被点选的、含徒步面的摩托化单位）；
-          来源之外的同编队单位**不参与**（日后开拔走 12.5c-C 单独单位法）。
-      -->
-      <p v-if="formationCoverageLine !== null" class="num">
-        12.5c-A：本次付 1SP 将覆盖
-        <b>{{ workbench.fuelFormationCoverage?.coveredIds.length ?? 0 }}</b> 枚（{{
-          formationCoverageLine
-        }}）
-        <template v-if="(workbench.fuelFormationCoverage?.leftOutIds.length ?? 0) > 0">
-          ；另有
-          {{ workbench.fuelFormationCoverage?.leftOutIds.length }} 枚同编队单位**不在本来源内** ⇒
-          不参与本次编队加油，日后开拔须用单独单位法（12.5c-C，每枚 1T）
-        </template>
-      </p>
-      <p v-if="formationPaidLine !== null" class="num">
-        12.5c-A：编队 <b>{{ formationPaidLine }}</b> 本阶段已用编队法付过油 ⇒
-        该编队其余成员请用单独单位法（12.5c-C，每枚 1T）
-      </p>
-      <!-- 12.3a：付款来源只能是受益单位拖得到的补给站（图用当前点数的 SP 算子图） -->
-      <CounterPicker
-        title="付款补给站（12.3a：受益单位须拖得到）"
-        hint="12.3a：5 MP 直拖内或相邻（12.3c）；12.5c-A/B 要求整个编队/该指挥部共用同一来源"
-        :items="fuelDumpItems"
-        :size="32"
-        @pick="workbench.pickFuelDump($event)"
-        @hover="hoverDump"
-      />
-      <div class="row">
-        <BaseButton variant="primary" size="sm" @click="workbench.payFuel()">
-          支付燃料（12.5c）——未加注 {{ workbench.fuelPendingUnits.length }} 枚
-        </BaseButton>
-        <span class="num">
-          获批来源：{{
-            workbench.fuelDump === null ? '（未选）' : hexLabel(workbench.fuelDump.hex)
-          }}
-        </span>
-      </div>
+      <template v-else>
+        <!-- 12.5a：谁耗油、谁已加注（已加注的灰显，免得重复付） -->
+        <CounterPicker
+          title="本次加油的受益单位（12.5c：谁付、付给谁）"
+          hint="12.5a：轮式/履带战斗单位耗 MP 前必须已付；12.5c-C 的加注只在本阶段有效（12.5d 的清理阶段移除 A/B 标记）"
+          :items="fuelTargetItems"
+          :size="40"
+          @pick="workbench.setUnitFuelled($event, false)"
+          @hover="hoverUnit"
+        />
+        <!--
+          12.5c（用户 2026-09-17）：**点谁决定能点哪一法** ——
+            单独单位法对任何单位都成立；编队法要"一整个多单位编队"；HQ 法要选中里有指挥部
+            （用户：「点击 HQ 时才能加 HQ 法，因为 HQ 要移动本身也要按自身属性和规则来判断」）。
+          可用性判据在引擎（`fuelMethodAvailability`），本处只按结论灰显并附原因。
+        -->
+        <div class="row">
+          <label
+            v-for="option in fuelMethodOptions"
+            :key="option.method"
+            class="field"
+            :title="option.reason ?? ''"
+          >
+            <input
+              v-model="workbench.fuelMethod"
+              type="radio"
+              :value="option.method"
+              :disabled="!option.available"
+            />
+            {{ option.label }}
+            <span v-if="!option.available" class="muted">（{{ option.reason }}）</span>
+          </label>
+        </div>
+        <!--
+          ★ B32 步骤 4：**"来源共用"不再由玩家勾** —— 13.7a / 12.5c-A 要求按盘面事实算同源组；
+          这一行如实显示算出来的划分（同源组走编队/HQ 法，其余按 13.7a 用单独单位法）。
+        -->
+        <p v-if="workbench.fuelMethod !== 'singleUnit'" class="num">
+          来源划分（13.7a）：
+          <template v-if="workbench.fuelSourcePartition.shared">
+            同源 ⇒ {{ workbench.fuelSourcePartition.commonUnitIds.length }} 枚可走
+            {{ workbench.fuelMethod === 'hq' ? 'HQ' : '编队' }}法
+          </template>
+          <template v-else>
+            **不同源** ⇒ 能共用的 {{ workbench.fuelSourcePartition.commonUnitIds.length }} 枚走
+            {{ workbench.fuelMethod === 'hq' ? 'HQ' : '编队' }}法，其余
+            {{ workbench.fuelSourcePartition.singleUnitIds.length }} 枚须按 13.7a 用单独单位法
+          </template>
+        </p>
+        <!--
+          ★ 12.5e（批 B 切片 3）：**HQ 法的覆盖是"付了 1SP 就覆盖投递距离内的所有独立单位"**，且
+            投递距离在付款那一刻**算定**、同一阶段**只能在一个位置**投递。这里如实显示本阶段的投递基点，
+            免得玩家在 HQ 移动后又去点 HQ 法、却只得到一条 12.5e 拒绝（原因文字在日志/状态条里）。
+        -->
+        <p v-for="line in hqFuelThrowLines" :key="line.instanceId" class="num">
+          12.5e：{{ line.name }} 本阶段已在 <b>{{ line.originLabel }}</b>
+          投递（投递距离在付款时算定；每阶段只能在这一个位置投递）
+        </p>
+        <!--
+          ★ I①（12.5c-A，用户 2026-09-18 第 7 条）：**编队法的覆盖预览** ——
+            「为一整个多单位编队支付 1SP，便可为整个多单位编队提供燃料补给」⇒ 付款前先说清这一付会覆盖谁：
+            同编队、能从本次来源取到的**全部**单位（含未被点选的、含徒步面的摩托化单位）；
+            来源之外的同编队单位**不参与**（日后开拔走 12.5c-C 单独单位法）。
+        -->
+        <p v-if="formationCoverageLine !== null" class="num">
+          12.5c-A：本次付 1SP 将覆盖
+          <b>{{ workbench.fuelFormationCoverage?.coveredIds.length ?? 0 }}</b> 枚（{{
+            formationCoverageLine
+          }}）
+          <template v-if="(workbench.fuelFormationCoverage?.leftOutIds.length ?? 0) > 0">
+            ；另有
+            {{ workbench.fuelFormationCoverage?.leftOutIds.length }} 枚同编队单位**不在本来源内** ⇒
+            不参与本次编队加油，日后开拔须用单独单位法（12.5c-C，每枚 1T）
+          </template>
+        </p>
+        <p v-if="formationPaidLine !== null" class="num">
+          12.5c-A：编队 <b>{{ formationPaidLine }}</b> 本阶段已用编队法付过油 ⇒
+          该编队其余成员请用单独单位法（12.5c-C，每枚 1T）
+        </p>
+        <!-- 12.3a：付款来源只能是受益单位拖得到的补给站（图用当前点数的 SP 算子图） -->
+        <CounterPicker
+          title="付款补给站（12.3a：受益单位须拖得到）"
+          hint="12.3a：5 MP 直拖内或相邻（12.3c）；12.5c-A/B 要求整个编队/该指挥部共用同一来源"
+          :items="fuelDumpItems"
+          :size="32"
+          @pick="workbench.pickFuelDump($event)"
+          @hover="hoverDump"
+        />
+        <div class="row">
+          <BaseButton variant="primary" size="sm" @click="workbench.payFuel()">
+            支付燃料（12.5c）——未加注 {{ workbench.fuelPendingUnits.length }} 枚
+          </BaseButton>
+          <span class="num">
+            获批来源：{{
+              workbench.fuelDump === null ? '（未选）' : hexLabel(workbench.fuelDump.hex)
+            }}
+          </span>
+        </div>
+      </template>
     </template>
 
-    <!-- ⑤ 收束：撤销一步 / 结束移动 / 放弃整次移动 -->
-    <div class="row">
+    <!-- ⑤ 收束：撤销一步 / 结束移动 / 放弃整次移动（只对"正在进行的那次移动"有意义） -->
+    <div v-if="canMove || workbench.moveInteraction !== null" class="row">
       <BaseButton variant="secondary" size="sm" @click="workbench.undoLastStep()">
         撤销一步（6.1）
       </BaseButton>
