@@ -7,7 +7,8 @@
  * | kind | 含义 | 处理 |
  * |---|---|---|
  * | `gated` | 原文给了**明确时机**，应当按环节放行 | store 入口里已加 `requireAction(key)`（本表只做**核对**） |
- * | `referee` | **裁判工具**：改值 / 订正 / 摆件 / 自动环节的手动退路 —— 规则里不是"玩家在某个环节的动作" | 不设环节闸；对局台界面按 `showsReferee`（`only === null`）不铺，只在引擎验证页可用 |
+ * | `referee` | **裁判工具**：改值 / 订正 / 摆件 / 自动环节的手动退路 —— 规则里不是"玩家在某个环节的动作" | 不设环节闸；**界面对局台一律按 `showsReferee` 不铺**（`useRefereeTools()` ＝ ui-mode 为 `verify`），只在引擎验证页可用 |
+ * | `playerStep` | **玩家本环节要做的事**，只是不属 `ACTION_GATES` 那套"宣布类动作"：掷表触发、落位选择、记忆标记 | 不设环节闸（环节已由 `segmentIn` 控显隐）；**对局台必须留着** —— 塞进 `showsReferee` 会把流程锁死 |
  * | `flowState` | 由**步进状态机**约束（`airState` / `combatState` / `barrageState` / `supplyState` / `moveInteraction` / `breakoutReturns` 的回合） | 不另设环节闸：没开局这些入口根本走不通（比环节闸更窄） |
  * | `noTiming` | 原文**给了这个动作、但没给时机**（或明说"任何阶段"） | **不加闸** —— 加闸就是发明规则（项目铁律：取保守值，不施加规则未明定的效果） |
  * | `pickMode` | "点地图选格"的选格态开关 | 不落盘，落盘在各自的 apply/place 入口 |
@@ -23,6 +24,8 @@
 export type UngatedKind =
   | 'gated'
   | 'referee'
+  /** 玩家本环节要做的事（掷表触发 / 落位选择 / 记忆标记）：对局台要留 */
+  | 'playerStep'
   | 'flowState'
   | 'noTiming'
   /** 打开"点地图选格"态：只改选择模式，不落盘 */
@@ -290,7 +293,7 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     why: '专规 3.5「任一轴方移动阶段、在单位移动之前」',
   },
 
-  /* ── 裁判工具（改值 / 订正 / 摆件 / 自动环节的手动退路） ── */
+  /* ── 裁判工具（改值 / 订正 / 摆件 / 自动环节的手动退路）⇒ 对局台按 showsReferee 不铺 ── */
 
   setConstructionMarkersNow: { kind: 'referee', why: '专规 3.5 的枚数是剧本给定值，手改属订正' },
   setMultiUnitFormationNow: {
@@ -298,7 +301,15 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     why: '3.4 的编队归属由素材编队目录推出，手改属覆盖',
   },
   setPanzerGroupNow: { kind: 'referee', why: '3.4 集群归属的**手工覆盖**' },
-  setDumpPanzerGroupNow: { kind: 'referee', why: '3.4b SP 归属声明（裁判代录）' },
+  /*
+   * 3.4b：「**All new Axis SP must immediately be assigned to a panzer group**」——
+   * 这是**玩家的义务**（不归属就没法用那批 SP 支付多单位编队的燃油/战斗/轰炸），
+   * 不是裁判订正 ⇒ `playerStep`（对局台必须留）。
+   */
+  setDumpPanzerGroupNow: {
+    kind: 'playerStep',
+    why: '3.4b「所有新到的轴心国 SP 必须立即归属某一装甲集群」：玩家声明，不是裁判代录',
+  },
   toggleAxisCityControlNow: {
     kind: 'referee',
     why: '3.3b 的城市控制状态由裁判维护（原文未把它交给某个环节）',
@@ -325,29 +336,45 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     why: '13.3f 换轨账本的手工清空（同 seedConvertedRailsNow）',
   },
   setBreakdownPoolNow: { kind: 'referee', why: '20.0 拆分单位池的枚数订正' },
+  /*
+   * 专规 2.4：「(rotate the 'locked' units as a memory aid)」＋「The locked divisions are
+   * mobilized per this table」—— 锁定面**由玩家翻转**（记忆辅助），解锁按表且
+   * 「玩家在锁定师中自选」⇒ 两者都是 `playerStep`，不能塞进 `showsReferee`。
+   */
   unlockSlowMobilizationNow: {
-    kind: 'referee',
-    why: '专规 2.4 慢动员的解锁由剧本日期给，手改属订正',
+    kind: 'playerStep',
+    why: '专规 2.4 表：按表解锁，且「玩家在锁定师中自选」',
   },
-  setUnitLockedNow: { kind: 'referee', why: '专规 2.4 的锁定标注（数据维护）' },
+  setUnitLockedNow: {
+    kind: 'playerStep',
+    why: '专规 2.4「rotate the locked units as a memory aid」：玩家翻面标记',
+  },
   resetContainers: { kind: 'referee', why: '清空全部盒子（裁判重置）' },
   captureAirBaseNow: {
     kind: 'referee',
     why: '9.14b–f 的夺取是"进入该格"的**结果**（由移动/战后推进触发，走 9.14 表）；界面这一处是裁判补录',
   },
+  /*
+   * 下面四条都是**玩家在本环节要做的事**，只是不属"宣布类动作"那套闸门：
+   *   · 13.6b 的掷表：环节是 B 段的 `reinforcement.replRoll`（driver=`automatic` ⇒ 骰子自动，
+   *     但**触发**在玩家手上；`segmentIn` 已把按钮限定在该环）；
+   *   · 13.5 补员算子落位：SOP 13.5 没给入场格 ⇒ 由玩家选格（用户 2026-10-25 裁定⑩）；
+   *   · 专规 2.1 免费铁运边缘格 / 3.6 补给列车格：落点由玩家指定（不印在卡上）。
+   * 塞进 `showsReferee` 会让对局台**没法把这些东西放到图上**。
+   */
   rollVariableReplNow: {
-    kind: 'referee',
-    why: '13.6b 的可变增援是 B 段的**自动**环节（`reinforcement.replRoll`，driver=automatic）⇒ 手动掷是退路',
+    kind: 'playerStep',
+    why: '13.6b 掷表：环节＝B 段 replRoll（骰子自动，触发在玩家）',
   },
   placePendingReplNow: {
-    kind: 'referee',
-    why: '13.5 补员算子的落点由裁判选（SOP 13.5 无入场格规定）',
+    kind: 'playerStep',
+    why: '13.5 补员算子的落点由玩家选（SOP 13.5 无入场格规定）',
   },
   pickFreeRailEdgeHex: {
-    kind: 'referee',
-    why: '专规 2.1 免费铁运的边缘格由裁判指定（落点不印在卡上）',
+    kind: 'playerStep',
+    why: '专规 2.1 免费铁运的边缘格由玩家指定（落点不印在卡上）',
   },
-  pickSupplyTrainHex: { kind: 'referee', why: '专规 3.6 补给列车的格由裁判指定' },
+  pickSupplyTrainHex: { kind: 'playerStep', why: '专规 3.6 补给列车的格由玩家指定' },
 
   /* ── 由步进状态机约束（比环节闸更窄：没开局就走不通） ── */
 

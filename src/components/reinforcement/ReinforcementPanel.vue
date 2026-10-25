@@ -3,7 +3,7 @@ import { computed, ref, watchEffect } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
 import UiField from '@/components/UiField.vue'
-import { useUiMode } from '@/components/ui-mode'
+import { useRefereeTools } from '@/components/ui-mode'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { auxCardImageUrl } from '@/components/game/aux-card-image'
 import { arrivalCopiesOf, rebuildChartRows, suggestRebuildRow } from '@/engine/rules'
@@ -27,8 +27,12 @@ import { useWorkbenchStore } from '@/stores'
 
 const workbench = useWorkbenchStore()
 
-/** 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输） */
-const uiMode = useUiMode()
+/**
+ * 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输）
+ * ★ 2026-10-25：与 §21 的"裁判工具"合并成**同一道门** `showsReferee`
+ *   （原来这里单独判 `uiMode === 'verify'`，同一个面板里两套判据容易漂）。
+ */
+const showsReferee = useRefereeTools()
 
 /**
  * §5-B：重建表行键**从数据取**（`charts-supply-repl.json` 按当前方）——不再自由手输，
@@ -458,7 +462,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         </template>
         <template v-if="showsActions">
           <input
-            v-if="uiMode === 'verify'"
+            v-if="showsReferee"
             v-model="rebuildHexText"
             class="input"
             placeholder="手改落点 列.行"
@@ -796,8 +800,13 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         </p>
       </RuleNote>
       <div v-if="showsRebuild" class="row">
-        <label class="field">
-          国籍池存量
+        <!--
+          裁判工具：池存量来自数据（`breakdownPoolTotal`，20.0e 的国籍池），手改是订正。
+          ★ 必须显式收：`UiField` 在正式界面把数字型渲染成 `－值＋` **步进**（仍可点），
+            不像文本型那样自动只读。
+        -->
+        <label v-if="showsReferee" class="field">
+          国籍池存量（裁判）
           <UiField
             class="input num"
             type="number"

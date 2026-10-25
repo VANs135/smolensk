@@ -50,3 +50,34 @@ export function useUiMode(): UiMode {
 export function useFormalMode(): boolean {
   return useUiMode() === 'formal'
 }
+
+/**
+ * **纯判据**：这个模式该不该显示**裁判工具**
+ *
+ * ## 判据为什么是"模式"而不是 `only === null`
+ *   对局台存在**不带 `only`** 的挂载（`<ReinforcementPanel />` 的 reinforce 会话、
+ *   `<BarragePanel />`、`<VictoryPanel />`）⇒ 拿 `only === null` 当"验证页"会把这些
+ *   会话里的裁判按钮一并放出来。而宿主是否声明 `formal` 是**视图的属性**，两处视图都声明了。
+ *
+ * ## 反向失败也安全
+ *   `useUiMode()` 的缺省是 `verify`（宿主没声明就保留手输/裁判退路）⇒ 这里同样：
+ *   没声明就当验证页，宁可多给裁判一个退路，也不把它的退路悄悄删掉。
+ */
+export function refereeToolsIn(mode: UiMode): boolean {
+  return mode === 'verify'
+}
+
+/**
+ * 面板里读"该不该显示裁判工具"（`showsReferee`）
+ *
+ * 语义：**改值 / 订正 / 摆件 / 自动环节的手动重掷** —— 规则里不是"玩家在某环节的动作"，
+ * 故只在引擎验证页出现（对局台一铺，就等于让玩家改账本）。
+ *
+ * ★ 必须与"玩家步骤"区分开：`placePendingReplNow`（13.5 补员落子）、`pickFreeRailEdgeHex`
+ *   （专规 2.1 入场格）、`pickSupplyTrainHex`（专规 3.6）、`rollVariableReplNow`（13.6b 掷表）、
+ *   `setUnitLockedNow` / `unlockSlowMobilizationNow`（专规 2.4「rotate the 'locked' units」）都是
+ *   **玩家要做的事**，对局台必须留着；把它们塞进 `showsReferee` 会把流程锁死。
+ */
+export function useRefereeTools(): boolean {
+  return refereeToolsIn(useUiMode())
+}

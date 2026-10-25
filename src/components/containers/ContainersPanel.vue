@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
+import { useRefereeTools } from '@/components/ui-mode'
 import { BaseButton, BasePanel, BaseTag } from '@/components/base'
 import UiField from '@/components/UiField.vue'
 import { useUiMode } from '@/components/ui-mode'
@@ -283,12 +284,18 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
  *
  * 2.2 的回合推进、1.5 的天气判定、专规 1.2 的铁路容量**都由系统按日期自动结算**
  * （见 `docs/阶段-环节-操作矩阵.md` 的"只有这 6 个环节是自动结算"）。它们的"改值"入口
- * 只该出现在**引擎验证页**（`only === null`）——对局台的盒会话（`only="actions"`）不铺，
+ * 只该出现在**引擎验证页** —— 对局台的盒会话（`only="actions"`）不铺，
  * 免得"展开一张盒卡"就顺带看到改回合标记 / 改天气 / 改运力这些不属于本环节的东西。
  *
  * ★ 用户 2026-10-25「每个阶段/环节只能出现该环节可用 UI」：这三项在**任何**玩家环节都不该有。
+ * ★ 用户 2026-10-25（本轮）：「referee 类里对局台不该出现的按钮在 UI 层**统一**按 `showsReferee`
+ *   收掉」⇒ 判据从 `props.only === null` 换成 **ui-mode**（`useRefereeTools()`）。
+ *   为什么必须换：`only === null` 只在"宿主没传 only"时为真，而本仓库两处宿主的差别
+ *   **本就该由 `formal / verify` 表达**——一旦有面板在正式宿主里不带 `only` 挂载
+ *   （`ReinforcementPanel` / `BarragePanel` / `VictoryPanel` 都这样），
+ *   `only === null` 就会把裁判工具放进对局台。
  */
-const showsReferee = computed(() => props.only === null)
+const showsReferee = useRefereeTools()
 </script>
 
 <template>
@@ -611,8 +618,10 @@ const showsReferee = computed(() => props.only === null)
     </details>
 
     <!-- ── ③ 剧本抽取盒（编队抽签；池成员由 formations.json 推导） ──
-         B17a-2：抽签与落盘都是**动作** ⇒ 只在会话框那一段里画 -->
-    <template v-if="showsBoxActions('scenarioDrawBox')">
+         B17a-2：抽签与落盘都是**动作** ⇒ 只在会话框那一段里画
+         ★ 2026-10-25：抽签已移到**初设自动执行**（`setup.runSetupDraws`）⇒ 这里的
+           「抽签 / 落盘本组处置」是**裁判重抽的退路**，故再加一道 `showsReferee`（对局台不铺）。 -->
+    <template v-if="showsReferee && showsBoxActions('scenarioDrawBox')">
       <hr />
       <h4 class="block-title">剧本抽取盒（ch10 Formation Chit Draw / ch11 随机化）</h4>
       <div class="row">

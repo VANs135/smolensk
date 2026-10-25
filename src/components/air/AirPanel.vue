@@ -4,7 +4,7 @@ import { computed } from 'vue'
 import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import UiField from '@/components/UiField.vue'
-import { useUiMode } from '@/components/ui-mode'
+import { useRefereeTools, useUiMode } from '@/components/ui-mode'
 import {
   aircraftRecordImageUrlOf,
   counterImageUrlOf,
@@ -297,6 +297,20 @@ const props = withDefaults(
 const showsMission = computed(() => props.only === null || props.only === 'mission')
 
 /**
+ * ★ 用户 2026-10-25：「referee 类里对局台不该出现的按钮在 UI 层统一按 `showsReferee` 收掉」。
+ *
+ * 本面板的四类**裁判工具**（只在验证页给）：
+ *   · **14.1a 摆放飞机**：新到飞机走到达卡（13.6），不是玩家随手摆一枚；
+ *   · **移除飞机**：会把算子从盘上删掉（`removeAirUnit` 同时清空轰炸参战集）；
+ *   · **15.2 声明为简易机场**：简易机场由 15.3 施工或 3.5 建造标记产生，手拨是订正；
+ *   · **9.14f 夺取基地**：战后推进时由 `advanceAfterCombat` 自动调用，手点是覆写。
+ *
+ * ★ 明确**不**收的（那是玩家的事）：「转移（14.11）」原文未给时机限制、「在地图上整备（15.1）」
+ *   是 A 段玩家的整备动作。
+ */
+const showsReferee = useRefereeTools()
+
+/**
  * ★ 14.2f-A/B 的**任务分配表单**只在"还没宣布 / 还在 A–B 两步"时出现
  *
  * 用户 2026-10-25「每个阶段/环节只能出现该环节可用 UI」：修前「任务类型 / 任务格 / 参战机 /
@@ -364,7 +378,8 @@ const showsBaseOps = computed(
           摆放飞机（14.1a：飞机停在**空军基地格**，该格即其起飞与返航基地；新到飞机为非激活，须整备
           15.1 后出击）：
         </p>
-        <div class="row">
+        <!-- 裁判工具（14.1a）：新到飞机走到达卡 13.6，这里只给验证页摆件 -->
+        <div v-if="showsReferee" class="row">
           <!-- B14：机型＝**算子图阵列**（原来是一个纯文字下拉） -->
           <CounterPicker
             title="机型（A5 空军专表）"
@@ -448,8 +463,13 @@ const showsBaseOps = computed(
           >
             转移（14.11）
           </BaseButton>
-          <BaseButton variant="ghost" size="sm" @click="workbench.removeAirUnit(air.instanceId)">
-            卸下
+          <BaseButton
+            v-if="showsReferee"
+            variant="ghost"
+            size="sm"
+            @click="workbench.removeAirUnit(air.instanceId)"
+          >
+            移除（裁判）
           </BaseButton>
         </p>
         <p v-if="workbench.ownAirUnits.length === 0" class="muted">当前方还没有飞机。</p>
@@ -986,7 +1006,13 @@ const showsBaseOps = computed(
             >
               在地图上整备（15.1）
             </BaseButton>
-            <BaseButton variant="ghost" size="sm" @click="workbench.toggleAirstripBase(base.id)">
+            <!-- 裁判工具：简易机场由 15.3 施工 / 3.5 建造标记产生，手拨是订正 -->
+            <BaseButton
+              v-if="showsReferee"
+              variant="ghost"
+              size="sm"
+              @click="workbench.toggleAirstripBase(base.id)"
+            >
               {{ base.isAirstrip === true ? '改回空军基地' : '声明为简易机场（15.2）' }}
             </BaseButton>
           </div>
@@ -1150,8 +1176,14 @@ const showsBaseOps = computed(
             <span class="num"
               >格内飞机 {{ workbench.airUnitsAt(base.hex, base.side).length }} 架</span
             >
-            <BaseButton variant="danger" size="sm" @click="workbench.captureAirBaseNow(base.id)">
-              夺取（9.14f）
+            <!-- 裁判工具：战后推进时 `advanceAfterCombat` 会自动结算 9.14f，手点是覆写 -->
+            <BaseButton
+              v-if="showsReferee"
+              variant="danger"
+              size="sm"
+              @click="workbench.captureAirBaseNow(base.id)"
+            >
+              夺取（9.14f，裁判覆写）
             </BaseButton>
           </div>
 

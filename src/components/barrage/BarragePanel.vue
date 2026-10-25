@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
+import { useRefereeTools } from '@/components/ui-mode'
 import UiField from '@/components/UiField.vue'
 import {
   aircraftRecordImageUrlOf,
@@ -26,6 +27,19 @@ import {
  */
 
 const workbench = useWorkbenchStore()
+
+/**
+ * ★ 用户 2026-10-25：**裁判工具统一按 `showsReferee` 收掉**（对局台不铺、验证页保留）。
+ *
+ * `BarragePanel` 在**两处宿主**都挂成"无 `only`"（对局台的 barrage 会话 / 验证页），
+ * 所以判据只能是 ui-mode（`only === null` 在这里两边同值，分辨不出来）。
+ *
+ * 本面板的两处裁判工具：
+ *   · **14.1a 摆放飞机**：新到飞机走到达卡 13.6；
+ *   · **卸下**：`removeAirUnit` 是**从盘上删除**这枚飞机（同时清空参炸集），不是"退出本次轰炸"
+ *     —— 退出本次轰炸是上面 `CounterPicker` 的 `toggleBarrageAirUnit`（玩家动作）。
+ */
+const showsReferee = useRefereeTools()
 
 /** 步骤清单（10.0 通用流程） */
 const checklist = computed(() => workbench.barrageChecklist)
@@ -304,7 +318,8 @@ function setAircraftRoll(unitId: string, value: number): void {
           参炸飞机（A5 空军专表）：摆在**空军基地格**（14.1a），该格即 10.2b 所说的「它们基地」；
           10.2c 空军轰炸**没有补给消耗**（本段不出现付款补给站）。
         </p>
-        <div class="row">
+        <!-- 裁判工具（14.1a）：新到飞机走到达卡 13.6 ⇒ 对局台不铺 -->
+        <div v-if="showsReferee" class="row">
           <!-- B14b：机型＝**算子图阵列**（原来是一个纯文字下拉） -->
           <CounterPicker
             title="机型（A5 空军专表）"
@@ -356,8 +371,11 @@ function setAircraftRoll(unitId: string, value: number): void {
         <p v-if="workbench.barrageAirCandidates.length === 0" class="muted">
           未摆放飞机：填机型与基地格后点「摆放飞机」。
         </p>
-        <!-- 卸下是**动作**（选中一枚再动作），属 B15 的操作链；此处保留最省的一行，免得没退路 -->
-        <p v-if="workbench.barrageAirCandidates.length > 0" class="num">
+        <!--
+          裁判工具：这里的「卸下」调的是 `removeAirUnit`（**从盘上删除**这枚飞机），
+          不是"退出本次轰炸"（那是上面 CounterPicker 的 `toggleBarrageAirUnit`）⇒ 对局台不铺。
+        -->
+        <p v-if="showsReferee && workbench.barrageAirCandidates.length > 0" class="num">
           卸下：<BaseButton
             v-for="air in workbench.barrageAirCandidates"
             :key="`drop-${air.instanceId}`"

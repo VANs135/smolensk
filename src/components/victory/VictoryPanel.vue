@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag } from '@/components/base'
+import { useRefereeTools } from '@/components/ui-mode'
 import { hexLabel, useWorkbenchStore } from '@/stores'
 
 /**
@@ -26,6 +27,16 @@ import { hexLabel, useWorkbenchStore } from '@/stores'
  */
 
 const props = withDefaults(defineProps<{ referee?: boolean }>(), { referee: false })
+
+/**
+ * ★ 用户 2026-10-25：**裁判工具统一按 `showsReferee` 收掉**。
+ *
+ * 本面板原有 `referee` 属性（宿主显式开），但它是**一个面板一套**的判据；
+ * 现在与其余面板统一到 ui-mode（`refereeToolsIn`），并保留 `referee` 作**宿主的额外开关**：
+ *   两个都为真才出现（验证页 + 宿主点名）。这样"对局台右栏无任何可写控件"由
+ *   **模式**保证，不再依赖某处挂载记得不传 `referee`。
+ */
+const showsReferee = computed(() => useRefereeTools() && props.referee)
 
 const workbench = useWorkbenchStore()
 
@@ -222,7 +233,7 @@ const CONTROL_RULE_TEXT =
     </p>
 
     <!-- ── 裁判工具（**只在引擎验证页**出现；对局台的右栏保持无控件） ── -->
-    <template v-if="props.referee">
+    <template v-if="showsReferee">
       <hr />
       <p class="muted">
         裁判工具（不属对局台右栏：那边只读）：按盘面刷新控制账本、指定/清除某格控制、 手动触发

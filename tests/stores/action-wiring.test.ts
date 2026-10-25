@@ -128,6 +128,12 @@ describe('动作接线账：每个写盘面入口要么有环节闸、要么登�
     const allowed: readonly UngatedKind[] = [
       'gated',
       'referee',
+      /*
+       * ★ 2026-10-25：新增的一类 —— 玩家本环节要做的事（掷表触发 / 落位选择 / 记忆标记）。
+       * 它们不属 `ACTION_GATES` 那套"宣布类动作"，但**对局台必须留着**；
+       * 与 `referee`（对局台按 `showsReferee` 不铺）是**相反**的两类，混在一起就会锁死流程。
+       */
+      'playerStep',
       'flowState',
       'noTiming',
       'pickMode',

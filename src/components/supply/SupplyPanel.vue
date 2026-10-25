@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
 import UiField from '@/components/UiField.vue'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
+import { useRefereeTools } from '@/components/ui-mode'
 import {
   counterImageUrlOf,
   hexLabel,
@@ -317,6 +318,21 @@ const props = withDefaults(
 const showsCheck = computed(() => props.only === null || props.only === 'check')
 
 /**
+ * ★ 用户 2026-10-25：「referee 类里对局台不该出现的按钮（addSpDump、setVictoryControlNow 等）
+ *   在 UI 层统一按 `showsReferee` 收掉」。
+ *
+ * 本面板里属于**裁判工具**的四处（规则里都不是"玩家在某环节的动作"）：
+ *   · 12.1b 新增补给站 / 移除：补给站是**位置**（"含 SP 的位置即补给站"），不是可凭空造的东西——
+ *     玩家拿到 SP 的途径是到达卡与 13.5/13.6b 的掷表；
+ *   · 12.6a 声明补给源 / 移除：补给源由规则与专规给定，表上只是把结论记下来；
+ *   · 13.3f 轨距账本「按剧本重取 / 清空」：给裁判订正换轨账本用。
+ *
+ * ★ 不在此列的（对局台**要留**）：12.1a 拆分 / 加总（原文无时机限制，是玩家的算子操作）、
+ *   13.2f 装卸、12.7c 转延补队、12.11a 销毁 —— 那些是动作，不是改值。
+ */
+const showsReferee = useRefereeTools()
+
+/**
  * ★ 用户 2026-10-25「**在什么环节，点什么单位才出现什么菜单**」：
  *   账本段内部再按**一个操作**细分 —— `sp` / `dumpBlow` / `transport` / `extender` / `loadUnload`
  *   由 `mapView.unitActionOptions()`（设施动作族 ∩ 本环节闸门）挑出来，会话里只画这一段；
@@ -371,7 +387,8 @@ const showsLedger = computed(
             补给站账本（12.1b：任何含 SP 的位置都是补给站；1 SP = 4 T）。 本操作台以账本代替盘面上的
             SP 算子——12.1a 的拆分/找零需要多枚等额算子，引擎只看持仓数值。
           </p>
-          <div class="row">
+          <!-- 裁判工具：补给站是「位置」而不是可凭空造的东西（12.1b），对局台不铺 -->
+          <div v-if="showsReferee" class="row">
             <label class="field">
               格号（列.行）
               <UiField v-model="workbench.spDumpDraft.hexText" class="input" placeholder="36.13" />
@@ -421,7 +438,12 @@ const showsLedger = computed(
             <BaseButton variant="ghost" size="sm" @click="workbench.mergeSpDumpHoldings(dump.id)">
               加总（12.1a）
             </BaseButton>
-            <BaseButton variant="ghost" size="sm" @click="workbench.removeSpDump(dump.id)">
+            <BaseButton
+              v-if="showsReferee"
+              variant="ghost"
+              size="sm"
+              @click="workbench.removeSpDump(dump.id)"
+            >
               移除
             </BaseButton>
           </div>
@@ -681,14 +703,25 @@ const showsLedger = computed(
               </option>
             </select>
           </label>
-          <BaseButton variant="secondary" size="sm" @click="workbench.addSupplySource()">
+          <!-- 裁判工具：12.6a 的补给源由规则/专规给定，表上只记结论 ⇒ 对局台不铺 -->
+          <BaseButton
+            v-if="showsReferee"
+            variant="secondary"
+            size="sm"
+            @click="workbench.addSupplySource()"
+          >
             声明补给源（12.6a）
           </BaseButton>
         </div>
         <p v-for="decl in workbench.supplySourceDecls" :key="decl.id" class="num">
           <BaseTag kind="neutral">{{ hexLabel(decl.hex) }}</BaseTag>
           {{ workbench.supplySourceKindLabel(decl.kind) }}
-          <BaseButton variant="ghost" size="sm" @click="workbench.removeSupplySource(decl.id)">
+          <BaseButton
+            v-if="showsReferee"
+            variant="ghost"
+            size="sm"
+            @click="workbench.removeSupplySource(decl.id)"
+          >
             移除
           </BaseButton>
         </p>
@@ -718,7 +751,8 @@ const showsLedger = computed(
             >
           </template>
         </p>
-        <div class="row">
+        <!-- 裁判工具：换轨账本的"按剧本重取 / 清空"是订正入口（专规 1.2）⇒ 对局台不铺 -->
+        <div v-if="showsReferee" class="row">
           <BaseButton variant="secondary" size="sm" @click="workbench.seedConvertedRailsNow()">
             按剧本初设重取换轨（专规 1.2）
           </BaseButton>

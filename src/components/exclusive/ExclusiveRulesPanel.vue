@@ -6,6 +6,8 @@ import UiField from '@/components/UiField.vue'
 import { hexLabel } from '@/stores'
 import { useWorkbenchStore } from '@/stores'
 
+import { useRefereeTools } from '@/components/ui-mode'
+
 import { actsShown, infoShown, sectionShown, type ExclusiveOnly } from './section-scope'
 
 /**
@@ -124,6 +126,24 @@ const props = withDefaults(defineProps<{ only?: ExclusiveOnly }>(), { only: null
  */
 const showsInfo = computed(() => infoShown(props.only))
 
+/**
+ * ★ 用户 2026-10-25：**裁判工具统一按 `showsReferee` 收掉**（对局台不铺、验证页保留）。
+ *
+ * 本面板里的裁判工具（改值 / 订正 / 覆写）：
+ *   · **3.4 装甲集群归属的手工覆盖**（`setPanzerGroupNow` / `setMultiUnitFormationNow`）——
+ *     集群由**算子上的白条**决定（原文「A thin white stripe differentiates Hoth's units」，
+ *     本作落在 `units-axis.json` 的 `panzerGroup`），手改是订正；
+ *   · **3.5 建造标记「手改枚数」**（`setConstructionMarkersNow`）—— 枚数由剧本初设给定；
+ *   · **3.3b 轴控城市声明的切换**（`toggleAxisCityControlNow`）—— 面板自己写着"由裁判维护"；
+ *   · **1.7 补给缓存「追加 1 枚」**（`addSupplyCacheNow`）—— 缓存来自开局 2 枚与 1.6c 掷表。
+ *
+ * ★ 明确**不**收的（原文要求玩家声明）：
+ *   「SP 归属（3.4b）」——原文「All new Axis SP must **immediately** be assigned to a panzer group」，
+ *   面板上的 `setDumpPanzerGroupNow` 是**玩家的义务**，收掉就没法付费；
+ *   「治安检查 / 3.3b 放置 Trainbusting」——专规明说「可在**任意相位**放置」（`noTiming`，不是裁判件）。
+ */
+const showsReferee = useRefereeTools()
+
 /*
  * 判据本身在 `./section-scope.ts`（**纯函数**，有单测）：
  *   `sectionShown(only, section)` 管"这一节的只读本体出不出现"，
@@ -237,26 +257,29 @@ const pins = computed(() => workbench.exclusiveSectionPins)
             <option value="hoth">Hoth</option>
           </select>
         </label>
-        <label class="field">
-          <input v-model="panzerMultiUnit" type="checkbox" />
-          属多单位编队（3.4）
-        </label>
-        <BaseButton
-          variant="primary"
-          size="sm"
-          :disabled="panzerUnitId === '' || panzerGroupChoice === ''"
-          @click="declarePanzerGroup()"
-        >
-          手工覆盖归属（3.4）
-        </BaseButton>
-        <BaseButton
-          variant="ghost"
-          size="sm"
-          :disabled="panzerUnitId === ''"
-          @click="workbench.setPanzerGroupNow(panzerUnitId, null)"
-        >
-          撤销覆盖
-        </BaseButton>
+        <!-- 裁判工具：集群归属由算子上的白条决定（3.4），手改是订正 ⇒ 对局台不铺 -->
+        <template v-if="showsReferee">
+          <label class="field">
+            <input v-model="panzerMultiUnit" type="checkbox" />
+            属多单位编队（3.4）
+          </label>
+          <BaseButton
+            variant="primary"
+            size="sm"
+            :disabled="panzerUnitId === '' || panzerGroupChoice === ''"
+            @click="declarePanzerGroup()"
+          >
+            手工覆盖归属（3.4）
+          </BaseButton>
+          <BaseButton
+            variant="ghost"
+            size="sm"
+            :disabled="panzerUnitId === ''"
+            @click="workbench.setPanzerGroupNow(panzerUnitId, null)"
+          >
+            撤销覆盖
+          </BaseButton>
+        </template>
       </div>
       <p v-for="(item, index) in workbench.panzerGroupObligations" :key="index" class="warn">
         <BaseTag kind="danger">{{ item.rule }}</BaseTag>
@@ -364,7 +387,9 @@ const pins = computed(() => workbench.exclusiveSectionPins)
               点地图选格
             </BaseButton>
           </label>
+          <!-- 裁判工具：3.3b 的轴控状态由盘面推出、由裁判维护（面板原文如此）⇒ 对局台不铺 -->
           <BaseButton
+            v-if="showsReferee"
             variant="secondary"
             size="sm"
             @click="workbench.toggleAxisCityControlNow(workbench.cityControlHexText)"
@@ -578,7 +603,8 @@ const pins = computed(() => workbench.exclusiveSectionPins)
           剩余 {{ workbench.constructionMarkers }} 枚
         </BaseTag>
         <template v-if="actsMarker">
-          <label class="field">
+          <!-- 裁判工具：枚数由剧本初设给定（3.5「剧本 1/2 各 3 枚」），手改是订正 -->
+          <label v-if="showsReferee" class="field">
             <UiField
               class="input num"
               type="number"
@@ -664,13 +690,14 @@ const pins = computed(() => workbench.exclusiveSectionPins)
       <div class="row">
         <BaseTag kind="info">轴 {{ workbench.supplyCacheHoldings.axis }} 枚</BaseTag>
         <BaseTag kind="info">苏 {{ workbench.supplyCacheHoldings.soviet }} 枚</BaseTag>
+        <!-- 裁判工具：缓存来自开局 2 枚与 1.6c 掷表（结算时已自动记账）⇒ 对局台不铺 -->
         <BaseButton
-          v-if="actsCache"
+          v-if="actsCache && showsReferee"
           variant="ghost"
           size="sm"
           @click="workbench.addSupplyCacheNow(workbench.activeSide)"
         >
-          追加 1 枚（1.6c）
+          追加 1 枚（1.6c，裁判）
         </BaseButton>
       </div>
       <div v-if="actsCache" class="row">

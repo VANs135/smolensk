@@ -225,17 +225,25 @@ describe('B16：托盘与右栏的接线（源码守卫）', () => {
     expect(verify).toContain('<VictoryPanel referee />')
   })
 
-  it('★ 面板本身默认不含可写控件：三个写入动作都在 `props.referee` 分支里', () => {
+  it('★ 面板本身默认不含可写控件：三个写入动作都在 `showsReferee` 门里', () => {
     const panel = readFileSync('src/components/victory/VictoryPanel.vue', 'utf8')
-    const gate = panel.indexOf('v-if="props.referee"')
+    /*
+     * ★ 2026-10-25（用户）：「referee 类里对局台不该出现的按钮在 UI 层**统一**按 `showsReferee`」。
+     * 修前这里是面板自己的一套判据（`v-if="props.referee"`）——只要某处挂载忘了不传 `referee`，
+     * 对局台就会露出改账本的按钮。现在 `showsReferee` 由 **ui-mode** 推（验证页才对），
+     * `referee` 属性降级为宿主的**额外**开关（两者都要为真）。
+     */
+    const gate = panel.indexOf('v-if="showsReferee"')
     expect(gate).toBeGreaterThan(0)
+    expect(panel, 'showsReferee 必须由统一判据推出').toContain('useRefereeTools()')
+    expect(panel, 'referee 属性仍是宿主的额外开关').toContain('props.referee')
     for (const call of [
       'workbench.refreshVictoryControlNow()',
       'workbench.setVictoryControlNow(',
       'workbench.checkVictoryNow(',
     ]) {
       const at = panel.indexOf(call)
-      expect(at, `${call} 应在 referee 分支内`).toBeGreaterThan(gate)
+      expect(at, `${call} 应在裁判件分支内`).toBeGreaterThan(gate)
     }
   })
 

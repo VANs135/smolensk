@@ -25,6 +25,8 @@ function maskComments(text: string): string {
 interface Block {
   /** 段名（`v-if` 里的表达式原文） */
   expr: string
+  /** 开标签自己的标签名（决定"多长才算有内容"，见 `minBody`） */
+  tag: string
   /** 开标签所在行（1 起） */
   openLine: number
   /** 闭标签所在行 */
@@ -34,51 +36,105 @@ interface Block {
 }
 
 /**
- * 找出 `v-if` 里带指定前缀的分段块（**按行做同标签深度配对**）
+ * 这一块"算不算有内容"的门槛
  *
- * 段可能挂在 `<template>` 上（整段），也可能挂在 `<div class="row">` 上（一行动作），
- * 所以这里按"开标签自己的标签名"配对，不假定一定是 `template`。
+ * 整段块（`<template>` / `<div class="row">`）要求 > 20 个字符——专抓
+ * "开闭被压成相邻一对"那种形态；**单个控件**（按钮 / 输入 / 标签）本身就是内容，
+ * `开始移动` 这类四字标签也算有内容 ⇒ 门槛降到 1。
+ */
+function minBody(block: Block): number {
+  return ['BaseButton', 'input', 'label', 'select', 'UiField'].includes(block.tag) ? 1 : 20
+}
+
+/** 文本里第 `index` 个字符所在的行（1 基） */
+function lineOf(text: string, index: number): number {
+  return text.slice(0, index).split('\n').length
+}
+
+/**
+ * 找出 `v-if` 里带指定前缀的分段块（按**同名标签**做深度配对）
+ *
+ * 段可能挂在 `<template>` 上（整段），也可能挂在 `<div class="row">` / `<BaseButton>` 上
+ * （一行动作 / 一个按钮），所以按"开标签自己的标签名"配对，不假定一定是 `template`。
+ *
+ * ★ 必须按**整段文本**扫开标签，不能按行匹配：仓库里几乎每个按钮都是
+ *   `<BaseButton\n  v-if="showsReferee"\n  @click=…\n>` 这种**多行开标签**，按行找 `<tag`
+ *   会整块漏掉（第一版就是这么漏的 —— 假绿的正是"裁判件没被门盖住"这种）。
+ * ★ 开标签的正则要放行**属性值里的 `>`**（`v-if="… .length > 0"` 很常见），
+ *   否则会在那个 `>` 处截断，`v-if` 的收尾引号就丢了。
  */
 function blocksOf(text: string, prefix: string): Block[] {
-  const lines = maskComments(text).split('\n')
-  const raw = text.split('\n')
+  const masked = maskComments(text)
   const blocks: Block[] = []
-  for (let i = 0; i < lines.length; i += 1) {
-    const opened = lines[i]!.match(/<(\w[\w-]*)\b[^>]*\bv-if="([^"]+)"/)
-    if (opened === null || !opened[2]!.startsWith(prefix)) continue
-    const tag = opened[1]!
-    const openRe = new RegExp(`<${tag}\\b`, 'g')
-    const closeRe = new RegExp(`</${tag}>`, 'g')
+  const openRe = /<(\w[\w-]*)\b(?:"[^"]*"|'[^']*'|[^>"'])*>/g
+
+  for (let m = openRe.exec(masked); m !== null; m = openRe.exec(masked)) {
+    const tag = m[1]!
+    const tagText = m[0]
+    const cond = tagText.match(/\bv-if="([^"]+)"/)
+    if (cond === null || !cond[1]!.startsWith(prefix)) continue
+    const openLine = lineOf(masked, m.index)
+
+    // 自闭合（`<input … />`）：块就是它自己那一行，正文按"它本身"算（叶子控件不是空段）
+    if (tagText.endsWith('/>')) {
+      blocks.push({
+        expr: cond[1]!,
+        tag,
+        openLine,
+        closeLine: lineOf(masked, m.index + tagText.length),
+        body: tagText,
+      })
+      continue
+    }
+
+    const pairRe = new RegExp(`<${tag}\\b|</${tag}>`, 'g')
+    pairRe.lastIndex = m.index
     let depth = 0
-    let close = -1
-    for (let j = i; j < lines.length; j += 1) {
-      const opens = (lines[j]!.match(openRe) ?? []).length
-      const closes = (lines[j]!.match(closeRe) ?? []).length
-      // 开闭同行的空块（正是那个坑）：先 +1 再 −1，depth 归零 ⇒ 立即判定为空段
-      depth += opens - closes
+    let closeIndex = -1
+    for (let p = pairRe.exec(masked); p !== null; p = pairRe.exec(masked)) {
+      depth += p[0].startsWith('</') ? -1 : 1
       if (depth === 0) {
-        close = j
+        closeIndex = p.index
         break
       }
     }
-    expect(close, `${opened[2]} 那一段没有闭合`).toBeGreaterThan(0)
+    expect(closeIndex, `${cond[1]} 那一段没有闭合`).toBeGreaterThan(0)
+
     blocks.push({
-      expr: opened[2]!,
-      openLine: i + 1,
-      closeLine: close + 1,
-      body: raw
-        .slice(i, close + 1)
-        .join('\n')
-        .replace(new RegExp(`<${tag}\\b[^>]*>`, 'g'), '')
-        .replace(new RegExp(`</${tag}>`, 'g'), '')
-        .replace(/<!--[\s\S]*?-->/g, '')
+      expr: cond[1]!,
+      tag,
+      openLine,
+      closeLine: lineOf(masked, closeIndex),
+      /*
+       * 正文＝**开闭之间的原文**（只抹掉注释、压空白），**保留内部标签**：
+       * 一个"只有按钮、没有文字"的段（`<div v-if="canMove"><BaseButton…/></div>`）
+       * 也是**有内容**的；若把内部标签一起剥掉，就会把这种段误判成空段。
+       */
+      body: masked
+        .slice(m.index + tagText.length, closeIndex)
+        .replace(/\s+/g, ' ')
         .trim(),
     })
   }
   return blocks
 }
 
-/** 某个内容标记落在哪一段里（不落在任何分段块内则返回 `null`） */
+/**
+ * 由**内到外**列出所有把 `marker` 包住的同前缀块
+ *
+ * 用途：一个按钮可能**嵌套**在两道门里（例 `showsSp` 段里再套 `showsReferee`），
+ * 只看最内那道就会丢掉"它属哪个操作段"的信息。
+ */
+function sectionsOf(text: string, marker: string, prefix: string): string[] {
+  const at = text.indexOf(marker)
+  expect(at, `${marker} 不在面板里`).toBeGreaterThanOrEqual(0)
+  const line = text.slice(0, at).split('\n').length
+  return blocksOf(text, prefix)
+    .filter((block) => line > block.openLine && line < block.closeLine)
+    .sort((a, b) => b.openLine - a.openLine)
+    .map((block) => block.expr)
+}
+
 function sectionOf(text: string, marker: string, prefix: string): string | null {
   const at = text.indexOf(marker)
   expect(at, `${marker} 不在面板里`).toBeGreaterThanOrEqual(0)
@@ -99,16 +155,18 @@ describe('分段块的**结构**不变量（空块 / 段错位都会红）', () 
     }
     expect(flags, 'SupplyPanel 缺 showsExtender 这一段').toContain('showsExtender')
     for (const block of blocks) {
-      expect(block.body.length, `${block.expr}（第 ${block.openLine} 行）是空段`).toBeGreaterThan(
-        20,
-      )
+      expect(
+        block.body.length,
+        `${block.expr}（第 ${block.openLine} 行，<${block.tag}>）是空段`,
+      ).toBeGreaterThan(minBody(block) - 1)
     }
   })
 
   it('★ SupplyPanel：每个动作按钮落在**它自己那个段**里（不串段、不落段外）', () => {
     const panel = readFileSync('src/components/supply/SupplyPanel.vue', 'utf8')
+
+    /** 玩家动作：最内那道门就是它所属的**操作段** */
     const expectSection: readonly [string, string][] = [
-      ['workbench.addSpDump()', 'showsSp'],
       ['workbench.destructDumpNow(', 'showsDumpBlow'],
       ['workbench.mergeTransportPointsNow()', 'showsTransport'],
       ['workbench.loadTransportPointNow()', 'showsLoadUnload'],
@@ -116,6 +174,25 @@ describe('分段块的**结构**不变量（空块 / 段错位都会红）', () 
     ]
     for (const [marker, flag] of expectSection) {
       expect(sectionOf(panel, marker, 'shows'), `${marker} 应落在 ${flag} 段里`).toBe(flag)
+    }
+
+    /*
+     * 裁判工具（12.1b 建站 / 移除、12.6a 补给源、13.3f 换轨账本）：
+     * 最内那道门是 `showsReferee`，但它**仍必须留在自己那个操作段里**
+     * （对局台不铺 ≠ 可以飘到别的段去）。
+     */
+    const expectReferee: readonly [string, string][] = [
+      ['workbench.addSpDump()', 'showsSp'],
+      ['workbench.removeSpDump(', 'showsSp'],
+      ['workbench.addSupplySource()', 'showsLedger'],
+      ['workbench.removeSupplySource(', 'showsLedger'],
+      ['workbench.seedConvertedRailsNow()', 'showsLedger'],
+      ['workbench.clearConvertedRailsNow()', 'showsLedger'],
+    ]
+    for (const [marker, outer] of expectReferee) {
+      const chain = sectionsOf(panel, marker, 'shows')
+      expect(chain[0], `${marker} 应由 showsReferee 收（对局台不铺）`).toBe('showsReferee')
+      expect(chain, `${marker} 还应留在 ${outer} 段里`).toContain(outer)
     }
   })
 
@@ -125,7 +202,7 @@ describe('分段块的**结构**不变量（空块 / 段错位都会红）', () 
     for (const flag of ['actsPanzer', 'actsSecurity', 'actsHedgehog', 'actsMarker', 'actsCache']) {
       const hit = blocks.find((block) => block.expr === flag)
       expect(hit, `ExclusiveRulesPanel 缺 ${flag} 段`).toBeDefined()
-      expect(hit!.body.length, `${flag} 是空段`).toBeGreaterThan(10)
+      expect(hit!.body.length, `${flag} 是空段`).toBeGreaterThan(minBody(hit!) - 1)
     }
   })
 
@@ -167,9 +244,10 @@ describe('分段块的**结构**不变量（空块 / 段错位都会红）', () 
     const blocks = blocksOf(panel, 'can')
     expect(blocks.length, '移动面板应有若干按闸门收敛的块').toBeGreaterThanOrEqual(2)
     for (const block of blocks) {
-      expect(block.body.length, `${block.expr}（第 ${block.openLine} 行）是空段`).toBeGreaterThan(
-        20,
-      )
+      expect(
+        block.body.length,
+        `${block.expr}（第 ${block.openLine} 行，<${block.tag}>）是空段`,
+      ).toBeGreaterThan(minBody(block) - 1)
     }
   })
 
@@ -190,9 +268,10 @@ describe('分段块的**结构**不变量（空块 / 段错位都会红）', () 
     const blocks = blocksOf(panel, 'showsAssign')
     expect(blocks.length, 'AirPanel 应有 showsAssign 的分段块').toBeGreaterThanOrEqual(1)
     for (const block of blocks) {
-      expect(block.body.length, `${block.expr}（第 ${block.openLine} 行）是空段`).toBeGreaterThan(
-        20,
-      )
+      expect(
+        block.body.length,
+        `${block.expr}（第 ${block.openLine} 行，<${block.tag}>）是空段`,
+      ).toBeGreaterThan(minBody(block) - 1)
     }
     expect(sectionOf(panel, 'workbench.runAirMissionWithKind(', 'showsAssign')).toBe('showsAssign')
     // 中段要有"表单已收起"的说明（不静默消失）
@@ -238,9 +317,10 @@ describe('分段块的**结构**不变量（空块 / 段错位都会红）', () 
     const blocks = blocksOf(panel, 'workbench.segmentIn(')
     expect(blocks.length, '增援面板应有按环节收敛的分段块').toBeGreaterThanOrEqual(5)
     for (const block of blocks) {
-      expect(block.body.length, `${block.expr}（第 ${block.openLine} 行）是空段`).toBeGreaterThan(
-        20,
-      )
+      expect(
+        block.body.length,
+        `${block.expr}（第 ${block.openLine} 行，<${block.tag}>）是空段`,
+      ).toBeGreaterThan(minBody(block) - 1)
     }
   })
 })
