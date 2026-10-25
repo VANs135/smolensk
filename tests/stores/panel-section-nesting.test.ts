@@ -173,6 +173,32 @@ describe('分段块的**结构**不变量（空块 / 段错位都会红）', () 
     }
   })
 
+  it('★ AirPanel：任务分配表单（14.2f-A/B）只在 A–B 两步出现，宣布后收起', () => {
+    const panel = readFileSync('src/components/air/AirPanel.vue', 'utf8')
+    /*
+     * 用户 2026-10-25：修前「任务类型 / 任务格 / 参战机 / 执行任务」整块**永远在**
+     * ——哪怕任务已宣布、正在 14.2f-C 的空战 / 拦截 / 防空里逐轮结算。
+     * 判据取自引擎步骤机（`airState.step` ∈ declare / move，或尚未宣布）。
+     */
+    expect(panel).toContain('showsAssign')
+    for (const step of ["'declare'", "'move'"]) {
+      expect(panel, `showsAssign 应认步骤 ${step}`).toContain(step)
+    }
+    expect(panel).toContain('workbench.airState?.step')
+
+    // 段里必须有真内容（不是被压成空对），且"选任务类型"确实落在里面
+    const blocks = blocksOf(panel, 'showsAssign')
+    expect(blocks.length, 'AirPanel 应有 showsAssign 的分段块').toBeGreaterThanOrEqual(1)
+    for (const block of blocks) {
+      expect(block.body.length, `${block.expr}（第 ${block.openLine} 行）是空段`).toBeGreaterThan(
+        20,
+      )
+    }
+    expect(sectionOf(panel, 'workbench.runAirMissionWithKind(', 'showsAssign')).toBe('showsAssign')
+    // 中段要有"表单已收起"的说明（不静默消失）
+    expect(panel).toContain('v-if="!showsAssign"')
+  })
+
   it('★ ContainersPanel：记录轨的三类"改表"按钮是**裁判工具**，只有验证页才铺', () => {
     const panel = readFileSync('src/components/containers/ContainersPanel.vue', 'utf8')
     /*
