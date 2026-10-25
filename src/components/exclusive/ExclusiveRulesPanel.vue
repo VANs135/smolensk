@@ -112,12 +112,43 @@ function declarePanzerGroup(): void {
  *     按方案 §4.3 进**会话框**（本面板的动作跨多个段，故由顶栏的「专规动作」按钮显式打开，
  *     不像增援那样由环节自动触发）。
  */
-const props = withDefaults(defineProps<{ only?: 'info' | 'actions' | null }>(), { only: null })
+const props = withDefaults(
+  defineProps<{
+    only?: 'info' | 'actions' | 'panzer' | 'security' | 'hedgehog' | 'marker' | 'cache' | null
+  }>(),
+  { only: null },
+)
 
-/** 本实例是否要画"只读信息"那一段 */
+/**
+ * ★ 用户 2026-10-25「**在什么环节，点什么单位才出现什么菜单**」：
+ *   `panzer` / `security` / `hedgehog` / `marker` / `cache` 是**单个操作**的段 ——
+ *   由 `mapView.unitActionOptions()`（设施动作族 ∩ 本环节闸门）挑出来，会话里只画这一段。
+ *   `actions` 仍＝"动作全显"（顶栏的「专规动作」按钮 / 验证页用），`info` 仍＝只读信息。
+ */
 const showsInfo = computed(() => props.only === null || props.only === 'info')
-/** 本实例是否要画"动作"那一段 */
-const showsActions = computed(() => props.only === null || props.only === 'actions')
+
+/** 某一节的动作是否可写：整块 `actions` 全放行；单段模式只放行自己那一段 */
+function actsOf(section: 'panzer' | 'security' | 'hedgehog' | 'marker' | 'cache'): boolean {
+  return props.only === null || props.only === 'actions' || props.only === section
+}
+
+/** 某一节本体是否出现（单段模式只出现自己） */
+function sectionShown(section: 'panzer' | 'security' | 'hedgehog' | 'marker' | 'cache'): boolean {
+  return props.only === null || props.only === 'actions' || props.only === section
+}
+
+const showsPanzer = computed(() => sectionShown('panzer'))
+const showsSecurity = computed(() => sectionShown('security'))
+const showsHedgehog = computed(() => sectionShown('hedgehog'))
+const showsMarker = computed(() => sectionShown('marker'))
+const showsCache = computed(() => sectionShown('cache'))
+
+/** 各节的"动作可写"开关（模板里用，避免逐处写函数调用） */
+const actsPanzer = computed(() => actsOf('panzer'))
+const actsSecurity = computed(() => actsOf('security'))
+const actsHedgehog = computed(() => actsOf('hedgehog'))
+const actsMarker = computed(() => actsOf('marker'))
+const actsCache = computed(() => actsOf('cache'))
 
 /**
  * B37：**分节置顶判据**（哪一节"本环节该做"）
@@ -165,7 +196,12 @@ const pins = computed(() => workbench.exclusiveSectionPins)
     </template>
     <!-- ══ 动作段（会话框）：3.4 / 3.3b / 16.0b·c / 3.5 / 1.7 ══ -->
 
-    <details class="excl" :open="pins.panzer" :style="{ order: pins.panzer ? 0 : 100 }">
+    <details
+      v-if="showsPanzer"
+      class="excl"
+      :open="pins.panzer"
+      :style="{ order: pins.panzer ? 0 : 100 }"
+    >
       <summary class="excl__title">3.4 装甲集群（分界线 / SP 归属 / 供给均分）</summary>
       <!-- ── · 装甲集群分界线与 SP 平分（3.4 / 3.4a / 3.4b） ── -->
       <hr />
@@ -190,7 +226,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
           {{ Object.keys(workbench.panzerGroupAssignments).length }} 枚
         </span>
       </div>
-      <div v-if="showsActions" class="row">
+      <div v-if="actsPanzer" class="row">
         <label class="field">
           算子
           <select v-model="panzerUnitId" class="select">
@@ -236,7 +272,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
       <p v-if="workbench.panzerGroupObligations.length === 0" class="muted">
         当前没有分界线义务（未声明归属 / 非多单位编队 / 已过 19 August / 无越线或同堆叠相邻）。
       </p>
-      <div v-if="showsActions && workbench.panzerGroupRulesOn" class="row">
+      <div v-if="actsPanzer && workbench.panzerGroupRulesOn" class="row">
         <label class="field">
           Supply Table 到货 SP
           <UiField v-model="workbench.supplyTableSpInput" class="input num" type="number" min="0" />
@@ -271,7 +307,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         <p v-if="workbench.panzerGroupUnassignedDumps.length === 0" class="muted">
           所有轴方补给站都已声明归属（或已过 19 August）。
         </p>
-        <template v-if="showsActions">
+        <template v-if="actsPanzer">
           <div
             v-for="dump in workbench.panzerGroupUnassignedDumps"
             :key="`pg-${dump.id}`"
@@ -303,7 +339,12 @@ const pins = computed(() => workbench.exclusiveSectionPins)
 
     <!-- ── · 装甲集群（B37：按本环节可做与否置顶/折叠） ── -->
 
-    <details class="excl" :open="pins.security" :style="{ order: pins.security ? 1 : 101 }">
+    <details
+      v-if="showsSecurity"
+      class="excl"
+      :open="pins.security"
+      :style="{ order: pins.security ? 1 : 101 }"
+    >
       <summary class="excl__title">3.3b 治安需求（Trainbusting 标记）</summary>
       <!-- ── · 治安需求（3.3b） ── -->
       <hr />
@@ -318,7 +359,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         </p>
       </RuleNote>
       <div class="row">
-        <template v-if="showsActions">
+        <template v-if="actsSecurity">
           <label class="field">
             城市格（列.行）
             <UiField v-model="workbench.cityControlHexText" class="input" placeholder="18.18" />
@@ -344,7 +385,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
           {{ workbench.trainbustingMarks.length }} 枚
         </span>
         <BaseButton
-          v-if="showsActions"
+          v-if="actsSecurity"
           variant="primary"
           size="sm"
           @click="workbench.applySecurityNeedsNow()"
@@ -396,7 +437,12 @@ const pins = computed(() => workbench.exclusiveSectionPins)
 
     <!-- ── · 治安需求（B37：按本环节可做与否置顶/折叠） ── -->
 
-    <details class="excl" :open="pins.hedgehog" :style="{ order: pins.hedgehog ? 2 : 102 }">
+    <details
+      v-if="showsHedgehog"
+      class="excl"
+      :open="pins.hedgehog"
+      :style="{ order: pins.hedgehog ? 2 : 102 }"
+    >
       <summary class="excl__title">16.0b/c 环形工事（修建 / 缩减）</summary>
       <!-- ── 16.0b/c 环形工事的修建与缩减（＋专规 1.3a 印刷工事、1.3b 上限、2.3e 苏军禁建期） ── -->
       <RuleNote
@@ -422,7 +468,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
           并额外受 13.8d 的公共前提约束（**一格一任务**、本阶段未移动、半径按地形算）。
         </p>
       </RuleNote>
-      <div v-if="showsActions" class="row">
+      <div v-if="actsHedgehog" class="row">
         <label class="field">
           执行途径
           <select v-model="workbench.hedgehogExecutorMode" class="select">
@@ -490,7 +536,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
       >
         当前方没有可施工的工程单位（13.8a/5.5b：须有工程能力且处于战斗模式，或 DG 朝战斗面）。
       </p>
-      <div v-if="showsActions && !workbench.hedgehogUsesEngineerRoute" class="row">
+      <div v-if="actsHedgehog && !workbench.hedgehogUsesEngineerRoute" class="row">
         <span class="muted">
           施工小队（在目标格内勾选；只有这批单位作业后本阶段不能再移动，其余照常行动）：
         </span>
@@ -518,6 +564,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
     <!-- ── · 环形工事（B37：按本环节可做与否置顶/折叠） ── -->
 
     <details
+      v-if="showsMarker"
       class="excl"
       :open="pins.constructionMarker"
       :style="{ order: pins.constructionMarker ? 3 : 103 }"
@@ -537,7 +584,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         <BaseTag :kind="workbench.constructionMarkers > 0 ? 'info' : 'neutral'">
           剩余 {{ workbench.constructionMarkers }} 枚
         </BaseTag>
-        <template v-if="showsActions">
+        <template v-if="actsMarker">
           <label class="field">
             <UiField
               class="input num"
@@ -600,7 +647,12 @@ const pins = computed(() => workbench.exclusiveSectionPins)
 
     <!-- ── · 建设标记（B37：按本环节可做与否置顶/折叠） ── -->
 
-    <details class="excl" :open="pins.supplyCache" :style="{ order: pins.supplyCache ? 4 : 104 }">
+    <details
+      v-if="showsCache"
+      class="excl"
+      :open="pins.supplyCache"
+      :style="{ order: pins.supplyCache ? 4 : 104 }"
+    >
       <summary class="excl__title">1.7 / 21.10 补给缓存（Shells / Forage）</summary>
       <!-- ── · 补给缓存（1.7 / 21.10） ── -->
       <hr />
@@ -620,7 +672,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         <BaseTag kind="info">轴 {{ workbench.supplyCacheHoldings.axis }} 枚</BaseTag>
         <BaseTag kind="info">苏 {{ workbench.supplyCacheHoldings.soviet }} 枚</BaseTag>
         <BaseButton
-          v-if="showsActions"
+          v-if="actsCache"
           variant="ghost"
           size="sm"
           @click="workbench.addSupplyCacheNow(workbench.activeSide)"
@@ -628,7 +680,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
           追加 1 枚（1.6c）
         </BaseButton>
       </div>
-      <div v-if="showsActions" class="row">
+      <div v-if="actsCache" class="row">
         <label class="field">
           用法
           <select v-model="workbench.supplyCacheInputs.use" class="select">

@@ -117,13 +117,58 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     expect(mapView.unitActionAvailableAt('sp-1')).toBe(false)
   })
 
-  it('★ 运输点在 C 段有操作（13.2f 装卸 / 12.7c 转延补队），A 段没有', () => {
+  it('★ 运输点：C 段三项（13.2c 合并拆分 / 13.2f 装卸 / 12.7a·d 转延补队），A 段没有', () => {
     const { workbench, mapView } = s
     place(workbench, 'transport_point', 'tp-1')
     enter(workbench, 'movement', 'movement.modeAndMovement')
     expect(mapView.unitActionAvailableAt('tp-1')).toBe(true)
+    expect(mapView.unitActionOptions('tp-1').map((item) => item.key)).toEqual([
+      'move.transportMerge',
+      'move.loadUnload',
+      'move.extenderConvert',
+    ])
     enter(workbench, 'aircraftRefit', 'aircraftRefit.refit')
     expect(mapView.unitActionAvailableAt('tp-1')).toBe(false)
+  })
+
+  it('★ 运输点：G 进击段只剩「转延补队」——13.2c 只许**移动阶段**、13.2f 只在 C 段', () => {
+    const { workbench, mapView } = s
+    place(workbench, 'transport_point', 'tp-1')
+    enter(workbench, 'exploitation', 'exploitation.movement')
+    // 12.7a·d 的转换在三个移动环节都放行；13.2c 原文是"只能在友方**移动阶段**" ⇒ 不在 G 段
+    expect(mapView.unitActionOptions('tp-1').map((item) => item.key)).toEqual([
+      'move.extenderConvert',
+    ])
+  })
+
+  it('★ 延补队：只有「翻回运输点数 / 崩溃」一项（13.2c 不适用于延补队）', () => {
+    const { workbench, mapView } = s
+    place(workbench, 'supply_extender', 'ext-1')
+    enter(workbench, 'movement', 'movement.modeAndMovement')
+    expect(mapView.unitActionOptions('ext-1').map((item) => item.key)).toEqual([
+      'move.extenderConvert',
+    ])
+    expect(mapView.unitActionOptions('ext-1').map((item) => item.only)).toEqual(['extender'])
+  })
+
+  it('★ 补给站：C 段只有「销毁」一项，段名是 dumpBlow（不是整本账本）', () => {
+    const { workbench, mapView } = s
+    place(workbench, 'sp', 'sp-1')
+    enter(workbench, 'movement', 'movement.modeAndMovement')
+    const options = mapView.unitActionOptions('sp-1')
+    expect(options.map((item) => item.key)).toEqual(['move.dumpBlow'])
+    expect(options[0]?.only).toBe('dumpBlow')
+    expect(options[0]?.rule).toBe('12.11a')
+  })
+
+  it('★ 工事：C 段一项，段名 hedgehog（不再整块铺开五节专规）', () => {
+    const { workbench, mapView } = s
+    place(workbench, 'hedgehog', 'hog-1')
+    enter(workbench, 'movement', 'movement.modeAndMovement')
+    const options = mapView.unitActionOptions('hog-1')
+    expect(options.map((item) => item.key)).toEqual(['move.hedgehog'])
+    expect(options[0]?.panel).toBe('fort')
+    expect(options[0]?.only).toBe('hedgehog')
   })
 
   it('★ 操作菜单：C 段基地列出「修建 / 缩减」两项（只列本环节允许的）', () => {
@@ -150,8 +195,11 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     const unitPanel = readFileSync('src/components/game/UnitPanel.vue', 'utf8')
     // 先给操作菜单，挑定后才展开那一段
     expect(unitPanel).toContain('unitActionOptions')
-    expect(unitPanel).toContain('picked === null')
-    expect(unitPanel).toContain(':only="airOnly"')
+    expect(unitPanel).toContain('picked.value === null')
+    // 三个面板的段名都由菜单项挑出来后传进去（写死就等于"永远铺开整块"）
+    for (const binding of [':only="airOnly"', ':only="supplyOnly"', ':only="fortOnly"']) {
+      expect(unitPanel, `UnitPanel 缺 ${binding}`).toContain(binding)
+    }
     const airPanel = readFileSync('src/components/air/AirPanel.vue', 'utf8')
     for (const flag of [
       'showsRefit',
@@ -164,6 +212,66 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     }
   })
 
+  /**
+   * ★ 用户 2026-10-25：**「在什么环节，点什么单位才出现什么菜单」**
+   *
+   * 这张表就是答案（左边＝环节，上面＝单位类型，格子里＝点它会看到的菜单）。
+   * 每格都从 store 实测（`unitActionOptions`），不是抄注释；`—` 表示**没有操作、连入口都不给**。
+   * 改闸门表 / 改 `facilityActionKeys` 都会让这张表红，逼着一起改（有意识的改动）。
+   */
+  it('★ 菜单矩阵：环节 × 单位类型 → 菜单项（这就是"点什么单位出什么菜单"）', () => {
+    const { workbench, mapView } = s
+    const KINDS = {
+      sp: 'sp',
+      tp: 'transport_point',
+      ext: 'supply_extender',
+      base: 'air_base',
+      hog: 'hedgehog',
+    } as const
+    for (const [id, kind] of Object.entries(KINDS)) place(workbench, kind, id)
+
+    /** 某环节下，各设施类型的菜单（`only` 段名），`—` ＝无操作 */
+    const menuOf = (step: { phase: ConsolePhase; id: string }) => {
+      enter(workbench, step.phase, step.id)
+      const row: Record<string, string[]> = {}
+      for (const id of Object.keys(KINDS)) {
+        row[id] = mapView.unitActionOptions(id).map((item) => item.only ?? '（整块）')
+      }
+      return row
+    }
+
+    const C = { phase: 'movement' as ConsolePhase, id: 'movement.modeAndMovement' }
+    const A = { phase: 'aircraftRefit' as ConsolePhase, id: 'aircraftRefit.refit' }
+    const D = { phase: 'supply' as ConsolePhase, id: 'supply.check' }
+    const F = { phase: 'combat' as ConsolePhase, id: 'combat.combat' }
+    const G = { phase: 'exploitation' as ConsolePhase, id: 'exploitation.movement' }
+
+    expect(menuOf(C)).toEqual({
+      sp: ['dumpBlow'],
+      tp: ['transport', 'loadUnload', 'extender'],
+      ext: ['extender'],
+      base: ['airstrip', 'reduce'],
+      hog: ['hedgehog'],
+    })
+    expect(menuOf(A)).toEqual({
+      sp: [],
+      tp: [],
+      ext: [],
+      base: ['refit'],
+      hog: [],
+    })
+    expect(menuOf(D)).toEqual({ sp: [], tp: [], ext: [], base: [], hog: [] })
+    expect(menuOf(F)).toEqual({ sp: [], tp: [], ext: [], base: [], hog: [] })
+    // G 进击段：12.7a·d 与 12.11a 在"进击阶段的移动环节"照常，13.2c/13.2f 不在
+    expect(menuOf(G)).toEqual({
+      sp: ['dumpBlow'],
+      tp: ['extender'],
+      ext: ['extender'],
+      base: [],
+      hog: [],
+    })
+  })
+
   it('★ 设施动作表本身就是"规则书清单"（键与环节由闸门表给，不在这里另写一套）', () => {
     const { mapView } = s
     expect(mapView.facilityActionKeys('sp')).toEqual(['move.dumpBlow'])
@@ -173,6 +281,12 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
       'air.baseReduce',
     ])
     expect(mapView.facilityActionKeys('hedgehog')).toEqual(['move.hedgehog'])
+    expect(mapView.facilityActionKeys('transport_point')).toEqual([
+      'move.transportMerge',
+      'move.loadUnload',
+      'move.extenderConvert',
+    ])
+    expect(mapView.facilityActionKeys('supply_extender')).toEqual(['move.extenderConvert'])
     // 没有"对它操作"的种类（纯标记类）⇒ 空表
     expect(mapView.facilityActionKeys('marker')).toEqual([])
   })

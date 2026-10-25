@@ -11641,6 +11641,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 换成该规模的那一枚记录——**算子库里没有该规模就拒绝**（这是规则的原文限制，不是我们的取舍）。
    */
   function mergeTransportPointsNow(): boolean {
+    if (!requireAction('move.transportMerge', '合并运输点数')) return false
     const picked = transportPointInputs.value.mergeIds
       .map((id) => units.value.find((unit) => unit.instanceId === id))
       .filter((unit): unit is ConsoleUnit => unit !== undefined)
@@ -11699,6 +11700,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 按各份规模各放一枚（缺任一规模的算子即整笔拒绝，且**原算子不动**——先全部校验再落盘）。
    */
   function splitTransportPointNow(): boolean {
+    if (!requireAction('move.transportMerge', '拆分运输点数')) return false
     const id = transportPointInputs.value.splitId
     const unit = units.value.find((item) => item.instanceId === id) ?? null
     if (unit === null) {

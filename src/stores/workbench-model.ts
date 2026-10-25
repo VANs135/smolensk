@@ -2308,6 +2308,8 @@ export type ActionKey =
   | 'move.railTransport'
   | 'move.railConversion'
   | 'move.loadUnload'
+  /* 13.2c：运输点数的合并 / 拆分（只在**移动阶段**；不耗 MP） */
+  | 'move.transportMerge'
   | 'move.construction'
   | 'move.hedgehog'
   | 'move.breakdown'
@@ -2479,6 +2481,15 @@ export const ACTION_GATES: readonly ActionGate[] = [
     key: 'move.loadUnload',
     label: '装载 / 卸载 SP',
     rule: '13.2f',
+    where: [{ phase: 'movement', segment: 'movement.modeAndMovement' }],
+  },
+  {
+    // 13.2c 原文：「合并与拆分 不消耗 MP，但**只能在友方移动阶段**中进行，且所有所涉及的
+    // 运输点数必须在同一格内」。★ 只取 `movement.modeAndMovement`：E 反应段与 G 进击段
+    // 分别是「反应阶段」「进击阶段」，与原文的「移动阶段」不是同一段（不失之于宽）。
+    key: 'move.transportMerge',
+    label: '合并 / 拆分运输点数',
+    rule: '13.2c',
     where: [{ phase: 'movement', segment: 'movement.modeAndMovement' }],
   },
   {
@@ -2689,6 +2700,8 @@ export const ACTION_KEY_KIND: Readonly<Record<ActionKey, readonly ActionKind[]>>
   'move.railTransport': ['railTransport'],
   'move.railConversion': ['railConversion'],
   'move.loadUnload': ['loadUnload'],
+  // 13.2c：合并/拆分不耗 MP、无单位执行 ⇒ 时机表未收（属补给子系统；环节闸由本表 `where` 判）
+  'move.transportMerge': [],
   'move.construction': ['engineer'],
   'move.hedgehog': ['buildHedgehog'],
   'move.breakdown': ['breakdown'],
@@ -2723,6 +2736,8 @@ export const ACTION_KEYS_WITHOUT_KIND: readonly ActionKey[] = [
   'move.dumpBlow',
   // 第五批批 B 切片 2（12.7a/d）：延补队转换/翻面 —— 同上，属"SP/运输点子的转换"而非"由单位执行"的动作
   'move.extenderConvert',
+  // ★ 2026-10-25（13.2c）：运输点数的合并/拆分 —— 不耗 MP、也不由单位执行（时机表无 kind）
+  'move.transportMerge',
   'supply.attrition',
   // H④（12.10e）：恢复部队储备 —— 同上，属"SP 分配"而非"由单位执行"的动作
   'supply.recovery',

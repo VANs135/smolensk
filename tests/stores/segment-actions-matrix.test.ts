@@ -194,7 +194,7 @@ describe('阶段/环节 × 操作矩阵（规则书口径）', () => {
       'player    reinforcement.specialRepl → rein.specialRepl',
       'player    reinforcement.frontalReserves → rein.frontalReserves',
       'player    movement.breakout → move.breakout',
-      'player    movement.modeAndMovement → air.baseReduce,air.mission,barrage.declare,move.breakdown,move.construction,move.dumpBlow,move.extenderConvert,move.hedgehog,move.loadUnload,move.modeChange,move.order,move.overrun,move.railConversion,move.railTransport,supply.fuel',
+      'player    movement.modeAndMovement → air.baseReduce,air.mission,barrage.declare,move.breakdown,move.construction,move.dumpBlow,move.extenderConvert,move.hedgehog,move.loadUnload,move.modeChange,move.order,move.overrun,move.railConversion,move.railTransport,move.transportMerge,supply.fuel',
       'player    movement.barrage → air.mission,barrage.declare',
       'player    supply.recovery → exclusive.forage,supply.draw,supply.recovery',
       'player    supply.check → exclusive.forage,supply.attrition,supply.draw',

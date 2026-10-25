@@ -1041,8 +1041,11 @@ export const useMapViewStore = defineStore('mapView', () => {
         return ['move.dumpBlow']
       case 'transport_point':
       case 'organic_truck':
+        // 13.2c 合并/拆分（只在移动阶段）＋ 13.2f 装卸 ＋ 12.7a/d 转延补队
+        return ['move.transportMerge', 'move.loadUnload', 'move.extenderConvert']
       case 'supply_extender':
-        return ['move.loadUnload', 'move.extenderConvert']
+        // 12.7d 翻回运输点数 / 9.14d 主动崩溃（延补队不能合并拆分，13.2c 也不适用）
+        return ['move.extenderConvert']
       case 'air_base':
         return ['air.refit', 'move.construction', 'air.baseReduce']
       case 'hedgehog':
@@ -1077,22 +1080,28 @@ export const useMapViewStore = defineStore('mapView', () => {
     { label: string; rule: string; panel: 'air' | 'supply' | 'fort'; only: string | null }
   > = {
     'move.dumpBlow': {
-      label: '销毁补给（12.11a）',
+      label: '销毁补给站（12.11a）',
       rule: '12.11a',
       panel: 'supply',
-      only: 'ledger',
+      only: 'dumpBlow',
+    },
+    'move.transportMerge': {
+      label: '合并 / 拆分运输点数（13.2c）',
+      rule: '13.2c',
+      panel: 'supply',
+      only: 'transport',
     },
     'move.loadUnload': {
       label: '装卸 SP（13.2f）',
       rule: '13.2f',
       panel: 'supply',
-      only: 'ledger',
+      only: 'loadUnload',
     },
     'move.extenderConvert': {
-      label: '运输点 ⇄ 延补队（12.7c）',
-      rule: '12.7c',
+      label: '运输点 ⇄ 延补队（12.7a·d）',
+      rule: '12.7a·d',
       panel: 'supply',
-      only: 'ledger',
+      only: 'extender',
     },
     'air.refit': { label: '整备飞机（15.1）', rule: '15.1', panel: 'air', only: 'refit' },
     'move.construction': {
@@ -1103,10 +1112,10 @@ export const useMapViewStore = defineStore('mapView', () => {
     },
     'air.baseReduce': { label: '缩减基地（15.4）', rule: '15.4', panel: 'air', only: 'reduce' },
     'move.hedgehog': {
-      label: '修建 / 改进工事（16.0b）',
-      rule: '16.0b',
+      label: '修建 / 缩减工事（16.0b·c）',
+      rule: '16.0b·c',
       panel: 'fort',
-      only: null,
+      only: 'hedgehog',
     },
   }
 

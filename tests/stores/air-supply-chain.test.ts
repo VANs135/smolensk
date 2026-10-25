@@ -262,7 +262,13 @@ describe('B15d/B15e：分段渲染与视图接线（源码守卫）', () => {
     expect(air).toContain('showsBaseOps')
 
     const supply = readFileSync('src/components/supply/SupplyPanel.vue', 'utf8')
-    expect(supply).toContain("only?: 'check' | 'ledger' | null")
+    // 两段（check / ledger）＋ ★ 用户 2026-10-25 的"一个操作一个面板"五个细分段
+    for (const only of ["'check'", "'ledger'", "'sp'", "'dumpBlow'", "'transport'"]) {
+      expect(supply, `SupplyPanel 缺 ${only} 分段`).toContain(only)
+    }
+    for (const only of ["'extender'", "'loadUnload'"]) {
+      expect(supply, `SupplyPanel 缺 ${only} 分段`).toContain(only)
+    }
     expect(supply).toContain('showsCheck')
     expect(supply).toContain('showsLedger')
   })
@@ -285,8 +291,13 @@ describe('B15d/B15e：分段渲染与视图接线（源码守卫）', () => {
     expect(unit).toContain("mapView.unitActionFamily === 'supply'")
     expect(unit).toContain("mapView.unitActionFamily === 'air'")
     expect(unit).toContain("mapView.unitActionFamily === 'fort'")
-    expect(unit).toContain('only="ledger"')
-    expect(unit).toContain('only="actions"')
+    /*
+     * ★ 用户 2026-10-25「在什么环节，点什么单位才出现什么菜单」：三个面板的段名一律由
+     *   `unitActionOptions()` 挑出来后**传进去**，不再写死 `only="ledger"` / `only="actions"`
+     *   （写死就等于"点补给站永远铺开整本账本"，正是要改掉的糅杂）。
+     */
+    expect(unit).toContain(':only="supplyOnly"')
+    expect(unit).toContain(':only="fortOnly"')
     /*
      * ★ 用户 2026-10-25「一个操作一个面板」：点基地**不再**一次铺开整块 AirPanel，
      *   而是先给"这个基地此刻能做的事"（判据＝设施动作族 ∩ 本环节闸门），挑定一项才展开那一段。

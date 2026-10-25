@@ -306,12 +306,41 @@ function hoverSource(id: string | null): void {
  *    按方案 §4.3 该在地图会话框里做。
  * 故侧栏挂 `only="ledger"`（含"受补给单位"入口）、地图会话挂 `only="check"`。
  */
-const props = withDefaults(defineProps<{ only?: 'check' | 'ledger' | null }>(), { only: null })
+const props = withDefaults(
+  defineProps<{
+    only?: 'check' | 'ledger' | 'sp' | 'dumpBlow' | 'transport' | 'extender' | 'loadUnload' | null
+  }>(),
+  { only: null },
+)
 
 /** 本实例是否要画"逐单位检查链"那一段 */
 const showsCheck = computed(() => props.only === null || props.only === 'check')
-/** 本实例是否要画"账本与事务"那一段 */
-const showsLedger = computed(() => props.only === null || props.only === 'ledger')
+
+/**
+ * ★ 用户 2026-10-25「**在什么环节，点什么单位才出现什么菜单**」：
+ *   账本段内部再按**一个操作**细分 —— `sp` / `dumpBlow` / `transport` / `extender` / `loadUnload`
+ *   由 `mapView.unitActionOptions()`（设施动作族 ∩ 本环节闸门）挑出来，会话里只画这一段；
+ *   `ledger` 仍是"账本全显"（右栏 / 验证页口径不变）。
+ */
+function sub(part: 'sp' | 'dumpBlow' | 'transport' | 'extender' | 'loadUnload'): boolean {
+  return props.only === null || props.only === 'ledger' || props.only === part
+}
+
+const showsSp = computed(() => sub('sp'))
+const showsDumpBlow = computed(() => sub('dumpBlow'))
+const showsTransport = computed(() => sub('transport'))
+const showsExtender = computed(() => sub('extender'))
+const showsLoadUnload = computed(() => sub('loadUnload'))
+
+/** 本实例是否要画"账本与事务"那一段（＝任一分段要求） */
+const showsLedger = computed(
+  () =>
+    showsSp.value ||
+    showsDumpBlow.value ||
+    showsTransport.value ||
+    showsExtender.value ||
+    showsLoadUnload.value,
+)
 </script>
 
 <template>
@@ -326,295 +355,302 @@ const showsLedger = computed(() => props.only === null || props.only === 'ledger
       </BaseButton>
     </div>
 
-    <p v-if="!workbench.supplyActive" class="muted">
+    <p v-if="!workbench.supplyActive && props.only === null" class="muted">
       开启后按 12.0 章逐步结算：判定补给状态（12.6）→ 选来源（12.3a 拖取 / 12.3b 投递）→ 定 T
       数与用途 → 结算；无追溯补给时走断补处置（12.6c 吃图上补给 / 12.6d 接受断补）。
     </p>
 
-    <template v-else>
+    <template v-else-if="workbench.supplyActive || props.only !== null">
       <!-- ══ 账本与事务段（12.1a/12.11a/13.2c/12.7/12.6a/13.3f/13.3a/12.1–12.2）══
            B15e：这一段留在**侧栏**（地图会话挂 `only="check"`）。"受补给单位"入口也在这里，
            因为它必须**随时可达**（会话只在检查开始后才存在）。 -->
       <template v-if="showsLedger">
-        <!-- ── ① SP 账本（12.1b：含 SP 的位置即补给站） ── -->
-        <p class="muted">
-          补给站账本（12.1b：任何含 SP 的位置都是补给站；1 SP = 4 T）。 本操作台以账本代替盘面上的
-          SP 算子——12.1a 的拆分/找零需要多枚等额算子，引擎只看持仓数值。
-        </p>
-        <div class="row">
-          <label class="field">
-            格号（列.行）
-            <UiField v-model="workbench.spDumpDraft.hexText" class="input" placeholder="36.13" />
-            <BaseButton variant="secondary" size="sm" @click="workbench.beginSpDumpHexPickNow()">
-              点地图选格
+        <template v-if="showsSp">
+          <!-- ── ① SP 账本（12.1b：含 SP 的位置即补给站） ── -->
+          <p class="muted">
+            补给站账本（12.1b：任何含 SP 的位置都是补给站；1 SP = 4 T）。 本操作台以账本代替盘面上的
+            SP 算子——12.1a 的拆分/找零需要多枚等额算子，引擎只看持仓数值。
+          </p>
+          <div class="row">
+            <label class="field">
+              格号（列.行）
+              <UiField v-model="workbench.spDumpDraft.hexText" class="input" placeholder="36.13" />
+              <BaseButton variant="secondary" size="sm" @click="workbench.beginSpDumpHexPickNow()">
+                点地图选格
+              </BaseButton>
+            </label>
+            <label class="field">
+              SP
+              <UiField v-model="workbench.spDumpDraft.sp" class="input num" type="number" min="0" />
+            </label>
+            <label class="field">
+              T
+              <UiField v-model="workbench.spDumpDraft.t" class="input num" type="number" min="0" />
+            </label>
+            <BaseButton variant="secondary" size="sm" @click="workbench.addSpDump()">
+              新增补给站（12.1b）
             </BaseButton>
-          </label>
-          <label class="field">
-            SP
-            <UiField v-model="workbench.spDumpDraft.sp" class="input num" type="number" min="0" />
-          </label>
-          <label class="field">
-            T
-            <UiField v-model="workbench.spDumpDraft.t" class="input num" type="number" min="0" />
-          </label>
-          <BaseButton variant="secondary" size="sm" @click="workbench.addSpDump()">
-            新增补给站（12.1b）
-          </BaseButton>
-        </div>
+          </div>
 
-        <p v-if="workbench.spDumpsOfSide.length === 0" class="muted">当前方尚无补给站。</p>
-        <div v-for="dump in workbench.spDumpsOfSide" :key="dump.id" class="row">
-          <BaseTag kind="info">{{ hexLabel(dump.hex) }}</BaseTag>
-          <span class="num">
-            {{ dump.sp }} SP + {{ dump.t }} T
-            <span v-if="!isNormalized(dump.sp, dump.t)">（可加总：12.1a）</span>
-          </span>
-          <label class="field">
-            拆
-            <UiField
-              v-model="workbench.supplyInputs.spToSplit"
-              class="input num"
-              type="number"
-              min="0"
-              :max="dump.sp"
-              stepper
-            />
-            SP
-          </label>
-          <BaseButton
-            variant="ghost"
-            size="sm"
-            @click="workbench.splitSpDumpHoldings(dump.id, workbench.supplyInputs.spToSplit)"
-          >
-            拆分（12.1a）
-          </BaseButton>
-          <BaseButton variant="ghost" size="sm" @click="workbench.mergeSpDumpHoldings(dump.id)">
-            加总（12.1a）
-          </BaseButton>
-          <BaseButton variant="ghost" size="sm" @click="workbench.removeSpDump(dump.id)">
-            移除
-          </BaseButton>
-        </div>
+          <p v-if="workbench.spDumpsOfSide.length === 0" class="muted">当前方尚无补给站。</p>
+          <div v-for="dump in workbench.spDumpsOfSide" :key="dump.id" class="row">
+            <BaseTag kind="info">{{ hexLabel(dump.hex) }}</BaseTag>
+            <span class="num">
+              {{ dump.sp }} SP + {{ dump.t }} T
+              <span v-if="!isNormalized(dump.sp, dump.t)">（可加总：12.1a）</span>
+            </span>
+            <label class="field">
+              拆
+              <UiField
+                v-model="workbench.supplyInputs.spToSplit"
+                class="input num"
+                type="number"
+                min="0"
+                :max="dump.sp"
+                stepper
+              />
+              SP
+            </label>
+            <BaseButton
+              variant="ghost"
+              size="sm"
+              @click="workbench.splitSpDumpHoldings(dump.id, workbench.supplyInputs.spToSplit)"
+            >
+              拆分（12.1a）
+            </BaseButton>
+            <BaseButton variant="ghost" size="sm" @click="workbench.mergeSpDumpHoldings(dump.id)">
+              加总（12.1a）
+            </BaseButton>
+            <BaseButton variant="ghost" size="sm" @click="workbench.removeSpDump(dump.id)">
+              移除
+            </BaseButton>
+          </div>
 
-        <!-- ── ①b 12.11a 销毁补给站（只在移动环节；每阶段每站一次；运输点数不能以此摧毁） ── -->
-        <p class="muted">
-          销毁补给站（12.11a）：担心被夺时可在**移动环节**销毁本站 SP（掷 1 骰查百分比，损失按 T
-          取整）。 每个阶段每个补给站只能尝试一次；**运输点数不能以此方式摧毁**。
-        </p>
-        <div class="row">
-          <label class="field"> 已试过的站会**灰掉**（12.11a：每阶段每站一次） </label>
-        </div>
-        <!-- B14d：补给站＝**算子图阵列**（原来是纯文字下拉） -->
-        <CounterPicker
-          title="要销毁的补给站（12.11a）"
-          hint="12.11a：只在移动环节；每阶段每站一次；运输点数不能以此摧毁"
-          :items="destroyDumpItems"
-          :size="32"
-          @pick="destroyDumpId = $event"
-          @hover="hoverDump"
-        />
-        <div class="row">
-          <label class="field">
-            销毁量（T；留空＝全部 SP）
-            <UiField
-              v-model="destroyT"
-              class="input num"
-              type="number"
-              min="1"
-              placeholder="全部"
-              readonly
-            />
-          </label>
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="destroyDumpId === ''"
-            @click="workbench.destructDumpNow(destroyDumpId, destroyT ?? undefined)"
-          >
-            销毁（12.11a）
-          </BaseButton>
-        </div>
-
-        <!-- ── ①c 运输点数（13.2c 合并/拆分、12.7 与延补队双向转换） ── -->
-        <RuleNote title="合并 / 拆分运输点数：同格、同类、本方移动阶段（不耗 MP）" rule="13.2c">
+          <template v-if="showsDumpBlow"> </template>
+          <!-- ── ①b 12.11a 销毁补给站（只在移动环节；每阶段每站一次；运输点数不能以此摧毁） ── -->
           <p class="muted">
-            运输点数（13.2c）：合并/拆分**不耗
-            MP**，只能在本方**移动阶段**做，且所有算子须在**同一格**；
-            **不同类型永不合并**（含编内卡车）。12.7a：同格合计满 **5 点**可转为一枚延补队（消耗 ½
-            MA， 余数留原格）；12.7d：延补队可在移动环节主动翻回 5 点运输点数（同样消耗自身 ½ MA）。
+            销毁补给站（12.11a）：担心被夺时可在**移动环节**销毁本站 SP（掷 1 骰查百分比，损失按 T
+            取整）。 每个阶段每个补给站只能尝试一次；**运输点数不能以此方式摧毁**。
           </p>
-        </RuleNote>
-        <div class="row">
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="workbench.transportPointInputs.mergeIds.length < 2"
-            @click="workbench.mergeTransportPointsNow()"
-          >
-            合并选中（13.2c）
-          </BaseButton>
-          <label class="field">
-            拆分为（空格分隔各份规模）
-            <!-- 13.2c：各份规模是**列表**（如 "2 3"），步进表达不了 ⇒ 保留普通输入（正式界面也可用） -->
-            <input
-              v-model="workbench.transportPointInputs.splitSizesText"
-              class="input"
-              placeholder="2 3"
-            />
-          </label>
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="workbench.transportPointInputs.splitId === null"
-            @click="workbench.splitTransportPointNow()"
-          >
-            拆分（13.2c）
-          </BaseButton>
-        </div>
-        <!-- B14d：运输点数＝**算子图阵列**（原来是逐点数的文字复选框 + 每行一个"选为拆分对象"按钮） -->
-        <CounterPicker
-          title="合并（13.2c，点两枚及以上）"
-          hint="13.2c：合并/拆分不耗 MP，只能在本方移动阶段、且所有算子须在**同一格**；不同类型永不合并"
-          :items="transportMergeItems"
-          :size="32"
-          @pick="workbench.toggleTransportMerge($event)"
-          @hover="hoverUnit"
-        />
-        <CounterPicker
-          title="拆分对象（点一枚）"
-          hint="13.2c：拆分只作用于这一枚（份数在上面的输入框里给）"
-          :items="transportSplitItems"
-          :size="32"
-          @pick="workbench.transportPointInputs.splitId = $event"
-          @hover="hoverUnit"
-        />
-        <p v-if="workbench.transportPointsOfSide.length === 0" class="muted">
-          （当前方图上没有运输点数算子）
-        </p>
-
-        <!-- ── ①d 13.2f 运输点数的装载 / 卸载 SP ── -->
-        <RuleNote
-          title="装载 / 卸载 SP：装载须与补给站同格、卸载须在有战斗单位/设施或已卸站的格"
-          rule="13.2f"
-        >
-          <p class="muted">
-            装载/卸载
-            SP（13.2f）：运输点数**在任何格**都能装载，但必须与**补给站**同格；卸载只能在含
-            **友方战斗单位、港口、空军基地或已有已卸载补给站**的格内。两种情况都要支付它**印刷 MA 的
-            10%** （按 6.1a 计入本阶段已耗 MP）。**编内卡车永远不能在地图上卸载**（13.2g-A）。
-            载量记在点数的「已载」上——9.14 的夺取表按此计入战利品。
-          </p>
-        </RuleNote>
-        <!-- B14d：装卸对象＝**算子图阵列**（原来是纯文字下拉；已载量在 title 里） -->
-        <CounterPicker
-          title="装卸对象（13.2f）"
-          hint="13.2f：装载须与补给站同格、卸载须在含友方战斗单位/港口/空军基地/已卸载补给站的格；两者都付印刷 MA 的 10%"
-          :items="transportLoadItems"
-          :size="32"
-          @pick="workbench.transportLoadInputs.pointId = $event"
-          @hover="hoverUnit"
-        />
-        <div class="row">
-          <label class="field">
-            SP 数（1 SP = 4 T）
-            <UiField
-              v-model="workbench.transportLoadInputs.amount"
-              class="input num"
-              type="number"
-              min="1"
-              stepper
-            />
-          </label>
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="workbench.transportLoadInputs.pointId === null"
-            @click="workbench.loadTransportPointNow()"
-          >
-            装载 SP（13.2f）
-          </BaseButton>
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="workbench.transportLoadInputs.pointId === null"
-            @click="workbench.unloadTransportPointNow()"
-          >
-            卸载 SP（13.2f）
-          </BaseButton>
-        </div>
-        <p v-if="workbench.transportLoadError !== null" class="bad">
-          <BaseTag kind="danger">{{ workbench.transportLoadError.rule }}</BaseTag>
-          {{ workbench.transportLoadError.reason }}
-        </p>
-        <div class="row">
-          <label class="field">
-            转换格号
-            <UiField v-model="workbench.convertTargetHexText" class="input" placeholder="36.13" />
+          <div class="row">
+            <label class="field"> 已试过的站会**灰掉**（12.11a：每阶段每站一次） </label>
+          </div>
+          <!-- B14d：补给站＝**算子图阵列**（原来是纯文字下拉） -->
+          <CounterPicker
+            title="要销毁的补给站（12.11a）"
+            hint="12.11a：只在移动环节；每阶段每站一次；运输点数不能以此摧毁"
+            :items="destroyDumpItems"
+            :size="32"
+            @pick="destroyDumpId = $event"
+            @hover="hoverDump"
+          />
+          <div class="row">
+            <label class="field">
+              销毁量（T；留空＝全部 SP）
+              <UiField
+                v-model="destroyT"
+                class="input num"
+                type="number"
+                min="1"
+                placeholder="全部"
+                readonly
+              />
+            </label>
             <BaseButton
               variant="secondary"
               size="sm"
-              @click="workbench.beginConvertTargetHexPickNow()"
+              :disabled="destroyDumpId === ''"
+              @click="workbench.destructDumpNow(destroyDumpId, destroyT ?? undefined)"
             >
-              点地图选格
+              销毁（12.11a）
             </BaseButton>
-          </label>
-          <label class="field">
-            型号
-            <select v-model="convertKind" class="select">
-              <option value="truck">truck（卡车）</option>
-              <option value="wagon">wagon（马车）</option>
-            </select>
-          </label>
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            @click="
-              workbench.convertTransportToExtenderNow(workbench.convertTargetHexText, convertKind)
-            "
-          >
-            转为延补队（12.7a）
-          </BaseButton>
-        </div>
-        <!-- B14d：延补队＝**算子图阵列**（原来是纯文字下拉） -->
-        <CounterPicker
-          title="延补队（12.7d 翻回 / 9.14d 主动崩溃）"
-          hint="12.7d：移动环节可主动翻回 5 点运输点数（消耗 ½ MA）；9.14d：以主动崩溃替代常规移动"
-          :items="extenderItems"
-          :size="32"
-          @pick="convertExtenderId = $event"
-          @hover="hoverUnit"
-        />
-        <div class="row">
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="convertExtenderId === ''"
-            @click="workbench.flipExtenderToTransport(convertExtenderId)"
-          >
-            翻回 5 点运输点数（12.7d）
-          </BaseButton>
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="convertExtenderId === ''"
-            @click="workbench.collapseExtenderNow(convertExtenderId)"
-          >
-            主动崩溃（9.14d：替代常规移动）
-          </BaseButton>
-        </div>
-        <RuleNote
-          title="9.14d 主动崩溃：延补队在移动环节位移到「特殊拖取距离内且有追溯补给」的格"
-          rule="9.14d"
-        >
-          <p class="muted">
-            9.14d 主动崩溃：延补队不能移动，可在**移动环节**用它替代常规移动——位移到**特殊拖取距离**
-            （12.7b：战斗面印值 MA，卡车 20 / 马车
-            10）内、且**该格此刻有追溯补给**的任意格；敌方单位 / ZOC /
-            禁入地形概不影响。落格后翻面到运输点数面；**若无合法格则无法崩溃**：原地翻面，并按 9.14c
-            判夺取。
-          </p>
-        </RuleNote>
+          </div>
 
+          <template v-if="showsTransport"> </template>
+          <!-- ── ①c 运输点数（13.2c 合并/拆分、12.7 与延补队双向转换） ── -->
+          <RuleNote title="合并 / 拆分运输点数：同格、同类、本方移动阶段（不耗 MP）" rule="13.2c">
+            <p class="muted">
+              运输点数（13.2c）：合并/拆分**不耗
+              MP**，只能在本方**移动阶段**做，且所有算子须在**同一格**；
+              **不同类型永不合并**（含编内卡车）。12.7a：同格合计满 **5 点**可转为一枚延补队（消耗 ½
+              MA， 余数留原格）；12.7d：延补队可在移动环节主动翻回 5 点运输点数（同样消耗自身 ½
+              MA）。
+            </p>
+          </RuleNote>
+          <div class="row">
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :disabled="workbench.transportPointInputs.mergeIds.length < 2"
+              @click="workbench.mergeTransportPointsNow()"
+            >
+              合并选中（13.2c）
+            </BaseButton>
+            <label class="field">
+              拆分为（空格分隔各份规模）
+              <!-- 13.2c：各份规模是**列表**（如 "2 3"），步进表达不了 ⇒ 保留普通输入（正式界面也可用） -->
+              <input
+                v-model="workbench.transportPointInputs.splitSizesText"
+                class="input"
+                placeholder="2 3"
+              />
+            </label>
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :disabled="workbench.transportPointInputs.splitId === null"
+              @click="workbench.splitTransportPointNow()"
+            >
+              拆分（13.2c）
+            </BaseButton>
+          </div>
+          <!-- B14d：运输点数＝**算子图阵列**（原来是逐点数的文字复选框 + 每行一个"选为拆分对象"按钮） -->
+          <CounterPicker
+            title="合并（13.2c，点两枚及以上）"
+            hint="13.2c：合并/拆分不耗 MP，只能在本方移动阶段、且所有算子须在**同一格**；不同类型永不合并"
+            :items="transportMergeItems"
+            :size="32"
+            @pick="workbench.toggleTransportMerge($event)"
+            @hover="hoverUnit"
+          />
+          <CounterPicker
+            title="拆分对象（点一枚）"
+            hint="13.2c：拆分只作用于这一枚（份数在上面的输入框里给）"
+            :items="transportSplitItems"
+            :size="32"
+            @pick="workbench.transportPointInputs.splitId = $event"
+            @hover="hoverUnit"
+          />
+          <p v-if="workbench.transportPointsOfSide.length === 0" class="muted">
+            （当前方图上没有运输点数算子）
+          </p>
+
+          <template v-if="showsLoadUnload"> </template>
+          <!-- ── ①d 13.2f 运输点数的装载 / 卸载 SP ── -->
+          <RuleNote
+            title="装载 / 卸载 SP：装载须与补给站同格、卸载须在有战斗单位/设施或已卸站的格"
+            rule="13.2f"
+          >
+            <p class="muted">
+              装载/卸载
+              SP（13.2f）：运输点数**在任何格**都能装载，但必须与**补给站**同格；卸载只能在含
+              **友方战斗单位、港口、空军基地或已有已卸载补给站**的格内。两种情况都要支付它**印刷 MA
+              的 10%** （按 6.1a 计入本阶段已耗 MP）。**编内卡车永远不能在地图上卸载**（13.2g-A）。
+              载量记在点数的「已载」上——9.14 的夺取表按此计入战利品。
+            </p>
+          </RuleNote>
+          <!-- B14d：装卸对象＝**算子图阵列**（原来是纯文字下拉；已载量在 title 里） -->
+          <CounterPicker
+            title="装卸对象（13.2f）"
+            hint="13.2f：装载须与补给站同格、卸载须在含友方战斗单位/港口/空军基地/已卸载补给站的格；两者都付印刷 MA 的 10%"
+            :items="transportLoadItems"
+            :size="32"
+            @pick="workbench.transportLoadInputs.pointId = $event"
+            @hover="hoverUnit"
+          />
+          <div class="row">
+            <label class="field">
+              SP 数（1 SP = 4 T）
+              <UiField
+                v-model="workbench.transportLoadInputs.amount"
+                class="input num"
+                type="number"
+                min="1"
+                stepper
+              />
+            </label>
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :disabled="workbench.transportLoadInputs.pointId === null"
+              @click="workbench.loadTransportPointNow()"
+            >
+              装载 SP（13.2f）
+            </BaseButton>
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :disabled="workbench.transportLoadInputs.pointId === null"
+              @click="workbench.unloadTransportPointNow()"
+            >
+              卸载 SP（13.2f）
+            </BaseButton>
+          </div>
+          <p v-if="workbench.transportLoadError !== null" class="bad">
+            <BaseTag kind="danger">{{ workbench.transportLoadError.rule }}</BaseTag>
+            {{ workbench.transportLoadError.reason }}
+          </p>
+          <template v-if="showsExtender"> </template>
+          <div class="row">
+            <label class="field">
+              转换格号
+              <UiField v-model="workbench.convertTargetHexText" class="input" placeholder="36.13" />
+              <BaseButton
+                variant="secondary"
+                size="sm"
+                @click="workbench.beginConvertTargetHexPickNow()"
+              >
+                点地图选格
+              </BaseButton>
+            </label>
+            <label class="field">
+              型号
+              <select v-model="convertKind" class="select">
+                <option value="truck">truck（卡车）</option>
+                <option value="wagon">wagon（马车）</option>
+              </select>
+            </label>
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              @click="
+                workbench.convertTransportToExtenderNow(workbench.convertTargetHexText, convertKind)
+              "
+            >
+              转为延补队（12.7a）
+            </BaseButton>
+          </div>
+          <!-- B14d：延补队＝**算子图阵列**（原来是纯文字下拉） -->
+          <CounterPicker
+            title="延补队（12.7d 翻回 / 9.14d 主动崩溃）"
+            hint="12.7d：移动环节可主动翻回 5 点运输点数（消耗 ½ MA）；9.14d：以主动崩溃替代常规移动"
+            :items="extenderItems"
+            :size="32"
+            @pick="convertExtenderId = $event"
+            @hover="hoverUnit"
+          />
+          <div class="row">
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :disabled="convertExtenderId === ''"
+              @click="workbench.flipExtenderToTransport(convertExtenderId)"
+            >
+              翻回 5 点运输点数（12.7d）
+            </BaseButton>
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :disabled="convertExtenderId === ''"
+              @click="workbench.collapseExtenderNow(convertExtenderId)"
+            >
+              主动崩溃（9.14d：替代常规移动）
+            </BaseButton>
+          </div>
+          <RuleNote
+            title="9.14d 主动崩溃：延补队在移动环节位移到「特殊拖取距离内且有追溯补给」的格"
+            rule="9.14d"
+          >
+            <p class="muted">
+              9.14d
+              主动崩溃：延补队不能移动，可在**移动环节**用它替代常规移动——位移到**特殊拖取距离**
+              （12.7b：战斗面印值 MA，卡车 20 / 马车
+              10）内、且**该格此刻有追溯补给**的任意格；敌方单位 / ZOC /
+              禁入地形概不影响。落格后翻面到运输点数面；**若无合法格则无法崩溃**：原地翻面，并按
+              9.14c 判夺取。
+            </p>
+          </RuleNote>
+        </template>
         <!-- ── ② 基础补给源声明（12.6a①②；来自专规/剧本） ── -->
         <p class="muted">
           基础补给源（12.6a①②：地图边缘铁路格 / 专规列出的补给源格 / 火车卸货格）——
