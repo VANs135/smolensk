@@ -71,10 +71,11 @@ describe('批 E 切片 2：编队抽签入口与回写初设', () => {
     const segments = readFileSync('src/engine/rules/sop-segments.ts', 'utf8')
     expect(segments).toContain('containers.drawAndApplyStepNow()')
     /*
-     * `★实现缺口` 现在**只剩一处**（`reinforcement.specialRepl`，专规 1.6c —— 另一个登记在案的缺口）；
-     * 修前是两处（编队抽取也在其中）。
+     * ★ 2026-10-25：`★实现缺口` 现在**一处也没有**了 —— 最后一处
+     * （`reinforcement.specialRepl`，专规 1.6c）已由 `containers.drawSpecialRepl()` 接线。
+     * 这条守卫留着：以后谁再漏一个环节，这里会立刻从 0 变成 1+。
      */
-    expect((segments.match(/★实现缺口/g) ?? []).length).toBe(1)
+    expect((segments.match(/★实现缺口/g) ?? []).length).toBe(0)
     // 面板层：抽签入口与"西移落点"点地图按钮都在
     const panel = readFileSync('src/components/containers/ContainersPanel.vue', 'utf8')
     expect(panel).toContain('containers.beginDrawShiftHexPickNow(formation)')

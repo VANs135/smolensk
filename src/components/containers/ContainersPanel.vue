@@ -99,6 +99,25 @@ function specialActiveOf(box: BoxView): boolean {
   return view.active === true
 }
 
+/**
+ * ★ 专规 1.6c 的**时机**：能不能抽，要过**两道闸**（各管一件事，不互相替代）
+ *
+ *   ① **环节闸** `actionAllowedNow('rein.specialRepl')` —— 只在本方 **B 增援段的
+ *      「特殊补员抽取」这一环**（原文「Each turn … the players also get to roll a die on their
+ *      Special Repl Table」；13.6b 的掷表同样在本方增援阶段）；
+ *   ② **日期闸** `specialActiveOf(box)` —— **19 August 起停止**（盒的 `active` 旗标来自
+ *      `isSpecialReplAvailable`）。
+ *
+ * 不放行时给一句**明说**（不静默灰按钮）：玩家看得到"为什么现在不能抽、该去哪一环"。
+ */
+function specialReplRefusal(box: BoxView): string | null {
+  if (!workbench.actionAllowedNow('rein.specialRepl')) {
+    return '现在不能抽：1.6c 只发在「B 增援 → 特殊补员抽取」这一环'
+  }
+  if (!specialActiveOf(box)) return '19 August 起停止特殊补员（专规 1.6c）'
+  return null
+}
+
 /** 特殊补员盒：抽取项说明（表 1-3 原文） */
 function itemsOf(box: BoxView): string[] {
   const view = box as { items?: readonly string[] }
@@ -490,17 +509,21 @@ const showsReferee = computed(() => props.only === null)
         </BaseButton>
       </div>
 
-      <!-- 1.6c 特殊补员抽取盒 -->
+      <!-- 1.6c 特殊补员抽取盒（两道闸：环节 + 日期；不放行时明说原因） -->
       <div v-if="showsBoxActions('specialReplBox')" class="row">
         <BaseButton
           variant="primary"
           size="sm"
-          :disabled="!specialActiveOf(box)"
+          :disabled="specialReplRefusal(box) !== null"
+          :title="specialReplRefusal(box) ?? undefined"
           @click="containers.drawSpecialRepl(box.side === 'soviet' ? 'soviet' : 'axis')"
         >
           掷骰抽取（1.6c，1 骰）
         </BaseButton>
         <span class="muted">抽取项：{{ itemsOf(box).join(' ／ ') }}</span>
+        <span v-if="specialReplRefusal(box) !== null" class="muted num">
+          {{ specialReplRefusal(box) }}
+        </span>
       </div>
 
       <!-- 地图外空军盒（1.4a） -->

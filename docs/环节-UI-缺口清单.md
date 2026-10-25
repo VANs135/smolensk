@@ -30,7 +30,7 @@
 | `rein.supplyArrival`         | 到货 SP 落位（免费铁运）           | 专规 2.1 / 3.1                 | B 增援·arrival                                                                                                                                               | applySupplyArrivalsNow()                                                  |
 | `rein.rebuild`               | 重建 / 整编                        | 13.5 / 13.9                    | B 增援·rebuild                                                                                                                                               | consolidateUnitsNow()、rebuildUnitNow()                                   |
 | `rein.formationDraw`         | 编队抽取                           | 专规 13.7                      | B 增援·formationDraw（axis）                                                                                                                                 | drawAndApplyStepNow()                                                     |
-| `rein.specialRepl`           | 特殊补员抽取                       | 专规 1.6c                      | B 增援·specialRepl（soviet）                                                                                                                                 | **（无入口）**                                                            |
+| `rein.specialRepl`           | 特殊补员抽取                       | 专规 1.6c                      | B 增援·specialRepl（**双方**）                                                                                                                               | `containers.drawSpecialRepl()`（★ 2026-10-25 接线）                       |
 | `rein.frontalReserves`       | 领取方面军预备队                   | 专规 2.3c                      | B 增援·frontalReserves（soviet）                                                                                                                             | claimFrontalReservesNow()                                                 |
 | `move.breakout`              | 突围尝试                           | 12.8e                          | C 移动·breakout                                                                                                                                              | breakoutNow()                                                             |
 | `move.modeChange`            | 改模式 / 翻朝向                    | 5.4a                           | C 移动·modeAndMovement                                                                                                                                       | flipUnitOrientation()、switchUnitMode()                                   |
@@ -58,7 +58,7 @@
 **两个例外（都不是越权漏洞）**
 
 - `move.breakout`：环节标了 `skipWhenIdle`（本局无人可突围 ⇒ 环节自动跳过），所以平常扫不到；
-- `rein.specialRepl`：**功能未实现**（store 里没有入口，`sop-segments` 标 `implemented: false`）⇒ 走到该环节玩家点不动任何东西，是缺口不是漏洞。
+- ~~`rein.specialRepl`：功能未实现~~ ⇒ ★ 2026-10-25 **已接线**（`containers.drawSpecialRepl()`，过环节闸＋日期闸）；本表其余项仍是缺口。
 - `exclusive.panzerObligation` 属"段末义务"判定（3.4b），不是玩家手里的按钮。
 
 ## 2. 缺口 A：UI 未按环节收敛（已受闸门，但界面常显）

@@ -283,6 +283,35 @@ describe('W7 C12：1.6c 特殊补员抽取盒（与死亡堆联动）', () => {
     expect(pool.map((item) => item.id)).toEqual(['ru-12-2-2'])
   })
 
+  it('★ 1.6c：轴方**不重建师**——固定项「一个步兵(民兵)师」是苏方专属', () => {
+    /*
+     * 原文：「**The Soviets always get one infantry (or militia) division**… Additional Soviet rifle
+     *   and militia divisions can be rebuilt at the usual cost」；轴方那一项是
+     *   「a Supply Cache (1.7) or any one **Aufk/Krd battalion**」⇒ **轴方没有"免费师"**。
+     * 修前引擎只按"池里有没有合格师"判断，没看方 ⇒ 轴方死亡堆里若有同印值的师会被误返场。
+     */
+    const axisDivision = unit({
+      id: 'ax-12-2-2',
+      side: 'axis',
+      attack: 12,
+      ar: 2,
+      ma: 2,
+      steps: 2,
+      printedSteps: 2,
+    })
+    const plan = planSpecialReplDraw({
+      side: 'axis',
+      date: '1941-08-15',
+      die: 2, // 轴方表：1–4 = Cache
+      deadPile: [axisDivision],
+    })
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    expect(plan.data.division).toBeNull()
+    expect(plan.data.patches).toEqual([])
+    expect(plan.data.second).toMatchObject({ kind: 'supplyCache' })
+  })
+
   it('C12：19 August 起停止（rules-constants.smolensk.specialReplEndDate）', () => {
     const endDate = rulesConstants.smolensk.specialReplEndDate
     const before = specialReplBoxView({ side: 'soviet', date: '1941-08-15', deadPile: [] })

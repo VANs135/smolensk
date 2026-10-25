@@ -91,8 +91,10 @@ export interface SopSegmentStep {
    * 这种环节**不能占住"当前环节"**：它在规则上存在、在实现上是空的，若让玩家停在上面，
    * 就变成"每次移动阶段先点一次没有任何作用的空环节，期间还动不了任何单位"——纯摩擦。
    * 故流程推进时会像自动环节一样**跳过**它；等实现落地，把本标志去掉它就成了真环节。
-   * 目前只剩一处（见该环 `note` 的"实现缺口"）：特殊补员抽取 专规 1.6c。
-   * （突围 12.8e 已由 B47 接线；编队抽取 专规 13.7 已由批 E 切片 2 接线 —— `containers.drawAndApplyStepNow()`。）
+   * ★ 2026-10-25：**已无遗留**——最后一条（特殊补员抽取 专规 1.6c）已由
+   * `containers.drawSpecialRepl()` 接线并过环节闸门。（突围 12.8e 由 B47 接线；
+   * 编队抽取 专规 1.3/13.7 由批 E 切片 2 接线 —— `containers.drawAndApplyStepNow()`。）
+   * 本标志保留：以后若再发现"规则有这一环、store 无入口"，仍按 false 登记并由守卫盯着。
    */
   implemented?: boolean
   /**
@@ -220,13 +222,31 @@ export const SOP_SEGMENT_CHAINS: readonly SopSegmentChain[] = [
       },
       {
         id: 'reinforcement.specialRepl',
-        label: '特殊补员抽取（苏方）',
+        label: '特殊补员抽取',
         rule: '专规 1.6c',
         driver: 'player',
+        // 本环的"动作"不是**单位执行**的盘面动作 ⇒ `actions`（引擎时机词表）留空；
+        // 玩家入口与环节闸门由 `ACTION_GATES['rein.specialRepl']` 给（与 `rein.formationDraw` 同法）
         actions: [],
-        sides: ['soviet'],
-        implemented: false,
-        note: '19 Aug 起停止（`exclusive-timing` 的 specialReplEnd）。★实现缺口：store 里**没有**对应入口（`specialRepl` 全仓 0 处），故 B8 无从补闸门',
+        /*
+         * ★ 2026-10-25（用户「补 1.6c，注意该操作时机」）：
+         *   原文「Each turn **before 19 August**, **the players** also get to roll a die on their
+         *   **Special Repl Table** to check for 'free' rebuilds… **The Soviets always get two and
+         *   the Axis one**」＋ 表（Soviet Table / Axis Table）⇒ **双方各掷自己的表**，
+         *   都在**本方 B 增援段**这一环（13.6b 的掷表同样在本方增援阶段）。
+         *   修前把 `sides` 写死成 `['soviet']`（标签也写「（苏方）」），轴方那一掷就没有位置。
+         *
+         * 两道闸门各管一件事，不互相替代：
+         *   ① **环节闸**＝本表（`ACTION_GATES.rein.specialRepl`：只在 B 段的这一环）；
+         *   ② **日期闸**＝引擎 `isSpecialReplAvailable`（19 Aug 起停止，`specialReplEndDate`）。
+         *
+         * 另两条原文约束（引擎已实现，此处留档）：
+         *   · 「Special Repls can **never be saved** for later, so if no such unit is in the
+         *     Dead Pile there is **no rebuild**」⇒ 不累积、无候选即作废；
+         *   · 苏方固定项「selected **randomly** from the 12-2-2 / 11-1-1 / 10-0-1 divisions that are
+         *     **in the dead pile**（13-3-3 永不以此法重建），返回 **−1 step**」。
+         */
+        note: '双方各掷自己的 Special Repl Table（苏方两项：死亡堆随机一个 12-2-2/11-1-1/10-0-1 步兵(民兵)师返场 −1 军力 ＋ 掷骰定「补给缓存 / Alarm」；轴方一项：掷骰定「补给缓存 / Aufk·Krd」）；**不可保存**（死亡堆没有即作废）；19 Aug 起停止由引擎按日期判；落点照 2.1（能直接拖取追溯补给的 HQ，否则边缘补给源格）',
       },
       {
         id: 'reinforcement.frontalReserves',

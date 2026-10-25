@@ -80,11 +80,12 @@ describe('阶段/环节 × 操作矩阵（规则书口径）', () => {
     }
     expect(empty).toEqual([])
     /*
-     * 唯一"有动作族但点不动"的环节：`reinforcement.specialRepl`（专规 1.6c）。
-     * 它**不是**闸门问题，而是**功能未实现**（store 里没有入口）⇒ 由既有守卫表登记，
-     * 一旦补上入口，`ACTION_KEYS_WITHOUT_STORE_ENTRY` 会逼着把它删掉。
+     * ★ 2026-10-25：`ACTION_KEYS_WITHOUT_STORE_ENTRY`（"有闸门、但 store 里一个入口都没有"）
+     * **已经清空** —— 最后一处 `rein.specialRepl`（专规 1.6c 特殊补员）由
+     * `containers.drawSpecialRepl()` 接线并过环节闸。这条守卫留着：再出现"闸门有了、入口没接"
+     * 的键，它就会红。
      */
-    expect(ACTION_KEYS_WITHOUT_STORE_ENTRY).toContain('rein.specialRepl')
+    expect(ACTION_KEYS_WITHOUT_STORE_ENTRY).toEqual([])
   })
 
   it('★ 每个动作族都有**至少一个**环节放行（没有死闸门）', () => {

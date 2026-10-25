@@ -15631,6 +15631,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
   })
 
+  /**
+   * 2.1 注：**Pax / Eq / 特殊补员 / 回归（breakout returns）**的落点
+   *
+   * 原文：「Pax, Eq, special repls, and breakout returns arrive at **any HQs able to get trace
+   * supply (OCS 12.6a) by direct draw**, or else in **any map-edge supply source hexes**。」
+   *
+   * ⇒ 有"能直接拖取追溯补给的友方 HQ"就只落在那些 HQ；没有才退到**地图边缘补给源格**；
+   * 两者都没有 ⇒ `hex === null`（调用方必须**整笔拒绝**，不许自行挑一格——规则没给这种落点）。
+   * 判据与到达卡共用 `resolveArrivalPlacement` 的 `hqOrEdgeSource` 分支（同源，不另写一套）。
+   */
+  function replArrivalPlacement(): { hex: HexRef | null; rule: string; detail: string } {
+    const resolved = resolveArrivalPlacement(
+      { kind: 'hqOrEdgeSource', label: 'Pax / Eq / 特殊补员 / 回归（2.1 注）' },
+      arrivalFacts.value,
+    )
+    return { hex: resolved.hex, rule: resolved.rule, detail: resolved.detail }
+  }
+
   /** 到达需求的落点解算（下标与 `arrivalPlan.units` 一致；落点只能在 `arrivalCandidates` 之内） */
   const arrivalPlacements = computed<readonly ArrivalPlacementResult[]>(() => {
     const plan = arrivalPlan.value
@@ -20129,6 +20147,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     reinforcementError,
     arrivalPlan,
     arrivalPlacements,
+    replArrivalPlacement,
     arrivalCandidates,
     arrivalPlaced,
     arrivalAllPlaced,

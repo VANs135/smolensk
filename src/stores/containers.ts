@@ -770,6 +770,36 @@ export const useContainersStore = defineStore('containers', () => {
    * → 第二项（Supply Cache / 特种营）；无可用 ⇒ 作废。
    */
   function drawSpecialRepl(side: Side): boolean {
+    /*
+     * ★ 专规 1.6c 的**时机**（用户 2026-10-25「注意该操作时机」）：
+     *   原文「Each turn **before 19 August**, the players also get to roll a die on their
+     *   **Special Repl Table**…」——它发在**本方 B 增援段**的「特殊补员抽取」这一环
+     *   （`ACTION_GATES['rein.specialRepl']` 的 `where` 只有
+     *   `{ phase: 'reinforcement', segment: 'reinforcement.specialRepl' }`，且**双方都有**：
+     *   「the players」＋ 13.6b 的掷表也在本方增援阶段）。
+     *   「19 August 起停止」是**第二道**闸门，由引擎按日期判（`isSpecialReplAvailable` /
+     *   `planSpecialReplDraw` 的 `specialReplStoppedFrom`）——两道闸门各管一件事，不互相替代。
+     */
+    if (!workbench.requireAction('rein.specialRepl', '特殊补员抽取')) return false
+    /*
+     * 1.6b 原文「A player rolls… during **his** Reinforcement Phase」⇒ 掷表的是**本方**自己的
+     * 增援阶段。故这里再钉一条**同方**判据：不能在自己的 B 段里去掷**对方**的表
+     * （盒卡与掷表入口都按方列出，但 store 是公开 API，这一条兜住"参数传错方"）。
+     */
+    if (side !== workbench.activeSide) {
+      lastAction.value = {
+        ok: false,
+        rule: '1.6c',
+        detail: `只能在**本方**的增援阶段掷表（当前行动方是 ${workbench.activeSide}）`,
+        scope: '1.6c 特殊补员',
+      }
+      workbench.pushLog(
+        'warning',
+        `特殊补员只能在本方增援阶段掷表（当前行动方 ${workbench.activeSide}）`,
+        '1.6c',
+      )
+      return false
+    }
     const die = rollDieOnce()
     const dead = deadPileUnits.value[side]
     // 苏方固定项「随机重建一个师」：候选池由引擎按 1.6c 判定，抽哪一个用 rng 决定
@@ -825,8 +855,25 @@ export const useContainersStore = defineStore('containers', () => {
       )
       return false
     }
-    // 落盘：师返场（−1 军力）与 Alarm 单位返场；落点由裁判在操作台给出（1.6c 的落点见 2.1/3.1）
-    const placementHex = newHexForReturn()
+    /*
+     * 落点：2.1 注「Pax, Eq, **special repls**, and breakout returns arrive at **any HQs able to get
+     * trace supply (12.6a) by direct draw**, or else in **any map-edge supply source hexes**」
+     * ⇒ 不能拿"当前选中的那一格"凑数（修前就是这么干的）。两者都没有 ⇒ **整笔拒绝**
+     *   （规则没给这种落点，不许自行挑一格）。
+     */
+    const placement = workbench.replArrivalPlacement()
+    const needsHex = planned.data.patches.some((patch) => patch.to === null)
+    if (needsHex && placement.hex === null) {
+      lastAction.value = {
+        ok: false,
+        rule: '2.1',
+        detail: `特殊补员无处返场：${placement.detail}`,
+        scope: '1.6c 特殊补员',
+      }
+      workbench.pushLog('danger', `特殊补员无处返场：${placement.detail}（2.1）`, '2.1')
+      return false
+    }
+    const placementHex = placement.hex === null ? null : `${placement.hex.col}.${placement.hex.row}`
     for (const patch of planned.data.patches) {
       if (patch.to === null && placementHex !== null) {
         workbench.returnFromDeadPileNow({

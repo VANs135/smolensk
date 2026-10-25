@@ -183,7 +183,13 @@ describe('B6：按方过滤与已知缺口登记', () => {
     expect(axis).toContain('reinforcement.randomEvent')
     expect(axis).toContain('reinforcement.variableExit')
     expect(axis).toContain('reinforcement.formationDraw')
-    expect(axis).not.toContain('reinforcement.specialRepl')
+    /*
+     * ★ 2026-10-25（专规 1.6c 原文）：「Each turn before 19 August, **the players** also get to roll
+     *   a die on their **Special Repl Table**… **The Soviets always get two and the Axis one**」
+     *   ＋ 表里的 `Soviet Table` / `Axis Table` ⇒ 这一环**双方都有**（各自的表）。
+     *   修前只给苏方（`sides: ['soviet']`），轴方那一掷无处安放。
+     */
+    expect(axis).toContain('reinforcement.specialRepl')
     expect(axis).not.toContain('reinforcement.frontalReserves')
 
     expect(soviet).toContain('reinforcement.specialRepl')
@@ -208,9 +214,15 @@ describe('B6：按方过滤与已知缺口登记', () => {
     const draw = sopStepById('reinforcement.formationDraw')!
     expect(draw.implemented).toBe(true)
     expect(draw.note ?? '').not.toContain('实现缺口')
+    /*
+     * ★ 2026-10-25：专规 1.6c 的**入口已接线**（`containers.drawSpecialRepl`，且过
+     *   `ACTION_GATES['rein.specialRepl']` 的环节闸）⇒ `implemented` 不再是 false，
+     *   note 里也不再有"实现缺口"——本条守卫正是逼着清掉陈旧登记的那只手。
+     */
     const repl = sopStepById('reinforcement.specialRepl')!
-    expect(repl.implemented).toBe(false)
-    expect(repl.note ?? '').toContain('实现缺口')
+    // `implemented` 缺省即 true ⇒ 这里断言"不是 false"（显式写 true 也行）
+    expect(repl.implemented).not.toBe(false)
+    expect(repl.note ?? '').not.toContain('实现缺口')
 
     const allSteps = SOP_SEGMENT_CHAINS.flatMap((chain) => chain.steps)
     // ① 未实现 ⇒ 必须登记

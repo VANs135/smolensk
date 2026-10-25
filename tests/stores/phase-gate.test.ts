@@ -241,12 +241,17 @@ describe('B7：逐环节的允许与禁止（每例带规则号）', () => {
         'rein.specialRepl',
       ),
     ).toBe(true)
+    /*
+     * ★ 2026-10-25（专规 1.6c 原文）：「Each turn before 19 August, **the players** also get to roll
+     *   a die on their **Special Repl Table**… **The Soviets always get two and the Axis one**」
+     *   ＋ 表里的 `Soviet Table` / `Axis Table` ⇒ **轴方也有这一掷**（修前写死只给苏方）。
+     */
     expect(
       isActionAllowed(
         queryOf('reinforcement', 'reinforcement.specialRepl', 'axis'),
         'rein.specialRepl',
       ),
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('C 移动 · 突围（12.8e）：只允许突围；移动与轰炸不在本环节', () => {

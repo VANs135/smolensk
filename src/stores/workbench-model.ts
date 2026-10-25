@@ -2418,7 +2418,12 @@ export const ACTION_GATES: readonly ActionGate[] = [
     key: 'rein.specialRepl',
     label: '特殊补员抽取',
     rule: '专规 1.6c',
-    where: [{ phase: 'reinforcement', segment: 'reinforcement.specialRepl', sides: ['soviet'] }],
+    /*
+     * 1.6c 原文「Each turn **before 19 August**, **the players** also get to roll a die on their
+     * **Special Repl Table**… The Soviets always get two and the Axis one」⇒ **双方各有这一掷**，
+     * 且**只在本方 B 增援段这一环**（修前写死 `sides: ['soviet']`，轴方那一掷无处安放）。
+     */
+    where: [{ phase: 'reinforcement', segment: 'reinforcement.specialRepl' }],
   },
   {
     key: 'rein.frontalReserves',
@@ -2753,7 +2758,6 @@ export const ACTION_KEYS_WITHOUT_KIND: readonly ActionKey[] = [
 export const ACTION_KEYS_WITHOUT_STORE_ENTRY: readonly ActionKey[] = [
   // 批 E 切片 2：`rein.formationDraw` **已接线** —— `containers.drawAndApplyStepNow()`
   // （B 增援段该环节内：抽签 → 落盘 → 回写初设台账），故从本表**删除**。
-  'rein.specialRepl', // 专规 1.6c：store 里 specialRepl 出现 0 次
   // B47（2026-09-17）：`move.breakout` 已接线（store 的 `breakoutNow` / `breakoutCandidates`），
   // 故从本表**删除** —— 这条守卫（`phase-gate-wiring.test.ts`）就是逼着删的那只手。
 ]

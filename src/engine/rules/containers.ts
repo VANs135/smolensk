@@ -713,7 +713,13 @@ export function planSpecialReplDraw(input: SpecialReplDrawInput): RuleOutcome<Sp
 
   const patches: BoxPatch[] = []
   let division: SpecialReplDrawPlan['division'] = null
-  if (divisionCandidates.length > 0) {
+  /*
+   * ★ 固定项「一个步兵（或民兵）师」是**苏方专属**（1.6c：「**The Soviets always get one
+   *   infantry (or militia) division**…」）；轴方的两项是「补给缓存 / Aufk·Krd 营」，
+   *   **不重建师**。故这里必须按方判定——否则若轴方死亡堆里恰好躺着同印值的师，
+   *   会被误当成"特殊补员师"返场（规则没给轴方这种做法）。
+   */
+  if (input.side === 'soviet' && divisionCandidates.length > 0) {
     const chosen = input.chosenDivisionId ?? divisionCandidates[0] ?? null
     if (chosen === null || !divisionCandidates.includes(chosen))
       return fail(SPECIAL_REPL_RULE, `specialReplDivisionNotInPool:${String(chosen)}`)
