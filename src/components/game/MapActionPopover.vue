@@ -694,7 +694,7 @@ function pickDump(): void {
                 基地 + SP 同格时，点 SP 也会进基地的整备会话。
               -->
               <BaseButton
-                v-if="unit.side === workbench.activeSide"
+                v-if="mapView.unitActionAvailableAt(unit.id)"
                 variant="ghost"
                 size="sm"
                 @click="openUnitAction(unit.id)"

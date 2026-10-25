@@ -40,7 +40,19 @@ const newStores = () => {
    *   本文件钉的是**对局中**的路由行为 ⇒ 夹具显式把初设标为已收束。
    */
   useSetupStore().finished = true
-  return { workbench: useWorkbenchStore(), mapView: useMapViewStore() }
+  const workbench = useWorkbenchStore()
+  /*
+   * ★ 用户 2026-10-25（设施 × 环节）：**能不能对设施操作，要看本环节的闸门**——
+   *   补给站只有 12.11a 的"销毁"（移动/反应/进击的**移动环节**）；基地 15.1 在 A 段、
+   *   15.3/15.4 在移动阶段；工事 16.0b 在移动阶段。
+   *   本文件钉"点枚进操作"的机制 ⇒ 夹具落在 **C 段移动环节**（三类设施在此都有可用操作）。
+   */
+  workbench.setPhase('movement')
+  const stepIndex = workbench.playerSegmentSteps.findIndex(
+    (step) => step.id === 'movement.modeAndMovement',
+  )
+  if (stepIndex >= 0) workbench.setSegmentStepIndex(stepIndex)
+  return { workbench, mapView: useMapViewStore() }
 }
 
 /** 取一个指定 `noncombatKind` 的轴方记录（找不到即失败，避免静默用错夹具） */

@@ -8,7 +8,13 @@ import {
   type CombatRetreatSidePlan,
   type CombatRetreatUnitPlan,
 } from './workbench'
-import { needsFuelOf, hexLabel, type ConsoleAirUnit, type ConsoleUnit } from './workbench-model'
+import {
+  needsFuelOf,
+  hexLabel,
+  type ActionKey,
+  type ConsoleAirUnit,
+  type ConsoleUnit,
+} from './workbench-model'
 import { useSetupStore } from './setup'
 import { useContainersStore } from './containers'
 import type { MovementOverlay, SupplyPickHint, UnitToken, ZocOverlay } from '@/render/token-layer'
@@ -704,6 +710,8 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (unit === undefined) return false
     if (unit.side !== workbench.activeSide) return false
     if ((unit.noncombatKind ?? null) === null) return false
+    // 本环节没有"对它自己"的操作 ⇒ 不给入口（判据与 `unitActionFamily` 同源）
+    if (!unitActionAvailableAt(instanceId)) return false
     unitActionHex.value = { col: hex.col, row: hex.row }
     unitActionUnitId.value = instanceId
     closePopup()
@@ -1010,6 +1018,54 @@ export const useMapViewStore = defineStore('mapView', () => {
    *   · fort：hedgehog ⇒ 工事（专规 16.0b）
    * 无（空格 / 战斗单位 / 单位已不在盘面）⇒ null。
    */
+  /**
+   * **这类设施"对它自己"能做哪些动作族**（规则书口径；空数组＝这类设施没有"对它的操作"）
+   *
+   * 用户 2026-10-25：「不同环节每个单位\设施能做的事情不一样，比如移动环节点击补给站可以销毁，
+   * 其它时候点击补给站都是单位指定消耗时有用，单点补给站能不能有操作得看规则书的规定」。
+   *
+   * 逐条对原文：
+   *   · **补给站（SP）** 12.11a：「……只能在**该玩家的移动、反应和进击阶段中的移动环节**进行」
+   *     ⇒ 只有"销毁"是"对补给站本身"的操作（`move.dumpBlow` 的闸门正是 C/E/G 的移动环节）；
+   *     其余场合（A 段整备付款、D 段补给检定、战斗补给）都是**别的动作选中它当补给源**，
+   *     不是"对它操作" ⇒ 那些环节点补给站**不开**操作会话（只显示该格信息）。
+   *   · **运输点** 13.2f 装卸（10% MA）／12.7c 转延补队或崩溃 ⇒ 移动环节。
+   *   · **空军基地** 15.1 整备（**A 段**，原文「在飞机整备阶段中，空军基地可整备一次」）／
+   *     15.3 修建与改进（「只能在移动阶段中」）／15.4 缩减（「只能在移动阶段中」）。
+   *   · **环形工事** 16.0b 修建与改进（「只能在移动阶段中」）。
+   */
+  function facilityActionKeys(kind: string): readonly ActionKey[] {
+    switch (kind) {
+      case 'sp':
+      case 'supply_point':
+        return ['move.dumpBlow']
+      case 'transport_point':
+      case 'organic_truck':
+      case 'supply_extender':
+        return ['move.loadUnload', 'move.extenderConvert']
+      case 'air_base':
+        return ['air.refit', 'move.construction', 'air.baseReduce']
+      case 'hedgehog':
+        return ['move.hedgehog']
+      default:
+        return []
+    }
+  }
+
+  /**
+   * 这一枚设施**此刻**有没有"对它自己"的操作（本环节闸门放行其中任一）
+   *
+   * 界面据此决定要不要给「操作」入口——没操作就不给（免得点开一个空的会话）。
+   */
+  function unitActionAvailableAt(instanceId: string): boolean {
+    const unit = workbench.units.find((item) => item.instanceId === instanceId)
+    if (unit === undefined) return false
+    if (unit.side !== workbench.activeSide) return false
+    const kind = unit.noncombatKind
+    if (kind === null || kind === undefined) return false
+    return facilityActionKeys(kind).some((key) => workbench.actionAllowedNow(key))
+  }
+
   const unitActionFamily = computed<'supply' | 'air' | 'fort' | null>(() => {
     /*
      * ★ 2026-10-25（用户实测：给**苏联初设**时点空军基地格，弹出「空军基地整备（15.1）」的会话，
@@ -1039,6 +1095,13 @@ export const useMapViewStore = defineStore('mapView', () => {
      *   敌方格照旧可以点：只摊开堆叠看 4.9a 的可见内容，不开动作会话。
      */
     if (unit.side !== workbench.activeSide) return null
+    /*
+     * ★ 本环节对它**没有可做的操作** ⇒ 不开会话（用户 2026-10-25 的规则口径）：
+     *   例 D 段点补给站只是"选它当补给源"（在补给面板里选），不是"对补给站操作"；
+     *   A 段点补给站是整备付款，也不是对站操作 ⇒ 这两处都不该弹出"补给站操作"面板。
+     */
+    const kindOf = unit.noncombatKind ?? ''
+    if (!facilityActionKeys(kindOf).some((key) => workbench.actionAllowedNow(key))) return null
     switch (unit.noncombatKind) {
       case 'sp':
       case 'supply_point':
@@ -1833,6 +1896,8 @@ export const useMapViewStore = defineStore('mapView', () => {
     unitActionHex,
     unitActionUnitId,
     openUnitActionAt,
+    unitActionAvailableAt,
+    facilityActionKeys,
     unitActionFamily,
     airEntryTarget,
     // 点什么
