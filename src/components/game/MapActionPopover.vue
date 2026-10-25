@@ -281,6 +281,17 @@ function beginMission(): void {
   workbench.beginAirMissionNow()
 }
 
+/**
+ * 点堆叠清单里的某一枚**本单位** ⇒ 打开它的动作会话（用户 2026-10-25）
+ *
+ * 判据（是不是本方 / 是不是非战斗单位）在 store 侧 `openUnitActionAt` 里，组件不重复判规则。
+ */
+function openUnitAction(unitId: string): void {
+  const unit = consoleUnitOf(unitId)
+  if (unit === null) return
+  mapView.openUnitActionAt({ col: unit.hex.col, row: unit.hex.row }, unitId)
+}
+
 function pickDump(): void {
   const dump = dumpAtHex.value
   if (dump !== undefined) workbench.pickCombatSupplyDump(dump.side, dump.id)
@@ -677,6 +688,19 @@ function pickDump(): void {
                 alt=""
               />
               <span class="chip__label num">{{ unit.label }}</span>
+              <!--
+                用户 2026-10-25（渐进交互）：**点哪一枚就对哪一枚操作**。
+                修前这一栏只有图与名（没有入口），格里有非战斗单位时是"点格即开会话" ⇒
+                基地 + SP 同格时，点 SP 也会进基地的整备会话。
+              -->
+              <BaseButton
+                v-if="unit.side === workbench.activeSide"
+                variant="ghost"
+                size="sm"
+                @click="openUnitAction(unit.id)"
+              >
+                操作
+              </BaseButton>
             </div>
             <!-- 14.1a：点「展开机场飞机」才在这一栏列出本基地的本方飞机（图阵列） -->
             <template v-if="(content?.airUnits.length ?? 0) > 0">

@@ -683,6 +683,32 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 落实「右栏只读」——SP 拖取 / 运输点装卸 / 延补队 / 基地整备 / 工事都从这里进。
    */
   const unitActionHex = ref<HexRef | null>(null)
+  /**
+   * ★ 用户 2026-10-25：「点格子先只展开堆叠，堆叠里只展示该格单位；点空军基地就进它的操作，
+   *   点其它单位/设施也能各做各的」⇒ 记**具体那一枚**（`instanceId`），不只记格。
+   *
+   * 为什么必须精确到枚：一格可能同时有空军基地 + SP + 工事；只按格取"第一枚非战斗单位"，
+   * 点 SP 也会进基地的整备会话（实测串面板）。
+   */
+  const unitActionUnitId = ref<string | null>(null)
+
+  /**
+   * 点堆叠清单里的**某一枚本单位** ⇒ 打开它的动作会话（用户 2026-10-25 的渐进交互）
+   *
+   * 「点格只摊堆叠 ⇒ 堆叠里只列该格单位 ⇒ 点哪一枚就做哪一枚的操作」。
+   * 精确到 `instanceId`（同格有基地 + SP + 工事时，各进各的面板）。
+   * 单击即收小窗（单框纪律：同一时刻只有一个会话框）。
+   */
+  function openUnitActionAt(hex: HexRef, instanceId: string): boolean {
+    const unit = workbench.units.find((item) => item.instanceId === instanceId)
+    if (unit === undefined) return false
+    if (unit.side !== workbench.activeSide) return false
+    if ((unit.noncombatKind ?? null) === null) return false
+    unitActionHex.value = { col: hex.col, row: hex.row }
+    unitActionUnitId.value = instanceId
+    closePopup()
+    return true
+  }
 
   /**
    * 条 19（A1）：**点地面格 ⇒ 空军任务入口**（target-first）的引导态
@@ -995,12 +1021,16 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (!setup.finished) return null
     const hex = unitActionHex.value
     if (hex === null) return null
-    const unit = workbench.units.find(
-      (item) =>
-        item.hex.col === hex.col &&
-        item.hex.row === hex.row &&
-        (item.noncombatKind ?? null) !== null,
-    )
+    const pinned = unitActionUnitId.value
+    const unit =
+      pinned === null
+        ? workbench.units.find(
+            (item) =>
+              item.hex.col === hex.col &&
+              item.hex.row === hex.row &&
+              (item.noncombatKind ?? null) !== null,
+          )
+        : workbench.units.find((item) => item.instanceId === pinned)
     if (unit === undefined) return null
     /*
      * ★ 只对**本方**单位开动作会话：15.1 整备 / 12.x 补给 / 16.0b 工事 都是"自己的东西自己动"。
@@ -1367,7 +1397,10 @@ export const useMapViewStore = defineStore('mapView', () => {
       collapsedSessionKey.value = currentStepKey.value
     }
     // 条 12（M2）：单位动作会话没有引擎状态机 ⇒ 收起即清掉"正在对其做动作"的那枚
-    else if (current.kind === 'unit') unitActionHex.value = null
+    else if (current.kind === 'unit') {
+      unitActionHex.value = null
+      unitActionUnitId.value = null
+    }
     // B15c：同理——宣布之前退掉参炸选子，宣布之后才是 `cancelBarrage`
     else if (workbench.barrageState === null) workbench.clearBarrageSelectionNow()
     else workbench.cancelBarrage()
@@ -1506,6 +1539,27 @@ export const useMapViewStore = defineStore('mapView', () => {
         unit.hex.row === hex.row &&
         (unit.noncombatKind ?? null) !== null,
     )
+  }
+
+  /** 该格**本方**非战斗单位（"点哪一枚就对哪一枚操作"的候选；敌方的只显示不操作） */
+  function ownNonCombatAt(hex: HexRef): readonly { instanceId: string }[] {
+    return workbench.units.filter(
+      (unit) =>
+        unit.side === workbench.activeSide &&
+        unit.hex.col === hex.col &&
+        unit.hex.row === hex.row &&
+        (unit.noncombatKind ?? null) !== null,
+    )
+  }
+
+  /**
+   * 该格是不是"就这一枚"（本轮是否需要省掉"先摊堆叠"这一步）
+   *
+   * 用户 2026-10-25：点格先摊堆叠、点枚再操作；只有格里没有别的东西可分辨时（1 枚可见且是本单位）
+   * 才直接进它的操作 —— 否则一律先列清单，让玩家自己点。
+   */
+  function onlyOwnNonCombatAt(hex: HexRef): boolean {
+    return ownNonCombatAt(hex).length === 1 && stackTokenIdsAt(hex).length <= 1
   }
 
   /**
@@ -1669,8 +1723,14 @@ export const useMapViewStore = defineStore('mapView', () => {
        * 排在摊开 / 既有分派之前：这一击明确表达"对这枚非战斗单位做动作"，就开那一个会话
        * （右栏原可写面板已收进会话，右栏只读）。点别处则收掉（见下一行的清理）。
        */
-      if (isIdleForStack() && hasNonCombatUnitAt(hex)) {
+      /*
+       * ★ 用户 2026-10-25（渐进交互）：**点格先只摊堆叠**，由玩家在堆叠里点具体那一枚再进操作。
+       *   只有"该格就这一枚可见本单位"时才省掉这一步（点它＝对它操作，没有可分辨的东西）。
+       *   修前：格里有非战斗单位就**立刻**开整备/补给会话 ⇒ 玩家还没看清这格有什么就被推进下一步。
+       */
+      if (isIdleForStack() && hasNonCombatUnitAt(hex) && onlyOwnNonCombatAt(hex)) {
         unitActionHex.value = { col: hex.col, row: hex.row }
+        unitActionUnitId.value = ownNonCombatAt(hex)[0]?.instanceId ?? null
         closePopup()
         return
       }
@@ -1690,6 +1750,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       }
       // 点别处（战斗单位 / 空格 / 走一步）⇒ 收掉可能开着的单位会话 + 空军引导态
       if (unitActionHex.value !== null) unitActionHex.value = null
+      unitActionUnitId.value = null
       if (airEntryTarget.value !== null) airEntryTarget.value = null
       // ③ 闲置态点到有堆叠的格 ⇒ **就地摊开**（用户口径：默认全选、点枚即取消）
       if (idleBefore && isIdleForStack() && stackTokenIdsAt(hex).length >= STACK_FAN_MIN_TOKENS) {
@@ -1770,6 +1831,8 @@ export const useMapViewStore = defineStore('mapView', () => {
     cancelSession,
     // 条 12（M2）：点非战斗单位开的动作会话（按类型分派到补给账本 / 空军整备 / 工事）
     unitActionHex,
+    unitActionUnitId,
+    openUnitActionAt,
     unitActionFamily,
     airEntryTarget,
     // 点什么

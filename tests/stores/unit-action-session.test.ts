@@ -179,8 +179,13 @@ describe('条 12（M2）：点非战斗单位开 unit 会话', () => {
         airStatus: 'active',
       }),
     )
-    // 点基地 ⇒ unit(air) 会话（渲染完整 AirPanel：admin＋mission 选机入口）
+    /*
+     * ★ 用户 2026-10-25（渐进交互）：格里有基地 + 停在基地的飞机 ⇒ 点格**先摊堆叠**，
+     *   由玩家在清单里点「操作」才进 unit(air) 会话（不再"点格即开会话"）。
+     */
     mapView.onHexClick(START, { x: 40, y: 40 })
+    expect(mapView.session?.kind).not.toBe('unit')
+    expect(mapView.openUnitActionAt(START, 'base-1')).toBe(true)
     expect(mapView.session?.kind).toBe('unit')
     expect(mapView.unitActionFamily).toBe('air')
 
