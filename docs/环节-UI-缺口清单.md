@@ -118,42 +118,44 @@
 **症状**：在 B 增援段打开右侧任一动作面板 → 按钮全在 → 点「修筑工事」/「换轨」/「铁路运输」/「整备」
 → 弹一行"只能在「C 移动·移动」进行（6.）"。**操作没做错，但界面像在骗人。**
 
-## 3. 缺口 B：UI 能点到、但 store **没有**环节闸门的落盘动作（真缺口）
+## 3. 缺口 B（已结案）：那约 48 条"能点到但没过闸门"的落盘动作
 
-判据：函数体写盘面（`.value =` / `.push(` / `.splice(`）、**不含 `requireAction`**、
-也不读 `combatState` / `barrageState` / `airMission` / `moveInteraction` 这类流程状态。
-共筛出 **约 50 个**；按面板分组（规则归属一律**待核原文**，此处不臆断环节）：
+> ★ **2026-10-25 已处理完毕**。逐条核过原文后，它们并不是同一种东西 —— 只有第一类是真缺口。
+> **唯一在案的账本**是代码里的 `src/stores/action-wiring.ts`（`UNGATED_ACTIONS`），
+> 由 `tests/stores/action-wiring.test.ts` 逐条核对（覆盖 / 已加闸核对 / 不该有闸核对 / 理由非空）。
+> 本表只留**结论摘要**，明细看代码。
 
-| 面板                  | 动作（无闸门）                                                                                                                                                            | 初判候选归属（待核）    |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| `ReinforcementPanel`  | `applyArrivalRemovalsNow`（1.6a 强制移除）                                                                                                                                | B 增援·到达             |
-|                       | `rollVariableReplNow`（13.6b 可变增援）                                                                                                                                   | B 增援·到达             |
-|                       | `placePendingReplNow`（13.5 补员算子放置）                                                                                                                                | B 增援（13.5a 同段）    |
-|                       | `consolidateAircraftNow`（13.9 飞机合并）                                                                                                                                 | B 增援·重建             |
-|                       | `pickFreeRailEdgeHex` / `pickSupplyTrainHex`（专规 2.1 / 3.6）                                                                                                            | B 增援·到达             |
-| `ContainersPanel`     | `removeForeverNow`（1.6a 永久移除）                                                                                                                                       | B 增援·到达             |
-|                       | `returnFromDeadPileNow`（1.6c 死亡堆返场）                                                                                                                                | B 增援                  |
-|                       | `armConstructionMarkerNow`（建造标记）                                                                                                                                    | 待核（初设 / C 移动）   |
-| `AirPanel`            | `buildAirstripNow` / `upgradeAirstripNow` / `toggleAirstripBase`（15.3）                                                                                                  | C 移动                  |
-|                       | `transferAircraftNow`（14.1c 转场）                                                                                                                                       | C 移动                  |
-|                       | `voluntaryReturnNow`（14.6 自愿返航）                                                                                                                                     | C/E/G 移动              |
-|                       | `declareInterceptionNow` / `resolveFlakNow` / `resolveInterceptionCombatNow`（14.6）                                                                                      | 待核                    |
-|                       | `runAirMissionNow` / `confirmAirMissionNow`（14.7）                                                                                                                       | 同 `air.mission`        |
-|                       | `beginAirPlacementHexPickNow` / `beginAirTargetHexPickNow` / `beginAirReturnHexPickNow` / `beginAirTransferHexPickNow` / `beginAirBaseHexPickNow`                         | 同各自落盘动作          |
-|                       | `captureAirBaseNow` / `addAirUnit` / `removeAirUnit`                                                                                                                      | 待核（裁判工具？）      |
-| `SupplyPanel`         | `addSpDump` / `removeSpDump` / `splitSpDumpHoldings` / `mergeSpDumpHoldings`（12.11 / 12.7）                                                                              | C 移动                  |
-|                       | `addSupplySource` / `removeSupplySource` / `addSupplyCacheNow`（12.x）                                                                                                    | 待核                    |
-|                       | `splitTransportPointNow` / `mergeTransportPointsNow`（12.7a/b）                                                                                                           | C 移动                  |
-|                       | `collapseExtenderNow` / `flipExtenderToTransport`（12.7c）                                                                                                                | C 移动                  |
-|                       | `chooseSupplySourceNow`（12.6e）                                                                                                                                          | D 补给                  |
-|                       | `rollAttritionNow`（12.8 损耗）                                                                                                                                           | D 补给                  |
-|                       | `confirmSupplyPickupNow` / `confirmOosResolutionNow`                                                                                                                      | D 补给                  |
-|                       | `seedConvertedRailsNow` / `clearConvertedRailsNow`                                                                                                                        | 待核（初设 / 剧本）     |
-| `ExclusiveRulesPanel` | `applySecurityNeedsNow`（9.14？） / `setConstructionMarkersNow` / `setMultiUnitFormationNow` / `setPanzerGroupNow` / `setDumpPanzerGroupNow` / `toggleAxisCityControlNow` | 待核                    |
-| `VictoryPanel`        | `setVictoryControlNow` / `checkVictoryNow`（5.0a）                                                                                                                        | 待核（回合末？）        |
-| `BreakoutPanel`       | `deployBreakoutReturnNow`（12.8e 返场）                                                                                                                                   | 与 `move.breakout` 同段 |
+| 归类                        | 条数 | 含义                                                                                                       | 处理                                                                       |
+| --------------------------- | ---- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **gated**（真缺口，已补闸） | 11   | 原文给了**明确时机**                                                                                       | store 入口加 `requireAction(key)`；行为验证在 `action-gates-batch.test.ts` |
+| referee（裁判工具）         | 33   | 改值 / 订正 / 摆件 / 自动环节的手动退路                                                                    | 规则里不是"玩家在某环节的动作" ⇒ 不设环节闸；对局台按 `showsReferee` 不铺  |
+| flowState（状态机）         | 46   | `combatState` / `barrageState` / `airState` / `supplyState` / `moveInteraction` / `breakoutReturns` 的步进 | 没开局这些入口根本走不通（比环节闸更窄）                                   |
+| noTiming（原文没给时机）    | 10   | 原文有动作、未给时机（或明说"任何阶段"）                                                                   | **不加闸** —— 加闸就是发明规则（铁律：取保守值）                           |
+| pickMode / draft / pregame  | 75   | 选格态 / 待提交输入 / 初设                                                                                 | 不落盘或不在环节体系内                                                     |
 
-> **注**：上表"初判候选归属"只是分类线索，改代码前必须逐条回原文核（本项目铁律：规则改动不得无中生有）。
+（本轮登记 **175** 条；另有约 23 条入口在函数体里直接带 `requireAction`，不入本表。）
+
+### 3.1 这轮真正补上的 11 个入口（9 道不同的闸）
+
+| 入口                                                 | 键                     | 原文                                                                               |
+| ---------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------- |
+| `applyArrivalRemovalsNow`                            | `rein.arrival`         | 1.6a「is **immediately** removed from play」（到达卡的一部分）                     |
+| `removeForeverNow`                                   | `rein.arrival`         | 13.5c 永久移出，入口在到达卡侧                                                     |
+| `buildAirstripNow` / `upgradeAirstripNow`            | `move.construction`    | 15.3「只能在**移动阶段**中修建或改进」/ 15.2A                                      |
+| `rollAttritionNow`                                   | `supply.attrition`     | 12.8a「在**补给阶段**中……并检查损耗」                                              |
+| `setUnitFuelled`                                     | `supply.fuel`          | 12.5c「在燃料消耗时支付」（修前 `payFuel` 有闸、这个开关没有 ⇒ 可绕过付款）        |
+| `flipExtenderToTransport` / `collapseExtenderNow`    | `move.extenderConvert` | 12.7d「翻面要消耗一半的 MA」/ 9.14d「可在**移动环节**用它替代常规移动」            |
+| `mergeTransportPointsNow` / `splitTransportPointNow` | `move.transportMerge`  | 13.2c「只能在**友方移动阶段**中进行」                                              |
+| `useConstructionMarkerNow`                           | `move.construction`    | 专规 3.5「任一轴方移动阶段、在单位移动之前」                                       |
+| `drawFormations` / `applyDraw`                       | ——（**故意不加**）     | 初设自动抽签也走这两个函数；带闸的是 `drawAndApplyStepNow`（`rein.formationDraw`） |
+
+### 3.2 明确"不加闸"的几条（附原文，防止以后有人手痒加回去）
+
+- **13.9 第 4) 项**：「这可以**在任何阶段**进行（不仅仅是增援阶段）」⇒ 飞机合并随时可做。
+- **专规 3.3b**：「可在**任意相位**放置」⇒ 治安检查随时可做。
+- **12.1a**：SP 的拆分/加总**没有时机限制**（与 13.2c 的运输点数不同）。
+- **14.11 基地转移**：原文未给阶段限制（它不是 14.1g 的"任务"）。
+- **1.4a/1.4b 盒**、**13.7 编队收纳**：原文未给时机。
 
 ## 4. 不属于环节闸门的三类（不算缺口）
 

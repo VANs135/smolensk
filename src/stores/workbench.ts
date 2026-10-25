@@ -7600,6 +7600,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C5：直接改某单位的燃料状态（便于制造「未加注」情形，12.5a） */
   function setUnitFuelled(instanceId: string, fuelled: boolean): void {
+    /*
+     * 12.5c「在发生燃料消耗的**任何阶段**，单位都应在燃料消耗时支付」⇒ 加注标记与付燃料
+     * 同一道闸（C/E/G 的移动环节）。修前 `payFuel` 过闸、这个开关不过 ⇒ 可以在任何环节
+     * 把单位标成"已加注"从而绕开付款。
+     */
+    if (!requireAction('supply.fuel', '加注燃料')) return
     const unit = units.value.find((item) => item.instanceId === instanceId)
     if (unit === undefined) return
     unit.fuelled = fuelled
@@ -11496,6 +11502,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 需要钉某个骰值的场合（验证页 / 既有用例）**显式传第三个参数** `die`。
    */
   function rollAttritionNow(hexKey: string, die?: number): boolean {
+    // 12.8 的损耗属 **D 补给段**（12.10e-A 的顺序把损耗放在补给阶段里）
+    if (!requireAction('supply.attrition', '掷损耗')) return false
     const duty = supplyPhasePlan.value?.attritionDuty.find(
       (item) => `${item.hex.col}.${item.hex.row}` === hexKey,
     )
@@ -11929,6 +11937,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * `resolveSpecialCombatAt` 的位移流程（那里 `playerInitiated: false`、代价 0）。
    */
   function flipExtenderToTransport(extenderId: string): boolean {
+    // 12.7d「延补队……翻回运输点数面，翻面要消耗一半的 MA」⇒ 属移动环节（与转换同一道闸）
+    if (!requireAction('move.extenderConvert', '翻回运输点数')) return false
     const extender = units.value.find((unit) => unit.instanceId === extenderId)
     if (extender === undefined || !isExtenderUnit(extender)) {
       pushLog('warning', '请选择一个延补队算子（12.7d）', '12.7d')
@@ -12010,6 +12020,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ∩ 该格有追溯补给；落点由玩家在地图上点选（走既有的 `setSpecialDisplacement` 与 `confirmSpecialCombatNow`）。
    */
   function collapseExtenderNow(extenderId: string): boolean {
+    // 9.14d「延补队……可在**移动环节**用它替代常规移动」⇒ 与转换同一道闸
+    if (!requireAction('move.extenderConvert', '延补队主动崩溃')) return false
     const unit = units.value.find((item) => item.instanceId === extenderId)
     if (unit === undefined || !isExtenderUnit(unit)) {
       pushLog('warning', '请选择一个延补队算子（9.14d）', '9.14d')
@@ -12676,6 +12688,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 无防空值 / 永不缩减（15.2B/E）。
    */
   function buildAirstripNow(): boolean {
+    // 15.3「空军基地**只能在移动阶段**中修建或改进，而且只能由具备工程能力的单位执行（13.8d）」
+    if (!requireAction('move.construction', '修建简易机场')) return false
     const hex = parseHexPath(constructionInputs.value.hexText)[0]
     if (hex === undefined) {
       pushLog(
@@ -12732,6 +12746,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 15.2E 的另一面：简易机场可被升格，但**永不能被缩减**（`canReduceAirstrip` 恒 false）。
    */
   function upgradeAirstripNow(baseId: string): boolean {
+    // 15.2A「简易机场可通过支付 3T 升级为一级空军基地」＋ 15.3「只能在移动阶段」⇒ 同一道闸
+    if (!requireAction('move.construction', '改进空军基地')) return false
     const base = airBases.value.find((item) => item.id === baseId)
     if (base === undefined) {
       pushLog('warning', `找不到空中设施 ${baseId}（15.2A）`, '15.2A')
@@ -16859,6 +16875,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   ★ 也正因为如此，专规 2.3c 的编制转化「The old unit is a Removal (1.6a)」不走死亡堆。
    */
   function applyArrivalRemovalsNow(): void {
+    // 1.6a「When a unit is called on to be "Removed" by the arrival charts … is **immediately**
+    // removed from play」⇒ 这是**到达卡**的一部分（B 增援·到货落位）
+    if (!requireAction('rein.arrival', '按到达卡移除')) return
     const plan = arrivalPlan.value
     if (plan === null) return
     for (const removal of plan.removals) {
@@ -16958,6 +16977,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** B18：永久移除（13.5c：AR 后有黄点者被摧毁即永久移出） */
   function removeForeverNow(instanceId: string): void {
+    /*
+     * 13.5c「永久移出」的**入口**在到达卡侧（1.6a「is immediately removed from play」）
+     * ⇒ 与 `applyArrivalRemovalsNow` 同一道闸（B 增援·到货落位）。
+     * 裁判在验证页摆件不走这里（那边可直接改 `units`）。
+     */
+    if (!requireAction('rein.arrival', '永久移出游戏')) return
     const index = units.value.findIndex((unit) => unit.instanceId === instanceId)
     if (index >= 0) {
       const [unit] = units.value.splice(index, 1)

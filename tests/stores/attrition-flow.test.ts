@@ -40,6 +40,11 @@ function oosDuty(store: Workbench, id = 'u1') {
   const unit = placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', id)
   unit.hasTraceSupply = false
   store.planSupplyPhaseNow()
+  /*
+   * ★ 2026-10-25：12.8b 的掷骰现在过 `ACTION_GATES['supply.attrition']`（只在 D 段的
+   *   「补给检定」这一环）⇒ 夹具必须真的站在那一环上（修前 `rollAttritionNow` 不过闸）。
+   */
+  goToAttritionStep(store)
   return { unit, key: `${CORE_HEX.col}.${CORE_HEX.row}` }
 }
 
@@ -81,6 +86,7 @@ describe('12.8b：掷骰（2 骰 + 断补军力 ≥5 的 +3）', () => {
     for (let index = 0; index < 5; index += 1)
       placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', `u${index}`).hasTraceSupply = false
     store.planSupplyPhaseNow()
+    goToAttritionStep(store) // 12.8b 只在 D 段的「补给检定」这一环（闸门 supply.attrition）
     const key = `${CORE_HEX.col}.${CORE_HEX.row}`
     const duty = store.supplyPhasePlan!.attritionDuty[0]!
     expect(duty.oosSteps).toBe(5)
