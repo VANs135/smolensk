@@ -359,495 +359,541 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       拆分单位的创建在 C/E/G 段或战后结算（20.0a）。
     </p>
 
-    <!-- ── · 到达表执行（13.6 / 13.6b / 1.6a） ── -->
-    <p class="muted">
-      到达表执行（13.6）：当日到达卡 → 投放需求与落点（入口被阻挡时按 13.6b
-      改投最近的未被阻挡边缘格）； 条目「Removed」按 1.6a 立即移出。
-    </p>
-    <!-- B34②：本方到达卡（OOA）原卡面（13.6 / 专规 1.6a；点图在新标签打开原尺寸） -->
-    <figure v-if="showsActions && ooaCard !== null" class="ooa">
-      <a v-if="ooaReady" :href="ooaImageUrl ?? undefined" target="_blank" rel="noreferrer">
-        <img class="ooa__img" :src="ooaImageUrl ?? ''" :alt="ooaCard.title" />
-      </a>
-      <span v-else class="ooa__img ooa__img--pending">正在读图…</span>
-      <figcaption class="muted">
-        {{ ooaCard.title
-        }}<template v-if="ooaCard.note !== undefined">｜{{ ooaCard.note }}</template>
-      </figcaption>
-    </figure>
-    <div class="row">
-      <!-- ★ 联调：剧本号唯一权威在会话 store，选择入口只留「初设与开局」一处（用户口径） -->
-      <BaseTag kind="info">剧本 {{ workbench.scenarioId }}</BaseTag>
-      <BaseTag kind="info">{{ workbench.date }}（第 {{ workbench.turn }} 回合）</BaseTag>
-      <span class="num">
-        投放需求 {{ plan?.units.length ?? 0 }} 条｜强制移除 {{ plan?.removals.length ?? 0 }} 条
-      </span>
-      <BaseTag v-if="workbench.arrivalAllPlaced" kind="success">当日到达已全部投放</BaseTag>
-      <BaseButton
-        v-if="showsActions"
-        variant="secondary"
-        size="sm"
-        @click="workbench.applyArrivalRemovalsNow()"
-      >
-        执行强制移除（1.6a）
-      </BaseButton>
-    </div>
-
-    <p v-if="plan !== null && plan.shutdowns.length > 0" class="warn">
-      <BaseTag kind="danger">2.1a</BaseTag>
-      当日生效的补给源关闭：{{ plan.shutdowns.join('、') }}
-    </p>
-
-    <p v-for="(unit, index) in plan?.units ?? []" :key="`${index}-${unit.raw}`" class="num">
-      <img
-        v-if="arrivalImageUrl(index) !== null"
-        :src="arrivalImageUrl(index) ?? undefined"
-        alt=""
-        class="arrival-thumb"
-      />
-      <BaseTag :kind="unit.kind === 'aircraft' ? 'warning' : 'neutral'">{{ unit.kind }}</BaseTag>
-      {{ unit.raw }}
-      <template v-if="unit.designation !== null">｜番号 {{ unit.designation }}</template>
-      <template v-if="unit.parentType !== null">｜母体 {{ unit.parentType }}</template>
-      <template v-if="unit.factors !== null">｜印值 {{ unit.factors }}</template>
-      <template v-if="arrivalCopiesOf(unit) > 1">｜同型 {{ arrivalCopiesOf(unit) }} 枚</template>
-      <template v-else-if="unit.count > 1 && unit.kind === 'transportPoint'">
-        ｜运力 {{ unit.count }}（13.6c：运力即装载 SP 数，仍是一枚算子）
-      </template>
-      <template v-else-if="unit.count > 1">｜卡面数量 {{ unit.count }}</template>
-      <!-- §5-A：编成条目（多枚算子共同到场）——显示枚数与逐枚映射状态 -->
-      <template v-if="unit.formationComponents.length > 0">
-        ｜编成 {{ unit.formationComponents.length }} 枚：
-        <template v-if="formationState(index)?.missing.length === 0">
-          已逐枚映射（{{ formationState(index)?.records.length ?? 0 }} 枚，投放即一次到场）
-        </template>
-        <template v-else>
-          <BaseTag kind="danger">{{ formationState(index)?.missing.length ?? 0 }} 枚未映射</BaseTag>
-          ⇒ 请按卡面手工逐枚摆入
-        </template>
-      </template>
-      <template v-if="unit.stepsLost > 0">｜到场带损 {{ unit.stepsLost }} step</template>
-      <template v-if="unit.loadedWithSp">｜满载 SP（13.6c）</template>
-      ｜落点：{{ unit.label }} →
-      <template v-if="placements[index]?.hex !== null && placements[index]?.hex !== undefined">
-        {{ hexLabel(placements[index]!.hex!) }}（{{ placements[index]!.rule }}）
+    <!--
+      用户 2026-10-25：「每个阶段/环节只能出现该环节可用的 UI，不要什么都糅杂在一起」
+      ⇒ 面板顶部先说清**现在这个环节该做什么**（人工/自动），下面只铺该环节的区块。
+    -->
+    <p v-if="workbench.phase === 'reinforcement'" class="num">
+      <BaseTag :kind="workbench.segmentDriver === 'automatic' ? 'neutral' : 'info'">
+        {{ workbench.segmentDriver === 'automatic' ? '自动结算' : '人工操作' }}
+      </BaseTag>
+      本环节：{{ workbench.segmentStep?.label ?? '—' }}（{{ workbench.segmentStep?.rule ?? '—' }}）
+      <template v-if="workbench.segmentDriver === 'automatic'">
+        —— 本环节由系统自动结算，结果见下方回执与日志；这里不铺动作按钮。
       </template>
       <template v-else>
-        <BaseTag kind="danger">{{ placements[index]?.status }}</BaseTag>
-        {{ placements[index]?.detail }}
-      </template>
-      <template v-if="showsActions">
-        <input
-          v-if="uiMode === 'verify'"
-          v-model="rebuildHexText"
-          class="input"
-          placeholder="手改落点 列.行"
-          @change="workbench.setArrivalHexOverride(index, rebuildHexText)"
-        />
-        <span v-else class="ui-field-readonly">{{ rebuildHexText || '—' }}</span>
-        <!-- B27 + 用户 2026-10-25 BUG①：落点改成**点地图**，但**只给卡面候选**（13.6 的入场格） -->
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          :disabled="(workbench.arrivalCandidates[index]?.length ?? 0) === 0"
-          :title="`13.6：只能落在该到达条目的 ${workbench.arrivalCandidates[index]?.length ?? 0} 处候选格（被堵按 13.6b 退最近的开放边缘格）`"
-          @click="workbench.beginArrivalHexPickNow(index)"
-        >
-          点地图选落点（{{ workbench.arrivalCandidates[index]?.length ?? 0 }} 处候选）
-        </BaseButton>
-        <!-- B21：库中型号在这一行选（13.6 的条目是卡面文字，工程库未落"条目 → 算子"映射） -->
-        <select
-          class="select"
-          :value="arrivalRecordIdOf(index)"
-          @change="onArrivalRecordPick(index, ($event.target as HTMLSelectElement).value)"
-        >
-          <option value="">（库中型号：按显示名自动匹配）</option>
-          <option v-for="item in workbench.choices" :key="item.id" :value="item.id">
-            {{ item.nameZh ?? item.nameEn ?? item.id }}
-          </option>
-        </select>
-        <BaseButton
-          variant="primary"
-          size="sm"
-          :disabled="workbench.arrivalPlaced[index] === true"
-          @click="onPlaceArrival(index)"
-        >
-          {{ workbench.arrivalPlaced[index] === true ? '已投放' : '投放（13.6）' }}
-        </BaseButton>
+        —— 只铺本环节要做的区块；其余子环节的区块已隐去（切到对应环节再出现）。
       </template>
     </p>
-    <p v-if="(plan?.units.length ?? 0) === 0" class="muted">当日到达卡没有条目。</p>
 
-    <!-- ── · 可变增援（13.6b / 1.6c / 3.3c / 3.6） ── -->
-    <hr />
-    <RuleNote
-      title="可变增援：每个己方增援阶段掷补给表与补员表（19 Aug 前掷一次，之后掷两次）"
-      rule="13.6b"
-    >
+    <template v-if="workbench.segmentIn(['reinforcement.arrival'])">
+      <!-- ── · 到达表执行（13.6 / 13.6b / 1.6a） ── -->
       <p class="muted">
-        可变增援（13.6b）：每个己方增援阶段掷补给表（得 SP）与补员表（得 Ftr/Tac/Pax/Eq）； 19 Aug
-        起补员表 −1 且取 Late 档；1.6c 特殊补员 19 Aug 前每回合掷； 轴方另掷 3.3c 可变撤离（19 Aug
-        起）、3.6 随机事件（19 Jul、25 Aug）。
+        到达表执行（13.6）：当日到达卡 → 投放需求与落点（入口被阻挡时按 13.6b
+        改投最近的未被阻挡边缘格）； 条目「Removed」按 1.6a 立即移出。
       </p>
-    </RuleNote>
-    <div v-if="showsActions" class="row">
-      <!--
+      <!-- B34②：本方到达卡（OOA）原卡面（13.6 / 专规 1.6a；点图在新标签打开原尺寸） -->
+      <figure v-if="showsActions && ooaCard !== null" class="ooa">
+        <a v-if="ooaReady" :href="ooaImageUrl ?? undefined" target="_blank" rel="noreferrer">
+          <img class="ooa__img" :src="ooaImageUrl ?? ''" :alt="ooaCard.title" />
+        </a>
+        <span v-else class="ooa__img ooa__img--pending">正在读图…</span>
+        <figcaption class="muted">
+          {{ ooaCard.title
+          }}<template v-if="ooaCard.note !== undefined">｜{{ ooaCard.note }}</template>
+        </figcaption>
+      </figure>
+      <div class="row">
+        <!-- ★ 联调：剧本号唯一权威在会话 store，选择入口只留「初设与开局」一处（用户口径） -->
+        <BaseTag kind="info">剧本 {{ workbench.scenarioId }}</BaseTag>
+        <BaseTag kind="info">{{ workbench.date }}（第 {{ workbench.turn }} 回合）</BaseTag>
+        <span class="num">
+          投放需求 {{ plan?.units.length ?? 0 }} 条｜强制移除 {{ plan?.removals.length ?? 0 }} 条
+        </span>
+        <BaseTag v-if="workbench.arrivalAllPlaced" kind="success">当日到达已全部投放</BaseTag>
+        <BaseButton
+          v-if="showsActions"
+          variant="secondary"
+          size="sm"
+          @click="workbench.applyArrivalRemovalsNow()"
+        >
+          执行强制移除（1.6a）
+        </BaseButton>
+      </div>
+
+      <p v-if="plan !== null && plan.shutdowns.length > 0" class="warn">
+        <BaseTag kind="danger">2.1a</BaseTag>
+        当日生效的补给源关闭：{{ plan.shutdowns.join('、') }}
+      </p>
+
+      <p v-for="(unit, index) in plan?.units ?? []" :key="`${index}-${unit.raw}`" class="num">
+        <img
+          v-if="arrivalImageUrl(index) !== null"
+          :src="arrivalImageUrl(index) ?? undefined"
+          alt=""
+          class="arrival-thumb"
+        />
+        <BaseTag :kind="unit.kind === 'aircraft' ? 'warning' : 'neutral'">{{ unit.kind }}</BaseTag>
+        {{ unit.raw }}
+        <template v-if="unit.designation !== null">｜番号 {{ unit.designation }}</template>
+        <template v-if="unit.parentType !== null">｜母体 {{ unit.parentType }}</template>
+        <template v-if="unit.factors !== null">｜印值 {{ unit.factors }}</template>
+        <template v-if="arrivalCopiesOf(unit) > 1">｜同型 {{ arrivalCopiesOf(unit) }} 枚</template>
+        <template v-else-if="unit.count > 1 && unit.kind === 'transportPoint'">
+          ｜运力 {{ unit.count }}（13.6c：运力即装载 SP 数，仍是一枚算子）
+        </template>
+        <template v-else-if="unit.count > 1">｜卡面数量 {{ unit.count }}</template>
+        <!-- §5-A：编成条目（多枚算子共同到场）——显示枚数与逐枚映射状态 -->
+        <template v-if="unit.formationComponents.length > 0">
+          ｜编成 {{ unit.formationComponents.length }} 枚：
+          <template v-if="formationState(index)?.missing.length === 0">
+            已逐枚映射（{{ formationState(index)?.records.length ?? 0 }} 枚，投放即一次到场）
+          </template>
+          <template v-else>
+            <BaseTag kind="danger"
+              >{{ formationState(index)?.missing.length ?? 0 }} 枚未映射</BaseTag
+            >
+            ⇒ 请按卡面手工逐枚摆入
+          </template>
+        </template>
+        <template v-if="unit.stepsLost > 0">｜到场带损 {{ unit.stepsLost }} step</template>
+        <template v-if="unit.loadedWithSp">｜满载 SP（13.6c）</template>
+        ｜落点：{{ unit.label }} →
+        <template v-if="placements[index]?.hex !== null && placements[index]?.hex !== undefined">
+          {{ hexLabel(placements[index]!.hex!) }}（{{ placements[index]!.rule }}）
+        </template>
+        <template v-else>
+          <BaseTag kind="danger">{{ placements[index]?.status }}</BaseTag>
+          {{ placements[index]?.detail }}
+        </template>
+        <template v-if="showsActions">
+          <input
+            v-if="uiMode === 'verify'"
+            v-model="rebuildHexText"
+            class="input"
+            placeholder="手改落点 列.行"
+            @change="workbench.setArrivalHexOverride(index, rebuildHexText)"
+          />
+          <span v-else class="ui-field-readonly">{{ rebuildHexText || '—' }}</span>
+          <!-- B27 + 用户 2026-10-25 BUG①：落点改成**点地图**，但**只给卡面候选**（13.6 的入场格） -->
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :disabled="(workbench.arrivalCandidates[index]?.length ?? 0) === 0"
+            :title="`13.6：只能落在该到达条目的 ${workbench.arrivalCandidates[index]?.length ?? 0} 处候选格（被堵按 13.6b 退最近的开放边缘格）`"
+            @click="workbench.beginArrivalHexPickNow(index)"
+          >
+            点地图选落点（{{ workbench.arrivalCandidates[index]?.length ?? 0 }} 处候选）
+          </BaseButton>
+          <!-- B21：库中型号在这一行选（13.6 的条目是卡面文字，工程库未落"条目 → 算子"映射） -->
+          <select
+            class="select"
+            :value="arrivalRecordIdOf(index)"
+            @change="onArrivalRecordPick(index, ($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">（库中型号：按显示名自动匹配）</option>
+            <option v-for="item in workbench.choices" :key="item.id" :value="item.id">
+              {{ item.nameZh ?? item.nameEn ?? item.id }}
+            </option>
+          </select>
+          <BaseButton
+            variant="primary"
+            size="sm"
+            :disabled="workbench.arrivalPlaced[index] === true"
+            @click="onPlaceArrival(index)"
+          >
+            {{ workbench.arrivalPlaced[index] === true ? '已投放' : '投放（13.6）' }}
+          </BaseButton>
+        </template>
+      </p>
+      <p v-if="(plan?.units.length ?? 0) === 0" class="muted">当日到达卡没有条目。</p>
+    </template>
+    <template
+      v-if="
+        workbench.segmentIn([
+          'reinforcement.replRoll',
+          'reinforcement.randomEvent',
+          'reinforcement.variableExit',
+        ])
+      "
+    >
+      <!-- ── · 可变增援（13.6b / 1.6c / 3.3c / 3.6） ── -->
+      <hr />
+      <RuleNote
+        title="可变增援：每个己方增援阶段掷补给表与补员表（19 Aug 前掷一次，之后掷两次）"
+        rule="13.6b"
+      >
+        <p class="muted">
+          可变增援（13.6b）：每个己方增援阶段掷补给表（得 SP）与补员表（得 Ftr/Tac/Pax/Eq）； 19 Aug
+          起补员表 −1 且取 Late 档；1.6c 特殊补员 19 Aug 前每回合掷； 轴方另掷 3.3c 可变撤离（19 Aug
+          起）、3.6 随机事件（19 Jul、25 Aug）。
+        </p>
+      </RuleNote>
+      <div v-if="showsActions" class="row">
+        <!--
         B28（用户口径 #9「所有的随机数抽取一律自动结算」）：骰面与"是否自动掷"的勾选都撤掉 ——
         一律走种子化 RNG（`rng` 默认 `autoRoll: true`），骰面在结果行与结算日志里可复算。
         留在这里的只有**选择类**的输入（如可选规则的启用）。
       -->
-      <label class="field">
-        <input v-model="workbench.variableReplInputs.option4_1b" type="checkbox" />
-        启用可选 4.1b（8 Jul / 12 Jul 自动 Supply Train）
-      </label>
-      <BaseButton variant="primary" size="sm" @click="workbench.rollVariableReplNow()">
-        掷可变增援（1.6b）
-      </BaseButton>
-      <BaseButton variant="ghost" size="sm" @click="workbench.clearNonSavableReplNow()">
-        清零不可保存的补员（13.5）
-      </BaseButton>
-    </div>
-    <p v-if="showsActions" class="muted num">
-      骰面自动（补给表 2d6 / 补员表 2d6 / 特殊补员 1d6 / 可变撤离 1d6 / 随机事件 2d6），
-      结果随本次结算一并落日志。
-    </p>
-    <!-- 3.3c：可变撤离的窗口与了结状态（轴方 19 Aug 起；掷出 1 或 6 即结束） -->
-    <p class="num">
-      3.3c 可变撤离：窗口
-      <BaseTag :kind="workbench.variableExitOpen ? 'danger' : 'neutral'">
-        {{ workbench.variableExitOpen ? '已开（19 Aug 起）' : '未开' }}
-      </BaseTag>
-      ｜判定
-      <BaseTag :kind="workbench.variableExitResolved ? 'success' : 'info'">
-        {{ workbench.variableExitResolved ? '已了结（不再掷）' : '未了结（2 选 1，须下回合再掷）' }}
-      </BaseTag>
-    </p>
-    <p v-if="workbench.lastVariableRepl !== null" class="num">
-      <BaseTag kind="success">{{ workbench.lastVariableRepl.rule }}</BaseTag>
-      {{ workbench.lastVariableRepl.detail }}
-    </p>
-    <p class="num">13.5 可保存的补员：{{ savableReplKeys.join(' / ') }}（其余在增援阶段末清零）</p>
-
-    <!-- ── · 到货 SP 落位（专规 2.1 / 3.1 免费铁运 + 3.6 补给列车） ── -->
-    <hr />
-    <RuleNote
-      title="到货 SP 落位：可卸载城市格每格 1 SP（免费铁运），其余放图边补给源格"
-      rule="专规 2.1 / 3.1"
-    >
-      <p class="muted">
-        补给表到货（1.6b）的 SP 可用**免费铁运**落到每个**可卸载城市格**（13.3c：城格有铁路 +
-        受本方控制 + 免敌方 ZOC 的铁路路径回补给源），**每格 1 SP**、**不扣铁路运量**（13.3b
-        的运量只在移动阶段用）； 其余 SP 放本方的**图边补给源格**。3.6 随机事件掷出 Supply Train（2
-        骰 5–9）时，另在**任一可卸货格** 得 2 SP，同样不用 Rail Cap。
-      </p>
-    </RuleNote>
-    <div v-if="showsActions" class="row">
-      <label class="field">
-        到货 SP（掷补给表后自动填，可手改）
-        <UiField v-model="workbench.supplyArrivalSp" type="number" min="0" step="1" />
-      </label>
-      <BaseTag kind="neutral">铁路运量消耗 0（免费）</BaseTag>
-    </div>
-    <p class="muted num">
-      可卸载城市格（静态）{{ workbench.freeRailCityHexes.length }} 处｜此刻候选（13.3c 运行期：受控
-      + 铁路路径通回补给源）{{ workbench.freeRailCityCandidates.length }} 处
-    </p>
-    <div v-if="workbench.freeRailCityCandidates.length > 0" class="row">
-      <BaseButton
-        v-for="item in workbench.freeRailCityCandidates"
-        :key="`${item.hex.col}.${item.hex.row}`"
-        :variant="freeRailPickedKeys.has(hexLabel(item.hex)) ? 'primary' : 'secondary'"
-        size="sm"
-        @click="workbench.toggleFreeRailPick(item.hex)"
-      >
-        {{ hexLabel(item.hex) }} {{ item.name }}
-      </BaseButton>
-    </div>
-    <p v-else class="muted">
-      此刻没有候选（城里要受本方控制、且铁路路径通回补给源）—— 按原文，SP 就全部落图边补给源格。
-    </p>
-    <div v-if="showsActions" class="row">
-      <label class="field">
-        其余 SP 的落点（图边补给源格）
-        <select
-          :value="freeRailEdgeValue"
-          @change="onFreeRailEdgeChange(($event.target as HTMLSelectElement).value)"
-        >
-          <option
-            v-for="item in workbench.scenarioSupplySourceHexes"
-            :key="`${item.col}.${item.row}`"
-            :value="hexLabel(item)"
-          >
-            {{ hexLabel(item) }}
-          </option>
-        </select>
-      </label>
-      <label v-if="workbench.supplyTrainSp > 0" class="field">
-        3.6 补给列车 {{ workbench.supplyTrainSp }} SP 落点（任一可卸货格）
-        <select
-          :value="supplyTrainValue"
-          @change="onSupplyTrainChange(($event.target as HTMLSelectElement).value)"
-        >
-          <option value="">（未选）</option>
-          <option
-            v-for="item in workbench.detrainableHexes"
-            :key="`${item.col}.${item.row}`"
-            :value="hexLabel(item)"
-          >
-            {{ hexLabel(item) }}
-          </option>
-        </select>
-      </label>
-      <BaseButton variant="primary" size="sm" @click="workbench.applySupplyArrivalsNow()">
-        落账（专规 2.1）
-      </BaseButton>
-    </div>
-    <p v-if="workbench.freeRailPlan !== null" class="num">
-      <BaseTag kind="info">{{ workbench.freeRailPlan.rule }}</BaseTag>
-      {{ workbench.freeRailPlan.detail }}
-    </p>
-    <p v-if="workbench.freeRailError !== null" class="warn">
-      落点被拒：{{ workbench.freeRailError.reason }}（{{ workbench.freeRailError.rule }}）
-    </p>
-    <p v-if="workbench.lastFreeRailPlan !== null" class="ok">
-      <BaseTag kind="success">已落账</BaseTag> {{ workbench.lastFreeRailPlan.detail }}
-    </p>
-
-    <!-- ── · 补员账本（13.5） ── -->
-    <hr />
-    <RuleNote title="补员（13.5 / §5-D）" rule="13.5 / 专规 1.6 Notes">
-      <p class="muted">
-        **Pax / Eq 是盘面算子**——每 1 点一枚 `Pax Repl` / `EQ Repl`，与普通算子一样移动、堆叠、
-        可被攻击/轰炸摧毁（摧毁即消灭，不进死亡堆）；掷出后按 SOP「放置在地图上」由裁判选落点。 Ftr
-        / Tac 只补 1 step 且**不可保存**，仍走账本（增援阶段末清零）。
-      </p>
-    </RuleNote>
-    <div class="row">
-      <span class="num">
-        盘面：Pax {{ replCounts.pax }} 枚 / Eq {{ replCounts.eq }} 枚｜账本：Ftr
-        {{ holdings.ftr }} / Tac {{ holdings.tac }}
-      </span>
-      <span v-if="replPendingTotal > 0" class="num">
-        <BaseTag kind="warning">待放置</BaseTag>
-        Pax {{ workbench.replPending.pax }} / Eq {{ workbench.replPending.eq }}
-      </span>
-    </div>
-    <div v-if="showsActions && replPendingTotal > 0" class="row">
-      <label class="field">
-        补员落点（13.5a：每点一枚，放好后可正常移动）
-        <UiField v-model="replPlaceHexText" class="input num" placeholder="列.行" />
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          :disabled="replPlaceHexText === ''"
-          @click="placePendingRepl()"
-        >
-          点地图选格后放置
+        <label class="field">
+          <input v-model="workbench.variableReplInputs.option4_1b" type="checkbox" />
+          启用可选 4.1b（8 Jul / 12 Jul 自动 Supply Train）
+        </label>
+        <BaseButton variant="primary" size="sm" @click="workbench.rollVariableReplNow()">
+          掷可变增援（1.6b）
         </BaseButton>
-      </label>
-      <BaseButton variant="primary" size="sm" :disabled="!replHexOk" @click="placePendingRepl()">
-        放置补员（13.5）
-      </BaseButton>
-    </div>
-
-    <!-- ── · 重建（13.5） ── -->
-    <hr />
-    <p v-if="showsRebuild" class="muted">
-      重建（13.5）：补员须都在**一个格**中、且在一个**战斗模式的友方 HQ 的 2 格内**（该格不得在敌方
-      ZOC 内）；重建图上有损的单位还须与补员**同格**。重建行键取自重建表（本作工程库未落「算子 →
-      行」映射，由裁判选定）。
-    </p>
-    <div v-if="showsRebuild" class="row">
-      <!-- B13：待重建单位＝**算子图阵列**（原来是一个纯文字下拉） -->
-      <CounterPicker
-        title="待重建单位"
-        hint="13.5 重建：死亡堆里的单位，或图上带损且与补员同格者"
-        :items="rebuildItems"
-        :size="32"
-        @pick="rebuildUnitId = $event"
-        @hover="onHoverRebuild"
-      />
-    </div>
-    <div v-if="showsRebuild" class="row">
-      <label class="field">
-        重建表行键
-        <select v-model="rebuildType" class="select">
-          <option value="">— 按重建表选行（13.5：费用由行决定）—</option>
-          <option v-for="row in rebuildRowChoices" :key="row.unitType" :value="row.unitType">
-            {{ row.unitType }}（{{ row.sourceLabel }}）
-          </option>
-        </select>
-      </label>
-      <!--
+        <BaseButton variant="ghost" size="sm" @click="workbench.clearNonSavableReplNow()">
+          清零不可保存的补员（13.5）
+        </BaseButton>
+      </div>
+      <p v-if="showsActions" class="muted num">
+        骰面自动（补给表 2d6 / 补员表 2d6 / 特殊补员 1d6 / 可变撤离 1d6 / 随机事件 2d6），
+        结果随本次结算一并落日志。
+      </p>
+      <!-- 3.3c：可变撤离的窗口与了结状态（轴方 19 Aug 起；掷出 1 或 6 即结束） -->
+      <p class="num">
+        3.3c 可变撤离：窗口
+        <BaseTag :kind="workbench.variableExitOpen ? 'danger' : 'neutral'">
+          {{ workbench.variableExitOpen ? '已开（19 Aug 起）' : '未开' }}
+        </BaseTag>
+        ｜判定
+        <BaseTag :kind="workbench.variableExitResolved ? 'success' : 'info'">
+          {{
+            workbench.variableExitResolved ? '已了结（不再掷）' : '未了结（2 选 1，须下回合再掷）'
+          }}
+        </BaseTag>
+      </p>
+      <p v-if="workbench.lastVariableRepl !== null" class="num">
+        <BaseTag kind="success">{{ workbench.lastVariableRepl.rule }}</BaseTag>
+        {{ workbench.lastVariableRepl.detail }}
+      </p>
+      <p class="num">
+        13.5 可保存的补员：{{ savableReplKeys.join(' / ') }}（其余在增援阶段末清零）
+      </p>
+    </template>
+    <template v-if="workbench.segmentIn(['reinforcement.arrival'])">
+      <!-- ── · 到货 SP 落位（专规 2.1 / 3.1 免费铁运 + 3.6 补给列车） ── -->
+      <hr />
+      <RuleNote
+        title="到货 SP 落位：可卸载城市格每格 1 SP（免费铁运），其余放图边补给源格"
+        rule="专规 2.1 / 3.1"
+      >
+        <p class="muted">
+          补给表到货（1.6b）的 SP 可用**免费铁运**落到每个**可卸载城市格**（13.3c：城格有铁路 +
+          受本方控制 + 免敌方 ZOC 的铁路路径回补给源），**每格 1 SP**、**不扣铁路运量**（13.3b
+          的运量只在移动阶段用）； 其余 SP 放本方的**图边补给源格**。3.6 随机事件掷出 Supply
+          Train（2 骰 5–9）时，另在**任一可卸货格** 得 2 SP，同样不用 Rail Cap。
+        </p>
+      </RuleNote>
+      <div v-if="showsActions" class="row">
+        <label class="field">
+          到货 SP（掷补给表后自动填，可手改）
+          <UiField v-model="workbench.supplyArrivalSp" type="number" min="0" step="1" />
+        </label>
+        <BaseTag kind="neutral">铁路运量消耗 0（免费）</BaseTag>
+      </div>
+      <p class="muted num">
+        可卸载城市格（静态）{{ workbench.freeRailCityHexes.length }} 处｜此刻候选（13.3c
+        运行期：受控 + 铁路路径通回补给源）{{ workbench.freeRailCityCandidates.length }} 处
+      </p>
+      <div v-if="workbench.freeRailCityCandidates.length > 0" class="row">
+        <BaseButton
+          v-for="item in workbench.freeRailCityCandidates"
+          :key="`${item.hex.col}.${item.hex.row}`"
+          :variant="freeRailPickedKeys.has(hexLabel(item.hex)) ? 'primary' : 'secondary'"
+          size="sm"
+          @click="workbench.toggleFreeRailPick(item.hex)"
+        >
+          {{ hexLabel(item.hex) }} {{ item.name }}
+        </BaseButton>
+      </div>
+      <p v-else class="muted">
+        此刻没有候选（城里要受本方控制、且铁路路径通回补给源）—— 按原文，SP 就全部落图边补给源格。
+      </p>
+      <div v-if="showsActions" class="row">
+        <label class="field">
+          其余 SP 的落点（图边补给源格）
+          <select
+            :value="freeRailEdgeValue"
+            @change="onFreeRailEdgeChange(($event.target as HTMLSelectElement).value)"
+          >
+            <option
+              v-for="item in workbench.scenarioSupplySourceHexes"
+              :key="`${item.col}.${item.row}`"
+              :value="hexLabel(item)"
+            >
+              {{ hexLabel(item) }}
+            </option>
+          </select>
+        </label>
+        <label v-if="workbench.supplyTrainSp > 0" class="field">
+          3.6 补给列车 {{ workbench.supplyTrainSp }} SP 落点（任一可卸货格）
+          <select
+            :value="supplyTrainValue"
+            @change="onSupplyTrainChange(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">（未选）</option>
+            <option
+              v-for="item in workbench.detrainableHexes"
+              :key="`${item.col}.${item.row}`"
+              :value="hexLabel(item)"
+            >
+              {{ hexLabel(item) }}
+            </option>
+          </select>
+        </label>
+        <BaseButton variant="primary" size="sm" @click="workbench.applySupplyArrivalsNow()">
+          落账（专规 2.1）
+        </BaseButton>
+      </div>
+      <p v-if="workbench.freeRailPlan !== null" class="num">
+        <BaseTag kind="info">{{ workbench.freeRailPlan.rule }}</BaseTag>
+        {{ workbench.freeRailPlan.detail }}
+      </p>
+      <p v-if="workbench.freeRailError !== null" class="warn">
+        落点被拒：{{ workbench.freeRailError.reason }}（{{ workbench.freeRailError.rule }}）
+      </p>
+      <p v-if="workbench.lastFreeRailPlan !== null" class="ok">
+        <BaseTag kind="success">已落账</BaseTag> {{ workbench.lastFreeRailPlan.detail }}
+      </p>
+    </template>
+    <template v-if="workbench.segmentIn(['reinforcement.rebuild'])">
+      <!-- ── · 补员账本（13.5） ── -->
+      <hr />
+      <RuleNote title="补员（13.5 / §5-D）" rule="13.5 / 专规 1.6 Notes">
+        <p class="muted">
+          **Pax / Eq 是盘面算子**——每 1 点一枚 `Pax Repl` / `EQ Repl`，与普通算子一样移动、堆叠、
+          可被攻击/轰炸摧毁（摧毁即消灭，不进死亡堆）；掷出后按 SOP「放置在地图上」由裁判选落点。
+          Ftr / Tac 只补 1 step 且**不可保存**，仍走账本（增援阶段末清零）。
+        </p>
+      </RuleNote>
+      <div class="row">
+        <span class="num">
+          盘面：Pax {{ replCounts.pax }} 枚 / Eq {{ replCounts.eq }} 枚｜账本：Ftr
+          {{ holdings.ftr }} / Tac {{ holdings.tac }}
+        </span>
+        <span v-if="replPendingTotal > 0" class="num">
+          <BaseTag kind="warning">待放置</BaseTag>
+          Pax {{ workbench.replPending.pax }} / Eq {{ workbench.replPending.eq }}
+        </span>
+      </div>
+      <div v-if="showsActions && replPendingTotal > 0" class="row">
+        <label class="field">
+          补员落点（13.5a：每点一枚，放好后可正常移动）
+          <UiField v-model="replPlaceHexText" class="input num" placeholder="列.行" />
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :disabled="replPlaceHexText === ''"
+            @click="placePendingRepl()"
+          >
+            点地图选格后放置
+          </BaseButton>
+        </label>
+        <BaseButton variant="primary" size="sm" :disabled="!replHexOk" @click="placePendingRepl()">
+          放置补员（13.5）
+        </BaseButton>
+      </div>
+    </template>
+    <template v-if="workbench.segmentIn(['reinforcement.rebuild'])">
+      <!-- ── · 重建（13.5） ── -->
+      <hr />
+      <p v-if="showsRebuild" class="muted">
+        重建（13.5）：补员须都在**一个格**、且该格 2 格内有**战斗模式友方 HQ**（不得在敌 ZOC
+        内）；重建有损单位还须与补员**同格**。行键取自重建表（库未落映射，由裁判选）。
+      </p>
+      <div v-if="showsRebuild" class="row">
+        <!-- B13：待重建单位＝**算子图阵列**（原来是一个纯文字下拉） -->
+        <CounterPicker
+          title="待重建单位"
+          hint="13.5 重建：死亡堆里的单位，或图上带损且与补员同格者"
+          :items="rebuildItems"
+          :size="32"
+          @pick="rebuildUnitId = $event"
+          @hover="onHoverRebuild"
+        />
+      </div>
+      <div v-if="showsRebuild" class="row">
+        <label class="field">
+          重建表行键
+          <select v-model="rebuildType" class="select">
+            <option value="">— 按重建表选行（13.5：费用由行决定）—</option>
+            <option v-for="row in rebuildRowChoices" :key="row.unitType" :value="row.unitType">
+              {{ row.unitType }}（{{ row.sourceLabel }}）
+            </option>
+          </select>
+        </label>
+        <!--
         13.5：**建议行**——由该算子自身类型推出（引擎唯一出处），但**不自动采用**：
         裁判必须点一下「采用建议」，未点就保持未选行、按钮禁用（默认值不能代替规则判定）。
       -->
-      <span v-if="rebuildSuggestion !== null" class="muted">
-        建议行：{{ rebuildSuggestion }}（{{ rebuildSuggestionLabel }}）
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          :disabled="rebuildType === rebuildSuggestion"
-          @click="rebuildType = rebuildSuggestion"
-        >
-          采用建议
-        </BaseButton>
-      </span>
-      <span v-else-if="rebuildUnitId !== '' && !rebuildCandidateBlocked" class="muted">
-        该算子的行键无法从类型唯一确定（重建表把同兵种拆成了多行）⇒ 请人工选行（13.5）。
-      </span>
-      <!-- 13.5c：AR 后有黄点（数据层 rebuildable=false）⇒ 永久不可重建，不必让裁判点一次被拒 -->
-      <span v-if="rebuildCandidateBlocked" class="warn">
-        <BaseTag kind="danger">13.5c</BaseTag>
-        该单位 AR 后有黄点（`rebuildable: false`）⇒ **永久不可重建**，被摧毁即移除。
-      </span>
-      <label class="field">
-        补员所在格
-        <UiField v-model="workbench.rebuildReplHexText" class="input" placeholder="36.13" />
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          :disabled="rebuildUnitId === ''"
-          @click="workbench.beginRebuildReplHexPickNow(rebuildUnitId)"
-        >
-          点地图选格
-        </BaseButton>
-      </label>
-      <BaseButton
-        variant="primary"
-        size="sm"
-        :disabled="!canRebuildNow"
-        @click="
-          workbench.rebuildUnitNow({
-            unitId: rebuildUnitId,
-            rebuildType,
-            replHexText: workbench.rebuildReplHexText,
-          })
-        "
-      >
-        重建（13.5）
-      </BaseButton>
-    </div>
-    <p v-if="workbench.lastRebuild !== null" class="ok">
-      <BaseTag kind="success">{{ workbench.lastRebuild.rule }}</BaseTag>
-      {{ workbench.lastRebuild.detail }}
-    </p>
-    <p class="num">
-      死亡堆 {{ workbench.deadPile.length }} 个｜永久移除 {{ workbench.removedForever.length }} 个
-    </p>
-
-    <!-- ── · 拆分与合并（20.0 / 13.9） ── -->
-    <hr />
-    <RuleNote
-      title="拆分：只有「其他」类型多军力单位可创建/吸收，时机＝开始移动 / 战后推进 / 战后撤退"
-      rule="20.0"
-    >
-      <p v-if="showsRebuild" class="muted">
-        拆分（20.0）：只有**「其他」类型**的多军力单位可创建/吸收；创建时机为**开始移动 / 战后推进 /
-        战后撤退**（20.0a）；**创建 AR ≤ 自己、吸收 AR ≥ 自己**（20.0b，两个方向相反，勿写成同向）；
-        标记与模式须与拆分单位一致（20.0c）；装甲/机械化一律不可；最后一点军力不可创建。
-        合并（13.9）：只在增援阶段；两面完全相同、非 DG、非部队储备低下。
-      </p>
-    </RuleNote>
-    <div v-if="showsRebuild" class="row">
-      <label class="field">
-        国籍池存量
-        <UiField
-          class="input num"
-          type="number"
-          min="0"
-          :model-value="workbench.breakdownPool['ax'] ?? 0"
-          @update:model-value="workbench.setBreakdownPoolNow('ax', Number($event))"
-        />
-      </label>
-      <CounterPicker
-        title="母单位（图上本方单位，点一枚即选中）"
-        hint="20.0：只有「其他」类型的多军力单位可创建/吸收拆分单位；合法性由引擎在提交时判"
-        :items="rebuildUnitItems(breakdownParentId)"
-        :size="32"
-        @pick="breakdownParentId = $event"
-        @hover="hoverUnit"
-      />
-      <label class="field">
-        创建用：库中型号
-        <select v-model="breakdownRecordId" class="select">
-          <option :value="''">（选择型号）</option>
-          <option v-for="item in workbench.choices" :key="item.id" :value="item.id">
-            {{ item.nameZh ?? item.nameEn ?? item.id }}
-          </option>
-        </select>
-      </label>
-      <label class="field">
-        吸收用：图上算子
-        <select v-model="breakdownAbsorbId" class="select">
-          <option :value="''">
-            {{ breakdownUnitsOnMap.length === 0 ? '（图上暂无拆分单位）' : '（选择算子）' }}
-          </option>
-          <option
-            v-for="unit in breakdownUnitsOnMap"
-            :key="unit.instanceId"
-            :value="unit.instanceId"
+        <span v-if="rebuildSuggestion !== null" class="muted">
+          建议行：{{ rebuildSuggestion }}（{{ rebuildSuggestionLabel }}）
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :disabled="rebuildType === rebuildSuggestion"
+            @click="rebuildType = rebuildSuggestion"
           >
-            {{ unit.name }} @ {{ hexLabel(unit.hex) }}
-          </option>
-        </select>
-      </label>
-      <BaseButton
-        variant="secondary"
-        size="sm"
-        @click="workbench.createBreakdownNow(breakdownParentId, breakdownRecordId)"
+            采用建议
+          </BaseButton>
+        </span>
+        <span v-else-if="rebuildUnitId !== '' && !rebuildCandidateBlocked" class="muted">
+          该算子的行键无法从类型唯一确定（重建表把同兵种拆成了多行）⇒ 请人工选行（13.5）。
+        </span>
+        <!-- 13.5c：AR 后有黄点（数据层 rebuildable=false）⇒ 永久不可重建，不必让裁判点一次被拒 -->
+        <span v-if="rebuildCandidateBlocked" class="warn">
+          <BaseTag kind="danger">13.5c</BaseTag>
+          该单位 AR 后有黄点（`rebuildable: false`）⇒ **永久不可重建**，被摧毁即移除。
+        </span>
+        <label class="field">
+          补员所在格
+          <UiField v-model="workbench.rebuildReplHexText" class="input" placeholder="36.13" />
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :disabled="rebuildUnitId === ''"
+            @click="workbench.beginRebuildReplHexPickNow(rebuildUnitId)"
+          >
+            点地图选格
+          </BaseButton>
+        </label>
+        <BaseButton
+          variant="primary"
+          size="sm"
+          :disabled="!canRebuildNow"
+          @click="
+            workbench.rebuildUnitNow({
+              unitId: rebuildUnitId,
+              rebuildType,
+              replHexText: workbench.rebuildReplHexText,
+            })
+          "
+        >
+          重建（13.5）
+        </BaseButton>
+      </div>
+      <p v-if="workbench.lastRebuild !== null" class="ok">
+        <BaseTag kind="success">{{ workbench.lastRebuild.rule }}</BaseTag>
+        {{ workbench.lastRebuild.detail }}
+      </p>
+      <p class="num">
+        死亡堆 {{ workbench.deadPile.length }} 个｜永久移除 {{ workbench.removedForever.length }} 个
+      </p>
+    </template>
+    <template
+      v-if="
+        workbench.segmentIn([
+          'reinforcement.rebuild',
+          'movement.modeAndMovement',
+          'combat.combat',
+          'exploitation.combat',
+        ])
+      "
+    >
+      <!-- ── · 拆分与合并（20.0 / 13.9） ── -->
+      <hr />
+      <RuleNote
+        title="拆分：只有「其他」类型多军力单位可创建/吸收，时机＝开始移动 / 战后推进 / 战后撤退"
+        rule="20.0"
       >
-        创建拆分单位（20.0a）
-      </BaseButton>
-      <BaseButton
-        variant="secondary"
-        size="sm"
-        @click="workbench.absorbBreakdownNow(breakdownParentId, breakdownAbsorbId)"
-      >
-        吸收拆分单位（20.0d）
-      </BaseButton>
-    </div>
-    <div v-if="showsRebuild" class="row">
-      <CounterPicker
-        title="合并：保留哪一枚"
-        hint="13.9：两面完全相同、非 DG、非部队储备低下 —— 由引擎判"
-        :items="rebuildUnitItems(keepId)"
-        :size="32"
-        @pick="keepId = $event"
-        @hover="hoverUnit"
-      />
-      <CounterPicker
-        title="合并：移除哪一枚"
-        hint="13.9-1 地面 / 13.9-4 飞机（用同一份阵列选，引擎按类型判）"
-        :items="rebuildUnitItems(removeId)"
-        :size="32"
-        @pick="removeId = $event"
-        @hover="hoverUnit"
-      />
-      <BaseButton
-        variant="primary"
-        size="sm"
-        @click="workbench.consolidateUnitsNow(keepId, removeId)"
-      >
-        合并地面单位（13.9-1）
-      </BaseButton>
-      <BaseButton
-        variant="secondary"
-        size="sm"
-        @click="workbench.consolidateAircraftNow(keepId, removeId)"
-      >
-        合并飞机（13.9-4）
-      </BaseButton>
-    </div>
-    <p v-if="workbench.lastBreakdown !== null" class="ok">
-      <BaseTag kind="success">{{ workbench.lastBreakdown.rule }}</BaseTag>
-      {{ workbench.lastBreakdown.detail }}
-    </p>
-    <p v-if="workbench.lastConsolidation !== null" class="ok">
-      <BaseTag kind="success">{{ workbench.lastConsolidation.rule }}</BaseTag>
-      {{ workbench.lastConsolidation.detail }}
-    </p>
-
+        <p v-if="showsRebuild" class="muted">
+          拆分（20.0）：只有**「其他」类型**的多军力单位可创建/吸收；创建时机为**开始移动 / 战后推进
+          / 战后撤退**（20.0a）；**创建 AR ≤ 自己、吸收 AR ≥
+          自己**（20.0b，两个方向相反，勿写成同向）；
+          标记与模式须与拆分单位一致（20.0c）；装甲/机械化一律不可；最后一点军力不可创建。
+          合并（13.9）：只在增援阶段；两面完全相同、非 DG、非部队储备低下。
+        </p>
+      </RuleNote>
+      <div v-if="showsRebuild" class="row">
+        <label class="field">
+          国籍池存量
+          <UiField
+            class="input num"
+            type="number"
+            min="0"
+            :model-value="workbench.breakdownPool['ax'] ?? 0"
+            @update:model-value="workbench.setBreakdownPoolNow('ax', Number($event))"
+          />
+        </label>
+        <CounterPicker
+          title="母单位（图上本方单位，点一枚即选中）"
+          hint="20.0：只有「其他」类型的多军力单位可创建/吸收拆分单位；合法性由引擎在提交时判"
+          :items="rebuildUnitItems(breakdownParentId)"
+          :size="32"
+          @pick="breakdownParentId = $event"
+          @hover="hoverUnit"
+        />
+        <label class="field">
+          创建用：库中型号
+          <select v-model="breakdownRecordId" class="select">
+            <option :value="''">（选择型号）</option>
+            <option v-for="item in workbench.choices" :key="item.id" :value="item.id">
+              {{ item.nameZh ?? item.nameEn ?? item.id }}
+            </option>
+          </select>
+        </label>
+        <label class="field">
+          吸收用：图上算子
+          <select v-model="breakdownAbsorbId" class="select">
+            <option :value="''">
+              {{ breakdownUnitsOnMap.length === 0 ? '（图上暂无拆分单位）' : '（选择算子）' }}
+            </option>
+            <option
+              v-for="unit in breakdownUnitsOnMap"
+              :key="unit.instanceId"
+              :value="unit.instanceId"
+            >
+              {{ unit.name }} @ {{ hexLabel(unit.hex) }}
+            </option>
+          </select>
+        </label>
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          @click="workbench.createBreakdownNow(breakdownParentId, breakdownRecordId)"
+        >
+          创建拆分单位（20.0a）
+        </BaseButton>
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          @click="workbench.absorbBreakdownNow(breakdownParentId, breakdownAbsorbId)"
+        >
+          吸收拆分单位（20.0d）
+        </BaseButton>
+      </div>
+      <div v-if="showsRebuild" class="row">
+        <CounterPicker
+          title="合并：保留哪一枚"
+          hint="13.9：两面完全相同、非 DG、非部队储备低下 —— 由引擎判"
+          :items="rebuildUnitItems(keepId)"
+          :size="32"
+          @pick="keepId = $event"
+          @hover="hoverUnit"
+        />
+        <CounterPicker
+          title="合并：移除哪一枚"
+          hint="13.9-1 地面 / 13.9-4 飞机（用同一份阵列选，引擎按类型判）"
+          :items="rebuildUnitItems(removeId)"
+          :size="32"
+          @pick="removeId = $event"
+          @hover="hoverUnit"
+        />
+        <BaseButton
+          variant="primary"
+          size="sm"
+          @click="workbench.consolidateUnitsNow(keepId, removeId)"
+        >
+          合并地面单位（13.9-1）
+        </BaseButton>
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          @click="workbench.consolidateAircraftNow(keepId, removeId)"
+        >
+          合并飞机（13.9-4）
+        </BaseButton>
+      </div>
+      <p v-if="workbench.lastBreakdown !== null" class="ok">
+        <BaseTag kind="success">{{ workbench.lastBreakdown.rule }}</BaseTag>
+        {{ workbench.lastBreakdown.detail }}
+      </p>
+      <p v-if="workbench.lastConsolidation !== null" class="ok">
+        <BaseTag kind="success">{{ workbench.lastConsolidation.rule }}</BaseTag>
+        {{ workbench.lastConsolidation.detail }}
+      </p>
+    </template>
     <!-- ── · 慢动员（专规 2.4） ── -->
     <hr />
     <p class="muted">
@@ -882,92 +928,95 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       </BaseButton>
     </div>
 
-    <!-- ── ⑥b 方面军预备队（专规 2.3c） ── -->
-    <hr />
-    <RuleNote
-      title="方面军预备队：三个时点各一批（2 SP + 编制转化 + 两次免费重建），必须当即领取"
-      rule="专规 2.3c"
-    >
-      <p class="muted">
-        方面军预备队（专规 2.3c）：**三个时点**（12 Jul / 1 Aug / 1 Sep ——
-        **印刷日程**）各到一批，每批 **2 SP、一次编制转化**（旧单位按 1.6a
-        **移出游戏**、新单位随当日到达摆放）与**两次免费重建** （一支 IL.2 或一支 HQ
-        或火炮单位，玩家择一，从**死亡堆**里挑）；**必须当即领取、不能保存**。
-        归位口径＝「轨上第一个 ≥ 卡面日期的回合」（轨上第 8 回合＝1941-08-01、第 17
-        回合＝1941-09-01，与卡面一致）。
-      </p>
-    </RuleNote>
-    <p v-if="workbench.frontalReservesToday === null" class="muted">
-      本回合（{{ workbench.date }}）没有方面军预备队到货。
-    </p>
-    <template v-else>
-      <p class="warn">
-        <BaseTag kind="danger">专规 2.3c</BaseTag>
-        本回合到货：**{{ workbench.frontalReservesToday.date }}** 批次 ——
-        {{ workbench.frontalReservesToday.sp }} SP 与编制转化（{{
-          workbench.frontalReservesToday.convertFrom
-        }}
-        → {{ workbench.frontalReservesToday.convertTo }}）＋ 免费重建
-        {{ workbench.frontalReservesToday.freeRebuilds.join('、') }}
-        <template
-          v-if="workbench.frontalReservesClaimed.includes(workbench.frontalReservesToday.date)"
-        >
-          ✓ **已领取**
-        </template>
-      </p>
-      <div v-if="showsActions" class="row">
-        <label class="field">
-          落点格（列.行；2 SP 与新单位都落这里）
-          <UiField
-            v-model="workbench.frontalReservesInputs.hexText"
-            class="input"
-            placeholder="60.34"
-          />
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            @click="workbench.beginFrontalReservesHexPickNow()"
-          >
-            点地图选落点
-          </BaseButton>
-        </label>
-        <BaseButton
-          variant="primary"
-          size="sm"
-          :disabled="workbench.frontalReservesClaimed.includes(workbench.frontalReservesToday.date)"
-          @click="workbench.claimFrontalReservesNow()"
-        >
-          领取方面军预备队（2.3c）
-        </BaseButton>
-      </div>
-      <p v-if="workbench.lastFrontalReserves !== null" class="ok">
-        <BaseTag kind="success">2.3c</BaseTag>
-        {{ workbench.lastFrontalReserves.detail }}
-      </p>
-      <template v-if="workbench.lastFrontalReserves !== null">
-        <p class="muted num">
-          已落盘：{{ workbench.lastFrontalReserves.applied.join('、') || '（无）' }}
+    <template v-if="workbench.segmentIn(['reinforcement.frontalReserves'])">
+      <!-- ── ⑥b 方面军预备队（专规 2.3c） ── -->
+      <hr />
+      <RuleNote
+        title="方面军预备队：三个时点各一批（2 SP + 编制转化 + 两次免费重建），必须当即领取"
+        rule="专规 2.3c"
+      >
+        <p class="muted">
+          方面军预备队（专规 2.3c）：**三个时点**（12 Jul / 1 Aug / 1 Sep ——
+          **印刷日程**）各到一批，每批 **2 SP、一次编制转化**（旧单位按 1.6a
+          **移出游戏**、新单位随当日到达摆放）与**两次免费重建** （一支 IL.2 或一支 HQ
+          或火炮单位，玩家择一，从**死亡堆**里挑）；**必须当即领取、不能保存**。
+          归位口径＝「轨上第一个 ≥ 卡面日期的回合」（轨上第 8 回合＝1941-08-01、第 17
+          回合＝1941-09-01，与卡面一致）。
         </p>
-        <p v-if="workbench.lastFrontalReserves.obligations.length > 0" class="warn">
-          须手工处理（产物单位库缺相应算子，卡面原文如上）：
-          {{ workbench.lastFrontalReserves.obligations.join('、') }}
-        </p>
-        <p
-          v-for="item in workbench.lastFrontalReserves.freeRebuildCandidates"
-          :key="item.label"
-          class="num"
-        >
-          免费重建「{{ item.label }}」的死亡堆候选：{{
-            item.candidates.join('、') || '（死亡堆内暂无）'
+      </RuleNote>
+      <p v-if="workbench.frontalReservesToday === null" class="muted">
+        本回合（{{ workbench.date }}）没有方面军预备队到货。
+      </p>
+      <template v-else>
+        <p class="warn">
+          <BaseTag kind="danger">专规 2.3c</BaseTag>
+          本回合到货：**{{ workbench.frontalReservesToday.date }}** 批次 ——
+          {{ workbench.frontalReservesToday.sp }} SP 与编制转化（{{
+            workbench.frontalReservesToday.convertFrom
           }}
+          → {{ workbench.frontalReservesToday.convertTo }}）＋ 免费重建
+          {{ workbench.frontalReservesToday.freeRebuilds.join('、') }}
+          <template
+            v-if="workbench.frontalReservesClaimed.includes(workbench.frontalReservesToday.date)"
+          >
+            ✓ **已领取**
+          </template>
+        </p>
+        <div v-if="showsActions" class="row">
+          <label class="field">
+            落点格（列.行；2 SP 与新单位都落这里）
+            <UiField
+              v-model="workbench.frontalReservesInputs.hexText"
+              class="input"
+              placeholder="60.34"
+            />
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              @click="workbench.beginFrontalReservesHexPickNow()"
+            >
+              点地图选落点
+            </BaseButton>
+          </label>
+          <BaseButton
+            variant="primary"
+            size="sm"
+            :disabled="
+              workbench.frontalReservesClaimed.includes(workbench.frontalReservesToday.date)
+            "
+            @click="workbench.claimFrontalReservesNow()"
+          >
+            领取方面军预备队（2.3c）
+          </BaseButton>
+        </div>
+        <p v-if="workbench.lastFrontalReserves !== null" class="ok">
+          <BaseTag kind="success">2.3c</BaseTag>
+          {{ workbench.lastFrontalReserves.detail }}
+        </p>
+        <template v-if="workbench.lastFrontalReserves !== null">
+          <p class="muted num">
+            已落盘：{{ workbench.lastFrontalReserves.applied.join('、') || '（无）' }}
+          </p>
+          <p v-if="workbench.lastFrontalReserves.obligations.length > 0" class="warn">
+            须手工处理（产物单位库缺相应算子，卡面原文如上）：
+            {{ workbench.lastFrontalReserves.obligations.join('、') }}
+          </p>
+          <p
+            v-for="item in workbench.lastFrontalReserves.freeRebuildCandidates"
+            :key="item.label"
+            class="num"
+          >
+            免费重建「{{ item.label }}」的死亡堆候选：{{
+              item.candidates.join('、') || '（死亡堆内暂无）'
+            }}
+          </p>
+        </template>
+        <p v-if="workbench.frontalReservesError !== null" class="warn">
+          <BaseTag kind="danger">{{ workbench.frontalReservesError.rule }}</BaseTag>
+          {{ workbench.frontalReservesError.reason }}
         </p>
       </template>
-      <p v-if="workbench.frontalReservesError !== null" class="warn">
-        <BaseTag kind="danger">{{ workbench.frontalReservesError.rule }}</BaseTag>
-        {{ workbench.frontalReservesError.reason }}
-      </p>
     </template>
-
     <!-- ── · NKVD 提示（专规 2.3b） ── -->
     <p v-if="workbench.combatNkvdDefenders.length > 0" class="warn">
       <BaseTag kind="danger">专规 2.3b</BaseTag>

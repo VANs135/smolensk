@@ -3,6 +3,7 @@ import type { AircraftRecord, DeepReadonly, HexRef, Side, UnitRecord } from '@/d
 import { areAdjacent, hexDistance } from '@/engine/hex-geometry'
 import { roll2d6, type RngDraw } from '@/engine/rng'
 import { turnDate } from '@/engine/turn-driver'
+import { GAME_PHASES } from '@/engine/state-types'
 import type { AirStatus, GamePhase, InternalStocks, RngState } from '@/engine/state-types'
 import { tokenImageUrl } from '@/render/token-images'
 import {
@@ -2797,6 +2798,49 @@ export function actionGateOf(key: ActionKey): ActionGate {
 /** 该动作族此刻是否允许（`allowedActionsOf` 的便捷包装） */
 export function isActionAllowed(query: ActionGateQuery, key: ActionKey): boolean {
   return allowedActionsOf(query).has(key)
+}
+
+/**
+ * 环节 id → 所属阶段（`movement.modeAndMovement` ⇒ `movement`）
+ *
+ * 环节 id 的前缀就是阶段（`sop-segments` 的 `phase.id`），故按第一个 `.` 切即可；
+ * 认不出的前缀返回 `null`（调用方据此"不猜"）。
+ */
+export function phaseOfSegment(stepId: string): GamePhase | null {
+  const head = stepId.split('.')[0] ?? ''
+  return (GAME_PHASES as readonly string[]).includes(head) ? (head as GamePhase) : null
+}
+
+/**
+ * **某环节允许的动作族**（用户 2026-10-25：「按规则书分清楚每个阶段\环节有哪些操作」）
+ *
+ * 这是"环节 ↔ 操作"的**唯一派生出入口**：界面不比较规则号、也不自己拼阶段名，
+ * 一律问本函数（或其 store 投影 `workbench.segmentActionKeys`）。
+ *
+ * 依据链：`ACTION_GATES.where`（每条动作族的规则原文位置）⇒ 本函数 ⇒
+ *   · UI 显隐/禁用（`actionAllowedNow` 同源）；
+ *   · `docs/阶段-环节-操作矩阵.md`（文档也由这条链生成）。
+ *
+ * @param stepId 环节 id（`SopSegmentStep.id`）
+ * @param side   本方（按方限定的动作族才会被筛掉；不传＝不按方筛）
+ * @param role   行动者（E 反应段是 `nonActive`）
+ * @param atSegmentEnd 此刻是不是本段最后一个环节（`at: 'end'` 的动作族只在此放行）
+ */
+export function actionKeysOfSegment(
+  stepId: string,
+  side?: Side,
+  role: ActionRole = 'active',
+  atSegmentEnd = false,
+): ReadonlySet<ActionKey> {
+  const phase = phaseOfSegment(stepId)
+  if (phase === null) return new Set<ActionKey>()
+  return allowedActionsOf({
+    phase,
+    segment: stepId,
+    role,
+    ...(side === undefined ? {} : { side }),
+    atSegmentEnd,
+  })
 }
 
 /* ────────────────────────────── 阶段闸门（B7：算子参与判定） ────────────────────────────── */

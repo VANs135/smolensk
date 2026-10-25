@@ -16207,6 +16207,41 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   本函数不自己比较规则号、也不写第二份"哪个动作归哪一段"。
    */
   /**
+   * **本环节允许的动作族**（用户 2026-10-25：「每个阶段/环节只能出现该环节可用的 UI」）
+   *
+   * 与 `actionAllowedNow` 同源（都是 `allowedActionsOf(segmentGateQuery)`），区别只是
+   * 这里是**整集合**：界面按"面板服务哪些动作族"与它求交，空集即本环节用不到该面板。
+   */
+  const segmentActionKeys = computed<ReadonlySet<ActionKey>>(() => {
+    const query = segmentGateQuery.value
+    if (query.segment === '') return new Set<ActionKey>()
+    return allowedActionsOf(query)
+  })
+
+  /**
+   * 本环节的**驱动方式**（用户 2026-10-25：分清哪些是人工操作、哪些是自动结算）
+   *
+   * 判据来自 `sop-segments` 的 `driver`（规则书 2.2 的流程表）：
+   *   · `player`    ⇒ 玩家在此做决定（出 UI）；
+   *   · `automatic` ⇒ 自动结算（只给一行回执，不铺动作面板）；
+   *   · `question`  ⇒ 系统发问、玩家回答一次（如 2.3 先后手）。
+   */
+  const segmentDriver = computed<'player' | 'automatic' | 'question' | null>(
+    () => segmentStep.value?.driver ?? null,
+  )
+
+  /**
+   * 本环节是否是 `ids` 之一（界面**分区**用；不比较规则号，也不自己拼阶段名）
+   *
+   * 用户 2026-10-25：「每个阶段/环节只能出现该环节可用的 UI，不要什么都糅杂在一起」
+   * ⇒ 面板里的区块用它决定显隐（例：B 段「重建」区块只在 `reinforcement.rebuild` 环节出现）。
+   */
+  function segmentIn(ids: readonly string[]): boolean {
+    const current = segmentStep.value?.id
+    return current !== undefined && ids.includes(current)
+  }
+
+  /**
    * 闸门**预测**（供界面判断"这个动作此刻能不能点"；无副作用、不写日志、不改拒绝状态）
    *
    * ★ 用户 2026-10-25 实测 BUG②「增援的时候点格子可能出现空军轰炸的 UI」——
@@ -19521,6 +19556,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     stepToNextSegmentStep,
     requireAction,
     actionAllowedNow,
+    segmentActionKeys,
+    segmentDriver,
+    segmentIn,
     actionRefusal,
     // B5：唯一「进入下一环节」（自动段连跑完，停到需要玩家的地方）
     advanceSegmentNow,
