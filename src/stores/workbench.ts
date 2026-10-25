@@ -210,6 +210,7 @@ import {
   resolveAdvance,
   resolveAirCargoDrop,
   resolveAirCombatRounds,
+  arrivalPlacementCandidates,
   resolveArrivalPlacement,
   resolveBarrageDice,
   resolveBaseTransfer,
@@ -1534,17 +1535,31 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /* ── 各动作的待点格入口（B27a：目标状态已在 store 的那些） ── */
 
-  /** 13.6：到达投放的落点（引擎先解算，玩家/裁判可改；改哪格由卡面判定 ⇒ 候选为"任意格"） */
-  function beginArrivalHexPickNow(index: number): void {
+  /**
+   * 13.6：到达投放的落点（★ 候选＝**卡面口径**，不是"任意格"）
+   *
+   * 13.6 的原文是「放置在它们的**入场格**中」⇒ 落点由卡面限定：`Entry K` 的条目只能落在
+   * Entry K 那几格（被敌方堵住时按 13.6b 退到最近的未被阻挡边缘格）。
+   * 修前候选是 `'any'` ⇒ 实测能把增援摆到地图任意一格（用户 2026-10-25 实测 BUG①）。
+   * 候选为空（进死亡堆 / 没有友方空军基地 / 入口全关）⇒ **不进**待点态，并如实说明原因。
+   */
+  function beginArrivalHexPickNow(index: number): boolean {
+    const allowed = arrivalCandidates.value[index] ?? []
+    if (allowed.length === 0) {
+      const detail = arrivalPlacements.value[index]?.detail ?? '该条目没有可放的格'
+      pushLog('warning', `该到达条目**不能在地图上选格**：${detail}（13.6）`, '13.6')
+      return false
+    }
     beginHexPick({
       label: `增援到达落点（第 ${String(index + 1)} 条）`,
       rule: '13.6',
-      candidates: 'any',
+      candidates: [...allowed],
       apply: (hex) => {
         setArrivalHexOverride(index, hexTextOf(hex))
         return true
       },
     })
+    return true
   }
 
   /** 16.0b/c：环形工事的修建 / 缩减格（合法性由 `planHedgehogBuild` 在提交时判） */
@@ -15598,7 +15613,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return outcome.ok ? outcome.data : null
   })
 
-  /** 到达需求的落点解算（下标与 `arrivalPlan.units` 一致；裁判可手改） */
+  /**
+   * 13.6：**每条到达需求的落点候选**（下标与 `arrivalPlan.units` 一致）
+   *
+   * ★ 用户 2026-10-25 实测 BUG①：修前"点地图选落点"给的是任意格，入场卡写 `Entry K` 的条目
+   *   能被摆到地图另一头 ⇒ 现在候选一律由引擎按**卡面口径**给（`arrivalPlacementCandidates`），
+   *   界面与"手改落点"都只能在这个范围里选。候选为空＝该条目此刻无处可放（进死亡堆 / 无基地 /
+   *   入口全关）⇒ 如实报出，不退回"任意格"。
+   */
+  const arrivalCandidates = computed<readonly (readonly HexRef[])[]>(() => {
+    const plan = arrivalPlan.value
+    if (plan === null) return []
+    return plan.units.map((unit) =>
+      arrivalPlacementCandidates(unit.placement, arrivalFacts.value).map((hex) => ({ ...hex })),
+    )
+  })
+
+  /** 到达需求的落点解算（下标与 `arrivalPlan.units` 一致；落点只能在 `arrivalCandidates` 之内） */
   const arrivalPlacements = computed<readonly ArrivalPlacementResult[]>(() => {
     const plan = arrivalPlan.value
     if (plan === null) return []
@@ -16175,6 +16206,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ★ 判据全部来自 `engine/rules/sop-segments` 与 `stores/workbench-model` 的两张纯表，
    *   本函数不自己比较规则号、也不写第二份"哪个动作归哪一段"。
    */
+  /**
+   * 闸门**预测**（供界面判断"这个动作此刻能不能点"；无副作用、不写日志、不改拒绝状态）
+   *
+   * ★ 用户 2026-10-25 实测 BUG②「增援的时候点格子可能出现空军轰炸的 UI」——
+   *   修前地图小窗里"炮击 / 空军轰炸"按钮只看"这枚算子有没有印刷轰炸值"，
+   *   **没问环节闸门** ⇒ B 增援段点己方火炮照样给出轰炸入口。
+   *   界面一律用本函数判可点，不要自己拿规则号/阶段名再拼一套口径。
+   */
+  function actionAllowedNow(key: ActionKey): boolean {
+    if (segmentLocked.value) return false
+    const query = segmentGateQuery.value
+    if (query.segment === '') return false
+    return allowedActionsOf(query).has(key)
+  }
+
   function requireAction(key: ActionKey, action: string): boolean {
     if (segmentLocked.value) return refuseWhileLocked(action)
     const query = segmentGateQuery.value
@@ -16235,6 +16281,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const hex = parseHexPath(hexText)[0]
     if (hex === undefined) {
       pushLog('warning', `落点格式应为「列.行」，收到「${hexText}」`, '13.6')
+      return
+    }
+    /*
+     * ★ 13.6（用户 2026-10-25 实测 BUG①「放增援可以任意放」）：落点**按卡面限定**
+     *   —— 13.6 的原文是「放置在它们的**入场格**中」，不是"玩家任选一格"。
+     *   候选由引擎 `arrivalPlacementCandidates` 给（与落点解算同源）；候选为空＝该条目
+     *   此刻无处可放（进死亡堆 / 没有友方基地 / 入口全关）⇒ 如实报出，不退回"任意格"（不猜）。
+     */
+    const allowed = arrivalCandidates.value[index] ?? []
+    if (allowed.length === 0) {
+      const detail = arrivalPlacements.value[index]?.detail ?? '该条目没有可放的格'
+      pushLog('warning', `落点未改：${detail}（13.6）`, '13.6')
+      return
+    }
+    if (!allowed.some((item) => item.col === hex.col && item.row === hex.row)) {
+      pushLog(
+        'warning',
+        `${hexTextOf(hex)} 不在该到达条目的落点范围内（13.6：共 ${String(allowed.length)} 处候选：${allowed
+          .slice(0, 8)
+          .map(hexTextOf)
+          .join('、')}${allowed.length > 8 ? '…' : ''}）`,
+        '13.6',
+      )
       return
     }
     arrivalHexOverrides.value = { ...arrivalHexOverrides.value, [index]: hex }
@@ -16478,6 +16547,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     const hex = hexText === undefined ? placed.hex : (parseHexPath(hexText)[0] ?? placed.hex)
+    /*
+     * 13.6（用户 2026-10-25 实测 BUG①）：**投放时**也按卡面候选校验一遍
+     * （不只"选格"那一步——验证页还能手输落点，绕过选格就能任意放）。
+     */
+    const allowed = arrivalCandidates.value[index] ?? []
+    if (
+      allowed.length > 0 &&
+      !allowed.some((item) => item.col === hex.col && item.row === hex.row)
+    ) {
+      reinforcementError.value = { rule: '13.6', reason: 'arrivalHexOutsideCandidates' }
+      pushLog(
+        'warning',
+        `无法投放：${hexTextOf(hex)} 不在该到达条目的落点范围内（13.6：共 ${String(allowed.length)} 处候选）`,
+        '13.6',
+      )
+      return false
+    }
 
     /*
      * 13.6：**飞机到达**单独一条分支
@@ -19434,6 +19520,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setSegmentStepIndex,
     stepToNextSegmentStep,
     requireAction,
+    actionAllowedNow,
     actionRefusal,
     // B5：唯一「进入下一环节」（自动段连跑完，停到需要玩家的地方）
     advanceSegmentNow,
@@ -20002,6 +20089,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     reinforcementError,
     arrivalPlan,
     arrivalPlacements,
+    arrivalCandidates,
     arrivalPlaced,
     arrivalAllPlaced,
     arrivalRecordOf,

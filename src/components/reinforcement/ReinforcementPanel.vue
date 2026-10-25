@@ -445,9 +445,15 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           @change="workbench.setArrivalHexOverride(index, rebuildHexText)"
         />
         <span v-else class="ui-field-readonly">{{ rebuildHexText || '—' }}</span>
-        <!-- B27：落点改成**点地图**（13.6 的入场格由裁判按卡面判定；文本框留着作退路） -->
-        <BaseButton variant="secondary" size="sm" @click="workbench.beginArrivalHexPickNow(index)">
-          点地图选落点
+        <!-- B27 + 用户 2026-10-25 BUG①：落点改成**点地图**，但**只给卡面候选**（13.6 的入场格） -->
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :disabled="(workbench.arrivalCandidates[index]?.length ?? 0) === 0"
+          :title="`13.6：只能落在该到达条目的 ${workbench.arrivalCandidates[index]?.length ?? 0} 处候选格（被堵按 13.6b 退最近的开放边缘格）`"
+          @click="workbench.beginArrivalHexPickNow(index)"
+        >
+          点地图选落点（{{ workbench.arrivalCandidates[index]?.length ?? 0 }} 处候选）
         </BaseButton>
         <!-- B21：库中型号在这一行选（13.6 的条目是卡面文字，工程库未落"条目 → 算子"映射） -->
         <select

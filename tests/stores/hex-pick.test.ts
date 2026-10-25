@@ -62,13 +62,18 @@ describe('B27：待点格（机制）', () => {
 
   it('★ 13.6 增援落点：声明正确且点格被消费（写回的是"落点覆盖"这一处状态）', () => {
     const { workbench, mapView } = newStores()
+    // turn 1 的当日到达卡没有条目 ⇒ 换到 turn 2（候选＝卡面的入场格 1.26）
+    workbench.setTurn(2)
     workbench.setPhase('reinforcement')
-    workbench.beginArrivalHexPickNow(0)
+    expect(workbench.beginArrivalHexPickNow(0)).toBe(true)
     expect(workbench.hexPickView).toMatchObject({ rule: '13.6' })
+    // ★ 用户 2026-10-25 BUG①：候选**不再是 'any'**，而是卡面那几格
+    const candidates = workbench.hexPickView?.candidates
+    expect(candidates).not.toBe('any')
+    expect(candidates).toContainEqual({ col: 1, row: 26 })
 
-    mapView.onHexClick(HEX)
-    // 写回之后待点态即收（具体那一条到达需求是否在此时存在，取决于当日到达卡，
-    // 故这里只钉"机制消费了这一击"，写回内容由 setArrivalHexOverride 自己的用例覆盖）
+    mapView.onHexClick({ col: 1, row: 26 })
+    expect(workbench.arrivalPlacements[0]?.hex).toMatchObject({ col: 1, row: 26 })
     expect(workbench.hexPickView).toBeNull()
   })
 

@@ -218,9 +218,14 @@ describe('W6 B18：到达表执行（13.6 / 13.6b / 1.6a）', () => {
     expect(placed).toBeDefined()
     expect(placed!.steps).toBe(placed!.printedSteps - (demand.stepsLost || 0))
 
-    // 裁判手改落点（13.6：入场格由裁判按卡面判定）
+    /*
+     * 裁判手改落点（★ 用户 2026-10-25 BUG①：13.6 的落点**只能在卡面候选内**，不是"任意格"）：
+     * 该条目是 `Entry …` 的到达 ⇒ 候选＝入场格 1.26，手改到 1.3（候选外）应被拒、落点不动。
+     */
     store.setArrivalHexOverride(index, '1.3')
-    expect(store.arrivalPlacements[index]).toMatchObject({ hex: { col: 1, row: 3 } })
+    expect(store.arrivalPlacements[index]?.hex).toMatchObject({ col: 1, row: 26 })
+    store.setArrivalHexOverride(index, '1.26')
+    expect(store.arrivalPlacements[index]).toMatchObject({ hex: { col: 1, row: 26 } })
   })
 
   it('13.6：条目无法对应算子即拒（引擎不臆造「条目→算子」映射）', () => {

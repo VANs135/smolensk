@@ -88,11 +88,26 @@ const nonCombatUnits = computed(() =>
 /** 非战斗栏：点「展开机场飞机」才列出该基地的本方飞机（14.1a） */
 const showAirbasePlanes = ref(false)
 
-/** 该算子是否可作为参炸单位（10.0e：有印刷轰炸值；归属与阶段合法性仍由引擎判） */
+/**
+ * 该算子是否可作为参炸单位（10.0e：有印刷轰炸值 + **本环节允许宣布轰炸**）
+ *
+ * ★ 用户 2026-10-25 实测 BUG②「增援的时候点格子可能出现空军轰炸的 UI」：
+ *   修前这里只看"本方 + 有轰炸值" ⇒ B 增援段点己方火炮，照样给「炮击」按钮
+ *   （点了还真的会开出轰炸流程）。现在加问**环节闸门**（`actionAllowedNow`，
+ *   判据与 `requireAction` 同一处），不在这环节就不给入口。
+ */
 function canBarrage(id: string): boolean {
   const unit = consoleUnitOf(id)
-  return unit !== null && unit.side === workbench.activeSide && (unit.raw.barrage ?? 0) > 0
+  return (
+    unit !== null &&
+    unit.side === workbench.activeSide &&
+    (unit.raw.barrage ?? 0) > 0 &&
+    workbench.actionAllowedNow('barrage.declare')
+  )
 }
+
+/** 14.2e：本环节**能不能宣布空中任务**（空中轰炸等同样受环节闸门约束） */
+const airMissionAllowed = computed(() => workbench.actionAllowedNow('air.mission'))
 
 /**
  * 9.12 撤退：当前该选落点的一方与其单位
@@ -682,8 +697,11 @@ function pickDump(): void {
                   <BaseButton
                     variant="ghost"
                     size="sm"
-                    :disabled="missionJoinReasonOf(air.instanceId) !== null"
-                    :title="missionJoinReasonOf(air.instanceId) ?? undefined"
+                    :disabled="missionJoinReasonOf(air.instanceId) !== null || !airMissionAllowed"
+                    :title="
+                      missionJoinReasonOf(air.instanceId) ??
+                      (!airMissionAllowed ? '本环节不能宣布空中任务（14.2e）' : undefined)
+                    "
                     @click="toggleMissionAircraft(air.instanceId)"
                   >
                     {{
@@ -776,7 +794,10 @@ function pickDump(): void {
       </section>
 
       <!-- 14.2f-A/B：已选飞机 ⇒ 在此（目标格）选任务并宣布 -->
-      <section v-if="workbench.airActive && pickedAir.length > 0" class="block">
+      <section
+        v-if="workbench.airActive && pickedAir.length > 0 && airMissionAllowed"
+        class="block"
+      >
         <h4 class="block__title">空军任务（14.2f-A/B）</h4>
         <p class="num">
           已选 {{ pickedAir.length }} 架：{{ pickedAir.map((air) => air.name).join('、') }}

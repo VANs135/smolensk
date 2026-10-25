@@ -3,6 +3,7 @@ import { isArrivalTurnOf } from '../turn-driver'
 import type { HexRef, Side } from '@/data'
 
 import { fail, succeed, type RuleOutcome } from '../result-types'
+import { hexesWithin } from '../hex-geometry'
 import { isEntryLShutDown, isSouthSourcesShutDown } from './timing'
 
 /**
@@ -512,6 +513,65 @@ export interface ArrivalPlacementResult {
   hex: HexRef | null
   rule: string
   detail: string
+}
+
+/**
+ * 13.6：**该落点声明允许哪些格**（卡面口径 ⇒ 候选；与 `resolveArrivalPlacement` 同源）
+ *
+ * ★ 用户 2026-10-25 实测 BUG①：「放增援的时候可以任意放，没按剧本要求做好限制」——
+ *   修前界面给的是"任意格"（`candidates: 'any'`），于是入场卡写 `Entry K` 的条目能被摆到地图另一头。
+ *   现在"落点由谁定"改成**卡面定范围**：13.6 的原文就是「放置在它们的**入场格**中」，
+ *   13.6b 另给了唯一的退路（入场格被敌方阻挡 ⇒ 最近的未被阻挡边缘格）。
+ *
+ * 返回空数组＝该条目**没有可放的格**（进死亡堆 / 无基地 / 无可用入口）⇒ 调用方应说明原因，
+ * 而不是退回"任意格"（不猜）。
+ */
+export function arrivalPlacementCandidates(
+  placement: ArrivalPlacement,
+  facts: ArrivalPlacementFacts,
+): readonly HexRef[] {
+  switch (placement.kind) {
+    case 'deadPile':
+      return []
+
+    case 'anyAirbase':
+      return facts.friendlyAirBaseHexes()
+
+    case 'anyWestEdge':
+      return facts.westEdgeHexes()
+
+    case 'hqOrEdgeSource': {
+      const hqs = facts.directDrawHqHexes()
+      // 2.1 / 3.1：有"可直接拖取"的 HQ 就只落在那些 HQ；没有才退到边缘补给源格
+      return hqs.length > 0 ? hqs : facts.edgeSupplySourceHexes()
+    }
+
+    case 'geographic':
+      return hexesWithin(placement.anchor, placement.radiusHexes, { onMapOnly: true })
+
+    case 'northEdgeEastOf':
+      return facts
+        .edgeSupplySourceHexes()
+        .filter((hex) => facts.isNorthEdge(hex) && hex.col >= placement.col)
+
+    case 'entryHex': {
+      const open: HexRef[] = []
+      const blockedFirst: HexRef[] = []
+      for (const letter of placement.letters) {
+        const candidates = facts.entryHexes(letter)
+        if (candidates.length === 0) continue
+        const free = candidates.filter((hex) => !facts.isBlocked(hex))
+        if (free.length > 0) {
+          open.push(...free)
+          continue
+        }
+        // 13.6b：该入口全被敌方单位阻挡 ⇒ 最近的未被阻挡边缘格（唯一的合法退路）
+        const fallback = facts.nearestOpenEdgeHex(candidates[0]!)
+        if (fallback !== null) blockedFirst.push(fallback)
+      }
+      return open.length > 0 ? open : blockedFirst
+    }
+  }
 }
 
 /**
