@@ -1776,6 +1776,47 @@ export const useSetupStore = defineStore('setup', () => {
       if (amount <= 0) {
         return record({ ok: false, rule: outcome.rule, reason: 'nothingToPlace' })
       }
+      /*
+       * ★ 12.1b / §5-C（用户 2026-10-25）：「一格里有多个补给（SP/T）时**自动合并**，
+       *   格子里只展示该格有多少补给」——剧本在该格已放了 2 SP，玩家初设又放 2 SP，
+       *   该格应是**一条 4 SP 的补给站**，不是两枚 2 SP 算子。
+       *
+       * 判据：同格同方已有账本（`sp:格` 就是"这一格"的键）⇒ 只把点数累加，
+       * 并把该格**既有 SP 算子**的点数改成合并后的总量（贴图按最近面额 + 角标显示实数，
+       * 见 `spDenominationDiffers`）⇒ 不再生成第二枚算子。
+       */
+      if (entry.kind === 'sp') {
+        const dumpId = `sp:${setupHexLabel(target)}`
+        const existing = spDumps.value.find(
+          (item) => item.id === dumpId && item.side === entry.side,
+        )
+        if (existing !== undefined) {
+          const total = existing.points + amount
+          spDumps.value = spDumps.value.map((item) =>
+            item.id === dumpId && item.side === entry.side ? { ...item, points: total } : item,
+          )
+          const counter = workbench.units.find(
+            (unit) =>
+              unit.noncombatKind === 'sp' &&
+              unit.side === entry.side &&
+              unit.hex.col === target.col &&
+              unit.hex.row === target.row,
+          )
+          if (counter !== undefined) counter.noncombatSp = total
+          workbench.landSetupSpDumps(spDumps.value)
+          placedSelfInstances.value = {
+            ...placedSelfInstances.value,
+            [entryIndex]: placedBefore + amount,
+          }
+          return record({
+            ok: true,
+            rule: '12.1b',
+            data: {
+              detail: `${setupHexLabel(target)} 已有本方补给站 ⇒ 合并为 ${String(total)} SP（12.1b：补给站是位置，不是条目）`,
+            },
+          })
+        }
+      }
       const built = countersFor({
         kind: entry.kind,
         count: amount,

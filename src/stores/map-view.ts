@@ -985,6 +985,14 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 无（空格 / 战斗单位 / 单位已不在盘面）⇒ null。
    */
   const unitActionFamily = computed<'supply' | 'air' | 'fort' | null>(() => {
+    /*
+     * ★ 2026-10-25（用户实测：给**苏联初设**时点空军基地格，弹出「空军基地整备（15.1）」的会话，
+     *   里面却是德军内容）：
+     *   初设**还没收束**时一切"单位动作会话"都不开 —— 初设里的摆位、飞机落位、SP 归属全在
+     *   「初设与开局」面板与决策队列里做（14.1a 的飞机落位也在那儿）；此时开 15.1 整备 / 12.x 补给
+     *   会话既不是规则时点（整备属 A 段），又会按 `activeSide`（默认轴方）把**对方**的基地摊给玩家。
+     */
+    if (!setup.finished) return null
     const hex = unitActionHex.value
     if (hex === null) return null
     const unit = workbench.units.find(
@@ -994,6 +1002,13 @@ export const useMapViewStore = defineStore('mapView', () => {
         (item.noncombatKind ?? null) !== null,
     )
     if (unit === undefined) return null
+    /*
+     * ★ 只对**本方**单位开动作会话：15.1 整备 / 12.x 补给 / 16.0b 工事 都是"自己的东西自己动"。
+     *   修前不看归属 ⇒ 点**敌方**基地也会开「空军基地整备」会话，面板再按 `activeSide` 取数，
+     *   于是"给苏方布设却看到德军内容"（用户 2026-10-25 实测）。
+     *   敌方格照旧可以点：只摊开堆叠看 4.9a 的可见内容，不开动作会话。
+     */
+    if (unit.side !== workbench.activeSide) return null
     switch (unit.noncombatKind) {
       case 'sp':
       case 'supply_point':
@@ -1113,9 +1128,9 @@ export const useMapViewStore = defineStore('mapView', () => {
         family === 'supply'
           ? '补给点 / 运输（12.1 / 13.2 / 9.14）'
           : family === 'air'
-            ? '空军基地整备（15.1）'
+            ? '空军基地（14.1a 落位 / 15.1 整备 / 15.3 简易机场）'
             : '工事（16.0b）'
-      const rule = family === 'supply' ? '12.1' : family === 'air' ? '15.1' : '16.0b'
+      const rule = family === 'supply' ? '12.1' : family === 'air' ? '14.1a' : '16.0b'
       return { kind: 'unit', title, rule, width: 'min(430px, 94%)' }
     }
     const moving = workbench.moveInteraction

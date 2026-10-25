@@ -9,6 +9,7 @@ import {
   toConsoleUnit,
   unitChoices,
   useMapViewStore,
+  useSetupStore,
   useWorkbenchStore,
 } from '@/stores'
 
@@ -18,7 +19,7 @@ import {
  * 按所点单位的类型（`mapView.unitActionFamily`）路由到**既有**面板（经 `UnitPanel` 分派）：
  *   · sp / supply_point / transport_point / organic_truck / supply_extender ⇒ `supply`
  *     （SP 拖取 / 运输点装卸 / 延补队，12.1 / 13.2 / 9.14）
- *   · air_base ⇒ `air`（空军基地整备，15.1）
+ *   · air_base ⇒ `air`（空军基地：14.1a 落位 / 15.1 整备 / 15.3 简易机场）
  *   · hedgehog ⇒ `fort`（工事，16.0b）
  *
  * 同时落实「右栏只读」：原右栏可写面板（`AirPanel only="admin"` / `SupplyPanel only="ledger"`）
@@ -32,6 +33,13 @@ const ELSEWHERE: HexRef = { col: 36, row: 12 }
 
 const newStores = () => {
   setActivePinia(createPinia())
+  /*
+   * ★ 用户 2026-10-25：**初设未收束时不开任何单位动作会话**（初设的摆位 / 飞机落位 / SP 归属
+   *   全在「初设与开局」面板与决策队列里做；此时点基地格会按 `activeSide` 摊出**对方**的面板，
+   *   实测"给苏方布设却看到德军整备"就是这么来的）。
+   *   本文件钉的是**对局中**的路由行为 ⇒ 夹具显式把初设标为已收束。
+   */
+  useSetupStore().finished = true
   return { workbench: useWorkbenchStore(), mapView: useMapViewStore() }
 }
 
@@ -89,13 +97,15 @@ describe('条 12（M2）：点非战斗单位开 unit 会话', () => {
     expect(mapView.unitActionFamily).toBe('supply')
   })
 
-  it('点空军基地 ⇒ air 会话（整备 15.1）', () => {
+  it('点空军基地 ⇒ air 会话（14.1a / 15.1 / 15.3）', () => {
     const { workbench, mapView } = stores
     placeNonCombat(workbench, 'air_base', START, 'base-1')
     mapView.onHexClick(START, { x: 40, y: 40 })
     expect(mapView.session?.kind).toBe('unit')
     expect(mapView.unitActionFamily).toBe('air')
-    expect(mapView.session?.rule).toBe('15.1')
+    // 会话的规则号=**基地格的基础条款**（14.1a 落位）；整备 15.1 / 简易机场 15.3 是格内操作
+    expect(mapView.session?.rule).toBe('14.1a')
+    expect(mapView.session?.title).toContain('空军基地')
   })
 
   it('点工事（hedgehog）⇒ fort 会话（16.0b）', () => {
