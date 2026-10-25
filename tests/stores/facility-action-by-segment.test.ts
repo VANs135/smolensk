@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs'
+
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { GamePhase } from '@/engine/state-types'
+import type { ConsolePhase } from '@/stores'
 import type { HexRef } from '@/data'
 import {
   toConsoleUnit,
@@ -54,7 +56,7 @@ function place(
 /** 把操作台切到"某阶段的某个环节"（环节 id 由 SOP 表给，不在这里猜） */
 function enter(
   workbench: ReturnType<typeof stores>['workbench'],
-  phase: GamePhase,
+  phase: ConsolePhase,
   stepId: string,
 ): void {
   workbench.setPhase(phase)
@@ -122,6 +124,44 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     expect(mapView.unitActionAvailableAt('tp-1')).toBe(true)
     enter(workbench, 'aircraftRefit', 'aircraftRefit.refit')
     expect(mapView.unitActionAvailableAt('tp-1')).toBe(false)
+  })
+
+  it('★ 操作菜单：C 段基地列出「修建 / 缩减」两项（只列本环节允许的）', () => {
+    const { workbench, mapView } = s
+    place(workbench, 'air_base', 'base-1')
+    enter(workbench, 'movement', 'movement.modeAndMovement')
+    const options = mapView.unitActionOptions('base-1')
+    expect(options.map((item) => item.key)).toEqual(['move.construction', 'air.baseReduce'])
+    // 每项都带规则号与"开哪一段"，界面据此只展开那一段
+    expect(options.map((item) => item.only)).toEqual(['airstrip', 'reduce'])
+    expect(options.every((item) => item.rule !== '' && item.label !== '')).toBe(true)
+  })
+
+  it('★ 操作菜单：A 段基地只剩「整备」一项（15.1 在 A 段）', () => {
+    const { workbench, mapView } = s
+    place(workbench, 'air_base', 'base-1')
+    enter(workbench, 'aircraftRefit', 'aircraftRefit.refit')
+    const options = mapView.unitActionOptions('base-1')
+    expect(options.map((item) => item.key)).toEqual(['air.refit'])
+    expect(options[0]?.only).toBe('refit')
+  })
+
+  it('★ 界面按"一个操作一个面板"落地（源码守卫）', () => {
+    const unitPanel = readFileSync('src/components/game/UnitPanel.vue', 'utf8')
+    // 先给操作菜单，挑定后才展开那一段
+    expect(unitPanel).toContain('unitActionOptions')
+    expect(unitPanel).toContain('picked === null')
+    expect(unitPanel).toContain(':only="airOnly"')
+    const airPanel = readFileSync('src/components/air/AirPanel.vue', 'utf8')
+    for (const flag of [
+      'showsRefit',
+      'showsAirstrip',
+      'showsReduce',
+      'showsCapture',
+      'showsPlace',
+    ]) {
+      expect(airPanel, `AirPanel 缺 ${flag} 分段`).toContain(flag)
+    }
   })
 
   it('★ 设施动作表本身就是"规则书清单"（键与环节由闸门表给，不在这里另写一套）', () => {

@@ -248,9 +248,18 @@ describe('B15e：补给检查链进会话框', () => {
 describe('B15d/B15e：分段渲染与视图接线（源码守卫）', () => {
   it('两个面板各支持 `only` 分段，且默认全渲染（引擎验证页不受影响）', () => {
     const air = readFileSync('src/components/air/AirPanel.vue', 'utf8')
-    expect(air).toContain("only?: 'mission' | 'admin' | null")
+    /*
+     * ★ 用户 2026-10-25「一个操作一个面板」：`only` 从两段（mission/admin）扩到
+     * mission + admin + place/refit/airstrip/reduce/capture 五个**基地操作**小节
+     * （15.1 整备 / 15.3 修建 / 15.4 缩减 / 9.14f 夺取 / 14.1a 摆放）。
+     */
+    expect(air).toContain("'mission'")
+    expect(air).toContain("'admin'")
+    for (const only of ["'place'", "'refit'", "'airstrip'", "'reduce'", "'capture'"]) {
+      expect(air, `AirPanel 缺 ${only} 分段`).toContain(only)
+    }
     expect(air).toContain('showsMission')
-    expect(air).toContain('showsAdmin')
+    expect(air).toContain('showsBaseOps')
 
     const supply = readFileSync('src/components/supply/SupplyPanel.vue', 'utf8')
     expect(supply).toContain("only?: 'check' | 'ledger' | null")
@@ -271,15 +280,19 @@ describe('B15d/B15e：分段渲染与视图接线（源码守卫）', () => {
     expect(view).toContain('<AirPanel v-else-if="session.kind === \'air\'" only="mission" />')
     expect(view).toContain('<SupplyPanel v-else-if="session.kind === \'supply\'" only="check" />')
 
-    // UnitPanel 把右栏原可写面板按单位类型收进会话（sp/运输点/延补队⇒ledger；基地⇒完整 AirPanel；工事⇒actions）
+    // UnitPanel 把右栏原可写面板按单位类型收进会话（sp/运输点/延补队⇒ledger；基地⇒操作菜单+分段；工事⇒actions）
     const unit = readFileSync('src/components/game/UnitPanel.vue', 'utf8')
     expect(unit).toContain("mapView.unitActionFamily === 'supply'")
     expect(unit).toContain("mapView.unitActionFamily === 'air'")
     expect(unit).toContain("mapView.unitActionFamily === 'fort'")
     expect(unit).toContain('only="ledger"')
     expect(unit).toContain('only="actions"')
-    // 批 A：空军基地渲染**完整** AirPanel（admin＋mission 两段，不传 only）——恢复"点基地→选机→任务"入口
-    expect(unit).toContain('<AirPanel v-else-if="mapView.unitActionFamily === \'air\'" />')
+    /*
+     * ★ 用户 2026-10-25「一个操作一个面板」：点基地**不再**一次铺开整块 AirPanel，
+     *   而是先给"这个基地此刻能做的事"（判据＝设施动作族 ∩ 本环节闸门），挑定一项才展开那一段。
+     */
+    expect(unit).toContain('unitActionOptions')
+    expect(unit).toContain(':only="airOnly"')
   })
 
   it('入口必须随时可达：受补给单位阵列留在**账本段**（会话只在检查开始后存在）', () => {

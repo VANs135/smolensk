@@ -1066,6 +1066,75 @@ export const useMapViewStore = defineStore('mapView', () => {
     return facilityActionKeys(kind).some((key) => workbench.actionAllowedNow(key))
   }
 
+  /**
+   * 设施动作的**界面元数据**（操作菜单的措辞与目标面板段）
+   *
+   * ★ 与 `facilityActionKeys` 一一对应：表里出现的键，逐个给出"点它会开哪一段"。
+   *   新加设施动作时**两处一起加**（键对不上会在测试里露出来）。
+   */
+  const FACILITY_ACTION_META: Record<
+    string,
+    { label: string; rule: string; panel: 'air' | 'supply' | 'fort'; only: string | null }
+  > = {
+    'move.dumpBlow': {
+      label: '销毁补给（12.11a）',
+      rule: '12.11a',
+      panel: 'supply',
+      only: 'ledger',
+    },
+    'move.loadUnload': {
+      label: '装卸 SP（13.2f）',
+      rule: '13.2f',
+      panel: 'supply',
+      only: 'ledger',
+    },
+    'move.extenderConvert': {
+      label: '运输点 ⇄ 延补队（12.7c）',
+      rule: '12.7c',
+      panel: 'supply',
+      only: 'ledger',
+    },
+    'air.refit': { label: '整备飞机（15.1）', rule: '15.1', panel: 'air', only: 'refit' },
+    'move.construction': {
+      label: '修建 / 改进基地（15.3）',
+      rule: '15.3',
+      panel: 'air',
+      only: 'airstrip',
+    },
+    'air.baseReduce': { label: '缩减基地（15.4）', rule: '15.4', panel: 'air', only: 'reduce' },
+    'move.hedgehog': {
+      label: '修建 / 改进工事（16.0b）',
+      rule: '16.0b',
+      panel: 'fort',
+      only: null,
+    },
+  }
+
+  /**
+   * 这一枚设施**此刻能做哪些操作**（用户 2026-10-25「一个操作一个面板」的菜单来源）
+   *
+   * 返回空数组＝本环节没有"对它自己"的操作（界面不给入口、也不开面板）。
+   */
+  function unitActionOptions(instanceId: string): readonly {
+    key: string
+    label: string
+    rule: string
+    panel: 'air' | 'supply' | 'fort'
+    only: string | null
+  }[] {
+    const unit = workbench.units.find((item) => item.instanceId === instanceId)
+    if (unit === undefined) return []
+    if (unit.side !== workbench.activeSide) return []
+    const kind = unit.noncombatKind
+    if (kind === null || kind === undefined) return []
+    return facilityActionKeys(kind)
+      .filter((key) => workbench.actionAllowedNow(key))
+      .flatMap((key) => {
+        const meta = FACILITY_ACTION_META[key]
+        return meta === undefined ? [] : [{ key, ...meta }]
+      })
+  }
+
   const unitActionFamily = computed<'supply' | 'air' | 'fort' | null>(() => {
     /*
      * ★ 2026-10-25（用户实测：给**苏联初设**时点空军基地格，弹出「空军基地整备（15.1）」的会话，
@@ -1897,6 +1966,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     unitActionUnitId,
     openUnitActionAt,
     unitActionAvailableAt,
+    unitActionOptions,
     facilityActionKeys,
     unitActionFamily,
     airEntryTarget,
