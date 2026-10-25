@@ -88,36 +88,45 @@ describe('B17a-2：分段渲染与入口（源码守卫）', () => {
     expect(gateCount).toBeGreaterThanOrEqual(12)
 
     /** 该动作是否在某道 `showsActions` 门之内（三种写法都认） */
-    /** 门的两种写法都算（`showsBoxActions` 是"再按展开的卡过滤一层"的更窄门） */
-    const hasGate = (text: string): boolean =>
-      text.includes('showsActions') || text.includes('showsBoxActions')
+    /*
+     * ★ 2026-10-25：门分两类 ——
+     *   · **动作门** `showsActions` / `showsBoxActions`（盒动作、返场、抽签…）；
+     *   · **裁判工具门** `showsReferee`：记录轨的"手动改表"（2.2 回合推进 / 1.5 天气 /
+     *     专规 1.2 铁路容量）与"重置全部盒子" —— 这些**都由系统自动结算**
+     *     （`docs/阶段-环节-操作矩阵.md` 的"只有这 6 个环节是自动结算"），
+     *     所以只挂在验证页（`only === null`），对局台的盒会话里不铺。
+     */
+    const ACTION_GATES = ['showsActions', 'showsBoxActions'] as const
+    const REFEREE_GATES = ['showsReferee'] as const
 
-    const isGated = (marker: string): boolean => {
+    const hasGate = (text: string, gates: readonly string[]): boolean =>
+      gates.some((gate) => text.includes(gate))
+
+    const isGated = (marker: string, gates: readonly string[]): boolean => {
       const at = panel.indexOf(marker)
       if (at < 0) throw new Error(`${marker} 不在面板里`)
       // 写法一：门就挂在按钮自己身上 ⇒ 就近 800 字符内出现
-      if (hasGate(panel.slice(Math.max(0, at - 800), at))) return true
+      if (hasGate(panel.slice(Math.max(0, at - 800), at), gates)) return true
       const heading = panel.lastIndexOf('block-title', at)
       if (heading < 0) return false
       // 写法二：门挂在**本节内**的某个 div/行上（标题之后、动作之前出现门）
-      if (hasGate(panel.slice(heading, at))) return true
+      if (hasGate(panel.slice(heading, at), gates)) return true
       // 写法三：整段包起来（门开在**本节标题之前**）
-      return /<template v-if="shows(Box)?Actions/.test(
-        panel.slice(Math.max(0, heading - 400), heading),
-      )
+      const window = panel.slice(Math.max(0, heading - 400), heading)
+      return gates.some((gate) => window.includes(`v-if="${gate}`))
     }
 
-    for (const marker of [
-      'containers.advanceTurnMarker()',
-      'containers.setWeatherMarker(',
-      'containers.applyRailCapacityForDate()',
-      'workbench.returnFromDeadPileNow({',
-      'workbench.removeForeverNow(',
-      'containers.drawFormations(',
-      '@click="hideNow()"',
-      'containers.resetContainers()',
-    ]) {
-      expect(isGated(marker), `${marker} 应由某道 showsActions 门管着`).toBe(true)
+    for (const [marker, gates] of [
+      ['containers.advanceTurnMarker()', REFEREE_GATES],
+      ['containers.setWeatherMarker(', REFEREE_GATES],
+      ['containers.applyRailCapacityForDate()', REFEREE_GATES],
+      ['containers.resetContainers()', REFEREE_GATES],
+      ['workbench.returnFromDeadPileNow({', ACTION_GATES],
+      ['workbench.removeForeverNow(', ACTION_GATES],
+      ['containers.drawFormations(', ACTION_GATES],
+      ['@click="hideNow()"', ACTION_GATES],
+    ] as const) {
+      expect(isGated(marker, gates), `${marker} 应由 ${gates.join(' / ')} 门管着`).toBe(true)
     }
   })
 

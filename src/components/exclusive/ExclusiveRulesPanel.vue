@@ -6,6 +6,8 @@ import UiField from '@/components/UiField.vue'
 import { hexLabel } from '@/stores'
 import { useWorkbenchStore } from '@/stores'
 
+import { actsShown, infoShown, sectionShown, type ExclusiveOnly } from './section-scope'
+
 /**
  * 专规机制面板（W6 B19：Smolensk 专规 1.2 / 1.7 / 2.1a / 2.2 / 3.3b / 3.4 / 3.5）
  *
@@ -112,12 +114,7 @@ function declarePanzerGroup(): void {
  *     按方案 §4.3 进**会话框**（本面板的动作跨多个段，故由顶栏的「专规动作」按钮显式打开，
  *     不像增援那样由环节自动触发）。
  */
-const props = withDefaults(
-  defineProps<{
-    only?: 'info' | 'actions' | 'panzer' | 'security' | 'hedgehog' | 'marker' | 'cache' | null
-  }>(),
-  { only: null },
-)
+const props = withDefaults(defineProps<{ only?: ExclusiveOnly }>(), { only: null })
 
 /**
  * ★ 用户 2026-10-25「**在什么环节，点什么单位才出现什么菜单**」：
@@ -125,30 +122,26 @@ const props = withDefaults(
  *   由 `mapView.unitActionOptions()`（设施动作族 ∩ 本环节闸门）挑出来，会话里只画这一段。
  *   `actions` 仍＝"动作全显"（顶栏的「专规动作」按钮 / 验证页用），`info` 仍＝只读信息。
  */
-const showsInfo = computed(() => props.only === null || props.only === 'info')
+const showsInfo = computed(() => infoShown(props.only))
 
-/** 某一节的动作是否可写：整块 `actions` 全放行；单段模式只放行自己那一段 */
-function actsOf(section: 'panzer' | 'security' | 'hedgehog' | 'marker' | 'cache'): boolean {
-  return props.only === null || props.only === 'actions' || props.only === section
-}
-
-/** 某一节本体是否出现（单段模式只出现自己） */
-function sectionShown(section: 'panzer' | 'security' | 'hedgehog' | 'marker' | 'cache'): boolean {
-  return props.only === null || props.only === 'actions' || props.only === section
-}
-
-const showsPanzer = computed(() => sectionShown('panzer'))
-const showsSecurity = computed(() => sectionShown('security'))
-const showsHedgehog = computed(() => sectionShown('hedgehog'))
-const showsMarker = computed(() => sectionShown('marker'))
-const showsCache = computed(() => sectionShown('cache'))
+/*
+ * 判据本身在 `./section-scope.ts`（**纯函数**，有单测）：
+ *   `sectionShown(only, section)` 管"这一节的只读本体出不出现"，
+ *   `actsShown(only, section)` 管"这一节的动作可不可写"。
+ *   ★ `info`（右栏只读）的语义是"节在、动作不写"——不是"节消失"（踩过）。
+ */
+const showsPanzer = computed(() => sectionShown(props.only, 'panzer'))
+const showsSecurity = computed(() => sectionShown(props.only, 'security'))
+const showsHedgehog = computed(() => sectionShown(props.only, 'hedgehog'))
+const showsMarker = computed(() => sectionShown(props.only, 'marker'))
+const showsCache = computed(() => sectionShown(props.only, 'cache'))
 
 /** 各节的"动作可写"开关（模板里用，避免逐处写函数调用） */
-const actsPanzer = computed(() => actsOf('panzer'))
-const actsSecurity = computed(() => actsOf('security'))
-const actsHedgehog = computed(() => actsOf('hedgehog'))
-const actsMarker = computed(() => actsOf('marker'))
-const actsCache = computed(() => actsOf('cache'))
+const actsPanzer = computed(() => actsShown(props.only, 'panzer'))
+const actsSecurity = computed(() => actsShown(props.only, 'security'))
+const actsHedgehog = computed(() => actsShown(props.only, 'hedgehog'))
+const actsMarker = computed(() => actsShown(props.only, 'marker'))
+const actsCache = computed(() => actsShown(props.only, 'cache'))
 
 /**
  * B37：**分节置顶判据**（哪一节"本环节该做"）

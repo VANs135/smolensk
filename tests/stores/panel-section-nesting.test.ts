@@ -173,6 +173,40 @@ describe('分段块的**结构**不变量（空块 / 段错位都会红）', () 
     }
   })
 
+  it('★ ContainersPanel：记录轨的三类"改表"按钮是**裁判工具**，只有验证页才铺', () => {
+    const panel = readFileSync('src/components/containers/ContainersPanel.vue', 'utf8')
+    /*
+     * 2.2 回合推进 / 1.5 天气 / 专规 1.2 铁路容量**都由系统自动结算**
+     * （`docs/阶段-环节-操作矩阵.md` 的"只有这 6 个环节是自动结算"）。
+     * 它们的"手动改值"入口只该在验证页（`only === null`）出现；
+     * 对局台的盒会话（`only="actions"`）铺出来，就是"展开一张盒卡顺带能改回合/天气/运力"。
+     */
+    expect(panel).toContain('showsReferee')
+    expect(panel).toContain('props.only === null')
+
+    /** 某个点击入口最近的那道 `v-if`（按钮自带的门） */
+    const gateOf = (marker: string): string => {
+      const at = panel.indexOf(marker)
+      expect(at, `${marker} 不在面板里`).toBeGreaterThanOrEqual(0)
+      const before = panel.slice(0, at)
+      const hit = before.lastIndexOf('v-if="')
+      expect(hit, `${marker} 前面没有 v-if 门`).toBeGreaterThanOrEqual(0)
+      const quote = hit + 'v-if="'.length
+      return before.slice(quote, before.indexOf('"', quote))
+    }
+
+    for (const marker of [
+      'containers.advanceTurnMarker()',
+      "containers.setWeatherMarker('normal')",
+      "containers.setWeatherMarker('limited')",
+      'containers.setRailCapacity(',
+      'containers.applyRailCapacityForDate()',
+      'containers.resetContainers()',
+    ]) {
+      expect(gateOf(marker), `${marker} 应挂裁判工具门`).toBe('showsReferee')
+    }
+  })
+
   it('★ ReinforcementPanel：每个 `segmentIn(...)` 块都**有正文**', () => {
     const panel = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
     const blocks = blocksOf(panel, 'workbench.segmentIn(')

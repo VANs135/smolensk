@@ -65,13 +65,19 @@ describe('B17a-3：分段渲染与入口（源码守卫）', () => {
      *   `panzer` / `security` / `hedgehog` / `marker` / `cache`（由 `unitActionOptions()` 挑）。
      *   `actions` 仍＝全显（顶栏「专规动作」按钮与验证页口径不变）。
      */
+    /*
+     * ★ 2026-10-25：段名联合类型已提到**纯函数模块** `./section-scope`（那里有单测，
+     *   见 `exclusive-section-scope.test.ts`）——所以这里查**模块**而不是 .vue 里的字面量。
+     */
+    const scope = readFileSync('src/components/exclusive/section-scope.ts', 'utf8')
     for (const only of ["'info'", "'actions'", "'panzer'", "'security'"]) {
-      expect(panel, `ExclusiveRulesPanel 缺 ${only} 分段`).toContain(only)
+      expect(scope, `section-scope 缺 ${only} 分段`).toContain(only)
     }
     for (const only of ["'hedgehog'", "'marker'", "'cache'"]) {
-      expect(panel, `ExclusiveRulesPanel 缺 ${only} 分段`).toContain(only)
+      expect(scope, `section-scope 缺 ${only} 分段`).toContain(only)
     }
     expect(panel).toContain('showsInfo')
+    expect(panel).toContain("from './section-scope'")
 
     /**
      * 该节的**本体**与**动作**是否各有一道门（`showsX` / `actsX`）

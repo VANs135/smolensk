@@ -258,6 +258,18 @@ function showsBoxActions(kind: string): boolean {
 const showsInfo = computed(() => props.only === null || props.only === 'info')
 /** 本实例是否要画"动作"那一段 */
 const showsActions = computed(() => props.only === null || props.only === 'actions')
+
+/**
+ * ★ 记录轨上那三个"手动改表"的按钮是**裁判工具**，不是流程动作
+ *
+ * 2.2 的回合推进、1.5 的天气判定、专规 1.2 的铁路容量**都由系统按日期自动结算**
+ * （见 `docs/阶段-环节-操作矩阵.md` 的"只有这 6 个环节是自动结算"）。它们的"改值"入口
+ * 只该出现在**引擎验证页**（`only === null`）——对局台的盒会话（`only="actions"`）不铺，
+ * 免得"展开一张盒卡"就顺带看到改回合标记 / 改天气 / 改运力这些不属于本环节的东西。
+ *
+ * ★ 用户 2026-10-25「每个阶段/环节只能出现该环节可用 UI」：这三项在**任何**玩家环节都不该有。
+ */
+const showsReferee = computed(() => props.only === null)
 </script>
 
 <template>
@@ -275,7 +287,7 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
       <BaseTag kind="info">回合 T{{ containers.turn }}｜{{ containers.date }}</BaseTag>
       <BaseTag kind="neutral">{{ containers.turnTrack.rule }}</BaseTag>
       <BaseButton
-        v-if="showsActions"
+        v-if="showsReferee"
         variant="secondary"
         size="sm"
         @click="containers.advanceTurnMarker()"
@@ -292,7 +304,7 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
         >天气 {{ containers.weather.air === 'normal' ? '正常飞行' : '受限飞行' }}</BaseTag
       >
       <BaseButton
-        v-if="showsActions"
+        v-if="showsReferee"
         variant="secondary"
         size="sm"
         @click="containers.setWeatherMarker('normal')"
@@ -300,7 +312,7 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
         置天气标记：正常
       </BaseButton>
       <BaseButton
-        v-if="showsActions"
+        v-if="showsReferee"
         variant="secondary"
         size="sm"
         @click="containers.setWeatherMarker('limited')"
@@ -317,7 +329,7 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
           {{ containers.railCapTrack.boostDate }} → {{ entry.boostTo }}）
         </span>
         <BaseButton
-          v-if="showsActions"
+          v-if="showsReferee"
           variant="ghost"
           size="sm"
           @click="containers.setRailCapacity(entry.side, entry.onDate)"
@@ -326,7 +338,7 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
         </BaseButton>
       </template>
       <BaseButton
-        v-if="showsActions"
+        v-if="showsReferee"
         variant="secondary"
         size="sm"
         @click="containers.applyRailCapacityForDate()"
@@ -847,7 +859,12 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
           {{ (containers.alarmUnitIds ?? []).join(',') || '（数据默认）' }}
         </span>
       </label>
-      <BaseButton variant="ghost" size="sm" @click="containers.resetContainers()"
+      <!-- 重置全部盒子＝裁判工具（会清掉名册），对局台不铺 -->
+      <BaseButton
+        v-if="showsReferee"
+        variant="ghost"
+        size="sm"
+        @click="containers.resetContainers()"
         >重置盒账本</BaseButton
       >
     </div>
