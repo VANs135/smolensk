@@ -108,6 +108,21 @@ describe('B17a-2：分段渲染与入口（源码守卫）', () => {
     expect(drawAt).toBeGreaterThan(-1)
   })
 
+  it('★ 13.5a：死亡堆「免费返场」按钮只在裁判面上（玩家路径是 13.5 付补员重建 / 1.6c 抽取）', () => {
+    /*
+     * 回执（2026-10-30）：这个按钮直接调 `returnFromDeadPileNow`（只做"取出→落到指定格"），
+     * 而 13.5a 要求重建**付补员**且"补员同格 + 友方指挥部 2 格内 + 不在敌方 ZOC"；
+     * 1.6c 的免费返场必须先抽到特殊补员（−1 军力）。玩家面上给一个免费返场
+     * ＝把 13.5a 的费用与位置约束全绕过去（盒子动作修好后这个按钮才真正露出来）。
+     */
+    const panel = readFileSync('src/components/containers/ContainersPanel.vue', 'utf8')
+    const at = panel.indexOf('workbench.returnFromDeadPileNow({')
+    expect(at).toBeGreaterThan(-1)
+    const open = panel.lastIndexOf('<BaseButton', at)
+    expect(open).toBeGreaterThan(-1)
+    expect(panel.slice(open, at)).toContain('showsReferee')
+  })
+
   it('★ 面板支持 `only` 分段，动作件都由 `showsActions` 管着', () => {
     const panel = readFileSync('src/components/containers/ContainersPanel.vue', 'utf8')
     expect(panel).toContain("only?: 'info' | 'actions' | null")

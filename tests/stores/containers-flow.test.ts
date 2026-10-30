@@ -5,6 +5,7 @@ import { markers, rulesConstants } from '@/data'
 import type { HexRef } from '@/data'
 import { createRngState } from '@/engine/rng'
 import {
+  actionGateOf,
   aircraftChoices,
   toConsoleAirUnit,
   toConsoleUnit,
@@ -72,6 +73,38 @@ function otherClassParent(): ReturnType<typeof unitChoices>[number] {
   )
   if (found === undefined) throw new Error('单位库里找不到 other 类型的多军力单位')
   return found
+}
+
+/**
+ * 20.0a：把母单位推进到「开始移动」这个**事件**（`beginMoveFor` 是开窗的唯一入口）
+ *
+ * ★ 修（2026-10-30）：本文件的用例原先直接给 `takeBreakdown` 传 `timing: 'startMove'`，
+ *   而那正是被修掉的缺陷（界面替规则宣称"此刻是开始移动"）。现在时机只认事件账本，
+ *   故用例必须真的走一次「开始移动」。
+ */
+function enterStep(
+  workbench: ReturnType<typeof useWorkbenchStore>,
+  key: 'move.order' | 'move.breakdown',
+): void {
+  const allowed = actionGateOf(key)
+    .where.filter((item) => item.phase === workbench.phase)
+    .map((item) => item.segment)
+  const index = workbench.playerSegmentSteps.findIndex((step) => allowed.includes(step.id))
+  if (index < 0) throw new Error(`该段没有允许 ${key} 的环节`)
+  if (!workbench.setSegmentStepIndex(index)) throw new Error(`进入环节失败（${key}）`)
+}
+
+function startMoving(
+  workbench: ReturnType<typeof useWorkbenchStore>,
+  instanceIds: readonly string[],
+): void {
+  // 行动方必须是这些单位的一方（`moveContext` 取 `activeSide`，不是"谁在图上"）
+  const first = workbench.units.find((unit) => unit.instanceId === instanceIds[0])
+  if (first !== undefined) workbench.setActiveSide(first.side)
+  enterStep(workbench, 'move.order')
+  if (!workbench.beginMoveFor([...instanceIds])) {
+    throw new Error(`开始移动失败：${workbench.moveBlocked?.reason ?? '未知原因'}`)
+  }
 }
 
 describe('W7 C12：记录轨（回合 / 天气 / 铁路容量）', () => {
@@ -297,10 +330,11 @@ describe('W7 C12：拆分单位盒（1.8a / 20.0）与编队抽签', () => {
     const beforePool = workbench.breakdownPool.su ?? 0
     const beforeSteps = parent.steps
     const beforeUnits = workbench.units.length
+    // 20.0a：先把「开始移动」这个事件走掉，取用才有合法时机
+    startMoving(workbench, [parent.instanceId])
     const ok = containers.takeBreakdown({
       parentInstanceId: parent.instanceId,
       breakdownAr: 2, // 苏方池：6× AR2 + 2× AR3（1.8a）
-      timing: 'startMove',
     })
     expect(ok, containers.lastAction?.detail).toBe(true)
     expect(parent.steps).toBe(beforeSteps - 1)
@@ -318,6 +352,37 @@ describe('W7 C12：拆分单位盒（1.8a / 20.0）与编队抽签', () => {
     expect(placed!.steps).toBe(1)
   })
 
+  it('★ 20.0a：没走「开始移动」这个事件时不得取用（修前界面写死 timing:startMove ⇒ 任何环节都能拆）', () => {
+    /*
+     * 回执（2026-10-30）：`takeBreakdown` 原先信任调用方给的 `timing`，而面板写死 `'startMove'`
+     * ⇒ 引擎那道 20.0a 判据只被喂了假事实，等于**任何环节**都能从盒里取拆分单位。
+     * 20.0a 原文：「多军力单位在开始移动、战后推进或战后撤退时，可以创建一个或多个拆分单位。
+     *   **只有在这些时机**才能创建拆分单位。」
+     * 现在时机只认事件账本（`breakdownTimingOf`）+ 环节闸（`move.breakdown`）。
+     */
+    workbench.setPhase('movement')
+    workbench.setActiveSide('soviet')
+    const parent = place(workbench, otherClassParent(), someHex(), 'soviet', 'p1')
+    enterStep(workbench, 'move.breakdown')
+    const beforePool = workbench.breakdownPool.su ?? 0
+    const beforeSteps = parent.steps
+
+    // ① 环节对了、但**没有**"开始移动"这个事件 ⇒ 拒（这是修前最大的口子）
+    expect(containers.takeBreakdown({ parentInstanceId: parent.instanceId, breakdownAr: 2 })).toBe(
+      false,
+    )
+    expect(containers.lastAction).toMatchObject({ ok: false, rule: '20.0a' })
+    expect(parent.steps).toBe(beforeSteps)
+    expect(workbench.breakdownPool.su).toBe(beforePool)
+
+    // ② 真的开始时 ⇒ 放行（同一条链的另一半，避免"一律拒绝"的假修复）
+    startMoving(workbench, [parent.instanceId])
+    expect(containers.takeBreakdown({ parentInstanceId: parent.instanceId, breakdownAr: 2 })).toBe(
+      true,
+    )
+    expect(parent.steps).toBe(beforeSteps - 1)
+  })
+
   it('C12：算子库里没有该 AR 的拆分单位时**不扣账**（避免「账已扣、子落不下」的半截状态）', () => {
     workbench.setPhase('movement')
     const parent = place(workbench, otherClassParent(), someHex(), 'soviet', 'p1')
@@ -325,10 +390,10 @@ describe('W7 C12：拆分单位盒（1.8a / 20.0）与编队抽签', () => {
     const beforeSteps = parent.steps
     const beforeUnits = workbench.units.length
     // 苏方池只有 AR2 / AR3（1.8a）⇒ AR4 不在库中
+    startMoving(workbench, [parent.instanceId])
     const ok = containers.takeBreakdown({
       parentInstanceId: parent.instanceId,
       breakdownAr: 4,
-      timing: 'startMove',
     })
     expect(ok).toBe(false)
     expect(parent.steps).toBe(beforeSteps)
@@ -339,11 +404,11 @@ describe('W7 C12：拆分单位盒（1.8a / 20.0）与编队抽签', () => {
   it('20.0d：吸收拆分单位须给**图上算子的实例 id**，成功后回池、母单位 +1 军力', () => {
     workbench.setPhase('movement')
     const parent = place(workbench, otherClassParent(), someHex(), 'soviet', 'p1')
+    startMoving(workbench, [parent.instanceId])
     expect(
       containers.takeBreakdown({
         parentInstanceId: parent.instanceId,
         breakdownAr: 2,
-        timing: 'startMove',
       }),
     ).toBe(true)
 
@@ -376,11 +441,14 @@ describe('W7 C12：拆分单位盒（1.8a / 20.0）与编队抽签', () => {
     )
     if (armor === undefined) return
     const parent = place(workbench, armor, someHex(), 'soviet', 'p-armor')
+    // 装甲单位也能"开始移动"（20.0 的拒绝理由应来自类型，而不是时机）
+    // 12.5a：履带战斗单位开拔前必须已加注燃料
+    parent.fuelled = true
+    startMoving(workbench, [parent.instanceId])
     expect(
       containers.takeBreakdown({
         parentInstanceId: parent.instanceId,
         breakdownAr: 2,
-        timing: 'startMove',
       }),
     ).toBe(false)
     expect(containers.lastAction).toMatchObject({ ok: false, rule: '20.0' })

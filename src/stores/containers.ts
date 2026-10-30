@@ -923,15 +923,32 @@ export const useContainersStore = defineStore('containers', () => {
 
   /* ────────────────────────────── 拆分单位盒取用 ────────────────────────────── */
 
-  /** 20.0 / 20.0a–g：从盒里取一枚拆分单位给指定母单位（创建拆分单位） */
-  function takeBreakdown(input: {
-    parentInstanceId: string
-    breakdownAr: number
-    timing: BreakdownCreateRequest['timing']
-  }): boolean {
+  /**
+   * 20.0 / 20.0a–g：从盒里取一枚拆分单位给指定母单位（创建拆分单位）
+   *
+   * ★ 修（2026-10-30）：这里原先由**调用方**传 `timing`（面板写死 `'startMove'`），
+   *   等于让界面替规则宣称"此刻正是开始移动"，引擎那道 20.0a 判据（`BREAKDOWN_CREATE_TIMINGS`
+   *   只做枚举校验）就永远通过 ⇒ **任何环节**都能从盒里取拆分单位。
+   *   20.0a 原文：「多军力单位在**开始移动、战后推进或战后撤退**时，可以创建一个或多个拆分单位。
+   *   **只有在这些时机**才能创建拆分单位。」
+   *   现在两件事都改由**事实**决定：
+   *     ① 环节闸 `move.breakdown`（与 `createBreakdownNow` 同一道）；
+   *     ② 时机取 store 的事件账本 `breakdownTimingOf`（由真实事件开窗），不在账本里即拒。
+   */
+  function takeBreakdown(input: { parentInstanceId: string; breakdownAr: number }): boolean {
+    if (!workbench.requireAction('move.breakdown', '取用拆分单位')) return false
     const parentUnit = workbench.units.find((unit) => unit.instanceId === input.parentInstanceId)
     if (parentUnit === undefined) {
       lastAction.value = { ok: false, rule: '20.0', detail: '母单位不在图上', scope: '拆分单位盒' }
+      return false
+    }
+    const timing = workbench.breakdownTimingOf(parentUnit.instanceId)
+    if (timing === null) {
+      const detail =
+        `${parentUnit.name} 此刻不在 20.0a 的创建时机里` +
+        '（只有「开始移动 / 战后推进 / 战后撤退」这三个时机能创建拆分单位）'
+      lastAction.value = { ok: false, rule: '20.0a', detail, scope: '拆分单位盒' }
+      workbench.pushLog('warning', detail, '20.0a')
       return false
     }
     const box = boxOf('breakdownBox', parentUnit.side)
@@ -964,7 +981,8 @@ export const useContainersStore = defineStore('containers', () => {
       side: parentUnit.side,
       parent,
       breakdown,
-      timing: input.timing,
+      // 时机来自事件账本（见函数开头的说明），不再由调用方自报
+      timing,
       slots,
     })
     if (!plan.ok) {

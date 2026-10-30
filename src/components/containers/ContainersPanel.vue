@@ -125,6 +125,31 @@ function itemsOf(box: BoxView): string[] {
   return [...(view.items ?? [])]
 }
 
+/**
+ * 20.0a：当前母单位处在哪个创建时机（`null` ＝不在三个时机里）
+ *
+ * ★ 修（2026-10-30）：修前这个按钮把 `timing: 'startMove'` **写死**传给 store，
+ *   等于替规则宣称"此刻正是开始移动" ⇒ 拆分的引擎闸永远通过、任何环节都能取用。
+ *   现在时机只认 store 的事件账本（开始移动 / 战后推进 / 战后撤退各自开窗），
+ *   不在账本里就把按钮灰掉并**明说**该先做什么（不静默）。
+ */
+const breakdownTimingNow = computed(() =>
+  breakdownParentId.value === '' ? null : workbench.breakdownTimingOf(breakdownParentId.value),
+)
+
+const breakdownTimingLabel = computed<string>(() => {
+  switch (breakdownTimingNow.value) {
+    case 'startMove':
+      return '开始移动'
+    case 'advanceAfterCombat':
+      return '战后推进'
+    case 'retreatAfterCombat':
+      return '战后撤退'
+    default:
+      return '—'
+  }
+})
+
 /** 编队盒：图上的编队标记名 */
 function markerNameOf(box: BoxView): string | null {
   const view = box as { marker?: { markerName: string } | null }
@@ -416,9 +441,19 @@ const showsReferee = useRefereeTools()
             <span v-if="holding.note !== undefined" class="muted">（{{ holding.note }}）</span>
             <!-- 死亡堆：返场 / 永久移除（13.5 / 1.6c / 13.5c）—— B17a-2：动作进会话框 -->
             <template v-if="showsBoxActions('deadPile')">
+              <!--
+                ★ 修（2026-10-30）：「返场到 X」**只留给裁判**。
+                它直接调 `returnFromDeadPileNow`（只做"从死亡堆取出 → 落到指定格"），
+                而 13.5 的重建要**付补员**且必须"补员同格 + 友方指挥部 2 格内 + 不在敌方 ZOC"，
+                1.6c 的免费返场要**先抽到特殊补员**（−1 军力）、13.7 的互换要先抽签——
+                这三条合法路径各有自己的引擎计划与入口。玩家面上直接给一个"免费返场"按钮，
+                等于把 13.5a 的费用与位置约束全绕过去（盒子动作修好后这个按钮才真正露出来）。
+              -->
               <BaseButton
+                v-if="showsReferee"
                 variant="ghost"
                 size="sm"
+                title="裁判订正用：规则内重建请走「重建（13.5）」付补员，特殊补员请走 1.6c 抽取"
                 @click="
                   workbench.returnFromDeadPileNow({
                     instanceId: holding.unitId,
@@ -503,16 +538,20 @@ const showsReferee = useRefereeTools()
         <BaseButton
           variant="primary"
           size="sm"
-          :disabled="breakdownParentId === ''"
+          :disabled="breakdownParentId === '' || breakdownTimingNow === null"
+          :title="
+            breakdownTimingNow === null
+              ? '20.0a：只有「开始移动 / 战后推进 / 战后撤退」三个时机能创建拆分单位（先让母单位开始移动，再取用）'
+              : `20.0a 当前时机：${breakdownTimingLabel}`
+          "
           @click="
             containers.takeBreakdown({
               parentInstanceId: breakdownParentId,
               breakdownAr,
-              timing: 'startMove',
             })
           "
         >
-          取用一枚（20.0a：开始移动时）
+          取用一枚（20.0a：仅在开始移动 / 战后推进 / 战后撤退）
         </BaseButton>
       </div>
 

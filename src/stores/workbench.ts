@@ -20196,6 +20196,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     variableExitOpen,
     isSavableRepl,
     breakdownAbsorbObligations,
+    /*
+     * 20.0a：该单位此刻处在哪个创建时机（null＝不在 20.0a 的三个时机里）
+     *
+     * 只读投影：给「拆分单位盒取用」（`containers.takeBreakdown`）与面板的可用性判断用。
+     * **不导出写入口**（`openBreakdownWindow`）——时机只能由真实事件开窗
+     * （开始移动 / 战后推进 / 战后撤退），调用方不许自称"现在可以拆"。
+     */
+    breakdownTimingOf,
     assessTurnEndVictoryNow,
     turnEndVictory,
     controlOfHex,
