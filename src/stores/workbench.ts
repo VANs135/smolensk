@@ -7981,6 +7981,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('danger', `${text}（13.5：补员算子被摧毁即消灭，不进死亡堆）`, rule)
       return
     }
+    /*
+     * 13.5c：**不可重建的单位**（数据层 `rebuildable === false`，即"AR 后有黄点"）
+     * 「被摧毁后会**被永久移除**」⇒ 不进死亡堆。
+     *
+     * ★ 修（2026-10-30）：修前一律塞进死亡堆 ⇒ 这些算子仍出现在死亡堆盒与重建候选里
+     *   （13.5 的重建虽会被引擎按 `rebuildable` 拒，但账本与界面已经错了：
+     *   13.5c 的语义是"永久移出"，不是"留在堆里但重建不了"）。
+     * 数据口径依用户 2026-10-24 裁定：**以 `rebuildable` 字段为准**，不另造判据。
+     */
+    if (!isAirDeadPileEntry(entry) && entry.rebuildable === false) {
+      removedForever.value = [...removedForever.value, entry]
+      pushLog('danger', `${text}（13.5c：AR 后有黄点 ⇒ 摧毁即永久移除，不进死亡堆）`, rule)
+      // 12.3b / 12.7：被摧毁的 HQ 或延补队是**补给源**，少一个源就要重判全场
+      if (affectsSupplyNet(entry)) refreshTraceSupply(`${entry.name} 被摧毁`)
+      return
+    }
     deadPile.value = [...deadPile.value, entry]
     pushLog('danger', text, rule)
     // 12.3b / 12.7：被摧毁的 HQ 或延补队是**补给源**，少一个源就要重判全场

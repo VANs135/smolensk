@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { resolveAttrition } from '@/engine/rules'
 import { useWorkbenchStore } from '@/stores'
 
-import { CORE_HEX, combatRecord, placeGround } from '../flows/sop-harness'
+import { CORE_HEX, combatRecord, groundRecord, placeGround } from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
 
 /**
@@ -163,6 +163,48 @@ describe('12.8b：分摊落盘（恰好满足义务、不得超过现有军力�
     }
     // 账本闭合：盘面 + 死亡堆守恒（B0④ 的不变量）
     expect(store.units.length + store.deadPile.length).toBe(before)
+  })
+
+  it('★ 13.5c：不可重建单位（`rebuildable: false`）损耗归零 ⇒ **永久移除**，不进死亡堆', () => {
+    /*
+     * 回执（2026-10-30）：`eliminateEntry` 原先一律塞进死亡堆 ⇒ 这些算子仍出现在死亡堆盒与
+     * 重建候选里。13.5c 原文：「AR 后有黄点的单位**无法被重建**，它们被摧毁后会**被永久移除**。」
+     * 数据口径依用户 2026-10-24 裁定：以 `rebuildable` 字段为准（轴方 `Flm Panzer Bn` 一族）。
+     */
+    const store = newStore()
+    store.setPhase('supply')
+    const doomed = groundRecord('axis', (record) => record.rebuildable === false)
+    const unit = placeGround(store, doomed, CORE_HEX, 'axis', 'flm')
+    // 归零才有"摧毁"可言：单点军力 ⇒ 任何损失都打光
+    unit.steps = 1
+    unit.hasTraceSupply = false
+    store.planSupplyPhaseNow()
+    goToAttritionStep(store)
+    const key = `${CORE_HEX.col}.${CORE_HEX.row}`
+    const duty = store.supplyPhasePlan!.attritionDuty.find(
+      (item) => `${item.hex.col}.${item.hex.row}` === key,
+    )!
+    // 找一个确实造成损失的骰面（2–12 里必存在）
+    let die = 12
+    for (; die >= 2; die -= 1) {
+      const probe = resolveAttrition({ die, bestAr: duty.bestAr, oosSteps: duty.oosSteps })
+      if (probe.losses.kind === 'allSteps' || probe.losses.steps > 0) break
+    }
+    store.setAttritionDie(key, die)
+    expect(store.rollAttritionNow(key, die)).toBe(true)
+    const losses = store.attritionResults[key]!.losses
+    const required = losses.kind === 'allSteps' ? unit.steps : losses.steps
+    expect(required).toBeGreaterThanOrEqual(1)
+    // 12.8b：分摊不得超过现有军力 ⇒ 让这一枚的军力恰好等于义务（归零即"被摧毁"）
+    unit.steps = required
+    store.setAttritionAllocation(key, unit.instanceId, required)
+    goToAttritionStep(store)
+    expect(store.applyAttritionNow(key)).toBe(true)
+
+    expect(store.units.some((item) => item.instanceId === unit.instanceId)).toBe(false)
+    // 13.5c：永久移除 —— 不进死亡堆，进 removedForever
+    expect(store.deadPile.some((item) => item.instanceId === unit.instanceId)).toBe(false)
+    expect(store.removedForever.some((item) => item.instanceId === unit.instanceId)).toBe(true)
   })
 
   it('未掷骰就分摊 ⇒ 拒（先掷后分）', () => {
