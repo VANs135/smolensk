@@ -170,6 +170,18 @@ export function hitTestHex(x: number, y: number): HexHit | null {
   if (best === null) return null
   // 最近格心落在图外（削角空洞/图廓留白）＝ 点到空白处
   if (!isBoardHex(best.hex)) return null
+  /*
+   * ★ 修（2026-10-30）：**图廓外的空白**要另判一刀。
+   *
+   * 上面那句"密铺 ⇒ 最近格心即在格内"只在**板内**成立：板外的 Voronoi 胞是无界的，
+   * 缩到最小倍率（`MIN_SCALE = 0.04`）时整幅图只剩两三百像素，视口左右上下的空白远大于一个格径，
+   * 在那里点一下 `hitTestHex` 仍会返回"最近的那枚图内格"（距离可以是好几个格径）⇒
+   * 玩家在空白处点一下却选中了很远的一格，还顺手把当前选择清掉。
+   *
+   * 上界取**外接半径**：格内任一点到格心的距离 ≤ R（顶点处恰为 R），故板内点击一个不漏；
+   * 留 `1e-6` 的相对余量只为吸收 `hypot` 的浮点误差，不放松判据。
+   */
+  if (best.distance > HEX_RADIUS_PX * (1 + 1e-6)) return null
   return best
 }
 

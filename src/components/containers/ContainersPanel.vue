@@ -724,15 +724,27 @@ const showsReferee = useRefereeTools()
       <p v-for="(gap, index) in scenarioBox?.dataGaps ?? []" :key="`sg${index}`" class="warn">
         ⚠ 数据缺口：{{ gap }}
       </p>
+    </template>
 
-      <!-- ── ④ 编队收纳盒的建立（13.7） ── B17a-2：建立是**动作** ⇒ 只在会话框那一段里画 -->
+    <!--
+      ── ④ 编队收纳盒的建立（13.7） ── B17a-2：建立是**动作** ⇒ 只在会话框那一段里画
+
+      ★ 修（2026-10-30）：这一块原先套在上面那段「剧本抽取盒（裁判重抽）」的
+        `v-if="showsReferee && showsBoxActions('scenarioDrawBox')"` 里 ⇒ 两层门互相排斥：
+        ① 正式对局台 `showsReferee === false` ⇒ 整块不铺；
+        ② 验证页展开别的卡时该卡覆盖的盒不含 `scenarioDrawBox` ⇒ `showsBoxActions` 为 false。
+        结果 13.7「收纳进盒 / 全部放回图上」在正式界面**完全不可达**。
+        现在它按"该卡覆盖的盒"独立判据出现（`formation_draw` 分区归 `scenarioDrawBox`；
+        `formationBox` 一并收，将来数据侧真给这张卡也不用再改）。
+    -->
+    <template v-if="showsBoxActions('scenarioDrawBox') || showsBoxActions('formationBox')">
       <hr />
       <h4 v-if="showsInfo" class="block-title">编队收纳盒（13.7 / 3.6f：收纳下属以制造迷雾）</h4>
       <p v-if="showsInfo" class="muted">
         建立收纳盒是**动作**（在托盘里展开一张盒卡后，会话框里给出表单）：本面板的只读段只说明
         它的来由——13.7 要求「至少一个所属单位须与标记同格」，盒内单位在图上仍计入 4.8a 的战斗 RE。
       </p>
-      <div v-if="showsBoxActions('formationBox')" class="row">
+      <div class="row">
         <label class="field">
           编队
           <select v-model="formationId" class="select">
@@ -807,8 +819,9 @@ const showsReferee = useRefereeTools()
           </BaseButton>
         </template>
       </div>
+    </template>
 
-      <!--
+    <!--
         ── ④b 建造标记（专规 3.5）── 批 D 切片 2（用户 9.16 #15）
 
         「盒里拾起（高亮）→ 点地图落位 → **二选一**」：修前只有专规面板里那套「文本框 + 下拉 + 按钮」，
@@ -817,40 +830,39 @@ const showsReferee = useRefereeTools()
           · 展开标记盒卡即在本会话框里给出**二选一**与「拾起并落位」（走同一份 store 状态）；
           · 落位用既有的 B27 待点格（候选＝有轴方战斗单位的格，与引擎前提同一条）。
       -->
-      <template v-if="showsBoxActions('markers')">
-        <hr />
-        <h4 class="block-title">建造标记（专规 3.5）</h4>
-        <p class="muted">
-          剧本 1/2 初设各 3
-          枚；可在**任一轴方移动阶段**、**单位移动之前**放进一个有**轴方战斗单位**的格——
-          **免费**：桥按 13.8b 由 HQ 架桥、简易机场按 15.2
-          的标准简易机场处理；**每枚只能用一次、不可重建**； 只有苏军战斗单位进入其格才会被毁。
-        </p>
-        <div class="row">
-          <BaseTag :kind="workbench.constructionMarkers > 0 ? 'info' : 'neutral'">
-            剩余 {{ workbench.constructionMarkers }} 枚（标记盒内）
-          </BaseTag>
-          <BaseButton
-            variant="primary"
-            size="sm"
-            :disabled="workbench.constructionMarkers === 0"
-            @click="workbench.armConstructionMarkerNow('bridge')"
-          >
-            拾起一枚 → 桥（13.8b）
-          </BaseButton>
-          <BaseButton
-            variant="primary"
-            size="sm"
-            :disabled="workbench.constructionMarkers === 0"
-            @click="workbench.armConstructionMarkerNow('airStrip')"
-          >
-            拾起一枚 → 简易机场（15.2）
-          </BaseButton>
-          <BaseTag v-if="workbench.constructionMarkerPicked" kind="success">
-            已拾起（点地图上有轴方战斗单位的格落位）
-          </BaseTag>
-        </div>
-      </template>
+    <template v-if="showsBoxActions('markers')">
+      <hr />
+      <h4 class="block-title">建造标记（专规 3.5）</h4>
+      <p class="muted">
+        剧本 1/2 初设各 3
+        枚；可在**任一轴方移动阶段**、**单位移动之前**放进一个有**轴方战斗单位**的格——
+        **免费**：桥按 13.8b 由 HQ 架桥、简易机场按 15.2
+        的标准简易机场处理；**每枚只能用一次、不可重建**； 只有苏军战斗单位进入其格才会被毁。
+      </p>
+      <div class="row">
+        <BaseTag :kind="workbench.constructionMarkers > 0 ? 'info' : 'neutral'">
+          剩余 {{ workbench.constructionMarkers }} 枚（标记盒内）
+        </BaseTag>
+        <BaseButton
+          variant="primary"
+          size="sm"
+          :disabled="workbench.constructionMarkers === 0"
+          @click="workbench.armConstructionMarkerNow('bridge')"
+        >
+          拾起一枚 → 桥（13.8b）
+        </BaseButton>
+        <BaseButton
+          variant="primary"
+          size="sm"
+          :disabled="workbench.constructionMarkers === 0"
+          @click="workbench.armConstructionMarkerNow('airStrip')"
+        >
+          拾起一枚 → 简易机场（15.2）
+        </BaseButton>
+        <BaseTag v-if="workbench.constructionMarkerPicked" kind="success">
+          已拾起（点地图上有轴方战斗单位的格落位）
+        </BaseTag>
+      </div>
     </template>
 
     <!-- ── ⑤ 最近一次结论 ── -->

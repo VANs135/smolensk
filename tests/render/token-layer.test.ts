@@ -162,6 +162,31 @@ describe('W7 C16：覆盖层的视口裁剪（性能底线）', () => {
     expect(culled.combatAttackableHexes).toEqual([NEAR])
   })
 
+  /*
+   * B2 就地摊开 / 4.5 控制区：这两个字段**不属于"可选优化"**。
+   *
+   * 回执（2026-10-30 实测）：`cullOverlay` 逐个手写返回字段时漏了它们，而
+   * `drawMovementOverlay` 在 `map-render` 里**永远**带着 visibleKeys 调用 ⇒ 必然走裁剪路径
+   * ⇒ `visible.expandedStack` 恒 undefined ⇒ 扇面一枚不画，可 store 的命中仍按"已摊开"消费点击
+   * （第一击被吃、第二击收起），ZOC 图层开关也完全没有效果。此用例钉住"裁剪后必须仍在"。
+   */
+  it('B2/4.5：展开态与 ZOC 图层经裁剪后**仍在**（漏拷即"摊开不画、ZOC 开关无效"）', () => {
+    const withStack: MovementOverlay = {
+      ...BASE,
+      expandedStack: { hex: NEAR, page: 0 },
+      zoc: { friendly: [NEAR, FAR], enemy: [FAR] },
+    }
+    const culled = cullOverlay(withStack, new Set([overlayHexKey(NEAR)]))
+    expect(culled.expandedStack).toEqual({ hex: NEAR, page: 0 })
+    // ZOC 两组的格同样按视口裁剪（远端的格不画）
+    expect(culled.zoc?.friendly).toEqual([NEAR])
+    expect(culled.zoc?.enemy).toEqual([])
+    // 未给这两个字段时保持 "缺省/未展开"（不凭空造出展开态）
+    const plain = cullOverlay(BASE, new Set([overlayHexKey(NEAR)]))
+    expect(plain.expandedStack ?? null).toBeNull()
+    expect(plain.zoc ?? null).toBeNull()
+  })
+
   it('C16：预览路径与起点格**不裁剪**（玩家刚点的路线必须在，哪怕端点出视口）', () => {
     const culled = cullOverlay(BASE, new Set([overlayHexKey(FAR)]))
     expect(culled.path).toEqual([NEAR, FAR])

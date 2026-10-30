@@ -540,6 +540,23 @@ export function cullOverlay(
     ...(overlay.breakoutHexes === undefined || overlay.breakoutHexes === null
       ? { breakoutHexes: overlay.breakoutHexes }
       : { breakoutHexes: overlay.breakoutHexes.filter((hex) => visible(hex)) }),
+    /*
+     * B2 就地摊开：**必须透传**（不可省）。
+     *
+     * 展开态是"整格"的属性，不随单个 token 裁剪；省略它的后果不是"少画一点"，
+     * 而是 `drawMovementOverlay` 里 `visible.expandedStack ?? null` 恒为 null ⇒
+     * 扇面一枚都不画，可 store 侧的命中（`handleStackClick` 读的是 store 的 `expandedStack`）
+     * 仍按"已摊开"消费点击 ⇒ 玩家看到"点堆叠第一次没反应、第二次连点也没反应"。
+     */
+    expandedStack: overlay.expandedStack,
+    // 4.5：控制区图层同理——`visible.zoc` 恒 undefined 等于"图层开关完全无效"
+    zoc:
+      overlay.zoc === undefined || overlay.zoc === null
+        ? overlay.zoc
+        : {
+            friendly: overlay.zoc.friendly.filter((hex) => visible(hex)),
+            enemy: overlay.zoc.enemy.filter((hex) => visible(hex)),
+          },
   }
 }
 

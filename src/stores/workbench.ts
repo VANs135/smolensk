@@ -15670,7 +15670,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const plan = arrivalPlan.value
     if (plan === null) return []
     return plan.units.map((unit, index) => {
-      const override = arrivalHexOverrides.value[index]
+      const override = arrivalOverrides.value[index]
       if (override !== undefined)
         return {
           status: 'placed' as const,
@@ -15700,6 +15700,30 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const arrivalPlaced = computed<Record<number, boolean>>(() =>
     arrivalPlacedKey.value === arrivalPlanKey.value ? arrivalPlacedRaw.value : {},
   )
+  /**
+   * 13.6：**裁判手改落点**只在同一个计划键下有效（换日/换方/换计划即作废）
+   *
+   * ★ 修（2026-10-30）：`arrivalHexOverrides` 原先只按键=下标存、只在换剧本时清 ⇒
+   *   换日后"昨天给第 3 条手改的落点"会套到今天第 3 条上：轻则该条目每次都被
+   *   `arrivalHexOutsideCandidates` 拒投（永久卡死），重则落到当天另一条目的入场格。
+   *   与 `arrivalPlaced` 共用同一个计划键，两本账同生共死。
+   */
+  const arrivalOverrides = computed<Record<number, HexRef>>(() =>
+    arrivalPlacedKey.value === arrivalPlanKey.value ? arrivalHexOverrides.value : {},
+  )
+  /**
+   * 把两本到达账本切到**当前**计划键（不同则整本作废）
+   *
+   * 只在**写**路径调用（`markArrivalPlaced` / 手改落点）：读路径靠上面的 computed 惰性判键，
+   * 不在 computed 里做副作用（`arrivalPlanKey` 是 computed，写入会形成读写环）。
+   */
+  function syncArrivalLedger(): void {
+    const key = arrivalPlanKey.value
+    if (arrivalPlacedKey.value === key) return
+    arrivalPlacedKey.value = key
+    arrivalPlacedRaw.value = {}
+    arrivalHexOverrides.value = {}
+  }
   /** 当日到达是否**已全部投放**（sp / unclassified 走卡面手工记账，不要求投放） */
   const arrivalAllPlaced = computed(() => {
     const plan = arrivalPlan.value
@@ -15717,7 +15741,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 记账：把第 index 条到达标为已投放（内部用；仅在投放成功路径上调用） */
   function markArrivalPlaced(index: number): void {
-    arrivalPlacedKey.value = arrivalPlanKey.value
+    // 换日/换方/换计划 ⇒ 先整本作废（修前把上一天的 {0..N:true} 一并带进新键，
+    // 新一天除第 0 条以外全部显示"已投放"且永久投不出去）
+    syncArrivalLedger()
     arrivalPlacedRaw.value = { ...arrivalPlacedRaw.value, [index]: true }
   }
 
@@ -16377,6 +16403,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       return
     }
+    // 换日/换方/换计划 ⇒ 手改落点与"已投放"账本一起作废（两本账共用同一个计划键）
+    syncArrivalLedger()
     arrivalHexOverrides.value = { ...arrivalHexOverrides.value, [index]: hex }
   }
 
@@ -17172,7 +17200,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const data = acceptReinforcement(
       planConsolidation({
         kind: 'multiStepUnits',
-        phaseIsReinforcement: true,
+        /*
+         * 13.9-1/2/3 的时机＝**本方增援阶段**（引擎判据 `consolidation.ts` 的
+         * `if (!input.phaseIsReinforcement) fail('13.9', …)`）。
+         *
+         * ★ 修（2026-10-30）：这里原先**写死 `true`** ⇒ 引擎那道闸永远进不去，
+         *   玩家可在移动/战斗/进击段的「拆分与合并」块里把两枚半步单位并成满血
+         *   （免费补步，还能免费用合并代替搬运）。改为如实上报当前阶段；
+         *   13.9-4 的**飞机合并**另走 `consolidateAircraftNow`，它不传这个字段（允许任何阶段）。
+         */
+        phaseIsReinforcement: phase.value === 'reinforcement',
         keep: toConsolidationGroundView(keep),
         remove: toConsolidationGroundView(remove),
       }),

@@ -176,6 +176,22 @@ describe('B17a：分段渲染与两处入口（源码守卫）', () => {
     ])
   })
 
+  it('★ 13.9：store 不得替引擎编造「此刻是增援阶段」（修前写死 `phaseIsReinforcement: true`）', () => {
+    /*
+     * 回执（2026-10-30）：`consolidateUnitsNow` 把 `phaseIsReinforcement` 写死为 `true`，
+     * 而引擎 `consolidation.ts` 的 13.9-1/2/3 前提正是"本方增援阶段"（`!input.phaseIsReinforcement` 即拒）
+     * ⇒ 那道闸永远进不去。今天它被 `requireAction('rein.rebuild')` 的环节闸挡在 B 段，
+     * 但"store 给引擎喂假事实"本身就是隐患（闸门表一改就会立刻变成可绕过的免费合兵）。
+     * 故按"事实必须如实上报"钉住：传的是当前阶段，常量不得再出现。
+     */
+    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const at = store.indexOf('function consolidateUnitsNow')
+    expect(at).toBeGreaterThan(-1)
+    const body = store.slice(at, at + 1600)
+    expect(body).not.toContain('phaseIsReinforcement: true')
+    expect(body).toContain("phaseIsReinforcement: phase.value === 'reinforcement'")
+  })
+
   it('★ 对局台：右栏 `only="info"`、会话只挂**一个** `reinforce` 会话框（R1：不再按子环节分两框）；验证页仍挂全量', () => {
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
     const verify = readFileSync('src/views/WorkbenchView.vue', 'utf8')

@@ -880,6 +880,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           @hover="hoverUnit"
         />
         <BaseButton
+          v-if="workbench.phase === 'reinforcement'"
           variant="primary"
           size="sm"
           @click="workbench.consolidateUnitsNow(keepId, removeId)"

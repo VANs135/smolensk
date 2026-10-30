@@ -587,7 +587,26 @@ export const useContainersStore = defineStore('containers', () => {
     if (id === null) return null
     const card = cardViews.value.find((item) => item.id === id)
     if (card === undefined) return null
-    return [...new Set(card.regions.map((region) => region.kind))]
+    /*
+     * ★ 修（2026-10-30）：这里原先直接返回 `region.kind`，而它是**数据侧的分区名**
+     *   （`aux-cards.json` 的 `boxKind`：`dead_pile` / `air_box_active` / …）。
+     *   面板 `showsBoxActions(kind)` 传的却是**引擎的盒名**（`BoxKind`：`deadPile` / `airBox` / …）
+     *   ⇒ `['dead_pile'].includes('deadPile') === false`，**永不命中**。
+     *   而对局台打开盒卡会话的唯一触发条件就是"展开着一张卡"（`map-view` 的 `containers` 会话），
+     *   于是展开任何盒卡后**所有盒内动作都不渲染**：1.4a 移出盒与免费整备、1.4b 边缘盒进出、
+     *   1.6c 特殊补员掷骰、13.7 收纳、20.0a 拆分取用、死亡堆返场——整个会话只剩只读清单。
+     *
+     * 口径：**两种键都收**——归一后的引擎盒名（给 `showsBoxActions('deadPile')` 这类调用），
+     *   以及原始分区名（给 `showsBoxActions('markers')` 这类"按分区"的调用；
+     *   注意 `markers` 在 `REGION_OF_BOX` 里映射到 `deadPile`，直接取引擎名会认错）。
+     */
+    const keys = new Set<string>()
+    for (const region of card.regions) {
+      keys.add(region.kind)
+      const mapped = boxOfRegion(region.kind)
+      if (mapped !== null) keys.add(mapped.boxKind)
+    }
+    return [...keys]
   })
 
   /** C-1：当前展开卡的名字（会话框标题用；没展开 ⇒ `null`） */

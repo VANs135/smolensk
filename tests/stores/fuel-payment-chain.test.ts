@@ -171,6 +171,25 @@ describe('B18b（12.5c）：燃料要能在"耗 MP 的当口"付，而不是只�
     expect(mapView.session?.rule).not.toBe('12.5c')
   })
 
+  it('★ 增援段点开一个"含未加油装甲"的堆叠，不得把增援会话顶成「移动 / 燃料」', () => {
+    /*
+     * 回执（2026-10-30）：`expandStackAt` 在任何环节摊开堆叠都会 `beginMovePick`，而
+     * `fuelTargets` 会取这个清单 ⇒ `fuelPaymentDue` 在 B 段也为真；地图会话里那一支
+     * "缺油也要能付"的分支原先**没有环节门**，于是增援面板被「移动 / 燃料」顶掉
+     * （而 12.5 的付款时机只在 C/E/G 的移动环节，那里点了也被闸门拒）。
+     */
+    const { workbench, mapView } = newStores()
+    workbench.setTurn(2)
+    workbench.setPhase('reinforcement')
+    place(workbench, fuelUnitRecord(), START, 't1')
+    place(workbench, fuelUnitRecord(), START, 't2')
+
+    mapView.expandStackAt(START)
+    // 摊开确实建立了取子清单 ⇒ 欠油事实成立（否则本用例测不到那一支）
+    expect(workbench.fuelPaymentDue).toBe(true)
+    expect(mapView.session?.kind).toBe('reinforce')
+  })
+
   it('★ 缺燃料被 12.5a 挡下 ⇒ 在**移动阶段**当场付油 ⇒ 账本真扣（12.5c「消耗时支付」）', () => {
     const { workbench } = newStores()
     workbench.setPhase('movement')

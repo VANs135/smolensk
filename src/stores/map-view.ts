@@ -1344,8 +1344,13 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 于是**根本没有地方付油**：这是"能不能打完整一局"的死结。
      * 判据用 store 的事实 `fuelPaymentDue`（耗油且未加注的**本方**单位已被选中 / 在取子清单里），
      * 不在这里比规则字面量。
+     *
+     * ★ 修（2026-10-30）：补一道**环节闸**。`expandStackAt` 在任何环节摊开堆叠都会建 `movePick`，
+     *   而 `fuelTargets` 会取它 ⇒ 在增援段/战斗段点一下"含未加油装甲"的堆叠，这一支就把
+     *   增援面板 / 战斗选攻方面板**顶成**「移动 / 燃料」。而 12.5 的付款时机只在移动环节，
+     *   判据直接问闸门表（`supply.fuel` 的 where 就是 C/E/G 三个移动环节）。
      */
-    if (workbench.fuelPaymentDue) {
+    if (workbench.fuelPaymentDue && workbench.actionAllowedNow('supply.fuel')) {
       return {
         kind: 'move',
         title: '移动 / 燃料（6.1 / 12.5）',
@@ -1754,8 +1759,22 @@ export const useMapViewStore = defineStore('mapView', () => {
         return
       }
     }
-    // ⓪ 已摊开 ⇒ 展开态优先，且**不落到下面的既有分派**
-    if (world !== undefined && handleStackClick(hex, world)) return
+    /*
+     * ⓪ 已摊开 ⇒ 展开态优先，且**不落到下面的既有分派**
+     *
+     * ★ 修（2026-10-30）：这一条原先排在**一切模态待点之前**，而 `expandedStack` 只在
+     *   换回合/换段/换方时收起（展开态本身不随会话收起）。于是"先摊开某格、再打开一个
+     *   要在地图上点格的动作"时，第一击被展开态吃掉：点在令牌上 ⇒ 改一个看不见的选择集；
+     *   点在空白 ⇒ 只是把扇面收掉。玩家观感＝"点高亮的落点没反应"（初设落位 / 增援落点 /
+     *   工事格 / 撤退落点 / 补给站付款全都踩）。
+     *   口径：**只要此刻有一个"等玩家点格"的模态态**，这一击就归它，展开态让路。
+     */
+    const modalPickLive =
+      setup.placing !== null ||
+      setup.truckPickActive ||
+      workbench.hexPickView !== null ||
+      workbench.optionDraftMode !== 'idle'
+    if (!modalPickLive && world !== undefined && handleStackClick(hex, world)) return
     // W7 C14：初设放置中 ⇒ 点地图即落位（最高优先级；非候选格由 store 记拒绝，不开常规小窗）
     if (setup.placing !== null && setup.placeAtHex(hex)) {
       closePopup()

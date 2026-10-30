@@ -149,6 +149,25 @@ describe('命中测试（点击选格）', () => {
     expect(hit!.distance).toBeCloseTo(HEX_RADIUS_PX, 6)
   })
 
+  it('★ 图廓外的空白点不应选中"最近的那一格"（缩到最小时四周有大量留白）', () => {
+    /*
+     * 回执（2026-10-30）：「最近格心在板内 ⇒ 点在格内」这条只对**板内**成立；
+     * 板外的 Voronoi 胞无界，缩小后点视口留白会命中很远的边缘格（还顺手清掉当前选择）。
+     * 这里取最右侧一格的格心向右再走 4R（明显在板外、且超过外接半径）。
+     */
+    const rightmost = HEXES.reduce((best, hex) =>
+      hexCanvasPoint(hex).x > hexCanvasPoint(best).x ? hex : best,
+    )
+    const center = hexCanvasPoint(rightmost)
+    expect(hitTestHex(center.x + HEX_RADIUS_PX * 4, center.y)).toBeNull()
+    // 板内照旧：格心与顶点方向都必须命中（不能把判据收紧成内切半径）
+    const mid = HEXES.find((hex) => hex.col === 36 && hex.row === 13) ?? HEXES[0]!
+    expect(hitTestHex(hexCanvasPoint(mid).x, hexCanvasPoint(mid).y)?.hex).toMatchObject({
+      col: mid.col,
+      row: mid.row,
+    })
+  })
+
   it('格心 Voronoi 判据：任取格内一点，命中的必是包含它的那一格', () => {
     // 取每格的多边形重心附近若干点（含偏向各顶点的点），命中格 = 最近格心 ⇒ 必为本格
     for (const hex of HEXES.slice(0, 200)) {

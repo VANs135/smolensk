@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
 import { mapLayers } from '@/data'
+import { hexCanvasPoint } from '@/render/map-layout'
 import { toConsoleUnit, unitChoices, useMapViewStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -58,6 +59,34 @@ describe('B27：待点格（机制）', () => {
     expect(workbench.hedgehogInputs.hexText).toBe(`${HEX.col}.${HEX.row}`)
     expect(workbench.hexPickView).toBeNull()
     expect(workbench.hexPickHint).toBe('')
+  })
+
+  it('★ 展开态不得抢走「待点格」的一击（修前第一击被吃 ⇒ "点高亮落点没反应"）', () => {
+    /*
+     * 回执（2026-10-30）：`onHexClick` 的 ⓪「展开态优先」排在一切模态待点之前，
+     * 而 `expandedStack` 只在换回合/换段/换方时收起 ⇒ 先摊开某格、再打开"要在地图上点格"的动作，
+     * 第一击会被展开态吃掉（点令牌＝改一个看不见的选择集；点空白＝收扇面），落点没写回。
+     */
+    const { workbench, mapView } = newStores()
+    const record = unitChoices('axis').find(
+      (item) => item.isCombat === true && item.attackCapable === true,
+    )!
+    for (const instanceId of ['stack-a', 'stack-b']) {
+      workbench.units.push(
+        toConsoleUnit({ record, instanceId, hex: HEX, side: 'axis', face: 'combat' }),
+      )
+    }
+    // ① 第一击（带世界坐标：扇面命中要靠它）：摊开该格（两枚 ⇒ 出扇面）
+    const center = hexCanvasPoint(HEX)
+    mapView.onHexClick(HEX, { x: 10, y: 10 }, center)
+    expect(mapView.expandedStack?.hex).toEqual(HEX)
+
+    // ② 声明一个待点格动作（16.0b 工事格，候选 any），再点同一格的格心
+    workbench.beginHedgehogHexPickNow('build')
+    mapView.onHexClick(HEX, { x: 10, y: 10 }, center)
+    // 这一击必须归待点格：写回格号并收态（修前会去 toggleSelection / collapseStack，写回为空）
+    expect(workbench.hedgehogInputs.hexText).toBe(`${HEX.col}.${HEX.row}`)
+    expect(workbench.hexPickView).toBeNull()
   })
 
   it('★ 13.6 增援落点：声明正确且点格被消费（写回的是"落点覆盖"这一处状态）', () => {
