@@ -83,7 +83,31 @@ describe('B24：捕获重定向下的手势归属（拖动与点击不再被吞�
     const down = source.indexOf('function onPointerDown(')
     const downBody = source.slice(down, source.indexOf('function ', down + 10))
     expect(downBody).toContain('isMapGesture(event)')
-    expect(downBody).not.toContain('drag.dragging')
+    /*
+     * ★ 收窄（2026-10-30）：这里原先断言 `not.toContain('drag.dragging')`，本意是"**手势起点**
+     *   不许把拖动位交给闸门"（即不得写成 `isMapGesture(event, drag.dragging)`）。而多指修复
+     *   在按下处加了一句"已在拖动中 ⇒ 忽略后续指针"，那是另一件事（防止第二根手指替换整段手势），
+     *   不该被这条守卫判红。故断言改为直接钉住本意。
+     */
+    expect(downBody).not.toContain('isMapGesture(event, drag.dragging)')
+    expect(downBody).toContain('if (drag.dragging) return')
+  })
+
+  it('源码守卫：视口尺寸与点击换算都取**画布**的矩形（容器有 1px 边框 ⇒ 系统偏 1–3px）', () => {
+    /*
+     * 回执（2026-10-30）：`.mapcanvas__viewport` 是 `border-box` + `1px` 边框，而
+     * `viewSize` 取它的 `getBoundingClientRect()`、后备存储按 `viewSize × dpr` 分配，
+     * 画布 CSS 尺寸却是内容盒（`viewSize − 2`）⇒ 实际 DPR 比例失真、离原点越远偏得越多；
+     * 点击换算也多吃 1px 边框。统一改用画布自身的矩形（`surfaceRect()`）后两处同源。
+     */
+    const source = readFileSync('src/components/map/MapCanvas.vue', 'utf8')
+    expect(source).toContain('function surfaceRect()')
+    for (const name of ['syncSize', 'toLocal', 'hexToWindow']) {
+      const start = source.indexOf(`function ${name}(`)
+      expect(start, `应当找得到 ${name}`).toBeGreaterThan(-1)
+      const body = source.slice(start, source.indexOf('function ', start + 10))
+      expect(body, `${name} 应改用 surfaceRect()`).toContain('surfaceRect()')
+    }
   })
 })
 

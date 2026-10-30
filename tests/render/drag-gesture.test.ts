@@ -21,9 +21,33 @@ import {
 describe('拖动状态机（M9⑤）', () => {
   it('按下 → 复位为「未按下」只有抬起/取消两条出口', () => {
     const gesture = beginDrag({ x: 100, y: 100 })
-    expect(gesture).toEqual({ dragging: true, moved: false, last: { x: 100, y: 100 } })
+    expect(gesture).toEqual({
+      dragging: true,
+      moved: false,
+      last: { x: 100, y: 100 },
+      pointerId: null,
+    })
     expect(dragEnd(gesture).gesture).toEqual(IDLE_DRAG)
     expect(dragCancel(gesture).gesture).toEqual(IDLE_DRAG)
+  })
+
+  it('④ 多指：手势身份（`pointerId`）必须一路带下去（丢了就分不清是哪一根手指）', () => {
+    /*
+     * 回执（2026-10-30）：状态里原先没有指针身份 ⇒ 第二根手指按下会替换整段手势，
+     * 先抬起的那根被当成"本次手势结束"并判一次单击（误点一格），仍在屏上的那根再也拖不动。
+     * 该用例只钉住纯模块的"身份传递"（组件侧的闸门见 MapCanvas 的三个 handler）。
+     */
+    const gesture = beginDrag({ x: 0, y: 0 }, 7)
+    expect(gesture.pointerId).toBe(7)
+    const panned = dragMove(gesture, { x: 30, y: 0 }, 1)
+    expect(panned.kind).toBe('pan')
+    expect(panned.kind === 'pan' && panned.gesture.pointerId).toBe(7)
+    // 五秒后（多步平移）身份仍然在
+    let step = panned
+    for (let i = 0; i < 3; i += 1) {
+      step = dragMove(step.kind === 'pan' ? step.gesture : gesture, { x: 40 + i, y: 0 }, 1)
+    }
+    expect(step.kind === 'pan' && step.gesture.pointerId).toBe(7)
   })
 
   it('① 抬起事件丢了：移动事件里左键位已松 ⇒ 就地复位且**不算**单击', () => {

@@ -234,10 +234,24 @@ function onScaleInput(event: Event): void {
 
 /* ── 尺寸变化 ── */
 
+/**
+ * **绘制面**（canvas 自身）的 CSS 像素矩形
+ *
+ * ★ 修（2026-10-30）：原先两处都用**容器**（`.mapcanvas__viewport`）的 `getBoundingClientRect()`，
+ *   而容器是 `border-box` 且带 `1px` 边框 ⇒ 它比画布的内容盒**宽高各多 2px**：
+ *   ① 后备存储按 `viewSize × dpr` 分配、CSS 尺寸却是 `viewSize − 2` ⇒ 实际 DPR 比例偏差，
+ *      离原点越远偏差越大，点击位置系统性右移/下移 1–3px（1:1 倍率下格高 109px，贴着格边点会点错格）；
+ *   ② 点击换算用容器 `left/top`，同样多吃 1px 边框。
+ *   统一到画布自身的矩形，两处变换共用同一块矩形就不再漂移。
+ */
+function surfaceRect(): DOMRect | null {
+  const element = canvas.value
+  return element === null ? null : element.getBoundingClientRect()
+}
+
 function syncSize(): void {
-  const element = container.value
-  if (element === null) return
-  const rect = element.getBoundingClientRect()
+  const rect = surfaceRect()
+  if (rect === null) return
   viewSize.value = { width: Math.max(rect.width, 0), height: Math.max(rect.height, 0) }
   if (!fitted && canDraw(viewSize.value)) {
     fitted = true
@@ -251,9 +265,8 @@ function syncSize(): void {
 
 /** 事件坐标 → 视口内 CSS 像素坐标 */
 function toLocal(event: { clientX: number; clientY: number }): { x: number; y: number } | null {
-  const element = container.value
-  if (element === null) return null
-  const rect = element.getBoundingClientRect()
+  const rect = surfaceRect()
+  if (rect === null) return null
   return { x: event.clientX - rect.left, y: event.clientY - rect.top }
 }
 
@@ -309,8 +322,10 @@ function captureTarget(): Element | null {
 
 function onPointerDown(event: PointerEvent): void {
   if (event.button !== 0) return
+  // 多指：已在拖动中就直接忽略后续指针（否则第二根手指会替换整段手势，见 DragGesture.pointerId）
+  if (drag.dragging) return
   if (!isMapGesture(event)) return
-  drag = beginDrag({ x: event.clientX, y: event.clientY })
+  drag = beginDrag({ x: event.clientX, y: event.clientY }, event.pointerId)
   // 指针捕获让「拖出画布」也能继续收到 pointermove。
   // 该 API 在指针已非活动时会抛错（快速点击 / 合成事件），故容错——否则拖动会卡住。
   try {
@@ -321,6 +336,8 @@ function onPointerDown(event: PointerEvent): void {
 }
 
 function onPointerMove(event: PointerEvent): void {
+  // 多指：只认发起这次手势的那一根指针（另一根的手指移动不得参与平移）
+  if (drag.dragging && drag.pointerId !== null && event.pointerId !== drag.pointerId) return
   // B18a：悬停在浮层上不该高亮下面的格；B24：拖动中（捕获会把 target 换成捕获元素）照旧算
   if (!isMapGesture(event, drag.dragging)) return
   const local = toLocal(event)
@@ -342,6 +359,8 @@ function onPointerMove(event: PointerEvent): void {
 }
 
 function onPointerUp(event: PointerEvent): void {
+  // 多指：别的指针抬起不算"本次手势结束"（否则会判一次单击、并把还在屏上的手势作废）
+  if (drag.dragging && drag.pointerId !== null && event.pointerId !== drag.pointerId) return
   // B24：抬起这一击属于"已在画布上按下"的那段手势 ⇒ 即便 target 被捕获改成别的元素也照收
   if (!isMapGesture(event, drag.dragging)) return
   const ended = dragEnd(drag)
@@ -362,6 +381,8 @@ function onPointerUp(event: PointerEvent): void {
  * 拖动状态就会永久卡住（此后所有点选都被当成平移）。
  */
 function onPointerCancel(event: PointerEvent): void {
+  // 多指：别的指针被取消不该把这一段手势一起作废（否则仍在屏上的那根手指拖不动）
+  if (drag.dragging && drag.pointerId !== null && event.pointerId !== drag.pointerId) return
   // 取消只复位：即使指针已经不在画布上（`target` 变了）也必须复位，故**不**过归属闸门
   const ended = dragCancel(drag)
   if (ended.gesture === drag) return
@@ -410,9 +431,9 @@ function hexToLocal(hex: HexRef): { x: number; y: number } {
  */
 function hexToWindow(hex: HexRef): { x: number; y: number } {
   const local = hexToLocal(hex)
-  const element = container.value
-  if (element === null) return local
-  const rect = element.getBoundingClientRect()
+  // 与 `toLocal` 同一块矩形（画布内容盒）；画布未挂载时才退回容器
+  const rect = surfaceRect() ?? container.value?.getBoundingClientRect() ?? null
+  if (rect === null) return local
   return { x: local.x + rect.left, y: local.y + rect.top }
 }
 

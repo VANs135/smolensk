@@ -21,17 +21,29 @@ export interface DragGesture {
   moved: boolean
   /** 上一次事件的客户端坐标（用于算增量） */
   last: { x: number; y: number } | null
+  /**
+   * 发起这次手势的指针 id（`null` ＝未记录 / 非指针来源）
+   *
+   * ★ 为什么必须有：触屏/触控板是**多指**的。第二根手指按下会再走一次 `pointerdown`，
+   *   若不记 id 就把整个手势替换掉；随后先抬起的那根手指被当成"本次手势的抬起"
+   *   ⇒ 判一次 `clicked`（用户根本没想点格），而仍在屏上的那根手指的移动因为
+   *   `dragging === false` 全部变成 `idle` ⇒ 地图突然拖不动。
+   */
+  pointerId: number | null
 }
 
 /** 未按下时的状态 */
-export const IDLE_DRAG: DragGesture = { dragging: false, moved: false, last: null }
+export const IDLE_DRAG: DragGesture = { dragging: false, moved: false, last: null, pointerId: null }
 
 /** 点击容差（客户端像素）：|dx| + |dy| 超过它才算平移 */
 export const DRAG_CLICK_SLOP_PX = 2
 
-/** 按下 */
-export function beginDrag(point: { x: number; y: number }): DragGesture {
-  return { dragging: true, moved: false, last: { ...point } }
+/** 按下（`pointerId` 用于多指判据：只认发起手势的那一根） */
+export function beginDrag(
+  point: { x: number; y: number },
+  pointerId: number | null = null,
+): DragGesture {
+  return { dragging: true, moved: false, last: { ...point }, pointerId }
 }
 
 /** 拖动中的一步结果 */
@@ -69,6 +81,8 @@ export function dragMove(
       dragging: true,
       moved: gesture.moved || Math.abs(dx) + Math.abs(dy) > DRAG_CLICK_SLOP_PX,
       last: { ...point },
+      // 手势身份必须一路带下去（丢失 ⇒ 多指时判据失效）
+      pointerId: gesture.pointerId,
     },
   }
 }
