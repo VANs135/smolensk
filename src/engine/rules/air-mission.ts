@@ -1,4 +1,4 @@
-import { rulesConstants } from '@/data'
+import { markers, rulesConstants } from '@/data'
 import type { Side } from '@/data'
 
 import { fail, succeed, type RuleOutcome } from '../result-types'
@@ -481,6 +481,19 @@ export type AirBoxSide = Side
  */
 export function airBoxRangeHexes(side: AirBoxSide): number {
   return side === 'soviet' ? SOVIET_AIR_BOX_RANGE_HEXES : AXIS_AIR_BOX_RANGE_HEXES
+}
+
+/**
+ * 专规 1.4a：图外空军盒**与地图连接的那一列**（苏方 62 / 轴方 1）
+ *
+ * 原文说的是「Box ↔ 地图的 62.xx 行 / 01.xx 行」；本作坐标里 **62 是列号**
+ * （地图 rows 0–35 / cols 1–62），`markers.json` 的 `containers.airBoxes[].edgeRow`
+ * 记的也正是 62 / 1 —— 唯一事实源取数据，不在这里写死。
+ * 用途：图外盒起飞的飞机「从这一列入场」，任务距离 = 盒到该列的航程 + 列差。
+ */
+export function airBoxEdgeColumn(side: AirBoxSide): number {
+  const box = markers.containers.airBoxes.find((item) => item.side === side)
+  return box?.edgeRow ?? (side === 'soviet' ? 62 : 1)
 }
 
 /** 专规 1.4a：往返图外空军盒的判定结果 */

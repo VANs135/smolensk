@@ -472,9 +472,11 @@ describe('B48 P0：存档带盘面（摆子 → 存 → 读 → 盘面一致）'
      * 契约变更（**不是放宽**）：批 A 切片 3 加了 9.1c 两个攻击账本 ⇒ 版本 2；
      * 第六批条 5 又加到达"已投放"账本（`arrivalPlacedKey`/`arrivalPlacedRaw`）⇒ 版本 3；
      * §5-D 补员盘面化（`replHoldings` → `replPending`/`replFtrTac`，Pax/Eq 改随 `units` 存档）
-     * ⇒ 版本 4（v3 旧档由 `migrateBoardV3ToV4` 迁成盘面算子，见 store 里那行注释）。
+     * ⇒ 版本 4（v3 旧档由 `migrateBoardV3ToV4` 迁成盘面算子，见 store 里那行注释）；
+     * 2026-10-30 专规 1.4a 的图外空军盒驻机名单（`airBoxMembers`）进档 ⇒ 版本 5
+     * （旧档窗口同时放宽到 v3/v4，且只跳过该版本确实没有的新键）。
      */
-    expect(boardPayloadOf(adapter)['version']).toBe(4)
+    expect(boardPayloadOf(adapter)['version']).toBe(5)
 
     // 把盘面改乱：清算子、清补给站、把城市账本改回去
     workbench.units.splice(0, workbench.units.length)

@@ -1871,7 +1871,15 @@ export function isFighterAircraft(aircraftType: string): boolean {
 }
 
 /** 空军算子 → 任务机视图（C9 引擎输入；字段一一对应，不做换算） */
-export function toAirMissionAircraftView(air: ConsoleAirUnit): AirMissionAircraftView {
+export function toAirMissionAircraftView(
+  air: ConsoleAirUnit,
+  /**
+   * 专规 1.4a：该机驻在**图外空军盒**时的入场参数（连接列 + 固定航程代价）
+   *
+   * 由调用方（操作台）按盒成员名单给，不是本函数去猜——`airBoxMembers` 是盘面账本。
+   */
+  offMap?: { edgeCol: number; rangeCost: number } | null,
+): AirMissionAircraftView {
   return {
     id: air.instanceId,
     side: air.side,
@@ -1892,6 +1900,7 @@ export function toAirMissionAircraftView(air: ConsoleAirUnit): AirMissionAircraf
     transportCapacity: air.transportCapacity,
     transportCapacityBack: air.transportCapacityBack,
     isStrategicBomber: isStrategicBomberAircraft(air.aircraftType),
+    ...(offMap === undefined || offMap === null ? {} : { offMap }),
   }
 }
 

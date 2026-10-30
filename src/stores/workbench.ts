@@ -44,6 +44,8 @@ import {
   DIRECT_DRAW_RANGE_MP,
   SP_TO_T,
   airBaseBuildCostSp,
+  airBoxEdgeColumn,
+  airBoxRangeHexes,
   claimFrontalReserves,
   constructionTaskCostsSp,
   frontalReservesBatch,
@@ -1430,6 +1432,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 飞机的印值来自 `aircraft.json`（A5 空军专表），与地面算子库（`units-*.json`）分开。
    */
   const airUnits = ref<ConsoleAirUnit[]>([])
+  /**
+   * 专规 1.4a：当前驻在**地图外空军盒**里的飞机 id
+   *
+   * 为什么这本账在**操作台**而不是 `containers`：
+   *   ① 盒本身就是飞机的一个**空军基地**（容量无限、整备免费）⇒ 它决定任务航程
+   *      （「从对应行入场，剩余航程 = 印刷航程 − 20/30 格」），任务判定在操作台/引擎这一侧；
+   *   ② 它是**盘面状态**，必须进存档——原先记在 `containers` 里、不在任何快照字段表，
+   *      于是"存档再读档，盒里的飞机就回到图上"（1.4a 的事实被静默丢掉）。
+   * 用户 2026-10-30 口径：不可能没有空军基地（至少有图外的）；若剧本不允许用图外盒，
+   * 或基地被占后航程不够飞去新基地，则该机**视为被摧毁**。
+   */
+  const airBoxMembers = ref<string[]>([])
   /** C7：参炸**飞机** id（与地面参炸单位分开收集；10.0e-F 的同类型限制由引擎裁决） */
   const barrageAirIds = ref<string[]>([])
   /** C7：摆放飞机的输入（机型 id + 基地格文本 `列.行`） */
@@ -4052,7 +4066,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C9：全部飞机视图（双方；引擎内部按阵营过滤） */
   const allAirViews = computed<AirMissionAircraftView[]>(() =>
-    airUnits.value.map(toAirMissionAircraftView),
+    airUnits.value.map((plane) => toAirMissionAircraftView(plane)),
   )
 
   /** C9：当前方的飞机 */
@@ -9589,6 +9603,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /* ── C7 空军：摆放与参炸勾选（14.1a / 10.2b） ── */
 
   /**
+   * 专规 1.4a：把飞机放进 / 移出**地图外空军盒**（盒成员账本的**唯一写入口**）
+   *
+   * 盒即基地（容量无限、整备免费），其成员身份决定：① 盒内清单；② 任务航程
+   * （「从对应列入场，剩余航程 = 印刷航程 − 20/30 格」）。合法性（射程够不够飞）由调用方
+   * 先用 `planOffMapAirBoxFlight` 判，本函数只落账。
+   */
+  function setAirInBoxMembership(instanceId: string, inBox: boolean): void {
+    airBoxMembers.value = inBox
+      ? [...new Set([...airBoxMembers.value, instanceId])]
+      : airBoxMembers.value.filter((id) => id !== instanceId)
+  }
+
+  /** 专规 1.4a：清空图外空军盒的驻机名单（换剧本 / 复位） */
+  function clearAirBoxMembers(): void {
+    airBoxMembers.value = []
+  }
+
+  /**
    * C7：摆放一架飞机到指定**基地格**（14.1a）
    *
    * 「飞机的模式表示方式是，将激活的飞机算子放在**空军基地算子**的上方，或将非激活的放在下方」
@@ -13219,7 +13251,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
          * ⇒ 仅移动阶段可执行任务（反应 / 进击不可）。两者是不同的事，不得互相替代。
          */
         weatherLimited: airInputs.value.flyingAllowed && !airInputs.value.weatherNormal,
-        aircraft: aircraft.map(toAirMissionAircraftView),
+        /*
+         * 专规 1.4a：驻在图外空军盒的飞机**从对应列入场**，剩余航程 = 印刷航程 − 20/30 格
+         * （用户 2026-10-30 口径）。判据在引擎 `assignAirMission`，这里只把事实交过去。
+         */
+        aircraft: aircraft.map((plane) =>
+          toAirMissionAircraftView(
+            plane,
+            airBoxMembers.value.includes(plane.instanceId)
+              ? { edgeCol: airBoxEdgeColumn(plane.side), rangeCost: airBoxRangeHexes(plane.side) }
+              : null,
+          ),
+        ),
         bases: airBases.value,
         cargo,
         // 14.10b：空投战斗单位须有计划（格 / 制定回合 / 执行回合）
@@ -13323,7 +13366,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
     const data = acceptAir(
       declareAirCombatStep(state, {
-        friendlyAircraft: friendlyAircraft.map(toAirMissionAircraftView),
+        friendlyAircraft: friendlyAircraft.map((plane) => toAirMissionAircraftView(plane)),
         enemyActiveCount: enemyAircraft.length,
         enemyCanInitiate: enemyAircraft.some((air) => air.canInitiateAirCombat),
         enemyAirBaseInHex,
@@ -13356,8 +13399,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return true
     }
     const ours = roles.attackerSide === activeSide.value
-    const attackerViews = (ours ? friendlyAircraft : enemyAircraft).map(toAirMissionAircraftView)
-    const defenderViews = (ours ? enemyAircraft : friendlyAircraft).map(toAirMissionAircraftView)
+    const attackerViews = (ours ? friendlyAircraft : enemyAircraft).map((plane) =>
+      toAirMissionAircraftView(plane),
+    )
+    const defenderViews = (ours ? enemyAircraft : friendlyAircraft).map((plane) =>
+      toAirMissionAircraftView(plane),
+    )
     // ⑭ 接线：drawAir2d6 / drawAir1d6 只回报数字（不改它们）⇒ 先记下掷骰前的骰源，
     // 按同一颗 PRNG 逐轮复算出骰面（14.3e 每对一轮：2 骰 + 1 损失骰）供会话日志复算
     const rngBefore = rng.value
@@ -19336,6 +19383,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ['units', units],
     ['spDumps', spDumps],
     ['airUnits', airUnits],
+    // 专规 1.4a：谁驻在图外空军盒（不存则读档后"盒里的飞机回到图上"，1.4a 的事实被丢掉）
+    ['airBoxMembers', airBoxMembers],
     ['deadPile', deadPile],
     ['removedForever', removedForever],
     // ② 账本（补员 / 拆解 / 补给缓存 / 装甲集群与编队归属）
@@ -19409,7 +19458,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   账本只剩"待放置"与 Ftr/Tac 两小块。旧档（≤3）由 `migrateBoardV3ToV4` 迁移：
    *   把 `replHoldings` 的 Pax/Eq 按点摆成补员算子（盘面为唯一事实，用户裁定⑨）。
    */
-  const BOARD_SNAPSHOT_VERSION = 4
+  /*
+   * ★ 5（2026-10-30）：字段表新增 `airBoxMembers`（专规 1.4a 图外空军盒的驻机名单）。
+   *   不存则"存档→读档"后驻在盒里的飞机被当成在图上的机场格（`hex` 未变）——
+   *   等于白送回图上，而且任务航程也不再按"从对应行入场"扣 20/30 格。
+   *   旧档（4）由 `boardSnapshotFits` 的"上一版"通道接受，缺该键 ⇒ 读成空盒（与原状一致，不会更糟）。
+   */
+  const BOARD_SNAPSHOT_VERSION = 5
 
   /**
    * §5-D：把 v3 及更早的补员账本迁成 v4 的盘面算子
@@ -19473,6 +19528,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   · 数组 ⇒ 快照必须是数组（这一类从不为 null，故这条足够严）；
    *   · 非空对象 ⇒ 快照必须是非空对象；标量 ⇒ `typeof` 相同。
    */
+  /**
+   * 各**旧版本**缺的字段（只有这些键允许"不在场"，由迁移补）
+   *
+   * 这是把"旧档跳过整张字段表"收窄成**逐版本白名单**：老键仍然逐项在场检查，
+   * 缺 `units` / `airUnits` 这种老键照样拒读（此前会静默放行，读成"时钟走了、盘面没动"）。
+   */
+  const LEGACY_MISSING_KEYS: Readonly<Record<number, readonly string[]>> = {
+    // v3：补员还是"账本数字"（无 replPending/replFtrTac），也没有图外空军盒驻机名单
+    3: ['replPending', 'replFtrTac', 'airBoxMembers'],
+    // v4：§5-D 补员盘面化之后，但还没有 airBoxMembers
+    4: ['airBoxMembers'],
+  }
+
   /** 读档时的**旧版本次数**（`accepts` 记下、`restore` 消费；null ＝ 当前版本，无需迁移） */
   let boardLegacyVersion: number | null = null
 
@@ -19486,14 +19554,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *   旧版本则跳过该检查——它的字段表本来就没有本版本的新键，缺项由迁移补。
      */
     boardLegacyVersion = null
-    const legacy = payload.version === BOARD_SNAPSHOT_VERSION - 1
-    if (legacy) boardLegacyVersion = payload.version as number
-    else if (payload.version !== BOARD_SNAPSHOT_VERSION) return false
+    /*
+     * ★ 修（2026-10-30）：旧档窗口从"只认上一版"放宽成"3 与 4 都认"——因为本轮把版本推到 5
+     *   （新增 `airBoxMembers`），若仍只认 4，**v3 档会立刻变成"不认识"**，而 v3 本来有确定性迁移
+     *   （`migrateBoardV3ToV4`）。同时把"旧档跳过整张字段表"改成**只跳过该版本确实没有的新键**
+     *   ——`units`/`airUnits` 这类老键仍然逐项在场检查（缺了照样拒，不再"缺项也放行"）。
+     */
+    const version = payload.version
+    const legacy = typeof version === 'number' && version >= 3 && version < BOARD_SNAPSHOT_VERSION
+    if (legacy) boardLegacyVersion = version
+    else if (version !== BOARD_SNAPSHOT_VERSION) return false
     if (typeof payload.fields !== 'object' || payload.fields === null) return false
     const table = payload.fields as Record<string, unknown>
+    const missingOk = legacy ? (LEGACY_MISSING_KEYS[boardLegacyVersion ?? 0] ?? []) : []
     for (const [key, source] of boardSnapshotFields()) {
-      // 旧档（≤上一版）没有本版本的新键 ⇒ 由迁移补，不当场拒
-      if (legacy) continue
+      // 旧档**确实没有**的那几个新键 ⇒ 由迁移补，不当场拒；其余键照旧逐项检查
+      if (missingOk.includes(key)) continue
       if (!(key in table)) return false
       const shape: unknown = source.value
       const next: unknown = table[key]
@@ -19900,6 +19976,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     barrageRequiresDefenderInput,
     // C7 空军（10.2b 短程加成的数据源）
     airUnits,
+    airBoxMembers,
+    setAirInBoxMembership,
+    clearAirBoxMembers,
     barrageAirIds,
     airPlacement,
     airUnitChoices,

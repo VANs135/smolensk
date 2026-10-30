@@ -231,6 +231,81 @@ describe('14.1a/14.1c 基地归属权：一切基地用途都要求本方基地'
 
 /* ────────────────────────────── 14.4c 巡逻区 ────────────────────────────── */
 
+describe('专规 1.4a：图外空军盒起飞的飞机「从对应列入场」（先扣 20/30 格）', () => {
+  /*
+   * 原文：「Moving between the Soviet player's Red Air Force Box and the map's 62.xx row costs
+   * 20 hexes of range. … the Axis … 01.xx row costs 30 hexes of range.」
+   * 用户 2026-10-30 口径：「从对应行入场，剩余航程 = 航程 − 盒到那一行的航程。」
+   * ⇒ 判据等价于 `盒航程 + 列差 ≤ 印刷航程`；本作 62 是**列号**（地图 rows 0–35 / cols 1–62）。
+   */
+  it('★ 苏方盒：入场列 62、代价 20 格；剩余航程 = 印刷航程 − 20', () => {
+    const edge = hex(62, TARGET.row)
+    // 62 列 → 36 列 = 26 格（同一行，格距恰为列差）
+    const ok = makePlane({
+      id: 'p1',
+      side: 'soviet',
+      baseHex: edge,
+      rangeHexes: 50,
+      offMap: { edgeCol: 62, rangeCost: 20 },
+    })
+    const accepted = assignAirMission(
+      missionRequest({ side: 'soviet', aircraft: [ok], bases: [], targetHex: TARGET }),
+    )
+    expect(accepted.ok).toBe(true)
+    expect(accepted.ok && accepted.data.origins[0]).toMatchObject({
+      aircraftId: 'p1',
+      baseHex: edge,
+      distanceHexes: 26,
+      rangeHexes: 30, // 50 − 20
+      fromOffMapBox: true,
+    })
+
+    // 射程 45 ⇒ 剩 25 < 26 ⇒ 够不着（若忘了扣 20 格，这条会被误放行）
+    const short = makePlane({
+      id: 'p2',
+      side: 'soviet',
+      baseHex: edge,
+      rangeHexes: 45,
+      offMap: { edgeCol: 62, rangeCost: 20 },
+    })
+    const rejected = assignAirMission(
+      missionRequest({ side: 'soviet', aircraft: [short], bases: [], targetHex: TARGET }),
+    )
+    expect(rejected.ok).toBe(false)
+    expect(rejected.ok === false && rejected.rule).toBe('专规 1.4a')
+  })
+
+  it('★ 轴方盒：入场列 1、代价 30 格；射程不足 30 格连场都进不来', () => {
+    const edge = hex(1, TARGET.row)
+    // 1 列 → 36 列 = 35 格；印刷 70 ⇒ 剩 40 ≥ 35
+    const ok = makePlane({
+      id: 'a1',
+      side: 'axis',
+      baseHex: edge,
+      rangeHexes: 70,
+      offMap: { edgeCol: 1, rangeCost: 30 },
+    })
+    expect(
+      assignAirMission(
+        missionRequest({ side: 'axis', aircraft: [ok], bases: [], targetHex: TARGET }),
+      ).ok,
+    ).toBe(true)
+
+    const tooShort = makePlane({
+      id: 'a2',
+      side: 'axis',
+      baseHex: edge,
+      rangeHexes: 25,
+      offMap: { edgeCol: 1, rangeCost: 30 },
+    })
+    const r = assignAirMission(
+      missionRequest({ side: 'axis', aircraft: [tooShort], bases: [], targetHex: TARGET }),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.ok === false && r.reason).toContain('offMapOriginBeyondRange')
+  })
+})
+
 describe('14.4c 巡逻区：本方基地 + 激活战斗机 + 10 格', () => {
   const ownBase = makeBase({ hex: TARGET })
 

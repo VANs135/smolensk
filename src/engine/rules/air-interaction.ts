@@ -143,6 +143,15 @@ export interface AirMissionAircraftView {
   canInitiateAirCombat: boolean
   /** 14.2d：航程（格） */
   rangeHexes: number
+  /**
+   * 专规 1.4a：该机驻在**地图外空军盒**里（盒本身就是空军基地，容量无限、整备免费）
+   *
+   * 用户 2026-10-30 口径：「两家的图外空军基地的飞机**从对应行入场**，剩余航程为
+   * 航程减去图外空军基地到那一行的航程。」
+   * ⇒ `edgeCol` = 连接地图的那一列（苏方 62 / 轴方 1），`rangeCost` = 往返该列的固定航程
+   * （苏 20 / 轴 30，见 `airBoxRangeHexes`）。任务距离按「先花 rangeCost 到该行，再飞剩下的」算。
+   */
+  offMap?: { edgeCol: number; rangeCost: number } | null
   /** 14.1b：剩余军力（0 ⇒ 已摧毁） */
   steps: number
   /** 14.7b：可否轰炸 */
@@ -377,7 +386,14 @@ export interface AirMissionAssignment {
   /** 参战机 id（顺序照输入，供 14.4f 的任务损失表按 #1..#4 解引用） */
   aircraftIds: string[]
   /** 逐机的起飞基地格（14.2d：距离自起飞基地起算）与其航程（14.1c 返航校验用） */
-  origins: { aircraftId: string; baseHex: HexRef; distanceHexes: number; rangeHexes: number }[]
+  origins: {
+    aircraftId: string
+    baseHex: HexRef
+    distanceHexes: number
+    rangeHexes: number
+    /** 专规 1.4a：本机自图外空军盒起飞（返航回盒，不校验图上基地） */
+    fromOffMapBox?: boolean
+  }[]
   /** 14.9a：空运/空投的总运输容量（T；其余任务为 0） */
   cargoCapacity: number
   /** 装载的货物（14.9a/14.10a；其余任务为空数组） */
@@ -515,26 +531,51 @@ export function assignAirMission(input: AirMissionRequest): RuleOutcome<AirMissi
     if (!canPerformMissionThisPhase(plane.missionsFlownThisPhase))
       return fail('14.2e', `aircraftAlreadyFlewMissionThisPhase:${plane.id}`)
 
-    // ★ 基地归属权：起飞基地必须是本方的空军基地（14.1a/14.1c）
-    const origin = checkAircraftOrigin({ aircraft: plane, side: input.side, bases: input.bases })
-    if (!origin.ok) return origin
+    /*
+     * 专规 1.4a：**驻在图外空军盒的飞机**以盒为基地（容量无限、整备免费）。
+     * 用户 2026-10-30 口径：「从对应行入场，剩余航程 = 印刷航程 − 盒到该行的航程。」
+     * ⇒ 起点取「连接列（苏 62 / 轴 1）× 任务格所在行」这一点（同行的格距恰为列差），
+     *   并把可用航程先扣掉 20/30 格。于是判据等价于 `rangeCost + 列差 ≤ 印刷航程`。
+     */
+    const offMap = plane.offMap ?? null
+    let originHex: HexRef
+    let effectiveRange: number
+    if (offMap !== null) {
+      originHex = { col: offMap.edgeCol, row: input.targetHex.row }
+      effectiveRange = plane.rangeHexes - offMap.rangeCost
+      if (effectiveRange < 0)
+        return fail(
+          '专规 1.4a',
+          `offMapOriginBeyondRange:${plane.id}:${plane.rangeHexes}<${offMap.rangeCost}`,
+        )
+    } else {
+      // ★ 基地归属权：起飞基地必须是本方的空军基地（14.1a/14.1c）
+      const origin = checkAircraftOrigin({ aircraft: plane, side: input.side, bases: input.bases })
+      if (!origin.ok) return origin
+      originHex = origin.data.base.hex
+      effectiveRange = plane.rangeHexes
+    }
 
-    const distanceHexes = hexDistance(origin.data.base.hex, input.targetHex)
+    const distanceHexes = hexDistance(originHex, input.targetHex)
     /*
      * 14.2d：任务格须在飞机航程内；**14.9e-A 的例外** —— 空运/空投任务允许飞到**两倍航程**，
      * 代价是该机在**目的地**变为非激活（档位由 `airTransportProfile` 判，见本文件上方的判据）。
      * 其余任务类型（轰炸 / 低空扫射 / 战机扫荡 / 运输破坏）仍按 14.2d 的正常航程。
      */
     const isTransportRun = input.kind === 'air_transport' || input.kind === 'air_drop'
-    const profile = airTransportProfile({ distanceHexes, rangeHexes: plane.rangeHexes })
-    if (isTransportRun ? profile.profile === null : distanceHexes > plane.rangeHexes)
-      return fail('14.2d', `aircraftOutOfRange:${plane.id}:${distanceHexes}>${plane.rangeHexes}`)
+    const profile = airTransportProfile({ distanceHexes, rangeHexes: effectiveRange })
+    if (isTransportRun ? profile.profile === null : distanceHexes > effectiveRange)
+      return fail(
+        offMap === null ? '14.2d' : '专规 1.4a',
+        `aircraftOutOfRange:${plane.id}:${distanceHexes}>${effectiveRange}`,
+      )
 
     origins.push({
       aircraftId: plane.id,
-      baseHex: origin.data.base.hex,
+      baseHex: originHex,
       distanceHexes,
-      rangeHexes: plane.rangeHexes,
+      rangeHexes: effectiveRange,
+      ...(offMap === null ? {} : { fromOffMapBox: true }),
     })
     maxDistanceHexes = Math.max(maxDistanceHexes, distanceHexes)
     if (distanceHexes > SHORT_RANGE_BARRAGE_HEXES) allWithinShortRange = false
@@ -1930,6 +1971,16 @@ export function completeAirReturnStep(
   for (const item of input.returns) {
     const origin = byId.get(item.aircraftId)
     if (origin === undefined) return fail('14.2f-G', `unknownMissionAircraft:${item.aircraftId}`)
+
+    /*
+     * 专规 1.4a：自**图外空军盒**起飞的飞机，返航即**回盒**（盒本身就是空军基地，容量无限）。
+     * ⇒ 不要求"返航点是图上空军基地"；出击时已按 `盒航程 + 列差 ≤ 印刷航程` 校验过，
+     *   返航同一距离，必然在航程内（用户 2026-10-30 口径：不可能没有空军基地，至少有图外的）。
+     */
+    if (origin.fromOffMapBox === true) {
+      if (!stayActive.includes(item.aircraftId)) inactiveAircraftIds.push(item.aircraftId)
+      continue
+    }
 
     // ★ 14.1c：返航必须回到**本方**空军基地
     const base = airBaseAt(input.bases, item.baseHex)

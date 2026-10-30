@@ -166,8 +166,12 @@ export const useContainersStore = defineStore('containers', () => {
     soviet: markers.railCap.initial.soviet,
   })
 
-  /** 地图外空军盒成员（aircraft 实例 id 集合；1.4a） */
-  const airBoxMembers = ref<string[]>([])
+  /*
+   * 专规 1.4a：**盒成员账本已迁到操作台**（`workbench.airBoxMembers`）。
+   * 它决定任务航程（从对应列入场、先扣 20/30 格），并必须随盘面存档；
+   * 记在这里时既读不到任务侧、也不进任何快照字段表。本 store 只读投影、写走操作台的入口。
+   */
+  const airBoxMembers = computed<readonly string[]>(() => workbench.airBoxMembers)
 
   /**
    * 边缘盒内的单位（1.4b）
@@ -379,7 +383,9 @@ export const useContainersStore = defineStore('containers', () => {
 
   /** 地图外空军盒成员（1.4a） */
   const aircraftInBox = computed<Record<Side, BoxUnitView[]>>(() => {
-    const members = workbench.airUnits.filter((air) => airBoxMembers.value.includes(air.instanceId))
+    const members = workbench.airUnits.filter((air) =>
+      workbench.airBoxMembers.includes(air.instanceId),
+    )
     return {
       axis: members.filter((air) => air.side === 'axis').map(toBoxAirUnit),
       soviet: members.filter((air) => air.side === 'soviet').map(toBoxAirUnit),
@@ -1839,7 +1845,7 @@ export const useContainersStore = defineStore('containers', () => {
   /** 1.4a：盒内免费整备（Inactive → Active） */
   function activateAirBox(side: Side): boolean {
     const inBox = workbench.airUnits.filter(
-      (air) => air.side === side && airBoxMembers.value.includes(air.instanceId),
+      (air) => air.side === side && workbench.airBoxMembers.includes(air.instanceId),
     )
     const plan = planAirBoxActivate({ side, aircraft: inBox.map(toBoxAirUnit) })
     if (!plan.ok) {
@@ -1896,9 +1902,7 @@ export const useContainersStore = defineStore('containers', () => {
       )
       return false
     }
-    airBoxMembers.value = inBox
-      ? [...new Set([...airBoxMembers.value, instanceId])]
-      : airBoxMembers.value.filter((id) => id !== instanceId)
+    workbench.setAirInBoxMembership(instanceId, inBox)
     lastAction.value = {
       ok: true,
       rule: '1.4a',
@@ -2077,7 +2081,7 @@ export const useContainersStore = defineStore('containers', () => {
       axis: markers.railCap.initial.axis,
       soviet: markers.railCap.initial.soviet,
     }
-    airBoxMembers.value = []
+    workbench.clearAirBoxMembers()
     edgeBoxHeld.value = { northeast: [], southeast: [] }
     formationBoxes.value = {}
     drawResults.value = {}
