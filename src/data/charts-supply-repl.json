@@ -3,7 +3,8 @@
     "version": "0.4.0",
     "description": "补给表(1.6b) / 补员表(1.6b) / 特殊补员表(1.6c) / 重建费用表(13.5c)：19 Aug 起补给与补员掷骰 -1、特殊补员停止；freeSpecialReplFactors 为 1.6c 免费重建资格（仅 12-2-2/11-1-1/10-0-1 型）",
     "source": [
-      "smolensk_charts_db.json（2026-09-10 按英文原版核对）+ Smolensk_Rules_v1.1（1.6b/1.6c）"
+      "smolensk_charts_db.json（2026-09-10 按英文原版核对）+ Smolensk_Rules_v1.1（1.6b/1.6c）",
+      "印表逐行核对（2026-10-31）：Smolensk Axis rebuilds.png / Smolensk Soviet rebuilds.png —— 行序、行键、费用与文案均照印表；两张表末均注「A Ftr or Tac repl only rebuilds 1 step」"
     ]
   },
   "supply": {
@@ -197,7 +198,7 @@
             }
           ]
         },
-        "sourceLabel": "1x Eq + 1x Pax"
+        "sourceLabel": "1x Eq + 1 Pax"
       },
       {
         "unitType": "Infantry Bde or Rgt",
@@ -286,7 +287,7 @@
             }
           ]
         },
-        "sourceLabel": "1x Eq + 1x Pax"
+        "sourceLabel": "1x Eq + 1 Pax"
       },
       {
         "unitType": "Pio Bn",
@@ -401,7 +402,7 @@
         "rebuild": {
           "kind": "special"
         },
-        "sourceLabel": "Special (1.6c)"
+        "sourceLabel": "Special (see 1.6c)"
       },
       {
         "unitType": "Artillery Rgt or Bde",
@@ -477,7 +478,7 @@
             }
           ]
         },
-        "sourceLabel": "1x Eq + 1x Pax"
+        "sourceLabel": "1x Eq + 1 Pax"
       },
       {
         "unitType": "Infantry Div step",
@@ -530,7 +531,7 @@
         "rebuild": {
           "kind": "special"
         },
-        "sourceLabel": "Special (1.6c)"
+        "sourceLabel": "Special (see 1.6c)"
       },
       {
         "unitType": "Motorcycle (MC) Rgt",
@@ -609,7 +610,7 @@
         "rebuild": {
           "kind": "special"
         },
-        "sourceLabel": "Special (1.6c)"
+        "sourceLabel": "Special (see 1.6c)"
       },
       {
         "unitType": "Tank Bn, Rgt, or Bde",
@@ -639,7 +640,7 @@
             }
           ]
         },
-        "sourceLabel": "1x Eq + 1x Pax"
+        "sourceLabel": "1x Eq + 1 Pax"
       },
       {
         "unitType": "Transport Points",
