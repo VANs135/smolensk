@@ -411,6 +411,57 @@ describe('W6 B18：重建与死亡堆（13.5a–c）', () => {
     expect(store.lastRebuild?.cost).toEqual({ pax: 2 })
   })
 
+  it('★ 13.5a：圆心 HQ 必须是**战斗模式**（或 DG 朝战斗面）—— 移动模式的 HQ 不作数', () => {
+    /*
+     * 原文：「所需的补员必须都在一个格中，且要在一个友方指挥部的 2 格内（含 2 格）。
+     *   该指挥部**必须处于战斗模式，或处于 DG 模式但朝向战斗模式面**（根据 5.10e）。」
+     * 回执（2026-10-30）：修前重建与 2.1 注的到达落点共用 `directDrawHqHexes()`
+     * （后者只要求"能直接拖取追溯补给的 HQ"，不要求模式）⇒ 移动模式的 HQ 也能当圆心。
+     *
+     * ★ 两种情况各用**独立 store**：`rebuildHqHexes` 是 computed，直接改 push 进去的裸对象
+     *   不会触发失效（Vue 只在通过响应式代理写入时才收集依赖）。
+     */
+    const setup = (mode: 'move' | 'dgCombat') => {
+      const store = newStore()
+      store.setTurn(2)
+      store.setPhase('reinforcement')
+      goToSegmentStep(store, 'reinforcement.rebuild')
+      store.setReplHoldingsNow({ pax: 4, eq: 0, ftr: 0, tac: 0 }, DEFENDER_HEX)
+      const hq = place(
+        store,
+        pickRecord('axis', (record) => record.specialized?.includes('hq') === true),
+        DEFENDER_HEX,
+        'axis',
+        'hq-1',
+      )
+      hq.mode =
+        mode === 'move'
+          ? { ...hq.mode, mode: 'move', orientation: 'move', dg: false }
+          : // 5.10e：DG 保留朝向 ⇒ 朝战斗面的 DG 仍可作为圆心
+            { ...hq.mode, mode: 'combat', orientation: 'combat', dg: true }
+      const unit = place(store, infDivRecord(), DEFENDER_HEX, 'axis', 'u1')
+      unit.steps = unit.printedSteps - 1
+      const args = {
+        unitId: 'u1',
+        rebuildType: 'Infantry Div step',
+        replHexText: `${String(hq.hex.col)}.${String(hq.hex.row)}`,
+      }
+      return { store, unit, args }
+    }
+
+    // ① 移动模式 ⇒ 不构成 13.5a 的圆心（账本一字未动）
+    const moving = setup('move')
+    expect(moving.store.rebuildUnitNow(moving.args)).toBe(false)
+    expect(moving.store.reinforcementError).toMatchObject({ rule: '13.5a' })
+    expect(moving.store.replHoldings.pax).toBe(4)
+    expect(moving.unit.steps).toBe(moving.unit.printedSteps - 1)
+
+    // ② DG 但朝战斗面 ⇒ 合法
+    const dg = setup('dgCombat')
+    expect(dg.store.rebuildUnitNow(dg.args)).toBe(true)
+    expect(dg.unit.steps).toBe(dg.unit.printedSteps)
+  })
+
   it('13.5：未选行键（空串）⇒ 拒绝且不扣款（不替裁判猜行）', () => {
     const store = newStore()
     store.setTurn(2)

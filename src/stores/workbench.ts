@@ -15508,6 +15508,33 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       .map((hex) => ({ col: hex.col, row: hex.row }))
   })
 
+  /**
+   * 13.5a：可作重建圆心的**友方指挥部**格
+   *
+   * 原文：「所需的补员必须都在一个格中，且要在一个友方指挥部的 2 格内（含 2 格）。
+   *   **该指挥部必须处于战斗模式，或处于 DG 模式但朝向战斗模式面（根据 5.10e）**。
+   *   该格不可在敌方 ZOC 内（4.5a）。」
+   *
+   * ★ 修（2026-10-30）：修前重建与"2.1 注的到达落点"共用 `arrivalFacts.directDrawHqHexes()`，
+   *   而那一条只要求「能直接拖取追溯补给的 HQ」、**不要求战斗模式** ⇒ 移动模式的 HQ 也被当成重建圆心
+   *   （与 13.5a 原文相反）。现在两者分开：到达落点照旧，重建圆心另用本投影。
+   */
+  const rebuildHqHexes = computed<HexRef[]>(() =>
+    units.value
+      .filter(
+        (unit) =>
+          unit.side === activeSide.value &&
+          (unit.specialized.includes('hq') || unit.throwRange !== null),
+      )
+      .filter(
+        (unit) =>
+          // 战斗模式（DG 时 `applyDgToUnit` 会把 mode 折成朝向，故朝战斗面的 DG 也落在第一支）
+          unit.mode.mode === 'combat' ||
+          (unit.mode.dg === true && unit.mode.orientation === 'combat'),
+      )
+      .map((unit) => ({ ...unit.hex })),
+  )
+
   /** 13.6 / 13.6b 的落点事实（引擎不持地图，故由操作台注入） */
   const arrivalFacts = computed<ArrivalPlacementFacts>(() => ({
     entryHexes: (letter) => (mapConfig.entryHexes?.[letter] ?? []).map((hex) => ({ ...hex })),
@@ -17156,7 +17183,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       ) ?? null
     const replHex =
       input.replHexText === undefined ? null : (parseHexPath(input.replHexText)[0] ?? null)
-    const hqHexes = arrivalFacts.value.directDrawHqHexes()
+    // 13.5a：重建圆心只认**战斗模式**（或 DG 朝战斗面）的友方 HQ
+    const hqHexes = rebuildHqHexes.value
     const data = acceptReinforcement(
       planRebuild({
         side: activeSide.value,
@@ -19261,7 +19289,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return base === undefined ? [] : [{ ...base.hex }]
     }
 
-    const hqHexes = arrivalFacts.value.directDrawHqHexes()
+    // 13.5a：与 `rebuildUnitNow` 同一份投影（界面高亮与判据不许两套）
+    const hqHexes = rebuildHqHexes.value
     const range = rulesConstants.repl.rebuildHqRangeHexes
     const withinHq = (hex: HexRef): boolean => hqHexes.some((hq) => hexDistance(hq, hex) <= range)
 
