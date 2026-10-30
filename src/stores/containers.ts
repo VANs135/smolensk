@@ -21,6 +21,7 @@ import {
   axisDrawPool,
   boxOfRegion,
   planAirBoxActivate,
+  planOffMapAirBoxFlight,
   planBreakdownTake,
   planEdgeBoxMove,
   planFormationBoxHide,
@@ -1860,18 +1861,52 @@ export const useContainersStore = defineStore('containers', () => {
   }
 
   /** 1.4a：把飞机移入 / 移出地图外空军盒 */
-  function setAirInBox(instanceId: string, inBox: boolean): void {
+  /**
+   * 1.4a：飞机进出**地图外空军盒**
+   *
+   * ★ 修（2026-10-30）：修前只改盒成员、再打一句"（航程 20/30 格）"——**没有任何裁断**，
+   *   等于免费瞬移，而且文案还假装费用已扣。原文给的是固定航程代价：
+   *   苏方 Red Air Force Box ↔ 62.xx 行 = 20 格；轴方 Luftwaffe Box ↔ 01.xx 行 = 30 格
+   *   ⇒ 印刷射程不足这个数就飞不进去（数据里的真实反例：`Ru I.153` 射程 15）。
+   *   现在先按机型射程裁断，再改成员；不满足即拒并给规则号。
+   */
+  function setAirInBox(instanceId: string, inBox: boolean): boolean {
+    const air = workbench.airUnits.find((item) => item.instanceId === instanceId)
+    if (air === undefined) {
+      lastAction.value = {
+        ok: false,
+        rule: '1.4a',
+        detail: `图上找不到飞机 ${instanceId}`,
+        scope: '地图外空军盒',
+      }
+      return false
+    }
+    const flight = planOffMapAirBoxFlight({ side: air.side, rangeHexes: air.rangeHexes })
+    if (!flight.ok) {
+      lastAction.value = {
+        ok: false,
+        rule: flight.rule,
+        detail: flight.reason,
+        scope: '地图外空军盒',
+      }
+      workbench.pushLog(
+        'danger',
+        `${air.name} ${inBox ? '飞入' : '飞出'}地图外空军盒被拒：${flight.reason}（专规 1.4a）`,
+        flight.rule,
+      )
+      return false
+    }
     airBoxMembers.value = inBox
       ? [...new Set([...airBoxMembers.value, instanceId])]
       : airBoxMembers.value.filter((id) => id !== instanceId)
-    const air = workbench.airUnits.find((item) => item.instanceId === instanceId)
     lastAction.value = {
       ok: true,
       rule: '1.4a',
-      detail: `${air?.name ?? instanceId} ${inBox ? '进入' : '离开'}地图外空军盒（航程 ${air?.side === 'axis' ? 30 : 20} 格；盒内免费整备）`,
+      detail: `${air.name} ${inBox ? '进入' : '离开'}地图外空军盒（1.4a：往返航程 ${flight.data.rangeCost} 格；盒内免费整备）`,
       scope: '地图外空军盒',
     }
     workbench.pushLog('info', lastAction.value.detail, '1.4a')
+    return true
   }
 
   /* ────────────────────────────── 边缘盒（1.4b） ────────────────────────────── */

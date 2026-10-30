@@ -483,6 +483,34 @@ export function airBoxRangeHexes(side: AirBoxSide): number {
   return side === 'soviet' ? SOVIET_AIR_BOX_RANGE_HEXES : AXIS_AIR_BOX_RANGE_HEXES
 }
 
+/** 专规 1.4a：往返图外空军盒的判定结果 */
+export interface OffMapAirBoxFlight {
+  /** 这一次往返要花掉的航程（格）——固定代价，不是"到某格的距离" */
+  rangeCost: number
+}
+
+/**
+ * 专规 1.4a：**进出图外空军盒**是否飞得到（判据，不是文案）
+ *
+ * 原文（Smolensk 专规 1.4a）：
+ *   「Moving between the Soviet player's Red Air Force Box and the map's 62.xx row
+ *     **costs 20 hexes of range**. Moving between the Axis player's Luftwaffe Box and the
+ *     map's **01.xx row costs 30 hexes of range**.」
+ *
+ * 要点：代价是**固定航程**（苏 20 / 轴 30），故机型印刷射程不足这个数就**根本飞不进去/飞不出来**
+ * （数据里确有反例：`Ru I.153` 射程 15 ⇒ 只能落图上基地）。
+ * 修前 store 只改盒成员并打一句"航程 20/30 格"，**不做任何裁断** ⇒ 等于免费瞬移。
+ */
+export function planOffMapAirBoxFlight(input: {
+  side: AirBoxSide
+  rangeHexes: number
+}): RuleOutcome<OffMapAirBoxFlight> {
+  const rangeCost = airBoxRangeHexes(input.side)
+  if (input.rangeHexes < rangeCost)
+    return fail('专规 1.4a', `offMapBoxBeyondRange:${input.rangeHexes}<${rangeCost}`)
+  return succeed('专规 1.4a', { rangeCost })
+}
+
 /** 专规 1.4a 图外空军盒的能力（容量无限、整备免费） */
 export interface AirBoxRules {
   /** 无限驻机容量（1.4a） */

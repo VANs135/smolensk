@@ -454,6 +454,31 @@ describe('W7 C12：拆分单位盒（1.8a / 20.0）与编队抽签', () => {
     expect(containers.lastAction).toMatchObject({ ok: false, rule: '20.0' })
   })
 
+  /*
+   * 专规 1.4a 原文给的是**固定航程代价**（苏 20 / 轴 30 格），不是"免费进出"。
+   * 修前 `setAirInBox` 只改盒成员、再打一句"（航程 20/30 格）"，等于免费瞬移且文案假装扣过费。
+   * 数据里的真实反例：苏方 `I.153` 射程 15 ⇒ 只能落图上基地。
+   */
+  it('★ 1.4a：射程不足的飞机飞不进地图外空军盒（判据来自机型印刷射程）', () => {
+    workbench.setActiveSide('soviet')
+    const short = workbench.airUnitChoices.find((choice) => (choice.rangeHexes ?? 0) < 20)
+    expect(short, '苏方应有射程 < 20 的机型（I.153）').toBeDefined()
+    expect(workbench.addAirUnit(short!.aircraftId, '36.13')).toBe(true)
+    const shortAir = workbench.airUnits[0]!
+
+    expect(containers.setAirInBox(shortAir.instanceId, true)).toBe(false)
+    expect(containers.airBoxMembers).not.toContain(shortAir.instanceId)
+    expect(containers.lastAction).toMatchObject({ ok: false, rule: '专规 1.4a' })
+
+    // 同一套判据的另一半：航程够就能进（避免"一律拒绝"的假修复）
+    const far = workbench.airUnitChoices.find((choice) => (choice.rangeHexes ?? 0) >= 30)
+    expect(far, '苏方应有射程 ≥ 30 的机型').toBeDefined()
+    expect(workbench.addAirUnit(far!.aircraftId, '36.13')).toBe(true)
+    const farAir = workbench.airUnits.find((unit) => unit.instanceId !== shortAir.instanceId)!
+    expect(containers.setAirInBox(farAir.instanceId, true)).toBe(true)
+    expect(containers.airBoxMembers).toContain(farAir.instanceId)
+  })
+
   it('14.1b：飞机军力归零后与地面单位**共用死亡堆**，并出现在死亡堆盒里', () => {
     const choice = workbench.airUnitChoices[0]
     expect(choice).toBeDefined()

@@ -123,6 +123,24 @@ describe('动作接线账：每个写盘面入口要么有环节闸、要么登�
     expect(empty).toEqual([])
   })
 
+  it('★ 1.4 两条的理由必须与**原文**一致（别把"有硬约束"写成"原文未给时机"）', () => {
+    /*
+     * 回执（2026-10-30）：`moveEdgeBox` 原先写「1.4b 边缘盒：原文未给时机」，
+     * 而专规 1.4b 明写「During their **Movement Phase** … **no retreats and no entry/exit during
+     * the Reaction or Exploitation Phase**」⇒ 时机是硬约束，只是判在引擎（`canEnterEdgeBox`）。
+     * 这条误导正是本轮审计把它当"无闸"的原因，故用守卫钉住措辞与出处。
+     * `setAirInBox` 同理：1.4a 给的是**航程代价**（苏 20 / 轴 30 格），要指向 `planOffMapAirBoxFlight`。
+     */
+    const edge = UNGATED_ACTIONS['moveEdgeBox']!
+    expect(edge.why).toContain('Movement Phase')
+    expect(edge.why).toContain('canEnterEdgeBox')
+    expect(edge.why).not.toContain('原文未给时机')
+
+    const air = UNGATED_ACTIONS['setAirInBox']!
+    expect(air.why).toContain('航程代价')
+    expect(air.why).toContain('planOffMapAirBoxFlight')
+  })
+
   it('分类词表不许出现"其他/待定"这类兜底（否则等于没分类）', () => {
     const kinds = new Set<UngatedKind>(Object.values(UNGATED_ACTIONS).map((entry) => entry.kind))
     const allowed: readonly UngatedKind[] = [

@@ -427,9 +427,40 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     kind: 'noTiming',
     why: '14.11 基地转移：原文未给阶段限制（不是 14.1g 的"任务"）⇒ 取保守值，不施加未明定的限制',
   },
-  setAirInBox: { kind: 'noTiming', why: '1.4a 地图外空军盒：原文未给时机' },
-  activateAirBox: { kind: 'noTiming', why: '1.4a 盒内免费整备：原文未给时机' },
-  hideInFormationBox: { kind: 'noTiming', why: '13.7 编队收纳盒：原文未给时机' },
-  revealFromFormationBox: { kind: 'noTiming', why: '13.7 同上' },
-  moveEdgeBox: { kind: 'noTiming', why: '1.4b 边缘盒：原文未给时机' },
+  setAirInBox: {
+    kind: 'noTiming',
+    /*
+     * 专规 1.4a 原文只给**航程代价**，不给阶段：
+     *   「Moving between the Soviet player's Red Air Force Box and the map's 62.xx row
+     *     costs 20 hexes of range. … the Axis … 01.xx row costs 30 hexes of range.」
+     * ⇒ 不加时机闸（原文没给）；但**射程必须够**，判据在 `planOffMapAirBoxFlight`（本轮接线）。
+     */
+    why: '1.4a 原文只给航程代价（苏 20 / 轴 30 格）、未给阶段 ⇒ 不设时机闸；射程判据见 planOffMapAirBoxFlight',
+  },
+  activateAirBox: {
+    kind: 'noTiming',
+    why: '1.4a「Any number of planes in these boxes can be refit each turn (no cost)」⇒ 盒内整备无时机限制',
+  },
+  hideInFormationBox: {
+    kind: 'noTiming',
+    why: '13.7 B「可以自由移动到标记中…这不需要额外消耗 MP」⇒ 原文明确不限时机',
+  },
+  revealFromFormationBox: {
+    kind: 'noTiming',
+    why: '13.7 B 同上（进出编队标记都不耗 MP、不限时机）',
+  },
+  moveEdgeBox: {
+    kind: 'noTiming',
+    /*
+     * ★ 修（2026-10-30）：这里原写「1.4b 边缘盒：原文未给时机」——**与原文相反**。
+     * 专规 1.4b：「During their **Movement Phase**, Soviet ground units (only) can move between …
+     *   by spending 1 MP or by using Rail Cap. Note this is the only time that off-map movement is
+     *   allowed by ground units (**no retreats and no entry/exit during the Reaction or Exploitation
+     *   Phase**).」
+     * ⇒ 时机有硬约束，只是判在**引擎**（`canEnterEdgeBox`：阵营 / 阶段 / 单位类型 / 边缘补给源格），
+     *   不是 ACTION_GATES 的环节键，故 kind 仍记 noTiming（本表只登记"有没有环节键"），
+     *   但 why 必须写清真实判据在哪，免得后人再把它当"无闸"。
+     */
+    why: '1.4b 时机是硬约束（仅本方 Movement Phase、禁 Reaction/Exploitation 进出）⇒ 由引擎 canEnterEdgeBox 判，不走 ACTION_GATES 环节键',
+  },
 }

@@ -15,6 +15,7 @@ import {
   alarmMixRows,
   axisDrawPool,
   airBoxView,
+  planOffMapAirBoxFlight,
   allBoxViews,
   boxArtwork,
   breakdownBoxView,
@@ -699,6 +700,28 @@ describe('W7 C12：地图外空军盒（1.4a）与边缘盒（1.4b）', () => {
     expect(view.holdings).toHaveLength(1)
     expect(view.notes.join('｜')).toContain('进入即须**停止移动**')
     expect(edgeBoxView({ box: 'northeast', units: [] }).connection).toBe('northAndEast')
+  })
+
+  /*
+   * 专规 1.4a 原文：「Moving between the Soviet player's Red Air Force Box and the map's
+   * 62.xx row **costs 20 hexes of range**. / ... the Axis ... 01.xx row **costs 30 hexes of range**.」
+   * ⇒ 代价是**固定航程**，射程不足就飞不进去。修前 store 只改盒成员、不裁断（等于免费瞬移）。
+   */
+  it('★ 1.4a：往返图外空军盒是**固定航程代价**（苏 20 / 轴 30），射程不足即不可飞', () => {
+    expect(planOffMapAirBoxFlight({ side: 'soviet', rangeHexes: 20 })).toMatchObject({
+      ok: true,
+      data: { rangeCost: 20 },
+    })
+    expect(planOffMapAirBoxFlight({ side: 'axis', rangeHexes: 30 })).toMatchObject({
+      ok: true,
+      data: { rangeCost: 30 },
+    })
+    // 数据里的真实反例：苏方 I.153 射程 15 ⇒ 只能落图上基地
+    const short = planOffMapAirBoxFlight({ side: 'soviet', rangeHexes: 15 })
+    expect(short.ok).toBe(false)
+    expect(short.ok === false && short.reason).toContain('offMapBoxBeyondRange')
+    // 轴方门槛是 30（不是 20）：29 格也不够
+    expect(planOffMapAirBoxFlight({ side: 'axis', rangeHexes: 29 }).ok).toBe(false)
   })
 })
 
