@@ -46,6 +46,7 @@ import {
   airBaseBuildCostSp,
   airBoxEdgeColumn,
   airBoxRangeHexes,
+  planOffMapAirBoxFlight,
   claimFrontalReserves,
   constructionTaskCostsSp,
   frontalReservesBatch,
@@ -13719,6 +13720,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
               distanceHexes: hexDistance(air.hex, baseHexTo),
             }).ok
           },
+          /*
+           * 专规 1.4a：图外空军盒是**永远存在**的空军基地（用户 2026-10-30 口径：
+           * 「不可能没有空军基地，因为至少有图外的」）⇒ 图上 2 倍航程内无处可去时，
+           * 射程够 20/30 格就回盒，连盒都够不着才摧毁。判据与 `planOffMapAirBoxFlight` 同源。
+           */
+          offMapBox: (aircraftId: string) => {
+            const air = airUnits.value.find((item) => item.instanceId === aircraftId)
+            if (air === undefined) return null
+            const flight = planOffMapAirBoxFlight({
+              side: air.side,
+              rangeHexes: air.rangeHexes,
+            })
+            if (!flight.ok) return null
+            return { col: airBoxEdgeColumn(air.side), row: air.hex.row }
+          },
         },
       }),
       '基地夺取（9.14f）',
@@ -13747,6 +13763,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         airUnits.value = airUnits.value.filter((entry) => entry.instanceId !== item.id)
         airMissionAirIds.value = airMissionAirIds.value.filter((id) => id !== item.id)
         pushLog('danger', `${air.name} 无处可转（2 倍距离内无友方基地）⇒ 摧毁（9.14f）`, '9.14f')
+        continue
+      }
+      /*
+       * 专规 1.4a：这次"转移"是**飞回图外空军盒**（盒即基地、容量无限）
+       * ⇒ 只落盒成员账本并转非激活，**不改 `hex`**（盒没有地图格，改 hex 会把它摆在图上）。
+       */
+      if (item.toOffMapBox === true) {
+        setAirInBoxMembership(air.instanceId, true)
+        air.airStatus = 'inactive'
+        pushLog(
+          'warning',
+          `${air.name} 无处转场 ⇒ 飞回图外空军盒并转非激活（9.14f / 专规 1.4a）`,
+          '专规 1.4a',
+        )
         continue
       }
       if (item.hex !== null) {

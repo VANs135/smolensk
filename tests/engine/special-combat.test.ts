@@ -397,6 +397,56 @@ describe('9.14f 空军基地夺取与飞机损失', () => {
     })
   })
 
+  it('★ 专规 1.4a：图上无友方基地时**先回图外盒**（盒即基地），连盒都够不着才摧毁', () => {
+    /*
+     * 用户 2026-10-30 口径：「不可能没有空军基地，因为至少有图外的」⇒ 9.14f 的逃避目的地
+     * 不能只有图上基地；够得着盒（射程 ≥ 20/30 格）就该飞回盒。
+     */
+    const toBox = run({
+      objects: [object({ id: 'ab', kind: 'airBase', level: 1 })],
+      aircraft: [{ id: 'p1', active: false, roll2d6: 12 }],
+      aircraftEscape: {
+        friendlyBases: () => [],
+        canTransferTo: () => false,
+        offMapBox: () => ({ col: 62, row: 13 }),
+      },
+    })
+    expect(toBox.ok && toBox.data.aircraft[0]).toMatchObject({
+      fate: 'transferred',
+      hex: { col: 62, row: 13 },
+      toOffMapBox: true,
+      inactiveAfter: true,
+    })
+
+    // 图上基地可用时优先图（不改变既有行为），即便盒也够得着
+    const toMap = run({
+      objects: [object({ id: 'ab', kind: 'airBase', level: 1 })],
+      aircraft: [{ id: 'p1', active: false, roll2d6: 12 }],
+      aircraftEscape: {
+        friendlyBases: () => [{ col: 40, row: 13 }],
+        canTransferTo: () => true,
+        offMapBox: () => ({ col: 62, row: 13 }),
+      },
+    })
+    expect(toMap.ok && toMap.data.aircraft[0]).toMatchObject({
+      fate: 'transferred',
+      hex: { col: 40, row: 13 },
+    })
+    expect(toMap.ok && toMap.data.aircraft[0]?.toOffMapBox).toBeUndefined()
+
+    // 连盒都够不着（offMapBox 返回 null）⇒ 仍按 9.14f 摧毁
+    const nowhere = run({
+      objects: [object({ id: 'ab', kind: 'airBase', level: 1 })],
+      aircraft: [{ id: 'p1', active: false, roll2d6: 12 }],
+      aircraftEscape: {
+        friendlyBases: () => [],
+        canTransferTo: () => false,
+        offMapBox: () => null,
+      },
+    })
+    expect(nowhere.ok && nowhere.data.aircraft[0]?.fate).toBe('destroyed')
+  })
+
   it('格内无被夺取的敌方基地 ⇒ 飞机不掷基地夺取表', () => {
     const outcome = run({
       objects: [],

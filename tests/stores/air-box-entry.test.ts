@@ -74,4 +74,24 @@ describe('专规 1.4a：图外盒起飞的航程扣减（store 级）', () => {
     workbench.setAirTargetFromText(`20.${String(CORE_HEX.row)}`)
     expect(workbench.beginAirMissionNow(), JSON.stringify(workbench.airError ?? null)).toBe(true)
   })
+
+  it('★ 9.14f + 1.4a：基地被占且图上无处转场 ⇒ 飞回图外盒（进盒成员），不是摧毁', () => {
+    /*
+     * 用户 2026-10-30 口径：「不可能没有空军基地，因为至少有图外的」。
+     * 夹具：全图只有这一座轴方基地、且它被夺取 ⇒ `friendlyBases` 为空；
+     * 该机射程 41 ≥ 轴方盒代价 30 ⇒ 应飞回盒并转非激活（修前：直接摧毁）。
+     */
+    const workbench = newStore()
+    const plane = setupPlane(workbench)
+    const base = workbench.units.find((unit) => unit.noncombatKind === 'air_base')!
+    // 9.14f 表 17-6：强制掷 12（+2 非激活/激活修正后仍无损失）
+    workbench.airInputs.baseCaptureDice = 12
+
+    expect(workbench.captureAirBaseNow(base.instanceId)).toBe(true)
+    // 飞机还在（没被摧毁），进了图外盒并转非激活
+    expect(workbench.airUnits.some((item) => item.instanceId === plane.instanceId)).toBe(true)
+    expect(workbench.airBoxMembers).toContain(plane.instanceId)
+    expect(workbench.airUnits[0]!.airStatus).toBe('inactive')
+    expect(workbench.log.some((entry) => entry.text.includes('飞回图外空军盒'))).toBe(true)
+  })
 })

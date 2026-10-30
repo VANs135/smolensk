@@ -155,6 +155,13 @@ export interface AircraftOutcome {
   fate: 'transferred' | 'destroyed'
   /** 转移落点（fate='transferred' 时给出） */
   hex: HexRef | null
+  /**
+   * 专规 1.4a：这次转移是**飞回地图外空军盒**（盒即基地、容量无限），不是图上基地
+   *
+   * 用户 2026-10-30 口径：「不可能没有空军基地，因为至少有图外的」⇒ 图上 2 倍航程内
+   * 没有友方基地时，先看能不能飞回盒（代价固定 20/30 格）；连盒都够不着才摧毁。
+   */
+  toOffMapBox?: boolean
   /** 9.14f：无论掷骰前状态如何，幸存者一律**非激活** */
   inactiveAfter: true
 }
@@ -240,6 +247,14 @@ export function resolveSpecialCombat(input: {
   aircraftEscape?: {
     friendlyBases(side: Side): readonly HexRef[]
     canTransferTo(aircraftId: string, baseHex: HexRef): boolean
+    /**
+     * 专规 1.4a：**图外空军盒**作为最后的逃避目的地
+     *
+     * 返回值＝盒的落点标记（用于日志/记录；`null` ＝该机连盒都飞不到）。
+     * 判据由调用方给（射程 ≥ 盒到对应列的固定航程 20/30 格），本函数不猜航程。
+     * 顺序：先试图上友方基地（14.11 两倍航程），**再**试盒——不改变既有结果，只补一条生路。
+     */
+    offMapBox?(aircraftId: string): HexRef | null
   }
 }): RuleOutcome<SpecialCombatResult> {
   const here = input.objects.filter((item) => sameHex(item.hex, input.hex))
@@ -411,10 +426,16 @@ export function resolveSpecialCombat(input: {
       for (const plane of input.aircraft) {
         const modifiedRoll = plane.roll2d6 + (plane.active ? AIR_BASE_CAPTURE_DRM.active : 0) + drm
         const result = resolveAirBaseCapture(modifiedRoll)
-        const destination =
+        const toMapBase =
           input.aircraftEscape
             .friendlyBases(ownerSide)
             .find((hex) => input.aircraftEscape?.canTransferTo(plane.id, hex) === true) ?? null
+        // 专规 1.4a：图上无处可去 ⇒ 先看能不能飞回**图外空军盒**（盒即基地）
+        const toBox =
+          toMapBase === null
+            ? ((input.aircraftEscape.offMapBox?.(plane.id) ?? null) as HexRef | null)
+            : null
+        const destination = toMapBase ?? toBox
         aircraft.push({
           id: plane.id,
           baseCapture: result,
@@ -423,9 +444,13 @@ export function resolveSpecialCombat(input: {
           fate: destination === null ? 'destroyed' : 'transferred',
           hex: destination,
           inactiveAfter: true,
+          ...(toBox === null ? {} : { toOffMapBox: true }),
         })
       }
-      notes.push('9.14f：幸存飞机必须转移并变为非激活；2 倍距离内无友方基地者被摧毁')
+      notes.push(
+        '9.14f：幸存飞机必须转移并变为非激活；2 倍距离内无友方基地者**先看能否飞回图外盒（专规 1.4a）**，' +
+          '连盒都够不着才被摧毁',
+      )
     }
   }
 
