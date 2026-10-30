@@ -231,6 +231,9 @@ describe('13.5：费用与 13.5d 成对重建', () => {
     expect(ok.data.cost).toEqual({ pax: 8 })
     expect(ok.data.holdingsAfter).toEqual({ pax: 1, eq: 0, ftr: 0, tac: 0 })
     expect(ok.data.placements[0]?.stepsAfter).toBe(4)
+    // 结算说明里必须写清"补回几个军力"——费用按每点军力计，账要能对上
+    expect(ok.data.detail).toContain('补回 4 个军力')
+    expect(ok.data.detail).toContain('8x Pax')
   })
 
   it('★ 13.5b：图上有损只补 1 step ⇒ 只收 1 份（2 Pax）', () => {

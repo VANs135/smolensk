@@ -482,7 +482,9 @@ export function planRebuild(input: RebuildRequest): RuleOutcome<RebuildPlan> {
     })),
     detail:
       `${candidate.id} 经 ${describeCost(cost)} 重建于 ${replHex.col}.${replHex.row}` +
-      `（13.5a：HQ 2 格内、无未抵消敌 ZOC；13.5b：不耗 MP，模式由玩家任选）`,
+      // 把"补了几个军力"写进账：重建表是**每点军力**的行价（13.5a「费用因单位类型和**规模**而异」
+      // ＋ 13.5b「可重建任意数量的军力，前提是有足够的补员」），一眼能对上费用
+      `（补回 ${String(stepsRebuilt)} 个军力；13.5a：HQ 2 格内、无未抵消敌 ZOC；13.5b：不耗 MP，模式由玩家任选）`,
   })
 }
 

@@ -66,11 +66,20 @@ const rebuildSuggestion = computed<string | null>(() => {
   })
 })
 
-/** 建议行的费用摘要（取自同一份重建表，界面不自算） */
+/**
+ * 建议行的费用摘要（取自同一份重建表，界面不自算）
+ *
+ * ★ 2026-10-30：表里 `…Div **step** — 2x Pax` 这类行键的价是**每点军力**的价，
+ * 多军力单位重建 N 个军力就付 N 份（13.5a「费用因单位类型和**规模**而异」＋13.5b）。
+ * 界面若只写 "2x Pax" 会让玩家以为总共 2 Pax ⇒ 这里把计价单位一并说清。
+ */
 const rebuildSuggestionLabel = computed<string | null>(() => {
   const suggestion = rebuildSuggestion.value
   if (suggestion === null) return null
-  return rebuildRowChoices.value.find((row) => row.unitType === suggestion)?.sourceLabel ?? null
+  const row = rebuildRowChoices.value.find((item) => item.unitType === suggestion)
+  if (row === undefined) return null
+  const perStep = /step/i.test(row.unitType)
+  return perStep ? `${row.sourceLabel}／每点军力` : row.sourceLabel
 })
 
 /** 13.5c：该候选**不可重建**（数据层 `rebuildable === false`：AR 后有黄点，永久移除） */
