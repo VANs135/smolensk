@@ -146,7 +146,8 @@ describe('13.5a：重建的落点（HQ 2 格内、无未抵消敌 ZOC、图上�
       side: 'axis',
       candidate: infDiv(),
       replHex: hex(30, 20),
-      holdings: holdings({ pax: 2 }),
+      // 4 军力师从死亡堆满血重建 = 4 step × 2 Pax = 8（13.5b + 表行 "Infantry Div step"）
+      holdings: holdings({ pax: 8 }),
       facts: facts(),
     })
     expect(outcome.ok).toBe(false)
@@ -158,7 +159,7 @@ describe('13.5a：重建的落点（HQ 2 格内、无未抵消敌 ZOC、图上�
       side: 'axis',
       candidate: infDiv(),
       replHex: hex(36, 13),
-      holdings: holdings({ pax: 2 }),
+      holdings: holdings({ pax: 8 }),
       facts: facts({ inUnnegatedEnemyZoc: () => true }),
     })
     expect(outcome.ok).toBe(false)
@@ -170,7 +171,8 @@ describe('13.5a：重建的落点（HQ 2 格内、无未抵消敌 ZOC、图上�
       side: 'axis',
       candidate: infDiv({ inDeadPile: false, hex: hex(36, 13), steps: 2, printedSteps: 4 }),
       replHex: hex(36, 13),
-      holdings: holdings({ pax: 2 }),
+      // 补 2 个 step ⇒ 4 Pax
+      holdings: holdings({ pax: 4 }),
       facts: facts(),
     })
     expect(stacked.ok).toBe(true)
@@ -180,7 +182,7 @@ describe('13.5a：重建的落点（HQ 2 格内、无未抵消敌 ZOC、图上�
       side: 'axis',
       candidate: infDiv({ inDeadPile: false, hex: hex(35, 13), steps: 2, printedSteps: 4 }),
       replHex: hex(36, 13),
-      holdings: holdings({ pax: 2 }),
+      holdings: holdings({ pax: 4 }),
       facts: facts(),
     })
     expect(apart.ok).toBe(false)
@@ -191,7 +193,7 @@ describe('13.5a：重建的落点（HQ 2 格内、无未抵消敌 ZOC、图上�
     const missing = planRebuild({
       side: 'axis',
       candidate: infDiv(),
-      holdings: holdings({ pax: 2 }),
+      holdings: holdings({ pax: 8 }),
       facts: facts(),
     })
     expect(missing.ok).toBe(false)
@@ -201,26 +203,63 @@ describe('13.5a：重建的落点（HQ 2 格内、无未抵消敌 ZOC、图上�
       side: 'axis',
       candidate: infDiv(),
       replHex: hex(36, 13),
-      holdings: holdings({ pax: 2 }),
+      holdings: holdings({ pax: 8 }),
       facts: facts(),
     })
     if (!ok.ok) return
     expect(ok.data.placements[0]?.mpSpent).toBe(0)
+    expect(ok.data.cost).toEqual({ pax: 8 })
   })
 })
 
 describe('13.5：费用与 13.5d 成对重建', () => {
-  it('13.5：步兵师步损 = 2x Pax（照重建表行键取费）', () => {
+  it('★ 13.5b：多军力师**按 step 计费**（4 军力从死亡堆满血重建 = 4 × 2 Pax = 8）', () => {
+    /*
+     * 表行键写的是 "Infantry Div **step** — 2x Pax"，13.5b「可重建**任意数量的军力**
+     * （前提是有足够的补员）」⇒ 每补回 1 step 付一份行价。
+     * 修前恒按 1 份收（2 Pax）却回来 4 个军力 —— 少收三份。
+     */
     const ok = planRebuild({
       side: 'axis',
       candidate: infDiv(),
       replHex: hex(36, 13),
-      holdings: holdings({ pax: 3 }),
+      holdings: holdings({ pax: 9 }),
       facts: facts(),
     })
+    expect(ok.ok).toBe(true)
+    if (!ok.ok) return
+    expect(ok.data.cost).toEqual({ pax: 8 })
+    expect(ok.data.holdingsAfter).toEqual({ pax: 1, eq: 0, ftr: 0, tac: 0 })
+    expect(ok.data.placements[0]?.stepsAfter).toBe(4)
+  })
+
+  it('★ 13.5b：图上有损只补 1 step ⇒ 只收 1 份（2 Pax）', () => {
+    const ok = planRebuild({
+      side: 'axis',
+      candidate: infDiv({ inDeadPile: false, hex: hex(36, 13), steps: 3, printedSteps: 4 }),
+      replHex: hex(36, 13),
+      holdings: holdings({ pax: 9 }),
+      facts: facts(),
+    })
+    expect(ok.ok).toBe(true)
     if (!ok.ok) return
     expect(ok.data.cost).toEqual({ pax: 2 })
-    expect(ok.data.holdingsAfter).toEqual({ pax: 1, eq: 0, ftr: 0, tac: 0 })
+    expect(ok.data.placements[0]?.stepsAfter).toBe(4)
+  })
+
+  it('★ 13.5b：`stepsToRestore` 指定补 2 step ⇒ 收 4 Pax（逐点收费）', () => {
+    const ok = planRebuild({
+      side: 'axis',
+      candidate: infDiv({ inDeadPile: false, hex: hex(36, 13), steps: 1, printedSteps: 4 }),
+      replHex: hex(36, 13),
+      stepsToRestore: 2,
+      holdings: holdings({ pax: 9 }),
+      facts: facts(),
+    })
+    expect(ok.ok).toBe(true)
+    if (!ok.ok) return
+    expect(ok.data.cost).toEqual({ pax: 4 })
+    expect(ok.data.placements[0]?.stepsAfter).toBe(3)
   })
 
   it('13.5：补员不足即拒（不静默）', () => {
@@ -232,7 +271,7 @@ describe('13.5：费用与 13.5d 成对重建', () => {
       facts: facts(),
     })
     expect(outcome.ok).toBe(false)
-    if (!outcome.ok) expect(outcome.reason).toBe('insufficientRepl:2x Pax')
+    if (!outcome.ok) expect(outcome.reason).toBe('insufficientRepl:8x Pax')
   })
 
   it('13.5d：成对重建（两个小单位用一个补员）；只剩一个仍消耗一个补员', () => {

@@ -411,6 +411,45 @@ describe('W6 B18：重建与死亡堆（13.5a–c）', () => {
     expect(store.lastRebuild?.cost).toEqual({ pax: 2 })
   })
 
+  it('★ 13.5b：4 军力师从死亡堆满血重建 = **8 Pax**（按 step 计费，不是一份行价）', () => {
+    /*
+     * 表行键写的是 "Infantry Div **step** — 2x Pax"；13.5b「可重建**任意数量的军力**
+     * （**前提是有足够的补员**）」⇒ 每补回 1 step 付一份行价。
+     * 修前：4 军力师满血回来只扣 2 Pax（少收三份）。
+     */
+    const store = newStore()
+    store.setTurn(2)
+    store.setPhase('reinforcement')
+    goToSegmentStep(store, 'reinforcement.rebuild')
+    store.setReplHoldingsNow({ pax: 10, eq: 0, ftr: 0, tac: 0 }, DEFENDER_HEX)
+    place(
+      store,
+      pickRecord('axis', (record) => record.specialized?.includes('hq') === true),
+      DEFENDER_HEX,
+      'axis',
+      'hq-1',
+    )
+    // 轴方步兵师都是 4 军力（数据实测）
+    const div = pickRecord(
+      'axis',
+      (record) => /Inf Div/i.test(record.vassalName ?? '') && (record.steps?.total ?? 1) === 4,
+    )
+    const unit = place(store, div, DEFENDER_HEX, 'axis', 'u1')
+    expect(unit.printedSteps).toBe(4)
+    store.sendToDeadPileNow('u1')
+
+    expect(
+      store.rebuildUnitNow({
+        unitId: 'u1',
+        rebuildType: 'Infantry Div step',
+        replHexText: `${String(DEFENDER_HEX.col)}.${String(DEFENDER_HEX.row)}`,
+      }),
+    ).toBe(true)
+    expect(store.lastRebuild?.cost).toEqual({ pax: 8 })
+    expect(store.replHoldings.pax).toBe(2)
+    expect(store.lastRebuild?.placements[0]?.stepsAfter).toBe(4)
+  })
+
   it('★ 13.5a：圆心 HQ 必须是**战斗模式**（或 DG 朝战斗面）—— 移动模式的 HQ 不作数', () => {
     /*
      * 原文：「所需的补员必须都在一个格中，且要在一个友方指挥部的 2 格内（含 2 格）。

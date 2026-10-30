@@ -383,7 +383,31 @@ export function planRebuild(input: RebuildRequest): RuleOutcome<RebuildPlan> {
 
   const unitsRequested = Math.max(1, Math.trunc(input.unitsRequested ?? 1))
   const pairSize = Math.max(1, Math.trunc(input.pairSize ?? 1))
-  const countersNeeded = Math.ceil(unitsRequested / pairSize)
+  /*
+   * ★ 修（2026-10-30）：费用按**实际重建的 step 数**计，而不是恒定 1 份。
+   *
+   * 重建表的行键本身就写着 "…Div **step**"（`charts-supply-repl.json`：`Infantry Div step — 2x Pax`），
+   * 且 13.5b「被损失军力或被摧毁的多军力单位，在一回合内可以重建**任意数量的军力**
+   * （**前提是有足够的补员**）」⇒ 每补回 1 个 step 付一份行价。
+   * 修前的 `countersNeeded` 只看 `unitsRequested`（缺省 1）⇒ **4 军力的德国步兵师从死亡堆
+   * 满血重建只扣 2 Pax**（应 8 Pax），是一笔实打实的少收账。
+   *
+   * 口径与落点共用同一处 `restoredSteps`：先算出重建后的军力，再倒推补了几个 step。
+   * `unitsRequested`（13.5d 的成对重建）仍保留：取两者较大者，再按 `pairSize` 折算。
+   */
+  const stepsRebuilt = Math.max(
+    0,
+    restoredSteps(candidate, input.stepsToRestore) - (candidate.inDeadPile ? 0 : candidate.steps),
+  )
+  /*
+   * 行键决定计价单位：重建表里写 **"…Div step"** 的行是**每 step 一份**（多军力师逐点重建，13.5b），
+   * 写 **"…Bn / Rgt / Bde / HQ"** 的行是**每算子一份**（这些都是单军力单位，二者等价）。
+   * 只看 `unitsRequested` 会把 4 军力师按 1 份收费；一律按 step 又会把 13.5d 的成对行算错。
+   */
+  const rowForCost = rebuildRow(input.side, candidate.rebuildType)
+  const isStepRow = rowForCost !== null && /step/i.test(rowForCost.unitType)
+  const paidUnits = isStepRow ? Math.max(unitsRequested, stepsRebuilt) : unitsRequested
+  const countersNeeded = Math.ceil(paidUnits / pairSize)
 
   // ③ 费用
   const aircraftCost = candidate.isAircraft ? aircraftReplCost(candidate, unitsRequested) : null
