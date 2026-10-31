@@ -540,7 +540,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       -->
         <label class="field">
           <input v-model="workbench.variableReplInputs.option4_1b" type="checkbox" />
-          启用可选 4.1b（8 Jul / 12 Jul 自动 Supply Train）
+          启用可选 4.1b（8 / 12 / 15 Jul 三个回合自动 Supply Train）
         </label>
         <BaseButton variant="primary" size="sm" @click="workbench.rollVariableReplNow()">
           掷可变增援（1.6b）
@@ -955,7 +955,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         rule="专规 2.3c"
       >
         <p class="muted">
-          方面军预备队（专规 2.3c）：**三个时点**（12 Jul / 1 Aug / 1 Sep ——
+          方面军预备队（专规 2.3c）：**三个时点**（22 Jul / 1 Aug / 1 Sep ——
           **印刷日程**）各到一批，每批 **2 SP、一次编制转化**（旧单位按 1.6a
           **移出游戏**、新单位随当日到达摆放）与**两次免费重建** （一支 IL.2 或一支 HQ
           或火炮单位，玩家择一，从**死亡堆**里挑）；**必须当即领取、不能保存**。

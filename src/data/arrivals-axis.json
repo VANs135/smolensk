@@ -16,7 +16,7 @@
       "entries": {},
       "notes": [
         "Axis Rail Cap is 0 at start.",
-        "No hedgerows above L-1 (1.3b).",
+        "No hedgehogs above Level 1 (1.3b).",
         "Begin Security Needs (3.3b).",
         "Begin Guderian & Hoth (3.4)."
       ]
@@ -1332,6 +1332,7 @@
     },
     "airResult": "all air units of the listed type immediately become Inactive (assigned off-map missions this turn)",
     "supplyTrain": "the Axis gets 2 SP of extra supply at any one detrainable hex (no Rail Cap used)",
-    "option4_1b": "the Supply Train event occurs automatically on both 8 July and 12 July"
+    "option4_1b": "the Supply Train event occurs automatically on 8 July, 12 July and 15 July",
+    "option4_1bDates": ["1941-07-08", "1941-07-12", "1941-07-15"]
   }
 }

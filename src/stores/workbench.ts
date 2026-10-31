@@ -15470,9 +15470,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     randomEventDice: 7,
     autoRoll: true,
     /**
-     * 3.6 / 可选规则 4.1b：是否启用 4.1b（8 Jul / 12 Jul 自动发生 Supply Train）
+     * 3.6 / 可选规则 4.1b：是否启用 4.1b（19 Jul 之前的**三个回合** 8 / 12 / 15 Jul
+     * 自动发生 Supply Train；日期表取 `arrivals-axis.randomEvents.option4_1bDates`）
      *
-     * 缺省 false ＝ 按通规 3.6 走（只有事件期内掷表）；勾上即按可选规则多那两次自动到货。
+     * 缺省 false ＝ 按通规 3.6 走（只有事件期内掷表）；勾上即按可选规则多那三次自动到货。
      */
     option4_1b: false,
   })
@@ -16744,7 +16745,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         randomEventDice,
         // 3.3c：已了结则不再掷（「1 或 6 ⇒ 该单位移除，撤离判定结束」）
         variableExitResolved: variableExitResolved.value,
-        // 3.6 / 4.1b：可选规则 4.1b 的 Supply Train（8 Jul / 12 Jul 自动发生）
+        // 3.6 / 4.1b：可选规则 4.1b 的 Supply Train（8 / 12 / 15 Jul 自动发生）
         option4_1b: inputs.option4_1b,
       }),
       '可变增援',

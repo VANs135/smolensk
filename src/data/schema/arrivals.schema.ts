@@ -105,6 +105,8 @@ export const RandomEventsSchema = z
     table: z.record(z.string(), z.string()),
     airResult: z.string().optional(),
     supplyTrain: z.string().optional(),
+    /** 可选 4.1b：Supply Train 自动发生的回合（ISO 日期；19 Jul 之前的三个回合 8/12/15 Jul） */
+    option4_1bDates: z.array(z.string()).optional(),
     option4_1b: z.string().optional(),
   })
   .strict()

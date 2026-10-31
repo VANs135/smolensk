@@ -238,14 +238,21 @@ describe('3.6：轴方随机事件（19 Jul–15 Aug）', () => {
     if (!missing.ok) expect(missing.reason).toBe('randomEventDieRequired:1941-07-19')
   })
 
-  it('4.1b（可选）：8 Jul 与 12 Jul 自动发生 Supply Train', () => {
-    expect(planRandomEvent({ date: '1941-07-08', option4_1b: true })).toMatchObject({
-      kind: 'supplyTrain',
-      sp: 2,
-    })
-    expect(planRandomEvent({ date: '1941-07-12', option4_1b: true })).toMatchObject({
-      kind: 'supplyTrain',
-    })
+  it('★ 4.1b（可选）：19 Jul 之前的**三个回合**（8 / 12 / 15 Jul）都自动发生 Supply Train', () => {
+    /*
+     * 原文（Smolensk 专规 4.1b）：「apply the 'Supply Train' event on the **three turns before
+     * 19 July** (when event rolls start)」；轴心到达卡：「occurs automatically on
+     * **8 July through 15 July**」。回合是 8 / 12 / 15 Jul ⇒ 三次。
+     * 修前只做了 8 Jul 与 12 Jul（少一次 15 Jul 的 2 SP）。
+     */
+    for (const date of ['1941-07-08', '1941-07-12', '1941-07-15'])
+      expect(planRandomEvent({ date, option4_1b: true }), date).toMatchObject({
+        kind: 'supplyTrain',
+        sp: 2,
+      })
+    // 19 Jul 起走 3.6 的掷表（不给骰面就返回 null）；18 Jul 不在表里
+    expect(planRandomEvent({ date: '1941-07-18', option4_1b: true })).toBeNull()
+    expect(planRandomEvent({ date: '1941-07-19', option4_1b: true })).toBeNull()
     // 未启用 4.1b 时，事件期外不掷
     expect(planRandomEvent({ date: '1941-07-08', option4_1b: false })).toBeNull()
   })

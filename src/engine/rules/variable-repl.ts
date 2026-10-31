@@ -224,7 +224,13 @@ function buildSpecialGrant(side: Side, die: number): SpecialReplGrant {
 /**
  * 3.6：轴方随机事件
  *
- * 事件期内（19 Jul–15 Aug）必掷；可选 4.1b 另在 8 Jul 与 12 Jul 自动发生 Supply Train。
+ * 事件期内（19 Jul–15 Aug）必掷；可选 4.1b 另在 **19 Jul 之前的三个回合**自动发生 Supply Train。
+ *
+ * ★ 修（2026-11-01）：4.1b 的原文是「apply the 'Supply Train' event on the **three turns before
+ *   19 July**」——回合是 8 / 12 / 15 Jul，故应为**三次**；轴心到达卡也写着
+ *   「occurs automatically on **8 July through 15 July**」。修前只做了 8 Jul 与 12 Jul（少一次）。
+ *   日期表由数据给（`arrivals-axis.randomEvents.option4_1bDates`），引擎不写死。
+ *
  * 返回 null 表示「当前不掷（不在事件期且无 4.1b 自动项）或未给骰面」。
  */
 export function planRandomEvent(input: {
@@ -232,8 +238,9 @@ export function planRandomEvent(input: {
   dice?: number
   option4_1b?: boolean
 }): RandomEventResult | null {
-  // 4.1b：8 Jul / 12 Jul 自动 Supply Train
-  if (input.option4_1b === true && (input.date === '1941-07-08' || input.date === '1941-07-12')) {
+  // 4.1b：19 Jul 之前的三个回合（8 / 12 / 15 Jul）自动 Supply Train
+  const optionDates = arrivalsAxis.randomEvents?.option4_1bDates ?? []
+  if (input.option4_1b === true && optionDates.includes(input.date)) {
     return {
       roll: 0,
       kind: 'supplyTrain',

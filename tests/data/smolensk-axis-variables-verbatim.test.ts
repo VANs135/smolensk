@@ -45,8 +45,15 @@ describe('Random Events（3.6）', () => {
     expect(randomEvents.supplyTrain).toContain('no Rail Cap')
   })
 
-  it('可选 4.1b：Supply Train 改为 8 Jul / 12 Jul 自动发生', () => {
+  it('★ 可选 4.1b：Supply Train 在 19 Jul 之前的**三个回合**（8 / 12 / 15 Jul）自动发生', () => {
+    /*
+     * 印卡原文：「If Option 4.1b is used, the 'Supply Train' event occurs automatically on
+     * **8 July through 15 July**.」；专规 4.1b：「on the **three turns before 19 July**」。
+     * ⇒ 8 / 12 / 15 Jul 三次（修前数据与引擎都只做 8 / 12 两次）。
+     */
     expect(randomEvents.option4_1b).toContain('8 July')
     expect(randomEvents.option4_1b).toContain('12 July')
+    expect(randomEvents.option4_1b).toContain('15 July')
+    expect(randomEvents.option4_1bDates).toEqual(['1941-07-08', '1941-07-12', '1941-07-15'])
   })
 })
