@@ -150,17 +150,17 @@
           "armor": {
             "kind": "multiplier",
             "mult": [1, 2],
-            "attackerOnly": true
+            "attackerOnly": false
           },
           "mech": {
             "kind": "multiplier",
             "mult": [1, 2],
-            "attackerOnly": true
+            "attackerOnly": false
           },
           "other": {
             "kind": "multiplier",
             "mult": [1, 1],
-            "attackerOnly": true
+            "attackerOnly": false
           }
         },
         "note": "Track/Truck 列 P → 轮式与履带必须沿路才能进入与攻击（9.1f）；Leg 可不依赖道路进入（3 MP）"
