@@ -791,10 +791,20 @@ describe('W7 C12：编队收纳盒（13.7 / 3.6f）', () => {
 /* ────────────────────────────── 美工接口与总览 ────────────────────────────── */
 
 describe('W7 C12：盒子美工接口与总览', () => {
-  it('C12：数据未提供盒图 ⇒ artwork 为 null（界面退化为纯文字盒，不影响判定）', () => {
-    expect(markers.containers.artwork).toBeUndefined()
-    expect(boxArtwork('dead-pile-axis')).toBeNull()
-    expect(deadPileView({ side: 'axis', units: [] }).artwork).toBeNull()
+  it('C12：盒图走数据（`containers.artwork`）；未登记的盒仍为 null（退化纯文字，不影响判定）', () => {
+    /*
+     * 用户 2026-09-16 裁定 E-4：盒与表格直接用素材库的辅助卡图。
+     * 2026-11-01 之前 `containers.artwork` 恒空（盒卡只有文字）；现已登记死亡堆 ×2、
+     * 图外空军盒 ×2、边缘盒 ×2、拆分盒 ×2 —— 键与图档的存在性由
+     * `tests/data/box-artwork.test.ts` 另外钉住，这里只验接口真的把数据透出来。
+     */
+    expect(markers.containers.artwork).toBeDefined()
+    expect(boxArtwork('dead-pile-axis')?.imageKey).toContain('/aux-cards/')
+    expect(deadPileView({ side: 'axis', units: [] }).artwork?.imageKey).toBe(
+      boxArtwork('dead-pile-axis')?.imageKey,
+    )
+    // 未登记图档的盒照旧 null
+    expect(boxArtwork('formation-10 Mtr Div')).toBeNull()
   })
 
   it('C12：总览一次列出双方死亡堆/拆分盒/特殊补员盒/空军盒 + 两个边缘盒 + 剧本抽取盒', () => {

@@ -507,6 +507,58 @@
         "rangeHexes": 20,
         "edgeRow": 62
       }
-    ]
+    ],
+    "artwork": {
+      "dead-pile-axis": {
+        "imageKey": "/aux-cards/German%20Dead%20Pile.png",
+        "widthPx": 731,
+        "heightPx": 344,
+        "note": "印卡 German Dead Pile.png（轴心国死亡堆盒）：13.5 的重建来源，盒面与卡图一致"
+      },
+      "dead-pile-soviet": {
+        "imageKey": "/aux-cards/Russian%20Dead%20Pile.png",
+        "widthPx": 731,
+        "heightPx": 344,
+        "note": "印卡 Russian Dead Pile.png（苏联死亡堆盒）"
+      },
+      "axis-air-box": {
+        "imageKey": "/aux-cards/German%20Airfields1.png",
+        "widthPx": 906,
+        "heightPx": 700,
+        "columns": 2,
+        "note": "印卡 Luftwaffe Off-map Box：Active / Inactive 两栏，卡面注明「30 Hexes to West Edge - Unlimited Refit」（专规 1.4a）"
+      },
+      "soviet-air-box": {
+        "imageKey": "/aux-cards/RussianAirfields.png",
+        "widthPx": 906,
+        "heightPx": 700,
+        "columns": 2,
+        "note": "印卡 Red Air Force Box：Active / Inactive 两栏（专规 1.4a，苏方 20 格）"
+      },
+      "edge-northeast": {
+        "imageKey": "/aux-cards/boxes/soviet-northeast.png",
+        "widthPx": 426,
+        "heightPx": 357,
+        "note": "从 Russian-Offboard4.png 裁出的 Northeast Box 面板（专规 1.4b）"
+      },
+      "edge-southeast": {
+        "imageKey": "/aux-cards/boxes/soviet-southeast.png",
+        "widthPx": 434,
+        "heightPx": 357,
+        "note": "从 Russian-Offboard4.png 裁出的 Southeast Box 面板（专规 1.4b）"
+      },
+      "breakdown-axis": {
+        "imageKey": "/aux-cards/boxes/axis-breakdown.png",
+        "widthPx": 393,
+        "heightPx": 294,
+        "note": "从 German-Offboard-2.png 裁出的 Breakdown Regiments 面板（1.8a / 20.0g）"
+      },
+      "breakdown-soviet": {
+        "imageKey": "/aux-cards/boxes/soviet-breakdown.png",
+        "widthPx": 434,
+        "heightPx": 328,
+        "note": "从 Russian-Offboard4.png 裁出的 Breakdown Regiments 面板（1.8a / 20.0g）"
+      }
+    }
   }
 }

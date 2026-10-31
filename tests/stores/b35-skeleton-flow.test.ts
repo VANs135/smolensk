@@ -1,9 +1,9 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
-import { auxCards, panelScans } from '@/data'
+import { auxCards, markers, panelScans } from '@/data'
 import { useWorkbenchStore } from '@/stores'
 
 /**
@@ -133,9 +133,28 @@ describe('批 D 切片 1：界面收口（右栏 / 盒图 / 辅助卡）', () =>
     const declared = new Set<string>()
     for (const card of auxCards.cards) declared.add(card.image)
     for (const scan of panelScans.scans) declared.add(scan.image)
-    const onDisk = readdirSync('public/aux-cards')
+    /*
+     * 盒图（`markers.containers.artwork`）也引用本目录下的图 —— 含 `boxes/` 子目录里
+     * 从大卡裁出的单面板（专规 1.4b 的边缘盒、1.8a 的拆分盒）。它们同样是「被引用的图」。
+     */
+    for (const entry of Object.values(markers.containers.artwork ?? {})) {
+      const key = entry.imageKey
+      if (key === null) continue
+      declared.add(decodeURIComponent(key.replace(/^\/aux-cards\//, '')))
+    }
+    const onDisk = readdirSync('public/aux-cards').filter(
+      (name) => !statSync(`public/aux-cards/${name}`).isDirectory(),
+    )
+    // 顶层与子目录**分别**核对引用（子目录不能被"整目录视为已引用"糊过去）
     const orphans = onDisk.filter((name) => !declared.has(name))
+    const subOrphans = readdirSync('public/aux-cards/boxes')
+      .map((name) => `boxes/${name}`)
+      .filter((name) => !declared.has(name))
     expect(orphans, '这些图没有任何清单引用（同步脚本只拷不删，删条目会留孤儿）').toEqual([])
+    expect(
+      subOrphans,
+      'public/aux-cards/boxes/ 里有没被 markers.containers.artwork 引用的图',
+    ).toEqual([])
     // note 不再提"数据表"那一面（B35 切片 A 已把它从托盘删掉）
     const stale = panelScans.scans.filter((scan) => (scan.note ?? '').includes('数据表'))
     expect(stale.map((scan) => scan.id)).toEqual([])
