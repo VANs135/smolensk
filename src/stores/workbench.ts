@@ -15495,6 +15495,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       .filter((hex): hex is HexRef => hex !== undefined)
   })
 
+  /**
+   * 专规 2.1a：**当日仍开放**的图边补给源格
+   *
+   * 原文（2.1a）：「These supply sources cease to exist on fixed dates: **Entry L on 19 July**.
+   *   **Entry E (and all South edge sources west of there) on 19 August**.」
+   *
+   * ★ 修（2026-11-01）：`scenarioSupplySourceHexes` 是剧本的 **live 清单、不看日期**，
+   *   而 2.1/3.1 的落点规则是「其余 SP 放**图边补给源格**」「补员/突围返场同理」——
+   *   关停之后那些格**不再是补给源**，却仍能接货。修前 `arrivalFacts.edgeSupplySourceHexes()`
+   *   与免费铁运的余额落点都直接用原始清单 ⇒ 19 Jul 之后还能往 20.35 塞 SP。
+   *   现在两处都改用本投影（与 1.1b 的 `safeEdgeHexesBySide` 同一份判据、同一份事实）。
+   */
+  const openSupplySourceHexes = computed<HexRef[]>(() => {
+    const statuses = supplySourceStatuses({
+      side: activeSide.value,
+      date: date.value,
+      sources: scenarioSupplySourceHexes.value,
+      facts: SHUTDOWN_FACTS,
+    })
+    const open = new Set(statuses.filter((item) => item.open).map((item) => hexLabel(item.hex)))
+    return scenarioSupplySourceHexes.value.filter((hex) => open.has(hexLabel(hex)))
+  })
+
   /** 地图边缘格（13.6b 的后备落点）：至少缺一个邻格的图内格 */
   const mapEdgeHexes = computed<HexRef[]>(() => {
     const inside = new Set(mapLayers.hexes.map((hex) => `${hex.col}.${hex.row}`))
@@ -15564,7 +15587,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
             (unit.specialized.includes('hq') || unit.throwRange !== null),
         )
         .map((unit) => ({ ...unit.hex })),
-    edgeSupplySourceHexes: () => scenarioSupplySourceHexes.value.map((hex) => ({ ...hex })),
+    // 2.1a：关停的源不再是补给源，故不能作落点
+    edgeSupplySourceHexes: () => openSupplySourceHexes.value.map((hex) => ({ ...hex })),
     westEdgeHexes: () =>
       mapEdgeHexes.value.filter((hex) => isWestEdge(hex)).map((hex) => ({ ...hex })),
     // 北缘＝没有图内北邻（曾用「行号 ≥ 上界 − 1」的近似：多算 52 格、漏 10 格削角北缘）
@@ -15637,8 +15661,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       detrainableHexes: detrainableHexes.value,
       picked: freeRailPicked.value,
       // 余额的落点缺省取本剧本**本方的图边补给源格第一处**（原文只说"放图边补给源格"，不指定哪一处）
-      edgeHex: freeRailEdgeHex.value ?? scenarioSupplySourceHexes.value[0] ?? null,
-      edgeSourceHexes: scenarioSupplySourceHexes.value,
+      // 2.1a：余额只能落**当日仍开放**的图边补给源格
+      edgeHex: freeRailEdgeHex.value ?? openSupplySourceHexes.value[0] ?? null,
+      edgeSourceHexes: openSupplySourceHexes.value,
       supplyTrainSp: supplyTrainSp.value,
       supplyTrainHex: supplyTrainHex.value,
     })
@@ -20243,6 +20268,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     pickFreeRailEdgeHex,
     // 图边补给源格（2.1 / 3.1）：到货余额的落点候选，也是 1.1b 安全边缘格的来源
     scenarioSupplySourceHexes,
+    openSupplySourceHexes,
     supplyArrivalSp,
     supplyTrainSp,
     supplyTrainHex,
