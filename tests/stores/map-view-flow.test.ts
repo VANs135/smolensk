@@ -481,4 +481,29 @@ describe('批 A 切片 3：单一对话框与候选过滤', () => {
         .sort(),
     ).toEqual(['e1', 'm1', 'm2'])
   })
+
+  it('★ 专规 1.4a：驻在图外空军盒的飞机**不画在地图上**（出盒后恢复）', () => {
+    const { workbench, mapView } = newStores()
+    workbench.setPhase('movement')
+    workbench.setActiveSide('soviet')
+    workbench.setAirActive(true)
+    const choice = workbench.airUnitChoices.find((item) => (item.rangeHexes ?? 0) >= 20)!
+    expect(
+      workbench.addAirUnit(choice.aircraftId, `${String(START.col)}.${String(START.row)}`),
+    ).toBe(true)
+    const plane = workbench.airUnits[0]!
+    const airTokenIds = () =>
+      mapView.overlay.tokens.filter((token) => token.air === true).map((token) => token.id)
+
+    // 在图上：画在该格
+    expect(airTokenIds()).toContain(plane.instanceId)
+
+    // 进盒：图上不再有它（盒卡里列出，见 ContainersPanel）
+    workbench.setAirInBoxMembership(plane.instanceId, true)
+    expect(airTokenIds()).not.toContain(plane.instanceId)
+
+    // 出盒：回到图上
+    workbench.setAirInBoxMembership(plane.instanceId, false)
+    expect(airTokenIds()).toContain(plane.instanceId)
+  })
 })

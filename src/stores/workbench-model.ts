@@ -1670,13 +1670,20 @@ export function airRangeFromBase(air: ConsoleAirUnit, targetHex: HexRef): number
 export function toAirBarrageUnitRequest(
   air: ConsoleAirUnit,
   targetHex: HexRef,
+  /**
+   * 10.2b 的「距基地格数」由调用方覆盖（专规 1.4a：驻**图外空军盒**的飞机，
+   * 基地就是盒本身 ⇒ 距离是"盒到连接列 20/30 格 + 列差"）
+   *
+   * 不给则按 `air.hex`（即图上基地格）算，与修前一致。
+   */
+  rangeFromBase?: number,
 ): BarrageUnitRequest {
   return {
     unitId: air.instanceId,
     // 14.1b/14.4f：减损机用**减损面**的轰炸值（`airBarrageStrengthOf` 唯一判据）
     printedValue: airBarrageStrengthOf(air),
     ...(isStrategicBomberAircraft(air.aircraftType) ? { strategicBomber: true } : {}),
-    rangeFromBase: airRangeFromBase(air, targetHex),
+    rangeFromBase: rangeFromBase ?? airRangeFromBase(air, targetHex),
   }
 }
 

@@ -104,6 +104,35 @@ describe('专规 1.4：盒内的飞机**不在图上任何一格**（1.4「盒�
   })
 })
 
+describe('专规 1.4a：任务面板的航程判定也按「盒 = 基地」算', () => {
+  /*
+   * 1.4a 的航程模型：盒内飞机「从对应列入场，剩余航程 = 印刷航程 − 20/30 格」。
+   * 修前任务编成阵列（`airMissionJoinChoices`）与 `anyOwnAircraftReaches` 都用 `air.hex`
+   * （盒内飞机保留的原位格）算距离 ⇒ 面板会把够得到的盒内飞机灰显成"14.1 够不到"。
+   * 轴方盒代价 30、连接列 1；本机 41 格 ⇒ 盒内可用 11 格。
+   */
+  it('★ 盒内飞机：11 格内不灰显，超出即灰显（10.2b 的「距基地格数」同步按盒算）', () => {
+    const workbench = newStore()
+    const plane = setupPlane(workbench)
+    workbench.setAirInBoxMembership(plane.instanceId, true) // 驻进图外盒
+
+    // 目标 col 10、同行：1 → 10 = 9 格（≤ 11）⇒ 不该灰显
+    workbench.setAirTargetFromText(`10.${String(CORE_HEX.row)}`)
+    const near = workbench.airMissionJoinChoices.find(
+      (item) => item.air.instanceId === plane.instanceId,
+    )
+    expect(near, '盒内飞机应出现在任务编成阵列里').toBeDefined()
+    expect(near!.disabledReason).toBeNull()
+
+    // 目标 col 20：1 → 20 = 19 格（> 11）⇒ 灰显为 14.1 够不到
+    workbench.setAirTargetFromText(`20.${String(CORE_HEX.row)}`)
+    const far = workbench.airMissionJoinChoices.find(
+      (item) => item.air.instanceId === plane.instanceId,
+    )
+    expect(far!.disabledReason).toBe('14.1：该机航程够不到任务格')
+  })
+})
+
 describe('专规 1.4a：图外盒起飞的航程扣减（store 级）', () => {
   it('★ 盒里的飞机：近处目标（列差 1 ≤ 剩 11）可以，远处（列差 19）被拒', () => {
     // ① 在盒里：41 − 30（轴方盒代价）= 剩 11 格

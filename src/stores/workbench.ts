@@ -2836,7 +2836,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const barrageAirFacts = computed(() => {
     const target = barrageTargetHex.value
     return barrageAirCandidates.value.map((unit) => {
-      const distance = target === null ? null : airRangeFromBase(unit, target)
+      const distance = target === null ? null : airDistanceFromRealBase(unit, target)
       return {
         id: unit.instanceId,
         name: unit.name,
@@ -9773,7 +9773,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           // 10.1a：地面（火炮）不带距基地事实，其射程由引擎另行判定
           ...firingGround.map((unit) => toBarrageUnitRequest(unit, targetHex)),
           // 10.2b / 14.1e：空军带「距其基地（= 所在格）格数」与「是否战略轰炸机」
-          ...firingAir.map((unit) => toAirBarrageUnitRequest(unit, targetHex)),
+          ...firingAir.map((unit) =>
+            // 专规 1.4a：盒内驻机的"距基地格数"按盒算（20/30 + 列差），与任务航程同源
+            toAirBarrageUnitRequest(unit, targetHex, airDistanceFromRealBase(unit, targetHex)),
+          ),
         ],
         facts: {
           /*
@@ -13196,7 +13199,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
                 : canPerformMissionThisPhase(air.missionsFlownThisPhase)
                   ? // 条 19（A1）：**按航程列机** —— 已定任务格时，够不到目标格的机在阵列里灰显（14.1）
                     airTargetHex.value !== null &&
-                    airRangeFromBase(air, airTargetHex.value) > air.rangeHexes
+                    airDistanceFromRealBase(air, airTargetHex.value) > air.rangeHexes
                     ? '14.1：该机航程够不到任务格'
                     : null
                   : '14.2e：本机本阶段已执行过一次任务'
@@ -13214,7 +13217,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function anyOwnAircraftReaches(hex: HexRef): boolean {
     return ownAirUnits.value.some(
-      (air) => canFlyMission(air.airStatus) && airRangeFromBase(air, hex) <= air.rangeHexes,
+      (air) => canFlyMission(air.airStatus) && airDistanceFromRealBase(air, hex) <= air.rangeHexes,
     )
   }
 
@@ -13490,6 +13493,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   function airUnitsAt(hex: HexRef, side: Side): ConsoleAirUnit[] {
     return onMapAirUnits.value.filter((air) => air.side === side && sameHex(air.hex, hex))
+  }
+
+  /**
+   * 专规 1.4a：该机**从它真正的基地**飞到目标格的格数
+   *
+   * 图上的飞机，基地＝所在格（14.1a）；驻在**图外空军盒**的飞机，基地＝盒本身
+   * ⇒ 距离＝「盒到连接列（苏 62 / 轴 1）的固定航程 20/30」＋「连接列到目标格的列差」，
+   * 与引擎 `assignAirMission` 的入场模型**同源**（起点取「连接列 × 目标行」，同一行格距即列差）。
+   *
+   * ★ 修（2026-11-01）：修前这里直接用 `air.hex`（盒内飞机保留的原位格），
+   *   于是任务面板会把"能出击的盒内飞机"标成 14.1 够不到（或被反向误放行）。
+   */
+  function airDistanceFromRealBase(air: ConsoleAirUnit, hex: HexRef): number {
+    if (!isAirInOffMapBox(air)) return airRangeFromBase(air, hex)
+    return (
+      hexDistance({ col: airBoxEdgeColumn(air.side), row: hex.row }, hex) +
+      airBoxRangeHexes(air.side)
+    )
   }
 
   /** C9：该格内某方的**激活**飞机（14.1a/14.3：非激活飞机不参加空战） */

@@ -245,23 +245,30 @@ export const useMapViewStore = defineStore('mapView', () => {
    */
   function airTokens(): UnitToken[] {
     const picked = workbench.airMissionAirIds
-    return workbench.ownAirUnits.map((air: ConsoleAirUnit) => ({
-      id: air.instanceId,
-      hex: air.hex,
-      side: air.side,
-      // 飞机图同样按机型取（空军专表 images；正面即主面）
-      unitId: air.aircraftId,
-      face: 'combat' as const,
-      images: air.images,
-      label: air.aircraftType,
-      air: true,
-      selected: picked.includes(air.instanceId),
-      ended: air.airStatus !== 'active',
-      modeLetter: air.airStatus === 'active' ? 'A' : 'I',
-      dg: false,
-      awaitingFuel: false,
-      fuelled: false,
-    }))
+    /*
+     * 专规 1.4a：驻在**图外空军盒**的飞机不在图上任何一格 —— 它们只在盒卡里出现。
+     * 修前这里取 `ownAirUnits`（含盒成员），盒内飞机仍被画在它原来的基地格上
+     * （看着像"盒里一份、图上还有一份"）。
+     */
+    return workbench.onMapAirUnits
+      .filter((air) => air.side === workbench.activeSide)
+      .map((air: ConsoleAirUnit) => ({
+        id: air.instanceId,
+        hex: air.hex,
+        side: air.side,
+        // 飞机图同样按机型取（空军专表 images；正面即主面）
+        unitId: air.aircraftId,
+        face: 'combat' as const,
+        images: air.images,
+        label: air.aircraftType,
+        air: true,
+        selected: picked.includes(air.instanceId),
+        ended: air.airStatus !== 'active',
+        modeLetter: air.airStatus === 'active' ? 'A' : 'I',
+        dg: false,
+        awaitingFuel: false,
+        fuelled: false,
+      }))
   }
 
   /**
