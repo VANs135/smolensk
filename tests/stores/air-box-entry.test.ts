@@ -39,6 +39,71 @@ function setupPlane(workbench: ReturnType<typeof newStore>) {
   return plane
 }
 
+describe('专规 1.4：盒内的飞机**不在图上任何一格**（1.4「盒内不允许战斗或轰炸」）', () => {
+  /*
+   * 原文（专规 1.4）：「In these boxes **no combat or barrage is allowed**.」
+   * 1.4a：「Each player has an off-map air box with **infinite basing capacity**.」
+   *
+   * 本作不把盒内飞机的 `hex` 改掉（那是"回盒再出场"的落点），所以盒成员身份必须在
+   * **一切按格判定**的地方生效；否则盒内的飞机会留在原来的基地格上被空战/炮击/夺基地打掉，
+   * 或占掉该基地的整备名额 —— 与"在盒里"这件事直接矛盾。
+   */
+  it('★ 盒内驻机不占图上基地的整备名额（15.1B），也不计入「该格有敌机」', () => {
+    const workbench = newStore()
+    const plane = setupPlane(workbench)
+    const base = workbench.units.find((unit) => unit.noncombatKind === 'air_base')!
+    plane.airStatus = 'inactive' // 15.1B 的整备对象是**非激活**飞机
+
+    // 在图上：该基地的整备候选里有它
+    expect(workbench.airInactiveAtBase(base.instanceId).map((air) => air.instanceId)).toContain(
+      plane.instanceId,
+    )
+
+    // 进盒后：整备候选不再含它（盒内走 activateAirBox 的免费整备）
+    workbench.setAirInBoxMembership(plane.instanceId, true)
+    expect(workbench.airInactiveAtBase(base.instanceId)).toHaveLength(0)
+    expect(workbench.onMapAirUnits.map((air) => air.instanceId)).not.toContain(plane.instanceId)
+
+    // 「目标格有敌机」的计数同样不算盒内驻机（14.3/14.5 的前提）
+    workbench.setActiveSide('soviet')
+    workbench.setAirTargetFromText(label(CORE_HEX))
+    expect(workbench.airEnemyAtTarget.activeAircraft).toBe(0)
+    expect(workbench.airEnemyAtTarget.canInitiate).toBe(false)
+
+    // 出盒后回到图上：两个投影都恢复
+    workbench.setActiveSide('axis')
+    workbench.setAirInBoxMembership(plane.instanceId, false)
+    expect(workbench.onMapAirUnits.map((air) => air.instanceId)).toContain(plane.instanceId)
+    expect(workbench.airInactiveAtBase(base.instanceId).map((air) => air.instanceId)).toContain(
+      plane.instanceId,
+    )
+  })
+
+  it('★ 盒内驻机不再在图上投射巡逻区（14.4c）；出盒后恢复', () => {
+    /*
+     * 14.4c：巡逻区由**该基地格内的激活战斗机**投射 10 格。盒内驻机不在图上任何一格
+     * ⇒ 不应再以"原基地格"投射巡逻区（修前它留在原格上，敌方仍被笼罩）。
+     */
+    const workbench = newStore()
+    const plane = setupPlane(workbench) // 激活的轴方战斗机，停在 CORE_HEX 的基地上
+    workbench.setActiveSide('soviet')
+    workbench.setAirTargetFromText(label(CORE_HEX))
+    expect(workbench.airTargetInEnemyPatrolZone, '在图上时应笼罩（同格）').toBe(true)
+
+    workbench.setActiveSide('axis')
+    workbench.setAirInBoxMembership(plane.instanceId, true)
+    workbench.setActiveSide('soviet')
+    workbench.setAirTargetFromText(label(CORE_HEX))
+    expect(workbench.airTargetInEnemyPatrolZone, '盒内驻机不该再投射').toBe(false)
+
+    workbench.setActiveSide('axis')
+    workbench.setAirInBoxMembership(plane.instanceId, false)
+    workbench.setActiveSide('soviet')
+    workbench.setAirTargetFromText(label(CORE_HEX)) // 切方会清目标格，重新指定
+    expect(workbench.airTargetInEnemyPatrolZone).toBe(true)
+  })
+})
+
 describe('专规 1.4a：图外盒起飞的航程扣减（store 级）', () => {
   it('★ 盒里的飞机：近处目标（列差 1 ≤ 剩 11）可以，远处（列差 19）被拒', () => {
     // ① 在盒里：41 − 30（轴方盒代价）= 剩 11 格

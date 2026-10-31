@@ -4066,8 +4066,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const enemySide = computed<Side>(() => (activeSide.value === 'axis' ? 'soviet' : 'axis'))
 
   /** C9：全部飞机视图（双方；引擎内部按阵营过滤） */
+  /**
+   * C9：**图上**飞机的引擎视图
+   *
+   * 专规 1.4a：驻在**地图外空军盒**的飞机不在图上任何一格 ⇒ 它们不投影巡逻区（14.4c）、
+   * 不作基地在场机计数（15.x 的整备/堆叠），也不作为 14.5 的拦截候选。
+   * 需要"盒内也能出击"的地方（任务编成、1.4a 的入场航程）另走 `airMissionAirUnits` +
+   * `toAirMissionAircraftView(plane, offMap)`，**不从这里取**。
+   */
   const allAirViews = computed<AirMissionAircraftView[]>(() =>
-    airUnits.value.map((plane) => toAirMissionAircraftView(plane)),
+    onMapAirUnits.value.map((plane) => toAirMissionAircraftView(plane)),
   )
 
   /** C9：当前方的飞机 */
@@ -4296,7 +4304,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }>(() => {
     const hex = airTargetHex.value
     if (hex === null) return { activeAircraft: 0, canInitiate: false, hasAirBase: false }
-    const aircraft = airUnits.value.filter(
+    // 专规 1.4a：盒内驻机不在图上任何一格 ⇒ 不参与"该格有敌机"的判定
+    const aircraft = onMapAirUnits.value.filter(
       (air) =>
         air.side === enemySide.value &&
         air.airStatus === 'active' &&
@@ -4332,7 +4341,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     () => (baseId: string) => {
       const base = airBases.value.find((item) => item.id === baseId)
       if (base === undefined) return []
-      return airUnits.value.filter(
+      // 专规 1.4a：盒内驻机由「盒内免费整备」（activateAirBox）处理，不占图上基地的整备名额
+      return onMapAirUnits.value.filter(
         (air) =>
           air.side === base.side && air.airStatus === 'inactive' && sameHex(air.hex, base.hex),
       )
@@ -10307,7 +10317,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const barrageAircraftRollTargets = computed<ConsoleAirUnit[]>(() => {
     const state = barrageState.value
     if (state === null) return []
-    return airUnits.value.filter(
+    // 专规 1.4：盒内**不允许轰炸**，盒内驻机也不在该格 ⇒ 不作为 10.0c-A 的掷骰对象
+    return onMapAirUnits.value.filter(
       (air) => air.side !== activeSide.value && sameHex(air.hex, state.targetHex),
     )
   })
@@ -13462,8 +13473,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /** C9：该格内某方的**全部**飞机（9.14f 按每架飞机掷夺取表） */
+  /**
+   * 专规 1.4a：该机是否驻在**地图外空军盒**里（盒即基地，图上没有它的位置）
+   *
+   * 本作不为盒内飞机另存坐标：`hex` 保留原位只为"回盒再出场"方便（见
+   * `setAirInBoxMembership`），所以**凡按格判定"这里有哪几架飞机"都必须过这一层**。
+   */
+  function isAirInOffMapBox(air: ConsoleAirUnit): boolean {
+    return airBoxMembers.value.includes(air.instanceId)
+  }
+
+  /** 专规 1.4a：**在图上**的飞机（盒内驻机不算：它们在盒里，不在任何一格） */
+  const onMapAirUnits = computed<ConsoleAirUnit[]>(() =>
+    airUnits.value.filter((air) => !isAirInOffMapBox(air)),
+  )
+
   function airUnitsAt(hex: HexRef, side: Side): ConsoleAirUnit[] {
-    return airUnits.value.filter((air) => air.side === side && sameHex(air.hex, hex))
+    return onMapAirUnits.value.filter((air) => air.side === side && sameHex(air.hex, hex))
   }
 
   /** C9：该格内某方的**激活**飞机（14.1a/14.3：非激活飞机不参加空战） */
@@ -13677,7 +13703,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const base = airBases.value.find((item) => item.id === baseId)
     if (base === undefined) return false
     const enteringSide: Side = base.side === 'axis' ? 'soviet' : 'axis'
-    const planes = airUnits.value.filter(
+    // 专规 1.4a：盒内驻机不在该基地格上 ⇒ 不参与基地夺取的飞机处置
+    const planes = onMapAirUnits.value.filter(
       (air) => air.side === base.side && sameHex(air.hex, base.hex),
     )
     const inputs = airInputs.value
@@ -20061,6 +20088,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // C7 空军（10.2b 短程加成的数据源）
     airUnits,
     airBoxMembers,
+    onMapAirUnits,
     setAirInBoxMembership,
     clearAirBoxMembers,
     barrageAirIds,

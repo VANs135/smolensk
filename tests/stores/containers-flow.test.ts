@@ -665,6 +665,42 @@ describe('W7 C12：地图外空军盒 / 边缘盒 / 编队收纳盒', () => {
     expect(containers.edgeBoxUnits.southeast).toHaveLength(0)
   })
 
+  it('★ 1.4b：离开边缘盒即**免费加注**（fueled at no SP cost，1T per unit 法）', () => {
+    /*
+     * 原文（专规 1.4b）：「Units must stop movement when entering a box. **When leaving a box,
+     * units are fueled at no SP cost** (via the "1T per unit" method).」
+     *
+     * 修前 `moveEdgeBox` 的 exit 分支只写 `movementEnded = true`，注释却说"离箱免费供油" ——
+     * 文案在说供油、代码没供。`ConsoleUnit.fuelled` 缺省是 false（12.5c 消耗时支付），
+     * 于是离箱单位还要**再付一次**燃料，与"免费"相反。
+     * 落账用 12.5c-C 的单单位法（1T/单位）⇒ `fuelMethod = 'singleUnit'`（只本阶段有效）。
+     */
+    const soviet = place(workbench, otherClassParent(), someHex(), 'soviet', 'ru-fuel')
+    workbench.setPhase('movement')
+    expect(soviet.fuelled).toBe(false) // 缺省未加注
+    expect(
+      containers.moveEdgeBox({
+        box: 'southeast',
+        instanceId: soviet.instanceId,
+        direction: 'enter',
+        fromSupplySourceHex: true,
+      }),
+    ).toBe(true)
+    expect(
+      containers.moveEdgeBox({
+        box: 'southeast',
+        instanceId: soviet.instanceId,
+        direction: 'exit',
+        fromSupplySourceHex: true,
+      }),
+    ).toBe(true)
+    const back = workbench.units.find((unit) => unit.instanceId === 'ru-fuel')!
+    expect(back.fuelled).toBe(true)
+    expect(back.fuelMethod).toBe('singleUnit')
+    // 1.4b：进/出盒都必须停下（不得接着走）
+    expect(back.movementEnded).toBe(true)
+  })
+
   it('C12：轴心国单位不得使用边缘盒（1.4b）', () => {
     const axis = place(workbench, otherClassParent(), someHex(), 'axis', 'ge-1')
     workbench.setPhase('movement')

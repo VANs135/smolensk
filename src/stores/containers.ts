@@ -24,6 +24,7 @@ import {
   planOffMapAirBoxFlight,
   planBreakdownTake,
   planEdgeBoxMove,
+  isEdgeBoxExitFuelFree,
   planFormationBoxHide,
   planFormationBoxReveal,
   deriveDrawComposition,
@@ -1974,8 +1975,21 @@ export const useContainersStore = defineStore('containers', () => {
         ...edgeBoxHeld.value,
         [input.box]: current.filter((item) => item.instanceId !== input.instanceId),
       }
-      // 1.4b：从**地图边缘补给源格**重新入场（沿用进入时所在的格），离箱免费供油
+      /*
+       * 专规 1.4b：「Units must stop movement when entering a box. **When leaving a box, units are
+       * fueled at no SP cost** (via the "1T per unit" method).」
+       *
+       * ★ 修（2026-11-01）：修前这里只写了 `movementEnded = true`，注释却写着"离箱免费供油" ——
+       *   文案在说供油、代码没供。`ConsoleUnit.fuelled` 缺省是 **false**（12.5c：消耗时支付），
+       *   于是离箱的单位**没有加注**，下一段还要再付一次燃料 —— 与原文相反（原文是"免费"，
+       *   不是"不用加油"）。按 12.5c-C 的**单单位法**（1T/单位）落账：`fuelMethod = 'singleUnit'`
+       *   ⇒ 持续期只到本阶段末（与"1T per unit"的方法一致）。
+       */
       held.movementEnded = true
+      if (isEdgeBoxExitFuelFree()) {
+        held.fuelled = true
+        held.fuelMethod = 'singleUnit'
+      }
       workbench.units = [...workbench.units, held]
     }
     lastAction.value = { ok: true, rule: plan.rule, detail: plan.data.detail, scope: '边缘盒' }
