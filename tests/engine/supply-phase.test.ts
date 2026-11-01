@@ -309,6 +309,24 @@ describe('补给阶段（2.2 D 段）：SP 分配顺序 = 先强制恢复部队�
     expect(plan.attritionDuty).toEqual([{ hex: at(9), unitIds: ['b'], bestAr: 2, oosSteps: 3 }])
   })
 
+  it('12.8a：恢复追溯或实际获供养的旧断补单位不再承担损耗', () => {
+    const facts = makeFacts({
+      hexes,
+      sources: [{ hex: at(0), side: 'axis', kind: 'detrainable' }],
+      dumps: [{ hex: at(8), side: 'axis' }],
+      enemyCombat: [at(5)],
+    })
+    const plan = planSupplyPhase(facts, {
+      activeSide: 'axis',
+      units: [unit('traced', 3, { outOfSupply: true }), unit('fed', 9, { outOfSupply: true })],
+      mobility: 'leg',
+      availableT: 2,
+      eatOffTheMap: (id) => id === 'fed',
+    })
+    expect(plan.outOfSupply.clear).toEqual(['traced', 'fed'])
+    expect(plan.attritionDuty).toEqual([])
+  })
+
   it('12.10e-A：恢复优先于「吃图上补给」，剩余 T 不足以吃即标 affordable=false', () => {
     const facts = makeFacts({
       hexes,

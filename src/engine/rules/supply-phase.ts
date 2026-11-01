@@ -479,6 +479,31 @@ export interface AttritionDuty {
   oosSteps: number
 }
 
+/** 12.8a/b：按结算后的断补状态汇总，已恢复补给、非战斗及离图单位不承担损耗。 */
+export function attritionDutiesFor(
+  units: readonly Pick<
+    SupplyPhaseUnitView,
+    'id' | 'hex' | 'isCombat' | 'steps' | 'ar' | 'mode' | 'outOfSupply'
+  >[],
+): AttritionDuty[] {
+  const byHex = new Map<string, { hex: HexRef; units: (typeof units)[number][] }>()
+  for (const unit of units) {
+    if (unit.hex === null || !unit.isCombat || !unit.outOfSupply || unit.steps <= 0) continue
+    const key = `${unit.hex.col}.${unit.hex.row}`
+    const entry = byHex.get(key)
+    if (entry === undefined) byHex.set(key, { hex: unit.hex, units: [unit] })
+    else entry.units.push(unit)
+  }
+  return [...byHex.values()]
+    .map((entry) => ({
+      hex: entry.hex,
+      unitIds: entry.units.map((unit) => unit.id),
+      bestAr: attritionStackAr(entry.units),
+      oosSteps: entry.units.reduce((sum, unit) => sum + unit.steps, 0),
+    }))
+    .sort((a, b) => a.hex.col - b.hex.col || a.hex.row - b.hex.row)
+}
+
 /** 补给阶段计划（SP 分配结果） */
 export interface SupplyPhasePlan {
   rule: string
@@ -588,24 +613,10 @@ export function planSupplyPhase(
     ...mine.filter((unit) => unit.outOfSupply).map((unit) => unit.id),
     ...outOfSupply.mark,
   ])
-  const byHex = new Map<string, { hex: HexRef; units: SupplyPhaseUnitView[] }>()
-  for (const unit of mine) {
-    if (unit.hex === null) continue
-    if (!markedOrStill.has(unit.id)) continue
-    const key = `${unit.hex.col}.${unit.hex.row}`
-    const entry = byHex.get(key)
-    if (entry === undefined) byHex.set(key, { hex: unit.hex, units: [unit] })
-    else entry.units.push(unit)
-  }
-  const attritionDuty: AttritionDuty[] = [...byHex.values()]
-    .map((entry) => ({
-      hex: entry.hex,
-      unitIds: entry.units.map((unit) => unit.id),
-      bestAr: attritionStackAr(entry.units),
-      oosSteps: entry.units.reduce((sum, unit) => sum + unit.steps, 0),
-    }))
-    .filter((duty) => duty.oosSteps > 0)
-    .sort((a, b) => a.hex.col - b.hex.col || a.hex.row - b.hex.row)
+  for (const id of outOfSupply.clear) markedOrStill.delete(id)
+  const attritionDuty = attritionDutiesFor(
+    mine.map((unit) => ({ ...unit, outOfSupply: markedOrStill.has(unit.id) })),
+  )
 
   return {
     rule: '12.10e/12.6/12.8',

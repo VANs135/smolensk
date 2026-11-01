@@ -259,7 +259,8 @@ describe('整局主线回归：开局、自动结算、玩家义务和持久化'
     expect(w.segmentStepPosition.index).toBe(1)
     expect(setup.finished).toBe(true)
     expect(setup.ensureSetupLoaded()).toBe(false)
-  })
+    // 真实整图冷启动与恢复接近 5 秒；并行全量运行时需留出调度余量。
+  }, 15000)
   it('坏盘面读取失败时不改变正在进行的对局', () => {
     const ctx = fresh()
     ctx.setup.enterSetup('1')
