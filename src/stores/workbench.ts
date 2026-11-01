@@ -1,4 +1,6 @@
-﻿import { defineStore } from 'pinia'
+﻿import { createFireResolutionDomain } from './fire-resolution'
+import { createCombatInputs } from './engagement-inputs'
+import { defineStore } from 'pinia'
 import { computed, ref, watch, type Ref } from 'vue'
 
 import type { HexRef, RailGauge, Side } from '@/data'
@@ -183,7 +185,6 @@ import {
   planArrivals,
   planAirBaseReduction,
   planAirUnload,
-  planBarrageOutcome,
   planBarrageSupply,
   planBaseRefit,
   planBaseTransfer,
@@ -219,14 +220,11 @@ import {
   resolveAirCombatRounds,
   arrivalPlacementCandidates,
   resolveArrivalPlacement,
-  resolveBarrageDice,
   resolveBaseTransfer,
-  resolveCombatDice,
   resolveFlakStep,
   resolveInterception,
   resolveRetreats,
   resolveSpecialCombat,
-  resolveSurprise,
   stepChecklist,
   supplyCoverage,
   supplyStepChecklist,
@@ -286,7 +284,6 @@ import {
   type ArrivalPlacementFacts,
   type ArrivalPlacementResult,
   type ArrivalPlan,
-  type BarrageInteractionState,
   type BarrageKind,
   type BarrageTargetKind,
   type BarrageUnitPatch,
@@ -713,136 +710,7 @@ export interface BattleTarget {
  * 纪律：本项**只承载玩家的选择**，不含任何规则结论；一切数值与可行性由引擎裁决
  * （`combat-interaction.ts` 的九步状态机）。
  */
-export interface CombatInputs {
-  /** 12.4：攻方本阶段可动用的 T（SP 与可动用部队储备之和） */
-  attackerAvailableT: number
-  /**
-   * 12.10a：攻方是否**动用部队储备**补齐图上补给的缺口
-   *
-   * 勾上后由 `planCombatSupplyFunding` 逐单位定"图上付 / 储备付"：图上能全额付清的单位**必须**
-   * 走图上（12.10a），付不清的改用储备并按 12.10b 降一级标记；已耗尽者无法再用（12.10c）
-   * ⇒ 整笔拒绝（12.4：付不出全额就不能攻击）。
-   */
-  attackerUsesInternalStocks: boolean
-  /** 9.5-B：守方是否愿意支付战斗补给（不付 ⇒ 以一半战斗值防御） */
-  defenderProvides: boolean
-  /** 12.4：守方本阶段可动用的 T */
-  defenderAvailableT: number
-  /** 12.10a：守方是否动用部队储备（口径同攻方） */
-  defenderUsesInternalStocks: boolean
-  /** 9.6：攻方 AR 单位 id（null＝未宣布） */
-  attackerArUnitId: string | null
-  /** 9.6：守方 AR 单位 id（null＝未宣布） */
-  defenderArUnitId: string | null
-  /** 9.4b：逐攻击堆叠地形（键＝`列.行`；缺项＝沿用守方格地形） */
-  stackTerrain: Record<string, { kind: 'hex' | 'hexside'; terrain: string }>
-  /** 9.4c：守方防御地形（决定战斗表横行） */
-  defenderTerrain: string
-  /** 9.10a：选项 —— 撤退格数 */
-  optionRetreatHexes: number
-  /** 9.10a：选项 —— 以军力损失满足的点数 */
-  optionLossPoints: number
-  /**
-   * 9.11a/9.11c（第五批 A3）：选项损失的**逐单位分配**（unitId → 点数；全 0/缺省＝按规范分配）。
-   * 给出正数时由引擎按 `validateBattleLossAllocation` 严格校验（AR 先受第一点、均匀展开）。
-   */
-  optionLossAllocation: Record<string, number>
-  /** 9.10c：守方行使「忽略选项」（仅当 9.10c 给予该权利时合法） */
-  ignoreOptions: boolean
-  /** 9.12：撤退路径（unitId → `列.行,...`，**不含起始格**；长度＝完整撤退距离） */
-  retreatPaths: Record<string, string>
-  /** 9.12e：额外 1 点军力损失的承受者（从候选 DG 单位中选） */
-  /** 9.11a（批 F 切片 2）：把"多受的那一点"改派给这一枚（null＝按规范分配） */
-  lossTakerId: string | null
-  extraLossTakerId: string | null
-
-  /** 9.12g：战后推进单位 id（常规战斗可空＝不推进） */
-  advanceUnitIds: string[]
-}
-
-/** C6：本场战斗的初始输入（未臆造任何数值：可用 T 由玩家填入 / 由演示补给池带入） */
-function createCombatInputs(): CombatInputs {
-  return {
-    attackerAvailableT: 0,
-    attackerUsesInternalStocks: false,
-    defenderProvides: true,
-    defenderAvailableT: 0,
-    defenderUsesInternalStocks: false,
-    attackerArUnitId: null,
-    defenderArUnitId: null,
-    stackTerrain: {},
-    defenderTerrain: '',
-    optionRetreatHexes: 0,
-    optionLossPoints: 0,
-    optionLossAllocation: {},
-    ignoreOptions: false,
-    retreatPaths: {},
-    lossTakerId: null,
-    extraLossTakerId: null,
-    advanceUnitIds: [],
-  }
-}
-
-/**
- * C7：一次轰炸里的玩家输入（界面 v-model 绑定）
- *
- * 纪律同 C6：本项**只承载玩家的选择**，不含任何规则结论；横移、成本、结果一律由引擎裁决
- * （`barrage-interaction.ts` 的 10.0 通用流程状态机）。
- */
-export interface BarrageInputs {
-  /** 10.1b：轰炸方可动用的 T（只能来自 SP：同一 HQ 或同一 dump，不含部队储备） */
-  availableT: number
-  /** 10.1b-A：补给是否来自同一指挥部 */
-  fromSameHq: boolean
-  /** 10.1b-A：不用指挥部时是否来自同一补给站 */
-  fromSameDump: boolean
-  /** 10.1b-C：是否动用了部队储备（明令禁止） */
-  usedInternalStocks: boolean
-  /** 10.0b：是否有正确的观察员（由 `createBarrageFacts` 填，界面只读） */
-  hasSpotter: boolean
-  /** 10.0a：**目标玩家**选择的地形线（'' = 未选，按不移处理） */
-  terrainLine: CombatLine | ''
-  /** 10.0e-A：该格本阶段是否已被轰炸过 */
-  hexAlreadyBarragedThisPhase: boolean
-  /** 10.0b/C：本次是否为低空扫射（须有正确观察员） */
-  hipShoot: boolean
-  /** 10.0：轰炸骰（战斗单位 2d6 之和；设施 1d6） */
-  die: number | null
-  /** 10.0a：`1/2` 的取整骰（1–6） */
-  halfDie: number | null
-  /** 10.0a：损失分配（unitId → 军力点数） */
-  losses: Record<string, number>
-  /* ── 10.0c 对设施 ── */
-  /** 10.0c-A：空军基地当前等级 */
-  baseLevel: number
-  /** 10.0c-A：目标是否为简易机场（永不降级） */
-  isAirstrip: boolean
-  /** 10.0c-B：港口既有累计伤害（0–4） */
-  portDamageBefore: number
-  /** 10.0c-A：格内每架飞机的掷骰（unitId → 1d6） */
-  aircraftRolls: Record<string, number>
-}
-
-/** C7：本次轰炸的初始输入（数值一律由玩家填入，界面不代猜） */
-function createBarrageInputs(): BarrageInputs {
-  return {
-    availableT: 0,
-    fromSameHq: true,
-    fromSameDump: false,
-    usedInternalStocks: false,
-    hasSpotter: false,
-    terrainLine: '',
-    hexAlreadyBarragedThisPhase: false,
-    hipShoot: false,
-    die: null,
-    halfDie: null,
-    losses: {},
-    baseLevel: 1,
-    isAirstrip: false,
-    portDamageBefore: 0,
-    aircraftRolls: {},
-  }
-}
+export type { CombatInputs, BarrageInputs } from './engagement-inputs'
 
 /** 攻守角色名（日志与提示用） */
 function roleLabel(role: CombatRole): string {
@@ -1329,22 +1197,46 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const battleMode = ref<'quick' | 'full'>('full')
   /** C6：参战攻方单位 id（可跨多个相邻攻击格；9.1b 允许只取堆叠中的一部分） */
   const combatAttackerIds = ref<string[]>([])
-  /** C6：战斗交互状态机（null＝未开始） */
-  const combatState = ref<CombatInteractionState | null>(null)
-  /** C6：最近一次被引擎拒绝的步骤（供界面提示；成功后清空） */
-  const combatError = ref<{ rule: string; reason: string } | null>(null)
-  /** C6：奇袭骰的骰值（9.8 发生奇袭后须再掷横移骰，故暂存以便第二步复算） */
-  const combatSurpriseDie = ref<number | null>(null)
-  /** C6：奇袭骰的实掷骰面（W7 C11：复核过程要展示「掷了什么」，只存合计不够） */
-  const combatSurpriseRoll = ref<DiceRoll | null>(null)
-  /** C6：横移骰的实掷骰面（W7 C11） */
-  const combatShiftRoll = ref<DiceRoll | null>(null)
-  /** C6：战斗骰（9.9）的实掷骰面（W7 C11） */
-  const combatDiceRoll = ref<DiceRoll | null>(null)
-  /** C6：等待横移骰（9.8：发生奇袭时须再掷 1 骰） */
-  const combatAwaitingShiftDie = ref(false)
-  /** C6：玩家在本场战斗里的各项输入（界面 v-model 绑定） */
-  const combatInputs = ref<CombatInputs>(createCombatInputs())
+  const fireResolution = createFireResolutionDomain({
+    rng,
+    drawCount,
+    acceptCombat,
+    acceptBarrage,
+    applyCombatPatches,
+    stripReserveMarkersAfterDefense,
+    logCombatSurprise,
+    pushLog,
+    recordSettlement,
+    nameOf,
+    barrageLossTargets: () => barrageLossTargets.value,
+    applyBarragePatches,
+    applyAirStepLoss,
+    applyFacilityPatch: applyBarrageFacilityPatch,
+    barrageAircraftTargets: () => barrageAircraftRollTargets.value,
+    facilityFacts: barrageFacilityFacts,
+    retreatPlans: () => combatRetreatPlans.value,
+    hasPendingSpecial: () => specialPending.value !== null,
+    applyRetreatCrossing({ unitId, hex }) {
+      const unit = units.value.find((item) => item.instanceId === unitId)
+      if (unit !== undefined) resolveSpecialCombatAt(hex, unit.side, false, [unitId])
+    },
+  })
+  const {
+    combatState,
+    combatError,
+    combatSurpriseDie,
+    combatSurpriseRoll,
+    combatShiftRoll,
+    combatDiceRoll,
+    combatAwaitingShiftDie,
+    combatInputs,
+    combatSupplyCommitted,
+    barrageState,
+    barrageError,
+    barrageInputs,
+    barrageAwaitingHalfDie,
+    barrageCommitted,
+  } = fireResolution
 
   // ── C7 轰炸交互（W5 C7：10.0 通用流程；引擎状态机在 barrage-interaction.ts） ──
   /** C7：轰炸工具是否已开启（点「轰炸」按钮进入；<CombatPanel/> 走九步）*/
@@ -1355,12 +1247,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const barrageTargetKind = ref<BarrageTargetKind>('combatUnits')
   /** C7：参炸单位 id（当前方，可只取一部分） */
   const barrageUnitIds = ref<string[]>([])
-  /** C7：轰炸交互状态机（null＝未开始） */
-  const barrageState = ref<BarrageInteractionState | null>(null)
-  /** C7：最近一次被引擎拒绝的步骤（供界面提示；成功后清空） */
-  const barrageError = ref<{ rule: string; reason: string } | null>(null)
-  /** C7：玩家在本场轰炸里的各项输入（界面 v-model 绑定） */
-  const barrageInputs = ref<BarrageInputs>(createBarrageInputs())
 
   /**
    * **10.0e-A/B 的轰炸账本**（按阶段；A 组接线 2026-09-16）
@@ -1403,8 +1289,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     unitIds: [...attackedUnitIdsThisPhase.value],
     hexes: [...attackedHexesThisPhase.value],
   }))
-  /** C7：待取整骰（10.0a：`1/2` 结果须再掷 1 骰） */
-  const barrageAwaitingHalfDie = ref(false)
   /**
    * C7：**空军算子**（14.1a：摆在**空军基地格**上，其所在格即 10.2b 所说的「它们基地」）
    *
@@ -2723,7 +2607,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C7：轰炸目标格（环节点格优先；缺省退回战斗目标，兼容验证页与既有夹具） */
   const barrageTargetHex = computed<HexRef | null>(
-    () => barragePickHex.value ?? battleTarget.value?.hex ?? null,
+    () => barrageState.value?.targetHex ?? barragePickHex.value ?? battleTarget.value?.hex ?? null,
   )
 
   /**
@@ -4823,6 +4707,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   也不受突袭结果影响）。拆分口径的唯一实现是引擎的 `splitOverrunStack`。
    */
   function overrunNow(hex: HexRef): boolean {
+    if (!canReplaceCombat() || !canReplaceBarrage()) return false
     if (!requireAction('move.overrun', '突袭')) return false
     // 条 17（批 F·F2）：新开一场突袭＝"再突袭"意图，旧的 4.5a 约束作废
     overrunZocHeldHex.value = null
@@ -5168,6 +5053,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 切方（2.3/2.2：先手方与后手方轮流；U0 直接手动切换） */
   function switchSide(): void {
+    if (!canReplaceCombat() || !canReplaceBarrage()) return
     activeSide.value = activeSide.value === 'axis' ? 'soviet' : 'axis'
     selectedId.value = null
     pendingRecord.value = null
@@ -5329,6 +5215,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 切阶段（2.2 SOP 段；换段即重置各单位的 MA 额度） */
   function setPhase(next: ConsolePhase): void {
+    if (!canReplaceCombat() || !canReplaceBarrage()) return
     const changed = phase.value !== next
     phase.value = next
     resetSegmentTransient()
@@ -5399,6 +5286,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   绝不能按固定天数推算——日期是专规闸门的唯一输入（专规 2.3e 战略模式、专规 1.2 铁路容量）。
    */
   function setTurn(next: number): void {
+    if (!canReplaceCombat() || !canReplaceBarrage()) return
     const first = TURN_TRACK[0]?.turn ?? 1
     const last = TURN_TRACK[TURN_TRACK.length - 1]?.turn ?? first
     const clamped = Math.min(last, Math.max(first, Math.trunc(next)))
@@ -7715,6 +7603,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   不再各写一遍"点敌方格选防御格 / 点己方单位加减攻方"。
    */
   function battleToolClick(hex: HexRef): void {
+    if (specialPending.value !== null) return
+    if (combatState.value?.finished === true) clearCombat()
     // C6 九步流程进行中：先按 9.2 结算完（或明确放弃），避免盘面在流程中途漂移
     if (combatState.value !== null) {
       pushLog('warning', '本场战斗进行中：请先结算完 9.2 流程，或点「放弃本场战斗」', '9.2')
@@ -7994,8 +7884,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /* ──────────────── C6 战斗交互：选子 → 9.2 九步流程动作（全部问引擎） ──────────────── */
 
+  function canReplaceBarrage(): boolean {
+    if (!barrageCommitted.value) return true
+    barrageError.value = { rule: '10.0', reason: 'barrageOutcomePending' }
+    pushLog('warning', '轰炸已提交，请先完成掷骰和目标损失结算', '10.0')
+    return false
+  }
+  function canReplaceCombat(): boolean {
+    if (!combatSupplyCommitted.value) return true
+    combatError.value = { rule: '9.2', reason: '请先完成已经提交的战斗' }
+    pushLog('warning', '战斗已提交，请先完成损失、选项、撤退与推进', '9.2')
+    return false
+  }
   /** C6：切战斗工具模式（quick＝一键查表 9.9；full＝9.2 九步完整流程） */
   function setBattleMode(next: 'quick' | 'full'): void {
+    if (!canReplaceCombat()) return
     battleMode.value = next
     clearCombat()
     battleTarget.value = null
@@ -8006,7 +7909,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /** C6：清空本场战斗的全部交互状态（换方/换阶段/重置/关闭时调用） */
-  const combatSupplyCommitted = ref(false)
   function clearCombat(force = false): void {
     if (
       !force &&
@@ -8017,17 +7919,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', '本场战斗已提交补给，必须完成战损、选项、撤退与推进', '9.2')
       return
     }
-    combatSupplyCommitted.value = false
     resetOptionDraft()
     combatAttackerIds.value = []
-    combatState.value = null
-    combatError.value = null
-    combatSurpriseDie.value = null
-    combatSurpriseRoll.value = null
-    combatShiftRoll.value = null
-    combatDiceRoll.value = null
-    combatAwaitingShiftDie.value = false
-    combatInputs.value = createCombatInputs()
+    fireResolution.resetCombat()
     // W7 C16：战斗补给的来源声明随本场战斗一并作废
     combatSupplyDumpIds.value = { attacker: null, defender: null }
     // 9.12d / 9.12f：跟随者名单与「战斗开始时」快照随之作废
@@ -8189,6 +8083,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C6：点选/取消一个攻方单位（9.1a 只有当前方；9.1b 可取堆叠的一部分；9.0 须与防御格相邻） */
   function toggleCombatAttacker(unitId: string): void {
+    if (!canReplaceCombat()) return
     const unit = units.value.find((item) => item.instanceId === unitId)
     if (unit === undefined) return
     if (unit.side !== activeSide.value) {
@@ -8231,6 +8126,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 提交时由引擎 `planCombatSupply({ attackerUnitIds })` 校验子集合法性，不在此重置战斗状态。
    */
   function toggleCombatSupplyAttacker(unitId: string): void {
+    if (!canReplaceCombat()) return
     if (combatAttackerIds.value.includes(unitId)) {
       if (combatAttackerIds.value.length <= 1) {
         pushLog('warning', '至少要保留一个参战单位（9.1b）', '9.5b')
@@ -8271,6 +8167,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C6：选定防御格（9.0：只能攻击含敌方**战斗**单位的格；非战斗单位走 9.14 特殊战斗） */
   function selectCombatDefenderHex(hex: HexRef): void {
+    if (!canReplaceCombat()) return
     const atHex = unitsAt(hex)
     const enemyCombat = atHex.filter(
       (unit) => unit.side !== activeSide.value && unit.isCombat && unit.steps > 0,
@@ -8321,6 +8218,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C6 第 1 步：开始战斗（9.1 战斗构成） */
   function beginCombatNow(): boolean {
+    if (!canReplaceCombat() || (barrageState.value !== null && !barrageState.value.finished))
+      return false
     if (combatSupplyCommitted.value && combatState.value !== null && !combatState.value.finished) {
       combatError.value = { rule: '9.2', reason: '请先完成已经提交的战斗' }
       return false
@@ -8494,8 +8393,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '战斗补给',
     )
     if (data === null) return false
-    combatState.value = data.state
-    if (useReduction) combatAttackerIds.value = [...data.state.composition.attackerIds]
     const supply = data.state.supply!
 
     /*
@@ -8512,7 +8409,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const needs = new Map<string, { dumpId: string; wantT: number }>()
     const addNeed = (dumpId: string | null, wantT: number): void => {
       if (wantT <= 0) return
-      if (dumpId === null) throw new Error(`12.4：引擎判定需付 ${wantT} T，但该方未声明补给站来源`)
+      if (dumpId === null) return
       needs.set(dumpId, { dumpId, wantT: (needs.get(dumpId)?.wantT ?? 0) + wantT })
     }
 
@@ -8524,6 +8421,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *   · 用储备的单位按 12.10b **降一级**（ready→low→exhausted）；
      *   · 12.10h：凑不满任何单位的图上 T 会被一并消耗（引擎已计入 `mapTUsed`）。
      */
+    if (
+      ((attackerPlan === null ? supply.attacker.requiredT : attackerPlan.data.mapTUsed) > 0 &&
+        combatSupplyDumpIds.value.attacker === null) ||
+      ((defenderPlan === null
+        ? supply.defender.paid
+          ? supply.defender.requiredT
+          : 0
+        : defenderPlan.data.mapTUsed) > 0 &&
+        combatSupplyDumpIds.value.defender === null)
+    ) {
+      pushLog('danger', '战斗补给缺少付款来源，本次不改变盘面和战斗步骤', '12.4')
+      return false
+    }
     addNeed(
       combatSupplyDumpIds.value.attacker,
       attackerPlan === null ? supply.attacker.requiredT : attackerPlan.data.mapTUsed,
@@ -8539,7 +8449,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
     const settled: { dumpId: string; after: SpHoldings }[] = []
     for (const need of needs.values()) {
-      const holdings = spDumps.value.find((item) => item.id === need.dumpId) ?? null
+      const holdings = allSpDumps.value.find((item) => item.id === need.dumpId) ?? null
       if (holdings === null) {
         pushLog('danger', '战斗补给付款失败：声明的补给站已不存在（12.1b）', '12.4')
         return false
@@ -8580,6 +8490,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       settled.push({ dumpId: need.dumpId, after: payment.data.holdingsAfter })
     }
     for (const item of settled) setSpDumpHoldings(item.dumpId, item.after)
+    combatState.value = data.state
+    if (useReduction) combatAttackerIds.value = [...data.state.composition.attackerIds]
 
     // 12.10b：动用储备的单位降一级（ready→low、low→exhausted）——落盘在图上扣款之后
     for (const plan of [attackerPlan?.data ?? null, defenderPlan?.data ?? null]) {
@@ -8618,7 +8530,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 那份作废的战斗不该占掉本环节的这一次（与 10.1b 的轰炸账本同一时点口径）。
      */
     recordAttackThisSegment(data.state.composition.attackerIds, data.state.composition.defendingHex)
-    combatSupplyCommitted.value = true
     return true
   }
 
@@ -8641,6 +8552,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         '攻方宣布行动值',
       )
       if (pending === null) return false
+      combatState.value = pending.state
       pushLog(
         'info',
         `攻方宣布行动值单位：${nameOf(inputs.attackerArUnitId)}（9.6：按规则由守方后宣布）`,
@@ -8660,6 +8572,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     if (inputs.defenderArUnitId === null) {
       pushLog('warning', '先选择守方的行动值单位（9.6）', '9.6')
+      return false
+    }
+    if (state.declaredAttackerArUnitId === undefined) {
+      combatError.value = { rule: '9.6', reason: 'attackerArMustBeDeclaredFirst' }
       return false
     }
     // 专规 2.3b：守方堆叠内有 NKVD 边防团时，它**必须**担任行动值单位
@@ -8861,141 +8777,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C6 第 6 步：奇袭判定（9.8）；发生奇袭时须再掷 1 骰做横移 */
   function rollCombatSurprise(): boolean {
-    const state = combatState.value
-    if (state === null) return false
-    if (combatAwaitingShiftDie.value) return rollCombatShiftDie()
-    const draw = roll2d6(rng.value)
-    rng.value = draw.rng
-    drawCount.value += 1
-    combatSurpriseDie.value = draw.value.total
-    combatSurpriseRoll.value = draw.value
-    const data = acceptCombat(resolveSurprise(state, { die: draw.value.total }), '奇袭判定')
-    if (data === null) return false
-    if (data.awaitingShiftDie) {
-      combatAwaitingShiftDie.value = true
-      // 此处引擎尚未给出奇袭方（要等横移骰），故不附复核过程 —— 不臆造结论
-      pushLog(
-        'warning',
-        `奇袭判定 2d6 = ${draw.value.faces.join('+')} = ${draw.value.total}（DRM ${state.ar?.drm ?? 0}）：发生奇袭，须再掷 1 骰做横移（9.8）`,
-        '9.8',
-      )
-      // ⑭ 接线：本笔只掷了奇袭 2d6（横移骰在下一步）⇒ rolls 只报这一颗
-      recordSettlement({
-        action: 'combatSurprise',
-        rule: '9.8',
-        rolls: [draw.value],
-        data: {
-          die: draw.value.total,
-          drm: state.ar?.drm ?? 0,
-          awaitingShiftDie: true,
-        },
-      })
-      return true
-    }
-    combatState.value = data.state
-    combatAwaitingShiftDie.value = false
-    logCombatSurprise(data.state, [draw.value])
-    return true
+    return fireResolution.rollCombatSurprise()
   }
 
   /** C6 第 6 步（续）：横移骰（9.8） */
   function rollCombatShiftDie(): boolean {
-    const state = combatState.value
-    const die = combatSurpriseDie.value
-    if (state === null || die === null) return false
-    const draw = roll1d6(rng.value)
-    rng.value = draw.rng
-    drawCount.value += 1
-    combatShiftRoll.value = draw.value
-    const data = acceptCombat(
-      resolveSurprise(state, { die, shiftDie: draw.value.total }),
-      '奇袭横移',
-    )
-    if (data === null) return false
-    combatState.value = data.state
-    combatAwaitingShiftDie.value = false
-    pushLog('info', `横移骰 = ${draw.value.total}（9.8）`, '9.8')
-    logCombatSurprise(data.state, [draw.value])
-    return true
+    return fireResolution.rollCombatShiftDie()
   }
 
   /** C6 第 7 步：战斗掷骰（9.9：2d6 + AR 差 − 环形工事完整等级） */
   function rollCombatDice(): boolean {
-    const state = combatState.value
-    if (state === null) return false
-    const draw = roll2d6(rng.value)
-    rng.value = draw.rng
-    drawCount.value += 1
-    combatDiceRoll.value = draw.value
-    const data = acceptCombat(resolveCombatDice(state, { die: draw.value.total }), '战斗掷骰')
-    if (data === null) return false
-    combatState.value = data.state
-    // 9.12a：战斗表 DG ⇒ 全部防御单位立即 DG（必须在撤退之前落盘，9.12e 要用这一事实）
-    applyCombatPatches(data.patches)
-    const dice = data.state.dice!
-    /*
-     * 5.7d：守方一旦**有战斗结果**（损失 / 选项 / DG，`Do1` 即便被忽略也算）即移除预备标记。
-     * 判据取自引擎解析出的守方段 —— 攻方独占的结果（如 `Ae4`）不触发（守方没"承受"任何结果）。
-     */
-    if (
-      dice.result.defender.losses > 0 ||
-      dice.result.defender.hasOption ||
-      dice.result.defender.disorganized
-    )
-      stripReserveMarkersAfterDefense(data.state)
-    const ar = data.state.ar
-    // W7 C11：附着本次战斗的复核过程（骰点 / 修正项与来源 / 合计 / 取列查表 / 结果）
-    const derivation = combatDerivation({
-      roll: draw.value,
-      die: dice.die,
-      attackerAr: ar?.attackerAr ?? 0,
-      attackerArSource: ar === undefined ? '未指定' : `攻方 AR 单位 ${nameOf(ar.attackerUnitId)}`,
-      defenderAr: ar?.defenderAr ?? 0,
-      defenderArSource: ar === undefined ? '未指定' : `守方 AR 单位 ${nameOf(ar.defenderUnitId)}`,
-      hedgehogLevel: state.hedgehogLevel,
-      modifiedDice: dice.modifiedDice,
-      raw: dice.result.raw,
-      terrainLine: dice.result.terrainLine,
-      columnLabel: data.state.surprise?.finalColumnLabel ?? data.state.odds?.columnLabel ?? '',
-      ...(data.state.odds === undefined ? {} : { oddsLabel: data.state.odds.oddsLabel }),
-      ...(data.state.odds === undefined
-        ? {}
-        : { terrain: data.state.odds.terrain.defenderTerrain }),
-    })
-    pushLog(
-      'success',
-      `战斗掷骰（9.9）：2d6 = ${draw.value.faces.join('+')} = ${draw.value.total}；` +
-        `修正骰 ${dice.modifiedDice}（AR ${state.ar?.attackerAr ?? 0}−${state.ar?.defenderAr ?? 0}，工事 −${state.hedgehogLevel}）⇒ CRT「${dice.result.raw}」`,
-      '9.9',
-      derivation,
-    )
-    // ⑭ 接线：战斗掷骰（9.9）入会话日志；rolls＝本次 2d6，data 附逐项复核过程；
-    // 9.10 的选项仍未结清 ⇒ 挂 pending（按 CRT 给出的选项点数分别给攻守双方）
-    const pending: PendingEffect[] = []
-    if (optionsOf(dice.result, 'attacker') > 0)
-      pending.push({
-        kind: 'option',
-        unitIds: [...data.state.composition.attackerIds],
-        rule: '9.10',
-      })
-    if (optionsOf(dice.result, 'defender') > 0)
-      pending.push({
-        kind: 'option',
-        unitIds: [...data.state.composition.defenderIds],
-        rule: '9.10',
-      })
-    recordSettlement({
-      action: 'combatDice',
-      rule: '9.9',
-      rolls: [draw.value],
-      pending,
-      data: {
-        [DERIVATION_KEY]: derivation,
-        modifiedDice: dice.modifiedDice,
-        raw: dice.result.raw,
-      },
-    })
-    return true
+    return fireResolution.rollCombatDice()
   }
 
   /** C6 第 8 步（a）：强制军力损失（9.11c：AR 单位先受第一点；每人各受一点后才有人受第二点） */
@@ -9394,6 +9186,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   · 9.14 的位移 / 分配待决（`specialPending`）时**停住**——与移动一致（落点须玩家在地图上选）。
    */
   function triggerSpecialCombatAfterRetreat(): void {
+    const crossings: { unitId: string; hex: HexRef }[] = []
     for (const [unitId, text] of Object.entries(combatInputs.value.retreatPaths)) {
       const path = parseHexPath(text)
       if (path.length === 0) continue
@@ -9401,13 +9194,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (unit === undefined || unit.steps <= 0) continue
       const mobility = effectiveMobilityOf(unit)
       for (const hex of path) {
-        if (specialPending.value !== null) return
         // 9.12：本格「敌方占据 / 禁入」⇒ 单位在此被消灭，不算进入 ⇒ 到此为止
         if (combatRetreatFacts.value.enemyCombatUnitAt(hex, unit.side)) break
         if (combatRetreatFacts.value.prohibitedFor(mobility, hex)) break
-        resolveSpecialCombatAt(hex, unit.side, false, [unitId])
+        crossings.push({ unitId, hex })
       }
     }
+    fireResolution.scheduleRetreatCrossings(crossings)
   }
 
   /** C6 第 9 步：撤退（9.12：撤退格数＝剩余选项数；落点须满足完整撤退距离） */
@@ -9541,6 +9334,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * **不重复落盘**（否则补丁会二次应用：单位被再挪一次、进击标记再发一遍）。
      */
     if (state.finished === true) return true
+    if (specialPending.value !== null) return false
     const arUnit = units.value.find((unit) => unit.instanceId === state.ar?.attackerUnitId)
     const candidates = combatAdvanceCandidates.value.map((item) => ({
       id: item.id,
@@ -9589,6 +9383,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const entered = battleTarget.value?.hex ?? null
     if (entered !== null && data.advanceUnitIds.length > 0) {
       resolveSpecialCombatAt(entered, activeSide.value, true)
+      fireResolution.trackSpecialPending()
     }
     pushLog(
       'success',
@@ -9650,6 +9445,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C7：开/关轰炸工具（开启时清空上一场） */
   function setBarrageActive(on: boolean): void {
+    if (!canReplaceBarrage()) return
     barrageActive.value = on
     clearBarrage()
     pushLog('info', on ? '轰炸工具已开启（10.0 通用流程）' : '轰炸工具已关闭', '10.0')
@@ -9663,12 +9459,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   混在一起会让"关掉轰炸工具再打开"就能绕过每阶段一次的限制。
    */
   function clearBarrage(): void {
+    if (!canReplaceBarrage()) return
     barrageUnitIds.value = []
     barrageAirIds.value = []
-    barrageState.value = null
-    barrageError.value = null
-    barrageAwaitingHalfDie.value = false
-    barrageInputs.value = createBarrageInputs()
+    fireResolution.resetBarrage()
     /*
      * ★ 第六批条 23-②：修前**不清** `barrageKind` / `barrageTargetKind` ⇒
      *   一场低空扫射（kind 会带成 `'air'`，hipShoot 为 true）结束后，这两个选择器仍停在
@@ -9696,9 +9490,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     for (const patch of patches) {
       const unit = units.value.find((item) => item.instanceId === patch.unitId)
       if (unit === undefined) continue
-      if (patch.steps !== undefined) {
-        unit.steps = patch.steps
-        if (patch.steps <= 0) eliminated.push(unit)
+      if (patch.stepLoss !== undefined) {
+        unit.steps = Math.max(0, unit.steps - patch.stepLoss)
+        if (unit.steps <= 0) eliminated.push(unit)
       }
       if (patch.dg === true) applyDgToUnit(unit)
     }
@@ -9708,6 +9502,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C7：选/取消一个参炸单位（10.0e-F 的同类型限制由引擎裁决；此处只收集选择） */
   function toggleBarrageUnit(unitId: string): void {
+    if (!canReplaceBarrage()) return
     if (barrageUnitIds.value.includes(unitId)) {
       barrageUnitIds.value = barrageUnitIds.value.filter((id) => id !== unitId)
     } else {
@@ -9773,6 +9568,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C7：移除一架飞机（连带取消其参炸勾选） */
   function removeAirUnit(instanceId: string): void {
+    if (!canReplaceBarrage()) return
     const unit = airUnits.value.find((item) => item.instanceId === instanceId)
     airUnits.value = airUnits.value.filter((item) => item.instanceId !== instanceId)
     barrageAirIds.value = barrageAirIds.value.filter((id) => id !== instanceId)
@@ -9782,6 +9578,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C7：勾选/取消一架参炸飞机（10.2b 的短程判定随之更新） */
   function toggleBarrageAirUnit(instanceId: string): void {
+    if (!canReplaceBarrage()) return
     if (barrageAirIds.value.includes(instanceId)) {
       barrageAirIds.value = barrageAirIds.value.filter((id) => id !== instanceId)
     } else {
@@ -9817,6 +9614,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 全部退掉"的退路（方案 §4.3「Esc = 取消当前会话」）。
    */
   function clearBarrageSelectionNow(): void {
+    if (!canReplaceBarrage()) return
     barrageUnitIds.value = []
     barrageAirIds.value = []
     barrageState.value = null
@@ -9827,12 +9625,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** C7：切参炸单位类别（10.0e-F）与整体目标（10.0d）——换选即作废进行中的流程 */ function setBarrageKind(
     kind: BarrageKind,
   ): void {
+    if (!canReplaceBarrage()) return
     barrageKind.value = kind
     barrageState.value = null
     barrageError.value = null
   }
 
   function setBarrageTargetKind(kind: BarrageTargetKind): void {
+    if (!canReplaceBarrage()) return
     barrageTargetKind.value = kind
     barrageState.value = null
     barrageError.value = null
@@ -9840,6 +9640,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C7 第 1 步：宣布整体目标与轰炸值分配（10.0d / 10.0e） */
   function beginBarrageNow(): boolean {
+    if (!canReplaceBarrage() || (combatState.value !== null && !combatState.value.finished))
+      return false
     // 10.0：轰炸在**当前段的轰炸环节**（C 段限空中与舰炮、F 段限炮兵，来源限定由引擎判）
     if (!requireAction('barrage.declare', '宣布轰炸')) return false
     const targetHex = barrageTargetHex.value
@@ -10196,7 +9998,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '轰炸补给',
     )
     if (data === null) return false
-    barrageState.value = data.state
     const supply = data.state.supply
     // 10.1b：付了就真扣（原先只把状态标成已付，账本分文不动 ⇒ 免费轰炸）
     if (supply?.paid === true && supply.waived !== true && supply.requiredT > 0) {
@@ -10232,6 +10033,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         : `按初始列支付战斗补给 ${supply?.requiredT ?? 0} T（10.1b）`,
       supply?.rule ?? '10.1b',
     )
+    barrageState.value = data.state
     // ⑭ 接线：轰炸战斗补给（10.1b / 10.2c）入会话日志（本笔不掷骰）
     recordSettlement({
       action: 'barrageSupply',
@@ -10312,15 +10114,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** C7：按目标类别掷骰（10.0a 2 骰 / 10.0c 1 骰），并推进 rng 与计数 */
-  function drawBarrageDie(state: BarrageInteractionState): number {
-    // 10.0c：对设施掷一个骰子；10.0a：对战斗单位掷两枚骰子
-    const draw = isFacilityBarrage(state) ? roll1d6(rng.value) : roll2d6(rng.value)
-    rng.value = draw.rng
-    drawCount.value += 1
-    return draw.value.total
-  }
-
   /**
    * B28：**12.11a 的销毁骰**（1d6）——一律自动，不再让玩家填骰面
    *
@@ -10339,66 +10132,37 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * `1/2` 结果须再掷取整骰（10.0a）：本动作在需要时**自动补掷**，玩家若想自定骰值可先填 `inputs.die`/`halfDie`。
    */
   function rollBarrageDiceStep(): boolean {
-    const state = barrageState.value
-    if (state === null) return false
-    const inputs = barrageInputs.value
-    // ⑭ 接线：`drawBarrageDie` 只回报数字（不改它）⇒ 先记下掷骰前的骰源，按同一颗 PRNG
-    // 复算出 DiceRoll（10.0c 1 骰 / 10.0a 2 骰）供会话日志复算
-    const rngBefore = rng.value
-    let cursor = rngBefore
-    const rolls: DiceRoll[] = []
-    const die = inputs.die ?? drawBarrageDie(state)
-    if (inputs.die === null) {
-      const derived = isFacilityBarrage(state) ? roll1d6(cursor) : roll2d6(cursor)
-      rolls.push(derived.value)
-      cursor = derived.rng
-    }
-
-    let data = acceptBarrage(
-      resolveBarrageDice(state, {
-        die,
-        ...(inputs.halfDie === null ? {} : { halfDie: inputs.halfDie }),
-      }),
-      '掷骰',
-    )
-    if (data === null) return false
-    if (data.awaitingHalfDie) {
-      const halfDie = inputs.halfDie ?? drawBarrageDie(state)
-      if (inputs.halfDie === null) {
-        const derived = isFacilityBarrage(state) ? roll1d6(cursor) : roll2d6(cursor)
-        rolls.push(derived.value)
-        cursor = derived.rng
-      }
-      data = acceptBarrage(resolveBarrageDice(state, { die, halfDie }), '取整骰')
-      if (data === null) return false
-    }
-    barrageState.value = data.state
-    barrageAwaitingHalfDie.value = data.awaitingHalfDie
-    const result = data.state.result
-    pushLog(
-      'success',
-      `掷骰 ${die}${isFacilityBarrage(state) ? '（1 骰，10.0c）' : '（2 骰，10.0a）'}` +
-        ` ⇒ 格值 ${result?.code ?? '?'}` +
-        `${data.state.dice?.halfDie === undefined ? '' : `（取整骰 ${data.state.dice.halfDie}）`}`,
-      isFacilityBarrage(state) ? '10.0c' : '10.0a',
-    )
-    // ⑭ 接线：轰炸掷骰（10.0a / 10.0c）入会话日志；rolls＝本笔真实掷出的骰子（含 10.0a 的取整骰）
-    recordSettlement({
-      action: 'barrageDice',
-      rule: isFacilityBarrage(state) ? '10.0c' : '10.0a',
-      rolls,
-      data: {
-        facility: isFacilityBarrage(state),
-        die,
-        halfDie: data.state.dice?.halfDie ?? null,
-        code: result?.code ?? null,
-      },
-    })
-    return true
+    return fireResolution.rollBarrageDiceStep()
   }
 
   /** C7：把设施结果写进日志（10.0c A/B/C） */
-  function logFacilityPatch(patch: FacilityPatch): void {
+  function barrageFacilityFacts(hex: HexRef) {
+    const base = airBases.value.find((item) => sameHex(item.hex, hex))
+    return {
+      baseLevel: base?.level ?? barrageInputs.value.baseLevel,
+      isAirstrip: base?.isAirstrip ?? barrageInputs.value.isAirstrip,
+      portDamageBefore: barrageInputs.value.portDamageBefore,
+    }
+  }
+  function applyBarrageFacilityPatch(patch: FacilityPatch, hex: HexRef): void {
+    if (patch.baseLevelAfter !== undefined) {
+      const base = airBases.value.find((item) => sameHex(item.hex, hex))
+      const unit = units.value.find((item) => item.instanceId === base?.id)
+      if (unit !== undefined) unit.noncombatLevel = patch.baseLevelAfter
+    }
+    if (
+      patch.trainbustingPlaced === true &&
+      !trainbustingMarks.value.some((mark) => sameHex(mark.hex, hex))
+    ) {
+      trainbustingMarks.value = [
+        ...trainbustingMarks.value,
+        {
+          id: createId('tb'),
+          hex: { ...hex },
+          side: segmentGateQuery.value.side ?? activeSide.value,
+        },
+      ]
+    }
     if (patch.baseLevelAfter !== undefined)
       pushLog('success', `空军基地降级至 ${patch.baseLevelAfter} 级（10.0c-A）`, '10.0c-A')
     if (patch.portDamage !== undefined)
@@ -10420,7 +10184,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (state === null) return []
     return units.value.filter(
       (unit) =>
-        unit.side !== activeSide.value && sameHex(unit.hex, state.targetHex) && unit.isCombat,
+        unit.side !== (segmentGateQuery.value.side ?? activeSide.value) &&
+        sameHex(unit.hex, state.targetHex) &&
+        unit.isCombat,
     )
   })
 
@@ -10433,87 +10199,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (state === null) return []
     // 专规 1.4：盒内**不允许轰炸**，盒内驻机也不在该格 ⇒ 不作为 10.0c-A 的掷骰对象
     return onMapAirUnits.value.filter(
-      (air) => air.side !== activeSide.value && sameHex(air.hex, state.targetHex),
+      (air) =>
+        air.side !== (segmentGateQuery.value.side ?? activeSide.value) &&
+        sameHex(air.hex, state.targetHex),
     )
   })
 
   /** C7 第 5 步：结果确认（10.0a 损失分配 / 10.0c 设施结果）并落盘 */
   function confirmBarrageOutcomeStep(): boolean {
-    const state = barrageState.value
-    if (state === null) return false
-    const inputs = barrageInputs.value
-    // 10.0a：损失承受者只能是**目标格内的敌方战斗单位**（与面板输入共用同一投影）
-    const eligibleUnitIds = barrageLossTargets.value.map((unit) => unit.instanceId)
-    const losses = Object.entries(inputs.losses)
-      .map(([unitId, steps]) => ({ unitId, steps }))
-      .filter((loss) => loss.steps > 0)
-    const aircraft = Object.entries(inputs.aircraftRolls).map(([id, roll]) => ({ id, roll }))
-
-    const data = acceptBarrage(
-      planBarrageOutcome(state, {
-        eligibleUnitIds,
-        losses,
-        baseLevel: inputs.baseLevel,
-        isAirstrip: inputs.isAirstrip,
-        portDamageBefore: inputs.portDamageBefore,
-        aircraft,
-      }),
-      '结果确认',
-    )
-    if (data === null) return false
-    barrageState.value = data.state
-    applyBarragePatches(data.patches)
-    // 10.0c-A：括号结果 ⇒ 格内掷骰 ≥# 的飞机各损 1 军力（引擎逐机判定；修前在交互层被丢弃、从未落盘）
-    const aircraftLossIds = data.aircraftLossIds ?? []
-    for (const id of aircraftLossIds) applyAirStepLoss(id)
-    if (aircraftLossIds.length > 0)
-      pushLog(
-        'warning',
-        `10.0c-A：${aircraftLossIds.length} 架飞机掷骰达标 ⇒ 各损失 1 点军力`,
-        '10.0c-A',
-      )
-    if (data.facility !== undefined) logFacilityPatch(data.facility)
-
-    const outcome = data.state.outcome
-    if (outcome?.table === 'barrage') {
-      pushLog(
-        'success',
-        `轰炸结果（10.0a）：${outcome.value.detail}` +
-          `${outcome.value.stepLosses > 0 ? `；承受者 ${losses.map((loss) => `${nameOf(loss.unitId)} ${loss.steps} 点`).join('、')}` : ''}`,
-        '10.0a',
-      )
-    } else if (outcome?.table === 'barrage-vs-facility') {
-      pushLog('success', `对设施轰炸结果（10.0c）：${outcome.value.detail}`, outcome.value.rule)
-    }
-    // ⑭ 接线：轰炸结果确认（10.0a 损失分配 / 10.0c 设施结果）入会话日志（本笔不掷骰）
-    recordSettlement({
-      action: 'barrageOutcome',
-      rule:
-        outcome === undefined
-          ? '10.0a'
-          : outcome.table === 'barrage-vs-facility'
-            ? outcome.value.rule
-            : '10.0a',
-      data: {
-        table: outcome?.table ?? null,
-        detail: outcome?.value.detail ?? null,
-        losses: losses.map((loss) => ({ unitId: loss.unitId, steps: loss.steps })),
-        ...(aircraftLossIds.length > 0 ? { aircraftLossIds } : {}),
-        facilityPatch:
-          data.facility === undefined
-            ? null
-            : {
-                baseLevelAfter: data.facility.baseLevelAfter ?? null,
-                portDamage: data.facility.portDamage ?? null,
-                trainbustingPlaced: data.facility.trainbustingPlaced === true,
-              },
-      },
-    })
-    return true
+    return fireResolution.confirmBarrageOutcomeStep()
   }
 
   /** C7：放弃本次轰炸（中止 10.0 流程；已落盘的结果不自动回滚） */
   function cancelBarrage(): void {
+    if (!canReplaceBarrage()) return
     clearBarrage()
     pushLog('info', '放弃本次轰炸（10.0 流程中止）', '10.0')
   }
@@ -14226,6 +13925,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 时序说明：`confirmCombatRetreats` 遇到 `specialPending` 会先停在推进步（落点要玩家在地图上选），
      *   待决清空后没有第二次调用点 ⇒ 不在这里续上的话，突袭会永久卡在推进步。
      */
+    fireResolution.resumeRetreatCrossings()
     settleOverrunAdvanceIfRequired()
     return true
   }
@@ -14260,6 +13960,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 9.14：放弃本次待决（位移不落盘；已即时落盘者不回滚） */
   function cancelSpecialCombatNow(): void {
     if (specialPending.value === null) return
+    if (combatSupplyCommitted.value) {
+      pushLog('warning', '战斗撤退或推进产生的位移必须完成，不能丢弃', '9.12f / 9.14')
+      return
+    }
     specialPending.value = null
     pushLog('info', '9.14 待决已关闭（位移未落盘；已定案的夺取不回滚）', '9.14')
     settleOverrunAdvanceIfRequired()
@@ -14709,6 +14413,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ★ 闸门照旧留给引擎/统一闸门：本函数只对齐盘面事实，宣布是否合法由 `beginBarrageNow` 判。
    */
   function beginAirBarrageNow(): boolean {
+    if (!canReplaceBarrage()) return false
     const state = airState.value
     const target = airTargetHex.value
     if (state === null || target === null) {
@@ -16161,6 +15866,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 宣布是否合法仍归引擎（`beginBarrageNow`）。
    */
   function pickBarrageTargetAt(hex: HexRef): void {
+    if (!canReplaceBarrage()) return
+    fireResolution.resetBarrage()
     barragePickHex.value = { ...hex }
     pushLog('info', `轰炸目标格 → ${hexLabel(hex)}（10.0d）`, '10.0d')
   }
@@ -16281,6 +15988,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 直接跳到某一环（引擎验证页/测试用；越界即拒绝，不夹取——夹取会掩盖调用方的错） */
   function setSegmentStepIndex(index: number): boolean {
+    if (!canReplaceCombat() || !canReplaceBarrage() || specialPending.value !== null) return false
     if (!Number.isInteger(index) || index < 0 || index >= playerSegmentSteps.value.length)
       return false
     segmentStepIndex.value = index
@@ -19075,6 +18783,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 重置局（含重设种子）——局况一并回到初始（第 1 回合 / 轴心国先手 / C 移动段） */
   function resetAll(nextSeed = DEFAULT_SEED): void {
+    fireResolution.resetCombat()
+    fireResolution.resetBarrage()
     units.value = []
     selectedId.value = null
     pendingRecord.value = null
@@ -19519,6 +19229,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function assertCompleteSettlement(): void {
     if (
+      combatSupplyCommitted.value ||
       (combatState.value !== null && !combatState.value.finished) ||
       (barrageState.value !== null && !barrageState.value.finished) ||
       (airState.value !== null && !airState.value.finished) ||
@@ -19547,6 +19258,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (prepared.sourceVersion === 3) migrateBoardV3ToV4(prepared.fields)
       const merged = normalizeSpDumpsOnLoad()
       clearCombat(true)
+      fireResolution.resetBarrage()
       moveInteraction.value = null
       movePick.value = null
       pendingZocConfirm.value = null
@@ -19625,6 +19337,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   function resetBoardNow(nextSeed = DEFAULT_SEED): void {
     clearCombat(true)
+    fireResolution.resetBarrage()
     restoreBoard(boardRegistry.initial(), true)
     localPhase.value = 'movement'
     localTurn.value = scenarioTurnRange(scenarioId.value).firstTurn
@@ -19638,6 +19351,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 只自动执行规则义务；战损如何分配等玩家选择必须留在正式面板。 */
   function settleSegmentObligations(wholePhase = false): boolean {
+    if (specialPending.value !== null) return false
     if (combatState.value !== null && !combatState.value.finished) return false
     if (barrageState.value !== null && !barrageState.value.finished) return false
     if (
@@ -19707,6 +19421,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   return {
     activeSide,
+    engagementDecisionRole: fireResolution.decisionRole,
     initialSetupInProgress,
     resetBoardNow,
     supplyRecoverySettled,

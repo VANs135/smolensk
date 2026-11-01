@@ -194,6 +194,33 @@ function runSupplyStep(
   return workbench.confirmCombatSupply()
 }
 
+/** 测试玩家完成真实战斗后再检查换段账本；已付款的战斗不能直接抹除。 */
+function finishCombat(store: ReturnType<typeof useWorkbenchStore>): void {
+  expect(store.declareCombatArStep('attacker')).toBe(true)
+  expect(store.declareCombatArStep('defender')).toBe(true)
+  expect(store.autoResolveCombatToOutcome()).toBe(true)
+  for (let guard = 0; guard < 12 && !store.combatState!.finished; guard++) {
+    const step = store.combatState!.step
+    if (step === 'losses') expect(store.confirmCombatLosses()).toBe(true)
+    else if (step === 'options') {
+      store.combatInputs.optionRetreatHexes = store.combatRequirement!.options
+      store.combatInputs.optionLossPoints = 0
+      expect(store.confirmCombatOptions()).toBe(true)
+    } else if (step === 'retreat') {
+      for (const plan of store.combatRetreatPlans)
+        for (const unit of plan.units) {
+          const destination =
+            unit.destinations.find((item) => !item.forcedDestruction) ?? unit.destinations[0]!
+          store.combatInputs.retreatPaths[unit.unitId] = destination.path
+            .map((hex) => `${hex.col}.${hex.row}`)
+            .join(',')
+        }
+      expect(store.confirmCombatRetreats()).toBe(true)
+    } else if (step === 'advance') expect(store.confirmCombatAdvance()).toBe(true)
+  }
+  expect(store.combatState!.finished).toBe(true)
+}
+
 describe('批 A 切片 3③：9.1c 的攻击账本（每战斗环节一次）', () => {
   let stores: ReturnType<typeof newStores>
 
@@ -290,6 +317,7 @@ describe('批 A 切片 3③：9.1c 的攻击账本（每战斗环节一次）', 
     expect(runSupplyStep(stores)).toBe(true)
     expect(workbench.attackPhaseLedger.unitIds).toEqual(['a1'])
 
+    finishCombat(workbench)
     workbench.setPhase('exploitation')
     expect(workbench.attackPhaseLedger.unitIds).toEqual([])
     expect(workbench.attackPhaseLedger.hexes).toEqual([])
@@ -302,7 +330,9 @@ describe('批 A 切片 3③：9.1c 的攻击账本（每战斗环节一次）', 
     workbench.cancelCombat()
     expect(workbench.attackPhaseLedger.unitIds).toEqual(['a1'])
 
-    // 回到本段的第一环（炮击）⇒ 环节变了，账本随之清空（`setSegmentStepIndex` 是验证页/测试路径）
+    expect(workbench.setSegmentStepIndex(0)).toBe(false)
+    finishCombat(workbench)
+    // 战斗完成后回到第一环 ⇒ 环节变了，账本随之清空。
     expect(workbench.setSegmentStepIndex(0)).toBe(true)
     expect(workbench.attackPhaseLedger.unitIds).toEqual([])
     expect(workbench.attackPhaseLedger.hexes).toEqual([])

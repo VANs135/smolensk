@@ -454,6 +454,17 @@ describe('9.6 行动值指定：攻方先、守方后', () => {
       }).ok,
     ).toBe(false)
   })
+  it('9.6：攻方半步声明必须合法，公开后的单位不能在守方宣布时偷换', () => {
+    const state = atArStep()
+    const request = { attackers: attackerPair(), defenders: [defenderUnit()], attackerUnitId: 'a1' }
+    expect(declareCombatAr(state, { ...request, attackerUnitId: 'missing' }).ok).toBe(false)
+    const pending = unwrap(declareCombatAr(state, request)).state
+    expect(pending.declaredAttackerArUnitId).toBe('a1')
+    expect(
+      declareCombatAr(pending, { ...request, attackerUnitId: 'a2', defenderUnitId: 'd1' }),
+    ).toMatchObject({ ok: false, rule: '9.6', reason: 'attackerArAlreadyDeclared' })
+    expect(declareCombatAr(pending, { ...request, defenderUnitId: 'd1' }).ok).toBe(true)
+  })
 })
 
 describe('9.4 逐堆叠地形宣布与初始攻防比', () => {

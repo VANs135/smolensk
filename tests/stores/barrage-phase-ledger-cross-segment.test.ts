@@ -199,6 +199,10 @@ describe('第六批 P0-1：10.0e-A/B 账本的换段清零（条 23）', () => {
     setupBarrage(workbench, gun.instanceId)
     runBarrageToLedger(stores, gun)
     expect(workbench.barragePhaseLedger.hexes).toEqual([`${TARGET_HEX.col}.${TARGET_HEX.row}`])
+    expect(workbench.confirmBarrageShiftsStep()).toBe(true)
+    workbench.barrageInputs.die = 2
+    expect(workbench.rollBarrageDiceStep()).toBe(true)
+    expect(workbench.confirmBarrageOutcomeStep()).toBe(true)
     workbench.cancelBarrage()
 
     // 换段（真实入口）⇒ 账本归零；再换一门炮打同一格不该再被 10.0e-A 拒
@@ -235,7 +239,6 @@ describe('第六批 P0-1：10.0e-A/B 账本的换段清零（条 23）', () => {
     workbench.setBarrageTargetKind('port')
     expect(workbench.barrageKind).toBe('air')
     expect(workbench.barrageTargetKind).toBe('port')
-
     workbench.cancelBarrage()
     expect(workbench.barrageKind).toBe('artillery')
     expect(workbench.barrageTargetKind).toBe('combatUnits')
@@ -274,6 +277,10 @@ describe('第六批 P0-1：10.0e-A/B 账本的换段清零（条 23）', () => {
     place(workbench, rifleRecord(), TARGET2_HEX, 'soviet', 'def-2')
     setupBarrage(workbench, gun.instanceId)
     runBarrageToLedger(stores, gun)
+    expect(workbench.confirmBarrageShiftsStep()).toBe(true)
+    workbench.barrageInputs.die = 2
+    expect(workbench.rollBarrageDiceStep()).toBe(true)
+    expect(workbench.confirmBarrageOutcomeStep()).toBe(true)
     workbench.cancelBarrage()
 
     expect(workbench.setSegmentStepIndex(0)).toBe(true)

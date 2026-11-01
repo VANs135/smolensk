@@ -561,6 +561,37 @@ describe('10.0a：结果确认（DG 强制 + 目标玩家分配损失）', () =>
       }),
     ).state
 
+  it('10.0a：容量按现有军力限制，多余损失忽略，不能重复列同一承受者', () => {
+    const rolled = resolved(12)
+    expect(
+      planBarrageOutcome(rolled, {
+        eligibleUnitIds: ['e1'],
+        eligibleUnits: [{ id: 'e1', steps: 1 }],
+        losses: [{ unitId: 'e1', steps: 1 }],
+      }).ok,
+    ).toBe(true)
+    expect(
+      planBarrageOutcome(rolled, {
+        eligibleUnitIds: ['e1', 'e2'],
+        eligibleUnits: [
+          { id: 'e1', steps: 1 },
+          { id: 'e2', steps: 3 },
+        ],
+        losses: [{ unitId: 'e1', steps: 2 }],
+      }),
+    ).toMatchObject({ ok: false, reason: 'lossExceedsSteps:e1' })
+    expect(
+      validateBarrageLossAllocation({
+        required: 2,
+        eligibleUnitIds: ['e1'],
+        losses: [
+          { unitId: 'e1', steps: 1 },
+          { unitId: 'e1', steps: 1 },
+        ],
+      }),
+    ).toMatchObject({ ok: false, reason: 'duplicateLossUnit' })
+  })
+
   it('10.0a：DG ⇒ 该格**全体战斗单位**进入 DG（无损失分配）', () => {
     const state = toDiceStep()
     const rolled = unwrap(resolveBarrageDice(state, { die: 7 })).state
@@ -597,8 +628,8 @@ describe('10.0a：结果确认（DG 强制 + 目标玩家分配损失）', () =>
     expect(done.patches).toEqual([
       { unitId: 'e1', dg: true },
       { unitId: 'e2', dg: true },
-      { unitId: 'e1', steps: 1 },
-      { unitId: 'e2', steps: 1 },
+      { unitId: 'e1', stepLoss: 1 },
+      { unitId: 'e2', stepLoss: 1 },
     ])
   })
 

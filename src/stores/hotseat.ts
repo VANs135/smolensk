@@ -90,7 +90,7 @@ export const useHotseatStore = defineStore('hotseat', () => {
     const attacker =
       actingSideFor({ phase: workbench.phase, activeSide: workbench.activeSide }) ??
       workbench.activeSide
-    return workbench.combatRequirement?.side === 'defender' ? otherSide(attacker) : attacker
+    return workbench.engagementDecisionRole === 'defender' ? otherSide(attacker) : attacker
   })
   const viewerOverride = ref<Side | null>(null)
   const viewerSide = computed<Side>(() => viewerOverride.value ?? decisionSide.value)

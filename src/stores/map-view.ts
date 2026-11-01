@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { pendingRetreatPlan } from '@/engine/rules/engagement-progress'
 import { computed, ref, watch } from 'vue'
 
 import type { HexRef, Side } from '@/data'
@@ -620,7 +621,7 @@ export const useMapViewStore = defineStore('mapView', () => {
   const retreatSidePlan = computed<CombatRetreatSidePlan | null>(() => {
     const plans = workbench.combatRetreatPlans
     if (plans.length === 0) return null
-    return plans.find((plan) => !plan.complete) ?? plans[plans.length - 1]!
+    return pendingRetreatPlan(plans)
   })
 
   /** 该方当前正在选落点的那一名单位（默认第一个还没选的；由界面切换时手动指定） */

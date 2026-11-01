@@ -193,6 +193,8 @@ export interface CombatInteractionState {
   supply?: { attacker: CombatSideSupply; defender: CombatSideSupply }
   /** 3) AR */
   ar?: CombatArDeclaration
+  /** 9.6：攻方先公开且锁定的行动值单位；守方后宣布。 */
+  declaredAttackerArUnitId?: string
   /** 4) 地形与初始列 */
   odds?: CombatOddsResult
   /** 6) 奇袭 */
@@ -415,7 +417,7 @@ export function planCombatSupply(
  *
  * 「每位玩家各选择一个单位，该单位将决定己方在战斗中的行动值（AR），由**攻击方先宣布**自己的选择。
  *   每方只能选择一个单位，且该单位**必须参与战斗**。」
- * 9.6 的时机由界面保证（先收攻方的选择，再收守方的）——本函数同时收两项，若只给攻方则报 `defenderArPending`。
+ * 正式入口先收攻方公开声明并写回状态，再收守方；只给攻方时锁定该单位并返回 `awaitingDefender`。
  */
 export function declareCombatAr(
   state: CombatInteractionState,
@@ -428,7 +430,23 @@ export function declareCombatAr(
   },
 ): RuleOutcome<{ state: CombatInteractionState; awaitingDefender: boolean }> {
   if (state.step !== 'declareAr') return fail('9.2', `notAtArStep:${state.step}`)
-  if (input.defenderUnitId === undefined) return succeed('9.6', { state, awaitingDefender: true })
+  if (
+    state.declaredAttackerArUnitId !== undefined &&
+    state.declaredAttackerArUnitId !== input.attackerUnitId
+  )
+    return fail('9.6', 'attackerArAlreadyDeclared')
+  if (input.defenderUnitId === undefined) {
+    if (
+      !unitsOfSide(state, input.attackers, 'attacker').some(
+        (unit) => unit.id === input.attackerUnitId && unit.steps > 0,
+      )
+    )
+      return fail('9.6', 'attackerArUnitNotParticipating')
+    return succeed('9.6', {
+      state: { ...state, declaredAttackerArUnitId: input.attackerUnitId },
+      awaitingDefender: true,
+    })
+  }
 
   const declared = declareBattleAr({
     attackers: unitsOfSide(state, input.attackers, 'attacker'),

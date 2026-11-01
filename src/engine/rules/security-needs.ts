@@ -1,4 +1,4 @@
-import type { HexRef } from '@/data'
+import type { HexRef, Side } from '@/data'
 
 import { succeed, type RuleOutcome } from '../result-types'
 
@@ -17,12 +17,12 @@ import { succeed, type RuleOutcome } from '../result-types'
  *     本作已有的标记表见 `markers.json`（`trainbusting`）。
  */
 
-/** 3.3b：一枚 Trainbusting 标记的状态视图（由调用方持有） */
+/** 3.3b / 14.8：运输破坏共用标记；治安需求放置的标记为苏军。 */
 export interface TrainbustingMarkerView {
   id: string
   hex: HexRef
-  /** 放置方恒为苏军（3.3b） */
-  side: 'soviet'
+  /** 实际放置方，决定 14.8c 的清理时点。 */
+  side: Side
 }
 
 /** 3.3b：一座轴方控制城市的治安检查输入 */

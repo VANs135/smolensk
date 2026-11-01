@@ -419,6 +419,7 @@ const quickDefenderArItems = computed(() =>
           <h4 class="block__title">③ 宣布行动值（9.6：攻方先、守方后）</h4>
           <!-- B14c：AR 单位＝**算子图阵列**（原来是两个纯文字下拉） -->
           <CounterPicker
+            v-if="state.declaredAttackerArUnitId === undefined"
             title="攻方 AR 单位（9.6）"
             hint="9.6：每方只能选一个参战单位担任行动值；DG 单位 −1"
             :items="attackerArItems"
@@ -426,7 +427,7 @@ const quickDefenderArItems = computed(() =>
             @pick="workbench.combatInputs.attackerArUnitId = $event"
             @hover="hoverUnit"
           />
-          <div class="row">
+          <div v-if="state.declaredAttackerArUnitId === undefined" class="row">
             <BaseButton
               variant="secondary"
               size="sm"
@@ -436,7 +437,9 @@ const quickDefenderArItems = computed(() =>
               攻方宣布
             </BaseButton>
           </div>
+          <p v-else>攻方已宣布：{{ nameOf(state.declaredAttackerArUnitId) }}</p>
           <CounterPicker
+            v-if="state.declaredAttackerArUnitId !== undefined"
             title="守方 AR 单位（9.6）"
             :hint="
               workbench.nkvdArRequiredNow
@@ -456,7 +459,10 @@ const quickDefenderArItems = computed(() =>
             <BaseButton
               variant="primary"
               size="sm"
-              :disabled="workbench.combatInputs.defenderArUnitId === null"
+              :disabled="
+                state.declaredAttackerArUnitId === undefined ||
+                workbench.combatInputs.defenderArUnitId === null
+              "
               @click="workbench.declareCombatArStep('defender')"
             >
               守方宣布并继续（9.6）

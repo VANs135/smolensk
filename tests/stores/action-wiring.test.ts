@@ -21,6 +21,7 @@ import { UNGATED_ACTIONS, type UngatedKind } from '@/stores/action-wiring'
  */
 
 const STORE_FILES = [
+  'src/stores/fire-resolution.ts',
   'src/stores/supply-phase.ts',
   'src/stores/workbench.ts',
   'src/stores/containers.ts',

@@ -257,6 +257,10 @@ describe('A 组：10.0e-A/B 的按阶段轰炸账本', () => {
     setupBarrage(workbench, gun.instanceId)
     expect(workbench.beginBarrageNow()).toBe(true)
     expect(workbench.confirmBarrageSupplyStep()).toBe(true)
+    expect(workbench.confirmBarrageShiftsStep()).toBe(true)
+    workbench.barrageInputs.die = 2
+    expect(workbench.rollBarrageDiceStep()).toBe(true)
+    expect(workbench.confirmBarrageOutcomeStep()).toBe(true)
     workbench.cancelBarrage() // 中止本场（账本不动）
 
     // 换一格、还是这一门炮 ⇒ 10.0e-B
@@ -278,6 +282,10 @@ describe('A 组：10.0e-A/B 的按阶段轰炸账本', () => {
     setupBarrage(workbench, gun.instanceId)
     expect(workbench.beginBarrageNow()).toBe(true)
     expect(workbench.confirmBarrageSupplyStep()).toBe(true)
+    expect(workbench.confirmBarrageShiftsStep()).toBe(true)
+    workbench.barrageInputs.die = 2
+    expect(workbench.rollBarrageDiceStep()).toBe(true)
+    expect(workbench.confirmBarrageOutcomeStep()).toBe(true)
     workbench.cancelBarrage()
 
     // 同样的目标格、另一门炮（它本阶段还没炸过）⇒ 只可能是 10.0e-A
@@ -298,6 +306,10 @@ describe('A 组：10.0e-A/B 的按阶段轰炸账本', () => {
     setupBarrage(workbench, gun.instanceId)
     expect(workbench.beginBarrageNow()).toBe(true)
     expect(workbench.confirmBarrageSupplyStep()).toBe(true)
+    expect(workbench.confirmBarrageShiftsStep()).toBe(true)
+    workbench.barrageInputs.die = 2
+    expect(workbench.rollBarrageDiceStep()).toBe(true)
+    expect(workbench.confirmBarrageOutcomeStep()).toBe(true)
     workbench.cancelBarrage()
 
     // ① 同一个阶段里重来 ⇒ 仍被账本拦住

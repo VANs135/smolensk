@@ -159,8 +159,8 @@ export interface BarrageUnitPatch {
   unitId: string
   /** 5.10：置为 DG */
   dg?: true
-  /** 结算后的剩余军力（10.0a 的 `#` 与 `1/2`） */
-  steps?: number
+  /** 本次损失的军力点数（10.0a），与战斗补丁的剩余军力明确区分。 */
+  stepLoss?: number
 }
 
 /** 对设施轰炸产生的设施变更（由状态层落盘） */
@@ -727,6 +727,7 @@ export function validateBarrageLossAllocation(input: {
   losses: readonly { unitId: string; steps: number }[]
   /** 目标格内可作为承受者的战斗单位 id */
   eligibleUnitIds: readonly string[]
+  units?: readonly { id: string; steps: number }[]
 }): BarrageLossCapacity {
   const allocated = input.losses.reduce((sum, loss) => sum + loss.steps, 0)
   const unknown = input.losses.find((loss) => !input.eligibleUnitIds.includes(loss.unitId))
@@ -745,12 +746,33 @@ export function validateBarrageLossAllocation(input: {
       ok: false,
       reason: `invalidSteps:${invalid.unitId}`,
     }
-  if (allocated !== input.required)
+  if (new Set(input.losses.map((loss) => loss.unitId)).size !== input.losses.length)
+    return { required: input.required, allocated, ok: false, reason: 'duplicateLossUnit' }
+  if (input.units !== undefined) {
+    const excess = input.losses.find(
+      (loss) => loss.steps > (input.units!.find((unit) => unit.id === loss.unitId)?.steps ?? 0),
+    )
+    if (excess !== undefined)
+      return {
+        required: input.required,
+        allocated,
+        ok: false,
+        reason: `lossExceedsSteps:${excess.unitId}`,
+      }
+  }
+  const required =
+    input.units === undefined
+      ? input.required
+      : Math.min(
+          input.required,
+          input.units.reduce((sum, unit) => sum + unit.steps, 0),
+        )
+  if (allocated !== required)
     return {
       required: input.required,
       allocated,
       ok: false,
-      reason: `lossAllocationMismatch:${allocated}!=${input.required}`,
+      reason: `lossAllocationMismatch:${allocated}!=${required}`,
     }
   return { required: input.required, allocated, ok: true }
 }
@@ -759,6 +781,8 @@ export function validateBarrageLossAllocation(input: {
 export interface BarrageOutcomeInput {
   /** 10.0a：目标格内可作为损失承受者的战斗单位 id */
   eligibleUnitIds?: readonly string[]
+  /** 当前目标军力，用于容量校验及超额损失忽略。正式盘面必须提供。 */
+  eligibleUnits?: readonly { id: string; steps: number }[]
   /** 10.0a：由目标玩家给出的损失分配（合计须等于结果点数） */
   losses?: readonly { unitId: string; steps: number }[]
   /* ── 以下仅对设施轰炸（10.0c）有效 ── */
@@ -775,7 +799,7 @@ export interface BarrageOutcomeInput {
 /** `planBarrageOutcome` 的结论 */
 export interface BarrageOutcomeStepResult {
   state: BarrageInteractionState
-  /** 10.0a：对战斗单位的变更（DG / 剩余军力） */
+  /** 10.0a：对战斗单位的变更（DG / 本次损失的军力点数） */
   patches: BarrageUnitPatch[]
   /** 10.0c：设施变更 */
   facility?: FacilityPatch
@@ -842,6 +866,7 @@ export function planBarrageOutcome(
       required: outcome.stepLosses,
       losses,
       eligibleUnitIds: input.eligibleUnitIds ?? [],
+      ...(input.eligibleUnits === undefined ? {} : { units: input.eligibleUnits }),
     })
     if (!capacity.ok) return fail('10.0a', capacity.reason ?? 'invalidLossAllocation')
   } else if (losses.length > 0) {
@@ -855,7 +880,7 @@ export function planBarrageOutcome(
   }
   for (const loss of losses) {
     if (loss.steps <= 0) continue
-    patches.push({ unitId: loss.unitId, steps: loss.steps })
+    patches.push({ unitId: loss.unitId, stepLoss: loss.steps })
   }
 
   return succeed(outcome.rule, {
