@@ -57,6 +57,7 @@ import type {
 import { browserStorage, createId, type KeyValueStorage } from '@/shared'
 import { useWorkbenchStore } from './workbench'
 import { useSetupStore } from './setup'
+import { captureGameSnapshot, prepareGameSnapshot } from './game-snapshot'
 
 /**
  * 会话流程条（W6 C10）——**独立**的整局流程驱动器
@@ -819,26 +820,22 @@ export const useGameSessionStore = defineStore('gameSession', () => {
      * 操作台里，谁都没存过 ⇒ 读档后"时钟走了、盘面没走"，两者互相矛盾。
      * 抓取失败时**不落盘**：宁可当场报错，也不要存出一份"没有盘面"的档去骗后面的读档。
      */
-    let board: unknown
-    if (boardCodec !== null) {
-      try {
-        const captured = boardCodec.capture()
-        board =
-          setupCodec === null
-            ? captured
-            : {
-                ...(captured as Record<string, unknown>),
-                setup: setupCodec.capture(),
-              }
-      } catch (cause) {
-        saveError.value = {
-          rule: SAVE_RULE,
-          reason: `boardCaptureFailed:${(cause as Error).message}`,
-        }
-        return false
+    let snapshot
+    try {
+      snapshot = captureGameSnapshot(current, boardCodec, setupCodec)
+    } catch (cause) {
+      saveError.value = {
+        rule: SAVE_RULE,
+        reason: `boardCaptureFailed:${(cause as Error).message}`,
       }
+      return false
     }
-    const text = serializeSaveFile(current, new Date().toISOString(), undefined, board)
+    const text = serializeSaveFile(
+      snapshot.session,
+      new Date().toISOString(),
+      undefined,
+      snapshot.board,
+    )
     try {
       adapter.setItem(SAVE_SLOT_KEY, text)
       slot.value = describeSaveFile(text)
@@ -888,26 +885,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
           ? (boardPayload as Record<string, unknown>)['setup']
           : undefined
       if (setupPayload !== undefined && setupCodec === null) useSetupStore()
-      if (setupPayload !== undefined && !setupCodec?.accepts(setupPayload)) {
-        saveError.value = { rule: SAVE_RULE, reason: 'setupUnrecognized:初设状态无效' }
-        return false
-      }
-      if (boardCodec !== null) {
-        if (boardPayload === undefined) {
-          saveError.value = {
-            rule: SAVE_RULE,
-            reason: 'boardMissing:该档不含盘面快照（修前存档）——读它会让记录轨与盘面错位，故拒读',
-          }
-          return false
-        }
-        if (!boardCodec.accepts(boardPayload)) {
-          saveError.value = {
-            rule: SAVE_RULE,
-            reason: 'boardUnrecognized:盘面快照的版本或字段表不认识（快照来自别的构建？）',
-          }
-          return false
-        }
-      }
+      const prepared = prepareGameSnapshot(file.session, boardPayload, boardCodec, setupCodec)
       const backup = {
         scenario: scenarioId.value,
         session: session.value,
@@ -922,7 +900,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       }
       try {
         scenarioId.value = file.scenarioId
-        session.value = file.session
+        session.value = prepared.session
         // 新会话上台：上一次的裁决记录与盘面注入值一并复位（不沿用上一局）
         lastAdvanceKind.value = null
         earlyDecisionMet.value = false
@@ -936,8 +914,8 @@ export const useGameSessionStore = defineStore('gameSession', () => {
          * （`refreshScenarioBoundLedgers` / `seedVictoryControlFromScenario`）会按**新剧本**重播
          * 13.3f 换轨账本与 5.0c 胜利格控制账本；顺序反了，这两本账会被那次重播冲掉。
          */
-        if (boardCodec !== null && boardPayload !== undefined) boardCodec.restore(boardPayload)
-        if (setupPayload !== undefined) setupCodec?.restore(setupPayload)
+        if (boardCodec !== null && boardPayload !== undefined) boardCodec.restore(prepared.board)
+        if (setupPayload !== undefined) setupCodec?.restore(prepared.setup)
       } catch (cause) {
         scenarioId.value = backup.scenario
         session.value = backup.session

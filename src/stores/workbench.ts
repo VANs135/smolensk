@@ -19,6 +19,9 @@ import { DERIVATION_KEY, type Derivation } from '@/engine/derivation'
 import { combatDerivation, surpriseDerivation } from '@/engine/derivation-builders'
 import { createRngState, roll1d6, roll2d6 } from '@/engine/rng'
 import { validBoardEntities } from '@/engine/board-validation'
+import { actingSideFor } from '@/engine/game-lifecycle'
+import { createSnapshotRegistry } from './snapshot-registry'
+import { createPhaseCoordinator } from './phase-coordinator'
 import { automaticAttritionAllocation } from '@/engine/rules/supply-phase'
 // B37：分界线的渲染投影类型（渲染层只画被给的东西）
 import type { BoundaryLine } from '@/render/map-render'
@@ -16451,7 +16454,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       phase: phase.value as GamePhase,
       segment: segmentStep.value?.id ?? '',
       role: reaction ? 'nonActive' : 'active',
-      side: reaction ? opponentOf(activeSide.value) : activeSide.value,
+      side: actingSideFor({ phase: phase.value, activeSide: activeSide.value }) ?? activeSide.value,
       /*
        * B37：**段末**声明（`at: 'end'` 那一类时机只在这里放行）
        *
@@ -19855,7 +19858,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 逐字段 `JSON.parse(JSON.stringify(…))` 深拷贝：**与落盘同一套语义**（存档本就是 JSON 文本），
    * 于是"内存里往返一次"与"写文件再读回来"完全同构；也保证快照不会随盘面后续改动而变。
    */
-  function snapshotBoard(): unknown {
+  function assertCompleteSettlement(): void {
     if (
       (combatState.value !== null && !combatState.value.finished) ||
       (barrageState.value !== null && !barrageState.value.finished) ||
@@ -19866,34 +19869,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ) {
       throw new Error('请先完成当前战斗、移动、付款或其他结算，再保存或读取对局')
     }
-    const fields: Record<string, unknown> = {}
-    for (const [key, source] of boardSnapshotFields()) {
-      fields[key] = JSON.parse(JSON.stringify(source.value ?? null)) as unknown
-    }
-    return { version: BOARD_SNAPSHOT_VERSION, fields }
   }
 
-  /**
-   * 这份快照**认识**吗（读档时"先验后改"：不认识就拒读，此刻尚未改动任何状态）
-   *
-   * 判据两条：
-   *   ① **版本号**一致（字段表变了就必须递增它）；
-   *   ② 字段表**逐项在场**，且每项的种类与该 ref **自身的种类**相容 —— 防"结构改过却忘了递增
-   *      版本号"的档混进来（那种档一落值就把 ref 变成另一个形状）。
-   *
-   * ★ 种类判据对着的是**字段自身**（"这个 ref 本来装什么"），**不是**比"快照 vs 当前值"：
-   *   读档时当前盘面往往已被改动过（用例里就是先把 units 清空再读档），拿两者互比会把
-   *   "当前是 null / 快照里有对象"这种**正常**情形判成不认识 ⇒ 合法档被拒。故：
-   *   · 该 ref 当前是 `null` ⇒ **不约束**（这一族本就是可空的账本：`supplyPhasePlan` / `specialPending`…）；
-   *   · 数组 ⇒ 快照必须是数组（这一类从不为 null，故这条足够严）；
-   *   · 非空对象 ⇒ 快照必须是非空对象；标量 ⇒ `typeof` 相同。
-   */
-  /**
-   * 各**旧版本**缺的字段（只有这些键允许"不在场"，由迁移补）
-   *
-   * 这是把"旧档跳过整张字段表"收窄成**逐版本白名单**：老键仍然逐项在场检查，
-   * 缺 `units` / `airUnits` 这种老键照样拒读（此前会静默放行，读成"时钟走了、盘面没动"）。
-   */
   const LEGACY_MISSING_KEYS: Readonly<Record<number, readonly string[]>> = {
     // v3：补员还是"账本数字"（无 replPending/replFtrTac），也没有图外空军盒驻机名单
     3: ['replPending', 'replFtrTac', 'airBoxMembers', ...V6_FIELDS],
@@ -19901,107 +19878,47 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     4: ['airBoxMembers', ...V6_FIELDS],
     5: V6_FIELDS,
   }
-  const boardSnapshotDefaults = new Map(
-    boardSnapshotFields().map(([key, source]) => [
-      key,
-      JSON.parse(JSON.stringify(source.value ?? null)) as unknown,
-    ]),
-  )
-
-  /** 读档时的**旧版本次数**（`accepts` 记下、`restore` 消费；null ＝ 当前版本，无需迁移） */
-  let boardLegacyVersion: number | null = null
-
-  function boardSnapshotFits(board: unknown): boolean {
-    if (typeof board !== 'object' || board === null) return false
-    const payload = board as { version?: unknown; fields?: unknown }
-    /*
-     * §5-D：**只接受上一个版本**（3 → 4）的旧档，并由 `restoreBoard` 跑确定性迁移
-     * （补员账本 → 盘面算子）。再往前的版本一律拒读（不猜更老的结构）。
-     * ★ 当前版本**仍要走下面逐字段的在场检查**（缺一项即拒：那是"结构改过却忘了递增版本"的信号），
-     *   旧版本则跳过该检查——它的字段表本来就没有本版本的新键，缺项由迁移补。
-     */
-    boardLegacyVersion = null
-    /*
-     * ★ 修（2026-10-30）：旧档窗口从"只认上一版"放宽成"3 与 4 都认"——因为本轮把版本推到 5
-     *   （新增 `airBoxMembers`），若仍只认 4，**v3 档会立刻变成"不认识"**，而 v3 本来有确定性迁移
-     *   （`migrateBoardV3ToV4`）。同时把"旧档跳过整张字段表"改成**只跳过该版本确实没有的新键**
-     *   ——`units`/`airUnits` 这类老键仍然逐项在场检查（缺了照样拒，不再"缺项也放行"）。
-     */
-    const version = payload.version
-    const legacy = typeof version === 'number' && version >= 3 && version < BOARD_SNAPSHOT_VERSION
-    if (legacy) boardLegacyVersion = version
-    else if (version !== BOARD_SNAPSHOT_VERSION) return false
-    if (typeof payload.fields !== 'object' || payload.fields === null) return false
-    const table = payload.fields as Record<string, unknown>
-    const missingOk = legacy ? (LEGACY_MISSING_KEYS[boardLegacyVersion ?? 0] ?? []) : []
-    for (const [key] of boardSnapshotFields()) {
-      // 旧档**确实没有**的那几个新键 ⇒ 由迁移补，不当场拒；其余键照旧逐项检查
-      if (missingOk.includes(key)) continue
-      if (!(key in table)) return false
-      const shape: unknown = boardSnapshotDefaults.get(key)
-      const next: unknown = table[key]
-      if (shape === null) continue
-      if (Array.isArray(shape)) {
-        if (!Array.isArray(next)) return false
-        continue
-      }
-      if (typeof shape === 'object') {
-        if (typeof next !== 'object' || next === null || Array.isArray(next)) return false
-        continue
-      }
-      if (typeof next !== typeof shape) return false
-    }
-    if (
-      typeof table['segmentStepIndex'] === 'number' &&
-      (!Number.isInteger(table['segmentStepIndex']) || table['segmentStepIndex'] < 0)
-    )
-      return false
-    return validBoardEntities(table)
-  }
-
-  /**
-   * 还原盘面（调用前必已 `boardSnapshotFits` 通过；本方法不做半途落值）
-   *
-   * 末尾按**新盘面**重播一次 5.0c 的控制账：它是由"格内有无可攻击单位"推导的，而同一份盘面在
-   * 存档那一刻已经播过 ⇒ 对一致盘面是**幂等**的（返回 0，不写日志）；万一份内控制账与盘面不符
-   * （手工改档等），这里会把它纠回盘面口径并留痕。
-   */
-  function restoreBoard(board: unknown, silent = false): void {
-    const table = (board as { fields: Record<string, unknown> }).fields
-    for (const [key, target] of boardSnapshotFields()) {
-      // 旧档没有本版本的字段（如 v3 没有 replPending/replFtrTac）⇒ 跳过，别把 undefined 写进 ref
-      target.value = JSON.parse(
-        JSON.stringify(key in table ? table[key] : boardSnapshotDefaults.get(key)),
-      ) as unknown
-    }
-    // §5-D：v3 → v4 的补员账本迁移（在字段还原之后跑，此刻盘面与当前方都已就位）
-    if (boardLegacyVersion !== null) {
-      migrateBoardV3ToV4(table)
-      boardLegacyVersion = null
-    }
-    const merged = normalizeSpDumpsOnLoad()
-    clearCombat(true)
-    moveInteraction.value = null
-    movePick.value = null
-    pendingZocConfirm.value = null
-    clearBarrage()
-    clearAir()
-    clearSupply()
-    refitTargetBaseId.value = null
-    initialSetupInProgress.value = false
-    if (silent) return
-    syncVictoryControlFromBoard()
-    pushLog(
-      'info',
-      `读档：盘面已还原 ${String(boardSnapshotFields().length)} 项（算子 ${String(units.value.length)} 枚 / 补给站 ${String(spDumps.value.length)} 处 / 飞机 ${String(airUnits.value.length)} 架）`,
-    )
-    if (merged > 0) {
+  const boardRegistry = createSnapshotRegistry({
+    version: BOARD_SNAPSHOT_VERSION,
+    fields: boardSnapshotFields,
+    legacyMissingKeys: LEGACY_MISSING_KEYS,
+    validate: validBoardEntities,
+    beforeCapture: assertCompleteSettlement,
+    afterRestore(prepared, silent) {
+      if (prepared.sourceVersion === 3) migrateBoardV3ToV4(prepared.fields)
+      const merged = normalizeSpDumpsOnLoad()
+      clearCombat(true)
+      moveInteraction.value = null
+      movePick.value = null
+      pendingZocConfirm.value = null
+      clearBarrage()
+      clearAir()
+      clearSupply()
+      refitTargetBaseId.value = null
+      initialSetupInProgress.value = false
+      if (silent) return
+      syncVictoryControlFromBoard()
       pushLog(
         'info',
-        `读档：同格同方的补给站账本按 12.1b 归并了 ${String(merged)} 条（旧档/改档兼容）`,
-        '12.1b',
+        `读档：盘面已还原 ${String(boardSnapshotFields().length)} 项（算子 ${String(units.value.length)} 枚 / 补给站 ${String(spDumps.value.length)} 处 / 飞机 ${String(airUnits.value.length)} 架）`,
       )
-    }
+      if (merged > 0) {
+        pushLog(
+          'info',
+          `读档：同格同方的补给站账本按 12.1b 归并了 ${String(merged)} 条（旧档/改档兼容）`,
+          '12.1b',
+        )
+      }
+    },
+  })
+  function snapshotBoard(): unknown {
+    return boardRegistry.capture()
+  }
+  function boardSnapshotFits(board: unknown): boolean {
+    return boardRegistry.accepts(board)
+  }
+  function restoreBoard(board: unknown, silent = false): void {
+    boardRegistry.restore(board, silent)
   }
 
   /**
@@ -20049,7 +19966,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   function resetBoardNow(nextSeed = DEFAULT_SEED): void {
     clearCombat(true)
-    restoreBoard({ fields: Object.fromEntries(boardSnapshotDefaults) }, true)
+    restoreBoard(boardRegistry.initial(), true)
     localPhase.value = 'movement'
     localTurn.value = scenarioTurnRange(scenarioId.value).firstTurn
     localRng.value = createRngState(nextSeed)
@@ -20127,54 +20044,45 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  session.setPhaseHooks({
-    started() {
-      initialSetupInProgress.value = false
-      pendingRolls.splice(0)
-      automaticPhaseKeys.value = []
-    },
-    beforeStep() {
-      if (initialSetupInProgress.value) return false
-      if (session.guidance?.step.driver === 'player' && !settleSegmentObligations(true))
-        return false
-      if (session.records?.phase === 'cleanUp' && !runCleanUpNow()) return false
-      pushVictoryToSessionNow()
-      return true
-    },
-    afterStep(previous) {
-      const current = session.records
-      if (current === null) return
-      const changed =
-        previous.turn !== current.turn ||
-        previous.phase !== current.phase ||
-        previous.activeSide !== current.activeSide
-      if (changed) {
+  session.setPhaseHooks(
+    createPhaseCoordinator({
+      current: () => session.records,
+      isInitialSetup: () => initialSetupInProgress.value,
+      isPlayerPhase: () => session.guidance?.step.driver === 'player',
+      start() {
+        initialSetupInProgress.value = false
+        pendingRolls.splice(0)
+        automaticPhaseKeys.value = []
+      },
+      settleObligations: () => settleSegmentObligations(true),
+      cleanUp: runCleanUpNow,
+      publishVictory: pushVictoryToSessionNow,
+      resetPhase() {
         resetSegmentTransient()
         resetSupplyPhaseLedger()
         segmentStepIndex.value = 0
-        if (previous.turn !== turn.value) {
-          hedgehogTurnLedger.value = {}
-          airBaseTurnLedger.value = {}
-          railCapSpentThisTurn.value = []
-          freeRailPicked.value = []
-          supplyArrivalSp.value = 0
-          supplyTrainHex.value = null
-        }
-        if (current.phase === 'movement' || current.phase === 'supply')
-          refreshTraceSupply('阶段开始')
-      }
-      if (current.phase === 'reinforcement') {
-        const key = `${turn.value}|${activeSide.value}|reinforcement`
-        if (!automaticPhaseKeys.value.includes(key)) {
-          variableReplInputs.value.autoRoll = true
-          variableReplInputs.value.option4_1b = session.consensus.some(
-            (choice) => choice.adopted === true && choice.item.includes('4.1b'),
-          )
-          if (rollVariableReplNow()) automaticPhaseKeys.value = [...automaticPhaseKeys.value, key]
-        }
-      }
-    },
-  })
+      },
+      resetTurn() {
+        hedgehogTurnLedger.value = {}
+        airBaseTurnLedger.value = {}
+        railCapSpentThisTurn.value = []
+        freeRailPicked.value = []
+        supplyArrivalSp.value = 0
+        supplyTrainHex.value = null
+      },
+      refreshTrace: () => {
+        refreshTraceSupply('阶段开始')
+      },
+      ensureReinforcement(key) {
+        if (automaticPhaseKeys.value.includes(key)) return
+        variableReplInputs.value.autoRoll = true
+        variableReplInputs.value.option4_1b = session.consensus.some(
+          (choice) => choice.adopted === true && choice.item.includes('4.1b'),
+        )
+        if (rollVariableReplNow()) automaticPhaseKeys.value = [...automaticPhaseKeys.value, key]
+      },
+    }),
+  )
 
   return {
     activeSide,

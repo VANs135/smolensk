@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 
 import { scenarios } from '@/data'
+import { actingSideFor } from '@/engine/game-lifecycle'
 import type { HexRef, Side } from '@/data'
 import { HEX_DIRECTIONS, isOnMap, neighbor, sameHex } from '@/engine/hex-geometry'
 import { exertsZoc } from '@/engine/rules'
@@ -87,7 +88,8 @@ export const useHotseatStore = defineStore('hotseat', () => {
   const decisionSide = computed<Side>(() => {
     if (session.question !== null) return session.question.responder
     const attacker =
-      workbench.phase === 'reaction' ? otherSide(workbench.activeSide) : workbench.activeSide
+      actingSideFor({ phase: workbench.phase, activeSide: workbench.activeSide }) ??
+      workbench.activeSide
     return workbench.combatRequirement?.side === 'defender' ? otherSide(attacker) : attacker
   })
   const viewerOverride = ref<Side | null>(null)
