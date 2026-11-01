@@ -94,6 +94,7 @@ import {
   nkvdArRequired,
   splitOverrunStack,
   canReleaseReserve,
+  canStackWithHedgehog,
   canSwitchModeNow,
   canThrowViaHQ,
   // B42（13.2g-B）：编内卡车的 SP 只许同一多单位编队内的单位拖取
@@ -6332,6 +6333,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       unit.mode = applyModeSwitch(unit.mode, to, target)
       // 5.4a：一切数值以朝向那一面为基准 → 换面后刷新印值缓存
       unit.raw = unit.faces[unit.mode.orientation]
+      /*
+       * 5.7g：「在**任何移动环节结束时**，处于预备模式内的单位都**不可与环形工事堆叠**在一起。」
+       *
+       * ★ 修（2026-11-01）：修前这条判据只活在引擎的 `modeEffectsFor` 里（`canStackWithHedgehog`），
+       *   盘面侧**无人读取** —— 玩家可以让预备单位与工事同格，一路走到环节结束都不被提示。
+       *   这里不**拦**（预备单位之后还能走开，5.7 允许预备移动），只在切换那一刻把义务说出来；
+       *   判据仍取引擎的 `canStackWithHedgehog`（不另写一份）。
+       */
+      if (!canStackWithHedgehog(unit.mode) && hedgehogHexState(unit.hex).level > 0)
+        pushLog(
+          'warning',
+          `${unit.name} 进入预备模式但与环形工事同格 ⇒ 本移动环节结束时必须分开（5.7g）`,
+          '5.7g',
+        )
       okCount += 1
     }
     if (okCount > 0) {
@@ -8081,6 +8096,32 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       eliminateEntry(unit, '9.11', `${unit.name} 军力归零，移入死亡堆（9.11）`)
   }
 
+  /**
+   * 5.7d：防御方承受战斗结果后的**预备标记移除**
+   *
+   * 原文：「5.7d **接敌**。在**突袭或常规战斗中防御**时，如果承受了**任何类型的战斗结果**
+   *   （**即使是被忽略的 Do1**），那么便要从堆叠中移除所有预备标记。这些单位**现在处于
+   *   战斗或移动模式，由它们的朝向决定**（5.7a）。」
+   *
+   * ★ 修（2026-11-01）：修前没有这一条。后果是防御过的预备单位仍带预备标记 ——
+   *   在本方反应阶段还能被"释放"并按 5.7b-B 以半 MA 移动，等于白赚一次反应阶段行动。
+   *   `releasedFromReserve: false` 一并清掉：它只表示"本阶段刚释放"，不是预备状态的残留位。
+   */
+  function stripReserveMarkersAfterDefense(state: CombatInteractionState): void {
+    const hex = state.composition.defendingHex
+    for (const unit of units.value) {
+      if (unit.mode.mode !== 'reserve') continue
+      if (!sameHex(unit.hex, hex)) continue
+      const orientation = unit.mode.orientation === 'move' ? 'move' : 'combat'
+      unit.mode = { ...unit.mode, mode: orientation, releasedFromReserve: false }
+      pushLog(
+        'info',
+        `${unit.name} 防御后移除预备标记 ⇒ ${orientation === 'move' ? '移动' : '战斗'}模式（5.7d）`,
+        '5.7d',
+      )
+    }
+  }
+
   /** C6：扣某单位若干点军力（9.12e 额外损失等；绝对值写回） */
   function takeCombatLoss(unitId: string, points: number): void {
     const unit = units.value.find((item) => item.instanceId === unitId)
@@ -8840,6 +8881,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 9.12a：战斗表 DG ⇒ 全部防御单位立即 DG（必须在撤退之前落盘，9.12e 要用这一事实）
     applyCombatPatches(data.patches)
     const dice = data.state.dice!
+    /*
+     * 5.7d：守方一旦**有战斗结果**（损失 / 选项 / DG，`Do1` 即便被忽略也算）即移除预备标记。
+     * 判据取自引擎解析出的守方段 —— 攻方独占的结果（如 `Ae4`）不触发（守方没"承受"任何结果）。
+     */
+    if (
+      dice.result.defender.losses > 0 ||
+      dice.result.defender.hasOption ||
+      dice.result.defender.disorganized
+    )
+      stripReserveMarkersAfterDefense(data.state)
     const ar = data.state.ar
     // W7 C11：附着本次战斗的复核过程（骰点 / 修正项与来源 / 合计 / 取列查表 / 结果）
     const derivation = combatDerivation({

@@ -382,6 +382,38 @@ describe('C6 9.2 九步流程：顺序推进', () => {
     expect(store.combatState!.finished).toBe(true)
   })
 
+  it('★ 5.7d：防御过的预备单位**移除预备标记**（`Do1` 即使被忽略也算）', () => {
+    /*
+     * 原文（5.7d 接敌）：「在**突袭或常规战斗中防御**时，如果承受了**任何类型的战斗结果**
+     *   （**即使是被忽略的 Do1**），那么便要从堆叠中移除所有预备标记。这些单位**现在处于
+     *   战斗或移动模式，由它们的朝向决定**（5.7a）。」
+     *
+     * 修前没有这一条 ⇒ 防御过的预备单位仍带预备标记，可在本方反应阶段被"释放"并按 5.7b-B
+     * 以半 MA 行动（等于白赚一次反应阶段）。本用例用真骰，故**先扫种子**取一个
+     * 「守方确实有结果」的骰面（攻击方独占的结果如 `Ae4` 不触发 5.7d）。
+     */
+    let checked = false
+    for (let seed = 1; seed <= 40 && !checked; seed += 1) {
+      const store = newStore()
+      store.resetAll(seed)
+      const { defender } = setupBattle(store)
+      // 5.7a：进入预备模式时保持朝向不变
+      defender.mode = { ...defender.mode, mode: 'reserve', releasedFromReserve: false }
+
+      driveToResolution(store)
+      const result = store.combatState!.dice!.result.defender
+      if (result.losses === 0 && !result.hasOption && !result.disorganized) continue
+
+      const after = store.units.find((unit) => unit.instanceId === defender.instanceId)!
+      expect(after.mode.mode, '守方已有战斗结果 ⇒ 预备标记必须移除（5.7d）').not.toBe('reserve')
+      expect(after.mode.mode).toBe(after.mode.orientation)
+      expect(after.mode.releasedFromReserve ?? false).toBe(false)
+      expect(store.log.some((entry) => entry.rule === '5.7d')).toBe(true)
+      checked = true
+    }
+    expect(checked, '扫了 40 个种子都没出现「守方有结果」的骰面？').toBe(true)
+  })
+
   it('账本闭合（B0④）：战斗跑完后「盘面算子数 + 死亡堆数」守恒，阵亡者确实在死亡堆里', () => {
     setupBattle(store)
     const before = store.units.length + store.deadPile.length

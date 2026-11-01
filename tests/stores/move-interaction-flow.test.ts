@@ -433,6 +433,31 @@ describe('C5 模式切换（5.4）与燃料支付（12.5）', () => {
     expect(unit.raw).toEqual(unit.faces.move)
   })
 
+  it('★ 5.7g：与环形工事同格进入预备模式 ⇒ 提示「环节结束前必须分开」', () => {
+    /*
+     * 原文（5.7g）：「在**任何移动环节结束时**，处于预备模式内的单位都**不可与环形工事堆叠**
+     *   在一起。」判据在引擎 `canStackWithHedgehog`（模式矩阵）里，修前**盘面侧无人读取** ——
+     *   玩家可以让预备单位与工事同格走完整个环节而毫无提示。
+     * 这里不拦（预备单位之后仍可走开），只要求切换那一刻把义务说清楚。
+     */
+    // 58.35 是印刷永久工事格（map-layers.printedHedgehogs，等级 1）
+    const hedged: HexRef = { col: 58, row: 35 }
+    const unit = place(store, legCombat(), hedged, 'axis', 'a1')
+    store.clickHex(hedged)
+    store.switchUnitMode('reserve')
+    expect(unit.mode.mode).toBe('reserve')
+    expect(store.log.some((entry) => entry.rule === '5.7g')).toBe(true)
+
+    // 对照：不在工事格上切预备 ⇒ 不该有 5.7g 的提示
+    const plain = newStore()
+    const open: HexRef = { col: 30, row: 20 }
+    const other = place(plain, legCombat(), open, 'axis', 'b1')
+    plain.clickHex(open)
+    plain.switchUnitMode('reserve')
+    expect(other.mode.mode).toBe('reserve')
+    expect(plain.log.some((entry) => entry.rule === '5.7g')).toBe(false)
+  })
+
   it('已消耗 MP 之后不能切换模式（5.4 时机 + 6.1g）', () => {
     const unit = place(store, legCombat(), START, 'axis', 'a1')
     store.clickHex(START)
