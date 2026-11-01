@@ -941,6 +941,23 @@
       "setupFirst": "axis",
       "firstWeather": "normal",
       "setup": {
+        "initialVictoryControl": {
+          "rule": "5.0c / 剧本7开局态势：五个城市及 Pochinok、Dukhovshchina、Roslavl、Yartsevo、Yeln'ya 属轴方；苏方持有其余六个所列目标，需再夺回一个达到5.0a胜利门槛（剧本7导言）。历史控制先于†自由初设落点，实际有可攻击单位的格再按5.0c更新。",
+          "axisOwned": [
+            "2.2",
+            "15.10",
+            "18.18",
+            "19.27",
+            "19.28",
+            "34.17",
+            "34.18",
+            "36.13",
+            "37.24",
+            "38.5",
+            "41.21",
+            "43.14"
+          ]
+        },
         "railCap": {
           "axis": 1,
           "soviet": 3

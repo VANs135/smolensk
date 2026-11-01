@@ -332,7 +332,7 @@ export interface ReplayReport {
   diceCount: number
   /** 存档的「种子—游标—内部状态」是否自洽（`verifyRngState`） */
   rngSelfConsistent: boolean
-  /** 重放到末尾的状态是否与存档一致（seed / state / drawCount 三者） */
+  /** 仅指随机数内部状态一致（seed / state / drawCount），不表示盘面或规则结果已重算 */
   stateMatches: boolean
   /** 首个分歧（null = 全程吻合） */
   firstDivergence: ReplayDivergence | null
@@ -403,8 +403,8 @@ export function replaySessionLog(session: GameSession): ReplayReport {
   const ok = rngSelfConsistent && stateMatches && divergence === null
 
   const detail = ok
-    ? `重放复算通过（算法 ${RNG_ALGORITHM}，种子 ${recorded.seed}）：${session.log.length} 条日志、${diceCount} 颗骰全部吻合，` +
-      `终点游标 ${rng.drawCount} 与存档一致`
+    ? `骰序列校验通过（算法 ${RNG_ALGORITHM}，种子 ${recorded.seed}）：${session.log.length} 条日志、${diceCount} 颗骰全部吻合，` +
+      `终点游标 ${rng.drawCount} 与存档一致；此校验不重算规则结果和盘面`
     : [
         `重放复算未通过（算法 ${RNG_ALGORITHM}，种子 ${recorded.seed}）`,
         rngSelfConsistent ? null : '存档的种子—游标—内部状态不自洽（verifyRngState 失败）',

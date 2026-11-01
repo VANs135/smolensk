@@ -181,6 +181,11 @@ export const ScenarioSetupSchema = z
     airSetup: AirSetupSchema.optional(),
     /** 地图印刷工事的剧本初始归属（专规 1.3a + 本作裁定） */
     printedHedgehogOwners: PrintedHedgehogOwnersSchema.optional(),
+    /** 5.0c：初设自由摆位之前已有的历史控制，不能用印刷工事归属替代。 */
+    initialVictoryControl: z
+      .object({ rule: z.string(), axisOwned: z.array(z.string()) })
+      .strict()
+      .optional(),
     /** 剧本初设的已转换轴方铁路（专规 1.2 剧本页；逐格清单由引擎沿铁路图推导） */
     convertedAxisRails: ConvertedAxisRailsSchema.optional(),
     /** 其余初设选项原文（键 → 原文），保留未结构化的剧本差异 */

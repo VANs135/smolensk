@@ -217,7 +217,7 @@ describe('批 A 切片 3③：9.1c 的攻击账本（每战斗环节一次）', 
     expect(workbench.attackPhaseLedger.unitIds).toEqual([])
   })
 
-  it('① 补给过关 ⇒ 记账（参战单位 + 被攻击的格）；同一单位再攻被引擎拒并给 9.1c', () => {
+  it('① 补给过关即记账；未完成的战斗不能通过取消后重宣告', () => {
     const { workbench } = stores
     const { attackerId } = prepareCombat(stores)
     expect(runSupplyStep(stores)).toBe(true)
@@ -226,18 +226,18 @@ describe('批 A 切片 3③：9.1c 的攻击账本（每战斗环节一次）', 
     expect(workbench.attackPhaseLedger.unitIds).toEqual([attackerId])
     expect(workbench.attackPhaseLedger.hexes).toEqual([`${DEFENDER_HEX.col}.${DEFENDER_HEX.row}`])
 
-    // 收掉这一场（9.1c 只管"打没打过"，不要求打完）
+    // 已付费的正式战斗必须完成；取消不能清掉它或攻击账本。
     workbench.cancelCombat()
-    expect(workbench.combatState).toBeNull()
+    expect(workbench.combatState).not.toBeNull()
 
-    // 同一单位、同一格再攻一次 ⇒ 引擎按 9.1c 拒
+    // 同一单位、同一格再宣布 ⇒ 要求先完成现有战斗（9.2）。
     workbench.combatAttackerIds = [attackerId]
     workbench.battleTarget = { hex: DEFENDER_HEX, defenderIds: ['d1'] }
     expect(workbench.beginCombatNow()).toBe(false)
-    expect(workbench.combatError?.rule).toBe('9.1c')
+    expect(workbench.combatError?.rule).toBe('9.2')
   })
 
-  it('② 同一格被**第二个单位**攻击同样被拒（"同一格只能被攻击一次"）', () => {
+  it('② 现有战斗未结清时，换另一单位攻击同格仍拒绝', () => {
     const { workbench } = stores
     prepareCombat(stores)
     expect(runSupplyStep(stores)).toBe(true)
@@ -248,10 +248,10 @@ describe('批 A 切片 3③：9.1c 的攻击账本（每战斗环节一次）', 
     workbench.combatAttackerIds = ['a2']
     workbench.battleTarget = { hex: DEFENDER_HEX, defenderIds: ['d1'] }
     expect(workbench.beginCombatNow()).toBe(false)
-    expect(workbench.combatError?.rule).toBe('9.1c')
+    expect(workbench.combatError?.rule).toBe('9.2')
   })
 
-  it('③ 同一单位打**另一个格**也被拒（"一个单位只能攻击一次"与打哪个格无关）', () => {
+  it('③ 现有战斗未结清时，同一单位改打另一格仍拒绝', () => {
     const { workbench } = stores
     prepareCombat(stores)
     expect(runSupplyStep(stores)).toBe(true)
@@ -263,7 +263,7 @@ describe('批 A 切片 3③：9.1c 的攻击账本（每战斗环节一次）', 
     workbench.combatAttackerIds = ['a1']
     workbench.battleTarget = { hex: other, defenderIds: ['d2'] }
     expect(workbench.beginCombatNow()).toBe(false)
-    expect(workbench.combatError?.rule).toBe('9.1c')
+    expect(workbench.combatError?.rule).toBe('9.2')
   })
 
   it('④ 付不出战斗补给的战斗**不记账**（9.5b「根本不攻击」⇒ 不占本环节这一次）', () => {

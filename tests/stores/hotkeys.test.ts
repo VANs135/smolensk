@@ -122,8 +122,10 @@ describe('W7 C16：动作派发到既有 store（不做规则判断）', () => {
     expect(workbench.stackSelect).toBe(true)
 
     const beforeSide = workbench.activeSide
+    const beforeViewer = useHotseatStore().viewerSide
     hotkeys.dispatch('side.next')
-    expect(workbench.activeSide).not.toBe(beforeSide)
+    expect(workbench.activeSide).toBe(beforeSide)
+    expect(useHotseatStore().viewerSide).not.toBe(beforeViewer)
 
     expect(hotkeys.panelCollapsed).toBe(false)
     hotkeys.dispatch('panel.toggle')
@@ -279,7 +281,8 @@ describe('W7 C16：动作派发到既有 store（不做规则判断）', () => {
     expect(hotkeys.handleKeydown({ key: 't', target: null, preventDefault: () => undefined })).toBe(
       true,
     )
-    expect(workbench.activeSide).not.toBe(before)
+    expect(workbench.activeSide).toBe(before)
+    expect(hotseat.viewerSide).not.toBe(before)
     expect(hotseat.handoffPending).toBe(true)
 
     // 接手方确认后遮屏撤下；未启用热坐时不应留下交接屏

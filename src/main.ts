@@ -3,6 +3,7 @@ import { createApp } from 'vue'
 
 import App from './App.vue'
 import '@/styles/base.css'
+import { useWorkbenchStore } from '@/stores/workbench'
 
 /**
  * 应用装配（Global Step 00：脚手架）
@@ -12,6 +13,9 @@ import '@/styles/base.css'
  */
 const app = createApp(App)
 
-app.use(createPinia())
+const pinia = createPinia()
+app.use(pinia)
+// 盘面持久化与阶段执行器属于应用装配，不能依赖用户是否曾打开对局台。
+useWorkbenchStore(pinia)
 
 app.mount('#app')

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { scenarios } from '@/data'
 import type { HexRef, Side } from '@/data'
@@ -84,7 +84,32 @@ export const useHotseatStore = defineStore('hotseat', () => {
   /* ────────────────────────────── 观察方（＝当前行动方） ────────────────────────────── */
 
   /** 当前观察方（2.2：行动方就是能看到己方全貌的一方） */
-  const viewerSide = computed<Side>(() => workbench.activeSide)
+  const decisionSide = computed<Side>(() => {
+    if (session.question !== null) return session.question.responder
+    const attacker =
+      workbench.phase === 'reaction' ? otherSide(workbench.activeSide) : workbench.activeSide
+    return workbench.combatRequirement?.side === 'defender' ? otherSide(attacker) : attacker
+  })
+  const viewerOverride = ref<Side | null>(null)
+  const viewerSide = computed<Side>(() => viewerOverride.value ?? decisionSide.value)
+  watch(
+    viewerSide,
+    () => {
+      workbench.selectedId = null
+      workbench.movePick = null
+    },
+    { flush: 'sync' },
+  )
+  let previousViewer: Side | null = null
+  watch(
+    decisionSide,
+    (next, previous) => {
+      viewerOverride.value = null
+      previousViewer = null
+      if (next !== previous && hotseatEnabled.value) handoffPending.value = true
+    },
+    { flush: 'sync' },
+  )
   /** 对手方 */
   const opponentSide = computed<Side>(() => otherSide(viewerSide.value))
   /** 交接提示语（给接手方看的那一句） */
@@ -286,19 +311,22 @@ export const useHotseatStore = defineStore('hotseat', () => {
 
   /** 2.2：交接到对手方；启用热坐（pvp/pve）时亮起交接屏（未确认前不显示盘面）；solo 直接切方 */
   function beginHandoff(): void {
-    workbench.setActiveSide(opponentSide.value)
+    previousViewer = viewerSide.value
+    viewerOverride.value = opponentSide.value
     handoffPending.value = hotseatEnabled.value
   }
 
   /** 确认交接：接手方已就位，亮出盘面（回到 4.9 的可见性纪律） */
   function confirmHandoff(): void {
+    previousViewer = null
     handoffPending.value = false
   }
 
   /** 反悔：把行动方改回原方（仅在交接屏未确认时可用） */
   function cancelHandoff(): void {
     if (!handoffPending.value) return
-    workbench.setActiveSide(opponentSide.value)
+    viewerOverride.value = previousViewer
+    previousViewer = null
     handoffPending.value = false
   }
 

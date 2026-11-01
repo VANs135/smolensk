@@ -133,6 +133,7 @@ function goToActionStep(
 
 /** 备好一场可宣布的炮兵轰炸：目标格 + 参炸炮 + 足量补给来源 */
 function setupBarrage(store: ReturnType<typeof newStores>['workbench'], gunId: string): void {
+  goToActionStep(store, 'barrage.declare')
   if (!store.spDumps.some((dump) => dump.id === 'sd-b'))
     store.spDumps.push({ id: 'sd-b', hex: { ...FIRING_HEX }, side: 'axis', sp: 30, t: 0 })
   // 专规 3.4b：站与参炸单位同属一个装甲集群，免得本组用例被 3.4b 拦在门口
@@ -153,13 +154,27 @@ function runBarrageToLedger(
   workbench.battleTarget = { hex: target, defenderIds: [`def-${target.col}-${target.row}`] }
   workbench.setBarrageActive(true)
   workbench.toggleBarrageUnit(gun.instanceId)
-  expect(workbench.beginBarrageNow()).toBe(true)
+  expect(
+    workbench.beginBarrageNow(),
+    JSON.stringify({
+      phase: workbench.phase,
+      side: workbench.activeSide,
+      error: workbench.barrageError,
+      log: workbench.log[0],
+    }),
+  ).toBe(true)
   expect(workbench.confirmBarrageSupplyStep()).toBe(true)
 }
 
 /** 把会话推进到指定阶段（走真实入口 `advanceSegmentNow`） */
 function advanceUntilPhase(stores: ReturnType<typeof newStores>, wanted: ConsolePhase): void {
   const { session, workbench } = stores
+  workbench.supplySourceDecls.push({
+    id: 'fixture-source',
+    hex: FIRING_HEX,
+    side: 'axis',
+    kind: 'supplySourceHex',
+  })
   session.startGame()
   for (let guard = 0; guard < 200; guard += 1) {
     if (workbench.phase === wanted) return
@@ -178,7 +193,7 @@ describe('第六批 P0-1：10.0e-A/B 账本的换段清零（条 23）', () => {
 
   it('★ ① 走真实入口 `advanceSegmentNow` 换段 ⇒ 账本清零（修前独漏这一条路径）', () => {
     const { workbench } = stores
-    advanceUntilPhase(stores, 'reaction')
+    advanceUntilPhase(stores, 'combat')
     const gun = place(workbench, artilleryRecord(), FIRING_HEX, 'axis', 'art-1')
     place(workbench, rifleRecord(), TARGET_HEX, 'soviet', 'def-1')
     setupBarrage(workbench, gun.instanceId)

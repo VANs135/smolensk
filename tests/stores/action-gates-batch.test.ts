@@ -90,6 +90,7 @@ describe('12.8b 损耗骰：只在 D 段的补给检定环节', () => {
     expect(store.attritionResults[key]).toBeUndefined()
 
     enter(store, 'supply', 'supply.check')
+    store.planSupplyPhaseNow()
     expect(store.rollAttritionNow(key, 7)).toBe(true)
     expect(store.attritionResults[key]).toBeDefined()
   })

@@ -28,6 +28,7 @@ import {
 } from '@/components/session'
 import { SetupPanel } from '@/components/setup'
 import { SupplyPanel } from '@/components/supply'
+import SupplyPhasePanel from '@/components/supply/SupplyPhasePanel.vue'
 import { provideUiMode } from '@/components/ui-mode'
 import { VictoryPanel } from '@/components/victory'
 import type { HexRef } from '@/data'
@@ -274,6 +275,7 @@ onBeforeUnmount(() => {
         <template #overlay>
           <!-- B11：待你决定的队列（初设四堆叠）压在地图窗口左上角；初设收束后自动消失 -->
           <DecisionQueue v-if="setup.applied && !setup.finished" />
+          <SupplyPhasePanel v-if="setup.finished && workbench.phase === 'supply'" />
           <MapDock
             v-if="session !== null"
             :key="session.kind"

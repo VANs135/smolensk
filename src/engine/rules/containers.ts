@@ -1213,7 +1213,7 @@ export interface DerivedDrawComposition {
 }
 
 /** 单位 id 末段 → 兵种（本作工程库的命名口径；数据核对见回执） */
-const MTR_PATTERN = /mot/i
+const MTR_PATTERN = /\b(?:mot(?:orized)?[ -]*)?inf(?:antry)?\b/i
 const AUFK_PATTERN = /arm-rec|aufk/i
 const KRD_PATTERN = /-mc$|-mc-|krd/i
 
@@ -1262,7 +1262,8 @@ export function deriveDrawComposition(input: {
     return sameNumber ?? candidates[0] ?? null
   }
 
-  const mtr = pickSameNumbered(onMap.filter((part) => MTR_PATTERN.test(part.unitId)))
+  // ch10：角色来自初设成员标签；motorized 类 ID 同时包含炮兵，不能用它识别步兵团。
+  const mtr = pickSameNumbered(onMap.filter((part) => MTR_PATTERN.test(part.component)))
   const krd = pickSameNumbered(onMap.filter((part) => KRD_PATTERN.test(part.unitId)))
   // 12.5 之外不相关：Aufk 必须是**死亡堆里**的那个（ch10 原文：「开局在 Dead Pile 里的 Aufk 营」）
   const aufk = pickSameNumbered(dead.filter((part) => AUFK_PATTERN.test(part.unitId)))

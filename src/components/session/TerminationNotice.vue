@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag } from '@/components/base'
-import { useGameSessionStore } from '@/stores'
+import { useGameSessionStore, useSetupStore } from '@/stores'
 
 /**
  * 终止提示（W6 C10 的 P3）
@@ -53,7 +53,9 @@ const terminatedAtTurn = computed<number | null>(() => {
       <BaseButton variant="secondary" size="sm" @click="gameSession.resetGame()"
         >重置流程条</BaseButton
       >
-      <BaseButton variant="primary" size="sm" @click="gameSession.startGame()">重开一局</BaseButton>
+      <BaseButton variant="primary" size="sm" @click="useSetupStore().restartGameNow()"
+        >重开一局</BaseButton
+      >
     </div>
   </BasePanel>
 </template>

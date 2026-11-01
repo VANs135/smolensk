@@ -160,14 +160,32 @@ export function validateAttritionAllocation(input: {
       }
     return { ok: true, rule: '12.8b', detail: `全部 ${full} 点军力损失` }
   }
-  if (total !== input.required)
+  // 12.8b：损失不能超过该格实际存在的军力；超额结果应消灭全部，而非形成无法完成的义务。
+  const required = Math.min(
+    input.required,
+    input.units.reduce((sum, unit) => sum + unit.steps, 0),
+  )
+  if (total !== required)
     return {
       ok: false,
       rule: '12.8b',
       reason: 'lossNotMet',
-      detail: `须损失 ${input.required} 点，实分摊 ${total}`,
+      detail: `须损失 ${required} 点，实分摊 ${total}`,
     }
   return { ok: true, rule: '12.8b', detail: `损失 ${total} 点军力` }
+}
+
+/** 12.8b：没有选择余地的零损失、全部损失或单单位损失可以自动落实。 */
+export function automaticAttritionAllocation(
+  required: number | 'all',
+  units: readonly { id: string; steps: number }[],
+): Record<string, number> | null {
+  const full = units.reduce((sum, unit) => sum + unit.steps, 0)
+  if (required === 'all' || required >= full)
+    return Object.fromEntries(units.map((unit) => [unit.id, unit.steps]))
+  if (required === 0) return {}
+  if (units.length === 1) return { [units[0]!.id]: Math.min(required, units[0]!.steps) }
+  return null
 }
 
 /* ────────────────────────────── 12.11a 主动销毁补给站 ────────────────────────────── */

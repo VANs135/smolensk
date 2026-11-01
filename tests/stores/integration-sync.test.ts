@@ -377,6 +377,11 @@ describe('联调⑦：`preTurn` 没有行动段 ⇒ 段闸动作一律拒绝并�
     expect(stores.session.records?.phase).toBe('movement')
     expect(stores.workbench.segmentLocked).toBe(false)
     expect(stores.workbench.phase).toBe('movement')
+    stores.workbench.setSegmentStepIndex(
+      stores.workbench.playerSegmentSteps.findIndex(
+        (step) => step.id === 'movement.modeAndMovement',
+      ),
+    )
     stores.workbench.clickHex(CORE_HEX)
     expect(stores.workbench.confirmMovePick()).toBe(true)
     expect(stores.workbench.groupReachable.hexes.length).toBeGreaterThan(0)

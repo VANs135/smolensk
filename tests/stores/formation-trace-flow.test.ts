@@ -109,7 +109,7 @@ describe('B40：12.6f 编队追溯补给的同源取舍', () => {
     const source = readFileSync('src/stores/workbench.ts', 'utf8')
     expect(source).toContain('function formationTraceDeniedIds')
     expect(source).toContain('const formation = unit.formation')
-    expect(source).toContain('formationTraceTradeoff(supplyFacts.value, {')
+    expect(source).toContain('formationTraceTradeoff(facts, {')
     expect(source).toContain(
       '(traceCoverageHas(covered, unit.hex) && !denied.has(unit.instanceId))',
     )

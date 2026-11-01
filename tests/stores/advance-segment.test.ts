@@ -215,6 +215,7 @@ describe('B5：换环节时盘面中间态自动收束', () => {
     expect(session.records?.phase).toBe('movement')
 
     // 玩家在移动段做了一半：选中一枚进入移动交互
+    goToActionStep(workbench, 'move.order')
     // 条 10（批 M）：点格只建取子清单，开拔交由「开始移动」按钮
     workbench.clickHex({ col: 36, row: 13 })
     expect(workbench.confirmMovePick()).toBe(true)

@@ -82,7 +82,7 @@ describe('B38：开局被拒后初设仍可改（`startGameNow` 先开局、再�
      * 只在**代码**上比次序：注释里也提到 `finishSetup()`（说明"修前是先收束"）⇒
      * 锚点取带上下文的代码串，免得被说明文字误判（这个坑本轮踩过一次）。
      */
-    const start = body.indexOf('game.startGame()')
+    const start = body.indexOf('game.startGame(workbench.seed)')
     const finish = body.indexOf('if (!finished.value) finishSetup()')
     expect(start).toBeGreaterThan(0)
     expect(finish).toBeGreaterThan(0)
@@ -104,7 +104,7 @@ describe('B38：初设框可拖 + 落满给「完成初设」（源码守卫）'
   })
 
   it('★ 落满（`allPlaced`）⇒ 收起列表、就地给「完成初设」按钮（调 `startGameNow`）', () => {
-    expect(queue).toContain('const allPlaced = computed(() => pendingTotal.value === 0)')
+    expect(queue).toContain('const allPlaced = computed(() => setup.initialPlacementsComplete)')
     expect(queue).toContain('v-show="!allPlaced"')
     expect(queue).toContain('@click="setup.startGameNow()"')
     expect(queue).toContain('完成初设')

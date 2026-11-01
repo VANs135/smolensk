@@ -278,7 +278,8 @@ describe('W7 D2：固定种子重放复算', () => {
     expect(report.rngSelfConsistent).toBe(true)
     expect(report.stateMatches).toBe(true)
     expect(report.firstDivergence).toBeNull()
-    expect(report.detail).toContain('重放复算通过')
+    expect(report.detail).toContain('骰序列校验通过')
+    expect(report.detail).toContain('不重算规则结果和盘面')
     expect(report.cursors).toEqual([
       { index: 0, drawCountBefore: 0, drawCountAfter: 1 },
       { index: 1, drawCountBefore: 1, drawCountAfter: 1 },

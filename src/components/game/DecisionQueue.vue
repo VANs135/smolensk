@@ -54,9 +54,10 @@ const pendingTotal = computed(() => stacks.value.reduce((total, stack) => total 
 
 /** 当前正在地图上选落点的那一项（null = 没在放） */
 const placing = computed(() => setup.placing)
+const omitConfirmed = ref(false)
 
 /** 是否**全部落位完毕**（落满 ⇒ 队列收起列表、就地给「完成初设」） */
-const allPlaced = computed(() => pendingTotal.value === 0)
+const allPlaced = computed(() => setup.initialPlacementsComplete)
 
 function toggleStack(key: DecisionStack['key']): void {
   openKey.value = openKey.value === key ? null : key
@@ -191,12 +192,30 @@ function sideMark(side: 'axis' | 'soviet'): string {
       B38（口径 #5「结束后不自动关」）：**全部落位完毕** ⇒ 队列收起列表、就地给「完成初设」，
       按下即开局（`startGameNow`）；初设收束后本框随 `!setup.finished` 的条件自动消失。
     -->
-    <div v-if="allPlaced" class="queue__done">
+    <div v-if="allPlaced && cursorSide === null" class="queue__done">
       <p class="queue__hint">
         <BaseTag kind="success">已全部落位</BaseTag>
         点「完成初设」进入第一阶段（未落位者视为本局移除）。
       </p>
       <BaseButton variant="primary" size="sm" @click="setup.startGameNow()">完成初设</BaseButton>
+    </div>
+
+    <div v-if="cursorSide === null && !allPlaced" class="queue__done">
+      <details>
+        <summary>还有未布设项；查看后可选择放弃</summary>
+        <p
+          v-for="item in setup.pendingPlacement"
+          :key="item.kind + ':' + item.side + ':' + item.entryIndex"
+        >
+          {{ sideName(item.side) }}：{{ item.label }} × {{ item.remaining }}
+        </p>
+        <label
+          ><input v-model="omitConfirmed" type="checkbox" />确认以上未布设项按初设规则处理</label
+        >
+        <BaseButton size="sm" :disabled="!omitConfirmed" @click="setup.startGameNow()"
+          >确认放弃未布设项并开局</BaseButton
+        >
+      </details>
     </div>
 
     <div v-for="stack in stacks" v-show="!allPlaced" :key="stack.key" class="queue__stack">

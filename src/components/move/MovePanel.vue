@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { BaseButton, BasePanel, BaseTag } from '@/components/base'
+import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import {
   counterImageUrlOf,

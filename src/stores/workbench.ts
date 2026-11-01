@@ -18,6 +18,8 @@ import {
 import { DERIVATION_KEY, type Derivation } from '@/engine/derivation'
 import { combatDerivation, surpriseDerivation } from '@/engine/derivation-builders'
 import { createRngState, roll1d6, roll2d6 } from '@/engine/rng'
+import { validBoardEntities } from '@/engine/board-validation'
+import { automaticAttritionAllocation } from '@/engine/rules/supply-phase'
 // B37：分界线的渲染投影类型（渲染层只画被给的东西）
 import type { BoundaryLine } from '@/render/map-render'
 import { createRailFacts, createTraceSupplyAt } from '@/engine/rules'
@@ -1754,6 +1756,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   → ④ 断补标记置/除（12.6d）→ ⑤ 需掷损耗的堆叠（12.8a/b）。
    */
   const supplyPhasePlan = ref<SupplyPhasePlan | null>(null)
+  const supplyRecoverySettled = ref(false)
+  const supplyFeedingSettled = ref(false)
+  const attritionAppliedHexes = ref<string[]>([])
   /** 载入计划时的错误（统一形状：rule + reason） */
   const supplyPhaseError = ref<{ rule: string; reason: string } | null>(null)
   /**
@@ -2702,7 +2707,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
     const target = barrageTargetHex.value
     return units.value
-      .filter((unit) => unit.side === activeSide.value && (unit.raw.barrage ?? 0) > 0)
+      .filter((unit) => unit.side === segmentGateQuery.value.side && (unit.raw.barrage ?? 0) > 0)
       .map((unit) => ({
         unit,
         selected: barrageUnitIds.value.includes(unit.instanceId),
@@ -2749,7 +2754,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 目标格未定时给出「无事实」的桩（全部返回中性值），避免界面在未选目标时误算横移。
    */
   const barrageFacts = computed(() =>
-    createBarrageFacts({ units: units.value, activeSide: activeSide.value }),
+    createBarrageFacts({
+      units: units.value,
+      activeSide: segmentGateQuery.value.side ?? activeSide.value,
+    }),
   )
 
   /** C7：目标格的密度 RE / 工事等级 / 战略模式 / 观察员（供界面显示与横移预览） */
@@ -2819,7 +2827,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const barrageAirCandidates = computed<ConsoleAirUnit[]>(() =>
     barrageKind.value === 'air'
       ? airUnits.value.filter(
-          (unit) => unit.side === activeSide.value && airBarrageStrengthOf(unit) > 0,
+          (unit) => unit.side === segmentGateQuery.value.side && airBarrageStrengthOf(unit) > 0,
         )
       : [],
   )
@@ -2967,11 +2975,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           .filter((decl) => decl.kind !== 'detrainable')
           .map((decl) => ({ hex: decl.hex, side: decl.side, kind: decl.kind })),
         // 13.3c / 12.6a②：铁路派生的火车卸货格（当前方）
-        ...railSupply.value.detrainableHexes.map((hex) => ({
-          hex,
-          side: activeSide.value,
-          kind: 'detrainable' as const,
-        })),
+        ...(['axis', 'soviet'] as const).flatMap((side) =>
+          railSupplyBySide.value[side].detrainableHexes.map((hex) => ({
+            hex,
+            side,
+            kind: 'detrainable' as const,
+          })),
+        ),
       ],
     }),
   )
@@ -3022,7 +3032,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   /** C9：铁路补给线与**火车卸货格**（13.3c / 12.7a-B/C；当前方视角） */
-  const railSupply = computed(() => railSupplyPath(railSupplyFacts.value, activeSide.value))
+  const railSupplyBySide = computed(() => ({
+    axis: railSupplyPath(railSupplyFacts.value, 'axis'),
+    soviet: railSupplyPath(railSupplyFacts.value, 'soviet'),
+  }))
+  const railSupply = computed(() => railSupplyBySide.value[activeSide.value])
 
   /** C9：火车卸货格（13.3c）——已连接的铁路格，可作 12.6a① 补给源 */
   const detrainableHexes = computed(() => railSupply.value.detrainableHexes)
@@ -5123,7 +5137,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C5：该格中**当前方**的算子（按摆放顺序；可整堆叠移动作战） */
   function friendlyUnitsAt(hex: HexRef): ConsoleUnit[] {
-    return unitsAt(hex).filter((unit) => unit.side === activeSide.value)
+    return unitsAt(hex).filter((unit) => unit.side === segmentGateQuery.value.side)
   }
 
   /** C5：清空本次移动交互（选子变化 / 换阶段 / 换方 / 重置时调用） */
@@ -5271,6 +5285,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *   现在 `setPhase` / `setTurn` / 换段共用这一个清零点，两条路径口径一致。
      */
     clearBarragePhaseLedger()
+    oosFedReByDump.value = {}
+    dumpDestructionAttempts.value = {}
+    gaugeConversionsThisPhase.value = []
+    convertedHexesThisPhase.value = []
+    railMovedNewTrackThisPhase.value = []
+    railMovedUnitIdsThisPhase.value = []
+  }
+
+  function resetSupplyPhaseLedger(): void {
+    supplyPhasePlan.value = null
+    supplyRecoverySettled.value = false
+    supplyFeedingSettled.value = false
+    attritionInputs.value = {}
+    attritionResults.value = {}
+    attritionAppliedHexes.value = []
   }
 
   /**
@@ -5285,6 +5314,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 请先走完或按 Esc 放弃（规则号照 9.2 / 10.0 给，不自己编）。
    */
   function advanceSegmentNow(): SessionAdvanceOutcome | null {
+    if (initialSetupInProgress.value || session.terminated) return null
     if (combatState.value !== null && !combatState.value.finished) {
       pushLog('warning', '战斗结算进行中：先走完 9.2 流程或按 Esc 放弃，再进入下一环节', '9.2')
       return null
@@ -5298,11 +5328,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 环节全部走完才推进会话步（换段）。环节是**段内**的进度，故不消耗会话步（steps = 0），
      * 返回的 `stoppedBy: 'player'` 如实表示"仍停在需要玩家的环节上"。
      */
+    if (!segmentLocked.value && !settleSegmentObligations()) return null
     if (stepToNextSegmentStep()) return { steps: 0, stoppedBy: 'player', driver: 'player' }
     const before = `${turn.value}|${phase.value}|${activeSide.value}`
     const outcome = session.advanceToNextStop()
     const after = `${turn.value}|${phase.value}|${activeSide.value}`
-    if (outcome.steps > 0 && after !== before) resetSegmentTransient()
+    if (outcome.steps > 0 && after !== before) segmentStepIndex.value = 0
     if (outcome.steps > 0) {
       pushLog(
         'info',
@@ -5325,8 +5356,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 切阶段（2.2 SOP 段；换段即重置各单位的 MA 额度） */
   function setPhase(next: ConsolePhase): void {
+    const changed = phase.value !== next
     phase.value = next
     resetSegmentTransient()
+    if (changed) resetSupplyPhaseLedger()
     pushLog('info', `阶段 → ${PHASE_LABELS[next]}`)
     /*
      * 12.6 / 12.8e：追溯补给的**自动重判时点**（补给网一过段就可能变，标记不能过期）
@@ -5753,11 +5786,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 确认取子 ⇒ 以所选子集开拔（其余留驻；8.1h 的留驻单位不受本次移动/突袭影响） */
   function confirmMovePick(): boolean {
     const pick = movePick.value
-    if (pick === null) return false
+    if (pick === null) {
+      if (phase.value === 'reaction')
+        moveBlocked.value = { rule: '6.3a', reason: '反应段请先选择非阶段玩家的合资格单位' }
+      return false
+    }
     const ids = friendlyUnitsAt(pick.hex)
       .filter((unit) => pick.ids.includes(unit.instanceId))
       .map((unit) => unit.instanceId)
     if (ids.length === 0) {
+      if (phase.value === 'reaction') {
+        moveBlocked.value = { rule: '6.3a', reason: '反应段只能由非阶段玩家的合资格单位移动' }
+        pushLog('warning', moveBlocked.value.reason, '6.3a')
+        return false
+      }
       pushLog('warning', '至少要勾选一枚才能开始移动（6.1）', '6.1')
       return false
     }
@@ -7991,7 +8033,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /** C6：清空本场战斗的全部交互状态（换方/换阶段/重置/关闭时调用） */
-  function clearCombat(): void {
+  const combatSupplyCommitted = ref(false)
+  function clearCombat(force = false): void {
+    if (
+      !force &&
+      combatSupplyCommitted.value &&
+      combatState.value !== null &&
+      !combatState.value.finished
+    ) {
+      pushLog('warning', '本场战斗已提交补给，必须完成战损、选项、撤退与推进', '9.2')
+      return
+    }
+    combatSupplyCommitted.value = false
     resetOptionDraft()
     combatAttackerIds.value = []
     combatState.value = null
@@ -8023,7 +8076,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   按判别字段决定从 `units` 还是 `airUnits` 移除，并顺带清掉与它绑定的选中/任务态。
    * ★ `text` 由调用方给出（各条的规则出处不同），但「进死亡堆」这一动作由本函数保证。
    */
-  function eliminateEntry(entry: DeadPileEntry, rule: string, text: string): void {
+  function eliminateEntry(entry: DeadPileEntry, rule: string, text: string, refresh = true): void {
     if (isAirDeadPileEntry(entry)) {
       airUnits.value = airUnits.value.filter((item) => item.instanceId !== entry.instanceId)
       airMissionAirIds.value = airMissionAirIds.value.filter((id) => id !== entry.instanceId)
@@ -8055,13 +8108,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       removedForever.value = [...removedForever.value, entry]
       pushLog('danger', `${text}（13.5c：AR 后有黄点 ⇒ 摧毁即永久移除，不进死亡堆）`, rule)
       // 12.3b / 12.7：被摧毁的 HQ 或延补队是**补给源**，少一个源就要重判全场
-      if (affectsSupplyNet(entry)) refreshTraceSupply(`${entry.name} 被摧毁`)
+      if (refresh && affectsSupplyNet(entry)) refreshTraceSupply(`${entry.name} 被摧毁`)
       return
     }
     deadPile.value = [...deadPile.value, entry]
     pushLog('danger', text, rule)
     // 12.3b / 12.7：被摧毁的 HQ 或延补队是**补给源**，少一个源就要重判全场
-    if (!isAirDeadPileEntry(entry) && affectsSupplyNet(entry))
+    if (refresh && !isAirDeadPileEntry(entry) && affectsSupplyNet(entry))
       refreshTraceSupply(`${entry.name} 被摧毁`)
   }
 
@@ -8295,6 +8348,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C6 第 1 步：开始战斗（9.1 战斗构成） */
   function beginCombatNow(): boolean {
+    if (combatSupplyCommitted.value && combatState.value !== null && !combatState.value.finished) {
+      combatError.value = { rule: '9.2', reason: '请先完成已经提交的战斗' }
+      return false
+    }
     if (!requireAction('combat.declare', '开始战斗')) return false
     const target = battleTarget.value
     if (target === null) {
@@ -8588,6 +8645,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 那份作废的战斗不该占掉本环节的这一次（与 10.1b 的轰炸账本同一时点口径）。
      */
     recordAttackThisSegment(data.state.composition.attackerIds, data.state.composition.defendingHex)
+    combatSupplyCommitted.value = true
     return true
   }
 
@@ -9602,6 +9660,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C6：放弃本场战斗（中止 9.2 流程；已落盘的结果不自动回滚） */
   function cancelCombat(): void {
+    if (combatSupplyCommitted.value && combatState.value !== null && !combatState.value.finished) {
+      pushLog('warning', '战斗结果待结算：请先完成损失、选项、撤退与推进', '9.2')
+      return
+    }
     // W7 C16：放弃突袭只丢托管信息（3 MP 尚未记账，故无需回滚）
     if (overrunContext.value !== null) {
       cancelOverrunContext()
@@ -9825,6 +9887,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const firingGround = barrageUnits.value
     const firingAir = barrageAirUnits.value
+    if ([...firingGround, ...firingAir].some((unit) => unit.side !== segmentGateQuery.value.side)) {
+      pushLog('warning', '只能由当前环节的行动方宣布轰炸', '7.0 / 10.0')
+      return false
+    }
     if (firingGround.length === 0 && firingAir.length === 0) {
       pushLog('warning', '请先选择参炸单位（10.0：地面点选算子 / 空中勾选飞机）', '10.0')
       return false
@@ -10026,7 +10092,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * ⇒ 直拖支取交集、HQ 投递支由 `deliverableDumpsFor` 一并给出（修前**没有** HQ 支：多门炮分散时
      *   根本选不出来源，炮击补给这一步永远过不去）。
      */
-    return deliverableDumpsFor(activeSide.value, units)
+    return deliverableDumpsFor(segmentGateQuery.value.side ?? activeSide.value, units)
   })
 
   /**
@@ -10038,7 +10104,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (barrageState.value?.kind !== 'artillery') return []
     const firingUnits = barrageUnits.value
     if (firingUnits.length === 0) return []
-    const keys = hqDeliveryDumpKeys(activeSide.value, firingUnits)
+    const keys = hqDeliveryDumpKeys(segmentGateQuery.value.side ?? activeSide.value, firingUnits)
     return spDumps.value.filter((dump) => keys.has(hexLabel(dump.hex)))
   })
 
@@ -11095,7 +11161,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 分组键＝`unit.formation`（3.1c 的多单位编队番号，**由数据定死**；用户 2026-09-17 裁定）。
    * 编队只有 1 个战斗单位时无从谈"同源"，直接跳过（不给单人编队编戏）。
    */
-  function formationTraceDeniedIds(side: Side, reason: string): Set<string> {
+  function formationTraceDeniedIds(
+    side: Side,
+    reason: string,
+    facts = supplyFacts.value,
+  ): Set<string> {
     const byFormation = new Map<string, ConsoleUnit[]>()
     for (const unit of units.value) {
       if (unit.side !== side) continue
@@ -11109,7 +11179,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const denied = new Set<string>()
     for (const [formation, members] of byFormation) {
       if (members.length < 2) continue
-      const result = formationTraceTradeoff(supplyFacts.value, {
+      const result = formationTraceTradeoff(facts, {
         side,
         // 与补给网的覆盖集同口径（`traceCoverageHexes` 也按 truck 算）
         mobility: 'truck',
@@ -11135,15 +11205,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   function refreshTraceSupply(reason: string): number {
     let outOfSupply = 0
+    const facts = supplyFacts.value
     for (const side of ['axis', 'soviet'] as const) {
-      const covered = traceCoverageHexes(supplyFacts.value, { side, mobility: 'truck' })
+      const covered = traceCoverageHexes(facts, { side, mobility: 'truck' })
       /*
        * 12.6f（＝13.7a 的**追溯补给那一半**）：「多单位编队中的所有战斗单位需要追溯补给线到**同一个**
        *   指挥部，或直接拖取**同一个**补给来源。如果无法做到这一点，则应选择该编队中的一部分单位进行
        *   『免费』的追溯补给，而编队中其他单位则必须使用图上补给，不然其他单位就会断补。」
        * 修前引擎的 `formationTraceTradeoff` **零调用** ⇒ 编队各单位各判各的，这条从不发生（§17.73）。
        */
-      const denied = formationTraceDeniedIds(side, reason)
+      const denied = formationTraceDeniedIds(side, reason, facts)
       for (const unit of units.value) {
         if (unit.side !== side) continue
         /*
@@ -11235,7 +11306,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 本动作只**算**不落盘；落盘各自走 `applySupplyPhaseRecoveryNow` / 既有的断补处置路径。
    */
   function planSupplyPhaseNow(): boolean {
-    if (!requireAction('supply.draw', '补给阶段总计划')) return false
+    if (!actionAllowedNow('supply.draw') && !requireAction('supply.recovery', '补给阶段总计划'))
+      return false
     const side = activeSide.value
     const mine = units.value.filter((unit) => unit.side === side)
     const outcome = planSupplyPhase(supplyFacts.value, {
@@ -11297,6 +11369,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 12.10e：恢复部队储备是 D 段**第一环**（H④ 起）——12.10e-A 的优先次序由此强制：
     // 「将 SP 用于恢复部队储备的优先级更高」⇒ 这一手在第二环（补给检定）里做不出来
     if (!requireAction('supply.recovery', '恢复部队储备')) return false
+    if (supplyRecoverySettled.value) return true
     const plan = supplyPhasePlan.value
     if (plan === null) {
       pushLog('warning', '先载入 D 段补给阶段总计划（12.1–12.2）', '12.10e')
@@ -11313,6 +11386,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *   付款（`payFromUnitReachableDumps`）。修前从**全边**站序扣 ⇒ SP 隔空转移。
      */
     if (recovery.recoveries.length === 0 && recovery.spentT <= 0) {
+      supplyRecoverySettled.value = true
       pushLog('info', '12.10e：本阶段没有需要恢复的部队储备（也没有可消耗的补给）', '12.10e')
       return true
     }
@@ -11320,6 +11394,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (recovery.wastedT > 0) {
       const paid = payFromSideDumps(recovery.spentT, supplyPhasePayableDumps.value)
       if (paid === null) return false
+      supplyRecoverySettled.value = true
       pushLog(
         'success',
         `12.10e 部队储备恢复：可达站 SP 不足 ⇒ 按 12.10e-C 消耗现有的全部补给（${recovery.spentT} T，` +
@@ -11329,6 +11404,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return true
     }
     // 池充足：逐单位从**各自的可达站**付款（同站被多单位共享时按序花，付不出者降级并如实登记）
+    supplyRecoverySettled.value = true
     const appliedIds: string[] = []
     const degradedIds: string[] = []
     const stations: string[] = []
@@ -11526,11 +11602,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function applySupplyPhaseFeedingNow(): boolean {
     if (!requireAction('supply.draw', '吃图上补给')) return false
+    if (supplyFeedingSettled.value) return true
     const plan = supplyPhasePlan.value
     if (plan === null) {
       pushLog('warning', '先载入 D 段补给阶段总计划（12.1–12.2）', '12.6c')
       return false
     }
+    supplyFeedingSettled.value = true
     const fed = plan.feeding.filter((item) => item.affordable)
     const skipped = plan.feeding.length - fed.length
     // ★ 第五批批 B 切片 3（12.6c × 12.3a·b）：**逐单位**从其**各自的可达站**付款
@@ -11639,6 +11717,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function rollAttritionNow(hexKey: string, die?: number): boolean {
     // 12.8 的损耗属 **D 补给段**（12.10e-A 的顺序把损耗放在补给阶段里）
     if (!requireAction('supply.attrition', '掷损耗')) return false
+    if (attritionResults.value[hexKey] !== undefined) return true
     const duty = supplyPhasePlan.value?.attritionDuty.find(
       (item) => `${item.hex.col}.${item.hex.row}` === hexKey,
     )
@@ -11660,6 +11739,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       oosSteps: duty.oosSteps,
     })
     attritionResults.value = { ...attritionResults.value, [hexKey]: { die: rolledDie, ...outcome } }
+    recordSettlement({
+      action: 'attritionRoll',
+      rule: '12.8b',
+      data: {
+        hexKey,
+        die: rolledDie,
+        bestAr: duty.bestAr,
+        oosSteps: duty.oosSteps,
+        result: outcome.raw,
+      },
+    })
     pushLog(
       'info',
       `12.8b 损耗判定 ${hexKey}：2 骰 ${rolledDie}${outcome.drm > 0 ? ` + ${outcome.drm}（断补军力 ≥5）` : ''}` +
@@ -11677,6 +11767,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 然后逐单位扣军力；军力归零者经**唯一漏斗** `eliminateEntry` 进死亡堆（9.11）。
    */
   function applyAttritionNow(hexKey: string): boolean {
+    if (!requireAction('supply.attrition', '损耗分配')) return false
+    if (attritionAppliedHexes.value.includes(hexKey)) return true
     if (!requireAction('supply.attrition', '断补损耗处置')) return false
     const duty = supplyPhasePlan.value?.attritionDuty.find(
       (item) => `${item.hex.col}.${item.hex.row}` === hexKey,
@@ -11705,16 +11797,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `12.8b 分摊被拒：${verdict.detail}（${verdict.rule}）`, verdict.rule)
       return false
     }
+    attritionAppliedHexes.value = [...attritionAppliedHexes.value, hexKey]
     for (const unit of present) {
       const loss = allocation[unit.instanceId] ?? 0
       if (loss > 0) unit.steps -= loss
     }
     for (const unit of present)
       if (unit.steps <= 0)
-        eliminateEntry(unit, '12.8b', `${unit.name} 损耗归零，移入死亡堆（12.8b）`)
+        eliminateEntry(unit, '12.8b', `${unit.name} 损耗归零，移入死亡堆（12.8b）`, false)
     pushLog('success', `12.8b 损耗落盘 ${hexKey}：${verdict.detail}`, '12.8b')
     // 战损即变动盘面：补给网可能因此变化（HQ/延补队被消灭）
-    refreshTraceSupply(`12.8b 损耗 ${hexKey}`)
+    if (
+      supplyPhasePlan.value?.attritionDuty.every((item) =>
+        attritionAppliedHexes.value.includes(`${item.hex.col}.${item.hex.row}`),
+      )
+    ) {
+      refreshTraceSupply('12.8b 本阶段损耗全部结清')
+    }
     return true
   }
 
@@ -16248,6 +16347,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 换段 / 换方 / 换回合即归零（见下面的 watch），故它只是**段内**的进度。
    */
   const segmentStepIndex = ref(0)
+  const initialSetupInProgress = ref(false)
+  const automaticPhaseKeys = ref<string[]>([])
 
   /** 本段本方的**全部**环节（唯一出处：`engine/rules/sop-segments`；B 段的链按方不同） */
   const segmentSteps = computed(() => sopStepsOf(phase.value as GamePhase, activeSide.value))
@@ -16497,6 +16598,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
        */
       clearAttackPhaseLedger()
     },
+    { flush: 'sync' },
   )
 
   /** 推进到本段的**下一环节**；已是最后一环则返回 false（由调用方接着推进会话步） */
@@ -16578,13 +16680,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   界面一律用本函数判可点，不要自己拿规则号/阶段名再拼一套口径。
    */
   function actionAllowedNow(key: ActionKey): boolean {
-    if (segmentLocked.value) return false
+    if (initialSetupInProgress.value || session.terminated || segmentLocked.value) return false
     const query = segmentGateQuery.value
     if (query.segment === '') return false
     return allowedActionsOf(query).has(key)
   }
 
   function requireAction(key: ActionKey, action: string): boolean {
+    if (initialSetupInProgress.value || session.terminated) {
+      actionRefusal.value = { key, rule: '2.2', reason: '请先完成初设，且对局须处于进行中' }
+      pushLog('warning', `${action}被拒绝：${actionRefusal.value.reason}`, '2.2')
+      return false
+    }
     if (segmentLocked.value) return refuseWhileLocked(action)
     const query = segmentGateQuery.value
     if (query.segment === '') {
@@ -16775,6 +16882,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 补员立即入账（Ftr/Tac 仍需在阶段末清零）；SP 与免费重建按 2.1 的落点由裁判投放。
    */
   function rollVariableReplNow(): boolean {
+    const key = `${turn.value}|${activeSide.value}|reinforcement`
+    if (session.session !== null && automaticPhaseKeys.value.includes(key)) return true
     const inputs = variableReplInputs.value
     // ⑭ 接线：下面两个闭包只回报数字（不改它们）⇒ 先记下掷骰前的骰源，末尾按实际掷骰顺序复算骰面
     const rngBefore = rng.value
@@ -19193,9 +19302,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function seedVictoryControlFromScenario(): void {
     const seed: Record<string, Side> = {}
+    const declared = scenarioSetup.value?.initialVictoryControl?.axisOwned
+    const axisOwned =
+      declared === undefined
+        ? printedHedgehogAxisOwnedAtStart.value
+        : new Set(
+            declared.map((text) => {
+              const hex = parseHexPath(text)[0]
+              return hex === undefined ? '' : hexLabel(hex)
+            }),
+          )
     for (const hex of victoryHexes.value) {
       const key = `${hex.col}.${hex.row}`
-      seed[key] = printedHedgehogAxisOwnedAtStart.value.has(hexLabel(hex)) ? 'axis' : 'soviet'
+      seed[key] = axisOwned.has(hexLabel(hex)) ? 'axis' : 'soviet'
     }
     victoryLastControl.value = seed
     victoryError.value = null
@@ -19584,6 +19703,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * `restoreBoard` 末尾还会按新盘面重播一次 5.0c 的控制账（幂等；见那里的注释）。
    */
   const boardSnapshotFields = (): readonly (readonly [string, Ref<unknown>])[] => [
+    ['segmentStepIndex', segmentStepIndex],
+    ['hqFuelThrows', hqFuelThrows],
+    ['formationFuelThrows', formationFuelThrows],
+    ['supplyRecoverySettled', supplyRecoverySettled],
+    ['supplyFeedingSettled', supplyFeedingSettled],
+    ['attritionAppliedHexes', attritionAppliedHexes],
+    ['automaticPhaseKeys', automaticPhaseKeys],
+    ['lastVariableRepl', lastVariableRepl],
+    ['supplyArrivalSp', supplyArrivalSp],
+    ['supplyTrainHex', supplyTrainHex],
+    ['freeRailPicked', freeRailPicked],
+    ['freeRailEdgeHex', freeRailEdgeHex],
     // ① 盘面实体
     ['units', units],
     ['spDumps', spDumps],
@@ -19669,7 +19800,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   等于白送回图上，而且任务航程也不再按"从对应行入场"扣 20/30 格。
    *   旧档（4）由 `boardSnapshotFits` 的"上一版"通道接受，缺该键 ⇒ 读成空盒（与原状一致，不会更糟）。
    */
-  const BOARD_SNAPSHOT_VERSION = 5
+  const BOARD_SNAPSHOT_VERSION = 6
+  const V6_FIELDS = [
+    'segmentStepIndex',
+    'hqFuelThrows',
+    'formationFuelThrows',
+    'supplyRecoverySettled',
+    'supplyFeedingSettled',
+    'attritionAppliedHexes',
+    'automaticPhaseKeys',
+    'lastVariableRepl',
+    'supplyArrivalSp',
+    'supplyTrainHex',
+    'freeRailPicked',
+    'freeRailEdgeHex',
+  ]
 
   /**
    * §5-D：把 v3 及更早的补员账本迁成 v4 的盘面算子
@@ -19711,6 +19856,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 于是"内存里往返一次"与"写文件再读回来"完全同构；也保证快照不会随盘面后续改动而变。
    */
   function snapshotBoard(): unknown {
+    if (
+      (combatState.value !== null && !combatState.value.finished) ||
+      (barrageState.value !== null && !barrageState.value.finished) ||
+      (airState.value !== null && !airState.value.finished) ||
+      (supplyState.value !== null && !supplyState.value.finished) ||
+      moveInteraction.value !== null ||
+      refitBase.value !== null
+    ) {
+      throw new Error('请先完成当前战斗、移动、付款或其他结算，再保存或读取对局')
+    }
     const fields: Record<string, unknown> = {}
     for (const [key, source] of boardSnapshotFields()) {
       fields[key] = JSON.parse(JSON.stringify(source.value ?? null)) as unknown
@@ -19741,10 +19896,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const LEGACY_MISSING_KEYS: Readonly<Record<number, readonly string[]>> = {
     // v3：补员还是"账本数字"（无 replPending/replFtrTac），也没有图外空军盒驻机名单
-    3: ['replPending', 'replFtrTac', 'airBoxMembers'],
+    3: ['replPending', 'replFtrTac', 'airBoxMembers', ...V6_FIELDS],
     // v4：§5-D 补员盘面化之后，但还没有 airBoxMembers
-    4: ['airBoxMembers'],
+    4: ['airBoxMembers', ...V6_FIELDS],
+    5: V6_FIELDS,
   }
+  const boardSnapshotDefaults = new Map(
+    boardSnapshotFields().map(([key, source]) => [
+      key,
+      JSON.parse(JSON.stringify(source.value ?? null)) as unknown,
+    ]),
+  )
 
   /** 读档时的**旧版本次数**（`accepts` 记下、`restore` 消费；null ＝ 当前版本，无需迁移） */
   let boardLegacyVersion: number | null = null
@@ -19772,11 +19934,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (typeof payload.fields !== 'object' || payload.fields === null) return false
     const table = payload.fields as Record<string, unknown>
     const missingOk = legacy ? (LEGACY_MISSING_KEYS[boardLegacyVersion ?? 0] ?? []) : []
-    for (const [key, source] of boardSnapshotFields()) {
+    for (const [key] of boardSnapshotFields()) {
       // 旧档**确实没有**的那几个新键 ⇒ 由迁移补，不当场拒；其余键照旧逐项检查
       if (missingOk.includes(key)) continue
       if (!(key in table)) return false
-      const shape: unknown = source.value
+      const shape: unknown = boardSnapshotDefaults.get(key)
       const next: unknown = table[key]
       if (shape === null) continue
       if (Array.isArray(shape)) {
@@ -19789,7 +19951,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
       if (typeof next !== typeof shape) return false
     }
-    return true
+    if (
+      typeof table['segmentStepIndex'] === 'number' &&
+      (!Number.isInteger(table['segmentStepIndex']) || table['segmentStepIndex'] < 0)
+    )
+      return false
+    return validBoardEntities(table)
   }
 
   /**
@@ -19799,12 +19966,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 存档那一刻已经播过 ⇒ 对一致盘面是**幂等**的（返回 0，不写日志）；万一份内控制账与盘面不符
    * （手工改档等），这里会把它纠回盘面口径并留痕。
    */
-  function restoreBoard(board: unknown): void {
+  function restoreBoard(board: unknown, silent = false): void {
     const table = (board as { fields: Record<string, unknown> }).fields
     for (const [key, target] of boardSnapshotFields()) {
       // 旧档没有本版本的字段（如 v3 没有 replPending/replFtrTac）⇒ 跳过，别把 undefined 写进 ref
-      if (!(key in table)) continue
-      target.value = JSON.parse(JSON.stringify(table[key])) as unknown
+      target.value = JSON.parse(
+        JSON.stringify(key in table ? table[key] : boardSnapshotDefaults.get(key)),
+      ) as unknown
     }
     // §5-D：v3 → v4 的补员账本迁移（在字段还原之后跑，此刻盘面与当前方都已就位）
     if (boardLegacyVersion !== null) {
@@ -19812,6 +19980,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       boardLegacyVersion = null
     }
     const merged = normalizeSpDumpsOnLoad()
+    clearCombat(true)
+    moveInteraction.value = null
+    movePick.value = null
+    pendingZocConfirm.value = null
+    clearBarrage()
+    clearAir()
+    clearSupply()
+    refitTargetBaseId.value = null
+    initialSetupInProgress.value = false
+    if (silent) return
     syncVictoryControlFromBoard()
     pushLog(
       'info',
@@ -19869,8 +20047,142 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     restore: restoreBoard,
   })
 
+  function resetBoardNow(nextSeed = DEFAULT_SEED): void {
+    clearCombat(true)
+    restoreBoard({ fields: Object.fromEntries(boardSnapshotDefaults) }, true)
+    localPhase.value = 'movement'
+    localTurn.value = scenarioTurnRange(scenarioId.value).firstTurn
+    localRng.value = createRngState(nextSeed)
+    localDrawCount.value = 0
+    pendingRolls.splice(0)
+    initialSetupInProgress.value = false
+    seedVictoryControlFromScenario()
+    refreshScenarioBoundLedgers(scenarioId.value)
+  }
+
+  /** 只自动执行规则义务；战损如何分配等玩家选择必须留在正式面板。 */
+  function settleSegmentObligations(wholePhase = false): boolean {
+    if (combatState.value !== null && !combatState.value.finished) return false
+    if (barrageState.value !== null && !barrageState.value.finished) return false
+    if (
+      ['movement', 'reaction', 'exploitation'].includes(phase.value) &&
+      (wholePhase || segmentStep.value?.id !== 'movement.breakout')
+    ) {
+      const movingSide =
+        phase.value === 'reaction'
+          ? activeSide.value === 'axis'
+            ? 'soviet'
+            : 'axis'
+          : activeSide.value
+      if (
+        units.value.some(
+          (unit) =>
+            unit.side === movingSide &&
+            unit.mode.mode === 'reserve' &&
+            hedgehogLevelOf(unit.hex) > 0,
+        )
+      ) {
+        pushLog('warning', '预备单位仍位于工事格，请先移出或依法切换模式后结束环节', '5.7g')
+        return false
+      }
+    }
+    if (phase.value !== 'supply') return true
+    const step = segmentStep.value?.id
+    if (step === 'supply.recovery' && !supplyRecoverySettled.value) {
+      if (!planSupplyPhaseNow() || !applySupplyPhaseRecoveryNow()) return false
+    }
+    if (wholePhase && step === 'supply.recovery') {
+      const next = playerSegmentSteps.value.findIndex((item) => item.id === 'supply.check')
+      if (!setSegmentStepIndex(next)) return false
+      return settleSegmentObligations()
+    }
+    if (step === 'supply.check' && !supplyFeedingSettled.value) {
+      if (!planSupplyPhaseNow() || !applySupplyPhaseFeedingNow()) return false
+    }
+    if (step === 'supply.check') {
+      for (const duty of supplyPhasePlan.value?.attritionDuty ?? []) {
+        const key = `${duty.hex.col}.${duty.hex.row}`
+        if (!attritionAppliedHexes.value.includes(key)) {
+          if (!rollAttritionNow(key)) return false
+          const losses = attritionResults.value[key]!.losses
+          const present = duty.unitIds.flatMap((id) => {
+            const unit = units.value.find((item) => item.instanceId === id)
+            return unit === undefined ? [] : [{ id: unit.instanceId, steps: unit.steps }]
+          })
+          const automatic = automaticAttritionAllocation(
+            losses.kind === 'allSteps' ? 'all' : losses.steps,
+            present,
+          )
+          if (automatic !== null) {
+            for (const [id, steps] of Object.entries(automatic))
+              setAttritionAllocation(key, id, steps)
+            if (!applyAttritionNow(key)) return false
+            continue
+          }
+          pushLog('warning', `${key} 的损耗尚未分配，请在补给面板确认损失`, '12.8b')
+          return false
+        }
+      }
+    }
+    return true
+  }
+
+  session.setPhaseHooks({
+    started() {
+      initialSetupInProgress.value = false
+      pendingRolls.splice(0)
+      automaticPhaseKeys.value = []
+    },
+    beforeStep() {
+      if (initialSetupInProgress.value) return false
+      if (session.guidance?.step.driver === 'player' && !settleSegmentObligations(true))
+        return false
+      if (session.records?.phase === 'cleanUp' && !runCleanUpNow()) return false
+      pushVictoryToSessionNow()
+      return true
+    },
+    afterStep(previous) {
+      const current = session.records
+      if (current === null) return
+      const changed =
+        previous.turn !== current.turn ||
+        previous.phase !== current.phase ||
+        previous.activeSide !== current.activeSide
+      if (changed) {
+        resetSegmentTransient()
+        resetSupplyPhaseLedger()
+        segmentStepIndex.value = 0
+        if (previous.turn !== turn.value) {
+          hedgehogTurnLedger.value = {}
+          airBaseTurnLedger.value = {}
+          railCapSpentThisTurn.value = []
+          freeRailPicked.value = []
+          supplyArrivalSp.value = 0
+          supplyTrainHex.value = null
+        }
+        if (current.phase === 'movement' || current.phase === 'supply')
+          refreshTraceSupply('阶段开始')
+      }
+      if (current.phase === 'reinforcement') {
+        const key = `${turn.value}|${activeSide.value}|reinforcement`
+        if (!automaticPhaseKeys.value.includes(key)) {
+          variableReplInputs.value.autoRoll = true
+          variableReplInputs.value.option4_1b = session.consensus.some(
+            (choice) => choice.adopted === true && choice.item.includes('4.1b'),
+          )
+          if (rollVariableReplNow()) automaticPhaseKeys.value = [...automaticPhaseKeys.value, key]
+        }
+      }
+    },
+  })
+
   return {
     activeSide,
+    initialSetupInProgress,
+    resetBoardNow,
+    supplyRecoverySettled,
+    supplyFeedingSettled,
+    attritionAppliedHexes,
     phase,
     segmentLocked,
     turn,

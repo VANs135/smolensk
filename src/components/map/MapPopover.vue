@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import { BaseTag } from '@/components/base'
 
@@ -36,6 +36,35 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{ close: [] }>()
+const root = ref<HTMLElement | null>(null)
+const bounds = ref({ width: 300, height: 100 })
+const viewport = ref({
+  width: typeof window === 'undefined' ? 1024 : window.innerWidth,
+  height: typeof window === 'undefined' ? 768 : window.innerHeight,
+})
+let observer: ResizeObserver | null = null
+function measure(): void {
+  viewport.value = { width: window.innerWidth, height: window.innerHeight }
+  if (root.value !== null)
+    bounds.value = { width: root.value.offsetWidth, height: root.value.offsetHeight }
+}
+watch(
+  root,
+  (element) => {
+    observer?.disconnect()
+    if (element !== null && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(measure)
+      observer.observe(element)
+      measure()
+    }
+  },
+  { flush: 'post' },
+)
+if (typeof window !== 'undefined') window.addEventListener('resize', measure)
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  if (typeof window !== 'undefined') window.removeEventListener('resize', measure)
+})
 
 /* ── 拖动（标题栏按住拖） ── */
 
@@ -83,8 +112,8 @@ const position = computed(() => {
     return { left: `${props.x + offset.value.dx}px`, top: `${props.y + offset.value.dy}px` }
   }
   return {
-    left: `${clampX(props.x + offset.value.dx, 60, window.innerWidth - 60)}px`,
-    top: `${clampX(props.y + offset.value.dy, 10, window.innerHeight - 40)}px`,
+    left: `${clampX(props.x + offset.value.dx, bounds.value.width / 2 + 8, viewport.value.width - bounds.value.width / 2 - 8)}px`,
+    top: `${clampX(props.y + offset.value.dy, 8, viewport.value.height - bounds.value.height - 8)}px`,
   }
 })
 
@@ -93,7 +122,7 @@ const dragging = computed(() => drag.value !== null)
 </script>
 
 <template>
-  <div v-if="props.open" class="popover" :style="{ ...position, width: props.width }">
+  <div v-if="props.open" ref="root" class="popover" :style="{ ...position, width: props.width }">
     <header
       class="popover__header"
       :class="{ 'popover__header--dragging': dragging }"
@@ -126,6 +155,10 @@ const dragging = computed(() => drag.value !== null)
 
 <style scoped>
 .popover {
+  max-width: calc(100vw - 2 * var(--space-2));
+  max-height: calc(100vh - 2 * var(--space-2));
+  display: flex;
+  flex-direction: column;
   position: fixed;
   z-index: var(--z-dialog-top);
   transform: translate(-50%, 0);
@@ -179,6 +212,7 @@ const dragging = computed(() => drag.value !== null)
 }
 
 .popover__body {
+  min-height: 0;
   padding: var(--space-2) var(--space-3);
   max-height: 46vh;
   overflow: auto;

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { SetupSnapshotSchema } from '@/engine/board-validation'
 
 import { aircraft, scenarios, unitsAxis, unitsSoviet } from '@/data'
 import type { HexRef, Side } from '@/data'
@@ -38,6 +39,7 @@ import {
 } from '@/engine/rules'
 import { hexesWithin, isOnMap } from '@/engine/hex-geometry'
 import { createId } from '@/shared'
+import { counterDirOfSide, counterImageUrl } from '@/render/token-images'
 
 import { useContainersStore } from './containers'
 import { useGameSessionStore } from './session'
@@ -47,6 +49,7 @@ import {
   isHqUnit,
   toConsoleAirUnit,
   toConsoleUnit,
+  type DeadPileEntry,
   type ConsoleUnit,
 } from './workbench-model'
 
@@ -180,14 +183,14 @@ function categoryOfEntry(kind: string): SetupPlacingCategory {
 function imageUrlOfRecordId(unitId: string | null | undefined): string | null {
   if (unitId === null || unitId === undefined || unitId === '') return null
   const hit = [...unitsAxis.units, ...unitsSoviet.units].find((record) => record.id === unitId)
-  return hit?.images?.front ?? null
+  return hit?.images?.front ? counterImageUrl(counterDirOfSide(hit.side), hit.images.front) : null
 }
 
 /** 飞机库记录 → 算子正面图档（`air` 项用机型 id） */
 function imageUrlOfAircraftId(aircraftId: string | null | undefined): string | null {
   if (aircraftId === null || aircraftId === undefined || aircraftId === '') return null
   const hit = aircraft.aircraft.find((record) => record.aircraftId === aircraftId)
-  return hit?.images?.front ?? null
+  return hit?.images?.front ? counterImageUrl(counterDirOfSide(hit.side), hit.images.front) : null
 }
 
 /** 决策队列的一堆叠（用户口径：地面 / 非战斗 / 飞机 / 卡车各一堆） */
@@ -404,6 +407,10 @@ export const useSetupStore = defineStore('setup', () => {
     }
     const total = selfInstanceTotalOf(entry)
     const placed = selfPlacedOf(entryIndex)
+    if (placed >= total || completed.value[`self:${entryIndex}`]) {
+      placing.value = null
+      return record({ ok: false, rule: 'IV', reason: 'nothingToPlace' })
+    }
     placing.value = {
       kind: 'self',
       entryIndex,
@@ -1038,11 +1045,18 @@ export const useSetupStore = defineStore('setup', () => {
    * 其余按条目解析出的 `unitId`（取不到就用展开棋子的第一枚、再没有即 null）。
    */
   function imageUrlOfEntry(entry: SetupEntryView): string | null {
-    if (entry.kind === 'sp') return findSpRecord(entry.count)?.images?.front ?? null
+    if (entry.kind === 'sp') {
+      const hit = findSpRecord(entry.count)
+      return hit?.images?.front
+        ? counterImageUrl(counterDirOfSide(hit.side), hit.images.front)
+        : null
+    }
     if (entry.kind === 'transport_point') {
       const byTruck = findTransportRecord(entry.side, 'truck', entry.count)
       const hit = byTruck ?? findTransportRecord(entry.side, 'wagon', entry.count)
-      return hit?.images?.front ?? null
+      return hit?.images?.front
+        ? counterImageUrl(counterDirOfSide(hit.side), hit.images.front)
+        : null
     }
     return imageUrlOfRecordId(entry.unitId ?? entry.pieces[0]?.unitId ?? null)
   }
@@ -1175,6 +1189,7 @@ export const useSetupStore = defineStore('setup', () => {
     }
     placing.value = null
     finished.value = true
+    workbench.initialSetupInProgress = false
     completed.value = { ...completed.value, start: true }
     return record({
       ok: true,
@@ -1207,7 +1222,7 @@ export const useSetupStore = defineStore('setup', () => {
      * 被拒时留下原因、初设照旧可改（`finished` 仍为 false）。
      */
     if (game.session === null) {
-      if (!game.startGame()) {
+      if (!game.startGame(workbench.seed)) {
         return record({
           ok: false,
           rule: SETUP_RULE,
@@ -1403,6 +1418,7 @@ export const useSetupStore = defineStore('setup', () => {
     notes.value = []
     placing.value = null
     finished.value = false
+    workbench.initialSetupInProgress = true
     // 第六批条 1（S1）：换剧本 ⇒ 分方游标按**新剧本的先布设方**重开
     armSetupSideCursor()
     cancelTruckPick()
@@ -1477,6 +1493,12 @@ export const useSetupStore = defineStore('setup', () => {
    * 故重复挂载 / 视图来回切换都不会叠加算子。
    */
   function ensureSetupLoaded(): boolean {
+    if (game.session !== null) {
+      finished.value = true
+      applied.value = true
+      workbench.initialSetupInProgress = false
+      return false
+    }
     if (applied.value || finished.value) return false
     if (workbench.units.length > 0 || workbench.airUnits.length > 0) return false
     return selectScenario(scenarioId.value)
@@ -1618,7 +1640,7 @@ export const useSetupStore = defineStore('setup', () => {
     const built = outcome.data
 
     const placedUnits: ConsoleUnit[] = []
-    const deadPileUnits: ConsoleUnit[] = []
+    const deadPileUnits: DeadPileEntry[] = []
     const notesLocal: string[] = []
     const skippedAircraft: string[] = []
 
@@ -1626,8 +1648,18 @@ export const useSetupStore = defineStore('setup', () => {
     for (const piece of built.pieces) {
       if (piece.unitId === null) continue
       if (piece.unitIdKind === 'aircraft') {
-        // 死亡堆里的飞机（13.5）：记入手册，不落到地面算子堆
-        skippedAircraft.push(`${piece.name}（${piece.toDeadPile ? '死亡堆' : '待飞机初设'}）`)
+        const recordAir = findAircraftRecord(piece.unitId)
+        if (piece.toDeadPile && recordAir !== undefined) {
+          deadPileUnits.push(
+            toConsoleAirUnit({
+              aircraft: recordAir,
+              instanceId: createId('air'),
+              hex: { col: 0, row: 0 },
+              side: piece.side,
+              airStatus: 'inactive',
+            }),
+          )
+        } else skippedAircraft.push(`${piece.name}（待飞机初设）`)
         continue
       }
       const recordUnit = findUnitRecord(piece.unitId)
@@ -1766,13 +1798,16 @@ export const useSetupStore = defineStore('setup', () => {
     const total = selfInstanceTotalOf(entry)
     const placedBefore = selfPlacedOf(entryIndex)
     const remaining = Math.max(0, total - placedBefore)
+    if (remaining === 0 || completed.value[`self:${entryIndex}`]) {
+      return record({ ok: false, rule: 'IV', reason: 'nothingToPlace' })
+    }
     // `one` 模式只落一枚 ⇒ 让下面棋子类的 copies 循环只跑一次（从第 placed 枚开始）
     const copiesWanted = mode === 'one' && total > 1 ? 1 : null
     // 本次实际落多少（计数类按量；棋子类恒 1）；用于进度账本与 dump 合并
     let advancedBy = 0
     if (entry.kind === 'sp' || entry.kind === 'transport_point') {
       // 条 26（S4）：SP / 运输点**按量**落盘，可分多格；同格同方合并进同一 dump（账本逐格合一）
-      const amount = mode === 'one' ? Math.max(1, Math.min(chunk, remaining)) : remaining
+      const amount = mode === 'one' ? Math.min(Math.max(0, chunk), remaining) : remaining
       if (amount <= 0) {
         return record({ ok: false, rule: outcome.rule, reason: 'nothingToPlace' })
       }
@@ -1791,9 +1826,11 @@ export const useSetupStore = defineStore('setup', () => {
           (item) => item.id === dumpId && item.side === entry.side,
         )
         if (existing !== undefined) {
-          const total = existing.points + amount
+          const mergedPoints = existing.points + amount
           spDumps.value = spDumps.value.map((item) =>
-            item.id === dumpId && item.side === entry.side ? { ...item, points: total } : item,
+            item.id === dumpId && item.side === entry.side
+              ? { ...item, points: mergedPoints }
+              : item,
           )
           const counter = workbench.units.find(
             (unit) =>
@@ -1802,17 +1839,20 @@ export const useSetupStore = defineStore('setup', () => {
               unit.hex.col === target.col &&
               unit.hex.row === target.row,
           )
-          if (counter !== undefined) counter.noncombatSp = total
+          if (counter !== undefined) counter.noncombatSp = mergedPoints
           workbench.landSetupSpDumps(spDumps.value)
           placedSelfInstances.value = {
             ...placedSelfInstances.value,
             [entryIndex]: placedBefore + amount,
           }
+          if (placedBefore + amount >= total) {
+            completed.value = { ...completed.value, [`self:${entryIndex}`]: true }
+          }
           return record({
             ok: true,
             rule: '12.1b',
             data: {
-              detail: `${setupHexLabel(target)} 已有本方补给站 ⇒ 合并为 ${String(total)} SP（12.1b：补给站是位置，不是条目）`,
+              detail: `${setupHexLabel(target)} 已有本方补给站 ⇒ 合并为 ${String(mergedPoints)} SP（12.1b：补给站是位置，不是条目）`,
             },
           })
         }
@@ -2120,6 +2160,60 @@ export const useSetupStore = defineStore('setup', () => {
     )
   }
 
+  const initialPlacementsComplete = computed(
+    () =>
+      setupSideCursor.value === null &&
+      pendingPlacement.value.every((item) => item.remaining === 0),
+  )
+
+  function captureSetup(): unknown {
+    return JSON.parse(
+      JSON.stringify({
+        applied: applied.value,
+        finished: finished.value,
+        completed: completed.value,
+        selfChoices: selfChoices.value,
+        truckFullIds: truckFullIds.value,
+        spAssignments: spAssignments.value,
+        spDumps: spDumps.value,
+        airChoices: airChoices.value,
+        placedSelfInstances: placedSelfInstances.value,
+        placedAirInstances: placedAirInstances.value,
+        setupSideCursor: setupSideCursor.value,
+        setupSideConfirmed: setupSideConfirmed.value,
+      }),
+    ) as unknown
+  }
+  game.setSetupCodec({
+    capture: captureSetup,
+    accepts: (value) => SetupSnapshotSchema.safeParse(value).success,
+    restore(value) {
+      const loaded = SetupSnapshotSchema.parse(value)
+      applied.value = loaded.applied
+      finished.value = loaded.finished
+      completed.value = loaded.completed
+      selfChoices.value = loaded.selfChoices
+      truckFullIds.value = loaded.truckFullIds
+      spAssignments.value = loaded.spAssignments as typeof spAssignments.value
+      spDumps.value = loaded.spDumps as typeof spDumps.value
+      airChoices.value = loaded.airChoices as typeof airChoices.value
+      placedSelfInstances.value = loaded.placedSelfInstances
+      placedAirInstances.value = loaded.placedAirInstances
+      setupSideCursor.value = loaded.setupSideCursor
+      setupSideConfirmed.value = loaded.setupSideConfirmed as typeof setupSideConfirmed.value
+      placing.value = null
+      cancelTruckPick()
+      workbench.initialSetupInProgress = !loaded.finished
+    },
+  })
+
+  function restartGameNow(): boolean {
+    const nextSeed = workbench.seed
+    game.resetGame(true)
+    workbench.resetBoardNow(nextSeed)
+    return selectScenario(scenarioId.value)
+  }
+
   return {
     // 状态
     scenarioId,
@@ -2179,6 +2273,7 @@ export const useSetupStore = defineStore('setup', () => {
     // 初设 box（地图点选放置）
     placing,
     pendingPlacement,
+    initialPlacementsComplete,
     finished,
     beginSelfPlacement,
     beginAirPlacement,
@@ -2190,6 +2285,7 @@ export const useSetupStore = defineStore('setup', () => {
     placingChunkChoices,
     finishSetup,
     startGameNow,
+    restartGameNow,
     // B10：前置「剧本 + 共识」视图
     scenarioChoices,
     enterSetup,

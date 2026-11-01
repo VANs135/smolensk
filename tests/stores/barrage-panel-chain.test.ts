@@ -308,7 +308,7 @@ describe('A 组：10.0e-A/B 的按阶段轰炸账本', () => {
     expect(workbench.barrageError?.rule).toBe('10.0e-B')
 
     // ② 换阶段（新的阶段 ＝ 新的一次）⇒ 账本清零，同样的宣布重新可行
-    workbench.setPhase('reaction')
+    workbench.setPhase('exploitation')
     expect(workbench.barragePhaseLedger).toEqual({ hexes: [], unitIds: [] })
     goToActionStep(workbench, 'barrage.declare')
     workbench.setBarrageActive(true)

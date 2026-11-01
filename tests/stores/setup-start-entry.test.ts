@@ -35,7 +35,7 @@ const count = (file: string, pattern: RegExp): number => (read(file).match(patte
 describe('批 E 切片 1：开局入口收敛（唯一入口＝初设收束点）', () => {
   it('① 唯一入口：`startGameNow()` 的 UI 调用点**只有**决策队列的「完成初设」', () => {
     // stores/setup.ts 里是定义（1 处 function + 返回表导出），UI 侧只许 DecisionQueue 调
-    expect(count('src/components/game/DecisionQueue.vue', /startGameNow\(\)/g)).toBe(1)
+    expect(count('src/components/game/DecisionQueue.vue', /\bstartGameNow\(\)/g)).toBe(2)
     expect(count('src/components/setup/SetupPanel.vue', /startGameNow\(\)/g)).toBe(0)
     expect(count('src/components/session/FlowStrip.vue', /startGameNow\(\)/g)).toBe(0)
 
@@ -47,7 +47,7 @@ describe('批 E 切片 1：开局入口收敛（唯一入口＝初设收束点�
       'src/components/session/TerminationNotice.vue',
       'src/views/ScenarioSetupView.vue',
       'src/views/GameTableView.vue',
-    ].filter((file) => count(file, /startGameNow\(\)/g) > 0)
+    ].filter((file) => count(file, /\bstartGameNow\(\)/g) > 0)
     expect(callers).toEqual(['src/components/game/DecisionQueue.vue'])
   })
 
@@ -67,7 +67,7 @@ describe('批 E 切片 1：开局入口收敛（唯一入口＝初设收束点�
     expect(panel).toContain('地图左上角「待你决定」队列落满后按「完成初设」')
     // 终止后的恢复路径保留（如实登记：它不是初设期的第二个入口）
     const notice = read('src/components/session/TerminationNotice.vue')
-    expect(notice).toContain('gameSession.startGame()')
+    expect(notice).toContain('useSetupStore().restartGameNow()')
     expect(notice).toContain('gameSession.terminated')
   })
 

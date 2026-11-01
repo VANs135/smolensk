@@ -213,6 +213,8 @@ function bulkEntries(): Record<string, UngatedEntry> {
  */
 export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   ...bulkEntries(),
+  advanceSegmentNow: { kind: 'flowState', why: '统一阶段执行器先结清规则义务，再按会话状态推进' },
+  restartGameNow: { kind: 'pregame', why: '终局后重建整局盘面与初设，不是阶段内行动' },
 
   /* ── 已加闸（原文给了明确时机）—— 本表用于**核对**，不是"未处理" ── */
 

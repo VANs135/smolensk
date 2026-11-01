@@ -61,6 +61,13 @@ describe('B9：不参与环节的算子点不动（就地展开层面）', () =>
   /** 把盘面推到 F 段的**炮击环节**（那里只有炮兵参与） */
   const setupCombatBarrageStep = () => {
     const { workbench, session } = stores
+    // 本夹具只验证 F 段点击资格，明确提供基础补给源，使中途 D 段无需玩家分配损耗。
+    workbench.supplySourceDecls.push({
+      id: 'fixture-source',
+      hex: HEX,
+      side: 'axis',
+      kind: 'supplySourceHex',
+    })
     workbench.units.push(
       toConsoleUnit({ record: artilleryRecord(), instanceId: 'gun', hex: HEX, side: 'axis' }),
       toConsoleUnit({ record: combatRecord(), instanceId: 'inf', hex: HEX, side: 'axis' }),

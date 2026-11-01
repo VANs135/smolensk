@@ -55,6 +55,8 @@ import type {
   VictoryLocationState,
 } from '@/engine/state-types'
 import { browserStorage, createId, type KeyValueStorage } from '@/shared'
+import { useWorkbenchStore } from './workbench'
+import { useSetupStore } from './setup'
 
 /**
  * 会话流程条（W6 C10）——**独立**的整局流程驱动器
@@ -142,7 +144,14 @@ export interface BoardCodec {
   /** 这份载荷认识吗（**先验后改**：不认识就拒读，此刻尚未改动任何状态） */
   accepts(board: unknown): boolean
   /** 还原盘面（调用前应已 `accepts` 通过；本方法不做半途落值） */
-  restore(board: unknown): void
+  restore(board: unknown, silent?: boolean): void
+}
+
+/** 盘面动作仍调用纯规则函数；此处负责保证正式推进的所有入口经过相同生命周期。 */
+export interface PhaseHooks {
+  started?(): void
+  beforeStep(): boolean
+  afterStep(previous: Records): void
 }
 
 export const useGameSessionStore = defineStore('gameSession', () => {
@@ -201,6 +210,15 @@ export const useGameSessionStore = defineStore('gameSession', () => {
    * 用普通变量而非 `ref`：它不是界面要看的状态，改它也不该触发任何渲染。
    */
   let boardCodec: BoardCodec | null = null
+  let setupCodec: BoardCodec | null = null
+  let phaseHooks: PhaseHooks | null = null
+
+  function setPhaseHooks(hooks: PhaseHooks): void {
+    phaseHooks = hooks
+  }
+  function setSetupCodec(codec: BoardCodec): void {
+    setupCodec = codec
+  }
 
   /* ────────────────────────────── 派生 ────────────────────────────── */
 
@@ -544,10 +562,11 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       error.value = { rule: '2.2', reason: 'scenarioLockedWhilePlaying' }
       return false
     }
+    const changed = scenarioId.value !== next
     scenarioId.value = next
     session.value = null
     // W7 C13：换剧本即重置共识勾选（新剧本要重新逐项一致同意，专规 4.0）
-    resetAgreedChecklist()
+    if (changed) resetAgreedChecklist()
     lastAdvanceKind.value = null
     error.value = null
     return true
@@ -590,8 +609,8 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       status: { form: 'created' },
     }
     session.value = startSession(created)
-    // W7 C13：每次开局都把共识勾选清空 —— 勾选列表是**本局**的开局准备（专规 4.0）
-    resetAgreedChecklist()
+    phaseHooks?.started?.()
+    // 4.0：开局采用玩家已经确认的草稿；不得在写入结论前清空。
     lastAdvanceKind.value = null
     error.value = null
     return true
@@ -610,6 +629,11 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       error.value = { rule: '2.2', reason: 'sessionNotStarted' }
       return false
     }
+    if (phaseHooks !== null && !phaseHooks.beforeStep()) {
+      error.value = { rule: '2.2', reason: '请先处理当前环节的待办事项' }
+      return false
+    }
+    current = session.value ?? current
     /*
      * 手点一步 ⇒ 上一次「连跑」的结论已不再描述最近的推进（界面按它措辞，不能让它过期说假话）；
      * 连跑路径会在结束后重新写入。
@@ -628,6 +652,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       const advance = advanceSession(current, makeSessionStepper(flowContext.value))
       session.value = advance.session
       lastAdvanceKind.value = advance.kind
+      phaseHooks?.afterStep(current.state.records)
       error.value = null
       return true
     } catch (cause) {
@@ -733,13 +758,13 @@ export const useGameSessionStore = defineStore('gameSession', () => {
   }
 
   /** 重置：清空会话（保留剧本选择） */
-  function resetGame(): void {
+  function resetGame(preserveConsensus = false): void {
     session.value = null
     lastAdvanceKind.value = null
     earlyDecisionMet.value = false
     error.value = null
     // W7 C13：勾选列表随会话一起清空
-    resetAgreedChecklist()
+    if (!preserveConsensus) resetAgreedChecklist()
   }
 
   /* ────────────────────────────── W6 D1：存档 / 读档 / 清档 ────────────────────────────── */
@@ -797,7 +822,14 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     let board: unknown
     if (boardCodec !== null) {
       try {
-        board = boardCodec.capture()
+        const captured = boardCodec.capture()
+        board =
+          setupCodec === null
+            ? captured
+            : {
+                ...(captured as Record<string, unknown>),
+                setup: setupCodec.capture(),
+              }
       } catch (cause) {
         saveError.value = {
           rule: SAVE_RULE,
@@ -849,6 +881,17 @@ export const useGameSessionStore = defineStore('gameSession', () => {
        *   · 有字段但形态不认识（版本号或字段表不符）⇒ 同样拒读，不半途落值。
        */
       const boardPayload = file.board
+      // 首页冷读档也必须建立盘面；只在动作内取 store，避免 setup 初始化相互读取。
+      if (boardPayload !== undefined && boardCodec === null) useWorkbenchStore()
+      const setupPayload =
+        typeof boardPayload === 'object' && boardPayload !== null
+          ? (boardPayload as Record<string, unknown>)['setup']
+          : undefined
+      if (setupPayload !== undefined && setupCodec === null) useSetupStore()
+      if (setupPayload !== undefined && !setupCodec?.accepts(setupPayload)) {
+        saveError.value = { rule: SAVE_RULE, reason: 'setupUnrecognized:初设状态无效' }
+        return false
+      }
       if (boardCodec !== null) {
         if (boardPayload === undefined) {
           saveError.value = {
@@ -865,22 +908,50 @@ export const useGameSessionStore = defineStore('gameSession', () => {
           return false
         }
       }
-      scenarioId.value = file.scenarioId
-      session.value = file.session
-      // 新会话上台：上一次的裁决记录与盘面注入值一并复位（不沿用上一局）
-      lastAdvanceKind.value = null
-      earlyDecisionMet.value = false
-      error.value = null
-      // W7 C13：读档即按存档里的共识结论回填勾选与采纳（结论已是「已写入日志」态，勾选只是界面镜像）
-      const loaded = consensusDecisions(file.session, agreedOptionItems.value)
-      agreedChecks.value = loaded.map((decision) => decision.adopted !== null)
-      agreedAdopted.value = loaded.map((decision) => decision.adopted === true)
-      /*
-       * 盘面还原**排在最后**：上面 `scenarioId.value = …` 触发的那两个同步 watch
-       * （`refreshScenarioBoundLedgers` / `seedVictoryControlFromScenario`）会按**新剧本**重播
-       * 13.3f 换轨账本与 5.0c 胜利格控制账本；顺序反了，这两本账会被那次重播冲掉。
-       */
-      if (boardCodec !== null && boardPayload !== undefined) boardCodec.restore(boardPayload)
+      const backup = {
+        scenario: scenarioId.value,
+        session: session.value,
+        checks: agreedChecks.value,
+        adopted: agreedAdopted.value,
+        early: earlyDecisionMet.value,
+        verdicts: pushedVerdicts.value,
+        advance: lastAdvanceKind.value,
+        error: error.value,
+        board: boardCodec?.capture(),
+        setup: setupCodec?.capture(),
+      }
+      try {
+        scenarioId.value = file.scenarioId
+        session.value = file.session
+        // 新会话上台：上一次的裁决记录与盘面注入值一并复位（不沿用上一局）
+        lastAdvanceKind.value = null
+        earlyDecisionMet.value = false
+        error.value = null
+        // W7 C13：读档即按存档里的共识结论回填勾选与采纳（结论已是「已写入日志」态，勾选只是界面镜像）
+        const loaded = consensusDecisions(file.session, agreedOptionItems.value)
+        agreedChecks.value = loaded.map((decision) => decision.adopted !== null)
+        agreedAdopted.value = loaded.map((decision) => decision.adopted === true)
+        /*
+         * 盘面还原**排在最后**：上面 `scenarioId.value = …` 触发的那两个同步 watch
+         * （`refreshScenarioBoundLedgers` / `seedVictoryControlFromScenario`）会按**新剧本**重播
+         * 13.3f 换轨账本与 5.0c 胜利格控制账本；顺序反了，这两本账会被那次重播冲掉。
+         */
+        if (boardCodec !== null && boardPayload !== undefined) boardCodec.restore(boardPayload)
+        if (setupPayload !== undefined) setupCodec?.restore(setupPayload)
+      } catch (cause) {
+        scenarioId.value = backup.scenario
+        session.value = backup.session
+        if (backup.board !== undefined) boardCodec?.restore(backup.board, true)
+        if (backup.setup !== undefined) setupCodec?.restore(backup.setup, true)
+        session.value = backup.session
+        agreedChecks.value = backup.checks
+        agreedAdopted.value = backup.adopted
+        earlyDecisionMet.value = backup.early
+        pushedVerdicts.value = backup.verdicts
+        lastAdvanceKind.value = backup.advance
+        error.value = backup.error
+        throw cause
+      }
       slot.value = describeSaveFile(text)
       saveError.value = null
       return true
@@ -994,6 +1065,8 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     setSaveStorage,
     // P0 修复（B48）：盘面快照编解码器的注册口（由操作台建店时挂上）
     setBoardCodec,
+    setSetupCodec,
+    setPhaseHooks,
     saveNow,
     loadNow,
     clearSlotNow,

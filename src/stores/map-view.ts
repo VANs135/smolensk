@@ -1779,6 +1779,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     const modalPickLive =
       setup.placing !== null ||
       setup.truckPickActive ||
+      workbench.refitBase !== null ||
       workbench.hexPickView !== null ||
       workbench.optionDraftMode !== 'idle'
     if (!modalPickLive && world !== undefined && handleStackClick(hex, world)) return

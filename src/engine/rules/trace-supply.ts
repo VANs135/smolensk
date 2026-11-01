@@ -201,6 +201,15 @@ function hexKey(hex: HexRef): string {
   return `${hex.col}.${hex.row}`
 }
 
+/** 仅缓存本模块建立的不可变事实；外部动态事实不缓存。盘面变化会产生新的事实对象。 */
+const traceSearchCache = new WeakMap<
+  TraceSupplyFacts,
+  {
+    reachable: Map<string, Set<string>>
+    hq: Map<string, boolean>
+  }
+>()
+
 /** 对方阵营 */
 function enemySide(side: Side): Side {
   return side === 'axis' ? 'soviet' : 'axis'
@@ -297,7 +306,8 @@ export function createTraceSupplyFacts(source: TraceSupplyFactsSource = {}): Tra
     else list.push(item.hex)
   }
 
-  return {
+  const stepCosts = new Map<string, number | null>()
+  const facts: TraceSupplyFacts = {
     onMap: (hex) => isOnMap(hex),
     sourcesFor: (side) =>
       sources
@@ -319,8 +329,16 @@ export function createTraceSupplyFacts(source: TraceSupplyFactsSource = {}): Tra
       if (friendlies !== undefined && friendlies.includes(side)) return false
       return zocBySide.get(enemySide(side))?.has(hexKey(hex)) === true
     },
-    stepCost: (from, to, mobility) => supplyStepCost(map, from, to, mobility),
+    stepCost: (from, to, mobility) => {
+      const key = `${mobility}|${hexKey(from)}|${hexKey(to)}`
+      if (stepCosts.has(key)) return stepCosts.get(key) ?? null
+      const cost = supplyStepCost(map, from, to, mobility)
+      stepCosts.set(key, cost)
+      return cost
+    },
   }
+  traceSearchCache.set(facts, { reachable: new Map(), hq: new Map() })
+  return facts
 }
 
 /* ────────────────────────────── 距离计数（12.3a/12.3b/12.7b 共用） ────────────────────────────── */
@@ -860,7 +878,13 @@ function reachableFrom(
   mobility: SupplyMobility,
   start: HexRef,
 ): Set<string> {
-  return floodFrom(facts, side, mobility, [start])
+  const cache = traceSearchCache.get(facts)?.reachable
+  const key = `${side}|${mobility}|${hexKey(start)}`
+  const previous = cache?.get(key)
+  if (previous !== undefined) return previous
+  const covered = floodFrom(facts, side, mobility, [start])
+  cache?.set(key, covered)
+  return covered
 }
 
 /**
@@ -1062,6 +1086,16 @@ function baseSourcesFor(
  * 12.3b-C/D 的两条禁令在此先判。
  */
 function hqCanThrow(facts: TraceSupplyFacts, hq: ThrowHqView): boolean {
+  const cache = traceSearchCache.get(facts)?.hq
+  const key = `${hq.side}|${hexKey(hq.hex)}|${hq.throwMobility}|${hq.throwRangeMp}|${hq.mobility}|${hq.mode}|${hq.receivedByThrow === true}`
+  const previous = cache?.get(key)
+  if (previous !== undefined) return previous
+  const result = computeHqCanThrow(facts, hq)
+  cache?.set(key, result)
+  return result
+}
+
+function computeHqCanThrow(facts: TraceSupplyFacts, hq: ThrowHqView): boolean {
   if (hq.mode === 'strat') return false
   if (hq.receivedByThrow === true) return false
   if (canDrawFromDump(facts, { hex: hq.hex, side: hq.side, mobility: hq.throwMobility }).ok)

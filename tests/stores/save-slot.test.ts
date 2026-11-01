@@ -476,7 +476,7 @@ describe('B48 P0：存档带盘面（摆子 → 存 → 读 → 盘面一致）'
      * 2026-10-30 专规 1.4a 的图外空军盒驻机名单（`airBoxMembers`）进档 ⇒ 版本 5
      * （旧档窗口同时放宽到 v3/v4，且只跳过该版本确实没有的新键）。
      */
-    expect(boardPayloadOf(adapter)['version']).toBe(5)
+    expect(boardPayloadOf(adapter)['version']).toBe(6)
 
     // 把盘面改乱：清算子、清补给站、把城市账本改回去
     workbench.units.splice(0, workbench.units.length)
