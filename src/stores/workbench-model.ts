@@ -895,6 +895,12 @@ export function buildMoveContext(input: {
    *   不得另建一份。
    */
   traceSupplyAt?: (hex: HexRef, side: Side) => boolean
+  /**
+   * 5.7g：该格的环形工事等级（0＝无）；预备单位**不得进入**有工事的格（用户 2026-11-01 口径）
+   *
+   * ★ 缺省不注入 ⇒ 视为无工事（不臆造）；调用方用 `hedgehogLevelOf` 注入（印刷 + 已建 - 已降）。
+   */
+  hedgehogLevelAt?: (hex: HexRef) => number
 }): MoveContext {
   return {
     phase: input.phase,
@@ -908,6 +914,7 @@ export function buildMoveContext(input: {
       ? {}
       : { bridgedHexesBySide: input.bridgedHexesBySide }),
     ...(input.traceSupplyAt === undefined ? {} : { traceSupplyAt: input.traceSupplyAt }),
+    ...(input.hedgehogLevelAt === undefined ? {} : { hedgehogLevelAt: input.hedgehogLevelAt }),
   }
 }
 

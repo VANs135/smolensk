@@ -439,6 +439,15 @@ export function evaluateStepFrom(
     return reject('stratIntoEzoc', '5.8a', `${to.col}.${to.row}`)
   const forcedStop = enteringEnemyZoc && zocEntryEffect(unit.mobility) === 'mustStopOrOverrun'
 
+  /*
+   * 5.7g：「在任何移动环节结束时，处于预备模式内的单位都不可与环形工事堆叠在一起。」
+   * ★ 用户 2026-11-01 口径（按此执行）：**预备单位可以路过工事格，但不得停在工事格内**。
+   *   故本步**不拦**预备进工事格——"进不进得去、停不停得下"由 `computeReachableHexes`
+   *   在 BFS 末段统一裁决：工事格只作**中转节点**（能扩展过去＝可路过），但**不进可停列表**
+   *   ＝不能停；移动力不足以"进得去也出得来"时，BFS 不会产生任何经该格的可停终点 ⇒ 等于进不去。
+   *   只约束**进入即停**：本阶段开始时已在工事格里（异常状态）的单位仍可走出去。
+   */
+
   // 6.2a/6.2b：MP 预算
   const ma = availableMa(unit, context.phase)
   const remaining = ma - mpSpent
@@ -513,6 +522,9 @@ export function computeReachableHexes(context: MoveContext, unitId: string): Rea
   const prepared = prepareMove(context, unitId)
   if (!prepared.ok) return prepared
   const { unit, ma, start } = prepared
+  // 5.7g（用户 2026-11-01 口径）：预备（未释放）单位不得**停在**环形工事格——
+  // 工事格只作 BFS 中转节点（可路过），不进最终可停列表（不能停）。
+  const isReserve = hasMarker(modeStateOf(unit), 'reserve')
 
   const best = new Map<string, ReachableHex>()
   const keyOf = (hex: { col: number; row: number }): string => `${hex.col}.${hex.row}`
@@ -556,7 +568,15 @@ export function computeReachableHexes(context: MoveContext, unitId: string): Rea
   }
 
   best.delete(keyOf(start))
-  const reachable = [...best.values()].sort(
+  let finalNodes = [...best.values()]
+  // 5.7g（用户 2026-11-01 口径）：预备单位不得**停在**环形工事格。
+  // 工事格只作 BFS 中转（能扩展过去＝可路过），但**不进可停列表**＝不能停；
+  // 于是预备单位只能穿过工事格到达另一侧，落地必在非工事格。移动力不足以"进得去也出得来"时，
+  // BFS 不会产生任何经该格的可停终点 ⇒ 等于进不去。非预备单位不受影响。
+  if (isReserve) {
+    finalNodes = finalNodes.filter((node) => (context.hedgehogLevelAt?.(node.hex) ?? 0) <= 0)
+  }
+  const reachable = finalNodes.sort(
     (a, b) =>
       hexDistance(start, a.hex) - hexDistance(start, b.hex) ||
       a.mpSpent - b.mpSpent ||

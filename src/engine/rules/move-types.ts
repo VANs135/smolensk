@@ -115,6 +115,15 @@ export interface MoveContext {
    * 引擎只在「本步的出格或入格在其中」时降级；省略即视为无桥（不臆造）。
    */
   bridgedHexesBySide?: { readonly axis: readonly HexRef[]; readonly soviet: readonly HexRef[] }
+  /**
+   * 5.7g / 16.0：该格的**环形工事等级**（0＝无）
+   *
+   * 「在**任何移动环节结束时**，处于预备模式内的单位都**不可与环形工事堆叠**在一起。」
+   * ★ 用户 2026-11-01 口径（比原文更硬，按此执行）：「**预备单位不能进工事格**」
+   *   ⇒ 把"环节结束时的义务"提前成"进入即禁"，`move.ts#validateStep` 在进入前就拒。
+   * 省略本项即视为**无工事**（不臆造）。
+   */
+  hedgehogLevelAt?: (hex: HexRef) => number
 }
 
 /* ────────────────────────────── 结果形状 ────────────────────────────── */

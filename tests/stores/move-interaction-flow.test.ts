@@ -433,6 +433,68 @@ describe('C5 模式切换（5.4）与燃料支付（12.5）', () => {
     expect(unit.raw).toEqual(unit.faces.move)
   })
 
+  it('★ 5.7g（用户 2026-11-01 口径）：预备单位可**路过**工事格，但不得**停在**工事格内', () => {
+    /*
+     * 原文 5.7g：「任何移动环节结束时，预备模式单位不可与环形工事堆叠。」
+     * 用户口径（比原文更硬，但允许**路过**）：预备单位可以穿过工事格，但**不能停在**工事格内；
+     * 且只有"移动力够进得去也出得来"才能进，否则进不去。
+     *
+     * 几何（平顶 + even-q，已用引擎 neighbor 核实）：
+     *   57.35(Open) ─SE─▶ 58.34(印刷永久工事 L1) ─SE─▶ 59.34(Open)
+     *   两格皆 Open（每格 1 MP），路径恰好 2 MP。
+     * 夹具：用一辆 MA=8 的轴方装甲（tracked）单位 —— 预备模式 MA = 8 × 1/4 = 2，
+     *   恰好够"进工事又出来"到达 59.34，从而能把"路过"与"不停"一起验证。
+     */
+    const start: HexRef = { col: 57, row: 35 }
+    const hedged: HexRef = { col: 58, row: 34 } // 工事格：只作中转，不可停
+    const beyond: HexRef = { col: 59, row: 34 } // 工事另一侧的开阔格：可停
+    const armor = pickRecord(
+      'axis',
+      (record) =>
+        record.classes?.movementClass === 'tracked' && (record.factors?.combat?.ma ?? 0) >= 8,
+    )
+    const unit = place(store, armor, start, 'axis', 'a1')
+    store.clickHex(start)
+    expect(unit.mode.mode).toBe('combat')
+    store.switchUnitMode('reserve')
+    expect(unit.mode.mode).toBe('reserve')
+    // 装甲（tracked）单位需先加注燃料方能开拔（12.5a）；加注本身不耗 MP
+    store.setUnitFuelled(unit.instanceId, true)
+    expect(store.confirmMovePick()).toBe(true)
+
+    // 工事格本身**不在**可停列表 ⇒ 不能停在里面
+    const hedgedNode = store.groupReachable.hexes.find(
+      (item) => item.hex.col === hedged.col && item.hex.row === hedged.row,
+    )
+    expect(hedgedNode).toBeUndefined()
+
+    // 但隔着工事格的另一侧（59.34）**在**可停列表，且路径穿过 58.34 ⇒ 可以路过到达
+    const beyondNode = store.groupReachable.hexes.find(
+      (item) => item.hex.col === beyond.col && item.hex.row === beyond.row,
+    )
+    expect(beyondNode).toBeDefined()
+    const beyondPath = beyondNode!.path.map((h) => `${h.col}.${h.row}`)
+    expect(beyondPath).toContain('57.35')
+    expect(beyondPath).toContain('58.34')
+    expect(beyondPath).toContain('59.34')
+
+    // 实际走过去：点 59.34 ⇒ 沿路径穿过 58.34，落地在 59.34（非工事格）
+    store.clickHex(beyond)
+    expect(store.units[0]!.hex).toEqual(beyond)
+
+    // 对照（独立格子，避免与上面已完成的移动纠缠）：**战斗模式**（无预备标记）下，
+    // 同一格 58.34 工事格**在**可停列表 ⇒ 约束的是"预备"这条，不是地形本身
+    const ctrl = newStore()
+    const ctrlUnit = place(ctrl, armor, start, 'axis', 'c1')
+    ctrl.clickHex(start)
+    ctrl.setUnitFuelled(ctrlUnit.instanceId, true)
+    expect(ctrl.confirmMovePick()).toBe(true)
+    const hedgedNode2 = ctrl.groupReachable.hexes.find(
+      (item) => item.hex.col === hedged.col && item.hex.row === hedged.row,
+    )
+    expect(hedgedNode2).toBeDefined()
+  })
+
   it('★ 5.7g：与环形工事同格进入预备模式 ⇒ 提示「环节结束前必须分开」', () => {
     /*
      * 原文（5.7g）：「在**任何移动环节结束时**，处于预备模式内的单位都**不可与环形工事堆叠**

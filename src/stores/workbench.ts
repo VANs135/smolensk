@@ -1868,6 +1868,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
        * 这里注入的是与 12.6 同一份事实（`createTraceSupplyAt(supplyFacts)`，见 C9 段）。
        */
       traceSupplyAt: (hex, side) => traceSupplyAtForMove.value(hex, side),
+      /*
+       * 5.7g（用户 2026-11-01 口径）：预备单位**不能进工事格**。
+       * 工事等级取与工事面板同一处（`hedgehogLevelOf`：印刷永久工事 + 本回合已建 − 已降）。
+       */
+      hedgehogLevelAt: (hex) => hedgehogLevelOf(hex),
     }),
   )
   /** 已选定交战的守方单位（9.3b/9.6 用；按实例 id 保持摆放顺序） */
@@ -6192,6 +6197,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (interaction === null || interaction.finished) return
     // 走到这里说明本步能落地 ⇒ 清掉上一次的拒绝原因（moveBlocked 是当前这一步被拒的显示位）
     moveBlocked.value = null
+    /*
+     * 5.7g（用户 2026-11-01 口径）兜底：预备（未释放）单位不得停在环形工事格。
+     * 正常路径下可停列表已排除工事格；但若中转途中因工事格触发 ZOC 确认 / 设施夺取而暂停，
+     * 玩家可能在工事格里点「结束移动」——此处拦截，要求先走出工事格再结束。
+     */
+    const reserveStuckInHedgehog = moveUnits.value
+      .filter((unit) => !unit.movementEnded)
+      .some((unit) => unit.mode.mode === 'reserve' && hedgehogLevelOf(unit.hex) > 0)
+    if (reserveStuckInHedgehog) {
+      moveBlocked.value = {
+        rule: '5.7g',
+        reason: '预备模式的单位不得停在环形工事格（5.7g）：请先走出工事格再结束移动',
+      }
+      pushLog('warning', moveBlocked.value.reason, '5.7g')
+      return
+    }
     const names = moveUnits.value.map((unit) => unit.name).join(' + ')
     const result = endMoveEarly({ interaction, runtime: moveRuntime.value })
     applyMovePatches(result.patches)

@@ -209,6 +209,11 @@ export function reachableForMove(input: {
   const { context, interaction, runtime } = input
   const units: ActiveUnitReachability[] = []
   const merged = new Map<string, GroupReachableHex>()
+  // 5.7g（用户 2026-11-01 口径）：堆叠里**任何一枚**处于预备模式 ⇒ 整堆叠都不得停在环形工事格
+  const anyReserve = interaction.unitIds.some((id) => {
+    const v = viewOf(context, id)
+    return v !== null && v.mode === 'reserve'
+  })
 
   for (const unitId of interaction.unitIds) {
     const item = runtimeOf(runtime, unitId)
@@ -234,6 +239,8 @@ export function reachableForMove(input: {
 
     for (const node of result.reachable) {
       if (node.mpSpent > remaining) continue
+      // 5.7g：堆叠含预备单位 ⇒ 环形工事格不得作为可停终点（只能路过）
+      if (anyReserve && (context.hedgehogLevelAt?.(node.hex) ?? 0) > 0) continue
       const absolute = node.mpSpent + item.spentMp
       const key = hexKey(node.hex)
       const existing = merged.get(key)
