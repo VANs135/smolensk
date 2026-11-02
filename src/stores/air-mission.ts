@@ -8,7 +8,10 @@ import {
   type AirInteractionState,
   type AirBaseView,
   type BarrageInteractionState,
+  type AirCargoResolution,
+  transportCapacityOf,
 } from '@/engine/rules'
+import { validateAirCargoReturns } from '@/engine/rules/air-cargo-unload'
 import type { ConsoleAirUnit } from './workbench-model'
 import { parseHexPath, hexLabel } from './workbench-model'
 export interface AirMissionPorts {
@@ -21,6 +24,8 @@ export interface AirMissionPorts {
   resultReady(state: AirInteractionState): boolean
   returnSupply(): void
   resetSupply(): void
+  resetCargo(): void
+  mustStayAtTarget(): boolean
   setAirStatus(id: string, status: AirStatus): void
   markAirMissionFlown(id: string): void
   nameOf(id: string): string
@@ -35,6 +40,7 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
   const barrageUnits = shallowRef<BarrageInteractionState['units'] | null>(null)
   function start(state: AirInteractionState): void {
     barrageUnits.value = null
+    ports.resetCargo()
     airState.value = state
   }
   function bindBarrage(state: BarrageInteractionState): void {
@@ -42,6 +48,18 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
   }
   function ownsBarrage(state: BarrageInteractionState): boolean {
     return barrageUnits.value !== null && barrageUnits.value === state.units
+  }
+  /** 14.2f-F：任务状态由本域提交；失效计划不能再改盘面或覆盖新任务。 */
+  function commitCargo(
+    state: AirInteractionState,
+    result: AirCargoResolution,
+    apply: () => void,
+  ): boolean {
+    if (airState.value !== state || state.step !== 'resolveMission' || state.cargo !== null)
+      return false
+    apply()
+    airState.value = { ...state, cargo: result }
+    return true
   }
   const airInputs = computed(ports.inputs),
     airTransportProfiles = computed(ports.profiles),
@@ -65,6 +83,7 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
     airError.value = null
     barrageUnits.value = null
     ports.resetSupply()
+    ports.resetCargo()
     return true
   }
   function confirmAirMissionNow(): boolean {
@@ -102,14 +121,33 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
         .filter((item) => item.profile === 'A')
         .map((item) => item.aircraftId),
     )
+    const forcedIds = ports.mustStayAtTarget()
+      ? airUnits.value.filter((air) => transportCapacityOf(air) > 0).map((air) => air.instanceId)
+      : []
     const returns = state.assignment.origins
       .filter((origin) => !aProfileIds.has(origin.aircraftId))
       .map((origin) => {
         const text = airInputs.value.returnHexText[origin.aircraftId]
         const parsed = text === undefined ? null : (parseHexPath(text)[0] ?? null)
         // 未填即回原起飞基地（合法：14.1c 只要求「距离内的一个友方空军基地」）
-        return { aircraftId: origin.aircraftId, baseHex: parsed ?? origin.baseHex }
+        return {
+          aircraftId: origin.aircraftId,
+          baseHex:
+            parsed ?? (forcedIds.includes(origin.aircraftId) ? state.targetHex : origin.baseHex),
+        }
       })
+    if (
+      acceptAir(
+        validateAirCargoReturns({
+          requiresStay: ports.mustStayAtTarget(),
+          transportIds: forcedIds,
+          targetHex: state.targetHex,
+          returns,
+        }),
+        '超限卸载返航',
+      ) === null
+    )
+      return false
     const data = acceptAir(completeAirReturnStep(state, { returns, bases: airBases.value }), '返航')
     if (data === null) return false
     ports.returnSupply()
@@ -166,6 +204,7 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
     start,
     bindBarrage,
     ownsBarrage,
+    commitCargo,
     canReplace,
     reset,
     confirmAirMissionNow,

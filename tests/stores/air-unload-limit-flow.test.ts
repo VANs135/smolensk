@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { mapLayers } from '@/data'
 import type { HexRef, Side } from '@/data'
-import { HEX_DIRECTIONS, isOnMap, neighbor } from '@/engine/hex-geometry'
+import { HEX_DIRECTIONS, isOnMap, neighbor, hexDistance } from '@/engine/hex-geometry'
 import {
   aircraftChoices,
   toConsoleAirUnit,
@@ -147,6 +147,60 @@ const dumpsAtDest = (store: ReturnType<typeof newStore>) =>
   store.spDumps.filter((dump) => dump.hex.col === DEST_HEX.col && dump.hex.row === DEST_HEX.row)
 
 describe('14.9f / 15.0b-C：空运卸载限额（真实基地格）', () => {
+  it('超限卸载后运输机必须留在目的地；修改草稿或返航输入不能抹掉义务', () => {
+    const store = newStore()
+    setup(store)
+    store.setAirMissionKind('air_transport')
+    store.setAirTargetFromText(label(DEST_HEX))
+    store.toggleAirMissionUnit('tpt-1')
+    store.airInputs.cargoSpT = 4
+    store.airInputs.unloadOverLimitInactive = true
+    expect(store.beginAirMissionNow()).toBe(true)
+    expect(store.confirmAirCombatNow()).toBe(true)
+    expect(store.declareInterceptionNow()).toBe(true)
+    store.airInputs.flakDie = 2
+    expect(store.resolveFlakNow()).toBe(true)
+    expect(store.resolveAirCargoNow()).toBe(true)
+    expect(store.airCargoUnloadReceipt?.requiresDestinationStay).toBe(true)
+    store.airInputs.unloadOverLimitInactive = false
+    expect(store.confirmAirMissionNow()).toBe(true)
+    store.airInputs.returnHexText['tpt-1'] = label(CORE_HEX)
+    const rng = store.rng
+    expect(store.completeAirReturnNow()).toBe(false)
+    expect(store.airError?.reason).toBe('overLimitTransportMustStayAtTarget')
+    expect(store.rng).toEqual(rng)
+    expect(dumpsAtDest(store)[0]!.sp * 4 + dumpsAtDest(store)[0]!.t).toBe(4)
+    store.airInputs.returnHexText['tpt-1'] = label(DEST_HEX)
+    expect(store.completeAirReturnNow()).toBe(true)
+    expect(store.airUnits[0]!.hex).toEqual(DEST_HEX)
+    expect(store.airUnits[0]!.airStatus).toBe('inactive')
+    expect(store.airUnits[0]!.missionsFlownThisPhase).toBe(1)
+  })
+  it('只有一架双程运输机，不能自动替其余运输机获得超限卸载例外', () => {
+    const store = newStore()
+    setup(store)
+    setup2(store)
+    const target = mapLayers.hexes.find((hex) => hexDistance(CORE_HEX, hex) === 2)!
+    store.units.push(
+      toConsoleUnit({ record: airBaseRecord(), instanceId: 'far-base', hex: target, side: 'axis' }),
+    )
+    store.airUnits[0]!.rangeHexes = 1 // 距离2，A档。
+    store.airUnits[1]!.rangeHexes = 4 // 距离2，C档。
+    store.setAirMissionKind('air_transport')
+    store.setAirTargetFromText(label(target))
+    store.toggleAirMissionUnit('tpt-1')
+    store.toggleAirMissionUnit('tpt-2')
+    store.airInputs.cargoSpT = 4
+    expect(store.beginAirMissionNow()).toBe(true)
+    expect(store.airOverLimitAircraftInactive).toBe(false)
+    expect(store.confirmAirCombatNow()).toBe(true)
+    expect(store.declareInterceptionNow()).toBe(true)
+    store.airInputs.flakDie = 2
+    expect(store.resolveFlakNow()).toBe(true)
+    expect(store.resolveAirCargoNow()).toBe(true)
+    expect(store.airCargoUnloadReceipt?.deliveredT).toBe(2)
+    expect(store.airCargoUnloadReceipt?.requiresDestinationStay).toBe(false)
+  })
   it('载货任务中拒绝保存，返航后可保存，避免读档丢失在途SP', () => {
     const store = newStore()
     const game = useGameSessionStore()
@@ -311,7 +365,7 @@ describe('14.9f / 15.0b-C：空运卸载限额（真实基地格）', () => {
     const dumps = dumpsAtDest(store)
     expect(dumps).toHaveLength(1)
     expect(dumps[0]).toMatchObject({ t: 3 })
-    expect(store.airUnloadedTAt(DEST_HEX, 'axis')).toBe(3)
+    expect(store.airUnloadedTAt(DEST_HEX, 'axis')).toBe(0) // 空投不占普通空运卸载额度（15.0b-C）。
   })
 })
 

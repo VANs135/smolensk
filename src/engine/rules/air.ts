@@ -1,7 +1,7 @@
 import { rulesConstants } from '@/data'
 
 import { airCombatLookup, airCombatLossRoll } from '../tables/air-combat'
-import { succeed, type RuleOutcome } from '../result-types'
+import { fail, succeed, type RuleOutcome } from '../result-types'
 import { AIR_BASE_CAPTURE_NO_LOSS_MIN_DICE } from './combat'
 
 /**
@@ -358,7 +358,14 @@ export function planAirUnload(input: {
   rule: string
   detail: string
 }> {
-  const cargoT = Math.max(0, Math.trunc(input.cargoT))
+  if (
+    !Number.isFinite(input.cargoT) ||
+    input.cargoT < 0 ||
+    !Number.isFinite(input.usedT) ||
+    input.usedT < 0
+  )
+    return fail('14.9f', 'invalidUnloadAmount')
+  const cargoT = input.cargoT
   if (input.kind === 'air_drop') {
     return succeed('15.0b-C', {
       allowedT: cargoT,
@@ -369,7 +376,7 @@ export function planAirUnload(input: {
     })
   }
   const limitT = airUnloadLimitT({ baseLevel: input.baseLevel, isAirstrip: input.isAirstrip })
-  const remaining = Math.max(0, limitT - Math.max(0, Math.trunc(input.usedT)))
+  const remaining = Math.max(0, limitT - input.usedT)
   if (cargoT <= remaining) {
     return succeed('14.9f', {
       allowedT: cargoT,

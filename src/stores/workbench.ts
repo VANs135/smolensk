@@ -1,9 +1,15 @@
 ﻿import { createAirMissionDomain } from './air-mission'
 import { createGroundMovementDomain } from './ground-movement'
-import { airCargoTransportT, isAirTransportableUnit } from '@/engine/rules/air-cargo'
+import {
+  airCargoTransportT,
+  isAirTransportableUnit,
+  airTransportSpentMpAfter,
+} from '@/engine/rules/air-cargo'
+import { createAirCargoResolutionDomain } from './air-cargo-resolution'
+import type { AirCargoUnloadPlan } from '@/engine/rules/air-cargo-unload'
 import { createAirSupplyDomain } from './air-supply'
 import { planAirSupplyLoad } from '@/engine/rules/air-supply'
-import { resolveAirTransportDelivery } from '@/engine/rules/air-interaction'
+import type { AirCargoResolution } from '@/engine/rules/air-interaction'
 import type { MoveStepSnapshot } from './movement-types'
 import { inEnemyZocForAction } from '@/engine/rules/move'
 import { createFireResolutionDomain } from './fire-resolution'
@@ -188,7 +194,6 @@ import {
   patrolZoneHexes,
   planArrivals,
   planAirBaseReduction,
-  planAirUnload,
   planBarrageSupply,
   planBaseRefit,
   planBaseTransfer,
@@ -219,7 +224,6 @@ import {
   reachableForMove,
   reachableNodeAt,
   resolveAdvance,
-  resolveAirCargoDrop,
   resolveAirCombatRounds,
   arrivalPlacementCandidates,
   resolveArrivalPlacement,
@@ -847,6 +851,8 @@ export interface AirInputs {
    *   超额部分的货物。」（14.9e-A 的双程飞法即在目的地变非激活）
    */
   unloadOverLimitInactive: boolean
+  /** F步显式选择本次卸载的完整货物；null为自动（含单位且超限时必须选择）。 */
+  unloadCargoIds: string[] | null
   /** 14.10a：本次空投的**战斗单位**（从己方已摆放单位中勾选） */
   cargoUnitIds: string[]
   /** 14.10a：勾选单位是否标有「空降/Para」标识（本作单位库未印该标识，故由玩家声明） */
@@ -896,6 +902,7 @@ function createAirInputs(): AirInputs {
     returnHexText: {},
     cargoSpT: 0,
     unloadOverLimitInactive: false,
+    unloadCargoIds: null,
     cargoUnitIds: [],
     cargoUnitsParaCapable: true,
     airdropPlannedTurn: 0,
@@ -1682,6 +1689,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     resultReady: airMissionResultReady,
     returnSupply: airSupply.returnRemaining,
     resetSupply: airSupply.reset,
+    resetCargo: () => {
+      airCargoResolution.reset()
+      airInputs.value.unloadCargoIds = null
+    },
+    mustStayAtTarget: () => airCargoUnloadReceipt.value?.requiresDestinationStay === true,
     setAirStatus,
     markAirMissionFlown,
     nameOf,
@@ -1689,6 +1701,46 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     recordSettlement,
   })
   const { airState, airError } = airMissionDomain
+  const airCargoResolution = createAirCargoResolutionDomain({
+    state: () => airState.value,
+    rng: () => rng.value,
+    inputs: () => airInputs.value,
+    facts: () => {
+      const state = airState.value
+      const base = airBases.value.find(
+        (entry) =>
+          state !== null && sameHex(entry.hex, state.targetHex) && entry.side === state.side,
+      )
+      return {
+        closedTerrain: airTransportTerrainIsClosed({
+          terrainsInHex: state === null ? [] : terrainsAt(state.targetHex),
+          hasAirBase:
+            state !== null && airBases.value.some((entry) => sameHex(entry.hex, state.targetHex)),
+        }),
+        baseLevel: base?.level ?? 0,
+        isAirstrip: base?.isAirstrip === true,
+        usedT: state === null ? 0 : airUnloadedTAt(state.targetHex, state.side),
+        overLimitAircraftInactive:
+          airInputs.value.unloadOverLimitInactive || airOverLimitAircraftInactive.value,
+      }
+    },
+    lossPending: () => airCargoLossPending.value !== null,
+    unitExists: (id) => units.value.some((unit) => `unit:${unit.instanceId}` === id),
+    draw2d6: drawAir2d6,
+    accept: acceptAir,
+    commit: (state, result, plan) =>
+      airMissionDomain.commitCargo(state, result, () => applyAirCargoDelivery(state, result, plan)),
+    pushLog,
+    record: recordSettlement,
+  })
+  const airCargoUnloadReceipt = airCargoResolution.receipt
+  const airCargoUnloadChoices = computed(() =>
+    (airState.value?.assignment.cargo ?? []).map((item) => ({
+      id: item.id,
+      t: airCargoTransportT(item),
+      label: item.kind === 'sp' ? item.id : nameOf(item.id.slice(5)),
+    })),
+  )
   /** C9：最近一次被引擎拒绝的步骤（供界面提示；成功后清空） */
   /** C9：玩家在本次空军交互里的各项输入（界面 v-model 绑定） */
   const airInputs = ref<AirInputs>(createAirInputs())
@@ -4044,9 +4096,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /** 14.9e-A：本次任务里**在目的地变非激活**（双程飞法）的飞机 —— 14.9f 的例外交给它判 */
-  const airOverLimitAircraftInactive = computed<boolean>(() =>
-    airTransportProfiles.value.some((item) => item.profile === 'A'),
-  )
+  const airOverLimitAircraftInactive = computed<boolean>(() => {
+    const transports = airTransportProfiles.value.filter((item) => {
+      const plane = airUnits.value.find((air) => air.instanceId === item.aircraftId)
+      return plane !== undefined && transportCapacityOf(plane) > 0
+    })
+    return transports.length > 0 && transports.every((item) => item.profile === 'A')
+  })
 
   /** C9：本次任务的参战机（未开始时＝点选集合；已开始时＝分配结论里的名单） */
   const airMissionAirUnits = computed<ConsoleAirUnit[]>(() => {
@@ -13094,202 +13150,56 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 单位货物成功 ⇒ 置于空投格且本阶段移动结束；失败 ⇒ 被摧毁（14.10d）。
    */
   function resolveAirCargoNow(): boolean {
-    const state = airState.value
-    if (state === null) return false
-    if (state.cargo !== null) return true
-    /*
-     * 14.4g：容量因防空变小、还有**未处理的超出货物**时，先让玩家选定摧毁哪几件 ——
-     * 否则会拿"已超容的货物清单"去过 14.10d 的检定（等于把本该摧毁的货物也空投下去）。
-     */
-    if (airCargoLossPending.value !== null) {
-      pushLog(
-        'warning',
-        `14.4g：先处理货物损失（容量 ${airCargoLossPending.value.capacityAfter} T、超出 ${airCargoLossPending.value.excessT} T）再执行货物检定`,
-        '14.4g',
-      )
-      return false
-    }
-    if (state.step !== 'resolveMission') {
-      pushLog('warning', '空投检定在 14.2f 的 F 步（结算任务）进行', '14.2f-F')
-      return false
-    }
-    if (state.kind !== 'air_transport' && state.kind !== 'air_drop') {
-      pushLog('warning', `该任务没有货物（${airMissionKindLabel(state.kind)}）`, '14.10d')
-      return false
-    }
-    const target = airTargetHex.value
-    const inputs = airInputs.value
-    const closedTerrain = airTransportTerrainIsClosed({
-      terrainsInHex: target === null ? [] : terrainsAt(target),
-      hasAirBase: target !== null && airBases.value.some((base) => sameHex(base.hex, target)),
-    })
-    // ⑭ 接线：drawAir2d6 只回报数字（不改它）⇒ 先记下掷骰前的骰源，按同一颗 PRNG 逐件复算骰面
-    const rngBefore = rng.value
-    const dice =
-      state.kind === 'air_drop'
-        ? state.assignment.cargo.map(() => inputs.cargoDice ?? drawAir2d6())
-        : []
-    const rolls: DiceRoll[] = []
-    if (inputs.cargoDice === null) {
-      let cursor = rngBefore
-      for (let index = 0; index < dice.length; index += 1) {
-        const derived = roll2d6(cursor)
-        cursor = derived.rng
-        rolls.push(derived.value)
-      }
-    }
-    const drop = acceptAir(
-      state.kind === 'air_transport'
-        ? resolveAirTransportDelivery(state.assignment.cargo)
-        : resolveAirCargoDrop({
-            cargo: state.assignment.cargo,
-            side: state.side,
-            friendlyAtPhaseStart: inputs.targetFriendlyAtPhaseStart,
-            closedTerrain,
-            ...(inputs.gliderLanding ? { glider: true } : {}),
-            ...(inputs.optionalTerrainDrm === 0
-              ? {}
-              : { optionalTerrainDrm: inputs.optionalTerrainDrm }),
-            ...(inputs.enemyCombatUnitInTarget ? { enemyCombatUnitInHex: true } : {}),
-            dice,
-          }),
-      state.kind === 'air_drop' ? '空投检定' : '空运卸载',
-    )
-    if (drop === null) return false
-    airState.value = { ...state, cargo: drop }
+    return airCargoResolution.resolveAirCargoNow()
+  }
+
+  /** 14.9/14.10：已验证的货物计划统一提交；规则与限额不在这里重新计算。 */
+  function applyAirCargoDelivery(
+    state: AirInteractionState,
+    result: AirCargoResolution,
+    plan: AirCargoUnloadPlan,
+  ): void {
+    const target = state.targetHex
     airSupply.settle(
-      drop.items
+      result.items
         .filter((item) => item.kind === 'sp' && item.fate === 'destroyed')
         .map((item) => item.id),
       'lost',
     )
-
-    // 14.10d：单位货物落地或摧毁（SP 货物走下面的"卸载限额 + 落账"，见 14.9f）
-    for (const item of drop.items) {
-      const unitId = item.id.startsWith('unit:') ? item.id.slice(5) : null
-      if (unitId === null) continue
-      const unit = units.value.find((entry) => entry.instanceId === unitId)
-      if (unit === undefined) continue
-      if (item.fate === 'placed' && target !== null) {
-        unit.hex = { ...target }
-        if (state.kind === 'air_transport') {
-          /*
-           * 14.9d（第五批批 C 切片 2）：「战斗单位被空运的阶段中，**最多可移动其 MA 的 1/2**……
-           *   这可以在空运任务之前或之后进行（或二者皆有），但消耗的 MA 不能超过 1/2」。
-           * ⇒ 把本阶段额度**预提**：落地之后还能再花的 ＝ max(0, MA/2 − 已花)。
-           *   ★ 主规则（移动阶段）在此落地；反应/进击阶段的 1/4 MA 与"须被释放预备"分支**未实现**（如实登记）。
-           *   ★ 空投维持 14.10d 的"本阶段移动结束"（不适用本条）。
-           */
-          const ma = unit.faces.move.ma
-          const allowAfter = Math.max(0, ma / 2 - Math.min(unit.mpSpent, ma / 2))
-          unit.mpSpent = ma - allowAfter
-          pushLog(
-            'info',
-            `${unit.name} 空运抵达 ${hexLabel(target)}（14.9d：本阶段合计至多移动 MA 的 1/2 ⇒ 之后还能移 ${String(allowAfter)} MP）`,
-            '14.9d',
-          )
-        } else {
-          unit.movementEnded = true
-          pushLog(
-            'success',
-            `${unit.name} 空投着陆于 ${hexLabel(target)}（本阶段移动结束，14.10d）`,
-            '14.10d',
-          )
-        }
-        /*
-         * 12.6h：「进行计划中的空投（14.10b）的单位，**在被空投那个回合中不需要追溯补给**」
-         *   ⇒ 记下被空投的回合；`refreshTraceSupply` 据此豁免该回合的断补判定（跨回合自然失效）。
-         *   ★ 只认**空投**（`air_drop`）：14.9 的空运降落在空军基地格，那里本来就有补给链，不属本条。
-         */
-        if (state.kind === 'air_drop') unit.airDropExemptTurn = turn.value
-        // 专规 3.5：空投/空运落地也算"进入该格"（苏方战斗单位进格即毁建造标记）
-        noteUnitEnteredHex(unit, target)
+    for (const item of result.items) {
+      if (item.kind !== 'unit') continue
+      const unit = units.value.find((entry) => `unit:${entry.instanceId}` === item.id)
+      if (unit === undefined) continue // 提交前已由流程域核对完整性。
+      if (item.fate === 'destroyed') {
+        eliminateEntry(unit, '14.10d', `${unit.name} 空投失败，被摧毁（14.10d）`)
         continue
       }
-      // 14.10d：空投失败被摧毁 ⇒ 同样进死亡堆（与战斗/轰炸淘汰同一入口）
-      eliminateEntry(unit, '14.10d', `${unit.name} 空投失败，被摧毁（14.10d）`)
-    }
-    /*
-     * 14.9f / 15.0b-C / 15.2C：**空运卸载限额 + 落账**
-     *
-     * 修前这里只打了日志（注释写着"SP 货物只影响账本，由调用方按需处理"），**没有调用方处理**：
-     * 空运来的 SP 既不进 SP 账本、也不受 14.9f 的「每基地每移动环节 等级×2T」限制
-     * （该常量 `unloadTPerLevelPerPhase` 当时在全库零消费）⇒ 同一基地同一环节可以无限收油。
-     * 现在：按引擎 `planAirUnload` 判限额，**允许的部分**落进目的格的 SP 账本（12.1b），
-     * 被拒的部分如实报出（不静默吞掉）。空投按 15.0b-C 无上限。
-     */
-    if (target !== null) {
-      const placedSpT = drop.items.filter(
-        (item) => item.id.startsWith('sp:') && item.fate === 'placed',
-      ).length
-      if (placedSpT > 0) {
-        const base = airBases.value.find((entry) => sameHex(entry.hex, target))
-        const plan = planAirUnload({
-          kind: state.kind === 'air_drop' ? 'air_drop' : 'air_transport',
-          baseLevel: base?.level ?? 0,
-          isAirstrip: base?.isAirstrip === true,
-          usedT: airUnloadedTAt(target, state.side),
-          cargoT: placedSpT,
-          /*
-           * 14.9f / 14.9e-A：**超额部分的运输机在目的地变非激活** ⇒ 可以一并卸载。
-           * 判据由**飞法**给出（A 档就是"目的地变非激活"），玩家手勾则作为额外的声明手段保留。
-           */
-          overLimitAircraftInactive:
-            inputs.unloadOverLimitInactive || airOverLimitAircraftInactive.value,
-        })
-        if (plan.ok) {
-          const { allowedT, refusedT } = plan.data
-          if (allowedT > 0) {
-            addSpAtHex({
-              hex: target,
-              side: state.side,
-              sp: 0,
-              t: allowedT,
-              source: plan.data.rule,
-            })
-            airUnloadLedger.value = {
-              ...airUnloadLedger.value,
-              [`${state.side}:${hexLabel(target)}`]: airUnloadedTAt(target, state.side) + allowedT,
-            }
-          }
-          pushLog(refusedT > 0 ? 'warning' : 'info', plan.data.detail, plan.data.rule)
-          airSupply.settle(
-            drop.items
-              .filter((item) => item.kind === 'sp' && item.fate === 'placed')
-              .slice(0, allowedT)
-              .map((item) => item.id),
-            'delivered',
-          )
-          if (refusedT > 0)
-            pushLog(
-              'danger',
-              `${refusedT} T 空运补给未卸载（14.9f：本格本环节上限已满），本次返航时退回起飞基地`,
-              '14.9f',
-            )
-        } else {
-          pushLog('warning', `空运卸载被判拒：${plan.reason}（${plan.rule}）`, plan.rule)
-        }
+      if (state.kind === 'air_transport')
+        unit.mpSpent = airTransportSpentMpAfter(unit.faces.move.ma, unit.mpSpent)
+      if (item.fate === 'retained') {
+        pushLog('info', `${unit.name} 未卸载，按原基地退运；保留空运阶段移动限制`, '14.9d/f')
+        continue
       }
+      unit.hex = { ...target }
+      if (state.kind === 'air_drop') {
+        unit.movementEnded = true
+        unit.airDropExemptTurn = turn.value
+      }
+      noteUnitEnteredHex(unit, target)
+      pushLog(
+        'success',
+        `${unit.name} 抵达 ${hexLabel(target)}`,
+        state.kind === 'air_drop' ? '14.10d' : '14.9d',
+      )
     }
-    for (const item of drop.items)
-      pushLog(item.fate === 'placed' ? 'info' : 'warning', item.detail, drop.rule)
-    pushLog('info', drop.detail, drop.rule)
-    // ⑭ 接线：空运/空投成功检定（14.10d）入会话日志；rolls＝逐件货物的 2 骰（按实际掷骰顺序）
-    recordSettlement({
-      action: 'airCargo',
-      rule: drop.rule,
-      rolls,
-      data: {
-        kind: state.kind,
-        items: drop.items.map((item) => ({
-          id: item.id,
-          fate: item.fate,
-          detail: item.detail,
-        })),
-        detail: drop.detail,
-      },
-    })
-    return true
+    if (plan.deliveredSpT > 0)
+      addSpAtHex({ hex: target, side: state.side, sp: 0, t: plan.deliveredSpT, source: plan.rule })
+    if (plan.consumedT > 0)
+      airUnloadLedger.value = {
+        ...airUnloadLedger.value,
+        [`${state.side}:${hexLabel(target)}`]: airUnloadedTAt(target, state.side) + plan.consumedT,
+      }
+    airSupply.settle(plan.deliveredIds, 'delivered')
   }
 
   /**
@@ -20051,6 +19961,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     resolveInterceptionCombatNow,
     resolveFlakNow,
     resolveAirCargoNow,
+    airCargoUnloadReceipt,
+    airCargoUnloadChoices,
     airSupplyManifest,
     // 14.4g：防空致容量变化后的货物损失（重算容量 / 勾选摧毁 / 落盘）
     airMissionCargoCapacityNow,

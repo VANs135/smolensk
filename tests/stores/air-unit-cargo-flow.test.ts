@@ -57,6 +57,84 @@ function setup(startSession = false) {
 }
 
 describe('14.9a / 14.4g：单位载货与真实盘面闭环', () => {
+  it('半T单位消耗的卸载额度可完整存读档，不被截成整数', () => {
+    const w = setup(true)
+    w.units.find((unit) => unit.instanceId === 'cargo')!.re = 0.25
+    expect(w.beginAirMissionNow()).toBe(true)
+    expect(w.confirmAirCombatNow()).toBe(true)
+    expect(w.declareInterceptionNow()).toBe(true)
+    w.airInputs.flakDie = 2
+    expect(w.resolveFlakNow()).toBe(true)
+    expect(w.resolveAirCargoNow()).toBe(true)
+    expect(w.airUnloadedTAt(NEAR_HEX, 'axis')).toBe(0.5)
+    expect(w.confirmAirMissionNow()).toBe(true)
+    expect(w.completeAirReturnNow()).toBe(true)
+    const game = useGameSessionStore()
+    expect(game.saveNow()).toBe(true)
+    w.airUnloadLedger = {}
+    expect(game.loadNow()).toBe(true)
+    expect(w.airUnloadedTAt(NEAR_HEX, 'axis')).toBe(0.5)
+  })
+  function mixedTask() {
+    const w = setup()
+    w.airUnits[0]!.transportCapacity = 2
+    w.spDumps.push({ id: 'stock', side: 'axis', hex: CORE_HEX, sp: 0, t: 1 })
+    w.airInputs.cargoSpT = 1
+    expect(w.beginAirMissionNow()).toBe(true)
+    expect(w.confirmAirCombatNow()).toBe(true)
+    expect(w.declareInterceptionNow()).toBe(true)
+    w.airInputs.flakDie = 2
+    expect(w.resolveFlakNow()).toBe(true)
+    return w
+  }
+  it('混合卸载超限先拒绝且不改盘面；选择单位后SP只退一次', () => {
+    const w = mixedTask()
+    const before = w.units.map((unit) => ({
+      id: unit.instanceId,
+      hex: { ...unit.hex },
+      mp: unit.mpSpent,
+    }))
+    const rng = w.rng
+    expect(w.resolveAirCargoNow()).toBe(false)
+    expect(w.airError?.reason).toBe('airUnloadSelectionRequired')
+    expect(w.airState!.cargo).toBeNull()
+    expect(w.airCargoUnloadReceipt).toBeNull()
+    expect(
+      w.units.map((unit) => ({ id: unit.instanceId, hex: { ...unit.hex }, mp: unit.mpSpent })),
+    ).toEqual(before)
+    expect(w.rng).toEqual(rng)
+    expect(w.airUnloadedTAt(NEAR_HEX, 'axis')).toBe(0)
+    w.airInputs.unloadCargoIds = ['unit:cargo', 'sp:1']
+    expect(w.resolveAirCargoNow()).toBe(false)
+    expect(w.airError?.reason).toBe('selectedCargoExceedsUnloadLimit')
+    w.airInputs.unloadCargoIds = ['unit:cargo']
+    expect(w.resolveAirCargoNow()).toBe(true)
+    expect(w.units.find((unit) => unit.instanceId === 'cargo')!.hex).toEqual(NEAR_HEX)
+    expect(w.airUnloadedTAt(NEAR_HEX, 'axis')).toBe(2)
+    expect(w.airState!.cargo!.items.find((item) => item.id === 'sp:1')!.fate).toBe('retained')
+    expect(w.resolveAirCargoNow()).toBe(true)
+    expect(w.airUnloadedTAt(NEAR_HEX, 'axis')).toBe(2)
+    expect(w.confirmAirMissionNow()).toBe(true)
+    expect(w.completeAirReturnNow()).toBe(true)
+    expect(w.spDumps.reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)).toBe(1)
+    expect(w.airSupplyManifest!.items[0]!.fate).toBe('returned')
+    expect(w.completeAirReturnNow()).toBe(false)
+  })
+  it('选SP卸载时不销毁未卸单位，并保留单位空运后的移动限制', () => {
+    const w = mixedTask()
+    w.airInputs.unloadCargoIds = ['sp:1']
+    expect(w.resolveAirCargoNow()).toBe(true)
+    const unit = w.units.find((unit) => unit.instanceId === 'cargo')!
+    expect(unit.hex).toEqual(CORE_HEX)
+    expect(unit.mpSpent).toBe(unit.faces.move.ma / 2)
+    expect(w.deadPile.some((unit) => unit.instanceId === 'cargo')).toBe(false)
+    expect(w.airUnloadedTAt(NEAR_HEX, 'axis')).toBe(1)
+    expect(w.airCargoUnloadReceipt!.refusedIds).toEqual(['unit:cargo'])
+    expect(w.confirmAirMissionNow()).toBe(true)
+    expect(w.completeAirReturnNow()).toBe(true)
+    expect(w.units.find((unit) => unit.instanceId === 'cargo')!.hex).toEqual(CORE_HEX)
+    expect(w.spDumps.find((dump) => sameHex(dump.hex, NEAR_HEX))!.t).toBe(1)
+  })
   it('单位载货中途不能保存不完整状态；任务及返航完成后可保存', () => {
     const w = setup(true)
     const game = useGameSessionStore()

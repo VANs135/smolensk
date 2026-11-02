@@ -33,6 +33,14 @@ import {
 
 const workbench = useWorkbenchStore()
 
+/** 14.9f：这里只维护玩家卸货选择，限额与不可拆分判定交给引擎。 */
+function toggleUnloadCargo(id: string): void {
+  const current = workbench.airInputs.unloadCargoIds ?? []
+  workbench.airInputs.unloadCargoIds = current.includes(id)
+    ? current.filter((item) => item !== id)
+    : [...current, id]
+}
+
 /** 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输） */
 const uiMode = useUiMode()
 
@@ -593,7 +601,7 @@ const showsBaseOps = computed(
             -->
               <label class="field" title="14.9f：超出部分由在目的地格变非激活的运输机承运">
                 <input v-model="workbench.airInputs.unloadOverLimitInactive" type="checkbox" />
-                超额部分由「在目的地变非激活」的运输机承运（14.9e-A / 14.9f）
+                超限卸载时，本次运输机全部留在目的地并转非激活（14.9f）
               </label>
               <label class="field">
                 计划回合（14.10b）
@@ -802,6 +810,35 @@ const showsBaseOps = computed(
 
           <!-- ── ②b F 步的空军轰炸（10.2 / 14.7b）：任务为"空军轰炸"时进轰炸链 ── -->
           <template v-if="workbench.airState.step === 'resolveMission'">
+            <template v-if="workbench.airState.kind === 'air_transport'">
+              <p class="muted">
+                单位与SP共用卸载限额。默认自动卸载；含单位且超限时，请选择本次卸下的完整货物。未选货物保留退运。
+              </p>
+              <div class="row">
+                <label v-for="item in workbench.airCargoUnloadChoices" :key="item.id" class="field">
+                  <input
+                    type="checkbox"
+                    :checked="workbench.airInputs.unloadCargoIds?.includes(item.id) ?? false"
+                    @change="toggleUnloadCargo(item.id)"
+                  />
+                  {{ item.label }}（{{ item.t }} T）
+                </label>
+              </div>
+              <div class="row">
+                <BaseButton
+                  size="sm"
+                  variant="secondary"
+                  @click="workbench.airInputs.unloadCargoIds = null"
+                  >恢复自动卸载</BaseButton
+                >
+                <BaseButton
+                  size="sm"
+                  variant="secondary"
+                  @click="workbench.airInputs.unloadCargoIds = []"
+                  >本次全部退运</BaseButton
+                >
+              </div>
+            </template>
             <p v-if="workbench.airState.kind === 'barrage'" class="num">
               空军轰炸（10.2a / 14.7b）：在轰炸环节对目标结算 —— 与炮兵**同一条**轰炸链 （加总轰炸值
               → 定纵列 → 横移 → 2 骰 → 战果），10.2c：**空军轰炸没有补给消耗**。

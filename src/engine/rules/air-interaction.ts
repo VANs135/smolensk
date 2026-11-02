@@ -1298,7 +1298,7 @@ export interface AirCargoItemResult {
   threshold: number | null
   success: boolean
   /** 14.10d：成功 ⇒ 置于空投格（其本阶段移动结束）；失败 ⇒ 被摧毁 */
-  fate: 'placed' | 'destroyed'
+  fate: 'placed' | 'destroyed' | 'retained'
   detail: string
 }
 

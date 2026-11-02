@@ -234,7 +234,7 @@ describe('W6 B19：3.5 建造标记', () => {
       const markers = [
         'function applyMovePatches', // 地面移动落盘
         'function applyCombatPatches', // 战斗后推进/撤退
-        `item.fate === 'placed'`, // 空投落地
+        'function applyAirCargoDelivery', // 通过已验证货物计划提交空投落地
         'function returnFromDeadPileNow', // 死亡堆返场
       ]
       const seen = new Set<string>()
