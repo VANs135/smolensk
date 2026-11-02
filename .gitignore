@@ -33,7 +33,7 @@ backup/
 /m\[1\]).join('
 /record.branch
 /record.noncombatKind
-/unit.name).join('、')}
+/unit.name).join('、')[}]
 
 # 临时草稿（规则/测试名抓取结果，非工程文件）
 /o9.txt

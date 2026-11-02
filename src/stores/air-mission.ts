@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 import type { HexRef } from '@/data'
 import type { AirStatus } from '@/engine/state-types'
 import type { RuleOutcome } from '@/engine/result-types'
@@ -7,6 +7,7 @@ import {
   completeAirReturnStep,
   type AirInteractionState,
   type AirBaseView,
+  type BarrageInteractionState,
 } from '@/engine/rules'
 import type { ConsoleAirUnit } from './workbench-model'
 import { parseHexPath, hexLabel } from './workbench-model'
@@ -28,6 +29,18 @@ export interface AirMissionPorts {
 export function createAirMissionDomain(ports: AirMissionPorts) {
   const airState = ref<AirInteractionState | null>(null),
     airError = ref<{ rule: string; reason: string } | null>(null)
+  // 14.2f-F：绑定本趟任务实际宣布的轰炸，不能借用上一趟同格的战果。
+  const barrageUnits = shallowRef<BarrageInteractionState['units'] | null>(null)
+  function start(state: AirInteractionState): void {
+    barrageUnits.value = null
+    airState.value = state
+  }
+  function bindBarrage(state: BarrageInteractionState): void {
+    barrageUnits.value = state.units
+  }
+  function ownsBarrage(state: BarrageInteractionState): boolean {
+    return barrageUnits.value !== null && barrageUnits.value === state.units
+  }
   const airInputs = computed(ports.inputs),
     airTransportProfiles = computed(ports.profiles),
     airBases = computed(ports.bases),
@@ -48,6 +61,7 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
     if (!force && !canReplace()) return false
     airState.value = null
     airError.value = null
+    barrageUnits.value = null
     return true
   }
   function confirmAirMissionNow(): boolean {
@@ -142,5 +156,15 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
     return true
   }
 
-  return { airState, airError, canReplace, reset, confirmAirMissionNow, completeAirReturnNow }
+  return {
+    airState,
+    airError,
+    start,
+    bindBarrage,
+    ownsBarrage,
+    canReplace,
+    reset,
+    confirmAirMissionNow,
+    completeAirReturnNow,
+  }
 }

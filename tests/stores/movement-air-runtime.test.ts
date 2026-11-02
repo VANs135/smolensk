@@ -54,6 +54,52 @@ function air(phase: 'movement' | 'reaction' = 'movement') {
   return w
 }
 describe('移动运行时与空军任务隔离', () => {
+  it('14.2f-F：同格同编成的旧轰炸不能替代新任务，重试则沿用本次进度', () => {
+    function task() {
+      const w = air()
+      w.setAirMissionKind('barrage')
+      w.setAirTargetFromText(`${NEAR_HEX.col}.${NEAR_HEX.row}`)
+      placeGround(
+        w,
+        groundRecord('soviet', (r) => r.isCombat === true),
+        NEAR_HEX,
+        'soviet',
+        'target',
+      )
+      expect(w.beginAirMissionNow()).toBe(true)
+      expect(w.confirmAirCombatNow()).toBe(true)
+      expect(w.declareInterceptionNow()).toBe(true)
+      expect(w.resolveFlakNow()).toBe(true)
+      return w
+    }
+    const previous = task()
+    expect(previous.beginAirBarrageNow()).toBe(true)
+    expect(previous.confirmBarrageSupplyStep()).toBe(true)
+    expect(previous.confirmBarrageShiftsStep()).toBe(true)
+    previous.barrageInputs.die = 2
+    expect(previous.rollBarrageDiceStep()).toBe(true)
+    expect(previous.confirmBarrageOutcomeStep()).toBe(true)
+    expect(previous.confirmAirMissionNow()).toBe(true)
+
+    const current = task()
+    // 注入真实完成的旧结算，验证归属不能仅凭坐标和飞机ID判断。
+    current.barrageState = previous.barrageState
+    expect(current.confirmAirMissionNow()).toBe(false)
+    expect(current.airError?.reason).toBe('barrageOutcomePending')
+    expect(current.beginAirBarrageNow()).toBe(true)
+    expect(current.barrageState).not.toBe(previous.barrageState)
+    expect(current.confirmBarrageSupplyStep()).toBe(true)
+    const progress = current.barrageState
+    const rng = current.rng
+    expect(current.beginAirBarrageNow()).toBe(true)
+    expect(current.barrageState).toBe(progress)
+    expect(current.rng).toEqual(rng)
+    expect(current.confirmBarrageShiftsStep()).toBe(true)
+    current.barrageInputs.die = 2
+    expect(current.rollBarrageDiceStep()).toBe(true)
+    expect(current.confirmBarrageOutcomeStep()).toBe(true)
+    expect(current.confirmAirMissionNow()).toBe(true)
+  })
   it('14.2f：任务进行中不能开拔、结束或拆分地面移动', () => {
     const w = air()
     placeGround(

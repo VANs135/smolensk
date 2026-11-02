@@ -12788,7 +12788,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
     if (data === null) return false
     groundMovement.markIrreversible('空军任务（14.2f）')
-    airState.value = data
+    airMissionDomain.start(data)
     const assignment = data.assignment
     pushLog(
       'info',
@@ -14381,7 +14381,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ★ 闸门照旧留给引擎/统一闸门：本函数只对齐盘面事实，宣布是否合法由 `beginBarrageNow` 判。
    */
   function beginAirBarrageNow(): boolean {
-    if (!canReplaceBarrage()) return false
     const state = airState.value
     const target = airTargetHex.value
     if (state === null || target === null) {
@@ -14413,11 +14412,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const existing = barrageState.value
     if (
       existing !== null &&
+      airMissionDomain.ownsBarrage(existing) &&
       existing.kind === 'air' &&
       sameHex(existing.targetHex, target) &&
       existing.units.every((unit) => state.assignment.aircraftIds.includes(unit.unitId))
     )
       return true
+    if (!canReplaceBarrage()) return false
     //
     // ★ 批 A 切片 2：对齐的是**轰炸目标格**，不再去改"战斗目标" ——
     //   空军轰炸借战斗工具的选定是修前的耦合（对局台没有工具时就点不出来）。
@@ -14428,7 +14429,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     barrageAirIds.value = [...state.assignment.aircraftIds]
     // 14.7d：低空扫射的标记随任务类型带入（10.0b 的观察员仍由面板声明）
     barrageInputs.value = { ...barrageInputs.value, hipShoot: state.kind === 'hip_shoot' }
-    return beginBarrageNow()
+    if (!beginBarrageNow()) return false
+    const started = barrageState.value
+    if (started === null) return false
+    airMissionDomain.bindBarrage(started)
+    return true
   }
 
   /**
@@ -14462,7 +14467,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const barrage = barrageState.value
       if (
         barrage === null ||
+        !airMissionDomain.ownsBarrage(barrage) ||
         !barrage.finished ||
+        barrage.outcome === undefined ||
         !sameHex(barrage.targetHex, state.targetHex) ||
         barrage.kind !== 'air'
       ) {
