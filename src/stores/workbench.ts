@@ -1,4 +1,8 @@
-﻿import { createFireResolutionDomain } from './fire-resolution'
+﻿import { createAirMissionDomain } from './air-mission'
+import { createGroundMovementDomain } from './ground-movement'
+import type { MoveStepSnapshot } from './movement-types'
+import { inEnemyZocForAction } from '@/engine/rules/move'
+import { createFireResolutionDomain } from './fire-resolution'
 import { createCombatInputs } from './engagement-inputs'
 import { defineStore } from 'pinia'
 import { computed, ref, watch, type Ref } from 'vue'
@@ -88,7 +92,6 @@ import {
   beginAirInteraction,
   beginBarrage,
   beginCombat,
-  beginMove,
   beginSupplyCheck,
   canFlipOrientation,
   // H⑤（14.1a）：非激活飞机不能执行任务（选择闸 / 候选阵列 / 宣布任务共用同一判据）
@@ -119,17 +122,14 @@ import {
   type BreakoutConditions,
   type BreakoutEligibility,
   type BreakoutPathFacts,
-  cancelMove as revertInteraction,
   checkDefenderArChoice,
   checkLegality,
   chooseSupplySource,
   isSavableRepl,
   clearReleasedFromReserve,
-  completeAirReturnStep,
   computeCombatSupplyCost,
   // 批 B 切片 2：补给链的"获取即付款"费率取自引擎的 12.5c 计价（不另写一份费率）
   computeFuelCost,
-  confirmMissionStep,
   canAttemptDumpDestruction,
   // 第五批批 B 切片 2（12.7a/d）：延补队转换的**环节闸**与生成格的**来源连通**判据（引擎唯一实现）
   canConvertTransportToExtender,
@@ -206,7 +206,6 @@ import {
   planSpMerge,
   planSpPayment,
   planSpSplit,
-  planStep,
   planTransportSplit,
   // 12.1a：同格并入时保持「尽可能并为 SP」的规范形（`holdingsToT` 已在上方导入）
   tToHoldings,
@@ -230,7 +229,6 @@ import {
   supplyStepChecklist,
   transportDisplacementCandidates,
   transportGroupOf,
-  undoMoveStep as revertInteractionStep,
   validateGaugeConversion,
   validateRailMovement,
   validateTransportPointLoad,
@@ -311,7 +309,6 @@ import {
   type GroupReachable,
   type InterceptionResponse,
   type LegalityVerdict,
-  type MoveInteractionState,
   type MoveStepRecord,
   type MoveUnitRuntime,
   type MovementSegmentPhase,
@@ -486,20 +483,7 @@ export interface WorkbenchLogEntry {
 }
 
 /** C5：一步移动的展示快照（全部来自引擎给出的步骤记录，界面不重算规则） */
-export interface MoveStepSnapshot {
-  kind: MoveStepRecord['kind']
-  from: HexRef
-  to: HexRef
-  /** 随行单位名 */
-  movedNames: string[]
-  /** 掉队单位名（6.1f：留在经过的格中） */
-  droppedNames: string[]
-  /** 进入未抵消敌方 ZOC 被迫停止的单位名（4.5a-A） */
-  zocStoppedNames: string[]
-  /** 各随行单位本步消耗的 MP 文本 */
-  costText: string
-  rules: string[]
-}
+export type { MoveStepSnapshot } from './movement-types'
 
 /**
  * 操作台可选阶段（2.2 SOP 段的一个子集）
@@ -1136,16 +1120,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 单位的位置与 MP 始终写在 `units` 上（引擎给出的 patches 由本 store 落盘），
    * 本项只保存「参移名单 + 起始格 + 步骤历史」，**撤销即还原历史快照**。
    */
-  const moveInteraction = ref<MoveInteractionState | null>(null)
+  const groundMovement = createGroundMovementDomain({
+    context: () => moveContext.value,
+    runtime: () => moveRuntime.value,
+    lastStep,
+    applyMovePatches,
+    pushLog,
+    recordSettlement,
+    snapshotOf,
+    stepTextOf,
+    triggerSpecialCombatAfterStep,
+    mayMutate() {
+      if (refuseWhileSettling('移动或撤销')) return false
+      if (specialPending.value !== null || (airState.value !== null && !airState.value.finished)) {
+        moveBlocked.value = { rule: '6.1', reason: '先完成当前特殊位移或空军任务，再继续地面移动' }
+        return false
+      }
+      return true
+    },
+  })
+  const { moveInteraction, pendingZocConfirm, zocStoppedMoveUnitIds, moveBlocked } = groundMovement
   /** 悬停格（用于路径与消耗预览） */
   const hoverHex = ref<HexRef | null>(null)
-  /** 4.5a-A：待玩家确认的「进入未抵消敌方 ZOC」（确认后从 remainingPath 继续沿路径走） */
-  const pendingZocConfirm = ref<{
-    to: HexRef
-    preview: StepPreview
-    /** 以 `to` 为起点的剩余路径（含 `to`），用于确认后继续推进 */
-    remainingPath: HexRef[]
-  } | null>(null)
   /**
    * 4.5a-A：**本次移动中因进入未抵消敌方 ZOC 而被迫停车**的单位 id
    *
@@ -1159,7 +1155,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   修前突袭候选只取 `activeMoveUnits`（`movementEnded` 为假者）⇒ 停车后 `overrunTargets`
    *   恒为空，4.5a-A 的后一半**实际不可达**（第六批条 14）。
    */
-  const zocStoppedMoveUnitIds = ref<string[]>([])
   /** 是否按堆叠选择（同一格内当前方的全部单位一起移动；6.1） */
   const stackSelect = ref(false)
   /**
@@ -1175,7 +1170,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const movePick = ref<{ hex: HexRef; ids: string[] } | null>(null)
   /** 上次移动被拒/受阻的原因（供界面显示） */
-  const moveBlocked = ref<{ rule: string; reason: string } | null>(null)
   /**
    * 演示用补给池（12.5c 的 SP / T）
    *
@@ -1667,9 +1661,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** C9：参战飞机实例 id（14.2a：一次任务合计 ≤4 架） */
   const airMissionAirIds = ref<string[]>([])
   /** C9：任务交互状态机（14.2f A–G；null＝未开始） */
-  const airState = ref<AirInteractionState | null>(null)
+  const airMissionDomain = createAirMissionDomain({
+    inputs: () => airInputs.value,
+    profiles: () => airTransportProfiles.value,
+    bases: () => airBases.value,
+    aircraft: () => airUnits.value,
+    target: () => airTargetHex.value,
+    acceptAir,
+    resultReady: airMissionResultReady,
+    setAirStatus,
+    markAirMissionFlown,
+    nameOf,
+    pushLog,
+    recordSettlement,
+  })
+  const { airState, airError } = airMissionDomain
   /** C9：最近一次被引擎拒绝的步骤（供界面提示；成功后清空） */
-  const airError = ref<{ rule: string; reason: string } | null>(null)
   /** C9：玩家在本次空军交互里的各项输入（界面 v-model 绑定） */
   const airInputs = ref<AirInputs>(createAirInputs())
   /** C9：本阶段已完成整备的基地 id（15.1A：每基地每整备阶段一次） */
@@ -3096,7 +3103,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           .length ?? 0) > 0,
       facts: {
         hasRail: (ref) => isRailHexAt(ref),
-        inEnemyZoc: (ref, side) => zocOnlySupplyFacts.value.inEnemyZoc(ref, side),
+        inEnemyZoc: (ref, side) =>
+          inEnemyZocForAction(moveContext.value, ref, side, 'railConversion'),
         isRailRepairUnit: (id) => isRailRepairUnit(id),
       },
     })
@@ -3191,7 +3199,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     createRailFacts({
       isControlled: (hex, side) => railSupplyFacts.value.isControlledBy(hex, side),
       railGaugeUsable: (hex, side) => isRailGaugeUsableAt(hex, side),
-      inEnemyZoc: (hex, side) => zocOnlySupplyFacts.value.inEnemyZoc(hex, side),
+      inEnemyZoc: (hex, side) => inEnemyZocForAction(moveContext.value, hex, side, 'railTransport'),
       hasEnemyCombatUnit: (hex, side) =>
         units.value.some((unit) => unit.side !== side && unit.isCombat && sameHex(unit.hex, hex)),
       // 13.3c 的结论由补给层按**当前行动方**给出；13.3b 也只允许本方使用自己的铁路容量
@@ -3944,8 +3952,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /* ── C9 空军交互：派生（一切结论来自引擎；此处只做视图整形） ── */
 
+  const airActingSide = computed<Side>(
+    () => airState.value?.side ?? segmentGateQuery.value.side ?? activeSide.value,
+  )
   /** C9：对手方 */
-  const enemySide = computed<Side>(() => (activeSide.value === 'axis' ? 'soviet' : 'axis'))
+  const enemySide = computed<Side>(() => (airActingSide.value === 'axis' ? 'soviet' : 'axis'))
 
   /** C9：全部飞机视图（双方；引擎内部按阵营过滤） */
   /**
@@ -3962,7 +3973,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C9：当前方的飞机 */
   const ownAirUnits = computed<ConsoleAirUnit[]>(() =>
-    airUnits.value.filter((air) => air.side === activeSide.value),
+    airUnits.value.filter((air) => air.side === airActingSide.value),
   )
 
   /**
@@ -3989,7 +4000,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C9：当前方的空军基地 */
   const ownAirBases = computed<AirBaseView[]>(() =>
-    airBases.value.filter((base) => base.side === activeSide.value),
+    airBases.value.filter((base) => base.side === airActingSide.value),
   )
 
   /**
@@ -4109,7 +4120,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const airCargoUnitChoices = computed<ConsoleUnit[]>(() =>
     units.value.filter(
-      (unit) => unit.side === activeSide.value && unit.isCombat && unit.mode.mode === 'move',
+      (unit) => unit.side === airActingSide.value && unit.isCombat && unit.mode.mode === 'move',
     ),
   )
 
@@ -4210,7 +4221,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C9：当前方的巡逻区覆盖格（14.4c；供地图铺色） */
   const airPatrolZoneHexes = computed<HexRef[]>(() =>
-    patrolZoneHexes({ side: activeSide.value, bases: airBases.value, aircraft: allAirViews.value }),
+    patrolZoneHexes({
+      side: airActingSide.value,
+      bases: airBases.value,
+      aircraft: allAirViews.value,
+    }),
   )
 
   /** C9：对手的巡逻区覆盖格（14.4c；供地图铺色） */
@@ -5053,6 +5068,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 切方（2.3/2.2：先手方与后手方轮流；U0 直接手动切换） */
   function switchSide(): void {
+    if (!airMissionDomain.canReplace()) return
     if (!canReplaceCombat() || !canReplaceBarrage()) return
     activeSide.value = activeSide.value === 'axis' ? 'soviet' : 'axis'
     selectedId.value = null
@@ -5215,6 +5231,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 切阶段（2.2 SOP 段；换段即重置各单位的 MA 额度） */
   function setPhase(next: ConsolePhase): void {
+    if (!airMissionDomain.canReplace()) return
     if (!canReplaceCombat() || !canReplaceBarrage()) return
     const changed = phase.value !== next
     phase.value = next
@@ -5286,6 +5303,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   绝不能按固定天数推算——日期是专规闸门的唯一输入（专规 2.3e 战略模式、专规 1.2 铁路容量）。
    */
   function setTurn(next: number): void {
+    if (!airMissionDomain.canReplace()) return
     if (!canReplaceCombat() || !canReplaceBarrage()) return
     const first = TURN_TRACK[0]?.turn ?? 1
     const last = TURN_TRACK[TURN_TRACK.length - 1]?.turn ?? first
@@ -5473,16 +5491,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 两条判据都保留：段级那条给出更贴切的原因码（如 `moveBlocked` 的 2.2），环节级这条管细粒度。
      */
     if (!requireAction('move.order', '移动')) return false
-    const result = beginMove({ context: moveContext.value, unitIds, runtime: moveRuntime.value })
-    if (!result.ok) {
-      moveInteraction.value = null
-      moveBlocked.value = { rule: result.rule, reason: result.reason }
-      pushLog('warning', `不能移动：${result.reason}（${result.rule}）`, result.rule)
-      return false
-    }
-    moveInteraction.value = result.data
-    moveBlocked.value = null
-    pendingZocConfirm.value = null
+    if (!groundMovement.begin(unitIds)) return false
     // 条 22（批 T）：20.0a 的**创建时机**＝「开始移动」这个**事件**（不是"当前在移动段"这个状态）
     openBreakdownWindow('startMove', unitIds)
     return true
@@ -5721,67 +5730,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C5：提交一步（引擎给出 patches 与新的交互状态） */
   function commitStep(to: HexRef, path: readonly HexRef[]): boolean {
-    const interaction = moveInteraction.value
-    if (interaction === null) return false
-    const result = planStep({
-      context: moveContext.value,
-      interaction,
-      runtime: moveRuntime.value,
-      to,
-      path,
-    })
-    if (!result.ok) {
-      moveBlocked.value = { rule: result.rule, reason: result.reason }
-      pushLog(
-        'danger',
-        `走 ${to.col}.${to.row} 不合法：${result.reason}（${result.rule}）`,
-        result.rule,
-      )
-      return false
-    }
-    applyMovePatches(result.data.patches)
-    moveInteraction.value = result.data.interaction
-    pendingZocConfirm.value = null
-    moveBlocked.value = null
-    /*
-     * 4.5a-A：把这一步**因进敌方 ZOC 被迫停车**的单位记进本轮账本 ——
-     *   它们随后仍可选择"突袭"（原文的两个分支），`overrunCandidateUnits` 据此把它们留在候选里。
-     *   `planStep` 已把它们的运行态 `ended` 置真，若不记这一笔，停车后 `overrunTargets` 会变成空集。
-     */
-    if (result.data.record.zocStoppedIds.length > 0) {
-      zocStoppedMoveUnitIds.value = [
-        ...new Set([...zocStoppedMoveUnitIds.value, ...result.data.record.zocStoppedIds]),
-      ]
-      /*
-       * ★ 同一条 4.5a-A 的另一半：`planStep` 见"全体 ended"就把交互标成 `finished`，
-       *   而 `applyOverrunMove` / `planStep` 都**拒绝**已 finished 的交互 ⇒ 停车后连突袭也一起被锁死。
-       *   原文给的正是两个分支（停止 / 突袭）⇒ 只要本次有因 ZOC 停车者，交互就**不算收束**。
-       *   ★ 不会因此放开普通移动：`reachableForMove` 仍按运行态的 `ended` 过滤
-       *     （`move-interaction.ts:233`），停车的单位依旧走不了下一格。
-       */
-      if (moveInteraction.value?.finished === true) {
-        moveInteraction.value = { ...moveInteraction.value, finished: false }
-      }
-    }
-    lastStep.value = snapshotOf(result.data.record)
-    pushLog('success', stepTextOf(result.data.record), result.data.record.rules[0] ?? '6.1')
-    // ⑭ 接线：本步移动（6.1 逐格移动）入会话日志（本笔不掷骰；MP 消耗按 costById 复核）
-    recordSettlement({
-      action: 'move',
-      rule: result.data.record.rules[0] ?? '6.1',
-      data: {
-        stage: 'step',
-        from: { ...result.data.record.from },
-        to: { ...result.data.record.to },
-        movedIds: [...result.data.record.movedIds],
-        droppedIds: [...result.data.record.droppedIds],
-        zocStoppedIds: [...result.data.record.zocStoppedIds],
-        costById: { ...result.data.record.costById },
-      },
-    })
-    // 9.14：进入的格若有**敌方设施/后勤目标**（补给站/运输点/延补队/工事/空军基地）⇒ 触发特殊战斗
-    triggerSpecialCombatAfterStep(to, result.data.record.movedIds)
-    return true
+    return groundMovement.commitStep(to, path)
   }
 
   /**
@@ -6020,38 +5969,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C5：撤销上一步（还原该步提交前的运行态快照） */
   function undoLastStep(): void {
-    const interaction = moveInteraction.value
-    if (interaction === null) return
-    if (interaction.steps.length === 0) {
-      pushLog('info', '本次移动还没有可撤销的步骤')
-      return
-    }
-    const reverted = revertInteractionStep(interaction)
-    applyMovePatches(reverted.patches)
-    moveInteraction.value = reverted.interaction
-    pendingZocConfirm.value = null
-    moveBlocked.value = null
-    lastStep.value = null
-    // 4.5a-A：撤销这一步 ⇒ 它带来的"进 ZOC 停车"记账一并对销（账本只反映**当前**盘面）
-    zocStoppedMoveUnitIds.value = zocStoppedMoveUnitIds.value.filter(
-      (id) => !interaction.steps[interaction.steps.length - 1]?.zocStoppedIds.includes(id),
-    )
-    pushLog('info', '撤销一步（还原运行态快照）', '6.1')
+    groundMovement.undoLastStep()
   }
 
   /** C5：取消整次移动（回到开始移动之前） */
   function cancelWholeMove(): void {
-    const interaction = moveInteraction.value
-    if (interaction === null) return
-    const reverted = revertInteraction(interaction)
-    applyMovePatches(reverted.patches)
-    moveInteraction.value = reverted.interaction
-    pendingZocConfirm.value = null
-    moveBlocked.value = null
-    lastStep.value = null
-    // 4.5a-A：整次移动还原 ⇒ 停车账本随之清空
-    zocStoppedMoveUnitIds.value = []
-    pushLog('info', '取消本次移动（全部还原）', '6.1')
+    groundMovement.cancelWholeMove()
   }
 
   /**
@@ -6064,6 +5987,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function abortMoveNow(): boolean {
     if (moveInteraction.value === null) return false
     cancelWholeMove()
+    if (moveBlocked.value !== null) return false
     clearMoveInteraction()
     return true
   }
@@ -6098,6 +6022,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 收束可能已经把本次移动就近结束（参突者全灭那一路）⇒ 重新读取，避免二次落盘
     const interaction = moveInteraction.value
     if (interaction === null || interaction.finished) return
+    if (!groundMovement.mayMutate()) return
     // 走到这里说明本步能落地 ⇒ 清掉上一次的拒绝原因（moveBlocked 是当前这一步被拒的显示位）
     moveBlocked.value = null
     /*
@@ -6154,6 +6079,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * `reachableForMove` 的 `activeUnitIds` 本就按 `ended` 过滤，故它自动退出后续移动与突袭资格。
    */
   function dropUnitFromMove(instanceId: string): boolean {
+    if (!groundMovement.mayMutate()) return false
     const interaction = moveInteraction.value
     if (interaction === null) {
       pushLog('warning', '当前没有正在进行的移动（6.1）')
@@ -8530,6 +8456,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 那份作废的战斗不该占掉本环节的这一次（与 10.1b 的轰炸账本同一时点口径）。
      */
     recordAttackThisSegment(data.state.composition.attackerIds, data.state.composition.defendingHex)
+    if (data.state.attackType === 'overrun') groundMovement.markIrreversible('突袭战斗（8.0/9.2）')
     return true
   }
 
@@ -12447,6 +12374,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C9：开/关空军工具（开启时清空上一场；基地声明与飞机保留） */
   function setAirActive(on: boolean): void {
+    if (!airMissionDomain.canReplace()) return
     airActive.value = on
     clearAir()
     pushLog('info', on ? '空军工具已开启（14.0 / 15.0 章）' : '空军工具已关闭', '14.0')
@@ -12454,6 +12382,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C9：清空本次空军交互（飞机与基地声明保留；换方/换阶段/重置/关闭时调用） */
   function clearAir(): void {
+    if (!airMissionDomain.canReplace()) return
     airMissionAirIds.value = []
     airTargetHex.value = null
     airState.value = null
@@ -12542,6 +12471,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C9：切任务类型（14.2e；换类型即作废进行中的流程） */
   function setAirMissionKind(kind: AirMissionKind): void {
+    if (!airMissionDomain.canReplace()) return
     airMissionKind.value = kind
     airState.value = null
     airError.value = null
@@ -12549,6 +12479,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C9：选定任务格（14.2f-B 的目标；输入 `列.行` 文本） */
   function setAirTargetFromText(text: string): boolean {
+    if (!airMissionDomain.canReplace()) return false
     const hex = parseHexPath(text)[0] ?? null
     if (hex === null) {
       pushLog('warning', `任务格格号应为「列.行」（如 36.13），收到「${text}」`, '14.2f-B')
@@ -12569,9 +12500,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   · **14.2f**「步骤 C 之后不能再向任务中添加飞机」（`canAddAircraftAtStep`）；
    *   · **14.2a** 一次任务合计上限 4 个空军单位（`canJoinMission`）；
    *   · **14.2e** 同一机一阶段只执行一次任务（`canPerformMissionThisPhase`）。
-   *   取消勾选任何时候都可以（不加飞机不等于加飞机）。
+   *   已宣布任务中的减机须执行合法的主动返航，不能擦除任务状态。
    */
   function toggleAirMissionUnit(instanceId: string): void {
+    const current = airState.value
+    if (current !== null && !current.finished && airMissionAirIds.value.includes(instanceId)) {
+      voluntaryReturnNow([instanceId])
+      return
+    }
     if (airMissionAirIds.value.includes(instanceId)) {
       airMissionAirIds.value = airMissionAirIds.value.filter((id) => id !== instanceId)
       airState.value = null
@@ -12638,6 +12574,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return
     }
     airMissionAirIds.value = [...airMissionAirIds.value, instanceId]
+    if (current !== null && !current.finished) {
+      airMissionDomain.reset(true)
+      if (!beginAirMissionNow()) {
+        airState.value = current
+        airMissionAirIds.value = [...current.assignment.aircraftIds]
+      }
+      return
+    }
     airState.value = null
     airError.value = null
   }
@@ -12673,7 +12617,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `主动返航被拒：${verdict.reason}（${verdict.rule}）`, verdict.rule)
       return false
     }
-    for (const air of leaving) setAirStatus(air.instanceId, 'inactive')
+    const leavingIds = new Set(leaving.map((air) => air.instanceId))
+    for (const air of leaving) {
+      setAirStatus(air.instanceId, 'inactive')
+      markAirMissionFlown(air.instanceId)
+    }
+    const remainingIds = state.assignment.aircraftIds.filter((id) => !leavingIds.has(id))
+    airState.value = {
+      ...state,
+      assignment: {
+        ...state.assignment,
+        aircraftIds: remainingIds,
+        origins: state.assignment.origins.filter((origin) => !leavingIds.has(origin.aircraftId)),
+      },
+      ...(remainingIds.length === 0 ? { step: 'done', finished: true } : {}),
+    }
+    airMissionAirIds.value = airMissionAirIds.value.filter((id) => !leavingIds.has(id))
     airError.value = null
     pushLog(
       'success',
@@ -12705,7 +12664,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   · **14.2f** 加机窗口（`canAddAircraftAtStep`；任务过移动步后不能再加）；
    *   · **14.2a** 一次任务合计上限（`canJoinMission`）；
    *   · **14.2e** 同一机一阶段只执行一次任务（`canPerformMissionThisPhase`）。
-   * **已选中的恒可点**（取消勾选不受任何闸限制，见 `toggleAirMissionUnit`）。
+   * 已选中飞机的减机由 `toggleAirMissionUnit` 检查主动返航窗口。
    *
    * ★ 14.1a 的「起飞机必须停在本方空军基地格」**不在本闸内**：那条在**宣布任务**时
    *   由 `beginAirMissionNow` 经引擎裁定（此处标不了，也不该由界面去猜）。
@@ -12755,6 +12714,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C9 第 1 步（14.2f-A/B）：宣布任务并分配飞机（含起飞基地归属与航程校验） */
   function beginAirMissionNow(): boolean {
+    if (!airMissionDomain.canReplace()) return false
     // 14.2e：任务按**环节**分派（移动环节：低空扫射/空运/空投/基地转移/战机扫荡；轰炸环节：空军轰炸/运输破坏）
     if (!requireAction('air.mission', '宣布空军任务')) return false
     const target = airTargetHex.value
@@ -12787,7 +12747,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const data = acceptAir(
       beginAirInteraction({
-        side: activeSide.value,
+        side: airActingSide.value,
         phase: phase.value,
         kind: airMissionKind.value,
         targetHex: target,
@@ -12827,6 +12787,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '宣布任务',
     )
     if (data === null) return false
+    groundMovement.markIrreversible('空军任务（14.2f）')
     airState.value = data
     const assignment = data.assignment
     pushLog(
@@ -12906,7 +12867,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     const enemy = enemySide.value
-    const friendlyAircraft = airUnitsInHex(target, activeSide.value)
+    const friendlyAircraft = airUnitsInHex(target, airActingSide.value)
     const enemyAircraft = airUnitsInHex(target, enemy)
     const enemyAirBaseInHex = airBases.value.some(
       (base) => base.side === enemy && sameHex(base.hex, target),
@@ -12945,7 +12906,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       airState.value = next
       return true
     }
-    const ours = roles.attackerSide === activeSide.value
+    const ours = roles.attackerSide === airActingSide.value
     const attackerViews = (ours ? friendlyAircraft : enemyAircraft).map((plane) =>
       toAirMissionAircraftView(plane),
     )
@@ -13060,6 +13021,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function resolveAirCargoNow(): boolean {
     const state = airState.value
     if (state === null) return false
+    if (state.cargo !== null) return true
     /*
      * 14.4g：容量因防空变小、还有**未处理的超出货物**时，先让玩家选定摧毁哪几件 ——
      * 否则会拿"已超容的货物清单"去过 14.10d 的检定（等于把本该摧毁的货物也空投下去）。
@@ -13555,6 +13517,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 只处理**敌方**物件（友军进入自家设施无效果，引擎也会返回 unchanged）
     const enemyObjects = objects.filter((item) => item.owner !== enteringSide)
     if (enemyObjects.length === 0) return false
+    groundMovement.markIrreversible('特殊战斗/缴获（9.14）')
 
     // ② 掷骰：只给本格实际出现的组掷（掷骰次数可复算）
     // ⑭ 接线：drawD6 只回报数字（不改它）⇒ 先记下掷骰前的骰源，按同一颗 PRNG 复算骰面
@@ -14367,7 +14330,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
        *   裁击/侦察/空运/空投等**没有轰炸结算**的任务仍走原来那条路（只记结果）。
        */
       const kind = airState.value.kind
-      if (kind === 'barrage' || kind === 'hip_shoot') {
+      if (kind === 'barrage' || kind === 'hip_shoot' || kind === 'trainbusting') {
         if (!beginAirBarrageNow()) return false
         if (!runBarrageChainNow()) return false
         /*
@@ -14382,6 +14345,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         airInputs.value = { ...airInputs.value, missionNote: summary }
         // 轰炸结算完 ⇒ 任务本身收尾（14.2f-F ⇒ 返航）；收束判定交给函数末尾那一句
         if (!confirmAirMissionNow()) return false
+      } else if (
+        (kind === 'air_transport' || kind === 'air_drop') &&
+        airState.value.cargo === null
+      ) {
+        if (!resolveAirCargoNow() || !confirmAirMissionNow()) return false
       } else if (!confirmAirMissionNow()) {
         return false
       }
@@ -14434,7 +14402,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *   低空扫射（14.7d）：**单机**（14.7d-B）+ 正确观察员（10.0b）+ 不得运输破坏（14.7d-D）。
      * 两者都把 kind 设成 `'air'` 并复用炮兵那条交互链（宣布 → 付款 → 横移 → 骰 → 战果）。
      */
-    if (state.kind !== 'barrage' && state.kind !== 'hip_shoot') {
+    if (state.kind !== 'barrage' && state.kind !== 'hip_shoot' && state.kind !== 'trainbusting') {
       pushLog(
         'warning',
         `该任务不是空军轰炸（${airMissionKindLabel(state.kind)}）⇒ 不需要轰炸结算（14.7b）`,
@@ -14442,11 +14410,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       return false
     }
+    const existing = barrageState.value
+    if (
+      existing !== null &&
+      existing.kind === 'air' &&
+      sameHex(existing.targetHex, target) &&
+      existing.units.every((unit) => state.assignment.aircraftIds.includes(unit.unitId))
+    )
+      return true
     //
     // ★ 批 A 切片 2：对齐的是**轰炸目标格**，不再去改"战斗目标" ——
     //   空军轰炸借战斗工具的选定是修前的耦合（对局台没有工具时就点不出来）。
     barragePickHex.value = { ...target }
     barrageKind.value = 'air'
+    if (state.kind === 'trainbusting') barrageTargetKind.value = 'trainbusting'
     barrageUnitIds.value = []
     barrageAirIds.value = [...state.assignment.aircraftIds]
     // 14.7d：低空扫射的标记随任务类型带入（10.0b 的观察员仍由面板声明）
@@ -14480,93 +14457,39 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return barrageState.value?.finished === true
   }
 
-  function confirmAirMissionNow(): boolean {
-    const state = airState.value
-    if (state === null) return false
-    const note = airInputs.value.missionNote
-    const data = acceptAir(confirmMissionStep(state, { note }), '任务结算')
-    if (data === null) return false
-    airState.value = data.state
-    pushLog('success', `任务结算（14.2f-F）：${note === '' ? '（未填结果）' : note}`, '14.2f-F')
-    // ⑭ 接线：任务结果记录（14.2f-F）入会话日志（本笔不掷骰）
-    recordSettlement({
-      action: 'airMissionResolve',
-      rule: '14.2f-F',
-      data: {
-        kind: state.kind,
-        aircraftIds: [...state.assignment.aircraftIds],
-        note,
-      },
-    })
+  function airMissionResultReady(state: AirInteractionState): boolean {
+    if (['barrage', 'hip_shoot', 'trainbusting'].includes(state.kind)) {
+      const barrage = barrageState.value
+      if (
+        barrage === null ||
+        !barrage.finished ||
+        !sameHex(barrage.targetHex, state.targetHex) ||
+        barrage.kind !== 'air'
+      ) {
+        airError.value = { rule: '14.2f-F', reason: 'barrageOutcomePending' }
+        pushLog('warning', '先完成本任务的轰炸结果，再确认返航', '14.2f-F')
+        return false
+      }
+    }
+    if ((state.kind === 'air_transport' || state.kind === 'air_drop') && state.cargo === null) {
+      airError.value = { rule: '14.2f-F', reason: 'cargoOutcomePending' }
+      pushLog('warning', '先完成货物检定和落盘，再确认返航', '14.2f-F')
+      return false
+    }
     return true
+  }
+  function confirmAirMissionNow(): boolean {
+    return airMissionDomain.confirmAirMissionNow()
   }
 
   /** C9 第 6 步（14.2f-G / 14.1c）：返航（逐机指定目的地，须是**本方**基地且在航程内） */
   function completeAirReturnNow(): boolean {
-    const state = airState.value
-    if (state === null) return false
-    /*
-     * 14.9e-A（第五批批 C 切片 2）：**双程档机不返航** —— 它「在目的地空军基地变为非激活」
-     * ⇒ 不进 returns（引擎对"出现在 returns 里的 A 档机"直接拒，规则号 14.9e-A），
-     * 落位由引擎返回的 `stayedAircraftIds` 处理。
-     */
-    const aProfileIds = new Set(
-      airTransportProfiles.value
-        .filter((item) => item.profile === 'A')
-        .map((item) => item.aircraftId),
-    )
-    const returns = state.assignment.origins
-      .filter((origin) => !aProfileIds.has(origin.aircraftId))
-      .map((origin) => {
-        const text = airInputs.value.returnHexText[origin.aircraftId]
-        const parsed = text === undefined ? null : (parseHexPath(text)[0] ?? null)
-        // 未填即回原起飞基地（合法：14.1c 只要求「距离内的一个友方空军基地」）
-        return { aircraftId: origin.aircraftId, baseHex: parsed ?? origin.baseHex }
-      })
-    const data = acceptAir(completeAirReturnStep(state, { returns, bases: airBases.value }), '返航')
-    if (data === null) return false
-    airState.value = data.state
-    // 14.1c：常规任务返航一律变为非激活（例外只给成功拦截的战斗机与正常距离转移的战斗机）
-    for (const id of data.inactiveAircraftIds) setAirStatus(id, 'inactive')
-    // 14.9e-A：双程档机留在**目的地（任务格）**（引擎已把它列入 inactive 名单）
-    const stayHex = airTargetHex.value
-    if (data.stayedAircraftIds.length > 0) {
-      for (const id of data.stayedAircraftIds) {
-        const air = airUnits.value.find((entry) => entry.instanceId === id)
-        if (air !== undefined && stayHex !== null) air.hex = { ...stayHex }
-      }
-      pushLog(
-        'info',
-        `14.9e-A：${data.stayedAircraftIds.map((id) => nameOf(id)).join('、')} 双程飞法 ⇒ 在目的地变非激活（不返航）`,
-        '14.9e-A',
-      )
-    }
-    // 14.2e：本阶段这些飞机已执行过任务
-    for (const origin of state.assignment.origins) markAirMissionFlown(origin.aircraftId)
-    if (returns.length > 0)
-      pushLog(
-        'info',
-        `返航（14.1c）：${returns.map((item) => `${hexLabel(item.baseHex)}`).join('、')}；均转非激活`,
-        '14.1c',
-      )
-    // ⑭ 接线：任务返航（14.1c）入会话日志（本笔不掷骰）
-    recordSettlement({
-      action: 'airReturn',
-      rule: '14.1c',
-      data: {
-        kind: state.kind,
-        returns: returns.map((item) => ({
-          aircraftId: item.aircraftId,
-          baseHex: { ...item.baseHex },
-        })),
-        inactiveAircraftIds: [...data.inactiveAircraftIds],
-      },
-    })
-    return true
+    return airMissionDomain.completeAirReturnNow()
   }
 
   /** C9：放弃本次任务（中止 14.2f 流程；已落盘的结算不自动回滚） */
   function cancelAir(): void {
+    if (!airMissionDomain.canReplace()) return
     clearAir()
     pushLog('info', '放弃本次空军任务（14.2f 流程中止）', '14.2f')
   }
@@ -14617,7 +14540,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const data = acceptAir(
       planBaseRefit({
         base: { ...base, refitDoneThisPhase: refitDoneBaseIds.value.includes(baseId) },
-        side: activeSide.value,
+        side: airActingSide.value,
         phase: phase.value,
         // 15.1B：只把**勾选的那几架**交给引擎 ⇒ 转激活的就是玩家点的那几架
         inactiveAircraft:
@@ -14676,7 +14599,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `找不到空军基地 ${baseId}（15.1）`, '15.1')
       return false
     }
-    if (base.side !== activeSide.value) {
+    if (base.side !== airActingSide.value) {
       pushLog(
         'warning',
         `${hexLabel(base.hex)} 不是本方空军基地：只能在**本方**基地整备（15.1）`,
@@ -14758,7 +14681,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const data = acceptAir(
       planBaseTransfer({
-        side: activeSide.value,
+        side: airActingSide.value,
         aircraft: {
           id: air.instanceId,
           isFighter: isFighterAircraft(air.aircraftType),
@@ -14829,7 +14752,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }))
     const data = acceptAir(
       planAirBaseReduction({
-        side: activeSide.value,
+        side: airActingSide.value,
         base: { ...base, reducedThisPhase: reducedBaseIds.value.includes(baseId) },
         phase: phase.value,
         operatingUnits,
@@ -15988,6 +15911,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 直接跳到某一环（引擎验证页/测试用；越界即拒绝，不夹取——夹取会掩盖调用方的错） */
   function setSegmentStepIndex(index: number): boolean {
+    if (!airMissionDomain.canReplace()) return false
     if (!canReplaceCombat() || !canReplaceBarrage() || specialPending.value !== null) return false
     if (!Number.isInteger(index) || index < 0 || index >= playerSegmentSteps.value.length)
       return false
@@ -16847,7 +16771,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           // 13.5a：该格须在「战斗模式的友方 HQ（或 DG 但朝战斗面）」2 格内
           withinHqThrowOfFriendlyHq: (hex) =>
             hqHexes.some((hq) => hexDistance(hq, hex) <= rulesConstants.repl.rebuildHqRangeHexes),
-          inUnnegatedEnemyZoc: (hex) => zocOnlySupplyFacts.value.inEnemyZoc(hex, activeSide.value),
+          inUnnegatedEnemyZoc: (hex) =>
+            inEnemyZocForAction(moveContext.value, hex, activeSide.value, 'rebuild'),
           // 专规 1.6 placement：只认**处于追溯补给**的友方空军基地
           hasFriendlyAirBase: () => traceSuppliedFriendlyBase() !== null,
           friendlyAirBaseHex: () => {
@@ -18078,6 +18003,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         isConstructionMarkerDestroyed({ enteredBySovietCombatUnit: true }),
     )
     if (doomed.length === 0) return
+    groundMovement.markIrreversible('建造标记摧毁（专规3.5）')
     const doomedIds = new Set(doomed.map((piece) => piece.id))
     constructionMarkerPieces.value = constructionMarkerPieces.value.filter(
       (piece) => !doomedIds.has(piece.id),
@@ -18783,6 +18709,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 重置局（含重设种子）——局况一并回到初始（第 1 回合 / 轴心国先手 / C 移动段） */
   function resetAll(nextSeed = DEFAULT_SEED): void {
+    airMissionDomain.reset(true)
     fireResolution.resetCombat()
     fireResolution.resetBarrage()
     units.value = []
@@ -19263,6 +19190,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       movePick.value = null
       pendingZocConfirm.value = null
       clearBarrage()
+      airMissionDomain.reset(true)
       clearAir()
       clearSupply()
       refitTargetBaseId.value = null
@@ -19351,6 +19279,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 只自动执行规则义务；战损如何分配等玩家选择必须留在正式面板。 */
   function settleSegmentObligations(wholePhase = false): boolean {
+    if (airState.value !== null && !airState.value.finished) return false
     if (specialPending.value !== null) return false
     if (combatState.value !== null && !combatState.value.finished) return false
     if (barrageState.value !== null && !barrageState.value.finished) return false

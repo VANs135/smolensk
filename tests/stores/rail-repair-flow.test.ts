@@ -320,7 +320,7 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     expect(store.log.some((entry) => entry.text.includes('enemyZocCannotConvert'))).toBe(true)
   })
 
-  it('13.3f-A：本方战斗单位所在格的敌方 ZOC 被 4.5b 抵消 ⇒ 该格可转换（对照）', () => {
+  it('13.3f-A：有本方战斗单位也不能抵消轨距转换的敌方 ZOC', () => {
     const store = newStore()
     store.switchSide()
     store.setPhase('movement')
@@ -330,8 +330,8 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     const enemy = groundRecord('axis', (item) => item.isCombat === true)
     placeGround(store, enemy, { col: 16, row: 10 }, 'axis', 'enemy-adj')
 
-    // FROM 格内有本方的铁路修理单位（战斗单位）⇒ 该格无敌方 ZOC ⇒ 可转换
-    expect(store.convertRailGaugeNow(rr.instanceId, label(FROM))).toBe(true)
+    // 4.5a-E / 13.3f-A 明确规定轨距转换不能抵消 ZOC。
+    expect(store.convertRailGaugeNow(rr.instanceId, label(FROM))).toBe(false)
   })
 
   it('13.3g-D：每阶段至多 min(4, 当前 MA) 格，超出即拒', () => {

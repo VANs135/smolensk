@@ -2,7 +2,13 @@ import type { HexRef, Side } from '@/data'
 
 import { hexDistance } from '../hex-geometry'
 import { fail, succeed, type RuleOutcome } from '../result-types'
-import { computeReachableHexes, evaluateStepFrom, findMoveUnit, inEnemyZocAt } from './move'
+import {
+  computeReachableHexes,
+  evaluateStepFrom,
+  findMoveUnit,
+  inEnemyZocAt,
+  inEnemyZocForAction,
+} from './move'
 import type { MoveContext, MoveUnitView, StepFailure } from './move-types'
 import type { OverrunMovePlan } from './overrun'
 import { zocEntryEffect } from './zoc'
@@ -665,8 +671,13 @@ export function canSwitchModeNow(input: ModeSwitchNowInput): ModeSwitchResult {
   return canSwitchMode({
     to,
     orientation,
-    // 4.5b：已抵消的 ZOC 不算（引擎在 inEnemyZocAt 里已计入抵消）
-    inEnemyZoc: inEnemyZocAt(context, item.hex, view.side),
+    // 4.5a-I/J：转入预备/战略模式不允许抵消。
+    inEnemyZoc: inEnemyZocForAction(
+      context,
+      item.hex,
+      view.side,
+      to === 'reserve' ? 'reserveMode' : 'stratMode',
+    ),
     unitClass,
     side: view.side,
     phase: context.phase,

@@ -26,6 +26,7 @@ import {
 import { STACKING_LIMIT_RE } from './movement'
 import { selectMovementTerrain } from './terrain'
 import { isInEnemyZoc, zocEntryEffect, type ZocSource } from './zoc'
+import { zocAffectsAction, type ZocAction } from './zoc-effects'
 
 /**
  * 地面移动的执行与可达性（OCS 6.0 / 6.1 / 6.2 + 4.5a-A + 4.5b + 8.1）
@@ -141,10 +142,22 @@ export function inEnemyZocAt(
   hex: { col: number; row: number },
   movingSide: Side,
 ): boolean {
-  const enemySide: Side = movingSide === 'axis' ? 'soviet' : 'axis'
-  return isInEnemyZoc(hex, enemySide, zocSourcesOf(context.units), {
-    friendlyCombatUnitInHex: zocNegatedAt(context, hex, movingSide),
-  })
+  return inEnemyZocForAction(context, hex, movingSide, 'truckMovement')
+}
+
+/** 4.5a：原始投射与合法抵消分别保留，再按动作类别裁决。 */
+export function inEnemyZocForAction(
+  context: MoveContext,
+  hex: { col: number; row: number },
+  side: Side,
+  action: ZocAction,
+): boolean {
+  const enemySide = side === 'axis' ? 'soviet' : 'axis'
+  return zocAffectsAction(
+    action,
+    isInEnemyZoc(hex, enemySide, zocSourcesOf(context.units)),
+    zocNegatedAt(context, hex, side),
+  )
 }
 
 /**
@@ -179,8 +192,7 @@ export function inEnemyZocForRetreat(
   hex: { col: number; row: number },
   movingSide: Side,
 ): boolean {
-  const enemySide: Side = movingSide === 'axis' ? 'soviet' : 'axis'
-  return isInEnemyZoc(hex, enemySide, zocSourcesOf(context.units))
+  return inEnemyZocForAction(context, hex, movingSide, 'retreat')
 }
 
 /**
@@ -435,7 +447,7 @@ export function evaluateStepFrom(
   // 5.8a：战略模式单位**不可移动进入敌方 ZOC**（与 4.5a-A 的「进入后可停」不同，这里是禁止进入）。
   //   注意只约束「进入」：若单位在本阶段开始时已在敌方 ZOC 内（敌方后来靠上来的情形，5.8a 括注
   //   「如果是敌方单位移动到它们相邻处，不会发生任何特殊情况」），它仍可以走出该 ZOC。
-  if (enteringEnemyZoc && hasMarker(state, 'strat'))
+  if (hasMarker(state, 'strat') && inEnemyZocForAction(context, to, unit.side, 'stratMovement'))
     return reject('stratIntoEzoc', '5.8a', `${to.col}.${to.row}`)
   const forcedStop = enteringEnemyZoc && zocEntryEffect(unit.mobility) === 'mustStopOrOverrun'
 

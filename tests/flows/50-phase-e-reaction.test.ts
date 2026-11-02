@@ -136,6 +136,7 @@ describe('Ⓔ 空军在 E 段的双重限制（专规 1.5 / 专规 2.2c）', () 
 
   it('端到端：E 段轴军可宣布任务；同一操作下苏军被专规 2.2c 拦下（rule 2.2c）', () => {
     const store = newConsole()
+    store.switchSide() // 阶段玩家为苏军，反应玩家才是轴军。
     store.setPhase('reaction')
     store.setAirActive(true)
 
@@ -152,7 +153,6 @@ describe('Ⓔ 空军在 E 段的双重限制（专规 1.5 / 专规 2.2c）', () 
     // 苏军：换方后同样宣布 ⇒ 专规 2.2c 拦下
     const soviet: Workbench = newConsole()
     soviet.setPhase('reaction')
-    soviet.switchSide()
     soviet.setAirActive(true)
     placeGround(soviet, airBaseRecord(), CORE_HEX, 'soviet', 'base-su')
     placeAir(soviet, fighterRecord('soviet'), CORE_HEX, 'soviet', 'air-su')

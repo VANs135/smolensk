@@ -239,6 +239,8 @@ describe('12.6h：空投当回合豁免追溯补给', () => {
     expect(store.resolveFlakNow()).toBe(true)
     store.airInputs.cargoDice = 12 // 表 17-4：2 骰 12 必成功
     expect(store.resolveAirCargoNow()).toBe(true)
+    expect(store.confirmAirMissionNow()).toBe(true)
+    expect(store.completeAirReturnNow()).toBe(true)
     expect(para.hex).toEqual(targetHex)
     expect(para.airDropExemptTurn).toBe(store.turn)
 

@@ -131,7 +131,12 @@ function runMission(
   store.airInputs.flakDie = 2 // E 防空：2 骰 2 ⇒ 不命中
   if (!store.resolveFlakNow()) return false
   store.airInputs.cargoDice = 12 // 表 17-4：2 骰 12 必成功
-  return store.resolveAirCargoNow()
+  if (!store.resolveAirCargoNow()) return false
+  if (!store.confirmAirMissionNow()) return false
+  if (!store.completeAirReturnNow()) return false
+  store.clearAir()
+  store.setAirActive(true)
+  return true
 }
 
 /** 目的地格上 SP 账本条目（未装载的、手工/空运落下的） */

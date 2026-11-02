@@ -149,6 +149,7 @@ describe('第六批 BUG ②：结算进行中 ⇒ 任何单位都不得移动', 
     // 收束（放弃本场）⇒ 闸门立即解除
     store.cancelCombat()
     expect(store.settlementInProgress).toBeNull()
+    store.finishMove() // 6.1g：先结束突袭单位的移动，才能开拔另一组。
     expect(store.beginMoveFor([mover.instanceId])).toBe(true)
   })
 

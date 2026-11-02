@@ -25,6 +25,7 @@ import {
   extenderConnectsBack,
   extenderRangeMpOf,
   inEnemyZocAt,
+  inEnemyZocForAction,
   inEnemyZocForRetreat,
   isCorrectSpotter,
   isMobileUnit,
@@ -1054,7 +1055,15 @@ export function buildLegalityRequest(input: {
     date: input.date,
     units: [toLegalityUnit(input.unit)],
     target: targetHexFacts(input.units, hex, input.unit.side, input.unit.instanceId),
-    inEnemyZoc: inEnemyZocAt(input.context, hex, input.unit.side),
+    inEnemyZoc:
+      input.modeTarget === 'reserve' || input.modeTarget === 'strat'
+        ? inEnemyZocForAction(
+            input.context,
+            hex,
+            input.unit.side,
+            input.modeTarget === 'reserve' ? 'reserveMode' : 'stratMode',
+          )
+        : inEnemyZocAt(input.context, hex, input.unit.side),
     ...(input.modeTarget === undefined ? {} : { modeTarget: input.modeTarget }),
     ...(input.fuelPaid === undefined ? {} : { fuelPaid: input.fuelPaid }),
   }

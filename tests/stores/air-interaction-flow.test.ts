@@ -197,7 +197,15 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
     store.setAirActive(true)
     const { plane } = setupBaseAndPlane(store)
 
-    expect(store.setAirTargetFromText(label(CORE_HEX))).toBe(true)
+    store.units.push(
+      toConsoleUnit({
+        record: unitChoices('soviet').find((record) => record.isCombat)!,
+        instanceId: 'target',
+        hex: NEAR_HEX,
+        side: 'soviet',
+      }),
+    )
+    expect(store.setAirTargetFromText(label(NEAR_HEX))).toBe(true)
     store.toggleAirMissionUnit(plane.instanceId)
     expect(store.beginAirMissionNow()).toBe(true)
     expect(store.airState?.step).toBe('airCombat')
@@ -219,7 +227,14 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
     expect(store.airState?.flak).toMatchObject({ applies: true, hit: false })
     expect(store.airState?.step).toBe('resolveMission')
 
-    // F 结算（结果由玩家记入）
+    // F 结算必须真实执行轰炸，备注不能替代战果。
+    expect(store.confirmAirMissionNow()).toBe(false)
+    expect(store.beginAirBarrageNow()).toBe(true)
+    expect(store.confirmBarrageSupplyStep()).toBe(true)
+    expect(store.confirmBarrageShiftsStep()).toBe(true)
+    store.barrageInputs.die = 2
+    expect(store.rollBarrageDiceStep()).toBe(true)
+    expect(store.confirmBarrageOutcomeStep()).toBe(true)
     store.airInputs.missionNote = '轰炸：格值 DG'
     expect(store.confirmAirMissionNow()).toBe(true)
     expect(store.airState?.missionNote).toBe('轰炸：格值 DG')

@@ -190,6 +190,7 @@ describe('第六批 P0-2：4.5a-A 停车后仍可突袭（条 14）', () => {
     const mpBody = source.slice(mpStart, mpStart + 700)
     expect(mpBody).toContain('zocStoppedMoveUnitIds.value.includes(id)')
     // ③ 记账只来自 `planStep` 的 `zocStoppedIds`（不另判一遍 ZOC）
-    expect(source).toContain('result.data.record.zocStoppedIds')
+    const movement = readFileSync('src/stores/ground-movement.ts', 'utf8')
+    expect(movement).toContain('result.data.record.zocStoppedIds')
   })
 })
