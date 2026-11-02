@@ -641,7 +641,7 @@ const showsBaseOps = computed(
             <!-- 14.10a：单位货物＝算子图阵列（点一枚加入 / 再点一枚移出） -->
             <CounterPicker
               title="单位货物（14.10a：空投的战斗单位）"
-              hint="候选＝图上本方地面战斗单位；资格由上面的开关声明（本作库未印 Para 标识）"
+              hint="候选为本方移动模式且移动面符合步行空运条件的战斗单位；须位于装载基地并有足够运力。Para资格仍需声明。"
               :items="cargoUnitItems"
               :size="32"
               @pick="workbench.toggleAirCargoUnit($event)"

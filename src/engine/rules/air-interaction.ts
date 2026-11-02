@@ -24,6 +24,7 @@ import {
 } from './air'
 // 14.9c：单位货物"处于移动模式"的判据基准（与 5.x 的基础模式同一枚举）
 import type { BaseMode } from './modes'
+import { checkAirCargoLoad, CARGO_UNIT_MAX_WALKING_MA, type AirCargoLoadView } from './air-cargo'
 import {
   AIR_MISSION_SEQUENCE,
   AIR_MISSION_STEP_IDS,
@@ -339,7 +340,7 @@ export interface AirMissionRequest {
 }
 
 /** 空运/空投的货物（14.9a / 14.10a） */
-export interface AirMissionCargo {
+export interface AirMissionCargo extends AirCargoLoadView {
   id: string
   /** 货物类别：补给指示物（SP）或战斗单位 */
   kind: 'sp' | 'unit'
@@ -355,12 +356,9 @@ export interface AirMissionCargo {
    * 「补给点数可以被空运，**处于移动模式**的战斗单位也可以空运，前提是其 MA 为 10 或以下的步行 MP。」
    */
   mode?: BaseMode
-  /** 14.9c：该单位的**步行 MP**（本作＝战斗面印值 MA；> 10 不可空运/空投） */
+  /** 14.9c / 4.7b：移动面的步行MA，不能用战斗面MA替代。 */
   ma?: number
 }
-
-/** 14.9c：可空运单位的步行 MP 上限（原文「MA 为 10 或以下的步行 MP」） */
-const CARGO_UNIT_MAX_WALKING_MA = 10
 
 /**
  * 14.10b：空投计划
@@ -608,7 +606,25 @@ export function assignAirMission(input: AirMissionRequest): RuleOutcome<AirMissi
   const cargo =
     input.kind === 'air_transport' || input.kind === 'air_drop' ? (input.cargo ?? []) : []
   // 14.9a：装载量不得超过总运输容量
-  const cargoT = cargo.reduce((sum, item) => sum + (item.kind === 'sp' ? (item.t ?? 0) : 0), 0)
+  const load = checkAirCargoLoad({
+    side: input.side,
+    cargo,
+    origins: origins.map((origin) => {
+      const plane = input.aircraft.find((item) => item.id === origin.aircraftId)!
+      return {
+        hex: origin.baseHex,
+        offMap: origin.fromOffMapBox === true,
+        capacityT:
+          transportCapacityOf(plane) *
+          airTransportProfile({
+            distanceHexes: origin.distanceHexes,
+            rangeHexes: origin.rangeHexes,
+          }).capacityMultiplier,
+      }
+    }),
+  })
+  if (!load.ok) return load
+  const cargoT = load.data.loadedT
   if (cargoT > cargoCapacity)
     return fail('14.9a', `cargoExceedsCapacity:${cargoT}>${cargoCapacity}`)
 
@@ -640,7 +656,7 @@ function missionCargoCheck(input: AirMissionRequest): RuleOutcome<{ ok: true }> 
   /*
    * 14.9c（第五批批 C 切片 2）：「补给点数可以被空运，处于**移动模式**的战斗单位也可以空运，
    *   前提是其 MA 为 **10 或以下的步行 MP**。」14.10 明写「第 14.9 节中的规则均适用于空投」
-   *   ⇒ 空运与空投**都**查本条（`ma` 由调用方给**步行 MP**，本作＝战斗面印值 MA）。
+   *   ⇒ 空运与空投**都**查本条（`ma` 为移动面印刷MA；机动类型另由载货校验检查）。
    */
   for (const item of cargo) {
     if (item.kind !== 'unit') continue

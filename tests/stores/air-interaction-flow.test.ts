@@ -939,6 +939,7 @@ describe('C9 空军交互：14.3e 逐轮空战与 14.10d 空投检定（端到�
     const cargoUnit = store.units.find((unit) => unit.instanceId === 'para-1')
     if (cargoUnit === undefined) throw new Error('夹具里找不到 para-1')
     cargoUnit.mode.mode = 'move'
+    cargoUnit.hex = { ...CORE_HEX } // 装载必须实际在起飞基地，不能从目标格瞬移。
     // 候选只列本方（engine 侧再过滤资格/运力）
     expect(store.airCargoUnitChoices.map((unit) => unit.instanceId)).toEqual(['para-1'])
 

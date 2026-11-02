@@ -26,10 +26,9 @@ import { placeGround } from '../flows/sop-harness'
  * 病灶（2026-09-30 review）：14.9c 全仓 0 命中（候选给全部地面战斗单位、引擎不查模式）；
  * 空运落地把单位直接置 `movementEnded`（比 14.9d 更严——原文允许任务前后合计移 MA/2）。
  *
- * ★ 测法边界（如实）：① "步行 MP≤10" 半条在本作数据下恒真（战斗单位战斗面 MA 最大 10），
- *   其判据层真值表由引擎用例覆盖；本文件只钉**模式**半条与额度联动。② 14.9d 的"反应/进击阶段
+ * 测法边界：本文件以移动面为步行MP的真实单位验证模式及额度联动。14.9d 的"反应/进击阶段
  *   1/4 MA、须被释放预备"等阶段分支**未实现**（主规则＝移动阶段；其余如实登记）。
- *   ③ 空运也走 14.10d 检定（既有实现口径），故链上给 `cargoDice = 12` 必成功。
+ *   普通空运按14.9卸载，不使用14.10d的空投成功表。
  */
 
 const newStore = () => {
@@ -80,10 +79,20 @@ function transportRecord(side: Side) {
   return found
 }
 
-/** 摩托化步兵团（战斗面 MA 3＝步行 MP；移动面 MA 16＝轮式） */
-function motInfRecord() {
-  const found = unitChoices('axis').find((record) => record.id === 'ax-armor_pz-ge-3-pz-3-mot-inf')
-  if (found === undefined) throw new Error('单位库中没有 3 Pz 3 Mot Inf')
+/** 合法空运步兵：移动面为步行MP；不能用战斗面步行MA包装移动面轮式单位。 */
+function airInfantryRecord() {
+  const found = unitChoices('axis').find((record) => {
+    const view = toConsoleUnit({ record, instanceId: 'probe', hex: CORE_HEX, side: 'axis' })
+    return (
+      view.isCombat &&
+      view.faces.move.mobility === 'leg' &&
+      view.faces.move.ma >= 4 &&
+      view.faces.move.ma <= 6 &&
+      view.re > 0 &&
+      view.re <= 2
+    )
+  })
+  if (found === undefined) throw new Error('单位库中没有合法空运步兵')
   return found
 }
 
@@ -91,7 +100,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
 })
 
-/** 摆好「起点基地 + 目的地基地 + 一架运输机（容量 4）」并返回该单位（移动模式的摩托化团） */
+/** 摆好起点/目的地基地及运输机，返回可空运步兵。 */
 function setup(store: ReturnType<typeof newStore>) {
   store.setAirActive(true)
   store.units.push(
@@ -107,7 +116,7 @@ function setup(store: ReturnType<typeof newStore>) {
   })
   transport.transportCapacity = 4
   store.airUnits.push(transport)
-  placeGround(store, motInfRecord(), CORE_HEX, 'axis', 'u1')
+  placeGround(store, airInfantryRecord(), CORE_HEX, 'axis', 'u1')
   const unit = store.units.find((item) => item.instanceId === 'u1')
   if (unit === undefined) throw new Error('单位 u1 不在盘面上')
   return unit
@@ -156,7 +165,7 @@ describe('第五批 C2：空运的 14.9c / 14.9d（store 链）', () => {
     expect(runUnitMission(store)).toBe(true)
     // 14.9d：任务前未动 ⇒ 任务后合计仍可移 MA/2 ⇒ 预扣另一半
     expect(unit.hex).toEqual(DEST_HEX)
-    expect(unit.mpSpent).toBe(unit.faces.move.ma / 2) // 16/2 = 8（修前 0 ⇒ 红）
+    expect(unit.mpSpent).toBe(unit.faces.move.ma / 2)
     // 14.9d 允许"任务前或后"移动 ⇒ 不整段封死（修前 movementEnded=true ⇒ 红）
     expect(unit.movementEnded).toBe(false)
   })
@@ -167,7 +176,7 @@ describe('第五批 C2：空运的 14.9c / 14.9d（store 链）', () => {
     unit.mode.mode = 'move'
     unit.mpSpent = 2
     expect(runUnitMission(store)).toBe(true)
-    // 16 MA：上限 8，已花 2 ⇒ 之后只能再花 6 ⇒ mpSpent 预提到 10
-    expect(unit.mpSpent).toBe(unit.faces.move.ma / 2 + 2) // = 10（修前 2 ⇒ 红）
+    // 已花2MP应从允许的半MA中扣除。
+    expect(unit.mpSpent).toBe(unit.faces.move.ma / 2 + 2)
   })
 })

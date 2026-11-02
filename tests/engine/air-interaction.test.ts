@@ -1592,6 +1592,10 @@ describe('14.9c / 14.9e：空运的货物资格与返航档位（第五批批 C 
     const unitCargo = (over: Partial<AirMissionCargo>): AirMissionCargo => ({
       id: 'u1',
       kind: 'unit',
+      re: 0.25,
+      mobility: 'leg',
+      side: 'axis',
+      sourceHex: plane.baseHex,
       isCombat: true,
       ma: 3,
       mode: 'combat',

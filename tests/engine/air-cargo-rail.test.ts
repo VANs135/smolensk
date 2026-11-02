@@ -233,6 +233,10 @@ describe('14.10a/14.10b：空投的货物资格与计划', () => {
     const paraUnit = {
       id: 'u1',
       kind: 'unit' as const,
+      re: 0.25,
+      mobility: 'leg' as const,
+      side: 'axis' as const,
+      sourceHex: transport.baseHex,
       isCombat: true,
       paraCapable: true,
       mode: 'move' as const,

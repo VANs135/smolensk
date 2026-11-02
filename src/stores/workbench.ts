@@ -1,5 +1,6 @@
 ﻿import { createAirMissionDomain } from './air-mission'
 import { createGroundMovementDomain } from './ground-movement'
+import { airCargoTransportT, isAirTransportableUnit } from '@/engine/rules/air-cargo'
 import { createAirSupplyDomain } from './air-supply'
 import { planAirSupplyLoad } from '@/engine/rules/air-supply'
 import { resolveAirTransportDelivery } from '@/engine/rules/air-interaction'
@@ -4132,7 +4133,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const airCargoUnitChoices = computed<ConsoleUnit[]>(() =>
     units.value.filter(
-      (unit) => unit.side === airActingSide.value && unit.isCombat && unit.mode.mode === 'move',
+      (unit) =>
+        unit.side === airActingSide.value &&
+        unit.mode.mode === 'move' &&
+        isAirTransportableUnit({
+          id: `unit:${unit.instanceId}`,
+          kind: 'unit',
+          isCombat: unit.isCombat,
+          re: unit.re,
+          ma: unit.faces.move.ma,
+          mobility: unit.faces.move.mobility,
+        }),
     ),
   )
 
@@ -12776,16 +12787,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       cargo.push({ id: `sp:${index + 1}`, kind: 'sp', t: 1 })
     for (const unitId of airInputs.value.cargoUnitIds) {
       const unit = units.value.find((entry) => entry.instanceId === unitId)
-      if (unit === undefined) continue
+      if (unit === undefined) {
+        airError.value = { rule: '14.9a', reason: `cargoUnitMissing:${unitId}` }
+        pushLog('warning', '所选货物单位已不存在，请重新选择货物', '14.9a')
+        return false
+      }
       cargo.push({
         id: `unit:${unitId}`,
         kind: 'unit',
         isCombat: unit.isCombat,
         paraCapable: airInputs.value.cargoUnitsParaCapable,
         // 14.9c（第五批批 C 切片 2）：单位货物须**移动模式**、且**步行 MP ≤ 10**
-        //（本作"步行 MP"＝战斗面印值 MA；判据在引擎 `missionCargoCheck`）
+        // 使用移动面的印刷MA、机动类型和RE；不得用战斗面步行MA代替移动面轮式MA。
         mode: unit.mode.mode,
-        ma: unit.faces.combat.ma,
+        ma: unit.faces.move.ma,
+        re: unit.re,
+        mobility: unit.faces.move.mobility,
+        side: unit.side,
+        sourceHex: { ...unit.hex },
       })
     }
     const data = acceptAir(
@@ -14179,7 +14198,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (state === null || pending === null) return false
     const cargo = state.assignment.cargo.map((item) => ({
       id: item.id,
-      t: item.kind === 'sp' ? (item.t ?? 0) : 0,
+      t: airCargoTransportT(item),
     }))
     const verdict = validateCargoLossChoice({
       cargo,
@@ -14192,6 +14211,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const destroyed = new Set(airCargoLossPicked.value)
     airSupply.settle([...destroyed], 'lost')
+    for (const item of state.assignment.cargo) {
+      if (item.kind !== 'unit' || !destroyed.has(item.id)) continue
+      const unit = units.value.find((entry) => `unit:${entry.instanceId}` === item.id)
+      if (unit !== undefined)
+        eliminateEntry(unit, '14.4g', `${unit.name} 作为运输货物损失（14.4g）`)
+    }
     const kept = state.assignment.cargo.filter((item) => !destroyed.has(item.id))
     airState.value = {
       ...state,
@@ -14278,15 +14303,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *   · 有超出部分 ⇒ 落一个**待决**，玩家选完之前 14.2f-F 的货物检定不许进行。
      */
     if (data.flak.hit && (state.kind === 'air_transport' || state.kind === 'air_drop')) {
-      /*
-       * 载货 T 的口径与装载时的校验**同一份**：只数 SP 货物的 T（`AirMissionCargo.t`）。
-       * ★ 边界：**单位货物的运输当量（4.7 的 RE）未计入** —— 引擎装载时的 14.9a 校验也是这么数的
-       *   （`air-interaction.ts` 的 `cargoT`），要一并纳入需先让 `AirMissionCargo` 带上单位的 RE，
-       *   属另一批的量（已登记进回执的边界）。
-       */
+      // 4.7 / 14.4g：SP与单位货物统一换算T，和宣布、货损选择使用同一个纯函数。
       const cargo = data.state.assignment.cargo.map((item) => ({
         id: item.id,
-        t: item.kind === 'sp' ? (item.t ?? 0) : 0,
+        t: airCargoTransportT(item),
       }))
       const capacityAfter = airMissionCargoCapacityNow.value
       const plan = planCargoLoss({ cargo, capacityAfter })
@@ -19294,6 +19314,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function snapshotBoard(): unknown {
     if (airSupplyManifest.value !== null && airState.value !== null && !airState.value.finished)
       throw new Error('空运SP仍在结算中，请完成任务及返航后保存')
+    if (
+      airState.value !== null &&
+      !airState.value.finished &&
+      (airState.value.kind === 'air_transport' || airState.value.kind === 'air_drop')
+    )
+      throw new Error('载货空军任务仍在结算中，请完成任务及返航后保存')
     return boardRegistry.capture()
   }
   function boardSnapshotFits(board: unknown): boolean {
