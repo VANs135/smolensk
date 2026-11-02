@@ -1002,6 +1002,7 @@ describe('C9 空军交互：14.3e 逐轮空战与 14.10d 空投检定（端到�
     store.setAirTargetFromText(label(NEAR_HEX))
     store.toggleAirMissionUnit('tpt-1')
     store.airInputs.cargoSpT = 2
+    store.spDumps.push({ id: 'origin-stock', side: 'axis', hex: CORE_HEX, sp: 0, t: 2 })
     expect(store.beginAirMissionNow()).toBe(true)
     // 14.2f 逐步：C 空战（无敌方基地 ⇒ 不发生）→ D 拦截（放弃）→ E 防空（不命中）
     expect(store.confirmAirCombatNow()).toBe(true)

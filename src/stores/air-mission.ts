@@ -19,6 +19,8 @@ export interface AirMissionPorts {
   target(): HexRef | null
   acceptAir<T>(outcome: RuleOutcome<T>, action: string): T | null
   resultReady(state: AirInteractionState): boolean
+  returnSupply(): void
+  resetSupply(): void
   setAirStatus(id: string, status: AirStatus): void
   markAirMissionFlown(id: string): void
   nameOf(id: string): string
@@ -62,6 +64,7 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
     airState.value = null
     airError.value = null
     barrageUnits.value = null
+    ports.resetSupply()
     return true
   }
   function confirmAirMissionNow(): boolean {
@@ -109,6 +112,7 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
       })
     const data = acceptAir(completeAirReturnStep(state, { returns, bases: airBases.value }), '返航')
     if (data === null) return false
+    ports.returnSupply()
     airState.value = data.state
     for (const returned of data.state.returns) {
       const origin = state.assignment.origins.find(

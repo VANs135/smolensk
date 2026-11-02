@@ -1276,10 +1276,10 @@ export function resolveFlakLoss(
 export interface AirCargoItemResult {
   id: string
   kind: 'sp' | 'unit'
-  /** 2 骰和 */
-  die2d6: number
-  modified: number
-  threshold: number
+  /** 空投的2骰和；普通空运不掷骰，为null。 */
+  die2d6: number | null
+  modified: number | null
+  threshold: number | null
   success: boolean
   /** 14.10d：成功 ⇒ 置于空投格（其本阶段移动结束）；失败 ⇒ 被摧毁 */
   fate: 'placed' | 'destroyed'
@@ -1292,6 +1292,27 @@ export interface AirCargoResolution {
   destroyedOnEnemyCombatUnitIds: string[]
   rule: string
   detail: string
+}
+
+/** 14.9：在友军基地卸载，不使用仅适用于14.10d空投的成功表。 */
+export function resolveAirTransportDelivery(
+  cargo: readonly AirMissionCargo[],
+): RuleOutcome<AirCargoResolution> {
+  return succeed('14.9', {
+    items: cargo.map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      die2d6: null,
+      modified: null,
+      threshold: null,
+      success: true,
+      fate: 'placed',
+      detail: `${item.id}：空运抵达友军基地（14.9）`,
+    })),
+    destroyedOnEnemyCombatUnitIds: [],
+    rule: '14.9',
+    detail: `空运抵达：${cargo.length}件货物；卸载量另按14.9f校验`,
+  })
 }
 
 /**

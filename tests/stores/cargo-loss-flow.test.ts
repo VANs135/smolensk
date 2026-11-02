@@ -116,6 +116,7 @@ describe('批 F 切片 6：14.4g 防空致容量变化后的货物损失（玩�
     store.toggleAirMissionUnit('tpt-1')
     store.toggleAirMissionUnit('tpt-2')
     store.airInputs.cargoSpT = 4 // 满载：2 + 2
+    store.spDumps.push({ id: 'origin-stock', side: 'axis', hex: CORE_HEX, sp: 1, t: 0 })
     expect(store.beginAirMissionNow()).toBe(true)
     expect(store.airState?.assignment.cargoCapacity).toBe(4)
     /*
@@ -166,11 +167,13 @@ describe('批 F 切片 6：14.4g 防空致容量变化后的货物损失（玩�
     expect(firstCargo).toBeDefined()
     store.toggleAirCargoLossPick(firstCargo!.id)
     expect(store.confirmAirCargoLossNow()).toBe(true)
+    expect(store.airSupplyManifest?.items.filter((item) => item.fate === 'lost')).toHaveLength(1)
     expect(store.airCargoLossPending).toBe(null)
     expect(store.airState?.assignment.cargo.length).toBe(3)
 
     // 处理完之后，货物检定照常进行（14.10d）
     expect(store.resolveAirCargoNow()).toBe(true)
+    expect(store.airSupplyManifest?.items.filter((item) => item.fate === 'lost')).toHaveLength(1)
   })
 
   it('★ 摧毁量不足 ⇒ 拒（14.4g）；容量够装 ⇒ 不落待决', () => {
@@ -200,6 +203,7 @@ describe('批 F 切片 6：14.4g 防空致容量变化后的货物损失（玩�
     expect(store.setAirTargetFromText(label(target))).toBe(true)
     store.toggleAirMissionUnit('tpt-1')
     store.airInputs.cargoSpT = 1
+    store.spDumps.push({ id: 'origin-stock', side: 'axis', hex: CORE_HEX, sp: 0, t: 1 })
     expect(store.beginAirMissionNow()).toBe(true)
     expect(store.confirmAirCombatNow()).toBe(true)
     expect(store.declareInterceptionNow()).toBe(true)

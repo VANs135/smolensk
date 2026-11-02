@@ -561,6 +561,10 @@ const showsBaseOps = computed(
           14.10b 空投单位属"需计划"的任务（计划回合须比执行回合早 ≥2）。
         -->
           <template v-if="isCargoMission">
+            <p class="hint">
+              SP 从所选飞机共同起飞基地的地面库存装载并扣账；未卸下的 SP
+              随本次任务退运。装载后请完成任务再重新编组。
+            </p>
             <div class="row">
               <label class="field">
                 装载 SP（T）
@@ -645,7 +649,11 @@ const showsBaseOps = computed(
             />
             <p class="num">
               本次货物：{{ workbench.airInputs.cargoSpT }} T SP ＋
-              {{ workbench.airInputs.cargoUnitIds.length }} 个单位（14.10d 逐件 2 骰检定）
+              {{ workbench.airInputs.cargoUnitIds.length }} 个单位 （{{
+                workbench.airMissionKind === 'air_drop'
+                  ? '14.10d 空投逐件2骰检定'
+                  : '14.9 空运卸载，不掷空投骰'
+              }}）
             </p>
           </template>
         </template>

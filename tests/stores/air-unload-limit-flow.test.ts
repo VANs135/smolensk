@@ -1,4 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
+import { createMemoryStorage } from '@/shared'
+import { useGameSessionStore } from '@/stores'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { mapLayers } from '@/data'
@@ -91,6 +93,7 @@ beforeEach(() => {
 
 /** 摆好「起点基地 + 目的地基地（等级 1）+ 一架运输机」，并返回目的地基地等级 */
 function setup(store: ReturnType<typeof newStore>, transportId = 'tpt-1'): number {
+  store.spDumps.push({ id: 'origin-stock', side: 'axis', hex: CORE_HEX, sp: 4, t: 0 })
   store.setAirActive(true)
   store.units.push(
     toConsoleUnit({ record: airBaseRecord(), instanceId: 'base-1', hex: CORE_HEX, side: 'axis' }),
@@ -144,6 +147,119 @@ const dumpsAtDest = (store: ReturnType<typeof newStore>) =>
   store.spDumps.filter((dump) => dump.hex.col === DEST_HEX.col && dump.hex.row === DEST_HEX.row)
 
 describe('14.9f / 15.0b-C：空运卸载限额（真实基地格）', () => {
+  it('载货任务中拒绝保存，返航后可保存，避免读档丢失在途SP', () => {
+    const store = newStore()
+    const game = useGameSessionStore()
+    game.setSaveStorage(createMemoryStorage())
+    game.startGame()
+    store.setPhase('movement')
+    store.setSegmentStepIndex(
+      store.playerSegmentSteps.findIndex((step) => step.id === 'movement.modeAndMovement'),
+    )
+    setup(store)
+    expect(game.saveNow()).toBe(true)
+    store.setAirMissionKind('air_transport')
+    store.setAirTargetFromText(label(DEST_HEX))
+    store.toggleAirMissionUnit('tpt-1')
+    store.airInputs.cargoSpT = 2
+    expect(store.beginAirMissionNow()).toBe(true)
+    expect(game.saveNow()).toBe(false)
+    expect(game.saveError?.reason).toContain('空运SP仍在结算中')
+    expect(store.confirmAirCombatNow()).toBe(true)
+    expect(store.voluntaryReturnNow(['tpt-1'])).toBe(true)
+    expect(game.saveNow()).toBe(true)
+  })
+  it('14.9a：超运力宣布失败不扣库存；普通空运卸载不消耗空投骰', () => {
+    const store = newStore()
+    setup(store)
+    store.setAirMissionKind('air_transport')
+    store.setAirTargetFromText(label(DEST_HEX))
+    store.toggleAirMissionUnit('tpt-1')
+    store.airInputs.cargoSpT = 16
+    expect(store.beginAirMissionNow()).toBe(false)
+    expect(store.spDumps[0]).toMatchObject({ sp: 4, t: 0 })
+    store.airInputs.cargoSpT = 2
+    expect(store.beginAirMissionNow()).toBe(true)
+    expect(store.beginAirMissionNow()).toBe(false)
+    expect(store.spDumps[0]).toMatchObject({ sp: 3, t: 2 })
+    expect(store.confirmAirCombatNow()).toBe(true)
+    expect(store.declareInterceptionNow()).toBe(true)
+    store.airInputs.flakDie = 2
+    expect(store.resolveFlakNow()).toBe(true)
+    store.airInputs.cargoDice = null
+    const rng = store.rng
+    const count = store.drawCount
+    expect(store.resolveAirCargoNow()).toBe(true)
+    expect(store.rng).toEqual(rng)
+    expect(store.drawCount).toBe(count)
+    const inventory = store.spDumps.map((dump) => ({ ...dump }))
+    expect(store.resolveAirCargoNow()).toBe(true)
+    expect(store.spDumps).toEqual(inventory)
+    expect(store.airSupplyManifest!.items.every((item) => item.fate === 'delivered')).toBe(true)
+  })
+  it('14.3d / 14.9：无空战时整组主动返航退回SP，不留下任务或多退一笔', () => {
+    const store = newStore()
+    setup(store)
+    store.setAirMissionKind('air_transport')
+    store.setAirTargetFromText(label(DEST_HEX))
+    store.toggleAirMissionUnit('tpt-1')
+    store.airInputs.cargoSpT = 2
+    expect(store.beginAirMissionNow()).toBe(true)
+    expect(store.confirmAirCombatNow()).toBe(true)
+    expect(store.voluntaryReturnNow(['tpt-1'])).toBe(true)
+    expect(store.airState?.finished).toBe(true)
+    expect(store.airSupplyManifest!.items.every((item) => item.fate === 'returned')).toBe(true)
+    expect(store.spDumps.reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)).toBe(16)
+    expect(store.completeAirReturnNow()).toBe(false)
+    expect(store.spDumps.reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)).toBe(16)
+  })
+  it('14.9a：空库存拒绝，失败不扣账、不掷骰，也不创建任务', () => {
+    const store = newStore()
+    setup(store)
+    store.spDumps = []
+    const before = store.rng
+    expect(runMission(store, { kind: 'air_transport', cargoT: 1 })).toBe(false)
+    expect(store.airError?.reason).toBe('airSupplyStockInsufficient')
+    expect(store.airState).toBeNull()
+    expect(store.spDumps).toEqual([])
+    expect(store.rng).toEqual(before)
+  })
+  it('14.9：装载从真实库存扣除；拒卸部分只退一次；地面总量守恒', () => {
+    const store = newStore()
+    setup(store)
+    expect(runMission(store, { kind: 'air_transport', cargoT: 4 })).toBe(true)
+    const total = () => store.spDumps.reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)
+    expect(total()).toBe(16)
+    expect(store.airSupplyManifest!.items.map((item) => item.fate)).toEqual([
+      'delivered',
+      'delivered',
+      'returned',
+      'returned',
+    ])
+    expect(dumpsAtDest(store).reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)).toBe(2)
+    expect(store.completeAirReturnNow()).toBe(false)
+    expect(total()).toBe(16)
+  })
+  it('14.10d：空投失败的SP已从起点消耗，不在返航时复活', () => {
+    const store = newStore()
+    setup(store)
+    store.setAirMissionKind('air_drop')
+    store.setAirTargetFromText(label(DEST_HEX))
+    store.toggleAirMissionUnit('tpt-1')
+    store.airInputs.cargoSpT = 2
+    expect(store.beginAirMissionNow()).toBe(true)
+    expect(store.spDumps.reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)).toBe(14)
+    expect(store.confirmAirCombatNow()).toBe(true)
+    expect(store.declareInterceptionNow()).toBe(true)
+    store.airInputs.flakDie = 2
+    expect(store.resolveFlakNow()).toBe(true)
+    store.airInputs.cargoDice = 2
+    expect(store.resolveAirCargoNow()).toBe(true)
+    expect(store.airSupplyManifest!.items.every((item) => item.fate === 'lost')).toBe(true)
+    expect(store.confirmAirMissionNow()).toBe(true)
+    expect(store.completeAirReturnNow()).toBe(true)
+    expect(store.spDumps.reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)).toBe(14)
+  })
   it('★ 1 级基地 + 4T 货物 ⇒ 只卸 2T（等级×2T），且**落进 SP 账本**；被拒的 2T 如实报出', () => {
     const store = newStore()
     const level = setup(store)
