@@ -723,7 +723,7 @@ const showsBaseOps = computed(
 
           <!-- ── 14.4g：防空致容量变化后的**货物损失**（由玩家选摧毁哪几件） ── -->
           <div v-if="workbench.airCargoLossPending !== null" class="block">
-            <h4 class="block__title">14.4g 货物损失（容量因防空变小）</h4>
+            <h4 class="block__title">{{ workbench.airCargoLossPending.rule }} 货物损失</h4>
             <p class="warn num">
               {{ workbench.airCargoLossPending.detail }}；摧毁哪些由您选（摧毁量须 ≥ 超出部分）
             </p>
@@ -969,7 +969,7 @@ const showsBaseOps = computed(
             </p>
             <div class="row">
               <label
-                v-for="origin in workbench.airState.assignment.origins"
+                v-for="origin in workbench.airMissionReturnOrigins"
                 :key="origin.aircraftId"
                 class="field"
               >

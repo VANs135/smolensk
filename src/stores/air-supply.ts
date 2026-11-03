@@ -18,12 +18,12 @@ export function createAirSupplyDomain(ports: {
   function settle(ids: readonly string[], fate: Exclude<AirSupplyFate, 'aboard'>): void {
     if (manifest.value !== null) manifest.value = settleAirSupply(manifest.value, ids, fate)
   }
-  function returnRemaining(): void {
+  function returnRemaining(destination?: HexRef): void {
     const current = manifest.value
     if (current === null) return
     const ids = current.items.filter((item) => item.fate === 'aboard').map((item) => item.id)
     if (ids.length === 0) return
-    ports.returnSupply(current.origin, current.side, ids.length)
+    ports.returnSupply(destination ?? current.origin, current.side, ids.length)
     settle(ids, 'returned')
   }
   function reset(): void {

@@ -1940,6 +1940,8 @@ export function resolveFlakStep(
   },
 ): RuleOutcome<{ state: AirInteractionState; flak: FlakResponse }> {
   if (state.step !== 'flak') return fail('14.2f-E', `notAtFlakStep:${state.step}`)
+  if (state.interception?.declared && state.interception.combat === null)
+    return fail('14.5', 'interceptionCombatPending')
   const flak = resolveFlakResponse({ kind: state.kind, ...input })
   return succeed(flak.rule, { state: { ...state, flak, step: 'resolveMission' }, flak })
 }

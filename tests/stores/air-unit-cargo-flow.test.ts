@@ -57,6 +57,37 @@ function setup(startSession = false) {
 }
 
 describe('14.9a / 14.4g：单位载货与真实盘面闭环', () => {
+  it('宣布后加机失败会恢复原任务及装载快照，原编队仍可整组返航', () => {
+    const w = setup()
+    const record = aircraftChoices('axis').find((record) => (record.transportCapacity ?? 0) > 0)!
+    placeAir(w, record, CORE_HEX, 'axis', 'out-of-range')
+    w.airUnits.find((air) => air.instanceId === 'out-of-range')!.rangeHexes = 0
+    expect(w.beginAirMissionNow()).toBe(true)
+    const original = w.airState
+    w.toggleAirMissionUnit('out-of-range')
+    expect(w.airState).toBe(original)
+    expect(w.airState!.assignment.aircraftIds).toEqual(['transport'])
+    expect(w.confirmAirCombatNow()).toBe(true)
+    expect(w.voluntaryReturnNow(['transport'])).toBe(true)
+    expect(w.airState!.finished).toBe(true)
+    expect(w.units.find((unit) => unit.instanceId === 'cargo')!.hex).toEqual(CORE_HEX)
+  })
+  it('留存单位随整组运输机退到实际基地，并记录该基地卸载量', () => {
+    const w = mixedTask()
+    w.airInputs.unloadCargoIds = ['sp:1']
+    expect(w.resolveAirCargoNow()).toBe(true)
+    const unit = w.units.find((unit) => unit.instanceId === 'cargo')!
+    const spent = unit.mpSpent
+    expect(unit.hex).toEqual(CORE_HEX)
+    expect(w.confirmAirMissionNow()).toBe(true)
+    w.airInputs.returnHexText.transport = `${NEAR_HEX.col}.${NEAR_HEX.row}`
+    expect(w.completeAirReturnNow()).toBe(true)
+    expect(unit.hex).toEqual(NEAR_HEX)
+    expect(unit.mpSpent).toBe(spent)
+    expect(w.airUnloadedTAt(NEAR_HEX, 'axis')).toBe(3)
+    expect(w.completeAirReturnNow()).toBe(false)
+    expect(w.airUnloadedTAt(NEAR_HEX, 'axis')).toBe(3)
+  })
   it('半T单位消耗的卸载额度可完整存读档，不被截成整数', () => {
     const w = setup(true)
     w.units.find((unit) => unit.instanceId === 'cargo')!.re = 0.25

@@ -1,6 +1,11 @@
 ﻿import { createAirMissionDomain } from './air-mission'
 import { createGroundMovementDomain } from './ground-movement'
 import {
+  airMissionRoster,
+  skipEmptyAirMissionFlak,
+  planRetainedCargoReturn,
+} from '@/engine/rules/air-mission-roster'
+import {
   airCargoTransportT,
   isAirTransportableUnit,
   airTransportSpentMpAfter,
@@ -1687,7 +1692,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     target: () => airTargetHex.value,
     acceptAir,
     resultReady: airMissionResultReady,
-    returnSupply: airSupply.returnRemaining,
+    returnCargo: completeAirCargoReturn,
     resetSupply: airSupply.reset,
     resetCargo: () => {
       airCargoResolution.reset()
@@ -1725,6 +1730,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
     },
     lossPending: () => airCargoLossPending.value !== null,
+    roster: () => airMissionRosterNow.value!,
     unitExists: (id) => units.value.some((unit) => `unit:${unit.instanceId}` === id),
     draw2d6: drawAir2d6,
     accept: acceptAir,
@@ -4112,6 +4118,30 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       .map((id) => airUnits.value.find((air) => air.instanceId === id))
       .filter((air): air is ConsoleAirUnit => air !== undefined)
   })
+  const airMissionRosterNow = computed(() => {
+    const state = airState.value
+    return state === null
+      ? null
+      : airMissionRoster(
+          state.assignment,
+          airUnits.value.map((air) => toAirMissionAircraftView(air)),
+          airMissionDomain.initialAircraft(),
+        )
+  })
+  const airMissionFlyingUnits = computed(() => {
+    const ids = airMissionRosterNow.value?.activeIds
+    return airMissionAirUnits.value.filter((air) =>
+      ids === undefined
+        ? air.airStatus === 'active' && air.steps > 0
+        : ids.includes(air.instanceId),
+    )
+  })
+  const airMissionReturnOrigins = computed(() => {
+    const ids = airMissionRosterNow.value?.liveIds ?? []
+    return (
+      airState.value?.assignment.origins.filter((origin) => ids.includes(origin.aircraftId)) ?? []
+    )
+  })
 
   /**
    * 14.3e-B：本场空战里**攻方**在场的飞机（逐轮点名的候选取此）
@@ -4154,9 +4184,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const airInterceptionDefender = computed<ConsoleAirUnit | null>(() => {
     const named = airInputs.value.namedDefenderId
     if (named !== null) {
-      return airMissionAirUnits.value.find((air) => air.instanceId === named) ?? null
+      return airMissionFlyingUnits.value.find((air) => air.instanceId === named) ?? null
     }
-    const planes = airMissionAirUnits.value
+    const planes = airMissionFlyingUnits.value
     if (planes.length === 0) return null
     // 14.1b：ACV 取**当前面**（减损机用减损面值；与引擎 `pickHighestAcv` 的入参同源）
     return planes.reduce((best, plane) =>
@@ -4205,7 +4235,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C9：任务编成里是否编有战斗机（14.4e 表 17-3 的 +1/+2 分档以此为准） */
   const airMissionHasFighter = computed<boolean>(() =>
-    airMissionAirUnits.value.some((air) => isFighterAircraft(air.aircraftType)),
+    airMissionFlyingUnits.value.some((air) => isFighterAircraft(air.aircraftType)),
   )
 
   /** C9：步骤清单（14.2f A–G；给界面打勾用） */
@@ -12661,7 +12691,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (current !== null && !current.finished) {
       airMissionDomain.reset(true)
       if (!beginAirMissionNow()) {
-        airState.value = current
+        airMissionDomain.start(current)
         airMissionAirIds.value = [...current.assignment.aircraftIds]
       }
       return
@@ -12683,6 +12713,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', '先宣布任务，再谈主动返航（14.3d）', '14.3d')
       return false
     }
+    if (
+      state.finished ||
+      state.step === 'returnToBase' ||
+      state.cargo !== null ||
+      (state.interception?.declared && state.interception.combat === null)
+    ) {
+      airError.value = { rule: '14.2f', reason: 'completePendingAirStepBeforeReturn' }
+      return false
+    }
     // 14.3d 的窗口由空战步是否已结算推出：未宣告空战 ⇒ 空战前；已结算 ⇒ 空战后；正在打 ⇒ 空战中
     const window: AirCombatWindow =
       state.combat === null
@@ -12692,13 +12731,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           : 'afterAirCombat'
     const flying = airMissionAirUnits.value.filter((air) => air.airStatus === 'active')
     const leaving = flying.filter((air) => aircraftIds.includes(air.instanceId))
-    if (
-      airSupplyManifest.value?.items.some((item) => item.fate === 'aboard') &&
-      leaving.length > 0 &&
-      leaving.length < flying.length
-    ) {
+    if (leaving.length === 0 || state.finished || airCargoLossPending.value !== null) {
+      airError.value = { rule: '14.3d', reason: 'noEligibleVoluntaryReturn' }
+      return false
+    }
+    if (state.assignment.cargo.length > 0 && leaving.length > 0 && leaving.length < flying.length) {
       airError.value = { rule: '14.9a', reason: 'partialCargoReturnUnsupported' }
-      pushLog('warning', '载有SP的任务请整组返航，或先完成卸载；暂不支持途中拆分载货', '14.9a')
+      pushLog('warning', '载货任务请整组返航，或先完成卸载；暂不支持途中拆分载货', '14.9a')
       return false
     }
     const verdict = canVoluntarilyReturn({
@@ -12710,6 +12749,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `主动返航被拒：${verdict.reason}（${verdict.rule}）`, verdict.rule)
       return false
     }
+    if (state.assignment.cargo.length > 0 && leaving.length === flying.length) {
+      if ((airMissionRosterNow.value?.lostCarriers ?? 0) > 0 && state.flak?.hit !== true) {
+        airError.value = { rule: '14.9a', reason: 'cargoCarrierAllocationRequired' }
+        return false
+      }
+      // 载货整组中止仍通过F/G提交，不能直接退款并擦除任务。
+      for (const air of leaving) setAirStatus(air.instanceId, 'inactive')
+      airState.value = { ...state, step: 'resolveMission' }
+      if (!resolveAirCargoNow() || !confirmAirMissionNow()) return false
+      return completeAirReturnNow()
+    }
     const leavingIds = new Set(leaving.map((air) => air.instanceId))
     for (const air of leaving) {
       setAirStatus(air.instanceId, 'inactive')
@@ -12717,6 +12767,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const remainingIds = state.assignment.aircraftIds.filter((id) => !leavingIds.has(id))
     if (remainingIds.length === 0) airSupply.returnRemaining()
+    if (remainingIds.length === 0) recordAbortedAirBarrage(state)
     airState.value = {
       ...state,
       assignment: {
@@ -12820,6 +12871,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (aircraft.length === 0) {
       pushLog('warning', '请先勾选参战飞机（14.2f-A）', '14.2f-A')
       return false
+    }
+    // 当前共享货单尚未实现多起点货损归属，明确收窄能力，避免跨基地补算运力。
+    if (
+      (airMissionKind.value === 'air_transport' || airMissionKind.value === 'air_drop') &&
+      (airInputs.value.cargoSpT > 0 || airInputs.value.cargoUnitIds.length > 0)
+    ) {
+      const carriers = aircraft.filter((plane) => transportCapacityOf(plane) > 0)
+      const origin = carriers[0]?.hex
+      if (
+        origin !== undefined &&
+        carriers.some(
+          (plane) => airBoxMembers.value.includes(plane.instanceId) || !sameHex(plane.hex, origin),
+        )
+      ) {
+        airError.value = { rule: '14.9a', reason: 'multiOriginCargoMissionUnsupported' }
+        pushLog(
+          'warning',
+          '目前载货任务只支持同一地图基地的承运编队，请按起点拆成独立任务；多起点分机货单尚未开放',
+          '14.9a',
+        )
+        return false
+      }
     }
     const supplyLoad = acceptAir(
       planAirSupplyLoad({
@@ -12998,7 +13071,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     const enemy = enemySide.value
-    const friendlyAircraft = airUnitsInHex(target, airActingSide.value)
+    const friendlyAircraft = airMissionFlyingUnits.value
     const enemyAircraft = airUnitsInHex(target, enemy)
     const enemyAirBaseInHex = airBases.value.some(
       (base) => base.side === enemy && sameHex(base.hex, target),
@@ -13174,7 +13247,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         eliminateEntry(unit, '14.10d', `${unit.name} 空投失败，被摧毁（14.10d）`)
         continue
       }
-      if (state.kind === 'air_transport')
+      if (state.kind === 'air_transport' || item.fate === 'retained')
         unit.mpSpent = airTransportSpentMpAfter(unit.faces.move.ma, unit.mpSpent)
       if (item.fate === 'retained') {
         pushLog('info', `${unit.name} 未卸载，按原基地退运；保留空运阶段移动限制`, '14.9d/f')
@@ -13944,10 +14017,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     const inputs = airInputs.value
+    const declared = inputs.interceptDeclared && airMissionFlyingUnits.value.length > 0
     const data = acceptAir(
       declareInterceptionStep(state, {
         response,
-        declared: inputs.interceptDeclared,
+        declared,
         ...(inputs.interceptorId === null ? {} : { interceptorId: inputs.interceptorId }),
       }),
       '拦截应答',
@@ -13956,7 +14030,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     airState.value = data.state
     pushLog(
       'info',
-      inputs.interceptDeclared
+      declared
         ? `拦截方宣布拦截（14.5）：1 架战斗机（不强制）`
         : '拦截方放弃拦截（14.5：不强制拦截）',
       '14.5',
@@ -13966,7 +14040,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       action: 'airIntercept',
       rule: '14.5',
       data: {
-        declared: inputs.interceptDeclared,
+        declared,
         interceptorId: inputs.interceptorId,
       },
     })
@@ -13977,6 +14051,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function resolveInterceptionCombatNow(): boolean {
     const state = airState.value
     if (state === null || state.interception === null) return false
+    if (state.step !== 'flak' || state.interception.combat !== null) {
+      airError.value = { rule: '14.5', reason: 'interceptionAlreadyResolvedOrClosed' }
+      return false
+    }
     const interceptorId = state.interception.interceptorId
     if (interceptorId === null) {
       pushLog('warning', '拦截方没有宣布拦截（14.5）', '14.5')
@@ -14028,6 +14106,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     airState.value = { ...state, interception: { ...state.interception, combat: data } }
     // 14.5：胜 ⇒ 回起飞基地并保持激活；败（含双方返航）⇒ 非激活
     setAirStatus(interceptor.instanceId, data.interceptorAirStatus)
+    if (data.combat.abortSide === 'defender' || data.combat.abortSide === 'both')
+      setAirStatus(defender.instanceId, 'inactive')
     // 14.3e-C：损失骰 5–6 ⇒ **返航的单位或单位们**各损 1 点军力（双方返航 ⇒ 两机都掉；
     // 修前用三元式只给一边，与引擎 `stepLossIds` 的口径不符）
     if (data.combat.winnerLossRoll === 'step_loss') {
@@ -14061,30 +14141,35 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 并沿用分配时算定的距离档位（14.9e-C 的容量翻倍按各机在 `origins` 里的距离判定）。
    * 被防空摧毁的飞机已移出任务名单，故它的容量自然消失 —— 这正是 14.4g 的触发条件。
    */
-  const airMissionCargoCapacityNow = computed<number>(() => {
-    const state = airState.value
-    if (state === null) return 0
-    const assignment = state.assignment
-    return assignment.origins
-      .filter((origin) => assignment.aircraftIds.includes(origin.aircraftId))
-      .reduce((sum, origin) => {
-        const plane = airUnits.value.find((air) => air.instanceId === origin.aircraftId)
-        if (plane === undefined) return sum
-        const multiplier = airTransportProfile({
-          distanceHexes: origin.distanceHexes,
-          rangeHexes: origin.rangeHexes,
-        }).capacityMultiplier
-        return sum + transportCapacityOf(plane) * multiplier
-      }, 0)
-  })
+  const airMissionCargoCapacityNow = computed(() => airMissionRosterNow.value?.activeCapacityT ?? 0)
 
   /** 14.4g：待玩家选择的**货物损失**（容量因防空变小、有超出部分时才落值） */
   const airCargoLossPending = ref<{
+    rule: string
     capacityAfter: number
     allowedT: number
     excessT: number
     detail: string
   } | null>(null)
+
+  function queueAirCargoLoss(capacityAfter: number, rule: string): void {
+    const state = airState.value
+    if (state === null || (state.kind !== 'air_transport' && state.kind !== 'air_drop')) return
+    const plan = planCargoLoss({
+      cargo: state.assignment.cargo.map((item) => ({ id: item.id, t: airCargoTransportT(item) })),
+      capacityAfter,
+    })
+    if (plan.ok && plan.data.excessT > 0) {
+      airCargoLossPending.value = {
+        capacityAfter,
+        allowedT: plan.data.allowedT,
+        excessT: plan.data.excessT,
+        detail: plan.data.detail,
+        rule,
+      }
+      pushLog('warning', `${plan.data.detail}；请先确认货物损失`, rule)
+    }
+  }
 
   /** 14.4g：玩家勾选要摧毁的货物件 */
   const airCargoLossPicked = ref<string[]>([])
@@ -14125,7 +14210,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (item.kind !== 'unit' || !destroyed.has(item.id)) continue
       const unit = units.value.find((entry) => `unit:${entry.instanceId}` === item.id)
       if (unit !== undefined)
-        eliminateEntry(unit, '14.4g', `${unit.name} 作为运输货物损失（14.4g）`)
+        eliminateEntry(unit, pending.rule, `${unit.name} 作为运输货物损失（${pending.rule}）`)
     }
     const kept = state.assignment.cargo.filter((item) => !destroyed.has(item.id))
     airState.value = {
@@ -14135,13 +14220,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     pushLog(
       'success',
-      `14.4g：${verdict.data.detail}；余下 ${String(kept.length)} 件货物继续本任务`,
-      '14.4g',
+      `${pending.rule}：${verdict.data.detail}；余下 ${String(kept.length)} 件货物继续本任务`,
+      pending.rule,
     )
     // ⑭ 接线：货物损失（14.4g）入会话日志（本笔不掷骰）
     recordSettlement({
       action: 'airCargoLoss',
-      rule: '14.4g',
+      rule: pending.rule,
       data: {
         capacityAfter: pending.capacityAfter,
         allowedT: pending.allowedT,
@@ -14161,6 +14246,31 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function resolveFlakNow(): boolean {
     const state = airState.value
     if (state === null) return false
+    if (
+      state.step !== 'flak' ||
+      (state.interception?.declared && state.interception.combat === null)
+    ) {
+      airError.value = { rule: '14.2f-E', reason: 'airFlakStepNotReady' }
+      return false
+    }
+    if (airMissionFlyingUnits.value.length === 0) {
+      const skipped = acceptAir(skipEmptyAirMissionFlak(state), '中止任务跳过防空')
+      if (skipped === null) return false
+      airState.value = skipped.state
+      if (airMissionRosterNow.value?.liveCapacityT === 0) queueAirCargoLoss(0, '14.1b')
+      pushLog('info', '没有活动任务机，跳过防空并处理退运或货物损失', '14.2f-E')
+      return true
+    }
+    if (
+      state.assignment.cargo.length > 0 &&
+      ((airMissionRosterNow.value?.inactiveCarriers ?? 0) > 0 ||
+        (airMissionRosterNow.value?.lostCarriers ?? 0) > 0)
+    ) {
+      if (airMissionRosterNow.value?.liveCapacityT === 0) queueAirCargoLoss(0, '14.1b')
+      airError.value = { rule: '14.9a', reason: 'cargoCarrierAllocationRequired' }
+      pushLog('warning', '部分承运机已中止；当前货单需要整组返航，逐机分流尚待处理', '14.9a')
+      return false
+    }
     const inputs = airInputs.value
     const inPatrolZone = airTargetInEnemyPatrolZone.value
     // ⑭ 接线：drawAir2d6 / drawAir1d6 只回报数字（不改它们）⇒ 记下掷骰前的骰源，按同法复算骰面
@@ -14182,7 +14292,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       resolveFlakStep(state, {
         inEnemyPatrolZone: inPatrolZone,
         missionHasFighter: airMissionHasFighter.value,
-        missionAircraft: airMissionAirUnits.value.map((air) => ({
+        missionAircraft: airMissionFlyingUnits.value.map((air) => ({
           id: air.instanceId,
           // 14.1b/14.4f：任务损失表的 W/S 按**当前面**轰炸值选（减损机用减损面值）
           barrageStrength: airBarrageStrengthOf(air),
@@ -14212,28 +14322,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *   · 取整按**有利于货物存留**（`planCargoLoss` 的 `ceil`，即 14.9b 明写的例外）；
      *   · 有超出部分 ⇒ 落一个**待决**，玩家选完之前 14.2f-F 的货物检定不许进行。
      */
-    if (data.flak.hit && (state.kind === 'air_transport' || state.kind === 'air_drop')) {
-      // 4.7 / 14.4g：SP与单位货物统一换算T，和宣布、货损选择使用同一个纯函数。
-      const cargo = data.state.assignment.cargo.map((item) => ({
-        id: item.id,
-        t: airCargoTransportT(item),
-      }))
-      const capacityAfter = airMissionCargoCapacityNow.value
-      const plan = planCargoLoss({ cargo, capacityAfter })
-      if (plan.ok && plan.data.excessT > 0) {
-        airCargoLossPending.value = {
-          capacityAfter,
-          allowedT: plan.data.allowedT,
-          excessT: plan.data.excessT,
-          detail: plan.data.detail,
-        }
-        pushLog(
-          'warning',
-          `14.4g：${plan.data.detail}；请选择要摧毁哪几件货物，之后再执行 14.2f-F 的货物检定`,
-          '14.4g',
-        )
-      }
-    }
+    if (data.flak.hit) queueAirCargoLoss(airMissionCargoCapacityNow.value, '14.4g')
+    else if (airMissionRosterNow.value?.liveCapacityT === 0) queueAirCargoLoss(0, '14.1b')
     pushLog(data.flak.hit ? 'warning' : 'info', data.flak.detail, data.flak.rule)
     // ⑭ 接线：防空应答（14.4e / 14.4f）入会话日志；rolls＝2 骰 + 1 损失骰
     recordSettlement({
@@ -14334,7 +14424,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
        *   裁击/侦察/空运/空投等**没有轰炸结算**的任务仍走原来那条路（只记结果）。
        */
       const kind = airState.value.kind
-      if (kind === 'barrage' || kind === 'hip_shoot' || kind === 'trainbusting') {
+      if (
+        airMissionFlyingUnits.value.length === 0 &&
+        kind !== 'air_transport' &&
+        kind !== 'air_drop'
+      ) {
+        airInputs.value.missionNote = '任务机已中止或被摧毁，没有执行对地任务'
+        if (!confirmAirMissionNow()) return false
+      } else if (kind === 'barrage' || kind === 'hip_shoot' || kind === 'trainbusting') {
         if (!beginAirBarrageNow()) return false
         if (!runBarrageChainNow()) return false
         /*
@@ -14399,6 +14496,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       return false
     }
+    if (airMissionFlyingUnits.value.length === 0) {
+      airError.value = { rule: '14.7', reason: 'noActiveMissionAircraft' }
+      return false
+    }
     /*
      * 14.7b / 14.7d：**空军轰炸与低空扫射**都走 10.2 的轰炸结算（10.0 的通用流程）——
      *   空军轰炸（14.7b）：10.2a 飞机放在目标上结算、10.2c **无补给消耗**、14.7 最多 4 机；
@@ -14430,7 +14531,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     barrageKind.value = 'air'
     if (state.kind === 'trainbusting') barrageTargetKind.value = 'trainbusting'
     barrageUnitIds.value = []
-    barrageAirIds.value = [...state.assignment.aircraftIds]
+    barrageAirIds.value = airMissionFlyingUnits.value.map((air) => air.instanceId)
     // 14.7d：低空扫射的标记随任务类型带入（10.0b 的观察员仍由面板声明）
     barrageInputs.value = { ...barrageInputs.value, hipShoot: state.kind === 'hip_shoot' }
     if (!beginBarrageNow()) return false
@@ -14468,6 +14569,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   function airMissionResultReady(state: AirInteractionState): boolean {
     if (['barrage', 'hip_shoot', 'trainbusting'].includes(state.kind)) {
+      if (airMissionFlyingUnits.value.length === 0) return true
       const barrage = barrageState.value
       if (
         barrage === null ||
@@ -14490,7 +14592,86 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
   function confirmAirMissionNow(): boolean {
-    return airMissionDomain.confirmAirMissionNow()
+    const state = airState.value
+    const ok = airMissionDomain.confirmAirMissionNow()
+    if (ok && state !== null && airMissionFlyingUnits.value.length === 0)
+      recordAbortedAirBarrage(state)
+    return ok
+  }
+
+  /** 10.0e / 14.7d：中止的轰炸也算尝试；低空扫射不占目标格额度。 */
+  function recordAbortedAirBarrage(state: AirInteractionState): void {
+    if (!['barrage', 'hip_shoot', 'trainbusting'].includes(state.kind)) return
+    if (state.kind !== 'hip_shoot')
+      barragedHexesThisPhase.value = [
+        ...new Set([...barragedHexesThisPhase.value, hexLabel(state.targetHex)]),
+      ]
+    barragedUnitIdsThisPhase.value = [
+      ...new Set([...barragedUnitIdsThisPhase.value, ...state.assignment.aircraftIds]),
+    ]
+  }
+
+  /** 14.1c / 14.9：整组留存货物随实际承运机退到同一基地，提交前核对完整性。 */
+  function completeAirCargoReturn(
+    state: AirInteractionState,
+    completed: AirInteractionState,
+    stayedIds: readonly string[],
+  ): boolean {
+    const retained = new Set(
+      state.cargo?.items.filter((item) => item.fate === 'retained').map((item) => item.id) ?? [],
+    )
+    const cargo = state.assignment.cargo.filter((item) => retained.has(item.id))
+    const plan = acceptAir(
+      planRetainedCargoReturn({
+        cargo,
+        targetHex: state.targetHex,
+        returns: completed.returns,
+        stayedIds,
+        carriers: state.assignment.origins
+          .filter((origin) => {
+            const plane = airUnits.value.find((air) => air.instanceId === origin.aircraftId)
+            return plane !== undefined && transportCapacityOf(plane) > 0
+          })
+          .map((origin) => ({
+            aircraftId: origin.aircraftId,
+            offMap: origin.fromOffMapBox === true,
+          })),
+      }),
+      '货物退运',
+    )
+    if (plan === null) {
+      pushLog(
+        'warning',
+        '留存货物暂按整组退运，请让承运机返回同一友方基地；逐机分流尚未开放',
+        '14.9',
+      )
+      return false
+    }
+    if (plan.destination === null) return true
+    const unitCargo = cargo.filter((item) => item.kind === 'unit')
+    if (
+      unitCargo.some((item) => !units.value.some((unit) => `unit:${unit.instanceId}` === item.id))
+    ) {
+      airError.value = { rule: '14.9', reason: 'retainedCargoUnitMissing' }
+      return false
+    }
+    airSupply.returnRemaining(plan.destination)
+    for (const item of unitCargo) {
+      const unit = units.value.find((entry) => `unit:${entry.instanceId}` === item.id)!
+      unit.hex = { ...plan.destination }
+      noteUnitEnteredHex(unit, plan.destination)
+    }
+    airUnloadLedger.value = {
+      ...airUnloadLedger.value,
+      [`${state.side}:${hexLabel(plan.destination)}`]:
+        airUnloadedTAt(plan.destination, state.side) + plan.unloadT,
+    }
+    recordSettlement({
+      action: 'airCargoReturn',
+      rule: '14.9',
+      data: { ids: cargo.map((item) => item.id), destination: plan.destination, t: plan.unloadT },
+    })
+    return true
   }
 
   /** C9 第 6 步（14.2f-G / 14.1c）：返航（逐机指定目的地，须是**本方**基地且在航程内） */
@@ -19864,6 +20045,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ownAirUnits,
     airMissionAirUnits,
     airMissionHasFighter,
+    airMissionReturnOrigins,
     airChecklist,
     airTargetInEnemyPatrolZone,
     airTargetBaseLevel,

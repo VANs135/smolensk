@@ -843,6 +843,7 @@ describe('C9 空军交互：14.3e 逐轮空战与 14.10d 空投检定（端到�
     )
     expect(store.setAirTargetFromText(label(CORE_HEX))).toBe(true)
     store.toggleAirMissionUnit('air-high')
+    store.toggleAirMissionUnit('air-low') // 两架参战机都必须正式编入任务。
     expect(store.beginAirMissionNow()).toBe(true)
   }
 

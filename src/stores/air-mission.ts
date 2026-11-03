@@ -9,11 +9,13 @@ import {
   type AirBaseView,
   type BarrageInteractionState,
   type AirCargoResolution,
+  type AirMissionAircraftView,
   transportCapacityOf,
 } from '@/engine/rules'
 import { validateAirCargoReturns } from '@/engine/rules/air-cargo-unload'
+import { survivingAirMission } from '@/engine/rules/air-mission-roster'
 import type { ConsoleAirUnit } from './workbench-model'
-import { parseHexPath, hexLabel } from './workbench-model'
+import { parseHexPath, hexLabel, toAirMissionAircraftView } from './workbench-model'
 export interface AirMissionPorts {
   inputs(): { missionNote: string; returnHexText: Record<string, string> }
   profiles(): readonly { aircraftId: string; profile: string }[]
@@ -22,7 +24,11 @@ export interface AirMissionPorts {
   target(): HexRef | null
   acceptAir<T>(outcome: RuleOutcome<T>, action: string): T | null
   resultReady(state: AirInteractionState): boolean
-  returnSupply(): void
+  returnCargo(
+    state: AirInteractionState,
+    completed: AirInteractionState,
+    stayedIds: readonly string[],
+  ): boolean
   resetSupply(): void
   resetCargo(): void
   mustStayAtTarget(): boolean
@@ -38,9 +44,14 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
     airError = ref<{ rule: string; reason: string } | null>(null)
   // 14.2f-F：绑定本趟任务实际宣布的轰炸，不能借用上一趟同格的战果。
   const barrageUnits = shallowRef<BarrageInteractionState['units'] | null>(null)
+  const initialAircraft = ref<AirMissionAircraftView[]>([])
   function start(state: AirInteractionState): void {
     barrageUnits.value = null
     ports.resetCargo()
+    initialAircraft.value = ports
+      .aircraft()
+      .filter((plane) => state.assignment.aircraftIds.includes(plane.instanceId))
+      .map((plane) => toAirMissionAircraftView(plane))
     airState.value = state
   }
   function bindBarrage(state: BarrageInteractionState): void {
@@ -84,6 +95,7 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
     barrageUnits.value = null
     ports.resetSupply()
     ports.resetCargo()
+    initialAircraft.value = []
     return true
   }
   function confirmAirMissionNow(): boolean {
@@ -109,8 +121,12 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
   }
 
   function completeAirReturnNow(): boolean {
-    const state = airState.value
-    if (state === null) return false
+    const current = airState.value
+    if (current === null) return false
+    const state = survivingAirMission(
+      current,
+      airUnits.value.map((air) => ({ id: air.instanceId, steps: air.steps })),
+    )
     /*
      * 14.9e-A（第五批批 C 切片 2）：**双程档机不返航** —— 它「在目的地空军基地变为非激活」
      * ⇒ 不进 returns（引擎对"出现在 returns 里的 A 档机"直接拒，规则号 14.9e-A），
@@ -150,7 +166,7 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
       return false
     const data = acceptAir(completeAirReturnStep(state, { returns, bases: airBases.value }), '返航')
     if (data === null) return false
-    ports.returnSupply()
+    if (!ports.returnCargo(state, data.state, data.stayedAircraftIds)) return false
     airState.value = data.state
     for (const returned of data.state.returns) {
       const origin = state.assignment.origins.find(
@@ -205,6 +221,7 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
     bindBarrage,
     ownsBarrage,
     commitCargo,
+    initialAircraft: () => initialAircraft.value,
     canReplace,
     reset,
     confirmAirMissionNow,

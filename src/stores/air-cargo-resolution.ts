@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import type { RngState, DiceRoll } from '@/engine/state-types'
 import type { RuleOutcome } from '@/engine/result-types'
 import { roll2d6 } from '@/engine/rng'
+import { planAirCargoContinuation, type airMissionRoster } from '@/engine/rules/air-mission-roster'
 import {
   resolveAirTransportDelivery,
   resolveAirCargoDrop,
@@ -34,6 +35,7 @@ export function createAirCargoResolutionDomain(ports: {
     overLimitAircraftInactive: boolean
   }
   lossPending(): boolean
+  roster(): ReturnType<typeof airMissionRoster>
   unitExists(cargoId: string): boolean
   draw2d6(): number
   accept<T>(outcome: RuleOutcome<T>, action: string): T | null
@@ -71,9 +73,22 @@ export function createAirCargoResolutionDomain(ports: {
     }
     const inputs = ports.inputs(),
       facts = ports.facts()
+    const continuation = ports.accept(
+      planAirCargoContinuation(state.assignment.cargo, ports.roster(), state.flak?.hit === true),
+      '承运状态',
+    )
+    if (continuation === null) {
+      ports.pushLog(
+        'warning',
+        '承运机已中止或运力不足；请整组返航，部分货物分流需要先明确分机货单',
+        '14.9a',
+      )
+      return false
+    }
+    const returnOnly = continuation.returnOnly
     const rngBefore = ports.rng()
     const dice =
-      state.kind === 'air_drop'
+      state.kind === 'air_drop' && !returnOnly
         ? state.assignment.cargo.map(() => inputs.cargoDice ?? ports.draw2d6())
         : []
     const rolls: DiceRoll[] = []
@@ -86,7 +101,7 @@ export function createAirCargoResolutionDomain(ports: {
       }
     }
     const result = ports.accept(
-      state.kind === 'air_transport'
+      state.kind === 'air_transport' || returnOnly
         ? resolveAirTransportDelivery(state.assignment.cargo)
         : resolveAirCargoDrop({
             cargo: state.assignment.cargo,
@@ -107,9 +122,9 @@ export function createAirCargoResolutionDomain(ports: {
     const plan = ports.accept(
       planAirCargoUnload({
         ...facts,
-        kind: state.kind,
+        kind: returnOnly ? 'air_transport' : state.kind,
         cargo: state.assignment.cargo.filter((item) => placed.has(item.id)),
-        selectedIds: inputs.unloadCargoIds,
+        selectedIds: returnOnly ? [] : inputs.unloadCargoIds,
       }),
       '卸载计划',
     )

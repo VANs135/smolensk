@@ -147,6 +147,42 @@ const dumpsAtDest = (store: ReturnType<typeof newStore>) =>
   store.spDumps.filter((dump) => dump.hex.col === DEST_HEX.col && dump.hex.row === DEST_HEX.row)
 
 describe('14.9f / 15.0b-C：空运卸载限额（真实基地格）', () => {
+  it('有留存货物时不同返航基地先拒绝，选同一基地后才统一退运，不提前退款', () => {
+    const store = newStore()
+    setup(store)
+    setup2(store)
+    store.setAirMissionKind('air_transport')
+    store.setAirTargetFromText(label(DEST_HEX))
+    store.toggleAirMissionUnit('tpt-1')
+    store.toggleAirMissionUnit('tpt-2')
+    store.airInputs.cargoSpT = 2
+    expect(store.beginAirMissionNow()).toBe(true)
+    expect(store.confirmAirCombatNow()).toBe(true)
+    expect(store.declareInterceptionNow()).toBe(true)
+    store.airInputs.flakDie = 2
+    expect(store.resolveFlakNow()).toBe(true)
+    store.airInputs.unloadCargoIds = []
+    expect(store.resolveAirCargoNow()).toBe(true)
+    expect(store.confirmAirMissionNow()).toBe(true)
+    store.airInputs.returnHexText['tpt-1'] = label(DEST_HEX)
+    store.airInputs.returnHexText['tpt-2'] = label(CORE_HEX)
+    expect(store.completeAirReturnNow()).toBe(false)
+    expect(store.airError?.reason).toBe('retainedCargoRequiresCommonReturnBase')
+    expect(store.spDumps.reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)).toBe(14)
+    expect(store.airUnits.every((air) => air.missionsFlownThisPhase === 0)).toBe(true)
+    store.airInputs.returnHexText['tpt-2'] = label(DEST_HEX)
+    expect(store.completeAirReturnNow()).toBe(true)
+    expect(store.spDumps.reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)).toBe(16)
+    expect(
+      store.airUnits.every(
+        (air) =>
+          air.hex.col === DEST_HEX.col &&
+          air.hex.row === DEST_HEX.row &&
+          air.missionsFlownThisPhase === 1,
+      ),
+    ).toBe(true)
+    expect(store.airUnloadedTAt(DEST_HEX, 'axis')).toBe(2)
+  })
   it('超限卸载后运输机必须留在目的地；修改草稿或返航输入不能抹掉义务', () => {
     const store = newStore()
     setup(store)

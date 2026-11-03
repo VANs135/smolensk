@@ -119,7 +119,7 @@ describe('W6 B19：3.5 建造标记', () => {
    * 「桥与简易机场**不能移动**」「**不可重建**」（毁掉即毁掉，枚数不退）。
    *
    * ★ 一条**测法边界（如实）**：本文件只钉"真走一步 ⇒ 那一枚被毁、另一枚不动、枚数不回补"，
-   *   以及四处"单位进入某格"的写点**都挂了同一个判定**（源码守卫）。判定本身的真假（苏方 +
+   *   以及五处"单位进入某格"的写点**都挂了同一个判定**（源码守卫）。判定本身的真假（苏方 +
    *   战斗单位才算）已由 `tests/engine/construction.test.ts` 的 `isConstructionMarkerDestroyed` 覆盖，
    *   此处**不重复**造四种进入方式的夹具 —— 空投 / 战斗后推进 / 死亡堆返场那三条路各自需要
    *   一整套空军/战斗/重建夹具，收益是同一行调用的重复验证（写清边界，不假装覆盖）。
@@ -217,24 +217,25 @@ describe('W6 B19：3.5 建造标记', () => {
       expect(workbench.hexPickView).toBeNull()
     })
 
-    it('★ 四处"单位进入某格"的写点都挂了同一个判定；面板绑 store 字段（源码守卫）', () => {
+    it('★ 五处"单位进入某格"的写点都挂了同一个判定；面板绑 store 字段（源码守卫）', () => {
       const store = readFileSync('src/stores/workbench.ts', 'utf8')
-      // 判定交给引擎，调用点覆盖四条进入路径
+      // 判定交给引擎，调用点覆盖五条进入路径
       expect(store).toContain('isConstructionMarkerDestroyed({ enteredBySovietCombatUnit: true })')
       // 命中数 - 定义本身 = 调用点数（`function noteUnitEnteredHex(` 那条不算调用）
       const all = store.match(/noteUnitEnteredHex\(/gu) ?? []
       const defs = store.match(/function noteUnitEnteredHex\(/gu) ?? []
       expect(defs).toHaveLength(1)
-      expect(all.length - defs.length).toBe(4)
+      expect(all.length - defs.length).toBe(5)
       /*
        * 逐调用点**回看上游代码**，认它长在哪条路径里（不能按"离某个名字多远"往后找：
-       * `applyMovePatches` 另有调用点，会先被撞上）。四个标记必须**都**出现 —— 少一个即说明
+       * `applyMovePatches` 另有调用点，会先被撞上）。五个标记必须**都**出现 —— 少一个即说明
        * 某条进入路径没挂判定。
        */
       const markers = [
         'function applyMovePatches', // 地面移动落盘
         'function applyCombatPatches', // 战斗后推进/撤退
         'function applyAirCargoDelivery', // 通过已验证货物计划提交空投落地
+        'function completeAirCargoReturn', // 退运到实际基地也属于单位进入
         'function returnFromDeadPileNow', // 死亡堆返场
       ]
       const seen = new Set<string>()
