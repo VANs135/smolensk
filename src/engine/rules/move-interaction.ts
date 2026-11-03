@@ -659,6 +659,8 @@ export function canSwitchModeNow(input: ModeSwitchNowInput): ModeSwitchResult {
   const item = runtimeOf(runtime, unitId)
   if (item === null) return { ok: false, rule: '5.4', reason: `找不到单位 ${unitId}` }
 
+  if (view.airTransportThisPhase != null)
+    return { ok: false, rule: '5.4 / 14.9d', reason: '本阶段已经空运，不能再切换主动模式' }
   if (item.ended)
     return { ok: false, rule: '5.4', reason: '本轮移动已结束，不能再切换模式（6.1g）' }
   if (item.spentMp > 0)

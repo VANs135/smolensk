@@ -6,6 +6,7 @@ import type { HexRef, Side } from '@/data'
 import { HEX_DIRECTIONS, isOnMap, neighbor } from '@/engine/hex-geometry'
 import {
   aircraftChoices,
+  availableMaOf,
   toConsoleAirUnit,
   toConsoleUnit,
   unitChoices,
@@ -26,8 +27,8 @@ import { placeGround } from '../flows/sop-harness'
  * 病灶（2026-09-30 review）：14.9c 全仓 0 命中（候选给全部地面战斗单位、引擎不查模式）；
  * 空运落地把单位直接置 `movementEnded`（比 14.9d 更严——原文允许任务前后合计移 MA/2）。
  *
- * 测法边界：本文件以移动面为步行MP的真实单位验证模式及额度联动。14.9d 的"反应/进击阶段
- *   1/4 MA、须被释放预备"等阶段分支**未实现**（主规则＝移动阶段；其余如实登记）。
+ * 测法边界：本文件以移动面为步行MP的真实单位验证主移动阶段模式及额度联动。
+ *   反应/进击及保存恢复的分支另见air-unit-budget-flow。
  *   普通空运按14.9卸载，不使用14.10d的空投成功表。
  */
 
@@ -153,6 +154,8 @@ describe('第五批 C2：空运的 14.9c / 14.9d（store 链）', () => {
     expect(store.airError).toMatchObject({ rule: '14.9c' })
     // ③ 对照：切到移动模式 ⇒ 候选含它、宣布放行
     unit.mode.mode = 'move'
+    unit.mode.orientation = 'move'
+    unit.raw = unit.faces.move
     expect(store.airCargoUnitChoices.map((item) => item.instanceId)).toContain('u1')
     expect(store.beginAirMissionNow()).toBe(true)
   })
@@ -161,11 +164,14 @@ describe('第五批 C2：空运的 14.9c / 14.9d（store 链）', () => {
     const store = newStore()
     const unit = setup(store)
     unit.mode.mode = 'move'
+    unit.mode.orientation = 'move'
+    unit.raw = unit.faces.move
     expect(unit.mpSpent).toBe(0)
     expect(runUnitMission(store)).toBe(true)
-    // 14.9d：任务前未动 ⇒ 任务后合计仍可移 MA/2 ⇒ 预扣另一半
+    // 14.9d：运输限制单独记录，真实MP保持0，阶段总额度为半MA。
     expect(unit.hex).toEqual(DEST_HEX)
-    expect(unit.mpSpent).toBe(unit.faces.move.ma / 2)
+    expect(unit.mpSpent).toBe(0)
+    expect(availableMaOf(unit, 'movement')).toBe(unit.faces.move.ma / 2)
     // 14.9d 允许"任务前或后"移动 ⇒ 不整段封死（修前 movementEnded=true ⇒ 红）
     expect(unit.movementEnded).toBe(false)
   })
@@ -174,9 +180,12 @@ describe('第五批 C2：空运的 14.9c / 14.9d（store 链）', () => {
     const store = newStore()
     const unit = setup(store)
     unit.mode.mode = 'move'
+    unit.mode.orientation = 'move'
+    unit.raw = unit.faces.move
     unit.mpSpent = 2
     expect(runUnitMission(store)).toBe(true)
     // 已花2MP应从允许的半MA中扣除。
-    expect(unit.mpSpent).toBe(unit.faces.move.ma / 2 + 2)
+    expect(unit.mpSpent).toBe(2)
+    expect(availableMaOf(unit, 'movement') - unit.mpSpent).toBe(unit.faces.move.ma / 2 - 2)
   })
 })

@@ -24,6 +24,7 @@ import {
 } from './barrage'
 import { modeEffect, type BaseMode } from './modes'
 import { combatLineOf, type CombatLine } from './terrain'
+import { canAttackAfterAirTransport, type AirUnitTransportState } from './air-unit-movement'
 
 /**
  * 轰炸交互（C7，OCS 10.0 章）——**10.0 通用流程的状态机**（纯函数）
@@ -114,6 +115,8 @@ export interface BarrageUnitRequest {
   mode?: BaseMode
   /** 5.7b：本阶段刚释放的预备（标记已移除，数值回到基础行） */
   releasedFromReserve?: boolean
+  /** 14.9d：地面参炸单位本阶段的空运限制；不约束空军任务。 */
+  airTransportThisPhase?: AirUnitTransportState | null
   /** 10.1a：火炮距目标格数（射程以格为单位，不受天气/地形影响） */
   distanceHexes?: number
   /** 10.1a：火炮射程（格） */
@@ -311,6 +314,13 @@ export function beginBarrage(input: {
   facts?: BarrageFacts
 }): RuleOutcome<BarrageInteractionState> {
   if (input.units.length === 0) return fail('10.0', 'noBarrageUnit')
+  if (input.kind === 'artillery') {
+    const restricted = input.units.find(
+      (unit) => !canAttackAfterAirTransport(unit.airTransportThisPhase),
+    )
+    if (restricted !== undefined)
+      return fail('14.9d', `airTransportForbidsBarrage:${restricted.unitId}`)
+  }
 
   /*
    * 5.10b-A：DG 单位的轰炸值减半；5.8：战略模式轰炸值为零（`modeEffect` 给出倍率）。

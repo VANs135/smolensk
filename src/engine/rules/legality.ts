@@ -18,6 +18,11 @@ import {
 import { RAIL_CONVERSION_MAX_PER_PHASE, STACKING_LIMIT_RE } from './movement'
 import { getRailCap } from './rail-cap'
 import type { MobilityType } from './terrain'
+import {
+  canAttackAfterAirTransport,
+  limitAirTransportMa,
+  type AirUnitTransportState,
+} from './air-unit-movement'
 
 /**
  * 合法性校验层（B21）——所有动作的统一前置校验
@@ -137,6 +142,8 @@ export interface LegalityUnit {
   mobility: MobilityType
   /** 模式状态（5.x） */
   mode: ModeState
+  /** 14.9d / 4.7d：本阶段空运对地面行动的限制。 */
+  airTransportThisPhase?: AirUnitTransportState | null
   /** 团级当量（4.6） */
   re: number
   /** 朝向那一面的印值（用于 5.x 的数值改写） */
@@ -588,6 +595,40 @@ function modeAllows(
 ): { ok: true } | ({ ok: false } & LegalityViolation) {
   const phase = movementSegmentOf(request.phase) ?? 'movement'
   const stats = resolveModeStats(unit.raw, unit.mode, phase)
+  const groundAttack =
+    request.action === 'attack' ||
+    request.action === 'overrun' ||
+    (request.action === 'barrage' &&
+      request.barrageSource !== 'air' &&
+      request.barrageSource !== 'ship')
+  if (groundAttack && !canAttackAfterAirTransport(unit.airTransportThisPhase))
+    return {
+      ok: false,
+      family: 'mode',
+      rule: '14.9d',
+      reason: 'airTransportForbidsAttack',
+      detail: `${unit.id} 本阶段空运后不能攻击、突袭或轰炸`,
+    }
+  if (
+    (request.action === 'move' || request.action === 'overrun') &&
+    unit.airTransportThisPhase != null &&
+    limitAirTransportMa(stats.ma, unit.airTransportThisPhase) <= 0
+  )
+    return {
+      ok: false,
+      family: 'mode',
+      rule: '14.9d',
+      reason: 'airTransportForbidsMovement',
+      detail: `${unit.id} 本阶段空运后没有地面移动额度`,
+    }
+  if (request.action === 'modeChange' && unit.airTransportThisPhase != null)
+    return {
+      ok: false,
+      family: 'mode',
+      rule: '5.4 / 14.9d',
+      reason: 'airTransportAlreadyStartedMovement',
+      detail: `${unit.id} 本阶段已经空运，不能再切换主动模式`,
+    }
 
   switch (request.action) {
     case 'attack':

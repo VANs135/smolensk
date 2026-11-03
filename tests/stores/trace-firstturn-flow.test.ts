@@ -251,6 +251,7 @@ describe('12.6h：空投当回合豁免追溯补给', () => {
 
     // 跨回合：豁免期结束 ⇒ 照常按 12.6 判定
     const dropTurn = store.turn
+    store.setPhase('cleanUp')
     store.setTurn(dropTurn + 1)
     store.setPhase('movement')
     expect(para.hasTraceSupply).toBe(false)

@@ -25,6 +25,7 @@ import {
   type MobilityType,
 } from './terrain'
 import { modeEffect } from './modes'
+import { canAttackAfterAirTransport, type AirUnitTransportState } from './air-unit-movement'
 
 import type { HexRef, Side } from '@/data'
 
@@ -86,6 +87,8 @@ export interface BattleUnitView {
   mode: 'combat' | 'move' | 'strat' | 'reserve'
   /** 预备模式是否已释放（9.1e：未释放的预备不能攻击） */
   releasedFromReserve?: boolean
+  /** 14.9d：普通单位在反应/进击中空运后不能攻击，但仍可防守。 */
+  airTransportThisPhase?: AirUnitTransportState | null
   /** 印值军力点数与当前军力（9.11d：多军力单位的攻防减半） */
   printedSteps: number
   steps: number
@@ -203,6 +206,8 @@ export function validateBattleComposition(input: {
     if (seen.has(unit.id)) return fail('9.1c', `duplicateAttacker:${unit.id}`)
     seen.add(unit.id)
     if (unit.side === defenders[0]!.side) return fail('9.1a', `friendlyFire:${unit.id}`)
+    if (!canAttackAfterAirTransport(unit.airTransportThisPhase))
+      return fail('14.9d', `airTransportForbidsAttack:${unit.id}`)
     if (unit.mode === 'strat') return fail('9.1e', `stratCannotAttack:${unit.id}`)
     if (unit.mode === 'reserve' && unit.releasedFromReserve !== true)
       return fail('9.1e', `unreleasedReserveCannotAttack:${unit.id}`)
@@ -436,6 +441,8 @@ export function unitBattleStrength(input: {
   combatSupplyPaid: boolean
 }): { strength: number; rule: string; cannotAttack: boolean } {
   const { unit, role } = input
+  if (role === 'attacker' && !canAttackAfterAirTransport(unit.airTransportThisPhase))
+    return { strength: 0, rule: '14.9d', cannotAttack: true }
   if (role === 'attacker' && !input.combatSupplyPaid)
     return { strength: 0, rule: '9.5-A', cannotAttack: true }
 

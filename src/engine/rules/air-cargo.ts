@@ -8,11 +8,6 @@ import type { MobilityType } from './terrain'
 /** 14.9c：可空运单位的移动面步行MA上限。 */
 export const CARGO_UNIT_MAX_WALKING_MA = 10
 
-/** 14.9d：主移动阶段空运后的MP预提，保留任务前已花的额度。 */
-export function airTransportSpentMpAfter(ma: number, spentMp: number): number {
-  return ma - Math.max(0, ma / 2 - Math.min(spentMp, ma / 2))
-}
-
 /** 6.1g / 14.9d：只允许把当前尚未完成移动的单位交接给它自身的空运。 */
 export function checkAirTransportMovementHandoff(input: {
   cargoUnitIds: readonly string[]

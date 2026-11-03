@@ -18,6 +18,14 @@ const ground = entity
       .object({ mode: z.string(), orientation: z.string(), dg: z.boolean(), exploit: z.boolean() })
       .passthrough(),
     fuelled: z.boolean(),
+    airTransportThisPhase: z
+      .object({
+        kind: z.enum(['air_transport', 'air_drop']),
+        phase: z.enum(['movement', 'reaction', 'exploitation']),
+        releasedFromReserve: z.boolean(),
+      })
+      .nullable()
+      .optional(),
     hasTraceSupply: z.boolean(),
     specialized: z.array(z.string()),
   })

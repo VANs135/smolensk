@@ -8,9 +8,14 @@ import {
 import {
   airCargoTransportT,
   isAirTransportableUnit,
-  airTransportSpentMpAfter,
   checkAirTransportMovementHandoff,
 } from '@/engine/rules/air-cargo'
+import {
+  planAirUnitTransport,
+  hasUnitMovementThisPhase,
+  type AirUnitTransportState,
+} from '@/engine/rules/air-unit-movement'
+import { canonicalMode, canUseTransport } from '@/engine/rules/modes'
 import { createAirCargoResolutionDomain } from './air-cargo-resolution'
 import type { AirCargoUnloadPlan } from '@/engine/rules/air-cargo-unload'
 import { createAirSupplyDomain } from './air-supply'
@@ -4243,7 +4248,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     units.value.filter(
       (unit) =>
         unit.side === airActingSide.value &&
-        unit.mode.mode === 'move' &&
+        canUseTransport(unit.mode) &&
         isAirTransportableUnit({
           id: `unit:${unit.instanceId}`,
           kind: 'unit',
@@ -5175,6 +5180,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function resetMovementTracking(): void {
     for (const unit of units.value) {
       unit.mpSpent = 0
+      unit.airTransportThisPhase = null
       unit.movementEnded = false
       unit.mpLockedThisPhase = false
       // 5.7b：`releasedFromReserve` 只表示「本阶段刚释放」，换段/换方/换回合即失效——
@@ -5187,6 +5193,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         unit.fuelMethod = null
       }
     }
+    for (const entry of deadPile.value)
+      if (!isAirDeadPileEntry(entry)) entry.airTransportThisPhase = null
     for (const air of airUnits.value) air.missionsFlownThisPhase = 0
     moveInteraction.value = null
     pendingZocConfirm.value = null
@@ -5362,12 +5370,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 切阶段（2.2 SOP 段；换段即重置各单位的 MA 额度） */
   function setPhase(next: ConsolePhase): void {
+    // preTurn等时点的界面阶段会回退到localPhase，须比较真实会话阶段而非回退投影。
+    if ((session.records?.phase ?? localPhase.value) === next) return
     if (!airMissionDomain.canReplace()) return
     if (!canReplaceCombat() || !canReplaceBarrage()) return
-    const changed = phase.value !== next
     phase.value = next
     resetSegmentTransient()
-    if (changed) resetSupplyPhaseLedger()
+    resetSupplyPhaseLedger()
     pushLog('info', `阶段 → ${PHASE_LABELS[next]}`)
     /*
      * 12.6 / 12.8e：追溯补给的**自动重判时点**（补给网一过段就可能变，标记不能过期）
@@ -11868,7 +11877,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         id: unit.instanceId,
         re: unit.re,
         mode: unit.mode.mode,
-        movedThisPhase: unit.mpSpent > 0,
+        movedThisPhase: hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase),
       })),
     }
   }
@@ -12174,7 +12183,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       kind: 'engineer',
       engineerCapable: engineer !== null && engineer.engineerCapable,
       unitId: engineer?.instanceId ?? '',
-      movedThisPhase: engineer === null || engineer.mpSpent > 0,
+      movedThisPhase:
+        engineer === null ||
+        hasUnitMovementThisPhase(engineer.mpSpent, engineer.airTransportThisPhase),
       legMpDistanceToTarget: engineer === null ? 0 : constructionLegRangeTo(engineer, target),
     }
   }
@@ -12191,7 +12202,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return validateConstructionBase({
       phase: phase.value as GamePhase,
       engineerCapable: engineer !== null && engineer.engineerCapable,
-      movedThisPhase: engineer === null || engineer.mpSpent > 0,
+      movedThisPhase:
+        engineer === null ||
+        hasUnitMovementThisPhase(engineer.mpSpent, engineer.airTransportThisPhase),
       hexesThisPhase: constructionPhaseLedger.value.hexes.length,
       task,
       previousTaskThisPhase: constructionPhaseLedger.value.task,
@@ -12970,7 +12983,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         paraCapable: airInputs.value.cargoUnitsParaCapable,
         // 14.9c（第五批批 C 切片 2）：单位货物须**移动模式**、且**步行 MP ≤ 10**
         // 使用移动面的印刷MA、机动类型和RE；不得用战斗面步行MA代替移动面轮式MA。
-        mode: unit.mode.mode,
+        mode: canonicalMode(unit.mode),
         ma: unit.faces.move.ma,
         re: unit.re,
         mobility: unit.faces.move.mobility,
@@ -13036,10 +13049,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '宣布任务',
     )
     if (data === null) return false
+    const transportStates = new Map<string, AirUnitTransportState>()
+    for (const { unit } of unitLoad.items) {
+      const budget = acceptAir(
+        planAirUnitTransport({
+          kind: airMissionKind.value === 'air_drop' ? 'air_drop' : 'air_transport',
+          phase: movementPhaseOf(phase.value),
+          mode: unit.mode,
+          ma: unit.faces.move.ma,
+          spentMp: unit.mpSpent,
+          previous: unit.airTransportThisPhase,
+        }),
+        '空运地面移动额度',
+      )
+      if (budget === null) return false
+      transportStates.set(unit.instanceId, budget.transport)
+    }
     if (!airUnitTransit.load(unitLoad)) {
       airError.value = { rule: '14.9a', reason: 'airUnitLoadPlanChanged' }
       return false
     }
+    for (const { unit } of unitLoad.items)
+      unit.airTransportThisPhase = transportStates.get(unit.instanceId)!
     groundMovement.markIrreversible('空军任务（14.2f）')
     if (
       handoff.detachMovement ||
@@ -13063,6 +13094,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
             id: item.cargoId,
             sourceHex: item.sourceHex,
             spentMp: item.unit.mpSpent,
+            transport: item.unit.airTransportThisPhase,
           })),
         },
       })
@@ -13327,8 +13359,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         eliminateEntry(unit, '14.10d', `${unit.name} 空投失败，被摧毁（14.10d）`)
         continue
       }
-      if (state.kind === 'air_transport' || item.fate === 'retained')
-        unit.mpSpent = airTransportSpentMpAfter(unit.faces.move.ma, unit.mpSpent)
       if (item.fate === 'retained') {
         pushLog('info', `${unit.name} 未卸载，留在机上退运；保留空运阶段移动限制`, '14.9d/f')
         continue
@@ -15030,8 +15060,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         id: unit.instanceId,
         re: unit.re,
         mode: unit.mode.mode,
-        // 15.4「且不能移动」：本阶段已耗 MP 即视为移动过
-        movedThisPhase: unit.mpSpent > 0,
+        // 15.4「且不能移动」：空运也改变过位置，不能仅查地面MP。
+        movedThisPhase: hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase),
       }))
     const data = acceptAir(
       planAirBaseReduction({
@@ -16941,6 +16971,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     deadPile.value = deadPile.value.filter((item) => item.instanceId !== input.instanceId)
     unit.hex = { ...hex }
+    unit.airTransportThisPhase = null
     // 专规 3.5：死亡堆返场同样是"进入某格"
     noteUnitEnteredHex(unit, hex)
     if (input.steps !== undefined) unit.steps = input.steps
@@ -17100,6 +17131,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           airUnits.value = [...airUnits.value, revived]
         } else if (revived !== undefined) {
           revived.hex = { ...placement.hex }
+          revived.airTransportThisPhase = null
           revived.steps = placement.stepsAfter
           revived.movementEnded = true
           units.value = [...units.value, revived]
@@ -18363,8 +18395,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         kind,
         side: activeSide.value,
         phase: phase.value,
-        // 3.5：「单位移动之前」⇒ 本阶段尚无任何单位消耗过 MP
-        beforeMovement: units.value.every((unit) => unit.mpSpent === 0),
+        // 3.5：空运不是地面MP，但仍属单位位移；在途货物也不能被漏掉。
+        beforeMovement:
+          units.value.every(
+            (unit) => !hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase),
+          ) && !airUnitCargoManifest.value.some((item) => item.fate === 'aboard'),
         hexHasAxisCombatUnit: units.value.some(
           (unit) => unit.side === 'axis' && unit.isCombat && sameHex(unit.hex, hex),
         ),

@@ -190,6 +190,7 @@ describe('15.3：修建 / 改进空军基地（1 SP/级、每回合 +1、上限 
     expect(store.buildAirBaseNow()).toBe(true)
 
     // 只换阶段（同一回合）⇒ 13.8d 的额度复位，但 15.3 的「每回合 +1」仍在
+    store.setPhase('supply')
     store.setPhase('movement')
     const again = placeEngineer(store, coreText, 'e2')
     store.constructionInputs = {
@@ -382,6 +383,7 @@ describe('15.2A / 15.2E：简易机场的修建、升格与「永不缩减」', 
     const baseId = store.airBases[0]!.id
 
     // 13.8d 一格一任务：换阶段再升格（同一回合内 15.2A 未设「每回合一次」的限制）
+    store.setPhase('supply')
     store.setPhase('movement')
     const engineer2 = placeEngineer(store, coreText, 'e2')
     store.constructionInputs = {
@@ -402,6 +404,7 @@ describe('15.2A / 15.2E：简易机场的修建、升格与「永不缩减」', 
     prepare(store, { hexText: coreText, engineerId: engineer.instanceId, payDumpId: dump.id })
     expect(store.buildAirstripNow()).toBe(true)
 
+    store.setPhase('supply')
     store.setPhase('movement')
     const engineer2 = placeEngineer(store, coreText, 'e2')
     store.constructionInputs = {
@@ -445,6 +448,7 @@ describe('13.8d / 15.3 的额度复位（换阶段 / 换回合 / 换方 / 重置
     expect(store.airBaseTurnLedger[coreText]).toBe(1)
 
     // 同一回合内、换阶段：13.8d 额度复位，但 15.3 的每回合 +1 仍拦
+    store.setPhase('supply')
     store.setPhase('movement')
     expect(store.constructionPhaseLedger.hexes).toEqual([])
     expect(store.airBaseTurnLedger[coreText]).toBe(1)

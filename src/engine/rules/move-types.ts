@@ -1,6 +1,7 @@
 import type { HexRef, Side } from '@/data'
 
 import type { BaseMode, MovementSegmentPhase, Orientation } from './modes'
+import type { AirUnitTransportState } from './air-unit-movement'
 import type { HexsideCrossing, MobilityType } from './terrain'
 
 /**
@@ -64,6 +65,8 @@ export interface MoveUnitView {
   exploit: boolean
   /** 本阶段刚被释放的预备（5.7b） */
   releasedFromReserve: boolean
+  /** 14.9d / 4.7d：本阶段已提交的单位空运事实，与实际MP消耗分开。 */
+  airTransportThisPhase?: AirUnitTransportState | null
   /** 是否已加注燃料（12.5；仅「轮式/履带 MP 的战斗单位」需要） */
   fuelled: boolean
   /**

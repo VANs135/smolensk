@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { HEX_DIRECTIONS, neighbor, sameHex } from '@/engine/hex-geometry'
 import {
   aircraftChoices,
+  availableMaOf,
   toConsoleUnit,
   unitChoices,
   useWorkbenchStore,
@@ -86,7 +87,8 @@ describe('14.9a / 14.4g：单位载货与真实盘面闭环', () => {
     expect(w.completeAirReturnNow()).toBe(true)
     const unit = w.units.find((unit) => unit.instanceId === 'cargo')!
     expect(unit.hex).toEqual(NEAR_HEX)
-    expect(unit.mpSpent).toBe(unit.faces.move.ma / 2)
+    expect(unit.mpSpent).toBe(0)
+    expect(availableMaOf(unit, 'movement')).toBe(unit.faces.move.ma / 2)
     expect(w.airUnitCargoManifest).toMatchObject([{ cargoId: 'unit:cargo', fate: 'returned' }])
     expect(w.airUnloadedTAt(NEAR_HEX, 'axis')).toBe(3)
     expect(w.completeAirReturnNow()).toBe(false)
@@ -168,7 +170,8 @@ describe('14.9a / 14.4g：单位载货与真实盘面闭环', () => {
     expect(w.completeAirReturnNow()).toBe(true)
     const returned = w.units.find((unit) => unit.instanceId === 'cargo')!
     expect(returned.hex).toEqual(CORE_HEX)
-    expect(returned.mpSpent).toBe(returned.faces.move.ma / 2)
+    expect(returned.mpSpent).toBe(0)
+    expect(availableMaOf(returned, 'movement')).toBe(returned.faces.move.ma / 2)
     expect(w.spDumps.find((dump) => sameHex(dump.hex, NEAR_HEX))!.t).toBe(1)
   })
   it('单位载货中途不能保存不完整状态；任务及返航完成后可保存', () => {

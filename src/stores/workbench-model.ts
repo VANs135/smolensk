@@ -5,6 +5,10 @@ import { roll2d6, type RngDraw } from '@/engine/rng'
 import { turnDate } from '@/engine/turn-driver'
 import { GAME_PHASES } from '@/engine/state-types'
 import type { AirStatus, GamePhase, InternalStocks, RngState } from '@/engine/state-types'
+import {
+  canAttackAfterAirTransport,
+  type AirUnitTransportState,
+} from '@/engine/rules/air-unit-movement'
 import { tokenImageUrl } from '@/render/token-images'
 import {
   availableMa,
@@ -268,6 +272,8 @@ export interface ConsoleUnit {
   engineerCapable: boolean
   /** 6.1a/6.1b：本阶段已消耗的 MP（MA 是一阶段的**总额度**，不是单步额度） */
   mpSpent: number
+  /** 4.7d / 14.9d：本阶段运输事实；真实地面MP另计，换环节和读档不解除。 */
+  airTransportThisPhase?: AirUnitTransportState | null
   /** 本阶段本轮移动是否已结束（4.5a-A 强制停止 / 6.1c 最小移动 / 6.2b All 地形耗尽 / 6.1f 掉队） */
   movementEnded: boolean
   /**
@@ -580,6 +586,7 @@ export function toConsoleUnit(input: {
      */
     engineerCapable: (record.specialized ?? []).includes('hq'),
     mpSpent: 0,
+    airTransportThisPhase: null,
     movementEnded: false,
     // 4.5b：垫人承诺由玩家在界面上显式许诺（见 store 的 lockZocNegation）
     mpLockedThisPhase: false,
@@ -783,6 +790,7 @@ export function toMoveUnitView(unit: ConsoleUnit): MoveUnitView {
     dg: unit.mode.dg,
     exploit: unit.mode.exploit,
     releasedFromReserve: unit.mode.releasedFromReserve === true,
+    airTransportThisPhase: unit.airTransportThisPhase,
     fuelled: unit.fuelled,
     // 4.5b：垫人承诺（一旦许诺，该单位本阶段起不能再消耗 MP，也不可再移动）
     mpLockedThisPhase: unit.mpLockedThisPhase,
@@ -1010,6 +1018,7 @@ export function targetHexFacts(
 export function toLegalityUnit(unit: ConsoleUnit): LegalityUnit {
   return {
     id: unit.instanceId,
+    airTransportThisPhase: unit.airTransportThisPhase,
     isCombat: unit.isCombat,
     attackCapable: unit.attackCapable,
     mobility: effectiveMobilityOf(unit),
@@ -1080,6 +1089,7 @@ export function buildLegalityRequest(input: {
 export function toBattleUnitView(unit: ConsoleUnit): BattleUnitView {
   return {
     id: unit.instanceId,
+    airTransportThisPhase: unit.airTransportThisPhase,
     side: unit.side,
     hex: unit.hex,
     attackerType: unit.combatClass,
@@ -1268,6 +1278,7 @@ export function attackersForHex(
       unit.side === activeSide &&
       unit.isCombat &&
       unit.attackCapable &&
+      canAttackAfterAirTransport(unit.airTransportThisPhase) &&
       areAdjacent(unit.hex, defenderHex),
   )
 }
@@ -1396,6 +1407,7 @@ export function isInReserveOrStrat(unit: ConsoleUnit): boolean {
 export function toBarrageUnitRequest(unit: ConsoleUnit, targetHex: HexRef): BarrageUnitRequest {
   return {
     unitId: unit.instanceId,
+    airTransportThisPhase: unit.airTransportThisPhase,
     printedValue: unit.raw.barrage ?? 0,
     dg: unit.mode.dg,
     mode: unit.mode.mode,
@@ -2126,6 +2138,8 @@ export function hedgehogLevelAt(units: readonly ConsoleUnit[], hex: HexRef): num
 export function resolveBattle(input: BattleInput): BattleOutcome {
   if (input.attackers.length === 0 || input.defenders.length === 0)
     return { ok: false, reason: '攻守双方都必须至少有一个单位' }
+  if (input.attackers.some((unit) => !canAttackAfterAirTransport(unit.airTransportThisPhase)))
+    return { ok: false, reason: '14.9d：本阶段空运时未释放预备的单位不能攻击' }
 
   const defenderHex = input.defenders[0]!.hex
   const terrainsPresent = terrainsAt(defenderHex)
@@ -2978,6 +2992,19 @@ export function participatesIn(query: ParticipationQuery): ParticipationVerdict 
 
   // 专规 2.4：被锁定的师一概不能动（也不能拆出 breakdown）
   if (unit.locked) return cannotParticipate('专规 2.4', '该师处于 Slow Mobilization 锁定状态')
+
+  // 14.9d：界面和正式动作读取同一份阶段运输义务，不能在进击后续环节重新取得攻击资格。
+  if (
+    ['reaction.barrage', 'exploitation.barrage', 'exploitation.combat'].includes(segment) &&
+    !canAttackAfterAirTransport(unit.airTransportThisPhase)
+  )
+    return cannotParticipate('14.9d', '本阶段空运时未释放预备，该单位不能攻击或轰炸')
+  if (
+    unit.airTransportThisPhase != null &&
+    ['movement.modeAndMovement', 'reaction.movement', 'exploitation.movement'].includes(segment) &&
+    availableMa(toMoveUnitView(unit), phase as MovementSegmentPhase) <= 0
+  )
+    return cannotParticipate('14.9d / 4.7d', '该单位本阶段运输后没有地面移动额度')
 
   switch (segment) {
     /* ── A 飞机整备：只点基地与飞机，**地面单位一律不可点**（备忘 #4 的原话） ── */

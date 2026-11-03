@@ -5,6 +5,7 @@ import { areAdjacent, HEX_DIRECTIONS, neighbor, sameHex } from '@/engine/hex-geo
 import { evaluateStepFrom, zocNegatedAt } from '@/engine/rules/move'
 import {
   aircraftChoices,
+  availableMaOf,
   toConsoleUnit,
   unitChoices,
   useGameSessionStore,
@@ -161,7 +162,8 @@ describe('14.9 / 14.10：在途单位的唯一归属与地面移动交接', () =
     toCargoStep(w)
     expect(w.resolveAirCargoNow()).toBe(true)
     expect(cargo.hex).toEqual(NEAR_HEX)
-    expect(cargo.mpSpent).toBe(ma / 2 + beforeFlightSpent)
+    expect(cargo.mpSpent).toBe(beforeFlightSpent)
+    expect(availableMaOf(cargo, 'movement')).toBe(ma / 2)
     expect(cargo.movementEnded).toBe(false)
     expect(w.confirmAirMissionNow()).toBe(true)
     expect(w.completeAirReturnNow()).toBe(true)
@@ -173,19 +175,19 @@ describe('14.9 / 14.10：在途单位的唯一归属与地面移动交接', () =
         !sameHex(node.hex, NEAR_HEX) &&
         !sameHex(node.hex, beforeFlightStart) &&
         node.path.length === 2 &&
-        node.mpSpent <= ma,
+        node.mpSpent <= ma / 2,
     )
     expect(next).toBeDefined()
     w.clickHex(next!.hex)
     expect(cargo.hex).toEqual(next!.hex)
-    expect(cargo.mpSpent).toBeLessThanOrEqual(ma)
+    expect(cargo.mpSpent).toBeLessThanOrEqual(ma / 2)
     w.undoLastStep()
     expect(cargo.hex).toEqual(NEAR_HEX)
-    expect(cargo.mpSpent).toBe(ma / 2 + beforeFlightSpent)
+    expect(cargo.mpSpent).toBe(beforeFlightSpent)
     expect(w.moveInteraction!.steps).toEqual([])
     w.undoLastStep()
     expect(cargo.hex).toEqual(NEAR_HEX)
-    expect(cargo.mpSpent).toBe(ma / 2 + beforeFlightSpent)
+    expect(cargo.mpSpent).toBe(beforeFlightSpent)
   })
 
   it('6.1g：同行尚未结束的非货物单位阻止空运，失败不移图、扣SP或消费骰子', () => {
@@ -230,7 +232,8 @@ describe('14.9 / 14.10：在途单位的唯一归属与地面移动交接', () =
     expect(w.airState!.cargo!.items).toMatchObject([{ id: 'unit:cargo', fate: 'retained' }])
     expect(w.airUnitCargoManifest[0]!.fate).toBe('aboard')
     expect(w.units.some((unit) => unit.instanceId === 'cargo')).toBe(false)
-    expect(cargo.mpSpent).toBe(cargo.faces.move.ma / 2)
+    expect(cargo.mpSpent).toBe(0)
+    expect(availableMaOf(cargo, 'movement')).toBe(cargo.faces.move.ma / 2)
     expect(w.confirmAirMissionNow()).toBe(true)
     w.airInputs.returnHexText.transport = label(neighbor(CORE_HEX, 'S'))
     expect(w.completeAirReturnNow()).toBe(false)

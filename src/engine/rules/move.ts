@@ -24,6 +24,7 @@ import {
   type MovementSegmentPhase,
 } from './modes'
 import { STACKING_LIMIT_RE } from './movement'
+import { canAttackAfterAirTransport, limitAirTransportMa } from './air-unit-movement'
 import { selectMovementTerrain } from './terrain'
 import { isInEnemyZoc, zocEntryEffect, type ZocSource } from './zoc'
 import { zocAffectsAction, type ZocAction } from './zoc-effects'
@@ -73,7 +74,10 @@ function modeStateOf(unit: MoveUnitView): ModeState {
 
 /** 本阶段该单位的可用 MA（模式修正；6.1h 永不取整） */
 export function availableMa(unit: MoveUnitView, phase: MovementSegmentPhase): number {
-  return unit.ma * maMultiplier(modeStateOf(unit), phase)
+  return limitAirTransportMa(
+    unit.ma * maMultiplier(modeStateOf(unit), phase),
+    unit.airTransportThisPhase,
+  )
 }
 
 /**
@@ -404,6 +408,8 @@ export function evaluateStepFrom(
   )
   if (!phaseCheck.ok) return reject('phaseNotAllowed', phaseCheck.rule, phaseCheck.reason)
 
+  if (unit.airTransportThisPhase != null && availableMa(unit, context.phase) <= 0)
+    return reject('noMa', '14.9d', `${unit.id} 本阶段空运后没有地面移动额度`)
   // 6.1b：无 MA（SP/港口/空军基地/环形工事）不可移动；MA 为 0 同理
   if (unit.ma <= 0) return reject('immobile', '6.1b', unit.id)
 
@@ -512,6 +518,8 @@ function prepareMove(
     context.phase,
   )
   if (!phaseCheck.ok) return reject('phaseNotAllowed', phaseCheck.rule, phaseCheck.reason)
+  if (unit.airTransportThisPhase != null && availableMa(unit, context.phase) <= 0)
+    return reject('noMa', '14.9d', `${unit.id} 本阶段空运后没有地面移动额度`)
   if (unit.ma <= 0) return reject('immobile', '6.1b', unitId)
   if (unit.mpLockedThisPhase) return reject('mpLocked', '4.5b', unitId)
   // 12.7：延补队面不可移动（高亮可到达格的查询也必须一致地拒绝）
@@ -648,6 +656,10 @@ export function canOverrun(input: OverrunCheckInput): OverrunCheck {
   if (!input.startedStackedTogether)
     return reject('phaseNotAllowed', '8.1', '参突单位本阶段开始时未同格堆叠')
   for (const unit of units) {
+    if (!canAttackAfterAirTransport(unit.airTransportThisPhase))
+      return reject('notAttackCapable', '14.9d', `${unit.id} 本阶段空运后不能攻击或突袭`)
+    if (unit.airTransportThisPhase != null && availableMa(unit, context.phase) <= 0)
+      return reject('noMa', '14.9d', `${unit.id} 本阶段空运后没有突袭移动额度`)
     if (!unit.attackCapable) return reject('notAttackCapable', '8.1', `${unit.id} 不可攻击`)
     // 8.1 要求「处于战斗、移动或进击模式」；★ 用 5.7b 的规范模式判定：
     // 已释放的预备（标记已移除、回到朝向那一面）与带进击标记的单位都算，故不能看原始 mode 字段
