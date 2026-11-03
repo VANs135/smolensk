@@ -57,7 +57,7 @@ function setup(startSession = false) {
 }
 
 describe('14.9a / 14.4g：单位载货与真实盘面闭环', () => {
-  it('宣布后加机失败会恢复原任务及装载快照，原编队仍可整组返航', () => {
+  it('宣布后不能加机重装，原任务及在途单位保留且仍可整组返航', () => {
     const w = setup()
     const record = aircraftChoices('axis').find((record) => (record.transportCapacity ?? 0) > 0)!
     placeAir(w, record, CORE_HEX, 'axis', 'out-of-range')
@@ -66,6 +66,9 @@ describe('14.9a / 14.4g：单位载货与真实盘面闭环', () => {
     const original = w.airState
     w.toggleAirMissionUnit('out-of-range')
     expect(w.airState).toBe(original)
+    expect(w.airError?.reason).toBe('airCargoAlreadyLoaded')
+    expect(w.units.some((unit) => unit.instanceId === 'cargo')).toBe(false)
+    expect(w.airUnitCargoManifest).toMatchObject([{ cargoId: 'unit:cargo', fate: 'aboard' }])
     expect(w.airState!.assignment.aircraftIds).toEqual(['transport'])
     expect(w.confirmAirCombatNow()).toBe(true)
     expect(w.voluntaryReturnNow(['transport'])).toBe(true)
@@ -76,14 +79,15 @@ describe('14.9a / 14.4g：单位载货与真实盘面闭环', () => {
     const w = mixedTask()
     w.airInputs.unloadCargoIds = ['sp:1']
     expect(w.resolveAirCargoNow()).toBe(true)
-    const unit = w.units.find((unit) => unit.instanceId === 'cargo')!
-    const spent = unit.mpSpent
-    expect(unit.hex).toEqual(CORE_HEX)
+    expect(w.units.some((unit) => unit.instanceId === 'cargo')).toBe(false)
+    expect(w.airUnitCargoManifest).toMatchObject([{ cargoId: 'unit:cargo', fate: 'aboard' }])
     expect(w.confirmAirMissionNow()).toBe(true)
     w.airInputs.returnHexText.transport = `${NEAR_HEX.col}.${NEAR_HEX.row}`
     expect(w.completeAirReturnNow()).toBe(true)
+    const unit = w.units.find((unit) => unit.instanceId === 'cargo')!
     expect(unit.hex).toEqual(NEAR_HEX)
-    expect(unit.mpSpent).toBe(spent)
+    expect(unit.mpSpent).toBe(unit.faces.move.ma / 2)
+    expect(w.airUnitCargoManifest).toMatchObject([{ cargoId: 'unit:cargo', fate: 'returned' }])
     expect(w.airUnloadedTAt(NEAR_HEX, 'axis')).toBe(3)
     expect(w.completeAirReturnNow()).toBe(false)
     expect(w.airUnloadedTAt(NEAR_HEX, 'axis')).toBe(3)
@@ -155,15 +159,16 @@ describe('14.9a / 14.4g：单位载货与真实盘面闭环', () => {
     const w = mixedTask()
     w.airInputs.unloadCargoIds = ['sp:1']
     expect(w.resolveAirCargoNow()).toBe(true)
-    const unit = w.units.find((unit) => unit.instanceId === 'cargo')!
-    expect(unit.hex).toEqual(CORE_HEX)
-    expect(unit.mpSpent).toBe(unit.faces.move.ma / 2)
+    expect(w.units.some((unit) => unit.instanceId === 'cargo')).toBe(false)
+    expect(w.airUnitCargoManifest).toMatchObject([{ cargoId: 'unit:cargo', fate: 'aboard' }])
     expect(w.deadPile.some((unit) => unit.instanceId === 'cargo')).toBe(false)
     expect(w.airUnloadedTAt(NEAR_HEX, 'axis')).toBe(1)
     expect(w.airCargoUnloadReceipt!.refusedIds).toEqual(['unit:cargo'])
     expect(w.confirmAirMissionNow()).toBe(true)
     expect(w.completeAirReturnNow()).toBe(true)
-    expect(w.units.find((unit) => unit.instanceId === 'cargo')!.hex).toEqual(CORE_HEX)
+    const returned = w.units.find((unit) => unit.instanceId === 'cargo')!
+    expect(returned.hex).toEqual(CORE_HEX)
+    expect(returned.mpSpent).toBe(returned.faces.move.ma / 2)
     expect(w.spDumps.find((dump) => sameHex(dump.hex, NEAR_HEX))!.t).toBe(1)
   })
   it('单位载货中途不能保存不完整状态；任务及返航完成后可保存', () => {
@@ -190,6 +195,7 @@ describe('14.9a / 14.4g：单位载货与真实盘面闭环', () => {
     expect(w.spDumps).toMatchObject([{ id: 'stock', sp: 0, t: 1 }])
     expect(w.airSupplyManifest).toBeNull()
     expect(w.units.some((unit) => unit.instanceId === 'cargo')).toBe(true)
+    expect(w.airUnitCargoManifest).toEqual([])
   })
   it('不能用战斗面的步行MA装载移动面16轮式MP的摩托化部队', () => {
     const w = setup()
@@ -237,7 +243,8 @@ describe('14.9a / 14.4g：单位载货与真实盘面闭环', () => {
     const rng = w.rng
     expect(w.resolveAirCargoNow()).toBe(false)
     expect(w.confirmAirCargoLossNow()).toBe(false)
-    expect(w.units.some((unit) => unit.instanceId === 'cargo')).toBe(true)
+    expect(w.units.some((unit) => unit.instanceId === 'cargo')).toBe(false)
+    expect(w.airUnitCargoManifest).toMatchObject([{ cargoId: 'unit:cargo', fate: 'aboard' }])
     expect(w.rng).toEqual(rng)
     w.toggleAirCargoLossPick('unit:cargo')
     expect(w.confirmAirCargoLossNow()).toBe(true)

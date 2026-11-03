@@ -155,8 +155,7 @@ const cargoUnitItems = computed<readonly CounterPickerItem[]>(() =>
 /** 14.4g：任务货物清单里的一件货怎么念（SP 报 T 数、单位报名字）—— 只做展示，不改任何账本 */
 function cargoLabel(item: { id: string; kind: 'sp' | 'unit'; t?: number | undefined }): string {
   if (item.kind === 'sp') return `${item.id}（${String(item.t ?? 0)} T SP）`
-  const unit = workbench.units.find((entry) => item.id === `unit:${entry.instanceId}`)
-  return unit === undefined ? item.id : unit.name
+  return workbench.unitNameOf(item.id.slice('unit:'.length))
 }
 
 /*
@@ -719,6 +718,18 @@ const showsBaseOps = computed(
             >
               ｜防空后重算 {{ workbench.airMissionCargoCapacityNow }} T
             </template>
+          </p>
+
+          <p
+            v-if="workbench.airUnitCargoManifest.some((item) => item.fate === 'aboard')"
+            class="num"
+          >
+            正在空运：{{
+              workbench.airUnitCargoManifest
+                .filter((item) => item.fate === 'aboard')
+                .map((item) => item.name)
+                .join('、')
+            }}。卸载或退运前，这些单位不在地图上。
           </p>
 
           <!-- ── 14.4g：防空致容量变化后的**货物损失**（由玩家选摧毁哪几件） ── -->

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   airCargoTransportT,
   checkAirCargoLoad,
+  checkAirTransportMovementHandoff,
   type AirCargoLoadView,
 } from '@/engine/rules/air-cargo'
 
@@ -20,6 +21,17 @@ const load = (cargo: AirCargoLoadView[], capacityT = 4) =>
   checkAirCargoLoad({ side: 'axis', cargo, origins: [{ hex, offMap: false, capacityT }] })
 
 describe('4.7 / 14.9：单位货物使用真实运输当量和起点', () => {
+  it('6.1g / 14.9d：只允许正在移动的同批货物交接空运，不能暂停他人移动', () => {
+    expect(
+      checkAirTransportMovementHandoff({ cargoUnitIds: ['u'], movingUnitIds: ['u'] }),
+    ).toMatchObject({ ok: true, data: { detachMovement: true } })
+    expect(
+      checkAirTransportMovementHandoff({ cargoUnitIds: ['u'], movingUnitIds: ['u', 'other'] }),
+    ).toMatchObject({ ok: false, rule: '6.1g' })
+    expect(
+      checkAirTransportMovementHandoff({ cargoUnitIds: ['u'], movingUnitIds: [] }),
+    ).toMatchObject({ ok: true, data: { detachMovement: false } })
+  })
   it.each([
     [0.25, 6, 0.5],
     [1, 6, 2],

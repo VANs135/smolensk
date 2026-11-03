@@ -13,6 +13,18 @@ export function airTransportSpentMpAfter(ma: number, spentMp: number): number {
   return ma - Math.max(0, ma / 2 - Math.min(spentMp, ma / 2))
 }
 
+/** 6.1g / 14.9d：只允许把当前尚未完成移动的单位交接给它自身的空运。 */
+export function checkAirTransportMovementHandoff(input: {
+  cargoUnitIds: readonly string[]
+  movingUnitIds: readonly string[]
+}): RuleOutcome<{ detachMovement: boolean }> {
+  if (input.cargoUnitIds.length === 0) return succeed('14.9d', { detachMovement: false })
+  const cargoIds = new Set(input.cargoUnitIds)
+  if (input.movingUnitIds.some((id) => !cargoIds.has(id)))
+    return fail('6.1g', 'finishOtherGroundMovementBeforeAirTransport')
+  return succeed('6.1g / 14.9d', { detachMovement: input.movingUnitIds.length > 0 })
+}
+
 export interface AirCargoLoadView {
   id: string
   kind: 'sp' | 'unit'

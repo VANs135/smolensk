@@ -9,10 +9,12 @@ import {
   airCargoTransportT,
   isAirTransportableUnit,
   airTransportSpentMpAfter,
+  checkAirTransportMovementHandoff,
 } from '@/engine/rules/air-cargo'
 import { createAirCargoResolutionDomain } from './air-cargo-resolution'
 import type { AirCargoUnloadPlan } from '@/engine/rules/air-cargo-unload'
 import { createAirSupplyDomain } from './air-supply'
+import { createAirUnitTransitDomain } from './air-unit-transit'
 import { planAirSupplyLoad } from '@/engine/rules/air-supply'
 import type { AirCargoResolution } from '@/engine/rules/air-interaction'
 import type { MoveStepSnapshot } from './movement-types'
@@ -1684,6 +1686,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     },
   })
   const airSupplyManifest = airSupply.manifest
+  // 14.9a：装载后从盘面移出，所有地图事实只读取仍在地图上的 units。
+  const airUnitTransit = createAirUnitTransitDomain({
+    units: () => units.value,
+    removeFromMap(ids) {
+      const loaded = new Set(ids)
+      units.value = units.value.filter((unit) => !loaded.has(unit.instanceId))
+      if (selectedId.value !== null && loaded.has(selectedId.value)) selectedId.value = null
+    },
+    addToMap(unit) {
+      units.value = [...units.value, unit]
+    },
+  })
+  const airUnitCargoManifest = airUnitTransit.manifest
   const airMissionDomain = createAirMissionDomain({
     inputs: () => airInputs.value,
     profiles: () => airTransportProfiles.value,
@@ -1731,11 +1746,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     },
     lossPending: () => airCargoLossPending.value !== null,
     roster: () => airMissionRosterNow.value!,
-    unitExists: (id) => units.value.some((unit) => `unit:${unit.instanceId}` === id),
+    unitExists: (id) => airUnitTransit.canLand([id]),
     draw2d6: drawAir2d6,
     accept: acceptAir,
-    commit: (state, result, plan) =>
-      airMissionDomain.commitCargo(state, result, () => applyAirCargoDelivery(state, result, plan)),
+    commit: (state, result, plan) => {
+      const landedIds = result.items
+        .filter((item) => item.kind === 'unit' && item.fate === 'placed')
+        .map((item) => item.id)
+      if (!airUnitTransit.canLand(landedIds)) return false
+      return airMissionDomain.commitCargo(state, result, () =>
+        applyAirCargoDelivery(state, result, plan),
+      )
+    },
     pushLog,
     record: recordSettlement,
   })
@@ -5506,7 +5528,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 单位实例 id → 显示名 */
   function nameOf(unitId: string): string {
-    return units.value.find((item) => item.instanceId === unitId)?.name ?? unitId
+    return (
+      units.value.find((item) => item.instanceId === unitId)?.name ??
+      airUnitTransit.find(`unit:${unitId}`)?.name ??
+      unitId
+    )
   }
 
   /** 界面用：单位实例 id → 显示名（与 `nameOf` 同源，导出供面板直接调用而不自行查表） */
@@ -12624,9 +12650,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return
     }
     const plane = airUnits.value.find((item) => item.instanceId === instanceId)
-    if (current !== null && !current.finished && airSupplyManifest.value !== null) {
-      airError.value = { rule: '14.9a', reason: 'airSupplyAlreadyLoaded' }
-      pushLog('warning', '本次SP已装载，请完成任务后重新编组；不能通过改选飞机重复装载', '14.9a')
+    if (current !== null && !current.finished && current.assignment.cargo.length > 0) {
+      airError.value = { rule: '14.9a', reason: 'airCargoAlreadyLoaded' }
+      pushLog('warning', '本次货物已装载，请完成任务后重新编组；不能通过改选飞机重复装载', '14.9a')
       return
     }
     /*
@@ -12860,6 +12886,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** C9 第 1 步（14.2f-A/B）：宣布任务并分配飞机（含起飞基地归属与航程校验） */
   function beginAirMissionNow(): boolean {
     if (!airMissionDomain.canReplace()) return false
+    if (refuseWhileSettling('宣布空军任务')) return false
+    if (
+      specialPending.value !== null ||
+      (supplyState.value !== null && !supplyState.value.finished) ||
+      refitBase.value !== null
+    ) {
+      airError.value = { rule: '14.2f', reason: 'completePendingSettlementBeforeAirMission' }
+      pushLog('warning', '先完成当前特殊位移、补给付款或整备，再宣布空军任务', '14.2f')
+      return false
+    }
     // 14.2e：任务按**环节**分派（移动环节：低空扫射/空运/空投/基地转移/战机扫荡；轰炸环节：空军轰炸/运输破坏）
     if (!requireAction('air.mission', '宣布空军任务')) return false
     const target = airTargetHex.value
@@ -12910,11 +12946,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '装载空运补给',
     )
     if (supplyLoad === null) return false
-    // 14.10d：**每 1T 补给分别掷骰** ⇒ 按 T 逐件建货物；单位货物逐架建
+    // 14.10d：每1T补给分别掷骰；仅载货任务读取货物草稿。
+    const carriesCargo =
+      airMissionKind.value === 'air_transport' || airMissionKind.value === 'air_drop'
     const cargo: AirMissionCargo[] = []
-    for (let index = 0; index < Math.max(0, Math.trunc(airInputs.value.cargoSpT)); index += 1)
+    for (
+      let index = 0;
+      index < (carriesCargo ? Math.max(0, Math.trunc(airInputs.value.cargoSpT)) : 0);
+      index += 1
+    )
       cargo.push({ id: `sp:${index + 1}`, kind: 'sp', t: 1 })
-    for (const unitId of airInputs.value.cargoUnitIds) {
+    for (const unitId of carriesCargo ? airInputs.value.cargoUnitIds : []) {
       const unit = units.value.find((entry) => entry.instanceId === unitId)
       if (unit === undefined) {
         airError.value = { rule: '14.9a', reason: `cargoUnitMissing:${unitId}` }
@@ -12936,6 +12978,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         sourceHex: { ...unit.hex },
       })
     }
+    const unitLoad = acceptAir(airUnitTransit.prepare(cargo), '单位装载计划')
+    if (unitLoad === null) return false
+    const moving = moveInteraction.value
+    const handoff = acceptAir(
+      checkAirTransportMovementHandoff({
+        cargoUnitIds: unitLoad.items.map((item) => item.unit.instanceId),
+        movingUnitIds:
+          moving === null || moving.finished || moving.steps.length === 0
+            ? []
+            : moving.unitIds.filter((id) =>
+                units.value.some((unit) => unit.instanceId === id && !unit.movementEnded),
+              ),
+      }),
+      '地面移动交接',
+    )
+    if (handoff === null) return false
     const data = acceptAir(
       beginAirInteraction({
         side: airActingSide.value,
@@ -12978,7 +13036,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '宣布任务',
     )
     if (data === null) return false
+    if (!airUnitTransit.load(unitLoad)) {
+      airError.value = { rule: '14.9a', reason: 'airUnitLoadPlanChanged' }
+      return false
+    }
     groundMovement.markIrreversible('空军任务（14.2f）')
+    if (
+      handoff.detachMovement ||
+      moving?.unitIds.some((id) => unitLoad.items.some((item) => item.unit.instanceId === id))
+    )
+      clearMoveInteraction()
     airMissionDomain.start(data)
     // 引擎与库存校验全部成功后，一次性扣账；失败的宣布不会消耗库存。
     const debits = new Map(supplyLoad.debits.map((debit) => [debit.id, debit.after]))
@@ -12987,6 +13054,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return after === undefined ? [dump] : after.sp + after.t === 0 ? [] : [{ ...dump, ...after }]
     })
     airSupply.load(supplyLoad)
+    if (unitLoad.items.length > 0)
+      recordSettlement({
+        action: 'airUnitLoad',
+        rule: '14.9a',
+        data: {
+          items: unitLoad.items.map((item) => ({
+            id: item.cargoId,
+            sourceHex: item.sourceHex,
+            spentMp: item.unit.mpSpent,
+          })),
+        },
+      })
     if (supplyLoad.manifest !== null)
       recordSettlement({
         action: 'airSupplyLoad',
@@ -13241,19 +13320,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
     for (const item of result.items) {
       if (item.kind !== 'unit') continue
-      const unit = units.value.find((entry) => `unit:${entry.instanceId}` === item.id)
+      const unit = airUnitTransit.find(item.id)
       if (unit === undefined) continue // 提交前已由流程域核对完整性。
       if (item.fate === 'destroyed') {
+        airUnitTransit.lose([item.id])
         eliminateEntry(unit, '14.10d', `${unit.name} 空投失败，被摧毁（14.10d）`)
         continue
       }
       if (state.kind === 'air_transport' || item.fate === 'retained')
         unit.mpSpent = airTransportSpentMpAfter(unit.faces.move.ma, unit.mpSpent)
       if (item.fate === 'retained') {
-        pushLog('info', `${unit.name} 未卸载，按原基地退运；保留空运阶段移动限制`, '14.9d/f')
+        pushLog('info', `${unit.name} 未卸载，留在机上退运；保留空运阶段移动限制`, '14.9d/f')
         continue
       }
-      unit.hex = { ...target }
+      airUnitTransit.land([item.id], target, 'delivered')
       if (state.kind === 'air_drop') {
         unit.movementEnded = true
         unit.airDropExemptTurn = turn.value
@@ -14184,8 +14264,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 14.4g：**落盘货物损失**（把选中的货物从任务货物清单里移除）
    *
-   * 判据走引擎（`validateCargoLossChoice`：摧毁量必须覆盖超出部分）；落盘只改 `airState` 的货物清单
-   * （SP 货物本来就还没进账本，单位货物落地时才动算子），并记留痕。
+   * 判据走引擎（`validateCargoLossChoice`：摧毁量必须覆盖超出部分）；
+   * 提交在途账本、单位淘汰及任务清单，避免仍能退回已损失的货物。
    */
   function confirmAirCargoLossNow(): boolean {
     const state = airState.value
@@ -14205,13 +14285,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     const destroyed = new Set(airCargoLossPicked.value)
-    airSupply.settle([...destroyed], 'lost')
-    for (const item of state.assignment.cargo) {
-      if (item.kind !== 'unit' || !destroyed.has(item.id)) continue
-      const unit = units.value.find((entry) => `unit:${entry.instanceId}` === item.id)
-      if (unit !== undefined)
-        eliminateEntry(unit, pending.rule, `${unit.name} 作为运输货物损失（${pending.rule}）`)
+    const unitLossIds = state.assignment.cargo
+      .filter((item) => item.kind === 'unit' && destroyed.has(item.id))
+      .map((item) => item.id)
+    const lostUnits = airUnitTransit.lose(unitLossIds)
+    if (lostUnits === null) {
+      airError.value = { rule: pending.rule, reason: 'airCargoLossUnitMissing' }
+      return false
     }
+    airSupply.settle([...destroyed], 'lost')
+    for (const unit of lostUnits)
+      eliminateEntry(unit, pending.rule, `${unit.name} 作为运输货物损失（${pending.rule}）`)
     const kept = state.assignment.cargo.filter((item) => !destroyed.has(item.id))
     airState.value = {
       ...state,
@@ -14647,18 +14731,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       return false
     }
-    if (plan.destination === null) return true
     const unitCargo = cargo.filter((item) => item.kind === 'unit')
-    if (
-      unitCargo.some((item) => !units.value.some((unit) => `unit:${unit.instanceId}` === item.id))
-    ) {
+    const unitIds = unitCargo.map((item) => item.id)
+    if (!airUnitTransit.canLand(unitIds)) {
       airError.value = { rule: '14.9', reason: 'retainedCargoUnitMissing' }
       return false
     }
+    if (
+      airUnitCargoManifest.value.some(
+        (item) => item.fate === 'aboard' && !unitIds.includes(item.cargoId),
+      )
+    ) {
+      airError.value = { rule: '14.9', reason: 'unsettledAirUnitCargo' }
+      return false
+    }
+    if (plan.destination === null) return true
+    const returningUnits = unitIds.map((id) => airUnitTransit.find(id)!)
+    if (!airUnitTransit.land(unitIds, plan.destination, 'returned')) return false
     airSupply.returnRemaining(plan.destination)
-    for (const item of unitCargo) {
-      const unit = units.value.find((entry) => `unit:${entry.instanceId}` === item.id)!
-      unit.hex = { ...plan.destination }
+    for (const unit of returningUnits) {
       noteUnitEnteredHex(unit, plan.destination)
     }
     airUnloadLedger.value = {
@@ -18902,6 +18993,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 重置局（含重设种子）——局况一并回到初始（第 1 回合 / 轴心国先手 / C 移动段） */
   function resetAll(nextSeed = DEFAULT_SEED): void {
     airMissionDomain.reset(true)
+    airUnitTransit.reset()
     fireResolution.resetCombat()
     fireResolution.resetBarrage()
     units.value = []
@@ -19348,6 +19440,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function assertCompleteSettlement(): void {
     if (
+      airUnitCargoManifest.value.some((item) => item.fate === 'aboard') ||
       combatSupplyCommitted.value ||
       (combatState.value !== null && !combatState.value.finished) ||
       (barrageState.value !== null && !barrageState.value.finished) ||
@@ -19383,6 +19476,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pendingZocConfirm.value = null
       clearBarrage()
       airMissionDomain.reset(true)
+      airUnitTransit.reset()
       clearAir()
       clearSupply()
       refitTargetBaseId.value = null
@@ -19403,6 +19497,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     },
   })
   function snapshotBoard(): unknown {
+    if (airUnitCargoManifest.value.some((item) => item.fate === 'aboard'))
+      throw new Error('载货空军任务仍在结算中，地面单位在途，请完成卸载或退运后保存')
     if (airSupplyManifest.value !== null && airState.value !== null && !airState.value.finished)
       throw new Error('空运SP仍在结算中，请完成任务及返航后保存')
     if (
@@ -20146,6 +20242,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     airCargoUnloadReceipt,
     airCargoUnloadChoices,
     airSupplyManifest,
+    airUnitCargoManifest,
     // 14.4g：防空致容量变化后的货物损失（重算容量 / 勾选摧毁 / 落盘）
     airMissionCargoCapacityNow,
     airCargoLossPending,
