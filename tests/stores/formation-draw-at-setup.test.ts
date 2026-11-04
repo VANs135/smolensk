@@ -19,7 +19,7 @@ import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchSto
  *   ② 不依赖落点的组当场落盘；西移组**只抽不落盘**（落点还没给）；
  *   ③ 西移编队进**初设 box**（`pendingPlacement` 的 ground 类）⇒ 点一项点地图即摆一个师；
  *   ④ 幂等：重复进入不重抽（换剧本/重挂载不会把抽签结果与已落盘处置搅乱）；
- *   ⑤ 完成初设时**没给落点**的西移师**留在剧本页原格**（不移除——规则没写"未落位即移除"）。
+ *   ⑤ 完成初设时保留自动落位结果；缺失必做落点的收束阻断另见setup-completion-flow。
  */
 
 /** 建一套真实盘面：选剧本 ⇒ 自动初设 + 自动抽签 */

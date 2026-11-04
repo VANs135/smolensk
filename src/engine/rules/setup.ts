@@ -18,6 +18,19 @@ import { isPanzerGroupConstraintLifted } from './timing'
 import { panzerGroupRulesActive } from './panzer-groups'
 import { scenarioTurnRange } from './victory'
 
+/** 剧本ch10/ch11：已有编队的必做西移不能按未摆新单位的放弃规则收束。 */
+export function validateRequiredSetupPlacements(
+  pending: readonly { id: string; remaining: number }[],
+): RuleOutcome<{ detail: string }> {
+  const missing = pending.filter((item) => item.remaining > 0)
+  if (missing.length > 0)
+    return fail(
+      'ch10 / ch11',
+      `requiredSetupPlacementPending:${missing.map((item) => item.id).join(',')}`,
+    )
+  return succeed('ch10 / ch11', { detail: '必做初设放置已完成' })
+}
+
 /**
  * 初设与开局流程（W7 C14）
  *

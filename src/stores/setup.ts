@@ -29,6 +29,7 @@ import {
   setupHexLabel,
   setupSourceOf,
   setupTransportKindOf,
+  validateRequiredSetupPlacements,
   type AirSetupPlan,
   type SetupCandidateFacts,
   type SetupEntryView,
@@ -1155,6 +1156,21 @@ export const useSetupStore = defineStore('setup', () => {
   /** 初设是否已收束（玩家点了「开始游戏」） */
   const finished = ref(false)
 
+  function canFinishSetup(): boolean {
+    const required = pendingPlacement.value.filter((item) => item.kind === 'shift')
+    const result = validateRequiredSetupPlacements(
+      required.map((item) => ({ id: item.formationId ?? item.label, remaining: item.remaining })),
+    )
+    return (
+      result.ok ||
+      record({
+        ok: false,
+        rule: result.rule,
+        reason: `请先完成编队西移放置：${required.map((item) => item.label).join('、')}`,
+      })
+    )
+  }
+
   /**
    * 收束初设 ⇒ 进入第一阶段
    *
@@ -1162,21 +1178,11 @@ export const useSetupStore = defineStore('setup', () => {
    * 「在初设 box 不设置的就视为从当前游戏中移除，不存在」。故此处只记一条留痕，不改盘面。
    */
   function finishSetup(): boolean {
+    if (finished.value) return true
+    if (!canFinishSetup()) return false
     const remaining = pendingPlacement.value
     for (const item of remaining) {
-      /*
-       * ★ ch10 西移项**不适用**「未落位 ⇒ 本局移除」：它不是"放一个新单位"，而是把一个
-       *   **已在图上**的师挪位置 ⇒ 没给落点就该**留在剧本页原格**（不施加未定的移动），
-       *   移除一整个师是规则没写的效果（CODE_SPEC：不无中生有）。
-       */
-      if (item.kind === 'shift') {
-        completed.value = { ...completed.value, [`shift:${item.formationId ?? ''}`]: true }
-        notes.value = [
-          ...notes.value,
-          `西移落点未给 ⇒ ${item.label} 留在剧本页原格（ch10 的西移不施加）`,
-        ]
-        continue
-      }
+      // 必做西移已在收束前验证，其余项沿用用户允许主动不摆的口径。
       if (item.kind === 'air') {
         completed.value = { ...completed.value, [`air:${item.side}:${item.entryIndex}`]: true }
       } else {
@@ -1213,7 +1219,9 @@ export const useSetupStore = defineStore('setup', () => {
    *   ③ 推进到第一阶段（`preTurn` 的自动段）。
    */
   function startGameNow(): boolean {
-    if (placing.value !== null) placing.value = null
+    // 初设入口不承担对局阶段推进；重复点击或读档重进不能跳过首个玩家环节。
+    if (finished.value && game.session !== null) return true
+    if (!canFinishSetup()) return false
     /*
      * B38（方案 §3 步骤 2 后半）：**先开局、再收初设**。
      *
