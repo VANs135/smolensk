@@ -223,6 +223,24 @@ describe('W7 C14：自动初设（专规 Setup Notes D + 通规 IV）', () => {
     expect(sp[0]?.rule).toBe(SP_OWNERSHIP_RULE)
   })
 
+  it.each(['5', '6', '7'])('12.1b：剧本%s同方同格的多条初设SP合并，总量与原清单一致', (id) => {
+    const rows = setupEntryViews(id).filter(
+      (row) =>
+        row.kind === 'sp' &&
+        row.automatic &&
+        row.side === 'soviet' &&
+        row.hexTexts.includes('60.34'),
+    )
+    expect(rows.length).toBeGreaterThan(1)
+    const plan = planAutoSetup({ scenarioId: id })
+    if (!plan.ok) throw new Error(plan.reason)
+    const dumps = plan.data.ledger.filter(
+      (row) => row.kind === 'sp' && row.side === 'soviet' && row.hexText === '60.34',
+    )
+    expect(dumps).toHaveLength(1)
+    expect(dumps[0]!.count).toBe(rows.reduce((sum, row) => sum + row.count, 0))
+  })
+
   it('C14：多点位的计数类条目在每个格各记一份（剧本 1 苏方 34.18 / 36.13 的 1 SP 与空军基地）', () => {
     const plan = planAutoSetup({ scenarioId: S1 })
     if (!plan.ok) throw new Error('应当成功')

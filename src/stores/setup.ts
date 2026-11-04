@@ -1474,16 +1474,19 @@ export const useSetupStore = defineStore('setup', () => {
   }
 
   /** 清空本流程的玩家输入（不改盘面） */
-  function resetInputs(): void {
+  function resetInputs(clearDumps = true): void {
     applied.value = false
     selfChoices.value = {}
     truckFullIds.value = []
     spAssignments.value = {}
     spDumps.value = []
     // 12.1b：账本是初设 SP 的用账之处 ⇒ 重置必须一并清空，否则旧剧本的补给站会残留
-    workbench.clearSpDumps('初设输入重置')
+    if (clearDumps) workbench.clearSpDumps('初设输入重置')
     airChoices.value = {}
     completed.value = {}
+    placedSelfInstances.value = {}
+    placedAirInstances.value = {}
+    defaultFilledIds.value = new Set()
   }
 
   /** 重置（含盘面：清空算子与飞机） */
@@ -2195,13 +2198,38 @@ export const useSetupStore = defineStore('setup', () => {
         placedAirInstances: placedAirInstances.value,
         setupSideCursor: setupSideCursor.value,
         setupSideConfirmed: setupSideConfirmed.value,
+        drawState: containers.setupDrawCodec.capture(),
+        notes: notes.value,
+        defaultFilledIds: [...defaultFilledIds.value],
       }),
     ) as unknown
   }
   game.setSetupCodec({
     capture: captureSetup,
-    accepts: (value) => SetupSnapshotSchema.safeParse(value).success,
+    accepts(value, expectedScenario) {
+      const result = SetupSnapshotSchema.safeParse(value)
+      return (
+        result.success &&
+        (result.data.drawState === undefined ||
+          containers.setupDrawCodec.accepts(result.data.drawState, expectedScenario))
+      )
+    },
     restore(value) {
+      // 旧对局可恢复盘面，但不能伪造初设历史或串入当前初设进度。
+      if (value === undefined) {
+        resetInputs(false)
+        applied.value = true
+        finished.value = true
+        setupSideCursor.value = null
+        setupSideConfirmed.value = {}
+        notes.value = ['旧存档未记录初设历史，沿用已保存盘面，不重新抽签']
+        lastAction.value = null
+        containers.setupDrawCodec.restore(undefined)
+        placing.value = null
+        cancelTruckPick()
+        workbench.initialSetupInProgress = false
+        return
+      }
       const loaded = SetupSnapshotSchema.parse(value)
       applied.value = loaded.applied
       finished.value = loaded.finished
@@ -2215,6 +2243,13 @@ export const useSetupStore = defineStore('setup', () => {
       placedAirInstances.value = loaded.placedAirInstances
       setupSideCursor.value = loaded.setupSideCursor
       setupSideConfirmed.value = loaded.setupSideConfirmed as typeof setupSideConfirmed.value
+      containers.setupDrawCodec.restore(loaded.drawState)
+      notes.value =
+        loaded.drawState === undefined
+          ? [...loaded.notes, '旧存档未记录编队抽取历史，沿用已保存盘面，不重新抽签']
+          : loaded.notes
+      defaultFilledIds.value = new Set(loaded.defaultFilledIds)
+      lastAction.value = null
       placing.value = null
       cancelTruckPick()
       workbench.initialSetupInProgress = !loaded.finished

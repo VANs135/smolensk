@@ -174,6 +174,9 @@ const slotUsable = computed(() => slot.value !== null)
       <BaseButton variant="ghost" size="sm" @click="refreshNow()">刷新槽摘要</BaseButton>
       <BaseButton variant="ghost" size="sm" @click="clearNow()">清空槽</BaseButton>
     </div>
+    <p v-if="gameSession.session === null" class="muted">
+      当前不支持保存未开局的初设进度；完成初设并开局后可保存对局。
+    </p>
 
     <!-- ── ② 存档槽摘要 ── -->
     <hr />

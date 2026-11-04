@@ -12,6 +12,7 @@ import {
 } from '@/data'
 import type { Side } from '@/data'
 import { pickIndex, roll1d6 } from '@/engine/rng'
+import { SetupDrawSnapshotSchema } from '@/engine/setup-draw-snapshot'
 import { createId } from '@/shared'
 import {
   ALARM_MIX_RULE,
@@ -52,7 +53,7 @@ import {
 } from '@/engine/rules'
 import type { BreakdownCreateRequest } from '@/engine/rules'
 
-import { useGameSessionStore } from './session'
+import { useGameSessionStore, type BoardCodec } from './session'
 import { useWorkbenchStore } from './workbench'
 import {
   counterImageUrlOf,
@@ -1461,6 +1462,14 @@ export const useContainersStore = defineStore('containers', () => {
     pendingShift: readonly string[]
     detail: string
   } {
+    if (session.session !== null)
+      return {
+        ok: false,
+        drawnGroups: 0,
+        appliedGroups: 0,
+        pendingShift: [],
+        detail: '对局已开局，不能重新执行初设编队抽取；读档沿用已保存的盘面与记录',
+      }
     const groups = setupDrawGroups.value
     if (groups.length === 0) {
       return {
@@ -2232,6 +2241,34 @@ export const useContainersStore = defineStore('containers', () => {
     formationDrawOutcomes.value = []
   }
 
+  /** 初设快照仅委托容器所有者捕获和还原，setup不直接改写容器账本。 */
+  const setupDrawCodec: BoardCodec = {
+    capture: () =>
+      SetupDrawSnapshotSchema.parse({
+        scenarioId: scenarioId.value,
+        drawResults: drawResults.value,
+        shiftHexes: drawShiftHexText.value,
+        outcomes: formationDrawOutcomes.value,
+      }),
+    accepts(value, expectedScenario) {
+      const result = SetupDrawSnapshotSchema.safeParse(value)
+      return (
+        result.success &&
+        (expectedScenario === undefined || result.data.scenarioId === expectedScenario)
+      )
+    },
+    restore(value) {
+      if (value === undefined) resetSetupDraws()
+      else {
+        const loaded = SetupDrawSnapshotSchema.parse(value)
+        drawResults.value = loaded.drawResults
+        drawShiftHexText.value = loaded.shiftHexes
+        formationDrawOutcomes.value = loaded.outcomes
+      }
+      lastAction.value = null
+    },
+  }
+
   return {
     // 账本
     scenarioId,
@@ -2244,6 +2281,7 @@ export const useContainersStore = defineStore('containers', () => {
     drawResults,
     setupDrawProgress,
     resetSetupDraws,
+    setupDrawCodec,
     // 批 E 切片 2：抽签的西移落点（点地图写回）与"落盘后的变化"台账（`setup` 只读它回写初设）
     drawShiftHexText,
     drawShiftHexOf,

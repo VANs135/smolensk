@@ -142,8 +142,8 @@ export interface AdvanceOutcome {
 export interface BoardCodec {
   /** 抓取当前盘面（返回**可 JSON 化**的载荷；序列化由存档层做） */
   capture(): unknown
-  /** 这份载荷认识吗（**先验后改**：不认识就拒读，此刻尚未改动任何状态） */
-  accepts(board: unknown): boolean
+  /** 先验后改；剧本参数来自待读存档，用于核对初设等附属账本的归属。 */
+  accepts(board: unknown, scenarioId?: string): boolean
   /** 还原盘面（调用前应已 `accepts` 通过；本方法不做半途落值） */
   restore(board: unknown, silent?: boolean): void
 }
@@ -880,11 +880,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       const boardPayload = file.board
       // 首页冷读档也必须建立盘面；只在动作内取 store，避免 setup 初始化相互读取。
       if (boardPayload !== undefined && boardCodec === null) useWorkbenchStore()
-      const setupPayload =
-        typeof boardPayload === 'object' && boardPayload !== null
-          ? (boardPayload as Record<string, unknown>)['setup']
-          : undefined
-      if (setupPayload !== undefined && setupCodec === null) useSetupStore()
+      if (boardPayload !== undefined && setupCodec === null) useSetupStore()
       const prepared = prepareGameSnapshot(file.session, boardPayload, boardCodec, setupCodec)
       const backup = {
         scenario: scenarioId.value,
@@ -915,7 +911,8 @@ export const useGameSessionStore = defineStore('gameSession', () => {
          * 13.3f 换轨账本与 5.0c 胜利格控制账本；顺序反了，这两本账会被那次重播冲掉。
          */
         if (boardCodec !== null && boardPayload !== undefined) boardCodec.restore(prepared.board)
-        if (setupPayload !== undefined) setupCodec?.restore(prepared.setup)
+        // 旧档没有初设快照时也通知所有者清理，不能保留读档前那一局的进度。
+        setupCodec?.restore(prepared.setup)
       } catch (cause) {
         scenarioId.value = backup.scenario
         session.value = backup.session

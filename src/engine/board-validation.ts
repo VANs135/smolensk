@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { SetupDrawSnapshotSchema } from './setup-draw-snapshot'
 
 const amount = z.number().finite().nonnegative()
 const hex = z.object({ col: z.number().int().nonnegative(), row: z.number().int().nonnegative() })
@@ -93,4 +94,8 @@ export const SetupSnapshotSchema = z.object({
   placedAirInstances: z.record(z.number().nonnegative()),
   setupSideCursor: z.enum(['axis', 'soviet']).nullable(),
   setupSideConfirmed: z.record(z.boolean()),
+  // 旧档缺省时保留“历史未记录”，由恢复层清空旧内存，不重新抽取。
+  drawState: SetupDrawSnapshotSchema.optional(),
+  notes: z.array(z.string()).default([]),
+  defaultFilledIds: z.array(z.string()).default([]),
 })

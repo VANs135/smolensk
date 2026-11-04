@@ -769,6 +769,18 @@ export function planAutoSetup(input: {
       for (const target of resolvedTargets) {
         const hex = target as HexRef
         const label = setupHexLabel(hex)
+        // 12.1b：初设页可分行列出同方同格SP；先加总，再落成唯一补给站账本。
+        const sameDump =
+          kind === 'sp'
+            ? ledger.find(
+                (row) => row.kind === 'sp' && row.side === entry.side && sameHex(row.hex, hex),
+              )
+            : undefined
+        if (sameDump !== undefined) {
+          sameDump.count += entry.count
+          sameDump.detail = `${sameDump.count} SP @ ${label}（12.1b：同方同格初设补给合并）`
+          continue
+        }
         ledger.push({
           entryIndex: entry.index,
           kind,

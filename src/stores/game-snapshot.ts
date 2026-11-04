@@ -35,7 +35,7 @@ export function prepareGameSnapshot(
     typeof payload === 'object' && payload !== null
       ? (payload as Record<string, unknown>)['setup']
       : undefined
-  if (initial !== undefined && !setup?.accepts(initial))
+  if (initial !== undefined && !setup?.accepts(initial, session.state.scenarioId))
     throw new Error('setupUnrecognized:初设状态无效')
   if (board !== null) {
     if (payload === undefined)
