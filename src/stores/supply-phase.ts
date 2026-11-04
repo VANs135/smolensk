@@ -9,7 +9,11 @@ import {
   type SupplyPhasePlan,
   type TraceSupplyFacts,
 } from '@/engine/rules'
-import { attritionDutiesFor, automaticAttritionAllocation } from '@/engine/rules/supply-phase'
+import {
+  attritionDutiesFor,
+  automaticAttritionAllocation,
+  supplyPhaseFeedingCostT,
+} from '@/engine/rules/supply-phase'
 import { nextSupplyPhaseObligation } from '@/engine/rules/supply-phase-progress'
 import type { AttritionResult } from '@/engine/tables/attrition'
 import type { ActionKey, ConsoleUnit } from './workbench-model'
@@ -300,14 +304,22 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     const degradedIds: string[] = []
     const stations: string[] = []
     let totalT = 0
+    let fedRe = 0
     for (const item of fed) {
       const unit = units.value.find((entry) => entry.instanceId === item.unitId)
-      const paid = unit === undefined ? null : payFromUnitReachableDumps(unit, item.costT)
+      if (unit === undefined) {
+        degradedIds.push(item.unitId)
+        continue
+      }
+      // 12.6c：失败单位不占已付费额度，不能沿用原计划中依赖它的零追加费用。
+      const costT = supplyPhaseFeedingCostT(fedRe, unit.re)
+      const paid = payFromUnitReachableDumps(unit, costT)
       if (paid === null) {
         degradedIds.push(item.unitId)
         continue
       }
-      totalT += item.costT
+      totalT += costT
+      fedRe += unit.re
       appliedIds.push(item.unitId)
       if (paid !== '（无需付款）') stations.push(paid)
     }

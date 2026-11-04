@@ -504,6 +504,11 @@ export function attritionDutiesFor(
     .sort((a, b) => a.hex.col - b.hex.col || a.hex.row - b.hex.row)
 }
 
+/** 12.6c：只按已成功供养的RE累计，计算下一单位应追加的整T费用。 */
+export function supplyPhaseFeedingCostT(fedRe: number, unitRe: number): number {
+  return eatingOffTheMapCostT(fedRe + unitRe) - eatingOffTheMapCostT(fedRe)
+}
+
 /** 补给阶段计划（SP 分配结果） */
 export interface SupplyPhasePlan {
   rule: string
@@ -593,7 +598,7 @@ export function planSupplyPhase(
     if (input.eatOffTheMap?.(unit.id) !== true) continue
     const assessment = assessments.find((item) => item.unitId === unit.id)
     if (assessment === undefined || !assessment.canEatOffTheMap) continue
-    const costT = eatingOffTheMapCostT(fedRe + unit.re) - eatingOffTheMapCostT(fedRe)
+    const costT = supplyPhaseFeedingCostT(fedRe, unit.re)
     const affordable = remainingT >= costT
     if (affordable) {
       remainingT -= costT

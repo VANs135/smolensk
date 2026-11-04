@@ -82,6 +82,51 @@ function domainFixture(count = 1) {
 }
 
 describe('D段独立域：付款、待决损耗与阶段退出', () => {
+  it.each([0, 1])('12.6c/12.8：首单位付款失败，后续单位按实际供养重计费用（余量%sT）', (leftT) => {
+    const a = domainFixture(2)
+    a.step.value = 'supply.check'
+    for (const unit of a.units.value) {
+      unit.re = 1
+      unit.steps = 1
+      unit.hasTraceSupply = false
+      a.domain.supplyPhaseInputs.value.eatOffTheMap[unit.instanceId] = true
+    }
+    expect(a.domain.planSupplyPhaseNow()).toBe(true)
+    expect(a.domain.supplyPhasePlan.value!.feeding.map((item) => item.costT)).toEqual([1, 0])
+    a.dumps.value[0]!.sp = 0
+    a.dumps.value[0]!.t = leftT
+    a.pay.mockImplementationOnce(() => null)
+    expect(a.domain.applySupplyPhaseFeedingNow()).toBe(true)
+    expect(a.pay.mock.calls.map((call) => call[1])).toEqual([1, 1])
+    expect(a.units.value.map((unit) => unit.hasTraceSupply)).toEqual([false, leftT === 1])
+    expect(holdingsToT(a.dumps.value[0]!)).toBe(0)
+    expect(a.domain.supplyPhasePlan.value!.attritionDuty[0]!.unitIds).toEqual(
+      leftT === 1 ? ['u0'] : ['u0', 'u1'],
+    )
+    expect(a.log).toHaveBeenCalledWith('success', expect.stringContaining(`共 ${leftT} T`), '12.6c')
+    expect(a.domain.applySupplyPhaseFeedingNow()).toBe(true)
+    expect(a.pay).toHaveBeenCalledTimes(2)
+  })
+
+  it('12.6c：成功支付的1T仍可供养两名1RE单位，不重复收取整费用', () => {
+    const a = domainFixture(2)
+    a.step.value = 'supply.check'
+    for (const unit of a.units.value) {
+      unit.re = 1
+      unit.steps = 1
+      unit.hasTraceSupply = false
+      a.domain.supplyPhaseInputs.value.eatOffTheMap[unit.instanceId] = true
+    }
+    a.dumps.value[0]!.sp = 0
+    a.dumps.value[0]!.t = 1
+    expect(a.domain.planSupplyPhaseNow()).toBe(true)
+    expect(a.domain.applySupplyPhaseFeedingNow()).toBe(true)
+    expect(a.pay.mock.calls.map((call) => call[1])).toEqual([1, 0])
+    expect(a.units.value.every((unit) => unit.hasTraceSupply)).toBe(true)
+    expect(holdingsToT(a.dumps.value[0]!)).toBe(0)
+    expect(a.domain.supplyPhasePlan.value!.attritionDuty).toEqual([])
+  })
+
   it('12.10e/12.6c：已结算恢复后重算供养不再次预留恢复费，实际喂食后不产生虚假损耗', () => {
     const a = domainFixture()
     a.units.value[0]!.internalStocks = 'low'
