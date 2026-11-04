@@ -70,6 +70,32 @@ function domainFixture(count = 1) {
 }
 
 describe('D段独立域：付款、待决损耗与阶段退出', () => {
+  it.each(['low', 'exhausted'] as const)(
+    '12.10e-C：不足且浪费1T时，先落实%s单位付得起的恢复，重复提交不再收费',
+    (level) => {
+      const a = domainFixture(2)
+      for (const unit of a.units.value) {
+        unit.internalStocks = level
+        unit.steps = 1
+        unit.re = 1
+      }
+      a.dumps.value[0]!.sp = 0
+      a.dumps.value[0]!.t = 3
+      expect(a.domain.planSupplyPhaseNow()).toBe(true)
+      const plan = a.domain.supplyPhasePlan.value!.internalStocks
+      expect(plan.wastedT).toBe(1)
+      expect(plan.recoveries.length).toBeGreaterThan(0)
+      expect(a.domain.applySupplyPhaseRecoveryNow()).toBe(true)
+      for (const recovery of plan.recoveries)
+        expect(
+          a.units.value.find((unit) => unit.instanceId === recovery.unitId)!.internalStocks,
+        ).toBe(recovery.to === 'ready' ? null : 'low')
+      expect(holdingsToT(a.dumps.value[0]!)).toBe(0)
+      const calls = a.pay.mock.calls.length
+      expect(a.domain.applySupplyPhaseRecoveryNow()).toBe(true)
+      expect(a.pay).toHaveBeenCalledTimes(calls)
+    },
+  )
   it('12.10e：独立实例不串账；重复恢复只付款一次，重置保留绑定的状态容器', () => {
     const a = domainFixture(),
       b = domainFixture()

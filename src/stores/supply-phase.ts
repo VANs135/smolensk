@@ -199,20 +199,7 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
       pushLog('info', '12.10e：本阶段没有需要恢复的部队储备（也没有可消耗的补给）', '12.10e')
       return true
     }
-    // 池级不足（12.10e-C）：花光**可达站**的全部（spentT 即计划时可达站合计）
-    if (recovery.wastedT > 0) {
-      const paid = payFromSideDumps(recovery.spentT, supplyPhasePayableDumps.value)
-      if (paid === null) return false
-      supplyRecoverySettled.value = true
-      pushLog(
-        'success',
-        `12.10e 部队储备恢复：可达站 SP 不足 ⇒ 按 12.10e-C 消耗现有的全部补给（${recovery.spentT} T，` +
-          `其中 ${recovery.wastedT} T 浪费）；仍未恢复 ${recovery.unmet.length} 个；付款站 ${paid}`,
-        '12.10e',
-      )
-      return true
-    }
-    // 池充足：逐单位从**各自的可达站**付款（同站被多单位共享时按序花，付不出者降级并如实登记）
+    // 逐单位从**各自的可达站**付款（同站被多单位共享时按序花，付不出者降级并如实登记）
     supplyRecoverySettled.value = true
     const appliedIds: string[] = []
     const degradedIds: string[] = []
@@ -237,6 +224,16 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
       unit.internalStocks = item.to === 'ready' ? null : 'low'
       appliedIds.push(item.unitId)
       if (paid !== '（无需付款）') stations.push(paid)
+    }
+    // 12.10e-C：先落实付得起的恢复，再消耗计划中应浪费的余额。
+    // 各自可达站的不足分支可能已用完余额，不能据旧计划再次扣款。
+    if (recovery.wastedT > 0) {
+      const available = supplyPhasePayableDumps.value.reduce(
+        (sum, dump) => sum + holdingsToT(dump),
+        0,
+      )
+      const waste = Math.min(recovery.wastedT, available)
+      if (waste > 0) payFromSideDumps(waste, supplyPhasePayableDumps.value)
     }
     // 12.8e 括注：12.10e 部队储备恢复也是"特殊续命" ⇒ 本回合不算被切断的第一回合
     markSustainedBySpecialSupply(appliedIds)
