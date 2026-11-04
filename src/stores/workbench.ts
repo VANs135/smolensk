@@ -93,6 +93,7 @@ import {
   PANZER_GROUP_CONSTRAINT_END,
   checkPanzerGroupSpBeneficiaries,
   normalizeSupplyDumps,
+  remapSupplyDumpAmounts,
   // B50（用户 2026-09-17）：3.4b 是 4.1a 的**可选项** ⇒ 生效与否＝日期窗口 × 开局共识
   panzerGroupRulesActive,
   PANZER_GROUP_OPTION_ITEM,
@@ -19550,6 +19551,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     spDumps.value = normalized.dumps
     spDumpPanzerGroups.value = normalized.groups
     pendingSpGroupAssignment.value = normalized.pending
+    oosFedReByDump.value = remapSupplyDumpAmounts(oosFedReByDump.value, normalized.aliases)
+    dumpDestructionAttempts.value = remapSupplyDumpAmounts(
+      dumpDestructionAttempts.value,
+      normalized.aliases,
+    )
     return normalized.merged
   }
 

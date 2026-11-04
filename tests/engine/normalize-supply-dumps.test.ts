@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeSupplyDumps } from '@/engine/rules'
+import { normalizeSupplyDumps, remapSupplyDumpAmounts } from '@/engine/rules'
 
 const dumps = [
   { id: 'a', side: 'axis' as const, hex: { col: 30, row: 20 }, sp: 1, t: 2 },
   { id: 'b', side: 'axis' as const, hex: { col: 30, row: 20 }, sp: 2, t: 3 },
 ]
 describe('12.1b/3.4b：补给站恢复归并', () => {
+  it('12.6c/12.11a：被归并来源的计数相加，保留其它来源历史，重复迁移不再增加', () => {
+    const original = { a: 2, b: 3, 'unit:truck': 4 }
+    const aliases = { a: 'a', b: 'a' }
+    const result = remapSupplyDumpAmounts(original, aliases)
+    expect(result).toEqual({ a: 5, 'unit:truck': 4 })
+    expect(original).toEqual({ a: 2, b: 3, 'unit:truck': 4 })
+    expect(remapSupplyDumpAmounts(result, aliases)).toEqual(result)
+  })
   it('不修改输入，返回旧ID映射和去重待办，重复规范化稳定', () => {
     const before = JSON.stringify(dumps)
     const result = normalizeSupplyDumps(dumps, {}, ['b', 'a', 'missing'])

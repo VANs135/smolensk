@@ -3,6 +3,20 @@ import { sameHex } from '../hex-geometry'
 import type { PanzerGroup } from './panzer-groups'
 import { holdingsToT, tToHoldings } from './supply-interaction'
 
+/** 12.6c/12.11a：归并来源的已用额度累计迁移，未参与归并的来源历史保持原样。 */
+export function remapSupplyDumpAmounts(
+  amounts: Readonly<Record<string, number>>,
+  aliases: Readonly<Record<string, string>>,
+): Record<string, number> {
+  const mapping = new Map(Object.entries(aliases))
+  const totals = new Map<string, number>()
+  for (const [id, amount] of Object.entries(amounts)) {
+    const target = mapping.get(id) ?? id
+    totals.set(target, (totals.get(target) ?? 0) + amount)
+  }
+  return Object.fromEntries(totals)
+}
+
 /** 12.1b/3.4b：恢复时同格同方同归属归并，并把归属待办迁移到保留的ID。 */
 export function normalizeSupplyDumps<
   T extends { id: string; side: Side; hex: HexRef; sp: number; t: number },
