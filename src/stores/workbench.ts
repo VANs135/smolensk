@@ -92,6 +92,7 @@ import {
   printedPermanentHedgehogAt,
   PANZER_GROUP_CONSTRAINT_END,
   checkPanzerGroupSpBeneficiaries,
+  normalizeSupplyDumps,
   // B50（用户 2026-09-17）：3.4b 是 4.1a 的**可选项** ⇒ 生效与否＝日期窗口 × 开局共识
   panzerGroupRulesActive,
   PANZER_GROUP_OPTION_ITEM,
@@ -19541,27 +19542,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 金额相加后按 12.1a 折算成「尽可能并为 SP」的规范形。对本来就一致的盘面**幂等**（返回 0）。
    */
   function normalizeSpDumpsOnLoad(): number {
-    const kept: SpDump[] = []
-    const byKey = new Map<string, SpDump>()
-    let merged = 0
-    for (const dump of spDumps.value) {
-      // 3.4b：同格不同集群的SP不能在恢复时悄悄变成第一条的归属。
-      const group = dump.side === 'axis' ? panzerGroupOfDump(dump.id) : null
-      const key = `${dump.side}|${String(dump.hex.col)},${String(dump.hex.row)}|${group ?? 'unassigned'}`
-      const first = byKey.get(key)
-      if (first === undefined) {
-        const copy = { ...dump }
-        byKey.set(key, copy)
-        kept.push(copy)
-        continue
-      }
-      const holdings = tToHoldings(holdingsToT({ sp: first.sp + dump.sp, t: first.t + dump.t }))
-      first.sp = holdings.sp
-      first.t = holdings.t
-      merged += 1
-    }
-    if (merged > 0) spDumps.value = kept
-    return merged
+    const normalized = normalizeSupplyDumps(
+      spDumps.value,
+      spDumpPanzerGroups.value,
+      pendingSpGroupAssignment.value,
+    )
+    spDumps.value = normalized.dumps
+    spDumpPanzerGroups.value = normalized.groups
+    pendingSpGroupAssignment.value = normalized.pending
+    return normalized.merged
   }
 
   /*

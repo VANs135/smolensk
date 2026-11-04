@@ -22,6 +22,30 @@ function boot() {
 }
 
 describe('12.1b/3.4b：读档归并不能改变SP归属', () => {
+  it('被归并条目的待归属记录迁移到保留ID，声明后可清完待办', () => {
+    const { board, game } = boot()
+    board.pendingSpGroupAssignment = ['second', 'first', 'second']
+    expect(game.saveNow()).toBe(true)
+    expect(game.loadNow()).toBe(true)
+    expect(board.pendingSpGroupAssignment).toEqual(['first'])
+    board.setDumpPanzerGroupNow('first', 'hoth')
+    expect(board.pendingSpGroupAssignment).toEqual([])
+    expect(game.saveNow()).toBe(true)
+    expect(game.loadNow()).toBe(true)
+    expect(board.pendingSpGroupAssignment).toEqual([])
+  })
+  it('无归并时也清理不存在的归属和待办，不制造补给站', () => {
+    const { board, game } = boot()
+    board.setDumpPanzerGroupNow('first', 'guderian')
+    board.setDumpPanzerGroupNow('second', 'hoth')
+    board.spDumpPanzerGroups['missing'] = 'hoth'
+    board.pendingSpGroupAssignment = ['missing', 'second']
+    expect(game.saveNow()).toBe(true)
+    expect(game.loadNow()).toBe(true)
+    expect(board.panzerGroupOfDump('missing')).toBeNull()
+    expect(board.pendingSpGroupAssignment).toEqual([])
+    expect(board.spDumps.some((dump) => dump.id === 'missing')).toBe(false)
+  })
   it.each(['guderian', 'unassigned'] as const)(
     '第一条为%s，第二条为Hoth，读档保留两笔和各自归属',
     (first) => {
@@ -53,5 +77,6 @@ describe('12.1b/3.4b：读档归并不能改变SP归属', () => {
     expect(dumps[0]!.id).toBe('first')
     expect(dumps[0]!.sp * 4 + dumps[0]!.t).toBe(23)
     expect(board.panzerGroupOfDump('first')).toBe('hoth')
+    expect(board.panzerGroupOfDump('second')).toBeNull()
   })
 })
