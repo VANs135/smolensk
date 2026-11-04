@@ -49,7 +49,7 @@ export function resolveWeather(die: number): WeatherResult {
  * Normal Flight 时所有阶段均可（受其他规则约束除外）。
  *
  * ★ 注：本条是**天气维度**的闸门，与 `air.ts#canMissionInPhase`（**专规维度**：苏军不得在
- *   反应/进击阶段执行任务，专规 2.2c）是**两条不同的规则**，两者都必须过（不得互相替代）。
+ *   反应/进击阶段执行任务，专规 2.2d）是**两条不同的规则**，两者都必须过（不得互相替代）。
  */
 export type AirPhase = 'movement' | 'reaction' | 'exploitation' | 'planning' | 'strategic'
 

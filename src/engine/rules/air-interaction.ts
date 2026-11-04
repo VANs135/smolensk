@@ -311,7 +311,7 @@ export function patrolZoneHexes(input: {
 export interface AirMissionRequest {
   /** 任务方（发起方，14.3c 的「本来的攻击方」） */
   side: Side
-  /** 当前阶段（14.1g：移动/进击/反应；专规 2.2c 另对苏军设限） */
+  /** 当前阶段（14.1g：移动/进击/反应；专规 2.2d 另对苏军设限） */
   phase: GamePhase
   kind: AirMissionKind
   targetHex: HexRef
@@ -484,7 +484,7 @@ export const SHORT_RANGE_BARRAGE_HEXES = 10
  *
  * 逐条校验（失败即返回带条文号的原因码，界面据此高亮该机）：
  *   1. **不能把拦截当任务宣布**（14.5：拦截发生在敌方任务的 D 步，由对手触发）；
- *   2. 天气允许飞行（14.1f）；阶段允许（14.1g；专规 2.2c 苏军不得在反应/进击阶段出击）；
+ *   2. 天气允许飞行（14.1f）；阶段允许（14.1g；专规 2.2d 苏军不得在反应/进击阶段出击）；
  *   3. 参战机 1–4 架（14.2a：一次任务合计上限 4 个空军单位）；
  *   4. 逐机：本方所有、**激活**（14.1a）、本阶段未执行过任务（14.2e）、军力未归零（14.1b）、
  *      **起飞基地为本方空军基地**（★ 归属权，14.1a/14.1c）、距任务格 ≤ 航程（14.2d）；
@@ -501,11 +501,11 @@ export function assignAirMission(input: AirMissionRequest): RuleOutcome<AirMissi
   if (input.phase !== 'movement' && input.phase !== 'reaction' && input.phase !== 'exploitation')
     return fail('14.1g', `missionsNotAllowedInPhase:${input.phase}`)
   if (!canMissionInPhase(input.side, input.phase))
-    return fail('2.2c', 'sovietNoReactionOrExploitationMission')
+    return fail('2.2d', 'sovietNoReactionOrExploitationMission')
   /*
    * 专规 1.5：受限飞行下**仅移动阶段**允许空军任务（反应 / 进击不可）。
    * ★ 这条**天气维度**的闸门此前**没人调用**（`weather.ts` 的注释还以为它在管这事），
-   *   于是受限飞行时双方都能在反应 / 进击阶段出击。它与上一条（专规 2.2c 的**阵营维度**）
+   *   于是受限飞行时双方都能在反应 / 进击阶段出击。它与上一条（专规 2.2d 的**阵营维度**）
    *   是两条不同的规则，必须都过。
    */
   if (!isAirMissionAllowedInPhase({ isLimited: input.weatherLimited === true }, input.phase))

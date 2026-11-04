@@ -446,7 +446,7 @@ describe('专规空军覆盖（2.2 苏联 / 3.2a 轴心）', () => {
     expect(canHipShoot('axis', false)).toBe(false) // 天气层仍生效
   })
 
-  it('2.2c 反应/进击阶段任务：苏军禁；轴方可；移动阶段皆可', () => {
+  it('2.2d 反应/进击阶段任务：苏军禁；轴方可；移动阶段皆可', () => {
     expect(canMissionInPhase('soviet', 'reaction')).toBe(false)
     expect(canMissionInPhase('soviet', 'exploitation')).toBe(false)
     expect(canMissionInPhase('soviet', 'movement')).toBe(true)
@@ -460,7 +460,7 @@ describe('专规空军覆盖（2.2 苏联 / 3.2a 轴心）', () => {
     expect(canPlannedAirdrop('axis', { airAbilities: { canAirDrop: false } })).toBe(false)
   })
 
-  it('2.2d 早期 IL-2 单军力标记只出现在 IL-2 型别上', () => {
+  it('2.2c 早期 IL-2 单军力标记只出现在 IL-2 型别上', () => {
     const il2 = aircraft.aircraft.find((a) => a.aircraftId.includes('il-2'))!
     expect(isEarlySturmovikOneStep(il2)).toBe(true)
     expect(isEarlySturmovikOneStep(axisFighter)).toBe(false)

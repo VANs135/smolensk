@@ -12,7 +12,7 @@ import { AIR_BASE_CAPTURE_NO_LOSS_MIN_DICE } from './combat'
  *      空运成功 14.10d、基地 15.0b/15.1/15.2/15.3、计划空降 14.10b —— 构成默认行为；
  *   2) 专规（exclusive_rules_smolensk）覆盖上述默认：
  *      - 2.2「Red Air Force」**只针对苏联空军**：禁低空扫射 2.2a、禁计划空降 2.2b、
- *        禁反应/进击阶段任务 2.2c、早期 IL-2 单军力 2.2d；
+ *        禁反应/进击阶段任务 2.2d、早期 IL-2 单军力 2.2c；
  *      - 3.2a 轴方：天气允许时可低空扫射（axis_special.hip_shoot）。
  * 具体某型是否具备某项能力，另由 aircraft.json 的 airAbilities / specialAbilities 提供。
  */
@@ -414,7 +414,7 @@ export function planAirUnload(input: {
 
 const EXCLUSIVE_AIR = rulesConstants.smolensk.air
 
-/** 任务阶段（2.2c 分别约束反应 / 进击阶段） */
+/** 任务阶段（2.2d 约束苏军的反应 / 进击阶段） */
 export type AirMissionPhase = 'movement' | 'reaction' | 'exploitation'
 
 /**
@@ -433,7 +433,7 @@ export function canHipShoot(side: Side, weatherNormal: boolean): boolean {
 }
 
 /**
- * 型别/阵营是否可在指定阶段执行任务（通规默认允许 ← 专规 2.2c 覆盖苏联）
+ * 型别/阵营是否可在指定阶段执行任务（通规默认允许 ← 专规 2.2d 覆盖苏联）
  */
 export function canMissionInPhase(side: Side, phase: AirMissionPhase): boolean {
   if (phase === 'movement') return true

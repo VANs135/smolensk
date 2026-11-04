@@ -27,11 +27,11 @@ import {
 } from './sop-harness'
 
 /**
- * 环节 Ⓔ：**反应**（E 段）——2.2 / 5.7b / 6.3a / 7.0a / 专规 1.5 / 专规 2.2c
+ * 环节 Ⓔ：**反应**（E 段）——2.2 / 5.7b / 6.3a / 7.0a / 专规 1.5 / 专规 2.2d
  *
  * E 段是**非阶段玩家**的回合：只有他**已释放的预备**地面单位能移动（6.3a + 7.0a），MA 减半（5.7b）；
  * 没有战斗环节，只能轰炸（炮兵/空中/舰炮三种来源皆可）；空军另受天气（专规 1.5 受限飞行禁飞）
- * 与「苏军不得在反应/进击阶段出击」（专规 2.2c）双重限制。
+ * 与「苏军不得在反应/进击阶段出击」（专规 2.2d）双重限制。
  * 单独运行：`npx vitest run tests/flows/50-phase-e-reaction.test.ts`
  */
 
@@ -114,8 +114,8 @@ describe('Ⓔ E 段许可动作与段闸（2.2 / 10.x）', () => {
   })
 })
 
-describe('Ⓔ 空军在 E 段的双重限制（专规 1.5 / 专规 2.2c）', () => {
-  it('专规 2.2c：苏军不得在反应/进击阶段出击；轴军可（通规 14.1g 允许三段）', () => {
+describe('Ⓔ 空军在 E 段的双重限制（专规 1.5 / 专规 2.2d）', () => {
+  it('专规 2.2d：苏军不得在反应/进击阶段出击；轴军可（通规 14.1g 允许三段）', () => {
     expect(canMissionInPhase('axis', 'movement')).toBe(true)
     expect(canMissionInPhase('axis', 'reaction')).toBe(true)
     expect(canMissionInPhase('axis', 'exploitation')).toBe(true)
@@ -134,7 +134,7 @@ describe('Ⓔ 空军在 E 段的双重限制（专规 1.5 / 专规 2.2c）', () 
     expect(isAirMissionAllowedInPhase(normal, 'reaction')).toBe(true)
   })
 
-  it('端到端：E 段轴军可宣布任务；同一操作下苏军被专规 2.2c 拦下（rule 2.2c）', () => {
+  it('端到端：E 段轴军可宣布任务；同一操作下苏军被专规 2.2d 拦下（rule 2.2d）', () => {
     const store = newConsole()
     store.switchSide() // 阶段玩家为苏军，反应玩家才是轴军。
     store.setPhase('reaction')
@@ -145,12 +145,12 @@ describe('Ⓔ 空军在 E 段的双重限制（专规 1.5 / 专规 2.2c）', () 
     placeAir(store, fighterRecord('axis'), CORE_HEX, 'axis', 'air-ax')
     store.setAirTargetFromText(label(NEAR_HEX))
     store.toggleAirMissionUnit('air-ax')
-    // 反应段不是空投等受限任务，普通轰炸在 E 段合法（14.1g + 专规 2.2c 对轴军无限制）
+    // 反应段不是空投等受限任务，普通轰炸在 E 段合法（14.1g + 专规 2.2d 对轴军无限制）
     expect(store.beginAirMissionNow()).toBe(true)
     expect(store.airState?.step).toBe('airCombat')
     store.cancelAir()
 
-    // 苏军：换方后同样宣布 ⇒ 专规 2.2c 拦下
+    // 苏军：换方后同样宣布 ⇒ 专规 2.2d 拦下
     const soviet: Workbench = newConsole()
     soviet.setPhase('reaction')
     soviet.setAirActive(true)
@@ -160,7 +160,7 @@ describe('Ⓔ 空军在 E 段的双重限制（专规 1.5 / 专规 2.2c）', () 
     soviet.toggleAirMissionUnit('air-su')
     expect(soviet.beginAirMissionNow()).toBe(false)
     expect(soviet.airError).toMatchObject({
-      rule: '2.2c',
+      rule: '2.2d',
       reason: 'sovietNoReactionOrExploitationMission',
     })
   })

@@ -16,6 +16,7 @@ import {
   baseOfAircraft,
   beginAirInteraction,
   checkAircraftOrigin,
+  checkRedAirForceMission,
   completeAirReturnStep,
   confirmMissionStep,
   declareAirCombatStep,
@@ -443,7 +444,7 @@ describe('14.2f-A/B 任务分配：机数·距离·阶段·天候·能力', () =
     ).toMatchObject({ ok: false, rule: '14.1f', reason: 'weatherProhibitsFlying' })
   })
 
-  it('14.1g：只在移动/进击/反应阶段出击；专规 2.2c：苏军不得在反应/进击出击', () => {
+  it('14.1g：只在移动/进击/反应阶段出击；专规 2.2d：苏军不得在反应/进击出击', () => {
     expect(
       assignAirMission(missionRequest({ aircraft: [planeAtBase], bases, phase: 'combat' })),
     ).toMatchObject({ ok: false, rule: '14.1g', reason: 'missionsNotAllowedInPhase:combat' })
@@ -458,7 +459,16 @@ describe('14.2f-A/B 任务分配：机数·距离·阶段·天候·能力', () =
           bases: [sovietBase],
         }),
       ),
-    ).toMatchObject({ ok: false, rule: '2.2c', reason: 'sovietNoReactionOrExploitationMission' })
+    ).toMatchObject({ ok: false, rule: '2.2d', reason: 'sovietNoReactionOrExploitationMission' })
+    // 同一事实在**预检**入口（B41 统一入口）也必须报 2.2d；修前预检报 2.2d、任务入口报 2.2c
+    expect(
+      checkRedAirForceMission({
+        side: 'soviet',
+        phase: 'reaction',
+        weatherNormal: true,
+        missionKind: 'barrage',
+      }),
+    ).toMatchObject({ ok: false, rule: '2.2d' })
     // 苏军在**移动阶段**可以出击（专规只禁反应/进击）
     expect(
       assignAirMission(
