@@ -6,6 +6,7 @@ import {
   planInternalStocksRecovery,
   resolveAttrition,
   validateAttritionAllocation,
+  type FeedingSourceFacts,
   type SupplyPhasePlan,
   type TraceSupplyFacts,
 } from '@/engine/rules'
@@ -28,6 +29,11 @@ export interface SupplyPhasePorts {
   requireAction(key: ActionKey, label: string): boolean
   actionAllowedNow(key: ActionKey): boolean
   deliverableDumpsFor(side: Side, units: readonly ConsoleUnit[]): SpDump[]
+  /**
+   * 12.6c / 12.3a·b：逐单位的付款来源事实（按 unit id），由工作台按真实可达补给站构建。
+   * 缺省＝不分组，保持「全阶段一批」的既有口径（独立域用例与旧存档不受影响）。
+   */
+  feedingSources?(): Readonly<Record<string, FeedingSourceFacts>>
   payFromSideDumps(amount: number, allowed?: readonly SpDump[]): string | null
   payFromUnitReachableDumps(unit: ConsoleUnit, amount: number): string | null
   markTraceSupply(id: string, ready: boolean): void
@@ -131,6 +137,8 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     const outcome = planSupplyPhase(supplyFacts.value, {
       activeSide: side,
       recoverySettled: supplyRecoverySettled.value,
+      // 12.6c：来源事实由工作台按真实可达站给出；引擎只按它分组算费，不自行猜来源。
+      ...(ports.feedingSources === undefined ? {} : { feedingSources: ports.feedingSources() }),
       units: mine.map((unit) => ({
         id: unit.instanceId,
         side: unit.side,
@@ -304,22 +312,31 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     const degradedIds: string[] = []
     const stations: string[] = []
     let totalT = 0
-    let fedRe = 0
+    // 12.6c：额度属于「付过款的那一组补给站」。计划带来源组时按组累计已成功供养的 RE，
+    // 不同来源不互相借用零头；旧计划（无 sourceKey，如旧存档）沿用全阶段一批的既有口径。
+    const fedReBySource = new Map<string, number>()
+    let globalFedRe = 0
     for (const item of fed) {
       const unit = units.value.find((entry) => entry.instanceId === item.unitId)
       if (unit === undefined) {
         degradedIds.push(item.unitId)
         continue
       }
+      const grouped = item.sourceKey !== undefined
+      const groupKey = item.sourceKey ?? ''
       // 12.6c：失败单位不占已付费额度，不能沿用原计划中依赖它的零追加费用。
-      const costT = supplyPhaseFeedingCostT(fedRe, unit.re)
+      const costT = supplyPhaseFeedingCostT(
+        grouped ? (fedReBySource.get(groupKey) ?? 0) : globalFedRe,
+        unit.re,
+      )
       const paid = payFromUnitReachableDumps(unit, costT)
       if (paid === null) {
         degradedIds.push(item.unitId)
         continue
       }
+      if (grouped) fedReBySource.set(groupKey, (fedReBySource.get(groupKey) ?? 0) + unit.re)
+      else globalFedRe += unit.re
       totalT += costT
-      fedRe += unit.re
       appliedIds.push(item.unitId)
       if (paid !== '（无需付款）') stations.push(paid)
     }

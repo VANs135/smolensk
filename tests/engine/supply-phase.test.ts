@@ -454,7 +454,7 @@ describe('12.6c 批量取整：D 段计划的吃图上补给按批次 RE 总量�
     multiStep: false,
   })
 
-  it('三枚 1RE 单位同批吃图上补给 ⇒ 批量合计 2T（修前逐单位 ceil 相加 = 3T）', () => {
+  it('12.6c：三枚 1RE 单位同批吃图上补给 ⇒ 批量合计 2T（修前逐单位 ceil 相加 = 3T）', () => {
     const facts = makeFacts({
       hexes,
       sources: [{ hex: at(0), side: 'axis', kind: 'detrainable' }],
@@ -474,5 +474,110 @@ describe('12.6c 批量取整：D 段计划的吃图上补给按批次 RE 总量�
     expect(plan.remainingT).toBe(7)
     // 三枚都被喂饱 ⇒ 免于断补
     expect(plan.outOfSupply.mark).toEqual([])
+  })
+})
+
+/* ───────────────── 12.6c 按付款来源分组（A3 第十五批） ───────────────── */
+
+describe('12.6c × 12.3a·b：批量取整额度只在同一付款来源组内共享', () => {
+  const hexes = corridor(0, 12)
+  const unit = (id: string): SupplyPhaseUnitView => ({
+    id,
+    side: 'axis',
+    hex: at(9),
+    isCombat: true,
+    steps: 2,
+    re: 1,
+    ar: 2,
+    mode: 'combat',
+    internalStocks: null,
+    outOfSupply: false,
+    multiStep: false,
+  })
+  const facts = makeFacts({
+    hexes,
+    sources: [{ hex: at(0), side: 'axis', kind: 'detrainable' }],
+    dumps: [{ hex: at(8), side: 'axis' }],
+    enemyCombat: [at(5)],
+  })
+  const base = (feedingSources: Record<string, { sourceKey: string | null; availableT: number }>) =>
+    planSupplyPhase(facts, {
+      activeSide: 'axis',
+      units: [unit('a'), unit('b')],
+      mobility: 'leg',
+      availableT: 9,
+      eatOffTheMap: () => true,
+      feedingSources,
+    })
+
+  it('12.6c：同一来源组仍按批次取整 ⇒ 1T 供养两个 1RE 单位', () => {
+    const plan = base({
+      a: { sourceKey: 'd1', availableT: 9 },
+      b: { sourceKey: 'd1', availableT: 9 },
+    })
+    expect(plan.feeding.map((item) => item.costT)).toEqual([1, 0])
+    expect(plan.feeding.map((item) => item.sourceKey)).toEqual(['d1', 'd1'])
+    expect(plan.remainingT).toBe(8)
+    expect(plan.outOfSupply.mark).toEqual([])
+  })
+
+  it('12.6c：完全不同来源各组起批 ⇒ 各付 1T，不能跨站借用已付费额度', () => {
+    const plan = base({
+      a: { sourceKey: 'd1', availableT: 9 },
+      b: { sourceKey: 'd2', availableT: 9 },
+    })
+    expect(plan.feeding.map((item) => item.costT)).toEqual([1, 1])
+    expect(plan.remainingT).toBe(7)
+    expect(plan.outOfSupply.mark).toEqual([])
+  })
+
+  it('12.6c：部分重叠来源不是同一组 ⇒ 不共享零头额度（保守口径）', () => {
+    const plan = planSupplyPhase(facts, {
+      activeSide: 'axis',
+      units: [unit('a'), unit('b'), unit('c')],
+      mobility: 'leg',
+      availableT: 9,
+      eatOffTheMap: () => true,
+      feedingSources: {
+        a: { sourceKey: 'd1|d2', availableT: 9 },
+        b: { sourceKey: 'd2', availableT: 9 },
+        c: { sourceKey: 'd1|d2', availableT: 9 },
+      },
+    })
+    // a 组 d1|d2 付 1T；b 组 d2 另起一批付 1T；c 回到 a 组，沿用该组零头付 0T
+    expect(plan.feeding.map((item) => item.costT)).toEqual([1, 1, 0])
+  })
+
+  it('12.6c：该来源组没有余额 ⇒ 不喂，不能靠别组的 1T 免费续命', () => {
+    const plan = base({
+      a: { sourceKey: 'd1', availableT: 9 },
+      b: { sourceKey: 'd2', availableT: 0 },
+    })
+    expect(plan.feeding.map((item) => item.affordable)).toEqual([true, false])
+    expect(plan.outOfSupply.mark).toEqual(['b'])
+    expect(plan.attritionDuty.flatMap((duty) => duty.unitIds)).toEqual(['b'])
+  })
+
+  it('12.6c：没有可达付款站 ⇒ 该单位不能吃图上补给', () => {
+    const plan = base({
+      a: { sourceKey: 'd1', availableT: 9 },
+      b: { sourceKey: null, availableT: 0 },
+    })
+    expect(plan.feeding[1]).toMatchObject({ affordable: false, sourceKey: null })
+    expect(plan.outOfSupply.mark).toEqual(['b'])
+  })
+
+  it('12.6c：未提供来源事实 ⇒ 保持「全阶段一批」的旧口径，且不写 sourceKey', () => {
+    const plan = planSupplyPhase(facts, {
+      activeSide: 'axis',
+      units: [unit('a'), unit('b')],
+      mobility: 'leg',
+      availableT: 9,
+      eatOffTheMap: () => true,
+    })
+    expect(plan.feeding).toEqual([
+      { unitId: 'a', costT: 1, affordable: true },
+      { unitId: 'b', costT: 0, affordable: true },
+    ])
   })
 })

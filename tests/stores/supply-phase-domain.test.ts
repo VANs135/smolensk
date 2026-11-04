@@ -1,13 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
-import { createTraceSupplyFacts, holdingsToT, resolveAttrition } from '@/engine/rules'
+import {
+  createTraceSupplyFacts,
+  holdingsToT,
+  resolveAttrition,
+  type FeedingSourceFacts,
+} from '@/engine/rules'
 import { createSupplyPhaseDomain, type SupplyPhasePorts } from '@/stores/supply-phase'
 import { allowedActionsOf, toConsoleUnit, type ConsoleUnit } from '@/stores/workbench-model'
 import type { SpDump } from '@/stores/supply-types'
 import { CORE_HEX, combatRecord } from '../flows/sop-harness'
 
 /** 独立实例使用真实单位和规则，付款/骰源只在端口处记录。 */
-function domainFixture(count = 1) {
+function domainFixture(
+  count = 1,
+  feedingSources?: () => Readonly<Record<string, FeedingSourceFacts>>,
+) {
   const units = ref<ConsoleUnit[]>(
     Array.from({ length: count }, (_, index) =>
       toConsoleUnit({
@@ -50,6 +58,7 @@ function domainFixture(count = 1) {
         key,
       ),
     deliverableDumpsFor: () => dumps.value,
+    ...(feedingSources === undefined ? {} : { feedingSources }),
     payFromSideDumps: (amount) => pay(units.value[0]!, amount),
     payFromUnitReachableDumps: pay,
     markTraceSupply(id, ready) {
@@ -82,6 +91,58 @@ function domainFixture(count = 1) {
 }
 
 describe('D段独立域：付款、待决损耗与阶段退出', () => {
+  it('12.6c/12.3a·b：不同付款来源不共享零头额度，首名失败也不让另一组免费续命', () => {
+    const a = domainFixture(2, () => ({
+      u0: { sourceKey: 'd1', availableT: 1 },
+      u1: { sourceKey: 'd2', availableT: 1 },
+    }))
+    a.step.value = 'supply.check'
+    for (const unit of a.units.value) {
+      unit.re = 1
+      unit.steps = 1
+      unit.hasTraceSupply = false
+      a.domain.supplyPhaseInputs.value.eatOffTheMap[unit.instanceId] = true
+    }
+    // 替身端口只有一座共享站：两组各 1T 的额度、全局池 2T 与事实表保持自洽
+    a.dumps.value[0]!.sp = 0
+    a.dumps.value[0]!.t = 2
+    expect(a.domain.planSupplyPhaseNow()).toBe(true)
+    // 两组各起一批：不能出现「第二名 0T」
+    expect(a.domain.supplyPhasePlan.value!.feeding.map((item) => item.costT)).toEqual([1, 1])
+    a.pay.mockImplementationOnce(() => null)
+    expect(a.domain.applySupplyPhaseFeedingNow()).toBe(true)
+    expect(a.pay.mock.calls.map((call) => call[1])).toEqual([1, 1])
+    expect(a.units.value.map((unit) => unit.hasTraceSupply)).toEqual([false, true])
+    // 首名付款被拒未扣款，第二名实际付 1T ⇒ 池里还剩 1T，没有凭空扣或凭空喂
+    expect(holdingsToT(a.dumps.value[0]!)).toBe(1)
+    expect(a.domain.supplyPhasePlan.value!.attritionDuty[0]!.unitIds).toEqual(['u0'])
+    expect(a.log).toHaveBeenCalledWith('success', expect.stringContaining('共 1 T'), '12.6c')
+    expect(a.domain.applySupplyPhaseFeedingNow()).toBe(true)
+    expect(a.pay).toHaveBeenCalledTimes(2)
+  })
+
+  it('12.6c：同一来源组内首名付款失败，第二名按实际已喂 RE 重计（不沿用 0T）', () => {
+    const a = domainFixture(2, () => ({
+      u0: { sourceKey: 'd1', availableT: 4 },
+      u1: { sourceKey: 'd1', availableT: 4 },
+    }))
+    a.step.value = 'supply.check'
+    for (const unit of a.units.value) {
+      unit.re = 1
+      unit.steps = 1
+      unit.hasTraceSupply = false
+      a.domain.supplyPhaseInputs.value.eatOffTheMap[unit.instanceId] = true
+    }
+    expect(a.domain.planSupplyPhaseNow()).toBe(true)
+    expect(a.domain.supplyPhasePlan.value!.feeding.map((item) => item.costT)).toEqual([1, 0])
+    a.pay.mockImplementationOnce(() => null)
+    expect(a.domain.applySupplyPhaseFeedingNow()).toBe(true)
+    expect(a.pay.mock.calls.map((call) => call[1])).toEqual([1, 1])
+    expect(a.units.value.map((unit) => unit.hasTraceSupply)).toEqual([false, true])
+    expect(a.domain.applySupplyPhaseFeedingNow()).toBe(true)
+    expect(a.pay).toHaveBeenCalledTimes(2)
+  })
+
   it.each([0, 1])('12.6c/12.8：首单位付款失败，后续单位按实际供养重计费用（余量%sT）', (leftT) => {
     const a = domainFixture(2)
     a.step.value = 'supply.check'

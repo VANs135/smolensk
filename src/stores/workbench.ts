@@ -1643,6 +1643,32 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     requireAction,
     actionAllowedNow,
     deliverableDumpsFor,
+    /**
+     * 12.6c / 12.3a·b：D 段供养的付款来源事实（工作台只提交事实，取整规则在引擎算）。
+     *
+     * 组键＝该单位**可达补给站 id 的有序集合**（与 `payFromUnitReachableDumps` 同一个
+     * `deliverableDumpsFor`）：同一组才共享 12.6c 的批量取整额度；部分重叠或完全不同来源
+     * 各自起批，避免把甲站已付过的 1T 零头借给乙站的单位免费解除断补。
+     * `availableT` 取这些站的实际持有量，不采用玩家输入的数字。
+     */
+    feedingSources() {
+      const facts: Record<string, { sourceKey: string | null; availableT: number }> = {}
+      for (const unit of units.value) {
+        if (unit.side !== activeSide.value || !unit.isCombat) continue
+        const dumps = deliverableDumpsFor(unit.side, [unit])
+        facts[unit.instanceId] = {
+          sourceKey:
+            dumps.length === 0
+              ? null
+              : dumps
+                  .map((dump) => dump.id)
+                  .sort()
+                  .join('|'),
+          availableT: dumps.reduce((sum, dump) => sum + holdingsToT({ sp: dump.sp, t: dump.t }), 0),
+        }
+      }
+      return facts
+    },
     payFromSideDumps,
     payFromUnitReachableDumps,
     markTraceSupply,

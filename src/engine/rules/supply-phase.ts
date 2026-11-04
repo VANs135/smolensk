@@ -509,6 +509,21 @@ export function supplyPhaseFeedingCostT(fedRe: number, unitRe: number): number {
   return eatingOffTheMapCostT(fedRe + unitRe) - eatingOffTheMapCostT(fedRe)
 }
 
+/**
+ * 12.6c / 12.3a·b：某单位「吃图上补给」的付款来源事实（由 store 提供，引擎只读）
+ *
+ * 「每消耗 1T，就可以为最多 2RE 的战斗单位提供追溯补给（前提是单位在补给站的拖取或投递
+ *   距离内）」——1T 是从补给站**实际消耗**的 SP，故向上取整留下的零头额度属于付过款的
+ *   那一组补给站，不能让另一座站分文不扣却让第二个单位免于断补。`oosFedReByDump`
+ *   （交互链）已按同一补给站记账，D 段与本表同口径。
+ */
+export interface FeedingSourceFacts {
+  /** 付款来源组键（同一组才共享批量取整额度）；null＝没有可达付款站 */
+  sourceKey: string | null
+  /** 该组本阶段可用于供养的 T 合计（按实际补给站持有量，不是玩家输入的数字） */
+  availableT: number
+}
+
 /** 补给阶段计划（SP 分配结果） */
 export interface SupplyPhasePlan {
   rule: string
@@ -520,8 +535,18 @@ export interface SupplyPhasePlan {
   assessments: UnitSupplyAssessment[]
   /** ④ 断补标记的置/除（12.6d） */
   outOfSupply: OutOfSupplyPlan
-  /** ⑤ 吃图上补给的分配（12.6c：按剩余 T 自前向后分配；affordable=false 者仍会断补） */
-  feeding: { unitId: string; costT: number; affordable: boolean }[]
+  /**
+   * ⑤ 吃图上补给的分配（12.6c：按剩余 T 自前向后分配；affordable=false 者仍会断补）
+   *
+   * `sourceKey` 只在调用方给出 `feedingSources` 事实时写入：同一来源组共享批量取整额度，
+   * 不同组各起一批。旧存档/未提供来源事实的计划没有该键，落盘沿用「全阶段一批」的既有口径。
+   */
+  feeding: {
+    unitId: string
+    costT: number
+    affordable: boolean
+    sourceKey?: string | null
+  }[]
   /** ⑥ 需掷损耗的堆叠（12.8a/b） */
   attritionDuty: AttritionDuty[]
   detail: string
@@ -549,6 +574,12 @@ export function planSupplyPhase(
     canDraw?: (unitId: string) => boolean
     /** 12.10e：本阶段恢复已结算时，供养重算不再预留第二次恢复费用。 */
     recoverySettled?: boolean
+    /**
+     * 12.6c / 12.3a·b：逐单位的付款来源事实（按 unit id）。
+     * 缺省＝不分组，沿用「全阶段一批」的既有口径；提供时**按来源组**分别累计已喂 RE
+     * 与预算，避免把甲站已付过的 1T 零头借给乙站的单位免费解除断补。
+     */
+    feedingSources?: Readonly<Record<string, FeedingSourceFacts>>
   },
 ): SupplyPhasePlan {
   const mine = input.units.filter((unit) => unit.side === input.activeSide)
@@ -590,22 +621,50 @@ export function planSupplyPhase(
   //   `assessUnitSupply#alreadyFedRe` 与交互链同一条口径）⇒ 本循环按**累计已喂 RE** 取增量成本，
   //   不能逐单位各取整再相加（修前取 `assessments` 里逐单位各算的 `eatingCostT` ⇒ 三个 1RE
   //   单位收 3T，而交互链同批次收 2T）。
+  //
+  // ★ 12.6c × 12.3a·b：**一批＝一组实际付款的补给站**。1T 是从某个站真正扣掉的 SP，
+  //   零头额度不能跨站借用（否则乙站分文不扣，却让第二个单位免于断补，等于凭空补给）。
+  //   给出 `feedingSources` 时按组分别累计已喂 RE 与该组预算；不给出时保持全阶段一批的旧口径。
   let remainingT = Math.max(0, input.availableT - recovery.spentT)
-  const feeding: { unitId: string; costT: number; affordable: boolean }[] = []
+  const feeding: SupplyPhasePlan['feeding'] = []
   const fedUnitIds = new Set<string>()
-  let fedRe = 0
+  const sources = input.feedingSources
+  const fedReBySource = new Map<string, number>()
+  const spentTBySource = new Map<string, number>()
+  let globalFedRe = 0
   for (const unit of mine) {
     if (input.eatOffTheMap?.(unit.id) !== true) continue
     const assessment = assessments.find((item) => item.unitId === unit.id)
     if (assessment === undefined || !assessment.canEatOffTheMap) continue
+    const source = sources?.[unit.id]
+    const sourceKey = source?.sourceKey ?? null
+    // 有来源事实却没有可达付款站 ⇒ 不能凭空供养（12.6c 的「在补给站拖取或投递距离内」）
+    if (sources !== undefined && sourceKey === null) {
+      feeding.push({ unitId: unit.id, costT: 0, affordable: false, sourceKey: null })
+      continue
+    }
+    const groupKey = sourceKey ?? ''
+    const fedRe = sources === undefined ? globalFedRe : (fedReBySource.get(groupKey) ?? 0)
     const costT = supplyPhaseFeedingCostT(fedRe, unit.re)
-    const affordable = remainingT >= costT
+    const groupLeft =
+      sources === undefined || source === undefined
+        ? remainingT
+        : source.availableT - (spentTBySource.get(groupKey) ?? 0)
+    const affordable = remainingT >= costT && groupLeft >= costT
     if (affordable) {
       remainingT -= costT
-      fedRe += unit.re
+      if (sources === undefined) globalFedRe += unit.re
+      else {
+        fedReBySource.set(groupKey, fedRe + unit.re)
+        spentTBySource.set(groupKey, (spentTBySource.get(groupKey) ?? 0) + costT)
+      }
       fedUnitIds.add(unit.id)
     }
-    feeding.push({ unitId: unit.id, costT, affordable })
+    feeding.push(
+      sources === undefined
+        ? { unitId: unit.id, costT, affordable }
+        : { unitId: unit.id, costT, affordable, sourceKey },
+    )
   }
 
   // ④ 断补标记（12.6d）：只有**真正被喂饱**（T 够付）的单位才算免于断补
