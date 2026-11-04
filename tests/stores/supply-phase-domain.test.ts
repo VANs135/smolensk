@@ -82,6 +82,44 @@ function domainFixture(count = 1) {
 }
 
 describe('D段独立域：付款、待决损耗与阶段退出', () => {
+  it('12.10e/12.6c：已结算恢复后重算供养不再次预留恢复费，实际喂食后不产生虚假损耗', () => {
+    const a = domainFixture()
+    a.units.value[0]!.internalStocks = 'low'
+    a.units.value[0]!.re = 1
+    a.units.value[0]!.steps = 1
+    a.dumps.value[0]!.sp = 0
+    a.dumps.value[0]!.t = 2
+    a.domain.supplyPhaseInputs.value.eatOffTheMap.u0 = true
+    expect(a.domain.planSupplyPhaseNow()).toBe(true)
+    expect(a.domain.supplyPhasePlan.value!.internalStocks.spentT).toBe(2)
+    expect(a.domain.supplyPhasePlan.value!.feeding[0]!.affordable).toBe(false)
+    // 模拟恢复环节已经结算、仍为Low的合法恢复点；供养重算只消费当前盘面余量。
+    a.domain.supplyRecoverySettled.value = true
+    a.step.value = 'supply.check'
+    expect(a.domain.planSupplyPhaseNow()).toBe(true)
+    expect(a.domain.supplyPhasePlan.value!.internalStocks.spentT).toBe(0)
+    expect(a.domain.supplyPhasePlan.value!.feeding[0]!.affordable).toBe(true)
+    expect(a.domain.applySupplyPhaseFeedingNow()).toBe(true)
+    expect(a.units.value[0]!.hasTraceSupply).toBe(true)
+    expect(a.units.value[0]!.internalStocks).toBe('low')
+    expect(a.domain.supplyPhasePlan.value!.attritionDuty).toEqual([])
+    const calls = a.pay.mock.calls.length
+    expect(a.domain.planSupplyPhaseNow()).toBe(true)
+    expect(a.domain.applySupplyPhaseFeedingNow()).toBe(true)
+    expect(a.pay).toHaveBeenCalledTimes(calls)
+  })
+  it('新阶段重置后重新执行恢复优先，不把上一阶段已结算状态延用', () => {
+    const a = domainFixture()
+    a.units.value[0]!.internalStocks = 'low'
+    a.units.value[0]!.re = 1
+    a.units.value[0]!.steps = 1
+    a.domain.supplyRecoverySettled.value = true
+    expect(a.domain.planSupplyPhaseNow()).toBe(true)
+    expect(a.domain.supplyPhasePlan.value!.internalStocks.spentT).toBe(0)
+    a.domain.reset()
+    expect(a.domain.planSupplyPhaseNow()).toBe(true)
+    expect(a.domain.supplyPhasePlan.value!.internalStocks.spentT).toBe(2)
+  })
   it('12.10e：计划后来源余额减少，耗尽单位仍落实付得起的部分恢复，日志使用实际扣款', () => {
     const a = domainFixture(2)
     for (const unit of a.units.value) {

@@ -542,6 +542,8 @@ export function planSupplyPhase(
     eatOffTheMap?: (unitId: string) => boolean
     /** 该单位本阶段是否可拖取/可被投递到 SP（12.10e-B；缺省＝true） */
     canDraw?: (unitId: string) => boolean
+    /** 12.10e：本阶段恢复已结算时，供养重算不再预留第二次恢复费用。 */
+    recoverySettled?: boolean
   },
 ): SupplyPhasePlan {
   const mine = input.units.filter((unit) => unit.side === input.activeSide)
@@ -550,7 +552,7 @@ export function planSupplyPhase(
   // ① 部队储备强制恢复（12.10e）：只针对战斗单位中带 Low/Exhausted 标记者
   const recovery = planInternalStocksRecovery({
     units: mine
-      .filter((unit) => unit.isCombat && unit.internalStocks !== null)
+      .filter((unit) => !input.recoverySettled && unit.isCombat && unit.internalStocks !== null)
       .map((unit) => ({
         id: unit.id,
         level: unit.internalStocks as StockLevel,

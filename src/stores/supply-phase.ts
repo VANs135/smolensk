@@ -126,6 +126,7 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     const mine = units.value.filter((unit) => unit.side === side)
     const outcome = planSupplyPhase(supplyFacts.value, {
       activeSide: side,
+      recoverySettled: supplyRecoverySettled.value,
       units: mine.map((unit) => ({
         id: unit.instanceId,
         side: unit.side,
