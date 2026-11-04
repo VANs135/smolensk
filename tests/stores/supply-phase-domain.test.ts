@@ -66,10 +66,54 @@ function domainFixture(count = 1) {
   }
   const domain = createSupplyPhaseDomain(ports)
   const key = `${CORE_HEX.col}.${CORE_HEX.row}`
-  return { domain, units, dumps, step, canPay, pay, roll, refresh, enterCheck, key }
+  return {
+    domain,
+    units,
+    dumps,
+    step,
+    canPay,
+    pay,
+    roll,
+    refresh,
+    enterCheck,
+    key,
+    log: ports.pushLog,
+  }
 }
 
 describe('D段独立域：付款、待决损耗与阶段退出', () => {
+  it('12.10e：计划后来源余额减少，耗尽单位仍落实付得起的部分恢复，日志使用实际扣款', () => {
+    const a = domainFixture(2)
+    for (const unit of a.units.value) {
+      unit.internalStocks = 'exhausted'
+      unit.re = 1
+      unit.steps = 1
+    }
+    expect(a.domain.planSupplyPhaseNow()).toBe(true)
+    expect(a.domain.supplyPhasePlan.value!.internalStocks.spentT).toBe(8)
+    a.dumps.value[0]!.sp = 0
+    a.dumps.value[0]!.t = 2
+    expect(a.domain.applySupplyPhaseRecoveryNow()).toBe(true)
+    expect(a.units.value[0]!.internalStocks).toBe('low')
+    expect(a.units.value[1]!.internalStocks).toBe('exhausted')
+    expect(holdingsToT(a.dumps.value[0]!)).toBe(0)
+    expect(a.log).toHaveBeenCalledWith('success', expect.stringContaining('实际消耗 2 T'), '12.10e')
+    const count = a.pay.mock.calls.length
+    expect(a.domain.applySupplyPhaseRecoveryNow()).toBe(true)
+    expect(a.pay).toHaveBeenCalledTimes(count)
+  })
+  it('12.10e：部分恢复付款被拒，不能更新单位或报出计划消耗', () => {
+    const a = domainFixture()
+    a.units.value[0]!.internalStocks = 'exhausted'
+    a.units.value[0]!.re = 1
+    a.units.value[0]!.steps = 1
+    expect(a.domain.planSupplyPhaseNow()).toBe(true)
+    a.canPay.value = false
+    expect(a.domain.applySupplyPhaseRecoveryNow()).toBe(true)
+    expect(a.units.value[0]!.internalStocks).toBe('exhausted')
+    expect(holdingsToT(a.dumps.value[0]!)).toBe(8)
+    expect(a.log).toHaveBeenCalledWith('success', expect.stringContaining('实际消耗 0 T'), '12.10e')
+  })
   it.each(['low', 'exhausted'] as const)(
     '12.10e-C：不足且浪费1T时，先落实%s单位付得起的恢复，重复提交不再收费',
     (level) => {

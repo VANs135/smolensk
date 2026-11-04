@@ -3,6 +3,7 @@ import type { Side } from '@/data'
 import {
   holdingsToT,
   planSupplyPhase,
+  planInternalStocksRecovery,
   resolveAttrition,
   validateAttritionAllocation,
   type SupplyPhasePlan,
@@ -204,6 +205,7 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     const appliedIds: string[] = []
     const degradedIds: string[] = []
     const stations: string[] = []
+    let actualSpentT = 0
     for (const item of recovery.recoveries) {
       const unit = units.value.find((entry) => entry.instanceId === item.unitId)
       if (unit === undefined) {
@@ -217,12 +219,34 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
           (sum, dump) => sum + holdingsToT({ sp: dump.sp, t: dump.t }),
           0,
         )
-        payFromUnitReachableDumps(unit, ownT)
+        const partial = planInternalStocksRecovery({
+          units: [
+            {
+              id: unit.instanceId,
+              level: item.from,
+              reSize: unit.re,
+              multiStep: unit.steps > 1,
+              canDraw: true,
+            },
+          ],
+          availableT: Math.min(ownT, item.costT),
+        })
+        const partialPaid = payFromUnitReachableDumps(unit, partial.spentT)
+        if (partialPaid !== null) {
+          actualSpentT += partial.spentT
+          if (partialPaid !== '（无需付款）') stations.push(partialPaid)
+          const restored = partial.recoveries[0]
+          if (restored !== undefined) {
+            unit.internalStocks = restored.to === 'ready' ? null : 'low'
+            appliedIds.push(item.unitId)
+          }
+        }
         degradedIds.push(item.unitId)
         continue
       }
       unit.internalStocks = item.to === 'ready' ? null : 'low'
       appliedIds.push(item.unitId)
+      actualSpentT += item.costT
       if (paid !== '（无需付款）') stations.push(paid)
     }
     // 12.10e-C：先落实付得起的恢复，再消耗计划中应浪费的余额。
@@ -233,7 +257,8 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
         0,
       )
       const waste = Math.min(recovery.wastedT, available)
-      if (waste > 0) payFromSideDumps(waste, supplyPhasePayableDumps.value)
+      if (waste > 0 && payFromSideDumps(waste, supplyPhasePayableDumps.value) !== null)
+        actualSpentT += waste
     }
     // 12.8e 括注：12.10e 部队储备恢复也是"特殊续命" ⇒ 本回合不算被切断的第一回合
     markSustainedBySpecialSupply(appliedIds)
@@ -241,11 +266,14 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
       'success',
       `12.10e 部队储备恢复：${appliedIds.length} 个单位（${recovery.recoveries
         .filter((item) => appliedIds.includes(item.unitId))
-        .map((item) => `${item.unitId} ${item.from}→${item.to}`)
-        .join('、')}）；消耗 ${recovery.spentT} T` +
+        .map(
+          (item) =>
+            `${item.unitId} ${item.from}→${units.value.find((unit) => unit.instanceId === item.unitId)?.internalStocks ?? 'ready'}`,
+        )
+        .join('、')}）；实际消耗 ${actualSpentT} T` +
         (recovery.unmet.length > 0 ? `；仍未恢复 ${recovery.unmet.length} 个` : '') +
         (degradedIds.length > 0
-          ? `；另有 ${degradedIds.length} 个因**各自的可达站**不足在落盘时降级（已按 12.10e-C 花光其可达余额）`
+          ? `；另有 ${degradedIds.length} 个因**各自的可达站**不足重新核算（恢复或浪费按实际付款落实）`
           : '') +
         `；付款站 ${stations.join('、') || '（无）'}`,
       '12.10e',
