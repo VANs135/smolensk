@@ -194,6 +194,39 @@ describe('3.4b：SP 归属账本', () => {
 })
 
 describe('3.4b：错误集群的 SP 不能支付多单位编队的受限用途', () => {
+  it.each(['fuel', 'combat', 'barrage'] as const)(
+    '混入独立单位或另一集群，不能绕过%s归属限制，拒付不改资源',
+    (purpose) => {
+      const store = newStore()
+      store.setTurn(1)
+      const dump = axisDump(store)
+      store.setDumpPanzerGroupNow(dump.id, 'hoth')
+      const { unit } = panzerUnit(store, 'restricted')
+      const { unit: independent } = plainUnit(store, 'independent')
+      const otherRecord = groundRecord('axis', (item) => item.panzerGroup === 'hoth')
+      const other = placeGround(store, otherRecord, CORE_HEX, 'axis', 'other')
+      const before = JSON.stringify({ dumps: store.spDumps, units: store.units, rng: store.rng })
+      for (const ids of [
+        [unit.instanceId, independent.instanceId],
+        [other.instanceId, unit.instanceId],
+      ]) {
+        expect(
+          store.panzerGroupSpGate({ dumpId: dump.id, purpose, beneficiaryUnitIds: ids }),
+        ).toMatchObject({ rule: '3.4b' })
+        expect(JSON.stringify({ dumps: store.spDumps, units: store.units, rng: store.rng })).toBe(
+          before,
+        )
+      }
+      store.setDumpPanzerGroupNow(dump.id, 'guderian')
+      expect(
+        store.panzerGroupSpGate({
+          dumpId: dump.id,
+          purpose,
+          beneficiaryUnitIds: [unit.instanceId, independent.instanceId],
+        }),
+      ).toBeNull()
+    },
+  )
   it('归属 Hoth 的站替 Guderian 编队付**战斗**成本 ⇒ 拒（rule 3.4b）', () => {
     const store = newStore()
     store.setTurn(1)

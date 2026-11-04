@@ -91,7 +91,7 @@ import {
   planHedgehogReduce,
   printedPermanentHedgehogAt,
   PANZER_GROUP_CONSTRAINT_END,
-  checkPanzerGroupSpPayment,
+  checkPanzerGroupSpBeneficiaries,
   // B50（用户 2026-09-17）：3.4b 是 4.1a 的**可选项** ⇒ 生效与否＝日期窗口 × 开局共识
   panzerGroupRulesActive,
   PANZER_GROUP_OPTION_ITEM,
@@ -18122,8 +18122,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *
    * 唯一判据是引擎的 `checkPanzerGroupSpPayment`；本处只把盘面事实填进去：
    *   · 付费方＝**该补给站登记的**集群（未登记即"尚未归属"）；
-   *   · 受益编队＝全部受益单位**共用**的那一个集群——混编、空集或有不属编队者 ⇒ 交 `null`，
-   *     引擎据此判「不受限」（3.4：只约束多单位编队）。
+   *   · 受益单位逐个核对；独立单位不受限，但不能因此豁免同笔付款中的多单位编队。
    */
   function panzerGroupSpGate(input: {
     /** 付款的补给站（null ＝ 无来源归属可查 ⇒ 不在此处判） */
@@ -18139,42 +18138,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const beneficiaries = input.beneficiaryUnitIds
       .map((id) => units.value.find((unit) => unit.instanceId === id))
       .filter((unit): unit is ConsoleUnit => unit !== undefined)
-    const groups = new Set(
-      beneficiaries
-        .map((unit) => groupOfUnit(unit))
-        .filter((group): group is PanzerGroup => group !== null),
-    )
-    const formationGroup = groups.size === 1 ? [...groups][0]! : null
-    const inMultiUnitFormation =
-      beneficiaries.length > 0 &&
-      beneficiaries.every(
-        (unit) =>
+    const outcome = checkPanzerGroupSpBeneficiaries({
+      spGroup: panzerGroupOfDump(dump.id),
+      purpose: input.purpose,
+      date: date.value,
+      agreedByConsensus: panzerGroupRulesOn.value,
+      unassigned:
+        panzerGroupOfDump(dump.id) === null && pendingSpGroupAssignment.value.includes(dump.id),
+      beneficiaries: beneficiaries.map((unit) => ({
+        group: groupOfUnit(unit),
+        inMultiUnitFormation:
           groupOfUnit(unit) !== null ||
           multiUnitFormationIds.value.includes(unit.instanceId) ||
           unit.panzerGroup != null,
-      )
-
-    const outcome = checkPanzerGroupSpPayment({
-      spGroup: panzerGroupOfDump(dump.id),
-      formationGroup,
-      purpose: input.purpose,
-      date: date.value,
-      inMultiUnitFormation,
-      /*
-       * 3.4b：「新到的轴方 SP 必须立即归属」这条**只在它真去替多单位编队付账时才拦**。
-       *
-       * ★ 两层收窄，都是为了不把条文读成"账簿没登记就不许打仗"：
-       *   ① 只有**在局中新落**的轴方补给站才算「新到」（见 `pendingSpGroupAssignment`）——
-       *      初设/裁判已久的 SP 按 Setup Note F 早已分配，不该被当成新到的；
-       *   ② 只有**多单位编队**的受限用途才拦——步兵师与独立单位的战斗与这座站的归属无关，
-       *      因为登记疏漏而拦掉一场普通攻击，那不是 3.4b 的意思。
-       */
-      unassigned:
-        inMultiUnitFormation &&
-        panzerGroupOfDump(dump.id) === null &&
-        pendingSpGroupAssignment.value.includes(dump.id),
-      /* B50：4.1a 可选项 —— 本局未采纳 3.4b 时，整条判据在引擎里提前放行 */
-      agreedByConsensus: panzerGroupRulesOn.value,
+      })),
     })
     return outcome.ok ? null : fail(outcome.rule, outcome.reason)
   }

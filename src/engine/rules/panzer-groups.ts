@@ -365,6 +365,27 @@ export function allowedSideOf(group: PanzerGroup): BoundarySide {
   return group === 'guderian' ? 'south' : 'north'
 }
 
+/** 3.4b：同笔付款逐个核对受益单位，独立单位不能替其它编队解除归属限制。 */
+export function checkPanzerGroupSpBeneficiaries(input: {
+  spGroup: PanzerGroup | null
+  purpose: PanzerGroupSpPurpose | 'other'
+  date: string
+  agreedByConsensus: boolean
+  unassigned: boolean
+  beneficiaries: readonly { group: PanzerGroup | null; inMultiUnitFormation: boolean }[]
+}): RuleOutcome<{ restricted: false }> {
+  for (const unit of input.beneficiaries) {
+    const outcome = checkPanzerGroupSpPayment({
+      ...input,
+      formationGroup: unit.group,
+      inMultiUnitFormation: unit.inMultiUnitFormation,
+      unassigned: input.unassigned && unit.inMultiUnitFormation,
+    })
+    if (!outcome.ok) return outcome
+  }
+  return succeed('3.4b', { restricted: false })
+}
+
 /** 3.4：步兵师与独立单位不受分界线约束（判据只按「是否多单位编队」） */
 export function isExemptFromPanzerGroupRules(unit: {
   group: PanzerGroup | null
