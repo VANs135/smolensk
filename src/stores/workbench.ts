@@ -19481,7 +19481,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       (barrageState.value !== null && !barrageState.value.finished) ||
       (airState.value !== null && !airState.value.finished) ||
       (supplyState.value !== null && !supplyState.value.finished) ||
-      moveInteraction.value !== null ||
+      (moveInteraction.value !== null && !moveInteraction.value.finished) ||
       refitBase.value !== null
     ) {
       throw new Error('请先完成当前战斗、移动、付款或其他结算，再保存或读取对局')

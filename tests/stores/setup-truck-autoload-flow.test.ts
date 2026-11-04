@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 
+import { confirmSetupForStart } from '../flows/setup-harness'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -194,8 +195,9 @@ describe('批 B 切片 1：编队卡车满载自动落账（13.2h / IV-D）', ()
      *   被裁掉的算子**不影响本用例的判据**（装载账本已在初设时落盘，见上面那几条用例），
      *   而 12.5 的付款与来源判定只涉及这两枚。
      */
+    confirmSetupForStart(setup)
     workbench.units.splice(0, workbench.units.length, truckUnit, mate)
-    setup.finishSetup()
+    expect(setup.finishSetup()).toBe(true)
 
     workbench.setPhase('movement')
     // 12.5：加油在「模式与移动」环节（12.5a/f 的"消耗时支付"也允许在移动环节付）

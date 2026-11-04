@@ -1,3 +1,4 @@
+import { confirmSetupForStart } from '../flows/setup-harness'
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
@@ -175,6 +176,7 @@ describe('§6-A：编队抽签在初设自动执行（ch10 / ch11）', () => {
     const target = item.hexText!.split('.').map(Number)
     const countBefore = workbench.units.length
 
+    confirmSetupForStart(setup)
     expect(setup.finishSetup()).toBe(true)
 
     // 一个算子都没少（不是"未落位即移除"）

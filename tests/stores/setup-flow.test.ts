@@ -1,3 +1,4 @@
+import { confirmSetupForStart } from '../flows/setup-harness'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -532,6 +533,7 @@ describe('W7 C14：初设单位 box（地图点选放置）与开始游戏', () 
 
   it('C14：box 里未落位的项 ⇒ finishSetup 记为「本局移除，不存在」', () => {
     expect(setup.pendingPlacement.length).toBeGreaterThan(0)
+    confirmSetupForStart(setup)
     expect(setup.finishSetup()).toBe(true)
     expect(setup.finished).toBe(true)
     expect(setup.pendingPlacement).toHaveLength(0)
@@ -539,6 +541,7 @@ describe('W7 C14：初设单位 box（地图点选放置）与开始游戏', () 
   })
 
   it('C14：开始游戏 ⇒ 收束初设 + 建会话 + 共识按默认（全不用）写日志 + 进入第一阶段', () => {
+    confirmSetupForStart(setup)
     expect(setup.startGameNow()).toBe(true)
     expect(setup.finished).toBe(true)
     expect(session.session).not.toBeNull()

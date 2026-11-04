@@ -1,3 +1,4 @@
+import { confirmSetupForStart } from '../flows/setup-harness'
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import { scenarioSetup, scenarios } from '@/data'
@@ -107,6 +108,7 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
       expect(JSON.stringify(containers.formationDrawOutcomes)).toBe(outcomes)
       expect(deposit).not.toHaveBeenCalled()
       expect(returned).not.toHaveBeenCalled()
+      confirmSetupForStart(setup)
       expect(setup.startGameNow()).toBe(true)
       expect(game.session).not.toBeNull()
       expect(game.guidance?.step.driver).toBe('player')
@@ -197,6 +199,7 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
       expect(setup.runSetupDraws()).toBe(true)
       expect(JSON.stringify(containers.drawResults)).toBe(draws)
       expect(containers.setupDrawProgress.complete).toBe(true)
+      confirmSetupForStart(setup)
       expect(setup.startGameNow()).toBe(true)
     },
   )

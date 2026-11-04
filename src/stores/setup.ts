@@ -6,6 +6,7 @@ import { aircraft, scenarios, unitsAxis, unitsSoviet } from '@/data'
 import type { HexRef, Side } from '@/data'
 import {
   AIR_BASE_SITE_RULE,
+  assessSetupTruckLoad,
   boundarySideOf,
   breakdownCounterValues,
   SETUP_RULE,
@@ -16,6 +17,7 @@ import {
   planAutoSetup,
   planSetupPlacement,
   planSupplyOwnership,
+  pendingSetupObligations,
   planTruckFullLoad,
   requiresPanzerGroupSpAssignment,
   // B50（用户 2026-09-17）：3.4b 是 4.1a 的**可选项** ⇒ 初设的点名要求与默认归属都看共识
@@ -860,8 +862,23 @@ export const useSetupStore = defineStore('setup', () => {
     raw:
       scenarios.scenarios.find((item) => item.id === scenarioId.value)?.setup.organicTrucks.raw ??
       '—',
-    done: completed.value['truckLoad'] === true,
+    done: truckLoadReadiness.value.complete,
   }))
+
+  const truckLoadReadiness = computed(() =>
+    assessSetupTruckLoad(
+      {
+        scenarioId: scenarioId.value,
+        trucks: setupTrucks.value,
+        fullInstanceIds: effectiveFullTruckIds.value,
+      },
+      setupTrucks.value.map((truck) => ({
+        instanceId: truck.instanceId,
+        loadedSpT:
+          workbench.units.find((unit) => unit.instanceId === truck.instanceId)?.loadedSpT ?? null,
+      })),
+    ),
+  )
 
   const truckDecisions = computed<readonly TruckDecision[]>(() => {
     const required = requiredFullTrucks.value
@@ -931,7 +948,7 @@ export const useSetupStore = defineStore('setup', () => {
             count: 1,
             total: 1,
             placed: truck.full ? 1 : 0,
-            remaining: truck.full ? 0 : 1,
+            remaining: truck.full || truckLoadReadiness.value.complete ? 0 : 1,
             chunk: 1,
             candidates: [],
             category: 'ground' as const,
@@ -992,6 +1009,14 @@ export const useSetupStore = defineStore('setup', () => {
     if (current === null) {
       return record({ ok: false, rule: SETUP_RULE, reason: 'sideCursorNotArmed' })
     }
+    const required = requiredSetupIssues.value.find(
+      (issue) => issue.side === current && issue.id !== 'sideConfirmation',
+    )
+    if (required !== undefined)
+      return record({ ok: false, rule: required.rule, reason: required.detail })
+    // 换手后不再接受上一方留下的地图点选。
+    placing.value = null
+    cancelTruckPick()
     setupSideConfirmed.value = { ...setupSideConfirmed.value, [current]: true }
     const other: Side = current === 'axis' ? 'soviet' : 'axis'
     const otherDone = setupSideConfirmed.value[other] === true
@@ -1013,7 +1038,9 @@ export const useSetupStore = defineStore('setup', () => {
       (total, stack) =>
         total +
         stack.items.filter(
-          (item) => (item.instanceId ? activeSideForTruck(item.instanceId) : item.side) === side,
+          (item) =>
+            item.remaining > 0 &&
+            (item.instanceId ? activeSideForTruck(item.instanceId) : item.side) === side,
         ).length,
       0,
     )
@@ -1155,6 +1182,20 @@ export const useSetupStore = defineStore('setup', () => {
   /** 初设是否已收束（玩家点了「开始游戏」） */
   const finished = ref(false)
 
+  const omittablePlacements = computed(() =>
+    pendingPlacement.value.filter((item) => item.kind === 'self' || item.kind === 'air'),
+  )
+  const requiredSetupIssues = computed(() =>
+    pendingSetupObligations({
+      shifts: pendingPlacement.value
+        .filter((item) => item.kind === 'shift')
+        .map((item) => ({ formationId: item.formationId ?? item.label })),
+      draws: containers.setupDrawProgress.groups,
+      truck: truckLoadReadiness.value,
+      cursor: setupSideCursor.value,
+    }),
+  )
+
   function canFinishSetup(): boolean {
     const required = pendingPlacement.value.filter((item) => item.kind === 'shift')
     const result = validateRequiredSetupPlacements(
@@ -1176,6 +1217,9 @@ export const useSetupStore = defineStore('setup', () => {
           .map((group) => group.reason)
           .join('；')}`,
       })
+    const obligation = requiredSetupIssues.value[0]
+    if (obligation !== undefined)
+      return record({ ok: false, rule: obligation.rule, reason: obligation.detail })
     return true
   }
 
@@ -1364,7 +1408,7 @@ export const useSetupStore = defineStore('setup', () => {
     return {
       scenario: source !== undefined,
       formationDraw: containers.setupDrawProgress.complete,
-      truckLoad: completed.value['truckLoad'] === true,
+      truckLoad: truckLoadReadiness.value.complete,
       spOwnership: completed.value['spOwnership'] === true,
       autoSetup: completed.value['autoSetup'] === true,
       airSetup: airDone('axis') && airDone('soviet'),
@@ -1992,6 +2036,7 @@ export const useSetupStore = defineStore('setup', () => {
     if (full) next.add(instanceId)
     else next.delete(instanceId)
     truckFullIds.value = [...next]
+    completed.value = { ...completed.value, truckLoad: false }
   }
 
   /** 3.4b 在本局是否生效（剧本首回合早于 19 August × 共识采纳 4.1a 的可选项） */
@@ -2180,6 +2225,7 @@ export const useSetupStore = defineStore('setup', () => {
   const initialPlacementsComplete = computed(
     () =>
       setupSideCursor.value === null &&
+      requiredSetupIssues.value.length === 0 &&
       pendingPlacement.value.every((item) => item.remaining === 0),
   )
 
@@ -2273,6 +2319,8 @@ export const useSetupStore = defineStore('setup', () => {
     spDumps,
     airChoices,
     completed,
+    requiredSetupIssues,
+    omittablePlacements,
     lastAction,
     notes,
     // 派生

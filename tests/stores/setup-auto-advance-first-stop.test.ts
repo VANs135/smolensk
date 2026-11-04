@@ -1,3 +1,4 @@
+import { confirmSetupForStart } from '../flows/setup-harness'
 import { readFileSync } from 'node:fs'
 
 import { createPinia, setActivePinia } from 'pinia'
@@ -43,6 +44,7 @@ describe('第六批 S3：完成初设 ⇒ 自动连跑到第一个玩家环节�
   it('★ 点「完成初设」⇒ 一次落到**第一个玩家环节**（A 飞机整备），不再停在 Pre-Turn', () => {
     const { setup, session, workbench } = stores
     setup.selectScenario('1')
+    confirmSetupForStart(setup)
     expect(setup.startGameNow()).toBe(true)
 
     // 反空转：确实推进了（不是 0 步），且停在**玩家**环节
@@ -58,6 +60,7 @@ describe('第六批 S3：完成初设 ⇒ 自动连跑到第一个玩家环节�
   it('★ 待答时不硬闯：停在 2.3 先后手 ⇒ 玩家答完才继续（不替玩家决定）', () => {
     const { setup, session } = stores
     setup.selectScenario('1')
+    confirmSetupForStart(setup)
     expect(setup.startGameNow()).toBe(true)
     // 首回合先手由剧本指定 ⇒ 通常不发问；若这一局真的挂起待答，则必须停在待答处
     if (session.awaiting) {

@@ -1,3 +1,4 @@
+import { confirmSetupForStart } from '../flows/setup-harness'
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchStore } from '@/stores'
@@ -9,6 +10,7 @@ function boot() {
     board = useWorkbenchStore()
   const containers = useContainersStore()
   setup.selectScenario('1')
+  confirmSetupForStart(setup)
   return { setup, game, board, containers }
 }
 

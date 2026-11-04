@@ -1,3 +1,4 @@
+import { confirmSetupForStart } from './setup-harness'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import { describe, it, expect } from 'vitest'
@@ -142,6 +143,7 @@ describe('整局主线回归：开局、自动结算、玩家义务和持久化'
     const ctx = fresh()
     ctx.setup.enterSetup('1')
     fillSetup(ctx)
+    confirmSetupForStart(ctx.setup)
     ctx.setup.startGameNow()
     await progress(ctx, () => ctx.g.terminated, 5000)
     expect(ctx.g.termination).toBe('earlyDecision')
@@ -160,6 +162,7 @@ describe('整局主线回归：开局、自动结算、玩家义务和持久化'
     const count = g.agreedCheckedCount
     setup.enterSetup('1')
     expect(g.agreedCheckedCount).toBe(count)
+    confirmSetupForStart(setup)
     setup.startGameNow()
     expect(g.consensus.filter((c) => c.adopted === true)).toHaveLength(count)
     expect(g.saveNow()).toBe(true)
@@ -241,6 +244,7 @@ describe('整局主线回归：开局、自动结算、玩家义务和持久化'
   it('首页冷读档恢复盘面、环节、MP、燃料窗口与初设完成状态', () => {
     const ctx = fresh()
     ctx.setup.enterSetup('1')
+    confirmSetupForStart(ctx.setup)
     ctx.setup.startGameNow()
     ctx.w.setPhase('movement')
     ctx.w.setSegmentStepIndex(1)
@@ -264,6 +268,7 @@ describe('整局主线回归：开局、自动结算、玩家义务和持久化'
   it('坏盘面读取失败时不改变正在进行的对局', () => {
     const ctx = fresh()
     ctx.setup.enterSetup('1')
+    confirmSetupForStart(ctx.setup)
     ctx.setup.startGameNow()
     expect(ctx.g.saveNow()).toBe(true)
     const storage = ctx.g.storage!,

@@ -1,3 +1,4 @@
+import { confirmSetupForStart } from '../flows/setup-harness'
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 import { scenarios } from '@/data'
@@ -32,8 +33,7 @@ function drawState(containers: ReturnType<typeof useContainersStore>) {
 function save(id = '1') {
   const original = boot(id)
   const { setup, game } = original
-  expect(setup.confirmSideSetup()).toBe(true)
-  expect(setup.confirmSideSetup()).toBe(true)
+  confirmSetupForStart(setup)
   setup.notes.push('验收：保留初设处置说明')
   expect(setup.startGameNow()).toBe(true)
   expect(game.saveNow()).toBe(true)

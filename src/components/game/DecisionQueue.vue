@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { BaseButton, BaseTag } from '@/components/base'
 import { clampDockOffset } from '@/components/map/dock-position'
@@ -55,6 +55,9 @@ const pendingTotal = computed(() => stacks.value.reduce((total, stack) => total 
 /** 当前正在地图上选落点的那一项（null = 没在放） */
 const placing = computed(() => setup.placing)
 const omitConfirmed = ref(false)
+watch([() => setup.scenarioId, () => setup.omittablePlacements], () => {
+  omitConfirmed.value = false
+})
 
 /** 是否**全部落位完毕**（落满 ⇒ 队列收起列表、就地给「完成初设」） */
 const allPlaced = computed(() => setup.initialPlacementsComplete)
@@ -200,19 +203,31 @@ function sideMark(side: 'axis' | 'soviet'): string {
       <BaseButton variant="primary" size="sm" @click="setup.startGameNow()">完成初设</BaseButton>
     </div>
 
-    <div v-if="cursorSide === null && !allPlaced" class="queue__done">
+    <div
+      v-if="setup.requiredSetupIssues.length > 0"
+      class="queue__hint"
+      aria-label="必须完成的初设事项"
+    >
+      <BaseTag kind="warning">必须完成</BaseTag>
+      <p v-for="issue in setup.requiredSetupIssues" :key="issue.id">{{ issue.detail }}</p>
+    </div>
+
+    <div v-if="cursorSide === null && setup.omittablePlacements.length > 0" class="queue__done">
       <details>
         <summary>还有未布设项；查看后可选择放弃</summary>
         <p
-          v-for="item in setup.pendingPlacement"
+          v-for="item in setup.omittablePlacements"
           :key="item.kind + ':' + item.side + ':' + item.entryIndex"
         >
           {{ sideName(item.side) }}：{{ item.label }} × {{ item.remaining }}
         </p>
         <label
-          ><input v-model="omitConfirmed" type="checkbox" />确认以上未布设项按初设规则处理</label
+          ><input v-model="omitConfirmed" type="checkbox" />确认以上普通未布设单位从本局移除</label
         >
-        <BaseButton size="sm" :disabled="!omitConfirmed" @click="setup.startGameNow()"
+        <BaseButton
+          size="sm"
+          :disabled="!omitConfirmed || setup.requiredSetupIssues.length > 0"
+          @click="setup.startGameNow()"
           >确认放弃未布设项并开局</BaseButton
         >
       </details>
@@ -228,7 +243,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
       <ul v-if="openKey === stack.key && stack.items.length > 0" class="queue__cards">
         <li
           v-for="item in stack.items"
-          :key="`${item.kind}:${item.side}:${item.entryIndex}:${item.instanceId ?? ''}`"
+          :key="`${item.kind}:${item.side}:${item.entryIndex}:${item.formationId ?? item.instanceId ?? ''}`"
           class="queue__row"
         >
           <button

@@ -59,6 +59,7 @@ export * from './victory'
 // 剧本抽取盒/地图外空军盒/边缘盒/编队收纳盒）
 export * from './containers'
 export * from './setup-draw-progress'
+export * from './setup-obligations'
 // W7 C17（B6）：SOP 环节链（2.2 段名原文里的子步）
 export * from './sop-segments'
 // W7 C13：切方与信息展示纪律（4.9a 敌方堆叠可见性 / 4.8b 堆叠顺序 / 4.9b 参战公开数值 /

@@ -1,3 +1,4 @@
+import { confirmSetupForStart } from '../flows/setup-harness'
 import { readFileSync } from 'node:fs'
 
 import { createPinia, setActivePinia } from 'pinia'
@@ -79,6 +80,7 @@ describe('批 E 切片 1：开局入口收敛（唯一入口＝初设收束点�
     // ch10：真实入口先完成自动初设及编队处置，不能从空白盘面直接开局。
     expect(setup.enterSetup('1')).toBe(true)
 
+    confirmSetupForStart(setup)
     expect(setup.startGameNow()).toBe(true)
     expect(session.session).not.toBeNull()
     expect(setup.finished).toBe(true)
