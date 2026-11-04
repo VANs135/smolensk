@@ -75,6 +75,56 @@ describe('专规 2.4：慢动员（store 流程）', () => {
     )
   })
 
+  it('2.4：锁定的师不能开拔；换方往返后当日配额不重置，15 Jul 才放下一批', () => {
+    const store = newStore()
+    store.setActiveSide('soviet')
+    store.setTurn(2)
+    store.setPhase('reinforcement')
+    const record = pickSovietDivision()
+    // 表 2-2 中 30th 累计只有 5 个师（12 Jul 2 + 15 Jul 3）；多摆一个用于验证总量封顶
+    const ids: string[] = []
+    for (let index = 0; index < 6; index += 1) {
+      const unit = toConsoleUnit({
+        record,
+        instanceId: `ru-locked-${index}`,
+        hex: { col: 36, row: 13 },
+        side: 'soviet',
+      })
+      unit.locked = true
+      unit.slowMobilizationArmy = '30th'
+      ids.push(unit.instanceId)
+      store.units.push(unit)
+    }
+
+    store.setPhase('movement')
+
+    // 锁定的师不能开拔：选中 36,13 的栈即被 2.4 拦下
+    store.clickHex({ col: 36, row: 13 })
+    expect(store.confirmMovePick()).toBe(false)
+    expect(store.moveBlocked?.rule).toBe('专规 2.4')
+
+    store.setPhase('reinforcement')
+    expect(store.unlockSlowMobilizationNow(ids[0]!)).toBe(true)
+    expect(store.unlockSlowMobilizationNow(ids[1]!)).toBe(true)
+    expect(store.unlockSlowMobilizationNow(ids[2]!)).toBe(false)
+
+    // 换方往返不重置当日配额
+    store.setActiveSide('axis')
+    store.setActiveSide('soviet')
+    expect(store.unlockSlowMobilizationNow(ids[2]!)).toBe(false)
+
+    // 15 Jul：该集团军累计 5 个，已解锁 2 ⇒ 本日恰放 3 个
+    store.setTurn(3)
+    expect(store.unlockSlowMobilizationNow(ids[2]!)).toBe(true)
+    expect(store.unlockSlowMobilizationNow(ids[3]!)).toBe(true)
+    expect(store.unlockSlowMobilizationNow(ids[4]!)).toBe(true)
+    // 第 6 个永远超出表 2-2 的累计 5
+    expect(store.unlockSlowMobilizationNow(ids[5]!)).toBe(false)
+    expect(store.units.filter((unit) => unit.locked).map((unit) => unit.instanceId)).toEqual([
+      ids[5]!,
+    ])
+  })
+
   it('2.4：没有到达卡集团军归属的算子不能按表解锁（不按番号前缀猜）', () => {
     const store = newStore()
     store.setActiveSide('soviet')

@@ -17512,6 +17512,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       return false
     }
+    /*
+     * ★ 待人工决策（近似口径，不得当成正式账本）：
+     *   这里用"盘面上同集团军标签、且已解除锁定的算子数"推导已解锁数，**没有新增存档字段**。
+     *   失效场景：已解锁的师被 1.6a **永久移除**（不留在死亡堆）后，已解锁数会下降，
+     *   理论上可回吐表 2-2 的配额；被摧毁进死亡堆的算子仍计入，故只有 1.6a 这条路径会失真。
+     *   是否改为正式"解锁账本"（需要存档字段与迁移）已在 docs/AI接手确认-2026-11-05.md
+     *   “待人工决策”清单挂起，本批保持现有近似口径。
+     */
     const tagged = [...units.value, ...deadPile.value].filter(
       (item): item is ConsoleUnit =>
         'slowMobilizationArmy' in item && item.slowMobilizationArmy === army,
