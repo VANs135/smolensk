@@ -106,6 +106,9 @@ export type ArrivalPlacement =
   /** 直接进死亡堆 */
   | { kind: 'deadPile'; label: string }
 
+/** 专规 2.4：慢动员涉及的集团军（到达卡以 `Nth Army HQ (see 2.4)` 标注） */
+export type SlowMobilizationArmy = '30th' | '28th' | '24th'
+
 /** 到达卡的投放需求（一条 = 到达卡上的一个条目） */
 export interface ArrivalUnitDemand {
   side: Side
@@ -134,6 +137,13 @@ export interface ArrivalUnitDemand {
   stepsLost: number
   /** 13.6c / 卡头：运输点数**满载 SP** 入场 */
   loadedWithSp: boolean
+  /**
+   * 专规 2.4：该条目是某集团军的**师**时给出集团军归属
+   *
+   * 卡面只在分栏里用 `30th/28th/24th Army HQ (see 2.4)` 标明集团军，单位库本身没有集团军字段；
+   * 故归属只能从**到达卡分组**得到。HQ 与本条独立单位不带此字段（2.4 只锁师）。
+   */
+  slowMobilizationArmy: SlowMobilizationArmy | null
   placement: ArrivalPlacement
   rule: string
   detail: string
@@ -315,8 +325,19 @@ export function planArrivals(input: { side: Side; date: string }): RuleOutcome<A
     for (const group of groups) {
       const placement = parseArrivalPlacement(group.label)
       if (placement === null) continue
-      for (const item of group.units as readonly RosterItem[]) {
-        units.push(buildDemand({ side, date, placement, item }))
+      const roster = group.units as readonly RosterItem[]
+      const slowArmy = slowMobilizationArmyOfGroup(roster)
+      for (const item of roster) {
+        units.push(
+          buildDemand({
+            side,
+            date,
+            placement,
+            item,
+            // 2.4 只锁**师**；HQ 与独立单位照常可动
+            slowMobilizationArmy: slowArmy !== null && isDivisionItem(item) ? slowArmy : null,
+          }),
+        )
       }
     }
 
@@ -378,12 +399,33 @@ export function planArrivals(input: { side: Side; date: string }): RuleOutcome<A
   })
 }
 
+/**
+ * 该到达分组属于哪个慢动员集团军（2.4）
+ *
+ * 只认卡面明写的 `30th/28th/24th Army HQ (see 2.4)`；不按番号前缀猜。
+ */
+function slowMobilizationArmyOfGroup(items: readonly RosterItem[]): SlowMobilizationArmy | null {
+  for (const item of items) {
+    const matched = /^(30th|28th|24th)\s+Army\s+HQ/i.exec(item.raw.trim())
+    if (matched !== null) return matched[1] as SlowMobilizationArmy
+  }
+  return null
+}
+
+/** 该条目是否为**师**（2.4 锁定对象；编成条目与 HQ/独立单位都不算） */
+function isDivisionItem(item: RosterItem): boolean {
+  if (item.kind === 'formation' || item.kind === 'hq') return false
+  if (/Div\b/i.test((item.parentType ?? '').trim())) return true
+  return /\b(Inf|Tk|Mtr|Militia|Rifle)\s+Div\b/i.test(item.raw)
+}
+
 /** 组装一条投放需求 */
 function buildDemand(input: {
   side: Side
   date: string
   placement: ArrivalPlacement
   item: RosterItem
+  slowMobilizationArmy?: SlowMobilizationArmy | null
 }): ArrivalUnitDemand {
   const { side, date, placement, item } = input
   const raw = item.raw
@@ -415,12 +457,16 @@ function buildDemand(input: {
     formationComponents,
     stepsLost,
     loadedWithSp,
+    slowMobilizationArmy: input.slowMobilizationArmy ?? null,
     placement,
     rule,
     detail:
       `${raw}：数量 ${count}` +
       (stepsLost > 0 ? `，到场即带损 ${stepsLost} step（到达卡 -${stepsLost} step）` : '') +
       (loadedWithSp ? '，满载 SP 入场（13.6c）' : '') +
+      (input.slowMobilizationArmy
+        ? `，到场为第 ${input.slowMobilizationArmy} 集团军的**锁定师**（2.4，解锁前不能移动/拆分）`
+        : '') +
       `；落点 ${describePlacement(placement)}`,
   }
 }
@@ -887,7 +933,7 @@ export function claimFrontalReserves(date: string): RuleOutcome<FrontalReservesB
 /** 慢动员释放（专规 2.4 表 2-2） */
 export interface SlowMobilizationUnlock {
   date: string
-  army: '30th' | '28th' | '24th'
+  army: SlowMobilizationArmy
   /** 当日该集团军可**解锁**（转为可动）的师数 */
   unlockDivisions: number
 }
@@ -899,36 +945,100 @@ export function slowMobilizationUnlocks(date: string): readonly SlowMobilization
   )
 }
 
+/** 玩家选中的一个锁定师（由调用方从盘面事实取出） */
+export interface SlowMobilizationSelectionFact {
+  instanceId: string
+  /** 该算子当前是否仍被锁（2.4 的锁定态） */
+  locked: boolean
+  /** 是否为**师**级战斗单位（2.4 只锁师；独立单位不锁） */
+  isDivision: boolean
+  /** 该师的集团军归属（数据未落此字段时为 null） */
+  army: SlowMobilizationArmy | null
+}
+
 /**
  * 专规 2.4：Slow Mobilization 的锁定与解锁口径
  *
  * 「被锁的师**不能移动**（也不能拆出 breakdown）；解锁按表分批（玩家自选具体哪个师）」
- * ⇒ 解锁时由玩家在**被锁的师**中自选至多 `unlockDivisions` 个；本函数只给出数量与合法性。
+ * ⇒ 解锁时由玩家在**被锁的师**中自选至多 `unlockDivisions` 个；本函数给出数量与合法性。
+ *
+ * 修前 store 把**全局**锁定算子按数组前缀解锁（忽略集团军、也无法由玩家指定），
+ * 且同日重复调用可重复拿到配额。故这里补上：
+ * - `selected`：玩家实际选中的师，逐个校验「仍被锁 / 是师 / 属于本集团军」；
+ * - `alreadyUnlocked`：该集团军**此前已解锁**的师数（由盘面标签推导，不新增存档字段）；
+ *   当日可用量 = `min(当日配额, 截至当日的累计配额 − 已解锁数)` ⇒ 同回合重试/读档不会重复获得配额。
+ *
+ * 不传 `selected` 时保留旧的"只报数量"路径（既有调用与测试不变）。
  */
 export function planSlowMobilization(input: {
   date: string
-  army: '30th' | '28th' | '24th'
+  army: SlowMobilizationArmy
   /** 该集团军当前仍被锁的师数 */
-  lockedDivisions: number
+  lockedDivisions?: number
   /** 本次想把几个师解锁（玩家选择的数量） */
-  unlockRequested: number
-}): RuleOutcome<{ unlocked: number; remainingLocked: number; rule: string; detail: string }> {
+  unlockRequested?: number
+  /** 玩家选中的具体师（给出时逐项校验，解锁数 = 选中数） */
+  selected?: readonly SlowMobilizationSelectionFact[]
+  /** 该集团军此前已解锁的师数（用于防止同日重复取配额） */
+  alreadyUnlocked?: number
+}): RuleOutcome<{
+  unlocked: number
+  remainingLocked: number
+  rule: string
+  detail: string
+  selectedIds: readonly string[]
+}> {
   const quota = slowMobilizationUnlocks(input.date)
     .filter((row) => row.army === input.army)
     .reduce((sum, row) => sum + row.unlockDivisions, 0)
   if (quota === 0) return fail('2.4', `noUnlockQuota:${input.date}:${input.army}`)
-  if (input.unlockRequested > quota)
-    return fail('2.4', `unlockExceedsQuota:${input.unlockRequested}>${quota}`)
-  if (input.unlockRequested > input.lockedDivisions)
-    return fail('2.4', `unlockExceedsLocked:${input.unlockRequested}>${input.lockedDivisions}`)
-  const unlocked = Math.max(0, Math.trunc(input.unlockRequested))
+
+  // 表 2-2 截至当日该集团军的累计配额（日期均为回合轨上的真实回合，ISO 串可直接比较）
+  const cumulativeQuota = rulesConstants.smolensk.slowMobilization.table
+    .filter((row) => row.army === input.army && row.date <= input.date)
+    .reduce((sum, row) => sum + row.unlockDivisions, 0)
+  const alreadyUnlocked = Math.max(0, Math.trunc(input.alreadyUnlocked ?? 0))
+  const quotaToday = Math.max(0, Math.min(quota, cumulativeQuota - alreadyUnlocked))
+  if (quotaToday === 0)
+    return fail(
+      '2.4',
+      `noUnlockQuotaLeft:${input.date}:${input.army}:already=${alreadyUnlocked}:cumulative=${cumulativeQuota}`,
+    )
+
+  const lockedDivisions = Math.max(0, Math.trunc(input.lockedDivisions ?? 0))
+  const selected = input.selected
+  let requested = input.unlockRequested ?? 0
+  if (selected !== undefined) {
+    requested = selected.length
+    if (input.unlockRequested !== undefined && input.unlockRequested !== selected.length)
+      return fail(
+        '2.4',
+        `unlockSelectionCountMismatch:${selected.length}!=${input.unlockRequested}`,
+      )
+    for (const fact of selected) {
+      if (!fact.locked) return fail('2.4', `selectedNotLocked:${fact.instanceId}`)
+      if (!fact.isDivision) return fail('2.4', `selectedNotDivision:${fact.instanceId}`)
+      if (fact.army === null) return fail('2.4', `selectedArmyUnknown:${fact.instanceId}`)
+      if (fact.army !== input.army)
+        return fail('2.4', `selectedWrongArmy:${fact.instanceId}:${fact.army}!=${input.army}`)
+    }
+  }
+  if (requested > quotaToday) return fail('2.4', `unlockExceedsQuota:${requested}>${quotaToday}`)
+  if (requested > lockedDivisions && lockedDivisions > 0)
+    return fail('2.4', `unlockExceedsLocked:${requested}>${lockedDivisions}`)
+
+  const unlocked = Math.max(0, Math.trunc(requested))
+  const remainingLocked = Math.max(0, lockedDivisions - unlocked)
   return succeed('2.4', {
     unlocked,
-    remainingLocked: input.lockedDivisions - unlocked,
+    remainingLocked,
     rule: '2.4',
     detail:
       `第 ${input.army} 集团军于 ${input.date} 解锁 ${unlocked} 个师` +
-      `（当日配额 ${quota}，玩家在锁定师中自选；剩余锁定 ${input.lockedDivisions - unlocked} 个，2.4）`,
+      (selected === undefined ? '' : `（${selected.map((fact) => fact.instanceId).join('、')}）`) +
+      `（当日配额 ${quota}，截至当日累计 ${cumulativeQuota}，此前已解锁 ${alreadyUnlocked}；` +
+      `剩余锁定 ${remainingLocked} 个，2.4）`,
+    selectedIds: selected?.map((fact) => fact.instanceId) ?? [],
   })
 }
 

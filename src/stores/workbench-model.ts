@@ -5,6 +5,7 @@ import { roll2d6, type RngDraw } from '@/engine/rng'
 import { turnDate } from '@/engine/turn-driver'
 import { GAME_PHASES } from '@/engine/state-types'
 import type { AirStatus, GamePhase, InternalStocks, RngState } from '@/engine/state-types'
+import type { SlowMobilizationArmy } from '@/engine/rules'
 import {
   canAttackAfterAirTransport,
   type AirUnitTransportState,
@@ -343,6 +344,12 @@ export interface ConsoleUnit {
    * 按表 2-2 逐日解锁（玩家自选具体哪个师）。
    */
   locked: boolean
+  /**
+   * 专规 2.4：到达卡分组标明的集团军归属（`30th/28th/24th Army HQ (see 2.4)`）
+   *
+   * 只落在**师**上；HQ/独立单位与初设摆入的算子为 null（单位库没有集团军字段，归属只能取自到达卡）。
+   */
+  slowMobilizationArmy: SlowMobilizationArmy | null
   /** 13.5c：AR 后是否有黄点（`rebuildable === false` ⇒ 摧毁即永久移除，不可重建） */
   rebuildable: boolean
   /**
@@ -615,6 +622,7 @@ export function toConsoleUnit(input: {
     specialAbilities: record.specialAbilities ?? [],
     // 专规 2.4：锁定状态由裁判在 Slow Mobilization 期间逐个设置（缺省不锁）
     locked: false,
+    slowMobilizationArmy: null,
     // 13.5c：AR 后有黄点的单位不可重建（数据层 rebuildable === false）
     rebuildable: record.rebuildable !== false,
     // 13.5e：卡车须「因敌方行动被摧毁/夺取」才可重建（由裁判在摧毁时置真）

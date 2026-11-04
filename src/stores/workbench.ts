@@ -16748,6 +16748,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         hex,
         side: activeSide.value,
       })
+      /*
+       * 专规 2.4：30/28/24 集团军的师**到场即锁定**——解锁前不能移动、不能拆 breakdown。
+       * 归属只取自到达卡分组里的 `Nth Army HQ (see 2.4)`，不按番号前缀猜。
+       */
+      if (demand.slowMobilizationArmy !== null) {
+        created.slowMobilizationArmy = demand.slowMobilizationArmy
+        created.locked = true
+        if (!quiet) {
+          pushLog(
+            'info',
+            `${created.name} 到场为第 ${demand.slowMobilizationArmy} 集团军的锁定师（2.4：解锁按表 2-2）`,
+            '专规 2.4',
+          )
+        }
+      }
       // 到达卡 `-N step`：到场即带损
       if (demand.stepsLost > 0) {
         created.steps = Math.max(0, created.steps - demand.stepsLost)
@@ -17455,6 +17470,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function setUnitLockedNow(instanceId: string, locked: boolean): void {
     const unit = units.value.find((item) => item.instanceId === instanceId)
     if (unit === undefined) return
+    if (unit.slowMobilizationArmy !== null) {
+      // 2.4：已按到达卡记录的师只能走配额解锁，不能靠手工翻面越过配额
+      if (!locked) {
+        unlockSlowMobilizationNow(instanceId)
+        return
+      }
+      pushLog(
+        'info',
+        `${unit.name} 已按到达卡记录为慢动员锁定师；解锁请用“按表解锁”（专规 2.4）`,
+        '专规 2.4',
+      )
+      return
+    }
     unit.locked = locked
     pushLog(
       'info',
@@ -17463,23 +17491,45 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
   }
 
-  /** B18：按表 2-2 解锁某集团军的师（专规 2.4；玩家在锁定师中自选） */
-  function unlockSlowMobilizationNow(
-    army: '30th' | '28th' | '24th',
-    unlockRequested: number,
-  ): boolean {
-    const lockedUnits = units.value.filter((unit) => unit.locked)
+  /**
+   * B18：按表 2-2 解锁**玩家指定**的某个师（专规 2.4）
+   *
+   * 修前这里取**全局**锁定算子、按数组前缀解锁（可跨集团军、玩家无法指定），
+   * 且同日重复点击会重复拿到配额。现在：
+   * - 归属只认到达卡分组落到算子上的 `slowMobilizationArmy`（数据不猜番号前缀）；
+   * - 已解锁数由盘面（含死亡堆）上同集团军的标签推导，经引擎校验累计配额；
+   * - 只解锁玩家选中的那一枚。
+   */
+  function unlockSlowMobilizationNow(instanceId: string): boolean {
+    const unit = units.value.find((item) => item.instanceId === instanceId)
+    if (unit === undefined) return false
+    const army = unit.slowMobilizationArmy
+    if (army === null) {
+      pushLog(
+        'warning',
+        `${unit.name} 没有到达卡集团军归属，2.4 不能按表解锁（不在 30/28/24 集团军到达卡分组内）`,
+        '专规 2.4',
+      )
+      return false
+    }
+    const tagged = [...units.value, ...deadPile.value].filter(
+      (item): item is ConsoleUnit =>
+        'slowMobilizationArmy' in item && item.slowMobilizationArmy === army,
+    )
+    const alreadyUnlocked = tagged.filter((item) => !item.locked).length
+    const lockedDivisions = tagged.filter((item) => item.locked).length
     const data = acceptReinforcement(
       planSlowMobilization({
         date: date.value,
         army,
-        lockedDivisions: lockedUnits.length,
-        unlockRequested,
+        lockedDivisions,
+        selected: [{ instanceId: unit.instanceId, locked: unit.locked, isDivision: true, army }],
+        alreadyUnlocked,
       }),
       '慢动员解锁',
     )
     if (data === null) return false
-    for (const unit of lockedUnits.slice(0, data.unlocked)) unit.locked = false
+    unit.locked = false
     pushLog('success', data.detail, data.rule)
     return true
   }

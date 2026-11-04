@@ -916,13 +916,13 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
     <!-- ── · 慢动员（专规 2.4） ── -->
     <hr />
     <p class="muted">
-      慢动员（专规 2.4）：被锁的师**不能移动、不能拆 breakdown**；按表 12-2
+      慢动员（专规 2.4）：被锁的师**不能移动、不能拆 breakdown**；按表 2-2
       逐日解锁（玩家在锁定师中自选）。
     </p>
     <div v-if="showsActions" class="row">
       <CounterPicker
         title="锁定哪一枚（专规 2.4 慢动员）"
-        hint="被锁的师不能移动、不能拆 breakdown；按表 12-2 逐日解锁"
+        hint="被锁的师不能移动、不能拆 breakdown；按表 2-2 逐日解锁"
         :items="rebuildUnitItems(breakdownParentId)"
         :size="32"
         @pick="breakdownParentId = $event"
@@ -942,8 +942,12 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       >
         解除锁定
       </BaseButton>
-      <BaseButton variant="ghost" size="sm" @click="workbench.unlockSlowMobilizationNow('30th', 2)">
-        按表解锁（10th 等）
+      <BaseButton
+        variant="ghost"
+        size="sm"
+        @click="workbench.unlockSlowMobilizationNow(breakdownParentId)"
+      >
+        按表解锁选中的师（2.4）
       </BaseButton>
     </div>
 

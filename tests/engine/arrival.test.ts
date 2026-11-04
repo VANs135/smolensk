@@ -353,6 +353,90 @@ describe('专规 2.4：Slow Mobilization 的解锁', () => {
     expect(wrongDay.ok).toBe(false)
   })
 
+  it('2.4：到达卡分组给集团军师打归属，HQ/独立单位不打（12 Jul 30th；15 Jul 28th+24th）', () => {
+    const twelfth = planArrivals({ side: 'soviet', date: '1941-07-12' })
+    if (!twelfth.ok) throw new Error(twelfth.reason)
+    const tagged = twelfth.data.units.filter((unit) => unit.slowMobilizationArmy !== null)
+    expect(tagged.length).toBeGreaterThan(0)
+    expect(tagged.every((unit) => unit.slowMobilizationArmy === '30th')).toBe(true)
+    expect(tagged.some((unit) => /Div/i.test(unit.parentType ?? ''))).toBe(true)
+    expect(
+      twelfth.data.units.every((unit) => unit.kind !== 'hq' || unit.slowMobilizationArmy === null),
+    ).toBe(true)
+
+    const fifteenth = planArrivals({ side: 'soviet', date: '1941-07-15' })
+    if (!fifteenth.ok) throw new Error(fifteenth.reason)
+    const armies = new Set(
+      fifteenth.data.units.map((unit) => unit.slowMobilizationArmy).filter((army) => army !== null),
+    )
+    expect(armies.has('28th')).toBe(true)
+    expect(armies.has('24th')).toBe(true)
+  })
+
+  it('2.4：玩家选中另一集团军/未锁定/非师/归属不明的算子即拒（修前只看全局前缀）', () => {
+    const wrongArmy = planSlowMobilization({
+      date: '1941-07-12',
+      army: '30th',
+      lockedDivisions: 2,
+      selected: [{ instanceId: 'ru-x', locked: true, isDivision: true, army: '28th' }],
+    })
+    expect(wrongArmy.ok).toBe(false)
+    if (wrongArmy.ok) throw new Error('应当拒绝')
+    expect(wrongArmy.reason).toMatch(/^selectedWrongArmy:ru-x/)
+
+    const notLocked = planSlowMobilization({
+      date: '1941-07-12',
+      army: '30th',
+      lockedDivisions: 1,
+      selected: [{ instanceId: 'ru-a', locked: false, isDivision: true, army: '30th' }],
+    })
+    expect(notLocked.ok).toBe(false)
+
+    const notDivision = planSlowMobilization({
+      date: '1941-07-12',
+      army: '30th',
+      lockedDivisions: 1,
+      selected: [{ instanceId: 'ru-b', locked: true, isDivision: false, army: '30th' }],
+    })
+    expect(notDivision.ok).toBe(false)
+    if (notDivision.ok) throw new Error('应当拒绝')
+    expect(notDivision.reason).toMatch(/^selectedNotDivision:ru-b/)
+
+    const unknownArmy = planSlowMobilization({
+      date: '1941-07-12',
+      army: '30th',
+      lockedDivisions: 1,
+      selected: [{ instanceId: 'ru-c', locked: true, isDivision: true, army: null }],
+    })
+    expect(unknownArmy.ok).toBe(false)
+    if (unknownArmy.ok) throw new Error('应当拒绝')
+    expect(unknownArmy.reason).toMatch(/^selectedArmyUnknown:ru-c/)
+  })
+
+  it('2.4：同日重复解锁不再获得配额；15 Jul 累计只剩 3（12 Jul 已解锁 2）', () => {
+    const repeat = planSlowMobilization({
+      date: '1941-07-12',
+      army: '30th',
+      lockedDivisions: 1,
+      selected: [{ instanceId: 'ru-a', locked: true, isDivision: true, army: '30th' }],
+      alreadyUnlocked: 2,
+    })
+    expect(repeat.ok).toBe(false)
+    if (repeat.ok) throw new Error('应当拒绝')
+    expect(repeat.reason).toMatch(/^noUnlockQuotaLeft:1941-07-12:30th/)
+
+    const later = planSlowMobilization({
+      date: '1941-07-15',
+      army: '30th',
+      lockedDivisions: 3,
+      selected: [{ instanceId: 'ru-a', locked: true, isDivision: true, army: '30th' }],
+      alreadyUnlocked: 2,
+    })
+    expect(later.ok).toBe(true)
+    if (!later.ok) throw new Error(later.reason)
+    expect(later.data).toMatchObject({ unlocked: 1, remainingLocked: 2, selectedIds: ['ru-a'] })
+  })
+
   it('1.6c：19 Aug 起不再掷特殊补员（日期闸门的唯一实现是 `timing.isSpecialReplAvailable`）', () => {
     expect(isSpecialReplAvailable('1941-08-18')).toBe(true)
     expect(isSpecialReplAvailable('1941-08-19')).toBe(false)
