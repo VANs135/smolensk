@@ -19504,7 +19504,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (merged > 0) {
         pushLog(
           'info',
-          `读档：同格同方的补给站账本按 12.1b 归并了 ${String(merged)} 条（旧档/改档兼容）`,
+          `读档：同格同方同归属的补给站账本按 12.1b 归并了 ${String(merged)} 条（旧档/改档兼容）`,
           '12.1b',
         )
       }
@@ -19531,7 +19531,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 12.1b / §5-C：**读档后把同格同方的补给站账本并成一条**
+   * 12.1b / §5-C：**读档后把同格同方同归属的补给站账本并成一条**
    *
    * 为什么要在读档做一次：本次修复前 `addSpAtHex` 会无条件新建条目，故**旧档**里可能已在同一格同一方
    * 留下多条账本；手工改过的档同理。而付款路径是 `find(side + sameHex)` 只取第一条 ⇒ 其余 SP
@@ -19545,7 +19545,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const byKey = new Map<string, SpDump>()
     let merged = 0
     for (const dump of spDumps.value) {
-      const key = `${dump.side}|${String(dump.hex.col)},${String(dump.hex.row)}`
+      // 3.4b：同格不同集群的SP不能在恢复时悄悄变成第一条的归属。
+      const group = dump.side === 'axis' ? panzerGroupOfDump(dump.id) : null
+      const key = `${dump.side}|${String(dump.hex.col)},${String(dump.hex.row)}|${group ?? 'unassigned'}`
       const first = byKey.get(key)
       if (first === undefined) {
         const copy = { ...dump }
