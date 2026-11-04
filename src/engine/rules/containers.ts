@@ -27,6 +27,7 @@ import { planBreakdownCreate, type BreakdownCreateRequest } from './breakdown'
 import { breakdownPoolLimits, breakdownPoolTotal, railCapacitiesOn } from './exclusive-timing'
 import { isRailCapBoosted, isSpecialReplAvailable } from './timing'
 import { specialReplRebuildRows } from './variable-repl'
+import { setupSourceOf } from './setup-source'
 
 /**
  * 记录轨与容器管理（W7 C12）
@@ -1117,7 +1118,7 @@ export function scenarioDrawBoxView(scenarioId: string): ScenarioDrawBoxView {
 export function axisDrawPool(
   scenarioId: string,
 ): readonly { formationId: string; formationCode: string }[] {
-  const key = `S${scenarioId}·axis`
+  const key = `S${setupSourceOf(scenarioId).source}·axis`
   return formations.formations
     .filter(
       (formation) =>
@@ -1202,7 +1203,7 @@ export interface DerivedDrawComposition {
   deadPileUnitIds: readonly string[]
   /** 摩托化团（B 组互换的"Mtr"；图上） */
   mtrRegimentUnitId: string | null
-  /** 装甲侦察营（B 组互换的"死亡堆里的 Aufk"；**取死亡堆里的那一个**） */
+  /** 装甲侦察营（默认取互换需要的死亡堆成员；移除组须明确指定图上成员） */
   aufkBattalionUnitId: string | null
   /** 摩托化侦察营（S5 的 Krd；图上） */
   krdBattalionUnitId: string | null
@@ -1229,12 +1230,14 @@ const KRD_PATTERN = /-mc$|-mc-|krd/i
  * 选择口径（原文未指名是哪一个团，如实登记在 `note` 里）：
  *   · **Mtr 团**：图上、unitId 含 `mot` 的下属；多个时**优先与师番号同号者**（`3 Pz Div` ⇒ `3 Inf`），否则取第一个；
  *   · **Krd 营**（S5）：图上、unitId 含 `-mc`（摩托化侦察连/营）的下属；
- *   · **Aufk 营**：**死亡堆**里、unitId 含 `arm-rec` 的下属。
+ *   · **Aufk 营**：互换组默认取死亡堆中的成员；S5/S6移除组明确要求图上的成员。
  * 缺任何一项即 `fail`（绝不猜）——调用方据此如实报"这一组按数据落不了盘"。
  */
 export function deriveDrawComposition(input: {
   rows: readonly DrawSetupRowView[]
   formationId: string
+  /** ch10互换从死亡堆返场；ch11 S5/S6则将图上的Aufk移入死亡堆。 */
+  aufkLocation?: 'dead_pile' | 'hex'
 }): RuleOutcome<DerivedDrawComposition> {
   const rows = input.rows.filter(
     (row) => row.kind === 'formation' && row.unitId === input.formationId,
@@ -1265,8 +1268,8 @@ export function deriveDrawComposition(input: {
   // ch10：角色来自初设成员标签；motorized 类 ID 同时包含炮兵，不能用它识别步兵团。
   const mtr = pickSameNumbered(onMap.filter((part) => MTR_PATTERN.test(part.component)))
   const krd = pickSameNumbered(onMap.filter((part) => KRD_PATTERN.test(part.unitId)))
-  // 12.5 之外不相关：Aufk 必须是**死亡堆里**的那个（ch10 原文：「开局在 Dead Pile 里的 Aufk 营」）
-  const aufk = pickSameNumbered(dead.filter((part) => AUFK_PATTERN.test(part.unitId)))
+  const aufkParts = input.aufkLocation === 'hex' ? onMap : dead
+  const aufk = pickSameNumbered(aufkParts.filter((part) => AUFK_PATTERN.test(part.unitId)))
 
   const anchorText =
     rows.flatMap((row) => row.locationHexes ?? []).find((text) => text.includes('.')) ?? null

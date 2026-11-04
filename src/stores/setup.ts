@@ -27,7 +27,6 @@ import {
   setupFlowFor,
   setupAirbaseLevelOf,
   setupHexLabel,
-  setupSourceOf,
   setupTransportKindOf,
   validateRequiredSetupPlacements,
   type AirSetupPlan,
@@ -1161,14 +1160,23 @@ export const useSetupStore = defineStore('setup', () => {
     const result = validateRequiredSetupPlacements(
       required.map((item) => ({ id: item.formationId ?? item.label, remaining: item.remaining })),
     )
-    return (
-      result.ok ||
-      record({
+    if (!result.ok)
+      return record({
         ok: false,
         rule: result.rule,
         reason: `请先完成编队西移放置：${required.map((item) => item.label).join('、')}`,
       })
-    )
+    const progress = containers.setupDrawProgress
+    if (!progress.complete)
+      return record({
+        ok: false,
+        rule: 'ch10 / ch11',
+        reason: `请先完成编队抽取处置：${progress.groups
+          .filter((group) => !group.applied)
+          .map((group) => group.reason)
+          .join('；')}`,
+      })
+    return true
   }
 
   /**
@@ -1351,19 +1359,11 @@ export const useSetupStore = defineStore('setup', () => {
    * 各步骤的完成度（供界面打勾；编制抽取的完成度**取自 C12 的剧本抽取盒账本**，不另立一份）
    */ const stepDone = computed<Record<string, boolean>>(() => {
     const source = scenarios.scenarios.find((item) => item.id === scenarioId.value)
-    // 编队抽签的池与组取自**初设源**（1–2 / 3–4 / 5–6 共用初设）；账本取自 C12 的剧本抽取盒
-    const sourceId = setupSourceOf(scenarioId.value).source
-    const groups =
-      scenarios.scenarios.find((item) => item.id === sourceId)?.setup.formationDraw?.groups ?? []
-    const drawn = [
-      ...(containers.drawResults[scenarioId.value] ?? []),
-      ...(containers.drawResults[sourceId] ?? []),
-    ]
     const selfTotal = selfChoiceEntries.value.length
     const selfPlaced = Object.keys(completed.value).filter((key) => key.startsWith('self:')).length
     return {
       scenario: source !== undefined,
-      formationDraw: groups.every((group) => drawn.some((row) => row.kind === group.kind)),
+      formationDraw: containers.setupDrawProgress.complete,
       truckLoad: completed.value['truckLoad'] === true,
       spOwnership: completed.value['spOwnership'] === true,
       autoSetup: completed.value['autoSetup'] === true,
@@ -1421,6 +1421,7 @@ export const useSetupStore = defineStore('setup', () => {
     // 随剧本重取的账本（剧本号本身已由上一步写定，这里是各自的投影刷新）
     workbench.setScenarioId(next)
     containers.setScenario(next)
+    containers.resetSetupDraws()
     resetInputs()
     lastAction.value = null
     notes.value = []
@@ -1432,15 +1433,14 @@ export const useSetupStore = defineStore('setup', () => {
     cancelTruckPick()
     // 换剧本 = 重新开局 ⇒ 先清盘面，再自动落盘固定初设（不叠加、不残留上一剧本的算子）
     resetAll()
-    runAutoSetup()
+    if (!runAutoSetup()) return false
     /*
      * ★ 第六批 §6-A：**编队抽签在初设自动跑**（ch10「Formation Chit Draw」/ ch11 的剧本随机化
      *   都是**开局前**的随机化，不是 B 增援段的动作）。
      *   必须在 `runAutoSetup()` **之后**：三项处置（进死亡堆 / 转 Move Mode / Mtr↔Aufk 互换）
      *   改的是**盘上那几枚算子**，而实例 id 是自动初设这一步生成的。
      */
-    runSetupDraws()
-    return true
+    return runSetupDraws()
   }
 
   /**
@@ -1452,7 +1452,7 @@ export const useSetupStore = defineStore('setup', () => {
    */
   function runSetupDraws(): boolean {
     const result = containers.runSetupDrawsNow()
-    if (result.drawnGroups === 0) return true // 本剧本没有编队抽签 ⇒ 不算错
+    if (result.ok && result.drawnGroups === 0) return true // 本剧本没有编队抽签 ⇒ 不算错
     /*
      * ★ 成功时**不覆盖** `lastAction`：紧接着自动初设之后跑，那条回执（棋子数 / SP /
      *   卡车按剧本落账）正是玩家要看的"选剧本后发生了什么"，被抽签结论顶掉就看不见了
@@ -1548,8 +1548,14 @@ export const useSetupStore = defineStore('setup', () => {
    */
   function enterSetup(id: string): boolean {
     if (id !== scenarioId.value) return selectScenario(id)
-    ensureSetupLoaded()
-    return true
+    const needsLoad =
+      game.session === null &&
+      !applied.value &&
+      !finished.value &&
+      workbench.units.length === 0 &&
+      workbench.airUnits.length === 0
+    const loaded = ensureSetupLoaded()
+    return !needsLoad || loaded
   }
 
   /** 取格子文本 → 坐标（无效即 null） */

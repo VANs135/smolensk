@@ -91,6 +91,7 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'confirmSpOwnership',
       'designateTrucks',
       'resetAll',
+      'resetSetupDraws',
       'runAirSetup',
       'runAutoSetup',
       'selectScenario',

@@ -52,8 +52,8 @@ function boot(scenarioId: string) {
   const setup = useSetupStore()
   game.setScenarioId(scenarioId)
   containers.setScenario(scenarioId)
-  // 真实盘面：抽签要改的是**盘上**的单位与死亡堆（先按该剧本落一次初设）
-  setup.selectScenario(scenarioId)
+  // 只做自动初设，留给本文件显式抽取和应用；避免在已处置盘面上再次重抽。
+  setup.runAutoSetup()
   return { workbench, containers }
 }
 

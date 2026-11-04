@@ -27,14 +27,14 @@ import {
  * ## 测法边界（如实交代）
  *   · 用**真实剧本数据**（`scenarios.json` 的 groups 与池）与真实 store；抽签名额由 `rng` 定 ⇒ 只断言
  *     "抽中数＝剧本页给的名额"与"落盘结果进了台账"，不写死抽中哪个师；
- *   · **不覆盖**"师原地西移 3 格的盘面平移"：数据里没有"所列位置"的**逐格落点**（原文在剧本卡上），
- *     本切片把落点**收进台账并在初设侧显示**；把整师按队形平移属新增几何判据（含 4.8a 堆叠上限），
- *     登记为后续项（见回执的如实边界）；
+ *   · 覆盖旧应用入口把全师图上成员实际摆到已选落点，并与回执一致；道路拓扑与堆叠另行验收。
  *   · 组件渲染无测试（本仓库不挂）⇒ "面板真的画出了落点按钮与回写行"由源码守卫承担。
  */
 
 const newStores = () => {
   setActivePinia(createPinia())
+  // ch10：应用抽签结果须有真实初设单位，不能只写一张没有盘面的回执。
+  useSetupStore().runAutoSetup()
   return {
     containers: useContainersStore(),
     setup: useSetupStore(),
@@ -93,7 +93,7 @@ describe('批 E 切片 2：编队抽签入口与回写初设', () => {
     // ① 没有落点时：引擎按 ch10 拒（这就是修前 A 组的下场）
     const facts = Object.fromEntries(drawn.map((id) => [id, {}]))
     expect(stores.containers.applyDraw(group, facts)).toBe(false)
-    expect(stores.containers.lastAction?.detail).toBe('shiftWestDestinationMissing:' + drawn[0])
+    expect(stores.containers.lastAction?.detail).toBe('西移编队缺少合法图上落点：' + drawn[0])
 
     // ② 逐编队「点地图选落点」⇒ 写回该编队的落点
     for (const id of drawn) {
@@ -104,6 +104,14 @@ describe('批 E 切片 2：编队抽签入口与回写初设', () => {
     }
     // ③ 有落点 ⇒ 落盘通过，落点进台账
     expect(stores.containers.applyDraw(group, facts)).toBe(true)
+    for (const item of stores.containers.pendingShiftWestPlacements) {
+      expect(item.unitIds.length).toBeGreaterThan(0)
+      for (const id of item.unitIds)
+        expect(stores.workbench.units.find((unit) => unit.instanceId === id)?.hex).toEqual({
+          col: 9,
+          row: 1,
+        })
+    }
 
     const outcome = stores.containers.formationDrawOutcomes.find(
       (row) => row.groupKind === 'shiftWest',

@@ -76,6 +76,8 @@ describe('批 E 切片 1：开局入口收敛（唯一入口＝初设收束点�
     const setup = useSetupStore()
     const session = useGameSessionStore()
     expect(session.session).toBeNull()
+    // ch10：真实入口先完成自动初设及编队处置，不能从空白盘面直接开局。
+    expect(setup.enterSetup('1')).toBe(true)
 
     expect(setup.startGameNow()).toBe(true)
     expect(session.session).not.toBeNull()

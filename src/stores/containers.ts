@@ -18,6 +18,9 @@ import {
   alarmMixRows,
   allBoxViews,
   applyModeSwitch,
+  assessSetupDrawProgress,
+  validateSetupDrawCommit,
+  validateSetupShiftCommit,
   axisDrawPool,
   boxOfRegion,
   planAirBoxActivate,
@@ -1113,6 +1116,16 @@ export const useContainersStore = defineStore('containers', () => {
     )
   }
 
+  /** ch10/ch11：当前新局的抽签与处置共同决定初设是否完成。 */
+  const setupDrawProgress = computed(() =>
+    assessSetupDrawProgress({
+      groups: setupDrawGroups.value,
+      draws: drawResults.value[scenarioId.value] ?? [],
+      outcomes: formationDrawOutcomes.value,
+      shiftHexes: drawShiftHexText.value,
+    }),
+  )
+
   /**
    * ch10：**点地图选某个抽中编队的西移落点**（B27 通用待点格）
    *
@@ -1158,7 +1171,7 @@ export const useContainersStore = defineStore('containers', () => {
    * ★ 用户 2026-09-18 报告第 5 条起，`facts` **不再要求调用方注入**：缺哪个编队的组成就用
    *   `deriveFactsFor` 从**初设索引**自动推（判据在引擎 `deriveDrawComposition`）；
    *   传入的 facts 仍是**覆盖**（验证页/裁判用）。
-   *   · shiftWest：抽中师沿道路西移 3 格（原文只给算法（沿道路西移 3 格，例 11.03 → 9.01）、道路拓扑数据未覆盖该区域 ⇒ 仍由玩家点地图给出）；
+   *   · shiftWest：按已选落点实际移动抽中师，所有成员和落点核对后才写处置回执；
    *   · moveMode：把抽中师的**战斗**单位转为 Move Mode；
    *   · mtrAufkSwap / deadPileKrd / deadPileAufk：把指定单位送进死亡堆 / 从死亡堆返场
    *     （返场落点＝该编队初设行里的图上格号，不再写死）。
@@ -1189,6 +1202,52 @@ export const useContainersStore = defineStore('containers', () => {
       }
       return false
     }
+    // ch10：旧的应用入口也必须实际移动，不能仅凭抽签计划记成已摆位。
+    if (group.kind === 'shiftWest') {
+      const placements = drawn.map((formationId) => {
+        const hexText = facts[formationId]?.shiftHexText ?? drawShiftHexText.value[formationId]
+        return {
+          formationId,
+          unitIds: deriveFactsFor(formationId, 'shiftWest')?.onMapInstanceIds ?? [],
+          hex: parseHexOf(hexText ?? ''),
+          hexText,
+        }
+      })
+      const valid = validateSetupShiftCommit({
+        placements,
+        onMapIds: workbench.units.map((unit) => unit.instanceId),
+      })
+      if (!valid.ok) {
+        lastAction.value = {
+          ok: false,
+          rule: valid.rule,
+          detail: valid.reason,
+          scope: '剧本抽取盒',
+        }
+        return false
+      }
+      for (const item of placements) {
+        if (!applyShiftWestAtNow(item.formationId, item.hexText!)) return false
+      }
+      return true
+    }
+    // 已提交的非西移处置不能重复移入/返场；西移的改点仍走专用摆位入口。
+    if (
+      assessSetupDrawProgress({
+        groups: [{ ...group, count: drawn.length }],
+        draws: [{ kind: group.kind, formationIds: drawn }],
+        outcomes: formationDrawOutcomes.value,
+        shiftHexes: drawShiftHexText.value,
+      }).complete
+    ) {
+      lastAction.value = {
+        ok: true,
+        rule: group.rule,
+        detail: `${group.label}：已完成处置，保留原结果`,
+        scope: '剧本抽取盒',
+      }
+      return true
+    }
     /*
      * ★ 用户 2026-09-18 报告第 5 条：**组成不再要求调用方（玩家）注入** ——
      *   调用方没给某个编队的组成事实时，就从**初设索引**自动推出（`deriveFactsFor`；
@@ -1196,7 +1255,7 @@ export const useContainersStore = defineStore('containers', () => {
      *   玩家不需要知道任何 unit id。
      */
     const factsOf = (formationId: string) =>
-      facts[formationId] ?? deriveFactsFor(formationId)?.facts ?? null
+      facts[formationId] ?? deriveFactsFor(formationId, group.kind)?.facts ?? null
     const derivedNotes: string[] = []
     /** 该编队图上落点（`列.行`）——返场单位就放回这里（用户第 5 条：落点按数据，不写死） */
     const anchorByUnitId = new Map<string, string>()
@@ -1207,7 +1266,6 @@ export const useContainersStore = defineStore('containers', () => {
         aufkBattalionUnitId?: string
         krdBattalionUnitId?: string
         combatUnitIds?: readonly string[]
-        shiftHex?: { col: number; row: number }
       }
     > = {}
     for (const formationId of drawn) {
@@ -1219,7 +1277,7 @@ export const useContainersStore = defineStore('containers', () => {
        * 索引里没有（或该剧本没摆这个师）时退回调用方给的返场格（`newHexForReturn`），
        * 两者都没有就**不猜**（下面循环里如实报"请在初设里手动放置"）。
        */
-      const derivedForAnchor = deriveFactsFor(formationId)
+      const derivedForAnchor = deriveFactsFor(formationId, group.kind)
       if (derivedForAnchor !== null) {
         if (facts[formationId] === undefined) derivedNotes.push(derivedForAnchor.note)
         const anchorHexText = derivedForAnchor.facts.anchorHexText
@@ -1233,7 +1291,6 @@ export const useContainersStore = defineStore('containers', () => {
           }
         }
       }
-      const shiftHex = parseHexOf(fact.anchorHexText ?? '')
       composed[formationId] = {
         ...(fact.mtrRegimentUnitId === undefined
           ? {}
@@ -1245,15 +1302,8 @@ export const useContainersStore = defineStore('containers', () => {
           ? {}
           : { krdBattalionUnitId: fact.krdBattalionUnitId }),
         ...(fact.combatUnitIds === undefined ? {} : { combatUnitIds: fact.combatUnitIds }),
-        ...(shiftHex === undefined ? {} : { shiftHex }),
       }
     }
-    /*
-     * ch10 的西移落点：调用方给了就用它，否则用玩家**点地图**选的那个（`drawShiftHexText`）——
-     * 修前两处都没有 ⇒ 剧本 1/2 的 A 组必被引擎按 `shiftWestDestinationMissing` 拒。
-     */
-    const shiftHexFor = (formationId: string): ReturnType<typeof parseHexOf> =>
-      composed[formationId]?.shiftHex ?? parseHexOf(drawShiftHexText.value[formationId] ?? '')
     const plan = planScenarioDraw({
       scenarioId: scenarioId.value,
       group: { ...group, count: drawn.length },
@@ -1261,7 +1311,6 @@ export const useContainersStore = defineStore('containers', () => {
       facts: Object.fromEntries(
         drawn.map((formationId) => {
           const fact = composed[formationId] ?? {}
-          const shiftHex = shiftHexFor(formationId)
           return [
             formationId,
             {
@@ -1275,7 +1324,6 @@ export const useContainersStore = defineStore('containers', () => {
                 ? {}
                 : { krdBattalionUnitId: fact.krdBattalionUnitId }),
               ...(fact.combatUnitIds === undefined ? {} : { combatUnitIds: fact.combatUnitIds }),
-              ...(shiftHex === undefined ? {} : { shiftHex }),
             },
           ]
         }),
@@ -1286,26 +1334,38 @@ export const useContainersStore = defineStore('containers', () => {
       workbench.pushLog('danger', `编队抽签落盘被拒：${plan.reason}（${plan.rule}）`, plan.rule)
       return false
     }
-    for (const patch of plan.data.deposits) {
+    const returnHexes = Object.fromEntries(
+      plan.data.returns.map((patch) => [
+        patch.unitId,
+        anchorByUnitId.get(patch.unitId) ?? newHexForReturn() ?? '',
+      ]),
+    )
+    const commit = validateSetupDrawCommit({
+      plan: plan.data,
+      onMapIds: workbench.units.map((unit) => unit.instanceId),
+      groundDeadPileIds: workbench.deadPile
+        .filter((unit) => !isAirDeadPileEntry(unit))
+        .map((unit) => unit.instanceId),
+      returnHexes: Object.fromEntries(
+        Object.entries(returnHexes).map(([id, text]) => [id, parseHexOf(text)]),
+      ),
+    })
+    if (!commit.ok) {
+      lastAction.value = {
+        ok: false,
+        rule: commit.rule,
+        detail: commit.reason,
+        scope: '剧本抽取盒',
+      }
+      workbench.pushLog('warning', `编队抽签未提交：${commit.reason}`, commit.rule)
+      return false
+    }
+    for (const patch of new Map(plan.data.deposits.map((item) => [item.unitId, item])).values()) {
       if (patch.to === 'deadPile') workbench.sendToDeadPileNow(patch.unitId)
       if (patch.mode === 'move') setUnitMoveMode(patch.unitId)
     }
-    for (const patch of plan.data.returns) {
-      /*
-       * 用户 2026-09-18 报告第 5 条：返场落点**按数据**给 —— 用它所属编队初设行里的图上落点
-       * （如 `3 Pz Div` 的 `11.03`），而不是先前那个写死的 `1.03`。
-       * 推不出落点时**不猜**：如实报"需在初设里手动放置"。
-       */
-      const anchorHexText = anchorByUnitId.get(patch.unitId) ?? newHexForReturn() ?? undefined
-      if (anchorHexText === undefined) {
-        workbench.pushLog(
-          'warning',
-          `编队抽签：${patch.unitId} 的**返场落点**推不出来（初设行没有图上格号）⇒ 未自动返场，请在初设里手动放置`,
-          group.rule,
-        )
-        continue
-      }
-      workbench.returnFromDeadPileNow({ instanceId: patch.unitId, hexText: anchorHexText })
+    for (const unitId of new Set(plan.data.returns.map((patch) => patch.unitId))) {
+      workbench.returnFromDeadPileNow({ instanceId: unitId, hexText: returnHexes[unitId]! })
     }
     for (const note of derivedNotes)
       workbench.pushLog('info', `编队组成（自动推）：${note}`, 'ch10')
@@ -1388,11 +1448,9 @@ export const useContainersStore = defineStore('containers', () => {
    * 故抽签在「选剧本 ⇒ 自动初设落盘」之后**自动**跑一次（骰走种子化 `rng`，与 B28「随机数一律
    * 自动结算」同一口径），随后：
    *   · **不依赖玩家落点**的组（moveMode / mtrAufkSwap / deadPileKrd / deadPileAufk）⇒ 当场落盘；
-   *   · **西移组**（shiftWest）⇒ 只抽不落盘：原文只给算法（沿道路西移 3 格，例 11.03 → 9.01）、道路拓扑数据未覆盖该区域 ⇒ 交给玩家在初设里给
-   *     （`pendingShiftWestPlacements` ⇒ 初设 box 的一项，见 `setup.ts`）。
+   *   · **西移组**（shiftWest）⇒ 沿用用户“视为有道路”的裁定自动摆位，失败才留给玩家补点。
    *
-   * 幂等：某组已抽过（`drawResults` 里有该 kind）⇒ **保留既有抽取结果**，不重抽
-   * （`selectScenario` / `ensureSetupLoaded` 可能被反复调用，重抽会让盘面与已落盘的处置对不上）。
+   * 幂等：已抽过的组不重抽，已有匹配回执的处置不重做；清盘新建才重置三份账本。
    */
   function runSetupDrawsNow(): {
     ok: boolean
@@ -1422,10 +1480,11 @@ export const useContainersStore = defineStore('containers', () => {
     const failures: string[] = []
 
     for (const group of groups) {
-      const already = drawnOf(group)
-      const drawn = already.length > 0 ? already : drawFormations(group, false, sourceId)
-      if (drawn.length === 0) {
-        failures.push(`${group.label}：入杯池为空（formations.json 未推导出该剧本的装甲/摩托化师）`)
+      const existing = drawResults.value[scenarioId.value]?.find((row) => row.kind === group.kind)
+      const drawn = existing?.formationIds ?? drawFormations(group, false, sourceId)
+      const progress = setupDrawProgress.value.groups.find((row) => row.kind === group.kind)!
+      if (!progress.drawn) {
+        failures.push(progress.reason!)
         continue
       }
       drawnGroups += 1
@@ -1439,7 +1498,19 @@ export const useContainersStore = defineStore('containers', () => {
        */
       if (group.kind === 'shiftWest') {
         for (const formationId of drawn) {
-          const derived = deriveFactsFor(formationId)
+          const chosen = drawShiftHexText.value[formationId]
+          const placed = formationDrawOutcomes.value
+            .find((row) => row.groupKind === group.kind)
+            ?.destinations.some(
+              (item) => item.formationId === formationId && item.hexText === chosen,
+            )
+          if (chosen !== undefined && placed) continue
+          // 玩家已选择但尚未提交的落点应沿用，不能重新套用自动落点。
+          if (chosen !== undefined) {
+            if (!applyShiftWestOneNow(formationId)) pendingShift.push(formationId)
+            continue
+          }
+          const derived = deriveFactsFor(formationId, 'shiftWest')
           const anchorText = derived?.facts.anchorHexText
           const anchor = anchorText === undefined ? undefined : parseHexOf(anchorText)
           const steps = group.shiftHexes ?? 0
@@ -1461,7 +1532,7 @@ export const useContainersStore = defineStore('containers', () => {
         }
         continue
       }
-      if (applyDraw(group)) appliedGroups += 1
+      if (progress.applied || applyDraw(group)) appliedGroups += 1
       else failures.push(`${group.label}：${lastAction.value?.detail ?? '落盘被拒'}`)
     }
 
@@ -1494,7 +1565,10 @@ export const useContainersStore = defineStore('containers', () => {
    * `combatUnitIds`（S3 的 Move Mode）取该编队**图上**的下属，且只收**战斗单位**
    * （非战斗的 Truck / 补给不转模式；判据用操作台算子自己的 `isCombat`）。
    */
-  function deriveFactsFor(formationId: string): {
+  function deriveFactsFor(
+    formationId: string,
+    kind?: ScenarioDrawGroup['kind'],
+  ): {
     facts: {
       mtrRegimentUnitId?: string
       aufkBattalionUnitId?: string
@@ -1513,7 +1587,11 @@ export const useContainersStore = defineStore('containers', () => {
     const rows = scenarioSetup.entries.filter(
       (entry) => entry.scenarioId === setupSourceOf(scenarioId.value).source,
     )
-    const outcome = deriveDrawComposition({ rows, formationId })
+    const outcome = deriveDrawComposition({
+      rows,
+      formationId,
+      aufkLocation: kind === 'deadPileAufk' ? 'hex' : 'dead_pile',
+    })
     if (!outcome.ok) {
       lastAction.value = {
         ok: false,
@@ -1556,8 +1634,23 @@ export const useContainersStore = defineStore('containers', () => {
     const krdBattalionUnitId = translate(data.krdBattalionUnitId)
     /** 该编队**图上**的单位（盘上实例 id；西移摆位要用全部，不筛战斗单位） */
     const onMapInstanceIds = data.onMapUnitIds
-      .map((libraryId) => boardIdOf(libraryId))
+      .map(
+        (libraryId) =>
+          workbench.units.find((unit) => unit.unitId === libraryId)?.instanceId ?? null,
+      )
       .filter((unitId): unitId is string => unitId !== null)
+    if (
+      (kind === 'shiftWest' || kind === 'moveMode') &&
+      onMapInstanceIds.length !== data.onMapUnitIds.length
+    ) {
+      lastAction.value = {
+        ok: false,
+        rule: 'ch10 / ch11',
+        detail: `${formationId} 的初设图上成员不齐，未提交编队处置`,
+        scope: '剧本抽取盒',
+      }
+      return null
+    }
     const combatUnitIds = onMapInstanceIds.filter(
       (unitId) => workbench.units.find((unit) => unit.instanceId === unitId)?.isCombat === true,
     )
@@ -1611,7 +1704,7 @@ export const useContainersStore = defineStore('containers', () => {
     const group = scenarioDrawBox.value?.groups.find((item) => item.kind === 'shiftWest')
     const shiftHexes = group?.shiftHexes ?? 0
     return record.formationIds.map((formationId) => {
-      const derived = deriveFactsFor(formationId)
+      const derived = deriveFactsFor(formationId, 'shiftWest')
       return {
         formationId,
         hexText: drawShiftHexText.value[formationId] ?? null,
@@ -1673,6 +1766,23 @@ export const useContainersStore = defineStore('containers', () => {
         `编队抽取摆位：缺落点（${missing.map((item) => item.formationId).join('、')}）⇒ 本次不改动任何算子`,
         'ch10',
       )
+      return false
+    }
+    const valid = validateSetupShiftCommit({
+      placements: pending.map((item) => ({
+        formationId: item.formationId,
+        unitIds: item.unitIds,
+        hex: parseHexOf(item.hexText ?? ''),
+      })),
+      onMapIds: workbench.units.map((unit) => unit.instanceId),
+    })
+    if (!valid.ok) {
+      lastAction.value = {
+        ok: false,
+        rule: valid.rule,
+        detail: valid.reason,
+        scope: '初设·编队抽取摆位',
+      }
       return false
     }
     let moved = 0
@@ -1795,6 +1905,19 @@ export const useContainersStore = defineStore('containers', () => {
         ok: false,
         rule: 'ch10',
         detail: `${formationId} 还没给西移落点`,
+        scope: '初设·编队抽取摆位',
+      }
+      return false
+    }
+    const valid = validateSetupShiftCommit({
+      placements: [{ ...item, hex: parseHexOf(item.hexText) }],
+      onMapIds: workbench.units.map((unit) => unit.instanceId),
+    })
+    if (!valid.ok) {
+      lastAction.value = {
+        ok: false,
+        rule: valid.rule,
+        detail: valid.reason,
         scope: '初设·编队抽取摆位',
       }
       return false
@@ -2098,8 +2221,15 @@ export const useContainersStore = defineStore('containers', () => {
     workbench.clearAirBoxMembers()
     edgeBoxHeld.value = { northeast: [], southeast: [] }
     formationBoxes.value = {}
-    drawResults.value = {}
+    resetSetupDraws()
     lastAction.value = null
+  }
+
+  /** ch10/ch11：清盘新建时，名单、落点及处置回执必须一起重置。 */
+  function resetSetupDraws(): void {
+    drawResults.value = {}
+    drawShiftHexText.value = {}
+    formationDrawOutcomes.value = []
   }
 
   return {
@@ -2112,6 +2242,8 @@ export const useContainersStore = defineStore('containers', () => {
     edgeBoxHeld,
     formationBoxes,
     drawResults,
+    setupDrawProgress,
+    resetSetupDraws,
     // 批 E 切片 2：抽签的西移落点（点地图写回）与"落盘后的变化"台账（`setup` 只读它回写初设）
     drawShiftHexText,
     drawShiftHexOf,
