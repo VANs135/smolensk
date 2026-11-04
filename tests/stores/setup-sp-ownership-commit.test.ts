@@ -17,6 +17,51 @@ function boot() {
 }
 
 describe('Setup Note F/3.4b：初设SP归属实际提交', () => {
+  it('后采纳选项时，双方确认和开局必须等待归属实际落实', () => {
+    const { setup, board, game } = boot()
+    const index = game.agreedOptionItems.indexOf(PANZER_GROUP_OPTION_ITEM)
+    game.setAgreedCheck(index, false)
+    expect(setup.selectScenario('1')).toBe(true)
+    confirmSetupForStart(setup)
+    game.setAgreedCheck(index, true)
+    const before = JSON.stringify(board.units),
+      rng = { ...board.rng }
+    expect(setup.stepDone.spOwnership).toBe(false)
+    expect(setup.requiredSetupIssues.some((issue) => issue.id === 'spOwnership')).toBe(true)
+    expect(setup.startGameNow()).toBe(false)
+    expect(game.session).toBeNull()
+    expect(JSON.stringify(board.units)).toBe(before)
+    expect(board.rng).toEqual(rng)
+    expect(setup.confirmSpOwnership()).toBe(true)
+    expect(setup.startGameNow()).toBe(true)
+  })
+  it('旧确认不能覆盖改选、清空或实际账本不一致，重新确认后才恢复就绪', () => {
+    const { setup, board, game } = boot()
+    confirmSetupForStart(setup)
+    const dump = setup.spDumpsOf('axis')[0]!
+    const other = board.panzerGroupOfDump(dump.id) === 'hoth' ? 'guderian' : 'hoth'
+    setup.setSpAssignment(dump.id, other)
+    expect(setup.stepDone.spOwnership).toBe(false)
+    expect(setup.startGameNow()).toBe(false)
+    expect(setup.confirmSpOwnership()).toBe(true)
+    board.spDumpPanzerGroups = {}
+    expect(setup.stepDone.spOwnership).toBe(false)
+    expect(setup.startGameNow()).toBe(false)
+    setup.setSpAssignment(dump.id, null)
+    expect(setup.confirmSpOwnership()).toBe(false)
+    expect(game.session).toBeNull()
+    setup.setSpAssignment(dump.id, other)
+    expect(setup.confirmSpOwnership()).toBe(true)
+    expect(setup.startGameNow()).toBe(true)
+  })
+  it('未启用选项或晚起始剧本不增加SP归属必做项', () => {
+    const { setup, game } = boot()
+    game.setAgreedCheck(game.agreedOptionItems.indexOf(PANZER_GROUP_OPTION_ITEM), false)
+    expect(setup.requiredSetupIssues.some((issue) => issue.id === 'spOwnership')).toBe(false)
+    expect(setup.selectScenario('7')).toBe(true)
+    game.setAgreedCheck(game.agreedOptionItems.indexOf(PANZER_GROUP_OPTION_ITEM), true)
+    expect(setup.requiredSetupIssues.some((issue) => issue.id === 'spOwnership')).toBe(false)
+  })
   it('确认后实际补给站读取玩家选择，重复确认不重复写入，存读档保留归属', () => {
     const { setup, board, game } = boot()
     for (const dump of setup.spDumpsOf('axis')) setup.setSpAssignment(dump.id, 'hoth')

@@ -7,6 +7,7 @@ import type { HexRef, Side } from '@/data'
 import {
   AIR_BASE_SITE_RULE,
   assessSetupTruckLoad,
+  assessSetupSpOwnership,
   boundarySideOf,
   breakdownCounterValues,
   SETUP_RULE,
@@ -1193,6 +1194,7 @@ export const useSetupStore = defineStore('setup', () => {
       draws: containers.setupDrawProgress.groups,
       truck: truckLoadReadiness.value,
       cursor: setupSideCursor.value,
+      ownership: spOwnershipReadiness.value,
     }),
   )
 
@@ -1409,7 +1411,7 @@ export const useSetupStore = defineStore('setup', () => {
       scenario: source !== undefined,
       formationDraw: containers.setupDrawProgress.complete,
       truckLoad: truckLoadReadiness.value.complete,
-      spOwnership: completed.value['spOwnership'] === true,
+      spOwnership: spOwnershipReadiness.value.complete,
       autoSetup: completed.value['autoSetup'] === true,
       airSetup: airDone('axis') && airDone('soviet'),
       selfSetup: selfTotal === 0 || selfPlaced >= selfTotal,
@@ -2113,6 +2115,20 @@ export const useSetupStore = defineStore('setup', () => {
     completed.value = { ...completed.value, spOwnership: true }
     return record(outcome)
   }
+
+  const spOwnershipReadiness = computed(() =>
+    !panzerGroupRulesOn()
+      ? { complete: true, rule: '12.1d', detail: '本局不适用SP装甲集群归属' }
+      : assessSetupSpOwnership(
+          {
+            scenarioId: scenarioId.value,
+            dumps: spDumps.value,
+            assignments: spAssignments.value,
+            agreedByConsensus: game.agreedOptionAdoptedOf(PANZER_GROUP_OPTION_ITEM),
+          },
+          workbench.spDumpPanzerGroups,
+        ),
+  )
 
   /** 记录某型飞机选择的基地格（14.1a） */
   function setAirChoice(entryIndex: number, hexText: string): void {

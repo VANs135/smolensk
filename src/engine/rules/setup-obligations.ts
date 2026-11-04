@@ -1,5 +1,10 @@
 import type { Side } from '@/data'
-import { planTruckFullLoad, type TruckLoadRequest } from './setup'
+import {
+  planTruckFullLoad,
+  planSupplyOwnership,
+  type TruckLoadRequest,
+  type SupplyOwnershipRequest,
+} from './setup'
 import { SP_TO_T } from './supply'
 
 export interface SetupObligation {
@@ -7,6 +12,24 @@ export interface SetupObligation {
   side: Side
   rule: string
   detail: string
+}
+
+/** Setup Note F/3.4b：当前选择必须合法并已提交到实际补给站归属，不能沿用旧完成标记。 */
+export function assessSetupSpOwnership(
+  request: SupplyOwnershipRequest,
+  actual: Readonly<Record<string, 'hoth' | 'guderian'>>,
+) {
+  const plan = planSupplyOwnership(request)
+  if (!plan.ok)
+    return { complete: false, rule: plan.rule, detail: '请完成初设SP装甲集群归属选择并确认' }
+  const complete = plan.data.entries.every(
+    (entry) => entry.panzerGroup === null || actual[entry.id] === entry.panzerGroup,
+  )
+  return {
+    complete,
+    rule: plan.rule,
+    detail: complete ? '初设SP归属已落实' : '初设SP归属尚未与实际补给站一致，请重新确认',
+  }
 }
 
 /** IV-D/13.2h：所选满载名单与实际载货都吻合才算完成，旧的完成标记不能代替盘面。 */
@@ -40,6 +63,7 @@ export function pendingSetupObligations(input: {
   draws: readonly { kind: string; applied: boolean; reason: string | null }[]
   truck: ReturnType<typeof assessSetupTruckLoad>
   cursor: Side | null
+  ownership?: ReturnType<typeof assessSetupSpOwnership>
 }): SetupObligation[] {
   const issues: SetupObligation[] = input.shifts.map((item) => ({
     id: `shift:${item.formationId}`,
@@ -62,6 +86,13 @@ export function pendingSetupObligations(input: {
       side: 'axis',
       rule: input.truck.rule,
       detail: input.truck.detail,
+    })
+  if (input.ownership !== undefined && !input.ownership.complete)
+    issues.push({
+      id: 'spOwnership',
+      side: 'axis',
+      rule: input.ownership.rule,
+      detail: input.ownership.detail,
     })
   if (input.cursor !== null)
     issues.push({
