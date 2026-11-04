@@ -2089,6 +2089,7 @@ export const useSetupStore = defineStore('setup', () => {
     if (group === null) delete next[dumpId]
     else next[dumpId] = group
     spAssignments.value = next
+    completed.value = { ...completed.value, spOwnership: false }
   }
 
   /** SP 归属划分（12.1d + Setup Note F + 3.4b）：核验后记完成 */
@@ -2103,6 +2104,12 @@ export const useSetupStore = defineStore('setup', () => {
       agreedByConsensus: game.agreedOptionAdoptedOf(PANZER_GROUP_OPTION_ITEM),
     })
     if (!outcome.ok) return record(outcome)
+    // 3.4b：验证完整名单后才提交到付款/拖取实际读取的账本，不能仅勾选初设完成。
+    for (const entry of outcome.data.entries) {
+      if (entry.side !== 'axis' || entry.panzerGroup === null) continue
+      if (workbench.panzerGroupOfDump(entry.id) !== entry.panzerGroup)
+        workbench.setDumpPanzerGroupNow(entry.id, entry.panzerGroup)
+    }
     completed.value = { ...completed.value, spOwnership: true }
     return record(outcome)
   }

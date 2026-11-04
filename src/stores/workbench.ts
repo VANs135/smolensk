@@ -10474,6 +10474,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C8：清空 SP 账本（初设重置用；同上不在初设期做全场重判） */
   function clearSpDumps(reason = '账本清空'): void {
+    spDumpPanzerGroups.value = {}
+    pendingSpGroupAssignment.value = []
     if (spDumps.value.length === 0) return
     spDumps.value = []
     pushLog('info', `SP 账本清空（${reason}）`, '12.1b')
