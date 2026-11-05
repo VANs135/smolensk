@@ -226,21 +226,9 @@ export interface VictoryLocationState {
 }
 
 /**
- * 双方资源计数（开局由剧本初设决定，见 scenarios.json scenarios[].setup）
- */
-export interface RecordCounters {
-  /** Reserve 标记可用数（5.7；剧本初设 setup.reserveMarkers） */
-  reserveMarkers: Record<Side, number>
-  /** Supply Cache 标记数（1.7；剧本初设 setup.supplyCache） */
-  supplyCache: Record<Side, number>
-  /** 建造标记可用数（3.5；剧本初设 setup.constructionMarkers） */
-  constructionMarkers: number
-}
-
-/**
  * 记录轨与计数（辅助卡「记录轨」）
  *
- * 回合轨 / 铁路容量轨 / 各标记轨位 / 胜利格控制 / 双方资源计数。
+ * 回合轨 / 铁路容量轨 / 各标记轨位 / 胜利格控制。
  */
 export interface Records {
   /** 回合轨：当前回合号（1 起，共 19 回合） */
@@ -274,8 +262,6 @@ export interface Records {
   markerTracks: Record<string, number>
   /** 胜利格控制状态（5.0c；清单来自 scenarios.json victory） */
   victoryLocations: VictoryLocationState[]
-  /** 双方资源计数 */
-  counters: RecordCounters
 }
 
 /* ────────────────────────────── GameState ────────────────────────────── */

@@ -91,11 +91,6 @@ function createRecords(): Records {
     railCapacity: { axis: 1, soviet: 2 },
     markerTracks: { 'mk-rail-cap': 3 },
     victoryLocations: [{ hex: { col: 36, row: 13 }, controlledBy: 'axis', listed: true }],
-    counters: {
-      reserveMarkers: { axis: 14, soviet: 0 },
-      supplyCache: { axis: 2, soviet: 2 },
-      constructionMarkers: 3,
-    },
   }
 }
 
@@ -456,5 +451,32 @@ describe('W7 C15：存档错误的归类（界面照它说话，不自己解析�
       expect(info.hint.length).toBeGreaterThan(0)
       expect(SAVE_ERROR_KINDS).toContain(info.kind)
     }
+  })
+
+  /*
+   * ⑥/G5：`records.counters` 是"只写不读"的重复账本，已随清理批删除。
+   * 两条兼容性判据：
+   *   ① 新写的档**不再**出现该键（不再回写无人读取的镜像值）；
+   *   ② 旧档里多出该字段**被忽略而非报错**（读档只做骨架校验，不校验 records 明细）。
+   */
+  it('⑥/G5：新档无 records.counters；旧档多出该字段仍可读', () => {
+    const text = serializeSaveFile(createSession(), SAVED_AT)
+    const fresh = JSON.parse(text) as {
+      session: { state: { records: Record<string, unknown> } }
+    }
+    expect(fresh.session.state.records).not.toHaveProperty('counters')
+
+    const legacy = JSON.parse(text) as {
+      session: { state: { records: Record<string, unknown> } }
+    }
+    legacy.session.state.records['counters'] = {
+      reserveMarkers: { axis: 14, soviet: 0 },
+      supplyCache: { axis: 2, soviet: 2 },
+      constructionMarkers: 3,
+    }
+    const loaded = deserializeSaveFile(JSON.stringify(legacy))
+    expect(loaded.session.state.records.turn).toBe(4)
+    // 读档不迁移也不裁剪：多余的键随原对象透传，行为不受影响
+    expect(() => verifyRngState(loaded.session.state.rng)).not.toThrow()
   })
 })

@@ -128,11 +128,6 @@ function createRecords(): Records {
     railCapacity: { axis: 0, soviet: 2 },
     markerTracks: {},
     victoryLocations: [{ hex: { col: 36, row: 13 }, controlledBy: 'soviet', listed: true }],
-    counters: {
-      reserveMarkers: { axis: 14, soviet: 0 },
-      supplyCache: { axis: 2, soviet: 2 },
-      constructionMarkers: 3,
-    },
   }
 }
 
@@ -305,13 +300,6 @@ describe('Records（记录轨与计数）', () => {
     expect(records.preTurnSegment).toBe('weatherDetermination')
     expect(records.weather).toEqual({ air: 'normal', ground: 'good' })
     expect(records.railCapacity).toEqual({ axis: 0, soviet: 2 })
-  })
-
-  it('计数来自剧本初设（Reserve 14/0、Supply Cache 各 2、建造标记 3）', () => {
-    const { counters } = createRecords()
-    expect(counters.reserveMarkers).toEqual({ axis: 14, soviet: 0 })
-    expect(counters.supplyCache).toEqual({ axis: 2, soviet: 2 })
-    expect(counters.constructionMarkers).toBe(3)
   })
 
   it('胜利格控制记录控制方与是否属清单（5.0c）', () => {
