@@ -32,6 +32,22 @@ export interface VariableExitResult {
 /** 可变撤离表原始数据（骰面值段 → 结果描述） */
 export const VARIABLE_EXIT_TABLE = rulesConstants.smolensk.variableExitTable
 
+/**
+ * 战役称谓 → 单位库**编队代号**（3.3c 表值 ↔ `formations.json` 的 `code`）
+ *
+ * 表值写的是战役称谓（`SS Reich` / `14 Mtr`），单位库里的 `formation` 是代号（`SS-R` / `14MTR`）；
+ * 这里只做**精确查表**，不做模糊匹配——认不出就返回 `null`，由调用方记警告、不推进。
+ */
+const VARIABLE_EXIT_FORMATION: Readonly<Record<string, string>> = {
+  'SS Reich': 'SS-R',
+  '14 Mtr': '14MTR',
+}
+
+/** 取撤离目标编队代号；未知称谓 ⇒ `null` */
+export function variableExitFormationOf(removedUnit: string): string | null {
+  return VARIABLE_EXIT_FORMATION[removedUnit] ?? null
+}
+
 /** 骰面值段解析：返回命中的表键（精确值或区间） */
 function resolveDieKey(die: number, table: Record<string, string>): string {
   const labels = Object.keys(table)

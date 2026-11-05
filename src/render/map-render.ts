@@ -311,6 +311,12 @@ export interface MapRenderOptions {
   image?: HTMLImageElement | null
   /** 高亮格（悬停/选中）；null 表示无 */
   highlightHex?: HexRef | null
+  /**
+   * 多格高亮（用户裁定⑦：选单位时"高亮提示有可选单位的格子"）
+   *
+   * 与 `highlightHex` 同色同线宽，只是可给多格；两者可同时存在（悬停格叠在可点格上）。
+   */
+  highlightHexes?: readonly HexRef[] | null
   /** 移动交互覆盖层（算子、可到达范围、预览路径；C5）；null 表示只画地图 */
   overlay?: MovementOverlay | null
   /**
@@ -523,13 +529,23 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
     }
   }
 
-  // ⑦ 高亮格
+  // ⑦ 高亮格（单格 = 悬停/选中；多格 = "有可选单位的格"）
   const highlight = options.highlightHex ?? null
   if (highlight !== null && isBoardHex(highlight)) {
     ctx.strokeStyle = MAP_PALETTE.highlight
     ctx.lineWidth = 3 / scale
     traceHexPath(ctx, highlight)
     ctx.stroke()
+  }
+  const highlightHexes = options.highlightHexes ?? null
+  if (highlightHexes !== null && highlightHexes.length > 0) {
+    ctx.strokeStyle = MAP_PALETTE.highlight
+    ctx.lineWidth = 3 / scale
+    for (const hex of highlightHexes) {
+      if (!isBoardHex(hex)) continue
+      traceHexPath(ctx, hex)
+      ctx.stroke()
+    }
   }
 
   // ⑧ 移动交互覆盖层（C5：算子 + 可到达范围 + 预览路径）；画在格号之上，免得被字压住

@@ -66,6 +66,12 @@ const props = withDefaults(
     layers?: MapLayerVisibility
     /** 高亮格（如上层选中的格） */
     highlightHex?: HexRef | null
+    /**
+     * 多格高亮（用户裁定⑦：选单位时"高亮提示有可选单位的格子"；由上层算好传入）
+     *
+     * 与 `highlightHex` 同色；单格（悬停）叠在多格之上，互不替代。
+     */
+    highlightHexes?: readonly HexRef[]
     /** 移动交互覆盖层（算子 / 可到达范围 / 预览路径；C5） */
     overlay?: MovementOverlay | null
     /**
@@ -95,6 +101,7 @@ const props = withDefaults(
   {
     layers: () => ({ ...DEFAULT_MAP_LAYERS }),
     highlightHex: null,
+    highlightHexes: () => [],
     overlay: null,
     hint: null,
     controlMarkers: null,
@@ -198,6 +205,7 @@ function render(): void {
     layers: props.layers,
     image: image.value,
     highlightHex: props.highlightHex,
+    highlightHexes: props.highlightHexes,
     overlay: props.overlay,
     controlMarkers: props.controlMarkers,
     boundary: props.boundary,
@@ -488,6 +496,7 @@ onBeforeUnmount(() => {
 // 图层开关、高亮格、覆盖层变化 → 合并到下一帧重绘（deep watch 仍保留：覆盖层内部就地变更也不漏）
 watch(() => props.layers, scheduleRender, { deep: true })
 watch(() => props.highlightHex, scheduleRender)
+watch(() => props.highlightHexes, scheduleRender)
 watch(
   () => props.overlay,
   (overlay) => {

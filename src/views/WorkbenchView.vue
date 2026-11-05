@@ -357,6 +357,7 @@ onMounted(() => {
       <MapCanvas
         :layers="mapLayerToggles"
         :highlight-hex="workbench.hoverHex"
+        :highlight-hexes="workbench.variableExitPickHexes"
         :overlay="mapView.overlay"
         :hint="workbench.mapHint"
         @hex-click="onHexClick"

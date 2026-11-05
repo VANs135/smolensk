@@ -263,6 +263,7 @@ onBeforeUnmount(() => {
         ref="mapRef"
         :layers="mapLayerToggles"
         :highlight-hex="workbench.hoverHex"
+        :highlight-hexes="workbench.variableExitPickHexes"
         :overlay="mapView.overlay"
         :control-markers="mapView.controlMarkers"
         :boundary="mapView.boundary"

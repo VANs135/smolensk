@@ -30,7 +30,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, watch, type Ref } from 'vue'
 
 import type { HexRef, RailGauge, Side } from '@/data'
-import { mapConfig, mapLayers, rulesConstants, scenarios } from '@/data'
+import { mapConfig, mapLayers, rulesConstants, scenarios, unitsAxis } from '@/data'
 import {
   HEX_DIRECTIONS,
   allMapHexes,
@@ -55,6 +55,7 @@ import type { SpDump } from './supply-types'
 // B37：分界线的渲染投影类型（渲染层只画被给的东西）
 import type { BoundaryLine } from '@/render/map-render'
 import { createRailFacts, createTraceSupplyAt } from '@/engine/rules'
+import { buildUnitSelectionSet, type UnitSelectionSet } from '@/engine/rules/unit-selection'
 // B8：环节链（当前环节由本文件的 `segmentStep` 从这张表推出）
 import { sopStepById, sopStepsOf, type SopSegmentStep } from '@/engine/rules'
 import {
@@ -100,6 +101,8 @@ import {
   validateConstructionBase,
   EXTENDER_REQUIRED_POINTS,
   isVariableExitActive,
+  variableExitFormationOf,
+  type VariableExitResult,
   airInteractionChecklist,
   airTransportTerrainIsClosed,
   // B44（14.9e）：逐机飞法（A 双程 / B 正常 / C 半程容量翻倍）
@@ -458,6 +461,7 @@ import {
   terrainsAt,
   turnDateOf,
   unitChoices,
+  counterImageUrlOf,
   type AircraftRecordView,
   // B14：空军面板的「参战机」算子图阵列（逐机给出可选性与原因）
   type AirMissionJoinChoice,
@@ -15307,6 +15311,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const variableExitResolved = ref<boolean>(false)
 
+  /**
+   * 3.3c：待玩家选择的替补（**从 `session.log` 反推**，不新增存档字段）
+   *
+   * 撤离目标编队"盘面与死亡堆都没有算子"时（1.6a 的 "or else a unit with identical factors"），
+   * 掷骰那次会落一条 `mode: 'select'` 的结算；确认移除落 `mode: 'confirm'`。
+   * ⇒ 从日志末尾往前找**第一条** `variableExit` 条目即可判定"是否仍在等玩家选"，
+   *   存档 → 读档后日志还在，选择态自然恢复（无需为它动 save schema）。
+   */
+  const variableExitPendingSelection = computed<{ removedUnit: string; formation: string } | null>(
+    () => {
+      const entry = [...session.log].reverse().find((item) => item.action === 'variableExit')
+      if (entry === undefined || !entry.outcome.ok) return null
+      const data = entry.outcome.data as unknown as {
+        mode?: unknown
+        removedUnit?: unknown
+        formation?: unknown
+      }
+      if (data.mode !== 'select') return null
+      if (typeof data.removedUnit !== 'string' || typeof data.formation !== 'string') return null
+      return { removedUnit: data.removedUnit, formation: data.formation }
+    },
+  )
+
   /** 3.3c：当前是否处于可变撤离的窗口内（19 Aug 起；供界面提示与按钮可用性） */
   const variableExitOpen = computed<boolean>(() => isVariableExitActive(date.value))
   /** 最近一次可变增援结论（1.6b / 1.6c / 3.3c / 3.6） */
@@ -16590,10 +16617,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     supplyArrivalSp.value = data.sp
     // 3.6：补给列车的落点须玩家选（任一可卸货格）；换掷即作废上一次的选择
     supplyTrainHex.value = null
-    // 3.3c：掷出 1 或 6 即「该单位移除，撤离判定结束」⇒ 记住已了结，后续回合不再掷
+    /*
+     * 3.3c：「until a division … is Removed」⇒ **只有真正移除时才了结**。
+     * 修前这里对 2–5（`reroll`）也置真 ⇒ 掷出"下回合再掷"后再也不会掷，与原文相反。
+     */
     if (data.variableExit !== null && data.variableExit !== undefined) {
-      variableExitResolved.value = true
-      pushLog('warning', `3.3c 可变撤离已了结：${data.variableExit.description}`, '3.3c')
+      if (data.variableExit.kind === 'remove') {
+        variableExitResolved.value = true
+        resolveVariableExitNow(data.variableExit)
+        pushLog('warning', `3.3c 可变撤离已了结：${data.variableExit.description}`, '3.3c')
+      } else {
+        pushLog('info', `3.3c 可变撤离：${data.variableExit.description}`, '3.3c')
+      }
     }
     // 补员入账（13.5：Pax/Eq 可保存；Ftr/Tac 不可保存，阶段末由调用方清零）
     addReplHoldingsNow({
@@ -16640,6 +16675,177 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       },
     })
     return true
+  }
+
+  /**
+   * 3.3c：把撤离结果**真正落到盘面**（1.6a）
+   *
+   * - 目标编队在场（盘面 / 死亡堆）⇒ 逐个 `removeFromPlayEverywhere`（1.6a：「regardless of its
+   *   current situation, **even if in the dead pile**」）——撤离是"移出游戏"，**不是**进死亡堆；
+   * - 盘面与死亡堆都没有该编队算子 ⇒ 落一条 `mode: 'select'` 的结算，由玩家按 1.6a
+   *   「**it, or else a unit with identical factors**」挑一枚同印值算子顶替。
+   *
+   * ★ 修前这里只置 `variableExitResolved = true` 并写日志，**一个算子都没移**（3.3c 从未落地）。
+   */
+  function resolveVariableExitNow(result: VariableExitResult): void {
+    const removedUnit = result.removedUnit
+    if (removedUnit === undefined) return
+    const formation = variableExitFormationOf(removedUnit)
+    if (formation === null) {
+      pushLog(
+        'warning',
+        `3.3c：撤离表称谓「${removedUnit}」没有对应的编队代号 ⇒ 请裁判手工处理`,
+        '3.3c',
+      )
+      return
+    }
+    const targets: ConsoleUnit[] = [
+      ...units.value,
+      ...deadPile.value.filter((entry): entry is ConsoleUnit => !isAirDeadPileEntry(entry)),
+    ].filter((unit) => unit.side === 'axis' && unit.formation === formation)
+    if (targets.length === 0) {
+      recordSettlement({
+        action: 'variableExit',
+        rule: '3.3c',
+        data: { mode: 'select', removedUnit, formation },
+      })
+      pushLog(
+        'warning',
+        `3.3c：${removedUnit} 已无算子在场 ⇒ 由玩家选择同印值算子移出游戏（1.6a）`,
+        '3.3c',
+      )
+      return
+    }
+    for (const unit of targets) {
+      removeFromPlayEverywhere(unit)
+      pushLog('info', `${unit.name} 按 3.3c 撤离移出游戏（1.6a：不论处境）`, '3.3c')
+    }
+    recordSettlement({
+      action: 'variableExit',
+      rule: '3.3c',
+      data: {
+        mode: 'direct',
+        removedUnit,
+        formation,
+        unitIds: targets.map((unit) => unit.instanceId),
+      },
+    })
+  }
+
+  /** 3.3c：是否有待玩家选择的替补（= 日志里最后一条撤离结算是 `select`） */
+  const variableExitSelectionOpen = computed<boolean>(
+    () => variableExitPendingSelection.value !== null,
+  )
+
+  /**
+   * 3.3c 待选清单：**1.6a 的「identical factors」**＝战斗面印值 `attack/ar/ma` 三元组相等
+   *
+   * 参考印值取自单位库中该编队的记录（目标编队此刻已无实例 ⇒ 不能从盘面取）；
+   * 候选只从**盘面**算子中挑（界面按格高亮＋点选，死亡堆没有格可点）。
+   * 本机制**只列可选**：不可选者根本不进候选集（不是灰显）。
+   */
+  const variableExitSelectionSet = computed<UnitSelectionSet>(() => {
+    const pending = variableExitPendingSelection.value
+    if (pending === null) return { eligibleIds: [], hexes: [], byHex: [] }
+    const factors = new Set<string>()
+    for (const record of unitsAxis.units) {
+      if (record.formation !== pending.formation) continue
+      // 用与盘面实例**同一套投影**取印值（避免"库里写 6-5、实例投影成别的"这种错位）
+      const view = toConsoleUnit({
+        record,
+        instanceId: `ref:${record.id}`,
+        hex: { col: 0, row: 0 },
+        side: 'axis',
+      })
+      factors.add(`${view.faces.combat.attack}|${view.faces.combat.ar}|${view.faces.combat.ma}`)
+    }
+    const candidates: {
+      id: string
+      col: number
+      row: number
+      eligible: boolean
+    }[] = []
+    for (const unit of units.value) {
+      if (unit.side !== 'axis') continue
+      if (unit.formation === pending.formation) continue
+      if (!unit.isCombat) continue
+      const key = `${unit.faces.combat.attack}|${unit.faces.combat.ar}|${unit.faces.combat.ma}`
+      if (!factors.has(key)) continue
+      candidates.push({ id: unit.instanceId, col: unit.hex.col, row: unit.hex.row, eligible: true })
+    }
+    return buildUnitSelectionSet(candidates)
+  })
+
+  /** 3.3c 待选的算子图阵列（只含可选者；`CounterPicker` 的纯投影数据） */
+  const variableExitPickItems = computed(() => {
+    const items: {
+      id: string
+      imageUrl: string | null
+      name: string
+      selected: boolean
+      hex: HexRef
+      groupKey: string
+    }[] = []
+    for (const id of variableExitSelectionSet.value.eligibleIds) {
+      const unit = units.value.find((item) => item.instanceId === id)
+      if (unit === undefined) continue
+      items.push({
+        id,
+        imageUrl: counterImageUrlOf(unit),
+        name: unit.name,
+        selected: false,
+        hex: { col: unit.hex.col, row: unit.hex.row },
+        groupKey: `${unit.hex.col}.${unit.hex.row}`,
+      })
+    }
+    return items
+  })
+
+  /** 3.3c 待选时**有可选单位的格**（地图多格高亮的数据源） */
+  const variableExitPickHexes = computed<HexRef[]>(() => [...variableExitSelectionSet.value.hexes])
+
+  /**
+   * 3.3c：玩家点选一枚同印值算子顶替撤离（1.6a）
+   *
+   * 只接受 `variableExitSelectionSet.eligibleIds` 里的 id（不在清单内＝规则上不可选，直接拒绝）。
+   */
+  function confirmVariableExitSubstitute(instanceId: string): boolean {
+    const pending = variableExitPendingSelection.value
+    if (pending === null) return false
+    if (!variableExitSelectionSet.value.eligibleIds.includes(instanceId)) {
+      pushLog('warning', `3.3c：该算子不在可选清单内（1.6a 只允许同印值算子）`, '1.6a')
+      return false
+    }
+    const unit = units.value.find((item) => item.instanceId === instanceId)
+    if (unit === undefined) return false
+    removeFromPlayEverywhere(unit)
+    pushLog(
+      'info',
+      `${unit.name} 作为 ${pending.removedUnit} 的替补移出游戏（1.6a：同印值）`,
+      '1.6a',
+    )
+    recordSettlement({
+      action: 'variableExit',
+      rule: '1.6a',
+      data: {
+        mode: 'confirm',
+        removedUnit: pending.removedUnit,
+        formation: pending.formation,
+        unitId: instanceId,
+      },
+    })
+    hoverHex.value = null
+    return true
+  }
+
+  /** 3.3c：悬停待选清单里的一枚 ⇒ 同步地图高亮（`CounterPicker` 的 `hover` 事件） */
+  function setVariableExitHover(instanceId: string | null): void {
+    if (instanceId === null) {
+      hoverHex.value = null
+      return
+    }
+    const unit = units.value.find((item) => item.instanceId === instanceId)
+    hoverHex.value = unit === undefined ? null : { col: unit.hex.col, row: unit.hex.row }
   }
 
   /**
@@ -20502,6 +20708,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     variableReplInputs,
     variableExitResolved,
     variableExitOpen,
+    // ⑦ 3.3c：撤离落盘与"可选单位清单"（待选状态从 session.log 反推，无存档字段）
+    variableExitPendingSelection,
+    variableExitSelectionOpen,
+    variableExitSelectionSet,
+    variableExitPickItems,
+    variableExitPickHexes,
+    confirmVariableExitSubstitute,
+    setVariableExitHover,
     isSavableRepl,
     breakdownAbsorbObligations,
     /*
