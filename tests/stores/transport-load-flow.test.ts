@@ -38,7 +38,9 @@ function placeTransportPoint(
   side: 'axis' | 'soviet' = 'soviet',
 ) {
   const record = groundRecord(side, (item) =>
-    organic ? item.noncombatKind === 'organic_truck' : item.noncombatKind === 'transport_point',
+    organic
+      ? item.noncombatKind === 'organic_truck'
+      : item.noncombatKind === 'transport_point' && (item.noncombatDetails?.transport ?? 0) >= 2,
   )
   const unit = placeGround(store, record, HEX, side, instanceId)
   return unit
@@ -79,6 +81,22 @@ describe('13.2f：装载 SP', () => {
       rule: '13.2f',
       reason: 'loadRequiresDumpInHex',
     })
+    expect(point.loadedSpT).toBe(0)
+    expect(point.mpSpent).toBe(0)
+  })
+
+  it('13.2c：装载量不得超过运输点数的规模 ⇒ 2 点卡车装 3 SP 被拒，账本与点数都不动', () => {
+    const store = newStore()
+    const point = placeTransportPoint(store)
+    expect(point.noncombatTransport).toBe(2)
+    const dump = dumpHere(store, 4)
+    store.transportLoadInputs = { pointId: point.instanceId, amount: 3 }
+    expect(store.loadTransportPointNow()).toBe(false)
+    expect(store.transportLoadError).toMatchObject({
+      rule: '13.2c',
+      reason: 'loadExceedsCapacity',
+    })
+    expect(store.spDumps.find((item) => item.id === dump.id)!.sp).toBe(4)
     expect(point.loadedSpT).toBe(0)
     expect(point.mpSpent).toBe(0)
   })

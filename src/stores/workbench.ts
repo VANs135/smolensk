@@ -3473,6 +3473,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       return false
     }
+    // 13.2c/4.7c：运输点数的运载能力**不超过其规模**（以 SP 为单位）
+    if (unit.loadedSpT / SP_TO_T + amount > unit.noncombatTransport) {
+      transportLoadError.value = { rule: '13.2c', reason: 'loadExceedsCapacity' }
+      pushLog(
+        'warning',
+        `该运输点数运力 ${unit.noncombatTransport} SP，装不下 ${amount} SP（13.2c）`,
+        '13.2c',
+      )
+      return false
+    }
     setSpDumpHoldings(dump.id, payment.data.holdingsAfter)
     unit.loadedSpT += amount * SP_TO_T
     // 13.2f：装载要支付印刷 MA 的 10%（按 6.1a 计入本阶段已耗 MP）
