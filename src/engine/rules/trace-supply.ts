@@ -617,25 +617,60 @@ export function countSupplyDistance(
 }
 
 /**
- * 与 `countSupplyDistance` **同结果**的读表版本（12.3b 的 HQ → 受益单位距离）
+ * 12.3c：HQ 投递到「**单位格或其任一相邻格**」的最省消耗（读表版）
  *
- * 同一个 HQ 要问所有受益单位 ⇒ 以 HQ 格为根的一次搜索在本 `facts` 生命周期内只算一次。
+ * 「只要补给能到达**单位的相邻格**，单位就可以获得补给。这适用于所有使用直接拖取或**指挥部投递**
+ * 的补给机制」⇒ 投递判据的终点集合与直接拖取**同一口径**（`selfAndNeighbors`）。
+ * 读表版不早停 ⇒ 同一 HQ 对多个受益单位只跑一次 Dijkstra（判据与 `countSupplyDistanceToAny` 同值）。
+ */
+export function countSupplyDistanceToUnitViaTable(
+  facts: TraceSupplyFacts,
+  input: { from: HexRef; unitHex: HexRef; side: Side; mobility: SupplyMobility; maxMp: number },
+): SupplyDistanceResult {
+  return countSupplyDistanceToAnyViaTable(facts, {
+    from: input.from,
+    targets: selfAndNeighbors(input.unitHex),
+    side: input.side,
+    mobility: input.mobility,
+    maxMp: input.maxMp,
+  })
+}
+
+/**
+ * `countSupplyDistanceToAny` 的**读表版本**（12.3b/12.3c 的多目标查询）
+ *
+ * 语义与 `countSupplyDistanceToAny` 相同（min over targets），区别只在**不传 `stopAt`**
+ * ⇒ 走 `cachedSearch`（同一 `(side, mobility, maxMp, from)` 在本 `facts` 生命周期内只算一次）。
+ * 结论逐字不变：无早停时 `best` 表给出的是**每个目标的真最短**，取最小值与提前停止同值。
+ *
  * 只用于**源 → 单位**方向：`stepMp` 的阻断取决于**目标格**（12.3d 不穿敌方战斗单位格），
  * 因此 A→B 可达**不代表** B→A 可达，这张表不可反向复用。
  */
-export function countSupplyDistanceViaTable(
+export function countSupplyDistanceToAnyViaTable(
   facts: TraceSupplyFacts,
-  input: { from: HexRef; to: HexRef; side: Side; mobility: SupplyMobility; maxMp: number },
+  input: {
+    from: HexRef
+    targets: readonly HexRef[]
+    side: Side
+    mobility: SupplyMobility
+    maxMp: number
+  },
 ): SupplyDistanceResult {
-  const { from, to, side, mobility, maxMp } = input
-  if (!facts.onMap(from) || !facts.onMap(to)) return { ok: false, reason: 'offMap' }
-  const fromKey = hexKey(from)
-  const toKey = hexKey(to)
-  if (fromKey === toKey) return { ok: true, mp: 0 }
+  const { from, side, mobility, maxMp } = input
+  if (!facts.onMap(from)) return { ok: false, reason: 'offMap' }
+  const wanted = new Set(input.targets.filter((hex) => facts.onMap(hex)).map(hexKey))
+  if (wanted.size === 0) return { ok: false, reason: 'offMap' }
+  if (wanted.has(hexKey(from))) return { ok: true, mp: 0 }
+
   const { best } = runDijkstra(facts, { from, side, mobility, maxMp })
-  const mp = best.get(toKey)
-  if (mp === undefined || mp > maxMp) return { ok: false, reason: 'unreachable' }
-  return { ok: true, mp }
+  let bestMp = Number.POSITIVE_INFINITY
+  for (const key of wanted) {
+    const mp = best.get(key)
+    if (mp !== undefined) bestMp = Math.min(bestMp, mp)
+  }
+  if (bestMp === Number.POSITIVE_INFINITY || bestMp > maxMp)
+    return { ok: false, reason: 'unreachable' }
+  return { ok: true, mp: bestMp }
 }
 
 /* ────────────────────────────── 可视化原语（C8：追溯与投递可视化） ────────────────────────────── */

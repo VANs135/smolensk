@@ -168,9 +168,8 @@ import {
   planDumpDestruction,
   confirmOosResolution,
   confirmSupplyPickup,
-  // G②（12.3b）：把补给投到**每一个**受益单位 —— 逐单位算投递距离，按 HQ 为根的距离表复用
-  countSupplyDistanceViaTable,
-  countSupplyDistanceToAny,
+  // 12.3c：HQ 投递同样「单位格或其任一相邻格」即可（12.3b/G② 的逐受益单位投递距离，按 HQ 为根的距离表复用）
+  countSupplyDistanceToUnitViaTable,
   currentResolver,
   declareAirCombatStep,
   declareBarrageShifts,
@@ -6847,9 +6846,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     for (const unit of units.value) {
       if (unit.side !== hq.side || unit.instanceId === hq.instanceId) continue
       if (!isIndependentUnitOf(unit)) continue
-      const reach = countSupplyDistanceToAny(facts, {
+      const reach = countSupplyDistanceToUnitViaTable(facts, {
         from: hq.hex,
-        targets: [unit.hex],
+        unitHex: unit.hex,
         side: unit.side,
         mobility: hqView.throwMobility,
         maxMp: hqView.throwRangeMp,
@@ -7069,9 +7068,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 12.3b/12.5e：覆盖它的 HQ（先按 12.3a 拖到 SP，再按印值投递距离投给它）
     for (const hq of units.value.filter((item) => item.side === side && isHqUnit(item))) {
       const hqView = toThrowHqView(hq)
-      const reach = countSupplyDistanceToAny(facts, {
+      const reach = countSupplyDistanceToUnitViaTable(facts, {
         from: hq.hex,
-        targets: [unit.hex],
+        unitHex: unit.hex,
         side,
         mobility: hqView.throwMobility,
         maxMp: hqView.throwRangeMp,
@@ -7629,9 +7628,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         let worstMp = 0
         let coversAll = true
         for (const target of targets) {
-          const reach = countSupplyDistanceToAny(facts, {
+          const reach = countSupplyDistanceToUnitViaTable(facts, {
             from: hq.hex,
-            targets: [target.hex],
+            unitHex: target.hex,
             side,
             mobility: hqView.throwMobility,
             maxMp: hqView.throwRangeMp,
@@ -9967,9 +9966,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     for (const hq of units.value.filter((unit) => unit.side === side && isHqUnit(unit))) {
       const hqView = toThrowHqView(hq)
       const coversAll = beneficiaries.every((unit) => {
-        const reach = countSupplyDistanceViaTable(facts, {
+        // 12.3c：终点取「单位格或其任一相邻格」（与直接拖取同一口径）
+        const reach = countSupplyDistanceToUnitViaTable(facts, {
           from: hq.hex,
-          to: unit.hex,
+          unitHex: unit.hex,
           side,
           mobility: hqView.throwMobility,
           maxMp: hqView.throwRangeMp,
