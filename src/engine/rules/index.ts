@@ -39,6 +39,8 @@ export * from './breakout'
 export * from './variable-exit'
 export * from './hedgehog'
 export * from './zoc'
+// 5.4a / 5.7：预备标记的计量单位（覆盖组）与校验时点
+export * from './reserve-markers'
 // W6 B18：到达、补员与编制调整
 export * from './arrival'
 export * from './variable-repl'

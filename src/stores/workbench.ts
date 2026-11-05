@@ -391,6 +391,10 @@ import {
   // 第六批条 20：10.1a 火炮射程（界面只用它"说清楚"，裁决仍在引擎）
   canBarrageAtRange,
   // B8：环节链与闸门表（判据的唯一出处；本 store 只查表，不自己写"哪个动作归哪一段"）
+  // 5.4a / 5.7：预备标记的计量单位（覆盖组）与校验时点（实际放置时）
+  hasMarker,
+  placeReserveMarkerForMove,
+  type ReserveMarkerGroup,
 } from '@/engine/rules'
 import { createId } from '@/shared'
 
@@ -1204,6 +1208,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 非空时界面在堆叠处给出勾选清单；确认后以所选子集 `beginMoveFor`。
    */
   const movePick = ref<{ hex: HexRef; ids: string[] } | null>(null)
+  /**
+   * 5.4a / 5.7：预备标记账本（**按组**计，不按单位计）
+   *
+   * 5.4a 允许「一个预备标记表示堆叠中一部分单位全部处于预备模式」，且「在这些单位完成
+   * 25% 的移动后，才需要放置该预备标记」⇒ ① 计量单位是**标记（覆盖组）**；② 切到预备模式
+   * **不占**标记，只有该组真正按预备 MA 迈步时才占一枚（见 `placeReserveMarkerForMove`）。
+   * 上限取剧本初设 `setup.reserveMarkers`（5.4a「严格限制」）；数据未给则不校验。
+   */
+  const reserveMarkerGroups = ref<ReserveMarkerGroup[]>([])
   /** 上次移动被拒/受阻的原因（供界面显示） */
   /**
    * 演示用补给池（12.5c 的 SP / T）
@@ -5927,8 +5940,53 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
   }
 
+  /**
+   * 5.4a：本次移动的第一步之前，为**这一组**预备单位放置那一枚标记
+   *
+   * 原文：「……在这些单位**完成 25% 的移动后，才需要放置该预备标记**」⇒ 校验放在**实际
+   * 迈步时**，不放切模式时（切模式不收标记，否则会比原文更早拒绝）。同一次移动的参移
+   * 预备单位按 `MoveInteractionState.start` 归为**一组**，全组只占一枚。
+   * 池空 ⇒ 按 5.4a 拒绝这一步（不静默）。
+   */
+  function ensureReserveMarkerForStep(): boolean {
+    const interaction = moveInteraction.value
+    if (interaction === null) return true
+    const holder = units.value.find((unit) => unit.instanceId === interaction.unitIds[0])
+    if (holder === undefined) return true
+    const reserveMarkerCap = session.scenarioInfo?.setup.reserveMarkers
+    const outcome = placeReserveMarkerForMove({
+      ledger: {
+        // 剧本未给上限 ⇒ null（不校验；用户口径：数据缺口不臆造）
+        cap:
+          reserveMarkerCap === undefined
+            ? null
+            : { axis: reserveMarkerCap.axis, soviet: reserveMarkerCap.soviet },
+        groups: reserveMarkerGroups.value,
+      },
+      side: holder.side,
+      origin: `${interaction.start.col}.${interaction.start.row}`,
+      unitIds: interaction.unitIds,
+      isReserveUnit: (unitId) => {
+        const unit = units.value.find((item) => item.instanceId === unitId)
+        return unit !== undefined && hasMarker(unit.mode, 'reserve')
+      },
+    })
+    if (!outcome.ok) {
+      moveBlocked.value = { rule: outcome.rule, reason: outcome.reason }
+      pushLog(
+        'danger',
+        `不能按预备模式移动：本方的预备标记已用完（${outcome.rule}）`,
+        outcome.rule,
+      )
+      return false
+    }
+    reserveMarkerGroups.value = [...outcome.data.groups]
+    return true
+  }
+
   /** C5：提交一步（引擎给出 patches 与新的交互状态） */
   function commitStep(to: HexRef, path: readonly HexRef[]): boolean {
+    if (!ensureReserveMarkerForStep()) return false
     return groundMovement.commitStep(to, path)
   }
 
@@ -19569,6 +19627,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     log.value = []
     // C5：本次移动的记账、悬停与待确认一并清空
     moveInteraction.value = null
+    // 5.4a：预备标记账本随单位一起清空
+    reserveMarkerGroups.value = []
     hoverHex.value = null
     pendingZocConfirm.value = null
     moveBlocked.value = null
@@ -20238,6 +20298,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     stackSelect,
     // C5 堆叠取子（6.1f / 8.1g / 8.1h）
     movePick,
+    // 5.4a：预备标记账本（按组；界面/测试读它核对"哪一组占了哪一枚"）
+    reserveMarkerGroups,
     movePickHex,
     movePickChoices,
     toggleMovePick,
