@@ -251,8 +251,10 @@ export interface ConsoleUnit {
    * 「在一个单位发现自己没有追溯补给的**第一个回合**（不是在『吃图上补给』之后，也不是在使用补给储备或
    *   树皮汤等特殊的追溯补给方式之后），上述条件将被免除，且成功概率会提高，即获得 **+1 的掷骰修正**，
    *   并且**运输点数也允许进行突围**。」
-   * ⇒ 判定"是不是首回合"＝ `cutSinceTurn === turn`（**回合**级，不是"此刻是否有补给"）。
-   * 由 `workbench.refreshTraceSupply` 维护：有补给即清 `null`；无补给且尚未记录则落当前回合。
+   * ⇒ **补给阶段**判定"是不是首回合"＝ `cutSinceTurn === turn`（21.10 补给缓存用）；
+   *   **突围**（运动阶段，先于本回合补给）用 `cutSinceTurn === turn - 1` —— 断补标记后第一次
+   *   突围必在下一回合（2.2 SOP：Movement/Breakout → Supply）。
+   * 由 `workbench.refreshTraceSupply` 维护：有补给即清 `null`；仅在补给阶段、无补给且尚未记录时落当前回合。
    * ★ 修前突围资格取的是 `!unit.hasTraceSupply`（＝"此刻无补给"）⇒ 任何断补单位永远白拿首回合豁免。
    */
   cutSinceTurn: number | null

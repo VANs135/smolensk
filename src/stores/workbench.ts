@@ -7385,13 +7385,26 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 12.8e：该单位此刻是否处于「发现没有追溯补给的**第一个回合**」
+   * 12.8e：该单位此刻的**突围**是否处在「发现没有追溯补给的第一个回合」
    *
-   * 判据＝`cutSinceTurn === 当前回合`（**连续**无补给的起点），且本回合**不是**靠特殊方式续命
-   * （12.6c/12.10e/21.10 —— 括注明写那三种方式不给本豁免）。
-   * 修前由调用方写 `!unit.hasTraceSupply`（＝此刻无补给）⇒ 任何断补单位永远白拿豁免。
+   * 回合序列（2.2 SOP / OCS v4.3 英文版 p.3「Movement Phase → Breakout Segment → Supply Phase」）：
+   * **先突围、后补给**。断补是在补给阶段结尾才落标记（12.8a），而突围在该回合早已执行过
+   * ⇒ 断补后的**第一次**突围必定发生在**下一回合**的运动阶段。
+   * 故判据＝`cutSinceTurn === 当前回合 - 1`（12.8e「第一个回合」的突围可执行窗口）。
+   * 括注：靠 12.6c/12.10e/21.10 续命的回合不落 `cutSinceTurn`（见 `markSustainedBySpecialSupply`），
+   * 所以"吃图上补给之后"的下一回合自然不会命中本判据。
    */
   function isFirstTurnOfBeingCut(unit: ConsoleUnit): boolean {
+    return (unit.cutSinceTurn ?? null) === turn.value - 1
+  }
+
+  /**
+   * 21.10：该 HQ 在**当前补给阶段**是否处于「被切断的第一个回合」
+   *
+   * 补给缓存是在补给阶段内使用的，判据按补给阶段的落标记回合（`cutSinceTurn === 当前回合`）。
+   * 与 12.8e 的突围豁免差一轮：后者要等下一回合的运动阶段（见 `isFirstTurnOfBeingCut`）。
+   */
+  function isFirstCutTurn(unit: ConsoleUnit): boolean {
     return (
       (unit.cutSinceTurn ?? null) === turn.value &&
       (unit.sustainedBySpecialSupplyTurn ?? null) !== turn.value
@@ -11086,7 +11099,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return denied
   }
 
-  function refreshTraceSupply(reason: string): number {
+  /**
+   * 12.6 / 12.8e：全场追溯补给重判
+   *
+   * `seedCutTurn` 只在**补给阶段**落"连续断补起点"（12.8a 的判定时点）。
+   * 运动阶段进入时也要重判（突围环节要新鲜标记），但**不能**在那里落起点：
+   * 否则"敌方回合被切断、下一回合突围"会被记成本回合起点，突围豁免再多拿一轮。
+   */
+  function refreshTraceSupply(
+    reason: string,
+    seedCutTurn: boolean = phase.value === 'supply',
+  ): number {
     let outOfSupply = 0
     const facts = supplyFacts.value
     for (const side of ['axis', 'soviet'] as const) {
@@ -11120,7 +11143,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
          *   也不把已在进行的连续断补期重置。
          */
         if (inSupply) unit.cutSinceTurn = null
-        else if (isOutOfSupplyNow(unit, turn.value) && (unit.cutSinceTurn ?? null) === null)
+        else if (
+          seedCutTurn &&
+          isOutOfSupplyNow(unit, turn.value) &&
+          (unit.cutSinceTurn ?? null) === null
+        )
           unit.cutSinceTurn = turn.value
         if (isOutOfSupplyNow(unit, turn.value)) outOfSupply += 1
       }
@@ -11345,7 +11372,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           forageAvailable({
             phase: phase.value,
             // 21.10：「敌军切断该 HQ 补给的第一个回合」＝ 真跟踪的连续断补起点（12.8e 同源判据）
-            firstTurnOfBeingCut: isFirstTurnOfBeingCut(unit),
+            firstTurnOfBeingCut: isFirstCutTurn(unit),
             holdings,
             side,
           }),
@@ -18760,7 +18787,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           phase: phase.value,
           hqHex: hex,
           hqThrowRangeHexes: inputs.hqThrowRangeHexes,
-          firstTurnOfBeingCut: isFirstTurnOfBeingCut(hqUnit),
+          firstTurnOfBeingCut: isFirstCutTurn(hqUnit),
         }),
         '补给缓存 Forage',
       )

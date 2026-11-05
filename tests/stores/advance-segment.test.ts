@@ -314,7 +314,8 @@ describe('B5：换环节时盘面中间态自动收束', () => {
     expect(session.records?.phase).toBe('movement')
 
     /*
-     * 12.8e 首回合豁免：把它标成"本回合才开始连续断补"（连续无补给的起点回合），
+     * 12.8e 首回合豁免：回合序列为「运动/突围 → 补给」（2.2 SOP），断补标记在 T 的补给阶段落，
+     * 第一次可突围在 T+1。故把它标成"**上一回合**补给阶段开始连续断补"（`turn - 1`），
      * 否则 `canBreakout` 还要过「A 可用路径 / B 15 格内有追补友军」才能突围，
      * 而这枚孤立单位并不满足 ⇒ 突围环节会被 `stepHasWork`（条 6 / R3 已按 `canBreakout` 收紧）
      * 判为"无活"而跳过。这里要验的正是「有（首回合）断补单位 ⇒ 环节占住」，
@@ -322,7 +323,7 @@ describe('B5：换环节时盘面中间态自动收束', () => {
      * 必须经由 workbench.units 的响应式代理改 `cutSinceTurn`，否则 `breakoutCandidates` 不会重算。
      */
     const cutOffRef = workbench.units.find((unit) => unit.instanceId === 'cut-off')!
-    cutOffRef.cutSinceTurn = workbench.turn
+    cutOffRef.cutSinceTurn = workbench.turn - 1
 
     /*
      * ★ B47（2026-09-17）起口径变了：**突围环节有入口了**（store 的 `breakoutNow` / `breakoutCandidates`

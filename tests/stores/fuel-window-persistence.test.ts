@@ -107,6 +107,12 @@ describe('燃料窗口（用户 2026-09-20 裁定）：持续到**本方清理�
     //   的机动类型判（12.5a）—— 徒步面时它不需要油，付它反而会被 12.5a 拒（这与编队法的覆盖口径**不同**：
     //   编队法按 12.5c-A 覆盖整个编队，不管某枚此刻在哪一面）。
     const extra = placeGround(store, motRecord(), mate.hex, 'axis', 'extra', 'move')
+    /*
+     * 新摆的这枚单位**有追溯补给** ⇒ 12.8e 的 A 路径（"到有追溯补给的友方单位的路径"）当场成立，
+     * `movement.breakout`（`skipWhenIdle`）从环节表里长出来，序号整体后移。
+     * 此处重新钉回「模式与移动」环节（与玩家发现环节条跳回突围后手动再点一次同义）。
+     */
+    goToMovementStep(store, 'movement')
     store.abortMoveNow()
     store.beginMovePick(extra.hex, ['extra'])
     store.fuelMethod = 'formation'
