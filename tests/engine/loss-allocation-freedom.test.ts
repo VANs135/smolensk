@@ -19,14 +19,13 @@ import {
  * 修前 `validateBattleLossAllocation` 要求玩家提交的分配与**规范分配逐单位一致** ⇒
  * 「同样是未受损单位之间选谁承受」会被误判违规（报 9.11c）——与 9.11a 的授权冲突。
  *
- * ## ② 专规 3.3d 轴方**多单位编队**不得整编
+ * ## ② 专规 3.2 轴方不得整编（`axis_special.no_consolidation`）
  *
- * 原文只禁多单位编队；修前登记库把 `axis_special.no_consolidation` 当无限定布尔，
- * store 也实现成"含 axis 即拒"（并误标 3.2）⇒ 轴方独立单位/飞机被误拒。
+ * `consolidateUnitsNow` / `consolidateAircraftNow` 修前**不看阵营** ⇒ 轴方也能合并。
  *
  * ## 测法边界（如实交代）
  *   · 引擎侧用**合成单位**（只给 9.11 需要的字段），断言到条文号一级；
- *   · 专规 3.3d 的**行为**用例在 store 层（`tests/stores/consolidation-axis-ban.test.ts`），
+ *   · 专规 3.2 的**行为**用例在 store 层（`tests/stores/consolidation-axis-ban.test.ts`），
  *     本文件只钉引擎侧的分配判据与源码守卫（"两处都看阵营"）；
  *   · **不覆盖**「轰炸与撤退造成的损失可自由指定」（9.11c 末段）：那两条走的是别的函数
  *     （轰炸 `resolveOptionChoice` / 撤退 `takeCombatLoss`），本轮未动。
@@ -143,19 +142,17 @@ describe('批 F 切片 2①：9.11a 的分配自由（9.11c 的两条约束之�
   })
 })
 
-describe('专规 3.3d：轴方多单位编队不得整编（源码守卫）', () => {
-  it('★ 判据只挂地面多军力合并；飞机（不属编队）不再过这道闸', () => {
+describe('批 F 切片 2②：专规 3.2 轴方不得整编（源码守卫）', () => {
+  it('★ 地面与飞机两处合并共用一处阵营判据（两处各写一遍会在改口径时漂移）', () => {
     const store = readFileSync('src/stores/workbench.ts', 'utf8')
     // 判据实现只有一处：禁条原话 + 规则号都在那一个函数里
-    const helper = store.slice(store.indexOf('function axisFormationConsolidationRefused'))
-    expect(helper.slice(0, 900)).toContain('轴心国多单位编队不得整编')
-    expect(helper.slice(0, 900)).toContain('专规 3.3d')
-    // 13.9-1（地面）按编队番号判
+    const helper = store.slice(store.indexOf('function axisConsolidationRefused'))
+    expect(helper.slice(0, 700)).toContain('轴心国不得整编')
+    expect(helper.slice(0, 700)).toContain('专规 3.2')
+    // 13.9-1（地面）与 13.9-4（飞机）两处都调用它
     const ground = store.slice(store.indexOf('function consolidateUnitsNow'))
-    expect(ground.slice(0, 1400)).toContain('axisFormationConsolidationRefused')
-    expect(ground.slice(0, 1400)).toContain('formation')
-    // 13.9-4（飞机）不再调用 3.3d 判据
+    expect(ground.slice(0, 1200)).toContain('axisConsolidationRefused')
     const air = store.slice(store.indexOf('function consolidateAircraftNow'))
-    expect(air.slice(0, 900)).not.toContain('axisFormationConsolidationRefused')
+    expect(air.slice(0, 900)).toContain('axisConsolidationRefused')
   })
 })

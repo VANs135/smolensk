@@ -140,7 +140,7 @@ const attackerRecord = () =>
 const defenderRecord = () =>
   pickRecord('soviet', (record) => record.isCombat === true && record.attackCapable === true)
 
-/** 13.5：可重建的步兵师记录（重建表行 `Infantry Div step`）—— 阵营由调用方给（专规 3.3d：轴方多单位编队不得整编） */
+/** 13.5：可重建的步兵师记录（重建表行 `Infantry Div step`）—— 阵营由调用方给（专规 3.2：轴方不得整编） */
 const infDivRecord = (side: 'axis' | 'soviet' = 'axis') =>
   side === 'axis'
     ? pickRecord('axis', (record) => /Inf Div/i.test(record.vassalName ?? ''))
@@ -671,8 +671,8 @@ describe('W6 B18：拆分与合并（20.0 / 13.9）', () => {
     store.setPhase('reinforcement')
     /*
      * ★ 契约变更（批 F 切片 2，**不是放宽**）：这一对换成**苏方**动作 ——
-     *   专规 3.3d（原文 `Smolensk_Rules_v1.1.txt:396-398`）禁的是**轴方多单位编队**整编，
-     *   ⇒ "轴方编队合并两个多军力单位"按原文**不合法**（store 按 3.3d 拒，见
+     *   专规 3.2（`axis_special.no_consolidation`）明写「**轴心国不得整编**」，
+     *   ⇒ "轴方合并两个多军力单位"按规则原文**不合法**（store 现在按专规 3.2 拒，见
      *   `tests/stores/consolidation-axis-ban.test.ts`）。13.9-1 的判据（同格、两面相同、
      *   军力相加）一字未动，只是换成合法的一方来验它。
      */

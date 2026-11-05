@@ -17218,24 +17218,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 专规 3.3d：**轴心国多单位编队**不得整编（OCS 13.9）
+   * 专规 3.2（`axis_special.no_consolidation`）：**轴方不得整编**
    *
-   * 原文（`Smolensk_Rules_v1.1.txt:396-398`）只禁**多单位编队**；登记库把
-   * `axis_special.no_consolidation` 记成无限定布尔是登记偏宽，判定以原文为准。
-   *
-   * 判据：这一手是轴方在下（动作方），或参与合并的算子属轴方；**且**参与算子带编队番号。
-   * 轴方独立单位（无编队）与飞机（不属多单位编队）不在本条限制内（13.9-4 照常）。
+   * 判据＝这一手是轴方在下（动作方），**或**被合并的算子属轴方 —— 命中任一即拒，并留一条 warning。
+   * 正常流程里两条等价（13.9 只合并同方算子）；只挂动作方会在"动作方与算子阵营不一致"的
+   * 异常态下漏判，故两条都查。地面 13.9-1 与飞机 13.9-4 共用此处判据，避免两处口径漂移。
    */
-  function axisFormationConsolidationRefused(
-    input: { sides: readonly Side[]; formationIds: readonly (string | null)[] },
-    action: string,
-  ): boolean {
-    if (!input.sides.includes('axis')) return false
-    if (!input.formationIds.some((id) => id !== null)) return false
+  function axisConsolidationRefused(sides: readonly Side[], action: string): boolean {
+    if (!sides.includes('axis')) return false
     pushLog(
       'warning',
-      `专规 3.3d：**轴心国多单位编队不得整编**（${action}）—— 本动作被拒，未改动任何账本`,
-      '专规 3.3d',
+      `专规 3.2：**轴心国不得整编**（${action}只对苏方开放）—— 本动作被拒，未改动任何账本`,
+      '专规 3.2',
     )
     return true
   }
@@ -17246,15 +17240,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const keep = units.value.find((unit) => unit.instanceId === keepId)
     const remove = units.value.find((unit) => unit.instanceId === removeId)
     if (keep === undefined || remove === undefined) return false
-    if (
-      axisFormationConsolidationRefused(
-        {
-          sides: [activeSide.value, keep.side, remove.side],
-          formationIds: [keep.formation, remove.formation],
-        },
-        '合并多军力单位',
-      )
-    )
+    if (axisConsolidationRefused([activeSide.value, keep.side, remove.side], '合并多军力单位'))
       return false
     const data = acceptReinforcement(
       planConsolidation({
@@ -17294,11 +17280,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** B18：合并两架同类减损飞机（13.9-4：可在任何阶段进行；飞机不属多单位编队，不受 3.3d 限制） */
+  /** B18：合并两架同类减损飞机（13.9-4：可在任何阶段进行） */
   function consolidateAircraftNow(keepId: string, removeId: string): boolean {
+    // 专规 3.2（`axis_special.no_consolidation`）：**轴方不得整编**（飞机同理，13.9-4 也受此限）
     const keep = airUnits.value.find((air) => air.instanceId === keepId)
     const remove = airUnits.value.find((air) => air.instanceId === removeId)
     if (keep === undefined || remove === undefined) return false
+    if (axisConsolidationRefused([activeSide.value, keep.side, remove.side], '合并减损飞机'))
+      return false
     const view = (air: ConsoleAirUnit, other: ConsoleAirUnit) => ({
       id: air.instanceId,
       // 13.9-4：同型判据看**当前面**的轰炸值（两枚减损机 ⇒ 都取减损面值）
