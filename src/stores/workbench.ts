@@ -27,7 +27,7 @@ import { inEnemyZocForAction } from '@/engine/rules/move'
 import { createFireResolutionDomain } from './fire-resolution'
 import { createCombatInputs } from './engagement-inputs'
 import { defineStore } from 'pinia'
-import { computed, ref, watch, type Ref } from 'vue'
+import { computed, ref, toRaw, watch, type Ref } from 'vue'
 
 import type { HexRef, RailGauge, Side } from '@/data'
 import { mapConfig, mapLayers, rulesConstants, scenarios, unitsAxis } from '@/data'
@@ -7199,6 +7199,57 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const breakoutReturns = ref<{ unit: ConsoleUnit; returnsOnTurn: number }[]>([])
 
   /**
+   * 12.8e-A：**一次求值内复用**的单位索引（按格聚合**阵营**）
+   *
+   * 原实现对**每个格**各扫一遍全单位（`isTracedFriend` / `enemyCombatAt`），一个候选要扫
+   * 8 024 格 × 2 遍 ⇒ 每格都要 `toWrapped → toReactive` 逐元素包装。这里把两张判据表一次建好，
+   * 之后每次查询只做一次 `Map.get`；聚合的是**阵营集合**，因此多方（轴/苏）语义不变。
+   */
+  interface BreakoutUnitIndex {
+    /** 该格有**追溯补给**的友方单位阵营（12.8e-A：路径能否"摸到友军"） */
+    tracedFriendSides: Map<string, Side[]>
+    /** 该格有**战斗**单位的阵营（12.8e-A：路径上是否有敌方战斗单位） */
+    enemyCombatSides: Map<string, Side[]>
+  }
+
+  /** 一次求值内共享的只读事实（索引 + 地图；两者都与候选无关） */
+  interface BreakoutSharedFacts {
+    index: BreakoutUnitIndex
+    map: ReturnType<typeof createMapFacts>
+  }
+
+  /**
+   * 建一次索引，供本次求值的**全部候选**复用
+   *
+   * 建表读 `toRaw` 后的原始数组；但**依赖登记**仍必须经响应式数组读一遍判据字段
+   * （否则 computed 会丢掉 `hasTraceSupply` / `isCombat` / `hex` 的依赖而算旧值）。
+   */
+  function buildBreakoutUnitIndex(): BreakoutUnitIndex {
+    const tracedFriendSides = new Map<string, Side[]>()
+    const enemyCombatSides = new Map<string, Side[]>()
+    const record = (table: Map<string, Side[]>, key: string, side: Side): void => {
+      const sides = table.get(key)
+      if (sides === undefined) table.set(key, [side])
+      else if (!sides.includes(side)) sides.push(side)
+    }
+    // 依赖登记：只读、不参与建表（值本身取自下面的 toRaw 遍历）
+    for (const unit of units.value) {
+      void unit.side
+      void unit.hasTraceSupply
+      void unit.isCombat
+      void unit.hex.col
+      void unit.hex.row
+    }
+    for (const element of toRaw(units.value)) {
+      const unit = toRaw(element)
+      const key = hexLabel(toRaw(unit.hex))
+      if (unit.hasTraceSupply) record(tracedFriendSides, key, unit.side)
+      if (unit.isCombat) record(enemyCombatSides, key, unit.side)
+    }
+    return { tracedFriendSides, enemyCombatSides }
+  }
+
+  /**
    * 12.8e-A：从该单位所在格出发，按**移动模式的 MA 类型**判"长度任意的路径"
    *
    * 原文：「必须有一条**长度任意**的路径……路径上必须**没有敌方战斗单位**，也**没有移动禁入的地形**
@@ -7209,21 +7260,30 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   ① **干净洪泛**：避开上述三类障碍格，若能摸到"有追溯补给的友方单位" ⇒ 存在这样的路径（A 成立）；
    *   ② **无限制洪泛**：只为给失败原因取证（记录路上遇到哪些障碍），若它连一个"有追溯补给的友方单位"
    *      都摸不到，则 A 的两项事实一律报 false —— 让引擎按 **B（15 格内）** 去判，不臆造原因。
+   *
+   * 档1（性能）：`shared` 由 `breakoutCandidates` 每次求值建一份（索引 + 地图事实），全候选复用；
+   * 单独调用（如 `breakoutNow`）时按原样就地构建，判据不变。
    */
-  function breakoutPathFacts(unit: ConsoleUnit): {
+  function breakoutPathFacts(
+    unit: ConsoleUnit,
+    shared?: BreakoutSharedFacts,
+  ): {
     path: BreakoutPathFacts
     reachedTracedFriend: boolean
   } {
-    const map = createMapFacts()
+    const map = shared?.map ?? createMapFacts()
+    const index = shared?.index ?? buildBreakoutUnitIndex()
     const mobility = unit.faces.move.mobility // 12.8e-A：以**移动模式**的 MA 类型判
     const side = unit.side
     const isTracedFriend = (hex: HexRef): boolean =>
       !sameHex(hex, unit.hex) &&
-      units.value.some(
-        (other) => other.side === side && other.hasTraceSupply && sameHex(other.hex, hex),
-      )
-    const enemyCombatAt = (hex: HexRef): boolean =>
-      units.value.some((other) => other.side !== side && other.isCombat && sameHex(other.hex, hex))
+      (index.tracedFriendSides.get(hexLabel(hex))?.includes(side) ?? false)
+    const enemyCombatAt = (hex: HexRef): boolean => {
+      const sides = index.enemyCombatSides.get(hexLabel(hex))
+      if (sides === undefined) return false
+      for (const other of sides) if (other !== side) return true
+      return false
+    }
     const ezocAt = (hex: HexRef): boolean =>
       mobility === 'truck' && inEnemyZocAt(moveContext.value, hex, side)
     const stepPassable = (from: HexRef, to: HexRef): boolean =>
@@ -7342,8 +7402,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 判据一律交给引擎（`canBreakout`）：调用方只负责把 12.8e-A/B 的**事实**备齐。
    * 「断补首回合豁免」由 `isFirstTurnOfBeingCut` 判（**连续**无补给的起点回合，见 12.8e 括注）。
    */
-  function breakoutVerdictOf(unit: ConsoleUnit): RuleOutcome<BreakoutEligibility> {
-    const { path, reachedTracedFriend } = breakoutPathFacts(unit)
+  function breakoutVerdictOf(
+    unit: ConsoleUnit,
+    shared?: BreakoutSharedFacts,
+  ): RuleOutcome<BreakoutEligibility> {
+    const { path, reachedTracedFriend } = breakoutPathFacts(unit, shared)
     const conditions: BreakoutConditions = {
       path,
       nearestTracedCombatFriendDistance: reachedTracedFriend
@@ -7369,17 +7432,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const breakoutCandidates = computed<
     { unit: ConsoleUnit; ok: boolean; reason: string | null; detail: string }[]
   >(() => {
-    return units.value
-      .filter((unit) => unit.side === activeSide.value && !unit.hasTraceSupply)
-      .map((unit) => {
-        const verdict = breakoutVerdictOf(unit)
-        return {
-          unit,
-          ok: verdict.ok,
-          reason: verdict.ok ? null : `${verdict.reason}（${verdict.rule}）`,
-          detail: verdict.ok ? verdict.data.detail : `${verdict.reason}（${verdict.rule}）`,
-        }
-      })
+    const candidates = units.value.filter(
+      (unit) => unit.side === activeSide.value && !unit.hasTraceSupply,
+    )
+    // 档1：索引与地图事实**每次求值建一份**，本次全部候选复用
+    // （`createMapFacts()` 只依赖静态 `mapLayers`，与候选无关；索引按格聚合阵营，与候选也无关）
+    const shared: BreakoutSharedFacts = {
+      index: buildBreakoutUnitIndex(),
+      map: createMapFacts(),
+    }
+    return candidates.map((unit) => {
+      const verdict = breakoutVerdictOf(unit, shared)
+      return {
+        unit,
+        ok: verdict.ok,
+        reason: verdict.ok ? null : `${verdict.reason}（${verdict.rule}）`,
+        detail: verdict.ok ? verdict.data.detail : `${verdict.reason}（${verdict.rule}）`,
+      }
+    })
   })
 
   /**

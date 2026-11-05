@@ -48,12 +48,11 @@ const BORDER: HexRef = (() => {
   return { col: minCol, row }
 })()
 
-const at = (index: number, from: HexRef = INTERIOR): HexRef => neighbor(from, HEX_DIRECTIONS[index])
+const at = (index: number, from: HexRef = INTERIOR): HexRef =>
+  neighbor(from, HEX_DIRECTIONS[index]!)
 
 const combats = (side: Side) =>
-  unitChoices(side).filter(
-    (record) => record.isCombat === true && (record.steps?.total ?? 1) <= 1,
-  )
+  unitChoices(side).filter((record) => record.isCombat === true && (record.steps?.total ?? 1) <= 1)
 
 const RECORD_AXIS = combats('axis')[0]!
 const RECORD_SOVIET = combats('soviet')[0]!
@@ -236,7 +235,9 @@ export function breakoutReactivityProbe(): { before: string; after: string } {
     live.hasTraceSupply = id === 'r-friend'
   }
   const render = () =>
-    store.breakoutCandidates.map((entry) => `${entry.unit.instanceId}:${entry.ok}:${entry.detail}`).join('|')
+    store.breakoutCandidates
+      .map((entry) => `${entry.unit.instanceId}:${entry.ok}:${entry.detail}`)
+      .join('|')
   const before = render()
   /**
    * 只改**非候选**单位（追踪友军）的补给状态：索引必须重建，否则会读到旧的"有友军"结论。
