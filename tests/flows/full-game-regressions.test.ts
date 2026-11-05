@@ -1,4 +1,5 @@
 import { confirmSetupForStart } from './setup-harness'
+import { fresh, fillSetup, progress } from './flow-harness'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import { describe, it, expect } from 'vitest'
@@ -7,12 +8,10 @@ import { deriveDrawComposition, createMapFacts, selectMovementTerrain } from '@/
 import { HEX_DIRECTIONS, neighbor } from '@/engine/hex-geometry'
 import { hexCanvasPoint } from '@/render/map-layout'
 import { replaySessionLog } from '@/engine/log-book'
-import { createMemoryStorage } from '@/shared'
 import {
   useSetupStore,
   useWorkbenchStore,
   useGameSessionStore,
-  useHotseatStore,
   useMapViewStore,
   SAVE_SLOT_KEY,
 } from '@/stores'
@@ -24,104 +23,6 @@ import {
   groundRecord,
   CORE_HEX,
 } from './sop-harness'
-
-function fresh() {
-  setActivePinia(createPinia())
-  const setup = useSetupStore(),
-    w = useWorkbenchStore(),
-    g = useGameSessionStore(),
-    hot = useHotseatStore()
-  hot.setMode('solo')
-  g.setSaveStorage(createMemoryStorage())
-  return { setup, w, g, hot }
-}
-function fillSetup(ctx: ReturnType<typeof fresh>) {
-  const { setup, w } = ctx
-  if (setup.truckLoadSummary.mode === 'choose_loaded') {
-    setup.beginTruckPick()
-    const seen = new Set<string>()
-    for (const row of setup.truckPickRows) {
-      const key = `${row.hex.col}.${row.hex.row}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      setup.pickTruckAtHex(row.hex)
-      if (setup.truckLoadSummary.done) break
-    }
-    setup.cancelTruckPick()
-    expect(setup.truckLoadSummary.done).toBe(true)
-  }
-  for (let n = 0; n < 500; n++) {
-    const item = setup.sideQueue
-      .flatMap((q) => q.items)
-      .find((p) => p.remaining > 0 && p.kind !== 'truck')
-    if (!item) {
-      if (setup.setupSideCursor) {
-        setup.confirmSideSetup()
-        continue
-      }
-      break
-    }
-    if (item.kind === 'self') setup.beginSelfPlacement(item.entryIndex)
-    else if (item.kind === 'air') setup.beginAirPlacement(item.side, item.entryIndex)
-    else if (item.kind === 'shift') setup.beginShiftPlacement(item.formationId!)
-    const choices = [...(setup.placing?.candidates ?? [])].sort((a, b) => {
-      const load = (h: { col: number; row: number }) =>
-        w.units
-          .filter((u) => u.hex.col === h.col && u.hex.row === h.row)
-          .reduce((v, u) => v + u.re, 0) +
-        100 * w.airUnits.filter((u) => u.hex.col === h.col && u.hex.row === h.row).length +
-        1000 * w.spDumps.filter((d) => d.hex.col === h.col && d.hex.row === h.row).length
-      return load(a) - load(b)
-    })
-    expect(choices.length).toBeGreaterThan(0)
-    expect(setup.placeAtHex(choices[0]!)).toBe(true)
-  }
-  expect(setup.pendingPlacement.filter((p) => p.remaining > 0)).toHaveLength(0)
-  expect(setup.initialPlacementsComplete).toBe(true)
-}
-
-/** 测试玩家明确选择不供养，并按单位顺序分配已判损失；生产程序不替玩家选择。 */
-function answerBoardChoices(ctx: ReturnType<typeof fresh>) {
-  const { w } = ctx
-  if (w.phase === 'movement' && w.actionAllowedNow('move.modeChange')) {
-    for (const unit of w.units.filter(
-      (u) => u.side === w.activeSide && u.mode.mode === 'reserve',
-    )) {
-      w.movePick = null
-      w.selectedId = unit.instanceId
-      w.switchUnitMode('combat')
-    }
-  }
-  if (w.phase !== 'supply' || !w.supplyFeedingSettled) return
-  for (const duty of w.supplyPhasePlan?.attritionDuty ?? []) {
-    const key = `${duty.hex.col}.${duty.hex.row}`
-    if (w.attritionAppliedHexes.includes(key)) continue
-    const rolled = w.attritionResults[key]
-    if (!rolled) continue
-    let left = rolled.losses.kind === 'allSteps' ? Number.POSITIVE_INFINITY : rolled.losses.steps
-    for (const id of duty.unitIds) {
-      const unit = w.units.find((u) => u.instanceId === id)
-      if (!unit) continue
-      const loss = Math.min(left, unit.steps)
-      w.setAttritionAllocation(key, id, loss)
-      left -= loss
-    }
-    expect(
-      w.applyAttritionNow(key),
-      JSON.stringify({ key, rolled, inputs: w.attritionInputs[key], log: w.log[0] }),
-    ).toBe(true)
-  }
-}
-async function progress(ctx: ReturnType<typeof fresh>, done: () => boolean, limit = 3000) {
-  for (let n = 0; n < limit && !done(); n++) {
-    answerBoardChoices(ctx)
-    if (ctx.g.awaiting) expect(ctx.g.answerNow('first')).toBe(true)
-    else ctx.w.advanceSegmentNow()
-    await nextTick()
-    if (n % 20 === 0) await new Promise((resolve) => setTimeout(resolve, 0))
-  }
-  expect(done()).toBe(true)
-}
 
 describe('整局主线回归：开局、自动结算、玩家义务和持久化', () => {
   for (const scenario of scenarios.scenarios) {
@@ -296,21 +197,6 @@ describe('整局主线回归：开局、自动结算、玩家义务和持久化'
     map.onHexClick(CORE_HEX, undefined, hexCanvasPoint(CORE_HEX))
     expect(w.airUnits.find((u) => u.instanceId === 'plane')?.airStatus).toBe('active')
     expect(w.spDumps[0]!.sp * 4 + w.spDumps[0]!.t).toBe(7)
-  })
-  it('反应交接与取消交接不改玩家回合归属或清空阶段账本', async () => {
-    const ctx = fresh()
-    ctx.hot.setMode('pvp')
-    ctx.g.startGame()
-    await progress(ctx, () => ctx.w.phase === 'reaction')
-    expect(ctx.hot.viewerSide).toBe('soviet')
-    const side = ctx.w.activeSide
-    const ledger = ctx.w.attackPhaseLedger
-    ctx.hot.beginHandoff()
-    expect(ctx.w.activeSide).toBe(side)
-    expect(ctx.g.guidance?.step.id).toBe('first.reaction')
-    ctx.hot.cancelHandoff()
-    expect(ctx.hot.viewerSide).toBe('soviet')
-    expect(ctx.w.attackPhaseLedger).toEqual(ledger)
   })
   it('E段非行动方释放预备后可以实际开拔，行动方身份保持不变', () => {
     const { w } = fresh()
