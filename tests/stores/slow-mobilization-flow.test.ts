@@ -192,9 +192,11 @@ describe('专规 2.4：慢动员（store 流程）', () => {
     expect(store.units.filter((unit) => unit.locked).map((unit) => unit.instanceId)).toEqual([
       ids[5]!,
     ])
-    // 该用例建会话 + 6 枚算子 + 两次推进回合；并行跑全量时单机耗时 ~7.5s，超过默认 5s 会**误报超时**
-    // （不是规则回归，单独跑 ~1.8s 通过）。断言不变，只放宽执行时间。
-  }, 20000)
+    // 为何显式超时：该用例建会话 + 6 枚算子 + 两次推进回合，**单跑 2.0s**、并行全量负载下
+    // **5.2s（曾观测到 7.5s）**，超过默认 5000ms ⇒ 会误报 `Test timed out in 5000ms`。
+    // 这是**并行负载导致的测试级超时，不是规则回归**；断言一字未改，只放宽执行时间。
+    // 取值 30000 与仓内同类重流程用例（`sp-ownership-load-merge`、`setup-obligations-flow`）一致。
+  }, 30000)
 
   it('2.4：没有到达卡集团军归属的算子不能按表解锁（不按番号前缀猜）', () => {
     const store = newStore()
