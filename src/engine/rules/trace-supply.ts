@@ -656,7 +656,11 @@ export interface DrawableDump {
   hex: HexRef
   /** 到「该格或其相邻格」的最省消耗（MP）；不可达为 null */
   distanceMp: number | null
-  /** 12.3d：最省路径（含起终点）；不可达为 null */
+  /**
+   * 12.3d：最省路径（含起终点）；不可达为 null
+   *
+   * **惰性字段**：只在真正读取 `.path` 时（界面画线/日志）才构建并缓存一次；判据与距离不读它。
+   */
   path: HexRef[] | null
   /** 12.3c：是否靠「相邻即可」成立（终点为该格的相邻格而非其自身） */
   viaAdjacency: boolean
@@ -674,34 +678,40 @@ export function drawableDumpsFor(
   const mobility = input.mobility ?? 'truck'
   const targets = selfAndNeighbors(input.hex)
   return facts.dumpsFor(input.side).map((dump) => {
-    // 有界搜索（12.3a 的 5 MP）：只展开够得着的区域，避免整图 Dijkstra 拖慢界面
-    const distance = countSupplyDistanceToAny(facts, {
-      from: dump,
-      targets,
-      side: input.side,
-      mobility,
-      maxMp: DIRECT_DRAW_RANGE_MP,
-    })
+    // 12.3a 的有界搜索（5 MP）：一次 Dijkstra 同时给出「到该格或其相邻格」的最省消耗与
+    //   最近目标格（修前是「到任一目标」1 次 + 逐目标 7 次，同输入同结论，见 `nearestInBudget`）
+    const reach = nearestInBudget(facts, dump, targets, input.side, mobility)
     // 12.3c：补给够到该格的相邻格即可——dump 自身就在相邻格（或同格）时，地形一概不论
     const adjacent = areAdjacent(dump, input.hex) || sameHex(dump, input.hex)
     const verdict = canDirectDraw({
-      distanceMp: distance.ok ? distance.mp : Number.POSITIVE_INFINITY,
+      distanceMp: reach.mp ?? Number.POSITIVE_INFINITY,
       adjacentToDump: adjacent,
     })
-    const endpoint = distance.ok ? nearestTarget(facts, dump, targets, input.side, mobility) : null
+    const endpoint = reach.endpoint
+    // 12.3d：路径**只为展示而建**——补给计划链（`deliverableDumpsFor` / `hqDeliveryDumpKeys`）
+    //   只读 `ok`/`hex`，故这里做成惰性字段，首次读取后才跑那一次 Dijkstra 并缓存。
+    //   对外契约不变：仍是 `HexRef[] | null`、仍是可枚举自有属性（展开/序列化取值一致）。
+    let pathBuilt = false
+    let pathValue: HexRef[] | null = null
     return {
       hex: dump,
-      distanceMp: distance.ok ? distance.mp : null,
-      path:
-        endpoint === null
-          ? null
-          : supplyPath(facts, {
-              from: dump,
-              to: endpoint,
-              side: input.side,
-              mobility,
-              maxMp: DIRECT_DRAW_RANGE_MP,
-            }),
+      distanceMp: reach.mp,
+      get path(): HexRef[] | null {
+        if (!pathBuilt) {
+          pathBuilt = true
+          pathValue =
+            endpoint === null
+              ? null
+              : supplyPath(facts, {
+                  from: dump,
+                  to: endpoint,
+                  side: input.side,
+                  mobility,
+                  maxMp: DIRECT_DRAW_RANGE_MP,
+                })
+        }
+        return pathValue
+      },
       // 12.3c：路径终点若是该格的相邻格（而非其自身），即为「相邻即可」成立
       viaAdjacency:
         endpoint === null ? adjacent && !sameHex(dump, input.hex) : !sameHex(endpoint, input.hex),
@@ -715,27 +725,39 @@ export function drawableDumpsFor(
   })
 }
 
-/** 取「该格或其相邻格」中距 `from` 最近的那个（与 `countSupplyDistanceToAny` 的最短口径一致） */
-function nearestTarget(
+/**
+ * 12.3a/12.3c：一次有界搜索给出「到该格或其相邻格」的最省消耗与最近目标格
+ *
+ * 与修前的「`countSupplyDistanceToAny` + 逐目标 `nearestTarget`」**逐字等价**：
+ *   - 消耗 = `best` 表里全部目标的**最小** mp（原函数就是 `Math.min(各目标的 best)`）；
+ *   - 最近目标格 = 按 `targets` 顺序（`selfAndNeighbors` 把自身放首位）取**首个最小值**
+ *     （原 `nearestTarget` 用 `distance.mp < best.mp` 严格小于 ⇒ 等费时靠前者胜）；
+ *   - 一次不设 `stopAt` 的 Dijkstra 对**每个**目标都给出真最短 mp（预算同为 5 MP），
+ *     故与"逐个目标各跑一次有界 Dijkstra"同值；原 `countSupplyDistanceToAny` 的提前停止
+ *     不影响这个最小值。
+ */
+function nearestInBudget(
   facts: TraceSupplyFacts,
   from: HexRef,
   targets: readonly HexRef[],
   side: Side,
   mobility: SupplyMobility,
-): HexRef | null {
-  let best: { hex: HexRef; mp: number } | null = null
-  for (const target of targets) {
-    const distance = countSupplyDistance(facts, {
-      from,
-      to: target,
-      side,
-      mobility,
-      maxMp: DIRECT_DRAW_RANGE_MP,
-    })
-    if (!distance.ok) continue
-    if (best === null || distance.mp < best.mp) best = { hex: target, mp: distance.mp }
+): { mp: number | null; endpoint: HexRef | null } {
+  if (!facts.onMap(from)) return { mp: null, endpoint: null }
+  const wanted = targets.filter((hex) => facts.onMap(hex))
+  if (wanted.length === 0) return { mp: null, endpoint: null }
+  const { best } = runDijkstra(facts, { from, side, mobility, maxMp: DIRECT_DRAW_RANGE_MP })
+  let mp: number | null = null
+  let endpoint: HexRef | null = null
+  for (const target of wanted) {
+    const value = best.get(hexKey(target))
+    if (value === undefined || value > DIRECT_DRAW_RANGE_MP) continue
+    if (mp === null || value < mp) {
+      mp = value
+      endpoint = target
+    }
   }
-  return best?.hex ?? null
+  return { mp, endpoint }
 }
 
 /**
