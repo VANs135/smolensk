@@ -649,6 +649,25 @@ describe('突袭资格（8.1 / 8.1a / 8.1b / 8.1c / 5.10b-C）', () => {
     expect(OVERRUN_MAX_ENTRY_MP).toBe(3)
   })
 
+  it('4.5b：许诺本阶段不再耗 MP 的垫人单位不能突袭（每次突袭消耗 3 MP）', () => {
+    const locked = unit({
+      id: 'a2',
+      mobility: 'track',
+      fuelled: true,
+      ma: 8,
+      mpLockedThisPhase: true,
+    })
+    const ctx = context([attacker, locked, enemy(defenderHex)])
+    const check = canOverrun({
+      context: ctx,
+      unitIds: ['a1', 'a2'],
+      target: defenderHex,
+      startedStackedTogether: true,
+      mpRemaining: 8,
+    })
+    expect(check).toMatchObject({ ok: false, rule: '4.5b', reason: 'mpLocked' })
+  })
+
   it('8.1：本阶段开始时未同格堆叠 → 不能突袭', () => {
     const check = canOverrun({
       context: overrunCtx(),

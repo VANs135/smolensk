@@ -6,6 +6,7 @@ import { neighbor } from '@/engine/hex-geometry'
 import {
   applyModeSwitch,
   beginMove,
+  canOverrun,
   canSwitchModeNow,
   cancelMove,
   endMoveEarly,
@@ -17,6 +18,7 @@ import {
   undoMoveStep,
 } from '@/engine/rules'
 import type { MoveContext, MoveUnitRuntime, MoveUnitView } from '@/engine/rules'
+import { applyOverrunMove, planOverrunMove, resolveOverrunAftermath } from '@/engine/rules'
 
 /**
  * 移动交互（C5；OCS 6.1 / 6.1a / 6.1b / 6.1e / 6.1f / 6.1g / 4.5a-A / 4.5b / 5.4 / 5.8a / 12.5）
@@ -257,6 +259,62 @@ describe('6.1a / 4.5a-A 单步预览', () => {
     const preview = previewStep({ context: ctx, interaction: state, runtime, to: target })
     expect(preview.stratBlockedIds).toEqual(['u1'])
     expect(preview.ok).toBe(false)
+  })
+})
+
+describe('4.5a-A：连续突袭穿越多个 ZOC', () => {
+  it('突袭进入 ZOC 格后不结束移动，可继续进入下一 ZOC（仍可就地再次突袭）', () => {
+    const target = { col: 10, row: 11 }
+    const next = neighbor(target, 'S')
+    const views = [
+      unit({ mobility: 'truck' }),
+      enemy(neighbor(target, 'NE')),
+      enemy(neighbor(next, 'NE')),
+    ]
+    const ctx = context(views)
+    const runtime0 = runtimeOf(views)
+    const state = startMove(ctx, ['u1'], runtime0)
+
+    // 第一次突袭：防御方离开该格 ⇒ 参突者须进入（8.0），且不结束本阶段移动（8.1f）
+    const aftermath = resolveOverrunAftermath({
+      mpRemainingBefore: 6,
+      attackerRetreatedInOptions: false,
+      defenderLeftHex: true,
+    })
+    const plan = planOverrunMove({
+      runtime: runtime0,
+      participantIds: ['u1'],
+      target,
+      aftermath,
+    })
+    const applied = applyOverrunMove({ interaction: state, runtime: runtime0, plan })
+    expect(applied.ok).toBe(true)
+    if (!applied.ok) return
+    const runtime = applied.data.patches
+    expect(runtime[0]).toMatchObject({ hex: target, spentMp: 3, ended: false })
+
+    // 4.5a-A：从该 ZOC 格继续走进下一个 ZOC ⇒ 允许进入、就地停止（下一步可再次突袭）
+    const preview = previewStep({
+      context: ctx,
+      interaction: applied.data.interaction,
+      runtime,
+      to: next,
+    })
+    expect(preview.ok).toBe(true)
+    expect(preview.enteringEnemyZoc).toBe(true)
+    expect(preview.zocStoppingIds).toEqual(['u1'])
+    expect(preview.needsConfirm).toBe(true)
+
+    // 4.5a-A：剩余恰好 3 MP ⇒ 仍可对相邻敌格发起下一次突袭（「连续通过多个 ZOC」）
+    expect(
+      canOverrun({
+        context: ctx,
+        unitIds: ['u1'],
+        target: neighbor(next, 'S'),
+        startedStackedTogether: true,
+        mpRemaining: 3,
+      }),
+    ).toMatchObject({ ok: true, mpCost: 3 })
   })
 })
 

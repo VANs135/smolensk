@@ -666,6 +666,8 @@ export function canOverrun(input: OverrunCheckInput): OverrunCheck {
     if (unit.dg) return reject('phaseNotAllowed', '5.10b', `${unit.id} 处于 DG 模式`)
     // 12.7：延补队不能移动，自然也不能突袭
     if (unit.isExtenderFace === true) return reject('extenderCannotMove', '12.7', unit.id)
+    // 4.5b：许诺抵消 ZOC 的单位本阶段不得再消耗 MP ⇒ 不得突袭（8.1a 每次突袭耗 3 MP）
+    if (unit.mpLockedThisPhase) return reject('mpLocked', '4.5b', unit.id)
     const mode = canonicalMode(modeStateOf(unit))
     if (mode !== 'combat' && mode !== 'move')
       return reject('phaseNotAllowed', '8.1', `${unit.id} 不在战斗/移动/进击模式`)
