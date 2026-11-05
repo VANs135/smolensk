@@ -854,8 +854,6 @@ export interface RetreatResult {
    * 为 false 时该撤退不合法，命令层应拒绝该落点（本函数仍给出沿路径的中间态，便于界面提示）。
    */
   fullRetreatDistanceMet: boolean
-  /** 9.12b：MA 为 0 的单位可在撤退前切换到移动模式 */
-  maySwitchToMoveMode: boolean
 }
 
 /**
@@ -895,7 +893,6 @@ export function resolveRetreat(input: {
     dgCompanions: [] as string[],
     extraLoss: 0,
     fullRetreatDistanceMet,
-    maySwitchToMoveMode: true,
   }
   if (facts.immobile(unit.id))
     return { ...base, rule: '9.12b', hex: null, destroyed: true, gainsDg: false }
@@ -952,7 +949,6 @@ export function resolveRetreat(input: {
     dgCompanions,
     extraLoss,
     fullRetreatDistanceMet,
-    maySwitchToMoveMode: true,
   }
 }
 

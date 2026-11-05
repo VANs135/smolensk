@@ -53,11 +53,6 @@ function createSession(status: SessionStatus = { form: 'created' }): GameSession
         railCapacity: { axis: 0, soviet: 2 },
         markerTracks: {},
         victoryLocations: [],
-        counters: {
-          reserveMarkers: { axis: 14, soviet: 0 },
-          supplyCache: { axis: 2, soviet: 2 },
-          constructionMarkers: 3,
-        },
       },
       units: [],
       stacks: [],

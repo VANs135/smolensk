@@ -91,11 +91,6 @@ function createRecords(): Records {
     railCapacity: { axis: 1, soviet: 2 },
     markerTracks: { 'mk-rail-cap': 3 },
     victoryLocations: [{ hex: { col: 36, row: 13 }, controlledBy: 'axis', listed: true }],
-    counters: {
-      reserveMarkers: { axis: 14, soviet: 0 },
-      supplyCache: { axis: 2, soviet: 2 },
-      constructionMarkers: 3,
-    },
   }
 }
 
@@ -456,28 +451,5 @@ describe('W7 C15：存档错误的归类（界面照它说话，不自己解析�
       expect(info.hint.length).toBeGreaterThan(0)
       expect(SAVE_ERROR_KINDS).toContain(info.kind)
     }
-  })
-
-  /*
-   * ⑥/G5 等价性留档（**不删字段**，等用户拍板）：
-   * `records.counters` 是剧本初设的只写镜像——写入值可由 `scenarios[].setup` 复算，
-   * 运行期无消费者。本用例把"镜像值 = 剧本值"和"旧档缺该字段仍可读"两件事锁住，
-   * 供删除决策时直接引用；删除动作本身不在本批范围。
-   */
-  it('⑥/G5 等价性：counters 仅镜像剧本初设，且旧档缺该字段仍可读', () => {
-    const text = serializeSaveFile(createSession(), SAVED_AT)
-    const parsed = JSON.parse(text) as {
-      session: { state: { records: { counters?: unknown; turn: number } } }
-    }
-    expect(parsed.session.state.records.counters).toEqual({
-      reserveMarkers: { axis: 14, soviet: 0 },
-      supplyCache: { axis: 2, soviet: 2 },
-      constructionMarkers: 3,
-    })
-
-    delete parsed.session.state.records.counters
-    const loaded = deserializeSaveFile(JSON.stringify(parsed))
-    expect(loaded.session.state.records.turn).toBe(4)
-    expect(() => verifyRngState(loaded.session.state.rng)).not.toThrow()
   })
 })

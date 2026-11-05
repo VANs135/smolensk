@@ -595,11 +595,6 @@ export const useGameSessionStore = defineStore('gameSession', () => {
           railCapacity: railCapacityAtStart(),
           markerTracks: {},
           victoryLocations: [],
-          counters: {
-            reserveMarkers: info.setup.reserveMarkers,
-            supplyCache: { axis: info.setup.supplyCache, soviet: info.setup.supplyCache },
-            constructionMarkers: info.setup.constructionMarkers,
-          },
         },
         units: [],
         stacks: [],

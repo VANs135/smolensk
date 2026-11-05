@@ -57,16 +57,11 @@ describe('W6 C10：开局与初设（会话驱动）', () => {
     expect(store.guidance?.total).toBe(SOP_STEP_COUNT)
   })
 
-  it('1.2 / 1.7 / 3.5 / 2.3：初设数值取自剧本数据（railCap / supplyCache / 建造标记 / 首回合天气）', () => {
+  it('1.2 / 2.3：初设数值取自剧本数据（railCap / 首回合天气）', () => {
     const store = newStore()
     store.startGame()
     const setup = scenarios.scenarios[0]?.setup
     expect(store.records?.railCapacity).toEqual(setup?.railCap)
-    expect(store.records?.counters.supplyCache).toEqual({
-      axis: setup?.supplyCache,
-      soviet: setup?.supplyCache,
-    })
-    expect(store.records?.counters.constructionMarkers).toBe(setup?.constructionMarkers)
     // 首回合天气按剧本指定（数据 'normal' ⇒ 引擎 'normal'）
     expect(store.records?.weather).toEqual({ air: 'normal', ground: 'good' })
   })
