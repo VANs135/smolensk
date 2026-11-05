@@ -413,13 +413,13 @@ describe('专规 2.4：Slow Mobilization 的解锁', () => {
     expect(unknownArmy.reason).toMatch(/^selectedArmyUnknown:ru-c/)
   })
 
-  it('2.4：同日重复解锁不再获得配额；15 Jul 累计只剩 3（12 Jul 已解锁 2）', () => {
+  it('2.4：同回合重复解锁不再获得配额（不累计封顶）；7.15 按当日表值 3 计', () => {
     const repeat = planSlowMobilization({
       date: '1941-07-12',
       army: '30th',
       lockedDivisions: 1,
       selected: [{ instanceId: 'ru-a', locked: true, isDivision: true, army: '30th' }],
-      alreadyUnlocked: 2,
+      alreadyUnlockedThisTurn: 2,
     })
     expect(repeat.ok).toBe(false)
     if (repeat.ok) throw new Error('应当拒绝')
@@ -430,7 +430,7 @@ describe('专规 2.4：Slow Mobilization 的解锁', () => {
       army: '30th',
       lockedDivisions: 3,
       selected: [{ instanceId: 'ru-a', locked: true, isDivision: true, army: '30th' }],
-      alreadyUnlocked: 2,
+      alreadyUnlockedThisTurn: 2,
     })
     expect(later.ok).toBe(true)
     if (!later.ok) throw new Error(later.reason)

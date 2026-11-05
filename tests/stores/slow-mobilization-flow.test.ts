@@ -1,16 +1,17 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
-import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
+import { toConsoleUnit, unitChoices, useGameSessionStore, useWorkbenchStore } from '@/stores'
 
 /**
  * 专规 2.4 慢动员的 **store 端到端**（真实到达卡、真实单位库）
  *
- * 核对（用户 2026-11-05 裁定的交互口径）：
+ * 核对（用户 2026-11-05 裁定①⑨「不要管什么配额，按回合能动就行」）：
  * - 30/28/24 集团军的师**到场即锁定**，归属来自到达卡分组（单位库没有集团军字段）；
- * - 每回合由玩家在**仍锁定**的师中自选，可挑数＝表 2-2 当回合配额；已解锁累计生效；
- * - 一次提交=整批校验：超配额 / 跨集团军 / 无归属一律拒绝，规则号 2.4；
- * - 同日重复提交不会重复拿到配额；换方往返、读档后当日配额不重置；
+ * - 每回合由玩家在**仍锁定**的师中自选，可挑数＝表 2-2 **当日**数字；
+ * - **不维护累计账本**：同回合已解锁数只从会话日志去重，跨回合不累计、不封顶；
+ * - 一次提交=整批校验：超当日配额 / 跨集团军 / 无归属一律拒绝，规则号 2.4；
+ * - 同日重复提交不会重复拿到配额；换方往返、读档后当日去重不重置（日志随档保存）；
  * - 未达"与指挥部同一到达卡分组"判据的师不进入专规集合。
  *
  * 用户给的验收例子（30th 共 5 师）：7.12 选 2 ⇒ 2 可动、3 仍锁；7.15 其余 3 一并可动。
@@ -18,6 +19,8 @@ import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 
 const newStore = () => {
   setActivePinia(createPinia())
+  // 2.4 的"本回合已解锁"从会话日志推导（裁定①⑨：不加存档字段）⇒ 测试需要真实会话
+  useGameSessionStore().startGame()
   return useWorkbenchStore()
 }
 
@@ -107,7 +110,7 @@ describe('专规 2.4：慢动员（store 流程）', () => {
     expect(store.unlockSlowMobilizationBatch(ids.slice(2, 4))).toBe(false)
     expect(store.slowMobilizationLockedOf('30th').length).toBe(3)
 
-    // 7.15：累计配额 5、已解锁 2 ⇒ 当日放 3
+    // 7.15：表 2-2 当日 3（裁定①⑨：不再做"累计 5 − 已解锁 2"的账本差）
     store.setTurn(3)
     expect(store.slowMobilizationQuotaOf('30th')).toBe(3)
     const rest = store.slowMobilizationLockedOf('30th').map((unit) => unit.instanceId)
@@ -147,7 +150,7 @@ describe('专规 2.4：慢动员（store 流程）', () => {
     store.setTurn(2)
     store.setPhase('reinforcement')
     const record = pickSovietDivision()
-    // 表 2-2 中 30th 累计只有 5 个师（12 Jul 2 + 15 Jul 3）；多摆一个用于验证总量封顶
+    // 表 2-2 中 30th 两批合计只有 5 个师（12 Jul 2 + 15 Jul 3）；多摆一个用于验证上限
     const ids: string[] = []
     for (let index = 0; index < 6; index += 1) {
       const unit = toConsoleUnit({
@@ -179,12 +182,12 @@ describe('专规 2.4：慢动员（store 流程）', () => {
     store.setActiveSide('soviet')
     expect(store.unlockSlowMobilizationNow(ids[2]!)).toBe(false)
 
-    // 15 Jul：该集团军累计 5 个，已解锁 2 ⇒ 本日恰放 3 个
+    // 15 Jul：当日表值 3（本回合已解锁 0；不再做累计差）
     store.setTurn(3)
     expect(store.unlockSlowMobilizationNow(ids[2]!)).toBe(true)
     expect(store.unlockSlowMobilizationNow(ids[3]!)).toBe(true)
     expect(store.unlockSlowMobilizationNow(ids[4]!)).toBe(true)
-    // 第 6 个永远超出表 2-2 的累计 5
+    // 第 6 个永远超出表 2-2 的合计 5（30th 再无后续批次）
     expect(store.unlockSlowMobilizationNow(ids[5]!)).toBe(false)
     expect(store.units.filter((unit) => unit.locked).map((unit) => unit.instanceId)).toEqual([
       ids[5]!,

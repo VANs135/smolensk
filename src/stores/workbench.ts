@@ -17532,25 +17532,43 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return units.value.filter((unit) => unit.slowMobilizationArmy === army && unit.locked)
   }
 
-  /** 2.4：该集团军此前已解锁的师数（盘面＋死亡堆；与引擎复核同一口径） */
-  function slowMobilizationAlreadyUnlocked(army: SlowMobilizationArmy): number {
-    return [...units.value, ...deadPile.value].filter(
-      (item): item is ConsoleUnit =>
-        'slowMobilizationArmy' in item && item.slowMobilizationArmy === army && !item.locked,
-    ).length
+  /**
+   * 2.4：该集团军**本回合**已解锁的师数
+   *
+   * 用户 2026-11-05 裁定①⑨：「不要管什么配额，按回合能动就行」——不维护已解锁计数账本、
+   * 不做累计运算。这里只从会话日志数**本回合**的成功解锁条目（与 `slowMobilizationUnlockedAt`
+   * 同一数据源，不新增存档字段）；未开局无日志 ⇒ 0（演练台不产生审计条目）。
+   */
+  function slowMobilizationUnlockedThisTurn(army: SlowMobilizationArmy): number {
+    const armyOf = new Map<string, SlowMobilizationArmy | null>()
+    for (const item of [...units.value, ...deadPile.value]) {
+      if ('slowMobilizationArmy' in item) armyOf.set(item.instanceId, item.slowMobilizationArmy)
+    }
+    let count = 0
+    for (const entry of session.log) {
+      if (entry.action !== 'slowMobilizationUnlock') continue
+      if (!entry.outcome.ok) continue
+      if (entry.turn !== turn.value) continue
+      const data = entry.outcome.data as unknown as { selectedIds?: unknown }
+      if (!Array.isArray(data.selectedIds)) continue
+      for (const id of data.selectedIds) {
+        if (typeof id === 'string' && armyOf.get(id) === army) count += 1
+      }
+    }
+    return count
   }
 
   /**
-   * 2.4：当日剩余可挑选数
+   * 2.4：本回合剩余可挑选数
    *
-   * 算式在引擎 `slowMobilizationQuotaRemaining`（表 2-2 当日配额 ∩ 截至当日累计 − 已解锁）；
+   * 算式在引擎 `slowMobilizationQuotaRemaining`（表 2-2 **当日**配额 − 本回合已解锁，不累计）；
    * 面板只用它置灰，提交时引擎仍会复核并给出规则号 2.4。
    */
   function slowMobilizationQuotaOf(army: SlowMobilizationArmy): number {
     return slowMobilizationQuotaRemaining({
       date: date.value,
       army,
-      alreadyUnlocked: slowMobilizationAlreadyUnlocked(army),
+      alreadyUnlockedThisTurn: slowMobilizationUnlockedThisTurn(army),
     })
   }
 
@@ -17558,13 +17576,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * B18：按表 2-2 解锁**玩家在本回合勾选**的若干师（专规 2.4）
    *
    * 交互口径（用户 2026-11-05 裁定）：每回合由玩家从"仍锁定"的师中自选，
-   * 可挑数量＝当回合配额；已解锁的累计生效。面板允许勾选/取消后再提交，
-   * 提交即整批校验（超配额、跨集团军、非师、已解锁一律整批拒绝并记 2.4）。
+   * 可挑数量＝表 2-2 **当回合**的数字（跨回合不累计，见裁定①⑨）；面板允许勾选/取消后再提交，
+   * 提交即整批校验（超当日配额、跨集团军、非师、已解锁一律整批拒绝并记 2.4）。
    *
    * 修前这里取**全局**锁定算子、按数组前缀解锁（可跨集团军、玩家无法指定），
    * 且同日重复点击会重复拿到配额。现在：
    * - 归属只认到达卡分组落到算子上的 `slowMobilizationArmy`；
-   * - 已解锁数由盘面（含死亡堆）上同集团军的标签推导，经引擎校验累计配额；
+   * - 本回合已解锁数从会话日志取（不新增存档字段、不做累计账本运算）；
    * - 只解锁玩家选中的那几枚，一次提交。
    */
   function unlockSlowMobilizationBatch(selectedIds: readonly string[]): boolean {
@@ -17587,20 +17605,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     /*
-     * ★ 待人工决策（近似口径，不得当成正式账本）：
-     *   这里用"盘面上同集团军标签、且已解除锁定的算子数"推导已解锁数，**没有新增存档字段**。
-     *   失效场景：已解锁的师被 1.6a **永久移除**（不留在死亡堆）后，已解锁数会下降，
-     *   理论上可回吐表 2-2 的配额；被摧毁进死亡堆的算子仍计入，故只有 1.6a 这条路径会失真。
-     *   是否改为正式"解锁账本"（需要存档字段与迁移）见 docs/2026-11-05-待审批事项汇总.md ①。
+     * ★ 口径（用户 2026-11-05 裁定①⑨）：**不做累计账本运算**。
+     *   本回合已解锁数只从会话日志（`slowMobilizationUnlock` 条目、`entry.turn === 当前回合`）取，
+     *   跨回合不累加、也不设"累计封顶"；因此 1.6a 永久移除造成的失真问题不再存在。
+     *   代价：未开局（无会话日志）的演练台无法识别"同回合已提交过"，重复提交会各拿一次当日表值。
      */
-    const alreadyUnlocked = slowMobilizationAlreadyUnlocked(army)
+    const alreadyUnlockedThisTurn = slowMobilizationUnlockedThisTurn(army)
     const lockedDivisions = slowMobilizationLockedOf(army).length
     const data = acceptReinforcement(
       planSlowMobilization({
         date: date.value,
         army,
         lockedDivisions,
-        alreadyUnlocked,
+        alreadyUnlockedThisTurn,
         selected: list.map((unit) => ({
           instanceId: unit.instanceId,
           locked: unit.locked,

@@ -957,24 +957,24 @@ export interface SlowMobilizationSelectionFact {
 }
 
 /**
- * 专规 2.4：当日仍可解锁的师数
+ * 专规 2.4：本回合仍可解锁的师数
  *
- * ＝min(表 2-2 **当日**配额, **截至当日累计**配额 − 此前已解锁)。
- * 面板据此把"超出配额"的选项置灰，引擎在 `planSlowMobilization` 里对同一算式复核。
+ * ＝表 2-2 **当日**配额 − 本回合已解锁数。
+ * 用户 2026-11-05 裁定①⑨：「不要管什么配额，按回合能动就行」⇒ **不做累计账本运算**
+ * （不再用"截至当日累计 − 此前已解锁"的封顶式），每回合只看表 2-2 当日的数字；
+ * 本回合已解锁多少由调用方从会话日志取（不新增存档字段）。
  */
 export function slowMobilizationQuotaRemaining(input: {
   date: string
   army: SlowMobilizationArmy
-  alreadyUnlocked: number
+  /** 本回合该集团军**已经**解锁的师数（跨回合不累计） */
+  alreadyUnlockedThisTurn: number
 }): number {
   const quota = slowMobilizationUnlocks(input.date)
     .filter((row) => row.army === input.army)
     .reduce((sum, row) => sum + row.unlockDivisions, 0)
-  const cumulativeQuota = rulesConstants.smolensk.slowMobilization.table
-    .filter((row) => row.army === input.army && row.date <= input.date)
-    .reduce((sum, row) => sum + row.unlockDivisions, 0)
-  const alreadyUnlocked = Math.max(0, Math.trunc(input.alreadyUnlocked))
-  return Math.max(0, Math.min(quota, cumulativeQuota - alreadyUnlocked))
+  const alreadyUnlocked = Math.max(0, Math.trunc(input.alreadyUnlockedThisTurn))
+  return Math.max(0, quota - alreadyUnlocked)
 }
 
 /**
@@ -986,8 +986,8 @@ export function slowMobilizationQuotaRemaining(input: {
  * 修前 store 把**全局**锁定算子按数组前缀解锁（忽略集团军、也无法由玩家指定），
  * 且同日重复调用可重复拿到配额。故这里补上：
  * - `selected`：玩家实际选中的师，逐个校验「仍被锁 / 是师 / 属于本集团军」；
- * - `alreadyUnlocked`：该集团军**此前已解锁**的师数（由盘面标签推导，不新增存档字段）；
- *   当日可用量 = `min(当日配额, 截至当日的累计配额 − 已解锁数)` ⇒ 同回合重试/读档不会重复获得配额。
+ * - `alreadyUnlockedThisTurn`：该集团军**本回合**已解锁的师数（由会话日志取，不新增存档字段）；
+ *   当日可用量 = `当日配额 − 本回合已解锁数` ⇒ 同回合重试不会重复获得配额，跨回合不累计。
  *
  * 不传 `selected` 时保留旧的"只报数量"路径（既有调用与测试不变）。
  */
@@ -1000,8 +1000,8 @@ export function planSlowMobilization(input: {
   unlockRequested?: number
   /** 玩家选中的具体师（给出时逐项校验，解锁数 = 选中数） */
   selected?: readonly SlowMobilizationSelectionFact[]
-  /** 该集团军此前已解锁的师数（用于防止同日重复取配额） */
-  alreadyUnlocked?: number
+  /** 该集团军**本回合**已解锁的师数（防止同回合重复取配额） */
+  alreadyUnlockedThisTurn?: number
 }): RuleOutcome<{
   unlocked: number
   remainingLocked: number
@@ -1014,20 +1014,17 @@ export function planSlowMobilization(input: {
     .reduce((sum, row) => sum + row.unlockDivisions, 0)
   if (quota === 0) return fail('2.4', `noUnlockQuota:${input.date}:${input.army}`)
 
-  // 表 2-2 截至当日该集团军的累计配额（日期均为回合轨上的真实回合，ISO 串可直接比较）
-  const cumulativeQuota = rulesConstants.smolensk.slowMobilization.table
-    .filter((row) => row.army === input.army && row.date <= input.date)
-    .reduce((sum, row) => sum + row.unlockDivisions, 0)
-  const alreadyUnlocked = Math.max(0, Math.trunc(input.alreadyUnlocked ?? 0))
+  // ② 裁定：每回合只看表 2-2 当日的数字（不累计、不封顶）
+  const alreadyUnlockedThisTurn = Math.max(0, Math.trunc(input.alreadyUnlockedThisTurn ?? 0))
   const quotaToday = slowMobilizationQuotaRemaining({
     date: input.date,
     army: input.army,
-    alreadyUnlocked,
+    alreadyUnlockedThisTurn,
   })
   if (quotaToday === 0)
     return fail(
       '2.4',
-      `noUnlockQuotaLeft:${input.date}:${input.army}:already=${alreadyUnlocked}:cumulative=${cumulativeQuota}`,
+      `noUnlockQuotaLeft:${input.date}:${input.army}:alreadyThisTurn=${alreadyUnlockedThisTurn}`,
     )
 
   const lockedDivisions = Math.max(0, Math.trunc(input.lockedDivisions ?? 0))
@@ -1061,7 +1058,7 @@ export function planSlowMobilization(input: {
     detail:
       `第 ${input.army} 集团军于 ${input.date} 解锁 ${unlocked} 个师` +
       (selected === undefined ? '' : `（${selected.map((fact) => fact.instanceId).join('、')}）`) +
-      `（当日配额 ${quota}，截至当日累计 ${cumulativeQuota}，此前已解锁 ${alreadyUnlocked}；` +
+      `（当日配额 ${quota}，本回合已解锁 ${alreadyUnlockedThisTurn}；` +
       `剩余锁定 ${remainingLocked} 个，2.4）`,
     selectedIds: selected?.map((fact) => fact.instanceId) ?? [],
   })
