@@ -55,11 +55,13 @@ export interface RailSupplyFacts extends Pick<RailFacts, 'railGaugeUsable'> {
   /** 该格的**格内**地形名（判 13.3c 的村庄/城市；城市与村庄的判读由调用方按 9.3b 口径给全） */
   terrainsPresentAt(hex: HexRef): readonly string[]
   /**
-   * 13.3c①后半：该格是否有**港口**或**具工程能力的指挥部**（13.8a）
+   * 13.3c①后半：该格是否有**港口**或 `side` 方**具工程能力的指挥部**（13.8a）
    *
-   * 缺省视为无（本作港口为装饰性，见专规 1.1c；工程 HQ 极少）。
+   * 判据（同格 + 同方 + 战斗模式）见 `engineerCapableHqAt`；缺省视为无（不凭空放行）。
+   * ★ 仓内地图数据没有港口地形条目（`map-layers.json` 无 `Port`），故港口一侧恒 false，
+   *   已登记待审批（港口清单缺失）；工程 HQ 一侧由 store 注入，不再是恒 false。
    */
-  hasPortOrEngineerHqAt?(hex: HexRef): boolean
+  hasPortOrEngineerHqAt?(hex: HexRef, side: Side): boolean
   /** 13.3h：该格是否由 `side` **控制**（被敌军夺取即失去控制） */
   isControlledBy(hex: HexRef, side: Side): boolean
   /** 13.3a：沿铁路相邻的格（该格边有铁路） */
@@ -122,6 +124,42 @@ const hexKey = (hex: HexRef): string => `${hex.col}.${hex.row}`
 /** 13.3c①：该格是否有村庄/城市（任意规模）—— 城市与村庄的符号判读由调用方给全 */
 export function hasVillageOrCity(terrains: readonly string[]): boolean {
   return terrains.some((name) => name === 'Village' || name.includes('City'))
+}
+
+/** 13.3c① / 13.8a 的判据输入：只看「同格、同方、战斗模式、是指挥部」四项 */
+export interface EngineerHqFacts {
+  side: Side
+  hex: HexRef
+  /** 战斗单位（指挥部在库内均为 `isCombat: true`） */
+  isCombat: boolean
+  /** 5.5b：工程职能须在**战斗模式**下执行（移动模式下的 HQ 不是 Engineer-Capable） */
+  mode: { mode: string }
+  /** `specialized` 含 `'hq'` 即指挥部 */
+  specialized: readonly string[]
+}
+
+/**
+ * 13.3c①后半 / 13.8a / 5.5b：该格是否有 `side` 方**具工程能力的指挥部**
+ *
+ * 原文：13.3c「It has a village, city (any size), port, **or Engineer-Capable HQ (13.8a)**」；
+ * 5.5b「Units must be in Combat Mode … to perform Engineering functions (13.8a)」；
+ * 13.8 首段：只有**指挥部**与**工程兵(Engineer)** 可执行工程能力，Pioneer / 铁路修理 / 突击工兵**不算**。
+ * ⇒ 本作没有 Engineer 类型算子，故判据＝同格 ∧ 本方 ∧ `specialized` 含 `'hq'` ∧ `mode === 'combat'`。
+ */
+export function engineerCapableHqAt(
+  units: readonly EngineerHqFacts[],
+  hex: HexRef,
+  side: Side,
+): boolean {
+  return units.some(
+    (unit) =>
+      unit.side === side &&
+      unit.isCombat &&
+      unit.mode.mode === 'combat' &&
+      unit.specialized.includes('hq') &&
+      unit.hex.col === hex.col &&
+      unit.hex.row === hex.row,
+  )
 }
 
 /**
@@ -224,7 +262,7 @@ export function railSupplyPath(facts: RailSupplyFacts, side: Side): RailSupplyPa
       facts.isControlledBy(hex, side) &&
       !facts.inUnnegatedEnemyZoc(hex, side) &&
       (hasVillageOrCity(facts.terrainsPresentAt(hex)) ||
-        facts.hasPortOrEngineerHqAt?.(hex) === true),
+        facts.hasPortOrEngineerHqAt?.(hex, side) === true),
   )
 
   return {

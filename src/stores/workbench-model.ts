@@ -2037,6 +2037,13 @@ export function createRailSupplyFacts(input: {
    */
   railGaugeUsable?: (hex: HexRef, side: Side) => boolean
   /**
+   * 13.3c①后半：该格是否有港口或本方具工程能力的指挥部（13.8a）
+   *
+   * 缺省视为无（**宁少勿多**）：不注入即意味着该类格永久不可卸货。
+   * 工程 HQ 一侧由 store 用 `engineerCapableHqAt` 注入（同格 ∧ 本方 ∧ 战斗模式 ∧ 指挥部）。
+   */
+  hasPortOrEngineerHqAt?: (hex: HexRef, side: Side) => boolean
+  /**
    * 12.7b：延补队回连距离的**唯一实现**来源
    *
    * `rail-supply` 不得自持"格数 ≤ rangeMp"那套口径——本字段把 trace-supply 的
@@ -2052,6 +2059,7 @@ export function createRailSupplyFacts(input: {
     isControlledBy: (hex, side) => input.controlByHex?.(hex) === side,
     isRailHex: (hex) => isRailHexAt(hex),
     railNeighbors: (hex) => railNeighborHexes(hex),
+    hasPortOrEngineerHqAt: (hex, side) => input.hasPortOrEngineerHqAt?.(hex, side) ?? false,
     inUnnegatedEnemyZoc: (hex, side) => input.zocAt?.(hex, side) ?? false,
     railGaugeUsable: (hex, side) => input.railGaugeUsable?.(hex, side) ?? false,
     baseSourceHexes: (side) =>

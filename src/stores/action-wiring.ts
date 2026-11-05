@@ -217,6 +217,16 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   advanceSegmentNow: { kind: 'flowState', why: '统一阶段执行器先结清规则义务，再按会话状态推进' },
   restartGameNow: { kind: 'pregame', why: '终局后重建整局盘面与初设，不是阶段内行动' },
 
+  // 专规 2.4：原文只写"按此表动员"，**未给时机** ⇒ 不加环节闸（用户 2026-11-05 裁定"按回合能动"）
+  slowMobilizationLockedOf: {
+    kind: 'noTiming',
+    why: '2.4 只读查询：列出某集团军仍锁定的师供面板勾选（`units.value.filter` 只是读盘面，落盘在 unlockSlowMobilizationBatch）',
+  },
+  unlockSlowMobilizationBatch: {
+    kind: 'noTiming',
+    why: '专规 2.4 只写「mobilized per this table」，原文未给时机 ⇒ 不加闸；配额按表 2-2 当日值、无累计账本',
+  },
+
   /* ── 已加闸（原文给了明确时机）—— 本表用于**核对**，不是"未处理" ── */
 
   // 1.6a：到达卡要求"移除"时立即移出（B 增援·到货落位）

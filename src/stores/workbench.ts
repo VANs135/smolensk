@@ -239,6 +239,7 @@ import {
   tToHoldings,
   planVariableReinforcement,
   previewStep,
+  engineerCapableHqAt,
   railSupplyPath,
   reachableForMove,
   reachableNodeAt,
@@ -3027,6 +3028,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         return sides.size === 1 ? ([...sides][0] ?? null) : null
       },
       zocAt: (hex, side) => zocOnlySupplyFacts.value.inEnemyZoc(hex, side),
+      // 13.3c①后半 / 13.8a / 5.5b：港口（本作地图数据无港口格）或本方战斗模式指挥部
+      hasPortOrEngineerHqAt: (hex, side) => engineerCapableHqAt(units.value, hex, side),
       // 13.3f／专规 1.2：轨距只回答「谁能用这条铁路」（与 13.3a 多轨的运量费用无关）
       railGaugeUsable: (hex, side) => isRailGaugeUsableAt(hex, side),
       // 12.7b：延补队回连距离用 trace-supply 的**同一实现**（MP 沿补给路径），不使用格数近似
