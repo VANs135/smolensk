@@ -22,6 +22,7 @@ import {
   resolveBattleSurprise,
   resolveOptionChoice,
   resolveRetreat,
+  resolveStackRetreat,
   retreatPathTo,
   unitBattleStrength,
   validateBattleComposition,
@@ -773,6 +774,35 @@ describe('9.12 撤退：完整距离、DG、敌方 ZOC 与被消灭', () => {
       facts: retreatFacts(),
     })
     expect(one).toMatchObject({ destroyed: false, gainsDg: false })
+  })
+
+  it('9.12c：同一堆叠可分开撤退（各自路径独立判定），9.12e 额外损失按堆叠至多 1 点', () => {
+    const stack = [
+      { ...retreatUnit, id: 'u1' },
+      { ...retreatUnit, id: 'u2', dg: true },
+    ]
+    const result = resolveStackRetreat({
+      units: stack,
+      paths: [
+        { unitId: 'u1', path: [{ col: 36, row: 12 }] },
+        { unitId: 'u2', path: [{ col: 36, row: 14 }] },
+      ],
+      // 只有 u2 的落点 (36,14) 在敌方 ZOC 内
+      facts: retreatFacts({ inEnemyZocAt: (hex) => hex.row === 14 }),
+    })
+    expect(result.rule).toBe('9.12c')
+    expect(result.results.find((item) => item.unitId === 'u1')).toMatchObject({
+      destroyed: false,
+      gainsDg: false,
+      hex: { col: 36, row: 12 },
+    })
+    expect(result.results.find((item) => item.unitId === 'u2')).toMatchObject({
+      destroyed: false,
+      gainsDg: true,
+      hex: { col: 36, row: 14 },
+    })
+    // 9.12e：撤退前已 DG 的单位进入 EZOC ⇒ 堆叠额外损失 1 点（两单位各判一次，仍只算 1 点）
+    expect(result.extraLoss).toBe(1)
   })
 
   it('9.12：必须穿过敌方战斗单位格或禁入地形 ⇒ 被消灭', () => {
