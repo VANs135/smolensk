@@ -332,6 +332,13 @@ export interface ConsoleUnit {
    */
   throwRange: { combatFace: number; moveFace: number } | null
   /**
+   * 12.3b / 12.3a：投递距离的**移动类型**（印值颜色，逐面；缺省 null ＝ 按轮式计算）
+   *
+   * 「投递距离印值的颜色表示其移动类型」⇒ 轮式/徒步/履带决定计费地形表；
+   * 计费复用单位移动代价（同一套 `selectMovementTerrain`），不另写一份代价表。
+   */
+  throwMobility: { combatFace: SupplyMobility | null; moveFace: SupplyMobility | null } | null
+  /**
    * 单位库的能力标签（`special_abilities`；专规 2.3b 的 NKVD 判据取自此）
    *
    * 与 `specialized` 分开保留：`specialized` 是**模式/规模分类**（replacement/hq/breakdown…），
@@ -619,6 +626,25 @@ export function toConsoleUnit(input: {
       if (range === undefined || range === null) return null
       return { combatFace: range.combatFace ?? 0, moveFace: range.moveFace ?? 0 }
     })(),
+    /*
+     * 12.3b / 12.3a：投递距离的移动类型（印值颜色），逐面。
+     * 数据缺省 ⇒ null（`throwMobilityOf` 按 12.3a 默认口径取 `truck`；行为与此前逐字节一致）。
+     * 后续作品若出现徒步/履带投递 HQ，只需在单位数据写 `throwMobility`，引擎无需另写代价表
+     * （`supplyStepCost` 已经按该类型复用 `selectMovementTerrain`）。
+     */
+    throwMobility:
+      record.throwMobility === undefined
+        ? null
+        : {
+            combatFace:
+              record.throwMobility.combatFace === undefined
+                ? null
+                : (MOBILITY_BY_CLASS[record.throwMobility.combatFace] ?? null),
+            moveFace:
+              record.throwMobility.moveFace === undefined
+                ? null
+                : (MOBILITY_BY_CLASS[record.throwMobility.moveFace] ?? null),
+          },
     // 规则能力标签（专规 2.3b 的 NKVD 判据取自此）
     specialAbilities: record.specialAbilities ?? [],
     // 专规 2.4：锁定状态由裁判在 Slow Mobilization 期间逐个设置（缺省不锁）
@@ -1852,11 +1878,22 @@ export function toTraceSupplyUnitView(unit: ConsoleUnit): TraceSupplyUnitView {
 }
 
 /**
+ * 12.3b / 12.3a：当前朝上的那一面所印的**投递移动类型**（印值颜色）
+ *
+ * 12.3a 原文：计算到补给站的距离「**始终要使用轮式 MP**（例外：对于投递距离为步行或履带的指挥部，
+ * 则使用对应的移动类型）」；12.3b：「投递距离印值的**颜色**表示其移动类型」。
+ * ⇒ 数据缺省时取 `truck`（本作算子库未标注颜色 ⇒ 按默认口径；与修前逐字节一致）。
+ */
+export function throwMobilityOf(unit: ConsoleUnit): SupplyMobility {
+  const face =
+    unit.mode.orientation === 'move' ? unit.throwMobility?.moveFace : unit.throwMobility?.combatFace
+  return face ?? 'truck'
+}
+
+/**
  * 操作台算子 → 可投递的指挥部视图（12.3b）
  *
- * ★ 数据缺口（不得无中生有）：12.3a 的例外是「投递距离为**步行或履带**的指挥部用对应移动类型计数」，
- *   即投递距离有**颜色**之分；本作单位库未单列该颜色，故一律按 12.3a 的**默认口径**（轮式 MP）计，
- *   有数据时由调用方经 `throwMobility` 覆盖。投递距离本身取自 13.1b 印值（`throwRangeMpOf`）。
+ * 投递距离取 13.1b 印值（`throwRangeMpOf`，按当前面）；移动类型取 `throwMobilityOf`（缺省轮式）。
  */
 export function toThrowHqView(
   unit: ConsoleUnit,
@@ -1868,7 +1905,7 @@ export function toThrowHqView(
     mode: unit.mode.mode,
     mobility: effectiveMobilityOf(unit),
     throwRangeMp: throwRangeMpOf(unit),
-    throwMobility: options.throwMobility ?? 'truck',
+    throwMobility: options.throwMobility ?? throwMobilityOf(unit),
   }
 }
 

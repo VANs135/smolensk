@@ -210,6 +210,20 @@ export const UnitSchema = z
 
     /** HQ 投递距离（通规 13.1b：底部左；战斗面与移动面不同） */
     throwRange: ThrowRangeSchema.optional(),
+    /**
+     * 12.3b：HQ 投递距离的**移动类型**（12.3a：「投递距离印值的颜色表示其移动类型」，缺省轮式）
+     *
+     * 逐面（13.1b：两面印值不同 ⇒ 颜色也可能不同）。数据缺口：本作算子库尚未逐枚标注颜色
+     * ⇒ 缺省不写（`throwMobilityOf` 按 12.3a 默认口径取 `truck`）；
+     * 未来出现「徒步/履带投递」的 HQ 时，在此写 `leg` / `tracked` 即可，**无需改代码**。
+     */
+    throwMobility: z
+      .object({
+        combatFace: z.enum(['leg', 'truck', 'tracked']).optional(),
+        moveFace: z.enum(['leg', 'truck', 'tracked']).optional(),
+      })
+      .strict()
+      .optional(),
     /** 非战斗单位专用详情（按 noncombatKind 路由到引擎判定） */
     noncombatDetails: NoncombatDetailsSchema.optional(),
 
