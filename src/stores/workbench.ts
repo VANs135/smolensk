@@ -1217,6 +1217,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 上限取剧本初设 `setup.reserveMarkers`（5.4a「严格限制」）；数据未给则不校验。
    */
   const reserveMarkerGroups = ref<ReserveMarkerGroup[]>([])
+  /**
+   * 13.2a：已「暂停移动」的运输点数（原文「运输点数可以移动、暂停移动……然后继续移动」）
+   *
+   * 只记**玩家主动结束移动**的运输点数：它们在同一移动阶段内可以再次开拔（6.1g 的
+   * 「本轮已结束」对 13.2a 让路）；同时原文限制「必须在另一个单位移动之前完成它的移动」
+   * ⇒ 暂停期间别的单位不得开拔（见 `beginMoveFor`）。
+   * 阶段/换方/换回合清空（`resetMovementTracking`）。
+   */
+  const pausedTransportIds = ref<string[]>([])
   /** 上次移动被拒/受阻的原因（供界面显示） */
   /**
    * 演示用补给池（12.5c 的 SP / T）
@@ -5271,6 +5280,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     hoverHex.value = null
     // 4.5a-A：停车账本只在本轮移动内有效（换段/换方/换回合 ⇒ 新的移动）
     zocStoppedMoveUnitIds.value = []
+    // 13.2a：暂停账本同样只在本阶段内有效（换段/换方/换回合 ⇒ 运输点数重新按 MA 计）
+    pausedTransportIds.value = []
   }
 
   /** 切方（2.3/2.2：先手方与后手方轮流；U0 直接手动切换） */
@@ -5703,7 +5714,31 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 两条判据都保留：段级那条给出更贴切的原因码（如 `moveBlocked` 的 2.2），环节级这条管细粒度。
      */
     if (!requireAction('move.order', '移动')) return false
-    if (!groundMovement.begin(unitIds)) return false
+    /*
+     * 13.2a：运输点数「暂停移动并使用它装载的部分补给、然后继续移动」——两条落地：
+     *   ① 暂停的运输点数**可以**在同一移动阶段内再次开拔 ⇒ 解开 6.1g 的"本轮已结束"；
+     *   ② 原文限制「运输点数必须在另一个单位移动之前完成它的移动」⇒ 暂停期间别的单位
+     *      不得开拔（付款、切模式等非移动动作不受限）。
+     * 阶段级排序原文未给：本处只判"别的单位是否先动"，不排阶段（见交付摘要"真空白"）。
+     */
+    const paused = pausedTransportIds.value
+    const resumingIds = unitIds.filter((id) => paused.includes(id))
+    if (paused.length > 0 && resumingIds.length === 0) {
+      const reason = '运输点数已暂停移动：必须先让它继续并完成移动，其它单位才能开拔（13.2a）'
+      moveBlocked.value = { rule: '13.2a', reason }
+      pushLog('warning', reason, '13.2a')
+      return false
+    }
+    const resumed = units.value.filter(
+      (unit) => resumingIds.includes(unit.instanceId) && unit.movementEnded,
+    )
+    for (const unit of resumed) unit.movementEnded = false
+    if (!groundMovement.begin(unitIds)) {
+      // 引擎仍拒绝（燃料/阶段等）⇒ 恢复「已结束」并保留暂停账，免得凭空多出一次移动
+      for (const unit of resumed) unit.movementEnded = true
+      return false
+    }
+    pausedTransportIds.value = paused.filter((id) => !resumingIds.includes(id))
     // 条 22（批 T）：20.0a 的**创建时机**＝「开始移动」这个**事件**（不是"当前在移动段"这个状态）
     openBreakdownWindow('startMove', unitIds)
     return true
@@ -6299,6 +6334,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return
     }
     const names = moveUnits.value.map((unit) => unit.name).join(' + ')
+    /*
+     * 13.2a：先把本次**主动停车**的运输点数记下来（3.3b 的运输点数＝非战斗、带运力点数的算子；
+     * 编内卡车是战斗单位，不算"运输点数"）。记账必须在 `applyMovePatches` 之前 —— 补丁会把
+     * 它们的 `movementEnded` 置真，之后就分不出"本来就停下的"与"这次停的"。
+     */
+    const pausedIds = moveUnits.value
+      .filter((unit) => !unit.movementEnded && !unit.isCombat && unit.noncombatTransport > 0)
+      .map((unit) => unit.instanceId)
     const result = endMoveEarly({ interaction, runtime: moveRuntime.value })
     applyMovePatches(result.patches)
     moveInteraction.value = result.interaction
@@ -6308,6 +6351,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * ⇒ 停车账本随之作废，这些单位此后不再出现在突袭候选里（否则界面会一直挂紫环）。
      */
     zocStoppedMoveUnitIds.value = []
+    // 13.2a：本次主动停车的运输点数＝「暂停」——同一阶段内可继续（其它单位开拔须等它完成）
+    if (pausedIds.length > 0) {
+      pausedTransportIds.value = [...new Set([...pausedTransportIds.value, ...pausedIds])]
+      pushLog(
+        'info',
+        `${names}：运输点数暂停移动（可用其装载的 SP 付款后再继续，13.2a）`,
+        '13.2a',
+      )
+    }
     if (result.record !== null) lastStep.value = snapshotOf(result.record)
     pushLog('info', `结束移动：${names}`, '6.1')
     // ⑭ 接线：结束本次移动（6.1 末句）入会话日志（本笔不掷骰）
