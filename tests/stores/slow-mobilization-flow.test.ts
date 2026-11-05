@@ -6,10 +6,14 @@ import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 /**
  * 专规 2.4 慢动员的 **store 端到端**（真实到达卡、真实单位库）
  *
- * 核对三件事：
+ * 核对（用户 2026-11-05 裁定的交互口径）：
  * - 30/28/24 集团军的师**到场即锁定**，归属来自到达卡分组（单位库没有集团军字段）；
- * - 解锁只作用于**玩家指定**的那一枚，且必须仍被锁、属于该集团军；
- * - 同日重复解锁不会重复拿到表 2-2 的配额。
+ * - 每回合由玩家在**仍锁定**的师中自选，可挑数＝表 2-2 当回合配额；已解锁累计生效；
+ * - 一次提交=整批校验：超配额 / 跨集团军 / 无归属一律拒绝，规则号 2.4；
+ * - 同日重复提交不会重复拿到配额；换方往返、读档后当日配额不重置；
+ * - 未达"与指挥部同一到达卡分组"判据的师不进入专规集合。
+ *
+ * 用户给的验收例子（30th 共 5 师）：7.12 选 2 ⇒ 2 可动、3 仍锁；7.15 其余 3 一并可动。
  */
 
 const newStore = () => {
@@ -73,6 +77,68 @@ describe('专规 2.4：慢动员（store 流程）', () => {
     expect(unlocked.map((unit) => unit.instanceId).sort()).toEqual(
       [lockedIds[0]!, lockedIds[1]!].sort(),
     )
+  })
+
+  it('2.4：30th 共 5 师——7.12 整批选 2（剩 3 锁），7.15 再整批 3 全解锁', () => {
+    const store = newStore()
+    store.setActiveSide('soviet')
+    store.setTurn(2)
+    store.setPhase('reinforcement')
+    const plan = store.arrivalPlan
+    if (plan === null) throw new Error('12 Jul 应有到达计划')
+    const record = pickSovietDivision()
+    plan.units.forEach((unit, index) => {
+      if (unit.slowMobilizationArmy === '30th')
+        expect(store.placeArrivalNow(index, record.id)).toBe(true)
+    })
+    expect(store.slowMobilizationLockedOf('30th').length).toBe(5)
+    expect(store.slowMobilizationQuotaOf('30th')).toBe(2)
+
+    const ids = store.slowMobilizationLockedOf('30th').map((unit) => unit.instanceId)
+    // 超配额整批 3 枚 ⇒ 整批拒绝，规则号 2.4，账本不动
+    expect(store.unlockSlowMobilizationBatch(ids.slice(0, 3))).toBe(false)
+    expect(store.reinforcementError?.rule).toBe('2.4')
+    expect(store.slowMobilizationLockedOf('30th').length).toBe(5)
+
+    expect(store.unlockSlowMobilizationBatch(ids.slice(0, 2))).toBe(true)
+    expect(store.slowMobilizationLockedOf('30th').length).toBe(3)
+
+    // 同日再提交不重复给配额
+    expect(store.unlockSlowMobilizationBatch(ids.slice(2, 4))).toBe(false)
+    expect(store.slowMobilizationLockedOf('30th').length).toBe(3)
+
+    // 7.15：累计配额 5、已解锁 2 ⇒ 当日放 3
+    store.setTurn(3)
+    expect(store.slowMobilizationQuotaOf('30th')).toBe(3)
+    const rest = store.slowMobilizationLockedOf('30th').map((unit) => unit.instanceId)
+    expect(rest.length).toBe(3)
+    expect(store.unlockSlowMobilizationBatch(rest)).toBe(true)
+    expect(store.slowMobilizationLockedOf('30th').length).toBe(0)
+  })
+
+  it('2.4：跨集团军一次提交被拒（同批只能同一集团军）', () => {
+    const store = newStore()
+    store.setActiveSide('soviet')
+    store.setTurn(2)
+    store.setPhase('reinforcement')
+    const first = store.arrivalPlan
+    if (first === null) throw new Error('12 Jul 应有到达计划')
+    const record = pickSovietDivision()
+    first.units.forEach((unit, index) => {
+      if (unit.slowMobilizationArmy === '30th') store.placeArrivalNow(index, record.id)
+    })
+    // 28th 于 15 Jul 到场；换回合后两边都仍有锁定师
+    store.setTurn(3)
+    const second = store.arrivalPlan
+    if (second === null) throw new Error('15 Jul 应有到达计划')
+    second.units.forEach((unit, index) => {
+      if (unit.slowMobilizationArmy === '28th') store.placeArrivalNow(index, record.id)
+    })
+    const a = store.slowMobilizationLockedOf('30th')[0]
+    const b = store.slowMobilizationLockedOf('28th')[0]
+    expect(a).toBeDefined()
+    expect(b).toBeDefined()
+    expect(store.unlockSlowMobilizationBatch([a!.instanceId, b!.instanceId])).toBe(false)
   })
 
   it('2.4：锁定的师不能开拔；换方往返后当日配额不重置，15 Jul 才放下一批', () => {

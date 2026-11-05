@@ -226,6 +226,8 @@ import {
   planRebuild,
   planRetreatDestinations,
   planSlowMobilization,
+  slowMobilizationQuotaRemaining,
+  type SlowMobilizationArmy,
   planSpMerge,
   planSpPayment,
   planSpSplit,
@@ -17220,6 +17222,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 专规 3.2（`axis_special.no_consolidation`）：**轴方不得整编**
    *
+   * ⚠ 待审批⑤：原文 3.3d 只禁**轴心国多单位编队**整编（`Smolensk_Rules_v1.1.txt:396-398`）；
+   * 现口径来自登记库把 `no_consolidation` 记成无限定布尔，属**偏宽登记**，且规则号误标 3.2。
+   * 是否按原文收窄**待用户裁定**，见 `docs/2026-11-05-待审批事项汇总.md` ⑤；
+   * 失败用例已备于 `tests/stores/axis-consolidation-3-3d-pending.test.ts`（`describe.skip`）。
+   *
    * 判据＝这一手是轴方在下（动作方），**或**被合并的算子属轴方 —— 命中任一即拒，并留一条 warning。
    * 正常流程里两条等价（13.9 只合并同方算子）；只挂动作方会在"动作方与算子阵营不一致"的
    * 异常态下漏判，故两条都查。地面 13.9-1 与飞机 13.9-4 共用此处判据，避免两处口径漂移。
@@ -17506,24 +17513,67 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * B18：按表 2-2 解锁**玩家指定**的某个师（专规 2.4）
+   * 2.4：某集团军仍被锁、且按"与指挥部同一到达卡分组进场"纳入本专规的师
+   *
+   * 归属只认到达计划落到算子上的 `slowMobilizationArmy`（数据不按番号前缀猜）：
+   * 同一到达卡分组里出现「Nth Army HQ (see 2.4)」时，该组师才进入 30/28/24 的专规集合。
+   */
+  function slowMobilizationLockedOf(army: SlowMobilizationArmy): ConsoleUnit[] {
+    return units.value.filter((unit) => unit.slowMobilizationArmy === army && unit.locked)
+  }
+
+  /** 2.4：该集团军此前已解锁的师数（盘面＋死亡堆；与引擎复核同一口径） */
+  function slowMobilizationAlreadyUnlocked(army: SlowMobilizationArmy): number {
+    return [...units.value, ...deadPile.value].filter(
+      (item): item is ConsoleUnit =>
+        'slowMobilizationArmy' in item && item.slowMobilizationArmy === army && !item.locked,
+    ).length
+  }
+
+  /**
+   * 2.4：当日剩余可挑选数
+   *
+   * 算式在引擎 `slowMobilizationQuotaRemaining`（表 2-2 当日配额 ∩ 截至当日累计 − 已解锁）；
+   * 面板只用它置灰，提交时引擎仍会复核并给出规则号 2.4。
+   */
+  function slowMobilizationQuotaOf(army: SlowMobilizationArmy): number {
+    return slowMobilizationQuotaRemaining({
+      date: date.value,
+      army,
+      alreadyUnlocked: slowMobilizationAlreadyUnlocked(army),
+    })
+  }
+
+  /**
+   * B18：按表 2-2 解锁**玩家在本回合勾选**的若干师（专规 2.4）
+   *
+   * 交互口径（用户 2026-11-05 裁定）：每回合由玩家从"仍锁定"的师中自选，
+   * 可挑数量＝当回合配额；已解锁的累计生效。面板允许勾选/取消后再提交，
+   * 提交即整批校验（超配额、跨集团军、非师、已解锁一律整批拒绝并记 2.4）。
    *
    * 修前这里取**全局**锁定算子、按数组前缀解锁（可跨集团军、玩家无法指定），
    * 且同日重复点击会重复拿到配额。现在：
-   * - 归属只认到达卡分组落到算子上的 `slowMobilizationArmy`（数据不猜番号前缀）；
+   * - 归属只认到达卡分组落到算子上的 `slowMobilizationArmy`；
    * - 已解锁数由盘面（含死亡堆）上同集团军的标签推导，经引擎校验累计配额；
-   * - 只解锁玩家选中的那一枚。
+   * - 只解锁玩家选中的那几枚，一次提交。
    */
-  function unlockSlowMobilizationNow(instanceId: string): boolean {
-    const unit = units.value.find((item) => item.instanceId === instanceId)
-    if (unit === undefined) return false
-    const army = unit.slowMobilizationArmy
+  function unlockSlowMobilizationBatch(selectedIds: readonly string[]): boolean {
+    const ids = [...new Set(selectedIds)]
+    if (ids.length === 0) return false
+    const picked = ids.map((id) => units.value.find((item) => item.instanceId === id))
+    if (picked.some((unit) => unit === undefined)) return false
+    const list = picked as ConsoleUnit[]
+    const army = list[0]!.slowMobilizationArmy
     if (army === null) {
       pushLog(
         'warning',
-        `${unit.name} 没有到达卡集团军归属，2.4 不能按表解锁（不在 30/28/24 集团军到达卡分组内）`,
+        `${list[0]!.name} 没有到达卡集团军归属，2.4 不能按表解锁（不在 30/28/24 集团军到达卡分组内）`,
         '专规 2.4',
       )
+      return false
+    }
+    if (list.some((unit) => unit.slowMobilizationArmy !== army)) {
+      pushLog('warning', '2.4：一次提交只能解锁同一集团军的师（跨集团军被拒）', '专规 2.4')
       return false
     }
     /*
@@ -17531,30 +17581,64 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *   这里用"盘面上同集团军标签、且已解除锁定的算子数"推导已解锁数，**没有新增存档字段**。
      *   失效场景：已解锁的师被 1.6a **永久移除**（不留在死亡堆）后，已解锁数会下降，
      *   理论上可回吐表 2-2 的配额；被摧毁进死亡堆的算子仍计入，故只有 1.6a 这条路径会失真。
-     *   是否改为正式"解锁账本"（需要存档字段与迁移）已在 docs/AI接手确认-2026-11-05.md
-     *   “待人工决策”清单挂起，本批保持现有近似口径。
+     *   是否改为正式"解锁账本"（需要存档字段与迁移）见 docs/2026-11-05-待审批事项汇总.md ①。
      */
-    const tagged = [...units.value, ...deadPile.value].filter(
-      (item): item is ConsoleUnit =>
-        'slowMobilizationArmy' in item && item.slowMobilizationArmy === army,
-    )
-    const alreadyUnlocked = tagged.filter((item) => !item.locked).length
-    const lockedDivisions = tagged.filter((item) => item.locked).length
+    const alreadyUnlocked = slowMobilizationAlreadyUnlocked(army)
+    const lockedDivisions = slowMobilizationLockedOf(army).length
     const data = acceptReinforcement(
       planSlowMobilization({
         date: date.value,
         army,
         lockedDivisions,
-        selected: [{ instanceId: unit.instanceId, locked: unit.locked, isDivision: true, army }],
         alreadyUnlocked,
+        selected: list.map((unit) => ({
+          instanceId: unit.instanceId,
+          locked: unit.locked,
+          isDivision: true,
+          army,
+        })),
       }),
       '慢动员解锁',
     )
     if (data === null) return false
-    unit.locked = false
+    for (const unit of list) unit.locked = false
     pushLog('success', data.detail, data.rule)
+    // "何时解锁"用**已存档的会话日志**回答（不新增存档字段）：turn＋当时的日期
+    recordSettlement({
+      action: 'slowMobilizationUnlock',
+      rule: '2.4',
+      data: { army, date: date.value, selectedIds: ids },
+    })
     return true
   }
+
+  /** 2.4：单枚解锁（保留旧入口；内部走整批，配额/归属校验一致） */
+  function unlockSlowMobilizationNow(instanceId: string): boolean {
+    return unlockSlowMobilizationBatch([instanceId])
+  }
+
+  /**
+   * 2.4：某师"何时解锁"（turn＋日期）
+   *
+   * 依据＝会话日志里 `slowMobilizationUnlock` 条目的 `turn` 与 `data.date`；
+   * 未开局演练（没有会话）时无履历 ⇒ null。**不新增存档字段**。
+   */
+  const slowMobilizationUnlockedAt = computed<
+    (instanceId: string) => { turn: number; date: string } | null
+  >(() => {
+    const map = new Map<string, { turn: number; date: string }>()
+    for (const entry of session.log) {
+      if (entry.action !== 'slowMobilizationUnlock') continue
+      if (!entry.outcome.ok) continue
+      const data = entry.outcome.data as unknown as { date?: unknown; selectedIds?: unknown }
+      if (!Array.isArray(data.selectedIds)) continue
+      for (const id of data.selectedIds) {
+        if (typeof id === 'string')
+          map.set(id, { turn: entry.turn, date: typeof data.date === 'string' ? data.date : '' })
+      }
+    }
+    return (instanceId: string) => map.get(instanceId) ?? null
+  })
 
   /* ────────── 专规 2.3c：方面军预备队（＋1.6c 特殊补员的可用期） ────────── */
 
@@ -20446,6 +20530,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     absorbBreakdownNow,
     setUnitLockedNow,
     unlockSlowMobilizationNow,
+    unlockSlowMobilizationBatch,
+    slowMobilizationLockedOf,
+    slowMobilizationQuotaOf,
+    slowMobilizationUnlockedAt,
     // 专规 2.3c：方面军预备队（＋1.6c 特殊补员的可用期提示）
     frontalReservesToday,
     frontalReservesClaimed,

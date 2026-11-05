@@ -957,6 +957,27 @@ export interface SlowMobilizationSelectionFact {
 }
 
 /**
+ * 专规 2.4：当日仍可解锁的师数
+ *
+ * ＝min(表 2-2 **当日**配额, **截至当日累计**配额 − 此前已解锁)。
+ * 面板据此把"超出配额"的选项置灰，引擎在 `planSlowMobilization` 里对同一算式复核。
+ */
+export function slowMobilizationQuotaRemaining(input: {
+  date: string
+  army: SlowMobilizationArmy
+  alreadyUnlocked: number
+}): number {
+  const quota = slowMobilizationUnlocks(input.date)
+    .filter((row) => row.army === input.army)
+    .reduce((sum, row) => sum + row.unlockDivisions, 0)
+  const cumulativeQuota = rulesConstants.smolensk.slowMobilization.table
+    .filter((row) => row.army === input.army && row.date <= input.date)
+    .reduce((sum, row) => sum + row.unlockDivisions, 0)
+  const alreadyUnlocked = Math.max(0, Math.trunc(input.alreadyUnlocked))
+  return Math.max(0, Math.min(quota, cumulativeQuota - alreadyUnlocked))
+}
+
+/**
  * 专规 2.4：Slow Mobilization 的锁定与解锁口径
  *
  * 「被锁的师**不能移动**（也不能拆出 breakdown）；解锁按表分批（玩家自选具体哪个师）」
@@ -998,7 +1019,11 @@ export function planSlowMobilization(input: {
     .filter((row) => row.army === input.army && row.date <= input.date)
     .reduce((sum, row) => sum + row.unlockDivisions, 0)
   const alreadyUnlocked = Math.max(0, Math.trunc(input.alreadyUnlocked ?? 0))
-  const quotaToday = Math.max(0, Math.min(quota, cumulativeQuota - alreadyUnlocked))
+  const quotaToday = slowMobilizationQuotaRemaining({
+    date: input.date,
+    army: input.army,
+    alreadyUnlocked,
+  })
   if (quotaToday === 0)
     return fail(
       '2.4',

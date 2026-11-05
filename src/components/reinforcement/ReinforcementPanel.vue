@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watchEffect } from 'vue'
+import { computed, ref, watch, watchEffect } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
 import UiField from '@/components/UiField.vue'
@@ -33,6 +33,61 @@ const workbench = useWorkbenchStore()
  *   （原来这里单独判 `uiMode === 'verify'`，同一个面板里两套判据容易漂）。
  */
 const showsReferee = useRefereeTools()
+
+/**
+ * 专规 2.4：慢动员选择面板的**界面暂存**
+ *
+ * 用户 2026-11-05 裁定的交互＝每回合由玩家在"仍锁定"的师中自选，
+ * 可挑数＝当回合配额；勾选/取消都只在本地，点"提交"才写入账本（提交后清空，可再开新一批）。
+ */
+const slowMobilizationArmy = ref<'30th' | '28th' | '24th'>('30th')
+const slowMobilizationPick = ref<string[]>([])
+
+/** 该集团军仍锁定、且按"与指挥部同一到达卡分组"纳入本专规的师 */
+const slowMobilizationCandidates = computed(() =>
+  workbench.slowMobilizationLockedOf(slowMobilizationArmy.value),
+)
+
+/** 当日可挑选数（引擎按表 2-2 算；界面只显示与置灰） */
+const slowMobilizationQuota = computed(() =>
+  workbench.slowMobilizationQuotaOf(slowMobilizationArmy.value),
+)
+
+const slowMobilizationLimitReached = computed(
+  () => slowMobilizationPick.value.length >= slowMobilizationQuota.value,
+)
+
+function toggleSlowMobilizationPick(instanceId: string): void {
+  const index = slowMobilizationPick.value.indexOf(instanceId)
+  if (index >= 0) {
+    slowMobilizationPick.value.splice(index, 1)
+    return
+  }
+  if (slowMobilizationPick.value.length >= slowMobilizationQuota.value) return
+  slowMobilizationPick.value.push(instanceId)
+}
+
+function submitSlowMobilizationPick(): void {
+  if (slowMobilizationPick.value.length === 0) return
+  if (workbench.unlockSlowMobilizationBatch(slowMobilizationPick.value))
+    slowMobilizationPick.value = []
+}
+
+/** 换集团军即清空未提交的勾选（避免把 A 军的勾选提交到 B 军） */
+watch(slowMobilizationArmy, () => {
+  slowMobilizationPick.value = []
+})
+
+/** 该集团军已解锁的师＋解锁履历（履历来自已存档会话日志；未开局演练为空） */
+const slowMobilizationUnlocked = computed(() =>
+  workbench.units
+    .filter((unit) => unit.slowMobilizationArmy === slowMobilizationArmy.value && !unit.locked)
+    .map((unit) => ({
+      instanceId: unit.instanceId,
+      name: unit.name,
+      at: workbench.slowMobilizationUnlockedAt(unit.instanceId),
+    })),
+)
 
 /**
  * §5-B：重建表行键**从数据取**（`charts-supply-repl.json` 按当前方）——不再自由手输，
@@ -942,14 +997,58 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       >
         解除锁定
       </BaseButton>
-      <BaseButton
-        variant="ghost"
-        size="sm"
-        @click="workbench.unlockSlowMobilizationNow(breakdownParentId)"
+    </div>
+    <!-- 2.4 选择面板：每回合玩家在仍锁定的师中自选，勾选数 ≤ 当回合配额 -->
+    <div class="row">
+      <label class="muted">
+        集团军
+        <select v-model="slowMobilizationArmy">
+          <option value="30th">30th</option>
+          <option value="28th">28th</option>
+          <option value="24th">24th</option>
+        </select>
+      </label>
+      <BaseTag>当日可挑 {{ slowMobilizationQuota }}</BaseTag>
+      <BaseTag>已勾 {{ slowMobilizationPick.length }}</BaseTag>
+    </div>
+    <div class="row">
+      <label
+        v-for="unit in slowMobilizationCandidates"
+        :key="unit.instanceId"
+        class="muted"
+        :title="`${unit.name}（${slowMobilizationArmy} 集团军，仍锁定）`"
       >
-        按表解锁选中的师（2.4）
+        <input
+          type="checkbox"
+          :checked="slowMobilizationPick.includes(unit.instanceId)"
+          :disabled="
+            !slowMobilizationPick.includes(unit.instanceId) && slowMobilizationLimitReached
+          "
+          @change="toggleSlowMobilizationPick(unit.instanceId)"
+        />
+        {{ unit.name }}
+      </label>
+    </div>
+    <p v-if="slowMobilizationCandidates.length === 0" class="muted">
+      本回合没有可解锁的师（配额 0 或该集团军已全部解锁）。
+    </p>
+    <div class="row">
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        :disabled="slowMobilizationPick.length === 0"
+        @click="submitSlowMobilizationPick"
+      >
+        提交本回合解锁（2.4）
       </BaseButton>
     </div>
+    <p v-if="slowMobilizationUnlocked.length > 0" class="muted">
+      已解锁：<span v-for="item in slowMobilizationUnlocked" :key="item.instanceId">
+        {{ item.name }}（{{
+          item.at === null ? '履历未开局' : `${item.at.date} / 第 ${item.at.turn} 回合`
+        }}）
+      </span>
+    </p>
 
     <template v-if="workbench.segmentIn(['reinforcement.frontalReserves'])">
       <!-- ── ⑥b 方面军预备队（专规 2.3c） ── -->
