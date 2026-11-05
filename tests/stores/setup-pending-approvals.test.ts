@@ -3,20 +3,20 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { mapLayers, scenarios } from '@/data'
 import type { HexRef } from '@/data'
+import { hexesWithin } from '@/engine/hex-geometry'
 import { STACKING_LIMIT_RE, findUnitRecord, resolveModeStats } from '@/engine/rules'
 import { toConsoleUnit, unitChoices, useSetupStore, useWorkbenchStore } from '@/stores'
 
 /**
- * 待审批⑭/⑮/⑯ 的**预置用例**（沿用 3.3d 的做法：先写期望、不实现语义）
+ * ⑭/⑮/⑯ 的行为用例（沿用 3.3d 的做法：先写期望，再按原文接线）
  *
  * | 编号 | 条款 | 期望 | 现状 |
  * | --- | --- | --- | --- |
- * | ⑭ | IV-F / IV-I | 初设放置拒绝超堆叠、拒绝不可进入格 | **IV-F 已接线**（`factsFor` 注入 `existingRe`，本文件活动用例锁行为）；**IV-I 未接线**：原文「如果单位无法使用常规移动进入某格」对**两面机动类型不同**（3.1a）与**多条目异质编队**以谁为准未说明 ⇒ 待裁定 |
+ * | ⑭ | IV-F / IV-I | 初设放置拒绝超堆叠、拒绝不可进入格 | **均已接线**：IV-F 注入 `existingRe`（4.8）；IV-I 逐棋子按**移动面**机动类型（3.1a）判地形禁止（6.2d），见 `factsFor.canEnter` |
  * | ⑮ | IV-J | 初设新建单位一律未加注燃料 | **已覆盖**：`toConsoleUnit` 默认 `fuelled: false`（12.5a，2026-09-16 用户裁定）⇒ 本文件用活动用例锁住该行为，不再作为待批项 |
  * | ⑯ | 剧本 1 首回合 | 苏方地面单位以 1/2 MA 移动 | **取整口径已裁定**（4.1 + 6.1h：保留小数，MA 5 ⇒ 2.5，见 `docs/2026-11-05-取整规则对照表.md`）；但数据字段运行期无消费方，接线未获授权 ⇒ 行为用例仍 `it.skip`，另用活动用例锁口径 |
  *
- * 启用前置：⑭ 需先接线 `factsFor`；⑯ 的行为用例需先获批接线。均见
- * `docs/2026-11-05-待审批事项汇总.md`。
+ * ⑭ 已接线；⑯ 的行为用例仍待接线授权（见 `docs/2026-11-05-待审批事项汇总.md`）。
  */
 
 const newStores = () => {
@@ -30,20 +30,37 @@ const SWAMP_HEX: HexRef | null = (() => {
   return found === undefined ? null : { col: found.col, row: found.row }
 })()
 
-/** 某条自由项的候选格中，第一个指定地形 */
-function candidateOfTerrain(
+/** 该条目里存在**移动面为 truck/tracked**的棋子（沼泽对这两类是 P，leg 可进） */
+function hasWheeledOrTrackedPiece(entry: {
+  pieces: readonly { unitId: string | null; unitIdKind: string | null }[]
+}): boolean {
+  for (const piece of entry.pieces) {
+    if (piece.unitId === null || piece.unitIdKind === 'aircraft') continue
+    const record = findUnitRecord(piece.unitId)
+    if (record === undefined) continue
+    const cls = record.mobilityByFace?.move ?? record.classes?.movementClass
+    if (cls === 'truck' || cls === 'tracked') return true
+  }
+  return false
+}
+
+/** 一条"移动面为轮式/履带"的自由项，且某沼泽格在其 `w/i X` 范围（含边界）内 */
+function wheeledEntryCoveringSwamp(
   setup: ReturnType<typeof newStores>['setup'],
-  pattern: RegExp,
 ): { index: number; hex: HexRef } | null {
+  const swamps: HexRef[] = mapLayers.hexes
+    .filter((hex) => /swamp/i.test(hex.terrain))
+    .map((hex) => ({ col: hex.col, row: hex.row }))
   for (const entry of setup.selfChoiceEntries) {
-    const hex = setup
-      .candidatesOf(entry.index)
-      .find((item) =>
-        pattern.test(
-          mapLayers.hexes.find((h) => h.col === item.col && h.row === item.row)?.terrain ?? '',
-        ),
+    if (entry.placement !== 'radius' || entry.radius === null) continue
+    if (!hasWheeledOrTrackedPiece(entry)) continue
+    for (const anchor of entry.anchors) {
+      const within = hexesWithin(anchor, entry.radius, { onMapOnly: true })
+      const hit = within.find((hex) =>
+        swamps.some((swamp) => swamp.col === hex.col && swamp.row === hex.row),
       )
-    if (hex !== undefined) return { index: entry.index, hex }
+      if (hit !== undefined) return { index: entry.index, hex: hit }
+    }
   }
   return null
 }
@@ -120,13 +137,13 @@ describe('⑭ IV-F：初设不得超堆叠（通规 IV-F + 4.8 的 10 RE）', ()
   })
 })
 
-describe.skip('待审批⑭-IV-I：不可进入格（原文歧义，待裁定）', () => {
-  it('IV-I：目标格为沼泽（truck 禁入）⇒ 拒绝放置，规则号 IV-I', () => {
+describe('⑭-IV-I：不可进入格', () => {
+  it('IV-I：目标格为沼泽（轮式/履带禁入）⇒ 拒绝放置，规则号 IV-I', () => {
     if (SWAMP_HEX === null) throw new Error('地图上没有沼泽格，无法构成 IV-I 用例')
     const { setup } = newStores()
     setup.selectScenario('1')
-    const hit = candidateOfTerrain(setup, /swamp/i)
-    if (hit === null) throw new Error('没有自由项的候选范围覆盖沼泽格')
+    const hit = wheeledEntryCoveringSwamp(setup)
+    if (hit === null) throw new Error('没有"移动面轮式/履带"且范围覆盖沼泽格的自由项')
 
     expect(setup.placeSelfEntry(hit.index, hit.hex)).toBe(false)
     expect(setup.lastAction?.rule).toBe('IV-I')

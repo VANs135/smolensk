@@ -372,8 +372,14 @@ export interface SetupCandidateFacts {
   hqHexes?: readonly HexRef[]
   /** 本方空军基地格（14.1a：飞机算子停在其空军基地格） */
   airBaseHexes?: readonly HexRef[]
-  /** IV-I：该格是否可按常规移动进入（缺省只校验「在地图上」） */
-  canEnter?: (hex: HexRef) => boolean
+  /**
+   * IV-I：该格是否可按常规移动进入（缺省只校验「在地图上」）
+   *
+   * 第二参 = 该条目里的**这一枚**棋子（`null` = 条目没有可判的地面棋子，如计数类聚合项）：
+   * 原文「如果**单位**无法使用常规移动进入某格」是**逐单位**的话，故调用方须能按棋子的机动类型判
+   * （异质编队里不同棋子结论可不同）。
+   */
+  canEnter?: (hex: HexRef, piece: SetupPieceRef | null) => boolean
   /** IV-F：该格当前已有的 RE 合计（缺省不校验超堆叠） */
   existingRe?: (hex: HexRef) => number
 }
@@ -404,7 +410,7 @@ export function setupCandidates(
   switch (entry.placement) {
     case 'fixed':
     case 'multiHex':
-      return filterEnterable(uniqueOrdered(entry.anchors, anchor), facts)
+      return filterEnterable(uniqueOrdered(entry.anchors, anchor), facts, entry)
     case 'fixedTolerant':
     case 'radius': {
       // 无锚格或半径解析不出 ⇒ 不可解（不猜）
@@ -413,13 +419,13 @@ export function setupCandidates(
       for (const start of entry.anchors) {
         pool.push(...hexesWithin(start, entry.radius, { onMapOnly: true }))
       }
-      return filterEnterable(uniqueOrdered(pool, anchor), facts)
+      return filterEnterable(uniqueOrdered(pool, anchor), facts, entry)
     }
     case 'anyHq':
-      return filterEnterable(uniqueOrdered(facts.hqHexes ?? [], null), facts)
+      return filterEnterable(uniqueOrdered(facts.hqHexes ?? [], null), facts, entry)
     case 'airbaseFree':
     case 'airFleet':
-      return filterEnterable(uniqueOrdered(facts.airBaseHexes ?? [], null), facts)
+      return filterEnterable(uniqueOrdered(facts.airBaseHexes ?? [], null), facts, entry)
     case 'deadPile':
     case 'unknown':
       return []
@@ -429,12 +435,35 @@ export function setupCandidates(
 }
 
 /** IV-I：候选格筛选（在图上 + 可按常规移动进入） */
-function filterEnterable(hexes: readonly HexRef[], facts: SetupCandidateFacts): readonly HexRef[] {
+function filterEnterable(
+  hexes: readonly HexRef[],
+  facts: SetupCandidateFacts,
+  entry: SetupEntryView | null,
+): readonly HexRef[] {
   return hexes.filter((hex) => {
     if (!isOnMap(hex)) return false
-    if (facts.canEnter === undefined) return true
-    return facts.canEnter(hex)
+    return canEnterForEntry(hex, entry, facts)
   })
+}
+
+/**
+ * IV-I：该格对本条目是否「可按常规移动进入」
+ *
+ * **逐棋子**判定（原文说的是"单位"）：条目里每一枚能落到盘上的地面棋子都要能进入；
+ * 飞机按 14.1a 停机场，不吃 IV-I 的常规移动；计数类棋子（无 `unitId`）不判。
+ * 只给一面机动类型（调用方按 3.1a 的**移动面**取）⇒ 所有棋子同面即同判。
+ */
+function canEnterForEntry(
+  hex: HexRef,
+  entry: SetupEntryView | null,
+  facts: SetupCandidateFacts,
+): boolean {
+  if (entry === null || facts.canEnter === undefined) return true
+  const checkable = entry.pieces.filter(
+    (piece) => piece.unitId !== null && piece.unitIdKind !== 'aircraft',
+  )
+  if (checkable.length === 0) return facts.canEnter(hex, null)
+  return checkable.every((piece) => facts.canEnter!(hex, piece))
 }
 
 /* ────────────────────────────── 单条放置校验 ────────────────────────────── */
@@ -490,7 +519,7 @@ export function planSetupPlacement(
   if (!isOnMap(targetHex)) {
     return fail(ENTERABILITY_RULE, `setupHexOffMap:${setupHexLabel(targetHex)}`)
   }
-  if (facts.canEnter !== undefined && !facts.canEnter(targetHex)) {
+  if (!canEnterForEntry(targetHex, entry, facts)) {
     return fail(ENTERABILITY_RULE, `setupHexNotEnterable:${setupHexLabel(targetHex)}`)
   }
 
@@ -712,7 +741,7 @@ export function planAutoSetup(input: {
 
     // ② 自由项（`w/i X` / 任一指挥部 / 任意空军基地）⇒ 交玩家定夺，候选格一并给出
     if (!entry.automatic) {
-      const candidates = filterEnterable(setupCandidates(entry, facts), facts)
+      const candidates = filterEnterable(setupCandidates(entry, facts), facts, entry)
       const reason =
         entry.placement === 'anyHq'
           ? '剧本页只要求「与任一本方指挥部同格」⇒ 由玩家在本方 HQ 格中选定'
@@ -1187,7 +1216,7 @@ export function planAirSetup(input: {
 
   const policy = airSetupPolicyOf(input.scenarioId, input.side)
   const facts = input.facts ?? {}
-  const candidates = filterEnterable(facts.airBaseHexes ?? [], facts)
+  const candidates = filterEnterable(facts.airBaseHexes ?? [], facts, null)
   const gaps: string[] = []
   if (!policy.statedInRules) {
     gaps.push(

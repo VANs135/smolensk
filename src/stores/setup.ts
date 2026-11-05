@@ -37,9 +37,11 @@ import {
   type SetupEntryView,
   type SetupFlowStep,
   type SetupPanzerGroup,
+  type SetupPieceRef,
   type SetupPlan,
   type SupplyDumpRef,
 } from '@/engine/rules'
+import { selectMovementTerrain } from '@/engine/rules/terrain'
 import { hexesWithin, isOnMap, sameHex } from '@/engine/hex-geometry'
 import { createId } from '@/shared'
 import { counterDirOfSide, counterImageUrl } from '@/render/token-images'
@@ -50,6 +52,8 @@ import { useWorkbenchStore } from './workbench'
 import {
   counterImageUrlOf,
   isHqUnit,
+  mobilityOf,
+  terrainsAt,
   toConsoleAirUnit,
   toConsoleUnit,
   type DeadPileEntry,
@@ -292,15 +296,32 @@ export const useSetupStore = defineStore('setup', () => {
       .reduce((sum, unit) => sum + (unit.re ?? 0), 0)
   }
 
+  /**
+   * IV-I：该格对这一枚棋子是否可按常规移动进入
+   *
+   * 「常规移动」= **移动面**（3.1a 逐面机动类型；`mobilityOf(record, 'move')`）。
+   * 判据只取地形禁止表（6.2d 的 `prohibited`），不看 MA——印刷 MA=0 的静态单位仍可初设。
+   * 库中找不到该记录 ⇒ 不拦（缺数据不伪造结论；缺口另有 `dataGaps` 记账）。
+   */
+  function canEnterAt(hex: HexRef, piece: SetupPieceRef | null): boolean {
+    if (piece === null || piece.unitId === null) return true
+    const record = findUnitRecord(piece.unitId)
+    if (record === undefined) return true
+    return selectMovementTerrain({
+      terrainsPresent: terrainsAt(hex),
+      mobility: mobilityOf(record, 'move'),
+    }).ok
+  }
+
   /** 注入给引擎的盘面事实（可指定按哪一方取 HQ / 空军基地） */
   function factsFor(side: Side | null = null): SetupCandidateFacts {
     if (side === null) return {}
     return {
       hqHexes: hqHexesOf(side),
       airBaseHexes: airBaseHexesOf(side),
-      // IV-F（4.8）：初设不得超堆叠。IV-I `canEnter` 暂不注入 —— 判据须按"条目算子的常规移动类型"
-      // 取地形禁止表，而原文未说明异质编队/多条目以谁为准（引擎 `canEnter` 只有格参数）⇒ 待裁定。
+      // IV-F（4.8）：初设不得超堆叠；IV-I：按棋子移动面判地形禁止（原文逐"单位"）
       existingRe: existingReAt,
+      canEnter: canEnterAt,
     }
   }
 
@@ -309,6 +330,7 @@ export const useSetupStore = defineStore('setup', () => {
     const facts: SetupCandidateFacts = {
       hqHexes: [...hqHexesOf('axis'), ...hqHexesOf('soviet')],
       airBaseHexes: [...airBaseHexesOf('axis'), ...airBaseHexesOf('soviet')],
+      canEnter: canEnterAt,
     }
     const outcome = planAutoSetup({ scenarioId: scenarioId.value, facts })
     return outcome.ok ? outcome.data : null
