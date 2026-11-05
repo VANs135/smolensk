@@ -979,6 +979,8 @@ export function resolveRetreats(
       hex: unit.hex,
       mobility: unit.mobility,
       dg: unit.dg,
+      // 5.8a：战略模式单位被迫撤退进入敌方 ZOC ⇒ 被摧毁
+      strat: unit.mode === 'strat',
     }))
 
     // ── 9.12d：跟随者（未参战战斗单位 / 编内卡车），须与某一撤退单位同格 ──
@@ -1001,6 +1003,7 @@ export function resolveRetreats(
         hex: view.hex,
         mobility: view.mobility,
         dg: view.dg,
+        strat: view.mode === 'strat',
       })
     }
     // 跟随者与该格的主撤退单位走同一条路径（9.12c「以一整个堆叠进行撤退」）

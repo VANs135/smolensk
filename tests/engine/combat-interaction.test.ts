@@ -858,6 +858,30 @@ describe('9.12 撤退方向：完整撤退距离、DG 与敌方 ZOC', () => {
     expect(retreat.patches).toContainEqual({ unitId: 'd1', hex: { col: 36, row: 15 } })
   })
 
+  it('5.8a：战略模式守方被迫撤退进入敌方 ZOC ⇒ 被摧毁（steps＝0）', () => {
+    const { state, units } = atRetreatStep()
+    // 守方 d1 处于战略模式；其撤退落点（36,15）在敌方 ZOC 内
+    const stratUnits = units.map((item) =>
+      item.id === 'd1' ? { ...item, mode: 'strat' as const } : item,
+    )
+    const retreat = unwrap(
+      resolveRetreats(state, {
+        units: stratUnits,
+        paths: [
+          { unitId: 'a1', path: [{ col: 36, row: 12 }] },
+          { unitId: 'd1', path: [{ col: 36, row: 15 }] },
+        ],
+        facts: retreatFacts({ inEnemyZocAt: (hex) => hex.row === 15 }),
+      }),
+    )
+    expect(retreat.results.find((item) => item.unitId === 'd1')).toMatchObject({
+      destroyed: true,
+      hex: null,
+      rule: '5.8a',
+    })
+    expect(retreat.patches).toContainEqual({ unitId: 'd1', steps: 0 })
+  })
+
   it('9.12a：撤退 2 格 ⇒ 进入第 2 格时 DG', () => {
     const { state, units } = atRetreatStep()
     // 把选项改成 2 格撤退：这里直接用「o2」的守方结果不便构造，故验证引擎对 2 格路径的 DG 判定

@@ -2427,6 +2427,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
             side: unit.side,
             facts: combatRetreatFacts.value,
             immobile: combatRetreatFacts.value.immobile(unit.instanceId),
+            // 5.8a：战略模式单位撤退路径进入敌方 ZOC ⇒ 被摧毁
+            strat: unit.mode.mode === 'strat',
           }),
         }
       })
@@ -9205,6 +9207,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           side: view.side,
           facts: combatRetreatFacts.value,
           immobile: combatRetreatFacts.value.immobile(view.id),
+          // 5.8a：战略模式单位撤退路径进入敌方 ZOC ⇒ 被摧毁
+          strat: view.mode === 'strat',
         })) {
           const key = keyOf(destination.hex)
           const kind = destination.forcedDestruction

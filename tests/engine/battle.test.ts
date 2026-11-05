@@ -858,6 +858,49 @@ describe('9.12 撤退：完整距离、DG、敌方 ZOC 与被消灭', () => {
     ).toBe(1)
   })
 
+  it('5.8a：战略模式单位撤退路径进入敌方 ZOC ⇒ 被摧毁（不再按 9.12e 只 DG）', () => {
+    expect(
+      resolveRetreat({
+        unit: { ...retreatUnit, strat: true },
+        path: [{ col: 36, row: 12 }],
+        facts: retreatFacts({ inEnemyZocAt: () => true }),
+      }),
+    ).toMatchObject({ destroyed: true, hex: null, gainsDg: false, rule: '5.8a' })
+
+    // 对照：非战略模式走同一条路径 ⇒ 不摧毁，按 9.12e 立即 DG
+    expect(
+      resolveRetreat({
+        unit: retreatUnit,
+        path: [{ col: 36, row: 12 }],
+        facts: retreatFacts({ inEnemyZocAt: () => true }),
+      }),
+    ).toMatchObject({ destroyed: false, gainsDg: true })
+  })
+
+  it('5.8a：路径进入 ZOC 的是**中途格**也摧毁；未进入 ZOC 的战略模式撤退照常', () => {
+    expect(
+      resolveRetreat({
+        unit: { ...retreatUnit, strat: true },
+        path: [
+          { col: 36, row: 12 },
+          { col: 36, row: 11 },
+        ],
+        facts: retreatFacts({ inEnemyZocAt: (hex) => hex.row === 11 }),
+      }),
+    ).toMatchObject({ destroyed: true, rule: '5.8a' })
+
+    expect(
+      resolveRetreat({
+        unit: { ...retreatUnit, strat: true },
+        path: [
+          { col: 36, row: 12 },
+          { col: 36, row: 11 },
+        ],
+        facts: retreatFacts(),
+      }),
+    ).toMatchObject({ destroyed: false, hex: { col: 36, row: 11 } })
+  })
+
   it('9.12：完整撤退距离——落点与起始格的直线距离必须等于撤退格数', () => {
     // 直线 1 格 ✓
     expect(
@@ -978,6 +1021,33 @@ describe('9.12 撤退落点规划：完整撤退距离、路径与 ZOC 分类', 
     expect(plans.some((plan) => plan.inEnemyZoc)).toBe(true)
     expect(plans.some((plan) => !plan.inEnemyZoc)).toBe(true)
     for (const plan of plans) expect(plan.inEnemyZoc).toBe(plan.hex.row < from.row)
+  })
+
+  it('5.8a：战略模式的 ZOC 落点标为必死，安全落点不标；非战略模式的 ZOC 落点仍可选择', () => {
+    const zocFacts = retreatFacts({ inEnemyZocAt: (hex) => hex.row < from.row })
+    const stratPlans = planRetreatDestinations({
+      from,
+      distance: 1,
+      mobility: 'leg',
+      side: 'axis',
+      facts: zocFacts,
+      strat: true,
+    })
+    expect(stratPlans.length).toBeGreaterThan(0)
+    for (const plan of stratPlans) {
+      // 5.8a：进入 ZOC 即被摧毁 ⇒ 必死；不在 ZOC ⇒ 正常落点
+      expect(plan.forcedDestruction).toBe(plan.inEnemyZoc)
+    }
+
+    const normalPlans = planRetreatDestinations({
+      from,
+      distance: 1,
+      mobility: 'leg',
+      side: 'axis',
+      facts: zocFacts,
+    })
+    expect(normalPlans.some((plan) => plan.inEnemyZoc)).toBe(true)
+    expect(normalPlans.every((plan) => plan.forcedDestruction === false)).toBe(true)
   })
 
   it('9.12：被禁入地形或敌方战斗单位挡住的落点仍列出，但标为「选了会被消灭」（9.12 明文允许该结局）', () => {

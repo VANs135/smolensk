@@ -879,6 +879,8 @@ export function resolveRetreat(input: {
     hex: HexRef
     mobility: MobilityType
     dg: boolean
+    /** 5.8a：该单位处于战略模式（不得撤退进入敌方 ZOC，被迫如此 ⇒ 被摧毁） */
+    strat?: boolean
   }
   /** 撤退路径（含落点、不含起始格）；长度即完整撤退距离 */
   path: readonly HexRef[]
@@ -912,6 +914,18 @@ export function resolveRetreat(input: {
         hex: null,
         destroyed: true,
         gainsDg: true,
+        extraLoss,
+        dgCompanions,
+      }
+    // 5.8a：「处于战略模式的单位不可移动或撤退进入敌方 ZOC。如果被迫这样做（在撤退中），
+    //   则单位会被摧毁」⇒ 一旦路径进入未抵消 EZOC 即被消灭，不再走 9.12e 的 DG 后果。
+    if (unit.strat === true && facts.inEnemyZocAt(next, unit.side))
+      return {
+        ...base,
+        rule: '5.8a',
+        hex: null,
+        destroyed: true,
+        gainsDg: false,
         extraLoss,
         dgCompanions,
       }
@@ -960,6 +974,8 @@ export function resolveStackRetreat(input: {
     hex: HexRef
     mobility: MobilityType
     dg: boolean
+    /** 5.8a：战略模式（不得撤退进入敌方 ZOC，被迫如此 ⇒ 被摧毁） */
+    strat?: boolean
   }[]
   /** 各单位的撤退路径（含落点、不含起始格），长度即各自的完整撤退距离 */
   paths: readonly { unitId: string; path: readonly HexRef[] }[]
@@ -1005,10 +1021,12 @@ export interface RetreatDestinationPlan {
   /** 起始格 → 落点的合法路径（含落点、**不含**起始格；长度＝完整撤退距离） */
   path: HexRef[]
   /**
-   * 9.12 / 9.12b：选这个落点会**被消灭**
+   * 9.12 / 9.12b / 5.8a：选这个落点会**被消灭**
    *
-   * 情形：撤退必然穿过敌方战斗单位/禁入地形（9.12：「则消灭这些单位」），或该单位在任何模式下
-   * 都不可移动（9.12b：「在被迫撤退时会被直接摧毁」）。界面须把这类落点单独标注，由玩家自负后果。
+   * 情形：撤退必然穿过敌方战斗单位/禁入地形（9.12：「则消灭这些单位」）、该单位在任何模式下
+   * 都不可移动（9.12b：「在被迫撤退时会被直接摧毁」），或战略模式单位的路径进入敌方 ZOC
+   * （5.8a：「不可移动或撤退进入敌方 ZOC……被迫这样做则单位会被摧毁」）。界面须把这类落点
+   * 单独标注，由玩家自负后果。
    */
   forcedDestruction: boolean
 }
@@ -1106,6 +1124,14 @@ export function planRetreatDestinations(input: {
    * 标成 `forcedDestruction: true`，让界面能如实呈现「这一步只能是这个单位被消灭」。
    */
   immobile?: boolean
+  /**
+   * 5.8a：该单位处于战略模式
+   *
+   * ⇒ 撤退路径一旦进入敌方 ZOC，该单位**被摧毁**（原文「不可移动或撤退进入敌方 ZOC；
+   *   如果被迫这样做（在撤退中），则单位会被摧毁」）。故这类落点全部标 `forcedDestruction`，
+   *   并让界面在提示里与 9.12e 的 DG 落点区分开。
+   */
+  strat?: boolean
   /** 可选的额外禁入判据（如落点已被堆叠占满、超出地图范围；由调用方给） */
   blocked?: (hex: HexRef) => boolean
 }): RetreatDestinationPlan[] {
@@ -1138,7 +1164,10 @@ export function planRetreatDestinations(input: {
       hex,
       inEnemyZoc: input.facts.inEnemyZocAt(hex, input.side),
       path,
-      forcedDestruction: clean === null || input.immobile === true,
+      forcedDestruction:
+        clean === null ||
+        input.immobile === true ||
+        (input.strat === true && path.some((step) => input.facts.inEnemyZocAt(step, input.side))),
     })
   }
   return plans
