@@ -403,7 +403,7 @@ interface SearchEntry {
   hex: HexRef
 }
 
-function runDijkstra(
+function searchFrom(
   facts: TraceSupplyFacts,
   input: {
     from: HexRef
@@ -492,6 +492,77 @@ function runDijkstra(
   return { best, prev }
 }
 
+/* ──────────────── 2b：**阶段级源格距离表**（同一 `facts` 生命周期内一次搜索只算一次） ──────────────── */
+
+/** 一张距离表：`best` 为「格键 → 最省 MP」，`prev` 为前驱链（回溯路径与现状同一份） */
+interface SupplyDistanceTable {
+  best: Map<string, number>
+  prev: Map<string, string>
+}
+
+/**
+ * 按 `facts` **对象身份**挂表：`facts` 是不可变事实，盘面一变就换新对象 ⇒ 旧表自动失效，
+ * 因此**不存在"漏置脏"**（不需要手工脏标记，也不可能读到旧盘面的距离）。
+ */
+const distanceTables = new WeakMap<TraceSupplyFacts, Map<string, SupplyDistanceTable>>()
+
+/** 每份事实最多留 32 张表（界面扫图会从很多格发起搜索；超限就整批丢弃，正确性不受影响） */
+const DISTANCE_TABLE_LIMIT = 32
+
+function distanceTableKey(
+  side: Side,
+  mobility: SupplyMobility,
+  maxMp: number,
+  fromKey: string,
+): string {
+  return `${side}|${mobility}|${maxMp}|${fromKey}`
+}
+
+function cachedSearch(
+  facts: TraceSupplyFacts,
+  input: { from: HexRef; side: Side; mobility: SupplyMobility; maxMp: number },
+): SupplyDistanceTable {
+  let tables = distanceTables.get(facts)
+  if (tables === undefined) {
+    tables = new Map()
+    distanceTables.set(facts, tables)
+  }
+  const key = distanceTableKey(input.side, input.mobility, input.maxMp, hexKey(input.from))
+  const hit = tables.get(key)
+  if (hit !== undefined) return hit
+  const table = searchFrom(facts, input)
+  if (tables.size >= DISTANCE_TABLE_LIMIT) tables.clear()
+  tables.set(key, table)
+  return table
+}
+
+/**
+ * 有界 Dijkstra（12.3d 的**唯一**搜索实现）
+ *
+ * 每步取费为正，故最短路即玩家会选的那条；取费与阻断一律经 `stepMp`（同一条文口径）。
+ * `stopAt` 给出后命中其中任一格即停（多目标查询的提前返回）；不给则收齐整片预算内区域
+ * （C8 的投递/拖取**可视化**需要整片区域）。同时返回前驱表供 `supplyPath` 回溯。
+ *
+ * ★ 2b（性能）：**不设 `stopAt`** 的调用按 `(facts, side, mobility, maxMp, 起点)` 结果复用。
+ *   同一阶段里 `drawableDumpsFor` 会对同一座站反复查 11–12 次、`planSupplyPhaseNow` 会重算
+ *   26 次，但**算法本身一字未改**——复用的就是"当场再算一遍"的同一份结果，
+ *   故 `hex / distanceMp / path / sourceKey` 全部逐字段不变。
+ */
+function runDijkstra(
+  facts: TraceSupplyFacts,
+  input: {
+    from: HexRef
+    side: Side
+    mobility: SupplyMobility
+    maxMp: number
+    /** 命中其中任一格即停止（键为 `列.行`） */
+    stopAt?: ReadonlySet<string>
+  },
+): { best: Map<string, number>; prev: Map<string, string> } {
+  if (input.stopAt !== undefined || !Number.isFinite(input.maxMp)) return searchFrom(facts, input)
+  return cachedSearch(facts, input)
+}
+
 /** `列.行` → 格坐标 */
 function hexFromKey(key: string): HexRef {
   const [col, row] = key.split('.').map(Number)
@@ -543,6 +614,28 @@ export function countSupplyDistance(
     mobility: input.mobility,
     ...(input.maxMp === undefined ? {} : { maxMp: input.maxMp }),
   })
+}
+
+/**
+ * 与 `countSupplyDistance` **同结果**的读表版本（12.3b 的 HQ → 受益单位距离）
+ *
+ * 同一个 HQ 要问所有受益单位 ⇒ 以 HQ 格为根的一次搜索在本 `facts` 生命周期内只算一次。
+ * 只用于**源 → 单位**方向：`stepMp` 的阻断取决于**目标格**（12.3d 不穿敌方战斗单位格），
+ * 因此 A→B 可达**不代表** B→A 可达，这张表不可反向复用。
+ */
+export function countSupplyDistanceViaTable(
+  facts: TraceSupplyFacts,
+  input: { from: HexRef; to: HexRef; side: Side; mobility: SupplyMobility; maxMp: number },
+): SupplyDistanceResult {
+  const { from, to, side, mobility, maxMp } = input
+  if (!facts.onMap(from) || !facts.onMap(to)) return { ok: false, reason: 'offMap' }
+  const fromKey = hexKey(from)
+  const toKey = hexKey(to)
+  if (fromKey === toKey) return { ok: true, mp: 0 }
+  const { best } = runDijkstra(facts, { from, side, mobility, maxMp })
+  const mp = best.get(toKey)
+  if (mp === undefined || mp > maxMp) return { ok: false, reason: 'unreachable' }
+  return { ok: true, mp }
 }
 
 /* ────────────────────────────── 可视化原语（C8：追溯与投递可视化） ────────────────────────────── */

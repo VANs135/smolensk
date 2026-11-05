@@ -168,8 +168,8 @@ import {
   planDumpDestruction,
   confirmOosResolution,
   confirmSupplyPickup,
-  // G②（12.3b）：把补给投到**每一个**受益单位 —— 逐单位算投递距离，故用单目标版
-  countSupplyDistance,
+  // G②（12.3b）：把补给投到**每一个**受益单位 —— 逐单位算投递距离，按 HQ 为根的距离表复用
+  countSupplyDistanceViaTable,
   countSupplyDistanceToAny,
   currentResolver,
   declareAirCombatStep,
@@ -9897,7 +9897,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     for (const hq of units.value.filter((unit) => unit.side === side && isHqUnit(unit))) {
       const hqView = toThrowHqView(hq)
       const coversAll = beneficiaries.every((unit) => {
-        const reach = countSupplyDistance(facts, {
+        const reach = countSupplyDistanceViaTable(facts, {
           from: hq.hex,
           to: unit.hex,
           side,
