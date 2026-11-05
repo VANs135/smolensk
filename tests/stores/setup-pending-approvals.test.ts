@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { mapLayers, scenarios } from '@/data'
 import type { HexRef } from '@/data'
-import { STACKING_LIMIT_RE, resolveModeStats } from '@/engine/rules'
+import { STACKING_LIMIT_RE, findUnitRecord, resolveModeStats } from '@/engine/rules'
 import { toConsoleUnit, unitChoices, useSetupStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -11,7 +11,7 @@ import { toConsoleUnit, unitChoices, useSetupStore, useWorkbenchStore } from '@/
  *
  * | 编号 | 条款 | 期望 | 现状 |
  * | --- | --- | --- | --- |
- * | ⑭ | IV-F / IV-I | 初设放置拒绝超堆叠、拒绝不可进入格 | 引擎 `planSetupPlacement` 已支持 `existingRe`/`canEnter`，但 `stores/setup.ts#factsFor` 只注入 HQ/机场格 ⇒ 初设路径不校验 |
+ * | ⑭ | IV-F / IV-I | 初设放置拒绝超堆叠、拒绝不可进入格 | **IV-F 已接线**（`factsFor` 注入 `existingRe`，本文件活动用例锁行为）；**IV-I 未接线**：原文「如果单位无法使用常规移动进入某格」对**两面机动类型不同**（3.1a）与**多条目异质编队**以谁为准未说明 ⇒ 待裁定 |
  * | ⑮ | IV-J | 初设新建单位一律未加注燃料 | **已覆盖**：`toConsoleUnit` 默认 `fuelled: false`（12.5a，2026-09-16 用户裁定）⇒ 本文件用活动用例锁住该行为，不再作为待批项 |
  * | ⑯ | 剧本 1 首回合 | 苏方地面单位以 1/2 MA 移动 | **取整口径已裁定**（4.1 + 6.1h：保留小数，MA 5 ⇒ 2.5，见 `docs/2026-11-05-取整规则对照表.md`）；但数据字段运行期无消费方，接线未获授权 ⇒ 行为用例仍 `it.skip`，另用活动用例锁口径 |
  *
@@ -66,14 +66,30 @@ describe('⑮ IV-J：初设/增援新建单位一律未加注燃料（已覆盖�
   })
 })
 
-describe.skip('待审批⑭：IV-F / IV-I 接线后的期望（审批后启用）', () => {
-  it('IV-F：目标格已有满堆叠 ⇒ 拒绝放置，规则号 IV-F', () => {
+/** 条目各棋子印值 RE 之和（与引擎 `reOfEntry` 同口径；用于挑选 reSize>0 的用例条目） */
+function printedReOf(entry: {
+  pieces: readonly { unitId: string | null; unitIdKind: string | null }[]
+}): number {
+  let total = 0
+  for (const piece of entry.pieces) {
+    if (piece.unitId === null || piece.unitIdKind === 'aircraft') continue
+    total += findUnitRecord(piece.unitId)?.reSize ?? 0
+  }
+  return total
+}
+
+describe('⑭ IV-F：初设不得超堆叠（通规 IV-F + 4.8 的 10 RE）', () => {
+  it('目标格已有满堆叠 ⇒ 拒绝放置，规则号 IV-F', () => {
     const { setup, workbench } = newStores()
     setup.selectScenario('1')
     const entry = setup.selfChoiceEntries.find(
-      (item) => item.side === 'axis' && item.kind === 'unit',
+      (item) =>
+        item.side === 'soviet' &&
+        item.kind === 'unit' &&
+        item.placement === 'radius' &&
+        printedReOf(item) > 0,
     )
-    if (entry === undefined) throw new Error('剧本 1 没有可自由放置的轴方单位条目')
+    if (entry === undefined) throw new Error('剧本 1 没有 RE>0 的可自由放置苏方单位条目')
     const target = setup.candidatesOf(entry.index)[0]
     if (target === undefined) throw new Error('该条目没有候选格')
 
@@ -86,6 +102,25 @@ describe.skip('待审批⑭：IV-F / IV-I 接线后的期望（审批后启用�
     expect(setup.lastAction?.rule).toBe('IV-F')
   })
 
+  it('对照：目标格无既有堆叠 ⇒ 允许放置', () => {
+    const { setup } = newStores()
+    setup.selectScenario('1')
+    const entry = setup.selfChoiceEntries.find(
+      (item) =>
+        item.side === 'soviet' &&
+        item.kind === 'unit' &&
+        item.placement === 'radius' &&
+        printedReOf(item) > 0,
+    )
+    if (entry === undefined) throw new Error('剧本 1 没有 RE>0 的可自由放置苏方单位条目')
+    const target = setup.candidatesOf(entry.index)[0]
+    if (target === undefined) throw new Error('该条目没有候选格')
+
+    expect(setup.placeSelfEntry(entry.index, target)).toBe(true)
+  })
+})
+
+describe.skip('待审批⑭-IV-I：不可进入格（原文歧义，待裁定）', () => {
   it('IV-I：目标格为沼泽（truck 禁入）⇒ 拒绝放置，规则号 IV-I', () => {
     if (SWAMP_HEX === null) throw new Error('地图上没有沼泽格，无法构成 IV-I 用例')
     const { setup } = newStores()

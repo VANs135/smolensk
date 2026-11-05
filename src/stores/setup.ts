@@ -40,7 +40,7 @@ import {
   type SetupPlan,
   type SupplyDumpRef,
 } from '@/engine/rules'
-import { hexesWithin, isOnMap } from '@/engine/hex-geometry'
+import { hexesWithin, isOnMap, sameHex } from '@/engine/hex-geometry'
 import { createId } from '@/shared'
 import { counterDirOfSide, counterImageUrl } from '@/render/token-images'
 
@@ -281,10 +281,27 @@ export const useSetupStore = defineStore('setup', () => {
       .map((unit) => unit.hex)
   }
 
+  /**
+   * IV-F：该格当前已有的 RE 合计（4.8：一格最多 10 RE）
+   *
+   * 只统计**已落盘**的算子；初设放置时由 `planSetupPlacement` 加上本条目的 RE 再比上限。
+   */
+  function existingReAt(hex: HexRef): number {
+    return workbench.units
+      .filter((unit) => sameHex(unit.hex, hex))
+      .reduce((sum, unit) => sum + (unit.re ?? 0), 0)
+  }
+
   /** 注入给引擎的盘面事实（可指定按哪一方取 HQ / 空军基地） */
   function factsFor(side: Side | null = null): SetupCandidateFacts {
     if (side === null) return {}
-    return { hqHexes: hqHexesOf(side), airBaseHexes: airBaseHexesOf(side) }
+    return {
+      hqHexes: hqHexesOf(side),
+      airBaseHexes: airBaseHexesOf(side),
+      // IV-F（4.8）：初设不得超堆叠。IV-I `canEnter` 暂不注入 —— 判据须按"条目算子的常规移动类型"
+      // 取地形禁止表，而原文未说明异质编队/多条目以谁为准（引擎 `canEnter` 只有格参数）⇒ 待裁定。
+      existingRe: existingReAt,
+    }
   }
 
   /** 自动初设计划（双方；盘面事实取双方的） */
