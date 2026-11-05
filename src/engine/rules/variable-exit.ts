@@ -37,6 +37,11 @@ export const VARIABLE_EXIT_TABLE = rulesConstants.smolensk.variableExitTable
  *
  * 表值写的是战役称谓（`SS Reich` / `14 Mtr`），单位库里的 `formation` 是代号（`SS-R` / `14MTR`）；
  * 这里只做**精确查表**，不做模糊匹配——认不出就返回 `null`，由调用方记警告、不推进。
+ *
+ * ★ 数据侧现状（2026-11-05 核实）：`formations.json` 只有 `formationId`（`SS-R Mtr Div` /
+ *   `14 Mtr Div`）与 `formationCode`，**没有** `SS Reich` / `14 Mtr` 这类战役别名；
+ *   `units-axis.json` 的 `formation` 亦只有代号。故本表暂为**引擎内特例**（不虚构数据条目），
+ *   已列入待审批表次要条目 ⑦-a（是否在数据侧补别名，等用户定）。
  */
 const VARIABLE_EXIT_FORMATION: Readonly<Record<string, string>> = {
   'SS Reich': 'SS-R',

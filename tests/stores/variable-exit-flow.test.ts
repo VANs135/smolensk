@@ -191,8 +191,7 @@ describe('专规 3.3c：2–5 是"下回合再掷"，不是已了结', () => {
 describe('专规 3.3c：待选态随存档往返（从 session.log 反推）', () => {
   it('存档 → 读档后选择态与可选清单都不丢', () => {
     const { workbench, game } = newStore()
-    const record = sameFactorsAxisRecord()
-    placeGround(workbench, record, CORE_HEX, 'axis', 'sub-ok')
+    placeGround(workbench, sameFactorsAxisRecord(), CORE_HEX, 'axis', 'sub-ok')
     rollVariableExit(workbench, 1)
     const before = workbench.variableExitPickItems.map((item) => item.id)
     expect(before).toEqual(['sub-ok'])
@@ -202,5 +201,55 @@ describe('专规 3.3c：待选态随存档往返（从 session.log 反推）', (
 
     expect(workbench.variableExitSelectionOpen).toBe(true)
     expect(workbench.variableExitPickItems.map((item) => item.id)).toEqual(before)
+  })
+})
+
+describe('3.3c：多格高亮不残留（用户自查 C）', () => {
+  it('确认移除 ⇒ 高亮立即清空', () => {
+    const { workbench } = newStore()
+    placeGround(workbench, sameFactorsAxisRecord(), CORE_HEX, 'axis', 'sub-ok')
+    rollVariableExit(workbench, 1)
+    expect(workbench.variableExitPickHexes).toHaveLength(1)
+
+    workbench.confirmVariableExitSubstitute('sub-ok')
+    expect(workbench.variableExitPickHexes).toEqual([])
+  })
+
+  it('切换集团军 ⇒ 立即清空；切回轴方恢复（待选态仍在）', () => {
+    const { workbench } = newStore()
+    placeGround(workbench, sameFactorsAxisRecord(), CORE_HEX, 'axis', 'sub-ok')
+    rollVariableExit(workbench, 1)
+    const hexes = workbench.variableExitPickHexes
+    expect(hexes).toHaveLength(1)
+
+    workbench.setActiveSide('soviet')
+    expect(workbench.variableExitPickHexes).toEqual([])
+    workbench.setActiveSide('axis')
+    expect(workbench.variableExitPickHexes).toEqual(hexes)
+  })
+
+  it('离开增援阶段 ⇒ 立即清空', () => {
+    const { workbench } = newStore()
+    placeGround(workbench, sameFactorsAxisRecord(), CORE_HEX, 'axis', 'sub-ok')
+    rollVariableExit(workbench, 1)
+    expect(workbench.variableExitPickHexes).toHaveLength(1)
+
+    workbench.setPhase('movement')
+    expect(workbench.variableExitPickHexes).toEqual([])
+  })
+
+  it('存档往返：待选时高亮随日志恢复；已确认后读档不再亮', () => {
+    const { workbench, game } = newStore()
+    placeGround(workbench, sameFactorsAxisRecord(), CORE_HEX, 'axis', 'sub-ok')
+    rollVariableExit(workbench, 1)
+    const hexes = workbench.variableExitPickHexes
+    expect(game.saveNow()).toBe(true)
+    expect(game.loadNow()).toBe(true)
+    expect(workbench.variableExitPickHexes).toEqual(hexes)
+
+    workbench.confirmVariableExitSubstitute('sub-ok')
+    expect(game.saveNow()).toBe(true)
+    expect(game.loadNow()).toBe(true)
+    expect(workbench.variableExitPickHexes).toEqual([])
   })
 })

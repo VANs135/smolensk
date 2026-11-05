@@ -16801,8 +16801,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return items
   })
 
-  /** 3.3c 待选时**有可选单位的格**（地图多格高亮的数据源） */
-  const variableExitPickHexes = computed<HexRef[]>(() => [...variableExitSelectionSet.value.hexes])
+  /**
+   * 3.3c 待选时**有可选单位的格**（地图多格高亮的数据源）
+   *
+   * ★ 只在"当前是轴方增援阶段"时才给高亮：切换集团军 / 进入其它阶段 / 确认移除后
+   *   （`pendingSelection` 归 null）一律清空，避免"格还亮着但已经不可点"的状态错位。
+   */
+  const variableExitPickHexes = computed<HexRef[]>(() =>
+    activeSide.value === 'axis' && phase.value === 'reinforcement'
+      ? [...variableExitSelectionSet.value.hexes]
+      : [],
+  )
 
   /**
    * 3.3c：玩家点选一枚同印值算子顶替撤离（1.6a）
