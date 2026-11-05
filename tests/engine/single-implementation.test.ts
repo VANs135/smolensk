@@ -137,7 +137,7 @@ describe('M2④ 12.4 战斗补给成本：唯一实现 + 走常量', () => {
       side: 'axis',
       face: 'combat',
     })
-    return { ...toBattleUnitView(unit), steps, re }
+    return { ...toBattleUnitView(unit, 0), steps, re }
   }
 })
 

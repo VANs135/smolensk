@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
 import { HEX_DIRECTIONS, isOnMap, neighbor } from '@/engine/hex-geometry'
+import { isOutOfSupplyNow } from '@/engine/rules'
 import {
   toConsoleAirUnit,
   toConsoleUnit,
@@ -159,18 +160,67 @@ describe('12.8e：断补「第一个回合」的真跟踪（修前恒为首回�
     }
     expect(store.planSupplyPhaseNow()).toBe(true)
     expect(store.applySupplyPhaseFeedingNow()).toBe(true)
-    // 喂饱 ⇒ 该回合不是断补；且按括注，这一回合**不算**"被切断的第一个回合"
+    // 喂饱 ⇒ 该回合**不算断补**（12.8e 括注）；但吃图上补给**不构成追溯补给**
+    // （用户 2026-11-06 裁定）⇒ `hasTraceSupply` 仍为 false，只落 `sustainedBySpecialSupplyTurn`。
     store.evaluateTraceSupplyNow()
-    expect(unit.hasTraceSupply).toBe(true)
+    expect(unit.hasTraceSupply).toBe(false)
     expect(unit.sustainedBySpecialSupplyTurn).toBe(store.turn)
     expect(unit.cutSinceTurn).not.toBe(store.turn)
+    expect(isOutOfSupplyNow(unit, store.turn)).toBe(false)
 
-    // 下一回合不再喂 ⇒ 这才是它的"第一个断补回合"
+    // 下一回合不再喂 ⇒ 这才是它的"第一个断补回合"（管吃的那一回合不算）
     const fedTurn = store.turn
     store.setTurn(fedTurn + 1)
     store.setPhase('movement')
     expect(unit.hasTraceSupply).toBe(false)
     expect(unit.cutSinceTurn).toBe(fedTurn + 1)
+    expect(isOutOfSupplyNow(unit, store.turn)).toBe(true)
+    // 该回合是"第一个断补回合" ⇒ 突围仍享豁免
+    expect(store.breakoutCandidates.find((item) => item.unit.instanceId === 'u1')?.ok).toBe(true)
+
+    // 再下一回合：豁免消失，必须按 A/B 条件来（12.8e）
+    store.setTurn(fedTurn + 2)
+    store.setPhase('movement')
+    expect(unit.cutSinceTurn).toBe(fedTurn + 1)
+    const later = store.breakoutCandidates.find((item) => item.unit.instanceId === 'u1')
+    expect(later?.ok).toBe(false)
+    expect(later?.reason ?? '').toContain('12.8e')
+  })
+
+  it('★ 已在连续断补中吃图上补给 ⇒ 不重置 cutSinceTurn；该回合不判断补但**无**首回合豁免', () => {
+    const store = newStore()
+    const unit = strandedUnit()
+    store.units.push(unit)
+    store.setPhase('movement')
+    store.evaluateTraceSupplyNow()
+    const firstCut = store.turn
+    expect(unit.cutSinceTurn).toBe(firstCut)
+    // 首回合（未吃）⇒ 豁免
+    expect(store.breakoutCandidates.find((item) => item.unit.instanceId === 'u1')?.ok).toBe(true)
+
+    // 下一回合：在**已断补**状态下吃图上补给
+    store.setTurn(firstCut + 1)
+    store.setPhase('supply')
+    const index = store.playerSegmentSteps.findIndex((step) => step.id.startsWith('supply.'))
+    expect(store.setSegmentStepIndex(index)).toBe(true)
+    store.spDumpDraft = { hexText: label(CORE_HEX), sp: 2, t: 0 }
+    expect(store.addSpDump()).toBe(true)
+    store.supplyPhaseInputs = {
+      ...store.supplyPhaseInputs,
+      availableT: 4,
+      eatOffTheMap: { u1: true },
+    }
+    expect(store.planSupplyPhaseNow()).toBe(true)
+    expect(store.applySupplyPhaseFeedingNow()).toBe(true)
+
+    // 续命当回合 ⇒ 不算断补；但连续断补的起点**不被重置**
+    expect(isOutOfSupplyNow(unit, store.turn)).toBe(false)
+    expect(unit.cutSinceTurn).toBe(firstCut)
+    // 突围候选仍存在（12.8e 用词是"没有追溯补给"），但首回合豁免已过期 ⇒ A/B 条件不成立即拒
+    store.setPhase('movement')
+    const candidate = store.breakoutCandidates.find((item) => item.unit.instanceId === 'u1')
+    expect(candidate?.ok).toBe(false)
+    expect(candidate?.reason ?? '').toContain('12.8e')
   })
 })
 

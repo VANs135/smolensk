@@ -11,6 +11,7 @@ import {
   FOG_RULE,
   hexDisplay,
   hiddenInfoPolicy,
+  isOutOfSupplyNow,
   otherSide,
   rollVisibleTo as engineRollVisibleTo,
   sideLabel,
@@ -150,10 +151,11 @@ export const useHotseatStore = defineStore('hotseat', () => {
       attackCapable: unit.attackCapable,
       inCombatMode,
       // 4.5：可攻击 ∧ 战斗模式 ∧ 非断补（与 zoc.ts 同一判据）
-      projectsZoc: unit.attackCapable && inCombatMode && unit.hasTraceSupply,
+      // ★ 12.8e：吃图上/储备/缓存续命当回合**不算断补** ⇒ 不以 `hasTraceSupply` 判（用户 2026-11-06 裁定）
+      projectsZoc: unit.attackCapable && inCombatMode && !isOutOfSupplyNow(unit, workbench.turn),
       mode: unit.mode.mode,
       dg: unit.mode.dg,
-      outOfSupply: !unit.hasTraceSupply,
+      outOfSupply: isOutOfSupplyNow(unit, workbench.turn),
       steps: unit.steps,
       printedSteps: unit.printedSteps,
       internalStocks: unit.internalStocks,

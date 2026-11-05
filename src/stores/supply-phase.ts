@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import type { Side } from '@/data'
 import {
   holdingsToT,
+  isOutOfSupplyNow,
   planSupplyPhase,
   planInternalStocksRecovery,
   resolveAttrition,
@@ -23,6 +24,8 @@ import type { SpDump } from './supply-types'
 export interface SupplyPhasePorts {
   units(): ConsoleUnit[]
   activeSide(): Side
+  /** 当前回合号（12.8e 的「续命当回合」判定用） */
+  turn(): number
   facts(): TraceSupplyFacts
   step(): string | undefined
   enterCheck(): boolean
@@ -62,6 +65,7 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     eliminateEntry,
     pushLog,
     recordSettlement,
+    turn,
   } = ports
   const supplyPhasePlan = ref<SupplyPhasePlan | null>(null)
   const supplyRecoverySettled = ref(false)
@@ -149,7 +153,8 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
         ar: unit.raw.ar,
         mode: unit.mode.mode,
         internalStocks: unit.internalStocks,
-        outOfSupply: !unit.hasTraceSupply,
+        // 12.6c/d：断补状态＝无追溯补给 **且** 本回合不是靠特殊方式续命（12.8e 括注）
+        outOfSupply: isOutOfSupplyNow(unit, turn()),
         multiStep: unit.steps > 1,
       })),
       mobility: 'truck',
@@ -341,8 +346,14 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
       if (paid !== '（无需付款）') stations.push(paid)
     }
 
-    // 12.6d：恢复者摘标、新断补者置标（单一写入点）
-    for (const unitId of plan.outOfSupply.clear) markTraceSupply(unitId, true)
+    // 12.6d：**追溯补给恢复者**摘标、新断补者置标（单一写入点）
+    // ★ 用户 2026-11-06 裁定：吃图上补给属"其它手段"，**不等同于追溯补给** ⇒
+    //   `clear` 中只有 `inSupply`（trace 成功）者摘标；被喂饱者不写 `hasTraceSupply`，
+    //   只由 `markSustainedBySpecialSupply` 记「本回合续命」（12.8e 括注）。
+    for (const unitId of plan.outOfSupply.clear) {
+      const assessment = plan.assessments.find((item) => item.unitId === unitId)
+      if (assessment?.status === 'inSupply') markTraceSupply(unitId, true)
+    }
     for (const unitId of plan.outOfSupply.mark) markTraceSupply(unitId, false)
     // 落盘降级者（计划说付得起、自己的可达站却付不出）⇒ 仍置断补标（如实登记）
     for (const unitId of degradedIds) markTraceSupply(unitId, false)
@@ -360,7 +371,7 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
           steps: unit.steps,
           ar: unit.raw.ar,
           mode: unit.mode.mode,
-          outOfSupply: !unit.hasTraceSupply,
+          outOfSupply: isOutOfSupplyNow(unit, turn()),
         })),
     )
 

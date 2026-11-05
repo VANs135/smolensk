@@ -145,6 +145,8 @@ import {
   createMultiTrackRailFacts,
   panzerGroupBoundaryPath,
   inEnemyZocAt,
+  // 12.6c/d + 12.8e：断补＝无追溯补给且本回合非续命（用户 2026-11-06 裁定：喂食不写 hasTraceSupply）
+  isOutOfSupplyNow,
   selectMovementTerrain,
   type BreakoutConditions,
   type BreakoutEligibility,
@@ -1644,6 +1646,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const supplyPhaseDomain = createSupplyPhaseDomain({
     units: () => units.value,
     activeSide: () => activeSide.value,
+    turn: () => turn.value,
     facts: () => supplyFacts.value,
     step: () => segmentStep.value?.id,
     enterCheck: () =>
@@ -1917,10 +1920,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C6：攻方/守方单位视图（引擎 `BattleUnitView`；随落盘自动刷新） */
   const combatAttackerViews = computed<BattleUnitView[]>(() =>
-    combatAttackers.value.map(toBattleUnitView),
+    combatAttackers.value.map((unit) => toBattleUnitView(unit, turn.value)),
   )
   const combatDefenderViews = computed<BattleUnitView[]>(() =>
-    battleDefenders.value.map(toBattleUnitView),
+    battleDefenders.value.map((unit) => toBattleUnitView(unit, turn.value)),
   )
 
   /** C6：战斗事实（9.1f/9.4b/9.4c/9.4e/9.9）——取自地图产物与单位库，不臆造 */
@@ -5005,8 +5008,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     battleMode.value = 'full'
     const composed = acceptCombat(
       beginCombat({
-        attackers: combatAttackers.value.map(toBattleUnitView),
-        defenders: battleDefenders.value.map(toBattleUnitView),
+        attackers: combatAttackers.value.map((unit) => toBattleUnitView(unit, turn.value)),
+        defenders: battleDefenders.value.map((unit) => toBattleUnitView(unit, turn.value)),
         facts: combatFacts.value,
         attackType: 'overrun',
         phase: phase.value,
@@ -8449,8 +8452,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const composition = acceptCombat(
       beginCombat({
-        attackers: attackers.map(toBattleUnitView),
-        defenders: defenders.map(toBattleUnitView),
+        attackers: attackers.map((unit) => toBattleUnitView(unit, turn.value)),
+        defenders: defenders.map((unit) => toBattleUnitView(unit, turn.value)),
         facts: combatFacts.value,
         attackType: 'regular',
         phase: phase.value,
@@ -9409,7 +9412,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       resolveRetreats(state, {
         // 9.12d：跟随者不是参战者，故这里给**全部盘面单位**（引擎只认构成里的参战者，
         // 但仍然需要能在名单里找到跟随者）
-        units: units.value.map(toBattleUnitView),
+        units: units.value.map((unit) => toBattleUnitView(unit, turn.value)),
         paths,
         facts: combatRetreatFacts.value,
         // 9.12d：加入撤退的跟随者（未参战战斗单位 / 编内卡车）
@@ -10845,7 +10848,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (instanceIds.length === 0) return
     const keys = new Set(instanceIds)
     for (const unit of units.value) {
-      if (keys.has(unit.instanceId)) unit.sustainedBySpecialSupplyTurn = turn.value
+      if (!keys.has(unit.instanceId)) continue
+      unit.sustainedBySpecialSupplyTurn = turn.value
+      /*
+       * 12.8e 括注的时序：若这次续命恰好发生在「发现没有追溯补给的**当回合**」，
+       * 则该回合不算"被切断的第一个回合" ⇒ 豁免顺延到下一个**真断补**回合。
+       * 若连续断补早已开始（`cutSinceTurn < turn`），续命**不重置**起点（否则会白送新的豁免）。
+       */
+      if ((unit.cutSinceTurn ?? null) === turn.value) unit.cutSinceTurn = null
     }
   }
 
@@ -10979,8 +10989,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     supplyState.value = data.state
     // 12.6c/d：把断补结论**落到单位上**（原先只进日志 ⇒ 12.8 的效果与逐回合损耗无处生效）。
-    // `acceptOutOfSupply` ⇒ 标记断补（hasTraceSupply=false）；`eatOffTheMap` ⇒ 已被喂饱、未标记断补。
-    markTraceSupply(supplyUnitId.value, !data.resolution.markedOutOfSupply)
+    // `acceptOutOfSupply` ⇒ 标记断补（hasTraceSupply=false）；
+    // `eatOffTheMap` ⇒ **不写** `hasTraceSupply`（吃图上补给不构成追溯补给，用户 2026-11-06 裁定），
+    //   只记「本回合续命」⇒ 12.8e 括注：该回合不算"被切断的第一个回合"。
+    if (data.resolution.markedOutOfSupply) markTraceSupply(supplyUnitId.value, false)
+    else if (supplyUnitId.value !== null) markSustainedBySpecialSupply([supplyUnitId.value])
     pushLog(
       data.resolution.markedOutOfSupply ? 'warning' : 'success',
       `断补处置：${data.resolution.detail}` +
@@ -11089,25 +11102,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         if (unit.side !== side) continue
         /*
          * 12.6h：**被空投的那个回合不需要追溯补给**（14.10b 的计划空投）；跨回合即自然失效。
-         * 12.8e 括注：本回合靠 12.6c 吃图上补给 / 12.10e 部队储备 / 21.10 缓存**续命**者不算断补
-         *   （那三种方式不构成追溯补给，但也不该让它们在续命当回合被标断补）。
+         * 12.8e 括注：本回合靠 12.6c 吃图上补给 / 12.10e 部队储备 / 21.10 缓存**续命**者
+         *   **也**不算断补（不标断补、不计入连续断补的起点），但那三种方式**不构成追溯补给**
+         *   ⇒ 用户 2026-11-06 裁定后，`hasTraceSupply` 只写**追溯类**结论，续命只落 `sustainedBySpecialSupplyTurn`。
          */
         const airDroppedThisTurn = (unit.airDropExemptTurn ?? null) === turn.value
-        const sustainedThisTurn = (unit.sustainedBySpecialSupplyTurn ?? null) === turn.value
         const inSupply =
           airDroppedThisTurn ||
-          sustainedThisTurn ||
           !requiresTraceSupply(unit) ||
           (traceCoverageHas(covered, unit.hex) && !denied.has(unit.instanceId))
         unit.hasTraceSupply = inSupply
         /*
          * 12.8e：维护「连续无追溯补给的起点回合」。
-         * 有补给（含空投/续命的豁免期）⇒ 连续期结束；无补给且尚未记录 ⇒ 本回合就是它的第一个断补回合。
-         * 只在"由有到无"时落值，故跨回合不变（＝连续计数），恢复后再次断补才会重新落新的回合。
+         * 追溯补给恢复（含空投豁免/非战斗单位）⇒ 连续期结束；
+         * 无追溯补给且**本回合是真断补**（不是靠吃图上/储备/缓存续命）且尚未记录 ⇒ 本回合就是第一个断补回合。
+         * ★ 续命当回合**不写、也不清**该字段：既不算"被切断的第一个回合"（12.8e 括注），
+         *   也不把已在进行的连续断补期重置。
          */
         if (inSupply) unit.cutSinceTurn = null
-        else if ((unit.cutSinceTurn ?? null) === null) unit.cutSinceTurn = turn.value
-        if (!inSupply) outOfSupply += 1
+        else if (isOutOfSupplyNow(unit, turn.value) && (unit.cutSinceTurn ?? null) === null)
+          unit.cutSinceTurn = turn.value
+        if (isOutOfSupplyNow(unit, turn.value)) outOfSupply += 1
       }
     }
     pushLog('info', `追溯补给重判（12.6，${reason}）：断补 ${outOfSupply} 个单位`, '12.6')

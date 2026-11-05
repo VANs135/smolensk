@@ -74,8 +74,10 @@ describe('12.6c：D 段按实际付款来源分组取整，不跨来源借用已
     expect(store.supplyPhasePlan!.feeding.map((item) => item.costT)).toEqual([1, 1])
     expect(store.applySupplyPhaseFeedingNow()).toBe(true)
 
-    expect(a.hasTraceSupply).toBe(true)
-    expect(b.hasTraceSupply).toBe(true)
+    expect(a.hasTraceSupply).toBe(false)
+    expect(b.hasTraceSupply).toBe(false)
+    expect(a.sustainedBySpecialSupplyTurn).toBe(store.turn)
+    expect(b.sustainedBySpecialSupplyTurn).toBe(store.turn)
     // 资源有来源也有去向：两站各扣 1T，没有隔空转移，也没有不扣款就解除断补
     expect(tonsOf(store, 'near')).toBe(0)
     expect(tonsOf(store, 'far')).toBe(0)
@@ -101,8 +103,10 @@ describe('12.6c：D 段按实际付款来源分组取整，不跨来源借用已
     expect(store.planSupplyPhaseNow()).toBe(true)
     expect(store.supplyPhasePlan!.feeding.map((item) => item.costT)).toEqual([1, 0])
     expect(store.applySupplyPhaseFeedingNow()).toBe(true)
-    expect(a.hasTraceSupply).toBe(true)
-    expect(b.hasTraceSupply).toBe(true)
+    expect(a.hasTraceSupply).toBe(false)
+    expect(b.hasTraceSupply).toBe(false)
+    expect(a.sustainedBySpecialSupplyTurn).toBe(store.turn)
+    expect(b.sustainedBySpecialSupplyTurn).toBe(store.turn)
     expect(tonsOf(store, 'shared')).toBe(0)
   })
 
@@ -122,8 +126,11 @@ describe('12.6c：D 段按实际付款来源分组取整，不跨来源借用已
     expect(store.planSupplyPhaseNow()).toBe(true)
     expect(store.supplyPhasePlan!.feeding.map((item) => item.affordable)).toEqual([true, false])
     expect(store.applySupplyPhaseFeedingNow()).toBe(true)
-    expect(a.hasTraceSupply).toBe(true)
+    // a 被喂饱（续命，不写 hasTraceSupply）；b 没额度 ⇒ 仍断补
+    expect(a.hasTraceSupply).toBe(false)
+    expect(a.sustainedBySpecialSupplyTurn).toBe(store.turn)
     expect(b.hasTraceSupply).toBe(false)
+    expect(b.sustainedBySpecialSupplyTurn ?? null).not.toBe(store.turn)
     expect(tonsOf(store, 'near')).toBe(0)
     expect(tonsOf(store, 'far')).toBe(0)
     expect(store.supplyPhasePlan!.attritionDuty.map((duty) => duty.unitIds)).toEqual([
@@ -147,7 +154,8 @@ describe('12.6c：D 段按实际付款来源分组取整，不跨来源借用已
     expect(unit.internalStocks).toBeNull()
     expect(tonsOf(store, 'shared')).toBe(1) // 3T − 2T 恢复
     expect(store.applySupplyPhaseFeedingNow()).toBe(true)
-    expect(unit.hasTraceSupply).toBe(true)
+    expect(unit.hasTraceSupply).toBe(false)
+    expect(unit.sustainedBySpecialSupplyTurn).toBe(store.turn)
     expect(tonsOf(store, 'shared')).toBe(0) // 再付 1T 供养，同一站对得上账
   })
 })

@@ -142,7 +142,7 @@ describe('13.8b：真实地图上的大河 —— 架桥把"轮式禁入"变成"
           side: 'axis',
           face: 'move',
         })
-        const view = toBattleUnitView(truck)
+        const view = toBattleUnitView(truck, 0)
         const plain = createBattleFacts({ units: [truck], defenderSide: 'soviet' })
         const bridged = createBattleFacts({
           units: [truck],
@@ -165,7 +165,7 @@ describe('13.8b：真实地图上的大河 —— 架桥把"轮式禁入"变成"
       side: 'axis',
       face: 'move',
     })
-    const view = toBattleUnitView(truck)
+    const view = toBattleUnitView(truck, 0)
 
     const withoutHq = createBattleFacts({ units: [truck], defenderSide: 'soviet' })
     expect(withoutHq.canEnterForAttack(view, MAJOR_EDGE.from, MAJOR_EDGE.to)).toBe(false)
@@ -198,7 +198,7 @@ describe('13.8b：真实地图上的大河 —— 架桥把"轮式禁入"变成"
       bridgedHexesBySide: bridgedHexesBySide([sovietTruck, hq]),
     })
     expect(
-      forSoviet.canEnterForAttack(toBattleUnitView(sovietTruck), MAJOR_EDGE.from, MAJOR_EDGE.to),
+      forSoviet.canEnterForAttack(toBattleUnitView(sovietTruck, 0), MAJOR_EDGE.from, MAJOR_EDGE.to),
     ).toBe(false)
   })
 

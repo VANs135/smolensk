@@ -944,6 +944,25 @@ export function requiresTraceSupply(unit: { isCombat: boolean }): boolean {
   return unit.isCombat
 }
 
+/**
+ * 12.6c/d + 12.8e：该单位**此刻是否处于断补状态**（供损耗、战斗值减半、ZOC、界面图标使用）
+ *
+ * 判据＝**没有追溯补给** 且 **本回合不是靠特殊方式续命**
+ * （12.6c 吃图上补给 / 12.10e 部队储备 / 21.10 补给缓存；12.8e 括注释明那三种方式
+ * 「不构成追溯补给」，但也不该让单位在续命当回合被当成断补）。
+ *
+ * ★ 与 `hasTraceSupply` 的分工（用户 2026-11-06 裁定）：
+ *   · `hasTraceSupply` 只表示**追溯类**补给（12.6 trace / 12.6h 空投豁免 / 12.0 非战斗单位）；
+ *   · 喂食只写 `sustainedBySpecialSupplyTurn`，**不写** `hasTraceSupply`；
+ *   · 12.8e 的「无追溯补给」候选判定仍读 `hasTraceSupply`（原文用词就是「没有追溯补给」）。
+ */
+export function isOutOfSupplyNow(
+  unit: { hasTraceSupply: boolean; sustainedBySpecialSupplyTurn?: number | null },
+  turn: number,
+): boolean {
+  return !unit.hasTraceSupply && (unit.sustainedBySpecialSupplyTurn ?? null) !== turn
+}
+
 /** 该源格本身是否可用（12.6b：源格内有未抵消敌方 ZOC ⇒ 不可用；12.3d：敌战斗单位占格亦然） */
 function sourceUsable(facts: TraceSupplyFacts, side: Side, hex: HexRef): boolean {
   if (!facts.onMap(hex)) return false

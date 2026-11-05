@@ -25,7 +25,13 @@ import {
   stackFanLayout,
   toggleSelection,
 } from '@/render/stack-fan'
-import { OVERRUN_MP_COST, exertsZoc, zocHexes, type ZocSource } from '@/engine/rules'
+import {
+  isOutOfSupplyNow,
+  OVERRUN_MP_COST,
+  exertsZoc,
+  zocHexes,
+  type ZocSource,
+} from '@/engine/rules'
 import type { GamePhase } from '@/engine/state-types'
 import { participatesIn } from './workbench-model'
 
@@ -222,7 +228,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       // 模式/状态贴图（5.8 战略 / 5.9 进击 / 12.8 断补）
       exploit: unit.mode.exploit === true,
       strat: unit.mode.mode === 'strat',
-      outOfSupply: !unit.hasTraceSupply,
+      outOfSupply: isOutOfSupplyNow(unit, workbench.turn),
       /*
        * 3.6e / 4.6：多军力单位的**军力损失**角标 `(-N)`（N ＝ 印值军力 − 当前军力）。
        * ★ 4.9a 字段级裁剪：**敌方那一枚不给**（「无权获取部队储备或损失军力的情况」）⇒

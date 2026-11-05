@@ -38,9 +38,12 @@ describe('12.8b：待决损耗的合法保存点，冷读档后账本完整', ()
     expect(w.planSupplyPhaseNow()).toBe(true)
     expect(w.applySupplyPhaseRecoveryNow()).toBe(true)
     expect(w.applySupplyPhaseFeedingNow()).toBe(true)
-    // 12.6c：只有勾选者付了 1T 并免于断补；另外两枚仍在损耗名单
+    // 12.6c：吃图上补给不构成追溯补给（用户 2026-11-06 裁定）⇒ 只记续命，不写 hasTraceSupply
     expect(holdingsToT(w.spDumps[0]!)).toBe(0)
-    expect(w.units.find((unit) => unit.instanceId === 'fed')!.hasTraceSupply).toBe(true)
+    expect(w.units.find((unit) => unit.instanceId === 'fed')!.hasTraceSupply).toBe(false)
+    expect(w.units.find((unit) => unit.instanceId === 'fed')!.sustainedBySpecialSupplyTurn).toBe(
+      w.turn,
+    )
 
     const index = w.playerSegmentSteps.findIndex((step) => step.id === 'supply.check')
     if (index < 0) throw new Error('D 段没有「补给检定」环节')

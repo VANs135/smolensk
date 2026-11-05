@@ -258,10 +258,11 @@ describe('C8 断补处置：12.6c 吃图上补给 / 12.6d 接受断补', () => {
     expect(store.confirmOosResolutionNow()).toBe(true)
     expect(store.supplyState?.step).toBe('done')
     expect(store.supplySummary?.oos?.markedOutOfSupply).toBe(false)
-    // 12.6c：吃图上补给 ⇒ 被喂饱、**未标记断补** ⇒ 单位仍视为有补给。
-    // （12.8e 的「断补首回合」豁免另算：那种「续命」方式不构成追溯补给，但也不给豁免，
-    //   所以它不能靠这个字段表达，而是 `canBreakout` 的 `firstTurnOutOfSupply` 入参。）
-    expect(unit.hasTraceSupply).toBe(true)
+    // 12.6c：吃图上补给 ⇒ 被喂饱、**未标记断补**
+    // ★ 用户 2026-11-06 裁定：吃图上补给不构成**追溯补给** ⇒ `hasTraceSupply` 仍为 false，
+    //   以 `sustainedBySpecialSupplyTurn` 记"本回合续命"；12.8e 的断补首回合判定见 `isOutOfSupplyNow`。
+    expect(unit.hasTraceSupply).toBe(false)
+    expect(unit.sustainedBySpecialSupplyTurn).toBe(store.turn)
     // 4 SP = 16 T；扣 costT 后余额按 12.1a 规范化
     const remaining = 16 - costT
     expect(store.spDumps[0]).toMatchObject({

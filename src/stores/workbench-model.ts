@@ -34,6 +34,7 @@ import {
   inEnemyZocForRetreat,
   isCorrectSpotter,
   isMobileUnit,
+  isOutOfSupplyNow,
   legMpDistanceWithinRadius,
   modeUnitClass,
   needsFuelToMove,
@@ -1108,7 +1109,7 @@ export function buildLegalityRequest(input: {
  * ★ `attack` 必须是**已按模式折算**的战斗值（5.5–5.10）：本函数按朝向那一面的印值取，
  *   DG 由 `dg` 字段单独带出（引擎按 5.10b-A 处理减半的只有模式影响矩阵，见 battle.unitBattleStrength）。
  */
-export function toBattleUnitView(unit: ConsoleUnit): BattleUnitView {
+export function toBattleUnitView(unit: ConsoleUnit, turn: number): BattleUnitView {
   return {
     id: unit.instanceId,
     airTransportThisPhase: unit.airTransportThisPhase,
@@ -1124,7 +1125,11 @@ export function toBattleUnitView(unit: ConsoleUnit): BattleUnitView {
     steps: unit.steps,
     re: unit.re,
     internalStocks: unit.internalStocks,
-    outOfSupply: !unit.hasTraceSupply,
+    /*
+     * 12.6c/d + 12.8e：断补＝无追溯补给 **且** 本回合不是靠吃图上/储备/缓存续命。
+     * ★ 用户 2026-11-06 裁定：喂食不再写 `hasTraceSupply`，故此处不能直接取 `!hasTraceSupply`。
+     */
+    outOfSupply: isOutOfSupplyNow(unit, turn),
     mobility: effectiveMobilityOf(unit),
     attackCapable: unit.attackCapable,
     // 规则能力标签（专规 2.3b 的 NKVD 判据取自此；引擎在 9.6 / 9.10 步消费）

@@ -46,6 +46,7 @@ function domainFixture(
   const ports: SupplyPhasePorts = {
     units: () => units.value,
     activeSide: () => 'axis',
+    turn: () => 1,
     facts: () => createTraceSupplyFacts({ dumps: dumps.value }),
     step: () => step.value,
     enterCheck,
@@ -64,7 +65,11 @@ function domainFixture(
     markTraceSupply(id, ready) {
       units.value.find((unit) => unit.instanceId === id)!.hasTraceSupply = ready
     },
-    markSustainedBySpecialSupply: vi.fn(),
+    markSustainedBySpecialSupply(ids) {
+      for (const unit of units.value) {
+        if (ids.includes(unit.instanceId)) unit.sustainedBySpecialSupplyTurn = 1
+      }
+    },
     refreshTraceSupply: refresh,
     eliminateEntry(unit) {
       units.value = units.value.filter((item) => item.instanceId !== unit.instanceId)
@@ -112,7 +117,9 @@ describe('D段独立域：付款、待决损耗与阶段退出', () => {
     a.pay.mockImplementationOnce(() => null)
     expect(a.domain.applySupplyPhaseFeedingNow()).toBe(true)
     expect(a.pay.mock.calls.map((call) => call[1])).toEqual([1, 1])
-    expect(a.units.value.map((unit) => unit.hasTraceSupply)).toEqual([false, true])
+    // ★ 用户 2026-11-06 裁定：吃图上补给不构成追溯补给 ⇒ 只落"续命"，不写 hasTraceSupply
+    expect(a.units.value.map((unit) => unit.hasTraceSupply)).toEqual([false, false])
+    expect(a.units.value.map((unit) => unit.sustainedBySpecialSupplyTurn)).toEqual([null, 1])
     // 首名付款被拒未扣款，第二名实际付 1T ⇒ 池里还剩 1T，没有凭空扣或凭空喂
     expect(holdingsToT(a.dumps.value[0]!)).toBe(1)
     expect(a.domain.supplyPhasePlan.value!.attritionDuty[0]!.unitIds).toEqual(['u0'])
@@ -138,7 +145,7 @@ describe('D段独立域：付款、待决损耗与阶段退出', () => {
     a.pay.mockImplementationOnce(() => null)
     expect(a.domain.applySupplyPhaseFeedingNow()).toBe(true)
     expect(a.pay.mock.calls.map((call) => call[1])).toEqual([1, 1])
-    expect(a.units.value.map((unit) => unit.hasTraceSupply)).toEqual([false, true])
+    expect(a.units.value.map((unit) => unit.hasTraceSupply)).toEqual([false, false])
     expect(a.domain.applySupplyPhaseFeedingNow()).toBe(true)
     expect(a.pay).toHaveBeenCalledTimes(2)
   })
@@ -159,7 +166,7 @@ describe('D段独立域：付款、待决损耗与阶段退出', () => {
     a.pay.mockImplementationOnce(() => null)
     expect(a.domain.applySupplyPhaseFeedingNow()).toBe(true)
     expect(a.pay.mock.calls.map((call) => call[1])).toEqual([1, 1])
-    expect(a.units.value.map((unit) => unit.hasTraceSupply)).toEqual([false, leftT === 1])
+    expect(a.units.value.map((unit) => unit.hasTraceSupply)).toEqual([false, false])
     expect(holdingsToT(a.dumps.value[0]!)).toBe(0)
     expect(a.domain.supplyPhasePlan.value!.attritionDuty[0]!.unitIds).toEqual(
       leftT === 1 ? ['u0'] : ['u0', 'u1'],
@@ -183,7 +190,8 @@ describe('D段独立域：付款、待决损耗与阶段退出', () => {
     expect(a.domain.planSupplyPhaseNow()).toBe(true)
     expect(a.domain.applySupplyPhaseFeedingNow()).toBe(true)
     expect(a.pay.mock.calls.map((call) => call[1])).toEqual([1, 0])
-    expect(a.units.value.every((unit) => unit.hasTraceSupply)).toBe(true)
+    expect(a.units.value.every((unit) => unit.hasTraceSupply)).toBe(false)
+    expect(a.units.value.every((unit) => unit.sustainedBySpecialSupplyTurn === 1)).toBe(true)
     expect(holdingsToT(a.dumps.value[0]!)).toBe(0)
     expect(a.domain.supplyPhasePlan.value!.attritionDuty).toEqual([])
   })
