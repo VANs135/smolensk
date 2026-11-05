@@ -3323,8 +3323,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 运行期六项分别取仓里既有结论：
    *   · 13.3h 控制 ← 补给层的 `controlByHex`（同格**唯一**战斗单位所属方；两侧各有即无人控制）；
    *   · 13.3f 轨距 ← `isRailGaugeUsableAt`（专规 1.2 的轨距账本，与 13.3f 的转换共用）；
-   *   · EZOC ← `zocOnlySupplyFacts.inEnemyZoc`（按 4.5b 抵消后；★ 13.3c 末句：**运货时不可抵消**，
-   *     但那份事实本身已按 4.5b 处理，故此处与条文仍有细微差别，见本节的登记）；
+   *   · EZOC ← `inEnemyZocForAction(…, 'railTransport')`：`zoc-effects` 把 `railTransport` 定为
+   *     **不可抵消**（4.5a-C ／ 13.3c 末句「运货时 EZOC 不可抵消」）；仅「连接补给源」的判定
+   *     （`zocOnlySupplyFacts`）才按 4.5b 抵消，两处不可混用；
    *   · 敌方战斗单位 ← 盘面推出；
    *   · 13.3c 可火车卸货格 ← 补给层的 `detrainableHexes`（**同一份结论**，不另立一条判据）；
    *   · 14.8 运输破坏区 ← `trainbustingMarks`。
