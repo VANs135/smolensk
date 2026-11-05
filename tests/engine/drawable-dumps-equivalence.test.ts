@@ -5,6 +5,7 @@ import {
   canDrawFromDump,
   countSupplyDistanceToAny,
   drawableDumpsFor,
+  planSupplyPhase,
   type DrawableDump,
   type SupplyMobility,
   type TraceSupplyFacts,
@@ -99,13 +100,13 @@ const DUMPS: { hex: HexRef; side: Side }[] = [
 ]
 
 /** 注入式假事实（与 supply-interaction.test.ts 同法：每步 1 MP，粗糙格 3 MP） */
-function makeFacts(): TraceSupplyFacts {
+function makeFacts(dumps: { hex: HexRef; side: Side }[] = DUMPS): TraceSupplyFacts {
   return {
     onMap: (hex) => inBoard(hex),
     sourcesFor: () => [],
     extendersFor: () => [],
     throwHqsFor: () => [],
-    dumpsFor: (side) => DUMPS.filter((item) => item.side === side).map((item) => item.hex),
+    dumpsFor: (side) => dumps.filter((item) => item.side === side).map((item) => item.hex),
     hasEnemyCombatUnit: (hex) => ENEMY_COMBAT.has(label(hex)),
     inEnemyZoc: (hex, side) => RAW_ZOC.has(label(hex)) && !friendlyCombatAt(hex, side),
     stepCost: (from, to) => (inBoard(from) && inBoard(to) ? (ROUGH.has(label(to)) ? 3 : 1) : null),
@@ -113,6 +114,19 @@ function makeFacts(): TraceSupplyFacts {
 }
 
 const FACTS = makeFacts()
+
+/**
+ * 2b 专项夹具：在原有盘面上**再加两座与 (37,3) 等距的 dump**（(36,3) 与 (38,3) 都是其六邻格，
+ * 到该格的受益格集合均为 0 MP），用来锁「等距 / 多可达 ⇒ 源集合必须完整、顺序必须稳定」，以及 12.6c 的分组键。
+ * 该格还有一座 5 MP 边界的 31.6 可达 —— 正好检验「集合里既有等距的两座、也有更远但仍在预算内的站」。
+ */
+const TIE_DUMPS: { hex: HexRef; side: Side }[] = [
+  ...DUMPS,
+  { hex: at(36, 3), side: 'axis' },
+  { hex: at(38, 3), side: 'axis' },
+]
+
+const TIE_FACTS = makeFacts(TIE_DUMPS)
 
 /* ────────────────────────────── 快照 ────────────────────────────── */
 
@@ -129,6 +143,9 @@ const CASES: { hex: HexRef; side: Side; mobility: SupplyMobility }[] = [
   { hex: at(40, 12), side: 'axis', mobility: 'truck' }, // 与 dump 同格
   { hex: at(31, 5), side: 'soviet', mobility: 'truck' }, // 另一方的 dump 集合
 ]
+
+/** 2b 快照用例：原有用例 + 一个与两座 dump 等距的格（源集合恰好两座） */
+const TIE_CASES: typeof CASES = [...CASES, { hex: at(37, 3), side: 'axis', mobility: 'truck' }]
 
 /** 有界/无界距离查询的直接探针（`countSupplyDistanceToAny` 的对外输出） */
 const PROBES: {
@@ -165,18 +182,22 @@ function dumpLine(dump: DrawableDump): string {
   ].join(' | ')
 }
 
-function buildSnapshot(): string {
+function buildSnapshot(
+  facts: TraceSupplyFacts = FACTS,
+  cases: { hex: HexRef; side: Side; mobility: SupplyMobility }[] = CASES,
+  probes = PROBES,
+): string {
   const lines: string[] = []
-  for (const item of CASES) {
+  for (const item of cases) {
     lines.push(`# ${item.side} ${label(item.hex)} ${item.mobility}`)
-    for (const dump of drawableDumpsFor(FACTS, {
+    for (const dump of drawableDumpsFor(facts, {
       hex: item.hex,
       side: item.side,
       mobility: item.mobility,
     }))
       lines.push(dumpLine(dump))
     // 聚合结论也必须一致（它只读 ok/距离，但同样受本次改造影响）
-    const verdict = canDrawFromDump(FACTS, {
+    const verdict = canDrawFromDump(facts, {
       hex: item.hex,
       side: item.side,
       mobility: item.mobility,
@@ -184,9 +205,20 @@ function buildSnapshot(): string {
     lines.push(
       `canDrawFromDump: ${verdict.ok ? `ok ${verdict.rule} ${verdict.detail ?? '-'}` : `blocked ${verdict.reason ?? '-'}`}`,
     )
+    // 12.10a/b 的归属 = **全部可达 dump 的有序集合**（workbench 的 `sourceKey` 即此串）；
+    // 它同时是 12.6c 的批量分组键，所以必须逐字符稳定，不能退化成「最近的某一个 dump」。
+    const sourceSet = drawableDumpsFor(facts, {
+      hex: item.hex,
+      side: item.side,
+      mobility: item.mobility,
+    })
+      .filter((dump) => dump.ok)
+      .map((dump) => label(dump.hex))
+      .sort()
+    lines.push(`sourceKey(12.6c 分组键): ${sourceSet.length === 0 ? 'null' : sourceSet.join('|')}`)
   }
-  for (const probe of PROBES) {
-    const result = countSupplyDistanceToAny(FACTS, {
+  for (const probe of probes) {
+    const result = countSupplyDistanceToAny(facts, {
       from: probe.from,
       targets: probe.targets,
       side: probe.side,
@@ -214,57 +246,67 @@ const BASELINE = `
 40.12 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 canDrawFromDump: ok 12.3a 0 MP
+sourceKey(12.6c 分组键): 30.4|31.6
 # axis 36.6 truck
 30.4 | 5 | 30.4>31.5>32.5>33.6>34.6>35.6 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：5 MP ≤ 5 MP
 31.6 | 4 | 31.6>32.6>33.7>34.6>35.6 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：4 MP ≤ 5 MP
 40.12 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 canDrawFromDump: ok 12.3a 4 MP
+sourceKey(12.6c 分组键): 30.4|31.6
 # axis 36.6 leg
 30.4 | 5 | 30.4>31.5>32.5>33.6>34.6>35.6 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：5 MP ≤ 5 MP
 31.6 | 4 | 31.6>32.6>33.7>34.6>35.6 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：4 MP ≤ 5 MP
 40.12 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 canDrawFromDump: ok 12.3a 4 MP
+sourceKey(12.6c 分组键): 30.4|31.6
 # axis 36.9 truck
 30.4 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 31.6 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 40.12 | 4 | 40.12>39.12>38.11>37.11>36.10 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：4 MP ≤ 5 MP
 33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 canDrawFromDump: ok 12.3a 4 MP
+sourceKey(12.6c 分组键): 40.12
 # axis 42.2 truck
 30.4 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 31.6 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 40.12 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 canDrawFromDump: blocked directDrawOutOfRange
+sourceKey(12.6c 分组键): null
 # axis 35.10 truck
 30.4 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 31.6 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 40.12 | 4 | 40.12>39.12>38.11>37.11>36.10 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：4 MP ≤ 5 MP
 33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 canDrawFromDump: ok 12.3a 4 MP
+sourceKey(12.6c 分组键): 40.12
 # axis 36.11 truck
 30.4 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 31.6 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 40.12 | 3 | 40.12>39.12>38.11>37.12 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：3 MP ≤ 5 MP
 33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 canDrawFromDump: ok 12.3a 3 MP
+sourceKey(12.6c 分组键): 40.12
 # axis 36.11 leg
 30.4 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 31.6 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 40.12 | 3 | 40.12>39.12>38.11>37.12 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：3 MP ≤ 5 MP
 33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 canDrawFromDump: ok 12.3a 3 MP
+sourceKey(12.6c 分组键): 40.12
 # axis 40.12 truck
 30.4 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 31.6 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 40.12 | 0 | 40.12 | self | ok | 12.3a | - | 可直接拖取（12.3a）：0 MP ≤ 5 MP
 33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
 canDrawFromDump: ok 12.3a 0 MP
+sourceKey(12.6c 分组键): 40.12
 # soviet 31.5 truck
 31.4 | 0 | 31.4 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：0 MP ≤ 5 MP
 canDrawFromDump: ok 12.3a 0 MP
+sourceKey(12.6c 分组键): 31.4
 @ 30.4 -> [30.5] axis truck maxMp=5: ok 1 MP
 @ 30.4 -> [36.6] axis truck maxMp=5: blocked unreachable
 @ 30.4 -> [36.6] axis truck maxMp=inf: ok 6 MP
@@ -282,5 +324,186 @@ canDrawFromDump: ok 12.3a 0 MP
 describe('P1a（12.3a/12.3c）：`drawableDumpsFor` 行为等价性基准', () => {
   it('逐字段与改造前的基准快照完全一致', () => {
     expect(buildSnapshot()).toBe(BASELINE)
+  })
+})
+
+/*
+ * ─────────────────────────── 2b：阶段级「源格距离表」的等价性基准 ───────────────────────────
+ *
+ * 改造前后都必须满足：
+ *   ① 每个 dump 的 `hex | distanceMp | path 全链 | viaAdjacency | ok | rule | reason | detail` 逐字符相同；
+ *   ② `sourceKey`（= 全部可达 dump 的有序集合，也是 12.6c 的分组键）逐字符相同 —— **不得**退化为 argmin；
+ *   ③ 等距/多可达时集合**完整**（两座等距站都要在），顺序由 `.sort()` 固定。
+ *
+ * 下表由**未改造代码**（P1a 状态）生成并固化，2b 实施后原样断言。
+ */
+const TIE_BASELINE = `
+# axis 30.5 truck
+30.4 | 0 | 30.4 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：0 MP ≤ 5 MP
+31.6 | 0 | 31.6 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：0 MP ≤ 5 MP
+40.12 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+36.3 | 5 | 36.3>35.4>34.4>33.5>32.5>31.6 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：5 MP ≤ 5 MP
+38.3 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+canDrawFromDump: ok 12.3a 0 MP
+sourceKey(12.6c 分组键): 30.4|31.6|36.3
+# axis 36.6 truck
+30.4 | 5 | 30.4>31.5>32.5>33.6>34.6>35.6 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：5 MP ≤ 5 MP
+31.6 | 4 | 31.6>32.6>33.7>34.6>35.6 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：4 MP ≤ 5 MP
+40.12 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+36.3 | 2 | 36.3>36.4>36.5 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：2 MP ≤ 5 MP
+38.3 | 3 | 38.3>38.4>38.5>37.6 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：3 MP ≤ 5 MP
+canDrawFromDump: ok 12.3a 2 MP
+sourceKey(12.6c 分组键): 30.4|31.6|36.3|38.3
+# axis 36.6 leg
+30.4 | 5 | 30.4>31.5>32.5>33.6>34.6>35.6 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：5 MP ≤ 5 MP
+31.6 | 4 | 31.6>32.6>33.7>34.6>35.6 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：4 MP ≤ 5 MP
+40.12 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+36.3 | 2 | 36.3>36.4>36.5 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：2 MP ≤ 5 MP
+38.3 | 3 | 38.3>38.4>38.5>37.6 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：3 MP ≤ 5 MP
+canDrawFromDump: ok 12.3a 2 MP
+sourceKey(12.6c 分组键): 30.4|31.6|36.3|38.3
+# axis 36.9 truck
+30.4 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+31.6 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+40.12 | 4 | 40.12>39.12>38.11>37.11>36.10 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：4 MP ≤ 5 MP
+33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+36.3 | 5 | 36.3>36.4>36.5>36.6>36.7>36.8 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：5 MP ≤ 5 MP
+38.3 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+canDrawFromDump: ok 12.3a 4 MP
+sourceKey(12.6c 分组键): 36.3|40.12
+# axis 42.2 truck
+30.4 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+31.6 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+40.12 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+36.3 | 5 | 36.3>37.4>38.3>39.3>40.2>41.2 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：5 MP ≤ 5 MP
+38.3 | 3 | 38.3>39.3>40.2>41.2 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：3 MP ≤ 5 MP
+canDrawFromDump: ok 12.3a 3 MP
+sourceKey(12.6c 分组键): 36.3|38.3
+# axis 35.10 truck
+30.4 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+31.6 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+40.12 | 4 | 40.12>39.12>38.11>37.11>36.10 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：4 MP ≤ 5 MP
+33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+36.3 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+38.3 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+canDrawFromDump: ok 12.3a 4 MP
+sourceKey(12.6c 分组键): 40.12
+# axis 36.11 truck
+30.4 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+31.6 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+40.12 | 3 | 40.12>39.12>38.11>37.12 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：3 MP ≤ 5 MP
+33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+36.3 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+38.3 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+canDrawFromDump: ok 12.3a 3 MP
+sourceKey(12.6c 分组键): 40.12
+# axis 36.11 leg
+30.4 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+31.6 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+40.12 | 3 | 40.12>39.12>38.11>37.12 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：3 MP ≤ 5 MP
+33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+36.3 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+38.3 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+canDrawFromDump: ok 12.3a 3 MP
+sourceKey(12.6c 分组键): 40.12
+# axis 40.12 truck
+30.4 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+31.6 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+40.12 | 0 | 40.12 | self | ok | 12.3a | - | 可直接拖取（12.3a）：0 MP ≤ 5 MP
+33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+36.3 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+38.3 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+canDrawFromDump: ok 12.3a 0 MP
+sourceKey(12.6c 分组键): 40.12
+# soviet 31.5 truck
+31.4 | 0 | 31.4 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：0 MP ≤ 5 MP
+canDrawFromDump: ok 12.3a 0 MP
+sourceKey(12.6c 分组键): 31.4
+# axis 37.3 truck
+30.4 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+31.6 | 5 | 31.6>32.5>33.5>34.4>35.4>36.3 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：5 MP ≤ 5 MP
+40.12 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+33.9 | null | null | self | blocked | 12.3a | directDrawOutOfRange | 过远（12.3a）：Infinity MP > 5 MP，且不与 dump 相邻
+36.3 | 0 | 36.3 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：0 MP ≤ 5 MP
+38.3 | 0 | 38.3 | viaAdjacency | ok | 12.3a | - | 可直接拖取（12.3a）：0 MP ≤ 5 MP
+canDrawFromDump: ok 12.3a 0 MP
+sourceKey(12.6c 分组键): 31.6|36.3|38.3
+@ 30.4 -> [30.5] axis truck maxMp=5: ok 1 MP
+@ 30.4 -> [36.6] axis truck maxMp=5: blocked unreachable
+@ 30.4 -> [36.6] axis truck maxMp=inf: ok 6 MP
+@ 30.4 -> [36.6,35.10] axis truck maxMp=5: blocked unreachable
+@ 36.11 -> [36.11] axis truck maxMp=5: ok 0 MP
+@ 36.11 -> [36.11] axis leg maxMp=5: ok 0 MP
+@ 40.12 -> [36.11] axis truck maxMp=5: blocked unreachable
+@ 40.12 -> [36.11] axis leg maxMp=5: ok 4 MP
+@ 33.9 -> [33.10,33.8] axis truck maxMp=5: blocked unreachable
+@ 29.4 -> [30.5] axis truck maxMp=5: blocked offMap
+@ 30.4 -> [29.4] axis truck maxMp=5: blocked offMap
+@ 30.4 -> [] axis truck maxMp=5: blocked offMap
+`.trim()
+
+describe('2b（阶段级源格距离表）：等距 / 多可达 / 12.6c 分组', () => {
+  it('逐字段 + 源集合与未改造代码完全一致（等距夹具）', () => {
+    expect(buildSnapshot(TIE_FACTS, TIE_CASES)).toBe(TIE_BASELINE)
+  })
+
+  it('等距多 dump：源集合完整且顺序稳定（不退化 argmin）', () => {
+    const sourceKeyOf = (hex: HexRef, side: Side): string =>
+      drawableDumpsFor(TIE_FACTS, { hex, side })
+        .filter((dump) => dump.ok)
+        .map((dump) => label(dump.hex))
+        .sort()
+        .join('|')
+    // (36,3) 与 (38,3) 都在 (37,3) 的六邻格内 ⇒ 到受益格集合均为 0 MP（等距）；
+    // 两座都必须 `ok` 且距离相等，但集合里还包含 5 MP 边界的 31.6 ⇒ 断言**完整集合**。
+    const dumps = drawableDumpsFor(TIE_FACTS, { hex: at(37, 3), side: 'axis' })
+    const byHex = new Map(dumps.map((dump) => [label(dump.hex), dump]))
+    expect(byHex.get('36.3')?.distanceMp).toBe(0)
+    expect(byHex.get('38.3')?.distanceMp).toBe(0)
+    expect(byHex.get('36.3')?.distanceMp).toBe(byHex.get('38.3')?.distanceMp)
+    expect(byHex.get('36.3')?.ok).toBe(true)
+    expect(byHex.get('38.3')?.ok).toBe(true)
+    expect(sourceKeyOf(at(37, 3), 'axis')).toBe('31.6|36.3|38.3')
+    // 同一格重复求值必须稳定（两次调用不许出现顺序/成员漂移）
+    expect(sourceKeyOf(at(37, 3), 'axis')).toBe(sourceKeyOf(at(37, 3), 'axis'))
+  })
+
+  it('12.6c：同一源集合仍按批次取整（2 个 1RE 单位 = 1T）', () => {
+    const sourceKey = drawableDumpsFor(TIE_FACTS, { hex: at(37, 3), side: 'axis' })
+      .filter((dump) => dump.ok)
+      .map((dump) => label(dump.hex))
+      .sort()
+      .join('|')
+    const unit = (id: string) => ({
+      id,
+      side: 'axis' as Side,
+      hex: at(37, 3),
+      isCombat: true,
+      steps: 2,
+      re: 1,
+      ar: 2,
+      mode: 'combat' as const,
+      internalStocks: null,
+      outOfSupply: false,
+      multiStep: false,
+    })
+    const plan = planSupplyPhase(TIE_FACTS, {
+      activeSide: 'axis',
+      units: [unit('a'), unit('b')],
+      mobility: 'truck',
+      availableT: 9,
+      eatOffTheMap: () => true,
+      feedingSources: {
+        a: { sourceKey, availableT: 9 },
+        b: { sourceKey, availableT: 9 },
+      },
+    })
+    expect(plan.feeding.map((item) => item.sourceKey)).toEqual([sourceKey, sourceKey])
+    expect(plan.feeding.map((item) => item.costT)).toEqual([1, 0])
+    expect(plan.remainingT).toBe(8)
   })
 })
