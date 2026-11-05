@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { mapLayers, scenarios } from '@/data'
 import type { HexRef } from '@/data'
-import { STACKING_LIMIT_RE } from '@/engine/rules'
+import { STACKING_LIMIT_RE, resolveModeStats } from '@/engine/rules'
 import { toConsoleUnit, unitChoices, useSetupStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -13,9 +13,9 @@ import { toConsoleUnit, unitChoices, useSetupStore, useWorkbenchStore } from '@/
  * | --- | --- | --- | --- |
  * | ⑭ | IV-F / IV-I | 初设放置拒绝超堆叠、拒绝不可进入格 | 引擎 `planSetupPlacement` 已支持 `existingRe`/`canEnter`，但 `stores/setup.ts#factsFor` 只注入 HQ/机场格 ⇒ 初设路径不校验 |
  * | ⑮ | IV-J | 初设新建单位一律未加注燃料 | **已覆盖**：`toConsoleUnit` 默认 `fuelled: false`（12.5a，2026-09-16 用户裁定）⇒ 本文件用活动用例锁住该行为，不再作为待批项 |
- * | ⑯ | 剧本 1 首回合 | 苏方地面单位以 1/2 MA 移动 | 数据 `setupInfo.sovietFirstTurnHalfMa` 有字符串，运行期无读取方；**取整方向原文未写明** ⇒ `it.skip` 留待口径裁定 |
+ * | ⑯ | 剧本 1 首回合 | 苏方地面单位以 1/2 MA 移动 | **取整口径已裁定**（4.1 + 6.1h：保留小数，MA 5 ⇒ 2.5，见 `docs/2026-11-05-取整规则对照表.md`）；但数据字段运行期无消费方，接线未获授权 ⇒ 行为用例仍 `it.skip`，另用活动用例锁口径 |
  *
- * 启用前置：⑭ 需先接线 `factsFor`；⑯ 需先定取整方向。均见
+ * 启用前置：⑭ 需先接线 `factsFor`；⑯ 的行为用例需先获批接线。均见
  * `docs/2026-11-05-待审批事项汇总.md`。
  */
 
@@ -98,9 +98,19 @@ describe.skip('待审批⑭：IV-F / IV-I 接线后的期望（审批后启用�
   })
 })
 
-describe.skip('待审批⑯：苏方首回合 1/2 MA（口径待裁定）', () => {
-  it.skip('口径待裁定：原文未写明 1/2 MA 的取整方向（A 向下 / B 向上 / C 保留小数）', () => {
-    // 启用前须先裁定取整方向；本用例故意留空，避免把猜测写成期望。
+describe('⑯ 取整口径（已裁定：4.1 + 6.1h 保留小数）', () => {
+  it('6.1h：1/2 后的 MA 保留小数（MA 5 ⇒ 2.5，不向上/向下取整）', () => {
+    const r = resolveModeStats(
+      { attack: 1, ar: 1, ma: 5 },
+      { mode: 'combat', orientation: 'combat', dg: true, exploit: false },
+      'movement',
+    )
+    expect(r.ma).toBe(2.5)
+  })
+
+  it.skip('苏方首回合 1/2 MA 接线（运行期无消费方；接线未获授权）', () => {
+    // 口径已定（见 docs/2026-11-05-取整规则对照表.md §4），但剧本字段尚无消费点：
+    // 启用前须先获批接线；本用例故意留空，避免把猜测写成期望。
   })
 })
 
