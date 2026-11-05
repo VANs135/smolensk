@@ -582,7 +582,7 @@ describe('12.3d 计费一律用正常地形成本（忽略天气与运输破坏�
     ).toMatchObject({
       ok: false,
     })
-    // 4.5b 抵消：源格内放一个己方战斗单位即抵消该格敌方 ZOC
+    // 12.6b + 4.5b：源格虽在敌方 ZOC 内，但格内有己方战斗单位 ⇒ 抵消，路径判定为未被阻断
     const negated = createTraceSupplyFacts({
       sources: [{ hex: sourceHex, side: 'axis', kind: 'detrainable' }],
       units: [enemy, { id: 'friendly', side: 'axis', hex: sourceHex, isCombat: true }],

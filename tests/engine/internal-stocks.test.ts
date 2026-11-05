@@ -129,6 +129,38 @@ describe('12.10a：唯一来源是编内卡车上的 SP ⇒ 例外允许用储�
   })
 })
 
+describe('12.10d：不得借用他单位的内部储备（即便同格堆叠）', () => {
+  it('12.10d：同栈两单位各用自己的储备降级，出资项没有"出资方"字段（不存在借用通道）', () => {
+    const plan = planCombatSupplyFunding({
+      units: [unit('rich', 1, 'low'), unit('poor', 1, null)],
+      availableMapT: 0,
+    })
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    expect(plan.data.funding).toEqual([
+      { unitId: 'rich', source: 'stocks', t: 1, from: 'low', to: 'exhausted' },
+      { unitId: 'poor', source: 'stocks', t: 1, from: null, to: 'low' },
+    ])
+    // 断言角度：接口本身没有 donor/借入字段 ⇒ "借用他单位储备"无数据通路
+    for (const item of plan.data.funding) {
+      expect(Object.keys(item).sort()).toEqual(['from', 'source', 't', 'to', 'unitId'])
+      expect(item.t).toBe(1) // 只等于**本单位**需求，不含他人份额
+    }
+  })
+
+  it('12.10d：邻单位储备再充足，也不替已耗尽单位出资 ⇒ 整笔仍按 12.10c 拒', () => {
+    const plan = planCombatSupplyFunding({
+      units: [unit('rich', 1, 'low'), unit('spent', 1, 'exhausted')],
+      availableMapT: 0,
+    })
+    expect(plan.ok).toBe(false)
+    if (plan.ok) return
+    // 若能借用，`spent` 会靠 `rich` 的储备过关；实际仍按 12.10c 拒
+    expect(plan.rule).toBe('12.10c')
+    expect(plan.reason).toBe('internalStocksExhausted:spent')
+  })
+})
+
 describe('12.10：需求为 0 时不动任何账本', () => {
   it('无参战单位 ⇒ 计划为空', () => {
     const plan = planCombatSupplyFunding({ units: [], availableMapT: 4 })
