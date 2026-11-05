@@ -355,6 +355,14 @@ describe('敌方 ZOC：轮式强制停止与 4.5b 抵消（4.5a-A / 4.5b）', ()
     })
   })
 
+  it('4.5b：垫人单位连"开始移动/高亮可达格"入口也一并拒绝（④ 统一口径）', () => {
+    const ctx = context([unit({ mpLockedThisPhase: true })])
+    const reach = computeReachableHexes(ctx, 'u1')
+    expect(reach.ok).toBe(false)
+    if (reach.ok) throw new Error('应当拒绝')
+    expect(reach).toMatchObject({ reason: 'mpLocked', rule: '4.5b' })
+  })
+
   it('4.5：断补或混乱的敌方单位不投射 ZOC', () => {
     const noSupply = context([
       unit({ mobility: 'truck', fuelled: true }),
