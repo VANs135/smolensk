@@ -1,6 +1,7 @@
 import type { HexRef, Side } from '@/data'
 
 import { HEX_DIRECTIONS, neighbor, sameHex } from '../hex-geometry'
+import { canEngineer, type ModeState } from './modes'
 import type { RailFacts } from './rail'
 import type { SupplyMobility } from './trace-supply'
 
@@ -57,9 +58,10 @@ export interface RailSupplyFacts extends Pick<RailFacts, 'railGaugeUsable'> {
   /**
    * 13.3c①后半：该格是否有**港口**或 `side` 方**具工程能力的指挥部**（13.8a）
    *
-   * 判据（同格 + 同方 + 战斗模式）见 `engineerCapableHqAt`；缺省视为无（不凭空放行）。
-   * ★ 仓内地图数据没有港口地形条目（`map-layers.json` 无 `Port`），故港口一侧恒 false，
-   *   已登记待审批（港口清单缺失）；工程 HQ 一侧由 store 注入，不再是恒 false。
+   * 判据（同格 + 同方 + 工程模式 13.8a）见 `engineerCapableHqAt`；缺省视为无（不凭空放行）。
+   * ★ 港口一侧：**本作无港口地形与港口专规**（用户裁定 2026-11-05；`map-layers.json` 无 `Port`
+   *   条目、专规亦无港口条文）；该判据恒 false 属**预期**，非遗漏，也不得为此伪造港口条目。
+   *   工程 HQ 一侧由 store 注入，不再是恒 false。
    */
   hasPortOrEngineerHqAt?(hex: HexRef, side: Side): boolean
   /** 13.3h：该格是否由 `side` **控制**（被敌军夺取即失去控制） */
@@ -132,8 +134,12 @@ export interface EngineerHqFacts {
   hex: HexRef
   /** 战斗单位（指挥部在库内均为 `isCombat: true`） */
   isCombat: boolean
-  /** 5.5b：工程职能须在**战斗模式**下执行（移动模式下的 HQ 不是 Engineer-Capable） */
-  mode: { mode: string }
+  /**
+   * 5.5b / 13.8a / 5.10e：模式状态（判据交给 `canEngineer`，不在这里另写一份）
+   *
+   * 13.8a 的例外（DG 但「朝向战斗面」）也只有 `canEngineer` 一处实现。
+   */
+  mode: ModeState
   /** `specialized` 含 `'hq'` 即指挥部 */
   specialized: readonly string[]
 }
@@ -155,7 +161,7 @@ export function engineerCapableHqAt(
     (unit) =>
       unit.side === side &&
       unit.isCombat &&
-      unit.mode.mode === 'combat' &&
+      canEngineer(unit.mode) &&
       unit.specialized.includes('hq') &&
       unit.hex.col === hex.col &&
       unit.hex.row === hex.row,

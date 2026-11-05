@@ -639,6 +639,20 @@ export function toConsoleUnit(input: {
 }
 
 /**
+ * 13.8a / 5.5b / 5.10e：该单位**此刻**是否具备工程能力（印值适格 **×** 模式）
+ *
+ * 13.8 首段：「**指挥部和工程兵 (Engineer)** 是唯二可执行工程能力（架桥、建造和创建火车卸货格）
+ * 的单位」⇒ 印值一侧仍由 `specialized` 定（`rail_repair` / `pioneer` 不算）。
+ * 5.5b：「Units must be in Combat Mode to convert railroad gauge (13.3f) and perform
+ * Engineering functions (13.8a)」——原文对**全部**工程职能一律要求战斗模式，没有按动作分档的例外；
+ * 唯一的例外来自 13.8a 自身：「or else be in **DG Mode and oriented toward Combat Mode** (per 5.10e)」。
+ * ⇒ 模式一侧**直接复用** `canEngineer`（`modes.ts` 里已是这两条原文的唯一实现），不另写判据。
+ */
+export function engineerCapableNow(unit: Pick<ConsoleUnit, 'engineerCapable' | 'mode'>): boolean {
+  return unit.engineerCapable === true && canEngineer(unit.mode)
+}
+
+/**
  * §5-D：这条记录是哪一种补员算子（`null` ＝ 不是补员）
  *
  * 判据只用单位库的结构化字段：`branch === 'replacement'` + 印刷名里的 `Pax` / `EQ`
@@ -2040,7 +2054,8 @@ export function createRailSupplyFacts(input: {
    * 13.3c①后半：该格是否有港口或本方具工程能力的指挥部（13.8a）
    *
    * 缺省视为无（**宁少勿多**）：不注入即意味着该类格永久不可卸货。
-   * 工程 HQ 一侧由 store 用 `engineerCapableHqAt` 注入（同格 ∧ 本方 ∧ 战斗模式 ∧ 指挥部）。
+   * 工程 HQ 一侧由 store 用 `engineerCapableHqAt` 注入（同格 ∧ 本方 ∧ 工程模式 13.8a ∧ 指挥部）。
+   * ★ 港口一侧恒 false 属**预期**：本作无港口地形与港口专规（用户裁定 2026-11-05），非遗漏。
    */
   hasPortOrEngineerHqAt?: (hex: HexRef, side: Side) => boolean
   /**

@@ -454,6 +454,8 @@ import {
   toConsolidationGroundView,
   toConsoleAirUnit,
   toConsoleUnit,
+  // 13.8a / 5.5b / 5.10e：工程能力须叠加模式（不只查印值适格）
+  engineerCapableNow,
   toMoveRuntime,
   toMoveUnitView,
   toExtenderView,
@@ -3028,7 +3030,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         return sides.size === 1 ? ([...sides][0] ?? null) : null
       },
       zocAt: (hex, side) => zocOnlySupplyFacts.value.inEnemyZoc(hex, side),
-      // 13.3c①后半 / 13.8a / 5.5b：港口（本作地图数据无港口格）或本方战斗模式指挥部
+      // 13.3c①后半 / 13.8a / 5.5b：本方具工程能力的指挥部。
+      // 港口分支恒 false 属预期：本作无港口地形与港口专规（用户裁定 2026-11-05），非遗漏。
       hasPortOrEngineerHqAt: (hex, side) => engineerCapableHqAt(units.value, hex, side),
       // 13.3f／专规 1.2：轨距只回答「谁能用这条铁路」（与 13.3a 多轨的运量费用无关）
       railGaugeUsable: (hex, side) => isRailGaugeUsableAt(hex, side),
@@ -12147,7 +12150,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 13.8a / 5.5b / 5.10e：该单位此刻是否具备工程能力（印值能力 × 模式） */
   function canEngineerInPhase(unit: ConsoleUnit): boolean {
-    if (!unit.engineerCapable) return false
+    if (!engineerCapableNow(unit)) return false
     return isLegal(
       checkLegality(
         buildLegalityRequest({
@@ -12235,7 +12238,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   ): Extract<ConstructionExecutor, { kind: 'engineer' }> {
     return {
       kind: 'engineer',
-      engineerCapable: engineer !== null && engineer.engineerCapable,
+      engineerCapable: engineer !== null && engineerCapableNow(engineer),
       unitId: engineer?.instanceId ?? '',
       movedThisPhase:
         engineer === null ||
@@ -12255,7 +12258,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   ): RuleFailure | null {
     return validateConstructionBase({
       phase: phase.value as GamePhase,
-      engineerCapable: engineer !== null && engineer.engineerCapable,
+      engineerCapable: engineer !== null && engineerCapableNow(engineer),
       movedThisPhase:
         engineer === null ||
         hasUnitMovementThisPhase(engineer.mpSpent, engineer.airTransportThisPhase),
@@ -15114,6 +15117,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         id: unit.instanceId,
         re: unit.re,
         mode: unit.mode.mode,
+        // 15.4：有人具工程能力时可免 RE≥1（13.8a 的印值适格 × 模式，此前该字段恒缺）
+        engineerCapable: engineerCapableNow(unit),
         // 15.4「且不能移动」：空运也改变过位置，不能仅查地面MP。
         movedThisPhase: hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase),
       }))

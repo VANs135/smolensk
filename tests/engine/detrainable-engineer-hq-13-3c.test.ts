@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
-import type { HexRef, Side } from '@/data'
+import { mapLayers, type HexRef, type Side } from '@/data'
 import {
   engineerCapableHqAt,
   railSupplyPath,
@@ -61,6 +61,14 @@ describe('13.3c①：港口 / 工程 HQ 使铁路格可卸货', () => {
     expect(path.railReachableHexes.map((item) => item.row)).toEqual([0, 1, 2, 3])
     expect(path.detrainableHexes).toEqual([])
   })
+
+  it('13.3c①「港口」半条：本作无港口地形（用户裁定 2026-11-05）⇒ 恒不可卸货', () => {
+    // 判定依据：`map-layers.json` 无 `Port` 条目、专规无港口条文
+    // ⇒ 港口一路恒 false 属**预期**；若剧本日后加入港口格，必须重新走裁定（待审批表 ⑰ 已裁定区）
+    expect(mapLayers.hexes.filter((hex) => (hex.terrainsPresent ?? []).includes('Port'))).toEqual(
+      [],
+    )
+  })
 })
 
 describe('13.3c① / 5.5b / 13.8a：Engineer-Capable HQ 的判据', () => {
@@ -68,7 +76,7 @@ describe('13.3c① / 5.5b / 13.8a：Engineer-Capable HQ 的判据', () => {
     side: 'axis',
     hex: at(2),
     isCombat: true,
-    mode: { mode: 'combat' },
+    mode: { mode: 'combat', orientation: 'combat', dg: false, exploit: false },
     specialized: ['hq'],
     ...over,
   })
@@ -78,7 +86,33 @@ describe('13.3c① / 5.5b / 13.8a：Engineer-Capable HQ 的判据', () => {
   })
 
   it('13.3c：移动模式的指挥部不算（5.5b：须在战斗模式才能执行工程职能）', () => {
-    expect(engineerCapableHqAt([hq({ mode: { mode: 'move' } })], at(2), 'axis')).toBe(false)
+    expect(
+      engineerCapableHqAt(
+        [hq({ mode: { mode: 'move', orientation: 'move', dg: false, exploit: false } })],
+        at(2),
+        'axis',
+      ),
+    ).toBe(false)
+  })
+
+  it('13.3c + 13.8a 例外：DG 但朝向战斗面的指挥部仍算（5.10e）', () => {
+    expect(
+      engineerCapableHqAt(
+        [hq({ mode: { mode: 'combat', orientation: 'combat', dg: true, exploit: false } })],
+        at(2),
+        'axis',
+      ),
+    ).toBe(true)
+  })
+
+  it('13.3c + 13.8a 例外反面：DG 但朝向移动面的指挥部不算（5.10e）', () => {
+    expect(
+      engineerCapableHqAt(
+        [hq({ mode: { mode: 'move', orientation: 'move', dg: true, exploit: false } })],
+        at(2),
+        'axis',
+      ),
+    ).toBe(false)
   })
 
   it('13.3c：敌方指挥部不算', () => {

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { describe, expect, it } from 'vitest'
 
 import { chartsCrt, mapLayers } from '@/data'
@@ -14,6 +16,7 @@ import {
   defenseTerrainChoices,
   defaultDefenseTerrain,
   effectiveMobilityOf,
+  engineerCapableNow,
   faceFactorsOf,
   hedgehogLevelAt,
   hexsideTerrainNames,
@@ -763,5 +766,78 @@ describe('9.12e / 9.12f：撤退事实的两条硬口径', () => {
     // 未给快照 ⇒ 退回当前盘面（无敌人 ⇒ 不挡）
     const live = createRetreatFacts({ units: [], context, retreatingUnitIds: [] })
     expect(live.enemyCombatUnitAt(NEIGHBOR, 'axis')).toBe(false)
+  })
+})
+
+/* ────────────── 13.8a / 5.5b：工程能力须叠模式（含 5.10e 的 DG 例外） ────────────── */
+
+describe('13.8a / 5.5b：工程能力 = 印值适格 × 模式', () => {
+  const HQ_RECORD: UnitRecordView = {
+    ...RECORD,
+    id: 'test-hq',
+    nameZh: '测试指挥部',
+    specialized: ['hq'],
+    classes: { combatClass: 'other', movementClass: 'leg' },
+    factors: {
+      combat: { attack: 0, ar: 0, ma: 2 },
+      move: { attack: 0, ar: 0, ma: 4 },
+    },
+  }
+
+  const hqUnit = (face: 'combat' | 'move' = 'combat'): ReturnType<typeof toConsoleUnit> =>
+    toConsoleUnit({ record: HQ_RECORD, instanceId: 'hq-1', hex: HEX, side: 'axis', face })
+
+  it('5.5b + 13.8a：战斗模式的指挥部可执行工程职能', () => {
+    expect(engineerCapableNow(hqUnit('combat'))).toBe(true)
+  })
+
+  it('5.5b：移动模式的指挥部**不能**执行工程职能（不得只看 specialized）', () => {
+    expect(engineerCapableNow(hqUnit('move'))).toBe(false)
+  })
+
+  it('13.8a 例外：DG 但朝向战斗面的指挥部仍算 Engineer-Capable（5.10e）', () => {
+    // DG 只替换「生效模式」，不改变朝向：战斗面朝上 ＝ mode 'combat' + dg 标记
+    const dg = hqUnit('combat')
+    dg.mode = { ...dg.mode, dg: true }
+    expect(engineerCapableNow(dg)).toBe(true)
+  })
+
+  it('13.8a 例外反面：DG 但朝向移动面的指挥部仍不算（「朝向」是例外的一半条件）', () => {
+    const dg = hqUnit('move')
+    dg.mode = { ...dg.mode, dg: true }
+    expect(engineerCapableNow(dg)).toBe(false)
+  })
+
+  it('13.8 首段：Pioneer / 铁路修理即使战斗模式也不算工程能力', () => {
+    const pioneer = toConsoleUnit({
+      record: { ...RECORD, id: 'test-pioneer', specialized: ['pioneer'] },
+      instanceId: 'pio-1',
+      hex: HEX,
+      side: 'axis',
+    })
+    expect(engineerCapableNow(pioneer)).toBe(false)
+    const railRepair = toConsoleUnit({
+      record: { ...RECORD, id: 'test-rr', specialized: ['rail_repair'] },
+      instanceId: 'rr-1',
+      hex: HEX,
+      side: 'axis',
+    })
+    expect(engineerCapableNow(railRepair)).toBe(false)
+  })
+})
+
+describe('接线守卫：13.8a 的模式判据必须落到施工与 15.4 的组装点', () => {
+  const text = readFileSync('src/stores/workbench.ts', 'utf8')
+
+  it('13.8a：施工执行者与施工前提均用 engineerCapableNow（不是裸 engineerCapable）', () => {
+    expect(text).toContain('engineerCapable: engineer !== null && engineerCapableNow(engineer)')
+  })
+
+  it('13.8a：工程候选清单用 engineerCapableNow', () => {
+    expect(text).toContain('if (!engineerCapableNow(unit)) return false')
+  })
+
+  it('13.8a：15.4 基地缩减的 operatingUnits 必须真的传 engineerCapable（此前恒缺）', () => {
+    expect(text).toContain('engineerCapable: engineerCapableNow(unit)')
   })
 })
