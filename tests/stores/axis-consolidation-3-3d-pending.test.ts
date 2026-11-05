@@ -14,17 +14,16 @@ import {
 } from '@/stores'
 
 /**
- * 待审批⑤：专规 3.3d **轴心国多单位编队不得整编**（13.9-1 / 13.9-4）
+ * 专规 3.3d：**轴心国多单位编队不得整编**（13.9-1 / 13.9-4）
  *
- * ## 状态：`describe.skip` —— 修前失败用例留待审批，**不改语义**
+ * 2026-11-05 用户裁定：收窄为"仅多单位编队"，照规则来；规则号由误标的 3.2 更正为 3.3d。
  *
  * 原文（`Smolensk_Rules_v1.1.txt:396-398` / `ch03-axis-special-rules.md`）：
  * 「**Axis multi-unit formations** cannot make use of Consolidation (OCS 13.9).」
- * —— 限定语是**多单位编队**。现实现仍为"含 axis 即拒"（登记库 `axis_special.no_consolidation`
- * 记成无限定布尔），并误标"专规 3.2"。是否按原文收窄，见 `docs/2026-11-05-待审批事项汇总.md` ⑤。
+ * —— 判据＝轴方参与**且**至少一枚带编队番号（`formation` 非空）；飞机不属编队，永不过闸。
  *
- * 复用 `consolidation-axis-ban.test.ts` 的夹具；启用 `describe.skip` 前请先拿到审批结论，
- * 再把判据改为 `keep/remove.formation`（地面）并让飞机不过闸。
+ * 三例覆盖：① 无编队独立 Inf Div 允许；② 带编队番号拒绝且日志规则号 3.3d；
+ * ③ 轴方飞机允许（13.9-4）。
  */
 
 const newStore = () => {
@@ -79,7 +78,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
 })
 
-describe.skip('待审批⑤：3.3d 收窄后的期望（审批后启用）', () => {
+describe('3.3d 收窄后（2026-11-05 裁定）：仅轴心国多单位编队不得整编', () => {
   it('轴方 Inf Div（无编队、多军力）可整编', () => {
     const store = newStore()
     armRebuildStep(store)

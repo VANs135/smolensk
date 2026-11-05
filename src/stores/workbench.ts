@@ -17220,23 +17220,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 专规 3.2（`axis_special.no_consolidation`）：**轴方不得整编**
+   * 专规 3.3d：**轴心国多单位编队不得整编**（13.9-1 / 13.9-4）
    *
-   * ⚠ 待审批⑤：原文 3.3d 只禁**轴心国多单位编队**整编（`Smolensk_Rules_v1.1.txt:396-398`）；
-   * 现口径来自登记库把 `no_consolidation` 记成无限定布尔，属**偏宽登记**，且规则号误标 3.2。
-   * 是否按原文收窄**待用户裁定**，见 `docs/2026-11-05-待审批事项汇总.md` ⑤；
-   * 失败用例已备于 `tests/stores/axis-consolidation-3-3d-pending.test.ts`（`describe.skip`）。
+   * 原文（`Smolensk_Rules_v1.1.txt:396-398`）：「**Axis multi-unit formations** cannot make use of
+   * Consolidation (OCS 13.9).」——限定语是**多单位编队**，不是"一切轴方单位"。
    *
-   * 判据＝这一手是轴方在下（动作方），**或**被合并的算子属轴方 —— 命中任一即拒，并留一条 warning。
-   * 正常流程里两条等价（13.9 只合并同方算子）；只挂动作方会在"动作方与算子阵营不一致"的
-   * 异常态下漏判，故两条都查。地面 13.9-1 与飞机 13.9-4 共用此处判据，避免两处口径漂移。
+   * 判据：动作方或被合并算子属轴方，**且**至少一枚带编队番号（`formation` 非空）才拒。
+   * 飞机不属多单位编队 ⇒ 传空数组，永不过闸。
+   * 本作数据中带 `formation` 的轴方地面单位全为多军力编队（13.9-1 本来就用不上），
+   * 因此收窄后的实际影响是：不再误拒 29 个无编队的独立 Inf Div。
    */
-  function axisConsolidationRefused(sides: readonly Side[], action: string): boolean {
+  function axisConsolidationRefused(
+    sides: readonly Side[],
+    formations: readonly (string | null | undefined)[],
+    action: string,
+  ): boolean {
     if (!sides.includes('axis')) return false
+    if (formations.every((formation) => formation == null || formation === '')) return false
     pushLog(
       'warning',
-      `专规 3.2：**轴心国不得整编**（${action}只对苏方开放）—— 本动作被拒，未改动任何账本`,
-      '专规 3.2',
+      `专规 3.3d：**轴心国多单位编队不得整编**（${action}只对无编队单位/苏方开放）—— 本动作被拒，未改动任何账本`,
+      '专规 3.3d',
     )
     return true
   }
@@ -17247,7 +17251,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const keep = units.value.find((unit) => unit.instanceId === keepId)
     const remove = units.value.find((unit) => unit.instanceId === removeId)
     if (keep === undefined || remove === undefined) return false
-    if (axisConsolidationRefused([activeSide.value, keep.side, remove.side], '合并多军力单位'))
+    if (
+      axisConsolidationRefused(
+        [activeSide.value, keep.side, remove.side],
+        [keep.formation, remove.formation],
+        '合并多军力单位',
+      )
+    )
       return false
     const data = acceptReinforcement(
       planConsolidation({
@@ -17289,11 +17299,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** B18：合并两架同类减损飞机（13.9-4：可在任何阶段进行） */
   function consolidateAircraftNow(keepId: string, removeId: string): boolean {
-    // 专规 3.2（`axis_special.no_consolidation`）：**轴方不得整编**（飞机同理，13.9-4 也受此限）
+    // 专规 3.3d：只禁**轴心国多单位编队**；飞机不属编队（13.9-4 不受此限）
     const keep = airUnits.value.find((air) => air.instanceId === keepId)
     const remove = airUnits.value.find((air) => air.instanceId === removeId)
     if (keep === undefined || remove === undefined) return false
-    if (axisConsolidationRefused([activeSide.value, keep.side, remove.side], '合并减损飞机'))
+    if (axisConsolidationRefused([activeSide.value, keep.side, remove.side], [], '合并减损飞机'))
       return false
     const view = (air: ConsoleAirUnit, other: ConsoleAirUnit) => ({
       id: air.instanceId,
