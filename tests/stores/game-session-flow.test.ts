@@ -62,7 +62,11 @@ describe('W6 C10：开局与初设（会话驱动）', () => {
     store.startGame()
     const setup = scenarios.scenarios[0]?.setup
     expect(store.records?.railCapacity).toEqual(setup?.railCap)
-    // 初设资源不再镜像到 records.counters：Supply Cache / 建造标记由 workbench 账本持有
+    expect(store.records?.counters.supplyCache).toEqual({
+      axis: setup?.supplyCache,
+      soviet: setup?.supplyCache,
+    })
+    expect(store.records?.counters.constructionMarkers).toBe(setup?.constructionMarkers)
     // 首回合天气按剧本指定（数据 'normal' ⇒ 引擎 'normal'）
     expect(store.records?.weather).toEqual({ air: 'normal', ground: 'good' })
   })

@@ -49,6 +49,11 @@ function createSession(overrides: Partial<Records> = {}): GameSession {
     railCapacity: { axis: 0, soviet: 2 },
     markerTracks: {},
     victoryLocations: [],
+    counters: {
+      reserveMarkers: { axis: 14, soviet: 0 },
+      supplyCache: { axis: 2, soviet: 2 },
+      constructionMarkers: 3,
+    },
     ...overrides,
   }
   return {

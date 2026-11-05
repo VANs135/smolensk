@@ -91,6 +91,11 @@ function createRecords(): Records {
     railCapacity: { axis: 1, soviet: 2 },
     markerTracks: { 'mk-rail-cap': 3 },
     victoryLocations: [{ hex: { col: 36, row: 13 }, controlledBy: 'axis', listed: true }],
+    counters: {
+      reserveMarkers: { axis: 14, soviet: 0 },
+      supplyCache: { axis: 2, soviet: 2 },
+      constructionMarkers: 3,
+    },
   }
 }
 
@@ -454,29 +459,25 @@ describe('W7 C15：存档错误的归类（界面照它说话，不自己解析�
   })
 
   /*
-   * ⑥/G5：`records.counters` 是"只写不读"的重复账本，已随清理批删除。
-   * 两条兼容性判据：
-   *   ① 新写的档**不再**出现该键（不再回写无人读取的镜像值）；
-   *   ② 旧档里多出该字段**被忽略而非报错**（读档只做骨架校验，不校验 records 明细）。
+   * ⑥/G5 等价性留档（**不删字段**，等用户拍板）：
+   * `records.counters` 是剧本初设的只写镜像——写入值可由 `scenarios[].setup` 复算，
+   * 运行期无消费者。本用例把"镜像值 = 剧本值"和"旧档缺该字段仍可读"两件事锁住，
+   * 供删除决策时直接引用；删除动作本身不在本批范围。
    */
-  it('⑥/G5：新档无 records.counters；旧档多出该字段仍可读', () => {
+  it('⑥/G5 等价性：counters 仅镜像剧本初设，且旧档缺该字段仍可读', () => {
     const text = serializeSaveFile(createSession(), SAVED_AT)
-    const fresh = JSON.parse(text) as {
-      session: { state: { records: Record<string, unknown> } }
+    const parsed = JSON.parse(text) as {
+      session: { state: { records: { counters?: unknown; turn: number } } }
     }
-    expect(fresh.session.state.records).not.toHaveProperty('counters')
-
-    const legacy = JSON.parse(text) as {
-      session: { state: { records: Record<string, unknown> } }
-    }
-    legacy.session.state.records['counters'] = {
+    expect(parsed.session.state.records.counters).toEqual({
       reserveMarkers: { axis: 14, soviet: 0 },
       supplyCache: { axis: 2, soviet: 2 },
       constructionMarkers: 3,
-    }
-    const loaded = deserializeSaveFile(JSON.stringify(legacy))
+    })
+
+    delete parsed.session.state.records.counters
+    const loaded = deserializeSaveFile(JSON.stringify(parsed))
     expect(loaded.session.state.records.turn).toBe(4)
-    // 读档不迁移也不裁剪：多余的键随原对象透传，行为不受影响
     expect(() => verifyRngState(loaded.session.state.rng)).not.toThrow()
   })
 })
