@@ -519,6 +519,59 @@ describe('5.4 模式切换时机与形态', () => {
     expect(verdict.ok).toBe(true)
   })
 
+  it('5.4a：0 MP 也能转入预备（"单位哪怕不移动也可以转入预备"）', () => {
+    const views = [unit()]
+    const verdict = canSwitchModeNow({
+      ...base,
+      to: 'reserve',
+      orientation: 'move',
+      context: context(views),
+      runtime: runtimeOf(views),
+    })
+    expect(verdict.ok).toBe(true)
+  })
+
+  it('5.4a：恰好 25% 可转入（MA 6 的 1/4 = 1.5），超过即拒', () => {
+    const views = [unit({ ma: 6 })]
+    const exactly = canSwitchModeNow({
+      ...base,
+      to: 'reserve',
+      orientation: 'move',
+      context: context(views),
+      runtime: runtimeOf(views).map((item) => ({ ...item, spentMp: 1.5 })),
+    })
+    expect(exactly.ok).toBe(true)
+    const over = canSwitchModeNow({
+      ...base,
+      to: 'reserve',
+      orientation: 'move',
+      context: context(views),
+      runtime: runtimeOf(views).map((item) => ({ ...item, spentMp: 1.51 })),
+    })
+    expect(over.ok).toBe(false)
+    if (!over.ok) expect(over.rule).toBe('5.4a')
+  })
+
+  it('5.4a：MA 5 的 25% 是 1.25（U4 不取整）⇒ 1.25 可转、1.5 拒', () => {
+    const views = [unit({ ma: 5 })]
+    const boundary = canSwitchModeNow({
+      ...base,
+      to: 'reserve',
+      orientation: 'move',
+      context: context(views),
+      runtime: runtimeOf(views).map((item) => ({ ...item, spentMp: 1.25 })),
+    })
+    expect(boundary.ok).toBe(true)
+    const over = canSwitchModeNow({
+      ...base,
+      to: 'reserve',
+      orientation: 'move',
+      context: context(views),
+      runtime: runtimeOf(views).map((item) => ({ ...item, spentMp: 1.5 })),
+    })
+    expect(over).toMatchObject({ ok: false, rule: '5.4a' })
+  })
+
   it('5.4 + 6.1g：已消耗过 MP 就不能再切（切换发生在开始移动时）', () => {
     const views = base.context.units as readonly MoveUnitView[]
     const runtime = runtimeOf(views).map((item) => ({ ...item, spentMp: 1 }))

@@ -29,6 +29,7 @@ import {
   type FuelMarker,
   type FuelMethod,
 } from './fuel'
+import { reserveQuarterMa } from './reserve-markers'
 
 /**
  * 移动交互（C5，OCS 6.0 / 6.1 / 6.3 / 4.5 / 5.4 / 12.5）——**纯函数状态机**
@@ -663,12 +664,31 @@ export function canSwitchModeNow(input: ModeSwitchNowInput): ModeSwitchResult {
     return { ok: false, rule: '5.4 / 14.9d', reason: '本阶段已经空运，不能再切换主动模式' }
   if (item.ended)
     return { ok: false, rule: '5.4', reason: '本轮移动已结束，不能再切换模式（6.1g）' }
-  if (item.spentMp > 0)
+  /*
+   * 5.4a + 用户 2026-11-06 裁定：预备模式的**准入**只看已耗 MP 是否 ≤ 当前面 MA 的 1/4
+   * （25% 边界上允许；**0 MP 也满足**——"单位哪怕不移动也可以转入预备"）。
+   * 原文「完成 25% 的移动后，才需要放置该预备标记」管的是**实体标记的摆放时点**，
+   * 不是准入；额度在转入那一刻由状态层占用（见 `placeReserveMarkersAtEntry`）。
+   * 其它主动模式仍受 5.4「在该单位/堆叠开始移动时切换」的原限制。
+   */
+  if (to === 'reserve') {
+    const quarterMa = reserveQuarterMa(view.ma)
+    if (item.spentMp > quarterMa + 1e-9)
+      return {
+        ok: false,
+        rule: '5.4a',
+        reason: `已耗 ${item.spentMp} MP 超过当前面 MA ${view.ma} 的 25%（${quarterMa}），不能再进入预备模式`,
+      }
+  } else if (item.spentMp > 0)
     return {
       ok: false,
       rule: '5.4',
       reason: '模式切换只在该单位开始移动时进行，本阶段已消耗过 MP（6.1g）',
     }
+  /*
+   * 5.7g 不在此处拦：原文只约束「在任何**移动环节结束时**」，转入预备后仍可在本环节内走离
+   * 工事格。停步的拦截见 `reachableHexes`（工事格不得作可停终点）与 `finishMove` 的兜底。
+   */
 
   return canSwitchMode({
     to,

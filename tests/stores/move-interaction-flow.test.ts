@@ -520,16 +520,31 @@ describe('C5 模式切换（5.4）与燃料支付（12.5）', () => {
     expect(plain.log.some((entry) => entry.rule === '5.7g')).toBe(false)
   })
 
-  it('已消耗 MP 之后不能切换模式（5.4 时机 + 6.1g）', () => {
+  it('已耗 MP 之后不能切到主动模式（5.4 时机 + 6.1g）', () => {
     const unit = place(store, legCombat(), START, 'axis', 'a1')
     store.clickHex(START)
     expect(store.confirmMovePick()).toBe(true)
     const node = store.groupReachable.hexes.find((item) => item.mpSpent > 0)!
     store.clickHex(node.hex)
 
-    store.switchUnitMode('reserve')
-    expect(unit.mode.mode).not.toBe('reserve')
+    // 5.4：「在该单位/堆叠**开始移动时**切换」⇒ 已迈步后不能再切到主动模式。
+    // （转预备不受这条限制：5.4a 只要求已耗 MP ≤ 当前面 MA 的 1/4，见
+    //   `tests/engine/move-interaction.test.ts` 的 5.4a 用例）
+    store.switchUnitMode('move')
+    expect(unit.mode.mode).not.toBe('move')
     expect(store.log[0]!.text).toContain('不能切换到')
+  })
+
+  it('已耗 MP（≤25%）仍可转预备（5.4a）', () => {
+    const unit = place(store, legCombat(), START, 'axis', 'a2')
+    store.clickHex(START)
+    expect(store.confirmMovePick()).toBe(true)
+    const node = store.groupReachable.hexes.find((item) => item.mpSpent > 0)!
+    store.clickHex(node.hex)
+
+    store.switchUnitMode('reserve')
+    expect(unit.mode.mode).toBe('reserve')
+    expect(store.reserveMarkerGroups).toHaveLength(1)
   })
 
   it('12.5a/12.5c：未加注燃料的轮式战斗单位不能移动，付燃料后即可', () => {
