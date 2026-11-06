@@ -2,10 +2,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
+import { HEX_DIRECTIONS, neighbor } from '@/engine/hex-geometry'
 import { EXTENDER_REQUIRED_POINTS, isConvertibleTransportPoint } from '@/engine/rules'
 import { isExtenderUnit, toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 
-import { CORE_HEX, placeGround } from '../flows/sop-harness'
+import { CORE_HEX, NEAR_HEX, placeGround } from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
 
 /**
@@ -293,6 +294,44 @@ describe('12.7d：延补队 → 5 点运输点数（主动翻面，移动环节 
     store.setPhase('supply')
     expect(store.flipExtenderToTransport(extender.instanceId)).toBe(false)
     expect(store.units.filter(isExtenderUnit)).toHaveLength(1)
+  })
+})
+
+/** 另一个图内邻格（与 NEAR_HEX 不同格；12.7e 的「来自不同格」用） */
+const FAR_HEX: HexRef = neighbor(CORE_HEX, HEX_DIRECTIONS[2])
+
+describe('12.7e：延补队的运输点数可来自不同格（移到同格后组合）', () => {
+  it('两枚运输点数各在不同格，移到同一格后合计 5 点 ⇒ 可生成延补队', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    declareSource(store, CORE_HEX)
+    placeTransportPoint(store, 'truck', 3, NEAR_HEX, 'tp-a')
+    placeTransportPoint(store, 'truck', 2, FAR_HEX, 'tp-b')
+
+    // 12.7e：来源格不同不妨碍组合——先把两枚移到同一格（行走本身由 6.x 结算）
+    store.units.find((unit) => unit.instanceId === 'tp-a')!.hex = CORE_HEX
+    store.units.find((unit) => unit.instanceId === 'tp-b')!.hex = CORE_HEX
+
+    expect(store.convertTransportToExtenderNow(`${CORE_HEX.col}.${CORE_HEX.row}`, 'truck')).toBe(
+      true,
+    )
+    expect(store.units.filter(isExtenderUnit)).toHaveLength(1)
+    // 3 + 2 = 5 点整 ⇒ 全部被消耗
+    expect(store.transportPointsOfSide).toHaveLength(0)
+  })
+
+  it('还各在一格时不能组合 ⇒ 单格不足 5 点 ⇒ 拒（12.7e 的「移到同一格」前提）', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    declareSource(store, CORE_HEX)
+    placeTransportPoint(store, 'truck', 3, NEAR_HEX, 'tp-a')
+    placeTransportPoint(store, 'truck', 2, FAR_HEX, 'tp-b')
+
+    expect(store.convertTransportToExtenderNow(`${CORE_HEX.col}.${CORE_HEX.row}`, 'truck')).toBe(
+      false,
+    )
+    expect(store.units.filter(isExtenderUnit)).toHaveLength(0)
+    expect(store.transportPointsOfSide).toHaveLength(2) // 账本一字未动
   })
 })
 
