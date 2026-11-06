@@ -218,3 +218,83 @@ describe('5.4a 读档往返（额度由 units 派生，无需重放日志）', (
     expect(hasMarker(store.units[0]!.mode, 'reserve')).toBe(true)
   })
 })
+
+describe('5.7 / 5.4a 归并：不同起点各走 1/4 MA 进同格 ⇒ 自动腾出一格额度', () => {
+  /**
+   * 用户 2026-11-06 场景：两处预备单位各走 1/4 MA 归并到同一格后，是否由一枚标记覆盖
+   * （＝腾出一枚额度），以及同段内尚未开拔的单位能否立刻用这枚腾出的额度。
+   *
+   * 原文：5.7「预备模式单位在本方常规移动阶段可移动 1/4 MA」；5.4a「玩家可以用**一个**预备标记
+   * 表示**堆叠中一部分单位全部处于预备模式**」（portion 以堆叠/格为界 ⇒ 同格即一枚）；
+   * 5.4「各单位/堆叠在**开始移动那一刻**改模式」⇒ 尚未开拔的单位在本段稍后仍可转入。
+   * 4.8a「单位在**移动过程中**可以暂时超堆叠」⇒ 归并本身不因堆叠被拒，超堆叠只在环节末结算。
+   */
+  it('★ 两格各转预备（占 2）→ 各走 1/4 MA 归并同格（占 1）→ 第 5 个未开拔单位同段转入成功（上限 4）', () => {
+    const { workbench: store, game } = newStores()
+    expect(game.setScenarioId('3')).toBe(true) // 苏方 4 枚（setup.reserveMarkers）
+    store.setActiveSide('soviet')
+
+    const a = place(store, leg('soviet'), START, 'soviet', 'a1')
+    store.clickHex(START)
+    store.switchUnitMode('reserve')
+    store.cancelMovePick()
+    expect(a.mode.mode).toBe('reserve')
+
+    // 用该单位自己的可到达范围挑归并目标（不猜地形，确保目标在 1/4 MA 之内）
+    store.clickHex(START)
+    expect(store.confirmMovePick()).toBe(true)
+    const probe = store.groupReachable.hexes[0]
+    expect(probe).toBeDefined()
+    expect(store.abortMoveNow()).toBe(true)
+    const T = probe!.hex
+    expect(hexKey(T)).not.toBe(hexKey(START))
+
+    const b = place(store, leg('soviet'), T, 'soviet', 'b1')
+    store.clickHex(T)
+    store.switchUnitMode('reserve')
+    store.cancelMovePick()
+    expect(b.mode.mode).toBe('reserve')
+
+    const c1: HexRef = { col: 50, row: 30 }
+    const c2: HexRef = { col: 48, row: 28 }
+    for (const [hex, id] of [
+      [c1, 'c1'],
+      [c2, 'c2'],
+    ] as const) {
+      const unit = place(store, leg('soviet'), hex, 'soviet', id)
+      store.clickHex(hex)
+      store.switchUnitMode('reserve')
+      store.cancelMovePick()
+      expect(unit.mode.mode).toBe('reserve')
+    }
+    expect(store.reservedHexes('soviet')).toHaveLength(4)
+
+    // 上限已满：第 5 个**新格**被拒
+    const eHex: HexRef = { col: 46, row: 26 }
+    const e = place(store, leg('soviet'), eHex, 'soviet', 'e1')
+    store.clickHex(eHex)
+    store.switchUnitMode('reserve')
+    expect(e.mode.mode).toBe('combat')
+    store.cancelMovePick()
+
+    // a 走 1/4 MA 进入 b 所在格（归并；4.8a 允许移动中暂时超堆叠）
+    store.clickHex(START)
+    expect(store.confirmMovePick()).toBe(true)
+    store.clickHex(T)
+    expect(a.hex).toEqual(T)
+    expect(a.mpSpent).toBeGreaterThan(0)
+    store.finishMove()
+    expect(hasMarker(a.mode, 'reserve')).toBe(true)
+    expect(hasMarker(b.mode, 'reserve')).toBe(true)
+
+    // 同格两枚预备 ⇒ 只占 1 格；a 的起点格腾出 ⇒ 占用 4 → 3
+    expect(store.reservedHexes('soviet')).toHaveLength(3)
+    expect(store.reservedHexes('soviet')).toContain(hexKey(T))
+
+    // 同段内还有尚未开拔的单位 ⇒ 5.4 时机仍在窗口内；额度已腾出 ⇒ 可以转入
+    store.clickHex(eHex)
+    store.switchUnitMode('reserve')
+    expect(e.mode.mode).toBe('reserve')
+    expect(store.reservedHexes('soviet')).toHaveLength(4)
+  })
+})

@@ -36,6 +36,23 @@ describe('5.4a 额度按格计', () => {
     expect(hexes).toHaveLength(3)
   })
 
+  it('归并（5.7 各走 1/4 MA 进同格）：两格 → 同格后只占 1 格，额度自动腾出', () => {
+    // 归并前：起点 A、B 两处各 1 枚
+    expect(reserveHexesInUse([view('10.10'), view('11.11')], 'axis')).toHaveLength(2)
+    // 归并后：两枚都在 C（A、B 已空 ⇒ 只剩 C 一格）
+    const after = reserveHexesInUse([view('12.12'), view('12.12')], 'axis')
+    expect(after).toEqual(['12.12'])
+    // 腾出的那一格额度可立刻被一个新格使用（cap=2）
+    expect(
+      allowReserveEntryAtHex({
+        side: 'axis',
+        cap: 2,
+        hex: '13.13',
+        occupiedHexes: after,
+      }).ok,
+    ).toBe(true)
+  })
+
   it('不统计敌方与不在预备模式的单位', () => {
     const hexes = reserveHexesInUse(
       [view('10.10'), view('9.9', { side: 'soviet' }), view('10.10', { inReserve: false })],
