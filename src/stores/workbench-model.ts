@@ -825,7 +825,10 @@ export function effectiveMobilityOf(unit: ConsoleUnit): MoveUnitView['mobility']
 }
 
 /** 操作台算子 → 引擎移动视图（MoveUnitView） */
-export function toMoveUnitView(unit: ConsoleUnit): MoveUnitView {
+export function toMoveUnitView(
+  unit: ConsoleUnit,
+  options: { scenarioMaFactor?: number } = {},
+): MoveUnitView {
   return {
     id: unit.instanceId,
     side: unit.side,
@@ -845,6 +848,8 @@ export function toMoveUnitView(unit: ConsoleUnit): MoveUnitView {
     fuelled: unit.fuelled,
     // 4.5b：垫人承诺（一旦许诺，该单位本阶段起不能再消耗 MP，也不可再移动）
     mpLockedThisPhase: unit.mpLockedThisPhase,
+    // 专规 1.5 / 剧本 1–2：首回合苏军地面单位 ×1/2（由调用方注入，缺省 1）
+    scenarioMaFactor: options.scenarioMaFactor ?? 1,
     // 12.7 的延补队面不由操作台模拟：摆上来的算子按运输点数面处理，故 isExtenderFace 缺省为 false
   }
 }
@@ -961,12 +966,20 @@ export function buildMoveContext(input: {
    * ★ 缺省不注入 ⇒ 视为无工事（不臆造）；调用方用 `hedgehogLevelOf` 注入（印刷 + 已建 - 已降）。
    */
   hedgehogLevelAt?: (hex: HexRef) => number
+  /**
+   * 专规 1.5 / 剧本 1–2：逐单位的剧本移动力系数（首回合苏军 ×1/2）
+   *
+   * 缺省 1；调用方按剧本/回合/阵营算好后注入，保证引擎可达性/取费与界面显示同一口径。
+   */
+  maFactorOf?: (unit: ConsoleUnit) => number
 }): MoveContext {
   return {
     phase: input.phase,
     activeSide: input.activeSide,
     map: createMapFacts(),
-    units: input.units.map(toMoveUnitView),
+    units: input.units.map((unit) =>
+      toMoveUnitView(unit, { scenarioMaFactor: input.maFactorOf?.(unit) ?? 1 }),
+    ),
     ...(input.safeEdgeHexesBySide === undefined
       ? {}
       : { safeEdgeHexesBySide: input.safeEdgeHexesBySide }),
@@ -989,8 +1002,12 @@ export function stepUnit(
 }
 
 /** 本阶段该单位的可用 MA（6.1h 不取整；供界面显示额度） */
-export function availableMaOf(unit: ConsoleUnit, phase: MovementSegmentPhase): number {
-  return availableMa(toMoveUnitView(unit), phase)
+export function availableMaOf(
+  unit: ConsoleUnit,
+  phase: MovementSegmentPhase,
+  scenarioMaFactor = 1,
+): number {
+  return availableMa(toMoveUnitView(unit, { scenarioMaFactor }), phase)
 }
 
 /**

@@ -68,6 +68,9 @@ export const STRAT_MA_MULT = rulesConstants.modes.stratMaMult
 export const RESERVE_DEFEND_MULT = rulesConstants.modes.reserveDefendMult
 /** 预备模式：常规移动阶段 ×1/4（5.7） */
 export const RESERVE_MA_NORMAL_MULT = rulesConstants.modes.reserveMaNormalMult
+
+/** 专规 1.5 / 剧本 1–2：苏方首回合地面单位 MA 再打折的倍率（与模式折算相乘） */
+export const FIRST_TURN_HALF_MA_MULT = rulesConstants.modes.firstTurnHalfMaMult
 /** 预备模式：反应阶段释放后 ×1/2（5.7b-B） */
 export const RESERVE_MA_REACTION_MULT = rulesConstants.modes.reserveMaReactionMult
 /** 预备模式：进击阶段释放后 ×1（5.7b-A：拥有完整的移动能力） */

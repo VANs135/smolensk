@@ -60,7 +60,8 @@
     "reserveMaNormalMult": 0.25,
     "reserveMaReactionMult": 0.5,
     "reserveMaExploitMult": 1,
-    "exploitMaMult": 0.5
+    "exploitMaMult": 0.5,
+    "firstTurnHalfMaMult": 0.5
   },
   "movement": {
     "minimumMoveHexes": 1,

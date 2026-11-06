@@ -233,9 +233,18 @@ const budgetRows = computed(() =>
   workbench.moveUnits.map((unit) => ({
     id: unit.instanceId,
     name: unit.name,
-    ma: availableMaOf(unit, movementPhaseOf(workbench.phase)),
+    ma: availableMaOf(
+      unit,
+      movementPhaseOf(workbench.phase),
+      workbench.sovietFirstTurnMaFactor(unit),
+    ),
     spent: unit.mpSpent,
-    remaining: availableMaOf(unit, movementPhaseOf(workbench.phase)) - unit.mpSpent,
+    remaining:
+      availableMaOf(
+        unit,
+        movementPhaseOf(workbench.phase),
+        workbench.sovietFirstTurnMaFactor(unit),
+      ) - unit.mpSpent,
     ended: unit.movementEnded,
   })),
 )
@@ -244,7 +253,11 @@ const budgetRows = computed(() =>
 const selectedAvailableMa = computed(() => {
   const unit = workbench.selectedUnit
   if (unit === null) return 0
-  return availableMaOf(unit, movementPhaseOf(workbench.phase))
+  return availableMaOf(
+    unit,
+    movementPhaseOf(workbench.phase),
+    workbench.sovietFirstTurnMaFactor(unit),
+  )
 })
 
 /** 选中算子是否需要燃料且尚未加注（12.5a） */

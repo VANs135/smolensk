@@ -67,6 +67,14 @@ export interface MoveUnitView {
   releasedFromReserve: boolean
   /** 14.9d / 4.7d：本阶段已提交的单位空运事实，与实际MP消耗分开。 */
   airTransportThisPhase?: AirUnitTransportState | null
+  /**
+   * 专规 1.5 / 剧本 1–2：苏方首回合地面单位移动力 ×1/2
+   *
+   * 「all of their ground units move at 1/2 MA on the first turn. This can be further adjusted
+   * by mode effects (e.g., DG).」⇒ 与模式折算**相乘**（6.1h 不取整）。
+   * 由调用方按剧本/回合/阵营注入（引擎不读剧本数据）；缺省 1。
+   */
+  scenarioMaFactor?: number
   /** 是否已加注燃料（12.5；仅「轮式/履带 MP 的战斗单位」需要） */
   fuelled: boolean
   /**

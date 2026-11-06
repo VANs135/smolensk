@@ -140,6 +140,13 @@ export const ModesSectionSchema = z
     reserveMaExploitMult: z.number().positive(),
     /** 进击模式：移动 ×1/2（5.9） */
     exploitMaMult: z.number().positive(),
+    /**
+     * 苏方首回合移动力 ×1/2（专规 1.5；剧本 1/2 顶层数据位 `sovietFirstTurnHalfMa`）
+     *
+     * 原文「all of their ground units move at 1/2 MA on the first turn. This can be further
+     * adjusted by mode effects (e.g., DG).」⇒ 与模式折算**相乘**，6.1h 不取整。
+     */
+    firstTurnHalfMaMult: z.number().positive(),
   })
   .strict()
 

@@ -396,6 +396,7 @@ import {
   canSetModeAtSetup,
   hasMarker,
   reserveHexesInUse,
+  FIRST_TURN_HALF_MA_MULT,
 } from '@/engine/rules'
 import { createId } from '@/shared'
 
@@ -1901,6 +1902,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         .map((piece) => piece.hex),
     ),
   )
+  /**
+   * 专规 1.5 / 剧本 1–2：苏方**地面单位**在剧本首回合以 1/2 MA 移动
+   *
+   * 原文「The Soviets are in disarray, so all of their ground units move at 1/2 MA on the first
+   * turn. This can be further adjusted by mode effects (e.g., DG).」
+   * ⇒ 仅当剧本顶层数据位 `sovietFirstTurnHalfMa` 存在、阵营为苏方、且当前回合 = 本剧本首回合
+   *   时返回 0.5；其余 1。与模式折算**相乘**（`availableMa` 内完成），6.1h 不取整。
+   * 本 store 的 `units` 只含地面单位（飞机在 `airUnits`）⇒ 无需再判空地。
+   */
+  function sovietFirstTurnMaFactor(unit: ConsoleUnit): number {
+    if (session.scenarioInfo?.sovietFirstTurnHalfMa === undefined) return 1
+    if (unit.side !== 'soviet') return 1
+    return turn.value === scenarioTurnRange(scenarioId.value).firstTurn
+      ? FIRST_TURN_HALF_MA_MULT
+      : 1
+  }
+
   /** 当前移动上下文（每次派生都重建，保证与摆子/切方一致） */
   const moveContext = computed(() =>
     buildMoveContext({
@@ -1925,6 +1943,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
        * 工事等级取与工事面板同一处（`hedgehogLevelOf`：印刷永久工事 + 本回合已建 − 已降）。
        */
       hedgehogLevelAt: (hex) => hedgehogLevelOf(hex),
+      // 专规 1.5：首回合苏军地面单位 ×1/2（与模式折算相乘）
+      maFactorOf: sovietFirstTurnMaFactor,
     }),
   )
   /** 已选定交战的守方单位（9.3b/9.6 用；按实例 id 保持摆放顺序） */
@@ -4820,7 +4840,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const unit = units.value.find((item) => item.instanceId === id)
       if (unit === undefined) continue
       if (unit.movementEnded && !zocStoppedMoveUnitIds.value.includes(id)) continue
-      const ma = availableMaOf(unit, movementPhaseOf(phase.value))
+      const ma = availableMaOf(unit, movementPhaseOf(phase.value), sovietFirstTurnMaFactor(unit))
       min = Math.min(min, ma - unit.mpSpent)
     }
     return Number.isFinite(min) ? min : 0
@@ -6147,7 +6167,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (unit === undefined || step === undefined) return []
       mpRemaining = Math.min(
         mpRemaining,
-        availableMaOf(unit, movementPhaseOf(phase.value)) - unit.mpSpent - step.cost,
+        availableMaOf(unit, movementPhaseOf(phase.value), sovietFirstTurnMaFactor(unit)) -
+          unit.mpSpent -
+          step.cost,
       )
     }
     // 8.1d：突袭从**进入后的那一格**发起 ⇒ 上下文里这几枚的位置前移到目标格（其余一律不动）
@@ -20446,6 +20468,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     movePick,
     // 5.4a：预备额度按格派生（同格已有预备单位 ⇒ 不额外占；界面/测试读它核对占用）
     reservedHexes,
+    // 专规 1.5 / 剧本 1–2：首回合苏军地面单位 ×1/2（界面额度显示与引擎同一口径）
+    sovietFirstTurnMaFactor,
     movePickHex,
     movePickChoices,
     toggleMovePick,
