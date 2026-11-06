@@ -1262,6 +1262,77 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 阶段/换方/换回合清空（`resetMovementTracking`）。
    */
   const pausedTransportIds = ref<string[]>([])
+
+  /**
+   * 12.2a / 12.2b：本阶段的 SP 接力账本
+   *
+   * 原文只给「同一个 SP」的规则，本作没有逐 SP 身份 ⇒ 按「格 + 方 + 方式 + T」近似记账；
+   * 12.2b 的「立即使用」边界取「同阶段该站持仓减少」，更细的时点原文未给，不扩展。
+   * 只在内存中按阶段存活（`resetMovementTracking` 清零），不进存档。
+   */
+  const spRelayLocks = ref<
+    Array<{ phaseKey: string; hex: string; side: Side; mode: 'transport' | 'rail'; t: number }>
+  >([])
+
+  function spRelayPhaseKey(): string {
+    return `${turn.value}|${activeSide.value}|${phase.value}`
+  }
+
+  function hexKeyText(hex: HexRef): string {
+    return `${hex.col}.${hex.row}`
+  }
+
+  /** 12.2a：该格该方本阶段已由**其他方式**移动过的 T（同方式不锁） */
+  function spRelayLockedT(hex: HexRef, side: Side, mode: 'transport' | 'rail'): number {
+    const key = spRelayPhaseKey()
+    const hexKey = hexKeyText(hex)
+    return spRelayLocks.value
+      .filter(
+        (lock) =>
+          lock.phaseKey === key && lock.hex === hexKey && lock.side === side && lock.mode !== mode,
+      )
+      .reduce((sum, lock) => sum + lock.t, 0)
+  }
+
+  /** 12.2a：在该格记下「这批 T 已由某种方式移动」 */
+  function addSpRelayLock(hex: HexRef, side: Side, mode: 'transport' | 'rail', t: number): void {
+    if (t <= 0) return
+    const phaseKey = spRelayPhaseKey()
+    const hexKey = hexKeyText(hex)
+    const existing = spRelayLocks.value.find(
+      (lock) =>
+        lock.phaseKey === phaseKey &&
+        lock.hex === hexKey &&
+        lock.side === side &&
+        lock.mode === mode,
+    )
+    if (existing !== undefined) {
+      existing.t += t
+      return
+    }
+    spRelayLocks.value = [...spRelayLocks.value, { phaseKey, hex: hexKey, side, mode, t }]
+  }
+
+  /** 12.2b：该站持仓减少 ⇒ 按最早锁优先释放（原文「立即使用掉」在本实现取同阶段边界） */
+  function releaseSpRelayLocks(hex: HexRef, side: Side, t: number): void {
+    if (t <= 0) return
+    const phaseKey = spRelayPhaseKey()
+    const hexKey = hexKeyText(hex)
+    let remaining = t
+    spRelayLocks.value = spRelayLocks.value.flatMap((lock) => {
+      if (
+        remaining <= 0 ||
+        lock.phaseKey !== phaseKey ||
+        lock.hex !== hexKey ||
+        lock.side !== side
+      ) {
+        return [lock]
+      }
+      const used = Math.min(lock.t, remaining)
+      remaining -= used
+      return lock.t - used > 0 ? [{ ...lock, t: lock.t - used }] : []
+    })
+  }
   /** 上次移动被拒/受阻的原因（供界面显示） */
   /**
    * 演示用补给池（12.5c 的 SP / T）
@@ -3557,6 +3628,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     const amount = Math.max(1, Math.trunc(transportLoadInputs.value.amount))
+    // 12.2a：该格本阶段若已有 SP 由**其他**运输方式卸下，则这批 T 不能再装到运输点数上
+    if (dump !== undefined) {
+      const lockedT = spRelayLockedT(dump.hex, dump.side, 'transport')
+      const availableT = holdingsToT({ sp: dump.sp, t: dump.t }) - lockedT
+      if (lockedT > 0 && amount * SP_TO_T > availableT) {
+        transportLoadError.value = { rule: '12.2a', reason: 'relayLockedOtherMode' }
+        pushLog(
+          'warning',
+          `12.2a：该格本阶段由其他运输方式卸下的 ${lockedT} T 不能再装于运输点数（可换回原方式，或等下一阶段）`,
+          '12.2a',
+        )
+        return false
+      }
+    }
     const payment = planSpPayment({
       holdings: { sp: dump?.sp ?? 0, t: dump?.t ?? 0 },
       wantT: amount * SP_TO_T,
@@ -3644,6 +3729,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     unit.loadedSpT -= amount * SP_TO_T
     grantSpDumpT(unit.hex, unit.side, amount * SP_TO_T)
+    // 12.2a：这批 T 本阶段已由「运输点数」卸下 ⇒ 之后不能再用铁路等其他方式运走
+    addSpRelayLock(unit.hex, unit.side, 'transport', amount * SP_TO_T)
     unit.mpSpent += outcome.data.cost
     transportLoadError.value = null
     pushLog(
@@ -3839,6 +3926,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     } else {
       const amountT = cargo.amount * SP_TO_T
       const dump = spDumps.value.find((item) => item.id === railMoveInputs.value.fromDumpId) ?? null
+      // 12.2a：该格本阶段若已有 SP 由**其他**运输方式卸下，则这批 T 不能再上铁路
+      if (dump !== null) {
+        const lockedT = spRelayLockedT(dump.hex, dump.side, 'rail')
+        const availableT = holdingsToT({ sp: dump.sp, t: dump.t }) - lockedT
+        if (lockedT > 0 && amountT > availableT) {
+          railMoveError.value = { rule: '12.2a', reason: 'railRelayLockedOtherMode' }
+          pushLog(
+            'warning',
+            `12.2a：该格本阶段由其他运输方式卸下的 ${lockedT} T 不能再上铁路（可换回原方式，或等下一阶段）`,
+            '12.2a',
+          )
+          return false
+        }
+      }
       const payment = planSpPayment({
         holdings: { sp: dump?.sp ?? 0, t: dump?.t ?? 0 },
         wantT: amountT,
@@ -3850,6 +3951,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
       setSpDumpHoldings(dump.id, payment.data.holdingsAfter)
       grantSpDumpT(to, side, amountT)
+      // 12.2a：这批 T 本阶段已由「铁路」运达 ⇒ 之后不能再换其他方式
+      addSpRelayLock(to, side, 'rail', amountT)
     }
     railCapSpentThisTurn.value = [
       ...railCapSpentThisTurn.value.filter((item) => item.side !== side),
@@ -5344,6 +5447,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     zocStoppedMoveUnitIds.value = []
     // 13.2a：暂停账本同样只在本阶段内有效（换段/换方/换回合 ⇒ 运输点数重新按 MA 计）
     pausedTransportIds.value = []
+    // 12.2a：接力账本只在本阶段内有效（且不进存档）
+    spRelayLocks.value = []
   }
 
   /** 切方（2.3/2.2：先手方与后手方轮流；U0 直接手动切换） */
@@ -10892,6 +10997,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       target.loadedSpT = holdingsToT({ sp: holdings.sp, t: holdings.t })
       if (target.loadedSpT <= 0) refreshTraceSupply(target.name + ' 的装载补给用尽')
       return
+    }
+    const prev = spDumps.value.find((dump) => dump.id === id)
+    if (prev !== undefined) {
+      const beforeT = holdingsToT({ sp: prev.sp, t: prev.t })
+      const afterT = holdingsToT(holdings)
+      // 12.2b：卸下后立即消耗掉的 SP 不再算接力 ⇒ 按持仓减少释放本阶段锁
+      if (beforeT > afterT) releaseSpRelayLocks(prev.hex, prev.side, beforeT - afterT)
     }
     spDumps.value = spDumps.value.map((dump) =>
       dump.id === id ? { ...dump, sp: holdings.sp, t: holdings.t } : dump,
