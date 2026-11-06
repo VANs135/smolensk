@@ -8530,10 +8530,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /* ──────────────── C6 战斗交互：选子 → 9.2 九步流程动作（全部问引擎） ──────────────── */
 
+  /**
+   * 9.2：当前战斗会话**不能放弃**的原因（唯一判据，`cancelCombat` 与 UI 投影共用）
+   *
+   * 查询与提交复用同一来源：界面只读它，不自己判「是否已提交」。
+   */
+  function combatCancelBlocker(): string | null {
+    if (combatSupplyCommitted.value && combatState.value !== null && !combatState.value.finished) {
+      return '战斗结果待结算：请先完成损失、选项、撤退与推进'
+    }
+    return null
+  }
+  /**
+   * 10.0：当前轰炸会话**不能放弃**的原因（唯一判据，`canReplaceBarrage` 与 UI 投影共用）
+   */
+  function barrageCancelBlocker(): string | null {
+    return barrageCommitted.value ? '轰炸已提交，请先完成掷骰和目标损失结算' : null
+  }
   function canReplaceBarrage(): boolean {
-    if (!barrageCommitted.value) return true
+    const blocker = barrageCancelBlocker()
+    if (blocker === null) return true
     barrageError.value = { rule: '10.0', reason: 'barrageOutcomePending' }
-    pushLog('warning', '轰炸已提交，请先完成掷骰和目标损失结算', '10.0')
+    pushLog('warning', blocker, '10.0')
     return false
   }
   function canReplaceCombat(): boolean {
@@ -10077,8 +10095,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C6：放弃本场战斗（中止 9.2 流程；已落盘的结果不自动回滚） */
   function cancelCombat(): void {
-    if (combatSupplyCommitted.value && combatState.value !== null && !combatState.value.finished) {
-      pushLog('warning', '战斗结果待结算：请先完成损失、选项、撤退与推进', '9.2')
+    const blocker = combatCancelBlocker()
+    if (blocker !== null) {
+      pushLog('warning', blocker, '9.2')
       return
     }
     // W7 C16：放弃突袭只丢托管信息（3 MP 尚未记账，故无需回滚）
@@ -21060,6 +21079,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     confirmCombatRetreats,
     confirmCombatAdvance,
     cancelCombat,
+    // P3 / UI3：会话「域拒绝」的唯一只读判据（与 cancelCombat 同源）
+    combatCancelBlocker,
     // W7 C16：移动中的突袭（8.0/8.1）
     overrunContext,
     moveStackHex,
@@ -21171,6 +21192,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     rollBarrageDiceStep,
     confirmBarrageOutcomeStep,
     cancelBarrage,
+    // P3 / UI3：会话「域拒绝」的唯一只读判据（与 canReplaceBarrage 同源）
+    barrageCancelBlocker,
     clearBarrage,
     targetKindLabel,
     // C8 补给交互与 SP 管理

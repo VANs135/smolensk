@@ -279,11 +279,13 @@ onBeforeUnmount(() => {
           <SupplyPhasePanel v-if="setup.finished && workbench.phase === 'supply'" />
           <MapDock
             v-if="session !== null"
-            :key="session.kind"
+            :key="session.sessionId"
             :session-key="session.kind"
             :title="session.title"
             :rule="session.rule"
             :width="session.width"
+            :close-policy="session.closePolicy"
+            :close-blocked-reason="session.closeBlockedReason"
             @close="mapView.cancelSession()"
           >
             <CombatPanel v-if="session.kind === 'combat'" />

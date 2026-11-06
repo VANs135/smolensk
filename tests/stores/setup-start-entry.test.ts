@@ -55,7 +55,9 @@ describe('批 E 切片 1：开局入口收敛（唯一入口＝初设收束点�
   it('② 流程条未开局时**只做视图引导**（不再直接建会话）', () => {
     const flow = read('src/components/session/FlowStrip.vue')
     expect(flow).not.toContain('gameSession.startGame()')
-    expect(flow).toContain("ui.navigate(flow.value.nextActionTarget === 'setup' ? 'game' : 'scenario')")
+    expect(flow).toContain(
+      "ui.navigate(flow.value.nextActionTarget === 'setup' ? 'game' : 'scenario')",
+    )
     // 按钮文案说清"该去哪儿收束初设"，而不是"点我就开局"（UI2 起由只读投影统一给出）
     expect(flow).toContain('useUiStore')
     const model = read('src/engine/flow-model.ts')

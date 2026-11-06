@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+
+import type { MapSessionClosePolicy } from '@/stores/map-view'
 
 import { BaseTag } from '@/components/base'
 
@@ -38,6 +40,14 @@ const props = defineProps<{
    * 同一类型记住上次位置；**换类型回到默认右上角**（新类型在记忆表里没有记录，自然回默认）。
    */
   sessionKey: string
+  /**
+   * 关闭语义（P3 / UI3，方案 §5 `closePolicy`）
+   *
+   * 由 `mapView.session` 只读投影传入；本组件只决定文案与可用态，不自己判"能不能取消"。
+   */
+  closePolicy?: MapSessionClosePolicy
+  /** `refused` 时的原因（与领域拒绝文案同源） */
+  closeBlockedReason?: string
 }>()
 
 /**
@@ -52,6 +62,17 @@ const dockMemory = createDockMemory()
 const minVisiblePx = DOCK_MIN_VISIBLE_PX
 
 defineEmits<{ (e: 'close'): void }>()
+
+/** 关闭按钮的文案（三种语义各说各的，不再一律「取消本次操作」） */
+const closeLabel = computed<string>(() => {
+  if (props.closePolicy === 'collapse') return '收起本次会话'
+  if (props.closePolicy === 'refused') {
+    return props.closeBlockedReason === undefined
+      ? '暂不可关闭'
+      : `暂不可关闭：${props.closeBlockedReason}`
+  }
+  return '取消本次操作'
+})
 
 const root = ref<HTMLElement | null>(null)
 const head = ref<HTMLElement | null>(null)
@@ -176,8 +197,9 @@ function resetPosition(): void {
       <button
         class="dock__close"
         type="button"
-        title="取消本次操作"
-        aria-label="取消本次操作"
+        :title="closeLabel"
+        :aria-label="closeLabel"
+        :disabled="props.closePolicy === 'refused'"
         @pointerdown.stop
         @click="$emit('close')"
       >

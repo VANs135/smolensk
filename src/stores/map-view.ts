@@ -117,12 +117,16 @@ export type MapSessionKind =
   | 'unit'
 
 /**
- * 当前该在地图上挂载的那**一个**会话框（B4，方案 §4.3）
+ * 会话的**关闭语义**（P3 / UI3，方案 §5 `closePolicy`）
  *
- * 视图只认这一个对象：标题、规则号、宽度全在这里定，视图不再各自 `v-if` 一堆面板
- * ——「同一时刻只挂载一个」因此是**结构保证**，而不是靠各处自觉。
+ * - `cancel`：真的中止本次操作（落到引擎/操作台的 `cancelXxx`）；
+ * - `collapse`：本次操作没有状态机可回滚，只是把这张会话收起（记在环节键上）；
+ * - `refused`：域已提交/待结算 ⇒ **不能关**，界面只读显示原因。
  */
-export interface MapSession {
+export type MapSessionClosePolicy = 'cancel' | 'collapse' | 'refused'
+
+/** 会话的基础内容（不含显示身份与关闭语义；由 `session` 统一补齐） */
+export interface MapSessionBase {
   kind: MapSessionKind
   /** 标题（含格号，便于玩家确认打的是哪一格） */
   title: string
@@ -130,6 +134,26 @@ export interface MapSession {
   rule: string
   /** 面板宽度（CSS 值；不给就用组件默认） */
   width?: string
+}
+
+/**
+ * 当前该在地图上挂载的那**一个**会话框（B4，方案 §4.3）
+ *
+ * 视图只认这一个对象：标题、规则号、宽度全在这里定，视图不再各自 `v-if` 一堆面板
+ * ——「同一时刻只挂载一个」因此是**结构保证**，而不是靠各处自觉。
+ */
+export interface MapSession extends MapSessionBase {
+  /**
+   * 会话的**显示身份**（P3 / UI3）：`${kind}#${nonce}`
+   *
+   * 同一种会话关掉重开即递增、换 kind 必变；同一会话内无关重绘不变。
+   * 只用于组件身份（草稿/滚动/锚点不串会话），**不进存档、不改领域身份**。
+   */
+  sessionId: string
+  /** 关闭语义（由既有 store 事实推出） */
+  closePolicy: MapSessionClosePolicy
+  /** 仅 `refused` 时给出原因（与领域拒绝文案同源） */
+  closeBlockedReason?: string
 }
 
 export const useMapViewStore = defineStore('mapView', () => {
@@ -1210,7 +1234,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
   })
 
-  const session = computed<MapSession | null>(() => {
+  const sessionBase = computed<MapSessionBase | null>(() => {
     const combat = workbench.combatState
     if (combat !== null && !combat.finished) {
       const overrun = combat.attackType === 'overrun'
@@ -1505,6 +1529,60 @@ export const useMapViewStore = defineStore('mapView', () => {
   )
 
   /**
+   * P3 / UI3：会话**显示身份**的序号
+   *
+   * 只在 `kind` 变化时递增（含 `null → kind` 与 `kindA → kindB`）；同一会话存活期间
+   * 无关重绘不递增 ⇒ 组件身份稳定。`flush: 'sync'` 让同一击内的读值也确定（测试可同步断言）。
+   */
+  const sessionNonce = ref(0)
+  watch(
+    () => sessionBase.value?.kind ?? null,
+    (kind, previous) => {
+      if (kind !== null && kind !== previous) sessionNonce.value += 1
+    },
+    { flush: 'sync' },
+  )
+
+  /**
+   * 会话的关闭语义（P3 / UI3）
+   *
+   * 只读既有 store 事实：战斗/轰炸的「不能关」判据来自 `workbench` 的同源查询，
+   * 本处不重算「是否已提交」。
+   */
+  function closePolicyOf(kind: MapSessionKind): { policy: MapSessionClosePolicy; reason?: string } {
+    if (kind === 'combat') {
+      const reason = workbench.combatCancelBlocker()
+      return reason === null ? { policy: 'cancel' } : { policy: 'refused', reason }
+    }
+    if (kind === 'barrage') {
+      const reason = workbench.barrageCancelBlocker()
+      return reason === null ? { policy: 'cancel' } : { policy: 'refused', reason }
+    }
+    if (
+      kind === 'reinforce' ||
+      kind === 'breakout' ||
+      kind === 'containers' ||
+      kind === 'exclusive' ||
+      kind === 'unit'
+    ) {
+      return { policy: 'collapse' }
+    }
+    return { policy: 'cancel' }
+  }
+
+  const session = computed<MapSession | null>(() => {
+    const base = sessionBase.value
+    if (base === null) return null
+    const close = closePolicyOf(base.kind)
+    return {
+      ...base,
+      sessionId: `${base.kind}#${sessionNonce.value}`,
+      closePolicy: close.policy,
+      ...(close.reason === undefined ? {} : { closeBlockedReason: close.reason }),
+    }
+  })
+
+  /**
    * 取消当前会话 —— **标题栏「×」与 `Esc` 共用的唯一一条路**
    *
    * 一律落到引擎/操作台的 `cancelXxx`（方案 §4.3「Esc = 取消当前会话（等价于「取消」按钮）」）：
@@ -1516,6 +1594,16 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (workbench.cancelHexPick()) return true
     const current = session.value
     if (current === null) return false
+    /*
+     * P3 / UI3：域已提交/待结算 ⇒ **不能关**。
+     * 仍调用领域取消以保留它的 warning 日志与错误态，但如实返回 false：
+     * 「按钮/×/Esc」都不假装取消成功。
+     */
+    if (current.closePolicy === 'refused') {
+      if (current.kind === 'combat') workbench.cancelCombat()
+      else if (current.kind === 'barrage') workbench.cancelBarrage()
+      return false
+    }
     // 10.0 的「放弃本次轰炸」是 `cancelBarrage`（写 10.0 的日志）；此前视图用的是
     // `setBarrageActive(false)`——那会把「轰炸工具」一并关掉，且日志说成"工具已关闭"，
     // 与面板里的「取消」按钮不是同一件事。
@@ -1561,6 +1649,8 @@ export const useMapViewStore = defineStore('mapView', () => {
       unitActionHex.value = null
       unitActionUnitId.value = null
     }
+    // 条 6（R3）：突围环节没有状态机 ⇒ 收起（与增援/盒内/专规同规，不落到轰炸分支）
+    else if (current.kind === 'breakout') collapsedSessionKey.value = currentStepKey.value
     // B15c：同理——宣布之前退掉参炸选子，宣布之后才是 `cancelBarrage`
     else if (workbench.barrageState === null) workbench.clearBarrageSelectionNow()
     else workbench.cancelBarrage()
