@@ -273,6 +273,21 @@ describe('C7 轰炸交互：10.0 通用流程端到端', () => {
     expect(tonsOf(store, dump)).toBe(before - required)
   })
 
+  it('10.1b-B：断补火炮仍按**完整**轰炸值轰炸（不折半）', () => {
+    const supplied = newStore()
+    const suppliedSetup = setupBarrage(supplied, 'combat')
+    expect(supplied.beginBarrageNow()).toBe(true)
+    const suppliedValue = supplied.barrageState!.totalValue
+    expect(suppliedSetup.artillery.hasTraceSupply).toBe(true)
+
+    const cut = newStore()
+    const cutSetup = setupBarrage(cut, 'combat')
+    // 「当标记为断补时，火炮单位仍可使用其完整的轰炸值（假设消耗了所需的战斗补给）」
+    cutSetup.artillery.hasTraceSupply = false
+    expect(cut.beginBarrageNow()).toBe(true)
+    expect(cut.barrageState!.totalValue).toBe(suppliedValue)
+  })
+
   it('10.0e-D：火炮不能在移动阶段轰炸（阶段门槛由引擎裁决）', () => {
     const store = newStore()
     setupBarrage(store, 'movement')
