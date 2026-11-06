@@ -7,7 +7,7 @@ import { mapLayers } from '@/data'
 import type { HexRef } from '@/data'
 
 import { HEX_DIRECTIONS, neighbor, sameHex } from '@/engine/hex-geometry'
-import { createMapFacts } from '@/engine/rules'
+import { createMapFacts, evaluateStep } from '@/engine/rules'
 import {
   bridgedHexesBySide,
   createBattleFacts,
@@ -200,6 +200,56 @@ describe('13.8b：真实地图上的大河 —— 架桥把"轮式禁入"变成"
     expect(
       forSoviet.canEnterForAttack(toBattleUnitView(sovietTruck, 0), MAJOR_EDGE.from, MAJOR_EDGE.to),
     ).toBe(false)
+  })
+
+  it('★ 13.8b 末句例外：HQ 切成移动模式后，可用**自己架的桥**离开该格（同格卡车不能借）', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    const hq = toConsoleUnit({
+      record: HQ_RECORD,
+      instanceId: 'hq-own',
+      hex: MAJOR_EDGE.from,
+      side: 'axis',
+    })
+    const truck = toConsoleUnit({
+      record: truckRecord,
+      instanceId: 'tk-own',
+      hex: MAJOR_EDGE.from,
+      side: 'axis',
+      face: 'move',
+    })
+    // 12.5a：轮式战斗单位（含 HQ）要有燃料才能移动
+    hq.fuelled = true
+    truck.fuelled = true
+    store.units.push(hq, truck)
+
+    // 战斗模式的 HQ 把该格变成架桥格（前半句）
+    expect(
+      store.moveContext.bridgedHexesBySide?.axis.some((hex) => sameHex(hex, MAJOR_EDGE.from)),
+    ).toBe(true)
+
+    store.selectedId = hq.instanceId
+    store.switchUnitMode('move')
+    expect(hq.mode.mode).toBe('move')
+    // 失能后该格**不再是**架桥格（其他人不能用这座已消失的桥）
+    expect(
+      store.moveContext.bridgedHexesBySide?.axis.some((hex) => sameHex(hex, MAJOR_EDGE.from)),
+    ).toBe(false)
+    // 但该单位自己获得"自有桥格"事实（末句例外）
+    expect(store.moveContext.ownBridgeHexByUnitId?.[hq.instanceId]).toEqual(MAJOR_EDGE.from)
+
+    // 例外：HQ 自己可以离开该格（修前 prohibited）
+    expect(evaluateStep(store.moveContext, hq.instanceId, MAJOR_EDGE.to).ok).toBe(true)
+    // 同格卡车不能借：桥对它已消失
+    const truckStep = evaluateStep(store.moveContext, truck.instanceId, MAJOR_EDGE.to)
+    expect(truckStep.ok).toBe(false)
+    if (!truckStep.ok) expect(truckStep.reason).toBe('prohibited')
+
+    // 离格后例外用尽：记录被清空
+    expect(store.beginMoveFor([hq.instanceId])).toBe(true)
+    store.clickHex(MAJOR_EDGE.to)
+    expect(hq.hex).toEqual(MAJOR_EDGE.to)
+    expect(store.moveContext.ownBridgeHexByUnitId?.[hq.instanceId]).toBeUndefined()
   })
 
   it('★ 源码守卫：store 把**同一份**架桥格同时给了 `moveContext` 与 `combatFacts`', () => {

@@ -280,13 +280,17 @@ function crossingForStep(
   forOverrun: boolean,
 ): ReturnType<typeof bridgedCrossing> {
   const crossing = context.map.crossingBetween(from, to)
-  const bridges = context.bridgedHexesBySide?.[unit.side]
-  if (bridges === undefined || bridges.length === 0 || crossing === null) return crossing
+  if (crossing === null) return crossing
   const keyOf = (hex: { col: number; row: number }): string => `${hex.col}.${hex.row}`
-  const keys = new Set(bridges.map(keyOf))
+  const keys = new Set((context.bridgedHexesBySide?.[unit.side] ?? []).map(keyOf))
   const touchesEngineerHex = keys.has(keyOf(from)) || keys.has(keyOf(to))
+  // 13.8b 末句例外：该单位失去工程能力后，**可以用自己架的桥离开该格**
+  // （只有该单位、只有"离开"这一方向；同格其它单位不能用这座已消失的桥）
+  const ownBridgeHex = context.ownBridgeHexByUnitId?.[unit.id]
+  const leavingOwnBridge = ownBridgeHex !== undefined && sameHex(ownBridgeHex, from)
+  if (!touchesEngineerHex && !leavingOwnBridge) return crossing
   return bridgedCrossing(crossing, {
-    touchesEngineerHex,
+    touchesEngineerHex: true,
     // 「当单位不再具备工程能力时，架的桥就会消失」⇒ 调用方给出的格**就是**此刻仍有桥的格
     // （含例外：失去能力者离开自己架的桥那一格时，那一格仍在清单里）
     bridgePresent: true,

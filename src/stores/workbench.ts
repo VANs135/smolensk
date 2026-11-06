@@ -1989,6 +1989,48 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         .map((piece) => piece.hex),
     ),
   )
+  /**
+   * 13.8b 末句例外：**按单位**的自有桥格（`unitId → hex`）
+   *
+   * 「具有工程能力的单位在通过切换模式或朝向而失去工程能力后，可以**使用自己架的桥离开该格**。」
+   * ⇒ 只在"因模式/朝向切换而失能"那一刻记下当时的格；该单位离开该格后清除（重返不再享受降费）。
+   * 瞬时事实，不进存档；只有**该单位自己**能消费（见 `MoveContext.ownBridgeHexByUnitId`）。
+   */
+  const ownBridgeHexByUnitId = ref<Record<string, HexRef>>({})
+
+  /** 清掉某单位的自有桥记录（恢复工程能力、或已离开该格时） */
+  function clearOwnBridgeHex(unitId: string): void {
+    if (!(unitId in ownBridgeHexByUnitId.value)) return
+    const next = { ...ownBridgeHexByUnitId.value }
+    delete next[unitId]
+    ownBridgeHexByUnitId.value = next
+  }
+
+  /**
+   * 13.8b 末句例外：切换**之后**结算这次能力变化
+   *
+   * `wasCapable` 由调用方在 `applyModeSwitch` / `flipOrientation` **之前**取（13.8a 的 `canEngineer`）。
+   * 由真变假 ⇒ 记下当时所在格；由假变真 ⇒ 桥恢复为常规架桥格，记录不再需要。
+   */
+  function noteEngineerCapabilityAfter(unit: ConsoleUnit, wasCapable: boolean): void {
+    const nowCapable = engineerCapableNow(unit)
+    if (wasCapable && !nowCapable && unit.hex !== null) {
+      ownBridgeHexByUnitId.value = {
+        ...ownBridgeHexByUnitId.value,
+        [unit.instanceId]: { ...unit.hex },
+      }
+      return
+    }
+    if (nowCapable) clearOwnBridgeHex(unit.instanceId)
+  }
+
+  /** 单位离开记录格 ⇒ 清记录（例外的授权只到"离开该格"为止） */
+  function noteUnitLeftOwnBridgeHex(unit: ConsoleUnit): void {
+    const recorded = ownBridgeHexByUnitId.value[unit.instanceId]
+    if (recorded === undefined) return
+    if (unit.hex !== null && sameHex(recorded, unit.hex)) return
+    clearOwnBridgeHex(unit.instanceId)
+  }
   // `scenarioTurnRange` 每次都要查剧本库 + 扫回合轨；`moveContext` 会逐单位调用，故先用 computed 缓存
   const scenarioFirstTurn = computed(() => scenarioTurnRange(scenarioId.value).firstTurn)
   const sovietFirstTurnHalfMaActive = computed(
@@ -2023,6 +2065,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       safeEdgeHexesBySide: safeEdgeHexesBySide.value,
       // 13.8b：架桥（与 createBattleFacts 同一份，见上面的 computed）
       bridgedHexesBySide: bridgedHexes.value,
+      // 13.8b 末句例外：因模式/朝向切换而失能的单位，可用**自己架的桥**离开该格
+      ownBridgeHexByUnitId: ownBridgeHexByUnitId.value,
       /*
        * 5.8b：战略模式单位**必须**在有追溯补给的格上结束移动。
        * 引擎的判据写在 `move.ts`，但要求调用方注入 `traceSupplyAt` —— 不注入则那条 if
@@ -3895,6 +3939,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const unit = units.value.find((item) => item.instanceId === cargo.id)
       if (unit !== undefined) {
         unit.hex = { col: to.col, row: to.row }
+        // 13.8b 末句例外：铁路离开记录格后，这条例外即用尽
+        noteUnitLeftOwnBridgeHex(unit)
         // 4.7d / 13.3e-3：卸货后不得再移动（13.3g-B 的铁路修理单位例外，其剩余 MP 已由引擎给出）
         unit.movementEnded = outcome.data.postDetrainMp <= 0
         railMovedUnitIdsThisPhase.value = [
@@ -5803,6 +5849,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       unit.hex = { ...patch.hex }
       unit.mpSpent = patch.spentMp
       unit.movementEnded = patch.ended
+      // 13.8b 末句例外：离开自有桥格后，这条例外即用尽
+      noteUnitLeftOwnBridgeHex(unit)
       // 专规 3.5：进入建造标记格即触发毁伤判定
       noteUnitEnteredHex(unit, patch.hex)
     }
@@ -6646,7 +6694,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
        * 同批同格：先转的那枚已把该格算作"有预备单位"⇒ 后续同格单位不再占新额度（派生判定）。
        */
       if (to === 'reserve' && !canEnterReserveMode(unit)) continue
+      // 13.8b 末句例外：切换前记下当时的工程能力，切换后按"由真变假"登记自有桥格
+      const wasEngineerCapable = engineerCapableNow(unit)
       unit.mode = applyModeSwitch(unit.mode, to, target)
+      noteEngineerCapabilityAfter(unit, wasEngineerCapable)
       // 5.7a：本移动阶段内进入预备 ⇒ 该朝向锁定到下一个移动阶段
       if (to === 'reserve') unit.reserveEnteredThisPhase = true
       // 5.4a：一切数值以朝向那一面为基准 → 换面后刷新印值缓存
@@ -6840,7 +6891,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `不能改变朝向：${verdict.reason}（${verdict.rule}）`, verdict.rule)
       return
     }
+    const wasEngineerCapable = engineerCapableNow(unit)
     unit.mode = flipOrientation(unit.mode)
+    noteEngineerCapabilityAfter(unit, wasEngineerCapable)
     unit.raw = unit.faces[unit.mode.orientation]
     pushLog(
       'success',

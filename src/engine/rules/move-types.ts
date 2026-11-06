@@ -127,6 +127,16 @@ export interface MoveContext {
    */
   bridgedHexesBySide?: { readonly axis: readonly HexRef[]; readonly soviet: readonly HexRef[] }
   /**
+   * 13.8b 末句例外：**按单位**的「自有桥格」
+   *
+   * 「当单位不再具备工程能力时，架的桥就会消失。（例外：具有工程能力的单位在通过切换模式或朝向而
+   *   失去工程能力后，可以**使用自己架的桥离开该格**。）」
+   * ⇒ 键＝单位 id，值＝该单位失去工程能力时所在的格；只有**该单位自己**从这一格**离开**时，桥才降级
+   * （同格其它单位不吃这份桥）。由命令层在模式/朝向切换时记录，离开该格后清除。
+   * 省略即无这条例外（不臆造）。
+   */
+  ownBridgeHexByUnitId?: Readonly<Record<string, HexRef>>
+  /**
    * 5.7g / 16.0：该格的**环形工事等级**（0＝无）
    *
    * 「在**任何移动环节结束时**，处于预备模式内的单位都**不可与环形工事堆叠**在一起。」

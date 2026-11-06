@@ -960,6 +960,12 @@ export function buildMoveContext(input: {
    */
   bridgedHexesBySide?: { readonly axis: readonly HexRef[]; readonly soviet: readonly HexRef[] }
   /**
+   * 13.8b 末句例外：**按单位**的「自有桥格」（见 `MoveContext.ownBridgeHexByUnitId`）
+   *
+   * 缺省不注入 ⇒ 视为无此例外（不臆造）；调用方在模式/朝向切换致失能时记录、离开该格后清除。
+   */
+  ownBridgeHexByUnitId?: Readonly<Record<string, HexRef>>
+  /**
    * 5.8b：该格此刻是否有**追溯补给**（引擎用它判「战略模式单位必须停在有补给的格」）
    *
    * ★ 缺省**不注入**，而 `move.ts` 的判据写成
@@ -995,6 +1001,9 @@ export function buildMoveContext(input: {
     ...(input.bridgedHexesBySide === undefined
       ? {}
       : { bridgedHexesBySide: input.bridgedHexesBySide }),
+    ...(input.ownBridgeHexByUnitId === undefined
+      ? {}
+      : { ownBridgeHexByUnitId: input.ownBridgeHexByUnitId }),
     ...(input.traceSupplyAt === undefined ? {} : { traceSupplyAt: input.traceSupplyAt }),
     ...(input.hedgehogLevelAt === undefined ? {} : { hedgehogLevelAt: input.hedgehogLevelAt }),
   }
