@@ -178,6 +178,26 @@ describe('G①：空军轰炸（14.7b / 10.2）真的落 CRT', () => {
   })
 })
 
+describe('G①：10.0e-A 已宣布但轰炸前被消灭也算已尝试', () => {
+  it('★ 参炸机在轰炸结算前全部被消灭 ⇒ 目标格仍记入本阶段已轰炸', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    const index = store.playerSegmentSteps.findIndex((step) => step.id === 'movement.barrage')
+    expect(store.setSegmentStepIndex(index)).toBe(true)
+    const target = setupBarrage(store)
+    store.airMissionKind = 'barrage'
+    expect(store.beginAirMissionNow()).toBe(true)
+    // 模拟防空/拦截在 10.2 结算前把参炸机全部消灭（盘面移除，飞行队清空）
+    store.airUnits.splice(0, store.airUnits.length)
+    expect(store.autoResolveAirMissionNow()).toBe(true)
+    /*
+     * 原文 10.0e-A：「若轰炸已宣布，但在进行轰炸之前，轰炸方被敌方防空、拦截等摧毁，
+     * 那么轰炸仍然视为已尝试，本阶段不能再对同一格轰炸。」
+     */
+    expect(store.barragePhaseLedger.hexes).toContain(label(target))
+  })
+})
+
 describe('G①：F 段轰炸环节**不**放行空中任务（2.2 SOP + 10.0e-C）', () => {
   it('★ 闸门对齐：air.mission 不在 combat.barrage；barrage.declare 也不给炮兵以外的段', () => {
     // 10.0e-C：空军轰炸只在移动/反应/进击段 ⇒ F 段（combat.barrage）不得放行空中任务
