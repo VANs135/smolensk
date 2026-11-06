@@ -711,7 +711,15 @@ function missionAbilityCheck(input: AirMissionRequest): RuleOutcome<{ ok: true }
     case 'air_drop':
       if (!planes.some((plane) => (plane.transportCapacity ?? 0) > 0))
         return fail('14.9a', 'noTransportCapableAircraft')
-      if (input.kind === 'air_drop' && !canPlannedAirdrop(input.side))
+      /*
+       * 专规 2.2b：苏方**允许补给空投**，只禁「需计划的空降」。
+       * 14.10b 亦明确「补给空投从来不需要预先计划」⇒ 判据落在**载有战斗单位**，不是任务类型。
+       */
+      if (
+        input.kind === 'air_drop' &&
+        (input.cargo ?? []).some((item) => item.kind === 'unit') &&
+        !canPlannedAirdrop(input.side)
+      )
         return fail('2.2b', 'plannedAirdropNotAllowedForSide')
       return succeed('14.9a', { ok: true })
     case 'fighter_sweep':

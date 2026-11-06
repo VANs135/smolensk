@@ -559,9 +559,40 @@ describe('14.2f-A/B 任务分配：机数·距离·阶段·天候·能力', () =
             makePlane({ id: 'tp1', baseHex: TARGET, side: 'soviet', transportCapacity: 2 }),
           ],
           bases: [makeBase({ hex: TARGET, side: 'soviet' })],
+          // 专规 2.2b 只禁「需计划的空降」（载有战斗单位）；纯补给空投不受此禁
+          cargo: [{ id: 'u1', kind: 'unit' }],
         }),
       ),
     ).toMatchObject({ ok: false, rule: '2.2b', reason: 'plannedAirdropNotAllowedForSide' })
+
+    // 专规 2.2b：苏军补给空投允许（14.10b 注：补给空投从不需要预先计划）
+    expect(
+      assignAirMission(
+        missionRequest({
+          kind: 'air_drop',
+          side: 'soviet',
+          aircraft: [
+            makePlane({ id: 'tp2', baseHex: TARGET, side: 'soviet', transportCapacity: 2 }),
+          ],
+          bases: [makeBase({ hex: TARGET, side: 'soviet' })],
+          cargo: [{ id: 'sp1', kind: 'sp', t: 1 }],
+        }),
+      ),
+    ).toMatchObject({ ok: true })
+
+    // 14.10b 注：补给空投「没有任何阶段限制」（轴方反应阶段亦可执行；苏方仍受 2.2d）
+    expect(
+      assignAirMission(
+        missionRequest({
+          kind: 'air_drop',
+          side: 'axis',
+          phase: 'reaction',
+          aircraft: [makePlane({ id: 'tp3', baseHex: TARGET, transportCapacity: 2 })],
+          bases: [makeBase({ hex: TARGET })],
+          cargo: [{ id: 'sp2', kind: 'sp', t: 1 }],
+        }),
+      ),
+    ).toMatchObject({ ok: true })
 
     // 战机扫荡：须至少 1 架能发起空战（14.6 + 14.1）
     expect(

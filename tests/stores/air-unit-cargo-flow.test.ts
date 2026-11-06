@@ -261,3 +261,16 @@ describe('14.9a / 14.4g：单位载货与真实盘面闭环', () => {
     expect(w.units.some((unit) => unit.instanceId === 'cargo')).toBe(false)
   })
 })
+
+describe('专规 2.2b：苏军补给空投不属「需计划空降」', () => {
+  it('只载 SP 的 air_drop 不触发计划空降禁令', () => {
+    setActivePinia(createPinia())
+    const w = useWorkbenchStore()
+    w.setActiveSide('soviet')
+    w.setPhase('movement')
+    w.setAirMissionKind('air_drop')
+    w.airInputs.cargoSpT = 1
+    w.airInputs.cargoUnitIds = []
+    expect(w.redAirForceAdvisory).toMatchObject({ ok: true })
+  })
+})

@@ -18995,8 +18995,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       phase: airPhase,
       weatherNormal: airInputs.value.weatherNormal,
       missionKind: airMissionKind.value,
-      // 2.2b：空投战斗单位属「需计划的任务」（14.10b）
-      requiresPlan: airMissionKind.value === 'air_drop',
+      // 2.2b：空投战斗单位属「需计划的任务」（14.10b）；补给空投从不需计划
+      requiresPlan: airMissionKind.value === 'air_drop' && airInputs.value.cargoUnitIds.length > 0,
     })
   })
 
