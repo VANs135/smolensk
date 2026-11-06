@@ -1158,10 +1158,24 @@ export function buildLegalityRequest(input: {
 /* ────────────────────────────── C6 战斗交互：事实与视图 ────────────────────────────── */
 
 /**
+ * 9.11d：**当前 RE 规模 = 印刷 RE − 已损失的军力**
+ *
+ * 原文：「一个**多军力师**当前的 RE 规模，等于该单位印刷的 RE 规模减去已损失的军力。」
+ * 单个算子（印刷 1 步）损失即被消灭，故只有多步单位会出现"损失后仍存在"；本作单位库里
+ * 多步单位的印刷 RE 等于印刷步数，减去的损失军力就是 `printedSteps - steps`。
+ */
+export function currentReOf(unit: Pick<ConsoleUnit, 're' | 'steps' | 'printedSteps'>): number {
+  const lostSteps = Math.max(0, unit.printedSteps - unit.steps)
+  return Math.max(0, unit.re - lostSteps)
+}
+
+/**
  * 操作台算子 → 战斗单位视图（9.1/9.4/9.5/9.6/9.11）
  *
  * ★ `attack` 必须是**已按模式折算**的战斗值（5.5–5.10）：本函数按朝向那一面的印值取，
  *   DG 由 `dg` 字段单独带出（引擎按 5.10b-A 处理减半的只有模式影响矩阵，见 battle.unitBattleStrength）。
+ * ★ `re` 按 9.11d 取**当前值**：12.4 的守方战斗补给成本按守方总 RE 计（≤1 时 1T，否则 2T），
+ *   损失后的师不能仍按印刷 RE 收钱。
  */
 export function toBattleUnitView(unit: ConsoleUnit, turn: number): BattleUnitView {
   return {
@@ -1177,7 +1191,7 @@ export function toBattleUnitView(unit: ConsoleUnit, turn: number): BattleUnitVie
     releasedFromReserve: unit.mode.releasedFromReserve === true,
     printedSteps: unit.printedSteps,
     steps: unit.steps,
-    re: unit.re,
+    re: currentReOf(unit),
     internalStocks: unit.internalStocks,
     /*
      * 12.6c/d + 12.8e：断补＝无追溯补给 **且** 本回合不是靠吃图上/储备/缓存续命。
