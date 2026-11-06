@@ -1,5 +1,7 @@
 import { rulesConstants } from '@/data'
 import type { Side } from '@/data'
+import { fail, succeed, type RuleOutcome } from '@/engine/result-types'
+import { allowReserveEntryAtHex } from './reserve-markers'
 
 /**
  * 模式（OCS 5.0 章）——基础模式 + 层叠标记、完整影响矩阵、模式切换合法性
@@ -763,6 +765,14 @@ export interface ModeSwitchRequest {
   phase: MovementSegmentPhase
   /** 当前日期（ISO，专规 2.3e 用）；缺省表示不判时点类专规限制 */
   date?: string
+  /**
+   * IV-B（**初设专用**，只有 `canSetModeAtSetup` 会传）：
+   * 该格是否与**敌方攻击力单位**相邻（4.4：印有战斗值且非括号、且不在预备/战略模式）
+   *
+   * 4.4b 的 ZOC 比这更窄（还要求敌方在战斗模式且有补给）；初设的 IV-B 明写"相邻"即可，
+   * 故与 `inEnemyZoc` 分开传，避免把 ZOC 的窄口径套到初设上。
+   */
+  adjacentEnemyAttackCapable?: boolean
 }
 
 /** 模式切换判定结果 */
@@ -806,6 +816,16 @@ export function canSwitchMode(req: ModeSwitchRequest): ModeSwitchResult {
   if (req.to === 'strat' && req.unitClass === 'transportPoint')
     return { ok: false, rule: '5.8c', reason: '运输点数不能进入战略模式' }
 
+  // IV-B（初设）：与敌方攻击力单位相邻的单位不能**设为**预备或战略模式
+  // （比 5.7c / 5.8a 的"敌方 ZOC"更宽：不看敌方是否战斗模式、是否有补给）
+  if (req.adjacentEnemyAttackCapable === true && (req.to === 'reserve' || req.to === 'strat')) {
+    return {
+      ok: false,
+      rule: 'IV-B',
+      reason: '初设时与敌方攻击力单位相邻，不能设为预备或战略模式',
+    }
+  }
+
   // 4.5a-I / 5.7c：单位不可以在敌方 ZOC 内进入预备模式
   if (req.to === 'reserve' && req.inEnemyZoc)
     return { ok: false, rule: '5.7c', reason: '不可在敌方 ZOC 内进入预备模式（4.5a-I）' }
@@ -825,6 +845,71 @@ export function canSwitchMode(req: ModeSwitchRequest): ModeSwitchResult {
   }
 
   return { ok: true }
+}
+
+/**
+ * IV-B：初设阶段为单位设定模式的请求
+ *
+ * 原文「Ground units can be set up in any desired mode. (Exception: ground units adjacent to
+ * enemy Attack-Capable units cannot be set up in Reserve or Strat Mode.)」
+ * ⇒ 初设可选 combat / move / reserve / strat（地面单位）；SP/港口/空军基地/环形工事/飞机没有模式（5.1）。
+ */
+export interface SetupModeRequest {
+  to: BaseMode
+  orientation: Orientation
+  unitClass: ModeUnitClass
+  side: Side
+  /** 该单位所在格（5.4a 按格额度用） */
+  hex: string
+  /** IV-B：是否与敌方攻击力单位相邻 */
+  adjacentEnemyAttackCapable: boolean
+  /** 5.4a：剧本给该方的预备标记数（＝可同时预备的格数；0 ⇒ 无预备权） */
+  reserveCap: number
+  /** 5.4a：该方此刻已有预备单位的格子 */
+  reserveOccupiedHexes: readonly string[]
+  /** 剧本明禁（剧本 3 ch11「No units can setup in Reserve Mode.」） */
+  reserveSetupForbidden?: boolean
+  /** 当前日期（专规 2.3e：8 月 1 日前苏军不得进入战略模式） */
+  date?: string
+}
+
+/**
+ * IV-B：初设阶段能否把该单位设为指定模式
+ *
+ * 复用 `canSwitchMode` 的全部通用闸门（5.1/5.5/5.5c/5.6/5.7f/5.8/5.8c + 专规 2.3e），
+ * 只把"移动阶段"这一时序前提换成初设前提（原文明确初设可任意选模式，不受 5.4 的
+ * "开始移动时"限制），再叠加 IV-B 的邻接限制与 5.4a 的按格额度。
+ * ⇒ 不存在"初设一套、游戏中一套"的双口径。
+ */
+export function canSetModeAtSetup(req: SetupModeRequest): RuleOutcome<null> {
+  const base = canSwitchMode({
+    to: req.to,
+    orientation: req.orientation,
+    unitClass: req.unitClass,
+    side: req.side,
+    // 初设不受 5.4 的移动阶段限制；这里传 'movement' 只为复用同一组非时序闸门
+    phase: 'movement',
+    // IV-B 的"与敌方攻击力单位相邻"严格覆盖 4.5b 的敌方 ZOC（ZOC 只可能由攻击力单位投出，
+    // 且只投到相邻格）⇒ 初设用 IV-B 一条即可，不再重复 5.7c/5.8a 的窄口径
+    inEnemyZoc: false,
+    adjacentEnemyAttackCapable: req.adjacentEnemyAttackCapable,
+    ...(req.date === undefined ? {} : { date: req.date }),
+  })
+  if (!base.ok) return fail(base.rule, base.reason)
+
+  if (req.to === 'reserve') {
+    // 剧本 3 ch11：No units can setup in Reserve Mode.
+    if (req.reserveSetupForbidden === true) return fail('ch11', 'reserveSetupForbidden')
+    // 5.4a（用户裁定）：装入即占，按格计；0 枚 ⇒ 无预备权
+    return allowReserveEntryAtHex({
+      side: req.side,
+      cap: req.reserveCap,
+      hex: req.hex,
+      occupiedHexes: req.reserveOccupiedHexes,
+    })
+  }
+
+  return succeed('IV-B', null)
 }
 
 /**

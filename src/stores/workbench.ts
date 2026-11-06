@@ -393,6 +393,7 @@ import {
   // B8：环节链与闸门表（判据的唯一出处；本 store 只查表，不自己写"哪个动作归哪一段"）
   // 5.4a / 5.7：预备额度**按格**计（同格已有预备单位 ⇒ 不额外占）
   allowReserveEntryAtHex,
+  canSetModeAtSetup,
   hasMarker,
   reserveHexesInUse,
 } from '@/engine/rules'
@@ -6522,6 +6523,94 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
     }
     // 条 10（M1）：模式切换不再自动开拔——改由「开始移动」按钮显式触发（与 retryBeginMove 解耦）
+  }
+
+  /** IV-B（4.4）：该单位所在格是否与**敌方攻击力单位**相邻 */
+  function adjacentEnemyAttackCapableOf(unit: ConsoleUnit): boolean {
+    const enemy: Side = unit.side === 'axis' ? 'soviet' : 'axis'
+    return units.value.some(
+      (other) =>
+        other.side === enemy &&
+        areAdjacent(other.hex, unit.hex) &&
+        // 4.4：印有战斗值且非括号、且不在预备/战略模式 ⇒ 攻击力单位
+        other.attackCapable &&
+        other.mode.mode !== 'reserve' &&
+        other.mode.mode !== 'strat',
+    )
+  }
+
+  /**
+   * IV-B：**初设阶段**为单位设定模式（按单位/按堆叠）
+   *
+   * 原文「Ground units can be set up in any desired mode. (Exception: ground units adjacent to
+   * enemy Attack-Capable units cannot be set up in Reserve or Strat Mode.)」
+   * ⇒ 初设可选 combat / move / reserve / strat，**不受 5.4 的"开始移动那一刻"限制**；
+   * 相邻于敌方攻击力单位者不得设预备/战略（IV-B）；预备按 5.4a 的**按格额度**占用。
+   *
+   * 判据全在 `canSetModeAtSetup`（内部复用 `canSwitchMode` 的全部通用闸门：5.1/5.5/5.5c/
+   * 5.6/5.7f/5.8/5.8c + 专规 2.3e），本函数只负责选目标、落盘与日志 ⇒ 不存在"初设一套、
+   * 游戏中一套"的双口径。不新增存档字段（模式本就在 `units` 里）。
+   */
+  function setUnitModeAtSetup(
+    to: BaseMode,
+    orientation?: Orientation,
+    ids?: readonly string[],
+  ): boolean {
+    if (!initialSetupInProgress.value) {
+      pushLog('warning', '初设模式只能在初设阶段设定（IV-B）', 'IV-B')
+      return false
+    }
+    const targets =
+      ids ??
+      (movePick.value !== null
+        ? movePick.value.ids
+        : selectedUnit.value === null
+          ? []
+          : [selectedUnit.value.instanceId])
+    if (targets.length === 0) {
+      pushLog('warning', '先选中要设模式的算子（可多选/按堆叠）')
+      return false
+    }
+    let okCount = 0
+    for (const id of targets) {
+      const unit = units.value.find((item) => item.instanceId === id)
+      if (unit === undefined) continue
+      // 朝向：战斗/移动面＝模式本身；战略必为移动面（5.8）；预备可任选（5.7a）
+      const target: Orientation =
+        to === 'combat'
+          ? 'combat'
+          : to === 'move'
+            ? 'move'
+            : to === 'strat'
+              ? 'move'
+              : (orientation ?? unit.mode.orientation)
+      const verdict = canSetModeAtSetup({
+        to,
+        orientation: target,
+        unitClass: modeUnitClassOf(unit),
+        side: unit.side,
+        hex: hexKeyOf(unit),
+        adjacentEnemyAttackCapable: adjacentEnemyAttackCapableOf(unit),
+        reserveCap: session.scenarioInfo?.setup.reserveMarkers?.[unit.side] ?? 0,
+        reserveOccupiedHexes: reservedHexes(unit.side),
+        reserveSetupForbidden: session.scenarioInfo?.setup.reserveSetupForbidden === true,
+        date: date.value,
+      })
+      if (!verdict.ok) {
+        pushLog(
+          'warning',
+          `${unit.name} 初设不能设为${MODE_LABELS[to]}：${verdict.reason}（${verdict.rule}）`,
+          verdict.rule,
+        )
+        continue
+      }
+      unit.mode = applyModeSwitch(unit.mode, to, target)
+      unit.raw = unit.faces[unit.mode.orientation]
+      okCount += 1
+    }
+    if (okCount > 0)
+      pushLog('success', `初设已为 ${String(okCount)} 枚设定${MODE_LABELS[to]}（IV-B）`, 'IV-B')
+    return okCount > 0
   }
 
   /**
@@ -20426,6 +20515,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 6.1f：把某枚从正在移动的堆叠里放下（就地停住，其余继续）
     dropUnitFromMove,
     switchUnitMode,
+    // IV-B：初设阶段为单位/堆叠设定模式（combat / move / reserve / strat）
+    setUnitModeAtSetup,
     eliminateEntry,
     beginMoveFor,
     flipUnitOrientation,

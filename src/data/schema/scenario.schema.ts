@@ -165,6 +165,8 @@ export const ScenarioSetupSchema = z
     railCap: SidePairSchema,
     /** Reserve 标记数（开局可用的预备模式标记） */
     reserveMarkers: SidePairSchema,
+    /** 剧本明禁初设进入预备模式（剧本 3「No units can setup in Reserve Mode.」） */
+    reserveSetupForbidden: z.boolean().optional(),
     /** Supply Cache 枚数（每方） */
     supplyCache: z.number().int().nonnegative(),
     /** 建造标记（Construction Markers）枚数 */

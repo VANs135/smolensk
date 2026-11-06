@@ -360,6 +360,7 @@
           "axis": 14,
           "soviet": 4
         },
+        "reserveSetupForbidden": true,
         "supplyCache": 2,
         "constructionMarkers": 0,
         "organicTrucks": {
@@ -560,6 +561,7 @@
           "axis": 14,
           "soviet": 4
         },
+        "reserveSetupForbidden": true,
         "supplyCache": 2,
         "constructionMarkers": 0,
         "organicTrucks": {
