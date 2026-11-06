@@ -46,14 +46,14 @@ describe('14.9（T16）：图外空军盒补给库存账本', () => {
     expect(w.spDumps).toEqual([])
   })
 
-  it('旧 v6 存档缺 offMapSupplyStocks 可读，spDumps 原样保留', () => {
+  it.each([4, 5, 6])('旧 v%i 存档缺 offMapSupplyStocks 可读，spDumps 原样保留', (version) => {
     const w = setup()
     const before = w.spDumps.map((dump) => ({ ...dump }))
     const snapshot = w.snapshotBoard() as unknown as {
       version: number
       fields: Record<string, unknown>
     }
-    snapshot.version = 6
+    snapshot.version = version
     delete snapshot.fields.offMapSupplyStocks
     expect(w.boardSnapshotFits(snapshot)).toBe(true)
     w.restoreBoard(snapshot)

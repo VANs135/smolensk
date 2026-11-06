@@ -20619,10 +20619,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   const LEGACY_MISSING_KEYS: Readonly<Record<number, readonly string[]>> = {
     // v3：补员还是"账本数字"（无 replPending/replFtrTac），也没有图外空军盒驻机名单
-    3: ['replPending', 'replFtrTac', 'airBoxMembers', ...V6_FIELDS],
+    3: ['replPending', 'replFtrTac', 'airBoxMembers', ...V6_FIELDS, 'offMapSupplyStocks'],
     // v4：§5-D 补员盘面化之后，但还没有 airBoxMembers
-    4: ['airBoxMembers', ...V6_FIELDS],
-    5: V6_FIELDS,
+    4: ['airBoxMembers', ...V6_FIELDS, 'offMapSupplyStocks'],
+    5: [...V6_FIELDS, 'offMapSupplyStocks'],
     // v6（T16）：字段表新增图外补给库存；缺键按 {} 读，spDumps 原样保留。
     6: ['offMapSupplyStocks'],
   }
