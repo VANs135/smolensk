@@ -20598,7 +20598,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 逐字段 `JSON.parse(JSON.stringify(…))` 深拷贝：**与落盘同一套语义**（存档本就是 JSON 文本），
    * 于是"内存里往返一次"与"写文件再读回来"完全同构；也保证快照不会随盘面后续改动而变。
    */
-  function assertCompleteSettlement(): void {
+  function settlementBlockedReason(): string | null {
     if (
       airUnitCargoManifest.value.some((item) => item.fate === 'aboard') ||
       combatSupplyCommitted.value ||
@@ -20609,8 +20609,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       (moveInteraction.value !== null && !moveInteraction.value.finished) ||
       refitBase.value !== null
     ) {
-      throw new Error('请先完成当前战斗、移动、付款或其他结算，再保存或读取对局')
+      return '请先完成当前战斗、移动、付款或其他结算，再保存或读取对局'
     }
+    return null
+  }
+
+  /** 存档可用态的唯一只读投影：界面据此禁用按钮，不另算一份判据 */
+  const saveBlockedReason = computed(() => settlementBlockedReason())
+
+  function assertCompleteSettlement(): void {
+    const reason = settlementBlockedReason()
+    if (reason !== null) throw new Error(reason)
   }
 
   const LEGACY_MISSING_KEYS: Readonly<Record<number, readonly string[]>> = {
@@ -20811,6 +20820,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     snapshotBoard,
     boardSnapshotFits,
     restoreBoard,
+    saveBlockedReason,
     supplyRecoverySettled,
     supplyFeedingSettled,
     attritionAppliedHexes,

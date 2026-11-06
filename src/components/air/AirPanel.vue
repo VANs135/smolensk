@@ -360,7 +360,7 @@ const showsBaseOps = computed(
 </script>
 
 <template>
-  <BasePanel title="空军（C9：OCS 14.0 / 15.0）">
+  <BasePanel title="空军（OCS 14.0 / 15.0）">
     <div class="row">
       <BaseButton
         variant="secondary"

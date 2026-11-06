@@ -521,7 +521,7 @@ onMounted(() => {
         </p>
       </BasePanel>
 
-      <BasePanel title="移动（C5：6.1 移动 / 6.1b 额度 / 6.1f 掉队）">
+      <BasePanel title="移动（6.1 移动 / 6.1b 额度 / 6.1f 掉队）">
         <p v-if="workbench.moveInteraction === null" class="muted">
           选中一个己方算子（或勾选「整堆叠」后选中一堆叠）即开始移动，地图上会标出可到达范围。
         </p>
@@ -793,7 +793,7 @@ onMounted(() => {
         这一面（行 × 列 + 单元格文本）改在**验证页**保留：可核对、且这 10 个投影仍有调用点。
       -->
       <BasePanel
-        title="引擎投影表（B16 十张：CRT / 补给 / 补员 / 特殊补员 / 重建 / TEC / 回合与天气 / 到货）"
+        title="引擎投影表（CRT / 补给 / 补员 / 特殊补员 / 重建 / TEC / 回合与天气 / 到货）"
       >
         <p class="muted">
           只读投影：单元格一律**照录数据文件**的结果代码与文本，便于逐格核对（对局台看的是印卡原卡）。

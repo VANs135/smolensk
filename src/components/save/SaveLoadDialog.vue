@@ -7,15 +7,15 @@ import { RNG_ALGORITHM } from '@/engine/rng'
 import { SAVE_FILE_VERSION, classifySaveError } from '@/engine/save-file'
 import { SESSION_SAVE_VERSION } from '@/engine/session'
 import type { SessionForm } from '@/engine/session-types'
-import { useGameSessionStore, useUiStore } from '@/stores'
+import { useGameSessionStore, useUiStore, useWorkbenchStore } from '@/stores'
 
 /**
  * 存档 / 读档界面（W7 C15）
  *
  * ## 它是什么
  *   把 W6 D1 的存档数据层（`engine/save-file.ts` + `stores/session.ts`）摆成一个**独立入口**：
- *   顶栏「存档 / 读档」按钮打开本对话框 —— 与对局在哪一步无关（**任意环节都可存档**），
- *   会话的四种形态（未开局 / 可推进 / 待答 / 已终止）都能存、都能读回。
+ *   顶栏「存档 / 读档」按钮打开本对话框。**结算点才可存档**：战斗、移动、付款、
+ *   空运等结算未完成时，保存按钮按 `workbench.saveBlockedReason` 禁用并说明原因。
  *
  * ## 三件事说清楚（对应用户要求）
  *   ① **存档槽**：本作只有一个槽（`SAVE_SLOT_KEY`）——摘要给出剧本 / 回合阶段 / 形态 /
@@ -35,6 +35,7 @@ const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ 'update:open': [value: boolean] }>()
 
 const gameSession = useGameSessionStore()
+const workbench = useWorkbenchStore()
 const ui = useUiStore()
 
 /** 会话形态的中文名（未开局 = null） */
@@ -131,12 +132,23 @@ watch(
 
 /** 读档预检：槽摘要非空即说明这一档**通过了完整校验**（版本 / 剧本 / 容器 / 种子自洽） */
 const slotUsable = computed(() => slot.value !== null)
+
+/**
+ * 存档可用态：会话存在、存储可用、且**没有未完成结算**。
+ * 判据全部来自既有 store 事实（`saveBlockedReason` 与 session 的状态），组件不另算规则。
+ */
+const canSave = computed(
+  () =>
+    gameSession.session !== null &&
+    gameSession.storage !== null &&
+    workbench.saveBlockedReason === null,
+)
 </script>
 
 <template>
   <BaseDialog
     :open="props.open"
-    title="存档 / 读档（W7 C15）"
+    title="存档 / 读档"
     width="640px"
     z-index="var(--z-dialog-top)"
     @update:open="emit('update:open', $event)"
@@ -144,8 +156,8 @@ const slotUsable = computed(() => slot.value !== null)
     <!-- ── ① 当前会话与动作 ── -->
     <p class="muted">
       本作**只有一个存档槽**（浏览器本地存储）。存档内容六项：状态 / 种子 / 日志游标 /
-      进行中会话（含待答问题）/ 共识开关结论 / 剧本与数据版本；**任意环节都可存档** ——
-      四种会话形态（未开局 · 可推进 · 待答 · 已终止）都能存、都能读回。
+      进行中会话（含待答问题）/ 共识开关结论 / 剧本与数据版本；**结算点才可存档** ——
+      战斗、移动、付款、空运等结算完成后按钮才可用。读档不受此限，随时可读回。
     </p>
     <p class="row">
       <BaseTag :kind="gameSession.session === null ? 'neutral' : 'info'">
@@ -160,12 +172,7 @@ const slotUsable = computed(() => slot.value !== null)
     </p>
 
     <div class="row">
-      <BaseButton
-        variant="primary"
-        size="sm"
-        :disabled="gameSession.session === null"
-        @click="saveNow()"
-      >
+      <BaseButton variant="primary" size="sm" :disabled="!canSave" @click="saveNow()">
         保存到槽
       </BaseButton>
       <BaseButton variant="secondary" size="sm" :disabled="!slotUsable" @click="loadNow()">
@@ -176,6 +183,9 @@ const slotUsable = computed(() => slot.value !== null)
     </div>
     <p v-if="gameSession.session === null" class="muted">
       当前不支持保存未开局的初设进度；完成初设并开局后可保存对局。
+    </p>
+    <p v-else-if="!canSave" class="muted">
+      暂不可保存：{{ workbench.saveBlockedReason ?? '本地存储不可用' }}
     </p>
 
     <!-- ── ② 存档槽摘要 ── -->

@@ -360,7 +360,7 @@ const showsLedger = computed(
 </script>
 
 <template>
-  <BasePanel title="补给与 SP（C8：OCS 12.0）">
+  <BasePanel title="补给与 SP（OCS 12.0）">
     <div class="row">
       <BaseButton
         variant="secondary"

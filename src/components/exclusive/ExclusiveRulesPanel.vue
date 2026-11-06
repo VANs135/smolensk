@@ -172,7 +172,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
 </script>
 
 <template>
-  <BasePanel title="专规机制（W6 B19：1.2 / 1.7 / 2.1a / 2.2 / 3.3b / 3.4 / 3.5）">
+  <BasePanel title="专规机制（1.2 / 1.7 / 2.1a / 2.2 / 3.3b / 3.4 / 3.5）">
     <!-- ══ 只读信息段（B17a-3：留右栏；会话里只保留必要的动作上下文） ══ -->
     <template v-if="showsInfo">
       <!-- ── · 容量提升与补给关闭时点（1.2 / 2.1a） ── -->

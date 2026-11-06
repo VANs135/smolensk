@@ -38,7 +38,7 @@ const terminatedAtTurn = computed<number | null>(() => {
 </script>
 
 <template>
-  <BasePanel v-if="gameSession.terminated" title="终止提示（W6 C10：P3）">
+  <BasePanel v-if="gameSession.terminated" title="终止提示">
     <p class="stop">
       <BaseTag kind="danger">已终止</BaseTag>
       <BaseTag kind="neutral">{{ gameSession.termination }}</BaseTag>

@@ -421,7 +421,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
 </script>
 
 <template>
-  <BasePanel title="增援与编制（W6 B18：13.5 / 13.6 / 13.9 / 20.0）">
+  <BasePanel title="增援与编制（13.5 / 13.6 / 13.9 / 20.0）">
     <p v-if="showsInfo && workbench.phase !== 'reinforcement'" class="muted">
       到达投放、重建与合并都在 **B 增援**（13.5a / 13.9）；请先把阶段切到「B 增援」。
       拆分单位的创建在 C/E/G 段或战后结算（20.0a）。

@@ -180,7 +180,7 @@ onBeforeUnmount(() => {
     <div class="gt__main">
       <!-- 状态条：一眼看清「谁在动、走到哪一步、工具是哪个」 -->
       <div class="gt__bar">
-        <BaseTag kind="info">对局台（C16）</BaseTag>
+        <BaseTag kind="info">对局台</BaseTag>
         <span class="gt__stat num">{{ sideLabel }} · 回合 {{ workbench.turn }}</span>
         <span class="gt__stat num">{{ workbench.date }}</span>
         <!--

@@ -180,7 +180,7 @@ function sideLabel(side: Side): string {
 </script>
 
 <template>
-  <BasePanel title="初设与开局（W7 C14：通规 IV Set Up Notes · 专规 Setup Notes）">
+  <BasePanel title="初设与开局（通规 IV Set Up Notes · 专规 Setup Notes）">
     <!-- ── ① 剧本选择 + 开始游戏（选剧本即自动初设固定项） ── -->
     <div class="row">
       <label class="field">

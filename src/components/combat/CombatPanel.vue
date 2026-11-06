@@ -209,7 +209,7 @@ const quickDefenderArItems = computed(() =>
 </script>
 
 <template>
-  <BasePanel title="战斗（C6：OCS 9.0）">
+  <BasePanel title="战斗（OCS 9.0）">
     <!-- 模式切换：九步完整流程 / 一键查表 -->
     <div class="row">
       <BaseButton

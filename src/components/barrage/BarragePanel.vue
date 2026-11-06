@@ -199,7 +199,7 @@ function setAircraftRoll(unitId: string, value: number): void {
 </script>
 
 <template>
-  <BasePanel title="轰炸（C7：OCS 10.0）">
+  <BasePanel title="轰炸（OCS 10.0）">
     <div class="row">
       <BaseButton
         variant="secondary"

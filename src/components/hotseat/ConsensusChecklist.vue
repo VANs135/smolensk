@@ -46,7 +46,7 @@ function decidedLabel(decided: boolean | null): {
 </script>
 
 <template>
-  <BasePanel title="开局共识（W7 C13：可选开关 · 专规 4.0）">
+  <BasePanel title="开局共识（可选开关 · 专规 4.0）">
     <p class="muted">
       **勾 = 用这条，不勾 = 不用；默认全部不勾**。勾选结果会写成人人对局结论（存档的一部份）；
       不勾任何一项也能直接开局，推进第一回合时自动补写，不会卡流程。

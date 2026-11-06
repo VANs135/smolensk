@@ -324,7 +324,7 @@ const showsReferee = useRefereeTools()
 </script>
 
 <template>
-  <BasePanel title="记录轨与容器（W7 C12：回合轨 · 天气轨 · 铁路容量轨 · 死亡堆 · 各类盒）">
+  <BasePanel title="记录轨与容器（回合轨 · 天气轨 · 铁路容量轨 · 死亡堆 · 各类盒）">
     <p v-if="showsInfo" class="muted">
       轨与盒的**名册与判定**全部来自引擎（`engine/rules/containers.ts`），本面板只画表与收点击。
       每个盒都带 **美工接口**（`artwork`）：有图即渲染图，无图渲染纯文字盒；数据缺口（如 2.3a 的

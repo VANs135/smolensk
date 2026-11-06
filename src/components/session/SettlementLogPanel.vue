@@ -61,7 +61,7 @@ function filterByRule(rule: string): void {
 </script>
 
 <template>
-  <BasePanel title="结算日志（W7 D2：结构化 · 可检索 · 可展开 · 重放复算）">
+  <BasePanel title="结算日志（结构化 · 可检索 · 可展开 · 重放复算）">
     <p class="muted">
       日志来自会话的结算记录（每条都带**规则编号**、成败、掷骰与待处理项）。下方可逐条展开看明细；
       检索条件同时给出即「与」关系。重放复算从**种子**出发重掷日志里的每一次掷骰并逐条比对，
