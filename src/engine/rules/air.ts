@@ -36,7 +36,6 @@ export const ACTIVE_STACKING_PER_LEVEL = rulesConstants.air.activeStackingPerLev
 export const AIR_MISSION_MAX_AIRCRAFT = rulesConstants.barrage.maxAircraftPerMission
 export const BASE_AA_PER_LEVEL = rulesConstants.air.baseAaPerLevel
 export const AIRSTRIP_AA_VALUE = rulesConstants.air.airstripAaValue
-export const PARADROP_PLANNING_TURNS_ADVANCE = rulesConstants.air.paradropPlanningTurnsAdvance
 export const PATROL_ZONE_MAX_HEXES = rulesConstants.air.patrolZoneMaxHexes
 export const FLAK_KILL_MIN_DICE = rulesConstants.air.flakKillMinDice
 export const FLAK_MODIFIERS = rulesConstants.air.flakModifiers

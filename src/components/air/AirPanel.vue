@@ -590,10 +590,7 @@ const showsBaseOps = computed(
                   >
                 </span>
               </label>
-              <label class="field">
-                <input v-model="workbench.airInputs.cargoUnitsParaCapable" type="checkbox" />
-                所载单位标有 Para / 空降资格（14.10a；本作库未印该标识）
-              </label>
+              <!-- R6：本作人员空投 N/A（无空降兵编制），不再提供「声明 Para 资格」入口 -->
               <!--
               14.9f：卸载限额的例外 —— 「如果超出部分对应的运输机在**目的地格变为非激活状态**，
               则可以卸载超额部分的货物」（14.9e-A 的双程飞法即在目的地变非激活）。

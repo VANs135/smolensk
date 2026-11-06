@@ -906,8 +906,6 @@ export interface AirInputs {
   unloadCargoIds: string[] | null
   /** 14.10a：本次空投的**战斗单位**（从己方已摆放单位中勾选） */
   cargoUnitIds: string[]
-  /** 14.10a：勾选单位是否标有「空降/Para」标识（本作单位库未印该标识，故由玩家声明） */
-  cargoUnitsParaCapable: boolean
   /** 14.10b：空投计划的制定回合（须比执行回合早 ≥2） */
   airdropPlannedTurn: number
   /** 14.10b：计划执行回合 */
@@ -956,7 +954,6 @@ function createAirInputs(): AirInputs {
     unloadOverLimitInactive: false,
     unloadCargoIds: null,
     cargoUnitIds: [],
-    cargoUnitsParaCapable: true,
     airdropPlannedTurn: 0,
     airdropScheduledTurn: 0,
     cargoDice: null,
@@ -4554,7 +4551,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 候选＝图上本方**地面战斗**单位且**处于移动模式**——「处于**移动模式**的战斗单位也可以空运，
    * 前提是其 MA 为 **10 或以下的步行 MP**」。本作数据里战斗面 MA 最大 10 ⇒ "步行 MP≤10" 恒满足
    * （判据层真值表在引擎 `missionCargoCheck` 里钉），候选只筛"模式"这一半；
-   * 空投另有 Para 资格（由玩家在界面上声明 `airInputs.cargoUnitsParaCapable`），不在此预筛。
+   * 空投的人员/战斗单位投送在本作 N/A（R6），候选仍可供空运使用；空投只允许 SP。
    */
   const airCargoUnitChoices = computed<ConsoleUnit[]>(() =>
     units.value.filter(
@@ -13593,7 +13590,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         id: `unit:${unitId}`,
         kind: 'unit',
         isCombat: unit.isCombat,
-        paraCapable: airInputs.value.cargoUnitsParaCapable,
         // 14.9c（第五批批 C 切片 2）：单位货物须**移动模式**、且**步行 MP ≤ 10**
         // 使用移动面的印刷MA、机动类型和RE；不得用战斗面步行MA代替移动面轮式MA。
         mode: canonicalMode(unit.mode),

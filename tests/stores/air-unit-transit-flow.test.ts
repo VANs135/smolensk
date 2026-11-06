@@ -267,27 +267,21 @@ describe('14.9 / 14.10：在途单位的唯一归属与地面移动交接', () =
     expect(game.saveNow()).toBe(true)
   })
 
-  it('14.10d：空投失败从在途进入死亡堆，完成返航和重试不会使单位返场', () => {
+  it('14.10d（N/A）：人员空投单位不得离场，更不会进入在途/死亡堆', () => {
+    /*
+     * ★ P0（R6）：本作无空降兵 ⇒ 单位货物空投在宣布阶段被 2.2b 拒绝。
+     *   原「空投失败 → 在途 → 死亡堆」链路不可达；此处钉住单位仍在原位。
+     */
     const { w } = setup()
     w.setAirMissionKind('air_drop')
     w.setTurn(3)
     w.airInputs.airdropPlannedTurn = 1
     w.airInputs.airdropScheduledTurn = 3
-    expect(w.beginAirMissionNow()).toBe(true)
-    expect(w.airUnitCargoManifest[0]!.fate).toBe('aboard')
-    expect(w.units.some((unit) => unit.instanceId === 'cargo')).toBe(false)
-    toCargoStep(w)
-    w.airInputs.cargoDice = 2
-    expect(w.resolveAirCargoNow()).toBe(true)
-    expect(w.airState!.cargo!.items).toMatchObject([{ id: 'unit:cargo', fate: 'destroyed' }])
-    expect(w.airUnitCargoManifest[0]!.fate).toBe('lost')
-    expect(w.deadPile.filter((unit) => unit.instanceId === 'cargo')).toHaveLength(1)
-    expect(w.resolveAirCargoNow()).toBe(true)
-    expect(w.confirmAirMissionNow()).toBe(true)
-    expect(w.completeAirReturnNow()).toBe(true)
-    expect(w.completeAirReturnNow()).toBe(false)
-    expect(w.units.some((unit) => unit.instanceId === 'cargo')).toBe(false)
-    expect(w.deadPile.filter((unit) => unit.instanceId === 'cargo')).toHaveLength(1)
+    expect(w.beginAirMissionNow()).toBe(false)
+    expect(w.airError).toMatchObject({ rule: '2.2b' })
+    expect(w.airUnitCargoManifest).toEqual([])
+    expect(w.units.find((unit) => unit.instanceId === 'cargo')!.hex).toEqual(CORE_HEX)
+    expect(w.deadPile.filter((unit) => unit.instanceId === 'cargo')).toHaveLength(0)
   })
 
   it('14.2e：非载货任务忽略残留货物草稿，不移走单位或扣除SP', () => {

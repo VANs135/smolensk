@@ -243,8 +243,8 @@ describe('12.8e：断补「第一个回合」的真跟踪（先突围、后补�
   })
 })
 
-describe('12.6h：空投当回合豁免追溯补给', () => {
-  it('★ 空投着陆的单位在本回合不被标断补；跨回合后照常判定', () => {
+describe('12.6h（N/A）：人员空投入口封闭', () => {
+  it('★ R6：本作无空降兵 ⇒ 空投单位被专规 2.2b 拒绝，12.6h 无从触发', () => {
     const store = newStore()
     store.setPhase('movement')
     // 现场：本方空军基地 + 一架运输机（载 1 单位货物），目标格是基地之外的一格
@@ -287,45 +287,22 @@ describe('12.6h：空投当回合豁免追溯补给', () => {
       'para-1',
       'move',
     )
-    // 空投：把单位作为货物（14.10）——先把它从图上挪开（货物须"在基地格"由面板勾选，这里直接进候选）
+    /*
+     * ★ P0（2026-11-07 R6）：本作无空降兵编制 ⇒ 人员空投整体 N/A。
+     *   12.6h 的「空投当回合豁免」绑定计划空投，随之 N/A；这里只钉住入口被 2.2b 拒绝。
+     */
     para.hex = { ...CORE_HEX }
     store.setAirActive(true)
     store.setAirMissionKind('air_drop')
     store.toggleAirCargoUnit('para-1')
-    // 14.10a：空投战斗单位须声明 Para 资格（界面上的复选框）
-    store.airInputs.cargoUnitsParaCapable = true
     expect(store.setAirTargetFromText(label(targetHex))).toBe(true)
     store.toggleAirMissionUnit('tpt-1')
-    // 14.10b：计划空投须**早于执行回合 ≥2 回合**（与既有用例同一现场：计划 1 → 执行 3）
     store.setTurn(3)
     store.airInputs.airdropPlannedTurn = 1
     store.airInputs.airdropScheduledTurn = 3
-    expect(store.beginAirMissionNow()).toBe(true)
-    // 14.2f 逐步：C 空战（无对手 ⇒ 直接过）→ D 拦截（放弃）→ E 防空（不命中）
-    expect(store.confirmAirCombatNow()).toBe(true)
-    expect(store.declareInterceptionNow()).toBe(true)
-    store.airInputs.flakDie = 2
-    expect(store.resolveFlakNow()).toBe(true)
-    store.airInputs.cargoDice = 12 // 表 17-4：2 骰 12 必成功
-    expect(store.resolveAirCargoNow()).toBe(true)
-    expect(store.confirmAirMissionNow()).toBe(true)
-    expect(store.completeAirReturnNow()).toBe(true)
-    expect(para.hex).toEqual(targetHex)
-    expect(para.airDropExemptTurn).toBe(store.turn)
-
-    // 12.6h：本回合无论怎么重判，它都不被标断补
-    store.evaluateTraceSupplyNow()
-    expect(para.hasTraceSupply).toBe(true)
-    expect(para.cutSinceTurn).toBe(null)
-
-    // 跨回合：豁免期结束 ⇒ 照常按 12.6 判定（运动阶段先重判，补给阶段才落断补起点）
-    const dropTurn = store.turn
-    store.setPhase('cleanUp')
-    store.setTurn(dropTurn + 1)
-    store.setPhase('movement')
-    expect(para.hasTraceSupply).toBe(false)
-    expect(para.cutSinceTurn).toBe(null)
-    store.setPhase('supply')
-    expect(para.cutSinceTurn).toBe(dropTurn + 1)
+    expect(store.beginAirMissionNow()).toBe(false)
+    expect(store.airError).toMatchObject({ rule: '2.2b' })
+    // 单位仍在原格，未被装载/空投
+    expect(para.hex).toEqual(CORE_HEX)
   })
 })

@@ -554,7 +554,7 @@ describe('14.2f-A/B 任务分配：机数·距离·阶段·天候·能力', () =
       expect(transportMission.data.cargoCapacity).toBe(6)
       expect(transportMission.data.aircraftIds).toEqual(['tp1', 'f1'])
     }
-    // 空投：苏军不得计划空投（专规 2.2b）
+    // P0（R6）：人员空投整体 N/A（苏、轴同拒）；补给空投不受影响
     expect(
       assignAirMission(
         missionRequest({
@@ -564,11 +564,10 @@ describe('14.2f-A/B 任务分配：机数·距离·阶段·天候·能力', () =
             makePlane({ id: 'tp1', baseHex: TARGET, side: 'soviet', transportCapacity: 2 }),
           ],
           bases: [makeBase({ hex: TARGET, side: 'soviet' })],
-          // 专规 2.2b 只禁「需计划的空降」（载有战斗单位）；纯补给空投不受此禁
-          cargo: [{ id: 'u1', kind: 'unit' }],
+          cargo: [{ id: 'u1', kind: 'unit', mode: 'move', ma: 3 }],
         }),
       ),
-    ).toMatchObject({ ok: false, rule: '2.2b', reason: 'plannedAirdropNotAllowedForSide' })
+    ).toMatchObject({ ok: false, rule: '2.2b', reason: 'airDropPersonnelNotAllowed:u1' })
 
     // 专规 2.2b：苏军补给空投允许（14.10b 注：补给空投从不需要预先计划）
     expect(

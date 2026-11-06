@@ -204,33 +204,31 @@ describe('14.10a/14.10b：空投的货物资格与计划', () => {
       ...(overrides.airdropPlan === undefined ? {} : { airdropPlan: overrides.airdropPlan }),
     })
 
-  it('14.10a：只有 SP 与标有「空降/Para」的**战斗单位**可空投', () => {
+  it('14.10a / R6：本作人员空投 N/A，空投只允许 SP', () => {
     /*
-     * ★ 契约变更（第五批批 C 切片 2，**收紧不是放宽**）：14.9c「处于移动模式的战斗单位也可以空运」
-     *   ⇒ 单位货物先过 14.9c（模式 + 步行 MP）再看 14.10a 的 Para 资格 —— 夹具补上前者。
+     * ★ P0（2026-11-07 R6）：本作没有可伞降的空降兵编制
+     *   ⇒ **任何单位货物空投**一律以专规 2.2b 拒绝，不再看 Para 番号、也不再走 14.10b 计划。
      */
     expect(
       request({
-        cargo: [
-          { id: 'c1', kind: 'unit', isCombat: true, paraCapable: false, mode: 'move', ma: 3 },
-        ],
+        cargo: [{ id: 'c1', kind: 'unit', isCombat: true, mode: 'move', ma: 3 }],
       }),
-    ).toMatchObject({ ok: false, rule: '14.10a', reason: 'cargoNotParaCapable:c1' })
-    // 非战斗单位（如补给点）不得空投
+    ).toMatchObject({ ok: false, rule: '2.2b', reason: 'airDropPersonnelNotAllowed:c1' })
+    // 非战斗单位同样不属于「补给投送」
     expect(
       request({
-        cargo: [
-          { id: 'c2', kind: 'unit', isCombat: false, paraCapable: true, mode: 'move', ma: 3 },
-        ],
+        cargo: [{ id: 'c2', kind: 'unit', isCombat: false, mode: 'move', ma: 3 }],
       }),
-    ).toMatchObject({ ok: false, rule: '14.10a', reason: 'cargoNotParaCapable:c2' })
+    ).toMatchObject({ ok: false, rule: '2.2b', reason: 'airDropPersonnelNotAllowed:c2' })
     // SP 空投合法，且**不需要计划**（14.10b 重要提示：补给空投从不需要预先计划）
     expect(request({ cargo: [{ id: 'c3', kind: 'sp', t: 2 }] }).ok).toBe(true)
   })
 
-  it('14.10b：空投战斗单位须在移动阶段且须有计划、提前两回合', () => {
-    // ★ 契约变更（第五批批 C 切片 2）：同上 —— 单位货物先过 14.9c 的"移动模式 + 步行 MP"
-    const paraUnit = {
+  it('14.10b N/A：即使阶段与计划齐全，人员空投仍被 2.2b 拒绝', () => {
+    /*
+     * P0（R6）：14.10b 的计划机制不适用；这里用「最有利的合法计划」证明它不能放行人员空投。
+     */
+    const unit = {
       id: 'u1',
       kind: 'unit' as const,
       re: 0.25,
@@ -238,46 +236,20 @@ describe('14.10a/14.10b：空投的货物资格与计划', () => {
       side: 'axis' as const,
       sourceHex: transport.baseHex,
       isCombat: true,
-      paraCapable: true,
       mode: 'move' as const,
       ma: 3,
     }
-    expect(request({ cargo: [paraUnit] })).toMatchObject({
-      ok: false,
-      rule: '14.10b',
-      reason: 'plannedAirdropRequiresPlan',
-    })
-    // 14.10b：空投战斗单位只能在**移动阶段**（反应/进击阶段虽可执行其它任务，但不得空投单位）
-    expect(request({ phase: 'reaction', cargo: [paraUnit] })).toMatchObject({
-      ok: false,
-      rule: '14.10b',
-      reason: 'plannedAirdropOnlyInMovementPhase',
-    })
-    // 只提前 1 回合 ⇒ 太晚
     expect(
       request({
-        cargo: [paraUnit],
-        airdropPlan: { targetHex: TARGET, plannedTurn: 4, scheduledTurn: 5, currentTurn: 5 },
+        cargo: [unit],
+        airdropPlan: { targetHex: TARGET, plannedTurn: 3, scheduledTurn: 5, currentTurn: 5 },
       }),
-    ).toMatchObject({ ok: false, reason: 'airdropPlanTooLate:1' })
-    // 计划格不符
-    expect(
-      request({
-        cargo: [paraUnit],
-        airdropPlan: { targetHex: at(20), plannedTurn: 3, scheduledTurn: 5, currentTurn: 5 },
-      }),
-    ).toMatchObject({ ok: false, reason: 'airdropPlanTargetMismatch' })
-    // 提前两回合且执行回合＝计划回合 ⇒ 合法
-    const ok = request({
-      cargo: [paraUnit],
-      airdropPlan: { targetHex: TARGET, plannedTurn: 3, scheduledTurn: 5, currentTurn: 5 },
+    ).toMatchObject({ ok: false, rule: '2.2b', reason: 'airDropPersonnelNotAllowed:u1' })
+    expect(request({ phase: 'reaction', cargo: [unit] })).toMatchObject({
+      ok: false,
+      rule: '2.2b',
+      reason: 'airDropPersonnelNotAllowed:u1',
     })
-    expect(ok.ok).toBe(true)
-    if (ok.ok) {
-      expect(ok.data.cargo).toHaveLength(1)
-      /* B44（14.9e-C）：本夹具的任务格就在起飞基地上（距离 0 ≤ 航程一半）⇒ 容量翻倍（3 → 6） */
-      expect(ok.data.cargoCapacity).toBe(6)
-    }
   })
 
   it('14.9a：装载量不得超过总运输容量', () => {

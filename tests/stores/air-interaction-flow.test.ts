@@ -910,10 +910,10 @@ describe('C9 空军交互：14.3e 逐轮空战与 14.10d 空投检定（端到�
    * B29b-2：**载货入口**（14.9 / 14.10）—— 候选投影 + 面板直连的勾选动作
    *
    * 修前这些输入只在 store 与用例里，面板没有入口 ⇒ 玩家无法宣布一次带货的任务。
-   * 此处钉"候选怎么来、勾选怎么落、宣布后真的进货物清单"三件事；
-   * 14.10a 的资格声明与 14.10b 的计划回合由既有用例（下一条）覆盖。
+   * 此处钉"候选怎么来、勾选怎么落"两件事；
+   * ★ P0（R6）：人员空投 N/A，宣布必须被专规 2.2b 拒绝（14.10b 计划不再放行）。
    */
-  it('★ 14.10a：单位货物候选＝图上本方地面战斗单位（且**移动模式**）；勾选后宣布任务即进货物清单', () => {
+  it('★ 14.10a（N/A）：单位货物候选仍供空运；人员空投宣布即被 2.2b 拒绝', () => {
     const store = newStore()
     store.setAirActive(true)
     store.setAirMissionKind('air_drop')
@@ -941,7 +941,7 @@ describe('C9 空军交互：14.3e 逐轮空战与 14.10d 空投检定（端到�
     if (cargoUnit === undefined) throw new Error('夹具里找不到 para-1')
     cargoUnit.mode.mode = 'move'
     cargoUnit.hex = { ...CORE_HEX } // 装载必须实际在起飞基地，不能从目标格瞬移。
-    // 候选只列本方（engine 侧再过滤资格/运力）
+    // 候选只列本方（engine 侧再过滤运力）；空运共用该候选，人员空投本身 N/A
     expect(store.airCargoUnitChoices.map((unit) => unit.instanceId)).toEqual(['para-1'])
 
     // 勾选 → 再点一次移出 → 再点一次加入（面板的"点一枚加入/移出"）
@@ -965,21 +965,15 @@ describe('C9 空军交互：14.3e 逐轮空战与 14.10d 空投检定（端到�
     expect(store.setAirTargetFromText(label(NEAR_HEX))).toBe(true)
     store.toggleAirMissionUnit('tpt-1')
     /*
-     * 14.10b：「空投**战斗单位**属需计划的任务」——计划回合须比执行回合早 ≥2。
-     * 三行按顺序各钉一次：计划不对 ⇒ 拒（规则号 14.10b）；改对 ⇒ 宣布成功。
+     * ★ P0（R6）：本作无空降兵编制 ⇒ 人员空投整体 N/A。
+     *   即使计划回合/执行回合完全合法，宣布任务也以专规 2.2b 拒绝。
      */
     store.setTurn(3)
     store.airInputs.airdropPlannedTurn = 1
-    store.airInputs.airdropScheduledTurn = 5 // ≠ 当前回合 ⇒ 计划与执行回合不符（14.10b）
-    expect(store.beginAirMissionNow()).toBe(false)
-    expect(store.airError).toMatchObject({ rule: '14.10b' })
-    // 计划先于执行 ≥2 回合（1 → 3）且执行回合＝当前回合 ⇒ 宣布成功
-    store.airInputs.airdropPlannedTurn = 1
     store.airInputs.airdropScheduledTurn = 3
-    expect(store.beginAirMissionNow()).toBe(true)
-    // 14.10a：货物清单里出现的是"单位货物"（id 带 unit: 前缀）
-    expect(store.airError).toEqual(null) // 调试：先用它把拒绝原因打出来
-    expect(store.airState?.assignment.cargo.map((item) => item.id)).toEqual(['unit:para-1'])
+    expect(store.beginAirMissionNow()).toBe(false)
+    expect(store.airError).toMatchObject({ rule: '2.2b' })
+    expect(store.airState).toBe(null)
   })
 
   it('14.10d：空投 SP 货物（14.10b：补给空投不需预先计划）按表 17-4 检定后置入', () => {
@@ -1055,8 +1049,8 @@ describe('C9 空军交互：14.3e 逐轮空战与 14.10d 空投检定（端到�
     store.setAirTargetFromText(label(NEAR_HEX))
     store.toggleAirMissionUnit('tpt-1')
     store.airInputs.cargoUnitIds = ['para-1']
-    store.airInputs.cargoUnitsParaCapable = false
     expect(store.beginAirMissionNow()).toBe(false)
-    expect(store.airError).toMatchObject({ rule: '14.10a' })
+    // P0（R6）：人员空投整体 N/A，不再有「声明 Para 资格」的口子
+    expect(store.airError).toMatchObject({ rule: '2.2b' })
   })
 })

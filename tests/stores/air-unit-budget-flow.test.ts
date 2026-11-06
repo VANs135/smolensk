@@ -408,7 +408,11 @@ describe('14.9d / 4.7d：空运地面移动额度及阶段身份的真实流程'
     expect(snapshot(w)).toEqual(before)
   })
 
-  it('4.7d：空投单位先花过地面MP即拒绝，不移出单位、不扣SP、不掷骰', () => {
+  it('4.7d（N/A）：人员空投已整体关闭，4.7d 不再有触发路径', () => {
+    /*
+     * ★ P0（R6）：本作无空降兵 ⇒ 任何单位货物空投在宣布阶段即被 2.2b 拒绝，
+     *   因而「空投单位先花过地面MP」这一分支不再可达；此处钉住入口与零副作用。
+     */
     const { w, cargo } = setup()
     w.setAirMissionKind('air_drop')
     w.setTurn(3)
@@ -421,7 +425,7 @@ describe('14.9d / 4.7d：空运地面移动额度及阶段身份的真实流程'
     cargo.mpSpent = 0.5
     const before = snapshot(w)
     expect(w.beginAirMissionNow()).toBe(false)
-    expect(w.airError).toEqual({ rule: '4.7d', reason: 'airDropUnitAlreadyMoved' })
+    expect(w.airError).toMatchObject({ rule: '2.2b' })
     expect(snapshot(w)).toEqual(before)
     expect(w.airUnitCargoManifest).toEqual([])
     expect(w.airSupplyManifest).toBeNull()

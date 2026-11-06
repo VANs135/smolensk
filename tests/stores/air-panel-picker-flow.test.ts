@@ -327,8 +327,8 @@ describe('B14a：空军面板的替换（源码守卫）', () => {
     expect(panel).toContain('workbench.airInputs.cargoSpT')
     expect(panel).toContain('workbench.airInputs.airdropPlannedTurn')
     expect(panel).toContain('workbench.airInputs.airdropScheduledTurn')
-    // 14.10a：资格由玩家声明的开关必须画出来（本作库未印 Para 标识）
-    expect(panel).toContain('workbench.airInputs.cargoUnitsParaCapable')
+    // P0（R6）：人员空投 N/A，不再画「声明 Para 资格」开关
+    expect(panel).not.toContain('cargoUnitsParaCapable')
     // 单位货物＝算子图阵列，点一枚直连 store 的勾选动作
     expect(panel).toContain('workbench.airCargoUnitChoices')
     expect(panel).toContain('@pick="workbench.toggleAirCargoUnit($event)"')

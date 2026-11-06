@@ -6,13 +6,11 @@ import type { AirStatus, GamePhase } from '../state-types'
 // 14.4f：防空任务损失表的取表（行标 `<N> aircraft`）只有一处实现
 import { flakMissionLoss } from '../tables/flak'
 import {
-  PARADROP_PLANNING_TURNS_ADVANCE,
   PATROL_ZONE_MAX_HEXES,
   activeStackingLimit,
   airCombatModifiedRoll,
   canHipShoot,
   canMissionInPhase,
-  canPlannedAirdrop,
   computeFlakDrm,
   flakAppliesToMission,
   flakKillCheck,
@@ -358,9 +356,7 @@ export interface AirMissionCargo extends AirCargoLoadView {
   kind: 'sp' | 'unit'
   /** SP 货物的 T 数（14.10d：**每 1T 分别掷骰**，调用方须按 1T 拆分） */
   t?: number
-  /** 14.10a：战斗单位是否标有「空降/Para」标识 */
-  paraCapable?: boolean
-  /** 14.10a：是否战斗单位（非战斗单位不得空投） */
+  /** 14.10a：是否战斗单位（本作人员空投 N/A，字段仅保留载货视图兼容） */
   isCombat?: boolean
   /**
    * 14.9c（第五批批 C 切片 2）：单位货物须**处于移动模式**
@@ -809,22 +805,15 @@ function missionCargoCheck(input: AirMissionRequest): RuleOutcome<{ ok: true }> 
   }
   if (input.kind !== 'air_drop') return succeed('14.9c', { ok: true })
 
-  const illegal = cargo.find(
-    (item) => item.kind !== 'sp' && !(item.isCombat === true && item.paraCapable === true),
-  )
-  if (illegal !== undefined) return fail('14.10a', `cargoNotParaCapable:${illegal.id}`)
-
-  const dropsUnits = cargo.some((item) => item.kind === 'unit')
-  if (!dropsUnits) return succeed('14.10a', { ok: true })
-
-  if (input.phase !== 'movement') return fail('14.10b', 'plannedAirdropOnlyInMovementPhase')
-  const plan = input.airdropPlan
-  if (plan === undefined) return fail('14.10b', 'plannedAirdropRequiresPlan')
-  if (!sameHex(plan.targetHex, input.targetHex)) return fail('14.10b', 'airdropPlanTargetMismatch')
-  if (plan.scheduledTurn !== plan.currentTurn) return fail('14.10b', 'airdropPlanTurnMismatch')
-  if (plan.currentTurn - plan.plannedTurn < PARADROP_PLANNING_TURNS_ADVANCE)
-    return fail('14.10b', `airdropPlanTooLate:${plan.currentTurn - plan.plannedTurn}`)
-  return succeed('14.10b', { ok: true })
+  /*
+   * ★ P0（2026-11-07 R6）：本作没有可伞降的空降兵编制（专规 2.2b + 无空降兵单位）
+   *   ⇒ **人员/战斗单位空投整体 N/A**；无论载货单位是否带 `para` 番号、是否提交空投计划，
+   *   一律拒绝。补给投送（kind:'sp'）不受影响。
+   *   这里不再读取 `para` 标签，也不保留「玩家声明资格」的口子。
+   */
+  const unit = cargo.find((item) => item.kind === 'unit')
+  if (unit !== undefined) return fail('2.2b', `airDropPersonnelNotAllowed:${unit.id}`)
+  return succeed('14.10a', { ok: true })
 }
 
 /** 任务类型的能力门槛（14.1 能力位 + 14.2e「不限制机种」的组合口径） */
@@ -855,15 +844,9 @@ function missionAbilityCheck(input: AirMissionRequest): RuleOutcome<{ ok: true }
       if (!planes.some((plane) => (plane.transportCapacity ?? 0) > 0))
         return fail('14.9a', 'noTransportCapableAircraft')
       /*
-       * 专规 2.2b：苏方**允许补给空投**，只禁「需计划的空降」。
-       * 14.10b 亦明确「补给空投从来不需要预先计划」⇒ 判据落在**载有战斗单位**，不是任务类型。
+       * ★ P0（R6）：人员空投已整体 N/A，统一由 `missionCargoCheck` 以 2.2b 拒绝；
+       *   这里只保留「至少一架具备运输能力」的门槛，补给空投照常通过。
        */
-      if (
-        input.kind === 'air_drop' &&
-        (input.cargo ?? []).some((item) => item.kind === 'unit') &&
-        !canPlannedAirdrop(input.side)
-      )
-        return fail('2.2b', 'plannedAirdropNotAllowedForSide')
       return succeed('14.9a', { ok: true })
     case 'fighter_sweep':
       // 14.6：战斗机飞入有激活敌机的格进行空战；14.1：只有战斗机能攻击 ⇒ 须至少 1 架能发起空战
