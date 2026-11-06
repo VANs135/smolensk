@@ -48,4 +48,11 @@ describe('10.0a：store 侧密度按 formation 分组后封顶', () => {
     const division = place('ax-infantry-ge-5-inf-div')
     expect(barrageDensityReIn([...group, division], HEX, 'axis')).toBe(4.5)
   })
+
+  it('★ 10.0a「实际数量」：减员师按 **当前 RE** 计密度（4RE 师剩 2 步 ⇒ 2，不再封顶 3）', () => {
+    const division = place('ax-infantry-ge-5-inf-div')
+    expect(division.re).toBe(4)
+    division.steps = 2 // 9.11d：当前 RE = 印刷 4 − 已损 2 = 2
+    expect(barrageDensityReIn([division], HEX, 'axis')).toBe(2)
+  })
 })

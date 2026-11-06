@@ -1555,6 +1555,9 @@ export function barrageSpotterAt(
  * 「单独一个师（即使是**多单位编队**）……永远不会算作超过 3RE」⇒ 先按 `formation` 分组合并，
  * 再由 `densityReOf` 逐组封顶 3 RE。本作多单位编队（如 3PZ）在单位库里就是共享同一 `formation`
  * 的多个单步算子；没有 `formation` 的独立师各成一组（同样封顶）。
+ *
+ * 「如果少于 3RE，则使用**实际数量**即可」⇒ 减员的师按 9.11d 的**当前 RE**（印刷 RE − 已损军力）
+ * 计，而不是印刷值：4RE 师剩 2 步时按 2 RE 进密度表。
  */
 export function barrageDensityReIn(units: readonly ConsoleUnit[], hex: HexRef, side: Side): number {
   return densityReOf(
@@ -1562,7 +1565,7 @@ export function barrageDensityReIn(units: readonly ConsoleUnit[], hex: HexRef, s
       .filter((unit) => unit.side === side && sameHexRef(unit.hex, hex))
       .map((unit) => ({
         isCombat: unit.isCombat,
-        re: unit.re,
+        re: currentReOf(unit),
         formationId: unit.formation ?? undefined,
       })),
   )
