@@ -391,12 +391,10 @@ import {
   // 第六批条 20：10.1a 火炮射程（界面只用它"说清楚"，裁决仍在引擎）
   canBarrageAtRange,
   // B8：环节链与闸门表（判据的唯一出处；本 store 只查表，不自己写"哪个动作归哪一段"）
-  // 5.4a / 5.7：预备标记的计量单位（覆盖组）与**转入即占**的额度
+  // 5.4a / 5.7：预备额度**按格**计（同格已有预备单位 ⇒ 不额外占）
+  allowReserveEntryAtHex,
   hasMarker,
-  placeReserveMarkersAtEntry,
-  rebuildReserveMarkerLedger,
-  type ReserveMarkerGroup,
-  type ReserveMarkerLogEvent,
+  reserveHexesInUse,
 } from '@/engine/rules'
 import { createId } from '@/shared'
 
@@ -1211,15 +1209,32 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const movePick = ref<{ hex: HexRef; ids: string[] } | null>(null)
   /**
-   * 5.4a / 5.7：预备标记账本（**按组**计，不按单位计）
+   * 5.4a / 5.7：预备额度＝**此刻有预备单位的格子**
    *
-   * 5.4a 允许「一个预备标记表示堆叠中一部分单位全部处于预备模式」⇒ ① 计量单位是**标记（覆盖组）**；
-   * ② 用户 2026-11-06 裁定：**转入预备那一刻即占**（原文「完成 25% 移动后才需要放置」是实体版
-   * 省标记的宽容条款）；③ 组内**部分释放**（5.7b）不归还，整组走空才归还（按当前模式实时判，
-   * 见 `reserveMarkersInUse`）。上限取剧本初设 `setup.reserveMarkers`（5.4a「严格限制」），
-   * 数据未给则不校验。读档时从 `session.log` 的 `reserveMarker` 条目反推（见 `afterRestore`）。
+   * 5.4a「玩家可以用一个预备标记（4.8b），表示**堆叠中一部分单位全部处于预备模式**」⇒ 一枚标记
+   * 覆盖**一个格子**里处于预备模式的那部分单位：同格多枚只算 1 格，异格各算 1 格（用户
+   * 2026-11-06 裁定「算不算额度得看同一格有没有预备模式的其它单位」）。剧本 `setup.reserveMarkers`
+   * 给几枚 ＝ 能同时保持几个格子处于预备；未给按 `0`（「没有就是 0」⇒ 无预备权）。
+   *
+   * 额度**不从账本读**：直接由 `units` 的当前模式派生 ⇒ 释放后标记天然留在未释放的单位上
+   * （5.7b 逐枚摘标记），读档也无需重放日志（`units` 本来就随档往返）。
    */
-  const reserveMarkerGroups = ref<ReserveMarkerGroup[]>([])
+  function hexKeyOf(unit: ConsoleUnit): string {
+    return `${String(unit.hex.col)}.${String(unit.hex.row)}`
+  }
+
+  /** 某方此刻有预备单位的格子（去重；界面/测试读它核对额度占用） */
+  function reservedHexes(side: Side): string[] {
+    return reserveHexesInUse(
+      units.value.map((unit) => ({
+        hex: hexKeyOf(unit),
+        side: unit.side,
+        inReserve: hasMarker(unit.mode, 'reserve'),
+      })),
+      side,
+    )
+  }
+
   /**
    * 13.2a：已「暂停移动」的运输点数（原文「运输点数可以移动、暂停移动……然后继续移动」）
    *
@@ -5979,89 +5994,34 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 5.4a：把本次**转入预备模式**的单位立即记入额度（电子版＝内部额度，不摆实体标记）
+   * 5.4a：该单位此刻能否**转入预备模式**（按格额度闸门；电子版＝程序校验）
    *
-   * 用户 2026-11-06 裁定：标记＝"同时处于预备模式的堆叠**组数**"上限，**转入那一刻即占额度**；
-   * 组内**部分释放**（5.7b）**不归还**，整组走空（5.7b / 5.7d / 5.10c）才归还（占用数按
-   * "组内仍有预备成员"统计，见 `reserveMarkersInUse`）。
-   * 同格同批转入的多枚共占一枚：`alreadyEntered` 是本次批量里已成功转入的成员，第二枚起并进
-   * 同一组；同格已有仍占用的组也并入（不烧新额度）。
-   * 池空 ⇒ 这一枚不能转入（`5.4a` / `noReserveMarkerAvailable`）。
+   * 用户 2026-11-06 裁定：
+   *   - 一枚标记＝**一个格子**里处于预备模式的那部分单位（5.4a / 4.8b）⇒ 同格已有预备单位
+   *     ⇒ 不额外占额度；同格没有 ⇒ 占 1 格；
+   *   - 剧本给几枚 ＝ 能同时保持几个格子处于预备；**没给就是 0** ⇒ 该方完全没有预备权
+   *     （进入即拒，不是"不校验"）；
+   *   - 转入那一刻即占（原文「完成 25% 移动后才需要放置标记」是实体版省标记的宽容条款）。
    *
-   * @returns 归属的组 id；被拒返回 `null`
+   * 额度由 `units` 的当前模式**派生**（见 `reservedHexes`），不维护账本 ⇒ 被拒时单位仍停在
+   * 原模式，不留半截状态。
+   *
+   * @returns 能否转入（被拒时已写日志）
    */
-  function consumeReserveQuota(
-    unit: ConsoleUnit,
-    alreadyEntered: ReadonlySet<string>,
-  ): string | null {
-    const reserveMarkerCap = session.scenarioInfo?.setup.reserveMarkers
-    const sameHex = (candidate: ConsoleUnit) =>
-      candidate.hex.col === unit.hex.col && candidate.hex.row === unit.hex.row
-    // 与它同格、且仍有成员处于预备模式的组（并入已有额度，不再占新额度）
-    const sibling = reserveMarkerGroups.value.find(
-      (group) =>
-        group.side === unit.side &&
-        group.unitIds.some((memberId) => {
-          const member = units.value.find((item) => item.instanceId === memberId)
-          return (
-            member !== undefined &&
-            (alreadyEntered.has(memberId) || hasMarker(member.mode, 'reserve')) &&
-            sameHex(member)
-          )
-        }),
-    )
-    const outcome = placeReserveMarkersAtEntry({
-      ledger: {
-        // 剧本未给上限 ⇒ null（不校验；用户口径：数据缺口不臆造）
-        cap:
-          reserveMarkerCap === undefined
-            ? null
-            : { axis: reserveMarkerCap.axis, soviet: reserveMarkerCap.soviet },
-        groups: reserveMarkerGroups.value,
-      },
+  function canEnterReserveMode(unit: ConsoleUnit): boolean {
+    const cap = session.scenarioInfo?.setup.reserveMarkers?.[unit.side] ?? 0
+    const outcome = allowReserveEntryAtHex({
       side: unit.side,
-      origin: `${unit.hex.col}.${unit.hex.row}`,
-      enteringIds: [unit.instanceId],
-      isReserveUnit: (unitId) =>
-        alreadyEntered.has(unitId) ||
-        units.value.some((item) => item.instanceId === unitId && hasMarker(item.mode, 'reserve')),
-      ...(sibling === undefined ? {} : { mergeGroupId: sibling.id }),
+      cap,
+      hex: hexKeyOf(unit),
+      occupiedHexes: reservedHexes(unit.side),
     })
-    if (!outcome.ok) {
-      pushLog(
-        'warning',
-        `${unit.name} 不能转入预备模式：本方的预备额度已用完（${outcome.rule}）`,
-        outcome.rule,
-      )
-      return null
-    }
-    reserveMarkerGroups.value = [...outcome.data.ledger.groups]
-    return outcome.data.groupId
-  }
-
-  /**
-   * 5.4a：从 `session.log` 反推预备标记账本（**不新增存档字段**）
-   *
-   * 每次成功转入都会落一条 `action='reserveMarker'` 的结算（`groupId / side / unitIds`）；
-   * 日志是整局审计、随存档往返，账本只是它的派生视图 ⇒ 读档后按时间顺序重放即可。
-   */
-  function reserveMarkerEventsFromLog(): ReserveMarkerLogEvent[] {
-    const events: ReserveMarkerLogEvent[] = []
-    for (const entry of session.log) {
-      if (entry.action !== 'reserveMarker' || !entry.outcome.ok) continue
-      const data = entry.outcome.data as unknown as {
-        groupId?: unknown
-        side?: unknown
-        unitIds?: unknown
-      }
-      if (typeof data.groupId !== 'string') continue
-      if (data.side !== 'axis' && data.side !== 'soviet') continue
-      if (!Array.isArray(data.unitIds)) continue
-      const unitIds = data.unitIds.filter((id): id is string => typeof id === 'string')
-      if (unitIds.length === 0) continue
-      events.push({ groupId: data.groupId, side: data.side, unitIds })
-    }
-    return events
+    if (outcome.ok) return true
+    const detail = outcome.reason.startsWith('noReserveMarkerAvailable')
+      ? '剧本未给本方预备标记（0 枚），无预备权（5.4a）'
+      : `本方的预备标记已用完（${String(cap)} 个格子），不能再把一个格子转入预备（5.4a）`
+    pushLog('warning', `${unit.name} 不能转入预备模式：${detail}`, outcome.rule)
+    return false
   }
 
   /** C5：提交一步（引擎给出 patches 与新的交互状态） */
@@ -6492,8 +6452,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return
     }
     let okCount = 0
-    // 5.4a：本次批量里已成功转入预备的成员（同格同批共占一枚标记）
-    const enteredReserve = new Set<string>()
     for (const id of ids) {
       const unit = units.value.find((item) => item.instanceId === id)
       if (unit === undefined) continue
@@ -6532,30 +6490,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         continue
       }
       /*
-       * 5.4a（用户 2026-11-06 裁定）：额度在**转入那一刻**占用；池空 ⇒ 整枚拒转（5.4a），
+       * 5.4a（用户 2026-11-06 裁定）：额度**按格**计，在转入那一刻校验；0 枚＝无预备权。
        * 必须放在 `applyModeSwitch` 之前——被拒时单位仍停在原模式，不留半截状态。
+       * 同批同格：先转的那枚已把该格算作"有预备单位"⇒ 后续同格单位不再占新额度（派生判定）。
        */
-      const reserveGroupId = to === 'reserve' ? consumeReserveQuota(unit, enteredReserve) : null
-      if (to === 'reserve' && reserveGroupId === null) {
-        pushLog(
-          'warning',
-          `${unit.name} 不能切换到${MODE_LABELS[to]}：本方的预备额度已用完（5.4a）`,
-          '5.4a',
-        )
-        continue
-      }
+      if (to === 'reserve' && !canEnterReserveMode(unit)) continue
       unit.mode = applyModeSwitch(unit.mode, to, target)
       // 5.4a：一切数值以朝向那一面为基准 → 换面后刷新印值缓存
       unit.raw = unit.faces[unit.mode.orientation]
-      if (to === 'reserve' && reserveGroupId !== null) {
-        enteredReserve.add(id)
-        // 读档重建账本用（不新增存档字段；`session.log` 随存档往返）
-        recordSettlement({
-          action: 'reserveMarker',
-          rule: '5.4a',
-          data: { groupId: reserveGroupId, side: unit.side, unitIds: [id] },
-        })
-      }
       /*
        * 5.7g：「在**任何移动环节结束时**，处于预备模式内的单位都**不可与环形工事堆叠**在一起。」
        *
@@ -19743,8 +19685,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     log.value = []
     // C5：本次移动的记账、悬停与待确认一并清空
     moveInteraction.value = null
-    // 5.4a：预备标记账本随单位一起清空
-    reserveMarkerGroups.value = []
     hoverHex.value = null
     pendingZocConfirm.value = null
     moveBlocked.value = null
@@ -20218,15 +20158,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       clearSupply()
       refitTargetBaseId.value = null
       initialSetupInProgress.value = false
-      // 5.4a：账本不进存档 —— 从会话日志的 `reserveMarker` 条目反推（随档往返的整局审计）
-      const reserveMarkerCap = session.scenarioInfo?.setup.reserveMarkers
-      const rebuiltReserveLedger = rebuildReserveMarkerLedger(
-        reserveMarkerEventsFromLog(),
-        reserveMarkerCap === undefined
-          ? null
-          : { axis: reserveMarkerCap.axis, soviet: reserveMarkerCap.soviet },
-      )
-      reserveMarkerGroups.value = [...rebuiltReserveLedger.groups]
+      // 5.4a：额度由 `units` 的当前模式派生（`reservedHexes`）⇒ 随单位一起还原，无需重放日志
       if (silent) return
       syncVictoryControlFromBoard()
       pushLog(
@@ -20423,8 +20355,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     stackSelect,
     // C5 堆叠取子（6.1f / 8.1g / 8.1h）
     movePick,
-    // 5.4a：预备标记账本（按组；界面/测试读它核对"哪一组占了哪一枚"）
-    reserveMarkerGroups,
+    // 5.4a：预备额度按格派生（同格已有预备单位 ⇒ 不额外占；界面/测试读它核对占用）
+    reservedHexes,
     movePickHex,
     movePickChoices,
     toggleMovePick,

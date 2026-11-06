@@ -544,7 +544,7 @@ describe('C5 模式切换（5.4）与燃料支付（12.5）', () => {
 
     store.switchUnitMode('reserve')
     expect(unit.mode.mode).toBe('reserve')
-    expect(store.reserveMarkerGroups).toHaveLength(1)
+    expect(store.reservedHexes('axis')).toHaveLength(1)
   })
 
   it('12.5a/12.5c：未加注燃料的轮式战斗单位不能移动，付燃料后即可', () => {

@@ -668,7 +668,7 @@ export function canSwitchModeNow(input: ModeSwitchNowInput): ModeSwitchResult {
    * 5.4a + 用户 2026-11-06 裁定：预备模式的**准入**只看已耗 MP 是否 ≤ 当前面 MA 的 1/4
    * （25% 边界上允许；**0 MP 也满足**——"单位哪怕不移动也可以转入预备"）。
    * 原文「完成 25% 的移动后，才需要放置该预备标记」管的是**实体标记的摆放时点**，
-   * 不是准入；额度在转入那一刻由状态层占用（见 `placeReserveMarkersAtEntry`）。
+   * 不是准入；额度在转入那一刻由状态层**按格**校验（见 `allowReserveEntryAtHex`）。
    * 其它主动模式仍受 5.4「在该单位/堆叠开始移动时切换」的原限制。
    */
   if (to === 'reserve') {
