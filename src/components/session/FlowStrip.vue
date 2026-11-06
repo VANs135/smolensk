@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag } from '@/components/base'
+import { buildFlowGuide, type FlowForm } from '@/engine/flow-model'
 import { SOP_STEPS, type SopStep } from '@/engine/session-flow'
 import {
   useGameSessionStore,
@@ -94,16 +95,6 @@ function roleMark(step: SopStep): string {
   return '回'
 }
 
-/**
- * 去掉标签里的**括号注记**（用户口径 #6：「（仅限空军）这种括号里的字不用加」）
- *
- * 只作用于**显示文本**：结构化信息仍在数据侧（段的 `sides` / `BARRAGE_SOURCES_BY_PHASE` 等），
- * 故"去掉括号"不丢信息 —— 地图上方那一条要的是关键字。
- */
-function bareLabel(text: string): string {
-  return text.replace(/（[^）]*）/gu, '').trim()
-}
-
 /** 步骤短名（去掉角色前缀，便于窄格显示） */
 function shortLabel(step: SopStep): string {
   return step.label.replace(/^(先手方|后手方) · /, '')
@@ -124,90 +115,61 @@ function stepState(index: number): 'done' | 'current' | 'todo' {
   return index === current ? 'current' : 'todo'
 }
 
-/** 会话形态的中文名 */
-const formLabel = computed<string>(() => {
-  switch (gameSession.form) {
-    case 'created':
-      return '未开局'
-    case 'advancing':
-      return '进行中'
-    case 'awaiting':
-      return '待答（须作答）'
-    case 'terminated':
-      return '已终止'
-    default:
-      return '未建会话'
-  }
-})
-
-/** 最近一次连跑的去向（B5；自动段跑了几步、停在哪） */
-const advanceLabel = computed<string>(() => {
-  const outcome = gameSession.lastAdvanceOutcome
-  if (outcome === null) return '—'
-  if (outcome.steps === 0) {
-    return outcome.stoppedBy === 'question' ? '停下待答（等作答）' : '未推进'
-  }
-  const where =
-    outcome.stoppedBy === 'question'
-      ? '待答'
-      : outcome.stoppedBy === 'terminated'
-        ? '本局终止'
-        : outcome.stoppedBy === 'refused'
-          ? '被内核拒绝'
-          : outcome.stoppedBy === 'limit'
-            ? '连跑上限'
-            : (gameSession.guidance?.step.label ?? '玩家环节')
-  return `自动段 ${outcome.steps} 步 → ${where}`
-})
-
-/**
- * 当前**环节**（B8 起是状态；B9 显示在这里）
- *
- * 用户口径：「玩家每个环节只能执行该环节能进行的操作」——界面上玩家得先看得见"现在在哪一环"，
- * 才知道下一步能做什么。故流程条给出：第几环 / 共几环 + 环节名 + 规则号 + **本环节可参与 N 枚**。
- */
-const segmentLabel = computed<string>(() => {
-  /*
-   * E5（批 F·F2）：Pre-Turn 时 `workbench.phase` **表达不了**「回合准备」——
-   * `ConsolePhase` 里没有 `preTurn`，`fromRecords` 取不到 ⇒ 回退到 `localPhase='movement'`，
-   * 于是「阶段」行报「回合准备」、本行却报**移动**环节（错配）。
-   * 现在：会话已建且处在 Pre-Turn ⇒ 改报**会话自己的子步**（天气判定 / 先手判定，见
-   * `gameSession.guidance?.step`），不问 `workbench`。未开局（无会话）仍走原路（验证页依赖它）。
-   */
-  const phase = gameSession.records?.phase
-  if (phase === 'preTurn' && gameSession.guidance !== null) {
-    const step = gameSession.guidance.step
-    return `${step.label}（${step.rule}）`
-  }
-  const step = workbench.segmentStep
-  if (step === null)
-    return workbench.segmentSteps.length === 0 ? '（本段无环节）' : '（本段无玩家环节）'
-  const position = workbench.segmentStepPosition
-  return `${step.label}（${step.rule}）· 第 ${position.index + 1}/${position.total} 环`
-})
-
-/** 本环节可参与的算子数（同一条 `participatesIn` 谓词算出来的，不是另写一句口径） */
-const segmentTodoLabel = computed<string>(() => {
-  if (workbench.segmentStep === null) return '—'
-  return `本环节可参与 ${workbench.participatingUnitCount} 枚`
-})
-
 /** 当前被闸门拒绝的这一步（B8 记、B9 显示；与"操作反馈"区同一来源） */
 const refusal = computed(() => workbench.actionRefusal)
 
 /**
- * 按钮是否可用
+ * 段内环节展示事实（Pre-Turn 报会话子步；其余报 workbench 段内环节）
  *
- * 未开局 ⇒ 可用（点它＝开局）；待答 ⇒ 不可用（先去待答面板作答，见 QuestionPrompt）；
- * 已终止 ⇒ 不可用（幂等：再点也不会继续）。
+ * E5（批 F·F2）：`workbench.phase` 表达不了「回合准备」，故 Pre-Turn 时改报会话自己的子步。
+ * 这里只整理事实，不做规则判断。
  */
-const canAdvance = computed(
-  () =>
-    !gameSession.terminated &&
-    !gameSession.awaiting &&
-    (gameSession.session === null ||
-      gameSession.form === 'created' ||
-      gameSession.form === 'advancing'),
+const segmentFacts = computed<{
+  step: { label: string; rule: string } | null
+  position: { index: number; total: number } | null
+}>(() => {
+  const phase = gameSession.records?.phase
+  if (phase === 'preTurn' && gameSession.guidance !== null) {
+    const step = gameSession.guidance.step
+    return { step: { label: step.label, rule: step.rule }, position: null }
+  }
+  const step = workbench.segmentStep
+  if (step === null) return { step: null, position: null }
+  return {
+    step: { label: step.label, rule: step.rule },
+    position: workbench.segmentStepPosition,
+  }
+})
+
+/**
+ * UI2：**唯一的只读投影** —— 行动方 / 操作者 / 阻断 / 下一步
+ *
+ * 所有输入都是既有 store / 引擎事实；组件不再各算一份按钮可用态与文案。
+ */
+const flow = computed(() =>
+  buildFlowGuide({
+    sessionExists: gameSession.session !== null,
+    form: (gameSession.form ?? 'none') as FlowForm,
+    terminated: gameSession.terminated,
+    awaiting: gameSession.awaiting,
+    questionRule: gameSession.question?.rule ?? null,
+    currentStep: currentIndex.value === null ? null : (SOP_STEPS[currentIndex.value] ?? null),
+    currentIndex: currentIndex.value,
+    sopLength: SOP_STEPS.length,
+    firstPlayer: gameSession.records?.firstPlayer ?? null,
+    phaseLabel: phaseLabel.value,
+    segmentStep: segmentFacts.value.step,
+    segmentPosition: segmentFacts.value.position,
+    segmentStepsCount: workbench.segmentSteps.length,
+    participatingUnitCount: workbench.participatingUnitCount,
+    refusal: refusal.value,
+    actionHint: mapView.actionHint,
+    advanceOutcome: gameSession.lastAdvanceOutcome,
+    setupApplied: setup.applied,
+    setupFinished: setup.finished,
+    agreedRecorded: gameSession.agreedRecorded,
+    saveError: gameSession.saveError,
+  }),
 )
 
 /**
@@ -220,17 +182,12 @@ const canAdvance = computed(
  *   否则先去剧本/共识前置视图（`ScenarioSetupView`）把初设开起来。
  */
 function onAdvance(): void {
-  if (gameSession.session === null) {
-    ui.navigate(setup.applied && !setup.finished ? 'game' : 'scenario')
+  if (flow.value.nextActionTarget !== 'advance') {
+    ui.navigate(flow.value.nextActionTarget === 'setup' ? 'game' : 'scenario')
     return
   }
   workbench.advanceSegmentNow()
 }
-
-/** 未开局时这颗按钮的文案：说清"该去哪儿把初设收束"（不是"点我就开局"） */
-const startHint = computed(() =>
-  setup.applied && !setup.finished ? '去初设队列（完成初设即开局）' : '去选剧本 / 共识',
-)
 
 /** 日志尾部（最近 6 条；Smoke 第 2 项要看的就是「自动段在日志里连续出现」） */
 const logTail = computed(() => gameSession.log.slice(-6).reverse())
@@ -243,23 +200,26 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
   -->
   <div v-if="isBar" class="bar">
     <span class="bar__title">流程条</span>
-    <BaseTag kind="neutral">阶段 {{ bareLabel(phaseLabel) }}</BaseTag>
-    <BaseTag :kind="workbench.segmentStep === null ? 'neutral' : 'info'">
-      环节 {{ bareLabel(segmentLabel) }}
+    <BaseTag kind="neutral">阶段 {{ flow.phaseLabel }}</BaseTag>
+    <BaseTag :kind="flow.segmentLabel === '（本段无环节）' ? 'neutral' : 'info'">
+      环节 {{ flow.segmentLabel }}
     </BaseTag>
-    <BaseButton variant="primary" size="sm" :disabled="!canAdvance" @click="onAdvance">
-      {{ gameSession.session === null ? startHint : '进入下一环节' }}
+    <BaseTag kind="neutral">{{ flow.actingSideLabel }} · {{ flow.decisionRoleLabel }}</BaseTag>
+    <BaseButton variant="primary" size="sm" :disabled="!flow.canAdvance" @click="onAdvance">
+      {{ flow.nextActionLabel }}
     </BaseButton>
-    <span class="bar__hint num">{{ mapView.actionHint }}</span>
-    <span v-if="refusal !== null" class="warn">
-      <BaseTag kind="warning">{{ refusal.rule }}</BaseTag>
-      {{ refusal.reason }}
+    <span class="bar__hint num">{{ flow.hint }}</span>
+    <span v-if="flow.blockers.length > 0" class="warn">
+      <BaseTag :kind="flow.blockers[0]!.kind === 'danger' ? 'danger' : 'warning'" />
+      {{ flow.blockers[0]!.text }}
     </span>
   </div>
 
   <BasePanel v-else title="流程条（2.2 流程表）">
     <div class="row">
-      <BaseTag :kind="gameSession.terminated ? 'danger' : 'info'">{{ formLabel }}</BaseTag>
+      <BaseTag :kind="gameSession.terminated ? 'danger' : 'info'">{{ flow.formLabel }}</BaseTag>
+      <BaseTag kind="neutral">{{ flow.actingSideLabel }}</BaseTag>
+      <BaseTag kind="neutral">{{ flow.decisionRoleLabel }}</BaseTag>
       <span class="num">
         回合 {{ gameSession.records?.turn ?? '—' }}({{ workbench.date }})｜先手方
         {{ gameSession.records?.firstPlayer ?? '未判定' }}｜天气
@@ -270,20 +230,25 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
 
     <!-- 三级：回合 → 阶段 → **环节**（B9：环节由 B8 的状态给出，与"段"分开显示） -->
     <div class="row">
-      <BaseTag kind="neutral">阶段 {{ phaseLabel }}</BaseTag>
-      <BaseTag :kind="workbench.segmentStep === null ? 'neutral' : 'info'">
-        环节 {{ segmentLabel }}
+      <BaseTag kind="neutral">阶段 {{ flow.phaseLabel }}</BaseTag>
+      <BaseTag :kind="flow.segmentLabel === '（本段无环节）' ? 'neutral' : 'info'">
+        环节 {{ flow.segmentLabel }}
       </BaseTag>
-      <span class="num">{{ segmentTodoLabel }}</span>
+      <span class="num">{{ flow.todoLabel }}</span>
       <span class="num">
-        阶段 {{ currentIndex === null ? '—' : currentIndex + 1 }} / {{ SOP_STEPS.length }}
+        阶段 {{ flow.stageIndex === null ? '—' : flow.stageIndex + 1 }} / {{ flow.stageTotal }}
       </span>
     </div>
 
-    <!-- 被闸门拒绝的这一步：就地在流程条上给一行（含规则号），不弹窗 -->
-    <p v-if="refusal !== null" class="warn">
-      <BaseTag kind="warning">{{ refusal.rule }}</BaseTag>
-      这一步本环节不能做：{{ refusal.reason }}
+    <!-- 阻断清单（UI2）：拒绝 / 待答 / 共识未落账 / 存档失败，统一由 flow-model 投影 -->
+    <p v-for="(blocker, index) in flow.blockers" :key="index" class="warn">
+      <BaseTag
+        v-if="blocker.rule !== null"
+        :kind="blocker.kind === 'danger' ? 'danger' : 'warning'"
+      >
+        {{ blocker.rule }}
+      </BaseTag>
+      {{ blocker.text }}
     </p>
 
     <!--
@@ -293,7 +258,7 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
     -->
     <p class="hint num">
       <BaseTag kind="info">该做什么</BaseTag>
-      {{ mapView.actionHint }}
+      {{ flow.hint }}
     </p>
 
     <!-- **阶段灯**（不是环节灯）：一个回合的 19 个**段**（先/后手各 A–H + Pre-Turn 2 + 回合结束 1） -->
@@ -312,10 +277,10 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
     </div>
 
     <div class="row">
-      <BaseButton variant="primary" size="sm" :disabled="!canAdvance" @click="onAdvance">
-        {{ gameSession.session === null ? startHint : '进入下一环节' }}
+      <BaseButton variant="primary" size="sm" :disabled="!flow.canAdvance" @click="onAdvance">
+        {{ flow.nextActionLabel }}
       </BaseButton>
-      <span class="num">{{ advanceLabel }}</span>
+      <span class="num">{{ flow.advanceLabel }}</span>
       <!-- 引擎验证页专用：一步一步点，便于逐段核对 -->
       <BaseButton
         v-if="props.stepwise"
@@ -333,13 +298,6 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
       </label>
     </div>
 
-    <p v-if="gameSession.awaiting" class="warn">
-      停下待答（{{ gameSession.question?.rule }}）：在待答面板作答后，再点「进入下一环节」。
-    </p>
-    <p v-if="!gameSession.agreedRecorded && gameSession.session !== null" class="warn">
-      开局共识结论尚未写入日志（4.0）：点「进入下一环节」会按当前勾选（默认一条都不用）写入。
-    </p>
-
     <!-- 审计尾部：自动段与作答都在此留痕 -->
     <details class="more">
       <summary>会话日志（最近 6 条）</summary>
@@ -353,10 +311,6 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
       <p v-if="logTail.length === 0" class="muted">尚无日志（先点「开局」）。</p>
     </details>
 
-    <p v-if="gameSession.saveError !== null" class="warn">
-      <BaseTag kind="danger">{{ gameSession.saveError.rule }}</BaseTag>
-      存档被拒：{{ gameSession.saveError.reason }}（详见顶栏「存档 / 读档」对话框）
-    </p>
     <p v-if="gameSession.error !== null" class="warn">
       <BaseTag kind="danger">{{ gameSession.error.rule }}</BaseTag>
       内核拒绝：{{ gameSession.error.reason }}

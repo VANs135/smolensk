@@ -34,11 +34,13 @@ describe('B35：流程条 / 工具按钮 / 纯文字面板（源码守卫）', (
     expect(barStart).toBeGreaterThan(0)
     expect(barEnd).toBeGreaterThan(barStart)
     const bar = strip.slice(barStart, barEnd)
-    // bar 里只有四样（＋被拒时的一行）
-    expect(bar).toContain('bareLabel(phaseLabel)')
-    expect(bar).toContain('bareLabel(segmentLabel)')
-    expect(bar).toContain('进入下一环节')
-    expect(bar).toContain('mapView.actionHint')
+    // bar 里只有阶段 / 环节 / 行动方与操作者 / 推进 / 一行提示（＋阻断一行）
+    expect(bar).toContain('flow.phaseLabel')
+    expect(bar).toContain('flow.segmentLabel')
+    expect(bar).toContain('flow.actingSideLabel')
+    expect(bar).toContain('flow.decisionRoleLabel')
+    expect(bar).toContain('flow.nextActionLabel')
+    expect(bar).toContain('flow.hint')
     // 阶段灯 / 日志 / 重置 / 5.0b 勾选 / 共识提示**不在** bar 里
     for (const heavy of [
       'strip__cell',
@@ -49,9 +51,10 @@ describe('B35：流程条 / 工具按钮 / 纯文字面板（源码守卫）', (
     ]) {
       expect(bar, `bar 里不该有 ${heavy}`).not.toContain(heavy)
     }
-    // 去括号（口径 #6：「（仅限空军）这种括号里的字不用加」）
-    expect(strip).toContain('function bareLabel(text: string): string')
-    expect(strip).toContain("text.replace(/（[^）]*）/gu, '')")
+    // 去括号（口径 #6：「（仅限空军）这种括号里的字不用加」）—— 已收进 UI2 只读投影
+    const model = readFileSync('src/engine/flow-model.ts', 'utf8')
+    expect(model).toContain('function bare(text: string): string')
+    expect(model).toContain("text.replace(/（[^）]*）/gu, '')")
   })
 
   it('★ 对局台不再有"移动 / 战斗"工具按钮；点地图算不算选战斗改由**闸门**推', () => {
