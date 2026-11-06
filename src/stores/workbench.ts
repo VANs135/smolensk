@@ -18086,13 +18086,32 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const parent = units.value.find((unit) => unit.instanceId === parentId)
     if (parent === undefined) return false
     const nationality = nationalityOfUnit(parent)
+    /*
+     * 20.0b：只能创建 **AR ≤ 自己** 的拆分单位。修前拆分子视图从母单位伪造且 `ar = parent.raw.ar`，
+     * 高 AR 拆分子永远放行；现按**所选拆分记录**的印值判。20.0c 的标记/储备/模式仍取母单位当前值。
+     */
+    const record = choices.value.find((item) => item.id === breakdownRecordId)
+    if (record === undefined) {
+      pushLog('warning', `拆分子清单里没有 ${breakdownRecordId}（20.0g：同国籍池）`, '20.0g')
+      return false
+    }
+    const parentView = toBreakdownSideView(parent, nationality)
+    const recordAr = record.factors?.combat?.ar
+    if (typeof recordAr !== 'number') {
+      pushLog('warning', `拆分子 ${breakdownRecordId} 缺印值 AR，无法按 20.0b 判定`, '20.0b')
+      return false
+    }
+    const recordSteps = record.steps?.total ?? 1
     const data = acceptReinforcement(
       planBreakdownCreate({
-        parent: toBreakdownSideView(parent, nationality),
+        parent: parentView,
         breakdown: {
-          ...toBreakdownSideView(parent, nationality),
+          ...parentView,
           id: `breakdown:${breakdownRecordId}`,
-          ar: parent.raw.ar,
+          classKind: record.classes?.combatClass ?? parentView.classKind,
+          ar: recordAr,
+          steps: recordSteps,
+          printedSteps: recordSteps,
         },
         timing,
         poolCount: breakdownPool.value[nationality] ?? 0,
@@ -18102,11 +18121,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '创建拆分单位',
     )
     if (data === null) return false
-    const record = choices.value.find((item) => item.id === breakdownRecordId)
-    if (record === undefined) {
-      pushLog('warning', `拆分子清单里没有 ${breakdownRecordId}（20.0g：同国籍池）`, '20.0g')
-      return false
-    }
     parent.steps = data.parentStepsAfter
     units.value = [
       ...units.value,
