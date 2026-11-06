@@ -740,6 +740,22 @@ function roleLabel(role: CombatRole): string {
 }
 
 /**
+ * 3.6：表 3-3 的机型名是否命中某个飞机算子
+ *
+ * 表里写的是**机型名**（`Bf.110`），而 `ConsoleAirUnit.aircraftType` 是 14.1 的机型代号
+ * （`F` / `T` / `comb` / `Tpt`），算子 `name` 又带国别前缀（`Ge Bf.110`）⇒ 不能直接比字面。
+ * 按「去前缀 + 去标点 + 全小写」后同名来判，避免写死 `Ge ` 前缀或某一方的命名习惯。
+ */
+function matchesEventAircraftModel(eventModel: string, airName: string): boolean {
+  const normalize = (text: string): string =>
+    text
+      .replace(/^[A-Za-z]{2}\s+/, '')
+      .replace(/[^a-z0-9]/gi, '')
+      .toLowerCase()
+  return normalize(eventModel) === normalize(airName)
+}
+
+/**
  * C8：一条 **SP 持仓**（12.1b：任何含 SP 的位置都是补给站）
  *
  * 本操作台用账本（`spDumps`）代替盘面上的 SP 算子：12.1a 的拆分/找零需要**多枚**等额算子，
@@ -16993,8 +17009,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 3.6：机型结果 ⇒ 该型飞机立即全部转非激活
     if (data.randomEvent?.kind === 'aircraft' && data.randomEvent.aircraftType !== undefined) {
       const type = data.randomEvent.aircraftType
+      // 3.6：表里是机型名（Bf.110），算子上是机型代号（F/T/…）⇒ 按机型名命中
       const hit = airUnits.value.filter(
-        (air) => air.side === activeSide.value && air.aircraftType === type,
+        (air) => air.side === activeSide.value && matchesEventAircraftModel(type, air.name),
       )
       for (const air of hit) air.airStatus = 'inactive'
       pushLog(
