@@ -332,6 +332,15 @@ describe('敌方 ZOC：轮式强制停止与 4.5b 抵消（4.5a-A / 4.5b）', ()
     }
   })
 
+  it('4.5a-A：阶段开始时已在敌方 ZOC 内的轮式单位可以走出该格（只拦「进入」）', () => {
+    // target 在 enemyAt 的 ZOC 内；out 离该敌 2 格 ⇒ 已离开 ZOC
+    const out = { col: 38, row: 14 }
+    const ctx = context([unit({ hex: target, mobility: 'truck', fuelled: true }), enemy(enemyAt)])
+    const step = expectOk(evaluateStep(ctx, 'u1', out))
+    expect(step.forcedStop).toBe(false)
+    expect(step.cost).toBe(1)
+  })
+
   it('4.5b 垫人：格内有己方战斗单位且已承诺本阶段不再消耗 MP → 抵消该格敌方 ZOC', () => {
     const ghost = unit({ id: 'ghost', hex: target, isCombat: true, mpLockedThisPhase: true })
     const ctx = context([unit({ mobility: 'truck', fuelled: true }), ghost, enemy(enemyAt)])

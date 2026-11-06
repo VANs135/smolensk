@@ -281,6 +281,13 @@ export interface ConsoleUnit {
   /** 本阶段本轮移动是否已结束（4.5a-A 强制停止 / 6.1c 最小移动 / 6.2b All 地形耗尽 / 6.1f 掉队） */
   movementEnded: boolean
   /**
+   * 5.7a：**本移动阶段内**刚进入预备模式（当前朝向锁定到下一个移动阶段）
+   *
+   * 阶段级瞬时事实，与 `mpSpent`/`movementEnded` 同层；换段/换方/换回合由
+   * `resetMovementTracking` 清零，不写入引擎 `state-types.Unit`（不改存档格式）。
+   */
+  reserveEnteredThisPhase: boolean
+  /**
    * 4.5b：本阶段已承诺「之后不再消耗 MP」（**垫人**抵消敌方 ZOC 的代价）
    *
    * 该格内只要有一个处于此状态的己方战斗单位，敌方 ZOC 即被抵消。
@@ -605,6 +612,8 @@ export function toConsoleUnit(input: {
     mpSpent: 0,
     airTransportThisPhase: null,
     movementEnded: false,
+    // 5.7a：进入预备的时点事实，仅在本移动阶段内有效
+    reserveEnteredThisPhase: false,
     // 4.5b：垫人承诺由玩家在界面上显式许诺（见 store 的 lockZocNegation）
     mpLockedThisPhase: false,
     specialized: record.specialized ?? [],

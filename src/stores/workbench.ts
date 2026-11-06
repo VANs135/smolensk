@@ -5319,6 +5319,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       unit.mpSpent = 0
       unit.airTransportThisPhase = null
       unit.movementEnded = false
+      // 5.7a：朝向锁只在本移动阶段内有效 ⇒ 换段/换方/换回合即解锁
+      unit.reserveEnteredThisPhase = false
       unit.mpLockedThisPhase = false
       // 5.7b：`releasedFromReserve` 只表示「本阶段刚释放」，换段/换方/换回合即失效——
       // 释放本身已把预备标记永久摘掉，陈旧旗标会让该单位凭空获得反应/进击阶段的移动资格
@@ -6540,6 +6542,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
        */
       if (to === 'reserve' && !canEnterReserveMode(unit)) continue
       unit.mode = applyModeSwitch(unit.mode, to, target)
+      // 5.7a：本移动阶段内进入预备 ⇒ 该朝向锁定到下一个移动阶段
+      if (to === 'reserve') unit.reserveEnteredThisPhase = true
       // 5.4a：一切数值以朝向那一面为基准 → 换面后刷新印值缓存
       unit.raw = unit.faces[unit.mode.orientation]
       /*
@@ -6721,7 +6725,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (!requireAction('move.modeChange', '翻朝向')) return
     const unit = selectedUnit.value
     if (unit === null) return
-    const verdict = canFlipOrientation({ state: unit.mode, phase: moveContext.value.phase })
+    const verdict = canFlipOrientation({
+      state: unit.mode,
+      phase: moveContext.value.phase,
+      // 5.7a：本移动阶段刚进入预备的单位，朝向锁定
+      enteredReserveThisTurn: unit.reserveEnteredThisPhase,
+    })
     if (!verdict.ok) {
       pushLog('warning', `不能改变朝向：${verdict.reason}（${verdict.rule}）`, verdict.rule)
       return
