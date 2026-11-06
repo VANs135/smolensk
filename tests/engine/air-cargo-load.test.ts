@@ -49,6 +49,15 @@ describe('4.7 / 14.9：单位货物使用真实运输当量和起点', () => {
     })
     expect(load([unit], 1).ok).toBe(false)
   })
+  it('14.9b：1/2T 容量不能取整为 1T，也不能留作以后使用', () => {
+    const oneT = { ...unit, re: 0.5 } // RE 0.5、步行 MA 6 ⇒ 1T（见上表）
+    expect(airCargoTransportT(oneT)).toBe(1)
+    // 单架 1/2T 装 1T ⇒ 拒；不因 14.4g 之外的场景向上取整
+    expect(load([oneT], 0.5)).toMatchObject({ ok: false, rule: '14.9a' })
+    // 下一次任务重新起算：0.5T 可装，1T 仍拒，说明上次的 1/2T 没有留存叠加
+    expect(load([{ id: 'sp:half', kind: 'sp', t: 0.5 }], 0.5).ok).toBe(true)
+    expect(load([oneT], 0.5).ok).toBe(false)
+  })
   it('同基地两架半T飞机可以合运1T，不能向另一基地借运力', () => {
     const cargo = [{ ...unit, re: 0.5 }]
     expect(
