@@ -151,6 +151,8 @@ export function createAirCargoResolutionDomain(ports: {
         kind: returnOnly ? 'air_transport' : state.kind,
         cargo: activeCargo.filter((item) => placed.has(item.id)),
         selectedIds: returnOnly ? [] : inputs.unloadCargoIds,
+        // 14.9f（T15）：按逐机货单定位承运超额部分的那几架。
+        cargoByAircraft: state.assignment.cargoByAircraft,
       }),
       '卸载计划',
     )

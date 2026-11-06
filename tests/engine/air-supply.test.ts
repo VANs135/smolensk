@@ -59,6 +59,47 @@ describe('12.1a / 14.9：空运SP实物账本', () => {
       )
     expect(plan(0)).toMatchObject({ ok: true, data: { manifest: null, debits: [] } })
   })
+  it('14.9（T15）：多起点各扣各的库存，总量相加校验', () => {
+    const other = { col: 21, row: 20 }
+    const result = planAirSupplyLoad({
+      side: 'axis',
+      requestedT: 2,
+      origins: [
+        { hex, offMap: false, requestedT: 1 },
+        { hex: other, offMap: false, requestedT: 1 },
+      ],
+      sources: [
+        { id: 'a', hex, side: 'axis', sp: 0, t: 2 },
+        { id: 'b', hex: other, side: 'axis', sp: 0, t: 2 },
+      ],
+    })
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        debits: [
+          { id: 'a', after: { sp: 0, t: 1 } },
+          { id: 'b', after: { sp: 0, t: 1 } },
+        ],
+      },
+    })
+    expect(
+      result.ok && result.data.manifest!.items.map((item) => [item.id, item.sourceId]),
+    ).toEqual([
+      ['sp:1', 'a'],
+      ['sp:2', 'b'],
+    ])
+    expect(
+      planAirSupplyLoad({
+        side: 'axis',
+        requestedT: 2,
+        origins: [
+          { hex, offMap: false, requestedT: 1 },
+          { hex: other, offMap: false, requestedT: 1 },
+        ],
+        sources: [{ id: 'a', hex, side: 'axis', sp: 0, t: 5 }],
+      }),
+    ).toMatchObject({ ok: false, reason: 'airSupplyStockInsufficient' })
+  })
   it('同一T不能既送达又退回，重复提交也不能再结算', () => {
     const load = plan()
     if (!load.ok || load.data.manifest === null) throw new Error('fixture')

@@ -56,6 +56,30 @@ describe('14.9f：完整货物共同卸载', () => {
       }).ok,
     ).toBe(true)
   })
+  it('14.9f（T15）：留场名单只含承运超额部分的飞机', () => {
+    const cargo = [
+      { id: 'sp:1', kind: 'sp' as const, t: 1 },
+      { id: 'sp:2', kind: 'sp' as const, t: 1 },
+      { id: 'sp:3', kind: 'sp' as const, t: 1 },
+    ]
+    const result = planAirCargoUnload({
+      kind: 'air_transport',
+      cargo,
+      baseLevel: 1,
+      isAirstrip: false,
+      usedT: 0,
+      overLimitAircraftInactive: true,
+      selectedIds: null,
+      cargoByAircraft: [
+        { aircraftId: 'a', cargoIds: ['sp:1', 'sp:2'] },
+        { aircraftId: 'b', cargoIds: ['sp:3'] },
+      ],
+    })
+    expect(result).toMatchObject({
+      ok: true,
+      data: { deliveredT: 3, requiresDestinationStay: true, stayAircraftIds: ['b'] },
+    })
+  })
   it('2T单位与1T补给超2T限额时，必须由玩家选择', () => {
     expect(plan([unit, sp])).toMatchObject({ ok: false, reason: 'airUnloadSelectionRequired' })
     expect(plan([unit, sp], [unit.id, sp.id])).toMatchObject({

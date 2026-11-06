@@ -4,7 +4,7 @@ import type {
   AirInteractionState,
 } from './air-interaction'
 import { airTransportProfile, transportCapacityOf } from './air-interaction'
-import { fail, succeed } from '../result-types'
+import { fail, succeed, type RuleOutcome } from '../result-types'
 import { airCargoTransportT, type AirCargoLoadView } from './air-cargo'
 import type { HexRef } from '@/data'
 import { sameHex } from '../hex-geometry'
@@ -96,14 +96,34 @@ export function planAirCargoContinuation(
   })
 }
 
-/** 14.1c / 14.9f：整组退运到同一实际基地；没有逐机货单时不能猜测分流。 */
+export interface RetainedCargoReturnPlan {
+  destination: HexRef | null
+  unloadT: number
+  allocations: {
+    aircraftId: string
+    destination: HexRef | null
+    offMap?: boolean
+    box?: string
+    unitIds: string[]
+    t: number
+  }[]
+}
+
+/** 14.1c / 14.9f：留存货物按逐机货单回到**各自**的返航基地（或留在目标格）。 */
 export function planRetainedCargoReturn(input: {
   cargo: readonly AirCargoLoadView[]
   targetHex: HexRef
-  carriers: readonly { aircraftId: string; offMap: boolean }[]
+  carriers: readonly {
+    aircraftId: string
+    offMap: boolean
+    baseHex?: HexRef
+    offMapBox?: string
+  }[]
   returns: readonly { aircraftId: string; baseHex: HexRef }[]
   stayedIds: readonly string[]
-}) {
+  /** 14.9a/14.9e（T15）：逐机货单；给出时按各机自载留存货物分流。 */
+  cargoByAircraft?: readonly { aircraftId: string; cargoIds: readonly string[] }[]
+}): RuleOutcome<RetainedCargoReturnPlan> {
   const unloadT = input.cargo.reduce((sum, item) => sum + airCargoTransportT(item), 0)
   if (
     !Number.isFinite(unloadT) ||
@@ -112,19 +132,88 @@ export function planRetainedCargoReturn(input: {
   )
     return fail('14.9', 'invalidRetainedCargo')
   if (input.cargo.length === 0)
-    return succeed('14.9', { destination: null as HexRef | null, unloadT: 0 })
+    return succeed('14.9', { destination: null as HexRef | null, unloadT: 0, allocations: [] })
   if (input.carriers.length === 0) return fail('14.9', 'retainedCargoHasNoCarrier')
-  if (input.carriers.some((carrier) => carrier.offMap))
-    return fail('14.9', 'retainedCargoOffMapReturnUnsupported')
-  const bases = input.carriers.map((carrier) =>
-    input.stayedIds.includes(carrier.aircraftId)
-      ? input.targetHex
-      : input.returns.find((entry) => entry.aircraftId === carrier.aircraftId)?.baseHex,
-  )
-  const first = bases[0]
-  if (first === undefined || bases.some((hex) => hex === undefined || !sameHex(hex, first)))
-    return fail('14.9', 'retainedCargoRequiresCommonReturnBase')
-  return succeed('14.9', { destination: first as HexRef | null, unloadT })
+
+  // 无逐机货单时保留旧口径：整组退到同一实际基地，无法归属才拒绝。
+  if (input.cargoByAircraft === undefined || input.cargoByAircraft.length === 0) {
+    if (input.carriers.some((carrier) => carrier.offMap))
+      return fail('14.9', 'retainedCargoOffMapReturnUnsupported')
+    const bases = input.carriers.map((carrier) =>
+      input.stayedIds.includes(carrier.aircraftId)
+        ? input.targetHex
+        : input.returns.find((entry) => entry.aircraftId === carrier.aircraftId)?.baseHex,
+    )
+    const first = bases[0]
+    if (first === undefined || bases.some((hex) => hex === undefined || !sameHex(hex, first)))
+      return fail('14.9', 'retainedCargoRequiresCommonReturnBase')
+    return succeed('14.9', {
+      destination: first as HexRef | null,
+      unloadT,
+      allocations: [
+        {
+          aircraftId: input.carriers[0]!.aircraftId,
+          destination: first,
+          unitIds: input.cargo.filter((item) => item.kind === 'unit').map((item) => item.id),
+          t: unloadT,
+        },
+      ],
+    })
+  }
+
+  /*
+   * 14.9a / 14.9e（T15）：每架只带回**自己装载**的留存货物。
+   * 承运飞机留在目标格时，其留存货物落目标格；否则回自己的返航基地（离图机回离图盒）。
+   */
+  const cargoById = new Map(input.cargo.map((item) => [item.id, item]))
+  const assigned = new Map<string, string>()
+  for (const entry of input.cargoByAircraft)
+    for (const id of entry.cargoIds)
+      if (cargoById.has(id)) {
+        if (assigned.has(id)) return fail('14.9', 'duplicateRetainedCargoAssignment')
+        assigned.set(id, entry.aircraftId)
+      }
+  const unassigned = input.cargo.find((item) => !assigned.has(item.id))
+  if (unassigned !== undefined) return fail('14.9', `retainedCargoUnassigned:${unassigned.id}`)
+  const carrierById = new Map(input.carriers.map((carrier) => [carrier.aircraftId, carrier]))
+  const allocations: {
+    aircraftId: string
+    destination: HexRef | null
+    offMap?: boolean
+    box?: string
+    unitIds: string[]
+    t: number
+  }[] = []
+  for (const entry of input.cargoByAircraft) {
+    const ids = entry.cargoIds.filter((id) => cargoById.has(id))
+    if (ids.length === 0) continue
+    const carrier = carrierById.get(entry.aircraftId)
+    if (carrier === undefined) continue
+    const stayed = input.stayedIds.includes(entry.aircraftId)
+    const returned = input.returns.find((item) => item.aircraftId === entry.aircraftId)
+    const destination = stayed ? input.targetHex : (returned?.baseHex ?? carrier.baseHex)
+    const offMap = !stayed && carrier.offMap
+    if (offMap) return fail('14.9', 'retainedCargoOffMapReturnUnsupported')
+    if (destination === undefined && !offMap)
+      return fail('14.9', `retainedCargoCarrierWithoutReturnBase:${entry.aircraftId}`)
+    const unitIds = ids.filter((id) => cargoById.get(id)!.kind === 'unit')
+    if (offMap && unitIds.length > 0) return fail('14.9', 'retainedCargoOffMapReturnUnsupported')
+    allocations.push({
+      aircraftId: entry.aircraftId,
+      destination: destination ?? null,
+      ...(offMap ? { offMap: true, box: carrier.offMapBox } : {}),
+      unitIds,
+      t: ids.reduce((sum, id) => sum + airCargoTransportT(cargoById.get(id)!), 0),
+    })
+  }
+  const first = allocations[0]?.destination
+  const destination =
+    first !== undefined &&
+    first !== null &&
+    allocations.every((entry) => entry.destination !== null && sameHex(entry.destination, first))
+      ? first
+      : null
+  return succeed('14.9', { destination, unloadT, allocations })
 }
 
 /** 14.2f-E：没有活动任务机时不再掷防空骰。 */

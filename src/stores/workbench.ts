@@ -1892,7 +1892,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       airCargoResolution.reset()
       airInputs.value.unloadCargoIds = null
     },
-    mustStayAtTarget: () => airCargoUnloadReceipt.value?.requiresDestinationStay === true,
+    mustStayAtTarget: () => airCargoUnloadReceipt.value?.stayAircraftIds ?? [],
     setAirStatus,
     markAirMissionFlown,
     nameOf,
@@ -13371,10 +13371,37 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       airError.value = { rule: '14.3d', reason: 'noEligibleVoluntaryReturn' }
       return false
     }
-    if (state.assignment.cargo.length > 0 && leaving.length > 0 && leaving.length < flying.length) {
-      airError.value = { rule: '14.9a', reason: 'partialCargoReturnUnsupported' }
-      pushLog('warning', '载货任务请整组返航，或先完成卸载；暂不支持途中拆分载货', '14.9a')
-      return false
+    const returnedCargoIds = new Set<string>()
+    if (state.assignment.cargo.length > 0 && leaving.length < flying.length) {
+      /*
+       * 14.9a/14.9e（T15）：只有能按逐机货单归属时，才允许载货任务部分返航；
+       * 返航机把**自载**货物带回自己的基地（离图机仍按离图盒处理，本批暂不开放）。
+       */
+      if (!hasCargoOwnership(state)) {
+        airError.value = { rule: '14.9a', reason: 'partialCargoReturnUnsupported' }
+        pushLog('warning', '载货任务请整组返航，或先完成卸载；当前货单无法归属部分返航', '14.9a')
+        return false
+      }
+      const leavingOrigins = state.assignment.origins.filter((origin) =>
+        leaving.some((air) => air.instanceId === origin.aircraftId),
+      )
+      if (leavingOrigins.some((origin) => origin.fromOffMapBox === true)) {
+        airError.value = { rule: '14.9a', reason: 'partialCargoReturnUnsupported' }
+        pushLog('warning', '离图盒起飞的载货机暂不支持途中部分返航', '14.9a')
+        return false
+      }
+      for (const origin of leavingOrigins) {
+        const ids =
+          state.assignment.cargoByAircraft.find((entry) => entry.aircraftId === origin.aircraftId)
+            ?.cargoIds ?? []
+        const unitIds = ids.filter((id) => id.startsWith('unit:'))
+        const spIds = ids.filter((id) => id.startsWith('sp:'))
+        if (unitIds.length > 0) {
+          if (!airUnitTransit.land(unitIds, origin.baseHex, 'returned')) return false
+        }
+        if (spIds.length > 0) airSupply.returnRemaining(origin.baseHex, spIds)
+        ids.forEach((id) => returnedCargoIds.add(id))
+      }
     }
     const verdict = canVoluntarilyReturn({
       window,
@@ -13410,6 +13437,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         ...state.assignment,
         aircraftIds: remainingIds,
         origins: state.assignment.origins.filter((origin) => !leavingIds.has(origin.aircraftId)),
+        cargo: state.assignment.cargo.filter((item) => !returnedCargoIds.has(item.id)),
+        cargoByAircraft: state.assignment.cargoByAircraft
+          .filter((entry) => !leavingIds.has(entry.aircraftId))
+          .map((entry) => ({
+            ...entry,
+            cargoIds: entry.cargoIds.filter((id) => !returnedCargoIds.has(id)),
+          })),
       },
       ...(remainingIds.length === 0 ? { step: 'done', finished: true } : {}),
     }
@@ -13518,45 +13552,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', '请先勾选参战飞机（14.2f-A）', '14.2f-A')
       return false
     }
-    // 当前共享货单尚未实现多起点货损归属，明确收窄能力，避免跨基地补算运力。
-    if (
-      (airMissionKind.value === 'air_transport' || airMissionKind.value === 'air_drop') &&
-      (airInputs.value.cargoSpT > 0 || airInputs.value.cargoUnitIds.length > 0)
-    ) {
-      const carriers = aircraft.filter((plane) => transportCapacityOf(plane) > 0)
-      const origin = carriers[0]?.hex
-      if (
-        origin !== undefined &&
-        carriers.some(
-          (plane) => airBoxMembers.value.includes(plane.instanceId) || !sameHex(plane.hex, origin),
-        )
-      ) {
-        airError.value = { rule: '14.9a', reason: 'multiOriginCargoMissionUnsupported' }
-        pushLog(
-          'warning',
-          '目前载货任务只支持同一地图基地的承运编队，请按起点拆成独立任务；多起点分机货单尚未开放',
-          '14.9a',
-        )
-        return false
-      }
-    }
-    const supplyLoad = acceptAir(
-      planAirSupplyLoad({
-        side: airActingSide.value,
-        requestedT:
-          airMissionKind.value === 'air_transport' || airMissionKind.value === 'air_drop'
-            ? airInputs.value.cargoSpT
-            : 0,
-        origins: aircraft.map((plane) => ({
-          hex: plane.hex,
-          offMap: airBoxMembers.value.includes(plane.instanceId),
-        })),
-        sources: spDumps.value,
-      }),
-      '装载空运补给',
-    )
-    if (supplyLoad === null) return false
-    // 14.10d：每1T补给分别掷骰；仅载货任务读取货物草稿。
+    // 14.9a/14.9e（T15）：多起点/多基地分装按逐机货单与各机起点处理，不再整组拒绝。
     const carriesCargo =
       airMissionKind.value === 'air_transport' || airMissionKind.value === 'air_drop'
     const cargo: AirMissionCargo[] = []
@@ -13650,6 +13646,45 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '宣布任务',
     )
     if (data === null) return false
+    /*
+     * 14.9a/14.9e（T15）：按逐机货单与各机起点分装补给。
+     * 每架机只从**自己的起点格/离图盒**扣 SP；同一格的多架机需求先合并，避免重复算一份库存。
+     */
+    const supplyOrigins = new Map<
+      string,
+      { hex?: HexRef; offMap: boolean; box?: string; requestedT: number }
+    >()
+    for (const entry of data.assignment.cargoByAircraft) {
+      const spT = entry.cargoIds.filter((id) => id.startsWith('sp:')).length
+      if (spT === 0) continue
+      const origin = data.assignment.origins.find((item) => item.aircraftId === entry.aircraftId)
+      if (origin === undefined) continue
+      const box = airActingSide.value
+      const key = origin.fromOffMapBox === true ? `box:${box}` : `hex:${hexLabel(origin.baseHex)}`
+      const current = supplyOrigins.get(key)
+      if (current === undefined)
+        supplyOrigins.set(
+          key,
+          origin.fromOffMapBox === true
+            ? { offMap: true, box, requestedT: spT }
+            : { hex: { ...origin.baseHex }, offMap: false, requestedT: spT },
+        )
+      else current.requestedT += spT
+    }
+    const spCargoT = cargo.filter((item) => item.kind === 'sp').length
+    const supplyLoad =
+      spCargoT === 0
+        ? { manifest: null, debits: [] }
+        : acceptAir(
+            planAirSupplyLoad({
+              side: airActingSide.value,
+              requestedT: spCargoT,
+              origins: [...supplyOrigins.values()],
+              sources: spDumps.value,
+            }),
+            '装载空运补给',
+          )
+    if (supplyLoad === null) return false
     const transportStates = new Map<string, AirUnitTransportState>()
     for (const { unit } of unitLoad.items) {
       const budget = acceptAir(
@@ -15354,7 +15389,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ]
   }
 
-  /** 14.1c / 14.9：整组留存货物随实际承运机退到同一基地，提交前核对完整性。 */
+  /** 14.1c / 14.9f：留存货物按逐机货单回到各自返航基地，提交前核对完整性。 */
   function completeAirCargoReturn(
     state: AirInteractionState,
     completed: AirInteractionState,
@@ -15364,30 +15399,30 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       state.cargo?.items.filter((item) => item.fate === 'retained').map((item) => item.id) ?? [],
     )
     const cargo = state.assignment.cargo.filter((item) => retained.has(item.id))
+    const carriers = state.assignment.origins
+      .filter((origin) => {
+        const plane = airUnits.value.find((air) => air.instanceId === origin.aircraftId)
+        return plane !== undefined && transportCapacityOf(plane) > 0
+      })
+      .map((origin) => ({
+        aircraftId: origin.aircraftId,
+        offMap: origin.fromOffMapBox === true,
+        baseHex: { ...origin.baseHex },
+        ...(origin.fromOffMapBox === true ? { offMapBox: state.side } : {}),
+      }))
     const plan = acceptAir(
       planRetainedCargoReturn({
         cargo,
         targetHex: state.targetHex,
         returns: completed.returns,
         stayedIds,
-        carriers: state.assignment.origins
-          .filter((origin) => {
-            const plane = airUnits.value.find((air) => air.instanceId === origin.aircraftId)
-            return plane !== undefined && transportCapacityOf(plane) > 0
-          })
-          .map((origin) => ({
-            aircraftId: origin.aircraftId,
-            offMap: origin.fromOffMapBox === true,
-          })),
+        carriers,
+        cargoByAircraft: state.assignment.cargoByAircraft,
       }),
       '货物退运',
     )
     if (plan === null) {
-      pushLog(
-        'warning',
-        '留存货物暂按整组退运，请让承运机返回同一友方基地；逐机分流尚未开放',
-        '14.9',
-      )
+      pushLog('warning', '留存货物无法归属到返航飞机；请确认逐机货单与各机返航基地', '14.9')
       return false
     }
     const unitCargo = cargo.filter((item) => item.kind === 'unit')
@@ -15404,22 +15439,64 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       airError.value = { rule: '14.9', reason: 'unsettledAirUnitCargo' }
       return false
     }
-    if (plan.destination === null) return true
-    const returningUnits = unitIds.map((id) => airUnitTransit.find(id)!)
-    if (!airUnitTransit.land(unitIds, plan.destination, 'returned')) return false
-    airSupply.returnRemaining(plan.destination)
-    for (const unit of returningUnits) {
-      noteUnitEnteredHex(unit, plan.destination)
+    /*
+     * 14.9a/14.9e（T15）：不再要求共同基地 —— 每架机只带回自载留存货物：
+     * SP 加回该机返航基地，单位货物落在该基地；留场飞机的留存货物落目标格。
+     */
+    const spIdsOf = (aircraftId: string): string[] =>
+      (
+        state.assignment.cargoByAircraft.find((entry) => entry.aircraftId === aircraftId)
+          ?.cargoIds ?? []
+      ).filter((id) => retained.has(id) && id.startsWith('sp:'))
+    const settledSp = new Set<string>()
+    const returnedUnits: string[] = []
+    for (const allocation of plan.allocations) {
+      const { destination } = allocation
+      if (destination === null) continue
+      if (allocation.offMap) {
+        const spIds = spIdsOf(allocation.aircraftId)
+        airSupply.returnRemaining(destination, spIds, allocation.box ?? state.side)
+        spIds.forEach((id) => settledSp.add(id))
+        continue
+      }
+      const spIds = spIdsOf(allocation.aircraftId)
+      if (allocation.unitIds.length > 0) {
+        const returning = allocation.unitIds.map((id) => airUnitTransit.find(id)!)
+        if (!airUnitTransit.land(allocation.unitIds, destination, 'returned')) return false
+        for (const unit of returning) noteUnitEnteredHex(unit, destination)
+        returnedUnits.push(...allocation.unitIds)
+      }
+      if (spIds.length > 0) {
+        airSupply.returnRemaining(destination, spIds)
+        spIds.forEach((id) => settledSp.add(id))
+      }
+      if (allocation.t > 0)
+        airUnloadLedger.value = {
+          ...airUnloadLedger.value,
+          [`${state.side}:${hexLabel(destination)}`]:
+            airUnloadedTAt(destination, state.side) + allocation.t,
+        }
     }
-    airUnloadLedger.value = {
-      ...airUnloadLedger.value,
-      [`${state.side}:${hexLabel(plan.destination)}`]:
-        airUnloadedTAt(plan.destination, state.side) + plan.unloadT,
+    const unreturnedSp = cargo
+      .filter((item) => item.kind === 'sp' && !settledSp.has(item.id))
+      .map((item) => item.id)
+    if (unreturnedSp.length > 0) {
+      airError.value = { rule: '14.9', reason: 'retainedCargoSpUnassigned' }
+      return false
     }
     recordSettlement({
       action: 'airCargoReturn',
       rule: '14.9',
-      data: { ids: cargo.map((item) => item.id), destination: plan.destination, t: plan.unloadT },
+      data: {
+        ids: cargo.map((item) => item.id),
+        allocations: plan.allocations.map((allocation) => ({
+          aircraftId: allocation.aircraftId,
+          destination: allocation.destination,
+          t: allocation.t,
+        })),
+        unitIds: returnedUnits,
+        t: plan.unloadT,
+      },
     })
     return true
   }

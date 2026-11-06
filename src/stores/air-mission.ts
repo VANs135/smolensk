@@ -10,7 +10,6 @@ import {
   type BarrageInteractionState,
   type AirCargoResolution,
   type AirMissionAircraftView,
-  transportCapacityOf,
 } from '@/engine/rules'
 import { validateAirCargoReturns } from '@/engine/rules/air-cargo-unload'
 import { survivingAirMission } from '@/engine/rules/air-mission-roster'
@@ -31,7 +30,7 @@ export interface AirMissionPorts {
   ): boolean
   resetSupply(): void
   resetCargo(): void
-  mustStayAtTarget(): boolean
+  mustStayAtTarget(): readonly string[]
   setAirStatus(id: string, status: AirStatus): void
   markAirMissionFlown(id: string): void
   nameOf(id: string): string
@@ -137,9 +136,8 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
         .filter((item) => item.profile === 'A')
         .map((item) => item.aircraftId),
     )
+    // 14.9f（T15）：只有承运超额部分的飞机留场，不再是整组运输机一刀切。
     const forcedIds = ports.mustStayAtTarget()
-      ? airUnits.value.filter((air) => transportCapacityOf(air) > 0).map((air) => air.instanceId)
-      : []
     const returns = state.assignment.origins
       .filter((origin) => !aProfileIds.has(origin.aircraftId))
       .map((origin) => {
@@ -155,8 +153,7 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
     if (
       acceptAir(
         validateAirCargoReturns({
-          requiresStay: ports.mustStayAtTarget(),
-          transportIds: forcedIds,
+          stayAircraftIds: forcedIds,
           targetHex: state.targetHex,
           returns,
         }),

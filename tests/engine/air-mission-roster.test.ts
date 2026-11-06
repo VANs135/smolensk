@@ -170,34 +170,47 @@ describe('14.1 / 14.9：任务存活名单与整组退运', () => {
     expect(filtered.assignment.origins.map((item) => item.aircraftId)).toEqual(['aborted'])
     expect(state.assignment.origins).toHaveLength(3)
   })
-  it('留存货物落到共同实际返航基地，分流则明确拒绝', () => {
+  it('留存货物按逐机货单回到各自基地，留场飞机的货物落目标格（14.9e）', () => {
     const other = { col: 21, row: 20 }
+    const cargo = [
+      { id: 'sp:1', kind: 'sp' as const, t: 1 },
+      { id: 'sp:2', kind: 'sp' as const, t: 1 },
+    ]
     const base = {
-      cargo: assignment.cargo,
+      cargo,
       targetHex: hex,
       carriers: [
-        { aircraftId: 'a', offMap: false },
-        { aircraftId: 'b', offMap: false },
+        { aircraftId: 'a', offMap: false, baseHex: other },
+        { aircraftId: 'b', offMap: false, baseHex: hex },
       ],
-      stayedIds: [],
+      returns: [
+        { aircraftId: 'a', baseHex: other },
+        { aircraftId: 'b', baseHex: { col: 22, row: 20 } },
+      ],
+      stayedIds: ['b'],
+      cargoByAircraft: [
+        { aircraftId: 'a', cargoIds: ['sp:1'] },
+        { aircraftId: 'b', cargoIds: ['sp:2'] },
+      ],
     }
+    const result = planRetainedCargoReturn(base)
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        destination: null,
+        unloadT: 2,
+        allocations: [
+          { aircraftId: 'a', destination: other, unitIds: [], t: 1 },
+          { aircraftId: 'b', destination: hex, unitIds: [], t: 1 },
+        ],
+      },
+    })
+    // 无法归属的留存货物仍明确拒绝，不猜分流。
     expect(
       planRetainedCargoReturn({
         ...base,
-        returns: [
-          { aircraftId: 'a', baseHex: other },
-          { aircraftId: 'b', baseHex: other },
-        ],
+        cargoByAircraft: [{ aircraftId: 'a', cargoIds: ['sp:1'] }],
       }),
-    ).toMatchObject({ ok: true, data: { destination: other, unloadT: 1 } })
-    expect(
-      planRetainedCargoReturn({
-        ...base,
-        returns: [
-          { aircraftId: 'a', baseHex: other },
-          { aircraftId: 'b', baseHex: hex },
-        ],
-      }),
-    ).toMatchObject({ ok: false, reason: 'retainedCargoRequiresCommonReturnBase' })
+    ).toMatchObject({ ok: false, reason: 'retainedCargoUnassigned:sp:2' })
   })
 })

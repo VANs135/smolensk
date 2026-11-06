@@ -9,7 +9,10 @@ import {
 
 /** 14.9：任务在途SP的唯一账本；存档只允许在该任务完成后进行。 */
 export function createAirSupplyDomain(ports: {
-  returnSupply(origin: HexRef, side: Side, t: number): void
+  /**
+   * 14.9（T16）：`fromOffMapBox` 非空时把 SP 加回离图盒库存，否则加到地图格。
+   */
+  returnSupply(origin: HexRef, side: Side, t: number, fromOffMapBox?: string): void
 }) {
   const manifest = ref<AirSupplyManifest | null>(null)
   function load(plan: AirSupplyLoadPlan): void {
@@ -18,13 +21,28 @@ export function createAirSupplyDomain(ports: {
   function settle(ids: readonly string[], fate: Exclude<AirSupplyFate, 'aboard'>): void {
     if (manifest.value !== null) manifest.value = settleAirSupply(manifest.value, ids, fate)
   }
-  function returnRemaining(destination?: HexRef): void {
+  function returnRemaining(
+    destination?: HexRef,
+    ids?: readonly string[],
+    offMapBox?: string,
+  ): void {
     const current = manifest.value
     if (current === null) return
-    const ids = current.items.filter((item) => item.fate === 'aboard').map((item) => item.id)
-    if (ids.length === 0) return
-    ports.returnSupply(destination ?? current.origin, current.side, ids.length)
-    settle(ids, 'returned')
+    const selected = ids === undefined ? null : new Set(ids)
+    const returning = current.items.filter(
+      (item) => item.fate === 'aboard' && (selected === null || selected.has(item.id)),
+    )
+    if (returning.length === 0) return
+    ports.returnSupply(
+      destination ?? current.origin,
+      current.side,
+      returning.length,
+      offMapBox ?? current.originOffMapBox,
+    )
+    settle(
+      returning.map((item) => item.id),
+      'returned',
+    )
   }
   function reset(): void {
     manifest.value = null

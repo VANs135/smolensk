@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { mapLayers } from '@/data'
 import type { HexRef, Side } from '@/data'
-import { HEX_DIRECTIONS, isOnMap, neighbor, hexDistance } from '@/engine/hex-geometry'
+import { HEX_DIRECTIONS, isOnMap, neighbor, hexDistance, sameHex } from '@/engine/hex-geometry'
 import {
   aircraftChoices,
   toConsoleAirUnit,
@@ -147,10 +147,14 @@ const dumpsAtDest = (store: ReturnType<typeof newStore>) =>
   store.spDumps.filter((dump) => dump.hex.col === DEST_HEX.col && dump.hex.row === DEST_HEX.row)
 
 describe('14.9f / 15.0b-C：空运卸载限额（真实基地格）', () => {
-  it('有留存货物时不同返航基地先拒绝，选同一基地后才统一退运，不提前退款', () => {
+  it('有留存货物时按逐机货单回各自返航基地，不提前退款', () => {
     const store = newStore()
     setup(store)
     setup2(store)
+    store.airInputs.cargoByAircraft = [
+      { aircraftId: 'tpt-1', cargoIds: ['sp:1'] },
+      { aircraftId: 'tpt-2', cargoIds: ['sp:2'] },
+    ]
     store.setAirMissionKind('air_transport')
     store.setAirTargetFromText(label(DEST_HEX))
     store.toggleAirMissionUnit('tpt-1')
@@ -166,22 +170,119 @@ describe('14.9f / 15.0b-C：空运卸载限额（真实基地格）', () => {
     expect(store.confirmAirMissionNow()).toBe(true)
     store.airInputs.returnHexText['tpt-1'] = label(DEST_HEX)
     store.airInputs.returnHexText['tpt-2'] = label(CORE_HEX)
-    expect(store.completeAirReturnNow()).toBe(false)
-    expect(store.airError?.reason).toBe('retainedCargoRequiresCommonReturnBase')
-    expect(store.spDumps.reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)).toBe(14)
-    expect(store.airUnits.every((air) => air.missionsFlownThisPhase === 0)).toBe(true)
-    store.airInputs.returnHexText['tpt-2'] = label(DEST_HEX)
     expect(store.completeAirReturnNow()).toBe(true)
     expect(store.spDumps.reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)).toBe(16)
-    expect(
-      store.airUnits.every(
-        (air) =>
-          air.hex.col === DEST_HEX.col &&
-          air.hex.row === DEST_HEX.row &&
-          air.missionsFlownThisPhase === 1,
+    expect(store.airUnits.every((air) => air.missionsFlownThisPhase === 1)).toBe(true)
+    expect(store.airUnits.find((air) => air.instanceId === 'tpt-1')!.hex).toEqual(DEST_HEX)
+    expect(store.airUnits.find((air) => air.instanceId === 'tpt-2')!.hex).toEqual(CORE_HEX)
+    expect(store.airUnloadedTAt(DEST_HEX, 'axis')).toBe(1)
+    expect(store.airUnloadedTAt(CORE_HEX, 'axis')).toBe(1)
+  })
+  it('两架从不同基地起飞各装1T飞同一目标，任务成功且各回各基地（14.9e）', () => {
+    const store = newStore()
+    const alt = HEX_DIRECTIONS.map((direction) => neighbor(CORE_HEX, direction)).find(
+      (candidate) =>
+        isOnMap(candidate) &&
+        mapLayers.hexes.some((hex) => hex.col === candidate.col && hex.row === candidate.row) &&
+        !sameHex(candidate, DEST_HEX),
+    )!
+    store.spDumps.push(
+      { id: 'stock-core', side: 'axis', hex: CORE_HEX, sp: 0, t: 2 },
+      { id: 'stock-alt', side: 'axis', hex: alt, sp: 0, t: 2 },
+    )
+    store.setAirActive(true)
+    store.units.push(
+      toConsoleUnit({ record: airBaseRecord(), instanceId: 'base-1', hex: CORE_HEX, side: 'axis' }),
+      toConsoleUnit({ record: airBaseRecord(), instanceId: 'base-2', hex: DEST_HEX, side: 'axis' }),
+      toConsoleUnit({ record: airBaseRecord(), instanceId: 'base-alt', hex: alt, side: 'axis' }),
+    )
+    store.airUnits.push(
+      withCapacity(
+        toConsoleAirUnit({
+          aircraft: transportRecord('axis'),
+          instanceId: 'tpt-1',
+          hex: CORE_HEX,
+          side: 'axis',
+          airStatus: 'active',
+        }),
+        0.5,
       ),
-    ).toBe(true)
-    expect(store.airUnloadedTAt(DEST_HEX, 'axis')).toBe(2)
+      withCapacity(
+        toConsoleAirUnit({
+          aircraft: transportRecord('axis'),
+          instanceId: 'tpt-2',
+          hex: alt,
+          side: 'axis',
+          airStatus: 'active',
+        }),
+        0.5,
+      ),
+    )
+    store.setAirMissionKind('air_transport')
+    store.setAirTargetFromText(label(DEST_HEX))
+    store.toggleAirMissionUnit('tpt-1')
+    store.toggleAirMissionUnit('tpt-2')
+    store.airInputs.cargoSpT = 2
+    expect(store.beginAirMissionNow()).toBe(true)
+    expect(store.confirmAirCombatNow()).toBe(true)
+    expect(store.declareInterceptionNow()).toBe(true)
+    store.airInputs.flakDie = 2
+    expect(store.resolveFlakNow()).toBe(true)
+    store.airInputs.cargoDice = 12
+    store.airInputs.unloadCargoIds = ['sp:1', 'sp:2']
+    expect(store.resolveAirCargoNow()).toBe(true)
+    expect(store.confirmAirMissionNow()).toBe(true)
+    expect(store.completeAirReturnNow()).toBe(true)
+    expect(store.airUnits.find((air) => air.instanceId === 'tpt-1')!.hex).toEqual(CORE_HEX)
+    expect(store.airUnits.find((air) => air.instanceId === 'tpt-2')!.hex).toEqual(alt)
+    expect(dumpsAtDest(store).reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)).toBe(2)
+    expect(store.spDumps.reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)).toBe(4)
+  })
+  it('一架双程档留场、另一架正常返航，留存货各归其位（14.9e/14.9f）', () => {
+    const store = newStore()
+    setup(store)
+    setup2(store)
+    const target = mapLayers.hexes.find((hex) => hexDistance(CORE_HEX, hex) === 2)!
+    store.units.push(
+      toConsoleUnit({ record: airBaseRecord(), instanceId: 'far-base', hex: target, side: 'axis' }),
+    )
+    store.airUnits[0]!.rangeHexes = 1
+    store.airUnits[0]!.transportCapacity = 1 // A档：距离2，运力1T
+    store.airUnits[1]!.rangeHexes = 4
+    store.airUnits[1]!.transportCapacity = 1.5 // C档：距离2，运力3T
+    store.airInputs.cargoByAircraft = [
+      { aircraftId: 'tpt-1', cargoIds: ['sp:1'] },
+      { aircraftId: 'tpt-2', cargoIds: ['sp:2', 'sp:3', 'sp:4'] },
+    ]
+    store.setAirMissionKind('air_transport')
+    store.setAirTargetFromText(label(target))
+    store.toggleAirMissionUnit('tpt-1')
+    store.toggleAirMissionUnit('tpt-2')
+    store.airInputs.cargoSpT = 4
+    expect(store.beginAirMissionNow()).toBe(true)
+    expect(store.confirmAirCombatNow()).toBe(true)
+    expect(store.declareInterceptionNow()).toBe(true)
+    store.airInputs.flakDie = 2
+    expect(store.resolveFlakNow()).toBe(true)
+    store.airInputs.cargoDice = 12
+    store.airInputs.unloadCargoIds = ['sp:2', 'sp:3']
+    expect(store.resolveAirCargoNow()).toBe(true)
+    expect(store.airCargoUnloadReceipt?.deliveredT).toBe(2)
+    expect(store.confirmAirMissionNow()).toBe(true)
+    expect(store.completeAirReturnNow()).toBe(true)
+    expect(sameHex(store.airUnits.find((air) => air.instanceId === 'tpt-1')!.hex, target)).toBe(
+      true,
+    )
+    expect(sameHex(store.airUnits.find((air) => air.instanceId === 'tpt-2')!.hex, CORE_HEX)).toBe(
+      true,
+    )
+    const at = (hex: HexRef) =>
+      store.spDumps
+        .filter((dump) => sameHex(dump.hex, hex))
+        .reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)
+    expect(at(target)).toBe(3) // 卸载2T + 留场机自载1T
+    expect(at(CORE_HEX)).toBe(13) // 原库存12T + 正常返航机自载1T
+    expect(store.spDumps.reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)).toBe(16)
   })
   it('超限卸载后运输机必须留在目的地；修改草稿或返航输入不能抹掉义务', () => {
     const store = newStore()
