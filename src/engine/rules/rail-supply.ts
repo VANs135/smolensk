@@ -200,6 +200,9 @@ export function railSupplyPath(facts: RailSupplyFacts, side: Side): RailSupplyPa
   for (const source of facts.baseSourceHexes(side)) {
     // 专规 1.2：轨距不可用的铁路格不得作为本条铁路路径的一部分
     if (!facts.railGaugeUsable(source, side)) continue
+    // 13.3c③＋12.6b：源格自身在**未被抵消**的敌方 ZOC 内 ⇒ 路径起点即断；
+    // 4.5b 的抵消由调用方在 `inUnnegatedEnemyZoc` 内完成，本模块不另设口径。
+    if (facts.inUnnegatedEnemyZoc(source, side)) continue
     push(source)
   }
 

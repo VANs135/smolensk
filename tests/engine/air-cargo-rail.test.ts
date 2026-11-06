@@ -386,6 +386,8 @@ function railFacts(input: {
   cities?: readonly number[]
   controlled?: (hex: HexRef) => boolean
   zoc?: readonly HexRef[]
+  /** 13.3c③＋4.5b：被己方战斗单位抵消掉的 ZOC 格（不计入“未被抵消”） */
+  zocCanceled?: readonly HexRef[]
   extenders?: readonly { hex: HexRef; rangeMp: number; mobility?: SupplyMobility }[]
   /**
    * 覆盖 12.7b 的回连判定（默认按本夹具的走廊：每步 1 MP ⇒ MP 距离＝格距）
@@ -408,6 +410,7 @@ function railFacts(input: {
   const railSet = new Set(input.railRows)
   const citySet = new Set(input.cities ?? [])
   const zocSet = new Set((input.zoc ?? []).map((item) => `${item.col}.${item.row}`))
+  const zocCanceledSet = new Set((input.zocCanceled ?? []).map((item) => `${item.col}.${item.row}`))
   const gaugeUnusableSet = new Set(
     (input.gaugeUnusable ?? []).map((item) => `${item.col}.${item.row}`),
   )
@@ -433,7 +436,11 @@ function railFacts(input: {
       }
       return found
     },
-    inUnnegatedEnemyZoc: (ref) => zocSet.has(`${ref.col}.${ref.row}`),
+    inUnnegatedEnemyZoc: (ref) => {
+      const key = `${ref.col}.${ref.row}`
+      // 4.5b：格内有己方战斗单位 ⇒ 该 ZOC 被抵消，不属“未被抵消”
+      return zocSet.has(key) && !zocCanceledSet.has(key)
+    },
     baseSourceHexes: (requested) => (requested === side ? input.sources : []),
     extenderLinks: (requested) =>
       requested === side
@@ -468,6 +475,35 @@ describe('13.3c + 12.7a-B/C：铁路补给线与火车卸货格', () => {
     expect(path.railReachableHexes.map((item) => item.row)).toEqual([0])
     expect(path.detrainableHexes).toEqual([])
     expect(path.rule).toBe('13.3c')
+  })
+
+  it('13.3c③＋12.6b：源格有**未被抵消**的敌 ZOC ⇒ 源格不得作起点，铁路线断', () => {
+    const path = railSupplyPath(
+      railFacts({
+        railRows: [0, 1, 2, 3],
+        sources: [at(0)],
+        cities: [3],
+        zoc: [at(0)], // 36.0 是补给源，但格内敌 ZOC 未被抵消
+      }),
+      'axis',
+    )
+    expect(path.railReachableHexes).toEqual([])
+    expect(path.detrainableHexes).toEqual([])
+  })
+
+  it('13.3c③＋4.5b：同一源格 ZOC 被己方战斗单位抵消 ⇒ 仍可作起点并连通', () => {
+    const path = railSupplyPath(
+      railFacts({
+        railRows: [0, 1, 2, 3],
+        sources: [at(0)],
+        cities: [3],
+        zoc: [at(0)],
+        zocCanceled: [at(0)], // 4.5b：格内有己方战斗单位 ⇒ 抵消
+      }),
+      'axis',
+    )
+    expect(path.railReachableHexes.map((item) => item.row)).toEqual([0, 1, 2, 3])
+    expect(path.detrainableHexes.map((item) => item.row)).toEqual([3])
   })
 
   it('13.3c：未被抵消的敌 ZOC 断链；受控且为村庄者成为卸货格', () => {
