@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
+import { hasTraceSupply } from '@/engine/rules'
 import type { UnitRecordView } from '@/stores'
-import { throwRangeMpOf, toConsoleUnit, toThrowHqView, unitChoices } from '@/stores'
+import {
+  createSupplyFacts,
+  throwRangeMpOf,
+  toConsoleUnit,
+  toThrowHqView,
+  unitChoices,
+} from '@/stores'
+
+import { CORE_HEX, NEAR_HEX } from '../flows/sop-harness'
 
 /**
  * R1（13.1b / 12.3b / 5.4a）：HQ 投递距离**按当前朝上的那一面取**
@@ -109,5 +118,56 @@ describe('12.3b：非 HQ 无投递距离', () => {
       side: 'axis',
     })
     expect(throwRangeMpOf(unit)).toBe(0)
+  })
+})
+
+/* ────────────── 13.1a–c：指挥部双面印值与 DG 例外（只固化行为，不改代码） ────────────── */
+
+describe('13.1a：DG 不影响指挥部的特殊功能', () => {
+  it('HQ 开 DG 后仍是有效投递源（投递距离与视图都不因 DG 改变）', () => {
+    const record = PICK('axis', 8)
+    const hq = toConsoleUnit({ record, instanceId: 'hq-dg', hex: CORE_HEX, side: 'axis' })
+    // 5.10e 的 DG：对 HQ 只改战斗相关数值，不影响 13.1b 的投递
+    hq.mode.dg = true
+
+    const facts = createSupplyFacts({
+      units: [hq],
+      dumps: [],
+      sources: [{ hex: CORE_HEX, side: 'axis', kind: 'supplySourceHex' }],
+    })
+    // 12.3b：目标在投递距离内 ⇒ 仍可作为追溯补给来源
+    const verdict = hasTraceSupply(facts, { hex: NEAR_HEX, side: 'axis', mobility: 'leg' })
+    expect(verdict.ok).toBe(true)
+    expect(verdict.rule).toBe('12.6a')
+    expect(throwRangeMpOf(hq)).toBe(record.throwRange!.combatFace)
+    expect(toThrowHqView(hq).throwRangeMp).toBe(record.throwRange!.combatFace)
+  })
+})
+
+describe('13.1a：战斗面的投递距离比移动面更远', () => {
+  it('全量 HQ：每一座的两面印值都是「战斗面 > 移动面」', () => {
+    for (const side of ['axis', 'soviet'] as const) {
+      for (const record of hqs(side)) {
+        const printed = record.throwRange!
+        expect(printed.combatFace!).toBeGreaterThan(printed.moveFace!)
+      }
+    }
+  })
+})
+
+describe('13.1c：战斗面 5（只防御）/移动面 1、AR 0', () => {
+  it('全量 HQ：两面攻击值 5 / 1（战斗面加括号）、两面 AR 0 且不可主动攻击', () => {
+    for (const side of ['axis', 'soviet'] as const) {
+      for (const record of hqs(side)) {
+        const factors = record.factors!
+        expect(factors.combat!.attack).toBe(5)
+        expect(factors.move!.attack).toBe(1)
+        expect(factors.combat!.ar).toBe(0)
+        expect(factors.move!.ar).toBe(0)
+        // 括号＝只能防御（13.1c），故不算可攻击单位
+        expect(record.attackValueBracketed).toBe(true)
+        expect(record.attackCapable).toBe(false)
+      }
+    }
   })
 })
