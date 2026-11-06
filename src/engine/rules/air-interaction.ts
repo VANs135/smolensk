@@ -24,7 +24,12 @@ import {
 } from './air'
 // 14.9c：单位货物"处于移动模式"的判据基准（与 5.x 的基础模式同一枚举）
 import type { BaseMode } from './modes'
-import { checkAirCargoLoad, CARGO_UNIT_MAX_WALKING_MA, type AirCargoLoadView } from './air-cargo'
+import {
+  airCargoTransportT,
+  checkAirCargoLoad,
+  CARGO_UNIT_MAX_WALKING_MA,
+  type AirCargoLoadView,
+} from './air-cargo'
 import {
   AIR_MISSION_SEQUENCE,
   AIR_MISSION_STEP_IDS,
@@ -333,6 +338,13 @@ export interface AirMissionRequest {
   bases: readonly AirBaseView[]
   /** 14.9a/14.10a：装载的货物（空运/空投任务） */
   cargo?: readonly AirMissionCargo[]
+  /**
+   * 14.9a / 14.9e（T14）：逐机货单。
+   *
+   * 给了就按玩家分单校验（每机不得超过自身 14.9e 有效运力）；没给则由引擎按编成
+   * 顺序确定性自动分配（每机装满再下一架，单位货物不可拆）。
+   */
+  cargoByAircraft?: readonly { aircraftId: string; cargoIds: readonly string[] }[]
   /** 14.10b：空投计划（空投**战斗单位**必须预先计划） */
   airdropPlan?: AirDropPlan
   /** 当前回合数（14.10b：计划须提前两个回合） */
@@ -396,6 +408,13 @@ export interface AirMissionAssignment {
   cargoCapacity: number
   /** 装载的货物（14.9a/14.10a；其余任务为空数组） */
   cargo: readonly AirMissionCargo[]
+  /**
+   * 14.9a / 14.9e（T14）：逐机货单（每架机实际承运哪些货物 id）。
+   *
+   * 14.9e 原文要求「将每个飞机分开处理」；14.9f 的超额卸载又只作用于
+   * 「承运超额部分的那几架」。非运输/空投任务恒为 `[]`。
+   */
+  cargoByAircraft: { aircraftId: string; cargoIds: string[] }[]
   /** 本任务中最远的飞行距离（格） */
   maxDistanceHexes: number
   /** 14.7c：所有飞机都在各自起飞基地 10 格内（享短距离轰炸修正） */
@@ -628,6 +647,129 @@ export function assignAirMission(input: AirMissionRequest): RuleOutcome<AirMissi
   if (cargoT > cargoCapacity)
     return fail('14.9a', `cargoExceedsCapacity:${cargoT}>${cargoCapacity}`)
 
+  /*
+   * 14.9a / 14.9e（T14）：逐机有效运力与逐机货单。
+   * 容量口径与 `checkAirCargoLoad` 一致（各机 14.9e 档位倍率 + 14.4f 减损面）。
+   */
+  const capacityByAircraft = new Map<string, number>()
+  const originByAircraft = new Map<string, AirMissionAssignment['origins'][number]>()
+  for (const origin of origins) {
+    const plane = input.aircraft.find((item) => item.id === origin.aircraftId)!
+    originByAircraft.set(origin.aircraftId, origin)
+    capacityByAircraft.set(
+      origin.aircraftId,
+      transportCapacityOf(plane) *
+        airTransportProfile({
+          distanceHexes: origin.distanceHexes,
+          rangeHexes: origin.rangeHexes,
+        }).capacityMultiplier,
+    )
+  }
+  const cargoById = new Map(cargo.map((item) => [item.id, item]))
+  const cargoByAircraft: AirMissionAssignment['cargoByAircraft'] = []
+  if (input.cargoByAircraft !== undefined) {
+    const seenAircraft = new Set<string>()
+    const seenCargo = new Set<string>()
+    for (const entry of input.cargoByAircraft) {
+      if (!capacityByAircraft.has(entry.aircraftId))
+        return fail('14.9a', `cargoAssignedToUnknownAircraft:${entry.aircraftId}`)
+      if (seenAircraft.has(entry.aircraftId))
+        return fail('14.9a', `duplicateCargoAircraft:${entry.aircraftId}`)
+      seenAircraft.add(entry.aircraftId)
+      let assignedT = 0
+      const cargoIds: string[] = []
+      for (const id of entry.cargoIds) {
+        const item = cargoById.get(id)
+        if (item === undefined) return fail('14.9a', `cargoNotInManifest:${id}`)
+        if (seenCargo.has(id)) return fail('14.9a', `duplicateCargoAssignment:${id}`)
+        seenCargo.add(id)
+        if (item.kind === 'unit' && item.sourceHex !== undefined) {
+          const origin = originByAircraft.get(entry.aircraftId)
+          if (
+            origin === undefined ||
+            origin.fromOffMapBox === true ||
+            !sameHex(origin.baseHex, item.sourceHex)
+          )
+            return fail('14.9a', `cargoUnitAssignedToOtherOrigin:${id}`)
+        }
+        const amount = airCargoTransportT(item)
+        if (!Number.isFinite(amount) || amount <= 0) return fail('14.9a', `invalidCargoSize:${id}`)
+        assignedT += amount
+        cargoIds.push(id)
+      }
+      if (assignedT > capacityByAircraft.get(entry.aircraftId)! + 1e-9)
+        return fail('14.9a', `cargoExceedsAircraftCapacity:${entry.aircraftId}`)
+      cargoByAircraft.push({ aircraftId: entry.aircraftId, cargoIds })
+    }
+    for (const item of cargo)
+      if (!seenCargo.has(item.id)) return fail('14.9a', `cargoUnassigned:${item.id}`)
+    // 未出现在分单里的参战机也要有一条空记录，供后续逐机处理时按编成顺序遍历。
+    for (const id of input.aircraft.map((plane) => plane.id))
+      if (!seenAircraft.has(id)) cargoByAircraft.push({ aircraftId: id, cargoIds: [] })
+  } else if (cargo.length > 0) {
+    /*
+     * 没给逐机货单时的确定性自动分配：
+     *   · 单位货物先按 `sourceHex` 找同格起飞的飞机（不能跨基地搬货）；
+     *   · SP 再按编成顺序每机装满再下一架；
+     *   · 单位货物不可拆，装不下即明确拒绝，不静默丢货。
+     */
+    const assigned = new Set<string>()
+    const draft = input.aircraft.map((plane) => ({
+      aircraftId: plane.id,
+      cargoIds: [] as string[],
+    }))
+    const remaining = new Map(
+      input.aircraft.map((plane) => [plane.id, capacityByAircraft.get(plane.id) ?? 0]),
+    )
+    const take = (item: AirMissionCargo, accept: (planeId: string) => boolean): boolean => {
+      const amount = airCargoTransportT(item)
+      if (!Number.isFinite(amount) || amount <= 0) return false
+      for (const draftEntry of draft) {
+        if (!accept(draftEntry.aircraftId)) continue
+        const left = remaining.get(draftEntry.aircraftId) ?? 0
+        if (amount > left + 1e-9) continue
+        draftEntry.cargoIds.push(item.id)
+        remaining.set(draftEntry.aircraftId, left - amount)
+        assigned.add(item.id)
+        return true
+      }
+      return false
+    }
+    for (const item of cargo) {
+      if (item.kind !== 'unit' || item.sourceHex === undefined) continue
+      take(item, (planeId) => {
+        const origin = originByAircraft.get(planeId)
+        return (
+          origin !== undefined &&
+          origin.fromOffMapBox !== true &&
+          sameHex(origin.baseHex, item.sourceHex!)
+        )
+      })
+    }
+    for (const item of cargo) {
+      if (assigned.has(item.id)) continue
+      if (item.kind === 'unit') {
+        const sourceHex = item.sourceHex
+        const matchesOrigin = (planeId: string) => {
+          const origin = originByAircraft.get(planeId)
+          return (
+            sourceHex !== undefined &&
+            origin !== undefined &&
+            origin.fromOffMapBox !== true &&
+            sameHex(origin.baseHex, sourceHex)
+          )
+        }
+        if (take(item, matchesOrigin)) continue
+      } else if (take(item, () => true)) continue
+      return fail('14.9a', `cargoCannotFitAircraft:${item.id}`)
+    }
+    cargoByAircraft.push(...draft)
+  } else {
+    cargoByAircraft.push(
+      ...input.aircraft.map((plane) => ({ aircraftId: plane.id, cargoIds: [] as string[] })),
+    )
+  }
+
   return succeed('14.2f-A', {
     kind: input.kind,
     side: input.side,
@@ -636,6 +778,7 @@ export function assignAirMission(input: AirMissionRequest): RuleOutcome<AirMissi
     origins,
     cargoCapacity,
     cargo,
+    cargoByAircraft,
     maxDistanceHexes,
     allWithinShortRange,
     rule: '14.2f-A',

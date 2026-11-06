@@ -229,6 +229,52 @@ describe('14.9a / 14.4g：单位载货与真实盘面闭环', () => {
     expect(w.beginAirMissionNow()).toBe(false)
     expect(w.airError?.reason).toBe('cargoUnitMissing:missing')
   })
+  it('两架各载1T，一架被防空摧毁 ⇒ 仅该机1T确定损失，另一架正常投送（14.9e）', () => {
+    const w = setup()
+    w.airInputs.cargoUnitIds = []
+    const record = aircraftChoices('axis').find((record) => (record.transportCapacity ?? 0) > 0)!
+    placeAir(w, record, CORE_HEX, 'axis', 'transport-2')
+    for (const air of w.airUnits) {
+      air.transportCapacity = 0.5
+      air.transportCapacityBack = 0.5
+      air.steps = 1
+    }
+    w.spDumps.push({ id: 'stock', side: 'axis', hex: CORE_HEX, sp: 0, t: 2 })
+    w.airInputs.cargoSpT = 2
+    w.toggleAirMissionUnit('transport-2')
+    const pz = HEX_DIRECTIONS.map((dir) => neighbor(NEAR_HEX, dir)).find(
+      (hex) => !sameHex(hex, CORE_HEX),
+    )!
+    placeGround(w, airBaseRecord(1), pz, 'soviet', 'enemy-base')
+    placeAir(w, fighterRecord('soviet'), pz, 'soviet', 'enemy-fighter')
+    expect(w.beginAirMissionNow()).toBe(true)
+    expect(w.airState!.assignment.cargoByAircraft).toEqual([
+      { aircraftId: 'transport', cargoIds: ['sp:1'] },
+      { aircraftId: 'transport-2', cargoIds: ['sp:2'] },
+    ])
+    expect(w.confirmAirCombatNow()).toBe(true)
+    expect(w.declareInterceptionNow()).toBe(true)
+    w.airInputs.flakDie = 12
+    w.airInputs.lossDie = 1
+    expect(w.resolveFlakNow()).toBe(true)
+    // 确定性损失归属：不再落 14.4g 玩家选货待决。
+    expect(w.airCargoLossPending).toBeNull()
+    expect(w.resolveAirCargoNow()).toBe(true)
+    const lostId = w.airSupplyManifest!.items.find((item) => item.fate === 'lost')!.id
+    const destroyed = w.airState!.assignment.cargoByAircraft.find((entry) =>
+      entry.cargoIds.includes(lostId),
+    )!.aircraftId
+    expect(w.airUnits.some((air) => air.instanceId === destroyed)).toBe(false)
+    expect(w.airSupplyManifest!.items.map((item) => item.fate)).toEqual(
+      destroyed === 'transport' ? ['lost', 'delivered'] : ['delivered', 'lost'],
+    )
+    expect(w.airUnloadedTAt(NEAR_HEX, 'axis')).toBe(1)
+    expect(w.resolveAirCargoNow()).toBe(true)
+    expect(w.airUnloadedTAt(NEAR_HEX, 'axis')).toBe(1)
+    expect(w.confirmAirMissionNow()).toBe(true)
+    expect(w.completeAirReturnNow()).toBe(true)
+    expect(w.spDumps.find((dump) => sameHex(dump.hex, NEAR_HEX))!.t).toBe(1)
+  })
   it('防空减损后要求选择单位货损，确认后进死亡堆，重试不重复淘汰', () => {
     const w = setup()
     const pz = HEX_DIRECTIONS.map((dir) => neighbor(NEAR_HEX, dir)).find(

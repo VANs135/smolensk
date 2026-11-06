@@ -74,7 +74,12 @@ export function createAirCargoResolutionDomain(ports: {
     const inputs = ports.inputs(),
       facts = ports.facts()
     const continuation = ports.accept(
-      planAirCargoContinuation(state.assignment.cargo, ports.roster(), state.flak?.hit === true),
+      planAirCargoContinuation(
+        state.assignment.cargo,
+        ports.roster(),
+        state.flak?.hit === true,
+        state.assignment.cargoByAircraft,
+      ),
       '承运状态',
     )
     if (continuation === null) {
@@ -86,10 +91,31 @@ export function createAirCargoResolutionDomain(ports: {
       return false
     }
     const returnOnly = continuation.returnOnly
+    /*
+     * 14.9a / 14.9e（T14）：被摧毁承运机的货物是确定损失 —— 先从本次结算中剔除，
+     * 作为 `destroyed` 结果交给同一提交入口结清；其余货物才进入投送/卸载判定。
+     * 同一件货物只会在这两处之一出现，不会重复结算。
+     */
+    const lostIds = new Set(continuation.lostCargoIds)
+    const lostCargoIds = continuation.lostCargoIds
+    const lostItems = lostCargoIds.map((id) => {
+      const item = state.assignment.cargo.find((entry) => entry.id === id)
+      return {
+        id,
+        kind: item?.kind ?? ('sp' as const),
+        die2d6: null,
+        modified: null,
+        threshold: null,
+        success: false,
+        fate: 'destroyed' as const,
+        detail: `${id}：承运机被毁 ⇒ 货物损失（14.9a / 14.9e）`,
+      }
+    })
+    const activeCargo = state.assignment.cargo.filter((item) => !lostIds.has(item.id))
     const rngBefore = ports.rng()
     const dice =
       state.kind === 'air_drop' && !returnOnly
-        ? state.assignment.cargo.map(() => inputs.cargoDice ?? ports.draw2d6())
+        ? activeCargo.map(() => inputs.cargoDice ?? ports.draw2d6())
         : []
     const rolls: DiceRoll[] = []
     if (inputs.cargoDice === null) {
@@ -102,9 +128,9 @@ export function createAirCargoResolutionDomain(ports: {
     }
     const result = ports.accept(
       state.kind === 'air_transport' || returnOnly
-        ? resolveAirTransportDelivery(state.assignment.cargo)
+        ? resolveAirTransportDelivery(activeCargo)
         : resolveAirCargoDrop({
-            cargo: state.assignment.cargo,
+            cargo: activeCargo,
             side: state.side,
             friendlyAtPhaseStart: inputs.targetFriendlyAtPhaseStart,
             closedTerrain: facts.closedTerrain,
@@ -123,7 +149,7 @@ export function createAirCargoResolutionDomain(ports: {
       planAirCargoUnload({
         ...facts,
         kind: returnOnly ? 'air_transport' : state.kind,
-        cargo: state.assignment.cargo.filter((item) => placed.has(item.id)),
+        cargo: activeCargo.filter((item) => placed.has(item.id)),
         selectedIds: returnOnly ? [] : inputs.unloadCargoIds,
       }),
       '卸载计划',
@@ -136,7 +162,15 @@ export function createAirCargoResolutionDomain(ports: {
       )
       return false
     }
-    const final = applyAirCargoUnloadResult(result, plan)
+    const resolved = applyAirCargoUnloadResult(result, plan)
+    const final: AirCargoResolution = {
+      ...resolved,
+      items: [...lostItems, ...resolved.items],
+      detail:
+        lostCargoIds.length === 0
+          ? resolved.detail
+          : `${resolved.detail}；承运机被毁致 ${String(lostCargoIds.length)} 件货物损失（14.9e）`,
+    }
     // 全部判定成功后只经过这一个盘面提交入口；先失败的预览不改单位、库存或账本。
     if (!ports.commit(state, final, plan)) {
       ports.pushLog('warning', '任务状态已变化，请重新检查货物结算', '14.2f-F')

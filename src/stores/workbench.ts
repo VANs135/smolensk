@@ -891,6 +891,11 @@ export interface AirInputs {
   /** 14.9a：本次空运/空投装载的 **SP（T）** */
   cargoSpT: number
   /**
+   * 14.9a / 14.9e（T14）：逐机货单（实例 id → 该机承运的货物 id）。
+   * null＝由引擎按编成顺序确定性自动分配；显式分单时每机不得超过自身有效运力。
+   */
+  cargoByAircraft: { aircraftId: string; cargoIds: string[] }[] | null
+  /**
    * 14.9f / 15.0b-C 的例外：**超出卸载限额的那部分货物由"在目的地格变为非激活"的运输机承运**
    *
    * 原文：「如果货物超过此限额，**如果超出部分对应的运输机在目的地格变为非激活状态**，则可以卸载
@@ -947,6 +952,7 @@ function createAirInputs(): AirInputs {
     reductionUnitIds: [],
     returnHexText: {},
     cargoSpT: 0,
+    cargoByAircraft: null,
     unloadOverLimitInactive: false,
     unloadCargoIds: null,
     cargoUnitIds: [],
@@ -13625,6 +13631,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         ),
         bases: airBases.value,
         cargo,
+        // 14.9a/14.9e（T14）：显式逐机货单；null 时由引擎确定性自动分配。
+        ...(carriesCargo && airInputs.value.cargoByAircraft !== null
+          ? { cargoByAircraft: airInputs.value.cargoByAircraft }
+          : {}),
         // 14.10b：空投战斗单位须有计划（格 / 制定回合 / 执行回合）
         ...(airMissionKind.value === 'air_drop'
           ? {
@@ -14920,7 +14930,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const kept = state.assignment.cargo.filter((item) => !destroyed.has(item.id))
     airState.value = {
       ...state,
-      assignment: { ...state.assignment, cargo: kept },
+      assignment: {
+        ...state.assignment,
+        cargo: kept,
+        // 14.9a/14.9e（T14）：货单与实际在途货物保持同步，避免 F 步再结算已摧毁货物。
+        cargoByAircraft: state.assignment.cargoByAircraft.map((entry) => ({
+          ...entry,
+          cargoIds: entry.cargoIds.filter((id) => !destroyed.has(id)),
+        })),
+      },
       cargo: null,
     }
     pushLog(
@@ -14947,6 +14965,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
+  /** 14.9a / 14.9e（T14）：本任务是否已有可确定损失归属的逐机货单。 */
+  function hasCargoOwnership(state: AirInteractionState): boolean {
+    return state.assignment.cargo.length > 0 && state.assignment.cargoByAircraft.length > 0
+  }
+
   /** C9 第 4 步（14.2f-E / 14.4）：防空应答（对手掷骰；命中则按 14.4f 的任务损失表定承受者） */
   function resolveFlakNow(): boolean {
     const state = airState.value
@@ -14962,14 +14985,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const skipped = acceptAir(skipEmptyAirMissionFlak(state), '中止任务跳过防空')
       if (skipped === null) return false
       airState.value = skipped.state
-      if (airMissionRosterNow.value?.liveCapacityT === 0) queueAirCargoLoss(0, '14.1b')
+      if (airMissionRosterNow.value?.liveCapacityT === 0 && !hasCargoOwnership(state))
+        queueAirCargoLoss(0, '14.1b')
       pushLog('info', '没有活动任务机，跳过防空并处理退运或货物损失', '14.2f-E')
       return true
     }
     if (
       state.assignment.cargo.length > 0 &&
       ((airMissionRosterNow.value?.inactiveCarriers ?? 0) > 0 ||
-        (airMissionRosterNow.value?.lostCarriers ?? 0) > 0)
+        (airMissionRosterNow.value?.lostCarriers ?? 0) > 0) &&
+      !hasCargoOwnership(state)
     ) {
       if (airMissionRosterNow.value?.liveCapacityT === 0) queueAirCargoLoss(0, '14.1b')
       airError.value = { rule: '14.9a', reason: 'cargoCarrierAllocationRequired' }
@@ -15027,8 +15052,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *   · 取整按**有利于货物存留**（`planCargoLoss` 的 `ceil`，即 14.9b 明写的例外）；
      *   · 有超出部分 ⇒ 落一个**待决**，玩家选完之前 14.2f-F 的货物检定不许进行。
      */
-    if (data.flak.hit) queueAirCargoLoss(airMissionCargoCapacityNow.value, '14.4g')
-    else if (airMissionRosterNow.value?.liveCapacityT === 0) queueAirCargoLoss(0, '14.1b')
+    if (data.flak.hit) {
+      /*
+       * 14.9a / 14.9e（T14）：有逐机货单且确有承运机被摧毁时，损失归属已由分单确定，
+       * 不需要玩家再选 14.4g 的超额货损；由 F 步结算按 `lostCargoIds` 一次性结清。
+       */
+      const destroyedCarriers = airMissionRosterNow.value?.destroyedIds ?? []
+      if (hasCargoOwnership(state) && destroyedCarriers.length > 0)
+        pushLog(
+          'warning',
+          `逐机货单：${String(destroyedCarriers.length)} 架承运机被毁，其货物按确定损失结算（14.9e）`,
+          '14.9e',
+        )
+      else queueAirCargoLoss(airMissionCargoCapacityNow.value, '14.4g')
+    } else if (airMissionRosterNow.value?.liveCapacityT === 0 && !hasCargoOwnership(state))
+      queueAirCargoLoss(0, '14.1b')
     pushLog(data.flak.hit ? 'warning' : 'info', data.flak.detail, data.flak.rule)
     // ⑭ 接线：防空应答（14.4e / 14.4f）入会话日志；rolls＝2 骰 + 1 损失骰
     recordSettlement({

@@ -151,7 +151,7 @@ describe('任务中止与存活名单真实流程', () => {
     expect(w.completeAirReturnNow()).toBe(false)
     expect(totalT(w)).toBe(2)
   })
-  it('防空摧毁最后承运机后，必须确认货损；不能空返航退款或让死亡飞机返航', () => {
+  it('防空摧毁最后承运机后，货物按逐机货单确定损失；不能空返航退款或让死亡飞机返航', () => {
     const w = cargoTask()
     w.airUnits.find((air) => air.instanceId === 'transport')!.steps = 1
     expect(w.beginAirMissionNow()).toBe(true)
@@ -160,12 +160,10 @@ describe('任务中止与存活名单真实流程', () => {
     w.airInputs.flakDie = 12
     w.airInputs.lossDie = 1
     expect(w.resolveFlakNow()).toBe(true)
-    expect(w.airCargoLossPending).toMatchObject({ capacityAfter: 0, excessT: 1 })
+    // 14.9e（T14）：唯一承运机被毁 ⇒ 其货物确定损失，不再要求玩家选 14.4g 超额货损。
+    expect(w.airCargoLossPending).toBeNull()
     expect(w.voluntaryReturnNow([])).toBe(false)
-    expect(w.resolveAirCargoNow()).toBe(false)
     expect(totalT(w)).toBe(1)
-    w.toggleAirCargoLossPick('sp:1')
-    expect(w.confirmAirCargoLossNow()).toBe(true)
     expect(w.resolveAirCargoNow()).toBe(true)
     expect(w.confirmAirMissionNow()).toBe(true)
     expect(w.airMissionReturnOrigins).toEqual([])

@@ -109,6 +109,8 @@ function missionRequest(overrides: {
   targetHex?: HexRef
   /** 14.9a/14.9c（第五批批 C 切片 2）：货物清单（含单位货物的 mode/ma 判据字段） */
   cargo?: readonly AirMissionCargo[]
+  /** 14.9a/14.9e（T14）：逐机货单 */
+  cargoByAircraft?: readonly { aircraftId: string; cargoIds: readonly string[] }[]
 }) {
   return {
     side: overrides.side ?? ('axis' as Side),
@@ -120,6 +122,9 @@ function missionRequest(overrides: {
     aircraft: overrides.aircraft,
     bases: overrides.bases,
     ...(overrides.cargo === undefined ? {} : { cargo: overrides.cargo }),
+    ...(overrides.cargoByAircraft === undefined
+      ? {}
+      : { cargoByAircraft: overrides.cargoByAircraft }),
   }
 }
 
@@ -625,6 +630,60 @@ describe('14.2f-A/B 任务分配：机数·距离·阶段·天候·能力', () =
     expect(result.data.maxDistanceHexes).toBe(distance)
     expect(result.data.allWithinShortRange).toBe(distance <= 10)
     expect(result.data.rule).toBe('14.2f-A')
+  })
+
+  it('14.9a/14.9e（T14）：逐机货单自动分配与显式分单等价，超过单机运力则拒', () => {
+    const cargo = [
+      { id: 'sp:1', kind: 'sp' as const, t: 1 },
+      { id: 'sp:2', kind: 'sp' as const, t: 1 },
+    ]
+    const aircraft = [
+      makePlane({ id: 'tp1', baseHex: FAR, transportCapacity: 1, canBarrage: false }),
+      makePlane({ id: 'tp2', baseHex: FAR, transportCapacity: 1, canBarrage: false }),
+    ]
+    const bases = [makeBase({ hex: FAR })]
+    const auto = assignAirMission(missionRequest({ kind: 'air_transport', aircraft, bases, cargo }))
+    expect(auto.ok).toBe(true)
+    if (!auto.ok) return
+    expect(auto.data.cargoByAircraft).toEqual([
+      { aircraftId: 'tp1', cargoIds: ['sp:1'] },
+      { aircraftId: 'tp2', cargoIds: ['sp:2'] },
+    ])
+    const explicit = assignAirMission(
+      missionRequest({
+        kind: 'air_transport',
+        aircraft,
+        bases,
+        cargo,
+        cargoByAircraft: [
+          { aircraftId: 'tp1', cargoIds: ['sp:1'] },
+          { aircraftId: 'tp2', cargoIds: ['sp:2'] },
+        ],
+      }),
+    )
+    expect(explicit).toMatchObject({ ok: true, data: auto.data })
+    expect(
+      assignAirMission(
+        missionRequest({
+          kind: 'air_transport',
+          aircraft,
+          bases,
+          cargo,
+          cargoByAircraft: [{ aircraftId: 'tp1', cargoIds: ['sp:1', 'sp:2'] }],
+        }),
+      ),
+    ).toMatchObject({ ok: false, reason: 'cargoExceedsAircraftCapacity:tp1' })
+    expect(
+      assignAirMission(
+        missionRequest({
+          kind: 'air_transport',
+          aircraft,
+          bases,
+          cargo,
+          cargoByAircraft: [{ aircraftId: 'tp1', cargoIds: ['sp:1'] }],
+        }),
+      ),
+    ).toMatchObject({ ok: false, reason: 'cargoUnassigned:sp:2' })
   })
 })
 

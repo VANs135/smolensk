@@ -9,17 +9,69 @@ import { airCargoTransportT, type AirCargoLoadView } from './air-cargo'
 import type { HexRef } from '@/data'
 import { sameHex } from '../hex-geometry'
 
-/** 14.9：中止机不再承运；未分机货单的部分中止不得静默把货转给其他飞机。 */
+/** 14.9：中止机不再承运；未被摧毁的剩余货物按幸存/活动运力决定继续投送或整组返航。 */
 export function planAirCargoContinuation(
   cargo: readonly AirCargoLoadView[],
   roster: Pick<
     ReturnType<typeof airMissionRoster>,
     'activeCapacityT' | 'liveCapacityT' | 'inactiveCarriers'
-  > & { initialLiveCapacityT?: number; lostCarriers?: number },
+  > & {
+    initialLiveCapacityT?: number
+    lostCarriers?: number
+    destroyedIds?: readonly string[]
+    liveIds?: readonly string[]
+    activeIds?: readonly string[]
+  },
   flakRounding: boolean,
+  cargoByAircraft?: readonly { aircraftId: string; cargoIds: readonly string[] }[],
 ) {
   const loadedT = cargo.reduce((sum, item) => sum + airCargoTransportT(item), 0)
-  if (loadedT === 0) return succeed('14.9a', { returnOnly: false })
+  if (loadedT === 0)
+    return succeed('14.9a', { returnOnly: false, lostCargoIds: [], remainingCargoIds: [] })
+  /*
+   * 14.9a / 14.9e（T14）：有逐机货单时，被摧毁承运机装载的货物是**确定损失**，
+   * 不得静默转给幸存机；剩余货物再按幸存/活动运力判继续投送或整组返航。
+   */
+  if (cargoByAircraft !== undefined && cargoByAircraft.length > 0) {
+    const live = roster.liveIds === undefined ? null : new Set(roster.liveIds)
+    const destroyed = new Set(roster.destroyedIds ?? [])
+    const active = roster.activeIds === undefined ? null : new Set(roster.activeIds)
+    const lostCargoIds: string[] = []
+    const remainingCargoIds: string[] = []
+    let cargoOnInactiveCarrier = false
+    for (const entry of cargoByAircraft) {
+      const isLost =
+        destroyed.has(entry.aircraftId) || (live !== null && !live.has(entry.aircraftId))
+      if (isLost) {
+        lostCargoIds.push(...entry.cargoIds)
+        continue
+      }
+      if (active !== null && !active.has(entry.aircraftId) && entry.cargoIds.length > 0)
+        cargoOnInactiveCarrier = true
+      remainingCargoIds.push(...entry.cargoIds)
+    }
+    const remainingLoadedT = remainingCargoIds.reduce((sum, id) => {
+      const item = cargo.find((entry) => entry.id === id)
+      return sum + (item === undefined ? 0 : airCargoTransportT(item))
+    }, 0)
+    if (remainingLoadedT === 0)
+      return succeed('14.9a', { returnOnly: false, lostCargoIds, remainingCargoIds })
+    const liveCapacity = flakRounding ? Math.ceil(roster.liveCapacityT) : roster.liveCapacityT
+    // 全机中止且无人被毁时，退运按出发时的整组运力判（14.1c），与旧口径一致。
+    const returnCapacity =
+      roster.lostCarriers === 0
+        ? flakRounding
+          ? Math.ceil(roster.initialLiveCapacityT ?? roster.liveCapacityT)
+          : (roster.initialLiveCapacityT ?? roster.liveCapacityT)
+        : liveCapacity
+    const activeCapacity = flakRounding ? Math.ceil(roster.activeCapacityT) : roster.activeCapacityT
+    if (roster.activeCapacityT === 0 || cargoOnInactiveCarrier)
+      return returnCapacity >= remainingLoadedT
+        ? succeed('14.1c / 14.9', { returnOnly: true, lostCargoIds, remainingCargoIds })
+        : fail('14.9a', 'cargoCannotBeReturned')
+    if (activeCapacity < remainingLoadedT) return fail('14.9a', 'cargoExceedsActiveCarrierCapacity')
+    return succeed('14.9a', { returnOnly: false, lostCargoIds, remainingCargoIds })
+  }
   if ((roster.lostCarriers ?? 0) > 0 && !flakRounding)
     return fail('14.9a', 'cargoCarrierAllocationRequired')
   const active = flakRounding ? Math.ceil(roster.activeCapacityT) : roster.activeCapacityT
@@ -30,10 +82,18 @@ export function planAirCargoContinuation(
       ? (roster.initialLiveCapacityT ?? roster.liveCapacityT)
       : roster.liveCapacityT
   if (roster.activeCapacityT === 0 && live >= loadedT)
-    return succeed('14.1c / 14.9', { returnOnly: true })
+    return succeed('14.1c / 14.9', {
+      returnOnly: true,
+      lostCargoIds: [],
+      remainingCargoIds: cargo.map((item) => item.id),
+    })
   if (roster.inactiveCarriers > 0) return fail('14.9a', 'cargoCarrierAllocationRequired')
   if (active < loadedT) return fail('14.9a', 'cargoExceedsActiveCarrierCapacity')
-  return succeed('14.9a', { returnOnly: false })
+  return succeed('14.9a', {
+    returnOnly: false,
+    lostCargoIds: [],
+    remainingCargoIds: cargo.map((item) => item.id),
+  })
 }
 
 /** 14.1c / 14.9f：整组退运到同一实际基地；没有逐机货单时不能猜测分流。 */

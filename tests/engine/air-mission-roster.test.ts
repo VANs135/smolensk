@@ -24,6 +24,7 @@ const assignment: AirMissionAssignment = {
     rangeHexes: 10,
   })),
   cargo: [{ id: 'sp:1', kind: 'sp', t: 1 }],
+  cargoByAircraft: [],
   cargoCapacity: 6,
   maxDistanceHexes: 1,
   allWithinShortRange: true,
@@ -70,6 +71,55 @@ describe('14.1 / 14.9：任务存活名单与整组退运', () => {
     expect(planAirCargoContinuation(assignment.cargo, all, false)).toMatchObject({
       ok: true,
       data: { returnOnly: true },
+    })
+  })
+  it('逐机货单：被摧毁承运机的货物确定损失，不转给幸存机（14.9e）', () => {
+    const cargo = [
+      { id: 'sp:1', kind: 'sp' as const, t: 1 },
+      { id: 'sp:2', kind: 'sp' as const, t: 1 },
+    ]
+    const roster = {
+      activeIds: ['b'],
+      liveIds: ['b'],
+      destroyedIds: ['a'],
+      activeCapacityT: 1,
+      liveCapacityT: 1,
+      inactiveCarriers: 0,
+    }
+    const continuation = planAirCargoContinuation(cargo, roster, false, [
+      { aircraftId: 'a', cargoIds: ['sp:1'] },
+      { aircraftId: 'b', cargoIds: ['sp:2'] },
+    ])
+    expect(continuation).toMatchObject({
+      ok: true,
+      data: {
+        returnOnly: false,
+        lostCargoIds: ['sp:1'],
+        remainingCargoIds: ['sp:2'],
+      },
+    })
+  })
+  it('逐机货单：剩余货物在活动运力不足但可随幸存机返航时整组退回', () => {
+    const cargo = [
+      { id: 'sp:1', kind: 'sp' as const, t: 1 },
+      { id: 'sp:2', kind: 'sp' as const, t: 1 },
+    ]
+    const roster = {
+      activeIds: [],
+      liveIds: ['a', 'b'],
+      destroyedIds: [],
+      activeCapacityT: 0,
+      liveCapacityT: 2,
+      inactiveCarriers: 2,
+    }
+    expect(
+      planAirCargoContinuation(cargo, roster, false, [
+        { aircraftId: 'a', cargoIds: ['sp:1'] },
+        { aircraftId: 'b', cargoIds: ['sp:2'] },
+      ]),
+    ).toMatchObject({
+      ok: true,
+      data: { returnOnly: true, lostCargoIds: [], remainingCargoIds: ['sp:1', 'sp:2'] },
     })
   })
   it('没有承运机时不能投送；货物已全部损失后可收束空任务', () => {
