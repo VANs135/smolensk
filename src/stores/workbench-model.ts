@@ -1529,14 +1529,19 @@ export function barrageSpotterAt(
 /**
  * 10.0a：目标格内**战斗单位**的密度 RE（只算战斗单位；单个师/编队计入密度时封顶 3 RE）
  *
- * 编队分组需要「单位属哪个师/编队」的数据；操作台当前无此字段，故按**单单位成组**传入
- * ⇒ 多单位编队会被按算子分别计入（偏高）。单师封顶 3 RE 的规则本身仍由 `densityReOf` 保证。
+ * 「单独一个师（即使是**多单位编队**）……永远不会算作超过 3RE」⇒ 先按 `formation` 分组合并，
+ * 再由 `densityReOf` 逐组封顶 3 RE。本作多单位编队（如 3PZ）在单位库里就是共享同一 `formation`
+ * 的多个单步算子；没有 `formation` 的独立师各成一组（同样封顶）。
  */
 export function barrageDensityReIn(units: readonly ConsoleUnit[], hex: HexRef, side: Side): number {
   return densityReOf(
     units
       .filter((unit) => unit.side === side && sameHexRef(unit.hex, hex))
-      .map((unit) => ({ isCombat: unit.isCombat, re: unit.re })),
+      .map((unit) => ({
+        isCombat: unit.isCombat,
+        re: unit.re,
+        formationId: unit.formation ?? undefined,
+      })),
   )
 }
 
