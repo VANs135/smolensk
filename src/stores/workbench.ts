@@ -1902,6 +1902,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         .map((piece) => piece.hex),
     ),
   )
+  // `scenarioTurnRange` 每次都要查剧本库 + 扫回合轨；`moveContext` 会逐单位调用，故先用 computed 缓存
+  const scenarioFirstTurn = computed(() => scenarioTurnRange(scenarioId.value).firstTurn)
+  const sovietFirstTurnHalfMaActive = computed(
+    () =>
+      session.scenarioInfo?.sovietFirstTurnHalfMa !== undefined &&
+      turn.value === scenarioFirstTurn.value,
+  )
+
   /**
    * 专规 1.5 / 剧本 1–2：苏方**地面单位**在剧本首回合以 1/2 MA 移动
    *
@@ -1912,11 +1920,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 本 store 的 `units` 只含地面单位（飞机在 `airUnits`）⇒ 无需再判空地。
    */
   function sovietFirstTurnMaFactor(unit: ConsoleUnit): number {
-    if (session.scenarioInfo?.sovietFirstTurnHalfMa === undefined) return 1
     if (unit.side !== 'soviet') return 1
-    return turn.value === scenarioTurnRange(scenarioId.value).firstTurn
-      ? FIRST_TURN_HALF_MA_MULT
-      : 1
+    return sovietFirstTurnHalfMaActive.value ? FIRST_TURN_HALF_MA_MULT : 1
   }
 
   /** 当前移动上下文（每次派生都重建，保证与摆子/切方一致） */
