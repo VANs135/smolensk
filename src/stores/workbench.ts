@@ -1749,6 +1749,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const supplyActive = ref(true)
   /** C8：SP 账本（12.1b：含 SP 的位置即补给站；12.1a 的拆分/加总在此逐条结算） */
   const spDumps = ref<SpDump[]>([])
+  /**
+   * 14.9（T16）：图外空军盒补给库存账本，键为 `${side}:${box}`，只记账不设上限（数据缺口）。
+   * 旧存档（v6）缺该键 ⇒ 读成 `{}`，不报错、不动 `spDumps`。
+   */
+  const offMapSupplyStocks = ref<Record<string, SpHoldings>>({})
   /** C8：基础补给源声明（12.6a①②；来自专规/剧本，操作台由玩家声明） */
   const supplySourceDecls = ref<SupplySourceDecl[]>([])
   /** C8：正在做补给检查的单位实例 id */
@@ -1859,7 +1864,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const airMissionAirIds = ref<string[]>([])
   /** C9：任务交互状态机（14.2f A–G；null＝未开始） */
   const airSupply = createAirSupplyDomain({
-    returnSupply(hex, side, t) {
+    returnSupply(hex, side, t, fromOffMapBox) {
+      // 14.9（T16）：从离图盒起飞的任务，退运加回图外库存，而不是凭空落到图上格。
+      if (fromOffMapBox !== undefined) {
+        const key = `${side}:${fromOffMapBox}`
+        const current = offMapSupplyStocks.value[key] ?? { sp: 0, t: 0 }
+        offMapSupplyStocks.value = {
+          ...offMapSupplyStocks.value,
+          [key]: tToHoldings(holdingsToT(current) + t),
+        }
+        recordSettlement({
+          action: 'airSupplyReturn',
+          rule: '14.9',
+          data: { offMap: true, box: fromOffMapBox, side, t },
+        })
+        return
+      }
       addSpAtHex({ hex, side, sp: 0, t, source: '14.9 退运' })
       recordSettlement({ action: 'airSupplyReturn', rule: '14.9', data: { hex, side, t } })
     },
@@ -13672,6 +13692,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       else current.requestedT += spT
     }
     const spCargoT = cargo.filter((item) => item.kind === 'sp').length
+    // 14.9（T16）：图外盒库存也是合法装货来源；地图内仍只认同格库存。
+    const offMapSources = Object.entries(offMapSupplyStocks.value).flatMap(([key, holdings]) => {
+      const [side, box] = key.split(':')
+      if (side !== 'axis' && side !== 'soviet') return []
+      return [
+        {
+          id: `offmap:${key}`,
+          side: side as Side,
+          offMap: true,
+          box: box ?? '',
+          ...holdings,
+        },
+      ]
+    })
     const supplyLoad =
       spCargoT === 0
         ? { manifest: null, debits: [] }
@@ -13680,7 +13714,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
               side: airActingSide.value,
               requestedT: spCargoT,
               origins: [...supplyOrigins.values()],
-              sources: spDumps.value,
+              sources: [...spDumps.value, ...offMapSources],
             }),
             '装载空运补给',
           )
@@ -13715,11 +13749,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       clearMoveInteraction()
     airMissionDomain.start(data)
     // 引擎与库存校验全部成功后，一次性扣账；失败的宣布不会消耗库存。
-    const debits = new Map(supplyLoad.debits.map((debit) => [debit.id, debit.after]))
+    const mapDebits = new Map(
+      supplyLoad.debits
+        .filter((debit) => debit.offMap !== true)
+        .map((debit) => [debit.id, debit.after]),
+    )
     spDumps.value = spDumps.value.flatMap((dump) => {
-      const after = debits.get(dump.id)
+      const after = mapDebits.get(dump.id)
       return after === undefined ? [dump] : after.sp + after.t === 0 ? [] : [{ ...dump, ...after }]
     })
+    const offMapDebits = supplyLoad.debits.filter((debit) => debit.offMap === true)
+    if (offMapDebits.length > 0) {
+      const next = { ...offMapSupplyStocks.value }
+      for (const debit of offMapDebits)
+        next[`${debit.side ?? airActingSide.value}:${debit.box ?? ''}`] = debit.after
+      offMapSupplyStocks.value = next
+    }
     airSupply.load(supplyLoad)
     if (unitLoad.items.length > 0)
       recordSettlement({
@@ -20414,6 +20459,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // ① 盘面实体
     ['units', units],
     ['spDumps', spDumps],
+    // 14.9（T16）：图外空军盒补给库存账本（`${side}:${box}` → {sp,t}）
+    ['offMapSupplyStocks', offMapSupplyStocks],
     ['airUnits', airUnits],
     // 专规 1.4a：谁驻在图外空军盒（不存则读档后"盒里的飞机回到图上"，1.4a 的事实被丢掉）
     ['airBoxMembers', airBoxMembers],
@@ -20495,8 +20542,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   不存则"存档→读档"后驻在盒里的飞机被当成在图上的机场格（`hex` 未变）——
    *   等于白送回图上，而且任务航程也不再按"从对应行入场"扣 20/30 格。
    *   旧档（4）由 `boardSnapshotFits` 的"上一版"通道接受，缺该键 ⇒ 读成空盒（与原状一致，不会更糟）。
+   *
+   * ★ 6（2026-11-07，T16）：字段表新增 `offMapSupplyStocks`（图外空军盒补给库存账本）。
+   *   不存则"离图盒装货→存档→读档"后已扣的库存复活（同时在途 SP 也还在）⇒ 凭空多出补给。
+   *   旧档（6）缺该键 ⇒ 读成 `{}`；绝不回填 `spDumps`，不吞既有地图库存。
    */
-  const BOARD_SNAPSHOT_VERSION = 6
+  const BOARD_SNAPSHOT_VERSION = 7
   const V6_FIELDS = [
     'segmentStepIndex',
     'hqFuelThrows',
@@ -20572,6 +20623,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // v4：§5-D 补员盘面化之后，但还没有 airBoxMembers
     4: ['airBoxMembers', ...V6_FIELDS],
     5: V6_FIELDS,
+    // v6（T16）：字段表新增图外补给库存；缺键按 {} 读，spDumps 原样保留。
+    6: ['offMapSupplyStocks'],
   }
   const boardRegistry = createSnapshotRegistry({
     version: BOARD_SNAPSHOT_VERSION,
@@ -20758,6 +20811,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     engagementDecisionRole: fireResolution.decisionRole,
     initialSetupInProgress,
     resetBoardNow,
+    // 盘面快照编解码器（会话层也使用；T16 旧档兼容测试需要直接调用）
+    snapshotBoard,
+    boardSnapshotFits,
+    restoreBoard,
     supplyRecoverySettled,
     supplyFeedingSettled,
     attritionAppliedHexes,
@@ -21116,6 +21173,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     allSpDumps,
     spDumps,
     spDumpsOfSide,
+    offMapSupplyStocks,
     supplySourceDecls,
     supplyUnitId,
     supplyUnit,

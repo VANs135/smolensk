@@ -193,7 +193,6 @@ export function planRetainedCargoReturn(input: {
     const returned = input.returns.find((item) => item.aircraftId === entry.aircraftId)
     const destination = stayed ? input.targetHex : (returned?.baseHex ?? carrier.baseHex)
     const offMap = !stayed && carrier.offMap
-    if (offMap) return fail('14.9', 'retainedCargoOffMapReturnUnsupported')
     if (destination === undefined && !offMap)
       return fail('14.9', `retainedCargoCarrierWithoutReturnBase:${entry.aircraftId}`)
     const unitIds = ids.filter((id) => cargoById.get(id)!.kind === 'unit')
