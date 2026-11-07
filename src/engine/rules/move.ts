@@ -25,8 +25,8 @@ import {
 } from './modes'
 import { STACKING_LIMIT_RE } from './movement'
 import { canAttackAfterAirTransport, limitAirTransportMa } from './air-unit-movement'
-import { selectMovementTerrain } from './terrain'
-import { isInEnemyZoc, zocEntryEffect, type ZocSource } from './zoc'
+import { selectMovementTerrain, type HexsideCrossing } from './terrain'
+import { isInEnemyZoc, projectsZoc, zocEntryEffect, type ZocSource } from './zoc'
 import { zocAffectsAction, type ZocAction } from './zoc-effects'
 
 /**
@@ -145,8 +145,9 @@ export function inEnemyZocAt(
   context: MoveContext,
   hex: { col: number; row: number },
   movingSide: Side,
+  facts?: MoveStepFacts,
 ): boolean {
-  return inEnemyZocForAction(context, hex, movingSide, 'truckMovement')
+  return inEnemyZocForAction(context, hex, movingSide, 'truckMovement', facts)
 }
 
 /** 4.5a：原始投射与合法抵消分别保留，再按动作类别裁决。 */
@@ -155,7 +156,11 @@ export function inEnemyZocForAction(
   hex: { col: number; row: number },
   side: Side,
   action: ZocAction,
+  facts?: MoveStepFacts,
 ): boolean {
+  if (facts !== undefined && facts.side === side) {
+    return zocAffectsAction(action, facts.rawEnemyZocAt(hex), facts.zocNegatedAt(hex))
+  }
   const enemySide = side === 'axis' ? 'soviet' : 'axis'
   return zocAffectsAction(
     action,
@@ -236,6 +241,163 @@ function reject(reason: MoveRejectReason, rule: string, detail?: string): StepFa
   return detail === undefined ? { ok: false, reason, rule } : { ok: false, reason, rule, detail }
 }
 
+/* ────────────────────── BFS 步进事实（性能优化 A：等价变换） ────────────────────── */
+
+/** 格 → 数字键：地图列/行都在 ±64 内，128 进制定长编码不会碰撞 */
+function hexIdOf(hex: { col: number; row: number }): number {
+  return hex.col * 128 + hex.row
+}
+
+const PAIR_OFFSET = 1 << 14
+const PAIR_SPAN = 1 << 15
+
+/** 无序格边键（`hexsideOf` 把 (a,b) 与 (b,a) 归一到同一条边） */
+function pairIdOf(a: number, b: number): number {
+  const low = Math.min(a, b) + PAIR_OFFSET
+  const high = Math.max(a, b) + PAIR_OFFSET
+  return low * PAIR_SPAN + high
+}
+
+/**
+ * 一次 BFS 内复用的**静态步进事实**
+ *
+ * ★ 等价性：这里只把「同一批事实」算一次，判据仍由 §4.5 / §4.5b / §6.3b / §4.8a /
+ *   专规 1.1b / §13.8b 的既有函数给出；`evaluateStepFrom` 在**不传** `facts` 时逐项现算，
+ *   单步点击（`evaluateStep`）路径与原实现逐字节一致。
+ * ★ 不缓存任何随「时点」变化的事实：`traceSupplyAt` / `hedgehogLevelAt` 仍逐格现问。
+ */
+export interface MoveStepFacts {
+  /** 这份事实属于哪一方（只在 `evaluateStepFrom` 的单位的同方时采用） */
+  readonly side: Side
+  /** 六邻（不滤边界，顺序同 `HEX_DIRECTIONS`） */
+  neighborsOf(hex: { col: number; row: number }): readonly { col: number; row: number }[]
+  /** 6.3b：该格有敌方战斗单位 */
+  enemyOccupiedAt(hex: { col: number; row: number }): boolean
+  /** 4.8a：该格本方战斗单位 RE 合计 */
+  friendlyCombatReAt(hex: { col: number; row: number }): number
+  /** 4.5：该格处于敌方 ZOC（未计 4.5b 抵消） */
+  rawEnemyZocAt(hex: { col: number; row: number }): boolean
+  /** 4.5b：该格敌方 ZOC 被本方垫人单位抵消 */
+  zocNegatedAt(hex: { col: number; row: number }): boolean
+  /** 专规 1.1b：该格是敌方安全边缘格 */
+  isEnemySafeEdge(hex: { col: number; row: number }): boolean
+  /** 13.8b：该格在本方架桥生效格清单里 */
+  isBridgedHex(hex: { col: number; row: number }): boolean
+  /** 13.8b 末句：该格是**本单位自己**的桥格 */
+  isOwnBridgeHex(hex: { col: number; row: number }): boolean
+  /** 记忆化的地图事实 */
+  terrainsAt(hex: { col: number; row: number }): readonly string[]
+  crossingBetween(
+    a: { col: number; row: number },
+    b: { col: number; row: number },
+  ): HexsideCrossing | null
+}
+
+/**
+ * 为一次 BFS（或一批只读查询）建一份步进事实
+ *
+ * @param unitId 只有 13.8b 的「自己架的桥」需要它；缺省时不认这一例外
+ */
+export function buildStepFacts(context: MoveContext, side: Side, unitId?: string): MoveStepFacts {
+  const enemySide: Side = side === 'axis' ? 'soviet' : 'axis'
+
+  // 4.5：投射单位的**六邻格**（不含自身格；原文明确不论格内地形与格边）
+  const zocCovered = new Set<number>()
+  for (const source of zocSourcesOf(context.units)) {
+    if (source.side !== enemySide || !projectsZoc(source)) continue
+    for (const direction of HEX_DIRECTIONS) {
+      zocCovered.add(hexIdOf(neighbor(source.hex, direction)))
+    }
+  }
+
+  // 4.8a 堆叠 / 6.3b 敌方占据 / 4.5b 抵消者（同一趟扫描，一次算定）
+  const friendlyCombatRe = new Map<number, number>()
+  const negated = new Set<number>()
+  const enemyOccupied = new Set<number>()
+  for (const unit of context.units) {
+    if (unit.hex === null) continue
+    const id = hexIdOf(unit.hex)
+    if (unit.side === side) {
+      if (!unit.isCombat) continue
+      friendlyCombatRe.set(id, (friendlyCombatRe.get(id) ?? 0) + unit.re)
+      if (unit.mpLockedThisPhase) negated.add(id)
+    } else if (unit.isCombat) {
+      enemyOccupied.add(id)
+    }
+  }
+
+  const lists = context.safeEdgeHexesBySide
+  const safeEdge = new Set<number>(
+    lists === undefined ? [] : (enemySide === 'axis' ? lists.axis : lists.soviet).map(hexIdOf),
+  )
+  const hasSafeEdge = lists !== undefined
+  const bridged = new Set<number>((context.bridgedHexesBySide?.[side] ?? []).map(hexIdOf))
+  const ownBridge = unitId === undefined ? undefined : context.ownBridgeHexByUnitId?.[unitId]
+  const ownBridgeKey = ownBridge === undefined ? null : hexIdOf(ownBridge)
+
+  const neighbors = new Map<number, readonly { col: number; row: number }[]>()
+  const terrains = new Map<number, readonly string[]>()
+  const crossings = new Map<number, HexsideCrossing | null>()
+
+  return {
+    side,
+    neighborsOf(hex) {
+      const id = hexIdOf(hex)
+      const cached = neighbors.get(id)
+      if (cached !== undefined) return cached
+      const list = HEX_DIRECTIONS.map((direction) => neighbor(hex, direction))
+      neighbors.set(id, list)
+      return list
+    },
+    enemyOccupiedAt(hex) {
+      return enemyOccupied.has(hexIdOf(hex))
+    },
+    friendlyCombatReAt(hex) {
+      return friendlyCombatRe.get(hexIdOf(hex)) ?? 0
+    },
+    rawEnemyZocAt(hex) {
+      return zocCovered.has(hexIdOf(hex))
+    },
+    zocNegatedAt(hex) {
+      return negated.has(hexIdOf(hex))
+    },
+    isEnemySafeEdge(hex) {
+      return hasSafeEdge && safeEdge.has(hexIdOf(hex))
+    },
+    isBridgedHex(hex) {
+      return bridged.has(hexIdOf(hex))
+    },
+    isOwnBridgeHex(hex) {
+      return ownBridgeKey !== null && ownBridgeKey === hexIdOf(hex)
+    },
+    terrainsAt(hex) {
+      const id = hexIdOf(hex)
+      const cached = terrains.get(id)
+      if (cached !== undefined) return cached
+      const value = context.map.terrainsAt(hex)
+      terrains.set(id, value)
+      return value
+    },
+    crossingBetween(a, b) {
+      const key = pairIdOf(hexIdOf(a), hexIdOf(b))
+      const cached = crossings.get(key)
+      if (cached !== undefined) return cached
+      const value = context.map.crossingBetween(a, b)
+      crossings.set(key, value)
+      return value
+    },
+  }
+}
+
+/**
+ * 可达格结果记忆化（性能优化 A）
+ *
+ * 键是 `MoveContext` 的对象身份：调用方（`workbench` 的 computed）在
+ * 「起点 / 模式 / 盘面 / 地形版本」任一变化时重建上下文 ⇒ 天然换键。
+ * 只缓存非战略、非预备单位（见 `computeReachableHexes` 的 `cacheable`）。
+ */
+const reachabilityMemo = new WeakMap<MoveContext, Map<string, ReachabilityResult>>()
+
 /* ────────────────────────────── 单步移动 ────────────────────────────── */
 
 /** 单步判定选项 */
@@ -244,6 +406,12 @@ export interface StepOptions {
   mpSpent?: number
   /** 是否用于突袭判定（8.1c：不得用道路/桥梁降费，也不得否定禁入地形；不计 MP 预算） */
   forOverrun?: boolean
+  /**
+   * 批量预计算的步进事实（性能优化 A；BFS 专用）
+   *
+   * 不传时逐项现算，行为与旧实现完全一致；传入且 `facts.side === unit.side` 时走索引。
+   */
+  facts?: MoveStepFacts
 }
 
 /** 定位单位；找不到返回失败 */
@@ -278,16 +446,25 @@ function crossingForStep(
   from: { col: number; row: number },
   to: { col: number; row: number },
   forOverrun: boolean,
+  facts?: MoveStepFacts,
 ): ReturnType<typeof bridgedCrossing> {
-  const crossing = context.map.crossingBetween(from, to)
+  const crossing =
+    facts === undefined ? context.map.crossingBetween(from, to) : facts.crossingBetween(from, to)
   if (crossing === null) return crossing
-  const keyOf = (hex: { col: number; row: number }): string => `${hex.col}.${hex.row}`
-  const keys = new Set((context.bridgedHexesBySide?.[unit.side] ?? []).map(keyOf))
-  const touchesEngineerHex = keys.has(keyOf(from)) || keys.has(keyOf(to))
-  // 13.8b 末句例外：该单位失去工程能力后，**可以用自己架的桥离开该格**
-  // （只有该单位、只有"离开"这一方向；同格其它单位不能用这座已消失的桥）
-  const ownBridgeHex = context.ownBridgeHexByUnitId?.[unit.id]
-  const leavingOwnBridge = ownBridgeHex !== undefined && sameHex(ownBridgeHex, from)
+  let touchesEngineerHex: boolean
+  let leavingOwnBridge: boolean
+  if (facts !== undefined) {
+    touchesEngineerHex = facts.isBridgedHex(from) || facts.isBridgedHex(to)
+    leavingOwnBridge = facts.isOwnBridgeHex(from)
+  } else {
+    const keyOf = (hex: { col: number; row: number }): string => `${hex.col}.${hex.row}`
+    const keys = new Set((context.bridgedHexesBySide?.[unit.side] ?? []).map(keyOf))
+    touchesEngineerHex = keys.has(keyOf(from)) || keys.has(keyOf(to))
+    // 13.8b 末句例外：该单位失去工程能力后，**可以用自己架的桥离开该格**
+    // （只有该单位、只有"离开"这一方向；同格其它单位不能用这座已消失的桥）
+    const ownBridgeHex = context.ownBridgeHexByUnitId?.[unit.id]
+    leavingOwnBridge = ownBridgeHex !== undefined && sameHex(ownBridgeHex, from)
+  }
   if (!touchesEngineerHex && !leavingOwnBridge) return crossing
   return bridgedCrossing(crossing, {
     touchesEngineerHex: true,
@@ -305,15 +482,16 @@ function costOfStep(
   from: { col: number; row: number },
   to: { col: number; row: number },
   forOverrun: boolean,
+  facts?: MoveStepFacts,
 ): StepCost | StepFailure {
   // 13.8b：本步的出/入格若在**本方**架桥生效格里，这条格边的河流降一级（突袭步不降）
-  const crossing = crossingForStep(context, unit, from, to, forOverrun)
+  const crossing = crossingForStep(context, unit, from, to, forOverrun, facts)
   // 6.2a：沿连续道路移动 → 付道路费率并忽略格/格边其他地形。
   // 判据落到「本步穿越的格边是否承载道路/铁路」——因为同格内所有道路与铁路视为相连，
   // 只要这一步是沿路迈出的，就是「沿一条连续道路移动」；不是沿路迈出即按格内地形计费。
   const followingRoad = !forOverrun && (crossing?.routes ?? []).length > 0
   const result = selectMovementTerrain({
-    terrainsPresent: context.map.terrainsAt(to),
+    terrainsPresent: facts === undefined ? context.map.terrainsAt(to) : facts.terrainsAt(to),
     mobility: unit.mobility,
     crossing,
     followingRoad,
@@ -354,13 +532,14 @@ function violatesReciprocity(
   unit: MoveUnitView,
   from: { col: number; row: number },
   to: { col: number; row: number },
+  facts?: MoveStepFacts,
 ): boolean {
   // 格边是无序对（`hexsideOf` 归一），故 (from, to) 与 (to, from) 取到同一条边；
   // 13.8b 的架桥降级也用同一口径（否则「借自己架的桥离开」会被误判成违反互逆性 ⇒ 单位卡死）
-  const crossing = crossingForStep(context, unit, from, to, false)
+  const crossing = crossingForStep(context, unit, from, to, false, facts)
   const followingRoad = (crossing?.routes ?? []).length > 0
   const back = selectMovementTerrain({
-    terrainsPresent: context.map.terrainsAt(from),
+    terrainsPresent: facts === undefined ? context.map.terrainsAt(from) : facts.terrainsAt(from),
     mobility: unit.mobility,
     crossing,
     followingRoad,
@@ -404,6 +583,9 @@ export function evaluateStepFrom(
   const forOverrun = options.forOverrun === true
   const mpSpent = options.mpSpent ?? 0
   const state = modeStateOf(unit)
+  // 性能优化 A：BFS 传入的批量事实只在本方单位上采用（异方一律回落到逐项现算）
+  const facts =
+    options.facts !== undefined && options.facts.side === unit.side ? options.facts : undefined
 
   // 6.0 / 6.3a / 7.0a / 11.0a：该阶段的行动权
   const phaseCheck = canMoveInPhase(
@@ -433,31 +615,39 @@ export function evaluateStepFrom(
   // 专规 1.1b：敌方**安全边缘格**（作为补给源的地图边格）不得被敌方地面单位进入；
   // 规则明文「可以被常规战斗攻击，但**不可被突袭**（因为可能需要推进）」⇒ 本判据对普通移动与
   // 突袭一体生效（突袭也要进格）。
-  if (isEnemySafeEdgeHex(context, to, unit.side))
+  if (facts === undefined ? isEnemySafeEdgeHex(context, to, unit.side) : facts.isEnemySafeEdge(to))
     return reject('enemySafeEdge', '专规 1.1b', `${to.col}.${to.row}`)
 
   // 6.3b / 8.0：敌方战斗单位占据的格不能直接走进（须以突袭处理）
-  if (!forOverrun && hasEnemyCombatUnit(context, to, unit.side))
+  if (
+    !forOverrun &&
+    (facts === undefined ? hasEnemyCombatUnit(context, to, unit.side) : facts.enemyOccupiedAt(to))
+  )
     return reject('enemyOccupied', '6.3b', `${to.col}.${to.row}`)
 
-  const cost = costOfStep(context, unit, from, to, forOverrun)
+  const cost = costOfStep(context, unit, from, to, forOverrun, facts)
   if (!cost.ok) return cost
-  if (violatesReciprocity(context, unit, from, to))
+  if (violatesReciprocity(context, unit, from, to, facts))
     return reject('reciprocity', '6.1d', `${to.col}.${to.row}`)
 
   // 4.8a：堆叠上限**不是逐步禁令**——「超堆叠，是指在任何环节或阶段结束时，某一格内的战斗单位
   //   超过 10RE」且「单位在移动过程中可以暂时地超堆叠」。故此处只如实标记「本步造成暂时超堆叠」，
   //   由合法性校验层（legality.stackingObligations）在环节/阶段结束时结算义务。
   //   唯一在本步就要拦的堆叠例外是**突袭**（见 canOverrun）。
-  const createsOverstack =
-    stackCombatReAt(context, to, unit.side) + (unit.isCombat ? unit.re : 0) > STACKING_LIMIT_RE
+  const stackedRe =
+    facts === undefined ? stackCombatReAt(context, to, unit.side) : facts.friendlyCombatReAt(to)
+  const createsOverstack = stackedRe + (unit.isCombat ? unit.re : 0) > STACKING_LIMIT_RE
 
   // 4.5a-A：进入未抵消敌方 ZOC 后，轮式必须停止（或突袭）
-  const enteringEnemyZoc = inEnemyZocAt(context, to, unit.side)
+  const zocAt = (action: ZocAction): boolean =>
+    facts === undefined
+      ? inEnemyZocForAction(context, to, unit.side, action)
+      : zocAffectsAction(action, facts.rawEnemyZocAt(to), facts.zocNegatedAt(to))
+  const enteringEnemyZoc = zocAt('truckMovement')
   // 5.8a：战略模式单位**不可移动进入敌方 ZOC**（与 4.5a-A 的「进入后可停」不同，这里是禁止进入）。
   //   注意只约束「进入」：若单位在本阶段开始时已在敌方 ZOC 内（敌方后来靠上来的情形，5.8a 括注
   //   「如果是敌方单位移动到它们相邻处，不会发生任何特殊情况」），它仍可以走出该 ZOC。
-  if (hasMarker(state, 'strat') && inEnemyZocForAction(context, to, unit.side, 'stratMovement'))
+  if (hasMarker(state, 'strat') && zocAt('stratMovement'))
     return reject('stratIntoEzoc', '5.8a', `${to.col}.${to.row}`)
   const forcedStop = enteringEnemyZoc && zocEntryEffect(unit.mobility) === 'mustStopOrOverrun'
 
@@ -546,53 +736,86 @@ export function computeReachableHexes(context: MoveContext, unitId: string): Rea
   const prepared = prepareMove(context, unitId)
   if (!prepared.ok) return prepared
   const { unit, ma, start } = prepared
+  const state = modeStateOf(unit)
   // 5.7g（用户 2026-11-01 口径）：预备（未释放）单位不得**停在**环形工事格——
   // 工事格只作 BFS 中转节点（可路过），不进最终可停列表（不能停）。
-  const isReserve = hasMarker(modeStateOf(unit), 'reserve')
+  const isReserve = hasMarker(state, 'reserve')
+  // 记忆化只对「结果只取决于上下文静态事实」的单位启用：战略要看 `traceSupplyAt`、
+  // 预备要看 `hedgehogLevelAt`，两者都是调用方**当场**回答的活事实，故不缓存。
+  const cacheable = !isReserve && !hasMarker(state, 'strat')
+  if (cacheable) {
+    const cached = reachabilityMemo.get(context)?.get(unitId)
+    if (cached !== undefined) return cached
+  }
 
-  const best = new Map<string, ReachableHex>()
-  const keyOf = (hex: { col: number; row: number }): string => `${hex.col}.${hex.row}`
-  best.set(keyOf(start), {
+  // 性能优化 A：一次 BFS 只建一份步进事实（单位索引 / ZOC 覆盖格 / 架桥格 / 地图事实记忆化）
+  const facts = buildStepFacts(context, unit.side, unit.id)
+
+  /** BFS 内部节点：只存父指针，输出时一次性回溯成 path（避免逐节点复制整条路径） */
+  interface Node {
+    readonly hex: { col: number; row: number }
+    readonly mpSpent: number
+    readonly minimumMove: boolean
+    readonly forcedStop: boolean
+    readonly parent: Node | null
+  }
+
+  const startNode: Node = {
     hex: start,
     mpSpent: 0,
     minimumMove: false,
     forcedStop: false,
-    path: [start],
-  })
-
-  const queue: ReachableHex[] = [best.get(keyOf(start))!]
-  while (queue.length > 0) {
-    const current = queue.shift()!
+    parent: null,
+  }
+  const startKey = hexIdOf(start)
+  const best = new Map<number, Node>([[startKey, startNode]])
+  const queue: Node[] = [startNode]
+  // 读指针出队（FIFO 顺序与 `shift()` 完全一致，但不再 O(n) 挪动数组）
+  for (let head = 0; head < queue.length; head += 1) {
+    const current = queue[head]!
     if (current.forcedStop) continue
-    for (const direction of HEX_DIRECTIONS) {
-      const step = neighbor(current.hex, direction)
+    for (const step of facts.neighborsOf(current.hex)) {
       const outcome = evaluateStepFrom(context, unit, current.hex, step, {
         mpSpent: current.mpSpent,
+        facts,
       })
       if (!outcome.ok) continue
       const nextMp = current.mpSpent + outcome.cost
       if (nextMp > ma) continue
-      const key = keyOf(step)
+      const key = hexIdOf(step)
       const existing = best.get(key)
       const better =
         existing === undefined ||
         nextMp < existing.mpSpent ||
         (nextMp === existing.mpSpent && existing.minimumMove && !outcome.minimumMove)
       if (!better) continue
-      const node: ReachableHex = {
+      const node: Node = {
         hex: step,
         mpSpent: nextMp,
         minimumMove: outcome.minimumMove,
         forcedStop: outcome.mustEndMove || nextMp >= ma,
-        path: [...current.path, step],
+        parent: current,
       }
       best.set(key, node)
       queue.push(node)
     }
   }
 
-  best.delete(keyOf(start))
-  let finalNodes = [...best.values()]
+  const pathOf = (node: Node): { col: number; row: number }[] => {
+    const path: { col: number; row: number }[] = []
+    for (let cursor: Node | null = node; cursor !== null; cursor = cursor.parent)
+      path.push(cursor.hex)
+    return path.reverse()
+  }
+
+  best.delete(startKey)
+  let finalNodes = [...best.values()].map((node): ReachableHex => ({
+    hex: node.hex,
+    mpSpent: node.mpSpent,
+    minimumMove: node.minimumMove,
+    forcedStop: node.forcedStop,
+    path: pathOf(node),
+  }))
   // 5.7g（用户 2026-11-01 口径）：预备单位不得**停在**环形工事格。
   // 工事格只作 BFS 中转（能扩展过去＝可路过），但**不进可停列表**＝不能停；
   // 于是预备单位只能穿过工事格到达另一侧，落地必在非工事格。移动力不足以"进得去也出得来"时，
@@ -608,7 +831,16 @@ export function computeReachableHexes(context: MoveContext, unitId: string): Rea
       a.hex.row - b.hex.row,
   )
 
-  return { ok: true, ma, mpSpent: 0, mpRemaining: ma, reachable }
+  const result: ReachabilityResult = { ok: true, ma, mpSpent: 0, mpRemaining: ma, reachable }
+  if (cacheable) {
+    let byUnit = reachabilityMemo.get(context)
+    if (byUnit === undefined) {
+      byUnit = new Map()
+      reachabilityMemo.set(context, byUnit)
+    }
+    byUnit.set(unitId, result)
+  }
+  return result
 }
 
 /* ────────────────────────────── 突袭资格（8.1） ────────────────────────────── */

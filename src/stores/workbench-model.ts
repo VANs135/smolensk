@@ -990,22 +990,40 @@ export function buildMoveContext(input: {
    */
   maFactorOf?: (unit: ConsoleUnit) => number
 }): MoveContext {
+  // 性能优化 A：上下文必须是**plain 快照**——原样搬运 Pinia 的 `hex` 引用会让 BFS 每一步读
+  // `hex.col/row` 都走 Vue 响应式 Proxy（实测占移动会话 362ms）。这里一律克隆为普通对象。
+  const plain = (hex: HexRef): HexRef => ({ col: hex.col, row: hex.row })
   return {
     phase: input.phase,
     activeSide: input.activeSide,
     map: createMapFacts(),
-    units: input.units.map((unit) =>
-      toMoveUnitView(unit, { scenarioMaFactor: input.maFactorOf?.(unit) ?? 1 }),
-    ),
+    units: input.units.map((unit) => {
+      const view = toMoveUnitView(unit, { scenarioMaFactor: input.maFactorOf?.(unit) ?? 1 })
+      return view.hex === null ? view : { ...view, hex: plain(view.hex) }
+    }),
     ...(input.safeEdgeHexesBySide === undefined
       ? {}
-      : { safeEdgeHexesBySide: input.safeEdgeHexesBySide }),
+      : {
+          safeEdgeHexesBySide: {
+            axis: input.safeEdgeHexesBySide.axis.map(plain),
+            soviet: input.safeEdgeHexesBySide.soviet.map(plain),
+          },
+        }),
     ...(input.bridgedHexesBySide === undefined
       ? {}
-      : { bridgedHexesBySide: input.bridgedHexesBySide }),
+      : {
+          bridgedHexesBySide: {
+            axis: input.bridgedHexesBySide.axis.map(plain),
+            soviet: input.bridgedHexesBySide.soviet.map(plain),
+          },
+        }),
     ...(input.ownBridgeHexByUnitId === undefined
       ? {}
-      : { ownBridgeHexByUnitId: input.ownBridgeHexByUnitId }),
+      : {
+          ownBridgeHexByUnitId: Object.fromEntries(
+            Object.entries(input.ownBridgeHexByUnitId).map(([id, hex]) => [id, plain(hex)]),
+          ),
+        }),
     ...(input.traceSupplyAt === undefined ? {} : { traceSupplyAt: input.traceSupplyAt }),
     ...(input.hedgehogLevelAt === undefined ? {} : { hedgehogLevelAt: input.hedgehogLevelAt }),
   }

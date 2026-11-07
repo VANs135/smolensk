@@ -3,11 +3,13 @@ import type { HexRef, Side } from '@/data'
 import { hexDistance } from '../hex-geometry'
 import { fail, succeed, type RuleOutcome } from '../result-types'
 import {
+  buildStepFacts,
   computeReachableHexes,
   evaluateStepFrom,
   findMoveUnit,
   inEnemyZocAt,
   inEnemyZocForAction,
+  type MoveStepFacts,
 } from './move'
 import type { MoveContext, MoveUnitView, StepFailure } from './move-types'
 import type { OverrunMovePlan } from './overrun'
@@ -221,6 +223,15 @@ export function reachableForMove(input: {
     const v = viewOf(context, id)
     return v !== null && v.mode === 'reserve'
   })
+  // 性能优化 A：ZOC 批量事实按方各建一份（每格现算会重建全单位 ZOC 来源）
+  const zocFactsBySide = new Map<Side, MoveStepFacts>()
+  const zocFactsOf = (side: Side): MoveStepFacts => {
+    const cached = zocFactsBySide.get(side)
+    if (cached !== undefined) return cached
+    const facts = buildStepFacts(context, side)
+    zocFactsBySide.set(side, facts)
+    return facts
+  }
 
   for (const unitId of interaction.unitIds) {
     const item = runtimeOf(runtime, unitId)
@@ -258,7 +269,7 @@ export function reachableForMove(input: {
           forcedStop: node.forcedStop,
           minimumMove: node.minimumMove,
           // 4.5a-A / 5.8a：该格是否处于未抵消的敌方 ZOC（界面据此提示与确认）
-          inEnemyZoc: inEnemyZocAt(context, node.hex, view.side),
+          inEnemyZoc: inEnemyZocAt(context, node.hex, view.side, zocFactsOf(view.side)),
           byUnit: [{ unitId, mpSpent: absolute }],
           path: node.path,
         })
