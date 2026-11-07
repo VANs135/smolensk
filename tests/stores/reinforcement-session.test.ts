@@ -311,11 +311,12 @@ describe('B34：拆并四处"指认单位"改成点算子图', () => {
     for (const dead of ['placeholder="u1"', 'placeholder="k1"', 'placeholder="r1"']) {
       expect(panel).not.toContain(dead)
     }
-    // 四处各自绑自己的选中态（母单位 / 保留 / 移除 / 锁定的"母单位"复用同一份）
+    // 三处各自绑自己的选中态（母单位 / 保留 / 移除）；慢动员的"锁定哪一枚"已改按侧+编制过滤（2.4）
     expect(panel).toContain(':items="rebuildUnitItems(breakdownParentId)"')
     expect(panel).toContain(':items="rebuildUnitItems(keepId)"')
     expect(panel).toContain(':items="rebuildUnitItems(removeId)"')
-    expect(panel.match(/rebuildUnitItems\(/gu)?.length).toBe(4)
+    expect(panel.match(/rebuildUnitItems\(/gu)?.length).toBe(3)
+    expect(panel).toContain(':items="slowMobilizationUnitItems(breakdownParentId)"')
     // 候选来自 store 的投影（组件不自己筛单位）
     expect(panel).toContain('workbench.ownUnitsOnMap')
     const store = readFileSync('src/stores/workbench.ts', 'utf8')

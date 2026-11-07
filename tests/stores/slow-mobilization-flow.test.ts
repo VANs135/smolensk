@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
@@ -197,6 +199,50 @@ describe('专规 2.4：慢动员（store 流程）', () => {
     // 这是**并行负载导致的测试级超时，不是规则回归**；断言一字未改，只放宽执行时间。
     // 取值 30000 与仓内同类重流程用例（`sp-ownership-load-merge`、`setup-obligations-flow`）一致。
   }, 30000)
+
+  it('2.4：轴方增援阶段不出现慢动员 UI（按侧 + 编制双重过滤）', () => {
+    const store = newStore()
+    store.setActiveSide('axis')
+    store.setTurn(2)
+    store.setPhase('reinforcement')
+
+    // ① 可见性：2.4 是苏联专规 ⇒ 轴方增援阶段不出现
+    expect(store.slowMobilizationVisible).toBe(false)
+
+    /*
+     * ② 候选双重过滤：即便一枚**德军**算子被错标成 `30th` 集团军归属，也不能进苏方慢动员集合、
+     *    更不能被"按表解锁"（侧 + 编制两道过滤）。
+     */
+    const axisRecord = unitChoices('axis')[0]
+    if (axisRecord === undefined) throw new Error('轴方单位库为空')
+    const german = toConsoleUnit({
+      record: axisRecord,
+      instanceId: 'ax-slow-mob',
+      hex: { col: 5, row: 27 },
+      side: 'axis',
+    })
+    german.locked = true
+    german.slowMobilizationArmy = '30th'
+    store.units.push(german)
+
+    expect(store.slowMobilizationLockedOf('30th').map((unit) => unit.instanceId)).not.toContain(
+      'ax-slow-mob',
+    )
+    expect(store.unlockSlowMobilizationBatch(['ax-slow-mob'])).toBe(false)
+    expect(german.locked).toBe(true)
+
+    // ③ 面板源码守卫：整段 2.4 UI 由可见性门包住；手动锁定阵列只取"苏方 + 30/28/24"
+    const panel = fs.readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
+    expect(panel).toContain('v-if="workbench.slowMobilizationVisible"')
+    expect(panel).toContain('slowMobilizationUnitItems(')
+    expect(panel).not.toMatch(/慢动员[\s\S]{0,400}:items="rebuildUnitItems/)
+
+    // ④ 苏方增援阶段恢复可见；离开增援阶段即收起
+    store.setActiveSide('soviet')
+    expect(store.slowMobilizationVisible).toBe(true)
+    store.setPhase('movement')
+    expect(store.slowMobilizationVisible).toBe(false)
+  })
 
   it('2.4：没有到达卡集团军归属的算子不能按表解锁（不按番号前缀猜）', () => {
     const store = newStore()

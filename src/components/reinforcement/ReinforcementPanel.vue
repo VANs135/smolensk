@@ -48,6 +48,27 @@ const slowMobilizationCandidates = computed(() =>
   workbench.slowMobilizationLockedOf(slowMobilizationArmy.value),
 )
 
+/**
+ * 2.4：手动「锁定哪一枚」阵列 —— **侧 + 编制双重过滤**
+ *
+ * 慢动员是苏联专规，只对到达卡标注 `30/28/24 Army HQ (see 2.4)` 的苏军集团军生效。
+ * 修前这里直接用 `rebuildUnitItems`（＝图上**本方全部**算子），于是轴方增援阶段会列出德军
+ * （用户 2026-11-07 ②）。这里只留**苏方且带 30/28/24 归属**的算子。
+ */
+const slowMobilizationUnitItems = computed(
+  () =>
+    (selectedId: string): readonly CounterPickerItem[] =>
+      workbench.ownUnitsOnMap
+        .filter((unit) => unit.side === 'soviet' && unit.slowMobilizationArmy !== null)
+        .map((unit) => ({
+          id: unit.instanceId,
+          imageUrl: counterImageUrlOf(unit),
+          name: `${unit.name} @ ${hexLabel(unit.hex)}（${String(unit.slowMobilizationArmy)} 集团军）`,
+          selected: selectedId === unit.instanceId,
+          hex: unit.hex,
+        })),
+)
+
 /** 当日可挑选数（引擎按表 2-2 算；界面只显示与置灰） */
 const slowMobilizationQuota = computed(() =>
   workbench.slowMobilizationQuotaOf(slowMobilizationArmy.value),
@@ -984,86 +1005,89 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       </p>
     </template>
     <!-- ── · 慢动员（专规 2.4） ── -->
-    <hr />
-    <p class="muted">
-      慢动员（专规 2.4）：被锁的师**不能移动、不能拆 breakdown**；按表 2-2
-      逐日解锁（玩家在锁定师中自选）。
-    </p>
-    <div v-if="showsActions" class="row">
-      <CounterPicker
-        title="锁定哪一枚（专规 2.4 慢动员）"
-        hint="被锁的师不能移动、不能拆 breakdown；按表 2-2 逐日解锁"
-        :items="rebuildUnitItems(breakdownParentId)"
-        :size="32"
-        @pick="breakdownParentId = $event"
-        @hover="hoverUnit"
-      />
-      <BaseButton
-        variant="secondary"
-        size="sm"
-        @click="workbench.setUnitLockedNow(breakdownParentId, true)"
-      >
-        锁定（2.4）
-      </BaseButton>
-      <BaseButton
-        variant="ghost"
-        size="sm"
-        @click="workbench.setUnitLockedNow(breakdownParentId, false)"
-      >
-        解除锁定
-      </BaseButton>
-    </div>
-    <!-- 2.4 选择面板：每回合玩家在仍锁定的师中自选，勾选数 ≤ 当回合配额 -->
-    <div class="row">
-      <label class="muted">
-        集团军
-        <select v-model="slowMobilizationArmy">
-          <option value="30th">30th</option>
-          <option value="28th">28th</option>
-          <option value="24th">24th</option>
-        </select>
-      </label>
-      <BaseTag>当日可挑 {{ slowMobilizationQuota }}</BaseTag>
-      <BaseTag>已勾 {{ slowMobilizationPick.length }}</BaseTag>
-    </div>
-    <div class="row">
-      <label
-        v-for="unit in slowMobilizationCandidates"
-        :key="unit.instanceId"
-        class="muted"
-        :title="`${unit.name}（${slowMobilizationArmy} 集团军，仍锁定）`"
-      >
-        <input
-          type="checkbox"
-          :checked="slowMobilizationPick.includes(unit.instanceId)"
-          :disabled="
-            !slowMobilizationPick.includes(unit.instanceId) && slowMobilizationLimitReached
-          "
-          @change="toggleSlowMobilizationPick(unit.instanceId)"
+    <!-- 2.4 是苏联专规：仅**苏方增援阶段**渲染（轴方增援阶段不出现该 UI，用户 2026-11-07 ②） -->
+    <template v-if="workbench.slowMobilizationVisible">
+      <hr />
+      <p class="muted">
+        慢动员（专规 2.4）：被锁的师**不能移动、不能拆 breakdown**；按表 2-2
+        逐日解锁（玩家在锁定师中自选）。
+      </p>
+      <div v-if="showsActions" class="row">
+        <CounterPicker
+          title="锁定哪一枚（专规 2.4 慢动员）"
+          hint="被锁的师不能移动、不能拆 breakdown；按表 2-2 逐日解锁"
+          :items="slowMobilizationUnitItems(breakdownParentId)"
+          :size="32"
+          @pick="breakdownParentId = $event"
+          @hover="hoverUnit"
         />
-        {{ unit.name }}
-      </label>
-    </div>
-    <p v-if="slowMobilizationCandidates.length === 0" class="muted">
-      本回合没有可解锁的师（配额 0 或该集团军已全部解锁）。
-    </p>
-    <div class="row">
-      <BaseButton
-        variant="secondary"
-        size="sm"
-        :disabled="slowMobilizationPick.length === 0"
-        @click="submitSlowMobilizationPick"
-      >
-        提交本回合解锁（2.4）
-      </BaseButton>
-    </div>
-    <p v-if="slowMobilizationUnlocked.length > 0" class="muted">
-      已解锁：<span v-for="item in slowMobilizationUnlocked" :key="item.instanceId">
-        {{ item.name }}（{{
-          item.at === null ? '履历未开局' : `${item.at.date} / 第 ${item.at.turn} 回合`
-        }}）
-      </span>
-    </p>
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          @click="workbench.setUnitLockedNow(breakdownParentId, true)"
+        >
+          锁定（2.4）
+        </BaseButton>
+        <BaseButton
+          variant="ghost"
+          size="sm"
+          @click="workbench.setUnitLockedNow(breakdownParentId, false)"
+        >
+          解除锁定
+        </BaseButton>
+      </div>
+      <!-- 2.4 选择面板：每回合玩家在仍锁定的师中自选，勾选数 ≤ 当回合配额 -->
+      <div class="row">
+        <label class="muted">
+          集团军
+          <select v-model="slowMobilizationArmy">
+            <option value="30th">30th</option>
+            <option value="28th">28th</option>
+            <option value="24th">24th</option>
+          </select>
+        </label>
+        <BaseTag>当日可挑 {{ slowMobilizationQuota }}</BaseTag>
+        <BaseTag>已勾 {{ slowMobilizationPick.length }}</BaseTag>
+      </div>
+      <div class="row">
+        <label
+          v-for="unit in slowMobilizationCandidates"
+          :key="unit.instanceId"
+          class="muted"
+          :title="`${unit.name}（${slowMobilizationArmy} 集团军，仍锁定）`"
+        >
+          <input
+            type="checkbox"
+            :checked="slowMobilizationPick.includes(unit.instanceId)"
+            :disabled="
+              !slowMobilizationPick.includes(unit.instanceId) && slowMobilizationLimitReached
+            "
+            @change="toggleSlowMobilizationPick(unit.instanceId)"
+          />
+          {{ unit.name }}
+        </label>
+      </div>
+      <p v-if="slowMobilizationCandidates.length === 0" class="muted">
+        本回合没有可解锁的师（配额 0 或该集团军已全部解锁）。
+      </p>
+      <div class="row">
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :disabled="slowMobilizationPick.length === 0"
+          @click="submitSlowMobilizationPick"
+        >
+          提交本回合解锁（2.4）
+        </BaseButton>
+      </div>
+      <p v-if="slowMobilizationUnlocked.length > 0" class="muted">
+        已解锁：<span v-for="item in slowMobilizationUnlocked" :key="item.instanceId">
+          {{ item.name }}（{{
+            item.at === null ? '履历未开局' : `${item.at.date} / 第 ${item.at.turn} 回合`
+          }}）
+        </span>
+      </p>
+    </template>
 
     <template v-if="workbench.segmentIn(['reinforcement.frontalReserves'])">
       <!-- ── ⑥b 方面军预备队（专规 2.3c） ── -->

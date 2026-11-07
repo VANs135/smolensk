@@ -18582,13 +18582,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 2.4：慢动员是**苏联专规**（只对到达卡标注 `30/28/24 Army HQ (see 2.4)` 的苏军集团军生效）
+   *
+   * 用户 2026-11-07 ②：**轴方增援阶段不该出现慢动员 UI**，更不该把德军算子列进「锁定哪一枚」。
+   * 故面板可见性只看「苏方 + 增援阶段」；候选列表另有"侧 + 编制（30/28/24 归属）"双重过滤。
+   */
+  const slowMobilizationVisible = computed<boolean>(
+    () => activeSide.value === 'soviet' && phase.value === 'reinforcement',
+  )
+
+  /**
    * 2.4：某集团军仍被锁、且按"与指挥部同一到达卡分组进场"纳入本专规的师
    *
    * 归属只认到达计划落到算子上的 `slowMobilizationArmy`（数据不按番号前缀猜）：
    * 同一到达卡分组里出现「Nth Army HQ (see 2.4)」时，该组师才进入 30/28/24 的专规集合。
+   * ★ 双重过滤：**只认苏方**（2.4 是苏联专规）**且**有 30/28/24 归属 —— 修前只按集团军字段，
+   *   轴方增援阶段只要有一枚算子带错归属就会被列进来（用户 2026-11-07 ② 的现象）。
    */
   function slowMobilizationLockedOf(army: SlowMobilizationArmy): ConsoleUnit[] {
-    return units.value.filter((unit) => unit.slowMobilizationArmy === army && unit.locked)
+    return units.value.filter(
+      (unit) => unit.side === 'soviet' && unit.slowMobilizationArmy === army && unit.locked,
+    )
   }
 
   /**
@@ -18650,6 +18664,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const picked = ids.map((id) => units.value.find((item) => item.instanceId === id))
     if (picked.some((unit) => unit === undefined)) return false
     const list = picked as ConsoleUnit[]
+    if (list.some((unit) => unit.side !== 'soviet')) {
+      pushLog('warning', '2.4 是苏联专规：非苏方单位不属于慢动员集合，不能按表解锁', '专规 2.4')
+      return false
+    }
     const army = list[0]!.slowMobilizationArmy
     if (army === null) {
       pushLog(
@@ -21669,6 +21687,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     unlockSlowMobilizationNow,
     unlockSlowMobilizationBatch,
     slowMobilizationLockedOf,
+    slowMobilizationVisible,
     slowMobilizationQuotaOf,
     slowMobilizationUnlockedAt,
     // 专规 2.3c：方面军预备队（＋1.6c 特殊补员的可用期提示）
