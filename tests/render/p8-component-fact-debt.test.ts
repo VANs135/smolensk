@@ -34,4 +34,10 @@ describe('P8：组件内另算还债（源码守卫）', () => {
     expect(supply).toContain('isRailRepairUnit')
     expect(supply).not.toContain("specialized.includes('rail_repair')")
   })
+
+  it('#5 SupplyPanel 损耗分摊显隐取 store 投影', () => {
+    const supply = source('src/components/supply/SupplyPanel.vue')
+    expect(supply).toContain('workbench.attritionNeedsAllocation')
+    expect(supply).not.toContain("losses.kind === 'allSteps'")
+  })
 })

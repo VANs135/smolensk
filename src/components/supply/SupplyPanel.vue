@@ -93,15 +93,9 @@ const destroyT = ref<number | null>(null)
 const convertKind = ref<'truck' | 'wagon'>('truck')
 const convertExtenderId = ref<string>('')
 
-/* ── 12.8b 损耗：格键与"是否需要分摊"的判读（分摊额由玩家填，本处只在有损失时展开输入） ── */
+/* ── 12.8b 损耗：格键（是否需要分摊由 store 只读投影判定） ── */
 function dutyKey(duty: { hex: { col: number; row: number } }): string {
   return `${duty.hex.col}.${duty.hex.row}`
-}
-
-function attritionNeedsAllocation(key: string): boolean {
-  const rolled = workbench.attritionResults[key]
-  if (rolled === undefined) return false
-  return rolled.losses.kind === 'allSteps' || rolled.losses.steps > 0
 }
 
 /* ─────────────────── 算子图阵列（B14d；用户口径⑪） ───────────────────
@@ -992,7 +986,7 @@ const showsLedger = computed(
                   掷损耗骰（12.8b）
                 </BaseButton>
               </div>
-              <template v-if="attritionNeedsAllocation(dutyKey(duty))">
+              <template v-if="workbench.attritionNeedsAllocation(dutyKey(duty))">
                 <div v-for="unitId in duty.unitIds" :key="unitId" class="row">
                   <label class="field">
                     {{ workbench.unitNameOf(unitId) }} 分摊军力

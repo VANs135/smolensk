@@ -1842,6 +1842,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     supplyPhaseInputs,
     attritionInputs,
     attritionResults,
+    attritionNeedsAllocation,
     supplyPhaseAvailableCap,
   } = supplyPhaseDomain
   /** 12.11a：本阶段各补给站的销毁尝试次数（每阶段每站只能尝试一次） */
@@ -21291,6 +21292,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 12.8b：断补堆叠的损耗掷骰与分摊
     attritionInputs,
     attritionResults,
+    attritionNeedsAllocation,
     setAttritionDie,
     setAttritionAllocation,
     rollAttritionNow,

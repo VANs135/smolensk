@@ -454,6 +454,12 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     return true
   }
 
+  /** 12.8b：已掷结果是否需要玩家分摊（`allSteps` 或 steps>0）——落盘与面板显隐共用同一判据 */
+  function attritionNeedsAllocation(hexKey: string): boolean {
+    const rolled = attritionResults.value[hexKey]
+    return rolled !== undefined && (rolled.losses.kind === 'allSteps' || rolled.losses.steps > 0)
+  }
+
   function applyAttritionNow(hexKey: string): boolean {
     if (!requireAction('supply.attrition', '损耗分配')) return false
     if (attritionAppliedHexes.value.includes(hexKey)) return true
@@ -473,7 +479,11 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     const present = duty.unitIds
       .map((id) => units.value.find((unit) => unit.instanceId === id))
       .filter((unit): unit is ConsoleUnit => unit !== undefined)
-    const required = rolled.losses.kind === 'allSteps' ? ('all' as const) : rolled.losses.steps
+    const required = attritionNeedsAllocation(hexKey)
+      ? rolled.losses.kind === 'allSteps'
+        ? ('all' as const)
+        : rolled.losses.steps
+      : 0
     const allocation = attritionInputOf(hexKey).allocation
     const verdict = validateAttritionAllocation({
       required,
@@ -564,6 +574,7 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     supplyPhaseInputs,
     attritionInputs,
     attritionResults,
+    attritionNeedsAllocation,
     supplyPhaseAvailableCap,
     reset,
     settleForExit,
