@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
+import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip, UI_COPY } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import UiField from '@/components/UiField.vue'
 import { useRefereeTools, useUiMode } from '@/components/ui-mode'
@@ -127,11 +127,6 @@ const missionJoinItems = computed<readonly CounterPickerItem[]>(() =>
       hex: air.hex,
     }
   }),
-)
-
-/** 14.9 / 14.10：本任务是不是带货的那两类（只有它们才有载货区） */
-const isCargoMission = computed(
-  () => workbench.airMissionKind === 'air_transport' || workbench.airMissionKind === 'air_drop',
 )
 
 /** 14.10a：单位货物的候选阵列（候选由 store 给，组件不自己筛单位） */
@@ -374,16 +369,16 @@ const showsBaseOps = computed(
            B15d：这一段留在**侧栏**（地图会话挂 `only="mission"` ⇒ 这里不画） -->
       <template v-if="showsPlace">
         <!-- ── 摆放飞机（14.1a：飞机算子停在其**空军基地格**） ── -->
-        <p class="muted">
-          摆放飞机（14.1a：飞机停在**空军基地格**，该格即其起飞与返航基地；新到飞机为非激活，须整备
-          15.1 后出击）：
-        </p>
+        <div class="muted">
+          摆放飞机：飞机停在空军基地格，该格即起飞与返航基地。
+          <RuleTip rule="14.1a">新到飞机为非激活，须整备（15.1）后出击。</RuleTip>
+        </div>
         <!-- 裁判工具（14.1a）：新到飞机走到达卡 13.6，这里只给验证页摆件 -->
         <div v-if="showsReferee" class="row">
           <!-- B14：机型＝**算子图阵列**（原来是一个纯文字下拉） -->
           <CounterPicker
             title="机型（A5 空军专表）"
-            hint="14.1a 摆放：飞机停在空军基地格，该格即其起飞与返航基地；新到飞机非激活，须整备 15.1 后出击"
+            hint="点一枚选择机型（新到飞机非激活）"
             :items="aircraftItems"
             :size="40"
             @pick="workbench.airPlacement.aircraftId = $event"
@@ -472,7 +467,7 @@ const showsBaseOps = computed(
             移除（裁判）
           </BaseButton>
         </p>
-        <p v-if="workbench.ownAirUnits.length === 0" class="muted">当前方还没有飞机。</p>
+        <p v-if="workbench.ownAirUnits.length === 0" class="muted">{{ UI_COPY.noAircraft }}</p>
 
         <!-- ── ① 任务分配（14.2f-A/B） ── -->
       </template>
@@ -480,10 +475,12 @@ const showsBaseOps = computed(
       <template v-if="showsMission">
         <hr />
         <template v-if="showsAssign">
-          <p class="muted">
-            任务分配（14.2f-A/B）：选类型与任务格、勾选参战机（14.2a 合计 ≤4 架；14.2e
-            每机每阶段一次； 起飞机必须停在**本方**空军基地格内，14.1a）。
-          </p>
+          <div class="muted">
+            任务分配：选类型与任务格、勾选参战机。
+            <RuleTip rule="14.2">
+              合计 ≤4 架；每机每阶段一次；起飞机必须停在本方空军基地格。
+            </RuleTip>
+          </div>
           <div class="row">
             <label class="field">
               任务类型（14.2e）
@@ -538,7 +535,7 @@ const showsBaseOps = computed(
           </div>
           <p class="num">
             当前方空军基地：
-            <template v-if="workbench.ownAirBases.length === 0">（无）</template>
+            <template v-if="workbench.ownAirBases.length === 0">{{ UI_COPY.noAirBase }}</template>
             <template v-for="base in workbench.ownAirBases" :key="base.id">
               <BaseTag :kind="base.isAirstrip === true ? 'warning' : 'info'">
                 {{ hexLabel(base.hex) }}
@@ -549,7 +546,7 @@ const showsBaseOps = computed(
           <!-- B14：参战机＝**算子图阵列**（原来是一排"名字 + ✓"的文字按钮） -->
           <CounterPicker
             title="参战机（点一枚加入 / 再点一枚退出）"
-            :hint="`14.1a 只有「激活」的飞机能执行任务（非激活需先在整备阶段 15.1 整备）；14.2a 一次任务合计上限 4 架（还可加 ${workbench.airJoinRemaining} 架）；14.2e 每机每阶段一次；14.2f 过移动步后不能再加`"
+            :hint="`只有「激活」的飞机能执行任务（非激活需先在整备阶段整备）；还可加 ${workbench.airJoinRemaining} 架`"
             :items="missionJoinItems"
             :size="40"
             @pick="workbench.toggleAirMissionUnit($event)"
@@ -557,10 +554,15 @@ const showsBaseOps = computed(
           />
           <!--
           14.9 / 14.10：**载货**（只在空运 / 空投任务上）
-          14.9a 运力取机型印值；14.10a 空投战斗单位须 Para 资格（本作库未印 ⇒ 玩家声明）；
-          14.10b 空投单位属"需计划"的任务（计划回合须比执行回合早 ≥2）。
+          14.9a 运力取机型印值；14.10b 计划回合须比执行回合早 ≥2。
+          本作无空降兵编制 ⇒ 人员空投整块不渲染（见下方 `?` 说明）。
         -->
-          <template v-if="isCargoMission">
+          <template
+            v-if="
+              workbench.airMissionKind === 'air_transport' ||
+              workbench.airMissionKind === 'air_drop'
+            "
+          >
             <p class="hint">
               SP 从所选飞机共同起飞基地的地面库存装载并扣账；未卸下的 SP
               随本次任务退运。装载后请完成任务再重新编组。
@@ -583,73 +585,81 @@ const showsBaseOps = computed(
                   >
                 </span>
               </label>
-              <!-- R6：本作人员空投 N/A（无空降兵编制），不再提供「声明 Para 资格」入口 -->
-              <!--
-              14.9f：卸载限额的例外 —— 「如果超出部分对应的运输机在**目的地格变为非激活状态**，
-              则可以卸载超额部分的货物」（14.9e-A 的双程飞法即在目的地变非激活）。
-            -->
-              <label class="field" title="14.9f：超出部分由在目的地格变非激活的运输机承运">
+              <!-- 14.9f：超限卸载的例外只在空运任务上成立（空投不卸载） -->
+              <label
+                v-if="workbench.airMissionKind === 'air_transport'"
+                class="field"
+                title="14.9f：超出部分由在目的地格变非激活的运输机承运"
+              >
                 <input v-model="workbench.airInputs.unloadOverLimitInactive" type="checkbox" />
-                超限卸载时，本次运输机全部留在目的地并转非激活（14.9f）
+                超限卸载时，本次运输机全部留在目的地并转非激活
               </label>
-              <label class="field">
-                计划回合（14.10b）
-                <span class="row">
-                  <BaseButton
-                    size="sm"
-                    variant="secondary"
-                    :disabled="workbench.airInputs.airdropPlannedTurn <= 0"
-                    @click="adjustAirNum('airdropPlannedTurn', -1)"
-                  >
-                    －
-                  </BaseButton>
-                  <span class="num cargo-sp">{{ workbench.airInputs.airdropPlannedTurn }}</span>
-                  <BaseButton
-                    size="sm"
-                    variant="secondary"
-                    @click="adjustAirNum('airdropPlannedTurn', 1)"
-                  >
-                    ＋
-                  </BaseButton>
-                </span>
-              </label>
-              <label class="field">
-                执行回合
-                <span class="row">
-                  <BaseButton
-                    size="sm"
-                    variant="secondary"
-                    :disabled="workbench.airInputs.airdropScheduledTurn <= 0"
-                    @click="adjustAirNum('airdropScheduledTurn', -1)"
-                  >
-                    －
-                  </BaseButton>
-                  <span class="num cargo-sp">{{ workbench.airInputs.airdropScheduledTurn }}</span>
-                  <BaseButton
-                    size="sm"
-                    variant="secondary"
-                    @click="adjustAirNum('airdropScheduledTurn', 1)"
-                  >
-                    ＋
-                  </BaseButton>
-                </span>
-              </label>
+              <!-- 14.10b：计划/执行回合只在空投任务上出现 -->
+              <template v-if="workbench.airMissionKind === 'air_drop'">
+                <label class="field">
+                  计划回合
+                  <span class="row">
+                    <BaseButton
+                      size="sm"
+                      variant="secondary"
+                      :disabled="workbench.airInputs.airdropPlannedTurn <= 0"
+                      @click="adjustAirNum('airdropPlannedTurn', -1)"
+                    >
+                      －
+                    </BaseButton>
+                    <span class="num cargo-sp">{{ workbench.airInputs.airdropPlannedTurn }}</span>
+                    <BaseButton
+                      size="sm"
+                      variant="secondary"
+                      @click="adjustAirNum('airdropPlannedTurn', 1)"
+                    >
+                      ＋
+                    </BaseButton>
+                  </span>
+                </label>
+                <label class="field">
+                  执行回合
+                  <span class="row">
+                    <BaseButton
+                      size="sm"
+                      variant="secondary"
+                      :disabled="workbench.airInputs.airdropScheduledTurn <= 0"
+                      @click="adjustAirNum('airdropScheduledTurn', -1)"
+                    >
+                      －
+                    </BaseButton>
+                    <span class="num cargo-sp">{{ workbench.airInputs.airdropScheduledTurn }}</span>
+                    <BaseButton
+                      size="sm"
+                      variant="secondary"
+                      @click="adjustAirNum('airdropScheduledTurn', 1)"
+                    >
+                      ＋
+                    </BaseButton>
+                  </span>
+                </label>
+              </template>
             </div>
-            <!-- 14.10a：单位货物＝算子图阵列（点一枚加入 / 再点一枚移出） -->
+            <!-- 14.9：单位货物只在空运任务上可选（空投整块不渲染） -->
             <CounterPicker
-              title="单位货物（14.10a：空投的战斗单位）"
-              hint="候选为本方移动模式且移动面符合步行空运条件的战斗单位；须位于装载基地并有足够运力。Para资格仍需声明。"
+              v-if="workbench.airMissionKind === 'air_transport'"
+              title="单位货物（空运单位）"
+              hint="候选为本方移动模式且移动面符合步行空运条件的战斗单位；须位于装载基地并有足够运力。"
               :items="cargoUnitItems"
               :size="32"
               @pick="workbench.toggleAirCargoUnit($event)"
               @hover="hoverUnit"
             />
+            <div v-else class="hint">
+              人员空投本作不启用
+              <RuleTip rule="2.2b">空投单位须有空降资格；本作库未印该资格，故不提供入口。</RuleTip>
+            </div>
             <p class="num">
               本次货物：{{ workbench.airInputs.cargoSpT }} T SP ＋
-              {{ workbench.airInputs.cargoUnitIds.length }} 个单位 （{{
+              {{ workbench.airInputs.cargoUnitIds.length }} 个单位（{{
                 workbench.airMissionKind === 'air_drop'
-                  ? '14.10d 空投逐件2骰检定'
-                  : '14.9 空运卸载，不掷空投骰'
+                  ? '空投逐件 2 骰检定'
+                  : '空运卸载，不掷空投骰'
               }}）
             </p>
           </template>

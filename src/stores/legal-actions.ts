@@ -30,6 +30,8 @@ export interface LegalActionEntry {
   gated: boolean
   /** 既有提交入口函数名（没有入口时为 ''，并在 `note` 说明） */
   submit: string
+  /** 可否作为「可点动作」上界面（`submit === ''` 的族一律 false） */
+  clickable: boolean
   rule?: string
   candidates: LegalActionCandidate[]
   note?: string
@@ -138,6 +140,7 @@ export function buildLegalActionsView(input: LegalActionsInput): LegalActionsVie
       status,
       gated,
       submit,
+      clickable: status === 'available' && submit !== '',
       rule: gate.rule,
       candidates: status === 'blocked' ? [] : (candidates ?? []),
       ...(entryNote(notes) === undefined ? {} : { note: entryNote(notes) }),
@@ -153,6 +156,7 @@ export function buildLegalActionsView(input: LegalActionsInput): LegalActionsVie
     status: advanceGated ? 'available' : 'blocked',
     gated: advanceGated,
     submit: input.advance.submit,
+    clickable: advanceGated,
     candidates: advanceGated ? [{ ref: 'advance', label: '进入下一环节' }] : [],
   })
 
@@ -163,6 +167,7 @@ export function buildLegalActionsView(input: LegalActionsInput): LegalActionsVie
     status: answerGated ? 'available' : 'blocked',
     gated: answerGated,
     submit: 'answerNow',
+    clickable: answerGated,
     candidates: answerGated
       ? input.answer.options.map((option) => ({ ref: option.id, label: option.label }))
       : [],
@@ -183,6 +188,7 @@ export function buildLegalActionsView(input: LegalActionsInput): LegalActionsVie
     status: setupActive ? 'available' : 'blocked',
     gated: setupActive,
     submit: 'placeSelfEntry',
+    clickable: setupActive,
     candidates: setupCandidates,
     ...(setupActive && setupCandidates.length === 0 ? { note: '无待落位项' } : {}),
   })

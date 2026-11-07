@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, watchEffect } from 'vue'
 
-import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
+import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/base'
 import UiField from '@/components/UiField.vue'
 import { useRefereeTools } from '@/components/ui-mode'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
@@ -1008,14 +1008,16 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
     <!-- 2.4 是苏联专规：仅**苏方增援阶段**渲染（轴方增援阶段不出现该 UI，用户 2026-11-07 ②） -->
     <template v-if="workbench.slowMobilizationVisible">
       <hr />
-      <p class="muted">
-        慢动员（专规 2.4）：被锁的师**不能移动、不能拆 breakdown**；按表 2-2
-        逐日解锁（玩家在锁定师中自选）。
-      </p>
+      <div class="muted">
+        慢动员：
+        <RuleTip rule="专规 2.4">
+          被锁的师**不能移动、不能拆 breakdown**；按表 2-2 逐日解锁（玩家在锁定师中自选）。
+        </RuleTip>
+      </div>
       <div v-if="showsActions" class="row">
         <CounterPicker
-          title="锁定哪一枚（专规 2.4 慢动员）"
-          hint="被锁的师不能移动、不能拆 breakdown；按表 2-2 逐日解锁"
+          title="锁定哪一枚"
+          hint="点一枚选择要解锁的师"
           :items="slowMobilizationUnitItems(breakdownParentId)"
           :size="32"
           @pick="breakdownParentId = $event"

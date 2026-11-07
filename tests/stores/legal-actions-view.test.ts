@@ -76,6 +76,32 @@ describe('纯函数：按闸门表逐条搬运', () => {
   })
 })
 
+describe('U0：没有提交入口的动作不得显示为可点', () => {
+  it('submit === "" 的 entry 即使 available 也 clickable=false', () => {
+    const keys = ['rein.formationDraw', 'rein.specialRepl', 'exclusive.panzerObligation']
+    const candidates = Object.fromEntries(keys.map((key) => [key, [{ ref: 'x', label: 'X' }]]))
+    const view = buildLegalActionsView(input({ gatedKeys: new Set(keys), candidates }))
+    for (const key of keys) {
+      const entry = entryOf(view, key)
+      expect(entry.status).toBe('available')
+      expect(entry.submit).toBe('')
+      expect(entry.clickable).toBe(false)
+      expect(entry.note ?? '').toContain('无既有提交入口')
+    }
+  })
+
+  it('有提交入口且 available ⇒ clickable=true；blocked ⇒ false', () => {
+    const view = buildLegalActionsView(
+      input({
+        gatedKeys: new Set(['move.order']),
+        candidates: { 'move.order': [{ ref: 'u1', label: 'U1' }] },
+      }),
+    )
+    expect(entryOf(view, 'move.order').clickable).toBe(true)
+    expect(entryOf(view, 'move.overrun').clickable).toBe(false)
+  })
+})
+
 describe('terminated / locked 的总闸', () => {
   for (const flag of ['terminated', 'locked'] as const) {
     it(`${flag} ⇒ 非 phase.advance / panel.answer 的 entry 一律 blocked`, () => {

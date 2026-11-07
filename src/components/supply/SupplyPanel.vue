@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
+import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip, UI_COPY } from '@/components/base'
 import UiField from '@/components/UiField.vue'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { useRefereeTools } from '@/components/ui-mode'
@@ -1021,20 +1021,22 @@ const showsLedger = computed(
         </p>
 
         <!-- ── ③ 选定受补给单位 ── -->
-        <p class="muted">受补给单位（当前方；12.6 只对战斗单位要求追溯补给，12.0）：</p>
+        <div class="muted">
+          受补给单位：
+          <RuleTip rule="12.6 / 12.8">
+            只对战斗单位要求追溯补给。一次判完全场：断补的单位战斗值减半、不投射控制区；
+            突围在移动面板的「可尝试突围的单位」发起（只在突围环节）。
+          </RuleTip>
+        </div>
         <div class="row">
           <BaseButton variant="primary" size="sm" @click="workbench.evaluateTraceSupplyNow()">
-            全场判定追溯补给（12.6 / 12.8）
+            全场判定追溯补给
           </BaseButton>
         </div>
-        <p class="muted">
-          一次判完全场：断补的单位其战斗值减半（12.8d）、不投射 ZOC（4.5）、
-          突围（12.8e）在**移动面板**的「可尝试突围的单位」一节发起（只在**突围环节**可用）。本处的判据与那一节**同源**。
-        </p>
         <!-- B14d：受补给单位＝**算子图阵列**（原来是一排"名字（RE，格号）✓"的文字按钮） -->
         <CounterPicker
-          title="受补给单位（当前方）"
-          hint="12.6：只对战斗单位要求追溯补给；点一枚即对它逐个检查（RE 与格号在悬停提示里）"
+          :title="UI_COPY.pickOne"
+          hint="点一枚即对它逐个检查（RE 与格号在悬停提示里）"
           :items="checkUnitItems"
           :size="40"
           @pick="workbench.beginSupplyCheckNow($event)"
@@ -1102,13 +1104,16 @@ const showsLedger = computed(
             <!-- B14d：付款补给站＝**算子图阵列**（原来是"（自动）"打头的纯文字下拉；点同一座即回到自动） -->
             <CounterPicker
               v-if="workbench.supplyPayDumpCandidates.length > 0"
-              title="付款补给站（12.3b：HQ 先按 12.3a 从它拖取再前送）"
-              hint="12.3b-A：投递只能送即用补给；点同一座站即回到「自动」（候选第一座）"
+              :title="UI_COPY.paySource"
+              hint="点同一座站即回到「自动」"
               :items="payDumpItems"
               :size="32"
               @pick="workbench.toggleSupplyPayDump($event)"
               @hover="hoverDump"
             />
+            <RuleTip rule="12.3b-A">
+              投递只能送**需要立即使用**的补给（本作把「立即使用」做成结构性恒真，不再给可取消的勾选）。
+            </RuleTip>
             <div class="row">
               <label class="field">
                 用途
@@ -1133,19 +1138,14 @@ const showsLedger = computed(
                   stepper
                 />
               </label>
-              <p v-else-if="pickupRequirement !== null" class="num">
+              <div v-else-if="pickupRequirement !== null" class="num">
                 应付 <b>{{ pickupRequirement.t }} T</b>
-                <BaseTag kind="neutral">{{ pickupRequirement.rule }}</BaseTag>
-                {{ pickupRequirement.detail }}
-              </p>
+                <RuleTip :rule="pickupRequirement.rule">{{ pickupRequirement.detail }}</RuleTip>
+              </div>
             </div>
-            <!-- 12.3b-A（裁定②：不允许预取）：拖取/投递必须当场用于某个用途 ⇒ 立即使用是**恒真项** -->
-            <p class="muted num">
-              12.3b-A：投递只能送**需要立即使用**的补给（本作把"立即使用"做成结构性恒真，不再给可取消的勾选）
-            </p>
             <div class="row">
               <BaseButton variant="primary" size="sm" @click="workbench.confirmSupplyPickupNow()">
-                结算拖取/投递（12.3）
+                提交补给
               </BaseButton>
             </div>
           </template>

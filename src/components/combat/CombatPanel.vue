@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
+import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { DerivationSteps } from '@/components/session'
 import UiField from '@/components/UiField.vue'
@@ -213,8 +213,9 @@ const quickDefenderArItems = computed(() =>
 </script>
 
 <template>
-  <BasePanel title="战斗（OCS 9.0）">
+  <BasePanel title="战斗">
     <!-- 模式切换：九步完整流程 / 一键查表 -->
+    <RuleTip rule="9.0">九步完整流程按 9.2 逐步结算；一键查表只出 CRT 结果。</RuleTip>
     <div class="row">
       <BaseButton
         v-for="mode in [
@@ -270,9 +271,6 @@ const quickDefenderArItems = computed(() =>
       <p v-if="quickBattleText !== null" class="ok">
         <BaseTag kind="success">9.9</BaseTag>
         {{ quickBattleText }}
-      </p>
-      <p class="muted">
-        一键查表只出 CRT 结果，不结算损失/撤退/推进；要按规则走完 9.2 请切「九步完整流程」。
       </p>
     </template>
 
@@ -543,11 +541,11 @@ const quickDefenderArItems = computed(() =>
 
         <!-- 第 6 步：奇袭（9.8）——B30 起通常已被"确认地形 ⇒ 自动结算"连跑过；本节是逐步复核路径 -->
         <section v-if="state.step === 'surprise'" class="block">
-          <h4 class="block__title">⑥ 奇袭判定（9.8）：骰子自动</h4>
-          <p class="muted">
-            掷 2 骰 + DRM（9.6）；守方在环形工事内则 −1。发生奇袭须再掷 1 骰做横移（9.1g 取端列）。
-            **正常流程不必点这里的按钮**（确认地形时已自动掷完）。
-          </p>
+          <h4 class="block__title">⑥ 奇袭判定：骰子自动</h4>
+          <RuleTip rule="9.8">
+            掷 2 骰 + DRM（9.6）；守方在环形工事内则 −1。发生奇袭须再掷 1 骰做横移（取端列）。
+            正常流程不必点这里的按钮（确认地形时已自动掷完）。
+          </RuleTip>
           <div v-if="props.stepwise" class="row">
             <BaseButton variant="secondary" size="sm" @click="workbench.rollCombatSurprise()">
               {{
@@ -562,11 +560,11 @@ const quickDefenderArItems = computed(() =>
 
         <!-- 第 7 步：战斗掷骰（9.9）——同上，通常已自动跑过 -->
         <section v-if="state.step === 'battleDice'" class="block">
-          <h4 class="block__title">⑦ 战斗掷骰（9.9）：骰子自动</h4>
-          <p class="muted">
-            修正骰 ＝ 2d6 + 攻方 AR − 守方 AR − 环形工事**完整等级**（奇袭只 −1，见 9.8/9.9）。
-            **正常流程不必点这里的按钮**（确认地形时已自动掷完）。
-          </p>
+          <h4 class="block__title">⑦ 战斗掷骰：骰子自动</h4>
+          <RuleTip rule="9.9">
+            修正骰 ＝ 2d6 + 攻方 AR − 守方 AR − 环形工事完整等级（奇袭只 −1）。
+            正常流程不必点这里的按钮（确认地形时已自动掷完）。
+          </RuleTip>
           <p class="num">
             列位：{{ state.surprise?.finalColumnLabel ?? state.odds?.oddsLabel ?? '—' }}；DRM
             {{ state.ar?.drm ?? 0 }}；工事等级 {{ state.hedgehogLevel }}
@@ -641,10 +639,13 @@ const quickDefenderArItems = computed(() =>
             选项点数 {{ workbench.combatRequirement?.options ?? 0 }}：可把「撤退格数 +
             损失军力」任意组合， 但总数必须**完全满足**（9.10a）。
           </p>
-          <p v-if="workbench.combatInputs.optionLossPoints > 0" class="muted">
-            9.11c：第一点必须由 AR 单位承受；各单位各受一点后才能有单位受第二点。 全部留 0 ＝
-            按规范分配（同样合法）。
-          </p>
+          <div v-if="workbench.combatInputs.optionLossPoints > 0" class="muted">
+            AR 先受第一点。
+            <RuleTip rule="9.11c">
+              第一点必须由 AR 单位承受；各单位各受一点后才能有单位受第二点。全部留 0 ＝
+              按规范分配（同样合法）。
+            </RuleTip>
+          </div>
           <label
             v-if="
               state.resolution.stage === 'defenderOptions' &&
@@ -695,9 +696,8 @@ const quickDefenderArItems = computed(() =>
           <p v-if="workbench.optionDraftMode === 'loss'" class="muted num">
             点**地图上本堆叠的单位图**记 1 点军力损失；也可直接点下面各单位。
           </p>
-          <p v-else-if="workbench.optionDraftMode === 'retreat'" class="muted num">
-            地图上已按三色铺出**本堆叠可撤退格**（青绿＝安全 / 橙红＝敌方 ZOC / 暗红＝必被消灭
-            9.12b）；点格即按该格距离记撤退草稿。
+          <p v-else class="muted num">
+            地图上已按三色铺出本堆叠可撤退格；点格即按该格距离记撤退草稿。
           </p>
           <!-- 「受损」模式：面板内也给出各单位（不看地图也能点） -->
           <div v-if="workbench.optionDraftMode === 'loss'" class="row">
@@ -734,10 +734,6 @@ const quickDefenderArItems = computed(() =>
               结束战斗（9.10c 例 B）
             </BaseButton>
           </div>
-          <p v-else-if="workbench.combatInputs.optionLossPoints > 0" class="muted">
-            9.11c：第一点必须由 AR 单位承受；各单位各受一点后才能有单位受第二点。 全部留 0 ＝
-            按规范分配（同样合法）。
-          </p>
           <div class="row">
             <BaseButton
               variant="primary"
@@ -754,19 +750,16 @@ const quickDefenderArItems = computed(() =>
 
         <!-- 第 9 步：撤退（9.12） -->
         <section v-if="state.step === 'retreat'" class="block">
-          <h4 class="block__title">⑨ 撤退（9.12）</h4>
-          <RuleNote
-            title="撤退：落点与起始格的直线距离必须等于完整撤退距离（青绿=安全 / 橙红=ZOC / 暗红=必死）"
-            rule="9.12"
-          >
+          <h4 class="block__title">⑨ 撤退</h4>
+          <RuleTip rule="9.12">
             <p class="muted">
-              撤退格数 ＝ 该方剩余选项数；落点与起始格的**直线距离**必须等于该格数（完整撤退距离），
-              路径可之字形避开禁入地形。**落点在地图上点**：
+              撤退格数 ＝
+              该方剩余选项数；落点与起始格的直线距离必须等于该格数，路径可之字形避开禁入地形。
               <BaseTag kind="success">青绿＝可撤退</BaseTag>
-              <BaseTag kind="warning">橙红＝落点在敌方 ZOC（9.12e）</BaseTag>
-              <BaseTag kind="danger">暗红＝必被消灭（9.12b）</BaseTag>
+              <BaseTag kind="warning">橙红＝落点在敌方控制区</BaseTag>
+              <BaseTag kind="danger">暗红＝必被消灭</BaseTag>
             </p>
-          </RuleNote>
+          </RuleTip>
           <div class="row">
             <BaseTag kind="info">
               攻方需撤 {{ workbench.combatRetreatRequirement.attacker }} 格

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { BaseButton, BasePanel, BaseTag } from '@/components/base'
+import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { useRefereeTools } from '@/components/ui-mode'
 import UiField from '@/components/UiField.vue'
@@ -239,8 +239,8 @@ function setAircraftRoll(unitId: string, value: number): void {
 
       <!-- 条 19（批 A）：空军起点已从本面板移除 ⇒ C 段给一句指引（空军任务走机场基地入口） -->
       <p v-if="workbench.barrageKindsInSegment.includes('air')" class="muted num">
-        空军任务（轰炸 / 低空扫射）请点**机场基地**发起：选机 → 点任务格 → 自动结算（14.2f，含空战 /
-        拦截 / 防空，不再由本面板直调 beginBarrageNow）。
+        空军任务请到空军面板发起。
+        <RuleTip rule="14.2f">选机 → 点任务格 → 自动结算（含空战、拦截、防空）。</RuleTip>
       </p>
 
       <!-- ── ① 宣布整体目标与轰炸值分配（10.0d / 10.0e）── -->

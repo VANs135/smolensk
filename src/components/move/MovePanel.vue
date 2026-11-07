@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
+import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip, UI_COPY } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import {
   counterImageUrlOf,
@@ -534,21 +534,22 @@ function hoverDump(id: string | null): void {
     <template v-if="canPayFuel">
       <!-- ── 燃料（12.5；用户 2026-09-16 指正：不是在补给阶段算，而是"消耗的那一刻"付） ── -->
       <hr />
-      <p class="muted num">
-        燃料（12.5）：12.5a「轮式/履带**战斗单位**要消耗 MP
-        的话，玩家必须消耗燃料补给，否则不能消耗任何
-        MP——**即使就移动一格**」；12.5c「在发生燃料消耗的**任何阶段**，单位都应在**燃料消耗时**支付」。
-        故燃料不属补给段某一步，而是**每次开拔的当口**在这里付：付完即自动继续刚才被挡下的那次移动。
-        12.5b 的另一半：**攻击 / 防御 / 轰炸 / 撤退 / 战后推进不需燃料**（只有移动与突袭需要）。
-      </p>
+      <div class="muted num">
+        加油后才能移动。
+        <RuleTip rule="12.5a / 12.5c">
+          12.5a「轮式/履带**战斗单位**要消耗 MP 的话，玩家必须消耗燃料补给，否则不能消耗任何
+          MP——即使就移动一格」；12.5c「在发生燃料消耗的任何阶段，单位都应在燃料消耗时支付」。
+          12.5b：攻击 / 防御 / 轰炸 / 撤退 / 战后推进不需燃料（只有移动与突袭需要）。
+        </RuleTip>
+      </div>
       <div v-if="!workbench.fuelPaymentDue" class="ok">
-        本次要动的单位**不需要燃料**（或都已加注）：步行单位、运输点数（卡车）与飞机永不需燃料（12.5a）。
+        本次要动的单位不需要燃料（或都已加注）：步行单位、运输点数（卡车）与飞机永不需燃料。
       </div>
       <template v-else>
         <!-- 12.5a：谁耗油、谁已加注（已加注的灰显，免得重复付） -->
         <CounterPicker
-          title="本次加油的受益单位（12.5c：谁付、付给谁）"
-          hint="12.5a：轮式/履带战斗单位耗 MP 前必须已付；12.5c-C 的加注只在本阶段有效（12.5d 的清理阶段移除 A/B 标记）"
+          title="本次加油单位"
+          hint="轮式/履带战斗单位耗 MP 前必须已付；单枚加的油只在本阶段有效"
           :items="fuelTargetItems"
           :size="40"
           @pick="workbench.setUnitFuelled($event, false)"
@@ -582,7 +583,7 @@ function hoverDump(id: string | null): void {
           这一行如实显示算出来的划分（同源组走编队/HQ 法，其余按 13.7a 用单独单位法）。
         -->
         <p v-if="workbench.fuelMethod !== 'singleUnit'" class="num">
-          来源划分（13.7a）：
+          来源划分：
           <template v-if="workbench.fuelSourcePartition.shared">
             同源 ⇒ {{ workbench.fuelSourcePartition.commonUnitIds.length }} 枚可走
             {{ workbench.fuelMethod === 'hq' ? 'HQ' : '编队' }}法
@@ -598,35 +599,36 @@ function hoverDump(id: string | null): void {
             投递距离在付款那一刻**算定**、同一阶段**只能在一个位置**投递。这里如实显示本阶段的投递基点，
             免得玩家在 HQ 移动后又去点 HQ 法、却只得到一条 12.5e 拒绝（原因文字在日志/状态条里）。
         -->
-        <p v-for="line in hqFuelThrowLines" :key="line.instanceId" class="num">
-          12.5e：{{ line.name }} 本阶段已在 <b>{{ line.originLabel }}</b>
-          投递（投递距离在付款时算定；每阶段只能在这一个位置投递）
-        </p>
+        <div v-for="line in hqFuelThrowLines" :key="line.instanceId" class="num">
+          本阶段投递点：{{ line.name }} 已在 <b>{{ line.originLabel }}</b> 投递
+          <RuleTip rule="12.5e">投递距离在付款时算定；每阶段只能在这一个位置投递。</RuleTip>
+        </div>
         <!--
           ★ I①（12.5c-A，用户 2026-09-18 第 7 条）：**编队法的覆盖预览** ——
             「为一整个多单位编队支付 1SP，便可为整个多单位编队提供燃料补给」⇒ 付款前先说清这一付会覆盖谁：
             同编队、能从本次来源取到的**全部**单位（含未被点选的、含徒步面的摩托化单位）；
             来源之外的同编队单位**不参与**（日后开拔走 12.5c-C 单独单位法）。
         -->
-        <p v-if="formationCoverageLine !== null" class="num">
-          12.5c-A：本次付 1SP 将覆盖
+        <div v-if="formationCoverageLine !== null" class="num">
+          本次付 1 SP 将覆盖
           <b>{{ workbench.fuelFormationCoverage?.coveredIds.length ?? 0 }}</b> 枚（{{
             formationCoverageLine
           }}）
           <template v-if="(workbench.fuelFormationCoverage?.leftOutIds.length ?? 0) > 0">
             ；另有
-            {{ workbench.fuelFormationCoverage?.leftOutIds.length }} 枚同编队单位**不在本来源内** ⇒
-            不参与本次编队加油，日后开拔须用单独单位法（12.5c-C，每枚 1T）
+            {{ workbench.fuelFormationCoverage?.leftOutIds.length }} 枚同编队单位不在本来源内 ⇒
+            不参与本次编队加油，日后开拔须单枚付
           </template>
-        </p>
-        <p v-if="formationPaidLine !== null" class="num">
-          12.5c-A：编队 <b>{{ formationPaidLine }}</b> 本阶段已用编队法付过油 ⇒
-          该编队其余成员请用单独单位法（12.5c-C，每枚 1T）
-        </p>
-        <!-- 12.5c-A：付款来源 = 全体**同一站直拖**（12.3a）或**同一 HQ 投递**（12.3b） -->
+          <RuleTip rule="12.5c-A">为一整个多单位编队支付 1 SP，便可为整个编队提供燃料。</RuleTip>
+        </div>
+        <div v-if="formationPaidLine !== null" class="num">
+          编队 <b>{{ formationPaidLine }}</b> 本阶段已用编队法付过油 ⇒ 该编队其余成员请单枚付
+          <RuleTip rule="12.5c-A / 12.5c-C">编队其余成员日后开拔按单独单位法，每枚 1 T。</RuleTip>
+        </div>
+        <!-- 付款来源 = 全体同一站直取，或同一 HQ 投递 -->
         <CounterPicker
-          title="付款补给站（12.5c-A：全体同源）"
-          hint="来源：全体 5 MP 直拖 / 相邻（12.3a、12.3c），或同一指挥部按投递距离送达（12.3b）；HQ 法只覆盖指挥部与独立单位（12.5c-B）"
+          :title="UI_COPY.paySource"
+          hint="全体同一站直取，或同一指挥部送达；HQ 法只覆盖指挥部与独立单位"
           :items="fuelDumpItems"
           :size="32"
           @pick="workbench.pickFuelDump($event)"
@@ -634,7 +636,7 @@ function hoverDump(id: string | null): void {
         />
         <div class="row">
           <BaseButton variant="primary" size="sm" @click="workbench.payFuel()">
-            支付燃料（12.5c）——未加注 {{ workbench.fuelPendingUnits.length }} 枚
+            支付燃料 · 未加注 {{ workbench.fuelPendingUnits.length }} 枚
           </BaseButton>
           <span class="num">
             获批来源：{{
@@ -648,19 +650,20 @@ function hoverDump(id: string | null): void {
     <!-- ⑤ 收束：撤销一步 / 结束移动 / 放弃整次移动（只对"正在进行的那次移动"有意义） -->
     <div v-if="canMove || workbench.moveInteraction !== null" class="row">
       <BaseButton variant="secondary" size="sm" @click="workbench.undoLastStep()">
-        撤销一步（6.1）
+        撤销一步
       </BaseButton>
       <BaseButton variant="primary" size="sm" @click="workbench.finishMove()">
-        结束移动（6.1）
+        结束移动
       </BaseButton>
       <BaseButton variant="ghost" size="sm" @click="workbench.abortMoveNow()">
         放弃本次移动（全部还原并退出）
       </BaseButton>
     </div>
-    <p class="muted">
-      6.1f 末句：走完可点「结束移动」；仍有单位在动时结束会让它们就地停下。已做的动作只能靠
-      「撤销一步」回退（6.1h 只给一步）或「放弃本次移动」全部还原（还原后即可重新选子再走）。
-    </p>
+    <div class="muted">
+      走完可点「结束移动」；仍有单位在动时结束会让它们就地停下。已做的动作只能靠「撤销一步」回退
+      或「放弃本次移动」全部还原。
+      <RuleTip rule="6.1f / 6.1h">撤销只给一步；放弃会还原整次移动，还原后可重新选子再走。</RuleTip>
+    </div>
   </BasePanel>
 </template>
 

@@ -322,14 +322,16 @@ describe('B14a：空军面板的替换（源码守卫）', () => {
     expect(store).toContain('function airCombatPicksPayload()')
   })
 
-  it('★ 14.9 / 14.10：载货区只在空运/空投任务上出现，输入直连 airInputs', () => {
-    expect(panel).toContain('isCargoMission')
+  it('★ 14.9 / 14.10：载货区按任务类型门控，输入直连 airInputs', () => {
+    // 空运：SP 与单位货物（14.9）；空投：SP 与计划/执行回合（14.10b）
+    expect(panel).toContain("workbench.airMissionKind === 'air_transport'")
+    expect(panel).toContain("workbench.airMissionKind === 'air_drop'")
     expect(panel).toContain('workbench.airInputs.cargoSpT')
     expect(panel).toContain('workbench.airInputs.airdropPlannedTurn')
     expect(panel).toContain('workbench.airInputs.airdropScheduledTurn')
     // P0（R6）：人员空投 N/A，不再画「声明 Para 资格」开关
     expect(panel).not.toContain('cargoUnitsParaCapable')
-    // 单位货物＝算子图阵列，点一枚直连 store 的勾选动作
+    // 单位货物＝算子图阵列，点一枚直连 store 的勾选动作（仅空运分支）
     expect(panel).toContain('workbench.airCargoUnitChoices')
     expect(panel).toContain('@pick="workbench.toggleAirCargoUnit($event)"')
   })
