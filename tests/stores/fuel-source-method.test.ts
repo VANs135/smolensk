@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { HexRef } from '@/data'
 import { mapLayers } from '@/data'
 import { HEX_DIRECTIONS, isOnMap, neighbor } from '@/engine/hex-geometry'
-import { createMapFacts, selectMovementTerrain } from '@/engine/rules'
+import { createMapFacts, holdingsToT, selectMovementTerrain } from '@/engine/rules'
 import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 
 /**
@@ -75,6 +75,18 @@ const FIXTURE = (() => {
 const newStore = () => {
   setActivePinia(createPinia())
   return useWorkbenchStore()
+}
+
+/** 走到 C 段「模式与移动」环节（燃料的闸门 `supply.fuel` 只在该环节放行；12.5a/12.5c） */
+function goToMovementStep(store: {
+  setPhase(phase: 'movement'): void
+  playerSegmentSteps: readonly { id: string }[]
+  setSegmentStepIndex(index: number): boolean
+}): void {
+  store.setPhase('movement')
+  const index = store.playerSegmentSteps.findIndex((step) => step.id === 'movement.modeAndMovement')
+  if (index < 0) throw new Error('C 段没有「模式与移动」环节')
+  if (!store.setSegmentStepIndex(index)) throw new Error('进入模式与移动环节失败')
 }
 
 const TANK_RECORD = unitChoices('axis').find(
@@ -341,6 +353,155 @@ describe('B40：HQ 法只覆盖独立单位（编队单位 / 多军力单位被�
     // ⑤ 选了不可用的那一法 ⇒ **实际生效**的退回单独单位法（12.5c-C 恒可用），不把人卡在点不动的按钮上
     store.fuelMethod = 'formation'
     expect(store.fuelMethodEffective).toBe('singleUnit')
+  })
+
+  /*
+   * ★ 用户 2026-11-07 报告（剧本 1，实际剧本数据）：
+   *   「5.27 格的补给站与 **39 军指挥部**堆叠，HQ 有 **10 点摩托化投递范围**，肉眼判断到 **15.25** 是够的，
+   *     但界面上不能给该单位加油。」
+   *
+   * 盘面事实（剧本 1 / scenario-setup.json）：5.27 有 39th Mtr Corps HQ（战斗面投递 10 MP，轮式）
+   *   与 10 SP；15.25 是 **7 Pz Div 编队**（7 Krd / I-25 Pz / II-25 Pz / 6 Inf / 7 Inf / 78 Arty / Truck）。
+   *
+   * 原文：
+   *   · 12.5c-B / 12.5e：「支付 1SP，为**指挥部自己**，及它投递距离内的**所有独立单位**提供燃料补给」
+   *     ⇒ 7 Pz Div 的编队单位**本来就不能**走 HQ 法（3.2f 独立单位判据）。
+   *   · 12.5c-A：「为一整个多单位编队支付 1SP，便可为整个多单位编队提供燃料补给。……检查每个单位
+   *     使用了哪个指挥部或补给站进行补给的**投递或拖取**。」⇒ **编队法明确允许"同一指挥部投递"作为
+   *     来源**（HQ 先在 5.27 拖取 SP，再按 10 MP 投递到 15.25）。
+   *
+   * 修前病灶：`fuelDumpChoices` 的编队法分支只按"**受益单位自己** 5 MP 直拖"取交集，漏掉了 12.3b 的
+   *   HQ 投递支 ⇒ `fuelSourcePartition` 已算出同源键 `hq:<39 军>`（规则上可付），但候选集为空
+   *   （界面无站可选、付不出去）。修复只补候选集的漏支，不改任何规则判据。
+   */
+  describe('★ 剧本 1 实际盘面：5.27 的 SP + 39 军 HQ（10 MP 摩托化）⇒ 15.25 的 7 Pz 编队', () => {
+    const SCENARIO_1 = () => {
+      const records = unitChoices('axis')
+      const hqRecord = records.find((record) => record.id === 'ax-hq-ge-hq-39th-corps')!
+      const pzIds = [
+        'ax-armor_pz-ge-7-pz-i-25-pz',
+        'ax-armor_pz-ge-7-pz-ii-25-pz',
+        'ax-armor_pz-ge-7-pz-6-mot-inf',
+        'ax-armor_pz-ge-7-pz-7-mot-inf',
+        'ax-armor_pz-ge-7-pz-78-arty',
+      ]
+      const pzRecords = pzIds
+        .map((id) => records.find((record) => record.id === id)!)
+        .map((record, index) => ({
+          record,
+          instanceId: `pz-${String(index)}`,
+        }))
+      // 数据自检：真实剧本里的两处格号、编队归属与 HQ 印值（不是合成夹具）
+      expect(hqRecord.throwRange?.combatFace).toBe(10)
+      expect(hqRecord.mobilityByFace?.combat).toBe('truck')
+      for (const item of pzRecords) expect(item.record.formation).toBe('7PZ')
+      return { hqRecord, pzRecords }
+    }
+
+    const setup = (store: ReturnType<typeof newStore>): readonly string[] => {
+      const { hqRecord, pzRecords } = SCENARIO_1()
+      goToMovementStep(store)
+      store.units.push(
+        toConsoleUnit({
+          record: hqRecord,
+          instanceId: 'hq-39',
+          hex: { col: 5, row: 27 },
+          side: 'axis',
+        }),
+        ...pzRecords.map(({ record, instanceId }) =>
+          toConsoleUnit({ record, instanceId, hex: { col: 15, row: 25 }, side: 'axis' }),
+        ),
+      )
+      store.spDumps.push({ id: 'sp-527', hex: { col: 5, row: 27 }, side: 'axis', sp: 10, t: 0 })
+      const ids = pzRecords.map((item) => item.instanceId)
+      store.beginMovePick({ col: 15, row: 25 }, ids)
+      return ids
+    }
+
+    it('★ 端到端：5.27 的 SP + 39 军 HQ ⇒ 15.25 的 7 Pz 编队**实际完成加油**（候选→点选→付款→单位状态变化）', () => {
+      const store = newStore()
+      const ids = setup(store)
+      const logText = (): string => store.log.map((line) => line.text).join(' | ')
+
+      /*
+       * ① 付款前：盘面初始态 —— 全编队**未加注**、无燃料方法、该编队没有已付台账。
+       *    若这里不先钉住，下面的"加了油"可能只是夹具自带的脏状态。
+       */
+      for (const instanceId of ids) {
+        const unit = store.units.find((item) => item.instanceId === instanceId)!
+        expect(unit.fuelled, logText()).toBe(false)
+        expect(unit.fuelMethod).toBeNull()
+      }
+      expect(store.formationFuelThrowOf('7PZ')).toBeNull()
+
+      // 盘面事实：这些编队单位自己够不着 5.27（直拖候选为空），但同源键已由 HQ 投递算出
+      expect(store.fuelTargets.map((unit) => unit.instanceId)).toEqual(ids)
+      expect(store.fuelSourcePartition).toMatchObject({
+        shared: true,
+        commonKey: 'hq:hq-39',
+      })
+
+      store.fuelMethod = 'formation'
+      expect(store.fuelMethodEffective).toBe('formation')
+      // ★ 红点：修前这里是 []（只有直拖支）⇒ 界面无站可付
+      expect(store.fuelDumpChoices.map((dump) => dump.id)).toContain('sp-527')
+      // ② 候选清单→实际点选：界面这一下必须真的选中该站（false 就等于"清单有、按钮不给点"）
+      expect(store.pickFuelDump('sp-527')).toBe(true)
+
+      // ③ 付款：1 SP 整编队（12.5c-A），SP 由 10 变 6
+      const before = holdingsToT(store.spDumps[0]!)
+      expect(store.payFuel()).toBeUndefined()
+      expect(holdingsToT(store.spDumps[0]!)).toBe(before - 4)
+
+      /*
+       * ④ 单位状态变化（端到端的终点）：五枚全部 fuelled + 方法记为编队法；
+       *    编队油台账记下同源键 `hq:hq-39` 与覆盖集（12.5c-A / 13.7a 的付款口径）。
+       */
+      for (const instanceId of ids) {
+        const unit = store.units.find((item) => item.instanceId === instanceId)!
+        expect(unit.fuelled, logText()).toBe(true)
+        expect(unit.fuelMethod).toBe('formation')
+      }
+      const paid = store.formationFuelThrowOf('7PZ')
+      expect(paid).not.toBeNull()
+      expect(paid!.sourceKey).toBe('hq:hq-39')
+      expect([...paid!.coveredIds].sort()).toEqual([...ids].sort())
+      // ⑤ 日志落成"已付"这一笔（不是静默改标记）
+      expect(
+        store.log.some((line) => line.kind === 'success' && line.text.includes('燃料已付')),
+      ).toBe(true)
+      expect(`${logText()}`).toContain('5.27')
+    })
+
+    it('★ 12.5c-B 边界：15.25 的 7 Pz 编队**仍然不能用 HQ 法加油**（不是独立单位，3.2f）— 不得放宽', () => {
+      const store = newStore()
+      const ids = setup(store)
+      const logText = (): string => store.log.map((line) => line.text).join(' | ')
+
+      store.fuelMethod = 'hq'
+      const hqChoice = store.fuelMethodChoices.find((item) => item.method === 'hq')!
+      expect(hqChoice.available).toBe(false)
+      // 原因必须落到原文：HQ 法只覆盖独立单位（3.2f ⇒ 7 Pz 是编队单位）
+      expect(hqChoice.reason ?? '').toContain('12.5c-B')
+      // 界面层：HQ 法下列表里**没有这一座**（玩家点不到）
+      expect(store.fuelDumpChoices).toEqual([])
+
+      /*
+       * 即便绕过界面直接付（store 的 `pickFuelDump` 不按候选集收口，真正的门在 `payFuel`）：
+       * `payFuel('hq')` 必须在**不扣任何账本**的前提下被拒，
+       * 五枚维持未加注（这就是"候选清单修好了 ≠ 这一格能加油"的分界线）。
+       */
+      const before = holdingsToT(store.spDumps[0]!)
+      store.payFuel('hq')
+      expect(holdingsToT(store.spDumps[0]!)).toBe(before)
+      for (const instanceId of ids) {
+        const unit = store.units.find((item) => item.instanceId === instanceId)!
+        expect(unit.fuelled, logText()).toBe(false)
+        expect(unit.fuelMethod).toBeNull()
+      }
+      expect(store.formationFuelThrowOf('7PZ')).toBeNull()
+      expect(logText()).toContain('12.5c-B')
+    })
   })
 
   it('★ 12.5c-C：编队单位走**单独单位法**不受此限（该条明写"任何单位都可以使用此方法"）', () => {

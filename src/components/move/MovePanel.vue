@@ -623,10 +623,10 @@ function hoverDump(id: string | null): void {
           12.5c-A：编队 <b>{{ formationPaidLine }}</b> 本阶段已用编队法付过油 ⇒
           该编队其余成员请用单独单位法（12.5c-C，每枚 1T）
         </p>
-        <!-- 12.3a：付款来源只能是受益单位拖得到的补给站（图用当前点数的 SP 算子图） -->
+        <!-- 12.5c-A：付款来源 = 全体**同一站直拖**（12.3a）或**同一 HQ 投递**（12.3b） -->
         <CounterPicker
-          title="付款补给站（12.3a：受益单位须拖得到）"
-          hint="12.3a：5 MP 直拖内或相邻（12.3c）；12.5c-A/B 要求整个编队/该指挥部共用同一来源"
+          title="付款补给站（12.5c-A：全体同源）"
+          hint="来源：全体 5 MP 直拖 / 相邻（12.3a、12.3c），或同一指挥部按投递距离送达（12.3b）；HQ 法只覆盖指挥部与独立单位（12.5c-B）"
           :items="fuelDumpItems"
           :size="32"
           @pick="workbench.pickFuelDump($event)"

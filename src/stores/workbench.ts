@@ -7025,6 +7025,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return
     }
     /*
+     * 12.5a / 12.5c：只有**轮式/履带 MP 的战斗单位**需要燃料。玩家的选子常常是一整个堆叠
+     * （剧本 1 的 15.25 同时有装甲、炮兵与徒步面的摩步），把不需要燃料的成员也塞进
+     * `planFuelPayment` 会被它按 12.5a **整单拒绝** ⇒ 整堆叠都加不了油（用户 2026-11-07 的
+     * 「不能给该单位加油」在选整编队时也会撞上这一条）。付款与扣账只按耗油成员计价；
+     * 编队法/HQ 法的**覆盖集**仍按盘面事实算（见下方 `formationFuelCoverageSet` /
+     * `hqFuelCoverageSet`，它们从 `targets` 取，不因此缩小）。
+     */
+    const beneficiaries = targets.filter((unit) => needsFuelOf(unit))
+    if (beneficiaries.length === 0) {
+      pushLog(
+        'warning',
+        '选中的单位都不需要燃料（12.5a：只有轮式/履带 MP 的战斗单位耗油）',
+        '12.5a',
+      )
+      return
+    }
+    /*
      * 12.5c（用户 2026-09-17 的界面口径）：**点谁决定能点哪一法** ——
      *   单独单位法对任何单位都成立；编队法要"一整个多单位编队"；HQ 法要选中里有指挥部、
      *   且其余受益单位都是独立单位（3.2f）。判据在引擎 `fuelMethodAvailability`（唯一实现），
@@ -7170,7 +7187,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const plan = planFuelPayment({
       context: moveContext.value,
-      unitIds: targets.map((unit) => unit.instanceId),
+      unitIds: beneficiaries.map((unit) => unit.instanceId),
       method,
       commonSource,
       /*
@@ -8201,6 +8218,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         }
       }
       return [...picked.values()]
+    }
+    /*
+     * 12.5c-A（用户 2026-11-07 报告「5.27 与 39 军 HQ 堆叠，够不到 15.25」）：
+     * 编队法的来源是「每个单位使用了哪个指挥部或补给站进行补给的**投递或拖取**」——
+     * 即**12.3a 直拖**与**12.3b HQ 投递**两种形态都算同源。修前这里只做直拖交集，
+     * 于是"编队单位自己够不着、但同一 HQ 投递够得着"的盘面（剧本 1 的 7 Pz Div @ 15.25）
+     * 候选为空：`fuelSourcePartition` 已算出同源键 `hq:<39 军>`，界面却无站可选。
+     * `deliverableDumpsFor` 的 ① 直拖支（全体交集）＋② HQ 投递支（HQ 拖得到且覆盖全体）
+     * 正是"同一来源"的两种形态，与付款时 `formationSourceAnchorFor` 的口径同源。
+     */
+    if (fuelMethod.value === 'formation') {
+      return deliverableDumpsFor(side, targets)
     }
     let common: SpDump[] | null = null
     for (const unit of targets) {
