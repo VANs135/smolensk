@@ -6892,8 +6892,7 @@
         "total": 1
       },
       "reSize": 1,
-      "status": "valued",
-      "capabilitiesRaw": ["para"]
+      "status": "valued"
     },
     {
       "id": "su-infantry-ru-8-para-inf-bde",
@@ -6936,8 +6935,7 @@
         "total": 1
       },
       "reSize": 1,
-      "status": "valued",
-      "capabilitiesRaw": ["para"]
+      "status": "valued"
     },
     {
       "id": "su-infantry-ru-214-para-inf-bde",
@@ -6980,8 +6978,7 @@
         "total": 1
       },
       "reSize": 1,
-      "status": "valued",
-      "capabilitiesRaw": ["para"]
+      "status": "valued"
     },
     {
       "id": "su-fortified_region-ru-58-ur-bde",
