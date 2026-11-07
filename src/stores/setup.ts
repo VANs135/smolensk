@@ -42,7 +42,7 @@ import {
   type SupplyDumpRef,
 } from '@/engine/rules'
 import { selectMovementTerrain } from '@/engine/rules/terrain'
-import { hexesWithin, isOnMap, sameHex } from '@/engine/hex-geometry'
+import { hexDistance, hexesWithin, isOnMap, sameHex } from '@/engine/hex-geometry'
 import { createId } from '@/shared'
 import { counterDirOfSide, counterImageUrl } from '@/render/token-images'
 
@@ -84,6 +84,14 @@ import {
 
 /** 单条自由项的落位输入（entryIndex → 目标格文本） */
 export type SetupChoiceInput = Record<number, string>
+
+/** 一键预设初设的结果（B2；失败一律留空并如实带出） */
+export interface PresetSetupResult {
+  placed: number
+  remaining: number
+  failures: { entryIndex: number; label: string; reason: string; tried: number }[]
+  airPlaced: number
+}
 
 /**
  * 剧本选择项（B10 前置视图的一行）
@@ -2121,6 +2129,189 @@ export const useSetupStore = defineStore('setup', () => {
     })
   }
 
+  /* ────────────────────────────── B2：一键预设初设 ────────────────────────────── */
+
+  /**
+   * 自由项候选的**确定性**排序（不掷骰、不看玩家输入）
+   *
+   * 主键＝朝该条目所列锚格（目标）的距离；次键＝朝本方补给站 / 指挥部的距离（补给线）；
+   * 再按该格已有 RE（先摆空一些的格，少走注定被 IV-F 拒的候选）；同分按格号升序。
+   * 只用盘面既成事实与条目原文，故同剧本同盘面 ⇒ 同顺序。
+   */
+  function presetCandidateOrder(entry: SetupEntryView, hexes: readonly HexRef[]): HexRef[] {
+    const anchor = entry.anchors[0]
+    const supplyHexes = [...spDumpsOf(entry.side).map((dump) => dump.hex), ...hqHexesOf(entry.side)]
+    const distanceToSupply = (hex: HexRef): number =>
+      supplyHexes.length === 0 ? 0 : Math.min(...supplyHexes.map((item) => hexDistance(item, hex)))
+    return [...hexes].sort((a, b) => {
+      const targetA = anchor === undefined ? 0 : hexDistance(anchor, a)
+      const targetB = anchor === undefined ? 0 : hexDistance(anchor, b)
+      if (targetA !== targetB) return targetA - targetB
+      const supplyA = distanceToSupply(a)
+      const supplyB = distanceToSupply(b)
+      if (supplyA !== supplyB) return supplyA - supplyB
+      const stackA = existingReAt(a)
+      const stackB = existingReAt(b)
+      if (stackA !== stackB) return stackA - stackB
+      return a.col - b.col || a.row - b.row
+    })
+  }
+
+  /** 落一条自由项（多枚的逐枚落；每落一枚重新取候选以反映堆叠变化） */
+  function placePresetEntry(
+    entry: SetupEntryView,
+    failures: PresetSetupResult['failures'],
+  ): boolean {
+    const total = selfInstanceTotalOf(entry)
+    const oneByOne =
+      (entry.kind === 'unit' || entry.kind === 'hq' || entry.kind === 'extender') && total > 1
+    let tried = 0
+    for (let step = 0; step < total; step += 1) {
+      if (completed.value[`self:${entry.index}`] === true) return true
+      let committed = false
+      const candidates = presetCandidateOrder(entry, candidatesOf(entry.index))
+      for (const hex of candidates) {
+        tried += 1
+        const ok = oneByOne
+          ? placeSelfOneInstance(entry.index, hex, 1)
+          : placeSelfEntry(entry.index, hex)
+        if (ok) {
+          committed = true
+          break
+        }
+      }
+      if (!committed) {
+        failures.push({
+          entryIndex: entry.index,
+          label: entry.name ?? entry.raw,
+          reason: lastAction.value?.detail ?? `placeSelfRejected:${entry.index}`,
+          tried,
+        })
+        return false
+      }
+    }
+    return completed.value[`self:${entry.index}`] === true
+  }
+
+  /**
+   * 一键预设的**开局前义务**（用既有落账入口，不放宽任何校验）
+   *
+   * · 13.2h `choose_loaded`：按格号升序取前 N 辆满载，再交给既有 `designateTrucks` 核验落账；
+   * · 12.1d / 3.4b：若存在归属义务，调用既有 `confirmSpOwnership`（默认归属已在自动初设时填好）。
+   */
+  function settlePresetObligations(failures: PresetSetupResult['failures']): void {
+    if (truckLoadMode.value === 'choose_loaded' && !truckLoadReadiness.value.complete) {
+      const required = requiredFullTrucks.value ?? 0
+      const ordered = [...setupTrucks.value].sort((a, b) => {
+        const hexA = workbench.units.find((unit) => unit.instanceId === a.instanceId)?.hex
+        const hexB = workbench.units.find((unit) => unit.instanceId === b.instanceId)?.hex
+        return (hexA?.col ?? 0) - (hexB?.col ?? 0) || (hexA?.row ?? 0) - (hexB?.row ?? 0)
+      })
+      const fullIds = new Set(ordered.slice(0, required).map((truck) => truck.instanceId))
+      for (const truck of setupTrucks.value) {
+        toggleTruckFull(truck.instanceId, fullIds.has(truck.instanceId))
+      }
+      if (!designateTrucks()) {
+        failures.push({
+          entryIndex: -1,
+          label: '编内卡车满载（13.2h）',
+          reason: lastAction.value?.detail ?? 'designateTrucksRejected',
+          tried: 1,
+        })
+      }
+    }
+    if (requiredSetupIssues.value.some((issue) => issue.id === 'spOwnership')) {
+      if (!confirmSpOwnership()) {
+        failures.push({
+          entryIndex: -1,
+          label: 'SP 装甲集群归属（12.1d / 3.4b）',
+          reason: lastAction.value?.detail ?? 'confirmSpOwnershipRejected',
+          tried: 1,
+        })
+      }
+    }
+  }
+
+  /**
+   * **一键预设初设**（B2；手动路径的并列可选入口，不改任何既有校验）
+   *
+   * 顺序：① 固定项（若尚未落）→ 既有 `runAutoSetup`；② 开局前义务（卡车 / SP 归属）；
+   * ③ 按 `setupSideCursor` 逐方把 `choicesOf(side)` 的自由项落到确定性排序后的首个合法候选，
+   * 失败换下一个候选，候选耗尽仍留空并记 failure（绝不硬塞）；④ 换手后继续另一方；
+   * ⑤ 飞机按既有 `planAirSetup` / `placeAirRowNow` 逐型落首个合法基地格。
+   *
+   * **不**调用 `startGameNow()`（不替玩家点开始游戏）；返回真实计数，不吞异常。
+   */
+  function presetSelfSetupNow(): PresetSetupResult {
+    const failures: PresetSetupResult['failures'] = []
+    let placed = 0
+    let airPlaced = 0
+    if (!applied.value && !runAutoSetup()) {
+      failures.push({
+        entryIndex: -1,
+        label: '自动初设（固定项）',
+        reason: lastAction.value?.detail ?? 'runAutoSetupRejected',
+        tried: 1,
+      })
+      return { placed, remaining: presetRemaining(), failures, airPlaced }
+    }
+    settlePresetObligations(failures)
+    // 分方落自由项：每方落完按既有换手逻辑推进（最多两方）
+    for (let guard = 0; guard < 2 && setupSideCursor.value !== null; guard += 1) {
+      const side = setupSideCursor.value
+      for (const entry of choicesOf(side)) {
+        if (completed.value[`self:${entry.index}`] === true) continue
+        placePresetEntry(entry, failures)
+        if (completed.value[`self:${entry.index}`] === true) placed += 1
+      }
+      if (!confirmSideSetup()) {
+        failures.push({
+          entryIndex: -1,
+          label: `双方布设确认（${side === 'axis' ? '轴心国' : '苏联'}）`,
+          reason: lastAction.value?.detail ?? 'confirmSideSetupRejected',
+          tried: 1,
+        })
+        break
+      }
+    }
+    // 飞机：每型落第一个合法基地格（候选顺序即引擎给出的稳定顺序）
+    for (const side of ['axis', 'soviet'] as const) {
+      const airPlan = airPlanOf(side)
+      if (airPlan === null) continue
+      for (const row of airPlan.placements) {
+        let tried = 0
+        while ((placedAirInstances.value[airProgressKey(side, row.entryIndex)] ?? 0) < row.count) {
+          let committed = false
+          for (const hex of row.candidates) {
+            tried += 1
+            if (placeAirRowNow(row.entryIndex, hex, side)) {
+              airPlaced += 1
+              committed = true
+              break
+            }
+          }
+          if (!committed) {
+            failures.push({
+              entryIndex: row.entryIndex,
+              label: row.name,
+              reason: lastAction.value?.detail ?? 'placeAirRowNowRejected',
+              tried,
+            })
+            break
+          }
+        }
+      }
+    }
+    return { placed, remaining: presetRemaining(), failures, airPlaced }
+  }
+
+  /** 预设后仍未落位的**枚数**（自由项与飞机；西移项不计入本条口径） */
+  function presetRemaining(): number {
+    return pendingPlacement.value
+      .filter((item) => item.kind === 'self' || item.kind === 'air')
+      .reduce((total, item) => total + item.remaining, 0)
+  }
+
   /** 记录一条自由项的选择（只写输入，不落盘） */
   function setSelfChoice(entryIndex: number, hexText: string): void {
     selfChoices.value = { ...selfChoices.value, [entryIndex]: hexText }
@@ -2525,6 +2716,7 @@ export const useSetupStore = defineStore('setup', () => {
     setPlacingChunk,
     placingChunkChoices,
     finishSetup,
+    canFinishSetup,
     startGameNow,
     restartGameNow,
     // B10：前置「剧本 + 共识」视图
@@ -2536,6 +2728,8 @@ export const useSetupStore = defineStore('setup', () => {
     resetInputs,
     resetAll,
     runAutoSetup,
+    // B2：一键预设初设（可选入口；手动路径不变）
+    presetSelfSetupNow,
     // 第六批 §6-A：初设时的**自动编队抽签**（ch10 / ch11 属开局前的剧本随机化）
     runSetupDraws,
     setSelfChoice,

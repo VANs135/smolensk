@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
 import { useUiMode } from '@/components/ui-mode'
@@ -10,6 +10,7 @@ import {
   useContainersStore,
   useSetupStore,
   useWorkbenchStore,
+  type PresetSetupResult,
   type SetupPlacing,
   type SetupPlacingCategory,
 } from '@/stores'
@@ -37,6 +38,13 @@ const workbench = useWorkbenchStore()
 
 /** 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输） */
 const uiMode = useUiMode()
+
+/** B2：一键预设初设的结果（只做最小回执，不投入视觉） */
+const presetResult = ref<PresetSetupResult | null>(null)
+
+function runPresetSetup(): void {
+  presetResult.value = setup.presetSelfSetupNow()
+}
 
 /**
  * 条 26 / S4：西移落点**点地图选**（补 §5-E「补缺的 4 处」之一）
@@ -205,7 +213,27 @@ function sideLabel(side: Side): string {
       <BaseTag :kind="setup.finished ? 'success' : 'warning'">
         {{ setup.finished ? '初设已收束' : `待落位 ${setup.pendingPlacement.length} 项` }}
       </BaseTag>
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        :disabled="setup.finished"
+        @click="runPresetSetup()"
+      >
+        一键预设初设
+      </BaseButton>
     </div>
+    <p v-if="presetResult !== null" class="num">
+      预设：落位 {{ presetResult.placed }} 项 / 飞机 {{ presetResult.airPlaced }} 架；剩余
+      {{ presetResult.remaining }} 枚；失败 {{ presetResult.failures.length }} 条
+      <template v-if="presetResult.failures.length > 0">
+        ——
+        {{
+          presetResult.failures
+            .map((item) => `${item.label}（${item.reason}，试 ${item.tried} 次）`)
+            .join('；')
+        }}
+      </template>
+    </p>
     <RuleNote
       v-if="!setup.finished"
       title="开局在初设收束点：地图左上角「待你决定」队列落满后按「完成初设」"
