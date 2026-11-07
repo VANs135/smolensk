@@ -189,7 +189,6 @@ export const ZERO_CALL_WHITELIST = [
   'src/render/map-layout.ts\tBOARD_EXTENT',
   'src/render/map-layout.ts\thexPolygonPoints',
   'src/render/token-layer.ts\tOVERLAY_HEX_RADIUS_PX',
-  'src/stores/workbench-model.ts\tformatHexPath',
   'src/stores/workbench-model.ts\tMAP_META',
 ]
 

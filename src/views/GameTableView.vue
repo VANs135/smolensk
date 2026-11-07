@@ -34,12 +34,15 @@ import { VictoryPanel } from '@/components/victory'
 import type { HexRef } from '@/data'
 import { DEFAULT_MAP_LAYERS } from '@/render/map-render'
 import {
+  useGameSessionStore,
   useHotkeyStore,
   useHotseatStore,
   useMapViewStore,
   useSetupStore,
   useWorkbenchStore,
 } from '@/stores'
+
+import { createAiMemory, runAiStep } from '@/ai/driver'
 
 /**
  * 对局台（W7 C16：**可以打完整一局**的主页面）
@@ -67,8 +70,49 @@ const workbench = useWorkbenchStore()
 const mapView = useMapViewStore()
 const hotkeys = useHotkeyStore()
 const setup = useSetupStore()
+const gameSession = useGameSessionStore()
 /** B36：交接（切方）走 hotseat 的流程 —— 与热键 T 同一条路 */
 const hotseat = useHotseatStore()
+
+/*
+ * B3：**AI 对打开关**（最小 UI 入口）
+ *
+ * 口径：只加**一个**按钮；开启后用 `setTimeout` 逐步调 `runAiStep`（每步一个动作），关闭即停。
+ * 决策全在 `src/ai/policy.ts`（纯函数），提交全走既有入口（`src/ai/driver.ts`），本视图不判规则。
+ * 停的条件：会话终止、或 `intent === 'none'`（已无可提交动作 / 只等玩家）。
+ */
+const aiRunning = ref(false)
+const aiMemory = createAiMemory()
+let aiTimer: ReturnType<typeof setTimeout> | null = null
+
+function stopAiPlay(): void {
+  aiRunning.value = false
+  if (aiTimer !== null) {
+    clearTimeout(aiTimer)
+    aiTimer = null
+  }
+}
+
+function scheduleAiStep(): void {
+  aiTimer = setTimeout(() => {
+    aiTimer = null
+    if (!aiRunning.value) return
+    const result = runAiStep({ workbench, session: gameSession, setup }, { memory: aiMemory })
+    if (gameSession.terminated || result.intent === 'none') {
+      stopAiPlay()
+      return
+    }
+    scheduleAiStep()
+  }, 0)
+}
+
+function toggleAiPlay(): void {
+  if (aiRunning.value) stopAiPlay()
+  else {
+    aiRunning.value = true
+    scheduleAiStep()
+  }
+}
 
 /*
  * ★ 条 24 / §5-F：**模式声明**（对局台＝正式）。
@@ -170,6 +214,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopAiPlay()
   hotkeys.unbind()
   hotkeys.setViewBridge(null)
 })
@@ -242,6 +287,10 @@ onBeforeUnmount(() => {
         </BaseButton>
         <BaseButton variant="ghost" size="sm" @click="hotkeys.helpOpen = !hotkeys.helpOpen">
           快捷键（?）
+        </BaseButton>
+        <!-- B3：唯一的 AI 入口 —— 开启后逐步替双方提交动作，关闭即停（不绕过任何流程/判据） -->
+        <BaseButton variant="ghost" size="sm" @click="toggleAiPlay">
+          AI 对打{{ aiRunning ? '：开' : '：关' }}
         </BaseButton>
       </div>
 
