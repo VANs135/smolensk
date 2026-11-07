@@ -46,10 +46,8 @@ import {
   useSetupStore,
   useMapViewStore,
   TURN_TRACK,
-  availableMaOf,
   effectiveMobilityOf,
   hexLabel,
-  movementPhaseOf,
   needsFuelOf,
   turnDateOf,
 } from '@/stores'
@@ -228,37 +226,11 @@ function nameOfUnit(unitId: string): string {
   return workbench.units.find((unit) => unit.instanceId === unitId)?.name ?? unitId
 }
 
-/** 参移单位的额度明细（A 整备段与 F 战斗段没有移动环节 ⇒ 用 `movementPhaseOf` 落到移动环节） */
-const budgetRows = computed(() =>
-  workbench.moveUnits.map((unit) => ({
-    id: unit.instanceId,
-    name: unit.name,
-    ma: availableMaOf(
-      unit,
-      movementPhaseOf(workbench.phase),
-      workbench.sovietFirstTurnMaFactor(unit),
-    ),
-    spent: unit.mpSpent,
-    remaining:
-      availableMaOf(
-        unit,
-        movementPhaseOf(workbench.phase),
-        workbench.sovietFirstTurnMaFactor(unit),
-      ) - unit.mpSpent,
-    ended: unit.movementEnded,
-  })),
-)
+/** 参移单位的额度明细（判据与换算在 store：`moveBudgetRows`） */
+const budgetRows = computed(() => workbench.moveBudgetRows)
 
-/** 选中算子的本阶段可用 MA（6.1h 不取整；供界面显示额度） */
-const selectedAvailableMa = computed(() => {
-  const unit = workbench.selectedUnit
-  if (unit === null) return 0
-  return availableMaOf(
-    unit,
-    movementPhaseOf(workbench.phase),
-    workbench.sovietFirstTurnMaFactor(unit),
-  )
-})
+/** 选中算子的本阶段可用 MA（6.1h 不取整；取 store 投影） */
+const selectedAvailableMa = computed(() => workbench.selectedAvailableMa)
 
 /** 选中算子是否需要燃料且尚未加注（12.5a） */
 const selectedNeedsFuel = computed(() => {
@@ -532,8 +504,9 @@ onMounted(() => {
             <BaseTag v-else kind="success">移动中</BaseTag>
           </p>
           <ul class="budget">
-            <li v-for="row in budgetRows" :key="row.id" class="num">
-              {{ row.name }}：MA {{ row.ma }} · 已耗 {{ row.spent }} · 剩 {{ row.remaining }}
+            <li v-for="row in budgetRows" :key="row.instanceId" class="num">
+              {{ row.name }}：MA {{ row.availableMa }} · 已耗 {{ row.spent }} · 剩
+              {{ row.remaining }}
               <span v-if="row.ended">· 本轮移动已结束</span>
             </li>
           </ul>

@@ -4919,6 +4919,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
     }),
   )
+  /** P8：选中算子的本阶段可用 MA（6.1h 不取整；与 `moveBudgetRows` 同一换算，供界面只读） */
+  const selectedAvailableMa = computed(() =>
+    selectedUnit.value === null
+      ? 0
+      : availableMaOf(
+          selectedUnit.value,
+          movementPhaseOf(phase.value),
+          sovietFirstTurnMaFactor(selectedUnit.value),
+        ),
+  )
   /** 当前方在选中算子处的合法性（B21 探针：不选单位时不判） */
   const selectedLegality = computed<LegalityVerdict | null>(() => {
     const unit = selectedUnit.value
@@ -20912,6 +20922,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     moveUnits,
     activeMoveUnits,
     moveBudgetRows,
+    selectedAvailableMa,
     groupReachable,
     stepPreview,
     hoverNode,

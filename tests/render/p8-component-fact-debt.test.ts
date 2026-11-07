@@ -61,4 +61,11 @@ describe('P8：组件内另算还债（源码守卫）', () => {
     expect(popover).not.toContain("hip_shoot', label")
     expect(air).not.toContain("hip_shoot', label")
   })
+
+  it('#9 WorkbenchView 额度明细取 store 投影', () => {
+    const view = source('src/views/WorkbenchView.vue')
+    expect(view).toContain('workbench.moveBudgetRows')
+    expect(view).toContain('workbench.selectedAvailableMa')
+    expect(view).not.toContain('availableMaOf(')
+  })
 })
