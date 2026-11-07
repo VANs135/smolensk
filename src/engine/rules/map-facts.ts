@@ -73,6 +73,19 @@ function toCrossing(edge: MapFactsSource['edges'][number]): HexsideCrossing | nu
  * @param source 默认取产品数据 map-layers.json（已通过 Zod 校验并深度冻结）
  */
 export function createMapFacts(source: MapFactsSource = mapLayers): MapFacts {
+  // 默认源是**深度冻结的静态产物**：建一次即可（建表要遍历全图 8k 格 + 全部格边，
+  // 而补给/移动上下文每次重算都会调用本工厂）
+  if (source === mapLayers) {
+    defaultMapFacts ??= buildMapFacts(source)
+    return defaultMapFacts
+  }
+  return buildMapFacts(source)
+}
+
+/** 默认源的 MapFacts 单例（`mapLayers` 只读，故可安全复用） */
+let defaultMapFacts: MapFacts | null = null
+
+function buildMapFacts(source: MapFactsSource): MapFacts {
   const terrains = new Map<string, readonly string[]>()
   for (const hex of source.hexes) terrains.set(hexKey(hex.col, hex.row), hex.terrainsPresent)
 

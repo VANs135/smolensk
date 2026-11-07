@@ -2189,9 +2189,7 @@ export function createRailSupplyFacts(input: {
   traceFacts: TraceSupplyFacts
 }): RailSupplyFacts {
   return {
-    terrainsPresentAt: (hex) =>
-      mapLayers.hexes.find((item) => item.col === hex.col && item.row === hex.row)
-        ?.terrainsPresent ?? [],
+    terrainsPresentAt: (hex) => hexRecordAt(hex)?.terrainsPresent ?? [],
     isControlledBy: (hex, side) => input.controlByHex?.(hex) === side,
     isRailHex: (hex) => isRailHexAt(hex),
     railNeighbors: (hex) => railNeighborHexes(hex),
@@ -2352,10 +2350,22 @@ function combatClassOf(unit: ConsoleUnit): CombatClass {
   return unit.combatClass
 }
 
+/**
+ * 地图格记录索引（`mapLayers.hexes` 是**静态产物**，逐格 `find` 每次 O(n)）
+ *
+ * 建一次 `Map` 供全仓 O(1) 读取；命中结果与 `mapLayers.hexes.find(...)` 逐字等价。
+ */
+const hexRecordById = new Map<number, (typeof mapLayers)['hexes'][number]>()
+for (const record of mapLayers.hexes) hexRecordById.set(record.col * 128 + record.row, record)
+
+/** 取该格的地图记录（无记录 ⇒ undefined） */
+export function hexRecordAt(hex: HexRef): (typeof mapLayers)['hexes'][number] | undefined {
+  return hexRecordById.get(hex.col * 128 + hex.row)
+}
+
 /** 某格格内地形（取自地图产物；无记录时为空数组） */
 export function terrainsAt(hex: HexRef): readonly string[] {
-  const found = mapLayers.hexes.find((item) => item.col === hex.col && item.row === hex.row)
-  return found?.terrainsPresent ?? []
+  return hexRecordAt(hex)?.terrainsPresent ?? []
 }
 
 /** 该格是否为城市/村庄格（9.3b：非城市格的城/村符号视为溢出而忽略） */

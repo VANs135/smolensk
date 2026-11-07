@@ -201,6 +201,16 @@ function hexKey(hex: HexRef): string {
   return `${hex.col}.${hex.row}`
 }
 
+/**
+ * 格的**数字**键（仅模块内部索引）
+ *
+ * 与 `hexKey` 一一对应：`col · 128 + row`（地图列/行均 < 128）。逐格每步都要查两张 ZOC /
+ * 战斗单位索引，字符串拼接在 12.3d 的搜索里是热点，故这里走数字键。
+ */
+function hexId(hex: HexRef): number {
+  return hex.col * 128 + hex.row
+}
+
 /** 仅缓存本模块建立的不可变事实；外部动态事实不缓存。盘面变化会产生新的事实对象。 */
 const traceSearchCache = new WeakMap<
   TraceSupplyFacts,
@@ -281,22 +291,22 @@ export function createTraceSupplyFacts(source: TraceSupplyFactsSource = {}): Tra
    *       **刻意不过滤图外**，与原 `areAdjacent` 的口径逐格一致）。
    *   事实对象本身是不可变投影：盘面一变，调用方（store 的 `supplyFacts`）会重建事实。
    */
-  const combatByHex = new Map<string, Side[]>()
+  const combatByHex = new Map<number, Side[]>()
   for (const item of combatUnitHexes) {
-    const key = hexKey(item.hex)
+    const key = hexId(item.hex)
     const sides = combatByHex.get(key)
     if (sides === undefined) combatByHex.set(key, [item.side])
     else if (!sides.includes(item.side)) sides.push(item.side)
   }
-  const zocBySide = new Map<Side, Set<string>>()
+  const zocBySide = new Map<Side, Set<number>>()
   for (const source of zocSources) {
     if (!projectsZoc(source)) continue
     let covered = zocBySide.get(source.side)
     if (covered === undefined) {
-      covered = new Set<string>()
+      covered = new Set<number>()
       zocBySide.set(source.side, covered)
     }
-    for (const direction of HEX_DIRECTIONS) covered.add(hexKey(neighbor(source.hex, direction)))
+    for (const direction of HEX_DIRECTIONS) covered.add(hexId(neighbor(source.hex, direction)))
   }
   /** 该方的 dump 格（12.1b；按方缓存：`drawableDumpsFor` 会为每座站反复取这张表） */
   const dumpsBySide = new Map<Side, HexRef[]>()
@@ -306,7 +316,7 @@ export function createTraceSupplyFacts(source: TraceSupplyFactsSource = {}): Tra
     else list.push(item.hex)
   }
 
-  const stepCosts = new Map<string, number | null>()
+  const stepCosts = new Map<SupplyMobility, Map<number, number | null>>()
   const facts: TraceSupplyFacts = {
     onMap: (hex) => isOnMap(hex),
     sourcesFor: (side) =>
@@ -320,20 +330,26 @@ export function createTraceSupplyFacts(source: TraceSupplyFactsSource = {}): Tra
     throwHqsFor: (side) => throwHqs.filter((item) => item.side === side),
     dumpsFor: (side) => dumpsBySide.get(side) ?? [],
     hasEnemyCombatUnit: (hex, side) => {
-      const sides = combatByHex.get(hexKey(hex))
+      const sides = combatByHex.get(hexId(hex))
       return sides !== undefined && sides.some((item) => item !== side)
     },
     inEnemyZoc: (hex, side) => {
       // 4.5b：格内有己方战斗单位即抵消（不论该单位是否投射 ZOC、是否处于战斗模式）
-      const friendlies = combatByHex.get(hexKey(hex))
+      const id = hexId(hex)
+      const friendlies = combatByHex.get(id)
       if (friendlies !== undefined && friendlies.includes(side)) return false
-      return zocBySide.get(enemySide(side))?.has(hexKey(hex)) === true
+      return zocBySide.get(enemySide(side))?.has(id) === true
     },
     stepCost: (from, to, mobility) => {
-      const key = `${mobility}|${hexKey(from)}|${hexKey(to)}`
-      if (stepCosts.has(key)) return stepCosts.get(key) ?? null
+      let table = stepCosts.get(mobility)
+      if (table === undefined) {
+        table = new Map<number, number | null>()
+        stepCosts.set(mobility, table)
+      }
+      const key = hexId(from) * 16384 + hexId(to)
+      if (table.has(key)) return table.get(key) ?? null
       const cost = supplyStepCost(map, from, to, mobility)
-      stepCosts.set(key, cost)
+      table.set(key, cost)
       return cost
     },
   }

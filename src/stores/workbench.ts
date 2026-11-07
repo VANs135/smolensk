@@ -148,6 +148,10 @@ import {
   // 12.6c/d + 12.8e：断补＝无追溯补给且本回合非续命（用户 2026-11-06 裁定：喂食不写 hasTraceSupply）
   isOutOfSupplyNow,
   selectMovementTerrain,
+  // 12.8e-A 档2：突围 EZOC 判据复用引擎 4.5 投影（一次建索引、按方复用）
+  buildStepFacts,
+  type MoveContext,
+  type MoveStepFacts,
   type BreakoutConditions,
   type BreakoutEligibility,
   type BreakoutPathFacts,
@@ -7744,15 +7748,114 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   interface BreakoutUnitIndex {
     /** 该格有**追溯补给**的友方单位阵营（12.8e-A：路径能否"摸到友军"） */
-    tracedFriendSides: Map<string, Side[]>
+    tracedFriendIds: Map<number, Side[]>
     /** 该格有**战斗**单位的阵营（12.8e-A：路径上是否有敌方战斗单位） */
-    enemyCombatSides: Map<string, Side[]>
+    enemyCombatIds: Map<number, Side[]>
   }
 
-  /** 一次求值内共享的只读事实（索引 + 地图；两者都与候选无关） */
+  /**
+   * 一次求值内共享的只读事实（索引 + 地图 + 记忆化 + ZOC 查询；都与具体候选无关）
+   *
+   * 档2（性能）：洪泛对同一格/同一条格边会反复查询（正反两向、两趟洪泛、多个候选），
+   * 故按格/按边记忆化；`zocOf` 按方惰性构建一次（仅轮式候选会用到）。
+   */
   interface BreakoutSharedFacts {
     index: BreakoutUnitIndex
     map: ReturnType<typeof createMapFacts>
+    /** 地形按格记忆化（与 `mapLayers` 静态数据等价） */
+    terrainsAt: (hex: HexRef) => readonly string[]
+    /** 格边按**无序**格对记忆化（`hexsideOf` 归一，正反同一边） */
+    crossingBetween: (
+      a: HexRef,
+      b: HexRef,
+    ) => ReturnType<ReturnType<typeof createMapFacts>['crossingBetween']>
+    /** 单步通行性按「机动类型 + 有序格对（数字键）」记忆化 */
+    passability: Map<string, Map<number, boolean>>
+    /** 六邻表（**只含在图内**、保持 `HEX_DIRECTIONS` 顺序），按数字格键缓存 */
+    neighborsOf: (id: number, hex: HexRef) => readonly BreakoutNeighbor[]
+    /** 4.5 的 ZOC 查询（按方惰性构建） */
+    zocOf: (side: Side) => MoveStepFacts
+  }
+
+  /** 洪泛里的一步：数字格键 + 其 `HexRef`（预生成后跨候选复用，不再逐步 `neighbor()` 分配） */
+  interface BreakoutNeighbor {
+    id: number
+    hex: HexRef
+  }
+
+  /**
+   * 静态地图事实缓存（store 生命周期内复用）
+   *
+   * `createMapFacts()` 只依赖只读静态的 `mapLayers`，与回合/盘面无关；
+   * 而 `breakoutCandidates` 在依赖环里可能被重算多次（`moveContext` ← 合法性 ← 候选），
+   * 把按格/按边的结果放在这里才能做到「一次求值只算一次」。
+   */
+  const staticBreakoutMapCaches: {
+    terrains: Map<string, readonly string[]>
+    crossings: Map<string, ReturnType<ReturnType<typeof createMapFacts>['crossingBetween']>>
+    passability: Map<string, Map<number, boolean>>
+    neighbors: Map<number, readonly BreakoutNeighbor[]>
+    zoc: Map<Side, { context: MoveContext; facts: MoveStepFacts }>
+  } = {
+    terrains: new Map(),
+    crossings: new Map(),
+    passability: new Map(),
+    neighbors: new Map(),
+    zoc: new Map(),
+  }
+
+  /** 建一份记忆化的地图事实 + 空缓存（候选间复用） */
+  function buildBreakoutSharedFacts(): BreakoutSharedFacts {
+    const map = createMapFacts()
+    const terrains = staticBreakoutMapCaches.terrains
+    const crossings = staticBreakoutMapCaches.crossings
+    const zoc = staticBreakoutMapCaches.zoc
+    return {
+      index: buildBreakoutUnitIndex(),
+      map,
+      terrainsAt(hex) {
+        const key = hexLabel(hex)
+        const cached = terrains.get(key)
+        if (cached !== undefined) return cached
+        const value = map.terrainsAt(hex)
+        terrains.set(key, value)
+        return value
+      },
+      crossingBetween(a, b) {
+        const left = hexLabel(a)
+        const right = hexLabel(b)
+        const key = left < right ? `${left}|${right}` : `${right}|${left}`
+        const cached = crossings.get(key)
+        if (cached !== undefined) return cached
+        const value = map.crossingBetween(a, b)
+        crossings.set(key, value)
+        return value
+      },
+      passability: staticBreakoutMapCaches.passability,
+      neighborsOf(id, hex) {
+        const neighbors = staticBreakoutMapCaches.neighbors
+        const cached = neighbors.get(id)
+        if (cached !== undefined) return cached
+        const built: BreakoutNeighbor[] = []
+        for (const direction of HEX_DIRECTIONS) {
+          const next = neighbor(hex, direction)
+          // 原实现在洪泛里逐步 `!map.onMap(next) → continue`；这里等价地**只保留在图内**的邻格
+          if (!map.onMap(next)) continue
+          built.push({ id: next.col * 128 + next.row, hex: next })
+        }
+        neighbors.set(id, built)
+        return built
+      },
+      zocOf(side) {
+        const context = moveContext.value
+        const cached = zoc.get(side)
+        if (cached !== undefined && cached.context === context) return cached.facts
+        // 12.8e-A 的 EZOC 判据直接复用引擎的 4.5 投影（与逐格现算等价）
+        const facts = buildStepFacts(context, side)
+        zoc.set(side, { context, facts })
+        return facts
+      },
+    }
   }
 
   /**
@@ -7762,9 +7865,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * （否则 computed 会丢掉 `hasTraceSupply` / `isCombat` / `hex` 的依赖而算旧值）。
    */
   function buildBreakoutUnitIndex(): BreakoutUnitIndex {
-    const tracedFriendSides = new Map<string, Side[]>()
-    const enemyCombatSides = new Map<string, Side[]>()
-    const record = (table: Map<string, Side[]>, key: string, side: Side): void => {
+    const tracedFriendIds = new Map<number, Side[]>()
+    const enemyCombatIds = new Map<number, Side[]>()
+    const record = (table: Map<number, Side[]>, key: number, side: Side): void => {
       const sides = table.get(key)
       if (sides === undefined) table.set(key, [side])
       else if (!sides.includes(side)) sides.push(side)
@@ -7779,11 +7882,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     for (const element of toRaw(units.value)) {
       const unit = toRaw(element)
-      const key = hexLabel(toRaw(unit.hex))
-      if (unit.hasTraceSupply) record(tracedFriendSides, key, unit.side)
-      if (unit.isCombat) record(enemyCombatSides, key, unit.side)
+      const hex = toRaw(unit.hex)
+      const id = hex.col * 128 + hex.row
+      if (unit.hasTraceSupply) record(tracedFriendIds, id, unit.side)
+      if (unit.isCombat) record(enemyCombatIds, id, unit.side)
     }
-    return { tracedFriendSides, enemyCombatSides }
+    return { tracedFriendIds, enemyCombatIds }
   }
 
   /**
@@ -7803,34 +7907,56 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function breakoutPathFacts(
     unit: ConsoleUnit,
-    shared?: BreakoutSharedFacts,
+    sharedInput?: BreakoutSharedFacts,
   ): {
     path: BreakoutPathFacts
     reachedTracedFriend: boolean
   } {
-    const map = shared?.map ?? createMapFacts()
-    const index = shared?.index ?? buildBreakoutUnitIndex()
+    const shared = sharedInput ?? buildBreakoutSharedFacts()
+    const index = shared.index
     const mobility = unit.faces.move.mobility // 12.8e-A：以**移动模式**的 MA 类型判
     const side = unit.side
-    const isTracedFriend = (hex: HexRef): boolean =>
-      !sameHex(hex, unit.hex) &&
-      (index.tracedFriendSides.get(hexLabel(hex))?.includes(side) ?? false)
-    const enemyCombatAt = (hex: HexRef): boolean => {
-      const sides = index.enemyCombatSides.get(hexLabel(hex))
+    // 起点克隆成 plain：原实现每个节点都读 `unit.hex`（Pinia 代理）做 sameHex，放大响应式开销
+    const start: HexRef = { col: unit.hex.col, row: unit.hex.row }
+    const startId = start.col * 128 + start.row
+    const isTracedFriendId = (id: number): boolean => {
+      if (id === startId) return false
+      return index.tracedFriendIds.get(id)?.includes(side) ?? false
+    }
+    const enemyCombatAtId = (id: number): boolean => {
+      const sides = index.enemyCombatIds.get(id)
       if (sides === undefined) return false
       for (const other of sides) if (other !== side) return true
       return false
     }
-    const ezocAt = (hex: HexRef): boolean =>
-      mobility === 'truck' && inEnemyZocAt(moveContext.value, hex, side)
-    const stepPassable = (from: HexRef, to: HexRef): boolean =>
-      selectMovementTerrain({
-        terrainsPresent: map.terrainsAt(to),
+    let zocFacts: MoveStepFacts | null = null
+    const ezocAt = (hex: HexRef): boolean => {
+      if (mobility !== 'truck') return false
+      if (zocFacts === null) zocFacts = shared.zocOf(side)
+      return inEnemyZocAt(moveContext.value, hex, side, zocFacts)
+    }
+    // 通行性按「机动类型 → 有序格对数字键」记忆化（整次求值内跨候选、跨两趟洪泛复用）
+    let passabilityOfMobility = shared.passability.get(mobility)
+    if (passabilityOfMobility === undefined) {
+      passabilityOfMobility = new Map<number, boolean>()
+      shared.passability.set(mobility, passabilityOfMobility)
+    }
+    const passability = passabilityOfMobility
+    const stepPassable = (from: BreakoutNeighbor, to: BreakoutNeighbor): boolean => {
+      // 数字格键 `fromId * 16384 + toId`（col/row 均 < 128 ⇒ id < 16384，不会碰撞）
+      const key = from.id * 16384 + to.id
+      const cached = passability.get(key)
+      if (cached !== undefined) return cached
+      const ok = selectMovementTerrain({
+        terrainsPresent: shared.terrainsAt(to.hex),
         mobility,
-        crossing: map.crossingBetween(from, to),
+        crossing: shared.crossingBetween(from.hex, to.hex),
         followingRoad: false,
         forOverrun: false,
       }).ok
+      passability.set(key, ok)
+      return ok
+    }
     const flood = (
       avoidObstacles: boolean,
     ): {
@@ -7839,20 +7965,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       hasProhibitedTerrain: boolean
       hasUnnegatedEzoc: boolean
     } => {
-      const seen = new Set<string>([hexLabel(unit.hex)])
-      const queue: HexRef[] = [unit.hex]
+      const seen = new Set<number>([startId])
+      const queue: BreakoutNeighbor[] = [{ id: startId, hex: start }]
       let hasEnemyCombatUnit = false
       let hasProhibitedTerrain = false
       let hasUnnegatedEzoc = false
-      while (queue.length > 0) {
-        const current = queue.shift()!
-        if (isTracedFriend(current)) {
+      // 读指针出队：FIFO 顺序与 `shift()` 完全一致（拒绝理由的取证顺序不变），但不 O(n) 挪数组
+      for (let head = 0; head < queue.length; head += 1) {
+        const current = queue[head]!
+        if (isTracedFriendId(current.id)) {
           return { reached: true, hasEnemyCombatUnit, hasProhibitedTerrain, hasUnnegatedEzoc }
         }
-        for (const direction of HEX_DIRECTIONS) {
-          const next = neighbor(current, direction)
-          if (!map.onMap(next) || seen.has(hexLabel(next))) continue
-          if (enemyCombatAt(next)) {
+        // 六邻表按格预生成（只含图内格、`HEX_DIRECTIONS` 序），逐步不再分配/判图
+        for (const next of shared.neighborsOf(current.id, current.hex)) {
+          if (seen.has(next.id)) continue
+          if (enemyCombatAtId(next.id)) {
             hasEnemyCombatUnit = true
             if (avoidObstacles) continue
           }
@@ -7860,15 +7987,35 @@ export const useWorkbenchStore = defineStore('workbench', () => {
             hasProhibitedTerrain = true
             if (avoidObstacles) continue
           }
-          if (ezocAt(next)) {
+          if (ezocAt(next.hex)) {
             hasUnnegatedEzoc = true
             if (avoidObstacles) continue
           }
-          seen.add(hexLabel(next))
+          seen.add(next.id)
           queue.push(next)
         }
       }
       return { reached: false, hasEnemyCombatUnit, hasProhibitedTerrain, hasUnnegatedEzoc }
+    }
+
+    // 全图都没有本方"有追溯补给的友军"（起点格除外）⇒ 两趟洪泛必然都摸不到，直接返回
+    let anyTracedFriend = false
+    for (const [id, sides] of index.tracedFriendIds) {
+      if (id !== startId && sides.includes(side)) {
+        anyTracedFriend = true
+        break
+      }
+    }
+    if (!anyTracedFriend) {
+      return {
+        reachedTracedFriend: false,
+        path: {
+          mobility,
+          hasEnemyCombatUnit: false,
+          hasProhibitedTerrain: false,
+          hasUnnegatedEzoc: false,
+        },
+      }
     }
 
     const clean = flood(true)
@@ -7985,12 +8132,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const candidates = units.value.filter(
       (unit) => unit.side === activeSide.value && !unit.hasTraceSupply,
     )
-    // 档1：索引与地图事实**每次求值建一份**，本次全部候选复用
-    // （`createMapFacts()` 只依赖静态 `mapLayers`，与候选无关；索引按格聚合阵营，与候选也无关）
-    const shared: BreakoutSharedFacts = {
-      index: buildBreakoutUnitIndex(),
-      map: createMapFacts(),
-    }
+    // 档1/2：索引、地图事实、通行性与 ZOC 查询**每次求值建一份**，本次全部候选复用
+    // （都只依赖静态 `mapLayers` 与本单位阵营，与候选无关）
+    const shared: BreakoutSharedFacts = buildBreakoutSharedFacts()
     return candidates.map((unit) => {
       const verdict = breakoutVerdictOf(unit, shared)
       return {

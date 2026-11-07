@@ -561,11 +561,23 @@ export function planSetupPlacement(
 
 /** 按 id 找地面算子记录（中性算子 side='both'，故两个库都查） */
 export function findUnitRecord(unitId: string) {
-  return (
-    unitsAxis.units.find((unit) => unit.id === unitId) ??
-    unitsSoviet.units.find((unit) => unit.id === unitId)
-  )
+  return unitRecordIndex.get(unitId)
 }
+
+/**
+ * 算子库 id → 记录索引（两个库都是静态产物）
+ *
+ * 与逐次 `unitsAxis.units.find(...) ?? unitsSoviet.units.find(...)` 逐字等价：
+ * 先建的先入表（`has` 判重），因此**同 id 时仍取轴方那条**。
+ */
+const unitRecordIndex = new Map<
+  string,
+  (typeof unitsAxis)['units'][number] | (typeof unitsSoviet)['units'][number]
+>()
+for (const unit of unitsAxis.units)
+  if (!unitRecordIndex.has(unit.id)) unitRecordIndex.set(unit.id, unit)
+for (const unit of unitsSoviet.units)
+  if (!unitRecordIndex.has(unit.id)) unitRecordIndex.set(unit.id, unit)
 
 /** 按 id 找空军记录 */
 export function findAircraftRecord(aircraftId: string) {
