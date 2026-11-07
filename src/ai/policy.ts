@@ -12,6 +12,22 @@ import { hexDistance } from '@/engine/hex-geometry'
 
 export type AiSide = 'axis' | 'soviet'
 
+/**
+ * B4：**控制方**（界面下拉的唯一取值域）
+ *
+ * `off`＝不接管；`axis`/`soviet`＝只替一方行动；`both`＝双 AI 对打（B3 行为）。
+ */
+export type AiControlMode = 'off' | 'axis' | 'soviet' | 'both'
+
+export function aiControlsSide(mode: AiControlMode, side: AiSide): boolean {
+  return mode === 'both' || (mode !== 'off' && mode === side)
+}
+
+/** 面向玩家的方名（等待文案用） */
+export function sideLabelOf(side: AiSide): string {
+  return side === 'axis' ? '轴心国' : '苏联'
+}
+
 export interface AiHex {
   col: number
   row: number
@@ -60,6 +76,8 @@ export interface AiCombatSnapshot {
   requirement: { side: 'attacker' | 'defender'; losses: number; options: number } | null
   retreatPlans: readonly {
     unitId: string
+    /** 该撤退单位所属阵营角色（9.12：攻方先撤、守方后撤） */
+    role: 'attacker' | 'defender'
     chosen: AiHex | null
     destinations: readonly {
       hex: AiHex
@@ -86,14 +104,45 @@ export interface AiSupplySnapshot {
   }[]
 }
 
+/**
+ * B4：每个「需要决定」的动作归属哪一方（布尔＝该方是否由 AI 控制）
+ *
+ * 换算全在 driver 里做，事实只来自既有投影；策略层只按布尔值放行或停下。
+ */
+export interface AiControlSnapshot {
+  /** 当前行动/结算方（`activeSide`） */
+  activeSide: boolean
+  /** 盘面提问的应答方（`session.question.responder`） */
+  responder: boolean
+  /** 战斗中攻方（＝activeSide） */
+  attacker: boolean
+  /** 战斗中守方（`combatDefenderSide`） */
+  defender: boolean
+  /** 战斗 `losses`/`options` 的当前结算方（`combatRequirement.side`） */
+  requirement: boolean
+  /** 未选齐的撤退计划所涉各方 */
+  retreat: boolean
+  /** 初设当前光标方（`setupSideCursor`） */
+  setup: boolean
+}
+
 export interface AiSnapshot {
   turn: number
   phase: string
   segment: string
   segmentStepIndex: number
   activeSide: AiSide
+  /** 当前战斗的守方（仅战斗相关动作使用） */
+  defenderSide: AiSide
   terminated: boolean
   awaitingOptionIds: readonly string[]
+  /** 盘面提问的应答方与题面（无提问时 responder 为 null） */
+  awaitingResponder: AiSide | null
+  awaitingPrompt: string
+  /** 初设还剩多少枚待落位（自由项 + 飞机） */
+  setupRemaining: number
+  /** B4：控制权（见 `AiControlSnapshot`） */
+  control: AiControlSnapshot
   setupInProgress: boolean
   /** 会话停在回合准备（天气 / 先手判定，2.2 / 2.3）——此时只能推进，不能按旧环节行动 */
   locked: boolean
@@ -146,6 +195,8 @@ export type AiAction =
       key: string
       allocation: readonly { unitId: string; steps: number }[]
     }
+  /** B4：玩家控制的决定 ⇒ 停下并给出等待文案（不提交任何动作） */
+  | { kind: 'wait'; reason: string }
   | { kind: 'none' }
 
 /** 决策的可读签名（死锁判据用；与盘面状态无关） */
@@ -219,9 +270,16 @@ function pickRetreatDestination(
   return sorted[0]?.path ?? null
 }
 
+/** B4：玩家侧的待办 ⇒ 返回 `wait`（不提交、不改盘面） */
+function waitForSide(side: AiSide, what: string): AiAction {
+  return { kind: 'wait', reason: `等待玩家（${sideLabelOf(side)}）${what}` }
+}
+
 function decideBarrageSettlement(snapshot: AiSnapshot): AiAction | null {
   const state = snapshot.barrage.state
   if (state === null || state.step === 'done') return null
+  // 炮击是**当前行动方**的动作；玩家侧的炮击结算不得由 AI 代办
+  if (!snapshot.control.activeSide) return waitForSide(snapshot.activeSide, '结算本次炮击（10.0）')
   switch (state.step) {
     case 'supply':
       if (
@@ -255,8 +313,11 @@ function decideBarrageSettlement(snapshot: AiSnapshot): AiAction | null {
 function decideCombatSettlement(snapshot: AiSnapshot): AiAction | null {
   const state = snapshot.combat.state
   if (state === null || state.finished) return null
+  const attacker = snapshot.activeSide
+  const opponent = snapshot.defenderSide
   switch (state.step) {
     case 'combatSupply': {
+      if (!snapshot.control.attacker) return waitForSide(attacker, '选择战斗补给（9.5）')
       const attackerDumpId = snapshot.combat.attackerDumpIds[0]
       if (attackerDumpId === undefined) return { kind: 'combatSkip' }
       return {
@@ -266,19 +327,29 @@ function decideCombatSettlement(snapshot: AiSnapshot): AiAction | null {
       }
     }
     case 'declareAr':
-      return {
-        kind: 'combatDeclareAr',
-        side: state.declaredAttackerArUnitId === undefined ? 'attacker' : 'defender',
+      if (state.declaredAttackerArUnitId === undefined) {
+        if (!snapshot.control.attacker) return waitForSide(attacker, '宣布攻方 AR（9.6）')
+        return { kind: 'combatDeclareAr', side: 'attacker' }
       }
+      if (!snapshot.control.defender) return waitForSide(opponent, '宣布守方 AR（9.6）')
+      return { kind: 'combatDeclareAr', side: 'defender' }
     case 'declareTerrain':
     case 'surprise':
     case 'battleDice':
+      // 纯自动结算（无输入、无选择）：不受控制权限制
       return { kind: 'combatAutoResolve' }
-    case 'losses':
+    case 'losses': {
+      const requirement = snapshot.combat.requirement
+      if (requirement === null) return null
+      const owner = requirement.side === 'attacker' ? attacker : opponent
+      if (!snapshot.control.requirement) return waitForSide(owner, '确认损失分配（9.11）')
       return { kind: 'combatLosses' }
+    }
     case 'options': {
       const requirement = snapshot.combat.requirement
       if (requirement === null) return null
+      const owner = requirement.side === 'attacker' ? attacker : opponent
+      if (!snapshot.control.requirement) return waitForSide(owner, '选择战斗选项（9.10）')
       return {
         kind: 'combatOptions',
         retreatHexes: requirement.options,
@@ -287,6 +358,11 @@ function decideCombatSettlement(snapshot: AiSnapshot): AiAction | null {
       }
     }
     case 'retreat': {
+      const pending = snapshot.combat.retreatPlans.filter((plan) => plan.chosen === null)
+      if (!snapshot.control.retreat) {
+        const role = pending[0]?.role ?? 'defender'
+        return waitForSide(role === 'attacker' ? attacker : opponent, '选择撤退落点（9.12）')
+      }
       const paths: { unitId: string; path: readonly AiHex[] }[] = []
       for (const plan of snapshot.combat.retreatPlans) {
         const path = plan.chosen === null ? pickRetreatDestination(plan.destinations) : null
@@ -295,6 +371,7 @@ function decideCombatSettlement(snapshot: AiSnapshot): AiAction | null {
       return { kind: 'combatRetreatPaths', paths }
     }
     case 'advance':
+      if (!snapshot.control.attacker) return waitForSide(attacker, '选择进攻推进格（9.13）')
       return { kind: 'combatAdvance' }
     default:
       return null
@@ -382,33 +459,63 @@ function decideSupply(snapshot: AiSnapshot): AiAction | null {
  * B3 基线策略：一次只给**一个**动作；优先级与任务书一致。
  *
  * 说明：本函数不做长链搜索、不预测合法性；任何「提交被拒」都由驱动记录后换下一个候选。
+ *
+ * B4：每个分支先按 `snapshot.control` 判**该决定归谁**——玩家控制的决定一律返回 `wait`，
+ * 纯流程（锁定推进 / 空环节推进 / 自动结算）不受控制权限制。
  */
 export function decideAiAction(snapshot: AiSnapshot): AiAction {
   if (snapshot.terminated) return { kind: 'none' }
 
-  // 1) 盘面提问：先答第一个选项（与既有 UI 的「第一选项」同一语义）
-  if (snapshot.awaitingOptionIds.length > 0)
+  // 1) 盘面提问：受控方才作答；否则明确告诉玩家在等什么
+  if (snapshot.awaitingOptionIds.length > 0) {
+    if (!snapshot.control.responder) {
+      const responder = snapshot.awaitingResponder ?? snapshot.activeSide
+      return waitForSide(responder, `作答：${snapshot.awaitingPrompt || '盘面提问'}`)
+    }
     return { kind: 'answer', optionId: snapshot.awaitingOptionIds[0]! }
+  }
 
   // 会话停在回合准备（天气/先手判定）：workbench 仍挂着上一环节的旧闸门，只能交给推进
   if (snapshot.locked) return { kind: 'advance' }
 
-  // 2) 未结算的战斗 / 轰炸 / 补给义务 → 先结清
-  if (snapshot.pendingZocConfirm) return { kind: 'zocConfirm' }
-  if (snapshot.specialPending) return { kind: 'specialConfirm' }
+  // 2) 未结算的战斗 / 轰炸 / 补给义务 → 先结清（各分支内部再按归属方判控制权）
+  if (snapshot.pendingZocConfirm) {
+    if (!snapshot.control.activeSide)
+      return waitForSide(snapshot.activeSide, '确认进入敌方 ZOC（4.5）')
+    return { kind: 'zocConfirm' }
+  }
+  if (snapshot.specialPending) {
+    if (!snapshot.control.activeSide) return waitForSide(snapshot.activeSide, '确认战斗专规（9.4）')
+    return { kind: 'specialConfirm' }
+  }
   const combatSettle = decideCombatSettlement(snapshot)
   if (combatSettle !== null) return combatSettle
   const barrageSettle = decideBarrageSettlement(snapshot)
   if (barrageSettle !== null) return barrageSettle
 
-  // 3) 初设：一键预设（对打用例在开局前已预设，此处只兜底界面内启动）
-  if (snapshot.setupInProgress) return { kind: 'preset' }
+  // 3) 初设：一键预设（只预设自己控制的一方；另一方的自由落位留给玩家）
+  if (snapshot.setupInProgress) {
+    if (!snapshot.control.setup)
+      return {
+        kind: 'wait',
+        reason: `等待玩家完成初设：还剩 ${String(snapshot.setupRemaining)} 枚待落位`,
+      }
+    return { kind: 'preset' }
+  }
 
-  // 正在移动 → 已经落子就直接结束；否则落第一子
+  // 正在移动 → 已经落子就直接结束；否则落第一子（玩家侧的移动 AI 不接手）
   if (snapshot.move.active) {
+    if (!snapshot.control.activeSide)
+      return waitForSide(snapshot.activeSide, '完成本次移动（4/5/7）')
     if (snapshot.move.hasStepped) return { kind: 'moveFinish' }
     const target = pickMoveTarget(snapshot)
     return target === null ? { kind: 'moveFinish' } : { kind: 'moveClick', hex: target }
+  }
+
+  // B4：以下动作都属于**当前行动方**——玩家控制时停手；空环节仍按纯流程推进
+  if (!snapshot.control.activeSide) {
+    if (snapshot.advanceAvailable && snapshot.can.size === 0) return { kind: 'advance' }
+    return waitForSide(snapshot.activeSide, '行动：本环节尚有可做动作')
   }
 
   // 4) 预备 → 战斗（只在闸门放行的环节；每环节每单位只试一次）

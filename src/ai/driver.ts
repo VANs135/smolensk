@@ -17,9 +17,11 @@ import type { useWorkbenchStore } from '@/stores/workbench'
 
 import {
   actionKeyOf,
+  aiControlsSide,
   decideAiAction,
   hexKeyOf,
   type AiAction,
+  type AiControlMode,
   type AiHex,
   type AiSnapshot,
   type AiSide,
@@ -60,6 +62,8 @@ export interface AiStepResult {
   ok: boolean
   rule?: string
   reason?: string
+  /** B4：玩家控制的一方有待办 ⇒ 停下并给出等待文案（此时未提交任何动作） */
+  waiting?: string
 }
 
 export interface AiRefusal {
@@ -88,6 +92,8 @@ export interface AiSelfPlayReport {
   warnings: string[]
   noLegal: number
   awaiting: boolean
+  /** B4：因玩家侧待办而停下时的文案（双 AI 模式下正常为 undefined） */
+  waiting?: string
 }
 
 export interface AiSelfPlayOptions {
@@ -96,6 +102,8 @@ export interface AiSelfPlayOptions {
   scenarioId?: string
   limit?: number
   memory?: AiMemory
+  /** B4：控制方（默认 `both`，与 B3 行为一致） */
+  control?: AiControlMode
 }
 
 function tokenOf(w: ReturnType<typeof useWorkbenchStore>): string {
@@ -142,7 +150,7 @@ function compareStableUnit(
   return a.unitId.localeCompare(b.unitId)
 }
 
-function snapshotOf(ctx: AiContext, memory: AiMemory): AiSnapshot {
+function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode): AiSnapshot {
   const w = ctx.workbench
   const side = sideOf(w)
   syncMemory(memory, w)
@@ -238,16 +246,49 @@ function snapshotOf(ctx: AiContext, memory: AiMemory): AiSnapshot {
   // 与 legal-actions-store 的 `advance.available` 同一口径（段锁定 / 初设时不可推进）
   const advanceAvailable = !w.segmentLocked && !w.initialSetupInProgress
 
+  /*
+   * B4：控制权换算（只做「角色 → 阵营」映射，不新增判据）
+   *   · 攻方＝当前行动方（与 `combatSupplyDumps` 的 attackerSide 同源，workbench:2743-2758）；
+   *   · 守方取既有投影 `combatDefenderSide`；
+   *   · 撤退归属取各撤退计划自身的 `side`，未选齐的才需要决定；
+   *   · 初设归属取 `setupSideCursor`。
+   */
+  const active = w.activeSide as AiSide
+  const defenderSide = w.combatDefenderSide as AiSide
+  const question = ctx.session.awaiting ? ctx.session.question : null
+  const requirement = w.combatRequirement
+  const retreatPending = w.combatRetreatPlans.filter((plan) => !plan.complete)
+  const setupRemaining = ctx.setup.pendingPlacement
+    .filter((item) => item.kind === 'self' || item.kind === 'air')
+    .reduce((total, item) => total + item.remaining, 0)
+
   return {
     turn: w.turn,
     phase: w.phase,
     segment: w.segmentStep?.id ?? '',
     segmentStepIndex: w.segmentStepIndex,
-    activeSide: w.activeSide as AiSide,
+    activeSide: active,
+    defenderSide,
     terminated: ctx.session.terminated,
-    awaitingOptionIds: ctx.session.awaiting
-      ? (ctx.session.question?.options ?? []).map((o) => o.id)
-      : [],
+    awaitingOptionIds: question === null ? [] : (question.options ?? []).map((o) => o.id),
+    awaitingResponder: question === null ? null : (question.responder as AiSide),
+    awaitingPrompt: question?.prompt ?? '',
+    setupRemaining,
+    control: {
+      activeSide: aiControlsSide(controlMode, active),
+      responder: question !== null && aiControlsSide(controlMode, question.responder as AiSide),
+      attacker: aiControlsSide(controlMode, active),
+      defender: aiControlsSide(controlMode, defenderSide),
+      requirement:
+        requirement !== null &&
+        aiControlsSide(controlMode, requirement.side === 'attacker' ? active : defenderSide),
+      retreat: retreatPending.every((plan) =>
+        aiControlsSide(controlMode, plan.side === 'attacker' ? active : defenderSide),
+      ),
+      setup:
+        ctx.setup.setupSideCursor !== null &&
+        aiControlsSide(controlMode, ctx.setup.setupSideCursor),
+    },
     setupInProgress: w.initialSetupInProgress,
     locked: w.segmentLocked,
     can: w.segmentActionKeys,
@@ -329,6 +370,7 @@ function snapshotOf(ctx: AiContext, memory: AiMemory): AiSnapshot {
         ? w.combatRetreatPlans.flatMap((plan) =>
             plan.units.map((row) => ({
               unitId: row.unitId,
+              role: plan.side,
               chosen: row.chosen,
               destinations: row.destinations.map((destination) => ({
                 hex: destination.hex,
@@ -361,7 +403,12 @@ function ruleFromStores(w: ReturnType<typeof useWorkbenchStore>): string | null 
   )
 }
 
-function execute(action: AiAction, ctx: AiContext, memory: AiMemory): boolean {
+function execute(
+  action: AiAction,
+  ctx: AiContext,
+  memory: AiMemory,
+  presetSide: AiSide | null,
+): boolean {
   const w = ctx.workbench
   switch (action.kind) {
     case 'answer':
@@ -369,9 +416,15 @@ function execute(action: AiAction, ctx: AiContext, memory: AiMemory): boolean {
     case 'advance':
       return w.advanceSegmentNow() !== null
     case 'preset': {
-      const result = ctx.setup.presetSelfSetupNow()
-      return result.remaining === 0
+      // B4：只预设 AI 控制的一方；另一方（玩家）的自由落位保留
+      const result =
+        presetSide === null
+          ? ctx.setup.presetSelfSetupNow()
+          : ctx.setup.presetSelfSetupNow({ onlySide: presetSide })
+      return result.failures.length === 0 && (presetSide !== null || result.remaining === 0)
     }
+    case 'wait':
+      return false
     case 'modeChange': {
       memory.reserveUnitIds.push(action.unitId)
       w.selectedId = action.unitId
@@ -516,11 +569,29 @@ function execute(action: AiAction, ctx: AiContext, memory: AiMemory): boolean {
   }
 }
 
-export function runAiStep(ctx: AiContext, options?: { memory?: AiMemory }): AiStepResult {
+export function runAiStep(
+  ctx: AiContext,
+  options?: { memory?: AiMemory; control?: AiControlMode },
+): AiStepResult {
   const memory = options?.memory ?? createAiMemory()
+  const control = options?.control ?? 'both'
   const w = ctx.workbench
-  const snapshot = snapshotOf(ctx, memory)
+  const snapshot = snapshotOf(ctx, memory, control)
   const action = decideAiAction(snapshot)
+
+  // B4：玩家控制的一方有待办 ⇒ 不提交任何动作，只回报等待文案
+  if (action.kind === 'wait') {
+    return {
+      turn: snapshot.turn,
+      phase: snapshot.phase,
+      segment: snapshot.segment,
+      side: sideOf(w),
+      intent: 'wait',
+      ok: false,
+      reason: action.reason,
+      waiting: action.reason,
+    }
+  }
 
   /*
    * 诊断：`pushLog` 用 `unshift` 且把 `log` 截到 60 条（workbench.ts:4968-4975），
@@ -528,7 +599,8 @@ export function runAiStep(ctx: AiContext, options?: { memory?: AiMemory }): AiSt
    * 拒绝原因随之退化成 `unknown`。改为按**栈顶 id** 取边界：新条目都在旧栈顶之上。
    */
   const topBefore = w.log[0]?.id ?? null
-  const ok = execute(action, ctx, memory)
+  const presetSide: AiSide | null = control === 'both' || control === 'off' ? null : control
+  const ok = execute(action, ctx, memory, presetSide)
   const added =
     topBefore === null
       ? [...w.log]
@@ -578,12 +650,14 @@ export async function runAiSelfPlay(options: AiSelfPlayOptions): Promise<AiSelfP
   const { ctx } = options
   const w = ctx.workbench
   const memory = options.memory ?? createAiMemory()
+  const control = options.control ?? 'both'
   const limit = options.limit ?? 12000
   const targetTurn = w.turn + options.targetTurns
   const stalls: string[] = []
   const refused: AiRefusal[] = []
   const refusedByRule: Record<string, number> = {}
   const warnings: string[] = []
+  let waiting: string | undefined
   let noLegal = 0
   let iterations = 0
   let lastToken = ''
@@ -598,8 +672,14 @@ export async function runAiSelfPlay(options: AiSelfPlayOptions): Promise<AiSelfP
     (w.turn < targetTurn || ctx.session.awaiting) &&
     iterations < limit
   ) {
-    const result = runAiStep(ctx, { memory })
+    const result = runAiStep(ctx, { memory, control })
     iterations += 1
+
+    // B4：单侧控制时遇到玩家待办 ⇒ 停下（不是 stall，也不是拒绝）
+    if (result.intent === 'wait') {
+      waiting = result.waiting ?? result.reason ?? ''
+      break
+    }
 
     const fresh = logLength <= w.log.length ? w.log.slice(0, w.log.length - logLength) : []
     logLength = w.log.length
@@ -668,5 +748,6 @@ export async function runAiSelfPlay(options: AiSelfPlayOptions): Promise<AiSelfP
     warnings,
     noLegal,
     awaiting: ctx.session.awaiting,
+    waiting,
   }
 }

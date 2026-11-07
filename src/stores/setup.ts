@@ -2199,27 +2199,38 @@ export const useSetupStore = defineStore('setup', () => {
    * · 13.2h `choose_loaded`：按格号升序取前 N 辆满载，再交给既有 `designateTrucks` 核验落账；
    * · 12.1d / 3.4b：若存在归属义务，调用既有 `confirmSpOwnership`（默认归属已在自动初设时填好）。
    */
-  function settlePresetObligations(failures: PresetSetupResult['failures']): void {
+  function settlePresetObligations(failures: PresetSetupResult['failures'], onlySide?: Side): void {
     if (truckLoadMode.value === 'choose_loaded' && !truckLoadReadiness.value.complete) {
       const required = requiredFullTrucks.value ?? 0
-      const ordered = [...setupTrucks.value].sort((a, b) => {
-        const hexA = workbench.units.find((unit) => unit.instanceId === a.instanceId)?.hex
-        const hexB = workbench.units.find((unit) => unit.instanceId === b.instanceId)?.hex
-        return (hexA?.col ?? 0) - (hexB?.col ?? 0) || (hexA?.row ?? 0) - (hexB?.row ?? 0)
-      })
-      const fullIds = new Set(ordered.slice(0, required).map((truck) => truck.instanceId))
-      for (const truck of setupTrucks.value) {
-        toggleTruckFull(truck.instanceId, fullIds.has(truck.instanceId))
-      }
-      if (!designateTrucks()) {
-        failures.push({
-          entryIndex: -1,
-          label: '编内卡车满载（13.2h）',
-          reason: lastAction.value?.detail ?? 'designateTrucksRejected',
-          tried: 1,
+      const sideOfTruck = (instanceId: string): Side | undefined =>
+        workbench.units.find((unit) => unit.instanceId === instanceId)?.side
+      const trucks =
+        onlySide === undefined
+          ? [...setupTrucks.value]
+          : setupTrucks.value.filter((truck) => sideOfTruck(truck.instanceId) === onlySide)
+      // B4：单方预设时，若要求辆数超出该方卡车范围 ⇒ 这一项不属于该方，交还玩家（不记 failure）
+      if (onlySide === undefined || trucks.length >= required) {
+        const ordered = [...trucks].sort((a, b) => {
+          const hexA = workbench.units.find((unit) => unit.instanceId === a.instanceId)?.hex
+          const hexB = workbench.units.find((unit) => unit.instanceId === b.instanceId)?.hex
+          return (hexA?.col ?? 0) - (hexB?.col ?? 0) || (hexA?.row ?? 0) - (hexB?.row ?? 0)
         })
+        const fullIds = new Set(ordered.slice(0, required).map((truck) => truck.instanceId))
+        for (const truck of trucks) {
+          toggleTruckFull(truck.instanceId, fullIds.has(truck.instanceId))
+        }
+        if (!designateTrucks()) {
+          failures.push({
+            entryIndex: -1,
+            label: '编内卡车满载（13.2h）',
+            reason: lastAction.value?.detail ?? 'designateTrucksRejected',
+            tried: 1,
+          })
+        }
       }
     }
+    // 12.1d / 3.4b 的 SP 装甲集群归属只涉及轴心 ⇒ 单方预设苏联时不动
+    if (onlySide !== undefined && onlySide !== 'axis') return
     if (requiredSetupIssues.value.some((issue) => issue.id === 'spOwnership')) {
       if (!confirmSpOwnership()) {
         failures.push({
@@ -2242,8 +2253,9 @@ export const useSetupStore = defineStore('setup', () => {
    *
    * **不**调用 `startGameNow()`（不替玩家点开始游戏）；返回真实计数，不吞异常。
    */
-  function presetSelfSetupNow(): PresetSetupResult {
+  function presetSelfSetupNow(options?: { onlySide?: Side }): PresetSetupResult {
     const failures: PresetSetupResult['failures'] = []
+    const onlySide = options?.onlySide
     let placed = 0
     let airPlaced = 0
     if (!applied.value && !runAutoSetup()) {
@@ -2255,11 +2267,33 @@ export const useSetupStore = defineStore('setup', () => {
       })
       return { placed, remaining: presetRemaining(), failures, airPlaced }
     }
-    settlePresetObligations(failures)
-    // 分方落自由项：每方落完按既有换手逻辑推进（最多两方）
-    for (let guard = 0; guard < 2 && setupSideCursor.value !== null; guard += 1) {
-      const side = setupSideCursor.value
-      for (const entry of choicesOf(side)) {
+    // B4：单方预设时，游标还没轮到该方 ⇒ 不动，把自由落位留给玩家
+    if (onlySide !== undefined && setupSideCursor.value !== onlySide) {
+      return { placed, remaining: presetRemaining(), failures, airPlaced }
+    }
+    settlePresetObligations(failures, onlySide)
+    if (onlySide === undefined) {
+      // 分方落自由项：每方落完按既有换手逻辑推进（最多两方）
+      for (let guard = 0; guard < 2 && setupSideCursor.value !== null; guard += 1) {
+        const side = setupSideCursor.value
+        for (const entry of choicesOf(side)) {
+          if (completed.value[`self:${entry.index}`] === true) continue
+          placePresetEntry(entry, failures)
+          if (completed.value[`self:${entry.index}`] === true) placed += 1
+        }
+        if (!confirmSideSetup()) {
+          failures.push({
+            entryIndex: -1,
+            label: `双方布设确认（${side === 'axis' ? '轴心国' : '苏联'}）`,
+            reason: lastAction.value?.detail ?? 'confirmSideSetupRejected',
+            tried: 1,
+          })
+          break
+        }
+      }
+    } else {
+      // B4：只落 AI 控制的一方，落完即按既有换手逻辑交给另一方
+      for (const entry of choicesOf(onlySide)) {
         if (completed.value[`self:${entry.index}`] === true) continue
         placePresetEntry(entry, failures)
         if (completed.value[`self:${entry.index}`] === true) placed += 1
@@ -2267,15 +2301,15 @@ export const useSetupStore = defineStore('setup', () => {
       if (!confirmSideSetup()) {
         failures.push({
           entryIndex: -1,
-          label: `双方布设确认（${side === 'axis' ? '轴心国' : '苏联'}）`,
+          label: `布设确认（${onlySide === 'axis' ? '轴心国' : '苏联'}）`,
           reason: lastAction.value?.detail ?? 'confirmSideSetupRejected',
           tried: 1,
         })
-        break
       }
     }
     // 飞机：每型落第一个合法基地格（候选顺序即引擎给出的稳定顺序）
-    for (const side of ['axis', 'soviet'] as const) {
+    const airSides: readonly Side[] = onlySide === undefined ? ['axis', 'soviet'] : [onlySide]
+    for (const side of airSides) {
       const airPlan = airPlanOf(side)
       if (airPlan === null) continue
       for (const row of airPlan.placements) {

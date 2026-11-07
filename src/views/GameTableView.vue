@@ -43,6 +43,7 @@ import {
 } from '@/stores'
 
 import { createAiMemory, runAiStep } from '@/ai/driver'
+import type { AiControlMode } from '@/ai/policy'
 
 /**
  * 对局台（W7 C16：**可以打完整一局**的主页面）
@@ -75,43 +76,47 @@ const gameSession = useGameSessionStore()
 const hotseat = useHotseatStore()
 
 /*
- * B3：**AI 对打开关**（最小 UI 入口）
+ * B4：**AI 控制方**（最小 UI 入口）
  *
- * 口径：只加**一个**按钮；开启后用 `setTimeout` 逐步调 `runAiStep`（每步一个动作），关闭即停。
+ * 口径：下拉四选一（关闭 / AI 打轴心 / AI 打苏联 / AI 对 AI），默认关闭。
+ * AI 只在自己控制的一方行动；玩家侧待办 ⇒ 停下并把等待文案显示在顶栏。
  * 决策全在 `src/ai/policy.ts`（纯函数），提交全走既有入口（`src/ai/driver.ts`），本视图不判规则。
- * 停的条件：会话终止、或 `intent === 'none'`（已无可提交动作 / 只等玩家）。
  */
-const aiRunning = ref(false)
-const aiMemory = createAiMemory()
+const aiControlMode = ref<AiControlMode>('off')
+const aiWaiting = ref('')
+let aiMemory = createAiMemory()
 let aiTimer: ReturnType<typeof setTimeout> | null = null
 
 function stopAiPlay(): void {
-  aiRunning.value = false
   if (aiTimer !== null) {
     clearTimeout(aiTimer)
     aiTimer = null
   }
 }
 
-function scheduleAiStep(): void {
+function scheduleAiStep(delayMs = 0): void {
   aiTimer = setTimeout(() => {
     aiTimer = null
-    if (!aiRunning.value) return
-    const result = runAiStep({ workbench, session: gameSession, setup }, { memory: aiMemory })
+    if (aiControlMode.value === 'off') return
+    const result = runAiStep(
+      { workbench, session: gameSession, setup },
+      { memory: aiMemory, control: aiControlMode.value },
+    )
+    aiWaiting.value = result.waiting ?? ''
     if (gameSession.terminated || result.intent === 'none') {
       stopAiPlay()
       return
     }
-    scheduleAiStep()
-  }, 0)
+    // 玩家侧待办 ⇒ 保持开启、稍后再试；一旦玩家做完决定就自动续跑
+    scheduleAiStep(result.intent === 'wait' ? 600 : 0)
+  }, delayMs)
 }
 
-function toggleAiPlay(): void {
-  if (aiRunning.value) stopAiPlay()
-  else {
-    aiRunning.value = true
-    scheduleAiStep()
-  }
+function onAiControlChange(): void {
+  stopAiPlay()
+  aiWaiting.value = ''
+  aiMemory = createAiMemory()
+  if (aiControlMode.value !== 'off') scheduleAiStep()
 }
 
 /*
@@ -288,10 +293,17 @@ onBeforeUnmount(() => {
         <BaseButton variant="ghost" size="sm" @click="hotkeys.helpOpen = !hotkeys.helpOpen">
           快捷键（?）
         </BaseButton>
-        <!-- B3：唯一的 AI 入口 —— 开启后逐步替双方提交动作，关闭即停（不绕过任何流程/判据） -->
-        <BaseButton variant="ghost" size="sm" @click="toggleAiPlay">
-          AI 对打{{ aiRunning ? '：开' : '：关' }}
-        </BaseButton>
+        <!-- B4：AI 控制方（默认关闭）；玩家侧待办时在顶栏明确显示在等什么 -->
+        <label class="gt__check">
+          AI 控制方
+          <select v-model="aiControlMode" @change="onAiControlChange">
+            <option value="off">关闭</option>
+            <option value="axis">AI 打轴心</option>
+            <option value="soviet">AI 打苏联</option>
+            <option value="both">AI 对 AI</option>
+          </select>
+        </label>
+        <span v-if="aiWaiting" class="gt__check">{{ aiWaiting }}</span>
       </div>
 
       <!--
