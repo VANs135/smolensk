@@ -52,4 +52,13 @@ describe('P8：组件内另算还债（源码守卫）', () => {
     expect(popover).toContain('isBarrageCapableUnit')
     expect(popover).not.toContain('raw.barrage')
   })
+
+  it('#8 空中任务清单取 store 投影（两处同一来源）', () => {
+    const popover = source('src/components/game/MapActionPopover.vue')
+    const air = source('src/components/air/AirPanel.vue')
+    expect(popover).toContain('airMissionKindChoices')
+    expect(air).toContain('airMissionKindChoices')
+    expect(popover).not.toContain("hip_shoot', label")
+    expect(air).not.toContain("hip_shoot', label")
+  })
 })

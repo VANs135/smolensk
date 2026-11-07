@@ -980,6 +980,16 @@ const AIR_MISSION_KIND_LABELS: Record<string, string> = {
   interception: '拦截（14.5）',
 }
 
+/**
+ * P8：14.2e「任务分配」入口可选的任务类型
+ *
+ * 唯一来源＝`AIR_MISSION_KIND_LABELS`；只排除**另走专用操作**的拦截与基地转移。
+ * 界面（地图小窗 / 空军面板）只读这一份，不再各存一张六项字面量。
+ */
+const AIR_MISSION_KIND_CHOICES = (Object.keys(AIR_MISSION_KIND_LABELS) as AirMissionKind[])
+  .filter((key) => key !== 'base_transfer' && key !== 'interception')
+  .map((key) => ({ key, label: AIR_MISSION_KIND_LABELS[key] ?? key }))
+
 /** C9：14.1a 激活状态中文名 */
 const AIR_STATUS_LABELS: Record<string, string> = {
   active: '激活（14.1a）',
@@ -21514,6 +21524,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     transferAircraftNow,
     reduceBaseNow,
     airMissionKindLabel,
+    airMissionKindChoices: AIR_MISSION_KIND_CHOICES,
     airStatusLabel,
     // W6 B18：到达、补员与编制调整
     scenarioId,

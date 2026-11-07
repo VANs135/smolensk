@@ -64,14 +64,7 @@ const interception = computed(() => workbench.airInterceptionResponse)
 const enemyAtTarget = computed(() => workbench.airEnemyAtTarget)
 
 /** 14.2e：可在「任务分配」里宣布的任务类型（拦截与基地转移不在其中） */
-const MISSION_KINDS = [
-  { key: 'barrage', label: '空军轰炸（14.7b）' },
-  { key: 'hip_shoot', label: '低空扫射（14.7d）' },
-  { key: 'trainbusting', label: '运输破坏（14.8）' },
-  { key: 'air_transport', label: '空运（14.9）' },
-  { key: 'air_drop', label: '空投（14.10）' },
-  { key: 'fighter_sweep', label: '战机扫荡（14.6）' },
-] as const
+const MISSION_KINDS = computed(() => workbench.airMissionKindChoices)
 
 /** 14.2e：任务所属**环节**的中文名（`missionSegmentOf` 的三个取值） */
 function segmentLabel(kind: string): string {
