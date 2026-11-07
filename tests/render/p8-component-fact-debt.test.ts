@@ -22,4 +22,10 @@ describe('P8：组件内另算还债（源码守卫）', () => {
     expect(move).toContain('segmentLabelsOfAction')
     expect(move).not.toContain('模式与移动」「E 反应')
   })
+
+  it('#3 SupplyPanel 已并 SP 判定取引擎谓词', () => {
+    const supply = source('src/components/supply/SupplyPanel.vue')
+    expect(supply).toContain('isNormalizedHoldings')
+    expect(supply).not.toContain('function isNormalized')
+  })
 })

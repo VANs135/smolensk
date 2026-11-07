@@ -2,6 +2,9 @@
  * Pinia stores 汇总出口
  */
 
+// P8：12.1a 已并 SP 判据（唯一出处＝引擎；组件只读）
+export { isNormalizedHoldings } from '@/engine/rules'
+
 export * from './app'
 export * from './ui'
 export * from './workbench-model'

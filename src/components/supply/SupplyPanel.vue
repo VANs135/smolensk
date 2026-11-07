@@ -9,6 +9,7 @@ import {
   counterImageUrlOf,
   hexLabel,
   isHqUnit,
+  isNormalizedHoldings,
   spDumpImageUrlOf,
   useWorkbenchStore,
 } from '@/stores'
@@ -70,11 +71,6 @@ const SOURCE_KINDS = [
   { key: 'supplySourceHex', label: '专规补给源格（12.6a①）' },
   { key: 'detrainable', label: '火车卸货格（12.6a②）' },
 ] as const
-
-/** 12.1a：账本条目的「已规范化」提示（T < 4 即已尽可能并为 SP） */
-function isNormalized(sp: number, t: number): boolean {
-  return t < 4 && sp >= 0
-}
 
 /* ── 13.3f / 专规 1.2：轨距账本 —— 「谁能用这条铁路」（与 13.3a 多轨的运量费用无关） ── */
 
@@ -414,7 +410,9 @@ const showsLedger = computed(
             <BaseTag kind="info">{{ hexLabel(dump.hex) }}</BaseTag>
             <span class="num">
               {{ dump.sp }} SP + {{ dump.t }} T
-              <span v-if="!isNormalized(dump.sp, dump.t)">（可加总：12.1a）</span>
+              <span v-if="!isNormalizedHoldings({ sp: dump.sp, t: dump.t })"
+                >（可加总：12.1a）</span
+              >
             </span>
             <label class="field">
               拆
