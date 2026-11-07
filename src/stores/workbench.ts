@@ -481,6 +481,7 @@ import {
   type DeadPileEntry,
   type UnitRecordView,
   // B9：算子参与判定（与闸门表同一套判据；界面灰显与拾取过滤都用它）
+  isBarrageCapableUnit,
   participatesIn,
   mapHintOf,
   type MapHint,
@@ -2938,7 +2939,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
     const target = barrageTargetHex.value
     return units.value
-      .filter((unit) => unit.side === segmentGateQuery.value.side && (unit.raw.barrage ?? 0) > 0)
+      .filter((unit) => unit.side === segmentGateQuery.value.side && isBarrageCapableUnit(unit))
       .map((unit) => ({
         unit,
         selected: barrageUnitIds.value.includes(unit.instanceId),
@@ -21451,6 +21452,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     convertedHexesThisPhase,
     railMovedNewTrackThisPhase,
     isRailRepairUnit,
+    isBarrageCapableUnit,
     segmentLabelsOfAction,
     refitDoneBases,
     reducedBases,

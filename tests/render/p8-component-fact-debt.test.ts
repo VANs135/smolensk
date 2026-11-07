@@ -46,4 +46,10 @@ describe('P8：组件内另算还债（源码守卫）', () => {
     expect(panel).toContain('supplyFeedingCandidates')
     expect(panel).not.toContain('hasTraceSupply')
   })
+
+  it('#7 MapActionPopover 轰炸资格取 store 谓词', () => {
+    const popover = source('src/components/game/MapActionPopover.vue')
+    expect(popover).toContain('isBarrageCapableUnit')
+    expect(popover).not.toContain('raw.barrage')
+  })
 })

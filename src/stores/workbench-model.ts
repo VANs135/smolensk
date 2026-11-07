@@ -3097,6 +3097,15 @@ function hasBarrageFactor(unit: ConsoleUnit): boolean {
 }
 
 /**
+ * P8：轰炸资格的唯一判据出口（界面入口与候选表共用）
+ *
+ * 10.0：只有印值面带轰炸值的单位能参炸；不在这里判环节/阵营（那是闸门与 store 的事）。
+ */
+export function isBarrageCapableUnit(unit: ConsoleUnit): boolean {
+  return hasBarrageFactor(unit)
+}
+
+/**
  * 造引擎的模式归类输入（`modeUnitClass` / `isMobileUnit` 的入参）
  *
  * 为什么在这里造一次：那两个谓词吃的是**同一个 profile**（"归哪类"与"有没有 MA"是两条判据），

@@ -101,7 +101,7 @@ function canBarrage(id: string): boolean {
   return (
     unit !== null &&
     unit.side === workbench.activeSide &&
-    (unit.raw.barrage ?? 0) > 0 &&
+    workbench.isBarrageCapableUnit(unit) &&
     workbench.actionAllowedNow('barrage.declare')
   )
 }
