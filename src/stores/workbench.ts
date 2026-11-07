@@ -4999,8 +4999,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     rolls?: readonly DiceRoll[]
     pending?: PendingEffect[]
     data?: Record<string, unknown>
+    /**
+     * 3.3c 的撤离结算是「同批骰子里的中间结算」，这批骰属于紧随其后的 `variableRepl`；
+     * 传 false 可避免它把 `pendingRolls` 吃掉、导致同一批骰被记两次（修 1.6b 重放错位）。
+     * 默认 true，其他调用点行为不变。
+     */
+    consumePendingRolls?: boolean
   }): boolean {
-    const rolls = pendingRolls.length > 0 ? pendingRolls.splice(0) : [...(input.rolls ?? [])]
+    const rolls =
+      input.consumePendingRolls === false
+        ? [...(input.rolls ?? [])]
+        : pendingRolls.length > 0
+          ? pendingRolls.splice(0)
+          : [...(input.rolls ?? [])]
     const entry: SessionLogEntry = {
       turn: turn.value,
       phase: phase.value,
@@ -17496,6 +17507,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         action: 'variableExit',
         rule: '3.3c',
         data: { mode: 'select', removedUnit, formation },
+        consumePendingRolls: false,
       })
       pushLog(
         'warning',
@@ -17517,6 +17529,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         formation,
         unitIds: targets.map((unit) => unit.instanceId),
       },
+      consumePendingRolls: false,
     })
   }
 
