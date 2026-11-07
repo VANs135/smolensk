@@ -94,6 +94,12 @@ const canOverrun = computed(() => workbench.actionAllowedNow('move.overrun'))
 const canReleaseReserve = computed(() => workbench.actionAllowedNow('reserve.release'))
 const canPayFuel = computed(() => workbench.actionAllowedNow('supply.fuel'))
 
+/** P8：移动/突袭允许的环节名（取 `ACTION_GATES` 投影，不在模板里写死） */
+const moveSegmentLabels = computed(() => workbench.segmentLabelsOfAction('move.order'))
+const moveSegmentLabelText = computed(() =>
+  moveSegmentLabels.value.map((label) => `「${label}」`).join('、'),
+)
+
 /** 6.1f：本次移动中的单位阵列（已放下的灰显） */
 const moveUnitItems = computed<readonly CounterPickerItem[]>(() =>
   movingUnits.value.map((unit) => {
@@ -287,8 +293,8 @@ function hoverDump(id: string | null): void {
     <div v-if="!canMove" class="block">
       <p class="num">
         <BaseTag kind="warning">{{ workbench.segmentStep?.rule ?? '6.1' }}</BaseTag>
-        本环节（{{ workbench.segmentStep?.label ?? '—' }}）**不做移动**：移动与突袭只在 「C
-        移动·模式与移动」「E 反应·反应移动」「G 进击·进击移动」三个环节进行（6.1 / 8.0）。
+        本环节（{{ workbench.segmentStep?.label ?? '—' }}）**不做移动**：移动与突袭只在
+        {{ moveSegmentLabelText }} {{ moveSegmentLabels.length }} 个环节进行（6.1 / 8.0）。
         下方只留与当前流程有关的信息。
       </p>
     </div>

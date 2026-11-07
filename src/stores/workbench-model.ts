@@ -36,6 +36,8 @@ import {
   isMobileUnit,
   isOutOfSupplyNow,
   legMpDistanceWithinRadius,
+  sopChainOf,
+  sopStepById,
   modeUnitClass,
   needsFuelToMove,
   resolveCombat,
@@ -2990,6 +2992,19 @@ export function actionGateOf(key: ActionKey): ActionGate {
   const found = ACTION_GATES.find((gate) => gate.key === key)
   if (found === undefined) throw new RangeError(`闸门表里没有这个动作族：${key}`)
   return found
+}
+
+/**
+ * P8：某动作族允许的**环节名**（「2.2 段名·环节名」）——界面只显示，不判规则
+ *
+ * 判据唯一来源：`ACTION_GATES.where`（哪些环节允许该动作族）+ SOP 环节表（段/环节中文名）。
+ */
+export function segmentLabelsOfAction(key: ActionKey): string[] {
+  const labels = actionGateOf(key).where.map((where) => {
+    const chain = sopChainOf(where.phase)
+    return `${chain.label}·${sopStepById(where.segment)?.label ?? where.segment}`
+  })
+  return [...new Set(labels)]
 }
 
 /** 该动作族此刻是否允许（`allowedActionsOf` 的便捷包装） */

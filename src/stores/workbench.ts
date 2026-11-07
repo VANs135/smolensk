@@ -487,6 +487,7 @@ import {
   // B8：环节闸门表（判据唯一出处）
   actionGateOf,
   allowedActionsOf,
+  segmentLabelsOfAction,
   type ActionGate,
   type ActionGateQuery,
   type ActionKey,
@@ -21446,6 +21447,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     convertedHexesThisPhase,
     railMovedNewTrackThisPhase,
     isRailRepairUnit,
+    segmentLabelsOfAction,
     refitDoneBases,
     reducedBases,
     airstripBaseIds,
