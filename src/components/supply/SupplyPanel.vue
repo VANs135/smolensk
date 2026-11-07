@@ -1204,11 +1204,19 @@ const showsLedger = computed(
             <BaseTag kind="success">{{ summary.pickup.rule }}</BaseTag>
             {{ summary.pickup.detail }}
           </p>
+          <!-- P5：结构化的「付款后余额」（引擎给 `sourceAfter`，不靠 detail 文本解析） -->
+          <p v-if="summary.pickup !== null" class="num">
+            付款后余额：{{ summary.pickup.sourceAfter.sp }} SP +
+            {{ summary.pickup.sourceAfter.t }} T
+          </p>
           <p v-if="summary.oos !== null" class="num">
             <BaseTag :kind="summary.oos.markedOutOfSupply ? 'warning' : 'success'">
               {{ summary.oos.rule }}
             </BaseTag>
             {{ summary.oos.detail }}
+          </p>
+          <p v-if="summary.oos !== null" class="num">
+            付款后余额：{{ summary.oos.holdingsAfter.sp }} SP + {{ summary.oos.holdingsAfter.t }} T
           </p>
         </template>
 

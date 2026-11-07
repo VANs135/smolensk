@@ -46,6 +46,11 @@ const checklist = computed(() => workbench.barrageChecklist)
 /** 结果摘要（格值 / 最终列 / 成本 / 损失） */
 const summary = computed(() => workbench.barrageSummary)
 
+/**
+ * P5：10.0 轰炸会话**不能放弃**的原因（store 唯一判据，与 `cancelBarrage` 同源；界面只读）
+ */
+const cancelBlocker = computed(() => workbench.barrageCancelBlocker())
+
 /** 10.0a 的 `1/2` 取整骰是否仍待掷 */
 const awaitingHalfDie = computed(() => workbench.barrageAwaitingHalfDie)
 
@@ -592,6 +597,11 @@ function setAircraftRoll(unitId: string, value: number): void {
       </p>
 
       <div class="row">
+        <!-- P5：已提交但未结算完 ⇒ 先明说「须完成结算」，而不是点了「放弃」才被拒 -->
+        <p v-if="cancelBlocker !== null" class="warn num">
+          <BaseTag kind="warning">须完成结算</BaseTag>
+          {{ cancelBlocker }}
+        </p>
         <BaseButton variant="secondary" size="sm" @click="workbench.cancelBarrage()">
           放弃本次轰炸
         </BaseButton>

@@ -40,6 +40,10 @@ const props = withDefaults(defineProps<{ stepwise?: boolean }>(), { stepwise: fa
 
 /** 战斗交互状态机（null＝未开始） */
 const state = computed(() => workbench.combatState)
+/**
+ * P5：9.2 战斗会话**不能放弃**的原因（store 唯一判据，与 `cancelCombat` 同源；界面只读）
+ */
+const cancelBlocker = computed(() => workbench.combatCancelBlocker())
 /** 第 8 步「结算结果」的两个子环节由 resolution.stage 区分（9.10b：攻方先、守方后） */
 const stage = computed(() => state.value?.resolution.stage ?? null)
 const isLossStage = computed(
@@ -921,6 +925,11 @@ const quickDefenderArItems = computed(() =>
         </details>
 
         <div class="row">
+          <!-- P5：已提交但未结算完 ⇒ 先明说「须完成结算」，而不是点了「放弃」才被拒 -->
+          <p v-if="cancelBlocker !== null" class="warn num">
+            <BaseTag kind="warning">须完成结算</BaseTag>
+            {{ cancelBlocker }}
+          </p>
           <BaseButton variant="ghost" size="sm" @click="workbench.cancelCombat()"
             >放弃本场战斗</BaseButton
           >

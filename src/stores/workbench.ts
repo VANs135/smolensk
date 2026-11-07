@@ -4873,6 +4873,38 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (hover === null) return null
     return reachableNodeAt(groupReachable.value.hexes, hover)
   })
+  /**
+   * P5（UI4/UI5）：**移动额度投影**（逐参移单位的可用 / 已耗 / 剩余，供移动面板显示）
+   *
+   * 额度判据来自引擎 `availableMaOf`（与 `moveMinRemainingMp` / `zocOverrunChoices` 同一处调用），
+   * 本投影**不另立规则**、只做减法（6.1h：不取整）；界面据此查表，不自己算额度。
+   */
+  const moveBudgetRows = computed<
+    {
+      instanceId: string
+      name: string
+      availableMa: number
+      spent: number
+      remaining: number
+      ended: boolean
+    }[]
+  >(() =>
+    moveUnits.value.map((unit) => {
+      const availableMa = availableMaOf(
+        unit,
+        movementPhaseOf(phase.value),
+        sovietFirstTurnMaFactor(unit),
+      )
+      return {
+        instanceId: unit.instanceId,
+        name: unit.name,
+        availableMa,
+        spent: unit.mpSpent,
+        remaining: availableMa - unit.mpSpent,
+        ended: unit.movementEnded,
+      }
+    }),
+  )
   /** 当前方在选中算子处的合法性（B21 探针：不选单位时不判） */
   const selectedLegality = computed<LegalityVerdict | null>(() => {
     const unit = selectedUnit.value
@@ -20865,6 +20897,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     moveInteraction,
     moveUnits,
     activeMoveUnits,
+    moveBudgetRows,
     groupReachable,
     stepPreview,
     hoverNode,

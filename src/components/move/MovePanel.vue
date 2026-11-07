@@ -38,10 +38,26 @@ const workbench = useWorkbenchStore()
 const movingUnits = computed(() => workbench.moveUnits)
 /** 上一步的结论（costText / 掉队 / ZOC 停止 / 规则号） */
 const lastStep = computed(() => workbench.lastStep)
+/** P5：单步预览的本步 MP（store 已算好，本组件只合计显示） */
+const previewCost = computed(() =>
+  (workbench.stepPreview?.moving ?? []).reduce((sum, item) => sum + item.cost, 0),
+)
+/** P5：单步预览被判不可提交时的原因（引擎 `StepFailure`，组件原样展示） */
+const previewBlocked = computed(() => workbench.stepPreview?.blocked ?? null)
 /** 4.5a-A：进入未抵消 ZOC 的待决 */
 const zocConfirm = computed(() => workbench.pendingZocConfirm)
 /** 6.1a：MA 是**一阶段的总额度** ⇒ 账要按"已耗 / 可用"显示 */
 const selected = computed(() => workbench.selectedUnit)
+/**
+ * P5：逐单位的**额度投影**（可用 / 已耗 / 剩余）——判据在 store（引擎 `availableMaOf`），
+ * 本组件只查表，不自己算额度。
+ */
+function budgetOf(instanceId: string) {
+  return workbench.moveBudgetRows.find((row) => row.instanceId === instanceId) ?? null
+}
+const selectedBudget = computed(() =>
+  selected.value === null ? null : budgetOf(selected.value.instanceId),
+)
 /** 条 9（M1）：改模式/开始移动的可用判据——有取子清单（选中集合）或单枚选中单位即可 */
 const modeTargetReady = computed(() => workbench.movePick !== null || selected.value !== null)
 /** 条 10（M1）：开拔前的取子勾选列表（界面用；`movePick` 为空时给空数组） */
@@ -80,16 +96,20 @@ const canPayFuel = computed(() => workbench.actionAllowedNow('supply.fuel'))
 
 /** 6.1f：本次移动中的单位阵列（已放下的灰显） */
 const moveUnitItems = computed<readonly CounterPickerItem[]>(() =>
-  movingUnits.value.map((unit) => ({
-    id: unit.instanceId,
-    imageUrl: counterImageUrlOf(unit),
-    name:
-      `${unit.name}（已耗 ${unit.mpSpent} MP @ ${hexLabel(unit.hex)}` +
-      `${unit.movementEnded ? '｜本次移动已结束' : '｜仍在动'}）`,
-    selected: !unit.movementEnded,
-    disabledReason: unit.movementEnded ? '6.1f：该单位本次移动已结束（放下/走完）' : null,
-    hex: unit.hex,
-  })),
+  movingUnits.value.map((unit) => {
+    const budget = budgetOf(unit.instanceId)
+    return {
+      id: unit.instanceId,
+      imageUrl: counterImageUrlOf(unit),
+      name:
+        `${unit.name}（已耗 ${unit.mpSpent} MP @ ${hexLabel(unit.hex)}` +
+        `${budget === null ? '' : `｜剩余 ${budget.remaining} MP`}` +
+        `${unit.movementEnded ? '｜本次移动已结束' : '｜仍在动'}）`,
+      selected: !unit.movementEnded,
+      disabledReason: unit.movementEnded ? '6.1f：该单位本次移动已结束（放下/走完）' : null,
+      hex: unit.hex,
+    }
+  }),
 )
 
 /** 悬停某一枚 ⇒ 同步地图高亮它所在的格 */
@@ -244,6 +264,12 @@ function hoverDump(id: string | null): void {
       ｜已耗 {{ selected.mpSpent }} MP @ {{ hexLabel(selected.hex) }}）
     </p>
     <p v-else class="muted">地图上还没选中算子：点一格即可就地摊开堆叠并逐枚选择（6.1）。</p>
+
+    <!-- P5：该单位的额度账（可用 / 已耗 / 剩余）——读 store 的 `moveBudgetRows`，不自己算 -->
+    <p v-if="selectedBudget !== null" class="num">
+      额度：可用 {{ selectedBudget.availableMa }} / 已耗 {{ selectedBudget.spent }} / 剩余
+      {{ selectedBudget.remaining }} MP（6.1a / 6.1h）
+    </p>
 
     <!-- 9.2 / 10.0：结算进行中 ⇒ 任何单位都不得移动 -->
     <div v-if="workbench.settlementInProgress !== null" class="block">
@@ -410,6 +436,37 @@ function hoverDump(id: string | null): void {
       <template v-if="lastStep.zocStoppedNames.length > 0">
         ｜进入 ZOC 就地停止：{{ lastStep.zocStoppedNames.join('、') }}（4.5a-A）
       </template>
+    </div>
+
+    <!--
+      P5：**悬停 / 单步预览**（C5）——对局台原先看不到 `hoverNode` / `stepPreview`，
+        玩家只能靠点下去才知道代价。这一块把 store 算好的路径、累计、本步 MP、挡因与
+        ZOC/掉队提示原样显示；**不在组件里重算**任何额度或判据。
+    -->
+    <div v-if="workbench.hoverNode !== null || workbench.stepPreview !== null" class="block">
+      <p class="num">
+        <BaseTag kind="info">预览</BaseTag>
+        <template v-if="workbench.hoverNode !== null">
+          路径 {{ workbench.hoverNode.path.length }} 格 · 累计 {{ workbench.hoverNode.mpSpent }} MP
+        </template>
+        <template v-if="workbench.stepPreview !== null">
+          <template v-if="workbench.hoverNode !== null">｜</template>
+          本步 {{ previewCost }} MP
+        </template>
+      </p>
+      <p v-if="previewBlocked !== null" class="muted num">
+        <BaseTag kind="warning">{{ previewBlocked.rule }}</BaseTag>
+        这一步走不进：{{ previewBlocked.reason
+        }}{{ previewBlocked.detail === undefined ? '' : `（${previewBlocked.detail}）` }}
+      </p>
+      <p v-if="(workbench.stepPreview?.zocStoppingIds.length ?? 0) > 0" class="muted num">
+        {{ workbench.stepPreview?.zocStoppingIds.length }} 枚进入该格后会因敌方 ZOC
+        就地停止（4.5a-A）
+      </p>
+      <p v-if="(workbench.stepPreview?.droppingIds.length ?? 0) > 0" class="muted num">
+        {{ workbench.stepPreview?.droppingIds.length }} 枚走不动、将留在原格（6.1f）
+      </p>
+      <p class="muted num">预览不扣 MP、不付款、不掷骰；提交时由规则域重新检查。</p>
     </div>
 
     <!-- ⑥ 4.5a-A：进入未抵消敌方 ZOC 的待决（必须收束，否则不许再走） -->
