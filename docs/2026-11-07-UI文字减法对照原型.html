@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UI 文字减法：现在 / 方案 对照</title>
+    <style>
+      :root {
+        --bg: #efe9dc;
+        --paper: #f7f2e7;
+        --ink: #2b2a26;
+        --muted: #6f6a5f;
+        --line: #cfc6b4;
+        --red: #8e3229;
+        --blue: #314d63;
+        --gold: #9a7b36;
+        --ok: #3f6b46;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 28px 32px 48px;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+      }
+      h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: 0.04em; }
+      .sub { color: var(--muted); font-size: 12px; margin: 0 0 22px; line-height: 1.6; }
+      .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+      .colhead {
+        display: flex; align-items: baseline; justify-content: space-between;
+        padding: 0 2px 8px; border-bottom: 2px solid var(--line); margin-bottom: 10px;
+      }
+      .colhead b { font-size: 14px; }
+      .colhead span { font-size: 11px; color: var(--muted); }
+      .screen { margin-bottom: 18px; }
+      .screen > .cap {
+        font-size: 11px; color: var(--muted); margin: 0 0 6px 2px; letter-spacing: 0.08em;
+      }
+      .frame {
+        border: 1px solid var(--line); background: var(--paper);
+        box-shadow: 0 1px 0 #fff inset, 0 2px 6px rgba(60, 50, 30, 0.08);
+      }
+      /* 顶栏 */
+      .topbar {
+        display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+        padding: 7px 8px; border-bottom: 1px solid var(--line); background: #e6dfcf;
+      }
+      .chip {
+        font-size: 10px; line-height: 1; padding: 4px 6px; border: 1px solid var(--line);
+        background: #f8f3e8; color: var(--ink); white-space: nowrap;
+      }
+      .chip.act { border-color: var(--gold); color: var(--gold); }
+      .chip.red { border-color: var(--red); color: var(--red); }
+      .chip.blue { border-color: var(--blue); color: var(--blue); }
+      .lbl { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; }
+      .spacer { flex: 1; }
+      .btn {
+        font-size: 11px; padding: 5px 9px; border: 1px solid var(--ink);
+        background: var(--ink); color: #fff; white-space: nowrap;
+      }
+      .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+      /* 主体 */
+      .body { display: grid; grid-template-columns: 1fr 128px; min-height: 118px; }
+      .map {
+        position: relative; padding: 10px; border-right: 1px solid var(--line);
+        background:
+          repeating-linear-gradient(0deg, transparent 0 23px, rgba(120,100,60,0.10) 23px 24px),
+          repeating-linear-gradient(90deg, transparent 0 23px, rgba(120,100,60,0.10) 23px 24px),
+          #f2ecdd;
+      }
+      .map .tip {
+        display: inline-block; font-size: 10px; padding: 3px 6px;
+        background: #fffdf4; border: 1px solid var(--line); color: var(--muted);
+      }
+      .map .ground { position: absolute; left: 18px; bottom: 14px; font-size: 10px; color: var(--muted); }
+      .side { padding: 8px; display: flex; flex-direction: column; gap: 5px; }
+      .card { border: 1px solid var(--line); background: #fbf6ea; padding: 6px 7px; }
+      .card h4 { margin: 0 0 4px; font-size: 10px; letter-spacing: 0.06em; color: var(--muted); }
+      .card p { margin: 0; font-size: 10px; line-height: 1.5; }
+      .card p + p { margin-top: 3px; }
+      .fold {
+        font-size: 10px; color: var(--muted); border-top: 1px dashed var(--line);
+        padding: 5px 7px; background: #f6f0e2;
+      }
+      /* 会话 */
+      .session { border-top: 1px solid var(--line); padding: 9px 10px; background: #fbf6ea; }
+      .session .shead { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+      .session .shead b { font-size: 12px; }
+      .session .status { font-size: 11px; color: var(--ink); }
+      .session .status .n { color: var(--red); font-weight: 700; }
+      .session .status .g { color: var(--ok); font-weight: 700; }
+      .prose { font-size: 10px; color: var(--muted); line-height: 1.55; margin: 5px 0; }
+      .prose b { color: var(--ink); font-weight: 600; }
+      .rule { color: #8b5f2a; }
+      .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+      .src {
+        font-size: 10px; padding: 3px 6px; border: 1px solid var(--line);
+        background: #fffdf4; color: var(--ink);
+      }
+      .src.sel { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+      .foot {
+        border-top: 1px dashed var(--line); padding: 5px 10px;
+        font-size: 10px; color: var(--muted); display: flex; gap: 10px;
+      }
+      .note {
+        margin-top: 26px; padding: 12px 14px; border-left: 3px solid var(--gold);
+        background: #f6f0e2; font-size: 12px; line-height: 1.7;
+      }
+      .note b { color: var(--gold); }
+      .badge { font-size: 10px; padding: 2px 5px; border: 1px solid var(--line); color: var(--muted); }
+      @media (max-width: 1080px) { .cols { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <h1>UI 文字减法 · 关键屏新旧对照</h1>
+    <p class="sub">
+      同一盘面状态：苏方增援阶段，选中 15.25 的 7 Pz Div 堆叠，5.27 有 39 军 HQ + 10 SP。
+      左栏是当前界面（规则说明全量平铺）；右栏是方案（一屏只留此刻必须看的，其余折叠/悬停/按需展开）。
+    </p>
+
+    <div class="cols">
+      <!-- ============ 现在 ============ -->
+      <div>
+        <div class="colhead">
+          <b>现在</b>
+          <span>14 个常驻控件 · 7 个常驻面板 · 移动会话 1032 字 / 91 处条款号</span>
+        </div>
+
+        <div class="screen">
+          <p class="cap">主界面</p>
+          <div class="frame">
+            <div class="topbar">
+              <span class="chip act">对局台</span>
+              <span class="chip blue">苏方</span>
+              <span class="chip">增援阶段</span>
+              <span class="chip">回合 2</span>
+              <span class="chip">1941-07</span>
+              <span class="chip">整堆叠（S）</span>
+              <span class="chip">格号 ☑</span>
+              <span class="chip">城市 ☑</span>
+              <span class="chip">河流 ☑</span>
+              <span class="chip">道路 ☑</span>
+              <span class="chip">ZOC ☐</span>
+              <span class="chip">侧栏（H）展开</span>
+              <span class="chip">快捷键（?）</span>
+              <span class="chip">AI：关闭</span>
+              <span class="chip">等待：无</span>
+              <span class="chip">交给对手（热坐）</span>
+            </div>
+            <div class="body">
+              <div class="map">
+                <span class="tip">点击堆叠 → 选择算子 → 会话框接管操作</span>
+                <span class="ground">地图（当前约占 68% 宽，右栏固定 320px + 面板标题）</span>
+              </div>
+              <div class="side">
+                <div class="card"><h4>状态</h4><p>苏方 · 增援 · 第 2/3 环节</p></div>
+                <div class="card"><h4>增援（info）</h4><p>到达 2 组 · 慢动员 3 条说明 · 重建 4 条说明</p></div>
+                <div class="card"><h4>专规（info）</h4><p>装甲集群边界 / 训练 / 拆解 / 可变撤离 / 随机事件…</p></div>
+                <div class="card"><h4>胜利</h4><p>双方条件、控制格刷新、裁定与终局说明</p></div>
+                <div class="card"><h4>盒区</h4><p>死亡堆、地图外盒、空军盒、编队盒（全部展开）</p></div>
+                <div class="card"><h4>快捷键</h4><p>H / ? / S / 空格 / Esc …</p></div>
+                <div class="card"><h4>日志</h4><p>规则号 + 掷骰 + 明细</p></div>
+              </div>
+            </div>
+            <div class="foot"><span>▸ 盒（已展开）</span><span>▸ 表格（已展开）</span><span>底栏占高 240px</span></div>
+          </div>
+        </div>
+
+        <div class="screen">
+          <p class="cap">移动会话（燃料段）</p>
+          <div class="frame">
+            <div class="session">
+              <div class="shead"><b>移动 · 7 Pz Div</b><span class="badge">战术模式 4 MP</span></div>
+              <p class="prose">
+                本次移动里还没有单位（先在地图上选定要动的算子）。预览不扣 MP、不付款、不掷骰；提交时由规则域重新检查。
+              </p>
+              <p class="prose">
+                12.5a / 12.5c：只有轮式/履带 MP 的战斗单位需要燃料。13.7a：检查每个单位使用了哪个指挥部或补给站进行补给的投递或拖取…（下略 20 行）
+              </p>
+              <p class="prose">
+                <span class="rule">12.5c-A</span> 本次付 1SP 将覆盖 7 枚…；另有 2 枚同编队单位不在本来源内 ⇒ 不参与本次编队加油，日后开拔须用单独单位法（<span class="rule">12.5c-C</span>，每枚 1T）。
+                <span class="rule">12.5e</span>：HQ 本阶段已在 5.27 投递（投递距离在付款时算定；每阶段只能在这一个位置投递）。
+              </p>
+              <div class="row">
+                <span class="chip">单独单位法</span>
+                <span class="chip act">编队法</span>
+                <span class="chip">HQ 法（不可用：7 Pz 非独立单位）</span>
+              </div>
+              <p class="prose">
+                <span class="rule">12.3a</span>：5 MP 直拖内或相邻（<span class="rule">12.3c</span>）；<span class="rule">12.5c-A/B</span> 要求整个编队/该指挥部共用同一来源。
+              </p>
+              <div class="row"><span class="chip red">当前无可用来源（直拖交集为空）</span></div>
+              <div class="row">
+                <span class="src">5.27 SP ×10（与 39 军 HQ 堆叠）</span>
+                <span class="src">9.12 SP ×3</span>
+                <span class="src">12.24 SP ×5</span>
+              </div>
+              <div class="row">
+                <span class="btn">支付燃料（12.5c）——未加注 5 枚</span>
+                <span class="btn ghost">撤销一步（6.1）</span>
+                <span class="btn ghost">结束移动（6.1）</span>
+              </div>
+            </div>
+            <div class="foot"><span>1032 中文字</span><span>91 处条款号</span><span>一屏 3 个入口 + 12 段说明</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ 方案 ============ -->
+      <div>
+        <div class="colhead">
+          <b>方案</b>
+          <span>3 个文字标签 + 4 个图标 · 3 张只读卡 · 移动会话 ≤250 字 / 0 处 L0 条款号</span>
+        </div>
+
+        <div class="screen">
+          <p class="cap">主界面</p>
+          <div class="frame">
+            <div class="topbar">
+              <span class="lbl">苏方 · 增援</span>
+              <span class="chip">回合 2 · 1941-07</span>
+              <span class="spacer"></span>
+              <span class="btn">推进 ▸</span>
+              <span class="chip">对手</span>
+              <span class="chip">图层</span>
+              <span class="chip">?</span>
+            </div>
+            <div class="body">
+              <div class="map">
+                <span class="tip">15.25 · 7 Pz Div ×7　｜　5.27 · 39 军 HQ + 10 SP</span>
+                <span class="ground">地图（方案下 ≥75% 宽；右栏只读且可折叠）</span>
+              </div>
+              <div class="side">
+                <div class="card"><h4>状态</h4><p>苏方 · 增援 · 2/3</p></div>
+                <div class="card"><h4>待办</h4><p>放置增援 2 组</p></div>
+                <div class="card"><h4>所选</h4><p>7 Pz Div · 7 枚<br />M4 · 剩 8 MP<br />未加注 5 枚</p></div>
+                <div class="fold">▸ 战况　▸ 专规　▸ 盒区</div>
+              </div>
+            </div>
+            <div class="foot"><span>▸ 盒</span><span>▸ 表格</span><span>底栏默认一行（28px）</span></div>
+          </div>
+        </div>
+
+        <div class="screen">
+          <p class="cap">移动会话（燃料段）</p>
+          <div class="frame">
+            <div class="session">
+              <div class="shead"><b>7 Pz Div · 15.25</b><span class="badge">4 MP</span></div>
+              <p class="status">未加注 <span class="n">5</span> 枚 · 需 <span class="n">1 SP</span>（编队法）</p>
+              <div class="row">
+                <span class="chip">编队法</span>
+                <span class="chip">单独法 1T/枚</span>
+                <span class="chip">更多 ▾</span>
+              </div>
+              <p class="status">来源：<span class="g">5.27</span>（39 军 HQ 投递 10 MP）</p>
+              <div class="row">
+                <span class="src sel">5.27 ×10</span>
+                <span class="src">9.12 ×3</span>
+                <span class="src">12.24 ×5</span>
+              </div>
+              <div class="row">
+                <span class="btn">支付并推进 ▸</span>
+                <span class="btn ghost">结束移动</span>
+                <span class="btn ghost">撤销</span>
+                <span class="chip">?</span>
+              </div>
+            </div>
+            <div class="fold">
+              ? 展开：12.5c-A 原文 / 12.3b HQ 投递 / 13.7a 同源划分 / 12.5e 投递基点（默认不显示）
+            </div>
+            <div class="foot"><span>≤250 中文字</span><span>L0 条款号 0</span><span>1 个主按钮 + 2 个次按钮</span></div>
+          </div>
+        </div>
+
+        <div class="screen">
+          <p class="cap">补给会话</p>
+          <div class="frame">
+            <div class="session">
+              <div class="shead"><b>补给 · 苏方</b><span class="badge">12.1</span></div>
+              <p class="status">断补 <span class="n">2</span> · 可追溯 <span class="g">5</span> · 余 <span class="g">12 SP</span></p>
+              <div class="row">
+                <span class="btn">提交补给</span>
+                <span class="chip">来源 ▾</span>
+                <span class="chip">账本 ▾</span>
+                <span class="chip">?</span>
+              </div>
+            </div>
+            <div class="foot"><span>≤400 中文字（现 1864）</span><span>条款号 193 → 0（L0）</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 交互重做（2026-11-07 补充规格） ==================== -->
+    <h1 style="margin-top: 36px">交互重做 · 常驻状态 + 点开操作</h1>
+    <p style="color: #8a93a6; font-size: 13px; margin: 4px 0 16px">
+      L0 常驻：胜利格控制 / 回合 / 环节 / 行动方 / 唯一推进按钮 / 一句阻断。
+      L1 点开：本环节可做的事 → 会话框、格子与算子点选、box 与空军基地展开、右键菜单。
+      L2 按需：条款号与规则原文只进 <b>?</b> 与日志。
+    </p>
+
+    <div style="display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start">
+      <!-- A. L0 状态条 -->
+      <div style="flex: 1 1 520px">
+        <div class="colhead"><b>A · L0 常驻状态条</b><span>无操作按钮，只有一个推进</span></div>
+        <div style="background: #0f1420; border: 1px solid #232a3b; border-radius: 10px; padding: 10px">
+          <div style="display: flex; gap: 10px; align-items: center; font-size: 12px; color: #cfd6e6">
+            <span style="padding: 4px 8px; background: #1b2233; border-radius: 6px">胜利格　轴 <b>3</b>・苏 <b>2</b></span>
+            <span style="padding: 4px 8px; background: #1b2233; border-radius: 6px">回合 2 · 1941-07</span>
+            <span style="padding: 4px 8px; background: #1b2233; border-radius: 6px">苏方 · 增援 · 放置 2/3</span>
+            <span style="margin-left: auto; padding: 4px 10px; background: #2f6fed; border-radius: 6px; color: #fff">推进 ▸</span>
+          </div>
+          <div style="margin-top: 8px; font-size: 12px; color: #e3b341">阻断：还有 2 组到达未落位</div>
+        </div>
+      </div>
+
+      <!-- B. 格内堆叠 1 / 3 / 6 -->
+      <div style="flex: 1 1 520px">
+        <div class="colhead"><b>B · 格内摊开（1 / 3 / 6 枚）</b><span>视觉下限 50%，命中热区 ≥24px</span></div>
+        <div style="display: flex; gap: 14px">
+          <!-- 1 枚 -->
+          <div style="width: 110px; height: 110px; background: #202a3d; border: 1px solid #3a4560; border-radius: 8px; position: relative">
+            <div style="position: absolute; left: 20px; top: 20px; width: 70px; height: 70px; background: #7a4a2b; border: 1px solid #c98a55; border-radius: 4px; color: #ffe0c2; font-size: 10px; display: flex; align-items: center; justify-content: center">战斗</div>
+            <div style="position: absolute; bottom: 2px; right: 4px; font-size: 9px; color: #8a93a6">1 枚 · 100%</div>
+          </div>
+          <!-- 3 枚 -->
+          <div style="width: 110px; height: 110px; background: #202a3d; border: 1px solid #3a4560; border-radius: 8px; position: relative">
+            <div style="position: absolute; left: 33px; top: 10px; width: 52px; height: 52px; background: #7a4a2b; border: 1px solid #c98a55; border-radius: 4px"></div>
+            <div style="position: absolute; left: 10px; top: 52px; width: 52px; height: 52px; background: #6b4a2b; border: 1px solid #b07c4d; border-radius: 4px"></div>
+            <div style="position: absolute; left: 56px; top: 52px; width: 52px; height: 52px; background: #6b4a2b; border: 1px solid #b07c4d; border-radius: 4px"></div>
+            <div style="position: absolute; bottom: 2px; right: 4px; font-size: 9px; color: #8a93a6">3 枚 · 68%</div>
+          </div>
+          <!-- 6 枚 -->
+          <div style="width: 110px; height: 110px; background: #202a3d; border: 1px solid #3a4560; border-radius: 8px; position: relative">
+            <div style="position: absolute; left: 6px; top: 6px; width: 34px; height: 34px; background: #7a4a2b; border: 1px solid #c98a55; border-radius: 3px"></div>
+            <div style="position: absolute; left: 43px; top: 6px; width: 34px; height: 34px; background: #6b4a2b; border: 1px solid #b07c4d; border-radius: 3px"></div>
+            <div style="position: absolute; left: 80px; top: 6px; width: 26px; height: 34px; background: #5d4428; border: 1px solid #9e7044; border-radius: 3px; font-size: 9px; color: #ffe0c2; display: flex; align-items: center; justify-content: center">+2</div>
+            <div style="position: absolute; left: 6px; top: 46px; width: 34px; height: 34px; background: #6b4a2b; border: 1px solid #b07c4d; border-radius: 3px"></div>
+            <div style="position: absolute; left: 43px; top: 46px; width: 34px; height: 34px; background: #5d4428; border: 1px solid #9e7044; border-radius: 3px"></div>
+            <div style="position: absolute; left: 80px; top: 46px; width: 26px; height: 34px; background: #4f3c26; border: 1px solid #8f6539; border-radius: 3px"></div>
+            <div style="position: absolute; bottom: 2px; right: 4px; font-size: 9px; color: #8a93a6">6 枚 · 50%</div>
+          </div>
+        </div>
+        <div style="font-size: 11px; color: #8a93a6; margin-top: 8px; line-height: 1.6">
+          左键点格：<b style="color: #cfd6e6">战斗单位优先成为堆叠主体</b>；非战斗单位单击选择。
+          视觉最上层＝堆叠最上层（4.8b）；空白处点格＝选中整格。地图缩放 0.8×–2.0×。
+        </div>
+      </div>
+
+      <!-- C. 操作清单 → 会话框 -->
+      <div style="flex: 1 1 520px">
+        <div class="colhead"><b>C · 本环节「可做的事」→ 点一项弹会话框</b><span>除增援外无常驻操作面板</span></div>
+        <div style="display: flex; gap: 12px">
+          <div style="width: 170px; background: #0f1420; border: 1px solid #232a3b; border-radius: 8px; padding: 8px; font-size: 12px">
+            <div style="color: #8a93a6; margin-bottom: 6px">移动环节 · 可做的事</div>
+            <div style="padding: 5px 6px; border-radius: 4px; background: #1b2233; color: #cfd6e6; margin-bottom: 4px">▸ 移动 / 突袭</div>
+            <div style="padding: 5px 6px; border-radius: 4px; background: #1b2233; color: #cfd6e6; margin-bottom: 4px">▸ 加油</div>
+            <div style="padding: 5px 6px; border-radius: 4px; background: #1b2233; color: #cfd6e6; margin-bottom: 4px">▸ 改模式</div>
+            <div style="padding: 5px 6px; border-radius: 4px; background: #1b2233; color: #cfd6e6">▸ 工程 / 铁路…</div>
+          </div>
+          <div style="flex: 1; background: #0f1420; border: 1px solid #2f6fed; border-radius: 8px; padding: 10px; font-size: 12px">
+            <div style="display: flex; justify-content: space-between; color: #cfd6e6">
+              <b>7 Pz Div · 15.25</b><span style="color: #8a93a6">加油</span>
+            </div>
+            <div style="margin-top: 6px; color: #e3b341">未加注 <b>5</b> 枚 · 需 <b>1 SP</b>（编队法）</div>
+            <div style="margin-top: 6px; color: #cfd6e6">来源：<span style="color: #4ade80">5.27</span>（39 军 HQ 送达 10 MP）</div>
+            <div style="display: flex; gap: 6px; margin-top: 8px">
+              <span style="padding: 4px 8px; background: #1b2233; border-radius: 5px; color: #8a93a6">?</span>
+              <span style="padding: 4px 10px; background: #2f6fed; border-radius: 5px; color: #fff">支付并推进 ▸</span>
+            </div>
+            <div style="margin-top: 8px; color: #6b7280; font-size: 11px">? 展开：12.5c-A / 12.3b / 13.7a（默认不显示）</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- D. 右键菜单 -->
+      <div style="flex: 1 1 520px">
+        <div class="colhead"><b>D · 右键菜单（小众功能）</b><span>主界面不占位；不满足阶段/方则灰显</span></div>
+        <div style="background: #0f1420; border: 1px solid #232a3b; border-radius: 8px; padding: 10px; font-size: 12px; width: 240px">
+          <div style="color: #8a93a6; margin-bottom: 6px">已选中：15.25 · 7 Pz Div</div>
+          <div style="padding: 3px 0; color: #6b7280; border-bottom: 1px solid #1b2233">运输</div>
+          <div style="padding: 4px 6px; color: #cfd6e6">装载 / 卸载 SP</div>
+          <div style="padding: 4px 6px; color: #6b7280">合并 / 拆分运输点数（阶段不符）</div>
+          <div style="padding: 3px 0; color: #6b7280; border-bottom: 1px solid #1b2233">工程</div>
+          <div style="padding: 4px 6px; color: #cfd6e6">修建 / 缩减工事</div>
+          <div style="padding: 4px 6px; color: #6b7280">修建 / 改进基地（无建造单位）</div>
+          <div style="padding: 3px 0; color: #6b7280; border-bottom: 1px solid #1b2233">编组</div>
+          <div style="padding: 4px 6px; color: #cfd6e6">创建拆分单位</div>
+          <div style="padding: 4px 6px; color: #cfd6e6">编队收纳盒：收纳 / 放出</div>
+        </div>
+      </div>
+
+      <!-- E. 空军基地展开 -->
+      <div style="flex: 1 1 520px">
+        <div class="colhead"><b>E · 点空军基地算子才展开飞机</b><span>地图外空军盒同一交互</span></div>
+        <div style="background: #0f1420; border: 1px solid #232a3b; border-radius: 8px; padding: 10px; font-size: 12px">
+          <div style="display: flex; gap: 12px; align-items: center">
+            <div style="width: 54px; height: 54px; background: #1f4d3a; border: 1px solid #3ddc97; border-radius: 6px; color: #b7f5d8; font-size: 10px; display: flex; align-items: center; justify-content: center">空军基地</div>
+            <div style="color: #6b7280">→ 点击后</div>
+            <div style="flex: 1; border: 1px solid #232a3b; border-radius: 6px; padding: 8px">
+              <div style="color: #8a93a6; margin-bottom: 4px">基地内飞机 · 2 架</div>
+              <div style="padding: 4px 6px; background: #1b2233; border-radius: 4px; color: #cfd6e6">✈ 机型 A · 激活</div>
+              <div style="padding: 4px 6px; background: #1b2233; border-radius: 4px; color: #cfd6e6; margin-top: 4px">✈ 机型 B · 非激活</div>
+              <div style="margin-top: 6px; color: #6b7280; font-size: 11px">点飞机 → 整备 / 任务分配 / 缩减基地</div>
+            </div>
+          </div>
+          <div style="margin-top: 8px; color: #8a93a6">地图外空军盒：点开同一列表，动作共用。</div>
+        </div>
+      </div>
+
+      <!-- F. 战雾 -->
+      <div style="flex: 1 1 520px">
+        <div class="colhead"><b>F · 对方视角（展示层降级）</b><span>4.9a / 4.9b / 专规 1.4；不造侦察规则</span></div>
+        <div style="display: flex; gap: 12px">
+          <div style="flex: 1; background: #0f1420; border: 1px solid #232a3b; border-radius: 8px; padding: 10px; font-size: 12px">
+            <div style="color: #8a93a6; margin-bottom: 6px">己方视角</div>
+            <div style="color: #cfd6e6">15.25 · 7 枚（含 1 HQ、5 战斗、1 炮兵）</div>
+            <div style="color: #cfd6e6">储备：低 · 损失军力：2</div>
+          </div>
+          <div style="flex: 1; background: #0f1420; border: 1px solid #232a3b; border-radius: 8px; padding: 10px; font-size: 12px">
+            <div style="color: #8a93a6; margin-bottom: 6px">对方视角</div>
+            <div style="color: #cfd6e6">15.25 · 最上方可攻击战斗单位（战斗模式）</div>
+            <div style="color: #cfd6e6">ZOC：有 · 断补：否</div>
+            <div style="color: #6b7280">枚数不显示 · 储备/损失军力不显示</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note" style="margin-top: 22px">
+      <b>交互边界：</b>除增援外，操作一律「清单项 → 会话框」；L0 只留状态与推进。
+      缩放 0.8×–2.0×、格内 1/3/6 排布与 ≥24px 命中热区按方案 2A.3 实现；
+      战雾仅消费现有 <b>fog.ts</b> 投影做展示裁剪，不改 <b>src/engine</b> / <b>src/data</b>。
+    </div>
+
+    <div class="note">
+      <b>边界：</b>本原型只示意信息层级与文案，不代表最终像素样式。三批实施都不改 <b>src/engine</b> 与 <b>src/data</b> 的判据和数据；
+      所有被收起的原文都能通过 <b>?</b>、折叠区或日志到达。骨架保持「地图为主 + 单一推进按钮 + 右栏只读 + 底部托盘」。
+    </div>
+  </body>
+</html>
