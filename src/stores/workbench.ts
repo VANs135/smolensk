@@ -7021,7 +7021,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (!requireAction('supply.fuel', '付燃料')) return
     const targets = fuelTargets.value
     if (targets.length === 0) {
-      pushLog('warning', '先选中要加油的单位（或开始移动一个堆叠）')
+      pushLog('warning', '先选中要加油的单位（或开始移动一个堆叠）', '12.5')
       return
     }
     /*
