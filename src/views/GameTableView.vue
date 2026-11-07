@@ -176,7 +176,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="gt">
+  <div class="gt" :class="{ 'gt--collapsed': hotkeys.panelCollapsed }">
     <div class="gt__main">
       <!-- 状态条：一眼看清「谁在动、走到哪一步、工具是哪个」 -->
       <div class="gt__bar">
@@ -369,6 +369,11 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: var(--space-4);
   align-items: start;
+}
+
+/* P6：折叠右栏时回收 320px 列宽（否则 v-show 只藏 aside、grid 仍留空槽） */
+.gt--collapsed {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .gt__main {
