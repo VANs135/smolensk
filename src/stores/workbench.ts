@@ -3442,6 +3442,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 13.3g：当前行动方盘面上可用的铁路修理单位（只读投影）
+   *
+   * 换轨是“移动进入”动作，必须有**盘面实例**与位置：单位库里有记录，不等于本局已落位/已到场。
+   * 候选只列本方（`activeSide`），避免把对方 RR 单位摆成可点入口；判定仍由 `convertRailGaugeNow`
+   * 交给引擎复核，本投影不改变任何结论。
+   */
+  const railRepairUnits = computed<ConsoleUnit[]>(() =>
+    units.value.filter(
+      (unit) => unit.side === activeSide.value && isRailRepairUnit(unit.instanceId),
+    ),
+  )
+
+  /**
    * C9b：13.3f／13.3g 轨距转换（铁路修理单位**移动进入**铁路格即转换该格）
    *
    * - 转换不消耗 SP 也不消耗额外 MP（13.3f-B）；
@@ -21473,6 +21486,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     convertedHexesThisPhase,
     railMovedNewTrackThisPhase,
     isRailRepairUnit,
+    railRepairUnits,
     isBarrageCapableUnit,
     segmentLabelsOfAction,
     refitDoneBases,

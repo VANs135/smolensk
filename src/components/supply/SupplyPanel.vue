@@ -74,11 +74,6 @@ const SOURCE_KINDS = [
 
 /* ── 13.3f / 专规 1.2：轨距账本 —— 「谁能用这条铁路」（与 13.3a 多轨的运量费用无关） ── */
 
-/** 13.3f：铁路修理单位候选（是否铁路修理单位由 store 谓词判定） */
-const railRepairUnits = computed(() =>
-  workbench.units.filter((unit) => workbench.isRailRepairUnit(unit.instanceId)),
-)
-
 /** 13.3f 转换动作的输入（单位实例 + 目标格文本） */
 const gaugeUnitId = ref<string>('')
 
@@ -206,9 +201,9 @@ const extenderItems = computed<readonly CounterPickerItem[]>(() =>
     })),
 )
 
-/** 13.3f：铁路修理单位阵列（本作尚未入库 ⇒ 空；入库后自动出现） */
+/** 13.3f：铁路修理单位阵列（候选＝当前行动方盘面上已落位/已到场的实例） */
 const railRepairItems = computed<readonly CounterPickerItem[]>(() =>
-  railRepairUnits.value.map((unit) => ({
+  workbench.railRepairUnits.map((unit) => ({
     id: unit.instanceId,
     imageUrl: counterImageUrlOf(unit),
     name: `${unit.name} @ ${hexLabel(unit.hex)}`,
@@ -752,10 +747,10 @@ const showsLedger = computed(
             清空换轨账本（裁判订正）
           </BaseButton>
         </div>
-        <!-- B14d：铁路修理单位＝**算子图阵列**（本作尚未入库 ⇒ 阵列显示"本组没有可选的算子"） -->
+        <!-- B14d：铁路修理单位＝**算子图阵列**（候选只看盘面实例，库里有记录≠本局已到场） -->
         <CounterPicker
           title="铁路修理单位（13.3f）"
-          hint="13.3f：转换轨距不耗 SP / MP；候选＝具铁路修理能力的单位（本作尚未入库，补员后自动出现）"
+          hint="13.3f：转换轨距不耗 SP / MP；候选＝当前行动方盘面上已落位/已到场的 RR 单位"
           :items="railRepairItems"
           :size="32"
           @pick="gaugeUnitId = $event"
@@ -783,9 +778,10 @@ const showsLedger = computed(
             转换轨距（13.3f：不耗 SP / MP）
           </BaseButton>
         </div>
-        <p v-if="railRepairUnits.length === 0" class="muted">
-          当前单位库里**没有**铁路修理单位算子（RR Bn / RR Rgt 尚未入库）⇒ 13.3f 的逐格转换暂时
-          只能按剧本初设走；补员后本处会自动出现可选单位。
+        <p v-if="workbench.railRepairUnits.length === 0" class="muted">
+          当前行动方的**盘面上**没有铁路修理单位可用（13.3g）：须先在初设落位或随增援到场。
+          本作单位库已收录 3 支——苏 West RR Rgt、德 I-2 / II-2 RR Bn；剧本 1/2 只有苏支， 剧本 3–7
+          三支齐备。
         </p>
 
         <!-- ── ②c 铁路运货（13.3a / 13.3b / 13.3e） ── -->
