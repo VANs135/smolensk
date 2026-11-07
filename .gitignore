@@ -4,6 +4,10 @@ dist/
 release/
 coverage/
 
+# 桌面壳（Tauri）：Rust 编译产物与本机生成物不入库
+src-tauri/target/
+src-tauri/gen/
+
 # 本地环境覆盖（机密变量不入库）
 .env.local
 .env.*.local
