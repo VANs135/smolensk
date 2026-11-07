@@ -6,9 +6,6 @@ import type { HexRef } from '@/data'
 
 const workbench = useWorkbenchStore()
 const recovery = computed(() => workbench.segmentIn(['supply.recovery']))
-const feedingCandidates = computed(() =>
-  workbench.supplyCheckCandidates.filter((unit) => !unit.hasTraceSupply),
-)
 function keyOf(hex: HexRef): string {
   return `${hex.col}.${hex.row}`
 }
@@ -46,8 +43,14 @@ function setLoss(hex: HexRef, id: string, event: Event): void {
         </template>
         <template v-else>
           <details v-if="!workbench.supplyFeedingSettled">
-            <summary>自愿使用图上补给（{{ feedingCandidates.length }} 个断补单位）</summary>
-            <label v-for="unit in feedingCandidates" :key="unit.instanceId" class="choice">
+            <summary>
+              自愿使用图上补给（{{ workbench.supplyFeedingCandidates.length }} 个断补单位）
+            </summary>
+            <label
+              v-for="unit in workbench.supplyFeedingCandidates"
+              :key="unit.instanceId"
+              class="choice"
+            >
               <input
                 v-model="workbench.supplyPhaseInputs.eatOffTheMap[unit.instanceId]"
                 type="checkbox"

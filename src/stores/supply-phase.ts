@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import type { Side } from '@/data'
 import {
+  assessUnitSupply,
   holdingsToT,
   isOutOfSupplyNow,
   planSupplyPhase,
@@ -94,6 +95,31 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
       { die: number; modifiedDice: number; drm: number; raw: string; losses: AttritionResult }
     >
   >({})
+
+  /**
+   * 12.6c / 12.8e：本阶段**可自愿吃图上补给**的候选
+   *
+   * 真断补（`isOutOfSupplyNow`，本回合续命不算）∧ 引擎 12.6c/12.6e 允许吃图上补给
+   * （`assessUnitSupply#canEatOffTheMap`）。不在这里另写阈值或模式判据。
+   */
+  const supplyFeedingCandidates = computed<ConsoleUnit[]>(() =>
+    units.value.filter((unit) => {
+      if (unit.side !== activeSide.value || !unit.isCombat) return false
+      if (!isOutOfSupplyNow(unit, turn())) return false
+      return assessUnitSupply(
+        supplyFacts.value,
+        {
+          id: unit.instanceId,
+          side: unit.side,
+          hex: unit.hex,
+          isCombat: unit.isCombat,
+          re: unit.re,
+          mode: unit.mode.mode,
+        },
+        { mobility: 'truck' },
+      ).canEatOffTheMap
+    }),
+  )
 
   /** 12.10e-B / 12.0：付款对象为待恢复储备或自愿吃图上补给的战斗单位。 */
   const supplyPhaseParticipants = computed<ConsoleUnit[]>(() =>
@@ -567,6 +593,7 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
   }
   return {
     supplyPhasePlan,
+    supplyFeedingCandidates,
     supplyRecoverySettled,
     supplyFeedingSettled,
     attritionAppliedHexes,

@@ -68,6 +68,24 @@ describe('12.6c/12.6d：喂食与断补标记的一键落盘', () => {
     expect(store.applySupplyPhaseFeedingNow()).toBe(false)
   })
 
+  it('候选只列真断补且可吃图上补给的单位（12.8e / 12.6c / 12.6e）', () => {
+    const store = newStore()
+    const plain = placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'plain')
+    placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'sustained')
+    placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'strat')
+    store.setPhase('supply')
+    store.spDumps.push({ id: 'd1', hex: { ...CORE_HEX }, side: 'axis', sp: 4, t: 0 })
+    // 12.8e：本回合靠特殊续命维生的单位**不算**断补
+    const sustained = store.units.find((unit) => unit.instanceId === 'sustained')
+    if (sustained === undefined) throw new Error('续命单位不在盘面上')
+    sustained.sustainedBySpecialSupplyTurn = store.turn
+    // 12.6e：战略模式不能吃图上补给
+    const strat = store.units.find((unit) => unit.instanceId === 'strat')
+    if (strat === undefined) throw new Error('战略模式单位不在盘面上')
+    strat.mode.mode = 'strat'
+    expect(store.supplyFeedingCandidates.map((unit) => unit.instanceId)).toEqual([plain.instanceId])
+  })
+
   it('落盘后**不**立刻重判（本计划就是这一段的结论，重判会覆盖它）', () => {
     const store = newStore()
     store.setPhase('supply')

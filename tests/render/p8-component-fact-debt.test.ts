@@ -40,4 +40,10 @@ describe('P8：组件内另算还债（源码守卫）', () => {
     expect(supply).toContain('workbench.attritionNeedsAllocation')
     expect(supply).not.toContain("losses.kind === 'allSteps'")
   })
+
+  it('#6 SupplyPhasePanel 喂食候选取 store 投影', () => {
+    const panel = source('src/components/supply/SupplyPhasePanel.vue')
+    expect(panel).toContain('supplyFeedingCandidates')
+    expect(panel).not.toContain('hasTraceSupply')
+  })
 })

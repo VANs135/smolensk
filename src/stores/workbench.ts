@@ -1835,6 +1835,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
   const {
     supplyPhasePlan,
+    supplyFeedingCandidates,
     supplyRecoverySettled,
     supplyFeedingSettled,
     attritionAppliedHexes,
@@ -21282,6 +21283,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     supplyPhaseInputs,
     supplyPhaseError,
     supplyPhaseAvailableCap,
+    supplyFeedingCandidates,
     planSupplyPhaseNow,
     clearSupplyPhasePlan,
     applySupplyPhaseRecoveryNow,
