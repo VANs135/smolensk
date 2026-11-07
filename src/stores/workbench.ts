@@ -20983,6 +20983,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     requireAction,
     actionAllowedNow,
     segmentActionKeys,
+    segmentGateQuery,
     segmentDriver,
     segmentIn,
     actionRefusal,
