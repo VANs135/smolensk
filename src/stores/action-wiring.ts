@@ -424,6 +424,13 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     why: '12.8e 返场受 `breakoutReturns[].returnsOnTurn` 的回合约束（比环节更窄）',
   },
 
+  /* ── 只读谓词：界面只查结果，不写盘面（扫描把 `units.value` 读取当写盘而误报） ── */
+
+  isRailRepairUnit: {
+    kind: 'flowState',
+    why: '只读谓词：13.3g 判定实例是否铁路修理单位（函数体内无任何写操作）',
+  },
+
   /* ── 原文给了动作但没给时机（或明说"任何阶段"）⇒ 不加闸 ── */
 
   consolidateAircraftNow: {

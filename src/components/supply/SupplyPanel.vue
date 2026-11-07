@@ -74,9 +74,9 @@ const SOURCE_KINDS = [
 
 /* ── 13.3f / 专规 1.2：轨距账本 —— 「谁能用这条铁路」（与 13.3a 多轨的运量费用无关） ── */
 
-/** 13.3f：铁路修理单位候选（数据标记 `specialized` 含 `'rail_repair'`；本作尚未入库 ⇒ 空） */
+/** 13.3f：铁路修理单位候选（是否铁路修理单位由 store 谓词判定） */
 const railRepairUnits = computed(() =>
-  workbench.units.filter((unit) => unit.specialized.includes('rail_repair')),
+  workbench.units.filter((unit) => workbench.isRailRepairUnit(unit.instanceId)),
 )
 
 /** 13.3f 转换动作的输入（单位实例 + 目标格文本） */

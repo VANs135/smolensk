@@ -28,4 +28,10 @@ describe('P8：组件内另算还债（源码守卫）', () => {
     expect(supply).toContain('isNormalizedHoldings')
     expect(supply).not.toContain('function isNormalized')
   })
+
+  it('#4 SupplyPanel 铁路抢修候选取 store 谓词', () => {
+    const supply = source('src/components/supply/SupplyPanel.vue')
+    expect(supply).toContain('isRailRepairUnit')
+    expect(supply).not.toContain("specialized.includes('rail_repair')")
+  })
 })
