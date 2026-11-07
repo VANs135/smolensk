@@ -174,6 +174,26 @@ export interface SetupPlacing {
   blockedReason: string | null
 }
 
+/**
+ * P4 / UI1-b：**已完成项**（初设队列第三组的只读投影）
+ *
+ * ★ 只供展示：来源全是既有事实 —— `completed` 台账（自选 / 飞机项的落满标记）与
+ *   `containers.pendingShiftWestPlacements`（抽签已自动摆位＝盘面既成事实）。
+ *   本投影**不新增任何 UI 完成标记**，也**不参与任何判定** ——
+ *   `pendingPlacement` / `requiredSetupIssues` / `canFinishSetup` 都不读它。
+ */
+export interface CompletedPlacement {
+  /** 稳定 key（self:条目下标 / air:方:条目下标 / shift:编队 id） */
+  key: string
+  kind: 'self' | 'air' | 'shift'
+  side: Side
+  label: string
+  placed: number
+  total: number
+  imageUrl: string | null
+  category: SetupPlacingCategory
+}
+
 /** 条目类别 → 初设 box 分类（飞机 / SP 与运输点 / 地面与基地） */
 function categoryOfEntry(kind: string): SetupPlacingCategory {
   if (kind === 'aircraft') return 'air'
@@ -828,6 +848,66 @@ export const useSetupStore = defineStore('setup', () => {
       })
     }
     return items
+  })
+
+  /**
+   * P4 / UI1-b：**已完成项**（初设队列第三组）
+   *
+   * 只读投影，不新增状态、不写完成标记：
+   *   · self：`completed['self:条目下标']` 为真（落满即由 `placeSelfInternal` 记）；
+   *   · air：`completed['air:方:条目下标']` 为真（落满即由 `placeAirRowNow` 记）；
+   *   · shift：`completed['shift:编队 id']` 为真，**或** 抽签时已自动摆位（`hexText !== null`，盘面既成事实）。
+   *
+   * ★ 本投影**只供展示**，不参与任何判定（见接口注释）。
+   */
+  const completedPlacements = computed<readonly CompletedPlacement[]>(() => {
+    const rows: CompletedPlacement[] = []
+    for (const entry of selfChoiceEntries.value) {
+      if (completed.value[`self:${entry.index}`] !== true) continue
+      const total = selfInstanceTotalOf(entry)
+      rows.push({
+        key: `self:${entry.index}`,
+        kind: 'self',
+        side: entry.side,
+        label: entry.name ?? entry.raw,
+        placed: total,
+        total,
+        imageUrl: imageUrlOfEntry(entry),
+        category: categoryOfEntry(entry.kind),
+      })
+    }
+    for (const side of ['axis', 'soviet'] as const) {
+      const planSide = airPlanOf(side)
+      if (planSide === null) continue
+      for (const row of planSide.placements) {
+        if (completed.value[`air:${side}:${row.entryIndex}`] !== true) continue
+        rows.push({
+          key: `air:${side}:${row.entryIndex}`,
+          kind: 'air',
+          side,
+          label: row.name,
+          placed: row.count,
+          total: row.count,
+          imageUrl: imageUrlOfAircraftId(row.aircraftId),
+          category: 'air',
+        })
+      }
+    }
+    for (const item of containers.pendingShiftWestPlacements) {
+      // 已自动摆位（有落点）＝盘面既成事实；玩家点图落盘的由 completed 台账确认
+      if (completed.value[`shift:${item.formationId}`] !== true && item.hexText === null) continue
+      rows.push({
+        key: `shift:${item.formationId}`,
+        kind: 'shift',
+        side: 'axis',
+        label: `${item.formationId}（ch10 西移 ${String(item.shiftHexes)} 格）`,
+        placed: 1,
+        total: 1,
+        imageUrl: item.unitIds[0] === undefined ? null : counterImageUrlOfUnit(item.unitIds[0]),
+        category: 'ground',
+      })
+    }
+    return rows
   })
 
   /**
@@ -2432,6 +2512,8 @@ export const useSetupStore = defineStore('setup', () => {
     // 初设 box（地图点选放置）
     placing,
     pendingPlacement,
+    // P4 / UI1-b：已完成项（只读投影；不参与任何判定）
+    completedPlacements,
     initialPlacementsComplete,
     finished,
     beginSelfPlacement,

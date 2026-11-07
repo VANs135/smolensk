@@ -203,35 +203,78 @@ function sideMark(side: 'axis' | 'soviet'): string {
       <BaseButton variant="primary" size="sm" @click="setup.startGameNow()">完成初设</BaseButton>
     </div>
 
-    <div
-      v-if="setup.requiredSetupIssues.length > 0"
-      class="queue__hint"
-      aria-label="必须完成的初设事项"
-    >
-      <BaseTag kind="warning">必须完成</BaseTag>
-      <p v-for="issue in setup.requiredSetupIssues" :key="issue.id">{{ issue.detail }}</p>
-    </div>
+    <!--
+      P4 / UI1-b：三组只读分组（必做事项 / 可自主放弃项 / 已完成项）。
+      计数与条目全部来自 store 投影；四堆叠仍是下面可点图落位的操作区。
+    -->
+    <section class="queue__group" aria-label="必做事项">
+      <h3 class="queue__group-title">
+        <span>必做事项</span>
+        <span class="queue__group-count num">{{ setup.requiredSetupIssues.length }}</span>
+      </h3>
+      <p v-if="setup.requiredSetupIssues.length === 0" class="queue__empty">无必做事项</p>
+      <p
+        v-for="issue in setup.requiredSetupIssues"
+        :key="issue.id"
+        class="queue__hint queue__issue"
+      >
+        <BaseTag kind="warning">{{ issue.rule }}</BaseTag>
+        {{ issue.detail }}
+      </p>
+    </section>
 
-    <div v-if="cursorSide === null && setup.omittablePlacements.length > 0" class="queue__done">
-      <details>
-        <summary>还有未布设项；查看后可选择放弃</summary>
-        <p
-          v-for="item in setup.omittablePlacements"
-          :key="item.kind + ':' + item.side + ':' + item.entryIndex"
+    <section class="queue__group" aria-label="可自主放弃项">
+      <h3 class="queue__group-title">
+        <span>可自主放弃项</span>
+        <span class="queue__group-count num">{{ setup.omittablePlacements.length }}</span>
+      </h3>
+      <div v-if="cursorSide === null && setup.omittablePlacements.length > 0" class="queue__done">
+        <details>
+          <summary>还有未布设项；查看后可选择放弃</summary>
+          <p
+            v-for="item in setup.omittablePlacements"
+            :key="item.kind + ':' + item.side + ':' + item.entryIndex"
+          >
+            {{ sideName(item.side) }}：{{ item.label }} × {{ item.remaining }}
+          </p>
+          <label
+            ><input
+              v-model="omitConfirmed"
+              type="checkbox"
+            />确认以上普通未布设单位从本局移除</label
+          >
+          <BaseButton
+            size="sm"
+            :disabled="!omitConfirmed || setup.requiredSetupIssues.length > 0"
+            @click="setup.startGameNow()"
+            >确认放弃未布设项并开局</BaseButton
+          >
+        </details>
+      </div>
+      <p v-else-if="setup.omittablePlacements.length === 0" class="queue__empty">无可自主放弃项</p>
+    </section>
+
+    <section class="queue__group" aria-label="已完成项">
+      <h3 class="queue__group-title">
+        <span>已完成项</span>
+        <span class="queue__group-count num">{{ setup.completedPlacements.length }}</span>
+      </h3>
+      <ul v-if="setup.completedPlacements.length > 0" class="queue__placed">
+        <li
+          v-for="placement in setup.completedPlacements"
+          :key="placement.key"
+          class="queue__placed-row"
         >
-          {{ sideName(item.side) }}：{{ item.label }} × {{ item.remaining }}
-        </p>
-        <label
-          ><input v-model="omitConfirmed" type="checkbox" />确认以上普通未布设单位从本局移除</label
-        >
-        <BaseButton
-          size="sm"
-          :disabled="!omitConfirmed || setup.requiredSetupIssues.length > 0"
-          @click="setup.startGameNow()"
-          >确认放弃未布设项并开局</BaseButton
-        >
-      </details>
-    </div>
+          <span v-if="placement.imageUrl !== null" class="queue__counter">
+            <img :src="placement.imageUrl" :alt="placement.label" class="queue__counter-img" />
+          </span>
+          <span class="queue__side num">{{ sideMark(placement.side) }}</span>
+          <span class="queue__label">{{ placement.label }}</span>
+          <span class="queue__badge num">{{ placement.placed }}/{{ placement.total }}</span>
+        </li>
+      </ul>
+      <p v-else class="queue__empty">暂无已完成项</p>
+    </section>
 
     <div v-for="stack in stacks" v-show="!allPlaced" :key="stack.key" class="queue__stack">
       <button type="button" class="queue__stack-btn" @click="toggleStack(stack.key)">
@@ -355,6 +398,49 @@ function sideMark(side: 'axis' | 'soviet'): string {
   flex-direction: column;
   gap: var(--space-1);
   padding-bottom: var(--space-1);
+}
+
+/* P4 / UI1-b：三组的标题 / 分隔线 / 已完成列表（只做展示，沿用现有令牌） */
+.queue__group {
+  border-top: 1px solid var(--color-rule);
+  padding: var(--space-1) 0;
+}
+
+.queue__group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.queue__group-count {
+  color: var(--color-muted);
+  font-weight: 400;
+}
+
+.queue__issue {
+  margin: 2px 0 0;
+}
+
+.queue__placed {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.queue__placed-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-2);
 }
 
 .queue {
