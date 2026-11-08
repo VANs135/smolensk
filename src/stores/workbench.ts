@@ -1176,6 +1176,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   // ── 摆子 ──
   const units = ref<ConsoleUnit[]>([])
+  /** 1.4b：盒内算子仍属于盘面，入盒回合防止同一移动阶段再次出盒。 */
+  const edgeBoxHoldings = ref<Record<'northeast' | 'southeast', ConsoleUnit[]>>({
+    northeast: [],
+    southeast: [],
+  })
+  const edgeBoxEnteredOn = ref<Record<string, number>>({})
   /** 当前选中的算子实例 id */
   const selectedId = ref<string | null>(null)
   /** 待摆放的单位库记录（从单位列表里点选后进入「摆放模式」） */
@@ -3570,6 +3576,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function railCapUsedBy(side: Side): number {
     return railCapSpentThisTurn.value.find((item) => item.side === side)?.points ?? 0
   }
+  function spendRailCapacity(side: Side, points: number): void {
+    railCapSpentThisTurn.value = [
+      ...railCapSpentThisTurn.value.filter((item) => item.side !== side),
+      { side, points: railCapUsedBy(side) + points },
+    ]
+  }
   const railCapRemaining = computed<{ axis: number; soviet: number }>(() => ({
     axis: railCapToday.value.axis - railCapUsedBy('axis'),
     soviet: railCapToday.value.soviet - railCapUsedBy('soviet'),
@@ -4054,10 +4066,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       // 12.2a：这批 T 本阶段已由「铁路」运达 ⇒ 之后不能再换其他方式
       addSpRelayLock(to, side, 'rail', amountT)
     }
-    railCapSpentThisTurn.value = [
-      ...railCapSpentThisTurn.value.filter((item) => item.side !== side),
-      { side, points: railCapUsedBy(side) + outcome.data.cost },
-    ]
+    spendRailCapacity(side, outcome.data.cost)
     railMoveError.value = null
     lastRailMove.value = {
       rule: outcome.data.rule,
@@ -6821,6 +6830,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 全部放完 ⇒ 本次移动就地收束（不必再点「结束移动」）
     if (activeMoveUnits.value.length === 0) finishMove()
     return true
+  }
+
+  /** 1.4b：入盒已经落盘，旧移动的撤销不得把盒内单位拖回图上。 */
+  function sealEdgeBoxTransferNow(unitId: string): void {
+    groundMovement.markIrreversible('边缘盒进出（1.4b）')
+    const move = moveInteraction.value
+    if (move !== null && move.unitIds.includes(unitId) && activeMoveUnits.value.length === 0) {
+      moveInteraction.value = { ...move, finished: true }
+      pendingZocConfirm.value = null
+    }
   }
 
   /** C5：选择方式 —— 单个单位 / 整堆叠（6.1） */
@@ -20539,6 +20558,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     fireResolution.resetCombat()
     fireResolution.resetBarrage()
     units.value = []
+    edgeBoxHoldings.value = { northeast: [], southeast: [] }
+    edgeBoxEnteredOn.value = {}
     selectedId.value = null
     pendingRecord.value = null
     tool.value = 'move'
@@ -20842,6 +20863,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ['freeRailEdgeHex', freeRailEdgeHex],
     // ① 盘面实体
     ['units', units],
+    ['edgeBoxHoldings', edgeBoxHoldings],
+    ['edgeBoxEnteredOn', edgeBoxEnteredOn],
     ['spDumps', spDumps],
     // 14.9（T16）：图外空军盒补给库存账本（`${side}:${box}` → {sp,t}）
     ['offMapSupplyStocks', offMapSupplyStocks],
@@ -20931,7 +20954,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   不存则"离图盒装货→存档→读档"后已扣的库存复活（同时在途 SP 也还在）⇒ 凭空多出补给。
    *   旧档（6）缺该键 ⇒ 读成 `{}`；绝不回填 `spDumps`，不吞既有地图库存。
    */
-  const BOARD_SNAPSHOT_VERSION = 7
+  // v8（1.4b）：盒内地面单位和入盒回合随盘面保存。
+  const BOARD_SNAPSHOT_VERSION = 8
+  const V8_FIELDS = ['edgeBoxHoldings', 'edgeBoxEnteredOn']
   const V6_FIELDS = [
     'segmentStepIndex',
     'hqFuelThrows',
@@ -21012,12 +21037,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   const LEGACY_MISSING_KEYS: Readonly<Record<number, readonly string[]>> = {
     // v3：补员还是"账本数字"（无 replPending/replFtrTac），也没有图外空军盒驻机名单
-    3: ['replPending', 'replFtrTac', 'airBoxMembers', ...V6_FIELDS, 'offMapSupplyStocks'],
+    3: [
+      'replPending',
+      'replFtrTac',
+      'airBoxMembers',
+      ...V6_FIELDS,
+      'offMapSupplyStocks',
+      ...V8_FIELDS,
+    ],
     // v4：§5-D 补员盘面化之后，但还没有 airBoxMembers
-    4: ['airBoxMembers', ...V6_FIELDS, 'offMapSupplyStocks'],
-    5: [...V6_FIELDS, 'offMapSupplyStocks'],
+    4: ['airBoxMembers', ...V6_FIELDS, 'offMapSupplyStocks', ...V8_FIELDS],
+    5: [...V6_FIELDS, 'offMapSupplyStocks', ...V8_FIELDS],
     // v6（T16）：字段表新增图外补给库存；缺键按 {} 读，spDumps 原样保留。
-    6: ['offMapSupplyStocks'],
+    6: ['offMapSupplyStocks', ...V8_FIELDS],
+    7: V8_FIELDS,
   }
   const boardRegistry = createSnapshotRegistry({
     version: BOARD_SNAPSHOT_VERSION,
@@ -21259,6 +21292,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     rng,
     drawCount,
     units,
+    edgeBoxHoldings,
+    edgeBoxEnteredOn,
+    sealEdgeBoxTransferNow,
     selectedId,
     pendingRecord,
     tool,
@@ -21811,6 +21847,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     railMoveInputs,
     railCapSpentThisTurn,
     railCapRemaining,
+    spendRailCapacity,
     railCapUsedBy,
     railMoveFacts,
     railPathBetween,

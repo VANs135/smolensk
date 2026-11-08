@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, toRef } from 'vue'
 
 import {
   auxCards,
@@ -10,7 +10,8 @@ import {
   unitsAxis,
   unitsSoviet,
 } from '@/data'
-import type { Side } from '@/data'
+import type { HexRef, Side } from '@/data'
+import { sameHex } from '@/engine/hex-geometry'
 import { pickIndex, roll1d6 } from '@/engine/rng'
 import { SetupDrawSnapshotSchema } from '@/engine/setup-draw-snapshot'
 import { createId } from '@/shared'
@@ -28,7 +29,9 @@ import {
   planOffMapAirBoxFlight,
   planBreakdownTake,
   planEdgeBoxMove,
-  isEdgeBoxExitFuelFree,
+  edgeBoxConnectsHex,
+  validateRailMovement,
+  type RailCargoView,
   planFormationBoxHide,
   planFormationBoxReveal,
   deriveDrawComposition,
@@ -54,9 +57,11 @@ import {
 import type { BreakdownCreateRequest } from '@/engine/rules'
 
 import { useGameSessionStore, type BoardCodec } from './session'
-import { useWorkbenchStore } from './workbench'
+import { movementPhaseOf, useWorkbenchStore } from './workbench'
 import {
   counterImageUrlOf,
+  availableMaOf,
+  needsFuelOf,
   toConsoleUnit,
   unitChoices,
   isAirDeadPileEntry,
@@ -184,7 +189,7 @@ export const useContainersStore = defineStore('containers', () => {
    * 单位在盒内即**不在图上**，故这里存**算子本体**（进入时从操作台 `units` 取出、离开时放回），
    * 与操作台的死亡堆同一思路：操作台只持盘面，盒内容由本 store 持。
    */
-  const edgeBoxHeld = ref<Record<EdgeBoxId, ConsoleUnit[]>>({ northeast: [], southeast: [] })
+  const edgeBoxHeld = toRef(workbench, 'edgeBoxHoldings')
 
   /** 编队收纳盒（编队 id → 归属方 + 全部成员 + 仍在图上的成员；13.7 / 3.6f） */
   const formationBoxes = ref<
@@ -2051,87 +2056,208 @@ export const useContainersStore = defineStore('containers', () => {
 
   /* ────────────────────────────── 边缘盒（1.4b） ────────────────────────────── */
 
-  /** 1.4b：把苏方地面单位移入 / 移出边缘盒（仅移动阶段、须在边缘补给源格） */
-  function moveEdgeBox(input: {
+  interface EdgeTransfer {
     box: EdgeBoxId
     instanceId: string
     direction: 'enter' | 'exit'
-    fromSupplySourceHex: boolean
     useRailCap?: boolean
-  }): boolean {
-    // 单位可能在图上（进入时）或在盒内（离开时）；两处都查
-    const unit =
-      workbench.units.find((item) => item.instanceId === input.instanceId) ??
-      edgeBoxHeld.value[input.box].find((item) => item.instanceId === input.instanceId)
-    if (unit === undefined) {
-      lastAction.value = {
-        ok: false,
-        rule: '1.4b',
-        detail: '单位既不在图上也不在这个边缘盒内',
-        scope: '边缘盒',
-      }
-      return false
-    }
+  }
+
+  const canUseEdgeBoxes = computed(
+    () =>
+      workbench.activeSide === 'soviet' &&
+      workbench.phase === 'movement' &&
+      workbench.actionAllowedNow('move.order'),
+  )
+
+  function edgeBoxSources(box: EdgeBoxId): readonly HexRef[] {
+    if (workbench.activeSide !== 'soviet' || workbench.phase !== 'movement') return []
+    return workbench.openSupplySourceHexes.filter((hex) => edgeBoxConnectsHex(box, hex))
+  }
+
+  /** 1.4b：候选预览和提交走同一判定；玩家只选单位、方式与出盒格。 */
+  function edgeTransferPlan(input: EdgeTransfer, target?: HexRef) {
+    const reject = (reason: string, rule = '1.4b') => ({ ok: false as const, reason, rule })
+    const entering = input.direction === 'enter'
+    const unit = (entering ? workbench.units : edgeBoxHeld.value[input.box]).find(
+      (item) => item.instanceId === input.instanceId,
+    )
+    if (!unit) return reject(entering ? '单位不在图上' : '该单位不在这个边缘盒内')
+    if (unit.side !== 'soviet') return reject('edgeBoxSovietOnly')
+    const hex = entering ? unit.hex : target
     const plan = planEdgeBoxMove({
       side: unit.side,
       phase: workbench.phase,
       unitKind: 'ground',
-      fromSupplySourceHex: input.fromSupplySourceHex,
       direction: input.direction,
+      fromSupplySourceHex:
+        hex !== undefined && edgeBoxSources(input.box).some((source) => sameHex(source, hex)),
       ...(input.useRailCap === undefined ? {} : { useRailCap: input.useRailCap }),
     })
-    if (!plan.ok) {
-      lastAction.value = { ok: false, rule: plan.rule, detail: plan.reason, scope: '边缘盒' }
-      workbench.pushLog('danger', `边缘盒进出被拒：${plan.reason}（${plan.rule}）`, plan.rule)
-      return false
-    }
-    const current = edgeBoxHeld.value[input.box]
-    if (input.direction === 'enter') {
-      const index = workbench.units.findIndex((item) => item.instanceId === input.instanceId)
-      if (index < 0) {
-        lastAction.value = { ok: false, rule: '1.4b', detail: '单位不在图上', scope: '边缘盒' }
-        return false
-      }
-      const [moved] = workbench.units.splice(index, 1)
-      if (moved === undefined) return false
-      edgeBoxHeld.value = { ...edgeBoxHeld.value, [input.box]: [...current, moved] }
+    if (!plan.ok) return plan
+    if (!hex || !workbench.actionAllowedNow('move.order')) return reject('当前环节不能进出边缘盒')
+    if (workbench.settlementInProgress !== null || workbench.pendingZocConfirm !== null)
+      return reject('请先完成当前待决')
+    if ((unit.noncombatKind != null && unit.noncombatTransport <= 0) || unit.locked)
+      return reject('该单位不能移动')
+    const moving = workbench.moveInteraction
+    if (
+      moving !== null &&
+      !moving.finished &&
+      (!entering || !moving.unitIds.includes(unit.instanceId))
+    )
+      return reject('请先完成当前移动', '6.1g')
+    if (entering && (unit.movementEnded || unit.mpLockedThisPhase))
+      return reject('本阶段已停止移动', '6.1')
+    if (!entering && workbench.edgeBoxEnteredOn[unit.instanceId] === workbench.turn)
+      return reject('本阶段入盒后须停止移动')
+    const spent = entering ? unit.mpSpent : 0
+    const ma = availableMaOf(
+      unit,
+      movementPhaseOf(workbench.phase),
+      workbench.sovietFirstTurnMaFactor(unit),
+    )
+    let railCost = 0
+    let railStops = false
+    if (input.useRailCap === true) {
+      const facts = workbench.railMoveFacts
+      const cargo: RailCargoView | null =
+        unit.noncombatTransport > 0
+          ? {
+              kind: 'transportPoint',
+              id: unit.instanceId,
+              side: unit.side,
+              size: unit.noncombatTransport,
+            }
+          : unit.isCombat
+            ? {
+                kind: 'unit',
+                id: unit.instanceId,
+                side: unit.side,
+                re: unit.re,
+                moveMa: unit.faces.move.ma,
+                mobility: unit.faces.move.mobility,
+                mode: unit.mode.mode,
+                dg: unit.mode.dg,
+                currentMa: unit.raw.ma,
+                preLoadMp: spent,
+              }
+            : null
+      if (!cargo) return reject('该单位不能铁路运输', '13.3a')
+      // 1.4b 已指定唯一图内端点为本方开放源格；此格不另要求聚落或驻军。
+      // 路径没有图内轨段，只按该格的轨距、EZOC 与运输破坏区判铁路规则。
+      const rail = validateRailMovement({
+        phase: 'movement',
+        cargo,
+        from: hex,
+        to: hex,
+        path: [hex],
+        facts: {
+          ...facts,
+          isControlled: () => true,
+          isDetrainable: () => true,
+          isRailRepairUnit: () => unit.specialized.includes('rail_repair'),
+        },
+      })
+      if (!rail.ok) return rail
+      railCost = rail.data.cost
+      railStops = rail.data.postDetrainMp <= 0
+      if (railCost > workbench.railCapRemaining[unit.side])
+        return reject('本回合铁路容量不足', '13.3b')
     } else {
-      const held = current.find((item) => item.instanceId === input.instanceId)
-      if (held === undefined) {
-        lastAction.value = {
-          ok: false,
-          rule: '1.4b',
-          detail: '该单位不在这个边缘盒内',
-          scope: '边缘盒',
-        }
-        return false
-      }
-      edgeBoxHeld.value = {
-        ...edgeBoxHeld.value,
-        [input.box]: current.filter((item) => item.instanceId !== input.instanceId),
-      }
-      /*
-       * 专规 1.4b：「Units must stop movement when entering a box. **When leaving a box, units are
-       * fueled at no SP cost** (via the "1T per unit" method).」
-       *
-       * ★ 修（2026-11-01）：修前这里只写了 `movementEnded = true`，注释却写着"离箱免费供油" ——
-       *   文案在说供油、代码没供。`ConsoleUnit.fuelled` 缺省是 **false**（12.5c：消耗时支付），
-       *   于是离箱的单位**没有加注**，下一段还要再付一次燃料 —— 与原文相反（原文是"免费"，
-       *   不是"不用加油"）。按 12.5c-C 的**单单位法**（1T/单位）落账：`fuelMethod = 'singleUnit'`
-       *   ⇒ 持续期只到本阶段末（与"1T per unit"的方法一致）。
-       */
-      held.movementEnded = true
-      if (isEdgeBoxExitFuelFree()) {
-        held.fuelled = true
-        held.fuelMethod = 'singleUnit'
-      }
-      workbench.units = [...workbench.units, held]
+      if (spent + plan.data.entryMp > ma) return reject('剩余 MP 不足', '6.1')
+      if (entering && needsFuelOf(unit) && !unit.fuelled) return reject('先加注燃料', '12.5a')
     }
-    lastAction.value = { ok: true, rule: plan.rule, detail: plan.data.detail, scope: '边缘盒' }
-    workbench.pushLog('info', `${unit.name} ${plan.data.detail}`, plan.rule)
-    return true
+    return { ok: true as const, unit, hex, spent, railCost, railStops, plan: plan.data }
   }
 
+  function edgeBoxEnterCandidates(box: EdgeBoxId, useRailCap: boolean) {
+    return workbench.units.flatMap((unit) => {
+      const result = edgeTransferPlan({
+        box,
+        instanceId: unit.instanceId,
+        direction: 'enter',
+        useRailCap,
+      })
+      return result.ok
+        ? [{ id: unit.instanceId, label: `${unit.name} · ${result.hex.col}.${result.hex.row}` }]
+        : []
+    })
+  }
+
+  function edgeBoxExitCandidates(box: EdgeBoxId, instanceId: string, useRailCap: boolean) {
+    return edgeBoxSources(box).filter(
+      (hex) => edgeTransferPlan({ box, instanceId, direction: 'exit', useRailCap }, hex).ok,
+    )
+  }
+
+  function beginEdgeBoxExitHexPickNow(
+    box: EdgeBoxId,
+    instanceId: string,
+    useRailCap: boolean,
+  ): void {
+    const candidates = edgeBoxExitCandidates(box, instanceId, useRailCap)
+    if (candidates.length === 0) return
+    workbench.beginHexPick({
+      label: '边缘盒出盒格',
+      rule: '1.4b',
+      candidates,
+      apply: (hex) =>
+        moveEdgeBox({ box, instanceId, direction: 'exit', useRailCap, targetHex: hex }),
+    })
+  }
+
+  function moveEdgeBox(input: EdgeTransfer & { targetHex?: HexRef }): boolean {
+    const result = edgeTransferPlan(input, input.targetHex)
+    if (!result.ok) {
+      lastAction.value = { ok: false, rule: result.rule, detail: result.reason, scope: '边缘盒' }
+      workbench.pushLog(
+        'warning',
+        `边缘盒进出被拒：${result.reason}（${result.rule}）`,
+        result.rule,
+      )
+      return false
+    }
+    const { unit, hex, spent, railCost, railStops, plan } = result
+    const current = edgeBoxHeld.value[input.box]
+    if (railCost > 0) workbench.spendRailCapacity(unit.side, railCost)
+    unit.mpSpent = spent + plan.entryMp
+    if (input.direction === 'enter') {
+      unit.movementEnded = true
+      workbench.units = workbench.units.filter((item) => item.instanceId !== unit.instanceId)
+      edgeBoxHeld.value = { ...edgeBoxHeld.value, [input.box]: [...current, unit] }
+      workbench.edgeBoxEnteredOn = {
+        ...workbench.edgeBoxEnteredOn,
+        [unit.instanceId]: workbench.turn,
+      }
+      if (workbench.selectedId === unit.instanceId) workbench.selectedId = null
+    } else {
+      edgeBoxHeld.value = {
+        ...edgeBoxHeld.value,
+        [input.box]: current.filter((item) => item.instanceId !== unit.instanceId),
+      }
+      const entryTurns = { ...workbench.edgeBoxEnteredOn }
+      delete entryTurns[unit.instanceId]
+      workbench.edgeBoxEnteredOn = entryTurns
+      unit.hex = { ...hex }
+      unit.movementEnded = railStops
+      unit.mpLockedThisPhase = false
+      if (plan.exitFuelsFree) {
+        unit.fuelled = true
+        unit.fuelMethod = 'singleUnit'
+      }
+      workbench.units = [...workbench.units, unit]
+    }
+    workbench.sealEdgeBoxTransferNow(unit.instanceId)
+    const payment = railCost > 0 ? ` · 铁路容量 -${railCost}` : ''
+    lastAction.value = { ok: true, rule: plan.rule, detail: plan.detail, scope: '边缘盒' }
+    workbench.pushLog(
+      'info',
+      `${unit.name} · ${hex.col}.${hex.row} · ${plan.detail}${payment}`,
+      plan.rule,
+    )
+    return true
+  }
   /* ────────────────────────────── 编队收纳盒（13.7 / 3.6f） ────────────────────────────── */
 
   /** 13.7：把编队下属收纳进盒（图上只留标记，构成迷雾） */
@@ -2232,6 +2358,7 @@ export const useContainersStore = defineStore('containers', () => {
     }
     workbench.clearAirBoxMembers()
     edgeBoxHeld.value = { northeast: [], southeast: [] }
+    workbench.edgeBoxEnteredOn = {}
     formationBoxes.value = {}
     resetSetupDraws()
     lastAction.value = null
@@ -2352,6 +2479,10 @@ export const useContainersStore = defineStore('containers', () => {
     activateAirBox,
     setAirInBox,
     moveEdgeBox,
+    canUseEdgeBoxes,
+    edgeBoxEnterCandidates,
+    edgeBoxExitCandidates,
+    beginEdgeBoxExitHexPickNow,
     hideInFormationBox,
     revealFromFormationBox,
     setScenario,

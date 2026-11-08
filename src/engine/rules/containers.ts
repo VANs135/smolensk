@@ -1,7 +1,7 @@
 import { markers, rulesConstants, scenarios, formations } from '@/data'
 import type { HexRef, Side, UnitSide } from '@/data'
 
-import { isOnMap, neighbor } from '../hex-geometry'
+import { HEX_BOUNDS, isOnMap, neighbor } from '../hex-geometry'
 
 import { fail, succeed, type RuleOutcome } from '../result-types'
 import type { AirStatus, FlightWeather, GamePhase, GroundWeather, UnitKind } from '../state-types'
@@ -1561,6 +1561,15 @@ export interface EdgeBoxView extends BoxView {
   rules: EdgeBoxRules
 }
 
+/** 1.4b：东北盒接北/东边，东南盒接南/东边。开放补给源由剧本账本提供。 */
+export function edgeBoxConnectsHex(box: EdgeBoxId, hex: HexRef): boolean {
+  return (
+    isOnMap(hex) &&
+    (hex.col === HEX_BOUNDS.colEnd ||
+      !isOnMap(neighbor(hex, edgeBoxConnection(box) === 'northAndEast' ? 'N' : 'S')))
+  )
+}
+
 /**
  * 边缘盒视图（专规 1.4b）
  *
@@ -1584,7 +1593,7 @@ export function edgeBoxView(input: { box: EdgeBoxId; units: readonly BoxUnitView
     artwork: boxArtwork(boxId),
     notes: [
       '1.4b：**仅苏方地面单位**可用；只在**移动阶段**进出（反应/进击阶段不得进出，撤退也不行）',
-      `1.4b：进入费用 ${rules.entryMp} MP，或改用铁路容量（1 点）`,
+      `1.4b：进出均消耗 ${rules.entryMp} MP，或使用铁路容量`,
       '1.4b：进入即须**停止移动**；离开时按「1T/单位」**免费**加注燃料（不耗 SP）',
       '1.4b：盒内只有 trace supply —— **图上单位不得**从盒内取 SP 或追溯补给',
       `1.4b 连接：${edgeBoxConnection(input.box) === 'northAndEast' ? '北、东边缘所有苏军补给源' : '南、东边缘所有苏军补给源'}`,
@@ -1606,7 +1615,7 @@ export function planEdgeBoxMove(input: {
   unitKind: UnitKind
   fromSupplySourceHex: boolean
   direction: 'enter' | 'exit'
-  /** 进入时是否改用铁路容量（1.4b：1 MP 或 Rail Cap） */
+  /** 进出是否改用铁路容量（1.4b：1 MP 或 Rail Cap） */
   useRailCap?: boolean
 }): RuleOutcome<{ rule: string; entryMp: number; exitFuelsFree: boolean; detail: string }> {
   const check = canEnterEdgeBox({
@@ -1621,10 +1630,9 @@ export function planEdgeBoxMove(input: {
     rule: EDGE_BOX_RULE,
     entryMp: input.useRailCap === true ? 0 : rules.entryMp,
     exitFuelsFree: rules.exitFuelsFree,
-    detail:
-      (input.direction === 'enter'
-        ? `进入边缘盒：${input.useRailCap === true ? '消耗 1 点铁路容量' : `消耗 ${rules.entryMp} MP`}，进入即停止移动（1.4b）`
-        : `离开边缘盒：按「1T/单位」免费加注燃料（不耗 SP，1.4b）`) + '；撤退不得进出（1.4b）',
+    detail: `${input.direction === 'enter' ? '进入边缘盒' : '离开边缘盒'}：${
+      input.useRailCap === true ? '使用铁路容量' : `消耗 ${rules.entryMp} MP`
+    }，${input.direction === 'enter' ? '停止移动' : '免费加注燃料'}（1.4b）`,
   })
 }
 

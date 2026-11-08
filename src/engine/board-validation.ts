@@ -44,6 +44,10 @@ const air = entity
 const entities = z
   .object({
     units: z.array(ground),
+    edgeBoxHoldings: z
+      .object({ northeast: z.array(ground), southeast: z.array(ground) })
+      .optional(),
+    edgeBoxEnteredOn: z.record(z.number().int().positive()).optional(),
     airUnits: z.array(air),
     deadPile: z.array(z.union([ground, air])),
     spDumps: z.array(
@@ -64,7 +68,14 @@ const entities = z
 export function validBoardEntities(fields: Record<string, unknown>): boolean {
   const result = entities.safeParse(fields)
   if (!result.success) return false
-  const ids = [...result.data.units, ...result.data.airUnits, ...result.data.deadPile].map(
+  const held = [
+    ...(result.data.edgeBoxHoldings?.northeast ?? []),
+    ...(result.data.edgeBoxHoldings?.southeast ?? []),
+  ]
+  if (held.some((unit) => unit.side !== 'soviet')) return false
+  const heldIds = new Set(held.map((unit) => unit.instanceId))
+  if (Object.keys(result.data.edgeBoxEnteredOn ?? {}).some((id) => !heldIds.has(id))) return false
+  const ids = [...result.data.units, ...result.data.airUnits, ...result.data.deadPile, ...held].map(
     (e) => e.instanceId,
   )
   if (new Set(ids).size !== ids.length) return false

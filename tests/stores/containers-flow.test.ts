@@ -625,96 +625,103 @@ describe('W7 C12：地图外空军盒 / 边缘盒 / 编队收纳盒', () => {
     expect(containers.aircraftInBox.axis).toHaveLength(0)
   })
 
-  it('C12：边缘盒 —— 仅苏方地面单位、仅移动阶段；进出与盘面同步（1.4b）', () => {
-    const soviet = place(workbench, otherClassParent(), someHex(), 'soviet', 'ru-1')
-    // 阶段不对：拒绝
-    workbench.setPhase('reaction')
-    expect(
-      containers.moveEdgeBox({
-        box: 'southeast',
-        instanceId: soviet.instanceId,
-        direction: 'enter',
-        fromSupplySourceHex: true,
-      }),
-    ).toBe(false)
-    expect(containers.lastAction).toMatchObject({ ok: false, rule: '1.4b' })
-
-    // 移动阶段：进入盒（离开盘面）
+  it('1.4b：剧本 1 仅连接开放边缘源；入盒扣 MP 并停止，下一回合可从另一格出盒', () => {
+    workbench.setScenarioId('1')
+    workbench.setActiveSide('soviet')
     workbench.setPhase('movement')
-    expect(
-      containers.moveEdgeBox({
-        box: 'southeast',
-        instanceId: soviet.instanceId,
-        direction: 'enter',
-        fromSupplySourceHex: true,
-      }),
-    ).toBe(true)
-    expect(workbench.units).toHaveLength(0)
-    expect(containers.edgeBoxUnits.southeast.map((item) => item.id)).toEqual(['ru-1'])
+    const unit = place(workbench, eligibleDivisionRecord(), someHex(), 'soviet', 'ru-edge')
+    const enter = { box: 'southeast', instanceId: unit.instanceId, direction: 'enter' } as const
+    const exit = { box: 'southeast', instanceId: unit.instanceId, direction: 'exit' } as const
 
-    // 离开盒（回到图上，1.4b：离箱免费供油）
-    expect(
-      containers.moveEdgeBox({
-        box: 'southeast',
-        instanceId: soviet.instanceId,
-        direction: 'exit',
-        fromSupplySourceHex: true,
-      }),
-    ).toBe(true)
-    expect(workbench.units.map((unit) => unit.instanceId)).toEqual(['ru-1'])
+    // 普通内陆格不能进盒。
+    enterStep(workbench, 'move.order')
+    unit.hex = someHex()
+    expect(containers.moveEdgeBox(enter)).toBe(false)
+    expect(unit.mpSpent).toBe(0)
+    // 东边源可进两个盒；北边 37.35 只接东北盒。
+    unit.hex = { col: 37, row: 35 }
+    expect(containers.moveEdgeBox(enter)).toBe(false)
+    unit.hex = { col: 62, row: 35 }
+    expect(containers.edgeBoxEnterCandidates('southeast', false)).toEqual([
+      expect.objectContaining({ id: unit.instanceId }),
+    ])
+    expect(containers.moveEdgeBox(enter)).toBe(true)
+    expect(workbench.units).toHaveLength(0)
+    expect(containers.edgeBoxHeld.southeast[0]).toMatchObject({ mpSpent: 1, movementEnded: true })
+    expect(containers.moveEdgeBox({ ...exit, targetHex: { col: 29, row: 1 } })).toBe(false)
+
+    // 盒内算子和本阶段的入盒记录随盘面快照恢复。
+    const snapshot = workbench.snapshotBoard()
+    containers.resetContainers()
+    workbench.restoreBoard(snapshot, true)
+    expect(containers.edgeBoxUnits.southeast.map((item) => item.id)).toEqual([unit.instanceId])
+    expect(containers.moveEdgeBox({ ...exit, targetHex: { col: 29, row: 1 } })).toBe(false)
+    workbench.setTurn(2)
+    expect(containers.moveEdgeBox({ ...exit, targetHex: someHex() })).toBe(false)
+    containers.beginEdgeBoxExitHexPickNow('southeast', unit.instanceId, false)
+    expect(workbench.hexPickView?.candidates).toContainEqual({ col: 29, row: 1 })
+    expect(workbench.pickHexFor({ col: 29, row: 1 })).toBe(true)
+    expect(workbench.units[0]).toMatchObject({
+      instanceId: unit.instanceId,
+      hex: { col: 29, row: 1 },
+      mpSpent: 1,
+      fuelled: true,
+      fuelMethod: 'singleUnit',
+      movementEnded: false,
+    })
     expect(containers.edgeBoxUnits.southeast).toHaveLength(0)
   })
 
-  it('★ 1.4b：离开边缘盒即**免费加注**（fueled at no SP cost，1T per unit 法）', () => {
-    /*
-     * 原文（专规 1.4b）：「Units must stop movement when entering a box. **When leaving a box,
-     * units are fueled at no SP cost** (via the "1T per unit" method).」
-     *
-     * 修前 `moveEdgeBox` 的 exit 分支只写 `movementEnded = true`，注释却说"离箱免费供油" ——
-     * 文案在说供油、代码没供。`ConsoleUnit.fuelled` 缺省是 false（12.5c 消耗时支付），
-     * 于是离箱单位还要**再付一次**燃料，与"免费"相反。
-     * 落账用 12.5c-C 的单单位法（1T/单位）⇒ `fuelMethod = 'singleUnit'`（只本阶段有效）。
-     */
-    const soviet = place(workbench, otherClassParent(), someHex(), 'soviet', 'ru-fuel')
+  it('1.4b：铁路替代费用扣同一运力账本，额度不足时不移动算子', () => {
+    workbench.setScenarioId('1')
+    workbench.setActiveSide('soviet')
     workbench.setPhase('movement')
-    expect(soviet.fuelled).toBe(false) // 缺省未加注
-    expect(
-      containers.moveEdgeBox({
-        box: 'southeast',
-        instanceId: soviet.instanceId,
-        direction: 'enter',
-        fromSupplySourceHex: true,
-      }),
-    ).toBe(true)
-    expect(
-      containers.moveEdgeBox({
-        box: 'southeast',
-        instanceId: soviet.instanceId,
-        direction: 'exit',
-        fromSupplySourceHex: true,
-      }),
-    ).toBe(true)
-    const back = workbench.units.find((unit) => unit.instanceId === 'ru-fuel')!
-    expect(back.fuelled).toBe(true)
-    expect(back.fuelMethod).toBe('singleUnit')
-    // 1.4b：进/出盒都必须停下（不得接着走）
-    expect(back.movementEnded).toBe(true)
+    enterStep(workbench, 'move.order')
+    const source = workbench.openSupplySourceHexes.find(
+      (hex) => hex.col === 62 && workbench.railMoveFacts.hasRail(hex),
+    )!
+    expect(source).toBeDefined()
+    const unit = place(workbench, eligibleDivisionRecord(), source, 'soviet', 'ru-rail-edge')
+    unit.mode = { ...unit.mode, mode: 'move' }
+    const enter = {
+      box: 'northeast',
+      instanceId: unit.instanceId,
+      direction: 'enter',
+      useRailCap: true,
+    } as const
+    const available = workbench.railCapRemaining.soviet
+    workbench.railCapSpentThisTurn = [{ side: 'soviet', points: available }]
+    expect(containers.moveEdgeBox(enter)).toBe(false)
+    expect(workbench.units).toHaveLength(1)
+    expect(workbench.railCapRemaining.soviet).toBe(0)
+
+    workbench.railCapSpentThisTurn = []
+    expect(containers.moveEdgeBox(enter)).toBe(true)
+    const spent = available - workbench.railCapRemaining.soviet
+    expect(spent).toBeGreaterThan(0)
+    expect(unit.mpSpent).toBe(0)
+    workbench.setTurn(2)
+    workbench.railCapSpentThisTurn = []
+    expect(containers.moveEdgeBox({ ...enter, direction: 'exit', targetHex: source })).toBe(true)
+    expect(available - workbench.railCapRemaining.soviet).toBe(spent)
+    expect(workbench.units[0]).toMatchObject({ mpSpent: 0, movementEnded: true, fuelled: true })
   })
 
-  it('C12：轴心国单位不得使用边缘盒（1.4b）', () => {
-    const axis = place(workbench, otherClassParent(), someHex(), 'axis', 'ge-1')
+  it('1.4b：反应阶段和轴心国单位不得使用边缘盒', () => {
+    workbench.setScenarioId('1')
+    workbench.setActiveSide('soviet')
+    const hex = { col: 37, row: 35 }
+    const axis = place(workbench, otherClassParent(), hex, 'axis', 'ge-1')
+    const soviet = place(workbench, eligibleDivisionRecord(), hex, 'soviet', 'ru-1')
+    const enter = { box: 'northeast', direction: 'enter' } as const
+    workbench.setPhase('reaction')
+    expect(containers.moveEdgeBox({ ...enter, instanceId: soviet.instanceId })).toBe(false)
+    expect(containers.lastAction?.detail).toBe('edgeBoxMovementPhaseOnly')
     workbench.setPhase('movement')
-    expect(
-      containers.moveEdgeBox({
-        box: 'northeast',
-        instanceId: axis.instanceId,
-        direction: 'enter',
-        fromSupplySourceHex: true,
-      }),
-    ).toBe(false)
+    enterStep(workbench, 'move.order')
+    expect(containers.moveEdgeBox({ ...enter, instanceId: axis.instanceId })).toBe(false)
     expect(containers.lastAction?.detail).toBe('edgeBoxSovietOnly')
   })
-
   it('C12：编队收纳盒 —— 至少一个所属单位须与标记同格（13.7 硬约束）', () => {
     const member = place(workbench, otherClassParent(), someHex(), 'soviet', 'm1')
     const hidden = place(workbench, otherClassParent(), someHex(), 'soviet', 'm2')

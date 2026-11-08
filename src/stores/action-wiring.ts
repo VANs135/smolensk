@@ -68,6 +68,7 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'beginFrontalReservesHexPickNow',
       'beginHedgehogHexPickNow',
       'beginHexPick',
+      'beginEdgeBoxExitHexPickNow',
       'beginRailGaugeTargetHexPickNow',
       'beginRailMoveHexPickNow',
       'cancelHexPick',
@@ -483,6 +484,6 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
      *   不是 ACTION_GATES 的环节键，故 kind 仍记 noTiming（本表只登记"有没有环节键"），
      *   但 why 必须写清真实判据在哪，免得后人再把它当"无闸"。
      */
-    why: '1.4b 时机是硬约束（仅本方 Movement Phase、禁 Reaction/Exploitation 进出）⇒ 由引擎 canEnterEdgeBox 判，不走 ACTION_GATES 环节键',
+    why: '1.4b 时机是硬约束（仅本方 Movement Phase、禁 Reaction/Exploitation 进出）⇒ canEnterEdgeBox 判阶段，并复用 move.order 闸门排除突围环节',
   },
 }

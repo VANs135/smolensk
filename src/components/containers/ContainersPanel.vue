@@ -8,7 +8,7 @@ import UiField from '@/components/UiField.vue'
 import { useUiMode } from '@/components/ui-mode'
 import { formations } from '@/data'
 import type { Side } from '@/data'
-import type { BoxView, ScenarioDrawBoxView } from '@/engine/rules'
+import type { BoxView, EdgeBoxId, ScenarioDrawBoxView } from '@/engine/rules'
 import { useContainersStore, useHotseatStore, useWorkbenchStore, counterImageUrlOf } from '@/stores'
 
 /**
@@ -43,10 +43,12 @@ const BREAKDOWN_AR_LEVELS = [0, 1, 2, 3, 4, 5]
 const drawGroupIndex = ref(0)
 /** 编队抽签落盘的组成事实（编队 id → Mtr/Aufk/Krd 单位 id） */
 // ★ I②：组成由 store 自动推（containers.drawCompositionNoteOf），不再有玩家手输 unit id 的文本框
-/** 边缘盒进出：目标单位与「在边缘补给源格」声明 */
+/** 边缘盒进出：从可用单位中选，并决定用 MP 或铁路容量。 */
 const edgeUnitId = ref('')
-const edgeFromSource = ref(true)
 const edgeUseRailCap = ref(false)
+function edgeBoxOf(box: BoxView): EdgeBoxId {
+  return box.id === 'edge-northeast' ? 'northeast' : 'southeast'
+}
 /** 编队收纳盒：编队、成员、图上成员、标记格、本次收纳 */
 const formationId = ref('')
 const formationMembersText = ref('')
@@ -344,6 +346,7 @@ watch(
  */
 function showsBoxActions(kind: string): boolean {
   if (!showsActions.value) return false
+  if (kind === 'edgeBox' && !containers.canUseEdgeBoxes) return false
   if (uiMode !== 'verify' && (hotseat.handoffPending || hotseat.viewerSide !== actingSide.value))
     return false
   if (props.subjectId != null) return kind === 'formationBox'
@@ -559,17 +562,19 @@ function boxAircraft(side: Side) {
                 <BaseButton
                   variant="ghost"
                   size="sm"
+                  :disabled="
+                    containers.edgeBoxExitCandidates(edgeBoxOf(box), holding.unitId, edgeUseRailCap)
+                      .length === 0
+                  "
                   @click="
-                    containers.moveEdgeBox({
-                      box: box.id === 'edge-northeast' ? 'northeast' : 'southeast',
-                      instanceId: holding.unitId,
-                      direction: 'exit',
-                      fromSupplySourceHex: edgeFromSource,
-                      useRailCap: edgeUseRailCap,
-                    })
+                    containers.beginEdgeBoxExitHexPickNow(
+                      edgeBoxOf(box),
+                      holding.unitId,
+                      edgeUseRailCap,
+                    )
                   "
                 >
-                  离箱入图（1.4b）
+                  点地图选出盒格
                 </BaseButton>
               </template>
               <!-- 空军盒：移出（1.4a） -->
@@ -696,30 +701,33 @@ function boxAircraft(side: Side) {
           <label class="field">
             入盒单位
             <select v-model="edgeUnitId" class="select">
-              <option value="">（选择苏方地面单位）</option>
-              <option v-for="item in parentCandidates" :key="item.id" :value="item.id">
+              <option value="">选择单位</option>
+              <option
+                v-for="item in containers.edgeBoxEnterCandidates(edgeBoxOf(box), edgeUseRailCap)"
+                :key="item.id"
+                :value="item.id"
+              >
                 {{ item.label }}
               </option>
             </select>
           </label>
           <label class="field">
-            <input v-model="edgeFromSource" type="checkbox" />
-            在地图边缘补给源格（1.4b 必需）
-          </label>
-          <label class="field">
             <input v-model="edgeUseRailCap" type="checkbox" />
-            改用铁路容量（1 点）
+            进出改用铁路运力
           </label>
           <BaseButton
             variant="primary"
             size="sm"
-            :disabled="edgeUnitId === ''"
+            :disabled="
+              !containers
+                .edgeBoxEnterCandidates(edgeBoxOf(box), edgeUseRailCap)
+                .some((item) => item.id === edgeUnitId)
+            "
             @click="
               containers.moveEdgeBox({
-                box: box.id === 'edge-northeast' ? 'northeast' : 'southeast',
+                box: edgeBoxOf(box),
                 instanceId: edgeUnitId,
                 direction: 'enter',
-                fromSupplySourceHex: edgeFromSource,
                 useRailCap: edgeUseRailCap,
               })
             "
