@@ -1622,6 +1622,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
+  /**
+   * 13.6：手牌式到达投放（2026-11-09）
+   *
+   * 点算子 → 地图高亮候选格 → 点格**立即投放**（省掉"再点投放"）；落点仍走既有候选与
+   * `placeArrivalNow` 的校验，界面不自己算、不放宽。
+   */
+  function beginArrivalPlacePickNow(index: number, recordId?: string): boolean {
+    const allowed = arrivalCandidates.value[index] ?? []
+    if (allowed.length === 0) {
+      const detail = arrivalPlacements.value[index]?.detail ?? '该条目没有可放的格'
+      pushLog('warning', `该到达条目**不能在地图上选格**：${detail}（13.6）`, '13.6')
+      return false
+    }
+    beginHexPick({
+      label: `增援落点（第 ${String(index + 1)} 条）`,
+      rule: '13.6',
+      candidates: [...allowed],
+      apply: (hex) => placeArrivalNow(index, recordId, hexTextOf(hex)),
+    })
+    return true
+  }
+
   /** 16.0b/c：环形工事的修建 / 缩减格（合法性由 `planHedgehogBuild` 在提交时判） */
   function beginHedgehogHexPickNow(purpose: 'build' | 'reduce'): void {
     beginHexPick({
@@ -16829,8 +16851,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
   const arrivalPlacedKey = ref('')
   const arrivalPlacedRaw = ref<Record<number, boolean>>({})
+  /**
+   * 已投放条目 → 本次投放**新建的算子 id**（2026-11-09：手牌式增援的可撤销账本）
+   *
+   * 只记"这一条目投放时新增了哪些 instanceId"，撤回时按 id 精确移除；不改任何规则判据。
+   */
+  const arrivalPlacedUnitsRaw = ref<Record<number, string[]>>({})
   const arrivalPlaced = computed<Record<number, boolean>>(() =>
     arrivalPlacedKey.value === arrivalPlanKey.value ? arrivalPlacedRaw.value : {},
+  )
+  const arrivalPlacedUnits = computed<Record<number, string[]>>(() =>
+    arrivalPlacedKey.value === arrivalPlanKey.value ? arrivalPlacedUnitsRaw.value : {},
   )
   /**
    * 13.6：**裁判手改落点**只在同一个计划键下有效（换日/换方/换计划即作废）
@@ -16854,6 +16885,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (arrivalPlacedKey.value === key) return
     arrivalPlacedKey.value = key
     arrivalPlacedRaw.value = {}
+    arrivalPlacedUnitsRaw.value = {}
     arrivalHexOverrides.value = {}
   }
   /** 当日到达是否**已全部投放**（sp / unclassified 走卡面手工记账，不要求投放） */
@@ -16872,12 +16904,49 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /** 记账：把第 index 条到达标为已投放（内部用；仅在投放成功路径上调用） */
-  function markArrivalPlaced(index: number): void {
+  function markArrivalPlaced(index: number, createdUnitIds: string[] = []): void {
     // 换日/换方/换计划 ⇒ 先整本作废（修前把上一天的 {0..N:true} 一并带进新键，
     // 新一天除第 0 条以外全部显示"已投放"且永久投不出去）
     syncArrivalLedger()
     arrivalPlacedRaw.value = { ...arrivalPlacedRaw.value, [index]: true }
+    arrivalPlacedUnitsRaw.value = { ...arrivalPlacedUnitsRaw.value, [index]: [...createdUnitIds] }
   }
+
+  /**
+   * 手牌式增援的「全部放完」判据（2026-11-09）
+   *
+   * 用于自动关窗：当回合**至少有 1 枚可投放算子**、且这些算子都已投放时才算放完
+   * （SP / 非算子条目不占手牌；空手牌回合不关窗，免得吞掉同环节的强制事项）。
+   * 不放宽任何校验——投放合法性仍由 `placeArrivalNow` 判。
+   */
+  const arrivalUnitsDone = computed<boolean>(() => {
+    const plan = arrivalPlan.value
+    if (plan === null) return false
+    /*
+     * 当回合**没有任何可投放算子**时不算「放完」——
+     * 否则空手牌回合会把整个增援会话框关掉，连带吞掉同环节的强制移除/供给提示。
+     */
+    const placeable = plan.units.filter(
+      (unit) => unit.kind !== 'sp' && unit.kind !== 'unclassified',
+    )
+    if (placeable.length === 0) return false
+    return plan.units.every((unit, index) => {
+      if (unit.kind === 'sp' || unit.kind === 'unclassified') return true
+      return arrivalPlaced.value[index] === true
+    })
+  })
+
+  /**
+   * 增援错误里**不属于 13.6 到达**的那一部分（2026-11-09）
+   *
+   * 13.6 的拒绝由手牌区用一句话显示；底部通用错误块只显示别的规则的错误，
+   * 免得同一条 13.6 原始码在窗里出现两遍。判定留在 store，组件只做显示。
+   */
+  const genericReinforcementError = computed<{ rule: string; reason: string } | null>(() => {
+    const error = reinforcementError.value
+    if (error === null || error.rule === '13.6') return null
+    return error
+  })
 
   /**
    * §5-A：**库中型号按词集键建索引**（`词集键 → 记录 id 列表`）
@@ -18065,7 +18134,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           aircraftId: arrived[0]!.instanceId,
         },
       })
-      markArrivalPlaced(index)
+      markArrivalPlaced(
+        index,
+        arrived.map((unit) => unit.instanceId),
+      )
       return true
     }
 
@@ -18185,7 +18257,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           formationComponents: formation.components,
         },
       })
-      markArrivalPlaced(index)
+      markArrivalPlaced(
+        index,
+        arrived.map((unit) => unit.instanceId),
+      )
       return true
     }
 
@@ -18205,6 +18280,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
     const unit = buildArrivalUnit(record)
     units.value = [...units.value, unit]
+    let createdIds = [unit.instanceId]
 
     /*
      * 13.6：**同型复制**（卡面 `2x 26-2-2 Arty Grp` 之类 ⇒ 两枚一模一样的算子都应到场）
@@ -18219,6 +18295,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         extras.push(buildArrivalUnit(record, true))
       }
       units.value = [...units.value, ...extras]
+      createdIds = [unit.instanceId, ...extras.map((item) => item.instanceId)]
       pushLog(
         'info',
         `${demand.raw}：卡面为 ${String(copies)} 枚同型算子 ⇒ 一并投放（13.6）`,
@@ -18247,7 +18324,42 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         loadedWithSp: demand.loadedWithSp,
       },
     })
-    markArrivalPlaced(index)
+    markArrivalPlaced(index, createdIds)
+    return true
+  }
+
+  /**
+   * 13.6：把已投放的到达算子**收回手牌**（可撤销重放，2026-11-09）
+   *
+   * 口径（按最宽松可撤销理解）：只要本笔仍在同一个到达计划键下，就按投放时登记的
+   * instanceId 精确移除（含 `Nx` 同型复制、编成条目、飞机），并清掉本条的"已投放"账。
+   * 这只是界面层的撤回，不是规则动作；不改任何校验，也不回滚已写的会话结算行。
+   */
+  function withdrawArrivalNow(index: number): boolean {
+    if (!requireAction('rein.arrival', '撤回到达投放')) return false
+    if (arrivalPlaced.value[index] !== true) return false
+    const ids = arrivalPlacedUnits.value[index] ?? []
+    if (ids.length === 0) {
+      reinforcementError.value = { rule: '13.6', reason: `arrivalWithdrawNoLedger:${index}` }
+      pushLog('warning', '这一条没有可撤回的投放记录（可能在读档后缺少账本）', '13.6')
+      return false
+    }
+    const idSet = new Set(ids)
+    units.value = units.value.filter((item) => !idSet.has(item.instanceId))
+    airUnits.value = airUnits.value.filter((item) => !idSet.has(item.instanceId))
+    syncArrivalLedger()
+    const nextPlaced = { ...arrivalPlacedRaw.value }
+    delete nextPlaced[index]
+    arrivalPlacedRaw.value = nextPlaced
+    const nextIds = { ...arrivalPlacedUnitsRaw.value }
+    delete nextIds[index]
+    arrivalPlacedUnitsRaw.value = nextIds
+    const nextOverrides = { ...arrivalHexOverrides.value }
+    delete nextOverrides[index]
+    arrivalHexOverrides.value = nextOverrides
+    pendingHexPick.value = null
+    reinforcementError.value = null
+    pushLog('info', `已把 ${String(ids.length)} 枚到达算子收回手牌（可重放）`, '13.6')
     return true
   }
 
@@ -20942,6 +21054,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 13.6：到达"已投放"账本（不存则读档后同一条目可再放一次 ⇒ 凭空多出算子）
     ['arrivalPlacedKey', arrivalPlacedKey],
     ['arrivalPlacedRaw', arrivalPlacedRaw],
+    // 2026-11-09：手牌式增援的可撤销账本（投放时新建的 instanceId）
+    ['arrivalPlacedUnitsRaw', arrivalPlacedUnitsRaw],
   ]
 
   /**
@@ -20970,7 +21084,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   旧档（6）缺该键 ⇒ 读成 `{}`；绝不回填 `spDumps`，不吞既有地图库存。
    */
   // v8（1.4b）：盒内地面单位和入盒回合随盘面保存。
-  const BOARD_SNAPSHOT_VERSION = 8
+  // v9（2026-11-09）：手牌式增援的撤回账本 `arrivalPlacedUnitsRaw`（投放时新建的算子 id）。
+  const V9_FIELDS = ['arrivalPlacedUnitsRaw']
+  const BOARD_SNAPSHOT_VERSION = 9
   const V8_FIELDS = ['edgeBoxHoldings', 'edgeBoxEnteredOn']
   const V6_FIELDS = [
     'segmentStepIndex',
@@ -21059,13 +21175,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       ...V6_FIELDS,
       'offMapSupplyStocks',
       ...V8_FIELDS,
+      ...V9_FIELDS,
     ],
     // v4：§5-D 补员盘面化之后，但还没有 airBoxMembers
-    4: ['airBoxMembers', ...V6_FIELDS, 'offMapSupplyStocks', ...V8_FIELDS],
-    5: [...V6_FIELDS, 'offMapSupplyStocks', ...V8_FIELDS],
+    4: ['airBoxMembers', ...V6_FIELDS, 'offMapSupplyStocks', ...V8_FIELDS, ...V9_FIELDS],
+    5: [...V6_FIELDS, 'offMapSupplyStocks', ...V8_FIELDS, ...V9_FIELDS],
     // v6（T16）：字段表新增图外补给库存；缺键按 {} 读，spDumps 原样保留。
-    6: ['offMapSupplyStocks', ...V8_FIELDS],
-    7: V8_FIELDS,
+    6: ['offMapSupplyStocks', ...V8_FIELDS, ...V9_FIELDS],
+    7: [...V8_FIELDS, ...V9_FIELDS],
+    // v8（1.4b）：缺撤回账本 ⇒ 读成 {}（仅不能"回手"，不影响既有投放与规则）
+    8: V9_FIELDS,
   }
   const boardRegistry = createSnapshotRegistry({
     version: BOARD_SNAPSHOT_VERSION,
@@ -21580,6 +21699,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     cancelHexPick,
     pickHexFor,
     beginArrivalHexPickNow,
+    beginArrivalPlacePickNow,
+    withdrawArrivalNow,
     beginHedgehogHexPickNow,
     beginSpDumpHexPickNow,
     beginSupplySourceHexPickNow,
@@ -21988,12 +22109,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     lastConsolidation,
     lastBreakdown,
     reinforcementError,
+    genericReinforcementError,
     arrivalPlan,
     arrivalPlacements,
     replArrivalPlacement,
     arrivalCandidates,
     arrivalPlaced,
+    arrivalPlacedUnits,
     arrivalAllPlaced,
+    arrivalUnitsDone,
     arrivalRecordOf,
     matchArrivalRecord,
     resolveArrivalFormation,

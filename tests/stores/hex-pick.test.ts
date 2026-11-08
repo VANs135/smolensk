@@ -187,7 +187,7 @@ describe('B27：接线（源码守卫）', () => {
     const files: [string, string[]][] = [
       [
         'src/components/reinforcement/ReinforcementPanel.vue',
-        ['beginArrivalHexPickNow(index)', 'beginFrontalReservesHexPickNow()'],
+        ['beginArrivalPlacePickNow(', 'beginFrontalReservesHexPickNow()'],
       ],
       [
         'src/components/exclusive/ExclusiveRulesPanel.vue',

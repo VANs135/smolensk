@@ -202,7 +202,6 @@ watchEffect(() => {
  */
 const rebuildType = ref('')
 const rebuildUnitId = ref('')
-const rebuildHexText = ref('')
 
 /** 合并 / 拆分 / 锁定的表单输入 */
 const keepId = ref('')
@@ -292,12 +291,6 @@ function onArrivalRecordPick(index: number, id: string): void {
   arrivalRecordIds.value = { ...arrivalRecordIds.value, [index]: id }
 }
 
-/** 投放某一条到达需求（带了选型就按选型，否则按显示名自动匹配） */
-function onPlaceArrival(index: number): void {
-  const picked = arrivalRecordIdOf(index)
-  workbench.placeArrivalNow(index, picked === '' ? undefined : picked)
-}
-
 /**
  * 13.6 / §5-A：到货行**出图**——只有「按显示名自动匹配」成功时才给那一枚的图（不臆造映射）。
  * 自动匹配的判据与 `placeArrivalNow` 同源（`workbench.arrivalRecordOf`）。
@@ -315,18 +308,6 @@ function arrivalImageUrl(index: number): string | null {
   const first = workbench.resolveArrivalFormation(index)?.records[0]
   if (first === undefined) return null
   return tokenImageUrl({ side: workbench.activeSide, face: 'combat', images: first.images ?? null })
-}
-
-/**
- * §5-A：编成条目的**逐枚映射状态**（组件 → 库中记录；未映射的枚数原样转述）
- *
- * 判据在 store `resolveArrivalFormation`（编队号前缀内按番号 + 兵种别名唯一命中）；
- * 这里只负责把它渲染出来，**不做任何匹配**。
- */
-function formationState(
-  index: number,
-): { components: string[]; records: unknown[]; missing: string[] } | null {
-  return workbench.resolveArrivalFormation(index)
 }
 
 /** 图上的拆分单位（20.0d 的吸收对象只能是**已在图上**的那些） */
@@ -348,7 +329,131 @@ function hoverUnit(id: string | null): void {
 
 /** 到达计划（当日到达卡） */
 const plan = computed(() => workbench.arrivalPlan)
-const placements = computed(() => workbench.arrivalPlacements)
+
+/* ── 2026-11-09：手牌式到达投放（只列本回合算子图标；点算子 → 点图落位；再点已放可回手） ── */
+
+/** 手牌里被选中的那一枚（地图高亮期间保持描边） */
+const activeArrivalIndex = ref<number | null>(null)
+/** 投放/撤回被拒时的一句话原因（不弹长文） */
+const handError = ref('')
+
+interface ArrivalHandCard {
+  index: number
+  raw: string
+  image: string | null
+  copies: number
+  aircraft: boolean
+  noCandidates: boolean
+  detail: string
+  formationMissing: number
+}
+
+function arrivalCardOf(index: number): ArrivalHandCard | null {
+  const unit = plan.value?.units[index]
+  if (unit === undefined) return null
+  const candidates = workbench.arrivalCandidates[index]?.length ?? 0
+  const formation = workbench.resolveArrivalFormation(index)
+  return {
+    index,
+    raw: unit.raw,
+    image: arrivalImageUrl(index),
+    copies:
+      unit.formationComponents.length > 0 ? unit.formationComponents.length : arrivalCopiesOf(unit),
+    aircraft: unit.kind === 'aircraft',
+    noCandidates: candidates === 0,
+    detail: workbench.arrivalPlacements[index]?.detail ?? '本条目没有可用的入场格',
+    formationMissing: formation?.missing.length ?? 0,
+  }
+}
+
+/** 手牌＝本回合到场、尚未投放的**算子**（SP / 非算子条目走卡面记账，不在手牌里） */
+const arrivalHandCards = computed<ArrivalHandCard[]>(() => {
+  const units = plan.value?.units ?? []
+  const cards: ArrivalHandCard[] = []
+  units.forEach((unit, index) => {
+    if (unit.kind === 'sp' || unit.kind === 'unclassified') return
+    if (workbench.arrivalPlaced[index] === true) return
+    const card = arrivalCardOf(index)
+    if (card !== null) cards.push(card)
+  })
+  return cards
+})
+
+/** 已投放的算子（仍显示图标，点一下即撤回手牌） */
+const arrivalPlacedCards = computed<ArrivalHandCard[]>(() => {
+  const units = plan.value?.units ?? []
+  const cards: ArrivalHandCard[] = []
+  units.forEach((unit, index) => {
+    if (unit.kind === 'sp' || unit.kind === 'unclassified') return
+    if (workbench.arrivalPlaced[index] !== true) return
+    const card = arrivalCardOf(index)
+    if (card !== null) cards.push(card)
+  })
+  return cards
+})
+
+/** 卡面记账条目（不占手牌，但必须能看到/能处理） */
+const arrivalManualEntries = computed(() =>
+  (plan.value?.units ?? [])
+    .map((unit, index) => ({ unit, index }))
+    .filter(({ unit }) => unit.kind === 'sp' || unit.kind === 'unclassified'),
+)
+
+/** 到达（13.6）的拒绝统一在 `handError` 里用一句话显示，底部不再重复原始码 */
+const genericReinforcementError = computed(() => workbench.genericReinforcementError)
+
+/** 把 store 的拒绝码翻成一句人能看懂的话 */
+function arrivalErrorText(reason: string): string {
+  const code = reason.split(':')[0] ?? reason
+  if (code === 'arrivalUnitNotResolved') return '单位库里找不到对应算子，请在「?」里指定型号后再点'
+  if (code === 'arrivalHexOutsideCandidates') return '这一格不在该条目的入场格内'
+  if (code.startsWith('arrivalHex')) return '这一格现在不能落：换一处高亮格试试'
+  if (code === 'arrivalWithdrawNoLedger') return '这一枚缺少投放记录，暂时不能回手'
+  return '这一枚现在放不下，换一条或换一处入场格试试'
+}
+
+function pickArrival(index: number): void {
+  handError.value = ''
+  const card = arrivalCardOf(index)
+  if (card === null) return
+  if (card.noCandidates) {
+    handError.value = card.detail
+    return
+  }
+  activeArrivalIndex.value = index
+  const picked = arrivalRecordIdOf(index)
+  if (!workbench.beginArrivalPlacePickNow(index, picked === '' ? undefined : picked)) {
+    activeArrivalIndex.value = null
+    handError.value = card.detail
+  }
+}
+
+function withdrawArrival(index: number): void {
+  handError.value = ''
+  if (!workbench.withdrawArrivalNow(index)) handError.value = '这一枚当前不能回手'
+}
+
+// 地图落点选择结束（投放成功或取消）⇒ 收掉手牌描边
+watch(
+  () => workbench.hexPickView,
+  (view) => {
+    if (view === null) activeArrivalIndex.value = null
+  },
+)
+// 投放被拒 ⇒ 用一句话说明；成功投放则清掉上一条错误
+watch(
+  () => workbench.reinforcementError,
+  (error) => {
+    if (error !== null) handError.value = arrivalErrorText(error.reason)
+  },
+)
+watch(
+  () => workbench.arrivalPlaced,
+  () => {
+    handError.value = ''
+  },
+  { deep: true },
+)
 /** 补员账本（13.5） */
 const holdings = computed(() => workbench.replHoldings)
 
@@ -484,126 +589,113 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
     </SessionStep>
 
     <SessionStep v-if="showsActions" item="reinforce:arrival">
-      <!-- ── · 到达表执行（13.6 / 13.6b / 1.6a） ── -->
-      <p class="muted">
-        到达表执行（13.6）：当日到达卡 → 投放需求与落点（入口被阻挡时按 13.6b
-        改投最近的未被阻挡边缘格）； 条目「Removed」按 1.6a 立即移出。
-      </p>
-      <!-- B34②：本方到达卡（OOA）原卡面（13.6 / 专规 1.6a；点图在新标签打开原尺寸） -->
-      <figure v-if="showsActions && ooaCard !== null" class="ooa">
-        <a v-if="ooaReady" :href="ooaImageUrl ?? undefined" target="_blank" rel="noreferrer">
-          <img class="ooa__img" :src="ooaImageUrl ?? ''" :alt="ooaCard.title" />
-        </a>
-        <span v-else class="ooa__img ooa__img--pending">正在读图…</span>
-        <figcaption class="muted">
-          {{ ooaCard.title
-          }}<template v-if="ooaCard.note !== undefined">｜{{ ooaCard.note }}</template>
-        </figcaption>
-      </figure>
-      <div class="row">
-        <!-- ★ 联调：剧本号唯一权威在会话 store，选择入口只留「初设与开局」一处（用户口径） -->
-        <BaseTag kind="info">剧本 {{ workbench.scenarioId }}</BaseTag>
-        <BaseTag kind="info">{{ workbench.date }}（第 {{ workbench.turn }} 回合）</BaseTag>
-        <span class="num">
-          投放需求 {{ plan?.units.length ?? 0 }} 条｜强制移除 {{ plan?.removals.length ?? 0 }} 条
-        </span>
-        <BaseTag v-if="workbench.arrivalAllPlaced" kind="success">当日到达已全部投放</BaseTag>
-        <BaseButton
-          v-if="showsActions"
-          variant="secondary"
-          size="sm"
-          @click="workbench.applyArrivalRemovalsNow()"
+      <!-- ── 手牌式到达投放（13.6）：只列本回合算子图标；点算子 → 点图落位；已放可点回手 ── -->
+      <div class="arrival-hand" data-testid="arrival-hand">
+        <button
+          v-for="card in arrivalHandCards"
+          :key="`hand-${card.index}`"
+          type="button"
+          class="arrival-hand__card"
+          :class="{ 'arrival-hand__card--active': activeArrivalIndex === card.index }"
+          :disabled="card.noCandidates"
+          :title="
+            card.noCandidates
+              ? `${card.raw}：${card.detail}`
+              : `${card.raw}：点一下 → 地图高亮入场格 → 点格落位`
+          "
+          data-testid="arrival-hand-card"
+          @click="pickArrival(card.index)"
         >
-          执行强制移除（1.6a）
-        </BaseButton>
+          <img v-if="card.image !== null" :src="card.image" alt="" class="arrival-hand__img" />
+          <span v-else class="arrival-hand__fallback" :title="card.raw">?</span>
+          <span v-if="card.copies > 1" class="arrival-hand__badge">{{ card.copies }}</span>
+          <span v-if="card.aircraft" class="arrival-hand__badge arrival-hand__badge--air">✈</span>
+        </button>
+        <button
+          v-for="card in arrivalPlacedCards"
+          :key="`placed-${card.index}`"
+          type="button"
+          class="arrival-hand__card arrival-hand__card--placed"
+          :title="`${card.raw}：点一下回手（可撤销重放）`"
+          data-testid="arrival-hand-placed"
+          @click="withdrawArrival(card.index)"
+        >
+          <img v-if="card.image !== null" :src="card.image" alt="" class="arrival-hand__img" />
+          <span v-else class="arrival-hand__fallback" :title="card.raw">?</span>
+          <span class="arrival-hand__undo">↩</span>
+        </button>
       </div>
+      <p class="arrival-hand__meta num" data-testid="arrival-hand-meta">
+        剩余 <strong>{{ arrivalHandCards.length }}</strong> 枚<template
+          v-if="arrivalPlacedCards.length > 0"
+        >
+          · 已放 {{ arrivalPlacedCards.length }}</template
+        >
+      </p>
+      <p v-if="handError !== ''" class="warn" role="status" data-testid="arrival-hand-error">
+        {{ handError }}
+      </p>
 
       <p v-if="plan !== null && plan.shutdowns.length > 0" class="warn">
         <BaseTag kind="danger">2.1a</BaseTag>
         当日生效的补给源关闭：{{ plan.shutdowns.join('、') }}
       </p>
+      <div v-if="(plan?.removals.length ?? 0) > 0" class="row">
+        <span class="num">强制移除 {{ plan?.removals.length }} 条</span>
+        <BaseButton variant="secondary" size="sm" @click="workbench.applyArrivalRemovalsNow()">
+          执行
+        </BaseButton>
+      </div>
 
-      <p v-for="(unit, index) in plan?.units ?? []" :key="`${index}-${unit.raw}`" class="num">
-        <img
-          v-if="arrivalImageUrl(index) !== null"
-          :src="arrivalImageUrl(index) ?? undefined"
-          alt=""
-          class="arrival-thumb"
-        />
-        <BaseTag :kind="unit.kind === 'aircraft' ? 'warning' : 'neutral'">{{ unit.kind }}</BaseTag>
-        {{ unit.raw }}
-        <template v-if="unit.designation !== null">｜番号 {{ unit.designation }}</template>
-        <template v-if="unit.parentType !== null">｜母体 {{ unit.parentType }}</template>
-        <template v-if="unit.factors !== null">｜印值 {{ unit.factors }}</template>
-        <template v-if="arrivalCopiesOf(unit) > 1">｜同型 {{ arrivalCopiesOf(unit) }} 枚</template>
-        <template v-else-if="unit.count > 1 && unit.kind === 'transportPoint'">
-          ｜运力 {{ unit.count }}（13.6c：运力即装载 SP 数，仍是一枚算子）
-        </template>
-        <template v-else-if="unit.count > 1">｜卡面数量 {{ unit.count }}</template>
-        <!-- §5-A：编成条目（多枚算子共同到场）——显示枚数与逐枚映射状态 -->
-        <template v-if="unit.formationComponents.length > 0">
-          ｜编成 {{ unit.formationComponents.length }} 枚：
-          <template v-if="formationState(index)?.missing.length === 0">
-            已逐枚映射（{{ formationState(index)?.records.length ?? 0 }} 枚，投放即一次到场）
-          </template>
-          <template v-else>
-            <BaseTag kind="danger"
-              >{{ formationState(index)?.missing.length ?? 0 }} 枚未映射</BaseTag
-            >
-            ⇒ 请按卡面手工逐枚摆入
-          </template>
-        </template>
-        <template v-if="unit.stepsLost > 0">｜到场带损 {{ unit.stepsLost }} step</template>
-        <template v-if="unit.loadedWithSp">｜满载 SP（13.6c）</template>
-        ｜落点：{{ unit.label }} →
-        <template v-if="placements[index]?.hex !== null && placements[index]?.hex !== undefined">
-          {{ hexLabel(placements[index]!.hex!) }}（{{ placements[index]!.rule }}）
-        </template>
-        <template v-else>
-          <BaseTag kind="danger">{{ placements[index]?.status }}</BaseTag>
-          {{ placements[index]?.detail }}
-        </template>
-        <template v-if="showsActions">
-          <input
-            v-if="showsReferee"
-            v-model="rebuildHexText"
-            class="input"
-            placeholder="手改落点 列.行"
-            @change="workbench.setArrivalHexOverride(index, rebuildHexText)"
+      <!-- 说明、条款、原卡面、库中型号、卡面记账：一律收进 ? -->
+      <details class="arrival-hand__more" data-testid="arrival-hand-more">
+        <summary title="到达卡原图、库中型号、卡面记账">?</summary>
+        <figure v-if="ooaCard !== null" class="ooa">
+          <a v-if="ooaReady" :href="ooaImageUrl ?? undefined" target="_blank" rel="noreferrer">
+            <img class="ooa__img" :src="ooaImageUrl ?? ''" :alt="ooaCard.title" />
+          </a>
+          <span v-else class="ooa__img ooa__img--pending">正在读图…</span>
+          <figcaption class="muted">
+            {{ ooaCard.title
+            }}<template v-if="ooaCard.note !== undefined">｜{{ ooaCard.note }}</template>
+          </figcaption>
+        </figure>
+        <p v-for="item in arrivalManualEntries" :key="`manual-${item.index}`" class="num">
+          <img
+            v-if="arrivalImageUrl(item.index) !== null"
+            :src="arrivalImageUrl(item.index) ?? undefined"
+            alt=""
+            class="arrival-thumb"
           />
-          <span v-else class="ui-field-readonly">{{ rebuildHexText || '—' }}</span>
-          <!-- B27 + 用户 2026-10-25 BUG①：落点改成**点地图**，但**只给卡面候选**（13.6 的入场格） -->
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="(workbench.arrivalCandidates[index]?.length ?? 0) === 0"
-            :title="`13.6：只能落在该到达条目的 ${workbench.arrivalCandidates[index]?.length ?? 0} 处候选格（被堵按 13.6b 退最近的开放边缘格）`"
-            @click="workbench.beginArrivalHexPickNow(index)"
+          <BaseTag kind="neutral">{{ item.unit.kind }}</BaseTag>
+          {{ item.unit.raw
+          }}<template v-if="arrivalCopiesOf(item.unit) > 1"
+            >｜{{ arrivalCopiesOf(item.unit) }} 枚</template
           >
-            点地图选落点（{{ workbench.arrivalCandidates[index]?.length ?? 0 }} 处候选）
-          </BaseButton>
-          <!-- B21：库中型号在这一行选（13.6 的条目是卡面文字，工程库未落"条目 → 算子"映射） -->
+          ｜按卡面记账
+        </p>
+        <p
+          v-for="card in arrivalHandCards"
+          v-show="card.formationMissing > 0"
+          :key="`miss-${card.index}`"
+          class="warn"
+        >
+          {{ card.raw }}：{{ card.formationMissing }} 枚未映射，请按卡面逐枚摆入
+        </p>
+        <div v-for="card in arrivalHandCards" :key="`pick-${card.index}`" class="row">
+          <span class="num">{{ card.raw }}</span>
           <select
             class="select"
-            :value="arrivalRecordIdOf(index)"
-            @change="onArrivalRecordPick(index, ($event.target as HTMLSelectElement).value)"
+            :value="arrivalRecordIdOf(card.index)"
+            @change="onArrivalRecordPick(card.index, ($event.target as HTMLSelectElement).value)"
           >
             <option value="">（库中型号：按显示名自动匹配）</option>
             <option v-for="item in workbench.choices" :key="item.id" :value="item.id">
               {{ item.nameZh ?? item.nameEn ?? item.id }}
             </option>
           </select>
-          <BaseButton
-            variant="primary"
-            size="sm"
-            :disabled="workbench.arrivalPlaced[index] === true"
-            @click="onPlaceArrival(index)"
-          >
-            {{ workbench.arrivalPlaced[index] === true ? '已投放' : '投放（13.6）' }}
-          </BaseButton>
-        </template>
-      </p>
-      <p v-if="(plan?.units.length ?? 0) === 0" class="muted">当日到达卡没有条目。</p>
+        </div>
+      </details>
     </SessionStep>
     <SessionStep v-if="showsActions" item="reinforce:replRoll">
       <!-- ── · 可变增援（13.6b / 1.6c / 3.3c / 3.6） ── -->
@@ -1192,9 +1284,9 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       的「忽略选项」权利不适用。
     </p>
 
-    <p v-if="workbench.reinforcementError !== null" class="warn">
-      <BaseTag kind="danger">{{ workbench.reinforcementError.rule }}</BaseTag>
-      {{ workbench.reinforcementError.reason }}
+    <p v-if="genericReinforcementError !== null" class="warn">
+      <BaseTag kind="danger">{{ genericReinforcementError.rule }}</BaseTag>
+      {{ genericReinforcementError.reason }}
     </p>
   </BasePanel>
 </template>
@@ -1277,5 +1369,101 @@ hr {
   object-fit: contain;
   vertical-align: middle;
   margin-right: 4px;
+}
+
+/* 2026-11-09：手牌式到达投放（只放算子图标，说明收进 ?） */
+.arrival-hand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-1) 0;
+}
+
+.arrival-hand__card {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 80px;
+  padding: 2px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.arrival-hand__card:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.arrival-hand__card--active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-2);
+  box-shadow: 0 0 0 1px var(--color-accent) inset;
+}
+
+.arrival-hand__card--placed {
+  opacity: 0.72;
+}
+
+.arrival-hand__card:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.arrival-hand__img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.arrival-hand__fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--color-muted);
+  font-size: var(--text-lg);
+}
+
+.arrival-hand__badge {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  padding: 0 3px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.2;
+}
+
+.arrival-hand__badge--air {
+  top: 2px;
+  bottom: auto;
+}
+
+.arrival-hand__undo {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+}
+
+.arrival-hand__meta {
+  margin: var(--space-1) 0;
+  color: var(--color-muted);
+}
+
+.arrival-hand__more {
+  margin-top: var(--space-1);
+}
+
+.arrival-hand__more > summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--color-muted);
 }
 </style>

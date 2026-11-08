@@ -207,9 +207,11 @@ describe('B34②：到达卡接进增援窗（源码守卫）', () => {
     // 懒加载 + 未就绪画占位（与托盘同一条手感）
     expect(panel).toContain('counterImages.preload')
     expect(panel).toContain('正在读图')
-    // 卡面在**动作段**（＝「可下增援单位」窗），右栏只读段不画大图
+    // 卡面在**动作段**（＝「可下增援单位」窗）的 `?` 里；右栏只读段不画大图
     const fig = panel.indexOf('class="ooa"')
     expect(fig).toBeGreaterThan(0)
-    expect(panel.slice(Math.max(0, fig - 200), fig)).toContain('showsActions')
+    const seg = panel.lastIndexOf('item="reinforce:arrival"', fig)
+    expect(seg).toBeGreaterThan(0)
+    expect(panel.slice(seg, fig)).not.toContain('</SessionStep>')
   })
 })

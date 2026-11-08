@@ -1778,7 +1778,21 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 玩家可以把它收走（`collapsedSessionKey`），换环节/换回合自然重现。
      */
     const stepId = workbench.segmentStep?.id ?? ''
-    if (stepId.startsWith('reinforcement.') && collapsedSessionKey.value !== currentStepKey.value) {
+    /*
+     * 2026-11-09：手牌式到达放完后**自动关窗**（用户口径）。
+     * 只关"已经没有可放的到达算子、且没有强制移除/待落 SP"的到货环节；
+     * 其它强制项（重建、强制移除、供给到货）仍照旧出现在会话框，不被这次改造吞掉。
+     */
+    const arrivalHandDone =
+      stepId === 'reinforcement.arrival' &&
+      workbench.arrivalUnitsDone &&
+      (workbench.arrivalPlan?.removals.length ?? 0) === 0 &&
+      workbench.supplyArrivalSp === 0
+    if (
+      stepId.startsWith('reinforcement.') &&
+      !arrivalHandDone &&
+      collapsedSessionKey.value !== currentStepKey.value
+    ) {
       /*
        * ★ 条 5（R1）：增援段**全程只有一个会话框**，内容按子环节渐变
        *   （① 当回合到达：图阵列、点图落位、新增"到达已放"账本 →
@@ -1791,14 +1805,15 @@ export const useMapViewStore = defineStore('mapView', () => {
       const label = workbench.segmentStep?.label ?? 'B 段'
       const title =
         stepId === 'reinforcement.arrival'
-          ? `增援与编制 · 到货落位（${label}）`
+          ? '增援'
           : stepId === 'reinforcement.rebuild'
             ? `增援与编制 · 重建与整编（${label}）`
             : `增援与编制（${label}）`
       return {
         kind: 'reinforce',
         title,
-        rule: workbench.segmentStep?.rule ?? '13.5 / 13.6',
+        rule:
+          stepId === 'reinforcement.arrival' ? '?' : (workbench.segmentStep?.rule ?? '13.5 / 13.6'),
         width: 'min(430px, 94%)',
       }
     }

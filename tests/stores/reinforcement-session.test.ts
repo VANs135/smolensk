@@ -38,18 +38,17 @@ beforeEach(() => {
 })
 
 describe('B17a：增援动作进会话框（由环节触发）', () => {
-  it('★ 走进增援段某环节 ⇒ 出现「增援与编制」会话；别的环节不出现', () => {
+  it('★ 走进增援段某环节 ⇒ 出现「增援」会话；别的环节不出现', () => {
     const { workbench, mapView } = newStores()
     expect(mapView.session).toBeNull()
 
     goToReinforcementStep(workbench)
     expect(mapView.session).toMatchObject({ kind: 'reinforce' })
     /*
-     * ★ B34：增援段**按子环节分成两个窗口** —— 到货落位环节的窗口叫「可下增援单位」，
-     *   重建环节的窗口叫「重建与整编」；两者标题都带**环节名**（环节表是唯一出处）。
+     * ★ 2026-11-09 用户口径：增援手牌窗只留「增援」标题 + 计数，说明/条款/步骤文案收进 `?`。
+     *   （B34 的「可下增援单位：<环节名>」标题已作废——标题不再带环节长名。）
      */
-    const stepLabel = workbench.segmentStep?.label ?? ''
-    expect(mapView.session?.title).toContain(stepLabel)
+    expect(mapView.session?.title).toBe('增援')
 
     // 换到别的段（如 C 移动段）⇒ 不再是增援会话
     workbench.setPhase('movement')
@@ -70,13 +69,11 @@ describe('B17a：增援动作进会话框（由环节触发）', () => {
     expect(mapView.session?.kind).toBe('reinforce')
   })
 
-  it('会话标题带当前环节名与规则号（环节表是唯一出处）', () => {
+  it('会话标题只留「增援」，条款说明收进 `?`（不在窗头摆长文案）', () => {
     const { workbench, mapView } = newStores()
     goToReinforcementStep(workbench)
-    const step = workbench.segmentStep
-    expect(step).not.toBeNull()
-    expect(mapView.session?.title).toContain(step?.label ?? '')
-    expect(mapView.session?.rule).toBe(step?.rule ?? '')
+    expect(mapView.session?.title).toBe('增援')
+    expect(mapView.session?.rule).toBe('?')
   })
 })
 
@@ -99,13 +96,14 @@ describe('B34：增援段的两个窗口（按子环节分派）', () => {
     expect(store.setSegmentStepIndex(index)).toBe(true)
   }
 
-  it('★ 到货落位 ⇒ 「可下增援单位」窗；重建 ⇒ 「重建与整编」窗（kind 与规则号都对）', () => {
+  it('★ 到货落位 ⇒ 「增援」窗（手牌）；重建 ⇒ 「重建与整编」窗（kind 与规则号都对）', () => {
     const { workbench, mapView } = newStores()
 
     goToStep(workbench, 'reinforcement.arrival')
     expect(mapView.session).toMatchObject({ kind: 'reinforce' })
-    expect(mapView.session?.title).toContain('到货落位')
-    expect(mapView.session?.title).toContain(workbench.segmentStep?.label ?? '')
+    // 2026-11-09：到达子环节只留「增援」标题，条款收进 `?`
+    expect(mapView.session?.title).toBe('增援')
+    expect(mapView.session?.rule).toBe('?')
 
     goToStep(workbench, 'reinforcement.rebuild')
     // R1（条 5）：仍是同一个会话框（kind 不变），只是标题/内容渐变到「重建与整编」
@@ -164,8 +162,8 @@ describe('B17a：分段渲染与两处入口（源码守卫）', () => {
     }
     checkGated('showsActions', [
       'workbench.applyArrivalRemovalsNow()',
-      // B21：投放那一行现在点的是 `onPlaceArrival`（它带上"库中型号"选型后交给引擎）
-      '@click="onPlaceArrival(index)"',
+      // 2026-11-09：手牌点算子即进入落点选格（选型随卡片走，不再有「投放」按钮）
+      '@click="pickArrival(card.index)"',
       'workbench.rollVariableReplNow()',
       'workbench.claimFrontalReservesNow()',
     ])
@@ -249,11 +247,11 @@ describe('B21：对局台不摆算子，到达投放自带选型', () => {
     expect(verify).toContain('pickRecord')
   })
 
-  it('★ 到达投放的"库中型号"选型在**那一行**上，并把选型交给引擎', () => {
+  it('★ 到达投放的"库中型号"选型随手牌卡片走，并把选型交给引擎', () => {
     const panel = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
     expect(panel).toContain('arrivalRecordIds')
     expect(panel).toContain('onArrivalRecordPick(index')
-    expect(panel).toContain('@click="onPlaceArrival(index)"')
+    expect(panel).toContain('@click="pickArrival(card.index)"')
     // 选型真的传下去了（空串 ⇒ undefined，交给引擎按显示名匹配）
     expect(panel).toContain("picked === '' ? undefined : picked")
   })
