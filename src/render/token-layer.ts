@@ -118,6 +118,8 @@ export interface UnitToken {
    * 飞机与地面算子画法不同（菱形 + 机型字母），以免玩家把停在同一基地格的飞机当地面单位。
    */
   air?: boolean
+  /** 初设时让基地边露出可操作的本方飞机。 */
+  setupAir?: boolean
 }
 
 /** 可到达格提示 */
@@ -1143,7 +1145,10 @@ function collapsedStackViews(group: readonly UnitToken[]): TokenDrawView[] {
   const top = topTokenOf(group)
   const center = hexCanvasPoint(top.hex)
   const publicAircraft = group.find(
-    (token) => token !== top && token.air === true && token.hiddenStack === true,
+    (token) =>
+      token !== top &&
+      token.air === true &&
+      (token.hiddenStack === true || token.setupAir === true),
   )
   const facilities = group.filter((token) => isFacilityToken(token) && token !== top)
   const companions = [

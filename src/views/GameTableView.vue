@@ -31,7 +31,8 @@ import { SupplyPanel } from '@/components/supply'
 import SupplyPhasePanel from '@/components/supply/SupplyPhasePanel.vue'
 import { provideUiMode } from '@/components/ui-mode'
 import { VictoryPanel } from '@/components/victory'
-import type { HexRef } from '@/data'
+import type { HexRef, Side } from '@/data'
+import { COUNTER_BOX_LABELS, type CounterBoxTarget } from '@/stores/map-view'
 import { DEFAULT_MAP_LAYERS } from '@/render/map-render'
 import {
   useGameSessionStore,
@@ -155,6 +156,50 @@ function showKeys(): void {
   hotkeys.helpOpen = !hotkeys.helpOpen
 }
 
+const queuedAirDrag = ref<{ side: Side; entryIndex: number } | null>(null)
+const setupBoxOpen = ref(false)
+const setupBoxSide = computed(() => (setup.finished ? null : setup.setupSideCursor))
+const setupBoxAircraft = computed(() =>
+  workbench.airUnits.filter(
+    (air) => air.side === setupBoxSide.value && workbench.airBoxMembers.includes(air.instanceId),
+  ),
+)
+const boxDropTargets = computed<readonly CounterBoxTarget[]>(() =>
+  setupBoxSide.value === null ? [] : ['air'],
+)
+watch([setupBoxSide, () => setup.scenarioId, () => hotseat.handoffPending], () => {
+  queuedAirDrag.value = null
+  setupBoxOpen.value = false
+})
+
+function onQueuedAirDrop(event: DragEvent, box: CounterBoxTarget): void {
+  const source = queuedAirDrag.value
+  if (box !== 'air' || source === null || source.side !== setupBoxSide.value) return
+  event.preventDefault()
+  queuedAirDrag.value = null
+  setup.placeAirInOffMapBoxNow(source.side, source.entryIndex)
+}
+
+function allowQueuedAirDrop(event: DragEvent, box: CounterBoxTarget): void {
+  if (
+    box !== 'air' ||
+    queuedAirDrag.value === null ||
+    queuedAirDrag.value.side !== setupBoxSide.value
+  )
+    return
+  event.preventDefault()
+  if (event.dataTransfer !== null) event.dataTransfer.dropEffect = 'move'
+}
+
+function pickAirBox(): void {
+  const item = setup.placing
+  if (item?.kind === 'air' && setup.canPlaceAirInOffMapBox(item.side, item.entryIndex)) {
+    setup.placeAirInOffMapBoxNow(item.side, item.entryIndex)
+    return
+  }
+  setupBoxOpen.value = !setupBoxOpen.value
+}
+
 function onHexClick(hex: HexRef, world: { x: number; y: number }, scale: number): void {
   const anchor = mapRef.value?.hexToWindow(hex) ?? { x: 0, y: 0 }
   mapView.onHexClick(hex, anchor, world, scale)
@@ -256,7 +301,38 @@ onBeforeUnmount(() => {
           @hex-context="mapView.onHexContext"
         >
           <template #overlay>
-            <DecisionQueue v-if="setup.applied && !setup.finished" id="setup-queue" tabindex="-1" />
+            <DecisionQueue
+              v-if="setup.applied && !setup.finished"
+              id="setup-queue"
+              tabindex="-1"
+              @air-drag="queuedAirDrag = $event"
+            />
+            <div
+              v-if="boxDropTargets.length > 0"
+              class="gt__box-targets"
+              :class="{ 'gt__box-targets--drag': queuedAirDrag !== null }"
+            >
+              <BaseButton
+                v-for="box in boxDropTargets"
+                :key="box"
+                :data-counter-box="box"
+                variant="secondary"
+                size="sm"
+                @dragenter="allowQueuedAirDrop($event, box)"
+                @dragover="allowQueuedAirDrop($event, box)"
+                @drop="onQueuedAirDrop($event, box)"
+                @click="box === 'air' && pickAirBox()"
+              >
+                {{ COUNTER_BOX_LABELS[box] }}
+                <span v-if="box === 'air'" class="num">{{ setupBoxAircraft.length }}</span>
+              </BaseButton>
+              <ul v-if="setupBoxOpen && boxDropTargets.includes('air')" class="gt__box-roster">
+                <li v-if="setupBoxAircraft.length === 0">空盒</li>
+                <li v-for="air in setupBoxAircraft" :key="air.instanceId">
+                  {{ air.name }} · {{ air.airStatus === 'active' ? '激活' : '非激活' }}
+                </li>
+              </ul>
+            </div>
             <SupplyPhasePanel
               v-if="setup.finished && workbench.phase === 'supply' && session === null"
             />
@@ -400,6 +476,37 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.gt__box-targets {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  z-index: var(--layer-map-popup);
+  display: flex;
+  gap: var(--space-2);
+}
+
+.gt__box-targets--drag {
+  outline: 2px solid var(--color-command-teal);
+  outline-offset: var(--space-1);
+  border-radius: var(--radius-sm);
+}
+
+.gt__box-roster {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-2));
+  max-height: 40vh;
+  min-width: 10rem;
+  overflow: auto;
+  margin: 0;
+  padding: var(--space-2);
+  list-style: none;
+  border: 1px solid var(--color-command-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-command-panel);
+  color: var(--color-command-ink);
+  font-size: var(--text-xs);
+}
 .gt {
   --color-bg: var(--color-command-bg);
   --color-bg-2: var(--color-command-raised);

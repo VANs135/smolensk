@@ -25,6 +25,30 @@ import { useSetupStore, type DecisionStack, type SetupPlacing } from '@/stores'
  */
 
 const setup = useSetupStore()
+const emit = defineEmits<{
+  airDrag: [source: { side: 'axis' | 'soviet'; entryIndex: number } | null]
+}>()
+const airMenu = ref<number | null>(null)
+
+function openAirMenu(item: SetupPlacing): void {
+  airMenu.value = item.offMapAllowed === true ? item.entryIndex : null
+}
+
+function startAirDrag(event: DragEvent, item: SetupPlacing): void {
+  if (item.offMapAllowed !== true || event.dataTransfer === null) {
+    event.preventDefault()
+    return
+  }
+  airMenu.value = null
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', item.label)
+  emit('airDrag', { side: item.side, entryIndex: item.entryIndex })
+}
+
+function placeInBox(item: SetupPlacing): void {
+  airMenu.value = null
+  setup.placeAirInOffMapBoxNow(item.side, item.entryIndex)
+}
 
 /** 展开的堆叠（同一时刻只展开一堆：四堆合计几十项，全展开会把地图盖住） */
 const openKey = ref<DecisionStack['key'] | null>('ground')
@@ -53,11 +77,15 @@ const omitConfirmed = ref(false)
 watch([() => setup.scenarioId, () => setup.omittablePlacements], () => {
   omitConfirmed.value = false
 })
+watch(cursorSide, () => {
+  airMenu.value = null
+})
 
 /** 是否**全部落位完毕**（落满 ⇒ 队列收起列表、就地给「完成初设」） */
 const allPlaced = computed(() => setup.initialPlacementsComplete)
 
 function toggleStack(key: DecisionStack['key']): void {
+  airMenu.value = null
   openKey.value = openKey.value === key ? null : key
 }
 
@@ -130,7 +158,12 @@ function isActive(item: SetupPlacing): boolean {
 
 /** 点卡片：开始在地图上落位（飞机走空军基地格；卡车直接在卡上选满载） */
 function pick(item: SetupPlacing): void {
-  if (item.kind === 'truck' || item.blockedReason !== null) return
+  airMenu.value = null
+  if (item.kind === 'truck') return
+  if (item.blockedReason !== null) {
+    openAirMenu(item)
+    return
+  }
   // §6-A：ch10 抽中西移的师（落点按原文算法（沿道路西移 3 格）得出，道路数据不全 ⇒ 由玩家点地图给）
   if (item.kind === 'shift') {
     if (item.formationId !== undefined) setup.beginShiftPlacement(item.formationId)
@@ -155,6 +188,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
     @pointerdown.stop
     @click.stop
     @wheel.stop
+    @keydown.esc="airMenu = null"
   >
     <!-- B38：标题栏可拖（松手夹回地图窗口内；口径 #5「初设框不能拖」） -->
     <header
@@ -326,17 +360,33 @@ function sideMark(side: 'axis' | 'soviet'): string {
               'queue__card--on': isActive(item),
               'queue__card--blocked': item.blockedReason !== null,
             }"
-            :title="item.blockedReason ?? `${item.raw}（${sideName(item.side)}）`"
+            :title="
+              item.offMapAllowed === true
+                ? '右键或拖到空军盒'
+                : (item.blockedReason ?? `${item.raw}（${sideName(item.side)}）`)
+            "
             :aria-pressed="isActive(item)"
-            :disabled="item.kind === 'truck' || item.blockedReason !== null"
+            :disabled="
+              item.kind === 'truck' || (item.blockedReason !== null && item.offMapAllowed !== true)
+            "
+            :draggable="item.offMapAllowed === true"
             @click="pick(item)"
+            @contextmenu.prevent.stop="openAirMenu(item)"
+            @keydown.shift.f10.prevent.stop="openAirMenu(item)"
+            @dragstart="startAirDrag($event, item)"
+            @dragend="emit('airDrag', null)"
           >
             <!--
               第六批条 1（S1）：**算子图阵列** —— 有图档就画算子（与地图同一份图档来源），
               没有才退回文字（数据里缺图的项目如实退回，不画占位方块冒充算子）。
             -->
             <span v-if="item.imageUrl !== null" class="queue__counter">
-              <img :src="item.imageUrl" :alt="item.label" class="queue__counter-img" />
+              <img
+                :src="item.imageUrl"
+                :alt="item.label"
+                class="queue__counter-img"
+                draggable="false"
+              />
             </span>
             <span class="queue__side num">{{ sideMark(item.side) }}</span>
             <span class="queue__label">{{ item.label }}</span>
@@ -350,6 +400,15 @@ function sideMark(side: 'axis' | 'soviet'): string {
               }}
             </span>
           </button>
+
+          <BaseButton
+            v-if="item.offMapAllowed === true && airMenu === item.entryIndex"
+            variant="primary"
+            size="sm"
+            @click="placeInBox(item)"
+          >
+            放入地图外空军盒 · 1.4a
+          </BaseButton>
 
           <span v-if="item.blockedReason !== null" class="queue__blocked">
             {{ item.blockedReason }}

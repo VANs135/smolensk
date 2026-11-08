@@ -6,6 +6,7 @@ import { aircraft, scenarios, unitsAxis, unitsSoviet } from '@/data'
 import type { HexRef, Side } from '@/data'
 import {
   AIR_BASE_SITE_RULE,
+  airBoxEdgeColumn,
   assessSetupTruckLoad,
   assessSetupSpOwnership,
   boundarySideOf,
@@ -132,6 +133,7 @@ export type SetupPlacingCategory = 'air' | 'supply' | 'ground'
  * 候选格一律来自引擎，故界面高亮的格一定合法。
  */
 export interface SetupPlacing {
+  offMapAllowed?: boolean
   kind: 'self' | 'air' | 'truck' | 'shift'
   entryIndex: number
   /**
@@ -710,12 +712,19 @@ export const useSetupStore = defineStore('setup', () => {
    *      一旦直接调用（非地图点选路径）就静默 `return false`，正是备忘 #1「放进机场后数量不减」的一半；
    *   ② 每次只落**一枚**（按该型已落枚数取 `statuses`/`steps`），落满 `row.count` 才记完成。
    */
-  function placeAirRowNow(entryIndex: number, hex: HexRef, side: Side): boolean {
+  function placeAirRowNow(entryIndex: number, target: HexRef | 'offMap', side: Side): boolean {
     const airPlan = airPlanOf(side)
     const row = airPlan?.placements.find((item) => item.entryIndex === entryIndex)
     const recordAir = row === undefined ? undefined : findAircraftRecord(row.aircraftId)
     if (row === undefined || recordAir === undefined) {
       return record({ ok: false, rule: AIR_BASE_SITE_RULE, reason: `airRowNotFound:${entryIndex}` })
+    }
+    const inBox = target === 'offMap'
+    if (!inBox && !row.candidates.some((hex) => sameHex(hex, target))) {
+      return record({ ok: false, rule: AIR_BASE_SITE_RULE, reason: '请选择本方空军基地格' })
+    }
+    if (inBox && (!row.offMapAllowed || !canEditAirSetup(side))) {
+      return record({ ok: false, rule: '1.4a', reason: '这枚飞机现在不能放入地图外空军盒' })
     }
     const key = airProgressKey(side, entryIndex)
     const index = placedAirInstances.value[key] ?? 0
@@ -729,26 +738,69 @@ export const useSetupStore = defineStore('setup', () => {
     const air = toConsoleAirUnit({
       aircraft: recordAir,
       instanceId: createId('a'),
-      hex: { ...hex },
+      // 盒内飞机的位置由成员账本决定。这里的格号仅保持存档实体形状。
+      hex: inBox ? { col: airBoxEdgeColumn(side), row: 1 } : { ...target },
       side,
       airStatus: row.statuses[index] ?? 'inactive',
     })
     // IV-E / 剧本明示的减损：落到该型第 n 枚时取第 n 个 loss 值
     air.steps = row.steps[index] ?? air.steps
+    if (inBox) workbench.setAirInBoxMembership(air.instanceId, true)
     workbench.airUnits.push(air)
     const placedNow = index + 1
     placedAirInstances.value = { ...placedAirInstances.value, [key]: placedNow }
-    airChoices.value = { ...airChoices.value, [entryIndex]: setupHexLabel(hex) }
+    if (!inBox) airChoices.value = { ...airChoices.value, [entryIndex]: setupHexLabel(target) }
     if (placedNow >= row.count) {
       completed.value = { ...completed.value, [`air:${side}:${entryIndex}`]: true }
     }
     return record({
       ok: true,
-      rule: AIR_BASE_SITE_RULE,
+      rule: inBox ? '1.4a' : AIR_BASE_SITE_RULE,
       data: {
-        detail: `飞机落位：${row.name} 第 ${placedNow}/${row.count} 枚 → ${setupHexLabel(hex)}（14.1a）`,
+        detail: `${row.name} ${placedNow}/${row.count} → ${inBox ? '地图外空军盒' : setupHexLabel(target)}`,
       },
     })
+  }
+
+  function canEditAirSetup(side: Side): boolean {
+    return applied.value && !finished.value && setupSideCursor.value === side
+  }
+
+  function canPlaceAirInOffMapBox(side: Side, entryIndex: number): boolean {
+    if (!canEditAirSetup(side)) return false
+    const row = airPlanOf(side)?.placements.find((item) => item.entryIndex === entryIndex)
+    return (
+      row?.offMapAllowed === true &&
+      (placedAirInstances.value[airProgressKey(side, entryIndex)] ?? 0) < row.count
+    )
+  }
+
+  function placeAirInOffMapBoxNow(side: Side, entryIndex: number): boolean {
+    if (!placeAirRowNow(entryIndex, 'offMap', side)) return false
+    const current = placing.value
+    if (current?.kind === 'air' && current.side === side && current.entryIndex === entryIndex) {
+      const placed = placedAirInstances.value[airProgressKey(side, entryIndex)] ?? 0
+      placing.value =
+        placed >= current.total ? null : { ...current, placed, remaining: current.total - placed }
+    }
+    return true
+  }
+
+  function canMoveSetupAirToBox(instanceId: string): boolean {
+    const air = workbench.onMapAirUnits.find((item) => item.instanceId === instanceId)
+    return (
+      air !== undefined &&
+      canEditAirSetup(air.side) &&
+      airPlanOf(air.side)?.placements.some(
+        (row) => row.offMapAllowed && row.aircraftId === air.aircraftId,
+      ) === true
+    )
+  }
+
+  function moveSetupAirToBoxNow(instanceId: string): boolean {
+    if (!canMoveSetupAirToBox(instanceId)) return false
+    workbench.setAirInBoxMembership(instanceId, true)
+    return record({ ok: true, rule: '1.4a', data: { detail: '飞机已放入地图外空军盒' } })
   }
 
   /** 还剩几项没在地图上落位（飞机按「型」计；自选格项按「条」计） */
@@ -799,6 +851,7 @@ export const useSetupStore = defineStore('setup', () => {
           chunk: 1,
           candidates: row.candidates,
           category: 'air',
+          offMapAllowed: row.offMapAllowed && canEditAirSetup(side),
           // 第六批条 1（S1）：机型图档
           imageUrl: imageUrlOfAircraftId(row.aircraftId),
           // ★ 备忘 #1：基地未落位时**说清前置**（14.1a 的候选＝本方空军基地格）
@@ -2743,6 +2796,10 @@ export const useSetupStore = defineStore('setup', () => {
     finished,
     beginSelfPlacement,
     beginAirPlacement,
+    canPlaceAirInOffMapBox,
+    placeAirInOffMapBoxNow,
+    canMoveSetupAirToBox,
+    moveSetupAirToBoxNow,
     // 第六批 §6-A：ch10 西移编队的落点（抽签抽中的师，与自由项并列进初设 box）
     beginShiftPlacement,
     cancelPlacement,

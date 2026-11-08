@@ -84,6 +84,7 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
     why: '初设 / 剧本 / 开局：不在 2.2 的环节体系内（初设期由「初设与开局」面板与决策队列管）',
     names: [
       'beginAirPlacement',
+      'placeAirInOffMapBoxNow',
       'beginSelfPlacement',
       'beginShiftPlacement',
       'beginTruckPick',

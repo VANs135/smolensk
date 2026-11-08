@@ -82,6 +82,14 @@ const MODE_LETTER: Record<string, string> = {
  */
 export type MapPopupVariant = 'content' | 'label' | 'context'
 
+export type CounterBoxTarget = 'air' | 'northeast' | 'southeast'
+
+export const COUNTER_BOX_LABELS: Readonly<Record<CounterBoxTarget, string>> = {
+  air: '地图外空军盒',
+  northeast: '东北盒',
+  southeast: '东南盒',
+}
+
 type ContextPanel = 'air' | 'supply' | 'fort' | 'containers'
 type ContextGroup = '运输' | '工程' | '编组' | '补给' | '空军'
 
@@ -328,6 +336,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       images: air.images,
       label: air.aircraftType,
       air: true,
+      setupAir: !setup.finished && air.side === setup.setupSideCursor,
       selected: picked.includes(air.instanceId),
       ended: air.airStatus !== 'active',
       modeLetter: air.airStatus === 'active' ? 'A' : 'I',
@@ -1458,6 +1467,40 @@ export const useMapViewStore = defineStore('mapView', () => {
     return kind === undefined || kind === 'move' || kind === 'unit'
   }
 
+  /** 拖放与右键共用候选。判定和落账仍由初设命令处理。 */
+  function counterBoxTargets(instanceId: string): CounterBoxTarget[] {
+    if (hotseat.handoffPending) return []
+    if (!setup.finished) return setup.canMoveSetupAirToBox(instanceId) ? ['air'] : []
+    return []
+  }
+
+  function counterForBoxAt(hex: HexRef, world: { x: number; y: number }, scale: number) {
+    const tokens = stackTokensAt(hex)
+    let token: UnitToken | null = null
+    const expanded = expandedStack.value
+    if (expanded !== null && isStackExpanded(hex)) {
+      const visible = tokens.filter((item) => item.hiddenStack !== true)
+      const layout = stackFanLayout({
+        hex,
+        total: visible.length,
+        page: expanded.page,
+        order: stackFanOrder(visible),
+      })
+      const hit = hitStackFan({ layout, point: world, scale })
+      if (hit?.kind === 'slot') token = visible[hit.index] ?? null
+    } else {
+      token = hitCollapsedToken(tokens, world, scale)
+    }
+    if (token === null) return null
+    const targets = counterBoxTargets(token.id)
+    return targets.length === 0 ? null : { id: token.id, label: token.label, targets }
+  }
+
+  function dropCounterInBox(instanceId: string, target: CounterBoxTarget): boolean {
+    if (!counterBoxTargets(instanceId).includes(target)) return false
+    return setup.moveSetupAirToBoxNow(instanceId)
+  }
+
   function showCounterContext(
     hex: HexRef,
     ids: readonly string[],
@@ -2547,6 +2590,9 @@ export const useMapViewStore = defineStore('mapView', () => {
     actionBaseAircraft,
     contextOptions,
     onHexContext,
+    counterForBoxAt,
+    counterBoxTargets,
+    dropCounterInBox,
     openContextAction,
     startRosterMission,
     selectCounterAt,

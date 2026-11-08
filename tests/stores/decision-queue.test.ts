@@ -266,6 +266,37 @@ describe('B11：飞机逐枚落位（备忘 #1：放进机场后数量要减）'
     expect(setup.lastAction?.ok).toBe(false)
     expect(setup.lastAction?.detail).toContain('先落本方空军基地')
   })
+
+  it('1.4a：本方飞机可逐枚入盒，保留初设状态并随盘面保存', () => {
+    const { setup, workbench } = stores
+    expect(setup.enterSetup('1')).toBe(true)
+    const side = setup.setupSideCursor!
+    const row = setup.airPlanOf(side)!.placements.find((item) => item.count >= 2)!
+    const otherSide = side === 'axis' ? 'soviet' : 'axis'
+    const opponent = setup.airPlanOf(otherSide)!.placements[0]!
+    expect(setup.placeAirInOffMapBoxNow(otherSide, opponent.entryIndex)).toBe(false)
+
+    expect(setup.beginAirPlacement(side, row.entryIndex)).toBe(true)
+    expect(setup.placeAtHex(row.candidates[0]!)).toBe(true)
+    const mapped = workbench.airUnits.at(-1)!
+    expect(setup.moveSetupAirToBoxNow(mapped.instanceId)).toBe(true)
+    expect(workbench.airBoxMembers).toContain(mapped.instanceId)
+    expect(setup.placing?.placed).toBe(1)
+
+    // 还没有图上基地时也能直接把剩余飞机放到图外基地。
+    workbench.units = workbench.units.filter((unit) => unit.noncombatKind !== 'air_base')
+    expect(setup.placeAirInOffMapBoxNow(side, row.entryIndex)).toBe(true)
+    const placed = workbench.airUnits.at(-1)!
+    expect(placed).toMatchObject({ side, airStatus: row.statuses[1], steps: row.steps[1] })
+    expect(workbench.onMapAirUnits).not.toContainEqual(placed)
+    expect(workbench.airBoxMembers).toContain(placed.instanceId)
+    const snapshot = workbench.snapshotBoard()
+    workbench.clearAirBoxMembers()
+    workbench.restoreBoard(snapshot, true)
+    expect(workbench.airBoxMembers).toEqual(
+      expect.arrayContaining([mapped.instanceId, placed.instanceId]),
+    )
+  })
 })
 
 describe('B11：卡车装载决定（13.2h）', () => {
