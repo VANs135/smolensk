@@ -167,6 +167,19 @@ describe('W6 D1：存档内容（六项齐备）', () => {
     expect(restored.state.scenarioId).toBe('1')
   })
 
+  it('D1：对局模式（hotseat）按新档写入并原样读回（不参与规则判定）', () => {
+    const session = createSession()
+    const text = serializeSaveFile(session, SAVED_AT, DATA_VERSION, undefined, {
+      mode: 'pve',
+      aiSide: 'soviet',
+    })
+    expect((JSON.parse(text) as Record<string, unknown>)['hotseat']).toEqual({
+      mode: 'pve',
+      aiSide: 'soviet',
+    })
+    expect(deserializeSaveFile(text).hotseat).toEqual({ mode: 'pve', aiSide: 'soviet' })
+  })
+
   it('D1：种子与日志游标往返一致，且**续掷的第一颗骰与原局相同**（可复算）', () => {
     const session = createSession()
     const restored = deserializeSaveFile(serializeSaveFile(session, SAVED_AT)).session

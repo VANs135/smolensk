@@ -38,6 +38,23 @@ import type { GamePhase, GameSession } from './state-types'
 /** 存档文件格式版本（外壳；破坏性变更须递增） */
 export const SAVE_FILE_VERSION = 1
 
+/** 对局模式（只记录组织方式，不参与任何规则判定） */
+export type SaveHotseatMode = 'solo' | 'pvp' | 'pve'
+
+/** 对局模式的三条合法取值（读档校验用） */
+export const SAVE_HOTSEAT_MODES: readonly SaveHotseatMode[] = ['solo', 'pvp', 'pve']
+
+/**
+ * 对局组织方式（存档字段 `hotseat`）
+ *
+ * `pve` 时 `aiSide` 为 AI 控制的一方；`pvp` / `solo` 时为 `null`。
+ * 引擎只做「形状校验 + 透传」，谁操作哪一方由 store / 界面决定。
+ */
+export interface SaveHotseat {
+  mode: SaveHotseatMode
+  aiSide: Side | null
+}
+
 /** 存档文件（可直接 `JSON.stringify` 落盘） */
 export interface SaveFile {
   /** 存档文件格式版本 */
@@ -67,6 +84,13 @@ export interface SaveFile {
    * 缺省（未注册编解码器）时该字段不出现 —— 旧档读起来照旧。
    */
   board?: unknown
+  /**
+   * **对局组织方式**（`mode` + PVE 的 `aiSide`；见 `SaveHotseat`）
+   *
+   * 只记录"谁操作哪一方"，不参与规则判定。缺省表示存档里没有记录（读成「未设置」，
+   * 由界面要求玩家重选），**不是拒读理由**。
+   */
+  hotseat?: SaveHotseat
 }
 
 /** 存档错误：带字段路径，便于定位（与 SessionError / DataError 同风格） */
@@ -89,6 +113,8 @@ export class SaveFileError extends Error {
  * @param session 会话本体（引擎不取时间，`savedAt` 由调用方传入）
  * @param savedAt 写盘时间戳（ISO 8601）
  * @param dataVersion 数据契约版本；缺省取当前 `DATA_VERSION`
+ * @param board 盘面快照（**不透明**；由 store 层的编解码器产出，引擎不解释）
+ * @param hotseat 对局组织方式（`mode` + PVE 的 `aiSide`；不参与规则判定）
  */
 export function serializeSaveFile(
   session: GameSession,
@@ -96,6 +122,8 @@ export function serializeSaveFile(
   dataVersion: string = DATA_VERSION,
   /** 盘面快照（**不透明**；由 store 层的编解码器产出，引擎不解释） */
   board?: unknown,
+  /** 对局组织方式；缺省不写该键（读回即「未设置」） */
+  hotseat?: SaveHotseat,
 ): string {
   const file: SaveFile = {
     saveVersion: SAVE_FILE_VERSION,
@@ -106,6 +134,7 @@ export function serializeSaveFile(
     rngAlgorithm: RNG_ALGORITHM,
     session,
     ...(board === undefined ? {} : { board }),
+    ...(hotseat === undefined ? {} : { hotseat }),
   }
   return JSON.stringify(file, null, 2)
 }
@@ -142,6 +171,31 @@ function requireNumber(value: unknown, path: string): number {
     throw new SaveFileError(path, `期望有限数字，实际 ${String(value)}`)
   }
   return value
+}
+
+/**
+ * 读 `hotseat`（可选对局组织方式）
+ *
+ * 缺省 ⇒ `undefined`（读成「未设置」，由界面要求重选）；给了就必须是合法形状。
+ */
+function readHotseat(value: unknown): SaveHotseat | undefined {
+  if (value === undefined) return undefined
+  const root = requireObject(value, '#/hotseat')
+  const mode = requireNonEmptyString(root['mode'], '#/hotseat/mode')
+  if (!(SAVE_HOTSEAT_MODES as readonly string[]).includes(mode)) {
+    throw new SaveFileError(
+      '#/hotseat/mode',
+      `对局模式非法：${mode}（应为 ${SAVE_HOTSEAT_MODES.join(' / ')}）`,
+    )
+  }
+  const aiSide = root['aiSide']
+  if (aiSide !== null && aiSide !== 'axis' && aiSide !== 'soviet') {
+    throw new SaveFileError(
+      '#/hotseat/aiSide',
+      `AI 控制方非法：${JSON.stringify(aiSide)}（应为 axis / soviet / null）`,
+    )
+  }
+  return { mode: mode as SaveHotseatMode, aiSide: aiSide as Side | null }
 }
 
 /**
@@ -244,6 +298,12 @@ export function deserializeSaveFile(text: string, options: LoadSaveOptions = {})
   if (board !== undefined && (typeof board !== 'object' || board === null))
     throw new SaveFileError('#/board', '盘面快照应为对象（形状由 store 层定义）')
 
+  /*
+   * 对局组织方式：**可选**。缺键 ⇒ 不返回该字段（由 store 层读成「未设置」，要求重选，
+   * 不是拒读理由）；给了就只校验形状，不解释语义、不参与规则判定。
+   */
+  const hotseat = readHotseat(root['hotseat'])
+
   return {
     saveVersion,
     dataVersion,
@@ -253,6 +313,7 @@ export function deserializeSaveFile(text: string, options: LoadSaveOptions = {})
     rngAlgorithm,
     session,
     ...(board === undefined ? {} : { board }),
+    ...(hotseat === undefined ? {} : { hotseat }),
   }
 }
 
