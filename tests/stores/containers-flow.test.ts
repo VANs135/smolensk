@@ -673,6 +673,36 @@ describe('W7 C12：地图外空军盒 / 边缘盒 / 编队收纳盒', () => {
     expect(containers.edgeBoxUnits.southeast).toHaveLength(0)
   })
 
+  it('B2：拖放/右键只投影 canEnterEdgeBoxNow，判据与 moveEdgeBox 一致', () => {
+    workbench.setScenarioId('1')
+    workbench.setActiveSide('soviet')
+    workbench.setPhase('movement')
+    enterStep(workbench, 'move.order')
+    const unit = place(workbench, eligibleDivisionRecord(), someHex(), 'soviet', 'ru-drop')
+    // 内陆格：两个盒都不接。
+    expect(containers.canEnterEdgeBoxNow('southeast', unit.instanceId)).toBe(false)
+    expect(containers.canEnterEdgeBoxNow('northeast', unit.instanceId)).toBe(false)
+    // 62.x 东边源：两盒都接（与 1.4b 的开放源格一致）。
+    unit.hex = { col: 62, row: 35 }
+    expect(containers.canEnterEdgeBoxNow('southeast', unit.instanceId)).toBe(true)
+    expect(containers.canEnterEdgeBoxNow('northeast', unit.instanceId)).toBe(true)
+    // 37.35 北边源只接东北盒。
+    unit.hex = { col: 37, row: 35 }
+    expect(containers.canEnterEdgeBoxNow('southeast', unit.instanceId)).toBe(false)
+    expect(containers.canEnterEdgeBoxNow('northeast', unit.instanceId)).toBe(true)
+    const enter = { box: 'northeast', instanceId: unit.instanceId, direction: 'enter' } as const
+    // 非移动阶段：投影为不可入，真提交同样被拒。
+    workbench.setPhase('reaction')
+    expect(containers.canEnterEdgeBoxNow('northeast', unit.instanceId)).toBe(false)
+    expect(containers.moveEdgeBox(enter)).toBe(false)
+    // 回到移动阶段：投影与提交同判据，均放行。
+    workbench.setPhase('movement')
+    enterStep(workbench, 'move.order')
+    unit.hex = { col: 37, row: 35 }
+    expect(containers.canEnterEdgeBoxNow('northeast', unit.instanceId)).toBe(true)
+    expect(containers.moveEdgeBox(enter)).toBe(true)
+  })
+
   it('1.4b：铁路替代费用扣同一运力账本，额度不足时不移动算子', () => {
     workbench.setScenarioId('1')
     workbench.setActiveSide('soviet')

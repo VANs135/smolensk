@@ -75,6 +75,13 @@ const props = withDefaults(
     highlightHexes?: readonly HexRef[]
     /** 移动交互覆盖层（算子 / 可到达范围 / 预览路径；C5） */
     overlay?: MovementOverlay | null
+    boxDragSource?:
+      | ((
+          hex: HexRef,
+          world: { x: number; y: number },
+          scale: number,
+        ) => { id: string; label: string } | null)
+      | null
     /**
      * 地图内**就地一行提示**（B9；null = 无提示）
      *
@@ -105,6 +112,7 @@ const props = withDefaults(
     highlightHex: null,
     highlightHexes: () => [],
     overlay: null,
+    boxDragSource: null,
     hint: null,
     controlMarkers: null,
     boundary: null,
@@ -124,7 +132,10 @@ const emit = defineEmits<{
     hex: HexRef | null,
     world: { x: number; y: number },
     anchor: { x: number; y: number },
+    scale: number,
   ]
+  counterDrag: [id: string | null]
+  counterDrop: [id: string, point: { x: number; y: number }]
   /** 悬停格变化（离开画布为 null） */
   hexHover: [hex: HexRef | null]
 }>()
@@ -162,6 +173,14 @@ let resizeObserver: ResizeObserver | null = null
  *   「`pointerup` 丢失 ⇒ 由 `pointercancel` / 按钮位已松两条路复位」这条纪律在那边实现。
  */
 let drag: DragGesture = IDLE_DRAG
+let counterPress: { id: string; label: string; x: number; y: number } | null = null
+const counterGhost = ref<{ label: string; x: number; y: number } | null>(null)
+
+function clearCounterDrag(): void {
+  counterPress = null
+  if (counterGhost.value !== null) emit('counterDrag', null)
+  counterGhost.value = null
+}
 
 /* ── 绘制 ── */
 
@@ -340,6 +359,11 @@ function onPointerDown(event: PointerEvent): void {
   // 多指：已在拖动中就直接忽略后续指针（否则第二根手指会替换整段手势，见 DragGesture.pointerId）
   if (drag.dragging) return
   if (!isMapGesture(event)) return
+  const local = toLocal(event)
+  const hit = local === null ? null : hitAtLocal(local)
+  const source =
+    hit === null ? null : props.boxDragSource?.(hit.hex, hit.world, viewport.value.scale)
+  counterPress = source == null ? null : { ...source, x: event.clientX, y: event.clientY }
   drag = beginDrag({ x: event.clientX, y: event.clientY }, event.pointerId)
   // 指针捕获让「拖出画布」也能继续收到 pointermove。
   // 该 API 在指针已非活动时会抛错（快速点击 / 合成事件），故容错——否则拖动会卡住。
@@ -357,6 +381,21 @@ function onPointerMove(event: PointerEvent): void {
   if (!isMapGesture(event, drag.dragging)) return
   const local = toLocal(event)
   if (local === null) return
+  if (counterPress !== null) {
+    if ((event.buttons & 1) === 0) {
+      drag = IDLE_DRAG
+      clearCounterDrag()
+      releaseCapture(event)
+    } else if (
+      counterGhost.value !== null ||
+      Math.hypot(event.clientX - counterPress.x, event.clientY - counterPress.y) >= 5
+    ) {
+      if (counterGhost.value === null) emit('counterDrag', counterPress.id)
+      drag = { ...drag, moved: true }
+      counterGhost.value = { label: counterPress.label, ...local }
+    }
+    return
+  }
 
   // ★ 拖动判定交纯模块：它负责「按钮位已松 ⇒ 就地复位」这条异常路径（`pointerup` 可能收不到）
   const step = dragMove(drag, { x: event.clientX, y: event.clientY }, event.buttons)
@@ -381,7 +420,12 @@ function onPointerUp(event: PointerEvent): void {
   const ended = dragEnd(drag)
   if (ended.gesture === drag) return // 未在拖动中
   drag = ended.gesture
+  const counter = counterPress
   releaseCapture(event)
+  if (counter !== null && !ended.clicked) {
+    emit('counterDrop', counter.id, { x: event.clientX, y: event.clientY })
+  }
+  clearCounterDrag()
   if (!ended.clicked) return
   const local = toLocal(event)
   if (local === null) return
@@ -395,10 +439,13 @@ function onContextMenu(event: MouseEvent): void {
   const local = toLocal(event)
   if (local === null) return
   const world = screenToWorld(local, viewport.value)
-  emit('hexContext', hitTestHex(world.x, world.y)?.hex ?? null, world, {
-    x: event.clientX,
-    y: event.clientY,
-  })
+  emit(
+    'hexContext',
+    hitTestHex(world.x, world.y)?.hex ?? null,
+    world,
+    { x: event.clientX, y: event.clientY },
+    viewport.value.scale,
+  )
 }
 
 /**
@@ -414,6 +461,7 @@ function onPointerCancel(event: PointerEvent): void {
   const ended = dragCancel(drag)
   if (ended.gesture === drag) return
   drag = ended.gesture
+  clearCounterDrag()
   releaseCapture(event)
 }
 
@@ -578,6 +626,13 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
         故调用方直接把 `hexToLocal(格)` 的结果当 left/top 用即可，不需要再做任何偏移换算。
       -->
       <slot name="overlay" />
+      <span
+        v-if="counterGhost !== null"
+        class="mapcanvas__counter-ghost"
+        :style="{ left: counterGhost.x + 'px', top: counterGhost.y + 'px' }"
+        aria-hidden="true"
+        >{{ counterGhost.label }}</span
+      >
     </div>
 
     <div class="mapcanvas__tools" aria-label="地图视口">
@@ -622,6 +677,18 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
 </template>
 
 <style scoped>
+.mapcanvas__counter-ghost {
+  position: absolute;
+  z-index: var(--layer-map-popup);
+  transform: translate(var(--space-2), var(--space-2));
+  pointer-events: none;
+  border: 1px solid var(--color-command-teal);
+  border-radius: var(--radius-sm);
+  background: var(--color-command-bg);
+  color: var(--color-command-ink);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+}
 .mapcanvas {
   display: flex;
   flex-direction: column;

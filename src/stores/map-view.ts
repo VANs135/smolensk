@@ -1467,11 +1467,14 @@ export const useMapViewStore = defineStore('mapView', () => {
     return kind === undefined || kind === 'move' || kind === 'unit'
   }
 
-  /** 拖放与右键共用候选。判定和落账仍由初设命令处理。 */
+  /** 拖放与右键共用候选。判定和落账仍由初设或容器命令处理。 */
   function counterBoxTargets(instanceId: string): CounterBoxTarget[] {
     if (hotseat.handoffPending) return []
     if (!setup.finished) return setup.canMoveSetupAirToBox(instanceId) ? ['air'] : []
-    return []
+    if (!canOpenCounterContext() || !containers.canUseEdgeBoxes) return []
+    return (['northeast', 'southeast'] as const).filter((box) =>
+      containers.canEnterEdgeBoxNow(box, instanceId),
+    )
   }
 
   function counterForBoxAt(hex: HexRef, world: { x: number; y: number }, scale: number) {
@@ -1498,7 +1501,9 @@ export const useMapViewStore = defineStore('mapView', () => {
 
   function dropCounterInBox(instanceId: string, target: CounterBoxTarget): boolean {
     if (!counterBoxTargets(instanceId).includes(target)) return false
-    return setup.moveSetupAirToBoxNow(instanceId)
+    return target === 'air'
+      ? setup.moveSetupAirToBoxNow(instanceId)
+      : containers.moveEdgeBox({ box: target, instanceId, direction: 'enter' })
   }
 
   function showCounterContext(

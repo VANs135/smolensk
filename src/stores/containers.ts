@@ -2186,6 +2186,10 @@ export const useContainersStore = defineStore('containers', () => {
     })
   }
 
+  function canEnterEdgeBoxNow(box: EdgeBoxId, instanceId: string): boolean {
+    return canUseEdgeBoxes.value && edgeTransferPlan({ box, instanceId, direction: 'enter' }).ok
+  }
+
   function edgeBoxExitCandidates(box: EdgeBoxId, instanceId: string, useRailCap: boolean) {
     return edgeBoxSources(box).filter(
       (hex) => edgeTransferPlan({ box, instanceId, direction: 'exit', useRailCap }, hex).ok,
@@ -2483,6 +2487,7 @@ export const useContainersStore = defineStore('containers', () => {
     moveEdgeBox,
     canUseEdgeBoxes,
     edgeBoxEnterCandidates,
+    canEnterEdgeBoxNow,
     edgeBoxExitCandidates,
     beginEdgeBoxExitHexPickNow,
     hideInFormationBox,

@@ -157,6 +157,8 @@ function showKeys(): void {
 }
 
 const queuedAirDrag = ref<{ side: Side; entryIndex: number } | null>(null)
+const mapCounterDrag = ref<string | null>(null)
+const airBoxMenu = ref<{ id: string; x: number; y: number } | null>(null)
 const setupBoxOpen = ref(false)
 const setupBoxSide = computed(() => (setup.finished ? null : setup.setupSideCursor))
 const setupBoxAircraft = computed(() =>
@@ -164,13 +166,45 @@ const setupBoxAircraft = computed(() =>
     (air) => air.side === setupBoxSide.value && workbench.airBoxMembers.includes(air.instanceId),
   ),
 )
-const boxDropTargets = computed<readonly CounterBoxTarget[]>(() =>
-  setupBoxSide.value === null ? [] : ['air'],
-)
+const boxDropTargets = computed<readonly CounterBoxTarget[]>(() => {
+  if (mapCounterDrag.value !== null) return mapView.counterBoxTargets(mapCounterDrag.value)
+  return setupBoxSide.value === null ? [] : ['air']
+})
 watch([setupBoxSide, () => setup.scenarioId, () => hotseat.handoffPending], () => {
+  airBoxMenu.value = null
   queuedAirDrag.value = null
+  mapCounterDrag.value = null
   setupBoxOpen.value = false
 })
+
+function onMapContext(
+  hex: HexRef | null,
+  world: { x: number; y: number },
+  anchor: { x: number; y: number },
+  scale: number,
+): void {
+  airBoxMenu.value = null
+  if (!setup.finished && hex !== null) {
+    const counter = mapView.counterForBoxAt(hex, world, scale)
+    if (counter?.targets.includes('air')) {
+      airBoxMenu.value = {
+        id: counter.id,
+        x: Math.max(8, Math.min(anchor.x, window.innerWidth - 220)),
+        y: Math.max(8, Math.min(anchor.y, window.innerHeight - 42)),
+      }
+      return
+    }
+  }
+  mapView.onHexContext(hex, world, anchor)
+}
+
+function onCounterDrop(id: string, point: { x: number; y: number }): void {
+  const target = document
+    .elementFromPoint(point.x, point.y)
+    ?.closest<HTMLElement>('[data-counter-box]')
+  const box = boxDropTargets.value.find((item) => item === target?.dataset.counterBox)
+  if (box !== undefined) mapView.dropCounterInBox(id, box)
+}
 
 function onQueuedAirDrop(event: DragEvent, box: CounterBoxTarget): void {
   const source = queuedAirDrag.value
@@ -200,7 +234,14 @@ function pickAirBox(): void {
   setupBoxOpen.value = !setupBoxOpen.value
 }
 
+function submitAirBoxMenu(): void {
+  const menu = airBoxMenu.value
+  airBoxMenu.value = null
+  if (menu !== null) mapView.dropCounterInBox(menu.id, 'air')
+}
+
 function onHexClick(hex: HexRef, world: { x: number; y: number }, scale: number): void {
+  airBoxMenu.value = null
   const anchor = mapRef.value?.hexToWindow(hex) ?? { x: 0, y: 0 }
   mapView.onHexClick(hex, anchor, world, scale)
 }
@@ -218,6 +259,10 @@ onMounted(() => {
     zoomOut: () => mapRef.value?.zoomOut(),
     fit: () => mapRef.value?.fitToWindow(),
     closePopup: () => {
+      if (airBoxMenu.value !== null) {
+        airBoxMenu.value = null
+        return true
+      }
       if (mapView.popup === null) return false
       mapView.closePopup()
       return true
@@ -292,13 +337,16 @@ onBeforeUnmount(() => {
           :highlight-hex="workbench.hoverHex"
           :highlight-hexes="workbench.variableExitPickHexes"
           :overlay="mapView.overlay"
+          :box-drag-source="mapView.counterForBoxAt"
           :control-markers="mapView.controlMarkers"
           :boundary="mapView.boundary"
           :construction-markers="workbench.constructionMarkerPieces"
           :hint="workbench.mapHint"
           @hex-click="onHexClick"
           @hex-hover="onHexHover"
-          @hex-context="mapView.onHexContext"
+          @hex-context="onMapContext"
+          @counter-drag="mapCounterDrag = $event"
+          @counter-drop="onCounterDrop"
         >
           <template #overlay>
             <DecisionQueue
@@ -310,7 +358,9 @@ onBeforeUnmount(() => {
             <div
               v-if="boxDropTargets.length > 0"
               class="gt__box-targets"
-              :class="{ 'gt__box-targets--drag': queuedAirDrag !== null }"
+              :class="{
+                'gt__box-targets--drag': queuedAirDrag !== null || mapCounterDrag !== null,
+              }"
             >
               <BaseButton
                 v-for="box in boxDropTargets"
@@ -332,6 +382,15 @@ onBeforeUnmount(() => {
                   {{ air.name }} · {{ air.airStatus === 'active' ? '激活' : '非激活' }}
                 </li>
               </ul>
+            </div>
+            <div
+              v-if="airBoxMenu !== null"
+              class="gt__air-box-menu"
+              :style="{ left: airBoxMenu.x + 'px', top: airBoxMenu.y + 'px' }"
+            >
+              <BaseButton variant="primary" size="sm" @click="submitAirBoxMenu()">
+                放入地图外空军盒 · 1.4a
+              </BaseButton>
             </div>
             <SupplyPhasePanel
               v-if="setup.finished && workbench.phase === 'supply' && session === null"
@@ -489,6 +548,11 @@ onBeforeUnmount(() => {
   outline: 2px solid var(--color-command-teal);
   outline-offset: var(--space-1);
   border-radius: var(--radius-sm);
+}
+
+.gt__air-box-menu {
+  position: fixed;
+  z-index: var(--layer-map-popup);
 }
 
 .gt__box-roster {
