@@ -49,6 +49,7 @@ import { counterDirOfSide, counterImageUrl } from '@/render/token-images'
 
 import { useContainersStore } from './containers'
 import { useGameSessionStore } from './session'
+import { useHotseatStore } from './hotseat'
 import { useWorkbenchStore } from './workbench'
 import {
   counterImageUrlOf,
@@ -255,6 +256,7 @@ export const useSetupStore = defineStore('setup', () => {
   const workbench = useWorkbenchStore()
   const containers = useContainersStore()
   const game = useGameSessionStore()
+  const hotseat = useHotseatStore()
 
   /* ────────────────────────────── 状态（本 store 的账本） ────────────────────────────── */
 
@@ -1646,6 +1648,8 @@ export const useSetupStore = defineStore('setup', () => {
     }
     // 随剧本重取的账本（剧本号本身已由上一步写定，这里是各自的投影刷新）
     workbench.setScenarioId(next)
+    // 换剧本 ＝ 新的一局 ⇒ 模式解锁，玩家回到选剧本页可重选（初设一旦开始则锁定）
+    hotseat.resetModeLock()
     containers.setScenario(next)
     containers.resetSetupDraws()
     resetInputs()
@@ -1776,15 +1780,27 @@ export const useSetupStore = defineStore('setup', () => {
    *   开局（写共识结论 + 建会话 + 进第一阶段）仍由初设收束时的「开始游戏」负责（`startGameNow`）。
    */
   function enterSetup(id: string): boolean {
-    if (id !== scenarioId.value) return selectScenario(id)
-    const needsLoad =
+    // 2026-11-09：模式前移到选剧本；未选齐（含 PVE 未指定 AI 方）不得进入初设
+    const modeIssue = hotseat.modeIssue
+    if (modeIssue !== null) {
+      lastAction.value = { ok: false, rule: '2.2', detail: modeIssue }
+      return false
+    }
+    const entered =
+      id !== scenarioId.value ? selectScenario(id) : !needsLoad() || ensureSetupLoaded()
+    if (entered) hotseat.lockMode()
+    return entered
+  }
+
+  /** `enterSetup` 的「需要重新加载盘面」判据 */
+  function needsLoad(): boolean {
+    return (
       game.session === null &&
       !applied.value &&
       !finished.value &&
       workbench.units.length === 0 &&
       workbench.airUnits.length === 0
-    const loaded = ensureSetupLoaded()
-    return !needsLoad || loaded
+    )
   }
 
   /** 取格子文本 → 坐标（无效即 null） */

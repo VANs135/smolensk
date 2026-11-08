@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
-import { useGameSessionStore, useSetupStore } from '@/stores'
+import { useGameSessionStore, useHotseatStore, useSetupStore } from '@/stores'
 
 /**
  * 批 E 切片 1（用户口径 9.17③b）：**开局入口收敛为唯一一处（初设收束点）**
@@ -77,6 +77,8 @@ describe('批 E 切片 1：开局入口收敛（唯一入口＝初设收束点�
 
   it('④ 正向：收束点真的能开局（`startGameNow` ⇒ 建会话 + 初设收束）', () => {
     setActivePinia(createPinia())
+    // 2026-11-09：模式前移到选剧本，进初设前必须先选
+    useHotseatStore().setMode('solo')
     const setup = useSetupStore()
     const session = useGameSessionStore()
     expect(session.session).toBeNull()

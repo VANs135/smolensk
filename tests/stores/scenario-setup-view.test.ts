@@ -4,7 +4,13 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { scenarios } from '@/data'
-import { useGameSessionStore, useSetupStore, useUiStore, useWorkbenchStore } from '@/stores'
+import {
+  useGameSessionStore,
+  useHotseatStore,
+  useSetupStore,
+  useUiStore,
+  useWorkbenchStore,
+} from '@/stores'
 
 /**
  * B10：前置「剧本 + 共识」视图
@@ -21,6 +27,8 @@ import { useGameSessionStore, useSetupStore, useUiStore, useWorkbenchStore } fro
 
 const newStores = () => {
   setActivePinia(createPinia())
+  // 2026-11-09：模式前移到选剧本，进初设前必须先选
+  useHotseatStore().setMode('solo')
   return {
     setup: useSetupStore(),
     session: useGameSessionStore(),

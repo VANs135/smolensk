@@ -56,13 +56,39 @@ export const useHotseatStore = defineStore('hotseat', () => {
   const session = useGameSessionStore()
 
   /**
-   * 对局模式（B36；用户口径 #7）
+   * 对局模式（B36；用户口径 #7；2026-11-09 前移到选剧本）
    *
-   *   · `pvp`（默认）：双人同机热坐 —— 交接亮**交接屏**，信息纪律按 4.9a 裁剪；
+   *   · `null`：**尚未选择** —— 选剧本页必须显式选一个，未选不得进入初设；
+   *   · `pvp`：双人同机热坐 —— 交接亮**交接屏**，信息纪律按 4.9a 裁剪；
    *   · `solo`：单人（自己跟自己推演）—— **不遮交接屏**、**双方内容都可见**（见 `fogDisabled`）；
-   *   · `pve`：人机 —— 本轮**只登记枚举**，行为与 `pvp` 相同，界面明示"未实现"。
+   *   · `pve`：人机 —— AI 打 `aiSide` 指定的一方，玩家操作另一方（AI 只走既有具名入口）。
    */
-  const mode = ref<HotseatMode>('pvp')
+  const mode = ref<HotseatMode | null>(null)
+
+  /** PVE 下 AI 控制的一方（PVP/solo 恒为 null；换模式即清空，逼出一次显式选择） */
+  const aiSide = ref<Side | null>(null)
+
+  /**
+   * 初设已开始 ⇒ 模式锁定（用户口径：初设一旦开始就不可再改）
+   *
+   * 由 `setup.enterSetup` 成功进入初设时调用 `lockMode()`；换剧本（`selectScenario`）是
+   * 唯一的新局入口，会 `resetModeLock()` 让玩家重新选。
+   */
+  const setupLocked = ref(false)
+
+  /** 模式选择的缺口说明（null ＝ 已选齐、可进初设） */
+  const modeIssue = computed<string | null>(() => {
+    if (mode.value === null) return '请先选择对局模式（PVE / PVP / solo）'
+    if (mode.value === 'pve' && aiSide.value === null) return 'PVE 需要指定 AI 控制的一方'
+    return null
+  })
+
+  /** 模式是否选齐（初设入口的唯一放行条件） */
+  const modeReady = computed<boolean>(() => modeIssue.value === null)
+
+  /** 一键预设的归属方：只有 PVE 才预设，且只预设 AI 一方；PVP/solo 恒 null（不替任何人落位） */
+  const presetSide = computed<Side | null>(() => (mode.value === 'pve' ? aiSide.value : null))
+  const canPreset = computed<boolean>(() => mode.value === 'pve' && aiSide.value !== null)
 
   /**
    * 热坐交接是否启用（pvp / pve 启用；solo 不遮屏）
@@ -335,14 +361,37 @@ export const useHotseatStore = defineStore('hotseat', () => {
   }
 
   /**
-   * 切换对局模式（B36）
+   * 切换对局模式（B36；2026-11-09 前移到选剧本 + 初设后锁定）
    *
+   * 返回是否改动：初设已开始（`setupLocked`）⇒ 拒绝，模式不可再改；
    * 换到 `solo` 时顺手收掉交接屏（否则会留一块"没人接手"的遮罩）；换到 pvp/pve 即恢复热坐纪律。
+   * 离开 PVE 时清空 `aiSide`，下次进 PVE 必须重新点一次 AI 方。
    * 模式**不写进存档**（本步范围：它是本机偏好，不是盘面事实）——已在回执里如实登记。
    */
-  function setMode(next: HotseatMode): void {
+  function setMode(next: HotseatMode | null): boolean {
+    if (setupLocked.value) return false
     mode.value = next
+    if (next !== 'pve') aiSide.value = null
     if (!hotseatEnabled.value) handoffPending.value = false
+    return true
+  }
+
+  /** 指定 PVE 的 AI 控制方（初设后同样锁定；非 PVE 下不登记） */
+  function setAiSide(next: Side | null): boolean {
+    if (setupLocked.value) return false
+    if (mode.value !== 'pve') return false
+    aiSide.value = next
+    return true
+  }
+
+  /** 初设开始 ⇒ 锁定模式（`setup.enterSetup` 成功后调用） */
+  function lockMode(): void {
+    setupLocked.value = true
+  }
+
+  /** 换剧本 ＝ 重开一局 ⇒ 解锁，让玩家在选剧本页重新定模式 */
+  function resetModeLock(): void {
+    setupLocked.value = false
   }
 
   /** 开关热坐交接（单人试算可关掉）——保留旧入口：关＝切到 solo、开＝切回 pvp */
@@ -352,15 +401,24 @@ export const useHotseatStore = defineStore('hotseat', () => {
 
   /** 模式的中文名与说明（界面直接取，不各处硬写） */
   const MODE_LABELS: readonly { key: HotseatMode; label: string; note: string }[] = [
-    { key: 'solo', label: 'SOLO（单人）', note: '不遮交接屏，双方内容都可见（无对手可隐瞒）' },
+    { key: 'solo', label: 'SOLO（单人）', note: '同一人操作双方；不遮交接屏、双方内容都可见' },
     { key: 'pvp', label: 'PVP（双人热坐）', note: '交接亮屏；信息纪律按 4.9a 裁剪' },
-    { key: 'pve', label: 'PVE（人机）', note: '**未实现**：本轮只登记该模式，行为与 PVP 相同' },
+    { key: 'pve', label: 'PVE（人机）', note: 'AI 打一方、玩家打另一方；AI 只走既有具名入口' },
   ]
 
   return {
     // 状态
     mode,
+    aiSide,
+    setupLocked,
+    modeIssue,
+    modeReady,
+    presetSide,
+    canPreset,
     setMode,
+    setAiSide,
+    lockMode,
+    resetModeLock,
     MODE_LABELS,
     fogDisabled,
     hotseatEnabled,

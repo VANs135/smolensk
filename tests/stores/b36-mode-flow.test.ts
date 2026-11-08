@@ -30,9 +30,12 @@ function placeEnemy(store: ReturnType<typeof newStores>['workbench']): void {
 }
 
 describe('B36：模式（solo / pvp / pve）', () => {
-  it('★ 缺省是 pvp（＝现状热坐），且模式决定"交接屏要不要遮"', () => {
+  it('★ 缺省未选模式；选定 pvp 后交接屏照旧遮', () => {
     const { workbench, hotseat } = newStores()
-    expect(hotseat.mode).toBe('pvp')
+    // 2026-11-09：模式前移到选剧本，缺省必须是「未选」，不得默认替玩家选 pvp
+    expect(hotseat.mode).toBeNull()
+    expect(hotseat.modeReady).toBe(false)
+    expect(hotseat.setMode('pvp')).toBe(true)
     expect(hotseat.hotseatEnabled).toBe(true)
 
     workbench.setActiveSide('axis')
@@ -100,11 +103,11 @@ describe('B36：模式（solo / pvp / pve）', () => {
 
     hotseat.setMode('pve')
     expect(hotseat.mode).toBe('pve')
-    // pve ＝ 与 pvp 相同的行为（本轮只登记枚举）
+    // pve 仍按热坐纪律遮交接屏；AI 方由选剧本页指定，控制方在棋桌只读展示
     expect(hotseat.hotseatEnabled).toBe(true)
   })
 
-  it('★ 三个模式都有中文名与说明；pve 明示"未实现"', () => {
+  it('★ 三个模式都有中文名与说明；pve 写明 AI 方由玩家指定', () => {
     const { hotseat } = newStores()
     expect(hotseat.MODE_LABELS.map((item) => item.key)).toEqual(['solo', 'pvp', 'pve'])
     for (const item of hotseat.MODE_LABELS) {
@@ -112,7 +115,7 @@ describe('B36：模式（solo / pvp / pve）', () => {
       expect(item.note).not.toBe('')
     }
     const pve = hotseat.MODE_LABELS.find((item) => item.key === 'pve')!
-    expect(pve.note).toContain('未实现')
+    expect(pve.note).toContain('AI 打一方')
   })
 })
 

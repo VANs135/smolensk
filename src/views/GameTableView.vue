@@ -57,10 +57,27 @@ const ui = useUiStore()
 
 provideUiMode('formal')
 
-const aiControlMode = ref<AiControlMode>('off')
+/**
+ * AI 控制方（2026-11-09：由选剧本时定下的对局模式推出，顶栏不再给开关）
+ *
+ *   · PVE + AI 方已定 ⇒ AI 打该方；
+ *   · PVP / solo / 未定 ⇒ `off`（双方都由人操作）。
+ * 规则边界：这只是"谁操作哪一方"的组织方式；AI 仍只走既有具名入口，判据全在引擎。
+ */
+const aiControlMode = computed<AiControlMode>(() =>
+  hotseat.mode === 'pve' && hotseat.aiSide !== null ? hotseat.aiSide : 'off',
+)
 const aiWaiting = ref('')
 let aiMemory = createAiMemory()
 let aiTimer: ReturnType<typeof setTimeout> | null = null
+
+const modeLabel = computed<string>(() => {
+  if (hotseat.mode === null) return '未设置'
+  if (hotseat.mode === 'pvp') return 'PVP · 双人热坐'
+  if (hotseat.mode === 'solo') return 'SOLO · 单人'
+  const aiSide = hotseat.aiSide === 'axis' ? '轴心国' : '苏联'
+  return `PVE · AI 打${aiSide}`
+})
 
 function stopAiPlay(): void {
   if (aiTimer !== null) {
@@ -87,12 +104,17 @@ function scheduleAiStep(delayMs = 0): void {
   }, delayMs)
 }
 
-function onAiControlChange(): void {
-  stopAiPlay()
-  aiWaiting.value = ''
-  aiMemory = createAiMemory()
-  if (aiControlMode.value !== 'off') scheduleAiStep()
-}
+// 模式在选剧本页定下、进初设即锁定 ⇒ 进棋桌时按当前模式启动（PVE 才有 AI）
+watch(
+  aiControlMode,
+  () => {
+    stopAiPlay()
+    aiWaiting.value = ''
+    aiMemory = createAiMemory()
+    if (aiControlMode.value !== 'off') scheduleAiStep()
+  },
+  { immediate: true },
+)
 
 interface MapBridge {
   zoomIn: () => void
@@ -502,16 +524,16 @@ onBeforeUnmount(() => {
 
           <section class="gt__settings" aria-label="对局控制">
             <h2>对局控制</h2>
-            <label class="gt__check">
-              AI 控制方
-              <select v-model="aiControlMode" @change="onAiControlChange">
-                <option value="off">关闭</option>
-                <option value="axis">轴心</option>
-                <option value="soviet">苏联</option>
-                <option value="both">双方</option>
-              </select>
-            </label>
-            <BaseButton variant="secondary" size="sm" @click="hotseat.beginHandoff()">
+            <!-- 2026-11-09：模式在选剧本页定下、初设后锁定 ⇒ 这里只读展示，不再给 AI 开关 -->
+            <p class="gt__mode" data-testid="match-mode">
+              对局模式 <strong>{{ modeLabel }}</strong>
+            </p>
+            <BaseButton
+              v-if="hotseat.hotseatEnabled"
+              variant="secondary"
+              size="sm"
+              @click="hotseat.beginHandoff()"
+            >
               交给{{ hotseat.opponentSide === 'axis' ? '轴心国' : '苏联' }}
             </BaseButton>
             <BaseButton
@@ -722,6 +744,16 @@ onBeforeUnmount(() => {
   gap: var(--space-2);
   color: var(--color-muted);
   font-size: var(--text-sm);
+}
+
+.gt__mode {
+  margin: 0 0 var(--space-2);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+.gt__mode strong {
+  color: var(--color-ink);
 }
 
 .gt__check input {

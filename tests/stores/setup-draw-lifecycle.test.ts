@@ -3,10 +3,18 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import { scenarioSetup, scenarios } from '@/data'
 import { deriveDrawComposition, setupSourceOf } from '@/engine/rules'
-import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchStore } from '@/stores'
+import {
+  useContainersStore,
+  useGameSessionStore,
+  useHotseatStore,
+  useSetupStore,
+  useWorkbenchStore,
+} from '@/stores'
 
 function boot(scenarioId = '1', automatic = true) {
   setActivePinia(createPinia())
+  // 2026-11-09：模式前移到选剧本，进初设前必须先选
+  useHotseatStore().setMode('solo')
   const setup = useSetupStore()
   const containers = useContainersStore()
   const game = useGameSessionStore()
@@ -238,6 +246,7 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
 
   it('首次进入当前剧本时，自动初设抽取失败也向界面返回失败', () => {
     setActivePinia(createPinia())
+    useHotseatStore().setMode('solo')
     const setup = useSetupStore()
     const containers = useContainersStore()
     vi.spyOn(containers, 'runSetupDrawsNow').mockReturnValueOnce({

@@ -18,14 +18,24 @@ const selectedId = ref(setup.scenarioId)
 const selected = computed(() => choices.value.find((item) => item.id === selectedId.value) ?? null)
 
 const modeCopy = {
-  solo: { label: '单人推演', note: '双方盘面可见' },
+  solo: { label: '单人推演', note: '同一人操作双方；不遮交接屏、双方可见' },
   pvp: { label: '双人热坐', note: '交接遮屏 · §4.9a' },
-  pve: { label: '人机对局', note: '在棋桌选择 AI 方' },
+  pve: { label: '人机对局', note: 'AI 打一方，你打另一方' },
 } as const
+
+const aiSideChoices = [
+  { side: 'axis', label: '轴心国' },
+  { side: 'soviet', label: '苏联' },
+] as const
 
 function onEnterSetup(): void {
   const target = selected.value
   if (target === null) return
+  // 2026-11-09：模式与 PVE 的 AI 方在进初设前必须选定；未选齐不进初设
+  if (hotseat.modeIssue !== null) {
+    ui.pushToast('warning', hotseat.modeIssue)
+    return
+  }
   if (!setup.enterSetup(target.id)) {
     const failure = setup.lastAction
     const message = failure?.detail ?? '请重新选择剧本'
@@ -118,10 +128,36 @@ function onEnterSetup(): void {
                       name="hotseat-mode"
                       :value="item.key"
                       :checked="hotseat.mode === item.key"
+                      :disabled="hotseat.setupLocked"
                       @change="hotseat.setMode(item.key)"
                     />
                     <span class="modes__label">{{ modeCopy[item.key].label }}</span>
                     <span class="modes__note">{{ modeCopy[item.key].note }}</span>
+                  </label>
+                </li>
+              </ul>
+              <p v-if="hotseat.setupLocked" class="modes__locked">
+                初设已开始，对局模式锁定；换剧本可重新选择。
+              </p>
+            </fieldset>
+            <fieldset v-if="hotseat.mode === 'pve'" class="scenario__modes">
+              <legend>AI 控制方</legend>
+              <ul class="modes">
+                <li v-for="item in aiSideChoices" :key="item.side">
+                  <label
+                    class="modes__item"
+                    :class="{ 'modes__item--on': hotseat.aiSide === item.side }"
+                  >
+                    <input
+                      type="radio"
+                      name="ai-side"
+                      :value="item.side"
+                      :checked="hotseat.aiSide === item.side"
+                      :disabled="hotseat.setupLocked"
+                      @change="hotseat.setAiSide(item.side)"
+                    />
+                    <span class="modes__label">AI 打{{ item.label }}</span>
+                    <span class="modes__note">你操作另一方</span>
                   </label>
                 </li>
               </ul>
@@ -377,6 +413,12 @@ function onEnterSetup(): void {
 
 .modes__note {
   margin-left: auto;
+}
+
+.modes__locked {
+  margin: var(--space-2) 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
 }
 
 .scenario__consensus summary {

@@ -8,6 +8,7 @@ import type { Side } from '@/data'
 import { setupHexLabel } from '@/engine/rules'
 import {
   useContainersStore,
+  useHotseatStore,
   useSetupStore,
   useWorkbenchStore,
   type PresetSetupResult,
@@ -35,6 +36,7 @@ import {
 const setup = useSetupStore()
 const containers = useContainersStore()
 const workbench = useWorkbenchStore()
+const hotseat = useHotseatStore()
 
 /** 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输） */
 const uiMode = useUiMode()
@@ -42,8 +44,15 @@ const uiMode = useUiMode()
 /** B2：一键预设初设的结果（只做最小回执，不投入视觉） */
 const presetResult = ref<PresetSetupResult | null>(null)
 
+/**
+ * 2026-11-09：一键预设只服务 PVE 的 AI 方
+ *
+ * PVP / solo 下不替任何人落位（按钮不出现）；PVE 下只预设 AI 控制的一方，
+ * 玩家侧的自由落位原样保留。判据在 `hotseat.presetSide`，本组件不另立口径。
+ */
 function runPresetSetup(): void {
-  presetResult.value = setup.presetSelfSetupNow()
+  if (!hotseat.canPreset || hotseat.presetSide === null) return
+  presetResult.value = setup.presetSelfSetupNow({ onlySide: hotseat.presetSide })
 }
 
 /**
@@ -214,12 +223,13 @@ function sideLabel(side: Side): string {
         {{ setup.finished ? '初设已收束' : `待落位 ${setup.pendingPlacement.length} 项` }}
       </BaseTag>
       <BaseButton
+        v-if="hotseat.canPreset"
         variant="secondary"
         size="sm"
         :disabled="setup.finished"
         @click="runPresetSetup()"
       >
-        一键预设初设
+        一键预设初设（仅 AI 方）
       </BaseButton>
     </div>
     <p v-if="presetResult !== null" class="num">

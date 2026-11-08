@@ -3,7 +3,13 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { mapLayers } from '@/data'
 import { SP_TO_T } from '@/engine/rules'
-import { useMapViewStore, useSetupStore, useWorkbenchStore, type SetupPlacing } from '@/stores'
+import {
+  useHotseatStore,
+  useMapViewStore,
+  useSetupStore,
+  useWorkbenchStore,
+  type SetupPlacing,
+} from '@/stores'
 
 /**
  * B11：初设**决策队列**（待你决定 · 四堆叠）与**逐枚落位**
@@ -19,6 +25,8 @@ import { useMapViewStore, useSetupStore, useWorkbenchStore, type SetupPlacing } 
 
 const newStores = () => {
   setActivePinia(createPinia())
+  // 2026-11-09：模式前移到选剧本，进初设前必须先选
+  useHotseatStore().setMode('solo')
   return { setup: useSetupStore(), workbench: useWorkbenchStore() }
 }
 
