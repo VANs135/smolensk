@@ -233,7 +233,8 @@ describe('专规 2.4：慢动员（store 流程）', () => {
 
     // ③ 面板源码守卫：整段 2.4 UI 由可见性门包住；手动锁定阵列只取"苏方 + 30/28/24"
     const panel = fs.readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
-    expect(panel).toContain('v-if="workbench.slowMobilizationVisible"')
+    expect(panel).toContain('v-if="showsActions && workbench.slowMobilizationVisible"')
+    expect(panel).toContain('item="reinforce:slow"')
     expect(panel).toContain('slowMobilizationUnitItems(')
     expect(panel).not.toMatch(/慢动员[\s\S]{0,400}:items="rebuildUnitItems/)
 

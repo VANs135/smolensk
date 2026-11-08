@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip, UI_COPY } from '@/components/base'
 import UiField from '@/components/UiField.vue'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
+import { SessionStep } from '@/components/session'
 import { useRefereeTools } from '@/components/ui-mode'
 import {
   counterImageUrlOf,
@@ -30,8 +31,6 @@ import {
 
 const workbench = useWorkbenchStore()
 
-/** 步骤清单（12.6 → 12.3 → 12.6c/d） */
-const checklist = computed(() => workbench.supplyChecklist)
 /** 结论摘要 */
 const summary = computed(() => workbench.supplySummary)
 
@@ -1048,15 +1047,10 @@ const showsLedger = computed(
       <!-- ══ 逐单位检查链（12.6 判定 → 12.3 选来源/拖取 → 12.6c/d 断补处置）══
            B15e：这一段进**地图会话框**（点"受补给单位"里的一枚即开） -->
       <template v-if="showsCheck">
-        <p v-if="checklist.length > 0" class="num">
-          <BaseTag
-            v-for="item in checklist"
-            :key="item.step"
-            :kind="item.done ? 'success' : 'neutral'"
-          >
-            {{ item.label }}{{ item.done ? ' ✓' : '' }}
-          </BaseTag>
-        </p>
+        <!-- U1-b：步骤清单是进度（非待决），会话框里不再并列显示 -->
+        <SessionStep item="supply:assess">
+          <p class="muted">正在判定这枚单位的补给范围与分支…</p>
+        </SessionStep>
 
         <!-- ── ④ 判定结论与来源清单（追溯与投递可视化） ── -->
         <template v-if="summary !== null">
@@ -1070,7 +1064,7 @@ const showsLedger = computed(
             </template>
           </p>
 
-          <template v-if="workbench.supplyState?.step === 'selectSource'">
+          <SessionStep item="supply:selectSource">
             <RuleNote
               title="选来源：12.3a 直接拖取（5 MP 内或相邻）/ 12.3b 指挥部投递（印值投递距离内）"
               rule="12.3a / 12.3b"
@@ -1090,10 +1084,10 @@ const showsLedger = computed(
               @pick="workbench.chooseSupplySourceNow(Number($event))"
               @hover="hoverSource"
             />
-          </template>
+          </SessionStep>
 
           <!-- ── ⑤ 拖取 / 投递选择（12.3） ── -->
-          <template v-if="workbench.supplyState?.step === 'pickup'">
+          <SessionStep item="supply:pickup">
             <p class="num">
               已选来源：{{
                 summary.chosenSource === null
@@ -1148,10 +1142,10 @@ const showsLedger = computed(
                 提交补给
               </BaseButton>
             </div>
-          </template>
+          </SessionStep>
 
           <!-- ── ⑥ 断补处置（12.6c 吃图上补给 / 12.6d 接受断补） ── -->
-          <template v-if="workbench.supplyState?.step === 'resolveOos'">
+          <SessionStep item="supply:resolveOos">
             <p class="muted">
               无追溯补给（12.6a）：可选择吃图上补给（12.6c：每 1T 覆盖最多 2RE，小数向上取整）
               或接受断补标记（12.6d：随后按 12.8 掷损耗骰）。12.6c 明言**永不强迫**吃图上补给。
@@ -1185,27 +1179,31 @@ const showsLedger = computed(
                 确认断补处置（12.6c/d）
               </BaseButton>
             </div>
-          </template>
+          </SessionStep>
 
-          <!-- ── 结果摘要 ── -->
-          <p v-if="summary.pickup !== null" class="ok">
-            <BaseTag kind="success">{{ summary.pickup.rule }}</BaseTag>
-            {{ summary.pickup.detail }}
-          </p>
-          <!-- P5：结构化的「付款后余额」（引擎给 `sourceAfter`，不靠 detail 文本解析） -->
-          <p v-if="summary.pickup !== null" class="num">
-            付款后余额：{{ summary.pickup.sourceAfter.sp }} SP +
-            {{ summary.pickup.sourceAfter.t }} T
-          </p>
-          <p v-if="summary.oos !== null" class="num">
-            <BaseTag :kind="summary.oos.markedOutOfSupply ? 'warning' : 'success'">
-              {{ summary.oos.rule }}
-            </BaseTag>
-            {{ summary.oos.detail }}
-          </p>
-          <p v-if="summary.oos !== null" class="num">
-            付款后余额：{{ summary.oos.holdingsAfter.sp }} SP + {{ summary.oos.holdingsAfter.t }} T
-          </p>
+          <!-- ── 结果摘要（U1-b：回执，折叠备查）── -->
+          <details v-if="summary.pickup !== null || summary.oos !== null" class="extra">
+            <summary class="extra__head num">补给回执（只读）</summary>
+            <p v-if="summary.pickup !== null" class="ok">
+              <BaseTag kind="success">{{ summary.pickup.rule }}</BaseTag>
+              {{ summary.pickup.detail }}
+            </p>
+            <!-- P5：结构化的「付款后余额」（引擎给 `sourceAfter`，不靠 detail 文本解析） -->
+            <p v-if="summary.pickup !== null" class="num">
+              付款后余额：{{ summary.pickup.sourceAfter.sp }} SP +
+              {{ summary.pickup.sourceAfter.t }} T
+            </p>
+            <p v-if="summary.oos !== null" class="num">
+              <BaseTag :kind="summary.oos.markedOutOfSupply ? 'warning' : 'success'">
+                {{ summary.oos.rule }}
+              </BaseTag>
+              {{ summary.oos.detail }}
+            </p>
+            <p v-if="summary.oos !== null" class="num">
+              付款后余额：{{ summary.oos.holdingsAfter.sp }} SP +
+              {{ summary.oos.holdingsAfter.t }} T
+            </p>
+          </details>
         </template>
 
         <p v-if="workbench.supplyError !== null" class="warn">
@@ -1224,6 +1222,18 @@ const showsLedger = computed(
 </template>
 
 <style scoped>
+/* U1-b：非待决信息折叠区（回执 / 进度） */
+.extra {
+  margin: var(--space-2) 0;
+}
+
+.extra__head {
+  margin-bottom: var(--space-1);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;

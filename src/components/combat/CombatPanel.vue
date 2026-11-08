@@ -3,7 +3,7 @@ import { computed } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
-import { DerivationSteps } from '@/components/session'
+import { DerivationSteps, SessionStep } from '@/components/session'
 import UiField from '@/components/UiField.vue'
 import {
   counterImageUrlOf,
@@ -44,14 +44,6 @@ const state = computed(() => workbench.combatState)
  * P5：9.2 战斗会话**不能放弃**的原因（store 唯一判据，与 `cancelCombat` 同源；界面只读）
  */
 const cancelBlocker = computed(() => workbench.combatCancelBlocker())
-/** 第 8 步「结算结果」的两个子环节由 resolution.stage 区分（9.10b：攻方先、守方后） */
-const stage = computed(() => state.value?.resolution.stage ?? null)
-const isLossStage = computed(
-  () => stage.value === 'attackerLosses' || stage.value === 'defenderLosses',
-)
-const isOptionStage = computed(
-  () => stage.value === 'attackerOptions' || stage.value === 'defenderOptions',
-)
 
 /** 角色名 */
 function roleName(role: string): string {
@@ -214,70 +206,76 @@ const quickDefenderArItems = computed(() =>
 
 <template>
   <BasePanel title="战斗">
-    <!-- 模式切换：九步完整流程 / 一键查表 -->
-    <RuleTip rule="9.0">九步完整流程按 9.2 逐步结算；一键查表只出 CRT 结果。</RuleTip>
-    <div class="row">
-      <BaseButton
-        v-for="mode in [
-          { key: 'full', label: '九步完整流程' },
-          { key: 'quick', label: '一键查表' },
-        ] as const"
-        :key="mode.key"
-        variant="secondary"
-        size="sm"
-        @click="workbench.setBattleMode(mode.key)"
-      >
-        {{ mode.label }}{{ workbench.battleMode === mode.key ? ' ✓' : '' }}
-      </BaseButton>
-    </div>
+    <!--
+      U1-b：会话框只放**当前这件事**。模式切换 / 九步清单 / 战果复核是非待决信息，
+      收进默认折叠的「其他入口」，不与会话步骤并列占屏。
+    -->
+    <details class="extra">
+      <summary class="extra__head num">其他入口（一键查表 / 九步清单 / 复核）</summary>
+      <RuleTip rule="9.0">九步完整流程按 9.2 逐步结算；一键查表只出 CRT 结果。</RuleTip>
+      <div class="row">
+        <BaseButton
+          v-for="mode in [
+            { key: 'full', label: '九步完整流程' },
+            { key: 'quick', label: '一键查表' },
+          ] as const"
+          :key="mode.key"
+          variant="secondary"
+          size="sm"
+          @click="workbench.setBattleMode(mode.key)"
+        >
+          {{ mode.label }}{{ workbench.battleMode === mode.key ? ' ✓' : '' }}
+        </BaseButton>
+      </div>
 
-    <!-- ──────────────── 快捷模式：9.9 一键查表 ──────────────── -->
-    <template v-if="workbench.battleMode === 'quick'">
-      <p v-if="workbench.battleTarget === null" class="muted">
-        切到「打一仗」工具：先点己方算子设为攻方，再点**相邻**的敌方算子所在格选定交战
-      </p>
-      <template v-else>
-        <p class="num">
-          交战格 {{ hexLabel(workbench.battleTarget.hex) }}（守方
-          {{ workbench.battleDefenders.length }} 个）· 攻方 {{ quickAttacker?.name ?? '—' }} AR{{
-            quickAttacker?.raw.ar ?? '—'
-          }}
+      <!-- ──────────────── 快捷模式：9.9 一键查表 ──────────────── -->
+      <template v-if="workbench.battleMode === 'quick'">
+        <p v-if="workbench.battleTarget === null" class="muted">
+          切到「打一仗」工具：先点己方算子设为攻方，再点**相邻**的敌方算子所在格选定交战
         </p>
-        <div class="row">
-          <label class="field">
-            守方地形（9.3b）
-            <select v-model="workbench.battleTerrain" class="select">
-              <option v-for="name in quickTerrainOptions" :key="name" :value="name">
-                {{ name }}
-              </option>
-            </select>
-          </label>
-        </div>
-        <!-- B14c：守方行动值＝**算子图阵列**（原来是纯文字下拉） -->
-        <CounterPicker
-          title="守方行动值（9.6，留空自动取最高）"
-          hint="9.6：每方只能选一个参战单位担任行动值；DG 单位 −1"
-          :items="quickDefenderArItems"
-          :size="32"
-          @pick="workbench.battleDefenderArId = $event"
-          @hover="hoverUnit"
-        />
-        <div class="row">
-          <BaseButton variant="primary" size="sm" @click="workbench.resolveBattleNow()">
-            结算战斗（9.9）
-          </BaseButton>
-        </div>
+        <template v-else>
+          <p class="num">
+            交战格 {{ hexLabel(workbench.battleTarget.hex) }}（守方
+            {{ workbench.battleDefenders.length }} 个）· 攻方 {{ quickAttacker?.name ?? '—' }} AR{{
+              quickAttacker?.raw.ar ?? '—'
+            }}
+          </p>
+          <div class="row">
+            <label class="field">
+              守方地形（9.3b）
+              <select v-model="workbench.battleTerrain" class="select">
+                <option v-for="name in quickTerrainOptions" :key="name" :value="name">
+                  {{ name }}
+                </option>
+              </select>
+            </label>
+          </div>
+          <!-- B14c：守方行动值＝**算子图阵列**（原来是纯文字下拉） -->
+          <CounterPicker
+            title="守方行动值（9.6，留空自动取最高）"
+            hint="9.6：每方只能选一个参战单位担任行动值；DG 单位 −1"
+            :items="quickDefenderArItems"
+            :size="32"
+            @pick="workbench.battleDefenderArId = $event"
+            @hover="hoverUnit"
+          />
+          <div class="row">
+            <BaseButton variant="primary" size="sm" @click="workbench.resolveBattleNow()">
+              结算战斗（9.9）
+            </BaseButton>
+          </div>
+        </template>
+        <p v-if="quickBattleText !== null" class="ok">
+          <BaseTag kind="success">9.9</BaseTag>
+          {{ quickBattleText }}
+        </p>
       </template>
-      <p v-if="quickBattleText !== null" class="ok">
-        <BaseTag kind="success">9.9</BaseTag>
-        {{ quickBattleText }}
-      </p>
-    </template>
+    </details>
 
     <!-- ──────────────── 九步完整流程（9.2） ──────────────── -->
-    <template v-else>
+    <template v-if="workbench.battleMode !== 'quick'">
       <!-- 未开始：选择攻方与防御格 -->
-      <template v-if="state === null">
+      <SessionStep v-if="state === null" item="combat:declare">
         <p class="muted">
           在「打一仗」工具下：点己方算子＝加入攻方（可跨多个相邻格，9.1b/9.1c）；点敌方算子所在格＝选定防御格。
         </p>
@@ -306,25 +304,28 @@ const quickDefenderArItems = computed(() =>
             清除选择
           </BaseButton>
         </div>
-      </template>
+      </SessionStep>
 
       <!-- 流程中 -->
       <template v-else>
-        <!-- 9.2 九步清单（顺序即规则要求的结算顺序） -->
-        <ol class="steps">
-          <li
-            v-for="item in workbench.combatChecklist"
-            :key="item.step"
-            :class="{
-              steps__item: true,
-              'steps__item--done': item.done,
-              'steps__item--current': item.current,
-            }"
-          >
-            <span class="steps__rule num">{{ item.rule }}</span>
-            <span>{{ item.note }}</span>
-          </li>
-        </ol>
+        <!-- U1-b：九步清单是进度（非待决），折叠后不占屏 -->
+        <details class="extra">
+          <summary class="extra__head num">九步清单</summary>
+          <ol class="steps">
+            <li
+              v-for="item in workbench.combatChecklist"
+              :key="item.step"
+              :class="{
+                steps__item: true,
+                'steps__item--done': item.done,
+                'steps__item--current': item.current,
+              }"
+            >
+              <span class="steps__rule num">{{ item.rule }}</span>
+              <span>{{ item.note }}</span>
+            </li>
+          </ol>
+        </details>
 
         <p v-if="workbench.combatError !== null" class="bad">
           <BaseTag kind="danger">{{ workbench.combatError.rule }}</BaseTag>
@@ -332,8 +333,7 @@ const quickDefenderArItems = computed(() =>
         </p>
 
         <!-- 第 2 步：战斗补给（9.5 / 12.4） -->
-        <section v-if="state.step === 'combatSupply'" class="block">
-          <h4 class="block__title">② 战斗补给（9.5 / 12.4）</h4>
+        <SessionStep item="combat:supply">
           <p class="muted">
             攻方须付足全部所需 T（不足则**取消攻击**）；守方可不付（以一半战斗值防御，9.5-B）。
           </p>
@@ -414,14 +414,12 @@ const quickDefenderArItems = computed(() =>
               确认战斗补给（9.5）
             </BaseButton>
           </div>
-        </section>
+        </SessionStep>
 
-        <!-- 第 3 步：宣布行动值（9.6） -->
-        <section v-if="state.step === 'declareAr'" class="block">
-          <h4 class="block__title">③ 宣布行动值（9.6：攻方先、守方后）</h4>
+        <!-- 第 3 步：宣布行动值（9.6：攻方先、守方后） -->
+        <SessionStep item="combat:ar:attacker">
           <!-- B14c：AR 单位＝**算子图阵列**（原来是两个纯文字下拉） -->
           <CounterPicker
-            v-if="state.declaredAttackerArUnitId === undefined"
             title="攻方 AR 单位（9.6）"
             hint="9.6：每方只能选一个参战单位担任行动值；DG 单位 −1"
             :items="attackerArItems"
@@ -429,7 +427,7 @@ const quickDefenderArItems = computed(() =>
             @pick="workbench.combatInputs.attackerArUnitId = $event"
             @hover="hoverUnit"
           />
-          <div v-if="state.declaredAttackerArUnitId === undefined" class="row">
+          <div class="row">
             <BaseButton
               variant="secondary"
               size="sm"
@@ -439,9 +437,11 @@ const quickDefenderArItems = computed(() =>
               攻方宣布
             </BaseButton>
           </div>
-          <p v-else>攻方已宣布：{{ nameOf(state.declaredAttackerArUnitId) }}</p>
+        </SessionStep>
+
+        <SessionStep item="combat:ar:defender">
+          <p class="num">攻方已宣布：{{ nameOf(state.declaredAttackerArUnitId ?? '') }}</p>
           <CounterPicker
-            v-if="state.declaredAttackerArUnitId !== undefined"
             title="守方 AR 单位（9.6）"
             :hint="
               workbench.nkvdArRequiredNow
@@ -453,28 +453,24 @@ const quickDefenderArItems = computed(() =>
             @pick="workbench.combatInputs.defenderArUnitId = $event"
             @hover="hoverUnit"
           />
+          <p v-if="workbench.nkvdArRequiredNow" class="warn">
+            <BaseTag kind="danger">专规 2.3b</BaseTag>
+            守方堆叠内有 NKVD 边防团 ⇒ **行动值单位只能从它们中选**（候选表已收窄）
+          </p>
           <div class="row">
-            <span v-if="workbench.nkvdArRequiredNow" class="warn">
-              <BaseTag kind="danger">专规 2.3b</BaseTag>
-              守方堆叠内有 NKVD 边防团 ⇒ **行动值单位只能从它们中选**（候选表已收窄）
-            </span>
             <BaseButton
               variant="primary"
               size="sm"
-              :disabled="
-                state.declaredAttackerArUnitId === undefined ||
-                workbench.combatInputs.defenderArUnitId === null
-              "
+              :disabled="workbench.combatInputs.defenderArUnitId === null"
               @click="workbench.declareCombatArStep('defender')"
             >
               守方宣布并继续（9.6）
             </BaseButton>
           </div>
-        </section>
+        </SessionStep>
 
         <!-- 第 4 步：宣布地形与初始攻防比（9.4 / 9.7） -->
-        <section v-if="state.step === 'declareTerrain'" class="block">
-          <h4 class="block__title">④ 宣布地形与攻防比（9.4b 逐堆叠 / 9.4c 守方 / 9.7）</h4>
+        <SessionStep item="combat:terrain">
           <p class="muted">
             9.4b 攻方**每一个攻击堆叠**可选「防御格内地形」或「所穿越的格边地形」（不累计）； 9.4c
             守方**只能**选防御格内地形，并决定战斗表横行。
@@ -537,34 +533,25 @@ const quickDefenderArItems = computed(() =>
             {{ state.odds.terrain.combatLine }}；军力 {{ state.odds.attackerTotal }} :
             {{ state.odds.defenderTotal }}）
           </p>
-        </section>
+        </SessionStep>
 
         <!-- 第 6 步：奇袭（9.8）——B30 起通常已被"确认地形 ⇒ 自动结算"连跑过；本节是逐步复核路径 -->
-        <section v-if="state.step === 'surprise'" class="block">
-          <h4 class="block__title">⑥ 奇袭判定：骰子自动</h4>
-          <RuleTip rule="9.8">
-            掷 2 骰 + DRM（9.6）；守方在环形工事内则 −1。发生奇袭须再掷 1 骰做横移（取端列）。
-            正常流程不必点这里的按钮（确认地形时已自动掷完）。
-          </RuleTip>
+        <SessionStep item="combat:surprise">
           <div v-if="props.stepwise" class="row">
             <BaseButton variant="secondary" size="sm" @click="workbench.rollCombatSurprise()">
               {{
                 workbench.combatAwaitingShiftDie ? '补掷横移骰（1d6）' : '掷奇袭骰（2d6，逐步复核）'
               }}
             </BaseButton>
+            <span class="muted">（逐步复核用；正常流程不必点这里的按钮。）</span>
           </div>
           <p v-if="workbench.combatAwaitingShiftDie" class="bad">
             已发生奇袭：按 9.8 须**再掷一枚骰子**决定横移列数。
           </p>
-        </section>
+        </SessionStep>
 
         <!-- 第 7 步：战斗掷骰（9.9）——同上，通常已自动跑过 -->
-        <section v-if="state.step === 'battleDice'" class="block">
-          <h4 class="block__title">⑦ 战斗掷骰：骰子自动</h4>
-          <RuleTip rule="9.9">
-            修正骰 ＝ 2d6 + 攻方 AR − 守方 AR − 环形工事完整等级（奇袭只 −1）。
-            正常流程不必点这里的按钮（确认地形时已自动掷完）。
-          </RuleTip>
+        <SessionStep item="combat:battleDice">
           <p class="num">
             列位：{{ state.surprise?.finalColumnLabel ?? state.odds?.oddsLabel ?? '—' }}；DRM
             {{ state.ar?.drm ?? 0 }}；工事等级 {{ state.hedgehogLevel }}
@@ -574,14 +561,14 @@ const quickDefenderArItems = computed(() =>
               掷战斗骰（2d6，逐步复核）
             </BaseButton>
           </div>
-        </section>
+        </SessionStep>
 
         <!-- 第 8 步（a）：强制军力损失（9.11） -->
-        <section v-if="state.step === 'losses' && isLossStage" class="block">
-          <h4 class="block__title">
-            ⑧ 强制军力损失（9.11c）—— 当前结算：
+        <SessionStep item="combat:losses">
+          <p class="num">
+            当前结算：
             {{ roleName(state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender') }}
-          </h4>
+          </p>
           <p class="num">
             需承受 {{ workbench.combatRequirement?.losses ?? 0 }} 点；AR
             单位先受第一点，之后每人各受一点 （9.11c）；超出承受范围的损失忽略（9.11b）。
@@ -627,14 +614,14 @@ const quickDefenderArItems = computed(() =>
               确认强制损失（9.11c）
             </BaseButton>
           </div>
-        </section>
+        </SessionStep>
 
         <!-- 第 8 步（b）：选项（9.10） -->
-        <section v-if="state.step === 'options' && isOptionStage" class="block">
-          <h4 class="block__title">
-            ⑧ 选项（9.10）—— 当前结算：
+        <SessionStep item="combat:options">
+          <p class="num">
+            当前结算：
             {{ roleName(state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender') }}
-          </h4>
+          </p>
           <p class="num">
             选项点数 {{ workbench.combatRequirement?.options ?? 0 }}：可把「撤退格数 +
             损失军力」任意组合， 但总数必须**完全满足**（9.10a）。
@@ -746,11 +733,10 @@ const quickDefenderArItems = computed(() =>
               提交选项（9.10）
             </BaseButton>
           </div>
-        </section>
+        </SessionStep>
 
         <!-- 第 9 步：撤退（9.12） -->
-        <section v-if="state.step === 'retreat'" class="block">
-          <h4 class="block__title">⑨ 撤退</h4>
+        <SessionStep item="combat:retreat">
           <RuleTip rule="9.12">
             <p class="muted">
               撤退格数 ＝
@@ -816,11 +802,10 @@ const quickDefenderArItems = computed(() =>
               确认撤退（9.12）
             </BaseButton>
           </div>
-        </section>
+        </SessionStep>
 
         <!-- 第 9 步：战后推进与进击（9.12g / 9.13） -->
-        <section v-if="state.step === 'advance'" class="block">
-          <h4 class="block__title">⑨ 战后推进与进击（9.12g / 9.13）</h4>
+        <SessionStep item="combat:advance">
           <!-- B33：突袭的推进是**强制**的（9.12g-D）⇒ 说明与按钮按这个口径给 -->
           <p v-if="workbench.combatAdvanceMandatory" class="warn num">
             <BaseTag kind="danger">9.12g-D</BaseTag>
@@ -863,58 +848,66 @@ const quickDefenderArItems = computed(() =>
             <BaseTag kind="success">战斗结束</BaseTag>
             9.2 九步流程已走完。
           </p>
-        </section>
+        </SessionStep>
 
-        <!-- 战果展示（9.9） -->
-        <div v-if="workbench.combatSummary !== null" class="result">
-          <p class="num">
-            <BaseTag kind="success">CRT {{ workbench.combatSummary.raw }}</BaseTag>
-            2d6 {{ workbench.combatSummary.die }} ⇒ 修正骰
-            {{ workbench.combatSummary.modifiedDice }}｜ {{ workbench.combatSummary.terrainLine }} /
-            {{ workbench.combatSummary.ratio }}
-            <span v-if="workbench.combatSummary.surprise !== null">
-              ｜奇袭
-              {{
-                workbench.combatSummary.surprise.side === 'attacker'
-                  ? '攻方'
-                  : workbench.combatSummary.surprise.side === 'defender'
-                    ? '守方'
-                    : '无'
+        <!-- U1-b：战果与复核是回执（非待决），折叠后备查 -->
+        <details
+          v-if="workbench.combatSummary !== null || workbench.combatReview !== null"
+          class="extra"
+        >
+          <summary class="extra__head num">战果与复核（只读）</summary>
+          <!-- 战果展示（9.9） -->
+          <div v-if="workbench.combatSummary !== null" class="result">
+            <p class="num">
+              <BaseTag kind="success">CRT {{ workbench.combatSummary.raw }}</BaseTag>
+              2d6 {{ workbench.combatSummary.die }} ⇒ 修正骰
+              {{ workbench.combatSummary.modifiedDice }}｜
+              {{ workbench.combatSummary.terrainLine }} /
+              {{ workbench.combatSummary.ratio }}
+              <span v-if="workbench.combatSummary.surprise !== null">
+                ｜奇袭
+                {{
+                  workbench.combatSummary.surprise.side === 'attacker'
+                    ? '攻方'
+                    : workbench.combatSummary.surprise.side === 'defender'
+                      ? '守方'
+                      : '无'
+                }}
+                （横移 {{ workbench.combatSummary.surprise.shift }}）
+              </span>
+            </p>
+            <p class="num">
+              攻方：L{{ workbench.combatSummary.attacker.losses }} + o{{
+                workbench.combatSummary.attacker.options
               }}
-              （横移 {{ workbench.combatSummary.surprise.shift }}）
-            </span>
-          </p>
-          <p class="num">
-            攻方：L{{ workbench.combatSummary.attacker.losses }} + o{{
-              workbench.combatSummary.attacker.options
-            }}
-            <span v-if="workbench.combatSummary.attacker.exploit !== undefined">
-              · e{{ workbench.combatSummary.attacker.exploit }}
-            </span>
-            <span v-if="workbench.combatSummary.attacker.optionTaken !== null">
-              （已结算：撤 {{ workbench.combatSummary.attacker.optionTaken.retreatHexes }} / 损
-              {{ workbench.combatSummary.attacker.optionTaken.lossPoints }}）
-            </span>
-          </p>
-          <p class="num">
-            守方：L{{ workbench.combatSummary.defender.losses }} + o{{
-              workbench.combatSummary.defender.options
-            }}
-            <span v-if="workbench.combatSummary.defender.dg">· DG</span>
-            <span v-if="workbench.combatSummary.defender.ignored">· 已忽略选项（9.10c）</span>
-            <span v-else-if="workbench.combatSummary.defender.optionTaken !== null">
-              （已结算：撤 {{ workbench.combatSummary.defender.optionTaken.retreatHexes }} / 损
-              {{ workbench.combatSummary.defender.optionTaken.lossPoints }}）
-            </span>
-          </p>
-        </div>
+              <span v-if="workbench.combatSummary.attacker.exploit !== undefined">
+                · e{{ workbench.combatSummary.attacker.exploit }}
+              </span>
+              <span v-if="workbench.combatSummary.attacker.optionTaken !== null">
+                （已结算：撤 {{ workbench.combatSummary.attacker.optionTaken.retreatHexes }} / 损
+                {{ workbench.combatSummary.attacker.optionTaken.lossPoints }}）
+              </span>
+            </p>
+            <p class="num">
+              守方：L{{ workbench.combatSummary.defender.losses }} + o{{
+                workbench.combatSummary.defender.options
+              }}
+              <span v-if="workbench.combatSummary.defender.dg">· DG</span>
+              <span v-if="workbench.combatSummary.defender.ignored">· 已忽略选项（9.10c）</span>
+              <span v-else-if="workbench.combatSummary.defender.optionTaken !== null">
+                （已结算：撤 {{ workbench.combatSummary.defender.optionTaken.retreatHexes }} / 损
+                {{ workbench.combatSummary.defender.optionTaken.lossPoints }}）
+              </span>
+            </p>
+          </div>
 
-        <!-- W7 C11：结算复核（骰点 / 计算过程 / 规则编号 / 修正来源；可展开逐项核对） -->
-        <details v-if="workbench.combatReview !== null" class="review" open>
-          <summary class="review__head num">
-            结算复核（{{ workbench.combatReview.rule }}）：骰点 · 计算过程 · 修正来源
-          </summary>
-          <DerivationSteps :derivation="workbench.combatReview" />
+          <!-- W7 C11：结算复核（骰点 / 计算过程 / 规则编号 / 修正来源；可展开逐项核对） -->
+          <div v-if="workbench.combatReview !== null" class="review">
+            <p class="review__head num">
+              结算复核（{{ workbench.combatReview.rule }}）：骰点 · 计算过程 · 修正来源
+            </p>
+            <DerivationSteps :derivation="workbench.combatReview" />
+          </div>
         </details>
 
         <div class="row">
@@ -954,6 +947,18 @@ const quickDefenderArItems = computed(() =>
   margin: var(--space-2) 0;
 }
 
+/* U1-b：非待决信息折叠区（其他入口 / 九步清单 / 战果复核） */
+.extra {
+  margin: var(--space-2) 0;
+}
+
+.extra__head {
+  margin-bottom: var(--space-1);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
 .review__head {
   margin-bottom: var(--space-1);
   color: var(--color-muted);
@@ -987,18 +992,6 @@ const quickDefenderArItems = computed(() =>
   gap: var(--space-2);
   font-size: var(--text-sm);
   color: var(--color-muted);
-}
-
-.block {
-  border-top: 1px dashed var(--color-rule);
-  padding-top: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-
-.block__title {
-  margin: var(--space-1) 0;
-  font-size: var(--text-sm);
-  color: var(--color-ink);
 }
 
 .steps {

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
+import { SessionStep } from '@/components/session'
 import { useRefereeTools } from '@/components/ui-mode'
 import UiField from '@/components/UiField.vue'
 import {
@@ -205,22 +206,36 @@ function setAircraftRoll(unitId: string, value: number): void {
 
 <template>
   <BasePanel title="轰炸（OCS 10.0）">
-    <div class="row">
-      <BaseButton
-        variant="secondary"
-        size="sm"
-        @click="workbench.setBarrageActive(!workbench.barrageActive)"
-      >
-        {{ workbench.barrageActive ? '关闭轰炸工具' : '开启轰炸工具' }}
-      </BaseButton>
-    </div>
+    <!-- U1-b：工具开关与步骤清单是非待决信息，折叠后不与会话步骤并列占屏 -->
+    <details class="extra">
+      <summary class="extra__head num">轰炸工具 / 步骤清单 / 回执</summary>
+      <div class="row">
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          @click="workbench.setBarrageActive(!workbench.barrageActive)"
+        >
+          {{ workbench.barrageActive ? '关闭轰炸工具' : '开启轰炸工具' }}
+        </BaseButton>
+      </div>
 
-    <p v-if="!workbench.barrageActive" class="muted">
-      开启后按 OCS 10.0 的通用流程逐步结算：加总轰炸值 → 定初始列 → 按该列付补给 → 列横移 → 掷骰 →
-      结果。
-    </p>
+      <p v-if="!workbench.barrageActive" class="muted">
+        开启后按 OCS 10.0 的通用流程逐步结算：加总轰炸值 → 定初始列 → 按该列付补给 → 列横移 → 掷骰 →
+        结果。
+      </p>
 
-    <template v-else>
+      <p v-if="checklist.length > 0" class="num">
+        <BaseTag
+          v-for="item in checklist"
+          :key="item.step"
+          :kind="item.done ? 'success' : 'neutral'"
+        >
+          {{ item.label }}{{ item.done ? ' ✓' : '' }}
+        </BaseTag>
+      </p>
+    </details>
+
+    <template v-if="workbench.barrageActive">
       <!-- ── 目标格（10.0d）── -->
       <p class="num">
         目标格：
@@ -244,179 +259,170 @@ function setAircraftRoll(unitId: string, value: number): void {
       </p>
 
       <!-- ── ① 宣布整体目标与轰炸值分配（10.0d / 10.0e）── -->
-      <div class="row">
-        <label class="field">
-          单位类别（10.0e-F）
-          <select
-            class="select"
-            :value="workbench.barrageKind"
-            @change="
-              workbench.setBarrageKind(
-                ($event.target as HTMLSelectElement).value as 'artillery' | 'air' | 'ship',
-              )
-            "
-          >
-            <option v-for="kind in kindsHere" :key="kind.key" :value="kind.key">
-              {{ kind.label }}
-            </option>
-          </select>
-        </label>
-        <label class="field">
-          整体目标（10.0d）
-          <select
-            class="select"
-            :value="workbench.barrageTargetKind"
-            @change="
-              workbench.setBarrageTargetKind(
-                ($event.target as HTMLSelectElement).value as
-                  'combatUnits' | 'airBase' | 'port' | 'trainbusting',
-              )
-            "
-          >
-            <option v-for="kind in TARGET_KINDS" :key="kind.key" :value="kind.key">
-              {{ kind.label }}
-            </option>
-          </select>
-        </label>
-      </div>
+      <SessionStep item="barrage:declare">
+        <div class="row">
+          <label class="field">
+            单位类别（10.0e-F）
+            <select
+              class="select"
+              :value="workbench.barrageKind"
+              @change="
+                workbench.setBarrageKind(
+                  ($event.target as HTMLSelectElement).value as 'artillery' | 'air' | 'ship',
+                )
+              "
+            >
+              <option v-for="kind in kindsHere" :key="kind.key" :value="kind.key">
+                {{ kind.label }}
+              </option>
+            </select>
+          </label>
+          <label class="field">
+            整体目标（10.0d）
+            <select
+              class="select"
+              :value="workbench.barrageTargetKind"
+              @change="
+                workbench.setBarrageTargetKind(
+                  ($event.target as HTMLSelectElement).value as
+                    'combatUnits' | 'airBase' | 'port' | 'trainbusting',
+                )
+              "
+            >
+              <option v-for="kind in TARGET_KINDS" :key="kind.key" :value="kind.key">
+                {{ kind.label }}
+              </option>
+            </select>
+          </label>
+        </div>
 
-      <!-- B14b：参炸单位＝**算子图阵列**（原来是一排"名字(值) + ✓"的文字按钮 + 一行名字） -->
-      <!-- H②：这一块**只服务炮兵**（10.0e-F：一次轰炸只能用同一类型）——空军那一套见下面的「参炸飞机」 -->
-      <template v-if="workbench.barrageKind === 'artillery'">
-        <CounterPicker
-          title="参炸单位（点一枚加入 / 再点一枚退出）"
-          hint="10.0e-B：不拆分轰炸值、不低于印刷值；13.4a：预备/战略模式的火炮不得轰炸"
-          :items="barrageUnitItems"
-          :size="40"
-          @pick="workbench.toggleBarrageUnit($event)"
-          @hover="hoverUnit"
-        />
-      </template>
+        <!-- B14b：参炸单位＝**算子图阵列**（原来是一排"名字(值) + ✓"的文字按钮 + 一行名字） -->
+        <!-- H②：这一块**只服务炮兵**（10.0e-F：一次轰炸只能用同一类型）——空军那一套见下面的「参炸飞机」 -->
+        <template v-if="workbench.barrageKind === 'artillery'">
+          <CounterPicker
+            title="参炸单位（点一枚加入 / 再点一枚退出）"
+            hint="10.0e-B：不拆分轰炸值、不低于印刷值；13.4a：预备/战略模式的火炮不得轰炸"
+            :items="barrageUnitItems"
+            :size="40"
+            @pick="workbench.toggleBarrageUnit($event)"
+            @hover="hoverUnit"
+          />
+        </template>
 
-      <div class="row">
-        <label class="field">
-          <input v-model="workbench.barrageInputs.hexAlreadyBarragedThisPhase" type="checkbox" />
-          该格本阶段已被轰炸过（10.0e-A；裁判补记用）
-        </label>
-      </div>
+        <div class="row">
+          <label class="field">
+            <input v-model="workbench.barrageInputs.hexAlreadyBarragedThisPhase" type="checkbox" />
+            该格本阶段已被轰炸过（10.0e-A；裁判补记用）
+          </label>
+        </div>
 
-      <!--
+        <!--
         A 组接线：**本阶段的轰炸账本**（10.0e-A/B「每格/每单位每阶段一次」）
         它是自动的（宣布 → 付完补给即记账），上面那个勾选框只留给裁判补记漏掉的场面。
         把账本显示出来，玩家才知道"这一格/这一门炮为什么现在炸不了"。
       -->
-      <p class="muted num">
-        本阶段已轰炸（10.0e-A/B，自动记账）：{{ workbench.barragePhaseLedger.hexes.length }} 格 ·
-        {{ workbench.barragePhaseLedger.unitIds.length }} 个单位
-        <template v-if="workbench.barragePhaseLedger.hexes.length > 0">
-          ｜格号：{{ workbench.barragePhaseLedger.hexes.join('、') }}
-        </template>
-      </p>
+        <p class="muted num">
+          本阶段已轰炸（10.0e-A/B，自动记账）：{{ workbench.barragePhaseLedger.hexes.length }} 格 ·
+          {{ workbench.barragePhaseLedger.unitIds.length }} 个单位
+          <template v-if="workbench.barragePhaseLedger.hexes.length > 0">
+            ｜格号：{{ workbench.barragePhaseLedger.hexes.join('、') }}
+          </template>
+        </p>
 
-      <!--
+        <!--
         ── 参炸飞机（10.2：空军轰炸；H② 起**整块只在类别＝空军时出现**）──
         用户 2026-09-18：「空军和炮兵的轰炸结算页面一定要分开，目前炮兵轰炸时结算页面上还有空军」。
         10.2b 短程 +1 列的数据源：14.1a 飞机停在空军基地格，该格即「它们基地」。
       -->
-      <template v-if="workbench.barrageKind === 'air'">
-        <p class="muted num">
-          参炸飞机（A5 空军专表）：摆在**空军基地格**（14.1a），该格即 10.2b 所说的「它们基地」；
-          10.2c 空军轰炸**没有补给消耗**（本段不出现付款补给站）。
-        </p>
-        <!-- 裁判工具（14.1a）：新到飞机走到达卡 13.6 ⇒ 对局台不铺 -->
-        <div v-if="showsReferee" class="row">
-          <!-- B14b：机型＝**算子图阵列**（原来是一个纯文字下拉） -->
-          <CounterPicker
-            title="机型（A5 空军专表）"
-            hint="14.1a 摆放：飞机停在空军基地格，该格即 10.2b 所说的「它们基地」"
-            :items="aircraftItems"
-            :size="32"
-            @pick="workbench.airPlacement.aircraftId = $event"
-            @hover="workbench.setHoverHex(null)"
-          />
-          <label class="field">
-            基地格（列.行）
-            <UiField v-model="workbench.airPlacement.hexText" class="input" placeholder="36.13" />
+        <template v-if="workbench.barrageKind === 'air'">
+          <p class="muted num">
+            参炸飞机（A5 空军专表）：摆在**空军基地格**（14.1a），该格即 10.2b 所说的「它们基地」；
+            10.2c 空军轰炸**没有补给消耗**（本段不出现付款补给站）。
+          </p>
+          <!-- 裁判工具（14.1a）：新到飞机走到达卡 13.6 ⇒ 对局台不铺 -->
+          <div v-if="showsReferee" class="row">
+            <!-- B14b：机型＝**算子图阵列**（原来是一个纯文字下拉） -->
+            <CounterPicker
+              title="机型（A5 空军专表）"
+              hint="14.1a 摆放：飞机停在空军基地格，该格即 10.2b 所说的「它们基地」"
+              :items="aircraftItems"
+              :size="32"
+              @pick="workbench.airPlacement.aircraftId = $event"
+              @hover="workbench.setHoverHex(null)"
+            />
+            <label class="field">
+              基地格（列.行）
+              <UiField v-model="workbench.airPlacement.hexText" class="input" placeholder="36.13" />
+              <BaseButton
+                variant="secondary"
+                size="sm"
+                @click="workbench.beginAirPlacementHexPickNow()"
+              >
+                点地图选基地格
+              </BaseButton>
+            </label>
             <BaseButton
               variant="secondary"
               size="sm"
-              @click="workbench.beginAirPlacementHexPickNow()"
+              @click="
+                workbench.addAirUnit(
+                  workbench.airPlacement.aircraftId,
+                  workbench.airPlacement.hexText,
+                )
+              "
             >
-              点地图选基地格
+              摆放飞机（14.1a）
             </BaseButton>
-          </label>
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            @click="
-              workbench.addAirUnit(
-                workbench.airPlacement.aircraftId,
-                workbench.airPlacement.hexText,
-              )
-            "
-          >
-            摆放飞机（14.1a）
-          </BaseButton>
-        </div>
-        <div class="row">
-          <label class="field">
-            <input v-model="workbench.barrageInputs.hipShoot" type="checkbox" />
-            低空扫射（14.7d：须有正确观察员 10.0b）
-          </label>
-        </div>
-        <!-- B14b：参炸飞机＝**算子图阵列**；航程够不到的飞机灰显（14.1） -->
-        <CounterPicker
-          title="参炸飞机（点一枚加入 / 再点一枚退出）"
-          hint="10.2b：距基地 ≤10 格才有短程 +1；战略轰炸机永不享（14.1e）；航程够不到目标格的不能出击（14.1）"
-          :items="barrageAirItems"
-          :size="40"
-          @pick="workbench.toggleBarrageAirUnit($event)"
-          @hover="hoverAir"
-        />
-        <p v-if="workbench.barrageAirCandidates.length === 0" class="muted">
-          未摆放飞机：填机型与基地格后点「摆放飞机」。
-        </p>
-        <!--
+          </div>
+          <div class="row">
+            <label class="field">
+              <input v-model="workbench.barrageInputs.hipShoot" type="checkbox" />
+              低空扫射（14.7d：须有正确观察员 10.0b）
+            </label>
+          </div>
+          <!-- B14b：参炸飞机＝**算子图阵列**；航程够不到的飞机灰显（14.1） -->
+          <CounterPicker
+            title="参炸飞机（点一枚加入 / 再点一枚退出）"
+            hint="10.2b：距基地 ≤10 格才有短程 +1；战略轰炸机永不享（14.1e）；航程够不到目标格的不能出击（14.1）"
+            :items="barrageAirItems"
+            :size="40"
+            @pick="workbench.toggleBarrageAirUnit($event)"
+            @hover="hoverAir"
+          />
+          <p v-if="workbench.barrageAirCandidates.length === 0" class="muted">
+            未摆放飞机：填机型与基地格后点「摆放飞机」。
+          </p>
+          <!--
           裁判工具：这里的「卸下」调的是 `removeAirUnit`（**从盘上删除**这枚飞机），
           不是"退出本次轰炸"（那是上面 CounterPicker 的 `toggleBarrageAirUnit`）⇒ 对局台不铺。
         -->
-        <p v-if="showsReferee && workbench.barrageAirCandidates.length > 0" class="num">
-          卸下：<BaseButton
-            v-for="air in workbench.barrageAirCandidates"
-            :key="`drop-${air.instanceId}`"
-            variant="ghost"
+          <p v-if="showsReferee && workbench.barrageAirCandidates.length > 0" class="num">
+            卸下：<BaseButton
+              v-for="air in workbench.barrageAirCandidates"
+              :key="`drop-${air.instanceId}`"
+              variant="ghost"
+              size="sm"
+              @click="workbench.removeAirUnit(air.instanceId)"
+            >
+              {{ air.name }}
+            </BaseButton>
+          </p>
+        </template>
+
+        <div class="row">
+          <BaseButton
+            variant="primary"
             size="sm"
-            @click="workbench.removeAirUnit(air.instanceId)"
+            :disabled="workbench.barrageState !== null"
+            @click="workbench.beginBarrageNow()"
           >
-            {{ air.name }}
+            ① 宣布轰炸（10.0d）
           </BaseButton>
-        </p>
-      </template>
-
-      <div class="row">
-        <BaseButton
-          variant="primary"
-          size="sm"
-          :disabled="workbench.barrageState !== null"
-          @click="workbench.beginBarrageNow()"
-        >
-          ① 宣布轰炸（10.0d）
-        </BaseButton>
-      </div>
-
-      <!-- ── 步骤清单（10.0 通用流程）── -->
-      <p class="num">
-        <BaseTag
-          v-for="item in checklist"
-          :key="item.step"
-          :kind="item.done ? 'success' : 'neutral'"
-        >
-          {{ item.label }}{{ item.done ? ' ✓' : '' }}
-        </BaseTag>
-      </p>
+        </div>
+      </SessionStep>
 
       <!-- ── ② 补给（10.1b / 10.2c）── -->
-      <template v-if="workbench.barrageState?.step === 'supply'">
+      <SessionStep item="barrage:supply">
         <!-- H②：付款那一整套**只服务炮兵**（10.1b）；10.2c 明写空军轰炸没有补给消耗 -->
         <template v-if="workbench.barrageKind === 'artillery'">
           <!-- B14b：付款补给站＝**算子图阵列**（原来是纯文字下拉；点同一座站即取消声明） -->
@@ -465,10 +471,10 @@ function setAircraftRoll(unitId: string, value: number): void {
             ② 按初始列付补给（10.1b）
           </BaseButton>
         </div>
-      </template>
+      </SessionStep>
 
       <!-- ── ③ 列横移（10.0a / 10.0b / 10.2b）── -->
-      <template v-if="workbench.barrageState?.step === 'shifts'">
+      <SessionStep item="barrage:shifts">
         <div class="row">
           <label class="field">
             目标玩家所选地形（10.0a，仅列目标格内存在者）
@@ -483,10 +489,10 @@ function setAircraftRoll(unitId: string, value: number): void {
             ③ 确认横移（10.0a）
           </BaseButton>
         </div>
-      </template>
+      </SessionStep>
 
       <!-- ── ④ 掷骰（10.0a / 10.0c）── -->
-      <template v-if="workbench.barrageState?.step === 'dice'">
+      <SessionStep item="barrage:dice">
         <!--
           B28（用户口径 #9「所有的随机数抽取一律自动结算」）：骰面不再让玩家填。
           `1/2` 结果的取整骰也自动补掷（再点一次「掷骰」即可），骰面走种子化 RNG、结算日志可复算。
@@ -498,10 +504,10 @@ function setAircraftRoll(unitId: string, value: number): void {
           </BaseButton>
         </div>
         <p v-if="awaitingHalfDie" class="muted">已出 `1/2`：再点一次「掷骰」即自动补掷取整骰。</p>
-      </template>
+      </SessionStep>
 
       <!-- ── ⑤ 结果确认（10.0a / 10.0c）── -->
-      <template v-if="workbench.barrageState?.step === 'outcome'">
+      <SessionStep item="barrage:outcome">
         <template v-if="summary?.facility !== true">
           <p class="num">10.0a：由**目标玩家**选择哪些战斗单位承受损失（合计须等于结果点数）</p>
           <div class="row">
@@ -572,24 +578,27 @@ function setAircraftRoll(unitId: string, value: number): void {
             ⑤ 确认结果（10.0a / 10.0c）
           </BaseButton>
         </div>
-      </template>
+      </SessionStep>
 
-      <!-- ── 结果摘要 ── -->
-      <p v-if="summary !== null" class="ok">
-        <BaseTag kind="success">{{ summary.facility ? '10.0c' : '10.0a' }}</BaseTag>
-        轰炸值 {{ summary.totalValue }} ⇒ 初始列 {{ summary.initialColumnLabel }}（成本
-        {{ summary.costT }} T）
-        <template v-if="!summary.facility">
-          ｜横移 {{ summary.shifts?.total ?? 0 }} ⇒ 列 {{ summary.finalColumn }}｜骰
-          {{ summary.die }}
-          <template v-if="summary.halfDie !== null"> +取整 {{ summary.halfDie }}</template>
-          ｜格值 {{ summary.code }}
-          <template v-if="summary.unitOutcome !== null"
-            >｜{{ summary.unitOutcome.detail }}</template
-          >
-        </template>
-        <template v-else>｜骰 {{ summary.die }}｜格值 {{ summary.code }}</template>
-      </p>
+      <!-- ── 结果摘要（U1-b：回执，折叠备查）── -->
+      <details v-if="summary !== null" class="extra">
+        <summary class="extra__head num">轰炸回执（只读）</summary>
+        <p class="ok">
+          <BaseTag kind="success">{{ summary.facility ? '10.0c' : '10.0a' }}</BaseTag>
+          轰炸值 {{ summary.totalValue }} ⇒ 初始列 {{ summary.initialColumnLabel }}（成本
+          {{ summary.costT }} T）
+          <template v-if="!summary.facility">
+            ｜横移 {{ summary.shifts?.total ?? 0 }} ⇒ 列 {{ summary.finalColumn }}｜骰
+            {{ summary.die }}
+            <template v-if="summary.halfDie !== null"> +取整 {{ summary.halfDie }}</template>
+            ｜格值 {{ summary.code }}
+            <template v-if="summary.unitOutcome !== null"
+              >｜{{ summary.unitOutcome.detail }}</template
+            >
+          </template>
+          <template v-else>｜骰 {{ summary.die }}｜格值 {{ summary.code }}</template>
+        </p>
+      </details>
 
       <p v-if="workbench.barrageError !== null" class="warn">
         <BaseTag kind="danger">{{ workbench.barrageError.rule }}</BaseTag>
@@ -609,3 +618,17 @@ function setAircraftRoll(unitId: string, value: number): void {
     </template>
   </BasePanel>
 </template>
+
+<style scoped>
+/* U1-b：非待决信息折叠区（工具开关 / 步骤清单 / 回执） */
+.extra {
+  margin: var(--space-2) 0;
+}
+
+.extra__head {
+  margin-bottom: var(--space-1);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+</style>

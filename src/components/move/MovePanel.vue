@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip, UI_COPY } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
+import { SessionStep } from '@/components/session'
 import {
   counterImageUrlOf,
   fuelMethodLabelOf,
@@ -300,7 +301,8 @@ function hoverDump(id: string | null): void {
     </div>
 
     <!-- 条 10（M1）：开拔前的取子勾选（6.1f / 8.1h）——点地图也可勾选，这里给一个面板内入口 -->
-    <div v-if="preBegin && canMove" class="block">
+    <!-- U1-b：开拔＝一件事（取子 + 模式 + 开始移动在同一门内，不并列堆两个决定） -->
+    <SessionStep v-if="preBegin && canMove" item="move:pick">
       <p class="num">勾选要一起开拔的单位（6.1；点地图也可勾选 / 取消）：</p>
       <CounterPicker
         title="待开拔单位（点一枚＝勾选 / 取消，6.1）"
@@ -318,65 +320,64 @@ function hoverDump(id: string | null): void {
           取消取子
         </BaseButton>
       </div>
-    </div>
 
-    <!--
-      ① 统一操作条（条 9 / 条 10，M1）：模式批量切换 + 开始移动
-      ★ 两半的时点不同（用户 2026-10-25）：5.4a 改模式「只在本方**移动阶段**」⇒ 只有 C 段；
-        6.1 开拔在 C/E/G 的移动环节都成立 ⇒ 由 `canMove` 管。
-    -->
-    <div class="row">
-      <template v-if="canChangeMode">
-        <span class="muted"
-          >改模式（5.4a：切换不耗 MP，只在本方移动阶段、开始移动前；按选中集合批量）</span
-        >
+      <!--
+        ① 统一操作条（条 9 / 条 10，M1）：模式批量切换 + 开始移动
+        ★ 两半的时点不同（用户 2026-10-25）：5.4a 改模式「只在本方**移动阶段**」⇒ 只有 C 段；
+          6.1 开拔在 C/E/G 的移动环节都成立 ⇒ 由 `canMove` 管。
+      -->
+      <div class="row">
+        <template v-if="canChangeMode">
+          <span class="muted"
+            >改模式（5.4a：切换不耗 MP，只在本方移动阶段、开始移动前；按选中集合批量）</span
+          >
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :disabled="!modeTargetReady"
+            @click="workbench.switchUnitMode('combat')"
+          >
+            切到战斗面
+          </BaseButton>
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :disabled="!modeTargetReady"
+            @click="workbench.switchUnitMode('move')"
+          >
+            切到移动面
+          </BaseButton>
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :disabled="!modeTargetReady"
+            @click="workbench.switchUnitMode('reserve')"
+          >
+            转入预备
+          </BaseButton>
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :disabled="!modeTargetReady"
+            @click="workbench.switchUnitMode('strat')"
+          >
+            转入战略
+          </BaseButton>
+        </template>
         <BaseButton
-          variant="secondary"
+          variant="primary"
           size="sm"
-          :disabled="!modeTargetReady"
-          @click="workbench.switchUnitMode('combat')"
+          :disabled="workbench.movePick === null"
+          @click="workbench.confirmMovePick()"
         >
-          切到战斗面
+          开始移动
         </BaseButton>
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          :disabled="!modeTargetReady"
-          @click="workbench.switchUnitMode('move')"
-        >
-          切到移动面
-        </BaseButton>
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          :disabled="!modeTargetReady"
-          @click="workbench.switchUnitMode('reserve')"
-        >
-          转入预备
-        </BaseButton>
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          :disabled="!modeTargetReady"
-          @click="workbench.switchUnitMode('strat')"
-        >
-          转入战略
-        </BaseButton>
-      </template>
-      <BaseButton
-        v-if="canMove"
-        variant="primary"
-        size="sm"
-        :disabled="workbench.movePick === null"
-        @click="workbench.confirmMovePick()"
-      >
-        开始移动
-      </BaseButton>
-    </div>
-    <p v-if="canMove && workbench.movePick !== null" class="num">
-      已选 {{ workbench.movePick.ids.length }} 枚待开拔：在地图上点枚勾选 /
-      取消，改完模式与（如需）付燃料后点「开始移动」。
-    </p>
+      </div>
+      <p class="num">
+        已选 {{ workbench.movePick?.ids.length ?? 0 }} 枚待开拔：在地图上点枚勾选 /
+        取消，改完模式与（如需）付燃料后点「开始移动」。
+      </p>
+    </SessionStep>
 
     <!--
       ①b 两条原先**只在引擎验证页有入口**的动作（B18 复核顺手接线，与燃料那处同类）：
@@ -476,7 +477,7 @@ function hoverDump(id: string | null): void {
     </div>
 
     <!-- ⑥ 4.5a-A：进入未抵消敌方 ZOC 的待决（必须收束，否则不许再走） -->
-    <div v-if="zocConfirm !== null" class="block">
+    <SessionStep v-if="zocConfirm !== null" item="move:zoc">
       <p class="num">
         <BaseTag kind="warning">4.5a-A</BaseTag>
         进入 {{ hexLabel(zocConfirm.to) }} 前须决定：该格在**未抵消的敌方 ZOC**
@@ -508,16 +509,16 @@ function hoverDump(id: string | null): void {
       <p v-else class="muted num">
         进入后没有可突袭目标（8.1a 的剩余 MP ≥ 3、8.1b 的进格 ≤ 3 MP）⇒ 只能就地停止。
       </p>
-    </div>
+    </SessionStep>
 
     <!-- ⑦ 条 17（批 F·F2）：4.5a 约束 —— 突袭强行进入敌方 ZOC 后，该格单位"不得离开、须再突袭或停" -->
-    <div v-if="workbench.overrunZocHeld !== null" class="block">
+    <SessionStep v-if="workbench.overrunZocHeld !== null" item="move:continue">
       <p class="num">
         <BaseTag kind="warning">4.5a</BaseTag>
         突袭进入 {{ hexLabel(workbench.overrunZocHeld) }}（敌方 ZOC）：该格单位**不得离开**，
         须**再突袭**（点相邻敌方格）或**停**在原格。
       </p>
-    </div>
+    </SessionStep>
 
     <!-- ③ 突袭（8.0/8.1a）：目标格在地图上高亮，点它即发起 -->
     <p v-if="canOverrun" class="num">
@@ -531,7 +532,7 @@ function hoverDump(id: string | null): void {
       ★ 12.5c「在发生燃料消耗的**任何阶段**…在燃料消耗时支付」⇒ 燃料跟着**移动**走：
       本环节不做移动（`supply.fuel` 闸门不放行）时，这一整块不出现（不铺点不动的付款按钮）。
     -->
-    <template v-if="canPayFuel">
+    <SessionStep v-if="canPayFuel" item="move:fuel">
       <!-- ── 燃料（12.5；用户 2026-09-16 指正：不是在补给阶段算，而是"消耗的那一刻"付） ── -->
       <hr />
       <div class="muted num">
@@ -645,25 +646,33 @@ function hoverDump(id: string | null): void {
           </span>
         </div>
       </template>
-    </template>
+    </SessionStep>
 
     <!-- ⑤ 收束：撤销一步 / 结束移动 / 放弃整次移动（只对"正在进行的那次移动"有意义） -->
-    <div v-if="canMove || workbench.moveInteraction !== null" class="row">
-      <BaseButton variant="secondary" size="sm" @click="workbench.undoLastStep()">
-        撤销一步
-      </BaseButton>
-      <BaseButton variant="primary" size="sm" @click="workbench.finishMove()">
-        结束移动
-      </BaseButton>
-      <BaseButton variant="ghost" size="sm" @click="workbench.abortMoveNow()">
-        放弃本次移动（全部还原并退出）
-      </BaseButton>
-    </div>
-    <div class="muted">
-      走完可点「结束移动」；仍有单位在动时结束会让它们就地停下。已做的动作只能靠「撤销一步」回退
-      或「放弃本次移动」全部还原。
-      <RuleTip rule="6.1f / 6.1h">撤销只给一步；放弃会还原整次移动，还原后可重新选子再走。</RuleTip>
-    </div>
+    <!-- U1-b：与「突袭后的处置」互斥（同一事项 id）；有 overrunZocHeld 时由上一门负责 -->
+    <SessionStep
+      v-if="(canMove || workbench.moveInteraction !== null) && workbench.overrunZocHeld === null"
+      item="move:continue"
+    >
+      <div class="row">
+        <BaseButton variant="secondary" size="sm" @click="workbench.undoLastStep()">
+          撤销一步
+        </BaseButton>
+        <BaseButton variant="primary" size="sm" @click="workbench.finishMove()">
+          结束移动
+        </BaseButton>
+        <BaseButton variant="ghost" size="sm" @click="workbench.abortMoveNow()">
+          放弃本次移动（全部还原并退出）
+        </BaseButton>
+      </div>
+      <div class="muted">
+        走完可点「结束移动」；仍有单位在动时结束会让它们就地停下。已做的动作只能靠「撤销一步」回退
+        或「放弃本次移动」全部还原。
+        <RuleTip rule="6.1f / 6.1h"
+          >撤销只给一步；放弃会还原整次移动，还原后可重新选子再走。</RuleTip
+        >
+      </div>
+    </SessionStep>
   </BasePanel>
 </template>
 

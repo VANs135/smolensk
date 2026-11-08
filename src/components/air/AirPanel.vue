@@ -56,8 +56,6 @@ function adjustAirNum(key: 'airdropPlannedTurn' | 'airdropScheduledTurn', delta:
   workbench.airInputs[key] = next
 }
 
-/** 步骤清单（14.2f A–G） */
-const checklist = computed(() => workbench.airChecklist)
 /** 对手的拦截资格（14.5） */
 const interception = computed(() => workbench.airInterceptionResponse)
 /** 任务格内的敌方空中/基地事实（14.3，由盘面推出） */
@@ -474,7 +472,8 @@ const showsBaseOps = computed(
       <!-- ══ 任务链（14.2f 的宣布与七步）══  B15d：这一段进**地图会话框** -->
       <template v-if="showsMission">
         <hr />
-        <template v-if="showsAssign">
+        <!-- U1-b：宣布前＝一件事（任务类型 + 任务格 + 参战机 + 执行，全在同一门内） -->
+        <SessionStep v-if="showsAssign" item="air:declare">
           <div class="muted">
             任务分配：选类型与任务格、勾选参战机。
             <RuleTip rule="14.2">
@@ -663,7 +662,7 @@ const showsBaseOps = computed(
               }}）
             </p>
           </template>
-        </template>
+        </SessionStep>
         <!-- 14.3d：主动返航（空战前须至少留 1 架；空战中禁止；空战后自由） -->
         <div class="row">
           <span class="muted">
@@ -691,16 +690,7 @@ const showsBaseOps = computed(
           任务已宣布：分配表单已收起（14.2f-A/B 只在宣布前用）—— 下面按步骤走 C–G。
         </p>
 
-        <!-- ── 步骤清单 ── -->
-        <p v-if="checklist.length > 0" class="num">
-          <BaseTag
-            v-for="item in checklist"
-            :key="item.step"
-            :kind="item.done ? 'success' : 'neutral'"
-          >
-            {{ item.label }}{{ item.done ? ' ✓' : '' }}
-          </BaseTag>
-        </p>
+        <!-- U1-b：步骤清单是进度（非待决），会话框里不再并列显示 -->
 
         <template v-if="workbench.airState !== null">
           <p v-if="workbench.airState.assignment.aircraftIds.length > 0" class="num">
@@ -733,7 +723,7 @@ const showsBaseOps = computed(
           </p>
 
           <!-- ── 14.4g：防空致容量变化后的**货物损失**（由玩家选摧毁哪几件） ── -->
-          <div v-if="workbench.airCargoLossPending !== null" class="block">
+          <SessionStep v-if="workbench.airCargoLossPending !== null" item="air:cargoLoss">
             <h4 class="block__title">{{ workbench.airCargoLossPending.rule }} 货物损失</h4>
             <p class="warn num">
               {{ workbench.airCargoLossPending.detail }}；摧毁哪些由您选（摧毁量须 ≥ 超出部分）
@@ -758,7 +748,7 @@ const showsBaseOps = computed(
               </BaseButton>
               <span class="muted">已选 {{ workbench.airCargoLossPicked.length }} 件</span>
             </div>
-          </div>
+          </SessionStep>
 
           <!--
         B29a（用户口径 #3）：宣布之后**一次结算到返航**。
@@ -776,7 +766,7 @@ const showsBaseOps = computed(
           </p>
 
           <!-- ── ② 空战环节（14.2f-C / 14.3） ── -->
-          <template v-if="workbench.airState.step === 'airCombat'">
+          <SessionStep v-if="workbench.airState.step === 'airCombat'" item="air:airCombat">
             <p class="num">
               空战前提（14.3，由盘面推出）：任务格内
               <BaseTag :kind="enemyAtTarget.hasAirBase ? 'warning' : 'neutral'">
@@ -817,10 +807,10 @@ const showsBaseOps = computed(
                 ② 结算空战环节（14.2f-C，逐步复核）
               </BaseButton>
             </div>
-          </template>
+          </SessionStep>
 
           <!-- ── ②b F 步的空军轰炸（10.2 / 14.7b）：任务为"空军轰炸"时进轰炸链 ── -->
-          <template v-if="workbench.airState.step === 'resolveMission'">
+          <SessionStep v-if="workbench.airState.step === 'resolveMission'" item="air:resolve">
             <template v-if="workbench.airState.kind === 'air_transport'">
               <p class="muted">
                 单位与SP共用卸载限额。默认自动卸载；含单位且超限时，请选择本次卸下的完整货物。未选货物保留退运。
@@ -860,10 +850,10 @@ const showsBaseOps = computed(
               </BaseButton>
               <span class="muted">结算完再回来「结算任务」（14.2f-F）。</span>
             </div>
-          </template>
+          </SessionStep>
 
           <!-- ── ③ 拦截应答（14.2f-D / 14.5） ── -->
-          <template v-if="workbench.airState.step === 'interception'">
+          <SessionStep v-if="workbench.airState.step === 'interception'" item="air:interception">
             <p class="num">
               对手拦截资格（14.5）：{{ interception === null ? '任务格未定' : interception.detail }}
               <template v-if="workbench.airTargetInEnemyPatrolZone">
@@ -891,7 +881,7 @@ const showsBaseOps = computed(
                 ③ 记录拦截应答（14.2f-D）
               </BaseButton>
             </div>
-          </template>
+          </SessionStep>
 
           <!-- ── 拦截空战结算（14.5 + 14.3e） ── -->
           <template
@@ -917,7 +907,7 @@ const showsBaseOps = computed(
           </template>
 
           <!-- ── ④ 防空应答（14.2f-E / 14.4） ── -->
-          <template v-if="workbench.airState.step === 'flak'">
+          <SessionStep v-if="workbench.airState.step === 'flak'" item="air:flak">
             <p class="num">
               防空（14.4e 表 17-3）：任务 ≥3 机 +1；目标格 HQ +1、基地等级每级 +1、印刷防空值
               +value；
@@ -957,9 +947,10 @@ const showsBaseOps = computed(
               </BaseTag>
               {{ workbench.airState.flak.detail }}
             </p>
-          </template>
+          </SessionStep>
 
           <!-- ── ⑤ 任务结算（14.2f-F） ── -->
+          <!-- U1-b：与 ②b 同一事项（空军轰炸 → 回来记录任务）；这里不再重复开门，避免两个待决 -->
           <template v-if="workbench.airState.step === 'resolveMission'">
             <div class="row">
               <label class="field">
@@ -973,7 +964,7 @@ const showsBaseOps = computed(
           </template>
 
           <!-- ── ⑥ 返航（14.2f-G / 14.1c） ── -->
-          <template v-if="workbench.airState.step === 'returnToBase'">
+          <SessionStep v-if="workbench.airState.step === 'returnToBase'" item="air:return">
             <p class="muted">
               返航（14.1c）：必须回**距离内的本方**空军基地；常规任务返航一律变为非激活。
               留空即回原起飞基地。
@@ -1015,7 +1006,7 @@ const showsBaseOps = computed(
                 ⑥ 返航（14.2f-G）
               </BaseButton>
             </div>
-          </template>
+          </SessionStep>
         </template>
 
         <template v-if="showsRefit">

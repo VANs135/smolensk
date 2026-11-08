@@ -34,6 +34,7 @@ import {
 } from '@/engine/rules'
 import type { GamePhase } from '@/engine/state-types'
 import { participatesIn } from './workbench-model'
+import { exposedSessionStep, planSessionSteps, type SessionStepFacts } from './session-steps'
 
 /**
  * 地图视图编排（W7 C16：对局台的地图优先交互）
@@ -1234,6 +1235,20 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
   })
 
+  /**
+   * U1-b：**突围会话改为"点击该环节操作才出现"**
+   *
+   * 用户规格：「除增援外，各环节的操作改为点击该环节对应操作才出现会话框」。
+   * 只加一个显示开关，不参与规则判定；换环节/换回合自动复位（`currentStepKey` 变化）。
+   */
+  const breakoutOpen = ref(false)
+  function openBreakoutNow(): void {
+    breakoutOpen.value = true
+  }
+  function closeBreakoutNow(): void {
+    breakoutOpen.value = false
+  }
+
   const sessionBase = computed<MapSessionBase | null>(() => {
     const combat = workbench.combatState
     if (combat !== null && !combat.finished) {
@@ -1438,6 +1453,7 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     if (
       workbench.segmentStep?.id === 'movement.breakout' &&
+      breakoutOpen.value &&
       collapsedSessionKey.value !== currentStepKey.value
     ) {
       return {
@@ -1496,6 +1512,94 @@ export const useMapViewStore = defineStore('mapView', () => {
   })
 
   /**
+   * U1-b：**会话步骤事实**（只读）
+   *
+   * 用户硬要求：「对话框必须拆分，一个会话只办一件事；顺序服从流程，先强制义务再选做」。
+   * 这里只把**既有 store 投影 / 引擎状态机**读成一份事实表，交给 `planSessionSteps`；
+   * 不在组件里重算"现在该做哪一步"，也不新增规则。
+   */
+  const sessionFacts = computed<SessionStepFacts>(() => {
+    const kind = sessionBase.value?.kind ?? null
+    const combat = workbench.combatState
+    const barrage = workbench.barrageState
+    const air = workbench.airState
+    const supply = workbench.supplyState
+    const moving = workbench.moveInteraction
+    const stepId = workbench.segmentStep?.id ?? ''
+    const batch = workbench.frontalReservesToday
+    const inRebuild = stepId === 'reinforcement.rebuild'
+    return {
+      kind,
+      combat:
+        kind !== 'combat'
+          ? null
+          : combat === null || combat.finished
+            ? { started: false, step: 'composition', attackerArDeclared: false }
+            : {
+                started: true,
+                step: combat.step,
+                attackerArDeclared: combat.declaredAttackerArUnitId !== undefined,
+              },
+      barrage:
+        kind !== 'barrage'
+          ? null
+          : barrage === null || barrage.finished
+            ? { step: 'declare' }
+            : { step: barrage.step },
+      air:
+        kind !== 'air'
+          ? null
+          : {
+              step: air?.step ?? 'declare',
+              declared: air !== null,
+              cargoLossPending: workbench.airCargoLossPending !== null,
+            },
+      supply: kind !== 'supply' || supply === null ? null : { step: supply.step },
+      move: {
+        zocPending: workbench.pendingZocConfirm !== null,
+        fuelPending: workbench.fuelPaymentDue && workbench.actionAllowedNow('supply.fuel'),
+        pickPending: workbench.movePick !== null && (moving === null || moving.finished),
+        moving: moving !== null && !moving.finished,
+        overrunZocHeld: workbench.overrunZocHeld !== null,
+      },
+      reinforce:
+        kind !== 'reinforce'
+          ? null
+          : {
+              stepId,
+              arrivalPending:
+                stepId === 'reinforcement.arrival' &&
+                workbench.arrivalPlan !== null &&
+                !workbench.arrivalAllPlaced,
+              freeRailPending: stepId === 'reinforcement.arrival' && workbench.supplyArrivalSp > 0,
+              replRollPending:
+                stepId === 'reinforcement.replRoll' ||
+                stepId === 'reinforcement.randomEvent' ||
+                stepId === 'reinforcement.variableExit',
+              replPlacePending:
+                inRebuild && workbench.replPending.pax + workbench.replPending.eq > 0,
+              rebuildAvailable: inRebuild && workbench.rebuildCandidates.length > 0,
+              frontalReservesPending:
+                batch !== null && !workbench.frontalReservesClaimed.includes(batch.date),
+              slowMobilizationVisible: workbench.slowMobilizationVisible,
+              breakdownAvailable: inRebuild,
+            },
+      breakout: kind === 'breakout',
+      breakoutReturnPending: kind === 'breakout' && workbench.breakoutReturns.length > 0,
+      containers: kind === 'containers',
+      exclusive: kind === 'exclusive',
+      unit: kind === 'unit',
+    }
+  })
+
+  /** U1-b：按规则顺序排好的待决事项（强制在前、选做在后） */
+  const sessionSteps = computed(() => planSessionSteps(sessionFacts.value))
+  /** U1-b：**当前暴露的那一个**（恒为 0 或 1；面板用 `<SessionStep :item>` 对齐） */
+  const sessionStep = computed(() => exposedSessionStep(sessionSteps.value))
+  /** U1-b：暴露数（守卫用例用；多待决同时出现即红） */
+  const sessionStepCount = computed(() => (sessionStep.value === null ? 0 : 1))
+
+  /**
    * B17a-3：专规动作会话的开关（顶栏按钮打开 ⇒ 地图上展开那一个会话框）
    *
    * 与 `collapsedSessionKey` 无关：它是"想用时打开"，不是"环节到了自动出现"。
@@ -1527,6 +1631,11 @@ export const useMapViewStore = defineStore('mapView', () => {
     () =>
       `${String(workbench.turn)}|${workbench.phase}|${workbench.segmentStep?.id ?? workbench.segmentStepIndex}`,
   )
+
+  /** U1-b：突围会话的显式开关只在本环节有效（换环节/换回合即复位） */
+  watch(currentStepKey, () => {
+    breakoutOpen.value = false
+  })
 
   /**
    * P3 / UI3：会话**显示身份**的序号
@@ -1650,7 +1759,10 @@ export const useMapViewStore = defineStore('mapView', () => {
       unitActionUnitId.value = null
     }
     // 条 6（R3）：突围环节没有状态机 ⇒ 收起（与增援/盒内/专规同规，不落到轰炸分支）
-    else if (current.kind === 'breakout') collapsedSessionKey.value = currentStepKey.value
+    else if (current.kind === 'breakout') {
+      breakoutOpen.value = false
+      collapsedSessionKey.value = currentStepKey.value
+    }
     // B15c：同理——宣布之前退掉参炸选子，宣布之后才是 `cancelBarrage`
     else if (workbench.barrageState === null) workbench.clearBarrageSelectionNow()
     else workbench.cancelBarrage()
@@ -2094,6 +2206,14 @@ export const useMapViewStore = defineStore('mapView', () => {
     // B4：唯一会话框（路由 + 唯一取消路径）
     session,
     cancelSession,
+    // U1-b：会话步骤投影（一次只暴露一个待决事项；面板用 `<SessionStep :item>` 对齐）
+    sessionSteps,
+    sessionStep,
+    sessionStepCount,
+    // U1-b：突围会话的显式开关（点击环节操作才出现）
+    breakoutOpen,
+    openBreakoutNow,
+    closeBreakoutNow,
     // 条 12（M2）：点非战斗单位开的动作会话（按类型分派到补给账本 / 空军整备 / 工事）
     unitActionHex,
     unitActionUnitId,

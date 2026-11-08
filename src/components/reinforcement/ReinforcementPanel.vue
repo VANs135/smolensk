@@ -2,6 +2,7 @@
 import { computed, ref, watch, watchEffect } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/base'
+import { SessionStep } from '@/components/session'
 import UiField from '@/components/UiField.vue'
 import { useRefereeTools } from '@/components/ui-mode'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
@@ -465,7 +466,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       </template>
     </p>
 
-    <template v-if="workbench.segmentIn(['reinforcement.arrival'])">
+    <SessionStep v-if="showsActions" item="reinforce:arrival">
       <!-- ── · 到达表执行（13.6 / 13.6b / 1.6a） ── -->
       <p class="muted">
         到达表执行（13.6）：当日到达卡 → 投放需求与落点（入口被阻挡时按 13.6b
@@ -586,16 +587,8 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         </template>
       </p>
       <p v-if="(plan?.units.length ?? 0) === 0" class="muted">当日到达卡没有条目。</p>
-    </template>
-    <template
-      v-if="
-        workbench.segmentIn([
-          'reinforcement.replRoll',
-          'reinforcement.randomEvent',
-          'reinforcement.variableExit',
-        ])
-      "
-    >
+    </SessionStep>
+    <SessionStep v-if="showsActions" item="reinforce:replRoll">
       <!-- ── · 可变增援（13.6b / 1.6c / 3.3c / 3.6） ── -->
       <hr />
       <RuleNote
@@ -664,8 +657,8 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <p class="num">
         13.5 可保存的补员：{{ savableReplKeys.join(' / ') }}（其余在增援阶段末清零）
       </p>
-    </template>
-    <template v-if="workbench.segmentIn(['reinforcement.arrival'])">
+    </SessionStep>
+    <SessionStep v-if="showsActions" item="reinforce:freeRail">
       <!-- ── · 到货 SP 落位（专规 2.1 / 3.1 免费铁运 + 3.6 补给列车） ── -->
       <hr />
       <RuleNote
@@ -750,8 +743,8 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <p v-if="workbench.lastFreeRailPlan !== null" class="ok">
         <BaseTag kind="success">已落账</BaseTag> {{ workbench.lastFreeRailPlan.detail }}
       </p>
-    </template>
-    <template v-if="workbench.segmentIn(['reinforcement.rebuild'])">
+    </SessionStep>
+    <SessionStep v-if="showsActions" item="reinforce:replPlace">
       <!-- ── · 补员账本（13.5） ── -->
       <hr />
       <RuleNote title="补员（13.5 / §5-D）" rule="13.5 / 专规 1.6 Notes">
@@ -788,8 +781,8 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           放置补员（13.5）
         </BaseButton>
       </div>
-    </template>
-    <template v-if="workbench.segmentIn(['reinforcement.rebuild'])">
+    </SessionStep>
+    <SessionStep v-if="showsRebuild" item="reinforce:rebuild">
       <!-- ── · 重建（13.5） ── -->
       <hr />
       <p v-if="showsRebuild" class="muted">
@@ -874,17 +867,9 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <p class="num">
         死亡堆 {{ workbench.deadPile.length }} 个｜永久移除 {{ workbench.removedForever.length }} 个
       </p>
-    </template>
-    <template
-      v-if="
-        workbench.segmentIn([
-          'reinforcement.rebuild',
-          'movement.modeAndMovement',
-          'combat.combat',
-          'exploitation.combat',
-        ])
-      "
-    >
+    </SessionStep>
+    <!-- U1-b：拆分/合并（20.0 / 13.9）＝本环节的**选做事项**，排在强制义务之后 -->
+    <SessionStep v-if="showsRebuild" item="reinforce:breakdown">
       <!-- ── · 拆分与合并（20.0 / 13.9） ── -->
       <hr />
       <RuleNote
@@ -1003,10 +988,10 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         <BaseTag kind="success">{{ workbench.lastConsolidation.rule }}</BaseTag>
         {{ workbench.lastConsolidation.detail }}
       </p>
-    </template>
+    </SessionStep>
     <!-- ── · 慢动员（专规 2.4） ── -->
     <!-- 2.4 是苏联专规：仅**苏方增援阶段**渲染（轴方增援阶段不出现该 UI，用户 2026-11-07 ②） -->
-    <template v-if="workbench.slowMobilizationVisible">
+    <SessionStep v-if="showsActions && workbench.slowMobilizationVisible" item="reinforce:slow">
       <hr />
       <div class="muted">
         慢动员：
@@ -1089,9 +1074,9 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           }}）
         </span>
       </p>
-    </template>
+    </SessionStep>
 
-    <template v-if="workbench.segmentIn(['reinforcement.frontalReserves'])">
+    <SessionStep v-if="showsActions" item="reinforce:frontalReserves">
       <!-- ── ⑥b 方面军预备队（专规 2.3c） ── -->
       <hr />
       <RuleNote
@@ -1179,7 +1164,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           {{ workbench.frontalReservesError.reason }}
         </p>
       </template>
-    </template>
+    </SessionStep>
     <!-- ── · NKVD 提示（专规 2.3b） ── -->
     <p v-if="workbench.combatNkvdDefenders.length > 0" class="warn">
       <BaseTag kind="danger">专规 2.3b</BaseTag>

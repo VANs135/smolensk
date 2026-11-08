@@ -1,5 +1,7 @@
 export { default as DerivationSteps } from './DerivationSteps.vue'
 export { default as FlowStrip } from './FlowStrip.vue'
 export { default as QuestionPrompt } from './QuestionPrompt.vue'
+export { default as SessionStep } from './SessionStep.vue'
 export { default as SettlementLogPanel } from './SettlementLogPanel.vue'
 export { default as TerminationNotice } from './TerminationNotice.vue'
+export { SESSION_STEP_GATE } from './gate'

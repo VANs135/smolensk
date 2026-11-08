@@ -162,7 +162,7 @@ function openUnitSession(stores: Stores): boolean {
 
 /** 突围会话（12.8e）：摆一枚断补战斗单位并把 store 放到突围环节 */
 function openBreakoutSession(stores: Stores): boolean {
-  const { workbench } = stores
+  const { workbench, mapView } = stores
   workbench.setPhase('movement')
   const record = unitChoices('axis').find(
     (item) => item.isCombat === true && (item.steps?.total ?? 1) <= 1,
@@ -176,7 +176,9 @@ function openBreakoutSession(stores: Stores): boolean {
   const index = workbench.playerSegmentSteps.findIndex((step) => step.id === 'movement.breakout')
   if (index < 0) throw new Error('移动阶段没有突围环节（断补单位在场时它应出现）')
   if (!workbench.setSegmentStepIndex(index)) throw new Error('进入突围环节失败')
-  return true
+  // U1-b：突围会话由「打开突围会话」入口触发（不再随环节自动弹出）
+  mapView.openBreakoutNow()
+  return mapView.session?.kind === 'breakout'
 }
 
 describe('P3：会话实例身份（sessionId）', () => {

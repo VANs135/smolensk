@@ -312,15 +312,16 @@ describe('分段块的**结构**不变量（空块 / 段错位都会红）', () 
     }
   })
 
-  it('★ ReinforcementPanel：每个 `segmentIn(...)` 块都**有正文**', () => {
+  it('★ ReinforcementPanel：每个 `SessionStep` 分段块都**有正文**', () => {
     const panel = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
-    const blocks = blocksOf(panel, 'workbench.segmentIn(')
+    const blocks = [
+      ...panel.matchAll(
+        /<SessionStep[^>]*item="(reinforce:[^"]+)"[^>]*>([\s\S]*?)<\/SessionStep>/g,
+      ),
+    ]
     expect(blocks.length, '增援面板应有按环节收敛的分段块').toBeGreaterThanOrEqual(5)
     for (const block of blocks) {
-      expect(
-        block.body.length,
-        `${block.expr}（第 ${block.openLine} 行，<${block.tag}>）是空段`,
-      ).toBeGreaterThan(minBody(block) - 1)
+      expect(block[2]!.trim().length, `${block[1]!} 是空段`).toBeGreaterThan(20)
     }
   })
 })

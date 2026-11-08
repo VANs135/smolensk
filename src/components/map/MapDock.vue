@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, provide, ref, watch } from 'vue'
 
 import type { MapSessionClosePolicy } from '@/stores/map-view'
+import { useMapViewStore } from '@/stores'
 
 import { BaseTag } from '@/components/base'
+import { SESSION_STEP_GATE } from '@/components/session'
 
 import { clampDockOffset, createDockMemory, DOCK_MIN_VISIBLE_PX } from './dock-position'
 
@@ -57,6 +59,18 @@ const props = defineProps<{
  * 真要持久化得走 `shared/storage`，那是另一批的事（不做，免得多一处状态源）。
  */
 const dockMemory = createDockMemory()
+
+/**
+ * U1-b：把**当前唯一待决事项**注入给会话面板
+ *
+ * 面板里的 `<SessionStep :item="…">` 只在 id 命中时渲染 ⇒ 同一会话一次只显示一件事。
+ * 这里只做转发（`mapView.sessionStep` 是 store 投影），不判规则。
+ */
+const mapView = useMapViewStore()
+provide(
+  SESSION_STEP_GATE,
+  computed(() => mapView.sessionStep),
+)
 
 /** 最小可见量（模板里给出可读提示；判定在 `clampDockOffset`） */
 const minVisiblePx = DOCK_MIN_VISIBLE_PX

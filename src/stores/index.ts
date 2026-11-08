@@ -20,3 +20,5 @@ export * from './setup'
 export * from './hotkeys'
 // W7 C16：地图视图编排（覆盖层 + 点选分派；对局台与旧操作台共用）
 export * from './map-view'
+// U1-b：会话步骤投影（一次只暴露一个待决事项）
+export * from './session-steps'

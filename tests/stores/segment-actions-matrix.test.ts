@@ -161,19 +161,19 @@ describe('阶段/环节 × 操作矩阵（规则书口径）', () => {
     expect(phaseOfSegment('')).toBeNull()
   })
 
-  it('★ 界面按环节收敛（样板：增援面板的区块全由 `segmentIn` 控显隐）', () => {
+  it('★ 界面按环节收敛（样板：增援面板的区块全由 `SessionStep` 的 item 控显隐）', () => {
     const panel = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
     // 每个 B 段子环节都要有对应区块（人工环节出动作区、自动环节只留回执）
-    for (const step of [
-      'reinforcement.arrival',
-      'reinforcement.replRoll',
-      'reinforcement.rebuild',
-      'reinforcement.frontalReserves',
+    for (const itemId of [
+      'reinforce:arrival',
+      'reinforce:replRoll',
+      'reinforce:rebuild',
+      'reinforce:frontalReserves',
     ]) {
-      expect(panel, `增援面板缺 ${step} 的区块收敛`).toContain(`'${step}'`)
+      expect(panel, `增援面板缺 ${itemId} 的区块收敛`).toContain(`item="${itemId}"`)
     }
     // 7 个区块：到达表 / 可变增援 / SP 落位 / 补员 / 重建 / 拆分合并 / 方面军预备队
-    expect((panel.match(/workbench\.segmentIn\(/g) ?? []).length).toBeGreaterThanOrEqual(7)
+    expect((panel.match(/item="reinforce:/g) ?? []).length).toBeGreaterThanOrEqual(7)
     // "人工 / 自动"的界面分界（自动环节只给回执）
     expect(panel).toContain("workbench.segmentDriver === 'automatic'")
   })

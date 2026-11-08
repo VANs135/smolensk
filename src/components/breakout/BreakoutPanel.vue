@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 
 import { BaseButton, BasePanel } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
+import { SessionStep } from '@/components/session'
 import { counterImageUrlOf, hexLabel, useWorkbenchStore } from '@/stores'
 
 /**
@@ -62,37 +63,41 @@ function deploySelectedReturn(): void {
       返场回合放回。
     </p>
 
-    <CounterPicker
-      title="可尝试突围的单位（点一枚＝宣布突围，12.8e）"
-      hint="12.8e：仅在**突围环节**（移动阶段首环节）可用；灰显的是引擎给的原因（有无追溯补给 / A 路径 / B 15 格 / MA）"
-      :items="breakoutItems"
-      :size="40"
-      @pick="workbench.breakoutNow($event)"
-    />
-    <p v-if="workbench.breakoutCandidates.length === 0" class="muted">
-      本方当前没有断补单位 ⇒ 本环节无可突围者（已按 12.8e 自动跳过）。
-    </p>
+    <!-- U1-b：返场是已突围单位的收尾，先做；做完才轮到「尝试突围」 -->
+    <SessionStep item="breakout:return">
+      <template v-if="workbench.breakoutReturns.length > 0">
+        <hr />
+        <CounterPicker
+          title="突围成功·待返场（回合到后按增援入场规则放回）"
+          hint="12.8e：成功者离图并**作为增援返回**；落点须是本方的地图边缘入场格且未被敌方单位阻挡（13.6b）"
+          :items="returnItems"
+          :size="32"
+          @pick="returnSelectedId = $event"
+        />
+        <div class="row">
+          <input v-model="returnHexText" class="input num" placeholder="列.行" />
+          <BaseButton variant="primary" size="sm" @click="deploySelectedReturn">
+            返场到该格（12.8e）
+          </BaseButton>
+        </div>
+        <p class="muted">
+          选中一枚待返场单位后，在框里填「列.行」再点按钮；落点必须是本方地图边缘入场格且未被敌方阻挡。
+        </p>
+      </template>
+    </SessionStep>
 
-    <hr />
-
-    <template v-if="workbench.breakoutReturns.length > 0">
+    <SessionStep item="breakout:act">
       <CounterPicker
-        title="突围成功·待返场（回合到后按增援入场规则放回）"
-        hint="12.8e：成功者离图并**作为增援返回**；落点须是本方的地图边缘入场格且未被敌方单位阻挡（13.6b）"
-        :items="returnItems"
-        :size="32"
-        @pick="returnSelectedId = $event"
+        title="可尝试突围的单位（点一枚＝宣布突围，12.8e）"
+        hint="12.8e：仅在**突围环节**（移动阶段首环节）可用；灰显的是引擎给的原因（有无追溯补给 / A 路径 / B 15 格 / MA）"
+        :items="breakoutItems"
+        :size="40"
+        @pick="workbench.breakoutNow($event)"
       />
-      <div class="row">
-        <input v-model="returnHexText" class="input num" placeholder="列.行" />
-        <BaseButton variant="primary" size="sm" @click="deploySelectedReturn">
-          返场到该格（12.8e）
-        </BaseButton>
-      </div>
-      <p class="muted">
-        选中一枚待返场单位后，在框里填「列.行」再点按钮；落点必须是本方地图边缘入场格且未被敌方阻挡。
+      <p v-if="workbench.breakoutCandidates.length === 0" class="muted">
+        本方当前没有断补单位 ⇒ 本环节无可突围者（已按 12.8e 自动跳过）。
       </p>
-    </template>
+    </SessionStep>
   </BasePanel>
 </template>
 

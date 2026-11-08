@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, provide, ref, watch } from 'vue'
 
 import { useMapViewStore } from '@/stores'
 import { BaseButton } from '@/components/base'
 import { AirPanel } from '@/components/air'
 import { ExclusiveRulesPanel } from '@/components/exclusive'
+import { SESSION_STEP_GATE } from '@/components/session'
 import { SupplyPanel } from '@/components/supply'
 
 /**
@@ -81,6 +82,16 @@ function narrow<T extends string>(pool: readonly T[], value: string | null): T |
 const airOnly = computed<AirOnly | null>(() => narrow(AIR_ONLY, activeOnly.value))
 const supplyOnly = computed<SupplyOnly | null>(() => narrow(SUPPLY_ONLY, activeOnly.value))
 const fortOnly = computed<FortOnly | null>(() => narrow(FORT_ONLY, activeOnly.value))
+
+/**
+ * U1-b：本会话自己的待决事项＝上方那张"能做什么"的菜单（或多段收窄后的**一段**）。
+ * 子面板（`AirPanel` / `SupplyPanel` / `ExclusiveRulesPanel`）各自已经只画一段，
+ * 这里把门放行（`null` ⇒ `<SessionStep>` 全部通过），避免把子面板自己的步骤也按 `unit:actions` 遮住。
+ */
+provide(
+  SESSION_STEP_GATE,
+  computed(() => null),
+)
 </script>
 
 <template>

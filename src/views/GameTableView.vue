@@ -242,6 +242,15 @@ onBeforeUnmount(() => {
       -->
       <FlowStrip variant="bar">
         <template #trail>
+          <!-- U1-b：突围没有状态机 —— 按用户规格「点击该环节对应操作才出现会话框」 -->
+          <BaseButton
+            v-if="workbench.segmentStep?.id === 'movement.breakout' && mapView.session === null"
+            variant="secondary"
+            size="sm"
+            @click="mapView.openBreakoutNow()"
+          >
+            打开突围会话
+          </BaseButton>
           <details class="gt__setup">
             <summary class="gt__setup-summary">视图与面板</summary>
             <div class="gt__setup-body">
