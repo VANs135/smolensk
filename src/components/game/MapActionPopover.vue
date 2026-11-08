@@ -45,7 +45,7 @@ const title = computed(() => (mapView.popup === null ? '' : `格 ${hexLabel(mapV
  * 判据在 store（`popupVariantFor`：该格有无可列内容），本组件只读它，不自己判规则。
  */
 const variant = computed(() => mapView.popup?.variant ?? 'content')
-const actionGroups = ['运输', '工程', '编组', '补给', '空军'] as const
+const actionGroups = ['移动', '战斗', '运输', '工程', '编组', '补给', '空军'] as const
 
 /** 9.2 当前步（null＝盘面上没有进行中的战斗） */
 /**

@@ -91,13 +91,14 @@ export const COUNTER_BOX_LABELS: Readonly<Record<CounterBoxTarget, string>> = {
 }
 
 type ContextPanel = 'air' | 'supply' | 'fort' | 'containers'
-type ContextGroup = '运输' | '工程' | '编组' | '补给' | '空军'
+type ContextGroup = '移动' | '战斗' | '运输' | '工程' | '编组' | '补给' | '空军'
 
 interface CounterAction {
   key: string
   label: string
   rule: string
-  panel: ContextPanel
+  /** `'unit'`＝点即执行，不开右栏面板（④ 的改模式 / 炮击 / 建造标记） */
+  panel: ContextPanel | 'unit'
   only: string | null
   group: ContextGroup
   disabledReason: string | null
@@ -1289,7 +1290,11 @@ export const useMapViewStore = defineStore('mapView', () => {
      *   会话既不是规则时点（整备属 A 段），又会按 `activeSide`（默认轴方）把**对方**的基地摊给玩家。
      */
     if (!setup.finished) return null
-    if (unitActionIntent.value !== null) return unitActionIntent.value.panel
+    if (unitActionIntent.value !== null) {
+      // ④ 的 `'unit'` 是"点即执行"，从不落到右栏面板（`openContextAction` 已提前 return）
+      const intentPanel = unitActionIntent.value.panel
+      return intentPanel === 'unit' ? null : intentPanel
+    }
     const hex = unitActionHex.value
     if (hex === null) return null
     const pinned = unitActionUnitId.value
@@ -1341,6 +1346,22 @@ export const useMapViewStore = defineStore('mapView', () => {
     const base = actionBase.value
     return base === null ? [] : workbench.airUnitsAt(base.hex, base.side)
   })
+
+  /** ④：改模式的四项菜单（key 只作菜单标识；落点是既有 `switchUnitMode`） */
+  const MODE_MENU_ACTIONS = [
+    ['move.mode.combat', '改战斗模式'],
+    ['move.mode.move', '改移动模式'],
+    ['move.mode.reserve', '改预备模式'],
+    ['move.mode.strat', '改战略模式'],
+  ] as const
+
+  /** ④：菜单 `only` → 既有 `switchUnitMode` 的目标模式 */
+  const MODE_MENU_TARGETS: Readonly<Record<string, 'combat' | 'move' | 'reserve' | 'strat'>> = {
+    'move.mode.combat': 'combat',
+    'move.mode.move': 'move',
+    'move.mode.reserve': 'reserve',
+    'move.mode.strat': 'strat',
+  }
 
   const groupOfAction: Partial<Record<ActionKey, ContextGroup>> = {
     'move.transportMerge': '运输',
@@ -1409,6 +1430,67 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (unit !== undefined && workbench.engineerChoices.some((item) => item.instanceId === id)) {
       add('move.construction', { ...FACILITY_ACTION_META['move.construction']!, group: '工程' })
       add('move.hedgehog', { ...FACILITY_ACTION_META['move.hedgehog']!, group: '工程' })
+    }
+    /*
+     * ④（用户 2026-11-09）：**按能力把次要动作收进右键**。
+     *
+     * 纪律：只在本环节**放行**的能力才出现（不让菜单堆一串灰按钮），每一项都落在既有入口上：
+     *   · 移动 5.4a 改模式 → `switchUnitMode`（引擎 `canSwitchModeNow` 仍做最终判定）
+     *   · 战斗 10.0 炮击 → `beginBarrageNow` + `toggleBarrageUnit`（判据 `isBarrageCapableUnit`）
+     *   · 工程 专规 3.5 建造标记 → `armConstructionMarkerNow`（桥 / 简易机场二选一）
+     */
+    if (unit !== undefined && workbench.actionAllowedNow('move.modeChange')) {
+      for (const [key, label] of MODE_MENU_ACTIONS) {
+        actions.push({
+          key,
+          label: moving ? `${label}（先结束移动）` : label,
+          rule: '5.4a',
+          panel: 'unit',
+          only: key,
+          group: '移动',
+          disabledReason: moving ? '先结束移动' : null,
+        })
+      }
+    }
+    if (
+      unit !== undefined &&
+      workbench.actionAllowedNow('barrage.declare') &&
+      workbench.isBarrageCapableUnit(unit)
+    ) {
+      actions.push({
+        key: 'barrage.declare',
+        label: workbench.barrageUnitIds.includes(id) ? '移出炮击' : '炮击',
+        rule: '10.0',
+        panel: 'unit',
+        only: 'barrage',
+        group: '战斗',
+        disabledReason: null,
+      })
+    }
+    if (
+      unit !== undefined &&
+      workbench.activeSide === 'axis' &&
+      workbench.constructionMarkers > 0 &&
+      workbench.actionAllowedNow('move.construction')
+    ) {
+      actions.push({
+        key: 'move.marker.bridge',
+        label: '建造标记：桥',
+        rule: '专规 3.5',
+        panel: 'unit',
+        only: 'markerBridge',
+        group: '工程',
+        disabledReason: null,
+      })
+      actions.push({
+        key: 'move.marker.airStrip',
+        label: '建造标记：简易机场',
+        rule: '专规 3.5',
+        panel: 'unit',
+        only: 'markerAirStrip',
+        group: '工程',
+        disabledReason: null,
+      })
     }
     if (unit !== undefined && workbench.breakdownTimingOf(id) !== null) {
       add('move.breakdown', {
@@ -1519,7 +1601,15 @@ export const useMapViewStore = defineStore('mapView', () => {
     return true
   }
 
-  /** 右键只查看当前选格，空白或未选格收起菜单。 */
+  /**
+   * 右键出菜单（④：按能力分类）
+   *
+   * 目标集合的取法：
+   *   · 堆叠已展开 ⇒ 该格全部可见算子（逐枚列组）；
+   *   · 未展开 ⇒ 先看**当前选中**是否就在这一格；不在就用**该格本方的可见算子**
+   *     （玩家右键一枚本单位就该看到它的能力，不必先左键选中）。
+   * 谁有资格出现在菜单里仍由 `counterActionsAt` 判（本方 + 本环节有既有入口）。
+   */
   function onHexContext(
     hex: HexRef | null,
     _world: { x: number; y: number },
@@ -1531,8 +1621,21 @@ export const useMapViewStore = defineStore('mapView', () => {
     const activeId = unitActionUnitId.value
     const expanded = isStackExpanded(hex)
     const selected = [picked, activeId].filter((id): id is string => typeof id === 'string')
-    if (!expanded && selected.every((id) => ownCounterAt(hex, id) === undefined)) return
-    const ids = expanded ? stackTokensAt(hex).map((token) => token.id) : selected
+    if (expanded) {
+      showCounterContext(
+        hex,
+        stackTokensAt(hex).map((token) => token.id),
+        anchor,
+      )
+      return
+    }
+    const hit = selected.filter((id) => ownCounterAt(hex, id) !== undefined)
+    const ids =
+      hit.length > 0
+        ? hit
+        : stackTokensAt(hex)
+            .filter((token) => token.side === actingSide.value)
+            .map((token) => token.id)
     showCounterContext(hex, ids, anchor)
   }
 
@@ -1542,6 +1645,28 @@ export const useMapViewStore = defineStore('mapView', () => {
       return false
     const option = counterActionsAt(hex, instanceId).find((item) => item.key === key)
     if (option === undefined || option.disabledReason !== null) return false
+    /*
+     * ④：一次性能力**点即执行**，不开右栏面板（与设施动作的 `unitActionIntent` 路径分开）。
+     * 全部转发到既有入口；这里只负责"把右键点中的那一枚"落到既有入口所需的选中态。
+     */
+    const mode = MODE_MENU_TARGETS[option.only ?? '']
+    if (mode !== undefined) {
+      workbench.selectedId = instanceId
+      workbench.switchUnitMode(mode)
+      closePopup()
+      return true
+    }
+    if (option.only === 'barrage') {
+      workbench.setBarrageActive(true)
+      workbench.toggleBarrageUnit(instanceId)
+      closePopup()
+      return true
+    }
+    if (option.only === 'markerBridge' || option.only === 'markerAirStrip') {
+      workbench.armConstructionMarkerNow(option.only === 'markerBridge' ? 'bridge' : 'airStrip')
+      closePopup()
+      return true
+    }
     const unit = ownCounterAt(hex, instanceId)
     if (option.only === 'railMove') {
       workbench.railMoveInputs.toHexText = ''
