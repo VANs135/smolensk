@@ -277,8 +277,12 @@ describe('W7 C12：死亡堆与 1.6c 特殊补员抽取（与盘面联动）', (
     const division = place(workbench, eligibleDivisionRecord(), someHex(), 'soviet', 'd1')
     workbench.sendToDeadPileNow(division.instanceId)
     workbench.rng = createRngState(21)
+    const rng = workbench.rng
+    const draws = workbench.drawCount
     expect(containers.drawSpecialRepl('soviet')).toBe(false)
-    expect(containers.lastAction?.detail ?? '').toContain('specialReplStoppedFrom')
+    expect(containers.lastAction?.detail ?? '').toContain('8 月 19 日')
+    expect(workbench.rng).toEqual(rng)
+    expect(workbench.drawCount).toBe(draws)
     expect(workbench.deadPile).toHaveLength(1)
   })
 
@@ -288,18 +292,15 @@ describe('W7 C12：死亡堆与 1.6c 特殊补员抽取（与盘面联动）', (
     workbench.setTool('move')
     workbench.clickHex(division.hex)
     workbench.sendToDeadPileNow('d1')
+    const before = workbench.snapshotBoard()
 
     workbench.rng = createRngState(4242)
     expect(containers.drawSpecialRepl('soviet'), '本环节应放行').toBe(true)
     const first = containers.lastAction?.detail ?? ''
     expect(first).toContain('1.6c')
 
-    // 复原：重新摆回死亡堆，重置种子
-    workbench.units = []
-    workbench.deadPile = []
-    const again = place(workbench, eligibleDivisionRecord(), someHex(), 'soviet', 'd1')
-    workbench.clickHex(again.hex)
-    workbench.sendToDeadPileNow('d1')
+    // 读掷表前的档并重置测试种子，再重放同一命令。
+    workbench.restoreBoard(before, true)
     workbench.rng = createRngState(4242)
     expect(containers.drawSpecialRepl('soviet')).toBe(true)
     expect(containers.lastAction?.detail ?? '').toBe(first)

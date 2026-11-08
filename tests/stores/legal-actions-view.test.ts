@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ACTION_GATES, buildLegalActionsView, type LegalActionsInput } from '@/stores/legal-actions'
 import { useLegalActionsStore } from '@/stores/legal-actions-store'
+import { useContainersStore, useMapViewStore } from '@/stores'
 
 import { fillSetup, fresh } from '../flows/flow-harness'
 
@@ -74,11 +75,27 @@ describe('纯函数：按闸门表逐条搬运', () => {
     expect(entry.status).toBe('available')
     expect(entry.candidates).toEqual(candidates)
   })
+
+  it('空候选与全被拒候选均不可点', () => {
+    const disabled = { ref: 'a', label: '飞机', disabledReason: '本阶段已整备' }
+    const view = buildLegalActionsView(
+      input({
+        gatedKeys: new Set(['move.order', 'air.refit']),
+        candidates: { 'move.order': [], 'air.refit': [disabled] },
+      }),
+    )
+    expect(entryOf(view, 'move.order')).toMatchObject({ status: 'blocked', clickable: false })
+    expect(entryOf(view, 'air.refit')).toMatchObject({
+      status: 'blocked',
+      clickable: false,
+      candidates: [disabled],
+    })
+  })
 })
 
 describe('U0：没有提交入口的动作不得显示为可点', () => {
   it('submit === "" 的 entry 即使 available 也 clickable=false', () => {
-    const keys = ['rein.formationDraw', 'rein.specialRepl', 'exclusive.panzerObligation']
+    const keys = ['rein.formationDraw', 'exclusive.panzerObligation']
     const candidates = Object.fromEntries(keys.map((key) => [key, [{ ref: 'x', label: 'X' }]]))
     const view = buildLegalActionsView(input({ gatedKeys: new Set(keys), candidates }))
     for (const key of keys) {
@@ -188,6 +205,41 @@ describe('setup.place', () => {
 })
 
 describe('store 适配层：只读投影真的读得到', () => {
+  it.each(['axis', 'soviet'] as const)('1.6c %s：增援会话可掷一次，读档后仍不可重掷', (side) => {
+    const { w } = fresh()
+    const legal = useLegalActionsStore()
+    const containers = useContainersStore()
+    const map = useMapViewStore()
+    w.setActiveSide(side)
+    expect(entryOf(legal.view, 'rein.specialRepl').clickable).toBe(false)
+    w.setPhase('reinforcement')
+    expect(
+      w.setSegmentStepIndex(
+        w.playerSegmentSteps.findIndex((step) => step.id === 'reinforcement.specialRepl'),
+      ),
+    ).toBe(true)
+    expect(map.sessionStep?.id).toBe('reinforce:specialRepl')
+    expect(entryOf(legal.view, 'rein.specialRepl')).toMatchObject({
+      status: 'available',
+      clickable: true,
+      submit: 'drawSpecialRepl',
+      candidates: [{ ref: side, label: '掷特殊补员表' }],
+    })
+    expect(containers.drawSpecialRepl(side)).toBe(true)
+    const rng = w.rng
+    const snapshot = w.snapshotBoard()
+    w.resetBoardNow()
+    w.setPhase('reinforcement')
+    w.restoreBoard(snapshot, true)
+    expect(entryOf(legal.view, 'rein.specialRepl')).toMatchObject({
+      status: 'blocked',
+      clickable: false,
+      note: '本回合已掷表',
+    })
+    w.rng = rng
+    expect(containers.drawSpecialRepl(side)).toBe(false)
+    expect(w.rng).toEqual(rng)
+  })
   it('剧本 1 进入初设后：side 可读、setup.place 有候选', () => {
     const ctx = fresh()
     expect(ctx.setup.enterSetup('1')).toBe(true)

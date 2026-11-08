@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed } from 'vue'
 
 import { buildLegalActionsView, type LegalActionsView } from './legal-actions'
+import { useContainersStore } from './containers'
 import { useGameSessionStore } from './session'
 import { useSetupStore } from './setup'
 import { useWorkbenchStore } from './workbench'
@@ -17,6 +18,7 @@ export const useLegalActionsStore = defineStore('legal-actions', () => {
   const workbench = useWorkbenchStore()
   const session = useGameSessionStore()
   const setup = useSetupStore()
+  const containers = useContainersStore()
 
   const view = computed<LegalActionsView>(() => {
     const actingSide = workbench.segmentGateQuery.side ?? workbench.activeSide
@@ -35,6 +37,14 @@ export const useLegalActionsStore = defineStore('legal-actions', () => {
       const ref = `${item.hex.col}.${item.hex.row}`
       return { ref, label: item.name === '' ? ref : item.name }
     })
+    const specialReplRefusal = containers.specialReplRefusal(actingSide)
+    candidates['rein.specialRepl'] = [
+      {
+        ref: actingSide,
+        label: '掷特殊补员表',
+        ...(specialReplRefusal === null ? {} : { disabledReason: specialReplRefusal }),
+      },
+    ]
 
     /* ── C 移动 ── */
     candidates['move.breakout'] = workbench.breakoutCandidates.map((item) => ({
@@ -120,8 +130,11 @@ export const useLegalActionsStore = defineStore('legal-actions', () => {
       })),
     }))
 
-    // 只搬运既有状态；「现在推进会不会被拒」由 advanceSegmentNow 自己判定并记日志。
-    const advanceAvailable = !workbench.initialSetupInProgress && !workbench.segmentLocked
+    const advanceAvailable =
+      !workbench.initialSetupInProgress &&
+      !workbench.segmentLocked &&
+      !session.awaiting &&
+      workbench.currentAdvanceBlock === null
 
     return buildLegalActionsView({
       phase: workbench.phase,

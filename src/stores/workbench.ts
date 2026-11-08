@@ -17112,6 +17112,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const initialSetupInProgress = ref(false)
   const automaticPhaseKeys = ref<string[]>([])
 
+  // 1.6c：沿用已随盘面保存的阶段结算键，按回合和阵营记录一次掷表。
+  function hasSpecialReplDraw(side: Side, round: number): boolean {
+    return automaticPhaseKeys.value.includes(`specialRepl:${round}:${side}`)
+  }
+
+  function markSpecialReplDraw(side: Side, round: number): void {
+    automaticPhaseKeys.value = [...automaticPhaseKeys.value, `specialRepl:${round}:${side}`]
+  }
+
   /** 本段本方的**全部**环节（唯一出处：`engine/rules/sop-segments`；B 段的链按方不同） */
   const segmentSteps = computed(() => sopStepsOf(phase.value as GamePhase, activeSide.value))
 
@@ -20553,6 +20562,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 重置局（含重设种子）——局况一并回到初始（第 1 回合 / 轴心国先手 / C 移动段） */
   function resetAll(nextSeed = DEFAULT_SEED): void {
+    automaticPhaseKeys.value = []
     airMissionDomain.reset(true)
     airUnitTransit.reset()
     fireResolution.resetCombat()
@@ -21367,6 +21377,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 只读闸门解释：**最近一次点击**为何没推进（流程条就地显示；不用于置灰）
     advanceBlock: advanceBlocked,
     currentAdvanceBlock: computed(() => segmentAdvanceBlock()),
+    hasSpecialReplDraw,
+    markSpecialReplDraw,
     pickRecord,
     setTool,
     /**

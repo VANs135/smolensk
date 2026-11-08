@@ -398,6 +398,11 @@ function moveItems(facts: SessionStepFacts['move']): SessionStepItem[] {
 }
 
 function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): SessionStepItem[] {
+  if (facts.stepId === 'reinforcement.specialRepl') {
+    return [
+      item('reinforce:specialRepl', '特殊补员', '本环节处理特殊补员。', '掷本方特殊补员表。', true),
+    ]
+  }
   const mandatory: SessionStepItem[] = []
   const optional: SessionStepItem[] = []
   const inRebuild = facts.stepId === 'reinforcement.rebuild'

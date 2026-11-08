@@ -37,6 +37,7 @@ import {
   deriveDrawComposition,
   planScenarioDraw,
   planSpecialReplDraw,
+  isSpecialReplAvailable,
   shiftWestDestination,
   planTurnMarkerAdvance,
   railCapPositionValid,
@@ -784,14 +785,6 @@ export const useContainersStore = defineStore('containers', () => {
 
   /* ────────────────────────────── 掷骰（唯一入口 rng.ts） ────────────────────────────── */
 
-  /** 掷 1 骰并推进操作台的 rng 游标（种子化可重放） */
-  function rollDieOnce(): number {
-    const draw = roll1d6(workbench.rng)
-    workbench.rng = draw.rng
-    workbench.drawCount += 1
-    return draw.value.total
-  }
-
   /** 在 `[0, size)` 中均匀抽一个下标（抽取盒用；无取模偏差） */
   function pickFrom(size: number): number {
     const draw = pickIndex(workbench.rng, size)
@@ -801,6 +794,14 @@ export const useContainersStore = defineStore('containers', () => {
   }
 
   /* ────────────────────────────── 1.6c 特殊补员抽取 ────────────────────────────── */
+
+  function specialReplRefusal(side: Side): string | null {
+    if (!workbench.actionAllowedNow('rein.specialRepl')) return '在增援的特殊补员环节掷表'
+    if (side !== workbench.activeSide) return '只能掷本方的特殊补员表'
+    if (!isSpecialReplAvailable(date.value)) return '8 月 19 日起停止特殊补员'
+    if (workbench.hasSpecialReplDraw(side, turn.value)) return '本回合已掷表'
+    return null
+  }
 
   /**
    * 1.6c：结算一次特殊补员（苏方两项 / 轴方一项）
@@ -820,26 +821,20 @@ export const useContainersStore = defineStore('containers', () => {
      *   `planSpecialReplDraw` 的 `specialReplStoppedFrom`）——两道闸门各管一件事，不互相替代。
      */
     if (!workbench.requireAction('rein.specialRepl', '特殊补员抽取')) return false
-    /*
-     * 1.6b 原文「A player rolls… during **his** Reinforcement Phase」⇒ 掷表的是**本方**自己的
-     * 增援阶段。故这里再钉一条**同方**判据：不能在自己的 B 段里去掷**对方**的表
-     * （盒卡与掷表入口都按方列出，但 store 是公开 API，这一条兜住"参数传错方"）。
-     */
-    if (side !== workbench.activeSide) {
+    const refusal = specialReplRefusal(side)
+    if (refusal !== null) {
       lastAction.value = {
         ok: false,
         rule: '1.6c',
-        detail: `只能在**本方**的增援阶段掷表（当前行动方是 ${workbench.activeSide}）`,
+        detail: refusal,
         scope: '1.6c 特殊补员',
       }
-      workbench.pushLog(
-        'warning',
-        `特殊补员只能在本方增援阶段掷表（当前行动方 ${workbench.activeSide}）`,
-        '1.6c',
-      )
+      workbench.pushLog('warning', refusal, '1.6c')
       return false
     }
-    const die = rollDieOnce()
+    // 先用本地骰源拟定结果。有合法落点后才提交骰源，避免被拒时白耗骰子。
+    const roll = roll1d6(workbench.rng)
+    const die = roll.value.total
     const dead = deadPileUnits.value[side]
     // 苏方固定项「随机重建一个师」：候选池由引擎按 1.6c 判定，抽哪一个用 rng 决定
     const candidates = planSpecialReplDraw({
@@ -866,10 +861,9 @@ export const useContainersStore = defineStore('containers', () => {
       return false
     }
     const divisionPool = candidates.data.pools.divisionCandidates
-    const chosen =
-      side === 'soviet' && divisionPool.length > 0
-        ? (divisionPool[pickFrom(divisionPool.length)] ?? null)
-        : null
+    const picked =
+      side === 'soviet' && divisionPool.length > 0 ? pickIndex(roll.rng, divisionPool.length) : null
+    const chosen = picked === null ? null : (divisionPool[picked.value] ?? null)
     const planned = planSpecialReplDraw({
       side,
       date: date.value,
@@ -912,6 +906,12 @@ export const useContainersStore = defineStore('containers', () => {
       workbench.pushLog('danger', `特殊补员无处返场：${placement.detail}（2.1）`, '2.1')
       return false
     }
+    workbench.rng = roll.rng
+    workbench.drawCount += 1
+    if (picked !== null && picked.rng !== roll.rng) {
+      workbench.rng = picked.rng
+      workbench.drawCount += 1
+    }
     const placementHex = placement.hex === null ? null : `${placement.hex.col}.${placement.hex.row}`
     for (const patch of planned.data.patches) {
       if (patch.to === null && placementHex !== null) {
@@ -925,6 +925,7 @@ export const useContainersStore = defineStore('containers', () => {
     if (planned.data.second.kind === 'supplyCache') {
       workbench.addSupplyCacheNow(side)
     }
+    workbench.markSpecialReplDraw(side, turn.value)
     lastAction.value = {
       ok: true,
       rule: planned.rule,
@@ -2470,6 +2471,7 @@ export const useContainersStore = defineStore('containers', () => {
     scenarioDrawBox,
     // 操作
     drawSpecialRepl,
+    specialReplRefusal,
     takeBreakdown,
     drawFormations,
     drawnOf,

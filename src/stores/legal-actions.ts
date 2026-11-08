@@ -74,7 +74,7 @@ const SUBMIT_ENTRY_OF: Readonly<Record<ActionKey, string>> = {
   'rein.supplyArrival': 'applySupplyArrivalsNow',
   'rein.rebuild': 'rebuildUnitNow',
   'rein.formationDraw': '',
-  'rein.specialRepl': '',
+  'rein.specialRepl': 'drawSpecialRepl',
   'rein.frontalReserves': 'claimFrontalReservesNow',
   'move.breakout': 'breakoutNow',
   'move.modeChange': 'switchUnitMode',
@@ -129,6 +129,9 @@ export function buildLegalActionsView(input: LegalActionsInput): LegalActionsVie
     } else if (candidates === undefined) {
       status = 'unsupported'
       notes.push(NOTE_NO_CANDIDATES)
+    } else if (!candidates.some((candidate) => candidate.disabledReason === undefined)) {
+      status = 'blocked'
+      notes.push(candidates[0]?.disabledReason ?? '当前无可提交候选')
     } else {
       status = 'available'
     }
@@ -142,7 +145,7 @@ export function buildLegalActionsView(input: LegalActionsInput): LegalActionsVie
       submit,
       clickable: status === 'available' && submit !== '',
       rule: gate.rule,
-      candidates: status === 'blocked' ? [] : (candidates ?? []),
+      candidates: hardBlocked || !gated ? [] : (candidates ?? []),
       ...(entryNote(notes) === undefined ? {} : { note: entryNote(notes) }),
     })
   }

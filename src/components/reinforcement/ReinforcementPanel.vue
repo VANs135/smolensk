@@ -11,7 +11,7 @@ import { arrivalCopiesOf, rebuildChartRows, suggestRebuildRow } from '@/engine/r
 import { counterImages, tokenImageUrl } from '@/render/token-images'
 import { ooaScanOf } from '@/render/charts-view'
 import { counterImageUrlOf, hexLabel, parseHexPath, recordNameOf, unitChoices } from '@/stores'
-import { useWorkbenchStore } from '@/stores'
+import { useContainersStore, useWorkbenchStore } from '@/stores'
 
 /**
  * 增援面板（W6 B18：OCS 13.5 / 13.6 / 13.9 / 20.0 + Smolensk 专规 1.6 / 2.1 / 2.3b / 2.4）
@@ -27,6 +27,8 @@ import { useWorkbenchStore } from '@/stores'
  * 这里只画表、收点击、把输入写回 store。 */
 
 const workbench = useWorkbenchStore()
+const containers = useContainersStore()
+const specialReplRefusal = computed(() => containers.specialReplRefusal(workbench.activeSide))
 
 /**
  * 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输）
@@ -465,6 +467,21 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         —— 只铺本环节要做的区块；其余子环节的区块已隐去（切到对应环节再出现）。
       </template>
     </p>
+
+    <SessionStep
+      v-if="showsActions && workbench.segmentStep?.id === 'reinforcement.specialRepl'"
+      item="reinforce:specialRepl"
+    >
+      <BaseButton
+        variant="primary"
+        size="sm"
+        :disabled="specialReplRefusal !== null"
+        @click="containers.drawSpecialRepl(workbench.activeSide)"
+      >
+        掷特殊补员表 · 1.6c
+      </BaseButton>
+      <p v-if="specialReplRefusal !== null" class="muted" role="status">{{ specialReplRefusal }}</p>
+    </SessionStep>
 
     <SessionStep v-if="showsActions" item="reinforce:arrival">
       <!-- ── · 到达表执行（13.6 / 13.6b / 1.6a） ── -->
