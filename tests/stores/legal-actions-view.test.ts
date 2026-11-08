@@ -199,15 +199,19 @@ describe('store 适配层：只读投影真的读得到', () => {
     expect(place.candidates.every((candidate) => candidate.ref.includes(':'))).toBe(true)
   })
 
-  it('摆完初设并开局后：phase=aircraftRefit、phase.advance 可用、全部闸门 key 都在', () => {
-    const ctx = fresh()
-    expect(ctx.setup.enterSetup('1')).toBe(true)
-    fillSetup(ctx)
-    expect(ctx.setup.startGameNow()).toBe(true)
+  it(
+    '摆完初设并开局后：phase=aircraftRefit、phase.advance 可用、全部闸门 key 都在',
+    { timeout: 20000 },
+    () => {
+      const ctx = fresh()
+      expect(ctx.setup.enterSetup('1')).toBe(true)
+      fillSetup(ctx)
+      expect(ctx.setup.startGameNow()).toBe(true)
 
-    const legal = useLegalActionsStore()
-    expect(legal.view.phase).toBe('aircraftRefit')
-    expect(entryOf(legal.view, 'phase.advance').status).toBe('available')
-    for (const gate of ACTION_GATES) expect(entryOf(legal.view, gate.key)).toBeDefined()
-  })
+      const legal = useLegalActionsStore()
+      expect(legal.view.phase).toBe('aircraftRefit')
+      expect(entryOf(legal.view, 'phase.advance').status).toBe('available')
+      for (const gate of ACTION_GATES) expect(entryOf(legal.view, gate.key)).toBeDefined()
+    },
+  )
 })

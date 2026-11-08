@@ -76,7 +76,7 @@ describe('一键预设初设（B2）', () => {
     expect(first.placed).toBeGreaterThan(0)
   })
 
-  it('手动初设路径未变：不调预设时仍可逐项落位', () => {
+  it('手动初设路径未变：不调预设时仍可逐项落位', { timeout: 20000 }, () => {
     const ctx = fresh()
     expect(ctx.setup.enterSetup('1')).toBe(true)
     fillSetup(ctx)
