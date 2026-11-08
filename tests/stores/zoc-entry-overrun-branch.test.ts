@@ -158,7 +158,7 @@ describe('第六批 BUG ①：4.5a-A 的「突袭」分支可点（进 ZOC 前�
     store.cancelCombat()
   })
 
-  it('★ 参突者＝因进 ZOC 被停车的那几枚，且发起格就是那一格（8.1g 同格）', () => {
+  it('★ 纯轮式单堆叠：参突者＝因进 ZOC 停车者，发起格就是那一格（8.1g 同格）', () => {
     const { zocHex, enemyHex } = setupPendingZoc(store)
     const preview = store.pendingZocConfirm?.preview
     expect(preview).toBeDefined()
@@ -216,6 +216,11 @@ describe('第六批 BUG ①：4.5a-A 的「突袭」分支可点（进 ZOC 前�
       source.indexOf('const zocOverrunChoices = computed'),
       source.indexOf('const zocOverrunChoices = computed') + 1600,
     )
-    expect(choicesBody).toContain('overrunEligibility(')
+    expect(choicesBody).toContain('pickOverrunParticipants(')
+    // 资格仍一律问引擎：取参突集的辅助函数直接委托 `overrunEligibility`，本层不重算
+    const helperStart = source.indexOf('function pickOverrunParticipants')
+    expect(helperStart).toBeGreaterThan(0)
+    const helperBody = source.slice(helperStart, helperStart + 2000)
+    expect(helperBody).toContain('overrunEligibility(')
   })
 })

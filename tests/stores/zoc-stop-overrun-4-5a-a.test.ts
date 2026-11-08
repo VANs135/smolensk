@@ -178,13 +178,13 @@ describe('第六批 P0-2：4.5a-A 停车后仍可突袭（条 14）', () => {
     expect(reachable).not.toContain(`${truck.hex.col}.${truck.hex.row}`)
   })
 
-  it('源码守卫：突袭候选＝`overrunCandidateUnits`（含 ZOC 停车者），不再是 `activeMoveUnits`', () => {
+  it('源码守卫：突袭候选＝`overrunCandidateUnits`（含 ZOC 停车者与同行者），不再是 `activeMoveUnits`', () => {
     const source = readFileSync('src/stores/workbench.ts', 'utf8')
-    // ① 三个消费点都用突袭候选
+    // ① 目标计算把突袭候选交给「逐单位取合格参突者」的助手（停车者与同行者同一口径）
     const targetsStart = source.indexOf('const overrunTargets = computed')
-    const targetsBody = source.slice(targetsStart, targetsStart + 900)
-    expect(targetsBody).toContain('overrunCandidateUnits.value.map')
-    expect(targetsBody).not.toContain('activeMoveUnits.value.map')
+    const targetsBody = source.slice(targetsStart, targetsStart + 1200)
+    expect(targetsBody).toContain('candidates: overrunCandidateUnits.value')
+    expect(targetsBody).not.toContain('activeMoveUnits')
     // ② 8.1a 的 MP 门槛也按同一口径（否则门槛恒为 0 ⇒ 永远突袭不了）
     const mpStart = source.indexOf('const moveMinRemainingMp = computed')
     const mpBody = source.slice(mpStart, mpStart + 700)

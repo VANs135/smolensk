@@ -5124,6 +5124,64 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
+   * 8.1 / 8.1a / 8.1h：从**进格后同格**的候选里取本格真正合格的参突者
+   *
+   * 4.5a-A 只规定「轮式单位进敌方 ZOC 后必须停或突袭」——**被强制停车的只有轮式**，
+   * 同行的其它单位仍会进格并可参突（8.1g），故候选不能取 `zocStoppingIds`（那只是停车者）。
+   *
+   * 逐单位过 `overrunEligibility`（资格一律引擎给）：不合格者（DG 5.10b / 不可攻击 / MP < 3 8.1a）
+   * **不参突、也不阻塞其余单位**（8.1h 允许其留驻，仍计 4.8a）；再把合格集合整体过一次
+   * （起突格堆叠上限 4.8a、进格费 8.1b 等按整堆叠口径）。
+   *
+   * @returns null ＝ 这一格整体不可突袭（没有合格参突者或整组资格被拒）
+   */
+  function pickOverrunParticipants(input: {
+    context: MoveContext
+    /** 进格后会在同一格的全部候选（含被 ZOC 停车者与继续移动者） */
+    candidates: readonly ConsoleUnit[]
+    target: HexRef
+    defenders: readonly { id: string; isCombat: boolean }[]
+    /** 该候选在本步之后剩余的 MP（8.1a 需要逐单位 ≥3） */
+    mpRemainingOf: (unit: ConsoleUnit) => number
+  }): { participantIds: string[]; mpRemaining: number; mpCost: number; entryCost: number } | null {
+    if (input.defenders.length === 0) return null
+    const phaseKey = movementPhaseOf(phase.value)
+    const eligible: { id: string; mp: number }[] = []
+    for (const unit of input.candidates) {
+      const mp = input.mpRemainingOf(unit)
+      if (mp < 1) continue
+      const verdict = overrunEligibility({
+        phase: phaseKey,
+        context: input.context,
+        unitIds: [unit.instanceId],
+        target: input.target,
+        mpRemaining: mp,
+        startedStackedTogether: true,
+        defenders: [...input.defenders],
+      })
+      if (verdict.ok) eligible.push({ id: unit.instanceId, mp })
+    }
+    if (eligible.length === 0) return null
+    const mpRemaining = Math.min(...eligible.map((item) => item.mp))
+    const verdict = overrunEligibility({
+      phase: phaseKey,
+      context: input.context,
+      unitIds: eligible.map((item) => item.id),
+      target: input.target,
+      mpRemaining,
+      startedStackedTogether: true,
+      defenders: [...input.defenders],
+    })
+    if (!verdict.ok) return null
+    return {
+      participantIds: eligible.map((item) => item.id),
+      mpRemaining,
+      mpCost: verdict.mpCost,
+      entryCost: verdict.entryCost,
+    }
+  }
+
+  /**
    * 可突袭目标（8.0 / 8.1）——移动中随位置实时重算
    *
    * 候选＝当前格的相邻敌方格 **加上** 悬停/预览终点相邻的敌方格（后者点它会先沿路径走过去再突袭）。
@@ -5134,11 +5192,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const interaction = moveInteraction.value
     const from = overrunStackHex.value
     if (interaction === null || from === null) return []
-    // 4.5a-A：候选＝仍在动者 **＋** 本次因进 ZOC 停车者（后者仍可选择突袭）
-    const participants = overrunCandidateUnits.value.map((unit) => unit.instanceId)
-    if (participants.length === 0) return []
-    const mpRemaining = moveMinRemainingMp.value
-    if (mpRemaining < 1) return []
+    if (overrunCandidateUnits.value.length === 0) return []
 
     const anchors: { hex: HexRef; adjacent: boolean }[] = neighbors(from).map((item) => ({
       hex: item.hex,
@@ -5159,19 +5213,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         (unit) => unit.side !== activeSide.value && unit.isCombat,
       )
       if (defenders.length === 0) continue
-      const eligibility = overrunEligibility({
-        phase: movementPhaseOf(phase.value),
+      // 8.1h：不合格单位（DG / MP 不足 / 不可攻击）不阻塞其余单位 ⇒ 按人取合格子集
+      const picked = pickOverrunParticipants({
         context: moveContext.value,
-        unitIds: participants,
+        candidates: overrunCandidateUnits.value,
         target: anchor.hex,
-        mpRemaining,
-        // 6.1：本次移动的单位是在**同一格**一起开拔的（界面只允许选中一堆叠 ⇒ 恒为真）
-        startedStackedTogether: true,
         defenders: defenders.map((unit) => ({ id: unit.instanceId, isCombat: unit.isCombat })),
+        mpRemainingOf: (unit) =>
+          availableMaOf(unit, movementPhaseOf(phase.value), sovietFirstTurnMaFactor(unit)) -
+          unit.mpSpent,
       })
-      if (eligibility.ok) {
-        found.push({ hex: anchor.hex, mpCost: eligibility.mpCost, adjacentToPath: anchor.adjacent })
-      }
+      if (picked === null) continue
+      found.push({ hex: anchor.hex, mpCost: picked.mpCost, adjacentToPath: anchor.adjacent })
     }
     return found
   })
@@ -5286,15 +5339,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
 
     /*
-     * 8.1g / 8.1h：参突单位是**仍在移动的单位中被指定的一批**；未指定时＝全部（与修前一致）。
+     * 8.1g / 8.1h：参突单位是**仍在移动（含因进 ZOC 停车）的单位中合格的一批**。
+     *   未显式勾选时＝全部合格者；不合格者（DG 5.10b / MP<3 8.1a / 不可攻击）不参突，
+     *   也不得阻塞其余单位（8.1h 允许其留驻、仍计 4.8a）。
      * 拆分（谁参突 / 谁留驻 / 原格战斗 RE）的唯一实现是引擎的 `splitOverrunStack`。
      */
-    // 4.5a-A：参突候选含"进 ZOC 停车"者（停车 ≠ 丧失突袭资格）
-    const movingIds = overrunCandidateUnits.value.map((unit) => unit.instanceId)
+    const candidates = overrunCandidateUnits.value
+    const movingIds = candidates.map((unit) => unit.instanceId)
+    const defenders = unitsAt(hex).filter((unit) => unit.side !== activeSide.value && unit.isCombat)
+    const mpRemainingOf = (unit: ConsoleUnit) =>
+      availableMaOf(unit, movementPhaseOf(phase.value), sovietFirstTurnMaFactor(unit)) -
+      unit.mpSpent
+    const picked = pickOverrunParticipants({
+      context: moveContext.value,
+      candidates,
+      target: hex,
+      defenders: defenders.map((unit) => ({ id: unit.instanceId, isCombat: unit.isCombat })),
+      mpRemainingOf,
+    })
     const chosen =
       overrunParticipantIds.value.length > 0
         ? overrunParticipantIds.value.filter((id) => movingIds.includes(id))
-        : movingIds
+        : (picked?.participantIds ?? [])
     const split = splitOverrunStack({
       side: activeSide.value,
       friendlyUnits: unitsAt(from).map((unit) => ({
@@ -5309,13 +5375,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', '没有仍在移动中的单位可以突袭（6.1g）', '6.1g')
       return false
     }
-    const defenders = unitsAt(hex).filter((unit) => unit.side !== activeSide.value && unit.isCombat)
+    // 8.1a：取参突者里最紧的剩余 MP（不合格者已被排除，不再拖累整组）
+    const participantsMp = Math.min(
+      ...participants.map((id) => {
+        const unit = units.value.find((item) => item.instanceId === id)
+        return unit === undefined ? 0 : mpRemainingOf(unit)
+      }),
+    )
     const eligibility = overrunEligibility({
       phase: movementPhaseOf(phase.value),
       context: moveContext.value,
       unitIds: participants,
       target: hex,
-      mpRemaining: moveMinRemainingMp.value,
+      mpRemaining: participantsMp,
       startedStackedTogether: true,
       defenders: defenders.map((unit) => ({ id: unit.instanceId, isCombat: unit.isCombat })),
     })
@@ -5333,7 +5405,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     overrunContext.value = {
       target: { ...hex },
       participantIds: [...participants],
-      mpRemainingBefore: moveMinRemainingMp.value,
+      mpRemainingBefore: participantsMp,
       runtimeBefore: moveRuntime.value
         .filter((unit) => participants.includes(unit.unitId))
         .map((unit) => ({ ...unit, hex: { ...unit.hex } })),
@@ -6458,33 +6530,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 后一支要靠玩家**先停车、再自己在地图上找紫环**——实测等同于"停下即不能突袭"。
    *
    * 口径：
-   *   · 参突者＝本次因进 ZOC 被停车的那几枚（`preview.zocStoppingIds`，4.5a-A 的主语就是它们）；
+   *   · 参突者＝**进格后同格的全部合格单位**（4.5a-A 只强制轮式停车；8.1g 允许同行者一起突袭，
+   *     8.1h 的留驻是玩家可选的子集，不是「只有轮式」）；
    *   · 剩余 MP＝各参突者「MA − 已耗 − **本步**消耗」的最小者（8.1a 的 3 MP 门槛取最紧的一枚）；
-   *   · 资格**全部交给引擎** `overrunEligibility`（8.1 系列），为此把上下文里这几枚的位置
+   *   · 资格**全部交给引擎** `overrunEligibility`（8.1 系列），为此把上下文里这批单位的位置
    *     **临时前移**到目标格——它们此刻还没走进去，不前移的话 8.1d 的相邻判定会按原格算。
    */
   const zocOverrunChoices = computed<ZocOverrunChoice[]>(() => {
     const pending = pendingZocConfirm.value
     if (pending === null) return []
-    const participants = pending.preview.zocStoppingIds
-    if (participants.length === 0) return []
-    let mpRemaining = Number.POSITIVE_INFINITY
-    for (const id of participants) {
-      const unit = units.value.find((item) => item.instanceId === id)
-      const step = pending.preview.moving.find((item) => item.unitId === id)
-      if (unit === undefined || step === undefined) return []
-      mpRemaining = Math.min(
-        mpRemaining,
-        availableMaOf(unit, movementPhaseOf(phase.value), sovietFirstTurnMaFactor(unit)) -
-          unit.mpSpent -
-          step.cost,
-      )
+    const movers = pending.preview.moving
+    if (movers.length === 0) return []
+    const candidates: ConsoleUnit[] = []
+    for (const step of movers) {
+      const unit = units.value.find((item) => item.instanceId === step.unitId)
+      if (unit !== undefined) candidates.push(unit)
     }
-    // 8.1d：突袭从**进入后的那一格**发起 ⇒ 上下文里这几枚的位置前移到目标格（其余一律不动）
+    if (candidates.length === 0) return []
+    // 8.1d：突袭从**进入后的那一格**发起 ⇒ 这一步的全部移动者位置前移到目标格（其余一律不动）
     const entered = {
       ...moveContext.value,
       units: moveContext.value.units.map((unit) =>
-        participants.includes(unit.id) ? { ...unit, hex: { ...pending.to } } : unit,
+        movers.some((step) => step.unitId === unit.id) ? { ...unit, hex: { ...pending.to } } : unit,
       ),
     }
     const found: ZocOverrunChoice[] = []
@@ -6493,25 +6560,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         (unit) => unit.side !== activeSide.value && unit.isCombat,
       )
       if (defenders.length === 0) continue
-      const eligibility = overrunEligibility({
-        phase: movementPhaseOf(phase.value),
+      const picked = pickOverrunParticipants({
         context: entered,
-        unitIds: participants,
+        candidates,
         target: item.hex,
-        mpRemaining,
-        // 6.1：参突者是从同一格一起开拔的（界面只允许选中一堆叠 ⇒ 恒为真）
-        startedStackedTogether: true,
         defenders: defenders.map((unit) => ({ id: unit.instanceId, isCombat: unit.isCombat })),
+        mpRemainingOf: (unit) => {
+          const step = movers.find((entry) => entry.unitId === unit.instanceId)
+          return (
+            availableMaOf(unit, movementPhaseOf(phase.value), sovietFirstTurnMaFactor(unit)) -
+            unit.mpSpent -
+            (step?.cost ?? 0)
+          )
+        },
       })
-      if (eligibility.ok) {
-        found.push({
-          hex: { ...item.hex },
-          participantIds: [...participants],
-          mpCost: eligibility.mpCost,
-          entryCost: eligibility.entryCost,
-          mpRemaining,
-        })
-      }
+      if (picked === null) continue
+      found.push({
+        hex: { ...item.hex },
+        participantIds: picked.participantIds,
+        mpCost: picked.mpCost,
+        entryCost: picked.entryCost,
+        mpRemaining: picked.mpRemaining,
+      })
     }
     return found
   })
@@ -6541,8 +6611,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 再从该格宣布突袭（8.0：突袭从**相邻格**发起）。两笔账各自落在自己的流程里——
    * 进格记 6.1a 的消耗，突袭的 3 MP 由 9.2 的推进步记（8.1a）。
    *
-   * 参突者锁定为「因进 ZOC 被停车」的那几枚（与 `zocOverrunChoices` 的预览同一口径，8.1g），
-   * 其余同行的单位按 8.1h 留在格内、不参突也不受结果影响。
+   * 参突者与 `zocOverrunChoices` 的预览同一口径：**进格后同格的全部合格单位**
+   * （4.5a-A 只强制轮式停车；8.1g 允许同行者一起突袭）。其余同行者按 8.1h 留在格内、
+   * 不参突也不受结果影响。
    */
   function confirmZocEntryAndOverrun(target: HexRef): boolean {
     const pending = pendingZocConfirm.value
@@ -6558,7 +6629,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', reason, '8.1')
       return false
     }
-    // 8.1g：参突者＝停车的那几枚（预览与发起必须是同一口径，否则会"看见能突、点下去被拒"）
+    // 8.1g：参突者＝进格后同格的合格单位（预览与发起必须是同一口径，否则会"看见能突、点下去被拒"）
     overrunParticipantIds.value = [...choice.participantIds]
     /*
      * 4.5a-A 前一支的进格照走，但**不顺带沿原路径继续推进**：
