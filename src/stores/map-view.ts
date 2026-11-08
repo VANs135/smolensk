@@ -1086,7 +1086,14 @@ export const useMapViewStore = defineStore('mapView', () => {
         // 12.7d 翻回运输点数 / 9.14d 主动崩溃（延补队不能合并拆分，13.2c 也不适用）
         return ['move.extenderConvert']
       case 'air_base':
-        return ['air.refit', 'move.construction', 'air.baseReduce']
+        /*
+         * ★ BUG 2（用户 2026-11-08）：**没有空军任务入口** ⇒ 移动环节的基地菜单只有
+         * 「修建 / 缩减」，玩家点基地/飞机这一侧**根本选不到机、交不了低空扫射**。
+         * 14.1a 的飞机停在本方空军基地格 ⇒ 基地格就是"点那几架飞机"的盘面把手；
+         * 14.2e 把任务类型分派到环节（低空扫射在移动环节、空军轰炸在轰炸环节），
+         * 故这一项与 15.3 / 15.4 并列，是否放行仍由闸门表（`air.mission` 的 where）判。
+         */
+        return ['air.refit', 'move.construction', 'air.baseReduce', 'air.mission']
       case 'hedgehog':
         return ['move.hedgehog']
       default:
@@ -1150,6 +1157,13 @@ export const useMapViewStore = defineStore('mapView', () => {
       only: 'airstrip',
     },
     'air.baseReduce': { label: '缩减基地（15.4）', rule: '15.4', panel: 'air', only: 'reduce' },
+    // BUG 2：点基地 ⇒ 对停在该基地的飞机下任务（14.1a 的落位 + 14.2e 的环节分派）
+    'air.mission': {
+      label: '空军任务（低空扫射 / 轰炸等，14.2e）',
+      rule: '14.2e',
+      panel: 'air',
+      only: 'mission',
+    },
     'move.hedgehog': {
       label: '修建 / 缩减工事（16.0b·c）',
       rule: '16.0b·c',
