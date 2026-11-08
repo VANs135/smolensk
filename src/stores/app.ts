@@ -14,9 +14,14 @@ export const useAppStore = defineStore('app', () => {
   const appTitle = import.meta.env.VITE_APP_TITLE
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
   const appVersion = pkg.version
+  /**
+   * 构建期注入的提交号（vite.config 的 `__APP_COMMIT__`；无 git 环境时退回 'unknown'）。
+   * ⑧ 的日志导出用来标明「这份记录出自哪一版构建」。
+   */
+  const appCommit = typeof __APP_COMMIT__ === 'string' ? __APP_COMMIT__ : 'unknown'
 
   /** 当前是否为生产环境 */
   const isProduction = appEnv === 'production'
 
-  return { appEnv, appTitle, apiBaseUrl, appVersion, isProduction }
+  return { appEnv, appTitle, apiBaseUrl, appVersion, appCommit, isProduction }
 })

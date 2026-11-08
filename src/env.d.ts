@@ -18,3 +18,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+/** 构建期注入：git 短提交号（无 git 时为 'unknown'） */
+declare const __APP_COMMIT__: string

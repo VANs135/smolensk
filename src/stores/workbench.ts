@@ -407,6 +407,7 @@ import { createId } from '@/shared'
 import { opponentOf } from '@/engine/turn-driver'
 
 import { useGameSessionStore, type AdvanceOutcome as SessionAdvanceOutcome } from './session'
+import { useRecorderStore, type RecorderEventInput } from './recorder'
 
 import {
   TURN_TRACK,
@@ -1039,6 +1040,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   // 未开局也能独立演练。实现上把这三个量做成「读：会话优先；写：有会话则写会话」的读写器，
   // 于是既有的 `rng.value = draw.rng` / `drawCount.value += 1` 写法无需改动即自动走会话。
   const session = useGameSessionStore()
+  // ⑧：对局记录器（只记事实；未开启时 `note` 立即返回，零开销）
+  const recorder = useRecorderStore()
   const localSeed = ref(DEFAULT_SEED)
   const localRng = ref<RngState>(createRngState(DEFAULT_SEED))
   /** 本地演练用的已掷骰次数（有会话时以会话 RNG 的 drawCount 为准） */
@@ -4999,6 +5002,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
   })
 
+  /**
+   * ⑧：把事实投给对局记录器
+   *
+   * 记录是**旁路**：未开启时 `note` 立即返回；任何异常都在这里吞掉，绝不影响对局。
+   */
+  function noteRecord(input: RecorderEventInput): void {
+    try {
+      recorder.note(input)
+    } catch {
+      // 记录失败不阻断游戏
+    }
+  }
+
   function pushLog(
     kind: WorkbenchLogEntry['kind'],
     text: string,
@@ -5013,6 +5029,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       ...(derivation === undefined ? {} : { derivation }),
     })
     if (log.value.length > 60) log.value.length = 60
+    noteRecord({
+      kind: 'log',
+      level: kind,
+      text,
+      rule: rule ?? null,
+      turn: turn.value,
+      phase: phase.value,
+      side: activeSide.value,
+      step: segmentStep.value?.id ?? null,
+    })
   }
 
   /**
@@ -5060,7 +5086,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       rolls,
       outcome: succeed(input.rule, input.data ?? {}, [...(input.pending ?? [])]),
     }
-    return session.appendSettlement(entry)
+    const recorded = session.appendSettlement(entry)
+    if (recorded) {
+      noteRecord({
+        kind: 'settle',
+        turn: entry.turn,
+        phase: entry.phase,
+        side: entry.side,
+        step: segmentStep.value?.id ?? null,
+        rule: input.rule,
+        detail: { action: input.action, rolls, outcome: entry.outcome },
+      })
+    }
+    return recorded
   }
 
   /** 该格的算子（按摆放顺序） */
@@ -22258,6 +22296,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     rollDice,
     resetAll,
     pushLog,
+    // ⑧：结算提交入口（域内共用；暴露给记录链路与测试核对"关键提交入账"）
+    recordSettlement,
     isLegal,
   }
 })

@@ -35,10 +35,12 @@ import type { HexRef, Side } from '@/data'
 import { COUNTER_BOX_LABELS, type CounterBoxTarget } from '@/stores/map-view'
 import { DEFAULT_MAP_LAYERS } from '@/render/map-render'
 import {
+  useAppStore,
   useGameSessionStore,
   useHotkeyStore,
   useHotseatStore,
   useMapViewStore,
+  useRecorderStore,
   useSetupStore,
   useUiStore,
   useWorkbenchStore,
@@ -54,6 +56,8 @@ const setup = useSetupStore()
 const gameSession = useGameSessionStore()
 const hotseat = useHotseatStore()
 const ui = useUiStore()
+const app = useAppStore()
+const recorder = useRecorderStore()
 
 provideUiMode('formal')
 
@@ -188,6 +192,54 @@ watch(
 
 function showKeys(): void {
   hotkeys.helpOpen = !hotkeys.helpOpen
+}
+
+/**
+ * ⑧ 对局记录（用户回报 BUG 用）
+ *
+ * 只把**既有事实**投给记录器（日志/结算/回合阶段环节/行动方）；不写规则判断、
+ * 不发网络请求、不写存档。导出走浏览器下载（桌面 WebView 同样落到下载目录）。
+ */
+const canRecord = computed<boolean>(() => gameSession.session !== null)
+
+function startRecording(): void {
+  const state = gameSession.session?.state
+  if (state === undefined) return
+  recorder.start({
+    appVersion: app.appVersion,
+    appCommit: app.appCommit,
+    scenarioId: gameSession.scenarioId,
+    scenarioName: gameSession.scenarioInfo?.name ?? '',
+    mode: hotseat.mode,
+    aiSide: hotseat.aiSide,
+    seed: state.rng.seed ?? null,
+    turn: workbench.turn,
+    phase: workbench.phase,
+  })
+}
+
+function saveRecording(): void {
+  const file = recorder.stop()
+  if (file === null) return
+  try {
+    const blob = new Blob([file.text], { type: 'application/jsonl;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = file.filename
+    anchor.rel = 'noopener'
+    document.body.append(anchor)
+    anchor.click()
+    anchor.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 0)
+  } catch {
+    // 导出失败不得影响对局
+  }
+}
+
+function toggleRecording(): void {
+  if (recorder.active) saveRecording()
+  else startRecording()
 }
 
 const queuedAirDrag = ref<{ side: Side; entryIndex: number } | null>(null)
@@ -555,6 +607,16 @@ onBeforeUnmount(() => {
               @click="showKeys"
             >
               快捷键
+            </BaseButton>
+            <!-- ⑧：开始/停止记录（导出 JSONL 交回定位；不影响对局） -->
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :disabled="!canRecord"
+              :data-testid="recorder.active ? 'recorder-stop' : 'recorder-start'"
+              @click="toggleRecording"
+            >
+              {{ recorder.active ? '停止并保存' : '开始记录' }}
             </BaseButton>
           </section>
           <HotkeyHelpPanel v-if="hotkeys.helpOpen" />

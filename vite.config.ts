@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { execSync } from 'node:child_process'
 import { fileURLToPath, URL } from 'node:url'
 
 import vue from '@vitejs/plugin-vue'
@@ -15,8 +16,24 @@ export default defineConfig(({ mode }) => {
   // 仅取 VITE_ 前缀，供构建期使用（客户端变量由 import.meta.env 直接读取）
   loadEnv(mode, process.cwd(), 'VITE_')
 
+  /*
+   * ⑧ 日志导出要标明构建来源：构建期抓一次 git 短提交号；
+   * 无 git / 非仓库环境退回 'unknown'（不让构建失败）。
+   */
+  const appCommit = (() => {
+    try {
+      return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
+    } catch {
+      return 'unknown'
+    }
+  })()
+
   return {
     plugins: [vue()],
+
+    define: {
+      __APP_COMMIT__: JSON.stringify(appCommit),
+    },
 
     resolve: {
       alias: {

@@ -22,3 +22,5 @@ export * from './hotkeys'
 export * from './map-view'
 // U1-b：会话步骤投影（一次只暴露一个待决事项）
 export * from './session-steps'
+// ⑧：对局记录（只记事实、可导出；不写存档、不发网络请求）
+export * from './recorder'
