@@ -5623,6 +5623,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
     }
     overrunContext.value = null
+    /*
+     * ②b（用户实测复现：A 突袭完 → B 堆叠突袭 → 参战的是 A、且改选不动）：
+     * 参突 pin / 攻方名单 / 跟随者都是**本场战斗的临时选择**，突袭一收束即作废。
+     * 不清的话 `overrunStackHex` 与 `chosen` 会沿用上一场的 id ⇒ 下一场从错误的格子发起。
+     * （组成本身已锁在 `combatState` 里，清选择器不影响这场的结果与结算。）
+     */
+    clearOverrunSelectionAfterConclusion()
     pushLog('info', plan.detail, plan.rule)
     // ⑭ 接线：突袭记账（8.1a 的 3 MP / 8.0 的进格 / 8.1f 的收束）入会话日志（本笔无骰）
     recordSettlement({
@@ -5645,9 +5652,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
+  /**
+   * ②b：突袭收束/放弃 ⇒ 作废本场战斗的**临时选择器**
+   *
+   * 只清选择器（参突 pin 8.1g / 攻方 9.1b / 跟随撤退 9.12d），不动已锁进 `combatState`
+   * 的构成与结算结果。修前这三个 ref 会跨场存活，导致下一场突袭沿用上一场的 id。
+   */
+  function clearOverrunSelectionAfterConclusion(): void {
+    overrunParticipantIds.value = []
+    combatAttackerIds.value = []
+    combatTagalongIds.value = []
+  }
+
   /** 放弃本次突袭（关掉战斗流程即撤销「突袭前」的托管信息；MP 尚未记账，故无需回滚） */
   function cancelOverrunContext(): void {
     overrunContext.value = null
+    clearOverrunSelectionAfterConclusion()
   }
 
   /** C5：该格中**当前方**的算子（按摆放顺序；可整堆叠移动作战） */
@@ -5662,6 +5682,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     pendingZocConfirm.value = null
     moveBlocked.value = null
     lastStep.value = null
+    // ②b：上一轮移动里的参突勾选不带到下一轮（否则新堆叠的突袭会沿用旧 id）
+    overrunParticipantIds.value = []
     // 4.5a-A：本次移动已收束 ⇒ 停车账本随之作废
     zocStoppedMoveUnitIds.value = []
     // 条 17（批 F·F2）：移动收束 ⇒ 4.5a 标记作废
