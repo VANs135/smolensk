@@ -209,6 +209,10 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
       {{ flow.nextActionLabel }}
     </BaseButton>
     <span class="bar__hint num">{{ flow.hint }}</span>
+    <span v-if="workbench.advanceBlock !== null" class="warn">
+      <BaseTag kind="warning" />
+      {{ workbench.advanceBlock.reason }}
+    </span>
     <span v-if="flow.blockers.length > 0" class="warn">
       <BaseTag :kind="flow.blockers[0]!.kind === 'danger' ? 'danger' : 'warning'" />
       {{ flow.blockers[0]!.text }}
@@ -281,6 +285,10 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
         {{ flow.nextActionLabel }}
       </BaseButton>
       <span class="num">{{ flow.advanceLabel }}</span>
+      <span v-if="workbench.advanceBlock !== null" class="warn">
+        <BaseTag kind="warning" />
+        {{ workbench.advanceBlock.reason }}
+      </span>
       <!-- 引擎验证页专用：一步一步点，便于逐段核对 -->
       <BaseButton
         v-if="props.stepwise"

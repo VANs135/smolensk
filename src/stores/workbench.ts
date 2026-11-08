@@ -5727,13 +5727,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 请先走完或按 Esc 放弃（规则号照 9.2 / 10.0 给，不自己编）。
    */
   function advanceSegmentNow(): SessionAdvanceOutcome | null {
+    advanceBlocked.value = null
     if (initialSetupInProgress.value || session.terminated) return null
-    if (combatState.value !== null && !combatState.value.finished) {
-      pushLog('warning', '战斗结算进行中：先走完 9.2 流程或按 Esc 放弃，再进入下一环节', '9.2')
-      return null
-    }
-    if (barrageState.value !== null && !barrageState.value.finished) {
-      pushLog('warning', '轰炸结算进行中：先走完 10.0 流程或按 Esc 放弃，再进入下一环节', '10.0')
+    /*
+     * ★ 死操作①（用户 2026-11-08）：「进入下一环节」曾被补给检定等必须应答的场景挡下后
+     *   **静默 return null** —— 按钮可点、点了无反应，像程序坏了。
+     *   现在每个挡下点都写进 `advanceBlocked`（流程条就地显示原因）并落一行 warning 日志。
+     *   判据仍来自既有闸门/义务链（`segmentAdvanceBlock()` 与 `supplyPhaseDomain.exitBlock`），
+     *   这里不新写规则。
+     */
+    const gate = segmentAdvanceBlock()
+    if (gate !== null) {
+      advanceBlocked.value = gate
+      pushLog('warning', `${gate.reason}（${gate.rule}）`, gate.rule)
       return null
     }
     /*
@@ -5741,7 +5747,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 环节全部走完才推进会话步（换段）。环节是**段内**的进度，故不消耗会话步（steps = 0），
      * 返回的 `stoppedBy: 'player'` 如实表示"仍停在需要玩家的环节上"。
      */
-    if (!segmentLocked.value && !settleSegmentObligations()) return null
+    if (!segmentLocked.value && !settleSegmentObligations()) {
+      advanceBlocked.value = supplyPhaseDomain.exitBlock.value ?? {
+        rule: '12.8b',
+        reason: '补给阶段还有未完成的义务：请先在补给面板处理',
+      }
+      const blocked = advanceBlocked.value
+      pushLog('warning', `${blocked.reason}（${blocked.rule}）`, blocked.rule)
+      return null
+    }
     if (stepToNextSegmentStep()) return { steps: 0, stoppedBy: 'player', driver: 'player' }
     const before = `${turn.value}|${phase.value}|${activeSide.value}`
     const outcome = session.advanceToNextStop()
@@ -5752,6 +5766,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         'info',
         `进入下一环节：自动段连跑 ${outcome.steps} 步 → 停在${stopLabel(outcome)}`,
         '2.2',
+      )
+    } else if (outcome.stoppedBy === 'refused') {
+      const error = session.error
+      advanceBlocked.value =
+        error === null
+          ? { rule: '2.2', reason: '内核拒绝推进（未给出原因）' }
+          : { rule: error.rule, reason: error.reason }
+      pushLog(
+        'warning',
+        `未能进入下一环节：${advanceBlocked.value.reason}（${advanceBlocked.value.rule}）`,
+        advanceBlocked.value.rule,
       )
     }
     return outcome
@@ -21034,10 +21059,50 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 只自动执行规则义务；战损如何分配等玩家选择必须留在正式面板。 */
   function settleSegmentObligations(wholePhase = false): boolean {
-    if (airState.value !== null && !airState.value.finished) return false
-    if (specialPending.value !== null) return false
-    if (combatState.value !== null && !combatState.value.finished) return false
-    if (barrageState.value !== null && !barrageState.value.finished) return false
+    const block = segmentAdvanceBlock(wholePhase)
+    if (block !== null) {
+      // 5.7g 的既有回执保留在这里（换段由协调器调用时也要留痕）
+      if (block.rule === '5.7g') pushLog('warning', block.reason, block.rule)
+      return false
+    }
+    return phase.value !== 'supply' || supplyPhaseDomain.settleForExit(wholePhase)
+  }
+
+  /**
+   * 推进按钮的**阻断原因记录**（死操作①）
+   *
+   * 语义：**最近一次点击**为什么没推进（null＝上一次推进正常）。流程条把它显示在按钮旁；
+   * **不用它置灰按钮**——补给面板里办完事后，这里若还残留旧原因，按钮会被永久锁死。
+   * 每次点击开头清空，成功推进则保持空。
+   */
+  const advanceBlocked = ref<{ rule: string; reason: string } | null>(null)
+
+  /**
+   * 「进入下一环节」此刻的**可预判阻断**（只读；与 `settleSegmentObligations` 的前四条守卫同源）
+   *
+   * 只报「必须先去别的面板/会话收尾」的状态；补给段的义务链**不在此列**——
+   * 那些义务是「点一次就自动结算」的，只有结算失败时才知道要不要玩家介入
+   * （失败原因由 `supplyPhaseDomain.exitBlock` 记录）。
+   */
+  function segmentAdvanceBlock(wholePhase = false): { rule: string; reason: string } | null {
+    if (airState.value !== null && !airState.value.finished) {
+      return {
+        rule: '2.2',
+        reason: '空军任务尚未结算：先完成空军流程或按 Esc 放弃，再进入下一环节',
+      }
+    }
+    if (specialPending.value !== null) {
+      return { rule: '专规', reason: '专规待办未完成：先在面板处理该待办，再进入下一环节' }
+    }
+    if (combatState.value !== null && !combatState.value.finished) {
+      return { rule: '9.2', reason: '战斗结算进行中：先走完 9.2 流程或按 Esc 放弃，再进入下一环节' }
+    }
+    if (barrageState.value !== null && !barrageState.value.finished) {
+      return {
+        rule: '10.0',
+        reason: '轰炸结算进行中：先走完 10.0 流程或按 Esc 放弃，再进入下一环节',
+      }
+    }
     if (
       ['movement', 'reaction', 'exploitation'].includes(phase.value) &&
       (wholePhase || segmentStep.value?.id !== 'movement.breakout')
@@ -21056,11 +21121,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
             hedgehogLevelOf(unit.hex) > 0,
         )
       ) {
-        pushLog('warning', '预备单位仍位于工事格，请先移出或依法切换模式后结束环节', '5.7g')
-        return false
+        return { rule: '5.7g', reason: '预备单位仍位于工事格，请先移出或依法切换模式后结束环节' }
       }
     }
-    return phase.value !== 'supply' || supplyPhaseDomain.settleForExit(wholePhase)
+    return null
   }
 
   session.setPhaseHooks(
@@ -21193,6 +21257,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     actionRefusal,
     // B5：唯一「进入下一环节」（自动段连跑完，停到需要玩家的地方）
     advanceSegmentNow,
+    // 只读闸门解释：**最近一次点击**为何没推进（流程条就地显示；不用于置灰）
+    advanceBlock: advanceBlocked,
     pickRecord,
     setTool,
     /**

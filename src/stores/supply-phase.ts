@@ -548,8 +548,12 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     attritionInputs.value = {}
     attritionResults.value = {}
     attritionAppliedHexes.value = []
+    exitBlocked.value = null
   }
+  /** 最近一次「推进补给段」被挡下的原因（给流程条置灰与文案用；成功推进后清空） */
+  const exitBlocked = ref<{ rule: string; reason: string } | null>(null)
   function settleForExit(wholePhase = false): boolean {
+    exitBlocked.value = null
     for (;;) {
       const pending =
         supplyPhasePlan.value?.attritionDuty.filter(
@@ -564,15 +568,27 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
       })
       if (obligation.kind === 'complete') return true
       if (obligation.kind === 'recovery') {
-        if (!planSupplyPhaseNow() || !applySupplyPhaseRecoveryNow()) return false
+        if (!planSupplyPhaseNow() || !applySupplyPhaseRecoveryNow()) {
+          exitBlocked.value = { rule: '12.10e', reason: '须先在补给面板完成「恢复部队储备」' }
+          return false
+        }
       } else if (obligation.kind === 'enterCheck') {
-        if (!ports.enterCheck() || ports.step() !== 'supply.check') return false
+        if (!ports.enterCheck() || ports.step() !== 'supply.check') {
+          exitBlocked.value = { rule: '12.6', reason: '须先在补给面板完成「补给检定」' }
+          return false
+        }
       } else if (obligation.kind === 'feeding') {
-        if (!planSupplyPhaseNow() || !applySupplyPhaseFeedingNow()) return false
+        if (!planSupplyPhaseNow() || !applySupplyPhaseFeedingNow()) {
+          exitBlocked.value = { rule: '12.3', reason: '须先在补给面板完成「喂补给」' }
+          return false
+        }
       } else {
         const key = obligation.hexKey,
           duty = pending[0]!
-        if (!rollAttritionNow(key)) return false
+        if (!rollAttritionNow(key)) {
+          exitBlocked.value = { rule: '12.8b', reason: `${key} 的损耗骰尚未结算` }
+          return false
+        }
         const losses = attritionResults.value[key]!.losses
         const present = duty.unitIds.flatMap((id) => {
           const unit = units.value.find((item) => item.instanceId === id)
@@ -584,14 +600,19 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
         )
         if (automatic === null) {
           pushLog('warning', `${key} 的损耗尚未分配，请在补给面板确认损失`, '12.8b')
+          exitBlocked.value = { rule: '12.8b', reason: `${key} 的损耗须先在补给面板分配` }
           return false
         }
         for (const [id, steps] of Object.entries(automatic)) setAttritionAllocation(key, id, steps)
-        if (!applyAttritionNow(key)) return false
+        if (!applyAttritionNow(key)) {
+          exitBlocked.value = { rule: '12.8b', reason: `${key} 的损耗须先在补给面板应用` }
+          return false
+        }
       }
     }
   }
   return {
+    exitBlock: exitBlocked,
     supplyPhasePlan,
     supplyFeedingCandidates,
     supplyRecoverySettled,
