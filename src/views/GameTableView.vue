@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
-import { BaseButton, BaseTag } from '@/components/base'
+import { BaseButton } from '@/components/base'
 import { AirPanel } from '@/components/air'
 import { BarragePanel } from '@/components/barrage'
 import { CombatPanel } from '@/components/combat'
@@ -149,8 +149,10 @@ const mapLayerToggles = reactive({ ...DEFAULT_MAP_LAYERS })
  * 不再让玩家先切一个工具。`workbench.tool` 本体保留（引擎验证页与流程用例仍显式切它）。
  */
 
-/** 当前方的中文名 */
-const sideLabel = computed(() => (workbench.activeSide === 'axis' ? '轴心国' : '苏联'))
+/*
+ * U1-a：原先「对局台」行的副标题（方 / 回合 / 日期）已并入 L0 常驻条（FlowStrip），
+ * 本视图不再自留一份，避免两处各说一套「现在到哪了」。
+ */
 
 /*
  * ★ 已删（2026-09-16）「摆算子」工具与它的单位清单
@@ -197,7 +199,11 @@ const session = computed(() => mapView.session)
 
 /* ── 快捷键接线（挂载绑、卸载解；地图能力登记给快捷键层） ── */
 
+/** U1-a：进入对局台默认**收纳**右栏（账本面板让位给地图）；离开时恢复原态 */
+const panelCollapsedOnEnter = hotkeys.panelCollapsed
+
 onMounted(() => {
+  hotkeys.panelCollapsed = true
   // ★ 进入对局台即按当前剧本做一次自动初设（固定格号 / 死亡堆 / 多点位 / 计数类算子）——
   //   幂等：已落盘或盘上已有算子即跳过，故视图来回切换不会叠加。
   setup.ensureSetupLoaded()
@@ -220,6 +226,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopAiPlay()
+  hotkeys.panelCollapsed = panelCollapsedOnEnter
   hotkeys.unbind()
   hotkeys.setViewBridge(null)
 })
@@ -228,97 +235,83 @@ onBeforeUnmount(() => {
 <template>
   <div class="gt" :class="{ 'gt--collapsed': hotkeys.panelCollapsed }">
     <div class="gt__main">
-      <!-- 状态条：一眼看清「谁在动、走到哪一步、工具是哪个」 -->
-      <div class="gt__bar">
-        <BaseTag kind="info">对局台</BaseTag>
-        <span class="gt__stat num">{{ sideLabel }} · 回合 {{ workbench.turn }}</span>
-        <span class="gt__stat num">{{ workbench.date }}</span>
-        <!--
-          用户 2026-09-16：「切方移至上方位置」⇒ 从右栏的「局况与切方」搬到这里。
-          为什么它该在上方：**切方是热坐换手的台面操作**（每换一次手都要点），
-          放在展开的地图工具条上比塞在右栏底部顺手；右栏随之只留只读信息（决定①）。
-        -->
-        <!--
-          B36（方案 §3 步骤 4）：**交给对手要走交接流程**（与热键 T 同一条路）。
-          修前这里直接 workbench.switchSide() ⇒ 交接屏永远不出现（热坐的遮屏形同虚设）。
-          solo 模式下 beginHandoff 内部不亮屏（hotseatEnabled 由 mode 推出）⇒ 一个入口两种模式都对。
-        -->
-        <BaseButton variant="primary" size="sm" @click="hotseat.beginHandoff()">
-          交给{{ hotseat.opponentSide === 'axis' ? '轴心国' : '苏联' }}（{{ hotseat.mode }}）
-        </BaseButton>
-        <!--
-          ★ 批 C 切片 1（用户口径 9.16 #11「测试味控件在正式界面」）：**「自由掷骰」已从对局台移走** ——
-            正式流程里的骰子都由各自的动作触发（战斗 9.8/9.9、轰炸 10.0、空军 14.3/14.4、
-            损耗 12.8 等，一律走种子化 RNG 并留痕）；手动掷骰只在**引擎验证页**（`WorkbenchView`）保留。
-        -->
-        <label class="gt__check">
-          <input
-            :checked="workbench.stackSelect"
-            type="checkbox"
-            @change="workbench.setStackSelect(($event.target as HTMLInputElement).checked)"
-          />
-          整堆叠（S）
-        </label>
-        <label
-          v-for="option in [
-            { key: 'image', label: '扫描图' },
-            { key: 'grid', label: '网格' },
-            { key: 'labels', label: '格号' },
-            { key: 'edges', label: '河/路/铁' },
-            { key: 'control', label: '控制标记' },
-          ] as const"
-          :key="option.key"
-          class="gt__check"
-        >
-          <input v-model="mapLayerToggles[option.key]" type="checkbox" />
-          {{ option.label }}
-        </label>
-        <!-- 4.5：ZOC 覆盖层（数据出自引擎的 `zocHexes`）——默认关，开启后铺出双方的 ZOC 覆盖格 -->
-        <label class="gt__check">
-          <input v-model="mapView.zocLayerVisible" type="checkbox" />
-          ZOC（4.5）
-        </label>
-        <!--
-          B37（方案 §3 步骤 2 后半）：**专规会话不再靠这个常驻按钮** —— 它改为
-          "本环节有可做的专规动作时自动出现"（判据＝闸门 `exclusiveActionsInStep`）。
-          按钮已删；顶栏只留图层开关与切方/掷骰（与口径 #6 / #10 同一方向）。
-        -->
-        <BaseButton
-          variant="ghost"
-          size="sm"
-          @click="hotkeys.panelCollapsed = !hotkeys.panelCollapsed"
-        >
-          侧栏（H）{{ hotkeys.panelCollapsed ? '展开' : '折叠' }}
-        </BaseButton>
-        <BaseButton variant="ghost" size="sm" @click="hotkeys.helpOpen = !hotkeys.helpOpen">
-          快捷键（?）
-        </BaseButton>
-        <!-- B4：AI 控制方（默认关闭）；玩家侧待办时在顶栏明确显示在等什么 -->
-        <label class="gt__check">
-          AI 控制方
-          <select v-model="aiControlMode" @change="onAiControlChange">
-            <option value="off">关闭</option>
-            <option value="axis">AI 打轴心</option>
-            <option value="soviet">AI 打苏联</option>
-            <option value="both">AI 对 AI</option>
-          </select>
-        </label>
-        <span v-if="aiWaiting" class="gt__check">{{ aiWaiting }}</span>
-      </div>
+      <!--
+        ★ U1-a：**L0 常驻条**（方 · 阶段 · 回合 / 分数 / 唯一推进 / 阻断提示）由 `FlowStrip` 一条线承担；
+          原先同一位置那行「对局台 · 切方 · 图层开关 · 侧栏 · 快捷键 · AI」是**低频入口**，
+          按用户交互规格收进条尾的「视图与面板」抽屉（默认收起），地图上方不再堆控件与规则号。
+      -->
+      <FlowStrip variant="bar">
+        <template #trail>
+          <details class="gt__setup">
+            <summary class="gt__setup-summary">视图与面板</summary>
+            <div class="gt__setup-body">
+              <!-- 交给对手要走交接流程（与热键 T 同一条路；solo 下不亮屏） -->
+              <BaseButton
+                variant="primary"
+                size="sm"
+                :title="`交接模式：${hotseat.mode}`"
+                @click="hotseat.beginHandoff()"
+              >
+                交给{{ hotseat.opponentSide === 'axis' ? '轴心国' : '苏联' }}
+              </BaseButton>
+              <label class="gt__check">
+                <input
+                  :checked="workbench.stackSelect"
+                  type="checkbox"
+                  @change="workbench.setStackSelect(($event.target as HTMLInputElement).checked)"
+                />
+                整堆叠
+              </label>
+              <label
+                v-for="option in [
+                  { key: 'image', label: '扫描图' },
+                  { key: 'grid', label: '网格' },
+                  { key: 'labels', label: '格号' },
+                  { key: 'edges', label: '河 / 路 / 铁' },
+                  { key: 'control', label: '控制标记' },
+                ] as const"
+                :key="option.key"
+                class="gt__check"
+              >
+                <input v-model="mapLayerToggles[option.key]" type="checkbox" />
+                {{ option.label }}
+              </label>
+              <!-- 4.5：ZOC 覆盖层（数据出自引擎的 `zocHexes`）——默认关 -->
+              <label class="gt__check">
+                <input v-model="mapView.zocLayerVisible" type="checkbox" />
+                ZOC
+              </label>
+              <BaseButton
+                variant="ghost"
+                size="sm"
+                @click="hotkeys.panelCollapsed = !hotkeys.panelCollapsed"
+              >
+                面板{{ hotkeys.panelCollapsed ? '展开' : '收起' }}
+              </BaseButton>
+              <BaseButton variant="ghost" size="sm" @click="hotkeys.helpOpen = !hotkeys.helpOpen">
+                快捷键
+              </BaseButton>
+              <!-- B4：AI 控制方（默认关闭）；玩家侧待办时在条尾明确显示在等什么 -->
+              <label class="gt__check">
+                AI 控制方
+                <select v-model="aiControlMode" @change="onAiControlChange">
+                  <option value="off">关闭</option>
+                  <option value="axis">AI 打轴心</option>
+                  <option value="soviet">AI 打苏联</option>
+                  <option value="both">AI 对 AI</option>
+                </select>
+              </label>
+              <span v-if="aiWaiting" class="gt__check">{{ aiWaiting }}</span>
+            </div>
+          </details>
+        </template>
+      </FlowStrip>
 
       <!--
         ★ 用户 2026-09-16：「**地图窗口上方不应该有消息栏**」。
-          故原先这里的「一行动作提示」与「操作反馈」两块都被搬走：
-            · 动作提示 ⇒ 流程条（方案 §4.5 的「动作提示带」，读 `mapView.actionHint`）；
-            · 操作反馈 ⇒ 右栏流程条下方（`ActionFeedbackStrip`）。
-          地图上方只剩**一条流程条**（B35：阶段名 / 环节名 / 推进按钮 / 一行该做什么）
-          与图层开关、切方、掷骰；工具按钮已删（口径 #10）。
-        ★ 同日再改：**摆算子工具条整块删除** —— 正式界面不摆算子，算子进场一律走流程
-          （初设 / 增援到货 / 重建 / 方面军预备队）。
+          动作提示 ⇒ 流程条；操作反馈 ⇒ 右栏流程条下方（`ActionFeedbackStrip`）。
+          地图上方只剩 **L0 一条线**（U1-a）：方 / 阶段 / 回合 / 分数 / 唯一推进 / 阻断提示。
       -->
-
-      <!-- B35（用户口径 #6）：**流程条画成一条线放在地图窗口上方**，只留关键字 -->
-      <FlowStrip variant="bar" />
 
       <MapCanvas
         ref="mapRef"
@@ -441,17 +434,42 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.gt__bar {
+/* U1-a：L0 条尾的「视图与面板」抽屉（默认收起；展开后浮在地图上方，不挤占版面） */
+.gt__setup {
+  position: relative;
+  margin-left: auto;
+}
+
+.gt__setup-summary {
+  cursor: pointer;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  list-style: none;
+  user-select: none;
+}
+
+.gt__setup-summary::-webkit-details-marker {
+  display: none;
+}
+
+.gt__setup-body {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-2));
+  z-index: 20;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-
-.gt__stat {
-  color: var(--color-muted);
-  font-size: var(--text-xs);
+  min-width: 320px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  box-shadow: var(--shadow-md);
 }
 
 .gt__check {

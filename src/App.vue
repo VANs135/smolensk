@@ -43,9 +43,6 @@ const saveBadge = computed(() => {
           存档 / 读档（{{ saveBadge }}）
         </BaseButton>
         <span class="shell__route">{{ activeRoute.meta.title }}</span>
-        <span class="shell__env" :class="{ 'shell__env--dev': !app.isProduction }">
-          {{ app.appEnv }}
-        </span>
       </div>
     </header>
 
@@ -109,17 +106,6 @@ const saveBadge = computed(() => {
 
 .shell__route {
   color: var(--color-gold);
-}
-
-.shell__env {
-  padding: 2px var(--space-3);
-  border-radius: var(--radius-pill);
-  background: rgb(255 255 255 / 0.12);
-  color: var(--color-bg);
-}
-
-.shell__env--dev {
-  background: var(--color-accent-2);
 }
 
 /* 顶栏上的「存档 / 读档」按钮：顶栏是深色，故覆写 ghost 的字色与描边

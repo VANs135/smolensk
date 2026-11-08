@@ -22,9 +22,9 @@ import { useWorkbenchStore } from '@/stores'
 describe('B35：流程条 / 工具按钮 / 纯文字面板（源码守卫）', () => {
   it('★ 流程条挂在地图上方，且是 `bar` 形态（只留阶段 / 环节 / 推进 / 一行提示）', () => {
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
-    expect(game).toContain('<FlowStrip variant="bar" />')
+    expect(game).toContain('<FlowStrip variant="bar">')
     // 位置：模板里 FlowStrip 必须在 <MapCanvas> **之前**
-    expect(game.indexOf('<FlowStrip variant="bar" />')).toBeLessThan(game.indexOf('<MapCanvas'))
+    expect(game.indexOf('<FlowStrip variant="bar">')).toBeLessThan(game.indexOf('<MapCanvas'))
 
     const strip = readFileSync('src/components/session/FlowStrip.vue', 'utf8')
     expect(strip).toContain("variant?: 'panel' | 'bar'")
@@ -105,9 +105,9 @@ describe('B35：流程条 / 工具按钮 / 纯文字面板（源码守卫）', (
 describe('批 D 切片 1：界面收口（右栏 / 盒图 / 辅助卡）', () => {
   it('① 右栏只留只读信息：`<FlowStrip />` 那一份已从对局台删除，bar 那份仍在地图上方', () => {
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
-    // 只有 bar 形态那一处（模板里 `<FlowStrip variant="bar" />` **恰好一次**）
+    // 只有 bar 形态那一处（模板里 `<FlowStrip variant="bar">` **恰好一次**）
     expect((game.match(/<FlowStrip/g) ?? []).length).toBe(1)
-    expect(game).toContain('<FlowStrip variant="bar" />')
+    expect(game).toContain('<FlowStrip variant="bar">')
     // panel 形态本身仍留给引擎验证页
     const bench = readFileSync('src/views/WorkbenchView.vue', 'utf8')
     expect(bench).toContain('<FlowStrip stepwise />')

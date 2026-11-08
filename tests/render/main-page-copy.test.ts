@@ -26,7 +26,10 @@ describe('UI1-a：存档文案与可用态', () => {
 
 describe('UI6-a：正式页可见标题不带批次编号', () => {
   it('对局台与存档标题已去批次码', () => {
-    expect(read('src/views/GameTableView.vue')).toContain('<BaseTag kind="info">对局台</BaseTag>')
+    // U1-a：原本当抬头的「对局台」标签也收掉（改由 L0 常驻条承担方/阶段/回合）
+    const game = read('src/views/GameTableView.vue')
+    expect(game).not.toContain('<BaseTag kind="info">对局台</BaseTag>')
+    expect(game).toContain('<FlowStrip variant="bar">')
     expect(read('src/components/save/SaveLoadDialog.vue')).not.toContain('存档 / 读档（W7 C15）')
   })
 

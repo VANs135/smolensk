@@ -189,6 +189,13 @@ function onAdvance(): void {
   workbench.advanceSegmentNow()
 }
 
+/**
+ * L0 常驻条的两个事实（U1-a）：回合号与 5.0a 所列格控制数
+ * —— 数字全部取自既有只读派生（`workbench.turn` / `victorySummary`），本组件不计数。
+ */
+const turnNow = computed<number>(() => gameSession.records?.turn ?? workbench.turn)
+const score = computed(() => workbench.victorySummary)
+
 /** 日志尾部（最近 6 条；Smoke 第 2 项要看的就是「自动段在日志里连续出现」） */
 const logTail = computed(() => gameSession.log.slice(-6).reverse())
 </script>
@@ -199,12 +206,18 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
     其余（回合/天气摘要、阶段灯、日志、重置、5.0b 勾选、共识提示）只在 panel 形态出现。
   -->
   <div v-if="isBar" class="bar">
-    <span class="bar__title">流程条</span>
-    <BaseTag kind="neutral">阶段 {{ flow.phaseLabel }}</BaseTag>
+    <!-- L0：方 · 阶段 · 回合（常驻，不随会话框变化） -->
+    <span class="bar__turn num">
+      {{ flow.actingSideLabel }} · {{ flow.decisionRoleLabel }} · {{ flow.phaseLabel }} · 回合
+      {{ turnNow }}
+    </span>
+    <!-- 分数：5.0a 所列格控制数（只读投影，不在此计数） -->
+    <span class="bar__score num" :title="`5.0a 所列格控制数（共 ${score.listedTotal} 格）`">
+      分数 苏 {{ score.listedBySide.soviet }} · 轴 {{ score.listedBySide.axis }}
+    </span>
     <BaseTag :kind="flow.segmentLabel === '（本段无环节）' ? 'neutral' : 'info'">
       环节 {{ flow.segmentLabel }}
     </BaseTag>
-    <BaseTag kind="neutral">{{ flow.actingSideLabel }} · {{ flow.decisionRoleLabel }}</BaseTag>
     <BaseButton variant="primary" size="sm" :disabled="!flow.canAdvance" @click="onAdvance">
       {{ flow.nextActionLabel }}
     </BaseButton>
@@ -217,6 +230,8 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
       <BaseTag :kind="flow.blockers[0]!.kind === 'danger' ? 'danger' : 'warning'" />
       {{ flow.blockers[0]!.text }}
     </span>
+    <!-- 宿主追加区（U1-a：面板收纳等低频入口收在条尾，不占地图前的独立行） -->
+    <slot name="trail" />
   </div>
 
   <BasePanel v-else title="流程条（2.2 流程表）">
@@ -406,9 +421,19 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
   font-size: var(--text-sm);
 }
 
-.bar__title {
+/* U1-a：L0 的左端两组常驻事实（方 / 阶段 / 回合、分数） */
+.bar__turn {
   font-weight: 600;
+  color: var(--color-ink);
+  white-space: nowrap;
+}
+
+.bar__score {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-panel);
   color: var(--color-muted);
+  white-space: nowrap;
 }
 
 .bar__hint {
