@@ -1956,8 +1956,15 @@ export const useMapViewStore = defineStore('mapView', () => {
               replPlacePending:
                 inRebuild && workbench.replPending.pax + workbench.replPending.eq > 0,
               rebuildAvailable: inRebuild && workbench.rebuildCandidates.length > 0,
+              /*
+               * ② 按方不渲染：方面军预备队是苏方专规（2.3c）内容。
+               * 只在该方**自己的那个环节**才把这一步排进待决计划 —— 否则德军回合会
+               * 因为「当天有批次」而冒出苏方的方面军预备队窗口。
+               */
               frontalReservesPending:
-                batch !== null && !workbench.frontalReservesClaimed.includes(batch.date),
+                stepId === 'reinforcement.frontalReserves' &&
+                batch !== null &&
+                !workbench.frontalReservesClaimed.includes(batch.date),
               slowMobilizationVisible: workbench.slowMobilizationVisible,
               breakdownAvailable: inRebuild,
             },

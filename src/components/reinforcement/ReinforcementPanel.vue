@@ -732,33 +732,38 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         结果随本次结算一并落日志。
       </p>
       <!-- 3.3c：可变撤离的窗口与了结状态（轴方 19 Aug 起；1/6 移除即结束，2–5 下回合再掷） -->
-      <p class="num">
-        3.3c 可变撤离：窗口
-        <BaseTag :kind="workbench.variableExitOpen ? 'danger' : 'neutral'">
-          {{ workbench.variableExitOpen ? '已开（19 Aug 起）' : '未开' }}
-        </BaseTag>
-        ｜判定
-        <BaseTag :kind="workbench.variableExitResolved ? 'success' : 'info'">
-          {{ workbench.variableExitResolved ? '已了结（不再掷）' : '未了结（2–5，须下回合再掷）' }}
-        </BaseTag>
-      </p>
-      <!-- ⑦ 3.3c：目标编队盘面与死亡堆都无算子 ⇒ 玩家从同印值算子中挑一枚移出游戏（1.6a） -->
-      <div v-if="workbench.variableExitSelectionOpen" class="row">
+      <template v-if="workbench.variableExitForActiveSide">
         <p class="num">
-          3.3c 撤离：该编队已无算子在场 ⇒ 请在地图高亮格（蓝框）里选一枚同印值算子移出游戏（1.6a）。
-          列表只列可选单位；堆叠中不可选者不出现。
+          3.3c 可变撤离：窗口
+          <BaseTag :kind="workbench.variableExitOpen ? 'danger' : 'neutral'">
+            {{ workbench.variableExitOpen ? '已开（19 Aug 起）' : '未开' }}
+          </BaseTag>
+          ｜判定
+          <BaseTag :kind="workbench.variableExitResolved ? 'success' : 'info'">
+            {{
+              workbench.variableExitResolved ? '已了结（不再掷）' : '未了结（2–5，须下回合再掷）'
+            }}
+          </BaseTag>
         </p>
-      </div>
-      <div v-if="workbench.variableExitSelectionOpen" class="row">
-        <CounterPicker
-          title="3.3c 撤离替补（只列可选）"
-          hint="1.6a：战斗面印值 attack/AR/MA 相同的算子才能顶替"
-          :items="workbench.variableExitPickItems"
-          :size="32"
-          @pick="workbench.confirmVariableExitSubstitute"
-          @hover="workbench.setVariableExitHover"
-        />
-      </div>
+        <!-- ⑦ 3.3c：目标编队盘面与死亡堆都无算子 ⇒ 玩家从同印值算子中挑一枚移出游戏（1.6a） -->
+        <div v-if="workbench.variableExitSelectionOpen" class="row">
+          <p class="num">
+            3.3c 撤离：该编队已无算子在场 ⇒
+            请在地图高亮格（蓝框）里选一枚同印值算子移出游戏（1.6a）。
+            列表只列可选单位；堆叠中不可选者不出现。
+          </p>
+        </div>
+        <div v-if="workbench.variableExitSelectionOpen" class="row">
+          <CounterPicker
+            title="3.3c 撤离替补（只列可选）"
+            hint="1.6a：战斗面印值 attack/AR/MA 相同的算子才能顶替"
+            :items="workbench.variableExitPickItems"
+            :size="32"
+            @pick="workbench.confirmVariableExitSubstitute"
+            @hover="workbench.setVariableExitHover"
+          />
+        </div>
+      </template>
       <p v-if="workbench.lastVariableRepl !== null" class="num">
         <BaseTag kind="success">{{ workbench.lastVariableRepl.rule }}</BaseTag>
         {{ workbench.lastVariableRepl.detail }}

@@ -16509,6 +16509,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 3.3c：当前是否处于可变撤离的窗口内（19 Aug 起；供界面提示与按钮可用性） */
   const variableExitOpen = computed<boolean>(() => isVariableExitActive(date.value))
+  /**
+   * ② 按方不渲染：3.3c 可变撤离是**轴方专规**内容
+   *
+   * 界面只在轴方回合画这一段（含"已了结/未了结"状态行与替补选择）；
+   * 苏方回合根本不渲染 —— 不是变灰、不是不可点。判据只取 `activeSide` 与日期事实。
+   */
+  const variableExitForActiveSide = computed<boolean>(
+    () =>
+      activeSide.value === 'axis' && (variableExitOpen.value || variableExitSelectionOpen.value),
+  )
   /** 最近一次可变增援结论（1.6b / 1.6c / 3.3c / 3.6） */
   const lastVariableRepl = ref<VariableReinforcementPlan | null>(null)
   /** 最近一次重建结论（13.5） */
@@ -22140,6 +22150,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     variableReplInputs,
     variableExitResolved,
     variableExitOpen,
+    variableExitForActiveSide,
     // ⑦ 3.3c：撤离落盘与"可选单位清单"（待选状态从 session.log 反推，无存档字段）
     variableExitPendingSelection,
     variableExitSelectionOpen,
