@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed } from 'vue'
 
 import { buildLegalActionsView, type LegalActionsView } from './legal-actions'
+import { hexLabel } from './workbench-model'
 import { useContainersStore } from './containers'
 import { useGameSessionStore } from './session'
 import { useSetupStore } from './setup'
@@ -25,18 +26,37 @@ export const useLegalActionsStore = defineStore('legal-actions', () => {
     const candidates: LoadedCandidates = {}
 
     /* ── A 整备 / B 增援 ── */
-    candidates['air.refit'] = workbench.refitCandidates.map((air) => ({
-      ref: air.instanceId,
-      label: air.name,
+    // 15.1：提交入口 `beginRefitNow` 收**基地 id**；候选随之为可开整备的本方基地（不是飞机）。
+    candidates['air.refit'] = workbench.refitStartBases.map((base) => ({
+      ref: base.id,
+      label: `${hexLabel(base.hex)} 基地（L${String(base.level)}）`,
     }))
     candidates['rein.rebuild'] = workbench.rebuildCandidates.map((entry) => ({
       ref: entry.instanceId,
       label: entry.name,
     }))
-    candidates['rein.supplyArrival'] = workbench.freeRailCityCandidates.map((item) => {
-      const ref = `${item.hex.col}.${item.hex.row}`
-      return { ref, label: item.name === '' ? ref : item.name }
-    })
+    // 到货 SP 的提交入口 `applySupplyArrivalsNow` 不接受格参数 —— 它落账的是**当前计划**
+    // （已勾选的免费铁运城市格 + 图边源余额 + 3.6 补给列车）。故候选只投一条「计划」，
+    // 城市清单留在面板的选择态里，不冒充可提交候选（P0-02c）。
+    const arrivalPlan = workbench.freeRailPlan
+    candidates['rein.supplyArrival'] =
+      arrivalPlan === null
+        ? [
+            {
+              ref: 'plan',
+              label: '到货 SP 落位',
+              disabledReason: workbench.freeRailError?.reason ?? '当前落账计划不可用',
+            },
+          ]
+        : [
+            {
+              ref: 'plan',
+              label: `到货 SP 落位（${String(arrivalPlan.placements.length)} 格）`,
+              ...(arrivalPlan.placements.length === 0
+                ? { disabledReason: '本笔没有可落的 SP' }
+                : {}),
+            },
+          ]
     const specialReplRefusal = containers.specialReplRefusal(actingSide)
     candidates['rein.specialRepl'] = [
       {
