@@ -186,25 +186,19 @@ export function fitViewport(
 }
 
 /**
- * 约束平移量：地图大于视口时不允许拖出空边；地图小于视口时强制居中
- *
- * 这样用户永远「看得见地图」，不会把图拖到视口之外找不回来。
+ * 允许把地图边缘拉到视口里面，方便避开浮窗。各轴至少保留一段可见地图。
  */
 export function clampViewport(
   viewport: ViewportTransform,
   worldSize: Size,
   viewSize: Size,
 ): ViewportTransform {
-  const scaledWidth = worldSize.width * viewport.scale
-  const scaledHeight = worldSize.height * viewport.scale
-  const offsetX =
-    scaledWidth <= viewSize.width
-      ? (viewSize.width - scaledWidth) / 2
-      : Math.min(Math.max(viewport.offsetX, viewSize.width - scaledWidth), 0)
-  const offsetY =
-    scaledHeight <= viewSize.height
-      ? (viewSize.height - scaledHeight) / 2
-      : Math.min(Math.max(viewport.offsetY, viewSize.height - scaledHeight), 0)
+  function clampAxis(offset: number, scaled: number, visible: number): number {
+    const keep = Math.min(scaled, visible) * 0.35
+    return Math.min(Math.max(offset, keep - scaled), visible - keep)
+  }
+  const offsetX = clampAxis(viewport.offsetX, worldSize.width * viewport.scale, viewSize.width)
+  const offsetY = clampAxis(viewport.offsetY, worldSize.height * viewport.scale, viewSize.height)
   return { scale: viewport.scale, offsetX, offsetY }
 }
 

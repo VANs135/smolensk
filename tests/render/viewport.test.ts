@@ -149,22 +149,28 @@ describe('适应窗口与平移约束', () => {
     expect(tiny.scale).toBe(MIN_SCALE)
   })
 
-  it('地图大于视口：平移被夹住，不露出空边', () => {
+  it('地图大于视口：四边都可以拉进视口，极限位置仍留 35% 可见地图', () => {
     const viewport = { scale: 1, offsetX: 500, offsetY: 500 }
     const clamped = clampViewport(viewport, WORLD, VIEW)
-    expect(clamped.offsetX).toBe(0)
-    expect(clamped.offsetY).toBe(0)
+    expect(clamped.offsetX).toBe(500)
+    expect(clamped.offsetY).toBe(500)
 
+    // 上限：地图左上角最多拉到「视口宽 / 高的 65%」处（留 35% 可见）。
+    const draggedNear = clampViewport({ scale: 1, offsetX: 99999, offsetY: 99999 }, WORLD, VIEW)
+    expect(draggedNear.offsetX).toBeCloseTo(VIEW.width - VIEW.width * 0.35, 6)
+    expect(draggedNear.offsetY).toBeCloseTo(VIEW.height - VIEW.height * 0.35, 6)
+    // 下限：地图右下角最多拉到「视口宽 / 高的 35%」处（同上）。
     const draggedFar = clampViewport({ scale: 1, offsetX: -99999, offsetY: -99999 }, WORLD, VIEW)
-    expect(draggedFar.offsetX).toBeCloseTo(VIEW.width - WORLD.width, 6)
-    expect(draggedFar.offsetY).toBeCloseTo(VIEW.height - WORLD.height, 6)
+    expect(draggedFar.offsetX).toBeCloseTo(VIEW.width * 0.35 - WORLD.width, 6)
+    expect(draggedFar.offsetY).toBeCloseTo(VIEW.height * 0.35 - WORLD.height, 6)
+    expect(draggedFar.offsetX + WORLD.width).toBeCloseTo(VIEW.width * 0.35, 6)
+    expect(draggedFar.offsetY + WORLD.height).toBeCloseTo(VIEW.height * 0.35, 6)
   })
 
-  it('地图小于视口：强制居中', () => {
-    const viewport = { scale: 0.1, offsetX: 999, offsetY: -999 }
-    const clamped = clampViewport(viewport, WORLD, VIEW)
-    expect(clamped.offsetX).toBeCloseTo((VIEW.width - WORLD.width * 0.1) / 2, 6)
-    expect(clamped.offsetY).toBeCloseTo((VIEW.height - WORLD.height * 0.1) / 2, 6)
+  it('全图适配仍居中，但适配后能平移', () => {
+    const fitted = fitViewport(WORLD, VIEW)
+    const viewport = { ...fitted, offsetX: fitted.offsetX + 100, offsetY: fitted.offsetY - 100 }
+    expect(clampViewport(viewport, WORLD, VIEW)).toEqual(viewport)
   })
 
   it('倍率不变：约束只动平移量', () => {
