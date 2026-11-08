@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { counterImages } from '@/render/token-images'
 import type { AuxCardView } from '@/stores'
@@ -21,6 +21,11 @@ const props = defineProps<{
   width: number
 }>()
 
+/** ⑤：盒内算子被点选（第二次点同一枚 = 取消）；没有规则含义，只是"我指的是这一枚" */
+const pickedUnitId = ref<string | null>(null)
+
+const emit = defineEmits<{ unitContext: [unitId: string] }>()
+
 /** 卡面显示比例（分区矩形 × 这个比例 = 屏上像素） */
 const scale = computed(() => props.width / props.card.imageSize.w)
 const displayHeight = computed(() => props.card.imageSize.h * scale.value)
@@ -36,8 +41,55 @@ const unitSizePx = computed<number>(() => (props.width >= 420 ? 40 : 32))
 /** 卡面图 URL（图档名含空格与大写 ⇒ 编码后取；与 `token-images` 同一套做法） */
 const imageUrl = computed(() => auxCardImageUrl(props.card.image))
 
-/** 卡面图是否已就绪（未就绪就只画分区框与枚数，不画图） */
-const imageReady = computed(() => counterImages.get(imageUrl.value) !== null)
+/**
+ * ⑤（用户 2026-11-09）：**盒内算子的图也要读进来** —— 修前只预载了卡面图，
+ * 于是每枚算子都命中 `counterImages.get(url) === null`，画成空占位（"盒里是空框"）。
+ *
+ * `counterImages` 是普通 Map（非响应式）⇒ 加载完要把 `imagesTick` 加一，模板才会重算。
+ */
+const imagesTick = ref(0)
+
+const unitUrls = computed<string[]>(() =>
+  props.card.regions.flatMap((region) =>
+    region.units
+      .map((unit) => unit.imageUrl)
+      .filter((url): url is string => typeof url === 'string' && url.length > 0),
+  ),
+)
+
+watch(
+  [imageUrl, unitUrls],
+  ([cardUrl, urls]) => {
+    void counterImages.preload([cardUrl, ...urls]).then(() => {
+      imagesTick.value += 1
+    })
+  },
+  { immediate: true },
+)
+
+/** 卡面图是否已就绪（读 `imagesTick` 让加载完成后重算） */
+const imageReady = computed(() => {
+  void imagesTick.value
+  return counterImages.get(imageUrl.value) !== null
+})
+
+/** 某一枚算子的图是否已就绪（同上） */
+function unitReady(url: string): boolean {
+  void imagesTick.value
+  return counterImages.get(url) !== null
+}
+
+/** 点选 / 取消（只影响卡面高亮，不提交任何动作） */
+function pickUnit(unitId: string): void {
+  pickedUnitId.value = pickedUnitId.value === unitId ? null : unitId
+}
+
+/** 右键：选中该枚并把"盒内动作"交给上层（展开那张卡 ⇒ 既有会话框出该盒的动作） */
+function onUnitContext(unitId: string, event: MouseEvent): void {
+  event.preventDefault()
+  pickedUnitId.value = unitId
+  emit('unitContext', unitId)
+}
 
 /** 分区在屏上的像素矩形（卡面像素 × 比例） */
 function regionStyle(rect: { x: number; y: number; w: number; h: number }): Record<string, string> {
@@ -80,20 +132,36 @@ function regionStyle(rect: { x: number; y: number; w: number; h: number }): Reco
           v-for="unit in region.units"
           :key="unit.unitId"
           class="face__unit"
-          :title="unit.name ?? unit.unitId"
+          :class="{ 'face__unit--picked': pickedUnitId === unit.unitId }"
         >
-          <img
-            v-if="unit.imageUrl !== null && counterImages.get(unit.imageUrl) !== null"
-            class="face__unit-img"
-            :style="{ width: `${unitSizePx}px`, height: `${unitSizePx}px` }"
-            :src="unit.imageUrl"
-            :alt="unit.name ?? unit.unitId"
-          />
-          <span
-            v-else
-            class="face__unit-img face__unit-img--missing"
-            :style="{ width: `${unitSizePx}px`, height: `${unitSizePx}px` }"
-          />
+          <!--
+            ⑤（用户 2026-11-09）：盒内算子**可点选、可右键**。
+            点 = 选中这一枚（再点取消）；右键 = 选中并由上层把该盒的既有动作会话摆出来。
+            这里不判规则、不提交动作。
+          -->
+          <button
+            type="button"
+            class="face__unit-btn"
+            :title="unit.name ?? unit.unitId"
+            :aria-pressed="pickedUnitId === unit.unitId"
+            @click="pickUnit(unit.unitId)"
+            @contextmenu="onUnitContext(unit.unitId, $event)"
+          >
+            <img
+              v-if="unit.imageUrl !== null && unitReady(unit.imageUrl)"
+              class="face__unit-img"
+              :style="{ width: `${unitSizePx}px`, height: `${unitSizePx}px` }"
+              :src="unit.imageUrl"
+              :alt="unit.name ?? unit.unitId"
+            />
+            <span
+              v-else
+              class="face__unit-img face__unit-img--missing"
+              :style="{ width: `${unitSizePx}px`, height: `${unitSizePx}px` }"
+            >
+              {{ (unit.name ?? unit.unitId).slice(0, 2) }}
+            </span>
+          </button>
         </li>
       </ul>
       <p v-if="region.units.length === 0 && region.note !== null" class="face__note">
@@ -164,10 +232,39 @@ function regionStyle(rect: { x: number; y: number; w: number; h: number }): Reco
   gap: 2px;
 }
 
+.face__unit-btn {
+  display: block;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 2px;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+
+/* ⑤：点选中的那一枚给一圈金色，与地图上"已选中"同一套视觉 */
+.face__unit--picked .face__unit-btn {
+  border-color: var(--color-gold);
+  box-shadow: 0 0 0 1px var(--color-gold);
+}
+
 /* 尺寸由 `unitSizePx` 内联给（托盘 32px / 浮窗 40px）；这里只兜底一个最小值 */
 .face__unit-img {
   width: 32px;
   height: 32px;
+}
+
+/* 图还没读进来时的占位：写出前两个字，至少能认出是哪一枚（修前是纯空框） */
+.face__unit-img--missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--color-rule);
+  border-radius: 2px;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1;
+  overflow: hidden;
 }
 
 .face__note {

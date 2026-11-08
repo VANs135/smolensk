@@ -61,6 +61,16 @@ function onToggle(): void {
   void counterImages.preload([imageUrl.value])
 }
 
+/**
+ * ⑤（用户 2026-11-09）：在盒卡里右键一枚算子 ⇒ **这张卡就是"当前展开的那一张"**。
+ *
+ * 展开本身即"我要对这个盒做点什么"：既有会话框（`containers` 那一档）会随之摆出该盒的
+ * 动作（重建 / 整编 / 抽取 / 离盒…）。这里只切展开态，不判规则、不提交动作。
+ */
+function onUnitContext(): void {
+  if (containers.cardOpenId !== props.card.id) containers.toggleCardOpen(props.card.id)
+}
+
 /* ────────────────────────── C-2 浮窗：拖动 / 关闭 ────────────────────────── */
 
 const popupRef = ref<HTMLElement | null>(null)
@@ -155,7 +165,7 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
     </div>
 
     <template v-if="open">
-      <BoxCardFace :card="card" :width="displayWidth" />
+      <BoxCardFace :card="card" :width="displayWidth" @unit-context="onUnitContext" />
 
       <p class="boxcard__hint num">
         <BaseTag kind="neutral">只读</BaseTag>
@@ -182,7 +192,7 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
           <span class="num">{{ unitTotal }} 枚</span>
           <button type="button" class="boxpopup__close" @click="closePopup">×</button>
         </div>
-        <BoxCardFace :card="card" :width="popupWidth" />
+        <BoxCardFace :card="card" :width="popupWidth" @unit-context="onUnitContext" />
       </div>
     </Teleport>
   </section>

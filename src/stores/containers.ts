@@ -752,6 +752,13 @@ export const useContainersStore = defineStore('containers', () => {
     if (ground !== undefined) return counterImageUrlOf(ground)
     const air = workbench.airUnits.find((item) => item.instanceId === holding.unitId)
     if (air !== undefined) return counterImageUrlOf(air)
+    /*
+     * ⑤（用户 2026-11-09）：**死亡堆的条目不在 `units` 里**（它们在 `workbench.deadPile`）。
+     * 修前这里只查图上单位与飞机 ⇒ 死亡堆每一枚都取不到图（`imageUrl` 为 null），
+     * 卡面只好画空占位 —— 这正是"死亡堆等盒显示为空框、里面有单位却看不到"的根因。
+     */
+    const dead = workbench.deadPile.find((entry) => entry.instanceId === holding.unitId)
+    if (dead !== undefined) return counterImageUrlOf(dead)
     return null
   }
 
