@@ -82,12 +82,43 @@ export const useRecorderStore = defineStore('recorder', () => {
   let seq = 0
 
   function start(next: RecorderMeta): void {
+    /*
+     * 同日二次开启 = **续写同一会话**（用户 2026-11-09）：
+     * 关闭记录只是停止写入、不生成新文件；再次开启沿用同一 header（开始的回合/阶段/时间）
+     * 与既有事件，最终导出的仍是一份完整日志。只有剧本/模式/种子变了才开新会话。
+     */
+    const sameSession =
+      meta !== null &&
+      meta.scenarioId === next.scenarioId &&
+      meta.mode === next.mode &&
+      meta.seed === next.seed
+    if (!sameSession) {
+      entries = []
+      seq = 0
+      count.value = 0
+      startedAt.value = new Date().toISOString()
+    }
     meta = { ...next }
-    entries = []
-    seq = 0
-    count.value = 0
-    startedAt.value = new Date().toISOString()
     active.value = true
+    if (sameSession && entries.length > 0) {
+      // 留一条"续写"标记，方便交回日志时看清中间停过一段
+      try {
+        entries.push({
+          seq: seq + 1,
+          at: new Date().toISOString(),
+          turn: next.turn,
+          phase: next.phase,
+          side: 'system',
+          step: null,
+          kind: 'marker',
+          text: '记录继续（同一会话）',
+        })
+        seq += 1
+        count.value = entries.length
+      } catch {
+        // 记录失败不阻断游戏
+      }
+    }
   }
 
   /** 记一条事实；未开启记录时静默跳过，任何异常都吞掉（不得影响对局） */
@@ -102,7 +133,13 @@ export const useRecorderStore = defineStore('recorder', () => {
     }
   }
 
-  /** 停止记录并返回可保存的文本；未开启时返回 null（调用方不做任何弹窗） */
+  /**
+   * 停止记录并返回可保存的文本；未开启时返回 null（调用方不做任何弹窗）。
+   *
+   * 停止只"暂停写入"：**不生成新文件、不清空会话**（再次 `start()` 续写同一份），
+   * 因此关闭后再点导出不会凭空多出一份；
+   * 真要丢弃整个会话用 `cancel()`。
+   */
   function stop(): { filename: string; text: string } | null {
     if (!active.value || meta === null) return null
     const now = new Date()
@@ -125,13 +162,8 @@ export const useRecorderStore = defineStore('recorder', () => {
     const safeMode = (meta.mode ?? 'unset').replace(/[^a-z0-9-]/gi, '')
     const filename = `smolensk-log-${safeMode}-${meta.scenarioId}-${stampOf(now)}.jsonl`
     const text = `${lines.join('\n')}\n`
-    // 导出后清空缓冲（第二份文件不会混进上一份的内容）
     active.value = false
-    count.value = 0
-    startedAt.value = null
-    meta = null
-    entries = []
-    seq = 0
+    count.value = entries.length
     return { filename, text }
   }
 

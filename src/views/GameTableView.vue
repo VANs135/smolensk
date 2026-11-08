@@ -618,6 +618,12 @@ onBeforeUnmount(() => {
             >
               {{ recorder.active ? '停止并保存' : '开始记录' }}
             </BaseButton>
+            <!-- 导出落点写清楚：不弹目录选择，走浏览器/WebView 的下载目录 -->
+            <span class="gt__recorder-hint" data-testid="recorder-hint">
+              日志存到下载目录（Windows 默认「下载」，即
+              <code>%USERPROFILE%\Downloads</code>），文件名
+              <code>smolensk-log-*.jsonl</code>
+            </span>
           </section>
           <HotkeyHelpPanel v-if="hotkeys.helpOpen" />
         </div>
@@ -740,6 +746,14 @@ onBeforeUnmount(() => {
   color: var(--color-command-ink);
   font-size: var(--text-xs);
 }
+/* ⑧：记录导出的落点说明（面板可见，避免"文件去哪了"） */
+.gt__recorder-hint {
+  flex-basis: 100%;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
 .gt {
   --color-bg: var(--color-command-bg);
   --color-bg-2: var(--color-command-raised);

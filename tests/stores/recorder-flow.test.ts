@@ -98,7 +98,7 @@ describe('⑧ 对局记录与导出', () => {
     expect(settle!.detail).toMatchObject({ action: 'move' })
   })
 
-  it('未开启记录 ⇒ 零记录、停止返回 null、不抛', () => {
+  it('未开启记录 ⇒ 零记录、停止返回 null、不抛；关闭后不再写入也不再多出文件', () => {
     const { recorder } = boot()
     expect(() =>
       recorder.note({
@@ -111,6 +111,85 @@ describe('⑧ 对局记录与导出', () => {
     ).not.toThrow()
     expect(recorder.count).toBe(0)
     expect(recorder.stop()).toBeNull()
+
+    // 开启 → 停止 → 再记：关闭期间不再产生事件；再停止不再生成第二份文件
+    recorder.start(metaOf())
+    recorder.note({ kind: 'log', turn: 1, phase: 'movement', side: 'axis', step: null })
+    const first = recorder.stop()
+    expect(first).not.toBeNull()
+    const before = recorder.count
+    recorder.note({
+      kind: 'log',
+      turn: 1,
+      phase: 'movement',
+      side: 'axis',
+      step: null,
+      text: '关闭期间的这句不该进日志',
+    })
+    expect(recorder.count).toBe(before)
+    expect(recorder.stop()).toBeNull()
+  })
+
+  it('再次开启 ⇒ 续写同一会话（同一 header 起点、事件接续）', () => {
+    const { recorder } = boot()
+    recorder.start(metaOf())
+    recorder.note({
+      kind: 'log',
+      turn: 1,
+      phase: 'movement',
+      side: 'axis',
+      step: null,
+      text: '前半段',
+    })
+    const first = parseLines(recorder.stop()!.text)
+
+    recorder.start(metaOf({ turn: 2, phase: 'combat' }))
+    recorder.note({
+      kind: 'log',
+      turn: 2,
+      phase: 'combat',
+      side: 'axis',
+      step: null,
+      text: '后半段',
+    })
+    const second = parseLines(recorder.stop()!.text)
+
+    // 同一会话：起点不变，篇幅只增不减
+    expect(second[0]!.startedAt).toBe(first[0]!.startedAt)
+    expect(Number(second[0]!.entries)).toBeGreaterThan(Number(first[0]!.entries))
+    const texts = second.map((line) => line.text)
+    expect(texts).toContain('前半段')
+    expect(texts).toContain('后半段')
+    expect(texts).toContain('记录继续（同一会话）')
+  })
+
+  it('换剧本 / 种子 ⇒ 另起会话（不混进上一局）', () => {
+    const { recorder } = boot()
+    recorder.start(metaOf())
+    recorder.note({
+      kind: 'log',
+      turn: 1,
+      phase: 'movement',
+      side: 'axis',
+      step: null,
+      text: '上一局的事件',
+    })
+    recorder.stop()
+
+    recorder.start(metaOf({ scenarioId: '3', seed: 777 }))
+    recorder.note({
+      kind: 'log',
+      turn: 1,
+      phase: 'movement',
+      side: 'axis',
+      step: null,
+      text: '新一局的事件',
+    })
+    const lines = parseLines(recorder.stop()!.text)
+    expect(lines[0]).toMatchObject({ scenarioId: '3', seed: 777 })
+    const texts = lines.map((line) => line.text)
+    expect(texts).toContain('新一局的事件')
+    expect(texts).not.toContain('上一局的事件')
   })
 
   it('记录内容出问题（循环引用）不得阻断导出', () => {
