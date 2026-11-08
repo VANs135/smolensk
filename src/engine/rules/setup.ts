@@ -1159,6 +1159,8 @@ export interface AirSetupPlacement {
   steps: readonly number[]
   /** 候选基地格（14.1a：飞机算子停在其空军基地格） */
   candidates: readonly HexRef[]
+  /** 专规 1.4a：剧本允许自由选基地时，本方图外空军盒也是基地。 */
+  offMapAllowed: boolean
   detail: string
   rule: string
 }
@@ -1284,6 +1286,7 @@ export function planAirSetup(input: {
       reduced,
       steps,
       candidates,
+      offMapAllowed: entry.placement === 'airbaseFree' || entry.placement === 'airFleet',
       detail:
         `${count}× ${name} ⇒ 任意本方空军基地（${AIR_BASE_SITE_RULE}）；` +
         `初始激活 ${count - inactiveCount} 枚 / 非激活 ${inactiveCount} 枚` +
