@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 
 import { scenarios } from '@/data'
 import { actingSideFor } from '@/engine/game-lifecycle'
+import type { SaveHotseat } from '@/engine/save-file'
 import type { HexRef, Side } from '@/data'
 import { HEX_DIRECTIONS, isOnMap, neighbor, sameHex } from '@/engine/hex-geometry'
 import { exertsZoc } from '@/engine/rules'
@@ -91,11 +92,12 @@ export const useHotseatStore = defineStore('hotseat', () => {
   const canPreset = computed<boolean>(() => mode.value === 'pve' && aiSide.value !== null)
 
   /**
-   * 热坐交接是否启用（pvp / pve 启用；solo 不遮屏）
+   * 热坐交接是否启用（pvp / pve 启用；solo 与「尚未选择」都不启用）
    *
    * ★ 由 `mode` **推出**（原来是一个独立 ref）⇒ 一个来源，免得"模式是 solo 但交接屏还开着"。
+   * ★ 未选择（null）**不得**按 PVP 口径生效：读档后要求重选模式，选之前不遮屏。
    */
-  const hotseatEnabled = computed<boolean>(() => mode.value !== 'solo')
+  const hotseatEnabled = computed<boolean>(() => mode.value === 'pvp' || mode.value === 'pve')
 
   /**
    * **战雾是否关闭**（solo：桌边只有一个玩家，没有要隐瞒的对手）
@@ -366,7 +368,7 @@ export const useHotseatStore = defineStore('hotseat', () => {
    * 返回是否改动：初设已开始（`setupLocked`）⇒ 拒绝，模式不可再改；
    * 换到 `solo` 时顺手收掉交接屏（否则会留一块"没人接手"的遮罩）；换到 pvp/pve 即恢复热坐纪律。
    * 离开 PVE 时清空 `aiSide`，下次进 PVE 必须重新点一次 AI 方。
-   * 模式**不写进存档**（本步范围：它是本机偏好，不是盘面事实）——已在回执里如实登记。
+   * 模式随存档保存（`hotseat: { mode, aiSide }`）——它只记录组织方式，不参与规则判定。
    */
   function setMode(next: HotseatMode | null): boolean {
     if (setupLocked.value) return false
@@ -394,6 +396,41 @@ export const useHotseatStore = defineStore('hotseat', () => {
     setupLocked.value = false
   }
 
+  /**
+   * 存档用：当前对局组织方式
+   *
+   * 尚未选择（`mode === null`）⇒ `undefined`，存档不写该键（读回仍是「未设置」）。
+   */
+  function snapshotForSave(): SaveHotseat | undefined {
+    if (mode.value === null) return undefined
+    return { mode: mode.value, aiSide: aiSide.value }
+  }
+
+  /**
+   * 读档后恢复
+   *
+   *   · 档里有 ⇒ 原样恢复，并视为**已锁定**（这一局早就开始了，初设不可再进）；
+   *   · 档里没有 ⇒ 读成「未设置」：`mode=null`、解锁，等玩家在棋桌重选后才继续；
+   *     选择前 AI 不接管（`aiControlMode` 由 mode 推出）、热坐遮罩也不按 PVP 口径亮起。
+   */
+  function restoreFromSave(saved: SaveHotseat | undefined): void {
+    handoffPending.value = false
+    viewerOverride.value = null
+    previousViewer = null
+    if (saved === undefined) {
+      mode.value = null
+      aiSide.value = null
+      setupLocked.value = false
+      return
+    }
+    mode.value = saved.mode
+    aiSide.value = saved.mode === 'pve' ? saved.aiSide : null
+    setupLocked.value = true
+  }
+
+  // 把「模式随档保存 / 读档恢复」挂到会话层的存档口（与 board/setup 编解码器同一惯例）
+  session.setHotseatCodec({ capture: snapshotForSave, restore: restoreFromSave })
+
   /** 开关热坐交接（单人试算可关掉）——保留旧入口：关＝切到 solo、开＝切回 pvp */
   function setHotseatEnabled(on: boolean): void {
     setMode(on ? 'pvp' : 'solo')
@@ -419,6 +456,8 @@ export const useHotseatStore = defineStore('hotseat', () => {
     setAiSide,
     lockMode,
     resetModeLock,
+    snapshotForSave,
+    restoreFromSave,
     MODE_LABELS,
     fogDisabled,
     hotseatEnabled,

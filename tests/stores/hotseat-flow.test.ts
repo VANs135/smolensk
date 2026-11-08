@@ -148,6 +148,8 @@ describe('W7 C13：热坐切屏（交接遮罩）', () => {
     const stores = newStores()
     workbench = stores.workbench
     hotseat = stores.hotseat
+    // 2026-11-09：未选择模式不再按 PVP 口径启用热坐；本组用例明确按双人热坐跑
+    expect(hotseat.setMode('pvp')).toBe(true)
   })
 
   it('C13：交接 ⇒ 切到对手方并亮起遮罩；确认后亮出盘面', () => {

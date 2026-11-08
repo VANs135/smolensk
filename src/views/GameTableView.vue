@@ -79,6 +79,18 @@ const modeLabel = computed<string>(() => {
   return `PVE · AI 打${aiSide}`
 })
 
+/**
+ * 继续闸门：读档后模式未设置（或 PVE 缺 AI 方）⇒ 必须先重选才能继续
+ *
+ * 选择前：`aiControlMode` 为 `off`（AI 不接管）、`hotseatEnabled` 为 false（不按 PVP 遮屏）。
+ * 只是对局组织方式，不参与规则判定。
+ */
+const modeGate = computed<boolean>(() => gameSession.session !== null && hotseat.modeIssue !== null)
+const gateSides = [
+  { side: 'axis', label: '轴心国' },
+  { side: 'soviet', label: '苏联' },
+] as const
+
 function stopAiPlay(): void {
   if (aiTimer !== null) {
     clearTimeout(aiTimer)
@@ -553,6 +565,79 @@ onBeforeUnmount(() => {
     <TerminationNotice v-if="gameSession.terminated" class="gt__termination" />
     <QuestionPrompt v-if="!hotseat.handoffPending" />
     <HandoffOverlay />
+
+    <!-- 读档后模式未设置：选齐前挡在盘面前，AI 不接管、热坐不按 PVP 遮屏 -->
+    <Teleport to="body">
+      <div
+        v-if="modeGate"
+        class="mode-gate"
+        role="dialog"
+        aria-modal="true"
+        aria-label="选择对局模式"
+        data-testid="mode-gate"
+      >
+        <div class="mode-gate__mask" />
+        <div class="mode-gate__panel">
+          <header class="mode-gate__head">
+            <span>对局模式</span>
+            <span class="num">必选</span>
+          </header>
+          <h2 class="mode-gate__title">这一档没有记录对局模式</h2>
+          <p class="mode-gate__hint">
+            请先选择本局的组织方式；选定前不推进、不交给 AI，也不按热坐遮屏。
+          </p>
+          <ul class="mode-gate__list">
+            <li v-for="item in hotseat.MODE_LABELS" :key="item.key">
+              <label
+                class="mode-gate__item"
+                :class="{ 'mode-gate__item--on': hotseat.mode === item.key }"
+              >
+                <input
+                  type="radio"
+                  name="gate-mode"
+                  :value="item.key"
+                  :checked="hotseat.mode === item.key"
+                  @change="hotseat.setMode(item.key)"
+                />
+                <span class="mode-gate__label">{{ item.label }}</span>
+                <span class="mode-gate__note">{{ item.note }}</span>
+              </label>
+            </li>
+          </ul>
+          <fieldset v-if="hotseat.mode === 'pve'" class="mode-gate__sides">
+            <legend>AI 控制方</legend>
+            <ul class="mode-gate__list">
+              <li v-for="item in gateSides" :key="item.side">
+                <label
+                  class="mode-gate__item"
+                  :class="{ 'mode-gate__item--on': hotseat.aiSide === item.side }"
+                >
+                  <input
+                    type="radio"
+                    name="gate-ai-side"
+                    :value="item.side"
+                    :checked="hotseat.aiSide === item.side"
+                    @change="hotseat.setAiSide(item.side)"
+                  />
+                  <span class="mode-gate__label">AI 打{{ item.label }}</span>
+                  <span class="mode-gate__note">你操作另一方</span>
+                </label>
+              </li>
+            </ul>
+          </fieldset>
+          <div class="mode-gate__actions">
+            <BaseButton
+              variant="primary"
+              size="sm"
+              :disabled="!hotseat.modeReady"
+              @click="hotseat.lockMode()"
+            >
+              确认并继续
+            </BaseButton>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -777,6 +862,120 @@ onBeforeUnmount(() => {
   max-width: min(var(--command-drawer-wide), calc(100% - var(--space-16)));
   max-height: 45vh;
   overflow: auto;
+}
+
+/* 读档后「模式未设置」的继续闸门（只是组织方式，不参与规则判定） */
+.mode-gate {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dialog-top);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mode-gate__mask {
+  position: absolute;
+  inset: 0;
+  background: var(--color-command-bg);
+}
+
+.mode-gate__panel {
+  position: relative;
+  width: min(620px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+  --color-bg-2: var(--color-command-raised);
+  --color-ink: var(--color-command-ink);
+  --color-accent-2: var(--color-command-teal-bg);
+  padding: var(--space-6);
+  background: var(--color-command-panel);
+  border: 1px solid var(--color-command-line);
+  border-top: 3px solid var(--color-command-teal);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.mode-gate__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  color: var(--color-command-teal);
+  font-size: var(--text-sm);
+}
+
+.mode-gate__title {
+  margin: var(--space-2) 0;
+  color: var(--color-ink);
+  font-size: var(--text-lg);
+}
+
+.mode-gate__hint {
+  margin: 0 0 var(--space-4);
+  color: var(--color-command-muted);
+  font-size: var(--text-sm);
+}
+
+.mode-gate__list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-2) 0;
+  list-style: none;
+}
+
+.mode-gate__sides {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.mode-gate__sides legend {
+  color: var(--color-command-muted);
+  font-size: var(--text-xs);
+}
+
+.mode-gate__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-command-line);
+  border-radius: var(--radius-md);
+  background: var(--color-command-bg);
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.mode-gate__item--on,
+.mode-gate__item--on:hover {
+  border-color: var(--color-command-teal);
+  background: var(--color-command-teal-bg);
+}
+
+.mode-gate__item input {
+  accent-color: var(--color-command-teal);
+}
+
+.mode-gate__label {
+  font-weight: 700;
+}
+
+.mode-gate__note {
+  margin-left: auto;
+  color: var(--color-command-muted);
+  font-size: var(--text-xs);
+}
+
+.mode-gate__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
 }
 
 @media (max-width: 1080px) {

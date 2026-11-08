@@ -43,6 +43,7 @@ import {
   describeSaveFile,
   deserializeSaveFile,
   serializeSaveFile,
+  type SaveHotseat,
   type SaveSlotInfo,
 } from '@/engine/save-file'
 import type { SessionAnswer, SessionQuestion, TerminationReason } from '@/engine/session-types'
@@ -148,6 +149,19 @@ export interface BoardCodec {
   restore(board: unknown, silent?: boolean): void
 }
 
+/**
+ * 对局组织方式的存档口（由 `stores/hotseat` 建店时注册）
+ *
+ * 模式是**界面层的组织事实**，不属于盘面；单独走根级 `hotseat` 字段。
+ * **未注册**（只建会话层的单测）⇒ 存档不写该键、读档也不恢复 —— 与修前一致。
+ */
+export interface HotseatCodec {
+  /** 当前组织方式；未选择（null）⇒ `undefined`，存档不写该键 */
+  capture(): SaveHotseat | undefined
+  /** 读档后恢复；档里没有该字段 ⇒ 传 `undefined`（读成「未设置」） */
+  restore(saved: SaveHotseat | undefined): void
+}
+
 /** 盘面动作仍调用纯规则函数；此处负责保证正式推进的所有入口经过相同生命周期。 */
 export interface PhaseHooks {
   started?(): void
@@ -212,6 +226,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
    */
   let boardCodec: BoardCodec | null = null
   let setupCodec: BoardCodec | null = null
+  let hotseatCodec: HotseatCodec | null = null
   let phaseHooks: PhaseHooks | null = null
 
   function setPhaseHooks(hooks: PhaseHooks): void {
@@ -219,6 +234,11 @@ export const useGameSessionStore = defineStore('gameSession', () => {
   }
   function setSetupCodec(codec: BoardCodec): void {
     setupCodec = codec
+  }
+
+  /** 注册对局组织方式的存档口（由 hotseat 建店时调用；未注册时存档不带该字段） */
+  function setHotseatCodec(codec: HotseatCodec | null): void {
+    hotseatCodec = codec
   }
 
   /* ────────────────────────────── 派生 ────────────────────────────── */
@@ -830,6 +850,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       new Date().toISOString(),
       undefined,
       snapshot.board,
+      hotseatCodec?.capture(),
     )
     try {
       adapter.setItem(SAVE_SLOT_KEY, text)
@@ -923,6 +944,11 @@ export const useGameSessionStore = defineStore('gameSession', () => {
         throw cause
       }
       slot.value = describeSaveFile(text)
+      /*
+       * 对局组织方式**最后**恢复：它只影响界面（AI 是否接管、热坐是否遮屏），
+       * 不参与规则；档里没有该字段 ⇒ 传 undefined，读成「未设置」，由界面要求重选。
+       */
+      hotseatCodec?.restore(file.hotseat)
       saveError.value = null
       return true
     } catch (cause) {
@@ -1036,6 +1062,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     // P0 修复（B48）：盘面快照编解码器的注册口（由操作台建店时挂上）
     setBoardCodec,
     setSetupCodec,
+    setHotseatCodec,
     setPhaseHooks,
     saveNow,
     loadNow,
