@@ -4,12 +4,13 @@ import { storeToRefs } from 'pinia'
 
 import { BaseButton, ToastHost } from '@/components/base'
 import { SaveLoadDialog } from '@/components/save'
-import { useAppStore, useGameSessionStore, useUiStore } from '@/stores'
+import { useAppStore, useGameSessionStore, useHotseatStore, useUiStore } from '@/stores'
 import { getView } from '@/views/registry'
 
 const app = useAppStore()
 const ui = useUiStore()
 const gameSession = useGameSessionStore()
+const hotseat = useHotseatStore()
 const { currentView } = storeToRefs(ui)
 
 const activeRoute = computed(() => getView(currentView.value))
@@ -29,7 +30,16 @@ const saveBadge = computed(() => {
       <h1 class="shell__title">{{ app.appTitle }}</h1>
       <div class="shell__right">
         <!-- W7 C15：存档 / 读档（独立按钮；任意视图都在 ⇒ 任意环节可存） -->
-        <BaseButton variant="ghost" size="sm" class="shell__save" @click="ui.openSaveDialog()">
+        <!-- 热坐交接未确认时顶栏抬到遮罩之上：按钮明确置灰 + 说明，避免「能点但没反应」 -->
+        <span v-if="hotseat.handoffPending" class="shell__handoff">须先确认交接</span>
+        <BaseButton
+          variant="ghost"
+          size="sm"
+          class="shell__save"
+          :disabled="hotseat.handoffPending"
+          :title="hotseat.handoffPending ? '须先确认交接，才能存档 / 读档' : undefined"
+          @click="ui.openSaveDialog()"
+        >
           存档 / 读档（{{ saveBadge }}）
         </BaseButton>
         <span class="shell__route">{{ activeRoute.meta.title }}</span>
@@ -70,6 +80,16 @@ const saveBadge = computed(() => {
   padding: var(--space-3) var(--space-6);
   background: var(--color-ink);
   color: var(--color-bg);
+  /* 热坐交接遮罩（z-index: 60）只遮盘面：顶栏抬高一层的常态不改变任何交互 */
+  position: relative;
+  z-index: 61;
+}
+
+.shell__handoff {
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-gold);
+  color: var(--color-ink);
 }
 
 .shell__title {
