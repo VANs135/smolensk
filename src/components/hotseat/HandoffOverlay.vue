@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 
-import { BaseButton, BaseTag } from '@/components/base'
+import { BaseButton } from '@/components/base'
 import { useHotseatStore } from '@/stores'
 
 /**
@@ -23,8 +23,16 @@ import { useHotseatStore } from '@/stores'
 
 const hotseat = useHotseatStore()
 
-/** 当前生效的信息纪律（共识开关的结论：1.4 隐藏盒 / 4.9e 秘密掷骰 / 2.4 同步回合 / 4.1–4.3） */
-const policy = computed(() => hotseat.policy)
+const heading = ref<HTMLElement | null>(null)
+watch(
+  () => hotseat.handoffPending,
+  async (pending) => {
+    if (!pending) return
+    await nextTick()
+    heading.value?.focus()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -40,31 +48,21 @@ const policy = computed(() => hotseat.policy)
       <div class="handoff__mask" />
       <div class="handoff__panel">
         <header class="handoff__header">
-          <h3 class="handoff__title">热坐交接</h3>
-          <BaseTag kind="warning">2.2 / 4.9a</BaseTag>
+          <span>换手</span>
+          <span class="num">4.9a</span>
         </header>
 
-        <p class="handoff__to">{{ hotseat.handoffNotice }}</p>
-        <p class="handoff__hint muted">
-          交接期间盘面已遮罩：换手时请勿让对手看到己方堆叠明细（4.9a：玩家永远不能检查敌方堆叠；
-          敌方格只会显示**最上方战斗单位 / 最上方激活飞机 /
-          环形工事**，以及是否战略模式、DG、断补）。
-        </p>
-
-        <p class="handoff__policy num">
-          <BaseTag kind="info">{{ policy.rule }}</BaseTag>
-          {{ policy.detail }}
-        </p>
+        <h2 ref="heading" class="handoff__to" tabindex="-1">
+          {{ hotseat.viewerSide === 'axis' ? '轴心国' : '苏联' }}接手
+        </h2>
+        <p class="handoff__hint">{{ hotseat.handoffNotice }}</p>
 
         <div class="handoff__row">
           <BaseButton variant="primary" size="sm" @click="hotseat.confirmHandoff()">
-            确认交接，显示盘面
+            显示盘面
           </BaseButton>
-          <BaseButton variant="ghost" size="sm" @click="hotseat.cancelHandoff()">
-            反悔（回到 {{ hotseat.opponentSide === 'axis' ? '轴心国' : '苏联' }}）
-          </BaseButton>
+          <BaseButton variant="ghost" size="sm" @click="hotseat.cancelHandoff()"> 返回 </BaseButton>
         </div>
-        <p class="muted">单人试算可在「局况与切方」面板关掉热坐交接（关掉后切方不再遮屏）。</p>
       </div>
     </div>
   </Teleport>
@@ -74,7 +72,7 @@ const policy = computed(() => hotseat.policy)
 .handoff {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--z-panel);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -84,48 +82,48 @@ const policy = computed(() => hotseat.policy)
   position: absolute;
   inset: 0;
   /* 全不透明：交接期间**不显示盘面**（若只做半透明，堆叠明细仍会被对手看到） */
-  background: var(--color-bg);
+  background: var(--color-command-bg);
 }
 
 .handoff__panel {
   position: relative;
   width: min(560px, 92vw);
-  padding: var(--space-4);
-  background: var(--color-panel);
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-md);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 35%);
+  --color-bg-2: var(--color-command-raised);
+  --color-ink: var(--color-command-ink);
+  --color-accent-2: var(--color-command-teal-bg);
+  padding: var(--space-6);
+  background: var(--color-command-panel);
+  border: 1px solid var(--color-command-line);
+  border-top: 3px solid var(--color-command-teal);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
 }
 
 .handoff__header {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-
-.handoff__title {
-  margin: 0;
-  font-size: var(--text-lg);
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+  color: var(--color-command-teal);
+  font-size: var(--text-sm);
 }
 
 .handoff__to {
   margin: var(--space-2) 0;
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
   color: var(--color-ink);
   text-align: center;
 }
 
 .handoff__hint {
-  line-height: 1.6;
-}
-
-.handoff__policy {
-  margin: var(--space-2) 0;
+  color: var(--color-command-muted);
+  font-size: var(--text-sm);
+  text-align: center;
 }
 
 .handoff__row {
   display: flex;
+  justify-content: center;
   gap: var(--space-2);
   margin: var(--space-3) 0 var(--space-1);
 }

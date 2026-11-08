@@ -110,7 +110,7 @@ describe('B38：初设框可拖 + 落满给「完成初设」（源码守卫）'
     expect(queue).toContain('完成初设')
     // 初设收束后本框由视图的条件移除（"结束后自动关"）
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
-    expect(game).toContain('<DecisionQueue v-if="setup.applied && !setup.finished" />')
+    expect(game).toMatch(/<DecisionQueue\s+v-if="setup\.applied && !setup\.finished"/)
   })
 
   it('★ `SetupPanel` 里那份重复的"应满载数"已删（判据只有 store 一处）', () => {

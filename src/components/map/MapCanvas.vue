@@ -62,6 +62,7 @@ import {
 
 const props = withDefaults(
   defineProps<{
+    fill?: boolean
     /** 图层开关（由上层持有，组件只读） */
     layers?: MapLayerVisibility
     /** 高亮格（如上层选中的格） */
@@ -99,6 +100,7 @@ const props = withDefaults(
     constructionMarkers?: readonly ConstructionMarkerPiece[] | null
   }>(),
   {
+    fill: false,
     layers: () => ({ ...DEFAULT_MAP_LAYERS }),
     highlightHex: null,
     highlightHexes: () => [],
@@ -117,7 +119,12 @@ const emit = defineEmits<{
    * `world` 是这一击在**世界坐标**里的位置（与绘制同一份变换）。堆叠就地展开要靠它判"点到了哪一枚"
    * （B3），故由画布直接给出——视图那边只有窗口坐标，换算会多一份可能不同步的真相。
    */
-  hexClick: [hex: HexRef, world: { x: number; y: number }]
+  hexClick: [hex: HexRef, world: { x: number; y: number }, scale: number]
+  hexContext: [
+    hex: HexRef | null,
+    world: { x: number; y: number },
+    anchor: { x: number; y: number },
+  ]
   /** 悬停格变化（离开画布为 null） */
   hexHover: [hex: HexRef | null]
 }>()
@@ -379,7 +386,19 @@ function onPointerUp(event: PointerEvent): void {
   const local = toLocal(event)
   if (local === null) return
   const hit = hitAtLocal(local)
-  if (hit !== null) emit('hexClick', hit.hex, hit.world)
+  if (hit !== null) emit('hexClick', hit.hex, hit.world, viewport.value.scale)
+}
+
+function onContextMenu(event: MouseEvent): void {
+  if (!props.fill || !isMapGestureTarget(event.target, canvas.value)) return
+  event.preventDefault()
+  const local = toLocal(event)
+  if (local === null) return
+  const world = screenToWorld(local, viewport.value)
+  emit('hexContext', hitTestHex(world.x, world.y)?.hex ?? null, world, {
+    x: event.clientX,
+    y: event.clientY,
+  })
 }
 
 /**
@@ -514,7 +533,7 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
 </script>
 
 <template>
-  <div class="mapcanvas">
+  <div class="mapcanvas" :class="{ 'mapcanvas--fill': props.fill }">
     <div
       ref="container"
       class="mapcanvas__viewport"
@@ -524,10 +543,11 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
       @pointerleave="onPointerLeave"
+      @contextmenu="onContextMenu"
     >
       <canvas ref="canvas" class="mapcanvas__canvas" />
 
-      <div class="mapcanvas__hud num">
+      <div v-if="!props.fill" class="mapcanvas__hud num">
         <span v-if="hoverHex !== null">{{ hoverHex.col }}.{{ hoverHex.row }}</span>
         <span v-else class="mapcanvas__muted">移入地图显示格号</span>
       </div>
@@ -560,13 +580,35 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
       <slot name="overlay" />
     </div>
 
-    <div class="mapcanvas__tools">
-      <BaseButton variant="secondary" size="sm" @click="zoomByStep(-1)">缩小</BaseButton>
-      <BaseButton variant="secondary" size="sm" @click="zoomByStep(1)">放大</BaseButton>
-      <BaseButton variant="primary" size="sm" @click="fitToWindow">适应窗口</BaseButton>
+    <div class="mapcanvas__tools" aria-label="地图视口">
+      <span v-if="props.fill" class="mapcanvas__coord num">
+        {{ hoverHex === null ? '格 —' : '格 ' + hoverHex.col + '.' + hoverHex.row }}
+      </span>
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        aria-label="缩小"
+        title="缩小 −"
+        @click="zoomByStep(-1)"
+      >
+        {{ props.fill ? '−' : '缩小' }}
+      </BaseButton>
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        aria-label="放大"
+        title="放大 +"
+        @click="zoomByStep(1)"
+      >
+        {{ props.fill ? '+' : '放大' }}
+      </BaseButton>
+      <BaseButton variant="secondary" size="sm" title="适应窗口 0" @click="fitToWindow">
+        {{ props.fill ? '全图' : '适应窗口' }}
+      </BaseButton>
       <input
         class="mapcanvas__slider"
         type="range"
+        aria-label="地图缩放"
         :min="MIN_SCALE"
         :max="MAX_SCALE"
         step="0.01"
@@ -574,7 +616,7 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
         @input="onScaleInput"
       />
       <span class="num mapcanvas__percent">{{ scalePercent }}%</span>
-      <span class="mapcanvas__hint"> 滚轮以光标为锚点缩放 · 左键拖拽平移 · 左键单击选格 </span>
+      <span v-if="!props.fill" class="mapcanvas__legend">滚轮缩放 · 拖动平移 · 单击选格</span>
     </div>
   </div>
 </template>
@@ -585,6 +627,33 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
+}
+
+.mapcanvas--fill {
+  height: 100%;
+  gap: 0;
+}
+
+.mapcanvas--fill .mapcanvas__viewport {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.mapcanvas--fill .mapcanvas__tools {
+  flex: none;
+  min-height: var(--space-10);
+  padding: var(--space-1) var(--space-3);
+  border-top: 1px solid var(--color-rule);
+  background: var(--color-panel);
+}
+
+.mapcanvas__coord {
+  margin-right: auto;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
 }
 
 .mapcanvas__viewport {
@@ -617,7 +686,7 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-sm);
   background: rgb(32 30 26 / 0.72);
-  color: var(--color-bg);
+  color: var(--color-command-ink);
   font-size: var(--text-xs);
   pointer-events: none;
 }
@@ -637,7 +706,7 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
   border: 1px solid var(--color-rule);
   border-radius: var(--radius-sm);
   background: rgb(32 30 26 / 0.82);
-  color: var(--color-bg);
+  color: var(--color-command-ink);
   font-size: var(--text-xs);
   pointer-events: none;
 }
@@ -689,8 +758,14 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
   font-size: var(--text-xs);
 }
 
-.mapcanvas__hint {
+.mapcanvas__legend {
   color: var(--color-muted);
   font-size: var(--text-xs);
+}
+
+@media (max-width: 600px) {
+  .mapcanvas--fill .mapcanvas__slider {
+    width: var(--space-16);
+  }
 }
 </style>

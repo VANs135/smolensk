@@ -27,13 +27,13 @@ export const viewRegistry: ViewRegistry = {
     name: 'scenario',
     path: '/scenario',
     component: ScenarioSetupView,
-    meta: { title: '剧本与共识（进入游戏前）' },
+    meta: { title: '剧本与共识' },
   },
   game: {
     name: 'game',
     path: '/game',
     component: GameTableView,
-    meta: { title: '对局台（全流程可玩 + 快捷键）' },
+    meta: { title: '对局台' },
   },
   workbench: {
     name: 'workbench',

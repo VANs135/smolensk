@@ -324,7 +324,7 @@ export const useHotkeyStore = defineStore('hotkeys', () => {
     target: EventTarget | null
     preventDefault: () => void
   }): boolean {
-    if (!enabled.value) return false
+    if (!enabled.value || hotseat.handoffPending) return false
     // ★ 控件自己的键：焦点在按钮/链接上时回车＝激活该控件（Space 同理），热键让路
     //   （既不派发也不 preventDefault）——修前「回车＝结束移动」会把它吃掉，键盘用户按不动按钮。
     if (isControlTarget(event.target) && CONTROL_OWNED_KEYS.has(event.key)) return false

@@ -41,17 +41,12 @@ function answer(optionId?: string): void {
       <div class="prompt__mask" />
       <div class="prompt__panel">
         <header class="prompt__header">
-          <h3 class="prompt__title">待答（会话裁决）</h3>
+          <h3 class="prompt__title">{{ question.responder === 'axis' ? '轴心国' : '苏联' }}应答</h3>
           <BaseTag kind="warning">{{ question.rule }}</BaseTag>
         </header>
 
         <div class="prompt__body">
           <p class="prompt__prompt">{{ question.prompt }}</p>
-          <p class="prompt__meta">
-            应答方：{{ question.responder === 'axis' ? '轴心国' : '苏联' }}｜题号
-            {{ question.id }}｜类别
-            {{ question.kind }}
-          </p>
 
           <div v-if="options.length > 0" class="prompt__options">
             <BaseButton
@@ -70,20 +65,16 @@ function answer(optionId?: string): void {
 
           <p v-if="gameSession.error !== null" class="prompt__error">
             <BaseTag kind="danger">{{ gameSession.error.rule }}</BaseTag>
-            内核拒绝：{{ gameSession.error.reason }}
+            {{ gameSession.error.reason }}
           </p>
         </div>
 
         <footer class="prompt__footer">
-          <p class="prompt__note">
-            本面板不提供关闭与取消：只有内核裁决通过（作答合法并落地）才会关闭。
-          </p>
           <div class="prompt__actions">
             <!-- W7 C15：待答时遮罩挡住了顶栏，故由面板自己给存档入口（与顶栏同一个对话框） -->
             <BaseButton variant="ghost" size="sm" @click="ui.openSaveDialog()">
               存档 / 读档
             </BaseButton>
-            <BaseTag kind="neutral">存档不改变形态：本面板仍在等作答</BaseTag>
           </div>
         </footer>
       </div>
@@ -143,12 +134,6 @@ function answer(optionId?: string): void {
   color: var(--color-ink);
 }
 
-.prompt__meta {
-  margin: 0 0 var(--space-4);
-  font-size: var(--text-sm);
-  color: var(--color-muted);
-}
-
 .prompt__options {
   display: flex;
   flex-wrap: wrap;
@@ -170,10 +155,6 @@ function answer(optionId?: string): void {
   background: var(--color-bg-2);
   font-size: var(--text-sm);
   color: var(--color-muted);
-}
-
-.prompt__note {
-  margin: 0;
 }
 
 .prompt__actions {

@@ -422,8 +422,8 @@ function hoverDump(id: string | null): void {
 
     <!-- ④ 本次移动中的单位（6.1f：点一枚即把它就地放下，其余继续走） -->
     <CounterPicker
-      title="本次移动中的单位（点一枚＝就地放下它，6.1f）"
-      hint="6.1f：离开堆叠即不得再移动 —— 走不动的留下、其余继续；点一枚即放下（灰掉的表示本次移动已结束）"
+      title="移动编组 · 6.1f"
+      hint="点击算子就地放下"
       :items="moveUnitItems"
       :size="40"
       @pick="workbench.dropUnitFromMove($event)"
@@ -452,7 +452,7 @@ function hoverDump(id: string | null): void {
     -->
     <div v-if="workbench.hoverNode !== null || workbench.stepPreview !== null" class="block">
       <p class="num">
-        <BaseTag kind="info">预览</BaseTag>
+        <BaseTag kind="info">预览不扣 MP</BaseTag>
         <template v-if="workbench.hoverNode !== null">
           路径 {{ workbench.hoverNode.path.length }} 格 · 累计 {{ workbench.hoverNode.mpSpent }} MP
         </template>
@@ -473,7 +473,6 @@ function hoverDump(id: string | null): void {
       <p v-if="(workbench.stepPreview?.droppingIds.length ?? 0) > 0" class="muted num">
         {{ workbench.stepPreview?.droppingIds.length }} 枚走不动、将留在原格（6.1f）
       </p>
-      <p class="muted num">预览不扣 MP、不付款、不掷骰；提交时由规则域重新检查。</p>
     </div>
 
     <!-- ⑥ 4.5a-A：进入未抵消敌方 ZOC 的待决（必须收束，否则不许再走） -->
@@ -521,12 +520,7 @@ function hoverDump(id: string | null): void {
     </SessionStep>
 
     <!-- ③ 突袭（8.0/8.1a）：目标格在地图上高亮，点它即发起 -->
-    <p v-if="canOverrun" class="num">
-      突袭（8.0）：把光标移到本方可攻击单位选定的格上时，可突袭的相邻格会高亮 ——
-      **点那个高亮格**即发起 （8.1a：3 MP 记在 9.2 的推进步；8.0：进格会立刻展开战斗会话）。
-      本面板**不替你选目标**：候选格由引擎按 8.1 的资格给出（`overrunTargets`）。突袭**需要燃料**
-      （12.5b：即使堆叠开始移动时就与防御方相邻也要付）。
-    </p>
+    <p v-if="canOverrun" class="muted num">点击地图上高亮的敌方格发起突袭 · 8.1a</p>
 
     <!--
       ★ 12.5c「在发生燃料消耗的**任何阶段**…在燃料消耗时支付」⇒ 燃料跟着**移动**走：

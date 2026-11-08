@@ -1,59 +1,35 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
-import { BaseButton, BasePanel, BaseTag } from '@/components/base'
 import { ConsensusChecklist } from '@/components/hotseat'
+import { provideUiMode } from '@/components/ui-mode'
 import { useGameSessionStore, useHotseatStore, useSetupStore, useUiStore } from '@/stores'
 
-/**
- * 前置「剧本 + 共识」视图（B10；用户口径⑨）
- *
- * ## 用户口径
- *   「可以在进入游戏界面前加一个**剧本选择界面**，选择剧本和共识后点击进入游戏，
- *    进入游戏界面**开始初设**」；「共识开关**默认全不勾**」。
- *
- * ## 它替代了哪一步
- *   此前"选剧本"藏在**对局台侧栏**的「初设与开局」面板里，玩家一进对局台就已经在一局里了。
- *   现在进入游戏的路径是：**开始台 → 本视图（选剧本 + 定共识）→ 进入游戏（开始初设）**，
- *   共识也在开局前就摆明了（默认一条都不用）。
- *
- * ## 分层纪律
- *   本视图只画与收点击：剧本列表来自 `setup.scenarioChoices`（`scenarios.json` 的投影），
- *   共识勾选走 `gameSession`（已有组件 `ConsensusChecklist`），"进入初设"走 `setup.enterSetup`
- *   ——**它不建会话、不进 Pre-Turn**（那是初设收束时「开始游戏」的事，见 `startGameNow`）。
- */
+provideUiMode('formal')
 
 const setup = useSetupStore()
 const gameSession = useGameSessionStore()
 const hotseat = useHotseatStore()
 const ui = useUiStore()
 
-/**
- * B36（用户口径 #7）：**对局模式**单选
- *
- * 本处只把模式写进 store 的 setMode（它决定：交接屏要不要遮、战雾要不要裁）；
- * 模式的**说明文案**取自 store 的 MODE_LABELS，不在这里另写一遍（否则两处会走散）。
- */
 const modeOptions = computed(() => hotseat.MODE_LABELS)
-
-/** 选中项（列表里高亮它） */
 const choices = computed(() => setup.scenarioChoices)
+const selectedId = ref(setup.scenarioId)
+const selected = computed(() => choices.value.find((item) => item.id === selectedId.value) ?? null)
 
-/** 当前选中剧本的说明行（用于"已选"提示，避免玩家来回确认） */
-const selected = computed(() => choices.value.find((item) => item.selected) ?? null)
+const modeCopy = {
+  solo: { label: '单人推演', note: '双方盘面可见' },
+  pvp: { label: '双人热坐', note: '交接遮屏 · §4.9a' },
+  pve: { label: '人机对局', note: '在棋桌选择 AI 方' },
+} as const
 
-/** 首手方中文名 */
-function sideLabel(side: 'axis' | 'soviet'): string {
-  return side === 'axis' ? '轴心国' : '苏联'
-}
-
-/** 进入初设：按所选剧本落盘固定初设，然后进对局台（在那边做初设决策） */
-function enterGame(): void {
+function onEnterSetup(): void {
   const target = selected.value
   if (target === null) return
   if (!setup.enterSetup(target.id)) {
     const failure = setup.lastAction
-    ui.pushToast('warning', `进入初设被拒（${failure?.rule ?? '初设'}）：${failure?.detail ?? ''}`)
+    const message = failure?.detail ?? '请重新选择剧本'
+    ui.pushToast('warning', `无法进入初设（§${failure?.rule ?? '2.2'}）${message}`)
     return
   }
   ui.navigate('game')
@@ -62,85 +38,104 @@ function enterGame(): void {
 
 <template>
   <div class="scenario">
-    <header class="scenario__bar">
-      <BaseTag kind="info">进入游戏前</BaseTag>
-      <span class="scenario__title">剧本与共识</span>
-      <BaseButton variant="ghost" size="sm" @click="ui.navigate('home')">返回开始台</BaseButton>
-      <BaseButton variant="primary" size="sm" @click="enterGame">进入游戏（开始初设）</BaseButton>
-    </header>
+    <div class="scenario__frame">
+      <header class="scenario__bar">
+        <div>
+          <button class="scenario__back" type="button" @click="ui.navigate('home')">
+            <span aria-hidden="true">←</span> 开始台
+          </button>
+          <h2 class="scenario__title">战役部署</h2>
+        </div>
+        <button
+          class="scenario__enter"
+          type="button"
+          :disabled="selected === null"
+          @click="onEnterSetup"
+        >
+          进入初设 <span aria-hidden="true">→</span>
+        </button>
+      </header>
 
-    <!-- B36（用户口径 #7）：对局模式（solo / PVP / PVE） -->
-    <BasePanel title="对局模式">
-      <ul class="modes">
-        <li v-for="item in modeOptions" :key="item.key">
-          <label class="modes__item" :class="{ 'modes__item--on': hotseat.mode === item.key }">
-            <input
-              type="radio"
-              name="hotseat-mode"
-              :value="item.key"
-              :checked="hotseat.mode === item.key"
-              @change="hotseat.setMode(item.key)"
-            />
-            <span class="modes__label">{{ item.label }}</span>
-            <span class="modes__note muted num">{{ item.note }}</span>
-          </label>
-        </li>
-      </ul>
-      <p class="muted">
-        模式只影响**交接屏与战雾**（solo：不遮屏、双方内容可见；PVP：热坐交接 + 4.9a 裁剪； PVE
-        暂未实现）。它不改变任何规则判定。
-      </p>
-    </BasePanel>
+      <div class="scenario__cols">
+        <section class="scenario__sheet" aria-labelledby="scenario-choice-title">
+          <header class="scenario__heading">
+            <h3 id="scenario-choice-title">选择剧本</h3>
+            <span class="num">{{ choices.length }} 个剧本</span>
+          </header>
+          <ul class="scenario__list">
+            <li v-for="item in choices" :key="item.id">
+              <button
+                type="button"
+                class="scenario__card"
+                :class="{ 'scenario__card--on': item.id === selectedId }"
+                :aria-pressed="item.id === selectedId"
+                @click="selectedId = item.id"
+              >
+                <span class="scenario__id num">{{ item.id.padStart(2, '0') }}</span>
+                <span class="scenario__entry">
+                  <strong class="scenario__name">{{ item.name }}</strong>
+                  <span class="scenario__date num">{{ item.firstTurn }} – {{ item.lastTurn }}</span>
+                </span>
+                <span class="scenario__meta num">{{ item.turns }} 回合</span>
+                <span class="scenario__mark" aria-hidden="true">
+                  {{ item.id === selectedId ? '✓' : '' }}
+                </span>
+              </button>
+            </li>
+          </ul>
+        </section>
 
-    <div class="scenario__cols">
-      <BasePanel title="剧本（7 个剧本页）">
-        <p class="muted">
-          选中即按该剧本**自动初设**无需玩家定夺的部分（固定格号 / 死亡堆 / 多点位 / 军力减损），
-          其余项进游戏后在初设里决定。剧本号只此一处选择（对局台内不再重复选择）。
-        </p>
-        <ul class="scenario__list">
-          <li v-for="item in choices" :key="item.id">
-            <button
-              type="button"
-              class="scenario__card"
-              :class="{ 'scenario__card--on': item.selected }"
-              @click="setup.enterSetup(item.id)"
-            >
-              <span class="scenario__id num">{{ item.id }}</span>
-              <span class="scenario__name">{{ item.name }}</span>
-              <span class="scenario__meta num">
-                {{ item.turns }} 回合 · {{ item.firstTurn }} → {{ item.lastTurn }} · 首手
-                {{ sideLabel(item.firstPlayer) }}
-              </span>
-              <span class="scenario__flags">
-                <BaseTag v-if="item.hasSetup" kind="neutral">自带初设页</BaseTag>
-                <BaseTag v-else-if="item.sharedSetupWith.length > 0" kind="neutral">
-                  共用剧本 {{ item.sharedSetupWith.join(' / ') }} 的初设
-                </BaseTag>
-                <BaseTag v-if="item.selected" kind="success">已选</BaseTag>
-              </span>
-            </button>
-          </li>
-        </ul>
-        <p v-if="setup.lastAction !== null" class="num muted">
-          {{ setup.lastAction.ok ? '初设' : '被拒' }}（{{ setup.lastAction.rule }}）：
-          {{ setup.lastAction.detail }}
-        </p>
-      </BasePanel>
+        <div class="scenario__side">
+          <section v-if="selected !== null" class="scenario__sheet" aria-labelledby="mode-title">
+            <header class="scenario__heading">
+              <h3 id="mode-title">对局设置</h3>
+              <span class="num">剧本 {{ selected.id }}</span>
+            </header>
+            <dl class="scenario__facts">
+              <div>
+                <dt>先手</dt>
+                <dd>{{ selected.firstPlayer === 'axis' ? '轴心国' : '苏联' }}</dd>
+              </div>
+              <div>
+                <dt>初设</dt>
+                <dd v-if="selected.hasSetup">独立</dd>
+                <dd v-else-if="selected.sharedSetupWith.length > 0">
+                  共用 {{ selected.sharedSetupWith.join(' / ') }}
+                </dd>
+                <dd v-else>—</dd>
+              </div>
+            </dl>
+            <fieldset class="scenario__modes">
+              <legend>对局模式</legend>
+              <ul class="modes">
+                <li v-for="item in modeOptions" :key="item.key">
+                  <label
+                    class="modes__item"
+                    :class="{ 'modes__item--on': hotseat.mode === item.key }"
+                  >
+                    <input
+                      type="radio"
+                      name="hotseat-mode"
+                      :value="item.key"
+                      :checked="hotseat.mode === item.key"
+                      @change="hotseat.setMode(item.key)"
+                    />
+                    <span class="modes__label">{{ modeCopy[item.key].label }}</span>
+                    <span class="modes__note">{{ modeCopy[item.key].note }}</span>
+                  </label>
+                </li>
+              </ul>
+            </fieldset>
+          </section>
 
-      <div class="scenario__side">
-        <!-- 共识：默认一条都不用（用户口径⑨）；勾选结论在初设收束「开始游戏」时写入日志 -->
-        <ConsensusChecklist />
-        <BasePanel title="接下来会发生什么">
-          <p class="muted">
-            进入游戏界面后先做**初设**：飞行单位落格、自由项落位、卡车满载、SP 归属等；
-            初设收束点「开始游戏」才建会话、写共识结论并进入回合准备（2.2）。
-          </p>
-          <p v-if="gameSession.session !== null" class="muted num">
-            注意：本会话已开局（剧本 {{ gameSession.scenarioId }}）⇒ 换剧本会被拒（2.2），
-            要换剧本请先在会话面板重置。
-          </p>
-        </BasePanel>
+          <details class="scenario__sheet scenario__consensus">
+            <summary class="scenario__heading">
+              <span>开局共识</span>
+              <span class="num">{{ gameSession.agreedCheckedCount }} 项 · §4.0</span>
+            </summary>
+            <ConsensusChecklist />
+          </details>
+        </div>
       </div>
     </div>
   </div>
@@ -148,141 +143,279 @@ function enterGame(): void {
 
 <style scoped>
 .scenario {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  flex: 1;
+  padding: var(--space-8) clamp(var(--space-4), 5vw, var(--space-16));
+  background: var(--color-command-bg);
+  color: var(--color-command-ink);
+  color-scheme: dark;
+}
+
+.scenario__frame {
+  width: min(100%, 1180px);
+  margin-inline: auto;
 }
 
 .scenario__bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-rule);
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.scenario__back {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
-  background: var(--color-panel);
+  background: transparent;
+  color: var(--color-command-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.scenario__back:hover {
+  border-color: var(--color-command-line);
+  color: var(--color-command-ink);
 }
 
 .scenario__title {
-  font-family: var(--font-head);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  margin-right: auto;
-}
-
-/* B36：对局模式一排（solo / PVP / PVE） */
-.modes {
   margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  font-size: clamp(1.8rem, 4vw, 3.2rem);
 }
 
-.modes__item {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-2);
+.scenario__enter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: var(--space-12);
+  padding: var(--space-2) var(--space-5);
+  border: 1px solid var(--color-command-teal);
+  border-radius: var(--radius-md);
+  background: var(--color-command-teal);
+  color: var(--color-command-bg);
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
-  font-size: var(--text-sm);
 }
 
-.modes__item--on {
-  border-color: var(--color-accent);
-  background: var(--color-panel);
-  box-shadow: var(--shadow-sm);
+.scenario__enter:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-command-teal) 85%, var(--color-command-ink));
 }
 
-.modes__label {
-  font-weight: 600;
+.scenario__enter:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
-.modes__note {
-  font-size: var(--text-xs);
+.scenario :focus-visible {
+  outline-color: var(--color-command-amber);
 }
 
 .scenario__cols {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
-  gap: var(--space-2);
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
+  gap: var(--space-4);
   align-items: start;
 }
 
-@media (max-width: 900px) {
-  .scenario__cols {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 .scenario__side {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  display: grid;
+  gap: var(--space-4);
 }
 
-.scenario__list {
-  margin: var(--space-1) 0 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+.scenario__sheet {
+  border: 1px solid var(--color-command-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-command-panel);
+}
+
+.scenario__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-command-line);
+  font-weight: 700;
+}
+
+.scenario__heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.scenario__heading .num,
+.scenario__date,
+.scenario__meta,
+.scenario__facts dt,
+.modes__note {
+  color: var(--color-command-muted);
+  font-size: var(--text-xs);
+}
+
+.scenario__list,
+.modes {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-2);
+  list-style: none;
 }
 
 .scenario__card {
+  display: grid;
+  grid-template-columns: var(--space-10) minmax(0, 1fr) auto var(--space-4);
+  align-items: center;
+  gap: var(--space-2);
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-2);
-  color: var(--color-ink);
+  min-height: var(--space-12);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-command-ink);
+  font: inherit;
+  line-height: 1.35;
   text-align: left;
   cursor: pointer;
 }
 
 .scenario__card:hover {
-  border-color: var(--color-accent);
+  background: var(--color-command-raised);
 }
 
-.scenario__card--on {
-  border-color: var(--color-accent);
-  background: var(--color-panel);
-  box-shadow: var(--shadow-sm);
+.scenario__card--on,
+.scenario__card--on:hover {
+  border-color: var(--color-command-teal);
+  background: var(--color-command-teal-bg);
+}
+
+.scenario__entry {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.scenario__id,
+.scenario__mark {
+  color: var(--color-command-teal);
+  text-align: center;
 }
 
 .scenario__id {
   font-weight: 700;
 }
 
-.scenario__name {
-  font-family: var(--font-head);
+.scenario__meta {
+  white-space: nowrap;
 }
 
-.scenario__meta {
-  color: var(--color-muted);
+.scenario__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.scenario__facts dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.scenario__modes {
+  min-width: 0;
+  margin: 0;
+  padding: 0 var(--space-2) var(--space-2);
+  border: 0;
+}
+
+.scenario__modes legend {
+  margin-inline: var(--space-2);
+  color: var(--color-command-muted);
   font-size: var(--text-xs);
 }
 
-.scenario__flags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin-top: 2px;
+.modes {
+  padding: var(--space-2) 0 0;
 }
 
-.muted {
-  color: var(--color-muted);
+.modes__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-command-line);
+  border-radius: var(--radius-md);
+  background: var(--color-command-bg);
   font-size: var(--text-sm);
-  margin: var(--space-1) 0 0;
+  cursor: pointer;
+}
+
+.modes__item:hover {
+  border-color: var(--color-command-muted);
+}
+
+.modes__item--on,
+.modes__item--on:hover {
+  border-color: var(--color-command-teal);
+  background: var(--color-command-teal-bg);
+}
+
+.modes__item input {
+  accent-color: var(--color-command-teal);
+}
+
+.modes__label {
+  font-weight: 700;
+}
+
+.modes__note {
+  margin-left: auto;
+}
+
+.scenario__consensus summary {
+  justify-content: flex-start;
+  border-bottom: 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.scenario__consensus summary::-webkit-details-marker {
+  display: none;
+}
+
+.scenario__consensus summary::before {
+  color: var(--color-command-teal);
+  content: '+';
+}
+
+.scenario__consensus[open] summary {
+  border-bottom: 1px solid var(--color-command-line);
+}
+
+.scenario__consensus[open] summary::before {
+  content: '−';
+}
+
+.scenario__consensus summary .num {
+  margin-left: auto;
+}
+
+@media (max-width: 840px) {
+  .scenario__cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .scenario__card {
+    grid-template-columns: var(--space-6) minmax(0, 1fr) auto var(--space-3);
+  }
 }
 </style>

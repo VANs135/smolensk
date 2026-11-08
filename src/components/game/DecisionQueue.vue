@@ -44,11 +44,6 @@ function sideName(side: 'axis' | 'soviet'): string {
   return side === 'axis' ? '轴心国' : '苏联'
 }
 
-/** 这一方还有几项没定（分方游标那一栏用；全量口径，不受当前过滤影响） */
-function pendingOf(side: 'axis' | 'soviet'): number {
-  return setup.sidePendingCount(side)
-}
-
 /** 还没落位的**总枚数**（标题上的角标） */
 const pendingTotal = computed(() => stacks.value.reduce((total, stack) => total + stack.count, 0))
 
@@ -73,6 +68,7 @@ const offset = ref<{ dx: number; dy: number }>({ dx: 0, dy: 0 })
 const drag = ref<{ startX: number; startY: number; dx: number; dy: number } | null>(null)
 
 function onPointerDown(event: PointerEvent): void {
+  if (event.button !== 0) return
   drag.value = {
     startX: event.clientX,
     startY: event.clientY,
@@ -134,12 +130,7 @@ function isActive(item: SetupPlacing): boolean {
 
 /** 点卡片：开始在地图上落位（飞机走空军基地格；卡车直接在卡上选满载） */
 function pick(item: SetupPlacing): void {
-  if (item.kind === 'truck') return
-  if (item.blockedReason !== null) {
-    // 不能落位的原因已在卡上写着，点了只把它顶到眼前（不弹窗、不换页）
-    setup.cancelPlacement()
-    return
-  }
+  if (item.kind === 'truck' || item.blockedReason !== null) return
   // §6-A：ch10 抽中西移的师（落点按原文算法（沿道路西移 3 格）得出，道路数据不全 ⇒ 由玩家点地图给）
   if (item.kind === 'shift') {
     if (item.formationId !== undefined) setup.beginShiftPlacement(item.formationId)
@@ -160,7 +151,10 @@ function sideMark(side: 'axis' | 'soviet'): string {
     ref="rootRef"
     class="queue"
     :style="{ transform: 'translate(' + offset.dx + 'px, ' + offset.dy + 'px)' }"
-    aria-label="待你决定的队列"
+    aria-label="初设"
+    @pointerdown.stop
+    @click.stop
+    @wheel.stop
   >
     <!-- B38：标题栏可拖（松手夹回地图窗口内；口径 #5「初设框不能拖」） -->
     <header
@@ -170,25 +164,21 @@ function sideMark(side: 'axis' | 'soviet'): string {
       @pointerup="onPointerUp"
       @pointercancel="onPointerUp"
     >
-      <span class="queue__title">待你决定</span>
-      <BaseTag v-if="cursorSide !== null" kind="info">
-        {{ sideName(cursorSide) }}布设（先布设方 {{ sideName(setup.setupFirstSide ?? 'axis') }}）
-      </BaseTag>
-      <BaseTag :kind="pendingTotal > 0 ? 'warning' : 'success'">{{ pendingTotal }} 枚未定</BaseTag>
+      <span class="queue__title">初设</span>
+      <span v-if="cursorSide !== null" class="queue__current" :data-side="cursorSide">
+        {{ sideName(cursorSide) }}
+      </span>
+      <span class="queue__pending num">{{ pendingTotal }} 待处理</span>
     </header>
 
     <!--
       第六批条 1（S1）：**分方游标** —— 先布设方（剧本页 `setupFirst`，与"先行动方"是两回事）
       布设完按一下即换手；两方都确认 ⇒ 游标归位、队列恢复全量（未落位者仍按既有口径处理）。
     -->
-    <div v-if="cursorSide !== null" class="queue__side-cursor">
-      <p class="queue__hint">
-        <BaseTag kind="neutral">分方</BaseTag>
-        本方待定 {{ pendingOf(cursorSide) }} 项
-        <BaseButton variant="primary" size="sm" @click="setup.confirmSideSetup()">
-          {{ sideName(cursorSide) }}布设完毕
-        </BaseButton>
-      </p>
+    <div v-if="cursorSide !== null" class="queue__row-actions">
+      <BaseButton variant="primary" size="sm" @click="setup.confirmSideSetup()">
+        确认本方布设
+      </BaseButton>
     </div>
 
     <!--
@@ -196,23 +186,56 @@ function sideMark(side: 'axis' | 'soviet'): string {
       按下即开局（`startGameNow`）；初设收束后本框随 `!setup.finished` 的条件自动消失。
     -->
     <div v-if="allPlaced && cursorSide === null" class="queue__done">
-      <p class="queue__hint">
-        <BaseTag kind="success">已全部落位</BaseTag>
-        点「完成初设」进入第一阶段（未落位者视为本局移除）。
-      </p>
       <BaseButton variant="primary" size="sm" @click="setup.startGameNow()">完成初设</BaseButton>
     </div>
+
+    <div v-if="placing !== null" class="queue__active">
+      <strong class="queue__label" :title="placing.label">{{ placing.label }}</strong>
+      <span class="queue__pending num">剩 {{ placing.remaining }}</span>
+      <BaseButton variant="ghost" size="sm" @click="setup.cancelPlacement()">取消选格</BaseButton>
+      <div v-if="placing.category === 'supply'" class="queue__hint">
+        本次落
+        <button
+          v-for="c in setup.placingChunkChoices"
+          :key="c"
+          type="button"
+          class="queue__chunk"
+          :class="{ 'queue__chunk--on': placing.chunk === c }"
+          :aria-pressed="placing.chunk === c"
+          @click="setup.setPlacingChunk(c)"
+        >
+          {{ c }}
+        </button>
+      </div>
+      <p class="queue__instruction">点击高亮格落位</p>
+    </div>
+
+    <div v-if="setup.truckLoadSummary.mode === 'choose_loaded'" class="queue__row-actions">
+      <span class="queue__hint num">
+        满载 {{ setup.truckLoadSummary.fullCount }}/{{ setup.requiredFullTrucks }} · §13.2h
+      </span>
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        @click="setup.truckPickActive ? setup.cancelTruckPick() : setup.beginTruckPick()"
+      >
+        {{ setup.truckPickActive ? '收起高亮' : '点图指定满载' }}
+      </BaseButton>
+    </div>
+
+    <p v-if="setup.lastAction !== null && !setup.lastAction.ok" class="queue__error" role="status">
+      <span class="num">§{{ setup.lastAction.rule }}</span> {{ setup.lastAction.detail }}
+    </p>
 
     <!--
       P4 / UI1-b：三组只读分组（必做事项 / 可自主放弃项 / 已完成项）。
       计数与条目全部来自 store 投影；四堆叠仍是下面可点图落位的操作区。
     -->
-    <section class="queue__group" aria-label="必做事项">
-      <h3 class="queue__group-title">
+    <details v-if="setup.requiredSetupIssues.length > 0" class="queue__group">
+      <summary class="queue__group-title">
         <span>必做事项</span>
         <span class="queue__group-count num">{{ setup.requiredSetupIssues.length }}</span>
-      </h3>
-      <p v-if="setup.requiredSetupIssues.length === 0" class="queue__empty">无必做事项</p>
+      </summary>
       <p
         v-for="issue in setup.requiredSetupIssues"
         :key="issue.id"
@@ -221,45 +244,48 @@ function sideMark(side: 'axis' | 'soviet'): string {
         <BaseTag kind="warning">{{ issue.rule }}</BaseTag>
         {{ issue.detail }}
       </p>
-    </section>
+    </details>
 
-    <section class="queue__group" aria-label="可自主放弃项">
-      <h3 class="queue__group-title">
+    <details
+      v-if="cursorSide === null && setup.omittablePlacements.length > 0"
+      class="queue__group"
+    >
+      <summary class="queue__group-title">
         <span>可自主放弃项</span>
         <span class="queue__group-count num">{{ setup.omittablePlacements.length }}</span>
-      </h3>
-      <div v-if="cursorSide === null && setup.omittablePlacements.length > 0" class="queue__done">
-        <details>
-          <summary>还有未布设项；查看后可选择放弃</summary>
-          <p
+      </summary>
+      <div class="queue__done">
+        <ul class="queue__cards">
+          <li
             v-for="item in setup.omittablePlacements"
             :key="item.kind + ':' + item.side + ':' + item.entryIndex"
+            class="queue__placed-row"
           >
-            {{ sideName(item.side) }}：{{ item.label }} × {{ item.remaining }}
-          </p>
-          <label
-            ><input
-              v-model="omitConfirmed"
-              type="checkbox"
-            />确认以上普通未布设单位从本局移除</label
-          >
-          <BaseButton
-            size="sm"
-            :disabled="!omitConfirmed || setup.requiredSetupIssues.length > 0"
-            @click="setup.startGameNow()"
-            >确认放弃未布设项并开局</BaseButton
-          >
-        </details>
+            <span class="queue__side num">{{ sideMark(item.side) }}</span>
+            <span class="queue__label" :title="item.label">{{ item.label }}</span>
+            <span class="num">× {{ item.remaining }}</span>
+          </li>
+        </ul>
+        <label class="queue__check">
+          <input v-model="omitConfirmed" type="checkbox" /> 放弃以上未布设单位
+        </label>
+        <BaseButton
+          variant="primary"
+          size="sm"
+          :disabled="!omitConfirmed || setup.requiredSetupIssues.length > 0"
+          @click="setup.startGameNow()"
+        >
+          确认放弃并开局
+        </BaseButton>
       </div>
-      <p v-else-if="setup.omittablePlacements.length === 0" class="queue__empty">无可自主放弃项</p>
-    </section>
+    </details>
 
-    <section class="queue__group" aria-label="已完成项">
-      <h3 class="queue__group-title">
+    <details v-if="setup.completedPlacements.length > 0" class="queue__group">
+      <summary class="queue__group-title">
         <span>已完成项</span>
         <span class="queue__group-count num">{{ setup.completedPlacements.length }}</span>
-      </h3>
-      <ul v-if="setup.completedPlacements.length > 0" class="queue__placed">
+      </summary>
+      <ul class="queue__placed">
         <li
           v-for="placement in setup.completedPlacements"
           :key="placement.key"
@@ -273,11 +299,15 @@ function sideMark(side: 'axis' | 'soviet'): string {
           <span class="queue__badge num">{{ placement.placed }}/{{ placement.total }}</span>
         </li>
       </ul>
-      <p v-else class="queue__empty">暂无已完成项</p>
-    </section>
+    </details>
 
     <div v-for="stack in stacks" v-show="!allPlaced" :key="stack.key" class="queue__stack">
-      <button type="button" class="queue__stack-btn" @click="toggleStack(stack.key)">
+      <button
+        type="button"
+        class="queue__stack-btn"
+        :aria-expanded="openKey === stack.key"
+        @click="toggleStack(stack.key)"
+      >
         <span class="queue__stack-name">{{ stack.label }}</span>
         <span class="queue__stack-count num">{{ stack.count }}</span>
         <span class="queue__caret">{{ openKey === stack.key ? '▾' : '▸' }}</span>
@@ -296,9 +326,9 @@ function sideMark(side: 'axis' | 'soviet'): string {
               'queue__card--on': isActive(item),
               'queue__card--blocked': item.blockedReason !== null,
             }"
-            :title="
-              item.blockedReason ?? `${item.raw}（${item.side === 'axis' ? '轴心国' : '苏联'}）`
-            "
+            :title="item.blockedReason ?? `${item.raw}（${sideName(item.side)}）`"
+            :aria-pressed="isActive(item)"
+            :disabled="item.kind === 'truck' || item.blockedReason !== null"
             @click="pick(item)"
           >
             <!--
@@ -310,78 +340,24 @@ function sideMark(side: 'axis' | 'soviet'): string {
             </span>
             <span class="queue__side num">{{ sideMark(item.side) }}</span>
             <span class="queue__label">{{ item.label }}</span>
-            <span v-if="item.kind !== 'truck'" class="queue__badge num">
-              {{ item.placed }}/{{ item.total }}
+            <span class="queue__badge num">
+              {{
+                item.kind === 'truck'
+                  ? item.placed > 0
+                    ? '满载'
+                    : '空载'
+                  : `${item.placed}/${item.total}`
+              }}
             </span>
           </button>
-
-          <!--
-            第六批条 2（S2）：卡车**不在卡片上勾** —— 同名同图的几十辆卡车在列表里认不出来，
-            玩家要问的是"图上这一辆装不装" ⇒ 改由**地图高亮 + 点卡车即装载**（13.2h）。
-            卡片上只回显它当前是否满载（`placed`），判定与落账都在 store。
-          -->
-          <span v-if="item.kind === 'truck'" class="queue__truck">
-            <BaseTag :kind="item.placed > 0 ? 'success' : 'neutral'">
-              {{ item.placed > 0 ? '已满载 1 SP' : '空载' }}
-            </BaseTag>
-          </span>
 
           <span v-if="item.blockedReason !== null" class="queue__blocked">
             {{ item.blockedReason }}
           </span>
         </li>
       </ul>
-      <p v-else-if="openKey === stack.key" class="queue__empty">这一堆没有待决定的项。</p>
+      <p v-else-if="openKey === stack.key" class="queue__empty">无待布设项</p>
     </div>
-
-    <!-- 正在落位的一行：说清"点地图上的哪儿"，并给一个退出（不改已落盘的） -->
-    <p v-if="placing !== null" class="queue__hint">
-      <BaseTag kind="info">{{ placing.label }}</BaseTag>
-      <!-- 第六批条 26（S4）：SP / 运输点可分多格 —— 先选"这一下放多少"，再点地图高亮格 -->
-      <template v-if="placing.category === 'supply'">
-        本次落
-        <button
-          v-for="c in setup.placingChunkChoices"
-          :key="c"
-          type="button"
-          class="queue__chunk"
-          :class="{ 'queue__chunk--on': placing.chunk === c }"
-          @click="setup.setPlacingChunk(c)"
-        >
-          {{ c }}
-        </button>
-        （剩 {{ placing.remaining }}）
-      </template>
-      <template v-else>还剩 {{ placing.remaining }} 枚：点地图高亮格落位</template>
-      <BaseButton variant="ghost" size="sm" @click="setup.cancelPlacement()">收起</BaseButton>
-    </p>
-
-    <!--
-      卡车装载（13.2h：满载辆数须与剧本页一致）
-      ★ 批 B 切片 1：**只在"玩家自选"时给这个入口** —— 剧本页明示全满载/全空载时初设已自动落账
-        （`setup.truckLoadSummary.automatic`），这类剧本的卡车堆叠本身也是空的（`decisionQueue` 的 filter）。
-      ★ 第六批条 2（S2）：**去掉"核验"按钮** —— 改为"地图高亮可装载卡车，点一辆即装载"；
-        选够剧本页要求的辆数时 store 自动落账（`pickTruckAtHex` → `designateTrucks`）。
-    -->
-    <p v-if="setup.truckLoadSummary.mode === 'choose_loaded'" class="queue__hint">
-      <BaseTag kind="neutral">13.2h</BaseTag>
-      本剧本须满载 {{ setup.requiredFullTrucks }} 辆（已选
-      {{ setup.truckLoadSummary.fullCount }} 辆）
-      <BaseButton
-        variant="secondary"
-        size="sm"
-        @click="setup.truckPickActive ? setup.cancelTruckPick() : setup.beginTruckPick()"
-      >
-        {{ setup.truckPickActive ? '收起高亮' : '点图指定满载' }}
-      </BaseButton>
-    </p>
-
-    <p v-if="setup.lastAction !== null" class="queue__hint num">
-      <BaseTag :kind="setup.lastAction.ok ? 'neutral' : 'danger'">
-        {{ setup.lastAction.rule }}
-      </BaseTag>
-      {{ setup.lastAction.detail }}
-    </p>
   </section>
 </template>
 
@@ -394,35 +370,47 @@ function sideMark(side: 'axis' | 'soviet'): string {
 }
 
 .queue__done {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding-bottom: var(--space-1);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
 }
 
-/* P4 / UI1-b：三组的标题 / 分隔线 / 已完成列表（只做展示，沿用现有令牌） */
 .queue__group {
   border-top: 1px solid var(--color-rule);
-  padding: var(--space-1) 0;
 }
 
 .queue__group-title {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   margin: 0;
+  min-height: var(--control-height-sm);
   font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.queue__group-title::-webkit-details-marker {
+  display: none;
+}
+
+.queue__group-title::before {
+  color: var(--color-command-teal);
+  content: '+';
+}
+
+.queue__group[open] .queue__group-title::before {
+  content: '−';
 }
 
 .queue__group-count {
+  margin-left: auto;
   color: var(--color-muted);
-  font-weight: 400;
 }
 
 .queue__issue {
-  margin: 2px 0 0;
+  margin: 0 0 var(--space-2);
 }
 
 .queue__placed {
@@ -444,33 +432,96 @@ function sideMark(side: 'axis' | 'soviet'): string {
 }
 
 .queue {
-  /* 地图窗口左上角（用户口径⑨）；宽度收窄以免盖住盘面 */
   position: absolute;
   left: var(--space-3);
   top: var(--space-3);
   z-index: var(--layer-map-popup);
-  width: min(240px, 42%);
-  max-height: 62vh;
+  width: min(300px, 65%);
+  max-height: min(64vh, calc(100% - 2 * var(--space-3)));
   overflow: auto;
-  padding: var(--space-1) var(--space-2);
+  overscroll-behavior: contain;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-rule);
-  border-radius: var(--radius-md);
-  background: rgb(255 255 255 / 0.94);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-lg);
+  background: var(--color-panel);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-lg);
   font-size: var(--text-sm);
+  line-height: 1.35;
+}
+
+.queue:focus-visible {
+  outline-color: var(--color-command-amber);
 }
 
 .queue__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  margin-bottom: var(--space-1);
+  min-height: var(--control-height-sm);
 }
 
 .queue__title {
   font-family: var(--font-head);
   font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: var(--text-lg);
+}
+
+.queue__current {
+  font-weight: 700;
+}
+
+.queue__current[data-side='axis'] {
+  color: var(--color-command-axis);
+}
+
+.queue__current[data-side='soviet'] {
+  color: var(--color-command-soviet);
+}
+
+.queue__pending {
+  margin-left: auto;
+  color: var(--color-command-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.queue__row-actions,
+.queue__active {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.queue__row-actions :deep(.btn) {
+  margin-left: auto;
+}
+
+.queue__active {
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-command-teal);
+  border-radius: var(--radius-md);
+  background: var(--color-command-teal-bg);
+}
+
+.queue__instruction,
+.queue__error {
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+.queue__instruction {
+  flex: 1 0 100%;
+  color: var(--color-command-teal);
+}
+
+.queue__error {
+  padding: var(--space-2) 0;
+  color: var(--color-command-danger);
 }
 
 .queue__stack {
@@ -482,10 +533,12 @@ function sideMark(side: 'axis' | 'soviet'): string {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 2px 0;
+  min-height: var(--control-height-sm);
+  padding: var(--space-1) 0;
   border: none;
   background: transparent;
   color: var(--color-ink);
+  font: inherit;
   cursor: pointer;
   text-align: left;
 }
@@ -522,27 +575,33 @@ function sideMark(side: 'axis' | 'soviet'): string {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  padding: 2px var(--space-1);
+  min-height: var(--control-height);
+  padding: var(--space-1);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--color-bg-2);
   color: var(--color-ink);
+  font: inherit;
   cursor: pointer;
   text-align: left;
 }
 
-.queue__card:hover {
+.queue__card:hover:not(:disabled) {
   border-color: var(--color-accent);
 }
 
+.queue__card:disabled {
+  cursor: default;
+}
+
 .queue__card--on {
-  border-color: var(--color-accent);
-  background: var(--color-panel);
+  border-color: var(--color-command-teal);
+  background: var(--color-command-teal-bg);
   box-shadow: var(--shadow-sm);
 }
 
 .queue__card--blocked {
-  opacity: 0.6;
+  color: var(--color-muted);
   cursor: not-allowed;
 }
 
@@ -573,6 +632,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
 
 .queue__label {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -583,10 +643,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
   color: var(--color-muted);
 }
 
-.queue__truck {
-  padding-left: calc(var(--space-1) + 1.2em);
-}
-
 .queue__check {
   display: flex;
   align-items: center;
@@ -595,8 +651,12 @@ function sideMark(side: 'axis' | 'soviet'): string {
   color: var(--color-muted);
 }
 
+.queue__check input {
+  accent-color: var(--color-command-teal);
+}
+
 .queue__blocked {
-  padding-left: calc(var(--space-1) + 1.2em);
+  padding-inline: var(--space-1);
   font-size: var(--text-xs);
   color: var(--color-warning);
 }
@@ -612,7 +672,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
-  margin: var(--space-1) 0 0;
+  margin: 0;
   font-size: var(--text-xs);
   color: var(--color-muted);
 }
@@ -631,8 +691,8 @@ function sideMark(side: 'axis' | 'soviet'): string {
 
 .queue__chunk--on {
   border-color: var(--color-accent);
-  background: var(--color-bg-2);
-  color: var(--color-accent);
+  background: var(--color-command-teal-bg);
+  color: var(--color-command-teal);
   font-weight: 600;
 }
 </style>

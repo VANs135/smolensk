@@ -18,10 +18,17 @@ import {
 } from './workbench-model'
 import { useSetupStore } from './setup'
 import { useContainersStore } from './containers'
-import type { MovementOverlay, SupplyPickHint, UnitToken, ZocOverlay } from '@/render/token-layer'
 import {
-  combatNoncombatColumns,
+  hitCollapsedToken,
+  stackFanOrder,
+  type MovementOverlay,
+  type SupplyPickHint,
+  type UnitToken,
+  type ZocOverlay,
+} from '@/render/token-layer'
+import {
   hitStackFan,
+  isNoncombatTokenLike,
   stackFanLayout,
   toggleSelection,
 } from '@/render/stack-fan'
@@ -29,6 +36,7 @@ import {
   isOutOfSupplyNow,
   OVERRUN_MP_COST,
   exertsZoc,
+  projectsZoc,
   zocHexes,
   type ZocSource,
 } from '@/engine/rules'
@@ -72,7 +80,20 @@ const MODE_LETTER: Record<string, string> = {
  * · `label`：**只读格号浮签**——空闲时点一个空格，玩家只要知道"我点的是哪一格"，
  *   不需要"该格算子 0 枚"这种空清单（用户清单条 25 的原话：要的是"只读格号小文字框"）。
  */
-export type MapPopupVariant = 'content' | 'label'
+export type MapPopupVariant = 'content' | 'label' | 'context'
+
+type ContextPanel = 'air' | 'supply' | 'fort' | 'containers'
+type ContextGroup = '运输' | '工程' | '编组' | '补给' | '空军'
+
+interface CounterAction {
+  key: string
+  label: string
+  rule: string
+  panel: ContextPanel
+  only: string | null
+  group: ContextGroup
+  disabledReason: string | null
+}
 
 export interface MapPopupState {
   hex: HexRef
@@ -198,19 +219,32 @@ export const useMapViewStore = defineStore('mapView', () => {
   /**
    * W7 C13（4.9a）：把算子令牌按战雾纪律裁剪
    *
-   * 己方格全留；敌方格只留引擎允许的那一两枚（最上方战斗单位 / 最上方激活飞机），
-   * 并打上 `hiddenStack` 标记（画提示环、**不显示枚数**——枚数属「看穿堆叠」，4.9a 不允许）。
+   * 敌方只保留现有投影准许的公开令牌，并清除内部行动状态。
    */
   function fogVisibleTokens(tokens: readonly UnitToken[]): UnitToken[] {
+    if (hotseat.fogDisabled) return [...tokens]
     const visible: UnitToken[] = []
+    const allowedByHex = new Map<string, readonly string[]>()
     for (const token of tokens) {
       if (token.side === hotseat.viewerSide) {
         visible.push(token)
         continue
       }
-      const allowed = hotseat.visibleUnitIdsInHex(token.hex)
+      const key = hexLabel(token.hex)
+      let allowed = allowedByHex.get(key)
+      if (allowed === undefined) {
+        allowed = hotseat.visibleUnitIdsInHex(token.hex)
+        allowedByHex.set(key, allowed)
+      }
       if (!allowed.includes(token.id)) continue
-      visible.push(hotseat.hasHiddenContent(token.hex) ? { ...token, hiddenStack: true } : token)
+      visible.push({
+        ...token,
+        hiddenStack: true,
+        selected: false,
+        ended: false,
+        awaitingFuel: false,
+        fuelled: false,
+      })
     }
     return visible
   }
@@ -225,6 +259,14 @@ export const useMapViewStore = defineStore('mapView', () => {
       id: unit.instanceId,
       hex: unit.hex,
       side: unit.side,
+      combat: unit.isCombat,
+      projectsZoc: projectsZoc({
+        hex: unit.hex,
+        side: unit.side,
+        attackCapable: unit.attackCapable,
+        inCombatMode: exertsZoc(unit.mode),
+        hasTraceSupply: !isOutOfSupplyNow(unit, workbench.turn),
+      }),
       // 算子图：按 unitId + 当前朝向取正面/背面（5.4a 图随朝向那一面）
       unitId: unit.unitId,
       face: unit.mode.orientation,
@@ -268,13 +310,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     }))
   }
 
-  /**
-   * 本方飞机 → 令牌（W7 C16）
-   *
-   * 14.1a：飞机停在其空军基地格，故画在该格上；**只画本方**（对手空军布置属己方不可见信息，
-   * 4.9a 的可见顶牌名单只覆盖地面堆叠，故飞机不参与该名单，直接不画更稳妥）。
-   * 画法与地面算子相同（正方形 + 真算子图）；激活态仍用角标 `A`/`I` 区分。
-   */
+  /** 14.1a / 4.9a：只取图上飞机，与地面令牌共用可见性投影。 */
   function airTokens(): UnitToken[] {
     const picked = workbench.airMissionAirIds
     /*
@@ -282,25 +318,23 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 修前这里取 `ownAirUnits`（含盒成员），盒内飞机仍被画在它原来的基地格上
      * （看着像"盒里一份、图上还有一份"）。
      */
-    return workbench.onMapAirUnits
-      .filter((air) => air.side === workbench.activeSide)
-      .map((air: ConsoleAirUnit) => ({
-        id: air.instanceId,
-        hex: air.hex,
-        side: air.side,
-        // 飞机图同样按机型取（空军专表 images；正面即主面）
-        unitId: air.aircraftId,
-        face: 'combat' as const,
-        images: air.images,
-        label: air.aircraftType,
-        air: true,
-        selected: picked.includes(air.instanceId),
-        ended: air.airStatus !== 'active',
-        modeLetter: air.airStatus === 'active' ? 'A' : 'I',
-        dg: false,
-        awaitingFuel: false,
-        fuelled: false,
-      }))
+    return workbench.onMapAirUnits.map((air: ConsoleAirUnit) => ({
+      id: air.instanceId,
+      hex: air.hex,
+      side: air.side,
+      // 飞机图同样按机型取（空军专表 images；正面即主面）
+      unitId: air.aircraftId,
+      face: 'combat' as const,
+      images: air.images,
+      label: air.aircraftType,
+      air: true,
+      selected: picked.includes(air.instanceId),
+      ended: air.airStatus !== 'active',
+      modeLetter: air.airStatus === 'active' ? 'A' : 'I',
+      dg: false,
+      awaitingFuel: false,
+      fuelled: false,
+    }))
   }
 
   /**
@@ -333,7 +367,8 @@ export const useMapViewStore = defineStore('mapView', () => {
    */
   function spDumpTokens(): UnitToken[] {
     const merged = new Map<string, { hex: HexRef; side: Side; sp: number; t: number }>()
-    for (const dump of workbench.spDumpsOfSide) {
+    for (const dump of workbench.spDumps) {
+      if (dump.side !== hotseat.viewerSide) continue
       if (dump.sp <= 0 && dump.t <= 0) continue
       const key = `${dump.hex.col},${dump.hex.row}`
       const cur = merged.get(key)
@@ -365,19 +400,14 @@ export const useMapViewStore = defineStore('mapView', () => {
     })
   }
 
+  const groundAndAir = computed(() => fogVisibleTokens([...groundTokens(), ...airTokens()]))
+  const visibleTokens = computed(() => [...spDumpTokens(), ...groundAndAir.value])
+
   /** 当前覆盖层（地图要画的一切；视图直接把它交给 `MapCanvas`） */
   const overlay = computed<MovementOverlay>(() => {
     const movingIds = workbench.moveInteraction?.unitIds ?? []
-    const groundAndAir = [...fogVisibleTokens(groundTokens()), ...airTokens()]
-    /*
-     * 条 27：SP 令牌**排在算子之前**——`topTokenOf` 的兜底是「取最后一枚」，
-     * 若把 SP 放在后面，同格有算子时 SP 会当顶牌把算子顶掉。排前面则同格必然是算子当顶牌、
-     * SP 走 `isFacilityToken` 的「设施单独一层」（0.6 尺寸、格内下侧），两者同时可见；
-     * 只有 SP 的格仍由它自己当顶牌（满尺寸）。
-     */
-    const visibleTokens = [...spDumpTokens(), ...groundAndAir]
     return {
-      tokens: visibleTokens,
+      tokens: visibleTokens.value,
       /*
        * 4.5：**控制区覆盖格集合**（`zocHexes` 此前零调用 ⇒ 玩家看不到 ZOC 范围，只能逐格试）
        *
@@ -385,7 +415,7 @@ export const useMapViewStore = defineStore('mapView', () => {
        * 泄露地图本身没画出来的信息。投射判据（可攻击 + 战斗模式 + 有追溯补给）由引擎的
        * `zocHexes` 内部按 `projectsZoc` 裁定，本处不另行判定。
        */
-      zoc: zocLayerVisible.value ? zocLayerFromTokens(groundAndAir) : null,
+      zoc: zocLayerVisible.value ? zocLayerFromTokens(groundAndAir.value) : null,
       reachable: workbench.groupReachable.hexes.map((node) => ({
         hex: node.hex,
         mpSpent: node.mpSpent,
@@ -736,6 +766,20 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 点 SP 也会进基地的整备会话（实测串面板）。
    */
   const unitActionUnitId = ref<string | null>(null)
+  const unitActionIntent = ref<CounterAction | null>(null)
+  const contextTargets = ref<readonly string[]>([])
+
+  const actingSide = computed(() => workbench.segmentGateQuery.side ?? workbench.activeSide)
+
+  function ownCounterAt(hex: HexRef, instanceId: string): ConsoleUnit | undefined {
+    return workbench.units.find(
+      (unit) =>
+        unit.instanceId === instanceId &&
+        unit.side === actingSide.value &&
+        unit.hex.col === hex.col &&
+        unit.hex.row === hex.row,
+    )
+  }
 
   /**
    * 点堆叠清单里的**某一枚本单位** ⇒ 打开它的动作会话（用户 2026-10-25 的渐进交互）
@@ -745,16 +789,45 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 单击即收小窗（单框纪律：同一时刻只有一个会话框）。
    */
   function openUnitActionAt(hex: HexRef, instanceId: string): boolean {
-    const unit = workbench.units.find((item) => item.instanceId === instanceId)
+    const unit = ownCounterAt(hex, instanceId)
     if (unit === undefined) return false
-    if (unit.side !== workbench.activeSide) return false
     if ((unit.noncombatKind ?? null) === null) return false
     // 本环节没有"对它自己"的操作 ⇒ 不给入口（判据与 `unitActionFamily` 同源）
     if (!unitActionAvailableAt(instanceId)) return false
+    unitActionIntent.value = null
     unitActionHex.value = { col: hex.col, row: hex.row }
     unitActionUnitId.value = instanceId
     closePopup()
     return true
+  }
+
+  /** 显式点设施算子时打开该设施。空军基地按需打开驻机名册。 */
+  function selectCounterAt(
+    hex: HexRef,
+    instanceId: string,
+    anchor?: { x: number; y: number },
+  ): boolean {
+    if (!setup.finished) return false
+    const unit = ownCounterAt(hex, instanceId)
+    if (unit?.noncombatKind === 'air_base') {
+      unitActionIntent.value = null
+      unitActionHex.value = { ...hex }
+      unitActionUnitId.value = instanceId
+      closePopup()
+      return true
+    }
+    if (openUnitActionAt(hex, instanceId)) return true
+    if (anchor === undefined || !instanceId.startsWith('sp:')) return false
+    return showCounterContext(hex, [instanceId], anchor)
+  }
+
+  function canSelectCounterAt(instanceId: string): boolean {
+    const unit = workbench.units.find((item) => item.instanceId === instanceId)
+    return (
+      setup.finished &&
+      unit?.side === actingSide.value &&
+      (unit.noncombatKind === 'air_base' || unitActionAvailableAt(instanceId))
+    )
   }
 
   /**
@@ -775,16 +848,9 @@ export const useMapViewStore = defineStore('mapView', () => {
     { flush: 'sync' },
   )
 
-  /**
-   * 该格**画出来的**全部令牌（地面＋飞机）——B26：渲染与命中必须同源
-   *
-   * ★ 修前这里（与摊开的命中判定）只取 `groundTokens()`，而**渲染**用的是
-   *   `overlay.tokens`＝地面＋飞机（见下方 `tokens` 那一行）⇒ 含飞机的格（空军基地最常见）
-   *   会出现「**点到的槽位不是画在那儿的算子**」：扇形的第 n 个槽位按"地面＋飞机"画，
-   *   命中却按"只有地面"回查。用户口径也要求「点机场后展开里面飞机」，故这里统一成一份。
-   */
+  /** 命中与渲染共用同一份令牌，包含 SP 合并算子。 */
   function stackTokensAt(hex: HexRef): UnitToken[] {
-    return [...fogVisibleTokens(groundTokens()), ...airTokens()].filter(
+    return visibleTokens.value.filter(
       (token) => token.hex.col === hex.col && token.hex.row === hex.row,
     )
   }
@@ -882,7 +948,7 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 段内的**环节链**（B6：如 F 战斗段内的炮击→战斗）粒度更细，届时把环节号并入键即可。
    */
   watch(
-    () => `${workbench.turn}|${workbench.phase}|${workbench.activeSide}`,
+    () => `${workbench.turn}|${workbench.phase}|${workbench.activeSide}|${hotseat.viewerSide}`,
     () => {
       clearStackSelection()
       collapseStack()
@@ -907,18 +973,24 @@ export const useMapViewStore = defineStore('mapView', () => {
    * · 点到分页角标 ⇒ 翻页；
    * · 点到空白 ⇒ 收起（选择集保留）。
    */
-  function handleStackClick(hex: HexRef, world: { x: number; y: number }): boolean {
+  function handleStackClick(
+    hex: HexRef,
+    world: { x: number; y: number },
+    scale: number,
+    anchor?: { x: number; y: number },
+  ): boolean {
     const state = expandedStack.value
     if (state === null || state.hex.col !== hex.col || state.hex.row !== hex.row) return false
     // B26：与渲染同一份令牌（含飞机）⇒ 命中的槽位就是画在那儿的算子
-    const tokens = stackTokensAt(hex)
+    const tokens = stackTokensAt(hex).filter((token) => token.hiddenStack !== true)
+    if (tokens.length === 0) return false
     const layout = stackFanLayout({
       hex,
       total: tokens.length,
       page: state.page,
-      columns: combatNoncombatColumns(tokens),
+      order: stackFanOrder(tokens),
     })
-    const hit = hitStackFan({ layout, point: world })
+    const hit = hitStackFan({ layout, point: world, scale })
     if (hit === null) {
       collapseStack()
       return true
@@ -929,6 +1001,8 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     const token = tokens[hit.index]
     if (token === undefined) return true
+    if (isIdleForStack() && isNoncombatTokenLike(token) && selectCounterAt(hex, token.id, anchor))
+      return true
     /*
      * B9：**不参与本环节的算子点不动**（用户口径「不参与环节的算子无法点击」）。
      * 不是静默忽略——那样玩家只会觉得"点了没反应"；而是**就地给一行规则号提示**
@@ -1109,7 +1183,7 @@ export const useMapViewStore = defineStore('mapView', () => {
   function unitActionAvailableAt(instanceId: string): boolean {
     const unit = workbench.units.find((item) => item.instanceId === instanceId)
     if (unit === undefined) return false
-    if (unit.side !== workbench.activeSide) return false
+    if (unit.side !== actingSide.value) return false
     const kind = unit.noncombatKind
     if (kind === null || kind === undefined) return false
     return facilityActionKeys(kind).some((key) => workbench.actionAllowedNow(key))
@@ -1186,7 +1260,7 @@ export const useMapViewStore = defineStore('mapView', () => {
   }[] {
     const unit = workbench.units.find((item) => item.instanceId === instanceId)
     if (unit === undefined) return []
-    if (unit.side !== workbench.activeSide) return []
+    if (unit.side !== actingSide.value) return []
     const kind = unit.noncombatKind
     if (kind === null || kind === undefined) return []
     return facilityActionKeys(kind)
@@ -1197,7 +1271,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       })
   }
 
-  const unitActionFamily = computed<'supply' | 'air' | 'fort' | null>(() => {
+  const unitActionFamily = computed<ContextPanel | null>(() => {
     /*
      * ★ 2026-10-25（用户实测：给**苏联初设**时点空军基地格，弹出「空军基地整备（15.1）」的会话，
      *   里面却是德军内容）：
@@ -1206,6 +1280,7 @@ export const useMapViewStore = defineStore('mapView', () => {
      *   会话既不是规则时点（整备属 A 段），又会按 `activeSide`（默认轴方）把**对方**的基地摊给玩家。
      */
     if (!setup.finished) return null
+    if (unitActionIntent.value !== null) return unitActionIntent.value.panel
     const hex = unitActionHex.value
     if (hex === null) return null
     const pinned = unitActionUnitId.value
@@ -1225,13 +1300,14 @@ export const useMapViewStore = defineStore('mapView', () => {
      *   于是"给苏方布设却看到德军内容"（用户 2026-10-25 实测）。
      *   敌方格照旧可以点：只摊开堆叠看 4.9a 的可见内容，不开动作会话。
      */
-    if (unit.side !== workbench.activeSide) return null
+    if (unit.side !== actingSide.value) return null
     /*
      * ★ 本环节对它**没有可做的操作** ⇒ 不开会话（用户 2026-10-25 的规则口径）：
      *   例 D 段点补给站只是"选它当补给源"（在补给面板里选），不是"对补给站操作"；
      *   A 段点补给站是整备付款，也不是对站操作 ⇒ 这两处都不该弹出"补给站操作"面板。
      */
     const kindOf = unit.noncombatKind ?? ''
+    if (kindOf === 'air_base') return 'air'
     if (!facilityActionKeys(kindOf).some((key) => workbench.actionAllowedNow(key))) return null
     switch (unit.noncombatKind) {
       case 'sp':
@@ -1240,14 +1316,230 @@ export const useMapViewStore = defineStore('mapView', () => {
       case 'organic_truck':
       case 'supply_extender':
         return 'supply'
-      case 'air_base':
-        return 'air'
       case 'hedgehog':
         return 'fort'
       default:
         return null
     }
   })
+
+  const actionBase = computed(() => {
+    const id = unitActionUnitId.value
+    return id === null ? null : (workbench.ownAirBases.find((base) => base.id === id) ?? null)
+  })
+
+  const actionBaseAircraft = computed(() => {
+    const base = actionBase.value
+    return base === null ? [] : workbench.airUnitsAt(base.hex, base.side)
+  })
+
+  const groupOfAction: Partial<Record<ActionKey, ContextGroup>> = {
+    'move.transportMerge': '运输',
+    'move.loadUnload': '运输',
+    'move.extenderConvert': '运输',
+    'move.construction': '工程',
+    'move.hedgehog': '工程',
+    'air.baseReduce': '工程',
+    'air.refit': '空军',
+    'air.mission': '空军',
+    'move.dumpBlow': '补给',
+  }
+
+  function counterActionsAt(hex: HexRef, id: string): CounterAction[] {
+    const unit = ownCounterAt(hex, id)
+    const dump =
+      id === `sp:${hex.col},${hex.row}`
+        ? workbench.spDumpsOfSide.find(
+            (item) => item.hex.col === hex.col && item.hex.row === hex.row,
+          )
+        : undefined
+    if (unit === undefined && dump === undefined) return []
+
+    const actions: CounterAction[] = []
+    const moving = workbench.moveInteraction !== null && !workbench.moveInteraction.finished
+    function add(
+      key: ActionKey,
+      meta: Omit<CounterAction, 'key' | 'disabledReason'>,
+      reason?: string,
+    ): void {
+      const disabledReason = !workbench.actionAllowedNow(key)
+        ? `限${workbench.segmentLabelsOfAction(key).join(' / ')}`
+        : moving && key !== 'move.breakdown'
+          ? '先结束移动'
+          : (reason ?? null)
+      actions.push({ key, ...meta, disabledReason })
+    }
+    const kind = unit?.noncombatKind ?? (dump === undefined ? '' : 'sp')
+    for (const key of facilityActionKeys(kind)) {
+      const meta = FACILITY_ACTION_META[key]
+      if (meta !== undefined) add(key, { ...meta, group: groupOfAction[key] ?? '补给' })
+    }
+    if (
+      kind === 'sp' ||
+      kind === 'transport_point' ||
+      kind === 'organic_truck' ||
+      unit?.isCombat === true
+    ) {
+      add('move.railTransport', {
+        label: '铁路运输',
+        rule: '13.3',
+        panel: 'supply',
+        only: 'railMove',
+        group: '运输',
+      })
+    }
+    if (unit !== undefined && workbench.railRepairUnits.some((item) => item.instanceId === id)) {
+      add('move.railConversion', {
+        label: '转换轨距',
+        rule: '13.3f',
+        panel: 'supply',
+        only: 'railGauge',
+        group: '工程',
+      })
+    }
+    if (unit !== undefined && workbench.engineerChoices.some((item) => item.instanceId === id)) {
+      add('move.construction', { ...FACILITY_ACTION_META['move.construction']!, group: '工程' })
+      add('move.hedgehog', { ...FACILITY_ACTION_META['move.hedgehog']!, group: '工程' })
+    }
+    if (unit !== undefined && workbench.breakdownTimingOf(id) !== null) {
+      add('move.breakdown', {
+        label: '创建拆分单位',
+        rule: '20.0a',
+        panel: 'containers',
+        only: 'breakdown',
+        group: '编组',
+      })
+    }
+    if (unit?.formation !== null && unit?.formation !== undefined && !moving) {
+      actions.push({
+        key: 'formation.box',
+        label: '编队收纳盒',
+        rule: '13.7',
+        panel: 'containers',
+        only: 'formation',
+        group: '编组',
+        disabledReason: null,
+      })
+    }
+    if (workbench.forageHints.some((item) => item.hqId === id)) {
+      add('exclusive.forage', {
+        label: '应急征粮',
+        rule: '1.7 / 21.10',
+        panel: 'fort',
+        only: 'cache',
+        group: '补给',
+      })
+    }
+    return actions
+  }
+
+  const contextOptions = computed(() => {
+    const hex = popup.value?.hex
+    if (popup.value?.variant !== 'context' || hex === undefined) return []
+    return contextTargets.value.flatMap((id) => {
+      const actions = counterActionsAt(hex, id)
+      if (actions.length === 0) return []
+      const label = ownCounterAt(hex, id)?.name ?? '补给站'
+      return [{ id, label, actions }]
+    })
+  })
+
+  function canOpenCounterContext(): boolean {
+    if (!setup.finished || hotseat.handoffPending || hotseat.viewerSide !== actingSide.value)
+      return false
+    if (workbench.hexPickView !== null || workbench.refitBase !== null) return false
+    if (
+      workbench.pendingZocConfirm !== null ||
+      workbench.overrunZocHeld !== null ||
+      workbench.specialPending !== null
+    )
+      return false
+    const kind = session.value?.kind
+    return kind === undefined || kind === 'move' || kind === 'unit'
+  }
+
+  function showCounterContext(
+    hex: HexRef,
+    ids: readonly string[],
+    anchor: { x: number; y: number },
+  ): boolean {
+    if (!canOpenCounterContext()) return false
+    const targets = [...new Set(ids)].filter((id) => counterActionsAt(hex, id).length > 0)
+    if (targets.length === 0) return false
+    contextTargets.value = targets
+    openPopup(hex, anchor.x, anchor.y, 'context')
+    return true
+  }
+
+  /** 右键只查看当前选格，空白或未选格收起菜单。 */
+  function onHexContext(
+    hex: HexRef | null,
+    _world: { x: number; y: number },
+    anchor: { x: number; y: number },
+  ): void {
+    if (popup.value?.variant === 'context') closePopup()
+    if (hex === null) return
+    const picked = workbench.selectedUnit?.instanceId
+    const activeId = unitActionUnitId.value
+    const expanded = isStackExpanded(hex)
+    const selected = [picked, activeId].filter((id): id is string => typeof id === 'string')
+    if (!expanded && selected.every((id) => ownCounterAt(hex, id) === undefined)) return
+    const ids = expanded ? stackTokensAt(hex).map((token) => token.id) : selected
+    showCounterContext(hex, ids, anchor)
+  }
+
+  function openContextAction(instanceId: string, key: string): boolean {
+    const hex = popup.value?.hex
+    if (hex === undefined || !contextTargets.value.includes(instanceId) || !canOpenCounterContext())
+      return false
+    const option = counterActionsAt(hex, instanceId).find((item) => item.key === key)
+    if (option === undefined || option.disabledReason !== null) return false
+    const unit = ownCounterAt(hex, instanceId)
+    if (option.only === 'railMove') {
+      workbench.railMoveInputs.toHexText = ''
+      if (
+        unit !== undefined &&
+        unit.noncombatKind !== 'sp' &&
+        unit.noncombatKind !== 'supply_point'
+      ) {
+        workbench.selectedId = instanceId
+      } else {
+        workbench.railMoveInputs.fromDumpId =
+          workbench.spDumpsOfSide.find(
+            (dump) => dump.hex.col === hex.col && dump.hex.row === hex.row,
+          )?.id ?? null
+      }
+    }
+    if (option.only === 'airstrip' && unit?.noncombatKind !== 'air_base') {
+      workbench.constructionInputs.engineerId = instanceId
+    }
+    if (option.only === 'cache') {
+      workbench.supplyCacheInputs.use = 'forage'
+      workbench.supplyCacheInputs.hexText = hexLabel(hex)
+    }
+    unitActionHex.value = { ...hex }
+    unitActionUnitId.value = instanceId
+    unitActionIntent.value = option
+    closePopup()
+    return true
+  }
+
+  /** 名册只建立参战选择。宣布与结算仍走空军会话。 */
+  function startRosterMission(instanceId: string): boolean {
+    if (!setup.finished || !workbench.actionAllowedNow('air.mission')) return false
+    const candidate = workbench.airMissionJoinChoices.find(
+      (item) => item.air.instanceId === instanceId,
+    )
+    if (candidate === undefined || candidate.disabledReason !== null) return false
+    if (!workbench.airActive) workbench.setAirActive(true)
+    if (!workbench.airMissionAirIds.includes(instanceId)) workbench.toggleAirMissionUnit(instanceId)
+    if (!workbench.airMissionAirIds.includes(instanceId)) return false
+    unitActionHex.value = null
+    unitActionUnitId.value = null
+    unitActionIntent.value = null
+    closePopup()
+    return true
+  }
 
   /**
    * U1-b：**突围会话改为"点击该环节操作才出现"**
@@ -1361,6 +1653,10 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 内容按 `unitActionFamily` 分派到右栏原可写面板（现收进会话，右栏只读）。
      */
     if (unitActionFamily.value !== null) {
+      const intent = unitActionIntent.value
+      if (intent !== null) {
+        return { kind: 'unit', title: intent.label, rule: intent.rule, width: 'min(430px, 94%)' }
+      }
       const family = unitActionFamily.value
       const title =
         family === 'supply'
@@ -1483,7 +1779,11 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 触发判据＝托盘里**展开着一张盒卡**（`containers.cardOpenId`）：展开本身就是在说
      * "我要对这个盒做点什么"，会话随之给出该盒相关的动作（抽签 / 收纳 / 移出 / 返场 / 离箱…）。
      */
-    if (containers.cardOpenId !== null && collapsedSessionKey.value !== currentStepKey.value) {
+    if (
+      containers.cardOpenId !== null &&
+      (containers.openCardSide === null || containers.openCardSide === actingSide.value) &&
+      collapsedSessionKey.value !== currentStepKey.value
+    ) {
       return {
         kind: 'containers',
         // C-1：标题点明**是哪一张卡**（动作已按该卡覆盖的盒过滤，见 ContainersPanel）
@@ -1649,6 +1949,10 @@ export const useMapViewStore = defineStore('mapView', () => {
   /** U1-b：突围会话的显式开关只在本环节有效（换环节/换回合即复位） */
   watch(currentStepKey, () => {
     breakoutOpen.value = false
+    unitActionIntent.value = null
+    unitActionHex.value = null
+    unitActionUnitId.value = null
+    if (popup.value?.variant === 'context') closePopup()
   })
 
   /**
@@ -1769,6 +2073,8 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     // 条 12（M2）：单位动作会话没有引擎状态机 ⇒ 收起即清掉"正在对其做动作"的那枚
     else if (current.kind === 'unit') {
+      if (workbench.refitBase !== null) workbench.cancelRefitNow()
+      unitActionIntent.value = null
       unitActionHex.value = null
       unitActionUnitId.value = null
     }
@@ -1810,6 +2116,7 @@ export const useMapViewStore = defineStore('mapView', () => {
   /** 关闭小窗 */
   function closePopup(): void {
     popup.value = null
+    contextTargets.value = []
   }
 
   /**
@@ -1851,9 +2158,7 @@ export const useMapViewStore = defineStore('mapView', () => {
   const popupContent = computed<MapPopupContent | null>(() => {
     const state = popup.value
     if (state === null) return null
-    const all = fogVisibleTokens(groundTokens()).filter(
-      (token) => token.hex.col === state.hex.col && token.hex.row === state.hex.row,
-    )
+    const all = stackTokensAt(state.hex).filter((token) => token.air !== true)
     /*
      * 批 A 切片 3②：**候选按环节过滤**（用户口径 9.17⑤）。
      *   己方算子只有"本环节能行动"的那些进候选（判据＝操作台的参与集合，与地图上的可点性**同一条**）；
@@ -1862,13 +2167,11 @@ export const useMapViewStore = defineStore('mapView', () => {
     const actionableOwnIds = all
       .filter(
         (token) =>
-          token.side === workbench.activeSide && workbench.participatingUnitIds.includes(token.id),
+          token.side === hotseat.viewerSide && workbench.participatingUnitIds.includes(token.id),
       )
       .map((token) => token.id)
     const blockedOwn = all
-      .filter(
-        (token) => token.side === workbench.activeSide && !actionableOwnIds.includes(token.id),
-      )
+      .filter((token) => token.side === hotseat.viewerSide && !actionableOwnIds.includes(token.id))
       .map((token) => {
         const verdict = participationVerdictOf(token.id)
         const step = workbench.segmentStep
@@ -1883,7 +2186,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     return {
       hex: state.hex,
       units: all,
-      airUnits: workbench.airUnitsAt(state.hex, workbench.activeSide),
+      airUnits: workbench.airUnitsAt(state.hex, hotseat.viewerSide),
       hidden: hotseat.hasHiddenContent(state.hex),
       actionableOwnIds,
       blockedOwn,
@@ -1976,6 +2279,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     hex: HexRef,
     anchor?: { x: number; y: number },
     world?: { x: number; y: number },
+    scale = 1,
   ): void {
     /*
      * 条 6（R3）：突围环节**点可突围的单位即自动结算**（12.8e）。
@@ -2005,7 +2309,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       workbench.refitBase !== null ||
       workbench.hexPickView !== null ||
       workbench.optionDraftMode !== 'idle'
-    if (!modalPickLive && world !== undefined && handleStackClick(hex, world)) return
+    if (!modalPickLive && world !== undefined && handleStackClick(hex, world, scale, anchor)) return
     // W7 C14：初设放置中 ⇒ 点地图即落位（最高优先级；非候选格由 store 记拒绝，不开常规小窗）
     if (setup.placing !== null && setup.placeAtHex(hex)) {
       closePopup()
@@ -2109,6 +2413,11 @@ export const useMapViewStore = defineStore('mapView', () => {
       consumed = true
     }
     if (!consumed) {
+      if (idleBefore && world !== undefined) {
+        const hit = hitCollapsedToken(stackTokensAt(hex), world, scale)
+        if (hit !== null && isNoncombatTokenLike(hit) && selectCounterAt(hex, hit.id, anchor))
+          return
+      }
       /*
        * 条 12（M2）：**点非战斗单位 ⇒ 开对应动作会话**（SP 拖取 / 运输点装卸 / 延补队 / 基地整备 / 工事）。
        * 排在摊开 / 既有分派之前：这一击明确表达"对这枚非战斗单位做动作"，就开那一个会话
@@ -2142,9 +2451,11 @@ export const useMapViewStore = defineStore('mapView', () => {
       // 点别处（战斗单位 / 空格 / 走一步）⇒ 收掉可能开着的单位会话 + 空军引导态
       if (unitActionHex.value !== null) unitActionHex.value = null
       unitActionUnitId.value = null
+      unitActionIntent.value = null
       if (airEntryTarget.value !== null) airEntryTarget.value = null
       // ③ 闲置态点到有堆叠的格 ⇒ **就地摊开**（用户口径：默认全选、点枚即取消）
-      if (idleBefore && isIdleForStack() && stackTokenIdsAt(hex).length >= STACK_FAN_MIN_TOKENS) {
+      const stack = stackTokensAt(hex).filter((token) => token.hiddenStack !== true)
+      if (idleBefore && isIdleForStack() && stack.length >= STACK_FAN_MIN_TOKENS) {
         expandStackAt(hex)
         /*
          * 批 A 切片 3①：摊开后**只有没产生会话时**才开小窗。
@@ -2231,6 +2542,15 @@ export const useMapViewStore = defineStore('mapView', () => {
     // 条 12（M2）：点非战斗单位开的动作会话（按类型分派到补给账本 / 空军整备 / 工事）
     unitActionHex,
     unitActionUnitId,
+    unitActionIntent,
+    actionBase,
+    actionBaseAircraft,
+    contextOptions,
+    onHexContext,
+    openContextAction,
+    startRosterMission,
+    selectCounterAt,
+    canSelectCounterAt,
     openUnitActionAt,
     unitActionAvailableAt,
     unitActionOptions,

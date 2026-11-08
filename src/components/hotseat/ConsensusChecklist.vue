@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag } from '@/components/base'
+import { useFormalMode } from '@/components/ui-mode'
 import { useGameSessionStore, useHotseatStore } from '@/stores'
 
 /**
@@ -21,6 +22,7 @@ import { useGameSessionStore, useHotseatStore } from '@/stores'
 
 const gameSession = useGameSessionStore()
 const hotseat = useHotseatStore()
+const formal = useFormalMode()
 
 /** 勾选行（条目 + 题号 + 是否采用 + 已写入日志的结论） */
 const rows = computed(() => gameSession.agreedChecklistRows)
@@ -46,13 +48,16 @@ function decidedLabel(decided: boolean | null): {
 </script>
 
 <template>
-  <BasePanel title="开局共识（可选开关 · 专规 4.0）">
-    <p class="muted">
+  <BasePanel
+    :title="formal ? '' : '开局共识（可选开关 · 专规 4.0）'"
+    :class="{ 'consensus--formal': formal }"
+  >
+    <p v-if="!formal" class="muted">
       **勾 = 用这条，不勾 = 不用；默认全部不勾**。勾选结果会写成人人对局结论（存档的一部份）；
       不勾任何一项也能直接开局，推进第一回合时自动补写，不会卡流程。
     </p>
 
-    <p class="num">
+    <p v-if="!formal" class="num">
       <BaseTag :kind="checkedCount > 0 ? 'info' : 'neutral'">已采用 {{ checkedCount }} 条</BaseTag>
       <BaseTag :kind="recorded ? 'success' : 'neutral'">
         {{ recorded ? '结论已写入日志' : '结论尚未写入日志' }}
@@ -70,20 +75,24 @@ function decidedLabel(decided: boolean | null): {
               gameSession.setAgreedCheck(row.index, ($event.target as HTMLInputElement).checked)
             "
           />
-          <span class="checks__text">{{ row.index + 1 }}. {{ row.item }}</span>
+          <span class="checks__text">
+            <template v-if="!formal">{{ row.index + 1 }}.</template>
+            {{ row.item }}
+          </span>
         </label>
-        <BaseTag :kind="decidedLabel(row.decided).kind">{{
-          decidedLabel(row.decided).text
-        }}</BaseTag>
-        <span class="checks__rule num">{{ row.rule }}</span>
+        <BaseTag v-if="!formal || row.decided !== null" :kind="decidedLabel(row.decided).kind">
+          {{ decidedLabel(row.decided).text }}
+        </BaseTag>
+        <span v-if="!formal" class="checks__rule num">{{ row.rule }}</span>
       </li>
     </ul>
 
-    <div class="row">
+    <div v-if="!formal || checkedCount > 0 || gameSession.session !== null" class="row">
       <BaseButton variant="ghost" size="sm" @click="gameSession.setAllAgreedChecks(false)">
         全部不用
       </BaseButton>
       <BaseButton
+        v-if="!formal || gameSession.session !== null"
         variant="secondary"
         size="sm"
         :disabled="gameSession.session === null"
@@ -91,14 +100,16 @@ function decidedLabel(decided: boolean | null): {
       >
         写入日志
       </BaseButton>
-      <span v-if="gameSession.session === null" class="muted">先选剧本并点「开始游戏」。</span>
+      <span v-if="!formal && gameSession.session === null" class="muted">
+        先选剧本并点「开始游戏」。
+      </span>
     </div>
 
     <p v-if="gameSession.error !== null" class="bad num">
       内核拒绝（{{ gameSession.error.rule }}）：{{ gameSession.error.reason }}
     </p>
 
-    <p class="num muted">生效的信息纪律：{{ policy.detail }}</p>
+    <p v-if="!formal" class="num muted">生效的信息纪律：{{ policy.detail }}</p>
   </BasePanel>
 </template>
 
@@ -150,5 +161,38 @@ function decidedLabel(decided: boolean | null): {
   color: var(--color-danger);
   font-size: var(--text-sm);
   margin: var(--space-1) 0;
+}
+
+.consensus--formal {
+  --color-panel: var(--color-command-panel);
+  --color-ink: var(--color-command-ink);
+  --color-muted: var(--color-command-muted);
+  --color-rule: var(--color-command-line);
+  --color-bg-2: var(--color-command-raised);
+  --color-danger: var(--color-command-amber);
+
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.consensus--formal :deep(.panel__body) {
+  padding: var(--space-2) var(--space-4);
+}
+
+.consensus--formal .checks__row + .checks__row {
+  border-top: 1px solid var(--color-command-line);
+}
+
+.consensus--formal .checks__label {
+  flex: 1;
+  min-height: var(--control-height-sm);
+  padding-block: var(--space-1);
+  cursor: pointer;
+}
+
+.consensus--formal input {
+  flex: 0 0 auto;
+  accent-color: var(--color-command-teal);
 }
 </style>

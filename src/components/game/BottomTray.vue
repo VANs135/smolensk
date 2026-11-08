@@ -2,9 +2,10 @@
 import { computed, ref, watch } from 'vue'
 
 import { BaseTag } from '@/components/base'
-import { chartSources, panelScansOf } from '@/render/charts-view'
+import { panelScansOf } from '@/render/charts-view'
 import { counterImages } from '@/render/token-images'
-import { useContainersStore } from '@/stores'
+import { useContainersStore, useHotseatStore } from '@/stores'
+import type { Side } from '@/data'
 
 import { panelScanImageUrl } from './aux-card-image'
 import { BoxCard } from './index'
@@ -32,6 +33,7 @@ import { BoxCard } from './index'
  */
 
 const containers = useContainersStore()
+const hotseat = useHotseatStore()
 
 /** 展开的那一段（null = 两段都折叠成一行） */
 const openSection = ref<'boxes' | 'tables' | null>(null)
@@ -41,12 +43,26 @@ function toggle(section: 'boxes' | 'tables'): void {
 }
 
 /** 盒段：本剧本两方的卡（轴心 / 苏联） */
-const axisCards = computed(() => containers.cardViewsOf('axis'))
-const sovietCards = computed(() => containers.cardViewsOf('soviet'))
+function visibleCardsOf(side: Side) {
+  const cards = containers.cardViewsOf(side)
+  if (hotseat.fogDisabled || !hotseat.policy.hideOffMapBoxes || side === hotseat.viewerSide)
+    return cards
+  return cards
+    .filter((card) => card.boxKind !== 'air_box')
+    .map((card) => ({
+      ...card,
+      regions: card.regions.filter((region) => !region.kind.startsWith('edge_box_')),
+    }))
+}
+
+const cardsBySide = computed(() => ({
+  axis: visibleCardsOf('axis'),
+  soviet: visibleCardsOf('soviet'),
+}))
 
 /** 盒段里还有多少枚没归位（卡头角标之和——沿用两侧的盘点口径） */
 const boxUnitTotal = computed(() =>
-  containers.cardViews.reduce(
+  [...cardsBySide.value.axis, ...cardsBySide.value.soviet, ...containers.sharedCardViews].reduce(
     (total, card) => total + card.regions.reduce((sum, region) => sum + region.units.length, 0),
     0,
   ),
@@ -91,26 +107,30 @@ watch([openSection, screen], () => {
   if (openSection.value !== 'tables') return
   void counterImages.preload(scans.value.map((scan) => scanUrl(scan.image)))
 })
-
-/** 表格数据文件的版本（放在折叠头上，便于确认看的是哪一版） */
-const sources = chartSources()
 </script>
 
 <template>
   <section class="tray" aria-label="底部托盘（盒 / 表格）">
     <!-- 左：盒 -->
     <div class="tray__section" :class="{ 'tray__section--open': openSection === 'boxes' }">
-      <button type="button" class="tray__head" @click="toggle('boxes')">
+      <button
+        type="button"
+        class="tray__head"
+        :aria-expanded="openSection === 'boxes'"
+        @click="toggle('boxes')"
+      >
         <span class="tray__caret">{{ openSection === 'boxes' ? '▾' : '▸' }}</span>
         <span class="tray__title">盒</span>
-        <BaseTag kind="neutral">{{ axisCards.length + sovietCards.length }} 张卡</BaseTag>
+        <BaseTag kind="neutral"
+          >{{ cardsBySide.axis.length + cardsBySide.soviet.length }} 张卡</BaseTag
+        >
         <span class="tray__meta num">{{ boxUnitTotal }} 枚在盒</span>
       </button>
 
       <div v-if="openSection === 'boxes'" class="tray__body">
         <div v-for="side in ['axis', 'soviet'] as const" :key="side" class="tray__col">
           <p class="tray__col-head num">{{ side === 'axis' ? '轴心国' : '苏联' }}</p>
-          <BoxCard v-for="card in containers.cardViewsOf(side)" :key="card.id" :card="card" />
+          <BoxCard v-for="card in cardsBySide[side]" :key="card.id" :card="card" />
         </div>
         <!-- B31c：**双方共用**的卡（运力记录轨：一张卡上两组轨，标记按当前容量推格） -->
         <div v-if="containers.sharedCardViews.length > 0" class="tray__col">
@@ -122,11 +142,14 @@ const sources = chartSources()
 
     <!-- 右：表格（B16：五屏，逐屏切换） -->
     <div class="tray__section" :class="{ 'tray__section--open': openSection === 'tables' }">
-      <button type="button" class="tray__head" @click="toggle('tables')">
+      <button
+        type="button"
+        class="tray__head"
+        :aria-expanded="openSection === 'tables'"
+        @click="toggle('tables')"
+      >
         <span class="tray__caret">{{ openSection === 'tables' ? '▾' : '▸' }}</span>
         <span class="tray__title">表格</span>
-        <span class="tray__meta num">{{ SCREENS.map((item) => item.label).join(' · ') }}</span>
-        <span class="tray__meta num">数据 v{{ sources[0]?.version ?? '—' }}</span>
       </button>
 
       <div v-if="openSection === 'tables'" class="tray__body tray__body--tables">
@@ -145,15 +168,11 @@ const sources = chartSources()
         </div>
 
         <!-- 印卡图：直接画素材库的官方卡面（点图在新标签打开原尺寸）——B35：托盘**只留卡图** -->
-        <p v-if="scans.length === 0" class="tray__note">
-          这一屏还没有对应的印卡扫描图（图档清单见 `panel-scans.json`）。
-        </p>
+        <p v-if="scans.length === 0" class="tray__note">暂无扫描图</p>
         <div v-for="scan in scans" :key="scan.id" class="tray__scan">
           <p class="tray__scan-title">
             {{ scan.title }}
-            <span class="tray__note num">{{ scan.imageSize.w }}×{{ scan.imageSize.h }}</span>
           </p>
-          <p v-if="scan.note !== undefined" class="tray__note">{{ scan.note }}</p>
           <a class="tray__scan-link" :href="scanUrl(scan.image)" target="_blank" rel="noopener">
             <img
               v-if="scanReady(scan.image)"
@@ -163,7 +182,6 @@ const sources = chartSources()
             />
             <span v-else class="tray__scan-img tray__scan-img--pending">正在读图…</span>
           </a>
-          <p class="tray__note num">图档：{{ scan.image }}</p>
         </div>
       </div>
     </div>
@@ -173,9 +191,10 @@ const sources = chartSources()
 <style scoped>
 .tray {
   display: flex;
+  flex-direction: column;
   gap: var(--space-2);
   /* 地图窗口下方（用户口径⑧）；两段各自可折叠，默认都只有一行高 */
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .tray__section {
@@ -220,10 +239,9 @@ const sources = chartSources()
 
 .tray__body {
   display: flex;
+  flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-2);
-  max-height: 40vh;
-  overflow: auto;
 }
 
 .tray__body--tables {

@@ -13,14 +13,10 @@ import { describe, expect, it } from 'vitest'
  *   ⑤ 不新增调试标识（`console.log` / `data-debug`）。
  */
 describe('P6：折叠右栏回收列宽（源码守卫）', () => {
-  it('GameTableView：根节点带折叠态类', () => {
+  it('GameTableView：地图伸展填满折叠抽屉释放的空间', () => {
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
-    expect(game).toContain(`<div class="gt" :class="{ 'gt--collapsed': hotkeys.panelCollapsed }">`)
-  })
-
-  it('GameTableView：折叠态收成单列', () => {
-    const game = readFileSync('src/views/GameTableView.vue', 'utf8')
-    expect(game).toMatch(/\.gt--collapsed\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s)
+    expect(game).toMatch(/\.gt__workspace\s*\{[^}]*display:\s*flex/s)
+    expect(game).toMatch(/\.gt__main\s*\{[^}]*flex:\s*1\s+1\s+auto/s)
   })
 
   it('GameTableView：aside 折叠入口保留', () => {

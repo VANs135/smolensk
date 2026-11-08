@@ -26,7 +26,7 @@
  *   node scripts/perf-compare.mjs --out docs/perf-compare-<日期>.md
  *
  * ## 三组关键指标（与 A/B/C 验收线同一口径）
- *   · 进入对局台 `click:进入游戏` ≤250ms（C 的线）
+ *   · 进入对局台 `click:进入初设` ≤250ms（C 的线）
  *   · 突围段（`snap.segment` 含「突围」的那一步）≤250ms（B 的线）
  *   · 移动会话 `click:开始移动` ≤300ms（A 的线）
  *
@@ -330,7 +330,8 @@ async function runProbe(options) {
   out.steps.push(
     await measured(cdp, () => clickPoint(cdp, cardRect.x, cardRect.y), 'click:scenario-card'),
   )
-  const enter = await clickByText(cdp, '进入游戏')
+  await cdp.eval("window.__store('hotseat').setMode('solo')", false)
+  const enter = await clickByText(cdp, '进入初设')
   if (enter) out.steps.push(enter)
   await waitUntil(
     cdp,
@@ -370,7 +371,7 @@ async function runProbe(options) {
     const segment = await cdp.eval('window.__snap().segment', false)
     if (String(segment).includes('移动') || String(segment).includes('战斗')) break
     const rect = await cdp.eval(
-      `(() => { const el = document.querySelector('.bar button'); return el ? window.__rect(el) : null })()`,
+      `(() => { const el = document.querySelector('.bar__advance'); return el ? window.__rect(el) : null })()`,
       false,
     )
     if (rect === null || rect.disabled) {
@@ -533,7 +534,7 @@ function breakoutOf(result) {
 }
 
 function keyValueOf(result, key) {
-  if (key === 'enterGame') return { settle: settleOf(result, 'click:进入游戏'), step: null }
+  if (key === 'enterGame') return { settle: settleOf(result, 'click:进入初设'), step: null }
   if (key === 'moveSession') return { settle: settleOf(result, 'click:开始移动'), step: null }
   const step = breakoutOf(result)
   return { settle: step ? step.settle : null, step }

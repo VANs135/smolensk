@@ -239,13 +239,14 @@ describe('4.8 / 6.1f：一格只画一枚（堆叠不越格），点格再展开
     expect(rec.texts).toContain('2')
   })
 
-  it('选序：正在操作的那一枚 > 飞机 > 最后一枚', () => {
+  it('顶牌优先显示投射 ZOC 的战斗单位，其次为其他战斗单位', () => {
     const plain = token(NEAR, 'a')
     const air = { ...token(NEAR, 'air'), air: true, label: 'F' }
     const selected = { ...token(NEAR, 'c'), selected: true, label: '3-3-3' }
-    expect(topTokenOf([plain, air])?.id).toBe('air')
+    const zoc = { ...token(NEAR, 'zoc'), projectsZoc: true }
+    expect(topTokenOf([plain, air])?.id).toBe('a')
     expect(topTokenOf([plain, air, selected])?.id).toBe('c')
-    expect(topTokenOf([plain, air])).toBe(air)
+    expect(topTokenOf([zoc, plain, air, selected])).toBe(zoc)
     expect(topTokenOf([plain])).toBe(plain)
   })
 

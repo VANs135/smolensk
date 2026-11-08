@@ -2,11 +2,14 @@
 import { computed, provide, ref, watch } from 'vue'
 
 import { useMapViewStore } from '@/stores'
-import { BaseButton } from '@/components/base'
+import { BaseButton, BaseTag } from '@/components/base'
 import { AirPanel } from '@/components/air'
+import AircraftRoster from '@/components/air/AircraftRoster.vue'
+import { ContainersPanel } from '@/components/containers'
 import { ExclusiveRulesPanel } from '@/components/exclusive'
 import { SESSION_STEP_GATE } from '@/components/session'
 import { SupplyPanel } from '@/components/supply'
+import CounterOrderPanel from './CounterOrderPanel.vue'
 
 /**
  * 条 12（M2）+ 条 13/19（批 A）：**点非战斗单位开的动作会话**（`MapSessionKind:'unit'`）
@@ -56,7 +59,7 @@ const picked = ref<string | null>(null)
 
 // 换成另一枚 / 收会话 ⇒ 回到菜单（不把上一枚的选择带过来）
 watch(
-  () => mapView.unitActionUnitId,
+  () => [mapView.unitActionUnitId, mapView.unitActionIntent?.key],
   () => {
     picked.value = null
   },
@@ -64,6 +67,8 @@ watch(
 
 /** 只有一项时省掉菜单（点它＝对它操作）；多项时用玩家挑的 */
 const activeOnly = computed<string | null>(() => {
+  if (mapView.unitActionIntent !== null) return mapView.unitActionIntent.only
+  if (mapView.actionBase !== null) return picked.value
   const list = options.value
   if (list.length === 0) return null
   if (list.length === 1) return list[0]!.only
@@ -71,7 +76,12 @@ const activeOnly = computed<string | null>(() => {
 })
 
 /** 要不要先给菜单 */
-const showMenu = computed(() => options.value.length > 1 && picked.value === null)
+const showMenu = computed(
+  () =>
+    mapView.unitActionIntent === null &&
+    (options.value.length > 1 || mapView.actionBase !== null) &&
+    picked.value === null,
+)
 /** 已挑定且原本多项 ⇒ 给一条"返回操作清单" */
 const showBack = computed(() => options.value.length > 1 && picked.value !== null)
 
@@ -82,6 +92,17 @@ function narrow<T extends string>(pool: readonly T[], value: string | null): T |
 const airOnly = computed<AirOnly | null>(() => narrow(AIR_ONLY, activeOnly.value))
 const supplyOnly = computed<SupplyOnly | null>(() => narrow(SUPPLY_ONLY, activeOnly.value))
 const fortOnly = computed<FortOnly | null>(() => narrow(FORT_ONLY, activeOnly.value))
+const orderOnly = computed(() =>
+  narrow(['railGauge', 'railMove', 'breakdown'] as const, activeOnly.value),
+)
+const showRoster = computed(
+  () => mapView.actionBase !== null && (activeOnly.value === null || activeOnly.value === 'refit'),
+)
+const menuOptions = computed(() =>
+  mapView.actionBase === null
+    ? options.value
+    : options.value.filter((option) => option.only !== 'refit'),
+)
 
 /**
  * U1-b：本会话自己的待决事项＝上方那张"能做什么"的菜单（或多段收窄后的**一段**）。
@@ -96,32 +117,53 @@ provide(
 
 <template>
   <!-- ① 操作菜单：这一枚设施此刻能做的事（一项都不列时不会走到这里） -->
-  <div v-if="showMenu" class="ops">
-    <p class="muted">这一枚设施此刻能做的事（{{ options.length }} 项，挑一项展开）：</p>
+  <div v-if="showMenu && menuOptions.length > 0" class="ops">
     <div class="row">
       <BaseButton
-        v-for="option in options"
+        v-for="option in menuOptions"
         :key="option.key"
         variant="secondary"
         size="sm"
         :title="`${option.rule}`"
         @click="picked = option.only"
       >
-        {{ option.label }}
+        {{ option.label.split('（')[0] }} <BaseTag kind="neutral">{{ option.rule }}</BaseTag>
       </BaseButton>
     </div>
-    <p class="muted">
-      只列**本环节**允许的操作（判据＝规则书里对它自己可做的动作族 ∩ 本环节闸门）。
-    </p>
   </div>
 
   <!-- ② 只展开挑定的那一段 -->
-  <template v-else>
+  <AircraftRoster
+    v-if="showRoster && mapView.actionBase !== null"
+    :key="mapView.actionBase.id"
+    :base-id="mapView.actionBase.id"
+    :aircraft="mapView.actionBaseAircraft"
+  />
+  <template v-else-if="!showMenu">
     <div v-if="showBack" class="row">
       <BaseButton variant="ghost" size="sm" @click="picked = null">← 返回操作清单</BaseButton>
     </div>
-    <AirPanel v-if="mapView.unitActionFamily === 'air'" :only="airOnly" />
-    <SupplyPanel v-else-if="mapView.unitActionFamily === 'supply'" :only="supplyOnly" />
+    <CounterOrderPanel
+      v-if="orderOnly !== null"
+      :key="`${mapView.unitActionUnitId}:${orderOnly}`"
+      :order="orderOnly"
+    />
+    <ContainersPanel
+      v-else-if="activeOnly === 'formation'"
+      only="actions"
+      :subject-id="mapView.unitActionUnitId"
+    />
+    <AirPanel
+      v-else-if="mapView.unitActionFamily === 'air'"
+      :only="airOnly"
+      :base-id="mapView.actionBase?.id"
+    />
+    <SupplyPanel
+      v-else-if="mapView.unitActionFamily === 'supply'"
+      :only="supplyOnly"
+      :subject-id="mapView.unitActionUnitId"
+      :subject-hex="mapView.unitActionHex"
+    />
     <ExclusiveRulesPanel v-else-if="mapView.unitActionFamily === 'fort'" :only="fortOnly" />
   </template>
 </template>
@@ -139,12 +181,6 @@ provide(
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin: var(--space-1) 0;
-}
-
-.muted {
-  color: var(--color-muted);
-  font-size: var(--text-xs);
   margin: var(--space-1) 0;
 }
 </style>

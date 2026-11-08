@@ -21330,6 +21330,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     advanceSegmentNow,
     // 只读闸门解释：**最近一次点击**为何没推进（流程条就地显示；不用于置灰）
     advanceBlock: advanceBlocked,
+    currentAdvanceBlock: computed(() => segmentAdvanceBlock()),
     pickRecord,
     setTool,
     /**

@@ -271,10 +271,12 @@ function hoverDump(id: string | null): void {
 const props = withDefaults(
   defineProps<{
     only?: 'mission' | 'admin' | 'place' | 'refit' | 'airstrip' | 'reduce' | 'capture' | null
+    baseId?: string
     stepwise?: boolean
   }>(),
   {
     only: null,
+    baseId: undefined,
     /**
      * ★ 批 C 切片 1（方案 §3 批 C 步骤 2 的后半）：**逐步复核**的手动按钮只在**验证页**渲染。
      *
@@ -339,9 +341,8 @@ const showsReduce = computed(
 const showsCapture = computed(
   () => props.only === null || props.only === 'admin' || props.only === 'capture',
 )
-/** 基地操作段的**任一小节**（用来决定那一段 `<template>` 要不要出现） */
-const showsBaseOps = computed(
-  () => showsRefit.value || showsAirstrip.value || showsReduce.value || showsCapture.value,
+const displayedBases = computed(() =>
+  workbench.ownAirBases.filter((base) => props.baseId === undefined || base.id === props.baseId),
 )
 </script>
 
@@ -1010,9 +1011,6 @@ const showsBaseOps = computed(
         </template>
 
         <template v-if="showsRefit">
-          <!-- ── ② 整备额度（15.1） ── -->
-        </template>
-        <template v-if="showsBaseOps">
           <hr />
           <!-- 批 C 切片 2（用户口径 #18「有标题即可」）：成段规则文字收成标题 + 折叠 -->
           <RuleNote
@@ -1030,7 +1028,7 @@ const showsBaseOps = computed(
           <p v-if="workbench.ownAirBases.length === 0" class="muted">
             当前方没有空军基地（15.0）。
           </p>
-          <div v-for="base in workbench.ownAirBases" :key="base.id" class="row">
+          <div v-for="base in displayedBases" :key="base.id" class="row">
             <BaseTag :kind="base.isAirstrip === true ? 'warning' : 'info'">
               {{ hexLabel(base.hex) }}
               {{ base.isAirstrip === true ? '简易机场' : `${base.level} 级` }}
@@ -1133,7 +1131,7 @@ const showsBaseOps = computed(
             {{ workbench.constructionError.reason }}
           </p>
           <div
-            v-for="base in workbench.ownAirBases.filter((item) => item.isAirstrip === true)"
+            v-for="base in displayedBases.filter((item) => item.isAirstrip === true)"
             :key="`upgrade-${base.id}`"
             class="row"
           >
@@ -1158,7 +1156,7 @@ const showsBaseOps = computed(
               点它的「缩减一级」会被引擎按 15.2E 直接拒绝）。
             </p>
           </RuleNote>
-          <div v-for="base in workbench.ownAirBases" :key="`reduce-${base.id}`" class="row">
+          <div v-for="base in displayedBases" :key="`reduce-${base.id}`" class="row">
             <BaseTag kind="neutral">{{ hexLabel(base.hex) }}（{{ base.level }} 级）</BaseTag>
             <BaseButton
               variant="secondary"

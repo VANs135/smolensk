@@ -20,7 +20,8 @@ describe('死操作②：交接遮罩存在时顶栏不得留「能点但没反�
     expect(APP).toContain('须先确认交接')
   })
 
-  it('② 顶栏位于交接遮罩（z-index 60）之上', () => {
-    expect(APP).toContain('z-index: 61')
+  it('② 交接期间棋桌不可聚焦，存档对话框隐藏', () => {
+    expect(APP).toContain(':inert="hotseat.handoffPending && currentView === \'game\'"')
+    expect(APP).toContain(':open="ui.saveDialogOpen && !hotseat.handoffPending"')
   })
 })

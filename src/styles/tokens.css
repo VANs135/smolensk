@@ -44,6 +44,23 @@
 }
 
 :root {
+  --color-command-bg: #101820;
+  --color-command-panel: #16232d;
+  --color-command-raised: #21323e;
+  --color-command-ink: #eef5f6;
+  --color-command-muted: #a3b7c2;
+  --color-command-line: #3a4c56;
+  --color-command-teal: #78e2ce;
+  --color-command-teal-bg: #244840;
+  --color-command-amber: #ffc576;
+  --color-command-danger: #ffada8;
+  --color-command-axis: #9bc8fc;
+  --color-command-soviet: #ffb18c;
+  --command-rail: 62px;
+  --command-rail-button: 52px;
+  --command-drawer: 316px;
+  --command-drawer-wide: 498px;
+
   /* ── 字体族 ─────────────────────────────────────────── */
   --font-cjk:
     'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;

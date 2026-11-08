@@ -2,7 +2,13 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
-import { isFacilityToken, topTokenOf, type UnitToken } from '@/render/token-layer'
+import { HEX_RADIUS_PX, hexCanvasPoint } from '@/render/map-layout'
+import {
+  hitCollapsedToken,
+  isFacilityToken,
+  topTokenOf,
+  type UnitToken,
+} from '@/render/token-layer'
 import { visibleUnitIds } from '@/engine/rules/fog'
 
 /**
@@ -36,16 +42,15 @@ describe('B31b：设施单独一层（渲染）', () => {
     expect(topTokenOf([base, inf]).id).not.toBe(base.id)
   })
 
-  it('★ 源码守卫：渲染层确有"设施层"（在算子层之后补画被顶掉的设施）', () => {
-    const layer = readFileSync('src/render/token-layer.ts', 'utf8')
-    expect(layer).toContain('export function isFacilityToken')
-    expect(layer).toContain('export const FACILITY_TOKEN_RATIO')
-    expect(layer).toContain('const facilities = group.filter')
-    // 补画在状态贴图之前、算子层之后（否则会被顶牌盖住）
-    const at = layer.indexOf('const facilities = group.filter')
-    const status = layer.indexOf('drawTokenStatusTextures(ctx, drawn)')
-    expect(at).toBeGreaterThan(0)
-    expect(status).toBeGreaterThan(at)
+  it('缩叠时设施可以单独命中，不抢格心的战斗单位', () => {
+    const base = token({ id: 'base', noncombatKind: 'air_base' })
+    const infantry = token({ id: 'inf' })
+    const group = [infantry, base]
+    const center = hexCanvasPoint(base.hex)
+    expect(hitCollapsedToken(group, center, 0.8)).toBe(infantry)
+    expect(hitCollapsedToken(group, { ...center, y: center.y + HEX_RADIUS_PX * 0.59 }, 0.8)).toBe(
+      base,
+    )
   })
 })
 

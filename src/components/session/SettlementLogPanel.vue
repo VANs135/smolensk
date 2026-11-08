@@ -61,13 +61,7 @@ function filterByRule(rule: string): void {
 </script>
 
 <template>
-  <BasePanel title="结算日志（结构化 · 可检索 · 可展开 · 重放复算）">
-    <p class="muted">
-      日志来自会话的结算记录（每条都带**规则编号**、成败、掷骰与待处理项）。下方可逐条展开看明细；
-      检索条件同时给出即「与」关系。重放复算从**种子**出发重掷日志里的每一次掷骰并逐条比对，
-      出现分歧即报出**首个分歧**（条号 / 动作 / 规则 / 当时的掷骰游标）。
-    </p>
-
+  <BasePanel title="结算记录">
     <!-- ── 概览 ── -->
     <div class="row">
       <BaseTag kind="info">共 {{ gameSession.logBook.stats.total }} 条</BaseTag>
@@ -83,9 +77,8 @@ function filterByRule(rule: string): void {
     </div>
 
     <!-- ── 规则号索引（与规则编号对齐） ── -->
-    <p class="num">
-      规则号索引：
-      <template v-if="gameSession.logBook.rules.length === 0">（无）</template>
+    <details v-if="gameSession.logBook.rules.length > 0" class="log-section">
+      <summary>按规则号筛选</summary>
       <BaseButton
         v-for="item in gameSession.logBook.rules"
         :key="item.rule"
@@ -95,113 +88,117 @@ function filterByRule(rule: string): void {
       >
         {{ item.rule }} ×{{ item.count }}
       </BaseButton>
-    </p>
+    </details>
 
     <!-- ── 检索 ── -->
-    <div class="row">
-      <label class="field">
-        回合
-        <input
-          class="input num"
-          type="number"
-          min="1"
-          :value="query.turn ?? ''"
-          @change="
-            gameSession.setLogQuery({
-              turn:
-                ($event.target as HTMLInputElement).value === ''
-                  ? null
-                  : Number(($event.target as HTMLInputElement).value),
-            })
-          "
-        />
-      </label>
-      <label class="field">
-        阶段
-        <select
-          class="select"
-          :value="query.phase ?? ''"
-          @change="
-            gameSession.setLogQuery({
-              phase: (($event.target as HTMLSelectElement).value || null) as typeof query.phase,
-            })
-          "
+    <details class="log-section">
+      <summary>筛选</summary>
+      <div class="row">
+        <label class="field">
+          回合
+          <input
+            class="input num"
+            type="number"
+            min="1"
+            :value="query.turn ?? ''"
+            @change="
+              gameSession.setLogQuery({
+                turn:
+                  ($event.target as HTMLInputElement).value === ''
+                    ? null
+                    : Number(($event.target as HTMLInputElement).value),
+              })
+            "
+          />
+        </label>
+        <label class="field">
+          阶段
+          <select
+            class="select"
+            :value="query.phase ?? ''"
+            @change="
+              gameSession.setLogQuery({
+                phase: (($event.target as HTMLSelectElement).value || null) as typeof query.phase,
+              })
+            "
+          >
+            <option value="">（不限）</option>
+            <option v-for="phase in GAME_PHASES" :key="phase" :value="phase">
+              {{ PHASE_LABELS[phase] ?? phase }}
+            </option>
+          </select>
+        </label>
+        <label class="field">
+          阵营
+          <select
+            class="select"
+            :value="query.side ?? ''"
+            @change="
+              gameSession.setLogQuery({
+                side: (($event.target as HTMLSelectElement).value || null) as typeof query.side,
+              })
+            "
+          >
+            <option value="">（不限）</option>
+            <option value="axis">轴心国</option>
+            <option value="soviet">苏联</option>
+          </select>
+        </label>
+        <label class="field">
+          动作
+          <select
+            class="select"
+            :value="query.action ?? ''"
+            @change="
+              gameSession.setLogQuery({
+                action: ($event.target as HTMLSelectElement).value || null,
+              })
+            "
+          >
+            <option value="">（不限）</option>
+            <option v-for="action in gameSession.logBook.actions" :key="action" :value="action">
+              {{ action }}
+            </option>
+          </select>
+        </label>
+        <label class="field">
+          关键词
+          <input
+            class="input"
+            :value="query.text ?? ''"
+            placeholder="如 radar / limited / 36.13"
+            @input="
+              gameSession.setLogQuery({ text: ($event.target as HTMLInputElement).value || null })
+            "
+          />
+        </label>
+        <label class="field">
+          <input
+            type="checkbox"
+            :checked="query.onlyFailed === true"
+            @change="
+              gameSession.setLogQuery({ onlyFailed: ($event.target as HTMLInputElement).checked })
+            "
+          />
+          只看被拒
+        </label>
+        <BaseButton
+          variant="ghost"
+          size="sm"
+          :disabled="!gameSession.logFiltered"
+          @click="gameSession.clearLogQuery()"
         >
-          <option value="">（不限）</option>
-          <option v-for="phase in GAME_PHASES" :key="phase" :value="phase">
-            {{ PHASE_LABELS[phase] ?? phase }}
-          </option>
-        </select>
-      </label>
-      <label class="field">
-        阵营
-        <select
-          class="select"
-          :value="query.side ?? ''"
-          @change="
-            gameSession.setLogQuery({
-              side: (($event.target as HTMLSelectElement).value || null) as typeof query.side,
-            })
-          "
-        >
-          <option value="">（不限）</option>
-          <option value="axis">轴心国</option>
-          <option value="soviet">苏联</option>
-        </select>
-      </label>
-      <label class="field">
-        动作
-        <select
-          class="select"
-          :value="query.action ?? ''"
-          @change="
-            gameSession.setLogQuery({ action: ($event.target as HTMLSelectElement).value || null })
-          "
-        >
-          <option value="">（不限）</option>
-          <option v-for="action in gameSession.logBook.actions" :key="action" :value="action">
-            {{ action }}
-          </option>
-        </select>
-      </label>
-      <label class="field">
-        关键词
-        <input
-          class="input"
-          :value="query.text ?? ''"
-          placeholder="如 radar / limited / 36.13"
-          @input="
-            gameSession.setLogQuery({ text: ($event.target as HTMLInputElement).value || null })
-          "
-        />
-      </label>
-      <label class="field">
-        <input
-          type="checkbox"
-          :checked="query.onlyFailed === true"
-          @change="
-            gameSession.setLogQuery({ onlyFailed: ($event.target as HTMLInputElement).checked })
-          "
-        />
-        只看被拒
-      </label>
-      <BaseButton
-        variant="ghost"
-        size="sm"
-        :disabled="!gameSession.logFiltered"
-        @click="gameSession.clearLogQuery()"
-      >
-        清除筛选
-      </BaseButton>
-      <span class="num">
-        命中 {{ gameSession.logEntries.length }} / {{ gameSession.logBook.stats.total }} 条
-      </span>
-    </div>
+          清除筛选
+        </BaseButton>
+        <span class="num">
+          命中 {{ gameSession.logEntries.length }} / {{ gameSession.logBook.stats.total }} 条
+        </span>
+      </div>
+    </details>
 
     <!-- ── 重放复算（固定种子） ── -->
-    <hr />
-    <p v-if="replay === null" class="muted">尚无会话：开局并推进后即可重放复算。</p>
-    <template v-else>
+    <details v-if="replay !== null" class="log-section">
+      <summary>重放复算</summary>
       <p class="num">
         <BaseTag :kind="replay.ok ? 'success' : 'danger'">
           重放复算 {{ replay.ok ? '通过' : '未通过' }}
@@ -222,13 +219,11 @@ function filterByRule(rule: string): void {
         {{ replay.firstDivergence.actual.faces.join('+') }}
       </p>
       <p class="num">{{ replay.detail }}</p>
-    </template>
+    </details>
 
     <!-- ── 日志明细（可展开） ── -->
     <hr />
-    <p v-if="gameSession.logEntries.length === 0" class="muted">
-      没有命中任何日志（或本局尚无日志 —— 点上方「推进一步」开始）。
-    </p>
+    <p v-if="gameSession.logEntries.length === 0" class="muted">暂无记录</p>
     <div v-for="entry in gameSession.logEntries" :key="entry.index" class="entry">
       <button class="entry__head" type="button" @click="toggleExpanded(entry.index)">
         <span class="entry__cursor num">#{{ entry.index + 1 }}</span>
@@ -271,6 +266,19 @@ function filterByRule(rule: string): void {
 </template>
 
 <style scoped>
+.log-section {
+  margin: var(--space-2) 0;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.log-section > summary {
+  cursor: pointer;
+  color: var(--color-muted);
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;

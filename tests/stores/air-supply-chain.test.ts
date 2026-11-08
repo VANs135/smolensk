@@ -259,7 +259,6 @@ describe('B15d/B15e：分段渲染与视图接线（源码守卫）', () => {
       expect(air, `AirPanel 缺 ${only} 分段`).toContain(only)
     }
     expect(air).toContain('showsMission')
-    expect(air).toContain('showsBaseOps')
 
     const supply = readFileSync('src/components/supply/SupplyPanel.vue', 'utf8')
     // 两段（check / ledger）＋ ★ 用户 2026-10-25 的"一个操作一个面板"五个细分段
@@ -316,21 +315,21 @@ describe('B15d/B15e：分段渲染与视图接线（源码守卫）', () => {
     expect(pickerAt).toBeLessThan(checkStart)
   })
 
-  it('空军事务段（摆放/整备/修建/缩减/夺取）留在 admin 段', () => {
+  it('空军事务命令留在各自的单项操作面板', () => {
     const air = readFileSync('src/components/air/AirPanel.vue', 'utf8')
-    const adminStart = air.indexOf('v-if="showsAdmin"')
-    const missionStart = air.indexOf('v-if="showsMission"')
-    for (const marker of [
-      'workbench.addAirUnit(',
-      'workbench.beginRefitNow(',
-      'workbench.buildAirBaseNow(',
-      'workbench.reduceBaseNow(',
-      'workbench.captureAirBaseNow(',
-    ]) {
-      const at = air.indexOf(marker)
-      expect(at, `${marker} 应在 admin 段`).toBeGreaterThan(adminStart)
-      // 事务动作不在 mission 段里（mission 段在 admin 段之后）
-      expect(at < missionStart || at > adminStart).toBe(true)
+    for (const [panel, command] of [
+      ['Place', 'addAirUnit'],
+      ['Refit', 'beginRefitNow'],
+      ['Airstrip', 'buildAirBaseNow'],
+      ['Reduce', 'reduceBaseNow'],
+      ['Capture', 'captureAirBaseNow'],
+    ] as const) {
+      const marker = `v-if="shows${panel}"`
+      const start = air.indexOf(marker)
+      const next = air.slice(start + marker.length).search(/<template v-if="shows[A-Z]/)
+      const end = next < 0 ? air.length : start + marker.length + next
+      expect(start, `缺少 ${panel} 面板`).toBeGreaterThan(0)
+      expect(air.slice(start, end)).toContain(`workbench.${command}(`)
     }
   })
 })

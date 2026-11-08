@@ -29,17 +29,17 @@ describe('B35：流程条 / 工具按钮 / 纯文字面板（源码守卫）', (
     const strip = readFileSync('src/components/session/FlowStrip.vue', 'utf8')
     expect(strip).toContain("variant?: 'panel' | 'bar'")
     expect(strip).toContain("const isBar = computed<boolean>(() => props.variant === 'bar')")
-    const barStart = strip.indexOf('<div v-if="isBar" class="bar">')
+    const barStart = strip.indexOf('<div v-if="isBar" class="bar"')
     const barEnd = strip.indexOf('<BasePanel v-else title="流程条（2.2 流程表）">')
     expect(barStart).toBeGreaterThan(0)
     expect(barEnd).toBeGreaterThan(barStart)
     const bar = strip.slice(barStart, barEnd)
     // bar 里只有阶段 / 环节 / 行动方与操作者 / 推进 / 一行提示（＋阻断一行）
-    expect(bar).toContain('flow.phaseLabel')
-    expect(bar).toContain('flow.segmentLabel')
-    expect(bar).toContain('flow.actingSideLabel')
-    expect(bar).toContain('flow.decisionRoleLabel')
-    expect(bar).toContain('flow.nextActionLabel')
+    expect(bar).toContain('activeStage')
+    expect(bar).toContain('currentSegment.label')
+    expect(bar).toContain('sideName')
+    expect(bar).toContain('advanceLabel')
+    expect(bar.match(/@click="onAdvance"/g)).toHaveLength(1)
     expect(bar).toContain('flow.hint')
     // 阶段灯 / 日志 / 重置 / 5.0b 勾选 / 共识提示**不在** bar 里
     for (const heavy of [
@@ -78,7 +78,7 @@ describe('B35：流程条 / 工具按钮 / 纯文字面板（源码守卫）', (
     expect(wb).toContain("allowedActionsOf(segmentGateQuery.value).has('combat.declare')")
   })
 
-  it('★ 5 处纯文字面板已删；右栏收到 320px（口径 #18）', () => {
+  it('★ 纯文字面板已删，战况抽屉按需打开', () => {
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
     for (const dead of [
       '局况与观察方（4.9a）',
@@ -89,8 +89,8 @@ describe('B35：流程条 / 工具按钮 / 纯文字面板（源码守卫）', (
     ]) {
       expect(game, `还有纯文字面板残留：${dead}`).not.toContain(dead)
     }
-    expect(game).toContain('grid-template-columns: minmax(0, 1fr) 320px;')
-    expect(game).not.toContain('grid-template-columns: minmax(0, 1fr) 400px;')
+    expect(game).toContain('v-show="!hotkeys.panelCollapsed"')
+    expect(game).toContain('v-if="openedDrawers.has(\'status\')"')
   })
 })
 

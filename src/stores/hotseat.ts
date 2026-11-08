@@ -170,7 +170,7 @@ export const useHotseatStore = defineStore('hotseat', () => {
 
   /** 该格的空中算子（4.8b E / 4.9a 的「最上方激活飞机」） */
   function fogAirUnitsAt(hex: HexRef): FogUnitView[] {
-    return workbench.airUnits
+    return workbench.onMapAirUnits
       .filter((air) => sameHex(air.hex, hex))
       .map((air) => ({
         id: air.instanceId,
@@ -197,7 +197,7 @@ export const useHotseatStore = defineStore('hotseat', () => {
     for (const unit of workbench.units) {
       if (!hexes.some((hex) => sameHex(hex, unit.hex))) hexes.push({ ...unit.hex })
     }
-    for (const air of workbench.airUnits) {
+    for (const air of workbench.onMapAirUnits) {
       if (!hexes.some((hex) => sameHex(hex, air.hex))) hexes.push({ ...air.hex })
     }
     return hexes
@@ -366,6 +366,7 @@ export const useHotseatStore = defineStore('hotseat', () => {
     hotseatEnabled,
     handoffPending,
     // 观察方
+    decisionSide,
     viewerSide,
     opponentSide,
     handoffNotice,

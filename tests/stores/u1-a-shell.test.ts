@@ -22,18 +22,21 @@ describe('U1-a：L0 常驻条', () => {
     expect(FLOW).toContain('turnNow')
     expect(FLOW).toContain('bar__score')
     expect(FLOW).toContain('score.listedBySide')
-    expect(FLOW).toContain('环节 {{ flow.segmentLabel }}')
+    expect(FLOW).toContain('currentSegment.label')
+    expect(FLOW).toContain('hotseat.decisionSide')
   })
 
   it('推进入口唯一，阻断原因就地显示', () => {
-    expect(FLOW).toContain(':disabled="!flow.canAdvance"')
-    expect(FLOW).toContain('workbench.advanceBlock.reason')
+    expect(FLOW).toContain(':disabled="!flow.canAdvance || liveBlock !== null"')
+    expect(FLOW).toContain('workbench.currentAdvanceBlock')
+    expect(FLOW).toContain('liveBlock.value ?? workbench.advanceBlock')
     // L0 条不再自报「流程条」这种调试抬头
     expect(FLOW).not.toContain('bar__title')
   })
 
-  it('低频入口收进「视图与面板」抽屉，地图上方不再平铺控件', () => {
-    expect(VIEW).toContain('gt__setup')
+  it('低频入口由棋桌导轨打开设置抽屉', () => {
+    expect(VIEW).toContain('aria-controls="\'table-drawer-\' + item.id"')
+    expect(VIEW).toContain('id="table-drawer-settings"')
     expect(VIEW).toContain('视图与面板')
     expect(VIEW).not.toContain('gt__stat')
     expect(VIEW).not.toContain('gt__bar')

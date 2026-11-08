@@ -13,6 +13,7 @@ import {
   MAP_IMAGE_ORIGIN,
   MAP_IMAGE_SRC,
   canDraw,
+  drawMap,
   visibleEdges,
   visibleHexes,
   visiblePrintedHedgehogs,
@@ -136,6 +137,32 @@ describe('视口裁剪：可见格', () => {
 })
 
 describe('视口裁剪：格边要素与印刷工事', () => {
+  it('以三种线型批量绘制所有河流、道路和铁路格边', () => {
+    const noop = () => undefined
+    const paths: number[] = []
+    let segments = 0
+    const ctx = {
+      setTransform: noop,
+      clearRect: noop,
+      fillRect: noop,
+      setLineDash: noop,
+      beginPath: () => (segments = 0),
+      moveTo: noop,
+      lineTo: () => (segments += 1),
+      stroke: () => paths.push(segments),
+    } as unknown as CanvasRenderingContext2D
+    drawMap(ctx, {
+      viewport: fitViewport(BOARD_SIZE_PX, FULL_VIEW),
+      viewSize: FULL_VIEW,
+      layers: { labels: false, hedgehogs: false },
+    })
+    expect(paths).toEqual([
+      mapLayers.edges.filter((edge) => edge.river !== undefined).length,
+      mapLayers.edges.filter((edge) => edge.road !== undefined).length,
+      mapLayers.edges.filter((edge) => edge.rail === true).length,
+    ])
+  })
+
   it('整幅入视口时返回全部格边要素', () => {
     const viewport = fitViewport(BOARD_SIZE_PX, FULL_VIEW)
     expect(visibleEdges(viewport, FULL_VIEW)).toHaveLength(mapLayers.edges.length)

@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { useRefereeTools } from '@/components/ui-mode'
 import { BaseButton, BasePanel, BaseTag } from '@/components/base'
+import AircraftRoster from '@/components/air/AircraftRoster.vue'
 import UiField from '@/components/UiField.vue'
 import { useUiMode } from '@/components/ui-mode'
 import { formations } from '@/data'
 import type { Side } from '@/data'
 import type { BoxView, ScenarioDrawBoxView } from '@/engine/rules'
-import { useContainersStore, useWorkbenchStore, counterImageUrlOf } from '@/stores'
+import { useContainersStore, useHotseatStore, useWorkbenchStore, counterImageUrlOf } from '@/stores'
 
 /**
  * 记录轨与容器面板（W7 C12）
@@ -29,6 +30,8 @@ const containers = useContainersStore()
 /** 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输） */
 const uiMode = useUiMode()
 const workbench = useWorkbenchStore()
+const hotseat = useHotseatStore()
+const actingSide = computed(() => workbench.segmentGateQuery.side ?? workbench.activeSide)
 
 /** 返场落点（死亡堆 → 图；13.5a / 1.6c 的落点规则见 2.1 / 3.1） */
 /** 拆分单位取用：母单位与档位 */
@@ -53,7 +56,26 @@ const formationHideText = ref('')
 const airUnitId = ref('')
 
 /** 盒的总览（顺序即引擎给出：死亡堆 → 拆分盒 → 特殊补员盒 → 空军盒（双方）→ 边缘盒 → 剧本盒 → 编队盒） */
-const boxes = computed<readonly BoxView[]>(() => containers.boxes)
+const boxes = computed<readonly BoxView[]>(() => {
+  if (uiMode === 'verify') return containers.boxes
+  const visible = containers.boxes.filter(
+    (box) =>
+      hotseat.fogDisabled ||
+      !hotseat.policy.hideOffMapBoxes ||
+      box.side === hotseat.viewerSide ||
+      !['airBox', 'edgeBox', 'formationBox'].includes(box.kind),
+  )
+  if (props.subjectId != null) {
+    return visible.filter(
+      (box) => box.kind === 'formationBox' && formationIdOf(box) === formationId.value,
+    )
+  }
+  const kinds = containers.openCardBoxKinds
+  if (props.only !== 'actions' || kinds === null) return visible
+  return visible.filter(
+    (box) => kinds.includes(box.kind) && (box.side === null || box.side === actingSide.value),
+  )
+})
 
 /** 剧本抽取盒（`BoxView` 是平铺接口，富字段用窄化取回；见引擎的 ScenarioDrawBoxView） */
 const scenarioBox = computed<ScenarioDrawBoxView | null>(() => {
@@ -171,14 +193,22 @@ function formationIdOf(box: BoxView): string {
 /** 可选飞机（未在盒里的） */
 const airCandidates = computed(() =>
   workbench.airUnits
-    .filter((air) => !containers.airBoxMembers.includes(air.instanceId))
+    .filter(
+      (air) =>
+        !containers.airBoxMembers.includes(air.instanceId) &&
+        (uiMode === 'verify' || air.side === actingSide.value),
+    )
     .map((air) => ({ id: air.instanceId, label: `${air.name}（${sideName(air.side)}）` })),
 )
 
 /** 可选母单位（图上、且非拆分单位本身） */
 const parentCandidates = computed(() =>
   workbench.units
-    .filter((unit) => !unit.specialized.includes('breakdown'))
+    .filter(
+      (unit) =>
+        !unit.specialized.includes('breakdown') &&
+        (uiMode === 'verify' || unit.side === actingSide.value),
+    )
     .map((unit) => ({
       id: unit.instanceId,
       label: `${unit.name}（${sideName(unit.side)}｜AR${unit.faces.combat.ar}｜${unit.steps}/${unit.printedSteps}）`,
@@ -187,10 +217,12 @@ const parentCandidates = computed(() =>
 
 /** 可选编队（多单位编队库，13.7） */
 const formationChoices = computed(() =>
-  formations.formations.map((item) => ({
-    id: item.formationId,
-    label: `${item.formationId}（${sideName(item.side)}）`,
-  })),
+  formations.formations
+    .filter((item) => uiMode === 'verify' || item.side === actingSide.value)
+    .map((item) => ({
+      id: item.formationId,
+      label: `${item.formationId}（${sideName(item.side)}）`,
+    })),
 )
 
 /** 编队归属方（按编队库） */
@@ -284,7 +316,24 @@ function hideNowFromBox(): boolean {
  *     编队收纳盒的建立、容器重置 —— 按方案 §4.7「**盒卡只负责『选谁』，动作进会话框**」，
  *     它们由"在托盘里展开一张盒卡"触发（`containers.cardOpenId`）。
  */
-const props = withDefaults(defineProps<{ only?: 'info' | 'actions' | null }>(), { only: null })
+const props = withDefaults(
+  defineProps<{ only?: 'info' | 'actions' | null; subjectId?: string | null }>(),
+  { only: null, subjectId: null },
+)
+
+watch(
+  () => props.subjectId,
+  (id) => {
+    const unit = workbench.units.find((item) => item.instanceId === id)
+    if (unit === undefined) return
+    formationId.value =
+      formations.formations.find(
+        (item) => item.side === unit.side && item.formationCode === unit.formation,
+      )?.formationId ?? ''
+    formationHideSelection.value = []
+  },
+  { immediate: true },
+)
 
 /**
  * C-1：**某个盒的动作段是否该显示**（判据＝当前展开卡覆盖的 `boxKind`）
@@ -295,6 +344,9 @@ const props = withDefaults(defineProps<{ only?: 'info' | 'actions' | null }>(), 
  */
 function showsBoxActions(kind: string): boolean {
   if (!showsActions.value) return false
+  if (uiMode !== 'verify' && (hotseat.handoffPending || hotseat.viewerSide !== actingSide.value))
+    return false
+  if (props.subjectId != null) return kind === 'formationBox'
   const kinds = containers.openCardBoxKinds
   return kinds === null || kinds.includes(kind)
 }
@@ -321,88 +373,98 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
  *   `only === null` 就会把裁判工具放进对局台。
  */
 const showsReferee = useRefereeTools()
+
+function boxAircraft(side: Side) {
+  return workbench.ownAirUnits.filter(
+    (air) => air.side === side && containers.airBoxMembers.includes(air.instanceId),
+  )
+}
 </script>
 
 <template>
-  <BasePanel title="记录轨与容器（回合轨 · 天气轨 · 铁路容量轨 · 死亡堆 · 各类盒）">
-    <p v-if="showsInfo" class="muted">
+  <BasePanel :title="showsInfo ? '记录轨与容器' : ''">
+    <p v-if="showsInfo && showsReferee" class="muted">
       轨与盒的**名册与判定**全部来自引擎（`engine/rules/containers.ts`），本面板只画表与收点击。
       每个盒都带 **美工接口**（`artwork`）：有图即渲染图，无图渲染纯文字盒；数据缺口（如 2.3a 的
       Alarm 单位未在单位库标注、剧本原文未列出被抽中的编队）在盒上**如实标出**，不猜。
     </p>
 
     <!-- ── ① 记录轨 ── -->
-    <hr />
-    <h4 class="block-title">记录轨</h4>
-    <div class="row">
-      <BaseTag kind="info">回合 T{{ containers.turn }}｜{{ containers.date }}</BaseTag>
-      <BaseTag kind="neutral">{{ containers.turnTrack.rule }}</BaseTag>
-      <BaseButton
-        v-if="showsReferee"
-        variant="secondary"
-        size="sm"
-        @click="containers.advanceTurnMarker()"
-      >
-        推进回合标记（2.2）
-      </BaseButton>
-      <span class="num">
-        轨格 {{ containers.turnTrack.slots.length }} 格（markers.json）｜当前标记
-        {{ containers.turnTrack.markers[0]?.detail ?? '（不在轨上）' }}
-      </span>
-    </div>
-    <div class="row">
-      <BaseTag kind="neutral"
-        >天气 {{ containers.weather.air === 'normal' ? '正常飞行' : '受限飞行' }}</BaseTag
-      >
-      <BaseButton
-        v-if="showsReferee"
-        variant="secondary"
-        size="sm"
-        @click="containers.setWeatherMarker('normal')"
-      >
-        置天气标记：正常
-      </BaseButton>
-      <BaseButton
-        v-if="showsReferee"
-        variant="secondary"
-        size="sm"
-        @click="containers.setWeatherMarker('limited')"
-      >
-        置天气标记：受限
-      </BaseButton>
-      <span class="muted">{{ containers.weatherTrack.note }}</span>
-    </div>
-    <div class="row">
-      <BaseTag kind="neutral">铁路容量轨 {{ containers.railCapTrack.rule }}</BaseTag>
-      <template v-for="entry in containers.railCapTrack.sides" :key="entry.side">
-        <span class="num">
-          {{ sideName(entry.side) }}：{{ entry.current }}（按日期应为 {{ entry.onDate }}｜升级日
-          {{ containers.railCapTrack.boostDate }} → {{ entry.boostTo }}）
-        </span>
+    <template v-if="showsInfo">
+      <hr />
+      <h4 class="block-title">记录轨</h4>
+      <div class="row">
+        <BaseTag kind="info">回合 T{{ containers.turn }}｜{{ containers.date }}</BaseTag>
+        <BaseTag kind="neutral">{{ containers.turnTrack.rule }}</BaseTag>
         <BaseButton
           v-if="showsReferee"
-          variant="ghost"
+          variant="secondary"
           size="sm"
-          @click="containers.setRailCapacity(entry.side, entry.onDate)"
+          @click="containers.advanceTurnMarker()"
         >
-          设为 {{ entry.onDate }}
+          推进回合标记（2.2）
         </BaseButton>
-      </template>
-      <BaseButton
-        v-if="showsReferee"
-        variant="secondary"
-        size="sm"
-        @click="containers.applyRailCapacityForDate()"
-      >
-        按日期重算（专规 1.2）
-      </BaseButton>
-    </div>
-
+        <span class="num">
+          轨格 {{ containers.turnTrack.slots.length }} 格（markers.json）｜当前标记
+          {{ containers.turnTrack.markers[0]?.detail ?? '（不在轨上）' }}
+        </span>
+      </div>
+      <div class="row">
+        <BaseTag kind="neutral"
+          >天气 {{ containers.weather.air === 'normal' ? '正常飞行' : '受限飞行' }}</BaseTag
+        >
+        <BaseButton
+          v-if="showsReferee"
+          variant="secondary"
+          size="sm"
+          @click="containers.setWeatherMarker('normal')"
+        >
+          置天气标记：正常
+        </BaseButton>
+        <BaseButton
+          v-if="showsReferee"
+          variant="secondary"
+          size="sm"
+          @click="containers.setWeatherMarker('limited')"
+        >
+          置天气标记：受限
+        </BaseButton>
+        <span class="muted">{{ containers.weatherTrack.note }}</span>
+      </div>
+      <div class="row">
+        <BaseTag kind="neutral">铁路容量轨 {{ containers.railCapTrack.rule }}</BaseTag>
+        <template v-for="entry in containers.railCapTrack.sides" :key="entry.side">
+          <span class="num">
+            {{ sideName(entry.side) }}：{{ entry.current }}（按日期应为 {{ entry.onDate }}｜升级日
+            {{ containers.railCapTrack.boostDate }} → {{ entry.boostTo }}）
+          </span>
+          <BaseButton
+            v-if="showsReferee"
+            variant="ghost"
+            size="sm"
+            @click="containers.setRailCapacity(entry.side, entry.onDate)"
+          >
+            设为 {{ entry.onDate }}
+          </BaseButton>
+        </template>
+        <BaseButton
+          v-if="showsReferee"
+          variant="secondary"
+          size="sm"
+          @click="containers.applyRailCapacityForDate()"
+        >
+          按日期重算（专规 1.2）
+        </BaseButton>
+      </div>
+    </template>
     <!-- ── ② 盒 ── -->
-    <hr />
-    <h4 class="block-title">容器（{{ boxes.length }} 个盒）</h4>
 
-    <details v-for="box in boxes" :key="box.id" class="box" open>
+    <details
+      v-for="box in boxes"
+      :key="box.id"
+      class="box"
+      :open="props.only === 'actions' || showsReferee"
+    >
       <summary class="box__head">
         <span class="box__name">{{ box.name }}</span>
         <BaseTag kind="neutral">{{ box.rule }}</BaseTag>
@@ -417,31 +479,52 @@ const showsReferee = useRefereeTools()
         >
       </summary>
 
-      <!-- 盒的美工接口：有图即渲染，无图退化 -->
-      <div class="box__art">
-        <img v-if="box.artwork?.imageKey" class="box__img" :src="box.artwork.imageKey" alt="盒图" />
-        <span v-else class="muted"
-          >（无盒图：美工接口已留，数据补 `containers.artwork[{{ box.id }}]` 即显示）</span
-        >
-      </div>
-
-      <!-- 分栏与持有项 -->
-      <div v-for="section in box.sections" :key="section.id" class="box__section">
-        <p class="num box__section-title">
-          {{ section.label }}（{{ section.rule }}）：
-          {{ box.holdings.filter((holding) => holding.sectionId === section.id).length }} 枚
-        </p>
-        <ul class="picks">
-          <li
-            v-for="holding in box.holdings.filter((item) => item.sectionId === section.id)"
-            :key="holding.unitId"
-            class="num"
+      <AircraftRoster
+        v-if="
+          !showsReferee &&
+          box.kind === 'airBox' &&
+          box.side !== null &&
+          box.side === actingSide &&
+          showsBoxActions('airBox')
+        "
+        :box-side="box.side"
+        :aircraft="boxAircraft(box.side)"
+      />
+      <template v-else>
+        <!-- 盒的美工接口：有图即渲染，无图退化 -->
+        <div v-if="showsReferee" class="box__art">
+          <img
+            v-if="box.artwork?.imageKey"
+            class="box__img"
+            :src="box.artwork.imageKey"
+            alt="盒图"
+          />
+          <span v-else class="muted"
+            >（无盒图：美工接口已留，数据补 `containers.artwork[{{ box.id }}]` 即显示）</span
           >
-            {{ holding.name ?? holding.unitId }}
-            <span v-if="holding.note !== undefined" class="muted">（{{ holding.note }}）</span>
-            <!-- 死亡堆：返场 / 永久移除（13.5 / 1.6c / 13.5c）—— B17a-2：动作进会话框 -->
-            <template v-if="showsBoxActions('deadPile')">
-              <!--
+        </div>
+
+        <!-- 分栏与持有项 -->
+        <div v-for="section in box.sections" :key="section.id" class="box__section">
+          <p class="num box__section-title">
+            {{ section.label }}（{{ section.rule }}）：
+            {{ box.holdings.filter((holding) => holding.sectionId === section.id).length }} 枚
+          </p>
+          <ul class="picks">
+            <li
+              v-for="holding in box.holdings.filter((item) => item.sectionId === section.id)"
+              :key="holding.unitId"
+              class="num"
+            >
+              {{ holding.name ?? holding.unitId }}
+              <span v-if="holding.note !== undefined" class="muted">（{{ holding.note }}）</span>
+              <!-- 死亡堆：返场 / 永久移除（13.5 / 1.6c / 13.5c）—— B17a-2：动作进会话框 -->
+              <template
+                v-if="
+                  box.kind === 'deadPile' && box.side === actingSide && showsBoxActions('deadPile')
+                "
+              >
+                <!--
                 ★ 修（2026-10-30）：「返场到 X」**只留给裁判**。
                 它直接调 `returnFromDeadPileNow`（只做"从死亡堆取出 → 落到指定格"），
                 而 13.5 的重建要**付补员**且必须"补员同格 + 友方指挥部 2 格内 + 不在敌方 ZOC"，
@@ -449,211 +532,214 @@ const showsReferee = useRefereeTools()
                 这三条合法路径各有自己的引擎计划与入口。玩家面上直接给一个"免费返场"按钮，
                 等于把 13.5a 的费用与位置约束全绕过去（盒子动作修好后这个按钮才真正露出来）。
               -->
-              <BaseButton
-                v-if="showsReferee"
-                variant="ghost"
-                size="sm"
-                title="裁判订正用：规则内重建请走「重建（13.5）」付补员，特殊补员请走 1.6c 抽取"
-                @click="
-                  workbench.returnFromDeadPileNow({
-                    instanceId: holding.unitId,
-                    hexText: workbench.deadPileReturnHexText,
-                  })
-                "
-              >
-                返场到 {{ workbench.deadPileReturnHexText || '（点地图选格）' }}
-              </BaseButton>
-              <BaseButton
-                variant="ghost"
-                size="sm"
-                @click="workbench.removeForeverNow(holding.unitId)"
-              >
-                永久移除（13.5c）
-              </BaseButton>
-            </template>
-            <!-- 边缘盒：离开（1.4b） -->
-            <template v-if="showsBoxActions('edgeBox')">
-              <BaseButton
-                variant="ghost"
-                size="sm"
-                @click="
-                  containers.moveEdgeBox({
-                    box: box.id === 'edge-northeast' ? 'northeast' : 'southeast',
-                    instanceId: holding.unitId,
-                    direction: 'exit',
-                    fromSupplySourceHex: edgeFromSource,
-                    useRailCap: edgeUseRailCap,
-                  })
-                "
-              >
-                离箱入图（1.4b）
-              </BaseButton>
-            </template>
-            <!-- 空军盒：移出（1.4a） -->
-            <template v-if="showsBoxActions('airBox')">
-              <BaseButton
-                variant="ghost"
-                size="sm"
-                @click="containers.setAirInBox(holding.unitId, false)"
-              >
-                移出盒
-              </BaseButton>
-            </template>
-          </li>
-        </ul>
-      </div>
+                <BaseButton
+                  v-if="showsReferee"
+                  variant="ghost"
+                  size="sm"
+                  title="裁判订正用：规则内重建请走「重建（13.5）」付补员，特殊补员请走 1.6c 抽取"
+                  @click="
+                    workbench.returnFromDeadPileNow({
+                      instanceId: holding.unitId,
+                      hexText: workbench.deadPileReturnHexText,
+                    })
+                  "
+                >
+                  返场到 {{ workbench.deadPileReturnHexText || '（点地图选格）' }}
+                </BaseButton>
+                <BaseButton
+                  variant="ghost"
+                  size="sm"
+                  @click="workbench.removeForeverNow(holding.unitId)"
+                >
+                  永久移除（13.5c）
+                </BaseButton>
+              </template>
+              <!-- 边缘盒：离开（1.4b） -->
+              <template v-if="box.kind === 'edgeBox' && showsBoxActions('edgeBox')">
+                <BaseButton
+                  variant="ghost"
+                  size="sm"
+                  @click="
+                    containers.moveEdgeBox({
+                      box: box.id === 'edge-northeast' ? 'northeast' : 'southeast',
+                      instanceId: holding.unitId,
+                      direction: 'exit',
+                      fromSupplySourceHex: edgeFromSource,
+                      useRailCap: edgeUseRailCap,
+                    })
+                  "
+                >
+                  离箱入图（1.4b）
+                </BaseButton>
+              </template>
+              <!-- 空军盒：移出（1.4a） -->
+              <template v-if="showsReferee && box.kind === 'airBox' && showsBoxActions('airBox')">
+                <BaseButton
+                  variant="ghost"
+                  size="sm"
+                  @click="containers.setAirInBox(holding.unitId, false)"
+                >
+                  移出盒
+                </BaseButton>
+              </template>
+            </li>
+          </ul>
+        </div>
 
-      <!-- 要点与缺口 -->
-      <p v-for="(note, index) in box.notes" :key="`n${index}`" class="muted">· {{ note }}</p>
-      <p v-for="(gap, index) in box.dataGaps" :key="`g${index}`" class="warn">
-        ⚠ 数据缺口：{{ gap }}
-      </p>
+        <!-- 要点与缺口 -->
+        <template v-if="showsReferee">
+          <p v-for="(note, index) in box.notes" :key="`n${index}`" class="muted">· {{ note }}</p>
+          <p v-for="(gap, index) in box.dataGaps" :key="`g${index}`" class="warn">
+            ⚠ 数据缺口：{{ gap }}
+          </p>
+        </template>
 
-      <!-- ── 各类盒的操作（B17a-2：动作段 ⇒ 只在会话框里画） ── -->
-      <!-- 拆分单位盒（1.8a / 20.0a–g） -->
-      <div v-if="showsBoxActions('breakdownBox')" class="row">
-        <label class="field">
-          母单位
-          <select v-model="breakdownParentId" class="select">
-            <option value="">（选择）</option>
-            <option v-for="item in parentCandidates" :key="item.id" :value="item.id">
-              {{ item.label }}
-            </option>
-          </select>
-        </label>
-        <label class="field">
-          AR 档
-          <span class="row">
-            <BaseButton
-              v-for="ar in BREAKDOWN_AR_LEVELS"
-              :key="ar"
-              :variant="breakdownAr === ar ? 'primary' : 'secondary'"
-              size="sm"
-              @click="breakdownAr = ar"
-            >
-              AR{{ ar }}
-            </BaseButton>
+        <!-- ── 各类盒的操作（B17a-2：动作段 ⇒ 只在会话框里画） ── -->
+        <!-- 拆分单位盒（1.8a / 20.0a–g） -->
+        <div v-if="box.kind === 'breakdownBox' && showsBoxActions('breakdownBox')" class="row">
+          <label class="field">
+            母单位
+            <select v-model="breakdownParentId" class="select">
+              <option value="">（选择）</option>
+              <option v-for="item in parentCandidates" :key="item.id" :value="item.id">
+                {{ item.label }}
+              </option>
+            </select>
+          </label>
+          <label class="field">
+            AR 档
+            <span class="row">
+              <BaseButton
+                v-for="ar in BREAKDOWN_AR_LEVELS"
+                :key="ar"
+                :variant="breakdownAr === ar ? 'primary' : 'secondary'"
+                size="sm"
+                @click="breakdownAr = ar"
+              >
+                AR{{ ar }}
+              </BaseButton>
+            </span>
+          </label>
+          <BaseButton
+            variant="primary"
+            size="sm"
+            :disabled="breakdownParentId === '' || breakdownTimingNow === null"
+            :title="
+              breakdownTimingNow === null
+                ? '20.0a：只有「开始移动 / 战后推进 / 战后撤退」三个时机能创建拆分单位（先让母单位开始移动，再取用）'
+                : `20.0a 当前时机：${breakdownTimingLabel}`
+            "
+            @click="
+              containers.takeBreakdown({
+                parentInstanceId: breakdownParentId,
+                breakdownAr,
+              })
+            "
+          >
+            取用一枚（20.0a：仅在开始移动 / 战后推进 / 战后撤退）
+          </BaseButton>
+        </div>
+
+        <!-- 1.6c 特殊补员抽取盒（两道闸：环节 + 日期；不放行时明说原因） -->
+        <div v-if="box.kind === 'specialReplBox' && showsBoxActions('specialReplBox')" class="row">
+          <BaseButton
+            variant="primary"
+            size="sm"
+            :disabled="specialReplRefusal(box) !== null"
+            :title="specialReplRefusal(box) ?? undefined"
+            @click="containers.drawSpecialRepl(box.side === 'soviet' ? 'soviet' : 'axis')"
+          >
+            掷骰抽取（1.6c，1 骰）
+          </BaseButton>
+          <span class="muted">抽取项：{{ itemsOf(box).join(' ／ ') }}</span>
+          <span v-if="specialReplRefusal(box) !== null" class="muted num">
+            {{ specialReplRefusal(box) }}
           </span>
-        </label>
-        <BaseButton
-          variant="primary"
-          size="sm"
-          :disabled="breakdownParentId === '' || breakdownTimingNow === null"
-          :title="
-            breakdownTimingNow === null
-              ? '20.0a：只有「开始移动 / 战后推进 / 战后撤退」三个时机能创建拆分单位（先让母单位开始移动，再取用）'
-              : `20.0a 当前时机：${breakdownTimingLabel}`
-          "
-          @click="
-            containers.takeBreakdown({
-              parentInstanceId: breakdownParentId,
-              breakdownAr,
-            })
-          "
-        >
-          取用一枚（20.0a：仅在开始移动 / 战后推进 / 战后撤退）
-        </BaseButton>
-      </div>
+        </div>
 
-      <!-- 1.6c 特殊补员抽取盒（两道闸：环节 + 日期；不放行时明说原因） -->
-      <div v-if="showsBoxActions('specialReplBox')" class="row">
-        <BaseButton
-          variant="primary"
-          size="sm"
-          :disabled="specialReplRefusal(box) !== null"
-          :title="specialReplRefusal(box) ?? undefined"
-          @click="containers.drawSpecialRepl(box.side === 'soviet' ? 'soviet' : 'axis')"
-        >
-          掷骰抽取（1.6c，1 骰）
-        </BaseButton>
-        <span class="muted">抽取项：{{ itemsOf(box).join(' ／ ') }}</span>
-        <span v-if="specialReplRefusal(box) !== null" class="muted num">
-          {{ specialReplRefusal(box) }}
-        </span>
-      </div>
+        <!-- 地图外空军盒（1.4a） -->
+        <div v-if="showsReferee && box.kind === 'airBox' && showsBoxActions('airBox')" class="row">
+          <label class="field">
+            移入盒
+            <select v-model="airUnitId" class="select">
+              <option value="">（选择飞机）</option>
+              <option v-for="item in airCandidates" :key="item.id" :value="item.id">
+                {{ item.label }}
+              </option>
+            </select>
+          </label>
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :disabled="airUnitId === ''"
+            @click="containers.setAirInBox(airUnitId, true)"
+          >
+            移入盒（1.4a）
+          </BaseButton>
+          <BaseButton
+            variant="primary"
+            size="sm"
+            @click="containers.activateAirBox(box.side === 'soviet' ? 'soviet' : 'axis')"
+          >
+            盒内免费整备（1.4a：Inactive → Active）
+          </BaseButton>
+          <span class="num">
+            航程 {{ rangeHexesOf(box) ?? '—' }} 格｜Active {{ airCountOf(box, 'active') }} /
+            Inactive {{ airCountOf(box, 'inactive') }}｜可激活：{{
+              activatableOf(box) ? '是（免费整备）' : '否'
+            }}
+          </span>
+        </div>
 
-      <!-- 地图外空军盒（1.4a） -->
-      <div v-if="showsBoxActions('airBox')" class="row">
-        <label class="field">
-          移入盒
-          <select v-model="airUnitId" class="select">
-            <option value="">（选择飞机）</option>
-            <option v-for="item in airCandidates" :key="item.id" :value="item.id">
-              {{ item.label }}
-            </option>
-          </select>
-        </label>
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          :disabled="airUnitId === ''"
-          @click="containers.setAirInBox(airUnitId, true)"
-        >
-          移入盒（1.4a）
-        </BaseButton>
-        <BaseButton
-          variant="primary"
-          size="sm"
-          @click="containers.activateAirBox(box.side === 'soviet' ? 'soviet' : 'axis')"
-        >
-          盒内免费整备（1.4a：Inactive → Active）
-        </BaseButton>
-        <span class="num">
-          航程 {{ rangeHexesOf(box) ?? '—' }} 格｜Active {{ airCountOf(box, 'active') }} / Inactive
-          {{ airCountOf(box, 'inactive') }}｜可激活：{{
-            activatableOf(box) ? '是（免费整备）' : '否'
-          }}
-        </span>
-      </div>
+        <!-- 边缘盒（1.4b） -->
+        <div v-if="box.kind === 'edgeBox' && showsBoxActions('edgeBox')" class="row">
+          <label class="field">
+            入盒单位
+            <select v-model="edgeUnitId" class="select">
+              <option value="">（选择苏方地面单位）</option>
+              <option v-for="item in parentCandidates" :key="item.id" :value="item.id">
+                {{ item.label }}
+              </option>
+            </select>
+          </label>
+          <label class="field">
+            <input v-model="edgeFromSource" type="checkbox" />
+            在地图边缘补给源格（1.4b 必需）
+          </label>
+          <label class="field">
+            <input v-model="edgeUseRailCap" type="checkbox" />
+            改用铁路容量（1 点）
+          </label>
+          <BaseButton
+            variant="primary"
+            size="sm"
+            :disabled="edgeUnitId === ''"
+            @click="
+              containers.moveEdgeBox({
+                box: box.id === 'edge-northeast' ? 'northeast' : 'southeast',
+                instanceId: edgeUnitId,
+                direction: 'enter',
+                fromSupplySourceHex: edgeFromSource,
+                useRailCap: edgeUseRailCap,
+              })
+            "
+          >
+            入盒（1.4b：进入即停）
+          </BaseButton>
+        </div>
 
-      <!-- 边缘盒（1.4b） -->
-      <div v-if="showsBoxActions('edgeBox')" class="row">
-        <label class="field">
-          入盒单位
-          <select v-model="edgeUnitId" class="select">
-            <option value="">（选择苏方地面单位）</option>
-            <option v-for="item in parentCandidates" :key="item.id" :value="item.id">
-              {{ item.label }}
-            </option>
-          </select>
-        </label>
-        <label class="field">
-          <input v-model="edgeFromSource" type="checkbox" />
-          在地图边缘补给源格（1.4b 必需）
-        </label>
-        <label class="field">
-          <input v-model="edgeUseRailCap" type="checkbox" />
-          改用铁路容量（1 点）
-        </label>
-        <BaseButton
-          variant="primary"
-          size="sm"
-          :disabled="edgeUnitId === ''"
-          @click="
-            containers.moveEdgeBox({
-              box: box.id === 'edge-northeast' ? 'northeast' : 'southeast',
-              instanceId: edgeUnitId,
-              direction: 'enter',
-              fromSupplySourceHex: edgeFromSource,
-              useRailCap: edgeUseRailCap,
-            })
-          "
-        >
-          入盒（1.4b：进入即停）
-        </BaseButton>
-      </div>
-
-      <!-- 编队收纳盒（13.7 / 3.6f） -->
-      <div v-if="showsBoxActions('formationBox')" class="row">
-        <span class="num">标记：{{ markerNameOf(box) ?? '（未找到 3.6f 标记）' }}</span>
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          @click="containers.revealFromFormationBox(formationIdOf(box), hiddenIdsOf(box))"
-        >
-          全部放回图上（13.7）
-        </BaseButton>
-      </div>
+        <!-- 编队收纳盒（13.7 / 3.6f） -->
+        <div v-if="box.kind === 'formationBox' && showsBoxActions('formationBox')" class="row">
+          <span class="num">标记：{{ markerNameOf(box) ?? '（未找到 3.6f 标记）' }}</span>
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            @click="containers.revealFromFormationBox(formationIdOf(box), hiddenIdsOf(box))"
+          >
+            全部放回图上（13.7）
+          </BaseButton>
+        </div>
+      </template>
     </details>
 
     <!-- ── ③ 剧本抽取盒（编队抽签；池成员由 formations.json 推导） ──

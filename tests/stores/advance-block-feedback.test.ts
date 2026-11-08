@@ -80,8 +80,8 @@ describe('死操作①：推进按钮不得「可点但无反应」', () => {
 
   it('流程条把 advanceBlock 的原因就地显示，且不因「上一次失败」把按钮永久置灰', () => {
     expect(STRIP).toContain('workbench.advanceBlock')
-    expect(STRIP).toContain('workbench.advanceBlock.reason')
-    // 原因记录只做提示；按钮禁用只看 flow.canAdvance（否则在面板里办完事，按钮就再也点不动）
+    expect(STRIP).toContain('liveBlock.value ?? workbench.advanceBlock')
+    // 上次阻断只用于提示，按钮根据实时阻断判断。
     expect(STRIP).not.toMatch(/:disabled="[^"]*advanceBlock/)
   })
 })

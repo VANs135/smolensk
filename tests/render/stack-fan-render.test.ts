@@ -155,10 +155,10 @@ describe('B2 就地展开：渲染', () => {
     expect(statusDraws, '只有带战略标记的那一枚产生贴图').toHaveLength(1)
   })
 
-  it('展开：>4 枚时画分页角标（文案只写「页/总页」）', () => {
+  it('展开：超过六枚时，角标显示本页以外的枚数', () => {
     const calls: DrawCall[] = []
     stubImages()
-    const group = Array.from({ length: 6 }, (_, index) => token(`u${index}`, HEX))
+    const group = Array.from({ length: 7 }, (_, index) => token(`u${index}`, HEX))
     drawMovementOverlay(
       recordingCtx(calls),
       {
@@ -174,13 +174,13 @@ describe('B2 就地展开：渲染', () => {
     const texts = calls
       .filter((call) => call.op === 'fillText')
       .map((call) => String(call.args?.[0]))
-    expect(texts).toContain('1/2')
+    expect(texts).toContain('+1')
   })
 
-  it('展开第 2 页：画的是第 5–6 枚（下标连续，选择集才对得上）', () => {
+  it('展开第 2 页：画出前一页未容纳的算子', () => {
     const calls: DrawCall[] = []
     stubImages()
-    const group = Array.from({ length: 6 }, (_, index) => token(`u${index}`, HEX))
+    const group = Array.from({ length: 8 }, (_, index) => token(`u${index}`, HEX))
     drawMovementOverlay(
       recordingCtx(calls),
       {
@@ -198,7 +198,7 @@ describe('B2 就地展开：渲染', () => {
     const texts = calls
       .filter((call) => call.op === 'fillText')
       .map((call) => String(call.args?.[0]))
-    expect(texts).toContain('2/2')
+    expect(texts).toContain('+6')
   })
 
   it('展开**别的格**时，本格维持顶牌画法（展开只作用于那一格）', () => {

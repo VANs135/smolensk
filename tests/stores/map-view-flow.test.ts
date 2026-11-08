@@ -10,8 +10,9 @@ import {
   useMapViewStore,
   useWorkbenchStore,
 } from '@/stores'
-import { hexCanvasPoint } from '@/render/map-layout'
+import { HEX_RADIUS_PX, hexCanvasPoint } from '@/render/map-layout'
 import { hitStackFan, stackFanLayout } from '@/render/stack-fan'
+import { aircraftChoices, toConsoleAirUnit } from '@/stores/workbench-model'
 
 /**
  * 地图视图编排（W7 C16）的 store 级测试
@@ -243,7 +244,8 @@ describe('B3：地图上就地展开堆叠（点格展开 / 点枚切换 / 收�
 
     // 格中心偏下的空白：既不在任何槽位矩形里，也不在分页角标上（3 枚无角标）
     const layout = stackFanLayout({ hex: START, total: 3, page: 0 })
-    const blank = { x: hexCanvasPoint(START).x, y: hexCanvasPoint(START).y }
+    const center = hexCanvasPoint(START)
+    const blank = { x: center.x, y: center.y - HEX_RADIUS_PX * 0.82 }
     expect(hitStackFan({ layout, point: blank })).toBeNull()
 
     mapView.onHexClick(START, undefined, blank)
@@ -254,13 +256,13 @@ describe('B3：地图上就地展开堆叠（点格展开 / 点枚切换 / 收�
     expect(kept).toEqual([ids[1]])
   })
 
-  it('拖过 4 枚 ⇒ 分页角标翻页（点角标不是点格）', () => {
+  it('超过 6 枚时点击角标翻页', () => {
     const { mapView } = stores
-    stackOf(5)
-    mapView.onHexClick(START, { x: 40, y: 50 }, slotCenter(5, 0))
+    stackOf(7)
+    mapView.onHexClick(START, { x: 40, y: 50 }, slotCenter(7, 0))
     expect(mapView.expandedStack?.page).toBe(0)
 
-    const badge = stackFanLayout({ hex: START, total: 5, page: 0 }).pageBadge!
+    const badge = stackFanLayout({ hex: START, total: 7, page: 0 }).pageBadge!
     mapView.onHexClick(START, undefined, { x: badge.x, y: badge.y })
 
     expect(mapView.expandedStack?.page).toBe(1)
@@ -505,5 +507,30 @@ describe('批 A 切片 3：单一对话框与候选过滤', () => {
     // 出盒：回到图上
     workbench.setAirInBoxMembership(plane.instanceId, false)
     expect(airTokenIds()).toContain(plane.instanceId)
+  })
+
+  it('4.9a：敌方格只画公开战斗算子和最上方图内激活飞机，点击不展开', () => {
+    const { workbench, mapView } = newStores()
+    const aircraft = aircraftChoices('axis')[0]!
+    const placePlane = (instanceId: string, airStatus: 'active' | 'inactive') =>
+      workbench.airUnits.push(
+        toConsoleAirUnit({ aircraft, instanceId, side: 'axis', hex: START, airStatus }),
+      )
+    workbench.units.push(
+      toConsoleUnit({ record: legCombat(), instanceId: 'top', hex: START, side: 'axis' }),
+      toConsoleUnit({ record: legCombat(), instanceId: 'concealed', hex: START, side: 'axis' }),
+    )
+    placePlane('off-map', 'active')
+    placePlane('public-plane', 'active')
+    placePlane('inactive-plane', 'inactive')
+    placePlane('concealed-plane', 'active')
+    workbench.setAirInBoxMembership('off-map', true)
+    workbench.setActiveSide('soviet')
+
+    expect(mapView.overlay.tokens.map(({ id }) => id)).toEqual(['top', 'public-plane'])
+    expect(mapView.overlay.tokens.every(({ hiddenStack }) => hiddenStack)).toBe(true)
+    mapView.onHexClick(START, { x: 120, y: 80 }, hexCanvasPoint(START), 0.8)
+    expect(mapView.expandedStack).toBeNull()
+    expect(mapView.popupContent?.airUnits).toEqual([])
   })
 })

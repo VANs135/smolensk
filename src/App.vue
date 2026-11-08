@@ -25,14 +25,26 @@ const saveBadge = computed(() => {
 </script>
 
 <template>
-  <div class="shell">
+  <div class="shell" :class="{ 'shell--board': currentView === 'game' }">
     <header class="shell__bar">
-      <h1 class="shell__title">{{ app.appTitle }}</h1>
+      <div class="shell__identity">
+        <span class="shell__mark" aria-hidden="true">17</span>
+        <h1 class="shell__title" :title="app.appTitle">斯摩棱斯克</h1>
+        <span class="shell__route">{{ activeRoute.meta.title }}</span>
+      </div>
       <div class="shell__right">
-        <!-- W7 C15：存档 / 读档（独立按钮；任意视图都在 ⇒ 任意环节可存） -->
-        <!-- 热坐交接未确认时顶栏抬到遮罩之上：按钮明确置灰 + 说明，避免「能点但没反应」 -->
         <span v-if="hotseat.handoffPending" class="shell__handoff">须先确认交接</span>
         <BaseButton
+          v-if="currentView === 'game'"
+          variant="ghost"
+          size="sm"
+          class="shell__save"
+          :disabled="hotseat.handoffPending"
+          @click="ui.navigate('home')"
+          >开始台</BaseButton
+        >
+        <BaseButton
+          v-if="currentView !== 'game'"
           variant="ghost"
           size="sm"
           class="shell__save"
@@ -42,7 +54,6 @@ const saveBadge = computed(() => {
         >
           存档 / 读档（{{ saveBadge }}）
         </BaseButton>
-        <span class="shell__route">{{ activeRoute.meta.title }}</span>
       </div>
     </header>
 
@@ -51,14 +62,20 @@ const saveBadge = computed(() => {
       :class="{
         'shell__body--wide':
           currentView === 'game' || currentView === 'workbench' || currentView === 'map',
+        'shell__body--full':
+          currentView === 'game' || currentView === 'home' || currentView === 'scenario',
       }"
+      :inert="hotseat.handoffPending && currentView === 'game'"
     >
       <component :is="activeRoute.component" />
     </main>
 
     <!-- 存档 / 读档对话框：状态在 ui store（顶栏与待答面板共用同一个入口） -->
-    <SaveLoadDialog :open="ui.saveDialogOpen" @update:open="ui.saveDialogOpen = $event" />
-    <ToastHost />
+    <SaveLoadDialog
+      :open="ui.saveDialogOpen && !hotseat.handoffPending"
+      @update:open="ui.saveDialogOpen = $event"
+    />
+    <ToastHost v-if="!hotseat.handoffPending" />
   </div>
 </template>
 
@@ -69,17 +86,43 @@ const saveBadge = computed(() => {
   flex-direction: column;
 }
 
+.shell--board {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .shell__bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-3) var(--space-6);
-  background: var(--color-ink);
-  color: var(--color-bg);
-  /* 热坐交接遮罩（z-index: 60）只遮盘面：顶栏抬高一层的常态不改变任何交互 */
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-command-panel);
+  color: var(--color-command-ink);
+  border-bottom: 1px solid var(--color-command-line);
   position: relative;
-  z-index: 61;
+  z-index: var(--layer-shell);
+}
+
+.shell__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.shell__mark {
+  display: grid;
+  flex: none;
+  width: var(--space-8);
+  height: var(--space-8);
+  place-items: center;
+  border: 1px solid var(--color-command-teal);
+  color: var(--color-command-teal);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-sm);
 }
 
 .shell__handoff {
@@ -105,7 +148,10 @@ const saveBadge = computed(() => {
 }
 
 .shell__route {
-  color: var(--color-gold);
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--color-command-line);
+  color: var(--color-command-muted);
+  font-size: var(--text-xs);
 }
 
 /* 顶栏上的「存档 / 读档」按钮：顶栏是深色，故覆写 ghost 的字色与描边
@@ -131,5 +177,17 @@ const saveBadge = computed(() => {
 /* 操作台要放地图，放宽版面（其余视图仍按 1080 阅读宽度） */
 .shell__body--wide {
   max-width: 1680px;
+}
+
+.shell__body--full {
+  max-width: none;
+  min-height: 0;
+  padding: 0;
+}
+
+@media (max-width: 620px) {
+  .shell__route {
+    display: none;
+  }
 }
 </style>

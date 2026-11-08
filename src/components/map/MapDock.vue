@@ -7,7 +7,7 @@ import { useMapViewStore } from '@/stores'
 import { BaseTag } from '@/components/base'
 import { SESSION_STEP_GATE } from '@/components/session'
 
-import { clampDockOffset, createDockMemory, DOCK_MIN_VISIBLE_PX } from './dock-position'
+import { clampDockOffset, createDockMemory } from './dock-position'
 
 /**
  * **唯一会话框**（B4，方案 §4.3；原 W7 C16 的可拖动结算面板）
@@ -73,7 +73,6 @@ provide(
 )
 
 /** 最小可见量（模板里给出可读提示；判定在 `clampDockOffset`） */
-const minVisiblePx = DOCK_MIN_VISIBLE_PX
 
 defineEmits<{ (e: 'close'): void }>()
 
@@ -199,7 +198,7 @@ function resetPosition(): void {
     <header
       ref="head"
       class="dock__head"
-      :title="`按住此条可拖动面板（双击回默认位置；拖出地图窗口会自动夹回至少 ${minVisiblePx}px）`"
+      title="拖动面板 · 双击复位"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
@@ -233,12 +232,14 @@ function resetPosition(): void {
   top: var(--space-3);
   right: var(--space-3);
   z-index: var(--layer-map-popup);
-  max-height: 62vh;
+  max-height: min(68vh, calc(100% - 2 * var(--space-3)));
+  max-width: calc(100% - 2 * var(--space-3));
   display: flex;
   flex-direction: column;
   background: var(--color-panel);
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--color-rule);
+  border-top: 3px solid var(--color-accent);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   font-size: var(--text-sm);
   resize: both;
@@ -263,14 +264,17 @@ function resetPosition(): void {
 
 .dock__title {
   flex: 1;
+  min-width: 0;
+  line-height: 1.35;
   font-family: var(--font-head);
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 
 .dock__close {
-  width: 22px;
-  height: 22px;
+  flex: none;
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -280,13 +284,19 @@ function resetPosition(): void {
 }
 
 .dock__close:hover {
-  background: var(--color-bg-2);
+  background: var(--color-panel);
   color: var(--color-ink);
+}
+
+.dock__close:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .dock__body {
   overflow: auto;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
   min-height: 0;
+  overscroll-behavior: contain;
 }
 </style>

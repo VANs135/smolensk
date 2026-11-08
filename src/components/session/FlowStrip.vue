@@ -6,6 +6,7 @@ import { buildFlowGuide, type FlowForm } from '@/engine/flow-model'
 import { SOP_STEPS, type SopStep } from '@/engine/session-flow'
 import {
   useGameSessionStore,
+  useHotseatStore,
   useMapViewStore,
   useSetupStore,
   useUiStore,
@@ -62,6 +63,7 @@ const isBar = computed<boolean>(() => props.variant === 'bar')
 const gameSession = useGameSessionStore()
 const workbench = useWorkbenchStore()
 const setup = useSetupStore()
+const hotseat = useHotseatStore()
 // 批 E 切片 1：未开局时本按钮只做**视图引导**（开局唯一入口＝初设收束点）
 const ui = useUiStore()
 /** 动作提示带的来源（`mapView.actionHint`；用户口径：地图上方不放消息栏 ⇒ 搬到这里） */
@@ -85,7 +87,7 @@ const phaseLabel = computed<string>(() => {
   // 「天气判定 / 先手判定」由下面的**环节**行显示（否则同一件事在两行里各说一遍）
   if (phase === 'preTurn') return '回合准备'
   if (phase === 'turnEnd') return '回合结束'
-  return phase
+  return workbench.PHASE_LABELS[workbench.phase] ?? phase
 })
 
 /** 步骤归属标记（先手方 / 后手方 / 回合级） */
@@ -184,6 +186,7 @@ const flow = computed(() =>
 function onAdvance(): void {
   if (flow.value.nextActionTarget !== 'advance') {
     ui.navigate(flow.value.nextActionTarget === 'setup' ? 'game' : 'scenario')
+    if (flow.value.nextActionTarget === 'setup') document.getElementById('setup-queue')?.focus()
     return
   }
   workbench.advanceSegmentNow()
@@ -196,6 +199,37 @@ function onAdvance(): void {
 const turnNow = computed<number>(() => gameSession.records?.turn ?? workbench.turn)
 const score = computed(() => workbench.victorySummary)
 
+const inSetup = computed(() => gameSession.session === null)
+const decidingSide = computed(() => (inSetup.value ? setup.setupSideCursor : hotseat.decisionSide))
+const sideName = computed(() =>
+  decidingSide.value === 'axis' ? '轴心国' : decidingSide.value === 'soviet' ? '苏联' : '初设',
+)
+const activeStage = computed(() => (inSetup.value ? '布设' : flow.value.phaseLabel))
+const currentSegment = computed(() => (inSetup.value ? null : segmentFacts.value.step))
+const currentRule = computed(
+  () => mapView.session?.rule ?? currentSegment.value?.rule.split(' / ')[0],
+)
+const position = computed(() => segmentFacts.value.position)
+const stages = Object.entries(workbench.PHASE_LABELS).map(([id, label]) => ({
+  id,
+  label,
+  letter: label.charAt(0),
+}))
+const advanceLabel = computed(() => {
+  if (gameSession.terminated) return '已结束'
+  if (gameSession.awaiting) return '待应答'
+  if (flow.value.nextActionTarget === 'setup') return '定位初设'
+  if (flow.value.nextActionTarget === 'scenario') return '选择剧本'
+  return flow.value.nextActionLabel
+})
+const liveBlock = computed(() => (inSetup.value ? null : workbench.currentAdvanceBlock))
+const notice = computed(() => {
+  const blocker = liveBlock.value ?? workbench.advanceBlock
+  if (blocker === null) return null
+  const text = liveBlock.value === null ? blocker.reason : blocker.reason.split('：')[0]!
+  return { text, rule: blocker.rule }
+})
+
 /** 日志尾部（最近 6 条；Smoke 第 2 项要看的就是「自动段在日志里连续出现」） */
 const logTail = computed(() => gameSession.log.slice(-6).reverse())
 </script>
@@ -205,33 +239,69 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
     bar 形态（对局台）：地图上方的一条线 —— 阶段名 + 环节名 + 唯一推进按钮 + 一行「该做什么」。
     其余（回合/天气摘要、阶段灯、日志、重置、5.0b 勾选、共识提示）只在 panel 形态出现。
   -->
-  <div v-if="isBar" class="bar">
-    <!-- L0：方 · 阶段 · 回合（常驻，不随会话框变化） -->
-    <span class="bar__turn num">
-      {{ flow.actingSideLabel }} · {{ flow.decisionRoleLabel }} · {{ flow.phaseLabel }} · 回合
-      {{ turnNow }}
-    </span>
-    <!-- 分数：5.0a 所列格控制数（只读投影，不在此计数） -->
-    <span class="bar__score num" :title="`5.0a 所列格控制数（共 ${score.listedTotal} 格）`">
-      分数 苏 {{ score.listedBySide.soviet }} · 轴 {{ score.listedBySide.axis }}
-    </span>
-    <BaseTag :kind="flow.segmentLabel === '（本段无环节）' ? 'neutral' : 'info'">
-      环节 {{ flow.segmentLabel }}
-    </BaseTag>
-    <BaseButton variant="primary" size="sm" :disabled="!flow.canAdvance" @click="onAdvance">
-      {{ flow.nextActionLabel }}
-    </BaseButton>
-    <span class="bar__hint num">{{ flow.hint }}</span>
-    <span v-if="workbench.advanceBlock !== null" class="warn">
-      <BaseTag kind="warning" />
-      {{ workbench.advanceBlock.reason }}
-    </span>
-    <span v-if="flow.blockers.length > 0" class="warn">
-      <BaseTag :kind="flow.blockers[0]!.kind === 'danger' ? 'danger' : 'warning'" />
-      {{ flow.blockers[0]!.text }}
-    </span>
-    <!-- 宿主追加区（U1-a：面板收纳等低频入口收在条尾，不占地图前的独立行） -->
-    <slot name="trail" />
+  <div v-if="isBar" class="bar" aria-label="对局流程">
+    <div class="bar__turn num">
+      <span class="bar__label">回合</span>
+      <strong>{{ inSetup ? '—' : String(turnNow).padStart(2, '0') }}</strong>
+      <span class="bar__date">{{ workbench.date }}</span>
+    </div>
+
+    <div class="bar__identity" :data-side="decidingSide">
+      <span class="bar__label">{{ inSetup ? '布设方' : '决策方' }}</span>
+      <strong>{{ sideName }}</strong>
+    </div>
+
+    <div class="bar__phase">
+      <div v-if="!inSetup" class="bar__track" aria-label="阶段轨">
+        <span
+          v-for="stage in stages"
+          :key="stage.id"
+          :aria-current="gameSession.records?.phase === stage.id ? 'step' : undefined"
+          :title="stage.label"
+          >{{ stage.letter }}</span
+        >
+      </div>
+      <div class="bar__phase-label">
+        <strong>{{ activeStage }}</strong>
+        <span v-if="currentSegment" :title="'环节 ' + flow.segmentLabel">
+          {{ currentSegment.label }}
+          <small v-if="position" class="num">{{ position.index + 1 }}/{{ position.total }}</small>
+        </span>
+      </div>
+    </div>
+
+    <div v-if="!inSetup" class="bar__score num" title="所列格控制数 · 5.0a">
+      <span class="bar__axis">轴 {{ score.listedBySide.axis }}</span>
+      <span class="bar__soviet">苏 {{ score.listedBySide.soviet }}</span>
+    </div>
+
+    <div class="bar__actions">
+      <slot name="trail" />
+      <BaseButton
+        class="bar__advance"
+        variant="primary"
+        :disabled="!flow.canAdvance || liveBlock !== null"
+        :title="liveBlock?.reason"
+        @click="onAdvance"
+        >{{ advanceLabel }}
+        <span v-if="flow.canAdvance && liveBlock === null" aria-hidden="true">→</span></BaseButton
+      >
+    </div>
+
+    <div class="bar__status" role="status">
+      <template v-if="notice !== null">
+        <span class="bar__rule num">{{ notice.rule }}</span>
+        <span class="bar__notice" :title="notice.text">{{ notice.text }}</span>
+      </template>
+      <template v-else>
+        <span v-if="currentRule" class="bar__rule num" :title="currentSegment?.rule">{{
+          currentRule
+        }}</span>
+        <span class="bar__hint" :title="flow.hint"
+          ><slot name="status">{{ flow.hint }}</slot></span
+        >
+      </template>
+    </div>
   </div>
 
   <BasePanel v-else title="流程条（2.2 流程表）">
@@ -413,34 +483,176 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
 .bar {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
+  align-items: stretch;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+  padding: var(--space-2) var(--space-3) 0;
   border-bottom: 1px solid var(--color-rule);
-  background: var(--color-bg-2);
+  background: var(--color-panel);
   font-size: var(--text-sm);
+  line-height: 1.25;
 }
 
-/* U1-a：L0 的左端两组常驻事实（方 / 阶段 / 回合、分数） */
-.bar__turn {
-  font-weight: 600;
-  color: var(--color-ink);
+.bar__turn,
+.bar__identity {
+  display: grid;
+  align-content: center;
+  gap: var(--space-1);
+  padding-right: var(--space-3);
+  border-right: 1px solid var(--color-rule);
   white-space: nowrap;
+}
+
+.bar__turn {
+  grid-template-columns: auto auto;
+  align-items: center;
+}
+
+.bar__turn strong {
+  font-size: var(--text-xl);
+}
+
+.bar__label,
+.bar__date {
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+.bar__date {
+  grid-column: 1 / -1;
+}
+
+.bar__identity strong {
+  font-size: var(--text-lg);
+}
+
+.bar__identity[data-side='axis'] strong,
+.bar__axis {
+  color: var(--color-command-axis);
+}
+
+.bar__identity[data-side='soviet'] strong,
+.bar__soviet {
+  color: var(--color-command-soviet);
+}
+
+.bar__phase {
+  display: grid;
+  align-content: center;
+  gap: var(--space-1);
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.bar__track,
+.bar__phase-label,
+.bar__score,
+.bar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.bar__track {
+  gap: var(--space-1);
+}
+
+.bar__track span {
+  display: grid;
+  place-items: center;
+  width: var(--space-5);
+  height: var(--space-5);
+  background: var(--color-bg);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.bar__track span[aria-current='step'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-2);
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.bar__phase-label > span {
+  color: var(--color-muted);
+  min-width: 0;
+}
+
+.bar__phase-label small {
+  margin-left: var(--space-1);
+  color: var(--color-accent);
 }
 
 .bar__score {
-  padding: 1px var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--color-panel);
-  color: var(--color-muted);
+  gap: var(--space-1);
   white-space: nowrap;
 }
 
-.bar__hint {
+.bar__score > span {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}
+
+.bar__actions {
+  margin-left: auto;
+}
+
+.bar__advance {
+  white-space: nowrap;
+  min-height: var(--control-height);
+}
+
+.bar__advance:not(:disabled) {
+  background: var(--color-command-teal);
+  color: var(--color-command-bg);
+}
+
+.bar__advance:hover:not(:disabled) {
+  background: var(--color-command-ink);
+}
+
+.bar__status {
+  display: flex;
+  align-items: center;
+  flex: 1 0 100%;
+  min-height: var(--space-6);
   min-width: 0;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-rule);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+.bar__hint,
+.bar__notice {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.bar__notice {
+  color: var(--color-command-amber);
+}
+
+.bar__rule {
+  flex: none;
+  color: var(--color-accent);
+}
+
+@media (max-width: 660px) {
+  .bar__phase {
+    flex-basis: 175px;
+  }
+
+  .bar__score {
+    display: none;
+  }
 }
 
 /* 动作提示带（一行；与"环节"那一行同一处，见用户口径） */

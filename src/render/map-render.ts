@@ -387,25 +387,43 @@ function traceHexPath(ctx: CanvasRenderingContext2D, hex: HexRef): void {
   ctx.closePath()
 }
 
-/** 描一条格边（世界坐标） */
-function drawHexside(
-  ctx: CanvasRenderingContext2D,
-  a: HexRef,
-  b: HexRef,
-  color: string,
-  screenWidth: number,
-  scale: number,
-  dashScreenPx: readonly number[] = [],
-): void {
-  const segment = hexsideCanvasSegment(a, b)
-  if (segment === null) return
-  ctx.strokeStyle = color
-  ctx.lineWidth = screenWidth / scale
-  ctx.setLineDash(dashScreenPx.map((value) => value / scale))
-  ctx.beginPath()
-  ctx.moveTo(segment.from.x, segment.from.y)
-  ctx.lineTo(segment.to.x, segment.to.y)
-  ctx.stroke()
+type MapEdge = (typeof mapLayers.edges)[number]
+type EdgeSegment = NonNullable<ReturnType<typeof hexsideCanvasSegment>>
+
+const edgeSegments = new WeakMap<MapEdge, EdgeSegment | null>()
+
+/** 静态端点复用，按线型合并描边。铁路的虚线仍在每条格边重新起笔。 */
+function drawEdges(ctx: CanvasRenderingContext2D, edges: readonly MapEdge[], scale: number): void {
+  const river: EdgeSegment[] = []
+  const road: EdgeSegment[] = []
+  const rail: EdgeSegment[] = []
+  for (const edge of edges) {
+    let segment = edgeSegments.get(edge)
+    if (segment === undefined) {
+      segment = hexsideCanvasSegment(edge.a, edge.b)
+      edgeSegments.set(edge, segment)
+    }
+    if (segment === null) continue
+    if (edge.river !== undefined) river.push(segment)
+    if (edge.road !== undefined) road.push(segment)
+    if (edge.rail === true) rail.push(segment)
+  }
+  for (const [segments, color, screenWidth, dash] of [
+    [river, MAP_PALETTE.river, RIVER_LINE_SCREEN_PX, []],
+    [road, MAP_PALETTE.road, ROAD_LINE_SCREEN_PX, []],
+    [rail, MAP_PALETTE.rail, RAIL_LINE_SCREEN_PX, RAIL_DASH_SCREEN_PX],
+  ] as const) {
+    if (segments.length === 0) continue
+    ctx.strokeStyle = color
+    ctx.lineWidth = screenWidth / scale
+    ctx.setLineDash(dash.map((value) => value / scale))
+    ctx.beginPath()
+    for (const { from, to } of segments) {
+      ctx.moveTo(from.x, from.y)
+      ctx.lineTo(to.x, to.y)
+    }
+    ctx.stroke()
+  }
   ctx.setLineDash([])
 }
 
@@ -464,25 +482,7 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
 
   // ④ 格边要素：河/湖、道路、铁路（各自独立线型，可叠加）
   if (layers.edges) {
-    for (const edge of visibleEdges(viewport, viewSize)) {
-      if (edge.river !== undefined) {
-        drawHexside(ctx, edge.a, edge.b, MAP_PALETTE.river, RIVER_LINE_SCREEN_PX, scale)
-      }
-      if (edge.road !== undefined) {
-        drawHexside(ctx, edge.a, edge.b, MAP_PALETTE.road, ROAD_LINE_SCREEN_PX, scale)
-      }
-      if (edge.rail === true) {
-        drawHexside(
-          ctx,
-          edge.a,
-          edge.b,
-          MAP_PALETTE.rail,
-          RAIL_LINE_SCREEN_PX,
-          scale,
-          RAIL_DASH_SCREEN_PX,
-        )
-      }
-    }
+    drawEdges(ctx, visibleEdges(viewport, viewSize), scale)
   }
 
   // ④-b 装甲集群分界线（专规 3.4）：**地图事实层**，画在格边要素之上、算子之下

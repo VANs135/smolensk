@@ -44,7 +44,8 @@ const title = computed(() => (mapView.popup === null ? '' : `格 ${hexLabel(mapV
  * 而 330px 的常规小窗在那里只会写「该格算子 0 枚」——一张空清单既挡地图又没信息。
  * 判据在 store（`popupVariantFor`：该格有无可列内容），本组件只读它，不自己判规则。
  */
-const variant = computed<'label' | 'content'>(() => mapView.popup?.variant ?? 'content')
+const variant = computed(() => mapView.popup?.variant ?? 'content')
+const actionGroups = ['运输', '工程', '编组', '补给', '空军'] as const
 
 /** 9.2 当前步（null＝盘面上没有进行中的战斗） */
 /**
@@ -69,7 +70,12 @@ function consoleUnitOf(id: string): ConsoleUnit | null {
 /** 该令牌的算子图 URL（栏内「图阵列」用；无图则回退 null，界面只显示文字） */
 function counterImageOf(id: string): string | null {
   const unit = consoleUnitOf(id)
-  return unit === null ? null : counterImageUrlOf(unit)
+  const aircraft = workbench.onMapAirUnits.find((item) => item.instanceId === id)
+  return unit === null
+    ? aircraft === undefined
+      ? null
+      : counterImageUrlOf(aircraft)
+    : counterImageUrlOf(unit)
 }
 
 /**
@@ -282,7 +288,7 @@ function beginMission(): void {
 function openUnitAction(unitId: string): void {
   const unit = consoleUnitOf(unitId)
   if (unit === null) return
-  mapView.openUnitActionAt({ col: unit.hex.col, row: unit.hex.row }, unitId)
+  mapView.selectCounterAt(unit.hex, unitId, anchor.value)
 }
 
 function pickDump(): void {
@@ -305,6 +311,40 @@ function pickDump(): void {
   >
     {{ title }}
   </div>
+  <MapPopover
+    v-else-if="variant === 'context'"
+    :open="open"
+    :x="anchor.x"
+    :y="anchor.y"
+    :title="`${title} · 操作`"
+    width="292px"
+    @close="mapView.closePopup()"
+  >
+    <section v-for="target in mapView.contextOptions" :key="target.id" class="context-target">
+      <h4 class="block__title">{{ target.label }}</h4>
+      <template v-for="group in actionGroups" :key="group">
+        <div v-if="target.actions.some((item) => item.group === group)" class="context-group">
+          <h5>{{ group }}</h5>
+          <BaseButton
+            v-for="item in target.actions.filter((action) => action.group === group)"
+            :key="item.key"
+            variant="ghost"
+            size="sm"
+            class="context-action"
+            :disabled="item.disabledReason !== null"
+            :title="item.disabledReason ?? item.rule"
+            @click="mapView.openContextAction(target.id, item.key)"
+          >
+            <span>{{ item.label }}</span
+            ><small>{{ item.rule }}</small>
+            <small v-if="item.disabledReason !== null" class="context-reason">{{
+              item.disabledReason
+            }}</small>
+          </BaseButton>
+        </div>
+      </template>
+    </section>
+  </MapPopover>
   <MapPopover
     v-else-if="variant === 'content'"
     :open="open"
@@ -687,12 +727,12 @@ function pickDump(): void {
                 基地 + SP 同格时，点 SP 也会进基地的整备会话。
               -->
               <BaseButton
-                v-if="mapView.unitActionAvailableAt(unit.id)"
+                v-if="mapView.canSelectCounterAt(unit.id)"
                 variant="ghost"
                 size="sm"
                 @click="openUnitAction(unit.id)"
               >
-                操作
+                {{ unit.noncombatKind === 'air_base' ? '驻机' : '操作' }}
               </BaseButton>
             </div>
             <!-- 14.1a：点「展开机场飞机」才在这一栏列出本基地的本方飞机（图阵列） -->
@@ -743,7 +783,10 @@ function pickDump(): void {
 
       <!-- 本方飞机（14.1a：停在其空军基地格） -->
       <!-- 15.1 整备：点机场的「整备」按钮 → 勾选飞机 → 点地图上高亮的补给付款 -->
-      <section v-if="baseAtHex !== null" class="block block--pick">
+      <section
+        v-if="baseAtHex !== null && workbench.actionAllowedNow('air.refit')"
+        class="block block--pick"
+      >
         <h4 class="block__title">整备（15.1）· {{ hexLabel(baseAtHex.hex) }}</h4>
         <p class="muted num">
           非激活 {{ workbench.airInactiveAtBase(baseAtHex.id).length }} 架｜整备容量
@@ -853,6 +896,30 @@ function pickDump(): void {
 </template>
 
 <style scoped>
+.context-target + .context-target {
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--color-rule);
+  padding-top: var(--space-2);
+}
+
+.context-group h5 {
+  margin: var(--space-2) 0 var(--space-1);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+.context-action {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 1fr auto;
+  text-align: left;
+}
+
+.context-reason {
+  grid-column: 1 / -1;
+  color: var(--color-muted);
+}
+
 /* 条 25：只读格号浮签（小、不挡地图、点即收） */
 .hex-tag {
   position: fixed;

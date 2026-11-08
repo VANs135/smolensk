@@ -627,6 +627,9 @@ export const useContainersStore = defineStore('containers', () => {
     if (id === null) return null
     return cardViews.value.find((item) => item.id === id)?.name ?? null
   })
+  const openCardSide = computed(
+    () => cardViews.value.find((card) => card.id === cardOpenId.value)?.side ?? null,
+  )
 
   const cardViews = computed<readonly AuxCardView[]>(() =>
     auxCards.cards.map((card) => {
@@ -2323,6 +2326,7 @@ export const useContainersStore = defineStore('containers', () => {
     cardViewsOf,
     openCardBoxKinds,
     openCardName,
+    openCardSide,
     popupCardId,
     setPopupCard,
     cardOpenId,

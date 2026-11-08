@@ -24,11 +24,10 @@ const step = computed(() => gate?.value ?? null)
 
 <template>
   <section v-if="active" class="step" data-session-item :data-session-item-id="props.item">
-    <p v-if="step !== null" class="step__title">
+    <p v-if="step !== null" class="step__title" :title="step.why">
       <b>{{ step.title }}</b>
     </p>
-    <p v-if="step !== null" class="step__why">{{ step.why }}</p>
-    <p v-if="step !== null" class="step__decision">需要你决定：{{ step.decision }}</p>
+    <p v-if="step !== null" class="step__decision">{{ step.decision }}</p>
     <slot />
   </section>
 </template>
@@ -43,11 +42,6 @@ const step = computed(() => gate?.value ?? null)
 .step__title {
   margin: 0;
   font-family: var(--font-head);
-}
-
-.step__why {
-  margin: 0;
-  color: var(--color-muted);
 }
 
 .step__decision {

@@ -1,13 +1,15 @@
 import type { HexRef, Side } from '@/data'
 
+import { HEX_COL_SPACING_PX, HEX_RADIUS_PX, hexCanvasCorners, hexCanvasPoint } from './map-layout'
 import {
-  HEX_COL_SPACING_PX,
-  HEX_RADIUS_PX,
-  HEX_ROW_SPACING_PX,
-  hexCanvasCorners,
-  hexCanvasPoint,
-} from './map-layout'
-import { combatNoncombatColumns, stackFanLayout } from './stack-fan'
+  counterHitSize,
+  insideCounter,
+  isNoncombatTokenLike,
+  stackFanLayout,
+  TOKEN_SIZE_PX,
+} from './stack-fan'
+
+export { TOKEN_INSET_RATIO, TOKEN_SIZE_PX } from './stack-fan'
 import {
   MARKER_TEXTURES,
   counterImages,
@@ -64,6 +66,9 @@ export interface UnitToken {
   label: string
   /** 是否被选中 */
   selected: boolean
+  /** 4.8b 的显示顺序来自状态层。 */
+  combat?: boolean
+  projectsZoc?: boolean
   /** 本轮移动是否已结束（4.5a-A / 6.1c / 6.2b / 掉队） */
   ended: boolean
   /**
@@ -410,22 +415,6 @@ export const OVERLAY_PALETTE = {
   refitAirbase: 'rgba(26, 116, 138, 0.18)',
   refitAirbaseEdge: 'rgba(26, 116, 138, 0.95)',
 } as const
-
-/**
- * 令牌边长（世界像素）
- *
- * ## 口径：正方形算子「四个角比相接六角格的四个边略小一点」
- *   平顶六角格（`orientation = flat`）的六个顶点到格心都是 `HEX_RADIUS_PX`，上下两条是**斜边**：
- *   过 `(R,0)` 与 `(R/2, √3R/2)` 的斜边方程 y = √3(R − x)。把边长为 `s` 的正方形（四角在 `(s/2, s/2)`）
- *   塞进格内，角点不越界要求 `s/2 ≤ √3(R − s/2)` ⇒ `s ≤ 2R/(1 + √3)·√3 = HEX_ROW_SPACING/(1+√3)`
- *   （`HEX_ROW_SPACING = √3R`）。即**最大内接正方形边长 = 格高 ÷ (1+√3) ≈ 0.732 格高**。
- *   再乘一个略小于 1 的内缩系数，使四角与格边留一丝缝（`TOKEN_INSET_RATIO`）。
- */
-const TOKEN_MAX_SQUARE_RATIO = 2 / (1 + Math.sqrt(3))
-/** 内缩系数（「略小一点」的那一点；改这一个数即可整体缩放算子） */
-export const TOKEN_INSET_RATIO = 0.94
-/** 令牌边长（世界像素） */
-export const TOKEN_SIZE_PX = HEX_ROW_SPACING_PX * TOKEN_MAX_SQUARE_RATIO * TOKEN_INSET_RATIO
 
 /** 可到达圈的半径（世界像素） */
 const REACHABLE_RADIUS_PX = HEX_COL_SPACING_PX * 0.3
@@ -860,16 +849,16 @@ export function drawMovementOverlay(
   const drawn: TokenDrawView[] = []
 
   for (const [key, group] of byHex) {
-    const top = topTokenOf(group)
-    if (expandedKey !== null && key === expandedKey) {
+    const fan = expandedKey === key ? group.filter((token) => token.hiddenStack !== true) : []
+    if (fan.length > 0) {
       const layout = stackFanLayout({
-        hex: top.hex,
-        total: group.length,
+        hex: fan[0]!.hex,
+        total: fan.length,
         page: expanded!.page,
-        columns: combatNoncombatColumns(group),
+        order: stackFanOrder(fan),
       })
       for (const slot of layout.slots) {
-        const token = group[slot.index]
+        const token = fan[slot.index]
         if (token === undefined) continue
         const centerX = slot.x + slot.size / 2
         const centerY = slot.y + slot.size / 2
@@ -877,37 +866,19 @@ export function drawMovementOverlay(
         drawn.push({ token, centerX, centerY, size: slot.size })
       }
       if (layout.pageBadge !== null) {
-        drawStackPageBadge(ctx, layout.page, layout.pageCount, layout.pageBadge, scale)
+        drawStackPageBadge(ctx, `+${layout.total - layout.slots.length}`, layout.pageBadge, scale)
       }
       continue
     }
-    const center = hexCanvasPoint(top.hex)
-    drawToken(ctx, top, center.x, center.y, scale)
-    drawn.push({ token: top, centerX: center.x, centerY: center.y, size: TOKEN_SIZE_PX })
-    if (group.length > 1) drawStackBadge(ctx, group.length, center, scale)
-  }
-
-  /*
-   * B31b（用户口径 2026-09-16 #7）：**设施类算子单独一层**
-   *
-   * 「非战斗单位可以和战斗单位不同层，但是要注意**机场是容纳飞机的**，点击机场后展开里面飞机」。
-   * 顶牌策略只为堆叠里"最该看的那一枚"服务，而设施是**格的属性**（这格有机场 / 有 SP / 有工事），
-   * 被顶掉就等于"没画出来"。故在算子层之后按格补画被顶掉的设施：0.6 尺寸、挪到格内下侧，
-   * 与顶牌不重叠；摊开态下扇面已经把所有令牌摊开了，跳过以免重复。
-   */
-  for (const [key, group] of byHex) {
-    if (expandedKey !== null && key === expandedKey) continue
-    const top = topTokenOf(group)
-    const facilities = group.filter((token) => isFacilityToken(token) && token !== top)
-    if (facilities.length === 0) continue
-    const base = hexCanvasPoint(top.hex)
-    facilities.slice(0, 3).forEach((token, index) => {
-      const size = TOKEN_SIZE_PX * FACILITY_TOKEN_RATIO
-      const step = size + 2 / scale
-      const x = base.x - (size + step * (facilities.length - 1)) / 2 + index * step
-      const y = base.y + TOKEN_SIZE_PX * 0.34
-      drawToken(ctx, token, x, y, scale, size)
-    })
+    const tokens = collapsedStackViews(group)
+    for (const view of tokens) {
+      drawToken(ctx, view.token, view.centerX, view.centerY, scale, view.size)
+      drawn.push(view)
+    }
+    const top = tokens[0]!
+    if (group.length > 1 && !group.some((token) => token.hiddenStack === true)) {
+      drawStackBadge(ctx, group.length, { x: top.centerX, y: top.centerY }, scale)
+    }
   }
 
   drawTokenStatusTextures(ctx, drawn)
@@ -1133,12 +1104,6 @@ export function drawTokenStatusTextures(
 }
 
 /**
- * 同格多枚时画哪一枚（4.8 堆叠：一格只画最上面那一枚）
- *
- * 取序（可预期优先）：**正在操作的那一枚** > **飞机**（它停在空军基地上，最该看见）> 最后一枚。
- * 其余枚数不丢信息：角上标出总数，点该格即在小窗里展开逐枚查看（4.9a 的可见内容）。
- */
-/**
  * B31b：**设施类算子**（不参与"一格一枚"的顶牌竞争，单独一层画）
  *
  * 判据只看"是不是设施/计数算子"：机场（14.1a）、SP（12.1b）、工事（16.0）。
@@ -1149,30 +1114,85 @@ export function isFacilityToken(token: UnitToken): boolean {
   return kind === 'air_base' || kind === 'sp' || kind === 'hedgehog'
 }
 
-/** 设施层的小图比例（相对算子格 44px） */
-export const FACILITY_TOKEN_RATIO = 0.6
+/** 设施沿同一格的下沿排布。 */
+export const FACILITY_TOKEN_RATIO = 0.36
+
+function stackPriority(token: UnitToken): number {
+  if (token.projectsZoc === true) return 3
+  if (token.combat ?? !isNoncombatTokenLike(token)) return 2
+  if (token.noncombatKind === 'air_base') return 1
+  return 0
+}
+
+export function stackFanOrder(group: readonly UnitToken[]): number[] {
+  return group
+    .map((_, index) => index)
+    .sort((a, b) => stackPriority(group[a]!) - stackPriority(group[b]!))
+}
 
 export function topTokenOf(group: readonly UnitToken[]): UnitToken {
   const first = group[0]
   if (first === undefined) throw new Error('topTokenOf：堆叠不能为空')
-  if (group.length === 1) return first
-  return (
-    group.find((token) => token.selected) ??
-    group.find((token) => token.air === true) ??
-    group[group.length - 1]!
+  return group.reduce(
+    (top, token) => (stackPriority(token) >= stackPriority(top) ? token : top),
+    first,
   )
 }
 
-/**
- * 展开态的分页角标（B2：>4 枚时的「第几页/共几页」）
- *
- * 画在格右下角内沿（与 2×2 的枚区错开），点它翻页（命中判定在 `stack-fan.hitStackFan`）。
- * 文案只写 `页/总页`，不再加别的字（用户口径：算子上信息已够，不要多余文字）。
- */
+function collapsedStackViews(group: readonly UnitToken[]): TokenDrawView[] {
+  const top = topTokenOf(group)
+  const center = hexCanvasPoint(top.hex)
+  const publicAircraft = group.find(
+    (token) => token !== top && token.air === true && token.hiddenStack === true,
+  )
+  const facilities = group.filter((token) => isFacilityToken(token) && token !== top)
+  const companions = [
+    ...(publicAircraft === undefined ? [] : [publicAircraft]),
+    ...facilities,
+  ].slice(0, 3)
+  return [
+    {
+      token: top,
+      centerX: center.x,
+      centerY: center.y - (companions.length > 0 ? HEX_RADIUS_PX * 0.1 : 0),
+      size: TOKEN_SIZE_PX,
+    },
+    ...companions.map((token, index) => ({
+      token,
+      centerX: center.x + (index - (companions.length - 1) / 2) * HEX_RADIUS_PX * 0.36,
+      centerY: center.y + HEX_RADIUS_PX * 0.59,
+      size: TOKEN_SIZE_PX * FACILITY_TOKEN_RATIO,
+    })),
+  ]
+}
+
+/** 使用与绘制相同的图面；图面以外的热区不盖住顶牌。 */
+export function hitCollapsedToken(
+  group: readonly UnitToken[],
+  point: { x: number; y: number },
+  scale: number,
+): UnitToken | null {
+  if (group.length === 0) return null
+  const views = collapsedStackViews(group).reverse()
+  for (const view of views) {
+    if (insideCounter(point, { x: view.centerX, y: view.centerY }, view.size)) return view.token
+  }
+  const nearest = views
+    .filter((view) =>
+      insideCounter(point, { x: view.centerX, y: view.centerY }, counterHitSize(view.size, scale)),
+    )
+    .sort(
+      (a, b) =>
+        Math.hypot(point.x - a.centerX, point.y - a.centerY) -
+        Math.hypot(point.x - b.centerX, point.y - b.centerY),
+    )[0]
+  return nearest?.token ?? null
+}
+
+/** 格内翻页角标与图面独立命中。 */
 function drawStackPageBadge(
   ctx: CanvasRenderingContext2D,
-  page: number,
-  pageCount: number,
+  label: string,
   badge: { x: number; y: number; radius: number },
   scale: number,
 ): void {
@@ -1184,7 +1204,7 @@ function drawStackPageBadge(
   ctx.font = `${(10 / scale).toFixed(1)}px ui-monospace, monospace`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText(`${page + 1}/${pageCount}`, badge.x, badge.y)
+  ctx.fillText(label, badge.x, badge.y)
 }
 
 /** 同格枚数角标（画在算子右上角外沿，不遮印值） */
