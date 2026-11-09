@@ -11476,19 +11476,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 3.4b（用户裁定）：**同格两集群的 SP 是两本账**——Guderian 与 Hoth 不能并成一条，
      * 否则两集群的余额会被合成一个数，之后既选不了、也扣不对。故并入条件还要加"集群相同"；
      * 未声明归属的站与"未带集群"的落账仍并入（12.1b：同格同方只有一条账本）。
+     *
+     * 2026-11-09 补充：同格已有 G/H **两本账**时，未带集群的落账不再并进任何一本
+     * （否则等于静默把漏选归属的 SP 算给某个集群）⇒ 另立第三本账并在日志告警。
+     * 同格只有**一个**集群（或只有未归属站）时无歧义，仍按 12.1a 并入。
      */
-    const inputGroup =
-      panzerGroupRulesOn.value && input.side === 'axis' ? input.panzerGroup : undefined
-    const existing = spDumps.value.find(
-      (dump) =>
-        dump.side === input.side &&
-        sameHex(dump.hex, input.hex) &&
-        (!panzerGroupRulesOn.value ||
-          dump.side !== 'axis' ||
-          inputGroup === undefined ||
-          panzerGroupOfDump(dump.id) === null ||
-          panzerGroupOfDump(dump.id) === inputGroup),
+    const axisGated = panzerGroupRulesOn.value && input.side === 'axis'
+    const inputGroup = axisGated ? input.panzerGroup : undefined
+    const sameHexDumps = spDumps.value.filter(
+      (dump) => dump.side === input.side && sameHex(dump.hex, input.hex),
     )
+    const existing = !axisGated
+      ? sameHexDumps[0]
+      : inputGroup !== undefined
+        ? sameHexDumps.find((dump) => panzerGroupOfDump(dump.id) === inputGroup)
+        : (sameHexDumps.find((dump) => panzerGroupOfDump(dump.id) === null) ??
+          // 同格只有**一个**集群时不存在歧义 ⇒ 按 12.1a 并入（不凭空造「未归属」）
+          (new Set(sameHexDumps.map((dump) => panzerGroupOfDump(dump.id))).size === 1
+            ? sameHexDumps[0]
+            : undefined))
     if (existing !== undefined) {
       // 12.1a：并入后仍保持「尽可能并为 SP」的规范形（2T + 2T ⇒ 1 SP + 0 T，而不是留成 4T）
       const merged = tToHoldings(holdingsToT({ sp: existing.sp + sp, t: existing.t + t }))
@@ -11536,10 +11542,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         setDumpPanzerGroupNow(id, input.panzerGroup)
       } else {
         pendingSpGroupAssignment.value = [...new Set([...pendingSpGroupAssignment.value, id])]
+        /*
+         * 2026-11-09：同格已有 G/H 两本账却还冒出一笔未归属 ⇒ 上游有漏（本该带上归属）。
+         * 这种情况**单独列第三本账**（不静默并进某集群），并明确告警，方便回头查漏。
+         */
+        const groupedHere = spDumps.value.some(
+          (dump) =>
+            dump.side === 'axis' &&
+            sameHex(dump.hex, input.hex) &&
+            dump.id !== id &&
+            panzerGroupOfDump(dump.id) !== null,
+        )
         pushLog(
           'warning',
-          `新到的轴方 SP：${hexLabel(input.hex)} 尚未归属装甲集群（3.4b）⇒ 请在本面板为它声明归属；` +
-            `未归属前它不能支付多单位编队的燃油/战斗/轰炸成本`,
+          groupedHere
+            ? `同格 ${hexLabel(input.hex)} 已有集群归属的补给站，却又落了一笔**未归属**的轴方 SP（3.4b）⇒` +
+                `已单独列为「未归属」算子，没有并入 Guderian/Hoth 任何一本账；请查这批 SP 为什么漏了归属`
+            : `新到的轴方 SP：${hexLabel(input.hex)} 尚未归属装甲集群（3.4b）⇒ 请在本面板为它声明归属；` +
+                `未归属前它不能支付多单位编队的燃油/战斗/轰炸成本`,
           '3.4b',
         )
       }

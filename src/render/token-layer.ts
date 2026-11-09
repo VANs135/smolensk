@@ -1157,21 +1157,25 @@ export function topTokenOf(group: readonly UnitToken[]): UnitToken {
 
 function collapsedStackViews(group: readonly UnitToken[]): TokenDrawView[] {
   /*
-   * 3.4b：同格轴方 SP 被拆成 Guderian / Hoth 两枚（`spDumpTokens`）——它们**都要看得见**，
-   * 不能一枚算顶牌、另一枚缩成底部设施小牌，否则玩家只看得到一半的 SP。故两枚并排同高。
+   * 3.4b：同格轴方 SP 被拆成 Guderian / Hoth（以及漏归属时的「未归属」第三枚，`spDumpTokens`）
+   * ——它们**都要看得见**，不能一枚算顶牌、其余缩成底部设施小牌，否则玩家只看得到一部分 SP。
+   * 故 2–3 枚一律并排同高（3 枚时略缩小并拉开，互不压住）。
    */
   const first = group[0]
   if (
     first !== undefined &&
-    group.length === 2 &&
+    group.length >= 2 &&
+    group.length <= 3 &&
     group.every((token) => token.noncombatKind === 'sp')
   ) {
     const center = hexCanvasPoint(first.hex)
+    const ratio = group.length === 2 ? 0.74 : 0.64
+    const spread = group.length === 2 ? 0.26 : 0.32
     return group.map((token, index) => ({
       token,
-      centerX: center.x + (index === 0 ? -1 : 1) * HEX_RADIUS_PX * 0.26,
+      centerX: center.x + (index - (group.length - 1) / 2) * HEX_RADIUS_PX * spread,
       centerY: center.y,
-      size: TOKEN_SIZE_PX * 0.74,
+      size: TOKEN_SIZE_PX * ratio,
     }))
   }
   const top = topTokenOf(group)

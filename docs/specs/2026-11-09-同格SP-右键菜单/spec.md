@@ -79,6 +79,31 @@
 - 不改 `src/engine`、`src/data`；不另建账本（选择只写 `supplyInputs.payFromDumpId`，扣减仍走既有付款路径与同格总量）。
 - 不新增存档字段。
 
+### 1.5 补充：同格未归属 SP 单列 + 告警（用户 2026-11-09）
+
+3.4b 生效期内本不该出现未归属 SP；真出现就说明上游漏了归属，**不得静默并进首条**。
+
+`src/stores/workbench.ts` `addSpAtHex`
+
+- 未带 `panzerGroup` 的落账：同格已有 **G/H 两本账**时不再并进任何一本，另立第三本账
+  （`panzerGroupOfDump === null`），并落一条 `warning`（规则号 `3.4b`，文案含「未归属」，
+  提示核查这批 SP 为什么漏了归属）。
+- 同格只有**一个**集群（或只有未归属站）时无歧义，仍按 12.1a 并入——否则「新到 SP 立即归属」
+  那套与既有到货/并入测试全被推翻，且单集群时凭空造未归属是噪声。
+
+`src/stores/map-view.ts` `spDumpTokens`
+
+- 3.4b 拆分出的未归属组打 `?` 角标（`? 2 SP`）。令牌约 36px，`未归属` 三字会溢出到邻格，
+  故图上用 `?`，面板 `payDumpItems` 与来源行仍写「未归属」，日志写全称。
+
+`src/render/token-layer.ts` `collapsedStackViews`
+
+- 同格 2–3 枚 `sp` 令牌一律并排同高（3 枚时 `0.64` 尺寸、更宽间距），避免第三枚被裁成小牌。
+
+红测：`tests/stores/supply-same-hex-unassigned.test.ts`（6 例）：G/H 旁落未归属 ⇒ 第三本账且两本不动；
+日志有 `3.4b` 告警；来源投影三行；地图 `? 2 SP`；同格只有未归属时仍合并；3.4b 未生效照旧合并不告警。
+先红（4 例失败，`G 4 SP` 被并成 `G 6 SP`）后绿。
+
 ## 2. 移动阶段右键敌方单位 ⇒ 「低空扫射」
 
 口径（用户原文）：

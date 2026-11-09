@@ -409,7 +409,14 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     return [...merged.entries()].map(([key, m]) => {
       const hasSp = m.sp > 0
+      /*
+       * 3.4b（用户 2026-11-09）：同格出现未归属 SP ⇒ **单独第三枚**，标 `?`（未归属）。
+       * 令牌只有 ~36px，`未归属` 三个汉字会溢出到邻格，故图上用 `?`，面板/日志仍写全称。
+       */
       const tag = m.group === 'guderian' ? 'G ' : m.group === 'hoth' ? 'H ' : ''
+      // 只有"3.4b 拆分出来的未归属组"才打 `?`（未拆分时 key 不带 `:-`，不要误标）
+      const unassigned = m.group === null && key.endsWith(':-')
+      const prefix = unassigned ? '? ' : tag
       return {
         id: `sp:${key}`,
         hex: m.hex,
@@ -418,7 +425,7 @@ export const useMapViewStore = defineStore('mapView', () => {
         spPoints: hasSp ? m.sp : m.t,
         face: hasSp ? ('combat' as const) : ('move' as const),
         images: null,
-        label: hasSp ? `${tag}${m.sp} SP` : `${tag}${m.t} T`,
+        label: hasSp ? `${prefix}${m.sp} SP` : `${prefix}${m.t} T`,
         selected: false,
         ended: false,
         modeLetter: '',

@@ -31,3 +31,11 @@
 - [x] T32 地图：`facilityActionKeysNow`；`unitActionOptions` / `unitActionAvailableAt` / `unitActionFamily` / `counterActionsAt` 统一走它
 - [x] T33 回归：`transport-load-flow`、`context-menu-capabilities`、`unit-action-session`、`map-view-session`、`facility-*`
 - [x] T34 六门槛（第 3 批）与提交推送 `b74c00d`、并入 main
+
+## 第 4 批：同格未归属 SP 单列 + 告警
+
+- [x] T40 红测：`tests/stores/supply-same-hex-unassigned.test.ts` 六例（第三本账 / 告警 / 来源三行 / 地图 `?` 令牌 / 纯未归属仍合并 / 失效期照旧合并）；先红（4 例失败，`G 4 SP` 被并成 `G 6 SP`）后绿
+- [x] T41 账本：`addSpAtHex` 同格 G/H 并存时未带集群另立第三本账；日志 `3.4b` warning 区分「漏归属」；单集群/纯未归属仍按 12.1a 并入
+- [x] T42 地图：`spDumpTokens` 未归属组标 `?`（令牌约 36px，三汉字会溢出；面板/日志仍写全称）
+- [x] T43 渲染：`collapsedStackViews` 2–3 枚 SP 并排同高（3 枚 0.64 / spread 0.32）
+- [x] T44 六门槛（第 4 批）、提交推送、并入 main
