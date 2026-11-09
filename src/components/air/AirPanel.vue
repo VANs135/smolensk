@@ -1094,17 +1094,6 @@ const displayedBases = computed(() =>
                 ｜本阶段已整备（15.1A）
               </template>
             </span>
-            <BaseButton
-              variant="primary"
-              size="sm"
-              :disabled="
-                workbench.refitDoneBases.some((item) => item.id === base.id) ||
-                workbench.airInactiveAtBase(base.id).length === 0
-              "
-              @click="workbench.beginRefitNow(base.id)"
-            >
-              在地图上整备（15.1）
-            </BaseButton>
             <!-- 裁判工具：简易机场由 15.3 施工 / 3.5 建造标记产生，手拨是订正 -->
             <BaseButton
               v-if="showsReferee"

@@ -315,11 +315,10 @@ describe('B15d/B15e：分段渲染与视图接线（源码守卫）', () => {
     expect(pickerAt).toBeLessThan(checkStart)
   })
 
-  it('空军事务命令留在各自的单项操作面板', () => {
+  it('空军事务命令留在各自的单项操作面板（15.1 整备归点基地格）', () => {
     const air = readFileSync('src/components/air/AirPanel.vue', 'utf8')
     for (const [panel, command] of [
       ['Place', 'addAirUnit'],
-      ['Refit', 'beginRefitNow'],
       ['Airstrip', 'buildAirBaseNow'],
       ['Reduce', 'reduceBaseNow'],
       ['Capture', 'captureAirBaseNow'],
@@ -331,5 +330,9 @@ describe('B15d/B15e：分段渲染与视图接线（源码守卫）', () => {
       expect(start, `缺少 ${panel} 面板`).toBeGreaterThan(0)
       expect(air.slice(start, end)).toContain(`workbench.${command}(`)
     }
+    // G3：15.1 整备的唯一发起入口＝点基地格（地图小窗），AirPanel 只列基地与容量
+    expect(air).not.toContain('workbench.beginRefitNow(')
+    const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
+    expect(popover).toContain('workbench.beginRefitNow(')
   })
 })

@@ -141,16 +141,6 @@ const visibleGroundUnits = computed(() =>
   ),
 )
 
-/** 该格是否是可付款的补给站（12.4；地图上画金黄方框） */
-const dumpAtHex = computed(() =>
-  mapView.combatSourceDumps.find(
-    (dump) =>
-      mapView.popup !== null &&
-      dump.hex.col === mapView.popup.hex.col &&
-      dump.hex.row === mapView.popup.hex.row,
-  ),
-)
-
 /* ── 15.1 整备（用户口径：点机场的整备按钮 → 勾选飞机 → 点地图上高亮的补给付款） ── */
 
 /** 该格上的**本方**空军基地（null = 不是本方基地格） */
@@ -194,11 +184,6 @@ function sideName(side: string): string {
 }
 
 /* ── 动作（全部转发给既有 store 动作，不新增业务规则） ── */
-
-function pickDump(): void {
-  const dump = dumpAtHex.value
-  if (dump !== undefined) workbench.pickCombatSupplyDump(dump.side, dump.id)
-}
 </script>
 
 <template>
@@ -410,18 +395,6 @@ function pickDump(): void {
         </div>
         <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatAdvance()">
           确认推进并收束（9.12g/9.13）
-        </BaseButton>
-      </section>
-
-      <!-- 12.4 战斗补给：该格是补给站时可就地声明付款来源 -->
-      <section v-if="step === 'combatSupply' && dumpAtHex !== undefined" class="block">
-        <h4 class="block__title">战斗补给来源（12.4）</h4>
-        <p class="num">
-          {{ hexLabel(dumpAtHex.hex) }} · {{ dumpAtHex.side === 'attacker' ? '攻方' : '守方' }} ·
-          {{ dumpAtHex.label }}
-        </p>
-        <BaseButton variant="primary" size="sm" @click="pickDump()">
-          用这个补给站付款（12.4）
         </BaseButton>
       </section>
     </template>
