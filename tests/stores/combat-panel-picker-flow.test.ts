@@ -236,9 +236,13 @@ function driveToAdvanceStep(store: ReturnType<typeof newStore>) {
   if (store.combatAwaitingShiftDie) expect(store.rollCombatShiftDie()).toBe(true)
   expect(store.rollCombatDice()).toBe(true)
   expect(store.confirmCombatLosses()).toBe(true)
-  driveOptions(store, 'attacker')
+  /*
+   * 批 12：某方在强制损失后被**全灭**时，选项步会被跳过（9.10a 的选项与 9.12 的撤退都无单位可承受）
+   * ⇒ 只在仍停在选项步时才驱动它；本例要验的是 9.12g 的推进阵列，不是那两条短路。
+   */
+  if (store.combatState?.step === 'options') driveOptions(store, 'attacker')
   expect(store.confirmCombatLosses()).toBe(true)
-  driveOptions(store, 'defender')
+  if (store.combatState?.step === 'options') driveOptions(store, 'defender')
 
   const requirement = store.combatRetreatRequirement
   const paths: Record<string, string> = {}
@@ -552,9 +556,10 @@ describe('B20：撤退落点在地图上点格（9.12）', () => {
     if (store.combatAwaitingShiftDie) expect(store.rollCombatShiftDie()).toBe(true)
     expect(store.rollCombatDice()).toBe(true)
     expect(store.confirmCombatLosses()).toBe(true)
-    driveOptionsAsRetreat(store)
+    // 批 12：被全灭的一方不再进选项步（9.10a 无承受者）⇒ 只在仍停在选项步时驱动
+    if (store.combatState?.step === 'options') driveOptionsAsRetreat(store)
     expect(store.confirmCombatLosses()).toBe(true)
-    driveOptionsAsRetreat(store)
+    if (store.combatState?.step === 'options') driveOptionsAsRetreat(store)
     expect(store.combatState?.step).toBe('retreat')
   }
 

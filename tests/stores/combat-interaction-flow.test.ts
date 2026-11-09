@@ -1537,3 +1537,155 @@ describe('5.10b-A / 5.7 / 5.8：模式折算经状态桥生效', () => {
     expect(outOfSupply.attackerTotal).toBe(plain.attackerTotal)
   })
 })
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 批 12：**强制战果损兵后的收束**（9.10c / 9.11b / 9.12）
+ *
+ * 用户口径：「战斗中单位因强制战果被消灭（进死亡堆）后，结算流程卡住，推不到战斗结束。」
+ * 构造：双方各只摆一枚 **1 军力** 的算子（各自唯一一枚）⇒ 任何 1 点损失都直接把它送进死亡堆。
+ * 这样每个种子都能拿到「一方全灭 / 双方各损一枚」的边界，且能检验：
+ *   ① 参战集合与取数投影在单位离场后同步（不再数到已进死亡堆的算子）；
+ *   ② 领队（9.6 宣布的 AR 单位）被消灭后，战斗窗不再引用它；
+ *   ③ 选项页在无单位可承受 9.10a 时不再出现（修前只能靠"死人撤退"凑数，o2 则永远卡住）。
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/** 双方各摆一枚 1 军力算子并走到「结算结果」（9.2 第 7 步之后） */
+function fragileBattle(seed: number) {
+  const store = newStore()
+  store.rng = createRngState(seed)
+  setupBattle(store)
+  const attacker = store.units.find((unit) => unit.instanceId === 'a1')!
+  const defender = store.units.find((unit) => unit.instanceId === 'd1')!
+  attacker.steps = 1
+  defender.steps = 1
+  driveToResolution(store)
+  return { store, attacker, defender }
+}
+
+/** 按面板口径走完「撤退 → 推进」；若还停在选项页（或任何一步）即视为卡住 */
+function concludeCombat(store: ReturnType<typeof newStore>): void {
+  let guard = 0
+  while (guard < 8) {
+    guard += 1
+    const state = store.combatState
+    if (state === null || state.finished) break
+    if (state.step === 'retreat') {
+      expect(store.confirmCombatRetreats()).toBe(true)
+      continue
+    }
+    if (state.step === 'advance') {
+      expect(store.confirmCombatAdvance()).toBe(true)
+      continue
+    }
+    throw new Error(`战斗停在 ${state.step}/${state.resolution.stage}：结算无法收束`)
+  }
+  expect(store.combatState?.finished).toBe(true)
+}
+
+describe('批 12：强制战果损兵后仍能收束（9.10c / 9.11b / 9.12）', () => {
+  it('12.1 双方各损一枚：强制损失后仍能收束并写日志', () => {
+    let found: ReturnType<typeof fragileBattle> | undefined
+    for (let seed = 1; seed <= 60 && found === undefined; seed += 1) {
+      const candidate = fragileBattle(seed)
+      const summary = candidate.store.combatSummary!
+      const ar = candidate.store.combatState!.ar
+      // 攻方无强制损失、有 o#（吃成军力损失 ⇒ 唯一一枚阵亡）；守方有 L#（唯一一枚阵亡）且还有自己的选项
+      if (summary.attacker.losses !== 0 || summary.attacker.options < 1) continue
+      if (summary.defender.losses < 1 || summary.defender.options < 1) continue
+      if (ar?.attackerUnitId !== candidate.attacker.instanceId) continue
+      found = candidate
+    }
+    expect(found).toBeDefined()
+    const { store, attacker, defender } = found!
+
+    // 9.11c：攻方强制损失 0 点 ⇒ 先结算选项；把 o1 全吃成军力损失 ⇒ 攻方唯一一枚被消灭
+    expect(store.confirmCombatLosses()).toBe(true)
+    store.combatInputs.optionRetreatHexes = 0
+    store.combatInputs.optionLossPoints = store.combatRequirement!.options
+    expect(store.confirmCombatOptions()).toBe(true)
+    expect(store.combatAttackers).toHaveLength(0)
+    expect(store.deadPile.some((unit) => unit.instanceId === attacker.instanceId)).toBe(true)
+
+    // 领队引用同步：9.6 宣布的 AR 单位已离场 ⇒ 战斗窗不再引用它（该方已无领队）
+    expect(store.combatState!.ar?.attackerUnitId).not.toBe(attacker.instanceId)
+
+    // 9.11c：守方强制损失 L1 ⇒ 守方唯一一枚被消灭；9.10a 的选项已无单位可承受 ⇒ 不再进选项页
+    expect(store.confirmCombatLosses()).toBe(true)
+    expect(store.battleDefenders).toHaveLength(0)
+    expect(store.deadPile.some((unit) => unit.instanceId === defender.instanceId)).toBe(true)
+    expect(store.combatState!.resolution.defender.optionsSkipped).toBe('defenderWipedOut')
+    expect(store.combatState!.step).toBe('retreat')
+    // 9.12：没有单位可撤退 ⇒ 撤退需求为 0（不许用"死人撤退"凑过 9.10a）
+    expect(store.combatRetreatRequirement).toEqual({ attacker: 0, defender: 0 })
+    // 领队引用同步：守方 AR 单位也已离场
+    expect(store.combatState!.ar?.defenderUnitId).not.toBe(defender.instanceId)
+
+    concludeCombat(store)
+    expect(store.log.some((entry) => entry.text.includes('跳过守方的选项'))).toBe(true)
+    expect(store.log.some((entry) => entry.rule === '9.11c')).toBe(true)
+  })
+
+  it('12.2 攻方全灭：跳过攻方选项后仍能收束并写日志', () => {
+    let found: ReturnType<typeof fragileBattle> | undefined
+    for (let seed = 1; seed <= 60 && found === undefined; seed += 1) {
+      const candidate = fragileBattle(seed)
+      const summary = candidate.store.combatSummary!
+      // 攻方 L1 即全灭；守方这一手无损失也无选项（9.10c 例 B：防御者忽略其选项）
+      if (summary.attacker.losses < 1) continue
+      if (summary.defender.losses !== 0 || summary.defender.options !== 0) continue
+      found = candidate
+    }
+    expect(found).toBeDefined()
+    const { store, attacker } = found!
+
+    expect(store.confirmCombatLosses()).toBe(true)
+    expect(store.combatAttackers).toHaveLength(0)
+    expect(store.deadPile.some((unit) => unit.instanceId === attacker.instanceId)).toBe(true)
+    // 9.10c 例 B：攻方在承受选项前被摧毁 ⇒ 不进攻方选项步，直接交守方强制损失
+    expect(store.combatState!.resolution.attacker.optionsSkipped).toBe('attackerWipedOut')
+    expect(store.combatState!.resolution.stage).toBe('defenderLosses')
+    expect(store.combatState!.step).toBe('losses')
+    expect(store.combatState!.ar?.attackerUnitId).not.toBe(attacker.instanceId)
+
+    expect(store.confirmCombatLosses()).toBe(true)
+    // 守方选项为 0 点：仍需确认一次（9.10a），但不得因为攻方名单已空而失败
+    if (store.combatState!.step === 'options') {
+      expect(store.combatState!.resolution.stage).toBe('defenderOptions')
+      expect(store.confirmCombatOptions()).toBe(true)
+    }
+    concludeCombat(store)
+    expect(store.log.some((entry) => entry.text.includes('跳过攻方的选项'))).toBe(true)
+  })
+
+  it('12.3 守方全灭（o2 选项）：不再停在填不动的选项页，能收束', () => {
+    let found: ReturnType<typeof fragileBattle> | undefined
+    for (let seed = 1; seed <= 60 && found === undefined; seed += 1) {
+      const candidate = fragileBattle(seed)
+      const summary = candidate.store.combatSummary!
+      // 攻方无强制损失（先结算攻方选项）；守方 L1 全灭，但 9.9 给了守方 2 点选项
+      if (summary.attacker.losses !== 0) continue
+      if (summary.defender.losses < 1 || summary.defender.options < 2) continue
+      found = candidate
+    }
+    expect(found).toBeDefined()
+    const { store, defender } = found!
+
+    // 攻方强制损失 0 点 ⇒ 选项为 0 点，确认后进入守方强制损失
+    expect(store.confirmCombatLosses()).toBe(true)
+    expect(store.combatState!.resolution.stage).toBe('attackerOptions')
+    expect(store.confirmCombatOptions()).toBe(true)
+    // 守方 L1 ⇒ 唯一一枚被消灭；9.10a 的 2 点选项已无单位可承受 ⇒ 不再进选项页
+    expect(store.confirmCombatLosses()).toBe(true)
+    expect(store.battleDefenders).toHaveLength(0)
+    expect(store.deadPile.some((unit) => unit.instanceId === defender.instanceId)).toBe(true)
+    expect(store.combatState!.resolution.defender.optionsSkipped).toBe('defenderWipedOut')
+    expect(store.combatState!.step).toBe('retreat')
+    expect(store.combatRetreatRequirement).toEqual({ attacker: 0, defender: 0 })
+    expect(store.combatState!.ar?.defenderUnitId).not.toBe(defender.instanceId)
+
+    concludeCombat(store)
+    expect(store.log.some((entry) => entry.text.includes('跳过守方的选项'))).toBe(true)
+  })
+})

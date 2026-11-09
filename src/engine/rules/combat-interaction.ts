@@ -156,14 +156,17 @@ export interface CombatSideResolution {
   /** 守方是否选择行使「忽略」 */
   optionIgnored?: boolean
   /**
-   * 9.10c：该方的**选项步被跳过**的原因（目前只有一种）
+   * 该方的**选项步被跳过**的原因
    *
-   * 「如果攻击方已撤退，或**无法完成所有选项**，则防御方便可忽略他的选项。」＋举例 B：
-   * 「AL1o1，Do1……**唯一的攻击者因 L1 摧毁**，因此**防御者可以忽略他的选项**。」
-   * ⇒ 攻方在承受选项前被摧毁时，**不再进入攻方选项步**（否则玩家面对一个填不动的页面：
-   *   损失无处可吃，只能靠"死人撤退"凑过 9.10a），直接交给守方结算强制损失。
+   * - `attackerWipedOut`（9.10c）：「如果攻击方已撤退，或**无法完成所有选项**，则防御方便可忽略他的选项。」
+   *   ＋举例 B：「AL1o1，Do1……**唯一的攻击者因 L1 摧毁**，因此**防御者可以忽略他的选项**。」
+   *   ⇒ 攻方在承受选项前被摧毁时，**不再进入攻方选项步**（否则玩家面对一个填不动的页面：
+   *     损失无处可吃，只能靠"死人撤退"凑过 9.10a），直接交给守方结算强制损失。
+   * - `defenderWipedOut`（9.11 / 9.12）：守方在强制损失后**全部参战单位被消灭**。
+   *   9.10a 的选项由「受影响的玩家」用**自己的单位**吃损失或撤退来支付，9.12 的撤退也以单位为对象；
+   *   名单已空时两项都无承受者 ⇒ 选项步无意义，直接进入撤退/收束（不再靠"死人撤退"凑数）。
    */
-  optionsSkipped?: 'attackerWipedOut'
+  optionsSkipped?: 'attackerWipedOut' | 'defenderWipedOut'
 }
 
 /** 9) 撤退与推进 */
@@ -728,16 +731,26 @@ export function planLosses(
    */
   const wipedOut = patches.every((patch) => (patch.steps ?? Number.POSITIVE_INFINITY) <= 0)
   const attackerWipedOut = side === 'attacker' && wipedOut
+  /*
+   * 9.11c / 9.12（批 12）：守方在强制损失后**整场被消灭** ⇒ 不再进守方选项步。
+   * 9.10a 的选项只能由「受影响的玩家」用自己的单位吃损失或撤退来支付；9.12 的撤退同样以单位为对象。
+   * 名单已空时两者都无承受者 ⇒ 直接进撤退/收束（修前会在选项页上卡死：损失容量 0、
+   * 只能靠"死人撤退"凑过 9.10a，o2 之类连凑都凑不出来）。
+   */
+  const defenderWipedOut = side === 'defender' && wipedOut
   const nextStage: CombatResolutionStage = attackerWipedOut
     ? 'defenderLosses'
     : side === 'attacker'
       ? 'attackerOptions'
-      : 'defenderOptions'
+      : defenderWipedOut
+        ? 'done'
+        : 'defenderOptions'
   const sideRecord: CombatSideResolution = {
     forcedLosses: checked.data.allocation,
     eliminated: checked.data.eliminated,
     ignoredLosses: canonical.ignored,
     ...(attackerWipedOut ? { optionsSkipped: 'attackerWipedOut' as const } : {}),
+    ...(defenderWipedOut ? { optionsSkipped: 'defenderWipedOut' as const } : {}),
   }
 
   return succeed(attackerWipedOut ? '9.10c' : '9.11', {
@@ -745,7 +758,7 @@ export function planLosses(
       ...state,
       // 第 8 步的两个子环节在 9.2 里合成「结算结果」一条；为使流程清单可读，`step` 在
       // 「强制损失」与「选项」之间来回切换（`resolution.stage` 才是权威的进度）
-      step: attackerWipedOut ? 'losses' : 'options',
+      step: attackerWipedOut ? 'losses' : defenderWipedOut ? 'retreat' : 'options',
       resolution: {
         ...state.resolution,
         stage: nextStage,

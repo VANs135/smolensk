@@ -775,6 +775,75 @@ describe('9.10 / 9.11 结算：攻方先、守方后，从 AR 单位起算', () 
       expect(losses.state.resolution.attacker.optionsSkipped).toBeUndefined()
     })
   })
+
+  /*
+   * 批 12（用户报）：**守方在强制损失后被整场消灭 ⇒ 跳过守方选项步**
+   *
+   * 9.10a 的选项只能由「受影响的玩家」用自己的单位吃军力损失或撤退来支付，9.12 的撤退也以单位为对象。
+   * 守方名单已空时两项都没有承受者 ⇒ 若仍进守方选项步，玩家会面对一个填不动的页面
+   * （修前：o1 还能靠"死人撤退"凑过 9.10a；o2 连凑都凑不出来 ⇒ 永远推不到战斗结束）。
+   *
+   * 现场与 `toAdvance` 同口径：12 + (4−2) = 14、攻方奇袭横移 1，
+   * 守方 3 军力 → CRT「14 行 2:1 列」= `Ae4 DL1o2`（L1 + o2，守方扛得住）；
+   * 守方 1 军力 → 折算后落 `Ae3 DL2o2DG`（L2 + o2，守方被全灭却还挂着 2 点选项）。
+   */
+  describe('批 12：守方在强制损失后被消灭', () => {
+    function afterDefenderLosses(defenderSteps: number, expectedRaw: string) {
+      const attackers = [unit({ id: 'a1', attack: 10, steps: 3, printedSteps: 3, ar: 4 })]
+      const defenders = [defenderUnit({ id: 'd1', attack: 10, steps: defenderSteps, ar: 2 })]
+      const { state } = upToTerrain({
+        attackers,
+        defenders,
+        attackerUnitId: 'a1',
+        defenderUnitId: 'd1',
+      })
+      const surprised = unwrap(resolveSurprise(state, { die: 12, shiftDie: 1 }))
+      const dice = unwrap(resolveCombatDice(surprised.state, { die: 12 }))
+      expect(dice.state.dice!.result.raw).toBe(expectedRaw)
+      return { attackers, defenders, state: dice.state }
+    }
+
+    it('★ 守方 1 军力 ⇒ DL2 即全灭：直落 retreat/done，不再停在 defenderOptions', () => {
+      const { attackers, defenders, state } = afterDefenderLosses(1, 'Ae3 DL2o2DG')
+      const losses = unwrap(planLosses(state, { units: [...attackers, ...defenders] }))
+      expect(losses.state.resolution.stage).toBe('attackerOptions')
+      // 攻方无选项 ⇒ 确认一次 0 点，进入守方强制损失
+      const attackerUnits = applyPatches([...attackers, ...defenders], losses.patches).filter(
+        (item) => item.side === 'axis',
+      )
+      const options = unwrap(
+        planOptions(losses.state, { units: attackerUnits, retreatHexes: 0, lossPoints: 0 }),
+      )
+      const current = applyPatches([...attackers, ...defenders], options.patches)
+      const defenderLosses = unwrap(planLosses(options.state, { units: current }))
+      expect(defenderLosses.patches.find((patch) => patch.unitId === 'd1')?.steps).toBe(0)
+      // 9.11 / 9.12：守方全灭 ⇒ 无单位可承受 9.10a 的 2 点选项，也无单位可撤退
+      expect(defenderLosses.state.resolution.stage).toBe('done')
+      expect(defenderLosses.state.step).toBe('retreat')
+      expect(defenderLosses.state.resolution.defender.optionsSkipped).toBe('defenderWipedOut')
+      // 选项步已经不存在（不再有填不动的页面）
+      expect(
+        planOptions(defenderLosses.state, { units: [], retreatHexes: 2, lossPoints: 0 }),
+      ).toMatchObject({ ok: false })
+    })
+
+    it('★ 对照：守方 3 军力（扛得住 DL1）⇒ 仍进守方选项步', () => {
+      const { attackers, defenders, state } = afterDefenderLosses(3, 'Ae4 DL1o2')
+      const losses = unwrap(planLosses(state, { units: [...attackers, ...defenders] }))
+      const attackerUnits = applyPatches([...attackers, ...defenders], losses.patches).filter(
+        (item) => item.side === 'axis',
+      )
+      const options = unwrap(
+        planOptions(losses.state, { units: attackerUnits, retreatHexes: 0, lossPoints: 0 }),
+      )
+      const current = applyPatches([...attackers, ...defenders], options.patches)
+      const defenderLosses = unwrap(planLosses(options.state, { units: current }))
+      expect(defenderLosses.patches.find((patch) => patch.unitId === 'd1')?.steps).toBe(2)
+      expect(defenderLosses.state.resolution.stage).toBe('defenderOptions')
+      expect(defenderLosses.state.step).toBe('options')
+      expect(defenderLosses.state.resolution.defender.optionsSkipped).toBeUndefined()
+    })
+  })
 })
 
 describe('9.12 撤退方向：完整撤退距离、DG 与敌方 ZOC', () => {

@@ -2353,9 +2353,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         roll: combatDiceRoll.value,
         die: state.dice.die,
         attackerAr: ar?.attackerAr ?? 0,
-        attackerArSource: ar === undefined ? '未指定' : `攻方 AR 单位 ${nameOf(ar.attackerUnitId)}`,
+        attackerArSource:
+          ar === undefined
+            ? '未指定'
+            : ar.attackerUnitId === ''
+              ? '攻方 AR 单位已被消灭（无领队，9.6）'
+              : `攻方 AR 单位 ${nameOf(ar.attackerUnitId)}`,
         defenderAr: ar?.defenderAr ?? 0,
-        defenderArSource: ar === undefined ? '未指定' : `守方 AR 单位 ${nameOf(ar.defenderUnitId)}`,
+        defenderArSource:
+          ar === undefined
+            ? '未指定'
+            : ar.defenderUnitId === ''
+              ? '守方 AR 单位已被消灭（无领队，9.6）'
+              : `守方 AR 单位 ${nameOf(ar.defenderUnitId)}`,
         hedgehogLevel: state.hedgehogLevel,
         modifiedDice: state.dice.modifiedDice,
         raw: state.dice.result.raw,
@@ -9362,6 +9372,39 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     for (const unit of eliminated)
       eliminateEntry(unit, '9.11', `${unit.name} 军力归零，移入死亡堆（9.11）`)
+    syncCombatArReference()
+  }
+
+  /**
+   * 批 12（9.6 / 9.11c）：战斗窗的**领队引用**必须随单位离场同步
+   *
+   * 9.6 的 AR 单位在**掷骰前**宣布，写进 `state.ar.*UnitId`；9.11c 的损失自它起算，9.13b-A 也拿它判 DG。
+   * 它在结算中被消灭（强制损失 / 选项损失 / 9.12e 额外损失）后，`state.ar` 仍指向已进死亡堆的实例 id
+   * ⇒ 战斗窗的领队栏与取数投影会继续引用一个不在 `units` 里的单位。
+   *
+   * 口径：**允许无领队**。AR 单位是掷骰前宣布的（9.6），被消灭后规则里没有"改选"，故把该侧引用
+   * 置空（`''`）；9.11c 的损失顺序与 9.13b-A 的 DG 判定按剩余单位自然落空，后续步骤不再依赖领队。
+   * 该侧仍有参战单位时也不改选 —— 改选会让 9.11c"AR 单位先受第一点"落到一个并非 AR 的单位上。
+   */
+  function syncCombatArReference(): void {
+    const state = combatState.value
+    if (state === null || state.finished === true || state.ar === undefined) return
+    const alive = new Set(units.value.map((unit) => unit.instanceId))
+    const attackerUnitId = alive.has(state.ar.attackerUnitId) ? state.ar.attackerUnitId : ''
+    const defenderUnitId = alive.has(state.ar.defenderUnitId) ? state.ar.defenderUnitId : ''
+    if (attackerUnitId === state.ar.attackerUnitId && defenderUnitId === state.ar.defenderUnitId)
+      return
+    const cleared = [
+      attackerUnitId === state.ar.attackerUnitId ? null : '攻方',
+      defenderUnitId === state.ar.defenderUnitId ? null : '守方',
+    ].filter((label): label is string => label !== null)
+    combatState.value = { ...state, ar: { ...state.ar, attackerUnitId, defenderUnitId } }
+    pushLog(
+      'warning',
+      `${cleared.join('、')}行动值（AR）单位已进死亡堆 ⇒ 本场战斗不再有${cleared.join('、')}领队` +
+        '（9.6：AR 单位在掷骰前宣布，被消灭后无人接替；9.11c 的损失顺序与 9.13b-A 按剩余单位判）',
+      '9.6',
+    )
   }
 
   /**
@@ -10149,7 +10192,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
          */
         (record.optionsSkipped === 'attackerWipedOut'
           ? '；攻方已全灭 ⇒ **跳过攻方的选项**（9.10c 例 B：防御者可以忽略），直接进守方结算'
-          : ''),
+          : record.optionsSkipped === 'defenderWipedOut'
+            ? '；守方已全灭 ⇒ **跳过守方的选项**（9.10a 的选项与 9.12 的撤退都无单位可承受），直接进撤退/收束'
+            : ''),
       data.rule === '9.10c' ? '9.10c' : '9.11c',
     )
     // ⑭ 接线：强制军力损失（9.11c）入会话日志（本笔不掷骰）
