@@ -51,6 +51,13 @@ export interface UnitToken {
    * 故要把类别与数值一并交给渲染层选图（选图逻辑在 `token-images.tokenImageUrl`）。
    */
   noncombatKind?: string | null
+  /**
+   * 13.5：**补员算子**种类（`pax` / `eq`；普通算子为 null）
+   *
+   * 补员记录在数据层写的是 `isCombat: true`（`unitKind: 'combat'`），单看 `combat` 分不出
+   * 它是不是战斗单位；左键堆叠窗只摆战斗单位，故把这一项一并交出去（判据仍取自 store 的 `replKind`）。
+   */
+  replKind?: string | null
   /** 12.1a：SP 当前点数（决定用哪张 SP 图） */
   spPoints?: number | null
   /** 13.8d / 16.0：非战斗单位当前等级（空军基地 1–3 / 环形工事 1–4） */

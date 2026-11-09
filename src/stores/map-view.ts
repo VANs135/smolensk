@@ -283,6 +283,8 @@ export const useMapViewStore = defineStore('mapView', () => {
       images: unit.images,
       // 计数类非战斗算子的图**随当前数值走**（SP 点数 / 机场等级 / 工事等级）
       noncombatKind: unit.noncombatKind ?? null,
+      // 13.5：补员算子（数据层写 `isCombat: true`，靠这一项与真正的战斗单位分开）
+      replKind: unit.replKind ?? null,
       spPoints: unit.noncombatSp,
       noncombatLevel: unit.noncombatLevel,
       // 13.2f/h：编内卡车的面＝**装载**（满载 1F / 空载 1），与朝向无关（13.0：运输单位只有移动模式）
@@ -2422,7 +2424,13 @@ export const useMapViewStore = defineStore('mapView', () => {
   /** 开窗/换格时重置为该格全部可见**战斗**单位（非战斗与飞机不进这个窗） */
   function resetStackPicks(hex: HexRef): void {
     stackPickIds.value = stackTokensAt(hex)
-      .filter((token) => token.air !== true && (token.noncombatKind ?? null) === null)
+      .filter(
+        (token) =>
+          token.air !== true &&
+          (token.noncombatKind ?? null) === null &&
+          // 13.5：补员算子不属战斗单位（数据层 `isCombat: true`，靠 `replKind` 分）
+          (token.replKind ?? null) === null,
+      )
       .map((token) => token.id)
   }
 

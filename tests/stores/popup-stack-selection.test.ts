@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
+import { emptyReplHoldings } from '@/engine/rules'
 import { useMapViewStore, useSetupStore, useWorkbenchStore } from '@/stores'
 
 import { groundRecord, placeGround } from '../flows/sop-harness'
@@ -72,5 +73,18 @@ describe('左键堆叠窗：默认全选战斗单位，点枚切换', () => {
     placeInfantry(s.workbench, 'inf-c', OTHER)
     s.mapView.openPopup(OTHER, 0, 0)
     expect([...s.mapView.stackPickIds]).toEqual(['inf-c'])
+  })
+
+  it('★ 13.5 补员算子不算战斗单位：同格的 Pax 补员不列、也不默认选中', () => {
+    // 补员记录在数据层写 `isCombat: true`，若不按 `replKind` 剔掉就会混进这个窗
+    s.workbench.setReplHoldingsNow({ ...emptyReplHoldings(), pax: 1 }, HEX)
+    const repls = s.workbench.units.filter((unit) => unit.replKind !== null)
+    expect(repls).toHaveLength(1)
+
+    s.mapView.openPopup(HEX, 0, 0)
+    expect([...s.mapView.stackPickIds].sort()).toEqual(['inf-a', 'inf-b'])
+    expect(s.mapView.popupContent?.units.some((token) => (token.replKind ?? null) !== null)).toBe(
+      true,
+    )
   })
 })

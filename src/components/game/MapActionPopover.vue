@@ -82,10 +82,13 @@ function counterImageOf(id: string): string | null {
  * 左键堆叠窗只摆**战斗单位**（用户 2026-11-09：非战斗与飞机不进这个窗，操作走右键）
  *
  * 判据用 `UnitToken.noncombatKind`：有值＝非战斗单位，无值＝战斗单位。
+ * 13.5 的补员算子在数据层也写 `isCombat: true`，靠 `replKind` 把它剔出去（它不是战斗单位）。
  * 本组件不另判规则——与地图上画算子是同一份数据。
  */
 const combatUnits = computed(() =>
-  visibleGroundUnits.value.filter((unit) => (unit.noncombatKind ?? null) === null),
+  visibleGroundUnits.value.filter(
+    (unit) => (unit.noncombatKind ?? null) === null && (unit.replKind ?? null) === null,
+  ),
 )
 
 /**
