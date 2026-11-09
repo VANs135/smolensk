@@ -30,4 +30,4 @@
 - [x] T31 store：`transportLoadReadyAt` / `transportUnloadReadyAt` / `transportHandlingReadyAt`（复用 13.2f/13.2g 引擎校验）
 - [x] T32 地图：`facilityActionKeysNow`；`unitActionOptions` / `unitActionAvailableAt` / `unitActionFamily` / `counterActionsAt` 统一走它
 - [x] T33 回归：`transport-load-flow`、`context-menu-capabilities`、`unit-action-session`、`map-view-session`、`facility-*`
-- [ ] T34 六门槛（第 3 批）与提交推送、并入 main
+- [x] T34 六门槛（第 3 批）与提交推送 `b74c00d`、并入 main
