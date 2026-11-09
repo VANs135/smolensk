@@ -160,10 +160,12 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).toMatch(/v-if="uiMode === 'verify'"/)
   })
 
-  it('ExclusiveRulesPanel：3.4 装甲集群**不替裁判默认**（修前默认 Guderian）', () => {
+  it('ExclusiveRulesPanel：3.4 装甲集群归属自动（对局台不铺算子/集群两个下拉）', () => {
     const src = read('src/components/exclusive/ExclusiveRulesPanel.vue')
     expect(src).toMatch(/const panzerGroupChoice = ref<'' \| 'guderian' \| 'hoth'>\(''\)/)
     expect(src).not.toMatch(/panzerGroupChoice = ref<'guderian' \| 'hoth'>\('guderian'\)/)
-    expect(src).toMatch(/:disabled="panzerUnitId === '' \|\| panzerGroupChoice === ''"/)
+    // 归属取自算子数据；两个下拉只在裁判工具态出现
+    expect(src).toMatch(/v-if="actsPanzer && showsReferee" class="row"/)
+    expect(src).not.toMatch(/<div v-if="actsPanzer" class="row">/)
   })
 })

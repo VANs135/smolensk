@@ -2865,7 +2865,12 @@ export const ACTION_GATES: readonly ActionGate[] = [
        * 为什么不写死"某一环"：玩家环节随剧本与 `skipWhenIdle` 变化，列全 + 段末判据才是稳的。
        * E 反应段由非行动方行动（role `nonActive`），故两环单列 role。
        */
-      { phase: 'aircraftRefit', segment: 'aircraftRefit.refit', at: 'end' },
+      /*
+       * ★ 用户 2026-11-09 裁定：**A 段（飞机整备）只出整备动作**，不在这里挂 3.4a。
+       * 原文 3.4a「at the end of any phase」虽字面包含整备段，但 A 段没有玩家行动环节，
+       * 编队位置与上一回合末（cleanUp / turnEnd 已结算过同一局面）相同，重复展示不新增判据；
+       * 义务仍在 B/C/D/E/F/G 各段末照常可结算（下列条目一条未减）。
+       */
       { phase: 'reinforcement', segment: 'reinforcement.arrival', at: 'end' },
       { phase: 'reinforcement', segment: 'reinforcement.rebuild', at: 'end' },
       { phase: 'reinforcement', segment: 'reinforcement.formationDraw', at: 'end' },

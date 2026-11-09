@@ -118,11 +118,12 @@ describe('B17a-3：分段渲染与入口（源码守卫）', () => {
     }
   })
 
-  it('★ 对局台：右栏 `only="info"`、会话 `only="actions"`；验证页仍挂全量', () => {
+  it('★ 对局台：右栏 `only="info"`、会话按节逐窗；验证页仍挂全量', () => {
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
     const verify = readFileSync('src/views/WorkbenchView.vue', 'utf8')
     expect(game).toContain('<ExclusiveRulesPanel only="info" />')
-    expect(game).toContain('session.kind === \'exclusive\'" only="actions"')
+    // 用户 2026-11-09「一个框不能装多件事」：会话按当前节传 only，不再写死 actions
+    expect(game).toContain(':only="mapView.sessionExclusiveSection ?? \'actions\'"')
     /*
      * B37（方案 §3 步骤 2 后半）：会话入口由**常驻按钮**改成"本环节有可做的专规动作时**自动出现**"
      * ⇒ 对局台上**不该再有**那个按钮（`setExclusiveOpen` 只留给验证页/测试显式打开）。

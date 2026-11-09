@@ -7,6 +7,7 @@ import { mapConfig } from '@/data'
 import { hexCanvasPoint } from '@/render/map-layout'
 import { boundaryLinePoints } from '@/render/map-render'
 import { toConsoleUnit, unitChoices, useMapViewStore, useWorkbenchStore } from '@/stores'
+import { actionGateOf } from '@/stores/workbench-model'
 
 /**
  * B37 切片 2：**装甲集群分界线**（用户口径 #14「画装甲集群分界线」）
@@ -146,6 +147,25 @@ describe('B37：专规面板按本环节置顶', () => {
 })
 
 describe('B37：专规会话按闸门自动出现', () => {
+  it('★ 用户 2026-11-09：3.4a 的闸门不再挂 A 段（其余段末一条未减）', () => {
+    const gate = actionGateOf('exclusive.panzerObligation')
+    expect(gate.where.some((where) => where.phase === 'aircraftRefit')).toBe(false)
+    // 去掉 A 段那一条后仍有 16 条（B×4 / C×3 / D×2 / E×2 / F×2 / G×3）
+    expect(gate.where).toHaveLength(16)
+  })
+
+  it('★ A 段（飞机整备）不出任何专规动作、不自动开窗', () => {
+    const { workbench, mapView } = newStores()
+    workbench.setPhase('aircraftRefit')
+    const index = workbench.playerSegmentSteps.findIndex((step) =>
+      step.id.startsWith('aircraftRefit.'),
+    )
+    if (index < 0) throw new Error('A 段没有整备环节？')
+    expect(workbench.setSegmentStepIndex(index)).toBe(true)
+    expect(workbench.exclusiveActionsInStep).toEqual([])
+    expect(mapView.session).toBeNull()
+  })
+
   it('★ D 补给段（1.7 可做）⇒ 自动出现；C 段**段中**无可做专规 ⇒ 不出现；C 段**段末**出现（3.4a）', () => {
     const { workbench, mapView } = newStores()
 

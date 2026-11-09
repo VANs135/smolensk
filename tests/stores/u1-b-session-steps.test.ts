@@ -48,6 +48,7 @@ function baseFacts(over: Partial<SessionStepFacts> = {}): SessionStepFacts {
     breakoutReturnPending: false,
     containers: false,
     exclusive: false,
+    exclusiveSections: [],
     unit: false,
     ...over,
   }
@@ -150,6 +151,20 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
     // 一次只暴露一个：先返场，返场做完才轮到突围
     expect(exposedCount(items)).toBe(1)
     expect(exposedSessionStep(items)?.id).toBe('breakout:return')
+  })
+  it('专规：按节拆成多件，一节一件（不再是"一个框装五件事"）', () => {
+    const items = planSessionSteps(
+      baseFacts({ kind: 'exclusive', exclusive: true, exclusiveSections: ['panzer', 'cache'] }),
+    )
+    expect(items.map((entry) => entry.id)).toEqual(['exclusive:panzer', 'exclusive:cache'])
+    expect(exposedCount(items)).toBe(1)
+    expect(exposedSessionStep(items)?.id).toBe('exclusive:panzer')
+  })
+
+  it('会话窗按节渲染：GameTableView 不再写死 only="actions"', () => {
+    const src = read('views/GameTableView.vue')
+    expect(src).toContain('sessionExclusiveSection')
+    expect(src).not.toMatch(/ExclusiveRulesPanel[^>]*only="actions"/)
   })
 })
 

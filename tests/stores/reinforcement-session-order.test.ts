@@ -58,6 +58,7 @@ function baseFacts(over: Partial<SessionStepFacts['reinforce']> = {}): SessionSt
     breakoutReturnPending: false,
     containers: false,
     exclusive: false,
+    exclusiveSections: [],
     unit: false,
   }
 }

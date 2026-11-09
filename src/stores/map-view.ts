@@ -43,7 +43,12 @@ import {
 } from '@/engine/rules'
 import type { GamePhase } from '@/engine/state-types'
 import { participatesIn } from './workbench-model'
-import { exposedSessionStep, planSessionSteps, type SessionStepFacts } from './session-steps'
+import {
+  exclusiveSectionTitle,
+  exposedSessionStep,
+  planSessionSteps,
+  type SessionStepFacts,
+} from './session-steps'
 
 /**
  * 地图视图编排（W7 C16：对局台的地图优先交互）
@@ -147,6 +152,13 @@ export type MapSessionKind =
   | 'containers'
   | 'exclusive'
   | 'unit'
+
+/**
+ * 专规会话按节拆窗时的节标识（与 `ExclusiveRulesPanel` 的 `section-scope` 同名）
+ *
+ * 用户 2026-11-09「一个框不能装多件事」：一节一件，逐件推进。
+ */
+export type ExclusiveSessionSection = 'panzer' | 'security' | 'hedgehog' | 'marker' | 'cache'
 
 /**
  * 会话的**关闭语义**（P3 / UI3，方案 §5 `closePolicy`）
@@ -2241,17 +2253,33 @@ export const useMapViewStore = defineStore('mapView', () => {
       (workbench.exclusiveActionsInStep.length > 0 || exclusiveOpen.value) &&
       collapsedSessionKey.value !== currentStepKey.value
     ) {
+      const sections = exclusiveSessionSections.value
+      const first = sections[0]
       return {
         kind: 'exclusive',
-        title:
-          workbench.exclusiveActionsInStep.length > 0
-            ? `专规动作：${workbench.exclusiveActionsInStep.map((item) => item.label).join(' / ')}`
-            : '专规动作（1.7 / 3.3b / 3.4 / 3.5 / 16.0）',
+        title: first ? `专规动作：${exclusiveSectionTitle(first)}` : '专规动作',
         rule: workbench.exclusiveActionsInStep[0]?.rule ?? '专规',
         width: 'min(430px, 94%)',
       }
     }
     return null
+  })
+
+  /**
+   * 专规会话本环节可做的分节（顺序即会话步骤顺序；判据全来自 `exclusiveSectionPins`）
+   *
+   * 修前：一个 `exclusive:actions` 把五节与 1.2 只读全塞进一个框（用户截图）。
+   * 现在按节拆开，`sessionStep` 一次只暴露一节，面板用 `only=<节>` 只画那一节。
+   */
+  const exclusiveSessionSections = computed<readonly ExclusiveSessionSection[]>(() => {
+    const pins = workbench.exclusiveSectionPins
+    const out: ExclusiveSessionSection[] = []
+    if (pins.panzer) out.push('panzer')
+    if (pins.security) out.push('security')
+    if (pins.hedgehog) out.push('hedgehog')
+    if (pins.constructionMarker) out.push('marker')
+    if (pins.supplyCache) out.push('cache')
+    return out
   })
 
   /**
@@ -2340,6 +2368,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       breakoutReturnPending: kind === 'breakout' && workbench.breakoutReturns.length > 0,
       containers: kind === 'containers',
       exclusive: kind === 'exclusive',
+      exclusiveSections: kind === 'exclusive' ? exclusiveSessionSections.value : [],
       unit: kind === 'unit',
     }
   })
@@ -2350,6 +2379,17 @@ export const useMapViewStore = defineStore('mapView', () => {
   const sessionStep = computed(() => exposedSessionStep(sessionSteps.value))
   /** U1-b：暴露数（守卫用例用；多待决同时出现即红） */
   const sessionStepCount = computed(() => (sessionStep.value === null ? 0 : 1))
+
+  /**
+   * 专规会话**当前这一窗只画哪一节**（`ExclusiveRulesPanel` 的 `only`）
+   *
+   * 与 `sessionStep` 同源：步骤由 `exclusiveSections` 按序展开，第一节即当前窗。
+   * 显式打开（验证页 / 顶栏按钮）且本环节无置顶节时给 `null` ⇒ 面板沿用 `only="actions"`。
+   */
+  const sessionExclusiveSection = computed<ExclusiveSessionSection | null>(() => {
+    if (sessionBase.value?.kind !== 'exclusive') return null
+    return exclusiveSessionSections.value[0] ?? null
+  })
 
   /**
    * B17a-3：专规动作会话的开关（顶栏按钮打开 ⇒ 地图上展开那一个会话框）
@@ -2982,6 +3022,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     sessionSteps,
     sessionStep,
     sessionStepCount,
+    sessionExclusiveSection,
     // U1-b：突围会话的显式开关（点击环节操作才出现）
     breakoutOpen,
     openBreakoutNow,

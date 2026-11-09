@@ -14,7 +14,7 @@ import type { BarrageStep } from '@/engine/rules/barrage-interaction'
 import type { CombatStep } from '@/engine/rules/combat-interaction'
 import type { SupplyStep } from '@/engine/rules/supply-interaction'
 
-import type { MapSessionKind } from './map-view'
+import type { MapSessionKind, ExclusiveSessionSection } from './map-view'
 
 /** 一步待决事项 */
 export interface SessionStepItem {
@@ -71,6 +71,13 @@ export interface SessionStepFacts {
   breakoutReturnPending: boolean
   containers: boolean
   exclusive: boolean
+  /**
+   * 专规会话本环节可做的分节（顺序即步骤顺序）
+   *
+   * 用户 2026-11-09「一个框不能装多件事」：专规块按节拆成多件，一次只暴露一件。
+   * 判据由 store 的 `exclusiveSectionPins` 给出，本模块只负责文案与顺序。
+   */
+  exclusiveSections: readonly ExclusiveSessionSection[]
   unit: boolean
 }
 
@@ -501,6 +508,42 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
   return items
 }
 
+/** 专规各节的会话文案（一节一件事；不写条款号，条款留在面板里） */
+const EXCLUSIVE_SECTION_TEXT: Readonly<
+  Record<ExclusiveSessionSection, { title: string; why: string; decision: string }>
+> = {
+  panzer: {
+    title: '装甲集群',
+    why: '本环节可结算分界线义务，或有新到的补给点要归属。',
+    decision: '选定要结算的编队（或补给点的归属），然后执行。',
+  },
+  security: {
+    title: '治安检查',
+    why: '轴控城市有未驻防/未盖 ZOC 的，或有标记到了该移除的时点。',
+    decision: '逐城放标记，或在清理段移除已满足条件的标记。',
+  },
+  hedgehog: {
+    title: '环形工事',
+    why: '本环节该格允许修建或缩减环形工事。',
+    decision: '选定施工格与施工单位，然后执行。',
+  },
+  marker: {
+    title: '建造标记',
+    why: '本环节有建造标记可用。',
+    decision: '选定用途与目标格，然后放下标记。',
+  },
+  cache: {
+    title: '补给缓存',
+    why: '本环节可用补给缓存取给。',
+    decision: '选定用法与目标，然后执行。',
+  },
+}
+
+/** 专规会话标题里用的单节名（一次只出一个） */
+export function exclusiveSectionTitle(section: ExclusiveSessionSection): string {
+  return EXCLUSIVE_SECTION_TEXT[section].title
+}
+
 /**
  * 按规则顺序给出现有会话的全部待决事项（增援段按规则顺序，一次只暴露第一件）
  *
@@ -561,8 +604,15 @@ export function planSessionSteps(facts: SessionStepFacts): SessionStepItem[] {
     }
     case 'containers':
       return facts.containers ? [containersItem] : []
-    case 'exclusive':
+    case 'exclusive': {
+      if (facts.exclusiveSections.length > 0) {
+        return facts.exclusiveSections.map((section) => {
+          const text = EXCLUSIVE_SECTION_TEXT[section]
+          return item(`exclusive:${section}`, text.title, text.why, text.decision)
+        })
+      }
       return facts.exclusive ? [exclusiveItem] : []
+    }
     case 'unit':
       return facts.unit ? [unitItem] : []
     default:

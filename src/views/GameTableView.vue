@@ -499,7 +499,10 @@ onBeforeUnmount(() => {
               <ReinforcementPanel v-else-if="session.kind === 'reinforce'" />
               <BreakoutPanel v-else-if="session.kind === 'breakout'" />
               <ContainersPanel v-else-if="session.kind === 'containers'" only="actions" />
-              <ExclusiveRulesPanel v-else-if="session.kind === 'exclusive'" only="actions" />
+              <ExclusiveRulesPanel
+                v-else-if="session.kind === 'exclusive'"
+                :only="mapView.sessionExclusiveSection ?? 'actions'"
+              />
               <UnitPanel v-else-if="session.kind === 'unit'" />
               <MovePanel v-else />
             </MapDock>

@@ -20375,6 +20375,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
   })
 
+  /**
+   * 本环节**该出窗的专规分节**（顺序即会话步骤顺序）
+   *
+   * 用户 2026-11-09：「一个框不能装多件事」——会话按节逐件推进，每次只出第一节可做的。
+   * 判据全部复用 `exclusiveSectionPins`（在上一处），不在这里另写规则；
+   * `airRestriction`（1.2 只读）不置顶 ⇒ 不进会话（仍留在右栏只读信息里）。
+   */
+  const exclusiveSectionsNow = computed<readonly ExclusiveSection[]>(() => {
+    const pins = exclusiveSectionPins.value
+    const order: readonly ExclusiveSection[] = [
+      'panzer',
+      'security',
+      'hedgehog',
+      'constructionMarker',
+      'supplyCache',
+    ]
+    return order.filter((section) => pins[section])
+  })
+
   /** 3.4b：Supply Table 到货点数（界面输入，用于展示均分结果） */
   const supplyTableSpInput = ref(7)
 
@@ -23097,6 +23116,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     boundaryView,
     exclusiveActionsInStep,
     exclusiveSectionPins,
+    exclusiveSectionsNow,
     panzerGroupAssignments,
     groupOfUnit,
     spDumpPanzerGroups,

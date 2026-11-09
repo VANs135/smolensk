@@ -249,7 +249,11 @@ const pins = computed(() => workbench.exclusiveSectionPins)
           {{ Object.keys(workbench.panzerGroupAssignments).length }} 枚
         </span>
       </div>
-      <div v-if="actsPanzer" class="row">
+      <!--
+        ★ 用户 2026-11-09：集群归属**自动取自算子数据**（素材编队目录），对局台不再让玩家逐个指定；
+        这两个下拉只在裁判工具态出现（手工覆盖 = 订正）。SP 归属仍由玩家选，见下方 3.4b 块。
+      -->
+      <div v-if="actsPanzer && showsReferee" class="row">
         <label class="field">
           算子
           <select v-model="panzerUnitId" class="select">
