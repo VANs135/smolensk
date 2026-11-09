@@ -21,8 +21,13 @@ const cargo = computed(() => {
   return subject.value.noncombatTransport > 0 ? 'transportPoint' : 'unit'
 })
 const recordId = ref('')
+const absorbId = ref('')
 const breakdownRecords = computed(() =>
   workbench.choices.filter((item) => item.branch === 'breakdown'),
+)
+/** 20.0d 吸收对象＝图上已有的拆分单位 */
+const breakdownUnitsOnMap = computed(() =>
+  workbench.units.filter((unit) => unit.specialized.includes('breakdown')),
 )
 const refusal = computed(() =>
   props.order === 'railMove' ? workbench.railMoveError : workbench.actionRefusal,
@@ -46,6 +51,12 @@ function railMove(): void {
 
 function breakdown(): void {
   if (subjectId.value !== null && workbench.createBreakdownNow(subjectId.value, recordId.value)) {
+    mapView.cancelSession()
+  }
+}
+
+function absorb(): void {
+  if (subjectId.value !== null && workbench.absorbBreakdownNow(subjectId.value, absorbId.value)) {
     mapView.cancelSession()
   }
 }
@@ -82,6 +93,24 @@ function breakdown(): void {
         </select>
       </label>
       <BaseButton size="sm" :disabled="recordId === ''" @click="breakdown">创建 · 20.0a</BaseButton>
+      <label class="order__subject">
+        吸收拆分单位
+        <select v-model="absorbId">
+          <option value="">
+            {{ breakdownUnitsOnMap.length === 0 ? '（图上暂无拆分单位）' : '选择算子' }}
+          </option>
+          <option
+            v-for="unit in breakdownUnitsOnMap"
+            :key="unit.instanceId"
+            :value="unit.instanceId"
+          >
+            {{ unit.name }} @ {{ hexLabel(unit.hex) }}
+          </option>
+        </select>
+      </label>
+      <BaseButton size="sm" variant="secondary" :disabled="absorbId === ''" @click="absorb"
+        >吸收 · 20.0d</BaseButton
+      >
     </template>
     <p v-if="refusal !== null" class="order__error" role="status">
       {{ refusal.rule }} · {{ refusal.reason }}

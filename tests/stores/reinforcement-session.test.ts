@@ -167,11 +167,7 @@ describe('B17a：分段渲染与两处入口（源码守卫）', () => {
       'workbench.rollVariableReplNow()',
       'workbench.claimFrontalReservesNow()',
     ])
-    checkGated('showsRebuild', [
-      'workbench.rebuildUnitNow({',
-      'workbench.createBreakdownNow(',
-      'workbench.consolidateUnitsNow(',
-    ])
+    checkGated('showsRebuild', ['workbench.rebuildUnitNow({', 'workbench.consolidateUnitsNow('])
   })
 
   it('★ 13.9：store 不得替引擎编造「此刻是增援阶段」（修前写死 `phaseIsReinforcement: true`）', () => {
@@ -304,17 +300,21 @@ describe('B34：拆并四处"指认单位"改成点算子图', () => {
     expect(workbench.units.find((unit) => unit.instanceId === 'f1')?.locked).toBe(false)
   })
 
-  it('★ 面板四处已是算子图阵列（`u1 / k1 / r1` 手打 id 的输入框全没了）', () => {
+  it('★ 面板两处已是算子图阵列（`u1 / k1 / r1` 手打 id 的输入框全没了）', () => {
     const panel = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
     for (const dead of ['placeholder="u1"', 'placeholder="k1"', 'placeholder="r1"']) {
       expect(panel).not.toContain(dead)
     }
-    // 三处各自绑自己的选中态（母单位 / 保留 / 移除）；慢动员的"锁定哪一枚"已改按侧+编制过滤（2.4）
-    expect(panel).toContain(':items="rebuildUnitItems(breakdownParentId)"')
     // 13.9 整编两处只列**当前堆叠**（右键带入作用域）；候选来自 workbench 投影，不在组件里筛
     expect(panel).toContain(':items="mergeKeepItems(keepId)"')
     expect(panel).toContain(':items="mergeRemoveItems(removeId)"')
-    expect(panel.match(/rebuildUnitItems\(/gu)?.length).toBe(1)
+    // G4：20.0a/20.0d 的拆分/吸收入口已收归右键单位面板（CounterOrderPanel），本窗不再摆第二套
+    expect(panel).not.toContain('rebuildUnitItems(')
+    expect(panel).not.toContain('createBreakdownNow')
+    expect(panel).not.toContain('absorbBreakdownNow')
+    const counterOrder = readFileSync('src/components/game/CounterOrderPanel.vue', 'utf8')
+    expect(counterOrder).toContain('workbench.createBreakdownNow(')
+    expect(counterOrder).toContain('workbench.absorbBreakdownNow(')
     expect(panel).toContain('workbench.consolidationKeepUnits')
     expect(panel).toContain('workbench.mergeRemoveUnits')
     expect(panel).toContain(':items="slowMobilizationUnitItems(breakdownParentId)"')

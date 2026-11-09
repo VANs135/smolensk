@@ -20,7 +20,7 @@ import { useContainersStore, useWorkbenchStore } from '@/stores'
  *   · **到达表执行**（13.6 / 13.6b / 1.6a）：按当日到达卡列出投放需求与落点，逐条投放/强制执行移除；
  *   · **可变增援**（13.6b 补给表与补员表 / 1.6c 特殊补员 / 3.3c 可变撤离 / 3.6 随机事件）；
  *   · **特殊补员**（1.6c）：免费重建内容由引擎给出；
- *   · **重建与拆分合并**（13.5 / 20.0 / 13.9）：补员账本、死亡堆重建、拆分单位池、合并；
+ *   · **重建与整编合并**（13.5 / 13.9）：补员账本、死亡堆重建、合并（拆分/吸收 20.0 走右键单位面板）；
  *   · **NKVD 强制担任行动值单位**（专规 2.3b）：战斗面板侧的裁定在本面板只做提示。
  *
  * 分层纪律（CODE_SPEC）：落点、费用、可用性、合法性全部来自 store 对引擎的调用；
@@ -215,41 +215,10 @@ const rebuildUnitId = computed<string>({
   },
 })
 
-/** 合并 / 拆分 / 锁定的表单输入 */
+/** 合并 / 锁定 / 补员的表单输入 */
 const keepId = ref('')
 const removeId = ref('')
 const breakdownParentId = ref('')
-/** 创建拆分单位（20.0a）用：单位库里的**记录 id**（引擎按它取算子数值） */
-const breakdownRecordId = ref('')
-/**
- * 吸收拆分单位（20.0d）用：图上那**枚拆分单位算子的实例 id**
- *
- * 两个口径不能共用：创建要的是**库里的哪一种算子**、
- * 吸收要的是**图上哪一枚算子**。原先两者绑同一个下拉 ⇒ 吸收永远查不到目标而静默失败。
- */
-const breakdownAbsorbId = ref('')
-
-/*
- * B34：四处"指认单位"的阵列（拆分母单位 / 慢动员锁定 / 合并保留 / 合并移除）
- *
- * 候选＝**图上本方单位**（`workbench.ownUnitsOnMap` 是数据投影）；
- * 传入选中的那枚即给它金框 —— 与其余面板的 `CounterPicker` 手感一致。
- * 合法条件不在本处判（20.0a 的时机、13.9 的两面一致…由引擎在提交时给规则号）。
- * 名字里带印值：13.9 要求"两面完全相同"，玩家得能一眼比对。
- */
-const rebuildUnitItems = computed(
-  () =>
-    (selectedId: string): readonly CounterPickerItem[] =>
-      workbench.ownUnitsOnMap.map((unit) => ({
-        id: unit.instanceId,
-        imageUrl: counterImageUrlOf(unit),
-        name:
-          `${unit.name} @ ${hexLabel(unit.hex)}（A ${unit.raw.attack}｜AR ${unit.raw.ar}` +
-          `｜MA ${unit.raw.ma}｜${unit.re}RE）`,
-        selected: selectedId === unit.instanceId,
-        hex: unit.hex,
-      })),
-)
 
 /**
  * 13.9 整编会话：**保留哪一枚**的候选
@@ -373,11 +342,6 @@ function arrivalImageUrl(index: number): string | null {
   if (first === undefined) return null
   return tokenImageUrl({ side: workbench.activeSide, face: 'combat', images: first.images ?? null })
 }
-
-/** 图上的拆分单位（20.0d 的吸收对象只能是**已在图上**的那些） */
-const breakdownUnitsOnMap = computed(() =>
-  workbench.units.filter((unit) => unit.specialized.includes('breakdown')),
-)
 
 /** 悬停某一枚待重建单位 ⇒ 同步地图高亮它所在的格（用户口径：悬停同步高亮地图格） */
 function onHoverRebuild(id: string | null): void {
@@ -1138,16 +1102,11 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
     >
       <!-- ── · 拆分与合并（20.0 / 13.9） ── -->
       <hr />
-      <RuleNote
-        title="拆分：只有「其他」类型多军力单位可创建/吸收，时机＝开始移动 / 战后推进 / 战后撤退"
-        rule="20.0"
-      >
+      <RuleNote title="合并（13.9）：只在增援阶段；拆分（20.0）走右键单位面板" rule="20.0">
         <p v-if="showsRebuild" class="muted">
-          拆分（20.0）：只有**「其他」类型**的多军力单位可创建/吸收；创建时机为**开始移动 / 战后推进
-          / 战后撤退**（20.0a）；**创建 AR ≤ 自己、吸收 AR ≥
-          自己**（20.0b，两个方向相反，勿写成同向）；
-          标记与模式须与拆分单位一致（20.0c）；装甲/机械化一律不可；最后一点军力不可创建。
           合并（13.9）：只在增援阶段；两面完全相同、非 DG、非部队储备低下。
+          拆分/吸收（20.0）只在**右键单位 →「工程 → 拆分」**面板里做（20.0a/20.0d），
+          本窗不再摆第二套。
         </p>
       </RuleNote>
       <div v-if="showsRebuild" class="row">
@@ -1166,52 +1125,6 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
             @update:model-value="workbench.setBreakdownPoolNow('ax', Number($event))"
           />
         </label>
-        <CounterPicker
-          title="母单位（图上本方单位，点一枚即选中）"
-          hint="20.0：只有「其他」类型的多军力单位可创建/吸收拆分单位；合法性由引擎在提交时判"
-          :items="rebuildUnitItems(breakdownParentId)"
-          :size="32"
-          @pick="breakdownParentId = $event"
-          @hover="hoverUnit"
-        />
-        <label class="field">
-          创建用：库中型号
-          <select v-model="breakdownRecordId" class="select">
-            <option :value="''">（选择型号）</option>
-            <option v-for="item in workbench.choices" :key="item.id" :value="item.id">
-              {{ item.nameZh ?? item.nameEn ?? item.id }}
-            </option>
-          </select>
-        </label>
-        <label class="field">
-          吸收用：图上算子
-          <select v-model="breakdownAbsorbId" class="select">
-            <option :value="''">
-              {{ breakdownUnitsOnMap.length === 0 ? '（图上暂无拆分单位）' : '（选择算子）' }}
-            </option>
-            <option
-              v-for="unit in breakdownUnitsOnMap"
-              :key="unit.instanceId"
-              :value="unit.instanceId"
-            >
-              {{ unit.name }} @ {{ hexLabel(unit.hex) }}
-            </option>
-          </select>
-        </label>
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          @click="workbench.createBreakdownNow(breakdownParentId, breakdownRecordId)"
-        >
-          创建拆分单位（20.0a）
-        </BaseButton>
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          @click="workbench.absorbBreakdownNow(breakdownParentId, breakdownAbsorbId)"
-        >
-          吸收拆分单位（20.0d）
-        </BaseButton>
       </div>
       <div v-if="showsRebuild" class="row">
         <CounterPicker
