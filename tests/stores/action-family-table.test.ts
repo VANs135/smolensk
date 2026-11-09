@@ -6,7 +6,7 @@ import {
   actionFamilyRowsAt,
   entryPointsOf,
 } from '@/stores'
-import { ACTION_GATES } from '@/stores/workbench-model'
+import { ACTION_GATES, allowedActionsOf } from '@/stores/workbench-model'
 
 /**
  * 「阶段 × 环节 × 动作族」权威表守卫（用户 2026-11-09 裁定）
@@ -88,6 +88,42 @@ describe('动作族权威表：覆盖与依据', () => {
       expect(item.rule.trim(), `${item.id} 缺条款号`).not.toBe('')
       expect(item.entry.length, `${item.id} 缺入口`).toBeGreaterThan(0)
       expect(item.families.length, `${item.id} 缺动作族`).toBeGreaterThan(0)
+    }
+  })
+
+  /*
+   * 菜单/面板已改成只查本表（`workbench.segmentActionKeys` / `actionAllowedNow`）。
+   * 这条用例把"表"与"闸门表"逐查询对齐：换投影不得改变任何一段的实际可点集合，
+   * 否则删入口时对"某阶段还剩什么能力"的判断就会跟着错。
+   */
+  it('表与 allowedActionsOf 逐查询等价（换投影不改行为）', () => {
+    const combos = new Map<
+      string,
+      {
+        phase: (typeof ACTION_GATES)[number]['where'][number]['phase']
+        segment: string
+        role: 'active' | 'nonActive'
+      }
+    >()
+    for (const gate of ACTION_GATES) {
+      for (const where of gate.where) {
+        const role = where.role ?? 'active'
+        combos.set(`${where.phase}|${where.segment}|${role}`, {
+          phase: where.phase,
+          segment: where.segment,
+          role,
+        })
+      }
+    }
+    for (const combo of combos.values()) {
+      for (const side of ['axis', 'soviet'] as const) {
+        for (const atSegmentEnd of [false, true]) {
+          const query = { ...combo, side, atSegmentEnd }
+          const fromTable = new Set(actionFamilyRowsAt(query).map((row) => row.key))
+          const fromGate = allowedActionsOf(query)
+          expect([...fromTable].sort(), JSON.stringify(query)).toEqual([...fromGate].sort())
+        }
+      }
     }
   })
 })

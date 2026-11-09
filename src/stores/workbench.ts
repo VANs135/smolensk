@@ -503,6 +503,7 @@ import {
   type ActionGateQuery,
   type ActionKey,
 } from './workbench-model'
+import { actionFamilyRowsAt } from './action-families'
 
 /**
  * 骨架操作台（U0）状态
@@ -18148,13 +18149,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * **本环节允许的动作族**（用户 2026-10-25：「每个阶段/环节只能出现该环节可用的 UI」）
    *
-   * 与 `actionAllowedNow` 同源（都是 `allowedActionsOf(segmentGateQuery)`），区别只是
-   * 这里是**整集合**：界面按"面板服务哪些动作族"与它求交，空集即本环节用不到该面板。
+   * 与 `actionAllowedNow` 同源（都是 `segmentActionKeys`，即「阶段 × 环节 × 动作族」权威表），
+   * 区别只是这里是**整集合**：界面按"面板服务哪些动作族"与它求交，空集即本环节用不到该面板。
    */
   const segmentActionKeys = computed<ReadonlySet<ActionKey>>(() => {
     const query = segmentGateQuery.value
     if (query.segment === '') return new Set<ActionKey>()
-    return allowedActionsOf(query)
+    // 唯一投影：从「阶段 × 环节 × 动作族」权威表取值（不再直接扫 ACTION_GATES）
+    return new Set(
+      actionFamilyRowsAt({
+        phase: query.phase,
+        segment: query.segment,
+        role: query.role,
+        side: query.side,
+        atSegmentEnd: query.atSegmentEnd,
+      }).map((row) => row.key),
+    )
   })
 
   /**
@@ -18190,9 +18200,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function actionAllowedNow(key: ActionKey): boolean {
     if (initialSetupInProgress.value || session.terminated || segmentLocked.value) return false
-    const query = segmentGateQuery.value
-    if (query.segment === '') return false
-    return allowedActionsOf(query).has(key)
+    if (segmentGateQuery.value.segment === '') return false
+    // 与 `segmentActionKeys` 同一条投影（权威表），不在组件或本函数里另拼判据
+    return segmentActionKeys.value.has(key)
   }
 
   function requireAction(key: ActionKey, action: string): boolean {
