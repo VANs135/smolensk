@@ -404,6 +404,8 @@ import {
   hasMarker,
   reserveHexesInUse,
   FIRST_TURN_HALF_MA_MULT,
+  // 14.7c：短距离轰炸的判定半径（基地分栏里的「≤10」只报原文事实）
+  SHORT_RANGE_BARRAGE_HEXES,
 } from '@/engine/rules'
 import { createId } from '@/shared'
 
@@ -14292,6 +14294,82 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
+   * 用户 2026-11-09 追加批：**空军任务窗口按基地分栏**（只在轰炸 / 低空扫射时展开）
+   *
+   * 目的：玩家要判断 14.7c 的短程修正（全体参战机都在起飞基地 10 格内）时，得先把
+   * 「哪架机在哪座基地、离任务格几格」摆在一屏。这里只做**分组与事实**，不判规则：
+   *   · 基地＝本方空军基地（`ownAirBases`，15.0/15.2 的等级与简易机场照旧）；
+   *   · 驻机＝该基地格上的本方飞机（`airUnitsAt`，只列停在这里的，不跨格凑数）；
+   *   · 可选性 / 不可选原因直接取 `airMissionJoinChoices`（14.1a/14.2a/14.2e/14.1），
+   *     本处不另写一份判据；
+   *   · 距离＝到当前任务格的格距（14.2d），任务格未定就留空，不拿默认格去猜；
+   *   · `withinShortRange` 只报「≤10 格」这一条**原文事实**（14.7c），且只在轰炸任务上
+   *     有意义（低空扫射没有这条修正）；加成结论仍由引擎在宣布任务时给。
+   */
+  interface AirMissionBaseRosterItem {
+    air: ConsoleAirUnit
+    selected: boolean
+    disabledReason: string | null
+    distanceToTarget: number | null
+    inRange: boolean | null
+    withinShortRange: boolean
+  }
+  interface AirMissionBaseRoster {
+    baseId: string
+    hex: HexRef
+    level: number
+    isAirstrip: boolean
+    aircraft: AirMissionBaseRosterItem[]
+  }
+
+  /** 最近一次点开的基地（面板上高亮这一栏；地图高亮走 `hoverHex`） */
+  const airMissionBaseFocus = ref<string | null>(null)
+
+  const airMissionBaseGroups = computed<AirMissionBaseRoster[]>(() => {
+    if (airMissionKind.value !== 'barrage' && airMissionKind.value !== 'hip_shoot') return []
+    const side = airActingSide.value
+    const target = airTargetHex.value
+    const choices = new Map(
+      airMissionJoinChoices.value.map((choice) => [choice.air.instanceId, choice] as const),
+    )
+    return ownAirBases.value
+      .map((base) => {
+        const aircraft = airUnitsAt(base.hex, side).map((air) => {
+          const choice = choices.get(air.instanceId)
+          const distance = target === null ? null : airDistanceFromRealBase(air, target)
+          return {
+            air,
+            selected: choice?.selected ?? false,
+            disabledReason: choice?.disabledReason ?? null,
+            distanceToTarget: distance,
+            inRange: distance === null ? null : distance <= air.rangeHexes,
+            withinShortRange:
+              airMissionKind.value === 'barrage' &&
+              distance !== null &&
+              distance <= SHORT_RANGE_BARRAGE_HEXES,
+          }
+        })
+        return {
+          baseId: base.id,
+          hex: base.hex,
+          level: base.level,
+          isAirstrip: base.isAirstrip === true,
+          aircraft,
+        }
+      })
+      .filter((group) => group.aircraft.length > 0)
+  })
+
+  /** 点某座基地 ⇒ 面板聚焦该栏 + 地图高亮该格（高亮通道就是已有的 `setHoverHex`） */
+  function focusAirMissionBase(baseId: string): boolean {
+    const base = ownAirBases.value.find((item) => item.id === baseId)
+    if (base === undefined) return false
+    airMissionBaseFocus.value = baseId
+    setHoverHex(base.hex)
+    return true
+  }
+
+  /**
    * 条 19（A1）：**按航程**判断——本方是否有**可出击**的飞机够得到目标格
    *
    * 用于「点地面格出空军对话框」的入口闸门（点一格才决定要不要开空军会话）。
@@ -22680,6 +22758,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     airJoinRemaining,
     // B14：参战机的算子图阵列（逐机可选性 + 原因）
     airMissionJoinChoices,
+    // 用户 2026-11-09：轰炸/低空扫射按基地分栏的驻机名册与距离（点基地高亮）
+    airMissionBaseGroups,
+    airMissionBaseFocus,
+    focusAirMissionBase,
     anyOwnAircraftReaches,
     hipShootEntryEligible,
     toggleAirReductionUnit,

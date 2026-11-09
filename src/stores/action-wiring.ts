@@ -231,6 +231,10 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     kind: 'draft',
     why: '只读投影：按同格预演列出"可移除伙伴"给整编会话选，`units.value` 仅用于取单位，不落盘',
   },
+  focusAirMissionBase: {
+    kind: 'pickMode',
+    why: '点基地分栏只改聚焦栏与地图高亮（复用 setHoverHex 的既有通道），不落盘',
+  },
 
   // 专规 2.4：原文只写"按此表动员"，**未给时机** ⇒ 不加环节闸（用户 2026-11-05 裁定"按回合能动"）
   slowMobilizationLockedOf: {

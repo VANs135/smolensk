@@ -543,8 +543,62 @@ const displayedBases = computed(() =>
               </BaseTag>
             </template>
           </p>
-          <!-- B14：参战机＝**算子图阵列**（原来是一排"名字 + ✓"的文字按钮） -->
+          <!--
+            用户 2026-11-09：轰炸 / 低空扫射时**按基地分栏**列驻机（原来是一张平铺阵列）。
+            只摆基地名册、算子、距离与按钮：点基地头 ⇒ 高亮该格；距离/航程给 14.7c 判读用。
+            其它任务类型仍用平铺阵列（空运/空投/扫荡不涉及 14.7c 的距离修正）。
+          -->
+          <div v-if="workbench.airMissionBaseGroups.length > 0" class="base-roster">
+            <div
+              v-for="group in workbench.airMissionBaseGroups"
+              :key="group.baseId"
+              class="base-roster__group"
+            >
+              <BaseButton
+                variant="ghost"
+                size="sm"
+                class="base-roster__head"
+                :class="{ 'base-roster__head--on': workbench.airMissionBaseFocus === group.baseId }"
+                :title="`点此在地图上高亮 ${hexLabel(group.hex)}`"
+                @click="workbench.focusAirMissionBase(group.baseId)"
+              >
+                <span class="num">{{ hexLabel(group.hex) }}</span>
+                <BaseTag :kind="group.isAirstrip ? 'warning' : 'info'">
+                  {{ group.isAirstrip ? '简易机场' : `${group.level} 级` }}
+                </BaseTag>
+              </BaseButton>
+              <div class="base-roster__planes">
+                <button
+                  v-for="item in group.aircraft"
+                  :key="item.air.instanceId"
+                  type="button"
+                  class="base-roster__plane"
+                  :class="{
+                    'base-roster__plane--on': item.selected,
+                    'base-roster__plane--off': item.disabledReason !== null && !item.selected,
+                  }"
+                  :title="`${item.air.name}｜到任务格 ${
+                    item.distanceToTarget === null ? '—' : item.distanceToTarget
+                  } 格 / 航程 ${item.air.rangeHexes}${
+                    item.disabledReason === null ? '' : `｜${item.disabledReason}`
+                  }`"
+                  @click="workbench.toggleAirMissionUnit(item.air.instanceId)"
+                >
+                  <img :src="counterImageUrlOf(item.air) ?? ''" class="base-roster__img" alt="" />
+                  <span class="num base-roster__distance">
+                    {{ item.distanceToTarget === null ? '—' : item.distanceToTarget }} /
+                    {{ item.air.rangeHexes }}
+                  </span>
+                  <BaseTag v-if="item.withinShortRange" kind="success" title="14.7c：≤10 格"
+                    >≤10</BaseTag
+                  >
+                </button>
+              </div>
+            </div>
+          </div>
+          <!-- B14：其它任务类型仍用平铺阵列 -->
           <CounterPicker
+            v-else
             title="参战机（点一枚加入 / 再点一枚退出）"
             :hint="`只有「激活」的飞机能执行任务（非激活需先在整备阶段整备）；还可加 ${workbench.airJoinRemaining} 架`"
             :items="missionJoinItems"
@@ -1255,6 +1309,68 @@ const displayedBases = computed(() =>
   align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-2);
+}
+
+.base-roster {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.base-roster__group {
+  border: 1px solid var(--color-rule);
+  border-radius: 6px;
+  padding: var(--space-1) var(--space-2);
+}
+
+.base-roster__head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.base-roster__head--on {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.base-roster__planes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.base-roster__plane {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.base-roster__plane--on {
+  border-color: var(--color-accent);
+}
+
+.base-roster__plane--off {
+  opacity: 0.4;
+}
+
+.base-roster__img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.base-roster__distance {
+  color: var(--color-muted);
 }
 
 .field {
