@@ -29,10 +29,38 @@
     按钮上的「（6.1）」「（15.1）」「（14.2f-A/B）」「（9.1）」移入 `title`。
 - `MapPopover.vue`：`rule` 标签改为 `?`，规则号只在悬停提示里出现。
 
-红测：`tests/stores/popup-stack-selection.test.ts`（3 例）——默认全选且不含非战斗；
-点枚取消/恢复；换格重置。先红（`toggleStackPick` 不存在、`stackPickIds` 为 undefined）
-后绿。
+红测：`tests/stores/popup-stack-selection.test.ts`——默认全选且不含非战斗；
+点枚取消/恢复；换格重置；第 4 例：13.5 补员算子不进战斗 chip / 不进默认选中集。先红后绿。
 
-## 3. 第 2 批：五项能力进右键（待做）
+## 3. 第 2 批：五项能力进右键
 
 逐项核对既有入口后再接，缺入口的先报告，不硬造。
+
+| 能力            | 入口（复用，不新写规则）                                                                                   | 右键里的表现                                                   |
+| --------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| 12.7 转换延补队 | 既有 `move.extenderConvert`（`facilityActionKeysNow` + `actionAllowedNow`）                                | 既有项，不搬动；红测钉它仍在                                   |
+| 20.0a 拆分单位  | 既有 `move.breakdown`（`breakdownTimingOf(id)` 决定出现）                                                  | 既有项，进 `containers` 面板                                   |
+| 13.9-1 合并单位 | 新增 store 谓词 `mergePartnerAt(keepId)`：同格**唯一**另一枚 + `planConsolidation` 预演 + 专规 3.3d 纯判据 | 「合并单位」**点即并**，不弹第二个选择                         |
+| 12.5 加油       | 新增 store 谓词 `needsFuelNow(id)`：`needsFuelOf` ∧ 未加注 ∧ 本方（与 `fuelTargets` 同源）                 | 「加油」把该枚选成燃料目标；付款方法与来源仍在既有补给会话里选 |
+| 13.5 补员       | 既有 `rebuildUnitNow`，但**行键**（费用）须玩家显式选定                                                    | **未进右键**（见 §4 缺口）                                     |
+
+- 去灰：`counterActionsAt` 收口 `return actions.filter((action) => action.disabledReason === null)`
+  —— 「先结束移动 / 限某环节」的项整条消失，不再摆灰按钮。20.0a 拆分在移动中仍合法（`add()` 原就豁免）。
+- 增援段放开右键：`canOpenCounterContext` 增加 `kind === 'reinforce'`。13.9-1 / 13.5 **只在增援段**
+  合法，原先那里右键被会话框挡住，等于这两项永远点不到。
+- 专规 3.3d：把「轴方多单位编队不得整编」拆出纯判据 `axisConsolidationBanned`（不写日志），
+  菜单预演与 `axisConsolidationRefused`（写日志）共用同一处规则。
+- 左键窗补丁：13.5 补员算子在数据层写 `isCombat: true`，`UnitToken` 增 `replKind` 后把它剔出战斗 chip
+  与默认选中集（`tests/stores/popup-stack-selection.test.ts` 第 4 例）。
+
+红测：`tests/stores/context-menu-unit-abilities.test.ts`（10 例）——合并出现/点即并、只有自己不出现、
+三枚堆叠不替玩家挑、非增援段不出现、3.3d 不出现、加油出现并落选中、已加注不出现、步行不出现、
+12.7 仍在、移动中只剩 20.0a。先红（暂撤实现时 3 例失败）后绿。
+
+## 4. 缺口（需拍板）
+
+**13.5 补员没有进右键。** `rebuildUnitNow` 的 `rebuildType` 是重建表**行键**（决定费用），
+本作工程库没有「算子 → 行」映射，行键由玩家（裁判）在增援面板里选；引擎里 `suggestRebuildRow`
+的既有注释明文裁定「不得在未选行时静默取建议行」（2026-10-24：宁可让按钮禁用，也不替裁判猜行）。
+因此「点单位即补员」要么替玩家猜行、要么只能开一个仍要选行的会话——两者都不满足本轮的
+「点即执行」，故留原入口（增援面板），待拍板后再定接线方式。

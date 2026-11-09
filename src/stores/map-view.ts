@@ -1608,6 +1608,38 @@ export const useMapViewStore = defineStore('mapView', () => {
         group: '编组',
       })
     }
+    /*
+     * 用户 2026-11-09：合并 / 加油进右键。
+     *   · 13.9-1 合并：只在**同格唯一**另一枚预演通过时出现（不替玩家挑并哪一枚）；
+     *   · 12.5 加油：出现即把这一枚选为燃料目标，方法与来源仍由既有补给会话选定。
+     */
+    if (unit !== undefined && !moving && workbench.mergePartnerAt(id) !== null) {
+      actions.push({
+        key: 'rein.consolidate',
+        label: '合并单位',
+        rule: '13.9',
+        panel: 'unit',
+        only: 'mergeUnit',
+        group: '编组',
+        disabledReason: null,
+      })
+    }
+    if (
+      unit !== undefined &&
+      !moving &&
+      workbench.actionAllowedNow('supply.fuel') &&
+      workbench.needsFuelNow(id)
+    ) {
+      actions.push({
+        key: 'supply.fuel',
+        label: '加油',
+        rule: '12.5',
+        panel: 'unit',
+        only: 'fuel',
+        group: '移动',
+        disabledReason: null,
+      })
+    }
     if (unit?.formation !== null && unit?.formation !== undefined && !moving) {
       actions.push({
         key: 'formation.box',
@@ -1628,7 +1660,11 @@ export const useMapViewStore = defineStore('mapView', () => {
         group: '补给',
       })
     }
-    return actions
+    /*
+     * 用户 2026-11-09：不满足就不出现、**不灰按钮** ⇒ 滤掉 `add()` 标了"先结束移动 / 限某环节"的项。
+     * 真正能否做仍由各入口（引擎 / store 谓词）再判一次，这里只管"菜单里不摆点不动的按钮"。
+     */
+    return actions.filter((action) => action.disabledReason === null)
   }
 
   const contextOptions = computed(() => {
@@ -1655,7 +1691,11 @@ export const useMapViewStore = defineStore('mapView', () => {
     )
       return false
     const kind = session.value?.kind
-    return kind === undefined || kind === 'move' || kind === 'unit'
+    /*
+     * 增援段（`reinforce`）也放开右键：13.9-1 合并 / 13.5 补员**只在增援段**合法，
+     * 若这里继续把右键挡住，这两项就永远点不到（会话框与右键菜单本可并存，`unit` 段已是先例）。
+     */
+    return kind === undefined || kind === 'move' || kind === 'unit' || kind === 'reinforce'
   }
 
   /** 拖放与右键共用候选。判定和落账仍由初设或容器命令处理。 */
@@ -1778,6 +1818,19 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     if (option.only === 'markerBridge' || option.only === 'markerAirStrip') {
       workbench.armConstructionMarkerNow(option.only === 'markerBridge' ? 'bridge' : 'airStrip')
+      closePopup()
+      return true
+    }
+    // 13.9-1：合并单位（目标已由入口判据限定为**同格唯一**另一枚）
+    if (option.only === 'mergeUnit') {
+      const partner = workbench.mergePartnerAt(instanceId)
+      if (partner !== null) workbench.consolidateUnitsNow(instanceId, partner)
+      closePopup()
+      return true
+    }
+    // 12.5：加油——只把这一枚选成燃料目标，方法与来源仍在既有补给会话里选（不替玩家定来源）
+    if (option.only === 'fuel') {
+      workbench.selectedId = instanceId
       closePopup()
       return true
     }

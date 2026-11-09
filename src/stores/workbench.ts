@@ -19151,14 +19151,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     formations: readonly (string | null | undefined)[],
     action: string,
   ): boolean {
-    if (!sides.includes('axis')) return false
-    if (formations.every((formation) => formation == null || formation === '')) return false
+    const banned = axisConsolidationBanned(sides, formations)
+    if (!banned) return false
     pushLog(
       'warning',
       `专规 3.3d：**轴心国多单位编队不得整编**（${action}只对无编队单位/苏方开放）—— 本动作被拒，未改动任何账本`,
       '专规 3.3d',
     )
     return true
+  }
+
+  /** 专规 3.3d 的纯判据（写日志的那版在 `axisConsolidationRefused`；菜单预演不能落日志） */
+  function axisConsolidationBanned(
+    sides: readonly Side[],
+    formations: readonly (string | null | undefined)[],
+  ): boolean {
+    if (!sides.includes('axis')) return false
+    return !formations.every((formation) => formation == null || formation === '')
   }
 
   /** B18：合并两个多军力单位（13.9-1） */
@@ -19211,6 +19220,45 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       },
     })
     return true
+  }
+
+  /**
+   * 13.9-1：同格**唯一**可合并的另一枚（右键「合并单位」的判据）
+   *
+   * 只做引擎预演（`planConsolidation`，与落账同一处判据），不落账；
+   * 候选多于一枚或预演不通过 ⇒ `null`（不替玩家挑并哪一枚，菜单也就不出现）。
+   */
+  function mergePartnerAt(keepId: string): string | null {
+    if (!actionAllowedNow('rein.rebuild')) return null
+    const keep = units.value.find((unit) => unit.instanceId === keepId)
+    if (keep === undefined || keep.side !== activeSide.value) return null
+    if ((keep.noncombatKind ?? null) !== null) return null
+    const candidates = units.value.filter(
+      (unit) =>
+        unit.instanceId !== keepId &&
+        unit.side === keep.side &&
+        sameHex(unit.hex, keep.hex) &&
+        (unit.noncombatKind ?? null) === null,
+    )
+    const eligible = candidates.filter(
+      (unit) =>
+        !axisConsolidationBanned([unit.side], [keep.formation, unit.formation]) &&
+        planConsolidation({
+          kind: 'multiStepUnits',
+          phaseIsReinforcement: phase.value === 'reinforcement',
+          keep: toConsolidationGroundView(keep),
+          remove: toConsolidationGroundView(unit),
+        }).ok === true,
+    )
+    return eligible.length === 1 ? (eligible[0]?.instanceId ?? null) : null
+  }
+
+  /** 12.5：这一枚此刻要不要加油（右键「加油」入口的判据，与 `fuelCandidates` 同源） */
+  function needsFuelNow(instanceId: string): boolean {
+    const unit = units.value.find((item) => item.instanceId === instanceId)
+    return (
+      unit !== undefined && unit.side === activeSide.value && needsFuelOf(unit) && !unit.fuelled
+    )
   }
 
   /** B18：合并两架同类减损飞机（13.9-4：可在任何阶段进行） */
@@ -22684,6 +22732,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     removeForeverNow,
     rebuildUnitNow,
     consolidateUnitsNow,
+    mergePartnerAt,
+    needsFuelNow,
     consolidateAircraftNow,
     setBreakdownPoolNow,
     createBreakdownNow,

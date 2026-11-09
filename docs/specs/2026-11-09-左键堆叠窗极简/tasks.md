@@ -10,7 +10,10 @@
 
 ## 第 2 批：五项能力进右键
 
-- [ ] T6 核对五项能力的既有入口与可用判据（转换延补队 / 拆分 / 合并 / 补员 / 加油）
-- [ ] T7 红测：可用才出现、不可用不出现（不灰按钮）
-- [ ] T8 接线（复用既有 store 入口；规则号只进 `title`）
-- [ ] T9 六门槛（第 2 批）、提交推送、并入 main
+- [x] T6 核对五项能力的既有入口与可用判据：12.7 `move.extenderConvert` / 20.0a `move.breakdown` 已在；
+      13.9-1 走 `planConsolidation` 预演、12.5 走 `needsFuelOf`；13.5 行键须玩家选 ⇒ 缺口（见 spec §4）
+- [x] T7 红测 `tests/stores/context-menu-unit-abilities.test.ts`（10 例）：可用才出现、不可用不出现；
+      先红（暂撤实现 3 例失败）后绿
+- [x] T8 接线：`mergePartnerAt` / `needsFuelNow`（store）+ 右键「合并单位 / 加油」+ 全局去灰 + 增援段放开右键 + 3.3d 纯判据；规则号只进 `?` 的 `title`
+- [x] T9 六门槛（第 2 批）、提交推送、并入 main
+- [ ] T10 待拍板：13.5 补员要不要进右键（行键费用不能静默猜）
