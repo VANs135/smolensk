@@ -139,13 +139,25 @@ const movePickIds = computed<string[]>(() => workbench.movePick?.ids ?? [])
 const movingUnits = computed(() => workbench.moveUnits)
 const activeMovingUnits = computed(() => workbench.activeMoveUnits)
 
-/** 6.1：小窗这一格是否正是待取子的堆叠格 ⇒ 在堆叠处给出勾选清单 */
+/** 6.1：小窗这一格是否正是待取子的堆叠格 ⇒ chip 直接驱动 `movePick` */
 const isMovePickHex = computed(() => {
   const hex = mapView.popup?.hex
   const pickHex = workbench.movePickHex
   if (hex === undefined || pickHex === null) return false
   return hex.col === pickHex.col && hex.row === pickHex.row
 })
+
+/** chip 选中态：待取子格上读 `movePick.ids`；其它小窗里 chips 只作展示（视为全选） */
+function chipSelected(id: string): boolean {
+  return !isMovePickHex.value || movePickIds.value.includes(id)
+}
+
+/** 点 chip＝取消/恢复该枚开拔（仅待取子格上、且是该格可开拔的本方算子才可点） */
+function toggleChip(id: string): void {
+  if (!isMovePickHex.value) return
+  if (!workbench.movePickChoices.some((unit) => unit.instanceId === id)) return
+  workbench.toggleMovePick(id)
+}
 
 /** 14.2e：可在「任务分配」里宣布的任务类型（拦截与基地转移不在其中，与 AirPanel 同口径） */
 const MISSION_KINDS = computed(() => workbench.airMissionKindChoices)
@@ -574,52 +586,11 @@ function pickDump(): void {
         </p>
       </section>
 
-      <!-- 6.1：堆叠取子（点堆叠格后先选哪几枚开拔；8.1h 允许其余单位留驻） -->
-      <section v-if="isMovePickHex" class="block block--pick">
-        <h4 class="block__title">选择要一起开拔的单位</h4>
-        <ul class="list">
-          <li
-            v-for="unit in workbench.movePickChoices"
-            :key="unit.instanceId"
-            class="num"
-            :class="{ 'list__row--active': movePickIds.includes(unit.instanceId) }"
-          >
-            <label class="check">
-              <input
-                type="checkbox"
-                :checked="movePickIds.includes(unit.instanceId)"
-                @change="workbench.toggleMovePick(unit.instanceId)"
-              />
-              {{ unit.name }}（A{{ unit.raw.attack }} AR{{ unit.raw.ar }} MA{{ unit.raw.ma }}，{{
-                unit.re
-              }}RE）
-            </label>
-            <BaseButton
-              variant="ghost"
-              size="sm"
-              @click="workbench.setMovePickOnly(unit.instanceId)"
-            >
-              只动这一枚
-            </BaseButton>
-          </li>
-        </ul>
-        <div class="row">
-          <BaseButton variant="secondary" size="sm" @click="workbench.setMovePickAll()">
-            整堆叠（全选）
-          </BaseButton>
-          <BaseButton variant="primary" size="sm" title="6.1" @click="workbench.confirmMovePick()">
-            开始移动
-          </BaseButton>
-          <BaseButton variant="ghost" size="sm" @click="workbench.cancelMovePick()">
-            取消
-          </BaseButton>
-        </div>
-      </section>
-
       <!--
         左键堆叠窗（用户 2026-11-09）：只摆**战斗单位**，默认全选；
         点某枚即取消该单位选中、再点恢复。窗内不写说明文字，只留算子与操作按钮。
-        非战斗单位（SP / 运输点 / 基地…）的操作走右键菜单。
+        选中集只有一份＝`workbench.movePick`（chip 直接驱动；旧的"选择要一起开拔的
+        单位"清单已删，不再另存 UI 选中集）。非战斗单位的操作走右键菜单。
       -->
       <section v-if="combatUnits.length > 0" class="block">
         <div class="chips">
@@ -627,13 +598,13 @@ function pickDump(): void {
             v-for="unit in combatUnits"
             :key="unit.id"
             class="chip chip--pickable"
-            :class="{ 'chip--off': !mapView.stackPickIds.includes(unit.id) }"
+            :class="{ 'chip--off': !chipSelected(unit.id) }"
             role="button"
             tabindex="0"
-            :aria-pressed="mapView.stackPickIds.includes(unit.id)"
-            @click="mapView.toggleStackPick(unit.id)"
-            @keydown.enter.prevent="mapView.toggleStackPick(unit.id)"
-            @keydown.space.prevent="mapView.toggleStackPick(unit.id)"
+            :aria-pressed="chipSelected(unit.id)"
+            @click="toggleChip(unit.id)"
+            @keydown.enter.prevent="toggleChip(unit.id)"
+            @keydown.space.prevent="toggleChip(unit.id)"
           >
             <img
               v-if="counterImageOf(unit.id) !== null"
@@ -654,6 +625,18 @@ function pickDump(): void {
               {{ workbench.barrageUnitIds.includes(unit.id) ? '移出炮击' : '炮击' }}
             </BaseButton>
           </div>
+        </div>
+        <!-- 6.1：待取子格上的确认入口（8.1h 允许其余单位留驻） -->
+        <div v-if="isMovePickHex" class="row">
+          <BaseButton variant="secondary" size="sm" @click="workbench.setMovePickAll()">
+            整堆叠（全选）
+          </BaseButton>
+          <BaseButton variant="primary" size="sm" title="6.1" @click="workbench.confirmMovePick()">
+            开始移动
+          </BaseButton>
+          <BaseButton variant="ghost" size="sm" @click="workbench.cancelMovePick()">
+            取消
+          </BaseButton>
         </div>
       </section>
 

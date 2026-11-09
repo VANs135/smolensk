@@ -2519,34 +2519,6 @@ export const useMapViewStore = defineStore('mapView', () => {
 
   const popup = ref<MapPopupState | null>(null)
 
-  /**
-   * 左键堆叠窗的**选中集**（用户 2026-11-09）
-   *
-   * 口径：窗内只摆**战斗单位**，开窗默认全部选中；点某枚即取消、再点恢复。
-   * 纯界面状态（不落引擎），供会话窗画选中态；引擎侧的取子仍走 `workbench.movePick`。
-   */
-  const stackPickIds = ref<readonly string[]>([])
-
-  /** 开窗/换格时重置为该格全部可见**战斗**单位（非战斗与飞机不进这个窗） */
-  function resetStackPicks(hex: HexRef): void {
-    stackPickIds.value = stackTokensAt(hex)
-      .filter(
-        (token) =>
-          token.air !== true &&
-          (token.noncombatKind ?? null) === null &&
-          // 13.5：补员算子不属战斗单位（数据层 `isCombat: true`，靠 `replKind` 分）
-          (token.replKind ?? null) === null,
-      )
-      .map((token) => token.id)
-  }
-
-  /** 点窗内算子＝取消/恢复该枚的选中 */
-  function toggleStackPick(id: string): void {
-    stackPickIds.value = stackPickIds.value.includes(id)
-      ? stackPickIds.value.filter((item) => item !== id)
-      : [...stackPickIds.value, id]
-  }
-
   /** 打开小窗（锚点由视图用 `MapCanvas.hexToLocal` 换算后传入） */
   function openPopup(
     hex: HexRef,
@@ -2555,7 +2527,6 @@ export const useMapViewStore = defineStore('mapView', () => {
     variant: MapPopupVariant = 'content',
   ): void {
     popup.value = { hex: { col: hex.col, row: hex.row }, x, y, variant }
-    if (variant === 'content') resetStackPicks(hex)
   }
 
   /**
@@ -3031,9 +3002,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     popupContent,
     openPopup,
     closePopup,
-    // 左键堆叠窗的选中集（默认全选战斗单位；点击切换）
-    stackPickIds,
-    toggleStackPick,
+    // 左键堆叠窗的选中集只有一份：`workbench.movePick`（chip 直接驱动它）
     onHexClick,
   }
 })

@@ -6413,11 +6413,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 当前取子清单所在格（用于界面判断是否显示该块） */
   const movePickHex = computed<HexRef | null>(() => movePick.value?.hex ?? null)
-  /** 取子清单的候选单位（该格当前方全部算子，按摆放顺序） */
+
+  /**
+   * 6.1 取子的**可开拔集**：同格本方单位，剔掉 13.5 的补员算子
+   *
+   * 补员算子只为「消耗补员重建」存在（数据层也是 `isCombat: true`），不参加移动；
+   * 左键窗的 chip 与取子清单共用这一份，避免 chip 看不见它、`movePick` 里却留着它。
+   */
+  function movePickPoolAt(hex: HexRef): ConsoleUnit[] {
+    return friendlyUnitsAt(hex).filter((unit) => !isReplUnit(unit))
+  }
+
+  /** 取子清单的候选单位（该格当前方可开拔的算子，按摆放顺序） */
   const movePickChoices = computed<ConsoleUnit[]>(() => {
     const pick = movePick.value
     if (pick === null) return []
-    return friendlyUnitsAt(pick.hex)
+    return movePickPoolAt(pick.hex)
   })
   /** 勾选/取消一枚（至少保留一枚，避免空选择） */
   function toggleMovePick(unitId: string): void {
@@ -6440,7 +6451,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function setMovePickAll(onlyIds?: readonly string[]): void {
     const pick = movePick.value
     if (pick === null) return
-    const here = friendlyUnitsAt(pick.hex).map((unit) => unit.instanceId)
+    const here = movePickPoolAt(pick.hex).map((unit) => unit.instanceId)
     pick.ids = onlyIds === undefined ? here : here.filter((id) => onlyIds.includes(id))
   }
 
@@ -6455,7 +6466,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   · 该格没有己方算子 ⇒ 清掉清单。
    */
   function beginMovePick(hex: HexRef, ids: readonly string[]): void {
-    const here = friendlyUnitsAt(hex).map((unit) => unit.instanceId)
+    const here = movePickPoolAt(hex).map((unit) => unit.instanceId)
     if (here.length === 0) {
       movePick.value = null
       return
