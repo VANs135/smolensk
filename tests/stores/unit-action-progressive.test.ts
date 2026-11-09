@@ -1,4 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
+import { readFileSync } from 'node:fs'
+
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
@@ -120,5 +122,35 @@ describe('渐进交互：点格摊堆叠 ⇒ 点具体那一枚才进操作', ()
     expect(mapView.unitActionUnitId).toBeNull()
     expect(mapView.unitActionHex).toBeNull()
     expect(mapView.unitActionFamily).toBeNull()
+  })
+
+  it('★ 堆叠窗点选只切换选中：会话保持在整堆这一档，不换成单枚动作', () => {
+    const { workbench, mapView } = stores
+    place(workbench, 'air_base', 'base-1')
+    place(workbench, 'sp', 'sp-1')
+    mapView.onHexClick(HEX)
+    expect(mapView.expandedStack?.hex).toEqual(HEX)
+    // 修前：点非战斗令牌 ⇒ selectCounterAt ⇒ 直接跳加油等单枚动作会话
+    expect(mapView.session?.kind).not.toBe('unit')
+    expect(mapView.unitActionUnitId).toBeNull()
+    const logLen = workbench.log.length
+    // 点内层窗的 chip 只切选中（与 chips 同源：movePick.ids，默认全选 ⇒ 点一枚取消、再点恢复）
+    const before = [...(workbench.movePick?.ids ?? [])]
+    expect(before.length).toBeGreaterThan(0)
+    const first = before[0]!
+    workbench.toggleMovePick(first)
+    expect(workbench.movePick?.ids).not.toContain(first)
+    workbench.toggleMovePick(first)
+    expect(workbench.movePick?.ids).toContain(first)
+    expect(mapView.session?.kind).not.toBe('unit')
+    expect(workbench.log.length).toBe(logLen)
+  })
+
+  it('★ 源码守卫：窗内点本单位不再走 selectCounterAt（只有无算子记录的 SP 令牌保留）', () => {
+    const source = readFileSync('src/stores/map-view.ts', 'utf8')
+    expect(source).toContain('ownCounterAt(hex, token.id) === undefined')
+    expect(source).not.toContain(
+      'if (isIdleForStack() && isNoncombatTokenLike(token) && selectCounterAt(hex, token.id, anchor))',
+    )
   })
 })

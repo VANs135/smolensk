@@ -1087,7 +1087,18 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     const token = tokens[hit.index]
     if (token === undefined) return true
-    if (isIdleForStack() && isNoncombatTokenLike(token) && selectCounterAt(hex, token.id, anchor))
+    /*
+     * ★ 用户 2026-11-09：**堆叠窗内左键只切换选中**，不触发任何动作、不跳任何会话。
+     * 修前：非战斗令牌（编内卡车/补给队…）命中即 `selectCounterAt` ⇒ 直接跳到加油等动作会话，
+     * 玩家没法先点掉它再重新组成一组。这里只留「没有算子记录」的令牌（SP 点数等）
+     * 走原有单枚入口；有算子记录的一律落到下面的选中切换。
+     */
+    if (
+      isIdleForStack() &&
+      isNoncombatTokenLike(token) &&
+      ownCounterAt(hex, token.id) === undefined &&
+      selectCounterAt(hex, token.id, anchor)
+    )
       return true
     /*
      * B9：**不参与本环节的算子点不动**（用户口径「不参与环节的算子无法点击」）。
@@ -1108,8 +1119,12 @@ export const useMapViewStore = defineStore('mapView', () => {
       )
       return true
     }
+    /*
+     * ★ 用户 2026-11-09：堆叠窗内左键**只切换选中**，不触发动作、不跳会话。
+     * 选中态仍是 `stackSelection`（条 8 裁定①：展开不预选）；有取子清单时同步回引擎，
+     * 这样"取消勾选的那一枚"是真的不会被带走（6.1f）。
+     */
     stackSelection.value = toggleSelection(stackSelection.value, token.id)
-    // 有取子清单时**同步回引擎**：这样"取消勾选的那一枚"是真的不会被带走（6.1f）
     if (movePickHere(hex)) workbench.setMovePickIds(stackSelection.value)
     // B15b（§4.2「选择集就是后续动作的参与集合」）：战斗的参战集同样跟着这一圈金色边框走
     //（9.1 选攻方 / 9.5b 减员两个阶段；合法性仍由 store 的那两个动作各自把关）
