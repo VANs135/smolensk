@@ -69,6 +69,16 @@ function groupLabel(group: 'guderian' | 'hoth'): string {
   return group === 'guderian' ? 'Guderian 2nd Panzer Group' : 'Hoth 3rd Panzer Group'
 }
 
+/** 3.4a：义务名单里的单位名（找不到就退回 instanceId，不静默改名） */
+function obligationUnitName(unitId: string): string {
+  return workbench.units.find((unit) => unit.instanceId === unitId)?.name ?? unitId
+}
+
+/** 3.4a：该单位是否已带 DG（按钮文案与禁用态用；状态取自算子本身） */
+function obligationUnitDg(unitId: string): boolean {
+  return workbench.units.find((unit) => unit.instanceId === unitId)?.mode.dg === true
+}
+
 /** 3.3b：标记该移除的**理由**（与引擎 `removalReasonOf` 的两个取值一一对应） */
 function removalReasonLabel(reason: 'securityNeedsMet' | 'citySovietControlled' | null): string {
   if (reason === 'securityNeedsMet') return '治安需求已满足'
@@ -224,7 +234,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
       >
         <p class="muted">
           装甲集群（3.4）：**至 19 August 止**、**只约束多单位编队**（步兵师与独立单位不受限）。
-          Guderian 编队须在分界线**上方**、Hoth 须在上或**下方**；与另一集群**同堆叠或相邻**，
+          Guderian 编队须在分界线**上或南**、Hoth 须在**上或北**；与另一集群**同堆叠或相邻**，
           或处于**错误一侧且在 Orsha 以东**（19.xx 以西不受约束）⇒ 相位末对该编队**一个单位投**
           DG**（3.4a）。Supply Table 到货在**均分**给两集群后**奇数点归 Guderian**（3.4b）。
           **编队归属不用玩家设置**：已按素材库的编队目录（3rd Panzer Group → Hoth，其余 → Guderian）
@@ -284,6 +294,20 @@ const pins = computed(() => workbench.exclusiveSectionPins)
       <p v-for="(item, index) in workbench.panzerGroupObligations" :key="index" class="warn">
         <BaseTag kind="danger">{{ item.rule }}</BaseTag>
         {{ groupLabel(item.group) }}：{{ item.detail }}
+        <!-- 3.4a：义务落盘 —— 编队内任选一个单位投 DG（仅在动作可写时出现） -->
+        <span v-if="actsPanzer" class="row">
+          <BaseButton
+            v-for="unitId in item.unitIds"
+            :key="unitId"
+            variant="secondary"
+            size="sm"
+            :disabled="obligationUnitDg(unitId)"
+            @click="workbench.applyPanzerGroupDgNow(unitId)"
+          >
+            {{ obligationUnitName(unitId)
+            }}{{ obligationUnitDg(unitId) ? '（已 DG）' : ' 投 DG（3.4a）' }}
+          </BaseButton>
+        </span>
       </p>
       <p v-if="workbench.panzerGroupObligations.length === 0" class="muted">
         当前没有分界线义务（未声明归属 / 非多单位编队 / 已过 19 August / 无越线或同堆叠相邻）。

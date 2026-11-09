@@ -271,6 +271,10 @@ function onFreeRailEdgeChange(text: string): void {
 function onSupplyTrainChange(text: string): void {
   workbench.pickSupplyTrainHex(parseHexText(text))
 }
+/** 3.4b：到货 SP 的逐格归属（空值 ⇒ 未选） */
+function onArrivalSpGroupChange(text: string, value: string): void {
+  workbench.setArrivalSpGroup(text, value === 'guderian' || value === 'hoth' ? value : null)
+}
 
 /**
  * 到达卡条目 → **单位库里的哪一枚算子**（B21：投放这一步自带选型）
@@ -851,6 +855,38 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         <BaseTag kind="info">{{ workbench.freeRailPlan.rule }}</BaseTag>
         {{ workbench.freeRailPlan.detail }}
       </p>
+      <div
+        v-if="
+          showsActions &&
+          workbench.panzerGroupRulesOn &&
+          workbench.activeSide === 'axis' &&
+          workbench.arrivalSpGroupTargets.length > 0
+        "
+        class="row"
+      >
+        <span class="muted num">3.4b 德军 SP 归属（未选不落账）</span>
+        <label
+          v-for="target in workbench.arrivalSpGroupTargets"
+          :key="target.hexText"
+          class="field"
+        >
+          {{ target.hexText }} {{ target.sp }} SP
+          <span v-if="target.fixed" class="muted">
+            跟随既有：{{ target.group === 'guderian' ? 'Guderian' : 'Hoth' }}
+          </span>
+          <select
+            v-else
+            :value="target.group ?? ''"
+            @change="
+              onArrivalSpGroupChange(target.hexText, ($event.target as HTMLSelectElement).value)
+            "
+          >
+            <option value="">（未选）</option>
+            <option value="guderian">Guderian</option>
+            <option value="hoth">Hoth</option>
+          </select>
+        </label>
+      </div>
       <p v-if="workbench.freeRailError !== null" class="warn">
         落点被拒：{{ workbench.freeRailError.reason }}（{{ workbench.freeRailError.rule }}）
       </p>

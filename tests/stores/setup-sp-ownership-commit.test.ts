@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
-import { PANZER_GROUP_OPTION_ITEM } from '@/engine/rules'
+import { boundarySideOf, PANZER_GROUP_OPTION_ITEM } from '@/engine/rules'
 import { createMemoryStorage } from '@/shared'
 import { useSetupStore, useWorkbenchStore, useGameSessionStore } from '@/stores'
 import { confirmSetupForStart } from '../flows/setup-harness'
@@ -28,10 +28,14 @@ describe('Setup Note F/3.4b：初设SP归属实际提交', () => {
       rng = { ...board.rng }
     expect(setup.stepDone.spOwnership).toBe(false)
     expect(setup.requiredSetupIssues.some((issue) => issue.id === 'spOwnership')).toBe(true)
+    expect(setup.spAssignments).toEqual({})
+    expect(setup.confirmSpOwnership()).toBe(false)
+    expect(setup.lastAction?.detail ?? '').toContain('spOwnershipMissing:')
     expect(setup.startGameNow()).toBe(false)
     expect(game.session).toBeNull()
     expect(JSON.stringify(board.units)).toBe(before)
     expect(board.rng).toEqual(rng)
+    for (const dump of setup.spDumpsOf('axis')) setup.setSpAssignment(dump.id, 'hoth')
     expect(setup.confirmSpOwnership()).toBe(true)
     expect(setup.startGameNow()).toBe(true)
   })
@@ -80,8 +84,25 @@ describe('Setup Note F/3.4b：初设SP归属实际提交', () => {
     expect(game.loadNow()).toBe(true)
     expect(board.spDumpPanzerGroups).toEqual(groups)
   })
+  it('初设归属只认玩家选择，分界线不自动改写', () => {
+    const { setup, board } = boot()
+    confirmSetupForStart(setup)
+    const boundary = board.panzerGroupBoundaryWithPath
+    expect(boundary).not.toBeNull()
+    const dumps = setup.spDumpsOf('axis')
+    const dump =
+      boundary === null
+        ? dumps[0]!
+        : (dumps.find((item) => boundarySideOf(item.hex, boundary) === 'north') ?? dumps[0]!)
+    const side = boundary === null ? 'south' : boundarySideOf(dump.hex, boundary)
+    const chosen = side === 'north' ? 'guderian' : 'hoth'
+    setup.setSpAssignment(dump.id, chosen)
+    expect(setup.confirmSpOwnership()).toBe(true)
+    expect(board.panzerGroupOfDump(dump.id)).toBe(chosen)
+  })
   it('非法苏方归属使整笔拒绝，不先提交合法的轴方修改', () => {
     const { setup, board } = boot()
+    for (const dump of setup.spDumpsOf('axis')) setup.setSpAssignment(dump.id, 'hoth')
     expect(setup.confirmSpOwnership()).toBe(true)
     const before = { ...board.spDumpPanzerGroups }
     for (const dump of setup.spDumpsOf('axis')) setup.setSpAssignment(dump.id, 'hoth')
@@ -92,6 +113,7 @@ describe('Setup Note F/3.4b：初设SP归属实际提交', () => {
   })
   it('清盘换剧本同时清除旧补给站归属及待归属记录', () => {
     const { setup, board } = boot()
+    for (const dump of setup.spDumpsOf('axis')) setup.setSpAssignment(dump.id, 'hoth')
     expect(setup.confirmSpOwnership()).toBe(true)
     expect(Object.keys(board.spDumpPanzerGroups).length).toBeGreaterThan(0)
     expect(setup.selectScenario('7')).toBe(true)

@@ -6069,6 +6069,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     freeRailPicked.value = []
     supplyArrivalSp.value = 0
     supplyTrainHex.value = null
+    clearArrivalSpGroups()
     // ⑬ 接线：回合变了，5.0b 的时点（19 Aug 起）与 5.0a 的末回合判定都随之变，重推结论
     pushVictoryToSessionNow()
     pushLog('info', `回合 ${clamped}（${date.value}）`)
@@ -11391,6 +11392,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     t: number
     /** 日志里说明来源（如「14.9f 空运卸载」）；缺省按手工新增 */
     source?: string
+    /** 3.4b：到货/初设时由玩家选定的装甲集群；带上即立刻归属，不再进待办 */
+    panzerGroup?: PanzerGroup
   }): string | null {
     const sp = Math.max(0, Math.trunc(input.sp))
     const t = Math.max(0, Math.trunc(input.t))
@@ -11422,21 +11425,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       /*
        * 3.4b：并进去之后，这笔新到的轴方 SP 归属**跟随该站已有的归属**——
        * 已声明过的站不再进待办（那是一次显式裁定，不该因为多加了几点就作废）；
-       * 未声明的站照旧登记待办，交玩家一键归属。
+       * 未声明的站：若本次带了玩家选择，立即补写归属；否则照旧登记待办。
        */
-      if (
-        panzerGroupRulesOn.value &&
-        input.side === 'axis' &&
-        panzerGroupOfDump(existing.id) === null
-      ) {
-        pendingSpGroupAssignment.value = [
-          ...new Set([...pendingSpGroupAssignment.value, existing.id]),
-        ]
-        pushLog(
-          'warning',
-          `新到的轴方 SP（${hexLabel(existing.hex)}）尚未归属装甲集群（3.4b）⇒ 请在专规面板声明`,
-          '3.4b',
-        )
+      const existingGroup = panzerGroupOfDump(existing.id)
+      if (panzerGroupRulesOn.value && input.side === 'axis' && existingGroup === null) {
+        if (input.panzerGroup !== undefined) {
+          setDumpPanzerGroupNow(existing.id, input.panzerGroup)
+        } else {
+          pendingSpGroupAssignment.value = [
+            ...new Set([...pendingSpGroupAssignment.value, existing.id]),
+          ]
+          pushLog(
+            'warning',
+            `新到的轴方 SP（${hexLabel(existing.hex)}）尚未归属装甲集群（3.4b）⇒ 请在专规面板声明`,
+            '3.4b',
+          )
+        }
       }
       return existing.id
     }
@@ -11444,18 +11448,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     spDumps.value = [...spDumps.value, { id, hex: input.hex, side: input.side, sp, t }]
     /*
      * 3.4b：在局中新落的**轴方** SP 属「新到的轴方 SP」⇒ 必须立即归属某一装甲集群。
-     * 这里只**登记待办**并提示（不阻断落盘：补给站本身合法，受限的是它去付什么账），
-     * 玩家在专规面板一键归属后即从待办里消失。
+     * 到货路径在落账前已要求玩家选归属并把 `panzerGroup` 传进来；手工/其它来源可
+     * 不带 `panzerGroup`，此时仍按既有做法登记待办（不阻断落盘）。
      */
     // B50：3.4b 未启用（共识未采纳）时**不登记待办** —— 约束与界面都不该出现
     if (panzerGroupRulesOn.value && input.side === 'axis') {
-      pendingSpGroupAssignment.value = [...new Set([...pendingSpGroupAssignment.value, id])]
-      pushLog(
-        'warning',
-        `新到的轴方 SP：${hexLabel(input.hex)} 尚未归属装甲集群（3.4b）⇒ 请在本面板为它声明归属；` +
-          `未归属前它不能支付多单位编队的燃油/战斗/轰炸成本`,
-        '3.4b',
-      )
+      if (input.panzerGroup !== undefined) {
+        // 玩家已在落账前选定归属 ⇒ 立即写入，不进待办（3.4b「新到 SP 必须立即归属」）
+        setDumpPanzerGroupNow(id, input.panzerGroup)
+      } else {
+        pendingSpGroupAssignment.value = [...new Set([...pendingSpGroupAssignment.value, id])]
+        pushLog(
+          'warning',
+          `新到的轴方 SP：${hexLabel(input.hex)} 尚未归属装甲集群（3.4b）⇒ 请在本面板为它声明归属；` +
+            `未归属前它不能支付多单位编队的燃油/战斗/轰炸成本`,
+          '3.4b',
+        )
+      }
     }
     pushLog(
       'info',
@@ -16774,6 +16783,69 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 3.4b：到货 SP 的逐格归属选择（**环节内瞬态，不写入存档**）
+   *
+   * 键为 `hexLabel(hex)`；落账成功、换回合、清空勾选时一并清掉。
+   */
+  const arrivalSpGroups = ref<Record<string, PanzerGroup>>({})
+
+  interface ArrivalSpGroupTarget {
+    hex: HexRef
+    hexText: string
+    sp: number
+    /** 既有补给站已声明的归属优先；没有则取玩家的本次选择 */
+    group: PanzerGroup | null
+    /** true ⇒ 该格已有归属，本次跟随既有，界面不给改 */
+    fixed: boolean
+  }
+
+  /** 3.4b：到货计划按格去重后的归属目标（供面板逐格选择） */
+  const arrivalSpGroupTargets = computed<ArrivalSpGroupTarget[]>(() => {
+    const plan = freeRailPlan.value
+    if (plan === null) return []
+    const byHex = new Map<string, ArrivalSpGroupTarget>()
+    for (const item of plan.placements) {
+      const text = hexLabel(item.hex)
+      const target = byHex.get(text)
+      if (target === undefined) {
+        byHex.set(text, {
+          hex: { ...item.hex },
+          hexText: text,
+          sp: item.sp,
+          group: null,
+          fixed: false,
+        })
+      } else {
+        target.sp += item.sp
+      }
+    }
+    return [...byHex.values()].map((target) => {
+      const dump = spDumps.value.find(
+        (item) => item.side === activeSide.value && sameHex(item.hex, target.hex),
+      )
+      const existingGroup = dump === undefined ? null : panzerGroupOfDump(dump.id)
+      return {
+        ...target,
+        group: existingGroup ?? arrivalSpGroups.value[target.hexText] ?? null,
+        fixed: existingGroup !== null,
+      }
+    })
+  })
+
+  /** 3.4b：为到货的某一落点选归属（null ⇒ 清除选择） */
+  function setArrivalSpGroup(hexText: string, group: PanzerGroup | null): void {
+    const next = { ...arrivalSpGroups.value }
+    if (group === null) delete next[hexText]
+    else next[hexText] = group
+    arrivalSpGroups.value = next
+  }
+
+  /** 3.4b：清空到货归属选择（换回合 / 落账成功 / 清空落点时调用） */
+  function clearArrivalSpGroups(): void {
+    arrivalSpGroups.value = {}
+  }
+
+  /**
    * 专规 2.1 / 3.1 + 3.6：把当日到货 SP **落账**（12.1b 的账本条目）
    *
    * 落盘形态与手工新增、空运卸载完全同一处（`addSpAtHex`），只是多说明来源；
@@ -16814,13 +16886,33 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         : reason === 'supplyTrain'
           ? '3.6 补给列车'
           : '图边补给源格'
-    for (const entry of byHex.values()) {
+    /*
+     * 3.4b：德军到货 SP「未选归属不得落账」。
+     * 以 `arrivalSpGroupTargets` 的有效归属为准（既有补给站已声明的优先）。
+     */
+    const groupByText = new Map(
+      arrivalSpGroupTargets.value.map((target) => [target.hexText, target.group] as const),
+    )
+    if (panzerGroupRulesOn.value && activeSide.value === 'axis') {
+      for (const text of byHex.keys()) {
+        if ((groupByText.get(text) ?? null) === null) {
+          pushLog(
+            'warning',
+            `德军 SP 到货（${text}）未选择归属（Guderian / Hoth），3.4b 要求先归属再落账`,
+            '3.4b',
+          )
+          return false
+        }
+      }
+    }
+    for (const [text, entry] of byHex) {
       addSpAtHex({
         hex: entry.hex,
         side: activeSide.value,
         sp: entry.sp,
         t: 0,
         source: `到货 SP 落位：${[...new Set(entry.reasons)].map(labelOfReason).join(' + ')}`,
+        panzerGroup: groupByText.get(text) ?? undefined,
       })
     }
     lastFreeRailPlan.value = plan
@@ -16846,6 +16938,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     freeRailPicked.value = []
     supplyTrainHex.value = null
     supplyArrivalSp.value = 0
+    clearArrivalSpGroups()
     return true
   }
 
@@ -19914,6 +20007,50 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return `${detail}`
   }
 
+  /**
+   * 3.4a：把分界线义务落到盘面 —— 给义务编队内的单位投 **DG**
+   *
+   * 原文 3.4a：「…place a DG on **one unit** of the multi-unit formation」——义务本身由
+   * `dividingLineObligations`（`panzerGroupObligations`）给出；本函数只做**落盘**：
+   * 校验该单位确实在义务名单里，投 DG 走既有的 `applyDgToUnit`（5.10 的唯一落盘点），
+   * 记 3.4a 日志与结算事实。**不清空义务清单**（"该编队是否已结算"由界面与段末判，
+   * §5 的触发窗口尚未裁定，本入口不扩大相位范围）。
+   */
+  function applyPanzerGroupDgNow(unitId: string): boolean {
+    const obligation = panzerGroupObligations.value.find((item) => item.unitIds.includes(unitId))
+    if (obligation === undefined) {
+      exclusiveError.value = { rule: '3.4a', reason: `unitNotInPanzerObligation:${unitId}` }
+      pushLog(
+        'warning',
+        '该单位不在 3.4a 的分界线义务名单内（未声明归属 / 非多单位编队 / 已过 19 August）⇒ 不能按 3.4a 投 DG',
+        '3.4a',
+      )
+      return false
+    }
+    const unit = units.value.find((item) => item.instanceId === unitId)
+    if (unit === undefined) {
+      exclusiveError.value = { rule: '3.4a', reason: `unitNotFound:${unitId}` }
+      pushLog('warning', `找不到算子 ${unitId}（3.4a）`, '3.4a')
+      return false
+    }
+    if (unit.mode.dg === true) {
+      pushLog('info', `${unit.name} 已处于 DG（3.4a 重复点击不重复落盘）`, '3.4a')
+      return true
+    }
+    applyDgToUnit(unit)
+    pushLog(
+      'success',
+      `${unit.name} 因 ${obligation.group === 'guderian' ? 'Guderian' : 'Hoth'} 的分界线义务投 DG（3.4a：${obligation.reason}）`,
+      '3.4a',
+    )
+    recordSettlement({
+      action: 'panzerObligationDg',
+      rule: '3.4a',
+      data: { unitId, group: obligation.group, reason: obligation.reason },
+    })
+    return true
+  }
+
   /** 1.7：补给缓存 +1（专规 1.6c 特殊补员的结果之一） */
   function addSupplyCacheNow(side: 'axis' | 'soviet'): void {
     supplyCacheHoldings.value = addSupplyCache(supplyCacheHoldings.value, side)
@@ -21460,6 +21597,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         freeRailPicked.value = []
         supplyArrivalSp.value = 0
         supplyTrainHex.value = null
+        clearArrivalSpGroups()
       },
       refreshTrace: () => {
         refreshTraceSupply('阶段开始')
@@ -22044,6 +22182,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     freeRailError,
     lastFreeRailPlan,
     applySupplyArrivalsNow,
+    arrivalSpGroups,
+    arrivalSpGroupTargets,
+    setArrivalSpGroup,
+    clearArrivalSpGroups,
     // C9b：轨距账本（13.3f / 专规 1.2）——「谁能用这条铁路」，与 13.3a 多轨的运量费用无关
     convertedRailHexes,
     printedRailGauge,
@@ -22239,6 +22381,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     panzerGroupUnitViews,
     panzerGroupObligations,
     panzerObligationActive,
+    applyPanzerGroupDgNow,
     panzerWrongSideHexes,
     boundaryView,
     exclusiveActionsInStep,

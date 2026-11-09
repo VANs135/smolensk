@@ -507,8 +507,8 @@ function sideLabel(side: Side): string {
       <p class="muted">
         SP 归属划分（12.1d）：通用 SP 算子双方共用，**谁带上图即谁拥有**；轴方地图内 SP 还要在初设期
         逐个点名装甲集群（Setup Note F / 3.4b）。本剧本**{{ requiresGroup ? '适用' : '不适用' }}**
-        3.4b ——
-        适用时已**按分界线自动填好默认归属**（分界线仅作参考，玩家仍可在此改），故不必逐个点名。
+        3.4b —— 适用时每个轴方补给站都必须选 Guderian 或 Hoth；分界线只作提示，不参与判定（原文
+        guide / 玩家自定），未选不能核验，也不能开局。
       </p>
       <table v-if="setup.spDumps.length > 0" class="table">
         <thead>

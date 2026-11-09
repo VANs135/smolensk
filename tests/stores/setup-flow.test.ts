@@ -242,15 +242,19 @@ describe('W7 C14：SP 归属划分（12.1d + Setup Note F + 3.4b）', () => {
     setup.runAutoSetup()
   })
 
-  it('C14：剧本 1 轴方 dump 的装甲集群**默认已按分界线填好**（玩家不用逐个点名）；清空即拒', () => {
+  it('C14：剧本 1 轴方 dump 的装甲集群**必须由玩家逐个点名**（不再按分界线预填）；未选即拒', () => {
     const axisDumps = setup.spDumpsOf('axis')
     expect(axisDumps.length).toBeGreaterThan(0)
-    // ★ 用户口径：编队归属不用玩家设置 ⇒ 自动初设时已按分界线给每个 dump 填好
-    expect(axisDumps.every((dump) => setup.spAssignments[dump.id] !== undefined)).toBe(true)
+    // ★ 3.4b 裁定：归属由玩家逐个选择，分界线只作提示 ⇒ 初设后账本为空
+    expect(Object.keys(setup.spAssignments).length).toBe(0)
+    expect(setup.confirmSpOwnership()).toBe(false)
+    expect(setup.lastAction).toMatchObject({ ok: false, rule: '3.4b' })
+
+    for (const dump of axisDumps) setup.setSpAssignment(dump.id, 'guderian')
     expect(setup.confirmSpOwnership()).toBe(true)
     expect(setup.stepDone['spOwnership']).toBe(true)
 
-    // 手工清掉一个 ⇒ 3.4b 仍要求逐一点名，故被拒（默认只是默认，不是不可改）
+    // 清掉一个 ⇒ 3.4b 逐一点名，故被拒
     setup.setSpAssignment(axisDumps[0]!.id, null)
     expect(setup.confirmSpOwnership()).toBe(false)
     expect(setup.lastAction).toMatchObject({ ok: false, rule: '3.4b' })
@@ -259,7 +263,7 @@ describe('W7 C14：SP 归属划分（12.1d + Setup Note F + 3.4b）', () => {
     expect(setup.confirmSpOwnership()).toBe(true)
   })
 
-  it('B50：**先选剧本、后勾共识** ⇒ 确认归属划分时自动补上默认归属（可选项的迟到采纳）', () => {
+  it('B50：**先选剧本、后勾共识** ⇒ 迟到采纳同样要求逐个点名，不自动补默认', () => {
     const late = newStores().setup
     late.selectScenario('1')
     late.runAutoSetup()
@@ -270,8 +274,10 @@ describe('W7 C14：SP 归属划分（12.1d + Setup Note F + 3.4b）', () => {
     expect(late.lastAction).toMatchObject({ ok: true, rule: '12.1d' })
     expect(late.lastAction?.detail).toContain('不适用 3.4b')
 
-    // 玩家这时才勾上可选项 ⇒ 下一次确认前应自动补默认归属并逐条点名通过
+    // 玩家这时才勾上可选项 ⇒ 下一次确认要求逐条点名，未选即拒
     adoptPanzerGroupOption()
+    expect(late.confirmSpOwnership()).toBe(false)
+    for (const dump of late.spDumpsOf('axis')) late.setSpAssignment(dump.id, 'hoth')
     expect(late.confirmSpOwnership()).toBe(true)
     expect(Object.keys(late.spAssignments).length).toBeGreaterThan(0)
     // 生效后：detail 里应出现"3.4b 适用"与已点名计数

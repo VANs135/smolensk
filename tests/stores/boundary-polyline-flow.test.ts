@@ -116,7 +116,7 @@ describe('批 F 切片 1：分界线沿多轨铁路折线', () => {
     expect(straight).toHaveLength(2)
   })
 
-  it('★ 投影层：`panzerGroupBoundaryWithPath` / `boundaryView` 都带路径；初设默认归属读同一份', () => {
+  it('★ 投影层：`panzerGroupBoundaryWithPath` / `boundaryView` 都带路径；初设不再按线预填归属', () => {
     setActivePinia(createPinia())
     const workbench = useWorkbenchStore()
     expect(workbench.panzerBoundaryPath).toHaveLength(DOCUMENTED_PATH.length)
@@ -124,11 +124,14 @@ describe('批 F 切片 1：分界线沿多轨铁路折线', () => {
     expect(workbench.boundaryView?.path).toHaveLength(DOCUMENTED_PATH.length)
 
     /*
-     * 源码守卫（口径只有一处）：`setup.ts` 不再自持一份**直线版**分界线，
-     * 而是读 `workbench.panzerGroupBoundaryWithPath` —— 否则"默认归属"与"义务判定"会拿两条线去判。
+     * 源码守卫（3.4b 裁定：归属由玩家逐个选择，分界线只作提示）：
+     * `setup.ts` 已删除按分界线预填（`defaultPanzerGroupOf` / `fillDefaultPanzerGroups`），
+     * 也不自持一份**直线版**分界线 —— 判据与渲染只在 workbench 用同一条多轨铁路折线。
      */
     const setup = readFileSync('src/stores/setup.ts', 'utf8')
-    expect(setup).toContain('workbench.panzerGroupBoundaryWithPath')
+    expect(setup).not.toContain('defaultPanzerGroupOf')
+    expect(setup).not.toContain('fillDefaultPanzerGroups')
+    expect(setup).not.toContain('panzerGroupBoundaryWithPath')
     expect(setup).not.toContain('mapConfig.panzerGroupBoundary')
   })
 })

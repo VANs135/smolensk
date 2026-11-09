@@ -173,6 +173,7 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'setAirActive',
       'setAirMissionKind',
       'setAirTargetFromText',
+      'setArrivalSpGroup',
       'setAttritionAllocation',
       'setBarrageActive',
       'setBarrageTargetKind',
@@ -229,6 +230,13 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   unlockSlowMobilizationBatch: {
     kind: 'noTiming',
     why: '专规 2.4 只写「mobilized per this table」，原文未给时机 ⇒ 不加闸；配额按表 2-2 当日值、无累计账本',
+  },
+
+  // 专规 3.4a：原文「place a DG … at the end of any phase」——"相位末"的具体归属（§5 A/B）未裁定，
+  // 入口只校验义务名单后落 DG（5.10），不擅自扩大相位范围，也不另设环节闸
+  applyPanzerGroupDgNow: {
+    kind: 'noTiming',
+    why: '3.4a 的义务由 `panzerGroupObligations` 给出（19 Aug 前、多单位编队）；本入口只做「有义务即可投」，相位口径待裁定',
   },
 
   /* ── 已加闸（原文给了明确时机）—— 本表用于**核对**，不是"未处理" ── */

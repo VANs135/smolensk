@@ -9,7 +9,6 @@ import {
   airBoxEdgeColumn,
   assessSetupTruckLoad,
   assessSetupSpOwnership,
-  boundarySideOf,
   breakdownCounterValues,
   SETUP_RULE,
   findAircraftRecord,
@@ -1525,28 +1524,6 @@ export const useSetupStore = defineStore('setup', () => {
     return spDumps.value.filter((dump) => dump.side === side)
   }
 
-  /*
-   * ★ 批 F 切片 1：本处那份**直线版**分界线已删 —— 口径统一到 `workbench.panzerGroupBoundaryWithPath`
-   *   （带多轨铁路折线；与段末义务判定、地图渲染**同一条线**）。理由见 `defaultPanzerGroupOf` 的注释。
-   */
-
-  /**
-   * 3.4a / Setup Note F：轴方 dump 的装甲集群**默认归属**（按分界线判）
-   *
-   * 规则原文说「分界线仅作参考，归属由玩家自定」⇒ 这里给的是**默认值**（玩家可在初设面板改），
-   * 目的是让「玩家不用为每个 dump 点名」；分界线以北 ⇒ Hoth，以南/线上 ⇒ Guderian
-   * （与 3.4b「奇数点归 Guderian」同一偏置）。
-   */
-  function defaultPanzerGroupOf(hex: HexRef): SetupPanzerGroup {
-    /*
-     * ★ 批 F 切片 1：用 **workbench 那份带路径的分界线**（多轨铁路折线）——
-     *   修前这里读的是本文件自己那份**直线版**，于是"初设默认归属"与"段末义务判定"
-     *   拿两条不同的线去判（前者直线、后者折线）⇒ 同一个 dump 可能默认归 A、判义务时算 B。
-     */
-    const boundary = workbench.panzerGroupBoundaryWithPath
-    if (boundary === null) return 'guderian'
-    return boundarySideOf(hex, boundary) === 'north' ? 'hoth' : 'guderian'
-  }
   /** 全部步骤是否走完（开局流程完成度） */
   const allDone = computed(() =>
     flow.value.filter((step) => step.applicable).every((step) => stepDone.value[step.id] === true),
@@ -1963,8 +1940,7 @@ export const useSetupStore = defineStore('setup', () => {
     // 12.1b / 12.1c：初设的 SP 位置就是补给站 ⇒ 整批落进 workbench 账本（整备付款、战斗补给、
     // 12.3a 拖取与追溯重判都读那本账；不落账就会出现「地图上有 SP 却付款补 0 处」）
     workbench.landSetupSpDumps(dumps)
-    // 3.4b / Setup Note F：轴方 dump 的装甲集群**默认按分界线填好**（玩家不用逐个点名，仍可改）
-    fillDefaultPanzerGroups(dumps)
+    // 3.4b / Setup Note F：分界线只作提示，归属由玩家逐站选择，不在此处预填
     /*
      * 13.2h / 通规 IV-D / 专规 Setup Note C：**剧本页明示"全部满载 / 全部空载"时不由玩家决定**
      * ⇒ 初设当场按剧本把 `loadedSpT` 落盘。
@@ -2266,7 +2242,8 @@ export const useSetupStore = defineStore('setup', () => {
    * 一键预设的**开局前义务**（用既有落账入口，不放宽任何校验）
    *
    * · 13.2h `choose_loaded`：按格号升序取前 N 辆满载，再交给既有 `designateTrucks` 核验落账；
-   * · 12.1d / 3.4b：若存在归属义务，调用既有 `confirmSpOwnership`（默认归属已在自动初设时填好）。
+   * · 12.1d / 3.4b：若存在归属义务，调用既有 `confirmSpOwnership`；归属必须由玩家逐站选择，预设不代填，
+   *   未选满即此步失败（不自动补默认值）。
    */
   function settlePresetObligations(failures: PresetSetupResult['failures'], onlySide?: Side): void {
     if (truckLoadMode.value === 'choose_loaded' && !truckLoadReadiness.value.complete) {
@@ -2463,40 +2440,11 @@ export const useSetupStore = defineStore('setup', () => {
   }
 
   /**
-   * 3.4b / Setup Note F：给**轴方** dump 按分界线填上**默认**装甲集群归属（玩家仍可改）
+   * 既存存档字段（旧版用于记录「已按分界线填过默认归属」的 dump id）。
    *
-   * ★ 两处调用：自动初设落 SP 之后；以及**确认归属划分之前**——玩家可能先选剧本、后勾共识
-   *   （勾选列表与初设面板同属开局前），只挂在自动初设那一处就会漏掉这个顺序。
-   * ★ 3.4b 未启用（共识未采纳）时**不填**：此时引擎会以「本剧本不适用」拒绝任何非空归属。
-   */
-  /**
-   * 已经按分界线填过默认归属的 dump id（**每个 dump 只填一次**）
-   *
-   * ★ 为什么需要它：确认归属划分时会再补一次默认（应付"先选剧本、后勾共识"的顺序），
-   *   但玩家**故意清掉**某个站的归属之后（`setSpAssignment(id, null)`）不该被补回来 ——
-   *   "默认只是默认，不是不可改"。故用这份集合把"没填过"与"填过又清掉"分开。
-   * 换剧本即清空（SP 归属整套重来）。
+   * 3.4b 改为玩家逐站选择后不再填充，始终为空；保留字段只为不改存档结构。
    */
   const defaultFilledIds = ref<Set<string>>(new Set())
-
-  function fillDefaultPanzerGroups(
-    dumps: readonly { id: string; side: Side; hex: HexRef }[],
-  ): void {
-    if (!panzerGroupRulesOn()) return
-    const defaults: Record<string, SetupPanzerGroup> = { ...spAssignments.value }
-    const filled = new Set(defaultFilledIds.value)
-    let changed = false
-    for (const dump of dumps) {
-      if (dump.side !== 'axis') continue
-      if (filled.has(dump.id)) continue
-      filled.add(dump.id)
-      changed = true
-      if (defaults[dump.id] === undefined) defaults[dump.id] = defaultPanzerGroupOf(dump.hex)
-    }
-    if (!changed) return
-    defaultFilledIds.value = filled
-    spAssignments.value = defaults
-  }
 
   /** 记一条 SP 的装甲集群归属（Setup Note F：分界线仅作参考，归属由玩家自定） */
   function setSpAssignment(dumpId: string, group: SetupPanzerGroup | null): void {
@@ -2509,8 +2457,6 @@ export const useSetupStore = defineStore('setup', () => {
 
   /** SP 归属划分（12.1d + Setup Note F + 3.4b）：核验后记完成 */
   function confirmSpOwnership(): boolean {
-    // ★ 先补默认归属：玩家可能是在自动初设之后才把 3.4b 那条共识勾上的
-    fillDefaultPanzerGroups(spDumps.value)
     const outcome = planSupplyOwnership({
       scenarioId: scenarioId.value,
       dumps: spDumps.value,
