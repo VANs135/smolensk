@@ -3079,6 +3079,12 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (sessionKindAfter !== sessionKindBefore) return
     if (sessionKindAfter !== '' && !consumed) return
     /*
+     * ★ 用户 2026-11-09（条 11）：战斗会话里「点格即弹」的小窗只保留 9.12g 推进格一处
+     *   （CombatPanel 的推进块是只读的，勾选与确认在这张辅助窗里）。
+     *   补给站付款、撤退落点等被消费的点击只执行动作，不再弹只写内部状态（9.2 当前步）的窗。
+     */
+    if (sessionKindAfter === 'combat' && workbench.combatLiveStep !== 'advance') return
+    /*
      * 条 25：**空闲点空格 ⇒ 只读格号浮签**。
      * 会话在跑时（本击被会话当成"地图点选"消费掉）一定是 `content`：那时小窗是会话的辅助窗，
      * 玩家要在里面选东西；只有"什么都没发生、纯粹点了个空格"这一击才降级成格号浮签。

@@ -47,9 +47,8 @@ const title = computed(() => (mapView.popup === null ? '' : `格 ${hexLabel(mapV
 const variant = computed(() => mapView.popup?.variant ?? 'content')
 const actionGroups = ['模式改变', '移动', '战斗', '运输', '工程', '编组', '补给', '空军'] as const
 
-/** 9.2 当前步（null＝盘面上没有进行中的战斗） */
 /**
- * 9.2 当前步（null＝盘面上没有**进行中**的战斗）
+ * 战斗进行到哪一步（null＝盘面上没有**进行中**的战斗）
  *
  * ★ 2026-09-18 修：原先取 `combatState?.step`，**不看 `finished`** ⇒ 战斗已收束后
  *   推进块与「确认推进并收束」仍挂在地图上（再点只是幂等地重跑一遍，界面无变化）。
@@ -89,11 +88,6 @@ const combatUnits = computed(() =>
 /** 9.12g 推进格（防御格已清空时给出） */
 const advanceHex = computed(() => workbench.combatAdvanceHex)
 const advanceChosen = computed(() => workbench.combatInputs.advanceUnitIds)
-
-/** 9.2 的**战斗发生在哪一格**（小窗的指路文字里报出，便于对上是哪一场） */
-const battleHex = computed(
-  () => workbench.combatState?.composition.defendingHex ?? workbench.battleTarget?.hex ?? null,
-)
 
 /** 6.1：堆叠取子清单的已勾选 id（界面用；`movePick` 为空时给空数组，避免模板里做空值断言） */
 const movePickIds = computed<string[]>(() => workbench.movePick?.ids ?? [])
@@ -339,29 +333,10 @@ function sideName(side: string): string {
       </div>
     </section>
 
-    <!-- ① 战斗流程中：小窗只做**地图上的点选**（撤退落点 / 补给站付款），结算控件在战斗栏里 -->
+    <!-- ① 9.12g 推进：小窗只做**地图上的点选**（结算控件在战斗栏里） -->
     <template v-if="step !== null">
-      <p class="muted num">
-        9.2 当前步：<BaseTag kind="info">{{ step }}</BaseTag>
-        <span v-if="battleHex !== null">· 战斗格 {{ hexLabel(battleHex) }}</span>
-      </p>
-      <p class="muted">
-        九步结算的输入在**战斗格上的「战斗结算（9.2）」面板**里（地图上就地展开，战斗结束即消失）；
-        这里只负责「在地图上点」的那部分。
-      </p>
-
-      <!-- 9.12 撤退：落点选择与确认都在**战斗结算面板（9.2）**；这里只提示怎么读地图高亮 -->
-      <section v-if="step === 'retreat'" class="block">
-        <h4 class="block__title">撤退（9.12：落点在战斗结算面板里选）</h4>
-        <p class="num">{{ mapView.retreatHint }}</p>
-        <p class="muted">
-          青绿＝安全格；橙红＝敌方 ZOC 格（9.12e）；暗红点线＝选了会被消灭（9.12/9.12b）。
-          攻方选完才轮到守方（9.10b 次序）。
-        </p>
-      </section>
-
       <!-- 9.12g 推进：地图上点绿格 -->
-      <section v-else-if="step === 'advance'" class="block">
+      <section v-if="step === 'advance'" class="block">
         <h4 class="block__title">战后推进（9.12g）</h4>
         <p class="num">
           防御格 {{ advanceHex === null ? '未被清空' : hexLabel(advanceHex) }}

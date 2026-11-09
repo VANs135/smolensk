@@ -140,3 +140,18 @@ describe('U1-c：战斗窗减负', () => {
     expect(panel).not.toContain('（12.10a；须同时勾"守方支付战斗补给"）')
   })
 })
+
+describe('U3：点格气泡不再展示内部状态', () => {
+  it('战斗小窗删掉 9.2 当前步与九步结算说明', () => {
+    const src = read('src/components/game/MapActionPopover.vue')
+    expect(src).not.toContain('九步结算的输入在')
+    expect(src).not.toContain('9.2 当前步')
+    expect(src).not.toContain('青绿＝安全格')
+    expect(src).toContain("step === 'advance'")
+  })
+
+  it('战斗会话中只有推进格保留辅助小窗', () => {
+    const src = read('src/stores/map-view.ts')
+    expect(src).toContain("sessionKindAfter === 'combat' && workbench.combatLiveStep !== 'advance'")
+  })
+})
