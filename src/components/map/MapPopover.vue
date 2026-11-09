@@ -133,7 +133,8 @@ const dragging = computed(() => drag.value !== null)
       @pointercancel="onHeaderPointerUp"
     >
       <span class="popover__title">{{ props.title }}</span>
-      <BaseTag v-if="props.rule !== ''" kind="neutral">{{ props.rule }}</BaseTag>
+      <!-- 规则号只进悬停提示（用户 2026-11-09：窗内不摆规则号，只留一个 `?`） -->
+      <BaseTag v-if="props.rule !== ''" kind="neutral" :title="`规则 ${props.rule}`"> ? </BaseTag>
       <button
         class="popover__close"
         type="button"

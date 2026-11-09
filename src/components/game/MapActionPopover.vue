@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
 import { BaseButton, BaseTag } from '@/components/base'
 import { MapPopover } from '@/components/map'
@@ -79,20 +79,14 @@ function counterImageOf(id: string): string | null {
 }
 
 /**
- * 条 7（R3）：堆叠展示分**战斗 / 非战斗两栏**（栏内图阵列）
+ * 左键堆叠窗只摆**战斗单位**（用户 2026-11-09：非战斗与飞机不进这个窗，操作走右键）
  *
- * 判据用 `UnitToken.noncombatKind`：有值＝非战斗单位（运输点 / 空军基地 / 工事…），无值＝战斗单位。
+ * 判据用 `UnitToken.noncombatKind`：有值＝非战斗单位，无值＝战斗单位。
  * 本组件不另判规则——与地图上画算子是同一份数据。
  */
 const combatUnits = computed(() =>
   visibleGroundUnits.value.filter((unit) => (unit.noncombatKind ?? null) === null),
 )
-const nonCombatUnits = computed(() =>
-  visibleGroundUnits.value.filter((unit) => (unit.noncombatKind ?? null) !== null),
-)
-
-/** 非战斗栏：点「展开机场飞机」才列出该基地的本方飞机（14.1a） */
-const showAirbasePlanes = ref(false)
 
 /**
  * 该算子是否可作为参炸单位（10.0e：有印刷轰炸值 + **本环节允许宣布轰炸**）
@@ -178,9 +172,6 @@ const visibleGroundUnits = computed(() =>
   ),
 )
 
-/** 被滤掉的己方算子（如实交代一行，含规则号；判据同样来自 store） */
-const blockedOwn = computed(() => content.value?.blockedOwn ?? [])
-
 /** 该格是否是可付款的补给站（12.4；地图上画金黄方框） */
 const dumpAtHex = computed(() =>
   mapView.combatSourceDumps.find(
@@ -256,39 +247,8 @@ function startBarrage(unitId: string): void {
   workbench.toggleBarrageUnit(unitId)
 }
 
-function toggleMissionAircraft(aircraftId: string): void {
-  // 点飞机即「加入/移出本次任务」；顺带打开空军工具，使随后点目标格能定任务格（14.2f-B）
-  workbench.setAirActive(true)
-  workbench.toggleAirMissionUnit(aircraftId)
-}
-
-/**
- * H⑤（14.1a）：这一枚飞机此刻**为什么不能选入任务**（可选的返回 null）
- *
- * 判据不在本组件里（组件不比较规则号）：直接读 store 的候选阵列——它与面板阵列、选择闸
- * （`toggleAirMissionUnit`）**同一处**结论。于是"点机场选一枚非激活飞机"在这里就被挡住，
- * 并给出一行原因（14.1a：非激活 ⇒ 需先按 14.1d 整备 15.1）。
- */
-function missionJoinReasonOf(aircraftId: string): string | null {
-  return (
-    workbench.airMissionJoinChoices.find((choice) => choice.air.instanceId === aircraftId)
-      ?.disabledReason ?? null
-  )
-}
-
 function beginMission(): void {
   workbench.beginAirMissionNow()
-}
-
-/**
- * 点堆叠清单里的某一枚**本单位** ⇒ 打开它的动作会话（用户 2026-10-25）
- *
- * 判据（是不是本方 / 是不是非战斗单位）在 store 侧 `openUnitActionAt` 里，组件不重复判规则。
- */
-function openUnitAction(unitId: string): void {
-  const unit = consoleUnitOf(unitId)
-  if (unit === null) return
-  mapView.selectCounterAt(unit.hex, unitId, anchor.value)
 }
 
 function pickDump(): void {
@@ -568,20 +528,11 @@ function pickDump(): void {
       </section>
     </template>
 
-    <!-- ② 无战斗流程：展示堆叠 + 飞机任务 -->
+    <!-- ② 无战斗流程：只摆战斗单位 + 操作按钮（不写说明文字） -->
     <template v-else>
-      <p class="muted num">
-        该格算子 {{ content?.units.length ?? 0 }} 枚
-        <span v-if="content?.hidden === true">（还有未显示的内容，4.9a 不透露枚数）</span>
-      </p>
-
       <!-- 6.1f：**移动中**可把堆叠里的某一枚就地放下（停在当前格，其余继续走） -->
       <section v-if="movingUnits.length > 1" class="block block--pick">
-        <h4 class="block__title">移动中：放下堆叠里的单位（6.1f）</h4>
-        <p class="muted num">
-          本次一起移动 {{ movingUnits.length }} 枚 · 仍在走
-          {{ activeMovingUnits.length }} 枚（放下者停在它当前所在格）
-        </p>
+        <h4 class="block__title">移动中：放下堆叠里的单位</h4>
         <ul class="list">
           <li v-for="unit in movingUnits" :key="unit.instanceId" class="num">
             {{ unit.name }} @ {{ hexLabel(unit.hex) }}
@@ -596,18 +547,11 @@ function pickDump(): void {
             </BaseButton>
           </li>
         </ul>
-        <p class="muted">
-          6.1f：放下即「离开堆叠」——该单位本次移动结束，剩下的单位继续走；下次要点它得等下个阶段。
-        </p>
       </section>
 
       <!-- 8.1g/h：突袭的参突/留驻拆分（不勾选＝仍在移动的全部单位都参突） -->
       <section v-if="activeMovingUnits.length > 0" class="block block--pick">
-        <h4 class="block__title">突袭时谁参战（8.1g / 8.1h）</h4>
-        <p class="muted num">
-          不勾选＝仍在走的 {{ activeMovingUnits.length }} 枚**全部参突**；勾选即只让这几枚参突，
-          其余**留在原格**（8.1h：仍计入原格 4.8a 的战斗 RE，但不参突、也不受结果影响）。
-        </p>
+        <h4 class="block__title">突袭时谁参战</h4>
         <ul class="list">
           <li v-for="unit in activeMovingUnits" :key="unit.instanceId" class="num">
             <label class="check">
@@ -629,10 +573,7 @@ function pickDump(): void {
 
       <!-- 6.1：堆叠取子（点堆叠格后先选哪几枚开拔；8.1h 允许其余单位留驻） -->
       <section v-if="isMovePickHex" class="block block--pick">
-        <h4 class="block__title">选择要一起开拔的单位（6.1）</h4>
-        <p class="muted num">
-          本格己方 {{ workbench.movePickChoices.length }} 枚 · 已勾选 {{ movePickIds.length }} 枚
-        </p>
+        <h4 class="block__title">选择要一起开拔的单位</h4>
         <ul class="list">
           <li
             v-for="unit in workbench.movePickChoices"
@@ -663,124 +604,54 @@ function pickDump(): void {
           <BaseButton variant="secondary" size="sm" @click="workbench.setMovePickAll()">
             整堆叠（全选）
           </BaseButton>
-          <BaseButton variant="primary" size="sm" @click="workbench.confirmMovePick()">
-            开始移动（6.1）
+          <BaseButton variant="primary" size="sm" title="6.1" @click="workbench.confirmMovePick()">
+            开始移动
           </BaseButton>
           <BaseButton variant="ghost" size="sm" @click="workbench.cancelMovePick()">
             取消
           </BaseButton>
         </div>
-        <p class="muted">
-          未勾选者留在格内：按 6.1f 它们不随本次移动；按 8.1h 它们也不参与突袭、不受突袭结果影响。
-          突袭时只有**勾选的这一组**会被当作参突单位（8.1g）⇒
-          堆叠里混有不可攻击的单位时，只勾合格者即可照常突袭。
-        </p>
       </section>
 
-      <!-- 地面算子（4.9a：敌方格只列允许的那一两枚；**己方只列本环节能行动的**） -->
-      <section class="block">
-        <h4 class="block__title">堆叠（4.9a 可见内容）</h4>
-        <p v-if="visibleGroundUnits.length === 0" class="muted">（无可见地面算子）</p>
-        <!--
-          条 7（R3）：堆叠分**战斗 / 非战斗两栏**（栏内图阵列）。
-          战斗栏含发起轰炸入口（10.0）；非战斗栏含机场飞机的「展开」入口（14.1a）。
-        -->
-        <div v-else class="cols">
-          <div class="col">
-            <h5 class="col__title">战斗</h5>
-            <div v-if="combatUnits.length === 0" class="muted">—</div>
-            <div v-for="unit in combatUnits" :key="unit.id" class="chip">
-              <img
-                v-if="counterImageOf(unit.id) !== null"
-                :src="counterImageOf(unit.id) ?? ''"
-                class="chip__img"
-                alt=""
-              />
-              <span class="chip__label num"
-                >{{ unit.label }} · {{ unit.modeLetter }}<template v-if="unit.dg">· DG</template
-                ><template v-if="unit.ended">· 停</template></span
-              >
-              <BaseButton
-                v-if="!workbench.combatPickActive && canBarrage(unit.id)"
-                variant="ghost"
-                size="sm"
-                @click="startBarrage(unit.id)"
-              >
-                {{ workbench.barrageUnitIds.includes(unit.id) ? '移出炮击' : '炮击' }}
-              </BaseButton>
-            </div>
-          </div>
-          <div class="col">
-            <h5 class="col__title">非战斗</h5>
-            <div v-if="nonCombatUnits.length === 0" class="muted">—</div>
-            <div v-for="unit in nonCombatUnits" :key="unit.id" class="chip">
-              <img
-                v-if="counterImageOf(unit.id) !== null"
-                :src="counterImageOf(unit.id) ?? ''"
-                class="chip__img"
-                alt=""
-              />
-              <span class="chip__label num">{{ unit.label }}</span>
-              <!-- 角标写不下全称的（3.4b「未归属」）⇒ 清单里补全称，与悬停提示同一份字段 -->
-              <span v-if="(unit.tip ?? null) !== null" class="muted">{{ unit.tip }}</span>
-              <!--
-                用户 2026-10-25（渐进交互）：**点哪一枚就对哪一枚操作**。
-                修前这一栏只有图与名（没有入口），格里有非战斗单位时是"点格即开会话" ⇒
-                基地 + SP 同格时，点 SP 也会进基地的整备会话。
-              -->
-              <BaseButton
-                v-if="mapView.canSelectCounterAt(unit.id)"
-                variant="ghost"
-                size="sm"
-                @click="openUnitAction(unit.id)"
-              >
-                {{ unit.noncombatKind === 'air_base' ? '驻机' : '操作' }}
-              </BaseButton>
-            </div>
-            <!-- 14.1a：点「展开机场飞机」才在这一栏列出本基地的本方飞机（图阵列） -->
-            <template v-if="(content?.airUnits.length ?? 0) > 0">
-              <BaseButton variant="ghost" size="sm" @click="showAirbasePlanes = !showAirbasePlanes">
-                {{ showAirbasePlanes ? '收起机场飞机' : '展开机场飞机' }}
-              </BaseButton>
-              <div v-if="showAirbasePlanes" class="chips">
-                <div v-for="air in content?.airUnits ?? []" :key="air.instanceId" class="chip">
-                  <img
-                    v-if="counterImageOf(air.instanceId) !== null"
-                    :src="counterImageOf(air.instanceId) ?? ''"
-                    class="chip__img"
-                    alt=""
-                  />
-                  <span class="chip__label num">
-                    {{ air.name }}（{{ air.airStatus === 'active' ? '激活' : '非激活' }}）
-                  </span>
-                  <BaseButton
-                    variant="ghost"
-                    size="sm"
-                    :disabled="missionJoinReasonOf(air.instanceId) !== null || !airMissionAllowed"
-                    :title="
-                      missionJoinReasonOf(air.instanceId) ??
-                      (!airMissionAllowed ? '本环节不能宣布空中任务（14.2e）' : undefined)
-                    "
-                    @click="toggleMissionAircraft(air.instanceId)"
-                  >
-                    {{
-                      workbench.airMissionAirIds.includes(air.instanceId) ? '移出任务' : '选入任务'
-                    }}
-                  </BaseButton>
-                </div>
-              </div>
-            </template>
+      <!--
+        左键堆叠窗（用户 2026-11-09）：只摆**战斗单位**，默认全选；
+        点某枚即取消该单位选中、再点恢复。窗内不写说明文字，只留算子与操作按钮。
+        非战斗单位（SP / 运输点 / 基地…）的操作走右键菜单。
+      -->
+      <section v-if="combatUnits.length > 0" class="block">
+        <div class="chips">
+          <div
+            v-for="unit in combatUnits"
+            :key="unit.id"
+            class="chip chip--pickable"
+            :class="{ 'chip--off': !mapView.stackPickIds.includes(unit.id) }"
+            role="button"
+            tabindex="0"
+            :aria-pressed="mapView.stackPickIds.includes(unit.id)"
+            @click="mapView.toggleStackPick(unit.id)"
+            @keydown.enter.prevent="mapView.toggleStackPick(unit.id)"
+            @keydown.space.prevent="mapView.toggleStackPick(unit.id)"
+          >
+            <img
+              v-if="counterImageOf(unit.id) !== null"
+              :src="counterImageOf(unit.id) ?? ''"
+              class="chip__img"
+              alt=""
+            />
+            <span class="chip__label num"
+              >{{ unit.label }} · {{ unit.modeLetter }}<template v-if="unit.dg">· DG</template
+              ><template v-if="unit.ended">· 停</template></span
+            >
+            <BaseButton
+              v-if="!workbench.combatPickActive && canBarrage(unit.id)"
+              variant="ghost"
+              size="sm"
+              @click.stop="startBarrage(unit.id)"
+            >
+              {{ workbench.barrageUnitIds.includes(unit.id) ? '移出炮击' : '炮击' }}
+            </BaseButton>
           </div>
         </div>
-        <!--
-          批 A 切片 3②（用户口径 9.17⑤「框内只列**该环节能行动**的单位」）：
-          被滤掉的己方算子**如实交代一行**（含规则号），否则玩家会以为"我的兵不见了"。
-          文字纪律：这属"环节提示"一类（§16.09），不是常驻说明。
-        -->
-        <p v-if="blockedOwn.length > 0" class="muted">
-          另有 {{ blockedOwn.length }} 枚本环节不能行动：
-          {{ blockedOwn.map((item) => `${item.label}（${item.rule} ${item.reason}）`).join('、') }}
-        </p>
       </section>
 
       <!-- 本方飞机（14.1a：停在其空军基地格） -->
@@ -800,19 +671,17 @@ function pickDump(): void {
         </template>
 
         <template v-else-if="!refitHere">
-          <BaseButton variant="primary" size="sm" @click="workbench.beginRefitNow(baseAtHex.id)">
-            整备（15.1）
+          <BaseButton
+            variant="primary"
+            size="sm"
+            title="15.1"
+            @click="workbench.beginRefitNow(baseAtHex.id)"
+          >
+            整备
           </BaseButton>
-          <p class="muted">
-            点整备后，在此勾选要整备的飞机，再点地图上<b>金黄高亮的补给站</b>付
-            1T（与其它补给消耗同一方式）。
-          </p>
         </template>
 
         <template v-else>
-          <p class="muted num">
-            勾选要整备的飞机（已选 {{ workbench.refitSelectedIds.length }} 架）：
-          </p>
           <p v-if="workbench.refitCandidates.length === 0" class="muted">
             本格没有非激活飞机（15.1B）。
           </p>
@@ -828,12 +697,9 @@ function pickDump(): void {
               </label>
             </li>
           </ul>
-          <p class="ok">
-            已勾选 {{ workbench.refitSelectedIds.length }} 架 ⇒
-            点地图上金黄高亮的补给站付款（1T）即结算（15.1B）。
-          </p>
-          <p class="muted num">
-            可付款补给站：{{ workbench.refitPayDumps.length }} 处（12.3a 该基地可拖取者）
+          <p class="ok num">
+            已选 {{ workbench.refitSelectedIds.length }} 架｜可付款
+            {{ workbench.refitPayDumps.length }} 处
           </p>
           <BaseButton variant="ghost" size="sm" @click="workbench.cancelRefitNow()">
             取消整备
@@ -844,14 +710,10 @@ function pickDump(): void {
       <!-- 9.1：战斗的发起入口已移到**会话框**（B15b：宣布之前也开一个「发起战斗（9.1）」会话）。
            这里只提示怎么在图上凑齐攻方与防御格。 -->
       <section v-if="workbench.combatPickActive && !combatRunning" class="block block--pick">
-        <h4 class="block__title">发起战斗（9.1）</h4>
+        <h4 class="block__title">发起战斗</h4>
         <p class="num">
-          攻方已选 {{ workbench.combatAttackerIds.length }} 枚｜防御格
+          攻方 {{ workbench.combatAttackerIds.length }} 枚｜防御格
           {{ workbench.battleTarget === null ? '（未选）' : hexLabel(workbench.battleTarget.hex) }}
-        </p>
-        <p class="muted">
-          在**地图上**摊开己方堆叠点枚即选出攻方（多格可分别选，9.1b/9.1c），再点敌方格定防御格 ⇒
-          右上角的「发起战斗（9.1）」会话框里按「开始战斗」即可（9.2 的九步随后在同一会话里走）。
         </p>
       </section>
 
@@ -881,18 +743,10 @@ function pickDump(): void {
             {{ workbench.airMissionKind === kind.key ? '✓ ' : '' }}{{ kind.label }}
           </BaseButton>
         </div>
-        <p class="muted">
-          当前类型：{{ workbench.airMissionKindLabel(workbench.airMissionKind) }}；
-          点地图上任意一格即把它定为任务格（14.2f-B），然后在此宣布。
-        </p>
-        <BaseButton variant="primary" size="sm" @click="beginMission()">
-          宣布任务（14.2f-A/B）
+        <BaseButton variant="primary" size="sm" title="14.2f" @click="beginMission()">
+          宣布任务
         </BaseButton>
       </section>
-
-      <p v-else class="muted">
-        点本方算子＝选中并显示可移动范围（6.1）；点空军基地格上的飞机＝选入任务（14.2f-A）。
-      </p>
     </template>
   </MapPopover>
 </template>
@@ -1044,6 +898,21 @@ function pickDump(): void {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--color-muted);
+}
+
+/* 左键堆叠窗：点枚切换选中（默认全选）；未选者压暗，不做额外说明 */
+.chip--pickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.chip--off {
+  opacity: 0.45;
+}
+
+.chip--pickable:focus-visible {
+  outline: 1px solid var(--color-command-teal);
+  outline-offset: 1px;
 }
 
 .list__row--active {

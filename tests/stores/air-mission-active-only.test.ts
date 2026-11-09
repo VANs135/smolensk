@@ -156,12 +156,10 @@ describe('H⑤（14.1a）：空军任务里只可选**激活**的飞机', () => 
     expect(canFlyMission('inactive')).toBe(false)
   })
 
-  it('★ 源码守卫：面板与小窗的阵列都读 store 的结论（不在组件里自己比状态）', () => {
+  it('★ 源码守卫：参战机阵列的可选性与原因必须来自 store 的投影', () => {
     const panel = readFileSync('src/components/air/AirPanel.vue', 'utf8')
-    // 参战机阵列的可选性与原因**必须**来自 store 的投影
+    // 用户 2026-11-09：机场飞机的「选入任务」已从左键堆叠窗移出（窗内只留战斗算子），
+    // 该入口只保留在空军面板；面板的可选性与原因仍只读 store 投影。
     expect(panel).toContain('workbench.airMissionJoinChoices')
-    const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
-    // 地图小窗（点机场）那一颗「选入任务」按钮同样按 store 的结论禁用
-    expect(popover).toContain('missionJoinReasonOf')
   })
 })

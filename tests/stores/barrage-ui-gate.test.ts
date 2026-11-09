@@ -43,9 +43,9 @@ describe('闸门预测 `actionAllowedNow`（与 requireAction 同一口径，无
   it('★ 地图小窗的轰炸入口**问闸门**（不再只看"有没有印刷轰炸值"）', () => {
     const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
     expect(popover).toContain("workbench.actionAllowedNow('barrage.declare')")
-    // 空军任务区与"选入任务"也受同一闸门约束（不是只藏了「炮击」一个按钮）
+    // 空军任务区也受同一闸门约束（不是只藏了「炮击」一个按钮）
+    // 用户 2026-11-09：窗内只留战斗算子 ⇒「选入任务」那一段已移出，守卫只管仍在的宣布区
     expect(popover).toContain("workbench.actionAllowedNow('air.mission')")
     expect(popover).toContain('pickedAir.length > 0 && airMissionAllowed')
-    expect(popover).toContain('|| !airMissionAllowed')
   })
 })
