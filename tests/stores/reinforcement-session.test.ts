@@ -311,9 +311,12 @@ describe('B34：拆并四处"指认单位"改成点算子图', () => {
     }
     // 三处各自绑自己的选中态（母单位 / 保留 / 移除）；慢动员的"锁定哪一枚"已改按侧+编制过滤（2.4）
     expect(panel).toContain(':items="rebuildUnitItems(breakdownParentId)"')
-    expect(panel).toContain(':items="rebuildUnitItems(keepId)"')
-    expect(panel).toContain(':items="rebuildUnitItems(removeId)"')
-    expect(panel.match(/rebuildUnitItems\(/gu)?.length).toBe(3)
+    // 13.9 整编两处只列**当前堆叠**（右键带入作用域）；候选来自 workbench 投影，不在组件里筛
+    expect(panel).toContain(':items="mergeKeepItems(keepId)"')
+    expect(panel).toContain(':items="mergeRemoveItems(removeId)"')
+    expect(panel.match(/rebuildUnitItems\(/gu)?.length).toBe(1)
+    expect(panel).toContain('workbench.consolidationKeepUnits')
+    expect(panel).toContain('workbench.mergeRemoveUnits')
     expect(panel).toContain(':items="slowMobilizationUnitItems(breakdownParentId)"')
     // 候选来自 store 的投影（组件不自己筛单位）
     expect(panel).toContain('workbench.ownUnitsOnMap')

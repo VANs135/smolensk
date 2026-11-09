@@ -19223,16 +19223,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 13.9-1：同格**唯一**可合并的另一枚（右键「合并单位」的判据）
+   * 13.9-1：同格**全部**可合并的伙伴（右键合并的判据；也供整编会话列候选）
    *
-   * 只做引擎预演（`planConsolidation`，与落账同一处判据），不落账；
-   * 候选多于一枚或预演不通过 ⇒ `null`（不替玩家挑并哪一枚，菜单也就不出现）。
+   * 只做引擎预演（`planConsolidation`，与落账同一处判据），不落账。
+   * 整编只可能发生在同一堆叠内 ⇒ 候选严格限定同格，不跨格展开成全局清单。
    */
-  function mergePartnerAt(keepId: string): string | null {
-    if (!actionAllowedNow('rein.rebuild')) return null
+  function mergePartnerIds(keepId: string): string[] {
+    if (!actionAllowedNow('rein.rebuild')) return []
     const keep = units.value.find((unit) => unit.instanceId === keepId)
-    if (keep === undefined || keep.side !== activeSide.value) return null
-    if ((keep.noncombatKind ?? null) !== null) return null
+    if (keep === undefined || keep.side !== activeSide.value) return []
+    if ((keep.noncombatKind ?? null) !== null) return []
     const candidates = units.value.filter(
       (unit) =>
         unit.instanceId !== keepId &&
@@ -19240,17 +19240,63 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         sameHex(unit.hex, keep.hex) &&
         (unit.noncombatKind ?? null) === null,
     )
-    const eligible = candidates.filter(
-      (unit) =>
-        !axisConsolidationBanned([unit.side], [keep.formation, unit.formation]) &&
-        planConsolidation({
-          kind: 'multiStepUnits',
-          phaseIsReinforcement: phase.value === 'reinforcement',
-          keep: toConsolidationGroundView(keep),
-          remove: toConsolidationGroundView(unit),
-        }).ok === true,
-    )
-    return eligible.length === 1 ? (eligible[0]?.instanceId ?? null) : null
+    return candidates
+      .filter(
+        (unit) =>
+          !axisConsolidationBanned([unit.side], [keep.formation, unit.formation]) &&
+          planConsolidation({
+            kind: 'multiStepUnits',
+            phaseIsReinforcement: phase.value === 'reinforcement',
+            keep: toConsolidationGroundView(keep),
+            remove: toConsolidationGroundView(unit),
+          }).ok === true,
+      )
+      .map((unit) => unit.instanceId)
+  }
+
+  /**
+   * 13.9-1：同格**唯一**可合并的另一枚（右键「合并单位」的判据）
+   *
+   * 候选多于一枚或预演不通过 ⇒ `null`（不替玩家挑并哪一枚，菜单改走整编会话）。
+   */
+  function mergePartnerAt(keepId: string): string | null {
+    const ids = mergePartnerIds(keepId)
+    return ids.length === 1 ? ids[0]! : null
+  }
+
+  /**
+   * 13.9-1：**整编会话的作用域**（用户 2026-11-09）
+   *
+   * 右键在某一堆叠上选择「合并单位（打开整编会话）」时记下该格与保留枚；
+   * 会话的两个阵列据此只列**这一个堆叠**的单位，不作为全局可合并清单展开。
+   */
+  const consolidationPick = ref<{ hex: HexRef; keepId: string } | null>(null)
+
+  function openConsolidationPickNow(keepId: string): boolean {
+    const keep = units.value.find((unit) => unit.instanceId === keepId)
+    if (keep === undefined || mergePartnerIds(keepId).length < 2) return false
+    consolidationPick.value = { hex: { col: keep.hex.col, row: keep.hex.row }, keepId }
+    return true
+  }
+
+  function clearConsolidationPick(): void {
+    consolidationPick.value = null
+  }
+
+  /** 整编会话「保留哪一枚」的候选：有作用域时只列该堆叠，否则沿用图上本方单位 */
+  const consolidationKeepUnits = computed<ConsoleUnit[]>(() => {
+    const pick = consolidationPick.value
+    if (pick === null) return ownUnitsOnMap.value
+    return ownUnitsOnMap.value.filter((unit) => sameHex(unit.hex, pick.hex))
+  })
+
+  /** 整编会话「移除哪一枚」的候选：只列该保留枚同格、预演通过的伙伴 */
+  function mergeRemoveUnits(keepId: string): ConsoleUnit[] {
+    const ids = mergePartnerIds(keepId)
+    return ids.flatMap((id) => {
+      const unit = units.value.find((item) => item.instanceId === id)
+      return unit === undefined ? [] : [unit]
+    })
   }
 
   /** 12.5：这一枚此刻要不要加油（右键「加油」入口的判据，与 `fuelCandidates` 同源） */
@@ -22733,6 +22779,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     rebuildUnitNow,
     consolidateUnitsNow,
     mergePartnerAt,
+    mergePartnerIds,
+    consolidationPick,
+    openConsolidationPickNow,
+    clearConsolidationPick,
+    consolidationKeepUnits,
+    mergeRemoveUnits,
     needsFuelNow,
     consolidateAircraftNow,
     setBreakdownPoolNow,

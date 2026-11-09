@@ -1610,19 +1610,33 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     /*
      * 用户 2026-11-09：合并 / 加油进右键。
-     *   · 13.9-1 合并：只在**同格唯一**另一枚预演通过时出现（不替玩家挑并哪一枚）；
+     *   · 13.9-1 合并：恰一枚同格伙伴 ⇒ 一键并；多于一枚 ⇒ 打开既有整编会话让玩家挑
+     *     （菜单不替他挑并哪一枚；会话只列当前这个堆叠）；
      *   · 12.5 加油：出现即把这一枚选为燃料目标，方法与来源仍由既有补给会话选定。
      */
-    if (unit !== undefined && !moving && workbench.mergePartnerAt(id) !== null) {
-      actions.push({
-        key: 'rein.consolidate',
-        label: '合并单位',
-        rule: '13.9',
-        panel: 'unit',
-        only: 'mergeUnit',
-        group: '编组',
-        disabledReason: null,
-      })
+    if (unit !== undefined && !moving) {
+      const partners = workbench.mergePartnerIds(id)
+      if (partners.length === 1) {
+        actions.push({
+          key: 'rein.consolidate',
+          label: '合并单位',
+          rule: '13.9',
+          panel: 'unit',
+          only: 'mergeUnit',
+          group: '编组',
+          disabledReason: null,
+        })
+      } else if (partners.length > 1) {
+        actions.push({
+          key: 'rein.consolidate.open',
+          label: '合并单位（打开整编会话挑对象）',
+          rule: '13.9',
+          panel: 'unit',
+          only: 'openConsolidation',
+          group: '编组',
+          disabledReason: null,
+        })
+      }
     }
     if (
       unit !== undefined &&
@@ -1825,6 +1839,15 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (option.only === 'mergeUnit') {
       const partner = workbench.mergePartnerAt(instanceId)
       if (partner !== null) workbench.consolidateUnitsNow(instanceId, partner)
+      closePopup()
+      return true
+    }
+    /*
+     * 13.9-1：同格伙伴多于一枚 ⇒ 打开**既有整编会话**，只带进这一堆叠的作用域
+     * （保留枚预选，移除枚由玩家点）；不替玩家挑，也不在这里落账。
+     */
+    if (option.only === 'openConsolidation') {
+      if (workbench.openConsolidationPickNow(instanceId)) collapsedSessionKey.value = null
       closePopup()
       return true
     }

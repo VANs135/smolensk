@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, watchEffect } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/base'
 import { SessionStep } from '@/components/session'
@@ -238,6 +238,54 @@ const rebuildUnitItems = computed(
         hex: unit.hex,
       })),
 )
+
+/**
+ * 13.9 整编会话：**保留哪一枚**的候选
+ *
+ * 右键从某一堆叠打开时，store 已把作用域收在该格（`consolidationPick`）⇒ 这里只列该堆叠；
+ * 未经右键（会话自己开着）时沿用图上本方单位。判据与过滤都在 store，本组件只搬运。
+ */
+const mergeKeepItems = computed(
+  () =>
+    (selectedId: string): readonly CounterPickerItem[] =>
+      workbench.consolidationKeepUnits.map((unit) => ({
+        id: unit.instanceId,
+        imageUrl: counterImageUrlOf(unit),
+        name:
+          `${unit.name} @ ${hexLabel(unit.hex)}（A ${unit.raw.attack}｜AR ${unit.raw.ar}` +
+          `｜MA ${unit.raw.ma}｜${unit.re}RE）`,
+        selected: selectedId === unit.instanceId,
+        hex: unit.hex,
+      })),
+)
+
+/** 13.9 整编会话：**移除哪一枚**的候选＝该保留枚同格、预演通过的伙伴（不跨格） */
+function mergeRemoveItems(selectedId: string): readonly CounterPickerItem[] {
+  return workbench.mergeRemoveUnits(keepId.value).map((unit) => ({
+    id: unit.instanceId,
+    imageUrl: counterImageUrlOf(unit),
+    name:
+      `${unit.name} @ ${hexLabel(unit.hex)}（A ${unit.raw.attack}｜AR ${unit.raw.ar}` +
+      `｜MA ${unit.raw.ma}｜${unit.re}RE）`,
+    selected: selectedId === unit.instanceId,
+    hex: unit.hex,
+  }))
+}
+
+/** 右键带入整编会话 ⇒ 预选保留枚、清掉上一轮的移除选择（不替玩家挑移除对象） */
+watch(
+  () => workbench.consolidationPick,
+  (pick) => {
+    if (pick === null) return
+    keepId.value = pick.keepId
+    removeId.value = ''
+  },
+  // 会话被右键"打开"时可能整块重挂载（此前被收起）⇒ 挂载即读一次作用域
+  { immediate: true },
+)
+
+/** 会话收起 ⇒ 作用域作废（下次重新右键再带入，不拿旧堆叠预选） */
+onBeforeUnmount(() => workbench.clearConsolidationPick())
 
 /** 13.5：**可保存**的补员类别（判据取引擎的 `isSavableRepl`，不在此写死） */
 const savableReplKeys = ['ftr', 'tac', 'pax', 'eq'].filter((key) =>
@@ -1101,15 +1149,15 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         <CounterPicker
           title="合并：保留哪一枚"
           hint="13.9：两面完全相同、非 DG、非部队储备低下 —— 由引擎判"
-          :items="rebuildUnitItems(keepId)"
+          :items="mergeKeepItems(keepId)"
           :size="32"
           @pick="keepId = $event"
           @hover="hoverUnit"
         />
         <CounterPicker
           title="合并：移除哪一枚"
-          hint="13.9-1 地面 / 13.9-4 飞机（用同一份阵列选，引擎按类型判）"
-          :items="rebuildUnitItems(removeId)"
+          hint="13.9-1 地面：只列同堆叠、两面相同的伙伴（引擎复核）"
+          :items="mergeRemoveItems(removeId)"
           :size="32"
           @pick="removeId = $event"
           @hover="hoverUnit"

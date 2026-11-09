@@ -222,6 +222,16 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   advanceSegmentNow: { kind: 'flowState', why: '统一阶段执行器先结清规则义务，再按会话状态推进' },
   restartGameNow: { kind: 'pregame', why: '终局后重建整局盘面与初设，不是阶段内行动' },
 
+  // 13.9-1：整编会话的**堆叠作用域**（右键带入哪一格），只改草稿态，不落盘
+  clearConsolidationPick: {
+    kind: 'draft',
+    why: '会话收起时清掉右键带入的堆叠作用域；落盘发生在 consolidateUnitsNow',
+  },
+  mergeRemoveUnits: {
+    kind: 'draft',
+    why: '只读投影：按同格预演列出"可移除伙伴"给整编会话选，`units.value` 仅用于取单位，不落盘',
+  },
+
   // 专规 2.4：原文只写"按此表动员"，**未给时机** ⇒ 不加环节闸（用户 2026-11-05 裁定"按回合能动"）
   slowMobilizationLockedOf: {
     kind: 'noTiming',
