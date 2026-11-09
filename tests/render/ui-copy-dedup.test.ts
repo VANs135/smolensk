@@ -110,3 +110,33 @@ describe('U0：人员空投死入口下线', () => {
     }
   })
 })
+
+describe('U1-c：战斗窗减负', () => {
+  it('战斗面板不再有「其他入口」与九步清单', () => {
+    const panel = combatPanel()
+    expect(panel).not.toContain('其他入口')
+    expect(panel).not.toContain('九步清单')
+    expect(panel).not.toContain('一键查表')
+    expect(panel).not.toContain('九步完整流程')
+    expect(panel).not.toContain('setBattleMode')
+  })
+
+  it('付款仍可走：来源声明 + 确认按钮 + 9.5b 参战攻方阵列都在', () => {
+    const panel = combatPanel()
+    expect(panel).toContain('declaredDumpOf')
+    expect(panel).toContain('confirmCombatSupply')
+    expect(panel).toContain('toggleCombatSupplyAttacker')
+    expect(panel).toContain('defenderProvides')
+    expect(panel).toContain('attackerUsesInternalStocks')
+    expect(panel).toContain('defenderUsesInternalStocks')
+    expect(panel).toContain('<RuleTip rule="9.5 / 12.4">')
+  })
+
+  it('折扣勾选用极短标签，不再挂解释段落', () => {
+    const panel = combatPanel()
+    expect(panel).toContain('守方支付')
+    expect(panel).not.toContain('不勾＝拒付')
+    expect(panel).not.toContain('（12.10a；用一次降一级，12.10b）')
+    expect(panel).not.toContain('（12.10a；须同时勾"守方支付战斗补给"）')
+  })
+})

@@ -400,8 +400,8 @@ describe('B14c：战后推进阵列（9.12g-A / 9.12b）', () => {
 describe('B14c：战斗面板的替换（源码守卫）', () => {
   const panel = readFileSync('src/components/combat/CombatPanel.vue', 'utf8')
 
-  it('四处「选算子」都改走 `CounterPicker`，旧的复选框 / 下拉已删', () => {
-    expect(panel.match(/<CounterPicker/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
+  it('三处「选算子」都改走 `CounterPicker`，旧的复选框 / 下拉已删', () => {
+    expect(panel.match(/<CounterPicker/g)?.length ?? 0).toBeGreaterThanOrEqual(3)
     expect(panel).not.toContain('v-for="unit in attackerList"')
     expect(panel).not.toContain('v-for="candidate in workbench.combatAdvanceCandidates"')
     expect(panel).not.toContain('<select v-model="workbench.combatInputs.attackerArUnitId"')
@@ -447,7 +447,7 @@ describe('B14c：战斗面板的替换（源码守卫）', () => {
 
   it('悬停同步地图高亮：走既有的 `setHoverHex`', () => {
     expect(panel).toContain('workbench.setHoverHex')
-    expect(panel.match(/@hover="hoverUnit"/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
+    expect(panel.match(/@hover="hoverUnit"/g)?.length ?? 0).toBeGreaterThanOrEqual(3)
   })
 })
 

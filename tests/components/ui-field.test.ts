@@ -61,10 +61,11 @@ describe('条 24：正式/验证模式门控', () => {
     }
   })
 
-  it('CombatPanel：攻/守可用 T 两个数值已走 UiField', () => {
+  it('CombatPanel：攻/守「可用 T」读数已删除', () => {
     const src = read('src/components/combat/CombatPanel.vue')
-    expect(src).toMatch(/import UiField from/)
-    expect(src.match(/<UiField\b/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+    expect(src).not.toContain('可用 T')
+    expect(src).not.toContain('attackerAvailableT')
+    expect(src).not.toContain('defenderAvailableT')
   })
 
   it('BarragePanel：4 处已走 UiField（14.1a 摆放块已删）', () => {
