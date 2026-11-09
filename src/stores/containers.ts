@@ -2062,6 +2062,45 @@ export const useContainersStore = defineStore('containers', () => {
     return true
   }
 
+  /**
+   * 条 14（用户实机）：「飞出盒」不是一按就消失
+   *
+   * 规则上等同 14.11 基地转移：先选本方空军基地 → 按 14.11 判距离/激活态并落位 →
+   * 再退出盒成员；落点写进 `lastAction`，界面据此回显"已落位 X.Y，可继续选任务"。
+   * 不新造判据：距离/基地/激活态全部由 `transferAircraftNow` → `planBaseTransfer` 裁。
+   */
+  function flyOutOfBox(instanceId: string, toHexText: string): boolean {
+    const air = workbench.airUnits.find((item) => item.instanceId === instanceId)
+    if (air === undefined) return false
+    if (!workbench.airBoxMembers.includes(instanceId)) {
+      lastAction.value = {
+        ok: false,
+        rule: '1.4a',
+        detail: `${air.name} 不在图外空军盒内`,
+        scope: '地图外空军盒',
+      }
+      return false
+    }
+    if (!workbench.transferAircraftNow(instanceId, toHexText)) {
+      lastAction.value = {
+        ok: false,
+        rule: '14.11',
+        detail: `${air.name} 未能落位 ${toHexText}（14.11：目的地须为本方空军基地）`,
+        scope: '地图外空军盒',
+      }
+      return false
+    }
+    workbench.setAirInBoxMembership(instanceId, false)
+    lastAction.value = {
+      ok: true,
+      rule: '14.11',
+      detail: `${air.name} 飞出盒并落位 ${toHexText}（14.11），可去该基地格选任务`,
+      scope: '地图外空军盒',
+    }
+    workbench.pushLog('info', lastAction.value.detail, '14.11')
+    return true
+  }
+
   /* ────────────────────────────── 边缘盒（1.4b） ────────────────────────────── */
 
   interface EdgeTransfer {
@@ -2491,6 +2530,7 @@ export const useContainersStore = defineStore('containers', () => {
     drawAndApplyStepNow,
     activateAirBox,
     setAirInBox,
+    flyOutOfBox,
     moveEdgeBox,
     canUseEdgeBoxes,
     edgeBoxEnterCandidates,

@@ -437,38 +437,101 @@ function boxAircraft(side: Side) {
     </template>
     <!-- ── ② 盒 ── -->
 
-    <details
-      v-for="box in boxes"
-      :key="box.id"
-      class="box"
-      :open="props.only === 'actions' || showsReferee"
-    >
-      <summary class="box__head">
-        <span class="box__name">{{ box.name }}</span>
-        <BaseTag kind="neutral">{{ box.rule }}</BaseTag>
-        <BaseTag kind="info">{{ sideName(box.side) }}</BaseTag>
-        <span class="num">
-          内 {{ box.holdings.length }} 枚<template v-if="box.capacity !== null">
-            ／容量 {{ box.capacity }}</template
+    <template v-for="box in boxes" :key="box.id">
+      <!-- ★ 条 14：地图外空军盒独立成窗（自带标题与边框，不与编队/死亡堆等盒共用 <details> 容器） -->
+      <section v-if="box.kind === 'airBox'" class="box box--air">
+        <header class="box__head box__head--title">
+          <span class="box__name">地图外空军盒 · {{ box.name }}</span>
+          <BaseTag kind="neutral">{{ box.rule }}</BaseTag>
+          <BaseTag kind="info">{{ sideName(box.side) }}</BaseTag>
+          <span class="num">
+            内 {{ box.holdings.length }} 枚<template v-if="box.capacity !== null">
+              ／容量 {{ box.capacity }}</template
+            >
+          </span>
+          <span v-if="box.dataGaps.length > 0" class="num box__gap"
+            >数据缺口 ×{{ box.dataGaps.length }}</span
           >
-        </span>
-        <span v-if="box.dataGaps.length > 0" class="num box__gap"
-          >数据缺口 ×{{ box.dataGaps.length }}</span
-        >
-      </summary>
+        </header>
 
-      <AircraftRoster
-        v-if="
-          !showsReferee &&
-          box.kind === 'airBox' &&
-          box.side !== null &&
-          box.side === actingSide &&
-          showsBoxActions('airBox')
-        "
-        :box-side="box.side"
-        :aircraft="boxAircraft(box.side)"
-      />
-      <template v-else>
+        <AircraftRoster
+          v-if="
+            !showsReferee &&
+            box.side !== null &&
+            box.side === actingSide &&
+            showsBoxActions('airBox')
+          "
+          :box-side="box.side"
+          :aircraft="boxAircraft(box.side)"
+        />
+
+        <!-- 验证页：盒图与裁判入口照旧（对局台不铺） -->
+        <template v-if="showsReferee">
+          <div class="box__art">
+            <img
+              v-if="box.artwork?.imageKey"
+              class="box__img"
+              :src="box.artwork.imageKey"
+              alt="盒图"
+            />
+            <span v-else class="muted"
+              >（无盒图：美工接口已留，数据补 `containers.artwork[{{ box.id }}]` 即显示）</span
+            >
+          </div>
+          <div v-if="showsBoxActions('airBox')" class="row">
+            <label class="field">
+              移入盒
+              <select v-model="airUnitId" class="select">
+                <option value="">（选择飞机）</option>
+                <option v-for="item in airCandidates" :key="item.id" :value="item.id">
+                  {{ item.label }}
+                </option>
+              </select>
+            </label>
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :disabled="airUnitId === ''"
+              @click="containers.setAirInBox(airUnitId, true)"
+            >
+              移入盒（1.4a）
+            </BaseButton>
+            <BaseButton
+              variant="primary"
+              size="sm"
+              @click="containers.activateAirBox(box.side === 'soviet' ? 'soviet' : 'axis')"
+            >
+              盒内免费整备（1.4a：Inactive → Active）
+            </BaseButton>
+            <span class="num">
+              航程 {{ rangeHexesOf(box) ?? '—' }} 格｜Active {{ airCountOf(box, 'active') }} /
+              Inactive {{ airCountOf(box, 'inactive') }}｜可激活：{{
+                activatableOf(box) ? '是（免费整备）' : '否'
+              }}
+            </span>
+          </div>
+          <p v-for="(note, index) in box.notes" :key="`n${index}`" class="muted">· {{ note }}</p>
+          <p v-for="(gap, index) in box.dataGaps" :key="`g${index}`" class="warn">
+            ⚠ 数据缺口：{{ gap }}
+          </p>
+        </template>
+      </section>
+
+      <details v-else class="box" :open="props.only === 'actions' || showsReferee">
+        <summary class="box__head">
+          <span class="box__name">{{ box.name }}</span>
+          <BaseTag kind="neutral">{{ box.rule }}</BaseTag>
+          <BaseTag kind="info">{{ sideName(box.side) }}</BaseTag>
+          <span class="num">
+            内 {{ box.holdings.length }} 枚<template v-if="box.capacity !== null">
+              ／容量 {{ box.capacity }}</template
+            >
+          </span>
+          <span v-if="box.dataGaps.length > 0" class="num box__gap"
+            >数据缺口 ×{{ box.dataGaps.length }}</span
+          >
+        </summary>
+
         <!-- 盒的美工接口：有图即渲染，无图退化 -->
         <div v-if="showsReferee" class="box__art">
           <img
@@ -552,16 +615,6 @@ function boxAircraft(side: Side) {
                   点地图选出盒格
                 </BaseButton>
               </template>
-              <!-- 空军盒：移出（1.4a） -->
-              <template v-if="showsReferee && box.kind === 'airBox' && showsBoxActions('airBox')">
-                <BaseButton
-                  variant="ghost"
-                  size="sm"
-                  @click="containers.setAirInBox(holding.unitId, false)"
-                >
-                  移出盒
-                </BaseButton>
-              </template>
             </li>
           </ul>
         </div>
@@ -642,40 +695,6 @@ function boxAircraft(side: Side) {
           </span>
         </div>
 
-        <!-- 地图外空军盒（1.4a） -->
-        <div v-if="showsReferee && box.kind === 'airBox' && showsBoxActions('airBox')" class="row">
-          <label class="field">
-            移入盒
-            <select v-model="airUnitId" class="select">
-              <option value="">（选择飞机）</option>
-              <option v-for="item in airCandidates" :key="item.id" :value="item.id">
-                {{ item.label }}
-              </option>
-            </select>
-          </label>
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="airUnitId === ''"
-            @click="containers.setAirInBox(airUnitId, true)"
-          >
-            移入盒（1.4a）
-          </BaseButton>
-          <BaseButton
-            variant="primary"
-            size="sm"
-            @click="containers.activateAirBox(box.side === 'soviet' ? 'soviet' : 'axis')"
-          >
-            盒内免费整备（1.4a：Inactive → Active）
-          </BaseButton>
-          <span class="num">
-            航程 {{ rangeHexesOf(box) ?? '—' }} 格｜Active {{ airCountOf(box, 'active') }} /
-            Inactive {{ airCountOf(box, 'inactive') }}｜可激活：{{
-              activatableOf(box) ? '是（免费整备）' : '否'
-            }}
-          </span>
-        </div>
-
         <!-- 边缘盒（1.4b） -->
         <div v-if="box.kind === 'edgeBox' && showsBoxActions('edgeBox')" class="row">
           <label class="field">
@@ -727,8 +746,8 @@ function boxAircraft(side: Side) {
             全部放回图上（13.7）
           </BaseButton>
         </div>
-      </template>
-    </details>
+      </details>
+    </template>
 
     <!-- ── ③ 剧本抽取盒（编队抽签；池成员由 formations.json 推导） ──
          B17a-2：抽签与落盘都是**动作** ⇒ 只在会话框那一段里画
@@ -1091,6 +1110,16 @@ function boxAircraft(side: Side) {
   padding: var(--space-1) 0;
 }
 
+/* 条 14：地图外空军盒独立成窗（与编队等盒的 <details> 区分边框与标题） */
+.box--air {
+  margin: var(--space-2) 0;
+  border: 1px solid var(--color-rule);
+  border-left: 3px solid var(--color-info);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  background: var(--color-bg-2);
+}
+
 .box__head {
   display: flex;
   flex-wrap: wrap;
@@ -1098,6 +1127,10 @@ function boxAircraft(side: Side) {
   gap: var(--space-2);
   font-size: var(--text-sm);
   cursor: pointer;
+}
+
+.box__head--title {
+  cursor: default;
 }
 
 .box__name {

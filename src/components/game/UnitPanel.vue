@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, provide } from 'vue'
 
-import { useMapViewStore } from '@/stores'
+import { useMapViewStore, useWorkbenchStore } from '@/stores'
 import { AirPanel } from '@/components/air'
 import AircraftRoster from '@/components/air/AircraftRoster.vue'
 import { ContainersPanel } from '@/components/containers'
@@ -46,6 +46,15 @@ type SupplyOnly = (typeof SUPPLY_ONLY)[number]
 type FortOnly = (typeof FORT_ONLY)[number]
 
 const mapView = useMapViewStore()
+const workbench = useWorkbenchStore()
+
+/** 条 14：基地格窗户自己的标题（`AirBaseView` 不含 `name`，按算子 id 取回） */
+const actionBaseTitle = computed(() => {
+  const base = mapView.actionBase
+  if (base === null) return ''
+  const unit = workbench.units.find((item) => item.instanceId === base.id)
+  return unit?.name ?? `${base.hex.col}.${base.hex.row}`
+})
 
 /** 这一枚设施此刻能做的操作（空＝不该有本会话；判据在 store） */
 const options = computed(() => mapView.unitActionOptions(mapView.unitActionUnitId ?? ''))
@@ -92,12 +101,15 @@ provide(
 
 <template>
   <!-- 只展开挑定的那一段：左键不再给操作菜单（动作从右键菜单挑） -->
-  <AircraftRoster
-    v-if="showRoster && mapView.actionBase !== null"
-    :key="mapView.actionBase.id"
-    :base-id="mapView.actionBase.id"
-    :aircraft="mapView.actionBaseAircraft"
-  />
+  <!-- 条 14：基地格窗口自带标题容器（修前裸放名册，与其它窗混在一起） -->
+  <section v-if="showRoster && mapView.actionBase !== null" class="roster-window">
+    <h4 class="roster-window__title">空军基地 · {{ actionBaseTitle }}</h4>
+    <AircraftRoster
+      :key="mapView.actionBase.id"
+      :base-id="mapView.actionBase.id"
+      :aircraft="mapView.actionBaseAircraft"
+    />
+  </section>
   <template v-else-if="activeOnly !== null">
     <CounterOrderPanel
       v-if="orderOnly !== null"
@@ -124,4 +136,16 @@ provide(
   </template>
 </template>
 
-<style scoped></style>
+<style scoped>
+.roster-window {
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  background: var(--color-bg-2);
+}
+.roster-window__title {
+  margin: 0 0 var(--space-2);
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+}
+</style>

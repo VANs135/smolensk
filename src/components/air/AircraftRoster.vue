@@ -27,6 +27,49 @@ const boxRefitAllowed = computed(
 )
 const refitSources = computed(() => workbench.refitPayDumps.length)
 
+/**
+ * 条 14：飞出盒＝完整的 14.11 落位流程（选本方空军基地 → 落位 → 回显）
+ *
+ * 飞入盒只裁 1.4a 的往返航程（一键即可）；飞出盒在规则上等同 14.11 基地转移，
+ * 目的地必须是本方空军基地，故必须先选基地再确认。
+ */
+const flyOutPick = ref(false)
+const targetBaseHex = ref('')
+const landed = ref<string | null>(null)
+const flyOutError = ref<string | null>(null)
+
+/** 飞出盒的目的地候选（本方空军基地；距离/激活态仍由 store 走 14.11 判） */
+const flyOutTargets = computed(() =>
+  workbench.ownAirBases
+    .filter((base) => props.boxSide === undefined || base.side === props.boxSide)
+    .map((base) => {
+      const hex = `${base.hex.col}.${base.hex.row}`
+      const unit = workbench.units.find((item) => item.instanceId === base.id)
+      return { hex, label: `${unit?.name ?? '空军基地'}（${hex}）` }
+    }),
+)
+
+function beginFlyOut(): void {
+  flyOutPick.value = true
+  targetBaseHex.value = ''
+  landed.value = null
+  flyOutError.value = null
+}
+
+function confirmFlyOut(): void {
+  const air = selected.value
+  if (air === undefined || targetBaseHex.value === '') return
+  if (containers.flyOutOfBox(air.instanceId, targetBaseHex.value)) {
+    landed.value = containers.lastAction?.detail ?? null
+    flyOutError.value = null
+    flyOutPick.value = false
+    targetBaseHex.value = ''
+    selectedId.value = null
+  } else {
+    flyOutError.value = containers.lastAction?.detail ?? '未能落位（14.11）'
+  }
+}
+
 const aircraftItems = computed(() =>
   (refit.value ? workbench.refitCandidates : props.aircraft).map((air) => ({
     id: air.instanceId,
@@ -70,12 +113,39 @@ function pick(id: string): void {
         >
       </div>
       <div v-if="selected !== undefined" class="roster__row">
+        <template v-if="boxSide !== undefined">
+          <BaseButton v-if="!flyOutPick" size="sm" variant="ghost" @click="beginFlyOut"
+            >飞出盒 · 14.11</BaseButton
+          >
+          <template v-else>
+            <select v-model="targetBaseHex" class="roster__select">
+              <option value="">（选本方空军基地）</option>
+              <option v-for="target in flyOutTargets" :key="target.hex" :value="target.hex">
+                {{ target.label }}
+              </option>
+            </select>
+            <BaseButton
+              size="sm"
+              variant="primary"
+              :disabled="targetBaseHex === ''"
+              @click="confirmFlyOut"
+              >确认飞出盒 · 14.11</BaseButton
+            >
+          </template>
+        </template>
+        <!-- 飞入盒只裁 1.4a 的往返航程 ⇒ 仍一键 -->
         <BaseButton
+          v-else
           size="sm"
           variant="ghost"
-          @click="containers.setAirInBox(selected.instanceId, boxSide === undefined)"
-          >{{ boxSide === undefined ? '飞入盒' : '飞出盒' }} · 1.4a</BaseButton
+          @click="containers.setAirInBox(selected.instanceId, true)"
+          >飞入盒 · 1.4a</BaseButton
         >
+      </div>
+      <!-- 条 14：落位/被拒的可见回显（不再点完只关窗） -->
+      <div v-if="landed !== null || flyOutError !== null" class="roster__row">
+        <BaseTag v-if="landed !== null" kind="success">{{ landed }}</BaseTag>
+        <BaseTag v-else kind="danger">{{ flyOutError }}</BaseTag>
       </div>
     </template>
   </div>
@@ -96,5 +166,10 @@ function pick(id: string): void {
   margin: 0;
   color: var(--color-muted);
   font-size: var(--text-sm);
+}
+.roster__select {
+  max-width: 220px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 </style>

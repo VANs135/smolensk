@@ -16819,7 +16819,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /** C9 14.11：把一架飞机转移到另一个**本方**基地（距离可加倍；战斗机在正常距离内保持激活） */
-  function transferAircraftNow(instanceId: string): boolean {
+  function transferAircraftNow(instanceId: string, toHexText?: string): boolean {
+    // 条 14：盒内飞出盒复用 14.11 落位判据，目的地可由调用方直接给（不写回面板输入）
     const air = airUnits.value.find((item) => item.instanceId === instanceId)
     if (air === undefined) return false
     const fromBase = airBases.value.find((base) => sameHex(base.hex, air.hex))
@@ -16827,7 +16828,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `${air.name} 不在空军基地格内（14.1a）`, '14.1a')
       return false
     }
-    const toHex = parseHexPath(airInputs.value.transferToHexText)[0] ?? null
+    const toHex = parseHexPath(toHexText ?? airInputs.value.transferToHexText)[0] ?? null
     if (toHex === null) {
       pushLog('warning', '转移目的地应为「列.行」（14.11）', '14.11')
       return false
