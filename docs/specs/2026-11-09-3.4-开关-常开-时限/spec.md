@@ -273,8 +273,21 @@ FP 独立的步兵师、独立单位、单一单位编队一律豁免（`panzerG
 
 ### 7.6 3.4b Supply Table 均分接线
 
-原文：「The Axis **must evenly divide Supply Table arrivals** between Guderian and Hoth, with the odd
-point going to Guderian. … If 7 SP are obtained, Hoth must be given 3 and Guderian 4.」
+原文（`专规及表格__Smolensk_Rules_v1.1.txt` 第 309–321 行，逐字）：
+
+> **3.4b Supply Restrictions.** The Axis must evenly divide Supply Table arrivals between Guderian
+> and Hoth, **with the odd point going to Guderian.** SP from the “wrong” panzer group cannot be
+> used to pay the fuel, combat, or barrage costs of a multi-unit formation. Aside from this, use
+> of SP is not restricted.
+> Example: If 7 SP are obtained, Hoth must be given 3 and Guderian 4.
+
+Setup Note F（第 394–400 行，逐字）：
+
+> F) When using 3.4b (part of “Guderian & Hoth”), on-map SP should be assigned to a Pz Grp during
+> setup. Use the Dividing Line as a guide, but **the player can freely decide ownership of dumps**.
+
+**结论（已核对）**：奇数点归 Guderian 是原文**明写**（"with the odd point going to Guderian"），
+不是从 "Hoth 3 / Guderian 4" 反推；示例只是再确认。因此实现维持固定余数归 Guderian，无需改。
 
 - **可判定**：`splitSupplyTableSp(T)` 已给出 `{ hoth: floor(T/2), guderian: ceil(T/2) }`。
 - **判对象**：`Supply Table` 到货（`plan.freeSp + plan.edgeSp`）；3.6 补给列车的 `supplyTrain` 落位剔除后再统计。

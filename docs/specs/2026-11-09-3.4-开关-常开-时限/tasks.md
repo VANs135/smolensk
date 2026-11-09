@@ -78,7 +78,7 @@
 
 ## T9 3.4b Supply Table 均分
 
-- [x] 回原文核对：均分对象是 **Supply Table arrivals**，数量关系可判定（7 ⇒ G4/H3）；初设按 Setup Note F 自由决定，不判。
+- [x] 回原文核对：均分对象是 **Supply Table arrivals**，数量关系可判定（7 ⇒ G4/H3）；奇数点归 Guderian 为原文**明写**（"with the odd point going to Guderian"），非反推；初设按 Setup Note F 自由决定，不判。
 - [x] 红测 `tests/stores/supply-arrival-panzer-group.test.ts`：2 SP 全给 Hoth ⇒ 拒绝；G1/H1 ⇒ 落账。
 - [x] 改 `applySupplyArrivalsNow`：剔除 `supplyTrain` 后按 `splitSupplyTableSp(tableSp)` 校验，不等即整笔拒绝并记 3.4b。
 - [x] 定向跑绿。
