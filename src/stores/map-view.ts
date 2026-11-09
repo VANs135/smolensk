@@ -1952,8 +1952,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       return true
     }
     if (option.only === 'barrage') {
-      workbench.setBarrageActive(true)
-      workbench.toggleBarrageUnit(instanceId)
+      workbench.beginBarrageAt(hex, instanceId)
       closePopup()
       return true
     }

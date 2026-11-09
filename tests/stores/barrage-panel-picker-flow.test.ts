@@ -343,7 +343,8 @@ describe('B14b：轰炸面板的替换（源码守卫）', () => {
   })
 
   it('面板不做规则判断：候选与灰显原因全部取自 store', () => {
-    expect(panel).toContain('workbench.barrageUnitChoices')
+    // 条 13：面板读的是按作用域收窄后的投影；判据仍是 store 的 `barrageUnitChoices`
+    expect(panel).toContain('workbench.barrageVisibleChoices')
     expect(panel).toContain('workbench.barrageAirChoices')
     // 面板不再自己筛候选（10.0e-B 的印值判据只在 store 里）
     expect(panel).not.toContain('unit.raw.barrage > 0')

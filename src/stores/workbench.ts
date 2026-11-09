@@ -1439,6 +1439,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const barrageTargetKind = ref<BarrageTargetKind>('combatUnits')
   /** C7：参炸单位 id（当前方，可只取一部分） */
   const barrageUnitIds = ref<string[]>([])
+  /**
+   * 条 13：本次炮击的**作用域格**（右键某格进入时锁定；工具条直接开为 null＝全场）
+   *
+   * 只影响阵列的**视图收窄**，判据仍是 `barrageUnitChoices`。
+   */
+  const barrageScopeHex = ref<HexRef | null>(null)
 
   /**
    * **10.0e-A/B 的轰炸账本**（按阶段；A 组接线 2026-09-16）
@@ -3025,6 +3031,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
               ? '专规 2.3d：苏军炮兵合并轰炸须同堆叠（与已选参炸炮同格）'
               : null,
       }))
+  })
+
+  /**
+   * 条 13（用户实机）：炮击阵列只看**本次作用域**内的炮兵
+   *
+   * 右键某枚/某堆炮兵进炮击时，候选就应是"这一枚 + 同格合法炮兵"，而不是全场所有炮；
+   * 但**已选中的**成员即使换了格也保留（多格联合炮击，B15c），否则玩家一点别格查看就把已选丢了。
+   * 不给作用域（工具条直接开）时退回全场候选 —— 判据仍是 `barrageUnitChoices`，这里只做视图收窄。
+   */
+  const barrageVisibleChoices = computed(() => {
+    const scope = barrageScopeHex.value
+    return scope === null
+      ? barrageUnitChoices.value
+      : barrageUnitChoices.value.filter(
+          (choice) =>
+            barrageUnitIds.value.includes(choice.unit.instanceId) ||
+            sameHex(choice.unit.hex, scope),
+        )
   })
 
   /**
@@ -10828,6 +10852,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 条 13：**从地图上某一格进入炮击**（右键「炮击」）
+   *
+   * 与工具条直接开的分歧只有一条：把作用域锁到这一格，阵列不会铺出全场炮兵。
+   * 判据仍走 `toggleBarrageUnit`（10.0e-B/13.4a 的同类型与账本由引擎裁）。
+   */
+  function beginBarrageAt(hex: HexRef, unitId: string): void {
+    if (!canReplaceBarrage()) return
+    setBarrageActive(true)
+    barrageScopeHex.value = { col: hex.col, row: hex.row }
+    toggleBarrageUnit(unitId)
+  }
+
+  /**
    * C7：清空本场轰炸的全部交互状态（换方/换阶段/重置/关闭时调用；不卸载已摆放的飞机）
    *
    * ★ 注意：**不清 10.0e-A/B 的账本**（`barragedHexesThisPhase` / `barragedUnitIdsThisPhase`）。
@@ -10837,6 +10874,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function clearBarrage(): void {
     if (!canReplaceBarrage()) return
     barrageUnitIds.value = []
+    barrageScopeHex.value = null
     barrageAirIds.value = []
     fireResolution.resetBarrage()
     /*
@@ -10973,6 +11011,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ⇒ 镜像不产生第二套判定。
    */
   function syncBarrageParticipants(hex: HexRef, selectedIds: readonly string[]): void {
+    // 镜像自带作用域：摊开的是哪一格，阵列就收到哪一格（条 13；别格已选成员仍保留）
+    barrageScopeHex.value = { col: hex.col, row: hex.row }
     const candidates = barrageUnitChoices.value
       .map((choice) => choice.unit)
       .filter((unit) => sameHex(unit.hex, hex))
@@ -22782,6 +22822,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     barrageUnits,
     // B14b：参炸单位 / 参炸飞机的算子图阵列（含逐枚灰显原因）
     barrageUnitChoices,
+    // 条 13：炮击阵列按本次作用域收窄后的视图（判据仍是 `barrageUnitChoices`）
+    barrageVisibleChoices,
+    beginBarrageAt,
     barrageAirChoices,
     barrageTargetHex,
     barrageTargetFacts,

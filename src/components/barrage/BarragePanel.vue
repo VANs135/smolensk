@@ -83,9 +83,14 @@ function hoverDump(id: string | null): void {
   workbench.setHoverHex(dump?.hex ?? null)
 }
 
-/** 参炸单位（10.0e-B / 13.4a）：可选性与灰显原因由 store 逐枚算好（`barrageUnitChoices`） */
+/**
+ * 参炸单位（10.0e-B / 13.4a）：可选性与灰显原因由 store 逐枚算好（`barrageUnitChoices`）
+ *
+ * 条 13：这里读 `barrageVisibleChoices` —— 按本次作用域收窄（右键某格进炮击时只列该格），
+ * 判据仍来自 `barrageUnitChoices`。
+ */
 const barrageUnitItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.barrageUnitChoices.map((choice) => ({
+  workbench.barrageVisibleChoices.map((choice) => ({
     id: choice.unit.instanceId,
     imageUrl: counterImageUrlOf(choice.unit),
     name:
