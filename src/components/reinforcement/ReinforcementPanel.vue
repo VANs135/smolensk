@@ -200,8 +200,20 @@ watchEffect(() => {
  *   重建一辆坦克营却不动下拉，就会按那一行的「2x Pax」扣款 —— **静默扣错费用**。
  *   宁可让按钮禁用，也不替裁判猜行（13.5：重建费用完全由行决定）。
  */
-const rebuildType = ref('')
-const rebuildUnitId = ref('')
+const rebuildType = computed<string>({
+  get: () => workbench.rebuildPickRow,
+  set: (value) => {
+    workbench.rebuildPickRow = value
+  },
+})
+const rebuildUnitId = computed<string>({
+  get: () => workbench.rebuildPickUnitId,
+  set: (value) => {
+    workbench.rebuildPickUnitId = value
+    // 换一枚重建对象不沿用上一枚的费用行（行键由这次重建单独点）
+    workbench.rebuildPickRow = ''
+  },
+})
 
 /** 合并 / 拆分 / 锁定的表单输入 */
 const keepId = ref('')

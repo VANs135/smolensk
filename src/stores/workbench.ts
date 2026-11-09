@@ -17630,6 +17630,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ),
   ])
 
+  /**
+   * 13.5：重建面板的**待重建算子**与**重建表行键**（唯一状态，面板与右键共用）
+   *
+   * 行键是重建表的**行**（决定费用），工程库没有「算子→行」映射；右键只能预选算子，
+   * 行键必须由玩家在面板里点（引擎 `suggestRebuildRow` 也明令不得静默采用）。
+   */
+  const rebuildPickUnitId = ref('')
+  const rebuildPickRow = ref('')
+
   /** 专规 2.3b：守方本场战斗中的 NKVD 边防团（必须担任行动值单位） */
   const combatNkvdDefenders = computed<ConsoleUnit[]>(() =>
     battleDefenders.value.filter((unit) => isNkvdBorderRegiment(toNkvdDefenseView(unit))),
@@ -22778,6 +22787,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     removeForeverNow,
     rebuildUnitNow,
     consolidateUnitsNow,
+    rebuildPickUnitId,
+    rebuildPickRow,
     mergePartnerAt,
     mergePartnerIds,
     consolidationPick,

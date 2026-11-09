@@ -129,7 +129,9 @@ describe('条 24：正式/验证模式门控', () => {
      * 13.5：**不替裁判默认一行**。修前 `ref('Infantry Div step')`，重建坦克营不动下拉就按
      * 那一行的「2x Pax」扣款（静默扣错费用）⇒ 默认必须是空串，且未选行时按钮禁用。
      */
-    expect(src).toMatch(/const rebuildType = ref\(''\)/)
+    // 行键状态在 store（`rebuildPickRow`，默认空串），面板只是桥接；右键预选算子时也会清空它
+    expect(src).toMatch(/const rebuildType = computed<string>\(\{/)
+    expect(src).toMatch(/get: \(\) => workbench\.rebuildPickRow/)
     expect(src).not.toMatch(/ref\('Infantry Div step'\)/)
     // 未选行、或该候选是 13.5c 的永久不可重建 ⇒ 按钮禁用
     expect(src).toMatch(/const canRebuildNow = computed<boolean>/)

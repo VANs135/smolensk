@@ -1638,6 +1638,26 @@ export const useMapViewStore = defineStore('mapView', () => {
         })
       }
     }
+    /*
+     * 13.5 补员：右键把这一枚带进增援面板的重建段（**只预选算子**）——
+     * 行键是重建表的行、决定费用，工程库没有「算子→行」映射，必须由玩家在面板里点。
+     */
+    if (
+      unit !== undefined &&
+      !moving &&
+      workbench.actionAllowedNow('rein.rebuild') &&
+      workbench.rebuildCandidates.some((item) => item.instanceId === id)
+    ) {
+      actions.push({
+        key: 'rein.rebuild',
+        label: '补员单位补员（13.5）',
+        rule: '13.5',
+        panel: 'unit',
+        only: 'rebuildPick',
+        group: '补给',
+        disabledReason: null,
+      })
+    }
     if (
       unit !== undefined &&
       !moving &&
@@ -1848,6 +1868,16 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     if (option.only === 'openConsolidation') {
       if (workbench.openConsolidationPickNow(instanceId)) collapsedSessionKey.value = null
+      closePopup()
+      return true
+    }
+    /*
+     * 13.5：只把算子带进增援面板的重建段；**不写行键、不落账**（行键由玩家在面板里点）。
+     */
+    if (option.only === 'rebuildPick') {
+      workbench.rebuildPickUnitId = instanceId
+      workbench.rebuildPickRow = ''
+      collapsedSessionKey.value = null
       closePopup()
       return true
     }
