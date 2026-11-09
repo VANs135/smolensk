@@ -147,6 +147,8 @@ describe('B15d：空军任务链进会话框', () => {
   it('任务起跑后会话仍在（规则号从 14.2f-A 变成 14.2f）', () => {
     const { workbench, mapView } = newStores()
     workbench.setAirActive(true)
+    // 14.2e：移动环节用移动环节任务（普通轰炸只在轰炸环节）
+    workbench.setAirMissionKind('fighter_sweep')
     workbench.units.push(
       toConsoleUnit({ record: airBaseRecord(), instanceId: 'base-1', hex: CORE_HEX, side: 'axis' }),
     )

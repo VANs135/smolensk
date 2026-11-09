@@ -93,6 +93,10 @@ beforeEach(() => {
 describe('第五批 A2：14.5 拦截「双方返航」两机各掉 1 步（14.3e-C）', () => {
   it('修正骰落在双退带（7）＋损失骰 5 ⇒ 拦截机与任务机都损失 1 点军力', () => {
     const store = newStore()
+    // 14.2e / 10.0 第二段：普通轰炸只在本段的轰炸环节宣布
+    store.setSegmentStepIndex(
+      store.playerSegmentSteps.findIndex((step) => step.id === 'movement.barrage'),
+    )
     store.setAirActive(true)
     // 轴方：基地 + 轰炸机（任务方）
     store.units.push(

@@ -139,6 +139,10 @@ describe('Ⓔ 空军在 E 段的双重限制（专规 1.5 / 专规 2.2d）', () 
     store.switchSide() // 阶段玩家为苏军，反应玩家才是轴军。
     store.setPhase('reaction')
     store.setAirActive(true)
+    // 14.2e / 10.0 第二段：普通轰炸在 E 段只于**轰炸环节**宣布
+    store.setSegmentStepIndex(
+      store.playerSegmentSteps.findIndex((step) => step.id === 'reaction.barrage'),
+    )
 
     // 轴军：基地 + 激活轰炸机
     placeGround(store, airBaseRecord(), CORE_HEX, 'axis', 'base-ax')
@@ -154,6 +158,9 @@ describe('Ⓔ 空军在 E 段的双重限制（专规 1.5 / 专规 2.2d）', () 
     const soviet: Workbench = newConsole()
     soviet.setPhase('reaction')
     soviet.setAirActive(true)
+    soviet.setSegmentStepIndex(
+      soviet.playerSegmentSteps.findIndex((step) => step.id === 'reaction.barrage'),
+    )
     placeGround(soviet, airBaseRecord(), CORE_HEX, 'soviet', 'base-su')
     placeAir(soviet, fighterRecord('soviet'), CORE_HEX, 'soviet', 'air-su')
     soviet.setAirTargetFromText(label(NEAR_HEX))
@@ -169,6 +176,9 @@ describe('Ⓔ 空军在 E 段的双重限制（专规 1.5 / 专规 2.2d）', () 
     const store = newConsole()
     store.setPhase('reaction')
     store.setAirActive(true)
+    store.setSegmentStepIndex(
+      store.playerSegmentSteps.findIndex((step) => step.id === 'reaction.barrage'),
+    )
     placeGround(store, airBaseRecord(), CORE_HEX, 'axis', 'base-ax')
     placeAir(store, bomberRecord('axis'), CORE_HEX, 'axis', 'air-ax')
     store.airInputs.flyingAllowed = false

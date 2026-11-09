@@ -30,6 +30,12 @@ const newStore = () => {
 
 const label = (hex: HexRef): string => `${hex.col}.${hex.row}`
 
+/** 14.2e：普通轰炸只在本段的轰炸环节宣布；移动环节只给低空扫射等 */
+const goToBarrageStep = (store: ReturnType<typeof newStore>): void => {
+  const index = store.playerSegmentSteps.findIndex((step) => step.id === 'movement.barrage')
+  expect(store.setSegmentStepIndex(index)).toBe(true)
+}
+
 /** 六邻皆图内的格：放基地与飞机都在这里，避免邻格/航程断言受地图形状影响 */
 const CORE_HEX: HexRef = (() => {
   const found = mapLayers.hexes.find((hex) => {
@@ -139,6 +145,7 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
   it('★ 归属权：飞机停在**敌方**基地格内不得起飞（14.1a）', () => {
     const store = newStore()
     store.setAirActive(true)
+    store.setAirMissionKind('fighter_sweep')
     // 基地属于苏方，飞机是轴方的 ⇒ 该格不是「友方空军基地」
     store.units.push(
       toConsoleUnit({
@@ -165,6 +172,7 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
 
   it('起飞格没有空军基地 ⇒ 拒绝（14.1a）', () => {
     const store = newStore()
+    goToBarrageStep(store)
     store.setAirActive(true)
     store.airUnits.push(
       toConsoleAirUnit({
@@ -184,6 +192,7 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
   it('非激活飞机不得执行任务（14.1a）；新到飞机默认非激活', () => {
     const store = newStore()
     store.setAirActive(true)
+    store.setAirMissionKind('fighter_sweep')
     const { plane } = setupBaseAndPlane(store)
     plane.airStatus = 'inactive'
     store.setAirTargetFromText(label(CORE_HEX))
@@ -309,6 +318,7 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
   it('14.2d：任务格超出航程即拒（距离自起飞基地起算）', () => {
     const store = newStore()
     store.setAirActive(true)
+    store.setAirMissionKind('fighter_sweep')
     const { plane } = setupBaseAndPlane(store)
     plane.rangeHexes = 0
     // 任务格取基地的邻格（距离 1 > 航程 0）
@@ -321,6 +331,7 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
   it('14.1f：天气禁飞即不可宣布任务', () => {
     const store = newStore()
     store.setAirActive(true)
+    store.setAirMissionKind('fighter_sweep')
     const { plane } = setupBaseAndPlane(store)
     store.airInputs.flyingAllowed = false
     store.setAirTargetFromText(label(CORE_HEX))
@@ -333,6 +344,7 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
 describe('C9 空军交互：14.5 拦截应答与 14.4 防空', () => {
   it('对手在巡逻区内有激活战斗机 ⇒ 可拦截；宣布后按空战结算，胜则保持激活（14.5）', () => {
     const store = newStore()
+    goToBarrageStep(store)
     store.setAirActive(true)
     // 轴方：基地 + 轰炸机（任务方）
     store.units.push(
@@ -400,6 +412,7 @@ describe('C9 空军交互：14.5 拦截应答与 14.4 防空', () => {
 
   it('14.4f：防空命中时按任务损失表把损失落到任务机（军力 −1）', () => {
     const store = newStore()
+    goToBarrageStep(store)
     store.setAirActive(true)
     store.units.push(
       toConsoleUnit({ record: airBaseRecord(), instanceId: 'base-1', hex: CORE_HEX, side: 'axis' }),
@@ -737,6 +750,7 @@ describe('C9 空军交互：14.3e 逐轮空战与 14.10d 空投检定（端到�
   it('14.3e：任务格内有敌方基地且双方都有激活机 ⇒ 发生空战并逐轮推进到一方清空', () => {
     const store = newStore()
     store.setAirActive(true)
+    store.setAirMissionKind('fighter_sweep')
     // 双方基地都在任务格（14.3：有敌方基地才打空战）
     store.units.push(
       toConsoleUnit({
@@ -807,6 +821,7 @@ describe('C9 空军交互：14.3e 逐轮空战与 14.10d 空投检定（端到�
 
   /** 空战场面：同格双方基地 + 两架轴方战斗机（ACV 不同）+ 一架苏方战斗机，并已宣布任务 */
   function setupAirCombat(store: ReturnType<typeof newStore>): void {
+    store.setAirMissionKind('fighter_sweep')
     const { high, low } = twoFighters()
     store.units.push(
       toConsoleUnit({
@@ -872,6 +887,7 @@ describe('C9 空军交互：14.3e 逐轮空战与 14.10d 空投检定（端到�
   it('★ 14.3e-B / 14.5：未点名的迎战机取 **ACV 最高**（与引擎缺省同口径）', () => {
     const store = newStore()
     store.setAirActive(true)
+    store.setAirMissionKind('fighter_sweep')
     const { high, low } = twoFighters()
 
     store.units.push(

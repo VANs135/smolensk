@@ -24,13 +24,21 @@ import {
  *   · 可选性/原因一律沿用 `airMissionJoinChoices`（14.1a/14.2a/14.2e），本处不另判。
  */
 
-function setup(kind: 'barrage' | 'hip_shoot' | 'air_transport' = 'barrage') {
+function setup(
+  kind: 'barrage' | 'hip_shoot' | 'air_transport' = 'barrage',
+  segment: 'movement' | 'barrage' = 'movement',
+) {
   setActivePinia(createPinia())
   const w = useWorkbenchStore()
   w.setActiveSide('axis')
   w.setPhase('movement')
+  // 14.2e / 10.0 第二段：普通轰炸只在本段的轰炸环节宣布；移动环节只给低空扫射等
   w.setSegmentStepIndex(
-    w.playerSegmentSteps.findIndex((step) => step.id === 'movement.modeAndMovement'),
+    w.playerSegmentSteps.findIndex((step) =>
+      segment === 'barrage'
+        ? step.id === 'movement.barrage'
+        : step.id === 'movement.modeAndMovement',
+    ),
   )
   placeGround(w, airBaseRecord(1), CORE_HEX, 'axis', 'base-a')
   placeGround(w, airBaseRecord(2), NEAR_HEX, 'axis', 'base-b')
@@ -44,7 +52,7 @@ function setup(kind: 'barrage' | 'hip_shoot' | 'air_transport' = 'barrage') {
 
 describe('空军任务窗口：按基地分栏的驻机名册', () => {
   it('★ 轰炸时按本方基地分栏，每架给出到任务格的距离与航程', () => {
-    const w = setup('barrage')
+    const w = setup('barrage', 'barrage')
     expect(w.airMissionBaseGroups.map((group) => group.baseId)).toEqual(['base-a', 'base-b'])
 
     const groupA = w.airMissionBaseGroups.find((group) => group.baseId === 'base-a')!
@@ -70,7 +78,7 @@ describe('空军任务窗口：按基地分栏的驻机名册', () => {
   })
 
   it('★ 可选性沿用 airMissionJoinChoices（非激活灰显），本处不另判', () => {
-    const w = setup('barrage')
+    const w = setup('barrage', 'barrage')
     const inactive = w.airUnits.find((air) => air.instanceId === 'b2')!
     inactive.airStatus = 'inactive'
 

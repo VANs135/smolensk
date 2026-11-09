@@ -138,6 +138,8 @@ describe('专规 1.4a：图外盒起飞的航程扣减（store 级）', () => {
     // ① 在盒里：41 − 30（轴方盒代价）= 剩 11 格
     const inBox = newStore()
     const plane = setupPlane(inBox)
+    // 14.2e：移动环节用移动环节任务（普通轰炸只在轰炸环节）
+    inBox.setAirMissionKind('fighter_sweep')
     inBox.setAirInBoxMembership(plane.instanceId, true)
     expect(inBox.airBoxMembers).toContain(plane.instanceId)
     inBox.toggleAirMissionUnit(plane.instanceId)
@@ -148,6 +150,7 @@ describe('专规 1.4a：图外盒起飞的航程扣减（store 级）', () => {
     // ② 远处目标：col 20 ⇒ 列差 19 > 11 ⇒ 拒（理由带 1.4a）
     const far = newStore()
     const plane2 = setupPlane(far)
+    far.setAirMissionKind('fighter_sweep')
     far.setAirInBoxMembership(plane2.instanceId, true)
     far.toggleAirMissionUnit(plane2.instanceId)
     far.setAirTargetFromText(`20.${String(CORE_HEX.row)}`)
@@ -163,6 +166,7 @@ describe('专规 1.4a：图外盒起飞的航程扣减（store 级）', () => {
      */
     const workbench = newStore()
     const plane = setupPlane(workbench)
+    workbench.setAirMissionKind('fighter_sweep')
     expect(workbench.airBoxMembers).not.toContain(plane.instanceId)
     workbench.toggleAirMissionUnit(plane.instanceId)
     workbench.setAirTargetFromText(`20.${String(CORE_HEX.row)}`)

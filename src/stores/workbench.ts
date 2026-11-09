@@ -992,10 +992,10 @@ const AIR_MISSION_KIND_LABELS: Record<string, string> = {
 }
 
 /**
- * P8：14.2e「任务分配」入口可选的任务类型
+ * P8：14.2e「任务分配」入口的**全量来源**（真正可选清单由 store 内 `airMissionKindChoices` 按环节过滤）
  *
  * 唯一来源＝`AIR_MISSION_KIND_LABELS`；只排除**另走专用操作**的拦截与基地转移。
- * 界面（地图小窗 / 空军面板）只读这一份，不再各存一张六项字面量。
+ * 界面（地图小窗 / 空军面板）只读 store 的过滤结果，不再各存一张六项字面量。
  */
 const AIR_MISSION_KIND_CHOICES = (Object.keys(AIR_MISSION_KIND_LABELS) as AirMissionKind[])
   .filter((key) => key !== 'base_transfer' && key !== 'interception')
@@ -14469,6 +14469,26 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     // 14.2e：任务按**环节**分派（移动环节：低空扫射/空运/空投/基地转移/战机扫荡；轰炸环节：空军轰炸/运输破坏）
     if (!requireAction('air.mission', '宣布空军任务')) return false
+    /*
+     * 14.2e / 10.0 第二段：任务种类必须属于当前环节（UI 已按环节过滤，这里堵绕过界面的旁路）。
+     * 移动环节宣布普通轰炸 ⇒ 直接拒，不留到轰炸结算才失败。
+     */
+    const missionSegmentKind = airMissionSegmentKind.value
+    if (
+      missionSegmentKind === null ||
+      missionSegmentOf(airMissionKind.value) !== missionSegmentKind
+    ) {
+      airError.value = {
+        rule: '14.2e',
+        reason: `missionKindOutsideSegment:${airMissionKind.value}`,
+      }
+      pushLog(
+        'warning',
+        `14.2e：${airMissionKindLabel(airMissionKind.value)}不属于本环节，请先切换任务类型`,
+        '14.2e',
+      )
+      return false
+    }
     const target = airTargetHex.value
     if (target === null) {
       pushLog('warning', '请先填任务格（14.2f-B）', '14.2f-B')
@@ -18004,6 +18024,46 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (allowed === undefined) return ALL_KINDS
     return ALL_KINDS.filter((kind) => allowed.includes(kind))
   })
+
+  /**
+   * 14.2e：**当前环节**对应的任务归属环节（非空军任务环节 ⇒ null）
+   *
+   * 与 `barrageKindsInSegment` 同一套环节 id 判据：`.barrage` 为轰炸环节，
+   * `.modeAndMovement` / `.movement` 为移动环节（C / E / G）。
+   */
+  const airMissionSegmentKind = computed<AirMissionSegment | null>(() => {
+    const stepId = segmentStep.value?.id ?? ''
+    if (stepId.endsWith('.barrage')) return 'barrageSegment'
+    if (stepId.endsWith('.modeAndMovement') || stepId.endsWith('.movement'))
+      return 'movementSegment'
+    return null
+  })
+
+  /**
+   * 14.2e / 10.0 第二段：**「任务分配」入口只列属于当前环节的任务类型**
+   *
+   * 移动环节 ⇒ 低空扫射 / 空运 / 空投 / 战机扫荡（普通轰炸不可选——10.0 第二段只给低空扫射开口子）；
+   * 轰炸环节 ⇒ 空军轰炸 / 运输破坏；基地转移与拦截仍走专用入口，不在本清单。
+   */
+  const airMissionKindChoices = computed<readonly { key: AirMissionKind; label: string }[]>(() => {
+    const segment = airMissionSegmentKind.value
+    if (segment === null) return []
+    return AIR_MISSION_KIND_CHOICES.filter((choice) => missionSegmentOf(choice.key) === segment)
+  })
+
+  /*
+   * 换环节后若已选任务类型不属于新环节，落位到本环节第一个合法项。
+   * 只做「把下拉从空值救回来」，不另判规则；非法宣布仍由 `beginAirMissionNow` 的 14.2e 守卫拒。
+   */
+  watch(
+    airMissionKindChoices,
+    (choices) => {
+      if (choices.length === 0) return
+      if (choices.some((choice) => choice.key === airMissionKind.value)) return
+      setAirMissionKind(choices[0]!.key)
+    },
+    { flush: 'sync' },
+  )
 
   /**
    * 批 A 切片 2：在轰炸环节里**点地图选目标格**（10.0d）
@@ -22917,7 +22977,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     transferAircraftNow,
     reduceBaseNow,
     airMissionKindLabel,
-    airMissionKindChoices: AIR_MISSION_KIND_CHOICES,
+    airMissionKindChoices,
     airStatusLabel,
     // W6 B18：到达、补员与编制调整
     scenarioId,

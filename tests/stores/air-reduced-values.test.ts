@@ -119,6 +119,10 @@ describe('第五批 C1：减损飞机的背面印值', () => {
   it('14.4f 任务损失表 W 列（4 机、损失骰 5）按**当前面**轰炸值选最弱：选中减损机', () => {
     const store = newStore()
     store.setAirActive(true)
+    // 14.2e / 10.0 第二段：普通轰炸只在本段的轰炸环节宣布
+    store.setSegmentStepIndex(
+      store.playerSegmentSteps.findIndex((step) => step.id === 'movement.barrage'),
+    )
     store.units.push(
       toConsoleUnit({
         record: unitChoices('axis').find((item) => item.noncombatKind === 'air_base')!,

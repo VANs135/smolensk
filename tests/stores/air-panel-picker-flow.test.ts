@@ -203,6 +203,8 @@ describe('B14a：参战机的可选性（三条闸逐机给出原因）', () => 
   it('14.2f：任务已过移动步 ⇒ 不能再加机（窗口闸）', () => {
     const store = newStore()
     store.setAirActive(true)
+    // 14.2e：本用例走 C 移动环节，任务类型取移动环节的战机扫荡
+    store.setAirMissionKind('fighter_sweep')
     const { planes } = setupBaseAndPlanes(store, 2)
     expect(store.setAirTargetFromText(label(CORE_HEX))).toBe(true)
     store.toggleAirMissionUnit('air-1')

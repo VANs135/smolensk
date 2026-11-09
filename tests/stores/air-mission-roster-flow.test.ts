@@ -41,10 +41,17 @@ function cargoTask() {
 const totalT = (w: ReturnType<typeof cargoTask>) =>
   w.spDumps.reduce((sum, dump) => sum + dump.sp * 4 + dump.t, 0)
 
+/** 14.2e：普通轰炸只在本段的轰炸环节宣布；移动环节只给低空扫射等 */
+const goToBarrageStep = (w: ReturnType<typeof cargoTask>) => {
+  const index = w.playerSegmentSteps.findIndex((step) => step.id === 'movement.barrage')
+  expect(w.setSegmentStepIndex(index)).toBe(true)
+}
+
 describe('任务中止与存活名单真实流程', () => {
   it('主动中止整场轰炸也记录目标格尝试次数，不能通过退出反复试探', () => {
     const w = cargoTask()
     w.clearAir()
+    goToBarrageStep(w)
     placeAir(w, fighterRecord('axis'), CORE_HEX, 'axis', 'abort-fighter')
     w.setAirActive(true)
     w.setAirMissionKind('barrage')
@@ -63,6 +70,7 @@ describe('任务中止与存活名单真实流程', () => {
   it('轰炸机全部中止后不产生对地战果，但仍记录轰炸尝试并正常收束', () => {
     const w = cargoTask()
     w.clearAir()
+    goToBarrageStep(w)
     w.units = w.units.filter((unit) => unit.instanceId !== 'destination')
     const target = placeGround(
       w,
