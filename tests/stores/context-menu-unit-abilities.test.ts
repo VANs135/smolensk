@@ -211,6 +211,6 @@ describe('右键：不灰按钮（不满足就不出现）', () => {
     // 用户 2026-11-09：「模式改变」改列"此刻真正能切的模式"——该单位尚未耗 MP ⇒ 引擎
     // `canSwitchModeNow` 仍允许切到 move，故这项合法地留在菜单里（不再是"先结束移动"的灰按钮）。
     const keys = s.mapView.contextOptions.flatMap((item) => item.actions).map((item) => item.key)
-    expect(keys).toEqual(['move.mode.move', 'move.breakdown'])
+    expect(keys).toEqual(['move.orientation.toggle', 'move.breakdown'])
   })
 })

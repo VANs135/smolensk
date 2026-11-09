@@ -7024,23 +7024,26 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ★ 条 9（M1）：**按选中集合批量**切换——优先作用于「取子清单」（`movePick.ids`，即开始移动前
    *   玩家在地图上勾选的那一组），没有取子清单时退回单枚 `selectedUnit`。这样多选的单位能一次切完，
    *   且 5.4a 的"开始移动前可随意改"才落得到实处。
+   * ★ 用户 2026-11-09：新增可选第三形参 `ids`——窗内右键单枚改模式必须显式传 `[该枚]`，
+   *   否则会误伤 `movePick` 整组（右键菜单走这条）。
    * 引擎 `canSwitchModeNow` 已支持 reserve/strat（5.7a / 5.8），故 combat/move/reserve/strat 四向都走同一批处理。
    */
-  function switchUnitMode(to: BaseMode, orientation?: Orientation): void {
+  function switchUnitMode(to: BaseMode, orientation?: Orientation, ids?: readonly string[]): void {
     if (!requireAction('move.modeChange', '改模式')) return
-    // 批量目标：取子清单（开始移动前的选中集合）优先；否则单枚选中单位
-    const ids =
-      movePick.value !== null
+    // 批量目标：显式给定 > 取子清单（开始移动前的选中集合）> 单枚选中单位
+    const targets =
+      ids ??
+      (movePick.value !== null
         ? movePick.value.ids
         : selectedUnit.value === null
           ? []
-          : [selectedUnit.value.instanceId]
-    if (ids.length === 0) {
+          : [selectedUnit.value.instanceId])
+    if (targets.length === 0) {
       pushLog('warning', '先选中要改模式的算子（在地图上勾选，或在移动中的单位里选一枚）')
       return
     }
     let okCount = 0
-    for (const id of ids) {
+    for (const id of targets) {
       const unit = units.value.find((item) => item.instanceId === id)
       if (unit === undefined) continue
       /*
@@ -7308,6 +7311,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     retryBeginMove()
     return true
+  }
+
+  /**
+   * 5.7b：此刻该单位能否「转出预备」——`releaseReserveNow` 的只读投影
+   *
+   * 与落账函数同一串判据（闸门 `reserve.release` + 阶段 + 引擎 `canReleaseReserve`），
+   * 但**不写日志、不改状态**：右键菜单只用它决定「这一项列不列」。
+   */
+  function canReleaseReserveOf(unitId: string): boolean {
+    const unit = units.value.find((item) => item.instanceId === unitId)
+    // 反应段的行动者是**非阶段玩家**，故不在这里比 `activeSide`——阵营资格交给引擎判
+    if (unit === undefined) return false
+    const current = phase.value
+    if (current !== 'reaction' && current !== 'exploitation') return false
+    if (!actionAllowedNow('reserve.release')) return false
+    return canReleaseReserve({
+      state: unit.mode,
+      side: unit.side,
+      activeSide: activeSide.value,
+      phase: current,
+    }).ok
   }
 
   /** C5：只改朝向而不改模式（5.4 末句 DG / 5.7a 预备） */
@@ -22452,6 +22476,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     flipUnitOrientation,
     // 5.7b：E/G 段释放预备（把预备标记摘掉，回朝向面）
     releaseReserveNow,
+    // 5.7b：释放预备的只读投影（右键「转出预备模式」只在它为真时出现）
+    canReleaseReserveOf,
     payFuel,
     setFuelPool,
     fuelDumpId,

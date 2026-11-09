@@ -126,26 +126,36 @@ describe('右键「模式改变」分组', () => {
     goToActionStep(s.workbench, 'move.modeChange')
   })
 
-  it('★ 模式动作归「模式改变」组，只列可切换的模式（当前模式不出现）', () => {
-    placeGround(s.workbench, infantryRecord(), HEX, 'soviet', 'u1', 'move')
-    const actions = actionsIn(s, 'u1')
-    const modeActions = actions.filter((item) => item.key.startsWith('move.mode.'))
-    expect(modeActions.length).toBeGreaterThan(0)
-    for (const action of modeActions) {
-      expect(action.group).toBe('模式改变')
-      expect(action.disabledReason).toBeNull()
-    }
-    const keys = modeActions.map((item) => item.key)
-    expect(keys).toContain('move.mode.combat')
-    expect(keys).not.toContain('move.mode.move')
+  /** 该枚算子菜单里的某一项 */
+  function actionIn(store: ReturnType<typeof stores>, id: string, key: string) {
+    return actionsIn(store, id).find((item) => item.key === key)
+  }
+
+  it('★ 改变朝向：同一单位连点两次在战斗↔移动间往返', () => {
+    const unit = placeGround(s.workbench, infantryRecord(), HEX, 'soviet', 'u1', 'combat')
+
+    const first = actionIn(s, 'u1', 'move.orientation.toggle')
+    expect(first?.group).toBe('模式改变')
+    expect(first?.disabledReason).toBeNull()
+    expect(first?.label).toContain('移动')
+    expect(s.mapView.openContextAction('u1', 'move.orientation.toggle')).toBe(true)
+    expect(unit.mode.mode).toBe('move')
+
+    // 连点第二次：同键反向，回到战斗模式（不是单向空操作）
+    const second = actionIn(s, 'u1', 'move.orientation.toggle')
+    expect(second?.group).toBe('模式改变')
+    expect(second?.disabledReason).toBeNull()
+    expect(second?.label).toContain('战斗')
+    expect(s.mapView.openContextAction('u1', 'move.orientation.toggle')).toBe(true)
+    expect(unit.mode.mode).toBe('combat')
   })
 
-  it('★ 补员算子：菜单里没有「改战斗模式」', () => {
+  it('★ 补员算子：没有「改变朝向」项', () => {
     const record = replRecordOf('soviet', 'pax')
     if (record === null) throw new Error('单位库里缺少苏军 Pax 补员记录')
     placeGround(s.workbench, record, HEX, 'soviet', 'rx')
     const keys = actionsIn(s, 'rx').map((item) => item.key)
-    expect(keys).not.toContain('move.mode.combat')
+    expect(keys).not.toContain('move.orientation.toggle')
   })
 
   it('★ 不在移动环节（不可改模式）⇒ 整组不出现', () => {
@@ -154,6 +164,68 @@ describe('右键「模式改变」分组', () => {
     placeGround(s.workbench, infantryRecord(), HEX, 'soviet', 'u2', 'move')
     const actions = actionsIn(s, 'u2')
     expect(actions.some((item) => item.group === '模式改变')).toBe(false)
+  })
+
+  it('★ 转入预备模式：点击落预备', () => {
+    const t = stores('axis')
+    t.workbench.setScenarioId('1')
+    t.workbench.setPhase('movement')
+    goToActionStep(t.workbench, 'move.modeChange')
+    const record = groundRecord(
+      'axis',
+      (item) => item.isCombat === true && item.classes?.movementClass === 'leg',
+    )
+    const unit = placeGround(t.workbench, record, HEX, 'axis', 'ax1', 'combat')
+
+    const item = actionIn(t, 'ax1', 'move.reserve.toggle')
+    expect(item?.group).toBe('模式改变')
+    expect(item?.disabledReason).toBeNull()
+    expect(item?.label).toBe('转入预备模式')
+    expect(t.mapView.openContextAction('ax1', 'move.reserve.toggle')).toBe(true)
+    expect(unit.mode.mode).toBe('reserve')
+  })
+
+  it('★ 转出预备模式：只在反应环节出现并可点', () => {
+    // 反应阶段的**行动者**是非阶段玩家：activeSide=soviet ⇒ actingSide=axis
+    const t = stores('soviet')
+    t.workbench.setPhase('reaction')
+    goToActionStep(t.workbench, 'reserve.release')
+    const record = groundRecord(
+      'axis',
+      (item) => item.isCombat === true && item.classes?.movementClass === 'leg',
+    )
+    const unit = placeGround(t.workbench, record, HEX, 'axis', 'axr', 'combat')
+    unit.mode = { ...unit.mode, mode: 'reserve' }
+
+    const item = actionIn(t, 'axr', 'move.reserve.toggle')
+    expect(item?.group).toBe('模式改变')
+    expect(item?.disabledReason).toBeNull()
+    expect(item?.label).toBe('转出预备模式')
+    expect(t.mapView.openContextAction('axr', 'move.reserve.toggle')).toBe(true)
+    expect(unit.mode.releasedFromReserve).toBe(true)
+  })
+
+  it('★ 战略模式：转入后菜单变「转出战略模式」，再点回移动模式', () => {
+    const t = stores('axis')
+    t.workbench.setPhase('movement')
+    goToActionStep(t.workbench, 'move.modeChange')
+    const record = groundRecord(
+      'axis',
+      (item) => item.isCombat === true && item.classes?.movementClass === 'leg',
+    )
+    const unit = placeGround(t.workbench, record, HEX, 'axis', 'axs', 'combat')
+
+    const first = actionIn(t, 'axs', 'move.strat.toggle')
+    expect(first?.group).toBe('模式改变')
+    expect(first?.disabledReason).toBeNull()
+    expect(first?.label).toBe('转入战略模式')
+    expect(t.mapView.openContextAction('axs', 'move.strat.toggle')).toBe(true)
+    expect(unit.mode.mode).toBe('strat')
+
+    const second = actionIn(t, 'axs', 'move.strat.toggle')
+    expect(second?.label).toBe('转出战略模式')
+    expect(t.mapView.openContextAction('axs', 'move.strat.toggle')).toBe(true)
+    expect(unit.mode.mode).toBe('move')
   })
 })
 
@@ -186,11 +258,20 @@ describe('堆叠右键：目标集合', () => {
   })
 
   it('★ 取子清单选中两枚 ⇒ 菜单按选中集合出，不落到某一枚（尤其编内卡车）', () => {
-    s.workbench.setMovePickIds(['a', 'b'])
+    // 同格再摆一枚编内卡车：它在格上，但不在 `movePick.ids` 里 ⇒ 不得成为菜单的目标
+    const truck = groundRecord('axis', (record) => record.noncombatKind === 'organic_truck')
+    placeGround(s.workbench, truck, HEX, 'soviet', 'truck', 'move')
+    s.workbench.beginMovePick(HEX, ['a', 'b'])
+    expect(s.workbench.movePick?.ids).toEqual(['a', 'b'])
     s.mapView.onHexContext(HEX, { x: 0, y: 0 }, { x: 0, y: 0 })
+    // 只有一块共用菜单，标题取两份选中（2 枚），不是卡车
     expect(s.mapView.contextOptions.map((item) => item.id)).toEqual(['__shared__'])
-    const keys = s.mapView.contextOptions[0]?.actions.map((item) => item.key) ?? []
-    expect(keys.length).toBeGreaterThan(0)
+    expect(s.mapView.contextOptions[0]?.label).toBe('已选 2 枚')
+    expect(s.mapView.contextOptions.length).toBe(1)
+    // 两枚步兵都能改模式 ⇒ 「模式改变」组在列（卡车的菜单不会顶替这份）
+    const modeRows =
+      s.mapView.contextOptions[0]?.actions.filter((a) => a.group === '模式改变') ?? []
+    expect(modeRows.length).toBeGreaterThan(0)
   })
 
   it('★ 窗内右键某枚 ⇒ 单目标菜单（该单位自己的）', () => {
@@ -212,14 +293,13 @@ describe('源码守卫', () => {
     expect(mapPopover).toContain('overflow: visible')
   })
 
-  it('★ MODE_MENU_ACTIONS 带目标模式列，模式动作不再归「移动」组', () => {
+  it('★ 模式组只有三个 toggle 键，不再出现 move.mode.combat / 四键循环', () => {
     const source = readFileSync('src/stores/map-view.ts', 'utf8')
-    expect(source).toContain("['move.mode.combat', '改战斗模式', 'combat']")
-
-    const start = source.indexOf('for (const [key, label, to] of MODE_MENU_ACTIONS)')
-    expect(start).toBeGreaterThan(-1)
-    const block = source.slice(start, start + 600)
-    expect(block).toContain("group: '模式改变'")
-    expect(block).not.toContain("group: '移动'")
+    expect(source).toContain('move.orientation.toggle')
+    expect(source).toContain('move.reserve.toggle')
+    expect(source).toContain('move.strat.toggle')
+    expect(source).not.toContain('move.mode.combat')
+    expect(source).not.toContain('for (const [key, label, to] of MODE_MENU_ACTIONS)')
+    expect(source).not.toContain('MODE_MENU_TARGETS')
   })
 })

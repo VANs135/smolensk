@@ -84,9 +84,9 @@ describe('④ 右键菜单：按能力分类的既有入口', () => {
     workbench.setConstructionMarkersNow(2)
     enter(workbench, 'movement', 'movement.modeAndMovement')
     const keys = menuKeys(s, 'inf-1')
-    // 用户 2026-11-09：「模式改变」只列此刻真正能切过去的模式（该单位当前就在 combat 面 ⇒ 不列 combat 自己；
-    // 本夹具无预备标记、苏军战略闸门未开 ⇒ reserve / strat 也不在列）
-    expect(keys).toContain('move.mode.move')
+    // 用户 2026-11-09：「模式改变」拆三项后，战斗面单位此刻只能「改变朝向 → 移动模式」；
+    // 本夹具无预备标记 ⇒ 预备项不在列（苏军战略闸门未开同理）。
+    expect(keys).toContain('move.orientation.toggle')
     expect(keys).not.toContain('move.mode.combat')
     expect(keys).toContain('move.marker.bridge')
     expect(keys).toContain('move.marker.airStrip')
@@ -128,7 +128,7 @@ describe('④ 右键菜单：按能力分类的既有入口', () => {
     const infantry = place(workbench, recordOf(false), 'inf-1')
     enter(workbench, 'movement', 'movement.modeAndMovement')
     menuKeys(s, 'inf-1')
-    expect(mapView.openContextAction('inf-1', 'move.mode.move')).toBe(true)
+    expect(mapView.openContextAction('inf-1', 'move.orientation.toggle')).toBe(true)
     expect(infantry.mode.orientation).toBe('move')
 
     const gun = place(workbench, recordOf(true), 'gun-1')

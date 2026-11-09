@@ -1445,22 +1445,6 @@ export const useMapViewStore = defineStore('mapView', () => {
     return base === null ? [] : workbench.airUnitsAt(base.hex, base.side)
   })
 
-  /** ④：改模式的四项菜单（key 只作菜单标识；第三列＝目标模式，用来问 store「此刻能不能切」） */
-  const MODE_MENU_ACTIONS = [
-    ['move.mode.combat', '改战斗模式', 'combat'],
-    ['move.mode.move', '改移动模式', 'move'],
-    ['move.mode.reserve', '改预备模式', 'reserve'],
-    ['move.mode.strat', '改战略模式', 'strat'],
-  ] as const
-
-  /** ④：菜单 `only` → 既有 `switchUnitMode` 的目标模式 */
-  const MODE_MENU_TARGETS: Readonly<Record<string, 'combat' | 'move' | 'reserve' | 'strat'>> = {
-    'move.mode.combat': 'combat',
-    'move.mode.move': 'move',
-    'move.mode.reserve': 'reserve',
-    'move.mode.strat': 'strat',
-  }
-
   const groupOfAction: Partial<Record<ActionKey, ContextGroup>> = {
     'move.transportMerge': '运输',
     'move.loadUnload': '运输',
@@ -1572,24 +1556,48 @@ export const useMapViewStore = defineStore('mapView', () => {
      *   · 移动 5.4a 改模式 → `switchUnitMode`（引擎 `canSwitchModeNow` 仍做最终判定）
      *   · 战斗 10.0 炮击 → `beginBarrageNow` + `toggleBarrageUnit`（判据 `isBarrageCapableUnit`）
      *   · 工程 专规 3.5 建造标记 → `armConstructionMarkerNow`（桥 / 简易机场二选一）
+     *
+     * ★ 用户 2026-11-09（第 7 条）：「模式改变」拆**三项**，各自点即切换、可来回：
+     *   ① 改变朝向 → `switchUnitMode(对向模式)`；战斗/移动模式下「朝向即模式本身」
+     *      （`canFlipOrientation` 直接拒绝，modes.ts L973-977）⇒ 只能走模式切换；
+     *   ② 转入/转出预备 → `switchUnitMode('reserve')` / `releaseReserveNow`；
+     *   ③ 转入/转出战略 → `switchUnitMode('strat' | 'move')`。
+     *   三项**各判自己的闸门**：朝向、转入预备、战略走 `move.modeChange`（5.4/5.4a/5.8），
+     *   转出预备走 `reserve.release`（5.7b）——否则「转出预备」永远不出现。
+     *   不可用就不列（不摆灰项）；可切集合仍取 `switchableModesOf`（与 `switchUnitMode` 同源）。
      */
-    if (unit !== undefined && workbench.actionAllowedNow('move.modeChange')) {
-      /*
-       * 用户 2026-11-09：子菜单**只列此刻真正能切过去的模式**（判据在 `switchableModesOf`，
-       * 与 `switchUnitMode` 同源）⇒ 不可用直接不出现，不摆灰按钮；移动中已耗 MP 者同理消失。
-       */
+    if (unit !== undefined) {
       const switchable = workbench.switchableModesOf(id)
-      for (const [key, label, to] of MODE_MENU_ACTIONS) {
-        if (!switchable.includes(to)) continue
+      const modeChange = workbench.actionAllowedNow('move.modeChange')
+      const pushMode = (key: string, label: string, rule: string): void => {
         actions.push({
           key,
           label,
-          rule: '5.4a',
+          rule,
           panel: 'unit',
           only: key,
           group: '模式改变',
           disabledReason: null,
         })
+      }
+      // ① 改变朝向：同一键双向（战斗面 → 移动模式 / 移动面 → 战斗模式）
+      if (modeChange && unit.mode.mode === 'combat' && switchable.includes('move'))
+        pushMode('move.orientation.toggle', '改变朝向 → 移动模式', '5.4')
+      if (modeChange && unit.mode.mode === 'move' && switchable.includes('combat'))
+        pushMode('move.orientation.toggle', '改变朝向 → 战斗模式', '5.4')
+      // ② 预备：转入（5.4a）/ 转出（5.7b，只在本方反应 / 进击环节）
+      if (unit.mode.mode !== 'reserve') {
+        if (modeChange && switchable.includes('reserve'))
+          pushMode('move.reserve.toggle', '转入预备模式', '5.4a')
+      } else if (workbench.canReleaseReserveOf(id)) {
+        pushMode('move.reserve.toggle', '转出预备模式', '5.7b')
+      }
+      // ③ 战略（5.8）：转入 / 转出
+      if (unit.mode.mode === 'strat') {
+        if (modeChange && switchable.includes('move'))
+          pushMode('move.strat.toggle', '转出战略模式', '5.8')
+      } else if (modeChange && switchable.includes('strat')) {
+        pushMode('move.strat.toggle', '转入战略模式', '5.8')
       }
     }
     if (
@@ -1912,10 +1920,34 @@ export const useMapViewStore = defineStore('mapView', () => {
      * ④：一次性能力**点即执行**，不开右栏面板（与设施动作的 `unitActionIntent` 路径分开）。
      * 全部转发到既有入口；这里只负责"把右键点中的那一枚"落到既有入口所需的选中态。
      */
-    const mode = MODE_MENU_TARGETS[option.only ?? '']
-    if (mode !== undefined) {
+    const unit = ownCounterAt(hex, instanceId)
+    /*
+     * ★ 用户 2026-11-09（第 7 条）：「模式改变」三项各自点即切换（改模式时显式只带这一枚，
+     *   不误伤 `movePick` 整组）。
+     */
+    if (option.only === 'move.orientation.toggle') {
+      if (unit === undefined) return false
       workbench.selectedId = instanceId
-      workbench.switchUnitMode(mode)
+      workbench.switchUnitMode(unit.mode.mode === 'combat' ? 'move' : 'combat', undefined, [
+        instanceId,
+      ])
+      closePopup()
+      return true
+    }
+    if (option.only === 'move.reserve.toggle') {
+      if (unit === undefined) return false
+      workbench.selectedId = instanceId
+      if (unit.mode.mode === 'reserve') workbench.releaseReserveNow()
+      else workbench.switchUnitMode('reserve', undefined, [instanceId])
+      closePopup()
+      return true
+    }
+    if (option.only === 'move.strat.toggle') {
+      if (unit === undefined) return false
+      workbench.selectedId = instanceId
+      workbench.switchUnitMode(unit.mode.mode === 'strat' ? 'move' : 'strat', undefined, [
+        instanceId,
+      ])
       closePopup()
       return true
     }
@@ -1975,7 +2007,6 @@ export const useMapViewStore = defineStore('mapView', () => {
       closePopup()
       return true
     }
-    const unit = ownCounterAt(hex, instanceId)
     if (option.only === 'railMove') {
       workbench.railMoveInputs.toHexText = ''
       if (
