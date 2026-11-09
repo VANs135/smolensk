@@ -16904,6 +16904,39 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           return false
         }
       }
+      /*
+       * 3.4b 均分：Supply Table 到货须在两集群间均分，**奇数点归 Guderian**
+       *
+       * 原文：「The Axis must evenly divide Supply Table arrivals between Guderian and Hoth,
+       * with the odd point going to Guderian. … Example: If 7 SP are obtained, Hoth must be
+       * given 3 and Guderian 4.」
+       *
+       * 判对象只有 **Supply Table 到货**（`plan.freeSp + plan.edgeSp`）；3.6 补给列车是另一个
+       * 事件，不在均分对象里，但同属 "All new Axis SP must immediately be assigned"（上面的
+       * 逐格点名已保证）。**初设不套这条**：Setup Note F 明说
+       * "player can freely decide ownership of dumps"。
+       */
+      const tableSpByText = new Map<string, number>()
+      for (const item of plan.placements) {
+        if (item.reason === 'supplyTrain') continue
+        const text = hexLabel(item.hex)
+        tableSpByText.set(text, (tableSpByText.get(text) ?? 0) + item.sp)
+      }
+      const tableSp = [...tableSpByText.values()].reduce((sum, sp) => sum + sp, 0)
+      const expected = splitSupplyTableSp(tableSp)
+      const actual: Record<PanzerGroup, number> = { guderian: 0, hoth: 0 }
+      for (const [text, sp] of tableSpByText) {
+        const group = groupByText.get(text) ?? null
+        if (group !== null) actual[group] += sp
+      }
+      if (actual.guderian !== expected.guderian || actual.hoth !== expected.hoth) {
+        pushLog(
+          'warning',
+          `3.4b：Supply Table 到货 ${tableSp} SP 须均分（Guderian ${expected.guderian} / Hoth ${expected.hoth}，奇数点归 Guderian）；当前 Guderian ${actual.guderian} / Hoth ${actual.hoth} ⇒ 不落账`,
+          '3.4b',
+        )
+        return false
+      }
     }
     for (const [text, entry] of byHex) {
       addSpAtHex({
@@ -19599,10 +19632,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
-   * B37 / 3.4a：**此刻是不是结算分界线义务的时候**（段末）
+   * B37 / 3.4a：**此刻是不是结算分界线义务的时候**（相位末）
    *
-   * 判据完全走闸门（`exclusive.panzerObligation` → 轴方 C/G 移动环节的**段末**）：
-   * 于是"义务清单"不会再在段中老是挂在界面上，玩家也不会在段中以为已经结算过。
+   * 用户 2026-11-09 裁定**读法 A**：原文「at the end of any phase」按字面执行 ——
+   * 判据完全走闸门（`exclusive.panzerObligation`），闸门覆盖**所有玩家相位的最后一个环节**
+   * （含苏军相位，E 反应段按 `nonActive`），不再收窄成轴方 C/G 段末。
    * 义务本身仍由引擎 `dividingLineObligations` 给结论（本投影只说"现在该看它了"）。
    */
   const panzerObligationActive = computed<boolean>(() =>

@@ -294,7 +294,7 @@ export function splitSupplyTableSp(points: number): { hoth: number; guderian: nu
  * ★ 这里写死文本是为了"有一处可对照"：数据侧 `scenarios.agreedOptions.items` 必须**原样包含**它，
  *   由 `tests/data/scenarios.test.ts` 钉住 —— 数据改字而常量没跟着改，测试会红，而不是功能静默失效。
  */
-export const PANZER_GROUP_OPTION_ITEM = '装甲集群 SP 归属约束（3.4b，4.1a 可选）'
+export const PANZER_GROUP_OPTION_ITEM = '3.4b SP 须按装甲集群分配'
 
 /**
  * 3.4b 在本局是否生效 —— **两轴都成立才算**（判据只此一处）

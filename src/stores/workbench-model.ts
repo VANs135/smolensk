@@ -2843,23 +2843,36 @@ export const ACTION_GATES: readonly ActionGate[] = [
     ],
   },
   {
-    // B37：3.4a 分界线义务 —— **段末**结算（对方在错误一侧/与他集群相邻 ⇒ 须投 DG）
+    // B37：3.4a 分界线义务 —— **相位末**结算（对方在错误一侧/与他集群相邻 ⇒ 须投 DG）
     key: 'exclusive.panzerObligation',
-    label: '3.4a 分界线义务（段末结算）',
+    label: '3.4a 分界线义务（相位末结算）',
     rule: '专规 3.4a',
     where: [
       /*
-       * 3.4a 的义务是**相位末**的事 ⇒ 把该段**全部玩家环节**都列上、并标 `at: 'end'`：
-       * 只有走到本段最后一个玩家环节时才放行（`atSegmentEnd`），段中一律不放。
-       * 为什么不写"最后一个环节的 id"：段的玩家环节随剧本与 `skipWhenIdle` 跳过规则变化，
-       * 写死某一个 id 会在链变短时失效 —— 列全 + 段末判据才是稳的。
+       * 3.4a 原文：「place a DG … **at the end of any phase**」——**读法 A**（用户 2026-11-09 裁定）：
+       * "any phase" 不限定轴方移动段，**所有相位末（含苏军相位）**都要检查轴方多单位编队的分界线义务。
+       * 实现只挂到既有的**段末**判据（`at: 'end'` → `atSegmentEnd`，即本相位最后一个玩家环节），
+       * 不在各段另写逻辑：把每段**最后一个玩家环节的候选**都列进来、不按方限定。
+       * 为什么不写死"某一环"：玩家环节随剧本与 `skipWhenIdle` 变化，列全 + 段末判据才是稳的。
+       * E 反应段由非行动方行动（role `nonActive`），故两环单列 role。
        */
-      { phase: 'movement', segment: 'movement.breakout', sides: ['axis'], at: 'end' },
-      { phase: 'movement', segment: 'movement.modeAndMovement', sides: ['axis'], at: 'end' },
-      { phase: 'movement', segment: 'movement.barrage', sides: ['axis'], at: 'end' },
-      { phase: 'exploitation', segment: 'exploitation.movement', sides: ['axis'], at: 'end' },
-      { phase: 'exploitation', segment: 'exploitation.barrage', sides: ['axis'], at: 'end' },
-      { phase: 'exploitation', segment: 'exploitation.combat', sides: ['axis'], at: 'end' },
+      { phase: 'aircraftRefit', segment: 'aircraftRefit.refit', at: 'end' },
+      { phase: 'reinforcement', segment: 'reinforcement.arrival', at: 'end' },
+      { phase: 'reinforcement', segment: 'reinforcement.rebuild', at: 'end' },
+      { phase: 'reinforcement', segment: 'reinforcement.formationDraw', at: 'end' },
+      { phase: 'reinforcement', segment: 'reinforcement.specialRepl', at: 'end' },
+      { phase: 'movement', segment: 'movement.breakout', at: 'end' },
+      { phase: 'movement', segment: 'movement.modeAndMovement', at: 'end' },
+      { phase: 'movement', segment: 'movement.barrage', at: 'end' },
+      { phase: 'supply', segment: 'supply.recovery', at: 'end' },
+      { phase: 'supply', segment: 'supply.check', at: 'end' },
+      { phase: 'reaction', segment: 'reaction.movement', role: 'nonActive', at: 'end' },
+      { phase: 'reaction', segment: 'reaction.barrage', role: 'nonActive', at: 'end' },
+      { phase: 'combat', segment: 'combat.barrage', at: 'end' },
+      { phase: 'combat', segment: 'combat.combat', at: 'end' },
+      { phase: 'exploitation', segment: 'exploitation.movement', at: 'end' },
+      { phase: 'exploitation', segment: 'exploitation.barrage', at: 'end' },
+      { phase: 'exploitation', segment: 'exploitation.combat', at: 'end' },
     ],
   },
   {

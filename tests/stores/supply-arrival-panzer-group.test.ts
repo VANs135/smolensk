@@ -73,6 +73,20 @@ function planArrival(store: ReturnType<typeof newStore>): void {
   expect(store.freeRailError).toBe(null)
 }
 
+/**
+ * 3.4b 均分：2 SP ⇒ Guderian 1 / Hoth 1（可拆成两格各 1，能精确满足；奇数点归 Guderian
+ * 的 7 ⇒ 4/3 由 `tests/engine/panzer-groups.test.ts` 的 `splitSupplyTableSp(7)` 断言）。
+ *
+ * 均分只判 **Supply Table 到货**；补给列车（3.6）不属 Supply Table，不在均分对象里。
+ */
+function planTwoSplit(store: ReturnType<typeof newStore>): void {
+  store.supplyArrivalSp = 2
+  store.toggleFreeRailPick(CITY_HEX)
+  store.pickFreeRailEdgeHex(hex(1, 3))
+  expect(store.freeRailError).toBe(null)
+  expect(store.arrivalSpGroupTargets).toHaveLength(2)
+}
+
 beforeEach(() => {
   setActivePinia(createPinia())
 })
@@ -91,26 +105,37 @@ describe('3.4b：到货 SP 必须选归属', () => {
     expect(store.log.some((entry) => (entry.text ?? '').includes('未选择归属'))).toBe(true)
   })
 
-  it('开启 + 轴方 + 逐格选了 ⇒ 落账并立即写入归属，不再进待归属', () => {
+  it('开启 + 轴方 + 按 Supply Table 均分（2 SP ⇒ G 1 / H 1）⇒ 落账并立即写入归属', () => {
     const store = newStore()
     adoptPanzerGroupOption()
     armAxisRail(store)
     enterArrivalStep(store)
-    planArrival(store)
+    planTwoSplit(store)
+    const targets = store.arrivalSpGroupTargets
+    store.setArrivalSpGroup(targets[0]!.hexText, 'guderian')
+    store.setArrivalSpGroup(targets[1]!.hexText, 'hoth')
+
+    expect(store.applySupplyArrivalsNow()).toBe(true)
+    const groups = store.spDumps.map((dump) => store.panzerGroupOfDump(dump.id)).sort()
+    expect(groups).toEqual(['guderian', 'hoth'])
+    expect(store.spDumps.reduce((sum, dump) => sum + dump.sp, 0)).toBe(2)
+    expect(store.pendingSpGroupAssignment).toEqual([])
+    expect(store.arrivalSpGroupTargets).toEqual([])
+  })
+
+  it('开启 + 轴方 + 未按 Supply Table 均分 ⇒ 整笔拒绝，账本不变（3.4b）', () => {
+    const store = newStore()
+    adoptPanzerGroupOption()
+    armAxisRail(store)
+    enterArrivalStep(store)
+    planTwoSplit(store)
+    // 2 SP 全给 Hoth ⇒ 违反「2 ⇒ G 1 / H 1」
     for (const target of store.arrivalSpGroupTargets)
       store.setArrivalSpGroup(target.hexText, 'hoth')
 
-    expect(store.applySupplyArrivalsNow()).toBe(true)
-    const byHex = Object.fromEntries(
-      store.spDumps.map((dump) => [
-        `${dump.hex.col}.${dump.hex.row}`,
-        `${dump.side}:${dump.sp}:${store.panzerGroupOfDump(dump.id)}`,
-      ]),
-    )
-    expect(byHex['2.2']).toBe('axis:1:hoth')
-    expect(byHex['1.3']).toBe('axis:6:hoth')
-    expect(store.pendingSpGroupAssignment).toEqual([])
-    expect(store.arrivalSpGroupTargets).toEqual([])
+    expect(store.applySupplyArrivalsNow()).toBe(false)
+    expect(store.spDumps).toEqual([])
+    expect(store.log.some((entry) => (entry.text ?? '').includes('均分'))).toBe(true)
   })
 
   it('关闭 ⇒ 不选也落账（与现状一致）', () => {

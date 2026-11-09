@@ -2,16 +2,20 @@
 
 ## 3.4b 可选开关
 
-- [x] 开局共识清单有「装甲集群 SP 归属约束（3.4b，4.1a 可选）」，默认不勾；未勾时初设与到货行为与现状一致（无归属选择、无需点名）。
+- [x] 开局共识清单有「3.4b SP 须按装甲集群分配」，默认不勾；未勾时初设与到货行为与现状一致（无归属选择、无需点名）。
+- [x] 条目位置仍在末位、结构未变；仅文字改动（`src/data/scenarios.json` + 引擎常量同源）。
 - [x] 勾选后初设每个轴方补给站必须由玩家选 Guderian / Hoth；未选满 `confirmSpOwnership()` 失败（`spOwnershipMissing`），不能开局。
 - [x] 初设归属只认玩家选择，分界线只作提示，不自动改写选择。
 - [x] 勾选后到货 SP 未选归属整笔拒绝，账本不新增；逐格选好才落账，并把归属写入 `spDumpPanzerGroups`。
 - [x] 归属落到既有 SP 账本，供 `checkPanzerGroupSpPayment` / `checkPanzerGroupSpBeneficiaries` 原文判据使用。
+- [x] Supply Table 到货按原文均分：`splitSupplyTableSp(T)` 判 G=ceil(T/2)、H=floor(T/2)；不符即整笔拒绝。
+- [x] 补给列车（3.6）不进均分统计；初设按 Setup Note F 自由决定，不判比例。
 - [x] 未新增持久化字段（`arrivalSpGroups` 为瞬态选择；`spDumpPanzerGroups` 是既有字段）。
 
 ## 3.4a 专规（常开）
 
 - [x] 3.4a 判定常开，不读取 3.4b 共识开关；越线 / 同堆叠相邻即产生义务。
+- [x] 时机取**读法 A**：所有玩家相位末（含苏军相位、战斗/补给/反应）都检查，不再只挂轴方 C/G 段末；段中不放行。
 - [x] 19.xx 以西豁免、Orsha 以西不触发；非多单位编队（步兵师 / 独立单位）不触发。
 - [x] 分界线取 `map-config.json` 的 `[[19,19],[62,23]]` 并参与判定。
 - [x] 义务行提供落 DG 入口 `applyPanzerGroupDgNow`：义务名单内可投、非义务单位被拒，走 5.10 的 `applyDgToUnit`。
@@ -26,5 +30,5 @@
 
 ## 数据与门槛
 
-- [x] `src/data`、`src/engine` 改动为 0；`src/data` 无数据需求变更。
+- [x] `src/data/scenarios.json` 仅按授权改共识条目文字（不改结构/位置/默认值）；`src/engine` 仅同步该常量文本，规则判据未变。
 - [x] 六门槛全绿：lint、format:check、typecheck、vitest（402 文件 / 4772 passed / 1 skipped）、arch、build。

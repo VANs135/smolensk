@@ -173,8 +173,8 @@ describe('B4：唯一会话框（路由 / 取消）', () => {
     const barrageToolBefore = workbench.barrageActive
     expect(mapView.cancelSession()).toBe(true)
     expect(workbench.combatState).toBeNull()
-    // 会话随引擎状态一起消失（视图不需要自己判 `finished`）
-    expect(mapView.session).toBeNull()
+    // 战斗会话随引擎状态一起消失；3.4a 读法 A 下，战斗相位末的专规提示可能立刻重新置顶
+    expect(mapView.session?.kind ?? null).not.toBe('combat')
     // 取消一场战斗不该动「轰炸工具」这个开关（各管各的）
     expect(workbench.barrageActive).toBe(barrageToolBefore)
   })

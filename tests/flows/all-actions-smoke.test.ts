@@ -105,7 +105,7 @@ describe('全操作体检：store 直调', () => {
     const sideLimited: readonly { key: ActionKey; allowed: Side; denied: Side }[] = [
       { key: 'rein.formationDraw', allowed: 'axis', denied: 'soviet' },
       { key: 'rein.frontalReserves', allowed: 'soviet', denied: 'axis' },
-      { key: 'exclusive.panzerObligation', allowed: 'axis', denied: 'soviet' },
+      // 3.4a 读法 A（2026-11-09 裁定）：不按方限定，苏军相位末也要检查轴方编队义务
     ]
 
     for (const row of sideLimited) {

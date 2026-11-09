@@ -33,9 +33,12 @@ describe('B37：专规时机的闸门（1.7 Forage / 3.4a 段末）', () => {
     ])
     const obligation = actionGateOf('exclusive.panzerObligation')
     expect(obligation.rule).toBe('专规 3.4a')
-    // 段末类：两条轴方移动环节，且**只在段末**
+    // 3.4a 读法 A（用户 2026-11-09 裁定）：**所有相位末**都放行，含苏军相位；段末类只在段末
     expect(obligation.where.every((item) => item.at === 'end')).toBe(true)
-    expect(obligation.where.every((item) => item.sides?.includes('axis') === true)).toBe(true)
+    expect(obligation.where.some((item) => item.phase === 'movement')).toBe(true)
+    expect(obligation.where.some((item) => item.phase === 'combat')).toBe(true)
+    // 不再按方限定：苏军相位末同样要检查轴方编队的分界线义务
+    expect(obligation.where.every((item) => item.sides === undefined)).toBe(true)
   })
 
   it('★ 新增的"段末"类别：段中不放行、段末才放行（其余动作不受影响）', () => {
@@ -85,6 +88,28 @@ describe('B37：专规时机的闸门（1.7 Forage / 3.4a 段末）', () => {
 
     // 走到本段最后一个环节 ⇒ 段末 ⇒ 生效（若本段只有一个玩家环节，上面那步就已经是段末）
     if (!isLast) {
+      store.setSegmentStepIndex(steps.length - 1)
+      expect(store.panzerObligationActive).toBe(true)
+    }
+  })
+
+  it('★ 3.4a 读法 A：苏军相位末与战斗/补给相位末同样进入结算，不再收窄成轴方 C/G', () => {
+    const cases = [
+      { side: 'soviet', phase: 'movement' },
+      { side: 'axis', phase: 'combat' },
+      { side: 'soviet', phase: 'supply' },
+    ] as const
+    for (const item of cases) {
+      const store = newStore()
+      store.setPhase(item.phase)
+      store.setActiveSide(item.side)
+      const steps = store.playerSegmentSteps
+      if (steps.length === 0) throw new Error(`${item.phase} 没有玩家环节？`)
+      // 段中（第一环，且不止一环）⇒ 不放行
+      if (steps.length > 1) {
+        store.setSegmentStepIndex(0)
+        expect(store.panzerObligationActive).toBe(false)
+      }
       store.setSegmentStepIndex(steps.length - 1)
       expect(store.panzerObligationActive).toBe(true)
     }

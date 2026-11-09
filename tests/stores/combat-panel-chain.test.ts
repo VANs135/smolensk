@@ -85,12 +85,21 @@ function place(
   return unit
 }
 
+/**
+ * 3.4a 读法 A（2026-11-09 裁定）：战斗相位末也会置顶专规面板（相位末的提示）。
+ * 本组用例测的是**战斗会话路由**，先把这块提示收起（`closePolicy: collapse`），再点图。
+ */
+function dismissPinnedExclusive(mapView: ReturnType<typeof newStores>['mapView']): void {
+  if (mapView.session?.kind === 'exclusive') mapView.cancelSession()
+}
+
 /** 摆好两枚攻方 + 一枚守方，切到战斗工具并选定防御格 */
 function setupBattlePrep(extraAttackers = 1) {
   const stores = newStores()
   const { workbench } = stores
   workbench.setPhase('combat')
   goToActionStep(workbench, 'combat.declare')
+  dismissPinnedExclusive(stores.mapView)
   workbench.setTool('battle')
   workbench.setFuelPool(0, 20)
   const a1 = place(workbench, attackerRecord(), ATTACKER_HEX, 'axis', 'a1')
@@ -153,6 +162,7 @@ describe('B15b：宣布之前的战斗会话（§4.2 的流程图）', () => {
     const { workbench, mapView } = newStores()
     workbench.setPhase('combat')
     goToActionStep(workbench, 'combat.declare')
+    dismissPinnedExclusive(mapView)
     workbench.setTool('battle')
     const a1 = place(workbench, attackerRecord(), ATTACKER_HEX, 'axis', 'a1')
     place(workbench, defenderRecord(), DEFENDER_HEX, 'soviet', 'd1')
