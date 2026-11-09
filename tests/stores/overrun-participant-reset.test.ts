@@ -302,6 +302,57 @@ describe('②b 突袭参战单位串号（用户实测复现）', () => {
     expect(store.combatAttackers.some((unit) => unit.instanceId === 'ov-a')).toBe(false)
   })
 
+  it('★ A 突袭结束（不点放弃）后直接起 B 突袭 ⇒ 窗口/参战集合只有 B', () => {
+    const first = pairs[0]!
+    const second = pairs.find(
+      (pair) =>
+        hexDistance(pair.defender, first.defender) >= 3 &&
+        hexDistance(pair.attacker, first.attacker) >= 3,
+    )
+    expect(second).toBeDefined()
+
+    expect(startOverrun(store, first, 'ov-a', 'def-a')).not.toBeNull()
+    expect(store.overrunNow(first.defender)).toBe(true)
+    driveToAdvance(store, first.attacker, first.defender)
+    if (store.combatState?.step === 'advance') expect(store.confirmCombatAdvance()).toBe(true)
+    expect(store.combatState?.finished).toBe(true)
+    // ★ 关键：不清 combatState（玩家不会先点「放弃」再打下一场）
+    if (store.moveInteraction !== null && store.moveInteraction.finished !== true)
+      store.finishMove()
+
+    expect(startOverrun(store, second!, 'ov-b', 'def-b')).not.toBeNull()
+    expect(store.overrunNow(second!.defender)).toBe(true)
+
+    expect(store.combatState?.attackType).toBe('overrun')
+    expect(store.combatState?.finished).toBe(false)
+    expect(store.combatState?.composition.attackerIds).toEqual(['ov-b'])
+    expect(store.combatAttackers.map((unit) => unit.instanceId)).toEqual(['ov-b'])
+  })
+
+  it('★ 突袭中途放弃后再起一次 ⇒ 不残留上一场的进攻单位', () => {
+    const first = pairs[0]!
+    const second = pairs.find(
+      (pair) =>
+        hexDistance(pair.defender, first.defender) >= 3 &&
+        hexDistance(pair.attacker, first.attacker) >= 3,
+    )
+    expect(second).toBeDefined()
+
+    expect(startOverrun(store, first, 'ov-a', 'def-a')).not.toBeNull()
+    expect(store.overrunNow(first.defender)).toBe(true)
+    store.cancelCombat() // 尚未提交补给 ⇒ 允许放弃
+    expect(store.combatState).toBeNull()
+    expect(store.overrunParticipantIds).toEqual([])
+    expect(store.combatAttackerIds).toEqual([])
+    if (store.moveInteraction !== null && store.moveInteraction.finished !== true)
+      store.finishMove()
+
+    expect(startOverrun(store, second!, 'ov-b', 'def-b')).not.toBeNull()
+    expect(store.overrunNow(second!.defender)).toBe(true)
+    expect(store.combatState?.composition.attackerIds).toEqual(['ov-b'])
+    expect(store.combatAttackers.map((unit) => unit.instanceId)).toEqual(['ov-b'])
+  })
+
   it('普通战斗/炮击不共用突袭的参突 pin（不出现同串号）', () => {
     // 普通战斗的攻方选择器就是 `combatAttackerIds`；突袭的 pin 只服务 8.1g，不应被战斗读取
     const pair = pairs[0]!

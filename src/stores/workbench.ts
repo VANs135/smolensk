@@ -5557,10 +5557,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       defenderIds: defenders.map((unit) => unit.instanceId),
     }
     combatAttackerIds.value = [...participants]
+    /*
+     * ②b-2（用户实测复现：连续两次突袭 ⇒ 第二次窗口列的是第一次的进攻单位）：
+     * `combatAttackers` 在 `combatState !== null` 时读 composition；上一场已 finished 仍非 null，
+     * 于是本场 beginCombat 拿到的是**上一场的 attackerIds**。这里两点一起收：
+     *   ① 本场攻方直接用 `participants`（8.1g 的当前选择），不经过投影；
+     *   ② 丢掉上一场的 finished 战斗态（普通战斗在 setBattleTarget 里也这么做）。
+     */
+    combatState.value = null
+    const participantUnits = units.value.filter((unit) => participants.includes(unit.instanceId))
     battleMode.value = 'full'
     const composed = acceptCombat(
       beginCombat({
-        attackers: combatAttackers.value.map((unit) => toBattleUnitView(unit, turn.value)),
+        attackers: participantUnits.map((unit) => toBattleUnitView(unit, turn.value)),
         defenders: battleDefenders.value.map((unit) => toBattleUnitView(unit, turn.value)),
         facts: combatFacts.value,
         attackType: 'overrun',
@@ -5570,6 +5579,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
     if (composed === null) {
       overrunContext.value = null
+      clearOverrunSelectionAfterConclusion()
       return false
     }
     combatState.value = composed
@@ -5672,6 +5682,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         moveInteraction.value = closed.interaction
       }
       overrunContext.value = null
+      // ②b-2：与正常收束分支同一口径 —— 参突 pin / 攻方名单 / 跟随者一场即作废
+      clearOverrunSelectionAfterConclusion()
       pushLog('info', plan.detail, plan.rule)
       // ⑭ 接线：参突者已不在盘面 ⇒ 8.1a 的 3 MP 与 8.0 的进格无对象可记（本笔无骰）
       recordSettlement({
