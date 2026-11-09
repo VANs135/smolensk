@@ -2563,6 +2563,13 @@ export interface ActionGateWhere {
    * 也不是"整段都能做"，用现有的 (段, 环节) 二元组表达不出来。
    */
   at?: 'end'
+  /**
+   * 仅当该 (段, 环节) 的**允许范围比契约键本身窄**时，写明窄在哪一条
+   *
+   * 例：`barrage.declare` 在 C 段移动环节只放行低空扫射的空军（10.0 第二段）。
+   * 菜单/面板的取值不变（仍按 key 判），本条只给动作族表落一句人话说明。
+   */
+  note?: string
 }
 
 /** 一个动作族的闸门条目（逐条带规则号：界面只查表，不比较规则号） */
@@ -2758,13 +2765,15 @@ export const ACTION_GATES: readonly ActionGate[] = [
       // 段限定（SOP 原文）：C 段仅空中与舰炮、F 段仅炮兵、E/G 不限
       { phase: 'movement', segment: 'movement.barrage' },
       /*
-       * ★ G①（2026-09-19）：**C 段的移动环节**也放行宣布轰炸 —— 依据 10.0b / 14.7d：
-       *   低空扫射是"在**移动环节**里对地面单位的一次轰炸"（`missionSegmentOf('hip_shoot')` 也是
-       *   `movementSegment`），引擎的 `BARRAGE_SOURCES_BY_PHASE.movement` 亦为 `['air','ship']`。
-       *   炮兵在移动段仍会被引擎按 10.0e-D 拒（`wrongPhaseForartillery:movement`），且界面按段只给
-       *   空中/舰炮来源 ⇒ 不会出现"点了必被拒"的按钮。
+       * ★ 10.0 第二段：「如果允许某方的空军单位执行低空扫射任务（见 14.7d），则这些轰炸还能在
+       *   上述阶段的**移动环节**中进行。」⇒ C 段移动环节只放行**低空扫射的空军**；
+       *   火炮与舰船**不得**借这个入口（引擎 `barrageEligibility` 按环节 id 同口径拒绝）。
        */
-      { phase: 'movement', segment: 'movement.modeAndMovement' },
+      {
+        phase: 'movement',
+        segment: 'movement.modeAndMovement',
+        note: '10.0 第二段：移动环节仅「有低空扫射能力的空军单位」可轰炸；火炮/舰船不得参与',
+      },
       { phase: 'reaction', segment: 'reaction.barrage', role: 'nonActive' },
       { phase: 'combat', segment: 'combat.barrage' },
       { phase: 'exploitation', segment: 'exploitation.barrage' },

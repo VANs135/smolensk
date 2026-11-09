@@ -420,6 +420,74 @@ describe('10.0d / 10.0e 轰炸资格：阶段门槛、同类型、每格每阶�
     })
   })
 
+  it('10.0 第二段：移动环节只放行低空扫射的空军（火炮/舰船不得借这个入口）', () => {
+    const hip = { ...base, kind: 'air' as const, unitCount: 1, hipShoot: true, hasSpotter: true }
+    // 移动环节：低空扫射的空军 → 通过
+    expect(
+      barrageEligibility({ ...hip, phase: 'movement', segment: 'movement.modeAndMovement' }),
+    ).toMatchObject({ ok: true })
+    // 移动环节：普通空军轰炸 → 拒（原文只开低空扫射这一个口子）
+    expect(
+      barrageEligibility({
+        ...base,
+        kind: 'air',
+        phase: 'movement',
+        segment: 'movement.modeAndMovement',
+      }),
+    ).toMatchObject({ ok: false, rule: '10.0', reason: 'movementSegmentOnlyHipShoot' })
+    // 移动环节：舰船、火炮 → 拒
+    expect(
+      barrageEligibility({
+        ...base,
+        kind: 'ship',
+        phase: 'movement',
+        segment: 'movement.modeAndMovement',
+      }),
+    ).toMatchObject({ ok: false, rule: '10.0', reason: 'movementSegmentOnlyHipShoot' })
+    expect(
+      barrageEligibility({
+        ...base,
+        kind: 'artillery',
+        phase: 'movement',
+        segment: 'movement.modeAndMovement',
+      }),
+    ).toMatchObject({ ok: false })
+
+    // 轰炸环节不受此限：C 段空军轰炸仍成立，机数上限仍是 4
+    expect(
+      barrageEligibility({
+        ...base,
+        kind: 'air',
+        unitCount: 3,
+        phase: 'movement',
+        segment: 'movement.barrage',
+      }),
+    ).toMatchObject({ ok: true })
+    expect(
+      barrageEligibility({
+        ...base,
+        kind: 'air',
+        unitCount: 5,
+        phase: 'movement',
+        segment: 'movement.barrage',
+      }),
+    ).toMatchObject({ ok: false, reason: 'tooManyAircraft' })
+
+    // 10.0 第四句：火炮/舰船不限数量（只有飞机 ≤4）
+    expect(
+      barrageEligibility({ ...base, unitCount: 12, phase: 'combat', segment: 'combat.barrage' }),
+    ).toMatchObject({ ok: true })
+    expect(
+      barrageEligibility({
+        ...base,
+        kind: 'ship',
+        unitCount: 12,
+        phase: 'exploitation',
+        segment: 'exploitation.barrage',
+      }),
+    ).toMatchObject({ ok: true })
+  })
+
   it('10.0e-A/B/F：每格每阶段一次、每单位一次、不得拆分/低于印刷值、同类型', () => {
     expect(barrageEligibility({ ...base, hexAlreadyBarragedThisPhase: true })).toMatchObject({
       ok: false,

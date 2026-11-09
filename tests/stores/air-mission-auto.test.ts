@@ -131,6 +131,10 @@ describe('B29a：自动连跑到返航（不替玩家做选择）', () => {
   })
 
   it('★ 宣布之后（任务格无敌情）⇒ 一次点完即到**返航**（14.3/14.5/14.4/任务结算 连跑）', () => {
+    // 10.0 第二段：普通空军轰炸只在本段的**轰炸环节**
+    store.setSegmentStepIndex(
+      store.playerSegmentSteps.findIndex((step) => step.id === 'movement.barrage'),
+    )
     /*
      * 夹具：本方基地 + 一架激活战机；任务格选**无人格** ⇒ 空战不发生、无人拦截、防空无目标，
      * 于是"自动连跑"要依次穿过四个环节直达返航 —— 这正是用户要的"点完自动结算到战果"。
@@ -184,6 +188,10 @@ describe('批 C 切片 1：选任务类型即跑到停返航（一次动作）',
 
   /** 基地 + 一架激活战机 + 已点名参战 + 已选任务格（任务格无人 ⇒ 一路无表态需求） */
   const armMission = (): void => {
+    // 10.0 第二段：空军轰炸只在本段的**轰炸环节**（移动环节只放行低空扫射）
+    store.setSegmentStepIndex(
+      store.playerSegmentSteps.findIndex((step) => step.id === 'movement.barrage'),
+    )
     const base = toConsoleUnit({
       record: airBaseRecord(),
       instanceId: 'base-1',

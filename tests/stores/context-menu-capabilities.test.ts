@@ -102,6 +102,17 @@ describe('④ 右键菜单：按能力分类的既有入口', () => {
     expect(menuKeys(s, 'rifle-1')).not.toContain('barrage.declare')
   })
 
+  it('★ 10.0 第二段：C 段移动环节与轰炸环节都不给地面火炮「炮击」', () => {
+    const { workbench } = s
+    place(workbench, recordOf(true), 'gun-1')
+    // 移动环节：只有低空扫射的空军可借 10.0 的口子，火炮不得参与
+    enter(workbench, 'movement', 'movement.modeAndMovement')
+    expect(menuKeys(s, 'gun-1')).not.toContain('barrage.declare')
+    // C 段轰炸环节只允许空中与舰炮（炮兵轰炸在 F 段）
+    enter(workbench, 'movement', 'movement.barrage')
+    expect(menuKeys(s, 'gun-1')).not.toContain('barrage.declare')
+  })
+
   it('★ 按方过滤：苏军回合右键轴心国算子不出现菜单（不渲染对方内容）', () => {
     const { workbench } = s
     place(workbench, recordOf(false), 'inf-1', 'axis')

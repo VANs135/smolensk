@@ -66,6 +66,18 @@ describe('动作族权威表：覆盖与依据', () => {
     expect(atEnd.some((row) => row.key === 'exclusive.panzerObligation')).toBe(true)
   })
 
+  it('10.0 第二段：移动环节的轰炸口子注明「仅空军」', () => {
+    const rows = actionFamilyRowsAt({
+      phase: 'movement',
+      segment: 'movement.modeAndMovement',
+      role: 'active',
+      side: 'axis',
+    }).filter((row) => row.key === 'barrage.declare')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.note).toContain('10.0 第二段')
+    expect(rows[0]!.note).toContain('移动环节仅')
+  })
+
   it('按方限定的动作不落给另一方', () => {
     const axis = actionFamilyRowsAt({
       phase: 'reinforcement',

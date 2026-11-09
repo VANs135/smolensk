@@ -39,11 +39,16 @@ function goToActionStep(
     setSegmentStepIndex(index: number): boolean
   },
   key: ActionKey,
+  preferSegment?: string,
 ): void {
   const allowed = actionGateOf(key)
     .where.filter((item) => item.phase === store.phase)
     .map((item) => item.segment)
-  const index = store.playerSegmentSteps.findIndex((step) => allowed.includes(step.id))
+  // 段内有多个允许环节时（如 C 段：轰炸环节 + 移动环节）可指定要进的那个
+  const index =
+    preferSegment === undefined
+      ? store.playerSegmentSteps.findIndex((step) => allowed.includes(step.id))
+      : store.playerSegmentSteps.findIndex((step) => step.id === preferSegment)
   if (index < 0) throw new Error(`${store.phase} 段没有允许 ${key} 的环节`)
   if (!store.setSegmentStepIndex(index)) throw new Error(`进入环节失败（${key}）`)
 }
@@ -310,7 +315,7 @@ describe('C7 轰炸交互：10.0 通用流程端到端', () => {
     const store = newStore()
     store.setPhase('movement')
     // B8：C 段的轰炸在**本段的轰炸环节**（段内动作只在对应环节放行）
-    goToActionStep(store, 'barrage.declare')
+    goToActionStep(store, 'barrage.declare', 'movement.barrage')
     const plane = place(store, artilleryRecord(), FIRING_HEX, 'axis', 'air-1')
     /*
      * B39 / A-1：宣布「空军基地」须**该格真有基地**（10.0c / 10.0d 由盘面事实校验）⇒
@@ -360,7 +365,7 @@ describe('C7 空军：10.2b 短程加成的数据源（14.1a 飞机停在空军�
   /** 摆一架飞机到 FIRING_HEX（⇒ 其基地格距目标格 1 格）并勾选参炸 */
   function setupAirBarrage(store: ReturnType<typeof newStore>, aircraftType?: string) {
     store.setPhase('movement')
-    goToActionStep(store, 'barrage.declare')
+    goToActionStep(store, 'barrage.declare', 'movement.barrage')
     store.battleTarget = { hex: TARGET_HEX, defenderIds: [] }
     store.setBarrageActive(true)
     store.setBarrageKind('air')

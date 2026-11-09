@@ -1568,6 +1568,8 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (
       unit !== undefined &&
       workbench.actionAllowedNow('barrage.declare') &&
+      // 10.0 第二段：本环节不给炮兵来源时（C 段移动环节 / C 段轰炸环节）不摆炮击入口
+      workbench.barrageKindsInSegment.includes('artillery') &&
       workbench.isBarrageCapableUnit(unit)
     ) {
       actions.push({

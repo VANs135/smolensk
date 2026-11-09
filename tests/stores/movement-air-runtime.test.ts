@@ -36,12 +36,17 @@ function ground() {
   expect(destination).toBeDefined()
   return { w, unit, destination, record }
 }
-function air(phase: 'movement' | 'reaction' = 'movement') {
+function air(
+  phase: 'movement' | 'reaction' = 'movement',
+  step: 'movement' | 'barrage' = 'movement',
+) {
   const w = fresh()
   w.setPhase(phase)
   if (phase === 'reaction') w.activeSide = 'soviet'
   w.setSegmentStepIndex(
-    w.playerSegmentSteps.findIndex((step) => step.id.endsWith('modeAndMovement')),
+    w.playerSegmentSteps.findIndex((item) =>
+      step === 'barrage' ? item.id === `${phase}.barrage` : item.id.endsWith('modeAndMovement'),
+    ),
   )
   placeGround(w, airBaseRecord(2), CORE_HEX, 'axis', 'base')
   placeGround(w, airBaseRecord(2), NEAR_HEX, 'axis', 'other-base')
@@ -56,7 +61,8 @@ function air(phase: 'movement' | 'reaction' = 'movement') {
 describe('移动运行时与空军任务隔离', () => {
   it('14.2f-F：同格同编成的旧轰炸不能替代新任务，重试则沿用本次进度', () => {
     function task() {
-      const w = air()
+      // 10.0 第二段：普通空军轰炸只在本段的轰炸环节
+      const w = air('movement', 'barrage')
       w.setAirMissionKind('barrage')
       w.setAirTargetFromText(`${NEAR_HEX.col}.${NEAR_HEX.row}`)
       placeGround(

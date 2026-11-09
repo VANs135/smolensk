@@ -702,6 +702,14 @@ export function barrageEligibility(input: {
   kind: BarrageKind
   /** 当前 SOP 段（2.2） */
   phase: GamePhase
+  /**
+   * 当前 SOP 环节 id（2.2；可选）
+   *
+   * 10.0 第二段：轰炸只在各段的**轰炸环节**；移动环节只在「允许低空扫射」时开一个
+   * 仅限空军的口子（火炮/舰船不得借这个入口）。段名（`phase`）分不出
+   * 「轰炸环节」与「移动环节」，故由调用方把环节 id 一并传入。
+   */
+  segment?: string
   /** 本次宣布的整体目标（10.0d） */
   declaredTarget: BarrageTargetKind
   /** 参炸单位数（10.0：空军单任务 ≤4 机） */
@@ -749,6 +757,16 @@ export function barrageEligibility(input: {
       rule: input.kind === 'artillery' ? '10.0e-D' : '10.0e-C',
       reason: `wrongPhaseFor${input.kind}:${input.phase}`,
     }
+
+  /*
+   * 10.0 第二段：「如果允许某方的空军单位执行低空扫射任务（见 14.7d），则这些轰炸还能在上述阶段的
+   * **移动环节**中进行。」⇒ 移动环节只放行**低空扫射的空军**；火炮与舰船不得借这个入口。
+   */
+  const inMovementStep =
+    input.segment !== undefined &&
+    (input.segment.endsWith('.modeAndMovement') || input.segment.endsWith('.movement'))
+  if (inMovementStep && (input.kind !== 'air' || input.hipShoot !== true))
+    return { ok: false, rule: '10.0', reason: 'movementSegmentOnlyHipShoot' }
 
   if (input.kind === 'artillery') {
     if (input.artilleryInReserveOrStrat === true)

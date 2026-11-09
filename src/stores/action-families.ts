@@ -120,6 +120,8 @@ export interface ActionFamilyRow {
   at: 'end' | null
   /** 由谁触发（人话） */
   owner: string
+  /** 该 (段, 环节) 的额外限定（如 10.0 第二段「移动环节仅空军」）；无则 null */
+  note: string | null
   entry: readonly ActionEntryPoint[]
 }
 
@@ -153,6 +155,7 @@ function buildRows(): ActionFamilyRow[] {
         sides: where.sides ?? null,
         at: where.at ?? null,
         owner: meta.owner ?? ownerOf(where),
+        note: where.note ?? null,
         entry: meta.entry,
       })
     }

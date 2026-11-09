@@ -10928,6 +10928,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       beginBarrage({
         kind: barrageKind.value,
         phase: phase.value,
+        // 10.0 第二段：移动环节只有低空扫射的空军可借轰炸口子（引擎按环节判）
+        segment: segmentStep.value?.id,
         targetKind: barrageTargetKind.value,
         targetHex,
         units: [
@@ -17983,17 +17985,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   /**
-   * 批 A 切片 2：**本环节允许的轰炸来源**（10.0e-F 的段内限制）
+   * 批 A 切片 2：**本环节允许的轰炸来源**（10.0e-F 的段内限制 ＋ 10.0 第二段）
    *
-   * 判据取自引擎的唯一表 `BARRAGE_SOURCES_BY_PHASE`（SOP 原文：C 段 air & ship only、F 段 artillery only）；
-   * 不在轰炸环节时给全量（面板在别的环节仍可查看，最终是否合法由引擎判）。
+   * 判据取自引擎的唯一表 `BARRAGE_SOURCES_BY_PHASE`（SOP 原文：C 段轰炸环节 air & ship only、
+   * F 段 artillery only）；**移动环节**按 10.0 第二段只给低空扫射的空军；其余环节不给来源。
    */
   const barrageKindsInSegment = computed<readonly BarrageKind[]>(() => {
     /** 全量来源（本作只有这三类：火炮 / 空军 / 海军；海军在本作不适用，保留以照原文） */
     const ALL_KINDS: readonly BarrageKind[] = ['artillery', 'air', 'ship']
+    const stepId = segmentStep.value?.id ?? ''
+    if (!isBarrageSegment.value) {
+      /* 10.0 第二段：「如果允许某方的空军单位执行低空扫射任务……则这些轰炸还能在上述阶段的
+       * 移动环节中进行」⇒ 移动环节只开空军（低空扫射）这一个来源；火炮/舰船不得借这个入口。 */
+      const inMovementStep = stepId.endsWith('.modeAndMovement') || stepId.endsWith('.movement')
+      return inMovementStep ? ['air'] : []
+    }
     const allowed = BARRAGE_SOURCES_BY_PHASE[phase.value as GamePhase]
     if (allowed === undefined) return ALL_KINDS
-    if (!isBarrageSegment.value) return ALL_KINDS
     return ALL_KINDS.filter((kind) => allowed.includes(kind))
   })
 

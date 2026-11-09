@@ -307,6 +307,8 @@ export interface BarrageFacts {
 export function beginBarrage(input: {
   kind: BarrageKind
   phase: GamePhase
+  /** SOP 环节 id（10.0 第二段：移动环节仅放行低空扫射的空军） */
+  segment?: string
   /** 10.0d：本次宣布的**整体目标** */
   targetKind: BarrageTargetKind
   targetHex: HexRef
@@ -382,6 +384,7 @@ export function beginBarrage(input: {
   const eligibility: BarrageEligibility = barrageEligibility({
     kind: input.kind,
     phase: input.phase,
+    segment: input.segment,
     declaredTarget: input.targetKind,
     unitCount: units.length,
     totalValue,

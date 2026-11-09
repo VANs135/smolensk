@@ -194,6 +194,10 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
 
   it('14.2f A–G 走通：宣布 → 空战（无敌基地⇒不打）→ 拦截（放弃）→ 防空（未命中）→ 结算 → 返航', () => {
     const store = newStore()
+    // 10.0 第二段：普通空军轰炸只在本段的**轰炸环节**；移动环节只放行低空扫射
+    store.setSegmentStepIndex(
+      store.playerSegmentSteps.findIndex((step) => step.id === 'movement.barrage'),
+    )
     store.setAirActive(true)
     const { plane } = setupBaseAndPlane(store)
 

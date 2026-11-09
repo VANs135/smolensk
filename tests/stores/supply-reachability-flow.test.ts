@@ -33,11 +33,16 @@ function goToActionStep(
     setSegmentStepIndex(index: number): boolean
   },
   key: ActionKey,
+  preferSegment?: string,
 ): void {
   const allowed = actionGateOf(key)
     .where.filter((item) => item.phase === store.phase)
     .map((item) => item.segment)
-  const index = store.playerSegmentSteps.findIndex((step) => allowed.includes(step.id))
+  // 段内有多个允许环节时（如 C 段：轰炸环节 + 移动环节）可指定要进的那个
+  const index =
+    preferSegment === undefined
+      ? store.playerSegmentSteps.findIndex((step) => allowed.includes(step.id))
+      : store.playerSegmentSteps.findIndex((step) => step.id === preferSegment)
   if (index < 0) throw new Error(`${store.phase} 段没有允许 ${key} 的环节`)
   if (!store.setSegmentStepIndex(index)) throw new Error(`进入环节失败（${key}）`)
 }
@@ -223,7 +228,7 @@ describe('10.1b 轰炸：付款站候选按 12.3a 可达性筛（且各参炸单
   it('10.2c：空军轰炸无需补给来源（候选为空也不要求选站）', () => {
     const store = newStore()
     store.setPhase('movement')
-    goToActionStep(store, 'barrage.declare')
+    goToActionStep(store, 'barrage.declare', 'movement.barrage')
     const plane = placeGround(store, artilleryRecord(), CORE_HEX, 'axis', 'air-1')
     const targetHex = neighbors(CORE_HEX)[0]!.hex
     store.battleTarget = { hex: targetHex, defenderIds: [] }
