@@ -7,6 +7,7 @@ import {
   entryPointsOf,
 } from '@/stores'
 import { ACTION_GATES, allowedActionsOf } from '@/stores/workbench-model'
+import { AIR_MISSION_SEGMENT } from '@/engine/rules'
 
 /**
  * 「阶段 × 环节 × 动作族」权威表守卫（用户 2026-11-09 裁定）
@@ -89,6 +90,17 @@ describe('动作族权威表：覆盖与依据', () => {
       expect(item.entry.length, `${item.id} 缺入口`).toBeGreaterThan(0)
       expect(item.families.length, `${item.id} 缺动作族`).toBeGreaterThan(0)
     }
+  })
+
+  it('14.11 基地转移：表口径限移动环节，与引擎同口径', () => {
+    const entry = UNREGISTERED_ACTION_FAMILIES.find((item) => item.id === 'air.transfer')
+    expect(entry).toBeDefined()
+    // 14.2e：「转移可在不同的移动环节中执行」⇒ 表登记为移动环节，而不是“无时机限制”
+    expect(entry!.segmentKind).toBe('movementSegment')
+    // 与引擎唯一口径对齐（AIR_MISSION_SEGMENT.base_transfer）
+    expect(entry!.segmentKind).toBe(AIR_MISSION_SEGMENT.base_transfer)
+    expect(entry!.note).toContain('移动环节')
+    expect(entry!.note).not.toContain('原文未给时机限制')
   })
 
   /*

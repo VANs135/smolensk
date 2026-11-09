@@ -1,5 +1,5 @@
 import type { Side } from '@/data'
-import { sopChainOf, sopStepById } from '@/engine/rules'
+import { sopChainOf, sopStepById, type AirMissionSegment } from '@/engine/rules'
 
 import {
   ACTION_GATES,
@@ -197,8 +197,9 @@ export function entryPointsOf(key: ActionKey): readonly ActionEntryPoint[] {
  * **UI 有入口、闸门表未登记**的能力（现状缺口；确认后补 `ACTION_GATES` 或补闸门）
  *
  * 这些条目还不能进 `ACTION_FAMILY_TABLE`（没有 `where` 就没有"哪一段哪一环节"的答案），
- * 单独列出是为了让"删入口前先查表"这件事不漏项：
- * 它们目前**只有 UI 层的时间判断**，删入口时更要谨慎。
+ * 单独列出是为了让"删入口前先查表"这件事不漏项。
+ * 其中引擎已经限定时机的，用 `segmentKind` 记下来（如 14.11 转移限移动环节），
+ * 不再写成"无时机限制"。
  */
 export interface UnregisteredFamily {
   id: string
@@ -206,6 +207,13 @@ export interface UnregisteredFamily {
   rule: string
   families: readonly ActionFamily[]
   entry: readonly ActionEntryPoint[]
+  /**
+   * 引擎已经限定的时机（14.2e）；与 `AIR_MISSION_SEGMENT` 同口径
+   *
+   * 例：14.11 基地转移在引擎里是 `movementSegment`（「转移可在不同的移动环节中执行」），
+   * 表里也照此登记，不能写成“无时机限制”。
+   */
+  segmentKind?: AirMissionSegment
   note: string
 }
 
@@ -216,7 +224,8 @@ export const UNREGISTERED_ACTION_FAMILIES: readonly UnregisteredFamily[] = [
     rule: '14.11',
     families: ['转移'],
     entry: ['面板', '盒区'],
-    note: '14.11 原文未给时机限制；当前只有 AirPanel / 名册两处 UI，无环节闸门。',
+    segmentKind: 'movementSegment',
+    note: '14.2e：转移限移动环节（「转移可在不同的移动环节中执行」）；引擎 `AIR_MISSION_SEGMENT.base_transfer` 同口径；UI 入口仍在 AirPanel / 名册。',
   },
   {
     id: 'rail.repair',
