@@ -16,6 +16,7 @@ import {
   type AirUnitTransportState,
 } from '@/engine/rules/air-unit-movement'
 import { canonicalMode, canUseTransport } from '@/engine/rules/modes'
+import { isSpBearingSource } from '@/engine/rules/supply-interaction'
 import { createAirCargoResolutionDomain } from './air-cargo-resolution'
 import type { AirCargoUnloadPlan } from '@/engine/rules/air-cargo-unload'
 import { createAirSupplyDomain } from './air-supply'
@@ -11738,6 +11739,93 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
+  /**
+   * ⑦ 12.3a / 12.3b：**地图上可点的来源格**（一格一条；同格多条视为并列）
+   *
+   * 口径全部来自引擎：只收 `ok` 且 `isSpBearingSource(kind)` 的来源（12.6a 追溯源 / 12.6c
+   * 吃图上补给没有可拖取的 SP，也不参与选源）。同格多条**不在图上隐式排序**，
+   * 只给一条提示 ⇒ 由玩家在面板的并列清单里点选。
+   */
+  const supplyPickSourceHints = computed<readonly { hex: HexRef; selected: boolean }[]>(() => {
+    const state = supplyState.value
+    if (state === null) return []
+    if (state.step !== 'selectSource' && state.step !== 'pickup') return []
+    const chosen = state.chosenSource
+    const chosenKey = chosen === undefined || chosen.hex === null ? null : hexTextOf(chosen.hex)
+    const seen = new Set<string>()
+    const hints: { hex: HexRef; selected: boolean }[] = []
+    for (const source of state.sources) {
+      if (!source.ok || !isSpBearingSource(source.kind) || source.hex === null) continue
+      const key = hexTextOf(source.hex)
+      if (seen.has(key)) continue
+      seen.add(key)
+      hints.push({ hex: { ...source.hex }, selected: chosenKey === key })
+    }
+    return hints
+  })
+
+  /** 该格**可点**的来源下标（引擎已判 `ok`；同格可能多条 ⇒ 并列） */
+  function supplyPickIndexesAt(hex: HexRef): number[] {
+    const state = supplyState.value
+    if (state === null) return []
+    const key = hexTextOf(hex)
+    return state.sources.flatMap((source, index) =>
+      source.ok &&
+      isSpBearingSource(source.kind) &&
+      source.hex !== null &&
+      hexTextOf(source.hex) === key
+        ? [index]
+        : [],
+    )
+  }
+
+  /**
+   * ⑦ 12.3：**地图上点来源格**
+   *
+   * @returns 这一击是否被选源消费（false ⇒ 交回常规地图点击分派）
+   */
+  function pickSupplySourceAtHexNow(hex: HexRef): boolean {
+    const state = supplyState.value
+    if (state === null) return false
+    const key = hexTextOf(hex)
+    // 再点已选来源同一格 ⇒ 取消，退回「选来源」（12.3；与 12.3b 付款站同口径）
+    if (state.step === 'pickup') {
+      const chosen = state.chosenSource
+      if (chosen !== undefined && chosen.hex !== null && hexTextOf(chosen.hex) === key) {
+        supplyState.value = { ...state, chosenSource: undefined, step: 'selectSource' }
+        supplyPreviewIndex.value = null
+        pushLog('info', `取消来源：${hexLabel(hex)}（12.3）`, '12.3')
+        return true
+      }
+      return false
+    }
+    if (state.step !== 'selectSource') return false
+    const indexes = supplyPickIndexesAt(hex)
+    if (indexes.length === 1) return chooseSupplySourceNow(indexes[0]!)
+    if (indexes.length > 1) {
+      pushLog(
+        'warning',
+        `${hexLabel(hex)} 有 ${indexes.length} 个并列来源，请在面板中选择（12.3）`,
+        '12.3',
+      )
+      return true
+    }
+    // 该格有来源但不可点（距离外 / 无 SP）：只出一行原因
+    const blocking = state.sources.find(
+      (source) => source.hex !== null && hexTextOf(source.hex) === key,
+    )
+    if (blocking === undefined) return false
+    const why = blocking.ok
+      ? '该来源不含 SP，不能拖取'
+      : `${blocking.rule}：${blocking.reason ?? blocking.detail}`
+    pushLog(
+      'warning',
+      `${hexLabel(hex)} 不能作为来源：${why}`,
+      blocking.ok ? '12.1b' : blocking.rule,
+    )
+    return true
+  }
+
   /** C8：本次拖取/投递的**付款补给站**（12.3a 直接从它拖取；12.3b 由 HQ 从它拖取后再前送） */
   function resolvePayDump(
     source: SupplySourceOption,
@@ -22067,6 +22155,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setSupplyPreview,
     beginSupplyCheckNow,
     chooseSupplySourceNow,
+    supplyPickSourceHints,
+    pickSupplySourceAtHexNow,
     confirmSupplyPickupNow,
     confirmOosResolutionNow,
     cancelSupply,

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
-import { drawMovementOverlay, type MovementOverlay } from '@/render/token-layer'
+import {
+  cullOverlay,
+  drawMovementOverlay,
+  overlayHexKey,
+  type MovementOverlay,
+} from '@/render/token-layer'
 
 /**
  * 补给覆盖层的绘制（C8：拖取/投递可视化）
@@ -126,6 +131,40 @@ describe('C8 补给覆盖层绘制', () => {
     expect(rec.rects).toHaveLength(1)
     expect(rec.texts).toHaveLength(0)
     expect(rec.arcs).toBe(0)
+  })
+})
+
+describe('⑦ 选源方框（12.3a / 12.3b：地图上点来源格）', () => {
+  it('选源提示与可消耗补给站同一画法：每格一个方框，已选用选中色', () => {
+    const { ctx, rec } = makeCtx()
+    drawMovementOverlay(
+      ctx,
+      {
+        ...EMPTY_OVERLAY,
+        supplyPick: [
+          { hex: hex(13), label: '', selected: true },
+          { hex: hex(20), label: '', selected: false },
+        ],
+      },
+      1,
+    )
+    expect(rec.rects).toHaveLength(2)
+    // 不写文字（来源格本身已够认）
+    expect(rec.texts).toHaveLength(0)
+  })
+
+  it('视口裁剪按可见格过滤选源方框（不可见格不画）', () => {
+    const overlay: MovementOverlay = {
+      ...EMPTY_OVERLAY,
+      supplyPick: [
+        { hex: hex(13), label: '', selected: false },
+        { hex: hex(40), label: '', selected: false },
+      ],
+    }
+    const culled = cullOverlay(overlay, new Set([overlayHexKey(hex(13))]))
+    expect(culled.supplyPick?.map((hint) => overlayHexKey(hint.hex))).toEqual([
+      overlayHexKey(hex(13)),
+    ])
   })
 })
 

@@ -504,6 +504,12 @@ export const useMapViewStore = defineStore('mapView', () => {
         setup.placing?.candidates ?? (setup.truckPickActive ? setup.truckPickHexes : null),
       // 15.1：整备付款的补给站候选（用户口径：与其它补给消耗一样，点地图上高亮的补给）
       refitPay: refitPayHints.value,
+      // ⑦ 12.3a / 12.3b：选源时地图上可点的来源格（点格即选定；再点取消）
+      supplyPick: workbench.supplyPickSourceHints.map((hint) => ({
+        hex: { ...hint.hex },
+        label: '',
+        selected: hint.selected,
+      })),
       // 条 4：可整备机场格（15.1）——青蓝环，整备后随状态自动消失
       refitAirbases: workbench.refitAirbaseHexes,
     }
@@ -2504,6 +2510,15 @@ export const useMapViewStore = defineStore('mapView', () => {
       workbench.refitBase !== null ||
       workbench.hexPickView !== null ||
       workbench.optionDraftMode !== 'idle'
+    /*
+     * ⑦ 12.3 选源：点高亮的来源格即选定（再点同一格取消）。
+     * 排在堆叠展开之前——来源格常与补给站/单位同格，这一击的意思明确是「选这个来源」；
+     * 也只有补给检查正停在选源/已选步时才会吃掉这一击（其余情况交回常规分派）。
+     */
+    if (workbench.pickSupplySourceAtHexNow(hex)) {
+      closePopup()
+      return
+    }
     if (!modalPickLive && world !== undefined && handleStackClick(hex, world, scale, anchor)) return
     // W7 C14：初设放置中 ⇒ 点地图即落位（最高优先级；非候选格由 store 记拒绝，不开常规小窗）
     if (setup.placing !== null && setup.placeAtHex(hex)) {

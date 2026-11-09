@@ -225,6 +225,12 @@ export interface MovementOverlay {
    */
   refitPay?: readonly SupplyPickHint[] | null
   /**
+   * ⑦ 12.3a / 12.3b：**选源时可点的来源格**（地图上点格即选定；再点同一格取消）
+   *
+   * 数据来自状态层的 `supplyPickSourceHints`（只收引擎判过 `ok` 且带 SP 的来源，一格一条）。
+   */
+  supplyPick?: readonly SupplyPickHint[] | null
+  /**
    * 条 4：**可整备的机场格**（15.1/15.1B；本轮补的 27 条核对缺口）
    *
    * 判据在状态层 `workbench.refitAirbaseHexes`（本方基地 ∧ 本阶段未整备过 ∧ 有非激活机 ∧ 能拖到 1T）。
@@ -492,6 +498,9 @@ export function cullOverlay(
     ...(overlay.refitPay === undefined || overlay.refitPay === null
       ? { refitPay: overlay.refitPay }
       : { refitPay: overlay.refitPay.filter((hint) => visible(hint.hex)) }),
+    ...(overlay.supplyPick === undefined || overlay.supplyPick === null
+      ? { supplyPick: overlay.supplyPick }
+      : { supplyPick: overlay.supplyPick.filter((hint) => visible(hint.hex)) }),
     ...(overlay.refitAirbases === undefined || overlay.refitAirbases === null
       ? { refitAirbases: overlay.refitAirbases }
       : { refitAirbases: overlay.refitAirbases.filter((hex) => visible(hex)) }),
@@ -890,8 +899,13 @@ export function drawMovementOverlay(
     drawSupplyOverlay(ctx, visible.supply, scale)
   }
 
-  // ⑥-b 可消耗的补给站（W7 C16：发起战斗/轰炸时的「选哪个补给站付款」；15.1 整备付款同画法）
-  const payHints = [...(visible.payDumps ?? []), ...(visible.refitPay ?? [])]
+  // ⑥-b 可消耗的补给站（W7 C16：发起战斗/轰炸时的「选哪个补给站付款」；15.1 整备付款同画法；
+  //     ⑦ 12.3 选源的可点来源格也走这一画法）
+  const payHints = [
+    ...(visible.payDumps ?? []),
+    ...(visible.refitPay ?? []),
+    ...(visible.supplyPick ?? []),
+  ]
   if (payHints.length > 0) {
     ctx.lineWidth = 2 / scale
     for (const hint of payHints) {
