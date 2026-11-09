@@ -76,7 +76,8 @@ describe('3.4b：未归属 SP 的全称（悬停提示 / 点开信息）', () =>
     expect(s.workbench.setSegmentStepIndex(index)).toBe(true)
 
     const id = `sp:${HEX.col},${HEX.row}:-`
-    s.mapView.onHexContext(HEX, { x: 0, y: 0 }, { x: 0, y: 0 })
+    // 用户 2026-11-09：地图右键多枚 ⇒ 一份共用菜单；单枚标签走"该枚自己的菜单"
+    expect(s.mapView.openUnitContext(HEX, id, { x: 0, y: 0 })).toBe(true)
     expect(s.mapView.contextOptions.find((item) => item.id === id)?.label).toBe('未归属（3.4b）')
   })
 

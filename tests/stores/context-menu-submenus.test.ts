@@ -174,10 +174,29 @@ describe('堆叠右键：目标集合', () => {
     expect(s.mapView.contextOptions.map((item) => item.id)).toEqual(['b'])
   })
 
-  it('★ 没有选中 ⇒ 列整堆叠', () => {
+  it('★ 没有选中 ⇒ 该格全部本单位合成**一份**共用菜单', () => {
     s.workbench.selectedId = null
     s.mapView.onHexContext(HEX, { x: 0, y: 0 }, { x: 0, y: 0 })
-    expect(s.mapView.contextOptions.map((item) => item.id)).toEqual(['a', 'b'])
+    expect(s.mapView.contextOptions.map((item) => item.id)).toEqual(['__shared__'])
+    expect(s.mapView.contextOptions[0]?.label).toBe('已选 2 枚')
+    // 选项是能力并集：步兵能改模式，两枚都具备 ⇒ 组只出现一次
+    const modeRows =
+      s.mapView.contextOptions[0]?.actions.filter((a) => a.group === '模式改变') ?? []
+    expect(modeRows.length).toBeGreaterThan(0)
+  })
+
+  it('★ 取子清单选中两枚 ⇒ 菜单按选中集合出，不落到某一枚（尤其编内卡车）', () => {
+    s.workbench.setMovePickIds(['a', 'b'])
+    s.mapView.onHexContext(HEX, { x: 0, y: 0 }, { x: 0, y: 0 })
+    expect(s.mapView.contextOptions.map((item) => item.id)).toEqual(['__shared__'])
+    const keys = s.mapView.contextOptions[0]?.actions.map((item) => item.key) ?? []
+    expect(keys.length).toBeGreaterThan(0)
+  })
+
+  it('★ 窗内右键某枚 ⇒ 单目标菜单（该单位自己的）', () => {
+    const ok = s.mapView.openUnitContext(HEX, 'b', { x: 0, y: 0 })
+    expect(ok).toBe(true)
+    expect(s.mapView.contextOptions.map((item) => item.id)).toEqual(['b'])
   })
 })
 

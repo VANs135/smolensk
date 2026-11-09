@@ -123,6 +123,17 @@ function chipSelected(id: string): boolean {
  */
 const canStartMove = computed(() => isMovePickHex.value && movePickIds.value.length > 0)
 
+/**
+ * 用户 2026-11-09：堆叠窗内右键**这一枚** ⇒ 该单位自己的菜单（只影响这一枚）
+ *
+ * 与地图右键分工：那边按选中集出一份共用菜单，这里只认这一枚。
+ */
+function onChipContext(event: MouseEvent, unitId: string): void {
+  const hex = mapView.popup?.hex
+  if (hex === undefined) return
+  mapView.openUnitContext(hex, unitId, { x: event.clientX, y: event.clientY })
+}
+
 /** 点 chip＝取消/恢复该枚开拔（仅待取子格上、且是该格可开拔的本方算子才可点） */
 function toggleChip(id: string): void {
   if (!isMovePickHex.value) return
@@ -462,6 +473,7 @@ function sideName(side: string): string {
             tabindex="0"
             :aria-pressed="chipSelected(unit.id)"
             @click="toggleChip(unit.id)"
+            @contextmenu.prevent.stop="onChipContext($event, unit.id)"
             @keydown.enter.prevent="toggleChip(unit.id)"
             @keydown.space.prevent="toggleChip(unit.id)"
           >

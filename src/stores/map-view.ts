@@ -1721,17 +1721,40 @@ export const useMapViewStore = defineStore('mapView', () => {
     return actions.filter((action) => action.disabledReason === null)
   }
 
+  /** 共用菜单的伪目标 id（只有"选中多枚"时出现；单枚仍用该枚 id） */
+  const SHARED_CONTEXT_ID = '__shared__'
+
+  /**
+   * 用户 2026-11-09：右键**一份共用菜单**
+   *
+   * 修前：每个目标单位各出一块菜单（5 个单位 5 份菜单，连 88 Arty 都有「运输」）。
+   * 现在按当前选中集合出一份：选项是集合里各单位能力的**并集**（组只在有人具备时出现），
+   * 执行时对具备该能力的成员逐个生效、不具备的跳过（见 `openContextAction`）。
+   * 只选中一枚时仍沿用该枚自己的菜单（id = 该枚），避免单枚场景多一层"共用"语义。
+   */
   const contextOptions = computed(() => {
     const hex = popup.value?.hex
     if (popup.value?.variant !== 'context' || hex === undefined) return []
-    return contextTargets.value.flatMap((id) => {
+    const targets = contextTargets.value
+    if (targets.length === 0) return []
+    if (targets.length === 1) {
+      const id = targets[0]!
       const actions = counterActionsAt(hex, id)
       if (actions.length === 0) return []
       // 3.4b：拆分出来的「未归属」补给站有全称（`? N SP` 是角标，写不下）⇒ 菜单标题写全称
       const tip = stackTokensAt(hex).find((token) => token.id === id)?.tip ?? null
       const label = ownCounterAt(hex, id)?.name ?? enemyCounterAt(hex, id)?.name ?? tip ?? '补给站'
       return [{ id, label, actions }]
-    })
+    }
+    const byKey = new Map<string, CounterAction>()
+    for (const id of targets) {
+      for (const action of counterActionsAt(hex, id)) {
+        if (!byKey.has(action.key)) byKey.set(action.key, action)
+      }
+    }
+    const actions = [...byKey.values()]
+    if (actions.length === 0) return []
+    return [{ id: SHARED_CONTEXT_ID, label: `已选 ${targets.length} 枚`, actions }]
   })
 
   function canOpenCounterContext(): boolean {
@@ -1805,12 +1828,50 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
-   * 右键出菜单（④：按能力分类）
+   * 用户 2026-11-09：堆叠窗内右键**这一枚** ⇒ 该单位自己的菜单（只影响这一枚）
    *
-   * 目标集合的取法：
-   *   · 堆叠已展开 ⇒ 该格全部可见算子（逐枚列组）；
-   *   · 未展开 ⇒ 先看**当前选中**是否就在这一格；不在就用**该格本方的可见算子**
-   *     （玩家右键一枚本单位就该看到它的能力，不必先左键选中）。
+   * 与地图右键（选中集合共用一份）分工明确：这里 `contextTargets` 只放这一枚。
+   */
+  function openUnitContext(
+    hex: HexRef,
+    instanceId: string,
+    anchor: { x: number; y: number },
+  ): boolean {
+    if (!canOpenCounterContext()) return false
+    if (counterActionsAt(hex, instanceId).length === 0) return false
+    contextTargets.value = [instanceId]
+    openPopup(hex, anchor.x, anchor.y, 'context')
+    return true
+  }
+
+  /** 地图右键的**选中集合**：优先取同格的取子清单（6.1f），否则按既有回退链 */
+  function contextSelectionAt(hex: HexRef): string[] {
+    const pick = workbench.movePick
+    if (pick !== null && pick.hex.col === hex.col && pick.hex.row === hex.row) {
+      const own = pick.ids.filter((id) => ownCounterAt(hex, id) !== undefined)
+      if (own.length > 0) return own
+    }
+    const picked = workbench.selectedUnit?.instanceId
+    const activeId = unitActionUnitId.value
+    const selected = [picked, activeId].filter((id): id is string => typeof id === 'string')
+    const hit = selected.filter((id) => ownCounterAt(hex, id) !== undefined)
+    if (hit.length > 0) return hit
+    const ownIds = stackTokensAt(hex)
+      .filter((token) => token.side === actingSide.value)
+      .map((token) => token.id)
+    if (ownIds.length > 0) return ownIds
+    return stackTokensAt(hex)
+      .filter((token) => token.side !== actingSide.value)
+      .map((token) => token.id)
+  }
+
+  /**
+   * 右键出菜单（④：按能力分类；用户 2026-11-09：一份共用菜单）
+   *
+   * 目标集合的取法（自上而下）：
+   *   · 该格有取子清单 ⇒ 清单里的本单位（＝堆叠窗里的选中集合）；
+   *   · 有选中/正在操作的算子且在本格 ⇒ 这些；
+   *   · 否则 ⇒ 该格本单位可见算子；再没有才取敌方（右键敌格 ⇒「低空扫射」）。
    * 谁有资格出现在菜单里仍由 `counterActionsAt` 判（本方 + 本环节有既有入口）。
    */
   function onHexContext(
@@ -1820,37 +1881,16 @@ export const useMapViewStore = defineStore('mapView', () => {
   ): void {
     if (popup.value?.variant === 'context') closePopup()
     if (hex === null) return
-    const picked = workbench.selectedUnit?.instanceId
-    const activeId = unitActionUnitId.value
-    const expanded = isStackExpanded(hex)
-    const selected = [picked, activeId].filter((id): id is string => typeof id === 'string')
-    if (expanded) {
-      showCounterContext(
-        hex,
-        stackTokensAt(hex).map((token) => token.id),
-        anchor,
-      )
-      return
-    }
-    const hit = selected.filter((id) => ownCounterAt(hex, id) !== undefined)
-    /*
-     * ④（用户 2026-11-09）：本方单位优先；本格**没有**本方可见算子时才取敌方可见算子
-     * （右键敌格 ⇒「低空扫射」）。战雾下看不见的敌人不会进 `stackTokensAt`。
-     */
-    const ownIds = stackTokensAt(hex)
-      .filter((token) => token.side === actingSide.value)
-      .map((token) => token.id)
-    const enemyIds = stackTokensAt(hex)
-      .filter((token) => token.side !== actingSide.value)
-      .map((token) => token.id)
-    const ids = hit.length > 0 ? hit : ownIds.length > 0 ? ownIds : enemyIds
-    showCounterContext(hex, ids, anchor)
+    showCounterContext(hex, contextSelectionAt(hex), anchor)
   }
 
-  function openContextAction(instanceId: string, key: string): boolean {
-    const hex = popup.value?.hex
-    if (hex === undefined || !contextTargets.value.includes(instanceId) || !canOpenCounterContext())
-      return false
+  /**
+   * 执行一条右键动作（单枚）
+   *
+   * ★ 用户 2026-11-09：从 `openContextAction` 里拆出——共用菜单要对**具备该能力的每个成员**
+   * 逐个调用本函数，不具备的由调用方跳过。
+   */
+  function applyContextAction(hex: HexRef, instanceId: string, key: string): boolean {
     const option = counterActionsAt(hex, instanceId).find((item) => item.key === key)
     if (option === undefined || option.disabledReason !== null) return false
     /*
@@ -1948,6 +1988,29 @@ export const useMapViewStore = defineStore('mapView', () => {
     unitActionIntent.value = option
     closePopup()
     return true
+  }
+
+  /**
+   * 右键菜单项的执行入口
+   *
+   * 共用菜单（选中多枚）⇒ 对**具备该能力且可用**的成员逐个生效，不具备的跳过、不报错；
+   * 单枚菜单 ⇒ 只作用于该枚（堆叠窗内右键）。
+   */
+  function openContextAction(instanceId: string, key: string): boolean {
+    const hex = popup.value?.hex
+    if (hex === undefined || !canOpenCounterContext()) return false
+    if (instanceId === SHARED_CONTEXT_ID) {
+      let applied = false
+      for (const id of [...contextTargets.value]) {
+        const option = counterActionsAt(hex, id).find((item) => item.key === key)
+        if (option === undefined || option.disabledReason !== null) continue
+        applied = applyContextAction(hex, id, key) || applied
+      }
+      closePopup()
+      return applied
+    }
+    if (!contextTargets.value.includes(instanceId)) return false
+    return applyContextAction(hex, instanceId, key)
   }
 
   /** 名册只建立参战选择。宣布与结算仍走空军会话。 */
@@ -3035,6 +3098,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     actionBaseAircraft,
     contextOptions,
     onHexContext,
+    openUnitContext,
     counterForBoxAt,
     counterBoxTargets,
     dropCounterInBox,
