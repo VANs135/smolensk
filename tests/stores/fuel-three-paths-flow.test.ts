@@ -261,7 +261,8 @@ describe('批 B 切片 3：三条取油路径都能让单位开拔（12.3/12.5�
     // 取完就能走
     store.beginMovePick(FIXTURE.tankHex, ['mate-1'])
     expect(store.confirmMovePick()).toBe(true)
-    expect(store.moveInteraction?.unitIds).toEqual(['mate-1'])
+    // 13.2g：编内卡车随同编队单位开拔（不再作为独立算子另行开拔）
+    expect(store.moveInteraction?.unitIds).toEqual(['mate-1', 'tr-1'])
   })
 
   it('★ 12.5e：已补给的指挥部**每阶段只能在一个位置投递** ⇒ 换位置再投递被拒、账本不动', () => {

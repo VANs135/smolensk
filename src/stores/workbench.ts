@@ -6299,6 +6299,42 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     if (!requireAction('move.order', '移动')) return false
     /*
+     * 13.2g：编内卡车不是独立算子 —— 既不能单独开拔，也不进 `pausedTransportIds`。
+     * 取子清单已把它剔掉（movePickPoolAt）；这里再兜一层，免得旧入口（selectForMove 等）绕过。
+     */
+    const organicOnly =
+      unitIds.length > 0 &&
+      unitIds.every(
+        (id) =>
+          units.value.find((unit) => unit.instanceId === id)?.noncombatKind === 'organic_truck',
+      )
+    if (organicOnly) {
+      const reason = '编内卡车不是独立算子：请与同编队单位一起移动（13.2g）'
+      moveBlocked.value = { rule: '13.2g', reason }
+      pushLog('warning', reason, '13.2g')
+      return false
+    }
+    /*
+     * 13.2g：编内卡车随同编队单位移动 —— 开拔时把**同格、同编队、未被停止**的编内卡车并进来，
+     * 免得玩家点「开始移动」时还要单独照顾一辆车。判据只用数据里的 `formation`，不新造规则。
+     */
+    const moveIds = [...unitIds]
+    for (const unit of units.value) {
+      if (unit.noncombatKind !== 'organic_truck' || unit.movementEnded || unit.locked) continue
+      const attaches = unitIds.some((id) => {
+        const picked = units.value.find((item) => item.instanceId === id)
+        return (
+          picked !== undefined &&
+          picked.isCombat &&
+          picked.hex.col === unit.hex.col &&
+          picked.hex.row === unit.hex.row &&
+          picked.formation !== null &&
+          picked.formation === unit.formation
+        )
+      })
+      if (attaches && !moveIds.includes(unit.instanceId)) moveIds.push(unit.instanceId)
+    }
+    /*
      * 13.2a：运输点数「暂停移动并使用它装载的部分补给、然后继续移动」——两条落地：
      *   ① 暂停的运输点数**可以**在同一移动阶段内再次开拔 ⇒ 解开 6.1g 的"本轮已结束"；
      *   ② 原文限制「运输点数必须在另一个单位移动之前完成它的移动」⇒ 暂停期间别的单位
@@ -6306,7 +6342,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 阶段级排序原文未给：本处只判"别的单位是否先动"，不排阶段（见交付摘要"真空白"）。
      */
     const paused = pausedTransportIds.value
-    const resumingIds = unitIds.filter((id) => paused.includes(id))
+    const resumingIds = moveIds.filter((id) => paused.includes(id))
     if (paused.length > 0 && resumingIds.length === 0) {
       const reason = '运输点数已暂停移动：必须先让它继续并完成移动，其它单位才能开拔（13.2a）'
       moveBlocked.value = { rule: '13.2a', reason }
@@ -6317,14 +6353,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       (unit) => resumingIds.includes(unit.instanceId) && unit.movementEnded,
     )
     for (const unit of resumed) unit.movementEnded = false
-    if (!groundMovement.begin(unitIds)) {
+    if (!groundMovement.begin(moveIds)) {
       // 引擎仍拒绝（燃料/阶段等）⇒ 恢复「已结束」并保留暂停账，免得凭空多出一次移动
       for (const unit of resumed) unit.movementEnded = true
       return false
     }
     pausedTransportIds.value = paused.filter((id) => !resumingIds.includes(id))
     // 条 22（批 T）：20.0a 的**创建时机**＝「开始移动」这个**事件**（不是"当前在移动段"这个状态）
-    openBreakdownWindow('startMove', unitIds)
+    openBreakdownWindow('startMove', moveIds)
     return true
   }
 
@@ -6422,9 +6458,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *
    * 补员算子只为「消耗补员重建」存在（数据层也是 `isCombat: true`），不参加移动；
    * 左键窗的 chip 与取子清单共用这一份，避免 chip 看不见它、`movePick` 里却留着它。
+   *
+   * 13.2g：编内卡车不是独立算子，不进可开拔集；它随同编队单位开拔（见 beginMoveFor）。
    */
   function movePickPoolAt(hex: HexRef): ConsoleUnit[] {
-    return friendlyUnitsAt(hex).filter((unit) => !isReplUnit(unit))
+    return friendlyUnitsAt(hex).filter(
+      (unit) => !isReplUnit(unit) && unit.noncombatKind !== 'organic_truck',
+    )
   }
 
   /** 取子清单的候选单位（该格当前方可开拔的算子，按摆放顺序） */
@@ -6918,11 +6958,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const names = moveUnits.value.map((unit) => unit.name).join(' + ')
     /*
      * 13.2a：先把本次**主动停车**的运输点数记下来（3.3b 的运输点数＝非战斗、带运力点数的算子；
-     * 编内卡车是战斗单位，不算"运输点数"）。记账必须在 `applyMovePatches` 之前 —— 补丁会把
-     * 它们的 `movementEnded` 置真，之后就分不出"本来就停下的"与"这次停的"。
+     * 编内卡车（13.2g）虽 `isCombat:false`，但不是独立运输点数，必须排除）。
+     * 记账必须在 `applyMovePatches` 之前 —— 补丁会把它们的 `movementEnded` 置真，
+     * 之后就分不出"本来就停下的"与"这次停的"。
      */
     const pausedIds = moveUnits.value
-      .filter((unit) => !unit.movementEnded && !unit.isCombat && unit.noncombatTransport > 0)
+      .filter(
+        (unit) =>
+          !unit.movementEnded &&
+          !unit.isCombat &&
+          unit.noncombatTransport > 0 &&
+          unit.noncombatKind !== 'organic_truck', // 13.2g：编内卡车不是「3.3b 运输点数」
+      )
       .map((unit) => unit.instanceId)
     const result = endMoveEarly({ interaction, runtime: moveRuntime.value })
     applyMovePatches(result.patches)
