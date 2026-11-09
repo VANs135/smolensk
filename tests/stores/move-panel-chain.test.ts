@@ -180,7 +180,7 @@ describe('B15a：操作链（撤销一步 / 放下 / 结束移动）真的接线
 describe('B15a：移动面板的接线（源码守卫）', () => {
   const panel = readFileSync('src/components/move/MovePanel.vue', 'utf8')
 
-  it('六个动作都直连 store（面板不自己算规则）', () => {
+  it('动作都直连 store（面板不自己算规则）', () => {
     for (const call of [
       'workbench.undoLastStep()',
       'workbench.finishMove()',
@@ -188,11 +188,12 @@ describe('B15a：移动面板的接线（源码守卫）', () => {
       'workbench.dropUnitFromMove($event)',
       'workbench.confirmZocEntry()',
       'workbench.dismissZocConfirm()',
-      'workbench.switchUnitMode(',
       'workbench.setHoverHex',
     ]) {
       expect(panel).toContain(call)
     }
+    // 5.4a 改模式只在右键菜单 →「模式改变」，本面板不得再有第二个入口
+    expect(panel).not.toContain('switchUnitMode')
     // 规则计算不在组件里：面板不导入引擎
     expect(panel).not.toContain("from '@/engine")
   })

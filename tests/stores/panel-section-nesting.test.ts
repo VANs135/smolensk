@@ -212,19 +212,14 @@ describe('分段块的**结构**不变量（空块 / 段错位都会红）', () 
      * ★ 用户 2026-10-25「每个阶段/环节只能出现该环节可用 UI」：
      *   修前移动面板一屏铺开（改模式 / 开始移动 / 释放预备 / 燃料 / 收束），
      *   在 B 增援、D 补给、F 战斗等环节照旧全显 —— 点了才被闸门拒。
-     *   现在每块问 `actionAllowedNow(...)`：5.4a 改模式只在 C 段；6.1/8.0/12.5 跟 C/E/G 移动环节；
-     *   5.7b 释放预备**只在 E/G**（修前在 C 段也显）。
+     *   现在每块问 `actionAllowedNow(...)`：6.1/8.0/12.5 跟 C/E/G 移动环节；
+     *   5.7b 释放预备**只在 E/G**（修前在 C 段也显）。5.4a 改模式已从本面板移除（只在右键菜单）。
      */
-    for (const flag of [
-      'canChangeMode',
-      'canMove',
-      'canOverrun',
-      'canReleaseReserve',
-      'canPayFuel',
-    ]) {
+    for (const flag of ['canMove', 'canOverrun', 'canReleaseReserve', 'canPayFuel']) {
       expect(panel, `MovePanel 缺 ${flag} 投影`).toContain(flag)
     }
-    for (const key of ['move.modeChange', 'move.order', 'move.overrun', 'reserve.release']) {
+    expect(panel, 'MovePanel 不得再有改模式入口').not.toContain('canChangeMode')
+    for (const key of ['move.order', 'move.overrun', 'reserve.release']) {
       expect(panel, `MovePanel 没问 ${key} 的闸门`).toContain(`actionAllowedNow('${key}')`)
     }
     expect(panel).toContain("actionAllowedNow('supply.fuel')")

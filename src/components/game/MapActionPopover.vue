@@ -633,18 +633,6 @@ function pickDump(): void {
             </BaseButton>
           </div>
         </div>
-        <!-- 6.1：待取子格上的确认入口（8.1h 允许其余单位留驻） -->
-        <div v-if="isMovePickHex" class="row">
-          <BaseButton variant="secondary" size="sm" @click="workbench.setMovePickAll()">
-            整堆叠（全选）
-          </BaseButton>
-          <BaseButton variant="primary" size="sm" title="6.1" @click="workbench.confirmMovePick()">
-            开始移动
-          </BaseButton>
-          <BaseButton variant="ghost" size="sm" @click="workbench.cancelMovePick()">
-            取消
-          </BaseButton>
-        </div>
       </section>
 
       <!-- 本方飞机（14.1a：停在其空军基地格） -->

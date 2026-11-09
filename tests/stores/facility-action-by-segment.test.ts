@@ -209,9 +209,10 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
 
   it('★ 界面按"一个操作一个面板"落地（源码守卫）', () => {
     const unitPanel = readFileSync('src/components/game/UnitPanel.vue', 'utf8')
-    // 先给操作菜单，挑定后才展开那一段
+    // 只有一项时省掉菜单：判据仍取 unitActionOptions；左键不再有操作菜单（动作从右键菜单挑）
     expect(unitPanel).toContain('unitActionOptions')
-    expect(unitPanel).toContain('picked.value === null')
+    expect(unitPanel).not.toContain('picked')
+    expect(unitPanel).toContain('activeOnly !== null')
     // 三个面板的段名都由菜单项挑出来后传进去（写死就等于"永远铺开整块"）
     for (const binding of [':only="airOnly"', ':only="supplyOnly"', ':only="fortOnly"']) {
       expect(unitPanel, `UnitPanel 缺 ${binding}`).toContain(binding)

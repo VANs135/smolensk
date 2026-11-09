@@ -25,12 +25,13 @@ import {
  *
  * ## 操作链（与方案 §4.2 的图一致）
  *   地图点堆叠 ⇒ 就地摊开并默认全选 ⇒ **本面板就是那一步之后的动作集**：
- *   ① 改模式（5.4a：只在本方移动阶段、且在**开始移动时**；由 store 裁决）
- *   ② 走一步（地图上点高亮的邻格；本面板显示上一步结论与各单位的 MP 账）
- *   ③ 突袭（8.0/8.1a：地图上点高亮的**突袭目标格**；3 MP 在 9.2 的推进步记账）
- *   ④ 放下某一枚（6.1f：走不动的留在经过的格，其余继续）
- *   ⑤ 撤销一步（6.1）/ 结束移动（6.1 末句）/ 放弃整次移动（全部还原）
- *   ⑥ 4.5a-A 的 ZOC 待决：进入即就地停止，或留在原格
+ *   ① 走一步（地图上点高亮的邻格；本面板显示上一步结论与各单位的 MP 账）
+ *   ② 突袭（8.0/8.1a：地图上点高亮的**突袭目标格**；3 MP 在 9.2 的推进步记账）
+ *   ③ 放下某一枚（6.1f：走不动的留在经过的格，其余继续）
+ *   ④ 撤销一步（6.1）/ 结束移动（6.1 末句）/ 放弃整次移动（全部还原）
+ *   ⑤ 4.5a-A 的 ZOC 待决：进入即就地停止，或留在原格
+ *
+ * ★ 5.4a 改模式**不在这里**：唯一入口是右键菜单 →「模式改变」（本面板只留开拔会话）。
  */
 
 const workbench = useWorkbenchStore()
@@ -59,8 +60,6 @@ function budgetOf(instanceId: string) {
 const selectedBudget = computed(() =>
   selected.value === null ? null : budgetOf(selected.value.instanceId),
 )
-/** 条 9（M1）：改模式/开始移动的可用判据——有取子清单（选中集合）或单枚选中单位即可 */
-const modeTargetReady = computed(() => workbench.movePick !== null || selected.value !== null)
 /** 条 10（M1）：开拔前的取子勾选列表（界面用；`movePick` 为空时给空数组） */
 const pickItems = computed<readonly CounterPickerItem[]>(() =>
   workbench.movePickChoices.map((unit) => ({
@@ -89,7 +88,6 @@ const preBegin = computed(() => workbench.movePick !== null && workbench.moveInt
  *
  * 界面只读这几个投影，**不在这里写死阶段名或规则号**（判据的唯一定义在 `ACTION_GATES`）。
  */
-const canChangeMode = computed(() => workbench.actionAllowedNow('move.modeChange'))
 const canMove = computed(() => workbench.actionAllowedNow('move.order'))
 const canOverrun = computed(() => workbench.actionAllowedNow('move.overrun'))
 const canReleaseReserve = computed(() => workbench.actionAllowedNow('reserve.release'))
@@ -322,48 +320,11 @@ function hoverDump(id: string | null): void {
       </div>
 
       <!--
-        ① 统一操作条（条 9 / 条 10，M1）：模式批量切换 + 开始移动
-        ★ 两半的时点不同（用户 2026-10-25）：5.4a 改模式「只在本方**移动阶段**」⇒ 只有 C 段；
+        ① 统一操作条（条 9 / 条 10，M1）：开始移动
+        ★ 改模式（5.4a）只在**右键菜单 →「模式改变」**里给，本面板不再重复摆一组模式按钮；
           6.1 开拔在 C/E/G 的移动环节都成立 ⇒ 由 `canMove` 管。
       -->
       <div class="row">
-        <template v-if="canChangeMode">
-          <span class="muted"
-            >改模式（5.4a：切换不耗 MP，只在本方移动阶段、开始移动前；按选中集合批量）</span
-          >
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="!modeTargetReady"
-            @click="workbench.switchUnitMode('combat')"
-          >
-            切到战斗面
-          </BaseButton>
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="!modeTargetReady"
-            @click="workbench.switchUnitMode('move')"
-          >
-            切到移动面
-          </BaseButton>
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="!modeTargetReady"
-            @click="workbench.switchUnitMode('reserve')"
-          >
-            转入预备
-          </BaseButton>
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="!modeTargetReady"
-            @click="workbench.switchUnitMode('strat')"
-          >
-            转入战略
-          </BaseButton>
-        </template>
         <BaseButton
           variant="primary"
           size="sm"
