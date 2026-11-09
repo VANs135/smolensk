@@ -40,12 +40,11 @@ describe('闸门预测 `actionAllowedNow`（与 requireAction 同一口径，无
     expect(workbench.actionAllowedNow('rein.arrival')).toBe(false)
   })
 
-  it('★ 地图小窗的轰炸入口**问闸门**（不再只看"有没有印刷轰炸值"）', () => {
+  it('★ 地图小窗不再另摆轰炸/任务入口（只留右键菜单 + 各自面板）', () => {
     const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
-    expect(popover).toContain("workbench.actionAllowedNow('barrage.declare')")
-    // 空军任务区也受同一闸门约束（不是只藏了「炮击」一个按钮）
-    // 用户 2026-11-09：窗内只留战斗算子 ⇒「选入任务」那一段已移出，守卫只管仍在的宣布区
-    expect(popover).toContain("workbench.actionAllowedNow('air.mission')")
-    expect(popover).toContain('pickedAir.length > 0 && airMissionAllowed')
+    // 用户 2026-11-09（G2）：同一能力只留一个入口 ⇒ 小窗里的「炮击」「宣布任务」按钮已删
+    expect(popover).not.toContain('startBarrage')
+    expect(popover).not.toContain('beginMission')
+    // 闸门本身仍由 store 统一裁决（见上面两条用例），组件不另拼判据
   })
 })

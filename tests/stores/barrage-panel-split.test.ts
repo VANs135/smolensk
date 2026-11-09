@@ -107,12 +107,12 @@ describe('H②：轰炸结算页按类别分家（10.0e-F）', () => {
 
   it('★ 源码守卫：面板里"参炸飞机"整块包在 `barrageKind === \'air\'` 里，火炮阵列与付款站在 artillery 里', () => {
     const panel = readFileSync('src/components/barrage/BarragePanel.vue', 'utf8')
-    // 空军那一块：从 v-if 到它自己的 </template> 之间必须含机型阵列、基地格输入、参炸机阵列与卸下
+    // 空军那一块：从 v-if 到它自己的 </template> 之间必须含参炸机阵列与卸下
     const airGate = panel.indexOf(`v-if="workbench.barrageKind === 'air'"`)
     expect(airGate).toBeGreaterThanOrEqual(0)
     const airBlock = panel.slice(airGate, panel.indexOf('</template>', airGate))
-    expect(airBlock).toContain('aircraftItems')
-    expect(airBlock).toContain('airPlacement.hexText')
+    // 用户 2026-11-09（G2）：14.1a 摆放飞机的裁判工具整块已从本面板删除，只在空军面板摆放
+    expect(airBlock).not.toContain('airPlacement')
     expect(airBlock).toContain('barrageAirItems')
     expect(airBlock).toContain('barrageAirCandidates')
     // 火炮那一块：参炸单位阵列与付款补给站都必须在 artillery 分支里

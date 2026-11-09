@@ -636,7 +636,10 @@ describe('B20：撤退落点在地图上点格（9.12）', () => {
     expect(panel).toContain('mapView.setRetreatUnit')
 
     const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
-    expect(popover).toContain('mapView.retreatSidePlan')
+    // G2：撤退落点/跟随/确认全部收归战斗面板（小窗只留提示），不得再出现第二套
+    expect(popover).not.toContain('retreatSidePlan')
+    expect(popover).not.toContain('setRetreatUnit')
+    expect(popover).not.toContain('confirmCombatRetreats')
     // 断言"读取处"而不是"整个文件不含该词"：修记的注释里会引到旧名
     expect(popover).not.toContain('computed(() => workbench.combatRetreatSide)')
 

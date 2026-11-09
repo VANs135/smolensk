@@ -329,8 +329,9 @@ describe('B14b：付款补给站的点选/取消（阵列里没有"未声明"空
 describe('B14b：轰炸面板的替换（源码守卫）', () => {
   const panel = readFileSync('src/components/barrage/BarragePanel.vue', 'utf8')
 
-  it('四处「选算子」都改走 `CounterPicker`，旧控件已删（不留两套）', () => {
-    expect(panel.match(/<CounterPicker/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
+  it('三处「选算子」都改走 `CounterPicker`，旧控件已删（不留两套）', () => {
+    // G2：14.1a 摆放飞机整块删除后，本面板只剩参炸单位 / 参炸飞机 / 付款补给站三处阵列
+    expect(panel.match(/<CounterPicker/g)?.length ?? 0).toBeGreaterThanOrEqual(3)
     expect(panel).not.toContain('pickBarrageDumpFromView')
     expect(panel).not.toContain('<select v-model="workbench.airPlacement.aircraftId"')
     expect(panel).not.toContain('v-for="unit in candidates"')

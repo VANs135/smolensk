@@ -7,7 +7,6 @@ import type { Side } from '@/data'
 import {
   counterImageUrlOf,
   useContainersStore,
-  useMapViewStore,
   useWorkbenchStore,
   type ConsoleAirUnit,
 } from '@/stores'
@@ -20,7 +19,6 @@ const props = defineProps<{
 
 const workbench = useWorkbenchStore()
 const containers = useContainersStore()
-const mapView = useMapViewStore()
 const selectedId = ref<string | null>(null)
 const selected = computed(() => props.aircraft.find((air) => air.instanceId === selectedId.value))
 const refit = computed(() => props.baseId !== undefined && workbench.refitBase?.id === props.baseId)
@@ -28,10 +26,6 @@ const refitOpen = computed(
   () => props.baseId !== undefined && workbench.actionAllowedNow('air.refit'),
 )
 const refitDone = computed(() => workbench.refitDoneBases.some((base) => base.id === props.baseId))
-const missionChoice = computed(() =>
-  workbench.airMissionJoinChoices.find((item) => item.air.instanceId === selectedId.value),
-)
-const missionAllowed = computed(() => workbench.actionAllowedNow('air.mission'))
 const boxRefitAllowed = computed(
   () => props.boxSide !== undefined && workbench.actionAllowedNow('air.refit'),
 )
@@ -142,14 +136,6 @@ function cancelTransfer(): void {
           >
         </div>
         <div v-if="selected !== undefined" class="roster__row">
-          <BaseButton
-            v-if="missionAllowed"
-            size="sm"
-            :disabled="missionChoice?.disabledReason !== null"
-            :title="missionChoice?.disabledReason ?? undefined"
-            @click="mapView.startRosterMission(selected.instanceId)"
-            >任务 · 14.2e</BaseButton
-          >
           <BaseButton
             v-if="baseId !== undefined"
             size="sm"

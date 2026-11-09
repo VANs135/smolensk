@@ -791,6 +791,19 @@ const quickDefenderArItems = computed(() =>
               <BaseTag kind="neutral">9.12d</BaseTag>
               {{ item.label }} 随 {{ item.hostLabel }} 同格撤退
             </p>
+            <!-- 9.12d：可加入撤退的单位（未参战战斗单位 / 编内卡车）；原在地图小窗，G2 起归此面板 -->
+            <div v-if="workbench.combatTagalongCandidates.length > 0" class="row">
+              <BaseButton
+                v-for="item in workbench.combatTagalongCandidates"
+                :key="item.unit.instanceId"
+                variant="secondary"
+                size="sm"
+                @click="workbench.toggleCombatTagalong(item.unit.instanceId)"
+              >
+                {{ workbench.combatTagalongIds.includes(item.unit.instanceId) ? '✓ ' : ''
+                }}{{ item.unit.name }}（随 {{ item.hostLabel }}）
+              </BaseButton>
+            </div>
           </template>
           <div class="row">
             <BaseButton

@@ -67,13 +67,12 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src.match(/<UiField\b/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
   })
 
-  it('BarragePanel：5 处（含补了点图按钮的基地格）已走 UiField', () => {
+  it('BarragePanel：4 处已走 UiField（14.1a 摆放块已删）', () => {
     const src = read('src/components/barrage/BarragePanel.vue')
     expect(src).toMatch(/import UiField from/)
-    expect(src.match(/<UiField\b/g)?.length ?? 0).toBeGreaterThanOrEqual(5)
-    // 基地格已补「点地图选基地格」按钮 ⇒ 正式界面不必手输
-    expect(src).toMatch(/beginAirPlacementHexPickNow/)
-    expect(src).not.toMatch(/<input v-model="workbench\.airPlacement\.hexText"/)
+    expect(src.match(/<UiField\b/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
+    // G2：摆放飞机的裁判工具整块删除 ⇒ 本面板不再有基地格输入
+    expect(src).not.toMatch(/airPlacement/)
   })
 
   it('其余面板：容器(2)/专规(8)/增援(5)/补给(13) 的数值与格号已走 UiField', () => {

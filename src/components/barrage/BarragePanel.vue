@@ -6,14 +6,7 @@ import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { SessionStep } from '@/components/session'
 import { useRefereeTools } from '@/components/ui-mode'
 import UiField from '@/components/UiField.vue'
-import {
-  aircraftRecordImageUrlOf,
-  counterImageUrlOf,
-  hexLabel,
-  isStrategicBomberAircraft,
-  spDumpImageUrlOf,
-  useWorkbenchStore,
-} from '@/stores'
+import { counterImageUrlOf, hexLabel, spDumpImageUrlOf, useWorkbenchStore } from '@/stores'
 
 /**
  * 轰炸面板（C7：OCS 10.0 章）
@@ -101,19 +94,6 @@ const barrageUnitItems = computed<readonly CounterPickerItem[]>(() =>
     selected: choice.selected,
     disabledReason: choice.disabledReason,
     hex: choice.unit.hex,
-  })),
-)
-
-/** 摆放飞机（14.1a）：机型库记录 → 算子图阵列 */
-const aircraftItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.airUnitChoices.map((item) => ({
-    id: item.aircraftId,
-    imageUrl: aircraftRecordImageUrlOf(item, workbench.activeSide),
-    name:
-      `${item.name ?? item.aircraftId}（${item.aircraftType ?? '?'}` +
-      `${isStrategicBomberAircraft(item.aircraftType ?? '') ? '｜战略轰炸机 14.1e' : ''}` +
-      `｜轰炸 ${item.barrageStrength ?? 0}｜航程 ${item.rangeHexes ?? 0}）`,
-    selected: workbench.airPlacement.aircraftId === item.aircraftId,
   })),
 )
 
@@ -339,41 +319,6 @@ function setAircraftRoll(unitId: string, value: number): void {
             参炸飞机（A5 空军专表）：摆在**空军基地格**（14.1a），该格即 10.2b 所说的「它们基地」；
             10.2c 空军轰炸**没有补给消耗**（本段不出现付款补给站）。
           </p>
-          <!-- 裁判工具（14.1a）：新到飞机走到达卡 13.6 ⇒ 对局台不铺 -->
-          <div v-if="showsReferee" class="row">
-            <!-- B14b：机型＝**算子图阵列**（原来是一个纯文字下拉） -->
-            <CounterPicker
-              title="机型（A5 空军专表）"
-              hint="14.1a 摆放：飞机停在空军基地格，该格即 10.2b 所说的「它们基地」"
-              :items="aircraftItems"
-              :size="32"
-              @pick="workbench.airPlacement.aircraftId = $event"
-              @hover="workbench.setHoverHex(null)"
-            />
-            <label class="field">
-              基地格（列.行）
-              <UiField v-model="workbench.airPlacement.hexText" class="input" placeholder="36.13" />
-              <BaseButton
-                variant="secondary"
-                size="sm"
-                @click="workbench.beginAirPlacementHexPickNow()"
-              >
-                点地图选基地格
-              </BaseButton>
-            </label>
-            <BaseButton
-              variant="secondary"
-              size="sm"
-              @click="
-                workbench.addAirUnit(
-                  workbench.airPlacement.aircraftId,
-                  workbench.airPlacement.hexText,
-                )
-              "
-            >
-              摆放飞机（14.1a）
-            </BaseButton>
-          </div>
           <div class="row">
             <label class="field">
               <input v-model="workbench.barrageInputs.hipShoot" type="checkbox" />
@@ -390,7 +335,7 @@ function setAircraftRoll(unitId: string, value: number): void {
             @hover="hoverAir"
           />
           <p v-if="workbench.barrageAirCandidates.length === 0" class="muted">
-            未摆放飞机：填机型与基地格后点「摆放飞机」。
+            未摆放飞机：在空军面板里摆放（14.1a）。
           </p>
           <!--
           裁判工具：这里的「卸下」调的是 `removeAirUnit`（**从盘上删除**这枚飞机），

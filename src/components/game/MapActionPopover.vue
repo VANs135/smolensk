@@ -16,14 +16,14 @@ import {
  *
  * ## 它按什么分派
  *   一块内容对应「当前盘面上正在进行的那件事」，而不是一堆常驻控件：
- *   ① **战斗流程中**（9.2 九步）：在**战斗发生的那一格**展开战果承受 / 选项 / 撤退 / 推进，
- *      与地图上这次画出的高亮（撤退落点、推进格、补给站）配对使用；
- *   ② **无战斗时**：展示该格堆叠（4.9a 裁剪后的可见内容）+ 本方飞机，
- *      并在已选飞机时给出「任务类型 → 宣布任务」（14.2f-A/B）。
+ *   ① **战斗流程中**（9.2 九步）：在**战斗发生的那一格**展开战果承受 / 选项 / 推进，
+ *      与地图上这次画出的高亮（推进格、补给站）配对使用；撤退的落点与确认在战斗结算面板；
+ *   ② **无战斗时**：展示该格堆叠（4.9a 裁剪后的可见内容）+ 本方飞机。
+ *      炮击、空军任务等动作一律从**右键菜单**进入它们各自的面板，本小窗不重复摆按钮。
  *
  * ## 分层纪律（CODE_SPEC）
- *   本组件**不做任何规则计算**：损失分配、撤退落点、推进候选、任务合法性全部来自 store 对引擎的
- *   调用结果；这里只画图、收点击，把输入写进既有的 `combatInputs` / `airInputs` / 撤退路径。
+ *   本组件**不做任何规则计算**：损失分配、推进候选等全部来自 store 对引擎的调用结果；
+ *   这里只画图、收点击，把输入写进既有的 `combatInputs`。
  *
  * ★ 为什么在地图上做：规则书里这些动作的对象就是「战斗发生的那一格」「那个堆叠」「那架飞机」，
  *   所以能把选择放在地图上的就不搬到侧栏（用户需求）。
@@ -91,38 +91,6 @@ const combatUnits = computed(() =>
   ),
 )
 
-/**
- * 该算子是否可作为参炸单位（10.0e：有印刷轰炸值 + **本环节允许宣布轰炸**）
- *
- * ★ 用户 2026-10-25 实测 BUG②「增援的时候点格子可能出现空军轰炸的 UI」：
- *   修前这里只看"本方 + 有轰炸值" ⇒ B 增援段点己方火炮，照样给「炮击」按钮
- *   （点了还真的会开出轰炸流程）。现在加问**环节闸门**（`actionAllowedNow`，
- *   判据与 `requireAction` 同一处），不在这环节就不给入口。
- */
-function canBarrage(id: string): boolean {
-  const unit = consoleUnitOf(id)
-  return (
-    unit !== null &&
-    unit.side === workbench.activeSide &&
-    workbench.isBarrageCapableUnit(unit) &&
-    workbench.actionAllowedNow('barrage.declare')
-  )
-}
-
-/** 14.2e：本环节**能不能宣布空中任务**（空中轰炸等同样受环节闸门约束） */
-const airMissionAllowed = computed(() => workbench.actionAllowedNow('air.mission'))
-
-/**
- * 9.12 撤退：当前该选落点的一方与其单位
- *
- * ★ 2026-09-16 修：原先读 `workbench.combatRetreatSide`（＝`combatRetreatPlans[0]`，**永远先攻方**），
- *   而地图高亮、`retreatHint`、`currentDestination` 读的是 `mapView.retreatSidePlan`
- *   （＝**第一个未选齐的一方**）。攻方选齐后地图已切到守方，小窗却还在列攻方 ⇒
- *   名单与"点哪一格生效"对不上。这里改成与地图**同一份**计划。
- */
-const retreatPlan = computed(() => mapView.retreatSidePlan)
-const retreatUnit = computed(() => mapView.retreatUnit)
-
 /** 9.12g 推进格（防御格已清空时给出） */
 const advanceHex = computed(() => workbench.combatAdvanceHex)
 const advanceChosen = computed(() => workbench.combatInputs.advanceUnitIds)
@@ -159,20 +127,6 @@ function toggleChip(id: string): void {
   workbench.toggleMovePick(id)
 }
 
-/** 14.2e：可在「任务分配」里宣布的任务类型（拦截与基地转移不在其中，与 AirPanel 同口径） */
-const MISSION_KINDS = computed(() => workbench.airMissionKindChoices)
-
-/** 已勾选的参战飞机（14.2a） */
-const pickedAir = computed(() => workbench.airMissionAirUnits)
-
-/** 该格是否已被定为任务格（14.2f-B） */
-const isMissionTarget = computed(() => {
-  const hex = mapView.popup?.hex
-  const target = workbench.airTargetHex
-  if (hex === undefined || target === null) return false
-  return hex.col === target.col && hex.row === target.row
-})
-
 /**
  * 批 A 切片 3②：框内**只列本环节能行动的己方算子**（用户口径 9.17⑤）
  *
@@ -196,16 +150,6 @@ const dumpAtHex = computed(() =>
       dump.hex.row === mapView.popup.hex.row,
   ),
 )
-
-/** 该格是否是当前这名的合法撤退落点（9.12；地图上按「安全 / ZOC / 必死」三色画） */
-const currentDestination = computed(() => {
-  const hex = mapView.popup?.hex
-  const unit = retreatUnit.value
-  if (hex === undefined || unit === null) return null
-  return (
-    unit.destinations.find((item) => item.hex.col === hex.col && item.hex.row === hex.row) ?? null
-  )
-})
 
 /* ── 15.1 整备（用户口径：点机场的整备按钮 → 勾选飞机 → 点地图上高亮的补给付款） ── */
 
@@ -250,21 +194,6 @@ function sideName(side: string): string {
 }
 
 /* ── 动作（全部转发给既有 store 动作，不新增业务规则） ── */
-
-/**
- * 发起轰炸（10.0）：点某枚有轰炸值的己方算子即开启轰炸流程
- *
- * 用户口径：**轰炸页面只在单位执行轰炸操作时才在地图上展开** ⇒ 这里点一下就开工具并选入该枚，
- * 于是 `barrageState` 建立、`MapDock` 上的「轰炸结算（10.0）」面板随之在地图右上角出现。
- */
-function startBarrage(unitId: string): void {
-  workbench.setBarrageActive(true)
-  workbench.toggleBarrageUnit(unitId)
-}
-
-function beginMission(): void {
-  workbench.beginAirMissionNow()
-}
 
 function pickDump(): void {
   const dump = dumpAtHex.value
@@ -422,67 +351,14 @@ function pickDump(): void {
         这里只负责「在地图上点」的那部分。
       </p>
 
-      <!-- 9.12 撤退：地图上点落点（含 9.12d 跟随者、9.12b 必死落点） -->
+      <!-- 9.12 撤退：落点选择与确认都在**战斗结算面板（9.2）**；这里只提示怎么读地图高亮 -->
       <section v-if="step === 'retreat'" class="block">
-        <h4 class="block__title">撤退（9.12：在地图上点落点）</h4>
+        <h4 class="block__title">撤退（9.12：落点在战斗结算面板里选）</h4>
         <p class="num">{{ mapView.retreatHint }}</p>
-        <ul class="list">
-          <li
-            v-for="unit in retreatPlan?.units ?? []"
-            :key="unit.unitId"
-            class="num"
-            :class="{ 'list__row--active': unit.unitId === retreatUnit?.unitId }"
-          >
-            <BaseButton variant="ghost" size="sm" @click="mapView.setRetreatUnit(unit.unitId)">
-              {{ unit.label }}
-            </BaseButton>
-            自 {{ hexLabel(unit.from) }} →
-            {{ unit.chosen === null ? '（未选）' : hexLabel(unit.chosen) }}
-          </li>
-          <!-- 9.12d：跟随者（路径自动沿用同格宿主） -->
-          <li v-for="item in retreatPlan?.tagalongs ?? []" :key="item.unitId" class="num">
-            <BaseTag kind="success">跟随</BaseTag>
-            {{ item.label }}（随 {{ item.hostLabel }}，9.12d）
-          </li>
-        </ul>
-
-        <!-- 9.12d：可加入撤退的单位（未参战战斗单位 / 编内卡车） -->
-        <div v-if="(workbench.combatTagalongCandidates.length ?? 0) > 0" class="row">
-          <BaseButton
-            v-for="item in workbench.combatTagalongCandidates"
-            :key="item.unit.instanceId"
-            variant="secondary"
-            size="sm"
-            @click="workbench.toggleCombatTagalong(item.unit.instanceId)"
-          >
-            {{ workbench.combatTagalongIds.includes(item.unit.instanceId) ? '✓ ' : ''
-            }}{{ item.unit.name }}（随 {{ item.hostLabel }}）
-          </BaseButton>
-        </div>
-
-        <p v-if="currentDestination !== null" class="ok">
-          这一格正是 {{ retreatUnit?.label }} 的合法落点 ⇒
-          点地图即可选定（9.12：完整撤退距离已满足）。
-          <span v-if="currentDestination.forcedDestruction" class="bad">
-            ⚠ 该路线必然穿过敌方战斗单位或禁入地形 ⇒ **该单位会被消灭**（9.12；不可移动者见
-            9.12b）。
-          </span>
-          <span v-else-if="currentDestination.inEnemyZoc">
-            该格在敌方 ZOC 内 ⇒ 进入即 DG（9.12e）。
-          </span>
-        </p>
         <p class="muted">
           青绿＝安全格；橙红＝敌方 ZOC 格（9.12e）；暗红点线＝选了会被消灭（9.12/9.12b）。
           攻方选完才轮到守方（9.10b 次序）。
         </p>
-        <BaseButton
-          variant="primary"
-          size="sm"
-          :disabled="retreatPlan === null || !retreatPlan.complete"
-          @click="workbench.confirmCombatRetreats()"
-        >
-          确认撤退（9.12）
-        </BaseButton>
       </section>
 
       <!-- 9.12g 推进：地图上点绿格 -->
@@ -623,14 +499,6 @@ function pickDump(): void {
               >{{ unit.label }} · {{ unit.modeLetter }}<template v-if="unit.dg">· DG</template
               ><template v-if="unit.ended">· 停</template></span
             >
-            <BaseButton
-              v-if="!workbench.combatPickActive && canBarrage(unit.id)"
-              variant="ghost"
-              size="sm"
-              @click.stop="startBarrage(unit.id)"
-            >
-              {{ workbench.barrageUnitIds.includes(unit.id) ? '移出炮击' : '炮击' }}
-            </BaseButton>
           </div>
         </div>
       </section>
@@ -696,37 +564,6 @@ function pickDump(): void {
           攻方 {{ workbench.combatAttackerIds.length }} 枚｜防御格
           {{ workbench.battleTarget === null ? '（未选）' : hexLabel(workbench.battleTarget.hex) }}
         </p>
-      </section>
-
-      <!-- 14.2f-A/B：已选飞机 ⇒ 在此（目标格）选任务并宣布 -->
-      <section
-        v-if="workbench.airActive && pickedAir.length > 0 && airMissionAllowed"
-        class="block"
-      >
-        <h4 class="block__title">空军任务（14.2f-A/B）</h4>
-        <p class="num">
-          已选 {{ pickedAir.length }} 架：{{ pickedAir.map((air) => air.name).join('、') }}
-        </p>
-        <p class="num">
-          任务格：{{
-            workbench.airTargetHex === null ? '（未选）' : hexLabel(workbench.airTargetHex)
-          }}
-          <span v-if="isMissionTarget">（就是这一格）</span>
-        </p>
-        <div class="row">
-          <BaseButton
-            v-for="kind in MISSION_KINDS"
-            :key="kind.key"
-            variant="secondary"
-            size="sm"
-            @click="workbench.setAirMissionKind(kind.key)"
-          >
-            {{ workbench.airMissionKind === kind.key ? '✓ ' : '' }}{{ kind.label }}
-          </BaseButton>
-        </div>
-        <BaseButton variant="primary" size="sm" title="14.2f" @click="beginMission()">
-          宣布任务
-        </BaseButton>
       </section>
     </template>
   </MapPopover>
