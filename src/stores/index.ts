@@ -8,6 +8,7 @@ export { isNormalizedHoldings } from '@/engine/rules'
 export * from './app'
 export * from './ui'
 export * from './workbench-model'
+export * from './action-families'
 export * from './workbench'
 export * from './session'
 // W7 C12：记录轨与容器管理（盒的账本与操作）
