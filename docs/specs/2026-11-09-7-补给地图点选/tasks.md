@@ -10,4 +10,4 @@
 - [x] T7 转绿：T1/T2 全绿；回归 `supply-panel-picker-flow`、`supply-interaction-flow`、`40-phase-d-supply`、`hex-pick`
 - [x] T8 六门槛：lint / format:check / typecheck / vitest --maxWorkers=4 / arch / build，报实数
 - [x] T9 提交推送：单独提交；`git diff --stat 7b6fd31 -- src/engine src/data` 为空；推 `origin/codex/command-table-ui`
-- [ ] T10 文档并入 main：`--ff-only` 合并并推送，非 force，回报 HEAD 与工作区状态
+- [x] T10 文档并入 main：`--ff-only` 合并并推送，非 force，回报 HEAD 与工作区状态
