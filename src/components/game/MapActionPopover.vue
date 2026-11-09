@@ -57,11 +57,6 @@ const actionGroups = ['模式改变', '移动', '战斗', '运输', '工程', '�
  */
 const step = computed(() => workbench.combatLiveStep)
 
-/** 是否已有进行中的战斗 / 突袭（战斗栏已在地图上展开 ⇒ 不再给「发起」入口） */
-const combatRunning = computed(
-  () => workbench.combatState !== null && !workbench.combatState.finished,
-)
-
 /** 该令牌对应的盘面算子（用来读「有无印刷轰炸值」等，界面只读不算规则） */
 function consoleUnitOf(id: string): ConsoleUnit | null {
   return workbench.units.find((unit) => unit.instanceId === id) ?? null
@@ -119,6 +114,14 @@ const isMovePickHex = computed(() => {
 function chipSelected(id: string): boolean {
   return !isMovePickHex.value || movePickIds.value.includes(id)
 }
+
+/**
+ * 用户 2026-11-09：堆叠窗「选完点开始移动即进入移动」
+ *
+ * 只在这一窗就是取子格、且至少选中一枚时出现；判据与执行都走既有
+ * `confirmMovePick`（6.1），组件不判规则。
+ */
+const canStartMove = computed(() => isMovePickHex.value && movePickIds.value.length > 0)
 
 /** 点 chip＝取消/恢复该枚开拔（仅待取子格上、且是该格可开拔的本方算子才可点） */
 function toggleChip(id: string): void {
@@ -474,6 +477,11 @@ function sideName(side: string): string {
             >
           </div>
         </div>
+        <div v-if="canStartMove" class="block__row">
+          <BaseButton variant="primary" size="sm" title="6.1" @click="workbench.confirmMovePick()">
+            开始移动
+          </BaseButton>
+        </div>
       </section>
 
       <!-- 本方飞机（14.1a：停在其空军基地格） -->
@@ -528,16 +536,6 @@ function sideName(side: string): string {
           </BaseButton>
         </template>
       </section>
-
-      <!-- 9.1：战斗的发起入口已移到**会话框**（B15b：宣布之前也开一个「发起战斗（9.1）」会话）。
-           这里只提示怎么在图上凑齐攻方与防御格。 -->
-      <section v-if="workbench.combatPickActive && !combatRunning" class="block block--pick">
-        <h4 class="block__title">发起战斗</h4>
-        <p class="num">
-          攻方 {{ workbench.combatAttackerIds.length }} 枚｜防御格
-          {{ workbench.battleTarget === null ? '（未选）' : hexLabel(workbench.battleTarget.hex) }}
-        </p>
-      </section>
     </template>
   </MapPopover>
 </template>
@@ -547,6 +545,13 @@ function sideName(side: string): string {
   margin-top: var(--space-2);
   border-top: 1px solid var(--color-rule);
   padding-top: var(--space-2);
+}
+
+.block__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
 }
 
 /*

@@ -109,4 +109,15 @@ describe('左键堆叠窗：选中集只有 movePick 一份', () => {
     expect(popover).toContain('workbench.toggleMovePick(id)')
     expect(popover).toContain('movePickIds.value.includes(id)')
   })
+
+  it('★ 堆叠窗极简：只有算子与按钮，"选完点开始移动即进入移动"，无说明块', () => {
+    const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
+    // 开始移动按钮走既有 confirmMovePick（6.1），不另写规则
+    expect(popover).toContain('开始移动')
+    expect(popover).toContain('workbench.confirmMovePick()')
+    // 旧的"发起战斗"只显示攻方数量的信息块（无按钮）已删
+    expect(popover).not.toContain('<h4 class="block__title">发起战斗</h4>')
+    // 选中集默认全选：chip 选中态读 movePick.ids（同格即全选）
+    expect(popover).toContain('!isMovePickHex.value || movePickIds.value.includes(id)')
+  })
 })

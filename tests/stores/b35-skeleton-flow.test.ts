@@ -69,7 +69,9 @@ describe('B35：流程条 / 工具按钮 / 纯文字面板（源码守卫）', (
     expect(mapView).toContain('workbench.combatPickActive')
     const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
     expect(popover).not.toContain("workbench.tool === 'battle'")
-    expect(popover).toContain('workbench.combatPickActive')
+    // 用户 2026-11-09：堆叠窗只留算子与按钮，"发起战斗"的信息块已删；
+    // 战斗入口在会话框里，判据来自 store 的 combatLiveStep（仍是闸门派生，不是工具开关）。
+    expect(popover).toContain('workbench.combatLiveStep')
 
     // `tool` 本体保留（验证页与流程用例仍靠它；只是不再出现在对局台的按钮上）
     const wb = readFileSync('src/stores/workbench.ts', 'utf8')
