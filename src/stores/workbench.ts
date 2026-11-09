@@ -7116,6 +7116,51 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 条 10（M1）：模式切换不再自动开拔——改由「开始移动」按钮显式触发（与 retryBeginMove 解耦）
   }
 
+  /**
+   * 5.4a：该单位此刻**真正**可以切换到的模式（右键「模式改变」子菜单的唯一来源）
+   *
+   * 与 `switchUnitMode` 同一串判据（补员禁战斗 / 朝向 / 引擎 `canSwitchModeNow` / 预备按格额度），
+   * 差别只在**不写日志**、也**不判环节闸门**——菜单投影随时可算，闸门由调用方先用
+   * `actionAllowedNow('move.modeChange')` 挡一层。预备额度必须走纯函数 `allowReserveEntryAtHex`：
+   * `canEnterReserveMode` 会 `pushLog`，投影里调它会把"看一眼菜单"写成一条警告。
+   */
+  function switchableModesOf(unitId: string): BaseMode[] {
+    const unit = units.value.find((item) => item.instanceId === unitId)
+    if (unit === undefined || unit.side !== activeSide.value) return []
+    const reachable: BaseMode[] = []
+    for (const to of ['combat', 'move', 'reserve', 'strat'] as const) {
+      // 当前模式不必列（切到自己没有意义）
+      if (unit.mode.mode === to) continue
+      // 13.5：补员永远无法进入战斗模式，但可以进入所有其他模式
+      if (isReplUnit(unit) && to === 'combat') continue
+      // 朝向：战斗/移动面＝模式本身；战略必为移动面（5.8）；预备可任选（5.7a）
+      const orientation: Orientation =
+        to === 'combat' ? 'combat' : to === 'reserve' ? unit.mode.orientation : 'move'
+      const verdict = canSwitchModeNow({
+        context: moveContext.value,
+        unitId,
+        runtime: moveRuntime.value,
+        to,
+        orientation,
+        unitClass: modeUnitClassOf(unit),
+        date: date.value,
+      })
+      if (!verdict.ok) continue
+      if (to === 'reserve') {
+        const cap = session.scenarioInfo?.setup.reserveMarkers?.[unit.side] ?? 0
+        const outcome = allowReserveEntryAtHex({
+          side: unit.side,
+          cap,
+          hex: hexKeyOf(unit),
+          occupiedHexes: reservedHexes(unit.side),
+        })
+        if (!outcome.ok) continue
+      }
+      reachable.push(to)
+    }
+    return reachable
+  }
+
   /** IV-B（4.4）：该单位所在格是否与**敌方攻击力单位**相邻 */
   function adjacentEnemyAttackCapableOf(unit: ConsoleUnit): boolean {
     const enemy: Side = unit.side === 'axis' ? 'soviet' : 'axis'
@@ -22301,6 +22346,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 6.1f：把某枚从正在移动的堆叠里放下（就地停住，其余继续）
     dropUnitFromMove,
     switchUnitMode,
+    // 5.4a：右键「模式改变」子菜单只列此刻真正能切过去的模式（与 switchUnitMode 同判据、不写日志）
+    switchableModesOf,
     // IV-B：初设阶段为单位/堆叠设定模式（combat / move / reserve / strat）
     setUnitModeAtSetup,
     eliminateEntry,

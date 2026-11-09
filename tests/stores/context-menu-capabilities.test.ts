@@ -78,16 +78,16 @@ describe('④ 右键菜单：按能力分类的既有入口', () => {
     s = stores()
   })
 
-  it('★ C 段移动环节：战斗单位有「改模式」四项与「建造标记」两项；没有炮击（不在本环节）', () => {
+  it('★ C 段移动环节：战斗单位有「改模式」与「建造标记」两项；没有炮击（不在本环节）', () => {
     const { workbench } = s
     place(workbench, recordOf(false), 'inf-1')
     workbench.setConstructionMarkersNow(2)
     enter(workbench, 'movement', 'movement.modeAndMovement')
     const keys = menuKeys(s, 'inf-1')
-    expect(keys).toContain('move.mode.combat')
+    // 用户 2026-11-09：「模式改变」只列此刻真正能切过去的模式（该单位当前就在 combat 面 ⇒ 不列 combat 自己；
+    // 本夹具无预备标记、苏军战略闸门未开 ⇒ reserve / strat 也不在列）
     expect(keys).toContain('move.mode.move')
-    expect(keys).toContain('move.mode.reserve')
-    expect(keys).toContain('move.mode.strat')
+    expect(keys).not.toContain('move.mode.combat')
     expect(keys).toContain('move.marker.bridge')
     expect(keys).toContain('move.marker.airStrip')
     expect(keys).not.toContain('barrage.declare')

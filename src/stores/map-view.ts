@@ -92,7 +92,7 @@ export const COUNTER_BOX_LABELS: Readonly<Record<CounterBoxTarget, string>> = {
 }
 
 type ContextPanel = 'air' | 'supply' | 'fort' | 'containers'
-type ContextGroup = '移动' | '战斗' | '运输' | '工程' | '编组' | '补给' | '空军'
+type ContextGroup = '模式改变' | '移动' | '战斗' | '运输' | '工程' | '编组' | '补给' | '空军'
 
 interface CounterAction {
   key: string
@@ -1418,12 +1418,12 @@ export const useMapViewStore = defineStore('mapView', () => {
     return base === null ? [] : workbench.airUnitsAt(base.hex, base.side)
   })
 
-  /** ④：改模式的四项菜单（key 只作菜单标识；落点是既有 `switchUnitMode`） */
+  /** ④：改模式的四项菜单（key 只作菜单标识；第三列＝目标模式，用来问 store「此刻能不能切」） */
   const MODE_MENU_ACTIONS = [
-    ['move.mode.combat', '改战斗模式'],
-    ['move.mode.move', '改移动模式'],
-    ['move.mode.reserve', '改预备模式'],
-    ['move.mode.strat', '改战略模式'],
+    ['move.mode.combat', '改战斗模式', 'combat'],
+    ['move.mode.move', '改移动模式', 'move'],
+    ['move.mode.reserve', '改预备模式', 'reserve'],
+    ['move.mode.strat', '改战略模式', 'strat'],
   ] as const
 
   /** ④：菜单 `only` → 既有 `switchUnitMode` 的目标模式 */
@@ -1547,15 +1547,21 @@ export const useMapViewStore = defineStore('mapView', () => {
      *   · 工程 专规 3.5 建造标记 → `armConstructionMarkerNow`（桥 / 简易机场二选一）
      */
     if (unit !== undefined && workbench.actionAllowedNow('move.modeChange')) {
-      for (const [key, label] of MODE_MENU_ACTIONS) {
+      /*
+       * 用户 2026-11-09：子菜单**只列此刻真正能切过去的模式**（判据在 `switchableModesOf`，
+       * 与 `switchUnitMode` 同源）⇒ 不可用直接不出现，不摆灰按钮；移动中已耗 MP 者同理消失。
+       */
+      const switchable = workbench.switchableModesOf(id)
+      for (const [key, label, to] of MODE_MENU_ACTIONS) {
+        if (!switchable.includes(to)) continue
         actions.push({
           key,
-          label: moving ? `${label}（先结束移动）` : label,
+          label,
           rule: '5.4a',
           panel: 'unit',
           only: key,
-          group: '移动',
-          disabledReason: moving ? '先结束移动' : null,
+          group: '模式改变',
+          disabledReason: null,
         })
       }
     }

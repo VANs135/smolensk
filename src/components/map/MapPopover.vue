@@ -228,4 +228,17 @@ const dragging = computed(() => drag.value !== null)
   background: var(--color-bg-2);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
+
+/*
+ * 右键菜单变体：右侧子菜单是 `.popover__body` 之外的绝对定位浮层，
+ * 若 body 仍是 `overflow:auto` 会被直接裁掉 ⇒ 放行溢出并取消内部滚动上限。
+ */
+.popover--menu {
+  max-height: none;
+}
+
+.popover--menu .popover__body {
+  max-height: none;
+  overflow: visible;
+}
 </style>

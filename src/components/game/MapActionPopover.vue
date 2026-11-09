@@ -45,7 +45,7 @@ const title = computed(() => (mapView.popup === null ? '' : `格 ${hexLabel(mapV
  * 判据在 store（`popupVariantFor`：该格有无可列内容），本组件只读它，不自己判规则。
  */
 const variant = computed(() => mapView.popup?.variant ?? 'content')
-const actionGroups = ['移动', '战斗', '运输', '工程', '编组', '补给', '空军'] as const
+const actionGroups = ['模式改变', '移动', '战斗', '运输', '工程', '编组', '补给', '空军'] as const
 
 /** 9.2 当前步（null＝盘面上没有进行中的战斗） */
 /**
@@ -293,29 +293,36 @@ function pickDump(): void {
     :y="anchor.y"
     :title="`${title} · 操作`"
     width="292px"
+    class="popover--menu"
     @close="mapView.closePopup()"
   >
     <section v-for="target in mapView.contextOptions" :key="target.id" class="context-target">
       <h4 class="block__title">{{ target.label }}</h4>
+      <!--
+        用户 2026-11-09：右键菜单改为**多级**——一级只摆分组入口，悬停/聚焦才在右侧展开该组叶子，
+        免得一个堆叠把所有能力平铺成一条长列表。组内没有动作时整组不渲染（沿用原来 v-if 的语义）。
+      -->
       <template v-for="group in actionGroups" :key="group">
         <div v-if="target.actions.some((item) => item.group === group)" class="context-group">
-          <h5>{{ group }}</h5>
-          <BaseButton
-            v-for="item in target.actions.filter((action) => action.group === group)"
-            :key="item.key"
-            variant="ghost"
-            size="sm"
-            class="context-action"
-            :disabled="item.disabledReason !== null"
-            :title="item.disabledReason ?? item.rule"
-            @click="mapView.openContextAction(target.id, item.key)"
-          >
-            <span>{{ item.label }}</span
-            ><small>{{ item.rule }}</small>
-            <small v-if="item.disabledReason !== null" class="context-reason">{{
-              item.disabledReason
-            }}</small>
-          </BaseButton>
+          <div class="context-group__trigger" tabindex="0">{{ group }} ▸</div>
+          <div class="context-group__submenu">
+            <BaseButton
+              v-for="item in target.actions.filter((action) => action.group === group)"
+              :key="item.key"
+              variant="ghost"
+              size="sm"
+              class="context-action"
+              :disabled="item.disabledReason !== null"
+              :title="item.disabledReason ?? item.rule"
+              @click="mapView.openContextAction(target.id, item.key)"
+            >
+              <span>{{ item.label }}</span
+              ><small>{{ item.rule }}</small>
+              <small v-if="item.disabledReason !== null" class="context-reason">{{
+                item.disabledReason
+              }}</small>
+            </BaseButton>
+          </div>
         </div>
       </template>
     </section>
@@ -744,10 +751,45 @@ function pickDump(): void {
   padding-top: var(--space-2);
 }
 
-.context-group h5 {
-  margin: var(--space-2) 0 var(--space-1);
+/*
+ * 多级右键菜单：一级＝分组入口，右侧子菜单默认收起，悬停/聚焦才展开。
+ * 子菜单是绝对定位的浮层 ⇒ 需要 MapPopover 的 `popover--menu` 放行溢出（见那边注释）。
+ */
+.context-group {
+  position: relative;
+}
+
+.context-group__trigger {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
   color: var(--color-muted);
   font-size: var(--text-xs);
+  user-select: none;
+}
+
+.context-group:hover > .context-group__trigger,
+.context-group:focus-within > .context-group__trigger {
+  color: var(--color-ink);
+  background: var(--color-bg-2);
+}
+
+.context-group__submenu {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  display: none;
+  min-width: 220px;
+  padding: var(--space-1);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  box-shadow: var(--shadow-lg);
+  z-index: 1;
+}
+
+.context-group:hover > .context-group__submenu,
+.context-group:focus-within > .context-group__submenu {
+  display: block;
 }
 
 .context-action {
