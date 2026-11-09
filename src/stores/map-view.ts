@@ -817,6 +817,24 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
+   * 敌方算子（④·用户 2026-11-09：右键**敌方**单位出「低空扫射」）
+   *
+   * 只在**由此可见**的令牌集合里找 ⇒ 战雾下看不见的敌人不会长出菜单项（不做对方视角内容）。
+   * 这里只做"这一枚是不是本格敌人"的搬运，能不能扫射仍由 `hipShootEntryEligible` 判。
+   */
+  function enemyCounterAt(hex: HexRef, instanceId: string): ConsoleUnit | undefined {
+    const visible = stackTokensAt(hex).some((token) => token.id === instanceId)
+    if (!visible) return undefined
+    return workbench.units.find(
+      (unit) =>
+        unit.instanceId === instanceId &&
+        unit.side !== actingSide.value &&
+        unit.hex.col === hex.col &&
+        unit.hex.row === hex.row,
+    )
+  }
+
+  /**
    * 点堆叠清单里的**某一枚本单位** ⇒ 打开它的动作会话（用户 2026-10-25 的渐进交互）
    *
    * 「点格只摊堆叠 ⇒ 堆叠里只列该格单位 ⇒ 点哪一枚就做哪一枚的操作」。
@@ -1417,7 +1435,26 @@ export const useMapViewStore = defineStore('mapView', () => {
                 (workbench.panzerGroupOfDump(item.id) ?? '-') === id.slice(spPrefix.length + 1)),
           )
         : undefined
-    if (unit === undefined && dump === undefined) return []
+    if (unit === undefined && dump === undefined) {
+      /*
+       * ④（用户 2026-11-09）：**右键敌方单位 ⇒「低空扫射」**。
+       * 敌方算子从不进上面那套"对自己的操作"，只有这一项；能不能出现由 `hipShootEntryEligible`
+       * 判（环节闸 + 阵营/天气 + 10.0b 观察员 + 有能力的飞机在航程内），缺前置就不出菜单项。
+       */
+      const enemy = enemyCounterAt(hex, id)
+      if (enemy === undefined || !workbench.hipShootEntryEligible(hex)) return []
+      return [
+        {
+          key: 'air.mission',
+          label: '低空扫射（14.7d）',
+          rule: '14.7d',
+          panel: 'air',
+          only: 'hipShoot',
+          group: '空军',
+          disabledReason: null,
+        },
+      ]
+    }
 
     const actions: CounterAction[] = []
     const moving = workbench.moveInteraction !== null && !workbench.moveInteraction.finished
@@ -1564,7 +1601,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     return contextTargets.value.flatMap((id) => {
       const actions = counterActionsAt(hex, id)
       if (actions.length === 0) return []
-      const label = ownCounterAt(hex, id)?.name ?? '补给站'
+      const label = ownCounterAt(hex, id)?.name ?? enemyCounterAt(hex, id)?.name ?? '补给站'
       return [{ id, label, actions }]
     })
   })
@@ -1664,12 +1701,17 @@ export const useMapViewStore = defineStore('mapView', () => {
       return
     }
     const hit = selected.filter((id) => ownCounterAt(hex, id) !== undefined)
-    const ids =
-      hit.length > 0
-        ? hit
-        : stackTokensAt(hex)
-            .filter((token) => token.side === actingSide.value)
-            .map((token) => token.id)
+    /*
+     * ④（用户 2026-11-09）：本方单位优先；本格**没有**本方可见算子时才取敌方可见算子
+     * （右键敌格 ⇒「低空扫射」）。战雾下看不见的敌人不会进 `stackTokensAt`。
+     */
+    const ownIds = stackTokensAt(hex)
+      .filter((token) => token.side === actingSide.value)
+      .map((token) => token.id)
+    const enemyIds = stackTokensAt(hex)
+      .filter((token) => token.side !== actingSide.value)
+      .map((token) => token.id)
+    const ids = hit.length > 0 ? hit : ownIds.length > 0 ? ownIds : enemyIds
     showCounterContext(hex, ids, anchor)
   }
 
@@ -1698,6 +1740,19 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     if (option.only === 'markerBridge' || option.only === 'markerAirStrip') {
       workbench.armConstructionMarkerNow(option.only === 'markerBridge' ? 'bridge' : 'airStrip')
+      closePopup()
+      return true
+    }
+    /*
+     * 14.7d（用户 2026-11-09）：右键敌方算子 ⇒「低空扫射」。
+     * 菜单只**把目标带进去**——打开空军工具、把任务类型设为低空扫射、预填任务格；
+     * 选机与宣布仍在既有 `air` 会话里完成（`beginAirMissionNow` 再做航程/观察员等最终校验）。
+     */
+    if (option.only === 'hipShoot') {
+      if (!workbench.airActive) workbench.setAirActive(true)
+      workbench.setAirMissionKind('hip_shoot')
+      workbench.setAirTargetFromText(`${hex.col}.${hex.row}`)
+      airEntryTarget.value = { col: hex.col, row: hex.row }
       closePopup()
       return true
     }

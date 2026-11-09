@@ -124,6 +124,8 @@ import {
   canFlipOrientation,
   // H⑤（14.1a）：非激活飞机不能执行任务（选择闸 / 候选阵列 / 宣布任务共用同一判据）
   canFlyMission,
+  // 14.7d ← 专规 2.2a/3.2a：低空扫射的阵营/天气可用性（与宣布任务的引擎判据同源）
+  canHipShoot,
   canJoinRetreat,
   canAddAircraftAtStep,
   canJoinMission,
@@ -14224,6 +14226,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
   }
 
+  /**
+   * 14.7d + 10.0b：**右键敌方算子 ⇒「低空扫射」**的入口判据（用户 2026-11-09 口径）
+   *
+   * 只回答"这一格现在值不值得出现这个菜单项"，全部复用既有谓词，不在组件里写规则：
+   *   · 环节闸 `actionAllowedNow('air.mission')`（14.2e：低空扫射在移动环节）；
+   *   · 阵营/天气 `canHipShoot`（专规 2.2a 苏军不得、3.2a 轴方须天气允许）；
+   *   · 观察员 `barrageFacts.hasSpotter`（10.0b 低空扫射必需正确观察员）；
+   *   · 至少一架**具备低空扫射能力**且航程够得到的己方飞机（14.1a 须激活）。
+   * 缺任何一条 ⇒ 菜单项**不出现**（不灰按钮）。任务已在跑时不覆盖（14.2f）。
+   */
+  function hipShootEntryEligible(hex: HexRef): boolean {
+    if (!actionAllowedNow('air.mission')) return false
+    if (airState.value !== null && !airState.value.finished) return false
+    if (!canHipShoot(airActingSide.value, airInputs.value.weatherNormal)) return false
+    if (!barrageFacts.value.hasSpotter(hex)) return false
+    return ownAirUnits.value.some(
+      (air) =>
+        air.canHipShoot &&
+        canFlyMission(air.airStatus) &&
+        airDistanceFromRealBase(air, hex) <= air.rangeHexes,
+    )
+  }
+
   /** C9 第 1 步（14.2f-A/B）：宣布任务并分配飞机（含起飞基地归属与航程校验） */
   function beginAirMissionNow(): boolean {
     if (!airMissionDomain.canReplace()) return false
@@ -22471,6 +22496,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // B14：参战机的算子图阵列（逐机可选性 + 原因）
     airMissionJoinChoices,
     anyOwnAircraftReaches,
+    hipShootEntryEligible,
     toggleAirReductionUnit,
     missionSegmentOf,
     airTargetBaseIsAirstrip,

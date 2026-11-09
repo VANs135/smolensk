@@ -89,6 +89,32 @@
 
 （本项实施细节见 tasks.md T20 起的勾选记录。）
 
+### 2.1 改动
+
+`src/stores/workbench.ts`
+
+- 新增并导出 `hipShootEntryEligible(hex)`：一句 `actionAllowedNow('air.mission')`（14.2e 环节闸）
+  - `airState` 未在跑（14.2f） + `canHipShoot(airActingSide, weatherNormal)`（专规 2.2a/3.2a）
+  - `barrageFacts.hasSpotter(hex)`（10.0b 正确观察员）+ 至少一架 `canHipShoot && canFlyMission`
+    且 `airDistanceFromRealBase <= rangeHexes` 的己方飞机（14.1a 须激活）。缺一不出菜单项。
+
+`src/stores/map-view.ts`
+
+- `enemyCounterAt(hex,id)`：只在 `stackTokensAt`（已过 4.9a 战雾）里认敌人。
+- `counterActionsAt`：本方 / SP 都不命中且该 id 是敌方格可见算子时，仅返回一项
+  `{ key:'air.mission', label:'低空扫射（14.7d）', only:'hipShoot', group:'空军' }`。
+- `contextOptions` 标题改为「本方名 → 敌方名 → 补给站」。
+- `onHexContext`：本方可见算子优先；本格无本方算子时取敌方可见算子。
+- `openContextAction`：`only === 'hipShoot'` ⇒ `setAirActive(true)` → `setAirMissionKind('hip_shoot')`
+  → `setAirTargetFromText(格号)` → `airEntryTarget` 置位（打开既有 `air` 会话），关小窗。
+  选机 / 宣布任务仍在既有会话（`beginAirMissionNow` 做最终校验）。
+
+### 2.2 红测
+
+`tests/stores/enemy-counter-hip-shoot-menu.test.ts`（6 例）：前置齐全出菜单；点菜单项落到既有入口
+（`airActive`/`airMissionKind==='hip_shoot'`/`airTargetHex`，未勾机）；缺 10.0b 观察员不出；苏军不出；
+无低空扫射能力机不出；右键己方单位不出。已用 `git stash` 撤实现验证前两例先红、恢复后转绿。
+
 ## 3. 右键己方单位 ⇒ 能力菜单
 
 口径（用户原文）：

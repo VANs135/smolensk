@@ -10,6 +10,16 @@
 - [x] T7 渲染：`collapsedStackViews` 两枚 SP 并排 0.74
 - [x] T8 面板：`sourceItems` 按格去重；`payDumpItems` 标注集群
 - [x] T9 转绿：T1/T2 全绿；回归 `supply-panel-picker-flow`、`supply-interaction-flow`、`40-phase-d-supply`、`hex-pick`、`panzer-group-sp-flow`、`panzer-group-expiry`、`panzer-group-dg`、`sp-dump-same-hex-merge`、`sp-map-projection`、`sp-ownership-load-merge`、`supply-arrival-panzer-group`、`carried-sp-source`、`setup-sp-merge`、`supply-overlay`、`supply-reachability-flow`
-- [ ] T10 六门槛：lint / format:check / typecheck / vitest --maxWorkers=4 / arch / build，报实数
-- [ ] T11 提交推送：单独提交；`git diff --stat cbea7c8 -- src/engine src/data` 为空；推 `origin/codex/command-table-ui`
-- [ ] T12 文档并入 main：`--ff-only` 合并并推送，非 force，回报 HEAD 与工作区状态
+- [x] T10 六门槛（第 1 批）：lint 0 / format ok / typecheck 0 / vitest 404 文件 4792 通过 1 跳过 / arch 通过 / build 1.32s 2,666kB
+- [x] T11 提交推送（第 1 批）：`b658eb8`；`git diff --stat cbea7c8 -- src/engine src/data` 为空
+- [x] T12 文档并入 main（第 1 批）：`--ff-only` 已推送
+
+## 第 2 批：右键敌方单位 ⇒「低空扫射」
+
+- [x] T20 红测：`tests/stores/enemy-counter-hip-shoot-menu.test.ts` 六例；撤实现验证前两例先红
+- [x] T21 store：`hipShootEntryEligible`（环节闸 + 14.2f + 2.2a/3.2a + 10.0b 观察员 + 有能力的机在航程内）
+- [x] T22 地图：`enemyCounterAt`（战雾可见）；`counterActionsAt` 敌方分支只给「低空扫射（14.7d）」
+- [x] T23 地图：`onHexContext` 本方优先、无本方时取敌方；`contextOptions` 标题取敌名
+- [x] T24 执行：`openContextAction` 的 `hipShoot` 落到 `setAirActive/setAirMissionKind/setAirTargetFromText`
+- [x] T25 回归：`context-menu-capabilities`、`map-view-session`、`unit-action-session`、`air-box-entry` 全绿
+- [ ] T26 六门槛（第 2 批）与提交推送、并入 main
