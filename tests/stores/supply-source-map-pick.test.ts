@@ -200,7 +200,7 @@ describe('⑦ 选源：不可点与不拦截', () => {
     expect(store.log[0]?.text).toContain(label(EMPTY_HEX))
   })
 
-  it('同格两条可用来源 ⇒ 不隐式择一，提示回面板（并列）', () => {
+  it('同格两条可用来源 ⇒ 视为同一个补给站，直接取一条、不出「并列」提示', () => {
     const { store } = setupTrace()
     const state = store.supplyState!
     const dump = state.sources.find((source) => source.kind === 'dump' && source.hex !== null)!
@@ -208,14 +208,13 @@ describe('⑦ 选源：不可点与不拦截', () => {
       ...state,
       sources: [
         ...state.sources,
-        { ...dump, distanceMp: 1, viaAdjacency: true, detail: '同格并列（注入）' },
+        { ...dump, distanceMp: 1, viaAdjacency: true, detail: '同格第二条（注入）' },
       ],
     }
     expect(store.pickSupplySourceAtHexNow(CORE_HEX)).toBe(true)
-    expect(store.supplySummary?.chosenSource).toBeNull()
-    expect(store.supplyState?.step).toBe('selectSource')
-    expect(store.log[0]?.kind).toBe('warning')
-    expect(store.log[0]?.text).toContain('并列')
+    expect(store.supplySummary?.chosenSource?.kind).toBe('dump')
+    expect(store.supplyState?.step).toBe('pickup')
+    expect(store.log.some((entry) => entry.text.includes('并列'))).toBe(false)
   })
 
   it('未开始检查 / 已结算完成时点格不拦截（交回常规分派）', () => {

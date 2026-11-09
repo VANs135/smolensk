@@ -221,10 +221,17 @@ const railFromDumpItems = computed<readonly CounterPickerItem[]>(() =>
 
 /** 12.3b：投递的付款站（点同一座即回到「自动」＝候选第一座） */
 const payDumpItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.supplyPayDumpCandidates.map((dump) => ({
-    ...dumpItem(dump),
-    selected: workbench.supplyInputs.payFromDumpId === dump.id,
-  })),
+  workbench.supplyPayDumpCandidates.map((dump) => {
+    const item = dumpItem(dump)
+    // 3.4b：同格两集群的两个算子要能分清（Guderian / Hoth / 未归属）
+    const group = workbench.panzerGroupOfDump(dump.id)
+    const tag = group === 'guderian' ? 'Guderian' : group === 'hoth' ? 'Hoth' : '未归属'
+    return {
+      ...item,
+      name: workbench.panzerGroupRulesOn ? `${item.name}（${tag}）` : item.name,
+      selected: workbench.supplyInputs.payFromDumpId === dump.id,
+    }
+  }),
 )
 
 /**
@@ -235,8 +242,21 @@ const payDumpItems = computed<readonly CounterPickerItem[]>(() =>
  * **基础源与吃图上补给没有算子**（正文里就没有对应算子）⇒ 用**格号角标**代替图。
  * 悬停 ⇒ 走既有的 `setSupplyPreview`（地图上铺覆盖范围与最省路径，12.3d）。
  */
-const sourceItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.supplySources.map((source, index) => {
+const sourceItems = computed<readonly CounterPickerItem[]>(() => {
+  // 12.1b：同一格的 SP 是**一个补给站** ⇒ dump 来源按格只出一条（引擎按账本逐条给，
+  // 这里折成一条；付款按钮会再按集群拆成 Guderian / Hoth 两个算子）
+  const seenDumpHex = new Set<string>()
+  const kept: number[] = []
+  workbench.supplySources.forEach((source, index) => {
+    if (source.kind === 'dump' && source.hex !== null) {
+      const key = hexLabel(source.hex)
+      if (seenDumpHex.has(key)) return
+      seenDumpHex.add(key)
+    }
+    kept.push(index)
+  })
+  return kept.map((index) => {
+    const source = workbench.supplySources[index]!
     const hex = source.hex
     const sameHex = (item: { hex: { col: number; row: number } }): boolean =>
       hex !== null && item.hex.col === hex.col && item.hex.row === hex.row
@@ -273,8 +293,8 @@ const sourceItems = computed<readonly CounterPickerItem[]>(() =>
       // 没有算子的来源（基础源 / 吃图上补给）用格号角标，免得整片是空框而认不出是哪一格
       badge: imageUrl === null && hex !== null ? hexLabel(hex) : undefined,
     }
-  }),
-)
+  })
+})
 
 /** 悬停来源 ⇒ 既有的 `setSupplyPreview`（地图上铺该来源的覆盖与最省路径） */
 function hoverSource(id: string | null): void {

@@ -4269,7 +4269,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const state = supplyState.value
     if (state === null) return []
     const source = state.chosenSource
-    if (source === undefined || source.kind !== 'hqThrow') return []
+    if (source === undefined) return []
+    if (source.kind === 'dump') {
+      /*
+       * 3.4b（用户补充裁定）：同格同时有 Guderian / Hoth 两份 SP 时，**非编队德军**可以选扣哪一份；
+       * 只有一个集群有 SP 时不出选择（`resolvePayDump` 直接扣那一条）。苏联单位与失效期不出现。
+       */
+      const sourceHex = source.hex
+      if (!panzerGroupRulesOn.value || state.side !== 'axis' || sourceHex === null) return []
+      const sameHexDumps = spDumpsOfSide.value.filter(
+        (dump) => sameHex(dump.hex, sourceHex) && (dump.sp > 0 || dump.t > 0),
+      )
+      const groups = new Set(sameHexDumps.map((dump) => panzerGroupOfDump(dump.id)))
+      return groups.size > 1 ? sameHexDumps : []
+    }
+    if (source.kind !== 'hqThrow') return []
     const hex = source.hex
     if (hex === null) return []
     const hq = units.value.find(
@@ -11408,9 +11422,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 且 3.4b 的待归属与装甲集群归属挂在 id 上，同格两 id 会各记一半。
      * 并入既有条（**沿用原 id**）可同时消掉这两件事：既有引用（`spDumpPanzerGroups` /
      * `pendingSpGroupAssignment` / `barrageSupplyDumpId`）不会悬空。
+     *
+     * 3.4b（用户裁定）：**同格两集群的 SP 是两本账**——Guderian 与 Hoth 不能并成一条，
+     * 否则两集群的余额会被合成一个数，之后既选不了、也扣不对。故并入条件还要加"集群相同"；
+     * 未声明归属的站与"未带集群"的落账仍并入（12.1b：同格同方只有一条账本）。
      */
+    const inputGroup =
+      panzerGroupRulesOn.value && input.side === 'axis' ? input.panzerGroup : undefined
     const existing = spDumps.value.find(
-      (dump) => dump.side === input.side && sameHex(dump.hex, input.hex),
+      (dump) =>
+        dump.side === input.side &&
+        sameHex(dump.hex, input.hex) &&
+        (!panzerGroupRulesOn.value ||
+          dump.side !== 'axis' ||
+          inputGroup === undefined ||
+          panzerGroupOfDump(dump.id) === null ||
+          panzerGroupOfDump(dump.id) === inputGroup),
     )
     if (existing !== undefined) {
       // 12.1a：并入后仍保持「尽可能并为 SP」的规范形（2T + 2T ⇒ 1 SP + 0 T，而不是留成 4T）
@@ -11740,11 +11767,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * ⑦ 12.3a / 12.3b：**地图上可点的来源格**（一格一条；同格多条视为并列）
+   * ⑦ 12.3a / 12.3b：**地图上可点的来源格**（一格一条 ⇒ 12.1b 同格多份 SP 是同一个补给站）
    *
    * 口径全部来自引擎：只收 `ok` 且 `isSpBearingSource(kind)` 的来源（12.6a 追溯源 / 12.6c
-   * 吃图上补给没有可拖取的 SP，也不参与选源）。同格多条**不在图上隐式排序**，
-   * 只给一条提示 ⇒ 由玩家在面板的并列清单里点选。
+   * 吃图上补给没有可拖取的 SP，也不参与选源）。3.4b 的两集群拆分只在**算子显示与付款**上，
+   * 这里始终一格一条，不产生「并列来源」。
    */
   const supplyPickSourceHints = computed<readonly { hex: HexRef; selected: boolean }[]>(() => {
     const state = supplyState.value
@@ -11764,7 +11791,60 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return hints
   })
 
-  /** 该格**可点**的来源下标（引擎已判 `ok`；同格可能多条 ⇒ 并列） */
+  /**
+   * 12.1b / 3.4b：**补给站来源列表**（面板/地图共用）
+   *
+   * 同格多份 SP 是**同一个补给站** ⇒ 折成一条来源（不产生「并列来源」）。唯一例外是
+   * 3.4b 勾选且生效期内的轴方：同格按集群拆成两行（Guderian / Hoth），两行**指向同一条
+   * 引擎来源**（`sourceIndex` 相同）——只是让玩家知道该扣哪一摞，不是两个补给站。
+   * 苏军/失效期/单集群不拆。
+   */
+  const supplySourceGroups = computed<
+    readonly {
+      sourceIndex: number
+      source: SupplySourceOption
+      dumpId: string | null
+      group: PanzerGroup | null
+    }[]
+  >(() => {
+    const state = supplyState.value
+    if (state === null) return []
+    const out: {
+      sourceIndex: number
+      source: SupplySourceOption
+      dumpId: string | null
+      group: PanzerGroup | null
+    }[] = []
+    const seenDumpHex = new Set<string>()
+    state.sources.forEach((source, index) => {
+      if (source.kind !== 'dump' || source.hex === null) {
+        out.push({ sourceIndex: index, source, dumpId: null, group: null })
+        return
+      }
+      const sourceHex = source.hex
+      const key = hexTextOf(sourceHex)
+      if (seenDumpHex.has(key)) return
+      seenDumpHex.add(key)
+      const dumps = spDumpsOfSide.value.filter(
+        (dump) => dump.side === state.side && sameHex(dump.hex, sourceHex),
+      )
+      if (panzerGroupRulesOn.value && state.side === 'axis' && dumps.length > 0) {
+        for (const dump of dumps) {
+          out.push({
+            sourceIndex: index,
+            source,
+            dumpId: dump.id,
+            group: panzerGroupOfDump(dump.id),
+          })
+        }
+        return
+      }
+      out.push({ sourceIndex: index, source, dumpId: dumps[0]?.id ?? null, group: null })
+    })
+    return out
+  })
+
+  /** 该格**可点**的来源下标（引擎已判 `ok`；同格多条按引擎顺序取第一条 ⇒ 仍是同一个补给站） */
   function supplyPickIndexesAt(hex: HexRef): number[] {
     const state = supplyState.value
     if (state === null) return []
@@ -11801,15 +11881,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     if (state.step !== 'selectSource') return false
     const indexes = supplyPickIndexesAt(hex)
-    if (indexes.length === 1) return chooseSupplySourceNow(indexes[0]!)
-    if (indexes.length > 1) {
-      pushLog(
-        'warning',
-        `${hexLabel(hex)} 有 ${indexes.length} 个并列来源，请在面板中选择（12.3）`,
-        '12.3',
-      )
-      return true
-    }
+    // 12.1b：同格多份 SP 是**同一个补给站** ⇒ 取引擎给出的第一条，不弹「并列」提示
+    if (indexes.length > 0) return chooseSupplySourceNow(indexes[0]!)
     // 该格有来源但不可点（距离外 / 无 SP）：只出一行原因
     const blocking = state.sources.find(
       (source) => source.hex !== null && hexTextOf(source.hex) === key,
@@ -11834,7 +11907,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (source.kind === 'dump') {
       const hex = source.hex
       if (hex === null) return null
-      return spDumpsOfSide.value.find((dump) => sameHex(dump.hex, hex)) ?? null
+      const sameHexDumps = spDumpsOfSide.value.filter((dump) => sameHex(dump.hex, hex))
+      if (!panzerGroupRulesOn.value) return sameHexDumps[0] ?? null
+      /*
+       * 3.4b（用户补充裁定）：
+       *   · 玩家点选过哪一个算子 ⇒ 扣那一条（非编队德军可在 G/H 之间二选一）；
+       *   · 没点选 ⇒ 多单位编队取本集群；非编队/未归属取第一条（同格总量不变）。
+       * 编队扣错集群由 `confirmSupplyPickupNow` 的 3.4b 闸门拒付并给出条款号。
+       */
+      const chosen = sameHexDumps.find((dump) => dump.id === supplyInputs.value.payFromDumpId)
+      if (chosen !== undefined) return chosen
+      const payer = units.value.find((unit) => unit.instanceId === supplyState.value?.unitId)
+      if (payer !== undefined && payer.panzerGroup != null) {
+        return sameHexDumps.find((dump) => panzerGroupOfDump(dump.id) === payer.panzerGroup) ?? null
+      }
+      return sameHexDumps[0] ?? null
     }
     if (source.kind === 'hqThrow') {
       if (candidates.length === 0) return null
@@ -11903,6 +11990,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     const inputs = supplyInputs.value
+    /*
+     * 3.4b（用户补充裁定）：付款站的集群必须与受益编队的集群一致 ——
+     * 多单位编队扣错集群就在这里拒，并给出条款号（12.3 拖取同样受 3.4b 约束）。
+     * 苏军/非编队/失效期由既有闸门自己放行（`panzerGroupSpGate` 只约束轴方编队）。
+     */
+    const panzerPurpose =
+      inputs.purpose === 'fuel' || inputs.purpose === 'combat' ? inputs.purpose : null
+    if (panzerPurpose !== null) {
+      const gate = panzerGroupSpGate({
+        dumpId: pay.id,
+        purpose: panzerPurpose,
+        beneficiaryUnitIds: [state.unitId],
+      })
+      if (gate !== null) {
+        pushLog(
+          'danger',
+          `${panzerGroupSpRefusal(gate, panzerPurpose === 'fuel' ? '燃油' : '战斗补给', pay.id)}（3.4b）`,
+          '3.4b',
+        )
+        return false
+      }
+    }
     /*
      * 裁定⑤「获取即付款」：**T 数由用途的费率算**，玩家不再手填（12.4/12.5 的费率是死的，
      * 手填等于允许少付）；只有 12.10 储备 / 13.8 建造这类"数量即内容"的用途才用手填值。
@@ -22156,6 +22265,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     beginSupplyCheckNow,
     chooseSupplySourceNow,
     supplyPickSourceHints,
+    supplySourceGroups,
     pickSupplySourceAtHexNow,
     confirmSupplyPickupNow,
     confirmOosResolutionNow,

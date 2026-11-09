@@ -3,6 +3,7 @@ import { pendingRetreatPlan } from '@/engine/rules/engagement-progress'
 import { computed, ref, watch } from 'vue'
 
 import type { HexRef, Side } from '@/data'
+import type { PanzerGroup } from '@/engine/rules'
 import { useHotseatStore } from './hotseat'
 import {
   useWorkbenchStore,
@@ -376,14 +377,31 @@ export const useMapViewStore = defineStore('mapView', () => {
    *   · **只有运输点数**（sp=0, t>0）⇒ 运输面 B（印 nT）——否则会变成"0 SP"且取不到 SP 图。
    */
   function spDumpTokens(): UnitToken[] {
-    const merged = new Map<string, { hex: HexRef; side: Side; sp: number; t: number }>()
+    const merged = new Map<
+      string,
+      { hex: HexRef; side: Side; sp: number; t: number; group: PanzerGroup | null }
+    >()
     for (const dump of workbench.spDumps) {
       if (dump.side !== hotseat.viewerSide) continue
       if (dump.sp <= 0 && dump.t <= 0) continue
-      const key = `${dump.hex.col},${dump.hex.row}`
+      /*
+       * 3.4b（用户裁定）：生效期内轴方同格 SP 按集群**拆成两个算子**显示（Guderian / Hoth）；
+       * 苏联 SP 与失效期仍是一枚（同一格就是一个补给站）。拆分只为显示，付款走同一格总量。
+       */
+      const split = workbench.panzerGroupRulesOn && dump.side === 'axis'
+      const group = split ? workbench.panzerGroupOfDump(dump.id) : null
+      const key = split
+        ? `${dump.hex.col},${dump.hex.row}:${group ?? '-'}`
+        : `${dump.hex.col},${dump.hex.row}`
       const cur = merged.get(key)
       if (cur === undefined) {
-        merged.set(key, { hex: { ...dump.hex }, side: dump.side, sp: dump.sp, t: dump.t })
+        merged.set(key, {
+          hex: { ...dump.hex },
+          side: dump.side,
+          sp: dump.sp,
+          t: dump.t,
+          group,
+        })
       } else {
         cur.sp += dump.sp
         cur.t += dump.t
@@ -391,6 +409,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     return [...merged.entries()].map(([key, m]) => {
       const hasSp = m.sp > 0
+      const tag = m.group === 'guderian' ? 'G ' : m.group === 'hoth' ? 'H ' : ''
       return {
         id: `sp:${key}`,
         hex: m.hex,
@@ -399,7 +418,7 @@ export const useMapViewStore = defineStore('mapView', () => {
         spPoints: hasSp ? m.sp : m.t,
         face: hasSp ? ('combat' as const) : ('move' as const),
         images: null,
-        label: hasSp ? `${m.sp} SP` : `${m.t} T`,
+        label: hasSp ? `${tag}${m.sp} SP` : `${tag}${m.t} T`,
         selected: false,
         ended: false,
         modeLetter: '',
@@ -1383,10 +1402,19 @@ export const useMapViewStore = defineStore('mapView', () => {
 
   function counterActionsAt(hex: HexRef, id: string): CounterAction[] {
     const unit = ownCounterAt(hex, id)
+    /*
+     * 3.4b 把同格轴方 SP 拆成两个算子（id 形如 `sp:c,r:guderian`）⇒ 这里按格前缀找那一条账本；
+     * 未拆分时 id 仍是 `sp:c,r`（前缀匹配对两者都成立）。
+     */
+    const spPrefix = `sp:${hex.col},${hex.row}`
     const dump =
-      id === `sp:${hex.col},${hex.row}`
+      id === spPrefix || id.startsWith(`${spPrefix}:`)
         ? workbench.spDumpsOfSide.find(
-            (item) => item.hex.col === hex.col && item.hex.row === hex.row,
+            (item) =>
+              item.hex.col === hex.col &&
+              item.hex.row === hex.row &&
+              (id === spPrefix ||
+                (workbench.panzerGroupOfDump(item.id) ?? '-') === id.slice(spPrefix.length + 1)),
           )
         : undefined
     if (unit === undefined && dump === undefined) return []
