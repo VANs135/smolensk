@@ -124,6 +124,44 @@
 
 （本项实施细节见 tasks.md T30 起的勾选记录。）
 
+### 3.1 改动
+
+`src/stores/workbench.ts`
+
+- 新增并导出 `transportLoadReadyAt(id)` / `transportUnloadReadyAt(id)` / `transportHandlingReadyAt(id)`：
+  复用引擎 `validateTransportPointLoad` / `validateTransportPointUnload`（含 13.2g-A 编内卡车永不卸载）
+  - 环节闸 `move.loadUnload` + 两条事实（站里有货且运力未满 / 车上真有 SP）。真判仍由
+    `loadTransportPointNow` / `unloadTransportPointNow` 落账前再走一遍。
+
+`src/stores/map-view.ts`
+
+- 新增 `facilityActionKeysNow(instanceId)`：`facilityActionKeys(kind)` 逐项过闸，`move.loadUnload`
+  额外要 `transportHandlingReadyAt(id)` 为真。
+- `unitActionOptions` / `unitActionAvailableAt` / `unitActionFamily` / `counterActionsAt` 的设施分支
+  全部改走它 ⇒ 装卸 SP **只在真能装或真能卸时**出现；工程、模式、合并拆分、铁路等既有项不变。
+
+### 3.2 已有能力（不重复造）
+
+| 能力      | 入口                                                       | 条款    |
+| --------- | ---------------------------------------------------------- | ------- |
+| 工程/筑垒 | 右键菜单 `move.construction` / `move.hedgehog` 等（既有）  | 13.5 等 |
+| 模式切换  | 右键菜单四项目标模式（既有，移动中给「先结束移动」）       | 9.0b    |
+| 机场/空中 | 左键开 `air` 会话；空运整单位 `toggleAirCargoUnit`（既有） | 14.7c   |
+| 铁路运输  | 右键菜单 `move.railMove`（既有）                           | 13.3    |
+| 合并/拆分 | 右键菜单 `move.transportMerge`（既有）                     | 13.2b   |
+
+### 3.3 缺口（报告，不硬做）
+
+- **装船 / 登陆**：本作无海军、无港口、无登陆艇条款 ⇒ 不提供。
+- **卡车运单位（"上车"）**：本作规则只允许运输点数 / 编内卡车运 **SP**，没有"卡车运作战单位"条款 ⇒ 不提供。
+- **整单位空运**：已有 `toggleAirCargoUnit`，但入口在既有 `air` 会话，不重复塞进右键菜单。
+
+### 3.4 红测
+
+`tests/stores/own-counter-ability-menu.test.ts`（7 例）：有站有货出项；无站空车不出；空站不出；
+载货且有友军格出（可卸）；13.2g-A 编内卡车已载无站不出、卸空后有站出；点项进既有 SupplyPanel
+`loadUnload` 段；无装卸可做时不列该项但合并/拆分项照常。已用 `git stash` 撤实现验证 4 例先红。
+
 ## 4. 六门槛（cwd `D:\OCS\smolensk`）
 
 ```

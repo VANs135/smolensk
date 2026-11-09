@@ -1234,12 +1234,7 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 界面据此决定要不要给「操作」入口——没操作就不给（免得点开一个空的会话）。
    */
   function unitActionAvailableAt(instanceId: string): boolean {
-    const unit = workbench.units.find((item) => item.instanceId === instanceId)
-    if (unit === undefined) return false
-    if (unit.side !== actingSide.value) return false
-    const kind = unit.noncombatKind
-    if (kind === null || kind === undefined) return false
-    return facilityActionKeys(kind).some((key) => workbench.actionAllowedNow(key))
+    return facilityActionKeysNow(instanceId).length > 0
   }
 
   /**
@@ -1300,6 +1295,25 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
+   * 13.2f（用户 2026-11-09）：「装卸 SP」只在**真能装或真能卸**时列出来
+   *
+   * `facilityActionKeys` 给的是"这一类设施**可能**有的动作"（按条款），`actionAllowedNow` 只判环节；
+   * 装卸还取决于同格有没有补给站、车上有没有货、运力满没满 ⇒ 这里多收一道 store 谓词，
+   * 免得右键菜单里出现一个点进去什么也干不了的项。
+   */
+  function facilityActionKeysNow(instanceId: string): readonly ActionKey[] {
+    const unit = workbench.units.find((item) => item.instanceId === instanceId)
+    if (unit === undefined || unit.side !== actingSide.value) return []
+    const kind = unit.noncombatKind
+    if (kind === null || kind === undefined) return []
+    return facilityActionKeys(kind).filter((key) =>
+      key === 'move.loadUnload'
+        ? workbench.transportHandlingReadyAt(instanceId)
+        : workbench.actionAllowedNow(key),
+    )
+  }
+
+  /**
    * 这一枚设施**此刻能做哪些操作**（用户 2026-10-25「一个操作一个面板」的菜单来源）
    *
    * 返回空数组＝本环节没有"对它自己"的操作（界面不给入口、也不开面板）。
@@ -1311,17 +1325,10 @@ export const useMapViewStore = defineStore('mapView', () => {
     panel: 'air' | 'supply' | 'fort'
     only: string | null
   }[] {
-    const unit = workbench.units.find((item) => item.instanceId === instanceId)
-    if (unit === undefined) return []
-    if (unit.side !== actingSide.value) return []
-    const kind = unit.noncombatKind
-    if (kind === null || kind === undefined) return []
-    return facilityActionKeys(kind)
-      .filter((key) => workbench.actionAllowedNow(key))
-      .flatMap((key) => {
-        const meta = FACILITY_ACTION_META[key]
-        return meta === undefined ? [] : [{ key, ...meta }]
-      })
+    return facilityActionKeysNow(instanceId).flatMap((key) => {
+      const meta = FACILITY_ACTION_META[key]
+      return meta === undefined ? [] : [{ key, ...meta }]
+    })
   }
 
   const unitActionFamily = computed<ContextPanel | null>(() => {
@@ -1365,7 +1372,7 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     const kindOf = unit.noncombatKind ?? ''
     if (kindOf === 'air_base') return 'air'
-    if (!facilityActionKeys(kindOf).some((key) => workbench.actionAllowedNow(key))) return null
+    if (facilityActionKeysNow(unit.instanceId).length === 0) return null
     switch (unit.noncombatKind) {
       case 'sp':
       case 'supply_point':
@@ -1471,7 +1478,15 @@ export const useMapViewStore = defineStore('mapView', () => {
       actions.push({ key, ...meta, disabledReason })
     }
     const kind = unit?.noncombatKind ?? (dump === undefined ? '' : 'sp')
-    for (const key of facilityActionKeys(kind)) {
+    /*
+     * 12.1b 的补给站没有"算子实例"（id 形如 `sp:c,r`）⇒ 走按 kind 的静态清单；
+     * 有实例的设施走 `facilityActionKeysNow`（多一道"真能做"的事实过滤，见其注释）。
+     */
+    const facilityKeys =
+      unit === undefined
+        ? facilityActionKeys(kind).filter((key) => workbench.actionAllowedNow(key))
+        : facilityActionKeysNow(id)
+    for (const key of facilityKeys) {
       const meta = FACILITY_ACTION_META[key]
       if (meta !== undefined) add(key, { ...meta, group: groupOfAction[key] ?? '补给' })
     }

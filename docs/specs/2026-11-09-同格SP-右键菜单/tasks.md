@@ -22,4 +22,12 @@
 - [x] T23 地图：`onHexContext` 本方优先、无本方时取敌方；`contextOptions` 标题取敌名
 - [x] T24 执行：`openContextAction` 的 `hipShoot` 落到 `setAirActive/setAirMissionKind/setAirTargetFromText`
 - [x] T25 回归：`context-menu-capabilities`、`map-view-session`、`unit-action-session`、`air-box-entry` 全绿
-- [ ] T26 六门槛（第 2 批）与提交推送、并入 main
+- [x] T26 六门槛（第 2 批）、提交推送 `bd6322b`、并入 main
+
+## 第 3 批：右键己方单位 ⇒ 能力菜单
+
+- [x] T30 红测：`tests/stores/own-counter-ability-menu.test.ts` 七例；撤实现验证四例先红
+- [x] T31 store：`transportLoadReadyAt` / `transportUnloadReadyAt` / `transportHandlingReadyAt`（复用 13.2f/13.2g 引擎校验）
+- [x] T32 地图：`facilityActionKeysNow`；`unitActionOptions` / `unitActionAvailableAt` / `unitActionFamily` / `counterActionsAt` 统一走它
+- [x] T33 回归：`transport-load-flow`、`context-menu-capabilities`、`unit-action-session`、`map-view-session`、`facility-*`
+- [ ] T34 六门槛（第 3 批）与提交推送、并入 main

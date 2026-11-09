@@ -120,6 +120,8 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
   it('★ 运输点：C 段三项（13.2c 合并拆分 / 13.2f 装卸 / 12.7a·d 转延补队），A 段没有', () => {
     const { workbench, mapView } = s
     place(workbench, 'transport_point', 'tp-1')
+    // 2026-11-09 用户口径：13.2f **只列当前真正可用的项** ⇒ 同格要有货可装/可卸才给这一项
+    workbench.spDumps.push({ id: 'd-tp', hex: { ...HEX }, side: 'axis', sp: 4, t: 0 })
     enter(workbench, 'movement', 'movement.modeAndMovement')
     expect(mapView.unitActionAvailableAt('tp-1')).toBe(true)
     expect(mapView.unitActionOptions('tp-1').map((item) => item.key)).toEqual([
@@ -129,6 +131,15 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     ])
     enter(workbench, 'aircraftRefit', 'aircraftRefit.refit')
     expect(mapView.unitActionAvailableAt('tp-1')).toBe(false)
+  })
+
+  it('★ 运输点：同格没货、车也空 ⇒ 13.2f 不列（只余 13.2c 合并拆分）', () => {
+    const { workbench, mapView } = s
+    place(workbench, 'transport_point', 'tp-1')
+    enter(workbench, 'movement', 'movement.modeAndMovement')
+    expect(mapView.unitActionOptions('tp-1').map((item) => item.key)).not.toContain(
+      'move.loadUnload',
+    )
   })
 
   it('★ 运输点：G 进击段只剩「转延补队」——13.2c 只许**移动阶段**、13.2f 只在 C 段', () => {
@@ -234,6 +245,8 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
       hog: 'hedgehog',
     } as const
     for (const [id, kind] of Object.entries(KINDS)) place(workbench, kind, id)
+    // 2026-11-09 用户口径：13.2f 装卸**只列真正可用的项** ⇒ 给运输点同格一座有货的站
+    workbench.spDumps.push({ id: 'd-menu', hex: { ...HEX }, side: 'axis', sp: 4, t: 0 })
 
     /** 某环节下，各设施类型的菜单（`only` 段名），`—` ＝无操作 */
     const menuOf = (step: { phase: ConsolePhase; id: string }) => {

@@ -3890,6 +3890,54 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 13.2f：右键**运输点数 / 编内卡车**的「装卸 SP」现在值不值得出现
+   *
+   * 用户 2026-11-09 口径：「只列当前真正可用的项」。装卸的真判仍是
+   * `loadTransportPointNow` / `unloadTransportPointNow`（落账前再走一遍引擎），
+   * 这里只复用同一批引擎校验 + 两条事实（站里有货、运力没满）来回答"能不能做"：
+   *   · 装载：`validateTransportPointLoad` + 同格补给站有货 + `13.2c` 运力未满；
+   *   · 卸载：`validateTransportPointUnload`（含 13.2g-A 编内卡车永不卸）+ 车上真有 SP。
+   * 环节闸 `move.loadUnload` 两者共同前置。
+   */
+  function transportLoadReadyAt(instanceId: string): boolean {
+    if (!actionAllowedNow('move.loadUnload')) return false
+    const unit = units.value.find((item) => item.instanceId === instanceId)
+    if (unit === undefined) return false
+    const dump = spDumps.value.find(
+      (item) => item.side === unit.side && sameHex(item.hex, unit.hex),
+    )
+    const outcome = validateTransportPointLoad({
+      transportPoint: transportPointActorOf(unit),
+      dumpInHex: dump !== undefined,
+    })
+    if (!outcome.ok || dump === undefined) return false
+    if (dump.sp + dump.t <= 0) return false
+    return unit.loadedSpT / SP_TO_T < unit.noncombatTransport
+  }
+
+  function transportUnloadReadyAt(instanceId: string): boolean {
+    if (!actionAllowedNow('move.loadUnload')) return false
+    const unit = units.value.find((item) => item.instanceId === instanceId)
+    if (unit === undefined || unit.loadedSpT <= 0) return false
+    const hasFriendlyCombat = units.value.some(
+      (item) => item.side === unit.side && item.isCombat && sameHex(item.hex, unit.hex),
+    )
+    const hasFacility = airBases.value.some((base) => sameHex(base.hex, unit.hex))
+    const hasDump = spDumps.value.some(
+      (item) => item.side === unit.side && sameHex(item.hex, unit.hex),
+    )
+    const outcome = validateTransportPointUnload({
+      transportPoint: transportPointActorOf(unit),
+      hexAllowsUnload: hasFriendlyCombat || hasFacility || hasDump,
+    })
+    return outcome.ok
+  }
+
+  function transportHandlingReadyAt(instanceId: string): boolean {
+    return transportLoadReadyAt(instanceId) || transportUnloadReadyAt(instanceId)
+  }
+
+  /**
    * 4.7d：本阶段**已用铁路运输过**的单位实例 id
    *
    * 「同一个阶段不能使用超过一种运输类型」是**跨动作的阶段级记账**（引擎自注：须由命令层累计，
@@ -22470,6 +22518,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     transportPointActorOf,
     loadTransportPointNow,
     unloadTransportPointNow,
+    transportLoadReadyAt,
+    transportUnloadReadyAt,
+    transportHandlingReadyAt,
     convertRailGaugeNow,
     gaugeConversionsThisPhase,
     // 13.3g-A：本阶段"刚换过轨的格"与"走过这些格的铁路修理单位"（"不能接力"的判据来源）
