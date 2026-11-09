@@ -721,6 +721,8 @@ function pickDump(): void {
                 alt=""
               />
               <span class="chip__label num">{{ unit.label }}</span>
+              <!-- 角标写不下全称的（3.4b「未归属」）⇒ 清单里补全称，与悬停提示同一份字段 -->
+              <span v-if="(unit.tip ?? null) !== null" class="muted">{{ unit.tip }}</span>
               <!--
                 用户 2026-10-25（渐进交互）：**点哪一枚就对哪一枚操作**。
                 修前这一栏只有图与名（没有入口），格里有非战斗单位时是"点格即开会话" ⇒

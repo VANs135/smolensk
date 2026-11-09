@@ -30,7 +30,14 @@ import {
   allMarkerTextureUrls,
   counterImages,
 } from '@/render/token-images'
-import { overlayImageUrls, type MovementOverlay } from '@/render/token-layer'
+import {
+  overlayImageUrls,
+  hitCollapsedToken,
+  stackFanOrder,
+  type MovementOverlay,
+  type UnitToken,
+} from '@/render/token-layer'
+import { hitStackFan, stackFanLayout } from '@/render/stack-fan'
 import {
   FIT_PADDING_PX,
   MAX_SCALE,
@@ -156,6 +163,14 @@ const imageError = ref<string | null>(null)
 const imageLoading = ref(true)
 
 const hoverHex = ref<HexRef | null>(null)
+
+/**
+ * 悬停令牌的**全称提示**（缺省 null）
+ *
+ * 只给 `UnitToken.tip` 有值的令牌显示（如 3.4b 未归属 SP：角标只有 `? N SP`）。
+ * 画布只读覆盖层里的字段，不判任何规则（CODE_SPEC §2）。
+ */
+const hoverTip = ref<{ text: string; x: number; y: number } | null>(null)
 
 /** 高清屏后备存储系数 */
 const pixelRatio = computed(() =>
@@ -314,9 +329,33 @@ function hitAtLocal(point: { x: number; y: number }): {
   return hex === undefined ? null : { hex, world }
 }
 
-/** 视口内坐标 → 格号（经世界坐标，与绘制共用同一份变换） */
-function hexAtLocal(point: { x: number; y: number }): HexRef | null {
-  return hitAtLocal(point)?.hex ?? null
+/**
+ * 该格该点上那一枚令牌的**全称提示**（无 tip 或没命中 ⇒ null）
+ *
+ * 命中与绘制同源：摊开态走扇面布局（`stackFanLayout` / `hitStackFan`），
+ * 未摊开走折叠堆叠（`hitCollapsedToken`）——与右键菜单的命中（store 的 `counterForBoxAt`）一致。
+ */
+function tokenTipAt(hex: HexRef, world: { x: number; y: number }): string | null {
+  const overlay = props.overlay
+  if (overlay === null || overlay === undefined) return null
+  const tokens = overlay.tokens.filter((token) => sameHex(token.hex, hex))
+  if (tokens.length === 0) return null
+  const expanded = overlay.expandedStack ?? null
+  let token: UnitToken | null = null
+  if (expanded !== null && sameHex(expanded.hex, hex)) {
+    const visible = tokens.filter((item) => item.hiddenStack !== true)
+    const layout = stackFanLayout({
+      hex,
+      total: visible.length,
+      page: expanded.page,
+      order: stackFanOrder(visible),
+    })
+    const hit = hitStackFan({ layout, point: world, scale: viewport.value.scale })
+    if (hit?.kind === 'slot') token = visible[hit.index] ?? null
+  } else {
+    token = hitCollapsedToken(tokens, world, viewport.value.scale)
+  }
+  return token?.tip ?? null
 }
 
 function onWheel(event: WheelEvent): void {
@@ -359,6 +398,7 @@ function onPointerDown(event: PointerEvent): void {
   // 多指：已在拖动中就直接忽略后续指针（否则第二根手指会替换整段手势，见 DragGesture.pointerId）
   if (drag.dragging) return
   if (!isMapGesture(event)) return
+  hoverTip.value = null
   const local = toLocal(event)
   const hit = local === null ? null : hitAtLocal(local)
   const source =
@@ -378,10 +418,14 @@ function onPointerMove(event: PointerEvent): void {
   // 多指：只认发起这次手势的那一根指针（另一根的手指移动不得参与平移）
   if (drag.dragging && drag.pointerId !== null && event.pointerId !== drag.pointerId) return
   // B18a：悬停在浮层上不该高亮下面的格；B24：拖动中（捕获会把 target 换成捕获元素）照旧算
-  if (!isMapGesture(event, drag.dragging)) return
+  if (!isMapGesture(event, drag.dragging)) {
+    hoverTip.value = null
+    return
+  }
   const local = toLocal(event)
   if (local === null) return
   if (counterPress !== null) {
+    hoverTip.value = null
     if ((event.buttons & 1) === 0) {
       drag = IDLE_DRAG
       clearCounterDrag()
@@ -405,11 +449,15 @@ function onPointerMove(event: PointerEvent): void {
     applyViewport(panBy(viewport.value, step.dx, step.dy))
   }
 
-  const hex = hexAtLocal(local)
+  const hit = drag.dragging ? null : hitAtLocal(local)
+  const hex = hit?.hex ?? null
   if (!sameHex(hoverHex.value, hex)) {
     hoverHex.value = hex
     emit('hexHover', hex)
   }
+  // 拖动中不出提示（否则提示会跟着平移乱飞）
+  const tip = hit === null ? null : tokenTipAt(hit.hex, hit.world)
+  hoverTip.value = tip === null ? null : { text: tip, x: local.x, y: local.y }
 }
 
 function onPointerUp(event: PointerEvent): void {
@@ -422,6 +470,7 @@ function onPointerUp(event: PointerEvent): void {
   drag = ended.gesture
   const counter = counterPress
   releaseCapture(event)
+  hoverTip.value = null
   if (counter !== null && !ended.clicked) {
     emit('counterDrop', counter.id, { x: event.clientX, y: event.clientY })
   }
@@ -461,6 +510,7 @@ function onPointerCancel(event: PointerEvent): void {
   const ended = dragCancel(drag)
   if (ended.gesture === drag) return
   drag = ended.gesture
+  hoverTip.value = null
   clearCounterDrag()
   releaseCapture(event)
 }
@@ -477,6 +527,7 @@ function releaseCapture(event: PointerEvent): void {
 }
 
 function onPointerLeave(): void {
+  hoverTip.value = null
   if (sameHex(hoverHex.value, null)) return
   hoverHex.value = null
   emit('hexHover', null)
@@ -595,6 +646,16 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
     >
       <canvas ref="canvas" class="mapcanvas__canvas" />
 
+      <!-- 悬停全称（只给 `UnitToken.tip` 有值的令牌；如 3.4b 的「未归属」） -->
+      <div
+        v-if="hoverTip !== null"
+        class="mapcanvas__tip"
+        role="tooltip"
+        :style="{ left: hoverTip.x + 'px', top: hoverTip.y + 'px' }"
+      >
+        {{ hoverTip.text }}
+      </div>
+
       <div v-if="!props.fill" class="mapcanvas__hud num">
         <span v-if="hoverHex !== null">{{ hoverHex.col }}.{{ hoverHex.row }}</span>
         <span v-else class="mapcanvas__muted">移入地图显示格号</span>
@@ -688,6 +749,21 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
   color: var(--color-command-ink);
   padding: var(--space-1) var(--space-2);
   font-size: var(--text-xs);
+}
+
+/* 悬停全称：贴着光标上方，不吃指针事件（否则会打断地图拖动） */
+.mapcanvas__tip {
+  position: absolute;
+  z-index: var(--layer-map-popup);
+  transform: translate(-50%, calc(-100% - 8px));
+  pointer-events: none;
+  padding: 2px 8px;
+  border: 1px solid var(--color-command-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-command-bg);
+  color: var(--color-command-ink);
+  font-size: var(--text-xs);
+  white-space: nowrap;
 }
 .mapcanvas {
   display: flex;

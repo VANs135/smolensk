@@ -64,6 +64,13 @@ export interface UnitToken {
   loadedSpT?: number | null
   /** 令牌上显示的印值文本（如 `5-4-6`） */
   label: string
+  /**
+   * 悬停 / 点开时的**全称**（缺省＝无提示）
+   *
+   * 只给"角标写不下全称"的令牌用：3.4b 未归属 SP 的角标是 `? N SP`（令牌 ~36px，
+   * 三汉字会溢出到邻格），全称「未归属（3.4b）」放在这里，由地图悬停与右侧清单读。
+   */
+  tip?: string | null
   /** 是否被选中 */
   selected: boolean
   /** 4.8b 的显示顺序来自状态层。 */

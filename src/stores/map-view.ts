@@ -426,6 +426,7 @@ export const useMapViewStore = defineStore('mapView', () => {
         face: hasSp ? ('combat' as const) : ('move' as const),
         images: null,
         label: hasSp ? `${prefix}${m.sp} SP` : `${prefix}${m.t} T`,
+        tip: unassigned ? '未归属（3.4b）' : undefined,
         selected: false,
         ended: false,
         modeLetter: '',
@@ -1623,7 +1624,9 @@ export const useMapViewStore = defineStore('mapView', () => {
     return contextTargets.value.flatMap((id) => {
       const actions = counterActionsAt(hex, id)
       if (actions.length === 0) return []
-      const label = ownCounterAt(hex, id)?.name ?? enemyCounterAt(hex, id)?.name ?? '补给站'
+      // 3.4b：拆分出来的「未归属」补给站有全称（`? N SP` 是角标，写不下）⇒ 菜单标题写全称
+      const tip = stackTokensAt(hex).find((token) => token.id === id)?.tip ?? null
+      const label = ownCounterAt(hex, id)?.name ?? enemyCounterAt(hex, id)?.name ?? tip ?? '补给站'
       return [{ id, label, actions }]
     })
   })

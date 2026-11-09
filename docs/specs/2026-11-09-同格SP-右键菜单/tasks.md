@@ -39,3 +39,10 @@
 - [x] T42 地图：`spDumpTokens` 未归属组标 `?`（令牌约 36px，三汉字会溢出；面板/日志仍写全称）
 - [x] T43 渲染：`collapsedStackViews` 2–3 枚 SP 并排同高（3 枚 0.64 / spread 0.32）
 - [x] T44 六门槛（第 4 批）、提交推送、并入 main
+
+## 第 5 批：未归属 SP 悬停 / 点开写全称
+
+- [x] T45 红测：`tests/stores/sp-token-unassigned-tip.test.ts` 三例；先红（`tip` 缺失、菜单标题仍是「补给站」）后绿
+- [x] T46 `UnitToken.tip` + `spDumpTokens` 只为未归属组填「未归属（3.4b）」；右键菜单标题改读 `tip`
+- [x] T47 `MapCanvas` 悬停提示（命中与绘制同源）+ 非战斗栏清单补全称
+- [x] T48 六门槛（第 5 批）、提交推送、并入 main（未归属站**不冻结**，无代码改动）
