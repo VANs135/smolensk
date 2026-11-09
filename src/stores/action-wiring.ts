@@ -235,6 +235,10 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     kind: 'pickMode',
     why: '点基地分栏只改聚焦栏与地图高亮（复用 setHoverHex 的既有通道），不落盘',
   },
+  acknowledgeReinforcementStepNow: {
+    kind: 'draft',
+    why: '增援段单窗推进：只记"本步已完成"的窗口标记，不落盘、不改账本',
+  },
 
   // 专规 2.4：原文只写"按此表动员"，**未给时机** ⇒ 不加环节闸（用户 2026-11-05 裁定"按回合能动"）
   slowMobilizationLockedOf: {

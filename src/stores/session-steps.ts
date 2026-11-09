@@ -52,14 +52,18 @@ export interface SessionStepFacts {
   }
   reinforce: {
     stepId: string
+    /** 本回合本方已经点过「本步完成」的窗口 id（只影响推进，不改账本） */
+    acked: readonly string[]
     arrivalPending: boolean
-    freeRailPending: boolean
-    replRollPending: boolean
-    replPlacePending: boolean
+    randomEventPending: boolean
+    variableExitPending: boolean
+    replTablePending: boolean
+    specialReplPending: boolean
+    supplyPlacePending: boolean
     rebuildAvailable: boolean
     frontalReservesPending: boolean
     slowMobilizationVisible: boolean
-    breakdownAvailable: boolean
+    consolidationAvailable: boolean
   } | null
   /** 突围会话是否打开 */
   breakout: boolean
@@ -398,102 +402,107 @@ function moveItems(facts: SessionStepFacts['move']): SessionStepItem[] {
 }
 
 function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): SessionStepItem[] {
-  if (facts.stepId === 'reinforcement.specialRepl') {
-    return [
-      item('reinforce:specialRepl', '特殊补员', '本环节处理特殊补员。', '掷本方特殊补员表。', true),
-    ]
+  const acked = new Set(facts.acked)
+  const items: SessionStepItem[] = []
+  const push = (id: string, title: string, why: string, decision: string): void => {
+    items.push(item(id, title, why, decision))
   }
-  const mandatory: SessionStepItem[] = []
-  const optional: SessionStepItem[] = []
-  const inRebuild = facts.stepId === 'reinforcement.rebuild'
-  if (facts.stepId === 'reinforcement.arrival' && facts.arrivalPending) {
-    mandatory.push(
-      item(
-        'reinforce:arrival',
-        '当日到达落位',
-        '当回合有单位到场，还没有全部放到地图上。',
-        '为每一条到达条目选定落点并投放。',
-      ),
+
+  // 3.6：轴方 19 Jul–15 Aug 的随机事件（原文未定段内位置，建议开场）
+  if (facts.randomEventPending && !acked.has('reinforce:randomEvent')) {
+    push(
+      'reinforce:randomEvent',
+      '随机事件（3.6）',
+      '19 Jul–15 Aug 的轴方增援阶段要掷一次随机事件。',
+      '看本回合事件结果；若为补给列车，记下 2 SP 的落点。',
     )
   }
-  if (facts.replRollPending) {
-    mandatory.push(
-      item(
-        'reinforce:replRoll',
-        '可变增援掷表',
-        '本方的增援阶段要掷一次可变增援。',
-        '确认可选规则后掷表。',
-      ),
+  // 13.6 / 1.6a：当日到达落位与强制移除
+  if (facts.arrivalPending) {
+    push(
+      'reinforce:arrival',
+      '当日到达落位（13.6 / 1.6a）',
+      '当回合有单位到场，还没有全部放到地图上。',
+      '为每一条到达条目选定落点并投放；Remove 条目立即执行。',
     )
   }
+  // 3.3c：轴方 19 Aug 起的可变撤离（到达之后，14 Mtr 才在场）
+  if (facts.variableExitPending && !acked.has('reinforce:variableExit')) {
+    push(
+      'reinforce:variableExit',
+      '可变撤离（3.3c）',
+      '19 Aug 起每个轴方增援阶段掷一次，直到 SS Reich 或 14 Mtr 被撤走。',
+      '掷骰并按 1.6a 移除；2–5 则本回合不撤，下一回合再掷。',
+    )
+  }
+  // 2.3c：苏方三批方面军预备队，必须当即领取
   if (facts.frontalReservesPending) {
-    mandatory.push(
-      item(
-        'reinforce:frontalReserves',
-        '方面军预备队',
-        '今天有一批方面军预备队到场，必须当即领取。',
-        '选定落点并领取这一批。',
-      ),
+    push(
+      'reinforce:frontalReserves',
+      '方面军预备队（2.3c）',
+      '今天有一批方面军预备队到场，必须当即领取。',
+      '落 2 SP、完成换装，并选两次免费重建的对象。',
     )
   }
-  if (inRebuild && facts.replPlacePending) {
-    mandatory.push(
-      item(
-        'reinforce:replPlace',
-        '放置补员',
-        '账本里还有补员点数没有放成算子。',
-        '选定格并把待放置的补员放下去。',
-      ),
+  // 2.4：苏方慢动员解锁（原文只给日期，不设硬闸）
+  if (facts.slowMobilizationVisible && !acked.has('reinforce:slow')) {
+    push(
+      'reinforce:slow',
+      '慢动员解锁（2.4）',
+      '本回合有仍被锁定的师可以解锁。',
+      '勾选不超过配额的师并提交解锁。',
     )
   }
-  if (inRebuild && facts.rebuildAvailable) {
-    mandatory.push(
-      item(
-        'reinforce:rebuild',
-        '重建 / 整编',
-        '死亡堆里有可重建单位，或图上有带损单位可整编。',
-        '选定要重建的单位、行键与补员所在格，然后重建。',
-      ),
+  // 13.5 / 1.6b：可变增援的补员表
+  if (facts.replTablePending && !acked.has('reinforce:replTable')) {
+    push(
+      'reinforce:replTable',
+      '可变增援·补员表（13.5 / 1.6b）',
+      '本方的增援阶段要掷一次补员表，并把 Pax/Eq 放成算子。',
+      '掷表、放置 Pax/Eq；Ftr/Tac 立即用掉，Pax/Eq 可留存。',
     )
   }
-  if (facts.freeRailPending) {
-    optional.push(
-      item(
-        'reinforce:freeRail',
-        '到货 SP 落位',
-        '补给表到货的 SP 还没有落账。',
-        '选定可卸载城市格或图边补给源格后落账。',
-        true,
-      ),
+  // 1.6c：19 Aug 前的特殊补员
+  if (facts.specialReplPending && !acked.has('reinforce:specialRepl')) {
+    push(
+      'reinforce:specialRepl',
+      '特殊补员（1.6c）',
+      '19 Aug 前每回合要掷一次特殊补员表。',
+      '掷表并领取；死亡堆没有合格单位则作废。',
     )
   }
-  if (facts.breakdownAvailable) {
-    optional.push(
-      item(
-        'reinforce:breakdown',
-        '拆分 / 合并',
-        '本环节允许创建或吸收拆分单位，也允许合并同型单位。',
-        '选定母单位与拆分/合并对象，执行其中一项。',
-        true,
-      ),
+  // 1.6b / 2.1 / 3.1：补给表到货与落位
+  if (facts.supplyPlacePending && !acked.has('reinforce:supplyTable')) {
+    push(
+      'reinforce:supplyTable',
+      '补给到达·补给表（1.6b / 2.1 / 3.1）',
+      '本方的增援阶段要掷一次补给表，并把到货 SP 落账。',
+      '选定可卸载城市格或图边补给源格后落账；轴方按 3.4b 分栏。',
     )
   }
-  if (facts.slowMobilizationVisible) {
-    optional.push(
-      item(
-        'reinforce:slow',
-        '慢动员解锁',
-        '本回合有仍被锁定的师可以解锁。',
-        '勾选不超过配额的师并提交解锁。',
-        true,
-      ),
+  // 13.5a：重建
+  if (facts.rebuildAvailable && !acked.has('reinforce:rebuild')) {
+    push(
+      'reinforce:rebuild',
+      '重建（13.5a）',
+      '死亡堆里有可重建单位，或有带损单位可补满。',
+      '选定要重建的单位、行键与补员所在格，然后重建。',
     )
   }
-  return [...mandatory, ...optional]
+  // 13.9：整编（含拆分/合并），轴方多单位编队禁用
+  if (facts.consolidationAvailable && !acked.has('reinforce:consolidation')) {
+    push(
+      'reinforce:consolidation',
+      '整编（13.9）',
+      '同堆叠里有可整编对象；轴方多单位编队不得整编（3.3d）。',
+      '选定保留枚与移除枚，执行整编或拆分/合并。',
+    )
+  }
+  return items
 }
 
 /**
- * 按规则顺序给出现有会话的全部待决事项（强制在前、选做在后）
+ * 按规则顺序给出现有会话的全部待决事项（增援段按规则顺序，一次只暴露第一件）
  *
  * 顺序写死在这里（与引擎状态机的推进顺序一致），不排序、不按字母序。
  */

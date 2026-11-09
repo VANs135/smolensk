@@ -84,59 +84,61 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
     expect(items.map((entry) => entry.id)).toEqual(['supply:pickup'])
   })
 
-  it('增援：补员待放置排在重建之前（强制先于选做，且不是字母序）', () => {
+  it('增援：慢动员 → 补员 → 重建 → 整编（规则顺序，不是字母序）', () => {
     const items = planSessionSteps(
       baseFacts({
         kind: 'reinforce',
         reinforce: {
           stepId: 'reinforcement.rebuild',
+          acked: [],
           arrivalPending: false,
-          freeRailPending: false,
-          replRollPending: false,
-          replPlacePending: true,
+          randomEventPending: false,
+          variableExitPending: false,
+          replTablePending: true,
+          specialReplPending: false,
+          supplyPlacePending: false,
           rebuildAvailable: true,
           frontalReservesPending: false,
           slowMobilizationVisible: true,
-          breakdownAvailable: true,
+          consolidationAvailable: true,
         },
       }),
     )
     expect(items.map((entry) => entry.id)).toEqual([
-      'reinforce:replPlace',
-      'reinforce:rebuild',
-      'reinforce:breakdown',
       'reinforce:slow',
+      'reinforce:replTable',
+      'reinforce:rebuild',
+      'reinforce:consolidation',
     ])
-    // 强制义务都在选做之前
-    const firstOptional = items.findIndex((entry) => entry.optional)
-    expect(firstOptional).toBe(2)
-    expect(items.slice(firstOptional).every((entry) => entry.optional)).toBe(true)
     // 暴露的只有第一件
     expect(exposedCount(items)).toBe(1)
-    expect(exposedSessionStep(items)?.id).toBe('reinforce:replPlace')
+    expect(exposedSessionStep(items)?.id).toBe('reinforce:slow')
   })
 
-  it('增援：到达落位在可变增援与重建之前（规则顺序，不是字典序）', () => {
+  it('增援：到达落位在可变增援与补给之前（规则顺序，不是字典序）', () => {
     const items = planSessionSteps(
       baseFacts({
         kind: 'reinforce',
         reinforce: {
           stepId: 'reinforcement.arrival',
+          acked: [],
           arrivalPending: true,
-          freeRailPending: true,
-          replRollPending: true,
-          replPlacePending: false,
+          randomEventPending: false,
+          variableExitPending: false,
+          replTablePending: true,
+          specialReplPending: false,
+          supplyPlacePending: true,
           rebuildAvailable: false,
           frontalReservesPending: false,
           slowMobilizationVisible: false,
-          breakdownAvailable: false,
+          consolidationAvailable: false,
         },
       }),
     )
     expect(items.map((entry) => entry.id)).toEqual([
       'reinforce:arrival',
-      'reinforce:replRoll',
-      'reinforce:freeRail',
+      'reinforce:replTable',
+      'reinforce:supplyTable',
     ])
   })
 
@@ -158,14 +160,17 @@ describe('U1-b 守卫：多待决同时成立也只暴露一件', () => {
       kind: 'reinforce',
       reinforce: {
         stepId: 'reinforcement.rebuild',
+        acked: [],
         arrivalPending: true,
-        freeRailPending: false,
-        replRollPending: true,
-        replPlacePending: true,
+        randomEventPending: true,
+        variableExitPending: false,
+        replTablePending: true,
+        specialReplPending: true,
+        supplyPlacePending: true,
         rebuildAvailable: true,
         frontalReservesPending: true,
         slowMobilizationVisible: true,
-        breakdownAvailable: true,
+        consolidationAvailable: true,
       },
     }),
     // 战斗损失 + 选项事实同时成立（引擎只会给一个，但投影必须也只暴露一个）
@@ -274,14 +279,16 @@ describe('U1-b 源码守卫：只在门里出一件，旧判定不留两份', ()
 
     const reinforce = read('components/reinforcement/ReinforcementPanel.vue')
     for (const id of [
+      'reinforce:randomEvent',
       'reinforce:arrival',
-      'reinforce:replRoll',
-      'reinforce:freeRail',
-      'reinforce:replPlace',
-      'reinforce:rebuild',
-      'reinforce:breakdown',
-      'reinforce:slow',
+      'reinforce:variableExit',
       'reinforce:frontalReserves',
+      'reinforce:slow',
+      'reinforce:replTable',
+      'reinforce:specialRepl',
+      'reinforce:supplyTable',
+      'reinforce:rebuild',
+      'reinforce:consolidation',
     ]) {
       expect(reinforce).toContain(`item="${id}"`)
     }

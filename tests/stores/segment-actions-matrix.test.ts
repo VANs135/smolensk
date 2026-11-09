@@ -166,7 +166,7 @@ describe('阶段/环节 × 操作矩阵（规则书口径）', () => {
     // 每个 B 段子环节都要有对应区块（人工环节出动作区、自动环节只留回执）
     for (const itemId of [
       'reinforce:arrival',
-      'reinforce:replRoll',
+      'reinforce:replTable',
       'reinforce:rebuild',
       'reinforce:frontalReserves',
     ]) {

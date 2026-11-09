@@ -234,7 +234,7 @@ describe('store 适配层：只读投影真的读得到', () => {
         w.playerSegmentSteps.findIndex((step) => step.id === 'reinforcement.specialRepl'),
       ),
     ).toBe(true)
-    expect(map.sessionStep?.id).toBe('reinforce:specialRepl')
+    expect(map.sessionSteps.map((step) => step.id)).toContain('reinforce:specialRepl')
     expect(entryOf(legal.view, 'rein.specialRepl')).toMatchObject({
       status: 'available',
       clickable: true,

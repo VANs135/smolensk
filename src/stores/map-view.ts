@@ -3,7 +3,7 @@ import { pendingRetreatPlan } from '@/engine/rules/engagement-progress'
 import { computed, ref, watch } from 'vue'
 
 import type { HexRef, Side } from '@/data'
-import type { PanzerGroup } from '@/engine/rules'
+import { isInRandomEventPeriod, isSpecialReplAvailable, type PanzerGroup } from '@/engine/rules'
 import { useHotseatStore } from './hotseat'
 import {
   useWorkbenchStore,
@@ -2262,7 +2262,6 @@ export const useMapViewStore = defineStore('mapView', () => {
     const moving = workbench.moveInteraction
     const stepId = workbench.segmentStep?.id ?? ''
     const batch = workbench.frontalReservesToday
-    const inRebuild = stepId === 'reinforcement.rebuild'
     return {
       kind,
       combat:
@@ -2302,29 +2301,32 @@ export const useMapViewStore = defineStore('mapView', () => {
           ? null
           : {
               stepId,
-              arrivalPending:
-                stepId === 'reinforcement.arrival' &&
-                workbench.arrivalPlan !== null &&
-                !workbench.arrivalAllPlaced,
-              freeRailPending: stepId === 'reinforcement.arrival' && workbench.supplyArrivalSp > 0,
-              replRollPending:
-                stepId === 'reinforcement.replRoll' ||
-                stepId === 'reinforcement.randomEvent' ||
-                stepId === 'reinforcement.variableExit',
-              replPlacePending:
-                inRebuild && workbench.replPending.pax + workbench.replPending.eq > 0,
-              rebuildAvailable: inRebuild && workbench.rebuildCandidates.length > 0,
+              acked: workbench.reinforcementAcks
+                .filter((key) => key.startsWith(`${workbench.turn}|${workbench.activeSide}|`))
+                .map((key) => key.slice(`${workbench.turn}|${workbench.activeSide}|`.length)),
+              arrivalPending: workbench.arrivalPlan !== null && !workbench.arrivalAllPlaced,
+              randomEventPending:
+                workbench.activeSide === 'axis' && isInRandomEventPeriod(workbench.date),
+              variableExitPending: workbench.variableExitForActiveSide,
+              // 1.6b：补员表窗口每个 B 段都要出现；掷表与落位都办完才允许「本步完成」
+              replTablePending: true,
+              specialReplPending:
+                isSpecialReplAvailable(workbench.date) &&
+                !workbench.hasSpecialReplDraw(workbench.activeSide, workbench.turn),
+              // 1.6b：补给表窗口同理；SP 未落账时 acknowledge 会拒绝
+              supplyPlacePending: true,
+              rebuildAvailable: workbench.rebuildCandidates.length > 0,
               /*
                * ② 按方不渲染：方面军预备队是苏方专规（2.3c）内容。
-               * 只在该方**自己的那个环节**才把这一步排进待决计划 —— 否则德军回合会
+               * 只在该方**自己的 B 段**才把这一步排进待决计划 —— 否则德军回合会
                * 因为「当天有批次」而冒出苏方的方面军预备队窗口。
                */
               frontalReservesPending:
-                stepId === 'reinforcement.frontalReserves' &&
+                workbench.activeSide === 'soviet' &&
                 batch !== null &&
                 !workbench.frontalReservesClaimed.includes(batch.date),
               slowMobilizationVisible: workbench.slowMobilizationVisible,
-              breakdownAvailable: inRebuild,
+              consolidationAvailable: workbench.consolidationAvailable,
             },
       breakout: kind === 'breakout',
       breakoutReturnPending: kind === 'breakout' && workbench.breakoutReturns.length > 0,

@@ -72,10 +72,9 @@ describe('② 双方面板串台（按方不渲染）', () => {
     )
     // 苏方步骤表里必须有这一步（轮到该方时正常出现）
     expect(frontIndex).toBeGreaterThanOrEqual(0)
-    // 「一次只暴露一件事」：定位到这一步后，它才成为当前待决事项
+    // 单窗推进：队列里要有它；当前窗由规则顺序决定（到达未放完时先停在到达窗）
     workbench.setSegmentStepIndex(frontIndex)
     expect(mapView.sessionSteps.map((step) => step.id)).toContain('reinforce:frontalReserves')
-    expect(mapView.sessionStep?.id).toBe('reinforce:frontalReserves')
   })
 
   it('撤离（3.3c 轴方）的界面事实只在轴方回合为真', () => {

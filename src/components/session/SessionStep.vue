@@ -14,7 +14,15 @@ import { SESSION_STEP_GATE } from './gate'
  * 本组件**不做任何规则判断**：只在 `item` 命中当前步骤 id 时渲染插槽。
  * 宿主（`MapDock`）provide 后生效；验证页 / 右栏没有宿主 ⇒ 放行（全量渲染）。
  */
-const props = defineProps<{ item: string }>()
+const props = defineProps<{
+  item: string
+  /** 增援段单窗推进：是否显示「本步完成 / 跳过」 */
+  ackable?: boolean
+  ackDisabled?: boolean
+  ackLabel?: string
+}>()
+
+const emit = defineEmits<{ (event: 'ack'): void }>()
 
 const gate = inject(SESSION_STEP_GATE, null)
 /** 没有宿主 / 宿主当前无待决 / 宿主显式放行 ⇒ 全量渲染；否则只认当前那一个事项 */
@@ -29,6 +37,15 @@ const step = computed(() => gate?.value ?? null)
     </p>
     <p v-if="step !== null" class="step__decision">{{ step.decision }}</p>
     <slot />
+    <button
+      v-if="props.ackable"
+      class="step__ack"
+      type="button"
+      :disabled="props.ackDisabled === true"
+      @click="emit('ack')"
+    >
+      {{ props.ackLabel ?? '本步完成 / 跳过' }}
+    </button>
   </section>
 </template>
 
@@ -47,5 +64,22 @@ const step = computed(() => gate?.value ?? null)
 .step__decision {
   margin: 0;
   color: var(--color-ink);
+}
+
+.step__ack {
+  align-self: flex-start;
+  margin-top: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--color-ink);
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.step__ack:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 </style>

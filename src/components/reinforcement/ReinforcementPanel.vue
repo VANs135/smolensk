@@ -638,8 +638,29 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
     </p>
 
     <SessionStep
-      v-if="showsActions && workbench.segmentStep?.id === 'reinforcement.specialRepl'"
+      v-if="showsActions"
+      item="reinforce:randomEvent"
+      ackable
+      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:randomEvent')"
+    >
+      <RuleNote title="3.6 随机事件：19 Jul–15 Aug，每个轴方增援阶段掷一次" rule="3.6">
+        <p class="muted">
+          通常为补给列车（2 SP，任一可卸货格、不用 Rail Cap）；偶尔整型飞机被调离图外。
+          结果随可变增援一并落日志。
+        </p>
+      </RuleNote>
+      <p v-if="workbench.lastVariableRepl?.randomEvent" class="num">
+        <BaseTag kind="info">3.6</BaseTag>
+        {{ workbench.lastVariableRepl.randomEvent.detail }}
+      </p>
+      <p v-else class="muted">本回合尚未掷出随机事件结果。</p>
+    </SessionStep>
+
+    <SessionStep
+      v-if="showsActions"
       item="reinforce:specialRepl"
+      ackable
+      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:specialRepl')"
     >
       <BaseButton
         variant="primary"
@@ -761,7 +782,61 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         </div>
       </details>
     </SessionStep>
-    <SessionStep v-if="showsActions" item="reinforce:replRoll">
+    <SessionStep
+      v-if="showsActions"
+      item="reinforce:variableExit"
+      ackable
+      :ack-disabled="workbench.variableExitSelectionOpen"
+      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:variableExit')"
+    >
+      <RuleNote title="3.3c 可变撤离：19 Aug 起，每个轴方增援阶段掷一次" rule="3.3c">
+        <p class="muted">
+          1 / 6 分别撤走 SS Reich 或 14 Mtr，撤走即了结；2–5 本回合不撤，下回合再掷。 撤离走 1.6a
+          程序：优先移除目标编队算子，否则用同印值算子顶替。
+        </p>
+      </RuleNote>
+      <template v-if="workbench.variableExitForActiveSide">
+        <p class="num">
+          3.3c 可变撤离：窗口
+          <BaseTag :kind="workbench.variableExitOpen ? 'danger' : 'neutral'">
+            {{ workbench.variableExitOpen ? '已开（19 Aug 起）' : '未开' }}
+          </BaseTag>
+          ｜判定
+          <BaseTag :kind="workbench.variableExitResolved ? 'success' : 'info'">
+            {{
+              workbench.variableExitResolved ? '已了结（不再掷）' : '未了结（2–5，须下回合再掷）'
+            }}
+          </BaseTag>
+        </p>
+        <!-- ⑦ 3.3c：目标编队盘面与死亡堆都无算子 ⇒ 玩家从同印值算子中挑一枚移出游戏（1.6a） -->
+        <div v-if="workbench.variableExitSelectionOpen" class="row">
+          <p class="num">
+            3.3c 撤离：该编队已无算子在场 ⇒
+            请在地图高亮格（蓝框）里选一枚同印值算子移出游戏（1.6a）。
+            列表只列可选单位；堆叠中不可选者不出现。
+          </p>
+        </div>
+        <div v-if="workbench.variableExitSelectionOpen" class="row">
+          <CounterPicker
+            title="3.3c 撤离替补（只列可选）"
+            hint="1.6a：战斗面印值 attack/AR/MA 相同的算子才能顶替"
+            :items="workbench.variableExitPickItems"
+            :size="32"
+            @pick="workbench.confirmVariableExitSubstitute"
+            @hover="workbench.setVariableExitHover"
+          />
+        </div>
+      </template>
+    </SessionStep>
+    <SessionStep
+      v-if="showsActions"
+      item="reinforce:replTable"
+      ackable
+      :ack-disabled="
+        !workbench.variableReplRolled || workbench.replPending.pax + workbench.replPending.eq > 0
+      "
+      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:replTable')"
+    >
       <!-- ── · 可变增援（13.6b / 1.6c / 3.3c / 3.6） ── -->
       <hr />
       <RuleNote
@@ -795,39 +870,6 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         骰面自动（补给表 2d6 / 补员表 2d6 / 特殊补员 1d6 / 可变撤离 1d6 / 随机事件 2d6），
         结果随本次结算一并落日志。
       </p>
-      <!-- 3.3c：可变撤离的窗口与了结状态（轴方 19 Aug 起；1/6 移除即结束，2–5 下回合再掷） -->
-      <template v-if="workbench.variableExitForActiveSide">
-        <p class="num">
-          3.3c 可变撤离：窗口
-          <BaseTag :kind="workbench.variableExitOpen ? 'danger' : 'neutral'">
-            {{ workbench.variableExitOpen ? '已开（19 Aug 起）' : '未开' }}
-          </BaseTag>
-          ｜判定
-          <BaseTag :kind="workbench.variableExitResolved ? 'success' : 'info'">
-            {{
-              workbench.variableExitResolved ? '已了结（不再掷）' : '未了结（2–5，须下回合再掷）'
-            }}
-          </BaseTag>
-        </p>
-        <!-- ⑦ 3.3c：目标编队盘面与死亡堆都无算子 ⇒ 玩家从同印值算子中挑一枚移出游戏（1.6a） -->
-        <div v-if="workbench.variableExitSelectionOpen" class="row">
-          <p class="num">
-            3.3c 撤离：该编队已无算子在场 ⇒
-            请在地图高亮格（蓝框）里选一枚同印值算子移出游戏（1.6a）。
-            列表只列可选单位；堆叠中不可选者不出现。
-          </p>
-        </div>
-        <div v-if="workbench.variableExitSelectionOpen" class="row">
-          <CounterPicker
-            title="3.3c 撤离替补（只列可选）"
-            hint="1.6a：战斗面印值 attack/AR/MA 相同的算子才能顶替"
-            :items="workbench.variableExitPickItems"
-            :size="32"
-            @pick="workbench.confirmVariableExitSubstitute"
-            @hover="workbench.setVariableExitHover"
-          />
-        </div>
-      </template>
       <p v-if="workbench.lastVariableRepl !== null" class="num">
         <BaseTag kind="success">{{ workbench.lastVariableRepl.rule }}</BaseTag>
         {{ workbench.lastVariableRepl.detail }}
@@ -835,8 +877,50 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <p class="num">
         13.5 可保存的补员：{{ savableReplKeys.join(' / ') }}（其余在增援阶段末清零）
       </p>
+      <!-- ── · 补员账本（13.5） ── -->
+      <hr />
+      <RuleNote title="补员（13.5 / §5-D）" rule="13.5 / 专规 1.6 Notes">
+        <p class="muted">
+          **Pax / Eq 是盘面算子**——每 1 点一枚 `Pax Repl` / `EQ Repl`，与普通算子一样移动、堆叠、
+          可被攻击/轰炸摧毁（摧毁即消灭，不进死亡堆）；掷出后按 SOP「放置在地图上」由裁判选落点。
+          Ftr / Tac 只补 1 step 且**不可保存**，仍走账本（增援阶段末清零）。
+        </p>
+      </RuleNote>
+      <div class="row">
+        <span class="num">
+          盘面：Pax {{ replCounts.pax }} 枚 / Eq {{ replCounts.eq }} 枚｜账本：Ftr
+          {{ holdings.ftr }} / Tac {{ holdings.tac }}
+        </span>
+        <span v-if="replPendingTotal > 0" class="num">
+          <BaseTag kind="warning">待放置</BaseTag>
+          Pax {{ workbench.replPending.pax }} / Eq {{ workbench.replPending.eq }}
+        </span>
+      </div>
+      <div v-if="showsActions && replPendingTotal > 0" class="row">
+        <label class="field">
+          补员落点（13.5a：每点一枚，放好后可正常移动）
+          <UiField v-model="replPlaceHexText" class="input num" placeholder="列.行" />
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :disabled="replPlaceHexText === ''"
+            @click="placePendingRepl()"
+          >
+            点地图选格后放置
+          </BaseButton>
+        </label>
+        <BaseButton variant="primary" size="sm" :disabled="!replHexOk" @click="placePendingRepl()">
+          放置补员（13.5）
+        </BaseButton>
+      </div>
     </SessionStep>
-    <SessionStep v-if="showsActions" item="reinforce:freeRail">
+    <SessionStep
+      v-if="showsActions"
+      item="reinforce:supplyTable"
+      ackable
+      :ack-disabled="workbench.supplyArrivalSp > 0"
+      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:supplyTable')"
+    >
       <!-- ── · 到货 SP 落位（专规 2.1 / 3.1 免费铁运 + 3.6 补给列车） ── -->
       <hr />
       <RuleNote
@@ -954,45 +1038,12 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         <BaseTag kind="success">已落账</BaseTag> {{ workbench.lastFreeRailPlan.detail }}
       </p>
     </SessionStep>
-    <SessionStep v-if="showsActions" item="reinforce:replPlace">
-      <!-- ── · 补员账本（13.5） ── -->
-      <hr />
-      <RuleNote title="补员（13.5 / §5-D）" rule="13.5 / 专规 1.6 Notes">
-        <p class="muted">
-          **Pax / Eq 是盘面算子**——每 1 点一枚 `Pax Repl` / `EQ Repl`，与普通算子一样移动、堆叠、
-          可被攻击/轰炸摧毁（摧毁即消灭，不进死亡堆）；掷出后按 SOP「放置在地图上」由裁判选落点。
-          Ftr / Tac 只补 1 step 且**不可保存**，仍走账本（增援阶段末清零）。
-        </p>
-      </RuleNote>
-      <div class="row">
-        <span class="num">
-          盘面：Pax {{ replCounts.pax }} 枚 / Eq {{ replCounts.eq }} 枚｜账本：Ftr
-          {{ holdings.ftr }} / Tac {{ holdings.tac }}
-        </span>
-        <span v-if="replPendingTotal > 0" class="num">
-          <BaseTag kind="warning">待放置</BaseTag>
-          Pax {{ workbench.replPending.pax }} / Eq {{ workbench.replPending.eq }}
-        </span>
-      </div>
-      <div v-if="showsActions && replPendingTotal > 0" class="row">
-        <label class="field">
-          补员落点（13.5a：每点一枚，放好后可正常移动）
-          <UiField v-model="replPlaceHexText" class="input num" placeholder="列.行" />
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="replPlaceHexText === ''"
-            @click="placePendingRepl()"
-          >
-            点地图选格后放置
-          </BaseButton>
-        </label>
-        <BaseButton variant="primary" size="sm" :disabled="!replHexOk" @click="placePendingRepl()">
-          放置补员（13.5）
-        </BaseButton>
-      </div>
-    </SessionStep>
-    <SessionStep v-if="showsRebuild" item="reinforce:rebuild">
+    <SessionStep
+      v-if="showsRebuild"
+      item="reinforce:rebuild"
+      ackable
+      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:rebuild')"
+    >
       <!-- ── · 重建（13.5） ── -->
       <hr />
       <p v-if="showsRebuild" class="muted">
@@ -1079,7 +1130,12 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       </p>
     </SessionStep>
     <!-- U1-b：拆分/合并（20.0 / 13.9）＝本环节的**选做事项**，排在强制义务之后 -->
-    <SessionStep v-if="showsRebuild" item="reinforce:breakdown">
+    <SessionStep
+      v-if="showsRebuild"
+      item="reinforce:consolidation"
+      ackable
+      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:consolidation')"
+    >
       <!-- ── · 拆分与合并（20.0 / 13.9） ── -->
       <hr />
       <RuleNote
@@ -1201,7 +1257,12 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
     </SessionStep>
     <!-- ── · 慢动员（专规 2.4） ── -->
     <!-- 2.4 是苏联专规：仅**苏方增援阶段**渲染（轴方增援阶段不出现该 UI，用户 2026-11-07 ②） -->
-    <SessionStep v-if="showsActions && workbench.slowMobilizationVisible" item="reinforce:slow">
+    <SessionStep
+      v-if="showsActions && workbench.slowMobilizationVisible"
+      item="reinforce:slow"
+      ackable
+      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:slow')"
+    >
       <hr />
       <div class="muted">
         慢动员：

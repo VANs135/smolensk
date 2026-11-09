@@ -17779,6 +17779,36 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     automaticPhaseKeys.value = [...automaticPhaseKeys.value, `specialRepl:${round}:${side}`]
   }
 
+  /** 1.6b：本回合本方的可变增援是否已经掷过（含补员表与补给表） */
+  const variableReplRolled = computed<boolean>(() =>
+    automaticPhaseKeys.value.includes(`${turn.value}|${activeSide.value}|reinforcement`),
+  )
+
+  /**
+   * 增援段单窗推进：玩家在「本步完成 / 跳过」时记一笔
+   *
+   * 键带回合与阵营，换方 / 换回合 / 换段即失效；只影响窗口顺序，不落盘、不改账本。
+   */
+  const reinforcementAcks = ref<string[]>([])
+
+  function acknowledgeReinforcementStepNow(itemId: string): boolean {
+    if (itemId === 'reinforce:arrival' && arrivalPlan.value !== null && !arrivalAllPlaced.value)
+      return false
+    if (itemId === 'reinforce:variableExit' && variableExitSelectionOpen.value) return false
+    if (
+      itemId === 'reinforce:replTable' &&
+      (!variableReplRolled.value || replPending.value.pax + replPending.value.eq > 0)
+    ) {
+      return false
+    }
+    if (itemId === 'reinforce:supplyTable' && supplyArrivalSp.value > 0) return false
+    const key = `${turn.value}|${activeSide.value}|${itemId}`
+    if (!reinforcementAcks.value.includes(key)) {
+      reinforcementAcks.value = [...reinforcementAcks.value, key]
+    }
+    return true
+  }
+
   /** 本段本方的**全部**环节（唯一出处：`engine/rules/sop-segments`；B 段的链按方不同） */
   const segmentSteps = computed(() => sopStepsOf(phase.value as GamePhase, activeSide.value))
 
@@ -18022,6 +18052,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     () => {
       segmentStepIndex.value = 0
       actionRefusal.value = null
+      reinforcementAcks.value = []
       /*
        * 9.1c：换回合 / 换段 / 换方 ⇒ 环节归零，账本也必须跟着清 —— 这条 watch 是"环节变了"
        * 的又一条路径（"交给对手"的切方不走 `resetSegmentTransient`），漏了它就会出现
@@ -19351,6 +19382,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       .map((unit) => unit.instanceId)
   }
+
+  /**
+   * 13.9：当前是否有可整编的同堆叠对象（会话窗只在有对象时出现）
+   *
+   * 判据复用 `mergePartnerIds`（同格、预演通过、轴方多单位编队已在其中排除）。
+   */
+  const consolidationAvailable = computed<boolean>(() =>
+    units.value.some(
+      (unit) =>
+        unit.side === activeSide.value &&
+        (unit.noncombatKind ?? null) === null &&
+        mergePartnerIds(unit.instanceId).length > 0,
+    ),
+  )
 
   /**
    * 13.9-1：同格**唯一**可合并的另一枚（右键「合并单位」的判据）
@@ -22820,6 +22865,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     variableExitResolved,
     variableExitOpen,
     variableExitForActiveSide,
+    variableReplRolled,
+    reinforcementAcks,
+    acknowledgeReinforcementStepNow,
     // ⑦ 3.3c：撤离落盘与"可选单位清单"（待选状态从 session.log 反推，无存档字段）
     variableExitPendingSelection,
     variableExitSelectionOpen,
@@ -22884,6 +22932,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     rebuildPickRow,
     mergePartnerAt,
     mergePartnerIds,
+    consolidationAvailable,
     consolidationPick,
     openConsolidationPickNow,
     clearConsolidationPick,
