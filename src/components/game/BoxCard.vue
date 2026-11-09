@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
 
-import { BaseTag } from '@/components/base'
+import { BaseButton, BaseTag } from '@/components/base'
 import { clampDockOffset } from '@/components/map/dock-position'
 import { counterImages } from '@/render/token-images'
-import { useContainersStore, type AuxCardView } from '@/stores'
+import { useContainersStore, useWorkbenchStore, type AuxCardView } from '@/stores'
 
 import { auxCardImageUrl } from './aux-card-image'
 import BoxCardFace from './BoxCardFace.vue'
@@ -33,6 +33,7 @@ const props = defineProps<{
 }>()
 
 const containers = useContainersStore()
+const workbench = useWorkbenchStore()
 
 /** 托盘里的显示宽度（像素；卡面按原始比例缩放。窄屏用百分比由外层控制） */
 const displayWidth = ref(320)
@@ -69,6 +70,24 @@ function onToggle(): void {
  */
 function onUnitContext(): void {
   if (containers.cardOpenId !== props.card.id) containers.toggleCardOpen(props.card.id)
+}
+
+/**
+ * ★ 用户 2026-11-09：**图外盒必须有自己的整备入口**（删重复入口时把盒区那份删掉了）
+ *
+ * 判据不在本组件：`actionAllowedNow('air.refit')` 问的是既有闸门，`activateAirBox` 是既有 1.4a
+ * 盒内整备入口（盒内没有地图格，15.1 的"基地 hex"在这里不存在）。组件只负责把按钮摆出来。
+ */
+const boxRefitAllowed = computed(
+  () =>
+    props.card.boxKind === 'air_box' &&
+    props.card.side !== null &&
+    workbench.actionAllowedNow('air.refit'),
+)
+
+function refitBoxAircraft(): void {
+  if (props.card.side === null) return
+  containers.activateAirBox(props.card.side)
 }
 
 /* ────────────────────────── C-2 浮窗：拖动 / 关闭 ────────────────────────── */
@@ -165,10 +184,16 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
     </div>
 
     <template v-if="open">
+      <!-- 盒区整备入口（用户 2026-11-09）：盒内没有地图格，不能靠点格整备 -->
+      <div v-if="boxRefitAllowed" class="boxcard__row">
+        <BaseButton size="sm" variant="secondary" @click="refitBoxAircraft"
+          >整备盒内飞机 · 1.4a</BaseButton
+        >
+      </div>
       <BoxCardFace :card="card" :width="displayWidth" @unit-context="onUnitContext" />
 
       <p class="boxcard__hint num">
-        <BaseTag kind="neutral">只读</BaseTag>
+        <BaseTag v-if="!boxRefitAllowed" kind="neutral">只读</BaseTag>
         卡内算子是**选谁**用的：动作在展开卡后弹出的会话框里做（重建 / 整编 / 抽取 / 返场）。
       </p>
     </template>
@@ -209,6 +234,14 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
 .boxcard__headrow {
   display: flex;
   align-items: stretch;
+}
+
+.boxcard__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
 }
 
 .boxcard__head {
