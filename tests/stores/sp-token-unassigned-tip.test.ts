@@ -6,11 +6,11 @@ import { PANZER_GROUP_OPTION_ITEM } from '@/engine/rules'
 import { useGameSessionStore, useMapViewStore, useSetupStore, useWorkbenchStore } from '@/stores'
 
 /**
- * 3.4b：未归属 SP 的**全称**（用户 2026-11-09）
+ * 3.4b：拆分出的三枚 SP 的**全称**（用户 2026-11-09）
  *
- *   · 角标仍是 `? N SP`（令牌太小，三汉字会溢出）；
- *   · 悬停提示与「点开的信息」写全称「未归属（3.4b）」；
- *   · 只有**拆分出来的未归属**那一枚带全称，G/H 与未拆分时的普通 SP 不带。
+ *   · 角标仍是 `G N SP` / `H N SP` / `? N SP`（令牌太小，全称会溢出）；
+ *   · 悬停提示与「点开的信息」写全称：Guderian / Hoth / 未归属，共一套机制；
+ *   · 未拆分时的普通 SP 不带全称。
  */
 
 const HEX: HexRef = { col: 36, row: 13 }
@@ -52,12 +52,18 @@ describe('3.4b：未归属 SP 的全称（悬停提示 / 点开信息）', () =>
     addUnassigned(s.workbench, 2)
   })
 
-  it('★ 未归属那一枚带 tip 全称；G/H 两枚不带', () => {
+  it('★ 三枚都带 tip 全称：G / H / 未归属（各自写清是哪一本账）', () => {
     const tokens = spTokens(s.mapView)
     const unassigned = tokens.find((token) => token.id === `sp:${HEX.col},${HEX.row}:-`)
+    const guderian = tokens.find((token) => token.id === `sp:${HEX.col},${HEX.row}:guderian`)
+    const hoth = tokens.find((token) => token.id === `sp:${HEX.col},${HEX.row}:hoth`)
     expect(unassigned?.label).toBe('? 2 SP')
     expect(unassigned?.tip).toBe('未归属（3.4b）')
-    expect(tokens.filter((token) => token.tip !== undefined)).toHaveLength(1)
+    expect(guderian?.label).toBe('G 4 SP')
+    expect(guderian?.tip).toBe('Guderian 装甲集群（3.4b）')
+    expect(hoth?.label).toBe('H 3 SP')
+    expect(hoth?.tip).toBe('Hoth 装甲集群（3.4b）')
+    expect(tokens.filter((token) => token.tip !== undefined)).toHaveLength(3)
   })
 
   it('★ 点开补给站菜单：标题写全称（不再是笼统的「补给站」）', () => {

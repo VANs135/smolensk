@@ -417,6 +417,17 @@ export const useMapViewStore = defineStore('mapView', () => {
       // 只有"3.4b 拆分出来的未归属组"才打 `?`（未拆分时 key 不带 `:-`，不要误标）
       const unassigned = m.group === null && key.endsWith(':-')
       const prefix = unassigned ? '? ' : tag
+      /*
+       * 3.4b：拆分出的三枚都带全称（用户 2026-11-09）——
+       * `G` / `H` 角标同样只有两个字，悬停与点开信息写清是哪一本账；普通 SP 不带。
+       */
+      const tip = unassigned
+        ? '未归属（3.4b）'
+        : m.group === 'guderian'
+          ? 'Guderian 装甲集群（3.4b）'
+          : m.group === 'hoth'
+            ? 'Hoth 装甲集群（3.4b）'
+            : undefined
       return {
         id: `sp:${key}`,
         hex: m.hex,
@@ -426,7 +437,7 @@ export const useMapViewStore = defineStore('mapView', () => {
         face: hasSp ? ('combat' as const) : ('move' as const),
         images: null,
         label: hasSp ? `${prefix}${m.sp} SP` : `${prefix}${m.t} T`,
-        tip: unassigned ? '未归属（3.4b）' : undefined,
+        tip,
         selected: false,
         ended: false,
         modeLetter: '',

@@ -46,3 +46,10 @@
 - [x] T46 `UnitToken.tip` + `spDumpTokens` 只为未归属组填「未归属（3.4b）」；右键菜单标题改读 `tip`
 - [x] T47 `MapCanvas` 悬停提示（命中与绘制同源）+ 非战斗栏清单补全称
 - [x] T48 六门槛（第 5 批）、提交推送、并入 main（未归属站**不冻结**，无代码改动）
+
+## 第 6 批：G/H 两枚也带悬停全称
+
+- [x] T49 红测：`sp-token-unassigned-tip` 改断言三枚分别带 `Guderian/Hoth/未归属` 全称；先红（G/H 为 `undefined`）
+- [x] T50 `spDumpTokens` 为 G/H/未归属三枚填 `tip`（同一套机制）；普通 SP 仍不填
+- [x] T51 确认悬停不拦截点击（`.mapcanvas__tip` `pointer-events: none`，点击仍走选源）
+- [x] T52 六门槛（第 6 批）、提交推送、并入 main

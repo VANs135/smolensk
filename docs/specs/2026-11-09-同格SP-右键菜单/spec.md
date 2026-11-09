@@ -107,17 +107,20 @@
 ### 1.6 补充：`?` 角标 + 悬停/点开写全称（用户 2026-11-09 第二轮裁定）
 
 - `?` 角标**保留**（令牌约 36px，`未归属` 三字仍会溢出）。
-- `UnitToken` 新增可选 `tip`：只给角标装不下全称的令牌用；3.4b 拆分出的未归属组填
-  `未归属（3.4b）`，G/H 与未拆分时的普通 SP 不填。
+- `UnitToken` 新增可选 `tip`：只给角标装不下全称的令牌用；3.4b 拆分出的三枚都填全称
+  （`Guderian 装甲集群（3.4b）` / `Hoth 装甲集群（3.4b）` / `未归属（3.4b）`），
+  G/H 与未归属共用同一套提示机制；未拆分时的普通 SP 不填。
 - 地图悬停该枚令牌 ⇒ 光标上方出提示（`MapCanvas` 的 `.mapcanvas__tip`，`pointer-events: none`）；
   命中与绘制同源（未摊开 `hitCollapsedToken`，摊开 `stackFanLayout` / `hitStackFan`）。
 - 点开该格：右键菜单标题、非战斗栏清单都读同一份 `tip` 写全称。
 - 未归属站**不冻结**（保持可用）：3.4b 期内出现即程序/操作漏账，冻结会让玩家为程序买单；
   告警已足够暴露。此项**不动代码**。
 
-红测：`tests/stores/sp-token-unassigned-tip.test.ts`（3 例）：未归属令牌 `tip` 有全称且
-G/H 不带；右键菜单标题为 `未归属（3.4b）`；8.19 后普通 SP 不带 `tip`。
-先红（`tip` 缺失 / 菜单标题仍是「补给站」）后绿。
+红测：`tests/stores/sp-token-unassigned-tip.test.ts`（3 例）：三枚都带全称且分别对应 G/H/未归属；
+右键菜单标题为 `未归属（3.4b）`；8.19 后普通 SP 不带 `tip`。
+先红（G/H 的 `tip` 为 `undefined`）后绿。
+悬停与点击不冲突：提示条 `pointer-events: none`，点击仍命中画布走选源（`supply-source-map-pick`
+既有用例继续全绿）。
 
 ## 2. 移动阶段右键敌方单位 ⇒ 「低空扫射」
 
