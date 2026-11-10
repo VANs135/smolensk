@@ -503,16 +503,19 @@ function boxAircraft(side: Side) {
       <section v-if="box.kind === 'airBox'" class="box box--air">
         <header class="box__head box__head--title">
           <span class="box__name">地图外空军盒 · {{ box.name }}</span>
-          <BaseTag kind="neutral">{{ box.rule }}</BaseTag>
-          <BaseTag kind="info">{{ sideName(box.side) }}</BaseTag>
-          <span class="num">
-            内 {{ box.holdings.length }} 枚<template v-if="box.capacity !== null">
-              ／容量 {{ box.capacity }}</template
+          <!-- 2026-11-10：对局台只摆飞机算子图，盒头不再铺规则号 / 阵营 / 枚数 / 缺口那堆读数 -->
+          <template v-if="showsReferee">
+            <BaseTag kind="neutral">{{ box.rule }}</BaseTag>
+            <BaseTag kind="info">{{ sideName(box.side) }}</BaseTag>
+            <span class="num">
+              内 {{ box.holdings.length }} 枚<template v-if="box.capacity !== null">
+                ／容量 {{ box.capacity }}</template
+              >
+            </span>
+            <span v-if="box.dataGaps.length > 0" class="num box__gap"
+              >数据缺口 ×{{ box.dataGaps.length }}</span
             >
-          </span>
-          <span v-if="box.dataGaps.length > 0" class="num box__gap"
-            >数据缺口 ×{{ box.dataGaps.length }}</span
-          >
+          </template>
         </header>
 
         <AircraftRoster

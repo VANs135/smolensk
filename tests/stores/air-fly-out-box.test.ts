@@ -69,6 +69,14 @@ describe('条 14：飞出盒＝完整的 14.11 落位流程', () => {
     expect(containers.lastAction?.detail).toContain('14.11')
   })
 
+  it('★ 对局台空军盒只摆算子图：盒头读数只在验证页铺（2026-11-10）', () => {
+    const panel = readFileSync('src/components/containers/ContainersPanel.vue', 'utf8')
+    // 盒头：名称之后，规则号 / 阵营 / 枚数 / 容量 / 缺口全部包进 `showsReferee`
+    expect(panel).toMatch(
+      /地图外空军盒 · \{\{ box\.name \}\}[\s\S]{0,120}<template v-if="showsReferee">[\s\S]{0,420}内 \{\{ box\.holdings\.length \}\} 枚/,
+    )
+  })
+
   it('★ 窗外提示：盒内空军窗与编队窗不共用容器', () => {
     const panel = readFileSync('src/components/containers/ContainersPanel.vue', 'utf8')
     // 空军盒独立成 section（自带 box--air 边框/标题），不再套在其它盒共用的 <details> 里
