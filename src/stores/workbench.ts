@@ -21962,6 +21962,68 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })
   }
 
+  /**
+   * 13.5：死亡堆窗口里"点选 / 右键"的那一枚（用户 2026-11-10 报的实机 bug）
+   *
+   * 只做**选中与预选**：把该持项带进唯一的重建对象状态（`rebuildPickUnitId`），
+   * 行键清空——费用由重建表的行决定，工程库没有「算子→行」映射，必须由玩家点。
+   */
+  const deadPilePickId = ref('')
+  function pickDeadPileUnitNow(instanceId: string): void {
+    if (!deadPile.value.some((unit) => unit.instanceId === instanceId)) {
+      pushLog('warning', `死亡堆中没有 ${instanceId}（13.5）`, '13.5')
+      return
+    }
+    deadPilePickId.value = instanceId
+    rebuildPickUnitId.value = instanceId
+    rebuildPickRow.value = ''
+  }
+
+  /**
+   * 13.5：死亡堆持项**为什么不能回场**（不可回场时必须可见，用户 2026-11-10）
+   *
+   * 逐条按原文给原因，顺序由"永久性 → 时机 → 落点"决定（永久挡的先说，免得玩家白找落点）：
+   *   · 13.5c：AR 后有黄点（`rebuildable: false`）⇒ 永久移出，永远不可重建；
+   *   · 13.5：重建只在增援阶段的「重建」环节（动作闸门 `rein.rebuild`）；
+   *   · 13.5a：没有合法落点（战斗面友方 HQ 2 格内 ∧ 非未抵消敌 ZOC；空军须追溯补给基地）。
+   */
+  function deadPileRebuildBlockedReason(unitId: string): string | null {
+    const unit = deadPile.value.find((item) => item.instanceId === unitId)
+    if (unit === undefined) return '13.5：死亡堆里没有这枚单位'
+    if (unit.side !== activeSide.value) return '13.5：只能重建当前行动方的单位'
+    if ('rebuildable' in unit && unit.rebuildable === false)
+      return '13.5c：AR 后有黄点（rebuildable: false）⇒ 永久不可重建，被摧毁即移出游戏'
+    if (!actionAllowedNow('rein.rebuild'))
+      return '13.5：重建只在增援阶段的「重建」环节（当前环节不放行）'
+    if (rebuildCandidateHexes(unitId).length === 0)
+      return '13.5a：没有合法落点（须在战斗面友方 HQ 2 格内、且不在未抵消敌 ZOC 内；空军须处于追溯补给的友方基地）'
+    return null
+  }
+
+  /** 13.5：死亡堆持项的右键菜单（规则编号与禁用原因都写在返回项里，界面只画） */
+  function deadPileActionsOf(unitId: string): {
+    key: 'deadPile.rebuild' | 'deadPile.removeForever'
+    label: string
+    rule: string
+    disabledReason: string | null
+  }[] {
+    const blocked = deadPileRebuildBlockedReason(unitId)
+    return [
+      {
+        key: 'deadPile.rebuild',
+        label: '重建（13.5，付 Pax/Eq）',
+        rule: '13.5',
+        disabledReason: blocked,
+      },
+      {
+        key: 'deadPile.removeForever',
+        label: '永久移除（13.5c）',
+        rule: '13.5c',
+        disabledReason: null,
+      },
+    ]
+  }
+
   /** 12.7a：把运输点数转成延补队的格（候选＝图上本方运输点数所在的格） */
   function beginConvertTargetHexPickNow(): void {
     beginHexPick({
@@ -22819,6 +22881,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     formationMarkerHexText,
     deadPileReturnHexText,
     beginRebuildReplHexPickNow,
+    deadPilePickId,
+    pickDeadPileUnitNow,
+    deadPileRebuildBlockedReason,
+    deadPileActionsOf,
     beginConvertTargetHexPickNow,
     beginRailGaugeTargetHexPickNow,
     beginCityControlHexPickNow,

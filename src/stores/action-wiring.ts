@@ -78,6 +78,8 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'beginSupplyCacheHexPickNow',
       'beginSupplySourceHexPickNow',
       'armConstructionMarkerNow',
+      // 13.5：死亡堆持项选中/预选重建对象——只改选择态，付费落盘在 rebuildUnitNow
+      'pickDeadPileUnitNow',
     ],
   },
   {
@@ -220,6 +222,12 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   ...bulkEntries(),
   advanceSegmentNow: { kind: 'flowState', why: '统一阶段执行器先结清规则义务，再按会话状态推进' },
   restartGameNow: { kind: 'pregame', why: '终局后重建整局盘面与初设，不是阶段内行动' },
+
+  // 13.5：死亡堆持项的"不可回场原因"——纯查询（只 `deadPile.value.find`），不改任何状态
+  deadPileRebuildBlockedReason: {
+    kind: 'noTiming',
+    why: '纯查询：按 13.5c / 13.5 / 13.5a 说明哪条挡住这枚持项，只读不落盘',
+  },
 
   // 13.9-1：整编会话的**堆叠作用域**（右键带入哪一格），只改草稿态，不落盘
   clearConsolidationPick: {

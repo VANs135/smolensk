@@ -9,6 +9,7 @@ import { useUiMode } from '@/components/ui-mode'
 import { formations } from '@/data'
 import type { Side } from '@/data'
 import type { BoxView, EdgeBoxId, ScenarioDrawBoxView } from '@/engine/rules'
+import { rebuildChartRows } from '@/engine/rules'
 import {
   useContainersStore,
   useHotseatStore,
@@ -324,6 +325,42 @@ const showsInfo = computed(() => props.only === null || props.only === 'info')
 const showsActions = computed(() => props.only === null || props.only === 'actions')
 
 /**
+ * 死亡堆（13.5 / 13.5a / 13.5c）：右键菜单
+ *
+ * 用户 2026-11-10 报的实机 bug —— 死亡堆以前是只读 `<li>`：点不动、右键无菜单、
+ * 也不知道"为什么不能回场"。现在：
+ *   · 左键 → `pickDeadPileUnitNow` 选中并预选为重建对象（行键清空，仍由玩家点）；
+ *   · 右键 → 同时打开该持项的菜单（重建 / 永久移除 + 不可回场原因）；
+ *   · 菜单里的「重建（13.5）付补员」直接调唯一的 `rebuildUnitNow`，不另做一套付费。
+ */
+const deadPileMenuId = ref('')
+const rebuildRows = computed(() => rebuildChartRows(workbench.activeSide))
+
+function isDeadPileActionable(box: BoxView): boolean {
+  return box.kind === 'deadPile' && box.side === actingSide.value && showsBoxActions('deadPile')
+}
+
+function pickDeadPileEntry(box: BoxView, unitId: string): void {
+  if (!isDeadPileActionable(box)) return
+  workbench.pickDeadPileUnitNow(unitId)
+}
+
+function openDeadPileMenu(box: BoxView, unitId: string): void {
+  if (!isDeadPileActionable(box)) return
+  workbench.pickDeadPileUnitNow(unitId)
+  deadPileMenuId.value = unitId
+}
+
+function rebuildDeadPileEntry(unitId: string): void {
+  const ok = workbench.rebuildUnitNow({
+    unitId,
+    rebuildType: workbench.rebuildPickRow,
+    replHexText: workbench.rebuildReplHexText,
+  })
+  if (ok) deadPileMenuId.value = ''
+}
+
+/**
  * ★ 记录轨上那三个"手动改表"的按钮是**裁判工具**，不是流程动作
  *
  * 2.2 的回合推进、1.5 的天气判定、专规 1.2 的铁路容量**都由系统按日期自动结算**
@@ -545,15 +582,81 @@ function boxAircraft(side: Side) {
               v-for="holding in box.holdings.filter((item) => item.sectionId === section.id)"
               :key="holding.unitId"
               class="num"
+              :class="{
+                'pile-item--picked':
+                  box.kind === 'deadPile' && workbench.deadPilePickId === holding.unitId,
+              }"
+              @click="pickDeadPileEntry(box, holding.unitId)"
+              @contextmenu.prevent="openDeadPileMenu(box, holding.unitId)"
             >
               {{ holding.name ?? holding.unitId }}
               <span v-if="holding.note !== undefined" class="muted">（{{ holding.note }}）</span>
-              <!-- 死亡堆：返场 / 永久移除（13.5 / 1.6c / 13.5c）—— B17a-2：动作进会话框 -->
+              <!--
+                死亡堆（13.5 / 13.5a / 13.5c）：用户 2026-11-10 报的实机 bug ——
+                这里以前是只读 `<li>`：点不动、右键无菜单、也不知道为什么不能回场。
+                现在：左键选中（预选重建对象）→ 右键出菜单；菜单里给两条动作，
+                重建项按 `deadPileRebuildBlockedReason` 逐条写明哪个条款挡的。
+              -->
               <template
                 v-if="
                   box.kind === 'deadPile' && box.side === actingSide && showsBoxActions('deadPile')
                 "
               >
+                <div v-if="deadPileMenuId === holding.unitId" class="pile-menu" @click.stop>
+                  <p class="muted">
+                    13.5：行键决定费用（工程库没有「算子→行」映射，须按重建表选）；补员格用「点地图选格」
+                  </p>
+                  <div class="row">
+                    <select v-model="workbench.rebuildPickRow" class="input">
+                      <option value="">— 重建表行键 —</option>
+                      <option v-for="row in rebuildRows" :key="row.unitType" :value="row.unitType">
+                        {{ row.unitType }}（{{ row.sourceLabel }}）
+                      </option>
+                    </select>
+                    <UiField
+                      v-model="workbench.rebuildReplHexText"
+                      class="input"
+                      placeholder="补员所在格"
+                    />
+                    <BaseButton
+                      variant="secondary"
+                      size="sm"
+                      @click="workbench.beginRebuildReplHexPickNow(holding.unitId)"
+                    >
+                      点地图选格
+                    </BaseButton>
+                  </div>
+                  <div class="row">
+                    <BaseButton
+                      v-for="action in workbench.deadPileActionsOf(holding.unitId)"
+                      :key="action.key"
+                      :variant="action.key === 'deadPile.rebuild' ? 'primary' : 'ghost'"
+                      size="sm"
+                      :disabled="
+                        action.key === 'deadPile.rebuild' &&
+                        (action.disabledReason !== null ||
+                          workbench.rebuildPickRow === '' ||
+                          workbench.rebuildReplHexText === '')
+                      "
+                      :title="action.disabledReason ?? action.rule"
+                      @click="
+                        action.key === 'deadPile.rebuild'
+                          ? rebuildDeadPileEntry(holding.unitId)
+                          : workbench.removeForeverNow(holding.unitId)
+                      "
+                    >
+                      {{ action.label }}
+                    </BaseButton>
+                  </div>
+                  <p
+                    v-if="workbench.deadPileRebuildBlockedReason(holding.unitId) !== null"
+                    class="warn"
+                  >
+                    {{ workbench.deadPileRebuildBlockedReason(holding.unitId) }}
+                  </p>
+                  <p v-else class="muted">可回场：13.5a 落点已满足，选好行键与补员格即可付补员。</p>
+                </div>
+                <span v-else class="muted">（左键选中 / 右键出菜单）</span>
                 <!--
                 ★ 修（2026-10-30）：「返场到 X」**只留给裁判**。
                 它直接调 `returnFromDeadPileNow`（只做"从死亡堆取出 → 落到指定格"），
@@ -575,13 +678,6 @@ function boxAircraft(side: Side) {
                   "
                 >
                   返场到 {{ workbench.deadPileReturnHexText || '（点地图选格）' }}
-                </BaseButton>
-                <BaseButton
-                  variant="ghost"
-                  size="sm"
-                  @click="workbench.removeForeverNow(holding.unitId)"
-                >
-                  永久移除（13.5c）
                 </BaseButton>
               </template>
               <!-- 边缘盒：离开（1.4b） -->
@@ -1082,6 +1178,27 @@ function boxAircraft(side: Side) {
   margin: 0;
   padding-left: var(--space-3);
   list-style: none;
+}
+
+/* 13.5：死亡堆持项（用户 2026-11-10）—— 可点选 / 可右键 / 菜单在此展开 */
+.picks li {
+  cursor: default;
+}
+
+.pile-item--picked {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.pile-menu {
+  margin: var(--space-2) 0;
+  padding: var(--space-2);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .muted {
