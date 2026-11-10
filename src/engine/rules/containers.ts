@@ -1302,43 +1302,52 @@ export function deriveDrawComposition(input: {
 }
 
 /**
- * ch10「沿道路西移 N 格」的落点（★ 用户裁定 2026-10-25：**视为那个格子有道路**）
+ * 两条相邻格之间是否有一条 `edges.road` 边（由调用方注入地图数据）
+ *
+ * 引擎不读文件：道路拓扑是**地图数据**（`map-layers.json` 的 `edges[].road`），
+ * 由接线层用同一把格边键（`hexsideOf`）构造后传入。
+ */
+export type RoadEdgeQuery = (from: HexRef, to: HexRef) => boolean
+
+/** ch10 西移的走位结果（`path` 含起点） */
+export interface ShiftWestWalk {
+  hex: HexRef
+  walked: number
+  exact: boolean
+  path: HexRef[]
+}
+
+/**
+ * ch10「沿道路西移 N 格」的落点（用户 2026-11-10 裁定：**按原文沿 road 走**）
  *
  * 原文（ch10 A 组）："4 that must shift three hexes west of listed location, following road.
  * (For instance, from 11.03 to 9.01.)" —— 给的是**算法**加一例，不是落点清单：
- *   · 起点＝**所列位置**（剧本页的初设格号 ⇒ 数据里有：`scenario-setup.json`，
- *     如 `3 Pz Div` 的 `11.03`）；
- *   · 终点＝沿道路往西走 N 格（示例 `11.03 → 9.01`）。
- * 而地图数据的道路边（`map-layers.edges` 的 `road`）**未覆盖**该区域（11.03 周边 0 条路）
- * ⇒ 用户裁定"视为那个格子有道路就行"：按几何**沿 SW（西南）方向**逐格走 N 步。
- *   为什么 SW：示例的列 −2、行 −2（向西**且向南**）与 SW 的方向倾向一致；
- *   全程 SW 得 `8.01`（与示例的 `9.01` 差一格，是道路拐弯所致）⇒ 回执里如实写明，
- *   玩家可在初设明细里照剧本卡改。
- * 走不通（图外）时改走 NW（仍是向西）；都走不通就停在能到的最远格（**不猜、不越图**）。
+ *   · 起点＝**所列位置**（剧本页的初设格号，见 `scenario-setup.json`）；
+ *   · 终点＝沿道路往西走 N 格。
+ *
+ * 每步只在**西向两邻**（`SW`、`NW`，列均 −1）里取，且必须**图内**、且该格边为 road；
+ * 两者皆可时固定 `SW → NW`。两者都不满足即停（`exact=false`），
+ * **不按几何回退、也不把任意格"视为有道路"**。无 road 边的师留在所列位置，由调用方登记缺口。
  */
 export function shiftWestDestination(
   from: HexRef,
   steps: number,
-): { hex: HexRef; walked: number; exact: boolean } {
+  hasRoad: RoadEdgeQuery,
+): ShiftWestWalk {
   const total = Math.max(0, Math.trunc(steps))
   let current: HexRef = { col: from.col, row: from.row }
+  const path: HexRef[] = [{ col: from.col, row: from.row }]
   let walked = 0
   for (let step = 0; step < total; step += 1) {
-    const sw = neighbor(current, 'SW')
-    if (isOnMap(sw)) {
-      current = { col: sw.col, row: sw.row }
-      walked += 1
-      continue
-    }
-    const nw = neighbor(current, 'NW')
-    if (isOnMap(nw)) {
-      current = { col: nw.col, row: nw.row }
-      walked += 1
-      continue
-    }
-    break
+    const next = (['SW', 'NW'] as const)
+      .map((direction) => neighbor(current, direction))
+      .find((candidate) => isOnMap(candidate) && hasRoad(current, candidate))
+    if (next === undefined) break
+    current = next
+    path.push({ col: next.col, row: next.row })
+    walked += 1
   }
-  return { hex: current, walked, exact: walked === total }
+  return { hex: current, walked, exact: walked === total, path }
 }
 
 /**

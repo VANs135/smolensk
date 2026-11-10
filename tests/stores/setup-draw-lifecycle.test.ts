@@ -236,6 +236,7 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
       drawnGroups: 0,
       appliedGroups: 0,
       pendingShift: [],
+      roadGaps: [],
       detail: '抽取池不足，未完成抽取',
     })
     expect(setup.selectScenario('1')).toBe(false)
@@ -254,6 +255,7 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
       drawnGroups: 0,
       appliedGroups: 0,
       pendingShift: [],
+      roadGaps: [],
       detail: '初设抽取失败',
     })
     expect(setup.enterSetup('1')).toBe(false)

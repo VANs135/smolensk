@@ -3,7 +3,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
 import { scenarios } from '@/data'
-import { shiftWestDestination } from '@/engine/rules'
 import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -119,7 +118,8 @@ describe('§6-A：编队抽签在初设自动执行（ch10 / ch11）', () => {
     const item = containers.pendingShiftWestPlacements[0]!
     expect(item.hexText).not.toBeNull()
 
-    // 落点＝沿 SW 从所列位置走 N 格（引擎 `shiftWestDestination` 的口径）
+    // 落点＝沿 `edges.road` 从所列位置西移 N 格（引擎 `shiftWestDestination` 的口径）
+    // 无道路的那一个师留在原格（本次该师是 4 Pz Div：hexText 仍等于其所列位置 8.8）
     const target = item.hexText!.split('.').map(Number)
     expect(target[0]!).toBeLessThan(item.fromHexText!.split('.').map(Number)[0]!)
     const onTarget = workbench.units.filter(
@@ -159,18 +159,7 @@ describe('§6-A：编队抽签在初设自动执行（ch10 / ch11）', () => {
     expect(workbench.units.length).toBeGreaterThan(0)
   })
 
-  it('★ 落点＝沿 SW 从所列位置走 N 格（「视为那个格子有道路」）：11.03 → 8.01', () => {
-    const dest = shiftWestDestination({ col: 11, row: 3 }, 3)
-    expect([dest.hex.col, dest.hex.row]).toEqual([8, 1])
-    expect(dest.walked).toBe(3)
-    expect(dest.exact).toBe(true)
-    // 与原文示例（11.03 → 9.01）**同向**：向西（列减）且向南（行减）；
-    // 差一格是道路拐弯所致（数据里该区域没有 road 边）⇒ 回执与界面已如实写明
-    expect(dest.hex.col).toBeLessThan(11)
-    expect(dest.hex.row).toBeLessThan(3)
-  })
-
-  it('★ 完成初设：西移师停在**自动算出的落点**（不移除、也不留在原格）', () => {
+  it('★ 完成初设：西移师停在**沿道路算出的落点**（不移除）', () => {
     const { workbench, setup, containers } = boot('1')
     const item = containers.pendingShiftWestPlacements[0]!
     const target = item.hexText!.split('.').map(Number)
