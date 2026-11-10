@@ -9,7 +9,13 @@ import { useUiMode } from '@/components/ui-mode'
 import { formations } from '@/data'
 import type { Side } from '@/data'
 import type { BoxView, EdgeBoxId, ScenarioDrawBoxView } from '@/engine/rules'
-import { useContainersStore, useHotseatStore, useWorkbenchStore, counterImageUrlOf } from '@/stores'
+import {
+  useContainersStore,
+  useHotseatStore,
+  useSetupStore,
+  useWorkbenchStore,
+  counterImageUrlOf,
+} from '@/stores'
 
 /**
  * 记录轨与容器面板（W7 C12）
@@ -26,6 +32,8 @@ import { useContainersStore, useHotseatStore, useWorkbenchStore, counterImageUrl
  */
 
 const containers = useContainersStore()
+/** ch10：抽签入口的可见条件与执行入口都在初设 store（唯一口径） */
+const setup = useSetupStore()
 
 /** 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输） */
 const uiMode = useUiMode()
@@ -39,8 +47,6 @@ const breakdownParentId = ref('')
 const breakdownAr = ref(4)
 /** 条 24：AR 档改用**点选**（0–5），正式界面无需手输；具体合法性仍由引擎在提交时判 */
 const BREAKDOWN_AR_LEVELS = [0, 1, 2, 3, 4, 5]
-/** 剧本抽签：当前组下标（每组一边抽签一边落盘） */
-const drawGroupIndex = ref(0)
 /** 编队抽签落盘的组成事实（编队 id → Mtr/Aufk/Krd 单位 id） */
 // ★ I②：组成由 store 自动推（containers.drawCompositionNoteOf），不再有玩家手输 unit id 的文本框
 /** 边缘盒进出：从可用单位中选，并决定用 MP 或铁路容量。 */
@@ -86,10 +92,6 @@ const scenarioBox = computed<ScenarioDrawBoxView | null>(() => {
 })
 
 /** 当前抽取组（越界即第一组） */
-const drawGroup = computed(() => scenarioBox.value?.groups[drawGroupIndex.value] ?? null)
-
-/** 已抽中的名单（当前组） */
-const drawn = computed(() => (drawGroup.value === null ? [] : containers.drawnOf(drawGroup.value)))
 
 /** 侧名 */
 function sideName(side: Side | null): string {
@@ -213,19 +215,6 @@ function splitIds(text: string): string[] {
     .split(/[,，\s]+/)
     .map((item) => item.trim())
     .filter((item) => item !== '')
-}
-
-/**
- * I②（用户 2026-09-18 报告第 5 条）：**组成由 store 自动推**（从初设索引），面板只落盘
- *
- * 修前这里是"把玩家输入的 unit id 文本切成 mtr/aufk/krd"——玩家不可能知道那些 id，
- * 于是抽签落盘必被引擎按 `swapUnitsMissing` / `moveModeUnitIdsMissing` 拒（＝"没有实现"）。
- * 现在：`containers.applyDraw(group)` 缺 facts 时自动推（判据在引擎 `deriveDrawComposition`）。
- */
-function applyDrawNow(): boolean {
-  const group = drawGroup.value
-  if (group === null) return false
-  return containers.applyDraw(group, {})
 }
 
 /** 编队收纳：按文本输入执行（验证页） */
@@ -750,10 +739,9 @@ function boxAircraft(side: Side) {
     </template>
 
     <!-- ── ③ 剧本抽取盒（编队抽签；池成员由 formations.json 推导） ──
-         B17a-2：抽签与落盘都是**动作** ⇒ 只在会话框那一段里画
-         ★ 2026-10-25：抽签已移到**初设自动执行**（`setup.runSetupDraws`）⇒ 这里的
-           「抽签 / 落盘本组处置」是**裁判重抽的退路**，故再加一道 `showsReferee`（对局台不铺）。 -->
-    <template v-if="showsReferee && showsBoxActions('scenarioDrawBox')">
+         ch10（用户 2026-11-10 裁定）：抽取**只在初设单位放置完成后执行一次**，
+         之后任何阶段都不再出现抽取窗口/按钮 ⇒ 可见条件收紧为 `setup.setupDrawEntryVisible`。 -->
+    <template v-if="setup.setupDrawEntryVisible">
       <hr />
       <h4 class="block-title">剧本抽取盒（ch10 Formation Chit Draw / ch11 随机化）</h4>
       <div class="row">
@@ -770,86 +758,16 @@ function boxAircraft(side: Side) {
       <template v-if="scenarioBox !== null && scenarioBox.groups.length > 0">
         <p class="num">入杯池：{{ scenarioBox.pool.map((item) => item.formationId).join('、') }}</p>
         <div class="row">
-          <label class="field">
-            抽取组
-            <select v-model.number="drawGroupIndex" class="select">
-              <option v-for="(group, index) in scenarioBox.groups" :key="group.kind" :value="index">
-                {{ group.label }}（抽 {{ group.count }}）
-              </option>
-            </select>
-          </label>
           <BaseButton
+            v-if="showsActions"
             variant="primary"
             size="sm"
-            :disabled="drawGroup === null"
-            @click="drawGroup !== null && containers.drawFormations(drawGroup, false)"
+            @click="setup.executeSetupDraws()"
           >
-            抽签（{{ drawGroup?.count ?? 0 }} 个）
-          </BaseButton>
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="drawGroup === null"
-            @click="drawGroup !== null && containers.drawFormations(drawGroup, true)"
-          >
-            抽签（'No Counterattack'：各 {{ scenarioBox.reducedCount ?? 2 }} 个）
-          </BaseButton>
-          <BaseButton
-            variant="primary"
-            size="sm"
-            :disabled="drawn.length === 0"
-            @click="applyDrawNow()"
-          >
-            落盘本组处置
+            执行编队抽取（ch10）
           </BaseButton>
         </div>
-        <p class="num">
-          抽中：<span v-if="drawn.length === 0">（尚未抽签）</span>
-          <template v-else>{{ drawn.join('、') }}</template>
-        </p>
-        <div v-for="formation in drawn" :key="formation" class="row">
-          <!--
-            ★ I②（用户 2026-09-18 报告第 5 条）：**组成不再由玩家手输** ——
-              原先这里是一个文本框（"按顺序：Mtr / Aufk / Krd"），而玩家不可能知道那些 unit id ⇒
-              「编队抽取还是没有实现」。现在组成从 `scenario-setup.json` 的初设行**自动推**
-              （判据在引擎 `deriveDrawComposition`），本处只把推出来的结果显示出来。
-          -->
-          <span class="num">
-            {{ formation }} 组成（初设自动推）：{{ containers.drawCompositionNoteOf(formation) }}
-          </span>
-          <!--
-            ★ 批 E 切片 2（用户 9.17③a）：ch10 的 A 组要求「抽中的师沿道路向**所列位置**西移三格」
-              —— 现由引擎按 `edges.road` 自动算落点；无合法道路落点即留在锚点并记 `roadGaps`。
-              下面的「点地图」只在旧台账缺落点时兜底（正常流程不需要玩家点）。
-          -->
-          <BaseButton
-            v-if="drawGroup?.kind === 'shiftWest'"
-            variant="secondary"
-            size="sm"
-            @click="containers.beginDrawShiftHexPickNow(formation)"
-          >
-            点地图选西移落点（{{ containers.drawShiftHexOf(formation) ?? '未选' }}）
-          </BaseButton>
-        </div>
-        <p class="muted">
-          {{ scenarioBox.groups[drawGroupIndex]?.effect ?? '' }}
-        </p>
-        <!-- 落盘之后的台账：初设那边（`setup.formationDrawNotes`）读的就是它 -->
-        <p
-          v-for="outcome in containers.formationDrawOutcomes.filter(
-            (row) => row.groupKind === drawGroup?.kind,
-          )"
-          :key="outcome.groupKind"
-          class="ok num"
-        >
-          <BaseTag kind="success">已落盘</BaseTag>
-          {{ outcome.detail
-          }}<template v-if="outcome.destinations.length > 0">
-            ｜西移落点：{{
-              outcome.destinations.map((item) => `${item.formationId} → ${item.hexText}`).join('、')
-            }}</template
-          >
-        </p>
+        <p class="muted">初设完成后只执行一次；抽完即永久收起，后续增援段与阶段切换不再抽取。</p>
       </template>
       <p v-else class="muted">本剧本无编队抽取（ch11：剧本 7 无随机化）。</p>
       <p v-for="(gap, index) in scenarioBox?.dataGaps ?? []" :key="`sg${index}`" class="warn">
@@ -1040,8 +958,9 @@ function boxAircraft(side: Side) {
         variant="ghost"
         size="sm"
         @click="containers.resetContainers()"
-        >重置盒账本</BaseButton
       >
+        重置盒账本
+      </BaseButton>
     </div>
     <!-- 2.3a 混编上限（3 / 5 / 7，按算子类型计）：每型的上限 / 在场 / 余量 -->
     <ul v-if="containers.alarmMix.length > 0" class="mix">

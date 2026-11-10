@@ -7,8 +7,6 @@ import { scenarioSetup, scenarios } from '@/data'
 import { deriveDrawComposition } from '@/engine/rules'
 import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchStore } from '@/stores'
 
-import type { Workbench } from '../flows/sop-harness'
-
 /**
  * I②（用户 2026-09-18 报告第 5 条）：**编队抽取真正可用** —— 组成自动推、死亡堆交互自动做
  *
@@ -32,17 +30,6 @@ import type { Workbench } from '../flows/sop-harness'
  *   ② 死亡堆交互（Mtr 进 / Aufk 返）**自动执行**，返场落点＝该编队初设行里的图上格号（不再写死）；
  *   ③ 缺项（例如死亡堆里没有该师的 Aufk）**不猜**：如实拒并说明。
  */
-
-/** 走到 B 段「编队抽取」环节（轴方；`rein.formationDraw` 的闸门在该环节） */
-function goToDrawStep(workbench: Workbench): void {
-  workbench.setPhase('reinforcement')
-  workbench.setActiveSide('axis')
-  const index = workbench.playerSegmentSteps.findIndex(
-    (step) => step.id === 'reinforcement.formationDraw',
-  )
-  if (index < 0) throw new Error('B 段没有「编队抽取」环节')
-  if (!workbench.setSegmentStepIndex(index)) throw new Error('进入编队抽取环节失败')
-}
 
 function boot(scenarioId: string) {
   setActivePinia(createPinia())
@@ -102,7 +89,6 @@ describe('I②：编队组成的自动推导（12.5 之外的 ch10/ch11 抽取�
 describe('I②：抽签落盘是**自动**的（不再手输 unit id）', () => {
   it('★ 剧本 1（ch10）B 组：抽签 ⇒ Mtr 进死亡堆、Aufk 返场到该师的初设格（不是写死的 1.03）', () => {
     const { workbench, containers } = boot('1')
-    goToDrawStep(workbench)
     const group = (
       scenarios.scenarios.find((item) => item.id === '1')?.setup.formationDraw?.groups ?? []
     ).find((item) => item.kind === 'mtrAufkSwap')
@@ -148,7 +134,6 @@ describe('I②：抽签落盘是**自动**的（不再手输 unit id）', () => 
 
   it('★ 自动落盘写进台账（初设那边读它），且日志交代"组成自动推"', () => {
     const { workbench, containers } = boot('1')
-    goToDrawStep(workbench)
     const group = (
       scenarios.scenarios.find((item) => item.id === '1')?.setup.formationDraw?.groups ?? []
     ).find((item) => item.kind === 'mtrAufkSwap')!
@@ -162,7 +147,6 @@ describe('I②：抽签落盘是**自动**的（不再手输 unit id）', () => 
 
   it('★ 剧本 5（ch11）A 组：抽中师的 Krd 营自动加入死亡堆（无 facts 也落得下）', () => {
     const { workbench, containers } = boot('5')
-    goToDrawStep(workbench)
     const group = (
       scenarios.scenarios.find((item) => item.id === '5')?.setup.formationDraw?.groups ?? []
     ).find((item) => item.kind === 'deadPileKrd')

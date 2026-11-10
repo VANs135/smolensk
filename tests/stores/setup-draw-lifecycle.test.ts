@@ -22,6 +22,10 @@ function boot(scenarioId = '1', automatic = true) {
   if (automatic) {
     const ok = setup.selectScenario(scenarioId)
     expect(ok, setup.lastAction?.detail ?? containers.lastAction?.detail).toBe(true)
+    // ch10（用户 2026-11-10）：抽签只在初设单位放置完成后执行一次 ⇒ 先摆完必做项，再执行抽签
+    confirmSetupForStart(setup)
+    expect(setup.executeSetupDraws(), setup.lastAction?.detail).toBe(true)
+    expect(setup.finishSetup()).toBe(true)
   } else {
     expect(game.setScenarioId(scenarioId)).toBe(true)
     expect(setup.runAutoSetup()).toBe(true)
@@ -167,15 +171,14 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     expect(returned).not.toHaveBeenCalled()
   })
 
-  it('只选落点但未执行摆位，不能按已处置开局；重试采用该落点', () => {
-    const { setup, containers, game, board } = boot()
+  it('只选落点但未执行摆位：开局入口按该落点补做处置，不丢掉玩家选择', () => {
+    const { setup, containers, board } = boot()
     const item = containers.pendingShiftWestPlacements[0]!
     const selected = item.fromHexText!
     expect(containers.setDrawShiftHexNow(item.formationId, selected)).toBe(true)
     expect(setup.stepDone.formationDraw).toBe(false)
-    expect(setup.startGameNow()).toBe(false)
-    expect(game.session).toBeNull()
-    expect(setup.runSetupDraws()).toBe(true)
+    // ch10：startGameNow 是"没点执行入口就直接开局"的兜底 ⇒ 会补做一次，采用已选落点
+    expect(setup.startGameNow()).toBe(true)
     expect(containers.setupDrawProgress.complete).toBe(true)
     for (const id of item.unitIds) {
       const hex = board.units.find((unit) => unit.instanceId === id)!.hex
@@ -213,7 +216,7 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
   )
 
   it('整组互换先核对所有来源：返场单位错误地在图上时，不先送走摩托化团', () => {
-    const { setup, containers, board } = boot('1', false)
+    const { containers, board } = boot('1', false)
     const group = containers.scenarioDrawBox!.groups.find((g) => g.kind === 'mtrAufkSwap')!
     const drawn = containers.drawFormations(group)
     const dead = board.deadPile.find(
@@ -226,11 +229,12 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     expect(containers.lastAction?.detail).toContain('不在死亡堆')
     expect(capture(board)).toBe(before)
     expect(containers.formationDrawOutcomes).toEqual([])
-    expect(setup.finishSetup()).toBe(false)
+    // ch10：初设已确认 ⇒ 抽签已执行过；此处落盘失败表现为"处置未完成"，不再让 finishSetup 返 false
+    expect(containers.setupDrawProgress.complete).toBe(false)
   })
 
-  it('首次抽取失败且零组完成时，选剧本必须报告失败', () => {
-    const { setup, containers } = boot('7')
+  it('抽签失败且零组完成时，执行入口必须报告失败', () => {
+    const { setup, containers } = boot('1', false)
     const failed = vi.spyOn(containers, 'runSetupDrawsNow').mockReturnValue({
       ok: false,
       drawnGroups: 0,
@@ -239,9 +243,10 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
       roadGaps: [],
       detail: '抽取池不足，未完成抽取',
     })
-    expect(setup.selectScenario('1')).toBe(false)
+    confirmSetupForStart(setup)
+    expect(setup.executeSetupDraws()).toBe(false)
     expect(setup.lastAction?.ok).toBe(false)
-    expect(setup.lastAction?.detail).toContain('抽取池不足')
+    expect(setup.lastAction?.detail ?? containers.lastAction?.detail).toContain('抽取池不足')
     failed.mockRestore()
   })
 
@@ -258,7 +263,10 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
       roadGaps: [],
       detail: '初设抽取失败',
     })
-    expect(setup.enterSetup('1')).toBe(false)
+    expect(setup.enterSetup('1')).toBe(true)
+    // ch10：抽签改在初设完成后执行 ⇒ 失败在执行入口报出
+    confirmSetupForStart(setup)
+    expect(setup.executeSetupDraws()).toBe(false)
     expect(setup.lastAction?.detail).toBe('初设抽取失败')
   })
 
@@ -278,6 +286,11 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     const oldIds = board.units.map((unit) => unit.instanceId)
     expect(setup.selectScenario('1')).toBe(true)
     expect(board.units.some((unit) => oldIds.includes(unit.instanceId))).toBe(false)
+    // ch10：重开剧本不再自动抽签 ⇒ 旧名单清空，需再走一次「确认初设 → 执行抽取」
+    expect(containers.setupDrawProgress.complete).toBe(false)
+    expect(containers.drawResults).toEqual({})
+    confirmSetupForStart(setup)
+    expect(setup.executeSetupDraws(), setup.lastAction?.detail).toBe(true)
     expect(containers.setupDrawProgress.complete).toBe(true)
     for (const item of containers.pendingShiftWestPlacements) {
       for (const id of item.unitIds) {
@@ -291,6 +304,9 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     expect(containers.formationDrawOutcomes).toEqual([])
     expect(setup.formationDrawNotes).toEqual([])
     expect(setup.selectScenario('2')).toBe(true)
+    expect(containers.drawResults).toEqual({})
+    confirmSetupForStart(setup)
+    expect(setup.executeSetupDraws(), setup.lastAction?.detail).toBe(true)
     expect(Object.keys(containers.drawResults)).toEqual(['2'])
     expect(containers.setupDrawProgress.complete).toBe(true)
   })

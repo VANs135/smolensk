@@ -133,6 +133,9 @@ describe('S1：开局存档与初设历史恢复', () => {
       else delete payload.board.setup!['drawState']
       saved.storage.setItem(SAVE_SLOT_KEY, JSON.stringify(payload))
       const current = boot('1', saved.storage)
+      // ch10：选剧本不再自动抽签 ⇒ 这里显式抽一次，制造"当前有抽签历史"的前置
+      confirmSetupForStart(current.setup)
+      expect(current.setup.executeSetupDraws()).toBe(true)
       expect(current.containers.formationDrawOutcomes.length).toBeGreaterThan(0)
       const pending = current.setup.pendingPlacement.find(
         (item) => item.kind === 'self' && item.candidates.length > 0,

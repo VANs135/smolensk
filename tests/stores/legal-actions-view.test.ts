@@ -111,7 +111,8 @@ describe('纯函数：按闸门表逐条搬运', () => {
 
 describe('U0：没有提交入口的动作不得显示为可点', () => {
   it('submit === "" 的 entry 即使 available 也 clickable=false', () => {
-    const keys = ['rein.formationDraw', 'exclusive.panzerObligation']
+    // ch10（2026-11-10）：`rein.formationDraw` 已从动作词表删除 ⇒ 只剩这一条空提交入口
+    const keys = ['exclusive.panzerObligation']
     const candidates = Object.fromEntries(keys.map((key) => [key, [{ ref: 'x', label: 'X' }]]))
     const view = buildLegalActionsView(input({ gatedKeys: new Set(keys), candidates }))
     for (const key of keys) {

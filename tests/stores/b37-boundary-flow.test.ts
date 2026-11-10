@@ -150,8 +150,8 @@ describe('B37：专规会话按闸门自动出现', () => {
   it('★ 用户 2026-11-09：3.4a 的闸门不再挂 A 段（其余段末一条未减）', () => {
     const gate = actionGateOf('exclusive.panzerObligation')
     expect(gate.where.some((where) => where.phase === 'aircraftRefit')).toBe(false)
-    // 去掉 A 段那一条后仍有 16 条（B×4 / C×3 / D×2 / E×2 / F×2 / G×3）
-    expect(gate.where).toHaveLength(16)
+    // 去掉 A 段那一条、以及已删除的 ch10 抽签环节后仍有 15 条（B×3 / C×3 / D×2 / E×2 / F×2 / G×3）
+    expect(gate.where).toHaveLength(15)
   })
 
   it('★ A 段（飞机整备）不出任何专规动作、不自动开窗', () => {

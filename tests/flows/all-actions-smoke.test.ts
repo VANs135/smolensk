@@ -103,7 +103,6 @@ describe('全操作体检：store 直调', () => {
     })
 
     const sideLimited: readonly { key: ActionKey; allowed: Side; denied: Side }[] = [
-      { key: 'rein.formationDraw', allowed: 'axis', denied: 'soviet' },
       { key: 'rein.frontalReserves', allowed: 'soviet', denied: 'axis' },
       // 3.4a 读法 A（2026-11-09 裁定）：不按方限定，苏军相位末也要检查轴方编队义务
     ]
@@ -203,11 +202,6 @@ describe('全操作体检：store 直调', () => {
           ctx.w.spDumpDraft = { hexText: 'bad', sp: 1, t: 0 }
         },
         run: (ctx) => ctx.w.addSpDump(),
-      },
-      {
-        name: 'drawAndApplyStepNow（非增援段）',
-        rules: ['专规 13.7'],
-        run: (_ctx, containers) => containers.drawAndApplyStepNow(containers.setupDrawGroups[0]!),
       },
     ]
 

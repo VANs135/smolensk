@@ -73,7 +73,6 @@ const SUBMIT_ENTRY_OF: Readonly<Record<ActionKey, string>> = {
   'rein.arrival': 'placeArrivalNow',
   'rein.supplyArrival': 'applySupplyArrivalsNow',
   'rein.rebuild': 'rebuildUnitNow',
-  'rein.formationDraw': '',
   'rein.specialRepl': 'drawSpecialRepl',
   'rein.frontalReserves': 'claimFrontalReservesNow',
   'move.breakout': 'breakoutNow',

@@ -70,7 +70,6 @@ const META: Readonly<Record<ActionKey, ActionMeta>> = {
   'rein.arrival': { families: ['增援落位'], entry: ['会话窗'] },
   'rein.supplyArrival': { families: ['增援落位'], entry: ['会话窗'] },
   'rein.rebuild': { families: ['整编', '补员', '合并'], entry: ['会话窗', '右键菜单'] },
-  'rein.formationDraw': { families: ['补员'], entry: ['会话窗'] },
   'rein.specialRepl': { families: ['补员'], entry: ['会话窗'] },
   'rein.frontalReserves': { families: ['补员'], entry: ['会话窗'] },
   'move.breakout': { families: ['突围'], entry: ['面板', '会话窗'] },

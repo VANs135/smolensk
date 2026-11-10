@@ -22,7 +22,7 @@ import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchSto
  *   ⑤ 完成初设时保留自动落位结果；缺失必做落点的收束阻断另见setup-completion-flow。
  */
 
-/** 建一套真实盘面：选剧本 ⇒ 自动初设 + 自动抽签 */
+/** 建一套真实盘面：选剧本 ⇒ 自动初设 ⇒ 摆完必做项 ⇒ 执行抽签（ch10：初设完成后一次） */
 function boot(scenarioId = '1') {
   setActivePinia(createPinia())
   const game = useGameSessionStore()
@@ -32,6 +32,8 @@ function boot(scenarioId = '1') {
   game.setScenarioId(scenarioId)
   containers.setScenario(scenarioId)
   setup.selectScenario(scenarioId)
+  confirmSetupForStart(setup)
+  if (!setup.executeSetupDraws()) throw new Error(setup.lastAction?.detail ?? '抽签失败')
   return { game, workbench, containers, setup }
 }
 
@@ -42,9 +44,9 @@ function groupsOf(scenarioId = '1') {
   )
 }
 
-describe('§6-A：编队抽签在初设自动执行（ch10 / ch11）', () => {
-  it('★ 选剧本即自动抽签：各组都抽到了人，不用玩家点「抽签」', () => {
-    const { containers } = boot('1')
+describe('§6-A：编队抽签在初设完成后执行一次（ch10 / ch11）', () => {
+  it('★ 初设确认后执行抽签：各组都抽到了人，且入口随即收起', () => {
+    const { containers, setup } = boot('1')
     const groups = groupsOf('1')
     expect(groups.length).toBeGreaterThan(0)
     for (const group of groups) {
@@ -52,6 +54,8 @@ describe('§6-A：编队抽签在初设自动执行（ch10 / ch11）', () => {
     }
     // 回执里说清了"抽了几组 / 落盘几组 / 谁在等落点"
     expect(containers.lastAction?.scope).toBe('初设·编队抽取')
+    // ch10：执行过一次 ⇒ 入口永久收起
+    expect(setup.setupDrawEntryVisible).toBe(false)
   })
 
   it('★ ch10「4 others」：A/B 两组**不重叠**（B 只从 A 抽剩的那些里再抽）', () => {

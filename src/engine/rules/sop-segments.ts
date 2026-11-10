@@ -93,7 +93,7 @@ export interface SopSegmentStep {
    * 故流程推进时会像自动环节一样**跳过**它；等实现落地，把本标志去掉它就成了真环节。
    * ★ 2026-10-25：**已无遗留**——最后一条（特殊补员抽取 专规 1.6c）已由
    * `containers.drawSpecialRepl()` 接线并过环节闸门。（突围 12.8e 由 B47 接线；
-   * 编队抽取 专规 1.3/13.7 由批 E 切片 2 接线 —— `containers.drawAndApplyStepNow()`。）
+   * 编队抽取 专规 1.3/13.7 已移到初设完成后执行一次，B 段不再有该环节。）
    * 本标志保留：以后若再发现"规则有这一环、store 无入口"，仍按 false 登记并由守卫盯着。
    */
   implemented?: boolean
@@ -211,22 +211,12 @@ export const SOP_SEGMENT_CHAINS: readonly SopSegmentChain[] = [
         note: 'Pax / Eq 的使用与留存；13.9 的第 4 项（飞机）可在任何阶段进行',
       },
       {
-        id: 'reinforcement.formationDraw',
-        label: '编队抽取（轴方）',
-        rule: '专规 13.7',
-        driver: 'player',
-        actions: [],
-        sides: ['axis'],
-        implemented: true,
-        note: '★第六批 §6-A：**抽签已移到初设自动执行**（ch10「Formation Chit Draw」/ ch11 的剧本随机化都是开局前的剧本随机化，不属 B 段）⇒ 选剧本时由 `containers.runSetupDrawsNow()` 一次抽完并把不依赖落点的处置当场落盘，西移落点则进初设 box 由玩家点地图给。B 段此处只作回执；`containers.drawAndApplyStepNow()` 仍是裁判在 B 段重抽/补做的退路（闸门照 `ACTION_GATES.rein.formationDraw`，仅轴方）',
-      },
-      {
         id: 'reinforcement.specialRepl',
         label: '特殊补员抽取',
         rule: '专规 1.6c',
         driver: 'player',
         // 本环的"动作"不是**单位执行**的盘面动作 ⇒ `actions`（引擎时机词表）留空；
-        // 玩家入口与环节闸门由 `ACTION_GATES['rein.specialRepl']` 给（与 `rein.formationDraw` 同法）
+        // 玩家入口与环节闸门由 `ACTION_GATES['rein.specialRepl']` 给
         actions: [],
         /*
          * ★ 2026-10-25（用户「补 1.6c，注意该操作时机」）：

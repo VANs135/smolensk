@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
 import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchStore } from '@/stores'
+import { confirmSetupForStart } from '../flows/setup-harness'
 
 /**
  * 剧本 1 西移「沿道路/铁路三格」的 store 接线（ch10）
@@ -24,6 +25,9 @@ function boot(scenarioId = '1') {
   game.setScenarioId(scenarioId)
   containers.setScenario(scenarioId)
   setup.selectScenario(scenarioId)
+  // ch10（用户 2026-11-10）：抽签只在初设单位放置完成后执行一次
+  confirmSetupForStart(setup)
+  setup.executeSetupDraws()
   return { workbench, containers, setup }
 }
 

@@ -315,19 +315,17 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     why: '13.2c 同上',
   },
   /*
-   * 专规 ch10/ch11 的抽签：**初设已自动抽完**（`runSetupDrawsNow`）；对局台这里的
-   * 「抽签 / 落盘」两个按钮是**裁判重抽的退路**。真正带环节闸的是 `drawAndApplyStepNow`
-   * （`rein.formationDraw`），它在 B 段的该环里一次做完"抽 → 落 → 回写台账"。
-   * ★ 不能给 `drawFormations` / `applyDraw` 本身加闸：初设自动抽签也走这两个函数，
-   *   那时不在 B 段 ⇒ 加了会把初设流程弄断。
+   * 专规 ch10/ch11 的抽签：**只在初设单位放置完成后执行一次**（`setup.executeSetupDraws`，
+   * 入口可见条件 `setup.setupDrawEntryVisible`）。增援段 / 回合开始 / 阶段切换都不再有抽签窗口。
+   * 下面两个是内部步骤，由初设抽签驱动，不单独出口。
    */
   drawFormations: {
     kind: 'referee',
-    why: '抽签（仅轴方）：初设已自动执行，此处为裁判重抽退路；带闸的落盘入口是 drawAndApplyStepNow',
+    why: '抽签的内部步骤（由 setup.executeSetupDraws 驱动，无独立入口）',
   },
   applyDraw: {
     kind: 'referee',
-    why: '抽签结果的落盘：初设自动抽签也走它，故不能在此加闸（带闸的是 drawAndApplyStepNow）',
+    why: '抽签落盘的内部步骤（由 setup.executeSetupDraws 驱动，无独立入口）',
   },
   useConstructionMarkerNow: {
     kind: 'gated',

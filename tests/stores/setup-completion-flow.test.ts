@@ -11,6 +11,8 @@ function boot() {
   const containers = useContainersStore()
   setup.selectScenario('1')
   confirmSetupForStart(setup)
+  // ch10（2026-11-10）：抽签在初设单位放置完成后执行一次，后续用例都基于"已抽完"
+  expect(setup.executeSetupDraws()).toBe(true)
   return { setup, game, board, containers }
 }
 

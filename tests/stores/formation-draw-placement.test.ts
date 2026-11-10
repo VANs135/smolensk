@@ -4,8 +4,6 @@ import { describe, expect, it } from 'vitest'
 import { scenarios } from '@/data'
 import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchStore } from '@/stores'
 
-import type { Workbench } from '../flows/sop-harness'
-
 /**
  * I② 切片 2（用户 2026-09-18 报告第 5 条后半）：
  * **「应该调整位置的编队应该放入初设里让玩家设置位置」**
@@ -20,16 +18,6 @@ import type { Workbench } from '../flows/sop-harness'
  *   ③ **缺落点整笔拒绝**（不猜），且格式非法的落点当场拒。
  */
 
-function goToDrawStep(workbench: Workbench): void {
-  workbench.setPhase('reinforcement')
-  workbench.setActiveSide('axis')
-  const index = workbench.playerSegmentSteps.findIndex(
-    (step) => step.id === 'reinforcement.formationDraw',
-  )
-  if (index < 0) throw new Error('B 段没有「编队抽取」环节')
-  if (!workbench.setSegmentStepIndex(index)) throw new Error('进入编队抽取环节失败')
-}
-
 function boot() {
   setActivePinia(createPinia())
   const game = useGameSessionStore()
@@ -38,7 +26,7 @@ function boot() {
   const setup = useSetupStore()
   game.setScenarioId('1')
   containers.setScenario('1')
-  setup.selectScenario('1') // 真实盘面（初设落盘）
+  setup.selectScenario('1') // 真实盘面（初设落盘）；ch10 抽签改在初设确认后执行，不再自动跑
   return { workbench, containers }
 }
 
@@ -58,8 +46,7 @@ function bootManual() {
 }
 
 /** 抽一次西移组并落盘（落点稍后由玩家在初设里给） */
-function drawShiftWest(containers: ReturnType<typeof boot>['containers'], workbench: Workbench) {
-  goToDrawStep(workbench)
+function drawShiftWest(containers: ReturnType<typeof boot>['containers']) {
   const group = (
     scenarios.scenarios.find((item) => item.id === '1')?.setup.formationDraw?.groups ?? []
   ).find((item) => item.kind === 'shiftWest')
@@ -72,8 +59,8 @@ describe('I② 切片 2：西移编队进初设摆位（ch10）', () => {
   it('★ 抽签后初设列出待摆位编队：带原初设格号、西移格数、图上单位数；未给落点为 null', () => {
     // §6-A：走「只摆盘、不自动抽签」的盘面（自动抽签那条路径的落点已当场算出，见
     // `formation-draw-at-setup`）；本例要的是"抽完签还没给落点"这一支。
-    const { containers, workbench } = bootManual()
-    const group = drawShiftWest(containers, workbench)
+    const { containers } = bootManual()
+    const group = drawShiftWest(containers)
     const pending = containers.pendingShiftWestPlacements
     expect(pending.length).toBe(group.count)
     for (const item of pending) {
@@ -87,7 +74,7 @@ describe('I② 切片 2：西移编队进初设摆位（ch10）', () => {
 
   it('★ 给落点 ⇒ 「照此摆位」把该师图上单位摆过去，并写进台账', () => {
     const { containers, workbench } = boot()
-    drawShiftWest(containers, workbench)
+    drawShiftWest(containers)
     const pending = containers.pendingShiftWestPlacements
     // 给每个师一个落点：原初设格西移 3 列（与 ch10 的"西移 3 格"一致）
     for (const item of pending) {
@@ -124,7 +111,7 @@ describe('I② 切片 2：西移编队进初设摆位（ch10）', () => {
   it('★ 缺落点 ⇒ **整笔拒绝**（不改动任何算子）；格式非法的落点当场拒', () => {
     // §6-A：走**只摆盘、不自动抽签**的盘面 ⇒ 抽完签还没落点（确定性场景）
     const { containers, workbench } = bootManual()
-    drawShiftWest(containers, workbench)
+    drawShiftWest(containers)
     const pending = containers.pendingShiftWestPlacements
     expect(containers.applyShiftWestPlacementsNow()).toBe(false) // 一个落点都没给
 

@@ -1154,6 +1154,12 @@ export const useContainersStore = defineStore('containers', () => {
     )
   }
 
+  /** ch10/ch11：本局是否**已经抽过签**（抽签只在初设确认后执行一次，之后永久收起） */
+  const setupDrawsExecuted = computed(
+    () =>
+      setupDrawGroups.value.length === 0 || (drawResults.value[scenarioId.value] ?? []).length > 0,
+  )
+
   /** ch10/ch11：当前新局的抽签与处置共同决定初设是否完成。 */
   const setupDrawProgress = computed(() =>
     assessSetupDrawProgress({
@@ -1425,42 +1431,6 @@ export const useContainersStore = defineStore('containers', () => {
     lastAction.value = { ok: true, rule: plan.rule, detail: plan.data.detail, scope: '剧本抽取盒' }
     workbench.pushLog('success', plan.data.detail, '剧本页·编队抽签')
     return true
-  }
-
-  /**
-   * 专规 13.7 / ch10–ch11：**B 增援段「编队抽取（轴方）」环节的入口**
-   *
-   * ★ 批 E 切片 2（用户 9.17③a）：修前这个 SOP 环节**没有任何 store 入口**
-   *   （`ACTION_KEYS_WITHOUT_STORE_ENTRY` 里挂着 `rein.formationDraw`，「store 里 formationDraw 全仓 0 处」）——
-   *   走到 B 段「编队抽取」时玩家点不动任何东西，且该步在 `sop-segments` 里标着 `implemented: false`。
-   *   现在把「抽签 → 落盘 → 回写初设台账」合成一次动作，闸门照 `ACTION_GATES` 判（B 段该环节、**仅轴方**）。
-   */
-  function drawAndApplyStepNow(
-    group: ScenarioDrawGroup,
-    facts: Record<
-      string,
-      {
-        mtrRegimentUnitId?: string
-        aufkBattalionUnitId?: string
-        krdBattalionUnitId?: string
-        combatUnitIds?: readonly string[]
-        shiftHexText?: string
-      }
-    > = {},
-    options?: { reduced?: boolean },
-  ): boolean {
-    if (!workbench.requireAction('rein.formationDraw', '编队抽取')) return false
-    const drawn = drawFormations(group, options?.reduced === true)
-    if (drawn.length === 0) {
-      lastAction.value = {
-        ok: false,
-        rule: group.rule,
-        detail: '抽取池里没有可抽的编队（12 个入杯编队由 formations.json 推导）',
-        scope: '剧本抽取盒',
-      }
-      return false
-    }
-    return applyDraw(group, facts)
   }
 
   /**
@@ -2510,6 +2480,7 @@ export const useContainersStore = defineStore('containers', () => {
     formationBoxes,
     drawResults,
     setupDrawProgress,
+    setupDrawsExecuted,
     resetSetupDraws,
     setupDrawCodec,
     // 批 E 切片 2：抽签的西移落点（点地图写回）与"落盘后的变化"台账（`setup` 只读它回写初设）
@@ -2575,8 +2546,6 @@ export const useContainersStore = defineStore('containers', () => {
     drawFormations,
     drawnOf,
     applyDraw,
-    // 批 E 切片 2：B 增援段「编队抽取（轴方）」的**唯一入口**（抽签 → 落盘 → 回写初设台账）
-    drawAndApplyStepNow,
     activateAirBox,
     setAirInBox,
     flyOutOfBox,

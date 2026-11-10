@@ -182,7 +182,8 @@ describe('B6：按方过滤与已知缺口登记', () => {
 
     expect(axis).toContain('reinforcement.randomEvent')
     expect(axis).toContain('reinforcement.variableExit')
-    expect(axis).toContain('reinforcement.formationDraw')
+    // ch10（用户 2026-11-10）：编队抽取只在初设完成后执行一次 ⇒ B 段不再有该环
+    expect(axis).not.toContain('reinforcement.formationDraw')
     /*
      * ★ 2026-10-25（专规 1.6c 原文）：「Each turn before 19 August, **the players** also get to roll
      *   a die on their **Special Repl Table**… **The Soviets always get two and the Axis one**」
@@ -195,7 +196,6 @@ describe('B6：按方过滤与已知缺口登记', () => {
     expect(soviet).toContain('reinforcement.specialRepl')
     expect(soviet).toContain('reinforcement.frontalReserves')
     expect(soviet).not.toContain('reinforcement.randomEvent')
-    expect(soviet).not.toContain('reinforcement.formationDraw')
 
     // 双方共有的环两边都在
     expect(axis).toContain('reinforcement.arrival')
@@ -211,9 +211,10 @@ describe('B6：按方过滤与已知缺口登记', () => {
      *   ② 反过来，`note` 里挂着"实现缺口"的环节 ⇒ 必须真的 `implemented === false`
      *      （防"已接线却留着陈旧登记"——13.7 编队抽取本轮接线，正是被这一条逼着清掉了缺口字样）。
      */
-    const draw = sopStepById('reinforcement.formationDraw')!
-    expect(draw.implemented).toBe(true)
-    expect(draw.note ?? '').not.toContain('实现缺口')
+    const special = sopStepById('reinforcement.specialRepl')!
+    // `implemented` 缺省即 true ⇒ 断言"不是 false"（与下方 repl 同口径）
+    expect(special.implemented).not.toBe(false)
+    expect(special.note ?? '').not.toContain('实现缺口')
     /*
      * ★ 2026-10-25：专规 1.6c 的**入口已接线**（`containers.drawSpecialRepl`，且过
      *   `ACTION_GATES['rein.specialRepl']` 的环节闸）⇒ `implemented` 不再是 false，

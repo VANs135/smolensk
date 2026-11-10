@@ -117,10 +117,9 @@ describe('阶段/环节 × 操作矩阵（规则书口径）', () => {
     }
     // A 段：只有整备（15.1）
     expect([...actionKeysOfSegment('aircraftRefit.refit', 'axis', 'active')]).toEqual(['air.refit'])
-    // B 段：到货落位 13.6 + 免费铁运 专规 2.1；重建 13.5/13.9；编队抽取（轴方）
+    // B 段：到货落位 13.6 + 免费铁运 专规 2.1；重建 13.5/13.9（ch10 抽签已移出 B 段）
     expectKeys('reinforcement.arrival', ['rein.arrival', 'rein.supplyArrival'])
     expectKeys('reinforcement.rebuild', ['rein.rebuild'])
-    expectKeys('reinforcement.formationDraw', ['rein.formationDraw'])
     // C 段：模式/移动/突袭/铁路/装卸/工事/拆分 + 燃料 + 空中任务
     expectKeys('movement.modeAndMovement', [
       'move.order',
@@ -191,7 +190,6 @@ describe('阶段/环节 × 操作矩阵（规则书口径）', () => {
       'automatic reinforcement.randomEvent → ',
       'automatic reinforcement.variableExit → ',
       'player    reinforcement.rebuild → rein.rebuild',
-      'player    reinforcement.formationDraw → rein.formationDraw',
       'player    reinforcement.specialRepl → rein.specialRepl',
       'player    reinforcement.frontalReserves → rein.frontalReserves',
       'player    movement.breakout → move.breakout',

@@ -182,10 +182,10 @@ describe('B17a-2：分段渲染与入口（源码守卫）', () => {
       ['workbench.returnFromDeadPileNow({', ACTION_GATES],
       ['workbench.removeForeverNow(', ACTION_GATES],
       /*
-       * ★ 2026-10-25：编队抽签已移到**初设自动执行**（`setup.runSetupDraws`）⇒ 对局台这里
-       * 的「抽签 / 落盘」是**裁判重抽的退路**，归 `showsReferee`（对局台不铺、验证页保留）。
+       * ★ 2026-11-10（ch10 裁定）：对局台的"重抽退路"已删除，面板只留一个
+       *   `setup.executeSetupDraws()` 入口，仍归动作段门。
        */
-      ['containers.drawFormations(', REFEREE_GATES],
+      ['setup.executeSetupDraws(', ACTION_GATES],
       ['@click="hideNow()"', ACTION_GATES],
     ] as const) {
       expect(isGated(marker, gates), `${marker} 应由 ${gates.join(' / ')} 门管着`).toBe(true)

@@ -226,15 +226,9 @@ describe('B7：逐环节的允许与禁止（每例带规则号）', () => {
     )
   })
 
-  it('B 增援：轴方抽取（专规 13.7）与苏方特补（专规 1.6c）各归其方', () => {
-    const axisDraw = allowedActionsOf(
-      queryOf('reinforcement', 'reinforcement.formationDraw', 'axis'),
-    )
-    const sovietDraw = allowedActionsOf(
-      queryOf('reinforcement', 'reinforcement.formationDraw', 'soviet'),
-    )
-    expect(axisDraw.has('rein.formationDraw')).toBe(true)
-    expect(sovietDraw.has('rein.formationDraw')).toBe(false)
+  it('B 增援：苏方特补（专规 1.6c）归其方；编队抽取不再按环节出现（ch10）', () => {
+    const axisDraw = allowedActionsOf(queryOf('reinforcement', 'reinforcement.specialRepl', 'axis'))
+    expect(axisDraw.has('rein.specialRepl')).toBe(true)
     expect(
       isActionAllowed(
         queryOf('reinforcement', 'reinforcement.specialRepl', 'soviet'),

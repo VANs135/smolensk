@@ -1193,7 +1193,12 @@ export const useSetupStore = defineStore('setup', () => {
       return record({ ok: false, rule: SETUP_RULE, reason: 'sideCursorNotArmed' })
     }
     const required = requiredSetupIssues.value.find(
-      (issue) => issue.side === current && issue.id !== 'sideConfirmation',
+      (issue) =>
+        issue.side === current &&
+        issue.id !== 'sideConfirmation' &&
+        // ch10：编队抽取是**双方布设确认之后**的一次性动作，不是某一方的"布设未完成"，
+        // 故不参与换手确认的判据（否则会与"先摆完再抽签"形成死锁）。
+        !issue.id.startsWith('draw:'),
     )
     if (required !== undefined)
       return record({ ok: false, rule: required.rule, reason: required.detail })
@@ -1392,6 +1397,11 @@ export const useSetupStore = defineStore('setup', () => {
         reason: `请先完成编队西移放置：${required.map((item) => item.label).join('、')}`,
       })
     const progress = containers.setupDrawProgress
+    // 先报"还没换手确认"（否则未确认时会被后面的抽签义务抢先报错）
+    const cursorIssue = requiredSetupIssues.value.find((issue) => issue.id === 'sideConfirmation')
+    if (cursorIssue !== undefined)
+      return record({ ok: false, rule: cursorIssue.rule, reason: cursorIssue.detail })
+    // 收束前必须抽完并处置完（ch10：抽签入口在"初设单位放置完成"后出现，执行后才允许收束）
     if (!progress.complete)
       return record({
         ok: false,
@@ -1457,6 +1467,15 @@ export const useSetupStore = defineStore('setup', () => {
   function startGameNow(): boolean {
     // 初设入口不承担对局阶段推进；重复点击或读档重进不能跳过首个玩家环节。
     if (finished.value && game.session !== null) return true
+    /*
+     * ch10（用户 2026-11-10 裁定）：抽签只在初设单位放置完成之后、开局之前执行一次。
+     * 玩家可先在初设台点「执行编队抽取」；这里只是"没点就直接开局"的兜底
+     * （`runSetupDrawsNow` 幂等，抽过即不重抽；开局后再调用会被拒）。
+     *
+     * 只在**初设单位放置已完成**时才兜底抽签：卡车满载 / 双方确认 / SP 归属
+     * 还没落实时不能先抽（抽签会消耗骰序，让"被拒后盘面不变"的保证失效）。
+     */
+    if (setupPlacementComplete.value && !runSetupDraws()) return false
     if (!canFinishSetup()) return false
     /*
      * B38（方案 §3 步骤 2 后半）：**先开局、再收初设**。
@@ -1643,11 +1662,52 @@ export const useSetupStore = defineStore('setup', () => {
     resetAll()
     if (!runAutoSetup()) return false
     /*
-     * ★ 第六批 §6-A：**编队抽签在初设自动跑**（ch10「Formation Chit Draw」/ ch11 的剧本随机化
-     *   都是**开局前**的随机化，不是 B 增援段的动作）。
-     *   必须在 `runAutoSetup()` **之后**：三项处置（进死亡堆 / 转 Move Mode / Mtr↔Aufk 互换）
-     *   改的是**盘上那几枚算子**，而实例 id 是自动初设这一步生成的。
+     * ★ ch10（用户 2026-11-10 裁定）：编队抽取**只在初设单位放置完成之后**执行一次，
+     *   之后任何阶段都不再出现抽取窗口。故 `selectScenario` 这里**不再自动抽签**；
+     *   抽签入口的可见条件见 `setupDrawEntryVisible`，执行入口是 `executeSetupDraws`。
      */
+    return true
+  }
+
+  /**
+   * ch10：**初设单位放置完成**（必做项已摆完、无未解决义务）
+   *
+   * 这就是抽签入口里"初设已确认"的口径：先把初设单位摆好，再抽一次编队。
+   */
+  const setupPlacementComplete = computed(
+    () =>
+      pendingSetupObligations({
+        shifts: pendingPlacement.value
+          .filter((item) => item.kind === 'shift')
+          .map((item) => ({ formationId: item.formationId ?? item.label })),
+        // ch10：抽签本身不是"放置"，不参与"初设单位是否摆完"的判据
+        draws: [],
+        truck: truckLoadReadiness.value,
+        cursor: setupSideCursor.value,
+        ownership: spOwnershipReadiness.value,
+      }).length === 0,
+  )
+
+  /**
+   * ch10：抽签入口的**唯一可见条件**（用户 2026-11-10 裁定）
+   *
+   * 三个同时满足才出现：初设单位放置完成、本局尚未抽过（`setupDrawsExecuted`）、
+   * 本剧本确有抽签组。执行过一次即永久收起；增援段 / 回合开始 / 阶段切换都不再出现。
+   */
+  const setupDrawEntryVisible = computed(
+    () =>
+      !finished.value &&
+      setupPlacementComplete.value &&
+      !containers.setupDrawsExecuted &&
+      containers.setupDrawGroups.length > 0,
+  )
+
+  /** 玩家点「执行编队抽取」：一次抽完并落盘（幂等；初设单位放置完成之前不允许） */
+  function executeSetupDraws(): boolean {
+    if (!setupPlacementComplete.value) {
+      return record({ ok: false, rule: 'ch10', reason: '请先完成初设单位放置，再执行编队抽取' })
+    }
+    if (containers.setupDrawsExecuted) return true
     return runSetupDraws()
   }
 
@@ -2608,7 +2668,8 @@ export const useSetupStore = defineStore('setup', () => {
   const initialPlacementsComplete = computed(
     () =>
       setupSideCursor.value === null &&
-      requiredSetupIssues.value.length === 0 &&
+      // ch10：抽签是初设单位摆完**之后**的一次性动作，不算"初设未完成"
+      setupPlacementComplete.value &&
       pendingPlacement.value.every((item) => item.remaining === 0),
   )
 
@@ -2771,6 +2832,9 @@ export const useSetupStore = defineStore('setup', () => {
     placingChunkChoices,
     finishSetup,
     canFinishSetup,
+    setupPlacementComplete,
+    setupDrawEntryVisible,
+    executeSetupDraws,
     startGameNow,
     restartGameNow,
     // B10：前置「剧本 + 共识」视图

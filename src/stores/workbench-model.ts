@@ -2534,7 +2534,6 @@ export type ActionKey =
   | 'rein.arrival'
   | 'rein.supplyArrival'
   | 'rein.rebuild'
-  | 'rein.formationDraw'
   | 'rein.specialRepl'
   | 'rein.frontalReserves'
   /* C 移动（12.8e / 5.4a / 6.x / 8.0 / 13.x / 15.3 / 16.0 / 20.0a / 12.11a） */
@@ -2651,12 +2650,6 @@ export const ACTION_GATES: readonly ActionGate[] = [
     label: '重建 / 整编',
     rule: '13.5 / 13.9',
     where: [{ phase: 'reinforcement', segment: 'reinforcement.rebuild' }],
-  },
-  {
-    key: 'rein.formationDraw',
-    label: '编队抽取',
-    rule: '专规 13.7',
-    where: [{ phase: 'reinforcement', segment: 'reinforcement.formationDraw', sides: ['axis'] }],
   },
   {
     key: 'rein.specialRepl',
@@ -2902,7 +2895,6 @@ export const ACTION_GATES: readonly ActionGate[] = [
        */
       { phase: 'reinforcement', segment: 'reinforcement.arrival', at: 'end' },
       { phase: 'reinforcement', segment: 'reinforcement.rebuild', at: 'end' },
-      { phase: 'reinforcement', segment: 'reinforcement.formationDraw', at: 'end' },
       { phase: 'reinforcement', segment: 'reinforcement.specialRepl', at: 'end' },
       { phase: 'movement', segment: 'movement.breakout', at: 'end' },
       { phase: 'movement', segment: 'movement.modeAndMovement', at: 'end' },
@@ -2959,7 +2951,6 @@ export const ACTION_KEY_KIND: Readonly<Record<ActionKey, readonly ActionKind[]>>
   'rein.arrival': ['arrival'],
   'rein.supplyArrival': [], // 专规 2.1/3.1 落点：时机表未收（非"由单位执行"的动作）
   'rein.rebuild': ['rebuild', 'consolidate'],
-  'rein.formationDraw': [], // 专规 13.7 抽签：时机表未收（非"由单位执行"的动作）
   'rein.specialRepl': [], // 专规 1.6c：同上
   'rein.frontalReserves': [], // 专规 2.3c：同上
   'move.breakout': ['breakout'],
@@ -2997,7 +2988,6 @@ export const ACTION_KEYS_WITHOUT_KIND: readonly ActionKey[] = [
   'exclusive.forage',
   'exclusive.panzerObligation',
   'air.baseReduce',
-  'rein.formationDraw',
   'rein.specialRepl',
   'rein.frontalReserves',
   // 批 F 切片 3：专规 2.1/3.1 的到货 SP 落点（免费铁运）——同上，非"由单位执行"的动作
@@ -3020,8 +3010,6 @@ export const ACTION_KEYS_WITHOUT_KIND: readonly ActionKey[] = [
  * 否则界面照 `allowedActionsOf` 放行，玩家会点到一个什么都不做的按钮。
  */
 export const ACTION_KEYS_WITHOUT_STORE_ENTRY: readonly ActionKey[] = [
-  // 批 E 切片 2：`rein.formationDraw` **已接线** —— `containers.drawAndApplyStepNow()`
-  // （B 增援段该环节内：抽签 → 落盘 → 回写初设台账），故从本表**删除**。
   // B47（2026-09-17）：`move.breakout` 已接线（store 的 `breakoutNow` / `breakoutCandidates`），
   // 故从本表**删除** —— 这条守卫（`phase-gate-wiring.test.ts`）就是逼着删的那只手。
 ]
@@ -3257,7 +3245,6 @@ export function participatesIn(query: ParticipationQuery): ParticipationVerdict 
     case 'reinforcement.arrival':
     case 'reinforcement.rebuild':
     case 'reinforcement.absorbBreakdown':
-    case 'reinforcement.formationDraw':
     case 'reinforcement.specialRepl':
     case 'reinforcement.frontalReserves':
       return cannotParticipate('13.6', '增援段的对象是待入场条目与盒内算子，图上算子本环节不参与')

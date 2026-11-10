@@ -38,31 +38,42 @@ export function fillSetup(ctx: ReturnType<typeof fresh>) {
     setup.cancelTruckPick()
     expect(setup.truckLoadSummary.done).toBe(true)
   }
-  for (let n = 0; n < 500; n++) {
-    const item = setup.sideQueue
-      .flatMap((q) => q.items)
-      .find((p) => p.remaining > 0 && p.kind !== 'truck')
-    if (!item) {
-      if (setup.setupSideCursor) {
-        setup.confirmSideSetup()
-        continue
+  const placeRemaining = () => {
+    for (let n = 0; n < 500; n++) {
+      const item = setup.sideQueue
+        .flatMap((q) => q.items)
+        .find((p) => p.remaining > 0 && p.kind !== 'truck')
+      if (!item) {
+        if (setup.setupSideCursor) {
+          setup.confirmSideSetup()
+          continue
+        }
+        break
       }
-      break
+      if (item.kind === 'self') setup.beginSelfPlacement(item.entryIndex)
+      else if (item.kind === 'air') setup.beginAirPlacement(item.side, item.entryIndex)
+      else if (item.kind === 'shift') setup.beginShiftPlacement(item.formationId!)
+      const choices = [...(setup.placing?.candidates ?? [])].sort((a, b) => {
+        const load = (h: { col: number; row: number }) =>
+          w.units
+            .filter((u) => u.hex.col === h.col && u.hex.row === h.row)
+            .reduce((v, u) => v + u.re, 0) +
+          100 * w.airUnits.filter((u) => u.hex.col === h.col && u.hex.row === h.row).length +
+          1000 * w.spDumps.filter((d) => d.hex.col === h.col && d.hex.row === h.row).length
+        return load(a) - load(b)
+      })
+      expect(choices.length).toBeGreaterThan(0)
+      expect(setup.placeAtHex(choices[0]!)).toBe(true)
     }
-    if (item.kind === 'self') setup.beginSelfPlacement(item.entryIndex)
-    else if (item.kind === 'air') setup.beginAirPlacement(item.side, item.entryIndex)
-    else if (item.kind === 'shift') setup.beginShiftPlacement(item.formationId!)
-    const choices = [...(setup.placing?.candidates ?? [])].sort((a, b) => {
-      const load = (h: { col: number; row: number }) =>
-        w.units
-          .filter((u) => u.hex.col === h.col && u.hex.row === h.row)
-          .reduce((v, u) => v + u.re, 0) +
-        100 * w.airUnits.filter((u) => u.hex.col === h.col && u.hex.row === h.row).length +
-        1000 * w.spDumps.filter((d) => d.hex.col === h.col && d.hex.row === h.row).length
-      return load(a) - load(b)
-    })
-    expect(choices.length).toBeGreaterThan(0)
-    expect(setup.placeAtHex(choices[0]!)).toBe(true)
+  }
+  placeRemaining()
+  /*
+   * ch10（用户 2026-11-10）：抽签只在初设单位摆完**之后**执行一次；
+   * 抽签产生的西移项会再回到初设 box ⇒ 执行完再摆一轮。
+   */
+  if (setup.setupDrawEntryVisible) {
+    expect(setup.executeSetupDraws(), setup.lastAction?.detail).toBe(true)
+    placeRemaining()
   }
   expect(setup.pendingPlacement.filter((p) => p.remaining > 0)).toHaveLength(0)
   expect(setup.initialPlacementsComplete).toBe(true)

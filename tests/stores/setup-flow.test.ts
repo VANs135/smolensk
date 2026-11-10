@@ -116,18 +116,26 @@ describe('W7 C14：开局流程进度与剧本选择', () => {
     expect(setup.flow.find((step) => step.id === 'scenario')?.detail).toContain('8 Jul 41')
   })
 
-  it('C14：编制抽取的完成度取自 C12 的剧本抽取盒（★ §6-A：抽签在初设自动跑完 ⇒ 选剧本即打勾）', () => {
+  it('C14：编制抽取的完成度取自 C12 的剧本抽取盒（ch10：初设完成后执行一次才打勾）', () => {
     setup.selectScenario('1')
     const groups =
       scenarios.scenarios.find((item) => item.id === '1')?.setup.formationDraw?.groups ?? []
     expect(groups.length).toBeGreaterThan(0)
-    // ch10 / ch11 是**开局前**的剧本随机化 ⇒ 初设时自动抽完，不必等玩家去点「抽签」
+    // ch10（2026-11-10）：选剧本不再自动抽签 ⇒ 未打勾、名单为空
+    expect(setup.stepDone['formationDraw']).toBe(false)
+    for (const group of groups) expect(containers.drawnOf(group)).toHaveLength(0)
+    // 初设确认后执行一次 ⇒ 打勾、名单与组数一致
+    confirmSetupForStart(setup)
+    expect(setup.executeSetupDraws()).toBe(true)
     expect(setup.stepDone['formationDraw']).toBe(true)
     for (const group of groups) {
       expect(containers.drawnOf(group).length).toBe(group.count)
     }
     // 完成度仍读的是 C12 抽取盒那本账（换剧本 ⇒ 该剧本名下没有抽取 ⇒ 重新抽）
     setup.selectScenario('3')
+    expect(setup.stepDone['formationDraw']).toBe(false)
+    confirmSetupForStart(setup)
+    expect(setup.executeSetupDraws()).toBe(true)
     expect(setup.stepDone['formationDraw']).toBe(true)
   })
 })
@@ -540,6 +548,8 @@ describe('W7 C14：初设单位 box（地图点选放置）与开始游戏', () 
   it('C14：box 里未落位的项 ⇒ finishSetup 记为「本局移除，不存在」', () => {
     expect(setup.pendingPlacement.length).toBeGreaterThan(0)
     confirmSetupForStart(setup)
+    // ch10：收束前必须先执行编队抽取（一次性入口）
+    expect(setup.executeSetupDraws()).toBe(true)
     expect(setup.finishSetup()).toBe(true)
     expect(setup.finished).toBe(true)
     expect(setup.pendingPlacement).toHaveLength(0)

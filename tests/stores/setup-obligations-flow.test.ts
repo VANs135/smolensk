@@ -39,6 +39,8 @@ describe('S1：必做初设、主动放弃与双方确认', () => {
     expect(JSON.stringify(board.units)).toBe(units)
     confirmSetupForStart(setup)
     expect(setup.truckLoadSummary.done).toBe(true)
+    // ch10：抽签在初设单位放置完成后执行一次
+    expect(setup.executeSetupDraws()).toBe(true)
     expect(setup.requiredSetupIssues).toEqual([])
     expect(setup.startGameNow()).toBe(true)
   })
@@ -66,18 +68,19 @@ describe('S1：必做初设、主动放弃与双方确认', () => {
     expect(setup.startGameNow()).toBe(true)
   })
 
-  it('必做西移与普通未摆单位分别列出；未完成西移不能确认轴方', () => {
+  it('必做西移与普通未摆单位分别列出；未完成西移不能收束', () => {
     const { setup, containers } = boot()
-    expect(setup.confirmSideSetup()).toBe(true)
-    expect(setup.setupSideCursor).toBe('axis')
+    // ch10：抽签在双方确认之后执行一次；未完成的西移再落回初设 box
+    confirmSetupForStart(setup)
+    expect(setup.executeSetupDraws()).toBe(true)
     containers.drawShiftHexText = {}
     expect(setup.requiredSetupIssues.some((issue) => issue.id.startsWith('shift:'))).toBe(true)
     expect(setup.omittablePlacements.length).toBeGreaterThan(0)
     expect(
       setup.omittablePlacements.every((item) => item.kind === 'self' || item.kind === 'air'),
     ).toBe(true)
-    expect(setup.confirmSideSetup()).toBe(false)
-    expect(setup.setupSideCursor).toBe('axis')
+    expect(setup.finishSetup()).toBe(false)
+    expect(setup.lastAction?.detail).toContain('请先完成编队西移放置')
   })
 
   it('尚未逐方确认时不能开局；成功换手清除上一方的地图落位', () => {
