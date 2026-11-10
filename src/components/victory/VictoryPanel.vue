@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import { BaseButton, BasePanel, BaseTag } from '@/components/base'
+import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import { useRefereeTools } from '@/components/ui-mode'
 import { hexLabel, useWorkbenchStore } from '@/stores'
 
@@ -122,7 +122,11 @@ const CONTROL_RULE_TEXT =
 </script>
 
 <template>
-  <BasePanel title="胜利判定（只读：5.0 / 5.0a / 5.0b / 5.0c）">
+  <!--
+    ★ 用户 2026-11-10：战况只留**三块**（胜利分 / 胜利点 / 占领情况）；
+    长说明与条款号收进 `?`，主屏只留读数与结论。
+  -->
+  <BasePanel title="战况">
     <p class="num">
       <BaseTag kind="info">{{ workbench.scenarioId }} 号剧本</BaseTag>
       <BaseTag kind="neutral">
@@ -132,7 +136,7 @@ const CONTROL_RULE_TEXT =
         回合
       </BaseTag>
       <BaseTag :kind="workbench.atFinalTurn ? 'warning' : 'neutral'">
-        {{ workbench.atFinalTurn ? '已是最终回合（5.0a 的判定时点）' : '未到最终回合' }}
+        {{ workbench.atFinalTurn ? '最终回合' : '未到最终回合' }}
       </BaseTag>
     </p>
 
@@ -141,7 +145,8 @@ const CONTROL_RULE_TEXT =
       {{ turnRange.dataNote }}
     </p>
 
-    <!-- ── 分项计分（两方各一行） ── -->
+    <!-- ① 胜利分：双方目标城市 / 所列格 / 当前结论 -->
+    <h4 class="vp__title">胜利分</h4>
     <table class="vp">
       <thead>
         <tr>
@@ -173,32 +178,22 @@ const CONTROL_RULE_TEXT =
         </tr>
       </tbody>
     </table>
-
-    <p class="muted num">5.0a 最终：{{ thresholdText(final.thresholds) }}</p>
     <p class="num">
       <BaseTag :kind="verdictTag(final.outcome)">{{ verdictLabel(final.outcome) }}</BaseTag>
       {{ final.detail }}
-    </p>
-    <p class="muted num">5.0b 提前决胜：{{ thresholdText(decisive.thresholds) }}</p>
-    <p class="num">
-      <BaseTag :kind="verdictTag(decisive.outcome)">{{ verdictLabel(decisive.outcome) }}</BaseTag>
-      {{ decisive.detail }}
-    </p>
-    <p class="num">
-      <BaseTag :kind="verdictTag(atEnd.outcome)">回合末</BaseTag>
-      {{ atEnd.detail }}（5.0a 在**最终回合结束**时才给终局；其余回合由 5.0b 兜住）
+      <RuleTip rule="5.0a / 5.0b">
+        5.0a 最终：{{ thresholdText(final.thresholds) }}。 5.0b 提前决胜：{{
+          thresholdText(decisive.thresholds)
+        }}
+        ——{{ decisive.detail }}。回合末：{{ atEnd.detail }}（5.0a 在最终回合结束时才给终局，
+        其余回合由 5.0b 兜住）
+      </RuleTip>
     </p>
 
-    <!-- ── 胜利格明细（5.0c） ── -->
-    <hr />
-    <p class="muted">
-      胜利格（5.0c）：所列格 **{{ summary.listedTotal }}** 处（剧本 2/4 用专属清单）—— 当前苏控
-      {{ summary.listedBySide.soviet }} 处、轴方 {{ summary.listedBySide.axis }} 处。{{
-        CONTROL_RULE_TEXT
-      }}
-    </p>
+    <!-- ② 胜利点：城市与所列格的控制 -->
+    <h4 class="vp__title">胜利点</h4>
     <div class="row">
-      <span class="num">轴方五城（须**全部格**控制）：</span>
+      <span class="num">轴方五城（全部格）：</span>
       <BaseTag
         v-for="city in summary.axisCities"
         :key="city.name"
@@ -221,10 +216,14 @@ const CONTROL_RULE_TEXT =
         }}
       </BaseTag>
     </div>
-    <p class="muted num">
-      控制账本：{{ Object.keys(workbench.victoryLastControl).length }} 格已登记（键 = 列.行）｜
-      胜利条件涉及 {{ workbench.victoryHexes.length }} 格 —— 账本在**每个玩家回合的 H 清理段收束时
-      自动按盘面刷新**（5.0c 的"最后一个控制者"需要它）。
+
+    <!-- ③ 占领情况：所列格归属与控制账本规模 -->
+    <h4 class="vp__title">占领情况</h4>
+    <p class="num">
+      所列格 {{ summary.listedTotal }} 处：苏控 {{ summary.listedBySide.soviet }} / 轴方
+      {{ summary.listedBySide.axis }}；控制账本
+      {{ Object.keys(workbench.victoryLastControl).length }} 格已登记
+      <RuleTip rule="5.0c"> {{ CONTROL_RULE_TEXT }} </RuleTip>
     </p>
 
     <p v-if="workbench.victoryError !== null" class="warn">
@@ -295,6 +294,14 @@ const CONTROL_RULE_TEXT =
   width: 100%;
   border-collapse: collapse;
   font-size: var(--text-xs);
+}
+
+/* 三块小标题（胜利分 / 胜利点 / 占领情况）：只做分隔，不另起面板 */
+.vp__title {
+  margin: var(--space-3) 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
 }
 
 .vp th,
