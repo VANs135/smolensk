@@ -962,18 +962,30 @@ export function resolveRetreats(
    *   本函数只报「该由哪些单位中选」与「共几点」，实际落盘由状态层按玩家选择写入。
    */
   extraLoss: { points: number; eligibleUnitIds: string[] }
+  /**
+   * 9.12：**点名要撤退、但已无存活参战单位**的一方
+   *
+   * 该方不进入等待集合（没有可撤退的对象），撤退格数记 0；由状态层写一条日志。
+   */
+  skipped: { side: CombatRole; retreatHexes: number }[]
 }> {
   if (state.step !== 'retreat') return fail('9.2', `notAtRetreatStep:${state.step}`)
 
-  const retreatingSides: CombatRole[] = []
-  if ((state.resolution.attacker.option?.retreatHexes ?? 0) > 0) retreatingSides.push('attacker')
-  if ((state.resolution.defender.option?.retreatHexes ?? 0) > 0) retreatingSides.push('defender')
+  const stepsById = new Map(input.units.map((unit) => [unit.id, unit.steps]))
+  const requested: CombatRole[] = (['attacker', 'defender'] as const).filter((side) =>
+    needsRetreat(state, side),
+  )
+  const retreatingSides = liveRetreatSides(state, stepsById)
+  const skipped = requested
+    .filter((side) => !retreatingSides.includes(side))
+    .map((side) => ({ side, retreatHexes: state.resolution[side].option?.retreatHexes ?? 0 }))
   if (retreatingSides.length === 0) {
     return succeed('9.12', {
       state: { ...state, step: 'advance' },
       patches: [],
       results: [],
       extraLoss: { points: 0, eligibleUnitIds: [] },
+      skipped,
     })
   }
 
@@ -986,15 +998,17 @@ export function resolveRetreats(
   for (const side of retreatingSides) {
     const required = side === 'attacker' ? state.resolution.attacker : state.resolution.defender
     const distance = required.option?.retreatHexes ?? 0
-    const sideUnits = unitsOfSide(state, input.units, side).map((unit) => ({
-      id: unit.id,
-      side: unit.side,
-      hex: unit.hex,
-      mobility: unit.mobility,
-      dg: unit.dg,
-      // 5.8a：战略模式单位被迫撤退进入敌方 ZOC ⇒ 被摧毁
-      strat: unit.mode === 'strat',
-    }))
+    const sideUnits = unitsOfSide(state, input.units, side)
+      .filter((unit) => unit.steps > 0)
+      .map((unit) => ({
+        id: unit.id,
+        side: unit.side,
+        hex: unit.hex,
+        mobility: unit.mobility,
+        dg: unit.dg,
+        // 5.8a：战略模式单位被迫撤退进入敌方 ZOC ⇒ 被摧毁
+        strat: unit.mode === 'strat',
+      }))
 
     // ── 9.12d：跟随者（未参战战斗单位 / 编内卡车），须与某一撤退单位同格 ──
     const faction = sideUnits[0]?.side
@@ -1113,6 +1127,7 @@ export function resolveRetreats(
     patches,
     results,
     extraLoss: { points: extraLossPoints, eligibleUnitIds: [...new Set(eligibleUnitIds)] },
+    skipped,
   })
 }
 
@@ -1232,6 +1247,28 @@ export function resolveAdvance(
 /** 该方是否还需要在选项中撤退（决定第 9 步是否要收撤退方向） */
 export function needsRetreat(state: CombatInteractionState, side: CombatRole): boolean {
   return (state.resolution[side].option?.retreatHexes ?? 0) > 0
+}
+
+/**
+ * 9.10a / 9.12：**仍然需要撤退**的一方
+ *
+ * 撤退义务来自该方自己在选项里选的撤退格数（9.10a「选项总数必须完全被满足」），
+ * 与对手是否还存在无关；9.10c 的「忽略选项」只属于守方。但 9.12 以**单位**为对象：
+ * 该方已无存活参战单位时没有可撤退的对象，这一方不再进入等待集合。
+ *
+ * `stepsById` 必须来自**当前盘面**（已进死亡堆的单位不在其中，或军力为 0）。
+ */
+export function liveRetreatSides(
+  state: CombatInteractionState,
+  stepsById: ReadonlyMap<string, number>,
+): CombatRole[] {
+  const sides: CombatRole[] = []
+  for (const side of ['attacker', 'defender'] as const) {
+    if (!needsRetreat(state, side)) continue
+    const ids = side === 'attacker' ? state.composition.attackerIds : state.composition.defenderIds
+    if (ids.some((id) => (stepsById.get(id) ?? 0) > 0)) sides.push(side)
+  }
+  return sides
 }
 
 /** 战斗结果里该方文本（供日志） */

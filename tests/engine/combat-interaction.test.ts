@@ -12,6 +12,7 @@ import {
   planCombatSupply,
   planLosses,
   planOptions,
+  liveRetreatSides,
   resolveAdvance,
   resolveCombatDice,
   resolveRetreats,
@@ -1315,5 +1316,126 @@ describe('9.12g / 9.13 战后推进与进击', () => {
     // 不推进 ⇒ 没有进格补丁（9.13 的进击标记与该限制无关，仍按 9.13 照常判定）
     expect(advance.patches.some((patch) => patch.hex !== undefined)).toBe(false)
     expect(advance.state.finished).toBe(true)
+  })
+})
+
+describe('9.10a / 9.12 终局归一：liveRetreatSides 与 skipped', () => {
+  /** 攻守各 o1、双方各撤 1 格 ⇒ 进入撤退步（与上一组 atRetreatStep 同一构图） */
+  function atRetreatStepForLive() {
+    const attackers = [unit({ id: 'a1', steps: 3, printedSteps: 3 })]
+    const defenders = [defenderUnit({ id: 'd1' })]
+    const { state } = upToTerrain({
+      attackers,
+      defenders,
+      attackerUnitId: 'a1',
+      defenderUnitId: 'd1',
+    })
+    const die = 5
+    const surprised = unwrap(resolveSurprise(state, { die }))
+    const dice = unwrap(resolveCombatDice(surprised.state, { die }))
+    const start = [...attackers, ...defenders]
+    const attackerLosses = unwrap(planLosses(dice.state, { units: start }))
+    let current = applyPatches(start, attackerLosses.patches)
+    const attackerOptions = unwrap(
+      planOptions(attackerLosses.state, {
+        units: current.filter((item) => item.side === 'axis'),
+        retreatHexes: 1,
+        lossPoints: 0,
+      }),
+    )
+    current = applyPatches(current, attackerOptions.patches)
+    const defenderLosses = unwrap(planLosses(attackerOptions.state, { units: current }))
+    current = applyPatches(current, defenderLosses.patches)
+    const defenderOptions = unwrap(
+      planOptions(defenderLosses.state, {
+        units: current.filter((item) => item.side === 'soviet'),
+        retreatHexes: 1,
+        lossPoints: 0,
+      }),
+    )
+    current = applyPatches(current, defenderOptions.patches)
+    return { state: defenderOptions.state, units: current }
+  }
+
+  function sidesState(attackerRetreat: number, defenderRetreat: number): CombatInteractionState {
+    return {
+      composition: { attackerIds: ['a1'], defenderIds: ['d1'] },
+      resolution: {
+        attacker: { option: { retreatHexes: attackerRetreat } },
+        defender: { option: { retreatHexes: defenderRetreat } },
+      },
+    } as unknown as CombatInteractionState
+  }
+
+  it('真值表 16 组：只有「格数>0 且该方尚有存活参战单位」的一方进入等待集合', () => {
+    const survivors = [
+      [
+        'both',
+        new Map([
+          ['a1', 1],
+          ['d1', 1],
+        ]),
+      ],
+      [
+        'attackerOnly',
+        new Map([
+          ['a1', 1],
+          ['d1', 0],
+        ]),
+      ],
+      [
+        'defenderOnly',
+        new Map([
+          ['a1', 0],
+          ['d1', 1],
+        ]),
+      ],
+      [
+        'neither',
+        new Map([
+          ['a1', 0],
+          ['d1', 0],
+        ]),
+      ],
+    ] as const
+    for (const attackerRetreat of [0, 1]) {
+      for (const defenderRetreat of [0, 1]) {
+        for (const [, steps] of survivors) {
+          const liveAttacker = (steps.get('a1') ?? 0) > 0 && attackerRetreat > 0
+          const liveDefender = (steps.get('d1') ?? 0) > 0 && defenderRetreat > 0
+          expect(liveRetreatSides(sidesState(attackerRetreat, defenderRetreat), steps)).toEqual([
+            ...(liveAttacker ? (['attacker'] as const) : []),
+            ...(liveDefender ? (['defender'] as const) : []),
+          ])
+        }
+      }
+    }
+  })
+
+  it('resolveRetreats：点名要撤退但该方已无存活单位 ⇒ 返回 skipped，不报 retreatPathMissing', () => {
+    const { state, units } = atRetreatStepForLive()
+    // 守方 d1 已进死亡堆（不在 input.units 里）；攻方 a1 仍存活且需撤 1 格
+    const live = units.filter((item) => item.id !== 'd1')
+    const retreat = unwrap(
+      resolveRetreats(state, {
+        units: live,
+        paths: [{ unitId: 'a1', path: [{ col: 36, row: 12 }] }],
+        facts: retreatFacts(),
+      }),
+    )
+    expect(retreat.skipped).toEqual([{ side: 'defender', retreatHexes: 1 }])
+    expect(retreat.results.map((item) => item.unitId)).toEqual(['a1'])
+    expect(retreat.state.step).toBe('advance')
+  })
+
+  it('resolveRetreats：双方都无存活单位 ⇒ skipped 两方、直接进推进步', () => {
+    const { state } = atRetreatStepForLive()
+    const retreat = unwrap(resolveRetreats(state, { units: [], paths: [], facts: retreatFacts() }))
+    expect(retreat.skipped).toEqual([
+      { side: 'attacker', retreatHexes: 1 },
+      { side: 'defender', retreatHexes: 1 },
+    ])
+    expect(retreat.results).toEqual([])
+    expect(retreat.state.step).toBe('advance')
   })
 })

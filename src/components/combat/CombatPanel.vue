@@ -618,10 +618,24 @@ const defenderArItems = computed(() =>
             守方需撤 {{ workbench.combatRetreatRequirement.defender }} 格
           </BaseTag>
         </div>
-        <p v-if="retreatPlan === null" class="muted">
+        <p
+          v-if="retreatPlan === null && workbench.combatRetreatSkippedSides.length === 0"
+          class="muted"
+        >
           本场战斗无人需要撤退（双方选项都未含撤退格数）。
         </p>
-        <template v-else>
+        <!-- 9.12：选项点名的撤退方已无存活参战单位 ⇒ 无撤退对象，确认即收束 -->
+        <p
+          v-if="retreatPlan === null && workbench.combatRetreatSkippedSides.length > 0"
+          class="muted"
+        >
+          <BaseTag kind="warning">9.12 / 无存活单位</BaseTag>
+          点名要撤退的{{ workbench.combatRetreatSkippedSides.includes('attacker') ? '攻方' : ''
+          }}{{
+            workbench.combatRetreatSkippedSides.includes('defender') ? '守方' : ''
+          }}已无存活参战单位 ⇒ 无撤退对象（格数记 0），确认即收束。
+        </p>
+        <template v-if="retreatPlan !== null">
           <p class="num">
             现在给**{{ retreatPlan.side === 'attacker' ? '攻方' : '守方' }}**选落点（{{
               retreatPlan.distance

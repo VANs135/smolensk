@@ -208,6 +208,7 @@ import {
   isFacilityBarrage,
   isLegal,
   isNkvdBorderRegiment,
+  liveRetreatSides,
   lossesOf,
   markersAfterDg,
   mergeTransportPoints,
@@ -2572,7 +2573,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const out: { unit: ConsoleUnit; side: CombatRole; hostId: string; hostLabel: string }[] = []
     for (const side of ['attacker', 'defender'] as const) {
       if (!needsRetreat(state, side)) continue
-      const stack = side === 'attacker' ? combatAttackers.value : battleDefenders.value
+      // 9.12 以单位为对象：军力归零/已进死亡堆的参战者不再是「可动作对象」
+      const stack = (side === 'attacker' ? combatAttackers.value : battleDefenders.value).filter(
+        (unit) => unit.steps > 0,
+      )
       const participantIds = new Set(stack.map((unit) => unit.instanceId))
       for (const unit of units.value) {
         if (participantIds.has(unit.instanceId)) continue
@@ -2609,13 +2613,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** C6：撤退事实（9.12/9.12b/9.12e/9.12f；注入引擎） */
   const combatRetreatFacts = computed<RetreatFacts>(() => {
     const state = combatState.value
+    const liveIds = new Set(
+      units.value.filter((unit) => unit.steps > 0).map((unit) => unit.instanceId),
+    )
+    // 9.12 以单位为对象：已进死亡堆的成员不再参与撤退事实（其位置/ZOC 不得继续阻挡）
     const retreating: string[] = []
     if (state !== null) {
-      if (needsRetreat(state, 'attacker')) retreating.push(...state.composition.attackerIds)
-      if (needsRetreat(state, 'defender')) retreating.push(...state.composition.defenderIds)
+      if (needsRetreat(state, 'attacker'))
+        retreating.push(...state.composition.attackerIds.filter((id) => liveIds.has(id)))
+      if (needsRetreat(state, 'defender'))
+        retreating.push(...state.composition.defenderIds.filter((id) => liveIds.has(id)))
     }
     // 9.12d：跟随撤退的单位也参与「撤退中的这一堆」
-    retreating.push(...combatTagalongIds.value)
+    retreating.push(...combatTagalongIds.value.filter((id) => liveIds.has(id)))
     return createRetreatFacts({
       units: units.value,
       context: moveContext.value,
@@ -2646,13 +2656,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const state = combatState.value
     if (state === null) return []
     const paid = state.supply?.attacker.paid === true
-    return combatAttackers.value.map((unit) => ({
-      id: unit.instanceId,
-      label: unit.name,
-      paid,
-      // 9.12b 末句：在任何模式下都不可移动的单位也无法战后推进
-      immobile: combatRetreatFacts.value.immobile(unit.instanceId),
-    }))
+    return combatAttackers.value
+      .filter((unit) => unit.steps > 0)
+      .map((unit) => ({
+        id: unit.instanceId,
+        label: unit.name,
+        paid,
+        // 9.12b 末句：在任何模式下都不可移动的单位也无法战后推进
+        immobile: combatRetreatFacts.value.immobile(unit.instanceId),
+      }))
   })
 
   /**
@@ -2713,7 +2725,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const record = side === 'attacker' ? state.resolution.attacker : state.resolution.defender
       const distance = record.option?.retreatHexes ?? 0
       if (distance <= 0) continue
-      const sideUnits = side === 'attacker' ? combatAttackers.value : battleDefenders.value
+      const sideUnits = (
+        side === 'attacker' ? combatAttackers.value : battleDefenders.value
+      ).filter((unit) => unit.steps > 0)
+      // 9.12 以单位为对象：该方已无存活参战单位 ⇒ 不建「空计划」，
+      // 否则 `complete = rows.every(...)` 会在空数组上恒为 true，界面误以为已选齐。
+      if (sideUnits.length === 0) continue
       const rows: CombatRetreatUnitPlan[] = sideUnits.map((unit) => {
         const escaped = combatInputs.value.retreatPaths[unit.instanceId] ?? ''
         const chosen = parseHexPath(escaped)
@@ -2776,6 +2793,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       })
     }
     return plans
+  })
+
+  /**
+   * 9.12：点名要撤退、但该方**已无存活参战单位**（9.10a 的义务在、9.12 的对象不在）
+   *
+   * 与 `combatRetreatPlans` 同口径：该方不建计划、撤退格数记 0；面板只在标签后注明。
+   */
+  const combatRetreatSkippedSides = computed<CombatRole[]>(() => {
+    const state = combatState.value
+    if (state === null) return []
+    const steps = new Map(units.value.map((unit) => [unit.instanceId, unit.steps]))
+    const live = liveRetreatSides(state, steps)
+    return (['attacker', 'defender'] as const).filter(
+      (side) => needsRetreat(state, side) && !live.includes(side),
+    )
   })
 
   /*
@@ -10624,6 +10656,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (data === null) return false
     combatState.value = data.state
     applyCombatPatches(data.patches)
+    // 9.12：点名要撤退、但该方已无存活参战单位 ⇒ 没有撤退对象，格数记 0（不放入等待集合）
+    for (const item of data.skipped) {
+      pushLog(
+        'warning',
+        `9.12：${item.side === 'attacker' ? '攻方' : '守方'}已无存活参战单位 ⇒ 无撤退对象（原需 ${item.retreatHexes} 格记 0）`,
+        '9.12',
+      )
+    }
     for (const result of data.results) {
       pushLog(
         result.destroyed ? 'danger' : 'info',
@@ -10668,7 +10708,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         ? [
             {
               kind: 'advanceAfterCombat',
-              unitIds: [...state.composition.attackerIds],
+              // 9.12 以单位为对象：只点名仍存活的攻方（已进死亡堆者不再等待动作）
+              unitIds: state.composition.attackerIds.filter((id) =>
+                units.value.some((unit) => unit.instanceId === id && unit.steps > 0),
+              ),
               rule: '9.12g',
             },
           ]
@@ -10800,7 +10843,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         }`,
       '9.12g',
     )
-    // ⑭ 接线：战后推进与进击标记（9.12g / 9.13）入会话日志（本笔不掷骰）
+    // 9.2：推进步已落盘即整场战斗收束（无推进候选的收尾也走本函数，故收束日志只此一处）
+    pushLog('success', '本场战斗收束（9.2）：结算已落账，可继续下一步', '9.2')
     recordSettlement({
       action: 'combatAdvance',
       rule: '9.12g',
@@ -22717,6 +22761,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // W7 C16：战斗收尾的地图优先交互（9.12 撤退落点 / 9.12g 推进格 / 12.4 补给站）
     combatAdvanceHex,
     combatRetreatPlans,
+    // 9.12：点名要撤退、但该方已无存活参战单位（计划的空行反例）
+    combatRetreatSkippedSides,
     // W7 C16 + 9.12d：跟随撤退（未参战战斗单位 / 编内卡车）
     combatTagalongIds,
     combatTagalongCandidates,
