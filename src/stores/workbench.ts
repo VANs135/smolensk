@@ -2138,6 +2138,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return sovietFirstTurnHalfMaActive.value ? FIRST_TURN_HALF_MA_MULT : 1
   }
 
+  /**
+   * 14.8b / 14.8c：运输破坏标记按**放置方**分组
+   *
+   * 「运输破坏区会影响**敌方**地面单位的移动……每进入一个处于 TZ 中的格 +1MP」⇒ 引擎按
+   * 「移动方 ≠ 放置方」取用；这里只把账本上的标记整理成引擎要的形状（标记格，不含邻格——
+   * 邻格的 TZ 判定与 14.8b 的步行例外都在 `move.ts` 里一处算）。
+   */
+  const trainbustingMarksByPlacer = computed<{
+    axis: HexRef[]
+    soviet: HexRef[]
+  }>(() => {
+    const out: { axis: HexRef[]; soviet: HexRef[] } = { axis: [], soviet: [] }
+    for (const mark of trainbustingMarks.value) {
+      out[mark.side].push({ col: mark.hex.col, row: mark.hex.row })
+    }
+    return out
+  })
+
   /** 当前移动上下文（每次派生都重建，保证与摆子/切方一致） */
   const moveContext = computed(() =>
     buildMoveContext({
@@ -2164,6 +2182,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
        * 工事等级取与工事面板同一处（`hedgehogLevelOf`：印刷永久工事 + 本回合已建 − 已降）。
        */
       hedgehogLevelAt: (hex) => hedgehogLevelOf(hex),
+      // 14.8b/14.8c：运输破坏区（对放置方的敌方地面单位 +1 MP/格；含 8.1 突袭进格）
+      trainbustingMarksBySide: trainbustingMarksByPlacer.value,
       // 专规 1.5：首回合苏军地面单位 ×1/2（与模式折算相乘）
       maFactorOf: sovietFirstTurnMaFactor,
     }),

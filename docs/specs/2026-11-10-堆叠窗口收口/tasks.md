@@ -16,4 +16,3 @@
 - [x] T11 回归修正：`fuel-three-paths-flow` 路径三改为独立算子口径；`popup-stack-selection`
       视点改用 `setActiveSide`（`viewerSide` 只读）
 - [x] T12 六门槛（typecheck / lint / format / vitest / arch / build）并通过后单独提交本批次
-

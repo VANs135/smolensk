@@ -145,6 +145,17 @@ export interface MoveContext {
    * 省略本项即视为**无工事**（不臆造）。
    */
   hedgehogLevelAt?: (hex: HexRef) => number
+  /**
+   * 14.8b / 14.8c：**运输破坏标记**，按**放置方**分组（只给标记所在格）
+   *
+   * 原文：「运输破坏区会影响**敌方**地面单位的移动……**地面单位每进入一个处于 TZ 中的格，
+   * 地形消耗必须增加 1MP**」；「（例外：使用**步行 MP** 移动时，运输破坏区**仅限于标记所在格**）」；
+   * 「绝不会因为多个 TZ 重叠而对一个格产生额外效果，而且 TZ 对**撤退**也没有影响」。
+   * ⇒ 引擎只在「移动方 ≠ 放置方」的地面移动步上 +1（含 8.1 突袭进格），步行 MP 只认标记格；
+   *   撤退走 `battle.ts` 的另一条路，不经过本上下文。
+   * 缺省不注入 ⇒ 视为无标记（不臆造）。
+   */
+  trainbustingMarksBySide?: { readonly axis: readonly HexRef[]; readonly soviet: readonly HexRef[] }
 }
 
 /* ────────────────────────────── 结果形状 ────────────────────────────── */
@@ -200,12 +211,14 @@ export type MoveRejectReason =
 /** 单步移动成功 */
 export interface StepSuccess {
   ok: true
-  /** 本步消耗的 MP（6.1a：进入格 + 穿越格边） */
+  /** 本步消耗的 MP（6.1a：进入格 + 穿越格边；6.2b 之外再含 14.8c 的运输破坏 +1） */
   cost: number
   /** 格内部分（沿路时即所走道路的费率） */
   hexCost: number
   /** 格边追加部分（6.2b；沿路时被忽略） */
   hexsideCost: number
+  /** 14.8c：进入运输破坏区追加的 MP（已计入 `cost`，最多 1） */
+  trainbustingCost: number
   /** 是否走了 6.2a 道路优先 */
   roadOverride: boolean
   /** 是否走了桥（桥 = 河/湖格边 + 路或铁路） */

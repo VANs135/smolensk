@@ -425,6 +425,8 @@ interface StepCost {
   cost: number
   hexCost: number
   hexsideCost: number
+  /** 14.8c：进入运输破坏区追加的 MP（已计入 `cost`） */
+  trainbustingCost: number
   roadOverride: boolean
   crossedOnBridge: boolean
   spendsAllMp: boolean
@@ -475,6 +477,31 @@ function crossingForStep(
   })
 }
 
+/**
+ * 14.8c：进入运输破坏区（TZ）的追加 MP
+ *
+ * 原文：「运输破坏区会影响**敌方**地面单位的移动……**地面单位每进入一个处于 TZ 中的格，
+ * 地形消耗必须增加 1MP**」；14.8b「（例外：使用**步行 MP** 移动时，运输破坏区**仅限于标记
+ * 所在格**）」；末句「绝不会因为多个 TZ 重叠而对一个格产生额外效果，而且 TZ 对**撤退**也没有影响」
+ * （撤退在 `battle.ts` 的另一条路径，不经过本函数）。
+ *
+ * ⇒ 判据落在「移动方 ≠ 标记放置方」的**地面移动步**上（含 8.1 突袭进格，8.1b 的进入格 MP
+ *   本就写作「格内＋格边＋运输破坏」）：标记格 +1；相邻六格 +1，但步行 MP 只认标记格。
+ *   重叠多个 TZ 不叠计 ⇒ 返回 0 / 1。
+ */
+function trainbustingSurcharge(
+  context: MoveContext,
+  unit: MoveUnitView,
+  to: { col: number; row: number },
+): number {
+  const marks = context.trainbustingMarksBySide?.[unit.side === 'axis' ? 'soviet' : 'axis']
+  if (marks === undefined || marks.length === 0) return 0
+  if (marks.some((hex) => sameHex(hex, to))) return 1
+  // 14.8b 例外：步行 MP 的 TZ 只到标记所在格为止
+  if (unit.mobility === 'leg') return 0
+  return marks.some((hex) => areAdjacent(hex, to)) ? 1 : 0
+}
+
 /** 计算一步的取费（不含 MP 预算判定） */
 function costOfStep(
   context: MoveContext,
@@ -504,11 +531,13 @@ function costOfStep(
     if (result.reason === 'unknownTerrain') return reject('unknownTerrain', '6.2', result.terrain)
     return reject('noTerrain', '6.2d', `${to.col}.${to.row}`)
   }
+  const trainbustingCost = trainbustingSurcharge(context, unit, to)
   return {
     ok: true,
-    cost: result.totalMp,
+    cost: result.totalMp + trainbustingCost,
     hexCost: result.mp,
     hexsideCost: result.hexsideDelta,
+    trainbustingCost,
     roadOverride: result.roadOverride,
     crossedOnBridge: result.crossedOnBridge,
     spendsAllMp: result.spendsAllMp,
@@ -686,6 +715,7 @@ export function evaluateStepFrom(
     cost: minimumMove ? Math.min(cost.cost, remaining) : cost.cost,
     hexCost: cost.hexCost,
     hexsideCost: cost.hexsideCost,
+    trainbustingCost: cost.trainbustingCost,
     roadOverride: cost.roadOverride,
     crossedOnBridge: cost.crossedOnBridge,
     minimumMove,

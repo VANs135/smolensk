@@ -93,6 +93,30 @@
 
 ---
 
+## 4.1 P0-2：14.8c 运输破坏区 +1 MP（裁定：**不登记 N/A**，按原文实现）
+
+原文（14.8）：
+
+- **14.8c**：「运输破坏区会影响**敌方**地面单位的移动和铁路费用。**地面单位每进入一个处于 TZ 中的格，地形消耗必须增加 1MP。**」「通过 TZ 的铁路货物需要使用正常双倍的铁路运量……」「舰船、飞机、海运容量和补给路径不受 TZ 影响。」「请注意，**绝不会因为多个 TZ 重叠而对一个格产生额外效果**，而且 **TZ 对撤退也没有影响**。」
+- **14.8b**：「运输破坏区(TZ)是指带有运输破坏标记的格加上相邻的六个格。（**例外：使用步行 MP 移动时，运输破坏区仅限于标记所在格**）。」
+
+裁定：原文写的是「地面单位**每进入一个**处于 TZ 中的格」（不是只限铁路/道路）⇒ 按原文叠加 +1 MP；8.1b 的「进入格 MP（**格内＋格边＋运输破坏**）≤ 3」表明**突袭进格也计这一格**。不登记 N/A。
+
+实现：
+
+- `MoveContext.trainbustingMarksBySide`（标记按**放置方**分组）＋ `move.ts#trainbustingSurcharge`：只对「移动方 ≠ 放置方」的地面移动步 +1；标记格与相邻六格都算，步行 MP 只认标记格；重叠不叠计；撤退走 `battle.ts` 的另一条路，不受影响。
+- `StepSuccess.trainbustingCost` 为第三段（`cost = hexCost + hexsideCost + trainbustingCost`），`move-interaction` 的步记录同步。
+- 账本接线：`workbench.trainbustingMarks` ⇒ `moveContext.trainbustingMarksBySide`。
+
+断言（`tests/engine/trainbusting-zone.test.ts`）：
+
+- 标记格 / 相邻六格各 +1（Open 1 ⇒ 2）；步行 MP 邻格不 +1、标记格 +1；
+- 只影响敌方（放置方自己进入不加）；两个 TZ 重叠仍只 +1；
+- 突袭 `entryCost` 含 +1（Open+TZ=2），并在 Forest+小河+TZ=4 时按 8.1b 拒绝；
+- store 接线按放置方分组。
+
+---
+
 ## 5. 六门槛
 
 ```bash

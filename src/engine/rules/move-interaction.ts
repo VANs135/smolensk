@@ -322,6 +322,8 @@ export interface StepMovingUnit {
   cost: number
   hexCost: number
   hexsideCost: number
+  /** 14.8c：进入运输破坏区的追加 MP（已计入 `cost`） */
+  trainbustingCost: number
   /** 是否走了 6.2a 道路优先 */
   roadOverride: boolean
   /** 是否过桥 */
@@ -403,6 +405,7 @@ export function previewStep(input: {
       cost: outcome.cost,
       hexCost: outcome.hexCost,
       hexsideCost: outcome.hexsideCost,
+      trainbustingCost: outcome.trainbustingCost,
       roadOverride: outcome.roadOverride,
       crossedOnBridge: outcome.crossedOnBridge,
       minimumMove: outcome.minimumMove,
@@ -937,6 +940,7 @@ export function applyOverrunMove(input: {
         cost: costById[unit.unitId] ?? 0,
         hexCost: 0,
         hexsideCost: 0,
+        trainbustingCost: 0,
         roadOverride: false,
         crossedOnBridge: false,
         minimumMove: false,

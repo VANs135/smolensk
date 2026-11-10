@@ -999,6 +999,12 @@ export function buildMoveContext(input: {
    * 缺省 1；调用方按剧本/回合/阵营算好后注入，保证引擎可达性/取费与界面显示同一口径。
    */
   maFactorOf?: (unit: ConsoleUnit) => number
+  /**
+   * 14.8b / 14.8c：运输破坏标记（按**放置方**分组，只给标记所在格）
+   *
+   * 缺省不注入 ⇒ 引擎视为无标记（不臆造）；调用方用 `trainbustingMarks` 注入。
+   */
+  trainbustingMarksBySide?: { readonly axis: readonly HexRef[]; readonly soviet: readonly HexRef[] }
 }): MoveContext {
   // 性能优化 A：上下文必须是**plain 快照**——原样搬运 Pinia 的 `hex` 引用会让 BFS 每一步读
   // `hex.col/row` 都走 Vue 响应式 Proxy（实测占移动会话 362ms）。这里一律克隆为普通对象。
@@ -1036,6 +1042,14 @@ export function buildMoveContext(input: {
         }),
     ...(input.traceSupplyAt === undefined ? {} : { traceSupplyAt: input.traceSupplyAt }),
     ...(input.hedgehogLevelAt === undefined ? {} : { hedgehogLevelAt: input.hedgehogLevelAt }),
+    ...(input.trainbustingMarksBySide === undefined
+      ? {}
+      : {
+          trainbustingMarksBySide: {
+            axis: input.trainbustingMarksBySide.axis.map(plain),
+            soviet: input.trainbustingMarksBySide.soviet.map(plain),
+          },
+        }),
   }
 }
 
