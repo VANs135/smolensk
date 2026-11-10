@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs'
+
 import { createPinia, setActivePinia } from 'pinia'
+
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
@@ -149,6 +152,18 @@ describe('统一流程：第 1 步 → 第 2 步（炮击）', () => {
     expect(mapView.cancelOpsFlow()).toBe(true)
     expect(workbench.barrageState).toBeNull()
     expect(mapView.opsFlow).toBeNull()
+  })
+})
+
+describe('候选同源（规格 §3 集合等式）', () => {
+  it('★ 空军第 1 步只取候选函数给出的那批（不列未激活 / 已出任务 / 航程不够）', () => {
+    const panel = readFileSync('src/components/ops/OpsFlowPanel.vue', 'utf8')
+    // 与右键入口同一函数：轰炸 `bombingCandidatesAt`、扫射 `hipShootCandidatesAt`
+    expect(panel).toContain('bombingCandidatesAt')
+    expect(panel).toContain('hipShootCandidatesAt')
+    // 不再在组件里按机型能力二次筛选（那是第二套判据）
+    expect(panel).not.toContain('barrageStrength ?? 0) > 0')
+    expect(panel).not.toContain('canHipShoot === true')
   })
 })
 

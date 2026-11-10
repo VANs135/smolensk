@@ -37,18 +37,20 @@ const barrageItems = computed(() => {
     .filter((unit) => !workbench.barragePhaseLedger.unitIds.includes(unit.instanceId))
 })
 
-/** 空军第 1 步：按基地分组（含地图外盒），只留**本操作能用**的机型 */
+/** 空军第 1 步：按基地分组（含地图外盒），只留**候选函数给出的**那批（与右键同源） */
 const airGroups = computed(() => {
   const current = flow.value
   if (current === null || current.kind === 'barrage') return []
+  const allowed = new Set(
+    (current.kind === 'bombing'
+      ? workbench.bombingCandidatesAt(current.targetHex)
+      : workbench.hipShootCandidatesAt(current.targetHex)
+    ).map((air) => air.instanceId),
+  )
   return workbench.airMissionBaseGroupsWithBox
     .map((group) => ({
       ...group,
-      aircraft: group.aircraft.filter((item) =>
-        current.kind === 'bombing'
-          ? (item.air.barrageStrength ?? 0) > 0
-          : item.air.canHipShoot === true,
-      ),
+      aircraft: group.aircraft.filter((item) => allowed.has(item.air.instanceId)),
     }))
     .filter((group) => group.aircraft.length > 0)
 })
