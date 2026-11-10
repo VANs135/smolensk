@@ -83,9 +83,6 @@ const stackUnits = computed(() => content.value?.units ?? [])
 /** 同格本方飞机（只读；操作走空军面板） */
 const stackAircraft = computed(() => content.value?.airUnits ?? [])
 
-/** 本窗这一格（展开/收起按钮只作用于它） */
-const popupHex = computed(() => mapView.popup?.hex ?? null)
-
 /** 6.1 取子池：只有这些 chip 能点选（敌方 / 非战斗 / 补员算子照列不可点） */
 const movableIds = computed(() => new Set(workbench.movePickChoices.map((unit) => unit.instanceId)))
 
@@ -142,24 +139,6 @@ function onChipContext(event: MouseEvent, unitId: string): void {
 function toggleChip(id: string): void {
   if (!chipPickable(id)) return
   workbench.toggleMovePick(id)
-}
-
-/** 本窗这一格是否已在图上摊开 */
-const expandedHere = computed(
-  () => popupHex.value !== null && mapView.isStackExpanded(popupHex.value),
-)
-
-/**
- * 地图同格展开 / 收起（用户 2026-11-10）
- *
- * 只作用于本窗那一格：摊开＝`expandStackAt`（默认全选），收起＝`collapseStack`。
- * 不换格、不关窗，窗内的选择与地图扇面始终是同一格。
- */
-function toggleExpandHere(): void {
-  const hex = popupHex.value
-  if (hex === null) return
-  if (mapView.isStackExpanded(hex)) mapView.collapseStack()
-  else mapView.expandStackAt(hex)
 }
 
 /* ── 15.1 整备（用户口径：点机场的整备按钮 → 勾选飞机 → 点地图上高亮的补给付款） ── */
@@ -472,7 +451,12 @@ function sideName(side: string): string {
               ><template v-if="unit.ended">· 停</template></span
             >
           </div>
-          <div v-for="air in stackAircraft" :key="air.instanceId" class="chip">
+          <div
+            v-for="air in stackAircraft"
+            :key="air.instanceId"
+            class="chip"
+            @contextmenu.prevent.stop="onChipContext($event, air.instanceId)"
+          >
             <img
               v-if="counterImageOf(air.instanceId) !== null"
               :src="counterImageOf(air.instanceId) ?? ''"
@@ -482,17 +466,8 @@ function sideName(side: string): string {
             <span class="chip__label num">{{ air.name }}</span>
           </div>
         </div>
-        <div class="block__row">
-          <BaseButton variant="ghost" size="sm" @click="toggleExpandHere()">
-            {{ expandedHere ? '收起展开' : '地图展开' }}
-          </BaseButton>
-          <BaseButton
-            v-if="canStartMove"
-            variant="primary"
-            size="sm"
-            title="6.1"
-            @click="workbench.confirmMovePick()"
-          >
+        <div v-if="canStartMove" class="block__row">
+          <BaseButton variant="primary" size="sm" title="6.1" @click="workbench.confirmMovePick()">
             开始移动
           </BaseButton>
         </div>

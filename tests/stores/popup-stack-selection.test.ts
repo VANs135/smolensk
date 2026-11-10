@@ -169,12 +169,32 @@ describe('堆叠窗口收口：列全、默认全选、同格展开、删说明'
     expect(popover).toContain('content.value?.airUnits')
   })
 
-  it('★ 地图同格展开：窗内按钮对该格摊开/收起', () => {
-    const popover = popoverSource()
-    expect(popover).toContain('地图展开')
-    expect(popover).toContain('mapView.isStackExpanded')
-    expect(popover).toContain('mapView.expandStackAt')
-    expect(popover).toContain('mapView.collapseStack')
+  it('★ 点己方堆叠即自动展开（窗内不再有展开按钮）', () => {
+    const s = stores()
+    placeInfantry(s.workbench, 'inf-a')
+    placeInfantry(s.workbench, 'inf-b')
+
+    s.mapView.onHexClick(HEX)
+
+    // 点这一击就摊开，并默认全选
+    expect(s.mapView.expandedStack).toEqual({ hex: HEX, page: 0 })
+    expect([...s.mapView.stackSelection].sort()).toEqual(['inf-a', 'inf-b'])
+    // 不再有「地图展开 / 收起展开」按钮（多一个按钮＝多一步操作）
+    expect(popoverSource()).not.toContain('地图展开')
+    expect(popoverSource()).not.toContain('收起展开')
+  })
+
+  it('★ 切格即自动收起；空格不展开', () => {
+    const s = stores()
+    placeInfantry(s.workbench, 'inf-a')
+    placeInfantry(s.workbench, 'inf-b')
+
+    s.mapView.onHexClick(HEX)
+    expect(s.mapView.expandedStack).not.toBeNull()
+
+    // 切到另一空格 ⇒ 旧格的摊开自动收起，新格没有可摊开的堆叠
+    s.mapView.onHexClick(OTHER)
+    expect(s.mapView.expandedStack).toBeNull()
   })
 
   it('★ 删说明文字：窗内不再写规则解释段落', () => {

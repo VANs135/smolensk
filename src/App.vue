@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import { BaseButton, ToastHost } from '@/components/base'
@@ -22,6 +22,19 @@ const saveBadge = computed(() => {
   if (gameSession.saveError !== null) return '槽不可读'
   return gameSession.session === null ? '无档' : '可存'
 })
+
+/**
+ * 用户 2026-11-10：拦掉 WebView 原生「将图像另存为」
+ *
+ * 模型图、算子图、面板图都是 `<img>`；WebView 的右键菜单会盖住我们自己的
+ * 单位菜单。这里只拦图片（文本框、输入框仍保留系统菜单）。
+ */
+function blockImageContextMenu(event: MouseEvent): void {
+  if (event.target instanceof HTMLImageElement) event.preventDefault()
+}
+
+onMounted(() => window.addEventListener('contextmenu', blockImageContextMenu))
+onBeforeUnmount(() => window.removeEventListener('contextmenu', blockImageContextMenu))
 </script>
 
 <template>

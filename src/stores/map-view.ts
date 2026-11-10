@@ -2676,7 +2676,13 @@ export const useMapViewStore = defineStore('mapView', () => {
 
   const popup = ref<MapPopupState | null>(null)
 
-  /** 打开小窗（锚点由视图用 `MapCanvas.hexToLocal` 换算后传入） */
+  /**
+   * 打开小窗（锚点由视图用 `MapCanvas.hexToLocal` 换算后传入）
+   *
+   * ★ 用户 2026-11-10：**点己方堆叠即自动展开该格**由 `onHexClick` 的闲置分支完成
+   *   （摊开优先于开窗，摊开即起移动会话，窗不再同屏）。这里只负责锚点与内容，
+   *   不重复摊开——否则会给「查看内容」类小窗强塞一个取子集合。
+   */
   function openPopup(
     hex: HexRef,
     x: number,
@@ -2698,10 +2704,24 @@ export const useMapViewStore = defineStore('mapView', () => {
     return stackTokensAt(hex).length > 0 ? 'content' : 'label'
   }
 
-  /** 关闭小窗 */
+  /**
+   * 关闭小窗
+   *
+   * ★ 用户 2026-11-10：**关窗即自动收起**该格的摊开（只收与这张内容窗同一格的扇面；
+   *   右键菜单等其它浮层的开合不碰摊开态）。
+   */
   function closePopup(): void {
+    const closed = popup.value
     popup.value = null
     contextTargets.value = []
+    if (
+      closed !== null &&
+      closed.variant === 'content' &&
+      expandedStack.value !== null &&
+      expandedStack.value.hex.col === closed.hex.col &&
+      expandedStack.value.hex.row === closed.hex.row
+    )
+      expandedStack.value = null
   }
 
   /**
@@ -2878,6 +2898,15 @@ export const useMapViewStore = defineStore('mapView', () => {
         return
       }
     }
+    /*
+     * 切格即收起（用户 2026-11-10）：摊开只属于当前那一格——点别的格先收掉，
+     * 再由这一击自己的分派决定是否在**新格**自动摊开（点己方堆叠 ⇒ `openPopup` 里摊开）。
+     */
+    if (
+      expandedStack.value !== null &&
+      (expandedStack.value.hex.col !== hex.col || expandedStack.value.hex.row !== hex.row)
+    )
+      expandedStack.value = null
     /*
      * ⓪ 已摊开 ⇒ 展开态优先，且**不落到下面的既有分派**
      *

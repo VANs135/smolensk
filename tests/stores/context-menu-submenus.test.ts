@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { HexRef } from '@/data'
 import {
@@ -279,9 +279,48 @@ describe('堆叠右键：目标集合', () => {
     expect(ok).toBe(true)
     expect(s.mapView.contextOptions.map((item) => item.id)).toEqual(['b'])
   })
+
+  it('★ 地图右键敌方堆叠 ⇒ 一份共用菜单出「低空扫射」（14.7d）', () => {
+    const enemyHex: HexRef = { col: 35, row: 12 }
+    placeGround(
+      s.workbench,
+      groundRecord('axis', (record) => record.isCombat === true),
+      enemyHex,
+      'axis',
+      'ax-a',
+    )
+    placeGround(
+      s.workbench,
+      groundRecord('axis', (record) => record.isCombat === true),
+      enemyHex,
+      'axis',
+      'ax-b',
+    )
+    s.workbench.selectedId = null
+    // 观察员/航程/天气等前置另测；这里只验右键把**敌方堆叠**接到 air.mission
+    const spy = vi.spyOn(s.workbench, 'hipShootEntryEligible').mockReturnValue(true)
+    s.mapView.onHexContext(enemyHex, { x: 0, y: 0 }, { x: 0, y: 0 })
+
+    // 4.9a：敌方堆叠只露可见面 ⇒ 右键出**一份**菜单（不是每枚一块）
+    expect(s.mapView.contextOptions).toHaveLength(1)
+    const row = s.mapView.contextOptions[0]?.actions.find((item) => item.key === 'air.mission')
+    expect(row?.label).toContain('低空扫射')
+    expect(row?.only).toBe('hipShoot')
+    spy.mockRestore()
+  })
 })
 
 describe('源码守卫', () => {
+  it('★ 拦掉 WebView 原生「将图像另存为」', () => {
+    const app = readFileSync('src/App.vue', 'utf8')
+    expect(app).toContain('instanceof HTMLImageElement')
+    expect(app).toContain("addEventListener('contextmenu'")
+    expect(app).toContain("removeEventListener('contextmenu'")
+    // 窗内 chip 仍自带 prevent.stop（双保险）
+    const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
+    expect(popover).toContain('@contextmenu.prevent.stop="onChipContext')
+  })
+
   it('★ 菜单一级是分组入口 + 子菜单容器；MapPopover 放行溢出', () => {
     const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
     expect(popover).toContain('context-group__trigger')
