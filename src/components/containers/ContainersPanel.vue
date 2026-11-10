@@ -60,6 +60,9 @@ const breakdownSlots = computed<readonly { ar: number; inBox: number }[]>(() => 
   const box = boxes.value.find((item) => item.kind === 'breakdownBox' && item.side === parent.side)
   return (box as { slots?: readonly { ar: number; inBox: number }[] } | undefined)?.slots ?? []
 })
+
+/** 2.3a：混编上限只有**超编**时才上屏（用户 2026-11-10：余量充足是背景信息） */
+const alarmMixOver = computed(() => containers.alarmMix.filter((row) => row.over))
 const breakdownArChoices = computed<number[]>(() => {
   const parent = breakdownParent.value
   if (parent === null) return BREAKDOWN_AR_LEVELS
@@ -1062,15 +1065,20 @@ function boxAircraft(side: Side) {
       </div>
     </template>
 
-    <!-- ── ⑤ 最近一次结论 ── -->
-    <hr />
-    <p v-if="containers.lastAction === null" class="muted">尚无操作。</p>
-    <p v-else class="num">
-      <BaseTag :kind="containers.lastAction.ok ? 'success' : 'danger'">
-        {{ containers.lastAction.scope }}｜{{ containers.lastAction.rule }}
-      </BaseTag>
-      {{ containers.lastAction.detail }}
-    </p>
+    <!--
+      ── ⑤ 最近一次结论（只在整页/验证页保留）──
+      ★ 用户 2026-11-10：盒内动作窗（`only="actions"`）删掉这条回执 —— 动作成败由窗内按钮态与日志说，不再单占一行。
+    -->
+    <template v-if="props.only === null">
+      <hr />
+      <p v-if="containers.lastAction === null" class="muted">尚无操作。</p>
+      <p v-else class="num">
+        <BaseTag :kind="containers.lastAction.ok ? 'success' : 'danger'">
+          {{ containers.lastAction.scope }}｜{{ containers.lastAction.rule }}
+        </BaseTag>
+        {{ containers.lastAction.detail }}
+      </p>
+    </template>
     <div v-if="showsActions" class="row">
       <label class="field">
         返场落点（死亡堆 → 图）
@@ -1083,7 +1091,8 @@ function boxAircraft(side: Side) {
           点地图选格
         </BaseButton>
       </label>
-      <label class="field">
+      <!-- ★ 用户 2026-11-10：删掉 `alarmLimit` 只读行（整页 / 验证页仍可改） -->
+      <label v-if="props.only === null" class="field">
         2.3a Alarm 单位（单位库 `alarmLimit` 自动取；手输即临时覆盖，清空即回到数据）
         <input
           v-if="uiMode === 'verify'"
@@ -1096,9 +1105,6 @@ function boxAircraft(side: Side) {
               .filter((item) => item !== '')
           "
         />
-        <span v-else class="ui-field-readonly">
-          {{ (containers.alarmUnitIds ?? []).join(',') || '（数据默认）' }}
-        </span>
       </label>
       <!-- 重置全部盒子＝裁判工具（会清掉名册），对局台不铺 -->
       <BaseButton
@@ -1110,12 +1116,15 @@ function boxAircraft(side: Side) {
         重置盒账本
       </BaseButton>
     </div>
-    <!-- 2.3a 混编上限（3 / 5 / 7，按算子类型计）：每型的上限 / 在场 / 余量 -->
-    <ul v-if="containers.alarmMix.length > 0" class="mix">
+    <!--
+      2.3a 混编上限（3 / 5 / 7，按算子类型计）
+      ★ 用户 2026-11-10：**只有超编时才出现**（余量充足是背景信息，不占屏）。
+    -->
+    <ul v-if="alarmMixOver.length > 0" class="mix">
       <li class="mix__head">{{ containers.alarmMixRule }} 混编上限（按算子类型计）</li>
-      <li v-for="row in containers.alarmMix" :key="row.unitId">
+      <li v-for="row in alarmMixOver" :key="row.unitId">
         {{ row.unitId }}：在场 {{ row.inPlay }} / 上限 {{ row.limit }} ⇒ 余量 {{ row.remaining
-        }}<span v-if="row.over" class="over">★ 超编</span>
+        }}<span class="over">★ 超编</span>
       </li>
     </ul>
   </BasePanel>

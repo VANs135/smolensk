@@ -79,6 +79,30 @@ describe('B35 C-1：按展开的盒卡过滤动作', () => {
     const mapView = readFileSync('src/stores/map-view.ts', 'utf8')
     expect(mapView).toContain('containers.openCardName')
   })
+
+  it('★ 用户 2026-11-10：盒内动作窗减负 —— 无规则号 tag / 无 lastAction 回执 / 混编只在超编时出现', () => {
+    const mapView = readFileSync('src/stores/map-view.ts', 'utf8')
+    // 标题不再挂条款号（条款号只在动作的 `?` 里）
+    expect(mapView).not.toContain('盒内动作（1.4 / 1.6c / 13.7）')
+    expect(mapView).not.toContain('（1.4 / 1.6c / 13.7）')
+    // 该会话不再给 `rule`（标题栏的规则号 tag 随之不显示）
+    const session = mapView.slice(
+      mapView.indexOf("kind: 'containers'"),
+      mapView.indexOf("kind: 'exclusive'"),
+    )
+    expect(session).not.toContain("rule: '13.7'")
+
+    const panel = readFileSync('src/components/containers/ContainersPanel.vue', 'utf8')
+    // lastAction 回执与 alarmLimit 只读行只在整页 / 验证页出现
+    const receipt = panel.indexOf('containers.lastAction.detail')
+    expect(receipt).toBeGreaterThan(0)
+    expect(panel.slice(0, receipt)).toContain('<template v-if="props.only === null">')
+    expect(panel).not.toContain('ui-field-readonly')
+    // 混编余量：只有超编行才上屏
+    expect(panel).toContain('alarmMixOver')
+    expect(panel).toContain('containers.alarmMix.filter((row) => row.over)')
+    expect(panel).toContain('<ul v-if="alarmMixOver.length > 0"')
+  })
 })
 
 describe('B35 C-2：盒卡弹出浮窗', () => {

@@ -192,8 +192,8 @@ export interface MapSessionBase {
   kind: MapSessionKind
   /** 标题（含格号，便于玩家确认打的是哪一格） */
   title: string
-  /** 规则出处（标题栏上的标签） */
-  rule: string
+  /** 规则出处（标题栏上的标签；不给则不显示——按「条款号进 ?」纪律，盒内动作窗不放规则号） */
+  rule?: string
   /** 面板宽度（CSS 值；不给就用组件默认） */
   width?: string
 }
@@ -2538,12 +2538,13 @@ export const useMapViewStore = defineStore('mapView', () => {
     ) {
       return {
         kind: 'containers',
-        // C-1：标题点明**是哪一张卡**（动作已按该卡覆盖的盒过滤，见 ContainersPanel）
+        /*
+         * C-1：标题点明**是哪一张卡**（动作已按该卡覆盖的盒过滤，见 ContainersPanel）。
+         * ★ 用户 2026-11-10：标题不再挂三个条款号、标题栏也不放规则号 tag；
+         *   盒卡自己保留阵营 tag —— 条款号只在各动作的 `?` 里。
+         */
         title:
-          containers.openCardName === null
-            ? '盒内动作（1.4 / 1.6c / 13.7）'
-            : `盒内动作：${containers.openCardName}（1.4 / 1.6c / 13.7）`,
-        rule: '13.7',
+          containers.openCardName === null ? '盒内动作' : `盒内动作：${containers.openCardName}`,
         width: 'min(430px, 94%)',
       }
     }
