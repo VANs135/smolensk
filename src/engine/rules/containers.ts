@@ -1302,12 +1302,13 @@ export function deriveDrawComposition(input: {
 }
 
 /**
- * 两条相邻格之间是否有一条 `edges.road` 边（由调用方注入地图数据）
+ * 两条相邻格之间是否有一条**道路类或铁路**边（由调用方注入地图数据）
  *
- * 引擎不读文件：道路拓扑是**地图数据**（`map-layers.json` 的 `edges[].road`），
- * 由接线层用同一把格边键（`hexsideOf`）构造后传入。
+ * 引擎不读文件：拓扑是**地图数据**（`map-layers.json` 的 `edges[].road` / `edges[].rail`），
+ * 由接线层用同一把格边键（`hexsideOf`）构造后传入。用户 2026-11-10 裁定：
+ * 「铁路和道路都算路」，故谓词为两者的并集。
  */
-export type RoadEdgeQuery = (from: HexRef, to: HexRef) => boolean
+export type RoadOrRailEdgeQuery = (from: HexRef, to: HexRef) => boolean
 
 /** ch10 西移的走位结果（`path` 含起点） */
 export interface ShiftWestWalk {
@@ -1318,21 +1319,21 @@ export interface ShiftWestWalk {
 }
 
 /**
- * ch10「沿道路西移 N 格」的落点（用户 2026-11-10 裁定：**按原文沿 road 走**）
+ * ch10「沿道路西移 N 格」的落点（用户 2026-11-10 裁定：**铁路也算路**）
  *
  * 原文（ch10 A 组）："4 that must shift three hexes west of listed location, following road.
  * (For instance, from 11.03 to 9.01.)" —— 给的是**算法**加一例，不是落点清单：
  *   · 起点＝**所列位置**（剧本页的初设格号，见 `scenario-setup.json`）；
- *   · 终点＝沿道路往西走 N 格。
+ *   · 终点＝沿道路/铁路往西走 N 格。
  *
- * 每步只在**西向两邻**（`SW`、`NW`，列均 −1）里取，且必须**图内**、且该格边为 road；
+ * 每步只在**西向两邻**（`SW`、`NW`，列均 −1）里取，且必须**图内**、且该格边为道路类或铁路；
  * 两者皆可时固定 `SW → NW`。两者都不满足即停（`exact=false`），
- * **不按几何回退、也不把任意格"视为有道路"**。无 road 边的师留在所列位置，由调用方登记缺口。
+ * **不按几何回退、也不把任意格"视为有路"**。无合法边的师留在所列位置，由调用方登记缺口。
  */
 export function shiftWestDestination(
   from: HexRef,
   steps: number,
-  hasRoad: RoadEdgeQuery,
+  hasRoadOrRail: RoadOrRailEdgeQuery,
 ): ShiftWestWalk {
   const total = Math.max(0, Math.trunc(steps))
   let current: HexRef = { col: from.col, row: from.row }
@@ -1341,7 +1342,7 @@ export function shiftWestDestination(
   for (let step = 0; step < total; step += 1) {
     const next = (['SW', 'NW'] as const)
       .map((direction) => neighbor(current, direction))
-      .find((candidate) => isOnMap(candidate) && hasRoad(current, candidate))
+      .find((candidate) => isOnMap(candidate) && hasRoadOrRail(current, candidate))
     if (next === undefined) break
     current = next
     path.push({ col: next.col, row: next.row })

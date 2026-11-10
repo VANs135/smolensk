@@ -97,22 +97,23 @@ import type { ConsoleAirUnit, ConsoleUnit, DeadPileEntry } from './workbench-mod
 const GROUND_ALWAYS_GOOD = 'good' as const
 
 /**
- * ch10 西移用的**道路格边索引**（`map-layers.json` 的 `edges[].road`，静态数据，建一次）
+ * ch10 西移用的**道路类 ∪ 铁路格边索引**（`map-layers.json` 的 `edges[].road` 或 `edges[].rail`）
  *
+ * 用户 2026-11-10 裁定「铁路和道路都算路」：判据为两者并集（`road` 的二级路/土路与 `rail: true`）。
  * 键用 `hexsideOf` 的规范化格边键（两端无序，与数据里 a/b 的存放顺序无关）。
- * 引擎只收谓词，不读文件；"没路就不走"由 `shiftWestDestination` 判定，这里不补任何道路。
+ * 引擎只收谓词，不读文件；"没路就不走"由 `shiftWestDestination` 判定，这里不补任何边。
  */
-const ROAD_SIDES: ReadonlySet<string> = new Set(
+const ROAD_OR_RAIL_SIDES: ReadonlySet<string> = new Set(
   mapLayers.edges
-    .filter((edge) => edge.road !== undefined)
+    .filter((edge) => edge.road !== undefined || edge.rail === true)
     .map((edge) => hexsideOf(edge.a, edge.b)?.key)
     .filter((key): key is string => key !== undefined),
 )
 
-/** 两格之间是否有 road 边（无 road 边的格对即 false，绝不"视为有道路"） */
-function hasRoadEdge(a: HexRef, b: HexRef): boolean {
+/** 两格之间是否有道路类或铁路边（都没有即 false，绝不"视为有路"） */
+function hasRoadOrRailEdge(a: HexRef, b: HexRef): boolean {
   const side = hexsideOf(a, b)
-  return side !== null && ROAD_SIDES.has(side.key)
+  return side !== null && ROAD_OR_RAIL_SIDES.has(side.key)
 }
 
 /**
@@ -1538,11 +1539,12 @@ export const useContainersStore = defineStore('containers', () => {
       }
       drawnGroups += 1
       /*
-       * 西移组：**沿地图的道路边**算落点并摆位（用户 2026-11-10 裁定：按原文沿 road 西移）
+       * 西移组：**沿地图的道路类/铁路边**算落点并摆位（用户 2026-11-10 裁定：铁路也算路）
        *
-       * 引擎每步只走 SW / NW 且须该格边为 road（`hasRoadEdge` 查 `map-layers.edges[].road`）；
-       * 走不满 N 格即 `exact=false` ⇒ **不移动**：落点写回所列位置、台账记同一格、
-       * 不进 `pendingShift`（不阻塞初设），只在 `roadGaps` 登记缺口并写一条 warning。
+       * 引擎每步只走 SW / NW 且须该格边为 road 或 rail（`hasRoadOrRailEdge` 查
+       * `map-layers.edges[].road` / `[].rail`）；走不满 N 格即 `exact=false` ⇒ **不移动**：
+       * 落点写回所列位置、台账记同一格、不进 `pendingShift`（不阻塞初设），
+       * 只在 `roadGaps` 登记缺口并写一条 warning。
        */
       if (group.kind === 'shiftWest') {
         for (const formationId of drawn) {
@@ -1566,16 +1568,16 @@ export const useContainersStore = defineStore('containers', () => {
             pendingShift.push(formationId)
             continue
           }
-          const target = shiftWestDestination(anchor, steps, hasRoadEdge)
+          const target = shiftWestDestination(anchor, steps, hasRoadOrRailEdge)
           if (!target.exact) {
             /*
-             * 无合法道路落点（如 8.08 周边 0 条 road 边）⇒ **留在原格**：不移动任何算子。
+             * 无合法道路/铁路落点 ⇒ **留在原格**：不移动任何算子。
              * 落点写回所列位置、台账同值 —— 否则抽签进度会判"尚未处置"而卡住初设收束。
              */
             roadGaps.push({ formationId, fromHex: anchorText, missing: 'SW|NW' })
             workbench.pushLog(
               'warning',
-              `ch10 西移：${formationId} ${anchorText} 无西向 road 边 ⇒ 留在原格（13.2g 无关，ch10）`,
+              `ch10 西移：${formationId} ${anchorText} 无西向道路/铁路边 ⇒ 留在原格（13.2g 无关，ch10）`,
               'ch10',
             )
             setDrawShiftHexNow(formationId, anchorText)
@@ -1731,8 +1733,8 @@ export const useContainersStore = defineStore('containers', () => {
         ...(aufkBattalionUnitId === undefined ? {} : { aufkBattalionUnitId }),
         ...(krdBattalionUnitId === undefined ? {} : { krdBattalionUnitId }),
         ...(combatUnitIds.length === 0 ? {} : { combatUnitIds }),
-        // ch10 的西移：引擎按 `edges.road` 从锚点连续西移 3 格（见 `shiftWestDestination`）；
-        // 无合法道路落点即留在锚点，落点不再由玩家点地图给（缺口另有 roadGaps 台账）
+        // ch10 的西移：引擎按 `edges.road ∪ edges.rail` 从锚点连续西移 3 格（见 `shiftWestDestination`）；
+        // 无合法道路/铁路落点即留在锚点，落点不再由玩家点地图给（缺口另有 roadGaps 台账）
         ...(data.anchorHex === null
           ? {}
           : { anchorHexText: `${data.anchorHex.col}.${data.anchorHex.row}` }),
@@ -1812,7 +1814,7 @@ export const useContainersStore = defineStore('containers', () => {
    * 照玩家给定的落点把西移编队的**图上单位**摆过去（初设里点「照此摆位」）
    *
    * 缺任一落点即**整笔拒绝**（用户口径的"不猜"）；落点与原初设格的**列差**若与 ch10 的
-   * 「沿道路西移 3 格」不符，只**如实记一行提示**（落点由 `shiftWestDestination` 沿 road 边算出，引擎不替它判对错）。
+   * 「沿道路西移 3 格」不符，只**如实记一行提示**（落点由 `shiftWestDestination` 沿道路/铁路边算出，引擎不替它判对错）。
    */
   function applyShiftWestPlacementsNow(): boolean {
     const pending = pendingShiftWestPlacements.value
@@ -1891,7 +1893,7 @@ export const useContainersStore = defineStore('containers', () => {
    * 把**一个**西移编队按已记的落点摆过去（整笔与单条共用这一段）
    *
    * 落点与原初设格的**列差**若与 ch10 的「沿道路西移 3 格」不符，只**如实记一行提示**
-   * （落点由 `shiftWestDestination` 沿 road 边算出，引擎不替它判对错）。
+   * （落点由 `shiftWestDestination` 沿道路/铁路边算出，引擎不替它判对错）。
    */
   function placeShiftWestItem(item: {
     formationId: string

@@ -627,7 +627,7 @@ export const useSetupStore = defineStore('setup', () => {
     const current = placing.value
     if (current === null) return false
     /*
-     * ★ ch10 西移项**不按候选校验**：正常落点由引擎沿 road 边自动算出（`shiftWestDestination`）；
+     * ★ ch10 西移项**不按候选校验**：正常落点由引擎沿道路/铁路边自动算出（`shiftWestDestination`）；
      *   只有旧台账缺落点的兜底入口才由玩家给格，候选只是提示范围。
      *   真正的口径是"玩家给一个格"（与 `containers.beginDrawShiftHexPickNow` 的 `candidates: 'any'`
      *   同一口径）⇒ 这里只校验在图上（IV-I 的一半），不给玩家添一层会被拒的框。
