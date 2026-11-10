@@ -110,11 +110,6 @@ function drawnOf(kind: string): string[] {
  *   store 的 `setup.truckLoadSummary` 给（同一理由：口径只有一处）。
  */
 
-/** 是否适用 3.4b（轴方 SP 须点名装甲集群） */
-const requiresGroup = computed(
-  () => setup.spDumpsOf('axis').length > 0 && setup.stepDone['spOwnership'] !== true,
-)
-
 /** 各方的自由项（须玩家定夺） */
 function choicesOf(side: Side) {
   return setup.choicesOf(side)
@@ -504,10 +499,12 @@ function sideLabel(side: Side): string {
 
       <!-- SP 归属划分（12.1d + Setup Note F + 3.4b） -->
       <p class="muted">
-        SP 归属划分（12.1d）：通用 SP 算子双方共用，**谁带上图即谁拥有**；轴方地图内 SP 还要在初设期
-        逐个点名装甲集群（Setup Note F / 3.4b）。本剧本**{{ requiresGroup ? '适用' : '不适用' }}**
-        3.4b —— 适用时每个轴方补给站都必须选 Guderian 或 Hoth；分界线只作提示，不参与判定（原文
-        guide / 玩家自定），未选不能核验，也不能开局。
+        SP 归属划分（12.1d）：通用 SP 算子双方共用，**谁带上图即谁拥有**。
+        <template v-if="setup.spOwnershipEntryVisible">
+          轴方地图内 SP 还要在初设期逐个点名装甲集群（Setup Note F / 3.4b）——每个轴方补给站都必须选
+          Guderian 或 Hoth；分界线只作提示，不参与判定（原文 guide /
+          玩家自定），未选不能核验，也不能开局。
+        </template>
       </p>
       <table v-if="setup.spDumps.length > 0" class="table">
         <thead>
@@ -515,7 +512,7 @@ function sideLabel(side: Side): string {
             <th>格</th>
             <th>点数</th>
             <th>归属（12.1d）</th>
-            <th>装甲集群（3.4b）</th>
+            <th v-if="setup.spOwnershipEntryVisible">装甲集群（3.4b）</th>
           </tr>
         </thead>
         <tbody>
@@ -523,7 +520,7 @@ function sideLabel(side: Side): string {
             <td class="num">{{ setupHexLabel(dump.hex) }}</td>
             <td class="num">{{ dump.points }}</td>
             <td>{{ dump.side === 'axis' ? '轴心国' : '苏联' }}</td>
-            <td>
+            <td v-if="setup.spOwnershipEntryVisible">
               <template v-if="dump.side === 'axis'">
                 <select
                   :value="setup.spAssignments[dump.id] ?? ''"

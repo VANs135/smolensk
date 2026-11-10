@@ -2501,6 +2501,17 @@ export const useSetupStore = defineStore('setup', () => {
   }
 
   /**
+   * 3.4b SP 归属入口是否出现 —— 用户 2026-11-10 口径：**三者同时**才出现
+   *   ① 开场共识勾选了 3.4b（4.1a 可选项）
+   *   ② 剧本首回合早于 19 August（生效期内）
+   *   ③ 本剧本确有德军（轴方）SP
+   * 未勾选 ⇒ 无入口、无提示、不写台账（归属只在这条规则真生效时才有意义）。
+   */
+  const spOwnershipEntryVisible = computed(
+    () => panzerGroupRulesOn() && spDumpsOf('axis').length > 0,
+  )
+
+  /**
    * 既存存档字段（旧版用于记录「已按分界线填过默认归属」的 dump id）。
    *
    * 3.4b 改为玩家逐站选择后不再填充，始终为空；保留字段只为不改存档结构。
@@ -2509,6 +2520,8 @@ export const useSetupStore = defineStore('setup', () => {
 
   /** 记一条 SP 的装甲集群归属（Setup Note F：分界线仅作参考，归属由玩家自定） */
   function setSpAssignment(dumpId: string, group: SetupPanzerGroup | null): void {
+    // 3.4b 未生效（未勾选 / 已过 19 Aug / 无德军 SP）⇒ 不写台账（用户 2026-11-10 口径）
+    if (!panzerGroupRulesOn()) return
     const next = { ...spAssignments.value }
     if (group === null) delete next[dumpId]
     else next[dumpId] = group
@@ -2527,10 +2540,13 @@ export const useSetupStore = defineStore('setup', () => {
     })
     if (!outcome.ok) return record(outcome)
     // 3.4b：验证完整名单后才提交到付款/拖取实际读取的账本，不能仅勾选初设完成。
-    for (const entry of outcome.data.entries) {
-      if (entry.side !== 'axis' || entry.panzerGroup === null) continue
-      if (workbench.panzerGroupOfDump(entry.id) !== entry.panzerGroup)
-        workbench.setDumpPanzerGroupNow(entry.id, entry.panzerGroup)
+    // 未生效（未勾选 / 已过 19 Aug / 无德军 SP）⇒ 不写台账（用户 2026-11-10 口径）
+    if (panzerGroupRulesOn()) {
+      for (const entry of outcome.data.entries) {
+        if (entry.side !== 'axis' || entry.panzerGroup === null) continue
+        if (workbench.panzerGroupOfDump(entry.id) !== entry.panzerGroup)
+          workbench.setDumpPanzerGroupNow(entry.id, entry.panzerGroup)
+      }
     }
     completed.value = { ...completed.value, spOwnership: true }
     return record(outcome)
@@ -2856,6 +2872,8 @@ export const useSetupStore = defineStore('setup', () => {
     designateTrucks,
     setSpAssignment,
     confirmSpOwnership,
+    panzerGroupRulesOn,
+    spOwnershipEntryVisible,
     setAirChoice,
     runAirSetup,
   }

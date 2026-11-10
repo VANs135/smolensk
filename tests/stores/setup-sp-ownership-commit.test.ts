@@ -1,4 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { boundarySideOf, PANZER_GROUP_OPTION_ITEM } from '@/engine/rules'
 import { createMemoryStorage } from '@/shared'
@@ -118,5 +119,64 @@ describe('Setup Note F/3.4b：初设SP归属实际提交', () => {
     expect(Object.keys(board.spDumpPanzerGroups).length).toBeGreaterThan(0)
     expect(setup.selectScenario('7')).toBe(true)
     expect(board.spDumpPanzerGroups).toEqual({})
+  })
+})
+
+/**
+ * 用户 2026-11-10 口径：#6「3.4b SP 归属入口」必须**三者同时**才出现
+ *   ① 开场共识勾选了 3.4b（4.1a 可选项）
+ *   ② 剧本首回合早于 19 August（生效期内）
+ *   ③ 本剧本确有德军（轴方）SP
+ * 未勾选时**无入口 / 无提示 / 不写台账**（归属只在这条规则真生效时才有意义）。
+ */
+describe('3.4b SP 归属入口：勾选 ∧ 19 Aug 前 ∧ 德军 SP', () => {
+  it('未勾选 ⇒ 无入口；设归属是空操作，核验也不写台账', () => {
+    const { setup, board, game } = boot()
+    game.setAgreedCheck(game.agreedOptionItems.indexOf(PANZER_GROUP_OPTION_ITEM), false)
+    expect(setup.panzerGroupRulesOn()).toBe(false)
+    expect(setup.spOwnershipEntryVisible).toBe(false)
+    const dump = setup.spDumpsOf('axis')[0]!
+    setup.setSpAssignment(dump.id, 'guderian')
+    expect(setup.spAssignments).toEqual({})
+    expect(setup.confirmSpOwnership()).toBe(true)
+    expect(board.spDumpPanzerGroups).toEqual({})
+  })
+
+  it('已过 19 Aug 生效期 ⇒ 无入口；不写台账', () => {
+    const { setup, board } = boot()
+    expect(setup.selectScenario('7')).toBe(true)
+    expect(setup.panzerGroupRulesOn()).toBe(false)
+    expect(setup.spOwnershipEntryVisible).toBe(false)
+    const dump = setup.spDumpsOf('axis')[0]!
+    setup.setSpAssignment(dump.id, 'hoth')
+    expect(setup.spAssignments).toEqual({})
+    expect(setup.confirmSpOwnership()).toBe(true)
+    expect(board.spDumpPanzerGroups).toEqual({})
+  })
+
+  it('生效期内但没有德军 SP（只剩苏军 SP）⇒ 无入口', () => {
+    const { setup } = boot()
+    expect(setup.panzerGroupRulesOn()).toBe(true)
+    setup.spDumps = setup.spDumps.filter((dump) => dump.side === 'soviet')
+    expect(setup.spDumpsOf('axis')).toHaveLength(0)
+    expect(setup.spOwnershipEntryVisible).toBe(false)
+  })
+
+  it('三者同时 ⇒ 入口出现；点名后核验写入付款实际读取的账本', () => {
+    const { setup, board } = boot()
+    expect(setup.spOwnershipEntryVisible).toBe(true)
+    for (const dump of setup.spDumpsOf('axis')) setup.setSpAssignment(dump.id, 'guderian')
+    expect(setup.confirmSpOwnership()).toBe(true)
+    for (const dump of setup.spDumpsOf('axis'))
+      expect(board.panzerGroupOfDump(dump.id)).toBe('guderian')
+  })
+
+  it('面板：3.4b 的列 / 提示都由 spOwnershipEntryVisible 控制（无入口即不渲染）', () => {
+    const source = readFileSync(
+      new URL('../../src/components/setup/SetupPanel.vue', import.meta.url),
+      'utf8',
+    )
+    expect(source).toMatch(/v-if="setup\.spOwnershipEntryVisible"[\s\S]{0,800}装甲集群（3\.4b）/)
+    expect(source).toMatch(/v-if="setup\.spOwnershipEntryVisible"[\s\S]{0,400}3\.4b/)
   })
 })

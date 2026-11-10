@@ -304,14 +304,17 @@ describe('W7 C14：SP 归属划分（12.1d + Setup Note F + 3.4b）', () => {
     expect(setup.lastAction?.detail).toContain('spOwnershipSovietGroupForbidden')
   })
 
-  it('C14：剧本 7（26 Aug 首回合）不适用 3.4b ⇒ 点名反而被拒（数据驱动）', () => {
+  it('C14：剧本 7（26 Aug 首回合）不适用 3.4b ⇒ 无入口、点名被忽略、核验通过且不写台账', () => {
     setup.selectScenario('7')
     setup.runAutoSetup()
     expect(setup.spDumpsOf('axis').length).toBeGreaterThan(0)
+    expect(setup.spOwnershipEntryVisible).toBe(false)
     expect(setup.confirmSpOwnership()).toBe(true)
     expect(setup.lastAction?.detail).toContain('不适用 3.4b')
+    // 用户 2026-11-10 口径：未生效时无入口 ⇒ 点名是空操作（不写台账）
     setup.setSpAssignment(setup.spDumpsOf('axis')[0]!.id, 'guderian')
-    expect(setup.confirmSpOwnership()).toBe(false)
+    expect(Object.keys(setup.spAssignments).length).toBe(0)
+    expect(setup.confirmSpOwnership()).toBe(true)
   })
 })
 
