@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
 import { mapLayers } from '@/data'
-import { hexCanvasPoint } from '@/render/map-layout'
+import { HEX_RADIUS_PX, hexCanvasPoint } from '@/render/map-layout'
 import { toConsoleUnit, unitChoices, useMapViewStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -76,9 +76,10 @@ describe('B27：待点格（机制）', () => {
         toConsoleUnit({ record, instanceId, hex: HEX, side: 'axis', face: 'combat' }),
       )
     }
-    // ① 第一击（带世界坐标：扇面命中要靠它）：摊开该格（两枚 ⇒ 出扇面）
+    // ① 第一击（带世界坐标：扇面命中要靠它）：点**格内空白** ⇒ 整格全选（两枚 ⇒ 出扇面）
     const center = hexCanvasPoint(HEX)
-    mapView.onHexClick(HEX, { x: 10, y: 10 }, center)
+    const blank = { x: center.x, y: center.y - HEX_RADIUS_PX * 0.82 }
+    mapView.onHexClick(HEX, { x: 10, y: 10 }, blank)
     expect(mapView.expandedStack?.hex).toEqual(HEX)
 
     // ② 声明一个待点格动作（16.0b 工事格，候选 any），再点同一格的格心

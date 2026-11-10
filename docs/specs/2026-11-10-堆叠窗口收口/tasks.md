@@ -7,3 +7,13 @@
 - [x] T5 右键体系：地图右键敌方堆叠 → 低空扫射（14.7d）；窗内右键该单位；`App.vue` 拦图片原生右键
 - [x] T6 六门槛（typecheck / lint / format / vitest / arch / build）
 - [x] T7 单独提交并报实数
+- [x] T8 红测：常态摊开（`stack-fan-render` / `token-layer` / `draw-order`）、点格开窗、
+      单点某枚只选该枚（`map-view-flow` / `hex-pick`）
+- [x] T9 `token-layer` / `MapCanvas` / `map-view` 四处命中与绘制同源：`fan.length >= 2` 恒摊开，
+      `expandedStack` 只承载翻页；命中落到具体算子
+- [x] T10 13.2g 按「特殊运输点数」回归：`movePickPoolAt` 收编内卡车、`beginMoveFor` 取消强制随行、
+      `selectForMove(hex, only?)` 支持单点；窗口 chip 加「随 <编队>」（`truckFormationOf`）
+- [x] T11 回归修正：`fuel-three-paths-flow` 路径三改为独立算子口径；`popup-stack-selection`
+      视点改用 `setActiveSide`（`viewerSide` 只读）
+- [x] T12 六门槛（typecheck / lint / format / vitest / arch / build）并通过后单独提交本批次
+

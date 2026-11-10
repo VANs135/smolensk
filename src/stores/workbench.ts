@@ -6417,41 +6417,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     if (!requireAction('move.order', '移动')) return false
     /*
-     * 13.2g：编内卡车不是独立算子 —— 既不能单独开拔，也不进 `pausedTransportIds`。
-     * 取子清单已把它剔掉（movePickPoolAt）；这里再兜一层，免得旧入口（selectForMove 等）绕过。
-     */
-    const organicOnly =
-      unitIds.length > 0 &&
-      unitIds.every(
-        (id) =>
-          units.value.find((unit) => unit.instanceId === id)?.noncombatKind === 'organic_truck',
-      )
-    if (organicOnly) {
-      const reason = '编内卡车不是独立算子：请与同编队单位一起移动（13.2g）'
-      moveBlocked.value = { rule: '13.2g', reason }
-      pushLog('warning', reason, '13.2g')
-      return false
-    }
-    /*
-     * 13.2g：编内卡车随同编队单位移动 —— 开拔时把**同格、同编队、未被停止**的编内卡车并进来，
-     * 免得玩家点「开始移动」时还要单独照顾一辆车。判据只用数据里的 `formation`，不新造规则。
+     * 13.2g：编内卡车＝**特殊的运输点数**（原文「与其他运输点数基本一样」），所以它**是独立算子**：
+     * 可以单独选中、单独开拔（载运/MA/装卸全部复用运输点数的既有实现）；选中整堆时它也一起走。
+     * 原文只列特殊处 A–G（不得卸载 SP / 只服务同编队 / 不能并延补队 / 可进预备 / 可随撤退不可单独撤 /
+     * 被夺取转常规运输点数 / 可留 SP 不付战斗补给），**没有**"不能独立移动"这一条 ⇒ 不设任何特判。
      */
     const moveIds = [...unitIds]
-    for (const unit of units.value) {
-      if (unit.noncombatKind !== 'organic_truck' || unit.movementEnded || unit.locked) continue
-      const attaches = unitIds.some((id) => {
-        const picked = units.value.find((item) => item.instanceId === id)
-        return (
-          picked !== undefined &&
-          picked.isCombat &&
-          picked.hex.col === unit.hex.col &&
-          picked.hex.row === unit.hex.row &&
-          picked.formation !== null &&
-          picked.formation === unit.formation
-        )
-      })
-      if (attaches && !moveIds.includes(unit.instanceId)) moveIds.push(unit.instanceId)
-    }
     /*
      * 13.2a：运输点数「暂停移动并使用它装载的部分补给、然后继续移动」——两条落地：
      *   ① 暂停的运输点数**可以**在同一移动阶段内再次开拔 ⇒ 解开 6.1g 的"本轮已结束"；
@@ -6548,16 +6519,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   - 多枚且未开「整堆叠」 ⇒ 候选先放顶上一枚，玩家在地图上逐枚勾选；
    *   - 多枚且已开「整堆叠」 ⇒ 整堆叠一起作为候选。
    */
-  function selectForMove(hex: HexRef): void {
+  function selectForMove(hex: HexRef, only?: readonly string[]): void {
     const friendlies = friendlyUnitsAt(hex)
     if (friendlies.length === 0) return
     const last = friendlies[friendlies.length - 1]!
+    /*
+     * ★ 用户 2026-11-10：地图上**点某一枚** ⇒ 就选这一枚（`only`），不再整格全选；
+     *   整格全选走"点格内空白"（`expandStackAt`）。
+     */
+    const pickedOnly =
+      only === undefined ? [] : friendlies.filter((unit) => only.includes(unit.instanceId))
+    const picked = pickedOnly.length > 0 ? pickedOnly[0]! : last
     const ids =
-      friendlies.length > 1 && !stackSelect.value
-        ? [last.instanceId]
-        : (stackSelect.value ? friendlies : [last]).map((unit) => unit.instanceId)
+      pickedOnly.length > 0
+        ? pickedOnly.map((unit) => unit.instanceId)
+        : friendlies.length > 1 && !stackSelect.value
+          ? [last.instanceId]
+          : (stackSelect.value ? friendlies : [last]).map((unit) => unit.instanceId)
     movePick.value = { hex: { col: hex.col, row: hex.row }, ids }
-    selectedId.value = last.instanceId
+    selectedId.value = picked.instanceId
     lastStep.value = null
     pushLog(
       'info',
@@ -6577,12 +6557,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 补员算子只为「消耗补员重建」存在（数据层也是 `isCombat: true`），不参加移动；
    * 左键窗的 chip 与取子清单共用这一份，避免 chip 看不见它、`movePick` 里却留着它。
    *
-   * 13.2g：编内卡车不是独立算子，不进可开拔集；它随同编队单位开拔（见 beginMoveFor）。
+   * 13.2g：编内卡车＝**特殊的运输点数**（「与其他运输点数基本一样」）⇒ 照常进可开拔集，
+   * 可单独选中/单独移动；原文没有"不能独立移动"这一条。
    */
   function movePickPoolAt(hex: HexRef): ConsoleUnit[] {
-    return friendlyUnitsAt(hex).filter(
-      (unit) => !isReplUnit(unit) && unit.noncombatKind !== 'organic_truck',
-    )
+    return friendlyUnitsAt(hex).filter((unit) => !isReplUnit(unit))
   }
 
   /** 取子清单的候选单位（该格当前方可开拔的算子，按摆放顺序） */
@@ -22685,6 +22664,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     placeAt,
     removeAt,
     clickHex,
+    // 用户 2026-11-10：地图上点**某一枚** ⇒ 只选这一枚（`only`），整格全选走"点格内空白"
+    selectForMove,
     // C5 动作
     setHoverHex,
     setStackSelect,

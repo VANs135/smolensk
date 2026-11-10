@@ -1051,12 +1051,22 @@ export const useMapViewStore = defineStore('mapView', () => {
     return state !== null && state.hex.col === hex.col && state.hex.row === hex.row
   }
 
+  /** 该格当前画到第几页（常态摊开：没翻过页就是第 0 页） */
+  function stackFanPageAt(hex: HexRef): number {
+    const state = expandedStack.value
+    return state !== null && state.hex.col === hex.col && state.hex.row === hex.row ? state.page : 0
+  }
+
   /**
-   * 展开态下的点击分派（世界坐标）——返回 true 表示"这一击已由展开态消化"
+   * 常态摊开下的点击分派（世界坐标）——返回 true 表示"这一击已由某一枚算子/角标消化"
    *
-   * · 点到某一枚 ⇒ **切换**它的选择（本人口径：再点即取消）；
+   * 用户 2026-11-10：格内多枚**常态摊开**（不需要点击），所以"点某一枚"必须落到**具体算子**：
+   * · 点到某一枚 ⇒ 闲置态**以这一枚开拔**（单体，不再整格全选），其余情境按原口径**切换**选择；
    * · 点到分页角标 ⇒ 翻页；
-   * · 点到空白 ⇒ 收起（选择集保留）。
+   * · 点到格内空白 ⇒ 不消化（交回"点格"分支：整格全选 + 开堆叠窗口）。
+   *
+   * 只在"这一击属于选算子"的情境下接管：闲置、9.1 选攻方、轰炸选参炸者。
+   * 移动中踩格 / 撤退落点 / 空军任务格等"点格即执行"的入口不受影响。
    */
   function handleStackClick(
     hex: HexRef,
@@ -1064,33 +1074,38 @@ export const useMapViewStore = defineStore('mapView', () => {
     scale: number,
     anchor?: { x: number; y: number },
   ): boolean {
-    const state = expandedStack.value
-    if (state === null || state.hex.col !== hex.col || state.hex.row !== hex.row) return false
+    const liveForStack =
+      isIdleForStack() ||
+      combatSelectionLive.value ||
+      (workbench.barrageActive && workbench.barrageState === null)
+    if (!liveForStack) return false
     // B26：与渲染同一份令牌（含飞机）⇒ 命中的槽位就是画在那儿的算子
-    const tokens = stackTokensAt(hex).filter((token) => token.hiddenStack !== true)
+    const all = stackTokensAt(hex)
+    const tokens = all.filter((token) => token.hiddenStack !== true)
     if (tokens.length === 0) return false
-    const layout = stackFanLayout({
-      hex,
-      total: tokens.length,
-      page: state.page,
-      order: stackFanOrder(tokens),
-    })
-    const hit = hitStackFan({ layout, point: world, scale })
-    if (hit === null) {
-      collapseStack()
+    let token: UnitToken | null = null
+    let nextPage: number | null = null
+    if (tokens.length >= STACK_FAN_MIN_TOKENS) {
+      const layout = stackFanLayout({
+        hex,
+        total: tokens.length,
+        page: stackFanPageAt(hex),
+        order: stackFanOrder(tokens),
+      })
+      const hit = hitStackFan({ layout, point: world, scale })
+      if (hit?.kind === 'page') nextPage = hit.nextPage
+      else if (hit?.kind === 'slot') token = tokens[hit.index] ?? null
+    } else {
+      token = hitCollapsedToken(all, world, scale)
+    }
+    if (nextPage !== null) {
+      expandedStack.value = { hex: { col: hex.col, row: hex.row }, page: nextPage }
       return true
     }
-    if (hit.kind === 'page') {
-      expandedStack.value = { hex: state.hex, page: hit.nextPage }
-      return true
-    }
-    const token = tokens[hit.index]
-    if (token === undefined) return true
+    if (token === null) return false
     /*
      * ★ 用户 2026-11-09：**堆叠窗内左键只切换选中**，不触发任何动作、不跳任何会话。
-     * 修前：非战斗令牌（编内卡车/补给队…）命中即 `selectCounterAt` ⇒ 直接跳到加油等动作会话，
-     * 玩家没法先点掉它再重新组成一组。这里只留「没有算子记录」的令牌（SP 点数等）
-     * 走原有单枚入口；有算子记录的一律落到下面的选中切换。
+     * 这里只留「没有算子记录」的令牌（SP 点数等）走原有单枚入口；有算子记录的一律落到下面的选中。
      */
     if (
       isIdleForStack() &&
@@ -1101,13 +1116,9 @@ export const useMapViewStore = defineStore('mapView', () => {
       return true
     /*
      * B9：**不参与本环节的算子点不动**（用户口径「不参与环节的算子无法点击」）。
-     * 不是静默忽略——那样玩家只会觉得"点了没反应"；而是**就地给一行规则号提示**
-     * （走操作台日志 ⇒ 侧栏反馈区与地图内提示都能取到）。
+     * 不是静默忽略——那样玩家只会觉得"点了没反应"；而是**就地给一行规则号提示**。
      *
-     * ★ B26 补一条出口：**已经选中的可以点掉**。否则 F 段炮击环节摊开"炮兵＋步兵"的堆叠时，
-     *   默认全选把步兵也圈进来（参加不了炮击），而步兵又"点不动"⇒
-     *   玩家既不能只留炮兵、也剔不掉步兵（用户报告 #22「炮兵单位和其它单位堆叠时无法选中」）。
-     *   即：**不能加入，但可以剔除** —— 这与"不参与就不能参战"的规则口径不冲突。
+     * ★ B26 补一条出口：**已经选中的可以点掉**（不能加入，但可以剔除）。
      */
     const isSelected = stackSelection.value.includes(token.id)
     if (!participatesNow(token.id) && !isSelected) {
@@ -1119,14 +1130,26 @@ export const useMapViewStore = defineStore('mapView', () => {
       return true
     }
     /*
+     * ★ 用户 2026-11-10：闲置态**点某一枚 ⇒ 只选这一枚**（"点格"才是整格全选 + 开窗口）。
+     *   修前点格即整格全选，玩家想看某一枚的菜单只能先进窗口。
+     */
+    if (
+      isIdleForStack() &&
+      !movePickHere(hex) &&
+      !combatSelectionLive.value &&
+      !(workbench.barrageActive && workbench.barrageState === null)
+    ) {
+      stackSelection.value = [token.id]
+      workbench.selectForMove(hex, [token.id])
+      return true
+    }
+    /*
      * ★ 用户 2026-11-09：堆叠窗内左键**只切换选中**，不触发动作、不跳会话。
-     * 选中态仍是 `stackSelection`（条 8 裁定①：展开不预选）；有取子清单时同步回引擎，
-     * 这样"取消勾选的那一枚"是真的不会被带走（6.1f）。
+     * 选中态仍是 `stackSelection`；有取子清单时同步回引擎，这样"取消勾选的那一枚"是真的不会被带走（6.1f）。
      */
     stackSelection.value = toggleSelection(stackSelection.value, token.id)
     if (movePickHere(hex)) workbench.setMovePickIds(stackSelection.value)
     // B15b（§4.2「选择集就是后续动作的参与集合」）：战斗的参战集同样跟着这一圈金色边框走
-    //（9.1 选攻方 / 9.5b 减员两个阶段；合法性仍由 store 的那两个动作各自把关）
     else if (combatSelectionLive.value) {
       workbench.syncCombatParticipants(hex, stackSelection.value)
     }
@@ -1809,14 +1832,14 @@ export const useMapViewStore = defineStore('mapView', () => {
 
   function counterForBoxAt(hex: HexRef, world: { x: number; y: number }, scale: number) {
     const tokens = stackTokensAt(hex)
+    const visible = tokens.filter((item) => item.hiddenStack !== true)
     let token: UnitToken | null = null
-    const expanded = expandedStack.value
-    if (expanded !== null && isStackExpanded(hex)) {
-      const visible = tokens.filter((item) => item.hiddenStack !== true)
+    // 用户 2026-11-10：格内常态摊开 ⇒ 命中与绘制同源（≥2 枚走扇面，单枚走折叠）
+    if (visible.length >= STACK_FAN_MIN_TOKENS) {
       const layout = stackFanLayout({
         hex,
         total: visible.length,
-        page: expanded.page,
+        page: stackFanPageAt(hex),
         order: stackFanOrder(visible),
       })
       const hit = hitStackFan({ layout, point: world, scale })
@@ -1898,11 +1921,33 @@ export const useMapViewStore = defineStore('mapView', () => {
    */
   function onHexContext(
     hex: HexRef | null,
-    _world: { x: number; y: number },
+    world: { x: number; y: number },
     anchor: { x: number; y: number },
+    scale = 1,
   ): void {
     if (popup.value?.variant === 'context') closePopup()
     if (hex === null) return
+    /*
+     * ★ 用户 2026-11-10：地图上右键**某一枚** ⇒ 出这一枚自己的菜单（与窗内右键同一套逻辑）。
+     *   格内常态摊开后"右键整格"几乎总会落在某一枚上，所以先按绘制同源命中具体算子；
+     *   没命中算子（点在格内空白）才退回原来的选中集合。
+     */
+    const all = stackTokensAt(hex)
+    const visible = all.filter((token) => token.hiddenStack !== true)
+    let token: UnitToken | null = null
+    if (visible.length >= STACK_FAN_MIN_TOKENS) {
+      const layout = stackFanLayout({
+        hex,
+        total: visible.length,
+        page: stackFanPageAt(hex),
+        order: stackFanOrder(visible),
+      })
+      const hit = hitStackFan({ layout, point: world, scale })
+      if (hit?.kind === 'slot') token = visible[hit.index] ?? null
+    } else {
+      token = hitCollapsedToken(all, world, scale)
+    }
+    if (token !== null && openUnitContext(hex, token.id, anchor)) return
     showCounterContext(hex, contextSelectionAt(hex), anchor)
   }
 
@@ -2725,28 +2770,10 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
-   * 批 A 切片 3①：**会话非空 ⇒ 不开小窗**（"同一时刻只有一个对话框"的结构保证）
-   *
-   * 用户口径（9.16 #3 后半 / #17）：「点一格同时出现『格子内容』小窗与『移动结算』会话框」不该发生。
-   * 修前摊开堆叠那一支在闸门**之前**就 `return`，并**无条件** `openPopup`（`map-view.ts:1213-1218`）——
-   * 而摊开会同时建立取子清单（`beginMovePick`），缺油单位的堆叠于是当场长出"移动/燃料"会话，
-   * 与小窗同屏。现在两个开窗点都过这道闸：**这一击已经产生会话，就不再另开小窗**。
-   *
-   * ★ 与"会话**在跑**时点地图"的差别：那种情况（例如战斗中给撤退落点定格子、点补给站付款）
-   *   本函数不会被调用（那条路径由 `onHexClick` 末尾按"会话种类没变才开窗"处理）——即
-   *   **小窗仍是会话的"地图点选辅助"**，只是不再与"刚起来的会话"抢同一屏。
-   */
-  function openPopupIfIdle(hex: HexRef, anchor?: { x: number; y: number }): void {
-    if (anchor === undefined) return
-    if (session.value !== null) return
-    openPopup(hex, anchor.x, anchor.y)
-  }
-
-  /**
    * 批 A 切片 3①：**会话一出现就把已开的小窗收掉**（修前没有任何 watcher 管这件事）
    *
-   * 与 `openPopupIfIdle` 同一目标的两半：那一半防"同一击开两个框"，这一半防"小窗开着、
-   * 会话从别的路径起来了"（面板按钮 / 快捷键 / 自动连跑推进入下一环节时自动开会话）。
+   * 与"点格开窗"同一目标的两半：那一半只在闲置态开窗（不会与刚起来的会话抢同一屏），
+   * 这一半防"小窗开着、会话从别的路径起来了"（面板按钮 / 快捷键 / 自动连跑推进入下一环节时自动开会话）。
    * 判据用**会话种类**（`session` 是 computed，每次求值都是新对象，直接 watch 会因无关重算而误关）。
    */
   watch(
@@ -3036,11 +3063,6 @@ export const useMapViewStore = defineStore('mapView', () => {
       consumed = true
     }
     if (!consumed) {
-      if (idleBefore && world !== undefined) {
-        const hit = hitCollapsedToken(stackTokensAt(hex), world, scale)
-        if (hit !== null && isNoncombatTokenLike(hit) && selectCounterAt(hex, hit.id, anchor))
-          return
-      }
       /*
        * 条 12（M2）：**点非战斗单位 ⇒ 开对应动作会话**（SP 拖取 / 运输点装卸 / 延补队 / 基地整备 / 工事）。
        * 排在摊开 / 既有分派之前：这一击明确表达"对这枚非战斗单位做动作"，就开那一个会话
@@ -3076,17 +3098,22 @@ export const useMapViewStore = defineStore('mapView', () => {
       unitActionUnitId.value = null
       unitActionIntent.value = null
       if (airEntryTarget.value !== null) airEntryTarget.value = null
-      // ③ 闲置态点到有堆叠的格 ⇒ **就地摊开**（用户口径：默认全选、点枚即取消）
+      /*
+       * ③ 闲置态点到**格内空白**（点具体某一枚已在 `handleStackClick` 消费）⇒ 整格全选 + 堆叠窗口
+       *
+       * 用户 2026-11-10：「点格弹出按该格单位排列的窗口（列表形态），供玩家成组选择」；
+       * 摊开已是常态，窗口不再承担"摊开地图"的职责。敌方格只开只读窗口，不建取子清单。
+       */
       const stack = stackTokensAt(hex).filter((token) => token.hiddenStack !== true)
-      if (idleBefore && isIdleForStack() && stack.length >= STACK_FAN_MIN_TOKENS) {
-        expandStackAt(hex)
+      if (idleBefore && isIdleForStack() && stack.length > 0) {
+        if (stack.some((token) => token.side === actingSide.value && token.air !== true))
+          expandStackAt(hex)
         /*
-         * 批 A 切片 3①：摊开后**只有没产生会话时**才开小窗。
-         * 摊开会建立取子清单 ⇒ 缺油单位当场长出「移动 / 燃料（12.5）」会话；那时再开小窗
-         * 就是用户报的"点一格出现两个框"。有会话时玩家要的东西在会话里（付油按钮 + 地图上的
-         * 摊开选择集），小窗反而挡路。
+         * 用户 2026-11-10：**点格就开堆叠窗口**（列表形态，供成组选择）。
+         * 窗口不再承担"摊开地图"的职责（摊开已是常态），所以这里不再因"刚起了会话"而压掉它
+         * ——会话在操作条、窗口在地图旁，各管一段，不是同一块地盘。
          */
-        openPopupIfIdle(hex, anchor)
+        openPopup(hex, anchor?.x ?? 0, anchor?.y ?? 0)
         return
       }
       // ④ 其余交给操作台的既有分派（选单位 / 走一步 / 打一仗）

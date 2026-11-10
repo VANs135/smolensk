@@ -89,14 +89,41 @@ afterEach(() => {
 
 const HEX = { col: 15, row: 10 }
 
-describe('B2 就地展开：渲染', () => {
-  it('未展开：整堆只画**顶牌**一枚（原行为不变）', () => {
+describe('B2 就地展开：渲染（用户 2026-11-10：**常态摊开**，不点也摊）', () => {
+  it('不点也摊开：格内三枚**逐枚画出**（数量可数，不再是顶牌一枚）', () => {
     const calls: DrawCall[] = []
     stubImages()
     const group = [token('u1', HEX), token('u2', HEX), token('u3', HEX)]
     drawMovementOverlay(
       recordingCtx(calls),
       { tokens: group, reachable: [], path: [], startHex: null, selectedIds: [] },
+      SCALE,
+    )
+    const counterDraws = calls.filter((call) => call.url?.includes('Ru_6_Inf_Div_F.png') === true)
+    expect(counterDraws, '常态摊开：三枚都要画出来').toHaveLength(3)
+
+    // 各自缩到槽位尺寸（"更紧密错位"），且中心互不相同（真的是摊开，不是叠在一起）
+    const layout = stackFanLayout({ hex: HEX, total: 3 })
+    for (const call of counterDraws)
+      expect(call.args?.[2] as number).toBeCloseTo(layout.slots[0]!.size, 6)
+    const centers = counterDraws.map(
+      (call) => `${String(call.args?.[0])},${String(call.args?.[1])}`,
+    )
+    expect(new Set(centers).size).toBe(3)
+  })
+
+  it('单枚格：仍只画这一枚（没有可摊的东西）', () => {
+    const calls: DrawCall[] = []
+    stubImages()
+    drawMovementOverlay(
+      recordingCtx(calls),
+      {
+        tokens: [token('u1', HEX)],
+        reachable: [],
+        path: [],
+        startHex: null,
+        selectedIds: [],
+      },
       SCALE,
     )
     const counterDraws = calls.filter((call) => call.url?.includes('Ru_6_Inf_Div_F.png') === true)
@@ -201,7 +228,7 @@ describe('B2 就地展开：渲染', () => {
     expect(texts).toContain('+6')
   })
 
-  it('展开**别的格**时，本格维持顶牌画法（展开只作用于那一格）', () => {
+  it('别格翻页时，本格仍按**第 0 页摊开**（页号只作用于那一格）', () => {
     const calls: DrawCall[] = []
     stubImages()
     const other = { col: 16, row: 10 }
@@ -219,7 +246,7 @@ describe('B2 就地展开：渲染', () => {
       SCALE,
     )
     const counterDraws = calls.filter((call) => call.url?.includes('Ru_6_Inf_Div_F.png') === true)
-    expect(counterDraws).toHaveLength(1)
+    expect(counterDraws).toHaveLength(2)
   })
 
   it('展开格的四枚各自落在格内（中心到格心 < R，不会压到相邻格）', () => {

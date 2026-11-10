@@ -203,4 +203,30 @@ describe('堆叠窗口收口：列全、默认全选、同格展开、删说明'
     expect(popover).not.toContain('本格没有非激活飞机')
     expect(popover).not.toContain('整备容量')
   })
+
+  it('★ 13.2g：点格开窗，窗口里必须有编内卡车，并标出与编队的随行关系', () => {
+    const s = stores()
+    // 编内卡车只在轴方单位库里出现 ⇒ 这一条按轴方视点摆（4.9a 会裁掉敌方不可见令牌）。
+    // 视点由当前行动方推出（`decisionSide`），不能直接写只读的 `viewerSide`。
+    s.workbench.setActiveSide('axis')
+    const truckRecord = groundRecord('axis', (record) => record.noncombatKind === 'organic_truck')
+    placeGround(s.workbench, truckRecord, HEX, 'axis', 'truck')
+    placeGround(
+      s.workbench,
+      groundRecord('axis', (record) => record.isCombat === true),
+      HEX,
+      'axis',
+      'inf-a',
+    )
+
+    s.mapView.onHexClick(HEX)
+
+    // 窗口＝该格全列（含卡车），否则玩家不知道它跟着谁
+    expect(s.mapView.popup?.variant).toBe('content')
+    expect(s.mapView.popupContent?.units.map((unit) => unit.id)).toContain('truck')
+    // 组件层：按 `formation` 给 chip 追加「随 <编队>」标注（不是说明段落）
+    const popover = popoverSource()
+    expect(popover).toContain('truckFormationOf')
+    expect(popover).toContain("noncombatKind !== 'organic_truck'")
+  })
 })

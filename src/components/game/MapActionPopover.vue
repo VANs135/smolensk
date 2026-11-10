@@ -80,6 +80,19 @@ function counterImageOf(id: string): string | null {
  */
 const stackUnits = computed(() => content.value?.units ?? [])
 
+/**
+ * 13.2g：**编内卡车**与所属编队的关系（窗口里要看得出它跟着谁）
+ *
+ * 原文：「多单位编队有时拥有特殊的附属运输点数。编内卡车**与其他运输点数基本一样**，
+ * 但有几点例外……」⇒ 它就是运输点数（可单独选中/移动），只是在窗口里额外标出**随行**的归属，
+ * 免得玩家以为它是一支独立编队。没有 `formation` 时给「编队」占位。
+ */
+function truckFormationOf(id: string): string | null {
+  const unit = consoleUnitOf(id)
+  if (unit === null || unit.noncombatKind !== 'organic_truck') return null
+  return unit.formation === null || unit.formation === '' ? '编队' : unit.formation
+}
+
 /** 同格本方飞机（只读；操作走空军面板） */
 const stackAircraft = computed(() => content.value?.airUnits ?? [])
 
@@ -448,7 +461,10 @@ function sideName(side: string): string {
             />
             <span class="chip__label num"
               >{{ unit.label }} · {{ unit.modeLetter }}<template v-if="unit.dg">· DG</template
-              ><template v-if="unit.ended">· 停</template></span
+              ><template v-if="unit.ended">· 停</template
+              ><template v-if="truckFormationOf(unit.id) !== null">
+                · 随 {{ truckFormationOf(unit.id) }}</template
+              ></span
             >
           </div>
           <div

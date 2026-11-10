@@ -164,28 +164,28 @@ describe('B1 绘制层次（用户 2026-09-16 #2）', () => {
     expect(stratIdx, '状态贴图必须在算子图之后画').toBeGreaterThan(tokenIdx)
   })
 
-  it('同格多枚时，状态贴图只贴在**实际画出的顶牌**上（不贴到看不见的牌上）', () => {
+  it('同格多枚**常态摊开**：每枚的状态贴图贴在自己那一枚上（不再只贴在顶牌）', () => {
     const hex = { col: 15, row: 10 }
     const calls: DrawCall[] = []
     const seen: string[] = []
     stubImages(seen)
     /*
-     * 顶牌判定见 `topTokenOf`：正在操作的那一枚（selected）> 飞机 > 最后一枚。
-     * 故把「带战略标记」的那枚设为**未选中**且排在前面，顶牌就是后一枚（无标记）⇒ 不该出现战略贴图。
+     * 用户 2026-11-10：格内常态摊开 ⇒ 每一枚都画出来，带战略标记的那一枚**自己**贴出战略标记
+     * （修前只画顶牌，标记落在看不见的牌上就丢了）。
      */
-    const hidden = tokenAt(hex, { id: 'u-hidden', selected: false, strat: true })
+    const marked = tokenAt(hex, { id: 'u-marked', selected: false, strat: true })
     const top = tokenAt(hex, { id: 'u-top', selected: true, strat: false })
 
     drawMovementOverlay(
       recordingCtx(calls),
-      { tokens: [hidden, top], reachable: [], path: [], startHex: null, selectedIds: [] },
+      { tokens: [marked, top], reachable: [], path: [], startHex: null, selectedIds: [] },
       SCALE,
     )
 
     const stratDraws = calls.filter(
       (call) => call.op === 'drawImage' && call.url === markerTextureUrl(MARKER_TEXTURES.strat),
     )
-    expect(stratDraws).toHaveLength(0) // 顶牌没有战略标记 ⇒ 不画（其下那枚不参与）
+    expect(stratDraws).toHaveLength(1)
   })
 
   it('工事角标在未就绪时走矢量回退，且仍在算子之后（arc 晚于 fillRect）', () => {

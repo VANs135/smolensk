@@ -261,8 +261,9 @@ describe('批 B 切片 3：三条取油路径都能让单位开拔（12.3/12.5�
     // 取完就能走
     store.beginMovePick(FIXTURE.tankHex, ['mate-1'])
     expect(store.confirmMovePick()).toBe(true)
-    // 13.2g：编内卡车随同编队单位开拔（不再作为独立算子另行开拔）
-    expect(store.moveInteraction?.unitIds).toEqual(['mate-1', 'tr-1'])
+    // 13.2g：编内卡车「与其他运输点数基本一样」⇒ 它是**独立算子**，不会被自动拼进别人的开拔；
+    // 想让它一起走就一起选（同格多选路径见 `organic-truck-move.test.ts`）。
+    expect(store.moveInteraction?.unitIds).toEqual(['mate-1'])
   })
 
   it('★ 12.5e：已补给的指挥部**每阶段只能在一个位置投递** ⇒ 换位置再投递被拒、账本不动', () => {

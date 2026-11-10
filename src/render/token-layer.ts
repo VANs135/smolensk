@@ -863,23 +863,24 @@ export function drawMovementOverlay(
   }
 
   /*
-   * ⑤ 算子层：一格只画一枚；**该格处于"就地展开"状态时**改成逐枚摊开（B2，用户 2026-09-16 #1）
+   * ⑤ 算子层（用户 2026-11-10：**格内常态摊开**）
    *
-   * 展开态：按 `stackFanLayout` 的槽位画本页的每一枚（>4 枚时分页，右下角标翻页）；
-   * 非展开：只画顶牌 + 枚数角标（原行为）。
-   * 画出的每一枚都收进 `drawn`，供状态贴图层按"本单位图之上"逐枚贴（用户 2026-09-16 #2）。
+   * 任何格子的多枚可见算子/设施，**不需要点击**就已经在格内错位展开（≥2 枚即走扇面，
+   * 枚数多时按 `SIZE_RATIOS` 缩小；>6 枚分页，右下角标 `+N`）。仅敌方受战雾限制者
+   * （`hiddenStack`）不参与摊开，仍只露可见顶牌。
+   * `expandedStack` 现在只承载"这一格翻到第几页"，不再决定摊不摊。
    */
   const expanded = visible.expandedStack ?? null
   const expandedKey = expanded === null ? null : hexKeyOf(expanded.hex)
   const drawn: TokenDrawView[] = []
 
   for (const [key, group] of byHex) {
-    const fan = expandedKey === key ? group.filter((token) => token.hiddenStack !== true) : []
-    if (fan.length > 0) {
+    const fan = group.filter((token) => token.hiddenStack !== true)
+    if (fan.length >= 2) {
       const layout = stackFanLayout({
         hex: fan[0]!.hex,
         total: fan.length,
-        page: expanded!.page,
+        page: expandedKey === key ? expanded!.page : 0,
         order: stackFanOrder(fan),
       })
       for (const slot of layout.slots) {

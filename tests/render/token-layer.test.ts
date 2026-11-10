@@ -230,13 +230,13 @@ describe('4.8 / 6.1f：一格只画一枚（堆叠不越格），点格再展开
     selectedIds: [],
   })
 
-  it('同格两枚只画一枚（不再横向摊开越出格边），并标出枚数', () => {
+  it('同格两枚**常态摊开**：两枚都画（各带自己的印值），不再叠成顶牌', () => {
     const { ctx, rec } = makeCtx()
     drawMovementOverlay(ctx, stackOverlay([token(NEAR, 'a'), token(NEAR, 'b')]), 1)
-    // 印值只出现一次（只有最上面那一枚被画出来）
-    expect(rec.texts.filter((text) => text === '5-4-6')).toHaveLength(1)
-    // 枚数角标
-    expect(rec.texts).toContain('2')
+    // 两枚各自画出 ⇒ 印值出现两次（用户 2026-11-10：格内常态摊开，枚数可数）
+    expect(rec.texts.filter((text) => text === '5-4-6')).toHaveLength(2)
+    // 摊开后不再需要枚数角标
+    expect(rec.texts).not.toContain('2')
   })
 
   it('顶牌优先显示投射 ZOC 的战斗单位，其次为其他战斗单位', () => {

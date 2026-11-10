@@ -281,7 +281,7 @@ function onMapContext(
       return
     }
   }
-  mapView.onHexContext(hex, world, anchor)
+  mapView.onHexContext(hex, world, anchor, scale)
 }
 
 function onCounterDrop(id: string, point: { x: number; y: number }): void {

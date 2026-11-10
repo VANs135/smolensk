@@ -332,8 +332,8 @@ function hitAtLocal(point: { x: number; y: number }): {
 /**
  * 该格该点上那一枚令牌的**全称提示**（无 tip 或没命中 ⇒ null）
  *
- * 命中与绘制同源：摊开态走扇面布局（`stackFanLayout` / `hitStackFan`），
- * 未摊开走折叠堆叠（`hitCollapsedToken`）——与右键菜单的命中（store 的 `counterForBoxAt`）一致。
+ * 命中与绘制同源：格内常态摊开（≥2 枚走扇面布局 `stackFanLayout` / `hitStackFan`），
+ * 单枚走折叠堆叠（`hitCollapsedToken`）——与右键菜单的命中（store 的 `counterForBoxAt`）一致。
  */
 function tokenTipAt(hex: HexRef, world: { x: number; y: number }): string | null {
   const overlay = props.overlay
@@ -341,13 +341,13 @@ function tokenTipAt(hex: HexRef, world: { x: number; y: number }): string | null
   const tokens = overlay.tokens.filter((token) => sameHex(token.hex, hex))
   if (tokens.length === 0) return null
   const expanded = overlay.expandedStack ?? null
+  const visible = tokens.filter((item) => item.hiddenStack !== true)
   let token: UnitToken | null = null
-  if (expanded !== null && sameHex(expanded.hex, hex)) {
-    const visible = tokens.filter((item) => item.hiddenStack !== true)
+  if (visible.length >= 2) {
     const layout = stackFanLayout({
       hex,
       total: visible.length,
-      page: expanded.page,
+      page: expanded !== null && sameHex(expanded.hex, hex) ? expanded.page : 0,
       order: stackFanOrder(visible),
     })
     const hit = hitStackFan({ layout, point: world, scale: viewport.value.scale })
