@@ -109,6 +109,19 @@ const retreatUnit = computed(() => mapView.retreatUnit)
  * （`workbench.toggleAdvanceUnit`），本面板只读 `combatAdvanceChoices` 展示。
  */
 
+/**
+ * 当前结算方在 CRT 原文里的记号（如守方段 `Do1`）——
+ * ★ 用户 2026-11-10：结算窗头部直接写 CRT 原文（`守方结算 · Do1`），不加箭头、不另造译名。
+ */
+const resolverNotation = computed(() => {
+  const summary = workbench.combatSummary
+  const current = state.value
+  if (summary === null || current === null) return ''
+  return current.resolution.stage.startsWith('attacker')
+    ? summary.attacker.notation
+    : summary.defender.notation
+})
+
 /** 供模板用：参战攻方（9.5b 减员时以勾选状态为准） */
 const attackerList = computed<ConsoleUnit[]>(() => workbench.combatAttackers)
 
@@ -426,7 +439,9 @@ const defenderArItems = computed(() =>
       <SessionStep item="combat:losses">
         <p class="num">
           当前结算：
-          {{ roleName(state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender') }}
+          {{
+            roleName(state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender')
+          }}结算<span v-if="resolverNotation !== ''"> · {{ resolverNotation }}</span>
         </p>
         <p class="num">
           需承受 {{ workbench.combatRequirement?.losses ?? 0 }} 点；AR
@@ -484,7 +499,9 @@ const defenderArItems = computed(() =>
       <SessionStep item="combat:options">
         <p class="num">
           当前结算：
-          {{ roleName(state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender') }}
+          {{
+            roleName(state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender')
+          }}结算<span v-if="resolverNotation !== ''"> · {{ resolverNotation }}</span>
         </p>
         <p class="num">
           选项点数 {{ workbench.combatRequirement?.options ?? 0 }}：可把「撤退格数 +

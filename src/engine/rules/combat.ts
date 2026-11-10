@@ -49,6 +49,8 @@ export interface AttackerResult {
   optionPoints: number
   /** 进击标记门槛（e#：行动值 ≥ # 的攻方获进击标记）；无则 undefined */
   exploitationAR?: number
+  /** 本格攻方段的原文记号（如 `AL1o1`）—— 结算窗直接显示 CRT 原文，不另造译名 */
+  notation: string
 }
 
 export interface DefenderResult {
@@ -60,6 +62,8 @@ export interface DefenderResult {
   optionPoints: number
   /** 是否混乱（DG） */
   disorganized: boolean
+  /** 本格守方段的原文记号（如 `Do1`、`DL1o2DG`） */
+  notation: string
 }
 
 export interface CombatResult {
@@ -84,6 +88,7 @@ function parseAttackerSection(text: string): AttackerResult {
     losses,
     hasOption: optionPoints > 0,
     optionPoints,
+    notation: text,
     ...(eMatch ? { exploitationAR: Number(eMatch[1]) } : {}),
   }
 }
@@ -96,6 +101,7 @@ function parseDefenderSection(text: string): DefenderResult {
     hasOption: optionPoints > 0,
     optionPoints,
     disorganized: /DG/.test(text),
+    notation: text,
   }
 }
 

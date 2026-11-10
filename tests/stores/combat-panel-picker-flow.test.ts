@@ -417,6 +417,18 @@ describe('B14c：战斗面板的替换（源码守卫）', () => {
     expect(panel).toContain('@pick="workbench.combatInputs.defenderArUnitId = $event"')
   })
 
+  it('★ 用户 2026-11-10：结算窗头部写 CRT 原文记号（如「守方结算 · Do1」），不加箭头', () => {
+    // 记号取自引擎解析出的原文段（`combatSummary.attacker/defender.notation`），面板不另造译名
+    expect(panel).toContain('const resolverNotation = computed')
+    expect(panel).toContain('summary.attacker.notation')
+    expect(panel).toContain('summary.defender.notation')
+    expect(panel).toContain(
+      '}}结算<span v-if="resolverNotation !== \'\'"> · {{ resolverNotation }}</span>',
+    )
+    // 攻方全灭的一键仍保留（9.10c 例 B）
+    expect(panel).toContain('结束战斗')
+  })
+
   /*
    * ★ 契约变更（批 F·E4，2026-10-24）：**推进入口唯一** ⇒ 推进的逐单位勾选从本面板
    *   收口到**地图小窗**（`MapActionPopover`），本面板的推进块改为**只读**。

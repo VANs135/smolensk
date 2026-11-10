@@ -60,8 +60,19 @@ import type { ModeState } from '@/engine/rules'
 describe('CRT 结果记号解析（9.9 / 9.10）', () => {
   it('`AL1o1 Do1`：攻方损失 1 且有 1 点选项；守方 1 点选项、不损失', () => {
     const r = parseCrtResultCell('AL1o1 Do1')
-    expect(r.attacker).toEqual({ losses: 1, hasOption: true, optionPoints: 1 })
-    expect(r.defender).toEqual({ losses: 0, hasOption: true, optionPoints: 1, disorganized: false })
+    expect(r.attacker).toEqual({
+      losses: 1,
+      hasOption: true,
+      optionPoints: 1,
+      notation: 'AL1o1',
+    })
+    expect(r.defender).toEqual({
+      losses: 0,
+      hasOption: true,
+      optionPoints: 1,
+      disorganized: false,
+      notation: 'Do1',
+    })
   })
 
   it('`Ao1 e4 DL1o2`：独立 e# 记号归攻方；守方的 `o2` 是 **2 点**选项（9.10a）', () => {
@@ -71,24 +82,49 @@ describe('CRT 结果记号解析（9.9 / 9.10）', () => {
       hasOption: true,
       optionPoints: 1,
       exploitationAR: 4,
+      notation: 'Ao1e4',
     })
-    expect(r.defender).toEqual({ losses: 1, hasOption: true, optionPoints: 2, disorganized: false })
+    expect(r.defender).toEqual({
+      losses: 1,
+      hasOption: true,
+      optionPoints: 2,
+      disorganized: false,
+      notation: 'DL1o2',
+    })
   })
 
   it('`Ae2 DL2o3DG`：攻方进击门槛 2；守方损失 2、3 点选项且混乱', () => {
     const r = parseCrtResultCell('Ae2 DL2o3DG')
-    expect(r.attacker).toEqual({ losses: 0, hasOption: false, optionPoints: 0, exploitationAR: 2 })
-    expect(r.defender).toEqual({ losses: 2, hasOption: true, optionPoints: 3, disorganized: true })
+    expect(r.attacker).toEqual({
+      losses: 0,
+      hasOption: false,
+      optionPoints: 0,
+      exploitationAR: 2,
+      notation: 'Ae2',
+    })
+    expect(r.defender).toEqual({
+      losses: 2,
+      hasOption: true,
+      optionPoints: 3,
+      disorganized: true,
+      notation: 'DL2o3DG',
+    })
   })
 
   it('`AL2`：无守方段时守方为零结果', () => {
     const r = parseCrtResultCell('AL2')
-    expect(r.attacker).toEqual({ losses: 2, hasOption: false, optionPoints: 0 })
+    expect(r.attacker).toEqual({
+      losses: 2,
+      hasOption: false,
+      optionPoints: 0,
+      notation: 'AL2',
+    })
     expect(r.defender).toEqual({
       losses: 0,
       hasOption: false,
       optionPoints: 0,
       disorganized: false,
+      notation: '',
     })
   })
 
@@ -107,10 +143,19 @@ describe('CRT 结果记号解析（9.9 / 9.10）', () => {
           hasOption: false,
           optionPoints: 0,
           disorganized: false,
+          notation: '',
         })
       } else {
         expect(parsed.defender.disorganized).toBe(cell.includes('DG'))
       }
+      // ★ 用户 2026-11-10：结算窗直接写 CRT 原文记号 ⇒ 两段 notation 必须就是本格原文切片
+      const attackerNotation = tokens
+        .filter((token) => token.startsWith('A') || /^e\d+$/.test(token))
+        .join('')
+      expect(parsed.attacker.notation).toBe(attackerNotation)
+      expect(parsed.defender.notation).toBe(
+        tokens.filter((token) => token.startsWith('D')).join(''),
+      )
       // 攻方段必定存在（本表每格都给出攻方结果）
       expect(parsed.attacker.losses).toBeGreaterThanOrEqual(0)
       // 选项点数必须与原文 o# 一致（9.10a 的全部自由度都在这个数字上）
@@ -242,7 +287,9 @@ describe('CRT 查表（9.9）', () => {
       hasOption: false,
       optionPoints: 0,
       disorganized: false,
+      notation: '',
     })
+    expect(r.attacker.notation).toBe('AL1o1')
   })
 
   it('非法骰值抛错', () => {
