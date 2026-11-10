@@ -721,8 +721,11 @@ const displayedBases = computed(() =>
         <!-- 14.3d：主动返航（空战前须至少留 1 架；空战中禁止；空战后自由） -->
         <div class="row">
           <span class="muted">
-            主动返航（14.3d）：勾选哪几架就返航哪几架 —— 空战**前**须至少留 1 架继续战斗，
-            空战**中**任何一方都不能返航，空战完全结束后自由返航（返航即转非激活）。
+            主动返航（14.3d）
+            <RuleTip rule="14.3d">
+              勾选哪几架就返航哪几架 —— 空战**前**须至少留 1 架继续战斗，
+              空战**中**任何一方都不能返航，空战完全结束后自由返航（返航即转非激活）。
+            </RuleTip>
           </span>
           <BaseButton
             variant="secondary"
@@ -741,8 +744,11 @@ const displayedBases = computed(() =>
         </div>
 
         <!-- 任务已宣布：分配表单收起，只走下方步骤（14.2f-C–G） -->
-        <p v-if="!showsAssign" class="muted num">
-          任务已宣布：分配表单已收起（14.2f-A/B 只在宣布前用）—— 下面按步骤走 C–G。
+        <p v-if="!showsAssign" class="num">
+          任务已宣布（14.2f-C–G）
+          <RuleTip rule="14.2f">
+            分配表单（任务类型 / 任务格 / 参战机）只在宣布前用；下面按 C–G 步走，骰子与查表自动跑。
+          </RuleTip>
         </p>
 
         <!-- U1-b：步骤清单是进度（非待决），会话框里不再并列显示 -->
@@ -812,24 +818,20 @@ const displayedBases = computed(() =>
         ★ 批 C 切片 1：正式界面**只剩「执行任务」这一个入口**（宣布与自动结算已合成一次动作，
           修前要点两次）；下面各环节的手动按钮是**逐步复核**路径，只在验证页（`stepwise`）渲染。
       -->
-          <p
-            v-if="workbench.airState.step !== 'returnToBase' && workbench.airState.step !== 'done'"
-            class="muted"
-          >
-            任务进行中：骰子与查表会自己跑完，停在**返航**步；需要玩家表态的地方（14.5 拦截宣布、
-            14.3e-B 点名迎战机）用下面的选机阵列。（各环节的手动按钮只在引擎验证页出现。）
-          </p>
 
           <!-- ── ② 空战环节（14.2f-C / 14.3） ── -->
           <SessionStep v-if="workbench.airState.step === 'airCombat'" item="air:airCombat">
             <p class="num">
-              空战前提（14.3，由盘面推出）：任务格内
+              空战（14.3）：敌方基地
               <BaseTag :kind="enemyAtTarget.hasAirBase ? 'warning' : 'neutral'">
-                {{ enemyAtTarget.hasAirBase ? '有' : '没有' }}敌方空军基地
+                {{ enemyAtTarget.hasAirBase ? '有' : '没有' }}
               </BaseTag>
-              ｜敌方激活机 {{ enemyAtTarget.activeAircraft }} 架（其中可发起空战
-              {{ enemyAtTarget.canInitiate ? '有' : '无' }}）；
-              只有**有敌方基地且双方都有激活机**才发生空战（14.3），否则直接进入拦截环节。
+              ｜敌方激活机 {{ enemyAtTarget.activeAircraft }} 架（可发起空战
+              {{ enemyAtTarget.canInitiate ? '有' : '无' }}）
+              <RuleTip rule="14.3">
+                只有**有敌方基地且双方都有激活机**才发生空战（14.3），否则直接进入拦截环节；
+                14.3a：带括号空战值的飞机不能发起空战。
+              </RuleTip>
             </p>
             <!-- 14.3e-B：任务方**点名**迎战的那一架（缺省＝ACV 最高，由引擎取） -->
             <CounterPicker
@@ -896,8 +898,11 @@ const displayedBases = computed(() =>
               </div>
             </template>
             <p v-if="workbench.airState.kind === 'barrage'" class="num">
-              空军轰炸（10.2a / 14.7b）：在轰炸环节对目标结算 —— 与炮兵**同一条**轰炸链 （加总轰炸值
-              → 定纵列 → 横移 → 2 骰 → 战果），10.2c：**空军轰炸没有补给消耗**。
+              空军轰炸（10.2a / 14.7b）
+              <RuleTip rule="10.2">
+                与炮兵**同一条**轰炸链（加总轰炸值 → 定纵列 → 横移 → 2 骰 → 战果）；
+                10.2c：**空军轰炸没有补给消耗**。
+              </RuleTip>
             </p>
             <div v-if="workbench.airState.kind === 'barrage'" class="row">
               <BaseButton variant="primary" size="sm" @click="workbench.beginAirBarrageNow()">
@@ -910,10 +915,13 @@ const displayedBases = computed(() =>
           <!-- ── ③ 拦截应答（14.2f-D / 14.5） ── -->
           <SessionStep v-if="workbench.airState.step === 'interception'" item="air:interception">
             <p class="num">
-              对手拦截资格（14.5）：{{ interception === null ? '任务格未定' : interception.detail }}
+              拦截资格（14.5）：{{ interception === null ? '任务格未定' : interception.detail }}
               <template v-if="workbench.airTargetInEnemyPatrolZone">
                 ｜任务格在对手巡逻区内（14.4c）
               </template>
+              <RuleTip rule="14.5">
+                拦截不强制；声明拦截时须给出一架合格战斗机（按 14.4c 的巡逻区判资格），一次一架。
+              </RuleTip>
             </p>
             <div class="row">
               <label class="field">
@@ -964,15 +972,14 @@ const displayedBases = computed(() =>
           <!-- ── ④ 防空应答（14.2f-E / 14.4） ── -->
           <SessionStep v-if="workbench.airState.step === 'flak'" item="air:flak">
             <p class="num">
-              防空（14.4e 表 17-3）：任务 ≥3 机 +1；目标格 HQ +1、基地等级每级 +1、印刷防空值
-              +value；
-              <template v-if="workbench.airTargetInEnemyPatrolZone">
+              防空（14.4e）
+              <RuleTip rule="14.4e">
+                表 17-3：任务 ≥3 机 +1；目标格 HQ +1、基地等级每级 +1、印刷防空值 +value；
                 任务格在对手巡逻区内 ⇒ 任务编有战斗机 +1 / 无战斗机 +2（本任务{{
                   workbench.airMissionHasFighter ? '有' : '无'
-                }}战斗机）
-              </template>
-              <template v-else>任务格不在对手巡逻区内 ⇒ 该组修正不适用</template>
-              ｜修正后 ≥11 命中，用任务损失表（14.4f）定承受者。
+                }}战斗机），不在巡逻区内则该组不适用；修正后 ≥11
+                命中，用任务损失表（14.4f）定承受者。
+              </RuleTip>
             </p>
             <div class="row">
               <label class="field">
@@ -1021,8 +1028,10 @@ const displayedBases = computed(() =>
           <!-- ── ⑥ 返航（14.2f-G / 14.1c） ── -->
           <SessionStep v-if="workbench.airState.step === 'returnToBase'" item="air:return">
             <p class="muted">
-              返航（14.1c）：必须回**距离内的本方**空军基地；常规任务返航一律变为非激活。
-              留空即回原起飞基地。
+              返航（14.1c）
+              <RuleTip rule="14.1c">
+                必须回**距离内的本方**空军基地；常规任务返航一律变为非激活。留空即回原起飞基地。
+              </RuleTip>
             </p>
             <div class="row">
               <label

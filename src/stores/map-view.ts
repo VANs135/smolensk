@@ -1007,12 +1007,18 @@ export const useMapViewStore = defineStore('mapView', () => {
     return true
   }
 
-  /** 第 1 步 → 第 2 步：宣布（炮击 `beginBarrageNow` / 空军 `beginAirMissionNow`） */
+  /**
+   * 第 1 步 → 第 2 步
+   *
+   * 炮击：宣布后进 10.1b 的补给步（`beginBarrageNow`，第二步仍有玩家输入）。
+   * 空军：**宣布 + 自动结算到停返航**（`runAirMissionNow`）——14.2f-C–F 是骰子与查表，
+   * 若只 `beginAirMissionNow` 就停手，会话会卡在「空战/拦截」步而正式界面又不渲染逐步按钮
+   * （只有验证页 `stepwise` 才有），玩家走不到 10.2 的轰炸骰。无拦截时由引擎自己过 D 步。
+   */
   function advanceOpsFlow(): boolean {
     const flow = opsFlow.value
     if (flow === null || flow.step !== 1) return false
-    const ok =
-      flow.kind === 'barrage' ? workbench.beginBarrageNow() : workbench.beginAirMissionNow()
+    const ok = flow.kind === 'barrage' ? workbench.beginBarrageNow() : workbench.runAirMissionNow()
     if (!ok) return false
     opsFlow.value = { ...flow, step: 2 }
     return true

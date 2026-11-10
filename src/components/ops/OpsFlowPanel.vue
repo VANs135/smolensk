@@ -3,7 +3,7 @@ import { computed } from 'vue'
 
 import { AirPanel } from '@/components/air'
 import { BarragePanel } from '@/components/barrage'
-import { BaseButton, BasePanel, BaseTag } from '@/components/base'
+import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import { counterImageUrlOf, hexLabel, useMapViewStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -98,8 +98,11 @@ function isPickedAir(id: string): boolean {
     <template v-if="flow.step === 1">
       <template v-if="flow.kind === 'barrage'">
         <p class="muted num">
-          只列**射程覆盖目标格**且本阶段还没炸过的炮兵（10.1a）；付不出 10.1b
-          的补给时这一项不会出现。
+          炮击（10.1a）
+          <RuleTip rule="10.1b">
+            只列**射程覆盖目标格**且本阶段还没炸过的炮兵（10.1a）；付不出 10.1b
+            的补给时这一项不会出现。
+          </RuleTip>
         </p>
         <div class="ops__grid">
           <button
@@ -121,11 +124,14 @@ function isPickedAir(id: string): boolean {
 
       <template v-else>
         <p class="muted num">
-          {{
-            flow.kind === 'bombing'
-              ? '只列能执行轰炸的飞机（10.2b）；空军轰炸不消耗补给（10.2c）。'
-              : '只列具备低空扫射能力、航程够得到的飞机（14.7d / 14.1a）。'
-          }}
+          {{ flow.kind === 'bombing' ? '轰炸（10.2b）' : '低空扫射（14.7d）' }}
+          <RuleTip :rule="flow.kind === 'bombing' ? '10.2' : '14.7d'">
+            {{
+              flow.kind === 'bombing'
+                ? '只列能执行轰炸的飞机（10.2b）；空军轰炸不消耗补给（10.2c）。'
+                : '只列具备低空扫射能力、航程够得到的飞机（14.7d / 14.1a）。'
+            }}
+          </RuleTip>
         </p>
         <div v-for="group in airGroups" :key="group.baseId" class="ops__group">
           <p class="ops__group-head num">

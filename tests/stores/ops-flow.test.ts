@@ -89,6 +89,15 @@ function airBaseRecord() {
   return groundRecord('axis', (record) => record.noncombatKind === 'air_base')
 }
 
+/** 有印刷轰炸值的轴方轰炸机（10.2b） */
+function bomberRecord() {
+  const found = aircraftChoices('axis').find(
+    (record) => (record.barrageStrength ?? 0) > 0 && (record.rangeHexes ?? 0) >= 1,
+  )
+  if (found === undefined) throw new Error('轴方飞机库中没有可轰炸的机')
+  return found
+}
+
 /** 炮击现场：C 段/F 段轰炸环节 + 邻格火炮 + 目标格守军 + 一座补给站 */
 function setupBarrage(withDump: boolean) {
   const { workbench, mapView } = newStores()
@@ -152,6 +161,35 @@ describe('统一流程：第 1 步 → 第 2 步（炮击）', () => {
     expect(mapView.cancelOpsFlow()).toBe(true)
     expect(workbench.barrageState).toBeNull()
     expect(mapView.opsFlow).toBeNull()
+  })
+})
+
+describe('统一流程：第 1 步 → 第 2 步（空军轰炸的自动结算）', () => {
+  it('★ 选机 → 无拦截 → 直接结算轰炸骰 → 走到返航（修前停在 airCombat 等选机）', () => {
+    const { workbench, mapView } = newStores()
+    // 14.2e / 10.0e-C：空军轰炸在移动段的轰炸环节（C 段）宣布（F 段只给炮兵）
+    workbench.setPhase('movement')
+    const barrageIndex = workbench.playerSegmentSteps.findIndex(
+      (step) => step.id === 'movement.barrage',
+    )
+    expect(barrageIndex).toBeGreaterThanOrEqual(0)
+    expect(workbench.setSegmentStepIndex(barrageIndex)).toBe(true)
+    placeGround(workbench, airBaseRecord(), CORE_HEX, 'axis', 'base-1')
+    const bomber = placeAir(workbench, bomberRecord(), CORE_HEX, 'axis', 'bomber-1')
+    placeGround(workbench, defenderRecord(), TARGET_HEX, 'soviet', 'def-1')
+
+    expect(mapView.openOpsFlow('bombing', TARGET_HEX)).toBe(true)
+    workbench.toggleAirMissionUnit(bomber.instanceId)
+    expect(workbench.airMissionAirIds).toContain('bomber-1')
+
+    expect(mapView.advanceOpsFlow()).toBe(true)
+    // 14.3：目标格无敌方空军基地、无敌机 ⇒ 不发生空战，也不会有拦截
+    expect(workbench.airState?.combat?.occurs).toBe(false)
+    expect(workbench.airState?.interception?.declared).not.toBe(true)
+    // 修前：只宣布（beginAirMissionNow）⇒ 停在 airCombat，界面只剩选机阵列，走不下去
+    expect(workbench.airState?.step).toBe('returnToBase')
+    // 10.2 / 14.7b：轰炸骰已结算并落账
+    expect(workbench.barrageState?.outcome).toBeDefined()
   })
 })
 
