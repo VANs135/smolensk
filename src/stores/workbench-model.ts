@@ -1447,6 +1447,11 @@ export function createRetreatFacts(input: {
       enemyCombatSources.some(
         (item) => item.isCombat && item.side !== side && sameHexRef(item.hex, hex),
       ),
+    // 9.12f 的绝对禁穿：只认战斗开始快照（无快照 ⇒ 无此信息，不臆造）
+    startOfCombatEnemyCombatUnitAt: (hex, side) =>
+      input.combatStartSnapshot?.some(
+        (item) => item.isCombat && item.side !== side && sameHexRef(item.hex, hex),
+      ) === true,
     inEnemyZocAt: (hex, side) => inEnemyZocForRetreat(input.context, hex, side),
     prohibitedFor: (mobility, hex) => {
       const result = selectMovementTerrain({

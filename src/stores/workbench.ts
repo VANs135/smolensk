@@ -10664,6 +10664,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         '9.12',
       )
     }
+    // Q-A2（用户 2026-11-10 裁定）：无撤退单位 ⇒ 9.12e 的 DG / 额外损失不适用，按 0 记
+    if (data.results.length === 0) {
+      pushLog('info', '9.12e：无撤退对象，9.12e 不适用（按 0 记）', '9.12')
+    }
     for (const result of data.results) {
       pushLog(
         result.destroyed ? 'danger' : 'info',

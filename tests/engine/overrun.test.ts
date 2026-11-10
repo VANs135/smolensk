@@ -326,6 +326,30 @@ describe('8.0 / 8.1a / 8.1e / 8.1f 突袭后的移动与状态', () => {
     })
   })
 
+  it('Q-A1（8.1f + 9.10c）：守方全灭 + 攻方选项撤退 ⇒ 仍须撤退、不进格、本阶段移动结束', () => {
+    // 守方已被全部消灭（defenderLeftHex=true）也不免除攻方自己的选项（9.10c / 9.10 例 E）
+    const aftermath = resolveOverrunAftermath({
+      mpRemainingBefore: 9,
+      attackerRetreatedInOptions: true,
+      defenderLeftHex: true,
+    })
+    expect(aftermath).toMatchObject({
+      rule: '8.1f',
+      mustEnterDefenderHex: false,
+      movementEndsThisPhase: true,
+      mayContinueMoving: false,
+      exploitGranted: false,
+    })
+    const plan = planOverrunMove({
+      runtime: [{ unitId: 'a1', hex: { col: 10, row: 10 }, spentMp: 0, ended: false }],
+      participantIds: ['a1'],
+      target: { col: 10, row: 11 },
+      aftermath,
+    })
+    expect(plan.patches).toEqual([{ unitId: 'a1', spentMp: 3, hex: null, ended: true }])
+    expect(plan.endedIds).toEqual(['a1'])
+  })
+
   it('8.0：未撤退且剩余 ≥3 MP ⇒ 可继续移动并再次突袭', () => {
     const continues = resolveOverrunAftermath({
       mpRemainingBefore: 6,

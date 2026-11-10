@@ -403,6 +403,10 @@ describe('战斗终局组合：7 种都必须收束（9.2 / 9.10a / 9.11 / 9.12 
     expect(store.combatState!.finished).toBe(true)
     expect(store.combatLiveStep).toBeNull()
     expect(session.log.some((entry) => entry.action === 'combatRetreat')).toBe(true)
+    // Q-A2：无撤退单位 ⇒ 9.12e 不适用，按 0 记，日志须写明（不给已灭单位补记损失）
+    expect(retreatLogs(store).some((line) => line.text.includes('无撤退对象，9.12e 不适用'))).toBe(
+      true,
+    )
   })
 
   it('A6 双方留存、各自需撤退 ⇒ 先攻后守各自落点，9.12g-B 不推进', () => {

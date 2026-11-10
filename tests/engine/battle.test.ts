@@ -1123,6 +1123,35 @@ describe('9.12 撤退落点规划：完整撤退距离、路径与 ZOC 分类', 
     expect(all.every((plan) => plan.forcedDestruction === false)).toBe(true)
   })
 
+  it('9.12f：战斗开始时含敌方战斗单位的格（现已空）⇒ 不可作落点，也不以“必死”混入', () => {
+    const to = { col: 36, row: 12 }
+    expect(hexDistance(from, to)).toBe(1)
+    const facts = retreatFacts({
+      startOfCombatEnemyCombatUnitAt: (hex) => hex.col === to.col && hex.row === to.row,
+    })
+    // 路径层：唯一一步就是该格 ⇒ 没有合法路径
+    expect(
+      retreatPathTo({ from, to, distance: 1, mobility: 'leg', side: 'axis', facts }),
+    ).toBeNull()
+    // 落点层：9.12f 是绝对禁穿，不得回退成 forcedDestruction 让玩家可选
+    expect(
+      planRetreatDestinations({ from, distance: 1, mobility: 'leg', side: 'axis', facts }).find(
+        (plan) => plan.hex.col === to.col && plan.hex.row === to.row,
+      ),
+    ).toBeUndefined()
+    // 当前敌方占据仍按 9.12 标记必死，不被 9.12f 的排除误伤
+    const currentEnemy = planRetreatDestinations({
+      from,
+      distance: 1,
+      mobility: 'leg',
+      side: 'axis',
+      facts: retreatFacts({
+        enemyCombatUnitAt: (hex) => hex.col === to.col && hex.row === to.row,
+      }),
+    }).find((plan) => plan.hex.col === to.col && plan.hex.row === to.row)
+    expect(currentEnemy?.forcedDestruction).toBe(true)
+  })
+
   it('9.12b：不可移动单位仍给出落点（但全部标为「被迫撤退 ⇒ 被消灭」）；撤退格数 0 与 blocked 判据照旧剔除', () => {
     const immobile = planRetreatDestinations({
       from,

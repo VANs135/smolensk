@@ -824,6 +824,14 @@ export function exploitEligibility(input: {
 export interface RetreatFacts {
   /** 9.12f：该格是否有敌方战斗单位（撤退不可穿越战斗开始时含敌方战斗单位的格） */
   enemyCombatUnitAt(hex: HexRef, side: Side): boolean
+  /**
+   * 9.12f：该格在**战斗开始时**是否含敌方战斗单位（绝对禁穿）
+   *
+   * 与 `enemyCombatUnitAt` 的区别：后者是「当前有敌方战斗单位 ⇒ 9.12 穿越即被消灭」；
+   * 本谓词是「当时有、现在可能已被打空或选项腾空」⇒ **连走都不能走**，不产生必死落点。
+   * 未提供时视为无此信息（仅调用方没有战斗开始快照时）。
+   */
+  startOfCombatEnemyCombatUnitAt?(hex: HexRef, side: Side): boolean
   /** 9.12e：该格是否在敌方未抵消 ZOC 内 */
   inEnemyZocAt(hex: HexRef, side: Side): boolean
   /** 9.12：该格是否禁止该机动类型进入（穿禁入地形者被消灭） */
@@ -904,7 +912,11 @@ export function resolveRetreat(input: {
 
   for (let index = 0; index < path.length; index += 1) {
     const next = path[index]!
-    if (facts.enemyCombatUnitAt(next, unit.side) || facts.prohibitedFor(unit.mobility, next))
+    if (
+      facts.enemyCombatUnitAt(next, unit.side) ||
+      facts.startOfCombatEnemyCombatUnitAt?.(next, unit.side) === true ||
+      facts.prohibitedFor(unit.mobility, next)
+    )
       return {
         ...base,
         rule: '9.12',
@@ -1083,11 +1095,12 @@ export function retreatPathTo(input: {
     from: input.from,
     to: input.to,
     distance: input.distance,
-    // 9.12f/9.12：不穿敌方战斗单位格、不进禁入地形、也不绕回起点
+    // 9.12f/9.12：不穿敌方战斗单位格（含战斗开始时曾有的格）、不进禁入地形、也不绕回起点
     passable: (hex) =>
       !sameHex(hex, from) &&
       !facts.prohibitedFor(input.mobility, hex) &&
-      !facts.enemyCombatUnitAt(hex, input.side),
+      !facts.enemyCombatUnitAt(hex, input.side) &&
+      facts.startOfCombatEnemyCombatUnitAt?.(hex, input.side) !== true,
   })
 }
 
@@ -1156,6 +1169,13 @@ export function planRetreatDestinations(input: {
         passable: (candidate) => !sameHex(candidate, input.from),
       })
     if (path === null) continue
+    // 9.12f：战斗开始时含敌方战斗单位的格是**绝对禁穿**，不是「穿越即被消灭」
+    // ⇒ 回退路径命中这些格时该落点不成立，不得以 forcedDestruction 混入可选落点。
+    if (
+      clean === null &&
+      path.some((step) => input.facts.startOfCombatEnemyCombatUnitAt?.(step, input.side) === true)
+    )
+      continue
     plans.push({
       hex,
       inEnemyZoc: input.facts.inEnemyZocAt(hex, input.side),
