@@ -48,6 +48,41 @@ const breakdownParentId = ref('')
 const breakdownAr = ref(4)
 /** 条 24：AR 档改用**点选**（0–5），正式界面无需手输；具体合法性仍由引擎在提交时判 */
 const BREAKDOWN_AR_LEVELS = [0, 1, 2, 3, 4, 5]
+/** 20.0a：拆分数量（"一个或多个"；上限由母单位军力与盒内存量共同决定） */
+const breakdownCount = ref(1)
+/** 20.0b / 第一步：AR 匹配 —— 只列 ≤ 母单位 AR 且盒内仍有存量的档 */
+const breakdownParent = computed(
+  () => workbench.units.find((unit) => unit.instanceId === breakdownParentId.value) ?? null,
+)
+const breakdownSlots = computed<readonly { ar: number; inBox: number }[]>(() => {
+  const parent = breakdownParent.value
+  if (parent === null) return []
+  const box = boxes.value.find((item) => item.kind === 'breakdownBox' && item.side === parent.side)
+  return (box as { slots?: readonly { ar: number; inBox: number }[] } | undefined)?.slots ?? []
+})
+const breakdownArChoices = computed<number[]>(() => {
+  const parent = breakdownParent.value
+  if (parent === null) return BREAKDOWN_AR_LEVELS
+  const parentAr = parent.faces.combat.ar
+  const usable = breakdownSlots.value
+    .filter((slot) => slot.ar <= parentAr && slot.inBox > 0)
+    .map((slot) => slot.ar)
+  return usable.length > 0
+    ? usable
+    : breakdownSlots.value.filter((slot) => slot.ar <= parentAr).map((slot) => slot.ar)
+})
+/** 第二步：数量上限 = min(该档盒内存量, 母单位军力 − 1)（20.0：最后一点军力不能拆） */
+const breakdownCountMax = computed<number>(() => {
+  const parent = breakdownParent.value
+  if (parent === null) return 1
+  const inBox = breakdownSlots.value.find((slot) => slot.ar === breakdownAr.value)?.inBox ?? 1
+  return Math.max(0, Math.min(inBox, parent.steps - 1))
+})
+const breakdownCountNow = computed<number>(() =>
+  breakdownCountMax.value === 0
+    ? 0
+    : Math.min(Math.max(1, breakdownCount.value), breakdownCountMax.value),
+)
 /** 编队抽签落盘的组成事实（编队 id → Mtr/Aufk/Krd 单位 id） */
 // ★ I②：组成由 store 自动推（containers.drawCompositionNoteOf），不再有玩家手输 unit id 的文本框
 /** 边缘盒进出：从可用单位中选，并决定用 MP 或铁路容量。 */
@@ -725,10 +760,10 @@ function boxAircraft(side: Side) {
             </select>
           </label>
           <label class="field">
-            AR 档
+            ① AR 匹配（≤ 母单位 AR）
             <span class="row">
               <BaseButton
-                v-for="ar in BREAKDOWN_AR_LEVELS"
+                v-for="ar in breakdownArChoices"
                 :key="ar"
                 :variant="breakdownAr === ar ? 'primary' : 'secondary'"
                 size="sm"
@@ -738,23 +773,36 @@ function boxAircraft(side: Side) {
               </BaseButton>
             </span>
           </label>
+          <label class="field">
+            ② 数量（≤ {{ breakdownCountMax }}）
+            <input
+              v-model.number="breakdownCount"
+              class="input"
+              type="number"
+              min="1"
+              :max="Math.max(1, breakdownCountMax)"
+            />
+          </label>
           <BaseButton
             variant="primary"
             size="sm"
-            :disabled="breakdownParentId === '' || breakdownTimingNow === null"
+            :disabled="
+              breakdownParentId === '' || breakdownTimingNow === null || breakdownCountNow === 0
+            "
             :title="
               breakdownTimingNow === null
-                ? '20.0a：只有「开始移动 / 战后推进 / 战后撤退」三个时机能创建拆分单位（先让母单位开始移动，再取用）'
-                : `20.0a 当前时机：${breakdownTimingLabel}`
+                ? '20.0a：只有「开始移动 / 战后推进 / 战后撤退」三个时机能创建拆分单位（未动过的单位在本方移动环节直接可拆）'
+                : `20.0a 当前时机：${breakdownTimingLabel}；20.0b 子 AR ≤ 母 AR`
             "
             @click="
               containers.takeBreakdown({
                 parentInstanceId: breakdownParentId,
                 breakdownAr,
+                count: breakdownCountNow,
               })
             "
           >
-            取用一枚（20.0a：仅在开始移动 / 战后推进 / 战后撤退）
+            取用 {{ breakdownCountNow }} 枚（20.0：不耗 MP）
           </BaseButton>
         </div>
 
@@ -1195,7 +1243,7 @@ function boxAircraft(side: Side) {
   padding: var(--space-2);
   border: 1px solid var(--color-rule);
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  background: var(--color-bg-2);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);

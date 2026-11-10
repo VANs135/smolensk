@@ -60,15 +60,16 @@ describe('A5-02/05/06：20.0 其余条款（store 接线）', () => {
     parent = place(workbench)
   })
 
-  it('20.0a：只进环节、未开「开始移动」窗口 ⇒ 拒绝并给 20.0a', () => {
+  it('20.0a（用户 2026-11-10 裁定）：只进环节、未点「开始移动」⇒ 也可直接拆（拆分即开始移动那一刻）', () => {
     enterMoveOrder(workbench) // 刻意不调用 beginMoveFor
+    const before = parent.steps
     const ok = workbench.createBreakdownNow(
       parent.instanceId,
       'su-breakdown-russian-3-2-2-breakdown',
     )
-    expect(ok).toBe(false)
-    expect(workbench.log[0]?.rule).toBe('20.0a')
-    expect(parent.steps).toBe(parentRecord().steps?.total ?? 0)
+    expect(ok).toBe(true)
+    expect(workbench.log[0]?.rule).toBe('20.0')
+    expect(parent.steps).toBe(before - 1)
   })
 
   it('20.0e：创建的拆分单位本阶段未耗 MP（可在当阶段移动）', () => {

@@ -970,8 +970,12 @@ export function planBreakdownTake(input: {
   locked?: boolean
   /** 盒内存量（`breakdownBoxView().slots`；按 AR 档取） */
   slots: readonly BreakdownPoolSlot[]
+  /** 20.0：一次取用几枚（"一个或多个"；缺省 1） */
+  count?: number
 }): RuleOutcome<{
   rule: string
+  /** 20.0：本次取用几枚（调用方据此扣池、摆算子） */
+  count: number
   /** 取用后该档盒内存量 */
   inBoxAfter: number
   parentStepsAfter: number
@@ -986,11 +990,13 @@ export function planBreakdownTake(input: {
     breakdown: input.breakdown,
     timing: input.timing,
     poolCount: inBox,
+    ...(input.count === undefined ? {} : { count: input.count }),
     ...(input.locked === undefined ? {} : { locked: input.locked }),
   })
   if (!created.ok) return created
   return succeed(created.rule, {
     rule: created.rule,
+    count: created.data.count,
     inBoxAfter: inBox - created.data.count,
     parentStepsAfter: created.data.parentStepsAfter,
     detail: `${created.data.detail}；盒内存量 AR${ar}：${inBox} → ${inBox - created.data.count}（1.8a）`,

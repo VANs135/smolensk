@@ -353,13 +353,12 @@ describe('W7 C12：拆分单位盒（1.8a / 20.0）与编队抽签', () => {
     expect(placed!.steps).toBe(1)
   })
 
-  it('★ 20.0a：没走「开始移动」这个事件时不得取用（修前界面写死 timing:startMove ⇒ 任何环节都能拆）', () => {
+  it('★ 20.0a（用户 2026-11-10 裁定）：未动过即可直接拆；动过的单位才须靠事件窗口', () => {
     /*
-     * 回执（2026-10-30）：`takeBreakdown` 原先信任调用方给的 `timing`，而面板写死 `'startMove'`
-     * ⇒ 引擎那道 20.0a 判据只被喂了假事实，等于**任何环节**都能从盒里取拆分单位。
-     * 20.0a 原文：「多军力单位在开始移动、战后推进或战后撤退时，可以创建一个或多个拆分单位。
-     *   **只有在这些时机**才能创建拆分单位。」
-     * 现在时机只认事件账本（`breakdownTimingOf`）+ 环节闸（`move.breakdown`）。
+     * 20.0a 原文：「多军力单位在开始移动、战后推进或战后撤退时，可以创建一个或多个拆分单位。」
+     * 用户 2026-11-10 的口径：**「开始移动」不是要先点一次按钮** —— 对于本阶段还没动过
+     * 的单位，拆出拆分单位本身就是它"开始移动"的那一刻。已经动过的单位，才必须靠
+     * 推进 / 撤退这两个事件开窗（`breakdownTimingOf` 的另外两条路径）。
      */
     workbench.setPhase('movement')
     workbench.setActiveSide('soviet')
@@ -368,20 +367,28 @@ describe('W7 C12：拆分单位盒（1.8a / 20.0）与编队抽签', () => {
     const beforePool = workbench.breakdownPool.su ?? 0
     const beforeSteps = parent.steps
 
-    // ① 环节对了、但**没有**"开始移动"这个事件 ⇒ 拒（这是修前最大的口子）
-    expect(containers.takeBreakdown({ parentInstanceId: parent.instanceId, breakdownAr: 2 })).toBe(
-      false,
-    )
-    expect(containers.lastAction).toMatchObject({ ok: false, rule: '20.0a' })
-    expect(parent.steps).toBe(beforeSteps)
-    expect(workbench.breakdownPool.su).toBe(beforePool)
-
-    // ② 真的开始时 ⇒ 放行（同一条链的另一半，避免"一律拒绝"的假修复）
-    startMoving(workbench, [parent.instanceId])
+    // ① 没点「开始移动」也能拆（修前这条会被 20.0a 误拒）
     expect(containers.takeBreakdown({ parentInstanceId: parent.instanceId, breakdownAr: 2 })).toBe(
       true,
     )
     expect(parent.steps).toBe(beforeSteps - 1)
+    expect(workbench.breakdownPool.su).toBe(beforePool - 1)
+
+    // ② 已经动过的单位：没有事件窗口 ⇒ 不在 20.0a 的时机（拒绝并报条文）
+    const moved = place(workbench, otherClassParent(), someHex(), 'soviet', 'p2')
+    moved.mpSpent = 1
+    expect(workbench.breakdownTimingOf(moved.instanceId)).toBeNull()
+    expect(containers.takeBreakdown({ parentInstanceId: moved.instanceId, breakdownAr: 2 })).toBe(
+      false,
+    )
+    expect(containers.lastAction).toMatchObject({ ok: false, rule: '20.0a' })
+
+    // ③ 真的在「开始移动」事件里 ⇒ 放行（同一条链的另一半，避免"一律拒绝"的假修复）
+    const fresh = place(workbench, otherClassParent(), someHex(), 'soviet', 'p3')
+    startMoving(workbench, [fresh.instanceId])
+    expect(containers.takeBreakdown({ parentInstanceId: fresh.instanceId, breakdownAr: 2 })).toBe(
+      true,
+    )
   })
 
   it('C12：算子库里没有该 AR 的拆分单位时**不扣账**（避免「账已扣、子落不下」的半截状态）', () => {

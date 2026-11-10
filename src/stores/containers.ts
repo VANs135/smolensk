@@ -984,7 +984,12 @@ export const useContainersStore = defineStore('containers', () => {
    *     ① 环节闸 `move.breakdown`（与 `createBreakdownNow` 同一道）；
    *     ② 时机取 store 的事件账本 `breakdownTimingOf`（由真实事件开窗），不在账本里即拒。
    */
-  function takeBreakdown(input: { parentInstanceId: string; breakdownAr: number }): boolean {
+  function takeBreakdown(input: {
+    parentInstanceId: string
+    breakdownAr: number
+    /** 20.0：「一个或多个」——一次取几枚（缺省 1）；上限由引擎按军力/池量判 */
+    count?: number
+  }): boolean {
     if (!workbench.requireAction('move.breakdown', '取用拆分单位')) return false
     const parentUnit = workbench.units.find((unit) => unit.instanceId === input.parentInstanceId)
     if (parentUnit === undefined) {
@@ -1012,7 +1017,9 @@ export const useContainersStore = defineStore('containers', () => {
       printedSteps: parentUnit.printedSteps,
       dg: parentUnit.mode.dg,
       internalStocks: parentUnit.internalStocks,
-      mode: 'combat',
+      // 20.0c：子算子必须与母单位**同模式** ⇒ 取母单位当前的模式（修前写死 'combat'，
+      //        在移动模式的母单位上拆出来的子算子会变成战斗模式，违反 20.0c）
+      mode: parentUnit.mode.mode,
     }
     const breakdown: BreakdownCreateRequest['breakdown'] = {
       id: `breakdown-ar${input.breakdownAr}`,
@@ -1033,6 +1040,7 @@ export const useContainersStore = defineStore('containers', () => {
       // 时机来自事件账本（见函数开头的说明），不再由调用方自报
       timing,
       slots,
+      ...(input.count === undefined ? {} : { count: input.count }),
     })
     if (!plan.ok) {
       lastAction.value = { ok: false, rule: plan.rule, detail: plan.reason, scope: '拆分单位盒' }
@@ -1056,21 +1064,31 @@ export const useContainersStore = defineStore('containers', () => {
       workbench.pushLog('danger', detail, '20.0g')
       return false
     }
-    // 落盘：母单位 −1 军力、池 −1（20.0：如同战斗损失、不耗 MP），并**摆出拆分单位算子**
+    // 落盘：母单位 −N 军力、池 −N（20.0：如同战斗损失、不耗 MP），并**摆出 N 枚拆分单位算子**
     parentUnit.steps = plan.data.parentStepsAfter
     const prefix = parentUnit.side === 'axis' ? 'ax' : 'su'
     workbench.breakdownPool = {
       ...workbench.breakdownPool,
-      [prefix]: Math.max(0, (workbench.breakdownPool[prefix] ?? 0) - 1),
+      [prefix]: Math.max(0, (workbench.breakdownPool[prefix] ?? 0) - plan.data.count),
     }
-    workbench.units.push(
-      toConsoleUnit({
+    for (let index = 0; index < plan.data.count; index += 1) {
+      const child = toConsoleUnit({
         record,
         instanceId: createId('brk'),
         hex: { ...parentUnit.hex },
         side: parentUnit.side,
-      }),
-    )
+        face: parentUnit.mode.mode === 'move' ? 'move' : 'combat',
+      })
+      // 20.0c：标记与模式同母单位（DG / 进击 / 朝向），部队储备也照抄
+      child.mode = {
+        ...child.mode,
+        orientation: parentUnit.mode.orientation,
+        dg: parentUnit.mode.dg,
+        exploit: parentUnit.mode.exploit,
+      }
+      child.internalStocks = parentUnit.internalStocks
+      workbench.units.push(child)
+    }
     lastAction.value = { ok: true, rule: plan.rule, detail: plan.data.detail, scope: '拆分单位盒' }
     workbench.pushLog('success', plan.data.detail, plan.rule)
     return true

@@ -6486,7 +6486,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     for (const window of breakdownWindows.value) {
       if (window.unitIds.includes(unitId)) return window.timing
     }
-    return null
+    /*
+     * ★ 用户 2026-11-10 裁定：**拆分不依赖「开始移动」按钮**。
+     *   20.0a 的「开始移动」是事件，不是"必须先点一次开始移动"。对于本方移动环节里
+     *   **本阶段还没动过**（`mpSpent === 0`）的单位，拆出拆分单位本身就是它开始移动的
+     *   那一刻。已经动过的单位不能再按这个时机拆，仍只认推进 / 撤退两个事件窗口。
+     */
+    const unit = units.value.find((item) => item.instanceId === unitId)
+    if (unit === undefined) return null
+    if (phase.value !== 'movement' || activeSide.value !== unit.side) return null
+    if (unit.mpSpent > 0) return null
+    return 'startMove'
   }
 
   /** 因燃料/模式等原因没能开始移动时，条件满足后自动重试，省得玩家再点一次 */

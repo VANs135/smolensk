@@ -593,12 +593,17 @@ describe('W6 B18：重建与死亡堆（13.5a–c）', () => {
  * ⇒ 夹具必须让单位真的**开始移动**，它才处在「开始移动」这个时机里。
  */
 function startMovementAt(store: ReturnType<typeof newStore>, hex: HexRef): void {
-  const index = store.playerSegmentSteps.findIndex((step) => step.id === 'movement.modeAndMovement')
-  if (index >= 0) store.setSegmentStepIndex(index)
+  enterMovementSegment(store)
   store.setTool('move')
   store.setFuelPool(0, 60)
   store.clickHex(hex)
   expect(store.confirmMovePick()).toBe(true)
+}
+
+/** 只进入「移动模式与移动」环节（不点开始移动） */
+function enterMovementSegment(store: ReturnType<typeof newStore>): void {
+  const index = store.playerSegmentSteps.findIndex((step) => step.id === 'movement.modeAndMovement')
+  if (index >= 0) store.setSegmentStepIndex(index)
 }
 
 describe('W6 B18：拆分与合并（20.0 / 13.9）', () => {
@@ -620,32 +625,42 @@ describe('W6 B18：拆分与合并（20.0 / 13.9）', () => {
   })
 
   /*
-   * 条 22（批 T）：修前 `createBreakdownNow` 的时机是**按阶段猜**的
-   *   （`phase === 'movement' ? 'startMove' : 'advanceAfterCombat'`）⇒ C 段里**根本没开拔**的
-   *   单位也能创建，而战后**撤退**又被错记成战后推进。现在时机来自**事件**：
-   *   母单位必须真的处在「开始移动 / 战后推进 / 战后撤退」之一，否则拒绝（20.0a）。
+   * 条 22（批 T，用户 2026-11-10 改判）：20.0a 的「开始移动」是**事件**，不是"必须先点一次
+   *   开始移动"。本方移动环节里**本阶段还没动过**（`mpSpent === 0`）的单位，拆出拆分单位
+   *   本身就是它开始移动的那一刻 ⇒ 直接放行；已经动过（`mpSpent > 0`）且没有推进 / 撤退
+   *   事件窗口的，才按 20.0a 拒绝。
    */
-  it('条 22：未开拔 ⇒ 不得创建拆分单位（20.0a：时机是事件，不是"在移动段"）', () => {
+  it('条 22：未动过即可直接拆（拆分即「开始移动」那一刻）', () => {
     const store = newStore()
     store.setPhase('movement')
     const record = pickRecord('axis', (item) => item.specialized?.includes('breakdown') === true)
     const parent = place(store, infDivRecord(), DEFENDER_HEX, 'axis', 'u1')
     expect(parent.steps).toBeGreaterThanOrEqual(2)
     store.setBreakdownPoolNow('ax', 2)
+    enterMovementSegment(store)
 
-    // 同在 C 段、但还没开拔 ⇒ 不在 20.0a 的任何时机里
-    expect(store.createBreakdownNow('u1', record.id)).toBe(false)
-    expect(store.log.some((line) => line.rule === '20.0a')).toBe(true)
-    // 池子与军力都没被动过（拒绝是干净的）
-    expect(store.breakdownPool['ax']).toBe(2)
-    expect(parent.steps).toBe(parent.steps)
-
-    // 真的开拔之后 ⇒ 处在「开始移动」这个时机 ⇒ 可创建
-    startMovementAt(store, DEFENDER_HEX)
+    const before = parent.steps
     expect(store.createBreakdownNow('u1', record.id)).toBe(true)
+    expect(parent.steps).toBe(before - 1)
     expect(store.breakdownPool['ax']).toBe(1)
     // 时机如实入账（不是猜出来的）
     expect(store.log.some((line) => line.text.includes('20.0a 时机：开始移动'))).toBe(true)
+  })
+
+  it('条 22：已经动过且没有事件窗口 ⇒ 20.0a 拒绝（池与军力不动）', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    const record = pickRecord('axis', (item) => item.specialized?.includes('breakdown') === true)
+    const parent = place(store, infDivRecord(), DEFENDER_HEX, 'axis', 'u1')
+    store.setBreakdownPoolNow('ax', 2)
+    enterMovementSegment(store)
+    parent.mpSpent = 1
+
+    const before = parent.steps
+    expect(store.createBreakdownNow('u1', record.id)).toBe(false)
+    expect(store.log.some((line) => line.rule === '20.0a')).toBe(true)
+    expect(store.breakdownPool['ax']).toBe(2)
+    expect(parent.steps).toBe(before)
   })
 
   it('20.0d：吸收拆分单位（须堆叠、AR 方向、阶段末）', () => {
