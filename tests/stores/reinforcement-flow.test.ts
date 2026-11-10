@@ -350,7 +350,14 @@ describe('W6 B18：可变增援与补员账本（1.6b / 1.6c）', () => {
       pax: 0,
       eq: 0,
     })
-    // 放置到地图上后才进盘面账本（每点一枚）
+    // 放置到地图上后才进盘面账本（每点一枚）；13.5a：落点须有战斗面 HQ 2 格内
+    place(
+      store,
+      pickRecord('axis', (record) => record.specialized?.includes('hq') === true),
+      DEFENDER_HEX,
+      'axis',
+      'hq-1',
+    )
     expect(store.placePendingReplNow(DEFENDER_HEX)).toBe(true)
     expect(store.replHoldings).toMatchObject({ pax: plan.repl.pax, eq: plan.repl.eq })
     expect(store.units.filter((unit) => unit.replKind != null)).toHaveLength(

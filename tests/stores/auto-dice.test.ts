@@ -110,11 +110,16 @@ describe('B28：界面上的手填骰面已撤（源码守卫）', () => {
     expect(store).toContain('function drawDumpDestructionDie(')
   })
 
-  it('★ 需要"掷"的动作在界面上都有一句话说明"自动结算"（不让玩家找输入框）', () => {
+  it('★ 需要"掷"的动作：骰面只在日志里，界面只说明"结果随日志可复算"', () => {
     const barrage = readFileSync('src/components/barrage/BarragePanel.vue', 'utf8')
     expect(barrage).toContain('掷骰自动结算')
+    /*
+     * 增援窗精简（用户口径）：骰面 / 公式 / 表名 / 条款号**不上屏**，
+     * 面板只留"拿到什么"；过程写日志。故这里断言骰面说明已撤、只剩一句"日志可复算"。
+     */
     const reinf = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
-    expect(reinf).toContain('骰面自动（')
+    expect(reinf).not.toContain('骰面自动（')
+    expect(reinf).toContain('骰面与表名只在结算日志里')
   })
 })
 

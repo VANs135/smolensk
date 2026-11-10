@@ -10,7 +10,7 @@ import { auxCardImageUrl } from '@/components/game/aux-card-image'
 import { arrivalCopiesOf, rebuildChartRows, suggestRebuildRow } from '@/engine/rules'
 import { counterImages, tokenImageUrl } from '@/render/token-images'
 import { ooaScanOf } from '@/render/charts-view'
-import { counterImageUrlOf, hexLabel, parseHexPath, recordNameOf, unitChoices } from '@/stores'
+import { counterImageUrlOf, hexLabel, recordNameOf, unitChoices } from '@/stores'
 import { useContainersStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -268,11 +268,6 @@ watch(
 /** 会话收起 ⇒ 作用域作废（下次重新右键再带入，不拿旧堆叠预选） */
 onBeforeUnmount(() => workbench.clearConsolidationPick())
 
-/** 13.5：**可保存**的补员类别（判据取引擎的 `isSavableRepl`，不在此写死） */
-const savableReplKeys = ['ftr', 'tac', 'pax', 'eq'].filter((key) =>
-  workbench.isSavableRepl(key as 'ftr' | 'tac' | 'pax' | 'eq'),
-)
-
 /**
  * 批 F 切片 3：**到货 SP 落位**（专规 2.1 / 3.1 免费铁运 + 3.6 补给列车）的界面态
  *
@@ -482,34 +477,46 @@ watch(
   },
   { deep: true },
 )
-/** 补员账本（13.5） */
-const holdings = computed(() => workbench.replHoldings)
-
-/** §5-D：盘面上的补员枚数（当前方；投影，不含待放置） */
-const replCounts = computed(() => ({
-  pax: workbench.replHoldings.pax,
-  eq: workbench.replHoldings.eq,
-}))
-
 /** §5-D：待放置的补员点数（掷出后还没放到地图上） */
 const replPendingTotal = computed(() => workbench.replPending.pax + workbench.replPending.eq)
 
-/** 补员落点输入（与其余格输入同一套路；正式界面只读展示） */
-const replPlaceHexText = ref('')
-const replHexOk = computed(() => parseHexPath(replPlaceHexText.value)[0] !== undefined)
+/** 13.5a：补员放不下去时的可见原因（没有待放置项时为 null） */
+const replPlacementBlocked = computed(() => workbench.replPlacementBlockedReason)
 
 /**
- * §5-D：把待放置的补员摆到选定格（SOP 13.5：「掷可变增援表，并将相应的结果放置在地图上」）
+ * 可变增援的**结果**（只写"拿到什么"）
  *
- * 落点由裁判给（该条没有规定入场格；游戏提示建议放前线后方的指挥部附近，即"训练分队"）。
+ * 骰面、公式、表名与条款号只在结算日志里（用户口径：过程不上屏），面板只列结果摘要。
  */
-function placePendingRepl(): boolean {
-  const hex = parseHexPath(replPlaceHexText.value)[0]
-  if (hex === undefined) return false
-  if (!workbench.placePendingReplNow(hex)) return false
-  replPlaceHexText.value = ''
-  return true
-}
+const variableReplResult = computed<readonly string[]>(() => {
+  const plan = workbench.lastVariableRepl
+  if (plan === null) return []
+  const lines = [`补给 +${String(plan.sp)} SP`]
+  const repl = [
+    plan.repl.pax > 0 ? `Pax ${String(plan.repl.pax)}` : '',
+    plan.repl.eq > 0 ? `Eq ${String(plan.repl.eq)}` : '',
+    plan.repl.ftr > 0 ? `Ftr ${String(plan.repl.ftr)}` : '',
+    plan.repl.tac > 0 ? `Tac ${String(plan.repl.tac)}` : '',
+  ].filter((item) => item !== '')
+  lines.push(repl.length === 0 ? '补员：无' : `补员：${repl.join(' / ')}`)
+  const special = plan.special
+  if (special !== null) {
+    const grants: string[] = []
+    if (special.supplyCache) grants.push('Supply Cache ×1')
+    if (special.freeDivisionRebuild) grants.push('免费重建 1 个步兵/民兵师（−1 step）')
+    if (special.freeAlarmOrRecon) grants.push('免费重建 1 个 Alarm / Aufk / Krd 单位')
+    if (grants.length > 0) lines.push(`特殊补员：${grants.join(' + ')}`)
+  }
+  const event = plan.randomEvent
+  if (event !== null) {
+    lines.push(
+      event.kind === 'supplyTrain'
+        ? `随机事件：Supply Train ⇒ +${String(event.sp ?? 0)} SP（任一可卸货格，不用 Rail Cap）`
+        : `随机事件：${event.aircraftType ?? '飞机'}全部变非激活`,
+    )
+  }
+  return lines
+})
 
 /**
  * **待重建单位**的算子图阵列（B13；用户口径⑪「把当前可选的算子图片紧凑排出来」）
@@ -803,14 +810,11 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
     >
       <!-- ── · 可变增援（13.6b / 1.6c / 3.3c / 3.6） ── -->
       <hr />
-      <RuleNote
-        title="可变增援：每个己方增援阶段掷补给表与补员表（19 Aug 前掷一次，之后掷两次）"
-        rule="13.6b"
-      >
+      <RuleNote title="可变增援：每个己方增援阶段掷一次（19 Aug 起两次）" rule="13.6b">
         <p class="muted">
           可变增援（13.6b）：每个己方增援阶段掷补给表（得 SP）与补员表（得 Ftr/Tac/Pax/Eq）； 19 Aug
           起补员表 −1 且取 Late 档；1.6c 特殊补员 19 Aug 前每回合掷； 轴方另掷 3.3c 可变撤离（19 Aug
-          起）、3.6 随机事件（19 Jul、25 Aug）。
+          起）、3.6 随机事件（19 Jul、25 Aug）。骰面与表名只在结算日志里，便于复算。
         </p>
       </RuleNote>
       <div v-if="showsActions" class="row">
@@ -824,59 +828,33 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           启用可选 4.1b（8 / 12 / 15 Jul 三个回合自动 Supply Train）
         </label>
         <BaseButton variant="primary" size="sm" @click="workbench.rollVariableReplNow()">
-          掷可变增援（1.6b）
+          掷可变增援
         </BaseButton>
         <BaseButton variant="ghost" size="sm" @click="workbench.clearNonSavableReplNow()">
-          清零不可保存的补员（13.5）
+          清零不可保存的补员
         </BaseButton>
       </div>
-      <p v-if="showsActions" class="muted num">
-        骰面自动（补给表 2d6 / 补员表 2d6 / 特殊补员 1d6 / 可变撤离 1d6 / 随机事件 2d6），
-        结果随本次结算一并落日志。
-      </p>
-      <p v-if="workbench.lastVariableRepl !== null" class="num">
-        <BaseTag kind="success">{{ workbench.lastVariableRepl.rule }}</BaseTag>
-        {{ workbench.lastVariableRepl.detail }}
-      </p>
-      <p class="num">
-        13.5 可保存的补员：{{ savableReplKeys.join(' / ') }}（其余在增援阶段末清零）
-      </p>
-      <!-- ── · 补员账本（13.5） ── -->
-      <hr />
-      <RuleNote title="补员（13.5 / §5-D）" rule="13.5 / 专规 1.6 Notes">
-        <p class="muted">
-          **Pax / Eq 是盘面算子**——每 1 点一枚 `Pax Repl` / `EQ Repl`，与普通算子一样移动、堆叠、
-          可被攻击/轰炸摧毁（摧毁即消灭，不进死亡堆）；掷出后按 SOP「放置在地图上」由裁判选落点。
-          Ftr / Tac 只补 1 step 且**不可保存**，仍走账本（增援阶段末清零）。
-        </p>
-      </RuleNote>
-      <div class="row">
-        <span class="num">
-          盘面：Pax {{ replCounts.pax }} 枚 / Eq {{ replCounts.eq }} 枚｜账本：Ftr
-          {{ holdings.ftr }} / Tac {{ holdings.tac }}
-        </span>
-        <span v-if="replPendingTotal > 0" class="num">
+      <!-- 只列「拿到什么」：骰面 / 表名 / 条款号不上屏 -->
+      <ul v-if="variableReplResult.length > 0" class="num repl-result">
+        <li v-for="line in variableReplResult" :key="line">{{ line }}</li>
+      </ul>
+      <template v-if="replPendingTotal > 0">
+        <p class="num">
           <BaseTag kind="warning">待放置</BaseTag>
           Pax {{ workbench.replPending.pax }} / Eq {{ workbench.replPending.eq }}
-        </span>
-      </div>
-      <div v-if="showsActions && replPendingTotal > 0" class="row">
-        <label class="field">
-          补员落点（13.5a：每点一枚，放好后可正常移动）
-          <UiField v-model="replPlaceHexText" class="input num" placeholder="列.行" />
+        </p>
+        <div v-if="showsActions" class="row">
           <BaseButton
-            variant="secondary"
+            variant="primary"
             size="sm"
-            :disabled="replPlaceHexText === ''"
-            @click="placePendingRepl()"
+            :disabled="replPlacementBlocked !== null"
+            @click="workbench.beginReplPlaceHexPickNow()"
           >
-            点地图选格后放置
+            在地图上点格放置
           </BaseButton>
-        </label>
-        <BaseButton variant="primary" size="sm" :disabled="!replHexOk" @click="placePendingRepl()">
-          放置补员（13.5）
-        </BaseButton>
-      </div>
+        </div>
+        <p v-if="replPlacementBlocked !== null" class="muted num">{{ replPlacementBlocked }}</p>
+      </template>
     </SessionStep>
     <SessionStep
       v-if="showsActions"

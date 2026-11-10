@@ -18519,10 +18519,63 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 13.5 / 13.5a：待放置补员的**合法落点**（候选与判据只有这一处）
+   *
+   * 13.5 的 SOP 只写「将相应的结果放置在地图上」，没有写入场格；13.5a 给出补员**可用**的条件
+   * ——补员须在一个战斗模式（或 DG 朝战斗面，5.10e）友方 HQ 的 2 格内，且该格不在敌方 ZOC 内；
+   * 13.5b 的游戏提示也建议在前线后方设「训练分队」摆新补员。故按 13.5a 的可用区铺候选：
+   * 落在这里的补员立刻能用于重建，不会出现「放下去了却永远用不了」。
+   * ★ 原文没有直接约束"刚掷出的补员"落点，此口径登记为待裁定。
+   */
+  const replPlacementCandidateHexes = computed<HexRef[]>(() => {
+    const hqHexes = rebuildHqHexes.value
+    if (hqHexes.length === 0) return []
+    const range = rulesConstants.repl.rebuildHqRangeHexes
+    return allMapHexes().filter(
+      (hex) =>
+        hqHexes.some((hq) => hexDistance(hq, hex) <= range) &&
+        !zocOnlySupplyFacts.value.inEnemyZoc(hex, activeSide.value),
+    )
+  })
+
+  /** 待放置补员**放不下去**时的可见原因（没有待放置项时为 `null`） */
+  const replPlacementBlockedReason = computed<string | null>(() => {
+    if (replPending.value.pax + replPending.value.eq === 0) return null
+    if (rebuildHqHexes.value.length === 0) {
+      return '本方没有处于战斗模式（或 DG 朝战斗面）的指挥部：13.5a 要求补员落在这样的 HQ 2 格内'
+    }
+    if (replPlacementCandidateHexes.value.length === 0) {
+      return '战斗面友方 HQ 的 2 格内没有不在敌方 ZOC 的格（13.5a）：先把 HQ 移出敌方 ZOC 或推进 HQ'
+    }
+    return null
+  })
+
+  /** 13.5：让玩家在地图上点补员的落点（候选＝13.5a 的合法格；无候选 ⇒ 给原因、不进待点态） */
+  function beginReplPlaceHexPickNow(): boolean {
+    const total = replPending.value.pax + replPending.value.eq
+    if (total === 0) {
+      pushLog('warning', '没有待放置的补员（13.5）', '13.5')
+      return false
+    }
+    const blocked = replPlacementBlockedReason.value
+    if (blocked !== null || replPlacementCandidateHexes.value.length === 0) {
+      pushLog('warning', `补员无法放置：${blocked ?? '没有 13.5a 的合法落点'}`, '13.5a')
+      return false
+    }
+    beginHexPick({
+      label: '补员落点（战斗面 HQ 2 格内、不在敌方 ZOC）',
+      rule: '13.5a',
+      candidates: replPlacementCandidateHexes.value,
+      apply: (hex) => placePendingReplNow(hex),
+    })
+    return true
+  }
+
+  /**
    * §5-D：把**待放置**的 Pax / Eq 补员摆到指定格（每点一枚）
    *
-   * SOP 13.5：「掷可变增援表，并将相应的结果放置在地图上」——该条没有规定入场格，
-   * 故落点由裁判选（游戏提示建议放在前线后方的指挥部附近，即"训练分队"）。
+   * 落点须是 13.5a 的合法格（见 `replPlacementCandidateHexes`）；不合法就**给出原因**并保留
+   * 待放置态，而不是静默失败或把补员摆到用不了的地方。
    */
   function placePendingReplNow(hex: HexRef): boolean {
     const pending = replPending.value
@@ -18530,6 +18583,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (total === 0) {
       pushLog('warning', '没有待放置的补员（13.5）', '13.5')
       return false
+    }
+    const legal = replPlacementCandidateHexes.value.some(
+      (item) => item.col === hex.col && item.row === hex.row,
+    )
+    if (!legal) {
+      const reason =
+        replPlacementBlockedReason.value ??
+        `${hexLabel(hex)} 不在 13.5a 的合法落点内（须在战斗面友方 HQ 2 格内，且不在敌方 ZOC）`
+      pushLog('warning', `补员不能放在 ${hexLabel(hex)}：${reason}`, '13.5a')
+      return false
+    }
+    // 先确认两族算子在库里都有，避免 Pax 摆下、Eq 失败的半放置
+    for (const kind of ['pax', 'eq'] as const) {
+      if (pending[kind] > 0 && replRecordOf(activeSide.value, kind) === null) {
+        pushLog(
+          'danger',
+          `单位库里没有 ${kind === 'pax' ? 'Pax' : 'EQ'} 补员算子，本次不放置（13.5）`,
+          '13.5',
+        )
+        return false
+      }
     }
     if (!placeReplCounters(hex, 'pax', pending.pax)) return false
     if (!placeReplCounters(hex, 'eq', pending.eq)) return false
@@ -23163,6 +23237,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setArrivalHexOverride,
     setReplHoldingsNow,
     placePendingReplNow,
+    beginReplPlaceHexPickNow,
+    replPlacementCandidateHexes,
+    replPlacementBlockedReason,
     replCountsAtHex,
     replPending,
     clearNonSavableReplNow,
