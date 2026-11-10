@@ -293,84 +293,111 @@ export const useMapViewStore = defineStore('mapView', () => {
   /** 本环节可参与的算子 id 集合（O(1) 查询；唯一来源是 workbench 的 participatingUnitIds） */
   const participatingIds = computed(() => new Set(workbench.participatingUnitIds))
 
+  /** 账本已经投影成补给站令牌的「方:格」——地面令牌不再重复画同格 SP 算子 */
+  const spDumpHexes = computed(() => {
+    const keys = new Set<string>()
+    for (const dump of workbench.spDumps) {
+      if (dump.side !== hotseat.viewerSide) continue
+      if (dump.sp <= 0 && dump.t <= 0) continue
+      keys.add(`${dump.side}:${dump.hex.col},${dump.hex.row}`)
+    }
+    return keys
+  })
+
   function groundTokens(): UnitToken[] {
     const movingIds = workbench.moveInteraction?.unitIds ?? []
-    return workbench.units.map((unit: ConsoleUnit) => {
-      const oos = isOutOfSupplyNow(unit, workbench.turn)
-      const mode = MODE_LETTER[unit.mode.mode] ?? '?'
-      /*
-       * 2026-11-10（用户队列 #4）：**悬停浮现全称与关键信息**。
-       * 角标只印 `A-AR-MA`，看不出全称、模式与状态；把这几项拼进 `tip`，
-       * 地图悬停复用既有 `hoverTip`（`MapCanvas.tokenTipAt`），不另起浮层。
-       * 4.9a：敌方顶牌本来就允许看模式 / DG / 断补，印值也是盘面可见 ⇒ 不额外裁剪。
-       */
-      const tip = [
-        unit.name,
-        `A ${unit.raw.attack} / AR ${unit.raw.ar} / MA ${unit.raw.ma}`,
-        `${unit.side === 'axis' ? '轴心' : '苏联'} · ${mode}`,
-        unit.mode.dg ? 'DG' : null,
-        oos ? '断补' : null,
-        unit.movementEnded ? '本回合移动已结束' : null,
-      ]
-        .filter((part): part is string => part !== null)
-        .join('｜')
-      return {
-        id: unit.instanceId,
-        hex: unit.hex,
-        side: unit.side,
-        combat: unit.isCombat,
-        projectsZoc: projectsZoc({
-          hex: unit.hex,
-          side: unit.side,
-          attackCapable: unit.attackCapable,
-          inCombatMode: exertsZoc(unit.mode),
-          hasTraceSupply: !oos,
-        }),
-        // 算子图：按 unitId + 当前朝向取正面/背面（5.4a 图随朝向那一面）
-        unitId: unit.unitId,
-        face: unit.mode.orientation,
-        images: unit.images,
-        // 计数类非战斗算子的图**随当前数值走**（SP 点数 / 机场等级 / 工事等级）
-        noncombatKind: unit.noncombatKind ?? null,
-        // 13.5：补员算子（数据层写 `isCombat: true`，靠这一项与真正的战斗单位分开）
-        replKind: unit.replKind ?? null,
-        spPoints: unit.noncombatSp,
-        noncombatLevel: unit.noncombatLevel,
-        // 13.2f/h：编内卡车的面＝**装载**（满载 1F / 空载 1），与朝向无关（13.0：运输单位只有移动模式）
-        loadedSpT: unit.loadedSpT,
-        label: `${unit.raw.attack}-${unit.raw.ar}-${unit.raw.ma}`,
-        tip,
-        // 选中环：移动交互中的那些 + **就地展开里被选中的那些**（用户 2026-09-16 #1：点某一枚即切换）
-        selected:
-          movingIds.includes(unit.instanceId) || stackSelection.value.includes(unit.instanceId),
+    return (
+      workbench.units
         /*
-         * B9：**本环节不参与的本方算子灰显**（用户口径「不参与环节的算子无法点击」的可视半边）。
-         * 判据是 store 里那条唯一谓词（participatingIds ← workbench.participatingUnitIds ← participatesIn），
-         * 本处只做"取集合 + 按敌我过滤"；敌方算子不标灰（4.9a 已把它限制成只读，再灰一层看不出敌我）。
+         * ★ 用户 2026-11-10：**同格 SP 不再画两枚**。
+         *   盘面上的 SP 计数算子（`noncombatKind === 'sp'`）与补给账本（`spDumpTokens`）是同一件事；
+         *   两者同时投影 ⇒ 同格一亮一灰两枚（灰的那枚是本环节"不参与"的被禁态）。
+         *   账本已覆盖的格（同方有正点数 dump）交给 `spDumpTokens` 画（同格多枚也已在那边合并）；
+         *   没有账本的 SP 算子照旧画，避免"去重把算子去没了"。
          */
-        disabled: unit.side === hotseat.viewerSide && !participatingIds.value.has(unit.instanceId),
-        ended: unit.movementEnded,
-        modeLetter: mode,
-        dg: unit.mode.dg,
-        awaitingFuel: needsFuelOf(unit) && !unit.fuelled,
-        fuelled: unit.fuelled,
-        // 模式/状态贴图（5.8 战略 / 5.9 进击 / 12.8 断补）
-        exploit: unit.mode.exploit === true,
-        strat: unit.mode.mode === 'strat',
-        outOfSupply: oos,
-        /*
-         * 3.6e / 4.6：多军力单位的**军力损失**角标 `(-N)`（N ＝ 印值军力 − 当前军力）。
-         * ★ 4.9a 字段级裁剪：**敌方那一枚不给**（「无权获取部队储备或损失军力的情况」）⇒
-         *   非当前方的算子这里恒为 0 —— 可见顶牌只透露模式 / DG / 断补，**不透露**掉到几成。
-         *   「多军力」按**印值**判（3.2d：算子上印有 RE 数值），不是按当前军力判：
-         *   已经打残到 1 的师仍是多军力单位，照样要标 `(-N)`。
-         */
-        stepsLost:
-          unit.side === hotseat.viewerSide && unit.printedSteps > 1
-            ? Math.max(0, unit.printedSteps - unit.steps)
-            : 0,
-      }
-    })
+        .filter(
+          (unit) =>
+            unit.noncombatKind !== 'sp' ||
+            !spDumpHexes.value.has(`${unit.side}:${unit.hex.col},${unit.hex.row}`),
+        )
+        .map((unit: ConsoleUnit) => {
+          const oos = isOutOfSupplyNow(unit, workbench.turn)
+          const mode = MODE_LETTER[unit.mode.mode] ?? '?'
+          /*
+           * 2026-11-10（用户队列 #4）：**悬停浮现全称与关键信息**。
+           * 角标只印 `A-AR-MA`，看不出全称、模式与状态；把这几项拼进 `tip`，
+           * 地图悬停复用既有 `hoverTip`（`MapCanvas.tokenTipAt`），不另起浮层。
+           * 4.9a：敌方顶牌本来就允许看模式 / DG / 断补，印值也是盘面可见 ⇒ 不额外裁剪。
+           */
+          const tip = [
+            unit.name,
+            `A ${unit.raw.attack} / AR ${unit.raw.ar} / MA ${unit.raw.ma}`,
+            `${unit.side === 'axis' ? '轴心' : '苏联'} · ${mode}`,
+            unit.mode.dg ? 'DG' : null,
+            oos ? '断补' : null,
+            unit.movementEnded ? '本回合移动已结束' : null,
+          ]
+            .filter((part): part is string => part !== null)
+            .join('｜')
+          return {
+            id: unit.instanceId,
+            hex: unit.hex,
+            side: unit.side,
+            combat: unit.isCombat,
+            projectsZoc: projectsZoc({
+              hex: unit.hex,
+              side: unit.side,
+              attackCapable: unit.attackCapable,
+              inCombatMode: exertsZoc(unit.mode),
+              hasTraceSupply: !oos,
+            }),
+            // 算子图：按 unitId + 当前朝向取正面/背面（5.4a 图随朝向那一面）
+            unitId: unit.unitId,
+            face: unit.mode.orientation,
+            images: unit.images,
+            // 计数类非战斗算子的图**随当前数值走**（SP 点数 / 机场等级 / 工事等级）
+            noncombatKind: unit.noncombatKind ?? null,
+            // 13.5：补员算子（数据层写 `isCombat: true`，靠这一项与真正的战斗单位分开）
+            replKind: unit.replKind ?? null,
+            spPoints: unit.noncombatSp,
+            noncombatLevel: unit.noncombatLevel,
+            // 13.2f/h：编内卡车的面＝**装载**（满载 1F / 空载 1），与朝向无关（13.0：运输单位只有移动模式）
+            loadedSpT: unit.loadedSpT,
+            label: `${unit.raw.attack}-${unit.raw.ar}-${unit.raw.ma}`,
+            tip,
+            // 选中环：移动交互中的那些 + **就地展开里被选中的那些**（用户 2026-09-16 #1：点某一枚即切换）
+            selected:
+              movingIds.includes(unit.instanceId) || stackSelection.value.includes(unit.instanceId),
+            /*
+             * B9：**本环节不参与的本方算子灰显**（用户口径「不参与环节的算子无法点击」的可视半边）。
+             * 判据是 store 里那条唯一谓词（participatingIds ← workbench.participatingUnitIds ← participatesIn），
+             * 本处只做"取集合 + 按敌我过滤"；敌方算子不标灰（4.9a 已把它限制成只读，再灰一层看不出敌我）。
+             */
+            disabled:
+              unit.side === hotseat.viewerSide && !participatingIds.value.has(unit.instanceId),
+            ended: unit.movementEnded,
+            modeLetter: mode,
+            dg: unit.mode.dg,
+            awaitingFuel: needsFuelOf(unit) && !unit.fuelled,
+            fuelled: unit.fuelled,
+            // 模式/状态贴图（5.8 战略 / 5.9 进击 / 12.8 断补）
+            exploit: unit.mode.exploit === true,
+            strat: unit.mode.mode === 'strat',
+            outOfSupply: oos,
+            /*
+             * 3.6e / 4.6：多军力单位的**军力损失**角标 `(-N)`（N ＝ 印值军力 − 当前军力）。
+             * ★ 4.9a 字段级裁剪：**敌方那一枚不给**（「无权获取部队储备或损失军力的情况」）⇒
+             *   非当前方的算子这里恒为 0 —— 可见顶牌只透露模式 / DG / 断补，**不透露**掉到几成。
+             *   「多军力」按**印值**判（3.2d：算子上印有 RE 数值），不是按当前军力判：
+             *   已经打残到 1 的师仍是多军力单位，照样要标 `(-N)`。
+             */
+            stepsLost:
+              unit.side === hotseat.viewerSide && unit.printedSteps > 1
+                ? Math.max(0, unit.printedSteps - unit.steps)
+                : 0,
+          }
+        })
+    )
   }
 
   /** 14.1a / 4.9a：只取图上飞机，与地面令牌共用可见性投影。 */
