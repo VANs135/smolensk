@@ -1,5 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
+import { nextTick } from 'vue'
 
 import { mapLayers } from '@/data'
 import type { HexRef } from '@/data'
@@ -7,6 +8,7 @@ import { HEX_DIRECTIONS, neighbor } from '@/engine/hex-geometry'
 import {
   toConsoleUnit,
   unitChoices,
+  useContainersStore,
   useGameSessionStore,
   useMapViewStore,
   useSetupStore,
@@ -108,5 +110,48 @@ describe('#5 重建环节：点堆叠不弹「开始移动」', () => {
     expect(workbench.actionAllowedNow('move.order')).toBe(false)
     mapView.expandStackAt(INTERIOR)
     expect(mapView.session?.kind).toBe('reinforce')
+  })
+})
+
+describe('环节闸门 + 切换清理（用户 2026-11-10 新增两例）', () => {
+  it('★ 初设期不出现空军会话：空军工具默认开着、已有选机也不得冒窗', () => {
+    /*
+     * 现场：初设阶段冒出空军工具窗口，玩家不知道自己点到了哪里。
+     * 根因：`sessionBase` 的 air 分支只问 `airActive`（默认 true）与选机/任务态，
+     * 不问闸门 `air.mission`。初设期没有任何环节 ⇒ `actionAllowedNow('air.mission')` 为假。
+     */
+    setActivePinia(createPinia())
+    const workbench = useWorkbenchStore()
+    const mapView = useMapViewStore()
+    // 初设进行中（setup.finished 默认 false ⇒ initialSetupInProgress 由初设入口置真）
+    workbench.initialSetupInProgress = true
+    workbench.airMissionAirIds = ['ghost-plane']
+    expect(workbench.airActive).toBe(true)
+    expect(workbench.actionAllowedNow('air.mission')).toBe(false)
+    expect(mapView.session).toBeNull()
+  })
+
+  it('★ 上一环节留下的盒卡展开，切环节必须被清（不弹重建/盒内会话）', async () => {
+    const { workbench, mapView } = newStores()
+    const containers = useContainersStore()
+    workbench.setActiveSide('axis')
+    workbench.setPhase('reinforcement')
+    goToStep(workbench, 'reinforcement.rebuild')
+    await nextTick()
+
+    // 重建环节里玩家展开了死亡堆卡（盒内会话 = 重建/整编入口）
+    containers.toggleCardOpen('dead-axis')
+    await nextTick()
+    expect(containers.cardOpenId).toBe('dead-axis')
+
+    /*
+     * 下一节 ⇒ 换环节（突围环节走的是同一只 `currentStepKey` 清理；本夹具只要求换一环节，
+     * 不重建 `12.8e` 的"真能突围"盘面，故取移动段首环节）。
+     */
+    workbench.setPhase('movement')
+    goToStep(workbench, 'movement.modeAndMovement')
+    await nextTick()
+    expect(containers.cardOpenId).toBeNull()
+    expect(mapView.session?.kind ?? null).not.toBe('containers')
   })
 })

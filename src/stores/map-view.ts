@@ -2337,6 +2337,11 @@ export const useMapViewStore = defineStore('mapView', () => {
      * （`AirPanel only="mission"`）；摆放/整备/修建/缩减/夺取这些**事务性**动作仍在侧栏面板里。
      */
     if (
+      /*
+       * ★ 用户 2026-11-10：初设期冒出空军工具窗。根因：air 分支只问 `airActive`（默认 true）
+       *   与选机/任务态，不问闸门 ⇒ 初设期（无环节）照样顶出来。这里补 `air.mission` 闸门。
+       */
+      workbench.actionAllowedNow('air.mission') &&
       workbench.airActive &&
       (workbench.airState !== null ||
         workbench.airMissionAirIds.length > 0 ||
@@ -2731,6 +2736,14 @@ export const useMapViewStore = defineStore('mapView', () => {
     unitActionIntent.value = null
     unitActionHex.value = null
     unitActionUnitId.value = null
+    /*
+     * ★ 用户 2026-11-10：进突围环节却冒出重建（盒内）窗口。
+     *   根因是这只"换环节清理"没管盒卡展开：重建环节展开的死亡堆卡（`containers.cardOpenId`）
+     *   随环节切换存活，走到突围环节时 `containers` 会话照样被顶出来。
+     *   ⇒ 换环节统一清：盒卡收起、浮窗关掉；右键菜单 / 会话意图已在上方清。
+     */
+    if (containers.cardOpenId !== null) containers.toggleCardOpen(containers.cardOpenId)
+    if (containers.popupCardId !== null) containers.setPopupCard(null)
     if (popup.value?.variant === 'context') closePopup()
   })
 
