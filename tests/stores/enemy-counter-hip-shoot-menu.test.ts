@@ -74,43 +74,47 @@ describe('14.7d 右键敌方算子：低空扫射', () => {
   })
 
   it('★ 前置齐全：右键敌格出「低空扫射（14.7d）」', () => {
-    expect(menuKeys(NEAR_HEX, 'enemy-1')).toContain('air.mission')
+    expect(menuKeys(NEAR_HEX, 'enemy-1')).toContain('ops.hipShoot')
     const action = useMapViewStore()
       .contextOptions.find((item) => item.id === 'enemy-1')!
-      .actions.find((item) => item.key === 'air.mission')!
+      .actions.find((item) => item.key === 'ops.hipShoot')!
     expect(action.label).toBe('低空扫射（14.7d）')
     expect(action.rule).toBe('14.7d')
     expect(action.disabledReason).toBeNull()
   })
 
-  it('★ 点菜单项：只把目标带进既有空军会话（选机仍在那里）', () => {
+  it('★ 点菜单项：进三操作统一流程（第 1 步选机，候选仍在同一骨架里）', () => {
     menuKeys(NEAR_HEX, 'enemy-1')
-    expect(useMapViewStore().openContextAction('enemy-1', 'air.mission')).toBe(true)
+    const mapView = useMapViewStore()
+    expect(mapView.openContextAction('enemy-1', 'ops.hipShoot')).toBe(true)
+    expect(mapView.opsFlow?.kind).toBe('hipShoot')
+    expect(mapView.opsFlow?.step).toBe(1)
+    expect(mapView.session?.kind).toBe('ops')
     expect(workbench.airActive).toBe(true)
     expect(workbench.airMissionKind).toBe('hip_shoot')
     expect(workbench.airTargetHex).toEqual(NEAR_HEX)
-    // 未勾选飞机（14.2f-A 仍在会话里做）
+    // 未勾选飞机（14.2f-A 在统一流程第 1 步做）
     expect(workbench.airMissionAirIds).toHaveLength(0)
   })
 
   it('★ 缺 10.0b 观察员：不出菜单项（不灰按钮）', () => {
     const index = workbench.units.findIndex((unit) => unit.instanceId === 'spotter-1')
     workbench.units.splice(index, 1)
-    expect(menuKeys(NEAR_HEX, 'enemy-1')).not.toContain('air.mission')
+    expect(menuKeys(NEAR_HEX, 'enemy-1')).not.toContain('ops.hipShoot')
   })
 
   it('★ 苏军不得低空扫射（专规 2.2a）：苏军回合右键德军无人出菜单', () => {
     workbench.setActiveSide('soviet')
-    expect(menuKeys(NEAR_HEX, 'enemy-1')).not.toContain('air.mission')
+    expect(menuKeys(NEAR_HEX, 'enemy-1')).not.toContain('ops.hipShoot')
   })
 
   it('★ 无具备低空扫射能力的飞机：不出菜单项', () => {
     const plane = workbench.airUnits.find((air) => air.instanceId === 'plane-1')!
     plane.canHipShoot = false
-    expect(menuKeys(NEAR_HEX, 'enemy-1')).not.toContain('air.mission')
+    expect(menuKeys(NEAR_HEX, 'enemy-1')).not.toContain('ops.hipShoot')
   })
 
   it('★ 右键己方单位不出现低空扫射（那是敌方目标菜单）', () => {
-    expect(menuKeys(CORE_HEX, 'spotter-1')).not.toContain('air.mission')
+    expect(menuKeys(CORE_HEX, 'spotter-1')).not.toContain('ops.hipShoot')
   })
 })

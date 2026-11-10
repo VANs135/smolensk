@@ -116,6 +116,7 @@ import {
   allocateBattleLosses,
   applyModeSwitch,
   barrageStepChecklist,
+  barrageTableMeta,
   barrageTerrainLines,
   beginAirInteraction,
   beginBarrage,
@@ -14533,6 +14534,53 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       .filter((group) => group.aircraft.length > 0)
   })
 
+  /**
+   * 规格 §4（2026-11-10 裁定③）：**图外空军盒＝独立基地分组**
+   *
+   * 2.1C 只禁「地图外储存区域内不允许进行战斗」，未禁从盒里出击 ⇒ 盒内驻机
+   * 与图上基地同构地参与第 1 步候选（取机范围、可选性、距离都与图上基地同一套）。
+   * 盒没有真实格号 ⇒ `hex` 只取「盒连接列 × 目标行」作显示锚点（与 `airDistanceFromRealBase` 同源）。
+   */
+  const AIR_BOX_GROUP_ID = '__offmap_air_box__'
+
+  const airBoxMissionGroup = computed<AirMissionBaseRoster | null>(() => {
+    if (airMissionKind.value !== 'barrage' && airMissionKind.value !== 'hip_shoot') return null
+    const planes = ownAirUnits.value.filter((air) => isAirInOffMapBox(air))
+    if (planes.length === 0) return null
+    const choices = new Map(
+      airMissionJoinChoices.value.map((choice) => [choice.air.instanceId, choice] as const),
+    )
+    const target = airTargetHex.value
+    const aircraft = planes.map((air) => {
+      const choice = choices.get(air.instanceId)
+      const distance = target === null ? null : airDistanceFromRealBase(air, target)
+      return {
+        air,
+        selected: choice?.selected ?? false,
+        disabledReason: choice?.disabledReason ?? null,
+        distanceToTarget: distance,
+        inRange: distance === null ? null : distance <= air.rangeHexes,
+        withinShortRange:
+          airMissionKind.value === 'barrage' &&
+          distance !== null &&
+          distance <= SHORT_RANGE_BARRAGE_HEXES,
+      }
+    })
+    return {
+      baseId: AIR_BOX_GROUP_ID,
+      hex: { col: airBoxEdgeColumn(airActingSide.value), row: target?.row ?? 0 },
+      level: 0,
+      isAirstrip: false,
+      aircraft,
+    }
+  })
+
+  /** 第 1 步候选分组：图上各基地（既有）＋ 图外盒（独立一组，同构） */
+  const airMissionBaseGroupsWithBox = computed<AirMissionBaseRoster[]>(() => {
+    const box = airBoxMissionGroup.value
+    return box === null ? airMissionBaseGroups.value : [...airMissionBaseGroups.value, box]
+  })
+
   /** 点某座基地 ⇒ 面板聚焦该栏 + 地图高亮该格（高亮通道就是已有的 `setHoverHex`） */
   function focusAirMissionBase(baseId: string): boolean {
     const base = ownAirBases.value.find((item) => item.id === baseId)
@@ -14556,6 +14604,87 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
   }
 
+  /* ──────────── 三操作统一流程（2026-11-10 规格）：入口判据 + 候选集合（两处同源） ──────────── */
+
+  /**
+   * 10.1a：**能打到这一格**的炮兵（射程内、可轰炸、非预备/战略）
+   *
+   * 规格 §3 的硬要求：右键入口「该项是否出现」与窗内候选必须来自**同一个**筛选函数。
+   * 13.4a 的预备/战略模式不参炸 ⇒ 直接从候选里剔除（不摆灰项）。
+   */
+  function barrageCandidatesAt(hex: HexRef): ConsoleUnit[] {
+    const side = segmentGateQuery.value.side ?? activeSide.value
+    return units.value.filter(
+      (unit) =>
+        unit.side === side &&
+        isBarrageCapableUnit(unit) &&
+        !isInReserveOrStrat(unit) &&
+        unit.raw.range !== undefined &&
+        canBarrageAtRange({
+          rangeHexes: unit.raw.range,
+          distanceHexes: hexDistance(unit.hex, hex),
+        }),
+    )
+  }
+
+  /** 10.2b：能对该格执行**空军轰炸**的飞机（可出动、未出任务、航程够、有印值） */
+  function bombingCandidatesAt(hex: HexRef): ConsoleAirUnit[] {
+    return ownAirUnits.value.filter(
+      (air) =>
+        (air.barrageStrength ?? 0) > 0 &&
+        canFlyMission(air.airStatus) &&
+        canPerformMissionThisPhase(air.missionsFlownThisPhase) &&
+        airDistanceFromRealBase(air, hex) <= air.rangeHexes,
+    )
+  }
+
+  /** 14.7d-B：能对该格**低空扫射**的飞机（单机上限在宣布时由引擎判） */
+  function hipShootCandidatesAt(hex: HexRef): ConsoleAirUnit[] {
+    if (!canHipShoot(airActingSide.value, airInputs.value.weatherNormal)) return []
+    return ownAirUnits.value.filter(
+      (air) =>
+        air.canHipShoot &&
+        canFlyMission(air.airStatus) &&
+        canPerformMissionThisPhase(air.missionsFlownThisPhase) &&
+        airDistanceFromRealBase(air, hex) <= air.rangeHexes,
+    )
+  }
+
+  /**
+   * 10.1b + 10.0e：**炮击**这一项该不该出现在右键菜单里
+   *
+   * 判据全部取既有入口/事实，不新写规则：
+   *   · 环节闸 `barrage.declare`（10.0 第二段）；
+   *   · 10.0e-A 该格本阶段未炸过；10.0e-B 有未炸过的炮兵；
+   *   · 10.1a 至少一门炮射程覆盖目标格（`barrageCandidatesAt`，与窗内同源）；
+   *   · 10.1b **付得起**：初始列成本 ≤ 可达补给来源里最大的一份（付不起 ⇒ 项缺席，不灰显）。
+   */
+  function barrageEntryEligible(hex: HexRef): boolean {
+    if (!actionAllowedNow('barrage.declare')) return false
+    if (!canReplaceBarrage()) return false
+    if (barrageState.value !== null && !barrageState.value.finished) return false
+    if (barragedHexesThisPhase.value.includes(hexLabel(hex))) return false
+    const candidates = barrageCandidatesAt(hex).filter(
+      (unit) => !barragedUnitIdsThisPhase.value.includes(unit.instanceId),
+    )
+    if (candidates.length === 0) return false
+    const total = candidates.reduce((sum, unit) => sum + (unit.raw.barrage ?? 0), 0)
+    if (total < 1) return false
+    const cost = barrageTableMeta({ target: 'combatUnits', valueRange: total }).costT
+    if (cost <= 0) return true
+    const dumps = deliverableDumpsFor(segmentGateQuery.value.side ?? activeSide.value, candidates)
+    return dumps.some((dump) => holdingsToT({ sp: dump.sp, t: dump.t }) >= cost)
+  }
+
+  /** 10.2c + 10.0e：**轰炸**这一项该不该出现（空军轰炸免补给 ⇒ 不判 10.1b） */
+  function bombingEntryEligible(hex: HexRef): boolean {
+    if (!actionAllowedNow('air.mission')) return false
+    if (!airMissionKindChoices.value.some((item) => item.key === 'barrage')) return false
+    if (airState.value !== null && !airState.value.finished) return false
+    if (barragedHexesThisPhase.value.includes(hexLabel(hex))) return false
+    return bombingCandidatesAt(hex).length > 0
+  }
+
   /**
    * 14.7d + 10.0b：**右键敌方算子 ⇒「低空扫射」**的入口判据（用户 2026-11-09 口径）
    *
@@ -14571,12 +14700,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (airState.value !== null && !airState.value.finished) return false
     if (!canHipShoot(airActingSide.value, airInputs.value.weatherNormal)) return false
     if (!barrageFacts.value.hasSpotter(hex)) return false
-    return ownAirUnits.value.some(
-      (air) =>
-        air.canHipShoot &&
-        canFlyMission(air.airStatus) &&
-        airDistanceFromRealBase(air, hex) <= air.rangeHexes,
-    )
+    return hipShootCandidatesAt(hex).length > 0
   }
 
   /** C9 第 1 步（14.2f-A/B）：宣布任务并分配飞机（含起飞基地归属与航程校验） */
@@ -23229,6 +23353,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     focusAirMissionBase,
     anyOwnAircraftReaches,
     hipShootEntryEligible,
+    // 三操作统一流程（2026-11-10）：入口判据与窗内候选同源
+    barrageEntryEligible,
+    bombingEntryEligible,
+    barrageCandidatesAt,
+    bombingCandidatesAt,
+    hipShootCandidatesAt,
+    airMissionBaseGroupsWithBox,
+    pickBarrageTargetAt,
     toggleAirReductionUnit,
     missionSegmentOf,
     airTargetBaseIsAirstrip,

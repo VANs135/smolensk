@@ -297,15 +297,15 @@ describe('堆叠右键：目标集合', () => {
       'ax-b',
     )
     s.workbench.selectedId = null
-    // 观察员/航程/天气等前置另测；这里只验右键把**敌方堆叠**接到 air.mission
+    // 观察员/航程/天气等前置另测；这里只验右键把**敌方堆叠**接到三操作统一入口
     const spy = vi.spyOn(s.workbench, 'hipShootEntryEligible').mockReturnValue(true)
     s.mapView.onHexContext(enemyHex, { x: 0, y: 0 }, { x: 0, y: 0 })
 
     // 4.9a：敌方堆叠只露可见面 ⇒ 右键出**一份**菜单（不是每枚一块）
     expect(s.mapView.contextOptions).toHaveLength(1)
-    const row = s.mapView.contextOptions[0]?.actions.find((item) => item.key === 'air.mission')
+    const row = s.mapView.contextOptions[0]?.actions.find((item) => item.key === 'ops.hipShoot')
     expect(row?.label).toContain('低空扫射')
-    expect(row?.only).toBe('hipShoot')
+    expect(row?.only).toBe('opsHipShoot')
     spy.mockRestore()
   })
 })

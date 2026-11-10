@@ -191,24 +191,14 @@ function setAircraftRoll(unitId: string, value: number): void {
 
 <template>
   <BasePanel title="轰炸（OCS 10.0）">
-    <!-- U1-b：工具开关与步骤清单是非待决信息，折叠后不与会话步骤并列占屏 -->
+    <!-- U1-b：步骤清单 / 回执是非待决信息，折叠后不与会话步骤并列占屏 -->
     <details class="extra">
-      <summary class="extra__head num">轰炸工具 / 步骤清单 / 回执</summary>
-      <div class="row">
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          @click="workbench.setBarrageActive(!workbench.barrageActive)"
-        >
-          {{ workbench.barrageActive ? '关闭轰炸工具' : '开启轰炸工具' }}
-        </BaseButton>
-      </div>
-
-      <p v-if="!workbench.barrageActive" class="muted">
-        开启后按 OCS 10.0 的通用流程逐步结算：加总轰炸值 → 定初始列 → 按该列付补给 → 列横移 → 掷骰 →
-        结果。
-      </p>
-
+      <summary class="extra__head num">轰炸步骤清单 / 回执</summary>
+      <!--
+        2026-11-10 规格（§6）：**独立起点已删除**。
+        炮击只能从 0 步（右键敌方目标 ⇒ 炮击）进入统一流程；本面板只作第 2/3 步的窗口，
+        不再提供「开启轰炸工具 / 选类别 / 选目标」的启动路径。
+      -->
       <p v-if="checklist.length > 0" class="num">
         <BaseTag
           v-for="item in checklist"
@@ -324,12 +314,6 @@ function setAircraftRoll(unitId: string, value: number): void {
             参炸飞机（A5 空军专表）：摆在**空军基地格**（14.1a），该格即 10.2b 所说的「它们基地」；
             10.2c 空军轰炸**没有补给消耗**（本段不出现付款补给站）。
           </p>
-          <div class="row">
-            <label class="field">
-              <input v-model="workbench.barrageInputs.hipShoot" type="checkbox" />
-              低空扫射（14.7d：须有正确观察员 10.0b）
-            </label>
-          </div>
           <!-- B14b：参炸飞机＝**算子图阵列**；航程够不到的飞机灰显（14.1） -->
           <CounterPicker
             title="参炸飞机（点一枚加入 / 再点一枚退出）"

@@ -147,12 +147,27 @@ export type MapSessionKind =
   | 'combat'
   | 'barrage'
   | 'air'
+  | 'ops'
   | 'supply'
   | 'reinforce'
   | 'breakout'
   | 'containers'
   | 'exclusive'
   | 'unit'
+
+/**
+ * 三操作统一流程（2026-11-10 规格）：右键敌方目标可发起的三个操作
+ *
+ * 判据各自独立（炮击 10.1a/10.1b、轰炸 10.2b、低空扫射 14.7d/10.0b），**不合并**。
+ */
+export type OpsFlowKind = 'barrage' | 'bombing' | 'hipShoot'
+
+/** 统一流程的会话态：`step` 1＝选单位，2＝分叉步（补给 / 空战防空） */
+export interface OpsFlowState {
+  kind: OpsFlowKind
+  targetHex: HexRef
+  step: 1 | 2
+}
 
 /**
  * 专规会话按节拆窗时的节标识（与 `ExclusiveRulesPanel` 的 `section-scope` 同名）
@@ -935,6 +950,73 @@ export const useMapViewStore = defineStore('mapView', () => {
     { flush: 'sync' },
   )
 
+  /**
+   * **三操作统一流程（2026-11-10 规格）**：右键敌方目标 ⇒ 炮击 / 轰炸 / 低空扫射
+   *
+   * 三个操作共用同一骨架：选参战单位 → 分叉步（炮击＝补给 10.1b；空军＝空战/防空 14.2f）
+   * → 结算收束。会话内容见 `OpsFlowPanel`；第 2/3 步复用既有 `BarragePanel` / `AirPanel`。
+   */
+  const opsFlow = ref<OpsFlowState | null>(null)
+
+  /** 第 1 步：进入某个操作（入口判据已由 `workbench.*EntryEligible` 判过） */
+  function openOpsFlow(kind: OpsFlowKind, hex: HexRef): boolean {
+    if (kind === 'barrage') {
+      // 10.0d：目标格先定；10.0e-F：一次轰炸只用一个类别 ⇒ 从炮兵这一支进入
+      workbench.setBarrageActive(true)
+      workbench.pickBarrageTargetAt(hex)
+      workbench.setBarrageKind('artillery')
+      workbench.setBarrageTargetKind('combatUnits')
+      workbench.barrageInputs = { ...workbench.barrageInputs, hipShoot: false }
+    } else {
+      // 14.2e：轰炸 / 低空扫射都走空军任务链（任务类型在 0 步定）
+      workbench.clearAir()
+      workbench.setAirActive(true)
+      workbench.setAirMissionKind(kind === 'bombing' ? 'barrage' : 'hip_shoot')
+      if (!workbench.setAirTargetFromText(`${hex.col}.${hex.row}`)) return false
+    }
+    opsFlow.value = { kind, targetHex: { col: hex.col, row: hex.row }, step: 1 }
+    closePopup()
+    return true
+  }
+
+  /** 第 1 步 → 第 2 步：宣布（炮击 `beginBarrageNow` / 空军 `beginAirMissionNow`） */
+  function advanceOpsFlow(): boolean {
+    const flow = opsFlow.value
+    if (flow === null || flow.step !== 1) return false
+    const ok =
+      flow.kind === 'barrage' ? workbench.beginBarrageNow() : workbench.beginAirMissionNow()
+    if (!ok) return false
+    opsFlow.value = { ...flow, step: 2 }
+    return true
+  }
+
+  /** 取消整单（10.1b：炮击取消不视为已炸过） */
+  function cancelOpsFlow(): boolean {
+    const flow = opsFlow.value
+    if (flow === null) return false
+    if (flow.kind === 'barrage') workbench.cancelBarrage()
+    else workbench.clearAir()
+    opsFlow.value = null
+    return true
+  }
+
+  /** 结算完成 ⇒ 自动收束会话（流程一结束即消失） */
+  function finishOpsFlow(): void {
+    opsFlow.value = null
+  }
+
+  watch(
+    () => {
+      const flow = opsFlow.value
+      if (flow === null || flow.step !== 2) return false
+      if (flow.kind === 'barrage') return workbench.barrageState?.finished === true
+      return workbench.airState?.finished === true
+    },
+    (finished) => {
+      if (finished) opsFlow.value = null
+    },
+  )
+
   /** 命中与渲染共用同一份令牌，包含 SP 合并算子。 */
   function stackTokensAt(hex: HexRef): UnitToken[] {
     return visibleTokens.value.filter(
@@ -1290,7 +1372,7 @@ export const useMapViewStore = defineStore('mapView', () => {
          * 14.2e 把任务类型分派到环节（低空扫射在移动环节、空军轰炸在轰炸环节），
          * 故这一项与 15.3 / 15.4 并列，是否放行仍由闸门表（`air.mission` 的 where）判。
          */
-        return ['air.refit', 'move.construction', 'air.baseReduce', 'air.mission']
+        return ['air.refit', 'move.construction', 'air.baseReduce']
       case 'hedgehog':
         return ['move.hedgehog']
       default:
@@ -1349,13 +1431,6 @@ export const useMapViewStore = defineStore('mapView', () => {
       only: 'airstrip',
     },
     'air.baseReduce': { label: '缩减基地（15.4）', rule: '15.4', panel: 'air', only: 'reduce' },
-    // BUG 2：点基地 ⇒ 对停在该基地的飞机下任务（14.1a 的落位 + 14.2e 的环节分派）
-    'air.mission': {
-      label: '空军任务（低空扫射 / 轰炸等，14.2e）',
-      rule: '14.2e',
-      panel: 'air',
-      only: 'mission',
-    },
     'move.hedgehog': {
       label: '修建 / 缩减工事（16.0b·c）',
       rule: '16.0b·c',
@@ -1498,23 +1573,49 @@ export const useMapViewStore = defineStore('mapView', () => {
         : undefined
     if (unit === undefined && dump === undefined) {
       /*
-       * ④（用户 2026-11-09）：**右键敌方单位 ⇒「低空扫射」**。
-       * 敌方算子从不进上面那套"对自己的操作"，只有这一项；能不能出现由 `hipShootEntryEligible`
-       * 判（环节闸 + 阵营/天气 + 10.0b 观察员 + 有能力的飞机在航程内），缺前置就不出菜单项。
+       * ④（用户 2026-11-09 / 2026-11-10 规格）：**右键敌方目标 ⇒ 三操作统一入口**
+       *
+       * 炮击 / 轰炸 / 低空扫射各用各的判据（`workbench.*EntryEligible`），判据不过就**不出现**
+       * （不摆灰项、不弹提示）：炮击还要过 10.1b「付得起」。三个项都只把目标带进统一流程，
+       * 选单位与结算在 `OpsFlowPanel` 里按同一骨架推进。
        */
       const enemy = enemyCounterAt(hex, id)
-      if (enemy === undefined || !workbench.hipShootEntryEligible(hex)) return []
-      return [
-        {
-          key: 'air.mission',
-          label: '低空扫射（14.7d）',
-          rule: '14.7d',
-          panel: 'air',
-          only: 'hipShoot',
+      if (enemy === undefined) return []
+      const ops: CounterAction[] = []
+      if (workbench.barrageEntryEligible(hex)) {
+        ops.push({
+          key: 'ops.barrage',
+          label: '炮击（10.1）',
+          rule: '10.1',
+          panel: 'unit',
+          only: 'opsBarrage',
+          group: '战斗',
+          disabledReason: null,
+        })
+      }
+      if (workbench.bombingEntryEligible(hex)) {
+        ops.push({
+          key: 'ops.bombing',
+          label: '轰炸（10.2）',
+          rule: '10.2',
+          panel: 'unit',
+          only: 'opsBombing',
           group: '空军',
           disabledReason: null,
-        },
-      ]
+        })
+      }
+      if (workbench.hipShootEntryEligible(hex)) {
+        ops.push({
+          key: 'ops.hipShoot',
+          label: '低空扫射（14.7d）',
+          rule: '14.7d',
+          panel: 'unit',
+          only: 'opsHipShoot',
+          group: '空军',
+          disabledReason: null,
+        })
+      }
+      return ops
     }
 
     const actions: CounterAction[] = []
@@ -2033,18 +2134,12 @@ export const useMapViewStore = defineStore('mapView', () => {
       return true
     }
     /*
-     * 14.7d（用户 2026-11-09）：右键敌方算子 ⇒「低空扫射」。
-     * 菜单只**把目标带进去**——打开空军工具、把任务类型设为低空扫射、预填任务格；
-     * 选机与宣布仍在既有 `air` 会话里完成（`beginAirMissionNow` 再做航程/观察员等最终校验）。
+     * 2026-11-10 规格：右键敌方目标的三个操作 ⇒ 进**统一流程**（`ops` 会话）。
+     * 这里只带目标格与操作类型；选单位 / 补给或空战 / 结算都在 `OpsFlowPanel` 的同一骨架里。
      */
-    if (option.only === 'hipShoot') {
-      if (!workbench.airActive) workbench.setAirActive(true)
-      workbench.setAirMissionKind('hip_shoot')
-      workbench.setAirTargetFromText(`${hex.col}.${hex.row}`)
-      airEntryTarget.value = { col: hex.col, row: hex.row }
-      closePopup()
-      return true
-    }
+    if (option.only === 'opsBarrage') return openOpsFlow('barrage', hex)
+    if (option.only === 'opsBombing') return openOpsFlow('bombing', hex)
+    if (option.only === 'opsHipShoot') return openOpsFlow('hipShoot', hex)
     if (option.only === 'railMove') {
       workbench.railMoveInputs.toHexText = ''
       if (
@@ -2129,6 +2224,29 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   const sessionBase = computed<MapSessionBase | null>(() => {
+    /*
+     * 2026-11-10 规格：**三操作统一流程**独占会话框（排最前：宣布后 `barrageState` / `airState`
+     * 会同时命中各自分支，必须由 ops 收口，保证三操作只有一条路径、一个骨架）。
+     */
+    const ops = opsFlow.value
+    if (ops !== null) {
+      const OPS_TITLES: Record<OpsFlowKind, string> = {
+        barrage: '炮击（10.1）',
+        bombing: '轰炸（10.2）',
+        hipShoot: '低空扫射（14.7d）',
+      }
+      const OPS_RULES: Record<OpsFlowKind, string> = {
+        barrage: '10.1b',
+        bombing: '14.2f',
+        hipShoot: '14.7d',
+      }
+      return {
+        kind: 'ops',
+        title: `${OPS_TITLES[ops.kind]} · 格 ${ops.targetHex.col}.${ops.targetHex.row}`,
+        rule: OPS_RULES[ops.kind],
+        width: 'min(430px, 94%)',
+      }
+    }
     const combat = workbench.combatState
     if (combat !== null && !combat.finished) {
       const overrun = combat.attackType === 'overrun'
@@ -2707,6 +2825,8 @@ export const useMapViewStore = defineStore('mapView', () => {
       breakoutOpen.value = false
       collapsedSessionKey.value = currentStepKey.value
     }
+    // 2026-11-10：三操作统一流程 —— 取消整单（炮击走 cancelBarrage，空军走 clearAir）
+    else if (current.kind === 'ops') cancelOpsFlow()
     // B15c：同理——宣布之前退掉参炸选子，宣布之后才是 `cancelBarrage`
     else if (workbench.barrageState === null) workbench.clearBarrageSelectionNow()
     else workbench.cancelBarrage()
@@ -3212,6 +3332,12 @@ export const useMapViewStore = defineStore('mapView', () => {
     facilityActionKeys,
     unitActionFamily,
     airEntryTarget,
+    // 2026-11-10 规格：三操作统一流程（右键敌方目标 → 炮击 / 轰炸 / 低空扫射）
+    opsFlow,
+    openOpsFlow,
+    advanceOpsFlow,
+    cancelOpsFlow,
+    finishOpsFlow,
     // 点什么
     popup,
     popupContent,

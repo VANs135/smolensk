@@ -182,19 +182,14 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     expect(options[0]?.only).toBe('hedgehog')
   })
 
-  it('★ 操作菜单：C 段基地列出「修建 / 缩减 / 空军任务」三项（只列本环节允许的）', () => {
+  it('★ 操作菜单：C 段基地只列「修建 / 缩减」两项（2026-11-10：基地不再下空军任务）', () => {
     const { workbench, mapView } = s
     place(workbench, 'air_base', 'base-1')
     enter(workbench, 'movement', 'movement.modeAndMovement')
     const options = mapView.unitActionOptions('base-1')
-    expect(options.map((item) => item.key)).toEqual([
-      'move.construction',
-      'air.baseReduce',
-      // BUG 2（2026-11-08）：14.1a 的飞机停在基地格 ⇒ 基地格也是下 14.2e 任务的入口
-      'air.mission',
-    ])
+    expect(options.map((item) => item.key)).toEqual(['move.construction', 'air.baseReduce'])
     // 每项都带规则号与"开哪一段"，界面据此只展开那一段
-    expect(options.map((item) => item.only)).toEqual(['airstrip', 'reduce', 'mission'])
+    expect(options.map((item) => item.only)).toEqual(['airstrip', 'reduce'])
     expect(options.every((item) => item.rule !== '' && item.label !== '')).toBe(true)
   })
 
@@ -269,8 +264,8 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
       sp: ['dumpBlow'],
       tp: ['transport', 'loadUnload', 'extender'],
       ext: ['extender'],
-      // BUG 2：C 段移动环节另可对基地驻机下达 14.2e 任务（低空扫射就在这一环）
-      base: ['airstrip', 'reduce', 'mission'],
+      // 2026-11-10：基地格不再当"选飞机"的把手（任务入口收敛到右键敌方目标）
+      base: ['airstrip', 'reduce'],
       hog: ['hedgehog'],
     })
     expect(menuOf(A)).toEqual({
@@ -287,8 +282,8 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
       sp: ['dumpBlow'],
       tp: ['extender'],
       ext: ['extender'],
-      // 14.2e：进击段的移动环节同样放行空军任务（15.3 / 15.4 只许 C 段）
-      base: ['mission'],
+      // 2026-11-10：任务入口收敛到 0 步（右键敌方目标）⇒ 基地格不再出任务项
+      base: [],
       hog: [],
     })
   })
@@ -300,7 +295,6 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
       'air.refit',
       'move.construction',
       'air.baseReduce',
-      'air.mission',
     ])
     expect(mapView.facilityActionKeys('hedgehog')).toEqual(['move.hedgehog'])
     expect(mapView.facilityActionKeys('transport_point')).toEqual([

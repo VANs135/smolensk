@@ -131,24 +131,24 @@ beforeEach(() => {
 })
 
 describe('BUG 2：移动环节从空军基地这一侧就能发起低空扫射（14.2e / 14.7d）', () => {
-  it('★ C 段移动环节：点本方空军基地 ⇒ 操作菜单含「空军任务」（否则这条链在界面上不存在）', () => {
+  it('★ C 段移动环节：基地菜单**不再**有「空军任务」；右键敌方目标 ⇒「低空扫射」进统一流程', () => {
     const { workbench, mapView } = newStores()
     enter(workbench, 'movement', 'movement.modeAndMovement')
     setupBaseAndTarget(workbench)
 
-    const options = mapView.unitActionOptions('base-1')
-    const mission = options.find((item) => item.key === 'air.mission')
-    expect(mission, '移动环节的基地菜单里缺「空军任务」入口').toBeDefined()
-    expect(mission?.only).toBe('mission')
-    expect(mission?.panel).toBe('air')
-    expect(mission?.rule).toBe('14.2e')
-    // 同一枚基地仍有 15.3 / 15.4 两项（入口不是替换，是并列）
-    expect(options.map((item) => item.only)).toEqual(
-      expect.arrayContaining(['mission', 'airstrip', 'reduce']),
+    // 2026-11-10 规格 §6：旧「对基地下任务」入口已删除（基地只留整备 / 修建 / 缩减）
+    expect(mapView.unitActionOptions('base-1').some((item) => item.key === 'air.mission')).toBe(
+      false,
     )
-    // 点它 = 开「空军基地」动作会话（AirPanel 的 mission 段随 only 展开）
-    expect(mapView.openUnitActionAt(CORE_HEX, 'base-1')).toBe(true)
-    expect(mapView.unitActionFamily).toBe('air')
+
+    // 0 步：右键**敌方目标** ⇒ 低空扫射（判据全满足时出现）
+    expect(mapView.openUnitContext(TARGET_HEX, 'def-1', { x: 0, y: 0 })).toBe(true)
+    const actions = mapView.contextOptions[0]?.actions ?? []
+    expect(actions.map((item) => item.key)).toContain('ops.hipShoot')
+    expect(mapView.openContextAction('def-1', 'ops.hipShoot')).toBe(true)
+    expect(mapView.opsFlow?.kind).toBe('hipShoot')
+    expect(mapView.session?.kind).toBe('ops')
+    expect(mapView.session?.title).toContain('低空扫射')
   })
 
   it('★ 从该入口提交低空扫射 ⇒ 单机任务跑完轰炸链并返航（14.7d-B / 14.2f-F）', () => {
@@ -179,15 +179,13 @@ describe('BUG 2：移动环节从空军基地这一侧就能发起低空扫射�
     expect(mapView.unitActionAvailableAt('base-1')).toBe(false)
   })
 
-  it('★ 非激活飞机：入口在，但参战机灰显且理由来自 14.1a（不是静默不可点）', () => {
+  it('★ 非激活飞机：右键敌方目标连菜单都不开（判据不过就不摆灰项）', () => {
     const { workbench, mapView } = newStores()
     enter(workbench, 'movement', 'movement.modeAndMovement')
     setupBaseAndTarget(workbench, 'inactive')
 
-    expect(mapView.unitActionOptions('base-1').some((item) => item.key === 'air.mission')).toBe(
-      true,
-    )
-    const choice = workbench.airMissionJoinChoices.find((item) => item.air.instanceId === 'air-1')
-    expect(choice?.disabledReason ?? '').toContain('14.1a')
+    expect(mapView.openUnitContext(TARGET_HEX, 'def-1', { x: 0, y: 0 })).toBe(false)
+    expect(mapView.contextOptions).toEqual([])
+    expect(workbench.hipShootEntryEligible(TARGET_HEX)).toBe(false)
   })
 })

@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { BaseButton } from '@/components/base'
 import { AirPanel } from '@/components/air'
 import { BarragePanel } from '@/components/barrage'
+import { OpsFlowPanel } from '@/components/ops'
 import { CombatPanel } from '@/components/combat'
 import { ContainersPanel } from '@/components/containers'
 import { ExclusiveRulesPanel } from '@/components/exclusive'
@@ -493,6 +494,7 @@ onBeforeUnmount(() => {
               @close="mapView.cancelSession()"
             >
               <CombatPanel v-if="session.kind === 'combat'" />
+              <OpsFlowPanel v-else-if="session.kind === 'ops'" />
               <BarragePanel v-else-if="session.kind === 'barrage'" />
               <AirPanel v-else-if="session.kind === 'air'" only="mission" />
               <SupplyPanel v-else-if="session.kind === 'supply'" only="check" />
