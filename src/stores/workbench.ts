@@ -6595,10 +6595,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (pick === null) return []
     return movePickPoolAt(pick.hex)
   })
-  /** 勾选/取消一枚（至少保留一枚，避免空选择） */
+  /** 勾选/取消一枚（至少保留一枚，避免空选择；不在可开拔池里的实例一律忽略） */
   function toggleMovePick(unitId: string): void {
     const pick = movePick.value
     if (pick === null) return
+    // #8：只有可开拔池里的实例才能进选中集（点地图/堆叠窗都走这里）
+    if (!movePickPoolAt(pick.hex).some((unit) => unit.instanceId === unitId)) return
     if (pick.ids.includes(unitId)) {
       if (pick.ids.length === 1) return
       pick.ids = pick.ids.filter((id) => id !== unitId)
@@ -6651,7 +6653,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function setMovePickIds(ids: readonly string[]): void {
     const pick = movePick.value
     if (pick === null) return
-    pick.ids = [...ids]
+    // #8：地图/堆叠窗给出的集合仍以可开拔池为准——未选中的补员算子等不得被顺手扩进来
+    const here = movePickPoolAt(pick.hex).map((unit) => unit.instanceId)
+    pick.ids = [...ids].filter((id) => here.includes(id))
   }
   /** 放弃取子（不移动任何人） */
   function cancelMovePick(): void {
@@ -6665,8 +6669,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         moveBlocked.value = { rule: '6.3a', reason: '反应段请先选择非阶段玩家的合资格单位' }
       return false
     }
+    // #8：开拔集只认可开拔池里的实例（补员算子即便被某条旧路径写进 `ids` 也不带走）
+    const poolIds = new Set(movePickPoolAt(pick.hex).map((unit) => unit.instanceId))
     const ids = friendlyUnitsAt(pick.hex)
-      .filter((unit) => pick.ids.includes(unit.instanceId))
+      .filter((unit) => pick.ids.includes(unit.instanceId) && poolIds.has(unit.instanceId))
       .map((unit) => unit.instanceId)
     if (ids.length === 0) {
       if (phase.value === 'reaction') {
