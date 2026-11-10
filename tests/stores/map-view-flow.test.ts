@@ -190,18 +190,18 @@ describe('B3：地图上就地展开堆叠（点格展开 / 点枚切换 / 收�
     return { x: slot.x + slot.size / 2, y: slot.y + slot.size / 2 }
   }
 
-  it('闲置态点堆叠 ⇒ 就地摊开、**不默认选中**（条 8 裁定①作废）、取子清单为可参与候选', () => {
+  it('闲置态点堆叠 ⇒ 就地摊开、**默认全选**（用户 2026-11-10）、取子清单＝该格可开拔算子', () => {
     const { workbench, mapView } = stores
     const ids = stackOf(3)
 
     mapView.onHexClick(START, { x: 40, y: 50 }, slotCenter(3, 0))
 
     expect(mapView.expandedStack).toEqual({ hex: START, page: 0 })
-    // 条 8 裁定：展开时**不预填**选择集——选中只发生在显式点选后（这是规则裁定变更，非断言放宽）
-    expect(mapView.stackSelection).toEqual([])
+    // 用户 2026-11-10：恢复「默认全选」——摊开即把该格可开拔算子全部选进选择集
+    expect(mapView.stackSelection).toEqual(ids)
     // 摊开要真的传到渲染层（否则状态对了、玩家眼前什么都没有）
     expect(mapView.overlay.expandedStack).toEqual({ hex: START, page: 0 })
-    // 6.1f 取子清单＝该格的**可参与候选**（参与集合）；可见选中态（金边）仍是空
+    // 6.1f 取子清单与选中集同源
     expect(workbench.movePick?.ids).toEqual(ids)
     // ★ 条 10（批 M）＋ 批 A 切片 3①：摊开即起**移动会话**（统一操作条取代小窗，单一对话框），
     //   故小窗不再同屏打开（修前摊开无条件开小窗 ⇒ 与移动会话两框同屏）
@@ -209,30 +209,30 @@ describe('B3：地图上就地展开堆叠（点格展开 / 点枚切换 / 收�
     expect(mapView.popup).toBeNull()
   })
 
-  it('点某一枚 ⇒ 选中它（条 8：选中只来自显式点选），且引擎取子集合同步', () => {
+  it('点已选的一枚 ⇒ 取消它（默认全选下点枚即剔除），且引擎取子集合同步', () => {
     const { workbench, mapView } = stores
     const ids = stackOf(3)
     mapView.onHexClick(START, { x: 40, y: 50 }, slotCenter(3, 0))
 
-    // 点"第 2 枚"（槽位下标 1）⇒ 把它加进选择集
+    // 点"第 2 枚"（槽位下标 1）⇒ 从默认全选里剔除
     mapView.onHexClick(START, undefined, slotCenter(3, 1))
 
-    expect(mapView.stackSelection).toEqual([ids[1]])
-    expect(workbench.movePick?.ids).toEqual([ids[1]])
+    expect(mapView.stackSelection).toEqual([ids[0], ids[2]])
+    expect(workbench.movePick?.ids).toEqual([ids[0], ids[2]])
     // 点在格内 ⇒ 展开态还开着
     expect(mapView.expandedStack).not.toBeNull()
   })
 
-  it('再点一次 ⇒ 取消选择（切换是双向的，不需要别的页面）', () => {
+  it('再点一次 ⇒ 恢复选择（切换是双向的，不需要别的页面）', () => {
     const { workbench, mapView } = stores
-    stackOf(3)
+    const ids = stackOf(3)
     mapView.onHexClick(START, { x: 40, y: 50 }, slotCenter(3, 0))
     mapView.onHexClick(START, undefined, slotCenter(3, 1))
     mapView.onHexClick(START, undefined, slotCenter(3, 1))
 
-    // 点选一枚 ⇒ 选中；再点同一枚 ⇒ 取消（选择集回到空）
-    expect(mapView.stackSelection).toEqual([])
-    expect(workbench.movePick?.ids).toEqual([])
+    // 剔除后再点同一枚 ⇒ 恢复到默认全选（恢复的一枚追加在末尾，按集合比较）
+    expect([...mapView.stackSelection].sort()).toEqual([...ids].sort())
+    expect([...(workbench.movePick?.ids ?? [])].sort()).toEqual([...ids].sort())
   })
 
   it('点格内空白 ⇒ 收起，但选择集保留（玩家下次进来还是上次勾的那些）', () => {
@@ -252,13 +252,13 @@ describe('B3：地图上就地展开堆叠（点格展开 / 点枚切换 / 收�
 
     expect(mapView.expandedStack).toBeNull()
     expect(mapView.stackSelection).toEqual(kept)
-    // 条 8 下：先点一枚 ⇒ 选择集只有那一枚，收起后保留
-    expect(kept).toEqual([ids[1]])
+    // 默认全选后剔除一枚 ⇒ 保留的那两枚
+    expect(kept).toEqual([ids[0], ids[2]])
   })
 
   it('超过 6 枚时点击角标翻页', () => {
     const { mapView } = stores
-    stackOf(7)
+    const ids = stackOf(7)
     mapView.onHexClick(START, { x: 40, y: 50 }, slotCenter(7, 0))
     expect(mapView.expandedStack?.page).toBe(0)
 
@@ -266,8 +266,8 @@ describe('B3：地图上就地展开堆叠（点格展开 / 点枚切换 / 收�
     mapView.onHexClick(START, undefined, { x: badge.x, y: badge.y })
 
     expect(mapView.expandedStack?.page).toBe(1)
-    // 翻页不改变选择集（条 8 下展开即空选择集）
-    expect(mapView.stackSelection).toEqual([])
+    // 翻页不改变选择集（默认全选仍是全部 7 枚）
+    expect(mapView.stackSelection).toEqual(ids)
   })
 
   it('已摊开时点另一格 ⇒ 摊开新格（旧格自然收起，不会两格同时摊开）', () => {
@@ -291,22 +291,22 @@ describe('B3：地图上就地展开堆叠（点格展开 / 点枚切换 / 收�
     )
 
     expect(mapView.expandedStack?.hex).toEqual(other)
-    // 条 8：新摊开的格**不默认选中**
-    expect(mapView.stackSelection).toEqual([])
+    // 用户 2026-11-10：换格摊开 ⇒ 新格默认全选
+    expect([...mapView.stackSelection].sort()).toEqual(['o1', 'o2'])
   })
 
-  it('条 8 裁定①：展开堆叠不产生任何默认选中（规则裁定变更，非断言放宽）', () => {
+  it('默认全选：摊开即选全部可开拔算子，点一枚只剔除那一枚（用户 2026-11-10）', () => {
     const { mapView } = stores
     const ids = stackOf(4)
     mapView.onHexClick(START, { x: 40, y: 50 }, slotCenter(4, 0))
 
-    // 验收"堆叠无默认选"：摊开后选择集为空，须显式点选才进选择集
-    expect(mapView.stackSelection).toEqual([])
-    // 分页 >4 仍正常工作，且默认选择集仍为空的约束不被分页破坏
+    // 默认全选
+    expect(mapView.stackSelection).toEqual(ids)
+    // 分页 >4 仍正常工作
     expect(mapView.overlay.expandedStack).not.toBeNull()
-    // 显式点选一枚 ⇒ 仅该枚被选中（其余仍不在选择集）
+    // 点第 3 枚 ⇒ 只剔除它，其余仍在
     mapView.onHexClick(START, undefined, slotCenter(4, 2))
-    expect(mapView.stackSelection).toEqual([ids[2]])
+    expect(mapView.stackSelection).toEqual([ids[0], ids[1], ids[3]])
   })
 
   it('有交互在进行时点堆叠**不摊开**（同一击不既走移动又摊开）', () => {

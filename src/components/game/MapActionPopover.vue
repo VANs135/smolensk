@@ -73,17 +73,26 @@ function counterImageOf(id: string): string | null {
 }
 
 /**
- * 左键堆叠窗只摆**战斗单位**（用户 2026-11-09：非战斗与飞机不进这个窗，操作走右键）
+ * 左键堆叠窗**列全**（用户 2026-11-10）：该格可见的地面令牌全部摆出来
  *
- * 判据用 `UnitToken.noncombatKind`：有值＝非战斗单位，无值＝战斗单位。
- * 13.5 的补员算子在数据层也写 `isCombat: true`，靠 `replKind` 把它剔出去（它不是战斗单位）。
- * 本组件不另判规则——与地图上画算子是同一份数据。
+ * 4.9a 已把敌方内容裁到「可见」；这里不再按「本环节参与」或「战斗单位」二次过滤
+ * —— 否则玩家会看见一个缺了几枚的堆叠。能不能点，由 `chipPickable` 单独判。
  */
-const combatUnits = computed(() =>
-  visibleGroundUnits.value.filter(
-    (unit) => (unit.noncombatKind ?? null) === null && (unit.replKind ?? null) === null,
-  ),
-)
+const stackUnits = computed(() => content.value?.units ?? [])
+
+/** 同格本方飞机（只读；操作走空军面板） */
+const stackAircraft = computed(() => content.value?.airUnits ?? [])
+
+/** 本窗这一格（展开/收起按钮只作用于它） */
+const popupHex = computed(() => mapView.popup?.hex ?? null)
+
+/** 6.1 取子池：只有这些 chip 能点选（敌方 / 非战斗 / 补员算子照列不可点） */
+const movableIds = computed(() => new Set(workbench.movePickChoices.map((unit) => unit.instanceId)))
+
+/** 这一枚此刻可点选：本窗就是取子格，且它在 6.1 的可开拔池里 */
+function chipPickable(id: string): boolean {
+  return isMovePickHex.value && movableIds.value.has(id)
+}
 
 /** 9.12g 推进格（防御格已清空时给出） */
 const advanceHex = computed(() => workbench.combatAdvanceHex)
@@ -104,8 +113,9 @@ const isMovePickHex = computed(() => {
   return hex.col === pickHex.col && hex.row === pickHex.row
 })
 
-/** chip 选中态：待取子格上读 `movePick.ids`；其它小窗里 chips 只作展示（视为全选） */
+/** chip 选中态：只有可开拔的本方算子有选中态；待取子格读 `movePick.ids`，其它窗按默认全选展示 */
 function chipSelected(id: string): boolean {
+  if (!movableIds.value.has(id)) return false
   return !isMovePickHex.value || movePickIds.value.includes(id)
 }
 
@@ -130,24 +140,27 @@ function onChipContext(event: MouseEvent, unitId: string): void {
 
 /** 点 chip＝取消/恢复该枚开拔（仅待取子格上、且是该格可开拔的本方算子才可点） */
 function toggleChip(id: string): void {
-  if (!isMovePickHex.value) return
-  if (!workbench.movePickChoices.some((unit) => unit.instanceId === id)) return
+  if (!chipPickable(id)) return
   workbench.toggleMovePick(id)
 }
 
-/**
- * 批 A 切片 3②：框内**只列本环节能行动的己方算子**（用户口径 9.17⑤）
- *
- * 敌方算子照列（它们是 4.9a 的**目标**，不是候选）；判据全部来自 store 的
- * `popupContent.actionableOwnIds`（＝参与集合 + 9.1c 的攻击账本），本组件不自己判规则。
- */
-const visibleGroundUnits = computed(() =>
-  (content.value?.units ?? []).filter(
-    (unit) =>
-      unit.side !== workbench.activeSide ||
-      (content.value?.actionableOwnIds ?? []).includes(unit.id),
-  ),
+/** 本窗这一格是否已在图上摊开 */
+const expandedHere = computed(
+  () => popupHex.value !== null && mapView.isStackExpanded(popupHex.value),
 )
+
+/**
+ * 地图同格展开 / 收起（用户 2026-11-10）
+ *
+ * 只作用于本窗那一格：摊开＝`expandStackAt`（默认全选），收起＝`collapseStack`。
+ * 不换格、不关窗，窗内的选择与地图扇面始终是同一格。
+ */
+function toggleExpandHere(): void {
+  const hex = popupHex.value
+  if (hex === null) return
+  if (mapView.isStackExpanded(hex)) mapView.collapseStack()
+  else mapView.expandStackAt(hex)
+}
 
 /* ── 15.1 整备（用户口径：点机场的整备按钮 → 勾选飞机 → 点地图上高亮的补给付款） ── */
 
@@ -314,12 +327,6 @@ function sideName(side: string): string {
         <p v-if="isSpecialCandidate" class="ok">
           这一格正是 {{ specialItem?.label }} 的合法落点 ⇒ 点地图即可选定。
         </p>
-        <p class="muted">
-          青色虚线＝合法落点。9.14c：位移「有点像撤退」，敌方单位、ZOC 和禁入地形都<b>不影响</b>，
-          只需把运输点放到新位置（格距上限见 rules-constants 的
-          specialCombat.transportDisplaceMaxHexes）；
-          9.14d：延补队必须崩溃，落点须在该延补队<b>特殊拖取距离内且此格有追溯补给</b>。
-        </p>
         <p class="muted">{{ mapView.specialHint }}</p>
       </div>
 
@@ -432,21 +439,23 @@ function sideName(side: string): string {
       </section>
 
       <!--
-        左键堆叠窗（用户 2026-11-09）：只摆**战斗单位**，默认全选；
-        点某枚即取消该单位选中、再点恢复。窗内不写说明文字，只留算子与操作按钮。
-        选中集只有一份＝`workbench.movePick`（chip 直接驱动；旧的"选择要一起开拔的
-        单位"清单已删，不再另存 UI 选中集）。非战斗单位的操作走右键菜单。
+        左键堆叠窗（用户 2026-11-10）：**列全 + 默认全选 + 地图同格展开 + 删说明文字**。
+        窗内只摆该格可见算子（地面全部 + 本方飞机）与操作按钮，不写规则解释；
+        选中集只有一份＝`workbench.movePick`，可点者仅限 6.1 可开拔池里的本方算子。
       -->
-      <section v-if="combatUnits.length > 0" class="block">
+      <section v-if="stackUnits.length > 0 || stackAircraft.length > 0" class="block">
         <div class="chips">
           <div
-            v-for="unit in combatUnits"
+            v-for="unit in stackUnits"
             :key="unit.id"
-            class="chip chip--pickable"
-            :class="{ 'chip--off': !chipSelected(unit.id) }"
-            role="button"
-            tabindex="0"
-            :aria-pressed="chipSelected(unit.id)"
+            class="chip"
+            :class="{
+              'chip--pickable': chipPickable(unit.id),
+              'chip--off': chipPickable(unit.id) && !chipSelected(unit.id),
+            }"
+            :role="chipPickable(unit.id) ? 'button' : undefined"
+            :tabindex="chipPickable(unit.id) ? 0 : undefined"
+            :aria-pressed="chipPickable(unit.id) ? chipSelected(unit.id) : undefined"
             @click="toggleChip(unit.id)"
             @contextmenu.prevent.stop="onChipContext($event, unit.id)"
             @keydown.enter.prevent="toggleChip(unit.id)"
@@ -463,9 +472,27 @@ function sideName(side: string): string {
               ><template v-if="unit.ended">· 停</template></span
             >
           </div>
+          <div v-for="air in stackAircraft" :key="air.instanceId" class="chip">
+            <img
+              v-if="counterImageOf(air.instanceId) !== null"
+              :src="counterImageOf(air.instanceId) ?? ''"
+              class="chip__img"
+              alt=""
+            />
+            <span class="chip__label num">{{ air.name }}</span>
+          </div>
         </div>
-        <div v-if="canStartMove" class="block__row">
-          <BaseButton variant="primary" size="sm" title="6.1" @click="workbench.confirmMovePick()">
+        <div class="block__row">
+          <BaseButton variant="ghost" size="sm" @click="toggleExpandHere()">
+            {{ expandedHere ? '收起展开' : '地图展开' }}
+          </BaseButton>
+          <BaseButton
+            v-if="canStartMove"
+            variant="primary"
+            size="sm"
+            title="6.1"
+            @click="workbench.confirmMovePick()"
+          >
             开始移动
           </BaseButton>
         </div>
@@ -478,10 +505,6 @@ function sideName(side: string): string {
         class="block block--pick"
       >
         <h4 class="block__title">整备（15.1）· {{ hexLabel(baseAtHex.hex) }}</h4>
-        <p class="muted num">
-          非激活 {{ workbench.airInactiveAtBase(baseAtHex.id).length }} 架｜整备容量
-          {{ baseAtHex.isAirstrip === true ? 1 : baseAtHex.level * 2 }}｜费用 1T
-        </p>
 
         <template v-if="refitDoneHere">
           <p class="ok">本阶段已整备（15.1A：每基地每整备阶段一次）。</p>
@@ -499,10 +522,7 @@ function sideName(side: string): string {
         </template>
 
         <template v-else>
-          <p v-if="workbench.refitCandidates.length === 0" class="muted">
-            本格没有非激活飞机（15.1B）。
-          </p>
-          <ul v-else class="list">
+          <ul v-if="workbench.refitCandidates.length > 0" class="list">
             <li v-for="air in workbench.refitCandidates" :key="air.instanceId" class="num">
               <label class="check">
                 <input

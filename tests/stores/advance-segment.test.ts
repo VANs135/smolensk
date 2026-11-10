@@ -366,9 +366,9 @@ describe('B5：换环节时盘面中间态自动收束', () => {
     }
     session.startGame()
     session.advanceToNextStop()
-    // 摊开该格（B3 的就地展开）—— 条 8 裁定①：展开**不默认选中**（无默认选）
+    // 摊开该格（B3 的就地展开）—— 用户 2026-11-10：默认全选
     mapView.expandStackAt({ col: 36, row: 13 })
-    expect(mapView.stackSelection).toEqual([])
+    expect([...mapView.stackSelection].sort()).toEqual(['s0', 's1'])
 
     workbench.advanceSegmentNow()
     // 选择集由 `map-view` 的 watch 收束（换段即触发）⇒ 等一拍让侦听器跑完

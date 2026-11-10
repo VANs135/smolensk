@@ -28,6 +28,7 @@ import {
   type ZocOverlay,
 } from '@/render/token-layer'
 import {
+  defaultSelectionOf,
   hitStackFan,
   isNoncombatTokenLike,
   stackFanLayout,
@@ -968,35 +969,33 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
-   * 摊开某格（**不默认选中**——条 8 裁定①已作废）
+   * 摊开某格（**默认全选**——用户 2026-11-10 恢复）
    *
-   * ★ 条 8 裁定：堆叠展开层**不再默认全选**；选中只发生在玩家的显式点选上。
-   * 这是**规则裁定变更**（deliberate ruling change），不是把断言放宽——验收要求
-   * "堆叠两栏 + 无默认选"。故 `stackSelection` 在摊开时为空，玩家点哪一枚才把它加进选择集。
-   * 取子清单（`movePick`）仍由 `beginMovePick` 建立为该格的**可参与集合**，作为"可开拔候选"，
-   * 但**可见的选中态（金边）只在玩家点选后出现**（见 `handleStackClick`）。
+   * ★ 2026-11-10 用户口径：堆叠窗口「列全 + 默认全选」。摊开即把该格**本方全部可开拔算子**
+   * 选进 `stackSelection`（地图扇面金环），点某一枚仍可取消/恢复。
+   * 候选集＝该格**本方地面令牌**（飞机与本阶段已结束移动者除外）；
+   * 敌方与补员算子由 `beginMovePick` 的 `movePickPoolAt` 再筛一遍。
    */
   function expandStackAt(hex: HexRef): void {
     /*
-     * 取参与本环节的那些作为"可开拔候选"（取子清单来源）；不参与本环节的算子不进候选
-     * —— 例：F 段炮击环节摊开"炮兵 + 步兵"堆叠，步兵不进候选，也就不会被误当成参炸单位。
+     * 候选集＝该格**本方地面令牌**（飞机不参加地面移动；已结束移动的也不再有动作）。
+     * 敌方与补员算子仍会交给 `beginMovePick`，由 `movePickPoolAt` 按本方 / 补员规则剔除；
+     * 窗口「列全」不依赖这一份，展示仍读该格全部令牌。
      */
-    const participating = stackTokenIdsAt(hex).filter((id) => participatesNow(id))
-    const ids = participating.length > 0 ? participating : stackTokenIdsAt(hex)
-    /*
-     * ★ B26：摊开这一击现在**先于** `clickHex`（"看这一格"优先于"开始移动"），
-     *   故取子清单要在这里建立/同步——它是"开始移动"与小窗勾选列表的唯一依据，
-     *   也是燃料付款的受益集（`fuelTargets` 走 `movePick.ids`）。
-     *   同步的永远是**参与集合**：修前 `setMovePickAll()` 按"该格全部己方算子"覆盖，
-     *   把不参与本环节的也圈进来 ⇒ 玩家想只留炮兵却被步兵占着名额（#22）。
-     */
+    const ids = stackTokensAt(hex)
+      .filter(
+        (token) =>
+          token.air !== true &&
+          // 本阶段已结束移动的算子不可再开拔（6.1c / 6.2b），不进默认选中
+          token.ended !== true,
+      )
+      .map((token) => token.id)
     workbench.beginMovePick(hex, ids)
     /*
-     * 条 8 裁定①（作废旧"默认全选"）：展开时**不预填选择集**——`stackSelection` 置空，
-     * 玩家点哪一枚才把哪一枚加进选择集。候选集 `ids` 仍传给 `beginMovePick` 作为"可开拔范围"，
-     * 但可见的选中态只在显式点选后出现。
+     * 默认全选：选中集与 `movePick.ids` 同源（只有一份状态）。
+     * 该格没有本方算子时 `beginMovePick` 清空清单 ⇒ 选中集为空（没有可选对象）。
      */
-    stackSelection.value = []
+    stackSelection.value = defaultSelectionOf(workbench.movePick?.ids ?? [])
     expandedStack.value = { hex: { col: hex.col, row: hex.row }, page: 0 }
     /*
      * ★ B26：**不再 `closePopup()`**。小窗里那一块「选择要一起开拔的单位（6.1）」

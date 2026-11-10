@@ -83,28 +83,24 @@ describe('B9：不参与环节的算子点不动（就地展开层面）', () =>
     expect(workbench.segmentStep?.id).toBe('combat.barrage')
   }
 
-  it('摊开堆叠时**不默认选中**（条 8 裁定①作废）：参与集合仅作取子候选', () => {
+  it('摊开堆叠即**默认全选**（用户 2026-11-10）：可开拔算子全进选中集，参与集合另算', () => {
     const { mapView, workbench } = stores
     setupCombatBarrageStep()
 
     mapView.expandStackAt(HEX)
 
-    // 条 8：展开**不预填**选择集——选中只在显式点选后发生（规则裁定变更，非断言放宽）
-    expect(mapView.stackSelection).toEqual([])
+    // 默认全选＝该格全部本方可开拔算子（炮 + 步）；参与集合仍只算参炸的炮兵
+    expect(mapView.stackSelection).toEqual(['gun', 'inf'])
+    expect(workbench.movePick?.ids).toEqual(['gun', 'inf'])
     expect(workbench.participatingUnitIds).toEqual(['gun'])
     expect(mapView.expandedStack).toEqual({ hex: HEX, page: 0 })
   })
 
-  it('点非参与的那一枚：**不改选择集**，且留一行带规则号的提示', () => {
+  it('未参与的那一枚：默认全选下点一次可剔除；未选中时再点则拒绝并留提示', () => {
     const { mapView, workbench } = stores
     setupCombatBarrageStep()
     mapView.expandStackAt(HEX)
-    const before = [...mapView.stackSelection]
-    const logBefore = workbench.log.length
-    // `segmentStep` 在 workbench 上（map-view 只读它算出的参与集合）
     expect(workbench.segmentStep?.id).toBe('combat.barrage')
-    // 条 8：展开即空选择集（选中只来自显式点选）
-    expect(before).toEqual([])
 
     /*
      * 槽位下标与"该格可见算子的顺序"一一对应（`stackFanLayout` 的 `index` 就是下标）：
@@ -115,24 +111,28 @@ describe('B9：不参与环节的算子点不动（就地展开层面）', () =>
     expect(infSlot, '槽位下标 1 应对应第二枚算子').toBeDefined()
     const center = { x: infSlot!.x + infSlot!.size / 2, y: infSlot!.y + infSlot!.size / 2 }
 
+    // ① 默认全选里它已被选中 ⇒ 点一下＝剔除（B26 的出口）
     mapView.onHexClick(HEX, undefined, center)
+    expect(mapView.stackSelection).toEqual(['gun'])
+    expect(workbench.movePick?.ids).toEqual(['gun'])
 
-    // ① 点不动：选择集保持原样（不是"点了没反应"，而是明确拒绝）
-    expect(mapView.stackSelection).toEqual(before)
-    // ② 且就地留了一行带规则号的提示（走操作台日志 ⇒ 侧栏反馈区与地图内提示都能取到）
+    // ② 它现在既没选中、也不参与本环节 ⇒ 再点＝明确拒绝，并留一行带规则号的提示
+    const logBefore = workbench.log.length
+    mapView.onHexClick(HEX, undefined, center)
+    expect(mapView.stackSelection).toEqual(['gun'])
     expect(workbench.log.length).toBeGreaterThan(logBefore)
     expect(workbench.log[0]?.kind).toBe('warning')
     expect(workbench.log[0]?.text).toContain('不参与本环节')
     expect(workbench.log[0]?.rule).toBeTruthy()
   })
 
-  it('★ B26：不参与的那枚**不能加入，但已选中的可以剔除**（#22 的出口）', () => {
+  it('★ B26：不参与的那枚**不能新加入，但已选中的可以剔除**（#22 的出口）', () => {
     const { mapView, workbench } = stores
     setupCombatBarrageStep()
     mapView.expandStackAt(HEX)
-    // 条 8：展开即空选择集；取子候选仍＝参与集合（gun）
-    expect(mapView.stackSelection).toEqual([])
-    expect(workbench.movePick?.ids).toEqual(['gun'])
+    // 用户 2026-11-10：默认全选（炮 + 步），取子清单同源
+    expect(mapView.stackSelection).toEqual(['gun', 'inf'])
+    expect(workbench.movePick?.ids).toEqual(['gun', 'inf'])
 
     /*
      * 场景：默认全选把不该参炸的也圈进来了（B26 之前的毛病）。
@@ -185,8 +185,8 @@ describe('B9：不参与环节的算子点不动（就地展开层面）', () =>
     expect(workbench.participatingUnitIds).toEqual(['inf'])
 
     mapView.expandStackAt(HEX)
-    // 条 8：展开即空选择集（即使步兵在本环节参与，也不默认选中）
-    expect(mapView.stackSelection).toEqual([])
+    // 用户 2026-11-10：默认全选不随环节变化（可开拔算子都选中），参与集合另算
+    expect(mapView.stackSelection).toEqual(['gun', 'inf'])
   })
 })
 

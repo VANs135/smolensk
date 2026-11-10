@@ -121,3 +121,66 @@ describe('左键堆叠窗：选中集只有 movePick 一份', () => {
     expect(popover).toContain('!isMovePickHex.value || movePickIds.value.includes(id)')
   })
 })
+
+/**
+ * 堆叠窗口收口（用户 2026-11-10）
+ *
+ * 四条口径：列全 / 默认全选 / 地图同格展开 / 删说明文字。
+ */
+describe('堆叠窗口收口：列全、默认全选、同格展开、删说明', () => {
+  const popoverSource = (): string =>
+    readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
+
+  it('★ 默认全选：摊开即选中该格全部本方可开拔算子', () => {
+    const s = stores()
+    placeInfantry(s.workbench, 'inf-a')
+    placeInfantry(s.workbench, 'inf-b')
+
+    s.mapView.expandStackAt(HEX)
+
+    expect([...s.mapView.stackSelection].sort()).toEqual(['inf-a', 'inf-b'])
+    expect([...(s.workbench.movePick?.ids ?? [])].sort()).toEqual(['inf-a', 'inf-b'])
+  })
+
+  it('★ 默认全选不跨敌我：同格敌方算子不进选中集', () => {
+    const s = stores()
+    placeInfantry(s.workbench, 'inf-a')
+    placeGround(
+      s.workbench,
+      groundRecord('axis', (record) => record.isCombat === true),
+      HEX,
+      'axis',
+      'ax-a',
+    )
+
+    s.mapView.expandStackAt(HEX)
+
+    expect(s.mapView.stackSelection).toEqual(['inf-a'])
+    expect(s.workbench.movePick?.ids).toEqual(['inf-a'])
+  })
+
+  it('★ 列全：窗口不再按「参与集合 / 战斗单位」过滤，飞机另列', () => {
+    const popover = popoverSource()
+    // 旧的两层过滤（本方非参与项、非战斗单位）必须消失
+    expect(popover).not.toContain('actionableOwnIds')
+    expect(popover).not.toContain('combatUnits')
+    // 直接摆该格全部地面令牌；飞机单列
+    expect(popover).toContain('content.value?.units')
+    expect(popover).toContain('content.value?.airUnits')
+  })
+
+  it('★ 地图同格展开：窗内按钮对该格摊开/收起', () => {
+    const popover = popoverSource()
+    expect(popover).toContain('地图展开')
+    expect(popover).toContain('mapView.isStackExpanded')
+    expect(popover).toContain('mapView.expandStackAt')
+    expect(popover).toContain('mapView.collapseStack')
+  })
+
+  it('★ 删说明文字：窗内不再写规则解释段落', () => {
+    const popover = popoverSource()
+    expect(popover).not.toContain('青色虚线＝合法落点')
+    expect(popover).not.toContain('本格没有非激活飞机')
+    expect(popover).not.toContain('整备容量')
+  })
+})
