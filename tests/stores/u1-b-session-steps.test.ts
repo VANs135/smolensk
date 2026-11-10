@@ -286,9 +286,11 @@ describe('U1-b 源码守卫：只在门里出一件，旧判定不留两份', ()
     }
 
     const move = read('components/move/MovePanel.vue')
-    for (const id of ['move:fuel', 'move:pick', 'move:continue']) {
+    for (const id of ['move:pick', 'move:continue']) {
       expect(move).toContain(`item="${id}"`)
     }
+    // 用户 2026-11-10：加油入口改为右键 ⇒ 移动准备窗不再有「支付燃料」步
+    expect(move).not.toContain('item="move:fuel"')
     // 4.5a-A 的停车是规则既定后果 ⇒ 「进入并突袭 / 进入停下」面板已删，会话步 `move:zoc` 一并移除
     expect(move).not.toContain('item="move:zoc"')
 

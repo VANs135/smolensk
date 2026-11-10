@@ -142,8 +142,8 @@ describe('右键：13.9-1 合并单位', () => {
   })
 })
 
-describe('右键：12.5 加油', () => {
-  it('★ 移动环节、耗油且未加注 ⇒ 出现「加油」，点它把该枚选成燃料目标', () => {
+describe('右键：12.5 加油（用户 2026-11-10：唯一入口＝右键菜单，按可用性列方法）', () => {
+  it('★ 移动环节、耗油且未加注 ⇒ 菜单列出「单单位法」，点它打开加油窗（不再只是设选中）', () => {
     const s = stores('axis')
     s.workbench.setPhase('movement')
     goToActionStep(s.workbench, 'supply.fuel')
@@ -151,10 +151,36 @@ describe('右键：12.5 加油', () => {
     expect(needsFuelOf(tank)).toBe(true)
     expect(tank.fuelled).toBe(false)
 
-    expect(menuKeys(s, 't1')).toContain('supply.fuel')
-    expect(s.mapView.openContextAction('t1', 'supply.fuel')).toBe(true)
-    expect(s.workbench.selectedId).toBe('t1')
-    expect(s.workbench.fuelPaymentDue).toBe(true)
+    const keys = menuKeys(s, 't1')
+    expect(keys).toContain('supply.fuel:singleUnit')
+    // 旧键（不带方法）不再出现：入口必须落到"某一法"
+    expect(keys).not.toContain('supply.fuel')
+
+    expect(s.mapView.openContextAction('t1', 'supply.fuel:singleUnit')).toBe(true)
+    expect(s.workbench.fuelSubjectId).toBe('t1')
+    expect(s.workbench.fuelMethod).toBe('singleUnit')
+    expect(s.mapView.session?.kind).toBe('fuel')
+  })
+
+  it('★ 编队单位 ⇒ 菜单同时列出编队法；该编队已付过 ⇒ 编队法不再出现（#13 同源判据）', () => {
+    const s = stores('axis')
+    s.workbench.setPhase('movement')
+    goToActionStep(s.workbench, 'supply.fuel')
+    const t1 = placeGround(s.workbench, fuelRecord(), HEX, 'axis', 't1')
+    t1.formation = 'Pz-Gr Div'
+
+    expect(menuKeys(s, 't1')).toContain('supply.fuel:formation')
+
+    s.workbench.formationFuelThrows['Pz-Gr Div'] = {
+      side: 'axis',
+      sourceKey: 'dump:test',
+      sourceLabel: '测试来源',
+      coveredIds: ['t1'],
+      originHex: { ...HEX },
+    }
+    expect(menuKeys(s, 't1')).not.toContain('supply.fuel:formation')
+    // 已付编队不影响单单位法（12.5c-C 任何单位都可用）
+    expect(menuKeys(s, 't1')).toContain('supply.fuel:singleUnit')
   })
 
   it('★ 已加注 ⇒ 不出现（12.5 没有第二笔要付）', () => {
@@ -163,7 +189,7 @@ describe('右键：12.5 加油', () => {
     goToActionStep(s.workbench, 'supply.fuel')
     const tank = placeGround(s.workbench, fuelRecord(), HEX, 'axis', 't1')
     tank.fuelled = true
-    expect(menuKeys(s, 't1')).not.toContain('supply.fuel')
+    expect(menuKeys(s, 't1')).not.toContain('supply.fuel:singleUnit')
   })
 
   it('★ 步行单位（12.5a：不需燃料）⇒ 不出现', () => {
@@ -171,7 +197,7 @@ describe('右键：12.5 加油', () => {
     s.workbench.setPhase('movement')
     goToActionStep(s.workbench, 'supply.fuel')
     const foot = placeGround(s.workbench, legRecord(), HEX, 'soviet', 'l1')
-    expect(menuKeys(s, 'l1')).not.toContain('supply.fuel')
+    expect(menuKeys(s, 'l1')).not.toContain('supply.fuel:singleUnit')
     expect(foot.fuelled).toBe(false)
   })
 })

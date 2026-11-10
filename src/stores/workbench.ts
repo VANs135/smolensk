@@ -193,6 +193,7 @@ import {
   fuelExpiresOnPhaseChange,
   // 12.5c（用户 2026-09-17）：三种加油法各自的适用范围
   fuelMethodAvailability,
+  type FuelMethodAvailability,
   // 12.5c-A（I①）：编队法的覆盖判据（该单位是否属于本次付款覆盖的那个编队）
   formationFuelCovers,
   getPrintedHedgehog,
@@ -504,6 +505,7 @@ import {
   type ActionGate,
   type ActionGateQuery,
   type ActionKey,
+  fuelMethodLabelOf,
 } from './workbench-model'
 import { actionFamilyRowsAt } from './action-families'
 
@@ -7808,7 +7810,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         dumpHex: { ...dump.hex },
       },
     })
-    retryBeginMove()
+    // 右键入口的独立加油（有受注单位）不重放"开始移动"：那一步属于移动准备会话，不归加油窗
+    if (fuelSubjectId.value === null) retryBeginMove()
   }
 
   /**
@@ -8003,6 +8006,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   A/B 两种"整编队/整指挥部"的方法更是无从谈起。
    */
   const fuelTargets = computed<ConsoleUnit[]>(() => {
+    /*
+     * ★ 用户 2026-11-10：加油唯一入口＝右键该单位/堆叠。
+     *   右键某项时显式指定受注单位（`fuelSubjectId`），不再沿用"当前选中/取子清单"——
+     *   否则堆叠窗里右键第二枚，仍会按取子清单给整组算钱。窗口关闭即清（见 `closeFuelNow`）。
+     */
+    const subjectId = fuelSubjectId.value
+    if (subjectId !== null) {
+      const subject = units.value.find((unit) => unit.instanceId === subjectId)
+      if (subject !== undefined) return [subject]
+    }
     const raw =
       moveUnits.value.length > 0
         ? moveUnits.value
@@ -8088,6 +8101,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const fuelMethod = ref<FuelMethod>('singleUnit')
 
   /**
+   * 用户 2026-11-10：**加油唯一入口＝右键该单位/堆叠**
+   *
+   * 显式受注单位（null ＝ 沿用"已选/取子清单"的旧口径，仅供移动准备等内部路径）。
+   * 右键菜单按 `fuelMethodsForUnitNow` 只列真正可用的方法；点选后 `openFuelNow` 落这个 id，
+   * 会话框里的候选、付款、覆盖集全部走既有的 `fuelTargets → fuelDumpChoices → payFuel` 同一条链。
+   */
+  const fuelSubjectId = ref<string | null>(null)
+
+  /**
    * 12.5c：三种加油法对**本次受益单位集**的可用性（用户 2026-09-17 的界面口径）
    *
    * 用户原话：「需要加油的单位点击时未加油都可以点**单独法**，**编队单位**有额外的**编队加油法**，
@@ -8115,6 +8137,62 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const entry = fuelMethodChoices.value.find((item) => item.method === chosen)
     return entry !== undefined && entry.available ? chosen : 'singleUnit'
   })
+
+  /**
+   * 用户 2026-11-10：**右键菜单只列"这一枚此刻真正可用"的加油法**
+   *
+   * 判据复用与窗口同一条链，不另写一套：
+   *   · 结构可用性 —— 引擎 `fuelMethodAvailability`（12.5c-A/B/C + 3.2f）；
+   *   · 已付过的整编队/整指挥部 —— `formationFuelThrows` / `hqFuelThrows`（12.5c-A/B 一次付款、
+   *     12.5e 每阶段一个投递位置）⇒ 不能再出现在菜单里，否则点了必被拒（#13 同源）。
+   *
+   * 来源可达性（12.3a）**不在这里判**：它是窗内"选哪座站/哪个 HQ"的一步；无来源时窗内如实显示
+   * 「没有可达的补给来源」，付款按钮不可用，而不是把方法从菜单里抹掉。
+   */
+  function fuelMethodsForUnitNow(instanceId: string): FuelMethodAvailability[] {
+    const unit = units.value.find((item) => item.instanceId === instanceId)
+    if (unit === undefined || unit.side !== activeSide.value) return []
+    if (!needsFuelOf(unit) || unit.fuelled) return []
+    if (!actionAllowedNow('supply.fuel')) return []
+    const choices = fuelMethodAvailability({
+      targets: [
+        {
+          isHq: isHqUnit(unit),
+          formation: unit.formation,
+          isIndependent: isIndependentUnitOf(unit),
+        },
+      ],
+    })
+    return choices.filter((choice) => {
+      if (!choice.available) return false
+      if (choice.method === 'formation') {
+        return unit.formation !== null && formationFuelThrows.value[unit.formation] === undefined
+      }
+      if (choice.method === 'hq') return hqFuelThrows.value[unit.instanceId] === undefined
+      return true
+    })
+  }
+
+  /** 用户 2026-11-10：右键选中某一法 ⇒ 落受注单位与方法，打开加油会话（界面据此出 `fuel` 窗） */
+  function openFuelNow(instanceId: string, method: FuelMethod): boolean {
+    if (!fuelMethodsForUnitNow(instanceId).some((choice) => choice.method === method)) return false
+    fuelSubjectId.value = instanceId
+    fuelMethod.value = method
+    fuelDumpId.value = null
+    return true
+  }
+
+  /** 关闭加油会话：受注单位、来源、方法都回初始（不留一行"上次点什么"的残态） */
+  function closeFuelNow(): void {
+    fuelSubjectId.value = null
+    fuelDumpId.value = null
+    fuelMethod.value = 'singleUnit'
+  }
+
+  /** 12.5c 方法名（界面文案；与旧面板同一份表，术语不变） */
+  function fuelMethodLabel(method: FuelMethod): string {
+    return fuelMethodLabelOf(method)
+  }
 
   /*
    * ★ B32 步骤 4：**已删** `fuelCommonSource`（玩家勾"来源共用"的那个复选框）——
@@ -23026,6 +23104,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     fuelMethodEffective,
     fuelDumpChoices,
     fuelTargets,
+    // 用户 2026-11-10：加油唯一入口＝右键该单位/堆叠（只列真正可用的 12.5c 方法）
+    fuelSubjectId,
+    fuelMethodsForUnitNow,
+    openFuelNow,
+    closeFuelNow,
+    fuelMethodLabel,
     // B18b：12.5a「耗油且未加注」的单位与"此刻该付油了吗"（地图据此展开燃料段）
     fuelPendingUnits,
     fuelPaymentDue,

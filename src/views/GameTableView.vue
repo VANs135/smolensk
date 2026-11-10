@@ -19,6 +19,7 @@ import {
 import { HandoffOverlay } from '@/components/hotseat'
 import { MapCanvas, MapDock } from '@/components/map'
 import { MovePanel } from '@/components/move'
+import { FuelPanel } from '@/components/fuel'
 import { BreakoutPanel } from '@/components/breakout'
 import { ReinforcementPanel } from '@/components/reinforcement'
 import {
@@ -506,6 +507,7 @@ onBeforeUnmount(() => {
                 :only="mapView.sessionExclusiveSection ?? 'actions'"
               />
               <UnitPanel v-else-if="session.kind === 'unit'" />
+              <FuelPanel v-else-if="session.kind === 'fuel'" />
               <MovePanel v-else />
             </MapDock>
           </template>

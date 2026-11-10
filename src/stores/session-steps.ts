@@ -370,11 +370,10 @@ function supplyItems(facts: NonNullable<SessionStepFacts['supply']>): SessionSte
 
 function moveItems(facts: SessionStepFacts['move']): SessionStepItem[] {
   const items: SessionStepItem[] = []
-  if (facts.fuelPending) {
-    items.push(
-      item('move:fuel', '支付燃料', '本次要动的耗油单位还没加注。', '选择付款来源并完成加油。'),
-    )
-  }
+  /*
+   * ★ 用户 2026-11-10：加油不是"移动的一步"，而是右键菜单里的一项。
+   *   付款已移出移动准备窗（`FuelPanel` 承载）⇒ 这里不再生成 `move:fuel` 步。
+   */
   if (facts.pickPending) {
     items.push(
       item('move:pick', '开拔', '已选好要一起移动的单位。', '确认参移名单、模式与燃料后开始移动。'),

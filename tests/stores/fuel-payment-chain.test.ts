@@ -147,18 +147,25 @@ beforeEach(() => {
 })
 
 describe('B18b（12.5c）：燃料要能在"耗 MP 的当口"付，而不是只在补给段', () => {
-  it('★ 选中一辆未加注的耗油单位 ⇒ 出现「移动 / 燃料」会话（这才有地方付油）', () => {
+  it('★ 点选一辆未加注的耗油单位**不再自动弹加油**（用户 2026-11-10：入口改右键）', () => {
+    /*
+     * 口径更正：加油不是"点选某一步"，而是右键菜单里的一项。
+     * 修前点一格就顶出「移动 / 燃料」会话（直接铺付款区）；现在点格只做它本来的事，
+     * 加油走右键 → `fuel` 会话（`openFuelNow`）。
+     */
     const { workbench, mapView } = newStores()
     workbench.setPhase('movement')
     const tank = place(workbench, fuelUnitRecord(), START, 't1')
     expect(needsFuelOf(tank)).toBe(true)
     expect(tank.fuelled).toBe(false)
 
-    // 修前：没有 `moveInteraction` ⇒ 会话为 null ⇒ payFuel 无处可调
-    expect(mapView.session).toBeNull()
     workbench.clickHex(START)
-    expect(mapView.session).toMatchObject({ kind: 'move', rule: '12.5c' })
-    expect(mapView.session?.title).toContain('燃料')
+    expect(mapView.session?.kind ?? null).not.toBe('fuel')
+    expect(mapView.session?.rule ?? null).not.toBe('12.5c')
+
+    // 右键唯一入口：打开的是那一法的加油窗
+    expect(workbench.openFuelNow('t1', 'singleUnit')).toBe(true)
+    expect(mapView.session).toMatchObject({ kind: 'fuel', rule: '12.5c' })
   })
 
   it('★ 步行单位（不需燃料）不会因此冒出燃料会话（12.5a：步行永不需燃料）', () => {
@@ -323,35 +330,34 @@ describe('B18：复核出的另外两条"只在验证页有入口"的动作（�
   })
 })
 
-describe('B18b：燃料段的接线（源码守卫）', () => {
-  const panel = readFileSync('src/components/move/MovePanel.vue', 'utf8')
+describe('B18b：加油窗的接线（源码守卫；用户 2026-11-10 入口改右键）', () => {
+  const panel = readFileSync('src/components/fuel/FuelPanel.vue', 'utf8')
+  const movePanel = readFileSync('src/components/move/MovePanel.vue', 'utf8')
 
-  it('会话里的燃料段用 store 的事实与动作（面板不自己判耗油）', () => {
-    expect(panel).toContain('workbench.fuelPaymentDue')
-    expect(panel).toContain('workbench.fuelPendingUnits')
+  it('会话里的加油段用 store 的事实与动作（面板不自己判耗油）', () => {
+    expect(panel).toContain('workbench.fuelSubjectId')
     expect(panel).toContain('workbench.fuelDumpChoices')
     /*
      * ★ B32：方法与"来源是否共用"已从组件局部 ref 搬进 store（候选集与校验都在 store），
      *   故面板改成绑 store 字段、并且**不传参**调用（缺省即 store 的选择）。
      */
     expect(panel).toContain('workbench.payFuel()')
-    expect(panel).toContain('v-model="workbench.fuelMethod"')
+    expect(panel).toContain('workbench.fuelMethod')
     // ★ B32 步骤 4：来源的"共用性"不再由玩家勾（13.7a 要求按盘面算出同源组）
-    expect(panel).toContain('workbench.fuelSourcePartition.shared')
     expect(panel).not.toContain('fuelCommonSource')
-    expect(panel).not.toContain('const fuelMethod = ref(')
     expect(panel).toContain('workbench.pickFuelDump($event)')
-    // 三种方法都在界面上（12.5c-A/B/C）
-    for (const key of ['singleUnit', 'hq', 'formation']) expect(panel).toContain(`'${key}'`)
+    // 付款区已从移动准备窗移出（加油唯一入口＝右键）
+    expect(movePanel).not.toContain('workbench.payFuel()')
   })
 
   it('面板不导入引擎（规则判断仍在 store/引擎）', () => {
     expect(panel).not.toContain("from '@/engine")
   })
 
-  it('地图会话在"缺燃料"时也开（判据是 store 的 `fuelPaymentDue`）', () => {
+  it('地图会话由右键受注单位打开（`fuelSubjectId`），不再按 `fuelPaymentDue` 自动跳转', () => {
     const store = readFileSync('src/stores/map-view.ts', 'utf8')
-    expect(store).toContain('workbench.fuelPaymentDue')
-    expect(store).toContain("rule: '12.5c'")
+    expect(store).toContain('workbench.fuelSubjectId !== null')
+    expect(store).toContain("kind: 'fuel'")
+    expect(store).not.toContain('移动 / 燃料（6.1 / 12.5）')
   })
 })

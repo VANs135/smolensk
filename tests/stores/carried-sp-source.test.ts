@@ -267,7 +267,8 @@ describe('B32 步骤 5：装载在运输点数上的 SP（12.1b / 13.2f）', () 
     expect(store).toContain("if (id.startsWith('unit:'))")
     // 12.5c-B：**HQ 法那一支**也必须从"含 SP 的位置"里取（修前只遍历 `spDumps` ⇒ 装在车上的油取不到）
     expect(store).toContain('for (const dump of allSpDumps.value) {')
-    const panel = readFileSync('src/components/move/MovePanel.vue', 'utf8')
+    // 加油窗（用户 2026-11-10：唯一入口＝右键）同样要显示"装载在 X 上"
+    const panel = readFileSync('src/components/fuel/FuelPanel.vue', 'utf8')
     expect(panel).toContain('dump.carriedBy')
     expect(panel).toContain('装载在')
   })

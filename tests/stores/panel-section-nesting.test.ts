@@ -215,18 +215,21 @@ describe('分段块的**结构**不变量（空块 / 段错位都会红）', () 
      *   现在每块问 `actionAllowedNow(...)`：6.1/8.0/12.5 跟 C/E/G 移动环节；
      *   5.7b 释放预备**只在 E/G**（修前在 C 段也显）。5.4a 改模式已从本面板移除（只在右键菜单）。
      */
-    for (const flag of ['canMove', 'canOverrun', 'canReleaseReserve', 'canPayFuel']) {
+    for (const flag of ['canMove', 'canOverrun', 'canReleaseReserve']) {
       expect(panel, `MovePanel 缺 ${flag} 投影`).toContain(flag)
     }
     expect(panel, 'MovePanel 不得再有改模式入口').not.toContain('canChangeMode')
     for (const key of ['move.order', 'move.overrun', 'reserve.release']) {
       expect(panel, `MovePanel 没问 ${key} 的闸门`).toContain(`actionAllowedNow('${key}')`)
     }
-    expect(panel).toContain("actionAllowedNow('supply.fuel')")
-
-    // 燃料块：整块在 `canPayFuel` 之内，付款按钮不能在段外
-    const fuel = sectionOf(panel, 'workbench.payFuel()', 'canPayFuel')
-    expect(fuel, '燃料付款按钮应落在 canPayFuel 段里').toBe('canPayFuel')
+    /*
+     * ★ 用户 2026-11-10：加油唯一入口＝右键 ⇒ 付款区已移出移动准备窗；
+     *   这里反向钉住"移动窗不再挂供应闸门、不再有付款按钮"。
+     */
+    expect(panel).not.toContain("actionAllowedNow('supply.fuel')")
+    expect(panel).not.toContain('workbench.payFuel()')
+    const fuelPanel = readFileSync('src/components/fuel/FuelPanel.vue', 'utf8')
+    expect(fuelPanel).toContain('workbench.payFuel()')
     /*
      * 5.7b 那一处是**按钮自带 `v-if`**（不是一个整段块）⇒ 判法看"按钮自己的开标签"，
      * 用 `sectionOf` 会返回 null（那说明写成了段块，反而与预期不符）。

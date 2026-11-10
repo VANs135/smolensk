@@ -89,7 +89,8 @@ const META: Readonly<Record<ActionKey, ActionMeta>> = {
   'combat.declare': { families: ['战斗'], entry: ['面板', '地图'] },
   'supply.recovery': { families: ['补给'], entry: ['面板'] },
   'supply.draw': { families: ['补给'], entry: ['面板'] },
-  'supply.fuel': { families: ['加油'], entry: ['面板'] },
+  // 用户 2026-11-10：加油唯一入口＝右键该单位/堆叠（A/B/C 三法只列真正可用的），不在移动窗里
+  'supply.fuel': { families: ['加油'], entry: ['右键菜单'] },
   'supply.attrition': { families: ['补给'], entry: ['面板'] },
   'reserve.release': { families: ['释放预备'], entry: ['面板'] },
   'air.mission': { families: ['空军任务'], entry: ['面板', '地图', '盒区'] },

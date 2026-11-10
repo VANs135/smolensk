@@ -42,6 +42,7 @@ import {
   zocHexes,
   type ZocSource,
 } from '@/engine/rules'
+import type { FuelMethod } from '@/engine/rules/fuel'
 import type { GamePhase } from '@/engine/state-types'
 import { participatesIn } from './workbench-model'
 import {
@@ -154,6 +155,7 @@ export type MapSessionKind =
   | 'containers'
   | 'exclusive'
   | 'unit'
+  | 'fuel'
 
 /**
  * 三操作统一流程（2026-11-10 规格）：右键敌方目标可发起的三个操作
@@ -1851,21 +1853,24 @@ export const useMapViewStore = defineStore('mapView', () => {
         disabledReason: null,
       })
     }
-    if (
-      unit !== undefined &&
-      !moving &&
-      workbench.actionAllowedNow('supply.fuel') &&
-      workbench.needsFuelNow(id)
-    ) {
-      actions.push({
-        key: 'supply.fuel',
-        label: '加油',
-        rule: '12.5',
-        panel: 'unit',
-        only: 'fuel',
-        group: '移动',
-        disabledReason: null,
-      })
+    if (unit !== undefined && !moving) {
+      /*
+       * ★ 用户 2026-11-10：**加油唯一入口＝右键该单位/堆叠**，菜单里直接列出"这一枚此刻真正可用"的
+       *   12.5c 方法（A 编队 / B HQ 投递 / C 单单位）；不可用的方法**不出现**，三法都不可用就整组不出现。
+       *   判据复用 store 的 `fuelMethodsForUnitNow`（与加油窗、付款同一条链），这里不另写。
+       *   选中后不再从移动准备窗展开"支付燃料"，而是在 `fuel` 会话里完成付款与确认。
+       */
+      for (const choice of workbench.fuelMethodsForUnitNow(id)) {
+        actions.push({
+          key: `supply.fuel:${choice.method}`,
+          label: `加油 · ${workbench.fuelMethodLabel(choice.method)}`,
+          rule: '12.5c',
+          panel: 'unit',
+          only: `fuel:${choice.method}`,
+          group: '移动',
+          disabledReason: null,
+        })
+      }
     }
     if (unit?.formation !== null && unit?.formation !== undefined && !moving) {
       actions.push({
@@ -2156,9 +2161,16 @@ export const useMapViewStore = defineStore('mapView', () => {
       closePopup()
       return true
     }
-    // 12.5：加油——只把这一枚选成燃料目标，方法与来源仍在既有补给会话里选（不替玩家定来源）
-    if (option.only === 'fuel') {
-      workbench.selectedId = instanceId
+    /*
+     * ★ 用户 2026-11-10：加油唯一入口＝右键。菜单里点的是**某一法**（A/B/C），
+     *   这里只落"受注单位 + 方法"，窗口（`fuel` 会话）里再完成来源与付款。
+     *   不再沿用旧的"选中它 → 去移动窗里展开支付燃料"。
+     */
+    if (option.only !== null && option.only.startsWith('fuel:')) {
+      const method = option.only.slice('fuel:'.length) as FuelMethod
+      const opened = workbench.openFuelNow(instanceId, method)
+      if (!opened) return false
+      collapsedSessionKey.value = null
       closePopup()
       return true
     }
@@ -2253,6 +2265,26 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   const sessionBase = computed<MapSessionBase | null>(() => {
+    /*
+     * ★ 用户 2026-11-10：加油唯一入口＝右键 → 打开**这一法**的加油窗。
+     *   判据是 store 的显式受注单位（`fuelSubjectId`）；窗口内完成来源选择、付款与确认。
+     *   若时序上闸门已关（换环节），这里直接把残态清掉，不把窗留在下一个环节。
+     */
+    if (workbench.fuelSubjectId !== null) {
+      if (!workbench.actionAllowedNow('supply.fuel')) {
+        workbench.closeFuelNow()
+      } else {
+        const subject = workbench.units.find((unit) => unit.instanceId === workbench.fuelSubjectId)
+        return {
+          kind: 'fuel',
+          title: `加油（${workbench.fuelMethodLabel(workbench.fuelMethod)}）${
+            subject === undefined ? '' : ` · ${subject.name}`
+          }`,
+          rule: '12.5c',
+          width: 'min(430px, 94%)',
+        }
+      }
+    }
     /*
      * 2026-11-10 规格：**三操作统一流程**独占会话框（排最前：宣布后 `barrageState` / `airState`
      * 会同时命中各自分支，必须由 ops 收口，保证三操作只有一条路径、一个骨架）。
@@ -2414,40 +2446,18 @@ export const useMapViewStore = defineStore('mapView', () => {
       (moving === null || moving.finished)
     ) {
       const count = workbench.movePick.ids.length
-      const rule = workbench.fuelPaymentDue ? '12.5c' : '6.1'
       return {
         kind: 'move',
-        title: `移动准备（6.1）：已选 ${count} 枚待开拔 · 改模式 · 付燃料 · 开始移动`,
-        rule,
+        title: `移动准备（6.1）：已选 ${count} 枚待开拔 · 改模式 · 开始移动`,
+        rule: '6.1',
         width: 'min(430px, 94%)',
       }
     }
     /*
-     * B18b（用户 2026-09-16 指正）：**缺燃料也要能开这个会话**。
-     *
-     * 12.5a 要求"耗 MP 前必须已付燃料"，而付燃料的入口此前只挂在 `WorkbenchView`（引擎验证页）——
-     * 对局台上选中一辆没油的坦克、点地图什么都不会发生（`beginMove` 被 12.5a 拒），
-     * 于是**根本没有地方付油**：这是"能不能打完整一局"的死结。
-     * 判据用 store 的事实 `fuelPaymentDue`（耗油且未加注的**本方**单位已被选中 / 在取子清单里），
-     * 不在这里比规则字面量。
-     *
-     * ★ 修（2026-10-30）：补一道**环节闸**。`expandStackAt` 在任何环节摊开堆叠都会建 `movePick`，
-     *   而 `fuelTargets` 会取它 ⇒ 在增援段/战斗段点一下"含未加油装甲"的堆叠，这一支就把
-     *   增援面板 / 战斗选攻方面板**顶成**「移动 / 燃料」。而 12.5 的付款时机只在移动环节，
-     *   判据直接问闸门表（`supply.fuel` 的 where 就是 C/E/G 三个移动环节）。
+     * ★ 用户 2026-11-10 口径更正：**加油不是"点选某一步"，而是右键菜单里的一项**。
+     *   B18b 曾在此以 `fuelPaymentDue` 自动顶出"移动 / 燃料"会话（点单位/点格即进付款流程）——
+     *   这条自动跳转已删；加油走右键（`fuel:<method>`）打开的 `fuel` 会话。
      */
-    if (
-      workbench.actionAllowedNow('move.order') &&
-      workbench.fuelPaymentDue &&
-      workbench.actionAllowedNow('supply.fuel')
-    ) {
-      return {
-        kind: 'move',
-        title: '移动 / 燃料（6.1 / 12.5）',
-        rule: '12.5c',
-        width: 'min(430px, 94%)',
-      }
-    }
     /*
      * B17a（方案 §10①「右侧栏只读」）：**增援段的动作面板**进会话框。
      *
@@ -2875,6 +2885,8 @@ export const useMapViewStore = defineStore('mapView', () => {
       breakoutOpen.value = false
       collapsedSessionKey.value = currentStepKey.value
     }
+    // 用户 2026-11-10：右键打开的加油窗 —— 关闭＝清受注单位/来源/方法，不碰移动准备
+    else if (current.kind === 'fuel') workbench.closeFuelNow()
     // 2026-11-10：三操作统一流程 —— 取消整单（炮击走 cancelBarrage，空军走 clearAir）
     else if (current.kind === 'ops') cancelOpsFlow()
     // B15c：同理——宣布之前退掉参炸选子，宣布之后才是 `cancelBarrage`

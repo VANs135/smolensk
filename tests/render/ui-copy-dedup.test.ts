@@ -8,6 +8,7 @@ const airPanel = () => read('src/components/air/AirPanel.vue')
 const combatPanel = () => read('src/components/combat/CombatPanel.vue')
 const supplyPanel = () => read('src/components/supply/SupplyPanel.vue')
 const movePanel = () => read('src/components/move/MovePanel.vue')
+const fuelPanel = () => read('src/components/fuel/FuelPanel.vue')
 const reinforcementPanel = () => read('src/components/reinforcement/ReinforcementPanel.vue')
 const barragePanel = () => read('src/components/barrage/BarragePanel.vue')
 
@@ -37,7 +38,9 @@ describe('U0：同一信息全界面只出现一次', () => {
   })
 
   it('12.5a 的「轮式/履带战斗单位」原文只出现一处', () => {
-    expect(occurrences(movePanel(), '轮式/履带**战斗单位**')).toBe(1)
+    // 用户 2026-11-10：付款区移到加油窗 ⇒ 原文只在 FuelPanel 出现一次（移动窗不再复述）
+    expect(occurrences(fuelPanel(), '轮式/履带**战斗单位**')).toBe(1)
+    expect(occurrences(movePanel(), '轮式/履带**战斗单位**')).toBe(0)
   })
 
   it('空军「停在空军基地格」只出现一处', () => {
@@ -50,9 +53,10 @@ describe('U0：同一信息全界面只出现一次', () => {
 
   it('付款来源标题跨面板共用同一短词', () => {
     expect(read('src/components/base/copy.ts')).toContain('paySource')
-    expect(movePanel()).toContain('UI_COPY.paySource')
+    // 用户 2026-11-10：加油付款在 FuelPanel（右键入口），不动 SupplyPanel 的支付
+    expect(fuelPanel()).toContain('UI_COPY.paySource')
     expect(supplyPanel()).toContain('UI_COPY.paySource')
-    expect(occurrences(movePanel(), '付款补给站（12.5c-A')).toBe(0)
+    expect(occurrences(fuelPanel(), '付款补给站（12.5c-A')).toBe(0)
     expect(occurrences(supplyPanel(), '付款补给站（12.3b')).toBe(0)
   })
 
@@ -70,7 +74,7 @@ describe('U0：条款号只进 `?`，不进正文', () => {
   it('被合并的段落用 RuleTip 承载条款号', () => {
     expect(combatPanel()).toContain('<RuleTip')
     expect(supplyPanel()).toContain('<RuleTip')
-    expect(movePanel()).toContain('<RuleTip')
+    expect(fuelPanel()).toContain('<RuleTip')
     expect(reinforcementPanel()).toContain('<RuleTip')
   })
 

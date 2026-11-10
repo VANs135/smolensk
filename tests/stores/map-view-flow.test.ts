@@ -398,7 +398,7 @@ describe('批 A 切片 3：单一对话框与候选过滤', () => {
     return unit
   }
 
-  it('① 点缺油堆叠 ⇒ 整格全选 + 燃料会话，**堆叠窗照开**（用户 2026-11-10：点格即开窗）', () => {
+  it('① 点缺油堆叠 ⇒ 整格全选 + 移动准备窗，**不自动进加油**（用户 2026-11-10）', () => {
     const { workbench, mapView } = stores
     workbench.setPhase('movement')
     put(fuelUnitRecord(), 't1', START)
@@ -409,8 +409,12 @@ describe('批 A 切片 3：单一对话框与候选过滤', () => {
     // 整格全选发生（选择集建立、取子清单有货）
     expect(mapView.expandedStack).toEqual({ hex: START, page: 0 })
     expect(workbench.movePick?.ids.length).toBe(2)
-    // 两枚都缺油 ⇒ 当场长出「移动 / 燃料（12.5c）」会话
-    expect(mapView.session).toMatchObject({ kind: 'move', rule: '12.5c' })
+    /*
+     * ★ 口径更正：加油不是一个自动跳转的步骤，而是右键菜单里的一项。
+     *   点格只开移动准备（6.1），不再因为"缺油"顶成燃料会话。
+     */
+    expect(mapView.session).toMatchObject({ kind: 'move', rule: '6.1' })
+    expect(mapView.session?.kind).not.toBe('fuel')
     // ★ 用户 2026-11-10：窗口不再被"刚起了会话"压掉 —— 点格就该看到该格的堆叠窗
     expect(mapView.popup?.hex).toEqual(START)
     expect(mapView.popup?.variant).toBe('content')
