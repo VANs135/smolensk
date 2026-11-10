@@ -102,6 +102,8 @@ describe('S1：必做初设、主动放弃与双方确认', () => {
     expect(game.session).toBeNull()
     expect(setup.confirmSideSetup()).toBe(true)
     expect(setup.omittablePlacements.length).toBeGreaterThan(0)
+    // ★ 用户 2026-11-10：抽取编队只有「抽取编队」按钮一个入口，开局不再隐式兜底
+    expect(setup.executeSetupDraws()).toBe(true)
     expect(setup.startGameNow()).toBe(true)
     expect(setup.notes.join('')).toContain('本局移除')
   })

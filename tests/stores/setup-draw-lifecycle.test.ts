@@ -171,19 +171,23 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     expect(returned).not.toHaveBeenCalled()
   })
 
-  it('只选落点但未执行摆位：开局入口按该落点补做处置，不丢掉玩家选择', () => {
+  it('未点抽取入口 ⇒ 开局被拒并提示 ch10/ch11（不再隐式兜底抽签）', () => {
     const { setup, containers, board } = boot()
     const item = containers.pendingShiftWestPlacements[0]!
     const selected = item.fromHexText!
     expect(containers.setDrawShiftHexNow(item.formationId, selected)).toBe(true)
     expect(setup.stepDone.formationDraw).toBe(false)
-    // ch10：startGameNow 是"没点执行入口就直接开局"的兜底 ⇒ 会补做一次，采用已选落点
-    expect(setup.startGameNow()).toBe(true)
+    // ★ 用户 2026-11-10：抽取编队只有「抽取编队」按钮一个入口；没点就开局 = 没做这一步
+    expect(setup.startGameNow()).toBe(false)
+    expect(setup.lastAction?.rule).toContain('ch10')
+    // 玩家已选落点保留；执行入口一次落盘后再开局
+    expect(setup.executeSetupDraws()).toBe(true)
     expect(containers.setupDrawProgress.complete).toBe(true)
     for (const id of item.unitIds) {
       const hex = board.units.find((unit) => unit.instanceId === id)!.hex
       expect(`${hex.col}.${hex.row}`).toBe(selected)
     }
+    expect(setup.startGameNow()).toBe(true)
   })
 
   it.each(['finishSetup', 'startGameNow'] as const)(
@@ -243,7 +247,7 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
       roadGaps: [],
       detail: '抽取池不足，未完成抽取',
     })
-    confirmSetupForStart(setup)
+    confirmSetupForStart(setup, { draws: false })
     expect(setup.executeSetupDraws()).toBe(false)
     expect(setup.lastAction?.ok).toBe(false)
     expect(setup.lastAction?.detail ?? containers.lastAction?.detail).toContain('抽取池不足')
@@ -265,7 +269,7 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     })
     expect(setup.enterSetup('1')).toBe(true)
     // ch10：抽签改在初设完成后执行 ⇒ 失败在执行入口报出
-    confirmSetupForStart(setup)
+    confirmSetupForStart(setup, { draws: false })
     expect(setup.executeSetupDraws()).toBe(false)
     expect(setup.lastAction?.detail).toBe('初设抽取失败')
   })

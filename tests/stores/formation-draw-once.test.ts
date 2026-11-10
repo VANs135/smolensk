@@ -1,4 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import { sopStepById } from '@/engine/rules'
@@ -35,8 +36,9 @@ describe('ch10：编队抽取只在初设完成后执行一次', () => {
     expect(setup.setupDrawEntryVisible).toBe(false)
     expect(containers.setupDrawsExecuted).toBe(false)
 
-    // ② 初设单位放置完成后：出现唯一一次入口
-    confirmSetupForStart(setup)
+    // ② 初设单位放置完成后：出现唯一一次入口（剧本 1 卡车按剧本全满载，只剩双方确认）
+    for (let guard = 0; setup.setupSideCursor !== null && guard < 3; guard++)
+      expect(setup.confirmSideSetup()).toBe(true)
     expect(setup.setupPlacementComplete).toBe(true)
     expect(setup.setupDrawEntryVisible).toBe(true)
     expect(containers.setupDrawsExecuted).toBe(false)
@@ -72,5 +74,34 @@ describe('ch10：编队抽取只在初设完成后执行一次', () => {
     const { containers } = boot()
     expect('drawAndApplyStepNow' in containers).toBe(false)
     expect(sopStepById('reinforcement.formationDraw')).toBeNull()
+  })
+
+  /**
+   * ★ 用户 2026-11-10：「抽取编队」是初设窗里唯一的抽签入口——
+   *   点一次＝抽取＋自动落位＋落账；没点就开局不得隐式补做。
+   */
+  it('★ 抽取编队唯一入口：开局不隐式兜底，按钮文案不带条款号', () => {
+    const { setup, containers } = boot()
+    // 正向摆完必做项（剧本 1：卡车按剧本全满载、只剩双方确认），但**不点**抽取按钮
+    for (let guard = 0; setup.setupSideCursor !== null && guard < 3; guard++)
+      expect(setup.confirmSideSetup()).toBe(true)
+    expect(setup.setupPlacementComplete).toBe(true)
+    expect(setup.setupDrawEntryVisible).toBe(true)
+    // 没点按钮 ⇒ 开局被 ch10/ch11 拦下，账本原封不动
+    const ledger = JSON.stringify(containers.drawResults)
+    expect(setup.startGameNow()).toBe(false)
+    expect(setup.lastAction?.rule).toContain('ch10')
+    expect(JSON.stringify(containers.drawResults)).toBe(ledger)
+    // 点一次 ⇒ 抽取 + 自动落位 + 落账，入口与必做事项同时消失
+    expect(setup.executeSetupDraws()).toBe(true)
+    expect(setup.setupDrawEntryVisible).toBe(false)
+    expect(setup.requiredSetupIssues.some((issue) => issue.rule.includes('ch10'))).toBe(false)
+    expect(setup.startGameNow()).toBe(true)
+    // 源码守卫：唯一入口文案「抽取编队」，条款号只在 title（? 提示）里
+    const panel = readFileSync('src/components/containers/ContainersPanel.vue', 'utf8')
+    expect(panel).toContain('抽取编队')
+    expect(panel).not.toContain('执行编队抽取（ch10）')
+    const store = readFileSync('src/stores/setup.ts', 'utf8')
+    expect(store).not.toContain('if (setupPlacementComplete.value && !runSetupDraws())')
   })
 })

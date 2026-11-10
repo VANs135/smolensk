@@ -561,6 +561,8 @@ describe('W7 C14：初设单位 box（地图点选放置）与开始游戏', () 
 
   it('C14：开始游戏 ⇒ 收束初设 + 建会话 + 共识按默认（全不用）写日志 + 进入第一阶段', () => {
     confirmSetupForStart(setup)
+    // ★ 用户 2026-11-10：抽取编队只有「抽取编队」按钮一个入口，开局不再隐式兜底
+    expect(setup.executeSetupDraws()).toBe(true)
     expect(setup.startGameNow()).toBe(true)
     expect(setup.finished).toBe(true)
     expect(session.session).not.toBeNull()

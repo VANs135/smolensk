@@ -225,7 +225,9 @@ describe('批 B 切片 1：编队卡车满载自动落账（13.2h / IV-D）', ()
     expect(panel).toContain('setup.truckLoadSummary.raw')
     expect(panel).not.toContain('truckRaw')
     const queue = readFileSync('src/components/game/DecisionQueue.vue', 'utf8')
-    expect(queue).toContain(`v-if="setup.truckLoadSummary.mode === 'choose_loaded'"`)
+    // ★ 用户 2026-11-10：满载已达额 ⇒ 整行隐藏（不灰显），与 `beginTruckPick()` 同一判据
+    expect(queue).toContain('setup.truckFullDone')
+    expect(queue).toContain(`setup.truckLoadSummary.mode === 'choose_loaded'`)
     // 反空转守卫：这两处判据真的指向 store 的那一份投影（而不是恰好同名的别的东西）
     const store = readFileSync('src/stores/setup.ts', 'utf8')
     expect(store).toContain('const truckLoadSummary = computed')

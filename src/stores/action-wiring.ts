@@ -93,6 +93,7 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'beginTruckPick',
       'cancelPlacement',
       'cancelTruckPick',
+      'pickTruckInstance',
       'confirmSideSetup',
       'confirmSpOwnership',
       'designateTrucks',

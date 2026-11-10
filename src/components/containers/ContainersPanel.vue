@@ -909,9 +909,10 @@ function boxAircraft(side: Side) {
             v-if="showsActions"
             variant="primary"
             size="sm"
+            title="ch10 Formation Chit Draw / ch11 剧本随机化：初设完成后只执行一次"
             @click="setup.executeSetupDraws()"
           >
-            执行编队抽取（ch10）
+            抽取编队
           </BaseButton>
         </div>
         <p class="muted">初设完成后只执行一次；抽完即永久收起，后续增援段与阶段切换不再抽取。</p>

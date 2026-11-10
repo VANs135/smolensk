@@ -1533,14 +1533,10 @@ export const useSetupStore = defineStore('setup', () => {
     // 初设入口不承担对局阶段推进；重复点击或读档重进不能跳过首个玩家环节。
     if (finished.value && game.session !== null) return true
     /*
-     * ch10（用户 2026-11-10 裁定）：抽签只在初设单位放置完成之后、开局之前执行一次。
-     * 玩家可先在初设台点「执行编队抽取」；这里只是"没点就直接开局"的兜底
-     * （`runSetupDrawsNow` 幂等，抽过即不重抽；开局后再调用会被拒）。
-     *
-     * 只在**初设单位放置已完成**时才兜底抽签：卡车满载 / 双方确认 / SP 归属
-     * 还没落实时不能先抽（抽签会消耗骰序，让"被拒后盘面不变"的保证失效）。
+     * ★ 用户 2026-11-10：**删除隐式兜底抽签**。抽取编队只有一个入口
+     *   （初设窗的「抽取编队」按钮 ⇒ `executeSetupDraws`）；没点就直接开局＝没做这一步，
+     *   `canFinishSetup` 会以 ch10 / ch11 的处置义务拦下并说明缺哪一组。
      */
-    if (setupPlacementComplete.value && !runSetupDraws()) return false
     if (!canFinishSetup()) return false
     /*
      * B38（方案 §3 步骤 2 后半）：**先开局、再收初设**。
@@ -1767,12 +1763,13 @@ export const useSetupStore = defineStore('setup', () => {
       containers.setupDrawGroups.length > 0,
   )
 
-  /** 玩家点「执行编队抽取」：一次抽完并落盘（幂等；初设单位放置完成之前不允许） */
+  /** 玩家点「抽取编队」：一次抽完并落盘（幂等；初设单位放置完成之前不允许） */
   function executeSetupDraws(): boolean {
     if (!setupPlacementComplete.value) {
       return record({ ok: false, rule: 'ch10', reason: '请先完成初设单位放置，再执行编队抽取' })
     }
-    if (containers.setupDrawsExecuted) return true
+    // 已抽且处置已全部落账 ⇒ 幂等返回；处置未完成（例：旧存档缺落点）时补做，不重抽
+    if (containers.setupDrawsExecuted && containers.setupDrawProgress.complete) return true
     return runSetupDraws()
   }
 

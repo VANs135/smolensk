@@ -92,6 +92,9 @@ async function runScenario(id: string): Promise<{
   const preset = ctx.setup.presetSelfSetupNow()
   expect(preset.failures, `剧本 ${id} 一键预设初设失败`).toEqual([])
   expect(preset.remaining, `剧本 ${id} 一键预设初设未完成`).toBe(0)
+  // ★ 用户 2026-11-10：抽取编队只有「抽取编队」按钮一个入口（开局不再隐式兜底）
+  if (ctx.setup.setupDrawEntryVisible)
+    expect(ctx.setup.executeSetupDraws(), `剧本 ${id} 抽取编队`).toBe(true)
   expect(ctx.setup.startGameNow(), `剧本 ${id} 开局`).toBe(true)
   const report = await runAiSelfPlay({
     ctx: { workbench: ctx.w, session: ctx.g, setup: ctx.setup },
