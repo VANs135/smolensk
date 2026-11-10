@@ -301,7 +301,7 @@ const CONTROL_RULE_TEXT =
   margin: var(--space-3) 0 var(--space-2);
   font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-ink);
 }
 
 .vp th,
