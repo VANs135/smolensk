@@ -222,7 +222,8 @@ const gridStyle = computed<Record<string, string>>(() => ({
 }
 
 .picker__cell {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   width: var(--picker-size);
   height: var(--picker-size);
   padding: 0;
@@ -231,6 +232,7 @@ const gridStyle = computed<Record<string, string>>(() => ({
   background: var(--color-bg-2);
   cursor: pointer;
   transition: transform 60ms ease-out;
+  overflow: hidden;
 }
 
 .picker__cell:hover {
@@ -251,8 +253,10 @@ const gridStyle = computed<Record<string, string>>(() => ({
 }
 
 .picker__img {
+  /* 角标占一行时不压图：图区让出角标高度，`contain` 保证算子完整可见 */
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
-  height: 100%;
   display: block;
   border-radius: calc(var(--radius-sm) - 1px);
   object-fit: contain;
@@ -263,16 +267,20 @@ const gridStyle = computed<Record<string, string>>(() => ({
   background: var(--color-rule);
 }
 
+/*
+ * 2026-11-10：角标不再**压**在算子右下角（原来与印刷的 MA / 机动值重叠，遮住图面关键信息）。
+ * 改成算子树内的一条独立底条：图区让出它的高度，角标落在自己的行里，不覆盖任何印值。
+ */
 .picker__badge {
-  position: absolute;
-  right: 0;
-  bottom: 0;
+  flex: 0 0 auto;
+  height: 12px;
   padding: 0 2px;
-  border-radius: var(--radius-sm);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
   background: rgb(32 30 26 / 0.72);
   color: var(--color-bg);
-  font-size: var(--text-xs);
-  line-height: 1.3;
+  font-size: 9px;
+  line-height: 12px;
+  text-align: center;
 }
 
 .picker__empty,

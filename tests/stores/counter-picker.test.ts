@@ -165,4 +165,15 @@ describe('B13：增援面板的替换（源码守卫）', () => {
       expect(allowed, `模板里出现了计划外的文字：{{ ${slot} }}`).toBe(true)
     }
   })
+
+  it('★ 角标不压算子图（2026-11-10）：角标是算子树内的独立底条，不是右下角浮层', () => {
+    const picker = readFileSync('src/components/game/CounterPicker.vue', 'utf8')
+    const badgeRule = picker.slice(picker.indexOf('.picker__badge {'))
+    expect(badgeRule).not.toContain('position: absolute')
+    expect(badgeRule).not.toMatch(/right:\s*0/)
+    expect(badgeRule).toContain('flex: 0 0 auto')
+    // 父级是纵向 flex ⇒ 图区与角标各占一行，互不覆盖
+    const cellRule = picker.slice(picker.indexOf('.picker__cell {'))
+    expect(cellRule).toContain('flex-direction: column')
+  })
 })
