@@ -121,4 +121,16 @@ describe('⑤ 盒内单位：看得见、点得到', () => {
     expect(containers.deadPileUnits.axis.some((u) => u.id === 'ax-dead-1')).toBe(true)
     expect(containers.deadPileUnits.soviet).toBeDefined()
   })
+
+  it('★ 浮窗右上角关闭 × 不会被标题栏拖拽吃掉点击（用户 2026-11-10）', () => {
+    /*
+     * 现场：部分图外盒（浮窗形态）的关闭 × 点不动。
+     * 根因：× 在标题栏内，标题栏 `pointerdown` 里 `setPointerCapture` ⇒ 后续 pointerup/click
+     * 改派给标题栏，按钮自己的 click 永远收不到。修法：× 的 pointerdown 必须 `.stop`，
+     * 且拖拽入口对关闭按钮再挡一次（双保险，不靠 z-index）。
+     */
+    const card = readFileSync(join(ROOT, 'src/components/game/BoxCard.vue'), 'utf8')
+    expect(card).toMatch(/boxpopup__close[^>]*@pointerdown\.stop/)
+    expect(card).toMatch(/onPopupPointerDown[\s\S]{0,400}boxpopup__close/)
+  })
 })

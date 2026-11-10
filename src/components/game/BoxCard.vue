@@ -111,6 +111,12 @@ function closePopup(): void {
 }
 
 function onPopupPointerDown(event: PointerEvent): void {
+  /*
+   * 用户 2026-11-10：浮窗右上角 × 点不动。
+   * 根因：× 在标题栏内，标题栏这里 `setPointerCapture` ⇒ 后续 pointerup / click 改派给标题栏，
+   * 按钮自己的 click 收不到。这里对关闭按钮再挡一次（模板上的 `@pointerdown.stop` 是第二道）。
+   */
+  if ((event.target as HTMLElement | null)?.closest('.boxpopup__close') != null) return
   drag.value = {
     startX: event.clientX,
     startY: event.clientY,
@@ -215,7 +221,9 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
         >
           <span class="boxpopup__title">{{ card.name }}</span>
           <span class="num">{{ unitTotal }} 枚</span>
-          <button type="button" class="boxpopup__close" @click="closePopup">×</button>
+          <button type="button" class="boxpopup__close" @pointerdown.stop @click="closePopup">
+            ×
+          </button>
         </div>
         <BoxCardFace :card="card" :width="popupWidth" @unit-context="onUnitContext" />
       </div>
