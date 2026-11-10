@@ -132,3 +132,36 @@ describe('⑤ 右键己方算子：运输点数 / 卡车的装卸', () => {
     expect(onlys).toContain('transport')
   })
 })
+
+/**
+ * #9（用户 2026-11-10）：**移动环节点己方炮兵不得出「宣布轰炸」**
+ *
+ * 10.0e-D：火炮轰炸只在战斗 / 反应 / 进击段的**轰炸环节**；10.0 第二段在移动环节
+ * 只给「低空扫射的空军」开口子。判断不能只看 `actionAllowedNow('barrage.declare')`
+ * ——该闸在移动环节会为低空扫射放行，必须再按 `barrageKindsInSegment` 收口。
+ */
+describe('阶段闸门：移动环节己方炮兵进不了炮击名单（#9）', () => {
+  it('★ 轰炸工具开着 + 点己方炮兵 ⇒ 参炸名单仍为空、不弹「宣布轰炸」', () => {
+    const { workbench, mapView } = stores()
+    workbench.setActiveSide('axis')
+    enterMovement(workbench)
+    const artillery = placeGround(
+      workbench,
+      groundRecord(
+        'axis',
+        (item) =>
+          (item.factors?.combat?.barrage ?? 0) > 0 && (item.factors?.combat?.range ?? 0) >= 1,
+      ),
+      HEX,
+      'axis',
+      'art-1',
+    )
+    // 模拟轰炸工具仍开着（从轰炸环节退回移动环节的情形）
+    workbench.setBarrageActive(true)
+    workbench.syncBarrageParticipants(HEX, [artillery.instanceId])
+    expect(workbench.barrageUnitIds).toEqual([])
+    expect(mapView.session?.kind ?? null).not.toBe('barrage')
+    // 右键菜单同样不列炮击（判据与 `barrageEntryEligible` 共用）
+    expect(menuKeys({ workbench, mapView }, artillery.instanceId)).not.toContain('barrage.declare')
+  })
+})

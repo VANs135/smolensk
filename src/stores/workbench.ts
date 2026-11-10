@@ -3085,6 +3085,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
+   * #9（用户 2026-11-10）：**本环节还允许的参炸名单里有东西吗**
+   *
+   * 10.0e-C/D：炮兵只在战斗 / 反应 / 进击段的轰炸环节可轰炸。从轰炸环节退回移动环节时，
+   * `barrageUnitIds` 仍是旧名单；会话框若不看环节就会继续弹「宣布轰炸（10.0d）」。
+   * 判据与 `barrageKindsInSegment` 同源，不另写一份。
+   */
+  const barrageSelectionAllowedNow = computed<boolean>(() => {
+    const kinds = barrageKindsInSegment.value
+    if (barrageUnitIds.value.length + barrageAirIds.value.length === 0) return false
+    // 无环节上下文（引擎验证页 / 夹具）：不按环节收口，保持工具本来的行为
+    if (kinds.length === 0) return true
+    return (
+      (barrageUnitIds.value.length > 0 && kinds.includes('artillery')) ||
+      (barrageAirIds.value.length > 0 && kinds.includes('air'))
+    )
+  })
+
+  /**
    * C7：**本环节里点地图选定的**轰炸目标格（10.0d）
    *
    * ★ 批 A 切片 2（用户口径「正式界面由环节驱动」）：修前 `barrageTargetHex` 直接取 `battleTarget?.hex` ——
@@ -11099,6 +11117,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ⇒ 镜像不产生第二套判定。
    */
   function syncBarrageParticipants(hex: HexRef, selectedIds: readonly string[]): void {
+    /*
+     * #9 / 10.0e-D：本环节**明确**不许炮兵轰炸（移动环节；`barrage.declare` 只为低空扫射的空军放行）
+     * ⇒ 点地图不往名单里镜像，避免"点己方炮兵就弹宣布轰炸"。
+     * 无环节上下文（引擎验证页 / 夹具）时 `barrageKindsInSegment` 为空，不按环节收口。
+     */
+    const kinds = barrageKindsInSegment.value
+    if (kinds.length > 0 && !kinds.includes('artillery')) return
     // 镜像自带作用域：摊开的是哪一格，阵列就收到哪一格（条 13；别格已选成员仍保留）
     barrageScopeHex.value = { col: hex.col, row: hex.row }
     const candidates = barrageUnitChoices.value
@@ -14791,6 +14816,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function barrageEntryEligible(hex: HexRef): boolean {
     if (!actionAllowedNow('barrage.declare')) return false
+    /*
+     * 10.0e-D / 10.0 第二段：**炮击入口只在本环节允许炮兵轰炸时出现**。
+     *
+     * `barrage.declare` 的闸门在移动环节也会放行——那是给「低空扫射的空军」（14.7d）开的口子，
+     * 不是给火炮的；移动环节的火炮进不了任何轰炸流程。修前这里只看闸门，移动环节右键敌方
+     * 就会冒出「炮击」三步骤、点进去走不通（用户 #11）。
+     */
+    if (!barrageKindsInSegment.value.includes('artillery')) return false
     if (!canReplaceBarrage()) return false
     if (barrageState.value !== null && !barrageState.value.finished) return false
     if (barragedHexesThisPhase.value.includes(hexLabel(hex))) return false
@@ -23207,6 +23240,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setBarrageActive,
     // 批 A 切片 2：环节驱动的分派事实（界面只读）
     barrageKindsInSegment,
+    barrageSelectionAllowedNow,
     isBarrageSegment,
     setBarrageKind,
     setBarrageTargetKind,

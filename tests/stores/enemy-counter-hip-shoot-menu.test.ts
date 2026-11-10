@@ -9,6 +9,7 @@ import {
   airBaseRecord,
   aircraftRecord,
   combatRecord,
+  groundRecord,
   placeAir,
   placeGround,
 } from '../flows/sop-harness'
@@ -116,5 +117,32 @@ describe('14.7d 右键敌方算子：低空扫射', () => {
 
   it('★ 右键己方单位不出现低空扫射（那是敌方目标菜单）', () => {
     expect(menuKeys(CORE_HEX, 'spotter-1')).not.toContain('ops.hipShoot')
+  })
+
+  /**
+   * #11（用户 2026-11-10）：**移动环节右键敌方 ⇒ 只出低空扫射，不出「炮击」**
+   *
+   * 10.0e-D：火炮轰炸只在战斗 / 反应 / 进击段的**轰炸环节**；10.0 第二段只给
+   * 「低空扫射的空军」开移动环节的口子。修前 `barrageEntryEligible` 只看
+   * `actionAllowedNow('barrage.declare')`（该闸在移动环节为空军放行）⇒ 炮兵也被列进来，
+   * 点进去是走不通的炮击三步骤。
+   */
+  it('★ 移动环节右键敌方：只出低空扫射，不列炮击', () => {
+    // 同格再摆一门射程够得着目标的己方炮兵，并备 1 点 SP（10.1b 付得起）
+    placeGround(
+      workbench,
+      groundRecord(
+        'axis',
+        (record) =>
+          (record.factors?.combat?.barrage ?? 0) > 0 && (record.factors?.combat?.range ?? 0) >= 1,
+      ),
+      CORE_HEX,
+      'axis',
+      'art-1',
+    )
+    workbench.spDumps.push({ id: 'd-core', hex: { ...CORE_HEX }, side: 'axis', sp: 4, t: 0 })
+    const keys = menuKeys(NEAR_HEX, 'enemy-1')
+    expect(keys).toContain('ops.hipShoot')
+    expect(keys).not.toContain('ops.barrage')
   })
 })

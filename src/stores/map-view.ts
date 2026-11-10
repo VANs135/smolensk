@@ -2311,11 +2311,7 @@ export const useMapViewStore = defineStore('mapView', () => {
      * B15c：**宣布之前**也开一个轰炸会话（判据＝轰炸工具开着 + 已选参炸单位 + 尚未宣布）。
      * 内容就是 `BarragePanel` 的"未宣布"那一段（类别 / 整体目标 / 参炸单位阵列 / 宣布）。
      */
-    if (
-      barrage === null &&
-      workbench.barrageActive &&
-      workbench.barrageUnitIds.length + workbench.barrageAirIds.length > 0
-    ) {
+    if (barrage === null && workbench.barrageActive && workbench.barrageSelectionAllowedNow) {
       return {
         kind: 'barrage',
         title: '宣布轰炸（10.0d）',

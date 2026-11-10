@@ -112,7 +112,9 @@ beforeEach(() => {
 describe('B15c：选择集 → 参炸名单（§4.2）', () => {
   it('★ 逐格镜像：该格选中的参炸单位进名单，取消即移出', () => {
     const { workbench } = newStores()
-    workbench.setPhase('movement')
+    // #9：炮兵只在轰炸环节可参炸；移到战斗段的轰炸环节（F）
+    workbench.setPhase('combat')
+    goToActionStep(workbench, 'barrage.declare')
     workbench.setBarrageActive(true)
     const a = place(workbench, artilleryRecord(), FIRING_HEX, 'axis', 'art-1')
     const b = place(workbench, artilleryRecord(), FIRING_HEX, 'axis', 'art-2')
@@ -126,7 +128,8 @@ describe('B15c：选择集 → 参炸名单（§4.2）', () => {
 
   it('候选＝`barrageUnitChoices`（同一份判据）：**没有印刷轰炸值**的同格单位不会被镜像进去', () => {
     const { workbench } = newStores()
-    workbench.setPhase('movement')
+    workbench.setPhase('combat')
+    goToActionStep(workbench, 'barrage.declare')
     workbench.setBarrageActive(true)
     const gun = place(workbench, artilleryRecord(), FIRING_HEX, 'axis', 'art-1')
     const rifle = place(workbench, rifleRecord(), FIRING_HEX, 'axis', 'rifle-1')
@@ -148,7 +151,8 @@ describe('B15c：选择集 → 参炸名单（§4.2）', () => {
 describe('B15c：宣布之前的轰炸会话（§4.2 / §4.3）', () => {
   it('★ 选了参炸单位（且工具开着）⇒ 生成「宣布轰炸」会话；未选则不生成', () => {
     const { workbench, mapView } = newStores()
-    workbench.setPhase('movement')
+    workbench.setPhase('combat')
+    goToActionStep(workbench, 'barrage.declare')
     const gun = place(workbench, artilleryRecord(), FIRING_HEX, 'axis', 'art-1')
 
     // 工具没开 ⇒ 不生成会话（轰炸不会自己冒出来）
@@ -157,14 +161,15 @@ describe('B15c：宣布之前的轰炸会话（§4.2 / §4.3）', () => {
     expect(mapView.session).toBeNull()
 
     workbench.toggleBarrageUnit(gun.instanceId)
-    // 会话只看「工具开着 + 有选子」——**与环节无关**：选子可以先备好，等环节到了再宣布
+    // #9：会话＝工具开着 + 有选子 + **本环节允许这个类别**（移动环节的炮兵不弹）
     expect(mapView.session).toMatchObject({ kind: 'barrage', rule: '10.0d' })
     expect(mapView.session?.title).toContain('宣布轰炸')
   })
 
   it('★ 会话取消 ⇒ 退掉尚未宣布的选子（无账可回滚），会话随之消失', () => {
     const { workbench, mapView } = newStores()
-    workbench.setPhase('movement')
+    workbench.setPhase('combat')
+    goToActionStep(workbench, 'barrage.declare')
     workbench.setBarrageActive(true)
     const gun = place(workbench, artilleryRecord(), FIRING_HEX, 'axis', 'art-1')
     workbench.toggleBarrageUnit(gun.instanceId)
