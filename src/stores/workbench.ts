@@ -6422,6 +6422,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 被夺取转常规运输点数 / 可留 SP 不付战斗补给），**没有**"不能独立移动"这一条 ⇒ 不设任何特判。
      */
     const moveIds = [...unitIds]
+    // #13：本编队已付过编队油且同格 ⇒ 先补记（阅读顺序：判据在 applyFormationFuelCoverage）
+    applyFormationFuelCoverageToIds(moveIds)
     /*
      * 13.2a：运输点数「暂停移动并使用它装载的部分补给、然后继续移动」——两条落地：
      *   ① 暂停的运输点数**可以**在同一移动阶段内再次开拔 ⇒ 解开 6.1g 的"本轮已结束"；
@@ -6565,6 +6567,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           ? defaults
           : [last.instanceId]
     movePick.value = { hex: { col: hex.col, row: hex.row }, ids }
+    // #13：选中即补记编队油（同格同编队，付款后进入本格的单位不再被要求加油）
+    applyFormationFuelCoverageToIds(ids)
     selectedId.value = picked.instanceId
     lastStep.value = null
     pushLog(
@@ -6628,6 +6632,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pick.ids = pick.ids.filter((id) => id !== unitId)
     } else {
       pick.ids = [...pick.ids, unitId]
+      // #13：显式点进来的同编队单位同样按编队油窗口补记
+      const unit = units.value.find((item) => item.instanceId === unitId)
+      if (unit !== undefined) applyFormationFuelCoverage(unit)
     }
   }
   /** 只选这一枚（点「只动这一枚」即「就它动」，不需要先勾上） */
@@ -6635,12 +6642,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const pick = movePick.value
     if (pick === null) return
     pick.ids = [unitId]
+    applyFormationFuelCoverageToIds(pick.ids)
   }
   /** 全选（等价于点「整堆叠」）——#12：只选该格**可开拔的战斗单位**（非战斗须显式点选） */
   function setMovePickAll(): void {
     const pick = movePick.value
     if (pick === null) return
     pick.ids = defaultMovePickIdsAt(pick.hex)
+    applyFormationFuelCoverageToIds(pick.ids)
   }
 
   /**
@@ -6660,10 +6669,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return
     }
     const picked = ids.filter((id) => here.includes(id))
+    const chosen = picked.length > 0 ? picked : [here[here.length - 1]!]
     movePick.value = {
       hex: { col: hex.col, row: hex.row },
-      ids: picked.length > 0 ? picked : [here[here.length - 1]!],
+      ids: chosen,
     }
+    applyFormationFuelCoverageToIds(chosen)
   }
   /**
    * 直接给定取子集合（B3：地图上的就地展开把它当**唯一选择集**来驱动）
@@ -6677,6 +6688,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // #8：地图/堆叠窗给出的集合仍以可开拔池为准——未选中的补员算子等不得被顺手扩进来
     const here = movePickPoolAt(pick.hex).map((unit) => unit.instanceId)
     pick.ids = [...ids].filter((id) => here.includes(id))
+    applyFormationFuelCoverageToIds(pick.ids)
   }
   /** 放弃取子（不移动任何人） */
   function cancelMovePick(): void {
@@ -7734,6 +7746,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
               ? '（未定）'
               : (fuelSourceKeysOfUnit(targets[0]!).get(formationCoverage.sourceKey) ?? '（未定）'),
           coveredIds,
+          // #13：付款格（编队油窗口的同格判据）
+          originHex: { ...targets[0]!.hex },
         },
       }
       const leftOut = formationCoverage.leftOut.filter(
@@ -7820,9 +7834,44 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const formationFuelThrows = ref<
     Record<
       string,
-      { side: Side; sourceKey: string; sourceLabel: string; coveredIds: readonly string[] }
+      {
+        side: Side
+        sourceKey: string
+        sourceLabel: string
+        coveredIds: readonly string[]
+        /** 付款时受益单位所在格（#13：同格同编队后来者按窗口覆盖） */
+        originHex: HexRef
+      }
     >
   >({})
+
+  /**
+   * #13（用户 2026-11-10）：编队油的**同格同编队**补记
+   *
+   * 12.5c-A：「为**一整个多单位编队**支付 1SP，便可为整个多单位编队提供燃料补给」，覆盖期到
+   * 12.5d 的**本方清理阶段**才结束。付款那一刻已在覆盖集里的单位由 `payFuel` 直接置位；这里补的是
+   * **付款后才进入同一格**的同编队单位（增援落位、拆分、回合内调上来、读档重排等）——
+   * 它们与付款单位同格 ⇒ 用的就是同一座来源（12.5c-A 后半句的来源判据自动成立），
+   * 不该在移动环节被再要一次钱（界面表现为"编队法只作用一枚"）。
+   */
+  function applyFormationFuelCoverage(unit: ConsoleUnit): void {
+    if (unit.fuelled) return
+    const formation = unit.formation
+    if (formation === null || formation === undefined) return
+    const record = formationFuelThrows.value[formation]
+    if (record === undefined || record.side !== unit.side) return
+    if (hexLabel(record.originHex) !== hexLabel(unit.hex)) return
+    unit.fuelled = true
+    unit.fuelMethod = 'formation'
+  }
+
+  /** 对一串实例 id 逐个补记（选中/勾选/开拔时共用） */
+  function applyFormationFuelCoverageToIds(ids: readonly string[]): void {
+    for (const id of ids) {
+      const unit = units.value.find((item) => item.instanceId === id)
+      if (unit !== undefined) applyFormationFuelCoverage(unit)
+    }
+  }
 
   /**
    * 12.5e：该指挥部此刻的**付费覆盖集**（HQ 自己 + 投递距离内的**所有独立单位**）
@@ -7909,8 +7958,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const formation = targets[0]?.formation ?? null
     if (formation === null) return { sourceKey: null, covered: [], leftOut: [] }
     const sourceKey = formationSourceAnchorFor(targets, dump)
-    const members = units.value.filter((unit) =>
-      formationFuelCovers({ unitFormation: unit.formation, fuelFormation: formation }),
+    const members = units.value.filter(
+      (unit) =>
+        unit.side === targets[0]!.side &&
+        formationFuelCovers({ unitFormation: unit.formation, fuelFormation: formation }),
     )
     if (sourceKey === null) return { sourceKey: null, covered: [], leftOut: members }
     const covered: ConsoleUnit[] = []

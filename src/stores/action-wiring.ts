@@ -238,6 +238,12 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     kind: 'draft',
     why: '只读投影：按同格预演列出"可移除伙伴"给整编会话选，`units.value` 仅用于取单位，不落盘',
   },
+  // #13：取子勾选本身是草稿；同一入口按 12.5c-A 给"同格同编队、该编队已付过 1SP"的单位补记
+  // `fuelled`（`applyFormationFuelCoverage`）。补记**不重复扣 SP**——付款账本仍只在 payFuel。
+  toggleMovePick: {
+    kind: 'draft',
+    why: '勾选集合是待提交输入；顺带按 12.5c-A 补记同格同编队的编队油（付款已在 payFuel 一次付清，此处不扣账）',
+  },
   focusAirMissionBase: {
     kind: 'pickMode',
     why: '点基地分栏只改聚焦栏与地图高亮（复用 setHoverHex 的既有通道），不落盘',

@@ -217,6 +217,60 @@ describe('I①（12.5c-A）：编队加油的覆盖集', () => {
     expect(store.formationFuelThrowOf('3PZ')).toBeNull()
   })
 
+  it('★ #13（用户 2026-11-10）：同格同编队一次覆盖——29MTR 另一枚不再被要求加油', () => {
+    const store = newStore()
+    const mot29 = () =>
+      groundRecord(
+        'axis',
+        (record) =>
+          record.formation === '29MTR' &&
+          record.mobilityByFace?.combat === 'leg' &&
+          record.mobilityByFace?.move === 'truck',
+      )
+    const mine = placeGround(store, mot29(), CORE_HEX, 'axis', 'mine', 'move')
+    const mate = placeGround(store, mot29(), CORE_HEX, 'axis', 'mate')
+    store.spDumps.push({ id: 'd1', hex: { ...CORE_HEX }, side: 'axis', sp: 4, t: 0 })
+    expect(mine.formation).toBe('29MTR')
+    expect(mate.formation).toBe('29MTR')
+
+    payFormationFuel(store)
+    expect(mine.fuelled).toBe(true)
+    // 同格、同编队 ⇒ 一次编队法必须覆盖另一枚
+    expect(mate.fuelled).toBe(true)
+    expect(store.formationFuelThrowOf('29MTR')?.coveredIds).toContain('mate')
+
+    // 之后点这一枚，不应再弹「支付燃料」
+    store.abortMoveNow()
+    store.selectedId = mate.instanceId
+    expect(store.fuelPaymentDue).toBe(false)
+  })
+
+  it('★ #13：付款后进入同格的同编队单位，按编队油窗口一并覆盖（同格同编队一次覆盖）', () => {
+    const store = newStore()
+    const mot29 = () =>
+      groundRecord(
+        'axis',
+        (record) =>
+          record.formation === '29MTR' &&
+          record.mobilityByFace?.combat === 'leg' &&
+          record.mobilityByFace?.move === 'truck',
+      )
+    placeGround(store, mot29(), CORE_HEX, 'axis', 'mine', 'move')
+    store.spDumps.push({ id: 'd1', hex: { ...CORE_HEX }, side: 'axis', sp: 4, t: 0 })
+    payFormationFuel(store)
+    store.abortMoveNow()
+
+    // 付款之后才与付款单位同格（增援落位 / 拆分 / 回合内调上来）
+    const late = placeGround(store, mot29(), CORE_HEX, 'axis', 'late')
+    expect(late.fuelled).toBe(false)
+
+    // 玩家点这一格（选中该编队）⇒ 12.5c-A 的编队油窗口按"同格同编队"覆盖它
+    store.clickHex(CORE_HEX)
+    expect(late.fuelled).toBe(true)
+    expect(late.fuelMethod).toBe('formation')
+    expect(store.fuelPaymentDue).toBe(false)
+  })
+
   it('★ 判据只有一处：`formationFuelCovers`（12.5c-A）的真值表', () => {
     expect(formationFuelCovers({ unitFormation: '3PZ', fuelFormation: '3PZ' })).toBe(true)
     expect(formationFuelCovers({ unitFormation: '10PZ', fuelFormation: '3PZ' })).toBe(false)
