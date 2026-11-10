@@ -5332,6 +5332,34 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
+   * 8.1：这些单位**在本环节开始时**是否同格堆叠在一起
+   *
+   * 判据＝「环节起始格快照（`phaseStartHex`）与当前堆叠求交」：全部参突者的起始格必须是
+   * 同一格。本环节内才移动过来汇合的单位起始格不同 ⇒ 整组突袭不合 8.1（修前恒传 `true`，
+   * 等于「此刻同格就能突袭」）。
+   *
+   * 单枚单位恒成立（自己与自己同格）；快照缺失（旧档/旧读档）按「不追溯」读成当前格。
+   */
+  function startedStackedTogether(ids: readonly string[]): boolean {
+    if (ids.length <= 1) return true
+    let start: HexRef | null = null
+    for (const id of ids) {
+      const unit = units.value.find((item) => item.instanceId === id)
+      const hex = unit?.phaseStartHex ?? null
+      if (hex === null) {
+        const here = unit?.hex ?? null
+        if (here === null) return false
+        if (start === null) start = here
+        else if (start.col !== here.col || start.row !== here.row) return false
+        continue
+      }
+      if (start === null) start = hex
+      else if (start.col !== hex.col || start.row !== hex.row) return false
+    }
+    return true
+  }
+
+  /**
    * 8.1 / 8.1a / 8.1h：从**进格后同格**的候选里取本格真正合格的参突者
    *
    * 4.5a-A 只规定「轮式单位进敌方 ZOC 后必须停或突袭」——**被强制停车的只有轮式**，
@@ -5364,7 +5392,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         unitIds: [unit.instanceId],
         target: input.target,
         mpRemaining: mp,
-        startedStackedTogether: true,
+        startedStackedTogether: startedStackedTogether([unit.instanceId]),
         defenders: [...input.defenders],
       })
       if (verdict.ok) eligible.push({ id: unit.instanceId, mp })
@@ -5377,7 +5405,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       unitIds: eligible.map((item) => item.id),
       target: input.target,
       mpRemaining,
-      startedStackedTogether: true,
+      startedStackedTogether: startedStackedTogether(eligible.map((item) => item.id)),
       defenders: [...input.defenders],
     })
     if (!verdict.ok) return null
@@ -5580,6 +5608,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })
     const participants = [...split.participantIds]
     if (participants.length === 0) {
+      // 8.1：把「本环节内才汇合」的拒绝理由说清楚（否则一律报 6.1g，玩家看不出病根）
+      if (!startedStackedTogether(movingIds)) {
+        combatError.value = { rule: '8.1', reason: 'notStackedAtPhaseStart' }
+        pushLog(
+          'warning',
+          '不能突袭：参突单位须在本环节开始时就同格堆叠（本环节内才汇合的单位不合 8.1）',
+          '8.1',
+        )
+        return false
+      }
       pushLog('warning', '没有仍在移动中的单位可以突袭（6.1g）', '6.1g')
       return false
     }
@@ -5596,7 +5634,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       unitIds: participants,
       target: hex,
       mpRemaining: participantsMp,
-      startedStackedTogether: true,
+      startedStackedTogether: startedStackedTogether(participants),
       defenders: defenders.map((unit) => ({ id: unit.instanceId, isCombat: unit.isCombat })),
     })
     if (!eligibility.ok) {
@@ -5889,6 +5927,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       unit.mpSpent = 0
       unit.airTransportThisPhase = null
       unit.movementEnded = false
+      // 8.1：拍下**环节开始时**的位置，供突袭判「阶段开始即同格堆叠」
+      unit.phaseStartHex = { col: unit.hex.col, row: unit.hex.row }
       // 5.7a：朝向锁只在本移动阶段内有效 ⇒ 换段/换方/换回合即解锁
       unit.reserveEnteredThisPhase = false
       unit.mpLockedThisPhase = false

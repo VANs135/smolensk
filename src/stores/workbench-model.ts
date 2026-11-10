@@ -283,6 +283,14 @@ export interface ConsoleUnit {
   /** 本阶段本轮移动是否已结束（4.5a-A 强制停止 / 6.1c 最小移动 / 6.2b All 地形耗尽 / 6.1f 掉队） */
   movementEnded: boolean
   /**
+   * 8.1：**本环节开始时**该单位所在格（突袭「须阶段开始即同格堆叠」的判据快照）
+   *
+   * 由 `resetMovementTracking`（换段/换方/换回合）在环节起步时拍下；建号落位时取落位格。
+   * 突袭时按「环节起始格与当前堆叠求交」判定 —— 本环节内才移动过来汇合的单位起始格不同，
+   * 整组突袭即被拒（8.1）。旧档没有该键 ⇒ 读档时补成当前格（不追溯）。
+   */
+  phaseStartHex: HexRef | null
+  /**
    * 5.7a：**本移动阶段内**刚进入预备模式（当前朝向锁定到下一个移动阶段）
    *
    * 阶段级瞬时事实，与 `mpSpent`/`movementEnded` 同层；换段/换方/换回合由
@@ -614,6 +622,8 @@ export function toConsoleUnit(input: {
     mpSpent: 0,
     airTransportThisPhase: null,
     movementEnded: false,
+    // 8.1：环节起始格快照 —— 落位即视为「本环节开始就在这一格」
+    phaseStartHex: { col: input.hex.col, row: input.hex.row },
     // 5.7a：进入预备的时点事实，仅在本移动阶段内有效
     reserveEnteredThisPhase: false,
     // 4.5b：垫人承诺由玩家在界面上显式许诺（见 store 的 lockZocNegation）
