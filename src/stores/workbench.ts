@@ -6529,8 +6529,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   - 多枚且已开「整堆叠」 ⇒ 整堆叠一起作为候选。
    */
   function selectForMove(hex: HexRef, only?: readonly string[]): void {
-    const friendlies = friendlyUnitsAt(hex)
-    if (friendlies.length === 0) return
+    const friendlies = movePickPoolAt(hex)
+    if (friendlies.length === 0) {
+      /*
+       * #15：本格只剩**已结束本轮移动**（或补员）的算子 ⇒ 不建立取子清单 ⇒ 界面没有「开始移动」入口。
+       * 6.1g「一旦开始移动就必须走完」；13.2a 的暂停实例仍在池里（可继续），不落到这里。
+       */
+      movePick.value = null
+      const atHex = friendlyUnitsAt(hex)
+      selectedId.value = atHex[atHex.length - 1]?.instanceId ?? null
+      pushLog('info', '该格没有可开拔的单位（本轮移动已结束，6.1g / 13.2a）', '6.1g')
+      return
+    }
     const last = friendlies[friendlies.length - 1]!
     /*
      * ★ 用户 2026-11-10：地图上**点某一枚** ⇒ 就选这一枚（`only`），不再整格全选；
@@ -6570,7 +6580,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 可单独选中/单独移动；原文没有"不能独立移动"这一条。
    */
   function movePickPoolAt(hex: HexRef): ConsoleUnit[] {
-    return friendlyUnitsAt(hex).filter((unit) => !isReplUnit(unit))
+    // #15：已结束本轮移动的实例不再进池（没有"开始移动"入口、不占配额）；
+    // 13.2a 显式暂停的运输点数仍可继续 ⇒ 保留在池里。
+    return friendlyUnitsAt(hex).filter(
+      (unit) =>
+        !isReplUnit(unit) &&
+        (!unit.movementEnded || pausedTransportIds.value.includes(unit.instanceId)),
+    )
   }
 
   /** 取子清单的候选单位（该格当前方可开拔的算子，按摆放顺序） */
@@ -6881,9 +6897,42 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** C5：结束当前单位/堆叠的移动（6.1 末句；仍可撤销） */
+  /**
+   * C5：结束当前单位/堆叠的移动（6.1 末句；仍可撤销）
+   *
+   * ★ 用户 2026-11-10 实机 #15：**「结束移动」＝完成**。修前这里把主动停车的运输点数自动记成
+   *   13.2a 的「暂停」⇒ 别的单位永远被拦（"运输点数没有移动完"），且已结束的点数还能再「开始移动」。
+   *   13.2a 的暂停是**可选动作**（「运输点数可以移动、暂停移动并使用它装载的部分补给、然后继续移动」），
+   *   只由 `pauseTransportMove` 触发；这里不再代替玩家做这个决定。
+   */
   function finishMove(): void {
-    if (moveInteraction.value === null) return
+    concludeMove(false)
+  }
+
+  /** 13.2a：显式「暂停移动」——只有本次移动里有运输点数时才有意义（其它单位按结束移动处理） */
+  function pauseTransportMove(): boolean {
+    const interaction = moveInteraction.value
+    if (interaction === null || interaction.finished) {
+      pushLog('warning', '当前没有正在进行的移动（6.1）', '6.1')
+      return false
+    }
+    const hasTransport = moveUnits.value.some(
+      (unit) =>
+        !unit.movementEnded &&
+        !unit.isCombat &&
+        unit.noncombatTransport > 0 &&
+        unit.noncombatKind !== 'organic_truck',
+    )
+    if (!hasTransport) {
+      pushLog('warning', '本次移动里没有可暂停的运输点数（13.2a）', '13.2a')
+      return false
+    }
+    return concludeMove(true)
+  }
+
+  /** 结束/暂停的共用实现（`pauseTransports` 只决定是否记 13.2a 的暂停账） */
+  function concludeMove(pauseTransports: boolean): boolean {
+    if (moveInteraction.value === null) return false
     /*
      * 8.1a：突袭的 3 MP 是在 9.2 推进步记账的 ⇒ 战斗未收束就结束移动会让这笔账无处落盘。
      *
@@ -6905,13 +6954,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           '否则 8.1a 的 3 MP 与 8.0 的进格都无法记账'
         moveBlocked.value = { rule: '8.1a', reason }
         pushLog('warning', reason, '8.1a')
-        return
+        return false
       }
     }
     // 收束可能已经把本次移动就近结束（参突者全灭那一路）⇒ 重新读取，避免二次落盘
     const interaction = moveInteraction.value
-    if (interaction === null || interaction.finished) return
-    if (!groundMovement.mayMutate()) return
+    if (interaction === null || interaction.finished) return false
+    if (!groundMovement.mayMutate()) return false
     // 走到这里说明本步能落地 ⇒ 清掉上一次的拒绝原因（moveBlocked 是当前这一步被拒的显示位）
     moveBlocked.value = null
     /*
@@ -6928,24 +6977,26 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         reason: '预备模式的单位不得停在环形工事格（5.7g）：请先走出工事格再结束移动',
       }
       pushLog('warning', moveBlocked.value.reason, '5.7g')
-      return
+      return false
     }
     const names = moveUnits.value.map((unit) => unit.name).join(' + ')
     /*
-     * 13.2a：先把本次**主动停车**的运输点数记下来（3.3b 的运输点数＝非战斗、带运力点数的算子；
+     * 13.2a：只有**显式暂停**才记这笔账（3.3b 的运输点数＝非战斗、带运力点数的算子；
      * 编内卡车（13.2g）虽 `isCombat:false`，但不是独立运输点数，必须排除）。
      * 记账必须在 `applyMovePatches` 之前 —— 补丁会把它们的 `movementEnded` 置真，
      * 之后就分不出"本来就停下的"与"这次停的"。
      */
-    const pausedIds = moveUnits.value
-      .filter(
-        (unit) =>
-          !unit.movementEnded &&
-          !unit.isCombat &&
-          unit.noncombatTransport > 0 &&
-          unit.noncombatKind !== 'organic_truck', // 13.2g：编内卡车不是「3.3b 运输点数」
-      )
-      .map((unit) => unit.instanceId)
+    const pausedIds = pauseTransports
+      ? moveUnits.value
+          .filter(
+            (unit) =>
+              !unit.movementEnded &&
+              !unit.isCombat &&
+              unit.noncombatTransport > 0 &&
+              unit.noncombatKind !== 'organic_truck', // 13.2g：编内卡车不是「3.3b 运输点数」
+          )
+          .map((unit) => unit.instanceId)
+      : []
     const result = endMoveEarly({ interaction, runtime: moveRuntime.value })
     applyMovePatches(result.patches)
     moveInteraction.value = result.interaction
@@ -6954,7 +7005,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * ⇒ 停车账本随之作废，这些单位此后不再出现在突袭候选里（否则界面会一直挂紫环）。
      */
     zocStoppedMoveUnitIds.value = []
-    // 13.2a：本次主动停车的运输点数＝「暂停」——同一阶段内可继续（其它单位开拔须等它完成）
+    // 13.2a：显式暂停的运输点数＝「暂停」——同一阶段内可继续（其它单位开拔须等它完成）
     if (pausedIds.length > 0) {
       pausedTransportIds.value = [...new Set([...pausedTransportIds.value, ...pausedIds])]
       pushLog('info', `${names}：运输点数暂停移动（可用其装载的 SP 付款后再继续，13.2a）`, '13.2a')
@@ -6970,6 +7021,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         unitIds: moveUnits.value.map((unit) => unit.instanceId),
       },
     })
+    return true
   }
 
   /** C5：悬停格（路径与消耗预览） */
@@ -22831,6 +22883,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // B15a：放弃本次移动**并退出移动态**（会话框的取消 / Esc）
     abortMoveNow,
     finishMove,
+    pauseTransportMove,
     // 6.1f：把某枚从正在移动的堆叠里放下（就地停住，其余继续）
     dropUnitFromMove,
     switchUnitMode,

@@ -91,6 +91,24 @@ const canOverrun = computed(() => workbench.actionAllowedNow('move.overrun'))
 const canReleaseReserve = computed(() => workbench.actionAllowedNow('reserve.release'))
 const canPayFuel = computed(() => workbench.actionAllowedNow('supply.fuel'))
 
+/**
+ * 13.2a：本次移动里有**运输点数**且尚未结束时，才给「暂停移动」这一个显式入口
+ *
+ * 用户的实机 #15：修前「结束移动」被当成暂停，别的单位永远被拦 ⇒ 现在结束＝完成；
+ * 13.2a 的「暂停并使用装载补给、然后继续」只由这个按钮触发。
+ */
+const canPauseTransport = computed(() => {
+  const interaction = workbench.moveInteraction
+  if (interaction === null || interaction.finished) return false
+  return workbench.moveUnits.some(
+    (unit) =>
+      !unit.movementEnded &&
+      !unit.isCombat &&
+      unit.noncombatTransport > 0 &&
+      unit.noncombatKind !== 'organic_truck',
+  )
+})
+
 /** P8：移动/突袭允许的环节名（取 `ACTION_GATES` 投影，不在模板里写死） */
 const moveSegmentLabels = computed(() => workbench.segmentLabelsOfAction('move.order'))
 const moveSegmentLabelText = computed(() =>
@@ -579,15 +597,23 @@ function hoverDump(id: string | null): void {
         <BaseButton variant="primary" size="sm" @click="workbench.finishMove()">
           结束移动
         </BaseButton>
+        <BaseButton
+          v-if="canPauseTransport"
+          variant="secondary"
+          size="sm"
+          @click="workbench.pauseTransportMove()"
+        >
+          暂停移动（13.2a）
+        </BaseButton>
         <BaseButton variant="ghost" size="sm" @click="workbench.abortMoveNow()">
           放弃本次移动（全部还原并退出）
         </BaseButton>
       </div>
       <div class="muted">
-        走完可点「结束移动」；仍有单位在动时结束会让它们就地停下。已做的动作只能靠「撤销一步」回退
-        或「放弃本次移动」全部还原。
-        <RuleTip rule="6.1f / 6.1h"
-          >撤销只给一步；放弃会还原整次移动，还原后可重新选子再走。</RuleTip
+        走完可点「结束移动」（结束＝完成）；运输点数要先用装载的补给付款再继续，用「暂停移动（13.2a）」。
+        已做的动作只能靠「撤销一步」回退或「放弃本次移动」全部还原。
+        <RuleTip rule="6.1f / 6.1h / 13.2a"
+          >撤销只给一步；放弃会还原整次移动，还原后可重新选子再走。暂停的运输点数须在别的单位开拔前完成（13.2a）。</RuleTip
         >
       </div>
     </SessionStep>
