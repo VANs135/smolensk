@@ -46,8 +46,6 @@ const previewCost = computed(() =>
 )
 /** P5：单步预览被判不可提交时的原因（引擎 `StepFailure`，组件原样展示） */
 const previewBlocked = computed(() => workbench.stepPreview?.blocked ?? null)
-/** 4.5a-A：进入未抵消 ZOC 的待决 */
-const zocConfirm = computed(() => workbench.pendingZocConfirm)
 /** 6.1a：MA 是**一阶段的总额度** ⇒ 账要按"已耗 / 可用"显示 */
 const selected = computed(() => workbench.selectedUnit)
 /**
@@ -435,41 +433,6 @@ function hoverDump(id: string | null): void {
         {{ workbench.stepPreview?.droppingIds.length }} 枚走不动、将留在原格（6.1f）
       </p>
     </div>
-
-    <!-- ⑥ 4.5a-A：进入未抵消敌方 ZOC 的待决（必须收束，否则不许再走） -->
-    <SessionStep v-if="zocConfirm !== null" item="move:zoc">
-      <p class="num">
-        <BaseTag kind="warning">4.5a-A</BaseTag>
-        进入 {{ hexLabel(zocConfirm.to) }} 前须决定：该格在**未抵消的敌方 ZOC**
-        内，进入后的单位须**就地停止**。
-      </p>
-      <div class="row">
-        <BaseButton variant="primary" size="sm" @click="workbench.confirmZocEntry()">
-          进入并停止（4.5a-A）
-        </BaseButton>
-        <BaseButton variant="secondary" size="sm" @click="workbench.dismissZocConfirm()">
-          留在原格
-        </BaseButton>
-      </div>
-      <!-- 4.5a-A 的后一支：进入后**立即突袭**（8.0） -->
-      <template v-if="workbench.zocOverrunChoices.length > 0">
-        <p class="muted num">或选「突袭」这一支（8.0）：进入后立刻打相邻的敌方格。</p>
-        <div class="row">
-          <BaseButton
-            v-for="choice in workbench.zocOverrunChoices"
-            :key="`${choice.hex.col}.${choice.hex.row}`"
-            variant="primary"
-            size="sm"
-            @click="workbench.confirmZocEntryAndOverrun(choice.hex)"
-          >
-            进入并突袭 {{ hexLabel(choice.hex) }}（{{ choice.entryCost }}+{{ choice.mpCost }} MP）
-          </BaseButton>
-        </div>
-      </template>
-      <p v-else class="muted num">
-        进入后没有可突袭目标（8.1a 的剩余 MP ≥ 3、8.1b 的进格 ≤ 3 MP）⇒ 只能就地停止。
-      </p>
-    </SessionStep>
 
     <!-- ⑦ 条 17（批 F·F2）：4.5a 约束 —— 突袭强行进入敌方 ZOC 后，该格单位"不得离开、须再突袭或停" -->
     <SessionStep v-if="workbench.overrunZocHeld !== null" item="move:continue">

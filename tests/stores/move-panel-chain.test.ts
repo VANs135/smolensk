@@ -186,8 +186,6 @@ describe('B15a：移动面板的接线（源码守卫）', () => {
       'workbench.finishMove()',
       'workbench.abortMoveNow()',
       'workbench.dropUnitFromMove($event)',
-      'workbench.confirmZocEntry()',
-      'workbench.dismissZocConfirm()',
       'workbench.setHoverHex',
     ]) {
       expect(panel).toContain(call)

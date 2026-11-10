@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import { BaseButton, BaseDialog, BasePanel, BaseTag } from '@/components/base'
+import { BaseButton, BasePanel, BaseTag } from '@/components/base'
 import { AirPanel } from '@/components/air'
 import { BarragePanel } from '@/components/barrage'
 import { CombatPanel } from '@/components/combat'
@@ -24,7 +24,7 @@ import { provideUiMode } from '@/components/ui-mode'
 import { ChartsTable } from '@/components/game'
 import type { HexRef } from '@/data'
 import { DEFAULT_MAP_LAYERS } from '@/render/map-render'
-import { OVERRUN_COST_MP } from '@/engine/rules/overrun'
+
 import {
   arrivalNotesOf,
   arrivalTableView,
@@ -810,64 +810,6 @@ onMounted(() => {
       </BasePanel>
     </div>
 
-    <!-- 4.5a-A：进入敌方 ZOC 前必须让玩家确认（轮式单位进入后只能就地停止或突袭） -->
-    <BaseDialog
-      :open="workbench.pendingZocConfirm !== null"
-      title="进入敌方控制区（4.5a-A）"
-      width="440px"
-      @update:open="
-        (open) => {
-          if (!open) workbench.dismissZocConfirm()
-        }
-      "
-    >
-      <p v-if="workbench.pendingZocConfirm !== null" class="num">
-        目标格
-        <strong>
-          {{ workbench.pendingZocConfirm.to.col }}.{{ workbench.pendingZocConfirm.to.row }}
-        </strong>
-        处于未被抵消的敌方 ZOC。
-      </p>
-      <p>
-        拥有轮式 MP 的单位进入敌方 ZOC
-        后，<strong>必须在此处结束移动，或者进行突袭</strong>（4.5a-A）。 使用步行 MP 或履带 MP
-        的移动不受任何影响（4.5a-A 括注）。
-      </p>
-      <p v-if="workbench.pendingZocConfirm !== null" class="muted num">
-        进入后必须停止：{{
-          workbench.pendingZocConfirm.preview.zocStoppingIds.map(nameOfUnit).join('、') || '—'
-        }}
-      </p>
-      <!-- 4.5a-A 的后一支：**进入并立即突袭**（8.0；资格由引擎 8.1 系列给出） -->
-      <div v-if="workbench.zocOverrunChoices.length > 0" class="zoc__branch">
-        <p class="muted num">
-          或选「突袭」这一支：进入后**立即**对相邻的敌方格发起突袭（8.1a：每次
-          {{ OVERRUN_COST_MP }} MP；8.1b：进格消耗 ≤ {{ OVERRUN_COST_MP }} MP）。
-        </p>
-        <div class="row">
-          <BaseButton
-            v-for="choice in workbench.zocOverrunChoices"
-            :key="`${choice.hex.col}.${choice.hex.row}`"
-            variant="primary"
-            @click="workbench.confirmZocEntryAndOverrun(choice.hex)"
-          >
-            进入并突袭 {{ choice.hex.col }}.{{ choice.hex.row }}（进格 {{ choice.entryCost }} MP +
-            突袭 {{ choice.mpCost }} MP）
-          </BaseButton>
-        </div>
-      </div>
-      <p v-else class="muted num">
-        进入后**没有**可突袭的目标（8.1a 的剩余 MP ≥ {{ OVERRUN_COST_MP }}、8.1b 的进格 ≤
-        {{ OVERRUN_COST_MP }} MP、8.1 的可攻击与同格，缺一即不可）⇒ 只能就地停止。
-      </p>
-      <template #footer>
-        <BaseButton variant="secondary" @click="workbench.dismissZocConfirm()">留在原格</BaseButton>
-        <BaseButton variant="primary" @click="workbench.confirmZocEntry()"
-          >确认进入并停止</BaseButton
-        >
-      </template>
-    </BaseDialog>
-
     <!-- W6 C10：待答面板（由会话驱动；无关闭入口，只在内核裁决通过后消失） -->
     <QuestionPrompt />
 
@@ -924,11 +866,6 @@ onMounted(() => {
   align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-2);
-}
-
-/* 4.5a-A 的后一支：进入敌方 ZOC 后立即突袭（8.0/8.1） */
-.zoc__branch {
-  margin-top: var(--space-2);
 }
 
 .wb__field {

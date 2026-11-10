@@ -2193,8 +2193,7 @@ export const useContainersStore = defineStore('containers', () => {
     })
     if (!plan.ok) return plan
     if (!hex || !workbench.actionAllowedNow('move.order')) return reject('当前环节不能进出边缘盒')
-    if (workbench.settlementInProgress !== null || workbench.pendingZocConfirm !== null)
-      return reject('请先完成当前待决')
+    if (workbench.settlementInProgress !== null) return reject('请先完成当前待决')
     if ((unit.noncombatKind != null && unit.noncombatTransport <= 0) || unit.locked)
       return reject('该单位不能移动')
     const moving = workbench.moveInteraction

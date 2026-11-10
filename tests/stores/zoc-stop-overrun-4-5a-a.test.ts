@@ -119,8 +119,10 @@ function setupZocStop(store: ReturnType<typeof newStore>): {
   place(store, zocSource(), enemyHex!, 'soviet', 'e1')
   store.clickHex(START)
   store.clickHex(target!.hex)
-  expect(store.pendingZocConfirm).not.toBeNull()
-  store.confirmZocEntry()
+  // 4.5a-A：轮式进未抵消 EZOC ⇒ 就地停止是**规则既定后果**，不再弹「进入并突袭 / 进入停下」
+  expect('pendingZocConfirm' in store).toBe(false)
+  // 面板已删：移动面板里不再有这条待决（会话步 `move:zoc` 一并移除）
+  expect(readFileSync('src/components/move/MovePanel.vue', 'utf8')).not.toContain('move:zoc')
   expect(truck.hex).toEqual(target!.hex)
   return { truck, stopHex: target!.hex, enemyHex: enemyHex! }
 }

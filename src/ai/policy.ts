@@ -148,7 +148,6 @@ export interface AiSnapshot {
   locked: boolean
   can: ReadonlySet<string>
   advanceAvailable: boolean
-  pendingZocConfirm: boolean
   specialPending: boolean
   reserveUnitIds: readonly string[]
   reserveTriedUnitIds: readonly string[]
@@ -166,7 +165,6 @@ export type AiAction =
   | { kind: 'moveBegin'; unitId: string }
   | { kind: 'moveClick'; hex: AiHex }
   | { kind: 'moveFinish' }
-  | { kind: 'zocConfirm' }
   | { kind: 'specialConfirm' }
   | { kind: 'barrageTarget'; hex: AiHex }
   | { kind: 'barrageToggleUnit'; unitId: string }
@@ -479,11 +477,6 @@ export function decideAiAction(snapshot: AiSnapshot): AiAction {
   if (snapshot.locked) return { kind: 'advance' }
 
   // 2) 未结算的战斗 / 轰炸 / 补给义务 → 先结清（各分支内部再按归属方判控制权）
-  if (snapshot.pendingZocConfirm) {
-    if (!snapshot.control.activeSide)
-      return waitForSide(snapshot.activeSide, '确认进入敌方 ZOC（4.5）')
-    return { kind: 'zocConfirm' }
-  }
   if (snapshot.specialPending) {
     if (!snapshot.control.activeSide) return waitForSide(snapshot.activeSide, '确认战斗专规（9.4）')
     return { kind: 'specialConfirm' }

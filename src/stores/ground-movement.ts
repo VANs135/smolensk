@@ -9,7 +9,6 @@ import {
   type MoveUnitRuntime,
   type MoveInteractionState,
   type MoveStepRecord,
-  type StepPreview,
 } from '@/engine/rules'
 import type { MoveStepSnapshot } from './movement-types'
 export interface GroundMovementPorts {
@@ -27,11 +26,6 @@ export interface GroundMovementPorts {
 /** 6.1：地面单位的移动历史、ZOC暂停和撤销边界；空军不写这里的MP。 */
 export function createGroundMovementDomain(ports: GroundMovementPorts) {
   const moveInteraction = ref<MoveInteractionState | null>(null)
-  const pendingZocConfirm = ref<{
-    to: HexRef
-    preview: StepPreview
-    remainingPath: HexRef[]
-  } | null>(null)
   const zocStoppedMoveUnitIds = ref<string[]>([]),
     moveBlocked = ref<{ rule: string; reason: string } | null>(null)
   const moveContext = computed(ports.context),
@@ -91,7 +85,6 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
     }
     moveInteraction.value = outcome.data
     moveBlocked.value = null
-    pendingZocConfirm.value = null
     rollbackFloor = -1
     rollbackReason = ''
     return true
@@ -122,7 +115,6 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
       applyingStep = false
     }
     moveInteraction.value = result.data.interaction
-    pendingZocConfirm.value = null
     moveBlocked.value = null
     /*
      * 4.5a-A：把这一步**因进敌方 ZOC 被迫停车**的单位记进本轮账本 ——
@@ -176,7 +168,6 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
     const reverted = revertInteractionStep(interaction)
     applyMovePatches(reverted.patches)
     moveInteraction.value = reverted.interaction
-    pendingZocConfirm.value = null
     moveBlocked.value = null
     lastStep.value = null
     // 4.5a-A：撤销这一步 ⇒ 它带来的"进 ZOC 停车"记账一并对销（账本只反映**当前**盘面）
@@ -193,7 +184,6 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
     const reverted = revertInteraction(interaction)
     applyMovePatches(reverted.patches)
     moveInteraction.value = reverted.interaction
-    pendingZocConfirm.value = null
     moveBlocked.value = null
     lastStep.value = null
     // 4.5a-A：整次移动还原 ⇒ 停车账本随之清空
@@ -203,7 +193,6 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
 
   return {
     moveInteraction,
-    pendingZocConfirm,
     zocStoppedMoveUnitIds,
     moveBlocked,
     begin,

@@ -37,7 +37,6 @@ function baseFacts(over: Partial<SessionStepFacts> = {}): SessionStepFacts {
     air: null,
     supply: null,
     move: {
-      zocPending: false,
       fuelPending: false,
       pickPending: false,
       moving: false,
@@ -193,11 +192,10 @@ describe('U1-b 守卫：多待决同时成立也只暴露一件', () => {
       kind: 'combat',
       combat: { started: true, step: 'losses', attackerArDeclared: true },
     }),
-    // 移动：ZOC 与燃料同时待决
+    // 移动：燃料待决与其它移动事实同时成立
     baseFacts({
       kind: 'move',
       move: {
-        zocPending: true,
         fuelPending: true,
         pickPending: true,
         moving: true,
@@ -288,9 +286,11 @@ describe('U1-b 源码守卫：只在门里出一件，旧判定不留两份', ()
     }
 
     const move = read('components/move/MovePanel.vue')
-    for (const id of ['move:zoc', 'move:fuel', 'move:pick', 'move:continue']) {
+    for (const id of ['move:fuel', 'move:pick', 'move:continue']) {
       expect(move).toContain(`item="${id}"`)
     }
+    // 4.5a-A 的停车是规则既定后果 ⇒ 「进入并突袭 / 进入停下」面板已删，会话步 `move:zoc` 一并移除
+    expect(move).not.toContain('item="move:zoc"')
 
     const reinforce = read('components/reinforcement/ReinforcementPanel.vue')
     for (const id of [

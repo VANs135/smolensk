@@ -355,19 +355,15 @@ describe('C5 进入敌方控制区的确认（4.5a-A）', () => {
     )
 
     store.clickHex(target!.hex)
-    // 4.5a-A：必须确认，不能直接搬子
-    expect(store.pendingZocConfirm).not.toBeNull()
-    expect(truck.hex).toEqual(START)
-
-    store.confirmZocEntry()
+    // 4.5a-A：轮式进 EZOC 就地停止是规则既定后果 ⇒ 直接落账，**没有确认框**
+    expect('pendingZocConfirm' in store).toBe(false)
     expect(truck.hex).toEqual(target!.hex)
     expect(truck.movementEnded).toBe(true) // 进入后必须就地停止
-    expect(store.pendingZocConfirm).toBeNull()
   })
 
-  it('放弃确认则留在原格', () => {
+  it('进 ZOC 后该格没有后续普通移动格（4.5a-A 只留突袭这一支）', () => {
     const truck = placeWheeled(store, 'axis', 'a1')
-    truck.fuelled = true // B18b：同上——本用例考察 4.5a-A 的"放弃确认"，燃料显式摆好
+    truck.fuelled = true
     store.clickHex(START)
     expect(store.confirmMovePick()).toBe(true)
     const target = adjacentReachable(store, START)!
@@ -376,11 +372,10 @@ describe('C5 进入敌方控制区的确认（4.5a-A）', () => {
     store.clickHex(START)
     store.clickHex(target.hex)
 
-    expect(store.pendingZocConfirm).not.toBeNull()
-    store.dismissZocConfirm()
-    expect(store.pendingZocConfirm).toBeNull()
-    expect(truck.hex).toEqual(START)
-    expect(truck.movementEnded).toBe(false)
+    expect(truck.hex).toEqual(target.hex)
+    expect(truck.movementEnded).toBe(true)
+    // 普通移动已关：从这一格出发没有落脚（只剩突袭 8.0 这条路）
+    expect(store.groupReachable.hexes).toHaveLength(0)
   })
 
   it('4.5b：许诺不再消耗 MP 后，其所在格的敌方 ZOC 被抵消', () => {

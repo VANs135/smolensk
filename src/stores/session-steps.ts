@@ -44,7 +44,6 @@ export interface SessionStepFacts {
   air: { step: AirMissionStep | 'done'; declared: boolean; cargoLossPending: boolean } | null
   supply: { step: SupplyStep } | null
   move: {
-    zocPending: boolean
     fuelPending: boolean
     pickPending: boolean
     moving: boolean
@@ -371,16 +370,6 @@ function supplyItems(facts: NonNullable<SessionStepFacts['supply']>): SessionSte
 
 function moveItems(facts: SessionStepFacts['move']): SessionStepItem[] {
   const items: SessionStepItem[] = []
-  if (facts.zocPending) {
-    items.push(
-      item(
-        'move:zoc',
-        '进入敌方控制区',
-        '再走一步会踩进未抵消的敌方控制区。',
-        '决定进入后就地停止、进入并突袭，或留在原格。',
-      ),
-    )
-  }
   if (facts.fuelPending) {
     items.push(
       item('move:fuel', '支付燃料', '本次要动的耗油单位还没加注。', '选择付款来源并完成加油。'),

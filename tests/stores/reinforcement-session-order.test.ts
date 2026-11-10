@@ -33,7 +33,6 @@ function baseFacts(over: Partial<SessionStepFacts['reinforce']> = {}): SessionSt
     air: null,
     supply: null,
     move: {
-      zocPending: false,
       fuelPending: false,
       pickPending: false,
       moving: false,

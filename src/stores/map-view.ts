@@ -1806,12 +1806,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (!setup.finished || hotseat.handoffPending || hotseat.viewerSide !== actingSide.value)
       return false
     if (workbench.hexPickView !== null || workbench.refitBase !== null) return false
-    if (
-      workbench.pendingZocConfirm !== null ||
-      workbench.overrunZocHeld !== null ||
-      workbench.specialPending !== null
-    )
-      return false
+    if (workbench.overrunZocHeld !== null || workbench.specialPending !== null) return false
     const kind = session.value?.kind
     /*
      * 增援段（`reinforce`）也放开右键：13.9-1 合并 / 13.5 补员**只在增援段**合法，
@@ -2478,7 +2473,6 @@ export const useMapViewStore = defineStore('mapView', () => {
             },
       supply: kind !== 'supply' || supply === null ? null : { step: supply.step },
       move: {
-        zocPending: workbench.pendingZocConfirm !== null,
         fuelPending: workbench.fuelPaymentDue && workbench.actionAllowedNow('supply.fuel'),
         pickPending: workbench.movePick !== null && (moving === null || moving.finished),
         moving: moving !== null && !moving.finished,

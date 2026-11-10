@@ -20,7 +20,8 @@ import { toConsoleUnit, unitChoices, useWorkbenchStore, type ConsoleUnit } from 
  * ⇒ 修前那段空档里玩家还能点别的算子继续走（同一批单位同时处在两个流程里，记账无从收束）。
  *
  * 修法：新增 `settlementInProgress`（9.2 / 10.0 的**唯一**判据）+ `refuseWhileSettling`，
- *   三个移动入口（开拔 `beginMoveFor` / 走一步 `tryMoveTo` / 进 ZOC `confirmZocEntry`）都问它。
+ *   两个移动入口（开拔 `beginMoveFor` / 走一步 `tryMoveTo`）都问它；4.5a-A 的进 ZOC
+ *   也走 `tryMoveTo`，因此同一道闸门一并覆盖。
  *
  * 测法边界：只钉**闸门**（结算中 ⇒ 动不了、给原因；收束 ⇒ 立刻恢复）；
  *   9.2 九步与 10.0 五步的结算本身在各自端到端测试里。
@@ -91,8 +92,8 @@ function findFreeNeighborOf(store: Store, target: HexRef, avoid: HexRef): HexRef
   return null
 }
 
-/** 摆到「轮式单位正要进入未抵消敌方 ZOC」的那一刻（待决框已弹出） */
-function setupPendingZoc(store: Store): { truck: ConsoleUnit; zocHex: HexRef; enemyHex: HexRef } {
+/** 摆到「轮式单位已进入未抵消敌方 ZOC 并就地停车」的那一刻（4.5a-A，无确认框） */
+function setupZocStopped(store: Store): { truck: ConsoleUnit; zocHex: HexRef; enemyHex: HexRef } {
   const truck = place(store, wheeledMover(), START, 'axis', 'a1', 'move')
   truck.fuelled = true
   store.clickHex(START)
@@ -104,7 +105,8 @@ function setupPendingZoc(store: Store): { truck: ConsoleUnit; zocHex: HexRef; en
   place(store, zocSource(), enemyHex!, 'soviet', 'e1')
   store.clickHex(START)
   store.clickHex(target!.hex)
-  expect(store.pendingZocConfirm).not.toBeNull()
+  expect('pendingZocConfirm' in store).toBe(false)
+  expect(keyOf(truck.hex)).toBe(keyOf(target!.hex))
   return { truck, zocHex: target!.hex, enemyHex: enemyHex! }
 }
 
@@ -131,11 +133,11 @@ describe('第六批 BUG ②：结算进行中 ⇒ 任何单位都不得移动', 
   })
 
   it('★ 突袭（8.0 照 9.2 结算）开局 ⇒ 结算期间不得开拔别的单位', () => {
-    const { enemyHex } = setupPendingZoc(store)
+    const { enemyHex } = setupZocStopped(store)
     const mover = place(store, otherMover(), SPARE, 'axis', 'b1', 'move')
     mover.fuelled = true
 
-    expect(store.confirmZocEntryAndOverrun(enemyHex)).toBe(true)
+    expect(store.overrunNow(enemyHex)).toBe(true)
     // 8.0：突袭开局 ⇒ 已在 9.2 流程里
     expect(store.settlementInProgress).not.toBeNull()
     expect(store.settlementInProgress?.kind).toBe('combat')
@@ -154,8 +156,8 @@ describe('第六批 BUG ②：结算进行中 ⇒ 任何单位都不得移动', 
   })
 
   it('★ 结算期间「走一步」也被拒（不是静默：给出 9.2 的原因）', () => {
-    const { enemyHex } = setupPendingZoc(store)
-    expect(store.confirmZocEntryAndOverrun(enemyHex)).toBe(true)
+    const { enemyHex } = setupZocStopped(store)
+    expect(store.overrunNow(enemyHex)).toBe(true)
     const before = { ...store.units.find((unit) => unit.instanceId === 'a1')!.hex }
     // `tryMoveTo` 由地图点选（`clickHex`）进入 ⇒ 走玩家真正的那条路
     const step = store.groupReachable.hexes[0]?.hex ?? START
@@ -208,7 +210,7 @@ describe('第六批 BUG ②：结算进行中 ⇒ 任何单位都不得移动', 
     expect(store.settlementInProgress).toBeNull()
   })
 
-  it('源码守卫：三个移动入口都问同一个闸门，且锁同时覆盖战斗与轰炸', () => {
+  it('源码守卫：两个移动入口都问同一个闸门，且锁同时覆盖战斗与轰炸', () => {
     const source = readFileSync('src/stores/workbench.ts', 'utf8')
     // ① 判据唯一：只看 `combatState` / `barrageState` 的"未收束"
     const lockStart = source.indexOf('const settlementInProgress = computed')
@@ -217,7 +219,7 @@ describe('第六批 BUG ②：结算进行中 ⇒ 任何单位都不得移动', 
     expect(lockBody).toContain('barrageState.value')
     expect(lockBody).toContain('!combat.finished')
     expect(lockBody).toContain('!barrage.finished')
-    // ② 三个入口都接了闸门
+    // ② 两个移动入口都接了闸门（4.5a-A 的进 ZOC 也走 `tryMoveTo` 这条路）
     const beginBody = source.slice(
       source.indexOf('function beginMoveFor('),
       source.indexOf('function beginMoveFor(') + 600,
@@ -228,10 +230,5 @@ describe('第六批 BUG ②：结算进行中 ⇒ 任何单位都不得移动', 
       source.indexOf('function tryMoveTo(') + 400,
     )
     expect(tryBody).toContain("refuseWhileSettling('继续移动')")
-    const zocBody = source.slice(
-      source.indexOf('function confirmZocEntry('),
-      source.indexOf('function confirmZocEntry(') + 400,
-    )
-    expect(zocBody).toContain("refuseWhileSettling('继续移动')")
   })
 })

@@ -293,7 +293,6 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
     locked: w.segmentLocked,
     can: w.segmentActionKeys,
     advanceAvailable: advanceAvailable && !w.initialSetupInProgress,
-    pendingZocConfirm: w.pendingZocConfirm !== null,
     specialPending: w.specialPending !== null,
     reserveUnitIds: friendly
       .filter((unit) => unit.mode.mode === 'reserve' && participating.includes(unit.instanceId))
@@ -440,18 +439,14 @@ function execute(
       const stepsBefore = w.moveInteraction?.steps.length ?? 0
       w.clickHex(action.hex)
       const stepsAfter = w.moveInteraction?.steps.length ?? 0
-      const zoc = w.pendingZocConfirm !== null
       const finished = w.moveInteraction?.finished ?? false
-      const ok = zoc || finished || stepsAfter > stepsBefore
+      const ok = finished || stepsAfter > stepsBefore
       if (!ok) memory.moveTargets.push(hexKeyOf(action.hex))
       return ok
     }
     case 'moveFinish':
       w.finishMove()
       return true
-    case 'zocConfirm':
-      w.confirmZocEntry()
-      return w.pendingZocConfirm === null
     case 'specialConfirm': {
       for (const item of w.specialPending?.items ?? []) {
         const candidate = item.candidates[0]
