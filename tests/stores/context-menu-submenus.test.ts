@@ -280,6 +280,20 @@ describe('堆叠右键：目标集合', () => {
     expect(s.mapView.contextOptions.map((item) => item.id)).toEqual(['b'])
   })
 
+  it('★ 会话窗开着（ops / supply / containers 等）时，窗内右键仍出该单位自己的菜单', () => {
+    /*
+     * 用户 2026-11-10：在会话窗里对算子右键无效。
+     * 根因：`canOpenCounterContext` 把"会话种类"当成了闸门，只放行 move / unit / reinforce，
+     * 其余会话（ops / barrage / air / supply / breakout / containers / exclusive）一律拒。
+     * 右键菜单与当前会话本就并存（`unit` 段已是先例），能否列出动作由 `counterActionsAt` 逐项判。
+     */
+    s.mapView.openOpsFlow('barrage', HEX)
+    expect(s.mapView.session?.kind).toBe('ops')
+    const ok = s.mapView.openUnitContext(HEX, 'b', { x: 0, y: 0 })
+    expect(ok).toBe(true)
+    expect(s.mapView.contextOptions.map((item) => item.id)).toEqual(['b'])
+  })
+
   it('★ 地图右键敌方堆叠 ⇒ 一份共用菜单出「低空扫射」（14.7d）', () => {
     const enemyHex: HexRef = { col: 35, row: 12 }
     placeGround(

@@ -1935,12 +1935,14 @@ export const useMapViewStore = defineStore('mapView', () => {
       return false
     if (workbench.hexPickView !== null || workbench.refitBase !== null) return false
     if (workbench.overrunZocHeld !== null || workbench.specialPending !== null) return false
-    const kind = session.value?.kind
     /*
-     * 增援段（`reinforce`）也放开右键：13.9-1 合并 / 13.5 补员**只在增援段**合法，
-     * 若这里继续把右键挡住，这两项就永远点不到（会话框与右键菜单本可并存，`unit` 段已是先例）。
+     * 用户 2026-11-10：会话窗里对算子右键无效。
+     * 根因：这里曾把"会话种类"当闸门（只放行 move / unit / reinforce），其余会话
+     * （ops / barrage / air / supply / breakout / containers / exclusive）一律拒 ⇒ 窗内右键没反应。
+     * 右键菜单与当前会话本可并存；"这一刻能做什么"由 `counterActionsAt` 逐项按 `ACTION_GATES` 判，
+     * 不在这里按会话种类一刀切。上面的 hexPick / refit / overrun / special 仍照旧挡住。
      */
-    return kind === undefined || kind === 'move' || kind === 'unit' || kind === 'reinforce'
+    return true
   }
 
   /** 拖放与右键共用候选。判定和落账仍由初设或容器命令处理。 */
