@@ -135,7 +135,10 @@ function chipSelected(id: string): boolean {
  * 只在这一窗就是取子格、且至少选中一枚时出现；判据与执行都走既有
  * `confirmMovePick`（6.1），组件不判规则。
  */
-const canStartMove = computed(() => isMovePickHex.value && movePickIds.value.length > 0)
+const canStartMove = computed(
+  () =>
+    workbench.actionAllowedNow('move.order') && isMovePickHex.value && movePickIds.value.length > 0,
+)
 
 /**
  * 用户 2026-11-09：堆叠窗内右键**这一枚** ⇒ 该单位自己的菜单（只影响这一枚）

@@ -2396,11 +2396,13 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 条 10（M1）：移动准备——移动段内已选单位待开拔（尚未真正开始移动），含已选但缺燃料需先付。
      * 旧口径「点格即开始移动」已作废，这里让取子清单活跃时即弹出移动会话，
      * 玩家在会话里勾选 / 改模式 / 付燃料后点「开始移动」才开拔。
-     * 仅在**移动段**出现：其它段（战斗 / 轰炸 / 补给 …）也经 `expandStackAt` 建了 `movePick`，
-     * 但那是各自的参战 / 参炸选择集，不应触发移动会话（各自的会话 / 小窗负责）。
+     * 仅在**移动环节**出现：其它环节（战斗 / 轰炸 / 补给 / 重建 / 突围 …）也经 `expandStackAt`
+     * 建了 `movePick`，但那是各自的参战 / 参炸选择集，不应触发移动会话。
+     * ★ #6（用户 2026-11-10）：判据从「阶段＝movement」改成**闸门 `move.order`**——
+     *   突围（12.8e）同在 C 段但不在移动环节，修前会被这支顶成「移动准备」、突围面板消失。
      */
     if (
-      workbench.phase === 'movement' &&
+      workbench.actionAllowedNow('move.order') &&
       workbench.movePick !== null &&
       (moving === null || moving.finished)
     ) {
@@ -2427,7 +2429,11 @@ export const useMapViewStore = defineStore('mapView', () => {
      *   增援面板 / 战斗选攻方面板**顶成**「移动 / 燃料」。而 12.5 的付款时机只在移动环节，
      *   判据直接问闸门表（`supply.fuel` 的 where 就是 C/E/G 三个移动环节）。
      */
-    if (workbench.fuelPaymentDue && workbench.actionAllowedNow('supply.fuel')) {
+    if (
+      workbench.actionAllowedNow('move.order') &&
+      workbench.fuelPaymentDue &&
+      workbench.actionAllowedNow('supply.fuel')
+    ) {
       return {
         kind: 'move',
         title: '移动 / 燃料（6.1 / 12.5）',
@@ -2614,8 +2620,14 @@ export const useMapViewStore = defineStore('mapView', () => {
             },
       supply: kind !== 'supply' || supply === null ? null : { step: supply.step },
       move: {
-        fuelPending: workbench.fuelPaymentDue && workbench.actionAllowedNow('supply.fuel'),
-        pickPending: workbench.movePick !== null && (moving === null || moving.finished),
+        fuelPending:
+          workbench.actionAllowedNow('move.order') &&
+          workbench.fuelPaymentDue &&
+          workbench.actionAllowedNow('supply.fuel'),
+        pickPending:
+          workbench.actionAllowedNow('move.order') &&
+          workbench.movePick !== null &&
+          (moving === null || moving.finished),
         moving: moving !== null && !moving.finished,
         overrunZocHeld: workbench.overrunZocHeld !== null,
       },
