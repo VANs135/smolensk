@@ -311,9 +311,15 @@ describe('堆叠右键：目标集合', () => {
 })
 
 describe('源码守卫', () => {
-  it('★ 拦掉 WebView 原生「将图像另存为」', () => {
+  it('★ 全站拦掉 WebView 原生右键菜单（输入框保留系统菜单）', () => {
     const app = readFileSync('src/App.vue', 'utf8')
-    expect(app).toContain('instanceof HTMLImageElement')
+    // 不再只拦图片：窗口级监听一律 preventDefault，否则原生菜单会盖住单位菜单
+    expect(app).toContain('preventDefault()')
+    expect(app).not.toContain('instanceof HTMLImageElement')
+    // 例外：文本输入保留复制/粘贴
+    expect(app).toContain('HTMLInputElement')
+    expect(app).toContain('HTMLTextAreaElement')
+    expect(app).toContain('isContentEditable')
     expect(app).toContain("addEventListener('contextmenu'")
     expect(app).toContain("removeEventListener('contextmenu'")
     // 窗内 chip 仍自带 prevent.stop（双保险）

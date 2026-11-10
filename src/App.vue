@@ -24,17 +24,26 @@ const saveBadge = computed(() => {
 })
 
 /**
- * 用户 2026-11-10：拦掉 WebView 原生「将图像另存为」
+ * 用户 2026-11-10：拦掉 WebView 原生右键菜单
  *
- * 模型图、算子图、面板图都是 `<img>`；WebView 的右键菜单会盖住我们自己的
- * 单位菜单。这里只拦图片（文本框、输入框仍保留系统菜单）。
+ * 模型图、算子图、面板图都是 `<img>`；WebView 的原生菜单（含「将图像另存为」）
+ * 会盖住我们自己的单位菜单。故窗口级一律 `preventDefault`，只给文本输入
+ * （input / textarea / contenteditable）放行，保留系统复制/粘贴。
  */
-function blockImageContextMenu(event: MouseEvent): void {
-  if (event.target instanceof HTMLImageElement) event.preventDefault()
+function blockNativeContextMenu(event: MouseEvent): void {
+  const target = event.target
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  ) {
+    return
+  }
+  event.preventDefault()
 }
 
-onMounted(() => window.addEventListener('contextmenu', blockImageContextMenu))
-onBeforeUnmount(() => window.removeEventListener('contextmenu', blockImageContextMenu))
+onMounted(() => window.addEventListener('contextmenu', blockNativeContextMenu))
+onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeContextMenu))
 </script>
 
 <template>
