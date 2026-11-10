@@ -7854,14 +7854,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   A/B 两种"整编队/整指挥部"的方法更是无从谈起。
    */
   const fuelTargets = computed<ConsoleUnit[]>(() => {
-    if (moveUnits.value.length > 0) return moveUnits.value
-    const picked = movePick.value
-    if (picked !== null && picked.ids.length > 0) {
-      return picked.ids
-        .map((id) => units.value.find((unit) => unit.instanceId === id))
-        .filter((unit): unit is ConsoleUnit => unit !== undefined)
-    }
-    return selectedUnit.value === null ? [] : [selectedUnit.value]
+    const raw =
+      moveUnits.value.length > 0
+        ? moveUnits.value
+        : (() => {
+            const picked = movePick.value
+            if (picked !== null && picked.ids.length > 0) {
+              return picked.ids
+                .map((id) => units.value.find((unit) => unit.instanceId === id))
+                .filter((unit): unit is ConsoleUnit => unit !== undefined)
+            }
+            return selectedUnit.value === null ? [] : [selectedUnit.value]
+          })()
+    /*
+     * #7（用户 2026-11-10）：编队聚合只做**展示**——受益单位按**单位唯一 id 去重**。
+     * 同一枚算子不能因为同时出现在堆叠/编队的多行里被计价两次（12.5c-C：每单位 1T）
+     * 或被打两次标记；覆盖集与扣费都只认实际枚数。
+     */
+    const seen = new Set<string>()
+    return raw.filter((unit) => {
+      if (seen.has(unit.instanceId)) return false
+      seen.add(unit.instanceId)
+      return true
+    })
   })
 
   /**

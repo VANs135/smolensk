@@ -150,6 +150,27 @@ describe('I①（12.5c-A）：编队加油的覆盖集', () => {
     expect(coverage?.leftOutIds).toContain('far')
   })
 
+  it('#7（用户 2026-11-10）：堆叠/编队聚合带来的重复 id 只算一次（按实际枚数扣费）', () => {
+    const store = newStore()
+    const mine = placeGround(store, motRecord(), CORE_HEX, 'axis', 'mine', 'move')
+    // 同一堆叠里的另一枚（多成员堆叠：编队聚合会把它和 `mine` 各列一行）
+    const mate = placeGround(store, motRecord(), CORE_HEX, 'axis', 'mate', 'move')
+    store.spDumps.push({ id: 'd1', hex: { ...CORE_HEX }, side: 'axis', sp: 4, t: 0 })
+    goToMovementStep(store)
+    // 同一次选择里同一枚单位出现两次（编队聚合/堆叠多行）⇒ 受益集只能留一份
+    store.beginMovePick(CORE_HEX, ['mine', 'mine', 'mate', 'mate'])
+    expect(store.fuelTargets.map((unit) => unit.instanceId)).toEqual(['mine', 'mate'])
+
+    store.fuelMethod = 'singleUnit'
+    expect(store.pickFuelDump('d1')).toBe(true)
+    const before = holdingsToT(store.spDumps[0]!)
+    store.payFuel()
+    // 单单位法：2 枚 × 1T（不是 4T）
+    expect(holdingsToT(store.spDumps[0]!)).toBe(before - 2)
+    expect(mine.fuelled).toBe(true)
+    expect(mate.fuelled).toBe(true)
+  })
+
   it('★ 12.5c-A：同阶段对同一编队**第二次**编队法付款被拒（剩余成员走 12.5c-C）', () => {
     const store = newStore()
     const { far } = setupFormation(store)
