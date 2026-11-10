@@ -123,6 +123,51 @@ describe('第六批 S2：卡车装载的地图点选（条 2）', () => {
     expect(setup.lastAction?.detail).toContain('notATruckHex')
   })
 
+  /**
+   * ★ 用户 2026-11-10：同格两辆编内卡车时，点格不许「猜第一辆」——
+   *   先按实例 id 列出该格的两辆，玩家点哪一辆才装哪一辆。
+   */
+  it('★ 同格两辆卡车 ⇒ 点该格先列候选，按实例 id 选一辆（不猜第一辆）', () => {
+    const { setup, workbench } = stores
+    setup.selectScenario('3')
+    expect(setup.beginTruckPick()).toBe(true)
+    const [a, b] = setup.setupTrucks
+    const hex: HexRef = { col: 5, row: 5 }
+    workbench.units.find((item) => item.instanceId === a!.instanceId)!.hex = { ...hex }
+    workbench.units.find((item) => item.instanceId === b!.instanceId)!.hex = { ...hex }
+
+    expect(setup.pickTruckAtHex(hex)).toBe(true)
+    // 不直接切换：先把该格两辆摆出来（按实例 id）
+    expect(setup.truckPickPending?.rows.map((row) => row.instanceId)).toEqual([
+      a!.instanceId,
+      b!.instanceId,
+    ])
+    expect(setup.effectiveFullTruckIds).not.toContain(a!.instanceId)
+    expect(setup.effectiveFullTruckIds).not.toContain(b!.instanceId)
+
+    // 点第二辆 ⇒ 只装第二辆，候选收起
+    expect(setup.pickTruckInstance(b!.instanceId)).toBe(true)
+    expect(setup.truckPickPending).toBeNull()
+    expect(setup.effectiveFullTruckIds).toContain(b!.instanceId)
+    expect(setup.effectiveFullTruckIds).not.toContain(a!.instanceId)
+  })
+
+  it('★ 满载已达剧本要求 ⇒ `truckFullDone`，点选按钮整行隐藏且 `beginTruckPick()` 同步拒绝', () => {
+    const { setup, workbench } = stores
+    setup.selectScenario('3')
+    expect(setup.beginTruckPick()).toBe(true)
+    const required = setup.requiredFullTrucks ?? 0
+    for (const truck of setup.setupTrucks.slice(0, required)) {
+      expect(setup.pickTruckAtHex(truckHex(workbench, truck.instanceId))).toBe(true)
+    }
+    expect(setup.truckFullDone).toBe(true)
+    // 不灰显：同步拒绝开一个空模式（与隐藏同一判据）
+    expect(setup.beginTruckPick()).toBe(false)
+    expect(setup.truckPickActive).toBe(false)
+    const queue = readFileSync('src/components/game/DecisionQueue.vue', 'utf8')
+    expect(queue).toContain('!setup.truckFullDone')
+  })
+
   it('源码守卫：卡片上的勾选框与"核验"按钮已去掉，地图侧接上点选', () => {
     const queue = readFileSync('src/components/game/DecisionQueue.vue', 'utf8')
     expect(queue).not.toContain('核验卡车装载')

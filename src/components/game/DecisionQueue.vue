@@ -244,7 +244,14 @@ function sideMark(side: 'axis' | 'soviet'): string {
       <p class="queue__instruction">点击高亮格落位</p>
     </div>
 
-    <div v-if="setup.truckLoadSummary.mode === 'choose_loaded'" class="queue__row-actions">
+    <!--
+      ★ 用户 2026-11-10：满载名单已达剧本要求 ⇒ 整行**隐藏**（不灰显）；
+      `beginTruckPick()` 用同一判据拒绝，界面不会出现「点了没反应」的按钮。
+    -->
+    <div
+      v-if="setup.truckLoadSummary.mode === 'choose_loaded' && !setup.truckFullDone"
+      class="queue__row-actions"
+    >
       <span class="queue__hint num">
         满载 {{ setup.truckLoadSummary.fullCount }}/{{ setup.requiredFullTrucks }} · §13.2h
       </span>
@@ -255,6 +262,26 @@ function sideMark(side: 'axis' | 'soviet'): string {
       >
         {{ setup.truckPickActive ? '收起高亮' : '点图指定满载' }}
       </BaseButton>
+    </div>
+
+    <!--
+      ★ 用户 2026-11-10：同格多辆编内卡车 ⇒ 先按实例 id 列候选，点哪一辆装哪一辆
+      （同型卡车同名同图，只靠格号分不出是哪一辆）。
+    -->
+    <div v-if="setup.truckPickPending !== null" class="queue__row-actions">
+      <span class="queue__hint"
+        >该格有 {{ setup.truckPickPending.rows.length }} 辆编内卡车，点一辆：</span
+      >
+      <BaseButton
+        v-for="row in setup.truckPickPending.rows"
+        :key="row.instanceId"
+        variant="secondary"
+        size="sm"
+        @click="setup.pickTruckInstance(row.instanceId)"
+      >
+        {{ row.name }}（{{ row.full ? '已满载' : '空载' }}）
+      </BaseButton>
+      <BaseButton variant="ghost" size="sm" @click="setup.cancelTruckPick()">取消</BaseButton>
     </div>
 
     <p v-if="setup.lastAction !== null && !setup.lastAction.ok" class="queue__error" role="status">

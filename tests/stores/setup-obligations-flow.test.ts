@@ -106,14 +106,16 @@ describe('S1：必做初设、主动放弃与双方确认', () => {
     expect(setup.notes.join('')).toContain('本局移除')
   })
 
-  it('卡车选额已满足时，未选车辆为空载，不能继续计作待完成项；换手取消点车模式', () => {
+  it('卡车选额已满足时，未选车辆为空载，不能继续计作待完成项；满载后不再开点车模式', () => {
     const { setup, board } = boot('3')
     const required = setup.requiredFullTrucks!
     for (const truck of setup.setupTrucks.slice(0, required))
       setup.toggleTruckFull(truck.instanceId, true)
     expect(setup.designateTrucks()).toBe(true)
     expect(setup.decisionQueue.find((stack) => stack.key === 'truck')!.count).toBe(0)
-    expect(setup.beginTruckPick()).toBe(true)
+    // ★ 用户 2026-11-10：满载名单已够 ⇒ 与「整行隐藏」同一判据，点车模式不再打开
+    expect(setup.beginTruckPick()).toBe(false)
+    expect(setup.truckPickActive).toBe(false)
     expect(setup.confirmSideSetup()).toBe(true)
     const units = JSON.stringify(board.units)
     const hex = setup.truckPickRows[0]!.hex

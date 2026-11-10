@@ -1310,6 +1310,24 @@ export const useSetupStore = defineStore('setup', () => {
     truckPickRows.value.map((row) => ({ col: row.hex.col, row: row.hex.row })),
   )
 
+  /**
+   * ★ 用户 2026-11-10：**满载名单已达剧本要求** ⇒ 界面整行隐藏、`beginTruckPick()` 同步拒绝。
+   *   同一判据两处用，避免「按钮点了没反应」与「灰按钮还得点一下」两种观感。
+   */
+  const truckFullDone = computed<boolean>(() => {
+    const required = requiredFullTrucks.value
+    return required !== null && required > 0 && effectiveFullTruckIds.value.length >= required
+  })
+
+  /**
+   * ★ 用户 2026-11-10：**同格多辆编内卡车**时点格不猜第一辆，先把该格几辆按实例 id 列出来。
+   *   `null` ＝ 没有待选的同格组（单辆直接切换）。
+   */
+  const truckPickPending = ref<{
+    hex: HexRef
+    rows: readonly { instanceId: string; name: string; full: boolean }[]
+  } | null>(null)
+
   /** 开启地图点选（没有可点卡车 ⇒ 明确拒绝并说清原因，不让界面开一个空模式） */
   function beginTruckPick(): boolean {
     if (truckLoadMode.value !== 'choose_loaded') {
@@ -1322,14 +1340,20 @@ export const useSetupStore = defineStore('setup', () => {
     if (truckPickRows.value.length === 0) {
       return record({ ok: false, rule: SETUP_RULE, reason: 'noTruckToPick' })
     }
+    // ★ 用户 2026-11-10：满载名单已够 ⇒ 与「整行隐藏」同一判据，直接拒绝开空模式
+    if (truckFullDone.value) {
+      return record({ ok: false, rule: SETUP_RULE, reason: 'truckFullAlreadyComplete' })
+    }
     placing.value = null
     truckPickActive.value = true
+    truckPickPending.value = null
     lastAction.value = null
     return true
   }
 
   function cancelTruckPick(): void {
     truckPickActive.value = false
+    truckPickPending.value = null
   }
 
   /**
@@ -1343,10 +1367,10 @@ export const useSetupStore = defineStore('setup', () => {
    */
   function pickTruckAtHex(hex: HexRef): boolean {
     if (!truckPickActive.value) return false
-    const hit = truckPickRows.value.find(
+    const hits = truckPickRows.value.filter(
       (row) => row.hex.col === hex.col && row.hex.row === hex.row,
     )
-    if (hit === undefined) {
+    if (hits.length === 0) {
       record({
         ok: false,
         rule: SETUP_RULE,
@@ -1354,7 +1378,32 @@ export const useSetupStore = defineStore('setup', () => {
       })
       return true
     }
-    toggleTruckFull(hit.instanceId, !hit.full)
+    /*
+     * ★ 用户 2026-11-10：同格两辆编内卡车时**不猜第一辆**（原先 `find` 永远命中列表里靠前的那辆，
+     *   玩家点第二辆其实一直在改第一辆）。同格多辆先按实例 id 摆候选，再点具体一辆。
+     */
+    truckPickPending.value = null
+    if (hits.length > 1) {
+      truckPickPending.value = {
+        hex: { col: hex.col, row: hex.row },
+        rows: hits.map((row) => ({
+          instanceId: row.instanceId,
+          name:
+            workbench.units.find((unit) => unit.instanceId === row.instanceId)?.name ??
+            row.instanceId,
+          full: row.full,
+        })),
+      }
+      lastAction.value = null
+      return true
+    }
+    commitTruckFull(hits[0]!.instanceId, !hits[0]!.full)
+    return true
+  }
+
+  /** 切换某一辆（按实例 id）的满载标记，并在选够时自动落账（13.2h） */
+  function commitTruckFull(instanceId: string, full: boolean): void {
+    toggleTruckFull(instanceId, full)
     const required = requiredFullTrucks.value
     const nowFull = truckFullIds.value.length
     if (required !== null && nowFull === required) {
@@ -1364,6 +1413,22 @@ export const useSetupStore = defineStore('setup', () => {
        */
       designateTrucks()
     }
+    // 名单已够 ⇒ 点选模式自动收起（否则「收起高亮」按钮随整行隐藏，玩家留在高亮态里）
+    if (truckFullDone.value) {
+      truckPickActive.value = false
+      truckPickPending.value = null
+    }
+  }
+
+  /** 同格候选里点了具体一辆（按实例 id） */
+  function pickTruckInstance(instanceId: string): boolean {
+    if (!truckPickActive.value) return false
+    const pending = truckPickPending.value
+    if (pending === null) return false
+    const row = pending.rows.find((item) => item.instanceId === instanceId)
+    if (row === undefined) return false
+    truckPickPending.value = null
+    commitTruckFull(row.instanceId, !row.full)
     return true
   }
 
@@ -2816,9 +2881,12 @@ export const useSetupStore = defineStore('setup', () => {
     truckPickActive,
     truckPickRows,
     truckPickHexes,
+    truckFullDone,
+    truckPickPending,
     beginTruckPick,
     cancelTruckPick,
     pickTruckAtHex,
+    pickTruckInstance,
     // 第六批条 1（S1）：分方游标（先布设方在前）与按方过滤的队列
     setupFirstSide,
     setupSideCursor,
