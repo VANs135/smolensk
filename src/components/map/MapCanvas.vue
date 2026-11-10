@@ -646,14 +646,20 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
     >
       <canvas ref="canvas" class="mapcanvas__canvas" />
 
-      <!-- 悬停全称（只给 `UnitToken.tip` 有值的令牌；如 3.4b 的「未归属」） -->
+      <!-- 悬停全称与关键信息（`UnitToken.tip`；多条用「｜」分隔，逐行浮现） -->
       <div
         v-if="hoverTip !== null"
         class="mapcanvas__tip"
         role="tooltip"
         :style="{ left: hoverTip.x + 'px', top: hoverTip.y + 'px' }"
       >
-        {{ hoverTip.text }}
+        <span
+          v-for="(line, index) in hoverTip.text.split('｜')"
+          :key="index"
+          class="mapcanvas__tip-line"
+          :class="{ 'mapcanvas__tip-line--head': index === 0 }"
+          >{{ line }}</span
+        >
       </div>
 
       <div v-if="!props.fill" class="mapcanvas__hud num">
@@ -757,13 +763,21 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
   z-index: var(--layer-map-popup);
   transform: translate(-50%, calc(-100% - 8px));
   pointer-events: none;
+  max-width: 240px;
   padding: 2px 8px;
   border: 1px solid var(--color-command-line);
   border-radius: var(--radius-sm);
   background: var(--color-command-bg);
   color: var(--color-command-ink);
   font-size: var(--text-xs);
-  white-space: nowrap;
+  line-height: 1.35;
+  white-space: normal;
+}
+.mapcanvas__tip-line {
+  display: block;
+}
+.mapcanvas__tip-line--head {
+  font-weight: 600;
 }
 .mapcanvas {
   display: flex;
