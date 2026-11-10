@@ -6541,20 +6541,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('info', '该格没有可开拔的单位（本轮移动已结束，6.1g / 13.2a）', '6.1g')
       return
     }
-    const last = friendlies[friendlies.length - 1]!
+    const defaults = defaultMovePickIdsAt(hex)
+    const last =
+      friendlies.find((unit) => unit.instanceId === defaults[defaults.length - 1]) ??
+      friendlies[friendlies.length - 1]!
     /*
      * ★ 用户 2026-11-10：地图上**点某一枚** ⇒ 就选这一枚（`only`），不再整格全选；
      *   整格全选走"点格内空白"（`expandStackAt`）。
+     * #8：`only` 指向池外实例（补员 / 已结束移动）⇒ 不建清单，绝不用默认集顶替。
      */
     const pickedOnly =
       only === undefined ? [] : friendlies.filter((unit) => only.includes(unit.instanceId))
+    if (only !== undefined && pickedOnly.length === 0) {
+      movePick.value = null
+      selectedId.value = only[only.length - 1] ?? null
+      return
+    }
     const picked = pickedOnly.length > 0 ? pickedOnly[0]! : last
     const ids =
       pickedOnly.length > 0
         ? pickedOnly.map((unit) => unit.instanceId)
-        : friendlies.length > 1 && !stackSelect.value
-          ? [last.instanceId]
-          : (stackSelect.value ? friendlies : [last]).map((unit) => unit.instanceId)
+        : stackSelect.value
+          ? defaults
+          : [last.instanceId]
     movePick.value = { hex: { col: hex.col, row: hex.row }, ids }
     selectedId.value = picked.instanceId
     lastStep.value = null
@@ -6589,20 +6598,33 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
   }
 
+  /**
+   * #12：摊开/「全选本格」的**默认集合**＝同格可开拔的本方**战斗单位**
+   *
+   * 用户 2026-11-10 实机：默认全选把最后一枚 SP 补给站也收进来了。
+   * 补给站 / SP / 编内卡车（13.2g）这类非战斗算子不参加默认集，但仍留在可选清单里，
+   * 玩家显式点它才进集合（点一枚取消、再点恢复）。若整格没有战斗单位，退回全部可开拔算子，
+   * 免得运输点数/编内卡车在没有战斗单位的格子里无法开拔。
+   */
+  function defaultMovePickIdsAt(hex: HexRef): string[] {
+    const pool = movePickPoolAt(hex)
+    const combat = pool.filter((unit) => unit.isCombat && unit.replKind === null)
+    return (combat.length > 0 ? combat : pool).map((unit) => unit.instanceId)
+  }
+
   /** 取子清单的候选单位（该格当前方可开拔的算子，按摆放顺序） */
   const movePickChoices = computed<ConsoleUnit[]>(() => {
     const pick = movePick.value
     if (pick === null) return []
     return movePickPoolAt(pick.hex)
   })
-  /** 勾选/取消一枚（至少保留一枚，避免空选择；不在可开拔池里的实例一律忽略） */
+  /** 勾选/取消一枚（#12：点一枚取消、再点恢复，允许空集；不在可开拔池里的实例一律忽略） */
   function toggleMovePick(unitId: string): void {
     const pick = movePick.value
     if (pick === null) return
-    // #8：只有可开拔池里的实例才能进选中集（点地图/堆叠窗都走这里）
+    // #12：点一枚取消（允许空集，再点恢复）；不在可开拔池里的实例一律忽略
     if (!movePickPoolAt(pick.hex).some((unit) => unit.instanceId === unitId)) return
     if (pick.ids.includes(unitId)) {
-      if (pick.ids.length === 1) return
       pick.ids = pick.ids.filter((id) => id !== unitId)
     } else {
       pick.ids = [...pick.ids, unitId]
@@ -6614,12 +6636,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (pick === null) return
     pick.ids = [unitId]
   }
-  /** 全选（等价于点「整堆叠」）——B26：可传入"参与集合"，此时只全选参与本环节的那些 */
-  function setMovePickAll(onlyIds?: readonly string[]): void {
+  /** 全选（等价于点「整堆叠」）——#12：只选该格**可开拔的战斗单位**（非战斗须显式点选） */
+  function setMovePickAll(): void {
     const pick = movePick.value
     if (pick === null) return
-    const here = movePickPoolAt(pick.hex).map((unit) => unit.instanceId)
-    pick.ids = onlyIds === undefined ? here : here.filter((id) => onlyIds.includes(id))
+    pick.ids = defaultMovePickIdsAt(pick.hex)
   }
 
   /**
@@ -22826,6 +22847,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setMovePickOnly,
     beginMovePick,
     setMovePickAll,
+    defaultMovePickIdsAt,
     cancelMovePick,
     confirmMovePick,
     moveBlocked,

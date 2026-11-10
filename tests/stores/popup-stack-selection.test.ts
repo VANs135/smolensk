@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
 import { emptyReplHoldings } from '@/engine/rules'
-import { useMapViewStore, useSetupStore, useWorkbenchStore } from '@/stores'
+import { useMapViewStore, useSetupStore, useWorkbenchStore, unitChoices } from '@/stores'
 
 import { groundRecord, placeGround } from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
@@ -46,6 +46,24 @@ function addDump(workbench: Workbench): void {
   workbench.spDumps.push({ id: 'd1', hex: { ...HEX }, side: 'soviet', sp: 4, t: 0 })
 }
 
+/** 补给点数算子（盘面上的 SP 计数枚，非战斗） */
+function spRecord() {
+  const found = unitChoices('soviet').find(
+    (record) => record.isCombat !== true && (record.noncombatDetails?.spValue ?? 0) > 0,
+  )
+  if (found === undefined) throw new Error('苏军单位库中没有 SP 点数算子')
+  return found
+}
+
+/** 运输点数（3.3b，非战斗） */
+function transportRecord() {
+  const found = unitChoices('soviet').find(
+    (record) => record.isCombat !== true && (record.noncombatDetails?.transport ?? 0) > 0,
+  )
+  if (found === undefined) throw new Error('苏军单位库中没有运输点数')
+  return found
+}
+
 describe('左键堆叠窗：选中集只有 movePick 一份', () => {
   let s: ReturnType<typeof stores>
 
@@ -83,6 +101,45 @@ describe('左键堆叠窗：选中集只有 movePick 一份', () => {
     s.mapView.expandStackAt(OTHER)
     expect(s.workbench.movePick?.hex).toEqual(OTHER)
     expect([...(s.workbench.movePick?.ids ?? [])]).toEqual(['inf-c'])
+  })
+
+  it('★ #12 默认全选＝战斗单位：SP / 运输点不进默认集；点一枚取消、再点恢复（可空）', () => {
+    // 同格再摆一枚 SP 点数与一枚运输点数（都是非战斗，但可被显式点选）
+    placeGround(s.workbench, spRecord(), HEX, 'soviet', 'sp1')
+    placeGround(s.workbench, transportRecord(), HEX, 'soviet', 'tp1')
+
+    s.mapView.expandStackAt(HEX)
+    // 默认集只含战斗单位
+    expect([...(s.workbench.movePick?.ids ?? [])].sort()).toEqual(['inf-a', 'inf-b'])
+    // 非战斗仍出现在可选清单里（显式点选才进集合）
+    expect([...s.workbench.movePickChoices.map((unit) => unit.instanceId)].sort()).toEqual([
+      'inf-a',
+      'inf-b',
+      'sp1',
+      'tp1',
+    ])
+
+    // 点一枚 ⇒ 取消；再点 ⇒ 恢复
+    s.workbench.toggleMovePick('inf-a')
+    expect(s.workbench.movePick?.ids).toEqual(['inf-b'])
+    s.workbench.toggleMovePick('inf-a')
+    expect([...(s.workbench.movePick?.ids ?? [])].sort()).toEqual(['inf-a', 'inf-b'])
+
+    // 全部取消（允许空集，再点恢复），不被"至少保留一枚"挡住
+    s.workbench.toggleMovePick('inf-a')
+    s.workbench.toggleMovePick('inf-b')
+    expect(s.workbench.movePick?.ids).toEqual([])
+    s.workbench.toggleMovePick('inf-b')
+    expect(s.workbench.movePick?.ids).toEqual(['inf-b'])
+  })
+
+  it('★ #12 非战斗被显式点选后可再取消；「全选本格」回到战斗单位集', () => {
+    placeGround(s.workbench, transportRecord(), HEX, 'soviet', 'tp1')
+    s.mapView.expandStackAt(HEX)
+    s.workbench.toggleMovePick('tp1')
+    expect(s.workbench.movePick?.ids).toContain('tp1')
+    s.workbench.setMovePickAll()
+    expect([...(s.workbench.movePick?.ids ?? [])].sort()).toEqual(['inf-a', 'inf-b'])
   })
 
   it('★ 13.5 补员算子不算战斗单位：同格的 Pax 补员不进选中集', () => {

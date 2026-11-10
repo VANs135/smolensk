@@ -1083,23 +1083,16 @@ export const useMapViewStore = defineStore('mapView', () => {
    *
    * ★ 2026-11-10 用户口径：堆叠窗口「列全 + 默认全选」。摊开即把该格**本方全部可开拔算子**
    * 选进 `stackSelection`（地图扇面金环），点某一枚仍可取消/恢复。
-   * 候选集＝该格**本方地面令牌**（飞机与本阶段已结束移动者除外）；
-   * 敌方与补员算子由 `beginMovePick` 的 `movePickPoolAt` 再筛一遍。
+   * 候选集＝该格**可开拔的本方战斗单位**（#12：SP / 补给站 / 编内卡车等非战斗不进默认集；
+   * 补员与已结束移动者由 `movePickPoolAt` 剔除）。
    */
   function expandStackAt(hex: HexRef): void {
     /*
-     * 候选集＝该格**本方地面令牌**（飞机不参加地面移动；已结束移动的也不再有动作）。
-     * 敌方与补员算子仍会交给 `beginMovePick`，由 `movePickPoolAt` 按本方 / 补员规则剔除；
-     * 窗口「列全」不依赖这一份，展示仍读该格全部令牌。
+     * #12：默认全选＝该格**可开拔的本方战斗单位**（补给站 / SP / 编内卡车等非战斗不进默认集）；
+     * 非战斗仍列在堆叠窗里，玩家显式点它才进集合。默认集由 store 的同一份投影给出，
+     * 避免这里再写一条"哪些算战斗单位"的判据。
      */
-    const ids = stackTokensAt(hex)
-      .filter(
-        (token) =>
-          token.air !== true &&
-          // 本阶段已结束移动的算子不可再开拔（6.1c / 6.2b），不进默认选中
-          token.ended !== true,
-      )
-      .map((token) => token.id)
+    const ids = workbench.defaultMovePickIdsAt(hex)
     workbench.beginMovePick(hex, ids)
     /*
      * 默认全选：选中集与 `movePick.ids` 同源（只有一份状态）。
