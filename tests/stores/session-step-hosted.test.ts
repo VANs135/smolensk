@@ -31,6 +31,14 @@ describe('宿主会话：无待决 ≠ 全量渲染', () => {
   })
 })
 
+describe('游戏桌 dock：无待决时给完成态，不留空窗', () => {
+  it('★ dock 有「本环节已完成」分支', () => {
+    const dock = readFileSync('src/components/map/MapDock.vue', 'utf8')
+    expect(dock).toContain('sessionStep === null')
+    expect(dock).toContain('本环节已完成')
+  })
+})
+
 describe('轴方增援窗：2.3c 块只属于苏方', () => {
   it('★ 方面军预备队 SessionStep 带 activeSide 判据', () => {
     const panel = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')

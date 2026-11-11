@@ -222,6 +222,7 @@ function resetPosition(): void {
       </button>
     </header>
     <div class="dock__body">
+      <p v-if="mapView.sessionStep === null" class="dock__done">本环节已完成。</p>
       <slot />
     </div>
   </div>
@@ -300,5 +301,10 @@ function resetPosition(): void {
   padding: var(--space-3);
   min-height: 0;
   overscroll-behavior: contain;
+}
+
+.dock__done {
+  margin: 0;
+  color: var(--color-muted);
 }
 </style>
