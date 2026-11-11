@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 
 import { mapLayers } from '@/data'
 import type { HexRef } from '@/data'
@@ -11,6 +12,7 @@ import {
   turnDate,
 } from '@/engine/turn-driver'
 import type { GamePhase, Records } from '@/engine/state-types'
+import { createPhaseCoordinator } from '@/stores/phase-coordinator'
 
 import { combatRecord, label, newConsole, placeGround } from './sop-harness'
 
@@ -89,6 +91,39 @@ describe('Ⓗ H 段：只有「清理」这一个动作的收束段（2.2）', (
     const secondDone = nextPhase(createRecords({ activeSide: 'soviet', firstPlayer: 'axis' }))
     expect(secondDone.phase).toBe('turnEnd')
     expect(secondDone.activeSide).toBeNull()
+  })
+
+  it('★ H 段是自动段：阶段协调器在离开 H 之前执行一次清理，无需任何按钮', () => {
+    let current: Records = createRecords({ phase: 'cleanUp', activeSide: 'soviet' })
+    let cleaned = 0
+    const coordinator = createPhaseCoordinator({
+      current: () => current,
+      isInitialSetup: () => false,
+      isPlayerPhase: () => false,
+      start() {},
+      settleObligations: () => true,
+      cleanUp() {
+        cleaned += 1
+        return true
+      },
+      publishVictory() {},
+      resetPhase() {},
+      resetTurn() {},
+      refreshTrace() {},
+      ensureReinforcement() {},
+    })
+    expect(coordinator.beforeStep()).toBe(true)
+    expect(cleaned).toBe(1)
+    // 一旦离开 H，后续步进不再重复清理
+    current = createRecords({ phase: 'reinforcement', activeSide: 'axis' })
+    expect(coordinator.beforeStep()).toBe(true)
+    expect(cleaned).toBe(1)
+  })
+
+  it('★ 源码守卫：自动段不铺动作按钮（验证页也没有「执行 H 段清理」入口）', () => {
+    const view = readFileSync('src/views/WorkbenchView.vue', 'utf8')
+    expect(view).not.toContain('runCleanUpNow')
+    expect(view).not.toContain('执行 H 段清理')
   })
 
   it('2.2：缺少行动方或先手方时 H 段换方即抛错（不允许静默推断）', () => {

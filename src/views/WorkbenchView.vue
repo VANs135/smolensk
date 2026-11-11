@@ -417,21 +417,6 @@ onMounted(() => {
             {{ phaseOption.label }}{{ workbench.phase === phaseOption.key ? ' ✓' : '' }}
           </BaseButton>
         </div>
-        <!-- 2.2 末段：H 清理阶段的通用自动清理（摘 DG/进击/燃料标记 + 移除对手的运输破坏标记） -->
-        <div class="row">
-          <BaseButton
-            variant="primary"
-            size="sm"
-            :disabled="workbench.phase !== 'cleanUp'"
-            @click="workbench.runCleanUpNow()"
-          >
-            执行 H 段清理（2.2）
-          </BaseButton>
-          <span class="muted num">
-            摘本人单位的 DG / 进击 / 燃料已补给标记（5.9 / 5.10 /
-            12.5d），并移除对手的运输破坏标记（10.0c-C）
-          </span>
-        </div>
         <div class="row">
           <label class="wb__field">
             回合
