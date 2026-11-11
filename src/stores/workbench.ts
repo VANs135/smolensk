@@ -405,6 +405,8 @@ import {
   allowReserveEntryAtHex,
   canSetModeAtSetup,
   hasMarker,
+  // 专规 2.1 / 3.1："able to get trace supply (OCS 12.6a) by direct draw" 的 HQ 判据
+  hasDirectDrawTraceSupply,
   reserveHexesInUse,
   FIRST_TURN_HALF_MA_MULT,
   // 14.7c：短距离轰炸的判定半径（基地分栏里的「≤10」只报原文事实）
@@ -17623,6 +17625,37 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       .map((unit) => ({ ...unit.hex })),
   )
 
+  /**
+   * 专规 2.1 / 3.1 的「by direct draw」判据事实（只服务 `directDrawHqHexes`）
+   *
+   * 源取三样，缺一不可：
+   *   ① 剧本图边补给源（2.1/3.1 的权威清单，已按 2.1a 过滤关停）——**不能漏**：
+   *      `supplyFacts` 只收玩家声明的源，若拿它来判，未声明源时所有 HQ 都会判成"断补"；
+   *   ② 玩家声明的 12.6a① 源；③ 13.3c 派生的卸货格（12.6a②）。
+   * 延补队由 `createSupplyFacts` 按在场单位自动收（12.6a③）。
+   */
+  const arrivalDirectDrawFacts = computed(() =>
+    createSupplyFacts({
+      units: units.value,
+      dumps: allSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),
+      sources: [
+        ...supplySourceDecls.value
+          .filter((decl) => decl.kind !== 'detrainable')
+          .map((decl) => ({ hex: decl.hex, side: decl.side, kind: decl.kind })),
+        ...openSupplySourceHexes.value.map((hex) => ({
+          hex,
+          side: activeSide.value,
+          kind: 'supplySourceHex' as const,
+        })),
+        ...railSupplyBySide.value[activeSide.value].detrainableHexes.map((hex) => ({
+          hex,
+          side: activeSide.value,
+          kind: 'detrainable' as const,
+        })),
+      ],
+    }),
+  )
+
   /** 13.6 / 13.6b 的落点事实（引擎不持地图，故由操作台注入） */
   const arrivalFacts = computed<ArrivalPlacementFacts>(() => ({
     entryHexes: (letter) => (mapConfig.entryHexes?.[letter] ?? []).map((hex) => ({ ...hex })),
@@ -17644,12 +17677,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       airBases.value
         .filter((base) => base.side === activeSide.value)
         .map((base) => ({ ...base.hex })),
+    /*
+     * 专规 2.1 / 3.1（原文同句）：
+     *   「Pax, Eq, special repls, and breakout returns arrive at any HQs able to get trace supply
+     *     (OCS 12.6a) by direct draw, or else in any map-edge supply source hexes.」
+     * ⇒ 只收**能直接拖取**追溯补给的 HQ；不能拖取（断补）的 HQ 不作落点。
+     */
     directDrawHqHexes: () =>
       units.value
         .filter(
           (unit) =>
             unit.side === activeSide.value &&
             (unit.specialized.includes('hq') || unit.throwRange !== null),
+        )
+        .filter((unit) =>
+          hasDirectDrawTraceSupply(arrivalDirectDrawFacts.value, {
+            hex: unit.hex,
+            side: activeSide.value,
+            mobility: effectiveMobilityOf(unit),
+          }),
         )
         .map((unit) => ({ ...unit.hex })),
     // 2.1a：关停的源不再是补给源，故不能作落点

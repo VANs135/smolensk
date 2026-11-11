@@ -1319,6 +1319,25 @@ export function traceSourcesFor(
   )
 }
 
+/**
+ * 12.6a / 专规 2.1·3.1：该格能否**直接拖取**追溯补给
+ *
+ * 专规 2.1 与 3.1 的原文同一句：
+ *   「Pax, Eq, special repls, and breakout returns arrive at any HQs able to get trace supply
+ *     (OCS 12.6a) by **direct draw**, or else in any map-edge supply source hexes.」
+ *
+ * 「by direct draw」＝只走 12.6a 的**基础补给源**（① 边缘铁路/专规源 ② 13.3c 卸货格 ③ 12.7 延补队），
+ * **不含** 12.3b 的 HQ 投递——投递由别的 HQ 转来，不是本条要的「拖取」。
+ * 与 `hasTraceSupply` 的区别仅此一处；消费方见 `workbench` 的 `arrivalFacts.directDrawHqHexes()`。
+ */
+export function hasDirectDrawTraceSupply(
+  facts: TraceSupplyFacts,
+  input: { hex: HexRef; side: Side; mobility: SupplyMobility },
+): boolean {
+  if (!facts.onMap(input.hex)) return false
+  return baseSourcesFor(facts, input).length > 0
+}
+
 /** 12.6：该方在该格是否有追溯补给（含失败原因） */
 export function hasTraceSupply(
   facts: TraceSupplyFacts,

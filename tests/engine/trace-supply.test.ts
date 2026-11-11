@@ -19,6 +19,7 @@ import {
   eatingOffTheMapCostT,
   extenderRangeMpOf,
   formationTraceTradeoff,
+  hasDirectDrawTraceSupply,
   hasTraceSupply,
   planOutOfSupply,
   requiresTraceSupply,
@@ -87,6 +88,47 @@ function makeFacts(options: FakeFactsOptions): TraceSupplyFacts {
     stepCost: (from, to) => (onMap.has(key(from)) && onMap.has(key(to)) ? cost : null),
   }
 }
+
+/* ─────────────── 专规 2.1 / 3.1：「直接拖取」不含 12.3b HQ 投递 ─────────────── */
+
+describe('专规 2.1 / 3.1：HQ 能否「by direct draw」取得追溯补给', () => {
+  it('只有 HQ 投递能到时，不算「直接拖取」；有基础源时才算；图外恒 false', () => {
+    const hexes = corridor(0, 5)
+    const dump = { hex: at(0), side: 'axis' as Side }
+    const hq: ThrowHqView = {
+      hex: at(1),
+      side: 'axis',
+      mode: 'combat',
+      mobility: 'truck',
+      throwRangeMp: 5,
+      throwMobility: 'truck',
+    }
+    // 只有 dump（供 HQ 投递）+ HQ 投递 ⇒ 追溯补给成立，但不是「拖取」
+    const throwOnly = makeFacts({ hexes, dumps: [dump], throwHqs: [hq] })
+    expect(hasTraceSupply(throwOnly, { hex: at(3), side: 'axis', mobility: 'truck' }).ok).toBe(true)
+    expect(
+      hasDirectDrawTraceSupply(throwOnly, { hex: at(3), side: 'axis', mobility: 'truck' }),
+    ).toBe(false)
+
+    // 同一条走廊上放一个基础源 ⇒ 直接拖取成立（专规 2.1/3.1 的 "able to get ... by direct draw"）
+    const withSource = makeFacts({
+      hexes,
+      sources: [{ hex: at(0), side: 'axis', kind: 'supplySourceHex' }],
+    })
+    expect(
+      hasDirectDrawTraceSupply(withSource, { hex: at(3), side: 'axis', mobility: 'truck' }),
+    ).toBe(true)
+
+    // 图外恒 false
+    expect(
+      hasDirectDrawTraceSupply(withSource, {
+        hex: { col: 99, row: 99 },
+        side: 'axis',
+        mobility: 'truck',
+      }),
+    ).toBe(false)
+  })
+})
 
 /* ────────────────────────────── 12.3a / 12.3c 直接拖取（5 MP） ────────────────────────────── */
 

@@ -7,7 +7,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { mapLayers } from '@/data'
 import type { HexRef } from '@/data'
 import { HEX_DIRECTIONS, isOnMap, neighbor } from '@/engine/hex-geometry'
-import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
+import { isRailHexAt, toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 
 /**
  * 13.5 / 13.5a：**待放置补员的落点**
@@ -23,24 +23,34 @@ const newStore = () => {
   return useWorkbenchStore()
 }
 
-/** 六邻皆图内的格（避免邻格越界影响 ZOC 判定） */
+/**
+ * 六邻皆图内、且**格内无铁路**的格
+ *
+ * 无铁路是给「断补 HQ」那条用例用的：13.3c 派生的卸货格也是 12.6a② 源，
+ * 若 HEX 恰是卸货格，围死它也仍按「源在脚下」判成有补给。
+ */
 const HEX: HexRef = (() => {
   const found = mapLayers.hexes.find((hex) => {
     const ref = { col: hex.col, row: hex.row }
-    return HEX_DIRECTIONS.every((direction) => {
-      const candidate = neighbor(ref, direction)
-      return (
-        isOnMap(candidate) &&
-        mapLayers.hexes.some((item) => item.col === candidate.col && item.row === candidate.row)
-      )
-    })
+    return (
+      !isRailHexAt(ref) &&
+      HEX_DIRECTIONS.every((direction) => {
+        const candidate = neighbor(ref, direction)
+        return (
+          isOnMap(candidate) &&
+          mapLayers.hexes.some((item) => item.col === candidate.col && item.row === candidate.row)
+        )
+      })
+    )
   })
-  if (found === undefined) throw new Error('地图上找不到六邻皆图内的格')
+  if (found === undefined) throw new Error('地图上找不到六邻皆图内、且无铁路的格')
   return { col: found.col, row: found.row }
 })()
 
 /** 与 `HEX` 相邻的敌方格（同时把 `HEX` 罩进敌方 ZOC） */
 const ENEMY_HEX: HexRef = neighbor(HEX, HEX_DIRECTIONS[0])
+
+const keyOf = (hex: HexRef): string => `${hex.col}.${hex.row}`
 
 function placeEnemyNextTo(store: ReturnType<typeof newStore>): void {
   const record = unitChoices('soviet').find((item) => item.isCombat === true)
@@ -98,6 +108,39 @@ describe('13.5：补员初次摆放（不套 13.5a）', () => {
     expect(store.replPending).toMatchObject({ pax: 2, eq: 1 })
     expect(store.units.filter((unit) => unit.replKind != null)).toHaveLength(0)
     expect(store.log.some((entry) => entry.text.includes('13.5'))).toBe(true)
+  })
+
+  it('专规 2.1/3.1：只有「能直接拖取追溯补给」的 HQ 才作落点（断补 HQ 被排除）', () => {
+    const hqRecord = unitChoices('axis').find((item) => item.specialized?.includes('hq') === true)
+    if (hqRecord === undefined) throw new Error('轴方单位库里没有 HQ')
+    const enemyRecord = unitChoices('soviet').find((item) => item.isCombat === true)
+    if (enemyRecord === undefined) throw new Error('苏方单位库里没有战斗单位')
+
+    // ① 与剧本图边补给源同格 ⇒ 源在脚下，直接拖取成立 ⇒ 该格是候选
+    const connected = newStore()
+    rollRepls(connected)
+    const sourceHex = connected.openSupplySourceHexes[0]!
+    connected.units.push(
+      toConsoleUnit({ record: hqRecord, instanceId: 'hq-1', hex: sourceHex, side: 'axis' }),
+    )
+    expect(connected.replInitialPlacementHexes.map(keyOf)).toContain(keyOf(sourceHex))
+
+    // ② 内陆军 HQ 被六个敌方战斗单位围死 ⇒ 断补 ⇒ 不作落点，退回图边补给源格
+    const cut = newStore()
+    rollRepls(cut)
+    cut.units.push(toConsoleUnit({ record: hqRecord, instanceId: 'hq-1', hex: HEX, side: 'axis' }))
+    HEX_DIRECTIONS.forEach((direction, index) => {
+      cut.units.push(
+        toConsoleUnit({
+          record: enemyRecord,
+          instanceId: `e${String(index)}`,
+          hex: neighbor(HEX, direction),
+          side: 'soviet',
+        }),
+      )
+    })
+    expect(cut.replInitialPlacementHexes.map(keyOf)).not.toContain(keyOf(HEX))
+    expect(cut.replInitialPlacementHexes.map(keyOf)).toEqual(cut.openSupplySourceHexes.map(keyOf))
   })
 
   it('13.5a 的 HQ/ZOC 判据只留给重建（两条策略分开）', () => {
