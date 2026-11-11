@@ -217,6 +217,8 @@ describe('14.9d / 4.7d：单位空运后的行动闸门', () => {
           {
             unitId: 'art',
             printedValue: 8,
+            // 2.2 进击·射击：地面参炸须为已释放的预备；14.9d 对已释放预备不误拦
+            releasedFromReserve: true,
             airTransportThisPhase: flight({ phase: 'exploitation', releasedFromReserve: true }),
           },
         ],

@@ -325,7 +325,9 @@ describe('A 组：10.0e-A/B 的按阶段轰炸账本', () => {
     expect(workbench.barrageError?.rule).toBe('10.0e-B')
 
     // ② 换阶段（新的阶段 ＝ 新的一次）⇒ 账本清零，同样的宣布重新可行
+    //    2.2 进击·射击：只有**释放预备模式的火炮**可以射击 ⇒ 本用例只验账本，故把炮置为已释放
     workbench.setPhase('exploitation')
+    gun.mode.releasedFromReserve = true
     expect(workbench.barragePhaseLedger).toEqual({ hexes: [], unitIds: [] })
     goToActionStep(workbench, 'barrage.declare')
     workbench.setBarrageActive(true)

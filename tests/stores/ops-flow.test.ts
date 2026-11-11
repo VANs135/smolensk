@@ -280,3 +280,100 @@ describe('F 战斗段的窗口纪律（2.2 F：炮击 → 战斗两节）', () =
     expect(combat).not.toContain('在「打一仗」工具下')
   })
 })
+
+describe('G 进击段的窗口纪律（2.2 G：移动 → 射击 → 战斗三节）', () => {
+  it('★ 2.2：G 段恰好三节（移动 → 轰炸 → 战斗），次序照原文', () => {
+    expect(sopStepsOf('exploitation').map((step) => step.id)).toEqual([
+      'exploitation.movement',
+      'exploitation.barrage',
+      'exploitation.combat',
+    ])
+  })
+
+  it('★ 11.0a：普通单位不进进击移动的取子清单，进击模式单位才进', () => {
+    const { workbench } = newStores()
+    workbench.setPhase('exploitation')
+    workbench.setSegmentStepIndex(
+      workbench.playerSegmentSteps.findIndex((step) => step.id === 'exploitation.movement'),
+    )
+    const unit = placeGround(
+      workbench,
+      groundRecord('axis', (record) => record.attackCapable === true),
+      CORE_HEX,
+      'axis',
+      'g-plain',
+    )
+    workbench.clickHex(CORE_HEX)
+    expect(workbench.movePick).toBeNull()
+    expect(workbench.moveBlocked?.rule).toBe('11.0a')
+
+    unit.mode.exploit = true
+    workbench.clickHex(CORE_HEX)
+    expect(workbench.movePick?.ids).toEqual(['g-plain'])
+  })
+
+  it('★ 2.2 进击·射击：只有已释放的预备火炮进候选，普通/进击模式炮都不进', () => {
+    const { workbench } = newStores()
+    workbench.setPhase('exploitation')
+    enterStep(workbench, 'barrage.declare')
+    placeGround(workbench, artilleryRecord(), CORE_HEX, 'axis', 'g-gun')
+    placeGround(workbench, defenderRecord(), TARGET_HEX, 'soviet', 'g-def')
+    workbench.battleTarget = { hex: TARGET_HEX, defenderIds: ['g-def'] }
+    workbench.setBarrageActive(true)
+
+    // placeGround 返回的是裸对象，直接改不会触发 computed ⇒ 统一经 store 里的响应式代理写
+    const reactiveGun = workbench.units.find((unit) => unit.instanceId === 'g-gun')!
+    expect(workbench.barrageUnitChoices.map((choice) => choice.unit.instanceId)).not.toContain(
+      'g-gun',
+    )
+
+    // 进击模式炮也不在 2.2 进击·射击的名单里（名单是「释放预备模式的火炮」）
+    reactiveGun.mode = { ...reactiveGun.mode, exploit: true }
+    expect(workbench.barrageUnitChoices.map((choice) => choice.unit.instanceId)).not.toContain(
+      'g-gun',
+    )
+
+    reactiveGun.mode = {
+      ...reactiveGun.mode,
+      mode: 'reserve',
+      releasedFromReserve: true,
+    }
+    expect(workbench.barrageUnitChoices.map((choice) => choice.unit.instanceId)).toContain('g-gun')
+  })
+
+  it('★ 11.0a：普通单位不能加入进击战斗的攻方；进击模式 / 已释放预备可以', () => {
+    const { workbench } = newStores()
+    workbench.setPhase('exploitation')
+    enterStep(workbench, 'combat.declare')
+    const attacker = placeGround(
+      workbench,
+      groundRecord('axis', (record) => record.attackCapable === true),
+      CORE_HEX,
+      'axis',
+      'g-a',
+    )
+    placeGround(workbench, defenderRecord(), NEAR_HEX, 'soviet', 'g-d')
+
+    workbench.toggleCombatAttacker('g-a')
+    expect(workbench.combatAttackerIds).not.toContain('g-a')
+    expect(workbench.log[0]!.text).toContain('11.0a')
+
+    attacker.mode.exploit = true
+    workbench.toggleCombatAttacker('g-a')
+    expect(workbench.combatAttackerIds).toContain('g-a')
+  })
+
+  it('★ 进击两环的提示按环节分流，不落回通用「可移动范围」', () => {
+    const { workbench, mapView } = newStores()
+    workbench.setPhase('exploitation')
+    workbench.setSegmentStepIndex(
+      workbench.playerSegmentSteps.findIndex((step) => step.id === 'exploitation.movement'),
+    )
+    expect(mapView.actionHint).toContain('进击移动')
+
+    workbench.setSegmentStepIndex(
+      workbench.playerSegmentSteps.findIndex((step) => step.id === 'exploitation.barrage'),
+    )
+    expect(mapView.actionHint).toContain('进击轰炸')
+  })
+})

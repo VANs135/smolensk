@@ -250,8 +250,9 @@ describe('Ⓕ F 段许可动作与段闸（2.2 / 9.0 / 10.1a）', () => {
     expect(store.beginCombatNow()).toBe(true)
     store.cancelCombat()
 
-    // G 段 ⇒ 也通过（2.2：G 段有战斗环节）
+    // G 段 ⇒ 也通过（2.2：G 段有战斗环节；11.0a：只有进击模式或已释放预备可以战斗）
     store.setPhase('exploitation')
+    store.units.find((unit) => unit.instanceId === 'a1')!.mode.exploit = true
     goToActionStep(store, 'combat.declare')
     store.setTool('battle')
     store.clickHex(ATTACKER_HEX)

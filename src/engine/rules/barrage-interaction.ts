@@ -341,6 +341,25 @@ export function beginBarrage(input: {
   })
 
   /*
+   * 2.2 反应 / 进击的**射击**环节（`_ocs_sop_clean.txt` 39–53 行）：
+   *   · 反应：「飞机单位，舰船单位（1 回合只能 1 次），或**释放预备模式的地面单位**可以射击。」
+   *   · 进击：「飞机单位，舰船单位，**释放预备模式的火炮单位**可以射击。」
+   * ⇒ 这两段的火炮射击只认**已释放的预备**；10.0e-E 的「所有类型都可以」是类型口径，
+   *   参与资格另由这两行收紧（未释放的普通炮 / 进击模式炮都不在名单里）。
+   */
+  if (
+    input.kind === 'artillery' &&
+    (input.phase === 'reaction' || input.phase === 'exploitation')
+  ) {
+    const notReleased = units.find((unit) => unit.releasedFromReserve !== true)
+    if (notReleased !== undefined)
+      return fail(
+        input.phase === 'reaction' ? '7.0a' : '11.0a',
+        `groundBarrageNeedsReleasedReserve:${notReleased.unitId}`,
+      )
+  }
+
+  /*
    * 专规 2.3d（第五批 A4）：「To combine for a single Barrage, all of the firing Soviet artillery
    * units must be stacked together.」（Smolensk_Rules_v1.1.txt:329-331）⇒ 带
    * `sov_artillery_stack_to_combine` 标签的参炸苏军炮兵 ≥2 时，必须**全部同格**。

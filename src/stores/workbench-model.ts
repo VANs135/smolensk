@@ -16,6 +16,7 @@ import {
   bestCombatTerrainForDefender,
   bridgedCrossing,
   canEngineer,
+  canonicalMode,
   canMoveInPhase,
   canReleaseReserve,
   combatTerrainCandidates,
@@ -1539,7 +1540,25 @@ function opposingSide(side: Side): Side {
  * 免得两边各写一遍 `mode === 'reserve' || mode === 'strat'`（那种重复迟早一边漏改）。
  */
 export function isInReserveOrStrat(unit: ConsoleUnit): boolean {
-  return unit.mode.mode === 'reserve' || unit.mode.mode === 'strat'
+  /*
+   * 5.7b：释放后的预备「只需移除它的预备标记」⇒ 表示法仍是 reserve + 旗标，但不再是预备模式。
+   * 13.4a 禁的是**正处于**预备/战略模式的火炮；按规范模式判，已释放的预备火炮可以轰炸。
+   */
+  const mode = canonicalMode(unit.mode)
+  return mode === 'reserve' || mode === 'strat'
+}
+
+/**
+ * 2.2 反应 / 进击两段的**地面射击**资格
+ *
+ * 原文（`OCS_SOP_CN` 2.2）：
+ *   · 反应·射击：「飞机单位，舰船单位（1 回合只能 1 次），或**释放预备模式的地面单位**可以射击。」
+ *   · 进击·射击：「飞机单位，舰船单位，**释放预备模式的火炮单位**可以射击。」
+ * ⇒ 这两段的火炮射击只认**已释放的预备**；其余阶段（F 战斗的炮击环节）不设此限。
+ */
+export function isGroundBarrageEligible(phase: GamePhase, unit: ConsoleUnit): boolean {
+  if (phase !== 'reaction' && phase !== 'exploitation') return true
+  return unit.mode.releasedFromReserve === true
 }
 
 /**
@@ -3335,6 +3354,9 @@ export function participatesIn(query: ParticipationQuery): ParticipationVerdict 
     case 'reaction.barrage':
       if (friendly) return cannotParticipate('6.3a', '反应段由非阶段玩家行动')
       if (!hasBarrageFactor(unit)) return cannotParticipate('10.0', '该单位没有轰炸值')
+      // 2.2 反应·射击：地面射击只认「释放预备模式的地面单位」
+      if (unit.mode.releasedFromReserve !== true)
+        return cannotParticipate('7.0a', '反应段的地面射击须先释放预备（2.2 / 7.0a）')
       return { ok: true, rule: '10.0' }
 
     /* ── F 战斗 · 炮击环节（SOP 原文：artillery only） ── */
@@ -3367,9 +3389,15 @@ export function participatesIn(query: ParticipationQuery): ParticipationVerdict 
     case 'exploitation.barrage':
       if (!friendly) return cannotParticipate('11.0', '进击段由当前阶段玩家行动')
       if (!hasBarrageFactor(unit)) return cannotParticipate('10.0', '该单位没有轰炸值')
+      // 2.2 进击·射击：地面射击只认「释放预备模式的火炮单位」
+      if (unit.mode.releasedFromReserve !== true)
+        return cannotParticipate('11.0a', '进击段的地面射击只认已释放的预备火炮（2.2 / 11.0a）')
       return { ok: true, rule: '10.0' }
     case 'exploitation.combat':
       if (!friendly) return cannotParticipate('11.0', '进击段由当前阶段玩家行动')
+      // 11.0a：本阶段可以战斗的地面单位只有进击模式单位与从预备模式中释放的单位
+      if (!unit.mode.exploit && unit.mode.releasedFromReserve !== true)
+        return cannotParticipate('11.0a', '进击段只有进击模式单位或已释放的预备可以战斗')
       if (query.attackedUnitIds?.includes(unit.instanceId) === true)
         return cannotParticipate('9.1c', '该单位在本战斗环节已攻击过（一个单位只能攻击一次）')
       if (!canBeAttacker(unit))

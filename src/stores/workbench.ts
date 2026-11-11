@@ -147,6 +147,7 @@ import {
   nkvdArRequired,
   splitOverrunStack,
   canReleaseReserve,
+  canMoveInPhase,
   canStackWithHedgehog,
   canSwitchModeNow,
   canThrowViaHQ,
@@ -460,6 +461,7 @@ import {
   isHqUnit,
   // B14b：13.4a 预备/战略模式判据（参炸单位阵列的灰显原因与引擎请求共用一处）
   isInReserveOrStrat,
+  isGroundBarrageEligible,
   isRailHexAt,
   isReplUnit,
   replRecordOf,
@@ -3110,7 +3112,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
     const target = barrageTargetHex.value
     return units.value
-      .filter((unit) => unit.side === segmentGateQuery.value.side && isBarrageCapableUnit(unit))
+      .filter(
+        (unit) =>
+          unit.side === segmentGateQuery.value.side &&
+          isBarrageCapableUnit(unit) &&
+          /*
+           * 2.2：反应 / 进击的射击只认已释放的预备（与 `barrageCandidatesAt` 同一条判据）。
+           * 不可用的单位不列出来——否则玩家点了、宣布时才被 7.0a / 11.0a 拒。
+           */
+          isGroundBarrageEligible(phase.value, unit),
+      )
       .map((unit) => ({
         unit,
         selected: barrageUnitIds.value.includes(unit.instanceId),
@@ -6668,10 +6679,30 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       /*
        * #15：本格只剩**已结束本轮移动**（或补员）的算子 ⇒ 不建立取子清单 ⇒ 界面没有「开始移动」入口。
        * 6.1g「一旦开始移动就必须走完」；13.2a 的暂停实例仍在池里（可继续），不落到这里。
+       *
+       * 7.0a / 11.0a：若池空是因为**本阶段资格**（未释放的预备 / 无进击标记），给出那条规则号，
+       * 而不是笼统的"本轮移动已结束"。
        */
       movePick.value = null
       const atHex = friendlyUnitsAt(hex)
       selectedId.value = atHex[atHex.length - 1]?.instanceId ?? null
+      const segmentPhase = phase.value
+      const verdict =
+        segmentPhase === 'reaction' || segmentPhase === 'exploitation'
+          ? atHex
+              .map((unit) =>
+                canMoveInPhase(
+                  { state: unit.mode, side: unit.side, activeSide: activeSide.value },
+                  segmentPhase,
+                ),
+              )
+              .find((item) => !item.ok)
+          : undefined
+      if (verdict !== undefined && !verdict.ok) {
+        moveBlocked.value = { rule: verdict.rule, reason: verdict.reason }
+        pushLog('warning', verdict.reason, verdict.rule)
+        return
+      }
       pushLog('info', '该格没有可开拔的单位（本轮移动已结束，6.1g / 13.2a）', '6.1g')
       return
     }
@@ -6727,10 +6758,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function movePickPoolAt(hex: HexRef): ConsoleUnit[] {
     // #15：已结束本轮移动的实例不再进池（没有"开始移动"入口、不占配额）；
     // 13.2a 显式暂停的运输点数仍可继续 ⇒ 保留在池里。
-    return friendlyUnitsAt(hex).filter(
+    const pool = friendlyUnitsAt(hex).filter(
       (unit) =>
         !isReplUnit(unit) &&
         (!unit.movementEnded || pausedTransportIds.value.includes(unit.instanceId)),
+    )
+    /*
+     * 7.0a / 11.0a：反应段只有**已释放的预备**、进击段只有**进击模式或已释放的预备**可以开拔。
+     * 判据与引擎 `canMoveInPhase` 同源 ⇒ 不合格的单位不进取子清单，界面不会出现
+     * "勾了、点开始移动才被拒"的假入口。
+     */
+    const segmentPhase = phase.value
+    if (segmentPhase !== 'reaction' && segmentPhase !== 'exploitation') return pool
+    return pool.filter(
+      (unit) =>
+        canMoveInPhase(
+          { state: unit.mode, side: unit.side, activeSide: activeSide.value },
+          segmentPhase,
+        ).ok,
     )
   }
 
@@ -9774,6 +9819,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     if (!unit.isCombat || !unit.attackCapable) {
       pushLog('warning', `${unit.name} 不可攻击（3.2b/9.1e）`, '9.1e')
+      return
+    }
+    /*
+     * 11.0a：进击阶段可以战斗的地面单位，只有进击模式单位与从预备模式中释放的单位。
+     * 与 `participatesIn('exploitation.combat')` 同一条判据；此处拦下"地图直接点"这条旁路。
+     */
+    if (
+      phase.value === 'exploitation' &&
+      !unit.mode.exploit &&
+      unit.mode.releasedFromReserve !== true
+    ) {
+      pushLog(
+        'warning',
+        `${unit.name} 不在进击模式且非已释放预备，本阶段不能战斗（11.0a）`,
+        '11.0a',
+      )
       return
     }
     const target = battleTarget.value
@@ -14981,6 +15042,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         unit.side === side &&
         isBarrageCapableUnit(unit) &&
         !isInReserveOrStrat(unit) &&
+        // 2.2：反应 / 进击的射击只认已释放的预备（原文见 `isGroundBarrageEligible`）
+        isGroundBarrageEligible(phase.value, unit) &&
         unit.raw.range !== undefined &&
         canBarrageAtRange({
           rangeHexes: unit.raw.range,
