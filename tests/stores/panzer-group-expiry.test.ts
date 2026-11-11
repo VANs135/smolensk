@@ -54,9 +54,12 @@ describe('3.4 族规则：19 Aug 边界', () => {
       }),
     ).toMatchObject({ rule: '3.4b' })
 
+    // 3.4b：新到的德军 SP 不选归属 ⇒ 拒；选了 ⇒ 当场归属，不进待办
     store.spDumpDraft = { hexText: `${CORE_HEX.col + 1}.${CORE_HEX.row}`, sp: 2, t: 0 }
+    expect(store.addSpDump()).toBe(false)
+    store.setSpDumpDraftGroup('guderian')
     expect(store.addSpDump()).toBe(true)
-    expect(store.pendingSpGroupAssignment.length).toBe(1)
+    expect(store.pendingSpGroupAssignment).toEqual([])
   })
 
   it('失效日（1941-08-19）：3.4b 关闭 ⇒ 不要求归属、错集群付款放行，历史归属保留', () => {

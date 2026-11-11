@@ -432,6 +432,30 @@ const showsLedger = computed(
               新增补给站（12.1b）
             </BaseButton>
           </div>
+          <!--
+            3.4b（用户 2026-11-11 口径）：解除日（19 Aug）之前，任何德军 SP 到场都必须由玩家指定集群，
+            **不提供「不属任何集群」**；解除日后本行整块不出现（`panzerGroupRulesOn` 为假）。
+          -->
+          <div
+            v-if="showsReferee && workbench.panzerGroupRulesOn && workbench.activeSide === 'axis'"
+            class="row"
+          >
+            <span class="muted">3.4b 新到 SP 归属</span>
+            <BaseButton
+              :variant="workbench.spDumpDraft.panzerGroup === 'guderian' ? 'primary' : 'secondary'"
+              size="sm"
+              @click="workbench.setSpDumpDraftGroup('guderian')"
+            >
+              Guderian（2nd PG）
+            </BaseButton>
+            <BaseButton
+              :variant="workbench.spDumpDraft.panzerGroup === 'hoth' ? 'primary' : 'secondary'"
+              size="sm"
+              @click="workbench.setSpDumpDraftGroup('hoth')"
+            >
+              Hoth（3rd PG）
+            </BaseButton>
+          </div>
 
           <p v-if="workbench.spDumpsOfSide.length === 0" class="muted">当前方尚无补给站。</p>
           <div v-for="dump in workbench.spDumpsOfSide" :key="dump.id" class="row">

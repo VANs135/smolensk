@@ -113,32 +113,38 @@ describe('3.4b：SP 归属账本', () => {
     expect(store.panzerGroupOfDump('nope')).toBeNull()
   })
 
-  it('3.4b：新落的轴方 SP 进「待归属」清单，声明后即出列', () => {
+  it('3.4b：未选归属 ⇒ 拒落账（无「不属任何集群」选项）；选了 ⇒ 当场归属、不进待办', () => {
     const store = newStore()
     store.setTurn(1)
     store.setActiveSide('axis')
     store.spDumpDraft = { hexText: `${CORE_HEX.col}.${CORE_HEX.row}`, sp: 4, t: 0 }
+    // 用户 2026-11-11 口径：解除日前德军 SP 到场必须指定集群 ⇒ 未选即拒
+    expect(store.addSpDump()).toBe(false)
+    expect(store.spDumps).toEqual([])
+
+    store.setSpDumpDraftGroup('guderian')
     expect(store.addSpDump()).toBe(true)
     const dump = store.spDumps[0]!
-    expect(store.pendingSpGroupAssignment).toContain(dump.id)
-    expect(store.panzerGroupUnassignedDumps.map((item) => item.id)).toContain(dump.id)
-
-    store.setDumpPanzerGroupNow(dump.id, 'guderian')
-    expect(store.pendingSpGroupAssignment).not.toContain(dump.id)
-    expect(store.panzerGroupUnassignedDumps.map((item) => item.id)).not.toContain(dump.id)
+    expect(store.panzerGroupOfDump(dump.id)).toBe('guderian')
+    expect(store.pendingSpGroupAssignment).toEqual([])
+    expect(store.panzerGroupUnassignedDumps).toEqual([])
   })
 
   it('3.4b / 12.1b：同格再落 SP 是**并入**同一条账（沿用原 id），已声明的归属不作废', () => {
     const store = newStore()
     store.setTurn(1)
     store.setActiveSide('axis')
-    store.spDumpDraft = { hexText: `${CORE_HEX.col}.${CORE_HEX.row}`, sp: 4, t: 0 }
+    store.spDumpDraft = {
+      hexText: `${CORE_HEX.col}.${CORE_HEX.row}`,
+      sp: 4,
+      t: 0,
+      panzerGroup: 'guderian',
+    }
     expect(store.addSpDump()).toBe(true)
     const dump = store.spDumps[0]!
-    store.setDumpPanzerGroupNow(dump.id, 'guderian')
     expect(store.pendingSpGroupAssignment).toEqual([])
 
-    // 同一格再落 2 SP：并入同一条（不是新增第二条），归属沿用
+    // 同一格再落 2 SP（未重选，但并入的是**已归属**的站 ⇒ 归属明确，放行）：并入同一条
     store.spDumpDraft = { hexText: `${CORE_HEX.col}.${CORE_HEX.row}`, sp: 2, t: 0 }
     expect(store.addSpDump()).toBe(true)
     expect(store.spDumps).toHaveLength(1)
@@ -148,27 +154,38 @@ describe('3.4b：SP 归属账本', () => {
     expect(store.pendingSpGroupAssignment).toEqual([])
   })
 
-  it('3.4b / 12.1b：并入**未声明**的站 ⇒ 该站仍在待归属里（新到的 SP 必须立即归属）', () => {
+  it('3.4b / 12.1b：落向**未归属**的旧站且未选集群 ⇒ 拒（不制造一笔未归属 SP）', () => {
     const store = newStore()
     store.setTurn(1)
     store.setActiveSide('axis')
-    store.spDumpDraft = { hexText: `${CORE_HEX.col}.${CORE_HEX.row}`, sp: 4, t: 0 }
-    expect(store.addSpDump()).toBe(true)
-    const dump = store.spDumps[0]!
+    // 旧数据：账本里已有一条未归属站（不经 addSpAtHex 落盘，模拟历史存档）
+    store.spDumps.push({ id: 'legacy', hex: { ...CORE_HEX }, side: 'axis', sp: 4, t: 0 })
     store.spDumpDraft = { hexText: `${CORE_HEX.col}.${CORE_HEX.row}`, sp: 2, t: 0 }
+    expect(store.addSpDump()).toBe(false)
+    expect(store.spDumps).toHaveLength(1)
+    expect(store.spDumps[0]!.sp).toBe(4)
+
+    // 给旧站补上归属后，同一格再不选也能并入（归属已明确）
+    store.setDumpPanzerGroupNow('legacy', 'hoth')
     expect(store.addSpDump()).toBe(true)
     expect(store.spDumps).toHaveLength(1)
-    expect(store.spDumps[0]!.id).toBe(dump.id)
-    expect(store.pendingSpGroupAssignment).toEqual([dump.id])
+    expect(store.spDumps[0]).toMatchObject({ id: 'legacy', sp: 6 })
+    expect(store.panzerGroupOfDump('legacy')).toBe('hoth')
   })
 
   it('3.4b：19 August 起自动失效（待归属与未归属清单都空）', () => {
     const store = newStore()
     const dump = axisDump(store, 'legacy')
     store.setTurn(1)
-    store.spDumpDraft = { hexText: `${CORE_HEX.col}.${CORE_HEX.row}`, sp: 4, t: 0 }
+    // 解除日前落账必须带归属 ⇒ 当场归属、不进待办
+    store.spDumpDraft = {
+      hexText: `${CORE_HEX.col}.${CORE_HEX.row}`,
+      sp: 4,
+      t: 0,
+      panzerGroup: 'hoth',
+    }
     expect(store.addSpDump()).toBe(true)
-    expect(store.pendingSpGroupAssignment.length).toBe(1)
+    expect(store.pendingSpGroupAssignment).toEqual([])
 
     // 拨到约束失效之后的回合（日期由 turnTrack 给出，不按天数推）
     const turn = store.turn
@@ -308,8 +325,9 @@ describe('3.4b：新到的轴方 SP 未归属时，只拦多单位编队的受�
   it('未归属的新站替装甲编队付账 ⇒ 拒 `newSpMustBeAssignedToAPanzerGroup`', () => {
     const store = newStore()
     store.setTurn(1)
-    store.spDumpDraft = { hexText: `${CORE_HEX.col}.${CORE_HEX.row}`, sp: 8, t: 0 }
-    expect(store.addSpDump()).toBe(true)
+    // 未归属站只可能来自历史存档（新落账必须带归属）⇒ 直接铺一条账本并登记待办
+    store.spDumps.push({ id: 'legacy', hex: { ...CORE_HEX }, side: 'axis', sp: 8, t: 0 })
+    store.pendingSpGroupAssignment = ['legacy']
     const dump = store.spDumps[0]!
     const { unit } = panzerUnit(store)
     const failure = store.panzerGroupSpGate({
@@ -332,11 +350,11 @@ describe('3.4b：新到的轴方 SP 未归属时，只拦多单位编队的受�
     ).toBeNull()
   })
 
-  it('未归属的新站替**步兵**付账 ⇒ 放行（登记疏漏不该拦掉普通攻击）', () => {
+  it('未归属的旧站替**步兵**付账 ⇒ 放行（登记疏漏不该拦掉普通攻击）', () => {
     const store = newStore()
     store.setTurn(1)
-    store.spDumpDraft = { hexText: `${CORE_HEX.col}.${CORE_HEX.row}`, sp: 8, t: 0 }
-    expect(store.addSpDump()).toBe(true)
+    store.spDumps.push({ id: 'legacy', hex: { ...CORE_HEX }, side: 'axis', sp: 8, t: 0 })
+    store.pendingSpGroupAssignment = ['legacy']
     const dump = store.spDumps[0]!
     const { unit } = plainUnit(store)
     expect(

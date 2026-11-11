@@ -1845,8 +1845,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const supplyInputs = ref<SupplyInputs>(createSupplyInputs())
   /** C8：界面上悬停预览的来源序号（用于把该来源的覆盖范围画到地图上；null＝用已选来源） */
   const supplyPreviewIndex = ref<number | null>(null)
-  /** C8：新增 SP 账本条目的输入（格号文本 + SP/T 数） */
-  const spDumpDraft = ref<{ hexText: string; sp: number; t: number }>({ hexText: '', sp: 1, t: 0 })
+  /** C8：新增 SP 账本条目的输入（格号文本 + SP/T 数 + 3.4b 装甲集群） */
+  const spDumpDraft = ref<{
+    hexText: string
+    sp: number
+    t: number
+    /** 3.4b：解除日前的德军新到 SP 归属（`null`/缺省＝未选，落账会被拒） */
+    panzerGroup?: PanzerGroup | null
+  }>({ hexText: '', sp: 1, t: 0, panzerGroup: null })
   /** C8：新增基础补给源声明的输入（格号文本 + 类别） */
   const supplySourceDraft = ref<{ hexText: string; kind: BaseSourceKind }>({
     hexText: '',
@@ -11956,6 +11962,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           (new Set(sameHexDumps.map((dump) => panzerGroupOfDump(dump.id))).size === 1
             ? sameHexDumps[0]
             : undefined))
+    /*
+     * 3.4b（用户 2026-11-11 口径）：**解除日之前，任何德军 SP 到场都必须由玩家指定集群**——
+     * 不提供「不属任何集群」这个选项。初设 / 增援 / 补给列车 / 可变增援 / 手工新增共用本入口，
+     * 判据只写在这一处：`sp > 0` 的轴方落账，若没带 `panzerGroup`，且并入的既有站也没有归属
+     * （即落完仍无集群）⇒ 整笔拒绝，不落盘、不建待办。并入**已归属**的站不算"未归属到场"
+     * （该站的归属就是玩家对这批 SP 的指定）。解除日（19 August）之后闸门自动失效。
+     */
+    if (axisGated && sp > 0 && inputGroup === undefined) {
+      const inheritedGroup = existing === undefined ? null : panzerGroupOfDump(existing.id)
+      if (inheritedGroup === null) {
+        pushLog(
+          'warning',
+          `德军 SP（${hexLabel(input.hex)}，${String(sp)} SP）未指定装甲集群 ⇒ 不落账；` +
+            `3.4b 要求新到的轴方 SP 立即归属 Guderian / Hoth`,
+          '3.4b',
+        )
+        return null
+      }
+    }
     if (existing !== undefined) {
       // 12.1a：并入后仍保持「尽可能并为 SP」的规范形（2T + 2T ⇒ 1 SP + 0 T，而不是留成 4T）
       const merged = tToHoldings(holdingsToT({ sp: existing.sp + sp, t: existing.t + t }))
@@ -11968,62 +11993,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         '12.1a',
       )
       /*
-       * 3.4b：并进去之后，这笔新到的轴方 SP 归属**跟随该站已有的归属**——
-       * 已声明过的站不再进待办（那是一次显式裁定，不该因为多加了几点就作废）；
-       * 未声明的站：若本次带了玩家选择，立即补写归属；否则照旧登记待办。
+       * 3.4b：并进去之后这笔新到 SP 的归属，跟随该站已有的归属；
+       * 未归属的站只可能走「本次带了玩家选择」这一支（无选择已在上面被闸拒绝）⇒ 立即补写。
        */
-      const existingGroup = panzerGroupOfDump(existing.id)
-      if (panzerGroupRulesOn.value && input.side === 'axis' && existingGroup === null) {
-        if (input.panzerGroup !== undefined) {
-          setDumpPanzerGroupNow(existing.id, input.panzerGroup)
-        } else {
-          pendingSpGroupAssignment.value = [
-            ...new Set([...pendingSpGroupAssignment.value, existing.id]),
-          ]
-          pushLog(
-            'warning',
-            `新到的轴方 SP（${hexLabel(existing.hex)}）尚未归属装甲集群（3.4b）⇒ 请在专规面板声明`,
-            '3.4b',
-          )
-        }
+      if (axisGated && panzerGroupOfDump(existing.id) === null && input.panzerGroup !== undefined) {
+        setDumpPanzerGroupNow(existing.id, input.panzerGroup)
       }
       return existing.id
     }
     const id = createId('sp')
     spDumps.value = [...spDumps.value, { id, hex: input.hex, side: input.side, sp, t }]
     /*
-     * 3.4b：在局中新落的**轴方** SP 属「新到的轴方 SP」⇒ 必须立即归属某一装甲集群。
-     * 到货路径在落账前已要求玩家选归属并把 `panzerGroup` 传进来；手工/其它来源可
-     * 不带 `panzerGroup`，此时仍按既有做法登记待办（不阻断落盘）。
+     * 3.4b：新落的轴方 SP 必须立即归属某一装甲集群。
+     * 无选择已被上面的闸拒绝 ⇒ 走到这里时 `panzerGroup` 必有值，直接写归属、不进待办。
+     * （B50：3.4b 未启用时 `axisGated` 为假，不写归属。）
      */
-    // B50：3.4b 未启用（共识未采纳）时**不登记待办** —— 约束与界面都不该出现
-    if (panzerGroupRulesOn.value && input.side === 'axis') {
-      if (input.panzerGroup !== undefined) {
-        // 玩家已在落账前选定归属 ⇒ 立即写入，不进待办（3.4b「新到 SP 必须立即归属」）
-        setDumpPanzerGroupNow(id, input.panzerGroup)
-      } else {
-        pendingSpGroupAssignment.value = [...new Set([...pendingSpGroupAssignment.value, id])]
-        /*
-         * 2026-11-09：同格已有 G/H 两本账却还冒出一笔未归属 ⇒ 上游有漏（本该带上归属）。
-         * 这种情况**单独列第三本账**（不静默并进某集群），并明确告警，方便回头查漏。
-         */
-        const groupedHere = spDumps.value.some(
-          (dump) =>
-            dump.side === 'axis' &&
-            sameHex(dump.hex, input.hex) &&
-            dump.id !== id &&
-            panzerGroupOfDump(dump.id) !== null,
-        )
-        pushLog(
-          'warning',
-          groupedHere
-            ? `同格 ${hexLabel(input.hex)} 已有集群归属的补给站，却又落了一笔**未归属**的轴方 SP（3.4b）⇒` +
-                `已单独列为「未归属」算子，没有并入 Guderian/Hoth 任何一本账；请查这批 SP 为什么漏了归属`
-            : `新到的轴方 SP：${hexLabel(input.hex)} 尚未归属装甲集群（3.4b）⇒ 请在本面板为它声明归属；` +
-                `未归属前它不能支付多单位编队的燃油/战斗/轰炸成本`,
-          '3.4b',
-        )
-      }
+    if (axisGated && input.panzerGroup !== undefined) {
+      setDumpPanzerGroupNow(id, input.panzerGroup)
     }
     pushLog(
       'info',
@@ -12047,7 +12033,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', 'SP 与 T 不能同时为 0（12.1a：1 SP = 4 T）', '12.1a')
       return false
     }
-    return addSpAtHex({ hex, side: activeSide.value, sp, t }) !== null
+    return (
+      addSpAtHex({
+        hex,
+        side: activeSide.value,
+        sp,
+        t,
+        panzerGroup: draft.panzerGroup ?? undefined,
+      }) !== null
+    )
+  }
+
+  /** 3.4b：手工新增 SP 时选定装甲集群（无「不属任何集群」选项） */
+  function setSpDumpDraftGroup(group: PanzerGroup | null): void {
+    spDumpDraft.value = { ...spDumpDraft.value, panzerGroup: group }
   }
 
   /** C8：移除一条 SP 账本条目 */
@@ -23588,6 +23587,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setSupplyActive,
     clearSupply,
     addSpDump,
+    setSpDumpDraftGroup,
     removeSpDump,
     landSetupSpDumps,
     clearSpDumps,

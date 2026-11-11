@@ -186,6 +186,7 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'setHoverHex',
       'setOptionDraftMode',
       'setPopupCard',
+      'setSpDumpDraftGroup',
       'setSupplyActive',
       'setSupplyPreview',
       'toggleAdvanceUnit',
