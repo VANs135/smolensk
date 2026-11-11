@@ -1783,22 +1783,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })
   }
 
-  /** 专规 2.3c：方面军预备队的落点（同 13.6 的到达解算） */
-  function beginFrontalReservesHexPickNow(): void {
-    beginHexPick({
-      label: '方面军预备队落点',
-      rule: '专规 2.3c',
-      candidates: 'any',
-      apply: (hex) => {
-        frontalReservesInputs.value = {
-          ...frontalReservesInputs.value,
-          hexText: hexTextOf(hex),
-        }
-        return true
-      },
-    })
-  }
-
   /** 14.1a：摆放飞机的空军基地格（候选＝本方**已有的**空军基地格，真能预筛） */
   function beginAirPlacementHexPickNow(): void {
     beginHexPick({
@@ -18000,6 +17984,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 3.6：进入「点地图高亮铁路格」的选格态（候选＝全部可卸货格） */
   function beginSupplyTrainHexPickNow(): void {
+    if (!rollPlacementOpen.value) {
+      pushLog(
+        'warning',
+        `暂不能落位：${rollPlacementBlockedReason.value ?? '判定阶段未完成'}`,
+        '专规 3.6',
+      )
+      return
+    }
     if (!supplyTrainPending.value) {
       pushLog('warning', '3.6：本次没有待落的补给列车', '专规 3.6')
       return
@@ -18785,27 +18777,421 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
+  /* ────────── v7.1 第二段：判定阶段 → 放置阶段（用户 2026-11-11 口径） ────────── */
+
+  /**
+   * 判定阶段是否已经全部走完（＝放置阶段的**唯一闸门**）
+   *
+   * 第二段是**两段式**：
+   *   ① 判定阶段：按序走完 1.6c 特殊补员 → 3.6 随机事件 → 3.6 补给列车 → 3.3c 可变撤离 →
+   *      1.6b 补员表 → 1.6b 补给表 → 2.3c 方面军预备队。这一阶段**不落子、不出地图落点**，
+   *      只出判定结果与回执；
+   *   ② 放置阶段：本轮拿到的全部单位与物资汇成**同一张手牌**，逐个点格落位。
+   *
+   * 故所有落点入口都先问这一处：判定没走完就不许放（修前"判完一项就能立刻放置"）。
+   */
+  const rollPlacementBlockedReason = computed<string | null>(() => {
+    if (segmentStep.value?.id !== 'reinforcement.replRoll') return '不在第二段（掷骰与统一放置）'
+    if (!variableReplRolled.value) return '先掷 1.6b 可变增援（判定阶段未完成）'
+    if (isSpecialReplAvailable(date.value) && !hasSpecialReplDraw(activeSide.value, turn.value)) {
+      return '1.6c 特殊补员还没掷（每回合必掷，判定阶段未完成）'
+    }
+    if (variableExitSelectionOpen.value) return '3.3c 撤离还有待选算子，先选定'
+    if (
+      frontalReservesToday.value !== null &&
+      !frontalReservesClaimed.value.includes(frontalReservesToday.value.date)
+    ) {
+      return '2.3c 方面军预备队必须当即领取（判定阶段未完成）'
+    }
+    return null
+  })
+  const rollPlacementOpen = computed<boolean>(() => rollPlacementBlockedReason.value === null)
+
+  /** 1.6c 特殊补员的**返场登记**：判定阶段只登记，放置阶段才从死亡堆取出 */
+  interface SpecialReplReturn {
+    instanceId: string
+    name: string
+    /** 返场后的军力（1.6c：−1 军力）；null ⇒ 保持原值 */
+    steps: number | null
+    /** 登记时的原军力（本段内收回时复原） */
+    priorSteps: number
+  }
+  const specialReplPending = ref<SpecialReplReturn[]>([])
+  const specialReplPlacedThisSegment = ref<SpecialReplReturn[]>([])
+
+  /** 2.3c 编制转化的**新单位登记**：判定阶段领取，放置阶段落位 */
+  interface FrontalUnitEntry {
+    recordId: string
+    name: string
+  }
+  const frontalUnitPending = ref<FrontalUnitEntry | null>(null)
+  const frontalUnitPlacedThisSegment = ref<{ instanceId: string; entry: FrontalUnitEntry } | null>(
+    null,
+  )
+  /** 2.3c 并进到货 SP 池的那 2 SP（只用于手牌照面显示"来自哪一项"） */
+  const frontalReservesSpPending = ref<number>(0)
+
+  /** 2.1 的到货落点候选（补员 / 特殊补员返场 / 2.3c 新单位共用这一处判据） */
+  function handArrivalCandidates(): HexRef[] {
+    return replInitialPlacementCandidatesFor('pax')
+  }
+
+  /**
+   * 1.6c：登记本次特殊补员的返场单位（**只登记，不落子**）
+   *
+   * 修前 `containers.drawSpecialRepl` 掷完就 `returnFromDeadPileNow` 直接返场，
+   * 无合法格则整笔拒绝——那是"判完一项就立刻放置"。现在改由放置阶段统一手牌落位。
+   */
+  function registerSpecialReplReturns(
+    entries: readonly { instanceId: string; steps?: number }[],
+  ): boolean {
+    if (entries.length === 0) return true
+    const next: SpecialReplReturn[] = []
+    for (const entry of entries) {
+      const unit = deadPile.value.find((item) => item.instanceId === entry.instanceId)
+      if (unit === undefined) {
+        pushLog('warning', `死亡堆中没有 ${entry.instanceId}（1.6c 返场登记失败）`, '1.6c')
+        return false
+      }
+      next.push({
+        instanceId: entry.instanceId,
+        name: unit.name,
+        steps: entry.steps === undefined ? null : entry.steps,
+        priorSteps: unit.steps,
+      })
+    }
+    specialReplPending.value = [...specialReplPending.value, ...next]
+    pushLog(
+      'info',
+      `1.6c 特殊补员：${String(next.length)} 枚返场单位已进手牌（判定阶段不落子）`,
+      '1.6c',
+    )
+    return true
+  }
+
+  /** 1.6c：点地图给某一条返场登记选落点（2.1 判据） */
+  function beginSpecialReplPlaceHexPickNow(index: number): boolean {
+    if (!rollPlacementOpen.value) {
+      pushLog(
+        'warning',
+        `暂不能落位：${rollPlacementBlockedReason.value ?? '判定阶段未完成'}`,
+        '1.6c',
+      )
+      return false
+    }
+    const entry = specialReplPending.value[index]
+    if (entry === undefined) return false
+    const candidates = handArrivalCandidates()
+    if (candidates.length === 0) {
+      pushLog('warning', '没有可返场的格（2.1：能直接拖取追溯补给的 HQ，否则图边补给源格）', '2.1')
+      return false
+    }
+    beginHexPick({
+      label: `1.6c 特殊补员返场 · ${entry.name}`,
+      rule: '2.1',
+      candidates,
+      apply: (hex) => placeSpecialReplReturnNow(index, hex),
+    })
+    return true
+  }
+
+  function placeSpecialReplReturnNow(index: number, hex: HexRef): boolean {
+    const entry = specialReplPending.value[index]
+    if (entry === undefined) return false
+    const legal = handArrivalCandidates().some(
+      (item) => item.col === hex.col && item.row === hex.row,
+    )
+    if (!legal) {
+      pushLog('warning', `${hexLabel(hex)} 不能返场（2.1：HQ 或图边补给源格）`, '2.1')
+      return false
+    }
+    const ok = returnFromDeadPileNow({
+      instanceId: entry.instanceId,
+      hexText: hexLabel(hex),
+      ...(entry.steps === null ? {} : { steps: entry.steps }),
+    })
+    if (!ok) return false
+    specialReplPending.value = specialReplPending.value.filter((_, at) => at !== index)
+    specialReplPlacedThisSegment.value = [...specialReplPlacedThisSegment.value, entry]
+    return true
+  }
+
+  /** 1.6c：收回本段已返场的一枚（退回死亡堆与手牌） */
+  function withdrawSpecialReplReturnNow(instanceId: string): boolean {
+    if (segmentStep.value?.id !== 'reinforcement.replRoll') return false
+    const entry = specialReplPlacedThisSegment.value.find((item) => item.instanceId === instanceId)
+    if (entry === undefined) return false
+    const unit = units.value.find((item) => item.instanceId === instanceId)
+    if (unit === undefined) return false
+    units.value = units.value.filter((item) => item.instanceId !== instanceId)
+    unit.steps = entry.priorSteps
+    unit.hex = { col: 0, row: 0 }
+    unit.movementEnded = false
+    deadPile.value = [...deadPile.value, unit]
+    specialReplPlacedThisSegment.value = specialReplPlacedThisSegment.value.filter(
+      (item) => item.instanceId !== instanceId,
+    )
+    specialReplPending.value = [...specialReplPending.value, entry]
+    if (selectedId.value === instanceId) selectedId.value = null
+    pushLog('info', `收回 1.6c 返场：${entry.name} 退回死亡堆与手牌`, '1.6c')
+    return true
+  }
+
+  /** 2.3c：点地图给编制转化的新单位选落点（与补员同一条 2.1 判据） */
+  function beginFrontalUnitPlaceHexPickNow(): boolean {
+    if (!rollPlacementOpen.value) {
+      pushLog(
+        'warning',
+        `暂不能落位：${rollPlacementBlockedReason.value ?? '判定阶段未完成'}`,
+        '2.3c',
+      )
+      return false
+    }
+    const entry = frontalUnitPending.value
+    if (entry === null) return false
+    const candidates = handArrivalCandidates()
+    if (candidates.length === 0) {
+      pushLog('warning', '没有可落位的格（2.1：HQ 或图边补给源格）', '2.1')
+      return false
+    }
+    beginHexPick({
+      label: `2.3c 编制转化 · ${entry.name}`,
+      rule: '2.1',
+      candidates,
+      apply: (hex) => placeFrontalUnitNow(hex),
+    })
+    return true
+  }
+
+  function placeFrontalUnitNow(hex: HexRef): boolean {
+    const entry = frontalUnitPending.value
+    if (entry === null) return false
+    const legal = handArrivalCandidates().some(
+      (item) => item.col === hex.col && item.row === hex.row,
+    )
+    if (!legal) {
+      pushLog('warning', `${hexLabel(hex)} 不能放方面军预备队新单位（2.1）`, '2.1')
+      return false
+    }
+    const record = unitChoices('soviet').find((item) => item.id === entry.recordId)
+    if (record === undefined) {
+      pushLog('danger', `${entry.name} 在单位库里找不到，无法落位（2.3c）`, '2.3c')
+      return false
+    }
+    const created = toConsoleUnit({
+      record,
+      instanceId: createId('fr'),
+      hex: { ...hex },
+      side: 'soviet',
+    })
+    units.value = [...units.value, created]
+    frontalUnitPending.value = null
+    frontalUnitPlacedThisSegment.value = { instanceId: created.instanceId, entry }
+    pushLog('success', `${entry.name} 按落点 ${hexLabel(hex)} 到场（2.3c）`, '2.3c')
+    return true
+  }
+
+  /** 2.3c：收回本段已落位的新单位（退回手牌） */
+  function withdrawFrontalUnitNow(): boolean {
+    if (segmentStep.value?.id !== 'reinforcement.replRoll') return false
+    const placed = frontalUnitPlacedThisSegment.value
+    if (placed === null) return false
+    const before = units.value.length
+    units.value = units.value.filter((item) => item.instanceId !== placed.instanceId)
+    if (units.value.length === before) return false
+    if (selectedId.value === placed.instanceId) selectedId.value = null
+    frontalUnitPending.value = placed.entry
+    frontalUnitPlacedThisSegment.value = null
+    pushLog('info', `收回 2.3c 新单位：${placed.entry.name} 退回手牌`, '2.3c')
+    return true
+  }
+
+  /**
+   * 到货 SP 里**还没指定落点**的点数
+   *
+   * 指定了图边余额格 ⇒ 其余全部按 2.1 落到那一格，视为已指定；
+   * 否则＝到货数 − 已勾选的城市格（每格 1 SP）。
+   */
+  const supplyTableUnplaced = computed<number>(() => {
+    const sp = Math.max(0, Math.trunc(supplyArrivalSp.value))
+    if (sp === 0) return 0
+    if (freeRailEdgeHex.value !== null) return 0
+    return Math.max(0, sp - freeRailPicked.value.length)
+  })
+
+  /** 到货 SP：点地图落 1 SP（城市格每格 1 SP；图边源格＝余额全落那里） */
+  function beginSupplyArrivalSpHexPickNow(): boolean {
+    if (!rollPlacementOpen.value) {
+      pushLog(
+        'warning',
+        `暂不能落位：${rollPlacementBlockedReason.value ?? '判定阶段未完成'}`,
+        '专规 2.1 / 3.1',
+      )
+      return false
+    }
+    if (supplyTableUnplaced.value <= 0) return false
+    const picked = new Set(freeRailPicked.value.map((item) => hexLabel(item)))
+    const candidates: HexRef[] = [
+      ...freeRailCityCandidates.value
+        .filter((item) => !picked.has(hexLabel(item.hex)))
+        .map((item) => ({ ...item.hex })),
+      ...openSupplySourceHexes.value.map((item) => ({ ...item })),
+    ]
+    if (candidates.length === 0) {
+      pushLog('warning', '没有可落 SP 的格（13.3c 城市格与图边补给源格都不可用）', '专规 2.1')
+      return false
+    }
+    beginHexPick({
+      label: '到货 SP 落点（城市格 1 SP；图边源格＝其余全部）',
+      rule: '专规 2.1 / 3.1',
+      candidates,
+      apply: (hex) => placeSupplyArrivalSpOneNow(hex),
+    })
+    return true
+  }
+
+  function placeSupplyArrivalSpOneNow(hex: HexRef): boolean {
+    if (supplyTableUnplaced.value <= 0) return false
+    const city = freeRailCityCandidates.value.find(
+      (item) => item.hex.col === hex.col && item.hex.row === hex.row,
+    )
+    if (city !== undefined) {
+      const picked = freeRailPicked.value.some((item) => hexLabel(item) === hexLabel(hex))
+      if (picked) return false
+      toggleFreeRailPick(hex)
+      return true
+    }
+    if (openSupplySourceHexes.value.some((item) => item.col === hex.col && item.row === hex.row)) {
+      pickFreeRailEdgeHex(hex)
+      return true
+    }
+    pushLog('warning', `${hexLabel(hex)} 不能落到货 SP（2.1/3.1）`, '专规 2.1 / 3.1')
+    return false
+  }
+
+  /** 统一手牌的一条（判据与角标都由 store 给，面板只画） */
+  interface RollHandEntry {
+    id: string
+    /** 来源标签（合并的是**放置动作**，不是来源语义） */
+    label: string
+    rule: string
+    detail: string
+    /** 角标：待放的枚数 / SP */
+    count: number
+    blocked: string | null
+  }
+
+  /**
+   * 第二段放置阶段 = **同一张手牌**（全部来源汇到一处）
+   *
+   * 来源：1.6b 补员表（Pax / Eq）／1.6c 特殊补员返场／1.6b 补给表 SP（含 2.3c 并进来的 2 SP）／
+   * 3.6 补给列车 2 SP／2.3c 编制转化新单位。每条仍带来源标签，拒付判据各按原文。
+   */
+  const rollHandEntries = computed<RollHandEntry[]>(() => {
+    const entries: RollHandEntry[] = []
+    const arrivalBlocked = handArrivalCandidates().length === 0
+    for (const item of ['pax', 'eq'] as const) {
+      const count = replPending.value[item]
+      if (count <= 0) continue
+      entries.push({
+        id: `repl:${item}`,
+        label: `1.6b 补员表 · ${item === 'pax' ? 'Pax' : 'Eq'}`,
+        rule: '13.5 / 2.1',
+        detail: '点一下 → 地图只高亮合法格 → 点格落一枚',
+        count,
+        blocked: replPlacementBlockedReasonFor(item),
+      })
+    }
+    specialReplPending.value.forEach((entry, index) => {
+      entries.push({
+        id: `unit:special:${String(index)}`,
+        label: `1.6c 特殊补员 · ${entry.name}`,
+        rule: '1.6c / 2.1',
+        detail: '死亡堆返场：点一下 → 点高亮格（HQ 或图边补给源格）',
+        count: 1,
+        blocked: arrivalBlocked ? '没有可返场的格（2.1：HQ 或图边补给源格）' : null,
+      })
+    })
+    if (frontalUnitPending.value !== null) {
+      entries.push({
+        id: 'unit:frontal',
+        label: `2.3c 编制转化 · ${frontalUnitPending.value.name}`,
+        rule: '2.3c / 2.1',
+        detail: '新单位随其它到达的 SP 与补员一起摆放',
+        count: 1,
+        blocked: arrivalBlocked ? '没有可落位的格（2.1：HQ 或图边补给源格）' : null,
+      })
+    }
+    if (supplyTableUnplaced.value > 0) {
+      const cityCount = freeRailCityCandidates.value.length
+      entries.push({
+        id: 'sp:arrival',
+        label:
+          frontalReservesSpPending.value > 0
+            ? '到货 SP（1.6b 补给表 + 2.3c 方面军 2 SP）'
+            : '到货 SP（1.6b 补给表）',
+        rule: '专规 2.1 / 3.1',
+        detail: '点一下 → 城市格每格 1 SP；点图边补给源格＝其余全部落那里',
+        count: supplyTableUnplaced.value,
+        blocked:
+          cityCount === 0 && openSupplySourceHexes.value.length === 0
+            ? '没有可落 SP 的格（13.3c 城市格与图边补给源格都不可用）'
+            : null,
+      })
+    }
+    if (supplyTrainPending.value) {
+      entries.push({
+        id: 'sp:train',
+        label: '3.6 补给列车',
+        rule: '专规 3.6',
+        detail: '点一下 → 点任一可卸货铁路格，落 2 SP（不用 Rail Cap）',
+        count: supplyTrainSp.value,
+        blocked:
+          panzerGroupRulesOn.value && supplyTrainGroup.value === null
+            ? '3.4b：德军补给列车 SP 须先选归属（Guderian / Hoth）'
+            : null,
+      })
+    }
+    return entries
+  })
+
+  /** 手牌点击分派（面板只调这一处，不各自判断来源） */
+  function beginRollHandEntryNow(id: string): boolean {
+    if (!rollPlacementOpen.value) {
+      pushLog(
+        'warning',
+        `暂不能落位：${rollPlacementBlockedReason.value ?? '判定阶段未完成'}`,
+        '1.6b',
+      )
+      return false
+    }
+    if (id === 'repl:pax') return beginReplPlaceHexPickNow('pax')
+    if (id === 'repl:eq') return beginReplPlaceHexPickNow('eq')
+    if (id === 'sp:arrival') return beginSupplyArrivalSpHexPickNow()
+    if (id === 'sp:train') {
+      beginSupplyTrainHexPickNow()
+      return true
+    }
+    if (id === 'unit:frontal') return beginFrontalUnitPlaceHexPickNow()
+    if (id.startsWith('unit:special:')) {
+      return beginSpecialReplPlaceHexPickNow(Number(id.slice('unit:special:'.length)))
+    }
+    return false
+  }
+
   /**
    * 第二段（掷骰与统一放置）的**待放手牌**
    *
    * v7.1 §3.3：所有骰子判完才出手牌，产出汇进同一张手牌再统一落位。
-   * 手牌＝未落位的补员算子（Pax / Eq，每点一枚）＋到货 SP（补给表 / 方面军预备队）
-   * ＋未落位的补给列车 2 SP。Ftr/Tac 不在手牌（13.5 不可保存，段末清零）。
+   * 手牌＝未落位的补员算子（Pax / Eq，每点一枚）＋1.6c 返场登记＋2.3c 新单位
+   * ＋到货 SP（补给表 / 方面军预备队）＋未落位的补给列车 2 SP。
+   * Ftr/Tac 不在手牌（13.5 不可保存，段末清零）。
    */
-  const rollHandPending = computed<boolean>(
-    () =>
-      replPending.value.pax + replPending.value.eq > 0 ||
-      supplyArrivalSp.value > 0 ||
-      supplyTrainPending.value,
-  )
+  const rollHandPending = computed<boolean>(() => rollHandEntries.value.length > 0)
 
   /** 第二段手牌还剩多少"点"（角标总数；面板与测试共用一处口径） */
-  const rollHandPoints = computed<number>(
-    () =>
-      replPending.value.pax +
-      replPending.value.eq +
-      supplyArrivalSp.value +
-      (supplyTrainPending.value ? supplyTrainSp.value : 0),
+  const rollHandPoints = computed<number>(() =>
+    rollHandEntries.value.reduce((sum, entry) => sum + entry.count, 0),
   )
 
   /**
@@ -18845,17 +19231,40 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       reinforcementError.value = { rule: '1.6b', reason: 'rollHandNotEmpty' }
       return false
     }
+    /*
+     * 放置阶段的收尾：手牌空了 ⇒ 把（1.6b 补给表 + 2.3c 方面军）的到货 SP 一次性落账。
+     * 3.4b 的归属/均分仍由 `applySupplyArrivalsNow` 校验，拒绝原因原样回给界面。
+     */
+    if (!abandonHand && supplyArrivalSp.value > 0) {
+      if (!applySupplyArrivalsNow()) {
+        reinforcementError.value = {
+          rule: freeRailError.value?.rule ?? '专规 2.1 / 3.1',
+          reason: freeRailError.value?.reason ?? 'supplyArrivalRejected',
+        }
+        return false
+      }
+      frontalReservesSpPending.value = 0
+    }
     if (abandonHand) {
       const lostRepl = replPending.value.pax + replPending.value.eq
       const lostSp = supplyArrivalSp.value
       const lostTrain = supplyTrainPending.value ? supplyTrainSp.value : 0
+      const lostSpecial = specialReplPending.value.length
+      const lostFrontal = frontalUnitPending.value === null ? 0 : 1
       replPending.value = { pax: 0, eq: 0 }
       supplyArrivalSp.value = 0
+      frontalReservesSpPending.value = 0
+      freeRailPicked.value = []
+      freeRailEdgeHex.value = null
+      clearArrivalSpGroups()
+      specialReplPending.value = []
+      frontalUnitPending.value = null
       if (supplyTrainPending.value) supplyTrainPlacedKey.value = supplyTrainTurnKey()
-      if (lostRepl + lostSp + lostTrain > 0) {
+      if (lostRepl + lostSp + lostTrain + lostSpecial + lostFrontal > 0) {
         pushLog(
           'warning',
-          `放弃上场：${lostRepl} 点补员 / ${lostSp} SP / 补给列车 ${lostTrain} SP 作废（未落位，不结转）`,
+          `放弃上场：${lostRepl} 点补员 / ${lostSp} SP / 补给列车 ${lostTrain} SP / ` +
+            `1.6c 返场 ${lostSpecial} 枚 / 2.3c 新单位 ${lostFrontal} 枚作废（未落位，不结转）`,
           '13.5',
         )
       }
@@ -19589,6 +19998,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 一族摆完不会把另一族一起落盘。
    */
   function beginReplPlaceHexPickNow(kind: SavableReplKind): boolean {
+    if (!rollPlacementOpen.value) {
+      pushLog(
+        'warning',
+        `暂不能落位：${rollPlacementBlockedReason.value ?? '判定阶段未完成'}`,
+        '13.5',
+      )
+      return false
+    }
     if (replPending.value[kind] === 0) {
       pushLog('warning', `没有待放置的 ${kind === 'pax' ? 'Pax' : 'Eq'} 补员（13.5）`, '13.5')
       return false
@@ -19785,6 +20202,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (session.session !== null && automaticPhaseKeys.value.includes(key)) return true
     // 3.6：重掷后重新给一次落点机会（上一掷若已落过，仍按新结果重置）
     resetSupplyTrainPlacement()
+    // 放置阶段的暂存（勾选 / 余额格 / 3.4b 归属）逐轮重置，避免把上一轮的落点带进这一轮
+    freeRailPicked.value = []
+    freeRailEdgeHex.value = null
+    clearArrivalSpGroups()
+    frontalReservesSpPending.value = 0
     const inputs = variableReplInputs.value
     // ⑭ 接线：下面两个闭包只回报数字（不改它们）⇒ 先记下掷骰前的骰源，末尾按实际掷骰顺序复算骰面
     const rngBefore = rng.value
@@ -19896,6 +20318,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         detail: data.detail,
       },
     })
+    // 1.6b 已掷：判定阶段以此为"补员/补给两表已过"的凭据（手牌闸门认这一条）
+    const rolledKey = `${String(turn.value)}|${activeSide.value}|reinforcement`
+    if (!automaticPhaseKeys.value.includes(rolledKey)) {
+      automaticPhaseKeys.value = [...automaticPhaseKeys.value, rolledKey]
+    }
     return true
   }
 
@@ -21680,9 +22107,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 2.3c：已领取的批次（键＝批次的**卡面日期**；「必须当即领取、不能保存」⇒ 每批一次） */
   const frontalReservesClaimed = ref<string[]>([])
 
-  /** 2.3c：2 SP 与批次新单位的落点（2.1/3.1：随当日其它到达一起入场） */
-  const frontalReservesInputs = ref<{ hexText: string }>({ hexText: '' })
-
   /** 2.3c 的错误（统一形状） */
   const frontalReservesError = ref<{ rule: string; reason: string } | null>(null)
 
@@ -21754,18 +22178,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `${batch.date} 这一批方面军预备队**已经领过**（不能重复，2.3c）`, '2.3c')
       return false
     }
-    const hex = parseHexPath(frontalReservesInputs.value.hexText)[0]
-    if (hex === undefined) {
-      frontalReservesError.value = { rule: '2.3c', reason: 'frontalReservesPlacementRequired' }
-      pushLog(
-        'warning',
-        `2 SP 与该批次的新单位需要落点 ⇒ 请填落点格号（列.行），收到「${frontalReservesInputs.value.hexText}」`,
-        '2.3c',
-      )
-      return false
-    }
-    // ① 2 SP（12.1a：1 SP = 4 T；落到该格该方的补给账本上）
-    grantSpDumpT(hex, 'soviet', batch.sp * SP_TO_T)
+    /*
+     * 判定阶段**不落子**（用户 2026-11-11 口径：第二段是"先把判定走完，再统一手牌放置"）：
+     * 本批次只登记两样产出——2 SP 并入「到货 SP」池、编制转化的新单位进手牌，
+     * 落点统一在放置阶段按 2.1 选（「new units are placed with other arriving SP and repls」）。
+     */
+    supplyArrivalSp.value += batch.sp
+    frontalReservesSpPending.value += batch.sp
 
     // ② 编制转化：旧单位＝1.6a Removal（**移出游戏**，不进死亡堆）；新单位随到达摆放
     const applied: string[] = []
@@ -21809,16 +22228,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         `${batch.convertTo} 须随到达摆放（产物单位库没有这个算子 ⇒ 请按卡面印值手工摆放）`,
       )
     } else {
-      units.value = [
-        ...units.value,
-        toConsoleUnit({
-          record: newRecord,
-          instanceId: createId('fr'),
-          hex,
-          side: 'soviet',
-        }),
-      ]
-      applied.push(`${recordNameOf(newRecord)} 按落点 ${hexLabel(hex)} 到场`)
+      frontalUnitPending.value = { recordId: newRecord.id, name: recordNameOf(newRecord) }
+      applied.push(`${recordNameOf(newRecord)} 已进手牌（放置阶段按 2.1 落位）`)
     }
 
     // ③ 两次免费重建：候选只列死亡堆里的，选择权留给玩家
@@ -21836,8 +22247,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       obligations,
       freeRebuildCandidates,
       detail:
-        `方面军预备队 ${batch.date} 已领：+${batch.sp} SP 落 ${hexLabel(hex)}；` +
-        `编制转化 ${batch.convertFrom} → ${batch.convertTo}（${applied.length} 步已落盘）` +
+        `方面军预备队 ${batch.date} 已领：+${batch.sp} SP 并入到货 SP 手牌；` +
+        `编制转化 ${batch.convertFrom} → ${batch.convertTo}（新单位进手牌，放置阶段按 2.1 落位）` +
         (obligations.length === 0 ? '' : `；待手工处理 ${obligations.length} 项`),
     }
     pushLog('success', lastFrontalReserves.value.detail, '2.3c')
@@ -21847,7 +22258,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       data: {
         batchDate: batch.date,
         sp: batch.sp,
-        hex: { ...hex },
         convertFrom: batch.convertFrom,
         convertTo: batch.convertTo,
         applied: [...applied],
@@ -24580,7 +24990,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     beginSupplySourceHexPickNow,
     beginRailMoveHexPickNow,
     beginSupplyCacheHexPickNow,
-    beginFrontalReservesHexPickNow,
     beginAirPlacementHexPickNow,
     beginAirTransferHexPickNow,
     beginAirTargetHexPickNow,
@@ -25009,6 +25418,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     endRollSegmentNow,
     rollHandPending,
     rollHandPoints,
+    // v7.1 第二段：判定阶段闸门 + 统一手牌（用户 2026-11-11 口径）
+    rollPlacementOpen,
+    rollPlacementBlockedReason,
+    rollHandEntries,
+    beginRollHandEntryNow,
+    registerSpecialReplReturns,
+    specialReplPending,
+    specialReplPlacedThisSegment,
+    beginSpecialReplPlaceHexPickNow,
+    withdrawSpecialReplReturnNow,
+    frontalUnitPending,
+    frontalUnitPlacedThisSegment,
+    beginFrontalUnitPlaceHexPickNow,
+    withdrawFrontalUnitNow,
+    frontalReservesSpPending,
+    supplyTableUnplaced,
+    beginSupplyArrivalSpHexPickNow,
     reinforcementSegment,
     arrivalAbandoned,
     arrivalSegmentClosed,
@@ -25129,7 +25555,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 专规 2.3c：方面军预备队（＋1.6c 特殊补员的可用期提示）
     frontalReservesToday,
     frontalReservesClaimed,
-    frontalReservesInputs,
     frontalReservesError,
     lastFrontalReserves,
     claimFrontalReservesNow,

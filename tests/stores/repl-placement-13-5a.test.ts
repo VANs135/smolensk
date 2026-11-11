@@ -66,6 +66,14 @@ function rollRepls(store: ReturnType<typeof newStore>): void {
   store.variableReplInputs.replDice = 10
   store.variableReplInputs.specialDie = 2
   expect(store.rollVariableReplNow()).toBe(true)
+  /*
+   * v7.1 第二段（用户 2026-11-11 口径）：判定阶段全部走完才进放置阶段。
+   * 1.6c 是每回合必掷的表 ⇒ 这里补记一次已掷，模拟"8 件判定都过完"。
+   */
+  store.markSpecialReplDraw(store.activeSide, store.turn)
+  // 放置入口认"当前环节＝第二段"，把环节拨到 replRoll
+  const at = store.playerSegmentSteps.findIndex((step) => step.id === 'reinforcement.replRoll')
+  if (at >= 0) store.setSegmentStepIndex(at)
 }
 
 beforeEach(() => {
@@ -182,9 +190,9 @@ describe('增援窗精简（源码守卫）', () => {
     expect(source).not.toContain('骰面自动（补给表')
     expect(source).not.toContain('盘面：Pax')
     expect(source).not.toContain('13.5 可保存的补员')
-    // 放置入口按族分开（Pax / Eq 各一条，地图点选，不再是手打格号）
-    expect(source).toContain('beginReplPlaceHexPickNow(item.key)')
-    expect(source).toContain('savableReplKinds')
+    // 放置入口收敛到**统一手牌**（每条带来源标签；地图点选，不再是手打格号）
+    expect(source).toContain('workbench.beginRollHandEntryNow(entry.id)')
+    expect(source).toContain('workbench.rollHandEntries')
     expect(source).not.toContain('replPlaceHexText')
   })
 })

@@ -66,7 +66,6 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'beginDeadPileReturnHexPickNow',
       'beginDrawShiftHexPickNow',
       'beginFormationMarkerHexPickNow',
-      'beginFrontalReservesHexPickNow',
       'beginHedgehogHexPickNow',
       'beginHexPick',
       'beginEdgeBoxExitHexPickNow',
@@ -457,6 +456,15 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   withdrawReplPlacementNow: {
     kind: 'playerStep',
     why: '第二段的撤回（v7.1 §1.1）：只允许收回**本段**刚落的补员并把点数退回手牌；函数内以宿主环为准，离开本段即失效',
+  },
+  // v7.1 第二段统一手牌：1.6c 返场 / 2.3c 新单位的"落一枚 / 收一枚"同属本段放置阶段的撤回
+  withdrawSpecialReplReturnNow: {
+    kind: 'playerStep',
+    why: '统一手牌里 1.6c 返场枚的收回：只允许收回**本段**刚返场的那一枚（退回死亡堆与手牌）；函数内以宿主环为准',
+  },
+  withdrawFrontalUnitNow: {
+    kind: 'playerStep',
+    why: '统一手牌里 2.3c 新单位的收回：只允许收回**本段**刚落的编制转化单位（退回手牌）；函数内以宿主环为准',
   },
   endRollSegmentNow: {
     kind: 'playerStep',

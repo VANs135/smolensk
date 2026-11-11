@@ -3,7 +3,6 @@ import { computed, ref, watch, watchEffect } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/base'
 import { SessionStep } from '@/components/session'
-import UiField from '@/components/UiField.vue'
 import { type CounterPickerItem } from '@/components/game'
 import { auxCardImageUrl } from '@/components/game/aux-card-image'
 import { arrivalCopiesOf } from '@/engine/rules'
@@ -152,19 +151,11 @@ watchEffect(() => {
 const breakdownParentId = ref('')
 
 /**
- * 批 F 切片 3：**到货 SP 落位**（专规 2.1 / 3.1 免费铁运 + 3.6 补给列车）的界面态
+ * 批 F 切片 3：**到货 SP 落位**（专规 2.1 / 3.1 免费铁运 + 3.6 补给列车）
  *
- * 判据全在引擎与 store：这里只把"哪些格能勾、勾了哪些、余额放哪"画出来并把选择写回。
- * 本组件的输入是**格号文本**（`<select>` 的 value 即 `列.行`），写回时解析成 `HexRef`。
+ * 判据全在引擎与 store；本组件只把"哪些格能点、点了哪些、余额放哪"画出来并把选择写回。
+ * v7.1 第二段起，落点统一在「待放上手牌」里点格给出（不再有块内表单）。
  */
-const freeRailPickedKeys = computed(
-  () => new Set(workbench.freeRailPicked.map((item) => hexLabel(item))),
-)
-/** 余额落点（未显式指定时＝store 的缺省：本剧本本方第一处图边源） */
-const freeRailEdgeValue = computed(() => {
-  const chosen = workbench.freeRailEdgeHex ?? workbench.scenarioSupplySourceHexes[0] ?? null
-  return chosen === null ? '' : hexLabel(chosen)
-})
 
 /** 3.4b：到货 SP 的逐格归属（空值 ⇒ 未选） */
 function onArrivalSpGroupChange(text: string, value: string): void {
@@ -420,12 +411,6 @@ watch(
 )
 /** §5-D：待放置的补员点数（掷出后还没放到地图上） */
 const replPendingTotal = computed(() => workbench.replPending.pax + workbench.replPending.eq)
-
-/** 13.5：Pax / Eq 分开放置——候选与落点按族各走一条（一族摆完不影响另一族） */
-const savableReplKinds = [
-  { key: 'pax', label: 'Pax' },
-  { key: 'eq', label: 'Eq' },
-] as const
 
 /**
  * 可变增援的**结果**（只写"拿到什么"）
@@ -846,6 +831,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <template v-else>
         <p class="num">
           <BaseTag kind="info">补给列车 {{ workbench.supplyTrainSp }} SP</BaseTag>
+          <span class="muted">判定阶段不落子：2 SP 已进「待放上手牌」，到放置阶段点格落位</span>
         </p>
         <div v-if="workbench.panzerGroupRulesOn && workbench.activeSide === 'axis'" class="row">
           <span class="muted">3.4b 归属（未选不落）</span>
@@ -862,11 +848,6 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
             @click="workbench.setSupplyTrainGroup('hoth')"
           >
             Hoth
-          </BaseButton>
-        </div>
-        <div class="row">
-          <BaseButton variant="primary" size="sm" @click="workbench.beginSupplyTrainHexPickNow()">
-            点地图高亮铁路格放置 2 SP
           </BaseButton>
         </div>
       </template>
@@ -890,58 +871,70 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           的运量只在移动阶段用）； 其余 SP 放本方的**图边补给源格**。3.6 的补给列车已有独立窗口。
         </p>
       </RuleNote>
-      <div v-if="showsActions" class="row">
-        <label class="field">
-          到货 SP（掷补给表后自动填，可手改）
-          <UiField v-model="workbench.supplyArrivalSp" type="number" min="0" step="1" />
-        </label>
+      <p class="num">
+        <BaseTag kind="info">补给表到货 {{ workbench.supplyArrivalSp }} SP</BaseTag>
         <BaseTag kind="neutral">铁路运量消耗 0（免费）</BaseTag>
-      </div>
+        <span class="muted">判定阶段不落子：落点统一在「待放上手牌」里点格给出</span>
+      </p>
       <p class="muted num">
         可卸载城市格（静态）{{ workbench.freeRailCityHexes.length }} 处｜此刻候选（13.3c
         运行期：受控 + 铁路路径通回补给源）{{ workbench.freeRailCityCandidates.length }} 处
       </p>
-      <div v-if="workbench.freeRailCityCandidates.length > 0" class="row">
-        <BaseButton
-          v-for="item in workbench.freeRailCityCandidates"
-          :key="`${item.hex.col}.${item.hex.row}`"
-          :variant="freeRailPickedKeys.has(hexLabel(item.hex)) ? 'primary' : 'secondary'"
-          size="sm"
-          @click="workbench.toggleFreeRailPick(item.hex)"
-        >
-          {{ hexLabel(item.hex) }} {{ item.name }}
-        </BaseButton>
-      </div>
-      <p v-else class="muted">
-        此刻没有候选（城里要受本方控制、且铁路路径通回补给源）—— 按原文，SP 就全部落图边补给源格。
+      <p v-if="workbench.freeRailCityCandidates.length === 0" class="muted">
+        此刻没有城市候选（城里要受本方控制、且铁路路径通回补给源）—— 按原文，SP 全部落图边补给源格。
       </p>
-      <div v-if="showsActions" class="row">
-        <span class="field">
-          其余 SP 的落点：{{ freeRailEdgeValue }}（图边补给源格）
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            @click="workbench.beginFreeRailEdgeHexPickNow()"
-          >
-            点地图选格
-          </BaseButton>
-        </span>
-        <BaseButton
-          v-if="workbench.supplyArrivalSp > 0"
-          variant="primary"
-          size="sm"
-          @click="workbench.applySupplyArrivalsNow()"
-        >
-          落账（专规 2.1）
-        </BaseButton>
-      </div>
       <p v-if="workbench.freeRailPlan !== null" class="num">
         <BaseTag kind="info">{{ workbench.freeRailPlan.rule }}</BaseTag>
         {{ workbench.freeRailPlan.detail }}
       </p>
+      <p v-if="workbench.freeRailError !== null" class="warn">
+        落点被拒：{{ workbench.freeRailError.reason }}（{{ workbench.freeRailError.rule }}）
+      </p>
+      <p v-if="workbench.lastFreeRailPlan !== null" class="ok">
+        <BaseTag kind="success">已落账</BaseTag> {{ workbench.lastFreeRailPlan.detail }}
+      </p>
+    </SessionStep>
+
+    <!--
+      v7.1 第二段：**统一手牌**（用户 2026-11-11 口径：判定全部走完才进放置阶段）
+
+      合并的是**放置动作**，不是来源语义：
+        · 全部来源（1.6b 补员表 / 1.6c 特殊补员 / 1.6b 补给表 SP / 3.6 补给列车 / 2.3c 新单位）
+          汇成同一张手牌，每条仍带来源标签；
+        · 角标＝该条待放的枚数 / SP；点一条 → 引擎只高亮该来源的合法格 → 点格落一枚；
+        · 再点已落位的枚 ⇒ 收回；撤回只在本段内有效。
+    -->
+    <SessionStep v-if="showsActions" item="reinforce:hand" data-testid="roll-hand">
+      <p v-if="!workbench.rollPlacementOpen" class="warn" data-testid="roll-hand-gate">
+        判定阶段还没走完：{{ workbench.rollPlacementBlockedReason }}
+      </p>
+      <p class="muted">
+        放置阶段：本轮全部产出都在这一张手牌里。点一条 → 地图只高亮该条的合法格 → 点格落一枚。
+      </p>
+      <div class="row">
+        <BaseButton
+          v-for="entry in workbench.rollHandEntries"
+          :key="entry.id"
+          variant="primary"
+          size="sm"
+          :disabled="!workbench.rollPlacementOpen || entry.blocked !== null"
+          :title="entry.blocked ?? entry.detail"
+          data-testid="roll-hand-card"
+          @click="workbench.beginRollHandEntryNow(entry.id)"
+        >
+          {{ entry.label }}<span class="num" data-testid="roll-hand-badge">{{ entry.count }}</span>
+        </BaseButton>
+      </div>
+      <p
+        v-for="entry in workbench.rollHandEntries.filter((item) => item.blocked !== null)"
+        :key="`hand-blocked:${entry.id}`"
+        class="warn num"
+      >
+        {{ entry.label }}：{{ entry.blocked }}
+      </p>
+      <!-- 3.4b：德军到货 SP 的逐格归属（未选不落账；归属在选择落点后给出） -->
       <div
         v-if="
-          showsActions &&
           workbench.panzerGroupRulesOn &&
           workbench.activeSide === 'axis' &&
           workbench.arrivalSpGroupTargets.length > 0
@@ -976,64 +969,15 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           </BaseButton>
         </label>
       </div>
-      <p v-if="workbench.freeRailError !== null" class="warn">
-        落点被拒：{{ workbench.freeRailError.reason }}（{{ workbench.freeRailError.rule }}）
-      </p>
-      <p v-if="workbench.lastFreeRailPlan !== null" class="ok">
-        <BaseTag kind="success">已落账</BaseTag> {{ workbench.lastFreeRailPlan.detail }}
-      </p>
-    </SessionStep>
-
-    <!--
-      v7.1 第二段：**批量手牌**（用户 Q2 / §1.1–1.2）
-
-      骰子全部判完后统一在这里落位：
-        · 角标数字＝该条待放的算子枚数（Pax / Eq / SP），只在本段出现；
-        · 点一条 → 引擎只高亮合法格（不是全图）→ 点格即生效，不弹二次确认；
-        · 再点已落位的枚 ⇒ 收回、点数退回手牌；撤回只在本段内有效。
-    -->
-    <SessionStep v-if="showsActions" item="reinforce:hand">
-      <div class="row" data-testid="roll-hand">
-        <BaseButton
-          v-for="item in savableReplKinds"
-          :key="`hand:${item.key}`"
-          :variant="workbench.replPending[item.key] > 0 ? 'primary' : 'secondary'"
-          size="sm"
-          :disabled="
-            workbench.replPending[item.key] === 0 ||
-            workbench.replPlacementBlockedReasonFor(item.key) !== null
-          "
-          :title="
-            workbench.replPlacementBlockedReasonFor(item.key) ??
-            `${item.label}：点一下 → 地图只高亮合法格 → 点格落一枚`
-          "
-          data-testid="roll-hand-card"
-          @click="workbench.beginReplPlaceHexPickNow(item.key)"
-        >
-          {{ item.label
-          }}<span class="num" data-testid="roll-hand-badge">{{
-            workbench.replPending[item.key]
-          }}</span>
-        </BaseButton>
-        <span v-if="workbench.supplyArrivalSp > 0" class="num" data-testid="roll-hand-sp">
-          <BaseTag kind="warning">SP {{ workbench.supplyArrivalSp }}</BaseTag>
-          <span class="muted">（在「补给到达」块里落账）</span>
-        </span>
-        <span v-if="workbench.supplyTrainPending" class="num" data-testid="roll-hand-train">
-          <BaseTag kind="warning">补给列车 {{ workbench.supplyTrainSp }} SP</BaseTag>
-          <span class="muted">（在「补给列车落点」块里放置）</span>
-        </span>
-      </div>
-      <p
-        v-for="item in savableReplKinds"
-        v-show="workbench.replPlacementBlockedReasonFor(item.key) !== null"
-        :key="`hand-blocked:${item.key}`"
-        class="muted num"
+      <!-- 已落位的枚/格：点一下收回（只在本段有效） -->
+      <div
+        v-if="
+          workbench.replPlacedThisSegment.length > 0 ||
+          workbench.specialReplPlacedThisSegment.length > 0 ||
+          workbench.frontalUnitPlacedThisSegment !== null
+        "
+        class="row"
       >
-        {{ workbench.replPlacementBlockedReasonFor(item.key) }}
-      </p>
-      <!-- 已落位的枚：点一下收回（点数退回手牌；只在本段有效） -->
-      <div v-if="workbench.replPlacedThisSegment.length > 0" class="row">
         <span class="muted num">本段已落位（点一下收回）</span>
         <BaseButton
           v-for="placed in workbench.replPlacedThisSegment"
@@ -1044,6 +988,49 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           @click="workbench.withdrawReplPlacementNow(placed.instanceId)"
         >
           {{ placed.kind === 'pax' ? 'Pax' : 'Eq' }} ↺
+        </BaseButton>
+        <BaseButton
+          v-for="placed in workbench.specialReplPlacedThisSegment"
+          :key="`special-placed:${placed.instanceId}`"
+          variant="ghost"
+          size="sm"
+          data-testid="roll-hand-special-placed"
+          @click="workbench.withdrawSpecialReplReturnNow(placed.instanceId)"
+        >
+          1.6c {{ placed.name }} ↺
+        </BaseButton>
+        <BaseButton
+          v-if="workbench.frontalUnitPlacedThisSegment !== null"
+          variant="ghost"
+          size="sm"
+          data-testid="roll-hand-frontal-placed"
+          @click="workbench.withdrawFrontalUnitNow()"
+        >
+          2.3c {{ workbench.frontalUnitPlacedThisSegment.entry.name }} ↺
+        </BaseButton>
+      </div>
+      <div
+        v-if="workbench.freeRailPicked.length > 0 || workbench.freeRailEdgeHex !== null"
+        class="row"
+        data-testid="roll-hand-sp-placed"
+      >
+        <span class="muted num">本段已指定的 SP 落点（点一下收回）</span>
+        <BaseButton
+          v-for="hex in workbench.freeRailPicked"
+          :key="`sp-picked:${hexLabel(hex)}`"
+          variant="ghost"
+          size="sm"
+          @click="workbench.toggleFreeRailPick(hex)"
+        >
+          城市 {{ hexLabel(hex) }} 1 SP ↺
+        </BaseButton>
+        <BaseButton
+          v-if="workbench.freeRailEdgeHex !== null"
+          variant="ghost"
+          size="sm"
+          @click="workbench.pickFreeRailEdgeHex(null)"
+        >
+          图边 {{ hexLabel(workbench.freeRailEdgeHex) }}（余额）↺
         </BaseButton>
       </div>
     </SessionStep>
@@ -1248,21 +1235,6 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           </template>
         </p>
         <div v-if="showsActions" class="row">
-          <label class="field">
-            落点格（列.行；2 SP 与新单位都落这里）
-            <UiField
-              v-model="workbench.frontalReservesInputs.hexText"
-              class="input"
-              placeholder="60.34"
-            />
-            <BaseButton
-              variant="secondary"
-              size="sm"
-              @click="workbench.beginFrontalReservesHexPickNow()"
-            >
-              点地图选落点
-            </BaseButton>
-          </label>
           <BaseButton
             variant="primary"
             size="sm"
@@ -1273,6 +1245,9 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           >
             领取方面军预备队（2.3c）
           </BaseButton>
+          <span class="muted">
+            领取只登记：2 SP 并入到货 SP、新单位进「待放上手牌」；落点在放置阶段按 2.1 点格给出
+          </span>
         </div>
         <p v-if="workbench.lastFrontalReserves !== null" class="ok">
           <BaseTag kind="success">2.3c</BaseTag>

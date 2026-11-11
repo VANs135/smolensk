@@ -3344,27 +3344,10 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
   }
 
-  /**
-   * 3.6：补给列车窗口一出来就把全部可卸货铁路格铺成高亮（用户口径：增援 SP 发放时高亮，
-   * 点其中一格即落 2 SP；不做列车算子、不手打格号）。离开该窗时收掉这层选格态。
-   *
-   * ★ 必须放在 setup 末尾：`sessionStep` 会牵动 `sessionFacts`（引用 `exclusiveOpen` 等
-   *   后声明的 const），`immediate: true` 在声明前求值会踩 TDZ。
+  /*
+   * 3.6：补给列车的落点**不再**随窗口自动铺高亮（v7.1 第二段用户口径：判定阶段只出判定与回执，
+   * 落点在放置阶段由统一手牌点一条 → 点格落地）。留此注释防止"自动开选格态"被加回来。
    */
-  const SUPPLY_TRAIN_PICK_LABEL = '补给列车落点（3.6 可卸货铁路格）'
-  watch(
-    () => sessionStep.value?.id ?? null,
-    (item) => {
-      if (item === 'reinforce:supplyTrain') {
-        if (workbench.supplyTrainPending && workbench.hexPickView === null) {
-          workbench.beginSupplyTrainHexPickNow()
-        }
-        return
-      }
-      if (workbench.hexPickView?.label === SUPPLY_TRAIN_PICK_LABEL) workbench.cancelHexPick()
-    },
-    { immediate: true },
-  )
   return {
     // 画什么
     overlay,

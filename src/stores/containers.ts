@@ -934,27 +934,26 @@ export const useContainersStore = defineStore('containers', () => {
       return false
     }
     /*
-     * 落点：2.1 注「Pax, Eq, **special repls**, and breakout returns arrive at **any HQs able to get
-     * trace supply (12.6a) by direct draw**, or else in **any map-edge supply source hexes**」
-     * ⇒ 不能拿"当前选中的那一格"凑数（修前就是这么干的）。两者都没有 ⇒ **整笔拒绝**
-     *   （规则没给这种落点，不许自行挑一格）。
+     * v7.1 第二段（用户 2026-11-11 口径）：判定阶段**不落子、不出地图落点**。
+     *
+     * 返场单位只登记进"统一手牌"；落点（2.1 注：能直接拖取追溯补给的 HQ，否则图边补给源格）
+     * 由放置阶段点格给出。修前这里是掷完就 `returnFromDeadPileNow` 直接返场、无合法格则整笔拒绝
+     * ——那就是"判完一项就能立刻放置"。
      */
-    const placement = workbench.replArrivalPlacement()
-    const needsHex = planned.data.patches.some((patch) => patch.to === null)
-    if (needsHex && placement.hex === null) {
+    const returns = planned.data.patches
+      .filter((patch) => patch.to === null)
+      .map((patch) => ({
+        instanceId: patch.unitId,
+        ...(patch.steps === undefined ? {} : { steps: patch.steps }),
+      }))
+    if (returns.length > 0 && !workbench.registerSpecialReplReturns(returns)) {
       lastAction.value = {
         ok: false,
-        rule: '2.1',
-        detail: `特殊补员无处返场：${placement.detail}`,
+        rule: '1.6c',
+        detail: '返场单位登记失败（死亡堆里已找不到）',
         scope: '1.6c 特殊补员',
       }
-      workbench.pushLog('danger', `特殊补员无处返场：${placement.detail}（2.1）`, '2.1')
-      specialReplLast.value = {
-        side,
-        die,
-        ok: false,
-        detail: `骰面 ${die} → ${planned.data.detail}；无处返场：${placement.detail}`,
-      }
+      specialReplLast.value = { side, die, ok: false, detail: '返场单位登记失败' }
       return false
     }
     workbench.rng = roll.rng
@@ -963,28 +962,23 @@ export const useContainersStore = defineStore('containers', () => {
       workbench.rng = picked.rng
       workbench.drawCount += 1
     }
-    const placementHex = placement.hex === null ? null : `${placement.hex.col}.${placement.hex.row}`
-    for (const patch of planned.data.patches) {
-      if (patch.to === null && placementHex !== null) {
-        workbench.returnFromDeadPileNow({
-          instanceId: patch.unitId,
-          hexText: placementHex,
-          ...(patch.steps === undefined ? {} : { steps: patch.steps }),
-        })
-      }
-    }
     if (planned.data.second.kind === 'supplyCache') {
       workbench.addSupplyCacheNow(side)
     }
     workbench.markSpecialReplDraw(side, turn.value)
+    // 判定阶段只出回执：返场单位已进"统一手牌"，落点在放置阶段点格给出
+    const detail =
+      returns.length === 0
+        ? planned.data.detail
+        : `${planned.data.detail}；${String(returns.length)} 枚返场单位已进手牌（放置阶段点格落位）`
     lastAction.value = {
       ok: true,
       rule: planned.rule,
-      detail: planned.data.detail,
+      detail,
       scope: '1.6c 特殊补员',
     }
-    specialReplLast.value = { side, die, ok: true, detail: planned.data.detail }
-    workbench.pushLog('success', planned.data.detail, planned.rule)
+    specialReplLast.value = { side, die, ok: true, detail }
+    workbench.pushLog('success', detail, planned.rule)
     return true
   }
 

@@ -206,10 +206,22 @@ describe('W7 C12：死亡堆与 1.6c 特殊补员抽取（与盘面联动）', (
     expect(placement.hex, '本局应有 HQ 或边缘补给源格可返场').not.toBeNull()
 
     // 固定种子：掷骰与抽签都走 rng.ts（可重放）
+    // v7.1 第二段：先过 1.6b（判定阶段的一部分），放置阶段才允许落格
+    workbench.rng = createRngState(19410708)
+    expect(workbench.rollVariableReplNow()).toBe(true)
     workbench.rng = createRngState(19410708)
     const ok = containers.drawSpecialRepl('soviet')
     expect(ok).toBe(true)
     expect(containers.lastAction?.rule).toBe('1.6c')
+    /*
+     * v7.1 第二段（用户 2026-11-11 口径）：判定阶段**不落子**——
+     * 返场单位先登记进统一手牌，死亡堆暂时不动；落点在放置阶段点格给出。
+     */
+    expect(workbench.deadPile).toHaveLength(1)
+    expect(workbench.specialReplPending.map((item) => item.instanceId)).toEqual(['d1'])
+    expect(workbench.rollPlacementBlockedReason).toBeNull()
+    expect(workbench.beginSpecialReplPlaceHexPickNow(0)).toBe(true)
+    expect(workbench.pickHexFor(placement.hex!)).toBe(true)
     // 死亡堆被清空、单位回到图上、军力 −1（规则原文：返场 −1 step）
     expect(workbench.deadPile).toHaveLength(0)
     const returned = workbench.units.find((unit) => unit.instanceId === 'd1')
@@ -243,7 +255,9 @@ describe('W7 C12：死亡堆与 1.6c 特殊补员抽取（与盘面联动）', (
     // ③ 回到 B 段这一环 ⇒ 放行
     enterSpecialReplSegment('soviet')
     expect(containers.drawSpecialRepl('soviet')).toBe(true)
-    expect(workbench.deadPile).toHaveLength(0)
+    // v7.1 第二段：判定阶段只登记返场，死亡堆等放置阶段才动
+    expect(workbench.specialReplPending.length).toBeGreaterThan(0)
+    expect(workbench.deadPile).toHaveLength(1)
   })
 
   it('★ 1.6c **双方都有**：轴方在本方 B 段那一环也能掷（表不同，1 项）', () => {

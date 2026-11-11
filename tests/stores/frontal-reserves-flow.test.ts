@@ -1,7 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { holdingsToT } from '@/engine/rules'
 import { arrivalTurnOf } from '@/engine/turn-driver'
 import { groundRecord, newConsole, placeGround } from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
@@ -84,24 +83,24 @@ describe('专规 2.3c：领取（2 SP ＋ 编制转化 ＋ 两次免费重建候
     expect(batch.convertTo).toBe('16-2-5 Mtr Div (107)')
 
     goToSovietSegmentStep(store, 'reinforcement.replRoll')
-    store.frontalReservesInputs = { hexText: '60.34' }
     expect(store.claimFrontalReservesNow()).toBe(true)
-    // 2 SP = 8 T 落到该格
-    const dump = store.spDumps.find(
-      (item) => item.side === 'soviet' && item.hex.col === 60 && item.hex.row === 34,
-    )
-    expect(dump).not.toBeUndefined()
-    expect(holdingsToT({ sp: dump!.sp, t: dump!.t })).toBe(8)
+    /*
+     * v7.1 第二段（用户 2026-11-11 口径）：判定阶段**不落子**——
+     * 2 SP 并入「到货 SP」池、编制转化的新单位进统一手牌，落点留到放置阶段按 2.1 点格给出。
+     */
+    expect(store.frontalReservesSpPending).toBe(2)
+    expect(store.supplyArrivalSp).toBeGreaterThanOrEqual(2)
+    expect(store.spDumps).toEqual([])
+    expect(store.frontalUnitPending?.name).toContain('107')
     /*
      * ★ 2026-09-15：69 / 107 摩托化师原为源库 `classified`（未导出）⇒ 当时只能记成「义务」；
-     *   这 87 条推进到 `valued` 后，两枚算子都进产物库 ⇒ 编制转化**真落盘**、义务清空。
-     *   （本用例此前断言 `applied = []` + 两条义务，现按新事实改判。）
+     *   这 87 条推进到 `valued` 后，两枚算子都进产物库 ⇒ 编制转化**真登记、义务清空**。
      *   另：旧单位（69）本就不在场 ⇒ 记成**已了结**（`applied`）而不是「须手工处理」（`obligations`）。
      */
     const last = store.lastFrontalReserves
     expect(last).not.toBeNull()
     expect(last!.obligations).toEqual([])
-    expect(last!.applied.join('｜')).toContain('Ru 107 Mot Div 按落点')
+    expect(last!.applied.join('｜')).toContain('已进手牌')
     expect(last!.applied.join('｜')).toContain('69')
     expect(last!.applied.join('｜')).toContain('已不在场')
     expect(store.frontalReservesClaimed).toContain('1941-07-22')
@@ -111,25 +110,28 @@ describe('专规 2.3c：领取（2 SP ＋ 编制转化 ＋ 两次免费重建候
     const store = newStore()
     expect(turnAt(store, '1941-07-22')).toBe(true)
     goToSovietSegmentStep(store, 'reinforcement.replRoll')
-    store.frontalReservesInputs = { hexText: '60.34' }
     expect(store.claimFrontalReservesNow()).toBe(true)
-    const spAfter = holdingsToT(store.spDumps[0] ?? { sp: 0, t: 0 })
+    const spAfter = store.supplyArrivalSp
     goToSovietSegmentStep(store, 'reinforcement.replRoll')
     expect(store.claimFrontalReservesNow()).toBe(false)
     expect(store.frontalReservesError?.reason).toBe('frontalReservesAlreadyClaimed:1941-07-22')
-    // 账本不再变（第二次没有再加 8 T）
-    expect(holdingsToT(store.spDumps[0] ?? { sp: 0, t: 0 })).toBe(spAfter)
+    // 账本不再变（第二次没有再加 2 SP）
+    expect(store.supplyArrivalSp).toBe(spAfter)
   })
 
-  it('未给落点即拒（2 SP 与新单位都要落点）', () => {
+  it('领取不再要求落点：2 SP 与新单位先登记，落点在放置阶段给', () => {
     const store = newStore()
     expect(turnAt(store, '1941-07-22')).toBe(true)
     goToSovietSegmentStep(store, 'reinforcement.replRoll')
-    store.frontalReservesInputs = { hexText: '' }
-    goToSovietSegmentStep(store, 'reinforcement.replRoll')
-    expect(store.claimFrontalReservesNow()).toBe(false)
-    expect(store.frontalReservesError?.reason).toBe('frontalReservesPlacementRequired')
+    expect(store.claimFrontalReservesNow()).toBe(true)
+    expect(store.frontalReservesError).toBeNull()
+    // 判定阶段不落子：账本与盘面都没变
     expect(store.spDumps).toEqual([])
+    expect(store.units.filter((unit) => unit.instanceId.startsWith('fr'))).toEqual([])
+    // 产出都进了统一手牌
+    expect(store.frontalUnitPending).not.toBeNull()
+    expect(store.rollHandEntries.some((entry) => entry.id === 'unit:frontal')).toBe(true)
+    expect(store.rollHandEntries.some((entry) => entry.id === 'sp:arrival')).toBe(true)
   })
 
   it('第三批（1 Sep → 9 月 1 日回合）：两个转化单位都在产物库 ⇒ 编制转化**真落盘**', () => {
@@ -148,16 +150,12 @@ describe('专规 2.3c：领取（2 SP ＋ 编制转化 ＋ 两次免费重建候
     const old = placeGround(store, oldRecord, { col: 60, row: 34 }, 'soviet', 'old-103')
 
     goToSovietSegmentStep(store, 'reinforcement.replRoll')
-    store.frontalReservesInputs = { hexText: '60.35' }
     expect(store.claimFrontalReservesNow()).toBe(true)
     const last = store.lastFrontalReserves!
     expect(store.units.some((unit) => unit.instanceId === old.instanceId)).toBe(false)
     expect(last.obligations).toEqual([])
-    // 新单位到场：103 Rifle Div（10-0-1）落在 60.35
-    const arrived = store.units.filter(
-      (unit) => unit.side === 'soviet' && unit.hex.col === 60 && unit.hex.row === 35,
-    )
-    expect(arrived.map((unit) => unit.unitId).join('、')).toContain('103')
+    // 新单位先登记进手牌（103 Rifle Div，10-0-1），落点在放置阶段给
+    expect(store.frontalUnitPending?.name).toContain('103')
     expect(last.applied.join('｜')).toContain('103')
     expect(last.applied.join('｜')).toContain('盘面 1')
   })
@@ -177,7 +175,6 @@ describe('专规 2.3c：领取（2 SP ＋ 编制转化 ＋ 两次免费重建候
       }),
     )
     goToSovietSegmentStep(store, 'reinforcement.replRoll')
-    store.frontalReservesInputs = { hexText: '60.35' }
     expect(store.claimFrontalReservesNow()).toBe(true)
     // 1.6a：「不论处境（即使在死亡堆里）」⇒ 死亡堆里那一枚也没了
     expect(store.deadPile.some((entry) => entry.instanceId === 'pile-103')).toBe(false)
@@ -214,7 +211,6 @@ describe('专规 2.3c：领取（2 SP ＋ 编制转化 ＋ 两次免费重建候
     )
 
     goToSovietSegmentStep(store, 'reinforcement.replRoll')
-    store.frontalReservesInputs = { hexText: '60.34' }
     expect(store.claimFrontalReservesNow()).toBe(true)
     const candidates = store.lastFrontalReserves!.freeRebuildCandidates
     expect(candidates.map((item) => item.label)).toEqual(['IL.2', 'HQ or artillery'])

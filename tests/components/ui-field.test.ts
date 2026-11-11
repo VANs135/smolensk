@@ -76,12 +76,11 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).not.toMatch(/airPlacement/)
   })
 
-  it('其余面板：容器(2)/专规(8)/增援(3)/补给(13) 的数值与格号已走 UiField', () => {
+  it('其余面板：容器(2)/专规(8)/补给(12) 的数值与格号已走 UiField', () => {
     const cases: Array<[string, number]> = [
       ['src/components/containers/ContainersPanel.vue', 2],
       ['src/components/exclusive/ExclusiveRulesPanel.vue', 8],
-      // 用户 2026-11-11：补员格 / 图边源格改「点地图选格」；第三段大窗删除后只剩 SP/锁定师两处
-      ['src/components/reinforcement/ReinforcementPanel.vue', 2],
+      // 用户 2026-11-11：补员格 / 图边源格 / 方面军落点全改「点地图选格」⇒ 增援面板已无手打格号
       // 用户 2026-11-11：铁路运货的卸货格改点地图 ⇒ 又少一处手打格号
       ['src/components/supply/SupplyPanel.vue', 12],
     ]
