@@ -66,111 +66,131 @@ function baseFacts(over: Partial<SessionStepFacts['reinforce']> = {}): SessionSt
 const idsOf = (facts: SessionStepFacts): string[] =>
   planSessionSteps(facts).map((entry) => entry.id)
 
-describe('增援段：按规则顺序单窗排列', () => {
-  it('苏方 22 Jul：到达 → 方面军 → 慢动员 → 补员表 → 特殊补员 → 补给表 → 重建 → 整编', () => {
+describe('增援段：每个环节只出本环节的窗', () => {
+  it('到达环节：到达 → 补员表 → 补给表 → 慢动员，不混入重建/方面军', () => {
     expect(
       idsOf(
         baseFacts({
+          stepId: 'reinforcement.arrival',
           arrivalPending: true,
-          frontalReservesPending: true,
           slowMobilizationVisible: true,
           replTablePending: true,
-          specialReplPending: true,
           supplyPlacePending: true,
           rebuildAvailable: true,
           consolidationAvailable: true,
+          frontalReservesPending: true,
         }),
       ),
     ).toEqual([
       'reinforce:arrival',
-      'reinforce:frontalReserves',
-      'reinforce:slow',
       'reinforce:replTable',
-      'reinforce:specialRepl',
       'reinforce:supplyTable',
-      'reinforce:rebuild',
-      'reinforce:consolidation',
+      'reinforce:slow',
     ])
   })
 
-  it('轴方 22 Jul：随机事件 → 到达 → 补员表 → 特殊补员 → 补给表 → 重建 → 整编', () => {
+  it('掷表环节是自动步：不出玩家窗（避免自动结算与手动按钮同屏）', () => {
     expect(
       idsOf(
         baseFacts({
-          randomEventPending: true,
-          supplyTrainPending: false,
+          stepId: 'reinforcement.replRoll',
           arrivalPending: true,
           replTablePending: true,
-          specialReplPending: true,
           supplyPlacePending: true,
           rebuildAvailable: true,
           consolidationAvailable: true,
         }),
       ),
-    ).toEqual([
-      'reinforce:randomEvent',
-      'reinforce:arrival',
-      'reinforce:replTable',
-      'reinforce:specialRepl',
-      'reinforce:supplyTable',
-      'reinforce:rebuild',
-      'reinforce:consolidation',
-    ])
+    ).toEqual([])
   })
 
-  it('轴方掷出补给列车：随机事件 → 补给列车 → 到达 → …（3.6 单独一窗）', () => {
+  it('重建环节：重建 → 整编（不夹带补员表/到达）', () => {
     expect(
       idsOf(
         baseFacts({
+          stepId: 'reinforcement.rebuild',
+          arrivalPending: true,
+          replTablePending: true,
+          supplyPlacePending: true,
+          rebuildAvailable: true,
+          consolidationAvailable: true,
+        }),
+      ),
+    ).toEqual(['reinforce:rebuild', 'reinforce:consolidation'])
+  })
+
+  it('轴方专规各占自己的环节：随机事件 / 补给列车 / 可变撤离', () => {
+    expect(
+      idsOf(
+        baseFacts({
+          stepId: 'reinforcement.randomEvent',
           randomEventPending: true,
           supplyTrainPending: true,
           arrivalPending: true,
-          replTablePending: true,
         }),
       ),
-    ).toEqual([
-      'reinforce:randomEvent',
-      'reinforce:supplyTrain',
-      'reinforce:arrival',
-      'reinforce:replTable',
-    ])
-  })
-
-  it('轴方 19 Aug：到达 → 可变撤离 → 补员表 → 补给表 → …；无随机事件、无特殊补员', () => {
+    ).toEqual(['reinforce:randomEvent'])
     expect(
       idsOf(
         baseFacts({
-          variableExitPending: true,
+          stepId: 'reinforcement.supplyTrain',
+          randomEventPending: true,
+          supplyTrainPending: true,
           arrivalPending: true,
-          replTablePending: true,
-          specialReplPending: false,
-          supplyPlacePending: true,
-          rebuildAvailable: true,
-          consolidationAvailable: true,
         }),
       ),
-    ).toEqual([
-      'reinforce:arrival',
-      'reinforce:variableExit',
-      'reinforce:replTable',
-      'reinforce:supplyTable',
-      'reinforce:rebuild',
-      'reinforce:consolidation',
-    ])
+    ).toEqual(['reinforce:supplyTrain'])
+    expect(
+      idsOf(
+        baseFacts({
+          stepId: 'reinforcement.variableExit',
+          variableExitPending: true,
+          arrivalPending: true,
+        }),
+      ),
+    ).toEqual(['reinforce:variableExit'])
+  })
+
+  it('苏方专规各占自己的环节：特殊补员 / 方面军预备队', () => {
+    expect(
+      idsOf(
+        baseFacts({
+          stepId: 'reinforcement.specialRepl',
+          specialReplPending: true,
+          frontalReservesPending: true,
+          arrivalPending: true,
+        }),
+      ),
+    ).toEqual(['reinforce:specialRepl'])
+    expect(
+      idsOf(
+        baseFacts({
+          stepId: 'reinforcement.frontalReserves',
+          specialReplPending: true,
+          frontalReservesPending: true,
+          arrivalPending: true,
+        }),
+      ),
+    ).toEqual(['reinforce:frontalReserves'])
   })
 })
 
 describe('增援段：一次只暴露第一件', () => {
   it('暴露的恒是第一项；前一件 ack 后才轮到下一件', () => {
-    const before = baseFacts({ slowMobilizationVisible: true, replTablePending: true })
-    expect(exposedSessionStep(planSessionSteps(before))?.id).toBe('reinforce:slow')
+    const before = baseFacts({
+      stepId: 'reinforcement.rebuild',
+      rebuildAvailable: true,
+      consolidationAvailable: true,
+    })
+    expect(exposedSessionStep(planSessionSteps(before))?.id).toBe('reinforce:rebuild')
 
     const after = baseFacts({
-      slowMobilizationVisible: true,
-      replTablePending: true,
-      acked: ['reinforce:slow'],
+      stepId: 'reinforcement.rebuild',
+      rebuildAvailable: true,
+      consolidationAvailable: true,
+      acked: ['reinforce:rebuild'],
     })
-    expect(exposedSessionStep(planSessionSteps(after))?.id).toBe('reinforce:replTable')
+    expect(exposedSessionStep(planSessionSteps(after))?.id).toBe('reinforce:consolidation')
   })
 
   it('强制项不受 ack 影响：到达没放完，记了 ack 也仍停在到达窗', () => {

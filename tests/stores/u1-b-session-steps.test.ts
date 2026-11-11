@@ -84,7 +84,7 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
     expect(items.map((entry) => entry.id)).toEqual(['supply:pickup'])
   })
 
-  it('增援：慢动员 → 补员 → 重建 → 整编（规则顺序，不是字母序）', () => {
+  it('增援：只出本环节的待办——重建环节不夹带补员表/慢动员', () => {
     const items = planSessionSteps(
       baseFacts({
         kind: 'reinforce',
@@ -105,18 +105,13 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
         },
       }),
     )
-    expect(items.map((entry) => entry.id)).toEqual([
-      'reinforce:slow',
-      'reinforce:replTable',
-      'reinforce:rebuild',
-      'reinforce:consolidation',
-    ])
+    expect(items.map((entry) => entry.id)).toEqual(['reinforce:rebuild', 'reinforce:consolidation'])
     // 暴露的只有第一件
     expect(exposedCount(items)).toBe(1)
-    expect(exposedSessionStep(items)?.id).toBe('reinforce:slow')
+    expect(exposedSessionStep(items)?.id).toBe('reinforce:rebuild')
   })
 
-  it('增援：到达落位在可变增援与补给之前（规则顺序，不是字典序）', () => {
+  it('增援：到达环节按"能获得什么"排——到达 → 补员表 → 补给表', () => {
     const items = planSessionSteps(
       baseFacts({
         kind: 'reinforce',
@@ -130,7 +125,7 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
           replTablePending: true,
           specialReplPending: false,
           supplyPlacePending: true,
-          rebuildAvailable: false,
+          rebuildAvailable: true,
           frontalReservesPending: false,
           slowMobilizationVisible: false,
           consolidationAvailable: false,
@@ -142,6 +137,30 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
       'reinforce:replTable',
       'reinforce:supplyTable',
     ])
+  })
+
+  it('增援：掷表环节是自动步，不出玩家窗', () => {
+    const items = planSessionSteps(
+      baseFacts({
+        kind: 'reinforce',
+        reinforce: {
+          stepId: 'reinforcement.replRoll',
+          acked: [],
+          arrivalPending: false,
+          randomEventPending: false,
+          supplyTrainPending: false,
+          variableExitPending: false,
+          replTablePending: true,
+          specialReplPending: false,
+          supplyPlacePending: true,
+          rebuildAvailable: false,
+          frontalReservesPending: false,
+          slowMobilizationVisible: false,
+          consolidationAvailable: false,
+        },
+      }),
+    )
+    expect(items.map((entry) => entry.id)).toEqual([])
   })
 
   it('突围：返场与突围尝试是两件事，先返场（强制）再突围（选做）', () => {

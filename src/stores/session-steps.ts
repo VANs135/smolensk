@@ -398,10 +398,40 @@ function moveItems(facts: SessionStepFacts['move']): SessionStepItem[] {
   return items
 }
 
+/**
+ * 增援事项 → 所属 SOP 子环节（唯一归属表）
+ *
+ * 用户 2026-11-11（批三「增援段专审」）：B 段在 `sop-segments` 里已切成多个环节，
+ * 一个环节的窗里**不能出现别的环节的待办**。修前这里只按"谁还没办"排全局顺序，
+ * 于是在到达环节也会冒出重建/整编窗（典型：把"能获得什么"和"能修什么"混在一屏）。
+ *
+ * 环节次序本身仍由 `sop-segments` 的 B 段给出；本表只回答"这一件事归哪一环"。
+ */
+const REINFORCE_STEP_OF: Readonly<Record<string, string>> = {
+  // 1.6b 可变增援：掷表是自动步，玩家只负责把到货的 Pax/Eq 与 SP **落位**
+  'reinforce:replTable': 'reinforcement.arrival',
+  'reinforce:supplyTable': 'reinforcement.arrival',
+  // 13.6 / 1.6a 到达落位；2.4 慢动员在收到锁定师之后当场解锁
+  'reinforce:arrival': 'reinforcement.arrival',
+  'reinforce:slow': 'reinforcement.arrival',
+  // 轴方专规
+  'reinforce:randomEvent': 'reinforcement.randomEvent',
+  'reinforce:supplyTrain': 'reinforcement.supplyTrain',
+  'reinforce:variableExit': 'reinforcement.variableExit',
+  // 13.5a / 13.9 重建与整编
+  'reinforce:rebuild': 'reinforcement.rebuild',
+  'reinforce:consolidation': 'reinforcement.rebuild',
+  // 专规 1.6c / 2.3c
+  'reinforce:specialRepl': 'reinforcement.specialRepl',
+  'reinforce:frontalReserves': 'reinforcement.frontalReserves',
+}
+
 function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): SessionStepItem[] {
   const acked = new Set(facts.acked)
   const items: SessionStepItem[] = []
   const push = (id: string, title: string, why: string, decision: string): void => {
+    // 只排当前环节的待办；其它环节的待办等切到那个环节再出现
+    if (REINFORCE_STEP_OF[id] !== facts.stepId) return
     items.push(item(id, title, why, decision))
   }
 
@@ -450,15 +480,6 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
       '落 2 SP、完成换装，并选两次免费重建的对象。',
     )
   }
-  // 2.4：苏方慢动员解锁（原文只给日期，不设硬闸）
-  if (facts.slowMobilizationVisible && !acked.has('reinforce:slow')) {
-    push(
-      'reinforce:slow',
-      '慢动员解锁（2.4）',
-      '本回合有仍被锁定的师可以解锁。',
-      '勾选不超过配额的师并提交解锁。',
-    )
-  }
   // 13.5 / 1.6b：可变增援的补员表
   if (facts.replTablePending && !acked.has('reinforce:replTable')) {
     push(
@@ -484,6 +505,15 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
       '补给到达·补给表（1.6b / 2.1 / 3.1）',
       '本方的增援阶段要掷一次补给表，并把到货 SP 落账。',
       '选定可卸载城市格或图边补给源格后落账；轴方按 3.4b 分栏。',
+    )
+  }
+  // 2.4：苏方慢动员解锁（收到本日锁定师之后再解锁；原文只给日期，不设硬闸）
+  if (facts.slowMobilizationVisible && !acked.has('reinforce:slow')) {
+    push(
+      'reinforce:slow',
+      '慢动员解锁（2.4）',
+      '本回合有仍被锁定的师可以解锁。',
+      '勾选不超过配额的师并提交解锁。',
     )
   }
   // 13.5a：重建
