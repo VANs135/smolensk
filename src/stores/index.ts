@@ -13,7 +13,7 @@ export * from './workbench'
 export * from './session'
 // W7 C12：记录轨与容器管理（盒的账本与操作）
 export * from './containers'
-// W7 C13：切方与信息展示纪律（热坐交接 + 4.9a 敌方堆叠可见性）
+// W7 C13：切方与信息展示纪律（观察方手动选定 + 4.9a 敌方堆叠可见性）
 export * from './hotseat'
 // W7 C14：初设与开局流程（剧本选择 / 编制抽取 / 卡车满载 / SP 归属 / 自动初设 / 自定义初设）
 export * from './setup'

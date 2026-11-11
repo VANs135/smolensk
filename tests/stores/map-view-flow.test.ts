@@ -493,9 +493,10 @@ describe('批 A 切片 3：单一对话框与候选过滤', () => {
   })
 
   it('★ 专规 1.4a：驻在图外空军盒的飞机**不画在地图上**（出盒后恢复）', () => {
-    const { workbench, mapView } = newStores()
+    const { workbench, mapView, hotseat } = newStores()
     workbench.setPhase('movement')
     workbench.setActiveSide('soviet')
+    hotseat.setViewerSide('soviet')
     workbench.setAirActive(true)
     const choice = workbench.airUnitChoices.find((item) => (item.rangeHexes ?? 0) >= 20)!
     expect(
@@ -518,7 +519,7 @@ describe('批 A 切片 3：单一对话框与候选过滤', () => {
   })
 
   it('4.9a：敌方格只画公开战斗算子和最上方图内激活飞机，点击不展开', () => {
-    const { workbench, mapView } = newStores()
+    const { workbench, mapView, hotseat } = newStores()
     const aircraft = aircraftChoices('axis')[0]!
     const placePlane = (instanceId: string, airStatus: 'active' | 'inactive') =>
       workbench.airUnits.push(
@@ -534,6 +535,7 @@ describe('批 A 切片 3：单一对话框与候选过滤', () => {
     placePlane('concealed-plane', 'active')
     workbench.setAirInBoxMembership('off-map', true)
     workbench.setActiveSide('soviet')
+    hotseat.setViewerSide('soviet')
 
     expect(mapView.overlay.tokens.map(({ id }) => id)).toEqual(['top', 'public-plane'])
     expect(mapView.overlay.tokens.every(({ hiddenStack }) => hiddenStack)).toBe(true)

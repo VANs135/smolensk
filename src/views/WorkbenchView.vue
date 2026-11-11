@@ -7,7 +7,7 @@ import { BarragePanel } from '@/components/barrage'
 import { CombatPanel } from '@/components/combat'
 import { ContainersPanel } from '@/components/containers'
 import { ExclusiveRulesPanel } from '@/components/exclusive'
-import { ConsensusChecklist, HandoffOverlay } from '@/components/hotseat'
+import { ConsensusChecklist } from '@/components/hotseat'
 import { MapCanvas } from '@/components/map'
 import { ReinforcementPanel } from '@/components/reinforcement'
 import {
@@ -373,22 +373,26 @@ onMounted(() => {
 
       <BasePanel title="局况与切方（2.2 / 2.3 / 4.9a）">
         <div class="row">
-          <BaseButton variant="primary" size="sm" @click="hotseat.beginHandoff()">
-            交接给{{ hotseat.opponentSide === 'axis' ? '轴心国' : '苏联' }}（热坐切屏）
+          <!-- 用户 2026-11-11：换手不自动切视角；看哪一方由玩家自己点 -->
+          <BaseButton
+            :variant="hotseat.viewerSide === 'axis' ? 'primary' : 'secondary'"
+            size="sm"
+            @click="hotseat.setViewerSide('axis')"
+          >
+            看轴心国
+          </BaseButton>
+          <BaseButton
+            :variant="hotseat.viewerSide === 'soviet' ? 'primary' : 'secondary'"
+            size="sm"
+            @click="hotseat.setViewerSide('soviet')"
+          >
+            看苏联
           </BaseButton>
           <BaseButton variant="ghost" size="sm" @click="workbench.switchSide()">
-            直接切方（不遮屏）
+            直接切方（改行动方）
           </BaseButton>
         </div>
         <div class="row">
-          <label class="wb__field">
-            <input
-              type="checkbox"
-              :checked="hotseat.hotseatEnabled"
-              @change="hotseat.setHotseatEnabled(($event.target as HTMLInputElement).checked)"
-            />
-            启用热坐交接（交接时遮屏）
-          </label>
           <span class="muted num">
             当前观察方：{{
               hotseat.viewerSide === 'axis' ? '轴心国' : '苏联'
@@ -812,9 +816,6 @@ onMounted(() => {
 
     <!-- W6 C10：待答面板（由会话驱动；无关闭入口，只在内核裁决通过后消失） -->
     <QuestionPrompt />
-
-    <!-- W7 C13：热坐交接屏（交接时遮罩盘面；未确认前不显示，依据 4.9a 的信息纪律） -->
-    <HandoffOverlay />
   </div>
 </template>
 

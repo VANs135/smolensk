@@ -4,13 +4,12 @@ import { storeToRefs } from 'pinia'
 
 import { BaseButton, ToastHost } from '@/components/base'
 import { SaveLoadDialog } from '@/components/save'
-import { useAppStore, useGameSessionStore, useHotseatStore, useUiStore } from '@/stores'
+import { useAppStore, useGameSessionStore, useUiStore } from '@/stores'
 import { getView } from '@/views/registry'
 
 const app = useAppStore()
 const ui = useUiStore()
 const gameSession = useGameSessionStore()
-const hotseat = useHotseatStore()
 const { currentView } = storeToRefs(ui)
 
 const activeRoute = computed(() => getView(currentView.value))
@@ -55,13 +54,11 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
         <span class="shell__route">{{ activeRoute.meta.title }}</span>
       </div>
       <div class="shell__right">
-        <span v-if="hotseat.handoffPending" class="shell__handoff">须先确认交接</span>
         <BaseButton
           v-if="currentView === 'game'"
           variant="ghost"
           size="sm"
           class="shell__save"
-          :disabled="hotseat.handoffPending"
           @click="ui.navigate('home')"
           >开始台</BaseButton
         >
@@ -70,8 +67,6 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
           variant="ghost"
           size="sm"
           class="shell__save"
-          :disabled="hotseat.handoffPending"
-          :title="hotseat.handoffPending ? '须先确认交接，才能存档 / 读档' : undefined"
           @click="ui.openSaveDialog()"
         >
           存档 / 读档（{{ saveBadge }}）
@@ -87,17 +82,13 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
         'shell__body--full':
           currentView === 'game' || currentView === 'home' || currentView === 'scenario',
       }"
-      :inert="hotseat.handoffPending && currentView === 'game'"
     >
       <component :is="activeRoute.component" />
     </main>
 
     <!-- 存档 / 读档对话框：状态在 ui store（顶栏与待答面板共用同一个入口） -->
-    <SaveLoadDialog
-      :open="ui.saveDialogOpen && !hotseat.handoffPending"
-      @update:open="ui.saveDialogOpen = $event"
-    />
-    <ToastHost v-if="!hotseat.handoffPending" />
+    <SaveLoadDialog :open="ui.saveDialogOpen" @update:open="ui.saveDialogOpen = $event" />
+    <ToastHost />
   </div>
 </template>
 
@@ -145,13 +136,6 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   border-radius: var(--radius-sm);
-}
-
-.shell__handoff {
-  padding: 2px var(--space-3);
-  border-radius: var(--radius-pill);
-  background: var(--color-gold);
-  color: var(--color-ink);
 }
 
 .shell__title {

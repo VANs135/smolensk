@@ -16,7 +16,6 @@ import {
   MapActionPopover,
   UnitPanel,
 } from '@/components/game'
-import { HandoffOverlay } from '@/components/hotseat'
 import { MapCanvas, MapDock } from '@/components/map'
 import { MovePanel } from '@/components/move'
 import { FuelPanel } from '@/components/fuel'
@@ -258,7 +257,7 @@ const boxDropTargets = computed<readonly CounterBoxTarget[]>(() => {
   if (mapCounterDrag.value !== null) return mapView.counterBoxTargets(mapCounterDrag.value)
   return setupBoxSide.value === null ? [] : ['air']
 })
-watch([setupBoxSide, () => setup.scenarioId, () => hotseat.handoffPending], () => {
+watch([setupBoxSide, () => setup.scenarioId], () => {
   airBoxMenu.value = null
   queuedAirDrag.value = null
   mapCounterDrag.value = null
@@ -606,13 +605,20 @@ onBeforeUnmount(() => {
             <p class="gt__mode" data-testid="match-mode">
               对局模式 <strong>{{ modeLabel }}</strong>
             </p>
+            <!-- 用户 2026-11-11：换手不自动切视角，看哪一方由玩家自己点 -->
             <BaseButton
-              v-if="hotseat.hotseatEnabled"
-              variant="secondary"
+              :variant="hotseat.viewerSide === 'axis' ? 'primary' : 'secondary'"
               size="sm"
-              @click="hotseat.beginHandoff()"
+              @click="hotseat.setViewerSide('axis')"
             >
-              交给{{ hotseat.opponentSide === 'axis' ? '轴心国' : '苏联' }}
+              看轴心国
+            </BaseButton>
+            <BaseButton
+              :variant="hotseat.viewerSide === 'soviet' ? 'primary' : 'secondary'"
+              size="sm"
+              @click="hotseat.setViewerSide('soviet')"
+            >
+              看苏联
             </BaseButton>
             <BaseButton
               variant="ghost"
@@ -645,8 +651,7 @@ onBeforeUnmount(() => {
     </div>
 
     <TerminationNotice v-if="gameSession.terminated" class="gt__termination" />
-    <QuestionPrompt v-if="!hotseat.handoffPending" />
-    <HandoffOverlay />
+    <QuestionPrompt />
 
     <!-- 读档后模式未设置：选齐前挡在盘面前，AI 不接管、热坐不按 PVP 遮屏 -->
     <Teleport to="body">

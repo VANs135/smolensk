@@ -414,39 +414,20 @@ describe('全操作体检：store 直调', () => {
       expect(ctx.w.log[0]?.rule, `期望 6.0（阶段/方不符）；日志：${logText(ctx)}`).toBe('6.0')
     })
 
-    it('hotseat：beginHandoff 翻观察方、confirmHandoff 收屏（体检记录：不翻行动方）', () => {
+    it('hotseat：观察方只由 setViewerSide 手动改，不动行动方（换手不再切屏/切视角）', () => {
       const ctx = fresh()
       ctx.hot.setMode('pvp')
       const sideBefore = ctx.w.activeSide
-      const viewerBefore = ctx.hot.viewerSide
+      const other = sideBefore === 'axis' ? 'soviet' : 'axis'
 
-      ctx.hot.beginHandoff()
-      expect(ctx.hot.handoffPending, '交接屏应亮起').toBe(true)
-      expect(
-        ctx.hot.viewerSide,
-        `交接屏期间观察方应翻到对手：before=${viewerBefore} actual=${ctx.hot.viewerSide}`,
-      ).not.toBe(viewerBefore)
-      const opponent = ctx.hot.viewerSide
-
-      ctx.hot.confirmHandoff()
-      expect(ctx.hot.handoffPending, '确认后交接屏应收起').toBe(false)
-      // 体检记录：confirmHandoff 只收屏，viewerOverride 仍指向对手；行动方并不在本入口翻转
-      expect(ctx.hot.viewerSide, `确认后观察方应保持为对手 ${opponent}`).toBe(opponent)
-      expect(ctx.w.activeSide, `confirmHandoff 未翻行动方（${sideBefore}）`).toBe(sideBefore)
-    })
-
-    it('hotseat：beginHandoff 后 cancelHandoff 不翻转', () => {
-      const ctx = fresh()
-      ctx.hot.setMode('pvp')
-      const sideBefore = ctx.w.activeSide
-      const viewerBefore = ctx.hot.viewerSide
-
-      ctx.hot.beginHandoff()
-      ctx.hot.cancelHandoff()
-
-      expect(ctx.hot.handoffPending, '取消后交接屏应收起').toBe(false)
-      expect(ctx.hot.viewerSide, `取消后观察方应回到原方 ${viewerBefore}`).toBe(viewerBefore)
-      expect(ctx.w.activeSide, `取消后行动方不应翻转`).toBe(sideBefore)
+      ctx.hot.setViewerSide(other)
+      expect(ctx.hot.viewerSide, '手动切视角应生效').toBe(other)
+      expect(ctx.w.activeSide, `切视角不该翻行动方（${sideBefore}）`).toBe(sideBefore)
+      ctx.hot.setViewerSide(sideBefore)
+      expect(ctx.hot.viewerSide, '切回原方应生效').toBe(sideBefore)
+      // 交接链整条移除，不留开关
+      expect('handoffPending' in ctx.hot).toBe(false)
+      expect('beginHandoff' in ctx.hot).toBe(false)
     })
 
     it('补给站：addSpDump 合法 + 同格并入 + mergeSpDumpHoldings 成功', () => {

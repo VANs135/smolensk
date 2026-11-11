@@ -5,6 +5,7 @@ import type { HexRef } from '@/data'
 import {
   actionGateOf,
   needsFuelOf,
+  useHotseatStore,
   useMapViewStore,
   useSetupStore,
   useWorkbenchStore,
@@ -34,6 +35,8 @@ function stores(side: 'axis' | 'soviet' = 'soviet') {
   useSetupStore().finished = true
   const workbench = useWorkbenchStore()
   workbench.setActiveSide(side)
+  // 2026-11-11：观察方手动选（不再随行动方自动切），测试里与行动方对齐
+  useHotseatStore().setViewerSide(side)
   return { workbench, mapView: useMapViewStore() }
 }
 

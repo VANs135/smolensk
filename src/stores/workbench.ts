@@ -6052,9 +6052,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     pushLog('info', `切方 → ${activeSide.value === 'axis' ? '轴心国' : '苏联'}`)
   }
   /**
-   * W7 C13：把当前行动方设为**指定方**（热坐交接用）
+   * W7 C13：把当前行动方设为**指定方**（脚本/测试与直接设方用）
    *
-   * 与 `switchSide()`（翻转）区分：交接屏确认后要落到**明确的一方**，连点两次不会转回原方。
+   * 与 `switchSide()`（翻转）区分：要落到**明确的一方**，连点两次不会转回原方。
    * 清理动作与 `switchSide` 完全一致（走同一个函数，避免两处漂移）。
    */
   function setActiveSide(side: Side): void {

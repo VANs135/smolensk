@@ -221,18 +221,23 @@ describe('联调③：流程事实只有一套钟（会话记录轨）；操作�
     expect(stores.workbench.date).toBe(turnDateOf(lastTurn))
   })
 
-  it('信息展示纪律（4.9a）的观察方跟着同一套钟：会话 → 操作台 → 热坐', () => {
+  it('4.9a：会话 → 操作台 同步行动方；观察方由玩家手动选、不自动跟', () => {
     const stores = boot()
     expect(stores.session.startGame()).toBe(true)
 
+    const viewerBefore = stores.hotseat.viewerSide
     stores.session.patchRecords({ activeSide: 'soviet' })
     expect(stores.workbench.activeSide).toBe('soviet')
+    // 用户 2026-11-11：轮到对方行动不自动切视角
+    expect(stores.hotseat.viewerSide).toBe(viewerBefore)
+
+    stores.hotseat.setViewerSide('soviet')
     expect(stores.hotseat.viewerSide).toBe('soviet')
     expect(stores.hotseat.opponentSide).toBe('axis')
 
     stores.workbench.switchSide()
     expect(stores.session.records?.activeSide).toBe('axis')
-    expect(stores.hotseat.viewerSide).toBe('axis')
+    expect(stores.hotseat.viewerSide).toBe('soviet')
   })
 })
 

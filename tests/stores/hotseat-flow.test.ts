@@ -15,7 +15,7 @@ import {
  * 切方与信息展示纪律的**端到端流程**（W7 C13，store 级）
  *
  * 三条链路逐条走通：
- *   ① **热坐切屏**：交接 → 切到对手方 + 遮罩；确认 / 反悔；
+ *   ① **观察方**：只由 `setViewerSide` 手动切换，换手不遮屏、不自动翻（2026-11-11 口径）；
  *   ② **4.9a 展示纪律**：敌方格只见最上方（战斗模式可攻击）单位 + 最上方激活飞机，枚数不外露；
  *      4.8b 的堆叠顺序提示（ZOC 单位须置顶）；
  *   ③ **共识勾选列表（专规 4.0）**：未全部勾选 ⇒ 第一回合不开始；全部勾选 + 写入日志 ⇒ 才放行。
@@ -71,8 +71,9 @@ describe('W7 C13：4.9a 敌方堆叠明细隐藏（配合 4.8b 堆叠顺序）',
     const top = place(workbench, 'axis', HEX_A, 'e-top')
     place(workbench, 'axis', HEX_A, 'e-1')
     place(workbench, 'axis', HEX_A, 'e-2')
-    // 观察方 = 苏联
+    // 观察方 = 苏联（2026-11-11 起由玩家手动指定，不随行动方自动切）
     workbench.setActiveSide('soviet')
+    hotseat.setViewerSide('soviet')
     expect(hotseat.viewerSide).toBe('soviet')
 
     const visible = hotseat.visibleUnitIdsInHex(HEX_A)
@@ -103,6 +104,7 @@ describe('W7 C13：4.9a 敌方堆叠明细隐藏（配合 4.8b 堆叠顺序）',
     dgTop.mode = { ...dgTop.mode, dg: true } // 5.10：DG 不是战斗模式
     const zocUnit = place(workbench, 'axis', HEX_A, 'zoc-unit')
     workbench.setActiveSide('soviet')
+    hotseat.setViewerSide('soviet')
 
     const display = hotseat.displayOf(HEX_A)
     expect(display.mode).toBe('topOnly')
@@ -140,7 +142,7 @@ describe('W7 C13：4.9a 敌方堆叠明细隐藏（配合 4.8b 堆叠顺序）',
   })
 })
 
-describe('W7 C13：热坐切屏（交接遮罩）', () => {
+describe('W7 C13（用户 2026-11-11 口径）：观察方由玩家手动选定，不自动切屏/切视角', () => {
   let workbench: ReturnType<typeof useWorkbenchStore>
   let hotseat: ReturnType<typeof useHotseatStore>
 
@@ -148,41 +150,37 @@ describe('W7 C13：热坐切屏（交接遮罩）', () => {
     const stores = newStores()
     workbench = stores.workbench
     hotseat = stores.hotseat
-    // 2026-11-09：未选择模式不再按 PVP 口径启用热坐；本组用例明确按双人热坐跑
     expect(hotseat.setMode('pvp')).toBe(true)
   })
 
-  it('C13：交接 ⇒ 切到对手方并亮起遮罩；确认后亮出盘面', () => {
+  it('C13：观察方只在玩家点选时变；轮到对手行动不自动翻', () => {
     expect(hotseat.viewerSide).toBe('axis')
-    hotseat.beginHandoff()
+
+    hotseat.setViewerSide('soviet')
     expect(hotseat.viewerSide).toBe('soviet')
-    expect(hotseat.handoffPending).toBe(true)
-    expect(hotseat.handoffNotice).toContain('苏联')
     expect(hotseat.opponentSide).toBe('axis')
 
-    hotseat.confirmHandoff()
-    expect(hotseat.handoffPending).toBe(false)
+    // 行动方翻面（如 T 键 / 直接切方）不再带动观察方
+    workbench.switchSide()
+    workbench.switchSide()
+    expect(hotseat.viewerSide).toBe('soviet')
   })
 
-  it('C13：反悔 ⇒ 回到原方且不遮屏；关掉热坐后交接不再遮屏', () => {
-    hotseat.beginHandoff()
-    expect(hotseat.viewerSide).toBe('soviet')
-    hotseat.cancelHandoff()
-    expect(hotseat.viewerSide).toBe('axis')
-    expect(hotseat.handoffPending).toBe(false)
-
-    // 交接会清空选中与交互态（与 switchSide 一致）
+  it('C13：切观察方会清空选中与交互态（与切方同纪律）', () => {
     const unit = place(workbench, 'axis', HEX_A, 'u1')
     workbench.setTool('move')
     workbench.clickHex(unit.hex)
     expect(workbench.selectedUnit?.instanceId).toBe('u1')
-    hotseat.beginHandoff()
+    hotseat.setViewerSide('soviet')
     expect(workbench.selectedUnit).toBeNull()
+  })
 
-    hotseat.setHotseatEnabled(false)
-    hotseat.confirmHandoff()
-    hotseat.beginHandoff()
-    expect(hotseat.handoffPending).toBe(false)
+  it('C13：hotseat store 不再导出交接判据（整条移除，不留开关）', () => {
+    expect('handoffPending' in hotseat).toBe(false)
+    expect('beginHandoff' in hotseat).toBe(false)
+    expect('confirmHandoff' in hotseat).toBe(false)
+    expect('cancelHandoff' in hotseat).toBe(false)
+    expect('setHotseatEnabled' in hotseat).toBe(false)
   })
 })
 

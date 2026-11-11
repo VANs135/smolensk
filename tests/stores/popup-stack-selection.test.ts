@@ -5,7 +5,13 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
 import { emptyReplHoldings } from '@/engine/rules'
-import { useMapViewStore, useSetupStore, useWorkbenchStore, unitChoices } from '@/stores'
+import {
+  useHotseatStore,
+  useMapViewStore,
+  useSetupStore,
+  useWorkbenchStore,
+  unitChoices,
+} from '@/stores'
 
 import { groundRecord, placeGround } from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
@@ -30,7 +36,12 @@ function stores() {
   useSetupStore().finished = true
   const workbench = useWorkbenchStore()
   workbench.setActiveSide('soviet')
-  return { workbench, mapView: useMapViewStore() }
+  const mapView = useMapViewStore()
+  const hotseat = useHotseatStore()
+  // 2026-11-11 起观察方由玩家手动选（`setViewerSide`），不再跟着行动方自动切；
+  // hotseat store 在 `useSetupStore()` 时就已按初始行动方建好，这里显式对齐到苏方。
+  hotseat.setViewerSide('soviet')
+  return { workbench, mapView, hotseat }
 }
 
 /** 战斗单位（单位库里的 `isCombat` 记录） */
@@ -264,8 +275,9 @@ describe('堆叠窗口收口：列全、默认全选、同格展开、删说明'
   it('★ 13.2g：点格开窗，窗口里必须有编内卡车，并标出与编队的随行关系', () => {
     const s = stores()
     // 编内卡车只在轴方单位库里出现 ⇒ 这一条按轴方视点摆（4.9a 会裁掉敌方不可见令牌）。
-    // 视点由当前行动方推出（`decisionSide`），不能直接写只读的 `viewerSide`。
+    // 2026-11-11 起观察方由玩家手动选（`setViewerSide`），不再由行动方自动推出。
     s.workbench.setActiveSide('axis')
+    s.hotseat.setViewerSide('axis')
     const truckRecord = groundRecord('axis', (record) => record.noncombatKind === 'organic_truck')
     placeGround(s.workbench, truckRecord, HEX, 'axis', 'truck')
     placeGround(

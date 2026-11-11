@@ -7,6 +7,7 @@ import type { HexRef } from '@/data'
 import {
   actionGateOf,
   replRecordOf,
+  useHotseatStore,
   useMapViewStore,
   useSetupStore,
   useWorkbenchStore,
@@ -32,6 +33,8 @@ function stores(side: 'axis' | 'soviet' = 'soviet') {
   useSetupStore().finished = true
   const workbench = useWorkbenchStore()
   workbench.setActiveSide(side)
+  // 2026-11-11：观察方手动选（不再随行动方自动切），测试里与行动方对齐
+  useHotseatStore().setViewerSide(side)
   return { workbench, mapView: useMapViewStore() }
 }
 
@@ -188,6 +191,8 @@ describe('右键「模式改变」分组', () => {
   it('★ 转出预备模式：只在反应环节出现并可点', () => {
     // 反应阶段的**行动者**是非阶段玩家：activeSide=soviet ⇒ actingSide=axis
     const t = stores('soviet')
+    // 2026-11-11：观察方手动选；本用例要看的是轴方反应单位
+    useHotseatStore().setViewerSide('axis')
     t.workbench.setPhase('reaction')
     goToActionStep(t.workbench, 'reserve.release')
     const record = groundRecord(

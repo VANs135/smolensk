@@ -350,8 +350,7 @@ watch(
 function showsBoxActions(kind: string): boolean {
   if (!showsActions.value) return false
   if (kind === 'edgeBox' && !containers.canUseEdgeBoxes) return false
-  if (uiMode !== 'verify' && (hotseat.handoffPending || hotseat.viewerSide !== actingSide.value))
-    return false
+  if (uiMode !== 'verify' && hotseat.viewerSide !== actingSide.value) return false
   if (props.subjectId != null) return kind === 'formationBox'
   const kinds = containers.openCardBoxKinds
   return kinds === null || kinds.includes(kind)

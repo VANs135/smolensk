@@ -121,11 +121,12 @@ describe('W7 C16：动作派发到既有 store（不做规则判断）', () => {
     hotkeys.dispatch('stack.toggle')
     expect(workbench.stackSelect).toBe(true)
 
+    // 用户 2026-11-11：T 只手动翻行动方，观察方不跟着动
     const beforeSide = workbench.activeSide
     const beforeViewer = useHotseatStore().viewerSide
     hotkeys.dispatch('side.next')
-    expect(workbench.activeSide).toBe(beforeSide)
-    expect(useHotseatStore().viewerSide).not.toBe(beforeViewer)
+    expect(workbench.activeSide).not.toBe(beforeSide)
+    expect(useHotseatStore().viewerSide).toBe(beforeViewer)
 
     expect(hotkeys.panelCollapsed).toBe(false)
     hotkeys.dispatch('panel.toggle')
@@ -271,27 +272,20 @@ describe('W7 C16：动作派发到既有 store（不做规则判断）', () => {
     ).toBe(false)
   })
 
-  it('M9③：切方走**交接流程**（4.9a）——热坐启用时亮交接屏，而不是静默换人', () => {
+  it('M9③（用户 2026-11-11）：T 只翻行动方，不遮屏、不自动切视角', () => {
     const workbench = useWorkbenchStore()
     const hotseat = useHotseatStore()
     const hotkeys = useHotkeyStore()
-    hotseat.setHotseatEnabled(true)
+    hotseat.setMode('pvp')
 
     const before = workbench.activeSide
+    const viewerBefore = hotseat.viewerSide
     expect(hotkeys.handleKeydown({ key: 't', target: null, preventDefault: () => undefined })).toBe(
       true,
     )
-    expect(workbench.activeSide).toBe(before)
-    expect(hotseat.viewerSide).not.toBe(before)
-    expect(hotseat.handoffPending).toBe(true)
-
-    // 接手方确认后遮屏撤下；未启用热坐时不应留下交接屏
-    hotseat.confirmHandoff()
-    expect(hotseat.handoffPending).toBe(false)
-    hotseat.setHotseatEnabled(false)
-    hotkeys.handleKeydown({ key: 't', target: null, preventDefault: () => undefined })
-    expect(hotseat.handoffPending).toBe(false)
-    hotseat.setHotseatEnabled(true)
+    expect(workbench.activeSide).not.toBe(before)
+    expect(hotseat.viewerSide).toBe(viewerBefore)
+    expect('handoffPending' in hotseat).toBe(false)
   })
 
   it('M9③：焦点在控件上时回车/空格归控件——热键既不派发也不 preventDefault', () => {

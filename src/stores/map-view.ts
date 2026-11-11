@@ -1963,8 +1963,7 @@ export const useMapViewStore = defineStore('mapView', () => {
   })
 
   function canOpenCounterContext(): boolean {
-    if (!setup.finished || hotseat.handoffPending || hotseat.viewerSide !== actingSide.value)
-      return false
+    if (!setup.finished || hotseat.viewerSide !== actingSide.value) return false
     if (workbench.hexPickView !== null || workbench.refitBase !== null) return false
     if (workbench.overrunZocHeld !== null || workbench.specialPending !== null) return false
     /*
@@ -1979,7 +1978,6 @@ export const useMapViewStore = defineStore('mapView', () => {
 
   /** 拖放与右键共用候选。判定和落账仍由初设或容器命令处理。 */
   function counterBoxTargets(instanceId: string): CounterBoxTarget[] {
-    if (hotseat.handoffPending) return []
     if (!setup.finished) return setup.canMoveSetupAirToBox(instanceId) ? ['air'] : []
     if (!canOpenCounterContext() || !containers.canUseEdgeBoxes) return []
     return (['northeast', 'southeast'] as const).filter((box) =>

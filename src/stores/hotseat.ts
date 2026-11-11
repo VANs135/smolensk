@@ -34,9 +34,8 @@ import type { ConsoleUnit } from './workbench-model'
  * 切方与信息展示纪律（W7 C13）
  *
  * ## 它解决什么
- *   1. **热坐切屏**：双人同机轮流操作时，交接触发一块全屏遮罩（`handoffPending`），
- *      接手方点「确认」之前**不显示盘面**。规则书里没有 hot-seat 条文（已核实「未找到」），
- *      这里实现的是**设备交接的礼仪**，其依据是 4.9 的信息纪律（对手不该看到己方堆叠明细）；
+ *   1. **观察方由玩家手动选定**（用户 2026-11-11 口径）：轮到对方行动时**不再遮挡换手、
+ *      也不再自动切视角**；`viewerSide` 只由 `setViewerSide` 改写，玩家自己决定看哪一方；
  *   2. **未参战敌方堆叠明细隐藏（4.9a）**：敌方格只给「最上方战斗单位 + 最上方激活飞机 + 工事」
  *      与「是否战略模式 / DG / 断补」；**枚数与其余算子一律隐藏**（`stackSizeHidden`）；
  *   3. **堆叠顺序（4.8b）**：给所有者报「有 ZOC 的单位应在最上方」「相邻有敌方地面单位时 HQ 不得置顶」
@@ -60,8 +59,8 @@ export const useHotseatStore = defineStore('hotseat', () => {
    * 对局模式（B36；用户口径 #7；2026-11-09 前移到选剧本）
    *
    *   · `null`：**尚未选择** —— 选剧本页必须显式选一个，未选不得进入初设；
-   *   · `pvp`：双人同机热坐 —— 交接亮**交接屏**，信息纪律按 4.9a 裁剪；
-   *   · `solo`：单人（自己跟自己推演）—— **不遮交接屏**、**双方内容都可见**（见 `fogDisabled`）；
+   *   · `pvp`：双人同机热坐 —— 换手**不遮屏、不自动切视角**（玩家自选看哪一方），信息纪律按 4.9a 裁剪；
+   *   · `solo`：单人（自己跟自己推演）—— **双方内容都可见**（见 `fogDisabled`）；
    *   · `pve`：人机 —— AI 打 `aiSide` 指定的一方，玩家操作另一方（AI 只走既有具名入口）。
    */
   const mode = ref<HotseatMode | null>(null)
@@ -92,10 +91,10 @@ export const useHotseatStore = defineStore('hotseat', () => {
   const canPreset = computed<boolean>(() => mode.value === 'pve' && aiSide.value !== null)
 
   /**
-   * 热坐交接是否启用（pvp / pve 启用；solo 与「尚未选择」都不启用）
+   * 是否双人/人机同机对局（pvp / pve；solo 与「尚未选择」都不算）
    *
-   * ★ 由 `mode` **推出**（原来是一个独立 ref）⇒ 一个来源，免得"模式是 solo 但交接屏还开着"。
-   * ★ 未选择（null）**不得**按 PVP 口径生效：读档后要求重选模式，选之前不遮屏。
+   * ★ 由 `mode` **推出**（一个来源）。2026-11-11 起它**只**表示对局组织方式，
+   *   不再驱动任何遮屏或自动切视角。
    */
   const hotseatEnabled = computed<boolean>(() => mode.value === 'pvp' || mode.value === 'pve')
 
@@ -108,12 +107,9 @@ export const useHotseatStore = defineStore('hotseat', () => {
    */
   const fogDisabled = computed<boolean>(() => mode.value === 'solo')
 
-  /** 交接屏是否待确认（true ⇒ 盘面被遮罩，直到接手方确认） */
-  const handoffPending = ref(false)
+  /* ────────────────────────────── 观察方（玩家手动选定） ────────────────────────────── */
 
-  /* ────────────────────────────── 观察方（＝当前行动方） ────────────────────────────── */
-
-  /** 当前观察方（2.2：行动方就是能看到己方全貌的一方） */
+  /** 当前决策方（2.2：行动方就是能看到己方全貌的一方） */
   const decisionSide = computed<Side>(() => {
     if (session.question !== null) return session.question.responder
     const attacker =
@@ -121,8 +117,14 @@ export const useHotseatStore = defineStore('hotseat', () => {
       workbench.activeSide
     return workbench.engagementDecisionRole === 'defender' ? otherSide(attacker) : attacker
   })
-  const viewerOverride = ref<Side | null>(null)
-  const viewerSide = computed<Side>(() => viewerOverride.value ?? decisionSide.value)
+
+  /**
+   * 当前观察方（**玩家手动选定，不随行动方自动切换**）
+   *
+   * 用户 2026-11-11 口径：轮到对方玩家行动时不再自动切屏/切视角，玩家自己决定看哪。
+   * 本 ref 只由 `setViewerSide` 改写；全文件没有任何 watch 会因为 `decisionSide` 变化而改它。
+   */
+  const viewerSide = ref<Side>(workbench.activeSide)
   watch(
     viewerSide,
     () => {
@@ -131,20 +133,14 @@ export const useHotseatStore = defineStore('hotseat', () => {
     },
     { flush: 'sync' },
   )
-  let previousViewer: Side | null = null
-  watch(
-    decisionSide,
-    (next, previous) => {
-      viewerOverride.value = null
-      previousViewer = null
-      if (next !== previous && hotseatEnabled.value) handoffPending.value = true
-    },
-    { flush: 'sync' },
-  )
-  /** 对手方 */
+
+  /** 手动切观察方（只改视角；不翻行动方、不遮屏、不触发交接） */
+  function setViewerSide(next: Side): void {
+    viewerSide.value = next
+  }
+
+  /** 对手方（相对**观察方**；如地图画敌方 ZOC） */
   const opponentSide = computed<Side>(() => otherSide(viewerSide.value))
-  /** 交接提示语（给接手方看的那一句） */
-  const handoffNotice = computed(() => `请把设备交给「${sideLabel(viewerSide.value)}」玩家`)
 
   /* ────────────────────────────── 信息纪律（共识开关 → 生效） ────────────────────────────── */
 
@@ -339,34 +335,10 @@ export const useHotseatStore = defineStore('hotseat', () => {
     }),
   )
 
-  /* ────────────────────────────── 交接（热坐切屏） ────────────────────────────── */
-
-  /** 2.2：交接到对手方；启用热坐（pvp/pve）时亮起交接屏（未确认前不显示盘面）；solo 直接切方 */
-  function beginHandoff(): void {
-    previousViewer = viewerSide.value
-    viewerOverride.value = opponentSide.value
-    handoffPending.value = hotseatEnabled.value
-  }
-
-  /** 确认交接：接手方已就位，亮出盘面（回到 4.9 的可见性纪律） */
-  function confirmHandoff(): void {
-    previousViewer = null
-    handoffPending.value = false
-  }
-
-  /** 反悔：把行动方改回原方（仅在交接屏未确认时可用） */
-  function cancelHandoff(): void {
-    if (!handoffPending.value) return
-    viewerOverride.value = previousViewer
-    previousViewer = null
-    handoffPending.value = false
-  }
-
   /**
    * 切换对局模式（B36；2026-11-09 前移到选剧本 + 初设后锁定）
    *
-   * 返回是否改动：初设已开始（`setupLocked`）⇒ 拒绝，模式不可再改；
-   * 换到 `solo` 时顺手收掉交接屏（否则会留一块"没人接手"的遮罩）；换到 pvp/pve 即恢复热坐纪律。
+   * 返回是否改动：初设已开始（`setupLocked`）⇒ 拒绝，模式不可再改。
    * 离开 PVE 时清空 `aiSide`，下次进 PVE 必须重新点一次 AI 方。
    * 模式随存档保存（`hotseat: { mode, aiSide }`）——它只记录组织方式，不参与规则判定。
    */
@@ -374,7 +346,6 @@ export const useHotseatStore = defineStore('hotseat', () => {
     if (setupLocked.value) return false
     mode.value = next
     if (next !== 'pve') aiSide.value = null
-    if (!hotseatEnabled.value) handoffPending.value = false
     return true
   }
 
@@ -414,9 +385,6 @@ export const useHotseatStore = defineStore('hotseat', () => {
    *     选择前 AI 不接管（`aiControlMode` 由 mode 推出）、热坐遮罩也不按 PVP 口径亮起。
    */
   function restoreFromSave(saved: SaveHotseat | undefined): void {
-    handoffPending.value = false
-    viewerOverride.value = null
-    previousViewer = null
     if (saved === undefined) {
       mode.value = null
       aiSide.value = null
@@ -431,15 +399,14 @@ export const useHotseatStore = defineStore('hotseat', () => {
   // 把「模式随档保存 / 读档恢复」挂到会话层的存档口（与 board/setup 编解码器同一惯例）
   session.setHotseatCodec({ capture: snapshotForSave, restore: restoreFromSave })
 
-  /** 开关热坐交接（单人试算可关掉）——保留旧入口：关＝切到 solo、开＝切回 pvp */
-  function setHotseatEnabled(on: boolean): void {
-    setMode(on ? 'pvp' : 'solo')
-  }
-
   /** 模式的中文名与说明（界面直接取，不各处硬写） */
   const MODE_LABELS: readonly { key: HotseatMode; label: string; note: string }[] = [
-    { key: 'solo', label: 'SOLO（单人）', note: '同一人操作双方；不遮交接屏、双方内容都可见' },
-    { key: 'pvp', label: 'PVP（双人热坐）', note: '交接亮屏；信息纪律按 4.9a 裁剪' },
+    { key: 'solo', label: 'SOLO（单人）', note: '同一人操作双方；双方内容都可见' },
+    {
+      key: 'pvp',
+      label: 'PVP（双人热坐）',
+      note: '换手不遮屏、不自动切视角（玩家自选看哪一方）；信息纪律按 4.9a 裁剪',
+    },
     { key: 'pve', label: 'PVE（人机）', note: 'AI 打一方、玩家打另一方；AI 只走既有具名入口' },
   ]
 
@@ -461,12 +428,11 @@ export const useHotseatStore = defineStore('hotseat', () => {
     MODE_LABELS,
     fogDisabled,
     hotseatEnabled,
-    handoffPending,
-    // 观察方
+    // 观察方（玩家手动选，不随行动方自动切）
     decisionSide,
     viewerSide,
+    setViewerSide,
     opponentSide,
-    handoffNotice,
     // 纪律
     policy,
     rollVisibleToViewer,
@@ -478,11 +444,6 @@ export const useHotseatStore = defineStore('hotseat', () => {
     inCombat,
     revealFor,
     stackOrderIssues,
-    // 交接
-    beginHandoff,
-    confirmHandoff,
-    cancelHandoff,
-    setHotseatEnabled,
     // 规则号（供界面直接标注，避免各处硬写字面量）
     FOG_RULE,
     STACK_ORDER_RULE,

@@ -271,10 +271,11 @@ describe('9.2/10.0：战斗与火炮真实盘面回归', () => {
     w.combatInputs.defenderArUnitId = d.instanceId
     expect(w.declareCombatArStep('defender')).toBe(false)
     expect(w.declareCombatArStep('attacker')).toBe(true)
-    expect(hot.viewerSide).toBe('soviet')
+    // 用户 2026-11-11：观察方不自动翻；"交给正确玩家"看决策方（decisionSide）
+    expect(hot.decisionSide).toBe('soviet')
     expect(w.combatState!.declaredAttackerArUnitId).toBe(a.instanceId)
     expect(w.declareCombatArStep('defender')).toBe(true)
-    expect(hot.viewerSide).toBe('soviet')
+    expect(hot.decisionSide).toBe('soviet')
     const state = w.combatState
     w.selectCombatDefenderHex(NEAR_HEX)
     w.setBattleMode('quick')
@@ -291,11 +292,11 @@ describe('9.2/10.0：战斗与火炮真实盘面回归', () => {
   it('10.0a：轰炸横移与目标损失时热坐交给目标方', () => {
     const { w } = barrageFixture()
     const hot = useHotseatStore()
-    expect(hot.viewerSide).toBe('soviet')
+    expect(hot.decisionSide).toBe('soviet')
     expect(w.confirmBarrageShiftsStep()).toBe(true)
-    expect(hot.viewerSide).toBe('axis')
+    expect(hot.decisionSide).toBe('axis')
     w.barrageInputs.die = 2
     expect(w.rollBarrageDiceStep()).toBe(true)
-    expect(hot.viewerSide).toBe('soviet')
+    expect(hot.decisionSide).toBe('soviet')
   })
 })

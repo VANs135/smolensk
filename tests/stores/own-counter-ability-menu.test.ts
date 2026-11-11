@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
-import { useMapViewStore, useSetupStore, useWorkbenchStore } from '@/stores'
+import { useHotseatStore, useMapViewStore, useSetupStore, useWorkbenchStore } from '@/stores'
 
 import { groundRecord, placeGround } from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
@@ -24,6 +24,8 @@ const HEX: HexRef = { col: 15, row: 10 }
 function stores() {
   setActivePinia(createPinia())
   useSetupStore().finished = true
+  // 2026-11-11：观察方手动选（不再随行动方自动切），默认按本组用例的苏方
+  useHotseatStore().setViewerSide('soviet')
   return { workbench: useWorkbenchStore(), mapView: useMapViewStore() }
 }
 
@@ -106,6 +108,7 @@ describe('⑤ 右键己方算子：运输点数 / 卡车的装卸', () => {
   it('★ 13.2g-A：编内卡车已载、格内不许卸载 ⇒ 不出；同格有站可装 ⇒ 出', () => {
     const truck = placeTransportPoint(s.workbench, { organic: true, side: 'axis', id: 'truck-1' })
     s.workbench.setActiveSide('axis')
+    useHotseatStore().setViewerSide('axis')
     enterMovement(s.workbench)
     truck.loadedSpT = 4
     // 编内卡车永远不能在地图上卸载（13.2g-A），格内又无站 ⇒ 无可用项
@@ -144,6 +147,7 @@ describe('阶段闸门：移动环节己方炮兵进不了炮击名单（#9）',
   it('★ 轰炸工具开着 + 点己方炮兵 ⇒ 参炸名单仍为空、不弹「宣布轰炸」', () => {
     const { workbench, mapView } = stores()
     workbench.setActiveSide('axis')
+    useHotseatStore().setViewerSide('axis')
     enterMovement(workbench)
     const artillery = placeGround(
       workbench,

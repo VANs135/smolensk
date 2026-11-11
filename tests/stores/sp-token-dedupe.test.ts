@@ -2,7 +2,13 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
-import { useMapViewStore, useSetupStore, useWorkbenchStore, unitChoices } from '@/stores'
+import {
+  useHotseatStore,
+  useMapViewStore,
+  useSetupStore,
+  useWorkbenchStore,
+  unitChoices,
+} from '@/stores'
 
 import { placeGround } from '../flows/sop-harness'
 
@@ -21,6 +27,8 @@ function stores() {
   useSetupStore().finished = true
   const workbench = useWorkbenchStore()
   workbench.setActiveSide('soviet')
+  // 2026-11-11：观察方手动选（不再随行动方自动切），测试里与行动方对齐
+  useHotseatStore().setViewerSide('soviet')
   return { workbench, mapView: useMapViewStore() }
 }
 

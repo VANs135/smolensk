@@ -13,8 +13,8 @@ import { toConsoleUnit, unitChoices, useHotseatStore, useWorkbenchStore } from '
  * 两条都是**对手之间**的约定 ⇒ 单人局（solo）**没有对手可隐瞒**，读成"全可见"是照原文的自然结论。
  * pvp 与现状一致；pve 本轮**只登记枚举**（界面明示未实现）。
  *
- * ★ 一条**测法边界（如实）**：本仓库不挂组件渲染测试 ⇒ "选剧本页那一排单选长什么样"只由源码守卫 + 人眼；
- *   交接屏**真的遮住盘面**属渲染层（`HandoffOverlay` 的 `v-if`），这里只钉 `handoffPending` 这个**判据**。
+ * ★ 一条**测法边界（如实）**：本仓库不挂组件渲染测试 ⇒ "选剧本页那一排单选长什么样"只由源码守卫 + 人眼。
+ * ★ 用户 2026-11-11 口径：换手**不再遮屏、不再自动切视角**（整条交接链已删），本文件只钉"模式 → 可见性纪律"。
  */
 const HEX: HexRef = { col: 10, row: 10 }
 
@@ -30,7 +30,7 @@ function placeEnemy(store: ReturnType<typeof newStores>['workbench']): void {
 }
 
 describe('B36：模式（solo / pvp / pve）', () => {
-  it('★ 缺省未选模式；选定 pvp 后交接屏照旧遮', () => {
+  it('★ 缺省未选模式；选定 pvp 后只影响可见性纪律，不遮屏', () => {
     const { workbench, hotseat } = newStores()
     // 2026-11-09：模式前移到选剧本，缺省必须是「未选」，不得默认替玩家选 pvp
     expect(hotseat.mode).toBeNull()
@@ -38,21 +38,21 @@ describe('B36：模式（solo / pvp / pve）', () => {
     expect(hotseat.setMode('pvp')).toBe(true)
     expect(hotseat.hotseatEnabled).toBe(true)
 
+    // 2026-11-11：行动方翻面不再带动观察方，也不再有任何遮罩判据
     workbench.setActiveSide('axis')
-    hotseat.beginHandoff()
-    expect(hotseat.handoffPending).toBe(true)
-    expect(hotseat.viewerSide).toBe('soviet')
+    workbench.switchSide()
+    expect(hotseat.viewerSide).toBe('axis')
+    expect('handoffPending' in hotseat).toBe(false)
   })
 
-  it('★ solo：不遮交接屏（切方照常发生，但不亮屏）', () => {
+  it('★ solo：可见性纪律放宽（换手同样不遮屏、不自动切视角）', () => {
     const { workbench, hotseat } = newStores()
     hotseat.setMode('solo')
     expect(hotseat.hotseatEnabled).toBe(false)
 
     workbench.setActiveSide('axis')
-    hotseat.beginHandoff()
-    expect(hotseat.viewerSide).toBe('soviet')
-    expect(hotseat.handoffPending).toBe(false)
+    workbench.switchSide()
+    expect(hotseat.viewerSide).toBe('axis')
   })
 
   it('★ solo：**双方内容都可见**（4.9a 的裁剪与"看穿堆叠"提示都关掉）', () => {
@@ -90,20 +90,10 @@ describe('B36：模式（solo / pvp / pve）', () => {
     expect(hotseat.visibleUnitIdsInHex(HEX)).toEqual(['e1', 'e2', 'e3'])
   })
 
-  it('★ 旧入口 `setHotseatEnabled` 仍可用（关＝solo、开＝pvp），换到 solo 顺手收掉交接屏', () => {
+  it('★ 模式仍可切到 pve（AI 方由选剧本页指定）', () => {
     const { hotseat } = newStores()
-    hotseat.setHotseatEnabled(true)
-    expect(hotseat.mode).toBe('pvp')
-    hotseat.beginHandoff()
-    expect(hotseat.handoffPending).toBe(true)
-
-    hotseat.setHotseatEnabled(false)
-    expect(hotseat.mode).toBe('solo')
-    expect(hotseat.handoffPending).toBe(false)
-
     hotseat.setMode('pve')
     expect(hotseat.mode).toBe('pve')
-    // pve 仍按热坐纪律遮交接屏；AI 方由选剧本页指定，控制方在棋桌只读展示
     expect(hotseat.hotseatEnabled).toBe(true)
   })
 
@@ -120,7 +110,7 @@ describe('B36：模式（solo / pvp / pve）', () => {
 })
 
 describe('B36：接线（源码守卫）', () => {
-  it('★ 选剧本页有模式单选；对局台的「切方」走交接流程（与热键 T 同一条路）', () => {
+  it('★ 选剧本页有模式单选；对局台与热键都**没有**交接链（整条移除）', () => {
     const setupView = readFileSync('src/views/ScenarioSetupView.vue', 'utf8')
     expect(setupView).toContain('hotseat.MODE_LABELS')
     expect(setupView).toContain('<ul class="modes">')
@@ -128,12 +118,13 @@ describe('B36：接线（源码守卫）', () => {
     expect(setupView).toContain('@change="hotseat.setMode(item.key)"')
 
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
-    expect(game).toContain('hotseat.beginHandoff()')
-    // 修前那行直接 switchSide，绕过了交接屏 ⇒ 必须绝迹
-    expect(game).not.toContain('@click="workbench.switchSide()"')
+    expect(game).not.toContain('beginHandoff')
+    expect(game).toContain("hotseat.setViewerSide('axis')")
+    expect(game).toContain("hotseat.setViewerSide('soviet')")
 
     const hotkeys = readFileSync('src/stores/hotkeys.ts', 'utf8')
-    expect(hotkeys).toContain('hotseat.beginHandoff()')
+    expect(hotkeys).not.toContain('beginHandoff')
+    expect(hotkeys).not.toContain('handoffPending')
   })
 
   it('★ 战雾那条"无观察方 ⇒ 不裁剪"的分支在**引擎**里（不在 store 里自己拼）', () => {

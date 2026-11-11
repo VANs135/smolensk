@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-import { useHotseatStore } from './hotseat'
 import { useUiStore } from './ui'
 import { useWorkbenchStore } from './workbench'
 
@@ -152,7 +151,7 @@ export const HOTKEY_DOCS: readonly HotkeyDoc[] = [
   { keys: 'Enter', label: '结束本次移动', rule: '6.1' },
   { keys: 'U / Backspace', label: '撤销一步', rule: '6.1' },
   { keys: 'Esc', label: '取消当前交互 / 关小窗', rule: '—' },
-  { keys: 'T', label: '交给对手（热坐切方，走交接流程）', rule: '4.9a' },
+  { keys: 'T', label: '切到对手（只翻行动方，不切视角）', rule: '2.2' },
   { keys: '+ / -', label: '地图放大 / 缩小', rule: '—' },
   { keys: '0', label: '适应窗口', rule: '—' },
   { keys: 'H', label: '折叠 / 展开侧栏', rule: '—' },
@@ -203,7 +202,6 @@ export interface HotkeyViewBridge {
 export const useHotkeyStore = defineStore('hotkeys', () => {
   const workbench = useWorkbenchStore()
   const ui = useUiStore()
-  const hotseat = useHotseatStore()
 
   /** 是否启用（默认启用；输入框聚焦时由绑定层自动放行） */
   const enabled = ref(true)
@@ -287,9 +285,8 @@ export const useHotkeyStore = defineStore('hotkeys', () => {
         }
         return false
       case 'side.next':
-        // 4.9a：交给对手要走**交接流程**（启用热坐时先亮交接屏，未确认前不显示盘面）。
-        // 修前直接 `workbench.switchSide()` ⇒ 交接屏永远不会出现，热坐的遮屏形同虚设。
-        hotseat.beginHandoff()
+        // 用户 2026-11-11：换手不再遮屏/自动切视角；T 只手动翻行动方，看哪一方由玩家自己点。
+        workbench.switchSide()
         return true
       case 'view.zoomIn':
         viewBridge.value?.zoomIn()
@@ -324,7 +321,7 @@ export const useHotkeyStore = defineStore('hotkeys', () => {
     target: EventTarget | null
     preventDefault: () => void
   }): boolean {
-    if (!enabled.value || hotseat.handoffPending) return false
+    if (!enabled.value) return false
     // ★ 控件自己的键：焦点在按钮/链接上时回车＝激活该控件（Space 同理），热键让路
     //   （既不派发也不 preventDefault）——修前「回车＝结束移动」会把它吃掉，键盘用户按不动按钮。
     if (isControlTarget(event.target) && CONTROL_OWNED_KEYS.has(event.key)) return false

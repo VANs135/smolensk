@@ -18,8 +18,8 @@ const selectedId = ref(setup.scenarioId)
 const selected = computed(() => choices.value.find((item) => item.id === selectedId.value) ?? null)
 
 const modeCopy = {
-  solo: { label: '单人推演', note: '同一人操作双方；不遮交接屏、双方可见' },
-  pvp: { label: '双人热坐', note: '交接遮屏 · §4.9a' },
+  solo: { label: '单人推演', note: '同一人操作双方；双方可见' },
+  pvp: { label: '双人热坐', note: '换手不遮屏、不自动切视角 · §4.9a' },
   pve: { label: '人机对局', note: 'AI 打一方，你打另一方' },
 } as const
 
