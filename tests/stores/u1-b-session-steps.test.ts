@@ -240,8 +240,9 @@ describe('U1-b 源码守卫：只在门里出一件，旧判定不留两份', ()
     expect(source).toContain('v-if="active"')
     expect(source).toContain('data-session-item')
     expect(source).not.toContain('v-show')
-    // 门不放行"全部显示"，只认当前事项 id
-    expect(source).toContain('gate.value.id === props.item')
+    // 门只认当前事项 id；「无宿主」与「宿主无待决」由 sessionStepVisible 分开
+    expect(source).toContain('sessionStepVisible(hosted, step.value?.id ?? null, props.item)')
+    expect(source).not.toContain('gate.value.id === props.item')
   })
 
   it('战斗面板：旧 state.step 判定已清掉，改由 SessionStep 对齐投影', () => {
