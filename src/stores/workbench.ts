@@ -3420,7 +3420,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * C9：铁路补给事实（13.3a / 13.3c / 12.7a-B/C）
    *
-   * - sources ← 12.6a① 的边缘铁路格/专规补给源格（玩家声明，**不含**派生的卸货格，否则自洽循环）；
+   * - sources ← **专规 2.1 / 3.1 的进场铁路格**，按连通性分属两方各自的网（用户 2026-11-11 裁定：
+   *   不存在交叉可用 / 共用段；多轨与单轨只差 13.3c 运量费用，不影响归属）；
    * - extenders ← 摆好的延补队（12.7b：距离＝印值 MA）；
    * - controlByHex（13.3h）：操作台无控制历史，按「格内仅有单方战斗单位」近似，其余视为未控制
    *   （宁可少给：未控制 ⇒ 不作火车卸货格）；
@@ -3428,9 +3429,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const railSupplyFacts = computed(() =>
     createRailSupplyFacts({
-      sources: supplySourceDecls.value
-        .filter((decl) => decl.kind !== 'detrainable')
-        .map((decl) => ({ hex: decl.hex, side: decl.side })),
+      sources: [
+        ...entryRailSeedsBySide.value.axis.map((hex) => ({ hex, side: 'axis' as Side })),
+        ...entryRailSeedsBySide.value.soviet.map((hex) => ({ hex, side: 'soviet' as Side })),
+      ],
       extenders: units.value.filter(isExtenderUnit).map(toExtenderView),
       controlByHex: (hex) => {
         const sides = new Set(
@@ -17595,6 +17597,30 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
+   * 专规 2.1 / 3.1（用户 2026-11-11 裁定）：**两张进场铁路网的种子**
+   *
+   * 原文没有「转换规矩」的铁路 ⇒ 不存在交叉可用，也没有共用段：整段铁路自然归其中一方。
+   * 两网各自从本方**进场铁路**出发做连通性 BFS，种子判据：
+   *   本方 live 补给源清单 ∩ 地图边缘 ∩ 铁路格 ∩ 当日仍开放（2.1a）。
+   * 多轨与单轨的差别只是 13.3c 的运量费用，**不参与归属判定**。
+   */
+  const entryRailSeedsBySide = computed<{ axis: HexRef[]; soviet: HexRef[] }>(() => {
+    const scenario = scenarios.scenarios.find((item) => item.id === scenarioId.value)
+    const edge = new Set(mapEdgeHexes.value.map((hex) => hexLabel(hex)))
+    const pick = (side: Side, list: readonly string[] | undefined): HexRef[] => {
+      const open = new Set(safeEdgeHexesBySide.value[side].map((hex) => hexLabel(hex)))
+      return (list ?? [])
+        .map((text) => parseHexPath(text)[0])
+        .filter((hex): hex is HexRef => hex !== undefined)
+        .filter((hex) => edge.has(hexLabel(hex)) && open.has(hexLabel(hex)) && isRailHexAt(hex))
+    }
+    return {
+      axis: pick('axis', scenario?.supplySources?.axisLive),
+      soviet: pick('soviet', scenario?.supplySources?.sovietLive),
+    }
+  })
+
+  /**
    * 13.5a：可作重建圆心的**友方指挥部**格
    *
    * 原文：「所需的补员必须都在一个格中，且要在一个友方指挥部的 2 格内（含 2 格）。
@@ -17829,9 +17855,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     () => supplyTrainSp.value > 0 && supplyTrainPlacedKey.value !== supplyTrainTurnKey(),
   )
 
-  /** 3.6：可放置的全部可卸货铁路格（判据同 13.3c，只有 `detrainableHexes` 一处） */
+  /**
+   * 3.6：补给列车可放置的卸货铁路格
+   *
+   * 用户 2026-11-11 裁定：**补给列车事件只取德军那张网**（不得用苏军铁路或共用段冒充），
+   * 与当前视角无关；判据仍只有 13.3c 的 `detrainableHexes` 一处，只是固定取 `axis`。
+   */
   const supplyTrainPlacementHexes = computed<HexRef[]>(() =>
-    detrainableHexes.value.map((hex) => ({ ...hex })),
+    railSupplyBySide.value.axis.detrainableHexes.map((hex) => ({ ...hex })),
   )
 
   /**
@@ -17842,6 +17873,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function placeSupplyTrainSpNow(hex: HexRef): boolean {
     if (!requireAction('rein.supplyTrain', '补给列车落点')) return false
+    // 3.6 是德军事件 ⇒ 只能落在德军自己的那张铁路网上
+    if (activeSide.value !== 'axis') {
+      pushLog('warning', '3.6：补给列车是德军事件，当前不是德军方视角', '专规 3.6')
+      return false
+    }
     if (!supplyTrainPending.value) {
       pushLog('warning', '3.6：本次没有待落的补给列车', '专规 3.6')
       return false
@@ -23803,7 +23839,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     refitPayDumps,
     airReductionCandidates,
     railSupply,
+    railSupplyBySide,
     railSupplyFacts,
+    entryRailSeedsBySide,
     detrainableHexes,
     // 批 F 切片 3：到货 SP 的落点（专规 2.1 / 3.1 免费铁运 + 3.6 补给列车）
     freeRailCityHexes,
