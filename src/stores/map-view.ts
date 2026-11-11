@@ -718,6 +718,12 @@ export const useMapViewStore = defineStore('mapView', () => {
       return '反应：点预备单位 → 右键「转出预备模式」（MA ×½）后才能移动（5.7b / 7.0a）'
     if (workbench.segmentStep?.id === 'reaction.barrage')
       return '反应轰炸：点敌方格定目标；右键己方炮/飞机选入轰炸，会话框里宣布（10.0d）'
+    /*
+     * F 段的炮击环节：本段**不能移动**，通用那句「点亮可移动范围」在这里是错的；
+     * 且 2.2 的 F 段括注限定 artillery only ⇒ 提示只说炮兵，不提空军。
+     */
+    if (workbench.segmentStep?.id === 'combat.barrage')
+      return '炮击：点敌方格定目标（10.0d）；右键己方火炮或敌方算子进炮击，会话框里宣布（10.1）'
     // B35：不再看"工具"，看**本环节允不允许宣布战斗**（判据与闸门同源）
     if (workbench.combatPickActive)
       return '点己方算子加入攻方（9.1b），点敌方格选定防御格，会话框里走 9.2 九步'

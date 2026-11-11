@@ -188,9 +188,9 @@ const defenderArItems = computed(() =>
   <BasePanel title="战斗">
     <!-- 未开始：选择攻方与防御格 -->
     <SessionStep v-if="state === null" item="combat:declare">
-      <p class="muted">
-        在「打一仗」工具下：点己方算子＝加入攻方（可跨多个相邻格，9.1b/9.1c）；点敌方算子所在格＝选定防御格。
-      </p>
+      <RuleTip rule="9.1b / 9.1c">
+        点己方算子＝加入攻方（可跨多个相邻格）；点敌方算子所在格＝选定防御格。
+      </RuleTip>
       <p v-if="workbench.battleTarget === null" class="num">
         <BaseTag kind="danger">可攻击</BaseTag>
         地图上<span v-if="workbench.combatAttackableHexes.length > 0">高亮</span
@@ -235,8 +235,12 @@ const defenderArItems = computed(() =>
             在地图上点补给站即声明付款来源（12.4）；来源为「未声明」时无法付款。
           </RuleTip>
         </div>
-        <div class="row">
+        <div
+          v-if="declaredDumpOf('attacker') !== null || declaredDumpOf('defender') !== null"
+          class="row"
+        >
           <BaseButton
+            v-if="declaredDumpOf('attacker') !== null"
             variant="ghost"
             size="sm"
             @click="workbench.clearCombatSupplyDump('attacker')"
@@ -244,6 +248,7 @@ const defenderArItems = computed(() =>
             清除攻方来源
           </BaseButton>
           <BaseButton
+            v-if="declaredDumpOf('defender') !== null"
             variant="ghost"
             size="sm"
             @click="workbench.clearCombatSupplyDump('defender')"
@@ -340,10 +345,9 @@ const defenderArItems = computed(() =>
 
       <!-- 第 4 步：宣布地形与初始攻防比（9.4 / 9.7） -->
       <SessionStep item="combat:terrain">
-        <p class="muted">
-          9.4b 攻方**每一个攻击堆叠**可选「防御格内地形」或「所穿越的格边地形」（不累计）； 9.4c
-          守方**只能**选防御格内地形，并决定战斗表横行。
-        </p>
+        <RuleTip rule="9.4b / 9.4c">
+          攻方每个攻击堆叠可选「防御格内地形」或「所穿越的格边地形」（不累计）；守方只能选防御格内地形，并决定战斗表横行。
+        </RuleTip>
         <div v-for="stack in workbench.combatStackTerrainOptions" :key="stack.key" class="row">
           <label class="field">
             攻方堆叠 {{ stack.label }}
@@ -365,7 +369,7 @@ const defenderArItems = computed(() =>
         </div>
         <div class="row">
           <label class="field">
-            守方防御地形（9.4c）
+            守方防御地形
             <select v-model="workbench.combatInputs.defenderTerrain" class="select">
               <option
                 v-for="name in workbench.combatDefenderTerrainOptions"
@@ -444,8 +448,10 @@ const defenderArItems = computed(() =>
           }}结算<span v-if="resolverNotation !== ''"> · {{ resolverNotation }}</span>
         </p>
         <p class="num">
-          需承受 {{ workbench.combatRequirement?.losses ?? 0 }} 点；AR
-          单位先受第一点，之后每人各受一点 （9.11c）；超出承受范围的损失忽略（9.11b）。
+          需承受 {{ workbench.combatRequirement?.losses ?? 0 }} 点
+          <RuleTip rule="9.11b / 9.11c">
+            AR 单位先受第一点，之后每人各受一点；超出承受范围的损失忽略。
+          </RuleTip>
         </p>
         <p class="muted num">
           规范分配：
@@ -462,7 +468,10 @@ const defenderArItems = computed(() =>
             修前引擎要求提交的分配与规范分配**逐单位一致** ⇒ 这种合法选择会被误判违规。
           -->
         <div v-if="workbench.combatLossSwapChoices.length > 0" class="row">
-          <span class="muted">9.11a：多受的那一点改派给</span>
+          <span class="muted"
+            >多受的那一点改派给
+            <RuleTip rule="9.11a">在 9.11c 的限制内由拥有者决定由哪些单位承受。</RuleTip>
+          </span>
           <BaseButton
             variant="ghost"
             size="sm"
@@ -505,7 +514,8 @@ const defenderArItems = computed(() =>
         </p>
         <p class="num">
           选项点数 {{ workbench.combatRequirement?.options ?? 0 }}：可把「撤退格数 +
-          损失军力」任意组合， 但总数必须**完全满足**（9.10a）。
+          损失军力」任意组合
+          <RuleTip rule="9.10a">组合后必须完全满足选项点数。</RuleTip>
         </p>
         <div v-if="workbench.combatInputs.optionLossPoints > 0" class="muted">
           AR 先受第一点。
@@ -532,8 +542,7 @@ const defenderArItems = computed(() =>
         <p class="num">
           可用选项点数 <b>{{ workbench.optionDraftPoints }}</b
           >｜草稿已用 <b>{{ workbench.optionDraftUsed }}</b
-          >｜剩余 <b>{{ workbench.optionDraftRemaining }}</b
-          >（9.10a：提交时须完全满足）
+          >｜剩余 <b>{{ workbench.optionDraftRemaining }}</b>
         </p>
         <div class="row">
           <BaseButton
@@ -730,19 +739,16 @@ const defenderArItems = computed(() =>
               : '防御格未空 ⇒ 不推进'
           }}
         </p>
-        <p class="muted">
-          9.12g-A：只有**付了战斗补给**的单位（含战斗值为零的）才能推进；9.13：取得进击标记须满足
-          攻击阶段、非 DG、非突袭、攻方把全部选项选为军力损失等条件。
-        </p>
+        <RuleTip rule="9.12g-A / 9.13">
+          只有付了战斗补给的单位（含战斗值为零的）才能推进；进击标记须满足攻击阶段、非 DG、
+          非突袭、攻方把全部选项选为军力损失等条件。
+        </RuleTip>
         <!--
             批 F·E4：**推进入口唯一** ⇒ 本面板的推进块改为**只读**，勾选与确认都在
             **地图上的推进格小窗**（`MapActionPopover`）里做（规则书里推进的对象就是那个格）。
             9.12g-D 的逐单位勾选因此没有丢失，只是换到了地图上。
           -->
-        <p class="muted">
-          勾选「哪些单位推进」与确认收束 ⇒ 请点地图上高亮的推进格（就近小窗）。突袭（9.12g-D）
-          由系统自动收束，无需操作。
-        </p>
+        <p class="muted">勾选与确认请点地图上高亮的推进格（就近小窗）；突袭由系统自动收束。</p>
         <ul class="list">
           <li
             v-for="choice in workbench.combatAdvanceChoices"

@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { HexRef } from '@/data'
 import { mapLayers } from '@/data'
 import { hexDistance } from '@/engine/hex-geometry'
+import { sopStepsOf } from '@/engine/rules'
 import {
   actionGateOf,
   aircraftChoices,
@@ -243,5 +244,39 @@ describe('地图外空军盒（2.1C / 规格 §4 裁定③）', () => {
     // 可勾选 ⇒ 参与任务（盒内整备等入口维持既有实现，这里只验出击）
     workbench.toggleAirMissionUnit('air-box')
     expect(workbench.airMissionAirIds).toContain('air-box')
+  })
+})
+
+describe('F 战斗段的窗口纪律（2.2 F：炮击 → 战斗两节）', () => {
+  it('★ 2.2：F 段恰好两节（炮击 → 战斗），没有第三个环节', () => {
+    expect(sopStepsOf('combat').map((step) => step.id)).toEqual(['combat.barrage', 'combat.combat'])
+  })
+
+  it('★ 炮击环节的提示说炮击，不再落回「可移动范围」那句通用提示', () => {
+    const { workbench, mapView } = setupBarrage(true)
+    expect(workbench.segmentStep?.id).toBe('combat.barrage')
+    expect(mapView.actionHint).toContain('炮击')
+    expect(mapView.actionHint).not.toContain('可移动范围')
+  })
+
+  it('★ 源码守卫：对局台不摆打不了的目标 / 来源，裁判补记只在验证页', () => {
+    const panel = readFileSync('src/components/barrage/BarragePanel.vue', 'utf8')
+    // 本作无港口（专规 1.1c）⇒ 对局台不列「港口」目标
+    expect(panel).toContain("kind.key !== 'port' || showsReferee")
+    // 「海军（本作无）」这类不可用项不再作为可选项出现
+    expect(panel).not.toContain('海军（本作无）')
+    // 10.0e-A 的裁判补记勾选框收进 showsReferee
+    expect(panel).toContain('v-if="showsReferee" class="row"')
+    // 窗内的实现史长句已收进 ?（RuleTip）
+    expect(panel).not.toContain('原先手填一个数字就算')
+  })
+
+  it('★ 源码守卫：战斗窗里没有空态的「清除来源」，也没有整段规则讲解', () => {
+    const combat = readFileSync('src/components/combat/CombatPanel.vue', 'utf8')
+    // 未声明来源时两个「清除」按钮都不出现
+    expect(combat).toContain('v-if="declaredDumpOf(\'attacker\') !== null"')
+    expect(combat).toContain('v-if="declaredDumpOf(\'defender\') !== null"')
+    // 规则讲解收进 ?，窗内不再留「在「打一仗」工具下…」的说明段
+    expect(combat).not.toContain('在「打一仗」工具下')
   })
 })

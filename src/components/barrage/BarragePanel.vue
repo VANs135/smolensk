@@ -137,11 +137,31 @@ const dumpItems = computed<readonly CounterPickerItem[]>(() =>
 
 /** 损失分配输入（unitId → 点数）；`setLoss` 只写玩家输入，不改盘面 */
 const TARGET_KINDS = [
-  { key: 'combatUnits', label: '战斗单位（10.0a）' },
-  { key: 'airBase', label: '空军基地（10.0c-A）' },
-  { key: 'port', label: '港口（10.0c-B）' },
-  { key: 'trainbusting', label: '运输破坏（10.0c-C）' },
+  { key: 'combatUnits', label: '战斗单位' },
+  { key: 'airBase', label: '空军基地' },
+  { key: 'port', label: '港口' },
+  { key: 'trainbusting', label: '运输破坏' },
 ] as const
+
+/**
+ * 10.0c-B：**本作没有港口**（专规 1.1c：双方皆无海运，港口仅装饰性；用户 2026-11-05 裁定）
+ * ⇒ 对局台不摆「港口」这个打不了的目标；验证页保留（裁判复核 10.0c-B 要用）。
+ */
+const targetKindsHere = computed(() =>
+  TARGET_KINDS.filter((kind) => kind.key !== 'port' || showsReferee),
+)
+
+/** 本段实际用到的轰炸来源（来源由入口决定：炮击＝火炮、空军任务＝轰炸） */
+const kindLabel = computed(() => {
+  switch (workbench.barrageKind) {
+    case 'air':
+      return '空军轰炸（10.2）'
+    case 'ship':
+      return '舰炮（10.0e-F）'
+    default:
+      return '火炮（10.1）'
+  }
+})
 
 /**
  * 10.0e-F：参炸单位类别（**全部**；实际显示哪些由本环节允许的来源决定）
@@ -152,8 +172,8 @@ const TARGET_KINDS = [
  *   空军任务的轰炸结算（`beginAirBarrageNow` 置 `barrageState` ⇒ 本面板以 air 段显示其结果）。
  */
 const KINDS = [
-  { key: 'artillery', label: '火炮（F 段）' },
-  { key: 'ship', label: '海军（本作无）' },
+  { key: 'artillery', label: '火炮' },
+  { key: 'ship', label: '舰炮' },
 ] as const
 
 /**
@@ -236,7 +256,12 @@ function setAircraftRoll(unitId: string, value: number): void {
       <!-- ── ① 宣布整体目标与轰炸值分配（10.0d / 10.0e）── -->
       <SessionStep item="barrage:declare">
         <div class="row">
-          <label class="field">
+          <!--
+            10.0e-F 的「单位类别」在对局台不再是一个下拉：入口已经决定了来源
+            （右键敌方目标＝炮击 10.1；空军任务＝轰炸 10.2），可选项只剩一个，
+            下拉等于让人以为还能换。验证页保留下拉（裁判逐项复核）。
+          -->
+          <label v-if="showsReferee" class="field">
             单位类别（10.0e-F）
             <select
               class="select"
@@ -252,8 +277,9 @@ function setAircraftRoll(unitId: string, value: number): void {
               </option>
             </select>
           </label>
+          <BaseTag v-else kind="info">{{ kindLabel }}</BaseTag>
           <label class="field">
-            整体目标（10.0d）
+            整体目标
             <select
               class="select"
               :value="workbench.barrageTargetKind"
@@ -264,10 +290,13 @@ function setAircraftRoll(unitId: string, value: number): void {
                 )
               "
             >
-              <option v-for="kind in TARGET_KINDS" :key="kind.key" :value="kind.key">
+              <option v-for="kind in targetKindsHere" :key="kind.key" :value="kind.key">
                 {{ kind.label }}
               </option>
             </select>
+            <RuleTip rule="10.0a / 10.0c">
+              战斗单位按 10.0a 结算；空军基地 / 港口 / 运输破坏按 10.0c 逐类查设施表。
+            </RuleTip>
           </label>
         </div>
 
@@ -284,7 +313,7 @@ function setAircraftRoll(unitId: string, value: number): void {
           />
         </template>
 
-        <div class="row">
+        <div v-if="showsReferee" class="row">
           <label class="field">
             <input v-model="workbench.barrageInputs.hexAlreadyBarragedThisPhase" type="checkbox" />
             该格本阶段已被轰炸过（10.0e-A；裁判补记用）
@@ -311,8 +340,10 @@ function setAircraftRoll(unitId: string, value: number): void {
       -->
         <template v-if="workbench.barrageKind === 'air'">
           <p class="muted num">
-            参炸飞机（A5 空军专表）：摆在**空军基地格**（14.1a），该格即 10.2b 所说的「它们基地」；
-            10.2c 空军轰炸**没有补给消耗**（本段不出现付款补给站）。
+            参炸飞机
+            <RuleTip rule="10.2b / 10.2c / 14.1a">
+              飞机摆在空军基地格，该格即「它们基地」；空军轰炸没有补给消耗，本段不出现付款补给站。
+            </RuleTip>
           </p>
           <!-- B14b：参炸飞机＝**算子图阵列**；航程够不到的飞机灰显（14.1） -->
           <CounterPicker
@@ -393,8 +424,8 @@ function setAircraftRoll(unitId: string, value: number): void {
             </label>
           </div>
           <p class="muted">
-            12.3a/12.3b 是仅有的取补途径（用户裁定：补给只能从**己方补给站**扣）⇒ 火炮的这笔 T
-            会从所选站**真扣**；原先手填一个数字就算"已付"，等于免费轰炸。
+            这笔 T 从所选站实扣。
+            <RuleTip rule="12.3a / 12.3b">取补只有直拖与 HQ 投递两条路。</RuleTip>
           </p>
         </template>
         <p v-else class="muted">
@@ -443,7 +474,10 @@ function setAircraftRoll(unitId: string, value: number): void {
       <!-- ── ⑤ 结果确认（10.0a / 10.0c）── -->
       <SessionStep item="barrage:outcome">
         <template v-if="summary?.facility !== true">
-          <p class="num">10.0a：由**目标玩家**选择哪些战斗单位承受损失（合计须等于结果点数）</p>
+          <p class="num">
+            由目标玩家选择承受损失的单位
+            <RuleTip rule="10.0a">各单位的点数合计须等于结果点数。</RuleTip>
+          </p>
           <div class="row">
             <label v-for="unit in lossTargets" :key="unit.instanceId" class="field">
               {{ unit.name }}
@@ -467,21 +501,24 @@ function setAircraftRoll(unitId: string, value: number): void {
                 </option>
               </select>
             </label>
-            <label class="field">
-              空军基地当前等级（10.0c-A）
-              <UiField
-                v-model="workbench.barrageInputs.baseLevel"
-                class="input"
-                type="number"
-                min="1"
-                max="3"
-              />
-            </label>
-            <label class="field">
-              <input v-model="workbench.barrageInputs.isAirstrip" type="checkbox" />
-              简易机场（永不降级，15.2E）
-            </label>
-            <label class="field">
+            <!-- 只摆这一种设施真正要用的字段（10.0c 逐类各有自己的表与输入） -->
+            <template v-if="workbench.barrageTargetKind === 'airBase'">
+              <label class="field">
+                空军基地当前等级（10.0c-A）
+                <UiField
+                  v-model="workbench.barrageInputs.baseLevel"
+                  class="input"
+                  type="number"
+                  min="1"
+                  max="3"
+                />
+              </label>
+              <label class="field">
+                <input v-model="workbench.barrageInputs.isAirstrip" type="checkbox" />
+                简易机场（永不降级，15.2E）
+              </label>
+            </template>
+            <label v-if="workbench.barrageTargetKind === 'port'" class="field">
               港口既有伤害（10.0c-B）
               <UiField
                 v-model="workbench.barrageInputs.portDamageBefore"
@@ -492,20 +529,25 @@ function setAircraftRoll(unitId: string, value: number): void {
               />
             </label>
           </div>
-          <p class="num">10.0c-A：格内每架飞机的掷骰（≥# 者损 1 军力）</p>
-          <div class="row">
-            <label v-for="unit in aircraftRollTargets" :key="unit.instanceId" class="field">
-              {{ unit.name }}
-              <UiField
-                class="input"
-                type="number"
-                min="1"
-                max="6"
-                :model-value="aircraftValue(unit.instanceId)"
-                @update:model-value="setAircraftRoll(unit.instanceId, Number($event))"
-              />
-            </label>
-          </div>
+          <template v-if="workbench.barrageTargetKind === 'airBase'">
+            <p class="num">
+              格内每架飞机的掷骰
+              <RuleTip rule="10.0c-A">掷出 ≥# 者损 1 军力。</RuleTip>
+            </p>
+            <div class="row">
+              <label v-for="unit in aircraftRollTargets" :key="unit.instanceId" class="field">
+                {{ unit.name }}
+                <UiField
+                  class="input"
+                  type="number"
+                  min="1"
+                  max="6"
+                  :model-value="aircraftValue(unit.instanceId)"
+                  @update:model-value="setAircraftRoll(unit.instanceId, Number($event))"
+                />
+              </label>
+            </div>
+          </template>
         </template>
         <div class="row">
           <BaseButton variant="primary" size="sm" @click="workbench.confirmBarrageOutcomeStep()">

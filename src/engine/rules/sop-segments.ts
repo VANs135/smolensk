@@ -388,7 +388,7 @@ export const SOP_SEGMENT_CHAINS: readonly SopSegmentChain[] = [
         rule: '10.0',
         driver: 'player',
         actions: ['barrage'],
-        note: '原文限定（artillery only）；空军轰炸在本段的**轰炸环节**内由 14.7b 宣布（`AIR_MISSION_SEGMENT`）',
+        note: '2.2 SOP 卡面原文：「火炮射击 —— 只有火炮可以射击（10.1）」⇒ 本环节**只放炮兵**；空军轰炸与运输破坏按 14.2e 在各自允许的段的**轰炸环节**宣布（本段闸门不放行 `air.mission`，引擎另以 10.0e-C `wrongPhaseForair:combat` 兜底）',
       },
       {
         id: 'combat.combat',
