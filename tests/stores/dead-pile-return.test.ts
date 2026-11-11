@@ -56,14 +56,16 @@ function readyForRebuild(): ReturnType<typeof newStore> {
 }
 
 describe('死亡堆：可点选 / 可右键 / 可见原因（13.5 / 13.5a / 13.5c）', () => {
-  it('点选一条持项 ⇒ 选中它并预选为重建对象；行键保持空（仍由玩家点）', () => {
+  it('点选一条持项 ⇒ 选中它并预选为重建对象；行键按类型自动映射', () => {
     const store = readyForRebuild()
     deadUnit(store)
 
     store.pickDeadPileUnitNow('dead-1')
     expect(store.deadPilePickId).toBe('dead-1')
     expect(store.rebuildPickUnitId).toBe('dead-1')
-    expect(store.rebuildPickRow).toBe('')
+    // 2026-11-11：不再手点「采用建议」——能唯一确定就自动填行
+    expect(store.rebuildSuggestedRow).not.toBeNull()
+    expect(store.rebuildPickRow).toBe(store.rebuildSuggestedRow)
 
     // 右键菜单：两条动作，顺序固定（重建 → 永久移除）
     expect(store.deadPileActionsOf('dead-1').map((item) => item.key)).toEqual([

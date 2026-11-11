@@ -81,8 +81,9 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'beginSupplyCacheHexPickNow',
       'beginSupplySourceHexPickNow',
       'armConstructionMarkerNow',
-      // 13.5：死亡堆持项选中/预选重建对象——只改选择态，付费落盘在 rebuildUnitNow
+      // 13.5：死亡堆持项选中/预选重建对象——只改选择态（选中 + 自动映射行键），付费落盘在 rebuildUnitNow
       'pickDeadPileUnitNow',
+      'selectRebuildUnitNow',
     ],
   },
   {

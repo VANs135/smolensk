@@ -7,10 +7,10 @@ import UiField from '@/components/UiField.vue'
 import { useRefereeTools } from '@/components/ui-mode'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { auxCardImageUrl } from '@/components/game/aux-card-image'
-import { arrivalCopiesOf, rebuildChartRows, suggestRebuildRow } from '@/engine/rules'
+import { arrivalCopiesOf, rebuildChartRows } from '@/engine/rules'
 import { counterImages, tokenImageUrl } from '@/render/token-images'
 import { ooaScanOf } from '@/render/charts-view'
-import { counterImageUrlOf, hexLabel, recordNameOf, unitChoices } from '@/stores'
+import { counterImageUrlOf, hexLabel } from '@/stores'
 import { useContainersStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -115,35 +115,17 @@ const slowMobilizationUnlocked = computed(() =>
 
 /**
  * §5-B：重建表行键**从数据取**（`charts-supply-repl.json` 按当前方）——不再自由手输，
- * 保证只能选到合法行键。真正的「算子 → 行」自动映射需逐单位类型数据，暂不做（避免启发式把费用判错）。
+ * 保证只能选到合法行键。「算子 → 行」由 store 按类型自动映射（`rebuildSuggestedRow`）。
  */
 const rebuildRowChoices = computed(() => rebuildChartRows(workbench.activeSide))
 
 /**
- * 13.5：**建议行键**（只按该算子自身类型推出，且推不出唯一行就给 null）
+ * 13.5：**自动映射行键**（按该算子自身类型推出；推不出唯一行时为 null）
  *
- * 判据在引擎 `suggestRebuildRow`（唯一出处，逐条对回重建表原文）。这里只做「记录视图 → 判据输入」的搬运：
- * 界面**不会**自动采用建议——必须裁判点「采用建议」，否则宁可让他手选（默认值不能代替规则判定）。
+ * 判据与搬运都在 store（`rebuildSuggestedRow` ← 引擎 `suggestRebuildRow`）；选中算子即写行，
+ * 面板只显示结果。2026-11-11 用户口径：不再让玩家手点「采用建议」。
  */
-const rebuildSuggestion = computed<string | null>(() => {
-  const unit = workbench.rebuildCandidates.find((item) => item.instanceId === rebuildUnitId.value)
-  if (unit === undefined) return null
-  // 空军：重建表恒为 `Aircraft`（专规 1.6 Notes：飞机只经 Repl Table）
-  if ('aircraftId' in unit)
-    return suggestRebuildRow({ side: workbench.activeSide, isAircraft: true })
-  const record = unitChoices(workbench.activeSide).find((item) => item.id === unit.unitId)
-  if (record === undefined) return null
-  return suggestRebuildRow({
-    side: workbench.activeSide,
-    branch: record.branch ?? null,
-    echelon: record.echelon ?? null,
-    specialized: record.specialized ?? [],
-    name: recordNameOf(record),
-    isTransportPoint: unit.noncombatKind === 'transport_point',
-    // 13.5c：数据层的 rebuildable 可信（用户 2026-10-24 裁定）⇒ 苏军步兵师据此分 step / (Red)
-    rebuildable: unit.rebuildable !== false,
-  })
-})
+const rebuildSuggestion = computed<string | null>(() => workbench.rebuildSuggestedRow)
 
 /**
  * 建议行的费用摘要（取自同一份重建表，界面不自算）
@@ -204,9 +186,8 @@ const rebuildType = computed<string>({
 const rebuildUnitId = computed<string>({
   get: () => workbench.rebuildPickUnitId,
   set: (value) => {
-    workbench.rebuildPickUnitId = value
-    // 换一枚重建对象不沿用上一枚的费用行（行键由这次重建单独点）
-    workbench.rebuildPickRow = ''
+    // 选中即按算子类型自动映射行键；唯一行才写，推不出唯一行留空交人工选
+    workbench.selectRebuildUnitNow(value)
   },
 })
 
@@ -463,8 +444,11 @@ watch(
 /** §5-D：待放置的补员点数（掷出后还没放到地图上） */
 const replPendingTotal = computed(() => workbench.replPending.pax + workbench.replPending.eq)
 
-/** 13.5a：补员放不下去时的可见原因（没有待放置项时为 null） */
-const replPlacementBlocked = computed(() => workbench.replPlacementBlockedReason)
+/** 13.5：Pax / Eq 分开放置——候选与落点按族各走一条（一族摆完不影响另一族） */
+const savableReplKinds = [
+  { key: 'pax', label: 'Pax' },
+  { key: 'eq', label: 'Eq' },
+] as const
 
 /**
  * 可变增援的**结果**（只写"拿到什么"）
@@ -846,15 +830,24 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         </p>
         <div v-if="showsActions" class="row">
           <BaseButton
+            v-for="item in savableReplKinds"
+            :key="item.key"
             variant="primary"
             size="sm"
-            :disabled="replPlacementBlocked !== null"
-            @click="workbench.beginReplPlaceHexPickNow()"
+            :disabled="
+              workbench.replPending[item.key] === 0 ||
+              workbench.replPlacementBlockedReasonFor(item.key) !== null
+            "
+            @click="workbench.beginReplPlaceHexPickNow(item.key)"
           >
-            在地图上点格放置
+            在地图上点格放置 {{ item.label }}（{{ workbench.replPending[item.key] }}）
           </BaseButton>
         </div>
-        <p v-if="replPlacementBlocked !== null" class="muted num">{{ replPlacementBlocked }}</p>
+        <template v-for="item in savableReplKinds" :key="`blocked:${item.key}`">
+          <p v-if="workbench.replPlacementBlockedReasonFor(item.key) !== null" class="muted num">
+            {{ workbench.replPlacementBlockedReasonFor(item.key) }}
+          </p>
+        </template>
       </template>
     </SessionStep>
     <!-- 3.6：补给列车 —— 不做列车算子；窗口一出现地图高亮全部可卸货铁路格，点一格落 2 SP -->
@@ -1052,19 +1045,11 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           </span>
         </span>
         <!--
-        13.5：**建议行**——由该算子自身类型推出（引擎唯一出处），但**不自动采用**：
-        裁判必须点一下「采用建议」，未点就保持未选行、按钮禁用（默认值不能代替规则判定）。
+        13.5：**行键已自动映射**——按该算子自身类型推出（store `rebuildSuggestedRow`，引擎唯一出处）。
+        推不出唯一行时才留空由人工选；不再需要点「采用建议」。
       -->
         <span v-if="rebuildSuggestion !== null" class="muted">
-          建议行：{{ rebuildSuggestion }}（{{ rebuildSuggestionLabel }}）
-          <BaseButton
-            v-if="rebuildType !== rebuildSuggestion"
-            variant="secondary"
-            size="sm"
-            @click="rebuildType = rebuildSuggestion"
-          >
-            采用建议
-          </BaseButton>
+          已按算子类型映射行：{{ rebuildSuggestion }}（{{ rebuildSuggestionLabel }}）
         </span>
         <span v-else-if="rebuildUnitId !== '' && !rebuildCandidateBlocked" class="muted">
           该算子的行键无法从类型唯一确定（重建表把同兵种拆成了多行）⇒ 请人工选行（13.5）。

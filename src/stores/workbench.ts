@@ -257,6 +257,7 @@ import {
   resolveAdvance,
   resolveAirCombatRounds,
   arrivalPlacementCandidates,
+  airBaseAt,
   resolveArrivalPlacement,
   resolveBaseTransfer,
   resolveFlakStep,
@@ -266,6 +267,7 @@ import {
   stepChecklist,
   supplyCoverage,
   supplyStepChecklist,
+  suggestRebuildRow,
   transportDisplacementCandidates,
   transportGroupOf,
   validateGaugeConversion,
@@ -14601,7 +14603,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (state.assignment.cargo.length > 0 && leaving.length < flying.length) {
       /*
        * 14.9a/14.9e（T15）：只有能按逐机货单归属时，才允许载货任务部分返航；
-       * 返航机把**自载**货物带回自己的基地（离图机仍按离图盒处理，本批暂不开放）。
+       * 返航机把**自载**货物带回自己的基地。
+       *
+       * 14.9（T16）+ 专规 1.4a：离图盒起飞的机体同样可以途中部分返航——机体回盒、
+       * 自载 SP 加回盒库存；其余机体**留场**继续任务（14.9e：各机按自身归宿分别处理）。
+       * 离图盒不载地面单位（14.9a 装载单元只认图上同格来源），故这里只需处理 SP。
        */
       if (!hasCargoOwnership(state)) {
         airError.value = { rule: '14.9a', reason: 'partialCargoReturnUnsupported' }
@@ -14611,11 +14617,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const leavingOrigins = state.assignment.origins.filter((origin) =>
         leaving.some((air) => air.instanceId === origin.aircraftId),
       )
-      if (leavingOrigins.some((origin) => origin.fromOffMapBox === true)) {
-        airError.value = { rule: '14.9a', reason: 'partialCargoReturnUnsupported' }
-        pushLog('warning', '离图盒起飞的载货机暂不支持途中部分返航', '14.9a')
-        return false
-      }
       for (const origin of leavingOrigins) {
         const ids =
           state.assignment.cargoByAircraft.find((entry) => entry.aircraftId === origin.aircraftId)
@@ -14625,7 +14626,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         if (unitIds.length > 0) {
           if (!airUnitTransit.land(unitIds, origin.baseHex, 'returned')) return false
         }
-        if (spIds.length > 0) airSupply.returnRemaining(origin.baseHex, spIds)
+        if (spIds.length > 0) {
+          // 离图盒机：回任务来源盒（undefined ⇒ 用 manifest 的 originOffMapBox）；
+          // 图上机场机：强制落地图格（null），避免混合来源时被误送进盒里。
+          airSupply.returnRemaining(
+            origin.baseHex,
+            spIds,
+            origin.fromOffMapBox === true ? undefined : null,
+          )
+        }
         ids.forEach((id) => returnedCargoIds.add(id))
       }
     }
@@ -17345,6 +17354,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const replPending = ref<{ pax: number; eq: number }>({ pax: 0, eq: 0 })
   const replFtrTac = ref<{ ftr: number; tac: number }>({ ftr: 0, tac: 0 })
 
+  /** 13.5：可保存补员的两族——放置策略与落点都按族分开（Pax / Eq 是独立算子） */
+  type SavableReplKind = 'pax' | 'eq'
+
   /** 盘面上（当前方）的补员算子枚数（§5-D：唯一事实，按格可再筛） */
   const replBoardUnits = computed<ConsoleUnit[]>(() =>
     units.value.filter((unit) => unit.side === activeSide.value && isReplUnit(unit)),
@@ -18514,11 +18526,48 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 13.5：重建面板的**待重建算子**与**重建表行键**（唯一状态，面板与右键共用）
    *
-   * 行键是重建表的**行**（决定费用），工程库没有「算子→行」映射；右键只能预选算子，
-   * 行键必须由玩家在面板里点（引擎 `suggestRebuildRow` 也明令不得静默采用）。
+   * 行键是重建表的**行**（决定费用），工程库没有「算子→行」映射；选中算子时按类型自动映射
+   * （`rebuildSuggestionFor`）。映射不出唯一行才留空由玩家点——见 2026-11-11 用户口径。
    */
   const rebuildPickUnitId = ref('')
   const rebuildPickRow = ref('')
+
+  /**
+   * 13.5：**按算子类型自动映射**的重建表行键（推不出唯一行 ⇒ `null`）
+   *
+   * 判据只在引擎 `suggestRebuildRow`（逐条对回重建表原文）；store 这一处把「记录视图 → 判据输入」
+   * 搬好，选中算子时即写入 `rebuildPickRow`（2026-11-11 用户口径：别再让玩家手点建议行）。
+   * 推不出唯一行时保持未选行，交人工选——默认值不能代替规则判定。
+   */
+  function rebuildSuggestionFor(instanceId: string): string | null {
+    const unit = rebuildCandidates.value.find((item) => item.instanceId === instanceId)
+    if (unit === undefined) return null
+    // 空军：重建表恒为 `Aircraft`（专规 1.6 Notes：飞机只经 Repl Table）
+    if ('aircraftId' in unit) return suggestRebuildRow({ side: activeSide.value, isAircraft: true })
+    const record = unitChoices(activeSide.value).find((item) => item.id === unit.unitId)
+    if (record === undefined) return null
+    return suggestRebuildRow({
+      side: activeSide.value,
+      branch: record.branch ?? null,
+      echelon: record.echelon ?? null,
+      specialized: record.specialized ?? [],
+      name: recordNameOf(record),
+      isTransportPoint: unit.noncombatKind === 'transport_point',
+      // 13.5c：数据层的 rebuildable 可信（用户 2026-10-24 裁定）⇒ 苏军步兵师据此分 step / (Red)
+      rebuildable: unit.rebuildable !== false,
+    })
+  }
+
+  /** 当前选中算子的自动映射行（面板显示用；唯一出处同 `rebuildSuggestionFor`） */
+  const rebuildSuggestedRow = computed<string | null>(() =>
+    rebuildPickUnitId.value === '' ? null : rebuildSuggestionFor(rebuildPickUnitId.value),
+  )
+
+  /** 选中待重建算子，并**自动填行**（自动映射不出唯一行时留空，交人工选） */
+  function selectRebuildUnitNow(instanceId: string): void {
+    rebuildPickUnitId.value = instanceId
+    rebuildPickRow.value = rebuildSuggestionFor(instanceId) ?? ''
+  }
 
   /** 专规 2.3b：守方本场战斗中的 NKVD 边防团（必须担任行动值单位） */
   const combatNkvdDefenders = computed<ConsoleUnit[]>(() =>
@@ -19142,10 +19191,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 13.5 / 2.1：补员**初次摆放**的候选
+   * 13.5 / 2.1：补员**初次摆放**的落点策略（**Pax / Eq 分开**）
    *
-   * 用户 2026-11-11：「可变增援把整张地图高亮（候选未按条款与图边补给源收窄）」——
-   * 修前这里是「全图 − 敌方占据」，于是高亮一整张地图。现改为与到达落点同一条引擎判据
+   * 原文（专规 2.1 注 / 3.1 注）对两族只给了同一条：
+   * 「Pax, Eq, special repls, and breakout returns arrive at any HQs able to get trace supply
+   * (12.6a) by direct draw, or else in any map-edge supply source hexes.」
+   * ⇒ 判据目前相同；但 Pax 与 Eq 是**两枚独立算子**，可以落在不同格，故策略按族建
+   *   （2026-11-11 用户口径：「Eq / Pax 分开策略」）。任一族将来改判据不会牵连另一族。
+   *
+   * 修前这里是「全图 − 敌方占据」，于是可变增援高亮一整张地图；现改为与到达落点同一条引擎判据
    * `arrivalPlacementCandidates({kind:'hqOrEdgeSource'})`：
    *   · 有能**直接拖取追溯补给**的友方 HQ ⇒ 只落这些 HQ；
    *   · 没有 HQ 才退到**本日仍开放的图边补给源格**（2.1a）。
@@ -19155,14 +19209,35 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   「战斗面 HQ 2 格内 / 非敌 ZOC」；但不再给整张地图（见待裁定：13.5 原文只写
    *   "place on the map"，与 2.1 的到货落点是否强绑未明说）。
    */
-  const replInitialPlacementHexes = computed<HexRef[]>(() =>
-    arrivalPlacementCandidates(
-      { kind: 'hqOrEdgeSource', label: '补员初次摆放（2.1）' },
-      arrivalFacts.value,
-    ).map((hex) => ({
-      ...hex,
-    })),
-  )
+  function replPlacementPolicyFor(kind: SavableReplKind): {
+    kind: 'hqOrEdgeSource'
+    label: string
+  } {
+    return {
+      kind: 'hqOrEdgeSource',
+      label: `补员初次摆放（2.1：${kind === 'pax' ? 'Pax' : 'Eq'}）`,
+    }
+  }
+
+  /** 某族初次摆放的候选（地图高亮与落点校验共用这一处） */
+  function replInitialPlacementCandidatesFor(kind: SavableReplKind): HexRef[] {
+    return arrivalPlacementCandidates(replPlacementPolicyFor(kind), arrivalFacts.value).map(
+      (hex) => ({ ...hex }),
+    )
+  }
+
+  const replInitialPlacementHexesFor = computed<Record<SavableReplKind, HexRef[]>>(() => ({
+    pax: replInitialPlacementCandidatesFor('pax'),
+    eq: replInitialPlacementCandidatesFor('eq'),
+  }))
+
+  /**
+   * 两族候选的并集（判据相同时即同一份）
+   *
+   * 保留这个投影给「地图高亮 / 旧调用方」用；落点校验必须走**按族**的
+   * `replInitialPlacementHexesFor`（否则一族改宽后会顺手放宽另一族）。
+   */
+  const replInitialPlacementHexes = computed<HexRef[]>(() => replInitialPlacementHexesFor.value.pax)
 
   /**
    * 13.5a：**重建**时补员可所在的格（战斗面友方 HQ 2 格内、且不在敌方 ZOC）
@@ -19181,76 +19256,84 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
   })
 
-  /** 待放置补员**放不下去**时的可见原因（没有待放置项时为 `null`） */
-  const replPlacementBlockedReason = computed<string | null>(() => {
-    if (replPending.value.pax + replPending.value.eq === 0) return null
-    if (replInitialPlacementHexes.value.length === 0) {
-      return '没有可放置补员的格（2.1：能直接拖取追溯补给的友方 HQ，否则图边补给源格）'
+  /** 某一族待放置补员**放不下去**时的可见原因（该族没有待放置项时为 `null`） */
+  function replPlacementBlockedReasonFor(kind: SavableReplKind): string | null {
+    if (replPending.value[kind] <= 0) return null
+    if (replInitialPlacementHexesFor.value[kind].length === 0) {
+      return `没有可放置 ${kind === 'pax' ? 'Pax' : 'Eq'} 的格（2.1：能直接拖取追溯补给的友方 HQ，否则图边补给源格）`
     }
     return null
+  }
+
+  /** 待放置补员**放不下去**时的可见原因（两族都无事可做时为 `null`） */
+  const replPlacementBlockedReason = computed<string | null>(() => {
+    if (replPending.value.pax + replPending.value.eq === 0) return null
+    return replPlacementBlockedReasonFor('pax') ?? replPlacementBlockedReasonFor('eq')
   })
 
-  /** 13.5：让玩家在地图上点补员的落点（候选＝图上未被敌方占据的格；无候选 ⇒ 给原因、不进待点态） */
-  function beginReplPlaceHexPickNow(): boolean {
-    const total = replPending.value.pax + replPending.value.eq
-    if (total === 0) {
-      pushLog('warning', '没有待放置的补员（13.5）', '13.5')
+  /**
+   * 13.5：让玩家在地图上点**某一族**补员的落点
+   *
+   * Pax / Eq 分开走：候选与落点都取该族自己的投影（`replInitialPlacementHexesFor`），
+   * 一族摆完不会把另一族一起落盘。
+   */
+  function beginReplPlaceHexPickNow(kind: SavableReplKind): boolean {
+    if (replPending.value[kind] === 0) {
+      pushLog('warning', `没有待放置的 ${kind === 'pax' ? 'Pax' : 'Eq'} 补员（13.5）`, '13.5')
       return false
     }
-    const blocked = replPlacementBlockedReason.value
-    if (blocked !== null || replInitialPlacementHexes.value.length === 0) {
+    const blocked = replPlacementBlockedReasonFor(kind)
+    if (blocked !== null || replInitialPlacementHexesFor.value[kind].length === 0) {
       pushLog('warning', `补员无法放置：${blocked ?? '地图上没有可放置的格'}`, '13.5')
       return false
     }
     beginHexPick({
-      label: '补员落点（2.1：友方 HQ 或图边补给源格）',
+      label: `补员落点 · ${kind === 'pax' ? 'Pax' : 'Eq'}（2.1：友方 HQ 或图边补给源格）`,
       rule: '13.5',
-      candidates: replInitialPlacementHexes.value,
-      apply: (hex) => placePendingReplNow(hex),
+      candidates: replInitialPlacementHexesFor.value[kind],
+      apply: (hex) => placePendingReplNow(hex, kind),
     })
     return true
   }
 
   /**
-   * §5-D：把**待放置**的 Pax / Eq 补员摆到指定格（每点一枚）
+   * §5-D：把**某一族**待放置补员摆到指定格（每点一枚）
    *
-   * 落点按 13.5 字面：图上、未被敌方占据即可（不套 13.5a 的 HQ/ZOC 限制）；不合法就**给出原因**
-   * 并保留待放置态，而不是静默失败。
+   * 落点按 2.1 到货条：能直接拖取追溯补给的友方 HQ，否则图边补给源格；不合法就**给出原因**
+   * 并保留待放置态，而不是静默失败。另一族的待放置数不受影响。
    */
-  function placePendingReplNow(hex: HexRef): boolean {
-    const pending = replPending.value
-    const total = pending.pax + pending.eq
-    if (total === 0) {
-      pushLog('warning', '没有待放置的补员（13.5）', '13.5')
+  function placePendingReplNow(hex: HexRef, kind: SavableReplKind): boolean {
+    const count = replPending.value[kind]
+    if (count === 0) {
+      pushLog('warning', `没有待放置的 ${kind === 'pax' ? 'Pax' : 'Eq'} 补员（13.5）`, '13.5')
       return false
     }
-    const legal = replInitialPlacementHexes.value.some(
+    const legal = replInitialPlacementHexesFor.value[kind].some(
       (item) => item.col === hex.col && item.row === hex.row,
     )
     if (!legal) {
       const reason =
-        replPlacementBlockedReason.value ??
+        replPlacementBlockedReasonFor(kind) ??
         `${hexLabel(hex)} 不能放补员（2.1：须是能直接拖取追溯补给的 HQ 或图边补给源格）`
       pushLog('warning', `补员不能放在 ${hexLabel(hex)}：${reason}`, '13.5')
       return false
     }
-    // 先确认两族算子在库里都有，避免 Pax 摆下、Eq 失败的半放置
-    for (const kind of ['pax', 'eq'] as const) {
-      if (pending[kind] > 0 && replRecordOf(activeSide.value, kind) === null) {
-        pushLog(
-          'danger',
-          `单位库里没有 ${kind === 'pax' ? 'Pax' : 'EQ'} 补员算子，本次不放置（13.5）`,
-          '13.5',
-        )
-        return false
-      }
+    if (replRecordOf(activeSide.value, kind) === null) {
+      pushLog(
+        'danger',
+        `单位库里没有 ${kind === 'pax' ? 'Pax' : 'EQ'} 补员算子，本次不放置（13.5）`,
+        '13.5',
+      )
+      return false
     }
-    if (!placeReplCounters(hex, 'pax', pending.pax)) return false
-    if (!placeReplCounters(hex, 'eq', pending.eq)) return false
-    replPending.value = { pax: 0, eq: 0 }
+    if (!placeReplCounters(hex, kind, count)) return false
+    replPending.value = { ...replPending.value, [kind]: 0 }
+    const pendingOther = replPending.value.pax + replPending.value.eq
     pushLog(
       'success',
-      `补员已放置于 ${hexLabel(hex)}：${pending.pax} Pax + ${pending.eq} Eq（13.5a：每点一枚，可随后移动）`,
+      `补员已放置于 ${hexLabel(hex)}：${count} ${kind === 'pax' ? 'Pax' : 'Eq'}（13.5a：每点一枚，可随后移动）${
+        pendingOther > 0 ? '；另一族仍在待放置' : ''
+      }`,
       '13.5',
     )
     return true
@@ -20049,27 +20132,46 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `死亡堆中没有 ${input.instanceId}（13.5）`, '13.5')
       return false
     }
-    // 本条是**地面**返场（1.6c 免费重建 / 编队抽签互换）——空军要落到空军基地并转非激活，
-    // 口径不同（14.1a），故显式拒绝而不是当地面单位摆到图上
+    // 空军返场（专规 1.6）：与 13.5f 已接的空军重建同口径——落**本方空军基地**、
+    // 以激活状态出现；不按地面单位那样落到 HQ／补给源格。
+    let airBaseHex: HexRef | null = null
     if (isAirDeadPileEntry(unit)) {
-      pushLog(
-        'warning',
-        `${unit.name} 是空军算子：本入口只做地面返场（空军返场须落空军基地，尚未接线）`,
-        '13.5',
-      )
-      return false
+      const airHex = parseHexPath(input.hexText)[0] ?? null
+      const base = airHex === null ? null : airBaseAt(airBases.value, airHex)
+      if (base === null || base.side !== unit.side) {
+        pushLog(
+          'warning',
+          `${unit.name} 是空军算子：返场须落在**本方空军基地**（专规 1.6：at any airbase, Active）`,
+          '专规 1.6',
+        )
+        return false
+      }
+      airBaseHex = { ...base.hex }
     }
-    const hex = parseHexPath(input.hexText)[0] ?? null
+    const hex = airBaseHex ?? parseHexPath(input.hexText)[0] ?? null
     if (hex === null) {
       pushLog('warning', `返场须给出落点格（13.5a：须与补员同格并在 HQ 2 格内）`, '13.5')
       return false
     }
     deadPile.value = deadPile.value.filter((item) => item.instanceId !== input.instanceId)
     unit.hex = { ...hex }
+    if (input.steps !== undefined) unit.steps = input.steps
+    if (isAirDeadPileEntry(unit)) {
+      // 专规 1.6 / 13.5f：新到之机 ⇒ 激活、本阶段任务计数归零
+      unit.airStatus = 'active'
+      unit.missionsFlownThisPhase = 0
+      airUnits.value = [...airUnits.value, unit]
+      pushLog(
+        'success',
+        `${unit.name} 从死亡堆返场 → ${hex.col}.${hex.row}（空军基地，激活、未飞）` +
+          `（1.6c 免费重建 / 编队抽签互换）`,
+        '1.6c',
+      )
+      return true
+    }
     unit.airTransportThisPhase = null
     // 专规 3.5：死亡堆返场同样是"进入某格"
     noteUnitEnteredHex(unit, hex)
-    if (input.steps !== undefined) unit.steps = input.steps
     unit.movementEnded = true
     units.value = [...units.value, unit]
     pushLog(
@@ -22676,7 +22778,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 13.5：死亡堆窗口里"点选 / 右键"的那一枚（用户 2026-11-10 报的实机 bug）
    *
    * 只做**选中与预选**：把该持项带进唯一的重建对象状态（`rebuildPickUnitId`），
-   * 行键清空——费用由重建表的行决定，工程库没有「算子→行」映射，必须由玩家点。
+   * 并按算子类型**自动映射**行键（`selectRebuildUnitNow`）；推不出唯一行才留空。
    */
   const deadPilePickId = ref('')
   function pickDeadPileUnitNow(instanceId: string): void {
@@ -22685,8 +22787,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return
     }
     deadPilePickId.value = instanceId
-    rebuildPickUnitId.value = instanceId
-    rebuildPickRow.value = ''
+    // 13.5：选中即按算子类型自动映射行键（唯一行才写，推不出唯一行留空）
+    selectRebuildUnitNow(instanceId)
   }
 
   /**
@@ -24054,8 +24156,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     placePendingReplNow,
     beginReplPlaceHexPickNow,
     replInitialPlacementHexes,
+    replInitialPlacementHexesFor,
     rebuildReplPlacementHexes,
     replPlacementBlockedReason,
+    replPlacementBlockedReasonFor,
     replCountsAtHex,
     replPending,
     clearNonSavableReplNow,
@@ -24068,6 +24172,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     consolidateUnitsNow,
     rebuildPickUnitId,
     rebuildPickRow,
+    rebuildSuggestedRow,
+    selectRebuildUnitNow,
     mergePartnerAt,
     mergePartnerIds,
     consolidationAvailable,

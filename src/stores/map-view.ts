@@ -1872,7 +1872,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     /*
      * 13.5 补员：右键把这一枚带进增援面板的重建段（**只预选算子**）——
-     * 行键是重建表的行、决定费用，工程库没有「算子→行」映射，必须由玩家在面板里点。
+     * 行键由该算子类型自动映射（唯一行才写）；右键本身不落账。
      */
     if (
       unit !== undefined &&
@@ -2206,11 +2206,10 @@ export const useMapViewStore = defineStore('mapView', () => {
       return true
     }
     /*
-     * 13.5：只把算子带进增援面板的重建段；**不写行键、不落账**（行键由玩家在面板里点）。
+     * 13.5：把算子带进增援面板的重建段，并按类型**自动映射行键**；不落账。
      */
     if (option.only === 'rebuildPick') {
-      workbench.rebuildPickUnitId = instanceId
-      workbench.rebuildPickRow = ''
+      workbench.selectRebuildUnitNow(instanceId)
       collapsedSessionKey.value = null
       closePopup()
       return true

@@ -86,15 +86,37 @@ describe('13.5：补员初次摆放（不套 13.5a）', () => {
     expect(candidates).toEqual(sources)
     expect(candidates).not.toContain(`${HEX.col}.${HEX.row}`)
 
-    const placeHex = store.replInitialPlacementHexes[0]!
-    expect(store.beginReplPlaceHexPickNow()).toBe(true)
-    expect(store.hexPickView?.candidates).toContainEqual(placeHex)
+    const placePaxHex = store.replInitialPlacementHexesFor.pax[0]!
+    const placeEqHex = store.replInitialPlacementHexesFor.eq[0]!
+    expect(store.beginReplPlaceHexPickNow('pax')).toBe(true)
+    expect(store.hexPickView?.candidates).toContainEqual(placePaxHex)
 
-    expect(store.placePendingReplNow(placeHex)).toBe(true)
-    expect(store.replPending).toEqual({ pax: 0, eq: 0 })
+    expect(store.placePendingReplNow(placePaxHex, 'pax')).toBe(true)
+    expect(store.replPending).toEqual({ pax: 0, eq: 1 })
     expect(store.units.filter((unit) => unit.replKind === 'pax')).toHaveLength(2)
+
+    expect(store.placePendingReplNow(placeEqHex, 'eq')).toBe(true)
+    expect(store.replPending).toEqual({ pax: 0, eq: 0 })
     expect(store.units.filter((unit) => unit.replKind === 'eq')).toHaveLength(1)
     expect(store.replHoldings).toMatchObject({ pax: 2, eq: 1 })
+  })
+
+  it('13.5：Pax 与 Eq 分开策略——同族一次落盘、另一族可另择格', () => {
+    const store = newStore()
+    rollRepls(store)
+    const paxHex = store.replInitialPlacementHexesFor.pax[0]!
+    const eqHex = [...store.replInitialPlacementHexesFor.eq].reverse()[0]!
+    expect(store.placePendingReplNow(paxHex, 'pax')).toBe(true)
+    expect(store.placePendingReplNow(eqHex, 'eq')).toBe(true)
+
+    const paxUnits = store.units.filter((unit) => unit.replKind === 'pax')
+    const eqUnits = store.units.filter((unit) => unit.replKind === 'eq')
+    expect(
+      paxUnits.every((unit) => unit.hex.col === paxHex.col && unit.hex.row === paxHex.row),
+    ).toBe(true)
+    expect(eqUnits.every((unit) => unit.hex.col === eqHex.col && unit.hex.row === eqHex.row)).toBe(
+      true,
+    )
   })
 
   it('被敌方单位占据的格与图外格不是候选 ⇒ 拒绝并给原因，待放置态保留', () => {
@@ -103,8 +125,8 @@ describe('13.5：补员初次摆放（不套 13.5a）', () => {
     placeEnemyNextTo(store)
 
     expect(store.replInitialPlacementHexes).not.toContainEqual(ENEMY_HEX)
-    expect(store.placePendingReplNow(ENEMY_HEX)).toBe(false)
-    expect(store.placePendingReplNow({ col: 999, row: 999 })).toBe(false)
+    expect(store.placePendingReplNow(ENEMY_HEX, 'pax')).toBe(false)
+    expect(store.placePendingReplNow({ col: 999, row: 999 }, 'pax')).toBe(false)
     expect(store.replPending).toMatchObject({ pax: 2, eq: 1 })
     expect(store.units.filter((unit) => unit.replKind != null)).toHaveLength(0)
     expect(store.log.some((entry) => entry.text.includes('13.5'))).toBe(true)
@@ -160,8 +182,9 @@ describe('增援窗精简（源码守卫）', () => {
     expect(source).not.toContain('骰面自动（补给表')
     expect(source).not.toContain('盘面：Pax')
     expect(source).not.toContain('13.5 可保存的补员')
-    // 放置入口只此一条（地图点选，不再是手打格号）
-    expect(source).toContain('beginReplPlaceHexPickNow()')
+    // 放置入口按族分开（Pax / Eq 各一条，地图点选，不再是手打格号）
+    expect(source).toContain('beginReplPlaceHexPickNow(item.key)')
+    expect(source).toContain('savableReplKinds')
     expect(source).not.toContain('replPlaceHexText')
   })
 })

@@ -514,23 +514,44 @@ describe('W7 C12：拆分单位盒（1.8a / 20.0）与编队抽签', () => {
     expect(containers.deadPileUnits[air.side].some((item) => item.id === air.instanceId)).toBe(true)
   })
 
-  it('14.1b：空军条目不会被误当成地面单位返场（显式拒绝并给出理由）', () => {
+  it('专规 1.6：空军条目从死亡堆返场须落本方空军基地，并以激活状态回到 airUnits', () => {
     const choice = workbench.airUnitChoices[0]!
     expect(workbench.addAirUnit(choice.aircraftId, '36.13')).toBe(true)
     const air = workbench.airUnits[0]!
+    // 同格先摆一枚本方空军基地（专规 1.6：空军从死亡堆返场只能落空军基地）
+    const airBase = unitChoices(air.side).find((record) => record.noncombatKind === 'air_base')
+    expect(airBase).toBeDefined()
+    workbench.units.push(
+      toConsoleUnit({
+        record: airBase!,
+        instanceId: 'base-for-return',
+        hex: { col: 36, row: 13 },
+        side: air.side,
+      }),
+    )
     // ★ 必须先把初值取出来：applyAirStepLoss 会递减 air.steps，
     //   若把 `index < air.steps` 直接当循环条件，上界会随之下缩而只扣 1 点（飞机没死）。
     const steps = air.steps
     for (let index = 0; index < steps; index += 1) workbench.applyAirStepLoss(air.instanceId)
     expect(workbench.deadPile.some((entry) => entry.instanceId === air.instanceId)).toBe(true)
 
-    expect(workbench.returnFromDeadPileNow({ instanceId: air.instanceId, hexText: '36.13' })).toBe(
+    // 非空军基地格 ⇒ 拒绝，飞机既不落回盘面、也没被从死亡堆里取走
+    expect(workbench.returnFromDeadPileNow({ instanceId: air.instanceId, hexText: '99.99' })).toBe(
       false,
     )
-    // 拒绝的可见效果：飞机既不落回盘面、也没被从死亡堆里取走
-    expect(workbench.units.some((unit) => unit.instanceId === air.instanceId)).toBe(false)
+    expect(workbench.airUnits.some((unit) => unit.instanceId === air.instanceId)).toBe(false)
     expect(workbench.deadPile.some((entry) => entry.instanceId === air.instanceId)).toBe(true)
-    expect(workbench.log.some((entry) => entry.text.includes('只做地面返场'))).toBe(true)
+    expect(workbench.log.some((entry) => entry.text.includes('本方空军基地'))).toBe(true)
+
+    // 本方空军基地 ⇒ 返场成功（1.6c 免费 / 互换式），激活、本阶段未飞
+    expect(workbench.returnFromDeadPileNow({ instanceId: air.instanceId, hexText: '36.13' })).toBe(
+      true,
+    )
+    const returned = workbench.airUnits.find((unit) => unit.instanceId === air.instanceId)!
+    expect(returned.hex).toMatchObject({ col: 36, row: 13 })
+    expect(returned.airStatus).toBe('active')
+    expect(returned.missionsFlownThisPhase).toBe(0)
+    expect(workbench.deadPile.some((entry) => entry.instanceId === air.instanceId)).toBe(false)
   })
 
   it('C12：剧本抽签在池内抽定，且同种子可重放（剧本 1 抽 4 个）', () => {

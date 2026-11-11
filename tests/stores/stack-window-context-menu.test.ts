@@ -103,7 +103,8 @@ describe('堆叠窗内右键：某一枚 ⇒ 它自己的菜单', () => {
     const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
     expect(popover).toContain('@contextmenu.prevent.stop="onChipContext($event, unit.id)"')
     expect(popover).toContain('@contextmenu.prevent.stop="onChipContext($event, air.instanceId)"')
-    expect(popover).toContain('mapView.openUnitContext(hex, unitId')
+    // Prettier 可能把调用折成多行 ⇒ 用容错空白匹配
+    expect(popover).toMatch(/mapView\.openUnitContext\(\s*hex,\s*unitId/)
   })
 
   it('源码守卫：窗内分支只过硬闸、不因动作列表为空拒开', () => {

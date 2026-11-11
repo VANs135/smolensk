@@ -361,9 +361,12 @@ describe('W6 B18：可变增援与补员账本（1.6b / 1.6c）', () => {
       `${placeHex!.col}.${placeHex!.row}`,
     )
     expect(store.replInitialPlacementHexes.length).toBeLessThan(500)
-    // 放置到地图上后才进盘面账本（每点一枚）
-    expect(store.placePendingReplNow(placeHex!)).toBe(true)
-    expect(store.replHoldings).toMatchObject({ pax: plan.repl.pax, eq: plan.repl.eq })
+    // 放置到地图上后才进盘面账本（13.5：Pax / Eq 分开落格，各点各的）
+    expect(store.placePendingReplNow(placeHex!, 'pax')).toBe(true)
+    expect(store.replHoldings.pax).toBe(plan.repl.pax)
+    const eqHex = store.replInitialPlacementHexesFor.eq[0]!
+    if (plan.repl.eq > 0) expect(store.placePendingReplNow(eqHex, 'eq')).toBe(true)
+    expect(store.replPending).toMatchObject({ pax: 0, eq: 0 })
     expect(store.units.filter((unit) => unit.replKind != null)).toHaveLength(
       plan.repl.pax + plan.repl.eq,
     )

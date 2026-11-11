@@ -24,7 +24,12 @@ export function createAirSupplyDomain(ports: {
   function returnRemaining(
     destination?: HexRef,
     ids?: readonly string[],
-    offMapBox?: string,
+    /**
+     * `undefined`：按任务来源（离图盒任务回盒）；
+     * `null`：**强制回地图格**（混合来源任务里从图上机场起飞的机体用）；
+     * 字符串：回指定离图盒。
+     */
+    offMapBox?: string | null,
   ): void {
     const current = manifest.value
     if (current === null) return
@@ -33,12 +38,8 @@ export function createAirSupplyDomain(ports: {
       (item) => item.fate === 'aboard' && (selected === null || selected.has(item.id)),
     )
     if (returning.length === 0) return
-    ports.returnSupply(
-      destination ?? current.origin,
-      current.side,
-      returning.length,
-      offMapBox ?? current.originOffMapBox,
-    )
+    const box = offMapBox === undefined ? current.originOffMapBox : (offMapBox ?? undefined)
+    ports.returnSupply(destination ?? current.origin, current.side, returning.length, box)
     settle(
       returning.map((item) => item.id),
       'returned',

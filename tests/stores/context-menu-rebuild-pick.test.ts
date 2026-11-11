@@ -14,11 +14,10 @@ import type { ActionKey, ConsolePhase } from '@/stores'
 import { groundRecord, placeGround } from '../flows/sop-harness'
 
 /**
- * 右键 13.5 补员：预选算子，**行键仍由玩家点**（用户 2026-11-09 第 4 轮）
+ * 右键 13.5 补员：预选算子 + 按类型**自动映射行键**（用户 2026-11-11）
  *
- * 原文/引擎口径：`rebuildType` 是重建表的**行键**（定费用），工程库没有「算子→行」映射；
- * 引擎 `suggestRebuildRow` 的注释明文禁止静默取建议行。故右键只能把算子带进增援面板，
- * 不得自动写行键、更不得落账。
+ * 原文/引擎口径：`rebuildType` 是重建表的**行键**（定费用）。行键由算子类型推出
+ * （引擎 `suggestRebuildRow`，唯一出处）；推不出唯一行时才留空由玩家选。右键不得落账。
  */
 
 const HEX: HexRef = { col: 36, row: 13 }
@@ -66,7 +65,7 @@ describe('右键 13.5：补员预选算子（行键仍由玩家选）', () => {
     goToActionStep(s.workbench, 'rein.rebuild')
   })
 
-  it('★ 图上带损本方单位 ⇒ 菜单出「补员单位补员」，点它只预选、不写行键、不落账', () => {
+  it('★ 图上带损本方单位 ⇒ 菜单出「补员单位补员」，点它即预选并按类型自动映射行键，不落账', () => {
     const unit = placeGround(
       s.workbench,
       groundRecord('soviet', (record) => /Rifle Div|Tk Div/i.test(record.vassalName ?? '')),
@@ -82,8 +81,9 @@ describe('右键 13.5：补员预选算子（行键仍由玩家选）', () => {
 
     expect(s.mapView.openContextAction('hurt', 'rein.rebuild')).toBe(true)
     expect(s.workbench.rebuildPickUnitId).toBe('hurt')
-    // 行键必须留空：由玩家在重建表里点
-    expect(s.workbench.rebuildPickRow).toBe('')
+    // 行键自动映射（可唯一确定 ⇒ 非空；不可 ⇒ 空串交人工选），但绝不落账
+    expect(s.workbench.rebuildSuggestedRow).not.toBeNull()
+    expect(s.workbench.rebuildPickRow).toBe(s.workbench.rebuildSuggestedRow)
     expect(s.workbench.lastRebuild).toBe(null)
     expect(s.workbench.units).toHaveLength(1)
     expect(s.workbench.units[0]?.steps).toBe(1)
