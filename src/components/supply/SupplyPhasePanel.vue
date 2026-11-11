@@ -51,10 +51,33 @@ function onSetLoss(hex: HexRef, id: string, max: number, event: Event): void {
   workbench.setAttritionAllocation(keyOf(hex), id, bounded)
   feedback.value = ''
 }
+
+/**
+ * 本环节是否**还有待决**（无待决就不渲染，而不是留一块「已完成」的常驻面板）
+ *
+ * 判据全部来自 store 的既有结算事实：计划未生成 / 恢复未结算 / 供养未结算 /
+ * 还有断补堆叠没掷或没分配。玩家做完最后一件事，面板自行消失，流程条继续推进。
+ */
+const pending = computed<boolean>(() => {
+  const current = plan.value
+  if (current === null) return true
+  if (recovery.value) return !workbench.supplyRecoverySettled
+  if (!workbench.supplyFeedingSettled) return true
+  return current.attritionDuty.some(
+    (duty) => !workbench.attritionAppliedHexes.includes(keyOf(duty.hex)),
+  )
+})
 </script>
 
 <template>
-  <section class="phase-panel" aria-label="补给结算" @pointerdown.stop @click.stop @wheel.stop>
+  <section
+    v-if="pending"
+    class="phase-panel"
+    aria-label="补给结算"
+    @pointerdown.stop
+    @click.stop
+    @wheel.stop
+  >
     <header class="phase-panel__head">
       <span class="phase-panel__step num">D</span>
       <h3>{{ recovery ? '部队储备恢复' : '补给结算' }}</h3>
