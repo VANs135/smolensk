@@ -5,7 +5,7 @@ import type { MapSessionClosePolicy } from '@/stores/map-view'
 import { useMapViewStore } from '@/stores'
 
 import { BaseTag } from '@/components/base'
-import { SESSION_STEP_GATE } from '@/components/session'
+import { SESSION_STEP_GATE, SESSION_STEP_HOSTED } from '@/components/session'
 
 import { clampDockOffset, createDockMemory } from './dock-position'
 
@@ -71,6 +71,8 @@ provide(
   SESSION_STEP_GATE,
   computed(() => mapView.sessionStep),
 )
+/** 批二：标记「有宿主」，让 SessionStep 区分「无待决」与「没有宿主」 */
+provide(SESSION_STEP_HOSTED, true)
 
 /** 最小可见量（模板里给出可读提示；判定在 `clampDockOffset`） */
 

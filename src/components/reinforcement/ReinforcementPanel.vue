@@ -1265,7 +1265,10 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       </p>
     </SessionStep>
 
-    <SessionStep v-if="showsActions" item="reinforce:frontalReserves">
+    <SessionStep
+      v-if="showsActions && workbench.activeSide === 'soviet'"
+      item="reinforce:frontalReserves"
+    >
       <!-- ── ⑥b 方面军预备队（专规 2.3c） ── -->
       <hr />
       <RuleNote

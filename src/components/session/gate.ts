@@ -14,3 +14,11 @@ import type { SessionStepItem } from '@/stores/session-steps'
 
 export const SESSION_STEP_GATE: InjectionKey<ComputedRef<SessionStepItem | null>> =
   Symbol('session-step-gate')
+
+/**
+ * 批二：**是否有宿主**（对局台 dock 为 true；验证页 / 右栏不 provide）
+ *
+ * 只靠 `SESSION_STEP_GATE` 无法区分「没有宿主」和「宿主当前无待决」：
+ * 两者都表现为 `null`，旧逻辑一律全量渲染，导致无待决时整块面板铺满（用户截图）。
+ */
+export const SESSION_STEP_HOSTED: InjectionKey<boolean> = Symbol('session-step-hosted')

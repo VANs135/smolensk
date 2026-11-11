@@ -627,3 +627,18 @@ export function planSessionSteps(facts: SessionStepFacts): SessionStepItem[] {
 export function exposedSessionStep(items: readonly SessionStepItem[]): SessionStepItem | null {
   return items.find((entry) => !entry.optional) ?? items[0] ?? null
 }
+
+/**
+ * 某一节是否渲染
+ *
+ * - 无宿主（验证页 / 右栏）：全量渲染，照旧；
+ * - 有宿主且无待决：**一节都不渲染**（批二：无待决 ≠ 全量渲染）；
+ * - 有宿主：只认当前暴露的那一项。
+ */
+export function sessionStepVisible(
+  hosted: boolean,
+  exposedId: string | null,
+  itemId: string,
+): boolean {
+  return !hosted || exposedId === itemId
+}

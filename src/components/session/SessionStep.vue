@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, inject } from 'vue'
 
-import { SESSION_STEP_GATE } from './gate'
+import { sessionStepVisible } from '@/stores/session-steps'
+
+import { SESSION_STEP_GATE, SESSION_STEP_HOSTED } from './gate'
 
 /**
  * U1-b：**会话步骤门**（一次只显示一件事）
@@ -25,9 +27,14 @@ const props = defineProps<{
 const emit = defineEmits<{ (event: 'ack'): void }>()
 
 const gate = inject(SESSION_STEP_GATE, null)
-/** 没有宿主 / 宿主当前无待决 / 宿主显式放行 ⇒ 全量渲染；否则只认当前那一个事项 */
-const active = computed(() => gate === null || gate.value === null || gate.value.id === props.item)
+const hosted = inject(SESSION_STEP_HOSTED, false)
 const step = computed(() => gate?.value ?? null)
+/**
+ * 没有宿主（验证页 / 右栏）⇒ 全量渲染；
+ * 有宿主且无待决 ⇒ 一节都不渲染（批二：无待决 ≠ 全量渲染）；
+ * 有宿主 ⇒ 只认当前那一个事项。
+ */
+const active = computed(() => sessionStepVisible(hosted, step.value?.id ?? null, props.item))
 </script>
 
 <template>
