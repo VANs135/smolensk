@@ -163,6 +163,25 @@ describe('3.4a：相位末的分界线义务', () => {
     expect(outcome).toEqual([])
   })
 
+  it('3.4a：19.xx 以西两侧集群都不判越线（以西豁免只作用于越线判据）', () => {
+    // 列 10 线性外推：行 30 在北、行 5 在南 ⇒ 分别是 Guderian / Hoth 的"错误一侧"
+    const westGuderianWrong = { col: 10, row: 30 }
+    const westHothWrong = { col: 10, row: 5 }
+    expect(boundarySideOf(westGuderianWrong, BOUNDARY)).toBe('north')
+    expect(boundarySideOf(westHothWrong, BOUNDARY)).toBe('south')
+    expect(inDividingLineScope(westGuderianWrong, SCOPE)).toBe(false)
+    expect(inDividingLineScope(westHothWrong, SCOPE)).toBe(false)
+    expect(
+      dividingLineObligations({
+        units: [unit('g1', 'guderian', westGuderianWrong), unit('h1', 'hoth', westHothWrong)],
+        scope: SCOPE,
+        date: '1941-07-12',
+        adjacent: areAdjacent,
+        sameHex,
+      }),
+    ).toEqual([])
+  })
+
   it('3.4：步兵师与独立单位（不属集群 / 非多单位编队）完全不受限', () => {
     expect(isExemptFromPanzerGroupRules({ group: null, inMultiUnitFormation: true })).toBe(true)
     expect(isExemptFromPanzerGroupRules({ group: 'hoth', inMultiUnitFormation: false })).toBe(true)

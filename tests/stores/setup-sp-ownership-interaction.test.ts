@@ -102,6 +102,30 @@ describe('3.4b：已预摆未指定的德军 SP（地图高亮 + 点选）', () 
     expect(setup.pendingSpOwnershipHexes).toHaveLength(0)
   })
 
+  it('19.xx 以西的德军 SP 仍必须指定集群（以西豁免只作用于越线判据，不作用于 3.4b 归属）', () => {
+    const { setup, board } = boot()
+    setup.resetInputs()
+    const boundary = board.panzerGroupBoundaryWithPath
+    expect(boundary).not.toBeNull()
+    const hex = { col: boundary!.west.col - 5, row: 10 }
+    const id = `sp:${hex.col}.${hex.row}`
+    setup.spDumps = [{ id, side: 'axis', hex, points: 2 }]
+
+    expect(hex.col).toBeLessThan(boundary!.west.col)
+    expect(setup.panzerGroupRulesOn()).toBe(true)
+    // 以西不豁免归属：仍进待指定清单、账本无归属、不能收束
+    expect(setup.pendingSpOwnershipHexes).toEqual([hex])
+    expect(board.panzerGroupOfDump(id)).toBeNull()
+    expect(setup.confirmSpOwnership()).toBe(false)
+    expect(setup.lastAction?.detail ?? '').toContain('spOwnershipMissing')
+
+    // 玩家点了才写账本（确认归属时才落 workbench 账）
+    setup.setSpAssignment(id, 'hoth')
+    expect(setup.confirmSpOwnership()).toBe(true)
+    expect(board.panzerGroupOfDump(id)).toBe('hoth')
+    expect(setup.pendingSpOwnershipHexes).toHaveLength(0)
+  })
+
   it('初设收束后：无入口、不可补指定', () => {
     const { setup, game } = boot()
     for (const dump of setup.spDumpsOf('axis')) setup.setSpAssignment(dump.id, 'hoth')
