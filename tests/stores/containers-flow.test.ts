@@ -667,8 +667,8 @@ describe('W7 C12：地图外空军盒 / 边缘盒 / 编队收纳盒', () => {
     unit.hex = someHex()
     expect(containers.moveEdgeBox(enter)).toBe(false)
     expect(unit.mpSpent).toBe(0)
-    // 东边源可进两个盒；北边 37.35 只接东北盒。
-    unit.hex = { col: 37, row: 35 }
+    // 东边源可进两个盒；北边 20.35（字母段 L）只接东北盒。
+    unit.hex = { col: 20, row: 35 }
     expect(containers.moveEdgeBox(enter)).toBe(false)
     unit.hex = { col: 62, row: 35 }
     expect(containers.edgeBoxEnterCandidates('southeast', false)).toEqual([
@@ -677,22 +677,23 @@ describe('W7 C12：地图外空军盒 / 边缘盒 / 编队收纳盒', () => {
     expect(containers.moveEdgeBox(enter)).toBe(true)
     expect(workbench.units).toHaveLength(0)
     expect(containers.edgeBoxHeld.southeast[0]).toMatchObject({ mpSpent: 1, movementEnded: true })
-    expect(containers.moveEdgeBox({ ...exit, targetHex: { col: 29, row: 1 } })).toBe(false)
+    expect(containers.moveEdgeBox({ ...exit, targetHex: { col: 42, row: 0 } })).toBe(false)
 
     // 盒内算子和本阶段的入盒记录随盘面快照恢复。
     const snapshot = workbench.snapshotBoard()
     containers.resetContainers()
     workbench.restoreBoard(snapshot, true)
     expect(containers.edgeBoxUnits.southeast.map((item) => item.id)).toEqual([unit.instanceId])
-    expect(containers.moveEdgeBox({ ...exit, targetHex: { col: 29, row: 1 } })).toBe(false)
+    expect(containers.moveEdgeBox({ ...exit, targetHex: { col: 42, row: 0 } })).toBe(false)
     workbench.setTurn(2)
     expect(containers.moveEdgeBox({ ...exit, targetHex: someHex() })).toBe(false)
     containers.beginEdgeBoxExitHexPickNow('southeast', unit.instanceId, false)
-    expect(workbench.hexPickView?.candidates).toContainEqual({ col: 29, row: 1 })
-    expect(workbench.pickHexFor({ col: 29, row: 1 })).toBe(true)
+    // 42.0（字母段 E）是南缘源；旧口径的 29.1 不在字母段内，不再算图边。
+    expect(workbench.hexPickView?.candidates).toContainEqual({ col: 42, row: 0 })
+    expect(workbench.pickHexFor({ col: 42, row: 0 })).toBe(true)
     expect(workbench.units[0]).toMatchObject({
       instanceId: unit.instanceId,
-      hex: { col: 29, row: 1 },
+      hex: { col: 42, row: 0 },
       mpSpent: 1,
       fuelled: true,
       fuelMethod: 'singleUnit',
@@ -714,8 +715,8 @@ describe('W7 C12：地图外空军盒 / 边缘盒 / 编队收纳盒', () => {
     unit.hex = { col: 62, row: 35 }
     expect(containers.canEnterEdgeBoxNow('southeast', unit.instanceId)).toBe(true)
     expect(containers.canEnterEdgeBoxNow('northeast', unit.instanceId)).toBe(true)
-    // 37.35 北边源只接东北盒。
-    unit.hex = { col: 37, row: 35 }
+    // 20.35（苏方字母入场段 L）是北缘源，只接东北盒；旧口径里的 37.35 不在字母段内，不再算图边。
+    unit.hex = { col: 20, row: 35 }
     expect(containers.canEnterEdgeBoxNow('southeast', unit.instanceId)).toBe(false)
     expect(containers.canEnterEdgeBoxNow('northeast', unit.instanceId)).toBe(true)
     const enter = { box: 'northeast', instanceId: unit.instanceId, direction: 'enter' } as const
@@ -726,7 +727,7 @@ describe('W7 C12：地图外空军盒 / 边缘盒 / 编队收纳盒', () => {
     // 回到移动阶段：投影与提交同判据，均放行。
     workbench.setPhase('movement')
     enterStep(workbench, 'move.order')
-    unit.hex = { col: 37, row: 35 }
+    unit.hex = { col: 20, row: 35 }
     expect(containers.canEnterEdgeBoxNow('northeast', unit.instanceId)).toBe(true)
     expect(containers.moveEdgeBox(enter)).toBe(true)
   })

@@ -37,11 +37,12 @@ function holdAxisCity(store: ReturnType<typeof useWorkbenchStore>): HexRef {
 }
 
 describe('进场铁路网：种子与两网分离', () => {
-  it('种子＝本方 live 清单 ∩ 图边 ∩ 铁路 ∩ 当日开放（不是任意声明格）', () => {
+  it('种子＝本方字母入场段 ∩ 铁路 ∩ 当日开放（不是任意声明格）', () => {
     const store = boot()
-    // 1.3 / 1.7 / 1.19 / 4.0 / 8.0 是 live 清单里真正的铁路边缘格；
-    // 轨距不可用者（4.0 / 8.0）在 BFS 第一步被 13.3f 拦下，但仍属"进场铁路"种子清单。
-    expect(labels(store.entryRailSeedsBySide.axis)).toEqual(['1.19', '1.3', '1.7', '4.0', '8.0'])
+    // 1.3 / 1.7 / 1.19 / 8.0 是轴方 K–F 字母入场段里的铁路格；
+    // 4.0 虽在旧 live 清单里，但不在 K–F 段内，按 2026-11-11 裁定不再算图边；
+    // 轨距不可用者（8.0）在 BFS 第一步被 13.3f 拦下，但仍属"进场铁路"种子清单。
+    expect(labels(store.entryRailSeedsBySide.axis)).toEqual(['1.19', '1.3', '1.7', '8.0'])
     expect(store.entryRailSeedsBySide.soviet.length).toBeGreaterThan(0)
     const axisNet = new Set(labels(store.railSupplyBySide.axis.railReachableHexes))
     expect(axisNet.has('1.3')).toBe(true)

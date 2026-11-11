@@ -39,7 +39,6 @@ import {
   hexDistance,
   isNorthEdge,
   isSouthEdge,
-  isWestEdge,
   neighbor,
   neighbors,
   sameHex,
@@ -56,6 +55,7 @@ import type { SpDump } from './supply-types'
 // B37：分界线的渲染投影类型（渲染层只画被给的东西）
 import type { BoundaryLine } from '@/render/map-render'
 import { createRailFacts, createTraceSupplyAt } from '@/engine/rules'
+import { entryEdgeHexes } from '@/engine/rules/entry-edges'
 import { buildUnitSelectionSet, type UnitSelectionSet } from '@/engine/rules/unit-selection'
 // B8：环节链（当前环节由本文件的 `segmentStep` 从这张表推出）
 import { sopStepById, sopStepsOf, type SopSegmentStep } from '@/engine/rules'
@@ -1011,6 +1011,24 @@ const SHUTDOWN_FACTS: SupplyShutdownFacts = {
   entryEHexes: (mapConfig.entryHexes?.E ?? []).map((hex) => ({ ...hex })),
   // 南缘＝没有图内南邻（奇数列没有第 0 行，故不能用 row === bounds.rowStart）
   isSouthEdge: (hex) => isSouthEdge(hex),
+}
+
+/**
+ * 3.1 / 2.1（用户 2026-11-11 追加裁定）：图边 = 地图库的**字母入场段**
+ *
+ * 轴：K/J/I/H/G/F；苏：A/B/C/D/E/L。缺字母只报缺口，**不**退化成「全部边缘格」。
+ */
+const ENTRY_EDGE = {
+  axis: entryEdgeHexes('axis', mapConfig.entryHexes ?? {}),
+  soviet: entryEdgeHexes('soviet', mapConfig.entryHexes ?? {}),
+} as const
+for (const side of ['axis', 'soviet'] as const) {
+  if (ENTRY_EDGE[side].missing.length > 0) {
+    // 登记缺口（不静默退化）：报告与日志都留痕
+    console.error(
+      `[3.1/2.1] 地图库缺少 ${side} 入场段：${ENTRY_EDGE[side].missing.join('/')}；不使用全边缘兜底`,
+    )
+  }
 }
 
 /** B37：专规面板的分节标识（与面板里的 6 节一一对应） */
@@ -17538,17 +17556,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 专规 1.1b：双方**安全边缘格**（作为补给源的地图边格）
    *
    * 「敌方地面单位不得进入；这些格可以被常规战斗攻击，但不可被突袭（因为可能需要推进）。」
-   * 数据即剧本的补给源清单（专规 2.1/3.1），按归属分两组给移动上下文。
+   * 数据即地图库的**字母入场段**（专规 2.1/3.1；用户 2026-11-11 追加裁定），按方取表。
    *
    * ★ 2.1a：**已关闭的源不再享受 1.1b 保护**——Entry L（19 Jul 起）与 Entry E 及以西南缘源
    *   （19 Aug 起）关闭后若仍计入，会让轴军进不去本应可进的格（过度限制）。
    */
   const safeEdgeHexesBySide = computed(() => {
-    const scenario = scenarios.scenarios.find((item) => item.id === scenarioId.value)
-    const openSources = (side: Side, list: readonly string[] | undefined): HexRef[] => {
-      const hexes = (list ?? [])
-        .map((text) => parseHexPath(text)[0])
-        .filter((hex): hex is HexRef => hex !== undefined)
+    const openSources = (side: Side): HexRef[] => {
+      const hexes = ENTRY_EDGE[side].hexes
       const statuses = supplySourceStatuses({
         side,
         date: date.value,
@@ -17556,25 +17571,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         facts: SHUTDOWN_FACTS,
       })
       const open = new Set(statuses.filter((item) => item.open).map((item) => hexLabel(item.hex)))
-      return hexes.filter((hex) => open.has(hexLabel(hex)))
+      return hexes.filter((hex) => open.has(hexLabel(hex))).map((hex) => ({ ...hex }))
     }
     return {
-      axis: openSources('axis', scenario?.supplySources?.axisLive),
-      soviet: openSources('soviet', scenario?.supplySources?.sovietLive),
+      axis: openSources('axis'),
+      soviet: openSources('soviet'),
     }
   })
 
-  /** 当前剧本的补给源格（2.1 / 3.1；按方取 Live 清单） */
-  const scenarioSupplySourceHexes = computed<HexRef[]>(() => {
-    const scenario = scenarios.scenarios.find((item) => item.id === scenarioId.value)
-    const list =
-      activeSide.value === 'axis'
-        ? (scenario?.supplySources?.axisLive ?? [])
-        : (scenario?.supplySources?.sovietLive ?? [])
-    return list
-      .map((text) => parseHexPath(text)[0])
-      .filter((hex): hex is HexRef => hex !== undefined)
-  })
+  /** 当前方的图边补给源格（2.1 / 3.1：地图库字母入场段，按方取表） */
+  const scenarioSupplySourceHexes = computed<HexRef[]>(() =>
+    ENTRY_EDGE[activeSide.value].hexes.map((hex) => ({ ...hex })),
+  )
 
   /**
    * 专规 2.1a：**当日仍开放**的图边补给源格
@@ -17582,7 +17590,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 原文（2.1a）：「These supply sources cease to exist on fixed dates: **Entry L on 19 July**.
    *   **Entry E (and all South edge sources west of there) on 19 August**.」
    *
-   * ★ 修（2026-11-01）：`scenarioSupplySourceHexes` 是剧本的 **live 清单、不看日期**，
+   * ★ 修（2026-11-01）：`scenarioSupplySourceHexes` 取 **字母入场段、不看日期**，
    *   而 2.1/3.1 的落点规则是「其余 SP 放**图边补给源格**」「补员/突围返场同理」——
    *   关停之后那些格**不再是补给源**，却仍能接货。修前 `arrivalFacts.edgeSupplySourceHexes()`
    *   与免费铁运的余额落点都直接用原始清单 ⇒ 19 Jul 之后还能往 20.35 塞 SP。
@@ -17599,40 +17607,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return scenarioSupplySourceHexes.value.filter((hex) => open.has(hexLabel(hex)))
   })
 
-  /** 地图边缘格（13.6b 的后备落点）：至少缺一个邻格的图内格 */
-  const mapEdgeHexes = computed<HexRef[]>(() => {
-    const inside = new Set(mapLayers.hexes.map((hex) => `${hex.col}.${hex.row}`))
-    return mapLayers.hexes
-      .filter((hex) =>
-        HEX_DIRECTIONS.some((direction) => {
-          const candidate = neighbor({ col: hex.col, row: hex.row }, direction)
-          return !inside.has(`${candidate.col}.${candidate.row}`)
-        }),
-      )
-      .map((hex) => ({ col: hex.col, row: hex.row }))
-  })
-
   /**
    * 专规 2.1 / 3.1（用户 2026-11-11 裁定）：**两张进场铁路网的种子**
    *
    * 原文没有「转换规矩」的铁路 ⇒ 不存在交叉可用，也没有共用段：整段铁路自然归其中一方。
    * 两网各自从本方**进场铁路**出发做连通性 BFS，种子判据：
-   *   本方 live 补给源清单 ∩ 地图边缘 ∩ 铁路格 ∩ 当日仍开放（2.1a）。
+   *   本方字母入场段 ∩ 铁路格 ∩ 当日仍开放（2.1a）。
    * 多轨与单轨的差别只是 13.3c 的运量费用，**不参与归属判定**。
    */
   const entryRailSeedsBySide = computed<{ axis: HexRef[]; soviet: HexRef[] }>(() => {
-    const scenario = scenarios.scenarios.find((item) => item.id === scenarioId.value)
-    const edge = new Set(mapEdgeHexes.value.map((hex) => hexLabel(hex)))
-    const pick = (side: Side, list: readonly string[] | undefined): HexRef[] => {
-      const open = new Set(safeEdgeHexesBySide.value[side].map((hex) => hexLabel(hex)))
-      return (list ?? [])
-        .map((text) => parseHexPath(text)[0])
-        .filter((hex): hex is HexRef => hex !== undefined)
-        .filter((hex) => edge.has(hexLabel(hex)) && open.has(hexLabel(hex)) && isRailHexAt(hex))
-    }
+    const pick = (side: Side): HexRef[] =>
+      safeEdgeHexesBySide.value[side].filter((hex) => isRailHexAt(hex))
     return {
-      axis: pick('axis', scenario?.supplySources?.axisLive),
-      soviet: pick('soviet', scenario?.supplySources?.sovietLive),
+      axis: pick('axis'),
+      soviet: pick('soviet'),
     }
   })
 
@@ -17702,7 +17690,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         (unit) => unit.side !== activeSide.value && sameHex(unit.hex, hex) && unit.steps > 0,
       ),
     nearestOpenEdgeHex: (from) => {
-      const open = mapEdgeHexes.value.filter(
+      const open = openSupplySourceHexes.value.filter(
         (hex) =>
           !units.value.some(
             (unit) => unit.side !== activeSide.value && sameHex(unit.hex, hex) && unit.steps > 0,
@@ -17747,8 +17735,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       shutdownsFor(activeSide.value, date.value).some(
         (name) => name === `Entry ${letter}` || name.startsWith(`Entry ${letter} `),
       ),
-    westEdgeHexes: () =>
-      mapEdgeHexes.value.filter((hex) => isWestEdge(hex)).map((hex) => ({ ...hex })),
+    // 「Any west edge hexes」= 轴方字母入场段 K–F（用户 2026-11-11 裁定），不是全部西缘格
+    westEdgeHexes: () => ENTRY_EDGE.axis.hexes.map((hex) => ({ ...hex })),
     // 北缘＝没有图内北邻（曾用「行号 ≥ 上界 − 1」的近似：多算 52 格、漏 10 格削角北缘）
     isNorthEdge: (hex) => isNorthEdge(hex),
   }))
