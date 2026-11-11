@@ -5,6 +5,8 @@ import {
   ACTIONS_BY_PHASE,
   AIR_MISSION_SEGMENT,
   BARRAGE_SOURCES_BY_PHASE,
+  REINFORCEMENT_SEGMENTS,
+  reinforcementSegmentOf,
   SOP_CHAIN_PHASE_COUNT,
   SOP_SEGMENT_CHAINS,
   sopActionsOf,
@@ -514,5 +516,39 @@ describe('B6：各操作的环节与燃料时机（12.5a / 12.5b / 12.5c）', ()
     }
   })
 })
-// ★ 与**闸门表**的对账（"要燃料的动作，其环节里闸门确实放行"）放在 `tests/stores/phase-gate.test.ts`：
-//   闸门表在 stores 层，引擎测试不反向依赖 store（分层纪律）。
+
+describe('B6.1：增援段的「段 → 节集合」分组（v7.1 第二段）', () => {
+  it('三段各一个宿主，且宿主是自己段内的环节', () => {
+    for (const segment of REINFORCEMENT_SEGMENTS) {
+      expect(segment.steps).toContain(segment.host)
+      expect(sopStepById(segment.host)).not.toBeNull()
+    }
+    expect(REINFORCEMENT_SEGMENTS.map((segment) => segment.id)).toEqual([
+      'arrival',
+      'roll',
+      'rebuild',
+    ])
+  })
+
+  it('每条链的每个环节恰好属于一个段；并集覆盖双方（轴 7 / 苏 5 一条未删）', () => {
+    const union = new Set(REINFORCEMENT_SEGMENTS.flatMap((segment) => segment.steps))
+    for (const side of ['axis', 'soviet'] as const) {
+      const chain = sopStepsOf('reinforcement', side)
+      for (const step of chain) expect(union.has(step.id)).toBe(true)
+      expect(chain.filter((step) => reinforcementSegmentOf(step.id) === null)).toEqual([])
+    }
+    // 并集里没有两条链之外的环节
+    expect(union.size).toBe(8)
+    // 节数不变：轴 7 / 苏 5
+    expect(sopStepsOf('reinforcement', 'axis')).toHaveLength(7)
+    expect(sopStepsOf('reinforcement', 'soviet')).toHaveLength(5)
+  })
+
+  it('每个环节都能反查到自己那一段（宿主不正确就当配置错误）', () => {
+    expect(reinforcementSegmentOf('reinforcement.arrival')?.id).toBe('arrival')
+    expect(reinforcementSegmentOf('reinforcement.replRoll')?.id).toBe('roll')
+    expect(reinforcementSegmentOf('reinforcement.specialRepl')?.id).toBe('roll')
+    expect(reinforcementSegmentOf('reinforcement.rebuild')?.id).toBe('rebuild')
+    expect(reinforcementSegmentOf('movement.modeAndMovement')).toBeNull()
+  })
+})

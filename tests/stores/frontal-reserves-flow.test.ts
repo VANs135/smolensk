@@ -66,7 +66,7 @@ describe('13.6：日程归位（卡面日期 → 执行回合）', () => {
     const store = newStore()
     expect(turnAt(store, '1941-07-15')).toBe(true)
     expect(store.frontalReservesToday).toBeNull()
-    goToSovietSegmentStep(store, 'reinforcement.frontalReserves')
+    goToSovietSegmentStep(store, 'reinforcement.replRoll')
     expect(store.claimFrontalReservesNow()).toBe(false)
     expect(store.frontalReservesError?.rule).toBe('2.3c')
   })
@@ -83,7 +83,7 @@ describe('专规 2.3c：领取（2 SP ＋ 编制转化 ＋ 两次免费重建候
     expect(batch.convertFrom).toBe('12-1-4 Mtr Div (69)')
     expect(batch.convertTo).toBe('16-2-5 Mtr Div (107)')
 
-    goToSovietSegmentStep(store, 'reinforcement.frontalReserves')
+    goToSovietSegmentStep(store, 'reinforcement.replRoll')
     store.frontalReservesInputs = { hexText: '60.34' }
     expect(store.claimFrontalReservesNow()).toBe(true)
     // 2 SP = 8 T 落到该格
@@ -110,11 +110,11 @@ describe('专规 2.3c：领取（2 SP ＋ 编制转化 ＋ 两次免费重建候
   it('同一批不得重复领取（「必须当即领取」＝每批一次）', () => {
     const store = newStore()
     expect(turnAt(store, '1941-07-22')).toBe(true)
-    goToSovietSegmentStep(store, 'reinforcement.frontalReserves')
+    goToSovietSegmentStep(store, 'reinforcement.replRoll')
     store.frontalReservesInputs = { hexText: '60.34' }
     expect(store.claimFrontalReservesNow()).toBe(true)
     const spAfter = holdingsToT(store.spDumps[0] ?? { sp: 0, t: 0 })
-    goToSovietSegmentStep(store, 'reinforcement.frontalReserves')
+    goToSovietSegmentStep(store, 'reinforcement.replRoll')
     expect(store.claimFrontalReservesNow()).toBe(false)
     expect(store.frontalReservesError?.reason).toBe('frontalReservesAlreadyClaimed:1941-07-22')
     // 账本不再变（第二次没有再加 8 T）
@@ -124,9 +124,9 @@ describe('专规 2.3c：领取（2 SP ＋ 编制转化 ＋ 两次免费重建候
   it('未给落点即拒（2 SP 与新单位都要落点）', () => {
     const store = newStore()
     expect(turnAt(store, '1941-07-22')).toBe(true)
-    goToSovietSegmentStep(store, 'reinforcement.frontalReserves')
+    goToSovietSegmentStep(store, 'reinforcement.replRoll')
     store.frontalReservesInputs = { hexText: '' }
-    goToSovietSegmentStep(store, 'reinforcement.frontalReserves')
+    goToSovietSegmentStep(store, 'reinforcement.replRoll')
     expect(store.claimFrontalReservesNow()).toBe(false)
     expect(store.frontalReservesError?.reason).toBe('frontalReservesPlacementRequired')
     expect(store.spDumps).toEqual([])
@@ -147,7 +147,7 @@ describe('专规 2.3c：领取（2 SP ＋ 编制转化 ＋ 两次免费重建候
     )
     const old = placeGround(store, oldRecord, { col: 60, row: 34 }, 'soviet', 'old-103')
 
-    goToSovietSegmentStep(store, 'reinforcement.frontalReserves')
+    goToSovietSegmentStep(store, 'reinforcement.replRoll')
     store.frontalReservesInputs = { hexText: '60.35' }
     expect(store.claimFrontalReservesNow()).toBe(true)
     const last = store.lastFrontalReserves!
@@ -176,7 +176,7 @@ describe('专规 2.3c：领取（2 SP ＋ 编制转化 ＋ 两次免费重建候
         side: 'soviet',
       }),
     )
-    goToSovietSegmentStep(store, 'reinforcement.frontalReserves')
+    goToSovietSegmentStep(store, 'reinforcement.replRoll')
     store.frontalReservesInputs = { hexText: '60.35' }
     expect(store.claimFrontalReservesNow()).toBe(true)
     // 1.6a：「不论处境（即使在死亡堆里）」⇒ 死亡堆里那一枚也没了
@@ -213,7 +213,7 @@ describe('专规 2.3c：领取（2 SP ＋ 编制转化 ＋ 两次免费重建候
       }),
     )
 
-    goToSovietSegmentStep(store, 'reinforcement.frontalReserves')
+    goToSovietSegmentStep(store, 'reinforcement.replRoll')
     store.frontalReservesInputs = { hexText: '60.34' }
     expect(store.claimFrontalReservesNow()).toBe(true)
     const candidates = store.lastFrontalReserves!.freeRebuildCandidates

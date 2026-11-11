@@ -175,9 +175,10 @@ describe('W7 C12：死亡堆与 1.6c 特殊补员抽取（与盘面联动）', (
     workbench.setActiveSide(side)
     workbench.setPhase('reinforcement')
     const index = workbench.playerSegmentSteps.findIndex(
-      (step) => step.id === 'reinforcement.specialRepl',
+      // v7.1 第二段：1.6c 挂在宿主环「掷骰与统一放置」上
+      (step) => step.id === 'reinforcement.replRoll',
     )
-    expect(index, 'B 段应有「特殊补员抽取」这一环').toBeGreaterThanOrEqual(0)
+    expect(index, 'B 段应有「掷骰与统一放置」这一环').toBeGreaterThanOrEqual(0)
     expect(workbench.setSegmentStepIndex(index)).toBe(true)
   }
 

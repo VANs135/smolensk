@@ -2718,6 +2718,9 @@ export const useMapViewStore = defineStore('mapView', () => {
                 !workbench.hasSpecialReplDraw(workbench.activeSide, workbench.turn),
               // 1.6b：补给表窗口同理；SP 未落账时 acknowledge 会拒绝
               supplyPlacePending: true,
+              // v7.1 第二段：骰子产出汇进统一手牌，手牌非空才出「待放上手牌」窗
+              handPending: workbench.rollHandPending,
+              handPlacedCount: workbench.replPlacedThisSegment.length,
               rebuildAvailable: workbench.rebuildCandidates.length > 0,
               /*
                * ② 按方不渲染：方面军预备队是苏方专规（2.3c）内容。

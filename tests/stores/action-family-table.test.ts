@@ -130,16 +130,17 @@ it('10.0 第二段：移动环节的轰炸口子注明「仅空军」', () => {
 })
 
 it('按方限定的动作不落给另一方', () => {
+  // v7.1 第二段：方面军预备队挂在宿主环「掷骰与统一放置」上
   const axis = actionFamilyRowsAt({
     phase: 'reinforcement',
-    segment: 'reinforcement.frontalReserves',
+    segment: 'reinforcement.replRoll',
     role: 'active',
     side: 'axis',
   })
   expect(axis.some((row) => row.key === 'rein.frontalReserves')).toBe(false)
   const soviet = actionFamilyRowsAt({
     phase: 'reinforcement',
-    segment: 'reinforcement.frontalReserves',
+    segment: 'reinforcement.replRoll',
     role: 'active',
     side: 'soviet',
   })

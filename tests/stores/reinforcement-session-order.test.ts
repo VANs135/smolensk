@@ -48,6 +48,8 @@ function baseFacts(over: Partial<SessionStepFacts['reinforce']> = {}): SessionSt
       replTablePending: true,
       specialReplPending: false,
       supplyPlacePending: false,
+      handPending: false,
+      handPlacedCount: 0,
       rebuildAvailable: false,
       frontalReservesPending: false,
       slowMobilizationVisible: false,
@@ -66,8 +68,8 @@ function baseFacts(over: Partial<SessionStepFacts['reinforce']> = {}): SessionSt
 const idsOf = (facts: SessionStepFacts): string[] =>
   planSessionSteps(facts).map((entry) => entry.id)
 
-describe('增援段：每个环节只出本环节的窗', () => {
-  it('到达环节：到达 → 慢动员 → 补员表 → 补给表，不混入重建/方面军', () => {
+describe('增援段：段 → 节集合（v7.1 第二段）', () => {
+  it('到达环节：只出到达段的两块，不混入掷骰/重建/方面军', () => {
     expect(
       idsOf(
         baseFacts({
@@ -76,20 +78,17 @@ describe('增援段：每个环节只出本环节的窗', () => {
           slowMobilizationVisible: true,
           replTablePending: true,
           supplyPlacePending: true,
+          randomEventPending: true,
+          specialReplPending: true,
           rebuildAvailable: true,
           consolidationAvailable: true,
           frontalReservesPending: true,
         }),
       ),
-    ).toEqual([
-      'reinforce:arrival',
-      'reinforce:slow',
-      'reinforce:replTable',
-      'reinforce:supplyTable',
-    ])
+    ).toEqual(['reinforce:arrival', 'reinforce:slow'])
   })
 
-  it('掷表环节是自动步：不出玩家窗（避免自动结算与手动按钮同屏）', () => {
+  it('掷骰宿主：段内块按 §3 次序，最后是统一手牌与结束本段', () => {
     expect(
       idsOf(
         baseFacts({
@@ -97,11 +96,43 @@ describe('增援段：每个环节只出本环节的窗', () => {
           arrivalPending: true,
           replTablePending: true,
           supplyPlacePending: true,
+          randomEventPending: true,
+          supplyTrainPending: true,
+          variableExitPending: true,
+          specialReplPending: true,
+          frontalReservesPending: true,
           rebuildAvailable: true,
           consolidationAvailable: true,
         }),
       ),
-    ).toEqual([])
+    ).toEqual([
+      'reinforce:specialRepl',
+      'reinforce:randomEvent',
+      'reinforce:supplyTrain',
+      'reinforce:variableExit',
+      'reinforce:replTable',
+      'reinforce:supplyTable',
+      'reinforce:frontalReserves',
+      'reinforce:endRoll',
+    ])
+  })
+
+  it('掷骰宿主：手牌非空时在结束本段之前插「待放上手牌」', () => {
+    expect(
+      idsOf(
+        baseFacts({
+          stepId: 'reinforcement.replRoll',
+          replTablePending: true,
+          supplyPlacePending: true,
+          handPending: true,
+        }),
+      ),
+    ).toEqual([
+      'reinforce:replTable',
+      'reinforce:supplyTable',
+      'reinforce:hand',
+      'reinforce:endRoll',
+    ])
   })
 
   it('重建环节：重建 → 整编（不夹带补员表/到达）', () => {
@@ -119,59 +150,38 @@ describe('增援段：每个环节只出本环节的窗', () => {
     ).toEqual(['reinforce:rebuild', 'reinforce:consolidation'])
   })
 
-  it('轴方专规各占自己的环节：随机事件 / 补给列车 / 可变撤离', () => {
+  it('轴方专规：随机事件 / 补给列车 / 可变撤离都在掷骰宿主内按序出现', () => {
     expect(
       idsOf(
         baseFacts({
-          stepId: 'reinforcement.randomEvent',
+          stepId: 'reinforcement.replRoll',
           randomEventPending: true,
           supplyTrainPending: true,
-          arrivalPending: true,
-        }),
-      ),
-    ).toEqual(['reinforce:randomEvent'])
-    expect(
-      idsOf(
-        baseFacts({
-          stepId: 'reinforcement.supplyTrain',
-          randomEventPending: true,
-          supplyTrainPending: true,
-          arrivalPending: true,
-        }),
-      ),
-    ).toEqual(['reinforce:supplyTrain'])
-    expect(
-      idsOf(
-        baseFacts({
-          stepId: 'reinforcement.variableExit',
           variableExitPending: true,
           arrivalPending: true,
+          replTablePending: false,
         }),
       ),
-    ).toEqual(['reinforce:variableExit'])
+    ).toEqual([
+      'reinforce:randomEvent',
+      'reinforce:supplyTrain',
+      'reinforce:variableExit',
+      'reinforce:endRoll',
+    ])
   })
 
-  it('苏方专规各占自己的环节：特殊补员 / 方面军预备队', () => {
+  it('苏方专规：特殊补员 / 方面军预备队都在掷骰宿主内按序出现', () => {
     expect(
       idsOf(
         baseFacts({
-          stepId: 'reinforcement.specialRepl',
+          stepId: 'reinforcement.replRoll',
           specialReplPending: true,
           frontalReservesPending: true,
           arrivalPending: true,
+          replTablePending: false,
         }),
       ),
-    ).toEqual(['reinforce:specialRepl'])
-    expect(
-      idsOf(
-        baseFacts({
-          stepId: 'reinforcement.frontalReserves',
-          specialReplPending: true,
-          frontalReservesPending: true,
-          arrivalPending: true,
-        }),
-      ),
-    ).toEqual(['reinforce:frontalReserves'])
+    ).toEqual(['reinforce:specialRepl', 'reinforce:frontalReserves', 'reinforce:endRoll'])
   })
 })
 
@@ -202,12 +212,20 @@ describe('增援段：一次只暴露第一件', () => {
 })
 
 describe('增援段：未办完不能下一步（store 拒绝推进）', () => {
-  it('补员表未掷、补给 SP 未落账时，acknowledge 返回 false', () => {
+  it('1.6c 可掷而未掷时，acknowledge 返回 false（掷表不是「领取」）', () => {
+    setActivePinia(createPinia())
+    const store = useWorkbenchStore()
+    store.setPhase('reinforcement')
+    expect(store.hasSpecialReplDraw(store.activeSide, store.turn)).toBe(false)
+    expect(store.acknowledgeReinforcementStepNow('reinforce:specialRepl')).toBe(false)
+  })
+
+  it('第二段未掷可变增援时，结束本段返回 false', () => {
     setActivePinia(createPinia())
     const store = useWorkbenchStore()
     store.setPhase('reinforcement')
     expect(store.variableReplRolled).toBe(false)
-    expect(store.acknowledgeReinforcementStepNow('reinforce:replTable')).toBe(false)
+    expect(store.endRollSegmentNow(false)).toBe(false)
   })
 })
 
@@ -297,6 +315,8 @@ describe('增援面板：只用新窗口 id', () => {
       'reinforce:supplyTable',
       'reinforce:rebuild',
       'reinforce:consolidation',
+      'reinforce:hand',
+      'reinforce:endRoll',
     ])
     const ids = [...panel.matchAll(/item="(reinforce:[^"]+)"/gu)].map((match) => match[1]!)
     expect(ids.length).toBeGreaterThan(0)

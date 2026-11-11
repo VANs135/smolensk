@@ -68,7 +68,8 @@ describe('② 双方面板串台（按方不渲染）', () => {
     enterReinforcement(workbench)
 
     const frontIndex = workbench.playerSegmentSteps.findIndex(
-      (step) => step.id === 'reinforcement.frontalReserves',
+      // v7.1 第二段：方面军预备队挂在宿主环「掷骰与统一放置」上
+      (step) => step.id === 'reinforcement.replRoll',
     )
     // 苏方步骤表里必须有这一步（轮到该方时正常出现）
     expect(frontIndex).toBeGreaterThanOrEqual(0)

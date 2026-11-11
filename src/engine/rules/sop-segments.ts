@@ -170,11 +170,24 @@ export const SOP_SEGMENT_CHAINS: readonly SopSegmentChain[] = [
     steps: [
       {
         id: 'reinforcement.replRoll',
-        label: '补员表与补给表掷骰',
-        rule: '1.6b',
-        driver: 'automatic',
+        label: '掷骰与统一放置',
+        rule: '1.6b / 1.6c / 3.3c / 3.6 / 2.3c',
+        driver: 'player',
         actions: [],
-        note: '双方各自掷；段内次序未由条文固定（SOP 原文未列子步）',
+        /*
+         * ★ 2026-11-11（v7.1 第二段，用户 Q2）：本步是**第二段的宿主步**（实现分层）。
+         *
+         * 原文（2.2 SOP 卡面）把 B 段写成三句：到达 → 掷可变增援表并放置 → 重建/合并。
+         * 第二句里的「掷表」与「放置」在引擎里原本散在 1.6b / 1.6c / 3.3c / 3.6 / 2.3c
+         * 五个自动步上（`replRoll` 自动 → … → `specialRepl`），玩家要连点好几次空环节。
+         * 现在把这五个掷骰与其产出**统一挂到本步**：流程条在第二段只停这一环，
+         * 段内各件事仍按 §3 的次序作为**块**逐张出现（次序见 `session-steps.ts#reinforceItems`）。
+         *
+         * 纪律：**不合并、不删除**环节链上的原条目（轴 7 / 苏 5 一节不减）——
+         * 本步只是"段的宿主"，原条目仍是各自的规则落点（闸门、文档矩阵、`sopStepById` 都还在用）。
+         * 因此 `REINFORCEMENT_SEGMENTS` 的「段 → 节集合」是**叠加**关系，不改变 7/5 的计数。
+         */
+        note: '第二段宿主步（实现分层，不改变 7/5 节链）：段内依次掷 1.6c 特殊补员 → 3.6 随机事件 → 3.6 补给列车 → 3.3c 可变撤离 → 1.6b 补给表 / 补员表 → 2.3c 方面军预备队，全部产出汇进同一张待放手牌，再按共用放置方法统一落位。1.6c 是**掷 1 骰查特殊补员表**，不是「领取」',
       },
       {
         id: 'reinforcement.arrival',
@@ -448,6 +461,78 @@ export const SOP_SEGMENT_CHAINS: readonly SopSegmentChain[] = [
     ],
   },
 ]
+
+/* ────────────────────────────── 增援段的「段」分组 ────────────────────────────── */
+
+/**
+ * 增援段内的**操作段**（v7.1 §0.1 的三段骨架）
+ *
+ * 这是**叠加**在 7/5 节链之上的一层分组（段 → 节集合），不是新的环节：
+ *   · `steps` 里的每个 id 都必须是 `SOP_SEGMENT_CHAINS` 里真实存在的环节（测试钉住）；
+ *   · 每条链（轴 7 / 苏 5）的每个环节**恰好**属于一个段（链内不重不漏）；分组合集覆盖双方；
+ *   · 不改变链路条数——轴 7 / 苏 5 照旧，`sopStepsOf` 的返回也不受影响。
+ *
+ * `host` 是流程条在该段**停留**的那一环：第一段＝到达、第二段＝掷骰与统一放置、
+ * 第三段＝重建与整编。段内的其余环节仍按原次序作为「块」逐一出现
+ * （见 `session-steps.ts#reinforceItems`），所以玩家不会再被自动步挡在中间。
+ */
+export interface ReinforcementSegment {
+  /** 段标识（与 v7.1 文档 §0.1 的三段一一对应） */
+  id: 'arrival' | 'roll' | 'rebuild'
+  /** 段名 */
+  label: string
+  /** 该段归属的规则出处 */
+  rule: string
+  /** 流程条在该段停留的宿主环节 id */
+  host: string
+  /** 本段承载的环节（节）id；次序即段内块的默认次序 */
+  steps: readonly string[]
+  note?: string
+}
+
+export const REINFORCEMENT_SEGMENTS: readonly ReinforcementSegment[] = [
+  {
+    id: 'arrival',
+    label: '一、到达',
+    rule: '2.2 SOP / 13.6 / 专规 1.6a / 2.4',
+    host: 'reinforcement.arrival',
+    steps: ['reinforcement.arrival'],
+    note: '当日到货落位 + 专规 1.6a 强制移除（先移除后放置）；苏方随后按表 2-2 累计解锁慢动员。慢动员是到达段内的块，不是独立环节。',
+  },
+  {
+    id: 'roll',
+    label: '二、掷骰与统一放置',
+    rule: '1.6b / 1.6c / 3.3c / 3.6 / 2.3c',
+    host: 'reinforcement.replRoll',
+    steps: [
+      'reinforcement.specialRepl',
+      'reinforcement.randomEvent',
+      'reinforcement.supplyTrain',
+      'reinforcement.variableExit',
+      'reinforcement.replRoll',
+      'reinforcement.frontalReserves',
+    ],
+    note: '先掷完、再统一放（用户裁定 1）。1.6c 特殊补员是掷 1 骰查表；3.6 随机事件/补给列车、3.3c 可变撤离只对轴方；2.3c 方面军预备队只对苏方。',
+  },
+  {
+    id: 'rebuild',
+    label: '三、重建 / 合并 / 整编',
+    rule: '13.5 / 13.9',
+    host: 'reinforcement.rebuild',
+    steps: ['reinforcement.rebuild'],
+    note: '重建（13.5a/b/f）、合并与整编（13.9；轴方多单位编队禁用 3.3d）；第三段没有待放手牌。',
+  },
+]
+
+/** 取增援段的三段分组（唯一出处；界面与测试都从这里取） */
+export function reinforcementSegmentsOf(): readonly ReinforcementSegment[] {
+  return REINFORCEMENT_SEGMENTS
+}
+
+/** 某环节属于增援段的哪一段（不是 B 段的环节返回 null） */
+export function reinforcementSegmentOf(stepId: string): ReinforcementSegment | null {
+  return REINFORCEMENT_SEGMENTS.find((segment) => segment.steps.includes(stepId)) ?? null
+}
 
 /* ────────────────────────────── 取用与派生 ────────────────────────────── */
 

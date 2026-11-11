@@ -2657,17 +2657,17 @@ export const ACTION_GATES: readonly ActionGate[] = [
   },
   {
     // 批 F 切片 3：补给表到货 SP 的**免费铁运落点**（专规 2.1 / 3.1 + 通规 13.3c）与
-    // 3.6 补给列车的 2 SP。与"到货落位"（13.6 的到达卡投放）同一环节 —— 补给表 SP 也属当日到货。
+    // 3.6 补给列车的 2 SP。v7.1 第二段起，掷骰与落位统一挂在宿主环「掷骰与统一放置」。
     key: 'rein.supplyArrival',
     label: '到货 SP 落位（免费铁运）',
     rule: '专规 2.1 / 3.1',
-    where: [{ phase: 'reinforcement', segment: 'reinforcement.arrival' }],
+    where: [{ phase: 'reinforcement', segment: 'reinforcement.replRoll' }],
   },
   {
     key: 'rein.supplyTrain',
     label: '补给列车落点',
     rule: '专规 3.6',
-    where: [{ phase: 'reinforcement', segment: 'reinforcement.supplyTrain', sides: ['axis'] }],
+    where: [{ phase: 'reinforcement', segment: 'reinforcement.replRoll', sides: ['axis'] }],
   },
   {
     key: 'rein.rebuild',
@@ -2684,15 +2684,13 @@ export const ACTION_GATES: readonly ActionGate[] = [
      * **Special Repl Table**… The Soviets always get two and the Axis one」⇒ **双方各有这一掷**，
      * 且**只在本方 B 增援段这一环**（修前写死 `sides: ['soviet']`，轴方那一掷无处安放）。
      */
-    where: [{ phase: 'reinforcement', segment: 'reinforcement.specialRepl' }],
+    where: [{ phase: 'reinforcement', segment: 'reinforcement.replRoll' }],
   },
   {
     key: 'rein.frontalReserves',
     label: '领取方面军预备队',
     rule: '专规 2.3c',
-    where: [
-      { phase: 'reinforcement', segment: 'reinforcement.frontalReserves', sides: ['soviet'] },
-    ],
+    where: [{ phase: 'reinforcement', segment: 'reinforcement.replRoll', sides: ['soviet'] }],
   },
   {
     key: 'move.breakout',
@@ -2918,8 +2916,8 @@ export const ACTION_GATES: readonly ActionGate[] = [
        * 义务仍在 B/C/D/E/F/G 各段末照常可结算（下列条目一条未减）。
        */
       { phase: 'reinforcement', segment: 'reinforcement.arrival', at: 'end' },
+      { phase: 'reinforcement', segment: 'reinforcement.replRoll', at: 'end' },
       { phase: 'reinforcement', segment: 'reinforcement.rebuild', at: 'end' },
-      { phase: 'reinforcement', segment: 'reinforcement.specialRepl', at: 'end' },
       { phase: 'movement', segment: 'movement.breakout', at: 'end' },
       { phase: 'movement', segment: 'movement.modeAndMovement', at: 'end' },
       { phase: 'movement', segment: 'movement.barrage', at: 'end' },
@@ -3269,7 +3267,12 @@ export function participatesIn(query: ParticipationQuery): ParticipationVerdict 
         ? { ok: true, rule: '15.1' }
         : cannotParticipate('15.1', '整备段只点空军基地（与基地内的飞机）；地面单位本环节不参与')
 
-    /* ── B 增援：本环节的对象是"待入场的条目"，故图上算子不可点 ── */
+    /* ── B 增援：本环节的对象是"待入场的条目"，故图上算子不可点 ──
+     *    v7.1 第二段：宿主环（掷骰与统一放置）与段内其余环节同样不以图上算子为对象 */
+    case 'reinforcement.replRoll':
+    case 'reinforcement.randomEvent':
+    case 'reinforcement.supplyTrain':
+    case 'reinforcement.variableExit':
     case 'reinforcement.arrival':
     case 'reinforcement.rebuild':
     case 'reinforcement.absorbBreakdown':

@@ -304,6 +304,20 @@ export const useContainersStore = defineStore('containers', () => {
   /** 最近一次操作结论（面板显示；带规则号） */
   const lastAction = ref<{ ok: boolean; rule: string; detail: string; scope: string } | null>(null)
 
+  /**
+   * 1.6c 特殊补员的**骰面与查表结果**（用户 Q4：必须出骰面与结果）
+   *
+   * `die` 是真实掷出的 1d6 面；`detail` 是 Special Repl Table 命中项与落位结论。
+   * 拒绝时也留骰面（骰已掷出，只是结果不合法），骰面为 `null` 表示连掷骰都没发生
+   * （例如 19 Aug 后 / 本回合已掷过——表不再开）。
+   */
+  const specialReplLast = ref<{
+    side: Side
+    die: number | null
+    ok: boolean
+    detail: string
+  } | null>(null)
+
   /* ────────────────────────────── 盘面事实 → 盒内单位视图 ────────────────────────────── */
 
   /** 全部地面单位记录（按 id 索引；取 13.5c 的可重建性与兵种） */
@@ -857,6 +871,7 @@ export const useContainersStore = defineStore('containers', () => {
         detail: refusal,
         scope: '1.6c 特殊补员',
       }
+      specialReplLast.value = { side, die: null, ok: false, detail: refusal }
       workbench.pushLog('warning', refusal, '1.6c')
       return false
     }
@@ -881,6 +896,7 @@ export const useContainersStore = defineStore('containers', () => {
         detail: candidates.reason,
         scope: '1.6c 特殊补员',
       }
+      specialReplLast.value = { side, die, ok: false, detail: candidates.reason }
       workbench.pushLog(
         'danger',
         `特殊补员被拒：${candidates.reason}（${candidates.rule}）`,
@@ -909,6 +925,7 @@ export const useContainersStore = defineStore('containers', () => {
         detail: planned.reason,
         scope: '1.6c 特殊补员',
       }
+      specialReplLast.value = { side, die, ok: false, detail: planned.reason }
       workbench.pushLog(
         'danger',
         `特殊补员被拒：${planned.reason}（${planned.rule}）`,
@@ -932,6 +949,12 @@ export const useContainersStore = defineStore('containers', () => {
         scope: '1.6c 特殊补员',
       }
       workbench.pushLog('danger', `特殊补员无处返场：${placement.detail}（2.1）`, '2.1')
+      specialReplLast.value = {
+        side,
+        die,
+        ok: false,
+        detail: `骰面 ${die} → ${planned.data.detail}；无处返场：${placement.detail}`,
+      }
       return false
     }
     workbench.rng = roll.rng
@@ -960,6 +983,7 @@ export const useContainersStore = defineStore('containers', () => {
       detail: planned.data.detail,
       scope: '1.6c 特殊补员',
     }
+    specialReplLast.value = { side, die, ok: true, detail: planned.data.detail }
     workbench.pushLog('success', planned.data.detail, planned.rule)
     return true
   }
@@ -2532,6 +2556,7 @@ export const useContainersStore = defineStore('containers', () => {
     alarmMix,
     alarmMixRule,
     lastAction,
+    specialReplLast,
     // 记录轨
     turn,
     weather,

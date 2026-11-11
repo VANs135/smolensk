@@ -227,11 +227,12 @@ describe('B7：逐环节的允许与禁止（每例带规则号）', () => {
   })
 
   it('B 增援：苏方特补（专规 1.6c）归其方；编队抽取不再按环节出现（ch10）', () => {
-    const axisDraw = allowedActionsOf(queryOf('reinforcement', 'reinforcement.specialRepl', 'axis'))
+    // v7.1 第二段：1.6c 的掷表挂在宿主环「掷骰与统一放置」上（段内各节不再各占一环）
+    const axisDraw = allowedActionsOf(queryOf('reinforcement', 'reinforcement.replRoll', 'axis'))
     expect(axisDraw.has('rein.specialRepl')).toBe(true)
     expect(
       isActionAllowed(
-        queryOf('reinforcement', 'reinforcement.specialRepl', 'soviet'),
+        queryOf('reinforcement', 'reinforcement.replRoll', 'soviet'),
         'rein.specialRepl',
       ),
     ).toBe(true)
@@ -242,7 +243,7 @@ describe('B7：逐环节的允许与禁止（每例带规则号）', () => {
      */
     expect(
       isActionAllowed(
-        queryOf('reinforcement', 'reinforcement.specialRepl', 'axis'),
+        queryOf('reinforcement', 'reinforcement.replRoll', 'axis'),
         'rein.specialRepl',
       ),
     ).toBe(true)

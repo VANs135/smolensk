@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import type { GamePhase } from '@/engine/state-types'
-import { sopStepsOf } from '@/engine/rules'
+import { reinforcementSegmentOf, sopStepsOf } from '@/engine/rules'
 import {
   ACTION_KEYS_WITHOUT_STORE_ENTRY,
   actionKeysOfSegment,
@@ -74,6 +74,12 @@ describe('阶段/环节 × 操作矩阵（规则书口径）', () => {
     for (const phase of PHASES) {
       for (const step of sopStepsOf(phase)) {
         if (step.driver !== 'player') continue
+        /*
+         * v7.1 第二段：B 段按「段」分组后，段内非宿主环节不再各占流程条一环，
+         * 动作统一由宿主环（掷骰与统一放置 / 到达 / 重建）承载 ⇒ 它们没有自己的闸门是正常的。
+         */
+        const segment = reinforcementSegmentOf(step.id)
+        if (segment !== null && segment.host !== step.id) continue
         const keys = actionKeysOfSegment(step.id, sideOf(step), roleOf(phase))
         if (keys.size === 0) empty.push(step.id)
       }
@@ -117,8 +123,13 @@ describe('阶段/环节 × 操作矩阵（规则书口径）', () => {
     }
     // A 段：只有整备（15.1）
     expect([...actionKeysOfSegment('aircraftRefit.refit', 'axis', 'active')]).toEqual(['air.refit'])
-    // B 段：到货落位 13.6 + 免费铁运 专规 2.1；重建 13.5/13.9（ch10 抽签已移出 B 段）
-    expectKeys('reinforcement.arrival', ['rein.arrival', 'rein.supplyArrival'])
+    // B 段：到达只排 13.6 到货；两张表与免费铁运迁到第二段宿主（v7.1 段分组）
+    expectKeys('reinforcement.arrival', ['rein.arrival'])
+    expectKeys('reinforcement.replRoll', [
+      'rein.supplyArrival',
+      'rein.specialRepl',
+      'rein.supplyTrain',
+    ])
     expectKeys('reinforcement.rebuild', ['rein.rebuild'])
     // C 段：模式/移动/突袭/铁路/装卸/工事/拆分 + 燃料 + 空中任务
     expectKeys('movement.modeAndMovement', [
@@ -185,14 +196,14 @@ describe('阶段/环节 × 操作矩阵（规则书口径）', () => {
       'automatic preTurn.weatherDetermination → ',
       'question  preTurn.firstPlayerDetermination → ',
       'player    aircraftRefit.refit → air.refit',
-      'automatic reinforcement.replRoll → ',
-      'player    reinforcement.arrival → rein.arrival,rein.supplyArrival',
+      'player    reinforcement.replRoll → rein.specialRepl,rein.supplyArrival,rein.supplyTrain',
+      'player    reinforcement.arrival → rein.arrival',
       'automatic reinforcement.randomEvent → ',
-      'player    reinforcement.supplyTrain → rein.supplyTrain',
+      'player    reinforcement.supplyTrain → ',
       'automatic reinforcement.variableExit → ',
       'player    reinforcement.rebuild → rein.rebuild',
-      'player    reinforcement.specialRepl → rein.specialRepl',
-      'player    reinforcement.frontalReserves → rein.frontalReserves',
+      'player    reinforcement.specialRepl → ',
+      'player    reinforcement.frontalReserves → ',
       'player    movement.breakout → move.breakout',
       'player    movement.modeAndMovement → air.baseReduce,air.mission,air.transfer,barrage.declare,move.breakdown,move.construction,move.dumpBlow,move.extenderConvert,move.hedgehog,move.loadUnload,move.modeChange,move.order,move.overrun,move.railConversion,move.railTransport,move.transportMerge,supply.fuel',
       'player    movement.barrage → air.mission,barrage.declare',

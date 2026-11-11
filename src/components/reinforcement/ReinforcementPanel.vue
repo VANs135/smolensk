@@ -483,6 +483,43 @@ function confirmAbandonArrival(): void {
     : '当前不在到达段，无法结束本段'
 }
 
+/**
+ * 第二段·结束本段（v7.1 §1.5 / §3.3）
+ *
+ * 与第一段同一口径：段内唯一出口；手牌非空先问一次是否放弃上场。
+ * 拒绝原因来自 store（未掷骰 / 1.6c 未掷 / 撤离待选 / 方面军预备队未领）。
+ */
+const rollFinishConfirm = ref(false)
+const rollFinishError = ref('')
+
+function rollErrorText(): string {
+  const reason = workbench.reinforcementError?.reason ?? ''
+  if (reason === 'rollNotMade') return '先掷可变增援（1.6b），再结束第二段'
+  if (reason === 'specialReplNotRolled') return '1.6c 特殊补员还没掷：这是每回合必掷的表'
+  if (reason === 'variableExitSelectionPending') return '3.3c 撤离还有待选算子，先选定再结束'
+  if (reason === 'frontalReservesPending') return '2.3c 方面军预备队必须当即领取'
+  if (reason === 'rollHandNotEmpty') return '手牌还没放完：要结束本段请先确认放弃上场'
+  return '当前不能结束第二段'
+}
+
+function finishRollSegment(): void {
+  rollFinishError.value = ''
+  if (workbench.rollHandPending) {
+    rollFinishConfirm.value = true
+    return
+  }
+  if (!workbench.endRollSegmentNow(false)) rollFinishError.value = rollErrorText()
+}
+
+function confirmAbandonRoll(): void {
+  rollFinishError.value = ''
+  if (workbench.endRollSegmentNow(true)) {
+    rollFinishConfirm.value = false
+    return
+  }
+  rollFinishError.value = rollErrorText()
+}
+
 // 地图落点选择结束（投放成功或取消）⇒ 收掉手牌描边
 watch(
   () => workbench.hexPickView,
@@ -672,6 +709,13 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         掷特殊补员表 · 1.6c
       </BaseButton>
       <p v-if="specialReplRefusal !== null" class="muted" role="status">{{ specialReplRefusal }}</p>
+      <!-- Q4：必须出骰面与查表结果（骰面来自真实 1d6；结果来自 Special Repl Table） -->
+      <p v-if="containers.specialReplLast !== null" class="num" data-testid="special-repl-last">
+        <BaseTag :kind="containers.specialReplLast.ok ? 'info' : 'warning'">
+          骰面 {{ containers.specialReplLast.die ?? '—' }}
+        </BaseTag>
+        {{ containers.specialReplLast.detail }}
+      </p>
     </SessionStep>
 
     <SessionStep v-if="showsActions" item="reinforce:arrival">
@@ -904,9 +948,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       v-if="showsActions"
       item="reinforce:replTable"
       ackable
-      :ack-disabled="
-        !workbench.variableReplRolled || workbench.replPending.pax + workbench.replPending.eq > 0
-      "
+      :ack-disabled="!workbench.variableReplRolled"
       @ack="workbench.acknowledgeReinforcementStepNow('reinforce:replTable')"
     >
       <!-- ── · 可变增援（13.6b / 1.6c / 3.3c / 3.6） ── -->
@@ -939,32 +981,10 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <ul v-if="variableReplResult.length > 0" class="num repl-result">
         <li v-for="line in variableReplResult" :key="line">{{ line }}</li>
       </ul>
-      <template v-if="replPendingTotal > 0">
-        <p class="num">
-          <BaseTag kind="warning">待放置</BaseTag>
-          Pax {{ workbench.replPending.pax }} / Eq {{ workbench.replPending.eq }}
-        </p>
-        <div v-if="showsActions" class="row">
-          <BaseButton
-            v-for="item in savableReplKinds"
-            :key="item.key"
-            variant="primary"
-            size="sm"
-            :disabled="
-              workbench.replPending[item.key] === 0 ||
-              workbench.replPlacementBlockedReasonFor(item.key) !== null
-            "
-            @click="workbench.beginReplPlaceHexPickNow(item.key)"
-          >
-            在地图上点格放置 {{ item.label }}（{{ workbench.replPending[item.key] }}）
-          </BaseButton>
-        </div>
-        <template v-for="item in savableReplKinds" :key="`blocked:${item.key}`">
-          <p v-if="workbench.replPlacementBlockedReasonFor(item.key) !== null" class="muted num">
-            {{ workbench.replPlacementBlockedReasonFor(item.key) }}
-          </p>
-        </template>
-      </template>
+      <p v-if="replPendingTotal > 0" class="muted num">
+        补员已进待放手牌（Pax {{ workbench.replPending.pax }} / Eq
+        {{ workbench.replPending.eq }}），统一在「待放上手牌」里落位。
+      </p>
     </SessionStep>
     <!-- 3.6：补给列车 —— 不做列车算子；窗口一出现地图高亮全部可卸货铁路格，点一格落 2 SP -->
     <SessionStep
@@ -1014,7 +1034,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       v-if="showsActions"
       item="reinforce:supplyTable"
       ackable
-      :ack-disabled="workbench.supplyArrivalSp > 0"
+      :ack-disabled="!workbench.variableReplRolled || workbench.supplyArrivalSp > 0"
       @ack="workbench.acknowledgeReinforcementStepNow('reinforce:supplyTable')"
     >
       <!-- ── · 到货 SP 落位（专规 2.1 / 3.1 免费铁运 + 3.6 补给列车） ── -->
@@ -1122,6 +1142,85 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         <BaseTag kind="success">已落账</BaseTag> {{ workbench.lastFreeRailPlan.detail }}
       </p>
     </SessionStep>
+
+    <!--
+      v7.1 第二段：**批量手牌**（用户 Q2 / §1.1–1.2）
+
+      骰子全部判完后统一在这里落位：
+        · 角标数字＝该条待放的算子枚数（Pax / Eq / SP），只在本段出现；
+        · 点一条 → 引擎只高亮合法格（不是全图）→ 点格即生效，不弹二次确认；
+        · 再点已落位的枚 ⇒ 收回、点数退回手牌；撤回只在本段内有效。
+    -->
+    <SessionStep v-if="showsActions" item="reinforce:hand">
+      <div class="row" data-testid="roll-hand">
+        <BaseButton
+          v-for="item in savableReplKinds"
+          :key="`hand:${item.key}`"
+          :variant="workbench.replPending[item.key] > 0 ? 'primary' : 'secondary'"
+          size="sm"
+          :disabled="
+            workbench.replPending[item.key] === 0 ||
+            workbench.replPlacementBlockedReasonFor(item.key) !== null
+          "
+          :title="
+            workbench.replPlacementBlockedReasonFor(item.key) ??
+            `${item.label}：点一下 → 地图只高亮合法格 → 点格落一枚`
+          "
+          data-testid="roll-hand-card"
+          @click="workbench.beginReplPlaceHexPickNow(item.key)"
+        >
+          {{ item.label
+          }}<span class="num" data-testid="roll-hand-badge">{{
+            workbench.replPending[item.key]
+          }}</span>
+        </BaseButton>
+        <span v-if="workbench.supplyArrivalSp > 0" class="num" data-testid="roll-hand-sp">
+          <BaseTag kind="warning">SP {{ workbench.supplyArrivalSp }}</BaseTag>
+          <span class="muted">（在「补给到达」块里落账）</span>
+        </span>
+        <span v-if="workbench.supplyTrainPending" class="num" data-testid="roll-hand-train">
+          <BaseTag kind="warning">补给列车 {{ workbench.supplyTrainSp }} SP</BaseTag>
+          <span class="muted">（在「补给列车落点」块里放置）</span>
+        </span>
+      </div>
+      <p
+        v-for="item in savableReplKinds"
+        v-show="workbench.replPlacementBlockedReasonFor(item.key) !== null"
+        :key="`hand-blocked:${item.key}`"
+        class="muted num"
+      >
+        {{ workbench.replPlacementBlockedReasonFor(item.key) }}
+      </p>
+      <!-- 已落位的枚：点一下收回（点数退回手牌；只在本段有效） -->
+      <div v-if="workbench.replPlacedThisSegment.length > 0" class="row">
+        <span class="muted num">本段已落位（点一下收回）</span>
+        <BaseButton
+          v-for="placed in workbench.replPlacedThisSegment"
+          :key="`placed:${placed.instanceId}`"
+          variant="ghost"
+          size="sm"
+          data-testid="roll-hand-placed"
+          @click="workbench.withdrawReplPlacementNow(placed.instanceId)"
+        >
+          {{ placed.kind === 'pax' ? 'Pax' : 'Eq' }} ↺
+        </BaseButton>
+      </div>
+    </SessionStep>
+
+    <!-- 第二段唯一出口：所有骰子判完、手牌清空（或确认放弃） -->
+    <SessionStep v-if="showsActions" item="reinforce:endRoll" data-testid="roll-end-step">
+      <div class="row">
+        <BaseButton variant="primary" size="sm" @click="finishRollSegment()"> 结束本段 </BaseButton>
+        <span class="muted num">手牌 {{ workbench.rollHandPoints }} 点待放</span>
+      </div>
+      <div v-if="rollFinishConfirm" class="row" data-testid="roll-end-abandon">
+        <span class="num">手牌还没放完：结束本段将把未落位的增援作废（不结转）。</span>
+        <BaseButton variant="primary" size="sm" @click="confirmAbandonRoll()">放弃上场</BaseButton>
+        <BaseButton variant="ghost" size="sm" @click="rollFinishConfirm = false">返回</BaseButton>
+      </div>
+      <p v-if="rollFinishError !== ''" class="warn" role="status">{{ rollFinishError }}</p>
+    </SessionStep>
+
     <SessionStep
       v-if="showsRebuild"
       item="reinforce:rebuild"

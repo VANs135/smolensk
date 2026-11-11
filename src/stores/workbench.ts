@@ -58,7 +58,15 @@ import { createRailFacts, createTraceSupplyAt } from '@/engine/rules'
 import { entryEdgeHexes } from '@/engine/rules/entry-edges'
 import { buildUnitSelectionSet, type UnitSelectionSet } from '@/engine/rules/unit-selection'
 // B8：环节链（当前环节由本文件的 `segmentStep` 从这张表推出）
-import { sopStepById, sopStepsOf, type SopSegmentStep } from '@/engine/rules'
+import {
+  isSpecialReplAvailable,
+  reinforcementSegmentOf,
+  reinforcementSegmentsOf,
+  sopStepById,
+  sopStepsOf,
+  type ReinforcementSegment,
+  type SopSegmentStep,
+} from '@/engine/rules'
 import {
   fail,
   succeed,
@@ -18768,17 +18776,101 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
+  /**
+   * 第二段（掷骰与统一放置）的**待放手牌**
+   *
+   * v7.1 §3.3：所有骰子判完才出手牌，产出汇进同一张手牌再统一落位。
+   * 手牌＝未落位的补员算子（Pax / Eq，每点一枚）＋到货 SP（补给表 / 方面军预备队）
+   * ＋未落位的补给列车 2 SP。Ftr/Tac 不在手牌（13.5 不可保存，段末清零）。
+   */
+  const rollHandPending = computed<boolean>(
+    () =>
+      replPending.value.pax + replPending.value.eq > 0 ||
+      supplyArrivalSp.value > 0 ||
+      supplyTrainPending.value,
+  )
+
+  /** 第二段手牌还剩多少"点"（角标总数；面板与测试共用一处口径） */
+  const rollHandPoints = computed<number>(
+    () =>
+      replPending.value.pax +
+      replPending.value.eq +
+      supplyArrivalSp.value +
+      (supplyTrainPending.value ? supplyTrainSp.value : 0),
+  )
+
+  /**
+   * 第二段·结束本段（v7.1 §1.5 / §3.3：段内唯一出口）
+   *
+   * 前置（都是"该掷的没掷/该办的没办"，不替玩家跳过）：
+   *   · 1.6b 可变增援未掷 ⇒ 拒绝；
+   *   · 1.6c 特殊补员可掷而未掷 ⇒ 拒绝（原文「Each turn before 19 August … roll a die」）；
+   *   · 3.3c 撤离待选算子 ⇒ 拒绝；
+   *   · 2.3c 方面军预备队到批而未领 ⇒ 拒绝（原文「must be taken right away」）；
+   *   · 手牌非空且未确认放弃 ⇒ 拒绝（由界面问一次"是否放弃上场"）。
+   *
+   * 确认放弃 ⇒ 未落位的补员 / SP / 补给列车作废（不结转），随后进第三段。
+   */
+  function endRollSegmentNow(abandonHand = false): boolean {
+    if (segmentStep.value?.id !== 'reinforcement.replRoll') return false
+    if (!variableReplRolled.value) {
+      reinforcementError.value = { rule: '1.6b', reason: 'rollNotMade' }
+      return false
+    }
+    if (isSpecialReplAvailable(date.value) && !hasSpecialReplDraw(activeSide.value, turn.value)) {
+      reinforcementError.value = { rule: '1.6c', reason: 'specialReplNotRolled' }
+      return false
+    }
+    if (variableExitSelectionOpen.value) {
+      reinforcementError.value = { rule: '3.3c', reason: 'variableExitSelectionPending' }
+      return false
+    }
+    if (
+      frontalReservesToday.value !== null &&
+      !frontalReservesClaimed.value.includes(frontalReservesToday.value.date)
+    ) {
+      reinforcementError.value = { rule: '2.3c', reason: 'frontalReservesPending' }
+      return false
+    }
+    if (!abandonHand && rollHandPending.value) {
+      reinforcementError.value = { rule: '1.6b', reason: 'rollHandNotEmpty' }
+      return false
+    }
+    if (abandonHand) {
+      const lostRepl = replPending.value.pax + replPending.value.eq
+      const lostSp = supplyArrivalSp.value
+      const lostTrain = supplyTrainPending.value ? supplyTrainSp.value : 0
+      replPending.value = { pax: 0, eq: 0 }
+      supplyArrivalSp.value = 0
+      if (supplyTrainPending.value) supplyTrainPlacedKey.value = supplyTrainTurnKey()
+      if (lostRepl + lostSp + lostTrain > 0) {
+        pushLog(
+          'warning',
+          `放弃上场：${lostRepl} 点补员 / ${lostSp} SP / 补给列车 ${lostTrain} SP 作废（未落位，不结转）`,
+          '13.5',
+        )
+      }
+    }
+    ackReinforcementItem('reinforce:endRoll')
+    stepToNextSegmentStep()
+    return true
+  }
+
   function acknowledgeReinforcementStepNow(itemId: string): boolean {
     if (itemId === 'reinforce:arrival' && arrivalPlan.value !== null && !arrivalAllPlaced.value)
       return false
     if (itemId === 'reinforce:variableExit' && variableExitSelectionOpen.value) return false
+    /*
+     * 第二段改用"先掷完、再统一放"的批量手牌 ⇒ 掷骰块不再以"已放置"为 ack 前提
+     * （放置统一由 `reinforce:hand` 与 `endRollSegmentNow` 把关）；
+     * 但 1.6c 是**必须掷的表**，未掷不得 ack。
+     */
     if (
-      itemId === 'reinforce:replTable' &&
-      (!variableReplRolled.value || replPending.value.pax + replPending.value.eq > 0)
-    ) {
+      itemId === 'reinforce:specialRepl' &&
+      isSpecialReplAvailable(date.value) &&
+      !hasSpecialReplDraw(activeSide.value, turn.value)
+    )
       return false
-    }
-    if (itemId === 'reinforce:supplyTable' && supplyArrivalSp.value > 0) return false
     const key = `${turn.value}|${activeSide.value}|${itemId}`
     if (!reinforcementAcks.value.includes(key)) {
       reinforcementAcks.value = [...reinforcementAcks.value, key]
@@ -18809,14 +18901,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 全自动的段（H 清理 / Turn End / Pre-Turn 的部分）滤完为空 ⇒ `segmentStep` 为 null
    * ⇒ 闸门对一切动作返回"当前段没有环节表"，**正是"这些段没有玩家动作"应有的效果**。
    */
-  const playerSegmentSteps = computed(() =>
-    segmentSteps.value.filter(
+  const playerSegmentSteps = computed(() => {
+    const visible = segmentSteps.value.filter(
       (step) =>
         step.driver !== 'automatic' &&
         step.implemented !== false &&
         !(step.skipWhenIdle === true && !stepHasWork(step)),
-    ),
-  )
+    )
+    /*
+     * ★ 2026-11-11（v7.1 第二段，用户 Q2）：B 段**按「段」分组**（段 → 节集合）。
+     *
+     * 段内只有**宿主步**占流程条的一格：到达段＝`reinforcement.arrival`、掷骰段＝
+     * `reinforcement.replRoll`、重建段＝`reinforcement.rebuild`。段内其余环节（特殊补员 /
+     * 随机事件 / 补给列车 / 可变撤离 / 方面军预备队）不在流程条上各占一格，而是作为
+     * 「块」按 §3 的次序在宿主窗里逐张出现（`session-steps.ts#reinforceItems`）。
+     *
+     * 计数口径随之变成：段 轴 3 / 苏 3、环 轴 3 / 苏 3（原 4 / 4）；**节仍是 7 / 5 不变**
+     * （`sopStepsOf` 与本函数无关，链路一条未删）。见文档 §0.2 的更新记录。
+     */
+    if (phase.value !== 'reinforcement') return visible
+    return reinforcementSegmentsOf()
+      .map((segment) => visible.find((step) => step.id === segment.host) ?? null)
+      .filter((step): step is SopSegmentStep => step !== null)
+  })
 
   /**
    * 本环节**是否有活可做**（只对 `skipWhenIdle` 的环节求值）
@@ -18873,6 +18980,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       total: steps.length,
     }
   })
+
+  /**
+   * 增援段：当前宿主环属于哪一段（其它阶段为 null；界面显示「第几段」用）
+   *
+   * 三段的分组元数据唯一出处是 `engine/rules/sop-segments.ts#REINFORCEMENT_SEGMENTS`。
+   */
+  const reinforcementSegment = computed<ReinforcementSegment | null>(() =>
+    phase.value === 'reinforcement' && segmentStep.value !== null
+      ? reinforcementSegmentOf(segmentStep.value.id)
+      : null,
+  )
 
   /**
    * 闸门查询（B7 `allowedActionsOf` 的入参）
@@ -19428,10 +19546,86 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       label: `补员落点 · ${kind === 'pax' ? 'Pax' : 'Eq'}（2.1：友方 HQ 或图边补给源格）`,
       rule: '13.5',
       candidates: replInitialPlacementHexesFor.value[kind],
-      apply: (hex) => placePendingReplNow(hex, kind),
+      apply: (hex) => placePendingReplOneNow(hex, kind),
     })
     return true
   }
+
+  /**
+   * 第二段已放置的补员算子（用于"再点一下收回"）
+   *
+   * v7.1 §1.1：撤回**只在本段内有效**——离开第二段（或换方/换回合）即清空，
+   * 防止把上一段的落位再撤回。
+   */
+  const replPlacedThisSegment = ref<{ instanceId: string; kind: SavableReplKind }[]>([])
+
+  /**
+   * 共用放置方法（第二段入口）：把某一族待放补员放**一枚**到指定格
+   *
+   * 与 `placePendingReplNow` 同一套合法性（2.1 到货条）；区别只是每次只落一枚，
+   * 便于"点单位 → 点格 → 再点已放单位收回"的逐枚操作。
+   */
+  function placePendingReplOneNow(hex: HexRef, kind: SavableReplKind): boolean {
+    if (replPending.value[kind] <= 0) return false
+    if (replRecordOf(activeSide.value, kind) === null) return false
+    const legal = replInitialPlacementHexesFor.value[kind].some(
+      (item) => item.col === hex.col && item.row === hex.row,
+    )
+    if (!legal) {
+      const reason =
+        replPlacementBlockedReasonFor(kind) ??
+        `${hexLabel(hex)} 不能放补员（2.1：须是能直接拖取追溯补给的 HQ 或图边补给源格）`
+      pushLog('warning', `补员不能放在 ${hexLabel(hex)}：${reason}`, '13.5')
+      return false
+    }
+    if (!placeReplCounters(hex, kind, 1)) return false
+    const created = units.value[units.value.length - 1]
+    if (created !== undefined) {
+      replPlacedThisSegment.value = [
+        ...replPlacedThisSegment.value,
+        { instanceId: created.instanceId, kind },
+      ]
+    }
+    replPending.value = { ...replPending.value, [kind]: replPending.value[kind] - 1 }
+    pushLog(
+      'info',
+      `补员落位 ${hexLabel(hex)}：1 ${kind === 'pax' ? 'Pax' : 'Eq'}（13.5a：每点一枚；本段内再点可收回）`,
+      '13.5',
+    )
+    return true
+  }
+
+  /**
+   * 第二段：收回本段已放置的一枚补员（点数退回待放手牌）
+   *
+   * 仅限第二段；第三段（重建/整编）已落位的算子不得用这条撤回。
+   */
+  function withdrawReplPlacementNow(instanceId: string): boolean {
+    if (segmentStep.value?.id !== 'reinforcement.replRoll') return false
+    const entry = replPlacedThisSegment.value.find((item) => item.instanceId === instanceId)
+    if (entry === undefined) return false
+    const before = units.value.length
+    units.value = units.value.filter((unit) => unit.instanceId !== instanceId)
+    if (units.value.length === before) return false
+    replPlacedThisSegment.value = replPlacedThisSegment.value.filter(
+      (item) => item.instanceId !== instanceId,
+    )
+    replPending.value = {
+      ...replPending.value,
+      [entry.kind]: replPending.value[entry.kind] + 1,
+    }
+    if (selectedId.value === instanceId) selectedId.value = null
+    pushLog('info', '收回本段落位：点数退回待放手牌（13.5a）', '13.5')
+    return true
+  }
+
+  watch(
+    () => `${turn.value}|${activeSide.value}|${segmentStep.value?.id ?? ''}`,
+    () => {
+      // 撤回只在本段内有效：离开第二段或换方/换回合即清空
+      if (segmentStep.value?.id !== 'reinforcement.replRoll') replPlacedThisSegment.value = []
+    },
+  )
 
   /**
    * §5-D：把**某一族**待放置补员摆到指定格（每点一枚）
@@ -24332,6 +24526,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     acknowledgeReinforcementStepNow,
     endArrivalSegmentNow,
     endSlowMobilizationSegmentNow,
+    endRollSegmentNow,
+    rollHandPending,
+    rollHandPoints,
+    reinforcementSegment,
     arrivalAbandoned,
     arrivalSegmentClosed,
     // ⑦ 3.3c：撤离落盘与"可选单位清单"（待选状态从 session.log 反推，无存档字段）
@@ -24386,6 +24584,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setArrivalHexOverride,
     setReplHoldingsNow,
     placePendingReplNow,
+    placePendingReplOneNow,
+    replPlacedThisSegment,
+    withdrawReplPlacementNow,
     beginReplPlaceHexPickNow,
     replInitialPlacementHexes,
     replInitialPlacementHexesFor,

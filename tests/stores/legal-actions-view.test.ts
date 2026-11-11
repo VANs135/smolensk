@@ -232,7 +232,7 @@ describe('store 适配层：只读投影真的读得到', () => {
     w.setPhase('reinforcement')
     expect(
       w.setSegmentStepIndex(
-        w.playerSegmentSteps.findIndex((step) => step.id === 'reinforcement.specialRepl'),
+        w.playerSegmentSteps.findIndex((step) => step.id === 'reinforcement.replRoll'),
       ),
     ).toBe(true)
     expect(map.sessionSteps.map((step) => step.id)).toContain('reinforce:specialRepl')

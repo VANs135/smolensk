@@ -13,6 +13,7 @@ import type { AirMissionStep } from '@/engine/rules/air-mission'
 import type { BarrageStep } from '@/engine/rules/barrage-interaction'
 import type { CombatStep } from '@/engine/rules/combat-interaction'
 import type { SupplyStep } from '@/engine/rules/supply-interaction'
+import { reinforcementSegmentOf } from '@/engine/rules'
 
 import type { MapSessionKind, ExclusiveSessionSection } from './map-view'
 
@@ -61,6 +62,10 @@ export interface SessionStepFacts {
     replTablePending: boolean
     specialReplPending: boolean
     supplyPlacePending: boolean
+    /** 第二段统一手牌：还有未落位的补员点 / SP / 补给列车 */
+    handPending: boolean
+    /** 第二段已落位的补员枚数（>0 时手牌窗保留，供"再点收回"） */
+    handPlacedCount: number
     rebuildAvailable: boolean
     frontalReservesPending: boolean
     slowMobilizationVisible: boolean
@@ -409,8 +414,8 @@ function moveItems(facts: SessionStepFacts['move']): SessionStepItem[] {
  */
 const REINFORCE_STEP_OF: Readonly<Record<string, string>> = {
   // 1.6b 可变增援：掷表是自动步，玩家只负责把到货的 Pax/Eq 与 SP **落位**
-  'reinforce:replTable': 'reinforcement.arrival',
-  'reinforce:supplyTable': 'reinforcement.arrival',
+  'reinforce:replTable': 'reinforcement.replRoll',
+  'reinforce:supplyTable': 'reinforcement.replRoll',
   // 13.6 / 1.6a 到达落位；2.4 慢动员在收到锁定师之后当场解锁
   'reinforce:arrival': 'reinforcement.arrival',
   'reinforce:slow': 'reinforcement.arrival',
@@ -424,14 +429,43 @@ const REINFORCE_STEP_OF: Readonly<Record<string, string>> = {
   // 专规 1.6c / 2.3c
   'reinforce:specialRepl': 'reinforcement.specialRepl',
   'reinforce:frontalReserves': 'reinforcement.frontalReserves',
+  // v7.1 第二段：批量手牌与"结束本段"都属于宿主环
+  'reinforce:hand': 'reinforcement.replRoll',
+  'reinforce:endRoll': 'reinforcement.replRoll',
 }
+
+/**
+ * 第二段段内次序（v7.1 §3，按原文先后）
+ *
+ * 只影响**显示顺序**，不改归属；未列出的条目排在列出的之后（保持 push 原序）。
+ * 1.6c 最前（条件必现且决定后续可重建对象），随后 3.6 随机事件/补给列车、3.3c 撤离，
+ * 再到 1.6b 两张表，2.3c 方面军预备队，最后统一手牌与结束本段。
+ */
+const REINFORCE_ROLL_ORDER: readonly string[] = [
+  'reinforce:specialRepl',
+  'reinforce:randomEvent',
+  'reinforce:supplyTrain',
+  'reinforce:variableExit',
+  'reinforce:replTable',
+  'reinforce:supplyTable',
+  'reinforce:frontalReserves',
+  'reinforce:hand',
+  'reinforce:endRoll',
+]
 
 function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): SessionStepItem[] {
   const acked = new Set(facts.acked)
   const items: SessionStepItem[] = []
   const push = (id: string, title: string, why: string, decision: string): void => {
-    // 只排当前环节的待办；其它环节的待办等切到那个环节再出现
-    if (REINFORCE_STEP_OF[id] !== facts.stepId) return
+    const owner = REINFORCE_STEP_OF[id]
+    if (owner === undefined) return
+    /*
+     * v7.1 第二段（用户 Q2）：B 段叠加「段」分组后，段内各环节不再各占流程条一环，
+     * 而是挂到**宿主环**（到达 / 掷骰与统一放置 / 重建）下按 §3 次序逐张出现。
+     * 归属表仍记"这件事原文属于哪一节"，这里只比宿主，不改 7/5 节链。
+     */
+    const host = reinforcementSegmentOf(owner)?.host ?? owner
+    if (host !== facts.stepId) return
     items.push(item(id, title, why, decision))
   }
 
@@ -503,8 +537,8 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
     push(
       'reinforce:specialRepl',
       '特殊补员（1.6c）',
-      '19 Aug 前每回合要掷一次特殊补员表。',
-      '掷表并领取；死亡堆没有合格单位则作废。',
+      '19 Aug 前每回合要掷一次特殊补员表；骰面决定返场单位或补给缓存。',
+      '掷 1 骰，按 Special Repl Table 的骰面结果执行；死亡堆没有合格单位则作废。',
     )
   }
   // 1.6b / 2.1 / 3.1：补给表到货与落位
@@ -534,7 +568,32 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
       '选定保留枚与移除枚，执行整编或拆分/合并。',
     )
   }
+  // ── 第二段收尾：批量手牌 + 结束本段（唯一出口） ──
+  if ((facts.handPending || facts.handPlacedCount > 0) && !acked.has('reinforce:hand')) {
+    push(
+      'reinforce:hand',
+      '待放上手牌（13.5a / 1.6b）',
+      '骰子已判完，落位统一在这里办：点一条 → 点高亮格 → 落下；再点已落下的算子可收回。',
+      '把 Pax / Eq / SP 逐枚放到合法格；点完即生效，不弹二次确认。',
+    )
+  }
+  if (facts.stepId === 'reinforcement.replRoll' && !acked.has('reinforce:endRoll')) {
+    push(
+      'reinforce:endRoll',
+      '结束本段（第二段）',
+      '本段的掷骰与落位都办完了。',
+      '结束本段并进入重建；若手牌非空会先问一次是否放弃上场。',
+    )
+  }
+  // 段内显示次序按 §3；未列出的条目保持 push 原序排在后面
+  const rank = (id: string): number => {
+    const index = REINFORCE_ROLL_ORDER.indexOf(id)
+    return index < 0 ? REINFORCE_ROLL_ORDER.length : index
+  }
   return items
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => rank(a.entry.id) - rank(b.entry.id) || a.index - b.index)
+    .map(({ entry }) => entry)
 }
 
 /** 专规各节的会话文案（一节一件事；不写条款号，条款留在面板里） */

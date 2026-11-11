@@ -98,6 +98,8 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
           replTablePending: true,
           specialReplPending: false,
           supplyPlacePending: false,
+          handPending: false,
+          handPlacedCount: 0,
           rebuildAvailable: true,
           frontalReservesPending: false,
           slowMobilizationVisible: true,
@@ -111,7 +113,7 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
     expect(exposedSessionStep(items)?.id).toBe('reinforce:rebuild')
   })
 
-  it('增援：到达环节按"能获得什么"排——到达 → 补员表 → 补给表', () => {
+  it('增援：到达段只出到达与慢动员，掷表已迁到第二段宿主', () => {
     const items = planSessionSteps(
       baseFacts({
         kind: 'reinforce',
@@ -125,6 +127,8 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
           replTablePending: true,
           specialReplPending: false,
           supplyPlacePending: true,
+          handPending: false,
+          handPlacedCount: 0,
           rebuildAvailable: true,
           frontalReservesPending: false,
           slowMobilizationVisible: false,
@@ -132,14 +136,10 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
         },
       }),
     )
-    expect(items.map((entry) => entry.id)).toEqual([
-      'reinforce:arrival',
-      'reinforce:replTable',
-      'reinforce:supplyTable',
-    ])
+    expect(items.map((entry) => entry.id)).toEqual(['reinforce:arrival'])
   })
 
-  it('增援：掷表环节是自动步，不出玩家窗', () => {
+  it('增援：掷骰宿主按 §3 次序出块，最后是结束本段', () => {
     const items = planSessionSteps(
       baseFacts({
         kind: 'reinforce',
@@ -153,6 +153,8 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
           replTablePending: true,
           specialReplPending: false,
           supplyPlacePending: true,
+          handPending: false,
+          handPlacedCount: 0,
           rebuildAvailable: false,
           frontalReservesPending: false,
           slowMobilizationVisible: false,
@@ -160,7 +162,11 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
         },
       }),
     )
-    expect(items.map((entry) => entry.id)).toEqual([])
+    expect(items.map((entry) => entry.id)).toEqual([
+      'reinforce:replTable',
+      'reinforce:supplyTable',
+      'reinforce:endRoll',
+    ])
   })
 
   it('突围：返场与突围尝试是两件事，先返场（强制）再突围（选做）', () => {
@@ -203,6 +209,8 @@ describe('U1-b 守卫：多待决同时成立也只暴露一件', () => {
         replTablePending: true,
         specialReplPending: true,
         supplyPlacePending: true,
+        handPending: false,
+        handPlacedCount: 0,
         rebuildAvailable: true,
         frontalReservesPending: true,
         slowMobilizationVisible: true,

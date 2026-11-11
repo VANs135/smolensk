@@ -453,6 +453,15 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     kind: 'playerStep',
     why: '13.5 补员算子的落点由玩家选（SOP 13.5 无入场格规定）',
   },
+  // v7.1 第二段（2026-11-11）：逐枚落位 / 收回——都只在宿主环「掷骰与统一放置」内可用
+  withdrawReplPlacementNow: {
+    kind: 'playerStep',
+    why: '第二段的撤回（v7.1 §1.1）：只允许收回**本段**刚落的补员并把点数退回手牌；函数内以宿主环为准，离开本段即失效',
+  },
+  endRollSegmentNow: {
+    kind: 'playerStep',
+    why: '第二段的收束按钮（v7.1 §1.5）：只记本段窗口标记并推进；未掷骰 / 1.6c 未掷 / 撤离待选 / 预备队未领 / 手牌未清的前置校验在函数内',
+  },
   pickFreeRailEdgeHex: {
     kind: 'playerStep',
     why: '专规 2.1 免费铁运的边缘格由玩家指定（落点不印在卡上）',
