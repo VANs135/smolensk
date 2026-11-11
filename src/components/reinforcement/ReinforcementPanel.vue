@@ -1,13 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch, watchEffect } from 'vue'
+import { computed, ref, watch, watchEffect } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/base'
 import { SessionStep } from '@/components/session'
 import UiField from '@/components/UiField.vue'
-import { useRefereeTools } from '@/components/ui-mode'
-import { CounterPicker, type CounterPickerItem } from '@/components/game'
+import { type CounterPickerItem } from '@/components/game'
 import { auxCardImageUrl } from '@/components/game/aux-card-image'
-import { arrivalCopiesOf, rebuildChartRows } from '@/engine/rules'
+import { arrivalCopiesOf } from '@/engine/rules'
 import { counterImages, tokenImageUrl } from '@/render/token-images'
 import { ooaScanOf } from '@/render/charts-view'
 import { counterImageUrlOf, hexLabel } from '@/stores'
@@ -29,13 +28,6 @@ import { useContainersStore, useWorkbenchStore } from '@/stores'
 const workbench = useWorkbenchStore()
 const containers = useContainersStore()
 const specialReplRefusal = computed(() => containers.specialReplRefusal(workbench.activeSide))
-
-/**
- * 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输）
- * ★ 2026-10-25：与 §21 的"裁判工具"合并成**同一道门** `showsReferee`
- *   （原来这里单独判 `uiMode === 'verify'`，同一个面板里两套判据容易漂）。
- */
-const showsReferee = useRefereeTools()
 
 /**
  * 专规 2.4：慢动员选择面板的**界面暂存**
@@ -138,44 +130,6 @@ const slowMobilizationUnlocked = computed(() =>
 )
 
 /**
- * §5-B：重建表行键**从数据取**（`charts-supply-repl.json` 按当前方）——不再自由手输，
- * 保证只能选到合法行键。「算子 → 行」由 store 按类型自动映射（`rebuildSuggestedRow`）。
- */
-const rebuildRowChoices = computed(() => rebuildChartRows(workbench.activeSide))
-
-/**
- * 13.5：**自动映射行键**（按该算子自身类型推出；推不出唯一行时为 null）
- *
- * 判据与搬运都在 store（`rebuildSuggestedRow` ← 引擎 `suggestRebuildRow`）；选中算子即写行，
- * 面板只显示结果。2026-11-11 用户口径：不再让玩家手点「采用建议」。
- */
-const rebuildSuggestion = computed<string | null>(() => workbench.rebuildSuggestedRow)
-
-/**
- * 建议行的费用摘要（取自同一份重建表，界面不自算）
- *
- * ★ 2026-10-30：表里 `…Div **step** — 2x Pax` 这类行键的价是**每点军力**的价，
- * 多军力单位重建 N 个军力就付 N 份（13.5a「费用因单位类型和**规模**而异」＋13.5b）。
- * 界面若只写 "2x Pax" 会让玩家以为总共 2 Pax ⇒ 这里把计价单位一并说清。
- */
-const rebuildSuggestionLabel = computed<string | null>(() => {
-  const suggestion = rebuildSuggestion.value
-  if (suggestion === null) return null
-  const row = rebuildRowChoices.value.find((item) => item.unitType === suggestion)
-  if (row === undefined) return null
-  const perStep = /step/i.test(row.unitType)
-  return perStep ? `${row.sourceLabel}／每点军力` : row.sourceLabel
-})
-
-/** 13.5c：该候选**不可重建**（数据层 `rebuildable === false`：AR 后有黄点，永久移除） */
-const rebuildCandidateBlocked = computed<boolean>(() => {
-  const unit = workbench.rebuildCandidates.find((item) => item.instanceId === rebuildUnitId.value)
-  if (unit === undefined) return false
-  // 空军条目没有该字段（飞机只经 Ftr/Tac 补员重建，13.5f）⇒ 不算被 13.5c 挡
-  return 'rebuildable' in unit && unit.rebuildable === false
-})
-
-/**
  * B34 余项②：**本方的到达卡（OOA）**
  *
  * 用户口径 2026-09-16 #4：「OOA 卡的窗口都做了，把图加进去吧」——
@@ -194,79 +148,8 @@ watchEffect(() => {
   if (ooaImageUrl.value !== null) void counterImages.preload([ooaImageUrl.value])
 })
 
-/**
- * 重建表行键（裁判按重建表选定；工程库未落「算子 → 行」映射）
- *
- * ★ 空串＝**未选行**，且「重建」按钮在未选行时禁用。修前默认 `'Infantry Div step'`：
- *   重建一辆坦克营却不动下拉，就会按那一行的「2x Pax」扣款 —— **静默扣错费用**。
- *   宁可让按钮禁用，也不替裁判猜行（13.5：重建费用完全由行决定）。
- */
-const rebuildType = computed<string>({
-  get: () => workbench.rebuildPickRow,
-  set: (value) => {
-    workbench.rebuildPickRow = value
-  },
-})
-const rebuildUnitId = computed<string>({
-  get: () => workbench.rebuildPickUnitId,
-  set: (value) => {
-    // 选中即按算子类型自动映射行键；唯一行才写，推不出唯一行留空交人工选
-    workbench.selectRebuildUnitNow(value)
-  },
-})
-
 /** 合并 / 锁定 / 补员的表单输入 */
-const keepId = ref('')
-const removeId = ref('')
 const breakdownParentId = ref('')
-
-/**
- * 13.9 整编会话：**保留哪一枚**的候选
- *
- * 右键从某一堆叠打开时，store 已把作用域收在该格（`consolidationPick`）⇒ 这里只列该堆叠；
- * 未经右键（会话自己开着）时沿用图上本方单位。判据与过滤都在 store，本组件只搬运。
- */
-const mergeKeepItems = computed(
-  () =>
-    (selectedId: string): readonly CounterPickerItem[] =>
-      workbench.consolidationKeepUnits.map((unit) => ({
-        id: unit.instanceId,
-        imageUrl: counterImageUrlOf(unit),
-        name:
-          `${unit.name} @ ${hexLabel(unit.hex)}（A ${unit.raw.attack}｜AR ${unit.raw.ar}` +
-          `｜MA ${unit.raw.ma}｜${unit.re}RE）`,
-        selected: selectedId === unit.instanceId,
-        hex: unit.hex,
-      })),
-)
-
-/** 13.9 整编会话：**移除哪一枚**的候选＝该保留枚同格、预演通过的伙伴（不跨格） */
-function mergeRemoveItems(selectedId: string): readonly CounterPickerItem[] {
-  return workbench.mergeRemoveUnits(keepId.value).map((unit) => ({
-    id: unit.instanceId,
-    imageUrl: counterImageUrlOf(unit),
-    name:
-      `${unit.name} @ ${hexLabel(unit.hex)}（A ${unit.raw.attack}｜AR ${unit.raw.ar}` +
-      `｜MA ${unit.raw.ma}｜${unit.re}RE）`,
-    selected: selectedId === unit.instanceId,
-    hex: unit.hex,
-  }))
-}
-
-/** 右键带入整编会话 ⇒ 预选保留枚、清掉上一轮的移除选择（不替玩家挑移除对象） */
-watch(
-  () => workbench.consolidationPick,
-  (pick) => {
-    if (pick === null) return
-    keepId.value = pick.keepId
-    removeId.value = ''
-  },
-  // 会话被右键"打开"时可能整块重挂载（此前被收起）⇒ 挂载即读一次作用域
-  { immediate: true },
-)
-
-/** 会话收起 ⇒ 作用域作废（下次重新右键再带入，不拿旧堆叠预选） */
-onBeforeUnmount(() => workbench.clearConsolidationPick())
 
 /**
  * 批 F 切片 3：**到货 SP 落位**（专规 2.1 / 3.1 免费铁运 + 3.6 补给列车）的界面态
@@ -324,12 +207,6 @@ function arrivalImageUrl(index: number): string | null {
   const first = workbench.resolveArrivalFormation(index)?.records[0]
   if (first === undefined) return null
   return tokenImageUrl({ side: workbench.activeSide, face: 'combat', images: first.images ?? null })
-}
-
-/** 悬停某一枚待重建单位 ⇒ 同步地图高亮它所在的格（用户口径：悬停同步高亮地图格） */
-function onHoverRebuild(id: string | null): void {
-  const unit = id === null ? null : (workbench.units.find((item) => item.instanceId === id) ?? null)
-  workbench.setHoverHex(unit?.hex ?? null)
 }
 
 /** 悬停阵列里的一枚 ⇒ 同步地图高亮它所在的格（与其余面板同一手感） */
@@ -584,42 +461,6 @@ const variableReplResult = computed<readonly string[]>(() => {
   }
   return lines
 })
-
-/**
- * **待重建单位**的算子图阵列（B13；用户口径⑪「把当前可选的算子图片紧凑排出来」）
- *
- * 三个字段都由 store 给：图走 `counterImageUrlOf`（与地图**同一条**选图实现）、
- * 能否重建看是否在死亡堆（13.5b）与是否空军（13.5 地面重建不适用）——**本组件不自己判**，
- * 只在 `disabledReason` 里如实转述一句人话（点它就地一行灰提示）。
- */
-const rebuildItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.rebuildCandidates.map((unit) => {
-    const isAir = 'aircraftId' in unit
-    const inDeadPile = workbench.deadPile.some((item) => item.instanceId === unit.instanceId)
-    /*
-     * 空军已接线（第五批批 C 切片 3）：飞机走 Ftr / Tac 补员重建（专规 1.6，13.5f），
-     * 与地面同列于此；不再有"空军不走地面重建"的灰显。
-     *
-     * 13.5c：AR 后有黄点（数据层 `rebuildable === false`）者**永久不可重建**——
-     * 用户 2026-10-24 裁定该字段可信（只有少数单位如此）。这里按惯例只**转述**一句人话：
-     * 置灰 + 悬停/点击给原因，而不是让裁判点进去再吃一次引擎拒绝。
-     */
-    const reason =
-      'rebuildable' in unit && unit.rebuildable === false
-        ? '13.5c：AR 后有黄点（rebuildable: false）⇒ 永久不可重建'
-        : null
-    return {
-      id: unit.instanceId,
-      imageUrl: counterImageUrlOf(unit),
-      name: `${unit.name}（军力 ${unit.steps}｜${inDeadPile ? '死亡堆' : '图上带损'}${isAir ? '｜空军：Ftr/Tac 补员重建' : ''}）`,
-      selected: rebuildUnitId.value === unit.instanceId,
-      disabledReason: reason,
-      // 图上不叠文字；角标只给"军力"，因为它是重建时唯一要看的数字
-      badge: String(unit.steps),
-      hex: 'hex' in unit ? unit.hex : null,
-    }
-  }),
-)
 
 /**
  * B17a-1：**只渲染哪一段**（默认全渲染，引擎验证页照旧）
@@ -1221,166 +1062,51 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <p v-if="rollFinishError !== ''" class="warn" role="status">{{ rollFinishError }}</p>
     </SessionStep>
 
-    <SessionStep
-      v-if="showsRebuild"
-      item="reinforce:rebuild"
-      ackable
-      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:rebuild')"
-    >
-      <!-- ── · 重建（13.5） ── -->
+    <!--
+      第三段（重建 · 合并 · 整编）：**不再开大窗**（v7.1 §4.3）。
+      重建＝死亡堆右键 / 盘面打残右键；整编＝盘面多选右键；本段只问「是否结束本段」。
+      补员点是盘面资源：Pax / Eq 两栏各带一个「免费重建 N」**提示**（1.6c / 2.3c，不参与扣点）。
+    -->
+    <SessionStep v-if="showsRebuild" item="reinforce:endRebuild" data-testid="rebuild-end-step">
       <hr />
-      <p v-if="showsRebuild" class="muted">
-        重建（13.5）：补员须都在**一个格**、且该格 2 格内有**战斗模式友方 HQ**（不得在敌 ZOC
-        内）；重建有损单位还须与补员**同格**。行键取自重建表（库未落映射，由裁判选）。
+      <p class="muted">
+        第三段（重建 · 合并 · 整编）：重建与整编都在**盘面右键**办理，本段没有待放项。
+        补员点数用不完留在图上，跨段跨回合继续可用（不清空、不作废）。
       </p>
-      <div v-if="showsRebuild" class="row">
-        <!-- B13：待重建单位＝**算子图阵列**（原来是一个纯文字下拉） -->
-        <CounterPicker
-          title="待重建单位"
-          hint="13.5 重建：死亡堆里的单位，或图上带损且与补员同格者"
-          :items="rebuildItems"
-          :size="32"
-          @pick="rebuildUnitId = $event"
-          @hover="onHoverRebuild"
-        />
+      <div class="row">
+        <span class="field">
+          Pax <span class="num">{{ workbench.boardReplTotals.pax }}</span>
+          <BaseTag kind="info" data-testid="rebuild-free-pax">
+            免费重建 {{ workbench.rebuildFreeHint }}
+          </BaseTag>
+        </span>
+        <span class="field">
+          Eq <span class="num">{{ workbench.boardReplTotals.eq }}</span>
+          <BaseTag kind="info" data-testid="rebuild-free-eq">
+            免费重建 {{ workbench.rebuildFreeHint }}
+          </BaseTag>
+        </span>
       </div>
-      <div v-if="showsRebuild" class="row">
-        <span class="field">
-          重建表行键（13.5：费用由行决定）
-          <span class="row">
-            <BaseButton
-              v-for="row in rebuildRowChoices"
-              :key="row.unitType"
-              :variant="rebuildType === row.unitType ? 'primary' : 'secondary'"
-              size="sm"
-              @click="rebuildType = row.unitType"
-            >
-              {{ row.unitType }}（{{ row.sourceLabel }}）
-            </BaseButton>
-          </span>
-        </span>
-        <!--
-        13.5：**行键已自动映射**——按该算子自身类型推出（store `rebuildSuggestedRow`，引擎唯一出处）。
-        推不出唯一行时才留空由人工选；不再需要点「采用建议」。
-      -->
-        <span v-if="rebuildSuggestion !== null" class="muted">
-          已按算子类型映射行：{{ rebuildSuggestion }}（{{ rebuildSuggestionLabel }}）
-        </span>
-        <span v-else-if="rebuildUnitId !== '' && !rebuildCandidateBlocked" class="muted">
-          该算子的行键无法从类型唯一确定（重建表把同兵种拆成了多行）⇒ 请人工选行（13.5）。
-        </span>
-        <!-- 13.5c：AR 后有黄点（数据层 rebuildable=false）⇒ 永久不可重建，不必让裁判点一次被拒 -->
-        <span v-if="rebuildCandidateBlocked" class="warn">
-          <BaseTag kind="danger">13.5c</BaseTag>
-          该单位 AR 后有黄点（`rebuildable: false`）⇒ **永久不可重建**，被摧毁即移除。
-        </span>
-        <span class="field">
-          补员所在格：{{
-            workbench.rebuildReplHexText === '' ? '（未选）' : workbench.rebuildReplHexText
-          }}
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            @click="workbench.beginRebuildReplHexPickNow(rebuildUnitId)"
-          >
-            点地图选格（高亮 13.5a 合法落点）
-          </BaseButton>
-        </span>
+      <div class="row">
         <BaseButton
           variant="primary"
           size="sm"
-          @click="
-            workbench.rebuildUnitNow({
-              unitId: rebuildUnitId,
-              rebuildType,
-              replHexText: workbench.rebuildReplHexText,
-            })
-          "
+          data-testid="rebuild-end"
+          @click="workbench.endRebuildSegmentNow()"
         >
-          重建（13.5）
+          结束本段
         </BaseButton>
       </div>
       <p v-if="workbench.lastRebuild !== null" class="ok">
         <BaseTag kind="success">{{ workbench.lastRebuild.rule }}</BaseTag>
         {{ workbench.lastRebuild.detail }}
       </p>
-      <p class="num">
-        死亡堆 {{ workbench.deadPile.length }} 个｜永久移除 {{ workbench.removedForever.length }} 个
-      </p>
-    </SessionStep>
-    <!-- U1-b：拆分/合并（20.0 / 13.9）＝本环节的**选做事项**，排在强制义务之后 -->
-    <SessionStep
-      v-if="showsRebuild"
-      item="reinforce:consolidation"
-      ackable
-      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:consolidation')"
-    >
-      <!-- ── · 拆分与合并（20.0 / 13.9） ── -->
-      <hr />
-      <RuleNote title="合并（13.9）：只在增援阶段；拆分（20.0）走右键单位面板" rule="20.0">
-        <p v-if="showsRebuild" class="muted">
-          合并（13.9）：只在增援阶段；两面完全相同、非 DG、非部队储备低下。
-          拆分/吸收（20.0）只在**右键单位 →「工程 → 拆分」**面板里做（20.0a/20.0d），
-          本窗不再摆第二套。
-        </p>
-      </RuleNote>
-      <div v-if="showsRebuild" class="row">
-        <!--
-          裁判工具：池存量来自数据（`breakdownPoolTotal`，20.0e 的国籍池），手改是订正。
-          ★ 必须显式收：`UiField` 在正式界面把数字型渲染成 `－值＋` **步进**（仍可点），
-            不像文本型那样自动只读。
-        -->
-        <label v-if="showsReferee" class="field">
-          国籍池存量（裁判）
-          <UiField
-            class="input num"
-            type="number"
-            min="0"
-            :model-value="workbench.breakdownPool['ax'] ?? 0"
-            @update:model-value="workbench.setBreakdownPoolNow('ax', Number($event))"
-          />
-        </label>
-      </div>
-      <div v-if="showsRebuild" class="row">
-        <CounterPicker
-          title="合并：保留哪一枚"
-          hint="13.9：两面完全相同、非 DG、非部队储备低下 —— 由引擎判"
-          :items="mergeKeepItems(keepId)"
-          :size="32"
-          @pick="keepId = $event"
-          @hover="hoverUnit"
-        />
-        <CounterPicker
-          title="合并：移除哪一枚"
-          hint="13.9-1 地面：只列同堆叠、两面相同的伙伴（引擎复核）"
-          :items="mergeRemoveItems(removeId)"
-          :size="32"
-          @pick="removeId = $event"
-          @hover="hoverUnit"
-        />
-        <BaseButton
-          v-if="workbench.phase === 'reinforcement'"
-          variant="primary"
-          size="sm"
-          @click="workbench.consolidateUnitsNow(keepId, removeId)"
-        >
-          合并地面单位（13.9-1）
-        </BaseButton>
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          @click="workbench.consolidateAircraftNow(keepId, removeId)"
-        >
-          合并飞机（13.9-4）
-        </BaseButton>
-      </div>
-      <p v-if="workbench.lastBreakdown !== null" class="ok">
-        <BaseTag kind="success">{{ workbench.lastBreakdown.rule }}</BaseTag>
-        {{ workbench.lastBreakdown.detail }}
-      </p>
       <p v-if="workbench.lastConsolidation !== null" class="ok">
         <BaseTag kind="success">{{ workbench.lastConsolidation.rule }}</BaseTag>
         {{ workbench.lastConsolidation.detail }}
+      </p>
+      <p class="num">
+        死亡堆 {{ workbench.deadPile.length }} 个｜永久移除 {{ workbench.removedForever.length }} 个
       </p>
     </SessionStep>
     <!-- ── · 慢动员（专规 2.4） ── -->

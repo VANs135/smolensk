@@ -6,7 +6,13 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { HexRef } from '@/data'
 import { mapLayers } from '@/data'
 import { HEX_RADIUS_PX, hexCanvasPoint } from '@/render/map-layout'
-import { toConsoleUnit, unitChoices, useMapViewStore, useWorkbenchStore } from '@/stores'
+import {
+  actionGateOf,
+  toConsoleUnit,
+  unitChoices,
+  useMapViewStore,
+  useWorkbenchStore,
+} from '@/stores'
 
 /**
  * B27：**通用「待点格」**（用户口径 2026-09-16 #9）
@@ -254,10 +260,22 @@ describe('B27b：剩下 6 处格子编号 → 点地图', () => {
     // 摆一枚本方 HQ（directDrawHqHexes 的来源，使 HEX 落在 HQ 2 格内）
     const hqRecord = unitChoices(side).find((item) => (item.specialized ?? []).includes('hq'))!
     workbench.units.push(toConsoleUnit({ record: hqRecord, instanceId: 'hq-1', hex: HEX, side }))
-    // 一枚**地面**死亡堆单位作为待重建对象
-    const groundRecord = unitChoices(side).find((item) => item.classes?.movementClass === 'leg')!
+    // 一枚**地面**死亡堆单位作为待重建对象（选能唯一映射到重建表行的步兵师/坦克师）
+    const groundRecord =
+      unitChoices(side).find(
+        (item) => item.echelon === 'div' && /Rifle Div|Tk Div|Inf Div/i.test(item.vassalName ?? ''),
+      ) ?? unitChoices(side).find((item) => item.classes?.movementClass === 'leg')!
     const dead = toConsoleUnit({ record: groundRecord, instanceId: 'dead-1', hex: HEX, side })
     workbench.deadPile.push(dead)
+    // v7.1 §4.1：重建落点必须"所需补员全在该格" ⇒ 先在 HEX 摆够 Pax/Eq
+    workbench.setReplHoldingsNow({ pax: 10, eq: 10, ftr: 0, tac: 0 }, HEX)
+    // 进入允许 rein.rebuild 的环节：点格即真的扣点落位
+    workbench.setPhase('reinforcement')
+    const allowed = actionGateOf('rein.rebuild')
+      .where.filter((item) => item.phase === 'reinforcement')
+      .map((item) => item.segment)
+    const index = workbench.playerSegmentSteps.findIndex((step) => allowed.includes(step.id))
+    expect(workbench.setSegmentStepIndex(index)).toBe(true)
     workbench.beginRebuildReplHexPickNow('dead-1')
 
     // R2：候选是**显式格列表**（含 HQ 所在格），不再是 'any'
@@ -339,7 +357,7 @@ describe('B27b：剩下 6 处格子编号 → 点地图', () => {
     const files: [string, string[]][] = [
       [
         'src/components/reinforcement/ReinforcementPanel.vue',
-        ['beginRebuildReplHexPickNow(rebuildUnitId)', 'workbench.rebuildReplHexText'],
+        ['endRebuildSegmentNow()', 'rebuild-free-pax'],
       ],
       [
         'src/components/supply/SupplyPanel.vue',

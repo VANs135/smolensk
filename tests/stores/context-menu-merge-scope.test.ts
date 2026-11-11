@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -14,12 +16,12 @@ import type { ActionKey, ConsolePhase } from '@/stores'
 import { groundRecord, placeGround } from '../flows/sop-harness'
 
 /**
- * 右键 13.9-1 合并：按同格可并伙伴数分流（用户 2026-11-09 第 4 轮）
+ * 13.9 整编：**唯一入口＝盘面左键多选 ≥2 枚 → 右键**（v7.1 §4.3）
  *
- * 口径：
- *   · 恰 1 枚伙伴 ⇒「合并单位」一键并（既有行为）；
- *   · ≥2 枚伙伴 ⇒「打开整编会话」，由玩家在既有整编会话里挑，菜单不替他挑；
- *   · 整编会话只列**当前触发该操作的那个堆叠**（同格），不跨格展开成全局清单。
+ * 修前是"恰一枚伙伴 ⇒ 一键并 / 多枚 ⇒ 开整编大窗"；用户 2026-11-11 改为：
+ *   · 不再开大窗；
+ *   · 多选里至少有一对合法才出「整编（13.9）」，条件不满足 ⇒ 菜单项**不出现**；
+ *   · 点它自动合并（不替玩家挑保留枚之外的任何东西）。
  */
 
 const HEX: HexRef = { col: 36, row: 13 }
@@ -56,15 +58,7 @@ function multiStepRecord() {
   return groundRecord('soviet', (record) => /Tk Div|Rifle Div/i.test(record.vassalName ?? ''))
 }
 
-function menuKeys(s: ReturnType<typeof stores>, instanceId: string): string[] {
-  s.workbench.selectedId = instanceId
-  s.mapView.onHexContext(HEX, { x: 0, y: 0 }, { x: 0, y: 0 })
-  return (s.mapView.contextOptions.find((item) => item.id === instanceId)?.actions ?? []).map(
-    (item) => item.key,
-  )
-}
-
-describe('右键 13.9-1：同格多枚伙伴 ⇒ 打开整编会话（不当场并）', () => {
+describe('13.9 整编：盘面多选 → 右键 → 自动合并（不再开大窗）', () => {
   let s: ReturnType<typeof stores>
 
   beforeEach(() => {
@@ -73,55 +67,41 @@ describe('右键 13.9-1：同格多枚伙伴 ⇒ 打开整编会话（不当场�
     goToActionStep(s.workbench, 'rein.rebuild')
   })
 
-  it('★ 三枚同格可并 ⇒ 菜单是「打开整编会话」，点它只预选、不落账', () => {
+  it('★ 三枚同格可并 ⇒ 多选判据成立，点「整编」自动合并一对', () => {
     const record = multiStepRecord()
     for (const id of ['a', 'b', 'c']) placeGround(s.workbench, record, HEX, 'soviet', id)
 
-    const keys = menuKeys(s, 'a')
-    expect(keys).toContain('rein.consolidate.open')
-    expect(keys).not.toContain('rein.consolidate')
-
-    expect(s.mapView.openContextAction('a', 'rein.consolidate.open')).toBe(true)
-    expect(s.workbench.consolidationPick?.keepId).toBe('a')
-    expect(s.workbench.consolidationPick?.hex).toEqual(HEX)
-    // 不替玩家挑：一枚都没并掉
-    expect(s.workbench.units).toHaveLength(3)
-    expect(s.workbench.lastConsolidation).toBe(null)
+    expect(s.workbench.canConsolidateSelectionNow(['a', 'b', 'c'])).toBe(true)
+    expect(s.workbench.consolidateSelectionNow(['a', 'b', 'c'])).toBe(true)
+    // 自动合并：至少少了一枚，且留下的是预演通过的那一对
+    expect(s.workbench.units.length).toBeLessThan(3)
+    expect(s.workbench.lastConsolidation).not.toBe(null)
+    // 不再有"打开整编会话"这条路径
+    expect(s.workbench.consolidationPick).toBe(null)
   })
 
-  it('★ 恰一枚同格伙伴 ⇒ 仍是「合并单位」一键并', () => {
+  it('★ 恰两枚同格 ⇒ 多选判据成立，且菜单入口挂在多选分支上', () => {
     const record = multiStepRecord()
     const keep = placeGround(s.workbench, record, HEX, 'soviet', 'k1')
     const remove = placeGround(s.workbench, record, HEX, 'soviet', 'r1')
     keep.steps = 2
     remove.steps = 1
 
-    const keys = menuKeys(s, 'k1')
-    expect(keys).toContain('rein.consolidate')
-    expect(keys).not.toContain('rein.consolidate.open')
-
-    expect(s.mapView.openContextAction('k1', 'rein.consolidate')).toBe(true)
-    expect(s.workbench.units.map((unit) => unit.instanceId)).toEqual(['k1'])
-    expect(keep.steps).toBe(3)
+    expect(s.workbench.canConsolidateSelectionNow(['k1', 'r1'])).toBe(true)
+    // 菜单项只挂在"多选"分支（单枚菜单不出现整编）
+    const source = readFileSync('src/stores/map-view.ts', 'utf8')
+    expect(source).toContain('canConsolidateSelectionNow(targets)')
+    expect(source).toContain("key: 'rein.consolidate.selection'")
   })
 
-  it('★ 整编会话只列当前堆叠：同格三枚 + 别格一枚 ⇒ 别格那枚不进候选', () => {
+  it('★ 单枚选择 / 跨格 / 缺一枚 ⇒ 判据不成立（菜单项不出现）', () => {
     const record = multiStepRecord()
-    for (const id of ['k1', 'r1', 'r2']) placeGround(s.workbench, record, HEX, 'soviet', id)
+    placeGround(s.workbench, record, HEX, 'soviet', 'k1')
+    placeGround(s.workbench, record, HEX, 'soviet', 'r1')
     placeGround(s.workbench, record, OTHER, 'soviet', 'far1')
 
-    // 判据本身只看同格
-    expect([...s.workbench.mergePartnerIds('k1')].sort()).toEqual(['r1', 'r2'])
-
-    menuKeys(s, 'k1')
-    expect(s.mapView.openContextAction('k1', 'rein.consolidate.open')).toBe(true)
-    const keepIds = s.workbench.consolidationKeepUnits.map((unit) => unit.instanceId).sort()
-    const removeIds = s.workbench
-      .mergeRemoveUnits('k1')
-      .map((unit) => unit.instanceId)
-      .sort()
-    expect(keepIds).toEqual(['k1', 'r1', 'r2'])
-    expect(removeIds).toEqual(['r1', 'r2'])
-    expect([...keepIds, ...removeIds]).not.toContain('far1')
+    expect(s.workbench.canConsolidateSelectionNow(['k1'])).toBe(false)
+    expect(s.workbench.canConsolidateSelectionNow(['k1', 'far1'])).toBe(false)
+    expect(s.workbench.canConsolidateSelectionNow(['k1', 'r1'])).toBe(true)
   })
 })

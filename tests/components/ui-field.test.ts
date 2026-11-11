@@ -80,8 +80,8 @@ describe('条 24：正式/验证模式门控', () => {
     const cases: Array<[string, number]> = [
       ['src/components/containers/ContainersPanel.vue', 2],
       ['src/components/exclusive/ExclusiveRulesPanel.vue', 8],
-      // 用户 2026-11-11：补员格 / 图边源格改「点地图选格」⇒ 少了一处手打格号
-      ['src/components/reinforcement/ReinforcementPanel.vue', 3],
+      // 用户 2026-11-11：补员格 / 图边源格改「点地图选格」；第三段大窗删除后只剩 SP/锁定师两处
+      ['src/components/reinforcement/ReinforcementPanel.vue', 2],
       // 用户 2026-11-11：铁路运货的卸货格改点地图 ⇒ 又少一处手打格号
       ['src/components/supply/SupplyPanel.vue', 12],
     ]
@@ -122,35 +122,17 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).toMatch(/class="ui-field-readonly"/)
   })
 
-  it('ReinforcementPanel：重建行键从重建表数据取下拉（§5-B）+ 到货行出图（§5-A）', () => {
+  it('ReinforcementPanel：第三段不再开重建/整编大窗（v7.1 §4.3）+ 到货行出图（§5-A）', () => {
     const src = read('src/components/reinforcement/ReinforcementPanel.vue')
-    expect(src).toMatch(/rebuildChartRows/)
-    expect(src).toMatch(/v-for="row in rebuildRowChoices"/)
-    expect(src).not.toMatch(/<input v-model="rebuildType"/)
-    /*
-     * 13.5：**不替裁判默认一行**。修前 `ref('Infantry Div step')`，重建坦克营不动下拉就按
-     * 那一行的「2x Pax」扣款（静默扣错费用）⇒ 默认必须是空串，且未选行时按钮禁用。
-     */
-    // 行键状态在 store（`rebuildPickRow`，默认空串），面板只是桥接；右键预选算子时也会清空它
-    expect(src).toMatch(/const rebuildType = computed<string>\(\{/)
-    expect(src).toMatch(/get: \(\) => workbench\.rebuildPickRow/)
-    expect(src).not.toMatch(/ref\('Infantry Div step'\)/)
-    // 用户 2026-11-11：不做灰项 ⇒ 缺行 / 缺补员格时按钮仍可点，由 store 回执说明原因
-    expect(src).not.toMatch(/const canRebuildNow = computed<boolean>/)
-    expect(src).not.toMatch(/:disabled="!canRebuildNow"/)
-    expect(src).toMatch(/workbench\.rebuildUnitNow\(\{/)
-    expect(src).toMatch(/rebuildCandidateBlocked/)
-    // 13.5c：不可重建的候选在算子图阵列里**置灰并给原因**（不静默隐藏、也不让人点进引擎再被拒）
-    expect(src).toMatch(/rebuildable === false/)
-    /*
-     * §5-B / 2026-11-11：**行键按算子类型自动映射**（store `selectRebuildUnitNow` ← 引擎
-     * `suggestRebuildRow`）。面板不再有「采用建议」按钮，也不能自己再算一份行键。
-     */
-    expect(src).not.toMatch(/\{\{\s*采用建议\s*\}\}/)
-    expect(src).not.toMatch(/rebuildType = rebuildSuggestion/)
-    expect(src).not.toMatch(/import \{[^}]*suggestRebuildRow/)
-    expect(src).toMatch(/rebuildSuggestedRow/)
-    expect(src).toMatch(/workbench\.selectRebuildUnitNow\(value\)/)
+    // 重建＝死亡堆/盘面右键；整编＝盘面多选右键 ⇒ 面板不再有行键下拉、候选阵列、付费按钮
+    expect(src).not.toMatch(/rebuildChartRows/)
+    expect(src).not.toMatch(/rebuildRowChoices/)
+    expect(src).not.toMatch(/workbench\.rebuildUnitNow\(\{/)
+    expect(src).not.toMatch(/workbench\.consolidateUnitsNow\(/)
+    expect(src).toMatch(/item="reinforce:endRebuild"/)
+    expect(src).toMatch(/workbench\.endRebuildSegmentNow\(\)/)
+    expect(src).toMatch(/rebuild-free-pax/)
+    expect(src).toMatch(/rebuild-free-eq/)
     // §5-A：到货行按"显示名自动匹配"出图
     expect(src).toMatch(/arrivalImageUrl/)
     expect(src).toMatch(/arrival-thumb/)

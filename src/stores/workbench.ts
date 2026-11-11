@@ -247,6 +247,7 @@ import {
   planLosses,
   planOptions,
   planRebuild,
+  type RebuildRequest,
   planRetreatDestinations,
   planSlowMobilization,
   slowMobilizationQuotaRemaining,
@@ -9308,6 +9309,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     if (tool.value === 'battle') {
       battleToolClick(hex)
+      return
+    }
+    /*
+     * v7.1 §1.1 / §4.5：重建段内**再点本段刚重建出的算子 ⇒ 收回并退点**。
+     * 只在本段有效（`rebuildPlacedThisSegment` 随段清空），且该格恰好一枚时消费这次点击；
+     * 其余情况交回常规点击，不吞掉玩家的选/移动。
+     */
+    if (segmentStep.value?.id === 'reinforcement.rebuild' && withdrawRebuildAtHexNow(hex)) {
       return
     }
 
@@ -18856,6 +18865,53 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
+  /**
+   * 第三段·结束本段（v7.1 §4.6：本段没有待放项，唯一出口）
+   *
+   * ★ 补员点数（Pax / Eq）是**盘面资源**：没用完的留在图上，跨段、跨回合继续可用，
+   * 这里**不清空、不提示作废**（§1.6）。只有从未放上场的增援与点名式免费重建会作废。
+   */
+  function endRebuildSegmentNow(): boolean {
+    if (segmentStep.value?.id !== 'reinforcement.rebuild') return false
+    ackReinforcementItem('reinforce:endRebuild')
+    if (stepToNextSegmentStep()) return true
+    /*
+     * 第三段是 B 段的**最后一环**：本段 ack 已完成，顺手推进会话步（结束增援阶段）；
+     * 若被补给/战斗等闸门挡下，`advanceSegmentNow` 会把原因写进流程条，**不算本段失败**
+     * （本段的「结束本段」只负责收束本段，阶段推进仍由统一流程条承担）。
+     */
+    advanceSegmentNow()
+    return true
+  }
+
+  /**
+   * 第三段：Pax / Eq 两栏旁的「免费重建 N」提示标记（v7.1 §4.6）
+   *
+   * **只是提示、不参与扣点**：1.6c（苏 2 / 轴 1，19 Aug 前且本回合已掷）与 2.3c（当日已领 +2）
+   * 都是「按单位点名、不扣 Pax/Eq」的免费重建；当期不用即作废、不结转。
+   */
+  const rebuildFreeHint = computed<number>(() => {
+    if (phase.value !== 'reinforcement') return 0
+    let count = 0
+    if (isSpecialReplAvailable(date.value) && hasSpecialReplDraw(activeSide.value, turn.value)) {
+      count += activeSide.value === 'soviet' ? 2 : 1
+    }
+    const batch = frontalReservesToday.value
+    if (batch !== null && frontalReservesClaimed.value.includes(batch.date)) count += 2
+    return count
+  })
+
+  /** 第三段收尾条：盘面现有 Pax / Eq 补员算子数（补员点=盘面资源，跨段跨回合保留） */
+  const boardReplTotals = computed<{ pax: number; eq: number }>(() => {
+    let pax = 0
+    let eq = 0
+    for (const unit of replBoardUnits.value) {
+      if (unit.replKind === 'pax') pax += 1
+      else if (unit.replKind === 'eq') eq += 1
+    }
+    return { pax, eq }
+  })
+
   function acknowledgeReinforcementStepNow(itemId: string): boolean {
     if (itemId === 'reinforce:arrival' && arrivalPlan.value !== null && !arrivalAllPlaced.value)
       return false
@@ -19624,6 +19680,33 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     () => {
       // 撤回只在本段内有效：离开第二段或换方/换回合即清空
       if (segmentStep.value?.id !== 'reinforcement.replRoll') replPlacedThisSegment.value = []
+    },
+  )
+
+  /**
+   * 第三段：本段已重建的算子（用于「再点一下收回」并退回补员）
+   *
+   * v7.1 §1.1 / §4.5：撤回**只在本段内有效**——离开重建段（或换方/换回合）即清空，
+   * 防止把上一段的成果再撤回。记录只存“重建前的形状”，不存整份盘面。
+   */
+  interface RebuildPlacementRecord {
+    instanceId: string
+    /** 重建来源：死亡堆 / 图上打残 / 空军基地 / 地图外空军盒 */
+    mode: 'deadPile' | 'onMap' | 'airBase' | 'airBox'
+    priorSteps: number
+    priorHex: HexRef | null
+    priorAirStatus: 'active' | 'inactive' | null
+    /** 地面重建时被扣补员的格（退回时按同一格补回） */
+    replHex: HexRef | null
+    cost: { pax: number; eq: number; ftr: number; tac: number }
+  }
+  const rebuildPlacedThisSegment = ref<RebuildPlacementRecord[]>([])
+
+  watch(
+    () => `${turn.value}|${activeSide.value}|${segmentStep.value?.id ?? ''}`,
+    () => {
+      // 撤回只在本段内有效：离开重建段或换方/换回合即清空
+      if (segmentStep.value?.id !== 'reinforcement.rebuild') rebuildPlacedThisSegment.value = []
     },
   )
 
@@ -20588,6 +20671,106 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 13.5：把「待重建算子 + 行键 + 补员格」搬成引擎请求（**唯一出处**）
+   *
+   * `rebuildUnitNow` 与「合法落点预演」共用这一份：候选判据、HQ/ZOC 事实、补员按格取，
+   * 都不许各写一套（否则地图高亮的格与真落位的判据会走散）。
+   */
+  function rebuildRequestOf(input: {
+    unitId: string
+    rebuildType: string
+    replHexText?: string
+    stepsToRestore?: number
+    pairSize?: number
+    unitsRequested?: number
+    airBox?: boolean
+  }): {
+    request: RebuildRequest
+    candidateUnit: DeadPileEntry
+    isAir: boolean
+    inDeadPile: boolean
+    priorHex: HexRef | null
+    priorSteps: number
+    priorAirStatus: 'active' | 'inactive' | null
+  } | null {
+    const candidateUnit =
+      deadPile.value.find((unit) => unit.instanceId === input.unitId) ??
+      units.value.find((unit) => unit.instanceId === input.unitId)
+    if (candidateUnit === undefined) return null
+    const isAir = isAirDeadPileEntry(candidateUnit)
+    const inDeadPile = deadPile.value.some((unit) => unit.instanceId === input.unitId)
+    const priorHex =
+      'hex' in candidateUnit && candidateUnit.hex !== null ? { ...candidateUnit.hex } : null
+    const priorSteps = candidateUnit.steps
+    const priorAirStatus = isAir ? candidateUnit.airStatus : null
+    const traceCovered = traceCoverageHexes(supplyFacts.value, {
+      side: activeSide.value,
+      mobility: 'truck',
+    })
+    const traceSuppliedFriendlyBases = () =>
+      airBases.value.filter(
+        (base) => base.side === activeSide.value && traceCoverageHas(traceCovered, base.hex),
+      )
+    const traceSuppliedFriendlyBase = () => traceSuppliedFriendlyBases()[0] ?? null
+    const replHex =
+      input.replHexText === undefined
+        ? isAir && input.airBox === true
+          ? priorHex
+          : null
+        : (parseHexPath(input.replHexText)[0] ?? null)
+    const hqHexes = rebuildHqHexes.value
+    const request: RebuildRequest = {
+      side: activeSide.value,
+      candidate: {
+        id: candidateUnit.instanceId,
+        side: candidateUnit.side,
+        rebuildType: input.rebuildType,
+        rebuildable: isAir ? true : candidateUnit.rebuildable !== false,
+        isAircraft: isAir,
+        ...(isAir ? { aircraftType: candidateUnit.aircraftType } : {}),
+        inDeadPile,
+        hex: candidateUnit.hex,
+        steps: candidateUnit.steps,
+        printedSteps: isAir ? airPrintedStepsOf(candidateUnit) : candidateUnit.printedSteps,
+        isBreakdown: isAir ? false : candidateUnit.specialized.includes('breakdown'),
+        isTruckTransportPoint: isAir ? false : candidateUnit.noncombatKind === 'transport_point',
+        ...(!isAir && candidateUnit.destroyedByEnemy === true ? { destroyedByEnemy: true } : {}),
+      },
+      ...(replHex === null ? {} : { replHex }),
+      ...(input.stepsToRestore === undefined ? {} : { stepsToRestore: input.stepsToRestore }),
+      ...(input.pairSize === undefined ? {} : { pairSize: input.pairSize }),
+      ...(input.unitsRequested === undefined ? {} : { unitsRequested: input.unitsRequested }),
+      holdings: isAir
+        ? { pax: 0, eq: 0, ftr: replFtrTac.value.ftr, tac: replFtrTac.value.tac }
+        : {
+            ...replCountsAtHex(replHex ?? candidateUnit.hex ?? { col: 0, row: 0 }),
+            ftr: 0,
+            tac: 0,
+          },
+      facts: {
+        withinHqThrowOfFriendlyHq: (hex) =>
+          hqHexes.some((hq) => hexDistance(hq, hex) <= rulesConstants.repl.rebuildHqRangeHexes),
+        inUnnegatedEnemyZoc: (hex) =>
+          inEnemyZocForAction(moveContext.value, hex, activeSide.value, 'rebuild'),
+        hasFriendlyAirBase: () =>
+          input.airBox === true ? priorHex !== null : traceSuppliedFriendlyBase() !== null,
+        friendlyAirBaseHex: () => {
+          // 子项 2：地图外空军盒**本身就是基地**（1.4a：盒内容量无限、免费整备），不另造格
+          if (input.airBox === true) return priorHex
+          const base = traceSuppliedFriendlyBase()
+          return base === null ? null : { ...base.hex }
+        },
+        // v7.1 §4.1：玩家点哪个基地就落哪个（不再由引擎取第一个）；盒落点不参与基地清单
+        friendlyAirBaseHexes: () =>
+          input.airBox === true
+            ? []
+            : traceSuppliedFriendlyBases().map((base) => ({ ...base.hex })),
+      },
+    }
+    return { request, candidateUnit, isAir, inDeadPile, priorHex, priorSteps, priorAirStatus }
+  }
+
+  /**
    * B18：重建一个单位（13.5 / 专规 1.6）
    *
    * `rebuildType` 是重建表行键（如 `Infantry Div step`）——本作工程库未落「算子 → 行」映射，
@@ -20600,87 +20783,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     stepsToRestore?: number
     pairSize?: number
     unitsRequested?: number
+    /** v7.1 §4.1：飞机重建的两个子项之「放入地图外空军基地」 */
+    airBox?: boolean
   }): boolean {
     if (!requireAction('rein.rebuild', '重建')) return false
-    const candidateUnit =
-      deadPile.value.find((unit) => unit.instanceId === input.unitId) ??
-      units.value.find((unit) => unit.instanceId === input.unitId)
-    if (candidateUnit === undefined) {
+    const built = rebuildRequestOf(input)
+    if (built === null) {
       pushLog('warning', `找不到待重建单位 ${input.unitId}（13.5b）`, '13.5b')
       return false
     }
-    /*
-     * 13.5f（第五批批 C 切片 3）：**空军重建接线** —— 飞机走 Ftr/Tac 补员（专规 1.6 Notes：
-     * Eq 不重建飞机、Ftr→F 型、Tac→T/S/Tpt 型、只重建一个军力），落点是"**处于追溯补给**的
-     * 友方空军基地"、以**激活**状态出现。判据全在引擎 `planRebuild` 的 `isAircraft` 分支。
-     */
-    const isAir = isAirDeadPileEntry(candidateUnit)
-    /*
-     * 专规 1.6 placement：处于追溯补给的友方空军基地（12.6 按**格**判）
-     * —— 复用与 `refreshTraceSupply` 同一条**掩码集合**范式（`traceCoverageHexes` 一次算全场），
-     * 不再逐格调引擎函数（少一次导入、也少 N 次 Dijkstra）。
-     */
-    const traceCovered = traceCoverageHexes(supplyFacts.value, {
-      side: activeSide.value,
-      mobility: 'truck',
-    })
-    const traceSuppliedFriendlyBase = () =>
-      airBases.value.find(
-        (base) => base.side === activeSide.value && traceCoverageHas(traceCovered, base.hex),
-      ) ?? null
-    const replHex =
-      input.replHexText === undefined ? null : (parseHexPath(input.replHexText)[0] ?? null)
-    // 13.5a：重建圆心只认**战斗模式**（或 DG 朝战斗面）的友方 HQ
-    const hqHexes = rebuildHqHexes.value
-    const data = acceptReinforcement(
-      planRebuild({
-        side: activeSide.value,
-        candidate: {
-          id: candidateUnit.instanceId,
-          side: candidateUnit.side,
-          rebuildType: input.rebuildType,
-          rebuildable: isAir ? true : candidateUnit.rebuildable !== false,
-          isAircraft: isAir,
-          ...(isAir ? { aircraftType: candidateUnit.aircraftType } : {}),
-          inDeadPile: deadPile.value.some((unit) => unit.instanceId === input.unitId),
-          hex: candidateUnit.hex,
-          steps: candidateUnit.steps,
-          printedSteps: isAir ? airPrintedStepsOf(candidateUnit) : candidateUnit.printedSteps,
-          isBreakdown: isAir ? false : candidateUnit.specialized.includes('breakdown'),
-          isTruckTransportPoint: isAir ? false : candidateUnit.noncombatKind === 'transport_point',
-          ...(!isAir && candidateUnit.destroyedByEnemy === true ? { destroyedByEnemy: true } : {}),
-        },
-        ...(replHex === null ? {} : { replHex }),
-        ...(input.stepsToRestore === undefined ? {} : { stepsToRestore: input.stepsToRestore }),
-        ...(input.pairSize === undefined ? {} : { pairSize: input.pairSize }),
-        ...(input.unitsRequested === undefined ? {} : { unitsRequested: input.unitsRequested }),
-        /*
-         * 13.5a / §5-D：**可用补员按"所在格"取**（「所需的补员必须都在一个格中」由结构保证——
-         * 只数这一格里的补员算子）。飞机走 Ftr / Tac 账本（13.5f + 专规 1.6：Eq 不重建飞机）。
-         */
-        holdings: isAir
-          ? { pax: 0, eq: 0, ftr: replFtrTac.value.ftr, tac: replFtrTac.value.tac }
-          : {
-              ...replCountsAtHex(replHex ?? candidateUnit.hex ?? { col: 0, row: 0 }),
-              ftr: 0,
-              tac: 0,
-            },
-        facts: {
-          // 13.5a：该格须在「战斗模式的友方 HQ（或 DG 但朝战斗面）」2 格内
-          withinHqThrowOfFriendlyHq: (hex) =>
-            hqHexes.some((hq) => hexDistance(hq, hex) <= rulesConstants.repl.rebuildHqRangeHexes),
-          inUnnegatedEnemyZoc: (hex) =>
-            inEnemyZocForAction(moveContext.value, hex, activeSide.value, 'rebuild'),
-          // 专规 1.6 placement：只认**处于追溯补给**的友方空军基地
-          hasFriendlyAirBase: () => traceSuppliedFriendlyBase() !== null,
-          friendlyAirBaseHex: () => {
-            const base = traceSuppliedFriendlyBase()
-            return base === null ? null : { ...base.hex }
-          },
-        },
-      }),
-      '重建',
-    )
+    const { isAir, inDeadPile, priorHex, priorSteps, priorAirStatus } = built
+    const data = acceptReinforcement(planRebuild(built.request), '重建')
     if (data === null) return false
     /*
      * 落盘：** Pax / Eq 从盘面摘掉被消耗的补员算子**（§5-D：每点一枚，13.5a"将所需的补员移除"），
@@ -20713,6 +20826,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           revived.airStatus = 'active'
           revived.missionsFlownThisPhase = 0
           airUnits.value = [...airUnits.value, revived]
+          if (input.airBox === true) {
+            // v7.1 §4.1 子项 2：直接移入**本方地图外空军盒**（盒内容量无限、免费整备，1.4a）
+            setAirInBoxMembership(input.unitId, true)
+          }
         } else if (revived !== undefined) {
           revived.hex = { ...placement.hex }
           revived.airTransportThisPhase = null
@@ -20724,6 +20841,30 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         onMap.steps = placement.stepsAfter
       }
     }
+    // v7.1 §4.5：记下本段刚重建出的这一枚（再点它即撤回并退点；离开本段即失效）
+    rebuildPlacedThisSegment.value = [
+      ...rebuildPlacedThisSegment.value,
+      {
+        instanceId: input.unitId,
+        mode: isAir
+          ? input.airBox === true
+            ? 'airBox'
+            : 'airBase'
+          : inDeadPile
+            ? 'deadPile'
+            : 'onMap',
+        priorSteps,
+        priorHex,
+        priorAirStatus,
+        replHex: isAir ? null : replHexForCost,
+        cost: {
+          pax: data.cost.pax ?? 0,
+          eq: data.cost.eq ?? 0,
+          ftr: data.cost.ftr ?? 0,
+          tac: data.cost.tac ?? 0,
+        },
+      },
+    ]
     pushLog('success', data.detail, data.rule)
     // ⑭ 接线：重建（13.5 / 专规 1.6）入会话日志（本笔不掷骰；费用与落点已由引擎判定）
     recordSettlement({
@@ -20740,6 +20881,78 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       },
     })
     return true
+  }
+
+  /**
+   * 第三段：**撤回**本段刚重建出的算子，并把补员点数退回
+   *
+   * v7.1 §1.1 / §4.5：只在本段内有效（`rebuildPlacedThisSegment` 随段清空）；
+   * 地面：把算子的军力改回重建前，并在原补员格补回被扣的 Pax / Eq 算子；
+   * 空军：把飞机放回死亡堆（盒内的先从盒里摘掉），并退回 Ftr / Tac 账本。
+   */
+  function withdrawRebuildNow(instanceId: string): boolean {
+    if (segmentStep.value?.id !== 'reinforcement.rebuild') return false
+    const entry = rebuildPlacedThisSegment.value.find((item) => item.instanceId === instanceId)
+    if (entry === undefined) return false
+    const isAirMode = entry.mode === 'airBase' || entry.mode === 'airBox'
+    if (entry.mode === 'onMap') {
+      const unit = units.value.find((item) => item.instanceId === instanceId)
+      if (unit === undefined) return false
+      unit.steps = entry.priorSteps
+    } else if (isAirMode) {
+      const air = airUnits.value.find((item) => item.instanceId === instanceId)
+      if (air === undefined) return false
+      airUnits.value = airUnits.value.filter((item) => item.instanceId !== instanceId)
+      air.steps = entry.priorSteps
+      if (entry.priorHex !== null) air.hex = { ...entry.priorHex }
+      if (entry.priorAirStatus !== null) air.airStatus = entry.priorAirStatus
+      if (entry.mode === 'airBox') setAirInBoxMembership(instanceId, false)
+      deadPile.value = [...deadPile.value, air]
+    } else {
+      const unit = units.value.find((item) => item.instanceId === instanceId)
+      if (unit === undefined) return false
+      units.value = units.value.filter((item) => item.instanceId !== instanceId)
+      unit.steps = entry.priorSteps
+      if (entry.priorHex !== null) unit.hex = { ...entry.priorHex }
+      deadPile.value = [...deadPile.value, unit]
+    }
+    // 退回被扣的补员：Pax / Eq 摆在原补员格；Ftr / Tac 回账本
+    if (entry.replHex !== null) {
+      if (entry.cost.pax > 0) placeReplCounters(entry.replHex, 'pax', entry.cost.pax)
+      if (entry.cost.eq > 0) placeReplCounters(entry.replHex, 'eq', entry.cost.eq)
+    }
+    replFtrTac.value = {
+      ftr: replFtrTac.value.ftr + entry.cost.ftr,
+      tac: replFtrTac.value.tac + entry.cost.tac,
+    }
+    rebuildPlacedThisSegment.value = rebuildPlacedThisSegment.value.filter(
+      (item) => item.instanceId !== instanceId,
+    )
+    if (selectedId.value === instanceId) selectedId.value = null
+    pushLog(
+      'info',
+      `撤回重建：${instanceId} 回到重建前状态，` +
+        `${entry.cost.pax} Pax / ${entry.cost.eq} Eq / ${entry.cost.ftr} Ftr / ${entry.cost.tac} Tac 已退回（13.5a）`,
+      '13.5',
+    )
+    return true
+  }
+
+  /**
+   * 第三段：点地图上本段刚重建出的算子 ⇒ 撤回（§1.1「再点已放置单位即收回」）
+   *
+   * @returns 是否消费了这次点击（false ⇒ 交回常规地图点击）
+   */
+  function withdrawRebuildAtHexNow(hex: HexRef): boolean {
+    const hit = rebuildPlacedThisSegment.value.filter((entry) => {
+      if (entry.mode === 'airBox') return false
+      const unit =
+        units.value.find((item) => item.instanceId === entry.instanceId) ??
+        airUnits.value.find((item) => item.instanceId === entry.instanceId)
+      return unit !== undefined && sameHex(unit.hex, hex)
+    })
+    if (hit.length !== 1) return false
+    return withdrawRebuildNow(hit[0]!.instanceId)
   }
 
   /**
@@ -20885,6 +21098,100 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return ids.length === 1 ? ids[0]! : null
   }
 
+  /** 13.9-4：飞机合并的落点键（盒内驻机共用同一个盒，不按原位格比） */
+  function airConsolidationLocationKey(air: ConsoleAirUnit): string {
+    return airBoxMembers.value.includes(air.instanceId) ? `box:${air.side}` : hexLabel(air.hex)
+  }
+
+  /**
+   * 13.9：盘面**多选**里能合并的一对（地面 / 飞机各一套判据）
+   *
+   * 用户裁定（v7.1 §4.3）：整编的唯一入口是「盘面左键多选 ≥2 枚 → 右键 → 整编」；
+   * 条件不满足 ⇒ 菜单项**不出现**。本函数只回答"这组选择里有没有合法的一对"。
+   */
+  function consolidationPairInSelection(
+    ids: readonly string[],
+  ): { kind: 'ground' | 'air'; keepId: string; removeId: string } | null {
+    if (ids.length < 2) return null
+    // 飞机：13.9-4 任何阶段都可（两架都须军力减损、同型同值同状态、同格或同一图外盒）
+    const airs = ids.flatMap((id) => {
+      const air = airUnits.value.find((item) => item.instanceId === id)
+      return air === undefined ? [] : [air]
+    })
+    for (let i = 0; i < airs.length; i += 1) {
+      for (let j = i + 1; j < airs.length; j += 1) {
+        const keep = airs[i]!
+        const remove = airs[j]!
+        const view = (air: ConsoleAirUnit, other: ConsoleAirUnit) => ({
+          id: air.instanceId,
+          sameTypeAndValues:
+            air.aircraftType === other.aircraftType &&
+            airBarrageStrengthOf(air) === airBarrageStrengthOf(other),
+          sameStatus: air.airStatus === other.airStatus,
+          reduced: air.steps < airPrintedStepsOf(air),
+          locationKey: airConsolidationLocationKey(air),
+          steps: air.steps,
+          printedSteps: airPrintedStepsOf(air),
+        })
+        if (
+          planConsolidation({
+            kind: 'aircraft',
+            keep: view(keep, remove),
+            remove: view(remove, keep),
+          }).ok
+        ) {
+          return { kind: 'air', keepId: keep.instanceId, removeId: remove.instanceId }
+        }
+      }
+    }
+    // 地面：13.9-1 只在增援阶段
+    if (!actionAllowedNow('rein.rebuild')) return null
+    const ground = ids.flatMap((id) => {
+      const unit = units.value.find((item) => item.instanceId === id)
+      return unit === undefined || (unit.noncombatKind ?? null) !== null ? [] : [unit]
+    })
+    for (let i = 0; i < ground.length; i += 1) {
+      for (let j = i + 1; j < ground.length; j += 1) {
+        const keep = ground[i]!
+        const remove = ground[j]!
+        if (axisConsolidationBanned([keep.side], [keep.formation, remove.formation])) continue
+        if (
+          planConsolidation({
+            kind: 'multiStepUnits',
+            phaseIsReinforcement: phase.value === 'reinforcement',
+            keep: toConsolidationGroundView(keep),
+            remove: toConsolidationGroundView(remove),
+          }).ok
+        ) {
+          return { kind: 'ground', keepId: keep.instanceId, removeId: remove.instanceId }
+        }
+      }
+    }
+    return null
+  }
+
+  /** 13.9：这组多选此刻是否可以出「整编」菜单项 */
+  function canConsolidateSelectionNow(ids: readonly string[]): boolean {
+    return consolidationPairInSelection(ids) !== null
+  }
+
+  /** 13.9：盘面多选 → 右键「整编」→ 自动合并（不弹大窗、不再让玩家挑保留枚） */
+  function consolidateSelectionNow(ids: readonly string[]): boolean {
+    let merged = false
+    // 多选可能不止一对：逐对合并，直到没有合法的一对（上限防死循环）
+    for (let guard = 0; guard < 16; guard += 1) {
+      const pair = consolidationPairInSelection(ids)
+      if (pair === null) break
+      const ok =
+        pair.kind === 'air'
+          ? consolidateAircraftNow(pair.keepId, pair.removeId)
+          : consolidateUnitsNow(pair.keepId, pair.removeId)
+      if (!ok) break
+      merged = true
+    }
+    return merged
+  }
+
   /**
    * 13.9-1：**整编会话的作用域**（用户 2026-11-09）
    *
@@ -20946,7 +21253,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       // 14.1b（第五批批 C 切片 1）：减损判据按**印值军力**（修前硬编码 2 ⇒ 单军力机 IL.2
       // 的 steps=1 被误判为"已减损"、两枚未损 IL.2 竟能合并出 2 点军力）
       reduced: air.steps < airPrintedStepsOf(air),
-      locationKey: hexLabel(air.hex),
+      locationKey: airConsolidationLocationKey(air),
       steps: air.steps,
       printedSteps: airPrintedStepsOf(air),
     })
@@ -23118,14 +23425,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const deadPileReturnHexText = ref('')
 
   /**
-   * 13.5：重建候选落点（**显式格投影**，R2；取代原先的 `'any'` 任意格）
+   * 13.5：重建候选落点（**结构投影**：还没按该格补员是否够付来筛）
    *
-   * 复用 `planRebuild` 的 ④ 落点判据，按"待重建单位"分类给出真·合法落点：
-   *   · 空军（死亡堆）：处于**追溯补给**的友方空军基地（`hasFriendlyAirBase`）；
+   * 复用 `planRebuild` 的 ④ 落点判据，按"待重建单位"分类给出落点：
+   *   · 空军（死亡堆）：处于**追溯补给**的友方空军基地（`friendlyAirBaseHexes`，**全部**列出）；
    *   · 地面**图上带损**单位（不在死亡堆）：重建须与补员**同格** ⇒ 唯一候选＝该单位所在格
    *     （且该格须满足 HQ 2 格内 ∧ 不在未抵消敌 ZOC）；
    *   · 地面**死亡堆**单位：全图扫描——HQ 2 格内 ∧ 不在未抵消敌方 ZOC 内。
-   * 候选与 `rebuildUnitNow` 的引擎判定**同源**（同一组 `facts`），故地图高亮的格就是真合法落点。
+   * 「所需补员全在该格」由 `rebuildLegalHexes` 用同一份引擎请求逐格预演。
    */
   function rebuildCandidateHexes(unitId: string): HexRef[] {
     const candidate =
@@ -23135,16 +23442,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const isAir = isAirDeadPileEntry(candidate)
     const inDeadPile = deadPile.value.some((unit) => unit.instanceId === unitId)
 
-    // 空军：友方空军基地（处于追溯补给）
+    // 空军：全部处于追溯补给的友方空军基地（v7.1 §4.1 子项 1：玩家自己点基地）
     if (isAir) {
       const traceCovered = traceCoverageHexes(supplyFacts.value, {
         side: activeSide.value,
         mobility: 'truck',
       })
-      const base = airBases.value.find(
-        (item) => item.side === activeSide.value && traceCoverageHas(traceCovered, item.hex),
-      )
-      return base === undefined ? [] : [{ ...base.hex }]
+      return airBases.value
+        .filter(
+          (item) => item.side === activeSide.value && traceCoverageHas(traceCovered, item.hex),
+        )
+        .map((item) => ({ ...item.hex }))
     }
 
     // 13.5a：与 `rebuildUnitNow` 同一份投影（界面高亮与判据不许两套）
@@ -23163,32 +23471,149 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return rebuildReplPlacementHexes.value
   }
 
-  /** 13.5：重建时"补员所在格"——候选＝13.5 投影的合法落点（R2：显式候选，不再 `'any'`） */
-  function beginRebuildReplHexPickNow(unitId: string): void {
-    const candidates = rebuildCandidateHexes(unitId)
+  /** 13.5：本枚重建要用的行键（已选则用玩家的；否则按算子类型自动映射） */
+  function rebuildRowFor(unitId: string): string {
+    if (rebuildPickUnitId.value === unitId && rebuildPickRow.value !== '') {
+      return rebuildPickRow.value
+    }
+    return rebuildSuggestionFor(unitId) ?? ''
+  }
+
+  /**
+   * 13.5a 第 1) 项：**该单位此刻真正的合法重建格**
+   *
+   * 逐格拿同一份引擎请求预演（`planRebuild`），因此「所需补员全在该格 + HQ 2 格内 + 无未抵消敌 ZOC」
+   * 一次判完；地图高亮的格与点下去的结果必然一致。
+   */
+  function rebuildLegalHexes(unitId: string): HexRef[] {
+    const row = rebuildRowFor(unitId)
+    if (row === '') return []
+    return rebuildCandidateHexes(unitId).filter((hex) => {
+      const built = rebuildRequestOf({
+        unitId,
+        rebuildType: row,
+        replHexText: hexTextOf(hex),
+      })
+      return built !== null && planRebuild(built.request).ok
+    })
+  }
+
+  /** 13.5：死亡堆右键「重建」→ 高亮该单位全部合法重建格 → 点格即扣点落位（§4.1） */
+  function beginDeadPileRebuildNow(unitId: string): boolean {
+    const row = rebuildRowFor(unitId)
+    if (row === '') {
+      pushLog('warning', `无法确定 ${unitId} 的重建表行键（13.5）`, '13.5')
+      return false
+    }
+    rebuildPickUnitId.value = unitId
+    rebuildPickRow.value = row
+    const candidates = rebuildLegalHexes(unitId)
     if (candidates.length === 0) {
       pushLog(
         'warning',
-        '没有可重建的合法落点（13.5：须在战斗模式友方 HQ 2 格内、且不在未抵消的敌方 ZOC 内；空军须处于追溯补给的友方基地）',
-        '13.5',
+        '没有可重建的合法落点（13.5a：所需补员须全在该格、在战斗模式友方 HQ 2 格内、且不在未抵消的敌方 ZOC 内）',
+        '13.5a',
       )
-      return
+      return false
     }
     beginHexPick({
-      label: '补员所在格（13.5 合法落点）',
-      rule: '13.5',
+      label: '重建落点（13.5a 合法格）',
+      rule: '13.5a',
       candidates,
       apply: (hex) => {
         rebuildReplHexText.value = hexTextOf(hex)
-        // 点格即落位：行键已选就顺手提交（用户口径：点算子 → 点地图格，不再回窗确认）
-        if (rebuildPickRow.value === '') return true
-        return rebuildUnitNow({
-          unitId,
-          rebuildType: rebuildPickRow.value,
-          replHexText: hexTextOf(hex),
-        })
+        return rebuildUnitNow({ unitId, rebuildType: row, replHexText: hexTextOf(hex) })
       },
     })
+    return true
+  }
+
+  /** 13.5a 第 2) 项：图上打残单位能否在本格重建（补员须同格） */
+  function canRebuildOnMapNow(unitId: string): boolean {
+    const unit = units.value.find((item) => item.instanceId === unitId)
+    if (unit === undefined || unit.side !== activeSide.value) return false
+    if (unit.steps >= unit.printedSteps) return false
+    if (!actionAllowedNow('rein.rebuild')) return false
+    const row = rebuildRowFor(unitId)
+    if (row === '') return false
+    const built = rebuildRequestOf({
+      unitId,
+      rebuildType: row,
+      replHexText: hexTextOf(unit.hex),
+    })
+    return built !== null && planRebuild(built.request).ok
+  }
+
+  /** 13.5a 第 2) 项：盘面打残右键 → 落点固定本格，**不出高亮** → 点即扣点 */
+  function rebuildOnMapUnitNow(unitId: string): boolean {
+    const unit = units.value.find((item) => item.instanceId === unitId)
+    if (unit === undefined || !canRebuildOnMapNow(unitId)) return false
+    return rebuildUnitNow({
+      unitId,
+      rebuildType: rebuildRowFor(unitId),
+      replHexText: hexTextOf(unit.hex),
+    })
+  }
+
+  /** 13.5f 子项 1：可放飞机的本方空军基地（追溯补给 + 14.2a 激活堆叠未满） */
+  function airRebuildBaseHexes(unitId: string): HexRef[] {
+    const row = rebuildRowFor(unitId) || (rebuildSuggestionFor(unitId) ?? 'Aircraft')
+    return rebuildCandidateHexes(unitId).filter((hex) => {
+      const base = airBases.value.find((item) => sameHex(item.hex, hex))
+      if (base === undefined) return false
+      if (activeAircraftInBase(allAirViews.value, hex) >= activeStackingLimitOf(base)) {
+        return false
+      }
+      const built = rebuildRequestOf({
+        unitId,
+        rebuildType: row,
+        replHexText: hexTextOf(hex),
+      })
+      return built !== null && planRebuild(built.request).ok
+    })
+  }
+
+  /** 13.5f 子项 1：死亡堆右键飞机 →「放入地图空军基地」→ 高亮基地 → 点格即放置 */
+  function beginAirRebuildBasePickNow(unitId: string): boolean {
+    const row = rebuildRowFor(unitId) || (rebuildSuggestionFor(unitId) ?? 'Aircraft')
+    const candidates = airRebuildBaseHexes(unitId)
+    if (candidates.length === 0) {
+      pushLog(
+        'warning',
+        '没有可放飞机的本方空军基地（13.5f：须处于追溯补给；14.2a：激活堆叠未满）',
+        '13.5f',
+      )
+      return false
+    }
+    beginHexPick({
+      label: '飞机重建落点（本方空军基地）',
+      rule: '13.5f',
+      candidates,
+      apply: (hex) => rebuildUnitNow({ unitId, rebuildType: row, replHexText: hexTextOf(hex) }),
+    })
+    return true
+  }
+
+  /** 13.5f 子项 2：能否直接放入本方地图外空军盒（盒按方一个、容量无限；只判补员够不够） */
+  function canRebuildAircraftIntoBoxNow(unitId: string): boolean {
+    const unit = deadPile.value.find((item) => item.instanceId === unitId)
+    if (unit === undefined || !isAirDeadPileEntry(unit)) return false
+    if (!actionAllowedNow('rein.rebuild')) return false
+    const row = rebuildRowFor(unitId) || (rebuildSuggestionFor(unitId) ?? 'Aircraft')
+    const built = rebuildRequestOf({ unitId, rebuildType: row, airBox: true })
+    return built !== null && planRebuild(built.request).ok
+  }
+
+  /** 13.5f 子项 2：点即移入地图外空军盒（不弹二次确认；§4.1） */
+  function rebuildAircraftIntoBoxNow(unitId: string): boolean {
+    if (!canRebuildAircraftIntoBoxNow(unitId)) return false
+    const row = rebuildRowFor(unitId) || (rebuildSuggestionFor(unitId) ?? 'Aircraft')
+    return rebuildUnitNow({ unitId, rebuildType: row, airBox: true })
+  }
+
+  /** 13.5：兼容旧入口（面板的「点地图选补员格」） */
+  function beginRebuildReplHexPickNow(unitId: string): void {
+    beginDeadPileRebuildNow(unitId)
   }
 
   /**
@@ -23229,28 +23654,83 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return null
   }
 
-  /** 13.5：死亡堆持项的右键菜单（规则编号与禁用原因都写在返回项里，界面只画） */
+  /**
+   * 13.5：死亡堆持项的右键菜单（**不满足的子项不出现**，用户裁定 6；不做灰项）
+   *
+   * v7.1 §4.1：飞机分两个子项——「放入地图空军基地」与「放入地图外空军基地」，
+   * 各自只在本方条件满足时出现；地面只有一项「重建（13.5）」。
+   */
   function deadPileActionsOf(unitId: string): {
-    key: 'deadPile.rebuild' | 'deadPile.removeForever'
+    key:
+      | 'deadPile.rebuild'
+      | 'deadPile.rebuildAirBase'
+      | 'deadPile.rebuildAirBox'
+      | 'deadPile.removeForever'
     label: string
     rule: string
     disabledReason: string | null
   }[] {
-    const blocked = deadPileRebuildBlockedReason(unitId)
-    return [
-      {
-        key: 'deadPile.rebuild',
-        label: '重建（13.5，付 Pax/Eq）',
-        rule: '13.5',
-        disabledReason: blocked,
-      },
-      {
-        key: 'deadPile.removeForever',
-        label: '永久移除（13.5c）',
-        rule: '13.5c',
-        disabledReason: null,
-      },
-    ]
+    const unit = deadPile.value.find((item) => item.instanceId === unitId)
+    const actions: {
+      key:
+        | 'deadPile.rebuild'
+        | 'deadPile.rebuildAirBase'
+        | 'deadPile.rebuildAirBox'
+        | 'deadPile.removeForever'
+      label: string
+      rule: string
+      disabledReason: string | null
+    }[] = []
+    if (unit !== undefined && unit.side === activeSide.value) {
+      if (isAirDeadPileEntry(unit)) {
+        if (airRebuildBaseHexes(unitId).length > 0) {
+          actions.push({
+            key: 'deadPile.rebuildAirBase',
+            label: '放入地图空军基地（13.5f）',
+            rule: '13.5f',
+            disabledReason: null,
+          })
+        }
+        if (canRebuildAircraftIntoBoxNow(unitId)) {
+          actions.push({
+            key: 'deadPile.rebuildAirBox',
+            label: '放入地图外空军基地（1.4a）',
+            rule: '专规 1.4a',
+            disabledReason: null,
+          })
+        }
+      } else if (deadPileRebuildBlockedReason(unitId) === null) {
+        actions.push({
+          key: 'deadPile.rebuild',
+          label: '重建（13.5，付 Pax/Eq）',
+          rule: '13.5',
+          disabledReason: null,
+        })
+      }
+    }
+    actions.push({
+      key: 'deadPile.removeForever',
+      label: '永久移除（13.5c）',
+      rule: '13.5c',
+      disabledReason: null,
+    })
+    return actions
+  }
+
+  /** 13.5：死亡堆菜单项的执行入口（界面只按 key 转发） */
+  function runDeadPileActionNow(
+    unitId: string,
+    key:
+      | 'deadPile.rebuild'
+      | 'deadPile.rebuildAirBase'
+      | 'deadPile.rebuildAirBox'
+      | 'deadPile.removeForever',
+  ): boolean {
+    if (key === 'deadPile.rebuild') return beginDeadPileRebuildNow(unitId)
+    if (key === 'deadPile.rebuildAirBase') return beginAirRebuildBasePickNow(unitId)
+    if (key === 'deadPile.rebuildAirBox') return rebuildAircraftIntoBoxNow(unitId)
+    removeForeverNow(unitId)
+    return true
   }
 
   /** 12.7a：把运输点数转成延补队的格（候选＝图上本方运输点数所在的格） */
@@ -24602,6 +25082,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     sendToDeadPileNow,
     removeForeverNow,
     rebuildUnitNow,
+    endRebuildSegmentNow,
+    withdrawRebuildNow,
+    withdrawRebuildAtHexNow,
+    rebuildPlacedThisSegment,
+    beginDeadPileRebuildNow,
+    beginAirRebuildBasePickNow,
+    rebuildAircraftIntoBoxNow,
+    canRebuildAircraftIntoBoxNow,
+    canRebuildOnMapNow,
+    rebuildOnMapUnitNow,
+    airRebuildBaseHexes,
+    rebuildLegalHexes,
+    rebuildFreeHint,
+    boardReplTotals,
+    runDeadPileActionNow,
+    canConsolidateSelectionNow,
+    consolidateSelectionNow,
     consolidateUnitsNow,
     rebuildPickUnitId,
     rebuildPickRow,

@@ -1844,51 +1844,18 @@ export const useMapViewStore = defineStore('mapView', () => {
       })
     }
     /*
-     * 用户 2026-11-09：合并 / 加油进右键。
-     *   · 13.9-1 合并：恰一枚同格伙伴 ⇒ 一键并；多于一枚 ⇒ 打开既有整编会话让玩家挑
-     *     （菜单不替他挑并哪一枚；会话只列当前这个堆叠）；
-     *   · 12.5 加油：出现即把这一枚选为燃料目标，方法与来源仍由既有补给会话选定。
+     * 13.5a 第 2) 项：图上打残单位的重建入口（v7.1 §4.1）
+     *
+     * 落点固定在本格（补员须同格），**不出高亮**；条件不满足（补员不在本格 / HQ 太远 / 敌 ZOC）
+     * ⇒ 菜单项**不出现**。落点与费用仍由 `rebuildOnMapUnitNow` → 引擎 `planRebuild` 判。
      */
-    if (unit !== undefined && !moving) {
-      const partners = workbench.mergePartnerIds(id)
-      if (partners.length === 1) {
-        actions.push({
-          key: 'rein.consolidate',
-          label: '合并单位',
-          rule: '13.9',
-          panel: 'unit',
-          only: 'mergeUnit',
-          group: '编组',
-          disabledReason: null,
-        })
-      } else if (partners.length > 1) {
-        actions.push({
-          key: 'rein.consolidate.open',
-          label: '合并单位（打开整编会话挑对象）',
-          rule: '13.9',
-          panel: 'unit',
-          only: 'openConsolidation',
-          group: '编组',
-          disabledReason: null,
-        })
-      }
-    }
-    /*
-     * 13.5 补员：右键把这一枚带进增援面板的重建段（**只预选算子**）——
-     * 行键由该算子类型自动映射（唯一行才写）；右键本身不落账。
-     */
-    if (
-      unit !== undefined &&
-      !moving &&
-      workbench.actionAllowedNow('rein.rebuild') &&
-      workbench.rebuildCandidates.some((item) => item.instanceId === id)
-    ) {
+    if (unit !== undefined && !moving && workbench.canRebuildOnMapNow(id)) {
       actions.push({
-        key: 'rein.rebuild',
-        label: '补员单位补员（13.5）',
-        rule: '13.5',
+        key: 'rein.rebuild.onMap',
+        label: '重建（13.5）',
+        rule: '13.5a',
         panel: 'unit',
-        only: 'rebuildPick',
+        only: 'rebuildOnMap',
         group: '补给',
         disabledReason: null,
       })
@@ -1969,6 +1936,23 @@ export const useMapViewStore = defineStore('mapView', () => {
       for (const action of counterActionsAt(hex, id)) {
         if (!byKey.has(action.key)) byKey.set(action.key, action)
       }
+    }
+    /*
+     * 13.9 整编（v7.1 §4.3）：**唯一入口＝盘面左键多选 ≥2 枚 → 右键**。
+     * 条件不满足（少于 2 枚 / 跨格 / 两面不同 / DG / 低补给 / 轴方多单位编队 / 飞机未减损…）
+     * ⇒ 这一项**不出现**，不置灰。判据在 store（与落账同一套 `planConsolidation`）。
+     */
+    if (workbench.canConsolidateSelectionNow(targets)) {
+      const action: CounterAction = {
+        key: 'rein.consolidate.selection',
+        label: '整编（13.9）',
+        rule: '13.9',
+        panel: 'unit',
+        only: 'consolidateSelection',
+        group: '编组',
+        disabledReason: null,
+      }
+      if (!byKey.has(action.key)) byKey.set(action.key, action)
     }
     const actions = [...byKey.values()]
     if (actions.length === 0) return []
@@ -2192,28 +2176,11 @@ export const useMapViewStore = defineStore('mapView', () => {
       closePopup()
       return true
     }
-    // 13.9-1：合并单位（目标已由入口判据限定为**同格唯一**另一枚）
-    if (option.only === 'mergeUnit') {
-      const partner = workbench.mergePartnerAt(instanceId)
-      if (partner !== null) workbench.consolidateUnitsNow(instanceId, partner)
-      closePopup()
-      return true
-    }
     /*
-     * 13.9-1：同格伙伴多于一枚 ⇒ 打开**既有整编会话**，只带进这一堆叠的作用域
-     * （保留枚预选，移除枚由玩家点）；不替玩家挑，也不在这里落账。
+     * 13.5a 第 2) 项：图上打残单位 → 落点固定本格，不出高亮，点即扣点。
      */
-    if (option.only === 'openConsolidation') {
-      if (workbench.openConsolidationPickNow(instanceId)) collapsedSessionKey.value = null
-      closePopup()
-      return true
-    }
-    /*
-     * 13.5：把算子带进增援面板的重建段，并按类型**自动映射行键**；不落账。
-     */
-    if (option.only === 'rebuildPick') {
-      workbench.selectRebuildUnitNow(instanceId)
-      collapsedSessionKey.value = null
+    if (option.only === 'rebuildOnMap') {
+      workbench.rebuildOnMapUnitNow(instanceId)
       closePopup()
       return true
     }
@@ -2276,6 +2243,12 @@ export const useMapViewStore = defineStore('mapView', () => {
     const hex = popup.value?.hex
     if (hex === undefined || !canOpenCounterContext()) return false
     if (instanceId === SHARED_CONTEXT_ID) {
+      // 13.9 整编：合成项不属于任何单枚，直接对整组选择落账
+      if (key === 'rein.consolidate.selection') {
+        const merged = workbench.consolidateSelectionNow([...contextTargets.value])
+        closePopup()
+        return merged
+      }
       let applied = false
       for (const id of [...contextTargets.value]) {
         const option = counterActionsAt(hex, id).find((item) => item.key === key)

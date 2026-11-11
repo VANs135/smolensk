@@ -462,6 +462,43 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     kind: 'playerStep',
     why: '第二段的收束按钮（v7.1 §1.5）：只记本段窗口标记并推进；未掷骰 / 1.6c 未掷 / 撤离待选 / 预备队未领 / 手牌未清的前置校验在函数内',
   },
+  // v7.1 第三段（2026-11-11）：重建 / 整编全部改成盘面右键入口
+  beginDeadPileRebuildNow: {
+    kind: 'pickMode',
+    why: '13.5：死亡堆右键「重建」→ 只打开"点合法格"态；付费落盘在 rebuildUnitNow（有 rein.rebuild 闸）',
+  },
+  beginAirRebuildBasePickNow: {
+    kind: 'pickMode',
+    why: '13.5f 子项 1：飞机右键 → 只打开"点本方空军基地"态；付费落盘在 rebuildUnitNow',
+  },
+  runDeadPileActionNow: {
+    kind: 'playerStep',
+    why: '死亡堆菜单转发（重建/放基地/放盒/永久移除）；各分支各自判据，重建分支走 rebuildUnitNow 的 rein.rebuild 闸',
+  },
+  withdrawRebuildNow: {
+    kind: 'playerStep',
+    why: '第三段的撤回（v7.1 §1.1）：只允许收回**本段**刚重建的算子并退点；函数内以重建段为准，离开本段即失效',
+  },
+  withdrawRebuildAtHexNow: {
+    kind: 'playerStep',
+    why: '第三段"再点已重建单位即收回"的地图点击入口；只在重建段内、且该格恰好一枚本段重建对象时生效',
+  },
+  endRebuildSegmentNow: {
+    kind: 'playerStep',
+    why: '第三段收束按钮（v7.1 §4.6）：只推进到下一环节；补员点保留在盘面，不清空',
+  },
+  rebuildOnMapUnitNow: {
+    kind: 'playerStep',
+    why: '13.5a 第 2) 项：盘面打残单位右键重建，落点固定本格；费用与判据在引擎 planRebuild',
+  },
+  rebuildAircraftIntoBoxNow: {
+    kind: 'playerStep',
+    why: '13.5f 子项 2：点即移入本方地图外空军盒（1.4a 容量无限）；费用与判据在引擎 planRebuild',
+  },
+  consolidateSelectionNow: {
+    kind: 'playerStep',
+    why: '13.9：盘面多选右键整编；地面分支经 consolidateUnitsNow 的 rein.rebuild 闸，飞机分支按 13.9-4 不限阶段',
+  },
   pickFreeRailEdgeHex: {
     kind: 'playerStep',
     why: '专规 2.1 免费铁运的边缘格由玩家指定（落点不印在卡上）',

@@ -423,9 +423,8 @@ const REINFORCE_STEP_OF: Readonly<Record<string, string>> = {
   'reinforce:randomEvent': 'reinforcement.randomEvent',
   'reinforce:supplyTrain': 'reinforcement.supplyTrain',
   'reinforce:variableExit': 'reinforcement.variableExit',
-  // 13.5a / 13.9 重建与整编
-  'reinforce:rebuild': 'reinforcement.rebuild',
-  'reinforce:consolidation': 'reinforcement.rebuild',
+  // 13.5a / 13.9 重建与整编（第三段只保留「结束本段」；重建/整编改走盘面右键）
+  'reinforce:endRebuild': 'reinforcement.rebuild',
   // 专规 1.6c / 2.3c
   'reinforce:specialRepl': 'reinforcement.specialRepl',
   'reinforce:frontalReserves': 'reinforcement.frontalReserves',
@@ -550,22 +549,18 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
       '选定可卸载城市格或图边补给源格后落账；轴方按 3.4b 分栏。',
     )
   }
-  // 13.5a：重建
-  if (facts.rebuildAvailable && !acked.has('reinforce:rebuild')) {
+  /*
+   * 第三段（重建 · 合并 · 整编）：**只问「是否结束本段」**（v7.1 §4.3 / §4.6）。
+   *
+   * 重建与整编都已改成**盘面入口**（死亡堆右键 / 盘面多选右键），不再开大窗；
+   * 本段没有"待放项"，所以唯一事项就是结束本段（补员点留在盘面，不清空、不作废）。
+   */
+  if (facts.stepId === 'reinforcement.rebuild' && !acked.has('reinforce:endRebuild')) {
     push(
-      'reinforce:rebuild',
-      '重建（13.5a）',
-      '死亡堆里有可重建单位，或有带损单位可补满。',
-      '选定要重建的单位、行键与补员所在格，然后重建。',
-    )
-  }
-  // 13.9：整编（含拆分/合并），轴方多单位编队禁用
-  if (facts.consolidationAvailable && !acked.has('reinforce:consolidation')) {
-    push(
-      'reinforce:consolidation',
-      '整编（13.9）',
-      '同堆叠里有可整编对象；轴方多单位编队不得整编（3.3d）。',
-      '选定保留枚与移除枚，执行整编或拆分/合并。',
+      'reinforce:endRebuild',
+      '结束本段（第三段）',
+      '重建与整编都在盘面右键办理；补员点数用不完留在图上，跨段跨回合继续可用。',
+      '结束本段，进入后续环节。',
     )
   }
   // ── 第二段收尾：批量手牌 + 结束本段（唯一出口） ──

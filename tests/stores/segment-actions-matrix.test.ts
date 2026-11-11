@@ -177,12 +177,12 @@ describe('阶段/环节 × 操作矩阵（规则书口径）', () => {
     for (const itemId of [
       'reinforce:arrival',
       'reinforce:replTable',
-      'reinforce:rebuild',
+      'reinforce:endRebuild',
       'reinforce:frontalReserves',
     ]) {
       expect(panel, `增援面板缺 ${itemId} 的区块收敛`).toContain(`item="${itemId}"`)
     }
-    // 7 个区块：到达表 / 可变增援 / SP 落位 / 补员 / 重建 / 拆分合并 / 方面军预备队
+    // 区块：到达 / 可变增援 / SP 落位 / 补员 / 第三段结束 / 手牌 / 方面军预备队…
     expect((panel.match(/item="reinforce:/g) ?? []).length).toBeGreaterThanOrEqual(7)
     // "人工 / 自动"的界面分界（自动环节只给回执）
     expect(panel).toContain("workbench.segmentDriver === 'automatic'")

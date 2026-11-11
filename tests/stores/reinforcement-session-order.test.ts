@@ -135,7 +135,7 @@ describe('增援段：段 → 节集合（v7.1 第二段）', () => {
     ])
   })
 
-  it('重建环节：重建 → 整编（不夹带补员表/到达）', () => {
+  it('重建环节：只问「是否结束本段」（不夹带补员表/到达/大窗）', () => {
     expect(
       idsOf(
         baseFacts({
@@ -147,7 +147,7 @@ describe('增援段：段 → 节集合（v7.1 第二段）', () => {
           consolidationAvailable: true,
         }),
       ),
-    ).toEqual(['reinforce:rebuild', 'reinforce:consolidation'])
+    ).toEqual(['reinforce:endRebuild'])
   })
 
   it('轴方专规：随机事件 / 补给列车 / 可变撤离都在掷骰宿主内按序出现', () => {
@@ -192,15 +192,15 @@ describe('增援段：一次只暴露第一件', () => {
       rebuildAvailable: true,
       consolidationAvailable: true,
     })
-    expect(exposedSessionStep(planSessionSteps(before))?.id).toBe('reinforce:rebuild')
+    expect(exposedSessionStep(planSessionSteps(before))?.id).toBe('reinforce:endRebuild')
 
     const after = baseFacts({
       stepId: 'reinforcement.rebuild',
       rebuildAvailable: true,
       consolidationAvailable: true,
-      acked: ['reinforce:rebuild'],
+      acked: ['reinforce:endRebuild'],
     })
-    expect(exposedSessionStep(planSessionSteps(after))?.id).toBe('reinforce:consolidation')
+    expect(exposedSessionStep(planSessionSteps(after))).toBe(null)
   })
 
   it('强制项不受 ack 影响：到达没放完，记了 ack 也仍停在到达窗', () => {
@@ -313,8 +313,7 @@ describe('增援面板：只用新窗口 id', () => {
       'reinforce:replTable',
       'reinforce:specialRepl',
       'reinforce:supplyTable',
-      'reinforce:rebuild',
-      'reinforce:consolidation',
+      'reinforce:endRebuild',
       'reinforce:hand',
       'reinforce:endRoll',
     ])

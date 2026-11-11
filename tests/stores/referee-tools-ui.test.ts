@@ -228,7 +228,6 @@ describe('裁判工具的统一门 `showsReferee`（用户 2026-10-25）', () =>
       'src/components/barrage/BarragePanel.vue',
       'src/components/containers/ContainersPanel.vue',
       'src/components/exclusive/ExclusiveRulesPanel.vue',
-      'src/components/reinforcement/ReinforcementPanel.vue',
       'src/components/supply/SupplyPanel.vue',
       'src/components/victory/VictoryPanel.vue',
     ]) {

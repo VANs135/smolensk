@@ -67,22 +67,65 @@ describe('死亡堆：可点选 / 可右键 / 可见原因（13.5 / 13.5a / 13.5
     expect(store.rebuildSuggestedRow).not.toBeNull()
     expect(store.rebuildPickRow).toBe(store.rebuildSuggestedRow)
 
-    // 右键菜单：两条动作，顺序固定（重建 → 永久移除）
+    // v7.1 §4.1：这一刻没有合法落点（无补员 / 无 HQ）⇒ 重建项**不出现**，只剩永久移除
     expect(store.deadPileActionsOf('dead-1').map((item) => item.key)).toEqual([
-      'deadPile.rebuild',
       'deadPile.removeForever',
     ])
   })
 
-  it('13.5a：没有合法落点（无战斗面 HQ）⇒ 重建项禁用并说明是落点条款挡的', () => {
+  it('13.5a：右键重建 → 点合法格落位；再点该单位撤回 ⇒ 回死亡堆并退回补员', () => {
+    const store = readyForRebuild()
+    deadUnit(store)
+    store.setReplHoldingsNow({ pax: 10, eq: 0, ftr: 0, tac: 0 }, CORE_HEX)
+    placeGround(store, hqRecord(), CORE_HEX, 'axis', 'hq-1')
+
+    expect(store.beginDeadPileRebuildNow('dead-1')).toBe(true)
+    expect(store.hexPickView?.candidates).toContainEqual(CORE_HEX)
+    expect(store.pickHexFor(CORE_HEX)).toBe(true)
+    expect(store.deadPile.some((item) => item.instanceId === 'dead-1')).toBe(false)
+    const spent = store.replHoldings.pax
+    expect(spent).toBeLessThan(10)
+
+    // §1.1：本段内再点已重建的单位 ⇒ 收回并退点
+    expect(store.withdrawRebuildNow('dead-1')).toBe(true)
+    expect(store.deadPile.some((item) => item.instanceId === 'dead-1')).toBe(true)
+    expect(store.replHoldings.pax).toBe(10)
+    // 同一枚不能撤回两次
+    expect(store.withdrawRebuildNow('dead-1')).toBe(false)
+  })
+
+  it('13.5a 第 2 项：图上打残右键重建，落点固定本格、不出高亮；撤回恢复原军力', () => {
+    const store = readyForRebuild()
+    placeGround(store, hqRecord(), CORE_HEX, 'axis', 'hq-1')
+    store.setReplHoldingsNow({ pax: 10, eq: 10, ftr: 0, tac: 0 }, CORE_HEX)
+    const unit = placeGround(store, infDivRecord('axis'), CORE_HEX, 'axis', 'hurt')
+    unit.steps = 1
+
+    expect(store.canRebuildOnMapNow('hurt')).toBe(true)
+    expect(store.rebuildOnMapUnitNow('hurt')).toBe(true)
+    expect(store.hexPickView).toBe(null)
+    expect(unit.steps).toBeGreaterThan(1)
+    expect(store.units.some((item) => item.instanceId === 'hurt')).toBe(true)
+
+    expect(store.withdrawRebuildNow('hurt')).toBe(true)
+    expect(store.units.find((item) => item.instanceId === 'hurt')?.steps).toBe(1)
+    expect(store.deadPile.some((item) => item.instanceId === 'hurt')).toBe(false)
+  })
+
+  it('13.5a：没有合法落点（无战斗面 HQ）⇒ 重建项不出现（不置灰）', () => {
     const store = readyForRebuild()
     deadUnit(store)
 
-    const rebuild = store
-      .deadPileActionsOf('dead-1')
-      .find((item) => item.key === 'deadPile.rebuild')!
-    expect(rebuild.disabledReason).toContain('13.5a')
-    expect(rebuild.disabledReason).toContain('HQ')
+    const keys = store.deadPileActionsOf('dead-1').map((item) => item.key)
+    expect(keys).not.toContain('deadPile.rebuild')
+    expect(keys).toContain('deadPile.removeForever')
+    // 条件满足时同一入口才出现（顺序：重建 → 永久移除）
+    store.setReplHoldingsNow({ pax: 10, eq: 0, ftr: 0, tac: 0 }, CORE_HEX)
+    placeGround(store, hqRecord(), CORE_HEX, 'axis', 'hq-1')
+    expect(store.deadPileActionsOf('dead-1').map((item) => item.key)).toEqual([
+      'deadPile.rebuild',
+      'deadPile.removeForever',
+    ])
   })
 
   it('13.5c：AR 后有黄点（rebuildable=false）⇒ 永久不可重建，原因写明 13.5c', () => {
@@ -135,7 +178,7 @@ describe('死亡堆：可点选 / 可右键 / 可见原因（13.5 / 13.5a / 13.5
     expect(source).toContain('pickDeadPileUnitNow(')
     expect(source).toContain('@contextmenu.prevent')
     expect(source).toContain('deadPileActionsOf(')
-    expect(source).toContain('deadPileRebuildBlockedReason(')
-    expect(source).toContain('workbench.rebuildUnitNow({')
+    expect(source).toContain('runDeadPileActionNow(')
+    expect(source).toContain('runDeadPileAction(')
   })
 })

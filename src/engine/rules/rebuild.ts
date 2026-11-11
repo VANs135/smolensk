@@ -301,6 +301,12 @@ export interface RebuildPlacementFacts {
   hasFriendlyAirBase(): boolean
   /** 13.5f：飞机重建的落点格（任一友方空军基地格；无基地时为 null） */
   friendlyAirBaseHex?(): HexRef | null
+  /**
+   * 13.5f / v7.1 §4.1：**全部**合法友方空军基地格（让玩家选基地，而不是替玩家取第一个）
+   *
+   * 缺省时退回 `friendlyAirBaseHex()`（单格）；给出时 `replHex` 必须是其中之一。
+   */
+  friendlyAirBaseHexes?(): readonly HexRef[]
 }
 
 /** 重建请求 */
@@ -432,10 +438,20 @@ export function planRebuild(input: RebuildRequest): RuleOutcome<RebuildPlan> {
 
   // ④ 落点
   if (candidate.isAircraft) {
-    if (!facts.hasFriendlyAirBase())
+    if (!facts.hasFriendlyAirBase() && input.replHex === undefined)
       return fail('13.5f', `noFriendlyAirbaseForRebuild:${candidate.id}`)
+    /*
+     * v7.1 §4.1：玩家点基地即落在该基地（`replHex`），不再由引擎替玩家取「第一个」。
+     * 给了候选清单时，`replHex` 必须在清单内（清单就是合法落点的唯一出处）。
+     */
+    const bases = facts.friendlyAirBaseHexes?.() ?? null
+    const requested = input.replHex ?? null
+    if (requested !== null && bases !== null && bases.length > 0) {
+      const hit = bases.some((base) => base.col === requested.col && base.row === requested.row)
+      if (!hit) return fail('13.5f', `aircraftRebuildHexNotFriendlyBase:${candidate.id}`)
+    }
     // 13.5f：飞机在任意友方空军基地以**激活**状态从死亡堆抵达
-    const hex = firstFriendlyAirBaseHex(facts)
+    const hex = requested ?? firstFriendlyAirBaseHex(facts)
     if (hex === null) return fail('13.5f', `noFriendlyAirbaseForRebuild:${candidate.id}`)
     const stepsAfter = restoredSteps(candidate, input.stepsToRestore)
     return succeed('13.5f', {

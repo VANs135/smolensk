@@ -9,7 +9,6 @@ import { useUiMode } from '@/components/ui-mode'
 import { formations } from '@/data'
 import type { Side } from '@/data'
 import type { BoxView, EdgeBoxId, ScenarioDrawBoxView } from '@/engine/rules'
-import { rebuildChartRows } from '@/engine/rules'
 import {
   useContainersStore,
   useHotseatStore,
@@ -364,14 +363,13 @@ const showsActions = computed(() => props.only === null || props.only === 'actio
 /**
  * 死亡堆（13.5 / 13.5a / 13.5c）：右键菜单
  *
- * 用户 2026-11-10 报的实机 bug —— 死亡堆以前是只读 `<li>`：点不动、右键无菜单、
- * 也不知道"为什么不能回场"。现在：
- *   · 左键 → `pickDeadPileUnitNow` 选中并预选为重建对象（行键清空，仍由玩家点）；
- *   · 右键 → 同时打开该持项的菜单（重建 / 永久移除 + 不可回场原因）；
- *   · 菜单里的「重建（13.5）付补员」直接调唯一的 `rebuildUnitNow`，不另做一套付费。
+ * v7.1 §4.1：菜单项**只列此刻真能做的事**（不满足就不出现、不置灰）：
+ *   · 地面：「重建（13.5）」→ 引擎算合法格 → 高亮 → 点格即扣点落位；
+ *   · 飞机：两个子项「放入地图空军基地」（高亮基地格后点格）与
+ *     「放入地图外空军基地」（点即移入盒，不弹二次确认）；
+ *   · 永久移除（13.5c）。
  */
 const deadPileMenuId = ref('')
-const rebuildRows = computed(() => rebuildChartRows(workbench.activeSide))
 
 function isDeadPileActionable(box: BoxView): boolean {
   return box.kind === 'deadPile' && box.side === actingSide.value && showsBoxActions('deadPile')
@@ -388,12 +386,15 @@ function openDeadPileMenu(box: BoxView, unitId: string): void {
   deadPileMenuId.value = unitId
 }
 
-function rebuildDeadPileEntry(unitId: string): void {
-  const ok = workbench.rebuildUnitNow({
+function deadPileActions(unitId: string) {
+  return workbench.deadPileActionsOf(unitId)
+}
+
+function runDeadPileAction(unitId: string, key: string): void {
+  const ok = workbench.runDeadPileActionNow(
     unitId,
-    rebuildType: workbench.rebuildPickRow,
-    replHexText: workbench.rebuildReplHexText,
-  })
+    key as Parameters<typeof workbench.runDeadPileActionNow>[1],
+  )
   if (ok) deadPileMenuId.value = ''
 }
 
@@ -644,56 +645,21 @@ function boxAircraft(side: Side) {
               >
                 <div v-if="deadPileMenuId === holding.unitId" class="pile-menu" @click.stop>
                   <p class="muted">
-                    13.5：行键决定费用（工程库没有「算子→行」映射，须按重建表选）；补员格用「点地图选格」
+                    13.5a：重建落点由引擎算（所需补员全在该格、友方 HQ 2 格内、无未抵消敌 ZOC）；
+                    飞机可选地图基地或地图外空军盒。
                   </p>
                   <div class="row">
                     <BaseButton
-                      v-for="row in rebuildRows"
-                      :key="row.unitType"
-                      :variant="workbench.rebuildPickRow === row.unitType ? 'primary' : 'secondary'"
-                      size="sm"
-                      @click="workbench.rebuildPickRow = row.unitType"
-                    >
-                      {{ row.unitType }}（{{ row.sourceLabel }}）
-                    </BaseButton>
-                    <BaseButton
-                      variant="secondary"
-                      size="sm"
-                      @click="workbench.beginRebuildReplHexPickNow(holding.unitId)"
-                    >
-                      点地图选补员格（高亮 13.5a 合法落点）
-                    </BaseButton>
-                    <span class="muted">
-                      补员格：{{
-                        workbench.rebuildReplHexText === ''
-                          ? '（未选）'
-                          : workbench.rebuildReplHexText
-                      }}
-                    </span>
-                  </div>
-                  <div class="row">
-                    <BaseButton
-                      v-for="action in workbench.deadPileActionsOf(holding.unitId)"
+                      v-for="action in deadPileActions(holding.unitId)"
                       :key="action.key"
-                      :variant="action.key === 'deadPile.rebuild' ? 'primary' : 'ghost'"
+                      :variant="action.key === 'deadPile.removeForever' ? 'ghost' : 'primary'"
                       size="sm"
-                      :title="action.disabledReason ?? action.rule"
-                      @click="
-                        action.key === 'deadPile.rebuild'
-                          ? rebuildDeadPileEntry(holding.unitId)
-                          : workbench.removeForeverNow(holding.unitId)
-                      "
+                      :title="action.rule"
+                      @click="runDeadPileAction(holding.unitId, action.key)"
                     >
                       {{ action.label }}
                     </BaseButton>
                   </div>
-                  <p
-                    v-if="workbench.deadPileRebuildBlockedReason(holding.unitId) !== null"
-                    class="warn"
-                  >
-                    {{ workbench.deadPileRebuildBlockedReason(holding.unitId) }}
-                  </p>
-                  <p v-else class="muted">可回场：13.5a 落点已满足，选好行键与补员格即可付补员。</p>
                 </div>
                 <span v-else class="muted">（左键选中 / 右键出菜单）</span>
                 <!--

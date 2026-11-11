@@ -177,6 +177,61 @@ describe('第五批 C3：飞机重建入口（13.5f / 专规 1.6）', () => {
   })
 })
 
+describe('v7.1 §4.1：飞机重建的两个子项（地图基地 / 地图外盒）', () => {
+  it('★ 子项按条件出现：可追溯基地 ⇒「放入地图空军基地」；盒恒可用 ⇒「放入地图外空军基地」', () => {
+    const store = newStore()
+    setupRebuild(store, true)
+    placeInDeadPile(store, 'su-aircraft-ru-il-2', 'air-il2')
+    store.setReplHoldingsNow({ ...emptyReplHoldings(), tac: 1 }, CORE_HEX)
+
+    const keys = store.deadPileActionsOf('air-il2').map((item) => item.key)
+    expect(keys).toContain('deadPile.rebuildAirBase')
+    expect(keys).toContain('deadPile.rebuildAirBox')
+  })
+
+  it('★ 子项 1：点地图基地格 ⇒ 落在该基地、扣 Tac、不进盒', () => {
+    const store = newStore()
+    setupRebuild(store, true)
+    placeInDeadPile(store, 'su-aircraft-ru-il-2', 'air-il2')
+    store.setReplHoldingsNow({ ...emptyReplHoldings(), tac: 1 }, CORE_HEX)
+
+    expect(store.beginAirRebuildBasePickNow('air-il2')).toBe(true)
+    expect(store.hexPickView?.candidates).toContainEqual(CORE_HEX)
+    expect(store.pickHexFor(CORE_HEX)).toBe(true)
+    const onMap = store.airUnits.find((item) => item.instanceId === 'air-il2')
+    expect(onMap?.hex).toEqual(CORE_HEX)
+    expect(store.airBoxMembers).not.toContain('air-il2')
+    expect(store.replHoldings.tac).toBe(0)
+  })
+
+  it('★ 子项 2：点即移入地图外盒（不弹二次确认），撤回回到死亡堆并退 Tac', () => {
+    const store = newStore()
+    setupRebuild(store, true)
+    placeInDeadPile(store, 'su-aircraft-ru-il-2', 'air-il2')
+    store.setReplHoldingsNow({ ...emptyReplHoldings(), tac: 1 }, CORE_HEX)
+
+    expect(store.rebuildAircraftIntoBoxNow('air-il2')).toBe(true)
+    expect(store.airBoxMembers).toContain('air-il2')
+    expect(store.replHoldings.tac).toBe(0)
+
+    // §1.1：本段内再点（或在死亡堆菜单外）撤回 ⇒ 回死亡堆、出盒、退 Tac
+    expect(store.withdrawRebuildNow('air-il2')).toBe(true)
+    expect(store.airBoxMembers).not.toContain('air-il2')
+    expect(store.deadPile.some((item) => item.instanceId === 'air-il2')).toBe(true)
+    expect(store.replHoldings.tac).toBe(1)
+  })
+
+  it('★ 第三段收束：补员点（Pax / Eq）留在盘面，不清空、不作废', () => {
+    const store = newStore()
+    setupRebuild(store, true)
+    store.setReplHoldingsNow({ ...emptyReplHoldings(), pax: 3, eq: 2 }, CORE_HEX)
+
+    expect(store.endRebuildSegmentNow()).toBe(true)
+    expect(store.replHoldings.pax).toBe(3)
+    expect(store.replHoldings.eq).toBe(2)
+  })
+})
+
 describe('第五批 C3：14.7d-B 单机扫射（store 闸）', () => {
   it('两机扫射在**选择**这一步即被拦（14.7d-B）；候选阵列给出灰显原因', () => {
     const store = newStore()

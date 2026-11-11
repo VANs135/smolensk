@@ -107,10 +107,10 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
         },
       }),
     )
-    expect(items.map((entry) => entry.id)).toEqual(['reinforce:rebuild', 'reinforce:consolidation'])
+    expect(items.map((entry) => entry.id)).toEqual(['reinforce:endRebuild'])
     // 暴露的只有第一件
     expect(exposedCount(items)).toBe(1)
-    expect(exposedSessionStep(items)?.id).toBe('reinforce:rebuild')
+    expect(exposedSessionStep(items)?.id).toBe('reinforce:endRebuild')
   })
 
   it('增援：到达段只出到达与慢动员，掷表已迁到第二段宿主', () => {
@@ -335,8 +335,7 @@ describe('U1-b 源码守卫：只在门里出一件，旧判定不留两份', ()
       'reinforce:replTable',
       'reinforce:specialRepl',
       'reinforce:supplyTable',
-      'reinforce:rebuild',
-      'reinforce:consolidation',
+      'reinforce:endRebuild',
     ]) {
       expect(reinforce).toContain(`item="${id}"`)
     }

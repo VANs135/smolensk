@@ -89,7 +89,7 @@ function menuKeys(s: ReturnType<typeof stores>, instanceId: string): string[] {
   )
 }
 
-describe('右键：13.9-1 合并单位', () => {
+describe('右键：13.9 整编（盘面多选 → 自动合并）', () => {
   let s: ReturnType<typeof stores>
 
   beforeEach(() => {
@@ -98,41 +98,36 @@ describe('右键：13.9-1 合并单位', () => {
     goToActionStep(s.workbench, 'rein.rebuild')
   })
 
-  it('★ 同格有且仅有另一枚可合并 ⇒ 出现「合并单位」，点它即并（不弹第二个选择）', () => {
+  it('★ 两枚同格可并 ⇒ 多选判据成立，点「整编」自动合并（不再开大窗）', () => {
     const record = multiStepRecord()
     const keep = placeGround(s.workbench, record, HEX, 'soviet', 'k1')
     const remove = placeGround(s.workbench, record, HEX, 'soviet', 'r1')
     keep.steps = 2
     remove.steps = 1
 
-    expect(menuKeys(s, 'k1')).toContain('rein.consolidate')
-    expect(s.mapView.openContextAction('k1', 'rein.consolidate')).toBe(true)
+    expect(s.workbench.canConsolidateSelectionNow(['k1', 'r1'])).toBe(true)
+    expect(s.workbench.consolidateSelectionNow(['k1', 'r1'])).toBe(true)
     expect(s.workbench.units.map((unit) => unit.instanceId)).toEqual(['k1'])
     expect(keep.steps).toBe(3)
+    expect(s.workbench.consolidationPick).toBe(null)
   })
 
-  it('★ 同格只有自己 ⇒ 不出现（没有可并的第二枚）', () => {
+  it('★ 只选一枚 ⇒ 判据不成立（菜单项不出现）', () => {
     const keep = placeGround(s.workbench, multiStepRecord(), HEX, 'soviet', 'k1')
-    expect(menuKeys(s, 'k1')).not.toContain('rein.consolidate')
+    expect(s.workbench.canConsolidateSelectionNow(['k1'])).toBe(false)
     expect(keep.steps).toBe(keep.printedSteps)
   })
 
-  it('★ 同格有两枚可并（三枚堆叠）⇒ 不出现：不替玩家挑并哪一枚', () => {
-    const record = multiStepRecord()
-    for (const id of ['a', 'b', 'c']) placeGround(s.workbench, record, HEX, 'soviet', id)
-    expect(menuKeys(s, 'a')).not.toContain('rein.consolidate')
-  })
-
-  it('★ 不在增援段（13.9 时机）⇒ 不出现', () => {
+  it('★ 不在增援段（13.9 时机）⇒ 判据不成立', () => {
     const record = multiStepRecord()
     placeGround(s.workbench, record, HEX, 'soviet', 'k1')
     placeGround(s.workbench, record, HEX, 'soviet', 'r1')
     s.workbench.setPhase('movement')
     goToActionStep(s.workbench, 'move.modeChange')
-    expect(menuKeys(s, 'k1')).not.toContain('rein.consolidate')
+    expect(s.workbench.canConsolidateSelectionNow(['k1', 'r1'])).toBe(false)
   })
 
-  it('★ 专规 3.3d：轴方多单位编队合并会被拒 ⇒ 菜单里不出现', () => {
+  it('★ 专规 3.3d：轴方多单位编队合并会被拒 ⇒ 判据不成立', () => {
     const record = groundRecord('axis', (item) => /Inf Div/i.test(item.vassalName ?? ''))
     const axis = stores('axis')
     axis.workbench.setPhase('reinforcement')
@@ -141,7 +136,7 @@ describe('右键：13.9-1 合并单位', () => {
     const remove = placeGround(axis.workbench, record, HEX, 'axis', 'r1')
     keep.formation = 'Pz-Gr Div'
     remove.formation = 'Pz-Gr Div'
-    expect(menuKeys(axis, 'k1')).not.toContain('rein.consolidate')
+    expect(axis.workbench.canConsolidateSelectionNow(['k1', 'r1'])).toBe(false)
   })
 })
 

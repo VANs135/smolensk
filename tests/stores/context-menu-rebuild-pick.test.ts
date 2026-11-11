@@ -65,7 +65,10 @@ describe('右键 13.5：补员预选算子（行键仍由玩家选）', () => {
     goToActionStep(s.workbench, 'rein.rebuild')
   })
 
-  it('★ 图上带损本方单位 ⇒ 菜单出「补员单位补员」，点它即预选并按类型自动映射行键，不落账', () => {
+  it('★ 图上带损本方单位 ⇒ 菜单出「重建（13.5）」；点它即在本格扣点重建（不出高亮）', () => {
+    const hqRecord = groundRecord('soviet', (record) => record.specialized?.includes('hq') === true)
+    placeGround(s.workbench, hqRecord, HEX, 'soviet', 'hq-1')
+    s.workbench.setReplHoldingsNow({ pax: 10, eq: 10, ftr: 0, tac: 0 }, HEX)
     const unit = placeGround(
       s.workbench,
       groundRecord('soviet', (record) => /Rifle Div|Tk Div/i.test(record.vassalName ?? '')),
@@ -77,16 +80,27 @@ describe('右键 13.5：补员预选算子（行键仍由玩家选）', () => {
     expect(unit.steps).toBeLessThan(unit.printedSteps)
 
     const keys = menuKeys(s, 'hurt')
-    expect(keys).toContain('rein.rebuild')
+    expect(keys).toContain('rein.rebuild.onMap')
 
-    expect(s.mapView.openContextAction('hurt', 'rein.rebuild')).toBe(true)
-    expect(s.workbench.rebuildPickUnitId).toBe('hurt')
-    // 行键自动映射（可唯一确定 ⇒ 非空；不可 ⇒ 空串交人工选），但绝不落账
-    expect(s.workbench.rebuildSuggestedRow).not.toBeNull()
-    expect(s.workbench.rebuildPickRow).toBe(s.workbench.rebuildSuggestedRow)
-    expect(s.workbench.lastRebuild).toBe(null)
-    expect(s.workbench.units).toHaveLength(1)
-    expect(s.workbench.units[0]?.steps).toBe(1)
+    expect(s.mapView.openContextAction('hurt', 'rein.rebuild.onMap')).toBe(true)
+    // 落点固定本格（13.5a 第 2 项）：不进入点格态
+    expect(s.workbench.hexPickView).toBe(null)
+    expect(s.workbench.lastRebuild).not.toBe(null)
+    expect(s.workbench.units.find((item) => item.instanceId === 'hurt')?.steps).toBeGreaterThan(1)
+  })
+
+  it('★ 补员不在本格 ⇒ 菜单不出现该项（13.5a：所需补员须全在该格）', () => {
+    const hqRecord = groundRecord('soviet', (record) => record.specialized?.includes('hq') === true)
+    placeGround(s.workbench, hqRecord, HEX, 'soviet', 'hq-1')
+    const unit = placeGround(
+      s.workbench,
+      groundRecord('soviet', (record) => /Rifle Div|Tk Div/i.test(record.vassalName ?? '')),
+      HEX,
+      'soviet',
+      'hurt',
+    )
+    unit.steps = 1
+    expect(menuKeys(s, 'hurt')).not.toContain('rein.rebuild.onMap')
   })
 
   it('★ 未受损、死亡堆也没有 ⇒ 菜单不出现该项', () => {
@@ -97,7 +111,7 @@ describe('右键 13.5：补员预选算子（行键仍由玩家选）', () => {
       'soviet',
       'full',
     )
-    expect(menuKeys(s, 'full')).not.toContain('rein.rebuild')
+    expect(menuKeys(s, 'full')).not.toContain('rein.rebuild.onMap')
   })
 
   it('★ 非增援段 ⇒ 菜单不出现该项（13.5 的时机闸）', () => {
@@ -112,6 +126,6 @@ describe('右键 13.5：补员预选算子（行键仍由玩家选）', () => {
 
     s.workbench.setPhase('movement')
     goToActionStep(s.workbench, 'move.order')
-    expect(menuKeys(s, 'hurt')).not.toContain('rein.rebuild')
+    expect(menuKeys(s, 'hurt')).not.toContain('rein.rebuild.onMap')
   })
 })

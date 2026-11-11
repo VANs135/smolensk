@@ -180,7 +180,7 @@ describe('B17a-2：分段渲染与入口（源码守卫）', () => {
       ['containers.applyRailCapacityForDate()', REFEREE_GATES],
       ['containers.resetContainers()', REFEREE_GATES],
       ['workbench.returnFromDeadPileNow({', ACTION_GATES],
-      ['workbench.removeForeverNow(', ACTION_GATES],
+      ['workbench.runDeadPileActionNow(', ACTION_GATES],
       /*
        * ★ 2026-11-11（体检 A 组）：「抽取编队」入口已移到地图左上角「初设」栏，容器窗只读，
        *   不再有 `setup.executeSetupDraws()` 可点件（下面单独断言"不存在"）。

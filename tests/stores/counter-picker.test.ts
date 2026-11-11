@@ -133,12 +133,13 @@ describe('B13：面板选图（counterImageUrlOf）与地图同源', () => {
 describe('B13：增援面板的替换（源码守卫）', () => {
   const panel = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
 
-  it('待重建单位改走 `CounterPicker`，且**旧的文字下拉已删**（不留两套控件）', () => {
+  it('第三段不再有待重建单位阵列（改死亡堆 / 盘面右键）；慢动员仍走 `CounterPicker`', () => {
     expect(panel).toContain('<CounterPicker')
     expect(panel).toContain('counterImageUrlOf')
-    // 那一处 select 必须是**没了**（`rebuildUnitId` 现在只由阵列点击写入）
+    // 重建大窗删除后，面板不再有 `rebuildUnitId` 的阵列写入
+    expect(panel).not.toContain('@pick="rebuildUnitId = $event"')
+    expect(panel).not.toContain('rebuildItems')
     expect(panel).not.toContain('<select v-model="rebuildUnitId"')
-    expect(panel).toContain('@pick="rebuildUnitId = $event"')
   })
 
   it('悬停同步地图高亮：走既有的 `setHoverHex`（不另立通道）', () => {
