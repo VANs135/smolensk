@@ -2151,13 +2151,23 @@ export const useSetupStore = defineStore('setup', () => {
   /**
    * 3.4a：按分界线判该格应属哪个集群
    *
-   * 原文：Guderian 在「分界线上或以南」、Hoth 在「分界线上或以北」。
-   * 线上（`onLine`）两侧都合规；自动初设取 Guderian（登记为待裁定口径，不改变玩家手选）。
+   * 原文：Guderian 在「分界线上或以南」、Hoth 在「分界线上或以北」；**线上两侧都合规**，
+   * 且**19.xx 以西（列 < 起点列 19）不受分界线约束**（列号向东增大 —— 分界线路径 19.19 → 62.23
+   * 的列号单调不减，见 `boundary-polyline-flow`）。
+   *
+   * ⇒ 这两类格分界线**给不出唯一归属**，返回 `null`（不强行归南侧 Guderian）：
+   *   自动初设把它们留在「待归属」清单里，由玩家二选一（3.4b 要求新 SP 必须归属某一集群）。
+   *   注释：若日后要改成「按到场单位本身的集群」，只需在此处另取单位数据，不改调用方。
    */
   function boundaryGroupOfHex(hex: HexRef): SetupPanzerGroup | null {
     const boundary = workbench.panzerGroupBoundaryWithPath
     if (boundary === null) return null
-    return boundarySideOf(hex, boundary) === 'north' ? 'hoth' : 'guderian'
+    // 19.xx 以西：不受分界线约束
+    if (hex.col < boundary.west.col) return null
+    const side = boundarySideOf(hex, boundary)
+    // 线上：两个集群都可以待在这里 ⇒ 不自作主张归南侧
+    if (side === 'onLine') return null
+    return side === 'north' ? 'hoth' : 'guderian'
   }
 
   /** 3.4b：记下某格 SP 的集群归属，并同步到付款/拖取实际读取的账本 */
@@ -2172,6 +2182,8 @@ export const useSetupStore = defineStore('setup', () => {
    * 3.4b：**一键自动初设**按 3.4a 分界线自动归属（不要求玩家逐个指定）
    *
    * 只补尚未指定的轴方补给站；分界线缺失时如实留空（不猜）。
+   * ★ 3.4a：**线上格与 19.xx 以西的格**分界线给不出唯一归属（`boundaryGroupOfHex` 返回 null）
+   *   ⇒ 自动初设不填，留在「待归属」清单里由玩家二选一（不强行归南侧 Guderian）。
    */
   function autoAssignAxisSpDumps(): void {
     if (!panzerGroupRulesOn()) return

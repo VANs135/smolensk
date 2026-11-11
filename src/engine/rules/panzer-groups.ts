@@ -172,6 +172,10 @@ export interface DividingLineScope {
  *
  * 「位于分界线『错误一侧』且处于 **Orsha 以东**的格（**19.xx 以西的格不受分界线约束**）」
  * ⇒ 生效当且仅当：**列 ≥ 分界线起点列**（数据派生，= 19）且 **列 > Orsha 列**。
+ *
+ * ★ 方向核对（2026-11-11）：地图坐标**列号向东增大**（分界线路径 19.19 → 62.23 的列号单调不减，
+ *   见 `boundary-polyline-flow` 的数据推导用例）⇒「19.xx 以西」＝**列 < 19**。
+ *   故上式用 `>= 起点列` 排除西侧，**不是** `> 起点列` 那种把方向写反的读法。
  */
 export function inDividingLineScope(hex: HexRef, scope: DividingLineScope): boolean {
   return hex.col >= scope.boundary.west.col && hex.col > scope.orshaHex.col
@@ -190,7 +194,10 @@ export interface PanzerGroupUnitView {
 /** 3.4a：相位末的分界线义务 */
 export interface DividingLineObligation {
   group: PanzerGroup
-  /** 需要投 DG 的单位（编队内任选一个，故给出编队内全部合格单位供选） */
+  /**
+   * 需要投 DG 的单位 —— **命中触发条件的那些单位**（原文「place a DG on a unit … if it is …」，
+   * "it" 指该单位本身，不是编队内任意一枚）。命中多枚时玩家从中选一枚投 DG。
+   */
   unitIds: readonly string[]
   /** 触发条件（机器可读） */
   reason: 'crossGroupStackedOrAdjacent' | 'wrongSideOfLineEastOfOrsha'
@@ -202,7 +209,9 @@ export interface DividingLineObligation {
  * 3.4a：相位末的分界线义务
  *
  * 对每个**多单位编队**逐条判两条触发条件（与另一集群同堆叠/相邻；错误一侧且 Orsha 以东），
- * 命中即在**该编队内**给出一个单位的 DG 义务（3.4a：「对多单位编队的一个单位投 DG」）。
+ * 命中即在**命中条件的那枚单位**上给出 DG 义务（原文：「place a DG on a unit from a multi-unit
+ * formation **if it is** …」——"it" 指该单位；不是"编队内任选一枚"）。同一次命中若有多枚，
+ * 则一并列出，由玩家从中选一枚投 DG。
  *
  * @param adjacent 两格是否相邻（注入 `areAdjacent`，引擎不重复实现几何）
  */
@@ -226,46 +235,45 @@ export function dividingLineObligations(input: {
 
   const obligations: DividingLineObligation[] = []
   for (const [group, members] of formations) {
-    const unitIds = members.map((unit) => unit.id)
-
     // 条件①：与**另一**装甲集群的单位同堆叠或相邻
     const other = input.units.filter(
       (unit) => unit.group !== null && unit.group !== group && unit.inMultiUnitFormation,
     )
-    const crossGroup = members.some((mine) =>
+    const crossGroupOffenders = members.filter((mine) =>
       other.some(
         (theirs) => input.sameHex(mine.hex, theirs.hex) || input.adjacent(mine.hex, theirs.hex),
       ),
     )
-    if (crossGroup) {
+    if (crossGroupOffenders.length > 0) {
       obligations.push({
         group,
-        unitIds,
+        unitIds: crossGroupOffenders.map((unit) => unit.id),
         reason: 'crossGroupStackedOrAdjacent',
         rule: '3.4a',
         detail:
           `${group === 'guderian' ? 'Guderian' : 'Hoth'} 编队与另一装甲集群的单位**同堆叠或相邻**` +
-          `（3.4a 条件①）⇒ 相位末须对该编队一个单位投 DG`,
+          `（3.4a 条件①）⇒ 相位末须对**命中条件的单位**投 DG`,
       })
       continue
     }
 
     // 条件②：位于分界线「错误一侧」且处于 Orsha 以东（19.xx 以西不受约束）
     const allowed: BoundarySide = group === 'guderian' ? 'south' : 'north'
-    const wrong = members.find((unit) => {
+    const wrongSide = members.filter((unit) => {
       if (!inDividingLineScope(unit.hex, input.scope)) return false
       const side = boundarySideOf(unit.hex, input.scope.boundary)
       return side !== 'onLine' && side !== allowed
     })
-    if (wrong !== undefined) {
+    if (wrongSide.length > 0) {
+      const wrong = wrongSide[0]!
       obligations.push({
         group,
-        unitIds,
+        unitIds: wrongSide.map((unit) => unit.id),
         reason: 'wrongSideOfLineEastOfOrsha',
         rule: '3.4a',
         detail:
           `${wrong.id} 位于分界线「错误一侧」（${group === 'guderian' ? 'Guderian 须在线上或南' : 'Hoth 须在线上或北'}）` +
-          `且处于 Orsha 以东 ⇒ 相位末须对该编队一个单位投 DG（3.4a 条件②；19.xx 以西不受约束）`,
+          `且处于 Orsha 以东 ⇒ 相位末须对**命中条件的单位**投 DG（3.4a 条件②；19.xx 以西不受约束）`,
       })
     }
   }

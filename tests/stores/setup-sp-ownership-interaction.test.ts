@@ -119,19 +119,27 @@ describe('3.4b：已预摆未指定的德军 SP（地图高亮 + 点选）', () 
   })
 })
 
-describe('3.4b：一键自动初设按 3.4a 分界线自动归属', () => {
-  it('自动初设落下的德军 SP 全部按分界线归属，无需逐个指定', () => {
+describe('3.4a/3.4b：一键自动初设的归属边界', () => {
+  it('分界线能定一侧的格自动归属；线上与 19.xx 以西留给玩家二选一', () => {
     const { setup, board } = boot()
     const boundary = board.panzerGroupBoundaryWithPath
     expect(boundary).not.toBeNull()
     const dumps = setup.spDumpsOf('axis')
     expect(dumps.length).toBeGreaterThan(0)
+    let autoAssigned = 0
     for (const dump of dumps) {
-      const expected = boundarySideOf(dump.hex, boundary!) === 'north' ? 'hoth' : 'guderian'
+      const side = boundarySideOf(dump.hex, boundary!)
+      // 3.4a：线上两侧都合规、19.xx 以西不受约束 ⇒ 分界线给不出唯一归属
+      if (side === 'onLine' || dump.hex.col < boundary!.west.col) {
+        expect(setup.spAssignments[dump.id]).toBeUndefined()
+        continue
+      }
+      const expected = side === 'north' ? 'hoth' : 'guderian'
       expect(setup.spAssignments[dump.id]).toBe(expected)
       expect(board.panzerGroupOfDump(dump.id)).toBe(expected)
+      autoAssigned += 1
     }
-    expect(setup.pendingSpOwnershipHexes).toHaveLength(0)
+    expect(setup.pendingSpOwnershipHexes).toHaveLength(dumps.length - autoAssigned)
   })
 })
 

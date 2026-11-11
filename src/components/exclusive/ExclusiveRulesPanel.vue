@@ -298,7 +298,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
       <p v-for="(item, index) in workbench.panzerGroupObligations" :key="index" class="warn">
         <BaseTag kind="danger">{{ item.rule }}</BaseTag>
         {{ groupLabel(item.group) }}：{{ item.detail }}
-        <!-- 3.4a：义务落盘 —— 编队内任选一个单位投 DG（仅在动作可写时出现） -->
+        <!-- 3.4a：义务落盘 —— 只列**命中条件**的单位（编队内未命中的单位不在此处） -->
         <span v-if="actsPanzer" class="row">
           <BaseButton
             v-for="unitId in item.unitIds"

@@ -250,21 +250,21 @@ describe('W7 C14：SP 归属划分（12.1d + Setup Note F + 3.4b）', () => {
     setup.runAutoSetup()
   })
 
-  it('C14：剧本 1 轴方 dump 由**一键自动初设按 3.4a 分界线**归属；清空一处即拒', () => {
+  it('C14：自动初设**只**归属分界线能定的一侧；剧本 1 的 dump 全在 19.xx 以西 ⇒ 留给玩家点名', () => {
     const axisDumps = setup.spDumpsOf('axis')
     expect(axisDumps.length).toBeGreaterThan(0)
-    // ★ 3.4b 裁定（用户 2026-11-11）：自动初设按分界线自动归属，不要求玩家逐个指定
-    expect(Object.keys(setup.spAssignments).length).toBe(axisDumps.length)
-    expect(setup.confirmSpOwnership()).toBe(true)
-    expect(setup.stepDone['spOwnership']).toBe(true)
-
-    // 清掉一个 ⇒ 归属缺失，核验被拒
-    setup.setSpAssignment(axisDumps[0]!.id, null)
+    // ★ 3.4a 裁定（用户 2026-11-11）：19.xx 以西不受分界线约束 ⇒ 分界线给不出唯一归属，
+    //   不强行归南侧 Guderian；自动初设把它们留在待归属清单里，由玩家二选一
+    expect(axisDumps.every((dump) => dump.hex.col < 19)).toBe(true)
+    expect(Object.keys(setup.spAssignments)).toHaveLength(0)
+    expect(setup.pendingSpOwnershipHexes).toHaveLength(axisDumps.length)
     expect(setup.confirmSpOwnership()).toBe(false)
     expect(setup.lastAction).toMatchObject({ ok: false, rule: '3.4b' })
-    // 本次指定补回即通过
-    setup.setSpAssignment(axisDumps[0]!.id, 'guderian')
+
+    // 逐个点名后通过
+    for (const dump of axisDumps) setup.setSpAssignment(dump.id, 'guderian')
     expect(setup.confirmSpOwnership()).toBe(true)
+    expect(setup.stepDone['spOwnership']).toBe(true)
   })
 
   it('B50：**先选剧本、后勾共识** ⇒ 迟到采纳同样要求逐个点名，不自动补默认', () => {

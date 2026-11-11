@@ -21707,7 +21707,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 3.4a：把分界线义务落到盘面 —— 给义务编队内的单位投 **DG**
    *
-   * 原文 3.4a：「…place a DG on **one unit** of the multi-unit formation」——义务本身由
+   * 原文 3.4a：「At the end of any phase, place a DG on **a unit from a multi-unit formation
+   * **if it is** …」——"it" 指**命中条件的那枚单位**（不是"编队内任选一枚"）；义务本身由
    * `dividingLineObligations`（`panzerGroupObligations`）给出；本函数只做**落盘**：
    * 校验该单位确实在义务名单里，投 DG 走既有的 `applyDgToUnit`（5.10 的唯一落盘点），
    * 记 3.4a 日志与结算事实。**不清空义务清单**（"该编队是否已结算"由界面与段末判，

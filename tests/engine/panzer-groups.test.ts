@@ -76,11 +76,13 @@ describe('3.4a：分界线的两侧判定', () => {
 })
 
 describe('3.4a：相位末的分界线义务', () => {
-  it('3.4a①：与另一装甲集群的单位**同堆叠或相邻** ⇒ 该编队一个单位 DG', () => {
+  it('3.4a①：与另一装甲集群的单位**同堆叠或相邻** ⇒ 只对**命中条件的单位** DG', () => {
     const outcome = dividingLineObligations({
       units: [
         unit('g1', 'guderian', SOUTH_OF_LINE),
-        unit('h1', 'hoth', SOUTH_OF_LINE), // 同堆叠
+        // 同编队、但在合规一侧且不与 Hoth 相邻 ⇒ 不是义务单位
+        unit('g2', 'guderian', { col: 30, row: 16 }),
+        unit('h1', 'hoth', SOUTH_OF_LINE), // 与 g1 同堆叠
       ],
       scope: SCOPE,
       date: '1941-07-12',
@@ -91,8 +93,9 @@ describe('3.4a：相位末的分界线义务', () => {
       ['guderian', 'crossGroupStackedOrAdjacent'],
       ['hoth', 'crossGroupStackedOrAdjacent'],
     ])
-    // DG 落在**该编队内一个单位**上 ⇒ 给出编队全部成员供选
+    // 原文「place a DG on a unit … if it is …」："it" 指命中条件的单位，不是编队内任选一枚
     expect(outcome[0]?.unitIds).toEqual(['g1'])
+    expect(outcome[1]?.unitIds).toEqual(['h1'])
     expect(outcome[0]?.rule).toBe('3.4a')
 
     const adjacentCase = dividingLineObligations({
@@ -105,16 +108,21 @@ describe('3.4a：相位末的分界线义务', () => {
     expect(adjacentCase.length).toBe(2)
   })
 
-  it('3.4a②：位于「错误一侧」且 Orsha 以东 ⇒ 该编队一个单位 DG', () => {
-    // Guderian 跑到分界线之北 ⇒ 错误一侧
+  it('3.4a②：位于「错误一侧」且 Orsha 以东 ⇒ 只对**站错一侧的那枚** DG', () => {
+    // Guderian 跑到分界线之北 ⇒ 错误一侧；同编队的另一枚在合规一侧
     const guderianWrong = dividingLineObligations({
-      units: [unit('g1', 'guderian', NORTH_OF_LINE)],
+      units: [
+        unit('g1', 'guderian', NORTH_OF_LINE),
+        unit('g2', 'guderian', SOUTH_OF_LINE),
+        unit('h1', 'hoth', { col: 55, row: 24 }), // Hoth 合规北侧，且远离 g1/g2
+      ],
       scope: SCOPE,
       date: '1941-07-12',
       adjacent: areAdjacent,
       sameHex,
     })
     expect(guderianWrong.map((item) => item.reason)).toEqual(['wrongSideOfLineEastOfOrsha'])
+    expect(guderianWrong[0]?.unitIds).toEqual(['g1'])
     expect(guderianWrong[0]?.detail).toContain('g1')
 
     // Hoth 跑到分界线之南 ⇒ 错误一侧
