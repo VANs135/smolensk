@@ -1652,6 +1652,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * `placeArrivalNow` 的校验，界面不自己算、不放宽。
    */
   function beginArrivalPlacePickNow(index: number, recordId?: string): boolean {
+    // 1.6a 先于放置：强制移除未执行时不允许开始落位
+    if (arrivalRemovalsPending.value) {
+      reinforcementError.value = { rule: '1.6a', reason: 'arrivalRemovalsFirst' }
+      return false
+    }
     const allowed = arrivalCandidates.value[index] ?? []
     if (allowed.length === 0) {
       const detail = arrivalPlacements.value[index]?.detail ?? '该条目没有可放的格'
@@ -18282,6 +18287,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const arrivalPlacedUnits = computed<Record<number, string[]>>(() =>
     arrivalPlacedKey.value === arrivalPlanKey.value ? arrivalPlacedUnitsRaw.value : {},
   )
+
+  /*
+   * 1.6a：**强制移除执行账本**（2026-11-11，第一段整改）
+   *
+   * 原文次序是"先 Remove、再放到达算子"；修前移除清单与放置同屏、无先后记录，
+   * 同一清单可被反复执行。这里按到达计划键记"本计划已执行过移除"，据此：
+   *   · 放置入口在移除未执行时拒绝（`arrivalRemovalsFirst`）；
+   *   · 移除块执行后显示"已执行"，不再重复触发。
+   */
+  const arrivalRemovalsKey = ref('')
+  const arrivalRemovalsPending = computed<boolean>(() => {
+    const plan = arrivalPlan.value
+    if (plan === null) return false
+    return plan.removals.length > 0 && arrivalRemovalsKey.value !== arrivalPlanKey.value
+  })
   /**
    * 13.6：**裁判手改落点**只在同一个计划键下有效（换日/换方/换计划即作废）
    *
@@ -18332,11 +18352,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 手牌式增援的「全部放完」判据（2026-11-09）
+   * 手牌式增援的「全部放完」判据
    *
-   * 用于自动关窗：当回合**至少有 1 枚可投放算子**、且这些算子都已投放时才算放完
-   * （SP / 非算子条目不占手牌；空手牌回合不关窗，免得吞掉同环节的强制事项）。
+   * 当回合**至少有 1 枚可投放算子**、且这些算子都已投放时才算放完
+   * （SP / 非算子条目不占手牌；空手牌回合不算放完）。
    * 不放宽任何校验——投放合法性仍由 `placeArrivalNow` 判。
+   *
+   * ★ 2026-11-11（v7.1 第一段）：本判据**不再驱动自动关窗**——
+   *   到达块改用「结束本段」按钮收束（见 `endArrivalSegmentNow`）。
    */
   const arrivalUnitsDone = computed<boolean>(() => {
     const plan = arrivalPlan.value
@@ -18353,6 +18376,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (unit.kind === 'sp' || unit.kind === 'unclassified') return true
       return arrivalPlaced.value[index] === true
     })
+  })
+
+  /**
+   * 手牌是否**仍有未投放的算子**（结束本段前"放弃上场"的确认判据）
+   *
+   * 与 `arrivalUnitsDone` 的区别：空手牌（只有 SP / 非算子条目）时为 false，
+   * 用于「结束本段前手牌非空要问一次」——空手牌不弹确认。
+   */
+  const arrivalHandPending = computed<boolean>(() => {
+    const plan = arrivalPlan.value
+    if (plan === null) return false
+    return plan.units.some(
+      (unit, index) =>
+        unit.kind !== 'sp' && unit.kind !== 'unclassified' && arrivalPlaced.value[index] !== true,
+    )
   })
 
   /**
@@ -18672,6 +18710,64 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const reinforcementAcks = ref<string[]>([])
 
+  /** 到达计划在本段被"放弃上场"收束（2.3 例外：本回合不上增援时可不做慢动员） */
+  const arrivalAbandoned = ref(false)
+
+  /** 到达段是否已由「结束本段」收束（驱动 `arrivalPending`，替代旧的自动关窗） */
+  const arrivalSegmentClosed = computed<boolean>(() =>
+    reinforcementAcks.value.includes(`${turn.value}|${activeSide.value}|reinforce:arrival`),
+  )
+
+  /** 记一笔"本环节已办"，键带回合与阵营，换方/换回合即失效 */
+  function ackReinforcementItem(itemId: string): void {
+    const key = `${turn.value}|${activeSide.value}|${itemId}`
+    if (!reinforcementAcks.value.includes(key)) {
+      reinforcementAcks.value = [...reinforcementAcks.value, key]
+    }
+  }
+
+  /**
+   * 第一段·到达：**结束本段**（唯一出口）
+   *
+   * v7.1 §2.2：到达块不再在"放完手牌"时自动关窗；改由本函数收束整段。
+   * - 1.6a 强制移除未执行 ⇒ 拒绝（先移除后放置）；
+   * - 手牌非空且未确认放弃 ⇒ 拒绝（由界面问一次"是否放弃上场"）；
+   * - 确认放弃 ⇒ 未放上场的增援作废（不结转），并允许本回合不做慢动员；
+   * - 苏方若还有按表 2-2 未解锁的师 ⇒ 留在本段等慢动员提交，否则推进到下一环节。
+   */
+  function endArrivalSegmentNow(abandonHand = false): boolean {
+    if (segmentStep.value?.id !== 'reinforcement.arrival') return false
+    if (arrivalRemovalsPending.value) {
+      reinforcementError.value = { rule: '1.6a', reason: 'arrivalRemovalsFirst' }
+      return false
+    }
+    if (!abandonHand && arrivalHandPending.value) {
+      reinforcementError.value = { rule: '13.6', reason: 'arrivalHandNotEmpty' }
+      return false
+    }
+    if (abandonHand) arrivalAbandoned.value = true
+    ackReinforcementItem('reinforce:arrival')
+    if (activeSide.value === 'soviet' && slowMobilizationOutstanding() && !arrivalAbandoned.value) {
+      return true
+    }
+    stepToNextSegmentStep()
+    return true
+  }
+
+  /**
+   * 第一段·慢动员：结束本段
+   *
+   * 2.4 + 表 2-2：当日仍有"配额 > 0 且仍有锁定师"的集团军 ⇒ 必须先提交
+   * （未用满不得提交）；2.3 的例外（本回合不上增援、到达已整段放弃）可跳过。
+   */
+  function endSlowMobilizationSegmentNow(): boolean {
+    if (segmentStep.value?.id !== 'reinforcement.arrival') return false
+    if (slowMobilizationOutstanding() && !arrivalAbandoned.value) return false
+    ackReinforcementItem('reinforce:slow')
+    stepToNextSegmentStep()
+    return true
+  }
+
   function acknowledgeReinforcementStepNow(itemId: string): boolean {
     if (itemId === 'reinforce:arrival' && arrivalPlan.value !== null && !arrivalAllPlaced.value)
       return false
@@ -18980,6 +19076,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       segmentStepIndex.value = 0
       actionRefusal.value = null
       reinforcementAcks.value = []
+      arrivalAbandoned.value = false
       /*
        * 9.1c：换回合 / 换段 / 换方 ⇒ 环节归零，账本也必须跟着清 —— 这条 watch 是"环节变了"
        * 的又一条路径（"交给对手"的切方不走 `resetSegmentTransient`），漏了它就会出现
@@ -20181,6 +20278,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       removeFromPlayEverywhere(unit)
       pushLog('info', `${unit.name} 按到达卡移出游戏（1.6a：立即生效，不论处境）`, '1.6a')
     }
+    // 记"本到达计划已执行过 1.6a"：未匹配的条目已在上面的警告里转手工，不再反复重跑
+    arrivalRemovalsKey.value = arrivalPlanKey.value
   }
 
   /**
@@ -20901,9 +21000,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 2.4：该集团军**本回合**已解锁的师数
    *
-   * 用户 2026-11-05 裁定①⑨：「不要管什么配额，按回合能动就行」——不维护已解锁计数账本、
-   * 不做累计运算。这里只从会话日志数**本回合**的成功解锁条目（与 `slowMobilizationUnlockedAt`
-   * 同一数据源，不新增存档字段）；未开局无日志 ⇒ 0（演练台不产生审计条目）。
+   * 现行口径（v7.1，2026-11-11）：慢动员按**累计解锁**——已解锁的师由算子自身 `locked`
+   * 旗标承载、跨回合保留，不另记累计账本。本函数只回答"今天已经用掉多少额度"
+   * （从会话日志数**本回合**的成功解锁条目，防同回合重复取配额；未开局无日志 ⇒ 0）。
+   *
+   * ★ 2026-11-05 旧裁定①⑨「不要管配额、按回合能动就行、不维护累计账本」**已作废**；
+   *   作废原因与依据见 `engine/rules/arrival.ts → slowMobilizationQuotaRemaining`。
    */
   function slowMobilizationUnlockedThisTurn(army: SlowMobilizationArmy): number {
     const armyOf = new Map<string, SlowMobilizationArmy | null>()
@@ -20927,8 +21029,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 2.4：本回合剩余可挑选数
    *
-   * 算式在引擎 `slowMobilizationQuotaRemaining`（表 2-2 **当日**配额 − 本回合已解锁，不累计）；
-   * 面板只用它置灰，提交时引擎仍会复核并给出规则号 2.4。
+   * 算式在引擎 `slowMobilizationQuotaRemaining`（表 2-2 **当日**配额 − 本回合已解锁）；
+   * 累计态由算子的 `locked` 旗标承载，跨回合保留。
+   * 面板用它置灰与算"今日应解锁数"，提交时引擎仍会复核并给出规则号 2.4。
    */
   function slowMobilizationQuotaOf(army: SlowMobilizationArmy): number {
     return slowMobilizationQuotaRemaining({
@@ -20939,19 +21042,44 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 2.4：今日**应解锁数** = min(当日剩余配额, 仍锁定师数)
+   *
+   * 「配额大于剩余则全部解锁」的界面口径：提交按钮只在选中数等于本值时可点。
+   */
+  function slowMobilizationRequiredOf(army: SlowMobilizationArmy): number {
+    return Math.min(slowMobilizationQuotaOf(army), slowMobilizationLockedOf(army).length)
+  }
+
+  /**
+   * 2.4：本段是否还有"按表 2-2 该解锁而没解锁"的师
+   *
+   * 用于第一段的收束：仍有剩余 ⇒ 必须先提交慢动员（2.3 例外见 `endSlowMobilizationSegmentNow`）。
+   */
+  function slowMobilizationOutstanding(): boolean {
+    if (activeSide.value !== 'soviet') return false
+    return (['30th', '28th', '24th'] as const).some((army) => slowMobilizationRequiredOf(army) > 0)
+  }
+
+  /**
    * B18：按表 2-2 解锁**玩家在本回合勾选**的若干师（专规 2.4）
    *
-   * 交互口径（用户 2026-11-05 裁定）：每回合由玩家从"仍锁定"的师中自选，
-   * 可挑数量＝表 2-2 **当回合**的数字（跨回合不累计，见裁定①⑨）；面板允许勾选/取消后再提交，
-   * 提交即整批校验（超当日配额、跨集团军、非师、已解锁一律整批拒绝并记 2.4）。
+   * 现行口径（v7.1，2026-11-11）：累计解锁（`locked` 旗标承载），当日应解锁
+   * `min(当日剩余配额, 仍锁定师数)`；整批提交要求选中数正好用满（`enforceFill`），
+   * 「配额大于剩余则全部解锁」。表 2-2 数字照原文。
    *
    * 修前这里取**全局**锁定算子、按数组前缀解锁（可跨集团军、玩家无法指定），
    * 且同日重复点击会重复拿到配额。现在：
    * - 归属只认到达卡分组落到算子上的 `slowMobilizationArmy`；
-   * - 本回合已解锁数从会话日志取（不新增存档字段、不做累计账本运算）；
+   * - 本回合已解锁数从会话日志取（不新增存档字段）；
    * - 只解锁玩家选中的那几枚，一次提交。
+   *
+   * ★ 2026-11-05 旧裁定①⑨「不要管配额、按回合能动就行、不维护累计账本」已作废
+   *   （作废原因与依据见 `engine/rules/arrival.ts → slowMobilizationQuotaRemaining`）。
    */
-  function unlockSlowMobilizationBatch(selectedIds: readonly string[]): boolean {
+  function unlockSlowMobilizationBatch(
+    selectedIds: readonly string[],
+    options?: { enforceFill?: boolean },
+  ): boolean {
     const ids = [...new Set(selectedIds)]
     if (ids.length === 0) return false
     const picked = ids.map((id) => units.value.find((item) => item.instanceId === id))
@@ -20975,10 +21103,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     /*
-     * ★ 口径（用户 2026-11-05 裁定①⑨）：**不做累计账本运算**。
-     *   本回合已解锁数只从会话日志（`slowMobilizationUnlock` 条目、`entry.turn === 当前回合`）取，
-     *   跨回合不累加、也不设"累计封顶"；因此 1.6a 永久移除造成的失真问题不再存在。
-     *   代价：未开局（无会话日志）的演练台无法识别"同回合已提交过"，重复提交会各拿一次当日表值。
+     * 累计解锁：已解锁的师由 locked 旗标承载；alreadyUnlockedThisTurn 只防同回合重复取配额。
+     * 整批提交默认用满（enforceFill）——配额大于剩余时，required 就是剩余数（全部解锁）。
      */
     const alreadyUnlockedThisTurn = slowMobilizationUnlockedThisTurn(army)
     const lockedDivisions = slowMobilizationLockedOf(army).length
@@ -20988,6 +21114,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         army,
         lockedDivisions,
         alreadyUnlockedThisTurn,
+        enforceFill: options?.enforceFill ?? true,
         selected: list.map((unit) => ({
           instanceId: unit.instanceId,
           locked: unit.locked,
@@ -21009,9 +21136,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** 2.4：单枚解锁（保留旧入口；内部走整批，配额/归属校验一致） */
+  /** 2.4：单枚解锁（裁判修正入口；不要求用满当日配额，其余校验与整批一致） */
   function unlockSlowMobilizationNow(instanceId: string): boolean {
-    return unlockSlowMobilizationBatch([instanceId])
+    return unlockSlowMobilizationBatch([instanceId], { enforceFill: false })
   }
 
   /**
@@ -24203,6 +24330,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     variableReplRolled,
     reinforcementAcks,
     acknowledgeReinforcementStepNow,
+    endArrivalSegmentNow,
+    endSlowMobilizationSegmentNow,
+    arrivalAbandoned,
+    arrivalSegmentClosed,
     // ⑦ 3.3c：撤离落盘与"可选单位清单"（待选状态从 session.log 反推，无存档字段）
     variableExitPendingSelection,
     variableExitSelectionOpen,
@@ -24241,6 +24372,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     arrivalPlacedUnits,
     arrivalAllPlaced,
     arrivalUnitsDone,
+    arrivalHandPending,
+    arrivalRemovalsPending,
     arrivalRecordOf,
     matchArrivalRecord,
     resolveArrivalFormation,
@@ -24292,6 +24425,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     slowMobilizationLockedOf,
     slowMobilizationVisible,
     slowMobilizationQuotaOf,
+    slowMobilizationRequiredOf,
+    slowMobilizationOutstanding,
     slowMobilizationUnlockedAt,
     // 专规 2.3c：方面军预备队（＋1.6c 特殊补员的可用期提示）
     frontalReservesToday,

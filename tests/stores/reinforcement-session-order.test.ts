@@ -67,7 +67,7 @@ const idsOf = (facts: SessionStepFacts): string[] =>
   planSessionSteps(facts).map((entry) => entry.id)
 
 describe('增援段：每个环节只出本环节的窗', () => {
-  it('到达环节：到达 → 补员表 → 补给表 → 慢动员，不混入重建/方面军', () => {
+  it('到达环节：到达 → 慢动员 → 补员表 → 补给表，不混入重建/方面军', () => {
     expect(
       idsOf(
         baseFacts({
@@ -83,9 +83,9 @@ describe('增援段：每个环节只出本环节的窗', () => {
       ),
     ).toEqual([
       'reinforce:arrival',
+      'reinforce:slow',
       'reinforce:replTable',
       'reinforce:supplyTable',
-      'reinforce:slow',
     ])
   })
 

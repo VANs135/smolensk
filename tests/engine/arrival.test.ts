@@ -427,6 +427,28 @@ describe('专规 2.4：Slow Mobilization 的解锁', () => {
     expect(wrongDay.ok).toBe(false)
   })
 
+  it('2.4：enforceFill ⇒ 未用满拒绝；配额大于剩余 ⇒ required 取剩余（剩余全部解锁）', () => {
+    const underFill = planSlowMobilization({
+      date: '1941-07-15',
+      army: '30th',
+      lockedDivisions: 4,
+      unlockRequested: 2,
+      enforceFill: true,
+    })
+    expect(underFill.ok).toBe(false)
+    if (!underFill.ok) expect(underFill.reason).toBe('unlockMustFillQuota:2!=3')
+
+    const all = planSlowMobilization({
+      date: '1941-07-15',
+      army: '30th',
+      lockedDivisions: 2,
+      unlockRequested: 2,
+      enforceFill: true,
+    })
+    expect(all.ok).toBe(true)
+    if (all.ok) expect(all.data).toMatchObject({ required: 2, unlocked: 2 })
+  })
+
   it('2.4：到达卡分组给集团军师打归属，HQ/独立单位不打（12 Jul 30th；15 Jul 28th+24th）', () => {
     const twelfth = planArrivals({ side: 'soviet', date: '1941-07-12' })
     if (!twelfth.ok) throw new Error(twelfth.reason)

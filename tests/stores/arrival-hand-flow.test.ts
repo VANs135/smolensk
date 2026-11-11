@@ -14,10 +14,11 @@ import {
 import type { ConsolePhase } from '@/stores'
 
 /**
- * 2026-11-09：手牌式增援（13.6）
+ * 2026-11-09：手牌式增援（13.6）；2026-11-11 v7.1 第一段整改
  *
  * 用户口径：会话框只排本回合到场算子图标 → 点算子出地图高亮 → 点格即放 →
- * 已放可点回手（可撤销重放）→ 全部放完自动关窗。落点仍只走既有候选与 `placeArrivalNow` 校验。
+ * 已放可点回手（可撤销重放）；**不再自动关窗**，改由「结束本段」收束
+ * （手牌非空要先确认放弃上场）。落点仍只走既有候选与 `placeArrivalNow` 校验。
  */
 const boot = () => {
   setActivePinia(createPinia())
@@ -43,13 +44,14 @@ function goToArrival(
   if (!store.setSegmentStepIndex(index)) throw new Error(`进入环节失败（${key}）`)
 }
 
-/** 找一条"有可投放算子、且有候选格"的到达条目（真实到达表，不造数） */
+/** 找一条"有可投放算子、有候选格、且无 1.6a 强制移除"的到达条目（真实到达表，不造数） */
 function seekPlaceable(store: ReturnType<typeof boot>['workbench']): number {
   for (let turn = 1; turn <= 40; turn += 1) {
     store.setTurn(turn)
     store.setPhase('reinforcement')
     const plan = store.arrivalPlan
-    if (plan === null) continue
+    // 1.6a 先于放置：有强制移除的回合要先执行移除，本用例只测放置/撤回本身
+    if (plan === null || plan.removals.length > 0) continue
     const index = plan.units.findIndex(
       (unit, at) =>
         unit.kind !== 'sp' &&
@@ -61,7 +63,7 @@ function seekPlaceable(store: ReturnType<typeof boot>['workbench']): number {
   throw new Error('到达表里没有可投放的算子')
 }
 
-/** 找"只有 1 条可投放算子、且无强制移除/待落 SP"的回合（用于验证放完自动关窗） */
+/** 找"只有 1 条可投放算子、且无强制移除/待落 SP"的回合（用于验证放完不关窗、由结束本段收束） */
 function seekSinglePlaceableTurn(store: ReturnType<typeof boot>['workbench']): number {
   for (let turn = 1; turn <= 40; turn += 1) {
     store.setTurn(turn)
@@ -173,7 +175,7 @@ describe('13.6：手牌式到达投放', () => {
     }
   })
 
-  it('该回合增援放完 ⇒ 会话窗口自动关闭', () => {
+  it('该回合增援放完 ⇒ 会话不自动关闭，由「结束本段」收束', () => {
     const { workbench, mapView } = boot()
     workbench.setActiveSide('axis')
     const index = seekSinglePlaceableTurn(workbench)
@@ -185,6 +187,61 @@ describe('13.6：手牌式到达投放', () => {
     expect(workbench.beginArrivalPlacePickNow(index)).toBe(true)
     expect(workbench.pickHexFor(workbench.arrivalCandidates[index]![0]!)).toBe(true)
     expect(workbench.arrivalUnitsDone).toBe(true)
-    expect(mapView.session).toBeNull()
+    // v7.1 第一段：放完不再自动关窗，会话保持可见
+    expect(mapView.session?.kind).toBe('reinforce')
+    expect(workbench.arrivalSegmentClosed).toBe(false)
+
+    // 手牌已空 ⇒ 结束本段不再要确认
+    expect(workbench.endArrivalSegmentNow(false)).toBe(true)
+    expect(workbench.arrivalSegmentClosed).toBe(true)
+  })
+
+  it('手牌非空时结束本段：先拒绝，确认放弃后才收束', () => {
+    const { workbench } = boot()
+    workbench.setActiveSide('axis')
+    seekPlaceable(workbench)
+    goToArrival(workbench, 'rein.arrival')
+    expect(workbench.arrivalHandPending).toBe(true)
+    expect(workbench.endArrivalSegmentNow(false)).toBe(false)
+    expect(workbench.arrivalSegmentClosed).toBe(false)
+    expect(workbench.reinforcementError?.reason).toBe('arrivalHandNotEmpty')
+
+    expect(workbench.endArrivalSegmentNow(true)).toBe(true)
+    expect(workbench.arrivalSegmentClosed).toBe(true)
+    expect(workbench.arrivalAbandoned).toBe(true)
+  })
+
+  it('1.6a 先于放置：移除未执行时拒绝落位，执行后才放行', () => {
+    for (let turn = 1; turn <= 40; turn += 1) {
+      const { workbench } = boot()
+      workbench.setActiveSide('axis')
+      workbench.setTurn(turn)
+      workbench.setPhase('reinforcement')
+      const plan = workbench.arrivalPlan
+      if (plan === null || plan.removals.length === 0) continue
+      const index = plan.units.findIndex(
+        (unit, at) =>
+          unit.kind !== 'sp' &&
+          unit.kind !== 'unclassified' &&
+          (workbench.arrivalCandidates[at]?.length ?? 0) > 0,
+      )
+      if (index < 0) continue
+      goToArrival(workbench, 'rein.arrival')
+      expect(workbench.arrivalRemovalsPending).toBe(true)
+      expect(workbench.beginArrivalPlacePickNow(index)).toBe(false)
+      expect(workbench.reinforcementError?.reason).toBe('arrivalRemovalsFirst')
+
+      workbench.applyArrivalRemovalsNow()
+      expect(workbench.arrivalRemovalsPending).toBe(false)
+      expect(workbench.beginArrivalPlacePickNow(index)).toBe(true)
+      workbench.cancelHexPick()
+      return
+    }
+    throw new Error('到达表里找不到"有强制移除且同时有可投放算子"的回合')
+  })
+
+  it('第一段手牌不显示枚数角标（只有批量条显示）', () => {
+    const source = readSource('../../src/components/reinforcement/ReinforcementPanel.vue')
+    expect(source).not.toContain('v-if="card.copies > 1"')
   })
 })

@@ -59,6 +59,7 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'beginAirReturnHexPickNow',
       'beginAirTargetHexPickNow',
       'beginAirTransferHexPickNow',
+      'beginArrivalPlacePickNow',
       'beginCityControlHexPickNow',
       'beginConstructionMarkerHexPickNow',
       'beginConvertTargetHexPickNow',
@@ -261,6 +262,15 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     kind: 'draft',
     why: '增援段单窗推进：只记"本步已完成"的窗口标记，不落盘、不改账本',
   },
+  // v7.1 第一段（2026-11-11）：到达/慢动员的「结束本段」——段内唯一出口，显隐由 segmentStep 控
+  endArrivalSegmentNow: {
+    kind: 'playerStep',
+    why: '第一段到达的收束按钮（v7.1 §2.2）：只记本段窗口标记并推进，不落盘；手牌/移除前置校验在函数内',
+  },
+  endSlowMobilizationSegmentNow: {
+    kind: 'playerStep',
+    why: '第一段慢动员的收束按钮（2.3 提交后进第二段）：只记本段窗口标记并推进，不落盘',
+  },
   // 3.4b：到达投放前的集群草稿；真正落账在 placeArrivalNow（有环节闸）
   setTransportSpGroupDraftNow: {
     kind: 'draft',
@@ -272,14 +282,14 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     why: '只改装卸窗的待提交输入（pointId / amount），不落盘；落账发生在 loadTransportPointNow / unloadTransportPointNow',
   },
 
-  // 专规 2.4：原文只写"按此表动员"，**未给时机** ⇒ 不加环节闸（用户 2026-11-05 裁定"按回合能动"）
+  // 专规 2.4：原文只写"按此表动员"，**未给时机** ⇒ 不加环节闸（v7.1：累计解锁，见下）
   slowMobilizationLockedOf: {
     kind: 'noTiming',
     why: '2.4 只读查询：列出某集团军仍锁定的师供面板勾选（`units.value.filter` 只是读盘面，落盘在 unlockSlowMobilizationBatch）',
   },
   unlockSlowMobilizationBatch: {
     kind: 'noTiming',
-    why: '专规 2.4 只写「mobilized per this table」，原文未给时机 ⇒ 不加闸；配额按表 2-2 当日值、无累计账本',
+    why: '专规 2.4 只写「mobilized per this table」，原文未给时机 ⇒ 不加闸；配额按表 2-2 当日值，累计态由算子 locked 旗标承载（v7.1 2026-11-11）',
   },
 
   // 专规 3.4a：原文「place a DG … at the end of any phase」——"相位末"的具体归属（§5 A/B）未裁定，

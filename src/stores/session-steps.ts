@@ -462,6 +462,15 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
       '为每一条到达条目选定落点并投放；Remove 条目立即执行。',
     )
   }
+  // 2.4：苏方慢动员解锁（到达确认放完后、第二段之前；原文只给日期，不设硬闸）
+  if (facts.slowMobilizationVisible && !acked.has('reinforce:slow')) {
+    push(
+      'reinforce:slow',
+      '慢动员解锁（2.4）',
+      '本回合有仍被锁定的师可以解锁。',
+      '勾选当日应解锁的师并提交解锁；配额大于剩余时剩余全部解锁。',
+    )
+  }
   // 3.3c：轴方 19 Aug 起的可变撤离（到达之后，14 Mtr 才在场）
   if (facts.variableExitPending && !acked.has('reinforce:variableExit')) {
     push(
@@ -505,15 +514,6 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
       '补给到达·补给表（1.6b / 2.1 / 3.1）',
       '本方的增援阶段要掷一次补给表，并把到货 SP 落账。',
       '选定可卸载城市格或图边补给源格后落账；轴方按 3.4b 分栏。',
-    )
-  }
-  // 2.4：苏方慢动员解锁（收到本日锁定师之后再解锁；原文只给日期，不设硬闸）
-  if (facts.slowMobilizationVisible && !acked.has('reinforce:slow')) {
-    push(
-      'reinforce:slow',
-      '慢动员解锁（2.4）',
-      '本回合有仍被锁定的师可以解锁。',
-      '勾选不超过配额的师并提交解锁。',
     )
   }
   // 13.5a：重建

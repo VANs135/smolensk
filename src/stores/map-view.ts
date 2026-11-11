@@ -2524,20 +2524,12 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     const stepId = workbench.segmentStep?.id ?? ''
     /*
-     * 2026-11-09：手牌式到达放完后**自动关窗**（用户口径）。
-     * 只关"已经没有可放的到达算子、且没有强制移除/待落 SP"的到货环节；
-     * 其它强制项（重建、强制移除、供给到货）仍照旧出现在会话框，不被这次改造吞掉。
+     * 2026-11-11（v7.1 第一段）：**取消到达块的自动关窗**。
+     * 修前"手牌放完 ⇒ 整个 reinforce 会话返回 null"，玩家看不到收束按钮、也无法在本段内撤回；
+     * 现在到达块由「结束本段」按钮收束（`workbench.endArrivalSegmentNow`），
+     * 会话在到达段未收束前始终可见。
      */
-    const arrivalHandDone =
-      stepId === 'reinforcement.arrival' &&
-      workbench.arrivalUnitsDone &&
-      (workbench.arrivalPlan?.removals.length ?? 0) === 0 &&
-      workbench.supplyArrivalSp === 0
-    if (
-      stepId.startsWith('reinforcement.') &&
-      !arrivalHandDone &&
-      collapsedSessionKey.value !== currentStepKey.value
-    ) {
+    if (stepId.startsWith('reinforcement.') && collapsedSessionKey.value !== currentStepKey.value) {
       /*
        * ★ 条 5（R1）：增援段**全程只有一个会话框**，内容按子环节渐变
        *   （① 当回合到达：图阵列、点图落位、新增"到达已放"账本 →
@@ -2713,7 +2705,7 @@ export const useMapViewStore = defineStore('mapView', () => {
               acked: workbench.reinforcementAcks
                 .filter((key) => key.startsWith(`${workbench.turn}|${workbench.activeSide}|`))
                 .map((key) => key.slice(`${workbench.turn}|${workbench.activeSide}|`.length)),
-              arrivalPending: workbench.arrivalPlan !== null && !workbench.arrivalAllPlaced,
+              arrivalPending: workbench.arrivalPlan !== null && !workbench.arrivalSegmentClosed,
               randomEventPending:
                 workbench.activeSide === 'axis' && isInRandomEventPeriod(workbench.date),
               // 3.6：只有掷出补给列车且还没落 2 SP 时才排这一窗（未掷出＝没有待办）

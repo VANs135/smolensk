@@ -8,20 +8,25 @@ import { toConsoleUnit, unitChoices, useGameSessionStore, useWorkbenchStore } fr
 /**
  * 专规 2.4 慢动员的 **store 端到端**（真实到达卡、真实单位库）
  *
- * 核对（用户 2026-11-05 裁定①⑨「不要管什么配额，按回合能动就行」）：
+ * 现行口径（v7.1，2026-11-11）：
  * - 30/28/24 集团军的师**到场即锁定**，归属来自到达卡分组（单位库没有集团军字段）；
- * - 每回合由玩家在**仍锁定**的师中自选，可挑数＝表 2-2 **当日**数字；
- * - **不维护累计账本**：同回合已解锁数只从会话日志去重，跨回合不累计、不封顶；
- * - 一次提交=整批校验：超当日配额 / 跨集团军 / 无归属一律拒绝，规则号 2.4；
+ * - **累计解锁**：已解锁的师由算子 `locked` 旗标承载、跨回合保留；表 2-2 的日期数字是
+ *   "当日再解锁几枚"，当日应解锁数 = min(当日剩余配额, 仍锁定师数)；
+ * - 用户原话：「7 个师一回合动 3 个、二回合动剩下 4 个、最后日期全部可动；
+ *   配额大于剩余则全部解锁」；
+ * - 一次提交=整批校验：未用满 / 超当日配额 / 跨集团军 / 无归属一律拒绝，规则号 2.4；
  * - 同日重复提交不会重复拿到配额；换方往返、读档后当日去重不重置（日志随档保存）；
  * - 未达"与指挥部同一到达卡分组"判据的师不进入专规集合。
+ *
+ * ★ 2026-11-05 旧裁定①⑨「不要管配额、按回合能动就行、不维护累计账本」已作废
+ *   （作废原因与依据见 `engine/rules/arrival.ts → slowMobilizationQuotaRemaining`）。
  *
  * 用户给的验收例子（30th 共 5 师）：7.12 选 2 ⇒ 2 可动、3 仍锁；7.15 其余 3 一并可动。
  */
 
 const newStore = () => {
   setActivePinia(createPinia())
-  // 2.4 的"本回合已解锁"从会话日志推导（裁定①⑨：不加存档字段）⇒ 测试需要真实会话
+  // 2.4 的"本回合已解锁"从会话日志推导（不新增存档字段）⇒ 测试需要真实会话
   useGameSessionStore().startGame()
   return useWorkbenchStore()
 }
@@ -98,6 +103,7 @@ describe('专规 2.4：慢动员（store 流程）', () => {
     })
     expect(store.slowMobilizationLockedOf('30th').length).toBe(5)
     expect(store.slowMobilizationQuotaOf('30th')).toBe(2)
+    expect(store.slowMobilizationRequiredOf('30th')).toBe(2)
 
     const ids = store.slowMobilizationLockedOf('30th').map((unit) => unit.instanceId)
     // 超配额整批 3 枚 ⇒ 整批拒绝，规则号 2.4，账本不动
@@ -112,9 +118,11 @@ describe('专规 2.4：慢动员（store 流程）', () => {
     expect(store.unlockSlowMobilizationBatch(ids.slice(2, 4))).toBe(false)
     expect(store.slowMobilizationLockedOf('30th').length).toBe(3)
 
-    // 7.15：表 2-2 当日 3（裁定①⑨：不再做"累计 5 − 已解锁 2"的账本差）
+    // 7.15：表 2-2 当日 3；累计态由算子 locked 旗标承载，剩余 3 ⇒ 全部解锁
     store.setTurn(3)
     expect(store.slowMobilizationQuotaOf('30th')).toBe(3)
+    // 配额 3 > 剩余 3？相等；剩余不足时 required 取剩余（"全部解锁"由 min 保证）
+    expect(store.slowMobilizationRequiredOf('30th')).toBe(3)
     const rest = store.slowMobilizationLockedOf('30th').map((unit) => unit.instanceId)
     expect(rest.length).toBe(3)
     expect(store.unlockSlowMobilizationBatch(rest)).toBe(true)
@@ -184,7 +192,7 @@ describe('专规 2.4：慢动员（store 流程）', () => {
     store.setActiveSide('soviet')
     expect(store.unlockSlowMobilizationNow(ids[2]!)).toBe(false)
 
-    // 15 Jul：当日表值 3（本回合已解锁 0；不再做累计差）
+    // 15 Jul：当日表值 3，剩余 4 ⇒ 应解锁 3（配额小于剩余时用满配额）
     store.setTurn(3)
     expect(store.unlockSlowMobilizationNow(ids[2]!)).toBe(true)
     expect(store.unlockSlowMobilizationNow(ids[3]!)).toBe(true)

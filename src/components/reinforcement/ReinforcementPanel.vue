@@ -40,8 +40,12 @@ const showsReferee = useRefereeTools()
 /**
  * 专规 2.4：慢动员选择面板的**界面暂存**
  *
- * 用户 2026-11-05 裁定的交互＝每回合由玩家在"仍锁定"的师中自选，
- * 可挑数＝当回合配额；勾选/取消都只在本地，点"提交"才写入账本（提交后清空，可再开新一批）。
+ * v7.1（2026-11-11）现行口径：累计解锁（`locked` 旗标跨回合保留）；玩家在"仍锁定"的
+ * 师中自选，当日应解锁数 = min(当日剩余配额, 仍锁定数)，**未用满不得提交**。
+ * 勾选/取消只在本地，点"提交"才写入账本（提交后清空，可再开下一批）。
+ *
+ * ★ 2026-11-05 旧裁定①⑨「不要管配额、按回合能动就行」已作废
+ *   （作废原因与依据见 `engine/rules/arrival.ts → slowMobilizationQuotaRemaining`）。
  */
 const slowMobilizationArmy = ref<'30th' | '28th' | '24th'>('30th')
 const slowMobilizationPick = ref<string[]>([])
@@ -77,6 +81,14 @@ const slowMobilizationQuota = computed(() =>
   workbench.slowMobilizationQuotaOf(slowMobilizationArmy.value),
 )
 
+/** 今日应解锁数 = min(当日剩余配额, 仍锁定师数)；配额大于剩余即"剩余全部解锁" */
+const slowMobilizationRequired = computed(() =>
+  workbench.slowMobilizationRequiredOf(slowMobilizationArmy.value),
+)
+
+/** 本段收束被拒时的一句话（2.4 未用满） */
+const slowFinishError = ref('')
+
 const slowMobilizationLimitReached = computed(
   () => slowMobilizationPick.value.length >= slowMobilizationQuota.value,
 )
@@ -92,9 +104,21 @@ function toggleSlowMobilizationPick(instanceId: string): void {
 }
 
 function submitSlowMobilizationPick(): void {
-  if (slowMobilizationPick.value.length === 0) return
-  if (workbench.unlockSlowMobilizationBatch(slowMobilizationPick.value))
-    slowMobilizationPick.value = []
+  slowFinishError.value = ''
+  // 2.4：未用满不得提交（当日应解锁数由引擎给出）
+  if (slowMobilizationPick.value.length !== slowMobilizationRequired.value) return
+  if (!workbench.unlockSlowMobilizationBatch(slowMobilizationPick.value)) return
+  slowMobilizationPick.value = []
+  // 2.3 口径：当日已无未用满配额 ⇒ 提交即收束第一段
+  if (!workbench.slowMobilizationOutstanding()) workbench.endSlowMobilizationSegmentNow()
+}
+
+/** 第一段·慢动员结束（当日仍有未用满配额时拒绝） */
+function finishSlowSegment(): void {
+  slowFinishError.value = ''
+  if (!workbench.endSlowMobilizationSegmentNow()) {
+    slowFinishError.value = '按表 2-2 还有未用满的当日配额：请先提交本回合解锁'
+  }
 }
 
 /** 换集团军即清空未提交的勾选（避免把 A 军的勾选提交到 B 军） */
@@ -328,7 +352,6 @@ interface ArrivalHandCard {
   index: number
   raw: string
   image: string | null
-  copies: number
   aircraft: boolean
   noCandidates: boolean
   detail: string
@@ -344,8 +367,6 @@ function arrivalCardOf(index: number): ArrivalHandCard | null {
     index,
     raw: unit.raw,
     image: arrivalImageUrl(index),
-    copies:
-      unit.formationComponents.length > 0 ? unit.formationComponents.length : arrivalCopiesOf(unit),
     aircraft: unit.kind === 'aircraft',
     noCandidates: candidates === 0,
     detail: workbench.arrivalPlacements[index]?.detail ?? '本条目没有可用的入场格',
@@ -401,6 +422,8 @@ function arrivalErrorText(reason: string): string {
     return '这一条现在没有合法落点（候选为空），请先检查入场格/基地'
   if (code.startsWith('arrivalHex')) return '这一格现在不能落：换一处高亮格试试'
   if (code === 'arrivalWithdrawNoLedger') return '这一枚缺少投放记录，暂时不能回手'
+  if (code === 'arrivalRemovalsFirst') return '先执行 1.6a 强制移除，再放置到达算子'
+  if (code === 'arrivalHandNotEmpty') return '手牌还没放完：要结束本段请先确认放弃上场'
   return '这一枚现在放不下，换一条或换一处入场格试试'
 }
 
@@ -423,6 +446,41 @@ function pickArrival(index: number): void {
 function withdrawArrival(index: number): void {
   handError.value = ''
   if (!workbench.withdrawArrivalNow(index)) handError.value = '这一枚当前不能回手'
+}
+
+/**
+ * 第一段·结束本段（v7.1 §2.2）
+ *
+ * 到达块不再"放完自动关窗"；由本按钮收束整段。
+ * 手牌非空 ⇒ 先问一次是否放弃上场（放弃＝未放上场的增援作废、不结转）。
+ */
+const arrivalFinishConfirm = ref(false)
+const arrivalFinishError = ref('')
+
+function finishArrivalSegment(): void {
+  handError.value = ''
+  arrivalFinishError.value = ''
+  if (workbench.arrivalHandPending) {
+    arrivalFinishConfirm.value = true
+    return
+  }
+  if (!workbench.endArrivalSegmentNow(false)) {
+    arrivalFinishError.value = workbench.arrivalRemovalsPending
+      ? '先执行 1.6a 强制移除，再结束本段'
+      : '当前不在到达段，无法结束本段'
+  }
+}
+
+function confirmAbandonArrival(): void {
+  handError.value = ''
+  arrivalFinishError.value = ''
+  if (workbench.endArrivalSegmentNow(true)) {
+    arrivalFinishConfirm.value = false
+    return
+  }
+  arrivalFinishError.value = workbench.arrivalRemovalsPending
+    ? '先执行 1.6a 强制移除，再结束本段'
+    : '当前不在到达段，无法结束本段'
 }
 
 // 地图落点选择结束（投放成功或取消）⇒ 收掉手牌描边
@@ -617,6 +675,28 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
     </SessionStep>
 
     <SessionStep v-if="showsActions" item="reinforce:arrival">
+      <!-- ── 1.6a：强制移除先于放置（原文次序）────────────────────────── -->
+      <div v-if="(plan?.removals.length ?? 0) > 0" class="row" data-testid="arrival-removals">
+        <span class="num">强制移除（1.6a，先执行）</span>
+        <ul class="arrival-removals__list">
+          <li v-for="(removal, at) in plan?.removals ?? []" :key="`rm-${at}`" class="num">
+            {{ removal.raw }}
+          </li>
+        </ul>
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :disabled="!workbench.arrivalRemovalsPending"
+          data-testid="arrival-removals-apply"
+          @click="workbench.applyArrivalRemovalsNow()"
+        >
+          {{ workbench.arrivalRemovalsPending ? '执行移除' : '已执行' }}
+        </BaseButton>
+      </div>
+      <p v-if="workbench.arrivalRemovalsPending" class="muted" data-testid="arrival-removals-first">
+        先执行 1.6a 强制移除，再放置到达算子。
+      </p>
+
       <!-- ── 手牌式到达投放（13.6）：只列本回合算子图标；点算子 → 点图落位；已放可点回手 ── -->
       <div class="arrival-hand" data-testid="arrival-hand">
         <button
@@ -625,7 +705,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           type="button"
           class="arrival-hand__card"
           :class="{ 'arrival-hand__card--active': activeArrivalIndex === card.index }"
-          :disabled="card.noCandidates"
+          :disabled="card.noCandidates || workbench.arrivalRemovalsPending"
           :title="
             card.noCandidates
               ? `${card.raw}：${card.detail}`
@@ -636,7 +716,6 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         >
           <img v-if="card.image !== null" :src="card.image" alt="" class="arrival-hand__img" />
           <span v-else class="arrival-hand__fallback" :title="card.raw">?</span>
-          <span v-if="card.copies > 1" class="arrival-hand__badge">{{ card.copies }}</span>
           <span v-if="card.aircraft" class="arrival-hand__badge arrival-hand__badge--air">✈</span>
         </button>
         <button
@@ -682,16 +761,48 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         {{ handError }}
       </p>
 
+      <!-- ── 第一段唯一出口：结束本段（收束整段，不再自动关窗）────────── -->
+      <div class="row" data-testid="arrival-finish-row">
+        <BaseButton
+          v-if="!arrivalFinishConfirm"
+          variant="primary"
+          size="sm"
+          :disabled="workbench.arrivalRemovalsPending"
+          data-testid="arrival-finish"
+          @click="finishArrivalSegment()"
+        >
+          结束本段
+        </BaseButton>
+        <template v-else>
+          <span class="warn" data-testid="arrival-finish-abandon-hint">
+            手牌还有 {{ arrivalHandCards.length }} 枚未上场：结束即视为放弃上场（作废、不结转）。
+          </span>
+          <BaseButton
+            variant="primary"
+            size="sm"
+            data-testid="arrival-finish-abandon"
+            @click="confirmAbandonArrival()"
+          >
+            放弃并结束
+          </BaseButton>
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            data-testid="arrival-finish-cancel"
+            @click="arrivalFinishConfirm = false"
+          >
+            继续放置
+          </BaseButton>
+        </template>
+      </div>
+      <p v-if="arrivalFinishError !== ''" class="warn" data-testid="arrival-finish-error">
+        {{ arrivalFinishError }}
+      </p>
+
       <p v-if="plan !== null && plan.shutdowns.length > 0" class="warn">
         <BaseTag kind="danger">2.1a</BaseTag>
         当日生效的补给源关闭：{{ plan.shutdowns.join('、') }}
       </p>
-      <div v-if="(plan?.removals.length ?? 0) > 0" class="row">
-        <span class="num">强制移除 {{ plan?.removals.length }} 条</span>
-        <BaseButton variant="secondary" size="sm" @click="workbench.applyArrivalRemovalsNow()">
-          执行
-        </BaseButton>
-      </div>
 
       <!-- 说明、条款、原卡面、库中型号、卡面记账：一律收进 ? -->
       <details class="arrival-hand__more" data-testid="arrival-hand-more">
@@ -1179,7 +1290,8 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       v-if="showsActions && workbench.slowMobilizationVisible"
       item="reinforce:slow"
       ackable
-      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:slow')"
+      ack-label="结束本段"
+      @ack="finishSlowSegment()"
     >
       <hr />
       <div class="muted">
@@ -1207,6 +1319,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         <BaseButton
           variant="ghost"
           size="sm"
+          title="裁判修正入口：正常解锁请走下方按表 2-2 的提交流程"
           @click="workbench.setUnitLockedNow(breakdownParentId, false)"
         >
           解除锁定
@@ -1222,7 +1335,8 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
             <option value="24th">24th</option>
           </select>
         </label>
-        <BaseTag>当日可挑 {{ slowMobilizationQuota }}</BaseTag>
+        <BaseTag>当日配额 {{ slowMobilizationQuota }}</BaseTag>
+        <BaseTag>今日应解锁 {{ slowMobilizationRequired }}</BaseTag>
         <BaseTag>已勾 {{ slowMobilizationPick.length }}</BaseTag>
       </div>
       <div class="row">
@@ -1250,12 +1364,18 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         <BaseButton
           variant="secondary"
           size="sm"
-          :disabled="slowMobilizationPick.length === 0"
+          :disabled="
+            slowMobilizationRequired === 0 ||
+            slowMobilizationPick.length !== slowMobilizationRequired
+          "
           @click="submitSlowMobilizationPick"
         >
           提交本回合解锁（2.4）
         </BaseButton>
       </div>
+      <p v-if="slowFinishError !== ''" class="warn" data-testid="slow-finish-error">
+        {{ slowFinishError }}
+      </p>
       <p v-if="slowMobilizationUnlocked.length > 0" class="muted">
         已解锁：<span v-for="item in slowMobilizationUnlocked" :key="item.instanceId">
           {{ item.name }}（{{

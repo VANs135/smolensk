@@ -1017,14 +1017,25 @@ export interface SlowMobilizationSelectionFact {
  * 专规 2.4：本回合仍可解锁的师数
  *
  * ＝表 2-2 **当日**配额 − 本回合已解锁数。
- * 用户 2026-11-05 裁定①⑨：「不要管什么配额，按回合能动就行」⇒ **不做累计账本运算**
- * （不再用"截至当日累计 − 此前已解锁"的封顶式），每回合只看表 2-2 当日的数字；
- * 本回合已解锁多少由调用方从会话日志取（不新增存档字段）。
+ *
+ * ## 现行口径（v7.1，2026-11-11）
+ *
+ * 慢动员按**累计解锁**：每个日期的配额是"当日再解锁几枚"，已解锁的师由算子自身
+ * `locked` 旗标承载（跨回合保留，不另记累计账本）。用户原话：
+ * 「7 个师一回合动 3 个、二回合动剩下 4 个、最后日期全部可动；配额大于剩余则全部解锁」。
+ * 故本函数只回答"今天还剩多少额度"；"今天必须解锁几枚"由 `planSlowMobilization`
+ * 的 `required = min(当日剩余配额, 仍锁定数)` 给出（配额大于剩余 ⇒ 剩余全部解锁）。
+ *
+ * ## 已作废
+ *
+ * 2026-11-05 旧裁定①⑨「不要管什么配额、按回合能动就行、不维护累计账本」**已作废**。
+ * 作废原因：该口径把同一天重复提交当成各拿一次配额，且不能表达"累计解锁到最后一日期全部可动"；
+ * 依据：v7.1 设计文档 §2.3 与用户 2026-11-11 的上述复述。
  */
 export function slowMobilizationQuotaRemaining(input: {
   date: string
   army: SlowMobilizationArmy
-  /** 本回合该集团军**已经**解锁的师数（跨回合不累计） */
+  /** 本回合该集团军**已经**解锁的师数（防同回合重复取配额；累计态由算子 locked 旗标承载） */
   alreadyUnlockedThisTurn: number
 }): number {
   const quota = slowMobilizationUnlocks(input.date)
@@ -1038,13 +1049,27 @@ export function slowMobilizationQuotaRemaining(input: {
  * 专规 2.4：Slow Mobilization 的锁定与解锁口径
  *
  * 「被锁的师**不能移动**（也不能拆出 breakdown）；解锁按表分批（玩家自选具体哪个师）」
- * ⇒ 解锁时由玩家在**被锁的师**中自选至多 `unlockDivisions` 个；本函数给出数量与合法性。
+ * ⇒ 解锁时由玩家在**被锁的师**中自选；本函数给出数量、合法性，以及**今日应解锁数**。
+ *
+ * ## 现行口径（v7.1，2026-11-11）
+ *
+ * - 累计解锁：已解锁的师由算子 `locked` 旗标承载，跨回合保留；
+ * - 当日的 `required = min(当日剩余配额, 仍锁定师数)`——**配额大于剩余则剩余全部解锁**；
+ * - 表 2-2 数字照原文（12 Jul 30th 2；15 Jul 30th 3 / 28th 3 / 24th 3；
+ *   19 Jul 28th 5 / 24th 5；22 Jul 24th 3）；
+ * - `enforceFill`：界面提交整批时置 true ⇒ 选中数必须等于 `required`（未用满不得提交）。
+ *   裁判单枚修正（`unlockSlowMobilizationNow`）不传，保留"逐枚解锁"的修正入口。
+ *
+ * ## 已作废
+ *
+ * 2026-11-05 旧裁定①⑨「不要管配额、按回合能动就行、不维护累计账本」已作废
+ * （原因与依据见 `slowMobilizationQuotaRemaining` 的文档）。
  *
  * 修前 store 把**全局**锁定算子按数组前缀解锁（忽略集团军、也无法由玩家指定），
  * 且同日重复调用可重复拿到配额。故这里补上：
  * - `selected`：玩家实际选中的师，逐个校验「仍被锁 / 是师 / 属于本集团军」；
  * - `alreadyUnlockedThisTurn`：该集团军**本回合**已解锁的师数（由会话日志取，不新增存档字段）；
- *   当日可用量 = `当日配额 − 本回合已解锁数` ⇒ 同回合重试不会重复获得配额，跨回合不累计。
+ *   当日可用量 = `当日配额 − 本回合已解锁数` ⇒ 同回合重试不会重复获得配额。
  *
  * 不传 `selected` 时保留旧的"只报数量"路径（既有调用与测试不变）。
  */
@@ -1059,9 +1084,13 @@ export function planSlowMobilization(input: {
   selected?: readonly SlowMobilizationSelectionFact[]
   /** 该集团军**本回合**已解锁的师数（防止同回合重复取配额） */
   alreadyUnlockedThisTurn?: number
+  /** 整批提交时置 true：选中数必须等于 `required`（未用满不得提交） */
+  enforceFill?: boolean
 }): RuleOutcome<{
   unlocked: number
   remainingLocked: number
+  /** 今日应解锁数 = min(当日剩余配额, 仍锁定数)；配额大于剩余时即"剩余全部解锁" */
+  required: number
   rule: string
   detail: string
   selectedIds: readonly string[]
@@ -1071,7 +1100,7 @@ export function planSlowMobilization(input: {
     .reduce((sum, row) => sum + row.unlockDivisions, 0)
   if (quota === 0) return fail('2.4', `noUnlockQuota:${input.date}:${input.army}`)
 
-  // ② 裁定：每回合只看表 2-2 当日的数字（不累计、不封顶）
+  // 现行口径：当日配额是"今天再解锁几枚"；累计态由算子 locked 旗标承载
   const alreadyUnlockedThisTurn = Math.max(0, Math.trunc(input.alreadyUnlockedThisTurn ?? 0))
   const quotaToday = slowMobilizationQuotaRemaining({
     date: input.date,
@@ -1085,6 +1114,11 @@ export function planSlowMobilization(input: {
     )
 
   const lockedDivisions = Math.max(0, Math.trunc(input.lockedDivisions ?? 0))
+  /*
+   * 今日应解锁数：配额大于剩余 ⇒ 剩余全部解锁（用户口径）。
+   * 仍锁定为 0 时 required 也为 0（没东西可解，不算违规）。
+   */
+  const required = Math.min(quotaToday, lockedDivisions)
   const selected = input.selected
   let requested = input.unlockRequested ?? 0
   if (selected !== undefined) {
@@ -1102,6 +1136,8 @@ export function planSlowMobilization(input: {
         return fail('2.4', `selectedWrongArmy:${fact.instanceId}:${fact.army}!=${input.army}`)
     }
   }
+  if (input.enforceFill === true && requested !== required)
+    return fail('2.4', `unlockMustFillQuota:${requested}!=${required}`)
   if (requested > quotaToday) return fail('2.4', `unlockExceedsQuota:${requested}>${quotaToday}`)
   if (requested > lockedDivisions && lockedDivisions > 0)
     return fail('2.4', `unlockExceedsLocked:${requested}>${lockedDivisions}`)
@@ -1111,11 +1147,12 @@ export function planSlowMobilization(input: {
   return succeed('2.4', {
     unlocked,
     remainingLocked,
+    required,
     rule: '2.4',
     detail:
       `第 ${input.army} 集团军于 ${input.date} 解锁 ${unlocked} 个师` +
       (selected === undefined ? '' : `（${selected.map((fact) => fact.instanceId).join('、')}）`) +
-      `（当日配额 ${quota}，本回合已解锁 ${alreadyUnlockedThisTurn}；` +
+      `（当日配额 ${quota}，本回合已解锁 ${alreadyUnlockedThisTurn}，今日应解锁 ${required}；` +
       `剩余锁定 ${remainingLocked} 个，2.4）`,
     selectedIds: selected?.map((fact) => fact.instanceId) ?? [],
   })
