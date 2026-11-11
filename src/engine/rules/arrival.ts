@@ -569,6 +569,30 @@ export interface ArrivalPlacementResult {
 }
 
 /**
+ * 13.6b：图边补给源格的候选（被敌方单位阻挡的源格 ⇒ 改投最近的未阻挡边缘格）
+ *
+ * 2.1 / 3.1 对补员的落点只写「any map-edge supply source hexes」；13.6b 给了唯一的退路：
+ * 「If an entry hex at the map edge is blocked by enemy units, reinforcements can be placed
+ *  in the nearest unblocked map-edge hex.」补员的到货格就是这些边缘源格，故同源奉行。
+ * **HQ 分支不受此影响**（HQ 格有己方 HQ，不会被敌单位占据）。
+ */
+function edgeSourceCandidates(facts: ArrivalPlacementFacts): readonly HexRef[] {
+  const sources = facts.edgeSupplySourceHexes()
+  const free = sources.filter((hex) => !facts.isBlocked(hex))
+  const fallbacks = sources
+    .filter((hex) => facts.isBlocked(hex))
+    .map((hex) => facts.nearestOpenEdgeHex(hex))
+    .filter((hex): hex is HexRef => hex !== null)
+  const seen = new Set<string>()
+  return [...free, ...fallbacks].filter((hex) => {
+    const key = `${String(hex.col)},${String(hex.row)}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/**
  * 13.6：**该落点声明允许哪些格**（卡面口径 ⇒ 候选；与 `resolveArrivalPlacement` 同源）
  *
  * ★ 用户 2026-10-25 实测 BUG①：「放增援的时候可以任意放，没按剧本要求做好限制」——
@@ -597,7 +621,7 @@ export function arrivalPlacementCandidates(
     case 'hqOrEdgeSource': {
       const hqs = facts.directDrawHqHexes()
       // 2.1 / 3.1：有"可直接拖取"的 HQ 就只落在那些 HQ；没有才退到边缘补给源格
-      return hqs.length > 0 ? hqs : facts.edgeSupplySourceHexes()
+      return hqs.length > 0 ? hqs : edgeSourceCandidates(facts)
     }
 
     case 'geographic':
@@ -702,14 +726,19 @@ export function resolveArrivalPlacement(
           rule: '2.1',
           detail: `能直接抽取追溯补给的 HQ（共 ${hqs.length} 处候选；2.1 / 3.1）`,
         }
-      const edges = facts.edgeSupplySourceHexes()
-      if (edges.length > 0)
+      const edges = edgeSourceCandidates(facts)
+      if (edges.length > 0) {
+        const blocked = facts.edgeSupplySourceHexes().filter((hex) => facts.isBlocked(hex)).length
         return {
           status: 'placed',
           hex: edges[0]!,
           rule: '2.1',
-          detail: `地图边缘补给源格（无可用 HQ ⇒ 退到边缘源格；共 ${edges.length} 处候选）`,
+          detail:
+            blocked > 0
+              ? `地图边缘补给源格（无可用 HQ；${String(blocked)} 处被敌阻挡 ⇒ 改投最近的未阻挡边缘格；共 ${String(edges.length)} 处候选）`
+              : `地图边缘补给源格（无可用 HQ ⇒ 退到边缘源格；共 ${String(edges.length)} 处候选）`,
         }
+      }
       return {
         status: 'noHq',
         hex: null,

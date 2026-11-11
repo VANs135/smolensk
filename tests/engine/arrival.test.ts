@@ -207,6 +207,27 @@ describe('13.6 / 13.6b：落点解算（含被阻挡时改投最近边缘格）'
     ).toMatchObject({ status: 'noHq', hex: null })
   })
 
+  it('13.6b：边缘补给源格被敌阻挡 ⇒ 改投最近的未阻挡边缘格；HQ 分支不受影响', () => {
+    // 无可用 HQ、1.03 被敌占 ⇒ 候选 = 其余源格 + 最近未阻挡边缘格（1.01）
+    const blockedSource = facts({
+      directDrawHqHexes: () => [],
+      isBlocked: (target) => target.col === 1 && target.row === 3,
+    })
+    expect(
+      arrivalPlacementCandidates({ kind: 'hqOrEdgeSource', label: 'HQ' }, blockedSource),
+    ).toEqual([hex(60, 35), hex(62, 16), hex(1, 1)])
+    expect(
+      resolveArrivalPlacement({ kind: 'hqOrEdgeSource', label: 'HQ' }, blockedSource),
+    ).toMatchObject({ status: 'placed', hex: hex(60, 35) })
+    // 有 HQ ⇒ 只落 HQ，阻挡回退不参与
+    expect(
+      arrivalPlacementCandidates(
+        { kind: 'hqOrEdgeSource', label: 'HQ' },
+        facts({ isBlocked: () => true }),
+      ),
+    ).toEqual([hex(36, 14)])
+  })
+
   it('1.6a：死亡堆落点不需要格', () => {
     expect(
       resolveArrivalPlacement({ kind: 'deadPile', label: 'Dead Pile' }, facts()),
