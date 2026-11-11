@@ -401,12 +401,14 @@ function sideMark(side: 'axis' | 'soviet'): string {
           v-for="placement in setup.completedPlacements"
           :key="placement.key"
           class="queue__placed-row"
+          :title="placement.label"
         >
           <span v-if="placement.imageUrl !== null" class="queue__counter">
             <img :src="placement.imageUrl" :alt="placement.label" class="queue__counter-img" />
           </span>
           <span class="queue__side num">{{ sideMark(placement.side) }}</span>
-          <span class="queue__label">{{ placement.label }}</span>
+          <!-- 用户 2026-11-11：有算子图就不再用文字重复名称（图上已印） -->
+          <span v-if="placement.imageUrl === null" class="queue__label">{{ placement.label }}</span>
           <span class="queue__badge num">{{ placement.placed }}/{{ placement.total }}</span>
         </li>
       </ul>
@@ -466,7 +468,8 @@ function sideMark(side: 'axis' | 'soviet'): string {
               />
             </span>
             <span class="queue__side num">{{ sideMark(item.side) }}</span>
-            <span class="queue__label">{{ item.label }}</span>
+            <!-- 用户 2026-11-11：有算子图就不再用文字重复名称；无图才退回文字 -->
+            <span v-if="item.imageUrl === null" class="queue__label">{{ item.label }}</span>
             <span class="queue__badge num">
               {{
                 item.kind === 'truck'

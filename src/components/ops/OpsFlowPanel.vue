@@ -115,8 +115,6 @@ function isPickedAir(id: string): boolean {
             @click="workbench.toggleBarrageUnit(unit.instanceId)"
           >
             <img :src="counterImageUrlOf(unit) ?? ''" class="ops__img" alt="" />
-            <span>{{ unit.name }}</span>
-            <BaseTag kind="neutral">炸 {{ unit.raw.barrage ?? 0 }}</BaseTag>
           </button>
         </div>
         <p v-if="barrageItems.length === 0" class="muted">本环节没有能打到该格的炮兵。</p>
@@ -161,7 +159,6 @@ function isPickedAir(id: string): boolean {
               @click="workbench.toggleAirMissionUnit(item.air.instanceId)"
             >
               <img :src="counterImageUrlOf(item.air) ?? ''" class="ops__img" alt="" />
-              <span>{{ item.air.name }}</span>
               <BaseTag kind="neutral">
                 {{ item.distanceToTarget === null ? '—' : item.distanceToTarget }} /
                 {{ item.air.rangeHexes }}

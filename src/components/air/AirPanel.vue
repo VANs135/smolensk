@@ -429,7 +429,29 @@ const displayedBases = computed(() =>
             </BaseButton>
           </label>
         </div>
-        <p v-for="air in workbench.ownAirUnits" :key="air.instanceId" class="num air-row">
+        <!-- 用户 2026-11-11：算子图已在左，右侧不再平铺重复印值；整行悬停给全部信息 -->
+        <p
+          v-for="air in workbench.ownAirUnits"
+          :key="air.instanceId"
+          class="num air-row"
+          :title="
+            [
+              air.name,
+              air.aircraftType,
+              `@${hexLabel(air.hex)}`,
+              `ACV ${air.airCombatRating}`,
+              air.canInitiateAirCombat ? '' : '括号值：不能发起空战 14.3a',
+              `轰炸 ${air.barrageStrength}`,
+              `航程 ${air.rangeHexes}`,
+              stepText(air.steps),
+              air.transportCapacity > 0 ? `运力 ${air.transportCapacity} T` : '',
+              air.canBarrage ? '' : '不可轰炸',
+              isFighterAircraft(air.aircraftType) ? '战斗机' : '',
+            ]
+              .filter((part) => part !== '')
+              .join('｜')
+          "
+        >
           <img
             class="air-row__thumb"
             :src="counterImageUrlOf(air) ?? undefined"
@@ -443,13 +465,6 @@ const displayedBases = computed(() =>
           >
             {{ air.airStatus === 'active' ? '激活' : '非激活' }}
           </BaseButton>
-          {{ air.name }}（{{ air.aircraftType }}）@ {{ hexLabel(air.hex) }} ｜ACV
-          {{ air.airCombatRating
-          }}{{ air.canInitiateAirCombat ? '' : '（括号值：不能发起空战 14.3a）' }} ｜轰炸
-          {{ air.barrageStrength }}｜航程 {{ air.rangeHexes }} ｜{{ stepText(air.steps) }}
-          <template v-if="air.transportCapacity > 0">｜运力 {{ air.transportCapacity }} T</template>
-          <template v-if="!air.canBarrage">｜不可轰炸</template>
-          <template v-if="isFighterAircraft(air.aircraftType)">｜战斗机</template>
           <BaseButton
             variant="ghost"
             size="sm"

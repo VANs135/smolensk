@@ -92,6 +92,23 @@ function truckFormationOf(id: string): string | null {
   return unit.formation === null || unit.formation === '' ? '编队' : unit.formation
 }
 
+/**
+ * 用户 2026-11-11：堆叠窗**只留算子图**，名字与印值不再平铺成一行（与算子图重复）
+ *
+ * 图上没有的信息（DG / 已动完 / 编内卡车随行）只进悬停提示与角标，不占一行文字。
+ */
+function chipTitle(
+  unit: { label: string; modeLetter: string; dg: boolean; ended: boolean },
+  id: string,
+): string {
+  const parts = [unit.label, unit.modeLetter === '' ? null : `模式 ${unit.modeLetter}`]
+  if (unit.dg) parts.push('DG')
+  if (unit.ended) parts.push('本回合已动完')
+  const formation = truckFormationOf(id)
+  if (formation !== null) parts.push(`随 ${formation}`)
+  return parts.filter((part): part is string => part !== null).join(' · ')
+}
+
 /** 同格本方飞机（只读；操作走空军面板） */
 const stackAircraft = computed(() => content.value?.airUnits ?? [])
 
@@ -448,6 +465,7 @@ function sideName(side: string): string {
             :role="chipPickable(unit.id) ? 'button' : undefined"
             :tabindex="chipPickable(unit.id) ? 0 : undefined"
             :aria-pressed="chipPickable(unit.id) ? chipSelected(unit.id) : undefined"
+            :title="chipTitle(unit, unit.id)"
             @click="toggleChip(unit.id)"
             @contextmenu.prevent.stop="onChipContext($event, unit.id)"
             @keydown.enter.prevent="toggleChip(unit.id)"
@@ -459,18 +477,15 @@ function sideName(side: string): string {
               class="chip__img"
               alt=""
             />
-            <span class="chip__label num"
-              >{{ unit.label }} · {{ unit.modeLetter }}<template v-if="unit.dg">· DG</template
-              ><template v-if="unit.ended">· 停</template
-              ><template v-if="truckFormationOf(unit.id) !== null">
-                · 随 {{ truckFormationOf(unit.id) }}</template
-              ></span
-            >
+            <!-- 用户 2026-11-11：图上没有的状态只作角标，不再平铺成一行文字 -->
+            <span v-if="unit.dg" class="chip__flag chip__flag--dg">DG</span>
+            <span v-if="unit.ended" class="chip__flag">停</span>
           </div>
           <div
             v-for="air in stackAircraft"
             :key="air.instanceId"
             class="chip"
+            :title="air.name"
             @contextmenu.prevent.stop="onChipContext($event, air.instanceId)"
           >
             <img
@@ -479,7 +494,6 @@ function sideName(side: string): string {
               class="chip__img"
               alt=""
             />
-            <span class="chip__label num">{{ air.name }}</span>
           </div>
         </div>
         <div v-if="canStartMove" class="block__row">
@@ -681,13 +695,13 @@ function sideName(side: string): string {
 
 .chips {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 4px;
 }
 
 .chip {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   padding: 2px;
@@ -703,12 +717,24 @@ function sideName(side: string): string {
   flex: 0 0 auto;
 }
 
-.chip__label {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-muted);
+/* 图上没有的状态：只作角标（DG / 停），不占一行文字 */
+.chip__flag {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: 0 2px;
+  border-radius: var(--radius-sm);
+  background: rgb(32 30 26 / 0.78);
+  color: var(--color-bg);
+  font-size: 9px;
+  line-height: 12px;
+  pointer-events: none;
+}
+
+.chip__flag--dg {
+  top: 0;
+  bottom: auto;
+  color: var(--color-warning);
 }
 
 /* 左键堆叠窗：点枚切换选中（默认全选）；未选者压暗，不做额外说明 */
