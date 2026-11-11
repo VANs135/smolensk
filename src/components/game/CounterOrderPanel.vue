@@ -49,6 +49,13 @@ function railMove(): void {
   if (workbench.railMoveNow(cargo.value)) mapView.cancelSession()
 }
 
+/** 13.3e：点地图选卸货格（点中即运；SP 货须先在补给面板指定起运站） */
+function pickRailMoveHex(): void {
+  if (cargo.value !== 'sp' && subject.value !== undefined)
+    workbench.selectedId = subject.value.instanceId
+  workbench.beginRailMoveHexPickNow(cargo.value)
+}
+
 function breakdown(): void {
   if (subjectId.value !== null && workbench.createBreakdownNow(subjectId.value, recordId.value)) {
     mapView.cancelSession()
@@ -75,10 +82,10 @@ function absorb(): void {
       <label v-if="cargo === 'sp'" class="order__subject">
         SP <UiField v-model="workbench.railMoveInputs.spAmount" type="number" min="1" stepper />
       </label>
-      <BaseButton size="sm" variant="secondary" @click="workbench.beginRailMoveHexPickNow()"
-        >点图选卸货格</BaseButton
+      <BaseButton size="sm" variant="secondary" @click="pickRailMoveHex"
+        >点图选卸货格（点中即运）</BaseButton
       >
-      <BaseButton size="sm" :disabled="workbench.railMoveInputs.toHexText === ''" @click="railMove">
+      <BaseButton size="sm" @click="railMove">
         运输至 {{ workbench.railMoveInputs.toHexText || '—' }} · 13.3
       </BaseButton>
     </template>

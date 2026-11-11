@@ -1682,15 +1682,52 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })
   }
 
-  /** 13.3a/e：铁路运货的卸货格（13.3f/h 的控制与轨距在提交时判） */
-  function beginRailMoveHexPickNow(): void {
+  /**
+   * 13.3c/13.3e：点地图选**卸货格**（不再手打格号、也不再全图高亮）
+   *
+   * 候选与 `railMoveNow` 同源：只取本方的**可卸货城市格**，并用 `railPathBetween` 预筛掉
+   * 走不通的终点（轨距/控制/敌军/EZOC 全交给同一条引擎判据）；点中后立即执行运货。
+   */
+  function beginRailMoveHexPickNow(kind: 'unit' | 'sp' | 'transportPoint'): void {
+    const side = activeSide.value
+    let from: HexRef | null = null
+    if (kind === 'unit' || kind === 'transportPoint') {
+      const unit = selectedUnit.value
+      if (unit === null) {
+        pushLog('warning', '铁路运货：请先在地图上选中要运输的单位（13.3e）', '13.3e')
+        return
+      }
+      if (unit.side !== side) {
+        pushLog('warning', `${unit.name} 不是本方单位（13.3b 只用本方铁路容量）`, '13.3b')
+        return
+      }
+      from = unit.hex
+    } else {
+      const dump = spDumps.value.find((item) => item.id === railMoveInputs.value.fromDumpId) ?? null
+      if (dump === null || dump.side !== side) {
+        pushLog('warning', 'SP 铁路运货：请先指定**己方**的起运补给站（13.3a）', '13.3a')
+        return
+      }
+      from = dump.hex
+    }
+    const candidates = detrainableHexes.value.filter(
+      (hex) => !sameHex(hex, from!) && railPathBetween(from!, hex, side) !== null,
+    )
+    if (candidates.length === 0) {
+      pushLog(
+        'warning',
+        '没有可卸货的铁路格（13.3c：须受控、轨距正确、铁路连通且免 EZOC）',
+        '13.3c',
+      )
+      return
+    }
     beginHexPick({
-      label: '铁路运货的卸货格',
-      rule: '13.3a',
-      candidates: 'any',
+      label: '铁路运货的卸货格（13.3c 可卸货格）',
+      rule: '13.3e',
+      candidates,
       apply: (hex) => {
         railMoveInputs.value = { ...railMoveInputs.value, toHexText: hexTextOf(hex) }
-        return true
+        return railMoveNow(kind)
       },
     })
   }

@@ -186,6 +186,8 @@ describe('B39 / B-3：运输点数作铁路货物', () => {
       "{ kind: 'transportPoint', id: unit.instanceId, side, size: unit.noncombatTransport }",
     )
     const panel = readFileSync('src/components/supply/SupplyPanel.vue', 'utf8')
-    expect(panel).toContain("workbench.railMoveNow('transportPoint')")
+    // 用户 2026-11-11：手打格号删除 ⇒ 三种货物都改成「点地图高亮卸货格」后自动执行
+    expect(panel).toContain("workbench.beginRailMoveHexPickNow('transportPoint')")
+    expect(panel).not.toContain('workbench.railMoveNow(')
   })
 })

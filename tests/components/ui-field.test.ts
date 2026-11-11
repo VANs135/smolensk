@@ -82,7 +82,8 @@ describe('条 24：正式/验证模式门控', () => {
       ['src/components/exclusive/ExclusiveRulesPanel.vue', 8],
       // 用户 2026-11-11：补员格 / 图边源格改「点地图选格」⇒ 少了一处手打格号
       ['src/components/reinforcement/ReinforcementPanel.vue', 3],
-      ['src/components/supply/SupplyPanel.vue', 13],
+      // 用户 2026-11-11：铁路运货的卸货格改点地图 ⇒ 又少一处手打格号
+      ['src/components/supply/SupplyPanel.vue', 12],
     ]
     for (const [file, min] of cases) {
       const src = read(file)

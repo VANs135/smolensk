@@ -113,6 +113,30 @@ describe('13.3e 三步：登车 → 铁路移动 → 卸货', () => {
     expect(store.lastRailMove!.detail).toContain('全程多轨')
     expect(store.lastRailMove?.cost).toBeGreaterThan(0)
     expect(store.railMoveError).toBeNull()
+  })
+
+  it('点地图选卸货格：候选＝可卸货格且路径可达（不再全图），点中即执行', () => {
+    const store = sovietStore()
+    store.setPhase('movement')
+    store.setTurn(5)
+    controlRailRun(store)
+    const cargo = railUnit(store, FROM, 'cargo-2')
+    store.selectedId = cargo.instanceId
+
+    store.beginRailMoveHexPickNow('unit')
+    const view = store.hexPickView
+    expect(view?.candidates).not.toBe('any')
+    const candidates =
+      view === null || view.candidates === 'any' ? [] : view.candidates.map((hex) => label(hex))
+    expect(candidates).toContain(label(TO))
+    // 用户 2026-11-11：铁路移动也用「高亮可放置目标格 + 点格」，不再 candidates:'any'
+    for (const item of candidates) {
+      expect(store.detrainableHexes.map(label), `${item} 不是可卸货格`).toContain(item)
+    }
+    expect(candidates).not.toContain('99.99')
+
+    expect(store.pickHexFor(TO)).toBe(true)
+    expect(cargo.hex).toEqual(TO)
     // 13.3b：容量账本记上了
     expect(store.railCapUsedBy('soviet')).toBe(store.lastRailMove!.cost)
     expect(store.railMovedUnitIdsThisPhase).toContain(cargo.instanceId)

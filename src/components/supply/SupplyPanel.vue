@@ -856,22 +856,18 @@ const showsLedger = computed(
             个单位（4.7d：同一阶段只用一种运输类型）
           </p>
           <div class="row">
-            <label class="field">
-              卸货格（列.行）
-              <UiField
-                v-model="workbench.railMoveInputs.toHexText"
-                class="input"
-                placeholder="36.13"
-              />
-              <BaseButton
-                variant="secondary"
-                size="sm"
-                @click="workbench.beginRailMoveHexPickNow()"
-              >
-                点地图选格
-              </BaseButton>
-            </label>
-            <BaseButton variant="primary" size="sm" @click="workbench.railMoveNow('unit')">
+            <span class="field">
+              卸货格：{{
+                workbench.railMoveInputs.toHexText === ''
+                  ? '（点货种后点地图高亮格）'
+                  : workbench.railMoveInputs.toHexText
+              }}
+            </span>
+            <BaseButton
+              variant="primary"
+              size="sm"
+              @click="workbench.beginRailMoveHexPickNow('unit')"
+            >
               铁路运货：**选中的单位**（13.3e）
             </BaseButton>
           </div>
@@ -895,14 +891,18 @@ const showsLedger = computed(
                 stepper
               />
             </label>
-            <BaseButton variant="secondary" size="sm" @click="workbench.railMoveNow('sp')">
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              @click="workbench.beginRailMoveHexPickNow('sp')"
+            >
               铁路运货：**SP**（13.3a）
             </BaseButton>
             <!-- B39 / B-3：13.3a「每个铁路运量点数可以运输一个 SP **或 RE**」⇒ 运输点数本身也能作货物 -->
             <BaseButton
               variant="secondary"
               size="sm"
-              @click="workbench.railMoveNow('transportPoint')"
+              @click="workbench.beginRailMoveHexPickNow('transportPoint')"
             >
               铁路运货：**选中的运输点数**（13.3a / 4.7）
             </BaseButton>

@@ -196,7 +196,11 @@ describe('B27：接线（源码守卫）', () => {
       ],
       [
         'src/components/supply/SupplyPanel.vue',
-        ['beginSpDumpHexPickNow()', 'beginSupplySourceHexPickNow()', 'beginRailMoveHexPickNow()'],
+        [
+          'beginSpDumpHexPickNow()',
+          'beginSupplySourceHexPickNow()',
+          "beginRailMoveHexPickNow('unit')",
+        ],
       ],
       [
         'src/components/air/AirPanel.vue',
