@@ -266,6 +266,11 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     kind: 'draft',
     why: '只改"这批运输点带来的 SP 归哪个集群"的待提交选择，不落盘；落账发生在 placeArrivalNow',
   },
+  // 13.2f：装卸窗的待提交选择（点哪枚点数、数量），落账在 load / unload（有环节闸）
+  selectTransportLoadPointNow: {
+    kind: 'draft',
+    why: '只改装卸窗的待提交输入（pointId / amount），不落盘；落账发生在 loadTransportPointNow / unloadTransportPointNow',
+  },
 
   // 专规 2.4：原文只写"按此表动员"，**未给时机** ⇒ 不加环节闸（用户 2026-11-05 裁定"按回合能动"）
   slowMobilizationLockedOf: {

@@ -176,6 +176,33 @@ const transportLoadItems = computed<readonly CounterPickerItem[]>(() =>
   })),
 )
 
+/** 13.2f：当前选中点数此刻能装 / 能卸多少（与落账同一批判据） */
+const transportLoadable = computed<number>(() => {
+  const id = workbench.transportLoadInputs.pointId
+  return id === null ? 0 : workbench.transportLoadableSpOf(id)
+})
+const transportUnloadable = computed<number>(() => {
+  const id = workbench.transportLoadInputs.pointId
+  return id === null ? 0 : workbench.transportUnloadableSpOf(id)
+})
+
+/** 13.2f：把「装载 → 移动 → 卸载」三步显式写出来，玩家只用看当前这一步 */
+const transportStageText = computed<string>(() => {
+  const id = workbench.transportLoadInputs.pointId
+  if (id === null) return '先点一枚运输点数；载量与运力在算子悬停里。'
+  if (transportLoadable.value > 0) {
+    return `① 同格有补给站：最多可装 ${transportLoadable.value} SP；装完移动，到含友军/基地/已卸站的格再卸。`
+  }
+  if (transportUnloadable.value > 0) {
+    return `③ 本格满足 13.2f 卸载条件：最多可卸 ${transportUnloadable.value} SP。`
+  }
+  const unit = workbench.transportPointsOfSide.find((item) => item.instanceId === id)
+  if ((unit?.loadedSpT ?? 0) > 0) {
+    return '已载货，但本格不满足卸载条件（需友方战斗单位 / 港口 / 空军基地 / 已卸载的补给站）。'
+  }
+  return '本格没有补给站，暂不能装（13.2f：装载须与补给站同格）。'
+})
+
 /** 12.6：受补给单位（当前方图上算子；点一枚即对它逐个检查） */
 const checkUnitItems = computed<readonly CounterPickerItem[]>(() =>
   checkCandidates.value.map((unit) => ({
@@ -617,9 +644,10 @@ const showsLedger = computed(
             hint="13.2f：装载须与补给站同格、卸载须在含友方战斗单位/港口/空军基地/已卸载补给站的格；两者都付印刷 MA 的 10%"
             :items="transportLoadItems"
             :size="32"
-            @pick="workbench.transportLoadInputs.pointId = $event"
+            @pick="workbench.selectTransportLoadPointNow($event)"
             @hover="hoverUnit"
           />
+          <p class="muted">{{ transportStageText }}</p>
           <div class="row">
             <label class="field">
               SP 数（1 SP = 4 T）
@@ -628,21 +656,22 @@ const showsLedger = computed(
                 class="input num"
                 type="number"
                 min="1"
+                :max="transportLoadable > 0 ? transportLoadable : transportUnloadable"
                 stepper
               />
             </label>
             <BaseButton
+              v-if="transportLoadable > 0"
               variant="secondary"
               size="sm"
-              :disabled="workbench.transportLoadInputs.pointId === null"
               @click="workbench.loadTransportPointNow()"
             >
               装载 SP（13.2f）
             </BaseButton>
             <BaseButton
+              v-if="transportUnloadable > 0"
               variant="secondary"
               size="sm"
-              :disabled="workbench.transportLoadInputs.pointId === null"
               @click="workbench.unloadTransportPointNow()"
             >
               卸载 SP（13.2f）

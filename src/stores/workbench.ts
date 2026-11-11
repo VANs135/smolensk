@@ -4098,6 +4098,47 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return transportLoadReadyAt(instanceId) || transportUnloadReadyAt(instanceId)
   }
 
+  /** 按实例 id 取算子（只读；避免在"界面可点到"的读函数里直接摸 `units.value`） */
+  function unitOfInstance(instanceId: string): (typeof units.value)[number] | undefined {
+    return units.value.find((item) => item.instanceId === instanceId)
+  }
+
+  /**
+   * 13.2f：这一枚运输点数此刻最多还能**装**多少 SP（0 ⇒ 不能装）
+   *
+   * 用户 2026-11-11（批四 #14 全流程）：装卸窗不该让玩家自己猜数字。
+   * 与 `loadTransportPointNow` 同一批判据：运力余量、同格站上可动用的 T（扣掉 12.2a 锁）、
+   * 以及 12.2a「其他方式卸下的 T 不能再装」。
+   */
+  function transportLoadableSpOf(instanceId: string): number {
+    if (!transportLoadReadyAt(instanceId)) return 0
+    const unit = unitOfInstance(instanceId)
+    if (unit === undefined) return 0
+    const dump = spDumps.value.find(
+      (item) => item.side === unit.side && sameHex(item.hex, unit.hex),
+    )
+    if (dump === undefined) return 0
+    const roomT = unit.noncombatTransport * SP_TO_T - unit.loadedSpT
+    const lockedT = spRelayLockedT(dump.hex, dump.side, 'transport')
+    const usableT = Math.max(0, holdingsToT({ sp: dump.sp, t: dump.t }) - lockedT)
+    return Math.max(0, Math.min(Math.floor(roomT / SP_TO_T), Math.floor(usableT / SP_TO_T)))
+  }
+
+  /** 13.2f：这一枚运输点数此刻最多能**卸**多少 SP（0 ⇒ 不能卸） */
+  function transportUnloadableSpOf(instanceId: string): number {
+    if (!transportUnloadReadyAt(instanceId)) return 0
+    const unit = unitOfInstance(instanceId)
+    return unit === undefined ? 0 : Math.floor(unit.loadedSpT / SP_TO_T)
+  }
+
+  /** 13.2f：点选装卸对象时预填数量（同格有站先按"能装多少"填，否则按"能卸多少"填） */
+  function selectTransportLoadPointNow(instanceId: string): void {
+    transportLoadInputs.value.pointId = instanceId
+    const load = transportLoadableSpOf(instanceId)
+    const unload = transportUnloadableSpOf(instanceId)
+    transportLoadInputs.value.amount = Math.max(1, load > 0 ? load : unload)
+  }
+
   /**
    * 4.7d：本阶段**已用铁路运输过**的单位实例 id
    *
@@ -24061,6 +24102,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     transportLoadReadyAt,
     transportUnloadReadyAt,
     transportHandlingReadyAt,
+    transportLoadableSpOf,
+    transportUnloadableSpOf,
+    selectTransportLoadPointNow,
     convertRailGaugeNow,
     gaugeConversionsThisPhase,
     // 13.3g-A：本阶段"刚换过轨的格"与"走过这些格的铁路修理单位"（"不能接力"的判据来源）

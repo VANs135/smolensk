@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -203,5 +205,43 @@ describe('13.2f：载量进入 9.14 的夺取事实', () => {
     expect(view).not.toBeUndefined()
     expect(view!.kind).toBe('transport')
     expect(view!.loadedSpT).toBe(8)
+  })
+})
+
+describe('13.2f：装载—移动—卸载全流程（数量预填与阶段）', () => {
+  it('选中点数即预填"可装"数；装载后自动转成"可卸"数', () => {
+    const store = newStore()
+    const point = placeTransportPoint(store)
+    dumpHere(store, 4)
+    const capacity = point.noncombatTransport
+
+    store.selectTransportLoadPointNow(point.instanceId)
+    expect(store.transportLoadableSpOf(point.instanceId)).toBe(Math.min(4, capacity))
+    expect(store.transportLoadInputs.amount).toBe(Math.min(4, capacity))
+    expect(store.transportUnloadableSpOf(point.instanceId)).toBe(0)
+
+    store.transportLoadInputs.amount = 2
+    expect(store.loadTransportPointNow()).toBe(true)
+    // ① 装载后：可装余量随站存货与运力一起下降
+    expect(store.transportLoadableSpOf(point.instanceId)).toBe(Math.min(4, capacity) - 2)
+    // ③ 同格已有补给站 ⇒ 满足卸载条件，可卸就是已载
+    expect(store.transportUnloadableSpOf(point.instanceId)).toBe(2)
+  })
+
+  it('同格没有补给站：可装 0，不预填虚数', () => {
+    const store = newStore()
+    const point = placeTransportPoint(store)
+    store.selectTransportLoadPointNow(point.instanceId)
+    expect(store.transportLoadableSpOf(point.instanceId)).toBe(0)
+    expect(store.transportUnloadableSpOf(point.instanceId)).toBe(0)
+    expect(store.transportLoadInputs.amount).toBe(1)
+  })
+
+  it('装卸窗只渲染当前可做的动作，并写出三步', () => {
+    const src = readFileSync('src/components/supply/SupplyPanel.vue', 'utf8')
+    expect(src).toContain('transportStageText')
+    expect(src).toContain('v-if="transportLoadable > 0"')
+    expect(src).toContain('v-if="transportUnloadable > 0"')
+    expect(src).not.toContain(':disabled="workbench.transportLoadInputs.pointId === null"')
   })
 })
