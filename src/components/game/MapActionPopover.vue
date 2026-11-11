@@ -146,15 +146,10 @@ function chipSelected(id: string): boolean {
 }
 
 /**
- * 用户 2026-11-09：堆叠窗「选完点开始移动即进入移动」
- *
- * 只在这一窗就是取子格、且至少选中一枚时出现；判据与执行都走既有
- * `confirmMovePick`（6.1），组件不判规则。
+ * 用户 2026-11-09 原在此给「开始移动」；2026-11-11 收口为**单入口**：
+ * 开拔（取子 → 开始移动）只在移动会话框（`MovePanel` 的 `move:pick` 门）里落地，
+ * 本堆叠窗只负责勾选，不再摆第二个「开始移动」。
  */
-const canStartMove = computed(
-  () =>
-    workbench.actionAllowedNow('move.order') && isMovePickHex.value && movePickIds.value.length > 0,
-)
 
 /**
  * 用户 2026-11-09：堆叠窗内右键**这一枚** ⇒ 该单位自己的菜单（只影响这一枚）
@@ -495,11 +490,6 @@ function sideName(side: string): string {
               alt=""
             />
           </div>
-        </div>
-        <div v-if="canStartMove" class="block__row">
-          <BaseButton variant="primary" size="sm" title="6.1" @click="workbench.confirmMovePick()">
-            开始移动
-          </BaseButton>
         </div>
       </section>
 

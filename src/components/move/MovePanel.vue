@@ -155,7 +155,7 @@ function hoverUnit(id: string | null): void {
       }}
       ｜已耗 {{ selected.mpSpent }} MP @ {{ hexLabel(selected.hex) }}）
     </p>
-    <p v-else class="muted">地图上还没选中算子：点一格即可就地摊开堆叠并逐枚选择（6.1）。</p>
+    <p v-else class="muted">未选中算子</p>
 
     <!-- P5：该单位的额度账（可用 / 已耗 / 剩余）——读 store 的 `moveBudgetRows`，不自己算 -->
     <p v-if="selectedBudget !== null" class="num">
@@ -167,8 +167,7 @@ function hoverUnit(id: string | null): void {
     <div v-if="workbench.settlementInProgress !== null" class="block">
       <p class="num">
         <BaseTag kind="warning">{{ workbench.settlementInProgress.rule }}</BaseTag>
-        {{ workbench.settlementInProgress.label }}正在结算：**任何单位都不能移动** ——
-        先走完流程（或按 Esc 放弃），之后才能开始 / 继续移动。
+        结算中，暂不可移动
       </p>
     </div>
 
@@ -179,19 +178,17 @@ function hoverUnit(id: string | null): void {
     <div v-if="!canMove" class="block">
       <p class="num">
         <BaseTag kind="warning">{{ workbench.segmentStep?.rule ?? '6.1' }}</BaseTag>
-        本环节（{{ workbench.segmentStep?.label ?? '—' }}）**不做移动**：移动与突袭只在
-        {{ moveSegmentLabelText }} {{ moveSegmentLabels.length }} 个环节进行（6.1 / 8.0）。
-        下方只留与当前流程有关的信息。
+        本环节不可移动（仅 {{ moveSegmentLabelText }}）
       </p>
     </div>
 
     <!-- 条 10（M1）：开拔前的取子勾选（6.1f / 8.1h）——点地图也可勾选，这里给一个面板内入口 -->
     <!-- U1-b：开拔＝一件事（取子 + 模式 + 开始移动在同一门内，不并列堆两个决定） -->
     <SessionStep v-if="preBegin && canMove" item="move:pick">
-      <p class="num">勾选要一起开拔的单位（6.1；点地图也可勾选 / 取消）：</p>
+      <p class="num">勾选开拔单位</p>
       <CounterPicker
         title="待开拔单位（点一枚＝勾选 / 取消，6.1）"
-        hint="6.1：未勾选者留在格内（8.1h 允许留驻）；勾选后改模式、付燃料、点「开始移动」"
+        hint="未勾选者留驻本格"
         :items="pickItems"
         :size="40"
         @pick="workbench.toggleMovePick($event)"
@@ -221,9 +218,7 @@ function hoverUnit(id: string | null): void {
           开始移动
         </BaseButton>
       </div>
-      <p class="num">
-        已选 {{ workbench.movePick?.ids.length ?? 0 }} 枚待开拔（地图上点枚可勾选 / 取消）。
-      </p>
+      <p class="num">已选 {{ workbench.movePick?.ids.length ?? 0 }} 枚</p>
     </SessionStep>
 
     <!--
@@ -276,9 +271,7 @@ function hoverUnit(id: string | null): void {
       @pick="workbench.dropUnitFromMove($event)"
       @hover="hoverUnit"
     />
-    <p v-if="movingUnits.length === 0" class="muted">
-      本次移动里还没有单位（先在地图上选定要动的算子）。
-    </p>
+    <p v-if="movingUnits.length === 0" class="muted">本次移动无单位</p>
 
     <!-- ② 上一步结论（6.1：MP 消耗 / 掉队 / ZOC 停止都由引擎给） -->
     <div v-if="lastStep !== null" class="num">
