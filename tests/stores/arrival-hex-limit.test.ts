@@ -2,7 +2,28 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
 import { arrivalPlacementCandidates, type ArrivalPlacementFacts } from '@/engine/rules'
-import { useWorkbenchStore } from '@/stores'
+import { hexesWithin } from '@/engine/hex-geometry'
+import { actionGateOf, useWorkbenchStore } from '@/stores'
+import type { ActionKey, ConsolePhase } from '@/stores'
+
+import { combatRecord, newConsole, placeGround } from '../flows/sop-harness'
+
+/** 进入允许 `rein.arrival` 的环节（后续回合的闸门按环节切） */
+function goToActionStep(
+  store: {
+    phase: ConsolePhase
+    playerSegmentSteps: readonly { id: string }[]
+    setSegmentStepIndex(index: number): boolean
+  },
+  key: ActionKey,
+): void {
+  const allowed = actionGateOf(key)
+    .where.filter((item) => item.phase === store.phase)
+    .map((item) => item.segment)
+  const index = store.playerSegmentSteps.findIndex((step) => allowed.includes(step.id))
+  if (index < 0) throw new Error(`${store.phase} 段没有允许 ${key} 的环节`)
+  if (!store.setSegmentStepIndex(index)) throw new Error(`进入环节失败（${key}）`)
+}
 
 /**
  * 用户 2026-10-25 实测 BUG①：**放增援的时候可以任意放，没按剧本要求做好限制**
@@ -109,5 +130,112 @@ describe('13.6：增援落点只能落在**卡面候选**内（不是任意格�
     expect(within.length).toBeLessThanOrEqual(7)
     // 进死亡堆的条目：图上没有可放的格
     expect(arrivalPlacementCandidates({ kind: 'deadPile', label: 'Dead Pile' }, facts)).toEqual([])
+  })
+})
+
+describe('13.6b / 4.8c：投放处不得落在**敌单位格**（可进 EZOC，不可与敌同格）', () => {
+  it('手输落点指向敌占格 ⇒ 拒绝且给出可见原因', () => {
+    const workbench = newStore()
+    placeGround(workbench, combatRecord('soviet'), { col: 1, row: 26 }, 'soviet', 'enemy-1-26')
+    expect(workbench.placeArrivalNow(1, undefined, '1.26')).toBe(false)
+    expect(workbench.reinforcementError?.reason).toBe('arrivalHexEnemyOccupied')
+    expect(workbench.log.some((entry) => entry.text.includes('不得与敌方单位同格'))).toBe(true)
+    expect(workbench.arrivalPlaced[1]).not.toBe(true)
+  })
+
+  it('候选为空时**不放行任何显式格**（13.6：不再有"只要在地图上就允许"的宽松路径）', () => {
+    const workbench = newConsole()
+    workbench.setActiveSide('soviet')
+
+    // 找一条地理参照的到达条目（苏联 `w/i 3 of 52.09` 之类），记下它的锚点与半径
+    let index = -1
+    let anchor = { col: 0, row: 0 }
+    let radius = 0
+    for (let turn = 1; turn <= 40 && index < 0; turn += 1) {
+      workbench.setTurn(turn)
+      workbench.setPhase('reinforcement')
+      const units = workbench.arrivalPlan?.units ?? []
+      const at = units.findIndex(
+        (unit) =>
+          unit.placement.kind === 'geographic' &&
+          unit.kind !== 'sp' &&
+          unit.kind !== 'unclassified',
+      )
+      if (at < 0) continue
+      const placement = units[at]!.placement
+      if (placement.kind !== 'geographic') continue
+      index = at
+      anchor = { ...placement.anchor }
+      radius = placement.radiusHexes
+    }
+    expect(index).toBeGreaterThanOrEqual(0)
+
+    // 半径内每一格都摆一个**敌方**战斗单位 ⇒ 该条目此刻没有合法落点
+    for (const hex of hexesWithin(anchor, radius, { onMapOnly: true })) {
+      placeGround(
+        workbench,
+        combatRecord('axis'),
+        { col: hex.col, row: hex.row },
+        'axis',
+        `geo-block-${String(hex.col)}-${String(hex.row)}`,
+      )
+    }
+    expect(workbench.arrivalCandidates[index]).toEqual([])
+
+    expect(workbench.placeArrivalNow(index, undefined, '1.3')).toBe(false)
+    expect(workbench.reinforcementError?.reason).toBe('arrivalNoCandidateHex')
+    expect(workbench.log.some((entry) => entry.text.includes('没有合法落点'))).toBe(true)
+    expect(workbench.arrivalPlaced[index]).not.toBe(true)
+  })
+})
+
+describe('4.8a：地理参照落点的**堆叠上限**（用户加严口径）', () => {
+  it('落点已有 10 RE 战斗单位 ⇒ 直接拒绝并给出可见原因', () => {
+    const workbench = newConsole()
+    workbench.setActiveSide('soviet')
+
+    let index = -1
+    let target = { col: 0, row: 0 }
+    for (let turn = 1; turn <= 40 && index < 0; turn += 1) {
+      workbench.setTurn(turn)
+      workbench.setPhase('reinforcement')
+      goToActionStep(workbench, 'rein.arrival')
+      const units = workbench.arrivalPlan?.units ?? []
+      const at = units.findIndex(
+        (unit, at) =>
+          unit.placement.kind === 'geographic' &&
+          unit.kind === 'unit' &&
+          unit.formationComponents.length === 0 &&
+          workbench.arrivalRecordOf(at) !== null &&
+          (workbench.arrivalCandidates[at]?.length ?? 0) > 0,
+      )
+      if (at < 0) continue
+      const hex = workbench.arrivalPlacements[at]?.hex
+      if (hex === null || hex === undefined) continue
+      index = at
+      target = { ...hex }
+    }
+    expect(index).toBeGreaterThanOrEqual(0)
+
+    // 先把落点堆到 10 RE（4.8a 上限）
+    let stackedRe = 0
+    for (let count = 0; stackedRe < 10; count += 1) {
+      const unit = placeGround(
+        workbench,
+        combatRecord('soviet'),
+        target,
+        'soviet',
+        `stack-${String(count)}`,
+      )
+      stackedRe += unit.re
+    }
+    expect(stackedRe).toBeGreaterThanOrEqual(10)
+
+    // 玩家**手输**这个已满的落点 ⇒ 不自动改落，直接拒绝
+    const typed = `${String(target.col)}.${String(target.row)}`
+    expect(workbench.placeArrivalNow(index, undefined, typed)).toBe(false)
+    expect(workbench.reinforcementError?.reason).toBe('arrivalHexOverstack')
+    expect(workbench.log.some((entry) => entry.text.includes('4.8a'))).toBe(true)
+    expect(workbench.arrivalPlaced[index]).not.toBe(true)
   })
 })

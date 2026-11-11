@@ -6,7 +6,13 @@ import type { ArrivalUnitDemand } from '@/engine/rules'
 import { actionGateOf, useWorkbenchStore } from '@/stores'
 import type { ActionKey, ConsolePhase } from '@/stores'
 
-import { CORE_HEX, airBaseRecord, placeGround } from '../flows/sop-harness'
+import {
+  CORE_HEX,
+  airBaseRecord,
+  aircraftRecord,
+  placeAir,
+  placeGround,
+} from '../flows/sop-harness'
 
 /**
  * 13.6：到达条目的**投放枚数**（`2x ...` 应当真的到场两枚）
@@ -133,6 +139,32 @@ describe('13.6：飞机到达（修前共用陆战库解析 ⇒ 一律投放失�
     expect(store.units.length).toBe(groundBefore)
     expect(store.airUnits.at(-1)?.airStatus).toBe('active')
     expect(store.reinforcementError).toBeNull()
+  })
+
+  it('14.2a：基地激活堆叠已满 ⇒ 飞机到场被拒并给出可见原因', () => {
+    const store = newStore()
+    store.setActiveSide('axis')
+    placeGround(store, airBaseRecord(2), CORE_HEX, 'axis', 'base-2')
+    // 2 级基地的激活上限 = 4 + 2 = 6，先摆满 6 架
+    for (let count = 0; count < 6; count += 1) {
+      placeAir(
+        store,
+        aircraftRecord('axis', (record) => (record.name ?? '').includes('He.111')),
+        CORE_HEX,
+        'axis',
+        `he-${String(count)}`,
+      )
+    }
+    const { turn, index } = findDemand(store, '2x He.111')
+    store.setTurn(turn)
+    store.setPhase('reinforcement')
+    goToActionStep(store, 'rein.arrival')
+
+    const airBefore = store.airUnits.length
+    expect(store.placeArrivalNow(index)).toBe(false)
+    expect(store.reinforcementError?.reason).toBe('arrivalAirBaseOverstack')
+    expect(store.airUnits.length).toBe(airBefore)
+    expect(store.log.some((entry) => entry.text.includes('14.2a'))).toBe(true)
   })
 })
 

@@ -394,6 +394,12 @@ function arrivalErrorText(reason: string): string {
   const code = reason.split(':')[0] ?? reason
   if (code === 'arrivalUnitNotResolved') return '单位库里找不到对应算子，请在「?」里指定型号后再点'
   if (code === 'arrivalHexOutsideCandidates') return '这一格不在该条目的入场格内'
+  if (code === 'arrivalHexEnemyOccupied')
+    return '这一格有敌方单位：增援可以进敌方 ZOC，但不能与敌方单位同格（13.6b）'
+  if (code === 'arrivalHexOverstack') return '这一格已有 10 RE 战斗单位，放不下更多了（4.8a）'
+  if (code === 'arrivalAirBaseOverstack') return '该基地的激活飞机已达上限（4 + 基地等级，14.2a）'
+  if (code === 'arrivalNoCandidateHex')
+    return '这一条现在没有合法落点（候选为空），请先检查入场格/基地'
   if (code.startsWith('arrivalHex')) return '这一格现在不能落：换一处高亮格试试'
   if (code === 'arrivalWithdrawNoLedger') return '这一枚缺少投放记录，暂时不能回手'
   return '这一枚现在放不下，换一条或换一处入场格试试'

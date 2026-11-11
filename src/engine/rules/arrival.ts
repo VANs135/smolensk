@@ -581,10 +581,11 @@ export function arrivalPlacementCandidates(
       return []
 
     case 'anyAirbase':
-      return facts.friendlyAirBaseHexes()
+      // 4.8c / 13.6b：不得落在**敌单位格**（可进敌方 ZOC，但不得与敌单位同格）
+      return facts.friendlyAirBaseHexes().filter((hex) => !facts.isBlocked(hex))
 
     case 'anyWestEdge':
-      return facts.westEdgeHexes()
+      return facts.westEdgeHexes().filter((hex) => !facts.isBlocked(hex))
 
     case 'hqOrEdgeSource': {
       const hqs = facts.directDrawHqHexes()
@@ -593,7 +594,9 @@ export function arrivalPlacementCandidates(
     }
 
     case 'geographic':
-      return hexesWithin(placement.anchor, placement.radiusHexes, { onMapOnly: true })
+      return hexesWithin(placement.anchor, placement.radiusHexes, { onMapOnly: true }).filter(
+        (hex) => !facts.isBlocked(hex),
+      )
 
     case 'northEdgeEastOf':
       return facts
@@ -645,11 +648,19 @@ export function resolveArrivalPlacement(
           rule: '13.6',
           detail: '该方没有友方空军基地，飞机无法以激活状态到达（13.6）',
         }
+      const open = bases.filter((hex) => !facts.isBlocked(hex))
+      if (open.length === 0)
+        return {
+          status: 'noAirbase',
+          hex: null,
+          rule: '13.6b',
+          detail: '友方空军基地格均被敌方单位占据，飞机不得与敌方单位同格（13.6b / 4.8c）',
+        }
       return {
         status: 'placed',
-        hex: bases[0]!,
+        hex: open[0]!,
         rule: '13.6',
-        detail: `任一友方空军基地（共 ${bases.length} 处候选；13.6：以激活状态到达）`,
+        detail: `任一友方空军基地（共 ${open.length} 处候选；13.6：以激活状态到达）`,
       }
     }
 
@@ -657,11 +668,19 @@ export function resolveArrivalPlacement(
       const hexes = facts.westEdgeHexes()
       if (hexes.length === 0)
         return { status: 'noHex', hex: null, rule: '13.6', detail: '地图上没有西缘格' }
+      const open = hexes.filter((hex) => !facts.isBlocked(hex))
+      if (open.length === 0)
+        return {
+          status: 'noHex',
+          hex: null,
+          rule: '13.6b',
+          detail: '西缘格均被敌方单位占据，不得落在敌单位格（13.6b / 4.8c）',
+        }
       return {
         status: 'placed',
-        hex: hexes[0]!,
+        hex: open[0]!,
         rule: '13.6',
-        detail: `西缘任意格（共 ${hexes.length} 处候选，入场卡原文）`,
+        detail: `西缘任意格（共 ${open.length} 处候选，入场卡原文）`,
       }
     }
 
@@ -691,11 +710,21 @@ export function resolveArrivalPlacement(
     }
 
     case 'geographic': {
+      const hexes = hexesWithin(placement.anchor, placement.radiusHexes, {
+        onMapOnly: true,
+      }).filter((hex) => !facts.isBlocked(hex))
+      if (hexes.length === 0)
+        return {
+          status: 'noHex',
+          hex: null,
+          rule: '13.6b',
+          detail: `以 ${placement.anchor.col}.${placement.anchor.row} 为圆心 ${placement.radiusHexes} 格内没有可用落点（图上格均被敌方单位占据，13.6b / 4.8c）`,
+        }
       return {
         status: 'placed',
-        hex: placement.anchor,
+        hex: hexes[0]!,
         rule: '13.6',
-        detail: `以 ${placement.anchor.col}.${placement.anchor.row} 为圆心 ${placement.radiusHexes} 格内任选（地理参照）`,
+        detail: `以 ${placement.anchor.col}.${placement.anchor.row} 为圆心 ${placement.radiusHexes} 格内任选（地理参照，共 ${hexes.length} 处候选）`,
       }
     }
 

@@ -5,6 +5,7 @@ import type { HexRef } from '@/data'
 import { arrivalTurnOf, turnDates } from '@/engine/turn-driver'
 import {
   arrivalDateIso,
+  arrivalPlacementCandidates,
   claimFrontalReserves,
   frontalReservesBatch,
   normalizeArrivalDate,
@@ -198,6 +199,52 @@ describe('13.6 / 13.6b：落点解算（含被阻挡时改投最近边缘格）'
         facts(),
       ),
     ).toMatchObject({ status: 'placed', hex: hex(60, 35) })
+  })
+
+  it('4.8c / 13.6b：任一基地 / 西缘 / 地理参照三条落点都排除**敌单位格**', () => {
+    // 任一基地：唯一的友方基地格被敌单位占据 ⇒ 候选为空、解算报 noAirbase（不静默落点）
+    const baseBlocked = facts({ isBlocked: (target) => target.col === 36 && target.row === 13 })
+    expect(
+      arrivalPlacementCandidates({ kind: 'anyAirbase', label: 'Any Airbase' }, baseBlocked),
+    ).toEqual([])
+    expect(
+      resolveArrivalPlacement({ kind: 'anyAirbase', label: 'Any Airbase' }, baseBlocked),
+    ).toMatchObject({ status: 'noAirbase', hex: null, rule: '13.6b' })
+
+    // 西缘：唯一的西缘格被敌单位占据 ⇒ 候选为空、解算报 noHex
+    const westBlocked = facts({ isBlocked: (target) => target.col === 1 && target.row === 3 })
+    expect(
+      arrivalPlacementCandidates(
+        { kind: 'anyWestEdge', label: 'Any west edge hexes' },
+        westBlocked,
+      ),
+    ).toEqual([])
+    expect(
+      resolveArrivalPlacement({ kind: 'anyWestEdge', label: 'Any west edge hexes' }, westBlocked),
+    ).toMatchObject({ status: 'noHex', hex: null, rule: '13.6b' })
+
+    // 地理参照：锚点被敌占 ⇒ 候选跳过该格、解算退到半径内最近的空格
+    const anchorBlocked = facts({ isBlocked: (target) => target.col === 60 && target.row === 34 })
+    const candidates = arrivalPlacementCandidates(
+      { kind: 'geographic', anchor: hex(60, 34), radiusHexes: 3, label: 'w/i 3 of 60.34' },
+      anchorBlocked,
+    )
+    expect(candidates).not.toContainEqual(hex(60, 34))
+    expect(candidates.length).toBeGreaterThan(0)
+    const resolved = resolveArrivalPlacement(
+      { kind: 'geographic', anchor: hex(60, 34), radiusHexes: 3, label: 'w/i 3 of 60.34' },
+      anchorBlocked,
+    )
+    expect(resolved.status).toBe('placed')
+    expect(resolved.hex).not.toEqual(hex(60, 34))
+
+    // 半径内全被敌占 ⇒ 不静默落点
+    expect(
+      resolveArrivalPlacement(
+        { kind: 'geographic', anchor: hex(60, 34), radiusHexes: 3, label: 'w/i 3 of 60.34' },
+        facts({ isBlocked: () => true }),
+      ),
+    ).toMatchObject({ status: 'noHex', hex: null, rule: '13.6b' })
   })
 })
 
