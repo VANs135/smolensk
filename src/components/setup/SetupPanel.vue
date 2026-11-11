@@ -269,10 +269,10 @@ function sideLabel(side: Side): string {
       </p>
     </div>
 
-    <!-- ── ②b 编队抽签（ch10 / ch11：选剧本时已自动抽取） ── -->
+    <!-- ── ②b 编队抽签（ch10 / ch11：摆完初设单位后由玩家抽取一次） ── -->
     <RuleNote
       v-if="drawGroups.length > 0"
-      title="编队抽签（ch10 / ch11）：选剧本时已自动抽取"
+      title="编队抽签（ch10 / ch11）：摆完初设单位后抽取"
       rule="ch10 / ch11"
       :open="true"
     >
@@ -280,9 +280,14 @@ function sideLabel(side: Side): string {
         {{ group.label }}（×{{ group.count }}）：抽中
         {{ drawnOf(group.kind).join('、') || '（尚未抽取）' }} ⇒ {{ group.effect }}
       </p>
-      <p class="muted">
-        落点不依赖玩家的处置（Move Mode / 与死亡堆互换 / 营入死亡堆）**当场已落盘**； 西移的落点印在
-        **剧本卡**上、数据里没有 ⇒ 在下面「地面单位与基地」里点那一项，再点地图给落点。
+      <div v-if="setup.setupDrawEntryVisible" class="row">
+        <BaseButton variant="primary" size="sm" @click="setup.executeSetupDraws()">
+          抽取编队
+        </BaseButton>
+        <span class="muted">抽一次即收起；处置与西移落点自动落盘。</span>
+      </div>
+      <p v-else class="muted">
+        摆完初设单位后这里出现「抽取编队」；抽完即永久收起，后续增援段与阶段切换不再抽取。
       </p>
     </RuleNote>
 
@@ -367,11 +372,11 @@ function sideLabel(side: Side): string {
         </li>
       </ul>
 
-      <!-- 编制抽取（★ 第六批 §6-A：抽签已移到初设自动执行，此处只留明细与退路） -->
+      <!-- 编制抽取（★ 2026-11-11：不再选剧本自动抽；摆完初设后由玩家点按钮抽一次） -->
       <p class="muted">
-        编制抽取（ch10 / ch11）：**选剧本时已自动抽取**（开局前的剧本随机化，骰走种子化 rng，与其
-        余抽取同一口径）。B 增援段不再有这一步 —— 抽签带来的变化（位置 / 模式 / 进死亡堆）都属初
-        设。此处只作明细与手改退路（池成员与 rng 仍在「记录轨与容器」的剧本抽取盒里）。
+        编制抽取（ch10 / ch11）：**摆完初设单位后抽取一次**（骰走种子化 rng，与其余抽取同一口径）。
+        B 增援段不再有这一步 —— 抽签带来的变化（位置 / 模式 / 进死亡堆）都属初设。抽完即永久收起；
+        池成员与抽取记录仍在「记录轨与容器」的剧本抽取盒里。
       </p>
       <p v-if="drawGroups.length === 0" class="muted">
         本剧本的剧本页没有编队抽签条目 ⇒ 该步不适用。

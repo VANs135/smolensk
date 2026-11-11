@@ -905,17 +905,8 @@ function boxAircraft(side: Side) {
       </div>
       <template v-if="scenarioBox !== null && scenarioBox.groups.length > 0">
         <p class="num">入杯池：{{ scenarioBox.pool.map((item) => item.formationId).join('、') }}</p>
-        <div class="row">
-          <BaseButton
-            v-if="showsActions"
-            variant="primary"
-            size="sm"
-            title="ch10 Formation Chit Draw / ch11 剧本随机化：初设完成后只执行一次"
-            @click="setup.executeSetupDraws()"
-          >
-            抽取编队
-          </BaseButton>
-        </div>
+        <!-- ch10：抽取入口唯一在「初设与开局」面板；本窗只读，避免同一动作两处可点 -->
+        <p class="muted">抽取入口在「初设与开局」面板（本窗只读）。</p>
         <p class="muted">初设完成后只执行一次；抽完即永久收起，后续增援段与阶段切换不再抽取。</p>
       </template>
       <p v-else class="muted">本剧本无编队抽取（ch11：剧本 7 无随机化）。</p>
