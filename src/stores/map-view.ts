@@ -710,6 +710,14 @@ export const useMapViewStore = defineStore('mapView', () => {
       return '已选飞机：点地图上任意一格即定任务格（14.2f-B），再在会话框里选任务并宣布'
     if (workbench.moveInteraction !== null)
       return '移动中：点可到达格逐格走（6.1）；点紫环敌方格＝突袭（8.1a）；Enter 结束移动'
+    /*
+     * 7.0a / 5.7b：反应段的行动方是**非阶段玩家**，其预备单位未释放前不能移动。
+     * 这一行是该段唯一的前置提示（释放入口在右键「模式改变」组），不放窗口里。
+     */
+    if (workbench.segmentStep?.id === 'reaction.movement')
+      return '反应：点预备单位 → 右键「转出预备模式」（MA ×½）后才能移动（5.7b / 7.0a）'
+    if (workbench.segmentStep?.id === 'reaction.barrage')
+      return '反应轰炸：点敌方格定目标；右键己方炮/飞机选入轰炸，会话框里宣布（10.0d）'
     // B35：不再看"工具"，看**本环节允不允许宣布战斗**（判据与闸门同源）
     if (workbench.combatPickActive)
       return '点己方算子加入攻方（9.1b），点敌方格选定防御格，会话框里走 9.2 九步'
@@ -2477,7 +2485,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       const count = workbench.movePick.ids.length
       return {
         kind: 'move',
-        title: `移动准备（6.1）：已选 ${count} 枚待开拔 · 改模式 · 开始移动`,
+        title: `移动准备（6.1）：已选 ${count} 枚待开拔 · 开始移动`,
         rule: '6.1',
         width: 'min(430px, 94%)',
       }

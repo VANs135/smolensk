@@ -304,18 +304,18 @@ describe('B18c（12.0）：受补给单位只列战斗单位', () => {
 })
 
 describe('B18：复核出的另外两条"只在验证页有入口"的动作（同燃料那处的病）', () => {
-  it('★ 5.7b 释放预备：对局台现在也能做（本批把它接进移动链）', () => {
+  it('★ 5.7b 释放预备：唯一入口＝右键「转出预备模式」（2026-11-12 反应段整改）', () => {
     const store = newStore()
     store.setPhase('reaction')
     const unit = place(store, fuelUnitRecord(), START, 't1')
     unit.mode = { ...unit.mode, mode: 'reserve' }
     store.selectedId = unit.instanceId
 
-    // 引擎判据在 store 里（反应段本方单位才可释放）；本处只钉"这条链在正式界面可达"
+    // 引擎判据在 store 里（反应段本方单位才可释放）；本处只钉"这条链可达、且不在移动窗重复"
     const ok = store.releaseReserveNow()
     expect(typeof ok).toBe('boolean')
     const panel = readFileSync('src/components/move/MovePanel.vue', 'utf8')
-    expect(panel).toContain('workbench.releaseReserveNow()')
+    expect(panel).not.toContain('workbench.releaseReserveNow()')
   })
 
   it('★ 4.5b 垫人承诺：按钮就在移动链里，落盘的是 `mpLockedThisPhase`', () => {

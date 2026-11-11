@@ -25,6 +25,7 @@ import { counterImageUrlOf, hexLabel, useWorkbenchStore } from '@/stores'
  *   ⑤ 4.5a-A 的 ZOC 待决：进入即就地停止，或留在原格
  *
  * ★ 5.4a 改模式**不在这里**：唯一入口是右键菜单 →「模式改变」（本面板只留开拔会话）。
+ * ★ 5.7b 释放预备**也不在这里**：同上，唯一入口是右键「转出预备模式」（判据 `canReleaseReserveOf`）。
  */
 
 const workbench = useWorkbenchStore()
@@ -72,8 +73,8 @@ const preBegin = computed(() => workbench.movePick !== null && workbench.moveInt
  *     （`move.modeChange` 的闸门）；
  *   · **6.1 移动**（开拔 / 走 / 结束）⇒ C/E/G 的**移动环节**（`move.order`）；
  *   · **8.0 突袭**⇒ 同三处（`move.overrun`）；
- *   · **5.7b 释放预备**「本方**反应阶段**（MA ×½）或**进击阶段**（MA ×1）」⇒ **只在 E/G**
- *     （`reserve.release`）—— 修前这一块在 C 段也常显；
+ *   · **5.7b 释放预备**「本方**反应阶段**（MA ×½）或**进击阶段**（MA ×1）」⇒ 唯一入口是
+ *     右键菜单「转出预备模式」（闸门 `reserve.release`），本面板不再重复；
  *   · **12.5c 燃料**「在发生燃料消耗的**任何阶段**…在燃料消耗时支付」⇒ 跟着移动走
  *     （`supply.fuel`：C/E/G 移动环节）。
  *
@@ -81,7 +82,6 @@ const preBegin = computed(() => workbench.movePick !== null && workbench.moveInt
  */
 const canMove = computed(() => workbench.actionAllowedNow('move.order'))
 const canOverrun = computed(() => workbench.actionAllowedNow('move.overrun'))
-const canReleaseReserve = computed(() => workbench.actionAllowedNow('reserve.release'))
 
 /**
  * 13.2a：本次移动里有**运输点数**且尚未结束时，才给「暂停移动」这一个显式入口
@@ -222,45 +222,23 @@ function hoverUnit(id: string | null): void {
     </SessionStep>
 
     <!--
-      ①b 两条原先**只在引擎验证页有入口**的动作（B18 复核顺手接线，与燃料那处同类）：
-        · 5.7b 释放预备：E/G 段把预备标记摘掉（反应段 MA×½、进击段 MA×1）；
-        · 4.5b 垫人：以某单位许诺"本阶段不再消耗 MP" ⇒ 抵消它所在格的敌方 ZOC。
-      判据都在 store（`releaseReserveNow` 转调引擎的 `canReleaseReserve`；`lockZocNegation` 只落盘），
-      本面板只提供"在哪按"。
+      4.5b 垫人：以某单位许诺"本阶段不再消耗 MP" ⇒ 抵消它所在格的敌方 ZOC。
+      判据与落盘都在 store（`lockZocNegation`），本面板只提供"在哪按"。
+      ★ 5.7b 释放预备已移出本面板：唯一入口＝右键「转出预备模式」（与 5.4a 改模式同组）。
     -->
     <div class="row">
-      <!-- 5.7b：只在 E 反应 / G 进击的移动环节（修前在 C 段也常显，点了才被拒） -->
-      <BaseButton
-        v-if="canReleaseReserve"
-        variant="secondary"
-        size="sm"
-        :disabled="selected === null"
-        @click="workbench.releaseReserveNow()"
-      >
-        释放预备（5.7b：仅反应 / 进击段）
-      </BaseButton>
       <!-- 4.5b 垫人：属"移动中的 ZOC 处置" ⇒ 跟着 canMove 走 -->
       <BaseButton
         v-if="canMove"
         variant="ghost"
         size="sm"
         :disabled="selected === null"
+        title="4.5b：本阶段不再消耗 MP，抵消该格敌方 ZOC"
         @click="selected !== null && workbench.lockZocNegation(selected.instanceId)"
       >
-        许诺不再耗 MP（垫人，4.5b：抵消该格敌方 ZOC）
+        许诺不再耗 MP（垫人）
       </BaseButton>
     </div>
-    <RuleNote
-      v-if="canReleaseReserve"
-      title="释放预备：本方反应阶段（MA ×½）或进击阶段（MA ×1）"
-      rule="5.7b"
-    >
-      <p class="muted">
-        5.7b：预备单位在**本方反应阶段**（非阶段玩家，MA ×½）或**进击阶段**（阶段玩家，MA
-        ×1）可被释放 ——摘掉预备标记即回到朝向面；4.5b：该格只要有一个处于「已承诺不再耗
-        MP」的己方战斗单位， 敌方 ZOC 即被抵消（该单位本阶段就不能再消耗 MP）。
-      </p>
-    </RuleNote>
 
     <!-- ④ 本次移动中的单位（6.1f：点一枚即把它就地放下，其余继续走） -->
     <CounterPicker

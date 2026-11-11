@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 
 import { useWorkbenchStore } from '@/stores'
 
+import { CORE_HEX, fighterRecord, placeAir } from '../flows/sop-harness'
+
 /**
  * 14.2e / 10.0 第二段：**「任务分配」入口只列本环节的任务类型**
  *
@@ -78,5 +80,23 @@ describe('14.2e：任务分配入口按环节给任务类型', () => {
     const index = w.playerSegmentSteps.findIndex((step) => step.id === 'movement.modeAndMovement')
     expect(w.setSegmentStepIndex(index)).toBe(true)
     expect(w.airMissionKind).toBe('hip_shoot')
+  })
+
+  it('★ 专规 2.2d：E 段苏军行动时参战机阵列不列出；轴军照常', () => {
+    // 当前方＝轴军 ⇒ 反应段的行动方是苏军；苏军不得在反应阶段出击（2.2d）
+    setActivePinia(createPinia())
+    const soviet = useWorkbenchStore()
+    soviet.setActiveSide('axis')
+    soviet.setPhase('reaction')
+    placeAir(soviet, fighterRecord('soviet'), CORE_HEX, 'soviet', 'su-f')
+    expect(soviet.airMissionJoinChoices).toEqual([])
+
+    // 当前方＝苏军 ⇒ 行动方是轴军；轴军可在反应阶段出击
+    setActivePinia(createPinia())
+    const axis = useWorkbenchStore()
+    axis.setActiveSide('soviet')
+    axis.setPhase('reaction')
+    placeAir(axis, fighterRecord('axis'), CORE_HEX, 'axis', 'ax-f')
+    expect(axis.airMissionJoinChoices.length).toBeGreaterThan(0)
   })
 })

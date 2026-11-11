@@ -136,6 +136,8 @@ import {
   canFlyMission,
   // 14.7d ← 专规 2.2a/3.2a：低空扫射的阵营/天气可用性（与宣布任务的引擎判据同源）
   canHipShoot,
+  // 专规 2.2d：苏军不得在反应 / 进击阶段出击（候选阵列与宣布任务共用同一判据）
+  canMissionInPhase,
   canJoinRetreat,
   canAddAircraftAtStep,
   canJoinMission,
@@ -14787,6 +14789,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   由 `beginAirMissionNow` 经引擎裁定（此处标不了，也不该由界面去猜）。
    */
   const airMissionJoinChoices = computed<readonly AirMissionJoinChoice[]>(() => {
+    /*
+     * 专规 2.2d：苏军不得在本方反应 / 进击阶段出击（通规 14.1g 允许三段，专规覆盖苏联）。
+     * 不可用的机不就该列进「参战机」阵列 —— 修前它照列，点进窗口后才在宣布时被 2.2d 拒。
+     * 引擎侧判据仍在 `beginAirMissionNow`（旁路直接写状态仍会被拒）。
+     */
+    const airPhase =
+      phase.value === 'reaction'
+        ? 'reaction'
+        : phase.value === 'exploitation'
+          ? 'exploitation'
+          : 'movement'
+    if (!canMissionInPhase(airActingSide.value, airPhase)) return []
     const step = airState.value?.step
     const canAdd = step === undefined ? true : step === 'done' ? false : canAddAircraftAtStep(step)
     const limit = canJoinMission(0, 0)
