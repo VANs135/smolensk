@@ -71,6 +71,15 @@ describe('3.4b：解除日前的德军 SP 归属', () => {
     expect(store.spDumps.find((dump) => dump.id === 'sd-h')!.sp).toBe(3)
   })
 
+  it('★ 同格只有一本 Hoth 时，未指定集群也拒收（不自动继承）', () => {
+    const store = newStore()
+    store.spDumps.push({ id: 'sd-h', hex: { ...HEX }, side: 'axis', sp: 3, t: 0 })
+    store.setDumpPanzerGroupNow('sd-h', 'hoth')
+    expect(addSp(store, 2)).toBe(false)
+    expect(store.spDumps).toHaveLength(1)
+    expect(store.spDumps[0]!.sp).toBe(3)
+  })
+
   it('★ 拒收时日志留一条 3.4b 告警（不静默）', () => {
     const store = newStore()
     seedGroups(store)

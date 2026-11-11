@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { SetupSnapshotSchema } from '@/engine/board-validation'
 
 import { aircraft, scenarios, unitsAxis, unitsSoviet } from '@/data'
@@ -9,6 +9,7 @@ import {
   airBoxEdgeColumn,
   assessSetupTruckLoad,
   assessSetupSpOwnership,
+  boundarySideOf,
   breakdownCounterValues,
   SETUP_RULE,
   findAircraftRecord,
@@ -281,6 +282,17 @@ export const useSetupStore = defineStore('setup', () => {
 
   /** SP dump 台账（自动初设落盘时从账本生成） */
   const spDumps = ref<SupplyDumpRef[]>([])
+
+  /**
+   * 3.4b：**已点格、尚未选集群**的一次 SP 落位
+   *
+   * 「摆一个确认一个」——地图上放下德军 SP 后不立即落账，先把本次落位暂存在这里，
+   * 玩家在常驻的 Guderian / Hoth 二选一里选定后才真正落盘（未选不算摆完）。
+   */
+  const pendingSpPlacement = ref<{ entryIndex: number; hex: HexRef; amount: number } | null>(null)
+
+  /** 3.4b：地图上点中的**已预摆、尚未归属**的德军 SP（等待本次指定集群） */
+  const pendingSpOwnershipDumpId = ref<string | null>(null)
 
   /** 飞机落位：条目下标 → 基地格文本（14.1a） */
   const airChoices = ref<SetupChoiceInput>({})
@@ -613,6 +625,9 @@ export const useSetupStore = defineStore('setup', () => {
 
   function cancelPlacement(): void {
     placing.value = null
+    // 3.4b：取消摆放 ⇒ 未选集群的暂存落位一并放弃（未选不算摆完）
+    pendingSpPlacement.value = null
+    pendingSpOwnershipDumpId.value = null
   }
 
   /**
@@ -626,6 +641,15 @@ export const useSetupStore = defineStore('setup', () => {
   function placeAtHex(hex: HexRef): boolean {
     const current = placing.value
     if (current === null) return false
+    // 3.4b：刚落下的德军 SP 尚未选集群 ⇒ 「未选不算摆完」，先完成二选一
+    if (pendingSpPlacement.value !== null) {
+      record({
+        ok: false,
+        rule: '3.4b',
+        reason: `${setupHexLabel(pendingSpPlacement.value.hex)} 的 SP 尚未选装甲集群（Guderian / Hoth）`,
+      })
+      return true
+    }
     /*
      * ★ ch10 西移项**不按候选校验**：正常落点由引擎沿道路/铁路边自动算出（`shiftWestDestination`）；
      *   只有旧台账缺落点的兜底入口才由玩家给格，候选只是提示范围。
@@ -1451,6 +1475,13 @@ export const useSetupStore = defineStore('setup', () => {
   )
 
   function canFinishSetup(): boolean {
+    // 3.4b：刚落下的 SP 未选集群 ⇒ 不算摆完，不能收束初设
+    if (pendingSpPlacement.value !== null)
+      return record({
+        ok: false,
+        rule: '3.4b',
+        reason: `${setupHexLabel(pendingSpPlacement.value.hex)} 的 SP 尚未选装甲集群（Guderian / Hoth）`,
+      })
     const required = pendingPlacement.value.filter((item) => item.kind === 'shift')
     const result = validateRequiredSetupPlacements(
       required.map((item) => ({ id: item.formationId ?? item.label, remaining: item.remaining })),
@@ -1505,6 +1536,9 @@ export const useSetupStore = defineStore('setup', () => {
       ]
     }
     placing.value = null
+    // 3.4b：收束后不再有初设内的归属补指定入口
+    pendingSpPlacement.value = null
+    pendingSpOwnershipDumpId.value = null
     finished.value = true
     workbench.initialSetupInProgress = false
     completed.value = { ...completed.value, start: true }
@@ -1810,6 +1844,8 @@ export const useSetupStore = defineStore('setup', () => {
     truckFullIds.value = []
     spAssignments.value = {}
     spDumps.value = []
+    pendingSpPlacement.value = null
+    pendingSpOwnershipDumpId.value = null
     // 12.1b：账本是初设 SP 的用账之处 ⇒ 重置必须一并清空，否则旧剧本的补给站会残留
     if (clearDumps) workbench.clearSpDumps('初设输入重置')
     airChoices.value = {}
@@ -2063,7 +2099,8 @@ export const useSetupStore = defineStore('setup', () => {
     // 12.1b / 12.1c：初设的 SP 位置就是补给站 ⇒ 整批落进 workbench 账本（整备付款、战斗补给、
     // 12.3a 拖取与追溯重判都读那本账；不落账就会出现「地图上有 SP 却付款补 0 处」）
     workbench.landSetupSpDumps(dumps)
-    // 3.4b / Setup Note F：分界线只作提示，归属由玩家逐站选择，不在此处预填
+    // 3.4b（用户 2026-11-11）：**一键自动初设按 3.4a 分界线自动归属**，不要求玩家逐个指定
+    autoAssignAxisSpDumps()
     /*
      * 13.2h / 通规 IV-D / 专规 Setup Note C：**剧本页明示"全部满载 / 全部空载"时不由玩家决定**
      * ⇒ 初设当场按剧本把 `loadedSpT` 落盘。
@@ -2108,9 +2145,150 @@ export const useSetupStore = defineStore('setup', () => {
     })
   }
 
+  /** 落位时可选的 3.4b 归属：显式集群，或 `auto`（按 3.4a 分界线自动判定） */
+  type SpPlacementOption = { panzerGroup?: SetupPanzerGroup | 'auto' }
+
+  /**
+   * 3.4a：按分界线判该格应属哪个集群
+   *
+   * 原文：Guderian 在「分界线上或以南」、Hoth 在「分界线上或以北」。
+   * 线上（`onLine`）两侧都合规；自动初设取 Guderian（登记为待裁定口径，不改变玩家手选）。
+   */
+  function boundaryGroupOfHex(hex: HexRef): SetupPanzerGroup | null {
+    const boundary = workbench.panzerGroupBoundaryWithPath
+    if (boundary === null) return null
+    return boundarySideOf(hex, boundary) === 'north' ? 'hoth' : 'guderian'
+  }
+
+  /** 3.4b：记下某格 SP 的集群归属，并同步到付款/拖取实际读取的账本 */
+  function assignSetupDumpGroup(dumpId: string, group: SetupPanzerGroup): void {
+    spAssignments.value = { ...spAssignments.value, [dumpId]: group }
+    if (workbench.panzerGroupOfDump(dumpId) !== group)
+      workbench.setDumpPanzerGroupNow(dumpId, group)
+    completed.value = { ...completed.value, spOwnership: false }
+  }
+
+  /**
+   * 3.4b：**一键自动初设**按 3.4a 分界线自动归属（不要求玩家逐个指定）
+   *
+   * 只补尚未指定的轴方补给站；分界线缺失时如实留空（不猜）。
+   */
+  function autoAssignAxisSpDumps(): void {
+    if (!panzerGroupRulesOn()) return
+    for (const dump of spDumps.value) {
+      if (dump.side !== 'axis') continue
+      if (spAssignments.value[dump.id] !== undefined) continue
+      const group = boundaryGroupOfHex(dump.hex)
+      if (group !== null) assignSetupDumpGroup(dump.id, group)
+    }
+  }
+
+  /**
+   * 3.4b：**已预摆、尚未指定**的德军 SP 格（地图高亮，点它即可指定）
+   *
+   * 只在 3.4b 生效且初设尚未收束时出现；正在自由摆放（含等待选集群）时让位给落位交互。
+   */
+  const pendingSpOwnershipHexes = computed<HexRef[]>(() => {
+    if (!panzerGroupRulesOn() || finished.value) return []
+    if (placing.value !== null || pendingSpPlacement.value !== null) return []
+    return spDumps.value
+      .filter((dump) => dump.side === 'axis' && spAssignments.value[dump.id] === undefined)
+      .map((dump) => ({ ...dump.hex }))
+  })
+
+  /** 3.4b：当前等待玩家点选的归属目标（供面板常驻的二选一显示格与点数） */
+  const pendingSpChoice = computed<{
+    source: 'placement' | 'ownership'
+    hexText: string
+    points: number
+    entryIndex: number
+  } | null>(() => {
+    if (!panzerGroupRulesOn() || finished.value) return null
+    const staged = pendingSpPlacement.value
+    if (staged !== null) {
+      return {
+        source: 'placement',
+        hexText: setupHexLabel(staged.hex),
+        points: staged.amount,
+        entryIndex: staged.entryIndex,
+      }
+    }
+    const dumpId = pendingSpOwnershipDumpId.value
+    if (dumpId === null) return null
+    const dump = spDumps.value.find((item) => item.id === dumpId && item.side === 'axis')
+    if (dump === undefined) return null
+    return {
+      source: 'ownership',
+      hexText: setupHexLabel(dump.hex),
+      points: dump.points,
+      entryIndex: -1,
+    }
+  })
+
+  /** 3.4b：玩家选定集群 ⇒ 完成本次落位（或给已预摆的 SP 补归属） */
+  function choosePendingSpGroup(group: SetupPanzerGroup): boolean {
+    if (!panzerGroupRulesOn() || finished.value) return false
+    const staged = pendingSpPlacement.value
+    if (staged !== null) {
+      const ok = placeSelfInternal(staged.entryIndex, staged.hex, 'one', staged.amount, {
+        panzerGroup: group,
+      })
+      if (!ok) return false
+      pendingSpPlacement.value = null
+      // 与 `placeAtHex` 同一收尾：落满即收起卡片，否则更新剩余量
+      const current = placing.value
+      if (current !== null && current.kind === 'self') {
+        const key = selfPlacedOf(current.entryIndex)
+        placing.value =
+          key >= current.total
+            ? null
+            : {
+                ...current,
+                placed: key,
+                remaining: current.total - key,
+                chunk: Math.max(0, current.total - key),
+              }
+      }
+      return true
+    }
+    const dumpId = pendingSpOwnershipDumpId.value
+    if (dumpId === null) return false
+    if (!spDumps.value.some((dump) => dump.id === dumpId && dump.side === 'axis')) return false
+    assignSetupDumpGroup(dumpId, group)
+    pendingSpOwnershipDumpId.value = null
+    return record({
+      ok: true,
+      rule: '3.4b',
+      data: { detail: `德军 SP 归属 → ${group === 'guderian' ? 'Guderian' : 'Hoth'}（3.4b）` },
+    })
+  }
+
+  /** 3.4b：地图上点了一格尚未归属的德军 SP ⇒ 选中它，等待二选一 */
+  function pickPendingOwnershipHex(hex: HexRef): boolean {
+    if (!panzerGroupRulesOn() || finished.value) return false
+    // 正在自由摆放时，这一击属于落位（含等待选集群），不由归属点选接管
+    if (placing.value !== null || pendingSpPlacement.value !== null) return false
+    const dump = spDumps.value.find((item) => item.side === 'axis' && sameHex(item.hex, hex))
+    if (dump === undefined || spAssignments.value[dump.id] !== undefined) return false
+    pendingSpOwnershipDumpId.value = dump.id
+    pendingSpPlacement.value = null
+    record({
+      ok: true,
+      rule: '3.4b',
+      data: {
+        detail: `${setupHexLabel(dump.hex)}（${String(dump.points)} SP）⇒ 请选择装甲集群（Guderian / Hoth）`,
+      },
+    })
+    return true
+  }
+
   /** 玩家自定义初设：把一条自由项**整条**落到指定格（IV-A / IV-I 校验在引擎） */
-  function placeSelfEntry(entryIndex: number, targetOverride?: HexRef): boolean {
-    return placeSelfInternal(entryIndex, targetOverride, 'all')
+  function placeSelfEntry(
+    entryIndex: number,
+    targetOverride?: HexRef,
+    options: SpPlacementOption = {},
+  ): boolean {
+    return placeSelfInternal(entryIndex, targetOverride, 'all', 1, options)
   }
 
   /**
@@ -2119,8 +2297,13 @@ export const useSetupStore = defineStore('setup', () => {
    * 棋子类条目（`unit` / `hq` / `extender`）且 `count > 1`（如「2x 26-1-1 Arty Bde」）时：
    * 每次只落一枚，落满才记完成。**只在地图点选路径使用**；`placeSelfEntry`（面板整条落位）保持原语义。
    */
-  function placeSelfOneInstance(entryIndex: number, hex: HexRef, chunk: number): boolean {
-    return placeSelfInternal(entryIndex, hex, 'one', chunk)
+  function placeSelfOneInstance(
+    entryIndex: number,
+    hex: HexRef,
+    chunk: number,
+    options: SpPlacementOption = {},
+  ): boolean {
+    return placeSelfInternal(entryIndex, hex, 'one', chunk, options)
   }
 
   /**
@@ -2134,6 +2317,7 @@ export const useSetupStore = defineStore('setup', () => {
     targetOverride: HexRef | undefined,
     mode: 'all' | 'one',
     chunk = 1,
+    options: SpPlacementOption = {},
   ): boolean {
     const entry = entries.value.find((view) => view.index === entryIndex)
     if (entry === undefined) {
@@ -2170,6 +2354,29 @@ export const useSetupStore = defineStore('setup', () => {
         return record({ ok: false, rule: outcome.rule, reason: 'nothingToPlace' })
       }
       /*
+       * 3.4b（用户 2026-11-11）：**自由摆放时摆一个确认一个**。
+       * 德军 SP 落地前必须先在常驻的 Guderian / Hoth 二选一里选定集群；未选不落账、不进进度。
+       * 例外：`auto`（一键自动初设）按 3.4a 分界线直接判；未启用 3.4b 时整条不出现。
+       * 同格已有唯一集群也**不自动继承**（用户口径），仍走本次指定。
+       */
+      const gatedAxisSp = entry.kind === 'sp' && entry.side === 'axis' && panzerGroupRulesOn()
+      if (gatedAxisSp && options.panzerGroup === undefined) {
+        pendingSpPlacement.value = { entryIndex, hex: { ...target }, amount }
+        pendingSpOwnershipDumpId.value = null
+        return record({
+          ok: true,
+          rule: '3.4b',
+          data: {
+            detail: `${setupHexLabel(target)} 落下 ${String(amount)} SP ⇒ 请选择装甲集群（Guderian / Hoth）后落账`,
+          },
+        })
+      }
+      const placementGroup: SetupPanzerGroup | null = gatedAxisSp
+        ? options.panzerGroup === 'auto'
+          ? boundaryGroupOfHex(target)
+          : (options.panzerGroup ?? null)
+        : null
+      /*
        * ★ 12.1b / §5-C（用户 2026-10-25）：「一格里有多个补给（SP/T）时**自动合并**，
        *   格子里只展示该格有多少补给」——剧本在该格已放了 2 SP，玩家初设又放 2 SP，
        *   该格应是**一条 4 SP 的补给站**，不是两枚 2 SP 算子。
@@ -2199,6 +2406,7 @@ export const useSetupStore = defineStore('setup', () => {
           )
           if (counter !== undefined) counter.noncombatSp = mergedPoints
           workbench.landSetupSpDumps(spDumps.value)
+          if (placementGroup !== null) assignSetupDumpGroup(dumpId, placementGroup)
           placedSelfInstances.value = {
             ...placedSelfInstances.value,
             [entryIndex]: placedBefore + amount,
@@ -2242,6 +2450,7 @@ export const useSetupStore = defineStore('setup', () => {
         }
         // 12.1b：初设落的 SP 必须同时进 workbench 账本 —— 那里才是「付款/拖取/追溯」的用账之处
         workbench.landSetupSpDumps(spDumps.value)
+        if (placementGroup !== null) assignSetupDumpGroup(built.dump.id, placementGroup)
       }
     } else if (entry.kind === 'airbase') {
       const built = countersFor({
@@ -2333,6 +2542,11 @@ export const useSetupStore = defineStore('setup', () => {
     const total = selfInstanceTotalOf(entry)
     const oneByOne =
       (entry.kind === 'unit' || entry.kind === 'hq' || entry.kind === 'extender') && total > 1
+    // 3.4b：一键预设属**自动初设**的并列入口 ⇒ 德军 SP 按 3.4a 分界线自动归属，不逐个要求玩家指定
+    const autoSp =
+      entry.kind === 'sp' && entry.side === 'axis' && panzerGroupRulesOn()
+        ? ({ panzerGroup: 'auto' } as const)
+        : {}
     let tried = 0
     for (let step = 0; step < total; step += 1) {
       if (completed.value[`self:${entry.index}`] === true) return true
@@ -2341,8 +2555,8 @@ export const useSetupStore = defineStore('setup', () => {
       for (const hex of candidates) {
         tried += 1
         const ok = oneByOne
-          ? placeSelfOneInstance(entry.index, hex, 1)
-          : placeSelfEntry(entry.index, hex)
+          ? placeSelfOneInstance(entry.index, hex, 1, autoSp)
+          : placeSelfEntry(entry.index, hex, autoSp)
         if (ok) {
           committed = true
           break
@@ -2562,6 +2776,28 @@ export const useSetupStore = defineStore('setup', () => {
     })
   }
 
+  /*
+   * 3.4b（用户 2026-11-11）：**未勾选时整条不出现、不写账本**。
+   * 初设期间取消勾选 ⇒ 自动初设此前写下的归属也不该残留（否则 UI 消失、账本还在）。
+   * 开局后（finished）日期越过解除日只是约束失效，**不清除既有归属**。
+   */
+  watch(
+    () => panzerGroupRulesOn(),
+    (on) => {
+      if (on || finished.value) return
+      if (Object.keys(spAssignments.value).length > 0) spAssignments.value = {}
+      pendingSpPlacement.value = null
+      pendingSpOwnershipDumpId.value = null
+      const setupIds = new Set(spDumps.value.map((dump) => dump.id))
+      if (!Object.keys(workbench.spDumpPanzerGroups).some((id) => setupIds.has(id))) return
+      const next = { ...workbench.spDumpPanzerGroups }
+      for (const id of setupIds) delete next[id]
+      workbench.spDumpPanzerGroups = next
+    },
+    // 取消勾选后 UI/台账必须**当场**一致（同一次事件内读取，不等下一 tick）
+    { flush: 'sync' },
+  )
+
   /**
    * 3.4b SP 归属入口是否出现 —— 用户 2026-11-10 口径：**三者同时**才出现
    *   ① 开场共识勾选了 3.4b（4.1a 可选项）
@@ -2570,7 +2806,8 @@ export const useSetupStore = defineStore('setup', () => {
    * 未勾选 ⇒ 无入口、无提示、不写台账（归属只在这条规则真生效时才有意义）。
    */
   const spOwnershipEntryVisible = computed(
-    () => panzerGroupRulesOn() && spDumpsOf('axis').length > 0,
+    // 3.4b：点「初设完成」即结束初设阶段 ⇒ 此后不再有初设内的归属补指定入口
+    () => !finished.value && panzerGroupRulesOn() && spDumpsOf('axis').length > 0,
   )
 
   /**
@@ -2584,6 +2821,8 @@ export const useSetupStore = defineStore('setup', () => {
   function setSpAssignment(dumpId: string, group: SetupPanzerGroup | null): void {
     // 3.4b 未生效（未勾选 / 已过 19 Aug / 无德军 SP）⇒ 不写台账（用户 2026-11-10 口径）
     if (!panzerGroupRulesOn()) return
+    // 初设已收束 ⇒ 初设内不再有归属补指定入口
+    if (finished.value) return
     const next = { ...spAssignments.value }
     if (group === null) delete next[dumpId]
     else next[dumpId] = group
@@ -2593,6 +2832,8 @@ export const useSetupStore = defineStore('setup', () => {
 
   /** SP 归属划分（12.1d + Setup Note F + 3.4b）：核验后记完成 */
   function confirmSpOwnership(): boolean {
+    // 初设已收束 ⇒ 不再有初设内的归属补指定入口（3.4b）
+    if (finished.value) return false
     const outcome = planSupplyOwnership({
       scenarioId: scenarioId.value,
       dumps: spDumps.value,
@@ -2937,6 +3178,11 @@ export const useSetupStore = defineStore('setup', () => {
     designateTrucks,
     setSpAssignment,
     confirmSpOwnership,
+    // 3.4b（用户 2026-11-11）：摆一个确认一个 + 已预摆 SP 的地图点选归属
+    pendingSpChoice,
+    pendingSpOwnershipHexes,
+    choosePendingSpGroup,
+    pickPendingOwnershipHex,
     panzerGroupRulesOn,
     spOwnershipEntryVisible,
     setAirChoice,

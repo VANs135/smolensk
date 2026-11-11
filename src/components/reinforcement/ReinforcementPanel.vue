@@ -671,6 +671,24 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           · 已放 {{ arrivalPlacedCards.length }}</template
         >
       </p>
+      <!-- 3.4b：非编队运输点带来的 SP 入场前必须选定集群 -->
+      <div v-if="workbench.arrivalTransportSpNeedsGroup" class="row" data-testid="arrival-sp-group">
+        <span class="num">运输点带来的 SP 归属（3.4b）：</span>
+        <BaseButton
+          :variant="workbench.transportSpGroupDraft === 'guderian' ? 'primary' : 'secondary'"
+          size="sm"
+          @click="workbench.setTransportSpGroupDraftNow('guderian')"
+        >
+          Guderian
+        </BaseButton>
+        <BaseButton
+          :variant="workbench.transportSpGroupDraft === 'hoth' ? 'primary' : 'secondary'"
+          size="sm"
+          @click="workbench.setTransportSpGroupDraftNow('hoth')"
+        >
+          Hoth
+        </BaseButton>
+      </div>
       <p v-if="handError !== ''" class="warn" role="status" data-testid="arrival-hand-error">
         {{ handError }}
       </p>

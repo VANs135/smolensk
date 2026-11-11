@@ -11953,33 +11953,30 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const sameHexDumps = spDumps.value.filter(
       (dump) => dump.side === input.side && sameHex(dump.hex, input.hex),
     )
-    const existing = !axisGated
-      ? sameHexDumps[0]
-      : inputGroup !== undefined
-        ? sameHexDumps.find((dump) => panzerGroupOfDump(dump.id) === inputGroup)
-        : (sameHexDumps.find((dump) => panzerGroupOfDump(dump.id) === null) ??
-          // 同格只有**一个**集群时不存在歧义 ⇒ 按 12.1a 并入（不凭空造「未归属」）
-          (new Set(sameHexDumps.map((dump) => panzerGroupOfDump(dump.id))).size === 1
-            ? sameHexDumps[0]
-            : undefined))
+    /*
+     * 3.4b（用户 2026-11-11）：**同格只有一个集群时也不自动继承**，仍须本次指定。
+     * ⇒ 轴方带 SP 的落账只并入「集群相同」的那一本；没带选择时下面直接拒绝，不再从同格既有站继承归属。
+     */
+    const existing =
+      axisGated && sp > 0
+        ? inputGroup === undefined
+          ? undefined
+          : sameHexDumps.find((dump) => panzerGroupOfDump(dump.id) === inputGroup)
+        : sameHexDumps[0]
     /*
      * 3.4b（用户 2026-11-11 口径）：**解除日之前，任何德军 SP 到场都必须由玩家指定集群**——
-     * 不提供「不属任何集群」这个选项。初设 / 增援 / 补给列车 / 可变增援 / 手工新增共用本入口，
-     * 判据只写在这一处：`sp > 0` 的轴方落账，若没带 `panzerGroup`，且并入的既有站也没有归属
-     * （即落完仍无集群）⇒ 整笔拒绝，不落盘、不建待办。并入**已归属**的站不算"未归属到场"
-     * （该站的归属就是玩家对这批 SP 的指定）。解除日（19 August）之后闸门自动失效。
+     * 不提供「不属任何集群」这个选项，也不从同格既有站自动继承。初设 / 增援 / 补给列车 /
+     * 可变增援 / 手工新增共用本入口，判据只写在这一处：`sp > 0` 的轴方落账没带
+     * `panzerGroup` ⇒ 整笔拒绝，不落盘、不建待办。解除日（19 August）之后闸门自动失效。
      */
     if (axisGated && sp > 0 && inputGroup === undefined) {
-      const inheritedGroup = existing === undefined ? null : panzerGroupOfDump(existing.id)
-      if (inheritedGroup === null) {
-        pushLog(
-          'warning',
-          `德军 SP（${hexLabel(input.hex)}，${String(sp)} SP）未指定装甲集群 ⇒ 不落账；` +
-            `3.4b 要求新到的轴方 SP 立即归属 Guderian / Hoth`,
-          '3.4b',
-        )
-        return null
-      }
+      pushLog(
+        'warning',
+        `德军 SP（${hexLabel(input.hex)}，${String(sp)} SP）未指定装甲集群 ⇒ 不落账；` +
+          `3.4b 要求新到的轴方 SP 立即归属 Guderian / Hoth（同格既有归属也不自动继承）`,
+        '3.4b',
+      )
+      return null
     }
     if (existing !== undefined) {
       // 12.1a：并入后仍保持「尽可能并为 SP」的规范形（2T + 2T ⇒ 1 SP + 0 T，而不是留成 4T）
@@ -19742,8 +19739,42 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 判据：编队号前缀内按「番号 + 兵种别名」**唯一**命中才投；有任何一枚命中不了就不猜，
      * 整条交裁判手工逐枚摆入（`resolveArrivalFormation` 给出缺哪几枚）。
      */
+    /*
+     * 3.4b（用户 2026-11-11）：**随运输队入场的 SP**
+     *   · 编队单位随编队自然已有集群（算子自带 `panzerGroup`）⇒ 不再要求指定；
+     *   · 非编队单位带来的 SP ⇒ 入场前必须选 Guderian / Hoth，未选就拒绝投放（不落未归属载货账）。
+     */
+    const gatedAxisCargo =
+      demand.loadedWithSp && panzerGroupRulesOn.value && activeSide.value === 'axis'
+    const ensureCargoGroup = (hasGroup: boolean, label: string): boolean => {
+      if (!gatedAxisCargo || hasGroup || transportSpGroupDraft.value !== null) return true
+      reinforcementError.value = { rule: '3.4b', reason: 'arrivalSpGroupRequired' }
+      pushLog(
+        'warning',
+        `${label}：运输点带来的 SP 必须先选装甲集群（Guderian / Hoth）再投放（3.4b）`,
+        '3.4b',
+      )
+      return false
+    }
+    const assignArrivalCargoGroups = (list: readonly ConsoleUnit[]): void => {
+      if (!gatedAxisCargo) return
+      for (const item of list) {
+        if (item.loadedSpT <= 0) continue
+        const group = item.panzerGroup ?? transportSpGroupDraft.value
+        if (group !== null) setDumpPanzerGroupNow(`unit:${item.instanceId}`, group)
+      }
+      transportSpGroupDraft.value = null
+    }
+
     const formation = resolveArrivalFormation(index)
     if (formation !== null) {
+      if (
+        !ensureCargoGroup(
+          formation.records.every((record) => (record.panzerGroup ?? null) !== null),
+          demand.raw,
+        )
+      )
+        return false
       if (formation.missing.length > 0) {
         reinforcementError.value = {
           rule: '13.6',
@@ -19759,6 +19790,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
       const arrived = formation.records.map((record) => buildArrivalUnit(record))
       units.value = [...units.value, ...arrived]
+      assignArrivalCargoGroups(arrived)
       pushLog(
         'success',
         `${demand.raw} 投放于 ${hexLabel(hex)}：编成共 ${String(arrived.length)} 枚（13.6）`,
@@ -19798,9 +19830,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
 
+    if (!ensureCargoGroup((record.panzerGroup ?? null) !== null, demand.raw)) return false
     const unit = buildArrivalUnit(record)
     units.value = [...units.value, unit]
     let createdIds = [unit.instanceId]
+    let arrivedUnits: ConsoleUnit[] = [unit]
 
     /*
      * 13.6：**同型复制**（卡面 `2x 26-2-2 Arty Grp` 之类 ⇒ 两枚一模一样的算子都应到场）
@@ -19816,12 +19850,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
       units.value = [...units.value, ...extras]
       createdIds = [unit.instanceId, ...extras.map((item) => item.instanceId)]
+      arrivedUnits = [unit, ...extras]
       pushLog(
         'info',
         `${demand.raw}：卡面为 ${String(copies)} 枚同型算子 ⇒ 一并投放（13.6）`,
         '13.6',
       )
     }
+    assignArrivalCargoGroups(arrivedUnits)
 
     pushLog(
       'success',
@@ -19867,6 +19903,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const idSet = new Set(ids)
     units.value = units.value.filter((item) => !idSet.has(item.instanceId))
     airUnits.value = airUnits.value.filter((item) => !idSet.has(item.instanceId))
+    // 3.4b：随运输队入场时写下的载货 SP 归属随算子一起撤回，避免留下幽灵归属
+    const staleGroupIds = ids.map((id) => `unit:${id}`)
+    if (staleGroupIds.some((id) => spDumpPanzerGroups.value[id] !== undefined)) {
+      const nextGroups = { ...spDumpPanzerGroups.value }
+      for (const id of staleGroupIds) delete nextGroups[id]
+      spDumpPanzerGroups.value = nextGroups
+    }
+    pendingSpGroupAssignment.value = pendingSpGroupAssignment.value.filter(
+      (id) => !staleGroupIds.includes(id),
+    )
     syncArrivalLedger()
     const nextPlaced = { ...arrivalPlacedRaw.value }
     delete nextPlaced[index]
@@ -21406,6 +21452,32 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   const pendingSpGroupAssignment = ref<string[]>([])
+
+  /**
+   * 3.4b：**随运输队入场的 SP**（13.6c）的集群选择
+   *
+   * 编队单位随编队自然已有集群（取算子自身的 `panzerGroup`）；非编队单位带来的 SP
+   * 入场前必须在这里选定 Guderian / Hoth——未选则拒绝投放，不落「未归属」的载货账。
+   */
+  const transportSpGroupDraft = ref<PanzerGroup | null>(null)
+
+  function setTransportSpGroupDraftNow(group: PanzerGroup | null): void {
+    transportSpGroupDraft.value = group
+  }
+
+  /** 3.4b：当前到达表里是否有「非编队运输点满载 SP」尚未投放（决定是否显示二选一） */
+  const arrivalTransportSpNeedsGroup = computed(() => {
+    if (!panzerGroupRulesOn.value || activeSide.value !== 'axis') return false
+    const plan = arrivalPlan.value
+    if (plan === null) return false
+    return plan.units.some(
+      (demand, index) =>
+        demand.loadedWithSp &&
+        demand.kind !== 'aircraft' &&
+        arrivalPlaced.value[index] !== true &&
+        (matchArrivalRecord(demand.name ?? demand.raw)?.formation ?? '') === '',
+    )
+  })
 
   /** 3.4b：声明/撤销某补给站的装甲集群归属（null ⇒ 撤销声明） */
   function setDumpPanzerGroupNow(dumpId: string, group: PanzerGroup | null): void {
@@ -24005,6 +24077,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     panzerGroupOfDump,
     setDumpPanzerGroupNow,
     panzerGroupUnassignedDumps,
+    // 3.4b：随运输队入场的 SP（非编队）入场前必须选集群
+    transportSpGroupDraft,
+    setTransportSpGroupDraftNow,
+    arrivalTransportSpNeedsGroup,
     pendingSpGroupAssignment,
     panzerGroupRulesOn,
     panzerGroupSpGate,

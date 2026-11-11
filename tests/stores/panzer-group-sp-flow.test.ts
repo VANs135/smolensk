@@ -144,8 +144,18 @@ describe('3.4b：SP 归属账本', () => {
     const dump = store.spDumps[0]!
     expect(store.pendingSpGroupAssignment).toEqual([])
 
-    // 同一格再落 2 SP（未重选，但并入的是**已归属**的站 ⇒ 归属明确，放行）：并入同一条
+    // 同一格再落 2 SP：**同格只有一个集群也不自动继承**（用户 2026-11-11 口径）⇒ 未选即拒
     store.spDumpDraft = { hexText: `${CORE_HEX.col}.${CORE_HEX.row}`, sp: 2, t: 0 }
+    expect(store.addSpDump()).toBe(false)
+    expect(store.spDumps).toHaveLength(1)
+    expect(store.spDumps[0]).toMatchObject({ id: dump.id, sp: 4 })
+    // 本次指定同一集群 ⇒ 并入同一条
+    store.spDumpDraft = {
+      hexText: `${CORE_HEX.col}.${CORE_HEX.row}`,
+      sp: 2,
+      t: 0,
+      panzerGroup: 'guderian',
+    }
     expect(store.addSpDump()).toBe(true)
     expect(store.spDumps).toHaveLength(1)
     expect(store.spDumps[0]).toMatchObject({ id: dump.id, sp: 6 })
@@ -165,8 +175,17 @@ describe('3.4b：SP 归属账本', () => {
     expect(store.spDumps).toHaveLength(1)
     expect(store.spDumps[0]!.sp).toBe(4)
 
-    // 给旧站补上归属后，同一格再不选也能并入（归属已明确）
+    // 给旧站补上归属后，同一格**仍不自动继承**（用户 2026-11-11 口径）⇒ 未选还是拒
     store.setDumpPanzerGroupNow('legacy', 'hoth')
+    expect(store.addSpDump()).toBe(false)
+    expect(store.spDumps[0]!.sp).toBe(4)
+    // 本次指定 Hoth ⇒ 并入旧站
+    store.spDumpDraft = {
+      hexText: `${CORE_HEX.col}.${CORE_HEX.row}`,
+      sp: 2,
+      t: 0,
+      panzerGroup: 'hoth',
+    }
     expect(store.addSpDump()).toBe(true)
     expect(store.spDumps).toHaveLength(1)
     expect(store.spDumps[0]).toMatchObject({ id: 'legacy', sp: 6 })

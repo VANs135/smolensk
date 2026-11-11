@@ -502,9 +502,29 @@ function sideLabel(side: Side): string {
         SP 归属划分（12.1d）：通用 SP 算子双方共用，**谁带上图即谁拥有**。
         <template v-if="setup.spOwnershipEntryVisible">
           轴方地图内 SP 还要在初设期逐个点名装甲集群（Setup Note F / 3.4b）——每个轴方补给站都必须选
-          Guderian 或 Hoth；分界线只作提示，不参与判定（原文 guide /
-          玩家自定），未选不能核验，也不能开局。
+          Guderian 或 Hoth（摆一个确认一个；未选不算摆完，不能核验，也不能开局）。 一键自动初设按
+          3.4a 分界线自动归属，不要求玩家逐个指定。
         </template>
+      </p>
+      <!-- 3.4b：摆一个确认一个 —— 刚落下的 SP（或地图上点中的未归属 SP）常驻二选一 -->
+      <div v-if="setup.pendingSpChoice !== null" class="row" data-testid="sp-group-choice">
+        <span class="num">
+          {{ setup.pendingSpChoice.hexText }}（{{ setup.pendingSpChoice.points }}
+          SP）待指定装甲集群（3.4b）：
+        </span>
+        <BaseButton variant="primary" size="sm" @click="setup.choosePendingSpGroup('guderian')">
+          Guderian
+        </BaseButton>
+        <BaseButton variant="primary" size="sm" @click="setup.choosePendingSpGroup('hoth')">
+          Hoth
+        </BaseButton>
+      </div>
+      <p
+        v-else-if="setup.spOwnershipEntryVisible && setup.pendingSpOwnershipHexes.length > 0"
+        class="muted"
+      >
+        地图上高亮 {{ setup.pendingSpOwnershipHexes.length }} 处尚未指定的德军
+        SP：点它即可指定集群。
       </p>
       <table v-if="setup.spDumps.length > 0" class="table">
         <thead>
@@ -526,7 +546,7 @@ function sideLabel(side: Side): string {
                   :value="setup.spAssignments[dump.id] ?? ''"
                   @change="setGroup(dump.id, ($event.target as HTMLSelectElement).value)"
                 >
-                  <option value="">（未点名）</option>
+                  <option value="" disabled>请选择…</option>
                   <option value="guderian">Guderian</option>
                   <option value="hoth">Hoth</option>
                 </select>

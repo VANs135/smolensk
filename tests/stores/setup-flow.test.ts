@@ -250,23 +250,19 @@ describe('W7 C14：SP 归属划分（12.1d + Setup Note F + 3.4b）', () => {
     setup.runAutoSetup()
   })
 
-  it('C14：剧本 1 轴方 dump 的装甲集群**必须由玩家逐个点名**（不再按分界线预填）；未选即拒', () => {
+  it('C14：剧本 1 轴方 dump 由**一键自动初设按 3.4a 分界线**归属；清空一处即拒', () => {
     const axisDumps = setup.spDumpsOf('axis')
     expect(axisDumps.length).toBeGreaterThan(0)
-    // ★ 3.4b 裁定：归属由玩家逐个选择，分界线只作提示 ⇒ 初设后账本为空
-    expect(Object.keys(setup.spAssignments).length).toBe(0)
-    expect(setup.confirmSpOwnership()).toBe(false)
-    expect(setup.lastAction).toMatchObject({ ok: false, rule: '3.4b' })
-
-    for (const dump of axisDumps) setup.setSpAssignment(dump.id, 'guderian')
+    // ★ 3.4b 裁定（用户 2026-11-11）：自动初设按分界线自动归属，不要求玩家逐个指定
+    expect(Object.keys(setup.spAssignments).length).toBe(axisDumps.length)
     expect(setup.confirmSpOwnership()).toBe(true)
     expect(setup.stepDone['spOwnership']).toBe(true)
 
-    // 清掉一个 ⇒ 3.4b 逐一点名，故被拒
+    // 清掉一个 ⇒ 归属缺失，核验被拒
     setup.setSpAssignment(axisDumps[0]!.id, null)
     expect(setup.confirmSpOwnership()).toBe(false)
     expect(setup.lastAction).toMatchObject({ ok: false, rule: '3.4b' })
-    // 再填回去即通过
+    // 本次指定补回即通过
     setup.setSpAssignment(axisDumps[0]!.id, 'guderian')
     expect(setup.confirmSpOwnership()).toBe(true)
   })

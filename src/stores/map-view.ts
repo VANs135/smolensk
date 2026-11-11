@@ -626,7 +626,12 @@ export const useMapViewStore = defineStore('mapView', () => {
       // W7 C14：初设落点候选（玩家在「初设单位 box」点了某一项时高亮其合法落点）
       // 第六批条 2：卡车点选模式下高亮的**是卡车所在格**（不是"落点"）
       setupCandidates:
-        setup.placing?.candidates ?? (setup.truckPickActive ? setup.truckPickHexes : null),
+        setup.placing?.candidates ??
+        (setup.truckPickActive
+          ? setup.truckPickHexes
+          : setup.pendingSpOwnershipHexes.length > 0
+            ? setup.pendingSpOwnershipHexes
+            : null),
       // 15.1：整备付款的补给站候选（用户口径：与其它补给消耗一样，点地图上高亮的补给）
       refitPay: refitPayHints.value,
       // ⑦ 12.3a / 12.3b：选源时地图上可点的来源格（点格即选定；再点取消）
@@ -3160,6 +3165,11 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 也只有补给检查正停在选源/已选步时才会吃掉这一击（其余情况交回常规分派）。
      */
     if (workbench.pickSupplySourceAtHexNow(hex)) {
+      closePopup()
+      return
+    }
+    // 3.4b：点地图上高亮的「已预摆、尚未指定」德军 SP ⇒ 选中它，等待 Guderian / Hoth 二选一
+    if (setup.pickPendingOwnershipHex(hex)) {
       closePopup()
       return
     }

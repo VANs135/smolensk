@@ -93,6 +93,9 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'placeAirInOffMapBoxNow',
       'beginSelfPlacement',
       'beginShiftPlacement',
+      // 3.4b：摆一个确认一个 / 已预摆 SP 的点选归属，都在初设期内完成
+      'choosePendingSpGroup',
+      'pickPendingOwnershipHex',
       'beginTruckPick',
       'cancelPlacement',
       'cancelTruckPick',
@@ -256,6 +259,11 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   acknowledgeReinforcementStepNow: {
     kind: 'draft',
     why: '增援段单窗推进：只记"本步已完成"的窗口标记，不落盘、不改账本',
+  },
+  // 3.4b：到达投放前的集群草稿；真正落账在 placeArrivalNow（有环节闸）
+  setTransportSpGroupDraftNow: {
+    kind: 'draft',
+    why: '只改"这批运输点带来的 SP 归哪个集群"的待提交选择，不落盘；落账发生在 placeArrivalNow',
   },
 
   // 专规 2.4：原文只写"按此表动员"，**未给时机** ⇒ 不加环节闸（用户 2026-11-05 裁定"按回合能动"）
