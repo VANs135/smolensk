@@ -940,17 +940,6 @@ const showsLedger = computed(
             <BaseTag kind="danger">{{ workbench.railMoveError.rule }}</BaseTag>
             {{ workbench.railMoveError.reason }}
           </p>
-          <RuleNote
-            title="尚未接线（如实登记）：13.3a 的运输点数货物 / 13.3g 铁路修理例外等"
-            rule="13.3"
-          >
-            <p class="muted">
-              ★ 尚未接线：**运输点数作为铁路货物**（13.3a 的第三类货物）、13.3g 的铁路修理单位例外
-              （任意铁路格登车 / 战斗模式可铁路移动 / 卸货后仍有完整 MA）——后者要等 RR 算子入库。
-              13.3c 末句的「运货时 EZOC 不可抵消」已落实（`zoc-effects` 的 `railTransport`
-              不可抵消）； 仅「连接补给源」才按 4.5b 抵消。
-            </p>
-          </RuleNote>
 
           <!-- ── ②c D 段补给阶段总计划（12.1–12.2；顺序由 12.10e-A 定死） ── -->
           <RuleNote
