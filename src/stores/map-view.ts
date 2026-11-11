@@ -1616,6 +1616,11 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   function counterActionsAt(hex: HexRef, id: string): CounterAction[] {
+    /*
+     * 用户 2026-11-11：4ab30d6 起观察方为**手选**，可与行动方不同。
+     * 菜单仍要能打开（看这一枚是谁），但非行动方不摆任何可执行项——否则会越过行动方权限。
+     */
+    if (hotseat.viewerSide !== actingSide.value) return []
     const unit = ownCounterAt(hex, id)
     /*
      * 3.4b 把同格轴方 SP 拆成两个算子（id 形如 `sp:c,r:guderian`）⇒ 这里按格前缀找那一条账本；
@@ -1949,8 +1954,8 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (targets.length === 0) return []
     if (targets.length === 1) {
       const id = targets[0]!
+      // 用户 2026-11-11：这一枚没有可执行项时也要出**它自己的**菜单（标题 + 空态），不留白窗
       const actions = counterActionsAt(hex, id)
-      if (actions.length === 0) return []
       // 3.4b：拆分出来的「未归属」补给站有全称（`? N SP` 是角标，写不下）⇒ 菜单标题写全称
       const tip = stackTokensAt(hex).find((token) => token.id === id)?.tip ?? null
       const label = ownCounterAt(hex, id)?.name ?? enemyCounterAt(hex, id)?.name ?? tip ?? '补给站'
@@ -1966,6 +1971,14 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (actions.length === 0) return []
     return [{ id: SHARED_CONTEXT_ID, label: `已选 ${targets.length} 枚`, actions }]
   })
+
+  /** 打开右键菜单的**硬闸**：只挡"正在点选/有待决"，不要求观察方=行动方（动作项另由 `counterActionsAt` 筛） */
+  function canOpenCounterMenu(): boolean {
+    if (!setup.finished) return false
+    if (workbench.hexPickView !== null || workbench.refitBase !== null) return false
+    if (workbench.overrunZocHeld !== null || workbench.specialPending !== null) return false
+    return true
+  }
 
   function canOpenCounterContext(): boolean {
     if (!setup.finished || hotseat.viewerSide !== actingSide.value) return false
@@ -2041,9 +2054,20 @@ export const useMapViewStore = defineStore('mapView', () => {
     hex: HexRef,
     instanceId: string,
     anchor: { x: number; y: number },
+    options: { fromStackWindow?: boolean } = {},
   ): boolean {
-    if (!canOpenCounterContext()) return false
-    if (counterActionsAt(hex, instanceId).length === 0) return false
+    if (options.fromStackWindow === true) {
+      /*
+       * 用户 2026-11-11：这一窗里**每一枚**都要出它自己的菜单。
+       * 打开只过"硬闸"（非点选中/无待决），动作项仍按能力与本环节闸门筛（空则显示空态）；
+       * 观察方≠行动方时 `counterActionsAt` 已返回空 ⇒ 只读，不越权。
+       */
+      if (!canOpenCounterMenu()) return false
+      if (!stackTokensAt(hex).some((token) => token.id === instanceId)) return false
+    } else {
+      if (!canOpenCounterContext()) return false
+      if (counterActionsAt(hex, instanceId).length === 0) return false
+    }
     contextTargets.value = [instanceId]
     openPopup(hex, anchor.x, anchor.y, 'context')
     return true

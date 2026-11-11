@@ -148,7 +148,9 @@ const canStartMove = computed(
 function onChipContext(event: MouseEvent, unitId: string): void {
   const hex = mapView.popup?.hex
   if (hex === undefined) return
-  mapView.openUnitContext(hex, unitId, { x: event.clientX, y: event.clientY })
+  mapView.openUnitContext(hex, unitId, { x: event.clientX, y: event.clientY }, {
+    fromStackWindow: true,
+  })
 }
 
 /** 点 chip＝取消/恢复该枚开拔（仅待取子格上、且是该格可开拔的本方算子才可点） */
@@ -255,6 +257,9 @@ function sideName(side: string): string {
           </div>
         </div>
       </template>
+      <p v-if="target.actions.length === 0" class="muted context-empty">
+        本环节无可用动作（只读查看）
+      </p>
     </section>
   </MapPopover>
   <MapPopover
