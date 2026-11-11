@@ -27,6 +27,12 @@ function setup(turn = 12) {
   return { workbench, mapView: useMapViewStore() }
 }
 
+/** 旧档遗留的未归属站（2026-11-11 起新入口不再产生未归属站） */
+function seedLegacyUnassigned(workbench: ReturnType<typeof setup>['workbench'], sp: number): void {
+  workbench.spDumps.push({ id: 'sd-legacy', hex: { ...HEX }, side: 'axis', sp, t: 0 })
+}
+
+/** 3.4b 未生效（19 August 后）时走真实入口落普通 SP */
 function addUnassigned(workbench: ReturnType<typeof setup>['workbench'], sp: number): void {
   workbench.spDumpDraft = { hexText: `${HEX.col}.${HEX.row}`, sp, t: 0 }
   expect(workbench.addSpDump()).toBe(true)
@@ -49,7 +55,7 @@ describe('3.4b：未归属 SP 的全称（悬停提示 / 点开信息）', () =>
   beforeEach(() => {
     s = setup()
     seedGroups(s.workbench)
-    addUnassigned(s.workbench, 2)
+    seedLegacyUnassigned(s.workbench, 2)
   })
 
   it('★ 三枚都带 tip 全称：G / H / 未归属（各自写清是哪一本账）', () => {

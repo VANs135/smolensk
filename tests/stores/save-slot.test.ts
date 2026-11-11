@@ -441,17 +441,20 @@ describe('B48 P0：存档带盘面（摆子 → 存 → 读 → 盘面一致）'
 
     placeFixtureUnit(workbench, 'axis', 'p0-axis', P0_HEX_A)
     placeFixtureUnit(workbench, 'soviet', 'p0-soviet', P0_HEX_B)
-    // B50：先把「装甲集群 SP 归属约束」这条**可选项**勾上 —— 否则新落的轴方 SP 不进待办
-    // （勾上是为了让下面的往返断言**非空**有东西可验，不是这个用例要考的规则本身）
+    /*
+     * B50：3.4b 的**可选项**勾上后，解除日前的德军 SP 到场必须当场指定集群
+     * （2026-11-11 口径：不再有「未归属」入口，也不再建待办账本）。
+     */
     const optionIndex = session.agreedOptionItems.indexOf(PANZER_GROUP_OPTION_ITEM)
     expect(optionIndex).toBeGreaterThanOrEqual(0)
     session.setAgreedCheck(optionIndex, true)
 
-    // 走**真实入口**落一处补给站（12.1b），顺带生成 3.4b 的装甲集群待办
+    // 走**真实入口**落一处补给站（12.1b），并当场归属 Guderian
     workbench.spDumpDraft = {
       hexText: `${String(P0_HEX_A.col)}.${String(P0_HEX_A.row)}`,
       sp: 2,
       t: 0,
+      panzerGroup: 'guderian',
     }
     expect(workbench.addSpDump()).toBe(true)
     // 一处城市控制账本（3.3b）
@@ -492,7 +495,8 @@ describe('B48 P0：存档带盘面（摆子 → 存 → 读 → 盘面一致）'
     expect(session.loadNow()).toBe(true)
     expect(clone(workbench.units)).toStrictEqual(boardBefore.units)
     expect(clone(workbench.spDumps)).toStrictEqual(boardBefore.spDumps)
-    expect(boardBefore.pendingSpGroupAssignment).toHaveLength(1) // 3.4b 待办确实进了快照
+    // 3.4b 待办账本随档往返（新口径下到场即归属 ⇒ 这份清单为空）
+    expect(boardBefore.pendingSpGroupAssignment).toHaveLength(0)
     expect([...workbench.pendingSpGroupAssignment]).toStrictEqual(
       boardBefore.pendingSpGroupAssignment,
     )
