@@ -85,6 +85,10 @@ const BOX_ENTRY_PROBES: Record<string, { files: readonly string[]; pattern: RegE
     files: ['src/components/air/AircraftRoster.vue'],
     pattern: /setAirInBox/,
   },
+  'air.transfer': {
+    files: ['src/components/air/AircraftRoster.vue'],
+    pattern: /flyOutOfBox|confirmTransfer/,
+  },
 }
 
 function repoPath(relative: string): string {
@@ -142,24 +146,22 @@ it('按方限定的动作不落给另一方', () => {
   expect(soviet.some((row) => row.key === 'rein.frontalReserves')).toBe(true)
 })
 
-it('未登记闸门的 UI 能力单独列出，条款号与入口齐全', () => {
-  expect(UNREGISTERED_ACTION_FAMILIES.length).toBeGreaterThan(0)
-  for (const item of UNREGISTERED_ACTION_FAMILIES) {
-    expect(item.rule.trim(), `${item.id} 缺条款号`).not.toBe('')
-    expect(item.entry.length, `${item.id} 缺入口`).toBeGreaterThan(0)
-    expect(item.families.length, `${item.id} 缺动作族`).toBeGreaterThan(0)
-  }
+it('未登记闸门的 UI 能力清单已清空（销账后不得回填）', () => {
+  // 2026-11-11：air.transfer 已进闸门、rail.repair 已被 move.railConversion 覆盖 ⇒ 不得再有"无闸门"条目
+  expect(UNREGISTERED_ACTION_FAMILIES).toEqual([])
 })
 
-it('14.11 基地转移：表口径限移动环节，与引擎同口径', () => {
-  const entry = UNREGISTERED_ACTION_FAMILIES.find((item) => item.id === 'air.transfer')
-  expect(entry).toBeDefined()
-  // 14.2e：「转移可在不同的移动环节中执行」⇒ 表登记为移动环节，而不是“无时机限制”
-  expect(entry!.segmentKind).toBe('movementSegment')
-  // 与引擎唯一口径对齐（AIR_MISSION_SEGMENT.base_transfer）
-  expect(entry!.segmentKind).toBe(AIR_MISSION_SEGMENT.base_transfer)
-  expect(entry!.note).toContain('移动环节')
-  expect(entry!.note).not.toContain('原文未给时机限制')
+it('14.11 基地转移：已进闸门且限移动环节，与引擎同口径', () => {
+  const gate = ACTION_GATES.find((item) => item.key === 'air.transfer')
+  expect(gate).toBeDefined()
+  expect(gate!.rule).toBe('14.11')
+  // 14.2e：「转移可在不同的移动环节中执行」⇒ C 移动 / G 进击，而不是"无时机限制"
+  expect(gate!.where.map((item) => `${item.phase}/${item.segment}`)).toEqual([
+    'movement/movement.modeAndMovement',
+    'exploitation/exploitation.movement',
+  ])
+  // 与引擎唯一口径对齐（AIR_MISSION_SEGMENT.base_transfer = movementSegment）
+  expect(AIR_MISSION_SEGMENT.base_transfer).toBe('movementSegment')
 })
 
 /*

@@ -503,16 +503,6 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   },
   splitSpDumpHoldings: { kind: 'noTiming', why: '12.1a 的拆分/加总**没有时机限制**' },
   mergeSpDumpHoldings: { kind: 'noTiming', why: '12.1a 同上' },
-  transferAircraftNow: {
-    kind: 'noTiming',
-    why: '14.11 基地转移：原文未给阶段限制（不是 14.1g 的"任务"）⇒ 取保守值，不施加未明定的限制',
-  },
-  flyOutOfBox: {
-    kind: 'noTiming',
-    why:
-      '条 14：飞出盒等同 14.11 基地转移（目的地/距离/激活态全由 transferAircraftNow → planBaseTransfer 裁）；' +
-      '14.11 原文未给阶段限制 ⇒ 与 transferAircraftNow 同归类',
-  },
   setAirInBox: {
     kind: 'noTiming',
     /*

@@ -70,6 +70,49 @@ function confirmFlyOut(): void {
   }
 }
 
+/**
+ * 14.11 基地 → 基地转移（图上基地载体）
+ *
+ * 图外空军盒走上面的「飞出盒」；图上基地在这里选目的地，落位判据仍由
+ * `transferAircraftNow` → `planBaseTransfer` 裁（距离 / 激活态 / 归属）。
+ */
+const transferPick = ref(false)
+const transferHex = ref('')
+const transferResult = ref<string | null>(null)
+const transferError = ref<string | null>(null)
+
+const transferTargets = computed(() =>
+  workbench.ownAirBases
+    .filter((base) => base.id !== props.baseId)
+    .map((base) => {
+      const hex = `${base.hex.col}.${base.hex.row}`
+      const unit = workbench.units.find((item) => item.instanceId === base.id)
+      return { hex, label: `${unit?.name ?? '空军基地'}（${hex}）` }
+    }),
+)
+
+function beginTransfer(): void {
+  transferPick.value = true
+  transferHex.value = ''
+  transferResult.value = null
+  transferError.value = null
+}
+
+function confirmTransfer(): void {
+  const air = selected.value
+  if (air === undefined || transferHex.value === '') return
+  if (workbench.transferAircraftNow(air.instanceId, transferHex.value)) {
+    transferResult.value =
+      workbench.lastTransfer?.detail ?? `已转移至 ${transferHex.value}（14.11）`
+    transferError.value = null
+    transferPick.value = false
+    transferHex.value = ''
+    selectedId.value = null
+  } else {
+    transferError.value = '未能转移（14.11：目的地须为本方空军基地，距离与激活态须合规）'
+  }
+}
+
 const aircraftItems = computed(() =>
   (refit.value ? workbench.refitCandidates : props.aircraft).map((air) => ({
     id: air.instanceId,
@@ -133,19 +176,45 @@ function pick(id: string): void {
             >
           </template>
         </template>
-        <!-- 飞入盒只裁 1.4a 的往返航程 ⇒ 仍一键 -->
-        <BaseButton
-          v-else
-          size="sm"
-          variant="ghost"
-          @click="containers.setAirInBox(selected.instanceId, true)"
-          >飞入盒 · 1.4a</BaseButton
-        >
+        <template v-else>
+          <!-- 14.11：图上基地 → 图上基地（图外空军盒走上面的「飞出盒」） -->
+          <template v-if="workbench.actionAllowedNow('air.transfer')">
+            <BaseButton v-if="!transferPick" size="sm" variant="ghost" @click="beginTransfer"
+              >转移 · 14.11</BaseButton
+            >
+            <template v-else>
+              <select v-model="transferHex" class="roster__select">
+                <option value="">（选另一个本方空军基地）</option>
+                <option v-for="target in transferTargets" :key="target.hex" :value="target.hex">
+                  {{ target.label }}
+                </option>
+              </select>
+              <BaseButton
+                size="sm"
+                variant="primary"
+                :disabled="transferHex === ''"
+                @click="confirmTransfer"
+                >确认转移 · 14.11</BaseButton
+              >
+            </template>
+          </template>
+          <!-- 飞入盒只裁 1.4a 的往返航程 ⇒ 仍一键 -->
+          <BaseButton
+            size="sm"
+            variant="ghost"
+            @click="containers.setAirInBox(selected.instanceId, true)"
+            >飞入盒 · 1.4a</BaseButton
+          >
+        </template>
       </div>
       <!-- 条 14：落位/被拒的可见回显（不再点完只关窗） -->
       <div v-if="landed !== null || flyOutError !== null" class="roster__row">
         <BaseTag v-if="landed !== null" kind="success">{{ landed }}</BaseTag>
         <BaseTag v-else kind="danger">{{ flyOutError }}</BaseTag>
+      </div>
+      <div v-if="transferResult !== null || transferError !== null" class="roster__row">
+        <BaseTag v-if="transferResult !== null" kind="success">{{ transferResult }}</BaseTag>
+        <BaseTag v-else kind="danger">{{ transferError }}</BaseTag>
       </div>
     </template>
   </div>

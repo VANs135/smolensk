@@ -2567,6 +2567,8 @@ export type ActionKey =
   | 'reserve.release'
   /* 空中任务（14.2e） */
   | 'air.mission'
+  /* 14.11 基地转移（14.2e 的 movementSegment：C 移动 / G 进击） */
+  | 'air.transfer'
   /* 专规（B37：把"按时机分散"的三条补上闸门） */
   | 'exclusive.forage'
   | 'exclusive.panzerObligation'
@@ -2632,6 +2634,20 @@ export const ACTION_GATES: readonly ActionGate[] = [
     label: '缩减己方空军基地',
     rule: '15.4',
     where: [{ phase: 'movement', segment: 'movement.modeAndMovement' }],
+  },
+  {
+    /*
+     * 14.2e：基地转移归 `movementSegment`（「转移可在不同的移动环节中执行」），
+     * 与引擎 `AIR_MISSION_SEGMENT.base_transfer` 同口径 ⇒ 给 C 移动 / G 进击。
+     * E 反应是对方的环节、只有拦截（14.5），不排本任务。
+     */
+    key: 'air.transfer',
+    label: '飞机转移（基地 → 基地）',
+    rule: '14.11',
+    where: [
+      { phase: 'movement', segment: 'movement.modeAndMovement' },
+      { phase: 'exploitation', segment: 'exploitation.movement' },
+    ],
   },
   {
     key: 'rein.arrival',
@@ -2984,6 +3000,7 @@ export const ACTION_KEY_KIND: Readonly<Record<ActionKey, readonly ActionKind[]>>
   'supply.attrition': [], // 12.8b 损耗分配：时机表未收
   'reserve.release': ['reserveRelease'],
   'air.mission': ['airMission'],
+  'air.transfer': ['airTransfer'],
   // B37：专规两条时机（Forage / 3.4a 段末义务）—— 引擎时机表里没有对应 kind（已登记在 ACTION_KEYS_WITHOUT_KIND）
   'exclusive.forage': [],
   'exclusive.panzerObligation': [],

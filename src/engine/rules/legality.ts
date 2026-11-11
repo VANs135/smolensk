@@ -97,6 +97,8 @@ export type ActionKind =
   | 'fuel'
   /** 14.x 空中任务（非轰炸类） */
   | 'airMission'
+  /** 14.11 基地转移（14.2e 的 movementSegment；判定在 store 的 `air.transfer` 闸门） */
+  | 'airTransfer'
   /** 15.1 整备 */
   | 'refit'
   /** 19.x 港口追溯补给（4.5a-F；本作无海运，保留以完整覆盖 A–K） */
@@ -350,6 +352,7 @@ export const ACTIONS_BY_PHASE: Record<GamePhase, readonly ActionKind[]> = {
  */
 export const TIMING_DEFERRED_ACTIONS: readonly ActionKind[] = [
   'airMission',
+  'airTransfer',
   'railTraceSupply',
   'portTraceSupply',
   'portSeaCap',
@@ -700,6 +703,9 @@ function modeAllows(
             reason: 'modeForbidsAirTransport',
             detail: `${unit.id} 不在移动模式`,
           }
+    case 'airTransfer':
+      // 14.11 的激活态 / 距离 / 归属由 `planBaseTransfer` 裁，模式族不额外加码
+      return { ok: true }
     case 'engineer':
       return canEngineer(unit.mode)
         ? { ok: true }

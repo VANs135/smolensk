@@ -98,6 +98,7 @@ const SUBMIT_ENTRY_OF: Readonly<Record<ActionKey, string>> = {
   'supply.attrition': 'applyAttritionNow',
   'reserve.release': 'releaseReserveNow',
   'air.mission': 'beginAirMissionNow',
+  'air.transfer': 'transferAircraftNow',
   'exclusive.forage': 'spendSupplyCacheNow',
   // 3.4a：段末义务由 `advanceSegmentNow` 的收束步骤结算，没有独立提交入口
   'exclusive.panzerObligation': '',

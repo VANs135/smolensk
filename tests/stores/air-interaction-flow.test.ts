@@ -568,6 +568,27 @@ describe('C9 空军交互：14.11 基地转移与 15.4 基地缩减', () => {
     expect(store.lastTransfer).toMatchObject({ airStatus: 'active', distanceHexes: 1 })
   })
 
+  it('14.2e：战斗段不排基地转移（闸门拒绝，飞机不动）', () => {
+    const store = newStore()
+    store.setAirActive(true)
+    store.units.push(
+      toConsoleUnit({ record: airBaseRecord(), instanceId: 'base-a', hex: CORE_HEX, side: 'axis' }),
+      toConsoleUnit({ record: airBaseRecord(), instanceId: 'base-b', hex: NEAR_HEX, side: 'axis' }),
+    )
+    const plane = toConsoleAirUnit({
+      aircraft: fighterRecord('axis'),
+      instanceId: 'air-1',
+      hex: CORE_HEX,
+      side: 'axis',
+      airStatus: 'active',
+    })
+    store.airUnits.push(plane)
+    store.setPhase('combat')
+    store.airInputs.transferToHexText = label(NEAR_HEX)
+    expect(store.transferAircraftNow('air-1')).toBe(false)
+    expect(plane.hex).toEqual(CORE_HEX)
+  })
+
   it('14.11：目标是**敌方**基地即拒（★ 归属权）', () => {
     const store = newStore()
     store.setAirActive(true)

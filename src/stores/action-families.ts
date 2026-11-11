@@ -67,6 +67,8 @@ interface ActionMeta {
 const META: Readonly<Record<ActionKey, ActionMeta>> = {
   'air.refit': { families: ['整备'], entry: ['面板', '地图', '盒区'] },
   'air.baseReduce': { families: ['建造'], entry: ['面板'] },
+  // 14.11：图上基地（空军名册）与图外空军盒（飞出盒）两类入口
+  'air.transfer': { families: ['转移'], entry: ['面板', '会话窗', '盒区'] },
   'rein.arrival': { families: ['增援落位'], entry: ['会话窗'] },
   'rein.supplyArrival': { families: ['增援落位'], entry: ['会话窗'] },
   'rein.supplyTrain': { families: ['增援落位'], entry: ['会话窗', '地图'] },
@@ -221,24 +223,14 @@ export interface UnregisteredFamily {
   note: string
 }
 
-export const UNREGISTERED_ACTION_FAMILIES: readonly UnregisteredFamily[] = [
-  {
-    id: 'air.transfer',
-    label: '飞机转移（基地 → 基地）',
-    rule: '14.11',
-    families: ['转移'],
-    entry: ['面板', '盒区'],
-    segmentKind: 'movementSegment',
-    note: '14.2e：转移限移动环节（「转移可在不同的移动环节中执行」）；引擎 `AIR_MISSION_SEGMENT.base_transfer` 同口径；UI 入口仍在 AirPanel / 名册。',
-  },
-  {
-    id: 'rail.repair',
-    label: '铁路修理（13.3g 例外）',
-    rule: '13.3g',
-    families: ['铁路修理'],
-    entry: ['面板'],
-    note: '当前只在 SupplyPanel 的「运输」段给出候选，无 ACTION_GATES 条目。',
-  },
-]
+/**
+ * 尚未进闸门的 UI 能力（应为空；每次销账删一条）
+ *
+ * 2026-11-11 销账：
+ *   · `air.transfer`（14.11）已登记 `ACTION_GATES`（C 移动 / G 进击，14.2e 的 `movementSegment`），
+ *     入口在空军名册（图上基地 / 图外空军盒两类载体）；
+ *   · `rail.repair`（13.3g 例外）实际由 `move.railConversion`（13.3f 换轨闸门）覆盖，不再是缺口。
+ */
+export const UNREGISTERED_ACTION_FAMILIES: readonly UnregisteredFamily[] = []
 
 export { SIDE_NAME }

@@ -2108,6 +2108,16 @@ export const useContainersStore = defineStore('containers', () => {
    * 不新造判据：距离/基地/激活态全部由 `transferAircraftNow` → `planBaseTransfer` 裁。
    */
   function flyOutOfBox(instanceId: string, toHexText: string): boolean {
+    // 14.2e：飞出盒等同 14.11 基地转移 ⇒ 同样只在该环节（store 内再判一次，防绕过面板）
+    if (!workbench.requireAction('air.transfer', '飞出盒（14.11）')) {
+      lastAction.value = {
+        ok: false,
+        rule: '14.11',
+        detail: '飞出盒只在移动环节执行（14.2e / 14.11）',
+        scope: '地图外空军盒',
+      }
+      return false
+    }
     const air = workbench.airUnits.find((item) => item.instanceId === instanceId)
     if (air === undefined) return false
     if (!workbench.airBoxMembers.includes(instanceId)) {

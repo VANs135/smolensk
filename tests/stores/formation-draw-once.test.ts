@@ -97,10 +97,13 @@ describe('ch10：编队抽取只在初设完成后执行一次', () => {
     expect(setup.setupDrawEntryVisible).toBe(false)
     expect(setup.requiredSetupIssues.some((issue) => issue.rule.includes('ch10'))).toBe(false)
     expect(setup.startGameNow()).toBe(true)
-    // 源码守卫：唯一入口文案「抽取编队」，条款号只在 title（? 提示）里
-    const panel = readFileSync('src/components/containers/ContainersPanel.vue', 'utf8')
+    // 源码守卫：唯一入口在初设面板，文案「抽取编队」，条款号只在 title（? 提示）里
+    const panel = readFileSync('src/components/setup/SetupPanel.vue', 'utf8')
     expect(panel).toContain('抽取编队')
     expect(panel).not.toContain('执行编队抽取（ch10）')
+    // 容器窗不得再有第二个可点入口（同一时刻只允许一处）
+    const containersPanel = readFileSync('src/components/containers/ContainersPanel.vue', 'utf8')
+    expect(containersPanel).not.toContain('setup.executeSetupDraws(')
     const store = readFileSync('src/stores/setup.ts', 'utf8')
     expect(store).not.toContain('if (setupPlacementComplete.value && !runSetupDraws())')
   })

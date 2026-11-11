@@ -182,14 +182,14 @@ describe('B17a-2：分段渲染与入口（源码守卫）', () => {
       ['workbench.returnFromDeadPileNow({', ACTION_GATES],
       ['workbench.removeForeverNow(', ACTION_GATES],
       /*
-       * ★ 2026-11-10（ch10 裁定）：对局台的"重抽退路"已删除，面板只留一个
-       *   `setup.executeSetupDraws()` 入口，仍归动作段门。
+       * ★ 2026-11-11（体检 A 组）：「抽取编队」入口已移到初设面板，容器窗只读，
+       *   不再有 `setup.executeSetupDraws()` 可点件（下面单独断言"不存在"）。
        */
-      ['setup.executeSetupDraws(', ACTION_GATES],
       ['@click="hideNow()"', ACTION_GATES],
     ] as const) {
       expect(isGated(marker, gates), `${marker} 应由 ${gates.join(' / ')} 门管着`).toBe(true)
     }
+    expect(panel).not.toContain('setup.executeSetupDraws(')
   })
 
   it('★ 对局台：右栏 `only="info"`、会话 `only="actions"`；验证页仍挂全量', () => {
