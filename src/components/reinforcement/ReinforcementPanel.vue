@@ -169,11 +169,6 @@ const rebuildCandidateBlocked = computed<boolean>(() => {
   return 'rebuildable' in unit && unit.rebuildable === false
 })
 
-/** 「重建」按钮的启用条件：选了行键 ∧ 该候选不是 13.5c 的永久不可重建 */
-const canRebuildNow = computed<boolean>(
-  () => rebuildType.value !== '' && rebuildUnitId.value !== '' && !rebuildCandidateBlocked.value,
-)
-
 /**
  * B34 余项②：**本方的到达卡（OOA）**
  *
@@ -282,19 +277,7 @@ const freeRailEdgeValue = computed(() => {
   const chosen = workbench.freeRailEdgeHex ?? workbench.scenarioSupplySourceHexes[0] ?? null
   return chosen === null ? '' : hexLabel(chosen)
 })
-const supplyTrainValue = computed(() =>
-  workbench.supplyTrainHex === null ? '' : hexLabel(workbench.supplyTrainHex),
-)
-function parseHexText(text: string): { col: number; row: number } | null {
-  const match = /^(\d{1,2})\.(\d{1,2})$/.exec(text.trim())
-  return match === null ? null : { col: Number(match[1]), row: Number(match[2]) }
-}
-function onFreeRailEdgeChange(text: string): void {
-  workbench.pickFreeRailEdgeHex(parseHexText(text))
-}
-function onSupplyTrainChange(text: string): void {
-  workbench.pickSupplyTrainHex(parseHexText(text))
-}
+
 /** 3.4b：到货 SP 的逐格归属（空值 ⇒ 未选） */
 function onArrivalSpGroupChange(text: string, value: string): void {
   workbench.setArrivalSpGroup(text, value === 'guderian' || value === 'hoth' ? value : null)
@@ -856,6 +839,50 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         <p v-if="replPlacementBlocked !== null" class="muted num">{{ replPlacementBlocked }}</p>
       </template>
     </SessionStep>
+    <!-- 3.6：补给列车 —— 不做列车算子；窗口一出现地图高亮全部可卸货铁路格，点一格落 2 SP -->
+    <SessionStep
+      v-if="showsActions"
+      item="reinforce:supplyTrain"
+      ackable
+      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:supplyTrain')"
+    >
+      <RuleNote title="补给列车：任一可卸货铁路格得 2 SP（不用 Rail Cap）" rule="专规 3.6">
+        <p class="muted">
+          随机事件掷出 Supply Train 时，在任一**可卸货（detrainable）铁路格**落 2 SP；地图已高亮
+          全部可卸货格，**点其中一格即放置**。未掷出则本窗空过。
+        </p>
+      </RuleNote>
+      <p v-if="!workbench.supplyTrainPending" class="muted">
+        本回合没有待落的补给列车，点「本步完成」继续。
+      </p>
+      <template v-else>
+        <p class="num">
+          <BaseTag kind="info">补给列车 {{ workbench.supplyTrainSp }} SP</BaseTag>
+        </p>
+        <div v-if="workbench.panzerGroupRulesOn && workbench.activeSide === 'axis'" class="row">
+          <span class="muted">3.4b 归属（未选不落）</span>
+          <BaseButton
+            :variant="workbench.supplyTrainGroup === 'guderian' ? 'primary' : 'secondary'"
+            size="sm"
+            @click="workbench.setSupplyTrainGroup('guderian')"
+          >
+            Guderian
+          </BaseButton>
+          <BaseButton
+            :variant="workbench.supplyTrainGroup === 'hoth' ? 'primary' : 'secondary'"
+            size="sm"
+            @click="workbench.setSupplyTrainGroup('hoth')"
+          >
+            Hoth
+          </BaseButton>
+        </div>
+        <div class="row">
+          <BaseButton variant="primary" size="sm" @click="workbench.beginSupplyTrainHexPickNow()">
+            点地图高亮铁路格放置 2 SP
+          </BaseButton>
+        </div>
+      </template>
+    </SessionStep>
     <SessionStep
       v-if="showsActions"
       item="reinforce:supplyTable"
@@ -872,8 +899,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         <p class="muted">
           补给表到货（1.6b）的 SP 可用**免费铁运**落到每个**可卸载城市格**（13.3c：城格有铁路 +
           受本方控制 + 免敌方 ZOC 的铁路路径回补给源），**每格 1 SP**、**不扣铁路运量**（13.3b
-          的运量只在移动阶段用）； 其余 SP 放本方的**图边补给源格**。3.6 随机事件掷出 Supply
-          Train（2 骰 5–9）时，另在**任一可卸货格** 得 2 SP，同样不用 Rail Cap。
+          的运量只在移动阶段用）； 其余 SP 放本方的**图边补给源格**。3.6 的补给列车已有独立窗口。
         </p>
       </RuleNote>
       <div v-if="showsActions" class="row">
@@ -902,38 +928,22 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         此刻没有候选（城里要受本方控制、且铁路路径通回补给源）—— 按原文，SP 就全部落图边补给源格。
       </p>
       <div v-if="showsActions" class="row">
-        <label class="field">
-          其余 SP 的落点（图边补给源格）
-          <select
-            :value="freeRailEdgeValue"
-            @change="onFreeRailEdgeChange(($event.target as HTMLSelectElement).value)"
+        <span class="field">
+          其余 SP 的落点：{{ freeRailEdgeValue }}（图边补给源格）
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            @click="workbench.beginFreeRailEdgeHexPickNow()"
           >
-            <option
-              v-for="item in workbench.scenarioSupplySourceHexes"
-              :key="`${item.col}.${item.row}`"
-              :value="hexLabel(item)"
-            >
-              {{ hexLabel(item) }}
-            </option>
-          </select>
-        </label>
-        <label v-if="workbench.supplyTrainSp > 0" class="field">
-          3.6 补给列车 {{ workbench.supplyTrainSp }} SP 落点（任一可卸货格）
-          <select
-            :value="supplyTrainValue"
-            @change="onSupplyTrainChange(($event.target as HTMLSelectElement).value)"
-          >
-            <option value="">（未选）</option>
-            <option
-              v-for="item in workbench.detrainableHexes"
-              :key="`${item.col}.${item.row}`"
-              :value="hexLabel(item)"
-            >
-              {{ hexLabel(item) }}
-            </option>
-          </select>
-        </label>
-        <BaseButton variant="primary" size="sm" @click="workbench.applySupplyArrivalsNow()">
+            点地图选格
+          </BaseButton>
+        </span>
+        <BaseButton
+          v-if="workbench.supplyArrivalSp > 0"
+          variant="primary"
+          size="sm"
+          @click="workbench.applySupplyArrivalsNow()"
+        >
           落账（专规 2.1）
         </BaseButton>
       </div>
@@ -960,17 +970,22 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           <span v-if="target.fixed" class="muted">
             跟随既有：{{ target.group === 'guderian' ? 'Guderian' : 'Hoth' }}
           </span>
-          <select
+          <BaseButton
             v-else
-            :value="target.group ?? ''"
-            @change="
-              onArrivalSpGroupChange(target.hexText, ($event.target as HTMLSelectElement).value)
-            "
+            :variant="target.group === 'guderian' ? 'primary' : 'secondary'"
+            size="sm"
+            @click="onArrivalSpGroupChange(target.hexText, 'guderian')"
           >
-            <option value="">（未选）</option>
-            <option value="guderian">Guderian</option>
-            <option value="hoth">Hoth</option>
-          </select>
+            Guderian
+          </BaseButton>
+          <BaseButton
+            v-if="!target.fixed"
+            :variant="target.group === 'hoth' ? 'primary' : 'secondary'"
+            size="sm"
+            @click="onArrivalSpGroupChange(target.hexText, 'hoth')"
+          >
+            Hoth
+          </BaseButton>
         </label>
       </div>
       <p v-if="workbench.freeRailError !== null" class="warn">
@@ -1004,15 +1019,20 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         />
       </div>
       <div v-if="showsRebuild" class="row">
-        <label class="field">
-          重建表行键
-          <select v-model="rebuildType" class="select">
-            <option value="">— 按重建表选行（13.5：费用由行决定）—</option>
-            <option v-for="row in rebuildRowChoices" :key="row.unitType" :value="row.unitType">
+        <span class="field">
+          重建表行键（13.5：费用由行决定）
+          <span class="row">
+            <BaseButton
+              v-for="row in rebuildRowChoices"
+              :key="row.unitType"
+              :variant="rebuildType === row.unitType ? 'primary' : 'secondary'"
+              size="sm"
+              @click="rebuildType = row.unitType"
+            >
               {{ row.unitType }}（{{ row.sourceLabel }}）
-            </option>
-          </select>
-        </label>
+            </BaseButton>
+          </span>
+        </span>
         <!--
         13.5：**建议行**——由该算子自身类型推出（引擎唯一出处），但**不自动采用**：
         裁判必须点一下「采用建议」，未点就保持未选行、按钮禁用（默认值不能代替规则判定）。
@@ -1020,9 +1040,9 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         <span v-if="rebuildSuggestion !== null" class="muted">
           建议行：{{ rebuildSuggestion }}（{{ rebuildSuggestionLabel }}）
           <BaseButton
+            v-if="rebuildType !== rebuildSuggestion"
             variant="secondary"
             size="sm"
-            :disabled="rebuildType === rebuildSuggestion"
             @click="rebuildType = rebuildSuggestion"
           >
             采用建议
@@ -1036,22 +1056,21 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           <BaseTag kind="danger">13.5c</BaseTag>
           该单位 AR 后有黄点（`rebuildable: false`）⇒ **永久不可重建**，被摧毁即移除。
         </span>
-        <label class="field">
-          补员所在格
-          <UiField v-model="workbench.rebuildReplHexText" class="input" placeholder="36.13" />
+        <span class="field">
+          补员所在格：{{
+            workbench.rebuildReplHexText === '' ? '（未选）' : workbench.rebuildReplHexText
+          }}
           <BaseButton
             variant="secondary"
             size="sm"
-            :disabled="rebuildUnitId === ''"
             @click="workbench.beginRebuildReplHexPickNow(rebuildUnitId)"
           >
-            点地图选格
+            点地图选格（高亮 13.5a 合法落点）
           </BaseButton>
-        </label>
+        </span>
         <BaseButton
           variant="primary"
           size="sm"
-          :disabled="!canRebuildNow"
           @click="
             workbench.rebuildUnitNow({
               unitId: rebuildUnitId,

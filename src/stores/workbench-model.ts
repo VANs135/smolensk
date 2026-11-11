@@ -2546,6 +2546,8 @@ export type ActionKey =
   | 'move.loadUnload'
   /* 13.2c：运输点数的合并 / 拆分（只在**移动阶段**；不耗 MP） */
   | 'move.transportMerge'
+  /* 专规 3.6：随机事件「补给列车」的 2 SP 落点（B 段） */
+  | 'rein.supplyTrain'
   | 'move.construction'
   | 'move.hedgehog'
   | 'move.breakdown'
@@ -2644,6 +2646,12 @@ export const ACTION_GATES: readonly ActionGate[] = [
     label: '到货 SP 落位（免费铁运）',
     rule: '专规 2.1 / 3.1',
     where: [{ phase: 'reinforcement', segment: 'reinforcement.arrival' }],
+  },
+  {
+    key: 'rein.supplyTrain',
+    label: '补给列车落点',
+    rule: '专规 3.6',
+    where: [{ phase: 'reinforcement', segment: 'reinforcement.supplyTrain', sides: ['axis'] }],
   },
   {
     key: 'rein.rebuild',
@@ -2950,6 +2958,7 @@ export const ACTION_KEY_KIND: Readonly<Record<ActionKey, readonly ActionKind[]>>
   'air.baseReduce': [], // 15.4 缩减：engine/rules 里无 kind（`move.construction` 一族未含）
   'rein.arrival': ['arrival'],
   'rein.supplyArrival': [], // 专规 2.1/3.1 落点：时机表未收（非"由单位执行"的动作）
+  'rein.supplyTrain': [], // 专规 3.6 补给列车：同上
   'rein.rebuild': ['rebuild', 'consolidate'],
   'rein.specialRepl': [], // 专规 1.6c：同上
   'rein.frontalReserves': [], // 专规 2.3c：同上
@@ -2992,6 +3001,8 @@ export const ACTION_KEYS_WITHOUT_KIND: readonly ActionKey[] = [
   'rein.frontalReserves',
   // 批 F 切片 3：专规 2.1/3.1 的到货 SP 落点（免费铁运）——同上，非"由单位执行"的动作
   'rein.supplyArrival',
+  // 专规 3.6：补给列车的 2 SP 落点 —— 同上，是"SP 落点"而非"由单位执行"的动作
+  'rein.supplyTrain',
   'move.dumpBlow',
   // 第五批批 B 切片 2（12.7a/d）：延补队转换/翻面 —— 同上，属"SP/运输点子的转换"而非"由单位执行"的动作
   'move.extenderConvert',

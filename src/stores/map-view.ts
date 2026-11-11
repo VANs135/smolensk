@@ -2687,6 +2687,8 @@ export const useMapViewStore = defineStore('mapView', () => {
               arrivalPending: workbench.arrivalPlan !== null && !workbench.arrivalAllPlaced,
               randomEventPending:
                 workbench.activeSide === 'axis' && isInRandomEventPeriod(workbench.date),
+              // 3.6：只有掷出补给列车且还没落 2 SP 时才排这一窗（未掷出＝没有待办）
+              supplyTrainPending: workbench.activeSide === 'axis' && workbench.supplyTrainPending,
               variableExitPending: workbench.variableExitForActiveSide,
               // 1.6b：补员表窗口每个 B 段都要出现；掷表与落位都办完才允许「本步完成」
               replTablePending: true,
@@ -3351,6 +3353,28 @@ export const useMapViewStore = defineStore('mapView', () => {
       openPopup(hex, anchor.x, anchor.y, sessionKindAfter !== '' ? 'content' : popupVariantFor(hex))
     }
   }
+
+  /**
+   * 3.6：补给列车窗口一出来就把全部可卸货铁路格铺成高亮（用户口径：增援 SP 发放时高亮，
+   * 点其中一格即落 2 SP；不做列车算子、不手打格号）。离开该窗时收掉这层选格态。
+   *
+   * ★ 必须放在 setup 末尾：`sessionStep` 会牵动 `sessionFacts`（引用 `exclusiveOpen` 等
+   *   后声明的 const），`immediate: true` 在声明前求值会踩 TDZ。
+   */
+  const SUPPLY_TRAIN_PICK_LABEL = '补给列车落点（3.6 可卸货铁路格）'
+  watch(
+    () => sessionStep.value?.id ?? null,
+    (item) => {
+      if (item === 'reinforce:supplyTrain') {
+        if (workbench.supplyTrainPending && workbench.hexPickView === null) {
+          workbench.beginSupplyTrainHexPickNow()
+        }
+        return
+      }
+      if (workbench.hexPickView?.label === SUPPLY_TRAIN_PICK_LABEL) workbench.cancelHexPick()
+    },
+    { immediate: true },
+  )
   return {
     // 画什么
     overlay,

@@ -350,8 +350,19 @@ describe('W6 B18：可变增援与补员账本（1.6b / 1.6c）', () => {
       pax: 0,
       eq: 0,
     })
-    // 放置到地图上后才进盘面账本（每点一枚）；13.5：初次摆放不要求 HQ/ZOC
-    expect(store.placePendingReplNow(DEFENDER_HEX)).toBe(true)
+    /*
+     * 用户 2026-11-11：「可变增援把整张地图高亮（候选未按条款与图边补给源收窄）」
+     * ⇒ 初次摆放候选改与到达落点同源（2.1：能直接拖取追溯补给的 HQ，否则图边补给源格），
+     *   不再是「全图 − 敌方占据」。这里钉住候选确实被收窄，并落在候选内。
+     */
+    const placeHex = store.replInitialPlacementHexes[0]
+    expect(placeHex).toBeDefined()
+    expect(store.openSupplySourceHexes.map((item) => `${item.col}.${item.row}`)).toContain(
+      `${placeHex!.col}.${placeHex!.row}`,
+    )
+    expect(store.replInitialPlacementHexes.length).toBeLessThan(500)
+    // 放置到地图上后才进盘面账本（每点一枚）
+    expect(store.placePendingReplNow(placeHex!)).toBe(true)
     expect(store.replHoldings).toMatchObject({ pax: plan.repl.pax, eq: plan.repl.eq })
     expect(store.units.filter((unit) => unit.replKind != null)).toHaveLength(
       plan.repl.pax + plan.repl.eq,

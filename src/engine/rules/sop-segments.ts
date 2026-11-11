@@ -194,6 +194,15 @@ export const SOP_SEGMENT_CHAINS: readonly SopSegmentChain[] = [
         note: '19 July–15 Aug（含）每个轴方增援阶段掷 2 骰；后果多为自动（空军转非激活等），个别结果需玩家落位（如补给列车）',
       },
       {
+        id: 'reinforcement.supplyTrain',
+        label: '补给列车落点（轴方）',
+        rule: '专规 3.6',
+        driver: 'player',
+        actions: [],
+        sides: ['axis'],
+        note: '随机事件掷出 Supply Train 时，在任一可卸货（detrainable）铁路格得 2 SP（不用 Rail Cap）；地图高亮全部可卸货格，点一格即放置。未掷出即空过。',
+      },
+      {
         id: 'reinforcement.variableExit',
         label: '可变撤离（轴方）',
         rule: '专规 3.3c',

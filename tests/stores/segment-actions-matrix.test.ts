@@ -188,6 +188,7 @@ describe('阶段/环节 × 操作矩阵（规则书口径）', () => {
       'automatic reinforcement.replRoll → ',
       'player    reinforcement.arrival → rein.arrival,rein.supplyArrival',
       'automatic reinforcement.randomEvent → ',
+      'player    reinforcement.supplyTrain → rein.supplyTrain',
       'automatic reinforcement.variableExit → ',
       'player    reinforcement.rebuild → rein.rebuild',
       'player    reinforcement.specialRepl → rein.specialRepl',

@@ -55,6 +55,8 @@ export interface SessionStepFacts {
     acked: readonly string[]
     arrivalPending: boolean
     randomEventPending: boolean
+    /** 3.6：随机事件掷出 Supply Train 且尚未落 2 SP */
+    supplyTrainPending: boolean
     variableExitPending: boolean
     replTablePending: boolean
     specialReplPending: boolean
@@ -409,7 +411,16 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
       'reinforce:randomEvent',
       '随机事件（3.6）',
       '19 Jul–15 Aug 的轴方增援阶段要掷一次随机事件。',
-      '看本回合事件结果；若为补给列车，记下 2 SP 的落点。',
+      '看本回合事件结果；若为补给列车，下一窗点地图高亮铁路格放置 2 SP。',
+    )
+  }
+  // 3.6：补给列车落点（只对轴方；未掷出则本窗空过）
+  if (facts.supplyTrainPending && !acked.has('reinforce:supplyTrain')) {
+    push(
+      'reinforce:supplyTrain',
+      '补给列车落点（3.6）',
+      '随机事件掷出 Supply Train：地图高亮全部可卸货铁路格，点一格即落 2 SP（不用 Rail Cap）。',
+      '在窗口确认 3.4b 归属后，点地图任意高亮铁路格。',
     )
   }
   // 13.6 / 1.6a：当日到达落位与强制移除

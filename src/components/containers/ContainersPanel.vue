@@ -648,24 +648,29 @@ function boxAircraft(side: Side) {
                     13.5：行键决定费用（工程库没有「算子→行」映射，须按重建表选）；补员格用「点地图选格」
                   </p>
                   <div class="row">
-                    <select v-model="workbench.rebuildPickRow" class="input">
-                      <option value="">— 重建表行键 —</option>
-                      <option v-for="row in rebuildRows" :key="row.unitType" :value="row.unitType">
-                        {{ row.unitType }}（{{ row.sourceLabel }}）
-                      </option>
-                    </select>
-                    <UiField
-                      v-model="workbench.rebuildReplHexText"
-                      class="input"
-                      placeholder="补员所在格"
-                    />
+                    <BaseButton
+                      v-for="row in rebuildRows"
+                      :key="row.unitType"
+                      :variant="workbench.rebuildPickRow === row.unitType ? 'primary' : 'secondary'"
+                      size="sm"
+                      @click="workbench.rebuildPickRow = row.unitType"
+                    >
+                      {{ row.unitType }}（{{ row.sourceLabel }}）
+                    </BaseButton>
                     <BaseButton
                       variant="secondary"
                       size="sm"
                       @click="workbench.beginRebuildReplHexPickNow(holding.unitId)"
                     >
-                      点地图选格
+                      点地图选补员格（高亮 13.5a 合法落点）
                     </BaseButton>
+                    <span class="muted">
+                      补员格：{{
+                        workbench.rebuildReplHexText === ''
+                          ? '（未选）'
+                          : workbench.rebuildReplHexText
+                      }}
+                    </span>
                   </div>
                   <div class="row">
                     <BaseButton
@@ -673,12 +678,6 @@ function boxAircraft(side: Side) {
                       :key="action.key"
                       :variant="action.key === 'deadPile.rebuild' ? 'primary' : 'ghost'"
                       size="sm"
-                      :disabled="
-                        action.key === 'deadPile.rebuild' &&
-                        (action.disabledReason !== null ||
-                          workbench.rebuildPickRow === '' ||
-                          workbench.rebuildReplHexText === '')
-                      "
                       :title="action.disabledReason ?? action.rule"
                       @click="
                         action.key === 'deadPile.rebuild'

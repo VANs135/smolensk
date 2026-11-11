@@ -12,7 +12,8 @@ import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 /**
  * 13.5 / 13.5a：**待放置补员的落点**
  *
- * 用户 2026-11-10 裁定：13.5 只说「把结果放置在地图上」，故**初次摆放**不套 13.5a 的
+ * 用户 2026-11-11 改判：初次摆放候选收窄到 2.1 的「能直接拖取追溯补给的 HQ / 图边补给源格」，
+ * 不再是「全图 − 敌方占据」；但仍不套 13.5a 的
  * 「战斗面 HQ 2 格内、非敌方 ZOC」；只排除地图外与已被敌方占据的格。13.5a 只约束**重建**。
  * 判据分成两条策略：`replInitialPlacementHexes`（初次）与 `rebuildReplPlacementHexes`（重建）。
  */
@@ -62,20 +63,24 @@ beforeEach(() => {
 })
 
 describe('13.5：补员初次摆放（不套 13.5a）', () => {
-  it('没有 HQ 也能放；敌 ZOC 内的格不作限制', () => {
+  it('没有 HQ ⇒ 初次摆放收窄到图边补给源格（不再全图）；敌 ZOC 不额外限制', () => {
     const store = newStore()
     rollRepls(store)
     expect(store.replPending).toMatchObject({ pax: 2, eq: 1 })
     expect(store.replPlacementBlockedReason).toBeNull()
 
-    // 放一个敌人到邻格：HEX 落入敌方 ZOC，但按 13.5 字面仍可初次摆放
+    // 放一个敌人到邻格：证明候选取自补给源、不再按"躲避 ZOC"或"全图"来算
     placeEnemyNextTo(store)
-    expect(store.replInitialPlacementHexes).toContainEqual(HEX)
+    const sources = store.openSupplySourceHexes.map((item) => `${item.col}.${item.row}`)
+    const candidates = store.replInitialPlacementHexes.map((item) => `${item.col}.${item.row}`)
+    expect(candidates).toEqual(sources)
+    expect(candidates).not.toContain(`${HEX.col}.${HEX.row}`)
 
+    const placeHex = store.replInitialPlacementHexes[0]!
     expect(store.beginReplPlaceHexPickNow()).toBe(true)
-    expect(store.hexPickView?.candidates).toContainEqual(HEX)
+    expect(store.hexPickView?.candidates).toContainEqual(placeHex)
 
-    expect(store.placePendingReplNow(HEX)).toBe(true)
+    expect(store.placePendingReplNow(placeHex)).toBe(true)
     expect(store.replPending).toEqual({ pax: 0, eq: 0 })
     expect(store.units.filter((unit) => unit.replKind === 'pax')).toHaveLength(2)
     expect(store.units.filter((unit) => unit.replKind === 'eq')).toHaveLength(1)

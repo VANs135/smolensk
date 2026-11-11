@@ -72,6 +72,7 @@ const SUBMIT_ENTRY_OF: Readonly<Record<ActionKey, string>> = {
   'air.baseReduce': 'reduceBaseNow',
   'rein.arrival': 'placeArrivalNow',
   'rein.supplyArrival': 'applySupplyArrivalsNow',
+  'rein.supplyTrain': 'placeSupplyTrainSpNow',
   'rein.rebuild': 'rebuildUnitNow',
   'rein.specialRepl': 'drawSpecialRepl',
   'rein.frontalReserves': 'claimFrontalReservesNow',

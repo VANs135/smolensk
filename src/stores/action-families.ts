@@ -69,6 +69,7 @@ const META: Readonly<Record<ActionKey, ActionMeta>> = {
   'air.baseReduce': { families: ['建造'], entry: ['面板'] },
   'rein.arrival': { families: ['增援落位'], entry: ['会话窗'] },
   'rein.supplyArrival': { families: ['增援落位'], entry: ['会话窗'] },
+  'rein.supplyTrain': { families: ['增援落位'], entry: ['会话窗', '地图'] },
   'rein.rebuild': { families: ['整编', '补员', '合并'], entry: ['会话窗', '右键菜单'] },
   'rein.specialRepl': { families: ['补员'], entry: ['会话窗'] },
   'rein.frontalReserves': { families: ['补员'], entry: ['会话窗'] },

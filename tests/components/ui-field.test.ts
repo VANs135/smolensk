@@ -76,11 +76,12 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).not.toMatch(/airPlacement/)
   })
 
-  it('其余面板：容器(2)/专规(8)/增援(4)/补给(13) 的数值与格号已走 UiField', () => {
+  it('其余面板：容器(2)/专规(8)/增援(3)/补给(13) 的数值与格号已走 UiField', () => {
     const cases: Array<[string, number]> = [
       ['src/components/containers/ContainersPanel.vue', 2],
       ['src/components/exclusive/ExclusiveRulesPanel.vue', 8],
-      ['src/components/reinforcement/ReinforcementPanel.vue', 4],
+      // 用户 2026-11-11：补员格 / 图边源格改「点地图选格」⇒ 少了一处手打格号
+      ['src/components/reinforcement/ReinforcementPanel.vue', 3],
       ['src/components/supply/SupplyPanel.vue', 13],
     ]
     for (const [file, min] of cases) {
@@ -133,9 +134,10 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).toMatch(/const rebuildType = computed<string>\(\{/)
     expect(src).toMatch(/get: \(\) => workbench\.rebuildPickRow/)
     expect(src).not.toMatch(/ref\('Infantry Div step'\)/)
-    // 未选行、或该候选是 13.5c 的永久不可重建 ⇒ 按钮禁用
-    expect(src).toMatch(/const canRebuildNow = computed<boolean>/)
-    expect(src).toMatch(/:disabled="!canRebuildNow"/)
+    // 用户 2026-11-11：不做灰项 ⇒ 缺行 / 缺补员格时按钮仍可点，由 store 回执说明原因
+    expect(src).not.toMatch(/const canRebuildNow = computed<boolean>/)
+    expect(src).not.toMatch(/:disabled="!canRebuildNow"/)
+    expect(src).toMatch(/workbench\.rebuildUnitNow\(\{/)
     expect(src).toMatch(/rebuildCandidateBlocked/)
     // 13.5c：不可重建的候选在算子图阵列里**置灰并给原因**（不静默隐藏、也不让人点进引擎再被拒）
     expect(src).toMatch(/rebuildable === false/)

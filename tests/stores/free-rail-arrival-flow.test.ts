@@ -217,13 +217,20 @@ describe('批 F 切片 3：免费铁运候选（数据面 + 运行期 13.3c）',
 })
 
 describe('批 F 切片 3：3.6 补给列车（2 SP，任一可卸货格，不用 Rail Cap）', () => {
-  it('★ 掷出 Supply Train ⇒ 2 SP 落可卸货格；与免费铁运同格时账本合并成一条', () => {
-    const store = newStore()
-    armAxisRail(store)
-    enterArrivalStep(store)
+  /** 进 B 段里允许「补给列车落点」的环节（闸门表反查，不写死序号） */
+  function enterSupplyTrainStep(store: ReturnType<typeof newStore>): void {
+    store.setPhase('reinforcement')
+    const allowed = actionGateOf('rein.supplyTrain')
+      .where.filter((item) => item.phase === store.phase)
+      .map((item) => item.segment)
+    const index = store.playerSegmentSteps.findIndex((step) => allowed.includes(step.id))
+    if (index < 0) throw new Error('B 段没有允许 rein.supplyTrain 的环节')
+    expect(store.setSegmentStepIndex(index)).toBe(true)
+  }
+
+  function rollSupplyTrain(store: ReturnType<typeof newStore>): void {
     store.setTurn(4)
     expect(store.date).toBe('1941-07-19')
-
     // 3.6 事件表：2 骰 5–9 ⇒ Supply Train（`arrivals-axis.json → randomEvents.table`）
     store.variableReplInputs.autoRoll = false
     store.variableReplInputs.supplyDice = 8
@@ -233,15 +240,33 @@ describe('批 F 切片 3：3.6 补给列车（2 SP，任一可卸货格，不用
     expect(store.rollVariableReplNow()).toBe(true)
     expect(store.lastVariableRepl?.randomEvent?.kind).toBe('supplyTrain')
     expect(store.supplyTrainSp).toBe(2)
+  }
+
+  it('★ 掷出 Supply Train ⇒ 点可卸货格落 2 SP（独立环节）；与免费铁运同格合并成一条', () => {
+    const store = newStore()
+    armAxisRail(store)
+    rollSupplyTrain(store)
+
+    // 用户 2026-11-11 口径：不做列车算子，高亮全部可卸货铁路格，点一格即落 2 SP
+    expect(store.supplyTrainPending).toBe(true)
+    expect(store.supplyTrainPlacementHexes.map((item) => `${item.col}.${item.row}`)).toContain(
+      '2.2',
+    )
+    enterSupplyTrainStep(store)
+    expect(store.placeSupplyTrainSpNow(CITY_HEX)).toBe(true)
+    expect(store.spDumps.filter((dump) => dump.hex.col === 2 && dump.hex.row === 2)[0]?.sp).toBe(2)
+    // 幂等：同一回合/段/方只落一次
+    expect(store.supplyTrainPending).toBe(false)
+    expect(store.placeSupplyTrainSpNow(CITY_HEX)).toBe(false)
+
     // 专规 2.1/3.1：补给表到货 SP 自动填进落账输入（免得裁判再抄一遍数）
     expect(store.supplyArrivalSp).toBe(store.lastVariableRepl?.sp)
-
+    enterArrivalStep(store)
     store.toggleFreeRailPick(CITY_HEX)
     store.pickFreeRailEdgeHex(hex(1, 3))
-    store.pickSupplyTrainHex(CITY_HEX)
     expect(store.applySupplyArrivalsNow()).toBe(true)
 
-    // 2.2：免费铁运 1 SP ＋ 补给列车 2 SP ⇒ **同格合并成一条**（3 SP）
+    // 2.2：补给列车 2 SP ＋ 免费铁运 1 SP ⇒ **同格合并成一条**（3 SP）
     const atCity = store.spDumps.filter((dump) => dump.hex.col === 2 && dump.hex.row === 2)
     expect(atCity).toHaveLength(1)
     expect(atCity[0]?.sp).toBe(3)
@@ -251,21 +276,20 @@ describe('批 F 切片 3：3.6 补给列车（2 SP，任一可卸货格，不用
     expect(store.railCapUsedBy('axis')).toBe(0)
   })
 
-  it('★ 补给列车没选落点 ⇒ 拒（原文"任一可卸货格"必须落到某格）', () => {
+  it('★ 非可卸货格 ⇒ 拒；未落列车不挡补给表落账（两条账分开）', () => {
     const store = newStore()
     armAxisRail(store)
-    enterArrivalStep(store)
-    store.setTurn(4)
-    store.variableReplInputs.autoRoll = false
-    store.variableReplInputs.supplyDice = 8
-    store.variableReplInputs.replDice = 7
-    store.variableReplInputs.specialDie = 1
-    store.variableReplInputs.randomEventDice = 7
-    expect(store.rollVariableReplNow()).toBe(true)
+    rollSupplyTrain(store)
+    enterSupplyTrainStep(store)
 
+    // 60.34 此刻不受控 / 铁路不通 ⇒ 不是 13.3c 可卸货格
+    expect(store.placeSupplyTrainSpNow(hex(60, 34))).toBe(false)
+    expect(store.spDumps).toEqual([])
+    // 没落列车不影响补给表自己的落账
+    enterArrivalStep(store)
+    store.supplyArrivalSp = 1
     store.toggleFreeRailPick(CITY_HEX)
-    expect(store.freeRailPlan).toBe(null)
-    expect(store.freeRailError?.rule).toBe('3.6')
-    expect(store.applySupplyArrivalsNow()).toBe(false)
+    expect(store.applySupplyArrivalsNow()).toBe(true)
+    expect(store.spDumps.reduce((sum, dump) => sum + dump.sp, 0)).toBe(1)
   })
 })

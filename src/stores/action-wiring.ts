@@ -73,6 +73,9 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'beginRailMoveHexPickNow',
       'cancelHexPick',
       'beginReplPlaceHexPickNow',
+      'beginFreeRailEdgeHexPickNow',
+      'beginSupplyTrainHexPickNow',
+      'setSupplyTrainGroup',
       'beginRebuildReplHexPickNow',
       'beginSpDumpHexPickNow',
       'beginSupplyCacheHexPickNow',
@@ -430,6 +433,12 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     why: '专规 2.1 免费铁运的边缘格由玩家指定（落点不印在卡上）',
   },
   pickSupplyTrainHex: { kind: 'playerStep', why: '专规 3.6 补给列车的格由玩家指定' },
+  // 3.6 改为「点地图高亮铁路格即落 2 SP」，入口加 `rein.supplyTrain` 环节闸
+  placeSupplyTrainSpNow: {
+    kind: 'gated',
+    key: 'rein.supplyTrain',
+    why: '专规 3.6 只在轴方增援段随机事件掷出 Supply Train 后落 2 SP',
+  },
 
   /* ── 由步进状态机约束（比环节闸更窄：没开局就走不通） ── */
 

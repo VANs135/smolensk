@@ -43,6 +43,7 @@ function baseFacts(over: Partial<SessionStepFacts['reinforce']> = {}): SessionSt
       acked: [],
       arrivalPending: false,
       randomEventPending: false,
+      supplyTrainPending: false,
       variableExitPending: false,
       replTablePending: true,
       specialReplPending: false,
@@ -97,6 +98,7 @@ describe('增援段：按规则顺序单窗排列', () => {
       idsOf(
         baseFacts({
           randomEventPending: true,
+          supplyTrainPending: false,
           arrivalPending: true,
           replTablePending: true,
           specialReplPending: true,
@@ -113,6 +115,24 @@ describe('增援段：按规则顺序单窗排列', () => {
       'reinforce:supplyTable',
       'reinforce:rebuild',
       'reinforce:consolidation',
+    ])
+  })
+
+  it('轴方掷出补给列车：随机事件 → 补给列车 → 到达 → …（3.6 单独一窗）', () => {
+    expect(
+      idsOf(
+        baseFacts({
+          randomEventPending: true,
+          supplyTrainPending: true,
+          arrivalPending: true,
+          replTablePending: true,
+        }),
+      ),
+    ).toEqual([
+      'reinforce:randomEvent',
+      'reinforce:supplyTrain',
+      'reinforce:arrival',
+      'reinforce:replTable',
     ])
   })
 
@@ -247,6 +267,7 @@ describe('增援面板：只用新窗口 id', () => {
     }
     const allowed = new Set([
       'reinforce:randomEvent',
+      'reinforce:supplyTrain',
       'reinforce:arrival',
       'reinforce:variableExit',
       'reinforce:frontalReserves',

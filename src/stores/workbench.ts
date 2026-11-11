@@ -17692,8 +17692,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       // 2.1a：余额只能落**当日仍开放**的图边补给源格
       edgeHex: freeRailEdgeHex.value ?? openSupplySourceHexes.value[0] ?? null,
       edgeSourceHexes: openSupplySourceHexes.value,
-      supplyTrainSp: supplyTrainSp.value,
-      supplyTrainHex: supplyTrainHex.value,
+      // 3.6 补给列车已拆成独立环节（点铁路格直接落 2 SP），不再并入免费铁运落账
     })
     if (!outcome.ok) {
       freeRailError.value = { rule: outcome.rule, reason: outcome.reason }
@@ -17717,9 +17716,120 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     freeRailEdgeHex.value = hex === null ? null : { ...hex }
   }
 
+  /** 专规 2.1/3.1：点地图选图边补给源格（候选＝当日本方仍开放的源格） */
+  function beginFreeRailEdgeHexPickNow(): void {
+    beginHexPick({
+      label: '余额落点（图边补给源格）',
+      rule: '专规 2.1 / 3.1',
+      candidates: openSupplySourceHexes.value,
+      apply: (hex) => {
+        pickFreeRailEdgeHex(hex)
+        return true
+      },
+    })
+  }
+
   /** 3.6：指定补给列车的落点（任一可卸货格） */
   function pickSupplyTrainHex(hex: HexRef | null): void {
     supplyTrainHex.value = hex === null ? null : { ...hex }
+  }
+
+  /* ── 专规 3.6：补给列车 —— 不做列车算子，高亮全部可卸货铁路格，点一格即落 2 SP ── */
+
+  /** 3.6：本回合本段本方是否已落（幂等键；重复点格不再叠加） */
+  const supplyTrainPlacedKey = ref<string | null>(null)
+  /** 3.6：3.4b 生效时的归属（未选不落） */
+  const supplyTrainGroup = ref<PanzerGroup | null>(null)
+
+  function supplyTrainTurnKey(): string {
+    return `${turn.value}|${date.value}|${phase.value}|${activeSide.value}`
+  }
+
+  /** 3.6：本回合还有待落的补给列车 SP 吗 */
+  const supplyTrainPending = computed<boolean>(
+    () => supplyTrainSp.value > 0 && supplyTrainPlacedKey.value !== supplyTrainTurnKey(),
+  )
+
+  /** 3.6：可放置的全部可卸货铁路格（判据同 13.3c，只有 `detrainableHexes` 一处） */
+  const supplyTrainPlacementHexes = computed<HexRef[]>(() =>
+    detrainableHexes.value.map((hex) => ({ ...hex })),
+  )
+
+  /**
+   * 3.6：在点中的可卸货铁路格落 2 SP（不用 Rail Cap）
+   *
+   * 判据与高亮同源（`supplyTrainPlacementHexes`），3.4b 生效时须先在本窗选归属；
+   * 幂等：同一回合/段/方只落一次，重复点格返回 false 并记日志。
+   */
+  function placeSupplyTrainSpNow(hex: HexRef): boolean {
+    if (!requireAction('rein.supplyTrain', '补给列车落点')) return false
+    if (!supplyTrainPending.value) {
+      pushLog('warning', '3.6：本次没有待落的补给列车', '专规 3.6')
+      return false
+    }
+    const text = hexLabel(hex)
+    if (!supplyTrainPlacementHexes.value.some((item) => hexLabel(item) === text)) {
+      pushLog('warning', `3.6：${text} 不是可卸货铁路格（13.3c）`, '13.3c')
+      return false
+    }
+    if (
+      panzerGroupRulesOn.value &&
+      activeSide.value === 'axis' &&
+      supplyTrainGroup.value === null
+    ) {
+      pushLog('warning', '3.4b：德军补给列车 SP 须先选归属（Guderian / Hoth）再落', '3.4b')
+      return false
+    }
+    const sp = supplyTrainSp.value
+    addSpAtHex({
+      hex,
+      side: activeSide.value,
+      sp,
+      t: 0,
+      source: '3.6 补给列车（不用 Rail Cap）',
+      panzerGroup: supplyTrainGroup.value ?? undefined,
+    })
+    supplyTrainPlacedKey.value = supplyTrainTurnKey()
+    const groupText =
+      supplyTrainGroup.value === null
+        ? ''
+        : `，归属 ${supplyTrainGroup.value === 'guderian' ? 'Guderian' : 'Hoth'}`
+    pushLog(
+      'success',
+      `3.6 补给列车：${text} +${String(sp)} SP（不用 Rail Cap）${groupText}`,
+      '专规 3.6',
+    )
+    recordSettlement({
+      action: 'supplyTrain',
+      rule: '专规 3.6',
+      data: { hex: text, sp, side: activeSide.value, panzerGroup: supplyTrainGroup.value },
+    })
+    return true
+  }
+
+  /** 3.6：进入「点地图高亮铁路格」的选格态（候选＝全部可卸货格） */
+  function beginSupplyTrainHexPickNow(): void {
+    if (!supplyTrainPending.value) {
+      pushLog('warning', '3.6：本次没有待落的补给列车', '专规 3.6')
+      return
+    }
+    beginHexPick({
+      label: '补给列车落点（3.6 可卸货铁路格）',
+      rule: '专规 3.6',
+      candidates: supplyTrainPlacementHexes.value,
+      apply: (hex) => placeSupplyTrainSpNow(hex),
+    })
+  }
+
+  /** 3.6：3.4b 归属选择（null ⇒ 清除） */
+  function setSupplyTrainGroup(group: PanzerGroup | null): void {
+    supplyTrainGroup.value = group
+  }
+
+  /** 3.6：清空本回合补给列车的落点记录（换回合 / 重掷时调用） */
+  function resetSupplyTrainPlacement(): void {
+    supplyTrainPlacedKey.value = null
+    supplyTrainGroup.value = null
   }
 
   /**
@@ -17805,7 +17915,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     if (plan.placements.length === 0) {
-      pushLog('warning', '本笔没有可落的 SP（到货 0 且无补给列车）', '专规 2.1 / 3.1')
+      pushLog('warning', '本笔没有可落的 SP（到货 0）', '专规 2.1 / 3.1')
       return false
     }
     // 同格合并（免费铁运 1 SP 与补给列车的 2 SP 可以落在同一格）
@@ -17889,7 +17999,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       })
     }
     lastFreeRailPlan.value = plan
-    pushLog('success', plan.detail, plan.rule)
+    const totalSp = [...byHex.values()].reduce((sum, entry) => sum + entry.sp, 0)
+    pushLog(
+      'success',
+      `${plan.detail}（本次落了 ${String(byHex.size)} 处 / ${String(totalSp)} SP）`,
+      plan.rule,
+    )
     // ⑭ 接线：到货 SP 落位（免费铁运）入会话日志（本笔不掷骰）
     recordSettlement({
       action: 'supplyArrival',
@@ -17909,7 +18024,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       },
     })
     freeRailPicked.value = []
-    supplyTrainHex.value = null
     supplyArrivalSp.value = 0
     clearArrivalSpGroups()
     return true
@@ -18911,22 +19025,26 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 13.5：补员**初次摆放**的候选（用户 2026-11-10 裁定：按原文不套 13.5a）
+   * 13.5 / 2.1：补员**初次摆放**的候选
    *
-   * 13.5 只写「将相应的结果放置在地图上」⇒ 初次摆放**不受**「战斗面 HQ 2 格内、非敌方 ZOC」
-   * 的约束（那一条在 13.5a 里约束的是**用补员重建**单位）。这里只排除明显非法格：
-   *   · 地图外（`allMapHexes` 只枚举图上格）；
-   *   · 已被敌方单位占据的格（`steps > 0`，与 13.6b 的 `isBlocked` 同口径）；
-   *   · 引擎不允许放算子的格（`isOnMap` 已是上界，故无额外禁放格）。
-   * 敌方 ZOC **不加限制**（原文没写就不加）。以后要收紧只改这一条。
+   * 用户 2026-11-11：「可变增援把整张地图高亮（候选未按条款与图边补给源收窄）」——
+   * 修前这里是「全图 − 敌方占据」，于是高亮一整张地图。现改为与到达落点同一条引擎判据
+   * `arrivalPlacementCandidates({kind:'hqOrEdgeSource'})`：
+   *   · 有能**直接拖取追溯补给**的友方 HQ ⇒ 只落这些 HQ；
+   *   · 没有 HQ 才退到**本日仍开放的图边补给源格**（2.1a）。
+   * 高亮与 `placePendingReplNow` 的校验共用本投影，不许两处各算。
+   *
+   * ★ 这条取代 2026-11-10「初次摆放不套 13.5a」的旧口径的**范围部分**：仍不套 13.5a 的
+   *   「战斗面 HQ 2 格内 / 非敌 ZOC」；但不再给整张地图（见待裁定：13.5 原文只写
+   *   "place on the map"，与 2.1 的到货落点是否强绑未明说）。
    */
   const replInitialPlacementHexes = computed<HexRef[]>(() =>
-    allMapHexes().filter(
-      (hex) =>
-        !units.value.some(
-          (unit) => unit.side !== activeSide.value && sameHex(unit.hex, hex) && unit.steps > 0,
-        ),
-    ),
+    arrivalPlacementCandidates(
+      { kind: 'hqOrEdgeSource', label: '补员初次摆放（2.1）' },
+      arrivalFacts.value,
+    ).map((hex) => ({
+      ...hex,
+    })),
   )
 
   /**
@@ -18950,7 +19068,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const replPlacementBlockedReason = computed<string | null>(() => {
     if (replPending.value.pax + replPending.value.eq === 0) return null
     if (replInitialPlacementHexes.value.length === 0) {
-      return '地图上没有可放置补员的格（13.5：格须在图内、且未被敌方单位占据）'
+      return '没有可放置补员的格（2.1：能直接拖取追溯补给的友方 HQ，否则图边补给源格）'
     }
     return null
   })
@@ -18968,7 +19086,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     beginHexPick({
-      label: '补员落点（13.5：图上未被敌方占据的格）',
+      label: '补员落点（2.1：友方 HQ 或图边补给源格）',
       rule: '13.5',
       candidates: replInitialPlacementHexes.value,
       apply: (hex) => placePendingReplNow(hex),
@@ -18995,7 +19113,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (!legal) {
       const reason =
         replPlacementBlockedReason.value ??
-        `${hexLabel(hex)} 不能放补员（13.5：须在图内、且未被敌方单位占据）`
+        `${hexLabel(hex)} 不能放补员（2.1：须是能直接拖取追溯补给的 HQ 或图边补给源格）`
       pushLog('warning', `补员不能放在 ${hexLabel(hex)}：${reason}`, '13.5')
       return false
     }
@@ -19051,6 +19169,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function rollVariableReplNow(): boolean {
     const key = `${turn.value}|${activeSide.value}|reinforcement`
     if (session.session !== null && automaticPhaseKeys.value.includes(key)) return true
+    // 3.6：重掷后重新给一次落点机会（上一掷若已落过，仍按新结果重置）
+    resetSupplyTrainPlacement()
     const inputs = variableReplInputs.value
     // ⑭ 接线：下面两个闭包只回报数字（不改它们）⇒ 先记下掷骰前的骰源，末尾按实际掷骰顺序复算骰面
     const rngBefore = rng.value
@@ -22349,7 +22469,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       candidates,
       apply: (hex) => {
         rebuildReplHexText.value = hexTextOf(hex)
-        return true
+        // 点格即落位：行键已选就顺手提交（用户口径：点算子 → 点地图格，不再回窗确认）
+        if (rebuildPickRow.value === '') return true
+        return rebuildUnitNow({
+          unitId,
+          rebuildType: rebuildPickRow.value,
+          replHexText: hexTextOf(hex),
+        })
       },
     })
   }
@@ -23531,6 +23657,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     toggleFreeRailPick,
     freeRailEdgeHex,
     pickFreeRailEdgeHex,
+    beginFreeRailEdgeHexPickNow,
     // 图边补给源格（2.1 / 3.1）：到货余额的落点候选，也是 1.1b 安全边缘格的来源
     scenarioSupplySourceHexes,
     openSupplySourceHexes,
@@ -23546,6 +23673,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     arrivalSpGroupTargets,
     setArrivalSpGroup,
     clearArrivalSpGroups,
+    // 专规 3.6：补给列车高亮落点 + 点格落 2 SP（不做列车算子）
+    supplyTrainPending,
+    supplyTrainPlacementHexes,
+    supplyTrainGroup,
+    setSupplyTrainGroup,
+    beginSupplyTrainHexPickNow,
+    placeSupplyTrainSpNow,
+    resetSupplyTrainPlacement,
     // C9b：轨距账本（13.3f / 专规 1.2）——「谁能用这条铁路」，与 13.3a 多轨的运量费用无关
     convertedRailHexes,
     printedRailGauge,
