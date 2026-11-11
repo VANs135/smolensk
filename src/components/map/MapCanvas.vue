@@ -456,7 +456,9 @@ function onPointerMove(event: PointerEvent): void {
     emit('hexHover', hex)
   }
   // 拖动中不出提示（否则提示会跟着平移乱飞）
-  const tip = hit === null ? null : tokenTipAt(hit.hex, hit.world)
+  // 条 25（D2）：悬停投影 —— 有令牌给令牌全称；空格回落成格号 `col.row`（点格不再弹只读浮签）
+  const tip =
+    hit === null ? null : (tokenTipAt(hit.hex, hit.world) ?? `${hit.hex.col}.${hit.hex.row}`)
   hoverTip.value = tip === null ? null : { text: tip, x: local.x, y: local.y }
 }
 

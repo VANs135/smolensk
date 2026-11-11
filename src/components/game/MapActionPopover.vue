@@ -38,11 +38,10 @@ const content = computed(() => mapView.popupContent)
 const title = computed(() => (mapView.popup === null ? '' : `格 ${hexLabel(mapView.popup.hex)}`))
 
 /**
- * 条 25：**小窗变体**——`label` ＝ 只读格号浮签，`content` ＝ 常规小窗
+ * 条 25（D2 修订）：**小窗只剩两种**——`content` 常规小窗、`context` 右键菜单
  *
- * 空闲时点一个空格，玩家只要知道"我点的是哪一格"（用户清单条 25 要的是"只读格号小文字框"），
- * 而 330px 的常规小窗在那里只会写「该格算子 0 枚」——一张空清单既挡地图又没信息。
- * 判据在 store（`popupVariantFor`：该格有无可列内容），本组件只读它，不自己判规则。
+ * 点空格的只读格号浮签已删：格号改由地图悬停提示（`MapCanvas` 的 `hoverTip`）随指针浮现，
+ * 离格即消失，不再留一张需要再点一下才收的小签。
  */
 const variant = computed(() => mapView.popup?.variant ?? 'content')
 const actionGroups = ['模式改变', '移动', '战斗', '运输', '工程', '编组', '补给', '空军'] as const
@@ -210,21 +209,9 @@ function sideName(side: string): string {
 </script>
 
 <template>
-  <!--
-    条 25：**只读格号浮签**——空闲点空格时只给一个格号小签（点它即收），
-    不铺 330px 的常规小窗（修前那里只会写「该格算子 0 枚」，空清单挡地图且无信息）。
-  -->
-  <div
-    v-if="variant === 'label'"
-    class="hex-tag"
-    :style="{ left: `${anchor.x}px`, top: `${anchor.y}px` }"
-    title="只读格号浮签（点一下即收）"
-    @click="mapView.closePopup()"
-  >
-    {{ title }}
-  </div>
+  <!-- 条 25（D2 修订）：只读格号浮签已删除（格号改由地图悬停提示给） -->
   <MapPopover
-    v-else-if="variant === 'context'"
+    v-if="variant === 'context'"
     :open="open"
     :x="anchor.x"
     :y="anchor.y"
@@ -268,7 +255,7 @@ function sideName(side: string): string {
     </section>
   </MapPopover>
   <MapPopover
-    v-else-if="variant === 'content'"
+    v-else
     :open="open"
     :x="anchor.x"
     :y="anchor.y"
@@ -616,24 +603,6 @@ function sideName(side: string): string {
 .context-reason {
   grid-column: 1 / -1;
   color: var(--color-muted);
-}
-
-/* 条 25：只读格号浮签（小、不挡地图、点即收） */
-.hex-tag {
-  position: fixed;
-  z-index: var(--z-dialog-top);
-  transform: translate(-50%, 0);
-  padding: 2px 8px;
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-sm);
-  background: var(--color-panel);
-  box-shadow: var(--shadow-sm);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
 }
 
 .block {

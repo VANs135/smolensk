@@ -148,6 +148,33 @@ describe('13.6 / 13.6b：落点解算（含被阻挡时改投最近边缘格）'
     expect(result).toMatchObject({ status: 'fallbackEdge', hex: hex(1, 1), rule: '13.6b' })
   })
 
+  it('专规 2.1a：入口关闭后 `entryHex` 不再在该入口落位（`entryShutDown`）', () => {
+    const twoEntries = facts({
+      entryHexes: (letter) => (letter === 'L' ? [hex(62, 20)] : letter === 'K' ? [hex(6, 1)] : []),
+      isBlocked: () => false,
+    })
+    // 全部入口都关闭 ⇒ 明确报「关闭」（不是笼统的"无可用入场格"）
+    const shut = facts({ ...twoEntries, entryShutDown: (letter) => letter === 'L' })
+    expect(
+      resolveArrivalPlacement({ kind: 'entryHex', letters: ['L'], label: 'Entry L' }, shut),
+    ).toMatchObject({ status: 'entryShutDown', hex: null, rule: '专规 2.1a' })
+    expect(shut.entryShutDown?.('L')).toBe(true)
+    // 多入口：关掉的跳过、仍开放的照常落位
+    expect(
+      resolveArrivalPlacement(
+        { kind: 'entryHex', letters: ['L', 'K'], label: 'Entry L or K' },
+        shut,
+      ),
+    ).toMatchObject({ status: 'placed', hex: hex(6, 1) })
+    // 候选与落点同源：关闭的入口不提供候选
+    expect(
+      arrivalPlacementCandidates(
+        { kind: 'entryHex', letters: ['L', 'K'], label: 'Entry L or K' },
+        shut,
+      ),
+    ).toEqual([hex(6, 1)])
+  })
+
   it('13.6：飞机落点为任一友方空军基地；该校无基地时报告 noAirbase', () => {
     expect(
       resolveArrivalPlacement({ kind: 'anyAirbase', label: 'Any Airbase' }, facts()),

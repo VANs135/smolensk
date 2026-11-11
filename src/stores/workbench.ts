@@ -260,6 +260,7 @@ import {
   arrivalPlacementCandidates,
   airBaseAt,
   resolveArrivalPlacement,
+  shutdownsFor,
   resolveBaseTransfer,
   resolveFlakStep,
   resolveInterception,
@@ -17737,6 +17738,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         .map((unit) => ({ ...unit.hex })),
     // 2.1a：关停的源不再是补给源，故不能作落点
     edgeSupplySourceHexes: () => openSupplySourceHexes.value.map((hex) => ({ ...hex })),
+    /*
+     * 专规 2.1a：Entry L（19 July 起）与 Entry E 及以西南缘源（19 August 起）关闭。
+     * 关闭的是**入口**本身 ⇒ `entryHex` 落点与候选都要跳过它（修前这两个分支不读 shutdowns）。
+     * 关停清单由 `shutdownsFor` 唯一给出；名字形如 `Entry L` / `Entry E 及以西所有南缘源`。
+     */
+    entryShutDown: (letter) =>
+      shutdownsFor(activeSide.value, date.value).some(
+        (name) => name === `Entry ${letter}` || name.startsWith(`Entry ${letter} `),
+      ),
     westEdgeHexes: () =>
       mapEdgeHexes.value.filter((hex) => isWestEdge(hex)).map((hex) => ({ ...hex })),
     // 北缘＝没有图内北邻（曾用「行号 ≥ 上界 − 1」的近似：多算 52 格、漏 10 格削角北缘）

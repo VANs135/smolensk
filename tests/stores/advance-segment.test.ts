@@ -378,6 +378,32 @@ describe('B5：换环节时盘面中间态自动收束', () => {
     expect(mapView.expandedStack).toBeNull()
   })
 
+  it('D4：**段内**换环节（同一阶段内）也清就地展开与选择集', async () => {
+    const { workbench } = stores
+    const mapView = useMapViewStore()
+    const record = unitChoices('axis').find(
+      (item) => item.classes?.movementClass === 'leg' && item.attackCapable === true,
+    )!
+    for (const instanceId of ['s0', 's1']) {
+      workbench.units.push(
+        toConsoleUnit({ record, instanceId, hex: { col: 36, row: 13 }, side: 'axis' }),
+      )
+    }
+    workbench.setPhase('movement')
+    // C 段的首环是突围，第 2 环才是「模式与移动」⇒ 同一 phase、不同环节
+    expect(workbench.playerSegmentSteps.length).toBeGreaterThan(1)
+    expect(workbench.setSegmentStepIndex(0)).toBe(true)
+    mapView.expandStackAt({ col: 36, row: 13 })
+    expect([...mapView.stackSelection].sort()).toEqual(['s0', 's1'])
+    expect(mapView.expandedStack).toEqual({ hex: { col: 36, row: 13 }, page: 0 })
+
+    expect(workbench.setSegmentStepIndex(1)).toBe(true)
+    await nextTick()
+
+    expect(mapView.stackSelection).toEqual([])
+    expect(mapView.expandedStack).toBeNull()
+  })
+
   it('有进行中的会话框（战斗）时拒绝进入下一环节，并给出规则号', () => {
     const { workbench } = stores
     workbench.setPhase('combat')

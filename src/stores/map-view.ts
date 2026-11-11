@@ -82,13 +82,14 @@ const MODE_LETTER: Record<string, string> = {
 
 /** 地图小窗的状态（点某格后打开；内容由视图按格推出） */
 /**
- * 小窗的两种**变体**（条 25）
+ * 小窗的两种**变体**（条 25；D2 修订：只读格号浮签已改为**悬停投影**，不再占小窗）
  *
  * · `content`：常规小窗（330px，含该格算子清单 / 飞机 / 各类动作）——有内容或正在办事时用它；
- * · `label`：**只读格号浮签**——空闲时点一个空格，玩家只要知道"我点的是哪一格"，
- *   不需要"该格算子 0 枚"这种空清单（用户清单条 25 的原话：要的是"只读格号小文字框"）。
+ * · `context`：右键多级菜单。
+ *
+ * 空格不再弹窗：格号由 `MapCanvas` 的悬停提示随指针浮现（空格回落成 `col.row`），离格即消失。
  */
-export type MapPopupVariant = 'content' | 'label' | 'context'
+export type MapPopupVariant = 'content' | 'context'
 
 export type CounterBoxTarget = 'air' | 'northeast' | 'southeast'
 
@@ -1171,12 +1172,14 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 清三样：摊开的选择集、摊开的格子、就地小窗。它们都是"上一步的现场"，
    * 留着只会误导（尤其是选择集，见上）。
    *
-   * 判据用 `workbench` 的三个投影（回合号 / 阶段 / 行动方）——它们本身就来自会话记录，
+   * 判据用 `workbench` 的四个投影（回合号 / 阶段 / **环节** / 行动方）——它们本身就来自会话记录，
    * 故这条 watch 同时覆盖"点进入下一环节"与"手动切方/切段（引擎验证页）"两条路径。
-   * 段内的**环节链**（B6：如 F 战斗段内的炮击→战斗）粒度更细，届时把环节号并入键即可。
+   * D4：**段内的环节链**（B6：如 C 段突围→模式与移动、F 段炮击→战斗）也并入键——
+   * 修前只比段，段内换环节时选择集与摊开态会残留到下一环（"上一环挑好的那几枚"被当成这一环的参与者）。
    */
   watch(
-    () => `${workbench.turn}|${workbench.phase}|${workbench.activeSide}|${hotseat.viewerSide}`,
+    () =>
+      `${workbench.turn}|${workbench.phase}|${workbench.segmentStep?.id ?? workbench.segmentStepIndex}|${workbench.activeSide}|${hotseat.viewerSide}`,
     () => {
       clearStackSelection()
       collapseStack()
@@ -2970,18 +2973,6 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
-   * 条 25：**空闲点空格 ⇒ 只读格号浮签**
-   *
-   * 判据只有一句——"这一格**没有任何可列内容**"（无地面算子令牌、无本方飞机）。
-   * 注意这里**不动 `clickHex` 的既有选中语义**：那一击照样清选中、照样写"选中格 X.Y（空格）"
-   * 日志（既有契约，别的用例钉着）；本条只把**显示**从 330px 空清单换成格号浮签。
-   */
-  function popupVariantFor(hex: HexRef): MapPopupVariant {
-    // 与"摊开/命中"同一份令牌口径（地面 + 本方飞机，已过战雾裁剪）
-    return stackTokensAt(hex).length > 0 ? 'content' : 'label'
-  }
-
-  /**
    * 关闭小窗
    *
    * ★ 用户 2026-11-10：**关窗即自动收起**该格的摊开（只收与这张内容窗同一格的扇面；
@@ -3376,12 +3367,12 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     if (sessionKindAfter === 'combat' && workbench.combatLiveStep !== 'advance') return
     /*
-     * 条 25：**空闲点空格 ⇒ 只读格号浮签**。
-     * 会话在跑时（本击被会话当成"地图点选"消费掉）一定是 `content`：那时小窗是会话的辅助窗，
-     * 玩家要在里面选东西；只有"什么都没发生、纯粹点了个空格"这一击才降级成格号浮签。
+     * 条 25（D2 修订）：**空闲点空格不再弹窗** —— 格号改由地图的悬停提示给（随指针浮现、离格即消失）。
+     * 只有两种情况仍开常规小窗：① 会话在跑（本击被会话当成"地图点选"消费掉，小窗是会话的辅助窗，
+     * 例如 9.12g 推进窗）；② 这一格**有可列内容**（算子 / 飞机）。
      */
-    if (anchor !== undefined) {
-      openPopup(hex, anchor.x, anchor.y, sessionKindAfter !== '' ? 'content' : popupVariantFor(hex))
+    if (anchor !== undefined && (sessionKindAfter !== '' || stackTokensAt(hex).length > 0)) {
+      openPopup(hex, anchor.x, anchor.y, 'content')
     }
   }
 

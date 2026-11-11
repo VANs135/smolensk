@@ -68,13 +68,13 @@ describe('W7 C16：地图视图编排（点什么 / 画什么 / 小窗内容）'
     expect(workbench.moveInteraction!.unitIds).toEqual(['a1'])
   })
 
-  it('★ B26：本击**没有**产生会话时小窗照旧打开（闸门只拦"刚起了会话"的那一击）', () => {
+  it('★ B26 / D2：本击没有会话且是空格 ⇒ 不开窗（格号走悬停投影）', () => {
     const { workbench, mapView } = stores
     // 空格子：点它不会起任何会话
     mapView.onHexClick(START, { x: 120, y: 80 })
     expect(mapView.session).toBeNull()
-    // ★ 条 25（批 U）：这一格是**空格** ⇒ 开的是**只读格号浮签**（变体 label），不是常规小窗
-    expect(mapView.popup).toEqual({ hex: START, x: 120, y: 80, variant: 'label' })
+    // ★ 条 25（D2 修订）：这一格是**空格** ⇒ 不再弹窗；格号由地图悬停提示给
+    expect(mapView.popup).toBeNull()
     void workbench
   })
 
@@ -146,8 +146,8 @@ describe('W7 C16：地图视图编排（点什么 / 画什么 / 小窗内容）'
     expect(after?.chosen).toEqual(target)
     expect(workbench.moveInteraction).toBeNull()
 
-    // 小窗开在被点的格上（便于就地确认）
-    expect(mapView.popup?.hex).toEqual(target)
+    // 条 25（D2 修订）：候选格是空格 ⇒ 不再弹只读浮签；落点确认看覆盖层高亮与悬停格号
+    expect(mapView.popup).toBeNull()
   })
 })
 
@@ -423,10 +423,10 @@ describe('批 A 切片 3：单一对话框与候选过滤', () => {
   it('① 小窗开着时会话**从别的路径**起来 ⇒ 小窗被收掉', () => {
     const { workbench, mapView } = stores
     workbench.setPhase('movement')
-    // 先点空格子开格号浮签（此时没有任何会话；条 25 ⇒ 变体 label）
-    mapView.onHexClick(START, { x: 120, y: 80 })
+    // 先显式开一张小窗（此时没有任何会话；D2 修订后点空格不再自动开窗）
+    mapView.openPopup(START, 120, 80)
     expect(mapView.session).toBeNull()
-    expect(mapView.popup).toEqual({ hex: START, x: 120, y: 80, variant: 'label' })
+    expect(mapView.popup).toEqual({ hex: START, x: 120, y: 80, variant: 'content' })
 
     // 另一格选中一辆未加注的坦克 ⇒ 燃料会话出现（走的不是"点地图开窗"那条路）
     const other = { col: 36, row: 12 }

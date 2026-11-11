@@ -545,6 +545,13 @@ export interface ArrivalPlacementFacts {
   /** 西缘格（轴方 RR Eng Bn 的「Any west edge hexes」） */
   westEdgeHexes(): readonly HexRef[]
   /**
+   * 专规 2.1a：该入口字母是否**已按日期关闭**
+   *
+   * Entry L 自 19 July 关闭；Entry E 及以西所有南缘源自 19 August 关闭（`shutdownsFor`）。
+   * 缺省不传＝不判关闭（既有调用方不必改）；接线见 `workbench.arrivalFacts`。
+   */
+  entryShutDown?(letter: string): boolean
+  /**
    * `North Edge, east of 32.xx` 的判据：该格是否位于**北缘**
    *
    * 本作的朝向裁定为「行号增大＝向北」（见 CODE_SPEC 坐标约定），故「北缘」由调用方按地图给出，
@@ -607,6 +614,8 @@ export function arrivalPlacementCandidates(
       const open: HexRef[] = []
       const blockedFirst: HexRef[] = []
       for (const letter of placement.letters) {
+        // 专规 2.1a：已关闭的入口不提供候选（关闭的入口不得在该处入场）
+        if (facts.entryShutDown?.(letter) === true) continue
         const candidates = facts.entryHexes(letter)
         if (candidates.length === 0) continue
         const free = candidates.filter((hex) => !facts.isBlocked(hex))
@@ -748,7 +757,13 @@ export function resolveArrivalPlacement(
     }
 
     case 'entryHex': {
+      const shutDown: string[] = []
       for (const letter of placement.letters) {
+        // 专规 2.1a：该入口已按日期关闭 ⇒ 跳过（不得在该处入场，须改走仍开放的入口）
+        if (facts.entryShutDown?.(letter) === true) {
+          shutDown.push(letter)
+          continue
+        }
         const candidates = facts.entryHexes(letter)
         if (candidates.length === 0) continue
         const open = candidates.find((hex) => !facts.isBlocked(hex))
@@ -773,11 +788,24 @@ export function resolveArrivalPlacement(
           }
         }
       }
+      // 专规 2.1a：全部入口都已按日期关闭 ⇒ 明确报「关闭」，而不是笼统的"无可用入场格"
+      if (shutDown.length > 0 && shutDown.length === placement.letters.length) {
+        return {
+          status: 'entryShutDown',
+          hex: null,
+          rule: '专规 2.1a',
+          detail:
+            `入口 ${shutDown.join(' / ')} 已按专规 2.1a 关闭（Entry L 自 19 July、` +
+            `Entry E 及以西所有南缘源自 19 August），不得在该处入场——须改走仍开放的入口或边缘补给源`,
+        }
+      }
       return {
         status: 'noHex',
         hex: null,
         rule: '13.6b',
-        detail: `入口 ${placement.letters.join(' / ')} 无可用的入场格，也没有可用的边缘格（13.6b）`,
+        detail:
+          `入口 ${placement.letters.join(' / ')} 无可用的入场格，也没有可用的边缘格（13.6b）` +
+          (shutDown.length > 0 ? `；其中 ${shutDown.join(' / ')} 已按专规 2.1a 关闭` : ''),
       }
     }
   }
