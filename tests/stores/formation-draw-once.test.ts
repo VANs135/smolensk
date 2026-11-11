@@ -97,14 +97,50 @@ describe('ch10：编队抽取只在初设完成后执行一次', () => {
     expect(setup.setupDrawEntryVisible).toBe(false)
     expect(setup.requiredSetupIssues.some((issue) => issue.rule.includes('ch10'))).toBe(false)
     expect(setup.startGameNow()).toBe(true)
-    // 源码守卫：唯一入口在初设面板，文案「抽取编队」，条款号只在 title（? 提示）里
+    // 源码守卫：唯一可点入口在地图左上角的「初设」栏（DecisionQueue），文案「抽取编队」
+    const queue = readFileSync('src/components/game/DecisionQueue.vue', 'utf8')
+    expect(queue).toContain('抽取编队')
+    expect(queue).toContain('setup.executeSetupDraws(')
+    // 初设面板与容器窗都不得再有可点入口（全程序只允许一处）
     const panel = readFileSync('src/components/setup/SetupPanel.vue', 'utf8')
-    expect(panel).toContain('抽取编队')
-    expect(panel).not.toContain('执行编队抽取（ch10）')
-    // 容器窗不得再有第二个可点入口（同一时刻只允许一处）
+    expect(panel).not.toContain('setup.executeSetupDraws(')
     const containersPanel = readFileSync('src/components/containers/ContainersPanel.vue', 'utf8')
     expect(containersPanel).not.toContain('setup.executeSetupDraws(')
     const store = readFileSync('src/stores/setup.ts', 'utf8')
     expect(store).not.toContain('if (setupPlacementComplete.value && !runSetupDraws())')
+  })
+})
+
+/**
+ * 用户 2026-11-11：**战况抽屉只留战况** —— 初设面板（一键预设初设与开局选剧本重复）与
+ * 专规机制（各机制已做到对应环节）删挂载；一键预设初设挪进地图左上角「初设」栏，
+ * 与「抽取编队」同一处，全程序只保留这一处可点。
+ */
+describe('战况抽屉挂载与一键预设初设唯一入口', () => {
+  function statusDrawerSource(): string {
+    const view = readFileSync('src/views/GameTableView.vue', 'utf8')
+    const start = view.indexOf('id="table-drawer-status"')
+    const end = view.indexOf('id="table-drawer-cards"')
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    return view.slice(start, end)
+  }
+
+  it('战况抽屉不再挂初设面板与专规机制，只留战况三块与阶段仪表', () => {
+    const drawer = statusDrawerSource()
+    expect(drawer).not.toContain('<SetupPanel')
+    expect(drawer).not.toContain('<ExclusiveRulesPanel')
+    expect(drawer).toContain('<VictoryPanel />')
+    // 阶段仪表（2026-11-10 #6）与容器信息（盒子唯一展示）仍保留
+    expect(drawer).toContain('<ReinforcementPanel only="info" />')
+    expect(drawer).toContain('<ContainersPanel only="info" />')
+  })
+
+  it('一键预设初设只在地图左上角「初设」栏可点', () => {
+    const queue = readFileSync('src/components/game/DecisionQueue.vue', 'utf8')
+    expect(queue).toContain('一键预设初设')
+    expect(queue).toContain('setup.presetSelfSetupNow(')
+    const panel = readFileSync('src/components/setup/SetupPanel.vue', 'utf8')
+    expect(panel).not.toContain('setup.presetSelfSetupNow(')
   })
 })

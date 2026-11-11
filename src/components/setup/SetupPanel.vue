@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
 import { useUiMode } from '@/components/ui-mode'
@@ -8,10 +8,8 @@ import type { Side } from '@/data'
 import { setupHexLabel } from '@/engine/rules'
 import {
   useContainersStore,
-  useHotseatStore,
   useSetupStore,
   useWorkbenchStore,
-  type PresetSetupResult,
   type SetupPlacing,
   type SetupPlacingCategory,
 } from '@/stores'
@@ -36,24 +34,9 @@ import {
 const setup = useSetupStore()
 const containers = useContainersStore()
 const workbench = useWorkbenchStore()
-const hotseat = useHotseatStore()
 
 /** 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输） */
 const uiMode = useUiMode()
-
-/** B2：一键预设初设的结果（只做最小回执，不投入视觉） */
-const presetResult = ref<PresetSetupResult | null>(null)
-
-/**
- * 2026-11-09：一键预设只服务 PVE 的 AI 方
- *
- * PVP / solo 下不替任何人落位（按钮不出现）；PVE 下只预设 AI 控制的一方，
- * 玩家侧的自由落位原样保留。判据在 `hotseat.presetSide`，本组件不另立口径。
- */
-function runPresetSetup(): void {
-  if (!hotseat.canPreset || hotseat.presetSide === null) return
-  presetResult.value = setup.presetSelfSetupNow({ onlySide: hotseat.presetSide })
-}
 
 /**
  * 条 26 / S4：西移落点**点地图选**（补 §5-E「补缺的 4 处」之一）
@@ -217,28 +200,10 @@ function sideLabel(side: Side): string {
       <BaseTag :kind="setup.finished ? 'success' : 'warning'">
         {{ setup.finished ? '初设已收束' : `待落位 ${setup.pendingPlacement.length} 项` }}
       </BaseTag>
-      <BaseButton
-        v-if="hotseat.canPreset"
-        variant="secondary"
-        size="sm"
-        :disabled="setup.finished"
-        @click="runPresetSetup()"
-      >
-        一键预设初设（仅 AI 方）
-      </BaseButton>
+      <span class="muted">
+        一键预设初设入口在地图左上角「初设」栏（本面板只读，全程序只保留这一处可点）。
+      </span>
     </div>
-    <p v-if="presetResult !== null" class="num">
-      预设：落位 {{ presetResult.placed }} 项 / 飞机 {{ presetResult.airPlaced }} 架；剩余
-      {{ presetResult.remaining }} 枚；失败 {{ presetResult.failures.length }} 条
-      <template v-if="presetResult.failures.length > 0">
-        ——
-        {{
-          presetResult.failures
-            .map((item) => `${item.label}（${item.reason}，试 ${item.tried} 次）`)
-            .join('；')
-        }}
-      </template>
-    </p>
     <RuleNote
       v-if="!setup.finished"
       title="开局在初设收束点：地图左上角「待你决定」队列落满后按「完成初设」"
@@ -281,13 +246,12 @@ function sideLabel(side: Side): string {
         {{ drawnOf(group.kind).join('、') || '（尚未抽取）' }} ⇒ {{ group.effect }}
       </p>
       <div v-if="setup.setupDrawEntryVisible" class="row">
-        <BaseButton variant="primary" size="sm" @click="setup.executeSetupDraws()">
-          抽取编队
-        </BaseButton>
-        <span class="muted">抽一次即收起；处置与西移落点自动落盘。</span>
+        <span class="muted">
+          抽取入口在地图左上角「初设」栏的「抽取编队」按钮（本面板只读，全程序只保留一处可点）。
+        </span>
       </div>
       <p v-else class="muted">
-        摆完初设单位后这里出现「抽取编队」；抽完即永久收起，后续增援段与阶段切换不再抽取。
+        摆完初设单位后地图左上角「初设」栏出现「抽取编队」；抽完即永久收起，后续增援段与阶段切换不再抽取。
       </p>
     </RuleNote>
 

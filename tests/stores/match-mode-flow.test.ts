@@ -96,9 +96,12 @@ describe('界面接线：模式在选剧本页、顶栏只读、预设按 AI 方
     expect(source).toContain('data-testid="match-mode"')
   })
 
-  it('初设面板：非 PVE 不出现「一键预设初设」，PVE 只传 AI 方', () => {
-    const source = readSource('../../src/components/setup/SetupPanel.vue')
-    expect(source).toContain('v-if="hotseat.canPreset"')
+  it('初设栏：非 PVE 不出现「一键预设初设」，PVE 只传 AI 方', () => {
+    const source = readSource('../../src/components/game/DecisionQueue.vue')
+    expect(source).toContain('v-if="hotseat.canPreset && !setup.finished"')
     expect(source).toContain('presetSelfSetupNow({ onlySide: hotseat.presetSide })')
+    // 用户 2026-11-11：入口只此一处，初设面板不再画按钮
+    const panel = readSource('../../src/components/setup/SetupPanel.vue')
+    expect(panel).not.toContain('presetSelfSetupNow(')
   })
 })

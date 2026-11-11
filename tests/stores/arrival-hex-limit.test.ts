@@ -189,8 +189,8 @@ describe('13.6b / 4.8c：投放处不得落在**敌单位格**（可进 EZOC，�
   })
 })
 
-describe('4.8a：地理参照落点的**堆叠上限**（用户加严口径）', () => {
-  it('落点已有 10 RE 战斗单位 ⇒ 直接拒绝并给出可见原因', () => {
+describe('13.6a：地面单位**到场时允许超堆叠**（不再做到场拦截）', () => {
+  it('落点已有 10 RE 战斗单位 ⇒ 仍可投放，超堆叠留给到场后按 4.8a 处理', () => {
     const workbench = newConsole()
     workbench.setActiveSide('soviet')
 
@@ -231,11 +231,20 @@ describe('4.8a：地理参照落点的**堆叠上限**（用户加严口径）',
     }
     expect(stackedRe).toBeGreaterThanOrEqual(10)
 
-    // 玩家**手输**这个已满的落点 ⇒ 不自动改落，直接拒绝
-    const typed = `${String(target.col)}.${String(target.row)}`
-    expect(workbench.placeArrivalNow(index, undefined, typed)).toBe(false)
-    expect(workbench.reinforcementError?.reason).toBe('arrivalHexOverstack')
-    expect(workbench.log.some((entry) => entry.text.includes('4.8a'))).toBe(true)
-    expect(workbench.arrivalPlaced[index]).not.toBe(true)
+    // 13.6a：到场允许超堆叠 ⇒ 投放成功，落点超过 10 RE
+    const before = workbench.units.length
+    expect(workbench.placeArrivalNow(index)).toBe(true)
+    expect(workbench.arrivalPlaced[index]).toBe(true)
+    expect(workbench.units.length).toBeGreaterThan(before)
+    const afterRe = workbench.units
+      .filter(
+        (item) =>
+          item.side === 'soviet' &&
+          item.hex.col === target.col &&
+          item.hex.row === target.row &&
+          item.isCombat,
+      )
+      .reduce((sum, item) => sum + item.re, 0)
+    expect(afterRe).toBeGreaterThan(10)
   })
 })

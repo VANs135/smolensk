@@ -396,7 +396,6 @@ function arrivalErrorText(reason: string): string {
   if (code === 'arrivalHexOutsideCandidates') return '这一格不在该条目的入场格内'
   if (code === 'arrivalHexEnemyOccupied')
     return '这一格有敌方单位：增援可以进敌方 ZOC，但不能与敌方单位同格（13.6b）'
-  if (code === 'arrivalHexOverstack') return '这一格已有 10 RE 战斗单位，放不下更多了（4.8a）'
   if (code === 'arrivalAirBaseOverstack') return '该基地的激活飞机已达上限（4 + 基地等级，14.2a）'
   if (code === 'arrivalNoCandidateHex')
     return '这一条现在没有合法落点（候选为空），请先检查入场格/基地'

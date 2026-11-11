@@ -3,7 +3,13 @@ import { computed, ref, watch } from 'vue'
 
 import { BaseButton, BaseTag } from '@/components/base'
 import { clampDockOffset } from '@/components/map/dock-position'
-import { useSetupStore, type DecisionStack, type SetupPlacing } from '@/stores'
+import {
+  useHotseatStore,
+  useSetupStore,
+  type DecisionStack,
+  type PresetSetupResult,
+  type SetupPlacing,
+} from '@/stores'
 
 /**
  * **待你决定的队列**（B11；地图左上角 · 四堆叠）
@@ -25,10 +31,24 @@ import { useSetupStore, type DecisionStack, type SetupPlacing } from '@/stores'
  */
 
 const setup = useSetupStore()
+const hotseat = useHotseatStore()
 const emit = defineEmits<{
   airDrag: [source: { side: 'axis' | 'soviet'; entryIndex: number } | null]
 }>()
 const airMenu = ref<number | null>(null)
+
+/**
+ * 一键预设初设（B2）：与「抽取编队」同一处，只落 AI 控制的一方，不替玩家点开始游戏。
+ * 修前这个入口挂在「战况」抽屉的初设面板里（与开局选剧本重复），玩家在初设栏找不到。
+ */
+const presetResult = ref<PresetSetupResult | null>(null)
+
+function runPresetSetup(): void {
+  presetResult.value =
+    hotseat.presetSide === null
+      ? setup.presetSelfSetupNow()
+      : setup.presetSelfSetupNow({ onlySide: hotseat.presetSide })
+}
 
 function openAirMenu(item: SetupPlacing): void {
   airMenu.value = item.offMapAllowed === true ? item.entryIndex : null
@@ -76,6 +96,7 @@ const placing = computed(() => setup.placing)
 const omitConfirmed = ref(false)
 watch([() => setup.scenarioId, () => setup.omittablePlacements], () => {
   omitConfirmed.value = false
+  presetResult.value = null
 })
 watch(cursorSide, () => {
   airMenu.value = null
@@ -204,6 +225,35 @@ function sideMark(side: 'axis' | 'soviet'): string {
       </span>
       <span class="queue__pending num">{{ pendingTotal }} 待处理</span>
     </header>
+
+    <!--
+      ch10 / ch11：编队抽取的**唯一可点入口**（用户 2026-11-11：挪到玩家看得见的初设栏）。
+      可见条件沿用 `setup.setupDrawEntryVisible`；点一次即抽取 + 落位 + 落账，之后永久收起。
+      初设面板与容器窗都不再画按钮，保持全程序只有这一处可点。
+    -->
+    <div v-if="setup.setupDrawEntryVisible" class="queue__row-actions">
+      <BaseButton variant="primary" size="sm" @click="setup.executeSetupDraws()">
+        抽取编队
+      </BaseButton>
+      <span class="queue__hint">ch10：初设摆完后抽一次，抽完即收起</span>
+    </div>
+
+    <!--
+      B2：**一键预设初设的唯一可点入口**（用户 2026-11-11：与「抽取编队」同一处）。
+      仅人机模式（`hotseat.canPreset`）且初设未收束时出现；只落 AI 控制的一方，不替玩家开局。
+    -->
+    <div v-if="hotseat.canPreset && !setup.finished" class="queue__row-actions">
+      <BaseButton variant="secondary" size="sm" @click="runPresetSetup()">
+        一键预设初设
+      </BaseButton>
+      <span v-if="presetResult === null" class="queue__hint">
+        自动落 {{ hotseat.presetSide === 'axis' ? '轴心国' : '苏联' }}一方，另一方由你摆
+      </span>
+      <span v-else class="queue__hint num">
+        已落 {{ presetResult.placed }} 项 · 剩 {{ presetResult.remaining }} 项 · 失败
+        {{ presetResult.failures.length }} 条
+      </span>
+    </div>
 
     <!--
       第六批条 1（S1）：**分方游标** —— 先布设方（剧本页 `setupFirst`，与"先行动方"是两回事）

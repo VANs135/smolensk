@@ -118,10 +118,11 @@ describe('B17a-3：分段渲染与入口（源码守卫）', () => {
     }
   })
 
-  it('★ 对局台：右栏 `only="info"`、会话按节逐窗；验证页仍挂全量', () => {
+  it('★ 对局台：专规只在会话窗按节出现（战况不再挂 info）；验证页仍挂全量', () => {
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
     const verify = readFileSync('src/views/WorkbenchView.vue', 'utf8')
-    expect(game).toContain('<ExclusiveRulesPanel only="info" />')
+    // 用户 2026-11-11：战况抽屉删掉专规机制挂载（各机制已做到对应环节，不必再挂一块）
+    expect(game).not.toContain('<ExclusiveRulesPanel only="info" />')
     // 用户 2026-11-09「一个框不能装多件事」：会话按当前节传 only，不再写死 actions
     expect(game).toContain(':only="mapView.sessionExclusiveSection ?? \'actions\'"')
     /*

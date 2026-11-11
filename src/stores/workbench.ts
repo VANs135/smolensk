@@ -79,7 +79,6 @@ import {
   BARRAGE_SOURCES_BY_PHASE,
   DIRECT_DRAW_RANGE_MP,
   SP_TO_T,
-  STACKING_LIMIT_RE,
   airBaseBuildCostSp,
   airBoxEdgeColumn,
   airBoxRangeHexes,
@@ -19840,17 +19839,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 单枚、`Nx` 同型复制、编成条目逐枚投放**共用**这一份，避免三处各写一遍后漂移。
      * `quiet` 供复制/编成的后续枚用：逐枚都刷一遍日志只会把日志刷爆。
      */
-    /*
-     * 4.8a 的"改落"会把落点挪到同一候选集内的另一格；`landingHex` 是**最终**落点，
-     * 校验（敌占 / 候选）仍用玩家指定的 `hex`，落盘与日志用 `landingHex`。
-     */
-    let landingHex: HexRef = hex
-
     const buildArrivalUnit = (record: UnitRecordView, quiet = false): ConsoleUnit => {
       const created = toConsoleUnit({
         record,
         instanceId: createId('arr'),
-        hex: landingHex,
+        hex,
         side: activeSide.value,
       })
       /*
@@ -19949,49 +19942,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
 
     /*
-     * 4.8a：**堆叠上限**（地理参照 / 西缘两条地面落点路径）
-     *
-     * 用户 2026-11-11 口令：`geographic`（w/i 3 of 60.34）与 `anyWestEdge` 除了「不得落在敌单位格」，
-     * 还要查 4.8 的 10 RE 上限，拒绝须带可见原因。
-     * ★ 口径说明：4.8a / 13.6 原文对**增援阶段**豁免超堆叠（13.6a 亦允许地面单位到场时超堆叠）；
-     *   这里是按用户的加严口径执行，只作用于这两条孤立落点（不波及 `entryHex` / `hqOrEdgeSource`）。
+     * 13.6a：**地面单位允许到场时超堆叠**——到场阶段不做 4.8a 的 10 RE 拦截，
+     * 到场结束后再由 `stackingObligations` 按 4.8a 处理（4.8a 对增援阶段本来就豁免）。
      */
-    const enforceArrivalStacking = (incomingRe: number): boolean => {
-      if (demand.placement.kind !== 'geographic' && demand.placement.kind !== 'anyWestEdge')
-        return true
-      if (incomingRe <= 0) return true
-      const combatReAt = (target: HexRef): number =>
-        units.value
-          .filter(
-            (item) => item.side === activeSide.value && sameHex(item.hex, target) && item.isCombat,
-          )
-          .reduce((sum, item) => sum + item.re, 0)
-      if (combatReAt(landingHex) + incomingRe <= STACKING_LIMIT_RE) return true
-      // 两条路径都是"范围内任选"：默认落点已满时先改落别的空候选，玩家手输的落点则直接拒绝
-      if (typedHex === undefined) {
-        const alternative = (arrivalCandidates.value[index] ?? []).find(
-          (candidate) =>
-            !arrivalFacts.value.isBlocked(candidate) &&
-            combatReAt(candidate) + incomingRe <= STACKING_LIMIT_RE,
-        )
-        if (alternative !== undefined) {
-          pushLog(
-            'info',
-            `${hexLabel(landingHex)} 已堆到 ${String(STACKING_LIMIT_RE)} RE，改落 ${hexLabel(alternative)}（4.8a）`,
-            '4.8a',
-          )
-          landingHex = alternative
-          return true
-        }
-      }
-      reinforcementError.value = { rule: '4.8a', reason: 'arrivalHexOverstack' }
-      pushLog(
-        'warning',
-        `无法投放：${hexLabel(landingHex)} 已有战斗单位 ${String(combatReAt(landingHex))} RE，再落 ${String(incomingRe)} RE 将超过 ${String(STACKING_LIMIT_RE)} RE 上限（4.8a）`,
-        '4.8a',
-      )
-      return false
-    }
 
     const formation = resolveArrivalFormation(index)
     if (formation !== null) {
@@ -20015,14 +19968,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         )
         return false
       }
-      const incomingRe = formation.records.reduce((sum, item) => sum + (item.reSize ?? 0), 0)
-      if (!enforceArrivalStacking(incomingRe)) return false
       const arrived = formation.records.map((record) => buildArrivalUnit(record))
       units.value = [...units.value, ...arrived]
       assignArrivalCargoGroups(arrived)
       pushLog(
         'success',
-        `${demand.raw} 投放于 ${hexLabel(landingHex)}：编成共 ${String(arrived.length)} 枚（13.6）`,
+        `${demand.raw} 投放于 ${hexLabel(hex)}：编成共 ${String(arrived.length)} 枚（13.6）`,
         '13.6',
       )
       recordSettlement({
@@ -20032,7 +19983,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           index,
           kind: demand.kind,
           raw: demand.raw,
-          hex: { ...landingHex },
+          hex: { ...hex },
           unitId: arrived[0]!.instanceId,
           formationCount: arrived.length,
           formationComponents: formation.components,
@@ -20066,10 +20017,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *
      * 修前 `count` 只进了文案、投放只落一枚，且随后被「已投放」账本挡住 ⇒ 另一半永远进不了场。
      * 枚数判据在引擎 `arrivalCopiesOf`（逐枚点名的括号、运输点数的运力数字都不算枚数）。
-     * ★ 先建后验再落盘：4.8a 的堆叠检查要看到**整批**（含 `Nx` 复制）的 RE，拒绝时盘面不动。
      */
     const copies = arrivalCopiesOf(demand)
-    if (!enforceArrivalStacking((record.reSize ?? 0) * copies)) return false
     const arrivedUnits: ConsoleUnit[] = [buildArrivalUnit(record)]
     for (let copy = 1; copy < copies; copy += 1) {
       arrivedUnits.push(buildArrivalUnit(record, true))
@@ -20088,7 +20037,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
     pushLog(
       'success',
-      `${demand.raw} 投放于 ${hexLabel(landingHex)}` +
+      `${demand.raw} 投放于 ${hexLabel(hex)}` +
         (demand.stepsLost > 0 ? `（到场即带损 ${demand.stepsLost} step）` : '') +
         (demand.loadedWithSp ? '（13.6c：运输点满载 SP 入场，请在 SP 账本登记）' : ''),
       '13.6',
@@ -20101,7 +20050,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         index,
         kind: demand.kind,
         raw: demand.raw,
-        hex: { ...landingHex },
+        hex: { ...hex },
         unitId: unit.instanceId,
         stepsLost: demand.stepsLost,
         loadedWithSp: demand.loadedWithSp,

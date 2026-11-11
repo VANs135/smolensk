@@ -27,7 +27,6 @@ import {
   SettlementLogPanel,
   TerminationNotice,
 } from '@/components/session'
-import { SetupPanel } from '@/components/setup'
 import { SupplyPanel } from '@/components/supply'
 import SupplyPhasePanel from '@/components/supply/SupplyPhasePanel.vue'
 import { provideUiMode } from '@/components/ui-mode'
@@ -539,7 +538,6 @@ onBeforeUnmount(() => {
           class="gt__drawer-body"
         >
           <ActionFeedbackStrip />
-          <SetupPanel />
           <!--
             #6（用户 2026-11-10）：**只在本阶段挂本阶段的仪表**。
             修前这条常驻，突围等环节的状态抽屉里也挂着「增援与编制」面板，
@@ -548,7 +546,11 @@ onBeforeUnmount(() => {
           <template v-if="workbench.phase === 'reinforcement'">
             <ReinforcementPanel only="info" />
           </template>
-          <ExclusiveRulesPanel only="info" />
+          <!--
+            用户 2026-11-11：**战况里删两块挂载** —— 初设面板（一键预设初设与开局选剧本重复；
+            其入口已挪进地图左上角「初设」栏，全程序只保留那一处可点）与专规机制
+            （各机制都已做到对应环节，不必在战况再挂一块）。组件与数据不动，裁判视图另有挂载。
+          -->
           <VictoryPanel />
           <ContainersPanel only="info" />
         </div>
