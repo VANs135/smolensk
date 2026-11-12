@@ -312,7 +312,10 @@ function hoverUnit(id: string | null): void {
     </SessionStep>
 
     <!-- ③ 突袭（8.0/8.1a）：目标格在地图上高亮，点它即发起 -->
-    <p v-if="canOverrun" class="muted num">点击地图上高亮的敌方格发起突袭 · 8.1a</p>
+    <!-- R14（K9）：提示与紫环同源 —— 只有真的有合格目标（`overrunTargets` 非空）才出现 -->
+    <p v-if="canOverrun && workbench.overrunTargets.length > 0" class="muted num">
+      点击地图上高亮的敌方格发起突袭 · 8.1a
+    </p>
 
     <!--
       R13（K3）：8.1g/h 的「参突 / 留驻」拆分原先只在「格子内容小窗」的 content 变体里，
