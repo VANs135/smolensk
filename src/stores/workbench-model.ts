@@ -2825,17 +2825,17 @@ export const ACTION_GATES: readonly ActionGate[] = [
     label: '宣布轰炸',
     rule: '10.0',
     where: [
-      // 段限定（SOP 原文）：C 段仅空中与舰炮、F 段仅炮兵、E/G 不限
+      // 段限定（SOP 原文）：C 段仅空中、F 段仅炮兵、E/G 不限（本作无海军）
       { phase: 'movement', segment: 'movement.barrage' },
       /*
        * ★ 10.0 第二段：「如果允许某方的空军单位执行低空扫射任务（见 14.7d），则这些轰炸还能在
        *   上述阶段的**移动环节**中进行。」⇒ C 段移动环节只放行**低空扫射的空军**；
-       *   火炮与舰船**不得**借这个入口（引擎 `barrageEligibility` 按环节 id 同口径拒绝）。
+       *   火炮**不得**借这个入口（引擎 `barrageEligibility` 按环节 id 同口径拒绝）。
        */
       {
         phase: 'movement',
         segment: 'movement.modeAndMovement',
-        note: '10.0 第二段：移动环节仅「有低空扫射能力的空军单位」可轰炸；火炮/舰船不得参与',
+        note: '10.0 第二段：移动环节仅「有低空扫射能力的空军单位」可轰炸；火炮不得参与',
       },
       { phase: 'reaction', segment: 'reaction.barrage', role: 'nonActive' },
       { phase: 'combat', segment: 'combat.barrage' },
@@ -3325,9 +3325,9 @@ export function participatesIn(query: ParticipationQuery): ParticipationVerdict 
       return { ok: true, rule: '6.0' }
     }
 
-    /* ── C 移动 · 轰炸（SOP 原文：air & ship only）⇒ 地面算子不参与 ── */
+    /* ── C 移动 · 轰炸（SOP 原文：air only，本作无海军）⇒ 地面算子不参与 ── */
     case 'movement.barrage':
-      return cannotParticipate('10.0', '移动段的轰炸限空中与舰炮（SOP 原文），地面算子不参与')
+      return cannotParticipate('10.0', '移动段的轰炸限空中（SOP 原文），地面算子不参与')
 
     /* ── D 补给 · 第一环：恢复部队储备（12.10e） ── */
     case 'supply.recovery':

@@ -421,7 +421,8 @@ onBeforeUnmount(() => {
           fill
           :layers="mapLayerToggles"
           :highlight-hex="workbench.hoverHex"
-          :highlight-hexes="workbench.variableExitPickHexes"
+          :highlight-hexes="mapView.mapHighlightHexes"
+          :hex-labels="mapView.mapHexLabels"
           :overlay="mapView.overlay"
           :box-drag-source="mapView.counterForBoxAt"
           :control-markers="mapView.controlMarkers"

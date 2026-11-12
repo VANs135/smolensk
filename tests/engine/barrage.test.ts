@@ -435,15 +435,7 @@ describe('10.0d / 10.0e 轰炸资格：阶段门槛、同类型、每格每阶�
         segment: 'movement.modeAndMovement',
       }),
     ).toMatchObject({ ok: false, rule: '10.0', reason: 'movementSegmentOnlyHipShoot' })
-    // 移动环节：舰船、火炮 → 拒
-    expect(
-      barrageEligibility({
-        ...base,
-        kind: 'ship',
-        phase: 'movement',
-        segment: 'movement.modeAndMovement',
-      }),
-    ).toMatchObject({ ok: false, rule: '10.0', reason: 'movementSegmentOnlyHipShoot' })
+    // 移动环节：火炮 → 拒（本作无海军，不再列舰船）
     expect(
       barrageEligibility({
         ...base,
@@ -473,14 +465,14 @@ describe('10.0d / 10.0e 轰炸资格：阶段门槛、同类型、每格每阶�
       }),
     ).toMatchObject({ ok: false, reason: 'tooManyAircraft' })
 
-    // 10.0 第四句：火炮/舰船不限数量（只有飞机 ≤4）
+    // 10.0 第四句：火炮不限数量（只有飞机 ≤4；本作无海军）
     expect(
       barrageEligibility({ ...base, unitCount: 12, phase: 'combat', segment: 'combat.barrage' }),
     ).toMatchObject({ ok: true })
     expect(
       barrageEligibility({
         ...base,
-        kind: 'ship',
+        kind: 'artillery',
         unitCount: 12,
         phase: 'exploitation',
         segment: 'exploitation.barrage',

@@ -50,9 +50,9 @@ describe('Ⓔ E 段许可动作与段闸（2.2 / 10.x）', () => {
     expect(attack.map((item) => item.reason)).toContain('actionNotInSegment')
   })
 
-  it('2.2：E 段允许三种来源的轰炸（炮兵 / 空中 / 舰炮）', () => {
-    expect([...(BARRAGE_SOURCES_BY_PHASE.reaction ?? [])]).toEqual(['artillery', 'air', 'ship'])
-    for (const source of ['artillery', 'air', 'ship'] as const) {
+  it('2.2：E 段允许两种来源的轰炸（炮兵 / 空中；本作无海军）', () => {
+    expect([...(BARRAGE_SOURCES_BY_PHASE.reaction ?? [])]).toEqual(['artillery', 'air'])
+    for (const source of ['artillery', 'air'] as const) {
       expect(
         checkTiming({
           action: 'barrage',

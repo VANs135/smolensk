@@ -149,11 +149,11 @@ describe('2.2 流程表：段的顺序与许可动作矩阵', () => {
     expect(timing('movement', 'refit').map((item) => item.reason)).toContain('actionNotInSegment')
   })
 
-  it('2.2：轰炸来源按段分级——C 段仅空中/舰炮，F 段仅炮兵，E/G 段三种皆可（SOP 原文）', () => {
-    expect([...(BARRAGE_SOURCES_BY_PHASE.movement ?? [])]).toEqual(['air', 'ship'])
+  it('2.2：轰炸来源按段分级——C 段仅空中，F 段仅炮兵，E/G 段两种皆可（SOP；本作无海军）', () => {
+    expect([...(BARRAGE_SOURCES_BY_PHASE.movement ?? [])]).toEqual(['air'])
     expect([...(BARRAGE_SOURCES_BY_PHASE.combat ?? [])]).toEqual(['artillery'])
-    expect([...(BARRAGE_SOURCES_BY_PHASE.reaction ?? [])]).toEqual(['artillery', 'air', 'ship'])
-    expect([...(BARRAGE_SOURCES_BY_PHASE.exploitation ?? [])]).toEqual(['artillery', 'air', 'ship'])
+    expect([...(BARRAGE_SOURCES_BY_PHASE.reaction ?? [])]).toEqual(['artillery', 'air'])
+    expect([...(BARRAGE_SOURCES_BY_PHASE.exploitation ?? [])]).toEqual(['artillery', 'air'])
 
     // C 段用炮兵轰炸 ⇒ 违反 SOP（10.1a/2.2）
     const cSegment = timing('movement', 'barrage', { barrageSource: 'artillery' })

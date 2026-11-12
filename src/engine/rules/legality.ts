@@ -222,8 +222,8 @@ export interface LegalityRequest {
   inEnemyZoc?: boolean
   /** 模式切换的目标模式（5.4；action='modeChange' 时必给） */
   modeTarget?: BaseMode
-  /** 轰炸来源（10.1a：炮兵 / 空中 / 舰炮；SOP 各段的许可不同） */
-  barrageSource?: 'artillery' | 'air' | 'ship'
+  /** 轰炸来源（10.1a：炮兵 / 空中；SOP 各段的许可不同；本作无海军） */
+  barrageSource?: 'artillery' | 'air'
   /** 额度占用 */
   allowance?: AllowanceUsage
   /** 编队同源事实（加油为编队法时必给） */
@@ -286,7 +286,7 @@ export type LegalityVerdict =
  * |---|---|---|
  * | A Aircraft Refit | 「A. Aircraft Refit Phase」 | 整备 15.1 |
  * | B Reinforcement | 「B. Reinforcement Phase」 | 增援放置（时机由 13.6 定义，本层不判） |
- * | C Movement | 「C. Movement Phase: Breakout / Mode & Movement / Barrage (air & ship only)」 | 突围 / 模式与移动 / **仅空中与舰炮**轰炸 |
+ * | C Movement | 「C. Movement Phase: Breakout / Mode & Movement / Barrage (air & ship only)」 | 突围 / 模式与移动 / **仅空中**轰炸（本作无海军） |
  * | D Supply | 「D. Supply Phase」 | 追溯判定（12.6）/ 吃图上补给 12.6c / 断补标记与损耗 12.8（**无燃料**，见下） |
  * | E Reaction | 「E. Reaction Phase: Movement / Barrage」 | 移动（限非行动方已释放预备 7.0a）/ 轰炸 |
  * | F Combat | 「F. Combat Phase: Barrage (artillery only) / Combat」 | **仅炮兵**轰炸 / 常规战斗 |
@@ -294,7 +294,7 @@ export type LegalityVerdict =
  * | H Clean Up | 「H. Clean Up Phase」 | 全自动，无玩家动作 |
  *
  * 注意两处**同一动作不同段许可范围不同**，必须靠 `barrageSource` 区分：
- * C 段只允许空中与舰炮轰炸，F 段只允许炮兵轰炸。
+ * C 段只允许空中轰炸，F 段只允许炮兵轰炸。
  *
  * ★ **燃料不在本表任何一段**（用户 2026-09-19 口径）：2.2 的段名里没有它，12.5c 把付款绑在
  *   「发生燃料消耗的**任何阶段**」的消耗时刻 ⇒ 它的"时机"由 `fuel.ts` 定义，故列在
@@ -359,12 +359,12 @@ export const TIMING_DEFERRED_ACTIONS: readonly ActionKind[] = [
   'fuel',
 ]
 
-/** 各段允许的轰炸来源（SOP 原文：C 段 air & ship only、F 段 artillery only） */
+/** 各段允许的轰炸来源（SOP：C 段 air only、F 段 artillery only；本作无海军） */
 export const BARRAGE_SOURCES_BY_PHASE: Partial<Record<GamePhase, readonly string[]>> = {
-  movement: ['air', 'ship'],
-  reaction: ['artillery', 'air', 'ship'],
+  movement: ['air'],
+  reaction: ['artillery', 'air'],
   combat: ['artillery'],
-  exploitation: ['artillery', 'air', 'ship'],
+  exploitation: ['artillery', 'air'],
 }
 
 /* ────────────────────────────── 4.5a 敌方 ZOC 内禁止的动作（A–K） ────────────────────────────── */
@@ -505,7 +505,7 @@ export function checkTiming(request: LegalityRequest): LegalityViolation[] {
     return violations
   }
 
-  // 轰炸来源：C 段仅空中与舰炮、F 段仅炮兵（SOP 原文）
+  // 轰炸来源：C 段仅空中、F 段仅炮兵（SOP；本作无海军）
   if (request.action === 'barrage') {
     const sources = BARRAGE_SOURCES_BY_PHASE[request.phase]
     if (sources !== undefined) {
@@ -601,9 +601,7 @@ function modeAllows(
   const groundAttack =
     request.action === 'attack' ||
     request.action === 'overrun' ||
-    (request.action === 'barrage' &&
-      request.barrageSource !== 'air' &&
-      request.barrageSource !== 'ship')
+    (request.action === 'barrage' && request.barrageSource !== 'air')
   if (groundAttack && !canAttackAfterAirTransport(unit.airTransportThisPhase))
     return {
       ok: false,

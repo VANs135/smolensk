@@ -2,20 +2,20 @@
 import { computed } from 'vue'
 
 import { AirPanel } from '@/components/air'
-import { BarragePanel } from '@/components/barrage'
 import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import { counterImageUrlOf, hexLabel, useMapViewStore, useWorkbenchStore } from '@/stores'
 
 /**
- * 三操作统一流程（2026-11-10 规格）
+ * 三操作统一流程（2026-11-10 规格；炮击链路 2026-11-12 重做）
  *
- * 骨架固定为三段，三个操作共用同一个窗：
- *   ① 选参战单位（炮击＝射程覆盖目标格的炮兵；空军＝按基地分组、含地图外盒、只列出动得了的）
- *   ② 分叉步（炮击＝补给 10.1b；空军＝空战 / 拦截 / 防空 14.2f）
- *   ③ 结算（10.0a 损失 / DG，或空军任务收束）
+ * 炮击（用户定的 7 步）：
+ *   ① 右键敌方堆叠/设施 →「炮击」→ 只列**射程覆盖目标格**的炮兵；点选时地图同步高亮。
+ *   ② 确认单位 → 支付补给（10.1b）：地图高亮可用补给站并显示 SP 数，点站支付。
+ *   ③ 确认支付后**自动走完**横移 / 掷骰 / 结算（地形按对防守方最有利自动取）。
+ *   ④ 若造成军力损失，列出目标格内的单位由玩家选受损者；选完本次炮击结束。
+ *   ⑤ 目标为设施时按 10.0c 设施表结算（基地降级、基地内飞机受损）。
  *
- * 第 2/3 步直接复用 `BarragePanel` / `AirPanel`：规则计算全在引擎/store，本组件**不写规则**，
- * 只负责第 1 步的候选呈现与「下一步」把球交给既有状态机（`advanceOpsFlow`）。
+ * 空军（轰炸 / 低空扫射）仍走既有空军任务链：第 1 步选机，第 2 步交给 `AirPanel`。
  */
 const map = useMapViewStore()
 const workbench = useWorkbenchStore()
@@ -37,6 +37,15 @@ const barrageItems = computed(() => {
     .filter((unit) => !workbench.barragePhaseLedger.unitIds.includes(unit.instanceId))
 })
 
+/** 10.0d / 10.0c：该格可宣布的整体目标（有敌战斗单位→单位；有敌空军基地→基地） */
+const targetKindChoices = computed<readonly { key: 'combatUnits' | 'airBase'; label: string }[]>(
+  () =>
+    workbench.barrageTargetKindChoicesAt.map((key) => ({
+      key,
+      label: key === 'airBase' ? '空军基地（10.0c）' : '战斗单位（10.0a）',
+    })),
+)
+
 /** 空军第 1 步：按基地分组（含地图外盒），只留**候选函数给出的**那批（与右键同源） */
 const airGroups = computed(() => {
   const current = flow.value
@@ -55,10 +64,6 @@ const airGroups = computed(() => {
     .filter((group) => group.aircraft.length > 0)
 })
 
-const step2Title = computed(() =>
-  flow.value?.kind === 'barrage' ? '补给（10.1b）' : '空战 / 防空（14.2f）',
-)
-
 /** 第 1 步是否已选到参战单位 */
 const picked = computed(() => {
   const current = flow.value
@@ -68,11 +73,22 @@ const picked = computed(() => {
     : workbench.airMissionAirIds.length > 0
 })
 
-const errorLine = computed(() => {
-  const current = flow.value
-  if (current === null) return null
-  return current.kind === 'barrage' ? workbench.barrageError : workbench.airError
-})
+/** 炮击错误：中文行（不显示引擎 reason 代码） */
+const barrageErrorLine = computed(() => workbench.barrageErrorLine)
+
+/** 空军错误（既有形状） */
+const airError = computed(() => workbench.airError)
+
+/** 炮击第 2 步的付款来源（地图上高亮的那几座站） */
+const supplyDumps = computed(() => workbench.barrageSupplyMapDumps)
+
+/** 炮击第 2 步：本次成本与初始列 */
+const supplyCostT = computed(() => workbench.barrageSummary?.costT ?? 0)
+
+/** 炮击第 3 步：受损单位候选与分配 */
+const lossTargets = computed(() => workbench.barrageLossTargets)
+const lossRequired = computed(() => workbench.barrageLossRequired)
+const lossAllocated = computed(() => workbench.barrageLossAllocated)
 
 function isPickedBarrage(id: string): boolean {
   return workbench.barrageUnitIds.includes(id)
@@ -81,6 +97,10 @@ function isPickedBarrage(id: string): boolean {
 function isPickedAir(id: string): boolean {
   return workbench.airMissionAirIds.includes(id)
 }
+
+function setTargetKind(kind: string): void {
+  if (kind === 'combatUnits' || kind === 'airBase') workbench.setBarrageTargetKind(kind)
+}
 </script>
 
 <template>
@@ -88,90 +108,195 @@ function isPickedAir(id: string): boolean {
     <p class="ops__steps num">
       <BaseTag :kind="flow.step === 1 ? 'info' : 'success'">① 选单位</BaseTag>
       <span class="ops__arrow">→</span>
-      <BaseTag :kind="flow.step === 2 ? 'info' : 'neutral'">② {{ step2Title }}</BaseTag>
-      <span class="ops__arrow">→</span>
-      <BaseTag kind="neutral">③ 结算</BaseTag>
+      <BaseTag :kind="flow.step === 2 ? 'info' : 'neutral'">
+        {{ flow.kind === 'barrage' ? '② 支付补给（10.1b）' : '② 空战 / 防空（14.2f）' }}
+      </BaseTag>
+      <template v-if="flow.kind === 'barrage'">
+        <span class="ops__arrow">→</span>
+        <BaseTag :kind="flow.step === 3 ? 'info' : 'neutral'">③ 受损单位</BaseTag>
+      </template>
       <span class="muted">｜目标 {{ hexLabel(flow.targetHex) }}</span>
     </p>
 
-    <!-- ───────── 第 1 步：选参战单位 ───────── -->
-    <template v-if="flow.step === 1">
-      <template v-if="flow.kind === 'barrage'">
-        <p class="muted num">
-          炮击（10.1a）
-          <RuleTip rule="10.1b">
-            只列**射程覆盖目标格**且本阶段还没炸过的炮兵（10.1a）；付不出 10.1b
-            的补给时这一项不会出现。
-          </RuleTip>
-        </p>
-        <div class="ops__grid">
+    <!-- ───────── 炮击：第 1 步 选炮兵 ───────── -->
+    <template v-if="flow.kind === 'barrage' && flow.step === 1">
+      <label v-if="targetKindChoices.length > 1" class="field num">
+        整体目标（10.0d：宣布后只能用于该目标）
+        <select
+          class="select"
+          :value="workbench.barrageTargetKind"
+          @change="setTargetKind(($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="item in targetKindChoices" :key="item.key" :value="item.key">
+            {{ item.label }}
+          </option>
+        </select>
+      </label>
+      <p class="muted num">
+        只列<b>射程覆盖该格</b>且本阶段还没炮击过的炮兵（10.1a / 10.0e-B）。
+        <RuleTip rule="10.1b">付不出补给的炮击不会出现在右键菜单里。</RuleTip>
+      </p>
+      <div class="ops__grid">
+        <button
+          v-for="unit in barrageItems"
+          :key="unit.instanceId"
+          type="button"
+          class="ops__unit num"
+          :class="{ 'ops__unit--on': isPickedBarrage(unit.instanceId) }"
+          :title="`${unit.name}｜轰炸值 ${unit.raw.barrage ?? 0}｜射程 ${unit.raw.range ?? '—'}`"
+          @click="workbench.toggleBarrageUnit(unit.instanceId)"
+        >
+          <img :src="counterImageUrlOf(unit) ?? ''" class="ops__img" alt="" />
+        </button>
+      </div>
+      <p v-if="barrageItems.length === 0" class="muted">本环节没有能打到该格的炮兵。</p>
+
+      <p v-if="barrageErrorLine !== null" class="warn num">
+        <BaseTag kind="danger">{{ workbench.barrageError?.rule }}</BaseTag>
+        {{ barrageErrorLine }}
+      </p>
+
+      <div class="ops__actions">
+        <BaseButton :disabled="!picked" @click="map.advanceOpsFlow()">确认单位</BaseButton>
+        <BaseButton variant="secondary" @click="map.cancelOpsFlow()">取消</BaseButton>
+      </div>
+    </template>
+
+    <!-- ───────── 炮击：第 2 步 支付补给 ───────── -->
+    <template v-else-if="flow.kind === 'barrage' && flow.step === 2">
+      <p class="muted num">
+        在<b>地图上点一座高亮的补给站</b>支付（12.3a / 10.1b）。本场成本
+        <b>{{ supplyCostT }} T</b>（取初始列；多门齐射须同一指挥部或同一补给站）。
+      </p>
+      <p v-if="supplyDumps.length === 0" class="warn num">
+        没有能覆盖本次参战火炮的补给站（12.3a）⇒ 无法支付，点「取消」退回选子。
+      </p>
+      <p v-else class="num">
+        可付款的站：{{
+          supplyDumps.map((item) => `${hexLabel(item.dump.hex)}（${item.label}）`).join('、')
+        }}
+      </p>
+      <p v-if="workbench.barrageSupplyDump !== null" class="ok num">
+        已选：{{ hexLabel(workbench.barrageSupplyDump.hex) }}（
+        {{ workbench.barrageSupplyDump.sp }} SP{{
+          workbench.barrageSupplyDump.t > 0 ? ` + ${workbench.barrageSupplyDump.t} T` : ''
+        }}）
+      </p>
+
+      <p v-if="barrageErrorLine !== null" class="warn num">
+        <BaseTag kind="danger">{{ workbench.barrageError?.rule }}</BaseTag>
+        {{ barrageErrorLine }}
+      </p>
+
+      <div class="ops__actions">
+        <BaseButton
+          :disabled="workbench.barrageSupplyDump === null"
+          @click="map.confirmOpsBarrageSupply()"
+        >
+          确认支付
+        </BaseButton>
+        <BaseButton variant="secondary" @click="map.cancelOpsFlow()">取消</BaseButton>
+      </div>
+    </template>
+
+    <!-- ───────── 炮击：第 3 步 选受损单位 ───────── -->
+    <template v-else-if="flow.kind === 'barrage' && flow.step === 3">
+      <p class="num">本次结果：{{ workbench.barrageSummary?.unitOutcome?.detail ?? '—' }}</p>
+      <p class="num">
+        请选择承受损失的单位：还需
+        <b>{{ Math.max(0, lossRequired - lossAllocated) }}</b> 点（共 {{ lossRequired }} 点）
+      </p>
+      <div class="ops__grid">
+        <div v-for="unit in lossTargets" :key="unit.instanceId" class="ops__loss num">
           <button
-            v-for="unit in barrageItems"
-            :key="unit.instanceId"
             type="button"
-            class="ops__unit num"
-            :class="{ 'ops__unit--on': isPickedBarrage(unit.instanceId) }"
-            :title="`${unit.name}｜轰炸值 ${unit.raw.barrage ?? 0}`"
-            @click="workbench.toggleBarrageUnit(unit.instanceId)"
+            class="ops__unit"
+            :class="{ 'ops__unit--on': workbench.barrageLossPointsOf(unit.instanceId) > 0 }"
+            :title="`${unit.name}｜当前军力 ${unit.steps}`"
+            @click="workbench.addBarrageLossPoint(unit.instanceId)"
           >
             <img :src="counterImageUrlOf(unit) ?? ''" class="ops__img" alt="" />
           </button>
+          <span class="ops__loss-count">
+            {{ workbench.barrageLossPointsOf(unit.instanceId) }} / {{ unit.steps }}
+          </span>
+          <button
+            type="button"
+            class="ops__minus"
+            :disabled="workbench.barrageLossPointsOf(unit.instanceId) === 0"
+            @click="workbench.removeBarrageLossPoint(unit.instanceId)"
+          >
+            −
+          </button>
         </div>
-        <p v-if="barrageItems.length === 0" class="muted">本环节没有能打到该格的炮兵。</p>
-      </template>
+      </div>
+      <p v-if="lossTargets.length === 0" class="muted">目标格内没有可承受损失的单位。</p>
 
-      <template v-else>
-        <p class="muted num">
-          {{ flow.kind === 'bombing' ? '轰炸（10.2b）' : '低空扫射（14.7d）' }}
-          <RuleTip :rule="flow.kind === 'bombing' ? '10.2' : '14.7d'">
+      <p v-if="barrageErrorLine !== null" class="warn num">
+        <BaseTag kind="danger">{{ workbench.barrageError?.rule }}</BaseTag>
+        {{ barrageErrorLine }}
+      </p>
+
+      <div class="ops__actions">
+        <BaseButton :disabled="!workbench.barrageLossReady" @click="map.confirmOpsBarrageLoss()">
+          确认受损
+        </BaseButton>
+        <BaseButton variant="secondary" @click="map.cancelOpsFlow()">取消（退回）</BaseButton>
+      </div>
+    </template>
+
+    <!-- ───────── 空军：第 1 步 选机 ───────── -->
+    <template v-else-if="flow.step === 1">
+      <p class="muted num">
+        {{ flow.kind === 'bombing' ? '轰炸（10.2b）' : '低空扫射（14.7d）' }}
+        <RuleTip :rule="flow.kind === 'bombing' ? '10.2' : '14.7d'">
+          {{
+            flow.kind === 'bombing'
+              ? '只列能执行轰炸的飞机（10.2b）；空军轰炸不消耗补给（10.2c）。'
+              : '只列具备低空扫射能力、航程够得到的飞机（14.7d / 14.1a）。'
+          }}
+        </RuleTip>
+      </p>
+      <div v-for="group in airGroups" :key="group.baseId" class="ops__group">
+        <p class="ops__group-head num">
+          <span>{{
+            group.baseId === '__offmap_air_box__' ? '地图外空军盒' : hexLabel(group.hex)
+          }}</span>
+          <BaseTag :kind="group.isAirstrip ? 'warning' : 'info'">
             {{
-              flow.kind === 'bombing'
-                ? '只列能执行轰炸的飞机（10.2b）；空军轰炸不消耗补给（10.2c）。'
-                : '只列具备低空扫射能力、航程够得到的飞机（14.7d / 14.1a）。'
+              group.baseId === '__offmap_air_box__'
+                ? '盒内出击'
+                : group.isAirstrip
+                  ? '简易机场'
+                  : `${group.level} 级`
             }}
-          </RuleTip>
+          </BaseTag>
         </p>
-        <div v-for="group in airGroups" :key="group.baseId" class="ops__group">
-          <p class="ops__group-head num">
-            <span>{{
-              group.baseId === '__offmap_air_box__' ? '地图外空军盒' : hexLabel(group.hex)
-            }}</span>
-            <BaseTag :kind="group.isAirstrip ? 'warning' : 'info'">
-              {{
-                group.baseId === '__offmap_air_box__'
-                  ? '盒内出击'
-                  : group.isAirstrip
-                    ? '简易机场'
-                    : `${group.level} 级`
-              }}
+        <div class="ops__grid">
+          <button
+            v-for="item in group.aircraft"
+            :key="item.air.instanceId"
+            type="button"
+            class="ops__unit num"
+            :class="{ 'ops__unit--on': isPickedAir(item.air.instanceId) }"
+            :title="`${item.air.name}｜到任务格 ${
+              item.distanceToTarget === null ? '—' : item.distanceToTarget
+            } 格 / 航程 ${item.air.rangeHexes}`"
+            @click="workbench.toggleAirMissionUnit(item.air.instanceId)"
+          >
+            <img :src="counterImageUrlOf(item.air) ?? ''" class="ops__img" alt="" />
+            <BaseTag kind="neutral">
+              {{ item.distanceToTarget === null ? '—' : item.distanceToTarget }} /
+              {{ item.air.rangeHexes }}
             </BaseTag>
-          </p>
-          <div class="ops__grid">
-            <button
-              v-for="item in group.aircraft"
-              :key="item.air.instanceId"
-              type="button"
-              class="ops__unit num"
-              :class="{ 'ops__unit--on': isPickedAir(item.air.instanceId) }"
-              :title="`${item.air.name}｜到任务格 ${
-                item.distanceToTarget === null ? '—' : item.distanceToTarget
-              } 格 / 航程 ${item.air.rangeHexes}`"
-              @click="workbench.toggleAirMissionUnit(item.air.instanceId)"
-            >
-              <img :src="counterImageUrlOf(item.air) ?? ''" class="ops__img" alt="" />
-              <BaseTag kind="neutral">
-                {{ item.distanceToTarget === null ? '—' : item.distanceToTarget }} /
-                {{ item.air.rangeHexes }}
-              </BaseTag>
-            </button>
-          </div>
+          </button>
         </div>
-        <p v-if="airGroups.length === 0" class="muted">没有能执行该任务的飞机。</p>
-      </template>
+      </div>
+      <p v-if="airGroups.length === 0" class="muted">没有能执行该任务的飞机。</p>
 
-      <p v-if="errorLine !== null" class="warn num">
-        <BaseTag kind="danger">{{ errorLine.rule }}</BaseTag>
-        {{ errorLine.reason }}
+      <p v-if="airError !== null" class="warn num">
+        <BaseTag kind="danger">{{ airError.rule }}</BaseTag>
+        {{ airError.reason }}
       </p>
 
       <div class="ops__actions">
@@ -180,10 +305,9 @@ function isPickedAir(id: string): boolean {
       </div>
     </template>
 
-    <!-- ───────── 第 2/3 步：分叉与结算（复用既有面板） ───────── -->
+    <!-- ───────── 空军：第 2 步 空战 / 防空 ───────── -->
     <template v-else>
-      <BarragePanel v-if="flow.kind === 'barrage'" />
-      <AirPanel v-else only="mission" />
+      <AirPanel only="mission" />
       <div class="ops__actions">
         <BaseButton variant="secondary" @click="map.cancelOpsFlow()">取消本次</BaseButton>
       </div>
@@ -237,6 +361,32 @@ function isPickedAir(id: string): boolean {
   width: 44px;
   height: 44px;
   object-fit: contain;
+}
+
+.ops__loss {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.ops__loss-count {
+  font-size: 11px;
+}
+
+.ops__minus {
+  width: 22px;
+  height: 20px;
+  border: 1px solid var(--color-rule);
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ops__minus:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .ops__group {

@@ -317,6 +317,12 @@ export interface MapRenderOptions {
    * 与 `highlightHex` 同色同线宽，只是可给多格；两者可同时存在（悬停格叠在可点格上）。
    */
   highlightHexes?: readonly HexRef[] | null
+  /**
+   * 格上短标注（炮击付款时显示"该格有多少 SP"）
+   *
+   * 画在格的下部，白字深底；字号按屏幕恒定（除以 scale）。
+   */
+  hexLabels?: readonly { hex: HexRef; text: string }[] | null
   /** 移动交互覆盖层（算子、可到达范围、预览路径；C5）；null 表示只画地图 */
   overlay?: MovementOverlay | null
   /**
@@ -545,6 +551,29 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
       if (!isBoardHex(hex)) continue
       traceHexPath(ctx, hex)
       ctx.stroke()
+    }
+  }
+
+  // ⑦-b 格上短标注（如炮击付款站："3 SP"）——白字深底，画在格的下部
+  const hexLabels = options.hexLabels ?? null
+  if (hexLabels !== null && hexLabels.length > 0) {
+    const fontPx = 11 / scale
+    ctx.font = `600 ${fontPx.toFixed(1)}px ui-monospace, monospace`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    for (const item of hexLabels) {
+      if (!isBoardHex(item.hex)) continue
+      const center = hexCanvasPoint(item.hex)
+      const y = center.y + HEX_RADIUS_PX * 0.62
+      const padding = 4 / scale
+      const width = ctx.measureText(item.text).width + padding * 2
+      const height = 14 / scale
+      ctx.fillStyle = MAP_PALETTE.labelHalo
+      ctx.beginPath()
+      ctx.rect(center.x - width / 2, y - height / 2, width, height)
+      ctx.fill()
+      ctx.fillStyle = MAP_PALETTE.board
+      ctx.fillText(item.text, center.x, y)
     }
   }
 

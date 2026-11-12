@@ -215,7 +215,7 @@ describe('Ⓕ F 段许可动作与段闸（2.2 / 9.0 / 10.1a）', () => {
       date: '1941-07-12',
     })
     expect(artillery).toEqual([])
-    for (const source of ['air', 'ship'] as const) {
+    for (const source of ['air'] as const) {
       const violations = checkTiming({
         action: 'barrage',
         barrageSource: source,

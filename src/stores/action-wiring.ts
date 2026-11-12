@@ -174,11 +174,13 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
     kind: 'draft',
     why: '只改"待提交的输入"或勾选集合（谁参战 / 谁加注 / 哪一格），不落盘',
     names: [
+      'addBarrageLossPoint',
       'clearAdvanceNow',
       'clearNonSavableReplNow',
       'clearSupplyPhasePlan',
       'pickCombatSupplyDump',
       'pickFuelDump',
+      'removeBarrageLossPoint',
       'setAirActive',
       'setAirMissionKind',
       'setAirTargetFromText',

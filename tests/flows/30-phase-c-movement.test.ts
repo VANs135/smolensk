@@ -84,8 +84,8 @@ describe('Ⓒ C 段许可动作与段闸（2.2 / 10.1a）', () => {
     expect(timing('engineer')).toEqual([])
   })
 
-  it('10.1a：C 段只允许**空中与舰炮**轰炸——炮兵轰炸在 C 段非法', () => {
-    expect([...(BARRAGE_SOURCES_BY_PHASE.movement ?? [])]).toEqual(['air', 'ship'])
+  it('10.1a：C 段只允许**空中**轰炸——炮兵轰炸在 C 段非法（本作无海军）', () => {
+    expect([...(BARRAGE_SOURCES_BY_PHASE.movement ?? [])]).toEqual(['air'])
     const artillery = checkTiming({
       action: 'barrage',
       barrageSource: 'artillery',

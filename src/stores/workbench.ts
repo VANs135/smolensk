@@ -127,6 +127,7 @@ import {
   barrageStepChecklist,
   barrageTableMeta,
   barrageTerrainLines,
+  BARRAGE_COLUMN_SHIFTS,
   beginAirInteraction,
   beginBarrage,
   beginCombat,
@@ -3316,6 +3317,26 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const hex = barrageTargetHex.value
     if (hex === null) return []
     return barrageTerrainLines(defenseTerrainChoices(hex))
+  })
+
+  /**
+   * 10.0d / 10.0c：该格**可宣布的整体目标**（炮击统一流程第 1 步的选项）
+   *
+   * 原文 10.0c：「玩家必须预先指定他的具体目标：空军基地或港口（**或作为空军任务执行的运输破坏**）」
+   * ⇒ 火炮炮击不提供运输破坏；本作无港口与海军，故只剩战斗单位与空军基地。
+   */
+  const barrageTargetKindChoicesAt = computed<readonly ('combatUnits' | 'airBase')[]>(() => {
+    const hex = barrageTargetHex.value
+    if (hex === null) return ['combatUnits']
+    const side = segmentGateQuery.value.side ?? activeSide.value
+    const hasEnemyCombat = units.value.some(
+      (unit) => unit.side !== side && sameHex(unit.hex, hex) && unit.isCombat,
+    )
+    const hasEnemyBase = airBases.value.some((base) => base.side !== side && sameHex(base.hex, hex))
+    const choices: ('combatUnits' | 'airBase')[] = []
+    if (hasEnemyCombat || !hasEnemyBase) choices.push('combatUnits')
+    if (hasEnemyBase) choices.push('airBase')
+    return choices
   })
 
   /* ── C7 空军：10.2b 短程加成的数据源 ── */
@@ -11356,6 +11377,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     barrageKind.value = 'artillery'
     barrageTargetKind.value = 'combatUnits'
+    // 付款来源由统一流程在开场/收场显式清（K6：不能靠这里清——面板允许"先选站后开工具"）
+    barragePaidSupply.value = null
   }
 
   /** C7：统一收引擎结论（失败即记 `barrageError` 与日志并返回 null） */
@@ -11748,6 +11771,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const barrageSupplyDumpId = ref<string | null>(null)
 
   /**
+   * 本次炮击**已实扣**的补给（10.1b）
+   *
+   * 用户口径：任何一步取消后，已扣的补给都要退回原状。记账点在 `confirmBarrageSupplyStep`
+   * 的真实扣款之后；`refundBarrageSupply` 按同一份记录把 T 加回原站，并从 10.0e-A/B 账本里
+   * 摘掉这一次（付不出不视为已轰炸过，取消同理）。
+   */
+  const barragePaidSupply = ref<{
+    dumpId: string
+    t: number
+    hexKey: string
+    unitIds: string[]
+  } | null>(null)
+
+  /**
    * C7：可作轰炸付款来源的补给站
    *
    * ★ 10.1b-A 要求「来自**同一指挥部**或**同一补给站**」⇒ 这一座站必须被**每个**参炸地面单位
@@ -11917,6 +11954,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         return false
       }
       setSpDumpHoldings(dump.id, payment.data.holdingsAfter)
+      // 用户口径：取消要退回原状 ⇒ 记下实扣的那一笔（站 + T + 本场涉及的账本键）
+      barragePaidSupply.value = {
+        dumpId: dump.id,
+        t: supply.requiredT,
+        hexKey: barrageTargetHex.value === null ? '' : hexLabel(barrageTargetHex.value),
+        unitIds: data.state.units.map((unit) => unit.unitId),
+      }
       pushLog(
         'info',
         `10.1b：从 ${hexLabel(dump.hex)} 扣 ${supply.requiredT} T 作本次轰炸的战斗补给`,
@@ -11967,13 +12011,31 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** C7 第 3 步：确认列横移（10.0a 目标玩家选地形 / 10.0b 观察员 / 10.2b 短程） */
-  function confirmBarrageShiftsStep(): boolean {
+  /**
+   * 10.0a：目标玩家可选地形里**对防守方最有利**的一条
+   *
+   * 用户口径（2026-11-12）：炮击链路不再让玩家挑地形，按对防守方最有利的地形自动结算。
+   * 「最有利」＝列横移最左（Extr Close −2 > Very Close/Close −1 > Open 0）；
+   * 判据仍取自引擎同一份 `BARRAGE_COLUMN_SHIFTS.terrainByCombatLine`。
+   */
+  function bestDefenderTerrainLine(): CombatLine | undefined {
+    const lines = barrageTerrainLineOptions.value
+    const weight = (line: CombatLine): number =>
+      BARRAGE_COLUMN_SHIFTS.terrainByCombatLine[line] ?? 0
+    return [...lines].sort((a, b) => weight(a) - weight(b))[0]
+  }
+
+  /** C7 第 3 步：确认列横移（10.0a 目标玩家选地形 / 10.0b 观察员 / 10.2b 短程）
+   *
+   * 默认 `autoTerrain = true`：用户 2026-11-12 口径「按对防守方最有利的地形结算，不再让玩家选择地形」。
+   */
+  function confirmBarrageShiftsStep(autoTerrain = true): boolean {
     const state = barrageState.value
     if (state === null) return false
     const inputs = barrageInputs.value
     const facts = barrageTargetFacts.value
     const targetHex = barrageTargetHex.value
+    const terrainLine = autoTerrain ? bestDefenderTerrainLine() : inputs.terrainLine
     const data = acceptBarrage(
       declareBarrageShifts(state, {
         enemyREInHex: facts.enemyREInHex,
@@ -11982,7 +12044,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         hasSpotter: facts.hasSpotter,
         // 10.0a：地形横移只能取自**目标格内**的地形（候选集与 9.3b 一致）
         ...(targetHex === null ? {} : { terrainCandidates: defenseTerrainChoices(targetHex) }),
-        ...(inputs.terrainLine === '' ? {} : { terrainLine: inputs.terrainLine }),
+        ...(terrainLine === undefined || terrainLine === '' ? {} : { terrainLine }),
       }),
       '列横移',
     )
@@ -12010,6 +12072,273 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })
     return true
   }
+
+  /**
+   * 炮击第 2 步之后**自动走完**横移 → 掷骰（用户 2026-11-12 流程）
+   *
+   * 用户口径：确认支付后不再有中间的横移 / 掷骰 / 结果分步块要让玩家点。
+   * 引擎仍保留那三步（验证页与备用路径照旧），这里只是一次性把它们串完：
+   *   · 横移：目标地形按「对防守方最有利」自动取（不再让玩家选）；
+   *   · 掷骰：`rollBarrageDiceStep` 自带 `1/2` 的自动补掷；
+   *   · 结果：设施与「无军力损失」直接收束；有军力损失则停在 `outcome` 等玩家选承受单位。
+   *
+   * 返回 `'finished'`（已收束）/ `'loss'`（等玩家选受损单位）/ `'failed'`（引擎拒绝）。
+   */
+  function runBarrageResolution(): 'finished' | 'loss' | 'failed' {
+    const state = barrageState.value
+    if (state === null) return 'failed'
+    if (state.step === 'shifts' && !confirmBarrageShiftsStep(true)) return 'failed'
+    if (barrageState.value?.step === 'dice' && !rollBarrageDiceStep()) return 'failed'
+    const current = barrageState.value
+    if (current === null || current.step !== 'outcome') return 'failed'
+    if (isFacilityBarrage(current)) {
+      return confirmBarrageOutcomeStep() ? 'finished' : 'failed'
+    }
+    const outcome = current.outcome
+    if (outcome === undefined || outcome.table !== 'barrage') return 'failed'
+    if (outcome.value.stepLosses > 0) return 'loss'
+    return confirmBarrageOutcomeStep() ? 'finished' : 'failed'
+  }
+
+  /**
+   * 用户口径：任何一步取消后，已扣的补给退回原状
+   *
+   * 只在**尚未落盘结果**时有意义（`outcome` 确认后会话即收束，不会再走这里）：
+   *   · 把 `barragePaidSupply` 记下的 T 加回原补给站；
+   *   · 从 10.0e-A/B 账本里摘掉这一次（10.1b：取消不视为已轰炸过）。
+   */
+  function refundBarrageSupply(): void {
+    const paid = barragePaidSupply.value
+    if (paid === null) return
+    const dump = spDumps.value.find((item) => item.id === paid.dumpId)
+    if (dump !== undefined && paid.t > 0) {
+      const totalT = holdingsToT({ sp: dump.sp, t: dump.t }) + paid.t
+      setSpDumpHoldings(dump.id, { sp: Math.floor(totalT / SP_TO_T), t: totalT % SP_TO_T })
+    }
+    if (paid.hexKey !== '')
+      barragedHexesThisPhase.value = barragedHexesThisPhase.value.filter(
+        (key) => key !== paid.hexKey,
+      )
+    barragedUnitIdsThisPhase.value = barragedUnitIdsThisPhase.value.filter(
+      (id) => !paid.unitIds.includes(id),
+    )
+    pushLog('info', `退回本次炮击的战斗补给 ${paid.t} T（10.1b：取消不视为已轰炸过）`, '10.1b')
+    barragePaidSupply.value = null
+  }
+
+  /** 用户口径：取消整单并把已扣补给、已选炮兵退回原状（炮击统一流程用） */
+  function cancelOpsBarrage(): void {
+    /*
+     * 不走 `canReplaceBarrage` / `clearBarrage`：付款后引擎把本场标成「已提交」，
+     * 那条闸是为**已落盘结果**保留的；统一流程在结果确认前取消是允许的，且必须退款。
+     * 结果尚未落盘（`outcome` 未确认），故这里只清交互态与账本，不动盘面。
+     */
+    refundBarrageSupply()
+    barrageUnitIds.value = []
+    barrageScopeHex.value = null
+    barrageAirIds.value = []
+    fireResolution.resetBarrage()
+    barrageKind.value = 'artillery'
+    barrageTargetKind.value = 'combatUnits'
+    barrageSupplyDumpId.value = null
+    barragePaidSupply.value = null
+    barrageError.value = null
+    pushLog('info', '取消本次炮击（10.0 流程中止；补给与选子已退回）', '10.0')
+  }
+
+  /**
+   * 10.0a：本次结果的军力损失点数（**按可选单位实际军力封顶**）
+   *
+   * 引擎 `validateBarrageLossAllocation` 在给了 `units` 时会取 `min(required, 可承受合计)`
+   * ⇒ 界面与它同口径，避免玩家把必填值填成一个永远凑不满的数。
+   */
+  const barrageLossRequired = computed<number>(() => {
+    const state = barrageState.value
+    if (state === null || state.outcome?.table !== 'barrage') return 0
+    const capacity = barrageLossTargets.value.reduce((sum, unit) => sum + unit.steps, 0)
+    return Math.min(state.outcome.value.stepLosses, capacity)
+  })
+
+  /** 10.0a：已分配的军力点数 */
+  const barrageLossAllocated = computed<number>(() =>
+    Object.values(barrageInputs.value.losses).reduce((sum, steps) => sum + steps, 0),
+  )
+
+  function barrageLossPointsOf(unitId: string): number {
+    return barrageInputs.value.losses[unitId] ?? 0
+  }
+
+  /** 10.0a：点一枚单位 ⇒ 给它加 1 点军力损失（不超过该单位当前军力） */
+  function addBarrageLossPoint(unitId: string): void {
+    const target = barrageLossTargets.value.find((unit) => unit.instanceId === unitId)
+    if (target === undefined) return
+    if (barrageLossAllocated.value >= barrageLossRequired.value) return
+    const current = barrageLossPointsOf(unitId)
+    if (current >= target.steps) return
+    barrageInputs.value = {
+      ...barrageInputs.value,
+      losses: { ...barrageInputs.value.losses, [unitId]: current + 1 },
+    }
+  }
+
+  function removeBarrageLossPoint(unitId: string): void {
+    const current = barrageLossPointsOf(unitId)
+    if (current <= 0) return
+    const next = { ...barrageInputs.value.losses }
+    if (current === 1) delete next[unitId]
+    else next[unitId] = current - 1
+    barrageInputs.value = { ...barrageInputs.value, losses: next }
+  }
+
+  /** 10.0a：损失分配足额才能确认（引擎仍会复判） */
+  const barrageLossReady = computed<boolean>(
+    () => barrageLossRequired.value > 0 && barrageLossAllocated.value === barrageLossRequired.value,
+  )
+
+  /** 10.0a：确认受损单位（选完本次炮击结束） */
+  function confirmBarrageLossNow(): boolean {
+    if (!barrageLossReady.value) return false
+    return confirmBarrageOutcomeStep()
+  }
+
+  /**
+   * 炮击统一流程第 1 步的入口：清掉上一场残留，锁定目标格与整体目标
+   *
+   * 10.0d 要求**预先指定**整体目标：格内有敌方战斗单位 → 打战斗单位；否则若有敌方空军基地 → 打基地
+   * （10.0c）。运输破坏按原文只「作为空军任务执行」，故不在火炮炮击里提供。
+   */
+  function prepareOpsBarrage(hex: HexRef, targetKind: BarrageTargetKind): boolean {
+    if (!canReplaceBarrage()) return false
+    setBarrageActive(true)
+    // K3：上一场用过的炮兵不能留到这一场（已炸过的炮会被 10.0e-B 拒，留在名单里只会"点下一步必被拒"）
+    clearBarrage()
+    pickBarrageTargetAt(hex)
+    barrageScopeHex.value = { col: hex.col, row: hex.row }
+    barrageKind.value = 'artillery'
+    barrageTargetKind.value = targetKind
+    // K6：新一场不得沿用上一场的付款来源（否则未点站就"已有来源"，跨场残留）
+    barrageSupplyDumpId.value = null
+    barragePaidSupply.value = null
+    barrageInputs.value = { ...barrageInputs.value, hipShoot: false }
+    barrageError.value = null
+    return true
+  }
+
+  /** 10.0d / 10.0c：该格默认的整体目标（有敌战斗单位→战斗单位；否则敌空军基地→基地） */
+  function defaultBarrageTargetKindAt(hex: HexRef): BarrageTargetKind {
+    const side = segmentGateQuery.value.side ?? activeSide.value
+    const hasEnemyCombat = units.value.some(
+      (unit) => unit.side !== side && sameHex(unit.hex, hex) && unit.isCombat,
+    )
+    if (hasEnemyCombat) return 'combatUnits'
+    const hasEnemyBase = airBases.value.some((base) => base.side !== side && sameHex(base.hex, hex))
+    return hasEnemyBase ? 'airBase' : 'combatUnits'
+  }
+
+  /**
+   * 12.3a / 10.1b：本场炮击的付款补给站（界面在地图上高亮并显示 SP 数）
+   *
+   * 判据仍是 `barrageSupplyDumpChoices`（同一来源 + 每个参炸单位拖得到），这里只补一格文本。
+   */
+  const barrageSupplyMapDumps = computed<readonly { dump: SpDump; label: string }[]>(() =>
+    barrageSupplyDumpChoices.value.map((dump) => ({
+      dump,
+      label: `${dump.sp} SP${dump.t > 0 ? ` + ${dump.t} T` : ''}`,
+    })),
+  )
+
+  /**
+   * 错误提示中文化（用户 2026-11-12：不要显示引擎 reason 代码）
+   *
+   * 输入仍是 `{ rule, reason }`（引擎/操作台同一形状），这里把 reason 译成一句人话；
+   * 未覆盖的代码退回规则号 + 通用说明，**不再原样打印内部代码**。
+   */
+  function barrageErrorTextOf(error: { rule: string; reason: string }): string {
+    const [head, ...rest] = error.reason.split(':')
+    const code = head ?? ''
+    const detail = rest.join('：')
+    switch (code) {
+      case 'noBarrageUnit':
+        return '没有选择参炸单位'
+      case 'airTransportForbidsBarrage':
+        return '该单位本阶段被空运限制，不能炮击'
+      case 'groundBarrageNeedsReleasedReserve':
+        return '反应／进击环节的炮击只允许已释放的预备火炮'
+      case 'sovietArtilleryMustStackTogether':
+        return '苏军炮兵合并齐射须全部同堆叠'
+      case 'artilleryOutOfRange':
+        return '有参炸火炮射程够不到目标格'
+      case 'belowMinBarrageValue':
+        return '至少需要 1 点轰炸值才能炮击'
+      case 'mixedBarrageKinds':
+        return '一次炮击只能用同一类型单位'
+      case 'unitAlreadyBarraged':
+        return '有参炸单位本阶段已经炮击过'
+      case 'cannotSplitBarrageValue':
+        return '轰炸值不能拆分到多次炮击'
+      case 'belowPrintedBarrageValue':
+        return '不能以低于印刷值的轰炸值参战'
+      case 'hexAlreadyBarraged':
+        return '该格本阶段已经被轰炸过'
+      case 'internalStocksForbidden':
+        return '炮击永远不能使用部队储备'
+      case 'cannotAfford':
+        return '所选补给站付不出这次炮击的补给'
+      case 'mixedSupplySources':
+        return '多门火炮齐射的补给必须来自同一指挥部或同一补给站'
+      case 'barrageSupplyNeedsADump':
+        return '请先在地图上点选一座可付款的补给站'
+      case 'barrageSupplyDumpOutOfRange':
+        return '所选补给站不在本次参炸火炮的可达范围内'
+      case 'terrainLineNotInTargetHex':
+        return '所选地形不在目标格内'
+      case 'invalidBarrageDice':
+        return '骰值与炮击类型不符'
+      case 'barrageOutcomeNotResolved':
+        return '还没有掷骰，无法结算结果'
+      case 'unitNotInTargetHex':
+        return '受损单位不在目标格内'
+      case 'invalidSteps':
+        return '损失点数必须是非负整数'
+      case 'duplicateLossUnit':
+        return '同一单位不能重复分配损失'
+      case 'lossExceedsSteps':
+        return '分配的点数超过该单位当前军力'
+      case 'lossAllocationMismatch':
+        return '损失点数合计与结果要求不符'
+      case 'noLossExpected':
+        return '本次结果不应造成军力损失'
+      case 'invalidAircraftLossRoll':
+        return '飞机的损失骰值应为 1–6'
+      case 'notAtSupplyStep':
+        return '当前不在补给步骤'
+      case 'notAtShiftsStep':
+        return '当前不在横移步骤'
+      case 'notAtDiceStep':
+        return '当前不在掷骰步骤'
+      case 'notAtOutcomeStep':
+        return '当前不在结果步骤'
+      case 'noBarrageResult':
+        return '还没有结果可结算'
+      case 'invalidLossAllocation':
+        return '损失分配不合法'
+      case 'movementSegmentOnlyHipShoot':
+        return '移动环节只允许低空扫射'
+      case 'tooManyAircraft':
+        return '一次轰炸的飞机超过上限（≤4）'
+      case 'hipShootNeedsCorrectSpotter':
+        return '低空扫射必须有正确的观察员'
+      default:
+        if (code.startsWith('wrongPhaseFor')) return '当前阶段不允许这类轰炸'
+        return detail === '' ? `本次操作被规则拒绝（${error.rule}）` : `${detail}（${error.rule}）`
+    }
+  }
+
+  /** 当前炮击错误的中文行（无错误 ⇒ null） */
+  const barrageErrorLine = computed<string | null>(() => {
+    const error = barrageError.value
+    return error === null ? null : barrageErrorTextOf(error)
+  })
 
   /**
    * B28：**12.11a 的销毁骰**（1d6）——一律自动，不再让玩家填骰面
@@ -15210,7 +15539,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (candidates.length === 0) return false
     const total = candidates.reduce((sum, unit) => sum + (unit.raw.barrage ?? 0), 0)
     if (total < 1) return false
-    const cost = barrageTableMeta({ target: 'combatUnits', valueRange: total }).costT
+    // 10.0d / 10.0c：整体目标决定用哪张表（成本取该表的初始列）
+    const target = defaultBarrageTargetKindAt(hex)
+    const cost = barrageTableMeta({ target, valueRange: total }).costT
     if (cost <= 0) return true
     const dumps = deliverableDumpsFor(segmentGateQuery.value.side ?? activeSide.value, candidates)
     return dumps.some((dump) => holdingsToT({ sp: dump.sp, t: dump.t }) >= cost)
@@ -19685,16 +20016,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 批 A 切片 2：**本环节允许的轰炸来源**（10.0e-F 的段内限制 ＋ 10.0 第二段）
    *
-   * 判据取自引擎的唯一表 `BARRAGE_SOURCES_BY_PHASE`（SOP 原文：C 段轰炸环节 air & ship only、
+   * 判据取自引擎的唯一表 `BARRAGE_SOURCES_BY_PHASE`（SOP：C 段轰炸环节 air only、
    * F 段 artillery only）；**移动环节**按 10.0 第二段只给低空扫射的空军；其余环节不给来源。
    */
   const barrageKindsInSegment = computed<readonly BarrageKind[]>(() => {
-    /** 全量来源（本作只有这三类：火炮 / 空军 / 海军；海军在本作不适用，保留以照原文） */
-    const ALL_KINDS: readonly BarrageKind[] = ['artillery', 'air', 'ship']
+    /** 全量来源（本作无海军，专规 1.1c ⇒ 只保留火炮 / 空军） */
+    const ALL_KINDS: readonly BarrageKind[] = ['artillery', 'air']
     const stepId = segmentStep.value?.id ?? ''
     if (!isBarrageSegment.value) {
       /* 10.0 第二段：「如果允许某方的空军单位执行低空扫射任务……则这些轰炸还能在上述阶段的
-       * 移动环节中进行」⇒ 移动环节只开空军（低空扫射）这一个来源；火炮/舰船不得借这个入口。 */
+       * 移动环节中进行」⇒ 移动环节只开空军（低空扫射）这一个来源；火炮不得借这个入口。 */
       const inMovementStep = stepId.endsWith('.modeAndMovement') || stepId.endsWith('.movement')
       return inMovementStep ? ['air'] : []
     }
@@ -25211,6 +25542,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     beginFormationMarkerHexPickNow,
     beginDeadPileReturnHexPickNow,
     barrageError,
+    // 用户 2026-11-12：错误提示中文化（面板不再显示引擎 reason 代码）
+    barrageErrorLine,
+    barrageErrorTextOf,
     barrageInputs,
     // A 组接线：10.0e-A/B 的按阶段轰炸账本（界面显示"本阶段已轰炸 N 格 / M 单位"）
     barragePhaseLedger,
@@ -25226,6 +25560,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     barrageTargetHex,
     barrageTargetFacts,
     barrageTargetKindIssue,
+    // 10.0d / 10.0c：该格可宣布的整体目标（炮击第 1 步的选项）
+    barrageTargetKindChoicesAt,
     barrageChecklist,
     barrageTerrainLineOptions,
     barrageSummary,
@@ -25264,6 +25600,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     rollBarrageDiceStep,
     confirmBarrageOutcomeStep,
     cancelBarrage,
+    // 用户 2026-11-12：炮击链路重做（一步式入口 / 自动结算 / 退款 / 受损选择 / 设施炮击）
+    prepareOpsBarrage,
+    defaultBarrageTargetKindAt,
+    runBarrageResolution,
+    refundBarrageSupply,
+    cancelOpsBarrage,
+    barrageSupplyMapDumps,
+    barrageLossRequired,
+    barrageLossAllocated,
+    barrageLossPointsOf,
+    addBarrageLossPoint,
+    removeBarrageLossPoint,
+    barrageLossReady,
+    confirmBarrageLossNow,
     // P3 / UI3：会话「域拒绝」的唯一只读判据（与 canReplaceBarrage 同源）
     barrageCancelBlocker,
     clearBarrage,

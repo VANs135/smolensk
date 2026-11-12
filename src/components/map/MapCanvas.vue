@@ -80,6 +80,12 @@ const props = withDefaults(
      * 与 `highlightHex` 同色；单格（悬停）叠在多格之上，互不替代。
      */
     highlightHexes?: readonly HexRef[]
+    /**
+     * 格上短标注（用户 2026-11-12：炮击付款时补给站格上要显示"该格有多少 SP"）
+     *
+     * 与 `highlightHex` 同族：由上层算好文本传入，画布只画，不读 store。
+     */
+    hexLabels?: readonly { hex: HexRef; text: string }[]
     /** 移动交互覆盖层（算子 / 可到达范围 / 预览路径；C5） */
     overlay?: MovementOverlay | null
     boxDragSource?:
@@ -118,6 +124,7 @@ const props = withDefaults(
     layers: () => ({ ...DEFAULT_MAP_LAYERS }),
     highlightHex: null,
     highlightHexes: () => [],
+    hexLabels: () => [],
     overlay: null,
     boxDragSource: null,
     hint: null,
@@ -247,6 +254,7 @@ function render(): void {
     image: image.value,
     highlightHex: props.highlightHex,
     highlightHexes: props.highlightHexes,
+    hexLabels: props.hexLabels,
     overlay: props.overlay,
     controlMarkers: props.controlMarkers,
     boundary: props.boundary,
@@ -617,6 +625,7 @@ onBeforeUnmount(() => {
 watch(() => props.layers, scheduleRender, { deep: true })
 watch(() => props.highlightHex, scheduleRender)
 watch(() => props.highlightHexes, scheduleRender)
+watch(() => props.hexLabels, scheduleRender)
 watch(
   () => props.overlay,
   (overlay) => {

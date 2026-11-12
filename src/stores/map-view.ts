@@ -165,11 +165,11 @@ export type MapSessionKind =
  */
 export type OpsFlowKind = 'barrage' | 'bombing' | 'hipShoot'
 
-/** 统一流程的会话态：`step` 1＝选单位，2＝分叉步（补给 / 空战防空） */
+/** 统一流程的会话态：1＝选单位，2＝分叉步（炮击＝补给 / 空军＝空战防空），3＝炮击受损单位选择 */
 export interface OpsFlowState {
   kind: OpsFlowKind
   targetHex: HexRef
-  step: 1 | 2
+  step: 1 | 2 | 3
 }
 
 /**
@@ -1046,12 +1046,11 @@ export const useMapViewStore = defineStore('mapView', () => {
   /** 第 1 步：进入某个操作（入口判据已由 `workbench.*EntryEligible` 判过） */
   function openOpsFlow(kind: OpsFlowKind, hex: HexRef): boolean {
     if (kind === 'barrage') {
-      // 10.0d：目标格先定；10.0e-F：一次轰炸只用一个类别 ⇒ 从炮兵这一支进入
-      workbench.setBarrageActive(true)
-      workbench.pickBarrageTargetAt(hex)
-      workbench.setBarrageKind('artillery')
-      workbench.setBarrageTargetKind('combatUnits')
-      workbench.barrageInputs = { ...workbench.barrageInputs, hipShoot: false }
+      /*
+       * 10.0d：目标格先定；10.0c：整体目标**预先指定**（有敌战斗单位打单位，否则打敌方空军基地）。
+       * 用户口径（2026-11-12）：设施炮击是合法操作，不再把炮击限制成只能打单位。
+       */
+      if (!workbench.prepareOpsBarrage(hex, workbench.defaultBarrageTargetKindAt(hex))) return false
     } else {
       // 14.2e：轰炸 / 低空扫射都走空军任务链（任务类型在 0 步定）
       workbench.clearAir()
@@ -1064,14 +1063,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     return true
   }
 
-  /**
-   * 第 1 步 → 第 2 步
-   *
-   * 炮击：宣布后进 10.1b 的补给步（`beginBarrageNow`，第二步仍有玩家输入）。
-   * 空军：**宣布 + 自动结算到停返航**（`runAirMissionNow`）——14.2f-C–F 是骰子与查表，
-   * 若只 `beginAirMissionNow` 就停手，会话会卡在「空战/拦截」步而正式界面又不渲染逐步按钮
-   * （只有验证页 `stepwise` 才有），玩家走不到 10.2 的轰炸骰。无拦截时由引擎自己过 D 步。
-   */
+  /** 第 1 步 → 第 2 步（炮击：宣布后进 10.1b 补给；空军：宣布 + 自动结算到停返航） */
   function advanceOpsFlow(): boolean {
     const flow = opsFlow.value
     if (flow === null || flow.step !== 1) return false
@@ -1081,11 +1073,40 @@ export const useMapViewStore = defineStore('mapView', () => {
     return true
   }
 
-  /** 取消整单（10.1b：炮击取消不视为已炸过） */
+  /**
+   * 炮击第 2 步：确认支付 ⇒ **自动走完横移与掷骰**
+   *
+   * 用户口径（2026-11-12）：不再有中间的横移 / 掷骰 / 结果分步块。
+   * 有军力损失时停在 `step 3` 让玩家选受损单位；设施与无损失结果当场收束。
+   */
+  function confirmOpsBarrageSupply(): boolean {
+    const flow = opsFlow.value
+    if (flow === null || flow.kind !== 'barrage' || flow.step !== 2) return false
+    if (!workbench.confirmBarrageSupplyStep()) return false
+    const result = workbench.runBarrageResolution()
+    if (result === 'failed') return false
+    if (result === 'loss') {
+      opsFlow.value = { ...flow, step: 3 }
+      return true
+    }
+    opsFlow.value = null
+    return true
+  }
+
+  /** 炮击第 3 步：选完受损单位即收束（10.0a） */
+  function confirmOpsBarrageLoss(): boolean {
+    const flow = opsFlow.value
+    if (flow === null || flow.kind !== 'barrage' || flow.step !== 3) return false
+    if (!workbench.confirmBarrageLossNow()) return false
+    opsFlow.value = null
+    return true
+  }
+
+  /** 取消整单（用户口径：已选炮兵与已扣补给都退回原状） */
   function cancelOpsFlow(): boolean {
     const flow = opsFlow.value
     if (flow === null) return false
-    if (flow.kind === 'barrage') workbench.cancelBarrage()
+    if (flow.kind === 'barrage') workbench.cancelOpsBarrage()
     else workbench.clearAir()
     opsFlow.value = null
     return true
@@ -1095,6 +1116,67 @@ export const useMapViewStore = defineStore('mapView', () => {
   function finishOpsFlow(): void {
     opsFlow.value = null
   }
+
+  /*
+   * 炮击第 2 步的地图点选：点高亮的补给站即付款来源（12.3a / 10.1b）
+   *
+   * 判据取自 `barrageSupplyDumpChoices`（同一来源 + 每个参炸单位拖得到）；
+   * 同格多站（3.4b 拆分）时优先点中的那枚令牌对应的站，找不到就取第一座。
+   */
+  function pickOpsBarrageSupplyAt(hex: HexRef): boolean {
+    const flow = opsFlow.value
+    if (flow === null || flow.kind !== 'barrage' || flow.step !== 2) return false
+    const dumps = workbench.barrageSupplyMapDumps.filter(
+      (item) => item.dump.hex.col === hex.col && item.dump.hex.row === hex.row,
+    )
+    if (dumps.length === 0) return false
+    workbench.toggleBarrageSupplyDump(dumps[0]!.dump.id)
+    return true
+  }
+
+  /** 炮击第 1 步：参炸炮兵所在格（地图同步高亮） */
+  const opsBarrageUnitHexes = computed<HexRef[]>(() => {
+    const flow = opsFlow.value
+    if (flow === null || flow.kind !== 'barrage' || flow.step !== 1) return []
+    return workbench.barrageUnitIds.flatMap((id) => {
+      const unit = workbench.units.find((item) => item.instanceId === id)
+      return unit === undefined ? [] : [unit.hex]
+    })
+  })
+
+  /** 炮击第 2 步：可用补给站所在格（地图高亮） */
+  const opsBarrageSupplyHexes = computed<HexRef[]>(() => {
+    const flow = opsFlow.value
+    if (flow === null || flow.kind !== 'barrage' || flow.step !== 2) return []
+    return workbench.barrageSupplyMapDumps.map((item) => item.dump.hex)
+  })
+
+  /** 地图多格高亮 = 既有「待点格」＋ 炮击链路的高亮格 */
+  const mapHighlightHexes = computed<readonly HexRef[]>(() => {
+    const seen = new Set<string>()
+    const out: HexRef[] = []
+    for (const hex of [
+      ...workbench.variableExitPickHexes,
+      ...opsBarrageUnitHexes.value,
+      ...opsBarrageSupplyHexes.value,
+    ]) {
+      const key = `${hex.col}.${hex.row}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(hex)
+    }
+    return out
+  })
+
+  /** 炮击第 2 步：格上显示的 SP 数（用户口径：补给站格上要看得见有多少 SP） */
+  const mapHexLabels = computed<readonly { hex: HexRef; text: string }[]>(() => {
+    const flow = opsFlow.value
+    if (flow === null || flow.kind !== 'barrage' || flow.step !== 2) return []
+    return workbench.barrageSupplyMapDumps.map((item) => ({
+      hex: item.dump.hex,
+      text: item.label,
+    }))
+  })
 
   watch(
     () => {
@@ -3155,6 +3237,11 @@ export const useMapViewStore = defineStore('mapView', () => {
       closePopup()
       return
     }
+    // 炮击第 2 步：点高亮的补给站即付款来源（10.1b；用户口径「点补给站支付」）
+    if (pickOpsBarrageSupplyAt(hex)) {
+      closePopup()
+      return
+    }
     if (!modalPickLive && world !== undefined && handleStackClick(hex, world, scale, anchor)) return
     // W7 C14：初设放置中 ⇒ 点地图即落位（最高优先级；非候选格由 store 记拒绝，不开常规小窗）
     if (setup.placing !== null && setup.placeAtHex(hex)) {
@@ -3423,8 +3510,15 @@ export const useMapViewStore = defineStore('mapView', () => {
     opsFlow,
     openOpsFlow,
     advanceOpsFlow,
+    confirmOpsBarrageSupply,
+    confirmOpsBarrageLoss,
     cancelOpsFlow,
     finishOpsFlow,
+    // 炮击链路（2026-11-12 重做）：地图高亮与格上 SP 标注
+    opsBarrageUnitHexes,
+    opsBarrageSupplyHexes,
+    mapHighlightHexes,
+    mapHexLabels,
     // 点什么
     popup,
     popupContent,

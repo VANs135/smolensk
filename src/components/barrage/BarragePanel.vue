@@ -54,9 +54,6 @@ const lossTargets = computed(() => workbench.barrageLossTargets)
 /** 10.0c-A：目标格内所有敌方飞机（逐机掷骰 ≥# 者损 1 军力；修前错取 battleDefenders＝地面单位） */
 const aircraftRollTargets = computed(() => workbench.barrageAircraftRollTargets)
 
-/** 10.0a：目标玩家可选的地形线（只列**目标格内**存在的地形所产生的战斗线；由引擎筛出） */
-const terrainLines = computed(() => workbench.barrageTerrainLineOptions)
-
 /* ─────────────────── 算子图阵列（B14b；用户口径⑪） ───────────────────
  *
  * 「把当前可选的**算子图片**紧凑排出来；算子上信息已经够了，除了环节提示这种外不需要显示额外的文字」。
@@ -156,28 +153,23 @@ const kindLabel = computed(() => {
   switch (workbench.barrageKind) {
     case 'air':
       return '空军轰炸（10.2）'
-    case 'ship':
-      return '舰炮（10.0e-F）'
     default:
       return '火炮（10.1）'
   }
 })
 
 /**
- * 10.0e-F：参炸单位类别（**全部**；实际显示哪些由本环节允许的来源决定）
+ * 10.0e-F：参炸单位类别（本作无海军，专规 1.1c ⇒ 只剩火炮）
  *
  * ★ 条 19（批 A）：**`air` 不再作为本面板的"起点类别"** —— C 段空军轰炸 / 低空扫射改走
  *   空军任务链（点机场基地 ⇒ 选机 ⇒ 点任务格 ⇒ `runAirMissionNow`），由此 14.3 / 14.5 / 14.4
  *   （空战 / 拦截 / 防空）不再被"面板直调 beginBarrageNow"绕过。`air` **段本身保留**：
  *   空军任务的轰炸结算（`beginAirBarrageNow` 置 `barrageState` ⇒ 本面板以 air 段显示其结果）。
  */
-const KINDS = [
-  { key: 'artillery', label: '火炮' },
-  { key: 'ship', label: '舰炮' },
-] as const
+const KINDS = [{ key: 'artillery', label: '火炮' }] as const
 
 /**
- * 批 A 切片 2：**本环节允许的类别**（SOP：C 段 air & ship only、F 段 artillery only）
+ * 批 A 切片 2：**本环节允许的类别**（SOP：C 段 air only、F 段 artillery only）
  *
  * 判据在 store（`barrageKindsInSegment`，取自引擎的 `BARRAGE_SOURCES_BY_PHASE`）——
  * 面板不再让玩家自由挑，避免"先选了炮兵、再被引擎按段拒绝"的来回。
@@ -268,7 +260,7 @@ function setAircraftRoll(unitId: string, value: number): void {
               :value="workbench.barrageKind"
               @change="
                 workbench.setBarrageKind(
-                  ($event.target as HTMLSelectElement).value as 'artillery' | 'air' | 'ship',
+                  ($event.target as HTMLSelectElement).value as 'artillery' | 'air',
                 )
               "
             >
@@ -440,15 +432,10 @@ function setAircraftRoll(unitId: string, value: number): void {
 
       <!-- ── ③ 列横移（10.0a / 10.0b / 10.2b）── -->
       <SessionStep item="barrage:shifts">
-        <div class="row">
-          <label class="field">
-            目标玩家所选地形（10.0a，仅列目标格内存在者）
-            <select v-model="workbench.barrageInputs.terrainLine" class="select">
-              <option value="">（不选）</option>
-              <option v-for="line in terrainLines" :key="line" :value="line">{{ line }}</option>
-            </select>
-          </label>
-        </div>
+        <!-- 用户 2026-11-12：目标地形不再由玩家选择，按对防守方最有利的地形自动结算 -->
+        <p class="muted num">
+          地形按**对防守方最有利**自动取（10.0a）；确认后即按 10.0b 观察员与 10.2b 短程合并横移。
+        </p>
         <div class="row">
           <BaseButton variant="primary" size="sm" @click="workbench.confirmBarrageShiftsStep()">
             ③ 确认横移（10.0a）
@@ -576,9 +563,9 @@ function setAircraftRoll(unitId: string, value: number): void {
         </p>
       </details>
 
-      <p v-if="workbench.barrageError !== null" class="warn">
-        <BaseTag kind="danger">{{ workbench.barrageError.rule }}</BaseTag>
-        {{ workbench.barrageError.reason }}
+      <p v-if="workbench.barrageErrorLine !== null" class="warn">
+        <BaseTag kind="danger">{{ workbench.barrageError?.rule }}</BaseTag>
+        {{ workbench.barrageErrorLine }}
       </p>
 
       <div class="row">

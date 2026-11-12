@@ -113,7 +113,7 @@ describe('B6：两处原文次序（用户原话的例子）', () => {
     expect(sopStepById('combat.combat')!.label).toContain('战斗')
   })
 
-  it('C 移动：突围 → 模式与移动 → 轰炸（仅空中与舰炮），突围在最前', () => {
+  it('C 移动：突围 → 模式与移动 → 轰炸（仅空中），突围在最前', () => {
     const ids = sopStepsOf('movement').map((step) => step.id)
     expect(ids).toEqual(['movement.breakout', 'movement.modeAndMovement', 'movement.barrage'])
     // 12.8e 的「before any other movement」⇒ 突围必须是第一环
@@ -121,8 +121,8 @@ describe('B6：两处原文次序（用户原话的例子）', () => {
   })
 
   it('轰炸来源的段限定与既有 BARRAGE_SOURCES_BY_PHASE 一致（C 段不准炮兵、F 段只准炮兵）', () => {
-    // C 段：原文「Barrage (air & ship only)」⇒ 炮兵轰炸不在本段
-    expect(BARRAGE_SOURCES_BY_PHASE.movement).toEqual(['air', 'ship'])
+    // C 段：原文 air only（本作无海军）⇒ 炮兵轰炸不在本段
+    expect(BARRAGE_SOURCES_BY_PHASE.movement).toEqual(['air'])
     expect(BARRAGE_SOURCES_BY_PHASE.movement).not.toContain('artillery')
     // F 段：原文「Barrage (artillery only)」
     expect(BARRAGE_SOURCES_BY_PHASE.combat).toEqual(['artillery'])

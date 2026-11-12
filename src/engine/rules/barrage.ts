@@ -65,8 +65,8 @@ export const BARRAGE_HALF_RESULT_STEP_LOSS_MIN_DIE = rulesConstants.barrage.half
 
 /* ── 类型 ── */
 
-/** 轰炸单位类别（10.0e-F：一次轰炸只能用同一类型） */
-export type BarrageKind = 'artillery' | 'air' | 'ship'
+/** 轰炸单位类别（10.0e-F：一次轰炸只能用同一类型；本作无海军 ⇒ 火炮 / 空军） */
+export type BarrageKind = 'artillery' | 'air'
 
 /** 轰炸的「整体目标」（10.0d：混合目标格须宣布其一） */
 export type BarrageTargetKind = 'combatUnits' | 'airBase' | 'port' | 'trainbusting'
@@ -481,8 +481,8 @@ export function resolveBarrageOutcome(input: {
     // `[1/2]` 的三个「直接判 DG」条件（10.0a；战略轰炸机按 10.0b 视为无观察员）
     const noSpotter = input.hasSpotter === false || input.strategicBomber === true
     const inHighHedgehog = (input.hedgehogLevel ?? 0) >= BARRAGE_BRACKET_HEDGEHOG_MIN_LEVEL
-    const airOrShip = input.kind === 'air' || input.kind === 'ship'
-    if (isBracketed && (inHighHedgehog || airOrShip || noSpotter))
+    const airBarrage = input.kind === 'air'
+    if (isBracketed && (inHighHedgehog || airBarrage || noSpotter))
       return {
         rule: '10.0a',
         dg: true,
@@ -490,7 +490,7 @@ export function resolveBarrageOutcome(input: {
         needsHalfDie: false,
         detail: `[1/2] 条件成立（${[
           inHighHedgehog ? `等级 ≥${BARRAGE_BRACKET_HEDGEHOG_MIN_LEVEL} 环形工事` : null,
-          airOrShip ? '飞机/舰船轰炸' : null,
+          airBarrage ? '飞机轰炸' : null,
           noSpotter ? '缺少观察员' : null,
         ]
           .filter((item): item is string => item !== null)
@@ -745,8 +745,8 @@ export function barrageEligibility(input: {
   if (input.hexAlreadyBarragedThisPhase === true && input.hipShoot !== true)
     return { ok: false, rule: '10.0e-A', reason: 'hexAlreadyBarraged' }
 
-  // 阶段门槛（10.0e-C/D/E）：火炮＝战斗/反应/进击；空军与海军＝移动/反应/进击
-  // （低空扫射发生在**移动环节**，已包含在空军/海军的许可段内，故无需额外放宽）
+  // 阶段门槛（10.0e-C/D/E）：火炮＝战斗/反应/进击；空军＝移动/反应/进击（本作无海军）
+  // （低空扫射发生在**移动环节**，已包含在空军的许可段内，故无需额外放宽）
   const allowed =
     input.kind === 'artillery'
       ? (['combat', 'reaction', 'exploitation'] as GamePhase[])
@@ -760,7 +760,7 @@ export function barrageEligibility(input: {
 
   /*
    * 10.0 第二段：「如果允许某方的空军单位执行低空扫射任务（见 14.7d），则这些轰炸还能在上述阶段的
-   * **移动环节**中进行。」⇒ 移动环节只放行**低空扫射的空军**；火炮与舰船不得借这个入口。
+   * **移动环节**中进行。」⇒ 移动环节只放行**低空扫射的空军**；火炮不得借这个入口。
    */
   const inMovementStep =
     input.segment !== undefined &&

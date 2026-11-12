@@ -178,7 +178,7 @@ describe('批 A 切片 2：环节驱动的点击分派', () => {
     expect(barrageIndex).toBeGreaterThanOrEqual(0)
     expect(store.setSegmentStepIndex(barrageIndex)).toBe(true)
     expect(store.segmentStep?.id).toBe('movement.barrage')
-    expect([...store.barrageKindsInSegment]).toEqual(['air', 'ship'])
+    expect([...store.barrageKindsInSegment]).toEqual(['air'])
   })
 
   it('③ F 段战斗环节：点敌方格＝选防御格、点己方单位＝加入攻方（不需要工具）', () => {

@@ -308,11 +308,11 @@ export const SOP_SEGMENT_CHAINS: readonly SopSegmentChain[] = [
       },
       {
         id: 'movement.barrage',
-        label: '轰炸（仅空中与舰炮）',
+        label: '轰炸（仅空中）',
         rule: '10.0 / 14.7b',
         driver: 'player',
         actions: ['barrage'],
-        note: '原文限定（air & ship only）；炮兵轰炸属 F 段（见 `BARRAGE_SOURCES_BY_PHASE`）。低空扫射 14.7d 按 10.0 结算但属**移动环节**的空军任务',
+        note: '原文限定（air only；本作无海军）；炮兵轰炸属 F 段（见 `BARRAGE_SOURCES_BY_PHASE`）。低空扫射 14.7d 按 10.0 结算但属**移动环节**的空军任务',
       },
     ],
   },
