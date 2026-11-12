@@ -22775,7 +22775,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       'success',
       `${demand.raw} 投放于 ${hexLabel(hex)}` +
         (demand.stepsLost > 0 ? `（到场即带损 ${demand.stepsLost} step）` : '') +
-        (demand.loadedWithSp ? '（13.6c：运输点满载 SP 入场，请在 SP 账本登记）' : ''),
+        (demand.loadedWithSp
+          ? '（13.6c：运输点满载 SP 入场，已自动归属到该单位/编组，无需再到 SP 账本登记）'
+          : ''),
       '13.6',
     )
     // ⑭ 接线：到达投放（13.6）入会话日志（本笔不掷骰）

@@ -222,5 +222,8 @@ describe('3.4b：随运输队入场的 SP（13.6c）', () => {
     expect(arrived).toBeDefined()
     expect(board.panzerGroupOfDump(`unit:${arrived!.instanceId}`)).toBe('guderian')
     expect(board.transportSpGroupDraft).toBeNull()
+    // 文案债：投放后必须说明"已自动归属"，不能再把玩家引去 SP 账本手填一次
+    expect(board.log.some((entry) => entry.text.includes('已自动归属到该单位/编组'))).toBe(true)
+    expect(board.log.some((entry) => entry.text.includes('请在 SP 账本登记'))).toBe(false)
   })
 })
