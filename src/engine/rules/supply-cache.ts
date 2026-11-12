@@ -69,10 +69,16 @@ export function addSupplyCache(
 export interface ShellsUseInput {
   side: 'axis' | 'soviet'
   holdings: SupplyCacheHoldings
-  /** 友方 HQ 所在格（21.10：在地图上任意友方 HQ 处花掉） */
+  /** 友方 HQ 所在格（21.10：在地图上任意友好 HQ 处花掉） */
   hqHex: HexRef
   /** 本次 HQ 投递的火炮轰炸成本（T） */
   barrageCostT: number
+  /**
+   * 本次**计划花掉**的标记枚数（默认 1）。
+   *
+   * 21.10：「Shells pay 2T ... **per marker spent**」⇒ 多枚按枚整花，最后一枚可溢出（不找零）。
+   */
+  markers?: number
   /**
    * 该 HQ 是否处于追溯补给（21.10：**即使 HQ 不在追溯补给中也可用**）
    *
@@ -84,8 +90,12 @@ export interface ShellsUseInput {
 /** 21.10 Shells 的结论 */
 export interface ShellsUseResult {
   rule: string
+  /** 实际花掉的标记枚数（= 输入 `markers`） */
+  markersSpent: number
   /** 本次实际抵付的 T（每标记 2T；不足不找零 ⇒ 取 min） */
   paidT: number
+  /** 未抵付、被浪费的 T（= 枚数×2 − `paidT`；「No 'change' is given」） */
+  wasteT: number
   /** 剩余仍须支付的轰炸成本 T */
   remainingCostT: number
   /** 是否实现了「部分火力」（成本被降到 0 以下的情形 ⇒ 无找零） */
@@ -94,29 +104,103 @@ export interface ShellsUseResult {
 }
 
 /**
- * 21.10 **Shells**：用一枚补给缓存抵付 HQ 投递的火炮轰炸成本
+ * 21.10 **Shells**：花掉若干枚补给缓存，抵付 HQ 投递的火炮轰炸成本
  *
- * 「每标记付 2T；成本降到 0 以下不找零」⇒ `paidT = min(2, cost)`，
- * 余量不足以构成一次完整投递时即为「部分火力」（条文举 26-1-1 只打 10 点的例子）。
+ * 「每标记付 2T；成本降到 0 以下不找零」⇒ `paidT = min(枚数×2, cost)`，
+ * 差额记入 `wasteT`（溢出作废，不退）。余量为 0 时即「部分火力」
+ * （条文举 26-1-1 只打 10 点的例子；具体选列见 `selectAffordableBarrageColumn`）。
  */
 export function useSupplyCacheAsShells(input: ShellsUseInput): RuleOutcome<ShellsUseResult> {
-  if (supplyCacheCount(input.holdings, input.side) <= 0)
-    return fail('1.7', `noSupplyCacheLeft:${input.side}`)
+  const held = supplyCacheCount(input.holdings, input.side)
+  const markers = Math.max(1, Math.trunc(input.markers ?? 1))
+  // 兼容旧原因码：一枚都没有时维持 `noSupplyCacheLeft`，只是枚数不够才用新码
+  if (held <= 0) return fail('1.7', `noSupplyCacheLeft:${input.side}`)
+  if (held < markers) return fail('1.7', `notEnoughSupplyCache:${input.side}:${held}<${markers}`)
   const cost = Math.max(0, Math.trunc(input.barrageCostT))
   if (cost === 0) return fail('21.10', 'shellsRequirePositiveBarrageCost')
 
-  const paidT = Math.min(SUPPLY_CACHE_SHELLS_T, cost)
+  const faceT = markers * SUPPLY_CACHE_SHELLS_T
+  const paidT = Math.min(faceT, cost)
+  const wasteT = faceT - paidT
   const remainingCostT = cost - paidT
   return succeed('21.10', {
     rule: '21.10',
+    markersSpent: markers,
     paidT,
+    wasteT,
     remainingCostT,
     // 成本被完全抵掉（或本来就低于 2T）⇒ 视为部分火力，无找零
     partialFire: remainingCostT === 0,
     detail:
-      `Shells（21.10）：在 ${input.hqHex.col}.${input.hqHex.row} 的友方 HQ 花掉一枚补给缓存 ⇒ 抵付 ${paidT} T` +
-      `（每标记 ${SUPPLY_CACHE_SHELLS_T} T，成本降到 0 以下不找零），剩余 ${remainingCostT} T` +
+      `Shells（21.10）：在 ${input.hqHex.col}.${input.hqHex.row} 的友方 HQ 花掉 ${markers} 枚补给缓存 ⇒ 抵付 ${paidT} T` +
+      `（每标记 ${SUPPLY_CACHE_SHELLS_T} T，成本降到 0 以下不找零；浪费 ${wasteT} T），剩余 ${remainingCostT} T` +
       (input.hqDrawsTraceSupply === false ? '；HQ 即使不在追溯补给中也可用（21.10）' : ''),
+  })
+}
+
+/** 21.10 Shells + SP 混付的输入 */
+export interface BarrageSupplyPaymentInput {
+  /** 本次炮击的初始列成本（T，10.1b） */
+  costT: number
+  /** 计划花掉的 Shells 枚数（可 0） */
+  markers: number
+  /** 可用于补足的 SP（T） */
+  spT: number
+}
+
+/** 21.10 Shells + SP 混付的账目 */
+export interface BarrageSupplyPaymentPlan {
+  rule: string
+  /** 实际花掉的 Shells 枚数 */
+  markersSpent: number
+  /** Shells 抵付的 T（≤ 面值，差额为 `wasteT`） */
+  shellsAppliedT: number
+  /** 溢出作废的 T */
+  wasteT: number
+  /** 实际用掉的 SP（T） */
+  spT: number
+  /** 合计覆盖的 T */
+  coveredT: number
+  /** 仍缺口的 T（0 ＝ 付得起） */
+  shortT: number
+  detail: string
+}
+
+/**
+ * 21.10：Shells 与 SP 混合支付（用户 2026-11-12 裁定：允许混付；溢出作废）
+ *
+ * 顺序固定「先 Shells、后 SP」：标记不可拆分，先按枚整花；缺口再由 SP 补。
+ * 本函数只算账、不判断 SP 来源（来源约束仍在 10.1b-A）；`shortT > 0` 时由调用方
+ * 决定"降档"（`selectAffordableBarrageColumn`）或拒绝本次炮击。
+ */
+export function planBarrageSupplyPayment(
+  input: BarrageSupplyPaymentInput,
+): RuleOutcome<BarrageSupplyPaymentPlan> {
+  const cost = Math.trunc(input.costT)
+  if (cost <= 0) return fail('21.10', 'shellsRequirePositiveBarrageCost')
+  const markers = Math.trunc(input.markers)
+  if (markers < 0) return fail('21.10', `negativeShellsMarkers:${input.markers}`)
+  const spAvailable = Math.max(0, Math.trunc(input.spT))
+
+  const faceT = markers * SUPPLY_CACHE_SHELLS_T
+  const shellsAppliedT = Math.min(faceT, cost)
+  const wasteT = faceT - shellsAppliedT
+  const remainingT = cost - shellsAppliedT
+  const spT = Math.min(spAvailable, remainingT)
+  const shortT = remainingT - spT
+  const coveredT = shellsAppliedT + spT
+  return succeed('21.10', {
+    rule: '21.10',
+    markersSpent: markers,
+    shellsAppliedT,
+    wasteT,
+    spT,
+    coveredT,
+    shortT,
+    detail:
+      `Shells 混付（21.10）：${markers} 枚 ⇒ 抵付 ${shellsAppliedT} T（浪费 ${wasteT} T）；` +
+      `SP ${spT} T；合计 ${coveredT}/${cost} T` +
+      (shortT > 0 ? `；缺口 ${shortT} T ⇒ 需降档或放弃` : ''),
   })
 }
 

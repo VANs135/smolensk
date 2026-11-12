@@ -2,7 +2,13 @@ import { chartsTables, rulesConstants } from '@/data'
 import type { HexRef, Side } from '@/data'
 
 import { HEX_DIRECTIONS, neighbor } from '../hex-geometry'
-import { findTable, lookupCell, matchRowIndex, resolveNumericColumnIndex } from '../tables/lookup'
+import {
+  findTable,
+  lookupCell,
+  matchRowIndex,
+  resolveNumericColumnIndex,
+  toNumericRange,
+} from '../tables/lookup'
 import type { GamePhase } from '../state-types'
 import { roundHalfUp } from './combat'
 import type { CombatLine } from './terrain'
@@ -330,6 +336,82 @@ export function barrageTableMeta(input: {
     costT: table.cost?.[initialColumn] ?? 0,
     columnLabel: columns[initialColumn] ?? '',
     columnCount: columns.length,
+  }
+}
+
+/**
+ * 10.0a/10.0c：某一列标所代表的**最大轰炸值**
+ *
+ * `8-11`⇒11、`2`⇒2、`1 or less`⇒1、`117+`⇒+∞；非数值列返回 `null`。
+ * 供 21.10 降档时把「总轰炸值」压到所选列的上界（如 20 值降到 8–11 列 ⇒ 只用 11）。
+ */
+export function barrageColumnUpperBound(
+  columnIndex: number,
+  tableId: 'barrage' | 'barrage-vs-facility' = 'barrage',
+): number | null {
+  const table = findTable(chartsTables.tables, tableId)
+  const label = table.columns?.[columnIndex]
+  if (label === undefined) return null
+  const range = toNumericRange(label)
+  return range ? range.max : null
+}
+
+/** 21.10 降档结果：本次实际可用的初始列与炮击值 */
+export interface AffordableBarrageColumn {
+  rule: string
+  /** 实际采用的初始列（≤ 全值列） */
+  initialColumn: number
+  /** 该列标签（如 `8-11`） */
+  columnLabel: string
+  /** 该列成本（T） */
+  costT: number
+  /** 实际使用的轰炸值（= min(总轰炸值, 列上界)） */
+  valueUsed: number
+}
+
+/**
+ * 21.10：在给定支付额度内选择**最高可负担**的轰炸列（降档）
+ *
+ * 原文：「Shells also allow artillery units to **fire partial factors**」（26-1-1 只打 10 点）。
+ * 算法：先按全值确定初始列 `c0`（10.1b：成本取初始列）；若 `cost(c0) ≤ availableT` 则不降档，
+ * 否则向下找最大的 `c ≤ c0` 且 `cost(c) ≤ availableT`；把 `valueUsed` 压到该列上界。
+ * 无任何可负担列（含最低列）时返回 `null`，由调用方拒绝本次炮击。
+ */
+export function selectAffordableBarrageColumn(input: {
+  target: BarrageTargetKind
+  /** 本次总轰炸值（加总后、任何横移之前；4.2 取整由本函数内部完成） */
+  valueRange: number
+  /** 可用支付额度（Shells 抵付 + SP，T） */
+  availableT: number
+}): AffordableBarrageColumn | null {
+  const tableId = input.target === 'combatUnits' ? 'barrage' : 'barrage-vs-facility'
+  const table = findTable(chartsTables.tables, tableId)
+  const columns = table.columns ?? []
+  const costAt = (index: number): number => table.cost?.[index] ?? 0
+  const roundedValue = roundBarrageValue(input.valueRange)
+  const fullColumn = resolveNumericColumnIndex(columns, roundedValue, tableId)
+  const budget = Math.max(0, input.availableT)
+
+  let chosen = -1
+  if (costAt(fullColumn) <= budget) chosen = fullColumn
+  else
+    for (let index = fullColumn - 1; index >= 0; index -= 1) {
+      if (costAt(index) <= budget) {
+        chosen = index
+        break
+      }
+    }
+  if (chosen < 0) return null
+
+  const upper = barrageColumnUpperBound(chosen, tableId)
+  const valueUsed = upper === null ? roundedValue : Math.min(roundedValue, upper)
+  if (valueUsed < BARRAGE_MIN_VALUE) return null
+  return {
+    rule: '21.10',
+    initialColumn: chosen,
+    columnLabel: columns[chosen] ?? '',
+    costT: costAt(chosen),
+    valueUsed,
   }
 }
 
