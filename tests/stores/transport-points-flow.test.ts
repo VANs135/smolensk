@@ -2,7 +2,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
-import { HEX_DIRECTIONS, neighbor } from '@/engine/hex-geometry'
+import { mapLayers } from '@/data'
+import { HEX_DIRECTIONS, isOnMap, neighbor } from '@/engine/hex-geometry'
 import { EXTENDER_REQUIRED_POINTS, isConvertibleTransportPoint } from '@/engine/rules'
 import { isExtenderUnit, toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 
@@ -57,6 +58,30 @@ function placeTransportPoint(
 function declareSource(store: Workbench, hex: HexRef): void {
   store.supplySourceDraft = { hexText: `${hex.col}.${hex.row}`, kind: 'supplySourceHex' }
   expect(store.addSupplySource()).toBe(true)
+}
+
+/** 以 CORE_HEX 为源，BFS 找一格轮式 MP 落在 [minMp, maxMp] 的图内格（12.3d 同一套步费） */
+function farHexByTruckMp(store: Workbench, minMp: number, maxMp: number): HexRef {
+  const seen = new Map<string, number>()
+  const queue: { hex: HexRef; mp: number }[] = [{ hex: CORE_HEX, mp: 0 }]
+  while (queue.length > 0) {
+    const current = queue.shift()!
+    if (current.mp >= minMp) return current.hex
+    for (const direction of HEX_DIRECTIONS) {
+      const next = neighbor(current.hex, direction)
+      if (!isOnMap(next)) continue
+      if (!mapLayers.hexes.some((item) => item.col === next.col && item.row === next.row)) continue
+      const step = store.supplyFacts.stepCost(current.hex, next, 'truck')
+      if (step === null) continue
+      const mp = current.mp + step
+      if (mp > maxMp) continue
+      const key = `${next.col}.${next.row}`
+      if ((seen.get(key) ?? Number.POSITIVE_INFINITY) <= mp) continue
+      seen.set(key, mp)
+      queue.push({ hex: next, mp })
+    }
+  }
+  throw new Error(`找不到轮式 ${minMp}–${maxMp} MP 的格`)
 }
 
 describe('13.2c：合并运输点数（同格、同类型、移动阶段、不耗 MP）', () => {
@@ -200,6 +225,17 @@ describe('12.7a：运输点数 → 延补队（满 5 点、消耗 ½ MA、余数
     expect(store.units.filter(isExtenderUnit)).toHaveLength(1)
     const leftovers = store.transportPointsOfSide.map((unit) => unit.noncombatTransport)
     expect(leftovers).toEqual([3])
+  })
+
+  it('12.7d（G7）：生成连通按延补队的**印值 MA**（卡车 20）判，不是 5 轮式 MP', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    declareSource(store, CORE_HEX)
+    // 找一格：轮式 MP 在 6–15 之间（旧口径 5MP 必拒，印值 20 应放行）
+    const hex = farHexByTruckMp(store, 6, 15)
+    placeTransportPoint(store, 'truck', 5, hex)
+    expect(store.convertTransportToExtenderNow(`${hex.col}.${hex.row}`, 'truck')).toBe(true)
+    expect(store.units.filter(isExtenderUnit)).toHaveLength(1)
   })
 
   it('不足 5 点 ⇒ 拒（12.7a 的阈值）', () => {

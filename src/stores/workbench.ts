@@ -434,6 +434,8 @@ import {
   FIRST_TURN_HALF_MA_MULT,
   // 14.7c：短距离轰炸的判定半径（基地分栏里的「≤10」只报原文事实）
   SHORT_RANGE_BARRAGE_HEXES,
+  // 12.7b：延补队距离＝印值 MA（卡车 20 / 马车 10），生成连通判据复用同一来源
+  extenderRangeMpOf,
 } from '@/engine/rules'
 import { createId } from '@/shared'
 
@@ -14788,6 +14790,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       hex,
       side: activeSide.value,
       mobility: kind === 'truck' ? 'truck' : 'leg',
+      // 12.7b/12.7d：生成连通用**即将生成那一面的印值 MA**（卡车 20 / 马车 10），
+      // 不是 12.3a 的 5 轮式 MP——后者只约束「单位→源」的接收段（U23/G7）
+      rangeMp: extenderRangeMpOf({
+        // `UnitRecordView` 是 Partial，缺字段时才按运输点数类型回退（真实算子库两值都有）
+        ma: record.factors?.combat?.ma ?? (kind === 'truck' ? 20 : 10),
+      }),
     })
     if (!connectivity.ok) {
       pushLog(
