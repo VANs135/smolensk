@@ -714,7 +714,23 @@
         "formationDrawRaw": "抽 5 个把摩托营放入死亡堆、另 7 个把侦察营放入死亡堆",
         "formationDraw": {
           "pool": 14,
-          "poolFrom": "formations.json 中该剧本的轴方装甲/摩托化多单位编队（formationId 以 'Pz Div' / 'Mtr Div' 结尾，骑兵师不入杯）",
+          "poolFrom": "入杯名单见 poolFormations（formations.json 该剧本轴方装甲/摩托化多单位编队，骑兵师不入杯；名单已冻结为剧本数据）",
+          "poolFormations": [
+            "3 Pz Div",
+            "4 Pz Div",
+            "7 Pz Div",
+            "10 Pz Div",
+            "12 Pz Div",
+            "17 Pz Div",
+            "18 Pz Div",
+            "19 Pz Div",
+            "20 Pz Div",
+            "10 Mtr Div",
+            "18 Mtr Div",
+            "20 Mtr Div",
+            "29 Mtr Div",
+            "SS-R Mtr Div"
+          ],
           "groups": [
             {
               "kind": "deadPileKrd",
