@@ -78,6 +78,8 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'setSupplyTrainGroup',
       'beginRebuildReplHexPickNow',
       'beginSpDumpHexPickNow',
+      'toggleConstructionPayPick',
+      'toggleHedgehogPayPick',
       'beginSupplyCacheHexPickNow',
       'beginSupplySourceHexPickNow',
       'armConstructionMarkerNow',

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip, UI_COPY } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
@@ -10,7 +10,6 @@ import {
   counterImageUrlOf,
   hexLabel,
   isFighterAircraft,
-  spDumpImageUrlOf,
   useWorkbenchStore,
 } from '@/stores'
 
@@ -242,22 +241,18 @@ function reductionItems(baseId: string): readonly CounterPickerItem[] {
   }))
 }
 
-/** 付款补给站（12.1b 账本）：图用**当前点数的 SP 算子图**（点数不同图不同） */
-const dumpItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.spDumpsOfSide.map((dump) => ({
-    id: dump.id,
-    imageUrl: spDumpImageUrlOf(dump),
-    name: `${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T）`,
-    selected: workbench.constructionInputs.payDumpId === dump.id,
-    hex: dump.hex,
-  })),
-)
+/** 12.1b：已选的建造付款站（地图点选写入；未选/失效时照实显示） */
+const selectedConstructionPayLabel = computed(() => {
+  const id = workbench.constructionInputs.payDumpId
+  if (id === null) return '（未选）'
+  const dump = workbench.spDumps.find((item) => item.id === id)
+  return dump === undefined ? '（已失效）' : `${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T）`
+})
 
-/** 悬停某一座补给站 ⇒ 同步地图高亮它的格 */
-function hoverDump(id: string | null): void {
-  const dump = id === null ? null : (workbench.spDumpsOfSide.find((item) => item.id === id) ?? null)
-  workbench.setHoverHex(dump?.hex ?? null)
-}
+/** 面板关掉就退出地图选站模式，避免高亮残留、误吞地图点击 */
+onBeforeUnmount(() => {
+  workbench.constructionPayPick = false
+})
 
 /**
  * B15d：**只渲染哪一段**（默认全渲染，引擎验证页照旧）
@@ -1160,9 +1155,25 @@ const displayedBases = computed(() =>
                 点地图选格
               </BaseButton>
             </label>
-            <label class="field"> 付款补给站（建造耗 SP/T；缩减免费） </label>
+            <label class="field"> 付款补给站 </label>
           </div>
-          <!-- B14：施工工程兵与付款补给站＝**算子图阵列**（原来是两个纯文字下拉） -->
+          <!-- 用户 2026-11-12：付款站改为**地图点选**（与炮击同一套：高亮 → 格上见 SP → 点选） -->
+          <div class="row">
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              @click="workbench.toggleConstructionPayPick()"
+            >
+              {{ workbench.constructionPayPick ? '取消地图选站' : '在地图上选付款补给站' }}
+            </BaseButton>
+            <span class="num">
+              付款站：{{ selectedConstructionPayLabel }}
+              <template v-if="workbench.constructionPayPick">
+                （点地图上高亮的补给站；12.3a/12.3b）
+              </template>
+            </span>
+          </div>
+          <!-- B14：施工工程兵＝算子图阵列（原来是纯文字下拉） -->
           <CounterPicker
             title="施工工程兵（13.8d）"
             hint="13.8d：须具工程能力、处于战斗模式（或 DG 朝战斗面）、本阶段未移动、在目标格 2 格步行 MP 内"
@@ -1171,19 +1182,21 @@ const displayedBases = computed(() =>
             @pick="workbench.constructionInputs.engineerId = $event"
             @hover="hoverUnit"
           />
-          <CounterPicker
-            title="付款补给站（建造耗 SP/T；缩减免费）"
-            hint="12.1b：从哪个补给站扣这次建造的 SP / T"
-            :items="dumpItems"
-            :size="32"
-            @pick="workbench.constructionInputs.payDumpId = $event"
-            @hover="hoverDump"
-          />
           <div class="row">
-            <BaseButton variant="primary" size="sm" @click="workbench.buildAirBaseNow()">
+            <BaseButton
+              variant="primary"
+              size="sm"
+              :disabled="workbench.constructionInputs.payDumpId === null"
+              @click="workbench.buildAirBaseNow()"
+            >
               修建/改进空军基地 +1 级（15.3：{{ workbench.airBaseBuildCostSpPerLevel }} SP/级）
             </BaseButton>
-            <BaseButton variant="secondary" size="sm" @click="workbench.buildAirstripNow()">
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :disabled="workbench.constructionInputs.payDumpId === null"
+              @click="workbench.buildAirstripNow()"
+            >
               修建简易机场（15.2A：1 T）
             </BaseButton>
             <span class="num">
@@ -1204,7 +1217,12 @@ const displayedBases = computed(() =>
             class="row"
           >
             <BaseTag kind="warning">{{ hexLabel(base.hex) }} 简易机场</BaseTag>
-            <BaseButton variant="primary" size="sm" @click="workbench.upgradeAirstripNow(base.id)">
+            <BaseButton
+              variant="primary"
+              size="sm"
+              :disabled="workbench.constructionInputs.payDumpId === null"
+              @click="workbench.upgradeAirstripNow(base.id)"
+            >
               升格为一级空军基地（15.2A：3 T）
             </BaseButton>
           </div>

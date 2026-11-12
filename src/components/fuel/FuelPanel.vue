@@ -1,15 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip, UI_COPY } from '@/components/base'
-import { CounterPicker, type CounterPickerItem } from '@/components/game'
-import {
-  counterImageUrlOf,
-  hexLabel,
-  spDumpImageUrlOf,
-  useMapViewStore,
-  useWorkbenchStore,
-} from '@/stores'
+import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/base'
+import { hexLabel, useMapViewStore, useWorkbenchStore } from '@/stores'
 
 /**
  * **加油窗**（12.5c；用户 2026-11-10 口径更正）
@@ -45,30 +38,16 @@ const hqOriginLabel = computed(() => {
   return origin === null ? '（本阶段尚未投递）' : hexLabel(origin)
 })
 
-/** 12.3a：这一法的付款来源（store 已按受注单位与方法筛过可达性） */
-const dumpItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.fuelDumpChoices.map((dump) => {
-    const carrier =
-      dump.carriedBy === undefined
-        ? undefined
-        : workbench.units.find((unit) => unit.instanceId === dump.carriedBy)
-    return {
-      id: dump.id,
-      imageUrl: carrier === undefined ? spDumpImageUrlOf(dump) : counterImageUrlOf(carrier),
-      name:
-        carrier === undefined
-          ? `${hexLabel(dump.hex)}（${dump.sp} SP / ${dump.t} T）`
-          : `${hexLabel(dump.hex)}｜装载在 ${carrier.name} 上（${dump.sp} SP / ${dump.t} T，12.1b）`,
-      selected: workbench.fuelDumpId === dump.id,
-      hex: dump.hex,
-    }
-  }),
-)
+/** 12.3a：这一法的付款来源（store 已按受注单位与方法筛过可达性；在地图上点选） */
+const selectedLabel = computed(() => {
+  if (workbench.fuelDumpId === null) return '（未选）'
+  const dump = workbench.fuelDumpChoices.find((item) => item.id === workbench.fuelDumpId)
+  return dump === undefined ? '（已失效）' : `${hexLabel(dump.hex)}（${dump.sp} SP / ${dump.t} T）`
+})
 
-function hoverDump(id: string | null): void {
-  const dump =
-    id === null ? null : (workbench.fuelDumpChoices.find((item) => item.id === id) ?? null)
-  workbench.setHoverHex(dump?.hex ?? null)
+/** 12.1b：该来源是否装载在运输点数上 */
+function carrierName(carrierId: string): string {
+  return workbench.units.find((unit) => unit.instanceId === carrierId)?.name ?? carrierId
 }
 
 /** 已付过 ⇒ 只剩"确认并关闭"（付款已经落账，窗口不再摆一次付款按钮） */
@@ -107,22 +86,19 @@ const paid = computed(() => subject.value?.fuelled ?? false)
           <RuleTip rule="12.5c-A">为一整个多单位编队支付 1 SP，便可为整个编队提供燃料。</RuleTip>
         </p>
 
-        <!-- 12.3a：付款来源 -->
-        <CounterPicker
-          :title="UI_COPY.paySource"
-          :hint="
-            method === 'hq'
-              ? '指挥部法：同一指挥部投递（12.5c-B / 12.5e）'
-              : '全体同一站直取（12.3a）'
-          "
-          :items="dumpItems"
-          :size="32"
-          @pick="workbench.pickFuelDump($event)"
-          @hover="hoverDump"
-        />
-        <p v-if="dumpItems.length === 0" class="muted">
-          这一枚此刻没有可达的补给来源（12.3a）——先补出一条补给线再来。
-        </p>
+        <!-- 12.3a：付款来源改为**地图点选**（用户 2026-11-12；与炮击同一套） -->
+        <p class="num">点地图上高亮的补给站付款（12.3a/12.3b）｜当前：{{ selectedLabel }}</p>
+        <ul v-if="workbench.fuelDumpChoices.length === 0" class="muted">
+          <li>这一枚此刻没有可达的补给来源（12.3a）——先补出一条补给线再来。</li>
+        </ul>
+        <ul v-else class="num candidates">
+          <li v-for="dump in workbench.fuelDumpChoices" :key="dump.id">
+            {{ hexLabel(dump.hex) }}（{{ dump.sp }} SP / {{ dump.t }} T）
+            <template v-if="dump.carriedBy !== undefined">
+              ｜装载在 {{ carrierName(dump.carriedBy) }} 上（12.1b）
+            </template>
+          </li>
+        </ul>
 
         <div class="row">
           <BaseButton
@@ -168,6 +144,13 @@ const paid = computed(() => subject.value?.fuelled ?? false)
 .muted {
   color: var(--color-muted);
   font-size: var(--text-sm);
+  margin: var(--space-1) 0;
+}
+
+.candidates {
+  max-height: 96px;
+  overflow-y: auto;
+  padding-left: var(--space-4);
   margin: var(--space-1) 0;
 }
 

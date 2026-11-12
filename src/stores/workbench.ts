@@ -14609,6 +14609,114 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const constructionError = ref<{ rule: string; reason: string } | null>(null)
 
   /**
+   * 15.3 / 15.2A / 16.0b：建造付款站候选（12.3a 直拖 / 12.3b HQ 投递）
+   *
+   * 用户 2026-11-12：与炮击一致——**只把施工者真正拖得到的站铺到地图上**。
+   * 受益单位取施工者本身（16.0b 的 `inPlace` 途径取目标格内的施工小队）。
+   */
+  const constructionPayDumps = computed<SpDump[]>(() => {
+    const engineer = pickedEngineer()
+    if (engineer === null) return []
+    return deliverableDumpsFor(activeSide.value, [engineer])
+  })
+
+  /** 建造付款的「点地图选站」模式（面板按钮开启；选中一站后自动退出） */
+  const constructionPayPick = ref(false)
+
+  /** 开启/取消建造付款的地图选站模式（无施工者或无候选 ⇒ 拒并给话术） */
+  function toggleConstructionPayPick(): boolean {
+    if (constructionPayPick.value) {
+      constructionPayPick.value = false
+      return true
+    }
+    const engineer = pickedEngineer()
+    if (engineer === null) {
+      pushLog('warning', '先指定施工的工程单位，再选付款补给站（13.8d）', '13.8d')
+      return false
+    }
+    if (constructionPayDumps.value.length === 0) {
+      pushLog('warning', '该施工者此刻没有可达的己方补给站（12.3a/12.3b）', '12.3a')
+      return false
+    }
+    constructionPayPick.value = true
+    return true
+  }
+
+  /** 地图点到某一座候选站 ⇒ 写入付款站并退出选站模式 */
+  function pickConstructionPayDumpNow(dumpId: string): boolean {
+    const dump = constructionPayDumps.value.find((item) => item.id === dumpId)
+    if (dump === undefined) return false
+    constructionInputs.value = { ...constructionInputs.value, payDumpId: dump.id }
+    constructionPayPick.value = false
+    pushLog(
+      'info',
+      `修建付款站：${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T，12.1b）`,
+      '12.1b',
+    )
+    return true
+  }
+
+  /** 16.0b/c：环形工事的付款站候选（施工小队或 13.8d 工程兵可达的来源） */
+  const hedgehogPayDumps = computed<SpDump[]>(() => {
+    const beneficiaries: ConsoleUnit[] = []
+    if (hedgehogUsesEngineerRoute.value) {
+      const engineer = pickedHedgehogEngineer()
+      if (engineer !== null) beneficiaries.push(engineer)
+    } else {
+      for (const id of hedgehogInputs.value.workerIds) {
+        const unit = units.value.find((item) => item.instanceId === id)
+        if (unit !== undefined) beneficiaries.push(unit)
+      }
+    }
+    if (beneficiaries.length === 0) return []
+    return deliverableDumpsFor(activeSide.value, beneficiaries)
+  })
+
+  /** 工事付款的「点地图选站」模式 */
+  const hedgehogPayPick = ref(false)
+
+  /** 开启/取消工事付款的地图选站模式 */
+  function toggleHedgehogPayPick(): boolean {
+    if (hedgehogPayPick.value) {
+      hedgehogPayPick.value = false
+      return true
+    }
+    const executorMissing = hedgehogUsesEngineerRoute.value
+      ? pickedHedgehogEngineer() === null
+      : hedgehogInputs.value.workerIds.length === 0
+    if (executorMissing) {
+      pushLog(
+        'warning',
+        hedgehogUsesEngineerRoute.value
+          ? '先指定 13.8d 的施工工程兵，再选付款补给站（16.0b）'
+          : '先在目标格勾选施工小队，再选付款补给站（16.0b）',
+        '16.0b',
+      )
+      return false
+    }
+    if (hedgehogPayDumps.value.length === 0) {
+      pushLog('warning', '施工者此刻没有可达的己方补给站（12.3a/12.3b）', '12.3a')
+      return false
+    }
+    hedgehogPayPick.value = true
+    return true
+  }
+
+  /** 地图点到某一座候选站 ⇒ 写入工事付款站并退出选站模式 */
+  function pickHedgehogPayDumpNow(dumpId: string): boolean {
+    const dump = hedgehogPayDumps.value.find((item) => item.id === dumpId)
+    if (dump === undefined) return false
+    hedgehogInputs.value = { ...hedgehogInputs.value, payDumpId: dump.id }
+    hedgehogPayPick.value = false
+    pushLog(
+      'info',
+      `工事付款站：${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T，12.1b）`,
+      '12.1b',
+    )
+    return true
+  }
+
+  /**
    * 15.3：**空军基地**每格每回合的已提升级数（15.3「等级每回合只能提升一级」）
    *
    * 与 16.0b/c 的 `hedgehogTurnLedger` 同构：按格按回合记账，换回合即清零。
@@ -25871,9 +25979,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     printedHedgehogPositions,
     buildHedgehogNow,
     reduceHedgehogNow,
+    hedgehogPayDumps,
+    hedgehogPayPick,
+    toggleHedgehogPayPick,
+    pickHedgehogPayDumpNow,
     // 15.3 / 15.2A：空军基地与简易机场的修建、升格（13.8d 施工前提一并接上）
     constructionInputs,
     constructionError,
+    constructionPayDumps,
+    constructionPayPick,
+    toggleConstructionPayPick,
+    pickConstructionPayDumpNow,
     constructionPhaseLedger,
     airBaseTurnLedger,
     // 14.9f / 15.0b-C：本环节各格已空运卸载的 T（界面据此显示还剩多少额度）

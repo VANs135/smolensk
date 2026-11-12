@@ -438,6 +438,60 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
+   * 12.3a/b：把一组来源账本压成**按格合并**的提示（同格多枚补给站合并显示 SP/T 之和）
+   *
+   * 建造 / 工事 / 加油共用这一份形状；点击仍按格找账本条目（同格取第一座，与整备一致）。
+   */
+  function paySourceHints(
+    dumps: readonly { id: string; hex: HexRef; sp: number; t: number }[],
+    selectedId: string | null,
+  ): readonly SupplyPickHint[] {
+    const byHex = new Map<string, { hex: HexRef; sp: number; t: number; selected: boolean }>()
+    for (const dump of dumps) {
+      const key = `${dump.hex.col}.${dump.hex.row}`
+      const current = byHex.get(key)
+      if (current === undefined) {
+        byHex.set(key, {
+          hex: { ...dump.hex },
+          sp: dump.sp,
+          t: dump.t,
+          selected: dump.id === selectedId,
+        })
+      } else {
+        current.sp += dump.sp
+        current.t += dump.t
+        current.selected = current.selected || dump.id === selectedId
+      }
+    }
+    return [...byHex.values()].map((item) => ({
+      hex: item.hex,
+      label: `${item.sp} SP + ${item.t} T`,
+      selected: item.selected,
+    }))
+  }
+
+  /** 15.3 / 15.2A：建造付款站候选（只在「点地图选站」模式铺出） */
+  const constructionPayHints = computed<readonly SupplyPickHint[]>(() =>
+    workbench.constructionPayPick
+      ? paySourceHints(workbench.constructionPayDumps, workbench.constructionInputs.payDumpId)
+      : [],
+  )
+
+  /** 16.0b：工事付款站候选（只在「点地图选站」模式铺出） */
+  const hedgehogPayHints = computed<readonly SupplyPickHint[]>(() =>
+    workbench.hedgehogPayPick
+      ? paySourceHints(workbench.hedgehogPayDumps, workbench.hedgehogInputs.payDumpId)
+      : [],
+  )
+
+  /** 12.5c：加油付款站候选（加油窗开着且尚未付款时铺出） */
+  const fuelPayHints = computed<readonly SupplyPickHint[]>(() => {
+    const subject = workbench.units.find((unit) => unit.instanceId === workbench.fuelSubjectId)
+    if (subject === undefined || subject.fuelled) return []
+    return paySourceHints(workbench.fuelDumpChoices, workbench.fuelDumpId)
+  })
+
+  /**
    * 15.1 整备付款候选（金黄方框）
    *
    * 只在「正在整备某个基地」时铺出：数据来自 `workbench.refitPayDumps`（引擎已按 12.3 判过
@@ -1178,6 +1232,9 @@ export const useMapViewStore = defineStore('mapView', () => {
       ...workbench.variableExitPickHexes,
       ...opsBarrageUnitHexes.value,
       ...opsBarrageSupplyHexes.value,
+      ...constructionPayHints.value.map((hint) => hint.hex),
+      ...hedgehogPayHints.value.map((hint) => hint.hex),
+      ...fuelPayHints.value.map((hint) => hint.hex),
     ]) {
       const key = `${hex.col}.${hex.row}`
       if (seen.has(key)) continue
@@ -1187,14 +1244,24 @@ export const useMapViewStore = defineStore('mapView', () => {
     return out
   })
 
-  /** 炮击第 2 步：格上显示的 SP 数（用户口径：补给站格上要看得见有多少 SP） */
+  /** 炮击第 2 步 / 建造 / 工事 / 加油：格上显示的 SP 数（用户口径：补给站格上要看得见有多少 SP） */
   const mapHexLabels = computed<readonly { hex: HexRef; text: string }[]>(() => {
     const flow = opsFlow.value
-    if (flow === null || flow.kind !== 'barrage' || flow.step !== 2) return []
-    return workbench.barrageSupplyMapDumps.map((item) => ({
-      hex: item.dump.hex,
-      text: item.label,
-    }))
+    const labels: { hex: HexRef; text: string }[] =
+      flow !== null && flow.kind === 'barrage' && flow.step === 2
+        ? workbench.barrageSupplyMapDumps.map((item) => ({
+            hex: item.dump.hex,
+            text: item.label,
+          }))
+        : []
+    for (const hint of [
+      ...constructionPayHints.value,
+      ...hedgehogPayHints.value,
+      ...fuelPayHints.value,
+    ]) {
+      labels.push({ hex: hint.hex, text: hint.label })
+    }
+    return labels
   })
 
   watch(
@@ -3241,6 +3308,9 @@ export const useMapViewStore = defineStore('mapView', () => {
       setup.truckPickActive ||
       workbench.refitBase !== null ||
       workbench.hexPickView !== null ||
+      workbench.constructionPayPick ||
+      workbench.hedgehogPayPick ||
+      workbench.fuelSubjectId !== null ||
       workbench.optionDraftMode !== 'idle'
     /*
      * ⑦ 12.3 选源：点高亮的来源格即选定（再点同一格取消）。
@@ -3260,6 +3330,38 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (pickOpsBarrageSupplyAt(hex)) {
       closePopup()
       return
+    }
+    /*
+     * 15.3 / 15.2A / 16.0b / 12.5c：建造、工事、加油的付款站地图点选
+     *
+     * 与炮击/整备同一套：只在这一步开着时接管点击；未点中候选格则照常往下走（不吞点击）。
+     */
+    if (workbench.constructionPayPick) {
+      const payDump = workbench.constructionPayDumps.find(
+        (item) => item.hex.col === hex.col && item.hex.row === hex.row,
+      )
+      if (payDump !== undefined && workbench.pickConstructionPayDumpNow(payDump.id)) {
+        closePopup()
+        return
+      }
+    }
+    if (workbench.hedgehogPayPick) {
+      const payDump = workbench.hedgehogPayDumps.find(
+        (item) => item.hex.col === hex.col && item.hex.row === hex.row,
+      )
+      if (payDump !== undefined && workbench.pickHedgehogPayDumpNow(payDump.id)) {
+        closePopup()
+        return
+      }
+    }
+    if (workbench.fuelSubjectId !== null) {
+      const payDump = workbench.fuelDumpChoices.find(
+        (item) => item.hex.col === hex.col && item.hex.row === hex.row,
+      )
+      if (payDump !== undefined && workbench.pickFuelDump(payDump.id)) {
+        closePopup()
+        return
+      }
     }
     if (!modalPickLive && world !== undefined && handleStackClick(hex, world, scale, anchor)) return
     // W7 C14：初设放置中 ⇒ 点地图即落位（最高优先级；非候选格由 store 记拒绝，不开常规小窗）

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
 import UiField from '@/components/UiField.vue'
@@ -55,6 +55,19 @@ function toggleHedgehogWorker(unitId: string): void {
 }
 
 const security = computed(() => workbench.securityNeeds)
+
+/** 12.1b：已选的工事付款站（地图点选写入） */
+const hedgehogPayLabel = computed(() => {
+  const id = workbench.hedgehogInputs.payDumpId
+  if (id === null) return '（未选）'
+  const dump = workbench.spDumps.find((item) => item.id === id)
+  return dump === undefined ? '（已失效）' : `${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T）`
+})
+
+/** 面板关掉就退出地图选站模式，避免高亮残留、误吞地图点击 */
+onBeforeUnmount(() => {
+  workbench.hedgehogPayPick = false
+})
 
 /** 2.1a：已关闭的补给源（当日） */
 const closedSources = computed(() =>
@@ -546,16 +559,26 @@ const pins = computed(() => workbench.exclusiveSectionPins)
             点地图选格（修建）
           </BaseButton>
         </label>
-        <label class="field">
+        <div class="field">
           付款补给站（修建用；缩减免费）
-          <select v-model="workbench.hedgehogInputs.payDumpId" class="select">
-            <option :value="null">（不指定）</option>
-            <option v-for="dump in workbench.spDumpsOfSide" :key="dump.id" :value="dump.id">
-              {{ hexLabel(dump.hex) }}（{{ dump.sp }} SP + {{ dump.t }} T）
-            </option>
-          </select>
-        </label>
-        <BaseButton variant="primary" size="sm" @click="workbench.buildHedgehogNow()">
+          <div class="row">
+            <BaseButton variant="secondary" size="sm" @click="workbench.toggleHedgehogPayPick()">
+              {{ workbench.hedgehogPayPick ? '取消地图选站' : '在地图上选付款补给站' }}
+            </BaseButton>
+            <span class="num">
+              {{ hedgehogPayLabel }}
+              <template v-if="workbench.hedgehogPayPick">
+                （点地图上高亮的补给站；12.3a/12.3b）
+              </template>
+            </span>
+          </div>
+        </div>
+        <BaseButton
+          variant="primary"
+          size="sm"
+          :disabled="workbench.hedgehogInputs.payDumpId === null"
+          @click="workbench.buildHedgehogNow()"
+        >
           修建/改进 +1 级（16.0b）
         </BaseButton>
         <BaseButton variant="secondary" size="sm" @click="workbench.reduceHedgehogNow()">

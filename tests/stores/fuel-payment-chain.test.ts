@@ -333,6 +333,7 @@ describe('B18：复核出的另外两条"只在验证页有入口"的动作（�
 describe('B18b：加油窗的接线（源码守卫；用户 2026-11-10 入口改右键）', () => {
   const panel = readFileSync('src/components/fuel/FuelPanel.vue', 'utf8')
   const movePanel = readFileSync('src/components/move/MovePanel.vue', 'utf8')
+  const mapView = readFileSync('src/stores/map-view.ts', 'utf8')
 
   it('会话里的加油段用 store 的事实与动作（面板不自己判耗油）', () => {
     expect(panel).toContain('workbench.fuelSubjectId')
@@ -345,7 +346,9 @@ describe('B18b：加油窗的接线（源码守卫；用户 2026-11-10 入口改
     expect(panel).toContain('workbench.fuelMethod')
     // ★ B32 步骤 4：来源的"共用性"不再由玩家勾（13.7a 要求按盘面算出同源组）
     expect(panel).not.toContain('fuelCommonSource')
-    expect(panel).toContain('workbench.pickFuelDump($event)')
+    // 用户 2026-11-12：来源改为**地图点选**（面板只显示候选与已选，不再摆选择器）
+    expect(panel).toContain('点地图上高亮的补给站')
+    expect(mapView).toContain('workbench.pickFuelDump(payDump.id)')
     // 付款区已从移动准备窗移出（加油唯一入口＝右键）
     expect(movePanel).not.toContain('workbench.payFuel()')
   })

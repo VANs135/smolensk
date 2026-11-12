@@ -203,10 +203,32 @@ describe('B14a：参战机的可选性（三条闸逐机给出原因）', () => 
   it('14.2f：任务已过移动步 ⇒ 不能再加机（窗口闸）', () => {
     const store = newStore()
     store.setAirActive(true)
-    // 14.2e：本用例走 C 移动环节，任务类型取移动环节的战机扫荡
+    // 14.2e：本用例走 C 移动环节，任务类型取战机扫荡（14.6：目标须有敌方激活飞机）
     store.setAirMissionKind('fighter_sweep')
     const { planes } = setupBaseAndPlanes(store, 2)
-    expect(store.setAirTargetFromText(label(CORE_HEX))).toBe(true)
+    const enemyHex = neighbor(CORE_HEX, HEX_DIRECTIONS[0]!)
+    const enemyBaseRecord = unitChoices('soviet').find(
+      (record) => record.noncombatKind === 'air_base',
+    )
+    if (enemyBaseRecord === undefined) throw new Error('苏军单位库中没有空军基地')
+    store.units.push(
+      toConsoleUnit({
+        record: enemyBaseRecord,
+        instanceId: 'base-enemy',
+        hex: enemyHex,
+        side: 'soviet',
+      }),
+    )
+    store.airUnits.push(
+      toConsoleAirUnit({
+        aircraft: fighterRecord('soviet'),
+        instanceId: 'air-enemy',
+        hex: enemyHex,
+        side: 'soviet',
+        airStatus: 'active',
+      }),
+    )
+    expect(store.setAirTargetFromText(label(enemyHex))).toBe(true)
     store.toggleAirMissionUnit('air-1')
     expect(store.beginAirMissionNow()).toBe(true)
     // 14.2f：此时已走到 C 步（空战）⇒ 加机窗口关闭
@@ -288,22 +310,24 @@ describe('B14a：15.4「被指定单位」的指定真的接线', () => {
 describe('B14a：空军面板的替换（源码守卫）', () => {
   const panel = readFileSync('src/components/air/AirPanel.vue', 'utf8')
 
-  it('四处「选算子」都改走 `CounterPicker`，对应的旧下拉已删（不留两套控件）', () => {
-    expect(panel.match(/<CounterPicker/g)?.length ?? 0).toBeGreaterThanOrEqual(5)
+  it('四处「选算子」都改走 `CounterPicker`，付款站改地图点选（不留两套控件）', () => {
+    expect(panel.match(/<CounterPicker/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
     expect(panel).not.toContain('<select v-model="workbench.airPlacement.aircraftId"')
     expect(panel).not.toContain('<select v-model="workbench.airInputs.interceptorId"')
     expect(panel).not.toContain('<select v-model="workbench.constructionInputs.engineerId"')
     expect(panel).not.toContain('<select v-model="workbench.constructionInputs.payDumpId"')
+    // 用户 2026-11-12：付款站不再在面板选，改为地图高亮 + 点选
+    expect(panel).not.toContain(':items="dumpItems"')
+    expect(panel).toContain('workbench.toggleConstructionPayPick()')
     // 参战机/被指定单位：点击直连 store 的动作（不是只改本地显示）
     expect(panel).toContain('@pick="workbench.toggleAirMissionUnit($event)"')
     expect(panel).toContain('@pick="workbench.toggleAirReductionUnit($event)"')
   })
 
-  it('悬停同步地图高亮：三类对象都走既有的 `setHoverHex`（不另立通道）', () => {
+  it('悬停同步地图高亮：其余三类对象都走既有的 `setHoverHex`（不另立通道）', () => {
     expect(panel).toContain('workbench.setHoverHex')
     expect(panel).toContain('@hover="hoverAir"')
     expect(panel).toContain('@hover="hoverUnit"')
-    expect(panel).toContain('@hover="hoverDump"')
   })
 
   it('★ 14.3e-B：逐轮点名在面板上（攻方非括号机 / 守方任选），可选性仍由 store 给', () => {

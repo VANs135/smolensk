@@ -29,7 +29,11 @@ describe('#10 移动准备窗不再承载「支付燃料」（入口改为右键
   it('★ 加油窗存在且只做这一法：受注单位 + 来源 + 付款 + 确认', () => {
     const text = fuelPanel()
     expect(text).toContain('workbench.payFuel()')
-    expect(text).toContain('workbench.pickFuelDump')
+    // 用户 2026-11-12：来源改为地图点选，面板只列候选并由 map-view 写 fuelDumpId
+    expect(text).toContain('workbench.fuelDumpChoices')
+    expect(readFileSync('src/stores/map-view.ts', 'utf8')).toContain(
+      'workbench.pickFuelDump(payDump.id)',
+    )
     expect(text).toContain('workbench.fuelSubjectId')
     expect(text).toContain('mapView.cancelSession()')
   })
