@@ -198,11 +198,23 @@ export function engineerCapableHqAt(
  *      ∧ 不命中三种阻断（敌方 ZOC / 敌方占据 / 同格卸货城镇被敌占）——13.3c①②③ ＋ 13.3f。
  *      ★ 铁路没有归属/控制/占领：不引入 `isControlledBy`，阻断③即「该城镇格有敌方单位」。
  */
-export function railSupplyPath(facts: RailSupplyFacts, side: Side): RailSupplyPath {
+export function railSupplyPath(
+  facts: RailSupplyFacts,
+  side: Side,
+  options?: {
+    /**
+     * U17：**装车/运货**用的卸货格
+     *
+     * 同 13.3c 过滤、BFS 只走铁路边，**不接延补队**（延补队是补给线接续，不是货物可卸货的铁路）。
+     * 只给 2.1/3.1 的免费铁运消费方使用；补给追溯仍用缺省的 `facts.extenderLinks`。
+     */
+    cargoOnly?: boolean
+  },
+): RailSupplyPath {
   const reached = new Set<string>()
   const railReachableHexes: HexRef[] = []
   const queue: HexRef[] = []
-  const extenders = facts.extenderLinks(side)
+  const extenders = options?.cargoOnly === true ? [] : facts.extenderLinks(side)
   const usedExtenderKeys = new Set<string>()
 
   const push = (hex: HexRef): void => {

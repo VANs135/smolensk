@@ -3730,6 +3730,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }))
   const railSupply = computed(() => railSupplyBySide.value[activeSide.value])
 
+  /**
+   * U17（用户 2026-11-13 批准）：2.1/3.1 **免费铁运**专用的卸货格
+   *
+   * 与 `railSupply` 的区别只有一条：BFS 只走铁路边、**不接延补队**（延补队接续的是补给线，
+   * 不是「货物可在该格卸车」）。只替换免费铁运这一个消费方；追溯补给仍用 `railSupply`。
+   */
+  const cargoDetrainableHexesBySide = computed(() => ({
+    axis: railSupplyPath(railSupplyFacts.value, 'axis', { cargoOnly: true }).detrainableHexes,
+    soviet: railSupplyPath(railSupplyFacts.value, 'soviet', { cargoOnly: true }).detrainableHexes,
+  }))
+  const cargoDetrainableHexes = computed(() => cargoDetrainableHexesBySide.value[activeSide.value])
+
   /** C9：火车卸货格（13.3c）——已连接的铁路格，可作 12.6a① 补给源 */
   const detrainableHexes = computed(() => railSupply.value.detrainableHexes)
 
@@ -19591,9 +19603,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       .map((hex) => ({ hex: { col: hex.col, row: hex.row }, name: hex.city?.name ?? '' }))
   })
 
-  /** 运行期的免费铁运候选＝静态城市格 ∩ 13.3c 的可卸货格（判据同一处：`railSupply`） */
+  /** 运行期的免费铁运候选＝静态城市格 ∩ 13.3c 可卸货格（U17：不接延补队，用 cargo 版） */
   const freeRailCityCandidates = computed<FreeRailCandidate[]>(() => {
-    const detrainable = new Set(detrainableHexes.value.map((hex) => hexLabel(hex)))
+    const detrainable = new Set(cargoDetrainableHexes.value.map((hex) => hexLabel(hex)))
     return freeRailCityHexes.value.filter((item) => detrainable.has(hexLabel(item.hex)))
   })
 
@@ -19622,7 +19634,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const outcome = planFreeRailArrivals({
       sp: Math.max(0, Math.trunc(supplyArrivalSp.value)),
       candidates: freeRailCityCandidates.value,
-      detrainableHexes: detrainableHexes.value,
+      detrainableHexes: cargoDetrainableHexes.value,
       picked: freeRailPicked.value,
       // 余额的落点缺省取本剧本**本方的图边补给源格第一处**（原文只说"放图边补给源格"，不指定哪一处）
       // 2.1a：余额只能落**当日仍开放**的图边补给源格
