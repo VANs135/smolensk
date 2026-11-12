@@ -222,6 +222,29 @@ const attackerArItems = computed(() =>
 const defenderArItems = computed(() =>
   arItems(workbench.combatDefenderArChoices, workbench.combatInputs.defenderArUnitId),
 )
+
+/** 9.10/9.11c：选项损失的逐单位候选（角标＝草稿已损；可损尽的置灰，不另摆文字按钮） */
+const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
+  workbench.combatOptionLossTargets.map((target) => {
+    const taken = workbench.combatInputs.optionLossAllocation[target.id] ?? 0
+    const unit = unitOf(target.id)
+    const reason =
+      workbench.optionDraftRemaining <= 0
+        ? '选项点数已分配完'
+        : taken >= target.steps
+          ? '已无军力可损'
+          : null
+    return {
+      id: target.id,
+      imageUrl: unit === null ? null : counterImageUrlOf(unit),
+      name: `${target.name}（军力 ${target.steps}，草稿已损 ${taken}）`,
+      selected: taken > 0,
+      disabledReason: reason,
+      hex: target.hex,
+      ...(taken > 0 ? { badge: `−${taken}` } : {}),
+    }
+  }),
+)
 </script>
 
 <template>
@@ -539,119 +562,48 @@ const defenderArItems = computed(() =>
         </div>
       </SessionStep>
 
-      <!-- 第 8 步（b）：选项（9.10） -->
+      <!-- 第 8 步（b）：选项（9.10）—— 一屏一决策：算子图记损失、地图点格记撤退、底部唯一出口 -->
       <SessionStep item="combat:options">
         <p class="num">
-          当前结算：
           {{
             roleName(state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender')
-          }}结算<span v-if="resolverNotation !== ''"> · {{ resolverNotation }}</span>
-        </p>
-        <p class="num">
-          选项点数 {{ workbench.combatRequirement?.options ?? 0 }}：可把「撤退格数 +
-          损失军力」任意组合
-          <RuleTip rule="9.10a">组合后必须完全满足选项点数。</RuleTip>
-        </p>
-        <div v-if="workbench.combatInputs.optionLossPoints > 0" class="muted">
-          AR 先受第一点。
-          <RuleTip rule="9.11c">
-            第一点必须由 AR 单位承受；各单位各受一点后才能有单位受第二点。全部留 0 ＝
-            按规范分配（同样合法）。
+          }}结算<span v-if="resolverNotation !== ''"> · {{ resolverNotation }}</span> · 还剩
+          {{ workbench.optionDraftRemaining }} 点
+          <RuleTip rule="9.10a / 9.11c">
+            撤退格数与损失军力可任意组合，组合后必须完全满足选项点数；未分配的点数按规范分配折成军力损失。
+            第一点必须由 AR 单位承受；各单位各受一点后才能有单位受第二点。
           </RuleTip>
-        </div>
-        <label
-          v-if="
-            state.resolution.stage === 'defenderOptions' &&
-            state.resolution.defender.optionIgnorable === true
-          "
-          class="check"
-        >
-          <input v-model="workbench.combatInputs.ignoreOptions" type="checkbox" />
-          行使 9.10c：忽略守方自己的选项
-        </label>
+        </p>
         <!--
-            ★ 条 15/16（批 F·F1）：选项点数的消耗改成「受损 / 撤退（1 格）」双按钮逐次点选。
-            点"受损"⇒ 点本堆叠单位图即受损；点"撤退"⇒ 地图高亮可撤退格、点格即撤退。
-            每次应用只进**草稿账本**（不落盘）；最后按「提交」才一次性交给引擎（planOptions）。
+            ★ 条 15/16（批 F·F1）+ 重做（§5 S6）：不再先选「受损 / 撤退」模式——
+            点本结算方算子图即受损，地图上三色格即撤退，两件事同屏；每次只进草稿，提交时一发结算。
           -->
-        <p class="num">
-          可用选项点数 <b>{{ workbench.optionDraftPoints }}</b
-          >｜草稿已用 <b>{{ workbench.optionDraftUsed }}</b
-          >｜剩余 <b>{{ workbench.optionDraftRemaining }}</b>
-        </p>
-        <!-- 9.12（C1）：选项步当场预演第 9 步落点，避免先放行、后永久灰显 -->
-        <p
-          v-for="item in workbench.combatOptionRetreatWarning"
-          :key="`retreat-warning-${item.unitId}`"
-          class="warn num"
-        >
-          <BaseTag kind="warning">9.12</BaseTag>
-          {{ item.label }}：{{
-            item.kind === 'noLanding'
-              ? '排除战斗开始时敌方格后无合法落点，确认撤退时将按 9.12 消灭'
-              : '只有必被消灭的撤退落点（9.12/9.12b/5.8a）'
-          }}
-        </p>
+        <CounterPicker
+          title="受损"
+          hint="点算子图＝记 1 点军力损失；地图三色格＝可撤退格，点格按该格距离记撤退"
+          :items="optionLossItems"
+          :size="40"
+          @pick="workbench.applyOptionDraftLoss($event)"
+          @hover="hoverUnit"
+        />
+        <!-- 9.12（C1）：选项步当场预演第 9 步落点，避免先放行、后永久灰显（长句进 ?） -->
+        <RuleTip v-if="workbench.combatOptionRetreatWarning.length > 0" rule="9.12">
+          <p
+            v-for="item in workbench.combatOptionRetreatWarning"
+            :key="`retreat-warning-${item.unitId}`"
+            class="warn num"
+          >
+            {{ item.label }}：{{
+              item.kind === 'noLanding'
+                ? '排除战斗开始时敌方格后无合法落点，确认撤退时将按 9.12 消灭'
+                : '只有必被消灭的撤退落点（9.12/9.12b/5.8a）'
+            }}
+          </p>
+        </RuleTip>
         <div class="row">
+          <!-- 条 16（批 F·F1）：攻方全灭 ⇒ 守方「结束战斗」一键 -->
           <BaseButton
-            :variant="workbench.optionDraftMode === 'loss' ? 'primary' : 'secondary'"
-            size="sm"
-            :disabled="workbench.optionDraftRemaining <= 0"
-            @click="workbench.setOptionDraftMode('loss')"
-          >
-            受损（点单位图）
-          </BaseButton>
-          <BaseButton
-            :variant="workbench.optionDraftMode === 'retreat' ? 'primary' : 'secondary'"
-            size="sm"
-            :disabled="workbench.optionDraftRemaining <= 0"
-            @click="workbench.setOptionDraftMode('retreat')"
-          >
-            撤退（1 格）
-          </BaseButton>
-          <BaseButton
-            variant="ghost"
-            size="sm"
-            :disabled="workbench.optionDraftEntries.length === 0"
-            @click="workbench.undoOptionDraftLast()"
-          >
-            撤销上一次
-          </BaseButton>
-        </div>
-        <p v-if="workbench.optionDraftMode === 'loss'" class="muted num">
-          点**地图上本堆叠的单位图**记 1 点军力损失；也可直接点下面各单位。
-        </p>
-        <p v-else class="muted num">
-          地图上已按三色铺出本堆叠可撤退格；点格即按该格距离记撤退草稿。
-        </p>
-        <!-- 「受损」模式：面板内也给出各单位（不看地图也能点） -->
-        <div v-if="workbench.optionDraftMode === 'loss'" class="row">
-          <BaseButton
-            v-for="unit in workbench.combatOptionLossTargets"
-            :key="unit.id"
-            variant="secondary"
-            size="sm"
-            :disabled="
-              workbench.optionDraftRemaining <= 0 ||
-              (workbench.combatInputs.optionLossAllocation[unit.id] ?? 0) >= unit.steps
-            "
-            @click="workbench.applyOptionDraftLoss(unit.id)"
-          >
-            {{ unit.name }}（{{ unit.steps }} 步，已损
-            {{ workbench.combatInputs.optionLossAllocation[unit.id] ?? 0 }}）
-          </BaseButton>
-        </div>
-        <!-- 草稿账本（流水；最新在末尾） -->
-        <div v-if="workbench.optionDraftEntries.length > 0" class="row">
-          <span class="muted num">草稿账本：</span>
-          <BaseTag v-for="entry in workbench.optionDraftEntries" :key="entry.index" kind="neutral">
-            {{ entry.label }}
-          </BaseTag>
-        </div>
-        <!-- 条 16（批 F·F1）：攻方全灭 ⇒ 守方「不选 / 结束战斗」一键 -->
-        <div v-if="workbench.attackerWipedNow" class="row">
-          <span class="warn num">攻方已全灭：</span>
-          <BaseButton
+            v-if="workbench.attackerWipedNow"
             variant="primary"
             size="sm"
             title="9.10c 例 B"
@@ -659,16 +611,33 @@ const defenderArItems = computed(() =>
           >
             结束战斗
           </BaseButton>
-        </div>
-        <div class="row">
+          <!-- 9.10c 唯一出口：可用且尚未分配点数时替掉「提交选项」（两者互斥） -->
           <BaseButton
+            v-else-if="workbench.optionIgnoreAvailableNow && workbench.optionDraftUsed === 0"
             variant="primary"
             size="sm"
-            :disabled="workbench.optionDraftRemaining > 0 && !workbench.combatInputs.ignoreOptions"
+            title="9.10c"
+            @click="workbench.confirmCombatIgnoreOptions()"
+          >
+            行使 9.10c：忽略选项
+          </BaseButton>
+          <!-- 剩余点数不要求点满：提交时按规范分配折成军力损失（9.10a / 9.11c） -->
+          <BaseButton
+            v-else
+            variant="primary"
+            size="sm"
             title="9.10"
             @click="workbench.confirmCombatOptions()"
           >
             提交选项
+          </BaseButton>
+          <BaseButton
+            v-if="workbench.optionDraftEntries.length > 0"
+            variant="ghost"
+            size="sm"
+            @click="workbench.undoOptionDraftLast()"
+          >
+            撤销上一次
           </BaseButton>
         </div>
       </SessionStep>

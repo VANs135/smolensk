@@ -11104,6 +11104,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (state === null) return false
     const side = currentResolver(state)
     const inputs = combatInputs.value
+    /*
+     * 一次折损（W2）：剩余未分配的点数按 9.10a 折成军力损失（引擎规范分配），
+     * 不再要求玩家逐个点单位凑满 —— 显式点过的逐单位分配随之让位于规范分配
+     * （9.11a 的授权仍在：玩家先点的那几下决定 AR 先受，折损只是把余数补齐）。
+     */
+    if (!inputs.ignoreOptions && optionDraftRemaining.value > 0) {
+      combatInputs.value.optionLossPoints = Math.max(
+        0,
+        optionDraftPoints.value - inputs.optionRetreatHexes,
+      )
+      combatInputs.value.optionLossAllocation = {}
+    }
     // 专规 2.3b：NKVD 边防团担任守方行动值单位时，守方全部选项**必须**吃成军力损失
     const nkvdOverride =
       side === 'defender' && state.dice !== undefined
@@ -11211,8 +11223,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ───────────────────────────────────────────────────────────────────────────
    */
 
-  /** 草稿应用模式：idle＝待选 / loss＝点单位图受损 / retreat＝点可撤退格撤退 */
-  const optionDraftMode = ref<'idle' | 'loss' | 'retreat'>('idle')
   /** 草稿流水（逐次应用；撤销按此回退） */
   const optionDraftLog = ref<{ kind: 'loss' | 'retreat'; unitId?: string; amount: number }[]>([])
 
@@ -11246,11 +11256,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           : `撤退 ${entry.amount} 格`,
     })),
   )
-
-  /** 切换应用模式（再点一次同一模式＝收起） */
-  function setOptionDraftMode(mode: 'idle' | 'loss' | 'retreat'): void {
-    optionDraftMode.value = optionDraftMode.value === mode ? 'idle' : mode
-  }
 
   /** 草稿层容量护栏：该单位当前军力（9.11d 的承受上限由提交时引擎严格校验） */
   function optionLossRoomOf(unitId: string): number {
@@ -11327,12 +11332,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 收起草稿（提交后 / 离开选项步 / 清理战斗时调用） */
   function resetOptionDraft(): void {
-    optionDraftMode.value = 'idle'
     optionDraftLog.value = []
   }
 
   /**
-   * 条 15/16（批 F·F1）：「撤退」草稿模式下，地图上铺「本堆叠可撤退格」预览。
+   * 条 15/16（批 F·F1）：选项步地图上铺「本堆叠可撤退格」预览。
    *
    * 取当前结算方各参战单位在 **1..剩余点数** 各距离上撤退落点（`planRetreatDestinations`，
    * 9.12）的并集；每格记**最小直线距离** ⇒ 玩家点格即按该距离消耗点数。
@@ -11345,7 +11349,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     distanceOf: Record<string, number>
   } | null>(() => {
     const state = combatState.value
-    if (state === null || state.step !== 'options' || optionDraftMode.value !== 'retreat') {
+    if (state === null || state.step !== 'options') {
       return null
     }
     const side = currentResolver(state)
@@ -11406,6 +11410,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (state === null || state.resolution.stage !== 'defenderOptions') return false
     return combatAttackerViews.value.every((view) => view.steps <= 0)
   })
+
+  /** 9.10c「忽略守方自己的选项」是否可用（专规 2.3b 的 NKVD 强制损失场次禁用） */
+  const optionIgnoreAvailableNow = computed(() => {
+    const state = combatState.value
+    if (state === null || state.resolution.stage !== 'defenderOptions') return false
+    if (state.resolution.defender.optionIgnorable !== true) return false
+    return !combatNkvdForcedLosses.value
+  })
+
+  /** 9.10c 唯一出口：行使忽略权并当场结算（面板只放这一处，不再另设勾选框） */
+  function confirmCombatIgnoreOptions(): boolean {
+    if (!optionIgnoreAvailableNow.value) return false
+    combatInputs.value.ignoreOptions = true
+    if (!confirmCombatOptions()) {
+      combatInputs.value.ignoreOptions = false
+      return false
+    }
+    return true
+  }
 
   /**
    * 条 16（批 F·F1）：「结束战斗」一键（仅攻方全灭的守方选项页可用）。
@@ -26254,7 +26277,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     combatResolver,
     combatRequirement,
     combatOptionLossTargets,
-    optionDraftMode,
     optionDraftPoints,
     optionDraftUsed,
     optionDraftRemaining,
@@ -26262,7 +26284,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     optionDraftRetreatPreview,
     combatOptionRetreatWarning,
     attackerWipedNow,
-    setOptionDraftMode,
+    optionIgnoreAvailableNow,
+    confirmCombatIgnoreOptions,
     applyOptionDraftLoss,
     applyOptionDraftRetreat,
     applyOptionDraftRetreatAt,

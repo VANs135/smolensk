@@ -19,12 +19,13 @@ import {
 } from '@/stores'
 
 /**
- * 批 F·F1（条 15/16）：选项战果页「草稿账本」＋「受损 / 撤退（1 格）」双按钮
+ * 批 F·F1（条 15/16）+ 战斗 UI 重做 §5 S6：选项页「草稿账本」与同屏受损 / 撤退
  *
  * 用户口径：
- *   ① 选项点数的消耗改成逐次点选——点"受损"再点单位图即受损；点"撤退"再点可撤退格即撤退；
- *   ② 每次应用只进**草稿账本**（不落盘），最后「提交」才一次性交给引擎（`planOptions` 不改）；
- *   ③ 攻方全灭时守方给「不选 / 结束战斗」一键（9.10c 例 B）。
+ *   ① 选项点数逐次点选——点算子图即受损；点地图上可撤退格即撤退（不再先选模式）；
+ *   ② 每次应用只进**草稿**（不落盘），最后「提交」才一次性交给引擎（`planOptions` 不改）；
+ *   ③ 未点满的剩余点数在提交时按规范分配折成军力损失（9.10a / 9.11c）；
+ *   ④ 攻方全灭时守方给「结束战斗」一键（9.10c 例 B）。
  *
  * 夹具沿用 `option-loss-allocation.test.ts` 的扫种子建场（守方三枚、选项 ≥2），
  * 骰面由种子驱动 ⇒ 用"扫种子"找"守方选项 ≥2"的骰序（找不到即抛错，不静默跳过）。
@@ -231,12 +232,12 @@ beforeEach(() => {
   setActivePinia(createPinia())
 })
 
-describe('批 F·F1（条 15/16）：选项页草稿账本与「受损 / 撤退（1 格）」双按钮', () => {
+describe('批 F·F1（条 15/16）：选项页逐次点选只进草稿，提交时一次性结算', () => {
   /*
    * ★ 超时：扫种子建现场（每个种子都建一次 store）——与 option-loss-allocation.test.ts 同口径
    *   显式给足超时（判据与断言本身不变）。
    */
-  it('双按钮逐次应用只进草稿账本（不落盘）；提交后引擎一次性结算', () => {
+  it('逐次点选不落盘；未点满的剩余点数提交时按规范分配折成损失', () => {
     const store = scanSeed(1, 400)
     const points = store.optionDraftPoints
     expect(points).toBeGreaterThanOrEqual(2)
@@ -256,16 +257,17 @@ describe('批 F·F1（条 15/16）：选项页草稿账本与「受损 / 撤退�
       expect(store.applyOptionDraftRetreat(1)).toBe(false)
     }
 
-    // ③ 提交 ⇒ planOptions 一发结算：d1（AR 单位）先受第一点、均匀展开（9.11c）
+    // ③ 提交 ⇒ planOptions 一发结算；剩余点数按规范分配折成军力损失（9.11c：AR 先受、均匀展开）
     expect(store.confirmCombatOptions()).toBe(true)
     const delta = (id: string): number =>
       (stepsBefore.get(id) ?? 0) - (store.units.find((unit) => unit.instanceId === id)?.steps ?? 0)
-    expect(delta('d1'), 'AR 单位先受第一点（9.11c）').toBe(1)
-    expect(delta('d2')).toBe(1)
-    expect(delta('d3')).toBe(0)
-    // ④ 提交后草稿收起（流水清空、模式回 idle）
+    expect(delta('d1') + delta('d2') + delta('d3')).toBe(points)
+    expect(delta('d1'), 'AR 单位先受第一点（9.11c）').toBeGreaterThanOrEqual(1)
+    const option = store.combatState?.resolution.defender.option
+    expect(option?.lossPoints).toBe(points)
+    expect(option?.retreatHexes).toBe(0)
+    // ④ 提交后草稿收起（流水清空）
     expect(store.optionDraftEntries).toHaveLength(0)
-    expect(store.optionDraftMode).toBe('idle')
   }, 30_000)
 
   it('草稿可逐次撤销（流水末条按量精确回退）', () => {
@@ -303,6 +305,14 @@ describe('批 F·F1（条 15/16）：选项页草稿账本与「受损 / 撤退�
     expect(store.applyOptionDraftRetreat(1)).toBe(false)
   }, 30_000)
 
+  it('9.10c 唯一出口：攻方未撤退也未全灭时不可用（入口拒绝、不落盘）', () => {
+    const store = scanSeed(1, 400)
+    // 夹具里攻方把选项全吃成损失（未撤退）、也未被全灭 ⇒ 守方没有忽略权（9.10c）
+    expect(store.optionIgnoreAvailableNow).toBe(false)
+    expect(store.confirmCombatIgnoreOptions()).toBe(false)
+    expect(store.combatState?.step).toBe('options')
+  }, 30_000)
+
   it('★ 攻方全灭 ⇒ 守方「结束战斗」一键收尾（9.10c 例 B）', () => {
     const store = scanSeed(1, 400)
     // 攻方未全灭 ⇒ 一键不出现、调用也被拒
@@ -331,24 +341,19 @@ describe('批 F·F1：选项草稿的地图点选（map-view 分派）', () => {
     return { workbench: store, mapView: useMapViewStore() }
   }
 
-  it('「受损」模式点本堆叠单位图 ⇒ 记 1 点草稿损失（点不到合法目标不落盘）', () => {
+  it('点本堆叠单位图 ⇒ 记 1 点草稿损失（点不到合法目标不落盘）', () => {
     const { workbench, mapView } = atDefenderOptions()
-    workbench.setOptionDraftMode('loss')
     const target = workbench.combatOptionLossTargets[0]!
     mapView.onHexClick(target.hex, { x: 40, y: 40 })
     expect(workbench.combatInputs.optionLossPoints).toBe(1)
     expect(workbench.combatInputs.optionLossAllocation[target.id]).toBe(1)
-    // 撤退模式下点同一个格不生效（模式不匹配）
-    workbench.setOptionDraftMode('retreat')
-    workbench.setOptionDraftMode('loss')
+    // 点远处的空白格（既非单位堆叠、也非撤退预览格）⇒ 不落盘
     mapView.onHexClick({ col: target.hex.col + 40, row: target.hex.row + 40 }, { x: 40, y: 40 })
     expect(workbench.combatInputs.optionLossPoints).toBe(1)
   }, 30_000)
 
-  it('「撤退」模式铺出三色可撤退格预览；点高亮格按距离记草稿', () => {
+  it('选项步同屏铺出三色可撤退格；点高亮格按距离记草稿', () => {
     const { workbench } = atDefenderOptions()
-    expect(workbench.optionDraftRetreatPreview).toBeNull()
-    workbench.setOptionDraftMode('retreat')
     const preview = workbench.optionDraftRetreatPreview
     expect(preview).not.toBeNull()
     // 1 格距离的预览至少存在（起点邻格图内且可入）

@@ -631,7 +631,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       combatAttackableHexes: workbench.combatAttackableHexes,
       // W7 C16：9.12 撤退落点（只画「当前该轮到的这一方」，实现「攻方先、守方后」的渲染次序；
       // 只在 9.2 的撤退步铺出，避免在其他步误导玩家）
-      // 条 15/16（批 F·F1）：选项页「撤退」草稿模式下，同三色铺「本堆叠可撤退格」预览
+      // 条 15/16（批 F·F1）：选项页同屏铺「本堆叠可撤退格」预览
       // （点格即按该格距离记撤退草稿；正式撤退仍走 9.2 撤退步）
       retreat:
         workbench.combatState?.step === 'retreat'
@@ -642,7 +642,7 @@ export const useMapViewStore = defineStore('mapView', () => {
                 zoc: retreatSidePlan.value.zoc,
                 doomed: retreatSidePlan.value.doomed,
               }
-          : workbench.optionDraftMode === 'retreat' && workbench.optionDraftRetreatPreview !== null
+          : workbench.optionDraftRetreatPreview !== null
             ? {
                 safe: workbench.optionDraftRetreatPreview.safe,
                 zoc: workbench.optionDraftRetreatPreview.zoc,
@@ -3495,7 +3495,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       workbench.constructionPayPick ||
       workbench.hedgehogPayPick ||
       workbench.fuelSubjectId !== null ||
-      workbench.optionDraftMode !== 'idle'
+      workbench.combatState?.step === 'options'
     /*
      * ⑦ 12.3 选源：点高亮的来源格即选定（再点同一格取消）。
      * 排在堆叠展开之前——来源格常与补给站/单位同格，这一击的意思明确是「选这个来源」；
@@ -3571,20 +3571,21 @@ export const useMapViewStore = defineStore('mapView', () => {
       return
     }
     /*
-     * 条 15/16（批 F·F1）：选项页草稿的**地图点选**（模态式，优先于常规分派）。
-     *   · 「受损」模式：点本结算方参战单位 ⇒ 该单位记 1 点军力损失（草稿）
-     *   · 「撤退」模式：点高亮的可撤退格 ⇒ 按该格距离记撤退（草稿）
-     * 两种模式下点不到合法目标都只当「取消选择」——不让这一击落到别的分派上。
+     * 条 15/16（批 F·F1）：选项页的**地图点选**（模态式，优先于常规分派）。
+     * 同屏两件事，不再先选模式：
+     *   · 点本结算方参战单位 ⇒ 该单位记 1 点军力损失（草稿）
+     *   · 点高亮的可撤退格 ⇒ 按该格距离记撤退（草稿）
+     * 两处都点不中只当「取消选择」——不让这一击落到别的分派上。
      */
-    if (workbench.optionDraftMode !== 'idle') {
-      if (workbench.optionDraftMode === 'loss') {
-        const target = workbench.combatOptionLossTargets.find(
-          (item) => item.hex.col === hex.col && item.hex.row === hex.row,
-        )
-        if (target !== undefined) workbench.applyOptionDraftLoss(target.id)
-      } else {
-        workbench.applyOptionDraftRetreatAt(hex)
+    if (workbench.combatState?.step === 'options') {
+      const target = workbench.combatOptionLossTargets.find(
+        (item) => item.hex.col === hex.col && item.hex.row === hex.row,
+      )
+      if (target !== undefined && workbench.applyOptionDraftLoss(target.id)) {
+        closePopup()
+        return
       }
+      workbench.applyOptionDraftRetreatAt(hex)
       closePopup()
       return
     }
