@@ -2201,16 +2201,18 @@ export function parseConvertedRailRun(text: string): { from: HexRef; to: HexRef 
  * 输入分工（「不得无中生有」）：
  *   - **sources**（12.6a①）：边缘铁路格 / 专规补给源格 —— 来自专规与剧本，由玩家声明；
  *   - **extenders**（12.7）：摆上来的延补队算子（距离取印值 MA，12.7b）；
- *   - **controlByHex**（13.3h）：格的控制方 —— 操作台无历史控制记录，故由调用方给出
- *     （缺省返回 null ＝各方都不控制 ⇒ 该格不能作火车卸货格，宁可少给）；
+ *   - **enemyOccupies**（阻断②）：该格是否有敌方单位 —— 铁路没有归属/控制/占领，
+ *     故不再有 `controlByHex`；「同格卸货城镇被敌占」也用这一项判（阻断③）；
  *   - **zocAt**（13.3c③）：**未被抵消**的敌方 ZOC —— 调用方须按 4.5b 抵消后给出；
  *   - **railGaugeUsable**（13.3f／专规 1.2）：该格轨距是否为本方可用 —— 缺省**全部不可用**
- *     （宁可少给：轨距账本未接线时不得凭空放行，否则整条宽轨网都会白送给轴方）。
+ *     （宁可少给：轨距账本未接线时不得凭空放行，否则整条宽轨网都会白送给轴方）；
+ *   - **railEdgeUsable**（13.3f）：**逐边**判本方能否通过 —— 缺省**全部不可用**（同上）。
  */
 export function createRailSupplyFacts(input: {
   sources: readonly { hex: HexRef; side: Side }[]
   extenders: readonly ExtenderView[]
-  controlByHex?: (hex: HexRef) => Side | null
+  /** 阻断②/③：该格是否被敌方单位占据 */
+  enemyOccupies: (hex: HexRef, side: Side) => boolean
   zocAt?: (hex: HexRef, side: Side) => boolean
   /**
    * 13.3f／专规 1.2：该铁路格的轨距是否为本方可用
@@ -2219,6 +2221,13 @@ export function createRailSupplyFacts(input: {
    * 此时若默认放行，苏方的宽轨网就会被轴方按「可用」消费掉。
    */
   railGaugeUsable?: (hex: HexRef, side: Side) => boolean
+  /**
+   * 13.3f：本方能否沿 `from`–`to` 这条**铁路格边**通过（逐边查 gauge）
+   *
+   * 缺省 `() => false`（**宁少勿多**）：与 `railGaugeUsable` 同一条规则，
+   * 但判的是**边**而不是格（一条边两端轨距不一致时本方不得通过）。
+   */
+  railEdgeUsable?: (from: HexRef, to: HexRef, side: Side) => boolean
   /**
    * 13.3c①后半：该格是否有港口或本方具工程能力的指挥部（13.8a）
    *
@@ -2238,9 +2247,10 @@ export function createRailSupplyFacts(input: {
 }): RailSupplyFacts {
   return {
     terrainsPresentAt: (hex) => hexRecordAt(hex)?.terrainsPresent ?? [],
-    isControlledBy: (hex, side) => input.controlByHex?.(hex) === side,
+    enemyOccupies: (hex, side) => input.enemyOccupies(hex, side),
     isRailHex: (hex) => isRailHexAt(hex),
     railNeighbors: (hex) => railNeighborHexes(hex),
+    railEdgeUsable: (from, to, side) => input.railEdgeUsable?.(from, to, side) ?? false,
     hasPortOrEngineerHqAt: (hex, side) => input.hasPortOrEngineerHqAt?.(hex, side) ?? false,
     inUnnegatedEnemyZoc: (hex, side) => input.zocAt?.(hex, side) ?? false,
     railGaugeUsable: (hex, side) => input.railGaugeUsable?.(hex, side) ?? false,

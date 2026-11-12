@@ -1,7 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { mapLayers } from '@/data'
 import type { HexRef } from '@/data'
 import { holdingsToT } from '@/engine/rules'
 import { useWorkbenchStore } from '@/stores'
@@ -25,15 +24,14 @@ const newStore = () => {
   return useWorkbenchStore()
 }
 
-/** 距 CORE_HEX 格距 ≥12 的图内格：轮式 5MP 直拖不可达，且盘面无 HQ ⇒ 无 12.3b 投递支 */
-const FAR_HEX: HexRef = (() => {
-  const found = mapLayers.hexes.find((hex) => {
-    const grid = Math.max(Math.abs(hex.col - CORE_HEX.col), Math.abs(hex.row - CORE_HEX.row))
-    return grid >= 12
-  })
-  if (found === undefined) throw new Error('地图上找不到距 CORE_HEX ≥12 格的格')
-  return { col: found.col, row: found.row }
-})()
+/**
+ * 与 CORE_HEX 互不可达、且**两方自动补给都覆盖不到**的图内格（21.21，Swamp）
+ *
+ * 2026-11-12 铁路口径后，12.6a② 的卸货格会自动喂饱整张连通路网（12.6 追溯补给无距离上限），
+ * 若仍取"第一个距离 ≥12 的格"，b 会被自动源喂饱、根本不进喂食候选。21.21 在实测的两方
+ * 覆盖集之外（四面沼泽，轮式走不到），保持"该格只能靠本格补给站喂"的前提。
+ */
+const FAR_HEX: HexRef = { col: 21, row: 21 }
 
 /** 摆一枚 1RE / 1 step 的断补战斗单位，取 store 内的响应式代理 */
 function placeCombat(store: ReturnType<typeof newStore>, id: string, hex: HexRef) {

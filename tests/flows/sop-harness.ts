@@ -27,34 +27,27 @@ import {
  *   - 测试名带规则编号（如 `15.1A`、`2.2`），便于反向检索规则书。
  */
 
-/** 六邻皆图内的格：断言不受地图削角影响（放基地/飞机/堆叠都用它） */
-export const CORE_HEX: HexRef = (() => {
-  const found = mapLayers.hexes.find((hex) => {
-    const ref = { col: hex.col, row: hex.row }
-    return HEX_DIRECTIONS.every((direction) => {
-      const candidate = neighbor(ref, direction)
-      return (
-        isOnMap(candidate) &&
-        mapLayers.hexes.some((item) => item.col === candidate.col && item.row === candidate.row)
-      )
-    })
-  })
-  if (found === undefined) throw new Error('地图上找不到六邻皆图内的格')
-  return { col: found.col, row: found.row }
-})()
+/**
+ * 六邻皆图内、且**两方自动补给都覆盖不到**的格：断言不受地图削角 / 12.6a② 铁路卸货格干扰
+ *
+ * 2026-11-12 铁路口径：铁路不再判控制，13.3c 派生的火车卸货格成为 12.6a② 的自动补给源，
+ * 而 12.6 追溯补给**无距离上限**（只判连通性）⇒ 剧本 1 的 Bobruysk（2.2）会喂饱整张连通路网。
+ * 7.21 是 Woods，六邻皆图内，且三面环沼泽、轮式追溯补给走不到（实测两方覆盖集都不含它），
+ * 故用它保持这些用例原本要测的"断补"前提。
+ */
+export const CORE_HEX: HexRef = { col: 7, row: 21 }
 
 /** CORE_HEX 的一个图内邻格（格距 1；转移/拦截/相邻攻击用） */
 export const NEAR_HEX: HexRef = (() => {
   for (const direction of HEX_DIRECTIONS) {
     const candidate = neighbor(CORE_HEX, direction)
-    if (
-      isOnMap(candidate) &&
-      mapLayers.hexes.some((h) => h.col === candidate.col && h.row === candidate.row)
-    ) {
-      return candidate
-    }
+    if (!isOnMap(candidate)) continue
+    const record = mapLayers.hexes.find((h) => h.col === candidate.col && h.row === candidate.row)
+    // CORE_HEX 7.21 三面环沼泽：取第一个**非沼泽**图内邻格，保持"邻格可正常进入"的夹具语义
+    if (record === undefined || record.terrain === 'Swamp') continue
+    return candidate
   }
-  throw new Error('CORE_HEX 没有图内邻格')
+  throw new Error('CORE_HEX 没有可进入的图内邻格')
 })()
 
 /** 格号文本（操作台输入用，如 `36.13`） */

@@ -245,7 +245,14 @@ describe('9.14 特殊战斗流程（store 级）', () => {
     expect(target).not.toEqual(item.chosen)
     expect(store.setSpecialDisplacement('ex1', target)).toBe(true)
     expect(store.confirmSpecialCombatNow()).toBe(true)
-    const moved = store.units.find((entry) => entry.instanceId === 'ex1')
+    // 9.14d 的翻面＝换记录（延补队 → 常运输点数面），实例 id 会一并换新 ⇒ 按落点/阵营找新算子
+    const moved = store.units.find(
+      (entry) =>
+        entry.side === 'soviet' &&
+        entry.instanceId !== 'a1' &&
+        entry.hex.col === target.col &&
+        entry.hex.row === target.row,
+    )
     expect(moved === undefined ? null : moved.hex).toEqual(target)
   })
 })

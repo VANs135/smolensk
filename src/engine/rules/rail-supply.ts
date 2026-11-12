@@ -24,9 +24,12 @@ import type { SupplyMobility } from './trace-supply'
  *   - **12.7b** 延补队都有以 MP 为单位的**距离**（＝距后方被连接格的最远距离），永远放在连接的前方
  *   - **12.7c** 延补队可与其它延补队连接成**锁链**
  *   - **13.3c 火车卸货格**须同时满足：① 该格有村庄、城市（任意规模）、港口或**有工程能力的指挥部**
- *           （13.8a）；② 该格已被**控制**（13.3h）；③ 该格有一条由**铁路**构成的路径可延伸至一个
- *           补给源，且该路径上**没有敌方 ZOC**（判断与补给源是否连接时 EZOC **可以**按 4.5b 被抵消；
- *           但**运输货物时** EZOC 不可抵消——本模块只判「与补给源是否连接」，故按可抵消处理）。
+ *           （13.8a）；② 该格有一条由**铁路**构成的路径可延伸至一个补给源，且该路径上**没有敌方 ZOC**
+ *           （判断与补给源是否连接时 EZOC **可以**按 4.5b 被抵消；但**运输货物时** EZOC 不可抵消——本模块
+ *           只判「与补给源是否连接」，故按可抵消处理）；③ 不命中三种阻断：敌方 ZOC 覆盖、敌方单位占据、
+ *           铁路同格的城市/村镇（卸货格）被敌方占领。
+ *           ★ 用户 2026-11-12 口径：**铁路没有归属、没有控制、没有占领**；13.3c 原文的「受控（13.3h）」
+ *           在本判定中不采用，轨距是唯一的可用性判据（原 `isControlledBy` 已删除）。
  *           ★ 13.3c 明言：判断追溯补给时，**延补队的连接可以作为该路径的一部分**
  *   - **13.3f / 专规 1.2 轨距**：「铁路线始终处于两种轨距之一，宽轨或标准轨。**最初除剧本初设另有
  *           注明者外，全部为宽轨**。就**铁路运货与获得追溯补给**而言：苏方**只能**使用宽轨铁路，
@@ -64,10 +67,22 @@ export interface RailSupplyFacts extends Pick<RailFacts, 'railGaugeUsable'> {
    *   工程 HQ 一侧由 store 注入，不再是恒 false。
    */
   hasPortOrEngineerHqAt?(hex: HexRef, side: Side): boolean
-  /** 13.3h：该格是否由 `side` **控制**（被敌军夺取即失去控制） */
-  isControlledBy(hex: HexRef, side: Side): boolean
+  /**
+   * 铁路阻断②（用户 2026-11-12 口径）：该格是否被 `side` 的**敌方单位占据**
+   *
+   * 铁路没有归属、没有控制、没有占领；这一项只回答「格内有没有敌军」，
+   * 不引入 `isControlledBy` / 城镇归属这类近似。
+   */
+  enemyOccupies(hex: HexRef, side: Side): boolean
   /** 13.3a：沿铁路相邻的格（该格边有铁路） */
   railNeighbors(hex: HexRef): readonly HexRef[]
+  /**
+   * 13.3f：`side` 能否沿 `from`–`to` 这条**铁路格边**通过（逐边查 gauge）
+   *
+   * 轨距是唯一的可用性判据：宽轨方只能用宽轨边、标准轨方只能用标准轨边。
+   * 与「格」级 `railGaugeUsable` 分开：一条边两端轨距不一致时，任一方都不保证可用。
+   */
+  railEdgeUsable(from: HexRef, to: HexRef, side: Side): boolean
   /**
    * 该格是否为**铁路格**（13.3a：至少有一条格边有铁路）
    *
@@ -171,16 +186,17 @@ export function engineerCapableHqAt(
 /**
  * 12.6a② / 13.3c / 12.7a-B/C：铁路补给路径与**火车卸货格**判定
  *
- * 算法（逐条对应条文）：
+ * 算法（逐条对应条文＋用户 2026-11-12 口径）：
  *   1. 起点＝12.6a① 的补给源格（边缘铁路格/专规补给源格）——**轨距不可用者不作起点**（专规 1.2：
  *      该方「只能使用」某种轨距的铁路，补给源是这条铁路路径的端点，同样在「路径」之内）；
- *   2. 沿**铁路**格边扩展（13.3a），跳过**轨距不可用**（13.3f）与**未被抵消**的敌方 ZOC（13.3c③）
- *      的格，两者都不得进入；
+ *   2. 沿**铁路**格边扩展（13.3a），逐边查 gauge（13.3f）决定本方能否通过，并跳过
+ *      **未被抵消**的敌方 ZOC（13.3c③）与**敌方单位占据**的格（阻断①②）；
  *   3. 延补队：若当前已连接的某格在其 `rangeMp` 内，则把该延补队所在格接入（12.7a-B/C、12.7b），
  *      接入后继续沿铁路扩展 —— 于是「后段铁路 → 延补队 → 前段铁路」与延补队**锁链**（12.7c）都成立；
  *      ★ 延补队**自身所在格不受轨距约束**（它是汽车/马车队而非铁路），但它**接续的前段铁路格**照旧受约束；
- *   4. 卸货格＝铁路可达 ∧ **轨距可用** ∧ 有村庄/城市（或港口/工程 HQ） ∧ 受本方控制 ∧ 无未抵消敌 ZOC
- *      （13.3c①②③ ＋ 13.3f）。
+ *   4. 卸货格＝铁路可达 ∧ 至少一条**本方可用轨距的铁路边** ∧ 有村庄/城市（或港口/工程 HQ）
+ *      ∧ 不命中三种阻断（敌方 ZOC / 敌方占据 / 同格卸货城镇被敌占）——13.3c①②③ ＋ 13.3f。
+ *      ★ 铁路没有归属/控制/占领：不引入 `isControlledBy`，阻断③即「该城镇格有敌方单位」。
  */
 export function railSupplyPath(facts: RailSupplyFacts, side: Side): RailSupplyPath {
   const reached = new Set<string>()
@@ -203,16 +219,20 @@ export function railSupplyPath(facts: RailSupplyFacts, side: Side): RailSupplyPa
     // 13.3c③＋12.6b：源格自身在**未被抵消**的敌方 ZOC 内 ⇒ 路径起点即断；
     // 4.5b 的抵消由调用方在 `inUnnegatedEnemyZoc` 内完成，本模块不另设口径。
     if (facts.inUnnegatedEnemyZoc(source, side)) continue
+    // 阻断②：源格被敌方单位占据
+    if (facts.enemyOccupies(source, side)) continue
     push(source)
   }
 
   while (queue.length > 0) {
     const hex = queue.shift()!
     for (const next of facts.railNeighbors(hex)) {
-      // 13.3f：轨距须为**本方**可用（苏宽轨／德标准轨；含已转换状态）
-      if (!facts.railGaugeUsable(next, side)) continue
+      // 13.3f：**逐边**查 gauge（轨距是唯一的可用性判据）
+      if (!facts.railEdgeUsable(hex, next, side)) continue
       // 13.3c③：铁路路径上不得有**未被抵消**的敌方 ZOC
       if (facts.inUnnegatedEnemyZoc(next, side)) continue
+      // 阻断②：敌方单位占据该格
+      if (facts.enemyOccupies(next, side)) continue
       push(next)
     }
     // 12.7a-B/C + 12.7b：延补队把后方已连接的格接到自己所在格（距离以印值 MP 为限）
@@ -249,6 +269,7 @@ export function railSupplyPath(facts: RailSupplyFacts, side: Side): RailSupplyPa
           // 13.3f：延补队把两段铁路接起来，接续的**铁路格**同样须轨距可用
           if (!facts.railGaugeUsable(candidate, side)) continue
           if (facts.inUnnegatedEnemyZoc(candidate, side)) continue
+          if (facts.enemyOccupies(candidate, side)) continue
           push(candidate)
         }
       }
@@ -256,20 +277,22 @@ export function railSupplyPath(facts: RailSupplyFacts, side: Side): RailSupplyPa
   }
 
   /*
-   * 13.3c：火车卸货格＝「**铁路格**」∧ **轨距为本方可用**（13.3f／专规 1.2）∧ 有村庄/城市
-   * （或港口/有工程能力的指挥部）∧ 受控 ∧ 无未抵消敌 ZOC。
+   * 13.3c：火车卸货格＝「**铁路格**」∧ 至少一条**本方可用轨距的铁路边**（13.3f／专规 1.2）
+   * ∧ 有村庄/城市（或港口/有工程能力的指挥部）∧ 不命中三种阻断（敌方 ZOC / 敌方占据 /
+   * 同格卸货城镇被敌占）。
    *
    * ★ 「须是铁路格」这一条此前缺失：延补队常被放在**不在铁路上**的村庄/城市格（12.7a-B/C 的典型
    *   布置），于是该格会被误判为火车卸货格，进而当作 12.6a② 的补给源喂给追溯补给。
-   * ★ 「须轨距可用」是**再兜一道底**：轨距不可用的格本已在扩展时被拦下，但延补队所在格是**无条件**
-   *   接入的（见上），若它恰好压在一条轨距不可用的铁路上且格内有村庄，仍须在此拦掉。
+   * ★ 「至少一条本方可用轨距的铁路边」＝逐边查 gauge；不再用格级近似兜底。
+   * ★ 铁路没有归属/控制/占领：原先的 `isControlledBy`（13.3h）已按用户 2026-11-12 口径删除；
+   *   阻断③「同格卸货城镇被敌方占领」即该格 `enemyOccupies`（不引入城镇归属字段）。
    */
   const detrainableHexes = railReachableHexes.filter(
     (hex) =>
       facts.isRailHex(hex) &&
-      facts.railGaugeUsable(hex, side) &&
-      facts.isControlledBy(hex, side) &&
+      facts.railNeighbors(hex).some((next) => facts.railEdgeUsable(hex, next, side)) &&
       !facts.inUnnegatedEnemyZoc(hex, side) &&
+      !facts.enemyOccupies(hex, side) &&
       (hasVillageOrCity(facts.terrainsPresentAt(hex)) ||
         facts.hasPortOrEngineerHqAt?.(hex, side) === true),
   )
@@ -286,7 +309,7 @@ export function railSupplyPath(facts: RailSupplyFacts, side: Side): RailSupplyPa
       (usedExtenderKeys.size === 0
         ? ''
         : `（其中 ${usedExtenderKeys.size} 处经延补队接续，12.7a-B/C）`) +
-      `；其中**火车卸货格** ${detrainableHexes.length} 处（13.3c：铁路格 + 轨距可用 13.3f + 村庄/城市/港口/工程 HQ + 受控 + 无未抵消敌 ZOC）`,
+      `；其中**火车卸货格** ${detrainableHexes.length} 处（13.3c：铁路格 + 本方可用轨距的铁路边 13.3f + 村庄/城市/港口/工程 HQ + 无敌方 ZOC/占据）`,
   }
 }
 

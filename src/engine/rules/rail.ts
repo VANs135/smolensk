@@ -1,5 +1,5 @@
 import { mapLayers } from '@/data'
-import type { HexRef, Side } from '@/data'
+import type { HexRef, RailGauge, Side } from '@/data'
 
 import { fail, succeed, type RuleFailure, type RuleOutcome } from '../result-types'
 import type { GamePhase } from '../state-types'
@@ -758,7 +758,27 @@ export function validateTransportPointUnload(input: {
 
 /** 静态铁路图层来源（map-layers.json 的 edges 子集） */
 export interface RailLayerSource {
-  edges: readonly { a: HexRef; b: HexRef; rail?: boolean; multiTrack?: boolean }[]
+  edges: readonly {
+    a: HexRef
+    b: HexRef
+    rail?: boolean
+    multiTrack?: boolean
+    /** 至少一端不在图内（schema `offMapStub`）：建图时整条边剔除 */
+    offMapStub?: boolean
+    /**
+     * 13.3f：该**格边**的印刷轨距（方案 A：数据层不写，缺省 broad）。
+     *
+     * 逐剧本的标准轨段不落在这里（同一张图要服务 7 个剧本，逐边写死会互相打架）——
+     * 运行期由 `setup.convertedAxisRails.runs` 推导，见 `convertedRailRun`。
+     */
+    gauge?: RailGauge
+  }[]
+}
+
+/** 一条铁路格边：邻格 + 该边轨距（缺省 broad） */
+export interface RailEdge {
+  hex: HexRef
+  gauge: RailGauge
 }
 
 /* ────────────────────────────── 静态铁路图层 → 邻接索引（13.3a） ────────────────────────────── */
@@ -769,6 +789,13 @@ export interface RailGraph {
   isRailHex(hex: HexRef): boolean
   /** 与 `hex` 以**铁路格边**相接的邻格 */
   railNeighbors(hex: HexRef): readonly HexRef[]
+  /**
+   * 与 `hex` 以铁路格边相接的邻格 + **该边**的轨距（缺省 broad）
+   *
+   * `railNeighbors` 只回格，会丢掉边属性；判「本方能否沿这条边通过」必须看边，
+   * 故单列本方法（13.3f；供 `railSupplyPath` 逐边查 gauge）。
+   */
+  railEdges(hex: HexRef): readonly RailEdge[]
   /** 13.3a：两格之间的格边是否为**多轨**铁路（单/多轨是静态图层数据，非运行期状态） */
   isMultiTrackEdge(from: HexRef, to: HexRef): boolean
 }
@@ -781,7 +808,7 @@ export interface RailGraph {
  *   修前这两处各建了一份「筛 `rail === true` 再连边」的表（同一条规则抄两遍）。
  */
 export function createRailGraph(source: RailLayerSource = mapLayers): RailGraph {
-  const adjacency = new Map<string, HexRef[]>()
+  const adjacency = new Map<string, RailEdge[]>()
   const multiTrack = new Set<string>()
   const key = (hex: HexRef): string => `${hex.col}.${hex.row}`
   /** 格边的规范键：与产物一致，格号文本字典序小者在前（一条边一个键） */
@@ -790,21 +817,26 @@ export function createRailGraph(source: RailLayerSource = mapLayers): RailGraph 
     const second = key(to)
     return first < second ? `${first}|${second}` : `${second}|${first}`
   }
-  const link = (from: HexRef, to: HexRef): void => {
+  const link = (from: HexRef, to: HexRef, gauge: RailGauge): void => {
     const list = adjacency.get(key(from))
-    if (list === undefined) adjacency.set(key(from), [to])
-    else list.push(to)
+    if (list === undefined) adjacency.set(key(from), [{ hex: to, gauge }])
+    else list.push({ hex: to, gauge })
   }
   for (const edge of source.edges) {
     if (edge.rail !== true) continue
-    link(edge.a, edge.b)
-    link(edge.b, edge.a)
+    // 13.3a / schema：`offMapStub` 的边至少一端不在图内 —— 引擎不得作为可进入格，
+    // 故整条边不建邻接（图外端点因此不会进入可达集，`isRailHex` 对图外格为假）。
+    if (edge.offMapStub === true) continue
+    const gauge: RailGauge = edge.gauge ?? 'broad'
+    link(edge.a, edge.b, gauge)
+    link(edge.b, edge.a, gauge)
     // 13.3a：多轨标记只出现在有铁路的格边上（源库 rail_track="multi"，用户逐段口述裁定）
     if (edge.multiTrack === true) multiTrack.add(edgeKey(edge.a, edge.b))
   }
   return {
     isRailHex: (hex) => adjacency.has(key(hex)),
-    railNeighbors: (hex) => adjacency.get(key(hex)) ?? [],
+    railNeighbors: (hex) => (adjacency.get(key(hex)) ?? []).map((item) => item.hex),
+    railEdges: (hex) => adjacency.get(key(hex)) ?? [],
     isMultiTrackEdge: (from, to) => multiTrack.has(edgeKey(from, to)),
   }
 }

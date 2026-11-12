@@ -55,6 +55,11 @@ export const EdgeLayerSchema = z
     /** 是否有铁路（轨距是全局值，见顶层 railGauge／专规 1.2） */
     rail: z.boolean().optional(),
     /**
+     * 13.3f：该**格边**的轨距；缺省 `broad`（方案 A：数据层不写，逐剧本标准轨段由
+     * `setup.convertedAxisRails.runs` 在运行期按唯一路径推导，不落成逐边事实）。
+     */
+    gauge: RailGaugeSchema.optional(),
+    /**
      * 13.3a：该格边是否为**多轨**铁路（源库 map_edges.json 的 `rail_track === "multi"`；
      * 定稿依据＝用户 2026-09-12/15 逐段口述的 9 条多轨走线，其余一律单轨）。
      * 只写「是」的一侧：字段缺省＝单轨。仅 `rail: true` 的格边可带此标记。

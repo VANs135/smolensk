@@ -356,7 +356,8 @@ function railFacts(input: {
   breaks?: readonly (readonly [number, number])[]
   sources: readonly HexRef[]
   cities?: readonly number[]
-  controlled?: (hex: HexRef) => boolean
+  /** 铁路阻断②③：被敌方单位占据的格（默认无） */
+  enemy?: readonly HexRef[]
   zoc?: readonly HexRef[]
   /** 13.3c③＋4.5b：被己方战斗单位抵消掉的 ZOC 格（不计入“未被抵消”） */
   zocCanceled?: readonly HexRef[]
@@ -389,14 +390,20 @@ function railFacts(input: {
   const broken = new Set(
     (input.breaks ?? []).map(([a, b]) => `${Math.min(a, b)}-${Math.max(a, b)}`),
   )
+  const enemySet = new Set((input.enemy ?? []).map((item) => `${item.col}.${item.row}`))
+  /** 13.3f：该格轨距是否为本方可用（供格级与边级共用，避免两处口径漂移） */
+  const gaugeUsableAt = (ref: HexRef, requested: Side): boolean =>
+    input.gaugeUsable !== undefined
+      ? input.gaugeUsable(ref, requested)
+      : !gaugeUnusableSet.has(`${ref.col}.${ref.row}`)
   return {
     terrainsPresentAt: (ref) => (citySet.has(ref.row) ? ['Village'] : ['Open']),
-    isControlledBy: (ref) => (input.controlled === undefined ? true : input.controlled(ref)),
+    enemyOccupies: (ref) => enemySet.has(`${ref.col}.${ref.row}`),
     isRailHex: (ref) => ref.col === 36 && railSet.has(ref.row),
-    railGaugeUsable: (ref, requested) =>
-      input.gaugeUsable !== undefined
-        ? input.gaugeUsable(ref, requested)
-        : !gaugeUnusableSet.has(`${ref.col}.${ref.row}`),
+    railGaugeUsable: (ref, requested) => gaugeUsableAt(ref, requested),
+    // 13.3f：逐边查 gauge —— 一条边的两端都为本方可用时，本方才能通过
+    railEdgeUsable: (from, to, requested) =>
+      gaugeUsableAt(from, requested) && gaugeUsableAt(to, requested),
     railNeighbors: (ref) => {
       if (ref.col !== 36) return []
       const found: HexRef[] = []
@@ -478,7 +485,7 @@ describe('13.3c + 12.7a-B/C：铁路补给线与火车卸货格', () => {
     expect(path.detrainableHexes.map((item) => item.row)).toEqual([3])
   })
 
-  it('13.3c：未被抵消的敌 ZOC 断链；受控且为村庄者成为卸货格', () => {
+  it('13.3c：铁路格 + 村庄 ⇒ 卸货格；卸货城镇被敌方单位占据 ⇒ 阻断', () => {
     const path = railSupplyPath(
       railFacts({ railRows: [0, 1, 2, 3], sources: [at(0)], cities: [2] }),
       'axis',
@@ -487,32 +494,33 @@ describe('13.3c + 12.7a-B/C：铁路补给线与火车卸货格', () => {
     expect(path.detrainableHexes.map((item) => item.row)).toEqual([2])
     expect(hasVillageOrCity(['Village'])).toBe(true)
     expect(hasVillageOrCity(['Minor City'])).toBe(true)
-    // 不被本方控制 ⇒ 不能作卸货格（13.3c②）
-    const notControlled = railSupplyPath(
+    // 阻断②/③：卸货城镇格有敌方单位 ⇒ 该格被阻断（不是"未控制"，铁路没有控制）
+    const enemyInTown = railSupplyPath(
       railFacts({
         railRows: [0, 1, 2],
         sources: [at(0)],
         cities: [2],
-        controlled: (ref) => ref.row !== 2,
+        enemy: [at(2)],
       }),
       'axis',
     )
-    expect(notControlled.detrainableHexes).toEqual([])
+    expect(enemyInTown.railReachableHexes.map((item) => item.row)).toEqual([0, 1])
+    expect(enemyInTown.detrainableHexes).toEqual([])
   })
 
   it('12.7a-B：延补队把后段铁路接到前段铁路，使前段铁路成为火车卸货格', () => {
     // 后段铁路 36.0–36.1（补给源在 36.0）；断口在 36.1 与 36.3 之间；
     // 延补队放在 36.2（12.7b：连接的前方），距离 20 MP ⇒ 够到后段
     const facts = railFacts({
-      railRows: [0, 1, 3],
+      railRows: [0, 1, 3, 4],
       breaks: [[1, 3]],
       sources: [at(0)],
       cities: [3],
       extenders: [{ hex: at(2), rangeMp: 20 }],
     })
     const path = railSupplyPath(facts, 'axis')
-    // 沿铁路可达 0、1；经延补队（36.2）接上前段铁路 36.3
-    expect(path.railReachableHexes.map((item) => item.row)).toEqual([0, 1, 2, 3])
+    // 沿铁路可达 0、1；经延补队（36.2）接上前段铁路 36.3，再沿铁路到 36.4
+    expect(path.railReachableHexes.map((item) => item.row)).toEqual([0, 1, 2, 3, 4])
     expect(path.usedExtenderHexes).toEqual([at(2)])
     expect(path.detrainableHexes.map((item) => item.row)).toEqual([3])
     expect(
@@ -531,7 +539,7 @@ describe('13.3c + 12.7a-B/C：铁路补给线与火车卸货格', () => {
   it('12.7b 守门：rail-supply 的延补队回连**只**按注入的判定（不得自持格数距离）', () => {
     const build = (connects: boolean) =>
       railFacts({
-        railRows: [0, 1, 3],
+        railRows: [0, 1, 3, 4],
         breaks: [[1, 3]],
         sources: [at(0)],
         cities: [3],
@@ -542,7 +550,7 @@ describe('13.3c + 12.7a-B/C：铁路补给线与火车卸货格', () => {
     // 判定为"连得上" ⇒ 延补队被采用、前段铁路接通
     const connected = railSupplyPath(build(true), 'axis')
     expect(connected.usedExtenderHexes).toEqual([at(2)])
-    expect(connected.railReachableHexes.map((item) => item.row)).toEqual([0, 1, 2, 3])
+    expect(connected.railReachableHexes.map((item) => item.row)).toEqual([0, 1, 2, 3, 4])
 
     /*
      * 判定为"连不上" ⇒ 即使**格距**只有 1 格（远小于 rangeMp 20）也不得接通。
@@ -563,7 +571,7 @@ describe('13.3c + 12.7a-B/C：铁路补给线与火车卸货格', () => {
      */
     const path = railSupplyPath(
       railFacts({
-        railRows: [0, 1, 3],
+        railRows: [0, 1, 3, 4],
         breaks: [[1, 3]],
         sources: [at(0)],
         cities: [2, 3], // 36.2＝延补队所在且**非铁路格**；36.3＝铁路格
@@ -573,7 +581,7 @@ describe('13.3c + 12.7a-B/C：铁路补给线与火车卸货格', () => {
     )
     // 延补队确实把 36.0–36.1 与 36.3 接通（否则本条用例测不到卸货格判定）
     expect(path.usedExtenderHexes).toEqual([at(2)])
-    expect(path.railReachableHexes.map((item) => item.row)).toEqual([0, 1, 2, 3])
+    expect(path.railReachableHexes.map((item) => item.row)).toEqual([0, 1, 2, 3, 4])
     const rows = path.detrainableHexes.map((item) => item.row)
     expect(rows).toContain(3) // 36.3：既是铁路格又有村庄 ⇒ 火车卸货格
     expect(rows).not.toContain(2) // 36.2：非铁路格 ⇒ 不得作火车卸货格（缺此判据时会被误判）
@@ -631,7 +639,7 @@ describe('13.3c + 12.7a-B/C：铁路补给线与火车卸货格', () => {
      */
     const blocked = railSupplyPath(
       railFacts({
-        railRows: [0, 1, 3],
+        railRows: [0, 1, 3, 4],
         breaks: [[1, 3]],
         sources: [at(0)],
         cities: [3],
@@ -647,7 +655,7 @@ describe('13.3c + 12.7a-B/C：铁路补给线与火车卸货格', () => {
     // 同一条布置，若前段铁路轨距可用 ⇒ 接通并产出卸货格（证明上面挡的是轨距而非别的）
     const open = railSupplyPath(
       railFacts({
-        railRows: [0, 1, 3],
+        railRows: [0, 1, 3, 4],
         breaks: [[1, 3]],
         sources: [at(0)],
         cities: [3],

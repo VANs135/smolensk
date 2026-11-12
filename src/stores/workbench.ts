@@ -30,8 +30,8 @@ import { createCombatInputs } from './engagement-inputs'
 import { defineStore } from 'pinia'
 import { computed, ref, toRaw, watch, type Ref } from 'vue'
 
-import type { HexRef, RailGauge, Side } from '@/data'
-import { mapConfig, mapLayers, rulesConstants, scenarios, unitsAxis } from '@/data'
+import type { HexRef, MarkerSide, RailGauge, Side } from '@/data'
+import { mapConfig, mapLayers, markers, rulesConstants, scenarios, unitsAxis } from '@/data'
 import {
   HEX_DIRECTIONS,
   allMapHexes,
@@ -78,6 +78,7 @@ import type {
   AirStatus,
   DiceRoll,
   GamePhase,
+  Marker,
   RngState,
   SessionLogEntry,
   VictoryLocationState,
@@ -3527,9 +3528,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * - sources ← **专规 2.1 / 3.1 的进场铁路格**，按连通性分属两方各自的网（用户 2026-11-11 裁定：
    *   不存在交叉可用 / 共用段；多轨与单轨只差 13.3c 运量费用，不影响归属）；
    * - extenders ← 摆好的延补队（12.7b：距离＝印值 MA）；
-   * - controlByHex（13.3h）：操作台无控制历史，按「格内仅有单方战斗单位」近似，其余视为未控制
-   *   （宁可少给：未控制 ⇒ 不作火车卸货格）；
+   * - enemyOccupies（阻断②③）：格内是否有敌方单位 —— 铁路没有归属/控制/占领（用户 2026-11-12 口径），
+   *   原先的 `controlByHex` 近似已删除；「同格卸货城镇被敌占」同样用这一项判；
    * - zocAt（13.3c③）：复用追溯事实的 `inEnemyZoc`（已按 4.5b 处理「格内有己方战斗单位即抵消」）。
+   * - railEdgeUsable（13.3f）：**逐边**轨距 —— 一条边两端都为本方可用轨距时，本方才能通过。
    */
   const railSupplyFacts = computed(() =>
     createRailSupplyFacts({
@@ -3538,20 +3540,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         ...entryRailSeedsBySide.value.soviet.map((hex) => ({ hex, side: 'soviet' as Side })),
       ],
       extenders: units.value.filter(isExtenderUnit).map(toExtenderView),
-      controlByHex: (hex) => {
-        const sides = new Set(
-          units.value
-            .filter((unit) => unit.isCombat && sameHex(unit.hex, hex))
-            .map((unit) => unit.side),
-        )
-        return sides.size === 1 ? ([...sides][0] ?? null) : null
-      },
+      enemyOccupies: (hex, side) =>
+        units.value.some((unit) => unit.side !== side && sameHex(unit.hex, hex)),
       zocAt: (hex, side) => zocOnlySupplyFacts.value.inEnemyZoc(hex, side),
       // 13.3c①后半 / 13.8a / 5.5b：本方具工程能力的指挥部。
       // 港口分支恒 false 属预期：本作无港口地形与港口专规（用户裁定 2026-11-05），非遗漏。
       hasPortOrEngineerHqAt: (hex, side) => engineerCapableHqAt(units.value, hex, side),
       // 13.3f／专规 1.2：轨距只回答「谁能用这条铁路」（与 13.3a 多轨的运量费用无关）
       railGaugeUsable: (hex, side) => isRailGaugeUsableAt(hex, side),
+      // 13.3f：逐边查 gauge —— 两端都必须是本方可用轨距（混合边任一方都不通过）
+      railEdgeUsable: (from, to, side) =>
+        isRailGaugeUsableAt(from, side) && isRailGaugeUsableAt(to, side),
       // 12.7b：延补队回连距离用 trace-supply 的**同一实现**（MP 沿补给路径），不使用格数近似
       traceFacts: zocOnlySupplyFacts.value,
     }),
@@ -3704,6 +3703,47 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '专规 1.2',
     )
     return true
+  }
+
+  /** 13.3d：railhead 标记的静态记录 id（markers.json） */
+  const MK_38_RAILHEAD_RECORD_ID = 'mk-38'
+
+  /**
+   * 13.3d：railhead 标记（`mk-38`）的静态定义 —— **全仓唯一的 side / 图名出处**
+   *
+   * 铁路端点标记在 `markers.json` 里定义为 `neutral`（它是磁贴，不归属任何一方）；
+   * 数据改了这里自动跟随，避免「初设写 neutral、渲染写 axis」这类两处各说一套。
+   */
+  const RAILHEAD_MARKER = (() => {
+    const record = markers.markers.find((item) => item.id === MK_38_RAILHEAD_RECORD_ID)
+    if (record === undefined)
+      throw new Error(`markers.json 缺 ${MK_38_RAILHEAD_RECORD_ID}（13.3d）`)
+    return { recordId: record.id, side: record.side ?? 'neutral', front: record.front }
+  })()
+
+  /**
+   * 13.3d：剧本初设的**德军铁路端头**标记实例（`mk-38`，画在 `Neutral_Railhead.png` 上）
+   *
+   * 端头格来自剧本 `setup.railheads`（= 剧本页 `Converted Axis Rails: A to B` 的 **B 端**）；
+   * 13.3f 推进时 B 向东前移，届时把实例的 `hex` 移过去即可，标记本身不换。
+   * 铁路没有归属/控制：标记是**地图事实**，不参与命中测试，也不改任何判定。
+   */
+  const railheadMarkers = ref<Marker[]>([])
+
+  /** 13.3d：按剧本 `setup.railheads` 重新播种端头标记（换剧本 / 重置时清空并重算） */
+  function seedRailheadMarkersNow(): void {
+    const setup = scenarios.scenarios.find((item) => item.id === scenarioId.value)?.setup
+    const hexes = (setup?.railheads?.hexes ?? [])
+      .map((text) => parseHexPath(text)[0])
+      .filter((hex): hex is HexRef => hex !== undefined)
+    railheadMarkers.value = hexes.map((hex) => ({
+      id: `mk-38:${hex.col}.${hex.row}`,
+      recordId: RAILHEAD_MARKER.recordId,
+      // 统一取 markers.json 的 side（neutral），不在初设或渲染层另写一份
+      side: RAILHEAD_MARKER.side as MarkerSide,
+      hex,
+      track: null,
+    }))
   }
 
   /** C9b：清空换轨账本（裁判订正用；13.3f 的初设之外不应有「已换轨」） */
@@ -3859,11 +3899,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }))
 
   /**
+   * 13.3e-2 / 13.3h：铁路**运输**（运兵/运货）沿线的格控制
+   *
+   * ★ 与用户 2026-11-12 的「轨距唯一」口径**分开**：那条口径管的是铁路**补给可用性/可卸货格**
+   *   （`railSupplyFacts`，已删除控制近似）。13.3e 原文另写「不能使用错误轨距或**未控制**的铁路格」，
+   *   故运兵/运货仍保留这一条；操作台无控制历史，沿用既有近似（同格仅有单方战斗单位 ⇒ 该方控制），
+   *   不新增控制账本。
+   */
+  function railTransportControlledBy(hex: HexRef, side: Side): boolean {
+    const sides = new Set(
+      units.value
+        .filter((unit) => unit.isCombat && sameHex(unit.hex, hex))
+        .map((unit) => unit.side),
+    )
+    return sides.size === 1 && [...sides][0] === side
+  }
+
+  /**
    * 13.3：铁路运货的运行期事实（`RailFacts` 的**唯一组装点**）
    *
    * 静态图层（哪格有铁路 / 两格是否以铁路相接）由引擎 `createRailFacts` 从 `map-layers` 建索引；
    * 运行期六项分别取仓里既有结论：
-   *   · 13.3h 控制 ← 补给层的 `controlByHex`（同格**唯一**战斗单位所属方；两侧各有即无人控制）；
+   *   · 13.3h 控制 ← `railTransportControlledBy`（13.3e-2 的运输限制；**补给**侧已不判控制）；
    *   · 13.3f 轨距 ← `isRailGaugeUsableAt`（专规 1.2 的轨距账本，与 13.3f 的转换共用）；
    *   · EZOC ← `inEnemyZocForAction(…, 'railTransport')`：`zoc-effects` 把 `railTransport` 定为
    *     **不可抵消**（4.5a-C ／ 13.3c 末句「运货时 EZOC 不可抵消」）；仅「连接补给源」的判定
@@ -3874,7 +3931,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const railMoveFacts = computed(() =>
     createRailFacts({
-      isControlled: (hex, side) => railSupplyFacts.value.isControlledBy(hex, side),
+      isControlled: (hex, side) => railTransportControlledBy(hex, side),
       railGaugeUsable: (hex, side) => isRailGaugeUsableAt(hex, side),
       inEnemyZoc: (hex, side) => inEnemyZocForAction(moveContext.value, hex, side, 'railTransport'),
       hasEnemyCombatUnit: (hex, side) =>
@@ -23917,6 +23974,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     printedHedgehogOwners.value = {}
     // 13.3f / 专规 1.2 初设换轨（剧本页 `Converted Axis Rails` 的逐格推导）
     seedConvertedRailsNow()
+    // 13.3d：铁路端头标记（`setup.railheads` 的 B 端；`mk-38`）
+    seedRailheadMarkersNow()
     // 9.14 特殊战斗待决（落点按剧本 4 的拖取距离判，换剧本即作废）
     specialPending.value = null
   }
@@ -24335,6 +24394,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     specialPending.value = null
     // 13.3f / 专规 1.2：换轨账本回到该剧本的初设（重置后账本不得残留上一局的换轨）
     seedConvertedRailsNow()
+    // 13.3d：端头标记同样回到该剧本初设
+    seedRailheadMarkersNow()
     gaugeConversionsThisPhase.value = []
     convertedHexesThisPhase.value = []
     railMovedNewTrackThisPhase.value = []
@@ -24820,6 +24881,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ['multiUnitFormationIds', multiUnitFormationIds],
     // ②′ 账本（铁路 / 换轨 / 施工 / 机场 / 胜利格 / 印刷工事）
     ['convertedRailHexes', convertedRailHexes],
+    // 13.3d：铁路端头标记实例（初设播种；13.3f 推进时只改 hex）
+    ['railheadMarkers', railheadMarkers],
     ['gaugeConversionsThisPhase', gaugeConversionsThisPhase],
     ['convertedHexesThisPhase', convertedHexesThisPhase],
     ['railMovedNewTrackThisPhase', railMovedNewTrackThisPhase],
@@ -25846,6 +25909,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     isRailGaugeUsableAt,
     seedConvertedRailsNow,
     clearConvertedRailsNow,
+    // 13.3d：铁路端头标记（`mk-38`；地图事实层）
+    railheadMarkers,
+    seedRailheadMarkersNow,
     railMoveError,
     railMoveInputs,
     railCapSpentThisTurn,

@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { CORE_HEX, NEAR_HEX, groundRecord, newConsole, placeGround } from '../flows/sop-harness'
+import type { HexRef } from '@/data'
+import { groundRecord, newConsole, placeGround } from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
+
+/**
+ * 可正常通行的相邻对（2.1 Woods → 2.2 Bobruysk）
+ *
+ * 不用 sop-harness 的 CORE_HEX：它现在取 7.21（三面环湖的断补口袋，专供补给用例），
+ * 单位走不进相邻格，会把"移动中夺取"这条路径测成假失败。
+ */
+const CORE_HEX: HexRef = { col: 2, row: 1 }
+const NEAR_HEX: HexRef = { col: 2, row: 2 }
 
 /**
  * 13.2i：被夺取运输点数的可动时点（store 级）

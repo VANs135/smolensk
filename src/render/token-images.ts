@@ -145,7 +145,15 @@ export function createImageCache(): ImageCache {
 export const counterImages = createImageCache()
 
 /**
- * 全部模式/状态贴图的 URL（`MapCanvas` 启动时一次预载：共 9 张，量小）
+ * 13.3d：铁路端头标记（`mk-38`）的贴图文件名
+ *
+ * 与 `markers.json` 的 `mk-38.front` 同名；渲染层从 `Marker.recordId` 反查该图名，
+ * 但启动预载只知道文件名，故在这里给一份常量（预载缺失会表现为"端头标记加载不出来"）。
+ */
+export const RAILHEAD_TEXTURE = 'Neutral_Railhead.png'
+
+/**
+ * 全部模式/状态贴图的 URL（`MapCanvas` 启动时一次预载：共 10 张，量小）
  *
  * 这些贴图与盘面无关（模式标记 / 工事等级），故不随覆盖层变化反复预载。
  */
@@ -155,6 +163,8 @@ export function allMarkerTextureUrls(): string[] {
     markerTextureUrl(MARKER_TEXTURES.strat),
     markerTextureUrl(MARKER_TEXTURES.outOfSupply),
     ...MARKER_TEXTURES.hedgehog.map((file) => markerTextureUrl(file)),
+    // 13.3d：铁路端头标记（`mk-38`，`setup.railheads` 播种后即画）
+    markerTextureUrl(RAILHEAD_TEXTURE),
   ]
 }
 

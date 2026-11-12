@@ -44,21 +44,14 @@ const newStore = () => {
   return useWorkbenchStore()
 }
 
-/** 六邻皆图内的格：断补/突围现场避开地图形状的干扰 */
-const CORE_HEX: HexRef = (() => {
-  const found = mapLayers.hexes.find((hex) => {
-    const ref = { col: hex.col, row: hex.row }
-    return HEX_DIRECTIONS.every((direction) => {
-      const candidate = neighbor(ref, direction)
-      return (
-        isOnMap(candidate) &&
-        mapLayers.hexes.some((item) => item.col === candidate.col && item.row === candidate.row)
-      )
-    })
-  })
-  if (found === undefined) throw new Error('地图上找不到六邻皆图内的格')
-  return { col: found.col, row: found.row }
-})()
+/**
+ * 两方自动补给都覆盖不到的六邻皆图内格（7.21，Woods）
+ *
+ * 2026-11-12 铁路口径：13.3c 派生的火车卸货格成为 12.6a② 的自动补给源，且 12.6 追溯补给
+ * 无距离上限 ⇒ 剧本 1 的 Bobruysk（2.2）会喂饱整张连通路网。7.21 三面环沼泽、轮式走不到，
+ * 用它保持"未声明源 ⇒ 断补"的前提。
+ */
+const CORE_HEX: HexRef = { col: 7, row: 21 }
 
 const label = (hex: HexRef): string => `${hex.col}.${hex.row}`
 

@@ -3,6 +3,7 @@ import { pendingRetreatPlan } from '@/engine/rules/engagement-progress'
 import { computed, ref, watch } from 'vue'
 
 import type { HexRef, Side } from '@/data'
+import { markers } from '@/data'
 import { isInRandomEventPeriod, isSpecialReplAvailable, type PanzerGroup } from '@/engine/rules'
 import { useHotseatStore } from './hotseat'
 import {
@@ -764,6 +765,24 @@ export const useMapViewStore = defineStore('mapView', () => {
       const side = workbench.victoryControlOf(hex)
       if (side === null) continue
       out.push({ hex: { col: hex.col, row: hex.row }, side })
+    }
+    return out
+  })
+
+  /**
+   * 13.3d：**通用地图标记**（当前即铁路端头 `mk-38`；`setup.railheads` 播种）
+   *
+   * 只做 recordId → 贴图文件名的转交：`side` 与图名都以 `markers.json` 为准
+   * （`workbench.railheadMarkers` 已按同一条数据播种，不在这里另写一份）。
+   */
+  const railheadMarkers = computed<readonly { hex: HexRef; image: string }[]>(() => {
+    const out: { hex: HexRef; image: string }[] = []
+    for (const marker of workbench.railheadMarkers) {
+      if (marker.hex === null) continue
+      const record = markers.markers.find((item) => item.id === marker.recordId)
+      const front = record?.front
+      if (typeof front !== 'string' || front === '') continue
+      out.push({ hex: { col: marker.hex.col, row: marker.hex.row }, image: front })
     }
     return out
   })
@@ -3441,6 +3460,8 @@ export const useMapViewStore = defineStore('mapView', () => {
     // 5.0c：胜利格控制标记（地图事实层；不是交互覆盖层，也不可选中）
     boundary,
     controlMarkers,
+    // 13.3d：铁路端头标记（`mk-38`；地图事实层，与 controlMarkers 并列）
+    railheadMarkers,
     // 用户口径：地图上方不放消息栏 ⇒ 这一行搬进流程条（方案 §4.5 的动作提示带）
     actionHint,
     // B17a-3：专规动作会话的开关（顶栏按钮打开）

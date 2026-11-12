@@ -74,7 +74,7 @@ describe('#6 突围环节：点堆叠不弹「开始移动」，本环节只认�
     const cutOff = toConsoleUnit({
       record: combatRecord(),
       instanceId: 'cut-off',
-      hex: { col: 36, row: 13 },
+      hex: { col: 7, row: 21 },
       side: 'axis',
     })
     cutOff.hasTraceSupply = false
@@ -89,7 +89,7 @@ describe('#6 突围环节：点堆叠不弹「开始移动」，本环节只认�
     goToStep(workbench, 'movement.breakout')
     // 点堆叠仍会建"选择集"（各环节共用），但**不得**被当成移动准备
     expect(workbench.actionAllowedNow('move.order')).toBe(false)
-    mapView.expandStackAt({ col: 36, row: 13 })
+    mapView.expandStackAt({ col: 7, row: 21 })
     expect(mapView.session?.kind ?? null).not.toBe('move')
 
     // 本环节自己的入口：突围会话照旧可开

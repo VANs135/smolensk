@@ -22,9 +22,10 @@ function facts(hasPortOrEngineerHqAt?: (hex: HexRef, side: Side) => boolean): Ra
   const rows = [0, 1, 2, 3]
   return {
     terrainsPresentAt: () => [],
-    isControlledBy: (_hex, side) => side === 'axis',
+    enemyOccupies: () => false,
     isRailHex: (hex) => hex.col === 36 && rows.includes(hex.row),
     railGaugeUsable: () => true,
+    railEdgeUsable: () => true,
     railNeighbors: (hex) => {
       if (hex.col !== 36 || !rows.includes(hex.row)) return []
       return rows.filter((row) => Math.abs(row - hex.row) === 1).map((row) => at(row))

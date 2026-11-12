@@ -1,9 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { mapLayers } from '@/data'
 import type { HexRef } from '@/data'
-import { HEX_DIRECTIONS, isOnMap, neighbor } from '@/engine/hex-geometry'
 import { emptyReplHoldings } from '@/engine/rules'
 import {
   actionGateOf,
@@ -58,21 +56,13 @@ function goToActionStep(
   if (!store.setSegmentStepIndex(index)) throw new Error(`进入环节失败（${key}）`)
 }
 
-/** 六邻皆图内的格（基地与飞机都摆这里） */
-const CORE_HEX: HexRef = (() => {
-  const found = mapLayers.hexes.find((hex) => {
-    const ref = { col: hex.col, row: hex.row }
-    return HEX_DIRECTIONS.every((direction) => {
-      const candidate = neighbor(ref, direction)
-      return (
-        isOnMap(candidate) &&
-        mapLayers.hexes.some((item) => item.col === candidate.col && item.row === candidate.row)
-      )
-    })
-  })
-  if (found === undefined) throw new Error('地图上找不到六邻皆图内的格')
-  return { col: found.col, row: found.row }
-})()
+/**
+ * 两方自动补给都覆盖不到、但可放基地的格（7.21，Woods；三面环湖，追溯补给走不到）
+ *
+ * 2026-11-12 铁路口径后 13.3c 的卸货格成为自动补给源，原先"不声明源 ⇒ 无补给"的 2.1
+ * 已被剧本 1 的 Bobruysk（2.2）喂饱；13.5f 的"基地不在追溯补给 ⇒ 拒"需要真正断补的格。
+ */
+const CORE_HEX: HexRef = { col: 7, row: 21 }
 
 function airBaseRecord() {
   const found = unitChoices('axis').find((record) => record.noncombatKind === 'air_base')

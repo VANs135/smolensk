@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
 import { mapLayers, scenarios } from '@/data'
-import { convertedRailRun } from '@/engine/rules'
+import { convertedRailRun, createRailGraph } from '@/engine/rules'
 
 /**
  * 剧本初设换轨**快照基线**（专规 1.2 / 13.3f；数据方案 A）
@@ -42,17 +42,8 @@ const hexOf = (text: string): HexRef => {
 /** 与 `map_edges.json` 的 `edge_key` 同规：两端 `列.行` 按字符串字典序排序后以 `|` 连接 */
 const edgeKey = (a: HexRef, b: HexRef): string => [keyOf(a), keyOf(b)].sort().join('|')
 
-const railNeighborSource = {
-  railNeighbors: (hex: HexRef): HexRef[] => {
-    const found: HexRef[] = []
-    for (const edge of mapLayers.edges) {
-      if (edge.rail !== true) continue
-      if (edge.a.col === hex.col && edge.a.row === hex.row) found.push(edge.b)
-      if (edge.b.col === hex.col && edge.b.row === hex.row) found.push(edge.a)
-    }
-    return found
-  },
-}
+/** 路径推导直接走引擎建图（过滤 `offMapStub`、逐边 gauge 保留在同一份实现里） */
+const railGraph = createRailGraph(mapLayers)
 
 const railEdgeKeys = new Set(
   mapLayers.edges.filter((edge) => edge.rail === true).map((edge) => edgeKey(edge.a, edge.b)),
@@ -88,7 +79,7 @@ describe('剧本初设换轨快照（专规 1.2）', () => {
       )
       for (const [index, declaration] of runs.entries()) {
         const [fromText, toText] = declaration.split(/\s+to\s+/i)
-        const outcome = convertedRailRun(railNeighborSource, {
+        const outcome = convertedRailRun(railGraph, {
           from: hexOf(fromText!),
           to: hexOf(toText!),
         })

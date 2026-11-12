@@ -24,6 +24,7 @@ import {
   type ConstructionMarkerPiece,
   type ControlMarker,
   type MapLayerVisibility,
+  type MapMarkerPiece,
 } from '@/render/map-render'
 import {
   allControlMarkerImageUrls,
@@ -118,6 +119,13 @@ const props = withDefaults(
      * `workbench.constructionMarkerPieces` 传进来（画布不读 store）。
      */
     constructionMarkers?: readonly ConstructionMarkerPiece[] | null
+    /**
+     * 13.3d：**通用地图标记**（铁路端头 `mk-38` 等地图事实标记）
+     *
+     * 与 `controlMarkers` 同族：不是算子 ⇒ 不进命中测试、不可选中；由上层把
+     * `mapView.railheadMarkers` 传进来（画布不读 store）。
+     */
+    markers?: readonly MapMarkerPiece[] | null
   }>(),
   {
     fill: false,
@@ -131,6 +139,7 @@ const props = withDefaults(
     controlMarkers: null,
     boundary: null,
     constructionMarkers: null,
+    markers: null,
   },
 )
 
@@ -259,6 +268,7 @@ function render(): void {
     controlMarkers: props.controlMarkers,
     boundary: props.boundary,
     constructionMarkers: props.constructionMarkers,
+    markers: props.markers,
   })
 }
 

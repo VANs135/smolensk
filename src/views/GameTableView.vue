@@ -426,6 +426,7 @@ onBeforeUnmount(() => {
           :overlay="mapView.overlay"
           :box-drag-source="mapView.counterForBoxAt"
           :control-markers="mapView.controlMarkers"
+          :markers="mapView.railheadMarkers"
           :boundary="mapView.boundary"
           :construction-markers="workbench.constructionMarkerPieces"
           :hint="workbench.mapHint"

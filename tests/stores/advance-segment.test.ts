@@ -298,10 +298,15 @@ describe('B5：换环节时盘面中间态自动收束', () => {
       (item) => item.classes?.movementClass === 'leg' && item.attackCapable === true,
     )!
     // 一枚**断补**的本方战斗单位 ⇒ 12.8e 的突围资格成立（participatesIn 对该环返回 ok）
+    /*
+     * 7.21：两方自动补给都覆盖不到的 Woods 口袋。
+     * 2026-11-12 铁路口径后 12.6a② 的卸货格成为自动源、追溯补给无距离上限，原 36.13 会被喂饱，
+     * 断补单位不再成立；7.21 三面环沼泽，保持「断补」这一前提。
+     */
     const cutOff = toConsoleUnit({
       record,
       instanceId: 'cut-off',
-      hex: { col: 36, row: 13 },
+      hex: { col: 7, row: 21 },
       side: 'axis',
     })
     // `toConsoleUnit` 的初值是"开局视为有补给"（12.6 的评估在补给阶段做）⇒ 这里显式标成断补

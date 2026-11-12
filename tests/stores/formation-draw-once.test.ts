@@ -50,6 +50,7 @@ describe('ch10：编队抽取只在初设完成后执行一次', () => {
     expect(setup.finishSetup()).toBe(true)
   })
 
+  // 重活是全量并行跑套件时会被 CPU 争抢：本用例单跑约 2s，并行时曾越过默认 5s；放宽到 20s
   it('推进多个回合与增援段后仍不出现，也不再重抽', () => {
     const { setup, containers, workbench } = boot()
     confirmSetupForStart(setup)
@@ -68,7 +69,7 @@ describe('ch10：编队抽取只在初设完成后执行一次', () => {
     // 队内台账不重抽：再点执行也是 no-op
     expect(setup.executeSetupDraws()).toBe(true)
     expect(JSON.stringify(containers.drawResults)).toBe(ledger)
-  })
+  }, 20_000)
 
   it('旧「按环节抽签」分支已删除（无 store 入口、无 SOP 环节）', () => {
     const { containers } = boot()

@@ -11,15 +11,14 @@ import { actionGateOf, toConsoleUnit, unitChoices, useWorkbenchStore } from '@/s
  * ## 原文
  *   - 专规 2.1/3.1（`rules.json → free_rail_cap_sp`）：「每个**可卸载城市格**可放 1 SP（免费铁运），
  *     其余 SP 放**图边补给源格**；须有 13.3e 的合法铁路移动路径」；
- *   - 通规 13.3c：可卸货格 = 有村庄/城市/港口/工程 HQ ＋ 受本方控制（13.3h）＋ 免 EZOC 铁路路径回补给源；
+ *   - 通规 13.3c：可卸货格 = 有村庄/城市/港口/工程 HQ ＋ 免 EZOC 铁路路径回补给源；
+ *     （2026-11-12 口径：铁路没有归属/控制/占领 ⇒ 不再要求 13.3h 受控）
  *   - 通规 13.3b：铁路运量每回合清零、只在移动阶段用 ⇒ 免费铁运**不扣**运量；
  *   - 专规 3.6：随机事件掷出 **Supply Train**（表 5–9）⇒ 轴方在**任一可卸货格**得 2 SP，不用 Rail Cap。
  *
  * ## 测法边界（如实交代）
  *   - 判据来自引擎（`tests/engine/free-rail-arrival.test.ts` 用合成格钉住）；
  *     本文件钉**数据面 + 接线 + 落账**：候选清单取自真实地图数据，运行时交集取自 `rail-supply` 的 13.3c；
- *   - **控制（13.3h）仍是操作台的近似**（「格内仅有单方战斗单位」⇒ 空城视为未控制，**宁可少给**）——
- *     故本用例必须把轴方算子摆进城里才拿得到候选；这条近似是既有约定，见 §17.111 的边界说明；
  *   - **不覆盖界面**（仓库无组件渲染测试）：面板上的勾选按钮由 store 用例与源码守卫间接盯。
  */
 
@@ -97,18 +96,30 @@ describe('批 F 切片 3：免费铁运候选（数据面 + 运行期 13.3c）',
     expect(listed.some((text) => text.startsWith('34.17'))).toBe(false)
   })
 
-  it('★ 运行期：候选＝城市格 ∩ 13.3c 可卸货格（城里没有本方战斗单位 ⇒ 未控制 ⇒ 不是候选）', () => {
+  it('★ 运行期：候选＝城市格 ∩ 13.3c 可卸货格（铁路路径 + 三种阻断；控制不再参与）', () => {
     const store = newStore()
     armAxisRail(store, [])
-    expect(store.freeRailCityCandidates).toEqual([])
-
-    // 往 2.2 摆一个轴方战斗单位（单方占据 ⇒ 控制），铁路路径通到边缘源 ⇒ 成为候选
-    armAxisRail(store, [CITY_HEX])
+    // 2026-11-12 铁路口径：铁路没有归属/控制/占领 ⇒ 空城同样是可卸货格
     expect(store.freeRailCityCandidates.map((item) => `${item.hex.col}.${item.hex.row}`)).toEqual([
       '2.2',
     ])
     // 候选恒是静态清单的子集（判据只有一处：rail-supply 的 13.3c）
     expect(store.detrainableHexes.map((item) => `${item.col}.${item.row}`)).toEqual(['2.2'])
+
+    // 阻断②：2.2 被苏方单位占据 ⇒ 候选清空（不再看"城内有没有本方战斗单位"）
+    const enemyRecord = unitChoices('soviet').find(
+      (item) => item.isCombat === true && item.attackCapable === true,
+    )
+    if (enemyRecord === undefined) throw new Error('苏方单位库里没有战斗单位')
+    store.units.push(
+      toConsoleUnit({
+        record: enemyRecord,
+        instanceId: 'enemy-at-city',
+        hex: CITY_HEX,
+        side: 'soviet',
+      }),
+    )
+    expect(store.freeRailCityCandidates).toEqual([])
   })
 
   it('★ 两侧都可用：换成苏方后候选改按苏方口径（宽轨 + 苏方图边源）重算', () => {

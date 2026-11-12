@@ -130,7 +130,12 @@ describe('9.14d：移动阶段的主动崩溃（替代常规移动）', () => {
     const store = newStore()
     store.setPhase('movement')
     const extender = placeExtender(store)
-    // 不声明任何补给源 ⇒ 全图无追溯补给 ⇒ 没有合法落点
+    /*
+     * 2026-11-12 铁路口径：13.3c 派生的卸货格成为 12.6a② 自动补给源，且 12.6 追溯补给无距离上限，
+     * 不能再靠"不声明补给源"造出"全图无补给"。这里把印值 MA 置 0 ⇒ 只有原格在位移半径内；
+     * CORE_HEX（7.21）本身在两方自动覆盖集之外 ⇒ 仍无合法落点，保持本条要测的 9.14d 分支。
+     */
+    extender.faces.combat.ma = 0
     expect(store.collapseExtenderNow(extender.instanceId)).toBe(true)
     expect(store.specialPending).toBeNull()
     // 9.14d 重要提示：原地不动、翻面、并按 9.14c 判夺取

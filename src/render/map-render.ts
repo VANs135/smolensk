@@ -12,7 +12,12 @@ import {
   hexsideCanvasSegment,
   isBoardHex,
 } from './map-layout'
-import { counterImages, controlMarkerImageUrl, hedgehogTextureUrl } from './token-images'
+import {
+  counterImages,
+  controlMarkerImageUrl,
+  hedgehogTextureUrl,
+  markerTextureUrl,
+} from './token-images'
 import {
   expandRect,
   visibleWorldRect,
@@ -114,6 +119,9 @@ export interface ConstructionMarkerBadge {
  */
 export const CONTROL_MARKER_RATIO = 0.6
 
+/** 13.3d：通用地图标记的显示比例（相对外接圆半径 R；画在格心右下角内沿） */
+export const MAP_MARKER_RATIO = 0.5
+
 /**
  * 地图绘制的**图层顺序**（自下而上）—— 唯一出处
  *
@@ -134,6 +142,7 @@ export const MAP_LAYER_ORDER = [
   'printedHedgehogs',
   'statusTextures',
   'controlMarkers',
+  'mapMarkers',
   'constructionMarkers',
 ] as const
 
@@ -173,6 +182,8 @@ export const MAP_PALETTE = {
   /** 专规 3.5 建造标记的回退色：桥 = 木色、简易机场 = 草绿（与河/路/工事都不同族） */
   constructionBridge: '#7a4a1d',
   constructionAirStrip: '#3f6b3a',
+  /** 13.3d 通用标记的回退色（铁路端头）：取铁路灰的深一档 */
+  railhead: '#3a3a3a',
 } as const
 
 /** 图层开关 */
@@ -191,6 +202,8 @@ export interface MapLayerVisibility {
   control: boolean
   /** 专规 3.5：**建造标记**（桥 / 简易机场）——玩家放下的那几枚 */
   constructionMarkers: boolean
+  /** 13.3d：**通用标记**（铁路端头 `mk-38` 等地图事实标记） */
+  mapMarkers: boolean
 }
 
 /** 默认图层：扫描图本身已印有网格，故网格默认关闭、格号默认开启（缩放时按屏幕字号重画） */
@@ -204,6 +217,8 @@ export const DEFAULT_MAP_LAYERS: MapLayerVisibility = {
   control: true,
   // 专规 3.5 的建造标记是玩家自己放的、会改变地形取费的事实 ⇒ 默认开着
   constructionMarkers: true,
+  // 13.3d 的铁路端头等地图事实标记 ⇒ 默认开着
+  mapMarkers: true,
 }
 
 /**
@@ -347,6 +362,19 @@ export interface MapRenderOptions {
    * 玩家放完标记就失去了唯一的空间参照（"这枚桥到底在哪一格"）。
    */
   constructionMarkers?: readonly ConstructionMarkerPiece[] | null
+  /**
+   * 13.3d：**通用地图标记**（`Marker` 实例里 `hex !== null` 的那些）
+   *
+   * 与 `controlMarkers`/`constructionMarkers` 同族：**地图事实**、不是算子 ⇒ 不可选中、
+   * 不进命中测试。`image` 是 `public/counters/markers/` 下的文件名（如 `Neutral_Railhead.png`）。
+   */
+  markers?: readonly MapMarkerPiece[] | null
+}
+
+/** 13.3d：一枚地图标记（格 + 贴图文件名） */
+export interface MapMarkerPiece {
+  hex: HexRef
+  image: string
 }
 
 /**
@@ -664,6 +692,49 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
       ctx.font = `${badgeFontPx.toFixed(1)}px ui-monospace, monospace`
       ctx.fillStyle = '#ffffff'
       ctx.fillText(marker.side === 'soviet' ? '苏' : '轴', center.x, center.y)
+    }
+  }
+
+  /*
+   * ⑩′ 13.3d：**通用地图标记**（铁路端头 `mk-38` 等）
+   *
+   *   · 画在格的**右下角内沿**（右上工事、左上控制、左下建造 ⇒ 四角互不打架）；
+   *   · 贴图就绪时直接画 `markers.json` 的图（如 `Neutral_Railhead.png`）；
+   *   · 未就绪时退回「深灰方块 + 端」，不让标记凭空消失；
+   *   · **不是算子**：不进 `tokens`，不参与命中测试与堆叠展开。
+   */
+  if (layers.mapMarkers) {
+    const pieces = options.markers ?? []
+    const badgeSide = HEX_RADIUS_PX * MAP_MARKER_RATIO
+    const fontPx = (badgeSide * 0.66) / scale
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    for (const piece of pieces) {
+      if (!isBoardHex(piece.hex)) continue
+      const hexCenter = hexCanvasPoint(piece.hex)
+      const center = {
+        x: hexCenter.x + HEX_RADIUS_PX * HEDGEHOG_CORNER_OFFSET,
+        y: hexCenter.y + HEX_RADIUS_PX * HEDGEHOG_CORNER_OFFSET,
+      }
+      const texture = counterImages.get(markerTextureUrl(piece.image))
+      if (texture !== null) {
+        ctx.drawImage(
+          texture,
+          center.x - badgeSide / 2,
+          center.y - badgeSide / 2,
+          badgeSide,
+          badgeSide,
+        )
+        continue
+      }
+      ctx.fillStyle = MAP_PALETTE.railhead
+      ctx.fillRect(center.x - badgeSide / 2, center.y - badgeSide / 2, badgeSide, badgeSide)
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = 1 / scale
+      ctx.strokeRect(center.x - badgeSide / 2, center.y - badgeSide / 2, badgeSide, badgeSide)
+      ctx.font = `${fontPx.toFixed(1)}px ui-monospace, monospace`
+      ctx.fillStyle = '#ffffff'
+      ctx.fillText('端', center.x, center.y)
     }
   }
 
