@@ -315,6 +315,36 @@ function hoverUnit(id: string | null): void {
     <p v-if="canOverrun" class="muted num">点击地图上高亮的敌方格发起突袭 · 8.1a</p>
 
     <!--
+      R13（K3）：8.1g/h 的「参突 / 留驻」拆分原先只在「格子内容小窗」的 content 变体里，
+        而移动中点格不会开窗 ⇒ 正常路径下打不开。这里把它放进移动面板（移动期间恒可用），
+        候选取 `overrunCandidateUnits`（含 4.5a-A 停车者——它们正是“停车后改突袭”的主体）。
+        不勾选＝仍在移动的合格单位全部参突；拆分的唯一实现仍在引擎 `splitOverrunStack`。
+    -->
+    <div v-if="workbench.overrunCandidateUnits.length > 0" class="block">
+      <p class="muted num">
+        <BaseTag kind="info">8.1g/h</BaseTag>
+        突袭时谁参战（不勾选＝全部参突；未勾者留驻，仍计 4.8a）
+      </p>
+      <ul class="checks">
+        <li v-for="unit in workbench.overrunCandidateUnits" :key="unit.instanceId" class="num">
+          <label>
+            <input
+              type="checkbox"
+              :checked="workbench.overrunParticipantIds.includes(unit.instanceId)"
+              @change="workbench.toggleOverrunParticipant(unit.instanceId)"
+            />
+            {{ unit.name }} @ {{ hexLabel(unit.hex) }}（{{ unit.re }} RE）
+          </label>
+        </li>
+      </ul>
+      <p v-if="workbench.overrunSplitNow !== null" class="muted num">
+        参突 {{ workbench.overrunSplitNow.participantIds.length }} 枚 · 留驻
+        {{ workbench.overrunSplitNow.stayIds.length }} 枚 · 原格战斗 RE
+        {{ workbench.overrunSplitNow.originStackRe }}
+      </p>
+    </div>
+
+    <!--
       ★ 12.5 燃料：**已移出本面板**（用户 2026-11-10：加油唯一入口＝右键该单位/堆叠）。
       点选单位/格子不再自动进入加油流程；付款在 `FuelPanel`（会话 kind='fuel'）内完成。
     -->
@@ -385,6 +415,19 @@ function hoverUnit(id: string | null): void {
   color: var(--color-muted);
   font-size: var(--text-sm);
   margin: var(--space-1) 0;
+}
+
+.checks {
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+}
+
+.checks label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  cursor: pointer;
 }
 
 .notes {
