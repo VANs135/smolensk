@@ -11248,8 +11248,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           unitId: unit.instanceId,
           ar: unit.raw.ar,
           dg: unit.mode.dg,
-          // 火炮不参与进攻、没有进击模式 ⇒ 引擎不向它发进击标记
-          isArtillery: (unit.raw.barrage ?? 0) > 0,
         })),
       }),
       '战后推进',

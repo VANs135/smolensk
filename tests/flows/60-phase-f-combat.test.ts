@@ -408,7 +408,7 @@ describe('Ⓕ 9.13 / 9.14：进击标记与特殊战斗判据', () => {
     if (mixed.ok) expect(mixed.data.reason).toBe('optionsNotAllLosses')
   })
 
-  it('火炮不参与进攻、没有进击模式 ⇒ 不获得进击标记', () => {
+  it('火炮攻击值为 0（无进攻能力）⇒ 不参战、不获得进击标记', () => {
     const base = {
       eThreshold: 3,
       attackerRetreatedInOptions: false,
@@ -419,16 +419,16 @@ describe('Ⓕ 9.13 / 9.14：进击标记与特殊战斗判据', () => {
     }
     const onlyGun = exploitEligibility({
       ...base,
-      attackers: [{ unitId: 'gun', ar: 5, dg: false, isArtillery: true }],
+      attackers: [{ unitId: 'gun', ar: 0, dg: false }],
     })
     expect(onlyGun.ok).toBe(true)
     if (onlyGun.ok)
-      expect(onlyGun.data).toMatchObject({ granted: false, reason: 'artilleryNoExploit' })
+      expect(onlyGun.data).toMatchObject({ granted: false, reason: 'arBelowThreshold' })
 
     const mixed = exploitEligibility({
       ...base,
       attackers: [
-        { unitId: 'gun', ar: 5, dg: false, isArtillery: true },
+        { unitId: 'gun', ar: 0, dg: false },
         { unitId: 'inf', ar: 4, dg: false },
       ],
     })

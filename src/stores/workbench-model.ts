@@ -3379,7 +3379,7 @@ export function participatesIn(query: ParticipationQuery): ParticipationVerdict 
       if (query.attackedUnitIds?.includes(unit.instanceId) === true)
         return cannotParticipate('9.1c', '该单位在本战斗环节已攻击过（一个单位只能攻击一次）')
       if (!canBeAttacker(unit))
-        return cannotParticipate('9.1b', '该单位不可攻击（无印刷战斗值或本轮已移动）')
+        return cannotParticipate('9.1b', '该单位不可进攻（attackCapable 为否，或印刷攻击值为 0）')
       return { ok: true, rule: '9.1b' }
 
     /* ── G 进击（11.0a：进击标记单位或已释放预备） ── */
@@ -3408,7 +3408,8 @@ export function participatesIn(query: ParticipationQuery): ParticipationVerdict 
         return cannotParticipate('11.0a', '进击段只有进击模式单位或已释放的预备可以战斗')
       if (query.attackedUnitIds?.includes(unit.instanceId) === true)
         return cannotParticipate('9.1c', '该单位在本战斗环节已攻击过（一个单位只能攻击一次）')
-      if (!canBeAttacker(unit)) return cannotParticipate('11.0', '该单位不可攻击（无印刷战斗值）')
+      if (!canBeAttacker(unit))
+        return cannotParticipate('11.0', '该单位不可进攻（attackCapable 为否，或印刷攻击值为 0）')
       return { ok: true, rule: '11.0' }
 
     default:

@@ -781,8 +781,8 @@ export function defenderMayIgnoreOptions(input: {
 export function exploitEligibility(input: {
   /** CRT 结果里的 e#（无则不判） */
   eThreshold: number | undefined
-  /** 参战攻方单位及各自的 AR / DG / 是否火炮（由调用方从参战单位取，9.13「实际参与攻击」） */
-  attackers: readonly { unitId: string; ar: number; dg: boolean; isArtillery?: boolean }[]
+  /** 参战攻方单位及各自的 AR / DG（由调用方从参战单位取，9.13「实际参与攻击」） */
+  attackers: readonly { unitId: string; ar: number; dg: boolean }[]
   attackerRetreatedInOptions: boolean
   /** 攻方是否把全部选项都选成了军力损失（9.10d） */
   attackerAllOptionsAsLosses: boolean
@@ -810,14 +810,12 @@ export function exploitEligibility(input: {
     return none('9.13b-C', 'twoStacksNotAdjacent')
 
   // 9.13 / 9.13b-A：逐单位判
-  // 火炮不参与进攻、没有进击模式（用户 2026-11-12 口径）⇒ 即使 AR 达标也不发进击标记
+  // 火炮的印刷攻击值为 0（无进攻能力），不会被列入参战攻方，故这里不需要额外的“火炮”分支
   const qualified = input.attackers.filter((unit) => unit.ar >= input.eThreshold!)
-  const eligible = qualified.filter((unit) => unit.isArtillery !== true)
-  const grantedUnitIds = eligible.filter((unit) => !unit.dg).map((unit) => unit.unitId)
+  const grantedUnitIds = qualified.filter((unit) => !unit.dg).map((unit) => unit.unitId)
   if (grantedUnitIds.length > 0)
     return succeed('9.13', { granted: true, grantedUnitIds, reason: 'ok' })
-  if (eligible.length > 0) return none('9.13b-A', 'attackerDg')
-  if (qualified.length > 0) return none('9.13', 'artilleryNoExploit')
+  if (qualified.length > 0) return none('9.13b-A', 'attackerDg')
   return none('9.13', 'arBelowThreshold')
 }
 
