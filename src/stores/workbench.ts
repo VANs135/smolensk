@@ -6284,46 +6284,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     combatState.value = composed
-    // 9.12f：突袭也是一种战斗 ⇒ 同样在「战斗开始时」拍快照
-    captureCombatStartSnapshot()
-    combatSurpriseDie.value = null
-    combatAwaitingShiftDie.value = false
-    const inputs = createCombatInputs()
-    /*
-     * B30：行动值单位**预填为双方 AR 最高者**（9.6 的选择仍是玩家的动作 —— 面板可改，
-     * 只是不再逼玩家从零挑一个）。放在这里而不是 UI：它是"盘面事实"的推导，且验证页同样受益。
-     */
-    inputs.attackerArUnitId = defaultArUnitIdOf('attacker')
-    inputs.defenderArUnitId = defaultArUnitIdOf('defender')
-    /*
-     * 12.4 / 12.6：**战斗补给只能从己方补给站扣**（12.3a 直接拖取 / 12.3b HQ 投递）。
-     * 除专规的补给储备标记（1.7 / 21.10：Shells 抵付炮击成本、Forage 在补给阶段提供追溯补给）外，
-     * SP 不存在「凭空可用的池子」。故未声明来源时可用量为 **0**，由引擎按 12.4 裁决
-     * （攻方付不出 ⇒ 不能攻击；守方付不出 ⇒ 以一半战斗值防御，9.5-B）。
-     */
-    inputs.attackerAvailableT = 0
-    inputs.defenderAvailableT = 0
-    inputs.defenderTerrain = defaultDefenseTerrain(hex)
-    combatInputs.value = inputs
-    pushLog(
-      'info',
-      `发起突袭（8.0）：${participants.length} 个参突单位 → ${hexLabel(hex)}（守方 ${defenders.length} 个）；` +
-        `每次 3 MP（8.1a），请按 9.2 九步结算`,
-      '8.0',
-    )
-    if (split.stayIds.length > 0) {
+    beginGroundAttack({
+      attackType: 'overrun',
+      hex,
+      text:
+        `发起突袭（8.0）：${participants.length} 个参突单位 → ${hexLabel(hex)}` +
+        `（守方 ${defenders.length} 个）；每次 3 MP（8.1a），请按 9.2 九步结算`,
       // 8.1h：留驻单位仍计入原格 4.8a 的战斗 RE，但不参突、也不受结果影响
-      pushLog(
-        'info',
-        `8.1g/h：留驻 ${split.stayIds.length} 个单位（原格战斗 RE ${split.originStackRe}）`,
-        '8.1h',
-      )
-    }
-    // ⑭ 接线：突袭的宣布入会话日志（8.0；本笔不掷骰，骰子在 9.2 九步里逐笔记账）
-    recordSettlement({
-      action: 'overrun',
-      rule: '8.0',
-      data: {
+      extraLogs:
+        split.stayIds.length > 0
+          ? [
+              {
+                text: `8.1g/h：留驻 ${split.stayIds.length} 个单位（原格战斗 RE ${split.originStackRe}）`,
+                rule: '8.1h',
+              },
+            ]
+          : [],
+      // ⑭ 接线：突袭的宣布入会话日志（8.0；本笔不掷骰，骰子在 9.2 九步里逐笔记账）
+      settlementData: {
         stage: 'declare',
         target: { ...hex },
         participantIds: [...participants],
@@ -10429,6 +10407,58 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
   }
 
+  /**
+   * 9.2 开战后的**公共段**（P1 合并：常规战斗与突袭只留一份）
+   *
+   * 两型在 `beginCombat` 之后的动作逐项相同：9.12f 快照 → 清骰 → 建输入 → AR 预填 →
+   * 战斗补给可用量归零 → 默认防御地形 → 开战日志 → 记账。差别只有「日志文案」与
+   * 「记账数据」，故由调用方给出；规则号与会话 `action` 由 `attackType` 定。
+   *
+   * ★ 突袭的**前置**（`moveInteraction` / `overrunContext` / ZOC 停车者 / 8.1g 参突 pin）
+   *   差异太大，不并入本函数——那是「能否发起」的事，这里是「发起之后」的事。
+   */
+  function beginGroundAttack(input: {
+    attackType: 'regular' | 'overrun'
+    /** 防御格（默认防御地形取它） */
+    hex: HexRef
+    /** 开战日志文案（规则号按 attackType 取 9.1 / 8.0） */
+    text: string
+    /** 追加日志（如突袭的 8.1h 留驻说明），按顺序排在主日志之后、记账之前 */
+    extraLogs?: readonly { text: string; rule: string }[]
+    /** 会话记账数据（两型形状不同，由调用方给） */
+    settlementData: Record<string, unknown>
+  }): void {
+    const rule = input.attackType === 'overrun' ? '8.0' : '9.1'
+    // 9.12f：此刻即「战斗开始时」⇒ 拍快照（撤退穿越只认它）
+    captureCombatStartSnapshot()
+    combatSurpriseDie.value = null
+    combatAwaitingShiftDie.value = false
+    const inputs = createCombatInputs()
+    /*
+     * B30：行动值单位**预填为双方 AR 最高者**（9.6 的选择仍是玩家的动作 —— 面板可改，
+     * 只是不再逼玩家从零挑一个）。放在这里而不是 UI：它是"盘面事实"的推导，且验证页同样受益。
+     */
+    inputs.attackerArUnitId = defaultArUnitIdOf('attacker')
+    inputs.defenderArUnitId = defaultArUnitIdOf('defender')
+    /*
+     * 12.4 / 12.6：**战斗补给只能从己方补给站扣**（12.3a 直接拖取 / 12.3b HQ 投递）。
+     * 除专规的补给储备标记（1.7 / 21.10：Shells 抵付炮击成本、Forage 在补给阶段提供追溯补给）外，
+     * SP 不存在「凭空可用的池子」。故未声明来源时可用量为 **0**，由引擎按 12.4 裁决
+     * （攻方付不出 ⇒ 不能攻击；守方付不出 ⇒ 以一半战斗值防御，9.5-B）。
+     */
+    inputs.attackerAvailableT = 0
+    inputs.defenderAvailableT = 0
+    inputs.defenderTerrain = defaultDefenseTerrain(input.hex)
+    combatInputs.value = inputs
+    pushLog('info', input.text, rule)
+    for (const entry of input.extraLogs ?? []) pushLog('info', entry.text, entry.rule)
+    recordSettlement({
+      action: input.attackType === 'overrun' ? 'overrun' : 'combatDeclare',
+      rule,
+      data: input.settlementData,
+    })
+  }
+
   /** C6 第 1 步：开始战斗（9.1 战斗构成） */
   function beginCombatNow(): boolean {
     if (!canReplaceCombat() || (barrageState.value !== null && !barrageState.value.finished))
@@ -10480,37 +10510,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
     if (composition === null) return false
     combatState.value = composition
-    // 9.12f：此刻即「战斗开始时」⇒ 拍快照（撤退穿越只认它）
-    captureCombatStartSnapshot()
-    combatSurpriseDie.value = null
-    combatAwaitingShiftDie.value = false
-    const inputs = createCombatInputs()
-    /*
-     * B30：行动值单位**预填为双方 AR 最高者**（9.6 的选择仍是玩家的动作 —— 面板可改，
-     * 只是不再逼玩家从零挑一个）。放在这里而不是 UI：它是"盘面事实"的推导，验证页同样受益。
-     */
-    inputs.attackerArUnitId = defaultArUnitIdOf('attacker')
-    inputs.defenderArUnitId = defaultArUnitIdOf('defender')
-    /*
-     * 12.4 / 12.6：**战斗补给只能从己方补给站扣**（12.3a 直接拖取 / 12.3b HQ 投递）。
-     * 除专规的补给储备标记（1.7 / 21.10：Shells 抵付炮击成本、Forage 在补给阶段提供追溯补给）外，
-     * SP 不存在「凭空可用的池子」。故未声明来源时可用量为 **0**，由引擎按 12.4 裁决
-     * （攻方付不出 ⇒ 不能攻击；守方付不出 ⇒ 以一半战斗值防御，9.5-B）。
-     */
-    inputs.attackerAvailableT = 0
-    inputs.defenderAvailableT = 0
-    inputs.defenderTerrain = defaultDefenseTerrain(target.hex)
-    combatInputs.value = inputs
-    pushLog(
-      'info',
-      `开始战斗（9.2 第 1 步）：攻方 ${attackers.length} 个 → 防御格 ${hexLabel(target.hex)}（守方 ${defenders.length} 个）。请确认战斗补给（9.5/12.4）`,
-      '9.1',
-    )
-    // ⑭ 接线：战斗构成（9.1）入会话日志（本笔不掷骰）
-    recordSettlement({
-      action: 'combatDeclare',
-      rule: '9.1',
-      data: {
+    beginGroundAttack({
+      attackType: 'regular',
+      hex: target.hex,
+      text:
+        `开始战斗（9.2 第 1 步）：攻方 ${attackers.length} 个 → 防御格 ${hexLabel(target.hex)}` +
+        `（守方 ${defenders.length} 个）。请确认战斗补给（9.5/12.4）`,
+      settlementData: {
         attackType: 'regular',
         targetHex: { ...target.hex },
         attackerIds: attackers.map((unit) => unit.instanceId),
