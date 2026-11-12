@@ -25,6 +25,30 @@ import type { DiceRoll, RngState } from './state-types'
 /** 算法标识（入存档头，用于判定存档是否可用当前算法复算） */
 export const RNG_ALGORITHM = 'mulberry32'
 
+/**
+ * 固定种子（原 `DEFAULT_SEED`）：测试与本地演练的确定性种子
+ *
+ * 测试环境的新局种子一律取此值，保证"固定种子 ⇒ 固定骰序"的既有断言不漂移。
+ */
+export const TEST_FIXED_SEED = 20260913
+
+/**
+ * 新局种子（E4）
+ *
+ * 测试环境固定为 `TEST_FIXED_SEED`；生产环境取系统熵（`crypto.getRandomValues`，
+ * 无 crypto 时退化到时间戳），**不用 `Math.random`**（B2：禁不可复算的随机源）。
+ */
+export function createGameSeed(): number {
+  if (import.meta.env.MODE === 'test') return TEST_FIXED_SEED
+  const cryptoApi = globalThis.crypto
+  if (cryptoApi !== undefined && typeof cryptoApi.getRandomValues === 'function') {
+    const buffer = new Uint32Array(1)
+    cryptoApi.getRandomValues(buffer)
+    return ((buffer[0] ?? 0) % 2_000_000_000) + 1
+  }
+  return (Date.now() % 2_000_000_000) + 1
+}
+
 /** 骰面数（本作判定均为 1d6 / 2d6，见 9.8 奇袭、9.9 战斗表等） */
 export const DIE_FACES = 6
 

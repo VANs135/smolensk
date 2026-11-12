@@ -32,7 +32,15 @@ import { defineStore } from 'pinia'
 import { computed, ref, toRaw, watch, type Ref } from 'vue'
 
 import type { HexRef, MarkerSide, RailGauge, Side } from '@/data'
-import { mapConfig, mapLayers, markers, rulesConstants, scenarios, unitsAxis } from '@/data'
+import {
+  DATA_VERSION,
+  mapConfig,
+  mapLayers,
+  markers,
+  rulesConstants,
+  scenarios,
+  unitsAxis,
+} from '@/data'
 import {
   HEX_DIRECTIONS,
   allMapHexes,
@@ -46,7 +54,7 @@ import {
 } from '@/engine/hex-geometry'
 import { DERIVATION_KEY, type Derivation } from '@/engine/derivation'
 import { combatDerivation, surpriseDerivation } from '@/engine/derivation-builders'
-import { createRngState, roll1d6, roll2d6 } from '@/engine/rng'
+import { createGameSeed, createRngState, RNG_ALGORITHM, roll1d6, roll2d6 } from '@/engine/rng'
 import { validBoardEntities } from '@/engine/board-validation'
 import { actingSideFor } from '@/engine/game-lifecycle'
 import { createSnapshotRegistry } from './snapshot-registry'
@@ -1047,8 +1055,6 @@ const AIR_STATUS_LABELS: Record<string, string> = {
   inactive: '非激活（14.1a）',
 }
 
-const DEFAULT_SEED = 20260913
-
 /**
  * 2.1a：补给源关闭判据的地图事实
  *
@@ -1106,8 +1112,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const session = useGameSessionStore()
   // ⑧：对局记录器（只记事实；未开启时 `note` 立即返回，零开销）
   const recorder = useRecorderStore()
-  const localSeed = ref(DEFAULT_SEED)
-  const localRng = ref<RngState>(createRngState(DEFAULT_SEED))
+  // E4：新局默认种子。测试环境由 `createGameSeed()` 固定为 TEST_FIXED_SEED，
+  // 生产环境取系统熵；同一毫秒内多次建店也不会共用同一个随机种子。
+  const initialSeed = createGameSeed()
+  const localSeed = ref(initialSeed)
+  const localRng = ref<RngState>(createRngState(initialSeed))
   /** 本地演练用的已掷骰次数（有会话时以会话 RNG 的 drawCount 为准） */
   const localDrawCount = ref(0)
 
@@ -1183,15 +1192,43 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const date = computed<string>(() => turnDateOf(turn.value))
 
+  /**
+   * E4：把种子写入当前骰源（初设前写本地，已有会话则写会话）
+   *
+   * 仅供「重置局」这类**显式开新局**的入口使用；日常改种子走 `setSeed`（对局中锁定）。
+   */
+  function applySeed(next: number): void {
+    if (session.session === null) {
+      localSeed.value = next
+      localRng.value = createRngState(next)
+    } else {
+      session.setSessionRng(createRngState(next))
+    }
+  }
+
+  /**
+   * E4：设定种子（**开局后锁定**）
+   *
+   * B2 的复算前提是「一局一个种子」：对局进行中改种子会让已有日志无法按种子重放，
+   * 故只允许在无会话时设定；要换种子必须走「重置局」（`resetAll` / `resetBoardNow`）。
+   */
+  function setSeed(next: number): boolean {
+    if (!Number.isFinite(next) || next <= 0) {
+      pushLog('warning', `种子必须是正整数：${String(next)}`, 'B2')
+      return false
+    }
+    if (session.session !== null) {
+      pushLog('warning', '对局进行中不能改种子（B2：日志按种子复算）；请用「重置局」开新局', 'B2')
+      return false
+    }
+    applySeed(Math.trunc(next))
+    return true
+  }
+
   const seed = computed<number>({
     get: () => session.session?.state.rng.seed ?? localSeed.value,
     set: (next) => {
-      if (session.session === null) {
-        localSeed.value = next
-        localRng.value = createRngState(next)
-      } else {
-        session.setSessionRng(createRngState(next))
-      }
+      setSeed(next)
     },
   })
 
@@ -5856,6 +5893,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       level: kind,
       text,
       rule: rule ?? null,
+      turn: turn.value,
+      phase: phase.value,
+      side: activeSide.value,
+      step: segmentStep.value?.id ?? null,
+    })
+  }
+
+  /**
+   * E4：日志头（种子 + 算法 + 数据契约）
+   *
+   * `log` 是新条目在前的数组，故把日志头 push 到末尾（最旧的一端），一局只在开头有一条；
+   * 已有头则跳过。复算方式：同一日志按该种子与算法重掷，即得同一骰序（B2）。
+   */
+  function recordLogHeader(): void {
+    if (log.value.some((entry) => entry.text.startsWith('本局种子：'))) return
+    const text = `本局种子：${seed.value}（RNG 算法 ${RNG_ALGORITHM}；数据契约 ${DATA_VERSION}；同一日志可按此复算）`
+    log.value.push({ id: createId('log'), kind: 'info', text, rule: 'B2' })
+    noteRecord({
+      kind: 'log',
+      level: 'info',
+      text,
+      rule: 'B2',
       turn: turn.value,
       phase: phase.value,
       side: activeSide.value,
@@ -25879,7 +25938,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /** 重置局（含重设种子）——局况一并回到初始（第 1 回合 / 轴心国先手 / C 移动段） */
-  function resetAll(nextSeed = DEFAULT_SEED): void {
+  function resetAll(nextSeed = createGameSeed()): void {
     automaticPhaseKeys.value = []
     airMissionDomain.reset(true)
     airUnitTransit.reset()
@@ -25975,10 +26034,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     phase.value = 'movement'
     const firstTurn = TURN_TRACK[0]?.turn ?? 1
     turn.value = firstTurn
-    seed.value = nextSeed
-    rng.value = createRngState(nextSeed)
+    // E4：重置局是**显式开新局**，允许换种子（日常改种子由 `setSeed` 在对局中拒绝）
+    applySeed(nextSeed)
     drawCount.value = 0
-    pushLog('info', `重置：种子 ${nextSeed}（B2 可复算）`)
+    recordLogHeader()
   }
 
   /* ── B27b：剩下 6 处「格子编号」的待点入口（值搬进 store，组件只绑字段） ── */
@@ -26722,7 +26781,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     restore: restoreBoard,
   })
 
-  function resetBoardNow(nextSeed = DEFAULT_SEED): void {
+  function resetBoardNow(nextSeed = createGameSeed()): void {
     clearCombat(true)
     fireResolution.resetBarrage()
     restoreBoard(boardRegistry.initial(), true)
@@ -26865,6 +26924,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     turn,
     date,
     seed,
+    setSeed,
+    recordLogHeader,
     rng,
     drawCount,
     units,

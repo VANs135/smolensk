@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 
 import { scenarios } from '@/data'
 import type { Side } from '@/data'
-import { createRngState } from '@/engine/rng'
+import { createRngState, TEST_FIXED_SEED } from '@/engine/rng'
 import {
   advanceSession,
   answerQuestion,
@@ -594,7 +594,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
   }
 
   /** 开局：建一个空白盘面的会话并置为 advancing（共识开关在首次步进时逐项提问） */
-  function startGame(seed = 20260913): boolean {
+  function startGame(seed = TEST_FIXED_SEED): boolean {
     const info = scenarioInfo.value
     if (info === undefined) {
       error.value = { rule: '2.2', reason: `scenarioNotFound:${scenarioId.value}` }

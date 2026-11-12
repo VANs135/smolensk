@@ -439,7 +439,7 @@ onMounted(() => {
               class="num"
               type="number"
               :value="workbench.seed"
-              @change="workbench.resetAll(Number(($event.target as HTMLInputElement).value))"
+              @change="workbench.setSeed(Number(($event.target as HTMLInputElement).value))"
             />
           </label>
           <BaseTag kind="neutral">已掷 {{ workbench.drawCount }} 次</BaseTag>

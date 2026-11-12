@@ -1587,6 +1587,8 @@ export const useSetupStore = defineStore('setup', () => {
           reason: `startGameRejected:${game.error?.reason ?? ''}`,
         })
       }
+      // E4：开局即写日志头（种子 + 算法 + 数据契约），保证一局可按种子复算
+      workbench.recordLogHeader()
       // 开局成功 ⇒ 此刻才收束初设（未落位者记为本局移除）
       if (!finished.value) finishSetup()
       // 专规 4.0：把共识勾选写成日志结论（默认全部不勾 ⇒ 可选规则一律不采用）
