@@ -300,6 +300,15 @@ function hoverUnit(id: string | null): void {
         突袭进入 {{ hexLabel(workbench.overrunZocHeld) }}（敌方 ZOC）：该格单位**不得离开**，
         须**再突袭**（点相邻敌方格）或**停**在原格。
       </p>
+      <!-- R10：这一状态原先只留一行提示，面板上没有可点的出口；补上两个真实动作 -->
+      <div class="row">
+        <BaseButton variant="primary" size="sm" @click="workbench.finishMove()">
+          结束移动
+        </BaseButton>
+        <BaseButton variant="ghost" size="sm" @click="workbench.abortMoveNow()">
+          放弃本次移动（全部还原并退出）
+        </BaseButton>
+      </div>
     </SessionStep>
 
     <!-- ③ 突袭（8.0/8.1a）：目标格在地图上高亮，点它即发起 -->
