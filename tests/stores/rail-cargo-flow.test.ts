@@ -59,15 +59,20 @@ const FROM: HexRef = RAIL_RUN[0]!
 const TO: HexRef = RAIL_RUN[RAIL_RUN.length - 1]!
 
 /** 摆一个**移动模式**的战斗单位（13.3e：铁路运输须移动模式；取非步行的以免 4.7b 减半） */
-function railUnit(store: Workbench, hex: HexRef, instanceId: string) {
+function railUnit(
+  store: Workbench,
+  hex: HexRef,
+  instanceId: string,
+  side: 'axis' | 'soviet' = 'soviet',
+) {
   const record = groundRecord(
-    'soviet',
+    side,
     (item) =>
       item.isCombat === true &&
       item.attackCapable === true &&
       item.classes?.movementClass !== 'leg',
   )
-  const unit = placeGround(store, record, hex, 'soviet', instanceId)
+  const unit = placeGround(store, record, hex, side, instanceId)
   unit.mode = { mode: 'move', orientation: 'move', dg: false, exploit: false }
   unit.mpSpent = 0
   unit.movementEnded = false
@@ -381,5 +386,28 @@ describe('13.3a：容量费用的两条路径修正', () => {
     expect(store.lastRailMove!.cost).toBe(2)
     expect(store.lastRailMove!.detail).not.toContain('全程多轨')
     expect(store.lastRailMove!.path.map(label)).toEqual(['15.10', ...SPUR.map(label)])
+  })
+})
+
+describe('13.6b 入场格登车：提案放行，拒绝原因交 13.3f / 13.3e-2', () => {
+  it('Entry F=8.00 起步不再被提案预滤成 noRailPath；由引擎按 13.3f 拒绝', () => {
+    const store = newStore() // 轴方
+    store.setPhase('movement')
+    const F: HexRef = { col: 8, row: 0 }
+    const BEYOND: HexRef = { col: 10, row: 1 }
+
+    // 8.0→9.1→10.1：中间格 9.1 是印刷宽轨（轴方用标准轨）。
+    // 入场格起步只搜连通性 ⇒ 提案给出整条路；旧实现会在这里提前返回 null。
+    expect(store.railPathBetween(F, BEYOND, 'axis')).toEqual([F, { col: 9, row: 1 }, BEYOND])
+
+    const cargo = railUnit(store, F, 'entry-f-cargo', 'axis')
+    store.selectedId = cargo.instanceId
+    store.railMoveInputs = { toHexText: label(BEYOND), spAmount: 1, fromDumpId: null }
+    expect(store.railMoveNow('unit')).toBe(false)
+    // 登车已放行（13.6b），真正的拒绝点是起点格轨距（13.3f）
+    expect(store.railMoveError).toMatchObject({
+      rule: '13.3f',
+      reason: 'entrainHexWrongGauge:8.0',
+    })
   })
 })

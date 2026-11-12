@@ -4090,6 +4090,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const facts = railMoveFacts.value
     const key = (hex: HexRef): string => `${hex.col}.${hex.row}`
     const goal = key(to)
+    /**
+     * 13.6b：起点是本方**入场格**时，登车已按「地图外登车」放行（引擎 §①），
+     * 提案阶段不得再按轨距/敌情把整条路预先滤掉，否则界面只剩 `noRailPath`，
+     * 拿不到 13.3f / 13.3e-2 的真实拒绝原因。故入场起步只搜连通性，合法性全交引擎。
+     */
+    const entryStart = facts.isEntryHex(from, side)
 
     /** `multiOnly` = 只走多轨格边（用于先试「全程多轨」） */
     function search(multiOnly: boolean): HexRef[] | null {
@@ -4103,7 +4109,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           const nextKey = key(next)
           if (seen.has(nextKey)) continue
           if (multiOnly && !facts.isMultiTrackEdge(hex, next)) continue
-          if (nextKey !== goal) {
+          if (nextKey !== goal && !entryStart) {
             if (!facts.railGaugeUsable(next, side)) continue
             // 13.3e-2 的「未控制」＝该格被敌方单位占据（任意单位；与补给侧同源）
             if (facts.enemyOccupies(next, side)) continue
@@ -19314,16 +19320,50 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
-   * 专规 2.1 / 3.1（用户 2026-11-11 裁定）：**两张进场铁路网的种子**
+   * 专规 2.1 / 3.1（用户 2026-11-12 按原文裁定）：**图边补给源 = 地理判据，不是字母入场段**
+   *
+   *   2.1（苏）：「Map-edge hexes **east of 12.xx** where **any type of road or railroad
+   *     enters the map** are Soviet supply sources.」
+   *   3.1（轴）：「Map-edge hexes **west of 10.xx** where **any type of road or railroad
+   *     enters the map** are Axis supply sources.」
+   *
+   * 权威清单＝剧本数据 `supplySources.sovietLive / axisLive`（数据侧按原文从素材库
+   * `supply_sources.json` 派生，故 `42.35` / `4.00` 这类**无字母**的源也在内）。
+   * 2.1a 的关闭（Entry L 19 Jul；Entry E 及以西的南缘源 19 Aug）仍按日期过滤。
+   */
+  const openSourceHexesBySide = computed<Record<Side, HexRef[]>>(() => {
+    const current = scenarios.scenarios.find((item) => item.id === scenarioId.value)
+    const read = (list: readonly string[] | undefined): HexRef[] =>
+      (list ?? [])
+        .map((text) => parseHexPath(text)[0])
+        .filter((hex): hex is HexRef => hex !== undefined)
+    const pick = (side: Side, list: readonly string[] | undefined): HexRef[] => {
+      const statuses = supplySourceStatuses({
+        side,
+        date: date.value,
+        sources: read(list),
+        facts: SHUTDOWN_FACTS,
+      })
+      return statuses.filter((item) => item.open).map((item) => ({ ...item.hex }))
+    }
+    return {
+      axis: pick('axis', current?.supplySources?.axisLive),
+      soviet: pick('soviet', current?.supplySources?.sovietLive),
+    }
+  })
+
+  /**
+   * 专规 2.1 / 3.1（用户 2026-11-12 裁定）：**两张进场铁路网的种子**
    *
    * 原文没有「转换规矩」的铁路 ⇒ 不存在交叉可用，也没有共用段：整段铁路自然归其中一方。
    * 两网各自从本方**进场铁路**出发做连通性 BFS，种子判据：
-   *   本方字母入场段 ∩ 铁路格 ∩ 当日仍开放（2.1a）。
+   *   本侧图边补给源（2.1/3.1 的地理判据，见 `openSourceHexesBySide`）∩ 铁路格 ∩ 当日仍开放（2.1a）。
+   * ★ 不再是「字母入场段」：`42.35`（苏）与 `4.00`（轴）是源但不是字母入口，同样作种子。
    * 多轨与单轨的差别只是 13.3c 的运量费用，**不参与归属判定**。
    */
   const entryRailSeedsBySide = computed<{ axis: HexRef[]; soviet: HexRef[] }>(() => {
     const pick = (side: Side): HexRef[] =>
-      safeEdgeHexesBySide.value[side].filter((hex) => isRailHexAt(hex))
+      openSourceHexesBySide.value[side].filter((hex) => isRailHexAt(hex))
     return {
       axis: pick('axis'),
       soviet: pick('soviet'),

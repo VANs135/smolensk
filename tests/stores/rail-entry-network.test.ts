@@ -37,13 +37,18 @@ function holdAxisCity(store: ReturnType<typeof useWorkbenchStore>): HexRef {
 }
 
 describe('进场铁路网：种子与两网分离', () => {
-  it('种子＝本方字母入场段 ∩ 铁路 ∩ 当日开放（不是任意声明格）', () => {
+  it('种子＝本侧图边补给源 ∩ 铁路 ∩ 当日开放（2.1/3.1 地理判据，不是字母段）', () => {
     const store = boot()
-    // 1.3 / 1.7 / 1.19 / 8.0 是轴方 K–F 字母入场段里的铁路格；
-    // 4.0 虽在旧 live 清单里，但不在 K–F 段内，按 2026-11-11 裁定不再算图边；
-    // 轨距不可用者（8.0）在 BFS 第一步被 13.3f 拦下，但仍属"进场铁路"种子清单。
-    expect(labels(store.entryRailSeedsBySide.axis)).toEqual(['1.19', '1.3', '1.7', '8.0'])
+    // 轴（3.1：西于 10.xx 且有道路/铁路入图）：有铁路的源是 1.03 / 1.07 / 1.19 / 4.00 / 8.00。
+    // ★ 4.0 没有字母，旧口径（字母入场段）把它排除；按 2.1/3.1 原文它是源，必须在种子里。
+    // 轨距不可用者（8.0 为宽轨）在铁路供应 BFS 第一步被 13.3f 拦下，但仍属"进场铁路"种子清单。
+    expect(labels(store.entryRailSeedsBySide.axis)).toEqual(['1.19', '1.3', '1.7', '4.0', '8.0'])
+    // 苏（2.1：东于 12.xx 且有道路/铁路入图）：42.35 在北缘、col 42、有铁路入图，无字母也是源。
+    expect(labels(store.entryRailSeedsBySide.soviet)).toContain('42.35')
     expect(store.entryRailSeedsBySide.soviet.length).toBeGreaterThan(0)
+    // 地理判据本身：轴 col < 10、苏 col > 12
+    for (const hex of store.entryRailSeedsBySide.axis) expect(hex.col).toBeLessThan(10)
+    for (const hex of store.entryRailSeedsBySide.soviet) expect(hex.col).toBeGreaterThan(12)
     const axisNet = new Set(labels(store.railSupplyBySide.axis.railReachableHexes))
     expect(axisNet.has('1.3')).toBe(true)
     const sovietNet = new Set(labels(store.railSupplyBySide.soviet.railReachableHexes))
