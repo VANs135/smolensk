@@ -62,6 +62,7 @@ function facts(over: Partial<RailFacts> = {}): RailFacts {
     isTrainbusting: () => false,
     isMultiTrackEdge: () => false,
     isRailRepairUnit: () => false,
+    isEntryHex: () => false,
     ...over,
   }
 }
@@ -358,6 +359,35 @@ describe('13.3e 铁路移动三步（登车 → 移动 → 卸货，同一阶段
     expect(railed({ entrainOffMap: true, cargo: unitCargo({ mode: 'combat' }) })).toMatchObject({
       ok: false,
       rule: '5.6a',
+    })
+  })
+
+  it('13.6b（用户 2026-11-12 裁定）：入场格可以登车——不要求可卸货 / 不在 ZOC / 有铁路', () => {
+    // A 格：无铁路、不可卸货、在敌方 ZOC、且被敌方单位占据；只因为是入场格就允许登车
+    const brokenBoarding = {
+      hasRail: (hex: HexRef) => hex.row !== A.row,
+      isDetrainable: (hex: HexRef) => hex.row !== A.row,
+      inEnemyZoc: (hex: HexRef) => hex.row === A.row,
+      enemyOccupies: (hex: HexRef) => hex.row === A.row,
+    }
+    expect(railed({ facts: facts({ ...brokenBoarding, isEntryHex: () => true }) }).ok).toBe(true)
+    // 同一批坏条件、非入场格 ⇒ 仍按 13.3e-1 拒
+    expect(railed({ facts: facts({ ...brokenBoarding, isEntryHex: () => false }) })).toMatchObject({
+      ok: false,
+      rule: '13.3e',
+      reason: `entrainHexHasNoRail:${A.col}.${A.row}`,
+    })
+  })
+
+  it('13.6b：入场格登车只豁免登车格；轨距（13.3f）仍照常判', () => {
+    const wrongGauge = facts({
+      railGaugeUsable: (hex) => hex.row !== A.row,
+      isEntryHex: () => true,
+    })
+    expect(railed({ facts: wrongGauge })).toMatchObject({
+      ok: false,
+      rule: '13.3f',
+      reason: `entrainHexWrongGauge:${A.col}.${A.row}`,
     })
   })
 
@@ -792,6 +822,29 @@ describe('createRailFacts：静态铁路图层（产品数据）→ 事实', () 
     expect(railFacts.isRailConnected(B, C)).toBe(false)
     // 不相邻的两格不造边键
     expect(railFacts.isRailConnected(A, C)).toBe(false)
+  })
+
+  it('13.6b：入场格（`isEntryHex`）缺省取产品数据字母段——轴 K/J/I/H/G/F，苏 A–E/L', () => {
+    const dataFacts = createRailFacts({
+      enemyOccupies: () => false,
+      railGaugeUsable: () => true,
+      inEnemyZoc: () => false,
+      hasEnemyCombatUnit: () => false,
+      isDetrainable: () => true,
+      isRailRepairUnit: () => false,
+      source,
+    })
+    // 用户 2026-11-12 裁定点名的三处：F=8.00、K=1.26、I=1.12
+    expect(dataFacts.isEntryHex({ col: 8, row: 0 }, 'axis')).toBe(true)
+    expect(dataFacts.isEntryHex({ col: 1, row: 26 }, 'axis')).toBe(true)
+    expect(dataFacts.isEntryHex({ col: 1, row: 12 }, 'axis')).toBe(true)
+    // 其余轴方字母：J=1.19、H=1.07、G=1.03/1.04
+    expect(dataFacts.isEntryHex({ col: 1, row: 19 }, 'axis')).toBe(true)
+    expect(dataFacts.isEntryHex({ col: 1, row: 7 }, 'axis')).toBe(true)
+    expect(dataFacts.isEntryHex({ col: 1, row: 3 }, 'axis')).toBe(true)
+    // L=20.35 是苏方字母，不算轴方入场格
+    expect(dataFacts.isEntryHex({ col: 20, row: 35 }, 'axis')).toBe(false)
+    expect(dataFacts.isEntryHex({ col: 20, row: 35 }, 'soviet')).toBe(true)
   })
 
   it('13.3a：单/多轨由静态图层的格边标记得出（两格皆视为多轨格，但只有标注的那**一条边**是多轨）', () => {
