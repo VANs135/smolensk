@@ -251,8 +251,8 @@ function shiftText(shift: number): string {
 /**
  * 10.0b：是否为「正确的观察员」
  *
- * 「与目标格**相邻**的，且**未装载于登陆艇**的任何**友方战斗单位**」。
- * 本作无登陆艇（专规 1.1c 无海运），故 `loadedOnLandingCraft` 恒为 false，保留入参以对齐原文。
+ * 「与目标格**相邻**的……任何**友方战斗单位**」——本作无海军、无登陆艇（专规 1.1c），
+ * 原文的「未装载于登陆艇」在本作恒成立，故不再保留该海军分支，只判阵营／战斗单位／相邻。
  */
 export function isCorrectSpotter(input: {
   side: Side
@@ -262,11 +262,9 @@ export function isCorrectSpotter(input: {
   isCombat: boolean
   /** **轰炸方**阵营（观察员须为其战斗单位——「友方」是相对轰炸方而言） */
   friendlySide: Side
-  loadedOnLandingCraft?: boolean
 }): boolean {
   if (input.side !== input.friendlySide) return false
   if (!input.isCombat) return false
-  if (input.loadedOnLandingCraft === true) return false
   return HEX_DIRECTIONS.some((direction) =>
     sameHex(neighbor(input.hex, direction), input.targetHex),
   )
