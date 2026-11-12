@@ -117,6 +117,41 @@ describe('IV-B：初设四种模式各设一次', () => {
   })
 })
 
+describe('E5：初设模式约束与面板计数', () => {
+  it('默认战斗：未指定 face 的地面战斗单位落在战斗面', () => {
+    const unit = toConsoleUnit({
+      record: leg('axis'),
+      instanceId: 'd1',
+      hex: START,
+      side: 'axis',
+    })
+    expect(unit.mode).toMatchObject({ mode: 'combat', orientation: 'combat' })
+  })
+
+  it('计数从盘面派生：剧本 1 轴 0/14、苏 0/0；设一枚预备后 used 变 1', () => {
+    const { workbench: store, game } = newStores()
+    startSetup(store, game, '1')
+    expect(store.setupReserveSummary).toEqual([
+      { side: 'axis', used: 0, cap: 14, forbidden: false },
+      { side: 'soviet', used: 0, cap: 0, forbidden: false },
+    ])
+    const a = place(store, leg('axis'), START, 'axis', 'a1')
+    expect(store.setUnitModeAtSetup('reserve', undefined, [a.instanceId])).toBe(true)
+    expect(store.setupReserveSummary[0]).toMatchObject({ used: 1, cap: 14 })
+  })
+
+  it('剧本 3 初设禁预备：summary 标禁止，设定被拒（ch11）', () => {
+    const { workbench: store, game } = newStores()
+    startSetup(store, game, '3')
+    expect(store.setupReserveSummary.find((item) => item.side === 'axis')).toMatchObject({
+      forbidden: true,
+    })
+    const a = place(store, leg('axis'), START, 'axis', 'a1')
+    expect(store.setUnitModeAtSetup('reserve', undefined, [a.instanceId])).toBe(false)
+    expect(a.mode.mode).toBe('combat')
+  })
+})
+
 describe('5.4a：初设进入预备即占额度', () => {
   it('剧本 2 苏方 0 枚 ⇒ 初设设预备即被拒', () => {
     const { workbench: store, game } = newStores()

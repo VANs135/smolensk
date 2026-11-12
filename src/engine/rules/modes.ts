@@ -878,6 +878,8 @@ export interface SetupModeRequest {
   reserveOccupiedHexes: readonly string[]
   /** 剧本明禁（剧本 3 ch11「No units can setup in Reserve Mode.」） */
   reserveSetupForbidden?: boolean
+  /** E5：剧本允许的初设模式集合；缺省＝四种主动模式都可设（IV-B） */
+  allowedModes?: readonly BaseMode[]
   /** 当前日期（专规 2.3e：8 月 1 日前苏军不得进入战略模式） */
   date?: string
 }
@@ -905,6 +907,11 @@ export function canSetModeAtSetup(req: SetupModeRequest): RuleOutcome<null> {
     ...(req.date === undefined ? {} : { date: req.date }),
   })
   if (!base.ok) return fail(base.rule, base.reason)
+
+  // E5：剧本可收紧初设可选模式集合；未声明时不设额外限制（IV-B）
+  if (req.allowedModes !== undefined && !req.allowedModes.includes(req.to)) {
+    return fail('IV-B', 'setupModeNotAllowed')
+  }
 
   if (req.to === 'reserve') {
     // 剧本 3 ch11：No units can setup in Reserve Mode.

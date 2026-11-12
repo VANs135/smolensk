@@ -221,6 +221,15 @@ function sideLabel(side: Side): string {
       box」。初设源：{{ sourceDetail }}
     </p>
 
+    <!-- ── ②a 初设模式约束（E5）：计数从盘面 units 派生，不另记一份账 ── -->
+    <div v-if="!setup.finished" class="row">
+      <BaseTag kind="neutral">初设模式（IV-B）</BaseTag>
+      <span v-for="item in workbench.setupReserveSummary" :key="item.side" class="muted num">
+        {{ sideLabel(item.side) }} 预备
+        {{ item.forbidden ? '禁止' : `${item.used}/${item.cap}` }}
+      </span>
+    </div>
+
     <!-- ── ② 放置中的提示条 ── -->
     <div v-if="setup.placing !== null" class="placing">
       <BaseTag kind="info">正在放置</BaseTag>

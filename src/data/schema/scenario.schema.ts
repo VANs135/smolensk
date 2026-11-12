@@ -194,6 +194,29 @@ export const ScenarioSetupSchema = z
     reserveMarkers: SidePairSchema,
     /** 剧本明禁初设进入预备模式（剧本 3「No units can setup in Reserve Mode.」） */
     reserveSetupForbidden: z.boolean().optional(),
+    /**
+     * E5：初设模式约束（规格 §2.1）
+     *
+     * 缺省＝四种主动模式都可设、预备上限取 `reserveMarkers`、不额外禁预备；
+     * 有剧本明确写出时才覆盖。
+     */
+    modeConstraints: z
+      .object({
+        /** 初设可选模式集合（IV-B）；缺省 combat / move / reserve / strat */
+        allowedSetupModes: z.array(z.enum(['combat', 'move', 'reserve', 'strat'])).optional(),
+        /** 预备上限（5.4a 按格）；缺省取 `reserveMarkers` */
+        reserveMax: z
+          .object({
+            axis: z.number().int().nonnegative().optional(),
+            soviet: z.number().int().nonnegative().optional(),
+          })
+          .strict()
+          .optional(),
+        /** 剧本明禁初设预备；缺省取旧字段 `reserveSetupForbidden` */
+        reserveSetupForbidden: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
     /** Supply Cache 枚数（每方） */
     supplyCache: z.number().int().nonnegative(),
     /**

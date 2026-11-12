@@ -12,6 +12,7 @@ import {
   canEngineer,
   canFlipOrientation,
   canMoveInPhase,
+  canSetModeAtSetup,
   canStackWithHedgehog,
   canSwitchMode,
   canUseTransport,
@@ -646,5 +647,33 @@ describe('模式矩阵入参收窄（ModeMatrixInput）', () => {
     })
     // 战略：战斗值归零
     expect(numbersOf(modeEffect({ mode: 'strat' }))).toEqual({ combat: 0, defense: 0, barrage: 0 })
+  })
+})
+
+describe('E5：初设允许集合（IV-B）', () => {
+  const request = {
+    to: 'strat' as const,
+    orientation: 'move' as const,
+    unitClass: 'combat' as const,
+    side: 'axis' as const,
+    hex: '57.35',
+    adjacentEnemyAttackCapable: false,
+    reserveCap: 3,
+    reserveOccupiedHexes: [] as string[],
+  }
+
+  it('剧本未声明允许集合 ⇒ 四种主动模式都不额外设限', () => {
+    expect(canSetModeAtSetup(request).ok).toBe(true)
+  })
+
+  it('剧本收紧为 combat/move ⇒ reserve/strat 被拒，reason=setupModeNotAllowed', () => {
+    expect(canSetModeAtSetup({ ...request, allowedModes: ['combat', 'move'] })).toMatchObject({
+      ok: false,
+      rule: 'IV-B',
+      reason: 'setupModeNotAllowed',
+    })
+    expect(
+      canSetModeAtSetup({ ...request, allowedModes: ['combat', 'move', 'reserve', 'strat'] }).ok,
+    ).toBe(true)
   })
 })

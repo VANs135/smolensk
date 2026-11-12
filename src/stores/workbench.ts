@@ -8193,6 +8193,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
   }
 
+  /** E5：初设模式约束（剧本数据优先；缺省按规格 §2.1：四种主动模式、上限取标记数、不禁预备） */
+  const SETUP_MODES_ALL: readonly BaseMode[] = ['combat', 'move', 'reserve', 'strat']
+  function setupModeConstraintsOf(side: Side): {
+    allowed: readonly BaseMode[]
+    reserveCap: number
+    reserveForbidden: boolean
+  } {
+    const setup = session.scenarioInfo?.setup
+    const constraints = setup?.modeConstraints
+    return {
+      allowed: constraints?.allowedSetupModes ?? SETUP_MODES_ALL,
+      reserveCap: constraints?.reserveMax?.[side] ?? setup?.reserveMarkers?.[side] ?? 0,
+      reserveForbidden: constraints?.reserveSetupForbidden ?? setup?.reserveSetupForbidden === true,
+    }
+  }
+
   /**
    * IV-B：**初设阶段**为单位设定模式（按单位/按堆叠）
    *
@@ -8238,6 +8254,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
             : to === 'strat'
               ? 'move'
               : (orientation ?? unit.mode.orientation)
+      const limits = setupModeConstraintsOf(unit.side)
+      if (!limits.allowed.includes(to)) {
+        pushLog('warning', `${unit.name}：本剧本初设不允许${MODE_LABELS[to]}（IV-B）`, 'IV-B')
+        continue
+      }
       const verdict = canSetModeAtSetup({
         to,
         orientation: target,
@@ -8245,9 +8266,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         side: unit.side,
         hex: hexKeyOf(unit),
         adjacentEnemyAttackCapable: adjacentEnemyAttackCapableOf(unit),
-        reserveCap: session.scenarioInfo?.setup.reserveMarkers?.[unit.side] ?? 0,
+        reserveCap: limits.reserveCap,
         reserveOccupiedHexes: reservedHexes(unit.side),
-        reserveSetupForbidden: session.scenarioInfo?.setup.reserveSetupForbidden === true,
+        reserveSetupForbidden: limits.reserveForbidden,
+        allowedModes: limits.allowed,
         date: date.value,
       })
       if (!verdict.ok) {
@@ -8266,6 +8288,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('success', `初设已为 ${String(okCount)} 枚设定${MODE_LABELS[to]}（IV-B）`, 'IV-B')
     return okCount > 0
   }
+
+  /**
+   * E5：初设面板的预备计数（从 `units` 派生，不另记一份账）
+   *
+   * 占用＝`reservedHexes(side).length`（5.4a 按格，同格堆叠只算 1 格）；上限与禁令读剧本数据。
+   */
+  const setupReserveSummary = computed(() =>
+    (['axis', 'soviet'] as const).map((side) => {
+      const limits = setupModeConstraintsOf(side)
+      return {
+        side,
+        used: reservedHexes(side).length,
+        cap: limits.reserveCap,
+        forbidden: limits.reserveForbidden,
+      }
+    }),
+  )
 
   /**
    * E5：释放预备（5.7b）——把选中的预备模式单位的预备标记摘掉
@@ -27038,6 +27077,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     switchableModesOf,
     // IV-B：初设阶段为单位/堆叠设定模式（combat / move / reserve / strat）
     setUnitModeAtSetup,
+    setupReserveSummary,
     eliminateEntry,
     beginMoveFor,
     flipUnitOrientation,
