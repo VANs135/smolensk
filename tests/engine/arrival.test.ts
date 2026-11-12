@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { arrivalsAxis, arrivalsSoviet, rulesConstants } from '@/data'
+import { arrivalsAxis, arrivalsSoviet, mapConfig, rulesConstants } from '@/data'
 import type { HexRef } from '@/data'
 import { arrivalTurnOf, turnDates } from '@/engine/turn-driver'
 import {
   arrivalDateIso,
   arrivalPlacementCandidates,
   claimFrontalReserves,
+  entryClosedForAllSides,
   frontalReservesBatch,
   normalizeArrivalDate,
   parseArrivalPlacement,
@@ -128,6 +129,55 @@ describe('13.6 / 13.6c / 专规 2.1a：一日的到达计划', () => {
     expect(shutdownsFor('soviet', '1941-08-19')).toEqual(['Entry L', 'Entry E 及以西所有南缘源'])
     // 轴方的补给源关闭不在专规 2.1a 之列
     expect(shutdownsFor('axis', '1941-08-19')).toEqual([])
+  })
+
+  it('5-D4（用户 2026-11-12 裁定）：Entry L 关闭后「谁也不是」——轴方也不得用 L 落 20.35', () => {
+    /*
+     * 裁定原文：「苏联补给源关闭后谁也不是」。
+     * Entry L 是苏方补给源入口（map-config.entryHexes.L = 20.35）；关闭后对**双方**都不可用，
+     * 不因当前行动方是轴方就重新开放。修前 `arrivalFacts.entryShutDown` 只查当前方，
+     * 轴方 19 Jul / 19 Aug 的 `Entry K or L` 因此仍会把 L（20.35）当候选。
+     */
+    expect(entryClosedForAllSides('L', '1941-07-18')).toBe(false)
+    expect(entryClosedForAllSides('L', '1941-07-19')).toBe(true)
+    expect(entryClosedForAllSides('E', '1941-08-19')).toBe(true)
+    expect(entryClosedForAllSides('E', '1941-08-18')).toBe(false)
+    expect(entryClosedForAllSides('K', '1941-08-19')).toBe(false)
+
+    // 数据侧：轴方 `Entry K or L` 共 10 条（19 Jul 9 条 + 19 Aug 1 条）
+    const leItems = arrivalsAxis.blocks.flatMap((block) =>
+      (block.groups ?? [])
+        .filter((group) => group.label === 'Entry K or L')
+        .flatMap((group) => group.units),
+    )
+    expect(leItems).toHaveLength(10)
+
+    // 引擎侧：这两天的 `Entry K or L` 需求全部落到 K（1.26），候选里不再出现 20.35
+    const realFacts = (date: string): ArrivalPlacementFacts =>
+      facts({
+        entryHexes: (letter) => (mapConfig.entryHexes?.[letter] ?? []).map((hex) => ({ ...hex })),
+        isBlocked: () => false,
+        entryShutDown: (letter) => entryClosedForAllSides(letter, date),
+      })
+    for (const date of ['1941-07-19', '1941-08-19']) {
+      const outcome = planArrivals({ side: 'axis', date })
+      expect(outcome.ok).toBe(true)
+      if (!outcome.ok) continue
+      const leDemands = outcome.data.units.filter(
+        (unit) => unit.placement.kind === 'entryHex' && unit.placement.letters.includes('L'),
+      )
+      expect(leDemands.length).toBeGreaterThan(0)
+      for (const demand of leDemands) {
+        expect(arrivalPlacementCandidates(demand.placement, realFacts(date))).not.toContainEqual({
+          col: 20,
+          row: 35,
+        })
+        expect(resolveArrivalPlacement(demand.placement, realFacts(date)).hex).toEqual({
+          col: 1,
+          row: 26,
+        })
+      }
+    }
   })
 })
 

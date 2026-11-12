@@ -277,7 +277,7 @@ import {
   arrivalPlacementCandidates,
   airBaseAt,
   resolveArrivalPlacement,
-  shutdownsFor,
+  entryClosedForAllSides,
   resolveBaseTransfer,
   resolveFlakStep,
   resolveInterception,
@@ -19184,12 +19184,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     /*
      * 专规 2.1a：Entry L（19 July 起）与 Entry E 及以西南缘源（19 August 起）关闭。
      * 关闭的是**入口**本身 ⇒ `entryHex` 落点与候选都要跳过它（修前这两个分支不读 shutdowns）。
+     * ★ 用户 2026-11-12 裁定（5-D4）：「苏联补给源关闭后谁也不是」——轴方的 `Entry K or L`
+     *   在 L 关闭后也不得改用 L（不转归轴心）。故判关闭按**双方合并**的清单，不随行动方变。
      * 关停清单由 `shutdownsFor` 唯一给出；名字形如 `Entry L` / `Entry E 及以西所有南缘源`。
      */
-    entryShutDown: (letter) =>
-      shutdownsFor(activeSide.value, date.value).some(
-        (name) => name === `Entry ${letter}` || name.startsWith(`Entry ${letter} `),
-      ),
+    entryShutDown: (letter) => entryClosedForAllSides(letter, date.value),
     // 「Any west edge hexes」= 轴方字母入场段 K–F（用户 2026-11-11 裁定），不是全部西缘格
     westEdgeHexes: () => ENTRY_EDGE.axis.hexes.map((hex) => ({ ...hex })),
     // 北缘＝没有图内北邻（曾用「行号 ≥ 上界 − 1」的近似：多算 52 格、漏 10 格削角北缘）

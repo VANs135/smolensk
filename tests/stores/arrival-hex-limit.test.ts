@@ -131,6 +131,24 @@ describe('13.6：增援落点只能落在**卡面候选**内（不是任意格�
     // 进死亡堆的条目：图上没有可放的格
     expect(arrivalPlacementCandidates({ kind: 'deadPile', label: 'Dead Pile' }, facts)).toEqual([])
   })
+
+  it('5-D4：轴方 `Entry K or L` 在 L 关闭后（19 July 起）不再给出 20.35', () => {
+    /*
+     * 用户 2026-11-12 裁定：「苏联补给源关闭后谁也不是」。
+     * 修复点在 store 接线（`arrivalFacts.entryShutDown`）：修前按**当前行动方**查关闭清单，
+     * 轴方在 19 July 后仍会把苏方入口 L（20.35）当候选。
+     */
+    const workbench = newStore()
+    workbench.setActiveSide('axis')
+    workbench.setTurn(4) // 回合 4 = 1941-07-19（Entry L 关闭当日）
+    expect(workbench.date).toBe('1941-07-19')
+    const candidates = workbench.arrivalCandidates.flat()
+    expect(candidates.length).toBeGreaterThan(0)
+    // K 仍开放，轴方有 1.26 可选
+    expect(candidates).toContainEqual({ col: 1, row: 26 })
+    // L 已关闭（对双方）⇒ 候选里没有 20.35
+    expect(candidates.some((hex) => hex.col === 20 && hex.row === 35)).toBe(false)
+  })
 })
 
 describe('13.6b / 4.8c：投放处不得落在**敌单位格**（可进 EZOC，不可与敌同格）', () => {

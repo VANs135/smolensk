@@ -526,6 +526,22 @@ export function shutdownsFor(side: Side, date: string): readonly string[] {
   return out
 }
 
+/**
+ * 专规 2.1a ＋ 用户 2026-11-12 裁定（5-D4）：**入口关闭是地图事实，对双方同时生效**
+ *
+ * 裁定原文：「苏联补给源关闭后谁也不是」。Entry L 是苏方补给源入口（`map-config.entryHexes.L`
+ * = 20.35）；剧本关闭该补给源后，这个入口对**双方**都不可用——轴方的 `Entry K or L` 不得改用 L，
+ * 更不转归轴心。故判关闭时不区分当前行动方（`shutdownsFor` 仍按方给「当日生效的关闭」清单，
+ * 供各自到达表提示；这里只回答「这个字母还能不能用」）。
+ */
+export function entryClosedForAllSides(letter: string, date: string): boolean {
+  return (['axis', 'soviet'] as const).some((side) =>
+    shutdownsFor(side, date).some(
+      (name) => name === `Entry ${letter}` || name.startsWith(`Entry ${letter} `),
+    ),
+  )
+}
+
 /* ────────────────────────────── 落点解算（注入地图事实） ────────────────────────────── */
 
 /** 落点解算所需的地图与盘面事实（由调用方注入；引擎不持有地图） */
@@ -547,7 +563,9 @@ export interface ArrivalPlacementFacts {
   /**
    * 专规 2.1a：该入口字母是否**已按日期关闭**
    *
-   * Entry L 自 19 July 关闭；Entry E 及以西所有南缘源自 19 August 关闭（`shutdownsFor`）。
+   * Entry L 自 19 July 关闭；Entry E 及以西所有南缘源自 19 August 关闭。
+   * ★ 用户 2026-11-12 裁定（5-D4）：关闭的入口「谁也不是」——对双方同时生效，
+   *   不因当前行动方是轴方就重新开放（`entryClosedForAllSides`）。
    * 缺省不传＝不判关闭（既有调用方不必改）；接线见 `workbench.arrivalFacts`。
    */
   entryShutDown?(letter: string): boolean
