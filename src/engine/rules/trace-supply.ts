@@ -51,12 +51,25 @@ import { projectsZoc, type ZocSource } from './zoc'
  *     本模块只裁定规则，不发明数字；一切常量取自 rules-constants.json；
  *   - **12.7a-B/C 的铁路线特例不建模**：那需要铁路网络数据（13.3）；需要时由调用方把由此产生的
  *     火车卸货格并入 `sources`（kind='detrainable'），本模块不臆造铁路连通性。
+ *   - **追溯接收段（U23，用户 2026-11-12 裁定 D1=A）**：12.6 的「接收」复用 12.3a/12.3b 的距离——
+ *     单位 → 12.6a 源 ≤ **5 轮式 MP**（道路只降费、不豁免；**源是终点**，不存在越过源继续沿路走；
+ *     **路网不能当源**），经 HQ 则按 12.3b 印值投递。故 `reachableFrom` / `floodFrom` /
+ *     `floodIncoming` / `baseSourcesFor` 一律为**有界** Dijkstra，机动类型固定 `truck`。
  */
 
 /* ────────────────────────────── 常量（唯一来源 rules-constants.json） ────────────────────────────── */
 
 /** 图上补给：每份覆盖的 RE 数（12.6c；与 supply.ts 的 TRACE_T_PER_TWO_RE 成对使用） */
 export const TRACE_RE_PER_T = rulesConstants.supply.traceRePerT
+
+/**
+ * 12.6 + 12.3a：追溯接收段的预算与机动类型（U23，用户 2026-11-12 裁定 D1=A）
+ *
+ * 12.6 的「接收」复用 12.3a 的直接拖取，故距离同样取 `directDrawRangeMp`（5），
+ * 且「计算距离时始终要使用轮式 MP」——与单位自身机动类型无关。
+ */
+const TRACE_RECEIVE_MAX_MP = DIRECT_DRAW_RANGE_MP
+const TRACE_RECEIVE_MOBILITY: SupplyMobility = 'truck'
 
 /* 12.7d 的「消耗一半 MA」常量只有一处：`extender.ts` 的 `EXTENDER_FLIP_MA_FRACTION`
  * （本模块原有的同名副本 `EXTENDER_CREATION_MA_FRACTION` 随 `extenderCreationCost` 一并删除）。 */
@@ -1056,59 +1069,98 @@ function usableExtenders(
   return usable
 }
 
-/** 从起点出发的**无界**可达集合（12.6：trace 只看连通性，无距离上限） */
+/**
+ * 12.6 + 12.3a：有界多源 Dijkstra（追溯接收段，U23）
+ *
+ * 与 `searchFrom` 共用同一套 `stepMp`（12.3d 的可走性）；`reverse=true` 时沿**反向边**
+ * （判 `next → current`）扩张，用于覆盖集——它逐格等价于「该格沿正向在预算内能走到源」。
+ * 预算固定 `TRACE_RECEIVE_MAX_MP`、机动类型固定 `TRACE_RECEIVE_MOBILITY`（12.3a：始终轮式）。
+ * 起点无条件计入（与原洪泛/逐格查询的 seed 语义一致）。
+ */
+function boundedFlood(
+  facts: TraceSupplyFacts,
+  side: Side,
+  starts: readonly HexRef[],
+  reverse: boolean,
+): Set<string> {
+  const best = new Map<string, number>()
+  const settled = new Set<string>()
+  const queue: { hex: HexRef; mp: number }[] = []
+  for (const start of starts) {
+    if (!facts.onMap(start)) continue
+    const key = hexKey(start)
+    if (best.get(key) === 0) continue
+    best.set(key, 0)
+    queue.push({ hex: start, mp: 0 })
+  }
+  while (queue.length > 0) {
+    let minIndex = 0
+    for (let index = 1; index < queue.length; index += 1)
+      if (queue[index]!.mp < queue[minIndex]!.mp) minIndex = index
+    const current = queue.splice(minIndex, 1)[0]!
+    const currentKey = hexKey(current.hex)
+    if (settled.has(currentKey)) continue
+    if (best.get(currentKey) !== current.mp) continue
+    if (current.mp > TRACE_RECEIVE_MAX_MP) continue
+    settled.add(currentKey)
+    for (const direction of HEX_DIRECTIONS) {
+      const next = neighbor(current.hex, direction)
+      // 反向时 `next` 是**出发格**，`stepMp` 的 `onMap` 只看终点（＝current），故需自判
+      if (reverse && !facts.onMap(next)) continue
+      const step = reverse
+        ? stepMp(facts, side, TRACE_RECEIVE_MOBILITY, next, current.hex)
+        : stepMp(facts, side, TRACE_RECEIVE_MOBILITY, current.hex, next)
+      if (step === null) continue
+      const candidate = current.mp + step
+      if (candidate > TRACE_RECEIVE_MAX_MP) continue
+      const key = hexKey(next)
+      const existing = best.get(key)
+      if (existing !== undefined && candidate >= existing) continue
+      best.set(key, candidate)
+      queue.push({ hex: next, mp: candidate })
+    }
+  }
+  return new Set(best.keys())
+}
+
+/**
+ * 从起点出发的**有界**可达集合（12.6 + 12.3a：5 轮式 MP，U23）
+ *
+ * `mobility` 入参仅为保持调用方签名不变：12.3a 明言计数**始终用轮式 MP**，
+ * 与本单位的机动类型无关（裁定 A 后不再有「徒步不受 5 点限制」的读法）。
+ */
 function reachableFrom(
   facts: TraceSupplyFacts,
   side: Side,
-  mobility: SupplyMobility,
+  _mobility: SupplyMobility,
   start: HexRef,
 ): Set<string> {
   const cache = traceSearchCache.get(facts)?.reachable
-  const key = `${side}|${mobility}|${hexKey(start)}`
+  const key = `${side}|${hexKey(start)}`
   const previous = cache?.get(key)
   if (previous !== undefined) return previous
-  const covered = floodFrom(facts, side, mobility, [start])
+  const covered = floodFrom(facts, side, TRACE_RECEIVE_MOBILITY, [start])
   cache?.set(key, covered)
   return covered
 }
 
 /**
- * 从**多个起点**出发的无界洪泛（12.6 的连通性连通分量）
+ * 从**多个起点**出发的有界洪泛（12.6：源集合到接收段的连通范围）
  *
- * 与 `reachableFrom` 同一套判据（`stepMp`），只是起点可以是整批源——
+ * 与 `reachableFrom` 同一套判据（`stepMp` + 5 轮式 MP），只是起点可以是整批源——
  * 这样「该格能否连到某源」变成**一次洪泛**而不是每个查询各洪泛一遍。
  */
 function floodFrom(
   facts: TraceSupplyFacts,
   side: Side,
-  mobility: SupplyMobility,
+  _mobility: SupplyMobility,
   starts: readonly HexRef[],
 ): Set<string> {
-  const seen = new Set<string>()
-  const queue: HexRef[] = []
-  for (const start of starts) {
-    if (!facts.onMap(start)) continue
-    const key = hexKey(start)
-    if (seen.has(key)) continue
-    seen.add(key)
-    queue.push(start)
-  }
-  while (queue.length > 0) {
-    const current = queue.shift()!
-    for (const direction of HEX_DIRECTIONS) {
-      const next = neighbor(current, direction)
-      const key = hexKey(next)
-      if (seen.has(key)) continue
-      if (stepMp(facts, side, mobility, current, next) === null) continue
-      seen.add(key)
-      queue.push(next)
-    }
-  }
-  return seen
+  return boundedFlood(facts, side, starts, false)
 }
 
 /**
- * **反向**洪泛：求出「能沿**正向**走到起点集合」的全部格
+ * **反向**有界洪泛：求出「能沿**正向**走到起点集合」且在 5 轮式 MP 内的全部格
  *
  * ★ 为什么不能用正向洪泛：`supplyStepCost` 的取费取决于**被进入格**的地形与判据，
  *   故该连通性**有方向**——例如轮式「从沼泽沿非道路离开」合法，而「从开阔进入沼泽」被禁入
@@ -1120,34 +1172,10 @@ function floodFrom(
 function floodIncoming(
   facts: TraceSupplyFacts,
   side: Side,
-  mobility: SupplyMobility,
+  _mobility: SupplyMobility,
   starts: readonly HexRef[],
 ): Set<string> {
-  const seen = new Set<string>()
-  const queue: HexRef[] = []
-  for (const start of starts) {
-    if (!facts.onMap(start)) continue
-    const key = hexKey(start)
-    if (seen.has(key)) continue
-    seen.add(key)
-    queue.push(start)
-  }
-  while (queue.length > 0) {
-    const current = queue.shift()!
-    for (const direction of HEX_DIRECTIONS) {
-      const next = neighbor(current, direction)
-      // ★ 图内判定必须在这里补：正查走的是 `stepMp(next, current)`，其 `onMap` 只看 `to`（＝current），
-      //   故反向洪泛若不自己判，会把图外格（如奇数列的第 0 行、西北削角）也算进覆盖集。
-      if (!facts.onMap(next)) continue
-      const key = hexKey(next)
-      if (seen.has(key)) continue
-      // 反向边：`next → current` 可走 ⇒ next 能沿正向走到 current，进而走到源
-      if (stepMp(facts, side, mobility, next, current) === null) continue
-      seen.add(key)
-      queue.push(next)
-    }
-  }
-  return seen
+  return boundedFlood(facts, side, starts, true)
 }
 
 /**
@@ -1181,10 +1209,10 @@ export function extenderConnectsBack(
  * 12.6：该方**有追溯补给的格集合**（一次算好，之后每格 O(1) 成员判定）
  *
  * ## 为什么需要它
- * 「该格能否连到补给源」是**连通性**问题（12.6 只看连通性、无距离上限），而
- * `traceSourcesFor` 是**逐格**查询：每个格都要洪泛一遍全图。9.14d 的崩溃候选约 1200 格
- * ⇒ 1200 次全图洪泛，实测 5 秒以上（与"45 MA 的移动范围一点就出"的差别就在这个方向）。
- * 本函数把方向反转：从**全部源**出发一次洪泛即得整张集合。
+ * 「该格能否连到补给源」在裁定 A（U23）后是**有界**问题（12.6 + 12.3a：5 轮式 MP），而
+ * `traceSourcesFor` 是**逐格**查询：每个格都要各自搜一遍。9.14d 的崩溃候选约 1200 格
+ * ⇒ 1200 次搜索（无界时是整图洪泛，实测 5 秒以上）。本函数把方向反转：
+ * 从**全部源**出发一次反向有界搜索即得整张集合。
  *
  * ## 与原逐格查询的等价性（★ 必须用**反向边**洪泛）
  * `baseSourcesFor` 的判据是 `reachableFrom(hex).has(source.hex)`，即「hex 沿**正向**能走到某源」。
@@ -1192,7 +1220,8 @@ export function extenderConnectsBack(
  *   轮式「从沼泽沿非道路离开」合法，却「从开阔进入沼泽」被禁入（与 6.1d 互逆性同族的问题）。
  *   所以覆盖集必须用 `floodIncoming`（判 `next → current` 可走）在**反向边**上洪泛，
  *   不能用正向洪泛——否则会漏掉那类"出得来、进不去"的格（真实地图上实测 9 格）。
- * 机动类型影响判据（12.3d：轮式受未抵消敌 ZOC 阻挡），故按 `(side, mobility)` 各算一份。
+ * 机动类型影响判据（12.3d：轮式受未抵消敌 ZOC 阻挡）；裁定 A 后接收段**固定轮式 MP**，
+ * 故 `mobility` 入参不再改变覆盖集（为保持调用方签名而保留）。
  * **测试须逐格断言本集合与 `hasTraceSupply` 结论一致**——那是防止两套口径漂移的闸门。
  *
  * ## 与逐格查询的一致性由测试把关

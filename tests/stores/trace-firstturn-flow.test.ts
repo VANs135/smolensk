@@ -157,7 +157,11 @@ describe('12.8e：断补「第一个回合」的真跟踪（先突围、后补�
     expect(unit.cutSinceTurn).toBe(null)
 
     // 撤掉源 ⇒ 再次断补：从**新的**补给阶段重新算
-    const declaration = store.supplySourceDecls[0]
+    // ★ 卡断夹具为让敌子投射 ZOC 也写了本方源，故按「本方 + 格」精确定位，不能用下标 0
+    const declaration = store.supplySourceDecls.find(
+      (item) =>
+        item.side === 'axis' && item.hex.col === TRACE_HEX.col && item.hex.row === TRACE_HEX.row,
+    )
     expect(declaration).toBeDefined()
     store.removeSupplySource(declaration!.id)
     const reCut = firstCut + 3

@@ -399,19 +399,17 @@ describe('C8 断补处置：12.6c 吃图上补给 / 12.6d 接受断补', () => {
   it('12.6 / 12.8：全场判定把被合围的单位判为断补（12.3d 敌方 ZOC 阻断卡车路径）', () => {
     const store = newStore()
     store.setSupplyActive(true)
-    // 补给源声明在**图另一侧**：被合围的单位因此连不过去（12.6 虽无距离上限，但路径被阻断）
-    const far = mapLayers.hexes[mapLayers.hexes.length - 1]!
-    store.supplySourceDraft = { hexText: `${far.col}.${far.row}`, kind: 'supplySourceHex' }
+    /*
+     * 12.6a①：把源放在**未被合围的友军同格**——合围单位连不过去，是因为 12.3d 的敌占阻断，
+     * 不是距离。裁定 A（U23）后接收段同样受 5 轮式 MP 约束，不能再靠"远在图另一侧的源"
+     * 喂饱全图（那正是 U23 的判宽缺陷）。
+     */
+    const freeHex = { col: CORE_HEX.col + 3, row: CORE_HEX.row }
+    store.supplySourceDraft = { hexText: `${freeHex.col}.${freeHex.row}`, kind: 'supplySourceHex' }
     expect(store.addSupplySource()).toBe(true)
 
     const surrounded = place(store, combatRecord('axis'), CORE_HEX, 'axis', 'u1')
-    const free = place(
-      store,
-      combatRecord('axis'),
-      { col: CORE_HEX.col + 3, row: CORE_HEX.row },
-      'axis',
-      'u2',
-    )
+    const free = place(store, combatRecord('axis'), freeHex, 'axis', 'u2')
     // 合围：六个图内邻格各放一个敌方可攻击单位 ⇒ 12.3d 阻断一切路径进出
     for (const direction of HEX_DIRECTIONS) {
       const blocker = neighbor(CORE_HEX, direction)

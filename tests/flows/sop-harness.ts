@@ -164,6 +164,21 @@ export function sealTraceSupplyByZoc(
   if (ringOne.some((item) => !blockedAt(item))) {
     throw new Error(`无法卡断 ${label(hex)}（第二圈已被占用或不在图内）`)
   }
+  /*
+   * 裁定 A（U23，用户 2026-11-12）后，追溯接收段受 **5 点轮式 MP** 约束：第二圈的敌子不再能
+   * 从"远方的地图边缘源"自动取得追溯补给，而 **4.5 规定断补的部队不投射 ZOC** ⇒ 纯 ZOC 卡断
+   * 会静默失效。故把每个敌子所在格声明为其**本方**的补给源（12.6a①），保证它们真有 trace、
+   * 从而投射 ZOC。源按方过滤，且源格内有己方战斗单位（4.5b 抵消 12.6b）⇒ 只喂本方、不会被
+   * 被围方的 ZOC 判成不可用，也不会给被围方造源。
+   */
+  for (const enemyUnit of placed) {
+    store.supplySourceDecls.push({
+      id: `zoc-seal-src-${enemyUnit.instanceId}`,
+      hex: enemyUnit.hex,
+      side: enemy,
+      kind: 'supplySourceHex',
+    })
+  }
   return { placed, pureZoc: occupied.size === 0 }
 }
 

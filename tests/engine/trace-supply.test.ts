@@ -255,12 +255,12 @@ describe('12.6a 三种补给源与 12.6b 源格阻断', () => {
         { hex: at(2), side: 'axis', kind: 'supplySourceHex' },
       ],
     })
-    expect(traceSourcesFor(facts, { hex: at(6), side: 'axis', mobility: 'leg' })).toEqual([
+    expect(traceSourcesFor(facts, { hex: at(5), side: 'axis', mobility: 'leg' })).toEqual([
       { hex: at(1), kind: 'detrainable' },
       { hex: at(0), kind: 'edgeRail' },
       { hex: at(2), kind: 'supplySourceHex' },
     ])
-    expect(hasTraceSupply(facts, { hex: at(6), side: 'axis', mobility: 'leg' })).toMatchObject({
+    expect(hasTraceSupply(facts, { hex: at(5), side: 'axis', mobility: 'leg' })).toMatchObject({
       ok: true,
       rule: '12.6a',
     })
@@ -297,27 +297,37 @@ describe('12.6a 三种补给源与 12.6b 源格阻断', () => {
     })
   })
 
-  it('12.3d：未抵消的敌方 ZOC 阻挡卡车 MP 路径的**进入与离开**，徒步不受影响', () => {
+  it('12.3d：未抵消的敌方 ZOC 阻挡卡车 MP 路径的**进入与离开**（接收段固定轮式，各机动类型同判）', () => {
     const facts = makeFacts({
       hexes,
       sources: [{ hex: at(0), side: 'axis', kind: 'detrainable' }],
       enemyZoc: [at(4)],
     })
-    expect(hasTraceSupply(facts, { hex: at(8), side: 'axis', mobility: 'truck' })).toMatchObject({
+    // 无 ZOC 时 5 号本可拖取（5 MP）——作为"断供确实由 ZOC 造成"的对照
+    const open = makeFacts({ hexes, sources: [{ hex: at(0), side: 'axis', kind: 'detrainable' }] })
+    expect(hasTraceSupply(open, { hex: at(5), side: 'axis', mobility: 'truck' }).ok).toBe(true)
+    // 单位在 5：路径必须进入 ZOC 格 4 ⇒ 断
+    expect(hasTraceSupply(facts, { hex: at(5), side: 'axis', mobility: 'truck' })).toMatchObject({
       ok: false,
     })
-    expect(hasTraceSupply(facts, { hex: at(8), side: 'axis', mobility: 'leg' }).ok).toBe(true)
+    // 裁定 A（U23）：12.3a「计算距离时始终要使用轮式 MP」⇒ 申报徒步也走同一条卡车路径，同样被阻断
+    expect(hasTraceSupply(facts, { hex: at(5), side: 'axis', mobility: 'leg' })).toMatchObject({
+      ok: false,
+    })
     // 12.3d 的另一半：卡车**从** ZOC 格出发也被阻断（起点在 ZOC 内 ⇒ 出不去）
     expect(
       countSupplyDistance(facts, { from: at(4), to: at(5), side: 'axis', mobility: 'truck' }),
     ).toMatchObject({ ok: false })
   })
 
-  it('12.6：trace 无距离上限（连通即可），而拖取有 5 MP 上限', () => {
+  it('12.6 + 12.3a：trace 的接收段与拖取同受 5 轮式 MP 约束（裁定 A）', () => {
     const hexes = corridor(0, 40)
     const facts = makeFacts({ hexes, sources: [{ hex: at(0), side: 'axis', kind: 'detrainable' }] })
-    expect(hasTraceSupply(facts, { hex: at(39), side: 'axis', mobility: 'truck' }).ok).toBe(true)
+    // 5 MP 内可供；第 6 格起断（道路只降费，不豁免；源是终点）
+    expect(hasTraceSupply(facts, { hex: at(5), side: 'axis', mobility: 'truck' }).ok).toBe(true)
+    expect(hasTraceSupply(facts, { hex: at(6), side: 'axis', mobility: 'truck' }).ok).toBe(false)
     const withDump = makeFacts({ hexes, dumps: [{ hex: at(0), side: 'axis' }] })
+    expect(canDrawFromDump(withDump, { hex: at(5), side: 'axis', mobility: 'truck' }).ok).toBe(true)
     expect(canDrawFromDump(withDump, { hex: at(39), side: 'axis', mobility: 'truck' }).ok).toBe(
       false,
     )
