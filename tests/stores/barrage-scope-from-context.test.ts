@@ -108,6 +108,28 @@ describe('条 13：炮击候选按当前选中集合收窄', () => {
     expect(store.barrageVisibleChoices.every((choice) => choice.disabledReason === null)).toBe(true)
   })
 
+  it('★ 工具条开启后选定目标 ⇒ 射程外的炮不再列出（10.1a，K2）', () => {
+    const store = newStore()
+    store.setPhase('combat')
+    goToActionStep(store, 'barrage.declare')
+    const near = place(store, artilleryRecord('axis'), H1, 'axis', 'art-near')
+    const farHex = MAP_HEXES.find((hex) => hexDistance(hex, H2) >= 1)!
+    const far = place(store, artilleryRecord('axis'), farHex, 'axis', 'art-far')
+    near.raw.range = 8
+    // 目标 H2 至少隔 1 格 ⇒ range 0 必定够不着
+    far.raw.range = 0
+
+    store.setBarrageActive(true)
+    store.pickBarrageTargetAt(H2)
+
+    expect(store.barrageVisibleChoices.map((choice) => choice.unit.instanceId)).toEqual([
+      'art-near',
+    ])
+    expect(
+      store.barrageUnitChoices.find((choice) => choice.unit.instanceId === 'art-far')?.inRange,
+    ).toBe(false)
+  })
+
   it('★ 工具条直接开启（无选中）⇒ 仍是全场候选', () => {
     const store = newStore()
     place(store, artilleryRecord('axis'), H1, 'axis', 'art-1')

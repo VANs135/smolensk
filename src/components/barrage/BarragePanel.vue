@@ -83,8 +83,8 @@ function hoverDump(id: string | null): void {
 /**
  * 参炸单位（10.0e-B / 13.4a）：可选性与灰显原因由 store 逐枚算好（`barrageUnitChoices`）
  *
- * 条 13：这里读 `barrageVisibleChoices` —— 按本次作用域收窄（右键某格进炮击时只列该格），
- * 判据仍来自 `barrageUnitChoices`。
+ * 条 13 / K2：这里读 `barrageVisibleChoices` —— 只列**打得到当前目标**的炮（10.1a），
+ * 右键某格进炮击时再按该格收窄；判据仍来自 `barrageUnitChoices`。
  */
 const barrageUnitItems = computed<readonly CounterPickerItem[]>(() =>
   workbench.barrageVisibleChoices.map((choice) => ({

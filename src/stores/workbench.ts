@@ -3289,7 +3289,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   那些引擎目前没接线，若在此处拦下来，界面会比引擎"更严"，反而掩盖规则缺口（已登记待改）。
    */
   const barrageUnitChoices = computed<
-    readonly { unit: ConsoleUnit; selected: boolean; disabledReason: string | null }[]
+    readonly {
+      unit: ConsoleUnit
+      selected: boolean
+      /** 10.1a：能否打到当前目标格；目标未定时无从判距离 ⇒ true（交引擎裁决） */
+      inRange: boolean
+      disabledReason: string | null
+    }[]
   >(() => {
     /*
      * 10.0e-F：一次轰炸只能用**同一类型** ⇒ 候选按**当前单位类别**收口：
@@ -3314,48 +3320,52 @@ export const useWorkbenchStore = defineStore('workbench', () => {
            */
           isGroundBarrageEligible(phase.value, unit),
       )
-      .map((unit) => ({
-        unit,
-        selected: barrageUnitIds.value.includes(unit.instanceId),
-        /*
-         * 10.1a（第六批条 20）：候选**按射程标出够不着者**（引擎侧同一条判据已在 `beginBarrage` 生效）。
-         *   界面只做"说清楚"，最终裁决仍在引擎（CODE_SPEC §3.1：规则结算只在引擎）。
-         *   目标格未选定时无从判距离 ⇒ 不标。
-         */
-        disabledReason: isInReserveOrStrat(unit)
-          ? '13.4a：预备/战略模式的火炮不得轰炸'
-          : target !== null &&
-              unit.raw.range !== undefined &&
-              !canBarrageAtRange({
-                rangeHexes: unit.raw.range,
-                distanceHexes: hexDistance(unit.hex, target),
-              })
-            ? `10.1a：射程 ${unit.raw.range} 格，目标在 ${hexDistance(unit.hex, target)} 格外`
-            : anchor !== undefined &&
-                unit.instanceId !== anchor.instanceId &&
-                (unit.specialAbilities ?? []).includes('sov_artillery_stack_to_combine') &&
-                !sameHex(unit.hex, anchor.hex)
-              ? '专规 2.3d：苏军炮兵合并轰炸须同堆叠（与已选参炸炮同格）'
-              : null,
-      }))
+      .map((unit) => {
+        const range = unit.raw.range
+        const distance = target === null ? null : hexDistance(unit.hex, target)
+        const outOfRange =
+          distance !== null &&
+          range !== undefined &&
+          !canBarrageAtRange({ rangeHexes: range, distanceHexes: distance })
+        return {
+          unit,
+          selected: barrageUnitIds.value.includes(unit.instanceId),
+          /*
+           * 10.1a（第六批条 20）：候选**按射程标出够不着者**（引擎侧同一条判据已在 `beginBarrage` 生效）。
+           *   界面只做"说清楚"，最终裁决仍在引擎（CODE_SPEC §3.1：规则结算只在引擎）。
+           *   目标格未选定时无从判距离 ⇒ 不标。
+           */
+          inRange: !outOfRange,
+          disabledReason: isInReserveOrStrat(unit)
+            ? '13.4a：预备/战略模式的火炮不得轰炸'
+            : outOfRange
+              ? `10.1a：射程 ${range} 格，目标在 ${distance} 格外`
+              : anchor !== undefined &&
+                  unit.instanceId !== anchor.instanceId &&
+                  (unit.specialAbilities ?? []).includes('sov_artillery_stack_to_combine') &&
+                  !sameHex(unit.hex, anchor.hex)
+                ? '专规 2.3d：苏军炮兵合并轰炸须同堆叠（与已选参炸炮同格）'
+                : null,
+        }
+      })
   })
 
   /**
-   * 条 13（用户实机）：炮击阵列只看**本次作用域**内的炮兵
+   * 条 13 + K2：炮击阵列只看**打得到当前目标**的炮；右键入口再按**该格**收窄
    *
-   * 右键某枚/某堆炮兵进炮击时，候选就应是"这一枚 + 同格合法炮兵"，而不是全场所有炮；
-   * 但**已选中的**成员即使换了格也保留（多格联合炮击，B15c），否则玩家一点别格查看就把已选丢了。
-   * 不给作用域（工具条直接开）时退回全场候选 —— 判据仍是 `barrageUnitChoices`，这里只做视图收窄。
+   * · 10.1a：目标格已定时，射程外的炮（`inRange === false`）不再列出——旧路径（工具条直接开）
+   *   以前把全场炮兵都列出来、只靠灰显说明"够不着"，玩家看到满屏不可点项；
+   * · 右键某枚/某堆炮兵进炮击时，候选再收窄为"这一枚 + 同格合法炮兵"；
+   * · **已选中的**成员始终保留（多格联合炮击 B15c；目标改点后也还能取消），否则玩家一点别格
+   *   查看就把已选丢了。
+   * 判据仍只来自 `barrageUnitChoices`，这里只做视图收窄。
    */
   const barrageVisibleChoices = computed(() => {
+    const inRange = barrageUnitChoices.value.filter((choice) => choice.inRange || choice.selected)
     const scope = barrageScopeHex.value
     return scope === null
-      ? barrageUnitChoices.value
-      : barrageUnitChoices.value.filter(
-          (choice) =>
-            barrageUnitIds.value.includes(choice.unit.instanceId) ||
-            sameHex(choice.unit.hex, scope),
-        )
+      ? inRange
+      : inRange.filter((choice) => choice.selected || sameHex(choice.unit.hex, scope))
   })
 
   /**
