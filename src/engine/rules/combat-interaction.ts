@@ -1151,6 +1151,8 @@ export function resolveAdvance(
     chosenUnitIds?: readonly string[]
     /** 9.13：攻方 AR 单位是否 DG（9.13b-A） */
     attackerArDg?: boolean
+    /** 9.13：攻方 AR 单位是否火炮（火炮不参与进攻、无进击模式） */
+    attackerArIsArtillery?: boolean
     /**
      * 9.13：**参战攻方单位各自的 AR / DG**（逐单位判进击标记）
      *
@@ -1158,7 +1160,13 @@ export function resolveAdvance(
      * 9.13b-A 又规定「**非 DG 的攻击单位可正常结算**」——故必须逐单位给。
      * 省略时退回"只看宣布的 AR 单位"的旧口径（供既有调用方与测试保持行为）。
      */
-    attackerUnits?: readonly { unitId: string; ar: number; dg: boolean }[]
+    attackerUnits?: readonly {
+      unitId: string
+      ar: number
+      dg: boolean
+      /** 火炮不参与进攻、无进击模式（用户口径）⇒ 不发进击标记 */
+      isArtillery?: boolean
+    }[]
     /** 9.13：攻方是否把全部选项都选成了军力损失（9.10d） */
     attackerAllOptionsAsLosses?: boolean
     /** 专规 1.1b：防御格是敌方安全边缘格（补给源边格）⇒ 不得推进进去 */
@@ -1209,7 +1217,12 @@ export function resolveAdvance(
     eThreshold: state.dice.result.attacker.exploitationAR,
     // 9.13 逐单位：调用方给全参战单位时按各自 AR/DG 判；否则退回"只看宣布的 AR 单位"
     attackers: input.attackerUnits ?? [
-      { unitId: state.ar.attackerUnitId, ar: state.ar.attackerAr, dg: input.attackerArDg === true },
+      {
+        unitId: state.ar.attackerUnitId,
+        ar: state.ar.attackerAr,
+        dg: input.attackerArDg === true,
+        isArtillery: input.attackerArIsArtillery === true,
+      },
     ],
     attackerRetreatedInOptions: attackerRetreated,
     attackerAllOptionsAsLosses:

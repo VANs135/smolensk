@@ -153,7 +153,13 @@ export interface ModeState {
   orientation: Orientation
   /** 混乱标记（被动，5.10） */
   dg: boolean
-  /** 进击标记（被动，5.9） */
+  /**
+   * 进击标记（被动，5.9）
+   *
+   * 只由战斗结果 9.13 授予，本作**没有**手动切换进击模式的入口。
+   * 火炮不参与进攻、不存在进击模式（用户 2026-11-12 口径）⇒ `battle.ts` 的
+   * `exploitEligibility` 用 `isArtillery` 过滤，不给火炮发此标记。
+   */
   exploit: boolean
   /**
    * 本阶段刚被释放的预备（5.7b）

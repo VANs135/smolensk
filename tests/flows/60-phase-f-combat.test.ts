@@ -408,6 +408,34 @@ describe('Ⓕ 9.13 / 9.14：进击标记与特殊战斗判据', () => {
     if (mixed.ok) expect(mixed.data.reason).toBe('optionsNotAllLosses')
   })
 
+  it('火炮不参与进攻、没有进击模式 ⇒ 不获得进击标记', () => {
+    const base = {
+      eThreshold: 3,
+      attackerRetreatedInOptions: false,
+      attackerAllOptionsAsLosses: true,
+      attackType: 'regular' as const,
+      phase: 'combat' as const,
+      attackerHexes: [ATTACKER_HEX],
+    }
+    const onlyGun = exploitEligibility({
+      ...base,
+      attackers: [{ unitId: 'gun', ar: 5, dg: false, isArtillery: true }],
+    })
+    expect(onlyGun.ok).toBe(true)
+    if (onlyGun.ok)
+      expect(onlyGun.data).toMatchObject({ granted: false, reason: 'artilleryNoExploit' })
+
+    const mixed = exploitEligibility({
+      ...base,
+      attackers: [
+        { unitId: 'gun', ar: 5, dg: false, isArtillery: true },
+        { unitId: 'inf', ar: 4, dg: false },
+      ],
+    })
+    expect(mixed.ok).toBe(true)
+    if (mixed.ok) expect(mixed.data.grantedUnitIds).toEqual(['inf'])
+  })
+
   it('9.13b-C：三个以上攻击格、或两个攻击格不相邻 ⇒ 永不产生进击结果', () => {
     const base = {
       eThreshold: 3,
