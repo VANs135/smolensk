@@ -2318,6 +2318,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       hedgehogLevelAt: (hex) => hedgehogLevelOf(hex),
       // 14.8b/14.8c：运输破坏区（对放置方的敌方地面单位 +1 MP/格；含 8.1 突袭进格）
       trainbustingMarksBySide: trainbustingMarksByPlacer.value,
+      // 4.5a-A（R9）：突袭进 ZOC 后「不得离开」的事实（引擎据此拦普通走法；再突袭不受限）
+      ...(zocHeldFact.value === undefined ? {} : { zocHeld: zocHeldFact.value }),
       // 专规 1.5：首回合苏军地面单位 ×1/2（与模式折算相乘）
       maFactorOf: sovietFirstTurnMaFactor,
     }),
@@ -5859,10 +5861,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 条 17（批 F·F2）：4.5a 标记——**突袭强行进入敌方 ZOC 的格**后，该格的单位
    * 「不得离开、须再突袭或停」（8.0 的进入是强制的，故 4.5a 的约束在其后就位）。
    *
-   * 仅作**事实标记 + UI 提示**用（不改移动引擎的 ZOC 停车逻辑）：突袭记账把单位落进
-   * `context.target` 且该格处于敌方 ZOC 时置位；新开一场突袭（重置意图）或移动交互收束时清掉。
+   * 突袭记账把单位落进 `context.target` 且该格处于敌方 ZOC 时置位；移动交互收束时清掉。
+   * R9 起它不只提示：同一事实经 `zocHeldFact` 注入 `MoveContext`，普通走法离开该格会被引擎拒。
    */
   const overrunZocHeldHex = ref<HexRef | null>(null)
+  /**
+   * 4.5a-A（R9）：处于「突袭进敌方 ZOC 后不得离开」状态的参突单位
+   *
+   * 与 `overrunZocHeldHex` 同步置/清；作为**事实**注入 `MoveContext.zocHeld`（引擎不读 store），
+   * 由 `evaluateStepFrom` 拦掉离开该格的普通走法（再突袭仍放行）。
+   */
+  const overrunZocHeldUnitIds = ref<string[]>([])
+
+  /** 4.5a-A（R9）：传给移动引擎的「进 ZOC 后不得离开」事实（缺省不注入 ⇒ 不约束） */
+  const zocHeldFact = computed(() => {
+    const hex = overrunZocHeldHex.value
+    if (hex === null || overrunZocHeldUnitIds.value.length === 0) return undefined
+    return { hex, unitIds: [...overrunZocHeldUnitIds.value] }
+  })
 
   /** 4.5a：当前移动交互里是否有一格"须再突袭或停"的 ZOC 约束（UI 提示用） */
   const overrunZocHeld = computed(() =>
@@ -6137,8 +6153,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function overrunNow(hex: HexRef): boolean {
     if (!canReplaceCombat() || !canReplaceBarrage()) return false
     if (!requireAction('move.overrun', '突袭')) return false
-    // 条 17（批 F·F2）：新开一场突袭＝"再突袭"意图，旧的 4.5a 约束作废
-    overrunZocHeldHex.value = null
     const interaction = moveInteraction.value
     // 4.5a-A：发起格取突袭候选（含"进 ZOC 停车但仍可突袭"者），不是 `activeMoveUnits`
     const from = overrunStackHex.value
@@ -6473,20 +6487,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         (id) => !context.participantIds.includes(id),
       )
       /*
-       * 条 17（批 F·F2）：4.5a 标记。防御方离格 ⇒ 参突者强行进入防御方格（8.0 的进入是强制的）；
+       * 条 17（批 F·F2）＋ R9：4.5a 标记。防御方离格 ⇒ 参突者强行进入防御方格（8.0 的进入是强制的）；
        * 若该格处于敌方 ZOC（"挺进 ZOC"），按 4.5a 此单位"不得离开、须再突袭或停"。
-       * 仅置事实标记（UI 提示用），不改移动引擎的 ZOC 停车逻辑。
+       *
+       * 进入防御格＝已经离开了旧格 ⇒ 旧的「不得离开」事实作废；只有新格仍在敌方 ZOC
+       * 才重新置位。未进入（相持 / 选项撤退）时保持旧事实不变（那个单位确实还在原格）。
        */
-      if (
-        draft.defenderLeftHex &&
-        inEnemyZocAt(moveContext.value, context.target, activeSide.value)
-      ) {
-        overrunZocHeldHex.value = { ...context.target }
-        pushLog(
-          'warning',
-          `4.5a：突袭进入 ${hexLabel(context.target)}（敌方 ZOC）⇒ 该单位不得离开、须再突袭或停`,
-          '4.5a',
-        )
+      if (draft.defenderLeftHex) {
+        overrunZocHeldHex.value = null
+        overrunZocHeldUnitIds.value = []
+        if (inEnemyZocAt(moveContext.value, context.target, activeSide.value)) {
+          overrunZocHeldHex.value = { ...context.target }
+          overrunZocHeldUnitIds.value = [...plan.participantIds]
+          pushLog(
+            'warning',
+            `4.5a：突袭进入 ${hexLabel(context.target)}（敌方 ZOC）⇒ 该单位不得离开、须再突袭或停`,
+            '4.5a',
+          )
+        }
       }
     } else if (draft.rejected !== null) {
       pushLog(
@@ -6575,6 +6593,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     zocStoppedMoveUnitIds.value = []
     // 条 17（批 F·F2）：移动收束 ⇒ 4.5a 标记作废
     overrunZocHeldHex.value = null
+    overrunZocHeldUnitIds.value = []
     // 条 22（批 T）：移动收束 ⇒ 20.0a 的「开始移动」时机窗口随之关闭
     closeBreakdownWindows('startMove')
   }

@@ -922,6 +922,35 @@ describe('专规 1.1b：安全边缘格（作为补给源的地图边格）敌�
     expect(evaluateStep(context([mover]), 'u1', SAFE).ok).toBe(true)
   })
 
+  it('4.5a（R9）：突袭进敌方 ZOC 后，该格单位不得离开；再突袭不受此限', () => {
+    const heldHex = { col: 36, row: 13 }
+    const mover = unit({ hex: heldHex })
+    const held = context([mover, enemy({ col: 37, row: 13 })], {
+      zocHeld: { hex: heldHex, unitIds: ['u1'] },
+    })
+    // 普通走法：离开该格 ⇒ 4.5a 拒绝
+    expect(evaluateStep(held, 'u1', { col: 36, row: 12 })).toMatchObject({
+      ok: false,
+      rule: '4.5a',
+      reason: 'prohibited',
+    })
+    // 8.1 再突袭（forOverrun）是 4.5a 明写的出路 ⇒ 放行
+    expect(
+      canOverrun({
+        context: held,
+        unitIds: ['u1'],
+        target: { col: 37, row: 13 },
+        startedStackedTogether: true,
+        mpRemaining: 6,
+      }),
+    ).toMatchObject({ ok: true })
+    // 不在 `zocHeld` 名单里的单位（8.1h 留驻者）不受约束
+    const stayer = context([mover, unit({ id: 'u2', hex: { col: 35, row: 13 } })], {
+      zocHeld: { hex: heldHex, unitIds: ['u1'] },
+    })
+    expect(evaluateStep(stayer, 'u2', { col: 35, row: 12 }).ok).toBe(true)
+  })
+
   it('8.1：突袭资格同一判据——`canOverrun` 也拒绝敌方安全边缘格（规则明文「不可被突袭」）', () => {
     const mover = unit({ hex: { col: 36, row: 13 } })
     const blocked = canOverrun({

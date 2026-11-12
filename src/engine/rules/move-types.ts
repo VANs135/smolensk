@@ -156,6 +156,16 @@ export interface MoveContext {
    * 缺省不注入 ⇒ 视为无标记（不臆造）。
    */
   trainbustingMarksBySide?: { readonly axis: readonly HexRef[]; readonly soviet: readonly HexRef[] }
+  /**
+   * 4.5a-A（R9）：**突袭强行进入敌方 ZOC 后「不得离开」**的单位与所在格
+   *
+   * 原文：「……若所在格处于敌方 ZOC，该单位**不得离开**，必须再次突袭或停止」。
+   * 这是操作台在突袭收束后得到的**事实**（引擎不读 store），由 `buildMoveContext` 注入；
+   * `evaluateStepFrom` 见到「这些单位从该格走向别格」即拒（4.5a），于是
+   * `reachableForMove` 的 BFS 与逐格预览自动同规；`forOverrun` 的再突袭不受此限。
+   * 省略本项 ⇒ 无此约束（不臆造）。
+   */
+  zocHeld?: { readonly hex: HexRef; readonly unitIds: readonly string[] }
 }
 
 /* ────────────────────────────── 结果形状 ────────────────────────────── */

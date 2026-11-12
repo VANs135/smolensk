@@ -641,6 +641,20 @@ export function evaluateStepFrom(
   if (!areAdjacent(from, to)) return reject('notAdjacent', '6.1', `${to.col}.${to.row}`)
   if (!context.map.onMap(to)) return reject('destinationOffMap', '专规 1.4', `${to.col}.${to.row}`)
 
+  /*
+   * 4.5a-A（R9）：突袭强行进入敌方 ZOC 后，该格单位**不得离开**——只能就地再突袭，或停止。
+   * 事实由操作台在突袭收束后注入 `context.zocHeld`；再突袭走 `forOverrun`，故不在此限。
+   */
+  const held = context.zocHeld
+  if (
+    !forOverrun &&
+    held !== undefined &&
+    held.unitIds.includes(unit.id) &&
+    sameHex(from, held.hex) &&
+    !sameHex(to, held.hex)
+  )
+    return reject('prohibited', '4.5a', `${unit.id} 在敌方 ZOC 内突袭后不得离开，须再突袭或停`)
+
   // 专规 1.1b：敌方**安全边缘格**（作为补给源的地图边格）不得被敌方地面单位进入；
   // 规则明文「可以被常规战斗攻击，但**不可被突袭**（因为可能需要推进）」⇒ 本判据对普通移动与
   // 突袭一体生效（突袭也要进格）。

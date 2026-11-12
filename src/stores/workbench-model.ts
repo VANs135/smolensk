@@ -1007,6 +1007,12 @@ export function buildMoveContext(input: {
    * 缺省不注入 ⇒ 引擎视为无标记（不臆造）；调用方用 `trainbustingMarks` 注入。
    */
   trainbustingMarksBySide?: { readonly axis: readonly HexRef[]; readonly soviet: readonly HexRef[] }
+  /**
+   * 4.5a-A（R9）：突袭强行进入敌方 ZOC 后「不得离开」的单位与所在格
+   *
+   * 引擎不读 store，故由调用方把这一事实注入；缺省视为无此约束（不臆造）。
+   */
+  zocHeld?: { readonly hex: HexRef; readonly unitIds: readonly string[] }
 }): MoveContext {
   // 性能优化 A：上下文必须是**plain 快照**——原样搬运 Pinia 的 `hex` 引用会让 BFS 每一步读
   // `hex.col/row` 都走 Vue 响应式 Proxy（实测占移动会话 362ms）。这里一律克隆为普通对象。
@@ -1043,6 +1049,9 @@ export function buildMoveContext(input: {
           ),
         }),
     ...(input.traceSupplyAt === undefined ? {} : { traceSupplyAt: input.traceSupplyAt }),
+    ...(input.zocHeld === undefined
+      ? {}
+      : { zocHeld: { hex: plain(input.zocHeld.hex), unitIds: [...input.zocHeld.unitIds] } }),
     ...(input.hedgehogLevelAt === undefined ? {} : { hedgehogLevelAt: input.hedgehogLevelAt }),
     ...(input.trainbustingMarksBySide === undefined
       ? {}
