@@ -196,6 +196,12 @@ export const ScenarioSetupSchema = z
     reserveSetupForbidden: z.boolean().optional(),
     /** Supply Cache 枚数（每方） */
     supplyCache: z.number().int().nonnegative(),
+    /**
+     * 1.6b：开局时图外空军盒内的额外 SP（枚，每方）
+     *
+     * 原文未给数 ⇒ 缺省 0；有剧本明确给出时按印刷值录入。
+     */
+    offMapAirBoxSp: SidePairSchema.optional(),
     /** 建造标记（Construction Markers）枚数 */
     constructionMarkers: z.number().int().nonnegative(),
     /** 德军卡车满载方式 */

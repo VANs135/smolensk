@@ -270,8 +270,8 @@ describe('批 F 切片 3：3.6 补给列车（2 SP，任一可卸货格，不用
     expect(store.supplyTrainPending).toBe(false)
     expect(store.placeSupplyTrainSpNow(CITY_HEX)).toBe(false)
 
-    // 专规 2.1/3.1：补给表到货 SP 自动填进落账输入（免得裁判再抄一遍数）
-    expect(store.supplyArrivalSp).toBe(store.lastVariableRepl?.sp)
+    // 裁定 2 后 1.6b 的 SP 不再自动进落账池；此处按 2.1 手填回原值，继续验免费铁运与列车合并
+    store.supplyArrivalSp = store.lastVariableRepl!.sp
     enterArrivalStep(store)
     store.toggleFreeRailPick(CITY_HEX)
     store.pickFreeRailEdgeHex(hex(1, 3))

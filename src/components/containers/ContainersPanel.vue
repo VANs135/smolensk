@@ -138,6 +138,13 @@ function sideName(side: Side | null): string {
   return '通用'
 }
 
+/** 裁定 2：图外空军盒内的 SP（1.6b 补给只能空运进图） */
+function airBoxSupplyText(side: Side | null): string {
+  if (side === null) return '0 SP'
+  const holding = workbench.airBoxSupply(side)
+  return holding.t === 0 ? `${holding.sp} SP` : `${holding.sp} SP + ${holding.t} T`
+}
+
 /* ── 盒的富字段读取（只在脚本里做窄化，模板不写类型断言） ── */
 
 /** 空军盒：任务航程（格） */
@@ -531,6 +538,11 @@ function boxAircraft(side: Side) {
           :box-side="box.side"
           :aircraft="boxAircraft(box.side)"
         />
+
+        <!-- 裁定 2：盒内补给库存（1.6b：只能由空军任务运进地图） -->
+        <p v-if="box.side !== null" class="num box__supply" data-testid="air-box-supply">
+          盒内补给：{{ airBoxSupplyText(box.side) }}
+        </p>
 
         <!-- 验证页：盒图与裁判入口照旧（对局台不铺） -->
         <template v-if="showsReferee">

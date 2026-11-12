@@ -19279,6 +19279,53 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
   /** 最近一次可变增援结论（1.6b / 1.6c / 3.3c / 3.6） */
   const lastVariableRepl = ref<VariableReinforcementPlan | null>(null)
+  /** 裁定 2：1.6b 补给表 SP 已入图外盒的记账（换掷先撤回上一笔，避免重掷叠加） */
+  const offMapRollDeposit = ref<{ turn: number; side: Side; t: number } | null>(null)
+
+  /** 裁定 2：图外空军盒 SP 的账本键（与 14.9 空运退运保持同一套 `side:box`） */
+  function offMapBoxSupplyKey(side: Side): string {
+    return `${side}:${side}`
+  }
+
+  function addOffMapSupplyT(side: Side, deltaT: number): void {
+    const key = offMapBoxSupplyKey(side)
+    const current = offMapSupplyStocks.value[key] ?? { sp: 0, t: 0 }
+    offMapSupplyStocks.value = {
+      ...offMapSupplyStocks.value,
+      [key]: tToHoldings(Math.max(0, holdingsToT(current) + deltaT)),
+    }
+  }
+
+  /**
+   * 裁定 2：把 N T 补给放进**图外空军盒**（1.6b Notes：extra SP 只能空运进图）
+   *
+   * 复用 `offMapSupplyStocks`，不新造第二套账；盒内 SP 不能直接给地图单位供给，
+   * 只能在合法阶段由 14.9 空运任务运进地图。
+   */
+  function depositOffMapSupplyNow(side: Side, t: number): boolean {
+    const amount = Math.max(0, Math.trunc(t))
+    if (amount <= 0) return false
+    addOffMapSupplyT(side, amount)
+    pushLog(
+      'info',
+      `有补给进入图外盒（${String(amount / SP_TO_T)} SP）：只能用空军任务运进地图（1.6b / 14.9）`,
+      '1.6b',
+    )
+    recordSettlement({
+      action: 'offMapSupplyDeposit',
+      rule: '1.6b',
+      data: { side, t: amount },
+      // 这笔是随掷表自动发生的附带结算，不得吃掉 1.6b 那批骰（否则重放游标错位）
+      consumePendingRolls: false,
+    })
+    return true
+  }
+
+  /** 裁定 2：盒内 SP 的界面投影（供空军盒卡片显示） */
+  function airBoxSupply(side: Side): { sp: number; t: number } {
+    return offMapSupplyStocks.value[offMapBoxSupplyKey(side)] ?? { sp: 0, t: 0 }
+  }
+
   /** 最近一次重建结论（13.5） */
   const lastRebuild = ref<RebuildPlan | null>(null)
   /** 最近一次合并结论（13.9） */
@@ -21980,8 +22027,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
     if (data === null) return false
     lastVariableRepl.value = data
-    // 专规 2.1/3.1：到货 SP 数自动填进落账输入（裁判可手改）—— 否则免费铁运要人再抄一遍数
-    supplyArrivalSp.value = data.sp
+    /*
+     * 裁定 2（用户 2026-11-13）：1.6b 补给表所得 SP **直接进图外空军盒**，只能由空军任务运进地图；
+     * 不再自动填进 2.1/3.1 的免费铁运落账池。换掷时先撤回上一笔，避免叠加。
+     */
+    supplyArrivalSp.value = 0
+    const offMapT = data.sp * SP_TO_T
+    const ledgerKey = `${turn.value}|${activeSide.value}`
+    const previousDeposit = offMapRollDeposit.value
+    if (
+      previousDeposit !== null &&
+      `${previousDeposit.turn}|${previousDeposit.side}` === ledgerKey
+    ) {
+      addOffMapSupplyT(previousDeposit.side, -previousDeposit.t)
+    }
+    offMapRollDeposit.value =
+      offMapT > 0 ? { turn: turn.value, side: activeSide.value, t: offMapT } : null
+    if (offMapT > 0) depositOffMapSupplyNow(activeSide.value, offMapT)
     // 3.6：补给列车的落点须玩家选（任一可卸货格）；换掷即作废上一次的选择
     supplyTrainHex.value = null
     /*
@@ -25457,6 +25519,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     arrivalHexOverrides.value = {}
     // 1.7 补给缓存 / 3.5 建造标记（专规初设）
     supplyCacheHoldings.value = initialSupplyCacheHoldings(setup?.supplyCache)
+    // 1.6b（裁定 2）：图外空军盒 SP 初设；剧本未给数 ⇒ 0
+    offMapSupplyStocks.value = {}
+    const offMapSetupSp = setup?.offMapAirBoxSp
+    if (offMapSetupSp !== undefined) {
+      if (offMapSetupSp.axis > 0) addOffMapSupplyT('axis', offMapSetupSp.axis * SP_TO_T)
+      if (offMapSetupSp.soviet > 0) addOffMapSupplyT('soviet', offMapSetupSp.soviet * SP_TO_T)
+    }
     constructionMarkers.value = setup?.constructionMarkers ?? 0
     // 5.0c 胜利格控制账本：由**后面**那个 immediate watch 按剧本与战线播种（此处不能调：
     // `victoryHexes` 尚未声明 ⇒ 会踩 TDZ）
@@ -27457,6 +27526,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 13.6b：增援铁路运输
     arrivalRailEligible,
     beginArrivalRailPickNow,
+    // 裁定 2：图外空军盒 SP（1.6b 补给只能空运）
+    depositOffMapSupplyNow,
+    airBoxSupply,
     railMovedUnitIdsThisPhase,
     // 13.2f：运输点数的装载 / 卸载
     transportLoadInputs,
