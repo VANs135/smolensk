@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/base'
+import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip, UI_COPY } from '@/components/base'
 import { hexLabel, useMapViewStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -87,7 +87,11 @@ const paid = computed(() => subject.value?.fuelled ?? false)
         </p>
 
         <!-- 12.3a：付款来源改为**地图点选**（用户 2026-11-12；与炮击同一套） -->
-        <p class="num">点地图上高亮的补给站付款（12.3a/12.3b）｜当前：{{ selectedLabel }}</p>
+        <p class="num">
+          {{ UI_COPY.paySource }}：点地图上高亮的补给站付款（12.3a/12.3b）｜当前：{{
+            selectedLabel
+          }}
+        </p>
         <ul v-if="workbench.fuelDumpChoices.length === 0" class="muted">
           <li>这一枚此刻没有可达的补给来源（12.3a）——先补出一条补给线再来。</li>
         </ul>
