@@ -3964,43 +3964,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }))
 
   /**
-   * 13.3e-2 / 13.3h：铁路**运输**（运兵/运货）沿线的格控制
-   *
-   * ★ 与用户 2026-11-12 的「轨距唯一」口径**分开**：那条口径管的是铁路**补给可用性/可卸货格**
-   *   （`railSupplyFacts`，已删除控制近似）。13.3e 原文另写「不能使用错误轨距或**未控制**的铁路格」，
-   *   故运兵/运货仍保留这一条；操作台无控制历史，沿用既有近似（同格仅有单方战斗单位 ⇒ 该方控制），
-   *   不新增控制账本。
-   */
-  function railTransportControlledBy(hex: HexRef, side: Side): boolean {
-    const sides = new Set(
-      units.value
-        .filter((unit) => unit.isCombat && sameHex(unit.hex, hex))
-        .map((unit) => unit.side),
-    )
-    return sides.size === 1 && [...sides][0] === side
-  }
-
-  /**
    * 13.3：铁路运货的运行期事实（`RailFacts` 的**唯一组装点**）
    *
    * 静态图层（哪格有铁路 / 两格是否以铁路相接）由引擎 `createRailFacts` 从 `map-layers` 建索引；
-   * 运行期六项分别取仓里既有结论：
-   *   · 13.3h 控制 ← `railTransportControlledBy`（13.3e-2 的运输限制；**补给**侧已不判控制）；
+   * 运行期各项分别取仓里既有结论：
+   *   · 13.3e-2「未控制」← **敌方单位占据**（`enemyOccupies`，与补给侧阻断②同源）。用户 2026-11-12
+   *     裁定：铁路本身没有归属/控制/占领，能被占领的是同格城镇/村镇；故不再有独立的控制权账本；
    *   · 13.3f 轨距 ← `isRailGaugeUsableAt`（专规 1.2 的轨距账本，与 13.3f 的转换共用）；
    *   · EZOC ← `inEnemyZocForAction(…, 'railTransport')`：`zoc-effects` 把 `railTransport` 定为
    *     **不可抵消**（4.5a-C ／ 13.3c 末句「运货时 EZOC 不可抵消」）；仅「连接补给源」的判定
    *     （`zocOnlySupplyFacts`）才按 4.5b 抵消，两处不可混用；
-   *   · 敌方战斗单位 ← 盘面推出；
+   *   · 敌方战斗单位 ← 盘面推出（给出专码）；非战斗敌方单位由 `enemyOccupies` 一并阻断；
    *   · 13.3c 可火车卸货格 ← 补给层的 `detrainableHexes`（**同一份结论**，不另立一条判据）；
    *   · 14.8 运输破坏区 ← `trainbustingMarks`。
    */
   const railMoveFacts = computed(() =>
     createRailFacts({
-      isControlled: (hex, side) => railTransportControlledBy(hex, side),
       railGaugeUsable: (hex, side) => isRailGaugeUsableAt(hex, side),
       inEnemyZoc: (hex, side) => inEnemyZocForAction(moveContext.value, hex, side, 'railTransport'),
       hasEnemyCombatUnit: (hex, side) =>
         units.value.some((unit) => unit.side !== side && unit.isCombat && sameHex(unit.hex, hex)),
+      // 13.3e-2 的「未控制」＝该格（含同格卸货城镇）有敌方单位；与补给侧 `enemyOccupies` 同一判据
+      enemyOccupies: (hex, side) =>
+        units.value.some((unit) => unit.side !== side && sameHex(unit.hex, hex)),
       // 13.3c 的结论由补给层按**当前行动方**给出；13.3b 也只允许本方使用自己的铁路容量
       isDetrainable: (hex, side) =>
         side === activeSide.value &&
@@ -4050,7 +4036,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           if (multiOnly && !facts.isMultiTrackEdge(hex, next)) continue
           if (nextKey !== goal) {
             if (!facts.railGaugeUsable(next, side)) continue
-            if (!facts.isControlled(next, side)) continue
+            // 13.3e-2 的「未控制」＝该格被敌方单位占据（任意单位；与补给侧同源）
+            if (facts.enemyOccupies(next, side)) continue
             if (facts.hasEnemyCombatUnit(next, side)) continue
             if (facts.inEnemyZoc(next, side)) continue
           }
@@ -5348,6 +5335,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       : (airBases.value.find((base) => base.id === refitTargetBaseId.value) ?? null),
   )
 
+  /** 该基地格内可勾选整备的非激活飞机（15.1B） */
+  const refitCandidates = computed<readonly ConsoleAirUnit[]>(() =>
+    refitTargetBaseId.value === null ? [] : airInactiveAtBase.value(refitTargetBaseId.value),
+  )
+
+  /** 已勾选要整备的飞机实例 id */
+  const refitSelectedIds = computed<string[]>(() => airInputs.value.refitAircraftIds)
+
+  /** 该基地可付款的补给站（15.1B：1T；地图上金黄方框高亮，点它即付款并结算） */
+  const refitPayDumps = computed<readonly SpDump[]>(() =>
+    refitTargetBaseId.value === null ? [] : airRefitPayDumps.value(refitTargetBaseId.value),
+  )
+
   /* ── 14.11 转场（用户 2026-11-12） ── */
 
   const transferBase = computed(() =>
@@ -5487,19 +5487,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     cancelTransferNow()
     return true
   }
-
-  /** 该基地格内可勾选整备的非激活飞机（15.1B） */
-  const refitCandidates = computed<readonly ConsoleAirUnit[]>(() =>
-    refitTargetBaseId.value === null ? [] : airInactiveAtBase.value(refitTargetBaseId.value),
-  )
-
-  /** 已勾选要整备的飞机实例 id */
-  const refitSelectedIds = computed<string[]>(() => airInputs.value.refitAircraftIds)
-
-  /** 该基地可付款的补给站（15.1B：1T；地图上金黄方框高亮，点它即付款并结算） */
-  const refitPayDumps = computed<readonly SpDump[]>(() =>
-    refitTargetBaseId.value === null ? [] : airRefitPayDumps.value(refitTargetBaseId.value),
-  )
 
   /**
    * 条 4：**可开整备的基地**（15.1 / 15.1B）
@@ -12647,6 +12634,130 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
+   * 战斗错误的中文行（与炮击 `barrageErrorTextOf` 同一套做法）
+   *
+   * 引擎/操作台给的是 `{ rule, reason }`：操作台自己写的中文原因原样返回；引擎的 `reason`
+   * 是内部代码（`stratCannotAttack:<id>` 这类），这里译成一句人话，**不再原样打印内部代码**，
+   * 也不把算子 id 露给玩家。未覆盖的代码退回「本次操作被规则拒绝（规则号）」。
+   */
+  function combatErrorTextOf(error: { rule: string; reason: string }): string {
+    if (/[\u4e00-\u9fa5]/.test(error.reason)) return error.reason
+    const [head] = error.reason.split(':')
+    const code = head ?? ''
+    switch (code) {
+      case 'noAttacker':
+        return '没有选择攻击单位'
+      case 'noDefender':
+        return '防御格内没有敌方战斗单位'
+      case 'defendersInMultipleHexes':
+        return '守方单位不在同一格'
+      case 'duplicateAttacker':
+        return '同一单位被重复加入攻方'
+      case 'friendlyFire':
+        return '攻方里混入了守方单位'
+      case 'airTransportForbidsAttack':
+        return '该单位本阶段被空运限制，不能进攻'
+      case 'stratCannotAttack':
+        return '战略模式的单位不能进攻（9.1e）'
+      case 'unreleasedReserveCannotAttack':
+        return '未释放的预备单位不能进攻（9.1e）'
+      case 'defenseOnlyUnit':
+        return '只能防御的单位不能进攻（9.1e）'
+      case 'cannotEnterDefendingHex':
+        return '该单位不能进入被攻击的格（9.1f）'
+      case 'unitAlreadyAttackedThisSegment':
+        return '该单位本环节已经进攻过'
+      case 'hexAlreadyAttackedThisSegment':
+        return '该格本环节已经被攻击过'
+      case 'noAttackerAfterReduction':
+        return '攻方减员后已没有参战单位'
+      case 'attackerNotInComposition':
+        return '名单里有不在本场战斗中的攻方单位'
+      case 'attackSupplyNotFull':
+        return '战斗补给不足：先在地图上点补给站付足攻方所需的 T'
+      case 'attackerArAlreadyDeclared':
+        return '攻方已经宣布过行动值'
+      case 'attackerArUnitNotParticipating':
+      case 'attackerArUnitNotInBattle':
+      case 'defenderArUnitNotInBattle':
+        return '所选单位不在本场战斗中'
+      case 'attackerArMustBeDeclaredFirst':
+        return '先宣布攻方行动值，再宣布守方'
+      case 'supplyOrArMissingBeforeTerrain':
+        return '补给或行动值还没有确认'
+      case 'defenderTerrainNotHexTerrain':
+        return '守方地形必须是防御格内地形'
+      case 'noCombatLine':
+        return '该地形没有对应的战斗表横行（9.3c）'
+      case 'stackTerrainNotCandidate':
+        return '该地形不是这个堆叠的可选地形（9.4b）'
+      case 'defenderMayNotIgnoreOptions':
+        return '本场守方不能忽略选项（9.10c）'
+      case 'nkvdUnitForbidsIgnoringOptions':
+        return 'NKVD 边防团担任行动值单位时，守方不得忽略选项（专规 2.3b）'
+      case 'badRetreatHexes':
+      case 'badLossPoints':
+        return '选项点数不合法'
+      case 'optionNotFullySatisfied':
+        return '选项点数还没有完全分配'
+      case 'optionLossExceedsAvailableSteps':
+        return '选项损失超过了该方还能承受的军力'
+      case 'retreatEndHexUnavailable':
+        return '这个撤退落点不可用'
+      case 'unknownUnit':
+        return '损失名单里有不在本场战斗中的单位'
+      case 'badSteps':
+        return '给该单位分配的点数不合法'
+      case 'arUnitMustTakeFirstLoss':
+        return '第一点损失必须先由行动值单位承受（9.11c）'
+      case 'lossAllocationViolatesSpreadRule':
+        return '损失分配不符合“先 AR、再均匀展开”（9.11c）'
+      case 'retreatPathMissing':
+        return '还有单位没有选定撤退落点'
+      case 'retreatPathRepeatsHex':
+        return '撤退路径重复经过同一格'
+      case 'retreatPathReturnsToStart':
+        return '撤退路径不能回到起始格'
+      case 'retreatOffMapForbidden':
+        return '本作撤退不能离图（专规 1.4b）'
+      case 'tagalongUnknownUnit':
+        return '跟随名单里有未知单位'
+      case 'tagalongHostEliminated':
+        return '跟随的宿主已被消灭'
+      case 'neitherCombatUnitNorOrganicTruck':
+        return '跟随者必须是战斗单位或编内卡车（9.12d）'
+      case 'attackerRetreatedNoAdvance':
+        return '攻方曾经撤退，不能推进（9.12g-B）'
+      case 'immobileUnitCannotAdvance':
+        return '不能移动的单位不能推进'
+      case 'noUnitPaidCombatSupply':
+        return '没有付过战斗补给的攻方单位可以推进'
+      case 'chosenUnitDidNotPayCombatSupply':
+        return '所选的推进单位没有付战斗补给'
+      case 'notStackedAtPhaseStart':
+        return '突袭要求参战单位在阶段开始时同堆叠（8.1）'
+      case 'arOrOddsMissingBeforeSurprise':
+      case 'arOrOddsMissingBeforeDice':
+      case 'diceOrArMissingBeforeLosses':
+      case 'diceMissingBeforeOptions':
+      case 'arOrDiceMissingBeforeAdvance':
+        return '上一步结算还没有完成'
+      case 'notAtLossStage':
+      case 'notAtOptionStage':
+        return '当前不是该方的结算步骤'
+      default:
+        if (code.startsWith('notAt')) return '当前不在这一步'
+        return `本次操作被规则拒绝（${error.rule}）`
+    }
+  }
+
+  /** 当前战斗错误的中文行（无错误 ⇒ null） */
+  const combatErrorLine = computed<string | null>(() => {
+    const error = combatError.value
+    return error === null ? null : combatErrorTextOf(error)
+  })
+
+  /**
    * B28：**12.11a 的销毁骰**（1d6）——一律自动，不再让玩家填骰面
    *
    * 与 `drawBarrageDie` 同一套：走种子化 `rng` 并按掷骰计数，骰面可在结算日志里复算。
@@ -14874,113 +14985,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
     return true
   }
-  /**
-   * 15.3 / 15.2A / 16.0b：建造付款站候选（12.3a 直拖 / 12.3b HQ 投递）
-   *
-   * 用户 2026-11-12：与炮击一致——**只把施工者真正拖得到的站铺到地图上**。
-   * 受益单位取施工者本身（16.0b 的 `inPlace` 途径取目标格内的施工小队）。
-   */
-  const constructionPayDumps = computed<SpDump[]>(() => {
-    const engineer = pickedEngineer()
-    if (engineer === null) return []
-    return deliverableDumpsFor(activeSide.value, [engineer])
-  })
-
-  /** 建造付款的「点地图选站」模式（面板按钮开启；选中一站后自动退出） */
-  const constructionPayPick = ref(false)
-
-  /** 开启/取消建造付款的地图选站模式（无施工者或无候选 ⇒ 拒并给话术） */
-  function toggleConstructionPayPick(): boolean {
-    if (constructionPayPick.value) {
-      constructionPayPick.value = false
-      return true
-    }
-    const engineer = pickedEngineer()
-    if (engineer === null) {
-      pushLog('warning', '先指定施工的工程单位，再选付款补给站（13.8d）', '13.8d')
-      return false
-    }
-    if (constructionPayDumps.value.length === 0) {
-      pushLog('warning', '该施工者此刻没有可达的己方补给站（12.3a/12.3b）', '12.3a')
-      return false
-    }
-    constructionPayPick.value = true
-    return true
-  }
-
-  /** 地图点到某一座候选站 ⇒ 写入付款站并退出选站模式 */
-  function pickConstructionPayDumpNow(dumpId: string): boolean {
-    const dump = constructionPayDumps.value.find((item) => item.id === dumpId)
-    if (dump === undefined) return false
-    constructionInputs.value = { ...constructionInputs.value, payDumpId: dump.id }
-    constructionPayPick.value = false
-    pushLog(
-      'info',
-      `修建付款站：${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T，12.1b）`,
-      '12.1b',
-    )
-    return true
-  }
-
-  /** 16.0b/c：环形工事的付款站候选（施工小队或 13.8d 工程兵可达的来源） */
-  const hedgehogPayDumps = computed<SpDump[]>(() => {
-    const beneficiaries: ConsoleUnit[] = []
-    if (hedgehogUsesEngineerRoute.value) {
-      const engineer = pickedHedgehogEngineer()
-      if (engineer !== null) beneficiaries.push(engineer)
-    } else {
-      for (const id of hedgehogInputs.value.workerIds) {
-        const unit = units.value.find((item) => item.instanceId === id)
-        if (unit !== undefined) beneficiaries.push(unit)
-      }
-    }
-    if (beneficiaries.length === 0) return []
-    return deliverableDumpsFor(activeSide.value, beneficiaries)
-  })
-
-  /** 工事付款的「点地图选站」模式 */
-  const hedgehogPayPick = ref(false)
-
-  /** 开启/取消工事付款的地图选站模式 */
-  function toggleHedgehogPayPick(): boolean {
-    if (hedgehogPayPick.value) {
-      hedgehogPayPick.value = false
-      return true
-    }
-    const executorMissing = hedgehogUsesEngineerRoute.value
-      ? pickedHedgehogEngineer() === null
-      : hedgehogInputs.value.workerIds.length === 0
-    if (executorMissing) {
-      pushLog(
-        'warning',
-        hedgehogUsesEngineerRoute.value
-          ? '先指定 13.8d 的施工工程兵，再选付款补给站（16.0b）'
-          : '先在目标格勾选施工小队，再选付款补给站（16.0b）',
-        '16.0b',
-      )
-      return false
-    }
-    if (hedgehogPayDumps.value.length === 0) {
-      pushLog('warning', '施工者此刻没有可达的己方补给站（12.3a/12.3b）', '12.3a')
-      return false
-    }
-    hedgehogPayPick.value = true
-    return true
-  }
-
-  /** 地图点到某一座候选站 ⇒ 写入工事付款站并退出选站模式 */
-  function pickHedgehogPayDumpNow(dumpId: string): boolean {
-    const dump = hedgehogPayDumps.value.find((item) => item.id === dumpId)
-    if (dump === undefined) return false
-    hedgehogInputs.value = { ...hedgehogInputs.value, payDumpId: dump.id }
-    hedgehogPayPick.value = false
-    pushLog(
-      'info',
-      `工事付款站：${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T，12.1b）`,
-      '12.1b',
-    )
-    return true
-  }
 
   /**
    * 15.3：**空军基地**每格每回合的已提升级数（15.3「等级每回合只能提升一级」）
@@ -15445,6 +15449,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (!airMissionDomain.canReplace()) return
     airMissionAirIds.value = []
     airTargetHex.value = null
+    airInputs.value = { ...airInputs.value, targetHexText: '' }
     airState.value = null
     airError.value = null
     lastRefit.value = null
@@ -15546,6 +15551,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     airTargetHex.value = hex
+    airInputs.value = { ...airInputs.value, targetHexText: hexTextOf(hex) }
     airState.value = null
     airError.value = null
     return true
@@ -15556,7 +15562,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *
    * ★ 四道闸都取引擎的**唯一实现**，不在界面里自算：
    *   · **14.1a** 非激活飞机不能执行任务（`canFlyMission`；用户 2026-09-18 报告第 8 条：
-    airInputs.value = { ...airInputs.value, targetHexText: '' }
    *     「可执行空军任务的环节时点击机场，**未激活的飞机应该不可选中**」）；
    *   · **14.2f**「步骤 C 之后不能再向任务中添加飞机」（`canAddAircraftAtStep`）；
    *   · **14.2a** 一次任务合计上限 4 个空军单位（`canJoinMission`）；
@@ -15658,7 +15663,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 判据只有引擎一处（`canVoluntarilyReturn`）；本处只把「窗口」与「返航后仍留几架激活」
    * 这两项盘面事实填进去。★ 14.3d-A：空战前允许部分返航，但**至少留 1 架**保持激活并战斗。
    */
-    airInputs.value = { ...airInputs.value, targetHexText: hexTextOf(hex) }
   function voluntaryReturnNow(aircraftIds: readonly string[]): boolean {
     const state = airState.value
     if (state === null) {
@@ -16564,6 +16568,101 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return onMapAirUnits.value.filter((air) => air.side === side && sameHex(air.hex, hex))
   }
 
+  /** 一个候选格的盘面事实（目标候选与"这一格能发什么任务"共用，避免两套判据） */
+  function airTargetFactsAt(ref: HexRef): AirTargetHexFacts {
+    const side = airActingSide.value
+    return {
+      hex: ref,
+      enemyGroundUnit: units.value.some((unit) => unit.side !== side && sameHex(unit.hex, ref)),
+      enemyFacility: airBases.value.some((base) => base.side !== side && sameHex(base.hex, ref)),
+      enemyActiveAircraft: onMapAirUnits.value.some(
+        (air) =>
+          air.side !== side && air.airStatus === 'active' && air.steps > 0 && sameHex(air.hex, ref),
+      ),
+      enemyAirBase: airBases.value.some((base) => base.side !== side && sameHex(base.hex, ref)),
+      friendlyAirBase: airBases.value.some((base) => base.side === side && sameHex(base.hex, ref)),
+      rail: railMoveFacts.value.hasRail(ref),
+    }
+  }
+
+  /** 这架飞机的**机型**能否执行该任务（14.7–14.10；激活态/环节/航程另判，见 `airPlaneCanPerformKind`） */
+  function airTypeCanPerformKind(air: ConsoleAirUnit, kind: AirMissionKind): boolean {
+    switch (kind) {
+      case 'barrage':
+      case 'trainbusting':
+        return air.canBarrage && (air.barrageStrength ?? 0) > 0
+      case 'hip_shoot':
+        return air.canHipShoot
+      case 'air_transport':
+      case 'air_drop':
+        return air.transportCapacity > 0
+      case 'fighter_sweep':
+        return air.canInitiateAirCombat
+      default:
+        return false
+    }
+  }
+
+  /** 这架飞机是否有能力执行该任务类型（14.7–14.10；环节与航程另判） */
+  function airPlaneCanPerformKind(air: ConsoleAirUnit, kind: AirMissionKind): boolean {
+    if (air.airStatus !== 'active' || air.missionsFlownThisPhase > 0) return false
+    return airTypeCanPerformKind(air, kind)
+  }
+
+  /**
+   * 14.2f-B **目标侧入口判据**：这一格现在能不能作为该任务类型的目标
+   *
+   * = 环节允许（`airMissionKindChoices`）∩ 目标类型合法（14.6–14.10）∩ 至少一架可出动飞机够得到。
+   * 用户 2026-11-12：所有主动任务都从目标右键发起，菜单项不满足就整项不出现。
+   */
+  function canAirMissionTarget(kind: AirMissionKind, hex: HexRef): boolean {
+    if (!airMissionKindChoices.value.some((choice) => choice.key === kind)) return false
+    if (!airMissionTargetTypeAllowed(kind, airTargetFactsAt(hex))) return false
+    const side = airActingSide.value
+    const planes = airUnits.value.filter(
+      (air) => air.side === side && airPlaneCanPerformKind(air, kind),
+    )
+    return planes.some((air) => airDistanceFromRealBase(air, hex) <= air.rangeHexes)
+  }
+
+  /**
+   * 14.2f-B：**任务目标格的候选集**（用户 2026-11-12 口径 —— 地图高亮点选，不再手输格号）
+   *
+   * 两个条件的交集，全部在引擎侧统一算（`airMissionTargetCandidates`）：
+   *   ① 任务对象类型合法（14.6–14.10，见引擎 `airMissionTargetTypeAllowed`）；
+   *   ② 至少一架可参战机从**当前位置/出发基地**够得到（14.2d / 专规 1.4a）。
+   * 输入只取地图格（`mapLayers.hexes`）—— 图外空军盒不是格，1.4 也禁止对盒内战斗，
+   * 故它永远不会出现在候选里，UI 只渲染这个结果。
+   */
+  const airMissionTargetCandidates = computed<HexRef[]>(() => {
+    const kind = airMissionKind.value
+    if (kind === null) return []
+    const selected = airMissionAirUnits.value
+    const planes =
+      selected.length > 0
+        ? selected
+        : airMissionJoinChoices.value
+            .filter((choice) => choice.disabledReason === null)
+            .map((choice) => choice.air)
+    if (planes.length === 0) return []
+    const facts: AirTargetHexFacts[] = mapLayers.hexes.map((hex) =>
+      airTargetFactsAt({ col: hex.col, row: hex.row }),
+    )
+    return engineAirMissionTargetCandidates({
+      kind,
+      hexes: facts,
+      /*
+       * 14.2d：参战机各自从**自己的出发格**飞到任务格，距离按各自航程算。
+       * 已勾选编队时必须**每一架都够得到**（否则点选后才发现某架超程 = 高亮骗人）；
+       * 尚未勾机时按"至少有一架可参战机够得到"，因为玩家可以据此挑机。
+       */
+      reachable: (hex) =>
+        selected.length > 0
+          ? planes.every((air) => airDistanceFromRealBase(air, hex) <= air.rangeHexes)
+          : planes.some((air) => airDistanceFromRealBase(air, hex) <= air.rangeHexes),
+    })
+  })
+
   /**
    * 专规 1.4a：该机**从它真正的基地**飞到目标格的格数
    *
@@ -16675,101 +16774,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         hex: base.hex,
         enteringSide,
         attackCapableUnitEnters: true,
-  /** 一个候选格的盘面事实（目标候选与"这一格能发什么任务"共用，避免两套判据） */
-  function airTargetFactsAt(ref: HexRef): AirTargetHexFacts {
-    const side = airActingSide.value
-    return {
-      hex: ref,
-      enemyGroundUnit: units.value.some((unit) => unit.side !== side && sameHex(unit.hex, ref)),
-      enemyFacility: airBases.value.some((base) => base.side !== side && sameHex(base.hex, ref)),
-      enemyActiveAircraft: onMapAirUnits.value.some(
-        (air) =>
-          air.side !== side && air.airStatus === 'active' && air.steps > 0 && sameHex(air.hex, ref),
-      ),
-      enemyAirBase: airBases.value.some((base) => base.side !== side && sameHex(base.hex, ref)),
-      friendlyAirBase: airBases.value.some((base) => base.side === side && sameHex(base.hex, ref)),
-      rail: railMoveFacts.value.hasRail(ref),
-    }
-  }
-
-  /** 这架飞机的**机型**能否执行该任务（14.7–14.10；激活态/环节/航程另判，见 `airPlaneCanPerformKind`） */
-  function airTypeCanPerformKind(air: ConsoleAirUnit, kind: AirMissionKind): boolean {
-    switch (kind) {
-      case 'barrage':
-      case 'trainbusting':
-        return air.canBarrage && (air.barrageStrength ?? 0) > 0
-      case 'hip_shoot':
-        return air.canHipShoot
-      case 'air_transport':
-      case 'air_drop':
-        return air.transportCapacity > 0
-      case 'fighter_sweep':
-        return air.canInitiateAirCombat
-      default:
-        return false
-    }
-  }
-
-  /** 这架飞机是否有能力执行该任务类型（14.7–14.10；环节与航程另判） */
-  function airPlaneCanPerformKind(air: ConsoleAirUnit, kind: AirMissionKind): boolean {
-    if (air.airStatus !== 'active' || air.missionsFlownThisPhase > 0) return false
-    return airTypeCanPerformKind(air, kind)
-  }
-
-  /**
-   * 14.2f-B **目标侧入口判据**：这一格现在能不能作为该任务类型的目标
-   *
-   * = 环节允许（`airMissionKindChoices`）∩ 目标类型合法（14.6–14.10）∩ 至少一架可出动飞机够得到。
-   * 用户 2026-11-12：所有主动任务都从目标右键发起，菜单项不满足就整项不出现。
-   */
-  function canAirMissionTarget(kind: AirMissionKind, hex: HexRef): boolean {
-    if (!airMissionKindChoices.value.some((choice) => choice.key === kind)) return false
-    if (!airMissionTargetTypeAllowed(kind, airTargetFactsAt(hex))) return false
-    const side = airActingSide.value
-    const planes = airUnits.value.filter(
-      (air) => air.side === side && airPlaneCanPerformKind(air, kind),
-    )
-    return planes.some((air) => airDistanceFromRealBase(air, hex) <= air.rangeHexes)
-  }
-
-  /**
-   * 14.2f-B：**任务目标格的候选集**（用户 2026-11-12 口径 —— 地图高亮点选，不再手输格号）
-   *
-   * 两个条件的交集，全部在引擎侧统一算（`airMissionTargetCandidates`）：
-   *   ① 任务对象类型合法（14.6–14.10，见引擎 `airMissionTargetTypeAllowed`）；
-   *   ② 至少一架可参战机从**当前位置/出发基地**够得到（14.2d / 专规 1.4a）。
-   * 输入只取地图格（`mapLayers.hexes`）—— 图外空军盒不是格，1.4 也禁止对盒内战斗，
-   * 故它永远不会出现在候选里，UI 只渲染这个结果。
-   */
-  const airMissionTargetCandidates = computed<HexRef[]>(() => {
-    const kind = airMissionKind.value
-    if (kind === null) return []
-    const selected = airMissionAirUnits.value
-    const planes =
-      selected.length > 0
-        ? selected
-        : airMissionJoinChoices.value
-            .filter((choice) => choice.disabledReason === null)
-            .map((choice) => choice.air)
-    if (planes.length === 0) return []
-    const facts: AirTargetHexFacts[] = mapLayers.hexes.map((hex) =>
-      airTargetFactsAt({ col: hex.col, row: hex.row }),
-    )
-    return engineAirMissionTargetCandidates({
-      kind,
-      hexes: facts,
-      /*
-       * 14.2d：参战机各自从**自己的出发格**飞到任务格，距离按各自航程算。
-       * 已勾选编队时必须**每一架都够得到**（否则点选后才发现某架超程 = 高亮骗人）；
-       * 尚未勾机时按"至少有一架可参战机够得到"，因为玩家可以据此挑机。
-       */
-      reachable: (hex) =>
-        selected.length > 0
-          ? planes.every((air) => airDistanceFromRealBase(air, hex) <= air.rangeHexes)
-          : planes.some((air) => airDistanceFromRealBase(air, hex) <= air.rangeHexes),
-    })
-  })
-
         phase: phase.value,
         objects: [
           {
@@ -17849,6 +17853,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 由引擎统一算（`airMissionTargetCandidates`）；不再允许手输格号。图外盒不在候选内。
    */
   function beginAirTargetHexPickNow(): void {
+    const kind = airMissionKind.value
+    /*
+     * 还没定任务类型时（target-first 入口：先点格再开会话）无法算"类型合法"，
+     * 退回落点即任意格；定了类型后一律走类型 ∩ 航程的候选集。
+     */
+    const candidates = kind === null ? ('any' as const) : airMissionTargetCandidates.value
+    if (kind !== null && candidates.length === 0)
+      pushLog(
+        'warning',
+        '没有合法目标格：任务类型要求的对象与参战机航程没有交集（14.2f-B）',
+        '14.2f-B',
+      )
     beginHexPick({
       label:
         kind === null ? '空军任务的目标格' : `空军任务的目标格（${airMissionKindLabel(kind)}）`,
@@ -17912,6 +17928,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (state === null) return false
     if (state.step === 'airCombat' && !confirmAirCombatNow()) return false
     if (airState.value?.step === 'interception') {
+      /*
+       * K3：拦截方的「是否宣布拦截」是**真实决策**（14.5：不强制）。
+       * 修前自动连跑立刻按默认 `interceptDeclared=false` 跳过该步 ⇒ 14.5 这一支永远走不到。
+       * 有合格拦截机时**停在 D 步**，由面板记录应答后再次调用本函数继续。
+       */
+      if (airInterceptorCandidates.value.length > 0 && !airInputs.value.interceptDeclared)
+        return true
       if (!declareInterceptionNow()) return false
       if (airState.value?.interception?.declared === true && !resolveInterceptionCombatNow()) {
         return false
@@ -17963,18 +17986,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *   自动补完返航步（`completeAirReturnNow` ⇒ 逐机转非激活），不必玩家再点一次「返航」。
      *   若返航确需玩家决策（起飞基地已不可用等）⇒ `completeAirReturnNow` 返 false，停在 returnToBase。
      *   barrage（14.7b 空军轰炸）**不在此列**——仍停 returnToBase 供核对（沿用既有 G① 口径）。
-    const kind = airMissionKind.value
-    /*
-     * 还没定任务类型时（target-first 入口：先点格再开会话）无法算"类型合法"，
-     * 退回落点即任意格；定了类型后一律走类型 ∩ 航程的候选集。
-     */
-    const candidates = kind === null ? ('any' as const) : airMissionTargetCandidates.value
-    if (kind !== null && candidates.length === 0)
-      pushLog(
-        'warning',
-        '没有合法目标格：任务类型要求的对象与参战机航程没有交集（14.2f-B）',
-        '14.2f-B',
-      )
      */
     if (airState.value?.kind === 'hip_shoot' && airState.value?.step === 'returnToBase') {
       if (!completeAirReturnNow()) return false
@@ -18035,13 +18046,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       existing.kind === 'air' &&
       sameHex(existing.targetHex, target) &&
       existing.units.every((unit) => state.assignment.aircraftIds.includes(unit.unitId))
-      /*
-       * K3：拦截方的「是否宣布拦截」是**真实决策**（14.5：不强制）。
-       * 修前自动连跑立刻按默认 `interceptDeclared=false` 跳过该步 ⇒ 14.5 这一支永远走不到。
-       * 有合格拦截机时**停在 D 步**，由面板记录应答后再次调用本函数继续。
-       */
-      if (airInterceptorCandidates.value.length > 0 && !airInputs.value.interceptDeclared)
-        return true
     )
       return true
     if (!canReplaceBarrage()) return false
@@ -18327,6 +18331,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     lastRefit.value = data
     // 收束交互（整备已落盘 ⇒ 不再处于「选飞机 / 选补给」的中间态）
     refitTargetBaseId.value = null
+    refitStage.value = null
     airInputs.value = { ...airInputs.value, refitAircraftIds: [], refitDumpId: null }
     pushLog(
       'success',
@@ -18382,11 +18387,37 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     refitTargetBaseId.value = baseId
+    refitStage.value = 'select'
     airInputs.value = { ...airInputs.value, refitAircraftIds: [], refitDumpId: null }
     pushLog(
       'info',
       `整备（15.1）：在 ${hexLabel(base.hex)} 勾选要整备的飞机，点「确认整备」后再在图上选补给站付款（1T）`,
       '15.1',
+    )
+    return true
+  }
+
+  /**
+   * 15.1：**确认整备名单** → 进入付款步（此时才在地图上高亮可用补给站）
+   *
+   * 用户 2026-11-12 流程第 4 步。名单为空或没有可付款来源就如实拒绝，不进入高亮态。
+   */
+  function confirmRefitSelectionNow(): boolean {
+    const base = refitBase.value
+    if (base === null || refitStage.value !== 'select') return false
+    if (airInputs.value.refitAircraftIds.length === 0) {
+      pushLog('warning', '请先勾选要整备的飞机（15.1B）', '15.1B')
+      return false
+    }
+    if (refitPayDumps.value.length === 0) {
+      pushLog('warning', `${hexLabel(base.hex)} 周围没有能付款的补给站（12.3a / 15.1B）`, '15.1B')
+      return false
+    }
+    refitStage.value = 'pay'
+    pushLog(
+      'info',
+      `整备（15.1）：请在**地图上点选高亮的补给站**付款（1T），再点「确认支付」`,
+      '15.1B',
     )
     return true
   }
@@ -18403,6 +18434,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 关掉整备交互（不改盘面、不扣补给） */
   function cancelRefitNow(): void {
     refitTargetBaseId.value = null
+    refitStage.value = null
     airInputs.value = { ...airInputs.value, refitAircraftIds: [], refitDumpId: null }
   }
 
@@ -18456,7 +18488,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (toHex === null) {
       pushLog('warning', '转移目的地应为「列.行」（14.11）', '14.11')
       return false
-    refitStage.value = null
     }
     const toBase = airBases.value.find((base) => sameHex(base.hex, toHex))
     if (toBase === undefined) {
@@ -18512,7 +18543,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /**
    * C9 15.4：缩减某本方基地一级（不耗 SP；被指定单位本阶段不能再移动）
-    refitStage.value = 'select'
    *
    * ★ 15.2E（简易机场永不缩减）在这一条链里由引擎判：`planAirBaseReduction` 会返回
    *   `15.2E / airstripCannotBeReduced`，经 `airError` 显示给玩家。
@@ -18522,31 +18552,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (!requireAction('air.baseReduce', '缩减空军基地')) return false
     const base = airBases.value.find((item) => item.id === baseId)
     if (base === undefined) return false
-  /**
-   * 15.1：**确认整备名单** → 进入付款步（此时才在地图上高亮可用补给站）
-   *
-   * 用户 2026-11-12 流程第 4 步。名单为空或没有可付款来源就如实拒绝，不进入高亮态。
-   */
-  function confirmRefitSelectionNow(): boolean {
-    const base = refitBase.value
-    if (base === null || refitStage.value !== 'select') return false
-    if (airInputs.value.refitAircraftIds.length === 0) {
-      pushLog('warning', '请先勾选要整备的飞机（15.1B）', '15.1B')
-      return false
-    }
-    if (refitPayDumps.value.length === 0) {
-      pushLog('warning', `${hexLabel(base.hex)} 周围没有能付款的补给站（12.3a / 15.1B）`, '15.1B')
-      return false
-    }
-    refitStage.value = 'pay'
-    pushLog(
-      'info',
-      `整备（15.1）：请在**地图上点选高亮的补给站**付款（1T），再点「确认支付」`,
-      '15.1B',
-    )
-    return true
-  }
-
     const target = units.value.find((unit) => unit.instanceId === baseId)
     if (target === undefined) return false
     const selected = airInputs.value.reductionUnitIds
@@ -18559,7 +18564,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         mode: unit.mode.mode,
         // 15.4：有人具工程能力时可免 RE≥1（13.8a 的印值适格 × 模式，此前该字段恒缺）
         engineerCapable: engineerCapableNow(unit),
-    refitStage.value = null
         // 15.4「且不能移动」：空运也改变过位置，不能仅查地面MP。
         movedThisPhase: hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase),
       }))
@@ -26088,6 +26092,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     combatAttackerIds,
     combatState,
     combatError,
+    combatErrorLine,
     combatInputs,
     combatAwaitingShiftDie,
     combatSurpriseDie,
@@ -26424,17 +26429,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     hedgehogPayPick,
     toggleHedgehogPayPick,
     pickHedgehogPayDumpNow,
-    hedgehogPayDumps,
-    hedgehogPayPick,
-    toggleHedgehogPayPick,
-    pickHedgehogPayDumpNow,
     // 15.3 / 15.2A：空军基地与简易机场的修建、升格（13.8d 施工前提一并接上）
     constructionInputs,
     constructionError,
-    constructionPayDumps,
-    constructionPayPick,
-    toggleConstructionPayPick,
-    pickConstructionPayDumpNow,
     constructionPayDumps,
     constructionPayPick,
     toggleConstructionPayPick,
@@ -26510,6 +26507,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     refitAirbaseHexes,
     refitSelectedIds,
     refitPayDumps,
+    refitStage,
+    // 14.11 转场
+    transferBase,
+    transferMode,
+    transferFromBox,
+    transferCandidates,
+    transferSelectedIds,
+    transferBoxReady,
+    transferBaseCandidates,
+    transferHasBoxOption,
+    transferHasBaseOption,
+    beginTransferNow,
+    toggleTransferAircraft,
+    cancelTransferNow,
+    completeTransferToBaseNow,
     airReductionCandidates,
     railSupply,
     railSupplyBySide,
@@ -26606,6 +26618,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     airJoinRemaining,
     // B14：参战机的算子图阵列（逐机可选性 + 原因）
     airMissionJoinChoices,
+    airMissionTargetCandidates,
+    canAirMissionTarget,
     // 用户 2026-11-09：轰炸/低空扫射按基地分栏的驻机名册与距离（点基地高亮）
     airMissionBaseGroups,
     airMissionBaseFocus,
@@ -26622,21 +26636,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     pickBarrageTargetAt,
     toggleAirReductionUnit,
     missionSegmentOf,
-    refitStage,
-    // 14.11 转场
-    transferBase,
-    transferMode,
-    transferFromBox,
-    transferCandidates,
-    transferSelectedIds,
-    transferBoxReady,
-    transferBaseCandidates,
-    transferHasBoxOption,
-    transferHasBaseOption,
-    beginTransferNow,
-    toggleTransferAircraft,
-    cancelTransferNow,
-    completeTransferToBaseNow,
     airTargetBaseIsAirstrip,
     toggleAirUnitStatus,
     beginAirMissionNow,
@@ -26672,6 +26671,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     toggleAirstripBase,
     refitBaseNow,
     beginRefitNow,
+    confirmRefitSelectionNow,
+    confirmRefitPaymentNow,
     toggleRefitAircraft,
     cancelRefitNow,
     pickRefitPayDump,
@@ -26733,8 +26734,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 20.0a：该单位此刻处在哪个创建时机（null＝不在 20.0a 的三个时机里）
      *
      * 只读投影：给「拆分单位盒取用」（`containers.takeBreakdown`）与面板的可用性判断用。
-    airMissionTargetCandidates,
-    canAirMissionTarget,
      * **不导出写入口**（`openBreakdownWindow`）——时机只能由真实事件开窗
      * （开始移动 / 战后推进 / 战后撤退），调用方不许自称"现在可以拆"。
      */
@@ -26786,8 +26785,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     replPending,
     clearNonSavableReplNow,
     rollVariableReplNow,
-    confirmRefitSelectionNow,
-    confirmRefitPaymentNow,
     placeArrivalNow,
     applyArrivalRemovalsNow,
     sendToDeadPileNow,
