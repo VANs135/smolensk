@@ -3240,9 +3240,14 @@ function modeProfileOf(unit: ConsoleUnit): ModeUnitProfile {
   }
 }
 
-/** 该算子能否作为"可攻击的攻方"（9.1b：可攻击 + 印刷战斗值 > 0 + 未动） */
+/**
+ * 该算子能否作为"可攻击的攻方"（9.1e：可攻击 + 印刷战斗值 > 0）
+ *
+ * 不再用 `movementEnded` 拦阻——原文没有"移动后不得攻击"的限制；9.1e 列举的不能攻击情形
+ * 只有模式、战斗补给、地形与单位类型。移动过的单位在本阶段战斗环节仍可当攻方。
+ */
 function canBeAttacker(unit: ConsoleUnit): boolean {
-  return unit.attackCapable && unit.raw.attack > 0 && !unit.movementEnded
+  return unit.attackCapable && unit.raw.attack > 0
 }
 
 /**
@@ -3368,7 +3373,7 @@ export function participatesIn(query: ParticipationQuery): ParticipationVerdict 
       if (!hasBarrageFactor(unit)) return cannotParticipate('10.0', '炮击环节只点有轰炸值的炮兵')
       return { ok: true, rule: '10.0' }
 
-    /* ── F 战斗 · 战斗环节（9.1b：可攻击 + 印刷战斗值 + 未动；9.1c：本环节未攻击过） ── */
+    /* ── F 战斗 · 战斗环节（9.1e：可攻击 + 印刷战斗值；9.1c：本环节未攻击过） ── */
     case 'combat.combat':
       if (!friendly) return cannotParticipate('9.1b', '敌方算子只读（4.9a）')
       if (query.attackedUnitIds?.includes(unit.instanceId) === true)
@@ -3403,8 +3408,7 @@ export function participatesIn(query: ParticipationQuery): ParticipationVerdict 
         return cannotParticipate('11.0a', '进击段只有进击模式单位或已释放的预备可以战斗')
       if (query.attackedUnitIds?.includes(unit.instanceId) === true)
         return cannotParticipate('9.1c', '该单位在本战斗环节已攻击过（一个单位只能攻击一次）')
-      if (!canBeAttacker(unit))
-        return cannotParticipate('11.0', '该单位不可攻击（无印刷战斗值或本轮已移动）')
+      if (!canBeAttacker(unit)) return cannotParticipate('11.0', '该单位不可攻击（无印刷战斗值）')
       return { ok: true, rule: '11.0' }
 
     default:

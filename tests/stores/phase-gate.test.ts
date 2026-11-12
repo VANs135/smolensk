@@ -589,7 +589,7 @@ describe('B7：算子参与判定（不参与环节的算子无法点击）', ()
     if (!verdict.ok) expect(verdict.rule).toBe('10.0')
   })
 
-  it('F 战斗 · 战斗环节（9.1b）：可攻击且未动的可点；敌方只读', () => {
+  it('F 战斗 · 战斗环节（9.1e）：可攻击的可点（移动过也可）；敌方只读', () => {
     const attacker = unitOf(
       recordOf(
         'axis',
@@ -633,8 +633,8 @@ describe('B7：算子参与判定（不参与环节的算子无法点击）', ()
       segment: 'combat.combat',
       activeSide: 'axis',
     })
-    expect(movedVerdict.ok).toBe(false)
-    if (!movedVerdict.ok) expect(movedVerdict.rule).toBe('9.1b')
+    // 9.1e 没有「移动后不得攻击」的限制：移动过的单位仍可当攻方
+    expect(movedVerdict.ok).toBe(true)
   })
 
   it('G 进击 · 进击移动（11.0a）：无进击标记的不可动，带标记的可动', () => {
