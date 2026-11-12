@@ -34,6 +34,7 @@ import {
   railCapPositionValid,
   railCapTrackView,
   scenarioDrawBoxView,
+  sortDrawPool,
   specialReplBoxView,
   turnTrackView,
   weatherTrackView,
@@ -509,21 +510,19 @@ describe('W7 C12：剧本抽取盒（编队抽签）', () => {
       expect(declared, sourceId).toBeDefined()
       if (declared === undefined) continue
       expect(declared.length, sourceId).toBe(derivedOf(sourceId).length)
-      // 顺序也须一致：抽取从池内按顺序取下标，顺序变了固定种子下的抽中名单就会变
-      expect(declared, sourceId).toEqual(derivedOf(sourceId))
+      // 成员集合须与派生口径一致；书写顺序由引擎的 sortDrawPool 兜底，不在此约束
+      expect([...declared].sort(), sourceId).toEqual([...derivedOf(sourceId)].sort())
       expect(
         axisDrawPool(sourceId).map((entry) => entry.formationId),
         sourceId,
-      ).toEqual(declared)
+      ).toEqual([...declared].sort())
       expect(
         axisDrawPool(sourceId).every((entry) => entry.formationCode !== ''),
         sourceId,
       ).toBe(true)
       for (const id of inheritors) {
-        expect(
-          axisDrawPool(id).map((entry) => entry.formationId),
-          id,
-        ).toEqual(declared)
+        // 继承剧本与本体的池逐位一致（两侧都经 sortDrawPool 定序）
+        expect(axisDrawPool(id), id).toEqual(axisDrawPool(sourceId))
         expect(scenarioDrawBoxView(id).dataGaps.join('｜'), id).not.toContain('未声明入池名单')
       }
     }
@@ -535,6 +534,24 @@ describe('W7 C12：剧本抽取盒（编队抽签）', () => {
       expect(scenarioDrawBoxView(scenario.id).dataGaps.join('｜')).not.toContain('未声明入池名单')
     }
     expect(axisDrawPool('1').map((entry) => entry.formationId)).not.toContain('1 Cav Div')
+  })
+
+  it('U21：名单书写顺序被打乱，抽签结果不变（取池后按 formationId 定序）', () => {
+    const pool = axisDrawPool('1').map((entry) => entry.formationId)
+    // 池本身已是升序；抽签按池内下标取，故书写顺序不应改变任何下标的归属
+    expect(pool).toEqual([...pool].sort())
+    // 反向书写＝一种打乱；定序后与原名单逐位一致
+    const shuffled = [...pool].reverse().map((formationId) => ({ formationId }))
+    const written = pool.map((formationId) => ({ formationId }))
+    const afterShuffle = sortDrawPool(shuffled).map((entry) => entry.formationId)
+    const afterWritten = sortDrawPool(written).map((entry) => entry.formationId)
+    expect(afterShuffle).toEqual(afterWritten)
+    expect(afterShuffle).toEqual(pool)
+    // 同一组固定下标（固定种子下 rng 的落点）在两种书写顺序下抽到同一批师
+    const picks = [3, 0, 7, 2]
+    expect(picks.map((index) => afterShuffle[index])).toEqual(
+      picks.map((index) => afterWritten[index]),
+    )
   })
 
   it('C12：剧本 2/4/6 继承同批初设的抽取参数（sharedSetupWith）', () => {

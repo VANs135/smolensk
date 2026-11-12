@@ -1135,9 +1135,23 @@ export function scenarioDrawBoxView(scenarioId: string): ScenarioDrawBoxView {
 }
 
 /**
+ * 抽取池的稳定顺序（防呆）
+ *
+ * 抽签按池内下标取；若沿用剧本 JSON 的书写顺序，改一次名单排版就会静默改变固定种子下的
+ * 抽中名单。故取池后统一按 `formationId` 升序——现数据本就按该序书写，行为不变。
+ */
+export function sortDrawPool<T extends { formationId: string }>(pool: readonly T[]): T[] {
+  return [...pool].sort((a, b) =>
+    a.formationId < b.formationId ? -1 : a.formationId > b.formationId ? 1 : 0,
+  )
+}
+
+/**
  * 剧本抽取池：优先取剧本声明的 `poolFormations`（Q3/Q7 冻结名单），
  * 未声明时回退为「该剧本的轴方装甲/摩托化多单位编队（不含骑兵师）」的后缀推导，
  * 缺口由 `scenarioDrawBoxView().dataGaps` 如实登记。
+ *
+ * 返回值一律经 `sortDrawPool` 定序：名单书写顺序不影响抽签。
  */
 export function axisDrawPool(
   scenarioId: string,
@@ -1147,23 +1161,27 @@ export function axisDrawPool(
     const byId = new Map(
       formations.formations.map((formation) => [formation.formationId, formation]),
     )
-    return declared.map((formationId) => ({
-      formationId,
-      formationCode: byId.get(formationId)?.formationCode ?? '',
-    }))
+    return sortDrawPool(
+      declared.map((formationId) => ({
+        formationId,
+        formationCode: byId.get(formationId)?.formationCode ?? '',
+      })),
+    )
   }
   const key = `S${setupSourceOf(scenarioId).source}·axis`
-  return formations.formations
-    .filter(
-      (formation) =>
-        formation.side === 'axis' &&
-        (formation.sources ?? []).includes(key) &&
-        (formation.formationId.endsWith('Pz Div') || formation.formationId.endsWith('Mtr Div')),
-    )
-    .map((formation) => ({
-      formationId: formation.formationId,
-      formationCode: formation.formationCode,
-    }))
+  return sortDrawPool(
+    formations.formations
+      .filter(
+        (formation) =>
+          formation.side === 'axis' &&
+          (formation.sources ?? []).includes(key) &&
+          (formation.formationId.endsWith('Pz Div') || formation.formationId.endsWith('Mtr Div')),
+      )
+      .map((formation) => ({
+        formationId: formation.formationId,
+        formationCode: formation.formationCode,
+      })),
+  )
 }
 
 /** 抽取结果的处置计划 */
