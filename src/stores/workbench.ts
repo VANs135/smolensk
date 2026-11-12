@@ -26808,6 +26808,31 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       dumpDestructionAttempts.value,
       normalized.aliases,
     )
+    /*
+     * U8（2026-11-13）：**旧档里没有编组归属的轴方 SP** 必须显式标出来。
+     *
+     * 修前：它们只是 `panzerGroupOfDump === null`，`panzerGroupUnassignedDumps` 能列出，
+     * 但不在 `pendingSpGroupAssignment` 里 ⇒ 不出 3.4b 置顶、付费被拒时还报「归属与受益编队
+     * 不符」（真实原因是"尚未归属"）。这里**只标未归属，不猜归属**：
+     *   · 3.4b 生效（日期窗口 × 开局共识）才标——失效期内的未归属是合法状态；
+     *   · `setDumpPanzerGroupNow` 声明后照旧从待办移除，随档往返；
+     *   · 不碰 `panzerGroupOfDump` 的 null 语义，也不猜测任何一方。
+     */
+    if (panzerGroupRulesOn.value) {
+      const unassigned = spDumps.value
+        .filter((dump) => dump.side === 'axis' && panzerGroupOfDump(dump.id) === null)
+        .map((dump) => dump.id)
+      const added = unassigned.filter((id) => !pendingSpGroupAssignment.value.includes(id))
+      if (added.length > 0) {
+        pendingSpGroupAssignment.value = [...pendingSpGroupAssignment.value, ...added]
+        pushLog(
+          'info',
+          `读档：旧档有 ${String(added.length)} 处轴方 SP 未登记装甲集群 ⇒ 已显式标为「未归属（3.4b）」；` +
+            '在专规面板声明归属后，才可用于多单位编队的燃油/战斗/轰炸付费',
+          '3.4b',
+        )
+      }
+    }
     return normalized.merged
   }
 

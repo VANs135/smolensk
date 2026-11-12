@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
+import { PANZER_GROUP_OPTION_ITEM } from '@/engine/rules'
 import { createMemoryStorage } from '@/shared'
 import {
   SAVE_SLOT_KEY,
@@ -11,7 +12,7 @@ import {
 } from '@/stores'
 import { confirmSetupForStart } from '../flows/setup-harness'
 
-function boot() {
+function boot({ panzerGroup = false }: { panzerGroup?: boolean } = {}) {
   setActivePinia(createPinia())
   const setup = useSetupStore(),
     board = useWorkbenchStore(),
@@ -19,6 +20,12 @@ function boot() {
   useHotseatStore().setMode('solo')
   game.setSaveStorage(createMemoryStorage())
   expect(setup.selectScenario('1')).toBe(true)
+  // 3.4b 是本作可选条（4.0 共识）；在初设收束**前**勾上，初设夹具才会逐站选归属。
+  if (panzerGroup) {
+    const index = game.agreedOptionItems.indexOf(PANZER_GROUP_OPTION_ITEM)
+    expect(index).toBeGreaterThanOrEqual(0)
+    game.setAgreedCheck(index, true)
+  }
   confirmSetupForStart(setup)
   expect(setup.startGameNow()).toBe(true)
   // 构造同格但不同来源的合法账本，用真实存读档入口检查恢复归并。
@@ -129,5 +136,40 @@ describe('12.1b/3.4b：读档归并不能改变SP归属', () => {
     expect(dumps[0]!.sp * 4 + dumps[0]!.t).toBe(23)
     expect(board.panzerGroupOfDump('first')).toBe('hoth')
     expect(board.panzerGroupOfDump('second')).toBeNull()
+  })
+})
+
+describe('U8：旧档里没有编组归属的 SP', () => {
+  it('3.4b 生效：读档把旧档未归属的轴方 SP 显式标为「未归属」，不猜归属', () => {
+    const { board, game } = boot({ panzerGroup: true })
+    // 同格的第二笔先声明归属，留下 first 作旧档未归属样本
+    board.setDumpPanzerGroupNow('second', 'hoth')
+    expect(game.saveNow()).toBe(true)
+    expect(game.loadNow()).toBe(true)
+
+    expect(board.panzerGroupRulesOn).toBe(true)
+    expect(board.panzerGroupOfDump('first')).toBeNull()
+    expect(board.panzerGroupUnassignedDumps.map((dump) => dump.id)).toEqual(['first'])
+    expect(board.pendingSpGroupAssignment).toContain('first')
+    expect(board.pendingSpGroupAssignment).not.toContain('second')
+    expect(board.log.some((entry) => entry.text.includes('已显式标为「未归属（3.4b）」'))).toBe(
+      true,
+    )
+
+    // 声明归属 ⇒ 待办清空；再存读档不会被重新标回
+    board.setDumpPanzerGroupNow('first', 'guderian')
+    expect(board.pendingSpGroupAssignment).toEqual([])
+    expect(game.saveNow()).toBe(true)
+    expect(game.loadNow()).toBe(true)
+    expect(board.pendingSpGroupAssignment).toEqual([])
+  })
+
+  it('3.4b 未启用：未归属是合法状态，读档不做标记、也不改归属', () => {
+    const { board, game } = boot()
+    expect(board.panzerGroupRulesOn).toBe(false)
+    expect(game.saveNow()).toBe(true)
+    expect(game.loadNow()).toBe(true)
+    expect(board.panzerGroupOfDump('first')).toBeNull()
+    expect(board.pendingSpGroupAssignment).toEqual([])
   })
 })
