@@ -422,9 +422,10 @@ describe('B14c：战斗面板的替换（源码守卫）', () => {
     expect(panel).toContain('const resolverNotation = computed')
     expect(panel).toContain('summary.attacker.notation')
     expect(panel).toContain('summary.defender.notation')
-    expect(panel).toContain(
-      '}}结算<span v-if="resolverNotation !== \'\'"> · {{ resolverNotation }}</span>',
-    )
+    // 语义：结算行同时出现「…结算」与 `resolverNotation`，且两者之间不加箭头（结构可重排，口径不变）
+    expect(panel).toMatch(/\}\}结算/)
+    expect(panel).toContain('{{ resolverNotation }}')
+    expect(panel).not.toMatch(/结算\s*(→|⇒)/)
     // 攻方全灭的一键仍保留（9.10c 例 B）
     expect(panel).toContain('结束战斗')
   })

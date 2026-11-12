@@ -1428,6 +1428,10 @@ export function attackersForHex(
       unit.isCombat &&
       unit.attackCapable &&
       canAttackAfterAirTransport(unit.airTransportThisPhase) &&
+      // 9.1e：战略模式、以及未释放的预备不能进攻 ⇒ 自动带攻方时就不收进来，
+      // 免得「开始战斗」才被引擎拒（原先是全收，再由 9.1e 打回）。
+      unit.mode.mode !== 'strat' &&
+      !(unit.mode.mode === 'reserve' && unit.mode.releasedFromReserve !== true) &&
       areAdjacent(unit.hex, defenderHex),
   )
 }

@@ -155,24 +155,14 @@ function combatItems(facts: NonNullable<SessionStepFacts['combat']>): SessionSte
           '确认每个攻击堆叠与守方所用的地形。',
         ),
       ]
+    /*
+     * 9.8 / 9.9 是**自动步**：奇袭、横移、战斗骰与查表在「确认地形」的同一拍内连跑
+     * （`autoResolveCombatToOutcome`），玩家没有任何待决动作 ⇒ **不占屏**。
+     * 这里显式返回空，宿主模式下这两步不渲染任何一节。
+     */
     case 'surprise':
-      return [
-        item(
-          'combat:surprise',
-          '掷骰与查表',
-          '地形已确认，奇袭骰与横移骰会自动跑完。',
-          '无需操作，等结算停到下一步。',
-        ),
-      ]
     case 'battleDice':
-      return [
-        item(
-          'combat:battleDice',
-          '掷骰与查表',
-          '奇袭已结算，战斗骰与战斗表会自动跑完。',
-          '无需操作，等结算停到下一步。',
-        ),
-      ]
+      return []
     case 'losses':
       return [
         item(

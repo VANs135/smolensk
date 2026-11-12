@@ -227,7 +227,7 @@ const defenderArItems = computed(() =>
     <template v-else>
       <p v-if="workbench.combatError !== null" class="bad">
         <BaseTag kind="danger">{{ workbench.combatError.rule }}</BaseTag>
-        {{ workbench.combatError.reason }}
+        {{ workbench.combatErrorLine }}
       </p>
 
       <!-- 第 2 步：战斗补给（9.5 / 12.4） -->
@@ -331,10 +331,6 @@ const defenderArItems = computed(() =>
           @pick="workbench.combatInputs.defenderArUnitId = $event"
           @hover="hoverUnit"
         />
-        <p v-if="workbench.nkvdArRequiredNow" class="warn">
-          <BaseTag kind="danger">专规 2.3b</BaseTag>
-          守方堆叠内有 NKVD 边防团 ⇒ **行动值单位只能从它们中选**（候选表已收窄）
-        </p>
         <div class="row">
           <BaseButton
             variant="primary"
@@ -447,13 +443,10 @@ const defenderArItems = computed(() =>
       <!-- 第 8 步（a）：强制军力损失（9.11） -->
       <SessionStep item="combat:losses">
         <p class="num">
-          当前结算：
           {{
             roleName(state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender')
-          }}结算<span v-if="resolverNotation !== ''"> · {{ resolverNotation }}</span>
-        </p>
-        <p class="num">
-          需承受 {{ workbench.combatRequirement?.losses ?? 0 }} 点
+          }}结算<template v-if="resolverNotation !== ''"> · {{ resolverNotation }}</template
+          >：需承受 {{ workbench.combatRequirement?.losses ?? 0 }} 点
           <RuleTip rule="9.11b / 9.11c">
             AR 单位先受第一点，之后每人各受一点；超出承受范围的损失忽略。
           </RuleTip>
@@ -681,10 +674,7 @@ const defenderArItems = computed(() =>
         </p>
         <template v-if="retreatPlan !== null">
           <p class="num">
-            现在给**{{ retreatPlan.side === 'attacker' ? '攻方' : '守方' }}**选落点（{{
-              retreatPlan.distance
-            }}
-            格）：{{
+            现在给{{ retreatPlan.side === 'attacker' ? '攻方' : '守方' }}选落点：{{
               retreatPlan.complete
                 ? retreatPlan.units.some((unit) => unit.noLanding === true)
                   ? '已齐（含将被消灭的单位）'
@@ -729,12 +719,7 @@ const defenderArItems = computed(() =>
               清除落点
             </BaseButton>
           </div>
-          <!-- 9.12d：跟随者（路径自动沿用宿主，界面只展示） -->
-          <p v-for="item in retreatPlan.tagalongs" :key="item.unitId" class="num">
-            <BaseTag kind="neutral">9.12d</BaseTag>
-            {{ item.label }} 随 {{ item.hostLabel }} 同格撤退
-          </p>
-          <!-- 9.12d：可加入撤退的单位（未参战战斗单位 / 编内卡车）；原在地图小窗，G2 起归此面板 -->
+          <!-- 9.12d：跟随者并入候选按钮（已选的显示 ✓），不再另起一份只读名单 -->
           <div v-if="workbench.combatTagalongCandidates.length > 0" class="row">
             <BaseButton
               v-for="item in workbench.combatTagalongCandidates"
@@ -766,16 +751,13 @@ const defenderArItems = computed(() =>
         <!-- B33：突袭的推进是**强制**的（9.12g-D）⇒ 说明与按钮按这个口径给 -->
         <p v-if="workbench.combatAdvanceMandatory" class="warn num">
           <BaseTag kind="danger">9.12g-D</BaseTag>
-          本次是**突袭**：成功的突袭**必须**战后推进（8.0：防御方撤退或被摧毁 ⇒ 所有攻击单位都必须
-          进入该格，无需额外 MP）⇒ 撤退收束后**自动收束**，不给"不推进"。若因 9.14 位移待决而停在
-          本步，位移落点选定后即自动收束。
+          本次是突袭：成功的突袭必须战后推进（8.0：防御方撤退或被摧毁 ⇒ 所有攻击单位进入该格，
+          无需额外 MP）。撤退收束后自动收束，不给"不推进"；若因 9.14 位移待决停在本步，
+          位移落点选定后即自动收束。
         </p>
         <p class="num">
-          防御格 {{ workbench.combatDefendingHexCleared ? '已空' : '未空' }}；
-          {{
-            workbench.combatDefendingHexCleared
-              ? '攻方可选择推进（9.12g-D：突袭后必须推进）'
-              : '防御格未空 ⇒ 不推进'
+          防御格 {{ workbench.combatDefendingHexCleared ? '已空' : '未空' }}；{{
+            workbench.combatDefendingHexCleared ? '可推进' : '本场不推进'
           }}
         </p>
         <RuleTip rule="9.12g-A / 9.13">

@@ -12794,7 +12794,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         return '该地形不是这个堆叠的可选地形（9.4b）'
       case 'defenderMayNotIgnoreOptions':
         return '本场守方不能忽略选项（9.10c）'
-      case 'nkvdUnitForbidsIgnoringOptions':
+      case 'nkvdArUnitForbidsIgnoringOptions':
         return 'NKVD 边防团担任行动值单位时，守方不得忽略选项（专规 2.3b）'
       case 'badRetreatHexes':
       case 'badLossPoints':
