@@ -707,6 +707,26 @@ describe('9.10 / 9.11 结算：攻方先、守方后，从 AR 单位起算', () 
     expect(asRetreat.retreatHexes).toBe(1)
   })
 
+  it('9.12/C1：选项步与撤退步同一判据——六邻全是不可通行格 ⇒ 允许分配但点名「无落点」', () => {
+    const { state, attackers, defenders } = afterLowDice()
+    const losses = unwrap(planLosses(state, { units: [...attackers, ...defenders] }))
+    const current = applyPatches([...attackers, ...defenders], losses.patches)
+    const attackerUnits = current.filter((item) => item.side === 'axis')
+    // a1/a2 都在 (36,13)；把六个邻格都当作「战斗开始时含敌方战斗单位」⇒ 1 格撤退无落点
+    const options = unwrap(
+      planOptions(losses.state, {
+        units: attackerUnits,
+        retreatHexes: 1,
+        lossPoints: 0,
+        retreatFacts: retreatFacts({
+          startOfCombatEnemyCombatUnitAt: (hex) => hexDistance(ATTACKER_HEX, hex) === 1,
+        }),
+      }),
+    )
+    expect(options.retreatNoLandingUnitIds.sort()).toEqual(['a1', 'a2'])
+    expect(options.retreatDoomedUnitIds).toEqual([])
+  })
+
   it('9.10c：攻方用选项撤退后，守方可以忽略自己的选项', () => {
     const { state, attackers, defenders } = afterLowDice()
     const losses = unwrap(planLosses(state, { units: [...attackers, ...defenders] }))
@@ -1157,6 +1177,105 @@ describe('9.12 撤退方向：完整撤退距离、DG 与敌方 ZOC', () => {
     expect(dgPatches).toEqual([{ unitId: 'd1', dg: true }])
     // 非 DG 结果 ⇒ 不产生任何补丁
     expect(plainPatches).toEqual([])
+  })
+
+  it('9.12（用户 2026-11-12 裁定）：路径长度可 > N——之字形延长后终点直线距离 = N 仍合法', () => {
+    const { state, units } = atRetreatStep()
+    // a1 起点 (36,13)，o1 ⇒ N=1；走 2 步、终点 (35,14) 与起点的直线距离仍是 1
+    const retreat = unwrap(
+      resolveRetreats(state, {
+        units,
+        paths: [
+          {
+            unitId: 'a1',
+            path: [
+              { col: 35, row: 13 },
+              { col: 35, row: 14 },
+            ],
+          },
+          { unitId: 'd1', path: [{ col: 36, row: 15 }] },
+        ],
+        facts: retreatFacts(),
+      }),
+    )
+    const a1 = retreat.results.find((item) => item.unitId === 'a1')!
+    expect(a1.hex).toEqual({ col: 35, row: 14 })
+    expect(a1.fullRetreatDistanceMet).toBe(true)
+    // 物理上进入第 2 格 ⇒ 9.12a 的 DG 仍然触发
+    expect(a1.gainsDg).toBe(true)
+  })
+
+  it('9.12（用户 2026-11-12 裁定）：简单路径——重复格 / 绕回起点被拒', () => {
+    const { state, units } = atRetreatStep()
+    const repeated = resolveRetreats(state, {
+      units,
+      paths: [
+        {
+          unitId: 'a1',
+          path: [
+            { col: 36, row: 12 },
+            { col: 36, row: 11 },
+            { col: 36, row: 12 },
+          ],
+        },
+        { unitId: 'd1', path: [{ col: 36, row: 15 }] },
+      ],
+      facts: retreatFacts(),
+    })
+    expect(repeated).toMatchObject({ ok: false, rule: '9.12' })
+    expect(repeated.ok === false && repeated.reason).toContain('retreatPathRepeatsHex')
+
+    const backToStart = resolveRetreats(state, {
+      units,
+      paths: [
+        {
+          unitId: 'a1',
+          path: [
+            { col: 36, row: 12 },
+            { col: 36, row: 13 },
+          ],
+        },
+        { unitId: 'd1', path: [{ col: 36, row: 15 }] },
+      ],
+      facts: retreatFacts(),
+    })
+    expect(backToStart).toMatchObject({ ok: false, rule: '9.12' })
+    expect(backToStart.ok === false && backToStart.reason).toContain('retreatPathReturnsToStart')
+  })
+
+  it('9.12 第三 bullet：排除不可通行格后无落点 ⇒ noLandingUnitIds 兜底消灭', () => {
+    const { state, units } = atRetreatStep()
+    const retreat = unwrap(
+      resolveRetreats(state, {
+        units,
+        paths: [{ unitId: 'd1', path: [{ col: 36, row: 15 }] }],
+        facts: retreatFacts({
+          // a1 的六个邻格都是「战斗开始时含敌方战斗单位」⇒ 不可通行、无落点
+          startOfCombatEnemyCombatUnitAt: (hex) => hexDistance(ATTACKER_HEX, hex) === 1,
+        }),
+        noLandingUnitIds: ['a1'],
+      }),
+    )
+    expect(retreat.results.find((item) => item.unitId === 'a1')).toMatchObject({
+      destroyed: true,
+      hex: null,
+      reason: 'noLanding',
+    })
+    expect(retreat.patches).toContainEqual({ unitId: 'a1', steps: 0 })
+  })
+
+  it('专规 1.4b：图外路径仍被拒绝', () => {
+    const { state, units } = atRetreatStep()
+    const outcome = resolveRetreats(state, {
+      units,
+      paths: [
+        { unitId: 'a1', path: [{ col: 1, row: 0 }] },
+        { unitId: 'd1', path: [{ col: 36, row: 15 }] },
+      ],
+      facts: retreatFacts(),
+    })
+    expect(outcome).toMatchObject({ ok: false, rule: '专规 1.4b' })
+    expect(outcome.ok === false && outcome.reason).toContain('retreatOffMapForbidden')
   })
 })
 

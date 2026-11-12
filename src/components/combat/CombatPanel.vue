@@ -544,6 +544,19 @@ const defenderArItems = computed(() =>
           >｜草稿已用 <b>{{ workbench.optionDraftUsed }}</b
           >｜剩余 <b>{{ workbench.optionDraftRemaining }}</b>
         </p>
+        <!-- 9.12（C1）：选项步当场预演第 9 步落点，避免先放行、后永久灰显 -->
+        <p
+          v-for="item in workbench.combatOptionRetreatWarning"
+          :key="`retreat-warning-${item.unitId}`"
+          class="warn num"
+        >
+          <BaseTag kind="warning">9.12</BaseTag>
+          {{ item.label }}：{{
+            item.kind === 'noLanding'
+              ? '排除战斗开始时敌方格后无合法落点，确认撤退时将按 9.12 消灭'
+              : '只有必被消灭的撤退落点（9.12/9.12b/5.8a）'
+          }}
+        </p>
         <div class="row">
           <BaseButton
             :variant="workbench.optionDraftMode === 'loss' ? 'primary' : 'secondary'"
@@ -666,7 +679,13 @@ const defenderArItems = computed(() =>
             现在给**{{ retreatPlan.side === 'attacker' ? '攻方' : '守方' }}**选落点（{{
               retreatPlan.distance
             }}
-            格）：{{ retreatPlan.complete ? '已选齐' : '点地图上的高亮格' }}
+            格）：{{
+              retreatPlan.complete
+                ? retreatPlan.units.some((unit) => unit.noLanding === true)
+                  ? '已齐（含将被消灭的单位）'
+                  : '已选齐'
+                : '点地图上的高亮格'
+            }}
           </p>
           <div v-for="row in retreatPlan.units" :key="row.unitId" class="row">
             <!-- 点这一行＝切换"现在给谁选"（与地图点击的同一个 `retreatUnit`） -->
@@ -680,6 +699,21 @@ const defenderArItems = computed(() =>
             <span class="num">
               落点：{{ row.chosen === null ? '（未选）' : hexLabel(row.chosen) }}｜候选
               {{ row.destinations.length }} 格
+            </span>
+            <!-- 9.12（C1）：不可通行格排除后无落点 ⇒ 允许确认，但必须明示消灭后果 -->
+            <span v-if="row.noLanding === true" class="warn num">
+              <BaseTag kind="danger">9.12</BaseTag>
+              无合法落点：确认后该单位被消灭
+            </span>
+            <span
+              v-else-if="
+                row.destinations.length > 0 &&
+                row.destinations.every((destination) => destination.forcedDestruction)
+              "
+              class="warn num"
+            >
+              <BaseTag kind="warning">9.12</BaseTag>
+              只有必被消灭的落点
             </span>
             <BaseButton
               v-if="row.chosen !== null"

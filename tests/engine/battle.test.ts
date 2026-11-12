@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { chartsCrt, rulesConstants } from '@/data'
 import type { HexRef } from '@/data'
-import { hexDistance } from '@/engine/hex-geometry'
+import { hexDistance, isOnMap } from '@/engine/hex-geometry'
 import {
   BATTLE_SEQUENCE,
   allocateBattleLosses,
@@ -1150,6 +1150,78 @@ describe('9.12 撤退落点规划：完整撤退距离、路径与 ZOC 分类', 
       }),
     }).find((plan) => plan.hex.col === to.col && plan.hex.row === to.row)
     expect(currentEnemy?.forcedDestruction).toBe(true)
+  })
+
+  it('9.12（用户 2026-11-12 裁定）：铺最短路径被挡住时，允许之字形延长到“终点直线距离 = N”的格', () => {
+    // from (36,13) → to (36,11) 的直线距离 2；两条最短路径的中转格都禁行 ⇒ 只能走 3 步绕行
+    const to = { col: 36, row: 11 }
+    const blocked = new Set(['36,12', '37,12'])
+    const path = retreatPathTo({
+      from,
+      to,
+      distance: 2,
+      mobility: 'leg',
+      side: 'axis',
+      facts: retreatFacts({
+        prohibitedFor: (_mobility, hex) => blocked.has(`${hex.col},${hex.row}`),
+      }),
+    })
+    expect(path).not.toBeNull()
+    // 路径可以长于 N；但终点必须是 to，且步数 > 2
+    expect(path).toHaveLength(3)
+    expect(path![path!.length - 1]).toEqual(to)
+    expect(hexDistance(from, path![path!.length - 1]!)).toBe(2)
+    // 简单路径：不重复格、不绕回起点、不踩禁行格
+    const keys = path!.map((hex) => `${hex.col},${hex.row}`)
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(keys).not.toContain('36,13')
+    for (const hex of path!) expect(blocked.has(`${hex.col},${hex.row}`)).toBe(false)
+  })
+
+  it('9.12（用户 2026-11-12 裁定）：不可通行格排除后全无落点 ⇒ 规划器为空（由上层按 9.12 兜底消灭）', () => {
+    // 把 from 的六个邻格全部当作「战斗开始时含敌方战斗单位」⇒ 1 格撤退没有任何合法落点
+    const enclosed = planRetreatDestinations({
+      from,
+      distance: 1,
+      mobility: 'leg',
+      side: 'axis',
+      facts: retreatFacts({
+        startOfCombatEnemyCombatUnitAt: (hex) => hexDistance(from, hex) === 1,
+      }),
+    })
+    expect(enclosed).toEqual([])
+  })
+
+  it('9.12f（用户 2026-11-12 裁定）：该格不可通行，但排除后仍有其他落点 ⇒ 正常给出其余落点', () => {
+    const to = { col: 36, row: 12 }
+    const facts = retreatFacts({
+      startOfCombatEnemyCombatUnitAt: (hex) => hex.col === to.col && hex.row === to.row,
+    })
+    const plans = planRetreatDestinations({
+      from,
+      distance: 1,
+      mobility: 'leg',
+      side: 'axis',
+      facts,
+    })
+    expect(plans.length).toBeGreaterThan(0)
+    expect(plans.some((plan) => plan.hex.col === to.col && plan.hex.row === to.row)).toBe(false)
+    for (const plan of plans)
+      expect(plan.path.some((hex) => hex.col === to.col && hex.row === to.row)).toBe(false)
+  })
+
+  it('专规 1.4b：规划器产出的路径每一步都在图内（不出现“能点、确认却报图外”）', () => {
+    // (2,0) 靠近地图西北削角；若不做 isOnMap 过滤，最短路径可能借用图外格
+    const edgeFrom: HexRef = { col: 2, row: 0 }
+    const plans = planRetreatDestinations({
+      from: edgeFrom,
+      distance: 2,
+      mobility: 'leg',
+      side: 'axis',
+      facts: retreatFacts(),
+    })
+    expect(plans.length).toBeGreaterThan(0)
+    for (const plan of plans) for (const hex of plan.path) expect(isOnMap(hex)).toBe(true)
   })
 
   it('9.12b：不可移动单位仍给出落点（但全部标为「被迫撤退 ⇒ 被消灭」）；撤退格数 0 与 blocked 判据照旧剔除', () => {

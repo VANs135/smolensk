@@ -1,6 +1,6 @@
 import { fail, succeed, type RuleOutcome } from '../result-types'
 import type { GamePhase, InternalStocks } from '../state-types'
-import { HEX_DIRECTIONS, hexDistance, hexesWithin, neighbor } from '../hex-geometry'
+import { HEX_DIRECTIONS, hexDistance, hexesWithin, isOnMap, neighbor } from '../hex-geometry'
 import { crtLookup } from '../tables/crt'
 import {
   clampColumnIndex,
@@ -826,11 +826,13 @@ export interface RetreatFacts {
   /** 9.12f：该格是否有敌方战斗单位（撤退不可穿越战斗开始时含敌方战斗单位的格） */
   enemyCombatUnitAt(hex: HexRef, side: Side): boolean
   /**
-   * 9.12f：该格在**战斗开始时**是否含敌方战斗单位（绝对禁穿）
+   * 9.12f：该格在**战斗开始时**是否含敌方战斗单位
    *
-   * 与 `enemyCombatUnitAt` 的区别：后者是「当前有敌方战斗单位 ⇒ 9.12 穿越即被消灭」；
-   * 本谓词是「当时有、现在可能已被打空或选项腾空」⇒ **连走都不能走**，不产生必死落点。
-   * 未提供时视为无此信息（仅调用方没有战斗开始快照时）。
+   * ★ 用户 2026-11-12 裁定：**该格对撤退方是不可通行格**——撤退路径搜索直接排除，
+   *   不是「穿越后判消灭」。理由：进入守方单位所在格叫挺进（advance），撤退不是挺进；
+   *   对照 9.12 第三 bullet：「必须撤退时穿越敌方占据格 ⇒ 消灭该单位」，两者不冲突：
+   *   先按「不可通行」找路，若排除后一个落点都没有，才走 9.12 的消灭兜底。
+   *   未提供时视为无此信息（仅调用方没有战斗开始快照时）。
    */
   startOfCombatEnemyCombatUnitAt?(hex: HexRef, side: Side): boolean
   /** 9.12e：该格是否在敌方未抵消 ZOC 内 */
@@ -849,6 +851,16 @@ export interface RetreatResult {
   /** 撤退落点；null＝被消灭 */
   hex: HexRef | null
   destroyed: boolean
+  /**
+   * 被消灭的原因（仅 `destroyed: true` 时有值；供界面/日志明示）
+   *
+   * - `noLanding`：排除不可通行格后一个落点都没有，按 9.12 第三 bullet 兜底消灭；
+   * - `mustCrossEnemyOrProhibited`：路径必须穿过当前敌方战斗单位格或禁入地形（9.12 第三 bullet）；
+   * - `impassableStartOfCombat`：路径进入战斗开始时敌方战斗单位所在格（9.12f，用户 2026-11-12 裁定为不可通行）；
+   * - `immobile`：任何模式下都不可移动（9.12b）；
+   * - `stratZoc`：战略模式进入敌方 ZOC（5.8a）。
+   */
+  reason?: RetreatDestructionReason
   /** 撤退后是否 DG（9.12a 的 2 格规则 / 9.12e 进入敌方 ZOC） */
   gainsDg: boolean
   /** 9.12e：与撤退单位同格的友方战斗单位一并 DG */
@@ -865,11 +877,15 @@ export interface RetreatResult {
   fullRetreatDistanceMet: boolean
 }
 
+/** 撤退被消灭的原因（见 `RetreatResult.reason`） */
+export type RetreatDestructionReason =
+  'noLanding' | 'mustCrossEnemyOrProhibited' | 'impassableStartOfCombat' | 'immobile' | 'stratZoc'
+
 /**
  * 9.12 / 9.12a-f：单个单位的撤退
  *
  *   9.12 撤退结束格与起始格的直线距离必须等于完整撤退距离；路径可之字形避开禁入地形；
- *        必须穿过敌方占据格或禁入地形者被**消灭**；
+ *        必须穿过**当前**敌方占据格或禁入地形者被**消灭**；
  *   9.12a 撤退 2 格及以上时，进入**第 2 格**的瞬间承受一次 DG；
  *   9.12b MA 为 0 的单位可先切到移动模式；在任何模式下都不可移动者**直接消灭**；
  *   9.12e 进入敌方 ZOC 立即 DG，且「恰好」在该格的友方战斗单位一并 DG；若撤退堆叠中任何单位在
@@ -877,7 +893,9 @@ export interface RetreatResult {
  *         ★ 次序要点：9.12a 的 DG 是在**进入第 2 格那一刻**才获得，故第 2 格本身即 ZOC 格时
  *         不构成「进入 ZOC 之前已 DG」，不触发该额外损失；且该损失是**每次撤退至多 1 点**
  *         （原文作「该堆栈损失一点军力」）；
- *   9.12f 撤退不可穿越战斗开始时含敌方战斗单位的格。
+ *   9.12f **战斗开始时**含敌方战斗单位的格对撤退方**不可通行**（用户 2026-11-12 裁定：
+ *         进入守方单位所在格叫挺进，撤退不是挺进）。规划器不会产出这种路径；若直接调用本函数
+ *         硬塞入这样的路径，按不可通行处理（`rule: '9.12f'`），不当作「穿越即消灭」的合法撤退。
  */
 export function resolveRetreat(input: {
   unit: {
@@ -889,14 +907,23 @@ export function resolveRetreat(input: {
     /** 5.8a：该单位处于战略模式（不得撤退进入敌方 ZOC，被迫如此 ⇒ 被摧毁） */
     strat?: boolean
   }
-  /** 撤退路径（含落点、不含起始格）；长度即完整撤退距离 */
+  /**
+   * 撤退路径（含落点、不含起始格）
+   *
+   * 9.12（用户 2026-11-12 裁定）：路径长度**可以大于**完整撤退距离 N（之字形避开禁入地形后
+   * 延长到满足距离的格）；真正要校验的是**终点与起撤格的直线距离 === N**。
+   * 未给 `distance` 时退回旧口径（N = 路径长度），供只测单步 DG/ZOC 的调用方使用。
+   */
   path: readonly HexRef[]
   facts: RetreatFacts
+  /** 完整撤退距离 N（9.10a 的撤退格数）；缺省＝路径长度（兼容旧调用） */
+  distance?: number
 }): RetreatResult {
   const { unit, path, facts } = input
+  const requiredDistance = input.distance ?? path.length
   const lastHex = path.length === 0 ? unit.hex : path[path.length - 1]!
-  // 9.12：结束格与起始格的**直线距离**必须等于完整撤退距离（之字形路径允许，但落点须刚好在该距离上）
-  const fullRetreatDistanceMet = hexDistance(unit.hex, lastHex) === path.length
+  // 9.12：结束格与起始格的**直线距离**必须等于完整撤退距离 N（不是路径长度）
+  const fullRetreatDistanceMet = hexDistance(unit.hex, lastHex) === requiredDistance
   const base = {
     unitId: unit.id,
     dgCompanions: [] as string[],
@@ -904,7 +931,14 @@ export function resolveRetreat(input: {
     fullRetreatDistanceMet,
   }
   if (facts.immobile(unit.id))
-    return { ...base, rule: '9.12b', hex: null, destroyed: true, gainsDg: false }
+    return {
+      ...base,
+      rule: '9.12b',
+      hex: null,
+      destroyed: true,
+      reason: 'immobile',
+      gainsDg: false,
+    }
 
   let current = unit.hex
   let dg = unit.dg
@@ -913,16 +947,27 @@ export function resolveRetreat(input: {
 
   for (let index = 0; index < path.length; index += 1) {
     const next = path[index]!
-    if (
-      facts.enemyCombatUnitAt(next, unit.side) ||
-      facts.startOfCombatEnemyCombatUnitAt?.(next, unit.side) === true ||
-      facts.prohibitedFor(unit.mobility, next)
-    )
+    // 9.12f（用户 2026-11-12 裁定）：战斗开始时敌方战斗单位所在格是**不可通行格**。
+    // 规划器已排除；这里只防直接调用硬塞入这种路径。不按「9.12 穿越即消灭」记。
+    if (facts.startOfCombatEnemyCombatUnitAt?.(next, unit.side) === true)
+      return {
+        ...base,
+        rule: '9.12f',
+        hex: null,
+        destroyed: true,
+        reason: 'impassableStartOfCombat',
+        gainsDg: true,
+        extraLoss,
+        dgCompanions,
+      }
+    // 9.12 第三 bullet：必须穿过**当前**敌方占据格或禁入地形 ⇒ 消灭该单位
+    if (facts.enemyCombatUnitAt(next, unit.side) || facts.prohibitedFor(unit.mobility, next))
       return {
         ...base,
         rule: '9.12',
         hex: null,
         destroyed: true,
+        reason: 'mustCrossEnemyOrProhibited',
         gainsDg: true,
         extraLoss,
         dgCompanions,
@@ -935,6 +980,7 @@ export function resolveRetreat(input: {
         rule: '5.8a',
         hex: null,
         destroyed: true,
+        reason: 'stratZoc',
         gainsDg: false,
         extraLoss,
         dgCompanions,
@@ -986,9 +1032,11 @@ export function resolveStackRetreat(input: {
     /** 5.8a：战略模式（不得撤退进入敌方 ZOC，被迫如此 ⇒ 被摧毁） */
     strat?: boolean
   }[]
-  /** 各单位的撤退路径（含落点、不含起始格），长度即各自的完整撤退距离 */
+  /** 各单位的撤退路径（含落点、不含起始格）；长度可 ≥ 完整撤退距离（见 9.12 用户裁定） */
   paths: readonly { unitId: string; path: readonly HexRef[] }[]
   facts: RetreatFacts
+  /** 完整撤退距离 N（9.10a 的撤退格数）；缺省时每个单位按自己的路径长度（兼容旧调用） */
+  distance?: number
 }): {
   rule: string
   results: RetreatResult[]
@@ -1005,6 +1053,7 @@ export function resolveStackRetreat(input: {
         unit,
         path: entry?.path ?? [],
         facts: input.facts,
+        ...(input.distance === undefined ? {} : { distance: input.distance }),
       }),
     )
   }
@@ -1040,7 +1089,78 @@ export interface RetreatDestinationPlan {
   forcedDestruction: boolean
 }
 
-/** 单调走法搜索（私有）：`passable` 决定是否绕开禁入格 */
+/**
+ * 9.12 绕行搜索的**确定性长度上限**（实现口径，原文未给上限）
+ *
+ * 用户 2026-11-12 裁定：
+ *   · 撤退路径必须是**简单路径**（不重复经过同一格，禁止在相邻格之间来回踱步凑格数）；
+ *   · 终点与起撤格的**直线距离必须正好等于完整撤退距离 N**；
+ *   · 路径长度**可以大于 N**（之字形避开禁入地形后延长到满足距离的格）；
+ *   · 逐格探索要有确定性上限，超出即判无解。
+ *
+ * 本实现取 `最长路径 = N + 6`。六格足够绕过一格宽的湖/河/敌方控制带来的常见障碍；
+ * 若真实局面需要更长绕行，按「无解」处理并走 9.12 的消灭兜底。该值是实现口径，不是原文数值。
+ */
+export const RETREAT_PATH_EXTRA_STEPS = 6
+
+/** 格坐标的稳定键（仅供简单路径 visited 集合使用） */
+function retreatHexKey(hex: HexRef): string {
+  return `${hex.col},${hex.row}`
+}
+
+/**
+ * 简单路径搜索（私有）：长度在 `[minLength, maxLength]` 内、终点为 `to`、不重复格、全在图内
+ *
+ * - 先短后长（IDDFS）：第一个找到的长度即最短可行长度，结果确定；
+ * - 每步按 `HEX_DIRECTIONS` 固定顺序展开，同一输入永远给同一条路径；
+ * - `passable` 负责排除禁入地形 / 敌方格 / 起点；本函数只额外保证「不重复格 + 在图内」。
+ */
+function simplePathWithin(input: {
+  from: HexRef
+  to: HexRef
+  minLength: number
+  maxLength: number
+  passable: (hex: HexRef) => boolean
+}): HexRef[] | null {
+  const { from, to, minLength, maxLength } = input
+  if (minLength <= 0 || maxLength < minLength) return null
+  const path: HexRef[] = []
+  const visited = new Set<string>([retreatHexKey(from)])
+
+  const walk = (current: HexRef, depth: number, limit: number): boolean => {
+    // 到达终点：只有路径长度达到下限才算数；否则不能再离开再回来（会重复终点）
+    if (sameHex(current, to)) return depth >= minLength
+    if (depth >= limit) return false
+    const remaining = limit - depth
+    // 剩余步数不足以走完到终点的直线距离 ⇒ 剪枝
+    if (hexDistance(current, to) > remaining) return false
+    for (const direction of HEX_DIRECTIONS) {
+      const next = neighbor(current, direction)
+      if (!isOnMap(next)) continue
+      const key = retreatHexKey(next)
+      if (visited.has(key)) continue
+      if (!input.passable(next)) continue
+      if (sameHex(next, to) && depth + 1 < minLength) continue
+      visited.add(key)
+      path.push(next)
+      if (walk(next, depth + 1, limit)) return true
+      path.pop()
+      visited.delete(key)
+    }
+    return false
+  }
+
+  // IDDFS：长度从 minLength 逐格加长到 maxLength；第一个成功即最短
+  for (let limit = minLength; limit <= maxLength; limit += 1) {
+    path.length = 0
+    visited.clear()
+    visited.add(retreatHexKey(from))
+    if (walk(from, 0, limit)) return [...path]
+  }
+  return null
+}
+
+/** 单调走法搜索（私有）：路径长度恰好 = 直线距离，`passable` 决定是否绕开禁入格 */
 function monotonePath(input: {
   from: HexRef
   to: HexRef
@@ -1058,6 +1178,7 @@ function monotonePath(input: {
       const next = neighbor(current, direction)
       // 必须更贴近落点一格（单调），保证路径长度恰好等于直线距离
       if (hexDistance(next, to) !== currentGap - 1) continue
+      if (!isOnMap(next)) continue
       if (!input.passable(next)) continue
       path.push(next)
       if (walk(next, remaining - 1)) return true
@@ -1071,37 +1192,50 @@ function monotonePath(input: {
 /**
  * 9.12：求**一条**从 `from` 到 `to` 的合法撤退路径（纯函数，供地图点选落点用）
  *
- * 规则依据（原文要点）：
+ * 规则依据（原文 + 用户 2026-11-12 裁定）：
  *   · 「撤退结束格与其开始撤退的格的**直线距离**，必须等于上述的格数」⇒ 先要求
  *     `hexDistance(from, to) === distance`，否则根本不可能合法；
- *   · 「撤退的路径不一定要是直线，它可以之字形避开禁入地形」⇒ 允许之字形，
- *     故按「每一步都**贴近落点**一格」的单调走法搜索（单调走法恰好给了
- *     `路径长度 == 直线距离`，这正是 9.12 的完整撤退距离条件），并在中途绕开禁入格；
- *   · 「必须穿过敌方占据格或禁入地形者被**消灭**」⇒ 本函数只给**不会必死**的路径，
- *     找不到就返回 null（必死路径由 `planRetreatDestinations` 另行标注，不在此伪装成合法）。
+ *   · 「撤退的路径不一定要是直线，它可以之字形避开禁入地形，但最后进入的格必须满足完整撤退距离」
+ *     ⇒ 路径长度**可以大于 N**；先找最短的 `N` 步路径（`monotonePath`），
+ *     找不到再按 `N+1 … N+RETREAT_PATH_EXTRA_STEPS` 逐步加长（`simplePathWithin`）；
+ *   · 简单路径：不重复经过同一格（用户裁定：禁止原地打转凑格数）；
+ *   · 9.12f（用户 2026-11-12 裁定）：**战斗开始时**含敌方战斗单位的格是**不可通行格**，
+ *     这里直接排除——不是「穿越后判消灭」；
+ *   · 9.12 第三 bullet：「必须穿过**当前**敌方占据格或禁入地形者被消灭」⇒ 本函数只给
+ *     **不会必死**的路径，找不到就返回 null（必死路径由 `planRetreatDestinations` 另行标注）。
  *
  * 走法顺序固定按 `HEX_DIRECTIONS`，故同一输入永远给出同一条路径（可复算、可测试）。
  */
 export function retreatPathTo(input: {
   from: HexRef
   to: HexRef
-  /** 完整撤退距离（＝9.10a 选项里的撤退格数） */
+  /** 完整撤退距离（＝9.10a 选项里的撤退格数）；终点直线距离必须等于它 */
   distance: number
   mobility: MobilityType
   side: Side
   facts: RetreatFacts
 }): HexRef[] | null {
   const { from, facts } = input
-  return monotonePath({
+  if (hexDistance(input.from, input.to) !== input.distance) return null
+  const passable = (hex: HexRef): boolean =>
+    isOnMap(hex) &&
+    !sameHex(hex, from) &&
+    !facts.prohibitedFor(input.mobility, hex) &&
+    !facts.enemyCombatUnitAt(hex, input.side) &&
+    facts.startOfCombatEnemyCombatUnitAt?.(hex, input.side) !== true
+  const shortest = monotonePath({
     from: input.from,
     to: input.to,
     distance: input.distance,
-    // 9.12f/9.12：不穿敌方战斗单位格（含战斗开始时曾有的格）、不进禁入地形、也不绕回起点
-    passable: (hex) =>
-      !sameHex(hex, from) &&
-      !facts.prohibitedFor(input.mobility, hex) &&
-      !facts.enemyCombatUnitAt(hex, input.side) &&
-      facts.startOfCombatEnemyCombatUnitAt?.(hex, input.side) !== true,
+    passable,
+  })
+  if (shortest !== null) return shortest
+  return simplePathWithin({
+    from: input.from,
+    to: input.to,
+    minLength: input.distance + 1,
+    maxLength: input.distance + RETREAT_PATH_EXTRA_STEPS,
+    passable,
   })
 }
 
@@ -1112,11 +1246,16 @@ export function retreatPathTo(input: {
  * 玩家点格即选定（`combatInputs.retreatPaths` 需要的就是这里的 `path` 文本）。
  *
  *   · 落点集合＝`hexesWithin(from, distance)` 中**直线距离恰为 distance** 的格（9.12 的完整撤退距离）；
- *   · 逐格先求**不会必死**的路径（`retreatPathTo`）；求不出再求纯几何单调路径并标
- *     `forcedDestruction: true` —— 9.12「必须穿过敌方占据格或禁入地形者被消灭」与 9.12b
- *     「任何模式下都不可移动者被迫撤退时被直接摧毁」都属于**规则允许的结果**，故必须可选，
- *     否则玩家在「必须撤退」的局面下无路可走（流程卡死）；
- *   · 两种路径都求不出（几何上不存在单调路线）者剔除 —— 那种格**连必死撤退都不成立**。
+ *   · 逐格先求**不会必死**的路径（`retreatPathTo`，允许之字形延长，见其注释）；
+ *   · 求不出再求「只避开不可通行格」的回退路径并标 `forcedDestruction: true`：
+ *       - 路径必须穿过**当前**敌方战斗单位格或禁入地形 ⇒ 9.12 第三 bullet 消灭该单位；
+ *       - 9.12b 不可移动者被迫撤退 ⇒ 直接摧毁；
+ *       - 5.8a 战略模式进入敌方 ZOC ⇒ 摧毁；
+ *     这些都属于**规则允许的结果**，故必须可选，否则玩家在「必须撤退」的局面下无路可走。
+ *   · 回退路径同样**排除 9.12f 的不可通行格**（用户 2026-11-12 裁定：战斗开始时含敌方战斗单位
+ *     的格连走都不能走，不是「穿越即消灭」）。
+ *   · 两种路径都求不出者剔除；若某单位**一个落点都没有**，调用方应按 9.12 第三 bullet 走
+ *     「无合法落点 ⇒ 消灭」兜底，并在界面明示原因。
  *
  * 结果按 距离 → 列 → 行 排序（与 `hexesWithin` 同口径，确定性）。
  */
@@ -1142,7 +1281,7 @@ export function planRetreatDestinations(input: {
    *   并让界面在提示里与 9.12e 的 DG 落点区分开。
    */
   strat?: boolean
-  /** 可选的额外禁入判据（如落点已被堆叠占满、超出地图范围；由调用方给） */
+  /** 可选的额外禁入判据（如落点已被堆叠占满；由调用方给） */
   blocked?: (hex: HexRef) => boolean
 }): RetreatDestinationPlan[] {
   if (input.distance <= 0) return []
@@ -1150,6 +1289,11 @@ export function planRetreatDestinations(input: {
   const candidates = hexesWithin(input.from, input.distance, { onMapOnly: true }).filter(
     (hex) => hexDistance(input.from, hex) === input.distance,
   )
+  // 回退路径（必死）仍须排除 9.12f 的不可通行格；当前敌方/禁入地形允许穿过（穿过后按 9.12 消灭）
+  const doomedPassable = (hex: HexRef): boolean =>
+    isOnMap(hex) &&
+    !sameHex(hex, input.from) &&
+    input.facts.startOfCombatEnemyCombatUnitAt?.(hex, input.side) !== true
   for (const hex of candidates) {
     if (input.blocked?.(hex) === true) continue
     const clean = retreatPathTo({
@@ -1160,23 +1304,22 @@ export function planRetreatDestinations(input: {
       side: input.side,
       facts: input.facts,
     })
-    // 9.12b：不可移动者没有「合法路径」，只能被消灭
     const path =
       clean ??
       monotonePath({
         from: input.from,
         to: hex,
         distance: input.distance,
-        passable: (candidate) => !sameHex(candidate, input.from),
+        passable: doomedPassable,
+      }) ??
+      simplePathWithin({
+        from: input.from,
+        to: hex,
+        minLength: input.distance + 1,
+        maxLength: input.distance + RETREAT_PATH_EXTRA_STEPS,
+        passable: doomedPassable,
       })
     if (path === null) continue
-    // 9.12f：战斗开始时含敌方战斗单位的格是**绝对禁穿**，不是「穿越即被消灭」
-    // ⇒ 回退路径命中这些格时该落点不成立，不得以 forcedDestruction 混入可选落点。
-    if (
-      clean === null &&
-      path.some((step) => input.facts.startOfCombatEnemyCombatUnitAt?.(step, input.side) === true)
-    )
-      continue
     plans.push({
       hex,
       inEnemyZoc: input.facts.inEnemyZocAt(hex, input.side),

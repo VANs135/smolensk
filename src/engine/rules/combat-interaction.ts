@@ -13,6 +13,7 @@ import {
   declareBattleTerrain,
   defenderMayIgnoreOptions,
   exploitEligibility,
+  planRetreatDestinations,
   resolveAdvanceAfterCombat,
   resolveBattleDice,
   resolveBattleSurprise,
@@ -791,12 +792,25 @@ export function planOptions(
      * 给出时按 `validateBattleLossAllocation` 严格校验（AR 先受第一点、均匀展开、逐单位不超容量）。
      */
     lossAllocation?: readonly { unitId: string; steps: number }[]
+    /**
+     * 9.12：撤退落点判据（与第 9 步同一套）
+     *
+     * 给出时按 `planRetreatDestinations` **逐单位**检查：若某单位一个落点都没有，
+     * 允许该分配（它将在第 9 步按 9.12 第三 bullet 兜底消灭），但会在返回值里点名；
+     * 若只有 `forcedDestruction` 落点，也会点名，供界面当场提示。
+     * 未给出时退回旧的几何闸门（`hasHexAtExactDistance`），兼容不构造撤退事实的调用方。
+     */
+    retreatFacts?: RetreatFacts
   },
 ): RuleOutcome<{
   state: CombatInteractionState
   patches: CombatUnitPatch[]
   /** 该方需要撤退的格数（第 9 步据此收撤退方向） */
   retreatHexes: number
+  /** 只有`forcedDestruction`落点的单位（9.12/9.12b/5.8a；界面应提示「将被消灭」） */
+  retreatDoomedUnitIds: string[]
+  /** 一个落点都没有的单位（9.12 第三 bullet：无合法落点 ⇒ 消灭） */
+  retreatNoLandingUnitIds: string[]
   rule: string
 }> {
   if (state.step !== 'options') return fail('9.2', `notAtOptionsStep:${state.step}`)
@@ -836,6 +850,8 @@ export function planOptions(
       },
       patches: [],
       retreatHexes: 0,
+      retreatDoomedUnitIds: [],
+      retreatNoLandingUnitIds: [],
       rule: '9.10c',
     })
   }
@@ -857,15 +873,37 @@ export function planOptions(
   if (choice.data.lossPoints > capacity)
     return fail('9.11', `optionLossExceedsAvailableSteps:${choice.data.lossPoints}>${capacity}`)
 
-  // 9.12 末段括注：「（有时这会限制可选为撤退的选项数量）」——撤退格数受**可撤退性**限制：
-  // 只要有一个参战单位在图上不存在直线距离恰为该格数的落点（几何上无解），就不允许这样的分配，
-  // 否则玩家会在第 9 步无法给出任何合法路径、流程卡死。
+  // 9.12 末段括注：「（有时这会限制可选为撤退的选项数量）」——撤退格数受**可撤退性**限制。
+  // 旧实现只查几何（`hasHexAtExactDistance`），而第 9 步才查路径，导致「选项步放行、撤退步无落点」
+  // 的永久灰显（C1）。现在改为与第 9 步同一套按单位判据：
+  //   · 一个落点都没有 ⇒ 允许分配（第 9 步按 9.12 第三 bullet 兜底消灭），但点名提示；
+  //   · 只有必死落点 ⇒ 同样允许，点名提示「将被消灭」。
+  // 未提供 `retreatFacts` 时保留旧的几何闸门，兼容不构造撤退事实的调用方。
+  const retreatDoomedUnitIds: string[] = []
+  const retreatNoLandingUnitIds: string[] = []
   if (choice.data.retreatHexes > 0) {
-    const infeasible = units.find(
-      (unit) => !hasHexAtExactDistance(unit.hex, choice.data.retreatHexes),
-    )
-    if (infeasible !== undefined)
-      return fail('9.12', `retreatEndHexUnavailable:${infeasible.id}:${choice.data.retreatHexes}`)
+    if (input.retreatFacts === undefined) {
+      const infeasible = units.find(
+        (unit) => !hasHexAtExactDistance(unit.hex, choice.data.retreatHexes),
+      )
+      if (infeasible !== undefined)
+        return fail('9.12', `retreatEndHexUnavailable:${infeasible.id}:${choice.data.retreatHexes}`)
+    } else {
+      for (const unit of units) {
+        const landings = planRetreatDestinations({
+          from: unit.hex,
+          distance: choice.data.retreatHexes,
+          mobility: unit.mobility,
+          side: unit.side,
+          facts: input.retreatFacts,
+          immobile: input.retreatFacts.immobile(unit.id),
+          strat: unit.mode === 'strat',
+        })
+        if (landings.length === 0) retreatNoLandingUnitIds.push(unit.id)
+        else if (landings.every((landing) => landing.forcedDestruction))
+          retreatDoomedUnitIds.push(unit.id)
+      }
+    }
   }
 
   // 9.11a/9.11c：选项损失也是**战斗结果中的军力损失** ⇒ 与强制损失同一条判据
@@ -923,6 +961,8 @@ export function planOptions(
     },
     patches,
     retreatHexes: choice.data.retreatHexes,
+    retreatDoomedUnitIds,
+    retreatNoLandingUnitIds,
     rule: exploitPenalty ? '9.10d' : '9.10a',
   })
 }
@@ -944,9 +984,21 @@ export function resolveRetreats(
   state: CombatInteractionState,
   input: {
     units: readonly BattleUnitView[]
-    /** 各单位的撤退路径（含落点、不含起始格）；长度即该单位的撤退格数 */
+    /**
+     * 各单位的撤退路径（含落点、不含起始格）
+     *
+     * 9.12（用户 2026-11-12 裁定）：长度可以 ≥ 完整撤退距离 N；硬条件是**终点直线距离 === N**，
+     * 且路径为简单路径（不重复格、不绕回起点）。
+     */
     paths: readonly { unitId: string; path: readonly HexRef[] }[]
     facts: RetreatFacts
+    /**
+     * 9.12 第三 bullet：排除 9.12f 不可通行格后**一个落点都没有**的单位
+     *
+     * 这些单位不再要求路径，直接按「无合法落点 ⇒ 消灭」兜底（`reason: 'noLanding'`），
+     * 并在界面明示原因。由状态层按 `combatRetreatPlans` 的口径传入。
+     */
+    noLandingUnitIds?: readonly string[]
     /** 9.12d：加入撤退的**跟随者**（未参战战斗单位 / 编内卡车；可一次传两方的，引擎按方取用） */
     tagalongIds?: readonly string[]
   },
@@ -1010,8 +1062,38 @@ export function resolveRetreats(
         strat: unit.mode === 'strat',
       }))
 
-    // ── 9.12d：跟随者（未参战战斗单位 / 编内卡车），须与某一撤退单位同格 ──
-    const faction = sideUnits[0]?.side
+    // ── 9.12 第三 bullet：排除不可通行格后一个落点都没有的单位 ⇒ 兜底消灭 ──
+    //   用户 2026-11-12 裁定：9.12f 的「战斗开始时敌方格」先按不可通行排除；
+    //   排除后确实无落点，才走这里的消灭兜底（不是把该格当成可穿越）。
+    const noLanding = new Set(input.noLandingUnitIds ?? [])
+    const eliminatedUnits = sideUnits.filter((unit) => noLanding.has(unit.id))
+    const liveUnits = sideUnits.filter((unit) => !noLanding.has(unit.id))
+    for (const unit of eliminatedUnits) {
+      const result: RetreatResult = {
+        rule: '9.12',
+        unitId: unit.id,
+        hex: null,
+        destroyed: true,
+        reason: 'noLanding',
+        gainsDg: false,
+        dgCompanions: [],
+        extraLoss: 0,
+        fullRetreatDistanceMet: false,
+      }
+      results.push(result)
+      records.push({
+        unitId: result.unitId,
+        hex: result.hex,
+        destroyed: true,
+        gainsDg: false,
+        dgCompanions: [],
+        fullRetreatDistanceMet: false,
+      })
+      patches.push({ unitId: unit.id, steps: 0 })
+    }
+
+    // ── 9.12d：跟随者（未参战战斗单位 / 编内卡车），须与某一**存活**撤退单位同格 ──
+    const faction = liveUnits[0]?.side ?? sideUnits[0]?.side
     const joiners: typeof sideUnits = []
     for (const id of input.tagalongIds ?? []) {
       const view = input.units.find((unit) => unit.id === id)
@@ -1022,8 +1104,9 @@ export function resolveRetreats(
       if (sideUnits.some((unit) => unit.id === id)) continue // 参战者本就要撤，无需「跟随」
       const allowed = canJoinRetreat(view)
       if (!allowed.ok) return fail(allowed.rule, `${allowed.reason}:${id}`)
-      if (!sideUnits.some((unit) => sameHexOf(unit.hex, view.hex)))
-        return fail('9.12d', `tagalongNotInRetreatingHex:${id}`)
+      // 跟随者必须与一个**还会走路**的主撤退单位同格；若同格者都已被 9.12 兜底消灭，则无法跟随。
+      if (!liveUnits.some((unit) => sameHexOf(unit.hex, view.hex)))
+        return fail('9.12d', `tagalongHostEliminated:${id}`)
       joiners.push({
         id: view.id,
         side: view.side,
@@ -1034,29 +1117,43 @@ export function resolveRetreats(
       })
     }
     // 跟随者与该格的主撤退单位走同一条路径（9.12c「以一整个堆叠进行撤退」）
-    const stackUnits = [...sideUnits, ...joiners]
+    const stackUnits = [...liveUnits, ...joiners]
     const resolvedPaths: { unitId: string; path: readonly HexRef[] }[] = [
-      ...input.paths.filter((item) => sideUnits.some((unit) => unit.id === item.unitId)),
+      ...input.paths.filter((item) => liveUnits.some((unit) => unit.id === item.unitId)),
     ]
     const sidePaths = resolvedPaths
-    const missing = sideUnits.filter(
+    const missing = liveUnits.filter(
       (unit) => !sidePaths.some((item) => item.unitId === unit.id) && distance > 0,
     )
     if (missing.length > 0)
       return fail('9.12', `retreatPathMissing:${missing.map((unit) => unit.id).join(',')}`)
-    const wrongDistance = sidePaths.find((item) => item.path.length !== distance)
-    if (wrongDistance !== undefined)
+    // 9.12（用户 2026-11-12 裁定）：路径长度**可以大于** N，只要求 ≥ N；
+    //   真正的硬条件是「终点直线距离 === N」（下面单独校验）。
+    const shortPath = sidePaths.find((item) => item.path.length < distance)
+    if (shortPath !== undefined)
       return fail(
         '9.12',
-        `retreatDistanceMustEqualOptions:${wrongDistance.unitId}:${wrongDistance.path.length}!==${distance}`,
+        `retreatPathShorterThanOptions:${shortPath.unitId}:${shortPath.path.length}<${distance}`,
       )
+    // 用户 2026-11-12 裁定：简单路径，不得重复经过同一格（禁止来回踱步凑格数），也不得绕回起点。
+    const repeated = sidePaths.find((item) => {
+      const keys = item.path.map((hex) => `${hex.col},${hex.row}`)
+      return new Set(keys).size !== keys.length
+    })
+    if (repeated !== undefined) return fail('9.12', `retreatPathRepeatsHex:${repeated.unitId}`)
+    const returnsToStart = sidePaths.find((item) => {
+      const unit = liveUnits.find((candidate) => candidate.id === item.unitId)!
+      return item.path.some((hex) => sameHexOf(hex, unit.hex))
+    })
+    if (returnsToStart !== undefined)
+      return fail('9.12', `retreatPathReturnsToStart:${returnsToStart.unitId}`)
     // 专规 1.4b：图外盒（图外空军盒 / 东北、东南边缘盒）**不得撤退进出**
     //   （原文：地面单位只在**移动阶段**可进出边缘盒，且明文「no retreats」）
     const offMap = sidePaths.find((item) => item.path.some((hex) => !isOnMap(hex)))
     if (offMap !== undefined) return fail('专规 1.4b', `retreatOffMapForbidden:${offMap.unitId}`)
     // 9.12：落点与起撤格的**直线距离**必须等于撤退格数（「完整撤退距离」是硬条件，不只是提示）
     for (const item of sidePaths) {
-      const unit = sideUnits.find((candidate) => candidate.id === item.unitId)!
+      const unit = liveUnits.find((candidate) => candidate.id === item.unitId)!
       const last = item.path[item.path.length - 1] ?? unit.hex
       if (hexDistance(unit.hex, last) !== distance)
         return fail(
@@ -1067,11 +1164,16 @@ export function resolveRetreats(
     for (const joiner of joiners) {
       const explicit = input.paths.find((item) => item.unitId === joiner.id)
       if (explicit !== undefined) {
-        if (explicit.path.length !== distance)
+        if (explicit.path.length < distance)
           return fail(
             '9.12',
-            `retreatDistanceMustEqualOptions:${joiner.id}:${explicit.path.length}!==${distance}`,
+            `retreatPathShorterThanOptions:${joiner.id}:${explicit.path.length}<${distance}`,
           )
+        const keys = explicit.path.map((hex) => `${hex.col},${hex.row}`)
+        if (new Set(keys).size !== keys.length)
+          return fail('9.12', `retreatPathRepeatsHex:${joiner.id}`)
+        if (explicit.path.some((hex) => sameHexOf(hex, joiner.hex)))
+          return fail('9.12', `retreatPathReturnsToStart:${joiner.id}`)
         const last = explicit.path[explicit.path.length - 1] ?? joiner.hex
         if (hexDistance(joiner.hex, last) !== distance)
           return fail(
@@ -1081,15 +1183,17 @@ export function resolveRetreats(
         resolvedPaths.push({ unitId: joiner.id, path: explicit.path })
         continue
       }
-      const host = sideUnits.find((unit) => sameHexOf(unit.hex, joiner.hex))!
+      const host = liveUnits.find((unit) => sameHexOf(unit.hex, joiner.hex))!
       const hostPath = resolvedPaths.find((item) => item.unitId === host.id)!
       resolvedPaths.push({ unitId: joiner.id, path: hostPath.path })
     }
 
+    if (stackUnits.length === 0) continue
     const stack = resolveStackRetreat({
       units: stackUnits,
       paths: resolvedPaths,
       facts: input.facts,
+      distance,
     })
     if (stack.extraLoss > 0) {
       extraLossPoints += stack.extraLoss

@@ -632,6 +632,12 @@ export interface CombatRetreatUnitPlan {
   chosen: HexRef | null
   /** 该单位可选的落点（含路径、是否在敌方 ZOC 内、是否会被消灭） */
   destinations: RetreatDestinationPlan[]
+  /**
+   * 9.12 第三 bullet：排除 9.12f 不可通行格后**一个落点都没有**
+   *
+   * ⇒ 第 9 步不再要求点落点，确认后按「无合法落点 ⇒ 消灭」兜底（界面必须红字明示）。
+   */
+  noLanding?: boolean
 }
 
 /**
@@ -2860,21 +2866,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const rows: CombatRetreatUnitPlan[] = sideUnits.map((unit) => {
         const escaped = combatInputs.value.retreatPaths[unit.instanceId] ?? ''
         const chosen = parseHexPath(escaped)
+        const destinations = planRetreatDestinations({
+          from: unit.hex,
+          distance,
+          mobility: effectiveMobilityOf(unit),
+          side: unit.side,
+          facts: combatRetreatFacts.value,
+          immobile: combatRetreatFacts.value.immobile(unit.instanceId),
+          // 5.8a：战略模式单位撤退路径进入敌方 ZOC ⇒ 被摧毁
+          strat: unit.mode.mode === 'strat',
+        })
         return {
           unitId: unit.instanceId,
           label: unit.name,
           from: { col: unit.hex.col, row: unit.hex.row },
           chosen: chosen.length > 0 ? chosen[chosen.length - 1]! : null,
-          destinations: planRetreatDestinations({
-            from: unit.hex,
-            distance,
-            mobility: effectiveMobilityOf(unit),
-            side: unit.side,
-            facts: combatRetreatFacts.value,
-            immobile: combatRetreatFacts.value.immobile(unit.instanceId),
-            // 5.8a：战略模式单位撤退路径进入敌方 ZOC ⇒ 被摧毁
-            strat: unit.mode.mode === 'strat',
-          }),
+          destinations,
+          // 9.12 第三 bullet：排除 9.12f 不可通行格后一个落点都没有 ⇒ 确认后兜底消灭
+          ...(destinations.length === 0 ? { noLanding: true } : {}),
         }
       })
       // 地图上画「该方能退到哪」的并集：安全格 / 有 ZOC 影响格 / 选了会被消灭的格
@@ -2912,13 +2921,50 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         distance,
         units: rows,
         tagalongs,
-        complete: rows.every((row) => row.chosen !== null),
+        complete: rows.every((row) => row.chosen !== null || row.noLanding === true),
         safe,
         zoc,
         doomed,
       })
     }
     return plans
+  })
+
+  /**
+   * 9.12（C1）：选项步的**当场提示**——按当前撤退格数，逐单位预演第 9 步落点
+   *
+   * `doomed`：只有必被消灭的落点；`noLanding`：排除 9.12f 不可通行格后一个落点都没有
+   * （确认撤退后按 9.12 第三 bullet 兜底消灭）。选项步与撤退步共用同一套判据，避免先放行后灰显。
+   */
+  const combatOptionRetreatWarning = computed<
+    { unitId: string; label: string; kind: 'doomed' | 'noLanding' }[]
+  >(() => {
+    const state = combatState.value
+    if (state === null || state.step !== 'options') return []
+    const distance = combatInputs.value.optionRetreatHexes
+    if (distance <= 0) return []
+    const side = currentResolver(state)
+    const sideUnits = (side === 'attacker' ? combatAttackers.value : battleDefenders.value).filter(
+      (unit) => unit.steps > 0,
+    )
+    return sideUnits.flatMap(
+      (unit): { unitId: string; label: string; kind: 'doomed' | 'noLanding' }[] => {
+        const landings = planRetreatDestinations({
+          from: unit.hex,
+          distance,
+          mobility: effectiveMobilityOf(unit),
+          side: unit.side,
+          facts: combatRetreatFacts.value,
+          immobile: combatRetreatFacts.value.immobile(unit.instanceId),
+          strat: unit.mode.mode === 'strat',
+        })
+        if (landings.length === 0)
+          return [{ unitId: unit.instanceId, label: unit.name, kind: 'noLanding' as const }]
+        if (landings.every((landing) => landing.forcedDestruction))
+          return [{ unitId: unit.instanceId, label: unit.name, kind: 'doomed' as const }]
+        return []
+      },
+    )
   })
 
   /**
@@ -10843,6 +10889,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
             }
           : {}),
         ...(side === 'defender' && inputs.ignoreOptions ? { ignore: true } : {}),
+        // 9.12/C1：选项步与撤退步用**同一套按单位落点判据**
+        retreatFacts: combatRetreatFacts.value,
       }),
       '选项结算',
     )
@@ -10850,6 +10898,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     combatState.value = data.state
     applyCombatPatches(data.patches)
     if (nkvdOverride !== null) pushLog('warning', nkvdOverride.detail, '专规 2.3b')
+    // 9.12（C1）：当场点名「只有必死落点 / 一个落点都没有」，不要等撤退步才灰显
+    const labelOf = (unitId: string) =>
+      units.value.find((unit) => unit.instanceId === unitId)?.name ?? unitId
+    if (data.retreatNoLandingUnitIds.length > 0)
+      pushLog(
+        'warning',
+        `${data.retreatNoLandingUnitIds.map(labelOf).join('、')}：排除战斗开始时敌方格后无合法落点，确认撤退时将按 9.12 消灭`,
+        '9.12',
+      )
+    else if (data.retreatDoomedUnitIds.length > 0)
+      pushLog(
+        'warning',
+        `${data.retreatDoomedUnitIds.map(labelOf).join('、')}：只有必被消灭的撤退落点（9.12/9.12b/5.8a）`,
+        '9.12',
+      )
     if (data.rule === '9.10c') {
       pushLog('info', '守方行使 9.10c：忽略自己的选项', '9.10c')
     } else {
@@ -11155,6 +11218,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const paths = Object.entries(combatInputs.value.retreatPaths)
       .map(([unitId, text]) => ({ unitId, path: parseHexPath(text) }))
       .filter((item) => item.path.length > 0)
+    // 9.12 第三 bullet：排除 9.12f 不可通行格后一个落点都没有的单位（确认后兜底消灭）
+    const noLandingUnitIds = combatRetreatPlans.value.flatMap((plan) =>
+      plan.units.filter((unit) => unit.noLanding === true).map((unit) => unit.unitId),
+    )
     const data = acceptCombat(
       resolveRetreats(state, {
         // 9.12d：跟随者不是参战者，故这里给**全部盘面单位**（引擎只认构成里的参战者，
@@ -11162,6 +11229,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         units: units.value.map((unit) => toBattleUnitView(unit, turn.value)),
         paths,
         facts: combatRetreatFacts.value,
+        // 9.12 第三 bullet：排除 9.12f 不可通行格后无落点的单位 ⇒ 兜底消灭
+        ...(noLandingUnitIds.length === 0 ? {} : { noLandingUnitIds }),
         // 9.12d：加入撤退的跟随者（未参战战斗单位 / 编内卡车）
         ...(combatTagalongIds.value.length === 0 ? {} : { tagalongIds: combatTagalongIds.value }),
       }),
@@ -11183,10 +11252,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('info', '9.12e：无撤退对象，9.12e 不适用（按 0 记）', '9.12')
     }
     for (const result of data.results) {
+      const destroyedText =
+        result.reason === 'noLanding'
+          ? `${nameOf(result.unitId)} 无合法撤退落点（排除战斗开始时敌方格后），按 9.12 消灭`
+          : result.reason === 'impassableStartOfCombat'
+            ? `${nameOf(result.unitId)} 撤退路径进入战斗开始时敌方格（不可通行），按 9.12f 消灭`
+            : result.reason === 'immobile'
+              ? `${nameOf(result.unitId)} 不可移动，被迫撤退 ⇒ 被摧毁（9.12b）`
+              : result.reason === 'stratZoc'
+                ? `${nameOf(result.unitId)} 战略模式被迫撤退进入敌方 ZOC ⇒ 被摧毁（5.8a）`
+                : `${nameOf(result.unitId)} 撤退时穿过敌方单位或禁入地形，被消灭（9.12）`
       pushLog(
         result.destroyed ? 'danger' : 'info',
         result.destroyed
-          ? `${nameOf(result.unitId)} 撤退时穿过敌方单位或禁入地形，被消灭（9.12）`
+          ? destroyedText
           : `${nameOf(result.unitId)} 撤退至 ${result.hex === null ? '—' : hexLabel(result.hex)}` +
               `${result.gainsDg ? '，并 DG（9.12a/9.12e）' : ''}` +
               `${result.fullRetreatDistanceMet ? '' : '（完整撤退距离不满足）'}`,
@@ -11239,6 +11318,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           unitId: result.unitId,
           hex: result.hex === null ? null : { ...result.hex },
           destroyed: result.destroyed,
+          ...(result.reason === undefined ? {} : { reason: result.reason }),
           gainsDg: result.gainsDg,
           fullRetreatDistanceMet: result.fullRetreatDistanceMet,
         })),
@@ -25477,6 +25557,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     optionDraftRemaining,
     optionDraftEntries,
     optionDraftRetreatPreview,
+    combatOptionRetreatWarning,
     attackerWipedNow,
     setOptionDraftMode,
     applyOptionDraftLoss,
