@@ -6356,15 +6356,38 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const context = overrunContext.value
     if (context === null) return null
     const state = combatState.value
+    /*
+     * M5 / R1（U4 裁定＝A）：9.5b 允许在补给步**减少参战攻方**（`composition.attackerIds` 已按
+     * 新名单重算）。突袭的 3 MP 与 8.0 的进格只作用于**真正参突**的单位 ⇒ 以结算时的编成为准，
+     * 与 `composition` 取交集（编成只可能 ⊆ 宣布时的 `participantIds`）。
+     * 被减掉的单位按用户口径「视同移动中放下」处理（见下方 staying 补丁）。
+     */
+    const compositionIds = state?.composition.attackerIds ?? context.participantIds
+    const settledIds = context.participantIds.filter((id) => compositionIds.includes(id))
+    // 剩余 MP 也按新名单重算（8.1a 的门槛/提示取参突者里最紧的一枚）
+    const mpRemainingBefore = (() => {
+      if (settledIds.length === context.participantIds.length) return context.mpRemainingBefore
+      let min = Number.POSITIVE_INFINITY
+      for (const id of settledIds) {
+        const unit = units.value.find((item) => item.instanceId === id)
+        if (unit === undefined) continue
+        min = Math.min(
+          min,
+          availableMaOf(unit, movementPhaseOf(phase.value), sovietFirstTurnMaFactor(unit)) -
+            unit.mpSpent,
+        )
+      }
+      return Number.isFinite(min) ? min : context.mpRemainingBefore
+    })()
     const attackerRetreated = (state?.resolution.attacker.option?.retreatHexes ?? 0) > 0
     const aftermath = resolveOverrunAftermath({
-      mpRemainingBefore: context.mpRemainingBefore,
+      mpRemainingBefore,
       attackerRetreatedInOptions: attackerRetreated,
       defenderLeftHex,
     })
     const plan = planOverrunMove({
       runtime: context.runtimeBefore,
-      participantIds: context.participantIds,
+      participantIds: settledIds,
       target: context.target,
       aftermath,
     })
@@ -6377,10 +6400,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const liveParticipantIds = plan.participantIds.filter((id) =>
       runtime.some((unit) => unit.unitId === id),
     )
+    const interaction = moveInteraction.value
     const base = { context, plan, attackerRetreated, defenderLeftHex, liveParticipantIds }
     if (liveParticipantIds.length === 0) {
-      const current = moveInteraction.value
-      const closed = current === null ? null : endMoveEarly({ interaction: current, runtime })
+      const closed = interaction === null ? null : endMoveEarly({ interaction, runtime })
       return {
         ...base,
         closed,
@@ -6390,7 +6413,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         movePatches: closed === null ? [] : [...closed.patches],
       }
     }
-    const interaction = moveInteraction.value
     if (interaction === null)
       return {
         ...base,
@@ -6410,13 +6432,36 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         nextInteraction: null,
         movePatches: [],
       }
+    /*
+     * 8.1g/h（U4＝A）：堆叠里**没有参与这次突袭**的单位视同 6.1f「移动中放下」——
+     *   留在出发格、本次移动结束；不扣 3 MP、也不随突袭进格（8.1g：只有参突者能随堆叠移动）。
+     */
+    const stayingIds = new Set(
+      runtime
+        .filter(
+          (unit) =>
+            interaction.unitIds.includes(unit.unitId) &&
+            !settledIds.includes(unit.unitId) &&
+            !unit.ended,
+        )
+        .map((unit) => unit.unitId),
+    )
+    const mergedPatches = result.data.patches.map((patch) =>
+      stayingIds.has(patch.unitId) ? { ...patch, ended: true } : patch,
+    )
+    const endedIds = new Set(
+      mergedPatches.filter((patch) => patch.ended).map((patch) => patch.unitId),
+    )
+    const nextInteraction = interaction.unitIds.every((id) => endedIds.has(id))
+      ? { ...result.data.interaction, finished: true }
+      : result.data.interaction
     return {
       ...base,
       closed: null,
-      applied: { interaction: result.data.interaction, patches: [...result.data.patches] },
+      applied: { interaction: nextInteraction, patches: [...mergedPatches] },
       rejected: null,
-      nextInteraction: result.data.interaction,
-      movePatches: [...result.data.patches],
+      nextInteraction,
+      movePatches: [...mergedPatches],
     }
   }
 
@@ -6475,7 +6520,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
        *   若它真的进了新的敌方 ZOC，下一步 `planStep` 会重新记账。
        */
       zocStoppedMoveUnitIds.value = zocStoppedMoveUnitIds.value.filter(
-        (id) => !context.participantIds.includes(id),
+        (id) => !plan.participantIds.includes(id),
       )
       /*
        * 条 17（批 F·F2）＋ R9：4.5a 标记。防御方离格 ⇒ 参突者强行进入防御方格（8.0 的进入是强制的）；
