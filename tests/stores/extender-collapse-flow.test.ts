@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { HexRef } from '@/data'
 import { isExtenderUnit, toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 
-import { CORE_HEX } from '../flows/sop-harness'
+import { CORE_HEX, sealTraceSupplyByZoc } from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
 
 /**
@@ -131,10 +131,13 @@ describe('9.14d：移动阶段的主动崩溃（替代常规移动）', () => {
     store.setPhase('movement')
     const extender = placeExtender(store)
     /*
-     * 2026-11-12 铁路口径：13.3c 派生的卸货格成为 12.6a② 自动补给源，且 12.6 追溯补给无距离上限，
-     * 不能再靠"不声明补给源"造出"全图无补给"。这里把印值 MA 置 0 ⇒ 只有原格在位移半径内；
-     * CORE_HEX（7.21）本身在两方自动覆盖集之外 ⇒ 仍无合法落点，保持本条要测的 9.14d 分支。
+     * 「不存在合法格」要两件事同时成立：① 位移半径内只剩原格；② 原格**没有追溯补给**。
+     * ① 把印值 MA 压到 0（9.14d 的半径＝12.7b 的印值 MA ⇒ 只剩原格本身）；
+     *   ★ 不能靠"不声明补给源"造出"全图无补给"：13.3c 派生的卸货格是 12.6a② 的自动源。
+     * ② 原格用**敌方 ZOC**卡断（12.3d：第一圈全被 EZOC 覆盖 ⇒ 卡车补给路径进出皆被挡），
+     *   而不是拿地形死角造断补 —— 这样本条同时验证 12.6 的阻断判据确实生效。
      */
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     extender.faces.combat.ma = 0
     expect(store.collapseExtenderNow(extender.instanceId)).toBe(true)
     expect(store.specialPending).toBeNull()

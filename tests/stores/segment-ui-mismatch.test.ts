@@ -15,6 +15,8 @@ import {
   useWorkbenchStore,
 } from '@/stores'
 
+import { CORE_HEX, sealTraceSupplyByZoc } from '../flows/sop-harness'
+
 /**
  * #5 / #6（用户 2026-11-10）：**环节与 UI 错配**
  *
@@ -71,10 +73,12 @@ describe('#6 突围环节：点堆叠不弹「开始移动」，本环节只认�
     const { workbench, mapView } = newStores()
     const session = useGameSessionStore()
     // 12.8e 首回合豁免：与 advance-segment 用同一套"真能突围"的夹具
+    // 12.3d：断补前提由**敌方 ZOC 卡断**构造（不靠地形死角）
+    sealTraceSupplyByZoc(workbench, CORE_HEX, 'axis', true)
     const cutOff = toConsoleUnit({
       record: combatRecord(),
       instanceId: 'cut-off',
-      hex: { col: 7, row: 21 },
+      hex: CORE_HEX,
       side: 'axis',
     })
     cutOff.hasTraceSupply = false
@@ -89,7 +93,7 @@ describe('#6 突围环节：点堆叠不弹「开始移动」，本环节只认�
     goToStep(workbench, 'movement.breakout')
     // 点堆叠仍会建"选择集"（各环节共用），但**不得**被当成移动准备
     expect(workbench.actionAllowedNow('move.order')).toBe(false)
-    mapView.expandStackAt({ col: 7, row: 21 })
+    mapView.expandStackAt(CORE_HEX)
     expect(mapView.session?.kind ?? null).not.toBe('move')
 
     // 本环节自己的入口：突围会话照旧可开

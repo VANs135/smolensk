@@ -1,11 +1,12 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { mapLayers } from '@/data'
 import type { HexRef } from '@/data'
 import { holdingsToT } from '@/engine/rules'
 import { useWorkbenchStore } from '@/stores'
 
-import { CORE_HEX, combatRecord, placeGround } from '../flows/sop-harness'
+import { CORE_HEX, combatRecord, placeGround, sealTraceSupplyByZoc } from '../flows/sop-harness'
 
 /**
  * A3 第十五批：12.6c「吃图上补给」的批量取整额度不能跨**付款来源**借用
@@ -25,13 +26,20 @@ const newStore = () => {
 }
 
 /**
- * 与 CORE_HEX 互不可达、且**两方自动补给都覆盖不到**的图内格（21.21，Swamp）
+ * 距 CORE_HEX 格距 ≥12 的图内格：轮式 5MP 直拖不可达（12.3a），且盘面无 HQ ⇒ 无 12.3b 投递支
  *
- * 2026-11-12 铁路口径后，12.6a② 的卸货格会自动喂饱整张连通路网（12.6 追溯补给无距离上限），
- * 若仍取"第一个距离 ≥12 的格"，b 会被自动源喂饱、根本不进喂食候选。21.21 在实测的两方
- * 覆盖集之外（四面沼泽，轮式走不到），保持"该格只能靠本格补给站喂"的前提。
+ * ★ 该格的**断补**由 `sealTraceSupplyByZoc` 现场卡断（12.3d），不是靠地形死角：
+ *   13.3c 派生的卸货格会自动成为 12.6a② 的源，光看"距离远"在本实现下喂不饱也断不了。
+ *   纯"离路 5 轮式 MP 之外"的构造暂时不可用——追溯补给缺 5MP 上限的缺陷已单独登记。
  */
-const FAR_HEX: HexRef = { col: 21, row: 21 }
+const FAR_HEX: HexRef = (() => {
+  const found = mapLayers.hexes.find((hex) => {
+    const grid = Math.max(Math.abs(hex.col - CORE_HEX.col), Math.abs(hex.row - CORE_HEX.row))
+    return grid >= 12
+  })
+  if (found === undefined) throw new Error('地图上找不到距 CORE_HEX ≥12 格的格')
+  return { col: found.col, row: found.row }
+})()
 
 /** 摆一枚 1RE / 1 step 的断补战斗单位，取 store 内的响应式代理 */
 function placeCombat(store: ReturnType<typeof newStore>, id: string, hex: HexRef) {
@@ -60,6 +68,9 @@ describe('12.6c：D 段按实际付款来源分组取整，不跨来源借用已
     store.setPhase('supply')
     const a = placeCombat(store, 'a', CORE_HEX)
     const b = placeCombat(store, 'b', FAR_HEX)
+    // 12.3d：两处都真断补（敌方 ZOC 卡断），不是靠地形死角
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
+    sealTraceSupplyByZoc(store, FAR_HEX)
     store.spDumps.push({ id: 'near', hex: { ...CORE_HEX }, side: 'axis', sp: 0, t: 1 })
     store.spDumps.push({ id: 'far', hex: { ...FAR_HEX }, side: 'axis', sp: 0, t: 1 })
     store.supplyPhaseInputs = {
@@ -92,6 +103,7 @@ describe('12.6c：D 段按实际付款来源分组取整，不跨来源借用已
     store.setPhase('supply')
     const a = placeCombat(store, 'a', CORE_HEX)
     const b = placeCombat(store, 'b', CORE_HEX)
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     store.spDumps.push({ id: 'shared', hex: { ...CORE_HEX }, side: 'axis', sp: 0, t: 1 })
     store.supplyPhaseInputs = {
       availableT: 0,
@@ -113,6 +125,9 @@ describe('12.6c：D 段按实际付款来源分组取整，不跨来源借用已
     store.setPhase('supply')
     const a = placeCombat(store, 'a', CORE_HEX)
     const b = placeCombat(store, 'b', FAR_HEX)
+    // 12.3d：两处都真断补（敌方 ZOC 卡断），不是靠地形死角
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
+    sealTraceSupplyByZoc(store, FAR_HEX)
     store.spDumps.push({ id: 'near', hex: { ...CORE_HEX }, side: 'axis', sp: 0, t: 1 })
     // 远站存在（12.6c 的距离前提成立）但分文没有 ⇒ 该组预算为 0
     store.spDumps.push({ id: 'far', hex: { ...FAR_HEX }, side: 'axis', sp: 0, t: 0 })
@@ -141,6 +156,8 @@ describe('12.6c：D 段按实际付款来源分组取整，不跨来源借用已
     store.setPhase('supply')
     const unit = placeCombat(store, 'a', CORE_HEX)
     unit.internalStocks = 'low'
+    // 12.3d：断补由敌方 ZOC/敌占卡断构造（不靠地形死角）
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     store.spDumps.push({ id: 'shared', hex: { ...CORE_HEX }, side: 'axis', sp: 0, t: 3 })
     store.supplyPhaseInputs = {
       availableT: 0,

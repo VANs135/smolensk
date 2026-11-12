@@ -6,7 +6,7 @@ import type { HexRef } from '@/data'
 import { holdingsToT } from '@/engine/rules'
 import { useWorkbenchStore } from '@/stores'
 
-import { CORE_HEX, combatRecord, placeGround } from '../flows/sop-harness'
+import { CORE_HEX, combatRecord, placeGround, sealTraceSupplyByZoc } from '../flows/sop-harness'
 
 /**
  * 第五批 B3（docs/第五批修改方案.md 族 B3）：D 段的扣款按 **12.3a/12.3b 可达性**收口
@@ -112,6 +112,8 @@ describe('第五批 B3：12.10e/12.6c 的 D 段扣款只走**该单位可达站*
       availableT: 0,
       eatOffTheMap: { [unit.instanceId]: true },
     }
+    // 12.3d：断补由敌方 ZOC/敌占卡断构造（13.3c 卸货格会自动成为源）
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     expect(store.planSupplyPhaseNow()).toBe(true)
     // 可达站只有 1T < 3T ⇒ 付不起（修前并集池 17T ⇒ affordable=true）
     expect(store.supplyPhasePlan!.feeding[0]?.affordable).toBe(false)

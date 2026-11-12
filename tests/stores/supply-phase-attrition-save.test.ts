@@ -5,7 +5,7 @@ import { holdingsToT, resolveAttrition } from '@/engine/rules'
 import { useGameSessionStore, useWorkbenchStore } from '@/stores'
 import { createMemoryStorage } from '@/shared'
 
-import { CORE_HEX, combatRecord, placeGround } from '../flows/sop-harness'
+import { CORE_HEX, combatRecord, placeGround, sealTraceSupplyByZoc } from '../flows/sop-harness'
 
 /**
  * 交接文档 §6：D 段「供养后进入实际损耗名单、掷骰后等待玩家分摊」的合法保存点验证
@@ -34,6 +34,8 @@ describe('12.8b：待决损耗的合法保存点，冷读档后账本完整', ()
     }
     w.spDumps.push({ id: 'near', hex: { ...CORE_HEX }, side: 'axis', sp: 0, t: 1 })
     w.supplyPhaseInputs = { availableT: 0, eatOffTheMap: { fed: true } }
+    // 12.3d：断补由敌方 ZOC/敌占卡断构造（不声明源不再等于断补）
+    sealTraceSupplyByZoc(w, CORE_HEX, 'axis', true)
 
     expect(w.planSupplyPhaseNow()).toBe(true)
     expect(w.applySupplyPhaseRecoveryNow()).toBe(true)

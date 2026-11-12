@@ -4,7 +4,7 @@ import { holdingsToT } from '@/engine/rules'
 import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 import { createPinia, setActivePinia } from 'pinia'
 
-import { CORE_HEX, combatRecord, placeGround } from '../flows/sop-harness'
+import { CORE_HEX, combatRecord, placeGround, sealTraceSupplyByZoc } from '../flows/sop-harness'
 
 /**
  * D 段**补给阶段总计划**（12.1–12.2 骨架）与其中两步的落盘：
@@ -43,6 +43,8 @@ describe('C8b：D 段补给阶段总计划（12.1–12.2）', () => {
     const unit = placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'u1')
     // 12.6c 的"吃图上补给"吃的是**图上**的 SP ⇒ 该格必须有可拖到的补给站
     store.spDumps.push({ id: 'd1', hex: { ...CORE_HEX }, side: 'axis', sp: 4, t: 0 })
+    // 12.3d：断补由敌方 ZOC/敌占卡断构造（13.3c 卸货格会自动成为源，不再"无源即断补"）
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     store.planSupplyPhaseNow()
     expect(store.supplyPhasePlan?.feeding).toEqual([])
 

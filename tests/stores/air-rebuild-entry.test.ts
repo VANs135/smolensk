@@ -14,6 +14,8 @@ import {
   type ConsolePhase,
 } from '@/stores'
 
+import { CORE_HEX, sealTraceSupplyByZoc } from '../flows/sop-harness'
+
 /**
  * 第五批 C3（docs/第五批修改方案.md 族 C5＋C7）：单机扫射（14.7d-B）＋ 飞机重建入口（13.5f / 专规 1.6）
  *
@@ -57,12 +59,9 @@ function goToActionStep(
 }
 
 /**
- * 两方自动补给都覆盖不到、但可放基地的格（7.21，Woods；三面环湖，追溯补给走不到）
- *
- * 2026-11-12 铁路口径后 13.3c 的卸货格成为自动补给源，原先"不声明源 ⇒ 无补给"的 2.1
- * 已被剧本 1 的 Bobruysk（2.2）喂饱；13.5f 的"基地不在追溯补给 ⇒ 拒"需要真正断补的格。
+ * 13.5f / 专规 1.6 placement：基地格（六邻皆图内，不受地图削角干扰）。
+ * 「不在追溯补给 ⇒ 拒」由 `sealTraceSupplyByZoc` 现场卡断，见 `setupRebuild`。
  */
-const CORE_HEX: HexRef = { col: 7, row: 21 }
 
 function airBaseRecord() {
   const found = unitChoices('axis').find((record) => record.noncombatKind === 'air_base')
@@ -85,6 +84,14 @@ function setupRebuild(store: ReturnType<typeof newStore>, withSource: boolean): 
   store.setActiveSide('soviet')
   store.setPhase('reinforcement')
   goToActionStep(store, 'rein.rebuild')
+  if (!withSource) {
+    /*
+     * 13.5f 的"基地不在追溯补给 ⇒ 拒"需要一个**真的**断补格。
+     * 12.3d：用敌方（轴方）ZOC 把 CORE_HEX 的第一圈全部覆盖 ⇒ 苏方补给路径进出都被卡断；
+     * 不靠地形死角，也不靠"不声明源"（13.3c 的卸货格会自动成为源）。
+     */
+    sealTraceSupplyByZoc(store, CORE_HEX, 'soviet', true)
+  }
   store.units.push(
     toConsoleUnit({
       record: airBaseRecord(),

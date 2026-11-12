@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import { mapLayers } from '@/data'
-import type { HexRef } from '@/data'
 import { hexDistance, sameHex } from '@/engine/hex-geometry'
 import {
   BARRAGE_SOURCES_BY_PHASE,
@@ -14,6 +13,7 @@ import { canBreakout } from '@/engine/rules/breakout'
 import { canFlipOrientation, canSwitchMode } from '@/engine/rules/modes'
 import {
   CORE_HEX,
+  NEAR_HEX,
   combatRecord,
   groundRecord,
   label,
@@ -322,21 +322,15 @@ describe('Ⓒ 移动链路端到端（6.1：选子 → 范围 → 逐格 → 结
     //     「已释放预备才可动」（7.0a）的判据在引擎层已由 canMoveInPhase 覆盖（见上一组用例）。
   })
 
-  it('6.1：可达范围随位置改变（走到相邻格后原起点不再是候选）', () => {
+  it('6.1：可达范围随位置改变（走到相邻格后原起点不再是候选，NEAR_HEX 生效）', () => {
     const store = newConsole()
     store.setPhase('movement')
-    /*
-     * 用 2.1/2.2（Woods→Bobruysk）做位移夹具：CORE_HEX 7.21 三面环湖、轮式/步行都过不去，
-     * 只适合当"断补口袋"；"走到相邻格"这类用例必须落在能正常通行的相邻对上。
-     */
-    const moveHex: HexRef = { col: 2, row: 1 }
-    const moveNear: HexRef = { col: 2, row: 2 }
-    const unit = placeGround(store, legCombat(), moveHex, 'axis', 'a1')
-    store.clickHex(moveHex)
+    const unit = placeGround(store, legCombat(), CORE_HEX, 'axis', 'a1')
+    store.clickHex(CORE_HEX)
     expect(store.confirmMovePick()).toBe(true)
     const reachable = store.groupReachable.hexes.map((node) => label(node.hex))
-    expect(reachable).toContain(label(moveNear))
-    expect(unit.hex).toEqual(moveHex)
+    expect(reachable).toContain(label(NEAR_HEX))
+    expect(unit.hex).toEqual(CORE_HEX)
   })
 })
 

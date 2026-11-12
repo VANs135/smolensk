@@ -16,11 +16,13 @@ import {
 } from '@/engine/rules'
 import {
   CORE_HEX,
+  ZOC_SEAL_HEX,
   combatRecord,
   groundRecord,
   label,
   newConsole,
   placeGround,
+  sealTraceSupplyByZoc,
   type Workbench,
 } from './sop-harness'
 
@@ -239,13 +241,15 @@ describe('Ⓓ 专规 1.7 / 21.10：补给缓存 Forage（应急征粮）只在 D
     /*
      * ★ 契约变更（批 F 切片 5，**不是放宽**）：21.10 的「断补的第一个回合」修前由裁判在面板上勾选
      *   （`supplyCacheInputs.firstTurnOfBeingCut`），现已删除 ⇒ 判据改按盘面事实算（`cutSinceTurn`）。
-     *   故本用例改为**摆出一个真的首回合**：把 HQ 摆在 CORE_HEX 上、不给任何补给源，重判一次
-     *   追溯补给（12.6）即落成"连续断补起点＝当前回合"。
+     *   故本用例改为**摆出一个真的首回合**：把 HQ 摆在 ZOC_SEAL_HEX 上、用敌方 ZOC 卡断（12.3d），
+     *   重判一次追溯补给（12.6）即落成"连续断补起点＝当前回合"。
      */
-    placeGround(store, hqRecord('axis'), CORE_HEX, 'axis', 'hq-1')
+    placeGround(store, hqRecord('axis'), ZOC_SEAL_HEX, 'axis', 'hq-1')
+    // 12.3d：HQ 是**非战斗单位**（4.5b 不抵消 ZOC）⇒ 用纯 ZOC 卡断的内部格，且同格源声明仍可用
+    sealTraceSupplyByZoc(store, ZOC_SEAL_HEX)
     store.evaluateTraceSupplyNow()
     store.supplyCacheInputs.use = 'forage'
-    store.supplyCacheInputs.hexText = label(CORE_HEX)
+    store.supplyCacheInputs.hexText = label(ZOC_SEAL_HEX)
     expect(store.spendSupplyCacheNow()).toBe(true)
     expect(store.supplyCacheHoldings.axis).toBe(1)
   })
@@ -266,7 +270,9 @@ describe('Ⓓ 专规 1.7 / 21.10：补给缓存 Forage（应急征粮）只在 D
     const store = newConsole()
     goToSupplyStep(store)
     // 契约变更（批 F 切片 5）：不再由裁判勾选 ⇒ 用"断补已到第二个回合"造出非首回合的事实
-    const hq = placeGround(store, hqRecord('axis'), CORE_HEX, 'axis', 'hq-1')
+    const hq = placeGround(store, hqRecord('axis'), ZOC_SEAL_HEX, 'axis', 'hq-1')
+    // 12.3d：纯 ZOC 卡断（HQ 不抵消 ZOC，见 sop-harness 的 ZOC_SEAL_HEX 注释）
+    sealTraceSupplyByZoc(store, ZOC_SEAL_HEX)
     store.evaluateTraceSupplyNow()
     expect(hq.cutSinceTurn).toBe(store.turn)
     store.setTurn(store.turn + 1)
@@ -275,7 +281,7 @@ describe('Ⓓ 专规 1.7 / 21.10：补给缓存 Forage（应急征粮）只在 D
     expect(hq.cutSinceTurn).toBe(store.turn - 1)
 
     store.supplyCacheInputs.use = 'forage'
-    store.supplyCacheInputs.hexText = label(CORE_HEX)
+    store.supplyCacheInputs.hexText = label(ZOC_SEAL_HEX)
     expect(store.spendSupplyCacheNow()).toBe(false)
     expect(store.exclusiveError?.reason).toBe('forageOnlyOnFirstTurnOfBeingCut')
   })

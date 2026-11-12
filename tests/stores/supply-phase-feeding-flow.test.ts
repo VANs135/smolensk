@@ -4,7 +4,13 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { holdingsToT } from '@/engine/rules'
 import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 
-import { CORE_HEX, combatRecord, placeGround } from '../flows/sop-harness'
+import {
+  CORE_HEX,
+  ZOC_SEAL_HEX,
+  combatRecord,
+  placeGround,
+  sealTraceSupplyByZoc,
+} from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
 
 /**
@@ -37,6 +43,8 @@ describe('12.6c/12.6d：喂食与断补标记的一键落盘', () => {
       availableT: 0,
       eatOffTheMap: { [fedUnit.instanceId]: true },
     }
+    // 12.3d：断补由敌方 ZOC/敌占卡断构造（13.3c 卸货格会自动成为源）
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     store.planSupplyPhaseNow()
     expect(store.supplyPhasePlan?.feeding.map((item) => item.unitId)).toEqual([fedUnit.instanceId])
     expect(store.supplyPhasePlan?.feeding[0]?.affordable).toBe(true)
@@ -54,6 +62,7 @@ describe('12.6c/12.6d：喂食与断补标记的一键落盘', () => {
     const unit = placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'u1')
     store.spDumps.push({ id: 'd1', hex: { ...CORE_HEX }, side: 'axis', sp: 0, t: 0 }) // 没有 T
     store.supplyPhaseInputs = { availableT: 0, eatOffTheMap: { [unit.instanceId]: true } }
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     store.planSupplyPhaseNow()
     // 有站但站里没 T ⇒ 引擎判 affordable=false ⇒ 不喂、不扣、仍断补
     expect(store.supplyPhasePlan?.feeding[0]?.affordable).toBe(false)
@@ -73,6 +82,8 @@ describe('12.6c/12.6d：喂食与断补标记的一键落盘', () => {
     const plain = placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'plain')
     placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'sustained')
     placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'strat')
+    // 12.3d：先卡断再进补给段（`supplyFeedingCandidates` 读的是重判后的 `hasTraceSupply` 标记）
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     store.setPhase('supply')
     store.spDumps.push({ id: 'd1', hex: { ...CORE_HEX }, side: 'axis', sp: 4, t: 0 })
     // 12.8e：本回合靠特殊续命维生的单位**不算**断补
@@ -83,6 +94,8 @@ describe('12.6c/12.6d：喂食与断补标记的一键落盘', () => {
     const strat = store.units.find((unit) => unit.instanceId === 'strat')
     if (strat === undefined) throw new Error('战略模式单位不在盘面上')
     strat.mode.mode = 'strat'
+    // 12.3d：断补由敌方 ZOC/敌占卡断构造
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     expect(store.supplyFeedingCandidates.map((unit) => unit.instanceId)).toEqual([plain.instanceId])
   })
 
@@ -92,6 +105,7 @@ describe('12.6c/12.6d：喂食与断补标记的一键落盘', () => {
     const unit = placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'u1')
     store.spDumps.push({ id: 'd1', hex: { ...CORE_HEX }, side: 'axis', sp: 4, t: 0 })
     store.supplyPhaseInputs = { availableT: 0, eatOffTheMap: { [unit.instanceId]: true } }
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     store.planSupplyPhaseNow()
     store.applySupplyPhaseFeedingNow()
     expect(unit.hasTraceSupply).toBe(true)
@@ -104,8 +118,10 @@ describe('21.10：Forage 可用性提示（补给阶段 + 断补首回合 + 有�
   const placeHq = (store: Workbench, side: 'axis' | 'soviet', id: string) => {
     const record = unitChoices(side).find((item) => (item.specialized ?? []).includes('hq'))
     if (record === undefined) throw new Error(`${side} 单位库中没有 HQ`)
-    const unit = toConsoleUnit({ record, instanceId: id, hex: CORE_HEX, side })
+    const unit = toConsoleUnit({ record, instanceId: id, hex: ZOC_SEAL_HEX, side })
     store.units.push(unit)
+    // 12.3d：HQ 是非战斗单位（4.5b 不抵消 ZOC）⇒ 纯 ZOC 卡断的内部格（同格源声明仍可用）
+    sealTraceSupplyByZoc(store, ZOC_SEAL_HEX)
     return unit
   }
 
@@ -134,7 +150,7 @@ describe('21.10：Forage 可用性提示（补给阶段 + 断补首回合 + 有�
 
     // 有追溯补给 ⇒ 不再"被切断"（连续期清零）⇒ 不提示
     store.supplySourceDraft = {
-      hexText: `${CORE_HEX.col}.${CORE_HEX.row}`,
+      hexText: `${ZOC_SEAL_HEX.col}.${ZOC_SEAL_HEX.row}`,
       kind: 'supplySourceHex',
     }
     expect(store.addSupplySource()).toBe(true)

@@ -6,7 +6,7 @@ import { HEX_DIRECTIONS, neighbor } from '@/engine/hex-geometry'
 import { EXTENDER_REQUIRED_POINTS, isConvertibleTransportPoint } from '@/engine/rules'
 import { isExtenderUnit, toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 
-import { CORE_HEX, NEAR_HEX, placeGround } from '../flows/sop-harness'
+import { CORE_HEX, NEAR_HEX, placeGround, sealTraceSupplyByZoc } from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
 
 /**
@@ -230,7 +230,8 @@ describe('12.7a：运输点数 → 延补队（满 5 点、消耗 ½ MA、余数
   it('生成格连不到补给来源 ⇒ 拒（12.7d：不能在该格生成延补队）', () => {
     const store = newStore()
     store.setPhase('movement')
-    // ★ 不声明任何来源 —— 12.7d 的"生成时须与追溯补给的补给来源格相连"不成立
+    // ★ 不声明任何来源 —— 改用敌方 ZOC 卡断（12.3d），使 12.7d 的"与补给来源相连"不成立
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     placeTransportPoint(store, 'truck', 5)
     expect(store.convertTransportToExtenderNow(`${CORE_HEX.col}.${CORE_HEX.row}`, 'truck')).toBe(
       false,

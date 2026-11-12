@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { useWorkbenchStore } from '@/stores'
 
-import { CORE_HEX, combatRecord, placeGround } from '../flows/sop-harness'
+import { CORE_HEX, combatRecord, placeGround, sealTraceSupplyByZoc } from '../flows/sop-harness'
 
 /**
  * ★ 用户 2026-10-25「继续补约 48 个缺口」——**行为**验证（不是源码守卫）
@@ -81,6 +81,8 @@ describe('12.8b 损耗骰：只在 D 段的补给检定环节', () => {
     const store = newStore()
     const unit = placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'u1')
     unit.hasTraceSupply = false
+    // 12.3d：断补前提由敌方 ZOC/敌占卡断（不声明源不再等于断补）
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     store.setPhase('supply')
     store.planSupplyPhaseNow()
     const key = `${CORE_HEX.col}.${CORE_HEX.row}`

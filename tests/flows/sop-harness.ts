@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 
 import { mapLayers } from '@/data'
 import type { HexRef, Side } from '@/data'
-import { HEX_DIRECTIONS, isOnMap, neighbor } from '@/engine/hex-geometry'
+import { HEX_DIRECTIONS, hexDistance, isOnMap, neighbor } from '@/engine/hex-geometry'
 import type { AirStatus } from '@/engine/state-types'
 import {
   aircraftChoices,
@@ -27,28 +27,145 @@ import {
  *   - 测试名带规则编号（如 `15.1A`、`2.2`），便于反向检索规则书。
  */
 
-/**
- * 六邻皆图内、且**两方自动补给都覆盖不到**的格：断言不受地图削角 / 12.6a② 铁路卸货格干扰
- *
- * 2026-11-12 铁路口径：铁路不再判控制，13.3c 派生的火车卸货格成为 12.6a② 的自动补给源，
- * 而 12.6 追溯补给**无距离上限**（只判连通性）⇒ 剧本 1 的 Bobruysk（2.2）会喂饱整张连通路网。
- * 7.21 是 Woods，六邻皆图内，且三面环沼泽、轮式追溯补给走不到（实测两方覆盖集都不含它），
- * 故用它保持这些用例原本要测的"断补"前提。
- */
-export const CORE_HEX: HexRef = { col: 7, row: 21 }
+/** 六邻皆图内的格：断言不受地图削角影响（放基地/飞机/堆叠都用它） */
+export const CORE_HEX: HexRef = (() => {
+  const found = mapLayers.hexes.find((hex) => {
+    const ref = { col: hex.col, row: hex.row }
+    return HEX_DIRECTIONS.every((direction) => {
+      const candidate = neighbor(ref, direction)
+      return (
+        isOnMap(candidate) &&
+        mapLayers.hexes.some((item) => item.col === candidate.col && item.row === candidate.row)
+      )
+    })
+  })
+  if (found === undefined) throw new Error('地图上找不到六邻皆图内的格')
+  return { col: found.col, row: found.row }
+})()
 
 /** CORE_HEX 的一个图内邻格（格距 1；转移/拦截/相邻攻击用） */
 export const NEAR_HEX: HexRef = (() => {
   for (const direction of HEX_DIRECTIONS) {
     const candidate = neighbor(CORE_HEX, direction)
-    if (!isOnMap(candidate)) continue
-    const record = mapLayers.hexes.find((h) => h.col === candidate.col && h.row === candidate.row)
-    // CORE_HEX 7.21 三面环沼泽：取第一个**非沼泽**图内邻格，保持"邻格可正常进入"的夹具语义
-    if (record === undefined || record.terrain === 'Swamp') continue
-    return candidate
+    if (
+      isOnMap(candidate) &&
+      mapLayers.hexes.some((h) => h.col === candidate.col && h.row === candidate.row)
+    ) {
+      return candidate
+    }
   }
-  throw new Error('CORE_HEX 没有可进入的图内邻格')
+  throw new Error('CORE_HEX 没有图内邻格')
 })()
+
+/**
+ * 三面环沼泽的 Woods 口袋（7.21）：**地形断补**的对照夹具
+ *
+ * 这里只用于"地形把补给路径整段切掉"这一类用例（用户要求：地形断补与 ZOC 断补两类并存）。
+ * 「断补」本身应优先用 {@link sealTraceSupplyByZoc}（敌方 ZOC 卡断）构造——
+ * 那才是在验 12.6 / 12.3d 的阻断判据，而不是拿地形死角绕开判据。
+ */
+export const SWAMP_POCKET_HEX: HexRef = { col: 7, row: 21 }
+
+/**
+ * 可被**纯 ZOC** 卡断的内部格（3.2，Woods）：第一圈六邻都能在第二圈摆敌子覆盖。
+ *
+ * 与 CORE_HEX（2.1）的区别：2.1 在地图角，第一圈有两格没有第二圈（只能"敌占"补齐）；
+ * 而敌占会让被围格**自身**落入敌方 ZOC —— HQ/空军基地这类**非战斗单位**不抵消 ZOC（4.5b），
+ * 于是"同格声明补给源"会被 12.6b 判为源不可用。需要"卡断 + 同格源仍可用"的用例（如 21.10 Forage）
+ * 必须用本格：纯 ZOC 卡断不动第一圈，被围格自己不在 EZOC 里。
+ */
+export const ZOC_SEAL_HEX: HexRef = { col: 3, row: 2 }
+
+/**
+ * 12.3d：把一格从补给网上卡断（构造"断补"前提的推荐夹具）
+ *
+ * 原文（12.3d）：「绝不能穿越包含敌方战斗单位的格；用卡车 MP 时，一个未被抵消的敌方 ZOC 格会
+ *   阻挡**进入或离开该格**的补给路径」。
+ *
+ * 做法：在**第二圈**（距 `hex` 两步）摆敌方可攻击战斗单位，让它们的 ZOC 覆盖第一圈——
+ * 敌子**不占**第一圈，不影响堆叠、相邻攻击、突围落点等夹具语义。这就是"纯 ZOC 卡断"。
+ *
+ * ★ 地图边缘的格（如 2.1）第一圈有邻格**没有**第二圈可摆（圈外不在图内），此时按 `allowOccupation`
+ *   在该邻格直接放敌子——同属 12.3d 的「不得穿越敌方战斗单位」，**不是**地形断补。
+ *   默认 `allowOccupation = false`：要求纯 ZOC，摆不出来就抛错（避免静默换成别的判据）。
+ *
+ * @returns 摆下的敌子；`pureZoc` 为真表示全部由 ZOC 封住（应当有 ≥2-3 个用例显式断言它）
+ */
+export function sealTraceSupplyByZoc(
+  store: Workbench,
+  hex: HexRef,
+  side: Side = 'axis',
+  allowOccupation = false,
+): { placed: ConsoleUnit[]; pureZoc: boolean } {
+  const enemy: Side = side === 'axis' ? 'soviet' : 'axis'
+  const record = groundRecord(
+    enemy,
+    (item) => item.isCombat === true && item.attackCapable === true,
+  )
+  const onMapHexes = mapLayers.hexes.map((item) => ({ col: item.col, row: item.row }))
+  const ringOne = HEX_DIRECTIONS.map((direction) => neighbor(hex, direction)).filter((item) =>
+    isOnMap(item),
+  )
+  // 4.5b：第一圈若已有己方战斗单位，该格的敌方 ZOC 被抵消 ⇒ 封不住（夹具错误，直接炸）
+  const friendlyInRing = ringOne.find((item) =>
+    store.units.some(
+      (unit) => unit.side === side && unit.hex.col === item.col && unit.hex.row === item.row,
+    ),
+  )
+  if (friendlyInRing !== undefined) {
+    throw new Error(`第一圈 ${label(friendlyInRing)} 有己方单位（4.5b 抵消 ZOC）⇒ 无法卡断`)
+  }
+  const occupied = new Set<string>()
+  const placed: ConsoleUnit[] = []
+  const occupiedAt = (item: HexRef): boolean =>
+    store.units.some((unit) => unit.hex.col === item.col && unit.hex.row === item.row)
+  /** 该第一圈格此刻是否已被封住：敌占，或被已摆敌子的 ZOC 覆盖 */
+  const blockedAt = (item: HexRef): boolean =>
+    occupied.has(label(item)) || placed.some((enemyUnit) => hexDistance(enemyUnit.hex, item) === 1)
+
+  // ① 第二圈覆盖不到的第一圈格：只能按 12.3d 的"敌占"封（仅 allowOccupation 时允许）
+  for (const item of ringOne) {
+    const hasRingTwo = onMapHexes.some(
+      (candidate) =>
+        hexDistance(candidate, hex) === 2 &&
+        hexDistance(candidate, item) === 1 &&
+        !occupiedAt(candidate),
+    )
+    if (hasRingTwo) continue
+    if (!allowOccupation) {
+      throw new Error(`无法用纯 ZOC 卡断 ${label(hex)}：${label(item)} 第二圈不在图内`)
+    }
+    if (occupiedAt(item)) {
+      occupied.add(label(item))
+      continue
+    }
+    placed.push(placeGround(store, record, item, enemy, `zoc-seal-${item.col}-${item.row}`))
+    occupied.add(label(item))
+  }
+
+  // ② 其余第一圈格：贪婪地挑第二圈格，让敌子的 ZOC 覆盖它们
+  while (ringOne.some((item) => !blockedAt(item))) {
+    let best: HexRef | null = null
+    let bestGain = 0
+    for (const candidate of onMapHexes) {
+      if (hexDistance(candidate, hex) !== 2) continue
+      if (occupiedAt(candidate)) continue
+      const gain = ringOne.filter(
+        (item) => !blockedAt(item) && hexDistance(item, candidate) === 1,
+      ).length
+      if (gain > bestGain) {
+        bestGain = gain
+        best = candidate
+      }
+    }
+    if (best === null) break
+    placed.push(placeGround(store, record, best, enemy, `zoc-seal-${best.col}-${best.row}`))
+  }
+  if (ringOne.some((item) => !blockedAt(item))) {
+    throw new Error(`无法卡断 ${label(hex)}（第二圈已被占用或不在图内）`)
+  }
+  return { placed, pureZoc: occupied.size === 0 }
+}
 
 /** 格号文本（操作台输入用，如 `36.13`） */
 export const label = (hex: HexRef): string => `${hex.col}.${hex.row}`

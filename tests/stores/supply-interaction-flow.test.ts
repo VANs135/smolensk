@@ -9,6 +9,8 @@ import { HEX_DIRECTIONS, isOnMap, neighbor } from '@/engine/hex-geometry'
 import { holdingsToT } from '@/engine/rules'
 import { toConsoleUnit, unitChoices, useWorkbenchStore, type ConsoleUnit } from '@/stores'
 
+import { CORE_HEX, sealTraceSupplyByZoc } from '../flows/sop-harness'
+
 /**
  * C8 补给交互与 SP 管理的**端到端流程**（store 级）
  *
@@ -26,13 +28,11 @@ const newStore = () => {
 }
 
 /**
- * 两方自动补给都覆盖不到的六邻皆图内格（7.21，Woods）
+ * 夹具格：六邻皆图内，把单位与补给站放在同格 ⇒ 距离 0，判据不受地形影响（断言可确定）。
  *
- * 2026-11-12 铁路口径：13.3c 派生的火车卸货格成为 12.6a② 的自动补给源，且 12.6 追溯补给
- * 无距离上限 ⇒ 剧本 1 的 Bobruysk（2.2）会喂饱整张连通路网。7.21 三面环沼泽、轮式走不到，
- * 用它保持"未声明源 ⇒ 断补"的前提。
+ * 「断补」前提一律用 `sealTraceSupplyByZoc`（12.3d 的敌方 ZOC 卡断）现场构造 ——
+ * 13.3c 的卸货格会自动成为 12.6a② 的源，不能再靠"不声明源"造断补。
  */
-const CORE_HEX: HexRef = { col: 7, row: 21 }
 
 const label = (hex: HexRef): string => `${hex.col}.${hex.row}`
 
@@ -228,6 +228,8 @@ describe('C8 断补处置：12.6c 吃图上补给 / 12.6d 接受断补', () => {
     const store = newStore()
     store.setSupplyActive(true)
     const unit = place(store, combatRecord('axis'), CORE_HEX, 'axis', 'u1')
+    // 12.3d：敌方 ZOC 卡断 ⇒ 真正的"无追溯补给"（不是靠不声明源）
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     store.spDumpDraft = { hexText: label(CORE_HEX), sp: 4, t: 0 }
     store.addSpDump()
 
@@ -271,6 +273,8 @@ describe('C8 断补处置：12.6c 吃图上补给 / 12.6d 接受断补', () => {
     expect(store.addSpDump()).toBe(true)
     const first = place(store, combatRecord('axis'), CORE_HEX, 'axis', 'u1')
     const second = place(store, combatRecord('axis'), CORE_HEX, 'axis', 'u2')
+    // 12.3d：敌方 ZOC 卡断 ⇒ 两个单位都真断补
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     // 两个都是 1RE（夹具只要求"有规模"，这里显式压成 1RE 好核对批量口径）
     first.re = 1
     second.re = 1
@@ -304,6 +308,8 @@ describe('C8 断补处置：12.6c 吃图上补给 / 12.6d 接受断补', () => {
     const store = newStore()
     store.setSupplyActive(true)
     const unit = place(store, combatRecord('axis'), CORE_HEX, 'axis', 'u1')
+    // 12.3d：敌方 ZOC 卡断 ⇒ 真正的"无追溯补给"
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
 
     // B8：D 段的动作只在 D 段放行 ⇒ 先声明段（本段第 1 环＝追溯/拖取）
 
@@ -331,6 +337,8 @@ describe('C8 断补处置：12.6c 吃图上补给 / 12.6d 接受断补', () => {
     const store = newStore()
     store.setSupplyActive(true)
     const unit = place(store, combatRecord('axis'), CORE_HEX, 'axis', 'u1')
+    // 12.3d：先让"此刻无 12.6a 源"成立（敌方 ZOC 卡断），再在同格声明源把它救回来
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
 
     // ① 先制造断补：此刻无 12.6a 源、无补给站 ⇒ 只能接受断补
 

@@ -16,6 +16,8 @@ import {
   type ConsolePhase,
 } from '@/stores'
 
+import { CORE_HEX, sealTraceSupplyByZoc } from '../flows/sop-harness'
+
 /**
  * B5：唯一「进入下一环节」（自动段连跑完，停到需要玩家的地方）
  *
@@ -299,14 +301,15 @@ describe('B5：换环节时盘面中间态自动收束', () => {
     )!
     // 一枚**断补**的本方战斗单位 ⇒ 12.8e 的突围资格成立（participatesIn 对该环返回 ok）
     /*
-     * 7.21：两方自动补给都覆盖不到的 Woods 口袋。
-     * 2026-11-12 铁路口径后 12.6a② 的卸货格成为自动源、追溯补给无距离上限，原 36.13 会被喂饱，
-     * 断补单位不再成立；7.21 三面环沼泽，保持「断补」这一前提。
+     * 12.3d：用**敌方 ZOC / 敌占**卡断补给路径，而不是拿地形死角造"断补"——
+     * 这样本条同时在验 12.6 的阻断判据确实生效。2.1 是地图角，两个邻格的第二圈不在图内
+     * ⇒ 那两格按 12.3d 的"不得穿越敌方战斗单位"直接放敌子（`allowOccupation`）。
      */
+    sealTraceSupplyByZoc(workbench, CORE_HEX, 'axis', true)
     const cutOff = toConsoleUnit({
       record,
       instanceId: 'cut-off',
-      hex: { col: 7, row: 21 },
+      hex: CORE_HEX,
       side: 'axis',
     })
     // `toConsoleUnit` 的初值是"开局视为有补给"（12.6 的评估在补给阶段做）⇒ 这里显式标成断补

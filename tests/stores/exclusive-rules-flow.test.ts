@@ -18,11 +18,13 @@ import {
 import {
   CORE_HEX,
   NEAR_HEX,
+  ZOC_SEAL_HEX,
   combatRecord,
   groundRecord,
   label,
   newConsole,
   placeGround,
+  sealTraceSupplyByZoc,
 } from '../flows/sop-harness'
 
 /**
@@ -462,8 +464,11 @@ describe('W6 B19：1.7 补给缓存', () => {
     const hqRecord = unitChoices('axis').find((item) => (item.specialized ?? []).includes('hq'))
     if (hqRecord === undefined) throw new Error('轴方单位库里没有指挥部')
     store.units.push(
-      toConsoleUnit({ record: hqRecord, instanceId: 'hq-1', hex: CORE_HEX, side: 'axis' }),
+      toConsoleUnit({ record: hqRecord, instanceId: 'hq-1', hex: ZOC_SEAL_HEX, side: 'axis' }),
     )
+    // 12.3d：HQ 是非战斗单位（4.5b 不抵消 ZOC）⇒ 用纯 ZOC 卡断的内部格，同格源声明仍可用
+    sealTraceSupplyByZoc(store, ZOC_SEAL_HEX)
+    store.supplyCacheInputs.hexText = label(ZOC_SEAL_HEX)
     store.evaluateTraceSupplyNow()
     expect(store.spendSupplyCacheNow()).toBe(true)
     expect(store.supplyCacheHoldings.axis).toBe(1)

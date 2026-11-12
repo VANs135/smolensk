@@ -13,7 +13,13 @@ import {
 import { mapLayers } from '@/data'
 import { createPinia, setActivePinia } from 'pinia'
 
-import { placeGround } from '../flows/sop-harness'
+import {
+  CORE_HEX,
+  SWAMP_POCKET_HEX,
+  ZOC_SEAL_HEX,
+  placeGround,
+  sealTraceSupplyByZoc,
+} from '../flows/sop-harness'
 
 /**
  * 批 F 切片 5（B49 收尾之①）：**断补状态的逐回合跟踪**（12.8e 首回合 / 12.6h 空投豁免）
@@ -44,21 +50,27 @@ const newStore = () => {
   return useWorkbenchStore()
 }
 
-/**
- * 两方自动补给都覆盖不到的六邻皆图内格（7.21，Woods）
- *
- * 2026-11-12 铁路口径：13.3c 派生的火车卸货格成为 12.6a② 的自动补给源，且 12.6 追溯补给
- * 无距离上限 ⇒ 剧本 1 的 Bobruysk（2.2）会喂饱整张连通路网。7.21 三面环沼泽、轮式走不到，
- * 用它保持"未声明源 ⇒ 断补"的前提。
+/*
+ * 断补夹具：「断补」一律由 `sealTraceSupplyByZoc`（12.3d 的敌方 ZOC）现场卡断，
+ * 不靠地形死角——否则 12.6 的阻断判据根本没被走到。
+ * TRACE_HEX＝3.2（Woods）：第一圈六邻都能被第二圈敌子 ZOC 覆盖 ⇒ **纯 ZOC** 卡断；
+ * CORE_HEX（2.1）是地图角，只能靠"敌占"补齐，留给不考阻断方式的用例。
  */
-const CORE_HEX: HexRef = { col: 7, row: 21 }
+const TRACE_HEX: HexRef = ZOC_SEAL_HEX
 
 const label = (hex: HexRef): string => `${hex.col}.${hex.row}`
 
-/** 摆一个**没有追溯补给**的轴方战斗单位（不声明任何补给源 ⇒ 12.6 判定为断补） */
-function strandedUnit(hex: HexRef = CORE_HEX, instanceId = 'u1') {
+/** 摆一个**没有追溯补给**的轴方战斗单位（纯敌方 ZOC 卡断，12.3d） */
+function strandedUnit(
+  store: ReturnType<typeof newStore>,
+  hex: HexRef = TRACE_HEX,
+  instanceId = 'u1',
+) {
   const record = unitChoices('axis').find((item) => item.isCombat === true && item.attackCapable)
   if (record === undefined) throw new Error('轴方单位库里没有战斗单位')
+  const seal = sealTraceSupplyByZoc(store, hex)
+  // 本文件要考的是 12.6 的路径阻断 ⇒ 必须是纯 ZOC 卡断（敌占不算）
+  expect(seal.pureZoc).toBe(true)
   return toConsoleUnit({ record, instanceId, hex, side: 'axis' })
 }
 
@@ -69,7 +81,7 @@ beforeEach(() => {
 describe('12.8e：断补「第一个回合」的真跟踪（先突围、后补给的回合序列）', () => {
   it('★ 补给阶段落断补（T）⇒ 下一回合运动阶段（T+1）突围才是「第一个回合」，免除 A/B 且 +1 DRM', () => {
     const store = newStore()
-    const unit = strandedUnit()
+    const unit = strandedUnit(store)
     store.units.push(unit)
 
     // 2.2 SOP：补给阶段在运动阶段之后（12.8a 的判定时点）
@@ -87,9 +99,26 @@ describe('12.8e：断补「第一个回合」的真跟踪（先突围、后补�
     expect(candidate?.detail ?? '').toContain('首回合')
   })
 
+  it('★ 对照（地形断补）：三面环沼泽的口袋（7.21）同样判为断补——两类断补夹具并存', () => {
+    const store = newStore()
+    const record = unitChoices('axis').find((item) => item.isCombat === true && item.attackCapable)
+    if (record === undefined) throw new Error('轴方单位库里没有战斗单位')
+    const unit = toConsoleUnit({
+      record,
+      instanceId: 'pocket',
+      hex: SWAMP_POCKET_HEX,
+      side: 'axis',
+    })
+    store.units.push(unit)
+    store.setPhase('supply')
+    // 12.3d：补给路径在沼泽/禁入地形处不可通 ⇒ 连不到任何 12.6a 源
+    expect(unit.hasTraceSupply).toBe(false)
+    expect(unit.cutSinceTurn).toBe(store.turn)
+  })
+
   it('★ 第二个回合起不再算首回合：A/B 不成立即拒（12.8e）', () => {
     const store = newStore()
-    const unit = strandedUnit()
+    const unit = strandedUnit(store)
     store.units.push(unit)
     store.setPhase('supply')
     const firstTurn = store.turn
@@ -114,14 +143,14 @@ describe('12.8e：断补「第一个回合」的真跟踪（先突围、后补�
 
   it('★ 恢复补给 ⇒ 计数清零；再次断补 ⇒ 重新从"下一回合"算起', () => {
     const store = newStore()
-    const unit = strandedUnit()
+    const unit = strandedUnit(store)
     store.units.push(unit)
     store.setPhase('supply')
     const firstCut = store.turn
     expect(unit.cutSinceTurn).toBe(firstCut)
 
     // 12.6a①：同格声明一个补给源 ⇒ 恢复追溯补给
-    store.supplySourceDraft = { hexText: label(CORE_HEX), kind: 'supplySourceHex' }
+    store.supplySourceDraft = { hexText: label(TRACE_HEX), kind: 'supplySourceHex' }
     expect(store.addSupplySource()).toBe(true)
     expect(store.evaluateTraceSupplyNow()).toBe(0)
     expect(unit.hasTraceSupply).toBe(true)
@@ -145,14 +174,14 @@ describe('12.8e：断补「第一个回合」的真跟踪（先突围、后补�
 
   it('★ 12.8e 括注：T 回合靠「吃图上补给」续命 ⇒ T+1 突围**无**豁免；T+1 不再喂、T+2 才有', () => {
     const store = newStore()
-    const unit = strandedUnit()
+    const unit = strandedUnit(store)
     store.units.push(unit)
     store.setPhase('supply')
     const index = store.playerSegmentSteps.findIndex((step) => step.id.startsWith('supply.'))
     expect(store.setSegmentStepIndex(index)).toBe(true)
 
     // 12.1b：喂食要有粮 ⇒ 同格摆一座补给站
-    store.spDumpDraft = { hexText: label(CORE_HEX), sp: 2, t: 0 }
+    store.spDumpDraft = { hexText: label(TRACE_HEX), sp: 2, t: 0 }
     expect(store.addSpDump()).toBe(true)
     // 12.6c：自愿吃图上补给（面板勾选后才进计划）
     store.supplyPhaseInputs = {
@@ -198,7 +227,7 @@ describe('12.8e：断补「第一个回合」的真跟踪（先突围、后补�
 
   it('★ 已在连续断补中吃图上补给 ⇒ 不重置 cutSinceTurn；下一回合突围无豁免', () => {
     const store = newStore()
-    const unit = strandedUnit()
+    const unit = strandedUnit(store)
     store.units.push(unit)
     store.setPhase('supply')
     const firstCut = store.turn
@@ -213,7 +242,7 @@ describe('12.8e：断补「第一个回合」的真跟踪（先突围、后补�
     store.setPhase('supply')
     const index = store.playerSegmentSteps.findIndex((step) => step.id.startsWith('supply.'))
     expect(store.setSegmentStepIndex(index)).toBe(true)
-    store.spDumpDraft = { hexText: label(CORE_HEX), sp: 2, t: 0 }
+    store.spDumpDraft = { hexText: label(TRACE_HEX), sp: 2, t: 0 }
     expect(store.addSpDump()).toBe(true)
     store.supplyPhaseInputs = {
       ...store.supplyPhaseInputs,

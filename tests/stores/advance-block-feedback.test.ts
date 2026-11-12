@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import { resolveAttrition } from '@/engine/rules'
 import { toConsoleUnit, useGameSessionStore, useWorkbenchStore, type ConsoleUnit } from '@/stores'
-import { CORE_HEX, combatRecord, label } from '../flows/sop-harness'
+import { CORE_HEX, combatRecord, label, sealTraceSupplyByZoc } from '../flows/sop-harness'
 
 /**
  * 死操作①：「进入下一环节」在必须应答的场景（补给检定的损耗分摊等）**可点但无反应**。
@@ -49,6 +49,8 @@ describe('死操作①：推进按钮不得「可点但无反应」', () => {
     const checkIndex = workbench.playerSegmentSteps.findIndex((step) => step.id === 'supply.check')
     expect(checkIndex).toBeGreaterThanOrEqual(0)
     expect(workbench.setSegmentStepIndex(checkIndex)).toBe(true)
+    // 12.3d：断补由敌方 ZOC/敌占卡断构造（不声明源不再等于断补）
+    sealTraceSupplyByZoc(workbench, CORE_HEX, 'axis', true)
     expect(workbench.planSupplyPhaseNow()).toBe(true)
 
     const key = label(CORE_HEX)

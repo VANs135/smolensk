@@ -4,7 +4,13 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { resolveAttrition } from '@/engine/rules'
 import { useWorkbenchStore } from '@/stores'
 
-import { CORE_HEX, combatRecord, groundRecord, placeGround } from '../flows/sop-harness'
+import {
+  CORE_HEX,
+  combatRecord,
+  groundRecord,
+  placeGround,
+  sealTraceSupplyByZoc,
+} from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
 
 /**
@@ -39,6 +45,8 @@ function oosDuty(store: Workbench, id = 'u1') {
   store.setPhase('supply')
   const unit = placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', id)
   unit.hasTraceSupply = false
+  // 12.3d：用敌方 ZOC/敌占卡断补给路径 ⇒ 真的断补（不是靠"不声明源"或地形死角）
+  sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
   store.planSupplyPhaseNow()
   /*
    * ★ 2026-10-25：12.8b 的掷骰现在过 `ACTION_GATES['supply.attrition']`（只在 D 段的
@@ -85,6 +93,7 @@ describe('12.8b：掷骰（2 骰 + 断补军力 ≥5 的 +3）', () => {
     store.setPhase('supply')
     for (let index = 0; index < 5; index += 1)
       placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', `u${index}`).hasTraceSupply = false
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     store.planSupplyPhaseNow()
     goToAttritionStep(store) // 12.8b 只在 D 段的「补给检定」这一环（闸门 supply.attrition）
     const key = `${CORE_HEX.col}.${CORE_HEX.row}`
@@ -99,6 +108,7 @@ describe('12.8b：掷骰（2 骰 + 断补军力 ≥5 的 +3）', () => {
     const store = newStore()
     store.setPhase('supply')
     placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'u1').hasTraceSupply = false
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     store.planSupplyPhaseNow()
     expect(store.rollAttritionNow('99.99')).toBe(false)
   })
@@ -178,6 +188,8 @@ describe('12.8b：分摊落盘（恰好满足义务、不得超过现有军力�
     // 归零才有"摧毁"可言：单点军力 ⇒ 任何损失都打光
     unit.steps = 1
     unit.hasTraceSupply = false
+    // 12.3d：断补由敌方 ZOC/敌占卡断构造（不声明源不再等于断补）
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     store.planSupplyPhaseNow()
     goToAttritionStep(store)
     const key = `${CORE_HEX.col}.${CORE_HEX.row}`
