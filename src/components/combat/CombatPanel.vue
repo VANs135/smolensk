@@ -290,6 +290,11 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
         <BaseTag kind="danger">{{ workbench.combatError.rule }}</BaseTag>
         {{ workbench.combatErrorLine }}
       </p>
+      <!-- C8：补给一旦确认，存档/读档即被 settlementBlockedReason 拒绝；在此后全程显式说明 -->
+      <p v-if="workbench.combatSupplyCommitted" class="muted">
+        <BaseTag kind="warning">9.2</BaseTag>
+        本场战斗须一次打完：收束前不能保存或读取对局。
+      </p>
 
       <!-- 第 2 步：战斗补给（9.5 / 12.4） -->
       <SessionStep item="combat:supply">
@@ -352,6 +357,8 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
           >
             确认战斗补给
           </BaseButton>
+          <!-- C8：写在确认按钮旁，确认前就能看到「本场战斗须一次打完」 -->
+          <span class="muted">确认后本场战斗须一次打完：收束前不能保存或读取对局（9.2）</span>
         </div>
       </SessionStep>
 

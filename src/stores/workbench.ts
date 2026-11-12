@@ -26380,6 +26380,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     defaultArUnitIdOf,
     autoResolveCombatToOutcome,
     combatLiveStep,
+    // C8：补给已提交 ⇒ 存档/读档被 settlementBlockedReason 拒绝，面板据此全程提示
+    combatSupplyCommitted,
     combatAdvanceMandatory,
     combatRetreatRequirement,
     combatDefendingHexCleared,
