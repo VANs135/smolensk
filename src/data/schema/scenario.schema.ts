@@ -73,6 +73,7 @@ export const FormationDrawSchema = z
      *
      * 规则原文只给池规模、不逐条列名单；本字段给出冻结后的成员，引擎按名单取池，
      * 不再按番号后缀推导。`length` 必须等于 `pool`；每个 id 必须是该剧本轴方多单位编队。
+     * **顺序会影响固定种子下的抽取结果**：须与 `formations.json` 的派生顺序一致。
      */
     poolFormations: z.array(z.string()).optional(),
     groups: z.array(FormationDrawGroupSchema),

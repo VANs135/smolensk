@@ -509,7 +509,8 @@ describe('W7 C12：剧本抽取盒（编队抽签）', () => {
       expect(declared, sourceId).toBeDefined()
       if (declared === undefined) continue
       expect(declared.length, sourceId).toBe(derivedOf(sourceId).length)
-      expect([...declared].sort(), sourceId).toEqual([...derivedOf(sourceId)].sort())
+      // 顺序也须一致：抽取从池内按顺序取下标，顺序变了固定种子下的抽中名单就会变
+      expect(declared, sourceId).toEqual(derivedOf(sourceId))
       expect(
         axisDrawPool(sourceId).map((entry) => entry.formationId),
         sourceId,
