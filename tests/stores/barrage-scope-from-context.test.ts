@@ -92,8 +92,9 @@ describe('条 13：炮击候选按当前选中集合收窄', () => {
     place(store, artilleryRecord('axis'), H1, 'axis', 'art-1b')
     place(store, artilleryRecord('axis'), H2, 'axis', 'art-2')
 
-    // 等价于右键入口：`map-view` 的「炮击」分支调 `beginBarrageAt(hex, instanceId)`
-    store.beginBarrageAt(H1, 'art-1')
+    // 统一入口：右键敌方目标 ⇒「炮击」进 ops 会话；第 1 步选炮时按目标格收窄
+    store.setBarrageActive(true)
+    store.syncBarrageParticipants(H1, ['art-1'])
 
     expect(store.barrageUnitIds).toEqual(['art-1'])
     expect(store.barrageVisibleChoices.map((choice) => choice.unit.instanceId).sort()).toEqual([
@@ -119,11 +120,12 @@ describe('条 13：炮击候选按当前选中集合收窄', () => {
     expect(store.barrageVisibleChoices.length).toBe(3)
   })
 
-  it('源码守卫：面板阵列改读 barrageVisibleChoices，右键入口走 beginBarrageAt', () => {
+  it('源码守卫：面板阵列改读 barrageVisibleChoices，炮击唯一入口是右键敌方的 ops 流程', () => {
     const panel = readFileSync('src/components/barrage/BarragePanel.vue', 'utf8')
     expect(panel).toContain('barrageVisibleChoices')
     expect(panel).not.toContain('workbench.barrageUnitChoices.map')
     const view = readFileSync('src/stores/map-view.ts', 'utf8')
-    expect(view).toContain('beginBarrageAt(hex, instanceId)')
+    expect(view).toContain("openOpsFlow('barrage', hex)")
+    expect(view).not.toContain('beginBarrageAt')
   })
 })

@@ -11,7 +11,6 @@ import {
   type CombatRetreatUnitPlan,
 } from './workbench'
 import {
-  isGroundBarrageEligible,
   needsFuelOf,
   hexLabel,
   type ActionKey,
@@ -718,13 +717,13 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (workbench.segmentStep?.id === 'reaction.movement')
       return '反应：点预备单位 → 右键「转出预备模式」（MA ×½）后才能移动（5.7b / 7.0a）'
     if (workbench.segmentStep?.id === 'reaction.barrage')
-      return '反应轰炸：点敌方格定目标；右键己方炮/飞机选入轰炸，会话框里宣布（10.0d）'
+      return '反应轰炸：点敌方格定目标；右键敌方格选「轰炸」，会话框里宣布（10.0d）'
     /*
      * F 段的炮击环节：本段**不能移动**，通用那句「点亮可移动范围」在这里是错的；
      * 且 2.2 的 F 段括注限定 artillery only ⇒ 提示只说炮兵，不提空军。
      */
     if (workbench.segmentStep?.id === 'combat.barrage')
-      return '炮击：点敌方格定目标（10.0d）；右键己方火炮或敌方算子进炮击，会话框里宣布（10.1）'
+      return '炮击：点敌方格定目标；右键敌方格选「炮击」，会话框里宣布（10.1）'
     /*
      * G 进击：本段能动的只有进击模式单位与已释放的预备（11.0a）；
      * 射击环节只认已释放预备的火炮与飞机/舰船（2.2 进击·射击）。
@@ -732,7 +731,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (workbench.segmentStep?.id === 'exploitation.movement')
       return '进击移动：点己方算子＝显示可移动范围（11.0a）；点紫环敌方格＝突袭（8.1a）'
     if (workbench.segmentStep?.id === 'exploitation.barrage')
-      return '进击轰炸：点敌方格定目标（10.0d）；右键已释放的预备火炮或飞机选入轰炸，会话框里宣布（11.0d）'
+      return '进击轰炸：点敌方格定目标；右键敌方格选「轰炸」，会话框里宣布（11.0d）'
     // B35：不再看"工具"，看**本环节允不允许宣布战斗**（判据与闸门同源）
     if (workbench.combatPickActive)
       return '点己方算子加入攻方（9.1b），点敌方格选定防御格，会话框里走 9.2 九步'
@@ -1677,7 +1676,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       if (workbench.barrageEntryEligible(hex)) {
         ops.push({
           key: 'ops.barrage',
-          label: '炮击（10.1）',
+          label: '炮击',
           rule: '10.1',
           panel: 'unit',
           only: 'opsBarrage',
@@ -1688,7 +1687,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       if (workbench.bombingEntryEligible(hex)) {
         ops.push({
           key: 'ops.bombing',
-          label: '轰炸（10.2）',
+          label: '轰炸',
           rule: '10.2',
           panel: 'unit',
           only: 'opsBombing',
@@ -1699,7 +1698,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       if (workbench.hipShootEntryEligible(hex)) {
         ops.push({
           key: 'ops.hipShoot',
-          label: '低空扫射（14.7d）',
+          label: '低空扫射',
           rule: '14.7d',
           panel: 'unit',
           only: 'opsHipShoot',
@@ -1814,25 +1813,6 @@ export const useMapViewStore = defineStore('mapView', () => {
       } else if (modeChange && switchable.includes('strat')) {
         pushMode('move.strat.toggle', '转入战略模式', '5.8')
       }
-    }
-    if (
-      unit !== undefined &&
-      workbench.actionAllowedNow('barrage.declare') &&
-      // 10.0 第二段：本环节不给炮兵来源时（C 段移动环节 / C 段轰炸环节）不摆炮击入口
-      workbench.barrageKindsInSegment.includes('artillery') &&
-      workbench.isBarrageCapableUnit(unit) &&
-      // 2.2：反应 / 进击的射击只认已释放的预备（与候选表 / 引擎同一条判据）
-      isGroundBarrageEligible(workbench.phase as GamePhase, unit)
-    ) {
-      actions.push({
-        key: 'barrage.declare',
-        label: workbench.barrageUnitIds.includes(id) ? '移出炮击' : '炮击',
-        rule: '10.0',
-        panel: 'unit',
-        only: 'barrage',
-        group: '战斗',
-        disabledReason: null,
-      })
     }
     if (
       unit !== undefined &&
@@ -2188,11 +2168,6 @@ export const useMapViewStore = defineStore('mapView', () => {
       workbench.switchUnitMode(unit.mode.mode === 'strat' ? 'move' : 'strat', undefined, [
         instanceId,
       ])
-      closePopup()
-      return true
-    }
-    if (option.only === 'barrage') {
-      workbench.beginBarrageAt(hex, instanceId)
       closePopup()
       return true
     }

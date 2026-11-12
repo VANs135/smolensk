@@ -74,12 +74,12 @@ describe('14.7d 右键敌方算子：低空扫射', () => {
     placeGround(workbench, combatRecord('soviet'), NEAR_HEX, 'soviet', 'enemy-1')
   })
 
-  it('★ 前置齐全：右键敌格出「低空扫射（14.7d）」', () => {
+  it('★ 前置齐全：右键敌格出「低空扫射」', () => {
     expect(menuKeys(NEAR_HEX, 'enemy-1')).toContain('ops.hipShoot')
     const action = useMapViewStore()
       .contextOptions.find((item) => item.id === 'enemy-1')!
       .actions.find((item) => item.key === 'ops.hipShoot')!
-    expect(action.label).toBe('低空扫射（14.7d）')
+    expect(action.label).toBe('低空扫射')
     expect(action.rule).toBe('14.7d')
     expect(action.disabledReason).toBeNull()
   })
@@ -117,6 +117,13 @@ describe('14.7d 右键敌方算子：低空扫射', () => {
 
   it('★ 右键己方单位不出现低空扫射（那是敌方目标菜单）', () => {
     expect(menuKeys(CORE_HEX, 'spotter-1')).not.toContain('ops.hipShoot')
+  })
+
+  it('★ 时机错位：轰炸环节右键敌方不出低空扫射（14.2e 属移动环节）', () => {
+    const index = workbench.playerSegmentSteps.findIndex((step) => step.id === 'movement.barrage')
+    expect(index, '本阶段没有 movement.barrage 环节').toBeGreaterThanOrEqual(0)
+    expect(workbench.setSegmentStepIndex(index)).toBe(true)
+    expect(menuKeys(NEAR_HEX, 'enemy-1')).not.toContain('ops.hipShoot')
   })
 
   /**

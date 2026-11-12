@@ -93,12 +93,12 @@ describe('④ 右键菜单：按能力分类的既有入口', () => {
     expect(keys).not.toContain('barrage.declare')
   })
 
-  it('★ 轰炸环节：带印刷轰炸值的火炮有「炮击」，步枪没有（既有 isBarrageCapableUnit 判据）', () => {
+  it('★ 轰炸环节：右键己方火炮不再出「炮击」（入口唯一：右键敌方目标）', () => {
     const { workbench } = s
     enter(workbench, 'combat', 'combat.barrage')
     place(workbench, recordOf(true), 'gun-1')
     place(workbench, recordOf(false), 'rifle-1')
-    expect(menuKeys(s, 'gun-1')).toContain('barrage.declare')
+    expect(menuKeys(s, 'gun-1')).not.toContain('barrage.declare')
     expect(menuKeys(s, 'rifle-1')).not.toContain('barrage.declare')
   })
 
@@ -123,7 +123,7 @@ describe('④ 右键菜单：按能力分类的既有入口', () => {
     expect(s.mapView.contextOptions).toEqual([])
   })
 
-  it('★ 点菜单项即执行：落点是既有入口（改模式 / 炮击 / 建造标记）', () => {
+  it('★ 点菜单项即执行：落点是既有入口（改模式 / 建造标记）', () => {
     const { workbench, mapView } = s
     const infantry = place(workbench, recordOf(false), 'inf-1')
     enter(workbench, 'movement', 'movement.modeAndMovement')
@@ -131,11 +131,11 @@ describe('④ 右键菜单：按能力分类的既有入口', () => {
     expect(mapView.openContextAction('inf-1', 'move.orientation.toggle')).toBe(true)
     expect(infantry.mode.orientation).toBe('move')
 
-    const gun = place(workbench, recordOf(true), 'gun-1')
+    // 炮击的唯一入口在敌方目标菜单；己方单位菜单里没有可执行的 `barrage.declare`
     enter(workbench, 'combat', 'combat.barrage')
+    place(workbench, recordOf(true), 'gun-1')
     menuKeys(s, 'gun-1')
-    expect(mapView.openContextAction('gun-1', 'barrage.declare')).toBe(true)
-    expect(workbench.barrageUnitIds).toContain(gun.instanceId)
+    expect(mapView.openContextAction('gun-1', 'barrage.declare')).toBe(false)
 
     enter(workbench, 'movement', 'movement.modeAndMovement')
     workbench.setConstructionMarkersNow(1)

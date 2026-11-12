@@ -11217,19 +11217,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 条 13：**从地图上某一格进入炮击**（右键「炮击」）
-   *
-   * 与工具条直接开的分歧只有一条：把作用域锁到这一格，阵列不会铺出全场炮兵。
-   * 判据仍走 `toggleBarrageUnit`（10.0e-B/13.4a 的同类型与账本由引擎裁）。
-   */
-  function beginBarrageAt(hex: HexRef, unitId: string): void {
-    if (!canReplaceBarrage()) return
-    setBarrageActive(true)
-    barrageScopeHex.value = { col: hex.col, row: hex.row }
-    toggleBarrageUnit(unitId)
-  }
-
-  /**
    * C7：清空本场轰炸的全部交互状态（换方/换阶段/重置/关闭时调用；不卸载已摆放的飞机）
    *
    * ★ 注意：**不清 10.0e-A/B 的账本**（`barragedHexesThisPhase` / `barragedUnitIdsThisPhase`）。
@@ -15130,6 +15117,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 缺任何一条 ⇒ 菜单项**不出现**（不灰按钮）。任务已在跑时不覆盖（14.2f）。
    */
   function hipShootEntryEligible(hex: HexRef): boolean {
+    // 14.2e：低空扫射属**移动环节**；轰炸环节即使闸门开着也不出这一项
+    if (airMissionSegmentKind.value !== 'movementSegment') return false
     if (!actionAllowedNow('air.mission')) return false
     if (airState.value !== null && !airState.value.finished) return false
     if (!canHipShoot(airActingSide.value, airInputs.value.weatherNormal)) return false
@@ -25109,7 +25098,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     barrageUnitChoices,
     // 条 13：炮击阵列按本次作用域收窄后的视图（判据仍是 `barrageUnitChoices`）
     barrageVisibleChoices,
-    beginBarrageAt,
     barrageAirChoices,
     barrageTargetHex,
     barrageTargetFacts,
