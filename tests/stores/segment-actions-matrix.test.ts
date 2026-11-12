@@ -214,8 +214,8 @@ describe('阶段/环节 × 操作矩阵（规则书口径）', () => {
       'player    combat.barrage → barrage.declare',
       'player    combat.combat → combat.declare,move.breakdown',
       'player    exploitation.movement → air.mission,air.transfer,move.dumpBlow,move.extenderConvert,move.order,move.overrun,reserve.release,supply.fuel',
-      'player    exploitation.barrage → air.mission,barrage.declare',
-      'player    exploitation.combat → combat.declare,move.breakdown',
+      'player    exploitation.barrage → air.mission,barrage.declare,reserve.release',
+      'player    exploitation.combat → combat.declare,move.breakdown,reserve.release',
       'automatic cleanUp.auto → ',
       'automatic turnEnd.advance → ',
     ])

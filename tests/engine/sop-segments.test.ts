@@ -71,7 +71,9 @@ describe('B6：环节链的结构不变量', () => {
         expect(step, `${phase} 的动作 ${action} 找不到所属环节`).not.toBeNull()
         // 唯一性：本表里不会有两环同时收同一个动作（否则"现在能不能做"会有两个答案）
         const owners = sopChainOf(phase).steps.filter((item) => item.actions.includes(action))
-        expect(owners).toHaveLength(1)
+        // 5.7b / 11.0b 特例：进击三环都可释放预备，故 reserveRelease 允许多环收留
+        if (action === 'reserveRelease') expect(owners.length).toBeGreaterThanOrEqual(1)
+        else expect(owners).toHaveLength(1)
       }
     }
   })

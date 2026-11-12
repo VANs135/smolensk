@@ -2898,10 +2898,13 @@ export const ACTION_GATES: readonly ActionGate[] = [
   {
     key: 'reserve.release',
     label: '释放预备',
-    rule: '5.7b',
+    rule: '5.7b / 11.0b',
     where: [
       { phase: 'reaction', segment: 'reaction.movement', role: 'nonActive' },
+      // 11.0b：进击阶段的**任何环节**都可释放预备，不限于移动环节
       { phase: 'exploitation', segment: 'exploitation.movement' },
+      { phase: 'exploitation', segment: 'exploitation.barrage' },
+      { phase: 'exploitation', segment: 'exploitation.combat' },
     ],
   },
   {
