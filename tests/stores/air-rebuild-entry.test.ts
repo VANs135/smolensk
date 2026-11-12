@@ -86,10 +86,16 @@ function setupRebuild(store: ReturnType<typeof newStore>, withSource: boolean): 
   goToActionStep(store, 'rein.rebuild')
   if (!withSource) {
     /*
-     * 13.5f 的"基地不在追溯补给 ⇒ 拒"需要一个**真的**断补格。
-     * 12.3d：用敌方（轴方）ZOC 把 CORE_HEX 的第一圈全部覆盖 ⇒ 苏方补给路径进出都被卡断；
-     * 不靠地形死角，也不靠"不声明源"（13.3c 的卸货格会自动成为源）。
+     * 13.5f 的"基地不在追溯补给 ⇒ 拒"必须由 **ZOC / 敌占**造成，不能被"离源超过 5 轮式 MP"顶替
+     * （U23 落地后 2.1 本来就离苏方源太远 —— 那样这条用例就不再验 12.6 的阻断）。
+     *
+     * 做法：先在基地格声明一个苏方来源（不加卡断时距离 0 ⇒ 确实在补给），
+     * 再用敌方 ZOC / 敌占封死第一圈：2.1 是地图角，2.0 / 1.1 没有第二圈可摆 ⇒ 敌占那两格；
+     * 基地是**非战斗单位**（4.5b 不抵消 ZOC）⇒ 基地格本身落入敌方 ZOC，按 12.6b
+     * "源格内有未抵消的敌方 ZOC ⇒ 不可从该源获得追溯补给"判为断补。
      */
+    store.supplySourceDraft = { hexText: label(CORE_HEX), kind: 'supplySourceHex' }
+    expect(store.addSupplySource()).toBe(true)
     sealTraceSupplyByZoc(store, CORE_HEX, 'soviet', true)
   }
   store.units.push(
