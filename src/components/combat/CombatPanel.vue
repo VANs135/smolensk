@@ -886,7 +886,12 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
           <BaseTag kind="warning">须完成结算</BaseTag>
           {{ cancelBlocker }}
         </p>
-        <BaseButton variant="ghost" size="sm" @click="workbench.cancelCombat()"
+        <!-- R15（K10）：「×」在提交后是 refused（置灰），本按钮同口径 —— 有挡因即 disabled -->
+        <BaseButton
+          variant="ghost"
+          size="sm"
+          :disabled="cancelBlocker !== null"
+          @click="workbench.cancelCombat()"
           >放弃本场战斗</BaseButton
         >
         <BaseButton
