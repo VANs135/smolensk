@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
 import { mapLayers } from '@/data'
+import { isOnMap } from '@/engine/hex-geometry'
 import {
   RAIL_CAP_PER_TRANSPORT_EQUIVALENT,
   RAIL_MOVEMENT_MP_COST,
@@ -12,6 +13,7 @@ import {
   RAIL_TRAINBUSTING_MULTIPLIER,
   convertedRailRun,
   createRailFacts,
+  createRailGraph,
   mergeTransportPoints,
   railCapacityCost,
   railPathFacts,
@@ -852,5 +854,28 @@ describe('createRailFacts：静态铁路图层（产品数据）→ 事实', () 
       facts: railFacts,
     })
     expect(result.ok).toBe(true)
+  })
+})
+
+describe('5-C1：offMapStub 铁路边不建邻接（图外端点不得成为可进入的铁路格）', () => {
+  const graph = createRailGraph(mapLayers)
+
+  it('5-C1：标了 offMapStub 的铁路边，图外端点不是铁路格、也没有邻格/边', () => {
+    const stubs = mapLayers.edges.filter((edge) => edge.rail === true && edge.offMapStub === true)
+    expect(stubs.length).toBeGreaterThan(0)
+    const offMapEnds = stubs.flatMap((edge) => [edge.a, edge.b]).filter((hex) => !isOnMap(hex))
+    expect(offMapEnds.length).toBeGreaterThan(0)
+    for (const hex of offMapEnds) {
+      expect(graph.isRailHex(hex)).toBe(false)
+      expect(graph.railNeighbors(hex)).toEqual([])
+      expect(graph.railEdges(hex)).toEqual([])
+    }
+  })
+
+  it('5-C1：全图铁路邻接里不存在图外格（可达计数不会因 stub 多算）', () => {
+    const offenders = mapLayers.hexes
+      .flatMap((hex) => graph.railNeighbors({ col: hex.col, row: hex.row }))
+      .filter((hex) => !isOnMap(hex))
+    expect(offenders).toEqual([])
   })
 })
