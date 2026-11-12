@@ -81,12 +81,27 @@ const TARGET: HexRef = { col: 36, row: 14 }
 describe('8.0 突袭：只发生在移动环节、只针对有敌方战斗单位的格', () => {
   it('8.0：三个移动环节可突袭，其他段不行', () => {
     expect(OVERRUN_SEGMENTS).toEqual(['movement', 'reaction', 'exploitation'])
-    for (const phase of OVERRUN_SEGMENTS)
+    for (const phase of OVERRUN_SEGMENTS) {
+      /*
+       * 行动者身份照 6.3a/7.0a/11.0a 布置（资格判据统一到 `checkLegality('overrun')` 后，
+       * 时机族也一并生效，故夹具必须是一个真实的行动者，而不是"随便一个轴方单位"）：
+       *   · 反应阶段：只能由**非阶段玩家**的**已释放预备**行动；
+       *   · 进击阶段：阶段玩家须已带**进击标记**（或已释放预备）。
+       */
+      const mover =
+        phase === 'reaction'
+          ? unit({ releasedFromReserve: true })
+          : phase === 'exploitation'
+            ? unit({ exploit: true })
+            : unit()
       expect(
         overrunEligibility({
           phase,
-          // OVERRUN_SEGMENTS 的类型是 GamePhase[]，此处三个值都是移动环节，故收窄给 context
-          context: context([unit()], { phase: phase as MovementSegmentPhase }),
+          context: context([mover], {
+            // OVERRUN_SEGMENTS 的类型是 GamePhase[]，此处三个值都已是移动环节
+            phase: phase as MovementSegmentPhase,
+            activeSide: phase === 'reaction' ? 'soviet' : 'axis',
+          }),
           unitIds: ['u1'],
           target: TARGET,
           mpRemaining: 6,
@@ -94,6 +109,7 @@ describe('8.0 突袭：只发生在移动环节、只针对有敌方战斗单位
           defenders: [{ id: 'd1', isCombat: true }],
         }).ok,
       ).toBe(true)
+    }
     expect(
       overrunEligibility({
         phase: 'combat',

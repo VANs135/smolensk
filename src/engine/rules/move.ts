@@ -15,7 +15,6 @@ import type {
 } from './move-types'
 import {
   canMoveInPhase,
-  canonicalMode,
   exertsZoc,
   hasMarker,
   maMultiplier,
@@ -24,7 +23,8 @@ import {
   type MovementSegmentPhase,
 } from './modes'
 import { STACKING_LIMIT_RE } from './movement'
-import { canAttackAfterAirTransport, limitAirTransportMa } from './air-unit-movement'
+import { limitAirTransportMa } from './air-unit-movement'
+import { checkLegality, type LegalityUnit, type LegalityViolation } from './legality'
 import { selectMovementTerrain, type HexsideCrossing } from './terrain'
 import { isInEnemyZoc, projectsZoc, zocEntryEffect, type ZocSource } from './zoc'
 import { zocAffectsAction, type ZocAction } from './zoc-effects'
@@ -892,11 +892,71 @@ export interface OverrunCheckInput {
 export type OverrunCheck = { ok: true; mpCost: number; entryCost: number } | StepFailure
 
 /**
- * 能否突袭（8.0/8.1/8.1a/8.1b/8.1c + 5.10b-C）
+ * 移动期单位视图 → 合法性层单位视图（8.1 资格统一委托 `checkLegality('overrun')`）
+ *
+ * `raw` 只给 `ma`：突袭资格读的是模式能力（5.5–5.10）、6.1b 的 MA 与 14.9d 的空运额度，
+ * 攻击/防御/轰炸值不参与（战斗值在 9.x 由 `battle.ts` 按各自单位视图取）。
+ */
+function legalityUnitOf(unit: MoveUnitView): LegalityUnit {
+  return {
+    id: unit.id,
+    isCombat: unit.isCombat,
+    attackCapable: unit.attackCapable,
+    mobility: unit.mobility,
+    mode: modeStateOf(unit),
+    re: unit.re,
+    raw: { attack: 0, ar: 0, ma: unit.ma },
+    airTransportThisPhase: unit.airTransportThisPhase,
+    mpLockedThisPhase: unit.mpLockedThisPhase,
+    isExtenderFace: unit.isExtenderFace,
+  }
+}
+
+/**
+ * 合法性层的原因码 → 移动层的稳定原因码
+ *
+ * 两层的词表各自对外（界面/日志已按移动层的 `MoveRejectReason` 展示），故按「同一规则」
+ * 一一映射，而不是把合法性层的原因码直接透传出去。
+ */
+function overrunRejectReason(violation: LegalityViolation): MoveRejectReason {
+  switch (violation.reason) {
+    case 'fuelNotPaid':
+      return 'needsFuel'
+    case 'airTransportForbidsAttack':
+      return 'notAttackCapable'
+    case 'airTransportForbidsMovement':
+      return 'noMa'
+    case 'dgCannotOverrun':
+    case 'modeForbidsOverrun':
+    case 'actionNotInSegment':
+    case 'notActiveSide':
+    case 'activeSideInReaction':
+    case 'reserveNotReleased':
+    case 'notExploitOrReleased':
+      return 'phaseNotAllowed'
+    case 'stackingLimit':
+      return 'stackingLimit'
+    case 'notAttackCapable':
+    case 'immobile':
+    case 'extenderCannotMove':
+    case 'mpLocked':
+      return violation.reason
+    default:
+      return 'prohibited'
+  }
+}
+
+/**
+ * 能否突袭（8.0/8.1/8.1a/8.1b/8.1c/8.1d + 4.8a + 专规 1.1b）
  *
  * 只判**资格与费用**，不结算战斗（战斗在 8.0 指向 9.2 流程）。
  * 8.1h（出发格可另有友军）不在此判——用户裁定：突袭由玩家选部分单位作为堆叠发起，
- * 选子集即自然满足 8.1h，待突袭结算单元实现时再处理。
+ * 选子集即自然满足 8.1h。
+ *
+ * ★ **单一判据**：单位资格（模式 / DG / 攻击能力 / MA / 燃料 / 空运 / 12.7 / 4.5b）与 4.8a
+ *   一律问 `checkLegality('overrun')`，本函数不再自己重算一份（P3 合并，K6 的根因）；
+ *   这里只保留 8.1 的「同格 + 阶段开始即同格」、8.1a 的 3 MP、8.1b/8.1c 的进格费用与
+ *   专规 1.1b 的安全边缘格禁令。
  */
 export function canOverrun(input: OverrunCheckInput): OverrunCheck {
   const { context, unitIds, target, mpRemaining } = input
@@ -912,33 +972,26 @@ export function canOverrun(input: OverrunCheckInput): OverrunCheck {
   if (!units.every((unit) => unit.hex !== null && sameHex(unit.hex, from)))
     return reject('notAdjacent', '8.1', '参突单位不在同一格')
 
-  // 4.8a：移动中的暂时超堆叠**不适用于突袭**——「所有参与突袭的单位加上它们所在格内的所有
-  //   其他友方单位，合计规模不能超过 10RE」，故突袭发起格此刻就必须满足上限
-  const originRe = stackCombatReAt(context, from, units[0]!.side)
-  if (originRe > STACKING_LIMIT_RE)
-    return reject('stackingLimit', '4.8a', `突袭发起格 ${originRe} RE > ${STACKING_LIMIT_RE} RE`)
-
-  // 8.1：只有在此阶段开始时就堆叠在一起的可攻击单位才能突袭，且须处于战斗/移动/进击模式
+  // 8.1：只有在此阶段开始时就堆叠在一起的可攻击单位才能突袭（纯时点事实，由移动会话给出）
   if (!input.startedStackedTogether)
     return reject('phaseNotAllowed', '8.1', '参突单位本阶段开始时未同格堆叠')
-  for (const unit of units) {
-    if (!canAttackAfterAirTransport(unit.airTransportThisPhase))
-      return reject('notAttackCapable', '14.9d', `${unit.id} 本阶段空运后不能攻击或突袭`)
-    if (unit.airTransportThisPhase != null && availableMa(unit, context.phase) <= 0)
-      return reject('noMa', '14.9d', `${unit.id} 本阶段空运后没有突袭移动额度`)
-    if (!unit.attackCapable) return reject('notAttackCapable', '8.1', `${unit.id} 不可攻击`)
-    // 8.1 要求「处于战斗、移动或进击模式」；★ 用 5.7b 的规范模式判定：
-    // 已释放的预备（标记已移除、回到朝向那一面）与带进击标记的单位都算，故不能看原始 mode 字段
-    if (unit.dg) return reject('phaseNotAllowed', '5.10b', `${unit.id} 处于 DG 模式`)
-    // 12.7：延补队不能移动，自然也不能突袭
-    if (unit.isExtenderFace === true) return reject('extenderCannotMove', '12.7', unit.id)
-    // 4.5b：许诺抵消 ZOC 的单位本阶段不得再消耗 MP ⇒ 不得突袭（8.1a 每次突袭耗 3 MP）
-    if (unit.mpLockedThisPhase) return reject('mpLocked', '4.5b', unit.id)
-    const mode = canonicalMode(modeStateOf(unit))
-    if (mode !== 'combat' && mode !== 'move')
-      return reject('phaseNotAllowed', '8.1', `${unit.id} 不在战斗/移动/进击模式`)
-    if (unit.ma <= 0) return reject('immobile', '6.1b', unit.id)
-    if (requiresFuel(unit) && !unit.fuelled) return reject('needsFuel', '12.5a', unit.id)
+
+  const side = units[0]!.side
+  const verdict = checkLegality({
+    action: 'overrun',
+    side,
+    // 三个移动环节名与 GamePhase 同名，故 MovementSegmentPhase 可原样交出
+    phase: context.phase,
+    activeSide: context.activeSide,
+    units: units.map((unit) => legalityUnitOf(unit)),
+    // 12.5b：突袭需要燃料（常规攻击不需要）；逐单位判据仍是 fuel.ts 的单一出处
+    fuelPaid: units.every((unit) => !requiresFuel(unit) || unit.fuelled),
+    // 4.8a：突袭发起格此刻就必须 ≤10RE（不能等环节末）
+    overrun: { originCombatRe: stackCombatReAt(context, from, side) },
+  })
+  if (!verdict.ok) {
+    const primary = verdict.violations[0]!
+    return reject(overrunRejectReason(primary), primary.rule, primary.detail)
   }
 
   // 8.1a：每突袭一次消耗 3 MP；剩余 MP 不足 3 的单位不能突袭
@@ -950,6 +1003,10 @@ export function canOverrun(input: OverrunCheckInput): OverrunCheck {
     return reject('notAdjacent', '8.1d', `${target.col}.${target.row}`)
   if (!context.map.onMap(target))
     return reject('destinationOffMap', '专规 1.4', `${target.col}.${target.row}`)
+
+  // 专规 1.1b：敌方安全边缘格「可以被常规战斗攻击，但不可被突袭」——突袭也要进格，故在此拦
+  if (isEnemySafeEdgeHex(context, target, side))
+    return reject('enemySafeEdge', '专规 1.1b', `${target.col}.${target.row}`)
 
   // 8.1b：进入格 MP（格内＋格边＋运输破坏）≤ 3；地形为 All 不可突袭
   // 8.1c：不得用道路/桥梁降费、不得否定禁入地形、不得满足 6.1d → 统一用 forOverrun 计费

@@ -161,6 +161,14 @@ export interface LegalityUnit {
   railRepair?: boolean
   /** 非战斗单位类型（4.8 的「每格 1 港口 + 1 空军基地 + 1 环形工事」用） */
   noncombatKind?: string | null
+  /**
+   * 4.5b：本阶段已承诺「之后不再消耗 MP」（垫人代价）
+   *
+   * 突袭每次至少消耗 3 MP（8.1a），故这类单位不得突袭；由 `modeAllows` 的 overrun 分支判。
+   */
+  mpLockedThisPhase?: boolean
+  /** 12.7：当前以延补队面在场（不能移动，也不能突袭）；未给出按 false 处理 */
+  isExtenderFace?: boolean
 }
 
 /** 额度占用事实（额度上限由本层按 kind 从数据层取，避免调用方各写一份） */
@@ -212,8 +220,13 @@ export interface LegalityRequest {
   phase: GamePhase
   /** 当前阶段玩家（2.2） */
   activeSide: Side
-  /** 当前日期（ISO，专规时点与铁路容量用） */
-  date: string
+  /**
+   * 当前日期（ISO，专规时点与铁路容量用）
+   *
+   * 只有额度族（铁路容量按日期取上限）真正读它；8.1 的突袭资格不占任何额度，故可省略——
+   * 移动上下文（`MoveContext`）本来就不带局面钟，不必为了凑字段去编一个日期。
+   */
+  date?: string
   /** 参与单位（整格动作可省略） */
   units?: readonly LegalityUnit[]
   /** 目标格事实 */
@@ -234,6 +247,18 @@ export interface LegalityRequest {
   fuelPaid?: boolean
   /** 本条移动所耗 MP（预留给调用方展示；不参与判定） */
   mpSpent?: number
+  /**
+   * 8.1 / 4.8a：突袭专用事实（`action='overrun'` 时必给）
+   *
+   * 4.8a 的「≤10 RE」平时是**环节末义务**（移动过程中可以暂时超堆叠），但突袭例外：
+   * 「所有参与突袭的单位加上它们所在格内的所有其他友方单位，合计规模不能超过 10 RE」
+   * ⇒ 发起时就必须满足，不能等到环节末。该数值来自**发起格**（含 8.1h 的留驻者），
+   * 无法由 `target`（目标敌方格）推出，故必须显式带入。
+   */
+  overrun?: {
+    /** 发起格内全部友方战斗单位的 RE 合计（含不参突的留驻者） */
+    originCombatRe: number
+  }
 }
 
 /* ────────────────────────────── 结论 ────────────────────────────── */
@@ -662,6 +687,42 @@ function modeAllows(
           reason: 'dgCannotOverrun',
           detail: `${unit.id} 处于 DG 模式`,
         }
+      // 8.1：「可攻击」是参突的资格之一（4.4/3.2b 的括注、无攻击值等都不行）
+      if (!unit.attackCapable)
+        return {
+          ok: false,
+          family: 'mode',
+          rule: '8.1',
+          reason: 'notAttackCapable',
+          detail: `${unit.id} 不可攻击（8.1）`,
+        }
+      // 6.1b：无 MA（MA=0）的单位不能动，自然也不能突袭（8.1 要求参突者本环节可动）
+      if (stats.ma <= 0)
+        return {
+          ok: false,
+          family: 'mode',
+          rule: '6.1b',
+          reason: 'immobile',
+          detail: `${unit.id} 无移动力（6.1b）`,
+        }
+      // 12.7：延补队面不能移动，也不能突袭
+      if (unit.isExtenderFace === true)
+        return {
+          ok: false,
+          family: 'timing',
+          rule: '12.7',
+          reason: 'extenderCannotMove',
+          detail: `${unit.id} 以延补队面在场（12.7）`,
+        }
+      // 4.5b：许诺抵消 ZOC 的单位本阶段不得再消耗 MP ⇒ 不得突袭（8.1a 每次突袭耗 3 MP）
+      if (unit.mpLockedThisPhase === true)
+        return {
+          ok: false,
+          family: 'zoc',
+          rule: '4.5b',
+          reason: 'mpLocked',
+          detail: `${unit.id} 本阶段已承诺不再消耗 MP（4.5b）`,
+        }
       return stats.canOverrun
         ? { ok: true }
         : {
@@ -901,10 +962,27 @@ export function checkFuel(request: LegalityRequest): LegalityViolation[] {
  * 且「单位在**移动过程中**可以暂时地超堆叠」——所以堆叠**不是逐步禁令**：
  *   - 本族只在两种**即时禁令**上判违规：4.8 的「每格 1 港口 + 1 空军基地 + 1 环形工事」、
  *     以及 4.8c 的敌方单位同格限制（后者由 zoc 族按 4.8c 报）；
- *   - 「合计 ≤10 RE」属**阶段末义务**，见 `stackingObligations()`（增援阶段例外，13.6）。
+ *   - 「合计 ≤10 RE」属**阶段末义务**，见 `stackingObligations()`（增援阶段例外，13.6）；
+ *   - 唯一例外是**突袭**：4.8a 明确要求发起时就 ≤10 RE，故 `action='overrun'` 按 `overrun`
+ *     专用事实当场判（见下）。
  */
 export function checkStacking(request: LegalityRequest): LegalityViolation[] {
   const violations: LegalityViolation[] = []
+  /*
+   * 4.8a（**突袭例外**）：平时「≤10 RE」只在环节/阶段末结算，但突袭是「发起时必须满足」的门槛
+   * （8.1h 的留驻者也计入）——故凡 `action='overrun'` 一律按 `overrun.originCombatRe` 当场判，
+   * 不借用 `target`（那是目标敌方格，不是发起格）。
+   */
+  if (request.action === 'overrun' && request.overrun !== undefined) {
+    if (request.overrun.originCombatRe > STACKING_LIMIT_RE)
+      violations.push({
+        family: 'stacking',
+        rule: '4.8a',
+        reason: 'stackingLimit',
+        detail: `突袭发起格 ${request.overrun.originCombatRe} RE > ${STACKING_LIMIT_RE} RE`,
+      })
+    return violations
+  }
   const target = request.target
   if (target === undefined || request.action !== 'move') return violations
 
@@ -955,6 +1033,17 @@ export function resolveAllowanceLimit(
 export function checkAllowance(request: LegalityRequest): LegalityViolation[] {
   const usage = request.allowance
   if (usage === undefined) return []
+  // 额度上限按日期取（铁路容量逐回合变化）；未给日期即无法取上限，如实报数据缺口
+  if (request.date === undefined) {
+    return [
+      {
+        family: 'allowance',
+        rule: '13.3',
+        reason: 'allowanceDateMissing',
+        detail: '额度判定需要当前日期（铁路容量按日期取上限）',
+      },
+    ]
+  }
   const limit = resolveAllowanceLimit(usage, { date: request.date, side: request.side })
   if (limit === null) {
     return [

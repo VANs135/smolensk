@@ -922,6 +922,28 @@ describe('专规 1.1b：安全边缘格（作为补给源的地图边格）敌�
     expect(evaluateStep(context([mover]), 'u1', SAFE).ok).toBe(true)
   })
 
+  it('8.1：突袭资格同一判据——`canOverrun` 也拒绝敌方安全边缘格（规则明文「不可被突袭」）', () => {
+    const mover = unit({ hex: { col: 36, row: 13 } })
+    const blocked = canOverrun({
+      context: enemySafe([mover, enemy(SAFE)]),
+      unitIds: ['u1'],
+      target: SAFE,
+      startedStackedTogether: true,
+      mpRemaining: 6,
+    })
+    expect(blocked).toMatchObject({ ok: false, rule: '专规 1.1b', reason: 'enemySafeEdge' })
+    // 对照：同一格不在清单里则可突袭（名额/费用全部合格）
+    expect(
+      canOverrun({
+        context: context([mover, enemy(SAFE)]),
+        unitIds: ['u1'],
+        target: SAFE,
+        startedStackedTogether: true,
+        mpRemaining: 6,
+      }),
+    ).toMatchObject({ ok: true })
+  })
+
   it('可达格 BFS 与逐步判定同一判据（高亮的格 == 真的能走进去的格）', () => {
     const mover = unit({ hex: { col: 36, row: 13 } })
     const blocked = computeReachableHexes(enemySafe([mover]), 'u1')
