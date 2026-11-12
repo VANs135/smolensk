@@ -143,3 +143,71 @@ describe('条 21（批 F·F2）：战斗段「可攻击位置」高亮', () => {
     expect(inOverlay).toBe(true)
   })
 })
+
+/**
+ * C5：9.1e 的资格判定要在**点击层**生效（自动带攻方与手动点选同一条判据）。
+ *
+ * 修前只修了自动选取（`9cff5da`）；手动点选仍能把战略模式 / 未释放预备加进攻方，
+ * 直到「开始战斗」才被引擎以 `stratCannotAttack:<id>` 这类原因码打回。
+ */
+describe('C5：9.1e 资格拦在点击层', () => {
+  let workbench: ReturnType<typeof useWorkbenchStore>
+
+  beforeEach(() => {
+    workbench = newStores().workbench
+  })
+
+  it('点敌方格自动带攻方时，战略模式与未释放的预备不入选；已释放的预备照常入选', () => {
+    setupBattleTool(workbench)
+    const strat = place(workbench, attackerRecord(), ATTACKER_HEX, 'axis', 'a-strat')
+    strat.mode = { ...strat.mode, mode: 'strat' }
+    const reserve = place(workbench, attackerRecord(), ATTACKER_HEX, 'axis', 'a-reserve')
+    reserve.mode = { ...reserve.mode, mode: 'reserve', releasedFromReserve: false }
+    const released = place(workbench, attackerRecord(), ATTACKER_HEX, 'axis', 'a-released')
+    released.mode = { ...released.mode, mode: 'reserve', releasedFromReserve: true }
+
+    workbench.selectCombatDefenderHex(DEFENDER_HEX)
+
+    expect(workbench.combatAttackerIds).toContain('a1')
+    expect(workbench.combatAttackerIds).toContain('a-released')
+    expect(workbench.combatAttackerIds).not.toContain('a-strat')
+    expect(workbench.combatAttackerIds).not.toContain('a-reserve')
+  })
+
+  it('手动点战略模式 / 未释放预备 ⇒ 拦在点击层，给中文原因而不是引擎原因码', () => {
+    setupBattleTool(workbench)
+    const strat = place(workbench, attackerRecord(), ATTACKER_HEX, 'axis', 'a-strat')
+    strat.mode = { ...strat.mode, mode: 'strat' }
+    const reserve = place(workbench, attackerRecord(), ATTACKER_HEX, 'axis', 'a-reserve')
+    reserve.mode = { ...reserve.mode, mode: 'reserve', releasedFromReserve: false }
+
+    workbench.toggleCombatAttacker('a-strat')
+    workbench.toggleCombatAttacker('a-reserve')
+
+    expect(workbench.combatAttackerIds).not.toContain('a-strat')
+    expect(workbench.combatAttackerIds).not.toContain('a-reserve')
+    const warnings = workbench.log.filter((entry) => entry.rule === '9.1e')
+    expect(
+      warnings.some((entry) => entry.text.includes('战略模式') && entry.text.includes('不能进攻')),
+    ).toBe(true)
+    expect(
+      warnings.some(
+        (entry) => entry.text.includes('未释放的预备') && entry.text.includes('不能进攻'),
+      ),
+    ).toBe(true)
+    // A3：界面只给人话，不直出引擎 reason
+    expect(warnings.every((entry) => !entry.text.includes('stratCannotAttack'))).toBe(true)
+  })
+
+  it('已在名单里的单位仍可点掉（模式变化不把出口堵死）', () => {
+    setupBattleTool(workbench)
+    workbench.toggleCombatAttacker('a1')
+    expect(workbench.combatAttackerIds).toContain('a1')
+
+    const unit = workbench.units.find((item) => item.instanceId === 'a1')!
+    unit.mode = { ...unit.mode, mode: 'strat' }
+    workbench.toggleCombatAttacker('a1')
+
+    expect(workbench.combatAttackerIds).not.toContain('a1')
+  })
+})

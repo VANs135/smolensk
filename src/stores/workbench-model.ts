@@ -1412,6 +1412,21 @@ export function printedHedgehogLevelAt(hex: HexRef): number {
 }
 
 /**
+ * 9.1e：**模式层面**的攻击否决（战略模式 / 未释放的预备）；`null`＝该模式可以进攻。
+ *
+ * 自动带攻方（`attackersForHex`）与手动点选（`workbench.toggleCombatAttacker`）共用这一条，
+ * 免得出现「自动收进来、开战才被引擎打回」与「手动能加、开战才报原因码」两套口径。
+ */
+export function combatModeAttackBlocked(
+  unit: Pick<ConsoleUnit, 'mode'>,
+): 'strat' | 'unreleasedReserve' | null {
+  if (unit.mode.mode === 'strat') return 'strat'
+  if (unit.mode.mode === 'reserve' && unit.mode.releasedFromReserve !== true)
+    return 'unreleasedReserve'
+  return null
+}
+
+/**
  * 9.1a / 9.0：能攻击 `defenderHex` 的己方单位
  *
  * 「要进行战斗的话，**攻击单位必须与被攻击的格相邻**」（9.0）；只列可攻击（3.2b 带括号者只能防御）
@@ -1430,8 +1445,7 @@ export function attackersForHex(
       canAttackAfterAirTransport(unit.airTransportThisPhase) &&
       // 9.1e：战略模式、以及未释放的预备不能进攻 ⇒ 自动带攻方时就不收进来，
       // 免得「开始战斗」才被引擎拒（原先是全收，再由 9.1e 打回）。
-      unit.mode.mode !== 'strat' &&
-      !(unit.mode.mode === 'reserve' && unit.mode.releasedFromReserve !== true) &&
+      combatModeAttackBlocked(unit) === null &&
       areAdjacent(unit.hex, defenderHex),
   )
 }

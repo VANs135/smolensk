@@ -519,6 +519,8 @@ import {
   type UnitRecordView,
   // B9：算子参与判定（与闸门表同一套判据；界面灰显与拾取过滤都用它）
   isBarrageCapableUnit,
+  // 9.1e：战略模式 / 未释放预备不能进攻（自动带攻方与手动点选共用一条判据）
+  combatModeAttackBlocked,
   participatesIn,
   mapHintOf,
   type MapHint,
@@ -10259,6 +10261,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       combatAttackerIds.value = combatAttackerIds.value.filter((id) => id !== unitId)
       pushLog('info', `移出攻方：${unit.name}`)
     } else {
+      /*
+       * 9.1e：手动点选也拦在点击层（与自动带攻方 `attackersForHex` 同一条判据）。
+       * 修前这里只拦 isCombat / attackCapable / 进击阶段 ⇒ 战略模式与未释放预备能手滑加进去，
+       * 直到「开始战斗」才被引擎以 `stratCannotAttack:<id>` 打回并直出原因码。
+       * 已在名单里的允许点掉（不拦截"移出"），避免模式变化后玩家反而选不回来。
+       */
+      const blocked = combatModeAttackBlocked(unit)
+      if (blocked !== null) {
+        pushLog(
+          'warning',
+          blocked === 'strat'
+            ? `${unit.name} 处于战略模式，不能进攻（9.1e）`
+            : `${unit.name} 是未释放的预备，不能进攻（9.1e）`,
+          '9.1e',
+        )
+        return
+      }
       combatAttackerIds.value = [...combatAttackerIds.value, unitId]
       pushLog(
         'info',
