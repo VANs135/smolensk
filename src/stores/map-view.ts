@@ -20,6 +20,7 @@ import {
 } from './workbench-model'
 import { useSetupStore } from './setup'
 import { useContainersStore } from './containers'
+import { useUiStore } from './ui'
 import {
   hitCollapsedToken,
   stackFanOrder,
@@ -226,6 +227,8 @@ export const useMapViewStore = defineStore('mapView', () => {
   const workbench = useWorkbenchStore()
   const hotseat = useHotseatStore()
   const setup = useSetupStore()
+  /** 战斗收束的结束提示（会话框自动卸载，不留"我已结算完"的空窗） */
+  const ui = useUiStore()
   /** B17a-2：盒卡展开与否决定"盒内动作"会话是否出现（方案 §4.7） */
   const containers = useContainersStore()
 
@@ -3336,6 +3339,14 @@ export const useMapViewStore = defineStore('mapView', () => {
     { flush: 'sync' },
   )
 
+  /** 战斗一收束就给一次 toast（`finished` 只翻转一次；清战斗态后自动归位） */
+  watch(
+    () => workbench.combatState?.finished === true,
+    (finished) => {
+      if (finished) ui.pushToast('success', '战斗结束')
+    },
+  )
+
   /** 小窗内容：这一格有什么（地面按 4.9a 裁剪；飞机只列本方） */
   const popupContent = computed<MapPopupContent | null>(() => {
     const state = popup.value
@@ -3700,15 +3711,14 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (sessionKindAfter !== sessionKindBefore) return
     if (sessionKindAfter !== '' && !consumed) return
     /*
-     * ★ 用户 2026-11-09（条 11）：战斗会话里「点格即弹」的小窗只保留 9.12g 推进格一处
-     *   （CombatPanel 的推进块是只读的，勾选与确认在这张辅助窗里）。
-     *   补给站付款、撤退落点等被消费的点击只执行动作，不再弹只写内部状态（9.2 当前步）的窗。
+     * 战斗会话：地图点选只执行动作，不再弹只写内部状态的辅助窗。
+     * 9.12g 推进的勾选与确认已收回 `CombatPanel`（用户 2026-11-12 第二批）⇒ 这里连"推进格小窗"也不开。
      */
-    if (sessionKindAfter === 'combat' && workbench.combatLiveStep !== 'advance') return
+    if (sessionKindAfter === 'combat') return
     /*
      * 条 25（D2 修订）：**空闲点空格不再弹窗** —— 格号改由地图的悬停提示给（随指针浮现、离格即消失）。
-     * 只有两种情况仍开常规小窗：① 会话在跑（本击被会话当成"地图点选"消费掉，小窗是会话的辅助窗，
-     * 例如 9.12g 推进窗）；② 这一格**有可列内容**（算子 / 飞机）。
+     * 只有两种情况仍开常规小窗：① 其它会话在跑（本击被该类会话当成"地图点选"消费掉，
+     * 小窗是会话的辅助窗，例如炮击的目标格）；② 这一格**有可列内容**（算子 / 飞机）。
      */
     if (anchor !== undefined && (sessionKindAfter !== '' || stackTokensAt(hex).length > 0)) {
       openPopup(hex, anchor.x, anchor.y, 'content')

@@ -130,10 +130,6 @@ function chipPickable(id: string): boolean {
   return isMovePickHex.value && movableIds.value.has(id)
 }
 
-/** 9.12g 推进格（防御格已清空时给出） */
-const advanceHex = computed(() => workbench.combatAdvanceHex)
-const advanceChosen = computed(() => workbench.combatInputs.advanceUnitIds)
-
 /** 6.1：堆叠取子清单的已勾选 id（界面用；`movePick` 为空时给空数组，避免模板里做空值断言） */
 const movePickIds = computed<string[]>(() => workbench.movePick?.ids ?? [])
 
@@ -360,63 +356,10 @@ function sideName(side: string): string {
       </div>
     </section>
 
-    <!-- ① 9.12g 推进：小窗只做**地图上的点选**（结算控件在战斗栏里） -->
-    <template v-if="step !== null">
-      <!-- 9.12g 推进：地图上点绿格 -->
-      <section v-if="step === 'advance'" class="block">
-        <h4 class="block__title">战后推进（9.12g）</h4>
-        <p class="num">
-          防御格 {{ advanceHex === null ? '未被清空' : hexLabel(advanceHex) }}
-          <span v-if="advanceChosen.length > 0">
-            · 已选 {{ advanceChosen.length }} 个推进单位
-          </span>
-        </p>
-        <!--
-          9.12g-D：「由拥有者玩家选择**哪些**攻击单位进行推进（如果有的话）」
-          ⇒ 逐单位勾选必须存在（不可只有"全推 / 全不推"）；批 F·E4 把它收口到**地图小窗**这一处。
-          灰显者（9.12g-A 未付战斗补给 / 9.12b 不可移动）点不动，原因由 store 给。
-        -->
-        <ul class="list">
-          <li v-for="choice in workbench.combatAdvanceChoices" :key="choice.unit.instanceId">
-            <BaseButton
-              variant="ghost"
-              size="sm"
-              :disabled="choice.disabledReason !== null"
-              @click="workbench.toggleAdvanceUnit(choice.unit.instanceId)"
-            >
-              {{ choice.selected ? '☑' : '☐' }} {{ choice.unit.name }}（军力
-              {{ choice.unit.steps }}）
-              <span v-if="choice.disabledReason !== null"> · {{ choice.disabledReason }}</span>
-            </BaseButton>
-          </li>
-        </ul>
-        <div class="row">
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            :disabled="advanceHex === null"
-            @click="advanceHex !== null && workbench.advanceNow(advanceHex)"
-          >
-            推进到该格（点地图绿格同效）
-          </BaseButton>
-          <!-- B33：突袭的推进是**强制**的 ⇒ 不给「不推进」（9.12g-D） -->
-          <BaseButton
-            v-if="!workbench.combatAdvanceMandatory"
-            variant="ghost"
-            size="sm"
-            @click="workbench.clearAdvanceNow()"
-          >
-            不推进（9.12g）
-          </BaseButton>
-        </div>
-        <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatAdvance()">
-          确认推进并收束（9.12g/9.13）
-        </BaseButton>
-      </section>
-    </template>
+    <!-- ② 9.12g 推进已收回 `CombatPanel`（用户 2026-11-12 第二批）：本窗不再承担推进的勾选与确认 -->
 
-    <!-- ② 无战斗流程：只摆战斗单位 + 操作按钮（不写说明文字） -->
-    <template v-else>
+    <!-- 无战斗流程：只摆战斗单位 + 操作按钮（不写说明文字） -->
+    <template v-if="step === null">
       <!-- 6.1f：**移动中**可把堆叠里的某一枚就地放下（停在当前格，其余继续走） -->
       <section v-if="movingUnits.length > 1" class="block block--pick">
         <h4 class="block__title">移动中：放下堆叠里的单位</h4>

@@ -146,16 +146,19 @@ describe('U1-c：战斗窗减负', () => {
 })
 
 describe('U3：点格气泡不再展示内部状态', () => {
-  it('战斗小窗删掉 9.2 当前步与九步结算说明', () => {
+  it('战斗小窗删掉 9.2 当前步与九步结算说明；推进也不在小窗', () => {
     const src = read('src/components/game/MapActionPopover.vue')
     expect(src).not.toContain('九步结算的输入在')
     expect(src).not.toContain('9.2 当前步')
     expect(src).not.toContain('青绿＝安全格')
-    expect(src).toContain("step === 'advance'")
+    // 用户 2026-11-12 第二批：推进的勾选与确认已收回 CombatPanel ⇒ 小窗不再有推进段
+    expect(src).not.toContain("step === 'advance'")
+    expect(src).not.toContain('workbench.confirmCombatAdvance()')
   })
 
-  it('战斗会话中只有推进格保留辅助小窗', () => {
+  it('战斗会话不再开辅助小窗（推进已回面板）', () => {
     const src = read('src/stores/map-view.ts')
-    expect(src).toContain("sessionKindAfter === 'combat' && workbench.combatLiveStep !== 'advance'")
+    expect(src).toContain("if (sessionKindAfter === 'combat') return")
+    expect(src).not.toContain("combatLiveStep !== 'advance'")
   })
 })

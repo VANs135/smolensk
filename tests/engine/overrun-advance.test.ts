@@ -75,12 +75,16 @@ describe('B33：9.12g-D 突袭的推进收束（引擎）', () => {
 })
 
 describe('B33：界面不给"不推进"（源码守卫）', () => {
-  it('★ 小窗的「不推进」在突袭下不出现；战斗面板有强制口径提示', () => {
+  it('★ 突袭的推进强制口径只在战斗面板；小窗不再承载推进', () => {
     const pop = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
-    expect(pop).toContain('workbench.combatAdvanceMandatory')
+    // 用户 2026-11-12 第二批：推进勾选与确认收回 CombatPanel
+    expect(pop).not.toContain('workbench.combatAdvanceMandatory')
+    expect(pop).not.toContain("step === 'advance'")
     const panel = readFileSync('src/components/combat/CombatPanel.vue', 'utf8')
     expect(panel).toContain('workbench.combatAdvanceMandatory')
     expect(panel).toContain('9.12g-D')
+    // 突袭下没有单独的「不推进」按钮：唯一主按钮由 advanceButtonLabel 给"推进并结束"
+    expect(panel).not.toContain('不推进（9.12g）')
     const store = readFileSync('src/stores/workbench.ts', 'utf8')
     expect(store).toContain("state.attackType === 'overrun'")
   })

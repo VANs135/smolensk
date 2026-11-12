@@ -247,30 +247,17 @@ describe('C6 9.2 九步流程：顺序推进', () => {
       if (store.combatAttackers.length > 0) continue // 这一骰序没把攻方打光 ⇒ 换种子
       found = true
 
-      // ① 攻方选项页**不再出现**（stage 直落守方强制损失）
-      expect(store.combatState!.resolution.stage).toBe('defenderLosses')
+      // ① 攻方选项页**不再出现**（9.10c 例 B：攻方被全灭 ⇒ 跳过攻方选项）
       expect(store.combatState!.resolution.attacker.optionsSkipped).toBe('attackerWipedOut')
       expect(store.log.some((entry) => (entry.text ?? '').includes('跳过攻方的选项'))).toBe(true)
 
-      // ② 守方的强制损失与选项照常结算（这一步不能被跳掉）
-      expect(store.confirmCombatLosses()).toBe(true)
-      expect(store.combatState!.resolution.stage).toBe('defenderOptions')
-      driveOptions(store, 'defender')
-      expect(store.combatState!.step).toBe('retreat')
-
-      // ③ 撤退（守方若需撤就给它直线路径）⇒ 9.12g-D：攻方无人可推 ⇒ 战斗**直接结束**
-      const requirement = store.combatRetreatRequirement
-      const paths: Record<string, string> = {}
-      if (requirement.defender > 0) {
-        for (const unit of store.battleDefenders) {
-          paths[unit.instanceId] = straightPath(unit.hex, requirement.defender)
-            .map((hex) => `${hex.col}.${hex.row}`)
-            .join(',')
-        }
-      }
-      store.combatInputs.retreatPaths = paths
-      expect(store.confirmCombatRetreats()).toBe(true)
+      /*
+       * ② 守方这一手是 0 点损失 / 0 点选项 / 无撤退对象 ⇒ 三个空屏由 store 自动越过（第二批）；
+       *   攻方又已无单位可推进（9.12g-D「如果有的话」）⇒ 整场战斗直接收束，不再停在填不动的屏上。
+       */
+      expect(store.combatState!.resolution.stage).toBe('done')
       expect(store.combatState!.finished).toBe(true)
+      expect(store.combatRetreatRequirement).toEqual({ attacker: 0, defender: 0 })
     }
     expect(found, '扫了 80 个种子都没出现"攻方被 AL1 打光"的骰序（用例前提不成立）').toBe(true)
   })
@@ -338,42 +325,51 @@ describe('C6 9.2 九步流程：顺序推进', () => {
     expect(store.combatState!.step).toBe('losses')
     expect(store.combatSummary).not.toBeNull()
 
-    // ⑧ 结算：攻方先（9.10b）—— 强制损失
-    expect(store.combatState!.resolution.stage).toBe('attackerLosses')
-    expect(store.confirmCombatLosses()).toBe(true)
-    expect(store.combatState!.resolution.stage).toBe('attackerOptions')
+    // ⑧ 结算（9.10b：攻方先、守方后）
+    /*
+     * 第二批：0 点数的强制损失 / 0 点数的选项 / 无对象的撤退都会被 store 自动确认
+     *   ⇒ 这里按**实际仍待决的步**推进，并钉住新契约：**停下来的每一屏都必须有正点数**
+     *   （`driveOptions` 内部也以正点数为前提）。
+     */
+    while (store.combatState!.step === 'losses' || store.combatState!.step === 'options') {
+      const stage = store.combatState!.resolution.stage
+      const pending = store.combatRequirement
+      expect(pending).not.toBeNull()
+      if (stage === 'attackerLosses' || stage === 'defenderLosses') {
+        expect(pending!.losses).toBeGreaterThan(0)
+        expect(store.confirmCombatLosses()).toBe(true)
+      } else if (stage === 'attackerOptions' || stage === 'defenderOptions') {
+        expect(pending!.options).toBeGreaterThan(0)
+        driveOptions(store, stage === 'attackerOptions' ? 'attacker' : 'defender')
+      } else {
+        throw new Error(`结算停在未知阶段 ${stage}`)
+      }
+    }
 
-    // ⑧ 攻方选项
-    driveOptions(store, 'attacker')
-    expect(store.combatState!.resolution.stage).toBe('defenderLosses')
-
-    // ⑧ 守方强制损失（守方后）
-    expect(store.confirmCombatLosses()).toBe(true)
-    expect(store.combatState!.resolution.stage).toBe('defenderOptions')
-
-    // ⑧ 守方选项
-    driveOptions(store, 'defender')
-    expect(store.combatState!.step).toBe('retreat')
-
-    // ⑨ 撤退（9.12）：按各方剩余撤退格数给直线路径
+    // ⑨ 撤退（9.12）：按各方剩余撤退格数给直线路径；双方都无需撤退时撤退屏同样被自动越过
     const requirement = store.combatRetreatRequirement
-    const paths: Record<string, string> = {}
-    if (requirement.attacker > 0) {
-      for (const unit of store.combatAttackers) {
-        paths[unit.instanceId] = straightPath(unit.hex, requirement.attacker)
-          .map((hex) => `${hex.col}.${hex.row}`)
-          .join(',')
+    if (requirement.attacker === 0 && requirement.defender === 0) {
+      expect(store.combatState!.step).toBe('advance')
+    } else {
+      expect(store.combatState!.step).toBe('retreat')
+      const paths: Record<string, string> = {}
+      if (requirement.attacker > 0) {
+        for (const unit of store.combatAttackers) {
+          paths[unit.instanceId] = straightPath(unit.hex, requirement.attacker)
+            .map((hex) => `${hex.col}.${hex.row}`)
+            .join(',')
+        }
       }
-    }
-    if (requirement.defender > 0) {
-      for (const unit of store.battleDefenders) {
-        paths[unit.instanceId] = straightPath(unit.hex, requirement.defender)
-          .map((hex) => `${hex.col}.${hex.row}`)
-          .join(',')
+      if (requirement.defender > 0) {
+        for (const unit of store.battleDefenders) {
+          paths[unit.instanceId] = straightPath(unit.hex, requirement.defender)
+            .map((hex) => `${hex.col}.${hex.row}`)
+            .join(',')
+        }
       }
+      store.combatInputs.retreatPaths = paths
+      expect(store.confirmCombatRetreats()).toBe(true)
     }
-    store.combatInputs.retreatPaths = paths
-    expect(store.confirmCombatRetreats()).toBe(true)
     expect(store.combatState!.step).toBe('advance')
 
     // ⑨ 战后推进（9.12g）＋ 进击（9.13）：本测试不推进
@@ -1616,9 +1612,9 @@ describe('批 12：强制战果损兵后仍能收束（9.10c / 9.11b / 9.12）',
     expect(store.battleDefenders).toHaveLength(0)
     expect(store.deadPile.some((unit) => unit.instanceId === defender.instanceId)).toBe(true)
     expect(store.combatState!.resolution.defender.optionsSkipped).toBe('defenderWipedOut')
-    expect(store.combatState!.step).toBe('retreat')
-    // 9.12：没有单位可撤退 ⇒ 撤退需求为 0（不许用"死人撤退"凑过 9.10a）
+    // 9.12：没有单位可撤退 ⇒ 撤退需求为 0（不许用"死人撤退"凑过 9.10a）；第二批：该空屏被自动越过
     expect(store.combatRetreatRequirement).toEqual({ attacker: 0, defender: 0 })
+    expect(store.combatState!.step).toBe('advance')
     // 领队引用同步：守方 AR 单位也已离场
     expect(store.combatState!.ar?.defenderUnitId).not.toBe(defender.instanceId)
 
@@ -1643,18 +1639,16 @@ describe('批 12：强制战果损兵后仍能收束（9.10c / 9.11b / 9.12）',
     expect(store.confirmCombatLosses()).toBe(true)
     expect(store.combatAttackers).toHaveLength(0)
     expect(store.deadPile.some((unit) => unit.instanceId === attacker.instanceId)).toBe(true)
-    // 9.10c 例 B：攻方在承受选项前被摧毁 ⇒ 不进攻方选项步，直接交守方强制损失
+    // 9.10c 例 B：攻方在承受选项前被摧毁 ⇒ 不进攻方选项步
     expect(store.combatState!.resolution.attacker.optionsSkipped).toBe('attackerWipedOut')
-    expect(store.combatState!.resolution.stage).toBe('defenderLosses')
-    expect(store.combatState!.step).toBe('losses')
+    /*
+     * 第二批：守方 0 点损失 / 0 点选项 / 无撤退对象 ⇒ 三个空屏由 store 自动越过；
+     * 攻方又已无单位可推进（9.12g-D「如果有的话」）⇒ 这一笔直接收束。
+     */
+    expect(store.combatState!.resolution.stage).toBe('done')
+    expect(store.combatState!.finished).toBe(true)
     expect(store.combatState!.ar?.attackerUnitId).not.toBe(attacker.instanceId)
 
-    expect(store.confirmCombatLosses()).toBe(true)
-    // 守方选项为 0 点：仍需确认一次（9.10a），但不得因为攻方名单已空而失败
-    if (store.combatState!.step === 'options') {
-      expect(store.combatState!.resolution.stage).toBe('defenderOptions')
-      expect(store.confirmCombatOptions()).toBe(true)
-    }
     concludeCombat(store)
     expect(store.log.some((entry) => entry.text.includes('跳过攻方的选项'))).toBe(true)
   })
@@ -1672,17 +1666,17 @@ describe('批 12：强制战果损兵后仍能收束（9.10c / 9.11b / 9.12）',
     expect(found).toBeDefined()
     const { store, defender } = found!
 
-    // 攻方强制损失 0 点 ⇒ 选项为 0 点，确认后进入守方强制损失
+    // 攻方强制损失 0 点 ⇒ 选项也为 0 点（第二批：两个空屏由 store 自动确认）⇒ 直接到守方强制损失
     expect(store.confirmCombatLosses()).toBe(true)
-    expect(store.combatState!.resolution.stage).toBe('attackerOptions')
-    expect(store.confirmCombatOptions()).toBe(true)
+    expect(store.combatState!.resolution.stage).toBe('defenderLosses')
     // 守方 L1 ⇒ 唯一一枚被消灭；9.10a 的 2 点选项已无单位可承受 ⇒ 不再进选项页
     expect(store.confirmCombatLosses()).toBe(true)
     expect(store.battleDefenders).toHaveLength(0)
     expect(store.deadPile.some((unit) => unit.instanceId === defender.instanceId)).toBe(true)
     expect(store.combatState!.resolution.defender.optionsSkipped).toBe('defenderWipedOut')
-    expect(store.combatState!.step).toBe('retreat')
+    // 9.12：无撤退对象 ⇒ 该屏自动越过，落在仍可推进的攻方那一页
     expect(store.combatRetreatRequirement).toEqual({ attacker: 0, defender: 0 })
+    expect(store.combatState!.step).toBe('advance')
     expect(store.combatState!.ar?.defenderUnitId).not.toBe(defender.instanceId)
 
     concludeCombat(store)

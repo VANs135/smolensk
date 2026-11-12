@@ -222,7 +222,10 @@ function resetPosition(): void {
       </button>
     </header>
     <div class="dock__body">
-      <p v-if="mapView.sessionStep === null" class="dock__done">本环节已完成。</p>
+      <!--
+        用户 2026-11-12：自动步（9.8 / 9.9）期间没有待决事项，`sessionStep` 为 null——
+        此时**不要**回落成任何"流程结束"文案。会话真要收束时会自行卸载。
+      -->
       <slot />
     </div>
   </div>
@@ -301,10 +304,5 @@ function resetPosition(): void {
   padding: var(--space-3);
   min-height: 0;
   overscroll-behavior: contain;
-}
-
-.dock__done {
-  margin: 0;
-  color: var(--color-muted);
 }
 </style>

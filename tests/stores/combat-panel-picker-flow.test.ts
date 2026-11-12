@@ -244,24 +244,27 @@ function driveToAdvanceStep(store: ReturnType<typeof newStore>) {
   expect(store.confirmCombatLosses()).toBe(true)
   if (store.combatState?.step === 'options') driveOptions(store, 'defender')
 
-  const requirement = store.combatRetreatRequirement
-  const paths: Record<string, string> = {}
-  if (requirement.attacker > 0) {
-    for (const unit of store.combatAttackers) {
-      paths[unit.instanceId] = straightPath(unit.hex, requirement.attacker)
-        .map((hex) => `${hex.col}.${hex.row}`)
-        .join(',')
+  // 第二批：0 点选项 / 无人需要撤退 ⇒ 结算里自动确认。只有仍停在撤退步时才手点确认。
+  if (store.combatState?.step === 'retreat') {
+    const requirement = store.combatRetreatRequirement
+    const paths: Record<string, string> = {}
+    if (requirement.attacker > 0) {
+      for (const unit of store.combatAttackers) {
+        paths[unit.instanceId] = straightPath(unit.hex, requirement.attacker)
+          .map((hex) => `${hex.col}.${hex.row}`)
+          .join(',')
+      }
     }
-  }
-  if (requirement.defender > 0) {
-    for (const unit of store.battleDefenders) {
-      paths[unit.instanceId] = straightPath(unit.hex, requirement.defender)
-        .map((hex) => `${hex.col}.${hex.row}`)
-        .join(',')
+    if (requirement.defender > 0) {
+      for (const unit of store.battleDefenders) {
+        paths[unit.instanceId] = straightPath(unit.hex, requirement.defender)
+          .map((hex) => `${hex.col}.${hex.row}`)
+          .join(',')
+      }
     }
+    store.combatInputs.retreatPaths = paths
+    expect(store.confirmCombatRetreats()).toBe(true)
   }
-  store.combatInputs.retreatPaths = paths
-  expect(store.confirmCombatRetreats()).toBe(true)
   expect(store.combatState?.step).toBe('advance')
 }
 
@@ -431,25 +434,22 @@ describe('B14c：战斗面板的替换（源码守卫）', () => {
   })
 
   /*
-   * ★ 契约变更（批 F·E4，2026-10-24）：**推进入口唯一** ⇒ 推进的逐单位勾选从本面板
-   *   收口到**地图小窗**（`MapActionPopover`），本面板的推进块改为**只读**。
-   *   修前本例钉 `@pick="toggleAdvanceUnit($event)"` 在面板里；现改为钉「面板不再挂这个入口，
-   *   但能力没丢——勾选动作上移到 store、由小窗调用」。
-   *   9.12g-D 的「由玩家选择**哪些**单位推进」是规则要求，故只准搬、**不准删**。
+   * ★ 契约反转（用户 2026-11-12 第二批）：**推进入口唯一** ⇒ 逐单位勾选与确认从地图小窗
+   *   收回 `CombatPanel`（推进就是在面板里一屏一决策）。9.12g-D 的「由玩家选择哪些单位推进」
+   *   是规则要求，故只准搬、**不准删**。
    */
-  it('批 F·E4：推进勾选**唯一入口在地图小窗**（面板只读，但能力未丢）', () => {
-    expect(panel).not.toContain('@pick="toggleAdvanceUnit($event)"')
+  it('批 F·E4（反转）：推进勾选与确认的唯一入口在战斗面板', () => {
+    expect(panel).toContain('workbench.toggleAdvanceUnit(')
+    expect(panel).toContain('@click="workbench.confirmCombatAdvance()"')
     expect(panel).toContain('workbench.combatAdvanceChoices')
-    // 面板只展示、不含推进的确认按钮
-    expect(panel).not.toContain('@click="workbench.confirmCombatAdvance()"')
 
     const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
-    // 小窗里逐单位勾选直连 store（灰显者点不动 ⇒ 9.12g-A / 9.12b 由 store 给原因）
-    expect(popover).toContain('workbench.combatAdvanceChoices')
-    expect(popover).toContain('workbench.toggleAdvanceUnit(')
-    expect(popover).toContain(':disabled="choice.disabledReason !== null"')
+    // 小窗不再承载推进：不列候选、不勾选、不确认
+    expect(popover).not.toContain('workbench.combatAdvanceChoices')
+    expect(popover).not.toContain('workbench.toggleAdvanceUnit(')
+    expect(popover).not.toContain('workbench.confirmCombatAdvance()')
 
-    // 勾选动作上移到 store（面板与小窗共用一份，不各写一遍）
+    // 勾选动作仍在 store（面板与小窗共用一份，不各写一遍）
     const store = readFileSync('src/stores/workbench.ts', 'utf8')
     expect(store).toContain('function toggleAdvanceUnit(')
   })
@@ -568,10 +568,13 @@ describe('B20：撤退落点在地图上点格（9.12）', () => {
     expect(store.rollCombatSurprise()).toBe(true)
     if (store.combatAwaitingShiftDie) expect(store.rollCombatShiftDie()).toBe(true)
     expect(store.rollCombatDice()).toBe(true)
-    expect(store.confirmCombatLosses()).toBe(true)
-    // 批 12：被全灭的一方不再进选项步（9.10a 无承受者）⇒ 只在仍停在选项步时驱动
-    if (store.combatState?.step === 'options') driveOptionsAsRetreat(store)
-    expect(store.confirmCombatLosses()).toBe(true)
+    /*
+     * ★ 第二批：0 点数 / 0 选项 / 无撤退的**被动步**现在由 store 自动确认（`settlePassiveCombatSteps`），
+     *   掷骰后可能已经越过其中的若干步 ⇒ 每次确认前都先看是否仍停在该步，不再假定步序需要逐踩。
+     */
+    if (store.combatState?.step === 'losses') expect(store.confirmCombatLosses()).toBe(true)
+    while (store.combatState?.step === 'options') driveOptionsAsRetreat(store)
+    if (store.combatState?.step === 'losses') expect(store.confirmCombatLosses()).toBe(true)
     if (store.combatState?.step === 'options') driveOptionsAsRetreat(store)
     expect(store.combatState?.step).toBe('retreat')
   }

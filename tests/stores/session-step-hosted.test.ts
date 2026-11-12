@@ -31,11 +31,13 @@ describe('宿主会话：无待决 ≠ 全量渲染', () => {
   })
 })
 
-describe('游戏桌 dock：无待决时给完成态，不留空窗', () => {
-  it('★ dock 有「本环节已完成」分支', () => {
+describe('游戏桌 dock：自动步无待决不误报完成态', () => {
+  it('★ 自动步（sessionStep 为 null）时 dock 不再回落成「本环节已完成」', () => {
     const dock = readFileSync('src/components/map/MapDock.vue', 'utf8')
-    expect(dock).toContain('sessionStep === null')
-    expect(dock).toContain('本环节已完成')
+    // 用户 2026-11-12：9.8/9.9 自动步期间 sessionStep 为 null，回落"已完成"会让人以为流程结束
+    expect(dock).not.toContain('本环节已完成')
+    // 会话真要收束时靠卸载，而不是靠这句文案
+    expect(dock).toContain('<slot />')
   })
 })
 

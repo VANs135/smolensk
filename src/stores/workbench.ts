@@ -10891,6 +10891,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     // 9.9：战斗骰
     if (combatState.value?.step === 'battleDice' && !rollCombatDice()) return false
+    // 零点数的损失 / 选项、无对象的撤退 ⇒ 不停在只有一个「确认」的空屏上
+    settlePassiveCombatSteps()
     return true
   }
 
@@ -11074,6 +11076,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         optionsSkipped: record.optionsSkipped ?? null,
       },
     })
+    // 零损失的这一方不停屏；继续把下一方的零点数步一并跳掉
+    settlePassiveCombatSteps()
     return true
   }
 
@@ -11189,6 +11193,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     combatInputs.value.optionLossAllocation = {}
     combatInputs.value.ignoreOptions = false
     resetOptionDraft()
+    // 下一方若也是 0 点选项 ⇒ 不停屏；撤退也一样
+    settlePassiveCombatSteps()
     return true
   }
 
@@ -11610,6 +11616,33 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     if (settleOverrunAdvanceIfRequired()) return true
     return true
+  }
+
+  /**
+   * 跳过没有决策的结算屏（用户 2026-11-12 第二批）
+   *
+   * 9.11 的损失点数为 0、9.10a 的选项点数为 0、9.12 的这一方没有撤退对象时，
+   * 屏上只剩一个「确认」按钮 —— 这类步**自动确认**，不再让玩家空点一次。
+   * 只连调既有的 confirm 函数，不改任何引擎判定；最多 8 跳，防止异常状态成环。
+   */
+  function settlePassiveCombatSteps(): void {
+    for (let hop = 0; hop < 8; hop += 1) {
+      const state = combatState.value
+      if (state === null || state.finished === true) return
+      if (state.step === 'losses' && (combatRequirement.value?.losses ?? 0) === 0) {
+        if (!confirmCombatLosses()) return
+        continue
+      }
+      if (state.step === 'options' && (combatRequirement.value?.options ?? 0) === 0) {
+        if (!confirmCombatOptions()) return
+        continue
+      }
+      if (state.step === 'retreat' && combatRetreatPlans.value.length === 0) {
+        if (!confirmCombatRetreats()) return
+        continue
+      }
+      return
+    }
   }
 
   /** C6 第 9 步：战后推进与进击标记（9.12g / 9.13） */

@@ -320,27 +320,36 @@ describe('Ⓕ 9.2 九步流程端到端（9.1 → 9.12g）', () => {
     expect(store.confirmCombatLosses()).toBe(true)
     expect(store.combatState!.resolution.stage).toBe('attackerOptions')
     driveOptions(store, 'attacker')
-    expect(store.combatState!.resolution.stage).toBe('defenderLosses')
-    expect(store.confirmCombatLosses()).toBe(true)
+    /*
+     * 第二批：0 点数的强制损失屏不再停屏（`settlePassiveCombatSteps`）⇒ 攻方选项结清后
+     * 若守方无需承受军力，已直接落在守方选项；仍需承受时才停在守方损失屏。
+     */
+    if (store.combatState!.resolution.stage === 'defenderLosses') {
+      expect(store.confirmCombatLosses()).toBe(true)
+    }
     expect(store.combatState!.resolution.stage).toBe('defenderOptions')
     driveOptions(store, 'defender')
-    expect(store.combatState!.step).toBe('retreat')
 
-    // 9.12：撤退（按需求给直线路径）
+    // 9.12：撤退（按需求给直线路径）；双方都无需撤退时撤退屏同样被自动越过
     const requirement = store.combatRetreatRequirement
-    const paths: Record<string, string> = {}
-    if (requirement.attacker > 0)
-      for (const unit of store.combatAttackers)
-        paths[unit.instanceId] = straightPath(unit.hex, requirement.attacker)
-          .map((hex) => label(hex))
-          .join(',')
-    if (requirement.defender > 0)
-      for (const unit of store.battleDefenders)
-        paths[unit.instanceId] = straightPath(unit.hex, requirement.defender)
-          .map((hex) => label(hex))
-          .join(',')
-    store.combatInputs.retreatPaths = paths
-    expect(store.confirmCombatRetreats()).toBe(true)
+    if (requirement.attacker === 0 && requirement.defender === 0) {
+      expect(store.combatState!.step).toBe('advance')
+    } else {
+      expect(store.combatState!.step).toBe('retreat')
+      const paths: Record<string, string> = {}
+      if (requirement.attacker > 0)
+        for (const unit of store.combatAttackers)
+          paths[unit.instanceId] = straightPath(unit.hex, requirement.attacker)
+            .map((hex) => label(hex))
+            .join(',')
+      if (requirement.defender > 0)
+        for (const unit of store.battleDefenders)
+          paths[unit.instanceId] = straightPath(unit.hex, requirement.defender)
+            .map((hex) => label(hex))
+            .join(',')
+      store.combatInputs.retreatPaths = paths
+      expect(store.confirmCombatRetreats()).toBe(true)
+    }
     expect(store.combatState!.step).toBe('advance')
 
     // 9.12g：战后推进（本测试不推进）

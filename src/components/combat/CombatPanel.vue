@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
@@ -91,6 +91,41 @@ function onStackTerrainChange(key: string, value: string): void {
     [key]: { kind: kind === 'hexside' ? 'hexside' : 'hex', terrain: terrain ?? '' },
   }
 }
+
+/** 9.4c：守方地形未点选时按候选第一项显示为"已选"（引擎落盘时同样取默认） */
+function isDefenderTerrain(name: string): boolean {
+  const chosen = workbench.combatInputs.defenderTerrain
+  return chosen === '' ? workbench.combatDefenderTerrainOptions[0] === name : chosen === name
+}
+
+/** 9.12g：可推进的单位（不可推进的只报数，不摆灰按钮） */
+const advanceSelectable = computed(() =>
+  workbench.combatAdvanceChoices.filter((choice) => choice.disabledReason === null),
+)
+const advanceBlockedCount = computed(
+  () => workbench.combatAdvanceChoices.filter((choice) => choice.disabledReason !== null).length,
+)
+/** 有选中且防御格已空 ⇒ 推进；否则就是按 9.13 结束（不推进） */
+const advanceButtonLabel = computed(() =>
+  workbench.combatDefendingHexCleared && workbench.combatInputs.advanceUnitIds.length > 0
+    ? '推进并结束（9.12g / 9.13）'
+    : '结束战斗（不推进）',
+)
+
+/**
+ * 进入推进步时把"可推进者"默认全选（9.12g-D：拥有者可选哪些，本批不强迫玩家先点地图）。
+ * 取消其中几枚就在面板上点一下；全部取消＝按 9.13 结束（不推进）。不写日志、不动引擎。
+ */
+watch(
+  () => state.value?.step === 'advance' && state.value?.finished !== true,
+  (inAdvance) => {
+    if (!inAdvance || workbench.combatAdvanceHex === null) return
+    if (workbench.combatInputs.advanceUnitIds.length > 0) return
+    const ids = advanceSelectable.value.map((choice) => choice.unit.instanceId)
+    if (ids.length > 0) workbench.combatInputs.advanceUnitIds = ids
+  },
+  { immediate: true },
+)
 
 /* ── 9.12 撤退：落点由**在地图上点格**选定（用户口径 2026-09-16） ──
  *
@@ -350,37 +385,39 @@ const defenderArItems = computed(() =>
           攻方每个攻击堆叠可选「防御格内地形」或「所穿越的格边地形」（不累计）；守方只能选防御格内地形，并决定战斗表横行。
         </RuleTip>
         <div v-for="stack in workbench.combatStackTerrainOptions" :key="stack.key" class="row">
-          <label class="field">
-            攻方堆叠 {{ stack.label }}
-            <select
-              class="select"
-              :value="stackChoiceValue(stack.key)"
-              @change="onStackTerrainChange(stack.key, ($event.target as HTMLSelectElement).value)"
-            >
-              <option value="">沿用守方格地形</option>
-              <option
-                v-for="option in stack.options"
-                :key="`${option.kind}|${option.terrain}`"
-                :value="`${option.kind}|${option.terrain}`"
-              >
-                {{ option.kind === 'hex' ? '格内' : '格边' }}：{{ option.terrain }}
-              </option>
-            </select>
-          </label>
+          <span class="num">攻方堆叠 {{ stack.label }}</span>
+          <BaseButton
+            size="sm"
+            :variant="stackChoiceValue(stack.key) === '' ? 'secondary' : 'ghost'"
+            @click="onStackTerrainChange(stack.key, '')"
+          >
+            沿用守方
+          </BaseButton>
+          <BaseButton
+            v-for="option in stack.options"
+            :key="`${option.kind}|${option.terrain}`"
+            size="sm"
+            :variant="
+              stackChoiceValue(stack.key) === `${option.kind}|${option.terrain}`
+                ? 'secondary'
+                : 'ghost'
+            "
+            @click="onStackTerrainChange(stack.key, `${option.kind}|${option.terrain}`)"
+          >
+            {{ option.kind === 'hex' ? '格内' : '格边' }}：{{ option.terrain }}
+          </BaseButton>
         </div>
         <div class="row">
-          <label class="field">
-            守方防御地形
-            <select v-model="workbench.combatInputs.defenderTerrain" class="select">
-              <option
-                v-for="name in workbench.combatDefenderTerrainOptions"
-                :key="name"
-                :value="name"
-              >
-                {{ name }}
-              </option>
-            </select>
-          </label>
+          <span class="num">守方防御地形</span>
+          <BaseButton
+            v-for="name in workbench.combatDefenderTerrainOptions"
+            :key="name"
+            size="sm"
+            :variant="isDefenderTerrain(name) ? 'secondary' : 'ghost'"
+            @click="workbench.combatInputs.defenderTerrain = name"
+          >
+            {{ name }}
+          </BaseButton>
         </div>
         <div class="row">
           <!--
@@ -765,25 +802,28 @@ const defenderArItems = computed(() =>
           非突袭、攻方把全部选项选为军力损失等条件。
         </RuleTip>
         <!--
-            批 F·E4：**推进入口唯一** ⇒ 本面板的推进块改为**只读**，勾选与确认都在
-            **地图上的推进格小窗**（`MapActionPopover`）里做（规则书里推进的对象就是那个格）。
-            9.12g-D 的逐单位勾选因此没有丢失，只是换到了地图上。
-          -->
-        <p class="muted">勾选与确认请点地图上高亮的推进格（就近小窗）；突袭由系统自动收束。</p>
-        <ul class="list">
-          <li
-            v-for="choice in workbench.combatAdvanceChoices"
+          9.12g-D：「由拥有者玩家选择哪些攻击单位进行推进（如果有的话）」
+          ⇒ 逐单位勾选在本面板（唯一入口）；地图绿格仍是"点该格＝全选可推进者"的快捷方式。
+        -->
+        <div v-if="advanceSelectable.length > 0" class="row">
+          <BaseButton
+            v-for="choice in advanceSelectable"
             :key="choice.unit.instanceId"
-            class="num"
+            :variant="choice.selected ? 'secondary' : 'ghost'"
+            size="sm"
+            @click="workbench.toggleAdvanceUnit(choice.unit.instanceId)"
           >
-            {{ choice.unit.name }}（军力 {{ choice.unit.steps }}）——
-            {{ choice.disabledReason ?? (choice.selected ? '已选推进' : '可推进') }}
-          </li>
-        </ul>
-        <p v-if="state.finished" class="ok">
-          <BaseTag kind="success">战斗结束</BaseTag>
-          9.2 九步流程已走完。
+            {{ choice.selected ? '✓ ' : '' }}{{ choice.unit.name }}
+          </BaseButton>
+        </div>
+        <p v-if="advanceBlockedCount > 0" class="muted">
+          另有 {{ advanceBlockedCount }} 枚不能推进（9.12g-A 未付补给 / 不可移动）。
         </p>
+        <div class="row">
+          <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatAdvance()">
+            {{ advanceButtonLabel }}
+          </BaseButton>
+        </div>
       </SessionStep>
 
       <!-- U1-b：战果与复核是回执（非待决），折叠后备查 -->
