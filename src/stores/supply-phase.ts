@@ -193,8 +193,16 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
         supplyPhaseInputs.value.availableT > 0
           ? Math.min(supplyPhaseInputs.value.availableT, supplyPhaseAvailableCap.value)
           : supplyPhaseAvailableCap.value,
-      // 12.6c 游戏说明：吃图上补给**永不强迫** ⇒ 逐单位的自愿选择
-      eatOffTheMap: (unitId) => supplyPhaseInputs.value.eatOffTheMap[unitId] === true,
+      /*
+       * 12.6c 游戏说明：吃图上补给**永不强迫** ⇒ 逐单位的自愿选择。
+       * 21.10b × 12.6c（F6）：本回合已被 **Forage** 覆盖的单位不再满足「no trace supply
+       * is available」的前提，即使输入里勾了也不得再喂。只看 Forage 专属标记
+       * `foragedTurn`，不拿 `sustainedBySpecialSupplyTurn` 当门槛——后者也含 12.10e
+       * 部队储备恢复，那条与 12.6c 可以先后并用（既有 D 段用例钉住）。
+       */
+      eatOffTheMap: (unitId) =>
+        supplyPhaseInputs.value.eatOffTheMap[unitId] === true &&
+        mine.some((unit) => unit.instanceId === unitId && (unit.foragedTurn ?? null) !== turn()),
       // 12.10e-B：「只要是低下或耗尽单位**可拖取，或可投递 SP 至这些单位**的补给站，均需要按规则去恢复」
       // ⇒ 两半都算（第五批批 B 切片 3 起；修前只判直拖）。编内卡车上的 SP 例外由
       // `deliverableDumpsFor` 的 13.2g-B 资格校验承担。

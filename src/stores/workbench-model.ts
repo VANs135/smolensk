@@ -276,6 +276,15 @@ export interface ConsoleUnit {
    * 这三种方式**不构成**追溯补给，故那一回合**不算**"被切断的第一个回合"。
    */
   sustainedBySpecialSupplyTurn: number | null
+  /**
+   * 21.10b：该单位本回合被 Forage 覆盖的回合（用户 2026-11-13 定稿）
+   *
+   * - HQ 用它做同回合幂等（`foragedTurn === turn` 时不再出现 Forage 选项）；
+   * - **受益单位也记**：12.6c 的喂食计划据此把本回合已被 Forage 救过的单位排除（F6）；
+   * - **不清 `cutSinceTurn`**——那一字段是「本次连续断补」的锚点，清掉会让下一回合仍断补的
+   *   HQ 被重记为"第一回合"而反复 Forage。
+   */
+  foragedTurn?: number | null
   /** 13.8a：是否具备工程能力（5.10e 与工程类动作判定用） */
   engineerCapable: boolean
   /** 6.1a/6.1b：本阶段已消耗的 MP（MA 是一阶段的**总额度**，不是单步额度） */

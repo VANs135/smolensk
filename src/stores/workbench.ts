@@ -474,6 +474,9 @@ import {
   isExtenderUnit,
   isFighterAircraft,
   isHqUnit,
+  // 21.10b：Forage 的投递距离/机动类型一律读印值（不手填）
+  throwRangeMpOf,
+  throwMobilityOf,
   // B14b：13.4a 预备/战略模式判据（参炸单位阵列的灰显原因与引擎请求共用一处）
   isInReserveOrStrat,
   isGroundBarrageEligible,
@@ -24178,6 +24181,146 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     initialSupplyCacheHoldings(scenarioSetup.value?.supplyCache),
   )
 
+  /** 21.10b：Forage 可选 HQ（与 12.6c 同面板两选项；本回合不可用则整项不出现） */
+  const forageOptions = computed<
+    { hqId: string; hex: HexRef; throwRangeMp: number; coveredUnitIds: string[] }[]
+  >(() => {
+    if (phase.value !== 'supply') return []
+    const side = activeSide.value
+    if (supplyCacheHoldings.value[side] <= 0) return []
+    const options: { hqId: string; hex: HexRef; throwRangeMp: number; coveredUnitIds: string[] }[] =
+      []
+    for (const hq of units.value) {
+      if (hq.side !== side || !isHqUnit(hq) || hq.destroyedByEnemy) continue
+      if (hq.cutSinceTurn !== turn.value) continue
+      if ((hq.foragedTurn ?? null) === turn.value) continue
+      const throwRangeMp = throwRangeMpOf(hq)
+      if (throwRangeMp <= 0) continue
+      const mobility = throwMobilityOf(hq)
+      const coveredUnitIds = [hq.instanceId]
+      for (const unit of units.value) {
+        if (unit.instanceId === hq.instanceId) continue
+        if (unit.side !== side || !unit.isCombat || unit.destroyedByEnemy) continue
+        const reach = countSupplyDistanceToUnitViaTable(supplyFacts.value, {
+          from: hq.hex,
+          unitHex: unit.hex,
+          side,
+          mobility,
+          maxMp: throwRangeMp,
+        })
+        if (reach.ok) coveredUnitIds.push(unit.instanceId)
+      }
+      options.push({ hqId: hq.instanceId, hex: hq.hex, throwRangeMp, coveredUnitIds })
+    }
+    return options
+  })
+
+  /** 21.10b：本阶段内可撤销的 Forage 凭据（跨阶段作废；含受益单位的逐项快照） */
+  const lastForageGrant = ref<{
+    side: Side
+    hqId: string
+    turn: number
+    unitIds: string[]
+    previous: Record<
+      string,
+      { sustained: number | null; cut: number | null; foraged: number | null }
+    >
+  } | null>(null)
+
+  /**
+   * 21.10b：花 1 枚补给缓存执行 Forage（用户 2026-11-13 定稿）
+   *
+   * - 覆盖 HQ 自身 + 投递距离内的己方战斗单位，全部写续命标（本回合不算断补）；
+   * - **HQ 的 `cutSinceTurn` 保留**：它是「本次连续断补」的锚点，清掉会让下一回合仍断补的
+   *   HQ 被重记成"第一回合"而反复 Forage；
+   * - 用完一枚即消失；补给阶段内、计划未落盘前可 `undoSupplyCacheUse()` 撤销。
+   */
+  function useForageNow(hqId: string): boolean {
+    if (phase.value !== 'supply') {
+      exclusiveError.value = { rule: '21.10', reason: 'forageOnlyInSupplyPhase' }
+      return false
+    }
+    const option = forageOptions.value.find((item) => item.hqId === hqId)
+    if (option === undefined) {
+      exclusiveError.value = { rule: '21.10', reason: 'forageNotAvailable' }
+      return false
+    }
+    const hq = units.value.find((unit) => unit.instanceId === hqId)
+    if (hq === undefined) return false
+    // 撤销快照：逐单位记下使用前的续命标、断补锚点与 Forage 标记
+    const previous: Record<
+      string,
+      { sustained: number | null; cut: number | null; foraged: number | null }
+    > = {}
+    for (const unitId of option.coveredUnitIds) {
+      const unit = units.value.find((item) => item.instanceId === unitId)
+      if (unit === undefined) continue
+      previous[unitId] = {
+        sustained: unit.sustainedBySpecialSupplyTurn ?? null,
+        cut: unit.cutSinceTurn ?? null,
+        foraged: unit.foragedTurn ?? null,
+      }
+    }
+    supplyCacheHoldings.value = {
+      ...supplyCacheHoldings.value,
+      [activeSide.value]: supplyCacheHoldings.value[activeSide.value] - 1,
+    }
+    /*
+     * HQ 自身：**只写续命标、不动 `cutSinceTurn`**（见函数注释）⇒ 不能走
+     * `markSustainedBySpecialSupply`（它会把 `cutSinceTurn === turn` 清成 null）。
+     * Forage 标记写到**全部受益单位**上：12.6c 的喂食计划据此排除（F6）。
+     */
+    for (const unitId of option.coveredUnitIds) {
+      const unit = units.value.find((item) => item.instanceId === unitId)
+      if (unit !== undefined) unit.foragedTurn = turn.value
+    }
+    hq.sustainedBySpecialSupplyTurn = turn.value
+    markSustainedBySpecialSupply(option.coveredUnitIds.filter((id) => id !== hqId))
+    lastForageGrant.value = {
+      side: activeSide.value,
+      hqId,
+      turn: turn.value,
+      unitIds: [...option.coveredUnitIds],
+      previous,
+    }
+    // F6：重算补给阶段计划——受益单位已有续命标，12.6c 喂食候选会排除它们
+    if (supplyPhasePlan.value !== null) planSupplyPhaseNow()
+    pushLog(
+      'success',
+      `21.10b：${hexLabel(hq.hex)} 的 HQ 使用 Forage（1 枚补给缓存）⇒ 覆盖 ${option.coveredUnitIds.length} 个单位` +
+        `（含 HQ 自身；投递距离 ${option.throwRangeMp}；本回合视为已吃图内补给）`,
+      '21.10',
+    )
+    lastSupplyCacheUse.value = 'Forage'
+    return true
+  }
+
+  function undoSupplyCacheUse(): boolean {
+    const grant = lastForageGrant.value
+    if (grant === null || grant.side !== activeSide.value) return false
+    if (phase.value !== 'supply' || turn.value !== grant.turn) return false
+    // 「补给阶段内、尚未推进」：供养一旦结算就不可再回退（12.10/21.10 的 spend 已生效）
+    if (supplyFeedingSettled.value) return false
+    const hq = units.value.find((unit) => unit.instanceId === grant.hqId)
+    if (hq === undefined) return false
+    supplyCacheHoldings.value = {
+      ...supplyCacheHoldings.value,
+      [activeSide.value]: supplyCacheHoldings.value[activeSide.value] + 1,
+    }
+    for (const unitId of grant.unitIds) {
+      const unit = units.value.find((item) => item.instanceId === unitId)
+      const snapshot = grant.previous[unitId]
+      if (unit === undefined || snapshot === undefined) continue
+      unit.sustainedBySpecialSupplyTurn = snapshot.sustained
+      unit.cutSinceTurn = snapshot.cut
+      unit.foragedTurn = snapshot.foraged
+    }
+    lastForageGrant.value = null
+    if (supplyPhasePlan.value !== null) planSupplyPhaseNow()
+    pushLog('info', '21.10b：撤销本阶段内的 Forage，补给缓存退回 1 枚', '21.10')
+    return true
+  }
+
   /** 1.7 / 21.10：补给缓存的用法输入（界面绑定） */
   const supplyCacheInputs = ref({
     use: 'forage' as SupplyCacheUse,
@@ -27369,6 +27512,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setMultiUnitFormationNow,
     addSupplyCacheNow,
     spendSupplyCacheNow,
+    // 21.10b：Forage 入口（与 12.6c 同面板）、执行与阶段内撤销
+    forageOptions,
+    useForageNow,
+    undoSupplyCacheUse,
     setConstructionMarkersNow,
     useConstructionMarkerNow,
     toggleAxisCityControlNow,
