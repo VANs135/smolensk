@@ -1,4 +1,5 @@
 import { setupSourceOf, type SetupSource } from './setup-source'
+import { setupEffectOf } from './setup-effects'
 import {
   aircraft,
   markers,
@@ -1353,7 +1354,7 @@ export interface SetupFlowStep {
 export function setupFlowFor(scenarioId: string): readonly SetupFlowStep[] {
   const scenario = scenarios.scenarios.find((item) => item.id === scenarioId)
   const source = setupSourceOf(scenarioId)
-  const draw = scenarios.scenarios.find((item) => item.id === source.source)?.setup.formationDraw
+  const draw = setupEffectOf(source.source, 'formationDraw')
   const trucks = scenario?.setup.organicTrucks
   const requiresGroup = requiresPanzerGroupSpAssignment(scenarioId)
   const views = setupEntryViews(scenarioId)
@@ -1377,9 +1378,9 @@ export function setupFlowFor(scenarioId: string): readonly SetupFlowStep[] {
       id: 'formationDraw',
       label: '编制抽取（编队抽签）',
       rule: 'ch10/ch11',
-      applicable: draw !== undefined,
+      applicable: draw !== null,
       detail:
-        draw === undefined
+        draw === null
           ? `剧本 ${scenarioId} 的剧本页无编队抽签条目 ⇒ 跳过（数据来源：剧本 ${source.source}）`
           : `入杯 ${draw.pool} 个编队：${draw.groups.map((group) => `${group.label}×${group.count}`).join('；')}`,
     },

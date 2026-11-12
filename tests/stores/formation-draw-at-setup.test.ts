@@ -2,7 +2,7 @@ import { confirmSetupForStart } from '../flows/setup-harness'
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
-import { scenarios } from '@/data'
+import { setupEffectsOf } from '@/engine/rules/setup-effects'
 import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -39,9 +39,7 @@ function boot(scenarioId = '1') {
 
 /** 剧本 1 的抽签组（取自初设源剧本） */
 function groupsOf(scenarioId = '1') {
-  return (
-    scenarios.scenarios.find((item) => item.id === scenarioId)?.setup.formationDraw?.groups ?? []
-  )
+  return setupEffectsOf(scenarioId).find((effect) => effect.kind === 'formationDraw')?.groups ?? []
 }
 
 describe('§6-A：编队抽签在初设完成后执行一次（ch10 / ch11）', () => {

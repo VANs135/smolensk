@@ -88,6 +88,41 @@ export const FormationDrawSchema = z
 export type FormationDraw = z.infer<typeof FormationDrawSchema>
 
 /**
+ * 初设强制效果（规格 `docs/2026-11-10-剧本级初设强制效果-规格.md` §2）
+ *
+ * 只登记**剧本数据里真实声明过**的 kind：当前数据只有 `formationDraw` 一种
+ * （剧本 1/3/5，剧本 2/4/6 经 `sharedSetupWith` 取源）。`applyStatus`（剧本 1 混乱）
+ * 因原文缺失未落库，故此处不建空分支——新增 kind 时先有数据、再扩 schema 与注册表。
+ *
+ * 约束：`timing` 只允许 `afterSetupConfirm`、`once` 只允许 `perGame`（本批口径）；
+ * `pool === poolFormations.length`（池规模与冻结名单必须对账）。
+ */
+export const FormationDrawEffectSchema = FormationDrawSchema.extend({
+  kind: z.literal('formationDraw'),
+  /** 稳定 id（写进台账 / 日志） */
+  id: z.string().min(1),
+  /** 执行时机：初设确认后 */
+  timing: z.literal('afterSetupConfirm'),
+  /** 每局只执行一次 */
+  once: z.literal('perGame'),
+  /** 条款出处（如 'ch10 / 剧本页'） */
+  rule: z.string().min(1),
+  /** 入杯名单（效果里必填：抽签池无安全默认） */
+  poolFormations: z.array(z.string()),
+})
+  .strict()
+  .refine((effect) => effect.pool === effect.poolFormations.length, {
+    message: 'formationDraw.pool 必须等于 poolFormations.length（池规模与冻结名单对账）',
+    path: ['pool'],
+  })
+
+/** 初设效果的联合（当前只有一支；加 `applyStatus` 前必须先有剧本数据） */
+export const SetupEffectSchema = FormationDrawEffectSchema
+
+export type FormationDrawEffect = z.infer<typeof FormationDrawEffectSchema>
+export type SetupEffect = z.infer<typeof SetupEffectSchema>
+
+/**
  * 飞机初设的激活规定（通规 IV Set Up Notes E 的默认 + 剧本页的明文覆盖）
  *
  * 规则出处：
@@ -233,8 +268,27 @@ export const ScenarioSetupSchema = z
     weatherFirstTurnRaw: z.string(),
     /** 编队抽取规则原文（各剧本差异） */
     formationDrawRaw: z.string().optional(),
-    /** 编队抽取参数（结构化；W7 C12 剧本抽取盒） */
-    formationDraw: FormationDrawSchema.optional(),
+    /**
+     * 初设确认后执行的强制效果（规格 §2；数组顺序＝执行顺序）
+     *
+     * 编队抽签已由 `formationDraw` 迁入本字段（数据搬家，字段不变）；缺失＝该剧本无强制效果。
+     * `id` 在剧本内唯一（写进台账/日志，重放时按 id 判「已执行」）。
+     */
+    effects: z
+      .array(SetupEffectSchema)
+      .superRefine((effects, ctx) => {
+        const seen = new Set<string>()
+        for (const effect of effects) {
+          if (seen.has(effect.id)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `effects.id 在剧本内必须唯一：${effect.id}`,
+            })
+          }
+          seen.add(effect.id)
+        }
+      })
+      .optional(),
     /** 飞机初设的激活规定（W7 C14；未列入的方按 IV-E 默认全激活） */
     airSetup: AirSetupSchema.optional(),
     /** 地图印刷工事的剧本初始归属（专规 1.3a + 本作裁定） */

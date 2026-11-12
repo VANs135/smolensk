@@ -112,44 +112,51 @@
         },
         "weatherFirstTurnRaw": "Normal Flight on 8 July",
         "formationDrawRaw": "12 个多单位编队标记入杯，抽 4 个沿道路西移 3 格、另 4 个以摩托化团换死亡堆中的侦察营",
-        "formationDraw": {
-          "pool": 12,
-          "poolFrom": "入杯名单见 poolFormations（formations.json 该剧本轴方装甲/摩托化多单位编队，骑兵师不入杯；名单已冻结为剧本数据）",
-          "poolFormations": [
-            "10 Mtr Div",
-            "10 Pz Div",
-            "12 Pz Div",
-            "17 Pz Div",
-            "18 Pz Div",
-            "20 Mtr Div",
-            "20 Pz Div",
-            "29 Mtr Div",
-            "3 Pz Div",
-            "4 Pz Div",
-            "7 Pz Div",
-            "SS-R Mtr Div"
-          ],
-          "groups": [
-            {
-              "kind": "shiftWest",
-              "count": 4,
-              "shiftHexes": 3,
-              "label": "A 组：沿道路西移 3 格",
-              "rule": "ch10 Formation Chit Draw",
-              "effect": "抽中的师必须沿道路向所列位置西移三格（例 11.03 → 9.01）"
-            },
-            {
-              "kind": "mtrAufkSwap",
-              "count": 4,
-              "label": "B 组：摩托化团 ↔ 死亡堆中的侦察营互换",
-              "rule": "ch10 Formation Chit Draw",
-              "effect": "抽中的师让一个 Mtr 团与开局在 Dead Pile 里的 Aufk 营互换（Mtr 进入死亡堆、Aufk 返场）"
-            }
-          ],
-          "reducedCount": 2,
-          "raw": "12 个多单位编队标记入杯，抽 4 个沿道路西移 3 格、另 4 个以摩托化团换死亡堆中的侦察营",
-          "note": "原文未逐条列出被抽中的师：入杯名单＝池成员，抽取结果由抽签决定；'No Counterattack' 选项下 A/B 两组各只抽 2 个（ch10）"
-        },
+        "effects": [
+          {
+            "kind": "formationDraw",
+            "id": "formation-draw",
+            "timing": "afterSetupConfirm",
+            "once": "perGame",
+            "rule": "ch10 Formation Chit Draw / 剧本页",
+            "pool": 12,
+            "poolFrom": "入杯名单见 poolFormations（formations.json 该剧本轴方装甲/摩托化多单位编队，骑兵师不入杯；名单已冻结为剧本数据）",
+            "poolFormations": [
+              "10 Mtr Div",
+              "10 Pz Div",
+              "12 Pz Div",
+              "17 Pz Div",
+              "18 Pz Div",
+              "20 Mtr Div",
+              "20 Pz Div",
+              "29 Mtr Div",
+              "3 Pz Div",
+              "4 Pz Div",
+              "7 Pz Div",
+              "SS-R Mtr Div"
+            ],
+            "groups": [
+              {
+                "kind": "shiftWest",
+                "count": 4,
+                "shiftHexes": 3,
+                "label": "A 组：沿道路西移 3 格",
+                "rule": "ch10 Formation Chit Draw",
+                "effect": "抽中的师必须沿道路向所列位置西移三格（例 11.03 → 9.01）"
+              },
+              {
+                "kind": "mtrAufkSwap",
+                "count": 4,
+                "label": "B 组：摩托化团 ↔ 死亡堆中的侦察营互换",
+                "rule": "ch10 Formation Chit Draw",
+                "effect": "抽中的师让一个 Mtr 团与开局在 Dead Pile 里的 Aufk 营互换（Mtr 进入死亡堆、Aufk 返场）"
+              }
+            ],
+            "reducedCount": 2,
+            "raw": "12 个多单位编队标记入杯，抽 4 个沿道路西移 3 格、另 4 个以摩托化团换死亡堆中的侦察营",
+            "note": "原文未逐条列出被抽中的师：入杯名单＝池成员，抽取结果由抽签决定；'No Counterattack' 选项下 A/B 两组各只抽 2 个（ch10）"
+          }
+        ],
         "airSetup": {
           "axis": {
             "policy": "all_inactive",
@@ -396,44 +403,51 @@
         },
         "weatherFirstTurnRaw": "Normal Flight on 22 July",
         "formationDrawRaw": "14 个师中抽 5 个全部以移动模式初设、另 5 个以摩托化团换侦察营",
-        "formationDraw": {
-          "pool": 14,
-          "poolFrom": "入杯名单见 poolFormations（formations.json 该剧本轴方装甲/摩托化多单位编队，骑兵师不入杯；名单已冻结为剧本数据）",
-          "poolFormations": [
-            "10 Mtr Div",
-            "10 Pz Div",
-            "12 Pz Div",
-            "17 Pz Div",
-            "18 Mtr Div",
-            "18 Pz Div",
-            "19 Pz Div",
-            "20 Mtr Div",
-            "20 Pz Div",
-            "29 Mtr Div",
-            "3 Pz Div",
-            "4 Pz Div",
-            "7 Pz Div",
-            "SS-R Mtr Div"
-          ],
-          "groups": [
-            {
-              "kind": "moveMode",
-              "count": 5,
-              "label": "A 组：全部战斗单位以 Move Mode 初设",
-              "rule": "ch11 Scenario 3/4 随机化（Move-Mode Draw）",
-              "effect": "抽中的 5 个师，其全部战斗单位以 Move Mode 初设（战斗值减半，暴露反击脆弱性）"
-            },
-            {
-              "kind": "mtrAufkSwap",
-              "count": 5,
-              "label": "B 组：摩托化团 ↔ 死亡堆中的侦察营互换",
-              "rule": "ch11 Scenario 3/4 随机化",
-              "effect": "抽中的 5 个师让一个 Mtr 团与 Dead Pile 中的 Aufk 营互换（Mtr 死、Aufk 活）"
-            }
-          ],
-          "raw": "14 个师中抽 5 个全部以移动模式初设、另 5 个以摩托化团换侦察营",
-          "note": "余下 4 个师保持初设原样；本剧本另禁任何单位以 Reserve Mode 初设（ch11）"
-        },
+        "effects": [
+          {
+            "kind": "formationDraw",
+            "id": "formation-draw",
+            "timing": "afterSetupConfirm",
+            "once": "perGame",
+            "rule": "ch11 Scenario 3/4 随机化",
+            "pool": 14,
+            "poolFrom": "入杯名单见 poolFormations（formations.json 该剧本轴方装甲/摩托化多单位编队，骑兵师不入杯；名单已冻结为剧本数据）",
+            "poolFormations": [
+              "10 Mtr Div",
+              "10 Pz Div",
+              "12 Pz Div",
+              "17 Pz Div",
+              "18 Mtr Div",
+              "18 Pz Div",
+              "19 Pz Div",
+              "20 Mtr Div",
+              "20 Pz Div",
+              "29 Mtr Div",
+              "3 Pz Div",
+              "4 Pz Div",
+              "7 Pz Div",
+              "SS-R Mtr Div"
+            ],
+            "groups": [
+              {
+                "kind": "moveMode",
+                "count": 5,
+                "label": "A 组：全部战斗单位以 Move Mode 初设",
+                "rule": "ch11 Scenario 3/4 随机化（Move-Mode Draw）",
+                "effect": "抽中的 5 个师，其全部战斗单位以 Move Mode 初设（战斗值减半，暴露反击脆弱性）"
+              },
+              {
+                "kind": "mtrAufkSwap",
+                "count": 5,
+                "label": "B 组：摩托化团 ↔ 死亡堆中的侦察营互换",
+                "rule": "ch11 Scenario 3/4 随机化",
+                "effect": "抽中的 5 个师让一个 Mtr 团与 Dead Pile 中的 Aufk 营互换（Mtr 死、Aufk 活）"
+              }
+            ],
+            "raw": "14 个师中抽 5 个全部以移动模式初设、另 5 个以摩托化团换侦察营",
+            "note": "余下 4 个师保持初设原样；本剧本另禁任何单位以 Reserve Mode 初设（ch11）"
+          }
+        ],
         "airSetup": {
           "axis": {
             "policy": "half_inactive_round_up",
@@ -712,44 +726,51 @@
         },
         "weatherFirstTurnRaw": "Normal Flight on 8 Aug",
         "formationDrawRaw": "抽 5 个把摩托营放入死亡堆、另 7 个把侦察营放入死亡堆",
-        "formationDraw": {
-          "pool": 14,
-          "poolFrom": "入杯名单见 poolFormations（formations.json 该剧本轴方装甲/摩托化多单位编队，骑兵师不入杯；名单已冻结为剧本数据）",
-          "poolFormations": [
-            "10 Mtr Div",
-            "10 Pz Div",
-            "12 Pz Div",
-            "17 Pz Div",
-            "18 Mtr Div",
-            "18 Pz Div",
-            "19 Pz Div",
-            "20 Mtr Div",
-            "20 Pz Div",
-            "29 Mtr Div",
-            "3 Pz Div",
-            "4 Pz Div",
-            "7 Pz Div",
-            "SS-R Mtr Div"
-          ],
-          "groups": [
-            {
-              "kind": "deadPileKrd",
-              "count": 5,
-              "label": "A 组：摩托化侦察（Krd）营加入死亡堆",
-              "rule": "ch11 Scenario 5/6 随机化（Dead-Pile-Subunit Draw）",
-              "effect": "抽中的 5 个师，其 Krd 营直接加入死亡堆"
-            },
-            {
-              "kind": "deadPileAufk",
-              "count": 7,
-              "label": "B 组：装甲侦察（Aufk）营加入死亡堆",
-              "rule": "ch11 Scenario 5/6 随机化（Dead-Pile-Subunit Draw）",
-              "effect": "抽中的 7 个师，其 Aufk 营直接加入死亡堆"
-            }
-          ],
-          "raw": "抽 5 个把摩托营放入死亡堆、另 7 个把侦察营放入死亡堆",
-          "note": "共 12 个营进入死亡堆（ch11：开局兵力结构被显著重塑）"
-        },
+        "effects": [
+          {
+            "kind": "formationDraw",
+            "id": "formation-draw",
+            "timing": "afterSetupConfirm",
+            "once": "perGame",
+            "rule": "ch11 Scenario 5/6 随机化",
+            "pool": 14,
+            "poolFrom": "入杯名单见 poolFormations（formations.json 该剧本轴方装甲/摩托化多单位编队，骑兵师不入杯；名单已冻结为剧本数据）",
+            "poolFormations": [
+              "10 Mtr Div",
+              "10 Pz Div",
+              "12 Pz Div",
+              "17 Pz Div",
+              "18 Mtr Div",
+              "18 Pz Div",
+              "19 Pz Div",
+              "20 Mtr Div",
+              "20 Pz Div",
+              "29 Mtr Div",
+              "3 Pz Div",
+              "4 Pz Div",
+              "7 Pz Div",
+              "SS-R Mtr Div"
+            ],
+            "groups": [
+              {
+                "kind": "deadPileKrd",
+                "count": 5,
+                "label": "A 组：摩托化侦察（Krd）营加入死亡堆",
+                "rule": "ch11 Scenario 5/6 随机化（Dead-Pile-Subunit Draw）",
+                "effect": "抽中的 5 个师，其 Krd 营直接加入死亡堆"
+              },
+              {
+                "kind": "deadPileAufk",
+                "count": 7,
+                "label": "B 组：装甲侦察（Aufk）营加入死亡堆",
+                "rule": "ch11 Scenario 5/6 随机化（Dead-Pile-Subunit Draw）",
+                "effect": "抽中的 7 个师，其 Aufk 营直接加入死亡堆"
+              }
+            ],
+            "raw": "抽 5 个把摩托营放入死亡堆、另 7 个把侦察营放入死亡堆",
+            "note": "共 12 个营进入死亡堆（ch11：开局兵力结构被显著重塑）"
+          }
+        ],
         "airSetup": {
           "axis": {
             "policy": "half_inactive_round_up",

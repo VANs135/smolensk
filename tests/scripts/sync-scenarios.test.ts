@@ -181,7 +181,7 @@ describe('sync-scenarios 手写块保留', () => {
         setup: {
           railCap: { axis: 1, soviet: 2 },
           formationDrawRaw: '抽 4 个',
-          formationDraw: { draws: ['a'] },
+          effects: [{ kind: 'formationDraw' }],
           airSetup: { axis: 'active' },
           printedHedgehogOwners: { axisOwned: ['23.15'] },
           options: { note: '旧' },
@@ -200,7 +200,7 @@ describe('sync-scenarios 手写块保留', () => {
       existing,
     ) as unknown as MergedOut
 
-    expect(merged.scenarios[0]!.setup.formationDraw).toEqual({ draws: ['a'] })
+    expect(merged.scenarios[0]!.setup.effects).toEqual([{ kind: 'formationDraw' }])
     expect(merged.scenarios[0]!.setup.airSetup).toEqual({ axis: 'active' })
     expect(merged.scenarios[0]!.setup.printedHedgehogOwners).toEqual({ axisOwned: ['23.15'] })
     // options 属"其余原文保留"，同样随既有产物保留
@@ -215,7 +215,7 @@ describe('sync-scenarios 手写块保留', () => {
     expect(Object.keys(merged.scenarios[0]!.setup)).toEqual([
       'railCap',
       'formationDrawRaw',
-      'formationDraw',
+      'effects',
       'airSetup',
       'printedHedgehogOwners',
       'options',
@@ -245,7 +245,7 @@ describe('sync-scenarios 手写块保留', () => {
 
   it('保留清单是可审计的显式常量', () => {
     expect([...HAND_WRITTEN_SETUP_KEYS]).toEqual([
-      'formationDraw',
+      'effects',
       'airSetup',
       'printedHedgehogOwners',
       'convertedAxisRails',

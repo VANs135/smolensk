@@ -42,6 +42,7 @@ import {
   type SetupPlan,
   type SupplyDumpRef,
 } from '@/engine/rules'
+import { runSetupEffects, setupEffectsOf } from '@/engine/rules/setup-effects'
 import { selectMovementTerrain } from '@/engine/rules/terrain'
 import { hexDistance, hexesWithin, isOnMap, sameHex } from '@/engine/hex-geometry'
 import { createId } from '@/shared'
@@ -1810,15 +1811,39 @@ export const useSetupStore = defineStore('setup', () => {
   }
 
   /**
-   * ch10 / ch11：**初设自动抽签**（用户 2026-10-25 口径：「初设里的德军抽取编队放置或替换单位，
-   * 应该放在初设时自动抽取后给玩家初设」）
+   * ch10 / ch11：**初设强制效果**（`setup.effects[]`）的唯一调用方
    *
-   * 判据与落盘全在容器 store（`containers.runSetupDrawsNow`），本处只负责：
-   * 把结论写进本流程的回执与提示，并如实报失败（不静默）。
+   * 注册表、时机与「先整体校验、失败不半执行」在 `engine/rules/setup-effects.ts`
+   * （当前数据只声明 `formationDraw` 一种）；本处把状态层的抽签执行器注入上下文，
+   * 再按效果回执写提示、如实报失败（不静默）。抽签算法仍在 `containers.runSetupDrawsNow`。
    */
   function runSetupDraws(): boolean {
-    const result = containers.runSetupDrawsNow()
-    if (result.ok && result.drawnGroups === 0) return true // 本剧本没有编队抽签 ⇒ 不算错
+    // 对局已开局 ⇒ 不再执行任何初设效果（读档沿用已保存的盘面与记录）
+    if (game.session !== null) {
+      return record({
+        ok: false,
+        rule: 'ch10 / ch11',
+        reason: '对局已开局，不能重新执行初设编队抽取；读档沿用已保存的盘面与记录',
+      })
+    }
+    const effects = setupEffectsOf(scenarioId.value)
+    if (effects.length === 0) return true // 本剧本无初设强制效果
+    const outcome = runSetupEffects(effects, {
+      formationDraw: () => {
+        const draw = containers.runSetupDrawsNow()
+        return {
+          ok: draw.ok,
+          detail: draw.detail,
+          ...(draw.ok ? {} : { reason: draw.detail }),
+          followUps:
+            draw.pendingShift.length === 0
+              ? []
+              : [
+                  `ch10 西移：${draw.pendingShift.join('、')} 的落点＝沿道路从所列位置西移 N 格（ch10 写 3 格，例 11.03 → 9.01）⇒ 在「初设单位 box」的「地面单位与基地」里点一项、再点地图给落点`,
+                ],
+        }
+      },
+    })
     /*
      * ★ 成功时**不覆盖** `lastAction`：紧接着自动初设之后跑，那条回执（棋子数 / SP /
      *   卡车按剧本落账）正是玩家要看的"选剧本后发生了什么"，被抽签结论顶掉就看不见了
@@ -1826,15 +1851,16 @@ export const useSetupStore = defineStore('setup', () => {
      *   抽签结论进 `notes`（面板的「数据缺口与提示」里逐条列出）。
      *   失败则**必须**顶上来写 `lastAction`：规则没落实是玩家该立刻看见的事。
      */
-    notes.value = [...notes.value, result.detail]
-    if (result.pendingShift.length > 0) {
-      notes.value = [
-        ...notes.value,
-        `ch10 西移：${result.pendingShift.join('、')} 的落点＝沿道路从所列位置西移 N 格（ch10 写 3 格，例 11.03 → 9.01）⇒ 在「初设单位 box」的「地面单位与基地」里点一项、再点地图给落点`,
-      ]
+    for (const result of outcome.executed) {
+      notes.value = [...notes.value, result.detail]
+      for (const followUp of result.followUps ?? []) notes.value = [...notes.value, followUp]
     }
-    if (!result.ok) {
-      return record({ ok: false, rule: 'ch10 / ch11', reason: result.detail })
+    if (!outcome.ok) {
+      return record({
+        ok: false,
+        rule: outcome.issues[0]?.rule ?? 'ch10 / ch11',
+        reason: outcome.issues.map((issue) => issue.reason).join('；'),
+      })
     }
     return true
   }

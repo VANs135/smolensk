@@ -2,8 +2,8 @@ import { confirmSetupForStart } from '../flows/setup-harness'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { scenarios } from '@/data'
 import { PANZER_GROUP_OPTION_ITEM } from '@/engine/rules'
+import { setupEffectsOf } from '@/engine/rules/setup-effects'
 import {
   useContainersStore,
   useGameSessionStore,
@@ -119,7 +119,7 @@ describe('W7 C14：开局流程进度与剧本选择', () => {
   it('C14：编制抽取的完成度取自 C12 的剧本抽取盒（ch10：初设完成后执行一次才打勾）', () => {
     setup.selectScenario('1')
     const groups =
-      scenarios.scenarios.find((item) => item.id === '1')?.setup.formationDraw?.groups ?? []
+      setupEffectsOf('1').find((effect) => effect.kind === 'formationDraw')?.groups ?? []
     expect(groups.length).toBeGreaterThan(0)
     // ch10（2026-11-10）：选剧本不再自动抽签 ⇒ 未打勾、名单为空
     expect(setup.stepDone['formationDraw']).toBe(false)

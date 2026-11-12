@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { formations, markers, rulesConstants, scenarios } from '@/data'
+import { setupEffectsOf } from '@/engine/rules/setup-effects'
 import {
   AIR_BOX_RULE,
   BREAKDOWN_BOX_RULE,
@@ -489,7 +490,7 @@ describe('W7 C12：剧本抽取盒（编队抽签）', () => {
 
   it('U21：入杯名单冻结在剧本数据里，与 formations.json 派生口径逐条一致', () => {
     const declaredOf = (id: string) =>
-      scenarios.scenarios.find((item) => item.id === id)?.setup.formationDraw?.poolFormations
+      setupEffectsOf(id).find((effect) => effect.kind === 'formationDraw')?.poolFormations
     /** 同一口径的独立复算：该剧本轴方装甲/摩托化多单位编队（骑兵师不入杯） */
     const derivedOf = (sourceId: string) =>
       formations.formations
@@ -529,8 +530,9 @@ describe('W7 C12：剧本抽取盒（编队抽签）', () => {
 
     // 所有带抽取参数的剧本都必须有声明名单；缺了才算数据缺口
     for (const scenario of scenarios.scenarios) {
-      if (scenario.setup.formationDraw === undefined) continue
-      expect(scenario.setup.formationDraw.poolFormations, scenario.id).toBeDefined()
+      const draw = setupEffectsOf(scenario.id).find((effect) => effect.kind === 'formationDraw')
+      if (draw === undefined) continue
+      expect(draw.poolFormations, scenario.id).toBeDefined()
       expect(scenarioDrawBoxView(scenario.id).dataGaps.join('｜')).not.toContain('未声明入池名单')
     }
     expect(axisDrawPool('1').map((entry) => entry.formationId)).not.toContain('1 Cav Div')
@@ -567,7 +569,7 @@ describe('W7 C12：剧本抽取盒（编队抽签）', () => {
     const box = scenarioDrawBoxView('7')
     expect(box.groups).toEqual([])
     expect(box.dataGaps.join('｜')).toContain('未登记编队抽取参数')
-    expect(scenarios.scenarios.find((item) => item.id === '7')?.setup.formationDraw).toBeUndefined()
+    expect(setupEffectsOf('7')).toEqual([])
   })
 
   it('C12：B 组互换 —— Mtr 团入死亡堆、Aufk 营从死亡堆返场（ch10：Mtr 死、Aufk 活）', () => {

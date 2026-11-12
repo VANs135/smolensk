@@ -27,6 +27,7 @@ import { planBreakdownCreate, type BreakdownCreateRequest } from './breakdown'
 import { breakdownPoolLimits, breakdownPoolTotal, railCapacitiesOn } from './exclusive-timing'
 import { isRailCapBoosted, isSpecialReplAvailable } from './timing'
 import { specialReplRebuildRows } from './variable-repl'
+import { setupEffectOf } from './setup-effects'
 import { setupSourceOf } from './setup-source'
 
 /**
@@ -1033,7 +1034,7 @@ export interface ScenarioDrawBoxView extends BoxView {
   reducedCount: number | null
 }
 
-/** 剧本的编排抽取参数（`scenarios.json.setup.formationDraw`；结构化自规则书） */
+/** 剧本的编队抽取参数（`scenarios.json.setup.effects[formationDraw]`；结构化自规则书） */
 function formationDrawOf(scenarioId: string): {
   pool: number
   poolFormations: readonly string[] | undefined
@@ -1042,14 +1043,8 @@ function formationDrawOf(scenarioId: string): {
   raw: string
   note: string
 } | null {
-  const own = scenarios.scenarios.find((scenario) => scenario.id === scenarioId)
-  const shared = scenarios.scenarios.find(
-    (scenario) =>
-      scenario.setup.formationDraw !== undefined && scenario.sharedSetupWith?.includes(scenarioId),
-  )
-  const holder = own?.setup.formationDraw !== undefined ? own : shared
-  const block = holder?.setup.formationDraw
-  if (block === undefined) return null
+  const block = setupEffectOf(scenarioId, 'formationDraw')
+  if (block === null) return null
   return {
     pool: block.pool,
     poolFormations: block.poolFormations,
@@ -1082,7 +1077,7 @@ export function scenarioDrawBoxView(scenarioId: string): ScenarioDrawBoxView {
   const dataGaps: string[] = []
   if (block === null) {
     dataGaps.push(
-      `剧本 ${scenarioId} 的初设数据未登记编队抽取参数（scenarios.json.setup.formationDraw）⇒ 视为无抽取`,
+      `剧本 ${scenarioId} 的初设数据未登记编队抽取参数（scenarios.json.setup.effects[formationDraw]）⇒ 视为无抽取`,
     )
   } else if (block.pool !== pool.length) {
     dataGaps.push(
@@ -1091,7 +1086,7 @@ export function scenarioDrawBoxView(scenarioId: string): ScenarioDrawBoxView {
   }
   if (block !== null && block.poolFormations === undefined) {
     dataGaps.push(
-      `剧本 ${scenarioId} 未声明入池名单（setup.formationDraw.poolFormations）⇒ 暂按番号后缀推导（数据缺口）`,
+      `剧本 ${scenarioId} 未声明入池名单（setup.effects[formationDraw].poolFormations）⇒ 暂按番号后缀推导（数据缺口）`,
     )
   }
   if (block !== null && block.poolFormations !== undefined) {

@@ -4,7 +4,7 @@
  * ## 为什么需要
  * 本工程**不是 git 仓库**（只有人工备份），而 `src/data/*.json` 里有几块
  * **脚本无法再生成的手写内容**：
- *   - `scenarios.json`：`setup.formationDraw` / `setup.airSetup` / `setup.printedHedgehogOwners`
+ *   - `scenarios.json`：`setup.effects` / `setup.airSetup` / `setup.printedHedgehogOwners`
  *     （引擎消费：`rules/containers.ts`、`rules/setup.ts`、`stores/workbench.ts`）
  *   - `charts-tables.json`：`surprise` / `attrition` 两张表（`tables/lookup.ts` 缺表直接抛错）
  *   - `map-layers.json`：人工改判删除的 36.18 印刷工事

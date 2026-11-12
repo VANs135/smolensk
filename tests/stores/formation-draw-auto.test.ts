@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs'
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
-import { scenarioSetup, scenarios } from '@/data'
+import { scenarioSetup } from '@/data'
 import { deriveDrawComposition } from '@/engine/rules'
+import { setupEffectsOf } from '@/engine/rules/setup-effects'
 import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -70,8 +71,7 @@ describe('I②：编队组成的自动推导（12.5 之外的 ch10/ch11 抽取�
 
   it('★ 入杯池与初设行**对得上**（每个池成员的组成都推得出来，且至少一个 Mtr 候选）', () => {
     const rows = scenarioSetup.entries.filter((entry) => entry.scenarioId === '1')
-    const pool =
-      scenarios.scenarios.find((item) => item.id === '1')?.setup.formationDraw?.groups ?? []
+    const pool = setupEffectsOf('1').find((effect) => effect.kind === 'formationDraw')?.groups ?? []
     expect(pool.length).toBeGreaterThan(0)
     const poolIds = rows
       .filter((entry) => entry.kind === 'formation' && String(entry.unitId).endsWith('Pz Div'))
@@ -90,7 +90,7 @@ describe('I②：抽签落盘是**自动**的（不再手输 unit id）', () => 
   it('★ 剧本 1（ch10）B 组：抽签 ⇒ Mtr 进死亡堆、Aufk 返场到该师的初设格（不是写死的 1.03）', () => {
     const { workbench, containers } = boot('1')
     const group = (
-      scenarios.scenarios.find((item) => item.id === '1')?.setup.formationDraw?.groups ?? []
+      setupEffectsOf('1').find((effect) => effect.kind === 'formationDraw')?.groups ?? []
     ).find((item) => item.kind === 'mtrAufkSwap')
     expect(group, '剧本 1 应有 mtrAufkSwap 组').toBeDefined()
     const drawn = containers.drawFormations(group!)
@@ -135,7 +135,7 @@ describe('I②：抽签落盘是**自动**的（不再手输 unit id）', () => 
   it('★ 自动落盘写进台账（初设那边读它），且日志交代"组成自动推"', () => {
     const { workbench, containers } = boot('1')
     const group = (
-      scenarios.scenarios.find((item) => item.id === '1')?.setup.formationDraw?.groups ?? []
+      setupEffectsOf('1').find((effect) => effect.kind === 'formationDraw')?.groups ?? []
     ).find((item) => item.kind === 'mtrAufkSwap')!
     containers.drawFormations(group)
     expect(containers.applyDraw(group, {})).toBe(true)
@@ -148,7 +148,7 @@ describe('I②：抽签落盘是**自动**的（不再手输 unit id）', () => 
   it('★ 剧本 5（ch11）A 组：抽中师的 Krd 营自动加入死亡堆（无 facts 也落得下）', () => {
     const { workbench, containers } = boot('5')
     const group = (
-      scenarios.scenarios.find((item) => item.id === '5')?.setup.formationDraw?.groups ?? []
+      setupEffectsOf('5').find((effect) => effect.kind === 'formationDraw')?.groups ?? []
     ).find((item) => item.kind === 'deadPileKrd')
     expect(group, '剧本 5 应有 deadPileKrd 组').toBeDefined()
     const drawn = containers.drawFormations(group!)

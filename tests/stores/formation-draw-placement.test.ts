@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
-import { scenarios } from '@/data'
+import { setupEffectsOf } from '@/engine/rules/setup-effects'
 import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -48,7 +48,7 @@ function bootManual() {
 /** 抽一次西移组并落盘（落点稍后由玩家在初设里给） */
 function drawShiftWest(containers: ReturnType<typeof boot>['containers']) {
   const group = (
-    scenarios.scenarios.find((item) => item.id === '1')?.setup.formationDraw?.groups ?? []
+    setupEffectsOf('1').find((effect) => effect.kind === 'formationDraw')?.groups ?? []
   ).find((item) => item.kind === 'shiftWest')
   if (group === undefined) throw new Error('剧本 1 应有 shiftWest 组')
   containers.drawFormations(group)

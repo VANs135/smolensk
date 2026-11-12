@@ -201,15 +201,16 @@ export function buildScenarios({ scenariosDb, rulesDb }) {
 /**
  * `setup` 里**脚本无法从权威库再生**的手写块
  *
- * 它们的消费方：`setup.formationDraw` → `rules/containers.ts` / `rules/setup.ts` /
- * `stores/setup.ts` / `components/setup/SetupPanel.vue`；
+ * 它们的消费方：`setup.effects`（编队抽签等初设强制效果）→ `rules/setup-effects.ts` /
+ * `rules/containers.ts` / `rules/setup.ts` / `stores/setup.ts` /
+ * `components/setup/SetupPanel.vue`；
  * `setup.airSetup` → `rules/setup.ts`（初设激活政策）；
  * `setup.printedHedgehogOwners` → `stores/workbench.ts`（印刷工事归属）；
  * `setup.convertedAxisRails` → `stores/workbench.ts`（专规 1.2 初设换轨；逐格清单由引擎推导）。
  * 缺失时引擎会退化为"未登记 ⇒ 视为无"，且 schema 是 optional 故校验不报错。
  */
 export const HAND_WRITTEN_SETUP_KEYS = [
-  'formationDraw',
+  'effects',
   'airSetup',
   'printedHedgehogOwners',
   'convertedAxisRails',

@@ -6,6 +6,7 @@ import { useUiMode } from '@/components/ui-mode'
 import { scenarios } from '@/data'
 import type { Side } from '@/data'
 import { setupHexLabel } from '@/engine/rules'
+import { setupEffectsOf } from '@/engine/rules/setup-effects'
 import {
   useContainersStore,
   useSetupStore,
@@ -72,7 +73,7 @@ const sourceDetail = computed(() => setup.plan?.source.detail ?? '—')
 /** 该剧本的编队抽签组（取自初设源） */
 const drawGroups = computed(() => {
   const sourceId = setup.plan?.source.source ?? setup.scenarioId
-  return scenarios.scenarios.find((item) => item.id === sourceId)?.setup.formationDraw?.groups ?? []
+  return setupEffectsOf(sourceId).find((effect) => effect.kind === 'formationDraw')?.groups ?? []
 })
 
 /** 某组已抽中的名单（账本在 C12 的剧本抽取盒里） */
