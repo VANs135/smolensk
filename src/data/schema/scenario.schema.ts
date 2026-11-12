@@ -158,6 +158,25 @@ export const ConvertedAxisRailsSchema = z
 
 export type ConvertedAxisRails = z.infer<typeof ConvertedAxisRailsSchema>
 
+/**
+ * 剧本初设的**德军铁路端头**（13.3d；用户 2026-11-12 口径）
+ *
+ * `railhead` = 剧本页 `Converted Axis Rails: A to B` 的 **B 端** = 初设时标准轨的**东端终点**，
+ * 也就是 `mk-38`（Neutral_Railhead）要画的那一格；13.3f 推进时 B **向东前移**，标记随之移动。
+ * 本字段只存该格清单（`列.行`），不存轨距：标准轨段由 `convertedAxisRails.runs` 沿铁路图
+ * 唯一路径推导（`engine/rules/rail.ts#convertedRailRun`），与 `map-layers.edges[].gauge` 无关。
+ */
+export const RailheadsSchema = z
+  .object({
+    /** 规则依据与读法（原文，便于回溯） */
+    rule: z.string(),
+    /** 初设端头格（原文 B 端，按剧本页顺序）；每段一个 */
+    hexes: z.array(z.string()),
+  })
+  .strict()
+
+export type Railheads = z.infer<typeof RailheadsSchema>
+
 /** 剧本初设数值与选项（Setup Notes A 的剧本页旋钮） */
 export const ScenarioSetupSchema = z
   .object({
@@ -190,6 +209,8 @@ export const ScenarioSetupSchema = z
       .optional(),
     /** 剧本初设的已转换轴方铁路（专规 1.2 剧本页；逐格清单由引擎沿铁路图推导） */
     convertedAxisRails: ConvertedAxisRailsSchema.optional(),
+    /** 剧本初设的德军铁路端头格（13.3d；= 各段 B 端，`mk-38` 所在格） */
+    railheads: RailheadsSchema.optional(),
     /** 其余初设选项原文（键 → 原文），保留未结构化的剧本差异 */
     options: z.record(z.string(), z.unknown()).optional(),
     /** 数据来源 */

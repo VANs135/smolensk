@@ -96,6 +96,10 @@
           "runs": ["01.03 to 2.02"],
           "notes": "印刷初设卡原文 \"1.03 to 2.02, place in 2.02\"——RR Bn 驻 2.02"
         },
+        "railheads": {
+          "rule": "专规 1.2 / 13.3d：剧本页 Converted Axis Rails 的 B 端＝初设标准轨东端终点（mk-38 所在格）；13.3f 推进时向东前移",
+          "hexes": ["2.02"]
+        },
         "reserveMarkers": {
           "axis": 14,
           "soviet": 0
@@ -269,6 +273,10 @@
           "runs": ["01.03 to 2.02"],
           "notes": "同剧本 1；RR Bn 驻 2.02"
         },
+        "railheads": {
+          "rule": "专规 1.2 / 13.3d：剧本页 Converted Axis Rails 的 B 端＝初设标准轨东端终点（mk-38 所在格）；13.3f 推进时向东前移",
+          "hexes": ["2.02"]
+        },
         "reserveMarkers": {
           "axis": 14,
           "soviet": 0
@@ -355,6 +363,10 @@
           "rule": "专规 1.2 剧本页 \"Converted Axis Rails: <A> to <B>\"：剧本页只给两个端点（端点处驻执行换轨的 RR Bn，4.1c），给的是那条铁路线；逐格清单由引擎沿铁路邻接图取唯一最短路径推导（engine/rules/rail.ts#convertedRailRun，歧义即失败）",
           "runs": ["01.03 to 2.02", "01.19 to 4.18", "01.07 to 4.07"],
           "notes": "端点为 4.07 与 4.18，两个 (1)-2-5 RR Bn 分别驻此"
+        },
+        "railheads": {
+          "rule": "专规 1.2 / 13.3d：剧本页 Converted Axis Rails 的 B 端＝初设标准轨东端终点（mk-38 所在格）；13.3f 推进时向东前移",
+          "hexes": ["2.02", "4.18", "4.07"]
         },
         "reserveMarkers": {
           "axis": 14,
@@ -557,6 +569,10 @@
           "runs": ["01.03 to 2.02", "01.19 to 4.18", "01.07 to 4.07"],
           "notes": "同剧本 3"
         },
+        "railheads": {
+          "rule": "专规 1.2 / 13.3d：剧本页 Converted Axis Rails 的 B 端＝初设标准轨东端终点（mk-38 所在格）；13.3f 推进时向东前移",
+          "hexes": ["2.02", "4.18", "4.07"]
+        },
         "reserveMarkers": {
           "axis": 14,
           "soviet": 4
@@ -648,6 +664,10 @@
           "rule": "专规 1.2 剧本页 \"Converted Axis Rails: <A> to <B>\"：剧本页只给两个端点（端点处驻执行换轨的 RR Bn，4.1c），给的是那条铁路线；逐格清单由引擎沿铁路邻接图取唯一最短路径推导（engine/rules/rail.ts#convertedRailRun，歧义即失败）",
           "runs": ["01.03 to 2.02", "01.19 to 24.19", "01.07 to 24.06"],
           "notes": "端点为 24.19 与 24.06"
+        },
+        "railheads": {
+          "rule": "专规 1.2 / 13.3d：剧本页 Converted Axis Rails 的 B 端＝初设标准轨东端终点（mk-38 所在格）；13.3f 推进时向东前移",
+          "hexes": ["2.02", "24.19", "24.06"]
         },
         "reserveMarkers": {
           "axis": 7,
@@ -855,6 +875,10 @@
           "runs": ["01.03 to 2.02", "01.19 to 24.19", "01.07 to 24.06"],
           "notes": "同剧本 5"
         },
+        "railheads": {
+          "rule": "专规 1.2 / 13.3d：剧本页 Converted Axis Rails 的 B 端＝初设标准轨东端终点（mk-38 所在格）；13.3f 推进时向东前移",
+          "hexes": ["2.02", "24.19", "24.06"]
+        },
         "reserveMarkers": {
           "axis": 7,
           "soviet": 6
@@ -968,6 +992,10 @@
           "rule": "专规 1.2 剧本页 \"Converted Axis Rails: <A> to <B>\"：剧本页只给两个端点（端点处驻执行换轨的 RR Bn，4.1c），给的是那条铁路线；逐格清单由引擎沿铁路邻接图取唯一最短路径推导（engine/rules/rail.ts#convertedRailRun，歧义即失败）",
           "runs": ["01.03 to 2.02", "01.19 to 34.18", "01.07 to 38.05", "15.10 to 18.18"],
           "notes": "第四段 15.10 → 18.18 为北向支线，两营 RR Bn 驻 18.18"
+        },
+        "railheads": {
+          "rule": "专规 1.2 / 13.3d：剧本页 Converted Axis Rails 的 B 端＝初设标准轨东端终点（mk-38 所在格）；13.3f 推进时向东前移",
+          "hexes": ["2.02", "34.18", "38.05", "18.18"]
         },
         "reserveMarkers": {
           "axis": 7,
