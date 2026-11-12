@@ -362,8 +362,9 @@ describe('13.3e 铁路移动三步（登车 → 移动 → 卸货，同一阶段
     })
   })
 
-  it('13.6b（用户 2026-11-12 裁定）：入场格可以登车——不要求可卸货 / 不在 ZOC / 有铁路', () => {
-    // A 格：无铁路、不可卸货、在敌方 ZOC、且被敌方单位占据；只因为是入场格就允许登车
+  it('13.6b：显式注入的入场格判据只豁免登车格检查（缺省判据须同时含铁路，见上）', () => {
+    // 注入 isEntryHex=true 后：无铁路、不可卸货、在敌方 ZOC、且被敌方单位占据，仍允许登车
+    // （判据本身的「含铁路」由缺省实现或调用方保证；见 2026-11-13 裁定收窄 5-D3）
     const brokenBoarding = {
       hasRail: (hex: HexRef) => hex.row !== A.row,
       isDetrainable: (hex: HexRef) => hex.row !== A.row,
@@ -824,7 +825,8 @@ describe('createRailFacts：静态铁路图层（产品数据）→ 事实', () 
     expect(railFacts.isRailConnected(A, C)).toBe(false)
   })
 
-  it('13.6b：入场格（`isEntryHex`）缺省取产品数据字母段——轴 K/J/I/H/G/F，苏 A–E/L', () => {
+  it('13.6b：铁路入场格＝字母入场段 ∩ 该格含铁路（用户 2026-11-13 裁定收窄 5-D3）', () => {
+    // 用产品数据（map-layers.json）而不是本文件的测试夹具，判据才与实图一致
     const dataFacts = createRailFacts({
       enemyOccupies: () => false,
       railGaugeUsable: () => true,
@@ -832,19 +834,65 @@ describe('createRailFacts：静态铁路图层（产品数据）→ 事实', () 
       hasEnemyCombatUnit: () => false,
       isDetrainable: () => true,
       isRailRepairUnit: () => false,
-      source,
     })
-    // 用户 2026-11-12 裁定点名的三处：F=8.00、K=1.26、I=1.12
-    expect(dataFacts.isEntryHex({ col: 8, row: 0 }, 'axis')).toBe(true)
-    expect(dataFacts.isEntryHex({ col: 1, row: 26 }, 'axis')).toBe(true)
-    expect(dataFacts.isEntryHex({ col: 1, row: 12 }, 'axis')).toBe(true)
-    // 其余轴方字母：J=1.19、H=1.07、G=1.03/1.04
+    // 轴方实际连铁路的四处：J=1.19、H=1.07、F=8.00、G=1.03
     expect(dataFacts.isEntryHex({ col: 1, row: 19 }, 'axis')).toBe(true)
     expect(dataFacts.isEntryHex({ col: 1, row: 7 }, 'axis')).toBe(true)
+    expect(dataFacts.isEntryHex({ col: 8, row: 0 }, 'axis')).toBe(true)
     expect(dataFacts.isEntryHex({ col: 1, row: 3 }, 'axis')).toBe(true)
-    // L=20.35 是苏方字母，不算轴方入场格
+    // G=1.04 无铁路 ⇒ 不是铁路入场格
+    expect(dataFacts.isEntryHex({ col: 1, row: 4 }, 'axis')).toBe(false)
+    // 裁定 1：K=1.26、I=1.12 不是连铁路的入场格，必须被拒
+    expect(dataFacts.isEntryHex({ col: 1, row: 26 }, 'axis')).toBe(false)
+    expect(dataFacts.isEntryHex({ col: 1, row: 12 }, 'axis')).toBe(false)
+    // L=20.35 是苏方字母且含铁路，算苏方；不算轴方
     expect(dataFacts.isEntryHex({ col: 20, row: 35 }, 'axis')).toBe(false)
     expect(dataFacts.isEntryHex({ col: 20, row: 35 }, 'soviet')).toBe(true)
+  })
+
+  it('13.6b：缺省判据下 J 放行、K/I 被拒（断言到拒绝原因，不放宽）', () => {
+    const dataFacts = createRailFacts({
+      enemyOccupies: () => false,
+      railGaugeUsable: () => true,
+      inEnemyZoc: () => false,
+      hasEnemyCombatUnit: () => false,
+      isDetrainable: () => true,
+      isRailRepairUnit: () => false,
+    })
+    const cargo = unitCargo()
+    // J=1.19：铁路入场格 ⇒ 走「地图外登车」，不要求可卸货
+    expect(
+      validateRailMovement({
+        phase: 'movement',
+        cargo,
+        from: { col: 1, row: 19 },
+        to: { col: 1, row: 19 },
+        path: [{ col: 1, row: 19 }],
+        facts: dataFacts,
+      }).ok,
+    ).toBe(true)
+    // K=1.26：不是铁路格 ⇒ 按普通登车判，拒于 entrainHexHasNoRail
+    expect(
+      validateRailMovement({
+        phase: 'movement',
+        cargo,
+        from: { col: 1, row: 26 },
+        to: { col: 1, row: 26 },
+        path: [{ col: 1, row: 26 }],
+        facts: dataFacts,
+      }),
+    ).toMatchObject({ ok: false, rule: '13.3e', reason: 'entrainHexHasNoRail:1.26' })
+    // I=1.12：同上
+    expect(
+      validateRailMovement({
+        phase: 'movement',
+        cargo,
+        from: { col: 1, row: 12 },
+        to: { col: 1, row: 12 },
+        path: [{ col: 1, row: 12 }],
+        facts: dataFacts,
+      }),
+    ).toMatchObject({ ok: false, rule: '13.3e', reason: 'entrainHexHasNoRail:1.12' })
   })
 
   it('13.3a：单/多轨由静态图层的格边标记得出（两格皆视为多轨格，但只有标注的那**一条边**是多轨）', () => {

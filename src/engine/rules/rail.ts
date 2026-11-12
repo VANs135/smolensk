@@ -24,7 +24,8 @@ import type { MobilityType } from './terrain'
  *      短腿（步行 MA 1–6）单位当量减半；
  *   ② **铁路移动三步**（13.3e / 13.3g）：登车 → 沿铁路移动 → 卸货，**三步必须同一阶段完成**（本模块一次调用即含三步，
  *      故天然同阶段）；登车格/卸货格须为可火车卸货格且不在敌方 ZOC，路径须相连、轨距正确、受控、无敌方单位与 ZOC。
- *      13.6b 的「地图外登车」跳过登车格检查；用户 2026-11-12 裁定**入场格可以登车**（`RailFacts.isEntryHex`）。
+ *      13.6b 的「地图外登车」跳过登车格检查；用户 2026-11-13 裁定**入场格且该格含铁路**才可登车
+ *      （`RailFacts.isEntryHex`；K/I 等无铁路入场格不放行）。
  *      铁路修理单位有三处例外（13.3g）：可在**战斗模式**下铁路移动（13.3g-B，5.5a/5.6a 例外）、
  *      可在**任意铁路格**登车与卸货（13.3g-C）、且**卸货后仍可按「完整 MA − 登车前移动」继续移动**
  *      （13.3g-B；4.7d 的「卸货后不得再移动」对它们不适用）；
@@ -202,11 +203,14 @@ export interface RailFacts {
   /** 13.3f：该格轨距是否为本方可用（苏宽轨 / 德标准轨；含已转换状态） */
   railGaugeUsable(hex: HexRef, side: Side): boolean
   /**
-   * 13.6b / 13.3b：该格是否为本方的**图边入场格**
+   * 13.6b / 13.3b：该格是否为本方的**铁路入场格**
    *
-   * 用户 2026-11-12 裁定：「入场格可以登车」——`Entry F / K / I` 三处都允许登车。
-   * 入场格登车按 13.6b 的「地图外登车」处理（忽略 13.3e-1 的登车格条件），与
-   * `RailMovementInput.entrainOffMap` 走同一支路；**轨距（13.3f）与沿途格条件仍照常判**。
+   * 原文条件：「Reinforcements and new SP can entrain 'off-map' **if their arrival hex contains
+   * a railroad** (13.6b).」⇒ 入场格登车须同时满足「是本方字母入场段」与「该格含铁路」。
+   *
+   * ★ 用户 2026-11-13 裁定（收窄 5-D3）：轴方实际只有 **J=1.19、H=1.07、F=8.00、G=1.03**
+   *   四处连铁路；**K=1.26、I=1.12 不是**，不得再按字母放行。缺省实现即按此判；
+   *   注入的自定义谓词由调用方负责同一口径。
    */
   isEntryHex(hex: HexRef, side: Side): boolean
   /** 该格是否有敌方 ZOC（★ 运货时不可抵消，见 13.3c 末句） */
@@ -294,8 +298,8 @@ export interface RailMovementInput {
    * 「增援单位可放置在有敌方 ZOC 的格中，也可通过铁路抵达（**忽略 13.3e 中通常要求的『登车』**）。」
    * 给出本项即跳过 13.3e-1 的**登车格**检查（是否有铁路 / 是否可卸货 / 是否在敌方 ZOC）；
    * ★ 单位自身的运输资格（5.6a 移动模式、5.10d 非 DG、13.3e-1 登车前 MP）仍照常校验。
-   * ★ 用户 2026-11-12 裁定：**入场格可以登车**（`Entry F / K / I` 均可）；该情形由
-   *   `RailFacts.isEntryHex` 自动命中，调用方不必再显式传本项。
+   * ★ 用户 2026-11-13 裁定：**入场格且该格含铁路**才可登车；轴方仅 J/H/F/G 合格，K/I 不放行。
+   *   该情形由 `RailFacts.isEntryHex` 自动命中，调用方不必再显式传本项。
    */
   entrainOffMap?: boolean
 }
@@ -333,7 +337,7 @@ export function validateRailMovement(input: RailMovementInput): RuleOutcome<Rail
   const isRailRepair = cargo.kind === 'unit' && facts.isRailRepairUnit(cargo.id)
 
   /* ① 登车格（13.3e-1）；13.6b 的「地图外登车」忽略本项 */
-  // 用户 2026-11-12 裁定：入场格可以登车（F / K / I 均可）⇒ 入场格自动按「地图外登车」处理
+  // 13.6b：入场格（含铁路，2026-11-13 裁定）自动按「地图外登车」处理；K/I 等无铁路入场格不再放行
   const entrainOffMap = input.entrainOffMap === true || facts.isEntryHex(from, cargo.side)
   if (!entrainOffMap) {
     if (!facts.hasRail(from)) return fail('13.3e', `entrainHexHasNoRail:${hexText(from)}`)
@@ -876,20 +880,23 @@ export function createRailFacts(input: {
   isDetrainable: (hex: HexRef, side: Side) => boolean
   isRailRepairUnit: (unitId: string) => boolean
   isTrainbusting?: (hex: HexRef) => boolean
-  /** 13.6b：该格是否为本方入场格；缺省按产品数据 `map-config.entryHexes` 的字母段判定 */
+  /** 13.6b：该格是否为本方铁路入场格；缺省＝`map-config.entryHexes` 字母段 ∩ 该格含铁路 */
   isEntryHex?: (hex: HexRef, side: Side) => boolean
   /** 静态铁路图层来源（缺省取产品数据 map-layers.json） */
   source?: RailLayerSource
 }): RailFacts {
   const graph = createRailGraph(input.source ?? mapLayers)
-  // 13.6b：缺省入场格＝产品数据的字母入场段（与 `entry-edges.ts` 同一张表，不写死格号）
+  // 13.6b：缺省入场格＝产品数据的字母入场段 ∩ 该格含铁路
+  // （用户 2026-11-13 裁定收窄 5-D3：轴方只有 J/H/F/G 连铁路，K/I 不是）
   const entryHexes: Record<Side, readonly HexRef[]> = {
     axis: entryEdgeHexes('axis', mapConfig.entryHexes ?? {}).hexes,
     soviet: entryEdgeHexes('soviet', mapConfig.entryHexes ?? {}).hexes,
   }
   const isEntryHex =
     input.isEntryHex ??
-    ((hex, side) => entryHexes[side].some((item) => item.col === hex.col && item.row === hex.row))
+    ((hex, side) =>
+      graph.isRailHex(hex) &&
+      entryHexes[side].some((item) => item.col === hex.col && item.row === hex.row))
 
   return {
     hasRail: (hex) => graph.isRailHex(hex),
