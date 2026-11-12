@@ -1,7 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
-import { createGameSeed, RNG_ALGORITHM, TEST_FIXED_SEED } from '@/engine/rng'
+import { RNG_ALGORITHM, TEST_FIXED_SEED } from '@/engine/rng'
+import { createGameSeed } from '@/shared'
 import { useGameSessionStore, useWorkbenchStore } from '@/stores'
 
 const newStores = () => {

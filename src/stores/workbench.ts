@@ -54,7 +54,7 @@ import {
 } from '@/engine/hex-geometry'
 import { DERIVATION_KEY, type Derivation } from '@/engine/derivation'
 import { combatDerivation, surpriseDerivation } from '@/engine/derivation-builders'
-import { createGameSeed, createRngState, RNG_ALGORITHM, roll1d6, roll2d6 } from '@/engine/rng'
+import { createRngState, RNG_ALGORITHM, roll1d6, roll2d6 } from '@/engine/rng'
 import { validBoardEntities } from '@/engine/board-validation'
 import { actingSideFor } from '@/engine/game-lifecycle'
 import { createSnapshotRegistry } from './snapshot-registry'
@@ -450,7 +450,7 @@ import {
   // 12.7b：延补队距离＝印值 MA（卡车 20 / 马车 10），生成连通判据复用同一来源
   extenderRangeMpOf,
 } from '@/engine/rules'
-import { createId } from '@/shared'
+import { createGameSeed, createId } from '@/shared'
 
 import { opponentOf } from '@/engine/turn-driver'
 

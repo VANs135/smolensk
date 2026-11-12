@@ -20,12 +20,13 @@ describe('3.3c / 1.6b：可变撤离与可变增援不重复记骰', () => {
     const preset = ctx.setup.presetSelfSetupNow()
     expect(preset.failures).toEqual([])
     expect(preset.remaining).toBe(0)
+    // E4：种子只能在开局前设定（开局后锁定）；先定种子，再建会话
+    ctx.w.seed = seedWithVariableExitRemove()
     expect(ctx.setup.startGameNow()).toBe(true)
 
     const w = ctx.w
     w.setPhase('reinforcement')
     w.setActiveSide('axis')
-    w.seed = seedWithVariableExitRemove()
     expect(w.variableReplInputs.autoRoll).toBe(true)
     expect(w.rollVariableReplNow()).toBe(true)
     expect(w.lastVariableRepl?.variableExit?.kind).toBe('remove')

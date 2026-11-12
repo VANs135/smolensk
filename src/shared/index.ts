@@ -7,6 +7,7 @@
 
 export * from './is'
 export * from './id'
+export * from './seed'
 export * from './assert'
 export * from './math'
 export * from './format'
