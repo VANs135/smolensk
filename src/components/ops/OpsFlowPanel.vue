@@ -126,7 +126,7 @@ function setTargetKind(kind: string): void {
       <BaseTag :kind="flow.step === 2 ? 'info' : 'neutral'">
         {{ flow.kind === 'barrage' ? '② 支付补给（10.1b）' : '② 空战 / 防空（14.2f）' }}
       </BaseTag>
-      <template v-if="flow.kind === 'barrage'">
+      <template v-if="flow.kind === 'barrage' && workbench.barrageTargetKind !== 'airBase'">
         <span class="ops__arrow">→</span>
         <BaseTag :kind="flow.step === 3 ? 'info' : 'neutral'">③ 受损单位</BaseTag>
       </template>
@@ -173,7 +173,7 @@ function setTargetKind(kind: string): void {
 
       <div class="ops__actions">
         <BaseButton :disabled="!picked" @click="map.advanceOpsFlow()">确认单位</BaseButton>
-        <BaseButton variant="secondary" @click="map.cancelOpsFlow()">取消</BaseButton>
+        <BaseButton variant="secondary" @click="map.cancelOpsFlow()">取消本次</BaseButton>
       </div>
     </template>
 
@@ -184,7 +184,8 @@ function setTargetKind(kind: string): void {
         <b>{{ supplyCostT }} T</b>（取初始列；多门齐射须同一指挥部或同一补给站）。
       </p>
       <p v-if="supplyDumps.length === 0" class="warn num">
-        没有能覆盖本次参战火炮的补给站（12.3a）⇒ 无法支付，点「取消」退回选子。
+        没有能覆盖本次参战火炮的补给站（12.3a）⇒
+        无法支付，点「取消本次」结束本次炮击（10.1b：无惩罚，不视为已轰炸）。
       </p>
       <p v-else class="num">
         可付款的站：{{
@@ -210,7 +211,7 @@ function setTargetKind(kind: string): void {
         >
           确认支付
         </BaseButton>
-        <BaseButton variant="secondary" @click="map.cancelOpsFlow()">取消</BaseButton>
+        <BaseButton variant="secondary" @click="map.cancelOpsFlow()">取消本次</BaseButton>
       </div>
     </template>
 

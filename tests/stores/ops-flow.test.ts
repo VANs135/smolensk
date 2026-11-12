@@ -206,6 +206,19 @@ describe('候选同源（规格 §3 集合等式）', () => {
   })
 })
 
+describe('炮击界面口径（§6-A4：按钮名＝实际动作）', () => {
+  const panel = readFileSync('src/components/ops/OpsFlowPanel.vue', 'utf8')
+
+  it('第 2 步空站提示与取消按钮都指向「取消本次」，不再承诺退回选子', () => {
+    expect(panel).not.toContain('退回选子')
+    expect(panel).toContain('点「取消本次」结束本次炮击')
+  })
+
+  it('设施目标（10.0c）不显示③受损单位步骤', () => {
+    expect(panel).toContain("workbench.barrageTargetKind !== 'airBase'")
+  })
+})
+
 describe('地图外空军盒（2.1C / 规格 §4 裁定③）', () => {
   it('★ 盒内驻机作为**独立基地分组**参与候选，且可被勾选出击', () => {
     const { workbench } = newStores()
