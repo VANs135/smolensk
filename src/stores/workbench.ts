@@ -3964,29 +3964,43 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }))
 
   /**
+   * 13.3e-2 / 13.3h：铁路**运输**（运兵/运货）沿线的格控制
+   *
+   * ★ 与用户 2026-11-12 的「轨距唯一」口径**分开**：那条口径管的是铁路**补给可用性/可卸货格**
+   *   （`railSupplyFacts`，已删除控制近似）。13.3e 原文另写「不能使用错误轨距或**未控制**的铁路格」，
+   *   故运兵/运货仍保留这一条；操作台无控制历史，沿用既有近似（同格仅有单方战斗单位 ⇒ 该方控制），
+   *   不新增控制账本。
+   */
+  function railTransportControlledBy(hex: HexRef, side: Side): boolean {
+    const sides = new Set(
+      units.value
+        .filter((unit) => unit.isCombat && sameHex(unit.hex, hex))
+        .map((unit) => unit.side),
+    )
+    return sides.size === 1 && [...sides][0] === side
+  }
+
+  /**
    * 13.3：铁路运货的运行期事实（`RailFacts` 的**唯一组装点**）
    *
    * 静态图层（哪格有铁路 / 两格是否以铁路相接）由引擎 `createRailFacts` 从 `map-layers` 建索引；
-   * 运行期各项分别取仓里既有结论：
-   *   · 13.3e-2「未控制」← **敌方单位占据**（`enemyOccupies`，与补给侧阻断②同源）。用户 2026-11-12
-   *     裁定：铁路本身没有归属/控制/占领，能被占领的是同格城镇/村镇；故不再有独立的控制权账本；
+   * 运行期六项分别取仓里既有结论：
+   *   · 13.3h 控制 ← `railTransportControlledBy`（13.3e-2 的运输限制；**补给**侧已不判控制）；
    *   · 13.3f 轨距 ← `isRailGaugeUsableAt`（专规 1.2 的轨距账本，与 13.3f 的转换共用）；
    *   · EZOC ← `inEnemyZocForAction(…, 'railTransport')`：`zoc-effects` 把 `railTransport` 定为
    *     **不可抵消**（4.5a-C ／ 13.3c 末句「运货时 EZOC 不可抵消」）；仅「连接补给源」的判定
    *     （`zocOnlySupplyFacts`）才按 4.5b 抵消，两处不可混用；
-   *   · 敌方战斗单位 ← 盘面推出（给出专码）；非战斗敌方单位由 `enemyOccupies` 一并阻断；
+   *   · 敌方战斗单位 ← 盘面推出；
    *   · 13.3c 可火车卸货格 ← 补给层的 `detrainableHexes`（**同一份结论**，不另立一条判据）；
    *   · 14.8 运输破坏区 ← `trainbustingMarks`。
    */
   const railMoveFacts = computed(() =>
     createRailFacts({
+      isControlled: (hex, side) => railTransportControlledBy(hex, side),
       railGaugeUsable: (hex, side) => isRailGaugeUsableAt(hex, side),
       inEnemyZoc: (hex, side) => inEnemyZocForAction(moveContext.value, hex, side, 'railTransport'),
       hasEnemyCombatUnit: (hex, side) =>
         units.value.some((unit) => unit.side !== side && unit.isCombat && sameHex(unit.hex, hex)),
-      // 13.3e-2 的「未控制」＝该格（含同格卸货城镇）有敌方单位；与补给侧 `enemyOccupies` 同一判据
-      enemyOccupies: (hex, side) =>
-        units.value.some((unit) => unit.side !== side && sameHex(unit.hex, hex)),
       // 13.3c 的结论由补给层按**当前行动方**给出；13.3b 也只允许本方使用自己的铁路容量
       isDetrainable: (hex, side) =>
         side === activeSide.value &&
@@ -4036,8 +4050,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           if (multiOnly && !facts.isMultiTrackEdge(hex, next)) continue
           if (nextKey !== goal) {
             if (!facts.railGaugeUsable(next, side)) continue
-            // 13.3e-2 的「未控制」＝该格被敌方单位占据（任意单位；与补给侧同源）
-            if (facts.enemyOccupies(next, side)) continue
+            if (!facts.isControlled(next, side)) continue
             if (facts.hasEnemyCombatUnit(next, side)) continue
             if (facts.inEnemyZoc(next, side)) continue
           }
@@ -14754,6 +14767,113 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 15.3 / 15.2A 的错误（统一形状：rule + reason） */
   const constructionError = ref<{ rule: string; reason: string } | null>(null)
 
+  /**
+   * 15.3 / 15.2A / 16.0b：建造付款站候选（12.3a 直拖 / 12.3b HQ 投递）
+   *
+   * 用户 2026-11-12：与炮击一致——**只把施工者真正拖得到的站铺到地图上**。
+   * 受益单位取施工者本身（16.0b 的 `inPlace` 途径取目标格内的施工小队）。
+   */
+  const constructionPayDumps = computed<SpDump[]>(() => {
+    const engineer = pickedEngineer()
+    if (engineer === null) return []
+    return deliverableDumpsFor(activeSide.value, [engineer])
+  })
+
+  /** 建造付款的「点地图选站」模式（面板按钮开启；选中一站后自动退出） */
+  const constructionPayPick = ref(false)
+
+  /** 开启/取消建造付款的地图选站模式（无施工者或无候选 ⇒ 拒并给话术） */
+  function toggleConstructionPayPick(): boolean {
+    if (constructionPayPick.value) {
+      constructionPayPick.value = false
+      return true
+    }
+    const engineer = pickedEngineer()
+    if (engineer === null) {
+      pushLog('warning', '先指定施工的工程单位，再选付款补给站（13.8d）', '13.8d')
+      return false
+    }
+    if (constructionPayDumps.value.length === 0) {
+      pushLog('warning', '该施工者此刻没有可达的己方补给站（12.3a/12.3b）', '12.3a')
+      return false
+    }
+    constructionPayPick.value = true
+    return true
+  }
+
+  /** 地图点到某一座候选站 ⇒ 写入付款站并退出选站模式 */
+  function pickConstructionPayDumpNow(dumpId: string): boolean {
+    const dump = constructionPayDumps.value.find((item) => item.id === dumpId)
+    if (dump === undefined) return false
+    constructionInputs.value = { ...constructionInputs.value, payDumpId: dump.id }
+    constructionPayPick.value = false
+    pushLog(
+      'info',
+      `修建付款站：${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T，12.1b）`,
+      '12.1b',
+    )
+    return true
+  }
+
+  /** 16.0b/c：环形工事的付款站候选（施工小队或 13.8d 工程兵可达的来源） */
+  const hedgehogPayDumps = computed<SpDump[]>(() => {
+    const beneficiaries: ConsoleUnit[] = []
+    if (hedgehogUsesEngineerRoute.value) {
+      const engineer = pickedHedgehogEngineer()
+      if (engineer !== null) beneficiaries.push(engineer)
+    } else {
+      for (const id of hedgehogInputs.value.workerIds) {
+        const unit = units.value.find((item) => item.instanceId === id)
+        if (unit !== undefined) beneficiaries.push(unit)
+      }
+    }
+    if (beneficiaries.length === 0) return []
+    return deliverableDumpsFor(activeSide.value, beneficiaries)
+  })
+
+  /** 工事付款的「点地图选站」模式 */
+  const hedgehogPayPick = ref(false)
+
+  /** 开启/取消工事付款的地图选站模式 */
+  function toggleHedgehogPayPick(): boolean {
+    if (hedgehogPayPick.value) {
+      hedgehogPayPick.value = false
+      return true
+    }
+    const executorMissing = hedgehogUsesEngineerRoute.value
+      ? pickedHedgehogEngineer() === null
+      : hedgehogInputs.value.workerIds.length === 0
+    if (executorMissing) {
+      pushLog(
+        'warning',
+        hedgehogUsesEngineerRoute.value
+          ? '先指定 13.8d 的施工工程兵，再选付款补给站（16.0b）'
+          : '先在目标格勾选施工小队，再选付款补给站（16.0b）',
+        '16.0b',
+      )
+      return false
+    }
+    if (hedgehogPayDumps.value.length === 0) {
+      pushLog('warning', '施工者此刻没有可达的己方补给站（12.3a/12.3b）', '12.3a')
+      return false
+    }
+    hedgehogPayPick.value = true
+    return true
+  }
+
+  /** 地图点到某一座候选站 ⇒ 写入工事付款站并退出选站模式 */
+  function pickHedgehogPayDumpNow(dumpId: string): boolean {
+    const dump = hedgehogPayDumps.value.find((item) => item.id === dumpId)
+    if (dump === undefined) return false
+    hedgehogInputs.value = { ...hedgehogInputs.value, payDumpId: dump.id }
+    hedgehogPayPick.value = false
+    pushLog(
+      'info',
+      `工事付款站：${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T，12.1b）`,
+      '12.1b',
+    )
+    return true
+  }
   /**
    * 15.3 / 15.2A / 16.0b：建造付款站候选（12.3a 直拖 / 12.3b HQ 投递）
    *
@@ -26304,9 +26424,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     hedgehogPayPick,
     toggleHedgehogPayPick,
     pickHedgehogPayDumpNow,
+    hedgehogPayDumps,
+    hedgehogPayPick,
+    toggleHedgehogPayPick,
+    pickHedgehogPayDumpNow,
     // 15.3 / 15.2A：空军基地与简易机场的修建、升格（13.8d 施工前提一并接上）
     constructionInputs,
     constructionError,
+    constructionPayDumps,
+    constructionPayPick,
+    toggleConstructionPayPick,
+    pickConstructionPayDumpNow,
     constructionPayDumps,
     constructionPayPick,
     toggleConstructionPayPick,
