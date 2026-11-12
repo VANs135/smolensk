@@ -489,9 +489,9 @@ const displayedBases = computed(() =>
       <template v-if="showsMission">
         <hr />
         <!-- K9：空军会话里也显示引擎的最近一次拒绝原因（修前只在裁判段渲染） -->
-        <p v-if="workbench.airError !== null" class="warn num">
-          <BaseTag kind="danger">{{ workbench.airError.rule }}</BaseTag>
-          {{ workbench.airError.reason }}
+        <p v-if="workbench.airErrorLine !== null" class="warn num">
+          <BaseTag kind="danger">{{ workbench.airError?.rule }}</BaseTag>
+          {{ workbench.airErrorLine }}
         </p>
         <!-- U1-b：宣布前＝一件事（任务类型 + 任务格 + 参战机 + 执行，全在同一门内） -->
         <SessionStep v-if="showsAssign" item="air:declare">
@@ -1349,9 +1349,9 @@ const displayedBases = computed(() =>
             </BaseButton>
           </div>
 
-          <p v-if="workbench.airError !== null" class="warn">
-            <BaseTag kind="danger">{{ workbench.airError.rule }}</BaseTag>
-            {{ workbench.airError.reason }}
+          <p v-if="workbench.airErrorLine !== null" class="warn">
+            <BaseTag kind="danger">{{ workbench.airError?.rule }}</BaseTag>
+            {{ workbench.airErrorLine }}
           </p>
 
           <div class="row">

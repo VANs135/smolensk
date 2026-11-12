@@ -25,6 +25,7 @@ import { planAirSupplyLoad } from '@/engine/rules/air-supply'
 import type { AirCargoResolution } from '@/engine/rules/air-interaction'
 import type { MoveStepSnapshot } from './movement-types'
 import { inEnemyZocForAction } from '@/engine/rules/move'
+import { ruleErrorTextOf } from '@/engine/rules/rule-error-text'
 import { createFireResolutionDomain } from './fire-resolution'
 import { createCombatInputs } from './engagement-inputs'
 import { defineStore } from 'pinia'
@@ -13153,231 +13154,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })),
   )
 
-  /**
-   * 错误提示中文化（用户 2026-11-12：不要显示引擎 reason 代码）
-   *
-   * 输入仍是 `{ rule, reason }`（引擎/操作台同一形状），这里把 reason 译成一句人话；
-   * 未覆盖的代码退回规则号 + 通用说明，**不再原样打印内部代码**。
-   */
-  function barrageErrorTextOf(error: { rule: string; reason: string }): string {
-    const [head, ...rest] = error.reason.split(':')
-    const code = head ?? ''
-    const detail = rest.join('：')
-    switch (code) {
-      case 'noBarrageUnit':
-        return '没有选择参炸单位'
-      case 'airTransportForbidsBarrage':
-        return '该单位本阶段被空运限制，不能炮击'
-      case 'groundBarrageNeedsReleasedReserve':
-        return '反应／进击环节的炮击只允许已释放的预备火炮'
-      case 'sovietArtilleryMustStackTogether':
-        return '苏军炮兵合并齐射须全部同堆叠'
-      case 'artilleryOutOfRange':
-        return '有参炸火炮射程够不到目标格'
-      case 'belowMinBarrageValue':
-        return '至少需要 1 点轰炸值才能炮击'
-      case 'mixedBarrageKinds':
-        return '一次炮击只能用同一类型单位'
-      case 'unitAlreadyBarraged':
-        return '有参炸单位本阶段已经炮击过'
-      case 'artilleryInReserveOrStratCannotBarrage':
-        return '预备／战略模式的炮兵不能炮击（13.4a）'
-      case 'noArtilleryUnit':
-        return '没有可参炸的火炮'
-      case 'targetKindNotInHex':
-        return '整体目标与该格不符（该格没有这类目标）'
-      case 'barrageOutcomePending':
-        return '本次炮击结果尚未确认，不能开新的一场'
-      case 'hipShootCannotTrainbusting':
-        return '低空扫射不能做运输破坏（14.7d-D）'
-      case 'cannotSplitBarrageValue':
-        return '轰炸值不能拆分到多次炮击'
-      case 'belowPrintedBarrageValue':
-        return '不能以低于印刷值的轰炸值参战'
-      case 'hexAlreadyBarraged':
-        return '该格本阶段已经被轰炸过'
-      case 'internalStocksForbidden':
-        return '炮击永远不能使用部队储备'
-      case 'cannotAfford':
-        return '所选补给站付不出这次炮击的补给'
-      case 'mixedSupplySources':
-        return '多门火炮齐射的补给必须来自同一指挥部或同一补给站'
-      case 'barrageSupplyNeedsADump':
-        return '请先在地图上点选一座可付款的补给站'
-      case 'barrageSupplyDumpOutOfRange':
-        return '所选补给站不在本次参炸火炮的可达范围内'
-      case 'terrainLineNotInTargetHex':
-        return '所选地形不在目标格内'
-      case 'invalidBarrageDice':
-        return '骰值与炮击类型不符'
-      case 'barrageOutcomeNotResolved':
-        return '还没有掷骰，无法结算结果'
-      case 'unitNotInTargetHex':
-        return '受损单位不在目标格内'
-      case 'invalidSteps':
-        return '损失点数必须是非负整数'
-      case 'duplicateLossUnit':
-        return '同一单位不能重复分配损失'
-      case 'lossExceedsSteps':
-        return '分配的点数超过该单位当前军力'
-      case 'lossAllocationMismatch':
-        return '损失点数合计与结果要求不符'
-      case 'noLossExpected':
-        return '本次结果不应造成军力损失'
-      case 'invalidAircraftLossRoll':
-        return '飞机的损失骰值应为 1–6'
-      case 'notAtSupplyStep':
-        return '当前不在补给步骤'
-      case 'notAtShiftsStep':
-        return '当前不在横移步骤'
-      case 'notAtDiceStep':
-        return '当前不在掷骰步骤'
-      case 'notAtOutcomeStep':
-        return '当前不在结果步骤'
-      case 'noBarrageResult':
-        return '还没有结果可结算'
-      case 'invalidLossAllocation':
-        return '损失分配不合法'
-      case 'movementSegmentOnlyHipShoot':
-        return '移动环节只允许低空扫射'
-      case 'tooManyAircraft':
-        return '一次轰炸的飞机超过上限（≤4）'
-      case 'hipShootNeedsCorrectSpotter':
-        return '低空扫射必须有正确的观察员'
-      default:
-        if (code.startsWith('wrongPhaseFor')) return '当前阶段不允许这类轰炸'
-        return detail === '' ? `本次操作被规则拒绝（${error.rule}）` : `${detail}（${error.rule}）`
-    }
-  }
-
   /** 当前炮击错误的中文行（无错误 ⇒ null） */
   const barrageErrorLine = computed<string | null>(() => {
     const error = barrageError.value
-    return error === null ? null : barrageErrorTextOf(error)
+    return error === null ? null : ruleErrorTextOf(error)
   })
 
   /**
-   * 战斗错误的中文行（与炮击 `barrageErrorTextOf` 同一套做法）
-   *
-   * 引擎/操作台给的是 `{ rule, reason }`：操作台自己写的中文原因原样返回；引擎的 `reason`
-   * 是内部代码（`stratCannotAttack:<id>` 这类），这里译成一句人话，**不再原样打印内部代码**，
-   * 也不把算子 id 露给玩家。未覆盖的代码退回「本次操作被规则拒绝（规则号）」。
+   * 战斗错误的中文行（与炮击共用 `ruleErrorTextOf`，三张表在 `engine/rules/rule-error-text`）
    */
-  function combatErrorTextOf(error: { rule: string; reason: string }): string {
-    if (/[\u4e00-\u9fa5]/.test(error.reason)) return error.reason
-    const [head] = error.reason.split(':')
-    const code = head ?? ''
-    switch (code) {
-      case 'noAttacker':
-        return '没有选择攻击单位'
-      case 'noDefender':
-        return '防御格内没有敌方战斗单位'
-      case 'defendersInMultipleHexes':
-        return '守方单位不在同一格'
-      case 'duplicateAttacker':
-        return '同一单位被重复加入攻方'
-      case 'friendlyFire':
-        return '攻方里混入了守方单位'
-      case 'airTransportForbidsAttack':
-        return '该单位本阶段被空运限制，不能进攻'
-      case 'stratCannotAttack':
-        return '战略模式的单位不能进攻（9.1e）'
-      case 'unreleasedReserveCannotAttack':
-        return '未释放的预备单位不能进攻（9.1e）'
-      case 'defenseOnlyUnit':
-        return '只能防御的单位不能进攻（9.1e）'
-      case 'cannotEnterDefendingHex':
-        return '该单位不能进入被攻击的格（9.1f）'
-      case 'unitAlreadyAttackedThisSegment':
-        return '该单位本环节已经进攻过'
-      case 'hexAlreadyAttackedThisSegment':
-        return '该格本环节已经被攻击过'
-      case 'noAttackerAfterReduction':
-        return '攻方减员后已没有参战单位'
-      case 'attackerNotInComposition':
-        return '名单里有不在本场战斗中的攻方单位'
-      case 'attackSupplyNotFull':
-        return '战斗补给不足：先在地图上点补给站付足攻方所需的 T'
-      case 'attackerArAlreadyDeclared':
-        return '攻方已经宣布过行动值'
-      case 'attackerArUnitNotParticipating':
-      case 'attackerArUnitNotInBattle':
-      case 'defenderArUnitNotInBattle':
-        return '所选单位不在本场战斗中'
-      case 'attackerArMustBeDeclaredFirst':
-        return '先宣布攻方行动值，再宣布守方'
-      case 'supplyOrArMissingBeforeTerrain':
-        return '补给或行动值还没有确认'
-      case 'defenderTerrainNotHexTerrain':
-        return '守方地形必须是防御格内地形'
-      case 'noCombatLine':
-        return '该地形没有对应的战斗表横行（9.3c）'
-      case 'stackTerrainNotCandidate':
-        return '该地形不是这个堆叠的可选地形（9.4b）'
-      case 'defenderMayNotIgnoreOptions':
-        return '本场守方不能忽略选项（9.10c）'
-      case 'nkvdArUnitForbidsIgnoringOptions':
-        return 'NKVD 边防团担任行动值单位时，守方不得忽略选项（专规 2.3b）'
-      case 'badRetreatHexes':
-      case 'badLossPoints':
-        return '选项点数不合法'
-      case 'optionNotFullySatisfied':
-        return '选项点数还没有完全分配'
-      case 'optionLossExceedsAvailableSteps':
-        return '选项损失超过了该方还能承受的军力'
-      case 'retreatEndHexUnavailable':
-        return '这个撤退落点不可用'
-      case 'unknownUnit':
-        return '损失名单里有不在本场战斗中的单位'
-      case 'badSteps':
-        return '给该单位分配的点数不合法'
-      case 'arUnitMustTakeFirstLoss':
-        return '第一点损失必须先由行动值单位承受（9.11c）'
-      case 'lossAllocationViolatesSpreadRule':
-        return '损失分配不符合“先 AR、再均匀展开”（9.11c）'
-      case 'retreatPathMissing':
-        return '还有单位没有选定撤退落点'
-      case 'retreatPathRepeatsHex':
-        return '撤退路径重复经过同一格'
-      case 'retreatPathReturnsToStart':
-        return '撤退路径不能回到起始格'
-      case 'retreatOffMapForbidden':
-        return '本作撤退不能离图（专规 1.4b）'
-      case 'tagalongUnknownUnit':
-        return '跟随名单里有未知单位'
-      case 'tagalongHostEliminated':
-        return '跟随的宿主已被消灭'
-      case 'neitherCombatUnitNorOrganicTruck':
-        return '跟随者必须是战斗单位或编内卡车（9.12d）'
-      case 'attackerRetreatedNoAdvance':
-        return '攻方曾经撤退，不能推进（9.12g-B）'
-      case 'immobileUnitCannotAdvance':
-        return '不能移动的单位不能推进'
-      case 'noUnitPaidCombatSupply':
-        return '没有付过战斗补给的攻方单位可以推进'
-      case 'chosenUnitDidNotPayCombatSupply':
-        return '所选的推进单位没有付战斗补给'
-      case 'notStackedAtPhaseStart':
-        return '突袭要求参战单位在阶段开始时同堆叠（8.1）'
-      case 'arOrOddsMissingBeforeSurprise':
-      case 'arOrOddsMissingBeforeDice':
-      case 'diceOrArMissingBeforeLosses':
-      case 'diceMissingBeforeOptions':
-      case 'arOrDiceMissingBeforeAdvance':
-        return '上一步结算还没有完成'
-      case 'notAtLossStage':
-      case 'notAtOptionStage':
-        return '当前不是该方的结算步骤'
-      default:
-        if (code.startsWith('notAt')) return '当前不在这一步'
-        return `本次操作被规则拒绝（${error.rule}）`
-    }
-  }
-
-  /** 当前战斗错误的中文行（无错误 ⇒ null） */
   const combatErrorLine = computed<string | null>(() => {
     const error = combatError.value
-    return error === null ? null : combatErrorTextOf(error)
+    return error === null ? null : ruleErrorTextOf(error)
+  })
+
+  /** 空中任务错误的中文行（14.x / 15.x，与炮击、战斗同表） */
+  const airErrorLine = computed<string | null>(() => {
+    const error = airError.value
+    return error === null ? null : ruleErrorTextOf(error)
   })
 
   /**
@@ -26926,7 +26720,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     barrageError,
     // 用户 2026-11-12：错误提示中文化（面板不再显示引擎 reason 代码）
     barrageErrorLine,
-    barrageErrorTextOf,
     barrageInputs,
     // A 组接线：10.0e-A/B 的按阶段轰炸账本（界面显示"本阶段已轰炸 N 格 / M 单位"）
     barragePhaseLedger,
@@ -27154,6 +26947,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     airMissionAirIds,
     airState,
     airError,
+    airErrorLine,
     airInputs,
     airBases,
     ownAirBases,

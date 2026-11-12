@@ -79,6 +79,7 @@ const barrageErrorLine = computed(() => workbench.barrageErrorLine)
 
 /** 空军错误（既有形状） */
 const airError = computed(() => workbench.airError)
+const airErrorLine = computed(() => workbench.airErrorLine)
 
 /** 炮击第 2 步的付款来源（地图上高亮的那几座站） */
 const supplyDumps = computed(() => workbench.barrageSupplyMapDumps)
@@ -281,9 +282,9 @@ function setTargetKind(kind: string): void {
       </div>
       <p v-if="airGroups.length === 0" class="muted">没有能执行该任务的飞机。</p>
 
-      <p v-if="airError !== null" class="warn num">
-        <BaseTag kind="danger">{{ airError.rule }}</BaseTag>
-        {{ airError.reason }}
+      <p v-if="airErrorLine !== null" class="warn num">
+        <BaseTag kind="danger">{{ airError?.rule }}</BaseTag>
+        {{ airErrorLine }}
       </p>
 
       <div class="ops__actions">
