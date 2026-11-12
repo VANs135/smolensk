@@ -370,7 +370,9 @@ import {
   type InterceptionResponse,
   type LegalityVerdict,
   type MoveStepRecord,
+  type MoveInteractionState,
   type MoveUnitRuntime,
+  type OverrunMovePlan,
   type MovementSegmentPhase,
   type OosAction,
   type Orientation,
@@ -6312,18 +6314,47 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
+  /** 突袭记账的**纯规划**（M4 事务化：只读，不写任何 store） */
+  type OverrunSettlementDraft = {
+    context: NonNullable<typeof overrunContext.value>
+    plan: OverrunMovePlan
+    attackerRetreated: boolean
+    /** 推进步给出的「防御格已清空」事实（8.0 的进入判据） */
+    defenderLeftHex: boolean
+    liveParticipantIds: string[]
+    /** 参突者全部离场 ⇒ 就地结束移动（`endMoveEarly` 的结果） */
+    closed: { interaction: MoveInteractionState; patches: MoveUnitRuntime[] } | null
+    /** 正常记账结果 */
+    applied: { interaction: MoveInteractionState; patches: MoveUnitRuntime[] } | null
+    /** 记账被引擎拒（8.1g/8.0 等） */
+    rejected: { reason: string; rule: string } | null
+    /** 要写回的移动交互新状态（closed / applied 二选一） */
+    nextInteraction: MoveInteractionState | null
+    /** 要写回的单位运行态补丁 */
+    movePatches: MoveUnitRuntime[]
+  }
+
   /**
-   * 突袭结算后把移动记账落盘（8.1a 3 MP / 8.0 必须进格 / 8.1f 结束移动 / 8.1g 只动参突者）
+   * 突袭结算的**补丁计算**（8.1a 3 MP / 8.0 必须进格 / 8.1f 结束移动 / 8.1g 只动参突者）
    *
-   * `defenderLeftHex` 由推进步的结论给出（防御格已清空）；`attackerRetreatedInOptions`
-   * 取本场战斗的选项结算结论（9.10c：攻方用选项撤退后不再进格）。
+   * `defenderLeftHex` 由推进步的结论给出（防御格已清空）；攻方是否在选项里撤退取
+   * 本场战斗的选项结算结论（9.10c：攻方用选项撤退后不再进格）。
+   *
+   * ★ M4：本函数**不落盘**。`confirmCombatAdvance` 先把它与 9.12g 的战斗补丁一起算出、
+   *   再一次性 apply，从而没有「战斗已推进、突袭 3 MP 却没记」的半截状态（K5 的结构性根因）。
    */
-  function settleOverrunMove(defenderLeftHex: boolean): boolean {
+  function planOverrunSettlement(
+    defenderLeftHex: boolean,
+    /**
+     * M4 事务化：本次推进同时会把哪些参突者打成 0 军力（取 `data.patches` 的 `steps<=0`）。
+     * 修前这段记账发生在 `applyCombatPatches` 之后，运行态已不含阵亡者；现在补丁要一次算出，
+     * 故由调用方把「即将离场」的 id 显式交进来，账目与修前一致。
+     */
+    eliminatedIds: ReadonlySet<string> = new Set(),
+  ): OverrunSettlementDraft | null {
     const context = overrunContext.value
-    const interaction = moveInteraction.value
-    if (context === null) return false
+    if (context === null) return null
     const state = combatState.value
-    // 9.10c：攻方用选项撤退 ⇒ 不进防御格（8.1f 同时让其在当前阶段的移动结束）
     const attackerRetreated = (state?.resolution.attacker.option?.retreatHexes ?? 0) > 0
     const aftermath = resolveOverrunAftermath({
       mpRemainingBefore: context.mpRemainingBefore,
@@ -6336,6 +6367,73 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       target: context.target,
       aftermath,
     })
+    // 视同「阵亡者已移出盘面」——与修前 `applyCombatPatches` 之后再记账的运行态一致
+    const runtime =
+      eliminatedIds.size === 0
+        ? moveRuntime.value
+        : moveRuntime.value.filter((unit) => !eliminatedIds.has(unit.unitId))
+    // 参突单位若已在战斗中阵亡/移出盘面 ⇒ 8.1a 的 3 MP 与 8.0 的进格都**没有对象可记**
+    const liveParticipantIds = plan.participantIds.filter((id) =>
+      runtime.some((unit) => unit.unitId === id),
+    )
+    const base = { context, plan, attackerRetreated, defenderLeftHex, liveParticipantIds }
+    if (liveParticipantIds.length === 0) {
+      const current = moveInteraction.value
+      const closed = current === null ? null : endMoveEarly({ interaction: current, runtime })
+      return {
+        ...base,
+        closed,
+        applied: null,
+        rejected: null,
+        nextInteraction: closed?.interaction ?? null,
+        movePatches: closed === null ? [] : [...closed.patches],
+      }
+    }
+    const interaction = moveInteraction.value
+    if (interaction === null)
+      return {
+        ...base,
+        closed: null,
+        applied: null,
+        rejected: null,
+        nextInteraction: null,
+        movePatches: [],
+      }
+    const result = applyOverrunMove({ interaction, runtime, plan })
+    if (!result.ok)
+      return {
+        ...base,
+        closed: null,
+        applied: null,
+        rejected: { reason: result.reason, rule: result.rule },
+        nextInteraction: null,
+        movePatches: [],
+      }
+    return {
+      ...base,
+      closed: null,
+      applied: { interaction: result.data.interaction, patches: [...result.data.patches] },
+      rejected: null,
+      nextInteraction: result.data.interaction,
+      movePatches: [...result.data.patches],
+    }
+  }
+
+  /**
+   * 把突袭记账规划**落盘并收尾**
+   *
+   * @param patchesAlreadyApplied 事务化路径（`confirmCombatAdvance`）已在同一次 apply 里
+   *   写过 `movePatches` 与 `nextInteraction`，此处只做收尾与日志，避免二次落盘。
+   */
+  function settleOverrunPlan(
+    draft: OverrunSettlementDraft,
+    patchesAlreadyApplied = false,
+  ): boolean {
+    const { context, plan, attackerRetreated, liveParticipantIds } = draft
+    if (!patchesAlreadyApplied) {
+      if (draft.nextInteraction !== null) moveInteraction.value = draft.nextInteraction
+      if (draft.movePatches.length > 0) applyMovePatches(draft.movePatches)
+    }
     if (plan.missingParticipantIds.length > 0) {
       pushLog(
         'warning',
@@ -6343,23 +6441,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         '8.1g',
       )
     }
-    // 参突单位若已在战斗中阵亡/移出盘面 ⇒ 8.1a 的 3 MP 与 8.0 的进格都**没有对象可记**。
-    // 此时必须就地收束，否则移动交互会挂着一批已不存在的 id（界面卡在「移动中」）。
-    const liveParticipantIds = plan.participantIds.filter((id) =>
-      moveRuntime.value.some((unit) => unit.unitId === id),
-    )
     if (liveParticipantIds.length === 0) {
       pushLog(
         'warning',
         `参突单位已不在盘面（阵亡或移除）⇒ 突袭无需记账；本次移动就地收束（8.1a）`,
         '8.1a',
       )
-      const current = moveInteraction.value
-      if (current !== null) {
-        const closed = endMoveEarly({ interaction: current, runtime: moveRuntime.value })
-        applyMovePatches(closed.patches)
-        moveInteraction.value = closed.interaction
-      }
       overrunContext.value = null
       // ②b-2：与正常收束分支同一口径 —— 参突 pin / 攻方名单 / 跟随者一场即作废
       clearOverrunSelectionAfterConclusion()
@@ -6372,43 +6459,45 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           stage: 'settle',
           participantsGone: true,
           mayContinueMoving: plan.mayContinueMoving,
-          defenderLeftHex,
+          defenderLeftHex: draft.defenderLeftHex,
           attackerRetreated,
           detail: plan.detail,
         },
       })
       return true
     }
-    if (interaction !== null) {
-      const applied = applyOverrunMove({ interaction, runtime: moveRuntime.value, plan })
-      if (applied.ok) {
-        moveInteraction.value = applied.data.interaction
-        applyMovePatches(applied.data.patches)
-        /*
-         * 4.5a-A：突袭记账落盘后，这一枚**不再处于"进 ZOC 停车"状态**——
-         *   它要么已进防御方格（8.0）、要么原地相持，总之这次"停车"已用掉。
-         *   不摘掉的话，随后它因别的原因结束移动时仍会被当成可突袭者（账本失真）。
-         *   若它真的进了新的敌方 ZOC，下一步 `planStep` 会重新记账。
-         */
-        zocStoppedMoveUnitIds.value = zocStoppedMoveUnitIds.value.filter(
-          (id) => !context.participantIds.includes(id),
+    if (draft.applied !== null) {
+      /*
+       * 4.5a-A：突袭记账落盘后，这一枚**不再处于"进 ZOC 停车"状态**——
+       *   它要么已进防御方格（8.0）、要么原地相持，总之这次"停车"已用掉。
+       *   不摘掉的话，随后它因别的原因结束移动时仍会被当成可突袭者（账本失真）。
+       *   若它真的进了新的敌方 ZOC，下一步 `planStep` 会重新记账。
+       */
+      zocStoppedMoveUnitIds.value = zocStoppedMoveUnitIds.value.filter(
+        (id) => !context.participantIds.includes(id),
+      )
+      /*
+       * 条 17（批 F·F2）：4.5a 标记。防御方离格 ⇒ 参突者强行进入防御方格（8.0 的进入是强制的）；
+       * 若该格处于敌方 ZOC（"挺进 ZOC"），按 4.5a 此单位"不得离开、须再突袭或停"。
+       * 仅置事实标记（UI 提示用），不改移动引擎的 ZOC 停车逻辑。
+       */
+      if (
+        draft.defenderLeftHex &&
+        inEnemyZocAt(moveContext.value, context.target, activeSide.value)
+      ) {
+        overrunZocHeldHex.value = { ...context.target }
+        pushLog(
+          'warning',
+          `4.5a：突袭进入 ${hexLabel(context.target)}（敌方 ZOC）⇒ 该单位不得离开、须再突袭或停`,
+          '4.5a',
         )
-        /*
-         * 条 17（批 F·F2）：4.5a 标记。防御方离格 ⇒ 参突者强行进入防御方格（8.0 的进入是强制的）；
-         * 若该格处于敌方 ZOC（"挺进 ZOC"），按 4.5a 此单位"不得离开、须再突袭或停"。
-         * 仅置事实标记（UI 提示用），不改移动引擎的 ZOC 停车逻辑。
-         */
-        if (defenderLeftHex && inEnemyZocAt(moveContext.value, context.target, activeSide.value)) {
-          overrunZocHeldHex.value = { ...context.target }
-          pushLog(
-            'warning',
-            `4.5a：突袭进入 ${hexLabel(context.target)}（敌方 ZOC）⇒ 该单位不得离开、须再突袭或停`,
-            '4.5a',
-          )
-        }
-      } else {
-        pushLog('warning', `突袭记账被拒：${applied.reason}（${applied.rule}）`, applied.rule)
       }
+    } else if (draft.rejected !== null) {
+      pushLog(
+        'warning',
+        `突袭记账被拒：${draft.rejected.reason}（${draft.rejected.rule}）`,
+        draft.rejected.rule,
+      )
     } else {
       // 移动交互已在别处清空 ⇒ 3 MP 与进格无处落盘。静默跳开会让人以为「结算过了」，
       // 故显式报出（8.1a 的 MP 未记、8.0 的进格未做），便于就地补记。
@@ -6437,7 +6526,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         participantIds: [...plan.participantIds],
         missingParticipantIds: [...plan.missingParticipantIds],
         mayContinueMoving: plan.mayContinueMoving,
-        defenderLeftHex,
+        defenderLeftHex: draft.defenderLeftHex,
         attackerRetreated,
         detail: plan.detail,
       },
@@ -6447,6 +6536,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('info', `突袭后剩余 MP 不足以再次突袭（8.1a）⇒ 仍可继续移动，只是不能再突袭`, '8.1a')
     }
     return true
+  }
+
+  /** 突袭结算后把移动记账落盘（8.1a 3 MP / 8.0 必须进格 / 8.1f 结束移动 / 8.1g 只动参突者） */
+  function settleOverrunMove(defenderLeftHex: boolean): boolean {
+    const draft = planOverrunSettlement(defenderLeftHex)
+    return draft === null ? false : settleOverrunPlan(draft)
   }
 
   /**
@@ -10140,23 +10235,53 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
   }
 
-  /** C6：把引擎给出的战斗变更落盘（引擎不写状态，CODE_SPEC §3.1）；军力归零者移入死亡堆（9.11） */
-  function applyCombatPatches(patches: readonly CombatUnitPatch[]): void {
+  /**
+   * C6：把引擎给出的战斗变更落盘（引擎不写状态，CODE_SPEC §3.1）；军力归零者移入死亡堆（9.11）
+   *
+   * M4：可选的 `movePatches` 让「9.12g 战斗推进补丁 + 8.0 突袭移动补丁」**一次算、一次落盘**
+   * （K5 的结构性根因：修前先写战斗、再写突袭，中途失败会留下「已推进却没扣 3 MP」的半截状态）。
+   * 合并后每枚单位只写一遍，字段次序仍沿用修前口径（军力→格→DG→进击→移动格/MP/结束标记）；
+   * 「进入某格」（专规 3.5）按**最终格**只判一次（两处同格时与修前的第二次空操作等价）。
+   */
+  function applyCombatPatches(
+    patches: readonly CombatUnitPatch[],
+    movePatches: readonly MoveUnitRuntime[] = [],
+  ): void {
+    const moveById = new Map(movePatches.map((patch) => [patch.unitId, patch]))
+    const ids =
+      movePatches.length === 0
+        ? patches.map((patch) => patch.unitId)
+        : [...new Set([...patches.map((patch) => patch.unitId), ...moveById.keys()])]
+    const patchById = new Map(patches.map((patch) => [patch.unitId, patch]))
     const eliminated: ConsoleUnit[] = []
-    for (const patch of patches) {
-      const unit = units.value.find((item) => item.instanceId === patch.unitId)
+    for (const id of ids) {
+      const unit = units.value.find((item) => item.instanceId === id)
       if (unit === undefined) continue
-      if (patch.steps !== undefined) {
+      const patch = patchById.get(id)
+      const move = moveById.get(id)
+      let dead = false
+      if (patch?.steps !== undefined) {
         unit.steps = patch.steps
-        if (patch.steps <= 0) eliminated.push(unit)
+        if (patch.steps <= 0) {
+          dead = true
+          eliminated.push(unit)
+        }
       }
-      if (patch.hex !== undefined) {
-        unit.hex = { ...patch.hex }
-        // 专规 3.5：战斗后推进/撤退同样是"进入某格"
-        noteUnitEnteredHex(unit, patch.hex)
+      // 9.11 阵亡者：修前 `applyCombatPatches` 之后即移入死亡堆，后续移动补丁对它不再生效
+      if (dead) continue
+      if (patch?.hex !== undefined) unit.hex = { ...patch.hex }
+      if (patch?.dg === true) applyDgToUnit(unit)
+      if (patch?.exploit === true) unit.mode.exploit = true
+      if (move !== undefined) {
+        unit.hex = { ...move.hex }
+        unit.mpSpent = move.spentMp
+        unit.movementEnded = move.ended
+        // 13.8b 末句例外：离开自有桥格后，这条例外即用尽
+        noteUnitLeftOwnBridgeHex(unit)
       }
-      if (patch.dg === true) applyDgToUnit(unit)
-      if (patch.exploit === true) unit.mode.exploit = true
+      // 专规 3.5：战斗后推进/撤退（以及 8.0 的突袭进格）同样是"进入某格"，按最终格判一次
+      const finalHex = move?.hex ?? patch?.hex
+      if (finalHex !== undefined) noteUnitEnteredHex(unit, finalHex)
     }
     for (const unit of eliminated)
       eliminateEntry(unit, '9.11', `${unit.name} 军力归零，移入死亡堆（9.11）`)
@@ -11811,8 +11936,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (overrunContext.value !== null) settleOverrunMove(combatDefendingHexCleared.value)
       return false
     }
+    /*
+     * M4：先把「9.12g 战斗推进补丁」与「8.0 突袭移动补丁」**一次算出**，再一次性 apply。
+     * 修前是 applyCombatPatches 先写、settleOverrunMove 末尾再写：中途失败会留下
+     * 「战斗已推进、突袭 3 MP 却没记」的半截状态（K5 的结构性根因）。
+     */
+    const overrunDraft = planOverrunSettlement(
+      combatDefendingHexCleared.value,
+      new Set(
+        data.patches
+          .filter((patch) => patch.steps !== undefined && patch.steps <= 0)
+          .map((patch) => patch.unitId),
+      ),
+    )
+    applyCombatPatches(data.patches, overrunDraft?.movePatches ?? [])
     combatState.value = data.state
-    applyCombatPatches(data.patches)
+    if (overrunDraft?.nextInteraction !== null && overrunDraft?.nextInteraction !== undefined)
+      moveInteraction.value = overrunDraft.nextInteraction
     // 9.12g-C：推进进入防御格后，立即按 9.14 处置该格（夺取环形工事 9.14e / 空军基地 9.14f /
     //   补给站 9.14b / 运输点与延补队 9.14c-d；位移落点由玩家在地图上选）
     const entered = battleTarget.value?.hex ?? null
@@ -11854,11 +11994,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     if (data.advanceUnitIds.length > 0)
       openBreakdownWindow('advanceAfterCombat', data.advanceUnitIds)
-    // W7 C16：若本场是**突袭**（8.0），推进步就是它的收束点 ⇒ 把 3 MP 与进格记回移动交互
-    if (overrunContext.value !== null) {
-      // 「防御方是否离开该格」取事实（推进步落盘后重算，8.0 的进入判据就是它）
-      settleOverrunMove(combatDefendingHexCleared.value)
-    }
+    // W7 C16：若本场是**突袭**（8.0），推进步就是它的收束点 ⇒ 3 MP 与进格已在上面的事务里落盘，
+    // 这里只做收尾（ZOC 账本、4.5a 标记、日志与记账），不再二次写补丁。
+    if (overrunDraft !== null) settleOverrunPlan(overrunDraft, true)
     return true
   }
 
