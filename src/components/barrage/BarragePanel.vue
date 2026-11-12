@@ -489,7 +489,9 @@ function setAircraftRoll(unitId: string, value: number): void {
             ④ 掷骰（10.0）
           </BaseButton>
         </div>
-        <p v-if="awaitingHalfDie" class="muted">已出 `1/2`：再点一次「掷骰」即自动补掷取整骰。</p>
+        <p v-if="awaitingHalfDie" class="muted">
+          已出 `1/2`：本次点击会自动补掷取整骰并继续，无需再点（10.0a）。
+        </p>
       </SessionStep>
 
       <!-- ── ⑤ 结果确认（10.0a / 10.0c）── -->
