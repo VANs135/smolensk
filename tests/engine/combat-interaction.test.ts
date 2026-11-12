@@ -748,6 +748,38 @@ describe('9.10 / 9.11 结算：攻方先、守方后，从 AR 单位起算', () 
     expect(ignored.state.step).toBe('retreat')
   })
 
+  it('9.10c/C2：守方**进入选项页时**即可见 optionIgnorable（不必先提交一次选项）', () => {
+    const { state, attackers, defenders } = afterLowDice()
+    const losses = unwrap(planLosses(state, { units: [...attackers, ...defenders] }))
+    const current = applyPatches([...attackers, ...defenders], losses.patches)
+    const attackerUnits = current.filter((item) => item.side === 'axis')
+    // 攻方用选项撤退 ⇒ 守方本来就有权忽略
+    const options = unwrap(
+      planOptions(losses.state, { units: attackerUnits, retreatHexes: 1, lossPoints: 0 }),
+    )
+    const defenderLosses = unwrap(planLosses(options.state, { units: current }))
+    expect(defenderLosses.state.resolution.stage).toBe('defenderOptions')
+    // 修前：该字段只在 planOptions 成功提交后写入 ⇒ 界面勾选框永远拿不到 true
+    expect(defenderLosses.state.resolution.defender.optionIgnorable).toBe(true)
+  })
+
+  it('9.10c/C2：攻方把选项全部吃成损失（未撤退）⇒ optionIgnorable 为 false 且忽略被拒', () => {
+    const { state, attackers, defenders } = afterLowDice()
+    const losses = unwrap(planLosses(state, { units: [...attackers, ...defenders] }))
+    const current = applyPatches([...attackers, ...defenders], losses.patches)
+    const attackerUnits = current.filter((item) => item.side === 'axis')
+    const options = unwrap(
+      planOptions(losses.state, { units: attackerUnits, retreatHexes: 0, lossPoints: 1 }),
+    )
+    const afterAttacker = applyPatches(current, options.patches)
+    const defenderLosses = unwrap(planLosses(options.state, { units: afterAttacker }))
+    expect(defenderLosses.state.resolution.defender.optionIgnorable).toBe(false)
+    const defenderUnits = afterAttacker.filter((item) => item.side === 'soviet')
+    expect(planOptions(defenderLosses.state, { units: defenderUnits, ignore: true })).toMatchObject(
+      { ok: false, rule: '9.10c' },
+    )
+  })
+
   /*
    * H①（用户 2026-09-18 报的第 2 条）：**攻方在承受选项前被摧毁 ⇒ 跳过攻方选项页**
    *

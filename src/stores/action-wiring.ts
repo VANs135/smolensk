@@ -162,6 +162,8 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'confirmCombatOptions',
       'confirmCombatRetreats',
       'confirmCombatSupply',
+      // 9.10c 例 B：守方选项页的「结束战斗」一键（仅攻方全灭时出现，见 attackerWipedNow）
+      'concludeCombatAfterWipe',
       'confirmMovePick',
       'confirmSpecialCombatNow',
       'declareCombatArStep',

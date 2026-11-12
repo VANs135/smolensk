@@ -316,6 +316,11 @@ describe('批 F·F1（条 15/16）：选项页草稿账本与「受损 / 撤退�
     expect(store.concludeCombatAfterWipe()).toBe(true)
     expect(store.combatState?.finished).toBe(true)
     expect(store.combatState?.resolution.defender.optionIgnored).toBe(true)
+    /*
+     * 9.10c（C2 收口）：一键收尾要把「攻方在承受选项前已被摧毁」**显式落账**——
+     * 引擎只认这条记录，不把「名单取不齐」猜成全灭。
+     */
+    expect(store.combatState?.resolution.attacker.optionsSkipped).toBe('attackerWipedOut')
   }, 30_000)
 })
 

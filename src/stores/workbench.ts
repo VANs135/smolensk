@@ -11416,6 +11416,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function concludeCombatAfterWipe(): boolean {
     const state = combatState.value
     if (state === null || !attackerWipedNow.value) return false
+    /*
+     * 9.10c（C2 收口，2026-11-12）：把「攻方在承受选项前已被摧毁」**显式写进结算记录**。
+     * 引擎的 `attackerCannotCompleteOptions` 只认 `composition.attackerIds` 与 `optionsSkipped`，
+     * 不把「名单取不齐」猜成全灭 —— 而本按钮可见即等价于该事实成立（`attackerWipedNow`），
+     * 故在此落账，守卫首行短路，忽略权才有依据。
+     */
+    if (state.resolution.attacker.optionsSkipped !== 'attackerWipedOut') {
+      combatState.value = {
+        ...state,
+        resolution: {
+          ...state.resolution,
+          attacker: { ...state.resolution.attacker, optionsSkipped: 'attackerWipedOut' },
+        },
+      }
+    }
     combatInputs.value.ignoreOptions = true
     if (!confirmCombatOptions()) return false
     if (combatState.value?.step === 'retreat' && !confirmCombatRetreats()) return false

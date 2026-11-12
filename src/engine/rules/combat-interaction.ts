@@ -678,6 +678,27 @@ export function currentResolver(state: CombatInteractionState): CombatRole {
 }
 
 /**
+ * 9.10c：攻方是否「已无法完成全部选项」（守方可据此忽略自己的选项）
+ *
+ * 调用方（store / 测试）通常只传**本环节该方**的单位，故不能对 `units` 全体直接求值
+ * （否则守方结算时攻方单位缺席会被误判成「全灭」）。这里按 `state.composition.attackerIds`
+ * 逐个取：取不齐就退回 `optionsSkipped` 的记录，宁可判「攻方已完成」也不凭空发放权利。
+ */
+function attackerCannotCompleteOptions(
+  state: CombatInteractionState,
+  units: readonly BattleUnitView[],
+): boolean {
+  if (state.resolution.attacker.optionsSkipped === 'attackerWipedOut') return true
+  const ids = state.composition.attackerIds
+  if (ids.length === 0) return false
+  const views = ids
+    .map((id) => units.find((unit) => unit.id === id))
+    .filter((unit): unit is BattleUnitView => unit !== undefined)
+  if (views.length !== ids.length) return false
+  return views.every((unit) => unit.steps <= 0)
+}
+
+/**
  * 第 8 步（强制损失）：9.11 军力损失
  *
  * 「永远攻击方先结算，并在防御方决定要做什么之前，先结算其战斗结果。**攻击方先承受强制的军力损失**，
@@ -746,12 +767,26 @@ export function planLosses(
       : defenderWipedOut
         ? 'done'
         : 'defenderOptions'
+  /*
+   * 9.10c（C2）：守方**进入选项页的那一刻**就该知道能否忽略自己的选项。
+   * 修前只有 `planOptions` 成功提交后才写 `optionIgnorable`，而界面勾选框又依赖该字段，
+   * 于是勾选框永远等不到 `true`（权利不可达）。这里在进入 `defenderOptions` 时按同一判据写入。
+   */
+  const attackersForIgnore = side === 'defender' ? unitsOfSide(state, input.units, 'attacker') : []
+  const optionIgnorable =
+    side === 'defender' && nextStage === 'defenderOptions'
+      ? defenderMayIgnoreOptions({
+          attackerRetreated: (state.resolution.attacker.option?.retreatHexes ?? 0) > 0,
+          attackerCompleted: !attackerCannotCompleteOptions(state, attackersForIgnore),
+        }).mayIgnore
+      : undefined
   const sideRecord: CombatSideResolution = {
     forcedLosses: checked.data.allocation,
     eliminated: checked.data.eliminated,
     ignoredLosses: canonical.ignored,
     ...(attackerWipedOut ? { optionsSkipped: 'attackerWipedOut' as const } : {}),
     ...(defenderWipedOut ? { optionsSkipped: 'defenderWipedOut' as const } : {}),
+    ...(optionIgnorable === undefined ? {} : { optionIgnorable }),
   }
 
   return succeed(attackerWipedOut ? '9.10c' : '9.11', {
@@ -826,8 +861,8 @@ export function planOptions(
 
   // 9.10c（辅助卡战斗结果说明注 2）：守方在**攻方用选项撤退**或**攻方在承受选项前已被摧毁**时
   // 可以忽略自己的选项（也可主动行使全部选项）。攻方永远必须完成自己的选项。
-  const attackerUnits = unitsOfSide(state, input.units, 'attacker')
-  const attackerWipedOut = attackerUnits.every((unit) => unit.steps <= 0)
+  // 注意：调用方只传**本环节该方**的单位，故不能直接对 `input.units` 全体求「攻方全灭」。
+  const attackerWipedOut = attackerCannotCompleteOptions(state, input.units)
   const ignorable =
     side === 'defender'
       ? defenderMayIgnoreOptions({
