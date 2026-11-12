@@ -437,6 +437,56 @@ describe('12.7 延补队：生成、新的 trace 取用点、锁链', () => {
     ).toMatchObject({ ok: false, rule: '12.7d', reason: 'notConnectedToSource' })
   })
 
+  it('12.7d + 12.7b（G7）：生成连通按即将生成那一面的**印值 MA**，不是 5 轮式 MP', () => {
+    const hexes = corridor(0, 24)
+    const source = { hex: at(0), side: 'axis' as Side, kind: 'detrainable' as BaseSourceKind }
+    const facts = makeFacts({ hexes, sources: [source] })
+    // 省略 rangeMp：退回旧口径（接收段 5 轮式 MP）⇒ 12 格连不上
+    expect(
+      canCreateExtenderAt(facts, { hex: at(12), side: 'axis', mobility: 'truck' }),
+    ).toMatchObject({ ok: false, rule: '12.7d', reason: 'notConnectedToSource' })
+    // 卡车延补队印值 20 MP：12 格连得上（G7：生成连通用印值，不是 5）
+    expect(
+      canCreateExtenderAt(facts, { hex: at(12), side: 'axis', mobility: 'truck', rangeMp: 20 }),
+    ).toMatchObject({ ok: true, rule: '12.7d' })
+    // 马车延补队印值 10 MP：12 格仍连不上；9 格（≤10）可以
+    expect(
+      canCreateExtenderAt(facts, { hex: at(12), side: 'axis', mobility: 'leg', rangeMp: 10 }),
+    ).toMatchObject({ ok: false, rule: '12.7d', reason: 'notConnectedToSource' })
+    expect(
+      canCreateExtenderAt(facts, { hex: at(9), side: 'axis', mobility: 'leg', rangeMp: 10 }),
+    ).toMatchObject({ ok: true, rule: '12.7d' })
+  })
+
+  it('G7：直接拖取＝每个单位自带 5 轮式 MP 取抽象补给；补给站只提供具象，不充当抽象源', () => {
+    const hexes = corridor(0, 15)
+    const source = { hex: at(0), side: 'axis' as Side, kind: 'detrainable' as BaseSourceKind }
+    const facts = makeFacts({ hexes, sources: [source] })
+    expect(hasDirectDrawTraceSupply(facts, { hex: at(5), side: 'axis', mobility: 'truck' })).toBe(
+      true,
+    )
+    expect(hasDirectDrawTraceSupply(facts, { hex: at(6), side: 'axis', mobility: 'truck' })).toBe(
+      false,
+    )
+
+    // 同一格有 dump ⇒ 可吃具象（12.3a），但 dump 不是 12.6a 的源 ⇒ 抽象补给仍断
+    const withDump = makeFacts({ hexes, sources: [source], dumps: [{ hex: at(6), side: 'axis' }] })
+    expect(canDrawFromDump(withDump, { hex: at(6), side: 'axis', mobility: 'truck' }).ok).toBe(true)
+    expect(
+      hasDirectDrawTraceSupply(withDump, { hex: at(6), side: 'axis', mobility: 'truck' }),
+    ).toBe(false)
+
+    // 延补队＝连接远处源后**生成的新抽象源**：单位在其 5MP 内即可直接拖取
+    const withExtender = makeFacts({
+      hexes,
+      sources: [source],
+      extenders: [{ hex: at(10), side: 'axis', mobility: 'truck', rangeMp: 20 }],
+    })
+    expect(
+      hasDirectDrawTraceSupply(withExtender, { hex: at(15), side: 'axis', mobility: 'truck' }),
+    ).toBe(true)
+  })
+
   it('12.7a/12.7b：延补队回连到源后成为取用点；12.7c 锁链可再延伸', () => {
     const hexes = corridor(0, 12)
     const source = { hex: at(0), side: 'axis' as Side, kind: 'detrainable' as BaseSourceKind }

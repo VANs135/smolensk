@@ -1458,16 +1458,44 @@ export function canEatOffTheMap(
  *
  * 「延补队在生成时，如果此时它所在格无法与一个追溯补给的补给来源格相连，
  *   则不能在该格内生成延补队」⇒ 生成格必须能连到基础源（12.6a①②）或**已可用**的延补队。
+ *
+ * ★ G7（用户 2026-11-12 裁定）：延补队＝「连接远处己方补给源后**生成一个新的抽象补给源**」，
+ *   其回连距离是**即将生成那一面的印值 MA**（12.7b：卡车 20 / 马车 10），**不是** 12.3a 的
+ *   5 轮式 MP——把"生成连通"套成 5MP 是判**严**。故新增 `rangeMp`：给出时按印值距离判连通
+ *   （含 12.7g「相邻即可」与 12.7c 锁链），省略时退回 5MP 的接收段口径（兼容尚未接线的调用方）。
  */
 export function canCreateExtenderAt(
   facts: TraceSupplyFacts,
-  input: { hex: HexRef; side: Side; mobility: SupplyMobility },
+  input: {
+    hex: HexRef
+    side: Side
+    mobility: SupplyMobility
+    /** 12.7b：即将生成的延补队印值 MA（MP）。给出即按此距离判连通 */
+    rangeMp?: number
+  },
 ): SupplyVerdict {
   if (!facts.onMap(input.hex)) return { ok: false, rule: '12.7d', reason: 'offMap' }
   if (!sourceUsable(facts, input.side, input.hex))
     return { ok: false, rule: '12.7d', reason: 'hexInEnemyZoc' }
+  const rangeMp = input.rangeMp
   const connected =
-    baseSourcesFor(facts, { hex: input.hex, side: input.side, mobility: input.mobility }).length > 0
+    rangeMp === undefined
+      ? baseSourcesFor(facts, {
+          hex: input.hex,
+          side: input.side,
+          mobility: input.mobility,
+        }).length > 0
+      : (() => {
+          const extender = { hex: input.hex, mobility: input.mobility, rangeMp }
+          const targets: HexRef[] = [
+            ...facts
+              .sourcesFor(input.side)
+              .filter((source) => sourceUsable(facts, input.side, source.hex))
+              .map((source) => source.hex),
+            ...usableExtenders(facts, input.side).map((item) => item.hex),
+          ]
+          return targets.some((target) => connectsBack(facts, input.side, extender, target))
+        })()
   if (!connected) return { ok: false, rule: '12.7d', reason: 'notConnectedToSource' }
   return { ok: true, rule: '12.7d' }
 }
