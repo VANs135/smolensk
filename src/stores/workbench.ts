@@ -446,6 +446,7 @@ import {
   TURN_TRACK,
   airRangeFromBase,
   aircraftChoices,
+  attackForceForHex,
   attackersForHex,
   availableMaOf,
   bridgedHexesBySide,
@@ -5979,40 +5980,26 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     /** 该候选在本步之后剩余的 MP（8.1a 需要逐单位 ≥3） */
     mpRemainingOf: (unit: ConsoleUnit) => number
   }): { participantIds: string[]; mpRemaining: number; mpCost: number; entryCost: number } | null {
-    if (input.defenders.length === 0) return null
-    const phaseKey = movementPhaseOf(phase.value)
-    const eligible: { id: string; mp: number }[] = []
-    for (const unit of input.candidates) {
-      const mp = input.mpRemainingOf(unit)
-      if (mp < 1) continue
-      const verdict = overrunEligibility({
-        phase: phaseKey,
+    // 判据与常规侧共用 `attackForceForHex`（P2/M3）；突袭的逐人过滤保留在引擎里
+    const force = attackForceForHex({
+      attackType: 'overrun',
+      side: activeSide.value,
+      hex: input.target,
+      candidates: input.candidates,
+      overrun: {
         context: input.context,
-        unitIds: [unit.instanceId],
-        target: input.target,
-        mpRemaining: mp,
-        startedStackedTogether: startedStackedTogether([unit.instanceId]),
-        defenders: [...input.defenders],
-      })
-      if (verdict.ok) eligible.push({ id: unit.instanceId, mp })
-    }
-    if (eligible.length === 0) return null
-    const mpRemaining = Math.min(...eligible.map((item) => item.mp))
-    const verdict = overrunEligibility({
-      phase: phaseKey,
-      context: input.context,
-      unitIds: eligible.map((item) => item.id),
-      target: input.target,
-      mpRemaining,
-      startedStackedTogether: startedStackedTogether(eligible.map((item) => item.id)),
-      defenders: [...input.defenders],
+        phase: movementPhaseOf(phase.value),
+        defenders: input.defenders,
+        startedStackedTogether,
+        mpRemainingOf: input.mpRemainingOf,
+      },
     })
-    if (!verdict.ok) return null
+    if (force === null || force.attackType !== 'overrun') return null
     return {
-      participantIds: eligible.map((item) => item.id),
-      mpRemaining,
-      mpCost: verdict.mpCost,
-      entryCost: verdict.entryCost,
+      participantIds: force.unitIds,
+      mpRemaining: force.mpRemaining,
+      mpCost: force.mpCost,
+      entryCost: force.entryCost,
     }
   }
 
@@ -6107,8 +6094,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       // 群攻（已点选）→ 全部攻方须邻接且该格合法；未点选 → 任一己方邻接且合法即可
       const candidateOk = combatAttackerIds.value.length > 0 ? adjacencyOk : someAdjacent
       if (!candidateOk) continue
+      // P2（M3）：先用**同一份参战投影**取合格者（与 `attackersForHex` / 突袭共用判据），再问合法性层
+      const force = attackForceForHex({
+        attackType: 'regular',
+        side,
+        hex,
+        candidates: attackers,
+      })
+      if (force === null) continue
+      const eligible = new Set(force.unitIds)
       const legal = attackers.some((unit) => {
-        if (!areAdjacent(unit.hex, hex)) return false
+        if (!eligible.has(unit.instanceId)) return false
         const verdict = checkLegality(
           buildLegalityRequest({
             action: 'attack',

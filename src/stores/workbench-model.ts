@@ -37,6 +37,7 @@ import {
   isMobileUnit,
   isOutOfSupplyNow,
   legMpDistanceWithinRadius,
+  overrunEligibility,
   sopChainOf,
   sopStepById,
   modeUnitClass,
@@ -1431,27 +1432,120 @@ export function combatModeAttackBlocked(
 }
 
 /**
+ * P2（M3）：**按 attackType 参数化的参战投影**——某格可以由哪些单位攻击 / 突袭
+ *
+ * 常规战斗与突袭的「谁能上」共用这一份判据：
+ *   · `regular`：3.2b 可攻击 + 9.1e 模式（战略 / 未释放预备不可进攻）+ 14.9d 空运后不可攻击 + 9.0 相邻；
+ *   · `overrun`：逐单位过一次 `overrunEligibility`（8.1/8.1a/12.5b/14.9d/4.5a…），
+ *     再用整组复判（8.1 阶段起始同格、4.8a 发起格 ≤10RE、8.1b 进格费）。
+ *
+ * ★ 突袭的**逐人过滤**保留：不合格者不参突、也不阻塞其余单位（8.1h 允许留驻）；
+ *   整组复判失败才返回 null（这一格整体不可突袭）。常规侧返回全部合格者。
+ */
+export type AttackForce =
+  | { attackType: 'regular'; unitIds: string[] }
+  | {
+      attackType: 'overrun'
+      unitIds: string[]
+      /** 8.1a：合格者中最紧的剩余 MP */
+      mpRemaining: number
+      mpCost: number
+      entryCost: number
+    }
+
+export function attackForceForHex(input: {
+  attackType: 'regular' | 'overrun'
+  side: Side
+  hex: HexRef
+  candidates: readonly ConsoleUnit[]
+  /** `attackType='overrun'` 时必给 */
+  overrun?: {
+    context: MoveContext
+    phase: MovementSegmentPhase
+    defenders: readonly { id: string; isCombat: boolean }[]
+    /** 8.1：这些单位本环节开始时是否同格堆叠（纯时点事实） */
+    startedStackedTogether: (ids: readonly string[]) => boolean
+    /** 8.1a：该候选在本步之后剩余的 MP */
+    mpRemainingOf: (unit: ConsoleUnit) => number
+  }
+}): AttackForce | null {
+  if (input.attackType === 'regular') {
+    const unitIds = input.candidates
+      .filter(
+        (unit) =>
+          unit.side === input.side &&
+          unit.isCombat &&
+          unit.attackCapable &&
+          canAttackAfterAirTransport(unit.airTransportThisPhase) &&
+          // 9.1e：战略模式、以及未释放的预备不能进攻 ⇒ 自动带攻方时就不收进来，
+          // 免得「开始战斗」才被引擎拒（原先是全收，再由 9.1e 打回）。
+          combatModeAttackBlocked(unit) === null &&
+          areAdjacent(unit.hex, input.hex),
+      )
+      .map((unit) => unit.instanceId)
+    return unitIds.length === 0 ? null : { attackType: 'regular', unitIds }
+  }
+  const overrun = input.overrun
+  if (overrun === undefined || overrun.defenders.length === 0) return null
+  // 8.1h：不合格单位（DG / MP 不足 / 不可攻击）不参突、也不阻塞其余单位 ⇒ 按人取合格子集
+  const eligible: { id: string; mp: number }[] = []
+  for (const unit of input.candidates) {
+    const mp = overrun.mpRemainingOf(unit)
+    if (mp < 1) continue
+    const verdict = overrunEligibility({
+      phase: overrun.phase,
+      context: overrun.context,
+      unitIds: [unit.instanceId],
+      target: input.hex,
+      mpRemaining: mp,
+      startedStackedTogether: overrun.startedStackedTogether([unit.instanceId]),
+      defenders: [...overrun.defenders],
+    })
+    if (verdict.ok) eligible.push({ id: unit.instanceId, mp })
+  }
+  if (eligible.length === 0) return null
+  // 8.1 / 4.8a / 8.1b：整组复判（同格、发起格 RE、进格费都按整堆叠口径）
+  const mpRemaining = Math.min(...eligible.map((item) => item.mp))
+  const verdict = overrunEligibility({
+    phase: overrun.phase,
+    context: overrun.context,
+    unitIds: eligible.map((item) => item.id),
+    target: input.hex,
+    mpRemaining,
+    startedStackedTogether: overrun.startedStackedTogether(eligible.map((item) => item.id)),
+    defenders: [...overrun.defenders],
+  })
+  if (!verdict.ok) return null
+  return {
+    attackType: 'overrun',
+    unitIds: eligible.map((item) => item.id),
+    mpRemaining,
+    mpCost: verdict.mpCost,
+    entryCost: verdict.entryCost,
+  }
+}
+
+/**
  * 9.1a / 9.0：能攻击 `defenderHex` 的己方单位
  *
  * 「要进行战斗的话，**攻击单位必须与被攻击的格相邻**」（9.0）；只列可攻击（3.2b 带括号者只能防御）
  * 且相邻的单位，供界面「一键取全部相邻攻方」用（9.1c：一个格可被任意数量相邻格攻击）。
+ * 判据与突袭共用 `attackForceForHex`（P2）。
  */
 export function attackersForHex(
   units: readonly ConsoleUnit[],
   defenderHex: HexRef,
   activeSide: Side,
 ): ConsoleUnit[] {
-  return units.filter(
-    (unit) =>
-      unit.side === activeSide &&
-      unit.isCombat &&
-      unit.attackCapable &&
-      canAttackAfterAirTransport(unit.airTransportThisPhase) &&
-      // 9.1e：战略模式、以及未释放的预备不能进攻 ⇒ 自动带攻方时就不收进来，
-      // 免得「开始战斗」才被引擎拒（原先是全收，再由 9.1e 打回）。
-      combatModeAttackBlocked(unit) === null &&
-      areAdjacent(unit.hex, defenderHex),
-  )
+  const force = attackForceForHex({
+    attackType: 'regular',
+    side: activeSide,
+    hex: defenderHex,
+    candidates: units,
+  })
+  if (force === null) return []
+  const picked = new Set(force.unitIds)
+  return units.filter((unit) => picked.has(unit.instanceId))
 }
 
 /**
