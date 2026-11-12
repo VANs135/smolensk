@@ -12274,6 +12274,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         return '一次炮击只能用同一类型单位'
       case 'unitAlreadyBarraged':
         return '有参炸单位本阶段已经炮击过'
+      case 'artilleryInReserveOrStratCannotBarrage':
+        return '预备／战略模式的炮兵不能炮击（13.4a）'
+      case 'noArtilleryUnit':
+        return '没有可参炸的火炮'
+      case 'targetKindNotInHex':
+        return '整体目标与该格不符（该格没有这类目标）'
+      case 'barrageOutcomePending':
+        return '本次炮击结果尚未确认，不能开新的一场'
+      case 'hipShootCannotTrainbusting':
+        return '低空扫射不能做运输破坏（14.7d-D）'
       case 'cannotSplitBarrageValue':
         return '轰炸值不能拆分到多次炮击'
       case 'belowPrintedBarrageValue':
