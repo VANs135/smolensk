@@ -193,6 +193,8 @@ export function barrageColumnShifts(input: {
   enemyREInHex?: number
   hedgehogLevel?: number
   terrainLine?: CombatLine
+  /** 10.0a：地形线由操作台自动取「对守方最有利」（只影响明细措辞，不影响取值） */
+  terrainAuto?: boolean
   hasSpotter?: boolean
   stratModeInHex?: boolean
   /** 任务中最远飞机距基地格数（10.2b） */
@@ -215,8 +217,16 @@ export function barrageColumnShifts(input: {
     input.terrainLine === undefined
       ? 0
       : (BARRAGE_COLUMN_SHIFTS.terrainByCombatLine[input.terrainLine] ?? 0)
-  if (terrain !== 0)
-    detail.push(`目标玩家选择的地形（${input.terrainLine}）⇒ ${shiftText(terrain)}`)
+  /*
+   * K5（用户 2026-11-12）：自动取值时**必须留一条可见记录**，玩家才知道这条横移取自哪条地形线；
+   * 目标格没有任何提供横移的地形时也要写明「无」，不能静默。
+   */
+  if (input.terrainLine !== undefined) {
+    const source = input.terrainAuto === true ? '守方地形（自动取最有利）' : '目标玩家选择的地形'
+    detail.push(`${source}＝${input.terrainLine} ⇒ ${shiftText(terrain)}`)
+  } else if (input.terrainAuto === true) {
+    detail.push('守方地形＝无（目标格没有提供横移的地形，自动）')
+  }
 
   // 10.0b：无正确观察员左移 3；★ 战略轰炸机轰炸时该惩罚**永久生效**
   const spotter =

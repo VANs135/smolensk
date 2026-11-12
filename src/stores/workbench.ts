@@ -12931,6 +12931,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         hasSpotter: facts.hasSpotter,
         // 10.0a：地形横移只能取自**目标格内**的地形（候选集与 9.3b 一致）
         ...(targetHex === null ? {} : { terrainCandidates: defenseTerrainChoices(targetHex) }),
+        // K5：自动取值时让引擎明细写明「守方地形＝X（自动取最有利）」
+        terrainAuto: autoTerrain,
         ...(terrainLine === undefined || terrainLine === '' ? {} : { terrainLine }),
       }),
       '列横移',
@@ -12955,6 +12957,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         shiftTotal: shifts?.total ?? 0,
         finalColumn: data.state.finalColumn,
         initialColumn: data.state.table.initialColumn,
+        // K5：把这次实际采用的地形线与「是否自动」也写进结算数据
+        terrainLine: terrainLine ?? null,
+        terrainAuto: autoTerrain,
       },
     })
     return true

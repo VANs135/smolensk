@@ -206,6 +206,8 @@ describe('C7 轰炸交互：10.0 通用流程端到端', () => {
     // ③ 目标玩家选地形（10.0a；本次不选 ⇒ 无地形横移）
     expect(store.confirmBarrageShiftsStep()).toBe(true)
     expect(store.barrageState?.step).toBe('dice')
+    // K5：自动取最有利地形 ⇒ 日志必须留一条可见记录
+    expect(store.log.some((entry) => entry.text.includes('守方地形'))).toBe(true)
 
     // ④ 掷骰（10.0a：2 骰 2–12）。骰 12 必出结果且多为 DG/[1/2]
     store.barrageInputs.die = 12

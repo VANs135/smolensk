@@ -514,6 +514,13 @@ export interface BarrageShiftInput {
   terrainLine?: CombatLine
   /** 10.0a：目标格内的**格内**地形候选（9.3b 的候选集，含 spillover 例外）；用于校验 `terrainLine` */
   terrainCandidates?: readonly string[]
+  /**
+   * 10.0a：地形线是否由操作台**自动取对守方最有利**（用户 2026-11-12 口径）
+   *
+   * 只影响横移明细的措辞（「守方地形＝X（自动取最有利）」），不影响横移取值；
+   * 省略/false ⇒ 明细仍写「目标玩家选择的地形」。
+   */
+  terrainAuto?: boolean
   /** 10.0b：是否有正确的观察员（与目标格相邻的友方战斗单位） */
   hasSpotter?: boolean
   /** 10.0a：目标格内是否有单位处于战略模式（有 ⇒ 右移 3） */
@@ -615,6 +622,7 @@ export function declareBarrageShifts(
     enemyREInHex: input.enemyREInHex,
     hedgehogLevel: input.hedgehogLevel,
     terrainLine: input.terrainLine,
+    terrainAuto: input.terrainAuto === true,
     hasSpotter: input.hasSpotter,
     stratModeInHex: input.stratModeInHex,
     ...(rangeFromBase === undefined ? {} : { rangeFromBase }),
