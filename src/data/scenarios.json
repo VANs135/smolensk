@@ -114,7 +114,21 @@
         "formationDrawRaw": "12 个多单位编队标记入杯，抽 4 个沿道路西移 3 格、另 4 个以摩托化团换死亡堆中的侦察营",
         "formationDraw": {
           "pool": 12,
-          "poolFrom": "formations.json 中该剧本的轴方装甲/摩托化多单位编队（formationId 以 'Pz Div' / 'Mtr Div' 结尾，骑兵师不入杯）",
+          "poolFrom": "入杯名单见 poolFormations（formations.json 该剧本轴方装甲/摩托化多单位编队，骑兵师不入杯；名单已冻结为剧本数据）",
+          "poolFormations": [
+            "3 Pz Div",
+            "4 Pz Div",
+            "7 Pz Div",
+            "10 Pz Div",
+            "12 Pz Div",
+            "17 Pz Div",
+            "18 Pz Div",
+            "20 Pz Div",
+            "10 Mtr Div",
+            "20 Mtr Div",
+            "29 Mtr Div",
+            "SS-R Mtr Div"
+          ],
           "groups": [
             {
               "kind": "shiftWest",
