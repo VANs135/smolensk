@@ -56,6 +56,39 @@ describe('进场铁路网：种子与两网分离', () => {
       expect(sovietNet.has(label(seed))).toBe(true)
   })
 
+  /**
+   * U18（2026-11-13）：东南支线 `36.24…42.35` 15 格
+   *
+   * 地图事实：这 15 格自成一条**印刷铁路分量**（与主网无铁路格边相连），
+   * 北端 `42.35` 位于图边第 35 行且是苏方 2.1 补给源 ⇒ 它就是这条支线的入图端，
+   * 支线应作为苏方进场铁路网的一部分可达。不是漏边，也不需要新增字母入口。
+   */
+  it('U18：东南 15 格从 42.35 入苏方网（独立印刷分量，不补边）', () => {
+    const store = boot()
+    const branch = [
+      '36.24',
+      '36.25',
+      '37.26',
+      '38.26',
+      '39.27',
+      '39.28',
+      '40.28',
+      '40.29',
+      '40.30',
+      '40.31',
+      '41.32',
+      '41.33',
+      '42.33',
+      '42.34',
+      '42.35',
+    ]
+    expect(labels(store.entryRailSeedsBySide.soviet)).toContain('42.35')
+    const sovietNet = new Set(labels(store.railSupplyBySide.soviet.railReachableHexes))
+    for (const hex of branch) expect(sovietNet.has(hex), hex).toBe(true)
+    // 南端 36.24 是印刷断头，再往西南没有铁路格（36.3 不是铁路格）
+    expect(sovietNet.has('36.3')).toBe(false)
+  })
+
   it('★ 手工声明一条边缘铁路也不能给本方"造"出一张网（取消共用/交叉概念）', () => {
     const store = boot()
     // 56.20（Vyazma）在苏军网深处：旧实现会把它当德军种子，顺势把苏军铁路喂给德军

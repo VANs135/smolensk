@@ -53,3 +53,72 @@ describe('专规 2.1 / 3.1：补给源与入场字母分属两套判据', () => 
     expect(entryHexes('F')).toEqual(['8.0'])
   })
 })
+
+/**
+ * U18（2026-11-13）：东南支线 `36.24…42.35` 的 15 格
+ *
+ * 地图事实：这 15 格通过铁路格边连成**一个独立分量**，与主网没有任何铁路边；
+ * `42.35` 落在图边第 35 行（六邻格缺 `41.36`/`42.36`），有铁路自图边入图，
+ * 因此按 2.1 它是苏方补给源，也是这条支线的入图端。
+ * ⇒ 支线应随 `42.35` 这个 seed 进苏方进场铁路网；**不是漏边，不补边，不加字母入口**。
+ */
+describe('U18：东南 15 格是已入图的独立印刷分量', () => {
+  const BRANCH = [
+    '36.24',
+    '36.25',
+    '37.26',
+    '38.26',
+    '39.27',
+    '39.28',
+    '40.28',
+    '40.29',
+    '40.30',
+    '40.31',
+    '41.32',
+    '41.33',
+    '42.33',
+    '42.34',
+    '42.35',
+  ]
+
+  function railComponent(start: string): string[] {
+    const adjacency = new Map<string, Set<string>>()
+    for (const edge of mapLayers.edges) {
+      if (edge.rail !== true) continue
+      const a = keyOf(edge.a)
+      const b = keyOf(edge.b)
+      if (!adjacency.has(a)) adjacency.set(a, new Set())
+      if (!adjacency.has(b)) adjacency.set(b, new Set())
+      adjacency.get(a)!.add(b)
+      adjacency.get(b)!.add(a)
+    }
+    const seen = new Set([start])
+    const queue = [start]
+    while (queue.length > 0) {
+      const current = queue.pop()!
+      for (const next of adjacency.get(current) ?? []) {
+        if (seen.has(next)) continue
+        seen.add(next)
+        queue.push(next)
+      }
+    }
+    return [...seen].sort()
+  }
+
+  it('42.35 的铁路分量恰为 15 格，与主网无铁路格边', () => {
+    expect(railComponent('42.35')).toEqual([...BRANCH].sort())
+    // 两端：36.24 是印刷断头，42.35 是图边入图端
+    expect(BRANCH).toContain('36.24')
+    expect(BRANCH).toContain('42.35')
+  })
+
+  it('42.35 是图边格（第 35 行，缺 41.36/42.36 两邻）且为苏方 2.1 源', () => {
+    const present = new Set(mapLayers.hexes.map(keyOf))
+    expect(present.has('42.35')).toBe(true)
+    expect(present.has('41.36')).toBe(false)
+    expect(present.has('42.36')).toBe(false)
+    for (const scenario of scenarios.scenarios)
+      expect(scenario.supplySources?.sovietLive ?? [], String(scenario.id)).toContain('42.35')
+    expect(allEntryHexes.has('42.35')).toBe(false)
+  })
+})
