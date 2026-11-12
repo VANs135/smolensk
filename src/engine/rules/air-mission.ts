@@ -1,5 +1,5 @@
 import { markers, rulesConstants } from '@/data'
-import type { Side } from '@/data'
+import type { HexRef, Side } from '@/data'
 
 import { fail, succeed, type RuleOutcome } from '../result-types'
 import type { AirStatus, GamePhase, UnitMode } from '../state-types'
@@ -636,6 +636,82 @@ export function canEnterEdgeBox(
   if (input.phase !== 'movement') return fail('1.4b', 'edgeBoxMovementPhaseOnly')
   if (!input.fromSupplySourceHex) return fail('1.4b', 'edgeBoxNeedsSupplySourceHex')
   return succeed('1.4b', { entryMp: EDGE_BOX_ENTRY_MP, allowsRailCap: true })
+}
+
+/* ── 14.2f-B / 14.6–14.10：空军任务目标格的类型判据与候选集 ── */
+
+/**
+ * 一个候选格的**盘面事实**（由 store 从盘面投影，引擎只按任务类型判"这类目标能否落在这格"）
+ *
+ * 图外空军盒不是地图格，不会出现在候选集的输入里；且 1.4「盒内不允许战斗与轰炸」
+ * ⇒ 任何任务都不把盒当目标（无专规例外）。
+ */
+export interface AirTargetHexFacts {
+  hex: HexRef
+  /** 该格有敌方地面单位（含非战斗单位；9.14 另算） */
+  enemyGroundUnit: boolean
+  /** 该格有敌方设施（本作＝敌方空军基地） */
+  enemyFacility: boolean
+  /** 该格有敌方**激活**飞机（14.6） */
+  enemyActiveAircraft: boolean
+  /** 该格有敌方空军基地 */
+  enemyAirBase: boolean
+  /** 该格有己方空军基地 */
+  friendlyAirBase: boolean
+  /** 该格有铁路（14.8c 的运输破坏标记只能落在铁路格） */
+  rail: boolean
+}
+
+/**
+ * 该任务类型能否以这个格为目标（14.6–14.10 的"任务对象"判据）
+ *
+ *   · 轰炸（10.2 / 14.7）：敌方地面单位或设施；
+ *   · 低空扫射（14.7d）：敌方地面单位（单机任务，目标类型同轰炸的"单位"一支）；
+ *   · 运输破坏（14.8c）：铁路格；
+ *   · 空运（14.9e）：**友方空军基地**；
+ *   · 空投（14.10）：不是敌方地面单位占据的格（14.10d：落敌战斗单位上货物即毁）；
+ *   · 战机扫荡（14.6）：有敌方**激活飞机**的敌方空军基地格（用户 2026-11-12 口径）；
+ *   · 基地转移（14.11）：友方空军基地。
+ *
+ * 注意：这里**不含图外盒**——输入只会是地图格，1.4 也禁止对盒内战斗。
+ */
+export function airMissionTargetTypeAllowed(
+  kind: AirMissionKind,
+  facts: AirTargetHexFacts,
+): boolean {
+  switch (kind) {
+    case 'barrage':
+      return facts.enemyGroundUnit || facts.enemyFacility
+    case 'hip_shoot':
+      return facts.enemyGroundUnit
+    case 'trainbusting':
+      return facts.rail
+    case 'air_transport':
+    case 'base_transfer':
+      return facts.friendlyAirBase
+    case 'air_drop':
+      return !facts.enemyGroundUnit
+    case 'fighter_sweep':
+      return facts.enemyActiveAircraft && facts.enemyAirBase
+    default:
+      return false
+  }
+}
+
+/**
+ * 14.2f-B：任务目标格候选集 = **类型合法** ∩ **航程可达**
+ *
+ * 用户 2026-11-12 口径：目标格只在地图上高亮点选，候选由引擎统一算，UI 只渲染。
+ * `reachable` 由调用方按参战飞机的"当前位置/基地 → 目标格"距离与该机航程给出（14.2d / 1.4a）。
+ */
+export function airMissionTargetCandidates(input: {
+  kind: AirMissionKind
+  hexes: readonly AirTargetHexFacts[]
+  reachable: (hex: HexRef) => boolean
+}): HexRef[] {
+  return input.hexes
+    .filter((facts) => airMissionTargetTypeAllowed(input.kind, facts) && input.reachable(facts.hex))
+    .map((facts) => facts.hex)
 }
 
 /**

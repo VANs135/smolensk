@@ -69,14 +69,40 @@ const fighterRecord = (side: Side) =>
   aircraftChoices(side).find((record) => record.aircraftType === 'F')!
 
 describe('B29a：任务格与迎战机（玩家自选）', () => {
-  it('★ 任务格：待点格声明正确，点地图即写回（14.2f-B）', () => {
+  it('★ 任务格：待点格给出候选，点地图即写回（14.2f-B）', () => {
     const store = newStore()
+    store.setAirActive(true)
+    store.setAirMissionKind('air_drop')
+    store.units.push(
+      toConsoleUnit({
+        record: airBaseRecord(),
+        instanceId: 'base-1',
+        hex: CORE_HEX,
+        side: 'axis',
+      }),
+    )
+    store.airUnits.push(
+      toConsoleAirUnit({
+        aircraft: fighterRecord('axis'),
+        instanceId: 'air-1',
+        hex: CORE_HEX,
+        side: 'axis',
+        airStatus: 'active',
+      }),
+    )
     expect(store.hexPickView).toBeNull()
     store.beginAirTargetHexPickNow()
-    expect(store.hexPickView).toMatchObject({ rule: '14.2f-B', candidates: 'any' })
+    /*
+     * 用户 2026-11-12：候选＝**任务对象类型合法 ∩ 参战机航程可达**（引擎算），
+     * 不再是任意格；空投合法格（无敌地面单位）里本格可达 ⇒ 进候选。
+     */
+    expect(store.hexPickView?.rule).toBe('14.2f-B')
+    expect(Array.isArray(store.hexPickView?.candidates)).toBe(true)
+    expect(store.hexPickView?.candidates).toContainEqual(CORE_HEX)
 
-    expect(store.pickHexFor({ col: 36, row: 13 })).toBe(true)
-    expect(store.airInputs.targetHexText).toBe('36.13')
+    expect(store.pickHexFor(CORE_HEX)).toBe(true)
+    expect(store.airTargetHex).toEqual(CORE_HEX)
+    expect(store.airInputs.targetHexText).toBe(label(CORE_HEX))
     expect(store.hexPickView).toBeNull()
   })
 
@@ -112,7 +138,11 @@ describe('B29a：任务格与迎战机（玩家自选）', () => {
      */
     expect(panel).toContain('workbench.runAirMissionNow()')
     expect(panel).toContain('workbench.runAirMissionWithKind(')
-    expect(panel).not.toContain('workbench.autoResolveAirMissionNow()')
+    /*
+     * 用户 2026-11-12（K2/K3）：自动连跑被空战/拦截拒停时，生产界面必须有自己的"继续结算"出口。
+     * 旧断言"面板不得直接挂自动结算"随之解除（入口仍只有一个按钮，且 stepwise 时换成逐步复核）。
+     */
+    expect(panel).toContain('workbench.autoResolveAirMissionNow()')
     expect(panel).toContain('namedDefenderItems')
     expect(panel).toContain('workbench.airInputs.namedDefenderId = $event')
   })

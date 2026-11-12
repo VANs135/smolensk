@@ -4,7 +4,7 @@ import { computed, onBeforeUnmount } from 'vue'
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip, UI_COPY } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import UiField from '@/components/UiField.vue'
-import { useRefereeTools, useUiMode } from '@/components/ui-mode'
+import { useRefereeTools } from '@/components/ui-mode'
 import {
   aircraftRecordImageUrlOf,
   counterImageUrlOf,
@@ -32,6 +32,14 @@ import {
 
 const workbench = useWorkbenchStore()
 
+/**
+ * K3：拦截应答是**决策步**，记录后必须继续跑完（否则会话停在此步没有出口）。
+ * 只组合两个既有 store 动作，不新增规则。
+ */
+function declareInterceptionAndContinue(): void {
+  if (workbench.declareInterceptionNow()) workbench.autoResolveAirMissionNow()
+}
+
 /** 14.9f：这里只维护玩家卸货选择，限额与不可拆分判定交给引擎。 */
 function toggleUnloadCargo(id: string): void {
   const current = workbench.airInputs.unloadCargoIds ?? []
@@ -39,9 +47,6 @@ function toggleUnloadCargo(id: string): void {
     ? current.filter((item) => item !== id)
     : [...current, id]
 }
-
-/** 条 24 / §5-F：正式界面把「手输」收敛为只读（验证页仍可手输） */
-const uiMode = useUiMode()
 
 /** 条 24：装货 SP 改**步进**（点选，不手输）；值仍写回 store，引擎照常判 14.9/14.10 */
 function adjustCargoSp(delta: number): void {
@@ -483,6 +488,11 @@ const displayedBases = computed(() =>
       <!-- ══ 任务链（14.2f 的宣布与七步）══  B15d：这一段进**地图会话框** -->
       <template v-if="showsMission">
         <hr />
+        <!-- K9：空军会话里也显示引擎的最近一次拒绝原因（修前只在裁判段渲染） -->
+        <p v-if="workbench.airError !== null" class="warn num">
+          <BaseTag kind="danger">{{ workbench.airError.rule }}</BaseTag>
+          {{ workbench.airError.reason }}
+        </p>
         <!-- U1-b：宣布前＝一件事（任务类型 + 任务格 + 参战机 + 执行，全在同一门内） -->
         <SessionStep v-if="showsAssign" item="air:declare">
           <div class="muted">
@@ -518,21 +528,17 @@ const displayedBases = computed(() =>
               {{ workbench.airJoinRemaining }} 架（14.2a 上限 4）
             </span>
             <label class="field">
-              任务格（列.行）
-              <input
-                v-if="uiMode === 'verify'"
-                class="input"
-                :value="workbench.airInputs.targetHexText"
-                placeholder="36.13"
-                @change="workbench.setAirTargetFromText(($event.target as HTMLInputElement).value)"
-              />
-              <span v-else class="ui-field-readonly">{{
-                workbench.airInputs.targetHexText || '—'
+              任务格
+              <span class="ui-field-readonly">{{
+                workbench.airTargetHex === null ? '未选' : hexLabel(workbench.airTargetHex)
               }}</span>
             </label>
-            <!-- B29a：任务格改成**点地图选**（14.2f-B；文本框留着作退路） -->
+            <!--
+              用户 2026-11-12：目标格一律**在地图上高亮点选**（候选＝类型合法 ∩ 航程可达，引擎算）。
+              这里不再留手输格号或下拉选格 —— 那正是 K16 静默打错目标的根源。
+            -->
             <BaseButton variant="secondary" size="sm" @click="workbench.beginAirTargetHexPickNow()">
-              点地图选任务格
+              在地图上点选任务格
             </BaseButton>
             <label class="field">
               <input v-model="workbench.airInputs.flyingAllowed" type="checkbox" />
@@ -554,13 +560,12 @@ const displayedBases = computed(() =>
             </template>
           </p>
           <!--
-            用户 2026-11-09：轰炸 / 低空扫射时**按基地分栏**列驻机（原来是一张平铺阵列）。
-            只摆基地名册、算子、距离与按钮：点基地头 ⇒ 高亮该格；距离/航程给 14.7c 判读用。
-            其它任务类型仍用平铺阵列（空运/空投/扫荡不涉及 14.7c 的距离修正）。
+            用户 2026-11-12：所有主动任务都从目标右键发起，窗内**按基地分组**列参战机（含图外盒）。
+            每组给基地名、飞机、到目标距离与"够/不够"；点基地头 ⇒ 高亮该格。
           -->
-          <div v-if="workbench.airMissionBaseGroups.length > 0" class="base-roster">
+          <div v-if="workbench.airMissionBaseGroupsWithBox.length > 0" class="base-roster">
             <div
-              v-for="group in workbench.airMissionBaseGroups"
+              v-for="group in workbench.airMissionBaseGroupsWithBox"
               :key="group.baseId"
               class="base-roster__group"
             >
@@ -869,9 +874,22 @@ const displayedBases = computed(() =>
                 @pick="setAirCombatPick(round - 1, 'defenderAircraftId', $event)"
               />
             </div>
-            <div v-if="props.stepwise" class="row">
-              <BaseButton variant="secondary" size="sm" @click="workbench.confirmAirCombatNow()">
-                ② 结算空战环节（14.2f-C，逐步复核）
+            <div class="row">
+              <BaseButton
+                v-if="props.stepwise"
+                variant="secondary"
+                size="sm"
+                @click="workbench.confirmAirCombatNow()"
+              >
+                ② 结算空战环节（14.3，逐步复核）
+              </BaseButton>
+              <BaseButton
+                v-else
+                variant="primary"
+                size="sm"
+                @click="workbench.autoResolveAirMissionNow()"
+              >
+                ② 结算空战并继续（14.3）
               </BaseButton>
             </div>
           </SessionStep>
@@ -950,8 +968,8 @@ const displayedBases = computed(() =>
               @hover="hoverAir"
             />
             <div class="row">
-              <BaseButton variant="primary" size="sm" @click="workbench.declareInterceptionNow()">
-                ③ 记录拦截应答（14.2f-D）
+              <BaseButton variant="primary" size="sm" @click="declareInterceptionAndContinue()">
+                ③ 记录拦截应答并继续
               </BaseButton>
             </div>
           </SessionStep>
@@ -1029,6 +1047,19 @@ const displayedBases = computed(() =>
                 任务结果（如 C7 的轰炸结论）
                 <UiField v-model="workbench.airInputs.missionNote" class="input" />
               </label>
+              <!-- K1：空运/空投货物未结算时，必须给一个**可重复执行**的结算出口 -->
+              <BaseButton
+                v-if="
+                  (workbench.airState.kind === 'air_transport' ||
+                    workbench.airState.kind === 'air_drop') &&
+                  workbench.airState.cargo === null
+                "
+                variant="secondary"
+                size="sm"
+                @click="workbench.resolveAirCargoNow()"
+              >
+                重新结算货物
+              </BaseButton>
               <BaseButton variant="primary" size="sm" @click="workbench.confirmAirMissionNow()">
                 ⑤ 记录任务结算（14.2f-F）
               </BaseButton>

@@ -207,27 +207,25 @@ describe('条 12（M2）：点非战斗单位开 unit 会话', () => {
     expect(mapView.session?.kind).toBe('air')
   })
 
-  it('★ 批 A：C 段点空格（有飞机按航程够到、无己方算子）⇒ 开空军任务入口（target-first）', () => {
+  it('★ 用户口径：所有主动空军任务从目标右键进；点空格不再开 target-first', () => {
     const { workbench, mapView } = stores
     workbench.setPhase('movement')
-    // 进 C 段移动环节（14.7d 低空扫射就在此宣布；该环节允许 air 来源，且非轰炸工具态 ⇒ isIdleForStack 为真）
+    // 进 C 段移动环节（14.7d 低空扫射就在此宣布；该环节允许 air 来源）
     const idx = workbench.playerSegmentSteps.findIndex(
       (step) => step.id === 'movement.modeAndMovement',
     )
     expect(workbench.setSegmentStepIndex(idx)).toBe(true)
-    expect(workbench.barrageKindsInSegment.includes('air')).toBe(true)
-    // 空军基地 + 一架激活飞机停在其格
+    // 空军基地 + 一架**运输机**（空投 14.10 的目标是格，不需要敌方算子）
     placeNonCombat(workbench, 'air_base', START, 'base-1')
     workbench.airUnits.push(
       toConsoleAirUnit({
-        aircraft: aircraftChoices('axis')[0]!,
+        aircraft: aircraftChoices('axis').find((a) => a.aircraftId === 'ax-aircraft-ge-ju-52')!,
         instanceId: 'ac-1',
         hex: START,
         side: 'axis',
         airStatus: 'active',
       }),
     )
-    // 找一个"在图内、无任何单位、飞机够得到"的邻格
     const target = HEX_DIRECTIONS.map((direction) => neighbor(START, direction)).find(
       (hex) =>
         isOnMap(hex) &&
@@ -236,13 +234,23 @@ describe('条 12（M2）：点非战斗单位开 unit 会话', () => {
     )
     expect(target, '应找到图内的空邻格').toBeDefined()
 
-    // 点这一格 ⇒ 开空军任务入口：预填任务格 + 开空军工具 + 置引导态 ⇒ air 会话
+    // 左键点空格：不再开 target-first 会话（新口径：目标侧右键才是入口）
     mapView.onHexClick(target!, { x: 40, y: 40 })
+    expect(mapView.session).toBeNull()
+
+    // 右键该格 ⇒ 目标侧「空军任务」菜单出现「空投」
+    mapView.onHexContext(target!, { x: 40, y: 40 }, { x: 10, y: 10 })
+    const option = mapView.contextOptions.find((item) =>
+      item.actions.some((action) => action.label === '空投'),
+    )
+    expect(option, '空投应出现在目标格菜单').toBeDefined()
+    const action = option!.actions.find((item) => item.label === '空投')!
+    expect(mapView.openContextAction(option!.id, action.key)).toBe(true)
+
     expect(mapView.session?.kind).toBe('air')
-    expect(mapView.airEntryTarget).toEqual(target)
     expect(workbench.airTargetHex).toEqual(target)
+    expect(mapView.airEntryTarget).toEqual(target)
     expect(workbench.airActive).toBe(true)
-    // 单框纪律：开了会话就不再另开小窗
     expect(mapView.popup).toBeNull()
   })
 
@@ -256,7 +264,7 @@ describe('条 12（M2）：点非战斗单位开 unit 会话', () => {
     placeNonCombat(workbench, 'air_base', START, 'base-1')
     workbench.airUnits.push(
       toConsoleAirUnit({
-        aircraft: aircraftChoices('axis')[0]!,
+        aircraft: aircraftChoices('axis').find((a) => a.aircraftId === 'ax-aircraft-ge-ju-52')!,
         instanceId: 'ac-1',
         hex: START,
         side: 'axis',
@@ -269,7 +277,12 @@ describe('条 12（M2）：点非战斗单位开 unit 会话', () => {
         mapLayers.hexes.some((item) => item.col === hex.col && item.row === hex.row) &&
         !workbench.units.some((unit) => unit.hex.col === hex.col && unit.hex.row === hex.row),
     )!
-    mapView.onHexClick(target, { x: 40, y: 40 })
+    mapView.onHexContext(target, { x: 40, y: 40 }, { x: 10, y: 10 })
+    const option = mapView.contextOptions.find((item) =>
+      item.actions.some((action) => action.label === '空投'),
+    )!
+    const action = option.actions.find((item) => item.label === '空投')!
+    expect(mapView.openContextAction(option.id, action.key)).toBe(true)
     expect(mapView.airEntryTarget).toEqual(target)
 
     workbench.toggleAirMissionUnit('ac-1')

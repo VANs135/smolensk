@@ -194,7 +194,10 @@ describe('整局主线回归：开局、自动结算、玩家义务和持久化'
     map.expandStackAt(CORE_HEX)
     expect(w.beginRefitNow(base.instanceId)).toBe(true)
     w.toggleRefitAircraft('plane')
+    // 用户 2026-11-12：整备改成两段式——确认整备 → 点高亮补给站 → 确认支付
+    expect(w.confirmRefitSelectionNow()).toBe(true)
     map.onHexClick(CORE_HEX, undefined, hexCanvasPoint(CORE_HEX))
+    expect(w.confirmRefitPaymentNow()).toBe(true)
     expect(w.airUnits.find((u) => u.instanceId === 'plane')?.airStatus).toBe('active')
     expect(w.spDumps[0]!.sp * 4 + w.spDumps[0]!.t).toBe(7)
   })

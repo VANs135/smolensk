@@ -83,9 +83,10 @@ describe('条 14：飞出盒＝完整的 14.11 落位流程', () => {
     expect(panel).toMatch(/<section[^>]*class="box box--air"/)
     expect(panel).toMatch(/box--air[\s\S]{0,900}<AircraftRoster/)
 
+    // 用户 2026-11-12：盒内单位转场不再下拉/输入，改为「转场到基地（点图选）」
     const roster = readFileSync('src/components/air/AircraftRoster.vue', 'utf8')
-    expect(roster).toContain('flyOutOfBox')
-    expect(roster).toContain('targetBaseHex')
+    expect(roster).toContain('startBoxTransfer')
+    expect(roster).toContain('14.11')
 
     // 基地格窗口也自带标题容器（修前裸放名册）
     const unitPanel = readFileSync('src/components/game/UnitPanel.vue', 'utf8')

@@ -42,6 +42,7 @@ import {
   projectsZoc,
   zocHexes,
   type ZocSource,
+  type AirMissionKind,
 } from '@/engine/rules'
 import type { FuelMethod } from '@/engine/rules/fuel'
 import type { GamePhase } from '@/engine/state-types'
@@ -101,7 +102,8 @@ export const COUNTER_BOX_LABELS: Readonly<Record<CounterBoxTarget, string>> = {
 }
 
 type ContextPanel = 'air' | 'supply' | 'fort' | 'containers'
-type ContextGroup = '模式改变' | '移动' | '战斗' | '运输' | '工程' | '编组' | '补给' | '空军'
+type ContextGroup =
+  '模式改变' | '移动' | '射击' | '空军任务' | '运输' | '工程' | '编组' | '补给' | '空军'
 
 interface CounterAction {
   key: string
@@ -498,7 +500,8 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 「该基地能拖取到哪些补给站」）。用户口径：吃补给与其它方式一致 —— 点地图上高亮的补给。
    */
   const refitPayHints = computed<readonly SupplyPickHint[]>(() => {
-    if (workbench.refitBase === null) return []
+    // 用户 2026-11-12：只有点了「确认整备」进入付款步，才在地图上高亮补给站
+    if (workbench.refitBase === null || workbench.refitStage !== 'pay') return []
     return workbench.refitPayDumps.map((dump) => ({
       hex: { ...dump.hex },
       label: `${dump.sp} SP + ${dump.t} T`,
@@ -1140,10 +1143,33 @@ export const useMapViewStore = defineStore('mapView', () => {
   function advanceOpsFlow(): boolean {
     const flow = opsFlow.value
     if (flow === null || flow.step !== 1) return false
-    const ok = flow.kind === 'barrage' ? workbench.beginBarrageNow() : workbench.runAirMissionNow()
-    if (!ok) return false
+    if (flow.kind === 'barrage') {
+      if (!workbench.beginBarrageNow()) return false
+      opsFlow.value = { ...flow, step: 2 }
+      return true
+    }
+    /*
+     * 用户 2026-11-12：空军先**宣布**再自动连跑。
+     * 修前只有整段 `runAirMissionNow` 成功才进第 2 步 ⇒ 自动连跑在轰炸战果处停住时
+     * 面板仍停在第 1 步（`BarragePanel` 的受损选择从此不可达，K4）。
+     * 现在宣布成功即进第 2 步，连跑的成功与否只决定停在哪一子步。
+     */
+    if (!workbench.beginAirMissionNow()) return false
     opsFlow.value = { ...flow, step: 2 }
+    workbench.autoResolveAirMissionNow()
     return true
+  }
+
+  /**
+   * 空军第 2 步：**目标方选完受损单位**后继续（与炮击第 3 步共用同一组损失分配动作）
+   *
+   * 10.0a / 10.2：空军轰炸复用炮兵的战果链；这里只把"确认受损"与"接着跑完任务"串起来。
+   */
+  function confirmOpsAirLoss(): boolean {
+    const flow = opsFlow.value
+    if (flow === null || flow.kind === 'barrage' || flow.step !== 2) return false
+    if (!workbench.confirmBarrageLossNow()) return false
+    return workbench.autoResolveAirMissionNow()
   }
 
   /**
@@ -1677,7 +1703,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       panel: 'supply',
       only: 'extender',
     },
-    'air.refit': { label: '整备飞机（15.1）', rule: '15.1', panel: 'air', only: 'refit' },
+    'air.refit': { label: '整备飞机', rule: '15.1', panel: 'air', only: 'refit' },
     'move.construction': {
       label: '修建 / 改进基地（15.3）',
       rule: '15.3',
@@ -1804,7 +1830,6 @@ export const useMapViewStore = defineStore('mapView', () => {
     'move.hedgehog': '工程',
     'air.baseReduce': '工程',
     'air.refit': '空军',
-    'air.mission': '空军',
     'move.dumpBlow': '补给',
   }
 
@@ -1814,6 +1839,8 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 菜单仍要能打开（看这一枚是谁），但非行动方不摆任何可执行项——否则会越过行动方权限。
      */
     if (hotseat.viewerSide !== actingSide.value) return []
+    // 用户 2026-11-12：格伪目标 ⇒ 目标侧空军任务（空投/破交/扫荡/空运）
+    if (id === HEX_CONTEXT_ID) return hexTargetActions(hex)
     const unit = ownCounterAt(hex, id)
     /*
      * 3.4b 把同格轴方 SP 拆成两个算子（id 形如 `sp:c,r:guderian`）⇒ 这里按格前缀找那一条账本；
@@ -1840,6 +1867,11 @@ export const useMapViewStore = defineStore('mapView', () => {
        */
       const enemy = enemyCounterAt(hex, id)
       if (enemy === undefined) return []
+      /*
+       * 用户 2026-11-12：右键敌方 ⇒ **射击菜单**（一个组，三个子项）。
+       * 炮击 / 轰炸 / 低空扫射仍各判各的环节与许可（`*EntryEligible`），不满足就整项不出现；
+       * 三者只把目标带进同一个 `OpsFlowPanel` 骨架，不另起第二条入口。
+       */
       const ops: CounterAction[] = []
       if (workbench.barrageEntryEligible(hex)) {
         ops.push({
@@ -1848,7 +1880,7 @@ export const useMapViewStore = defineStore('mapView', () => {
           rule: '10.1',
           panel: 'unit',
           only: 'opsBarrage',
-          group: '战斗',
+          group: '射击',
           disabledReason: null,
         })
       }
@@ -1859,7 +1891,7 @@ export const useMapViewStore = defineStore('mapView', () => {
           rule: '10.2',
           panel: 'unit',
           only: 'opsBombing',
-          group: '空军',
+          group: '射击',
           disabledReason: null,
         })
       }
@@ -1870,7 +1902,7 @@ export const useMapViewStore = defineStore('mapView', () => {
           rule: '14.7d',
           panel: 'unit',
           only: 'opsHipShoot',
-          group: '空军',
+          group: '射击',
           disabledReason: null,
         })
       }
@@ -1903,6 +1935,10 @@ export const useMapViewStore = defineStore('mapView', () => {
     for (const key of facilityKeys) {
       const meta = FACILITY_ACTION_META[key]
       if (meta !== undefined) add(key, { ...meta, group: groupOfAction[key] ?? '补给' })
+    }
+    // 用户 2026-11-12：己方空军基地右键 ⇒ 转场两个子项（14.11）
+    if (unit !== undefined && kind === 'air_base') {
+      for (const action of transferMenuActions(id)) actions.push(action)
     }
     if (
       kind === 'sp' ||
@@ -2081,6 +2117,139 @@ export const useMapViewStore = defineStore('mapView', () => {
 
   /** 共用菜单的伪目标 id（只有"选中多枚"时出现；单枚仍用该枚 id） */
   const SHARED_CONTEXT_ID = '__shared__'
+  /**
+   * 用户 2026-11-12：**目标格**作为右键对象（空投落点、铁路/桥梁格、敌方有激活空军的基地格）。
+   *
+   * 这些任务的目标不一定有算子（空投可能落在空格），所以菜单需要一个"格本身"的伪目标。
+   */
+  const HEX_CONTEXT_ID = '__hex_target__'
+
+  /**
+   * 目标侧的**主动空军任务**项（用户 2026-11-12 定死）
+   *
+   * 轰炸/低空扫射已由敌方算子自身的射击菜单给出；这里补上"任务对象是格/设施"的几类：
+   *   · 扫荡（14.6）：有敌方激活飞机的敌方空军基地格；
+   *   · 破交（14.8c）：铁路格；
+   *   · 空运（14.9e）：己方空军基地；
+   *   · 空投（14.10）：无敌方地面单位的投送格。
+   * 全部走 `canAirMissionTarget`（环节 ∩ 类型 ∩ 航程），不满足整项不出现。
+   */
+  function hexTargetActions(hex: HexRef): CounterAction[] {
+    const out: CounterAction[] = []
+    const add = (kind: AirMissionKind, label: string, group: ContextGroup): void => {
+      if (!workbench.canAirMissionTarget(kind, hex)) return
+      out.push({
+        key: `air.target:${kind}`,
+        label,
+        rule: '',
+        panel: 'unit',
+        only: `airTarget:${kind}`,
+        group,
+        disabledReason: null,
+      })
+    }
+    add('fighter_sweep', '扫荡', '空军任务')
+    add('trainbusting', '破交', '空军任务')
+    add('air_transport', '空运', '空军任务')
+    add('air_drop', '空投', '空军任务')
+    return out
+  }
+
+  /**
+   * 14.11 转场入口（用户 2026-11-12）
+   *
+   * 己方基地右键的「空军任务」组里只摆两个子项：
+   *   1. 进入地图外盒 —— 点即移入（盒没有格可高亮）；
+   *   2. 放入别的空军基地 —— 选机后高亮航程内的己方基地格，点格放置。
+   * 不满足的子项不出现；盒内单位只给「放入别的空军基地」。
+   */
+  function transferMenuActions(baseId: string): CounterAction[] {
+    if (!workbench.actionAllowedNow('air.transfer')) return []
+    const out: CounterAction[] = []
+    if (workbench.transferHasBoxOption(baseId)) {
+      out.push({
+        key: 'air.transfer.box',
+        label: '进入地图外盒',
+        rule: '',
+        panel: 'unit',
+        only: 'transferBox',
+        group: '空军任务',
+        disabledReason: null,
+      })
+    }
+    if (workbench.transferHasBaseOption(baseId)) {
+      out.push({
+        key: 'air.transfer.base',
+        label: '放入别的空军基地',
+        rule: '',
+        panel: 'unit',
+        only: 'transferBase',
+        group: '空军任务',
+        disabledReason: null,
+      })
+    }
+    return out
+  }
+
+  /**
+   * 从目标侧发起一次空军任务（用户 2026-11-12：所有主动任务都以目标为主）
+   *
+   * 目标先定；任务窗按基地分组列出航程内可参与的飞机，多选组队后确认。
+   * 清空上一次未宣布的选择，避免"改目标仍按旧格"。
+   */
+  function startTargetAirMission(kind: AirMissionKind, hex: HexRef): boolean {
+    if (!workbench.airMissionKindChoices.some((choice) => choice.key === kind)) return false
+    workbench.setAirActive(true)
+    workbench.setAirMissionKind(kind)
+    if (!workbench.setAirTargetFromText(`${hex.col}.${hex.row}`)) return false
+    airEntryTarget.value = { col: hex.col, row: hex.row }
+    closePopup()
+    return true
+  }
+
+  /**
+   * 14.11：选好目的基地后，在地图上高亮**航程内**的己方基地格，点格放置。
+   */
+  function beginTransferBasePickNow(): boolean {
+    const candidates = workbench.transferBaseCandidates
+    if (candidates.length === 0) return false
+    workbench.beginHexPick({
+      label: '转场目的基地（14.11：航程内的己方空军基地）',
+      rule: '14.11',
+      candidates,
+      apply: (hex: HexRef) => workbench.completeTransferToBaseNow(hex),
+    })
+    closePopup()
+    return true
+  }
+
+  /**
+   * 14.11 + 专规 1.4a：确认把已勾选的飞机移入图外空军盒
+   *
+   * 进入盒不需要在图上点格（盒没有格）。航程（20/30 + 列差）已由 store 预检，
+   * 这里只对每架飞机调用既有的盒成员入口（同一份 `setAirInBox` 账本）。
+   */
+  function confirmTransferToBoxNow(): boolean {
+    if (!workbench.transferBoxReady) return false
+    const ids = [...workbench.transferSelectedIds]
+    for (const id of ids) {
+      if (!containers.setAirInBox(id, true)) return false
+    }
+    workbench.cancelTransferNow()
+    return true
+  }
+
+  /**
+   * 盒内单位转场：**只能转入图上基地**（用户 2026-11-12：不提供盒到盒）。
+   */
+  function startBoxTransfer(instanceId: string): boolean {
+    if (!workbench.beginTransferNow('base', null, true)) return false
+    if (!workbench.toggleTransferAircraft(instanceId)) {
+      workbench.cancelTransferNow()
+      return false
+    }
+    return beginTransferBasePickNow()
+  }
 
   /**
    * 用户 2026-11-09：右键**一份共用菜单**
@@ -2097,6 +2266,9 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (targets.length === 0) return []
     if (targets.length === 1) {
       const id = targets[0]!
+      if (id === HEX_CONTEXT_ID) {
+        return [{ id, label: `目标格 ${hexLabel(hex)}`, actions: hexTargetActions(hex) }]
+      }
       // 用户 2026-11-11：这一枚没有可执行项时也要出**它自己的**菜单（标题 + 空态），不留白窗
       const actions = counterActionsAt(hex, id)
       // 3.4b：拆分出来的「未归属」补给站有全称（`? N SP` 是角标，写不下）⇒ 菜单标题写全称
@@ -2109,6 +2281,10 @@ export const useMapViewStore = defineStore('mapView', () => {
       for (const action of counterActionsAt(hex, id)) {
         if (!byKey.has(action.key)) byKey.set(action.key, action)
       }
+    }
+    // 目标格动作（空投/破交/扫荡/空运）与多选单位动作合并成一份，只出现一次
+    for (const action of hexTargetActions(hex)) {
+      if (!byKey.has(action.key)) byKey.set(action.key, action)
     }
     /*
      * 13.9 整编（v7.1 §4.3）：**唯一入口＝盘面左键多选 ≥2 枚 → 右键**。
@@ -2129,7 +2305,15 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     const actions = [...byKey.values()]
     if (actions.length === 0) return []
-    return [{ id: SHARED_CONTEXT_ID, label: `已选 ${targets.length} 枚`, actions }]
+    const counterCount = targets.filter((id) => id !== HEX_CONTEXT_ID).length
+    const hasHexTarget = targets.includes(HEX_CONTEXT_ID)
+    return [
+      {
+        id: SHARED_CONTEXT_ID,
+        label: `已选 ${counterCount} 枚${hasHexTarget ? ' · 目标格' : ''}`,
+        actions,
+      },
+    ]
   })
 
   /** 打开右键菜单的**硬闸**：只挡"正在点选/有待决"，不要求观察方=行动方（动作项另由 `counterActionsAt` 筛） */
@@ -2292,7 +2476,13 @@ export const useMapViewStore = defineStore('mapView', () => {
       token = hitCollapsedToken(all, world, scale)
     }
     if (token !== null && openUnitContext(hex, token.id, anchor)) return
-    showCounterContext(hex, contextSelectionAt(hex), anchor)
+    const ids = contextSelectionAt(hex)
+    /*
+     * 用户 2026-11-12：目标侧空军任务以"格"为对象（空投点、铁路/桥梁格、敌方激活空军基地）。
+     * 格上有算子时也补一份"目标格"菜单，让破交/扫荡/空运/空投有唯一入口。
+     */
+    if (hexTargetActions(hex).length > 0) ids.push(HEX_CONTEXT_ID)
+    showCounterContext(hex, ids, anchor)
   }
 
   /**
@@ -2309,6 +2499,12 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 全部转发到既有入口；这里只负责"把右键点中的那一枚"落到既有入口所需的选中态。
      */
     const unit = ownCounterAt(hex, instanceId)
+    // 用户 2026-11-12：格伪目标 ⇒ 目标侧主动任务（先定目标，再在窗内按基地组队）
+    if (instanceId === HEX_CONTEXT_ID) {
+      if (option.only === null || !option.only.startsWith('airTarget:')) return false
+      const kind = option.only.slice('airTarget:'.length) as AirMissionKind
+      return startTargetAirMission(kind, hex)
+    }
     /*
      * ★ 用户 2026-11-09（第 7 条）：「模式改变」三项各自点即切换（改模式时显式只带这一枚，
      *   不误伤 `movePick` 整组）。
@@ -2394,6 +2590,15 @@ export const useMapViewStore = defineStore('mapView', () => {
       workbench.supplyCacheInputs.use = 'forage'
       workbench.supplyCacheInputs.hexText = hexLabel(hex)
     }
+    // 用户 2026-11-12：14.11 转场 —— 先开基地窗勾机，再按模式选盒/目的基地
+    if (option.only === 'transferBox' || option.only === 'transferBase') {
+      if (unit === undefined) return false
+      const mode = option.only === 'transferBox' ? 'box' : 'base'
+      if (!workbench.beginTransferNow(mode, instanceId, false)) return false
+      const anchor = popup.value
+      openPopup(hex, anchor?.x ?? 0, anchor?.y ?? 0, 'content')
+      return true
+    }
     unitActionHex.value = { ...hex }
     unitActionUnitId.value = instanceId
     unitActionIntent.value = option
@@ -2428,23 +2633,6 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     if (!contextTargets.value.includes(instanceId)) return false
     return applyContextAction(hex, instanceId, key)
-  }
-
-  /** 名册只建立参战选择。宣布与结算仍走空军会话。 */
-  function startRosterMission(instanceId: string): boolean {
-    if (!setup.finished || !workbench.actionAllowedNow('air.mission')) return false
-    const candidate = workbench.airMissionJoinChoices.find(
-      (item) => item.air.instanceId === instanceId,
-    )
-    if (candidate === undefined || candidate.disabledReason !== null) return false
-    if (!workbench.airActive) workbench.setAirActive(true)
-    if (!workbench.airMissionAirIds.includes(instanceId)) workbench.toggleAirMissionUnit(instanceId)
-    if (!workbench.airMissionAirIds.includes(instanceId)) return false
-    unitActionHex.value = null
-    unitActionUnitId.value = null
-    unitActionIntent.value = null
-    closePopup()
-    return true
   }
 
   /**
@@ -3233,24 +3421,6 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
-   * 条 19（A1）：这一点是否值得开**空军任务入口**（target-first）
-   *
-   * 三条件（都满足才开，避免打扰常规的点选 / 移动 / 小窗）：
-   *   ① 当前环节允许空军来源（`barrageKindsInSegment` 含 air：C/E/G 段）；
-   *   ② 该格**没有己方地面算子**（有 ⇒ 这是选子 / 移动，不是空军入口；非战斗单位格已由 M2 先拦）；
-   *   ③ 有飞机**按航程**够得到该格（`anyOwnAircraftReaches`）。
-   */
-  function airEntryEligible(hex: HexRef): boolean {
-    if (!workbench.barrageKindsInSegment.includes('air')) return false
-    const friendlyHere = workbench.units.some(
-      (unit) =>
-        unit.hex.col === hex.col && unit.hex.row === hex.row && unit.side === workbench.activeSide,
-    )
-    if (friendlyHere) return false
-    return workbench.anyOwnAircraftReaches(hex)
-  }
-
-  /**
    * 点地图（地图优先交互的**唯一入口**）
    *
    * ★ B26 重排（用户报告「一次点击出现两个框」「点堆叠总是默认移动第一枚」「炮击选不中炮兵」）：
@@ -3484,19 +3654,9 @@ export const useMapViewStore = defineStore('mapView', () => {
         return
       }
       /*
-       * 条 19（A1）：**点地面格 ⇒ 空军任务对话框**（target-first：按航程列机）。
-       * 三条件见 `airEntryEligible`；命中即把该格预填为任务格、打开空军工具、置引导态 ⇒
-       * `air` 会话弹出（AirPanel mission 段列出够得到该格的机，选机/编队＋任务类型 → `runAirMissionNow`）。
-       * 单框纪律：开会话即不再另开小窗。
+       * 用户 2026-11-12：**所有主动空军任务都以目标为主**，从右键目标格/目标算子进入；
+       * 点空格不再开 target-first 会话（那会形成第二入口，且目标与任务类型不同源）。
        */
-      if (isIdleForStack() && airEntryEligible(hex)) {
-        // ★ 顺序：先确保空军工具开（`setAirActive` 内部 `clearAir` 会清 airTargetHex），**再**填任务格
-        if (!workbench.airActive) workbench.setAirActive(true)
-        workbench.setAirTargetFromText(`${hex.col}.${hex.row}`)
-        airEntryTarget.value = { col: hex.col, row: hex.row }
-        closePopup()
-        return
-      }
       // 点别处（战斗单位 / 空格 / 走一步）⇒ 收掉可能开着的单位会话 + 空军引导态
       if (unitActionHex.value !== null) unitActionHex.value = null
       unitActionUnitId.value = null
@@ -3620,7 +3780,10 @@ export const useMapViewStore = defineStore('mapView', () => {
     counterBoxTargets,
     dropCounterInBox,
     openContextAction,
-    startRosterMission,
+    // 14.11 转场（用户 2026-11-12）：基地窗勾机 → 选盒 / 选目的基地
+    confirmTransferToBoxNow,
+    beginTransferBasePickNow,
+    startBoxTransfer,
     selectCounterAt,
     canSelectCounterAt,
     openUnitActionAt,
@@ -3633,6 +3796,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     opsFlow,
     openOpsFlow,
     advanceOpsFlow,
+    confirmOpsAirLoss,
     confirmOpsBarrageSupply,
     confirmOpsBarrageLoss,
     cancelOpsFlow,

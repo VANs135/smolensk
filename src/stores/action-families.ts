@@ -67,8 +67,8 @@ interface ActionMeta {
 const META: Readonly<Record<ActionKey, ActionMeta>> = {
   'air.refit': { families: ['整备'], entry: ['面板', '地图', '盒区'] },
   'air.baseReduce': { families: ['建造'], entry: ['面板'] },
-  // 14.11：图上基地（空军名册）与图外空军盒（飞出盒）两类入口
-  'air.transfer': { families: ['转移'], entry: ['面板', '会话窗', '盒区'] },
+  // 14.11：图上基地右键（放入别的基地）与图外空军盒（转场到基地）两类入口
+  'air.transfer': { families: ['转移'], entry: ['右键菜单', '面板', '会话窗', '盒区'] },
   'rein.arrival': { families: ['增援落位'], entry: ['会话窗'] },
   'rein.supplyArrival': { families: ['增援落位'], entry: ['会话窗'] },
   'rein.supplyTrain': { families: ['增援落位'], entry: ['会话窗', '地图'] },
@@ -96,7 +96,8 @@ const META: Readonly<Record<ActionKey, ActionMeta>> = {
   'supply.fuel': { families: ['加油'], entry: ['右键菜单'] },
   'supply.attrition': { families: ['补给'], entry: ['面板'] },
   'reserve.release': { families: ['释放预备'], entry: ['面板'] },
-  'air.mission': { families: ['空军任务'], entry: ['面板', '地图', '盒区'] },
+  // 用户 2026-11-12：主动空军任务一律右键目标格发起，窗内按基地（含图外盒）分组选机
+  'air.mission': { families: ['空军任务'], entry: ['右键菜单', '面板', '地图', '盒区'] },
   'exclusive.forage': { families: ['补给'], entry: ['面板'] },
   'exclusive.panzerObligation': {
     families: ['专规义务'],

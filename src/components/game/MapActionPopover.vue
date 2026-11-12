@@ -44,7 +44,17 @@ const title = computed(() => (mapView.popup === null ? '' : `格 ${hexLabel(mapV
  * 离格即消失，不再留一张需要再点一下才收的小签。
  */
 const variant = computed(() => mapView.popup?.variant ?? 'content')
-const actionGroups = ['模式改变', '移动', '战斗', '运输', '工程', '编组', '补给', '空军'] as const
+const actionGroups = [
+  '射击',
+  '空军任务',
+  '模式改变',
+  '移动',
+  '运输',
+  '工程',
+  '编组',
+  '补给',
+  '空军',
+] as const
 
 /**
  * 战斗进行到哪一步（null＝盘面上没有**进行中**的战斗）
@@ -199,6 +209,16 @@ const refitDoneHere = computed(
     workbench.refitDoneBases.some((base) => base.id === baseAtHex.value?.id),
 )
 
+/** 这一格是否正是「正在转场」的出发基地（14.11） */
+const transferHere = computed(
+  () => baseAtHex.value !== null && workbench.transferBase?.id === baseAtHex.value.id,
+)
+
+/** 付款步已点选的补给站（未选＝null；用于「确认支付」前的回显） */
+const refitDumpChoice = computed(
+  () => workbench.refitPayDumps.find((dump) => dump.id === workbench.airInputs.refitDumpId) ?? null,
+)
+
 /* ── 9.14 特殊战斗：待决的位移与运输点分配 ── */
 /** 9.14 待决（null＝没有待决） */
 const special = computed(() => workbench.specialPending)
@@ -252,11 +272,7 @@ function sideName(side: string): string {
               :title="item.disabledReason ?? item.rule"
               @click="mapView.openContextAction(target.id, item.key)"
             >
-              <span>{{ item.label }}</span
-              ><small>{{ item.rule }}</small>
-              <small v-if="item.disabledReason !== null" class="context-reason">{{
-                item.disabledReason
-              }}</small>
+              <span>{{ item.label }}</span>
             </BaseButton>
           </div>
         </div>
@@ -516,27 +532,103 @@ function sideName(side: string): string {
           </BaseButton>
         </template>
 
+        <!-- 用户 2026-11-12：勾机 →「确认整备」→ 高亮补给站 → 点站 →「确认支付」 -->
         <template v-else>
-          <ul v-if="workbench.refitCandidates.length > 0" class="list">
-            <li v-for="air in workbench.refitCandidates" :key="air.instanceId" class="num">
-              <label class="check">
-                <input
-                  type="checkbox"
-                  :checked="workbench.refitSelectedIds.includes(air.instanceId)"
-                  @change="workbench.toggleRefitAircraft(air.instanceId)"
-                />
-                {{ air.name }}
-              </label>
-            </li>
-          </ul>
-          <p class="ok num">
-            已选 {{ workbench.refitSelectedIds.length }} 架｜可付款
-            {{ workbench.refitPayDumps.length }} 处
-          </p>
+          <template v-if="workbench.refitStage === 'select'">
+            <ul v-if="workbench.refitCandidates.length > 0" class="list">
+              <li v-for="air in workbench.refitCandidates" :key="air.instanceId" class="num">
+                <label class="check">
+                  <input
+                    type="checkbox"
+                    :checked="workbench.refitSelectedIds.includes(air.instanceId)"
+                    @change="workbench.toggleRefitAircraft(air.instanceId)"
+                  />
+                  {{ air.name }}
+                </label>
+              </li>
+            </ul>
+            <p class="ok num">已选 {{ workbench.refitSelectedIds.length }} 架</p>
+            <BaseButton
+              variant="primary"
+              size="sm"
+              :disabled="workbench.refitSelectedIds.length === 0"
+              @click="workbench.confirmRefitSelectionNow()"
+            >
+              确认整备
+            </BaseButton>
+          </template>
+          <template v-else>
+            <p class="ok num">
+              已选 {{ workbench.refitSelectedIds.length }} 架｜可付款
+              {{ workbench.refitPayDumps.length }} 处
+            </p>
+            <p v-if="refitDumpChoice !== null" class="num">
+              已选补给站：{{ hexLabel(refitDumpChoice.hex) }}（{{ refitDumpChoice.sp }} SP +
+              {{ refitDumpChoice.t }} T）
+            </p>
+            <p v-else class="muted num">在地图上点选高亮的补给站（格上标有剩余 SP）</p>
+            <BaseButton
+              variant="primary"
+              size="sm"
+              :disabled="workbench.refitStage !== 'pay' || workbench.airInputs.refitDumpId === null"
+              @click="workbench.confirmRefitPaymentNow()"
+            >
+              确认支付
+            </BaseButton>
+          </template>
           <BaseButton variant="ghost" size="sm" @click="workbench.cancelRefitNow()">
             取消整备
           </BaseButton>
         </template>
+      </section>
+
+      <!-- 用户 2026-11-12：14.11 转场——勾机 → 进入图外盒 / 选目的基地（点格放置） -->
+      <section v-if="transferHere" class="block block--pick">
+        <h4 class="block__title">
+          转场（14.11）· {{ baseAtHex === null ? '' : hexLabel(baseAtHex.hex) }}
+        </h4>
+        <ul v-if="workbench.transferCandidates.length > 0" class="list">
+          <li v-for="air in workbench.transferCandidates" :key="air.instanceId" class="num">
+            <label class="check">
+              <input
+                type="checkbox"
+                :checked="workbench.transferSelectedIds.includes(air.instanceId)"
+                @change="workbench.toggleTransferAircraft(air.instanceId)"
+              />
+              {{ air.name }}
+              <small class="muted">航程 {{ air.rangeHexes }}</small>
+            </label>
+          </li>
+        </ul>
+        <p v-else class="muted">这一格没有可转场的飞机。</p>
+        <p class="ok num">已选 {{ workbench.transferSelectedIds.length }} 架</p>
+        <template v-if="workbench.transferMode === 'box'">
+          <p class="muted num">进入图外盒：1.4a 航程（苏 20 / 轴 30 格 + 与盒连接列的列差）</p>
+          <BaseButton
+            variant="primary"
+            size="sm"
+            :disabled="!workbench.transferBoxReady"
+            @click="mapView.confirmTransferToBoxNow()"
+          >
+            确认移入图外盒
+          </BaseButton>
+        </template>
+        <template v-else>
+          <p class="muted num">
+            放入别的空军基地：14.11 距离可增加一倍；够得到的基地会在图上高亮。
+          </p>
+          <BaseButton
+            variant="primary"
+            size="sm"
+            :disabled="workbench.transferSelectedIds.length === 0"
+            @click="mapView.beginTransferBasePickNow()"
+          >
+            选择目的基地
+          </BaseButton>
+        </template>
+        <BaseButton variant="ghost" size="sm" @click="workbench.cancelTransferNow()">
+          取消转场
+        </BaseButton>
       </section>
     </template>
   </MapPopover>

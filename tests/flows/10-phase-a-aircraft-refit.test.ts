@@ -221,15 +221,19 @@ describe('Ⓐ 15.1B：盘面整备交互（点机场 → 勾飞机 → 点地图
     expect(store.refitPayDumps.length).toBeGreaterThan(0)
     expect(store.refitSelectedIds).toEqual([])
 
-    // 一架都没勾 ⇒ 不给结算（如实提示，不静默）
-    expect(store.pickRefitPayDump(store.refitPayDumps[0]!.id)).toBe(false)
+    // 一架都没勾 ⇒ 不给进入付款步（如实提示，不静默）
+    expect(store.confirmRefitSelectionNow()).toBe(false)
 
     store.toggleRefitAircraft('air-1')
     store.toggleRefitAircraft('air-1') // 再点一次＝取消
     store.toggleRefitAircraft('air-2')
     expect(store.refitSelectedIds).toEqual(['air-2'])
 
+    // 用户 2026-11-12：勾机 →「确认整备」→ 点高亮补给站 →「确认支付」
+    expect(store.confirmRefitSelectionNow()).toBe(true)
+    expect(store.refitStage).toBe('pay')
     expect(store.pickRefitPayDump(store.refitPayDumps[0]!.id)).toBe(true)
+    expect(store.confirmRefitPaymentNow()).toBe(true)
     expect(second.airStatus).toBe('active')
     expect(plane.airStatus).toBe('inactive') // 未勾选的不动
     expect(store.lastRefit).toMatchObject({ costT: 1, activateAircraftIds: ['air-2'] })
@@ -254,7 +258,9 @@ describe('Ⓐ 15.1B：盘面整备交互（点机场 → 勾飞机 → 点地图
     const { plane } = setupRefitBase(store)
     expect(store.beginRefitNow('base-1')).toBe(true)
     store.toggleRefitAircraft(plane.instanceId)
+    expect(store.confirmRefitSelectionNow()).toBe(true)
     expect(store.pickRefitPayDump(store.refitPayDumps[0]!.id)).toBe(true)
+    expect(store.confirmRefitPaymentNow()).toBe(true)
     expect(store.beginRefitNow('base-1')).toBe(false)
     expect(store.refitBase).toBeNull()
 

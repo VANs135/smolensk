@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import { AirPanel } from '@/components/air'
 import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import { counterImageUrlOf, hexLabel, useMapViewStore, useWorkbenchStore } from '@/stores'
+import OpsLossPicker from './OpsLossPicker.vue'
 
 /**
  * 三操作统一流程（2026-11-10 规格；炮击链路 2026-11-12 重做）
@@ -85,10 +86,24 @@ const supplyDumps = computed(() => workbench.barrageSupplyMapDumps)
 /** 炮击第 2 步：本次成本与初始列 */
 const supplyCostT = computed(() => workbench.barrageSummary?.costT ?? 0)
 
-/** 炮击第 3 步：受损单位候选与分配 */
-const lossTargets = computed(() => workbench.barrageLossTargets)
-const lossRequired = computed(() => workbench.barrageLossRequired)
-const lossAllocated = computed(() => workbench.barrageLossAllocated)
+/**
+ * 空军轰炸的**战果待分损失**（K4）
+ *
+ * 空军轰炸复用炮兵的 `barrageState` 战果链；一旦需要目标方选受损单位，
+ * 自动连跑会停在战果步 ⇒ 第 2 步必须把同一个共用损失分配块摆出来。
+ */
+const airLossPending = computed(() => {
+  const current = flow.value
+  const barrage = workbench.barrageState
+  return (
+    current !== null &&
+    current.kind !== 'barrage' &&
+    barrage !== null &&
+    barrage.kind === 'air' &&
+    !barrage.finished &&
+    workbench.barrageLossRequired > 0
+  )
+})
 
 function isPickedBarrage(id: string): boolean {
   return workbench.barrageUnitIds.includes(id)
@@ -199,38 +214,9 @@ function setTargetKind(kind: string): void {
       </div>
     </template>
 
-    <!-- ───────── 炮击：第 3 步 选受损单位 ───────── -->
+    <!-- ───────── 炮击：第 3 步 选受损单位（与空军轰炸共用同一块） ───────── -->
     <template v-else-if="flow.kind === 'barrage' && flow.step === 3">
-      <p class="num">本次结果：{{ workbench.barrageSummary?.unitOutcome?.detail ?? '—' }}</p>
-      <p class="num">
-        请选择承受损失的单位：还需
-        <b>{{ Math.max(0, lossRequired - lossAllocated) }}</b> 点（共 {{ lossRequired }} 点）
-      </p>
-      <div class="ops__grid">
-        <div v-for="unit in lossTargets" :key="unit.instanceId" class="ops__loss num">
-          <button
-            type="button"
-            class="ops__unit"
-            :class="{ 'ops__unit--on': workbench.barrageLossPointsOf(unit.instanceId) > 0 }"
-            :title="`${unit.name}｜当前军力 ${unit.steps}`"
-            @click="workbench.addBarrageLossPoint(unit.instanceId)"
-          >
-            <img :src="counterImageUrlOf(unit) ?? ''" class="ops__img" alt="" />
-          </button>
-          <span class="ops__loss-count">
-            {{ workbench.barrageLossPointsOf(unit.instanceId) }} / {{ unit.steps }}
-          </span>
-          <button
-            type="button"
-            class="ops__minus"
-            :disabled="workbench.barrageLossPointsOf(unit.instanceId) === 0"
-            @click="workbench.removeBarrageLossPoint(unit.instanceId)"
-          >
-            −
-          </button>
-        </div>
-      </div>
-      <p v-if="lossTargets.length === 0" class="muted">目标格内没有可承受损失的单位。</p>
+      <OpsLossPicker />
 
       <p v-if="barrageErrorLine !== null" class="warn num">
         <BaseTag kind="danger">{{ workbench.barrageError?.rule }}</BaseTag>
@@ -305,11 +291,24 @@ function setTargetKind(kind: string): void {
       </div>
     </template>
 
-    <!-- ───────── 空军：第 2 步 空战 / 防空 ───────── -->
+    <!-- ───────── 空军：第 2 步 空战 / 防空 / 战果（含受损分担） ───────── -->
     <template v-else>
       <AirPanel only="mission" />
+      <!-- K4：空军轰炸需要目标方选受损单位时，用与炮击第 3 步**同一块**界面 -->
+      <template v-if="airLossPending">
+        <hr />
+        <OpsLossPicker />
+        <div class="ops__actions">
+          <BaseButton :disabled="!workbench.barrageLossReady" @click="map.confirmOpsAirLoss()">
+            确认受损并继续
+          </BaseButton>
+        </div>
+      </template>
       <div class="ops__actions">
-        <BaseButton variant="secondary" @click="map.cancelOpsFlow()">取消本次</BaseButton>
+        <!-- K15：这一步只收起面板，任务并未取消（宣布后不可撤回，14.2b） -->
+        <BaseButton variant="secondary" @click="map.cancelOpsFlow()">
+          收起面板（任务继续）
+        </BaseButton>
       </div>
     </template>
   </BasePanel>

@@ -82,12 +82,12 @@ const BOX_ENTRY_PROBES: Record<string, { files: readonly string[]; pattern: RegE
     pattern: /activateAirBox/,
   },
   'air.mission': {
-    files: ['src/components/air/AircraftRoster.vue'],
-    pattern: /setAirInBox/,
+    files: ['src/components/air/AirPanel.vue'],
+    pattern: /airBoxMissionGroup|airMissionBaseGroupsWithBox/,
   },
   'air.transfer': {
     files: ['src/components/air/AircraftRoster.vue'],
-    pattern: /flyOutOfBox|confirmTransfer/,
+    pattern: /startBoxTransfer|confirmTransfer|flyOutOfBox/,
   },
 }
 

@@ -38,26 +38,21 @@ describe('条 24：正式/验证模式门控', () => {
 
   it('AirPanel：手输文本/数字已走 UiField 或双分支只读（不再有裸 input）', () => {
     const src = read('src/components/air/AirPanel.vue')
-    // 采用门控
-    expect(src).toMatch(/useUiMode\(\)/)
-    // 条 24「单位信息改图」：飞机清单每行带算子缩略图
+    /*
+     * 用户 2026-11-12：任务格改为地图高亮点选，**手输格号的整体路径已删除**，
+     * 因此不再要求 AirPanel 保留 `useUiMode()` / verify 分支；仍要求：
+     *   · 飞机清单每行带算子缩略图；
+     *   · 只读 span 仍在；
+     *   · 剩余 <input 只能是 checkbox/radio。
+     */
     expect(src).toMatch(/air-row__thumb/)
-    // @change 类字段（任务格等）走 v-if=verify + 只读 span；返航已改为三选一按钮，不再手输
-    expect(src).toMatch(/v-if="uiMode === 'verify'"/)
     expect(src.match(/class="ui-field-readonly"/g)?.length ?? 0).toBeGreaterThanOrEqual(1)
-    // 剩余 <input 只应是 checkbox（游戏动作），或落在 verify 分支内。
-    // 逐行核对：凡以 `<input` 起头且非 checkbox 的，必须紧邻 v-if="uiMode === 'verify'"。
     const lines = src.split('\n')
     for (let i = 0; i < lines.length; i += 1) {
       if (!/^\s*<input\b/.test(lines[i] ?? '')) continue
       const block = lines.slice(i, i + 8).join('\n')
       const isCheckboxOrRadio = /type="(checkbox|radio)"/.test(block)
-      if (isCheckboxOrRadio) continue
-      // 文本/数字输入：其标签内（紧随的几行）应带 v-if="uiMode === 'verify'"
-      const near = lines.slice(i, i + 4).join('\n')
-      expect(near, `AirPanel 第 ${i + 1} 行的文本输入未门控：\n${block}`).toMatch(
-        /v-if="uiMode === 'verify'"/,
-      )
+      expect(isCheckboxOrRadio, `AirPanel 第 ${i + 1} 行出现非勾选输入：\n${block}`).toBe(true)
     }
   })
 
