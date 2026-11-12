@@ -122,14 +122,20 @@ export function validateAirCargoReturns(input: {
   requiresStay?: boolean
   transportIds?: readonly string[]
   targetHex: HexRef
-  returns: readonly { aircraftId: string; baseHex: HexRef }[]
+  returns: readonly { aircraftId: string; baseHex?: HexRef; offMapBox?: boolean }[]
 }): RuleOutcome<{ ok: true }> {
   const stayAircraftIds =
     input.stayAircraftIds ?? (input.requiresStay === true ? (input.transportIds ?? []) : [])
   if (
     stayAircraftIds.some((aircraftId) => {
       const entry = input.returns.find((item) => item.aircraftId === aircraftId)
-      return entry !== undefined && !sameHex(entry.baseHex, input.targetHex)
+      // 回图外盒也算“离开目的地格”
+      return (
+        entry !== undefined &&
+        (entry.offMapBox === true ||
+          entry.baseHex === undefined ||
+          !sameHex(entry.baseHex, input.targetHex))
+      )
     })
   )
     return fail('14.9f', 'overLimitTransportMustStayAtTarget')

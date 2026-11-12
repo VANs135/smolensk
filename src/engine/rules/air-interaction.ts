@@ -38,6 +38,7 @@ import {
   canReduceAirBase,
   refitEligibility,
   resolveBaseTransfer,
+  planOffMapAirBoxFlight,
   type AirBaseOperatingUnit,
 } from './air-mission'
 // 15.2E：简易机场永不缩减的常量（唯一实现）在 construction.ts
@@ -1855,8 +1856,8 @@ export interface AirInteractionState {
   cargo: AirCargoResolution | null
   /** 14.2f-F：任务本身的结果说明（由调用方写入，如 C7 轰炸结论） */
   missionNote: string | null
-  /** 14.2f-G：逐机返航的目的地（14.1c：须为本方基地） */
-  returns: { aircraftId: string; baseHex: HexRef }[]
+  /** 14.2f-G：逐机返航的目的地（14.1c：须为本方基地；专规 1.4a：也可直接回图外空军盒） */
+  returns: { aircraftId: string; baseHex?: HexRef; offMapBox?: boolean }[]
   finished: boolean
 }
 
@@ -2107,7 +2108,7 @@ export function confirmMissionStep(
 export function completeAirReturnStep(
   state: AirInteractionState,
   input: {
-    returns: readonly { aircraftId: string; baseHex: HexRef }[]
+    returns: readonly { aircraftId: string; baseHex?: HexRef; offMapBox?: boolean }[]
     /** 全图空军基地（用于返航目的地的**归属**判定） */
     bases: readonly AirBaseView[]
     /** 14.1c 例外：返航后仍保持激活的飞机（如成功拦截的战斗机） */
@@ -2154,6 +2155,19 @@ export function completeAirReturnStep(
       if (!stayActive.includes(item.aircraftId)) inactiveAircraftIds.push(item.aircraftId)
       continue
     }
+
+    // 专规 1.4a：图上起飞的飞机也可在返航时直接**移入图外空军盒**（固定航程代价）
+    if (item.offMapBox === true) {
+      const flight = planOffMapAirBoxFlight({
+        side: state.side,
+        rangeHexes: origin.rangeHexes,
+      })
+      if (!flight.ok) return flight
+      if (!stayActive.includes(item.aircraftId)) inactiveAircraftIds.push(item.aircraftId)
+      continue
+    }
+
+    if (item.baseHex === undefined) return fail('14.1c', `returnHexMissing:${item.aircraftId}`)
 
     // ★ 14.1c：返航必须回到**本方**空军基地
     const base = airBaseAt(input.bases, item.baseHex)

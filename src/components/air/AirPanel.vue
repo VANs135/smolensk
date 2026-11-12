@@ -1045,40 +1045,41 @@ const displayedBases = computed(() =>
             <p class="muted">
               返航（14.1c）
               <RuleTip rule="14.1c">
-                必须回**距离内的本方**空军基地；常规任务返航一律变为非激活。留空即回原起飞基地。
+                必须回**距离内的本方**空军基地；常规任务返航一律变为非激活。
               </RuleTip>
             </p>
-            <div class="row">
-              <label
-                v-for="origin in workbench.airMissionReturnOrigins"
-                :key="origin.aircraftId"
-                class="field"
+            <div
+              v-for="choice in workbench.airMissionReturnChoices"
+              :key="choice.aircraftId"
+              class="row"
+            >
+              <span class="num">
+                {{ choice.aircraftId }} → {{ workbench.airReturnSelectionLabel(choice.aircraftId) }}
+              </span>
+              <BaseButton
+                v-if="choice.departureAvailable"
+                variant="secondary"
+                size="sm"
+                @click="workbench.chooseAirReturnDepartureNow(choice.aircraftId)"
               >
-                {{ origin.aircraftId }} → 基地格
-                <input
-                  v-if="uiMode === 'verify'"
-                  class="input"
-                  :placeholder="hexLabel(origin.baseHex)"
-                  :value="workbench.airInputs.returnHexText[origin.aircraftId] ?? ''"
-                  @change="
-                    workbench.airInputs.returnHexText = {
-                      ...workbench.airInputs.returnHexText,
-                      [origin.aircraftId]: ($event.target as HTMLInputElement).value,
-                    }
-                  "
-                />
-                <span v-else class="ui-field-readonly">{{
-                  workbench.airInputs.returnHexText[origin.aircraftId] || hexLabel(origin.baseHex)
-                }}</span>
-                <!-- B27：返航基地格改成**点地图**（留空仍＝回原起飞基地） -->
-                <BaseButton
-                  variant="secondary"
-                  size="sm"
-                  @click="workbench.beginAirReturnHexPickNow(origin.aircraftId)"
-                >
-                  点地图选格
-                </BaseButton>
-              </label>
+                返回出发基地
+              </BaseButton>
+              <BaseButton
+                v-if="choice.offMapBoxAvailable"
+                variant="secondary"
+                size="sm"
+                @click="workbench.chooseAirReturnOffMapBoxNow(choice.aircraftId)"
+              >
+                移入图外空军基地
+              </BaseButton>
+              <BaseButton
+                v-if="choice.otherBases.length > 0"
+                variant="secondary"
+                size="sm"
+                @click="workbench.beginAirReturnBasePickNow(choice.aircraftId)"
+              >
+                其它己方基地
+              </BaseButton>
             </div>
             <div class="row">
               <BaseButton variant="primary" size="sm" @click="workbench.completeAirReturnNow()">

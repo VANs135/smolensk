@@ -904,6 +904,8 @@ export interface AirInputs {
   reductionUnitIds: string[]
   /** 14.2f-G：逐机返航目的地（实例 id → `列.行`文本） */
   returnHexText: Record<string, string>
+  /** 14.2f-G / 专规 1.4a：逐机选择“移入图外空军盒”（true 时忽略 returnHexText） */
+  returnToBox: Record<string, boolean>
   /** 14.9a：本次空运/空投装载的 **SP（T）** */
   cargoSpT: number
   /**
@@ -942,6 +944,13 @@ export interface AirInputs {
   baseCaptureDice: number | null
 }
 
+/** 逐机输入表：删掉某一架机的键（返航三选一切换时用） */
+function omitRecordKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+  const next = { ...record }
+  delete next[key]
+  return next
+}
+
 /** C9：本次空军交互的初始输入（数值一律由玩家填入，界面不代猜） */
 function createAirInputs(): AirInputs {
   return {
@@ -965,6 +974,7 @@ function createAirInputs(): AirInputs {
     transferToHexText: '',
     reductionUnitIds: [],
     returnHexText: {},
+    returnToBox: {},
     cargoSpT: 0,
     cargoByAircraft: null,
     unloadOverLimitInactive: false,
@@ -1813,20 +1823,59 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })
   }
 
-  /** 14.1c：返航基地格（留空＝回原起飞基地；合法性在提交时判） */
-  function beginAirReturnHexPickNow(aircraftId: string): void {
+  /** 14.1c：返航到“其它己方基地”——只高亮剩余航程内的可用基地格 */
+  function beginAirReturnBasePickNow(aircraftId: string): boolean {
+    const choice = airMissionReturnChoices.value.find((item) => item.aircraftId === aircraftId)
+    if (choice === undefined || choice.otherBases.length === 0) return false
     beginHexPick({
       label: '返航基地格',
       rule: '14.1c',
-      candidates: 'any',
+      candidates: choice.otherBases,
       apply: (hex) => {
         airInputs.value = {
           ...airInputs.value,
           returnHexText: { ...airInputs.value.returnHexText, [aircraftId]: hexTextOf(hex) },
+          returnToBox: omitRecordKey(airInputs.value.returnToBox, aircraftId),
         }
         return true
       },
     })
+    return true
+  }
+
+  /** 14.1c / 专规 1.4a：返航三选一——出发基地（图上基地或原图外盒） */
+  function chooseAirReturnDepartureNow(aircraftId: string): boolean {
+    const choice = airMissionReturnChoices.value.find((item) => item.aircraftId === aircraftId)
+    if (choice === undefined || !choice.departureAvailable) return false
+    if (choice.fromBox) {
+      airInputs.value = {
+        ...airInputs.value,
+        returnToBox: { ...airInputs.value.returnToBox, [aircraftId]: true },
+        returnHexText: omitRecordKey(airInputs.value.returnHexText, aircraftId),
+      }
+      return true
+    }
+    airInputs.value = {
+      ...airInputs.value,
+      returnHexText: {
+        ...airInputs.value.returnHexText,
+        [aircraftId]: hexTextOf(choice.departureHex),
+      },
+      returnToBox: omitRecordKey(airInputs.value.returnToBox, aircraftId),
+    }
+    return true
+  }
+
+  /** 专规 1.4a：返航三选一——移入图外空军盒（点即移入，不高亮地图） */
+  function chooseAirReturnOffMapBoxNow(aircraftId: string): boolean {
+    const choice = airMissionReturnChoices.value.find((item) => item.aircraftId === aircraftId)
+    if (choice === undefined || !choice.offMapBoxAvailable) return false
+    airInputs.value = {
+      ...airInputs.value,
+      returnToBox: { ...airInputs.value.returnToBox, [aircraftId]: true },
+      returnHexText: omitRecordKey(airInputs.value.returnHexText, aircraftId),
+    }
+    return true
   }
 
   /** 15.2A / 15.3：修建空军基地 / 简易机场升格的格（工程兵距离在提交时判） */
@@ -2025,6 +2074,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     },
     mustStayAtTarget: () => airCargoUnloadReceipt.value?.stayAircraftIds ?? [],
     setAirStatus,
+    setInOffMapBox: (id) => setAirInBoxMembership(id, true),
     markAirMissionFlown,
     nameOf,
     pushLog,
@@ -4821,6 +4871,75 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       airState.value?.assignment.origins.filter((origin) => ids.includes(origin.aircraftId)) ?? []
     )
   })
+
+  /**
+   * 14.1c / 专规 1.4a：返航三选一的**可用性**
+   *
+   * - `departureAvailable`：出发基地仍是**本方**空军基地；自图外盒起飞者恒可回盒。
+   * - `offMapBoxAvailable`：图上起飞的飞机，印刷航程 ≥ 盒代价（苏 20 / 轴 30）。
+   *   空运/空投任务暂不给此项（留存货物的盒返账本未建模，见未决项）。
+   * - `otherBases`：剩余航程（`target → base ≤ 印刷航程`）内的其它己方基地格。
+   */
+  const airMissionReturnChoices = computed<
+    {
+      aircraftId: string
+      fromBox: boolean
+      departureAvailable: boolean
+      departureHex: HexRef
+      offMapBoxAvailable: boolean
+      otherBases: HexRef[]
+    }[]
+  >(() => {
+    const state = airState.value
+    if (state === null) return []
+    return airMissionReturnOrigins.value.map((origin) => {
+      const plane = airUnits.value.find((air) => air.instanceId === origin.aircraftId)
+      const range = plane?.rangeHexes ?? origin.rangeHexes
+      const fromBox = origin.fromOffMapBox === true
+      const departureBase = airBases.value.find(
+        (base) => base.side === state.side && sameHex(base.hex, origin.baseHex),
+      )
+      const cargoMission = state.kind === 'air_transport' || state.kind === 'air_drop'
+      return {
+        aircraftId: origin.aircraftId,
+        fromBox,
+        departureAvailable: fromBox || departureBase !== undefined,
+        departureHex: { ...origin.baseHex },
+        offMapBoxAvailable:
+          !fromBox &&
+          !cargoMission &&
+          planOffMapAirBoxFlight({ side: state.side, rangeHexes: range }).ok,
+        otherBases: airBases.value
+          .filter(
+            (base) =>
+              base.side === state.side &&
+              !sameHex(base.hex, origin.baseHex) &&
+              hexDistance(state.targetHex, base.hex) <= range,
+          )
+          .map((base) => ({ ...base.hex })),
+      }
+    })
+  })
+
+  /** 14.2f-G：某架机当前选定的返航落点（供界面显示） */
+  function airReturnSelectionLabel(aircraftId: string): string {
+    if (airInputs.value.returnToBox[aircraftId] === true) return '图外空军基地'
+    const text = airInputs.value.returnHexText[aircraftId]
+    const choice = airMissionReturnChoices.value.find((item) => item.aircraftId === aircraftId)
+    if (text !== undefined && text !== '') {
+      const parsed = parseHexPath(text)[0]
+      if (
+        choice !== undefined &&
+        !choice.fromBox &&
+        parsed !== undefined &&
+        sameHex(parsed, choice.departureHex)
+      )
+        return `出发基地（${text}）`
+      return text
+    }
+    if (choice === undefined) return ''
+    return choice.fromBox ? '出发基地（图外盒）' : `出发基地（${hexLabel(choice.departureHex)}）`
+  }
 
   /**
    * 14.3e-B：本场空战里**攻方**在场的飞机（逐轮点名的候选取此）
@@ -25067,7 +25186,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 批 C 切片 1：选任务类型即"宣布 + 自动结算到停返航"（一次动作，不再两次确认）
     runAirMissionNow,
     runAirMissionWithKind,
-    beginAirReturnHexPickNow,
+    beginAirReturnBasePickNow,
+    chooseAirReturnDepartureNow,
+    chooseAirReturnOffMapBoxNow,
+    airReturnSelectionLabel,
     beginAirBaseHexPickNow,
     // B27b：最后 6 处"格子编号" → 点地图（值在 store，组件只绑字段）
     rebuildReplHexText,
@@ -25298,6 +25420,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     airMissionAirUnits,
     airMissionHasFighter,
     airMissionReturnOrigins,
+    airMissionReturnChoices,
     airChecklist,
     airTargetInEnemyPatrolZone,
     airTargetBaseLevel,

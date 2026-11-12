@@ -16,7 +16,11 @@ import { survivingAirMission } from '@/engine/rules/air-mission-roster'
 import type { ConsoleAirUnit } from './workbench-model'
 import { parseHexPath, hexLabel, toAirMissionAircraftView } from './workbench-model'
 export interface AirMissionPorts {
-  inputs(): { missionNote: string; returnHexText: Record<string, string> }
+  inputs(): {
+    missionNote: string
+    returnHexText: Record<string, string>
+    returnToBox: Record<string, boolean>
+  }
   profiles(): readonly { aircraftId: string; profile: string }[]
   bases(): readonly AirBaseView[]
   aircraft(): ConsoleAirUnit[]
@@ -32,6 +36,8 @@ export interface AirMissionPorts {
   resetCargo(): void
   mustStayAtTarget(): readonly string[]
   setAirStatus(id: string, status: AirStatus): void
+  /** 专规 1.4a：把飞机成员移入图外空军盒（返航直接进盒） */
+  setInOffMapBox(id: string): void
   markAirMissionFlown(id: string): void
   nameOf(id: string): string
   pushLog(kind: 'info' | 'success' | 'warning' | 'danger', text: string, rule?: string): void
@@ -138,18 +144,22 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
     )
     // 14.9f（T15）：只有承运超额部分的飞机留场，不再是整组运输机一刀切。
     const forcedIds = ports.mustStayAtTarget()
-    const returns = state.assignment.origins
-      .filter((origin) => !aProfileIds.has(origin.aircraftId))
-      .map((origin) => {
-        const text = airInputs.value.returnHexText[origin.aircraftId]
-        const parsed = text === undefined ? null : (parseHexPath(text)[0] ?? null)
-        // 未填即回原起飞基地（合法：14.1c 只要求「距离内的一个友方空军基地」）
-        return {
-          aircraftId: origin.aircraftId,
-          baseHex:
-            parsed ?? (forcedIds.includes(origin.aircraftId) ? state.targetHex : origin.baseHex),
-        }
-      })
+    const returns: { aircraftId: string; baseHex?: HexRef; offMapBox?: boolean }[] =
+      state.assignment.origins
+        .filter((origin) => !aProfileIds.has(origin.aircraftId))
+        .map((origin) => {
+          // 专规 1.4a：玩家选“移入图外空军盒” ⇒ 不看格号，直接进盒
+          if (airInputs.value.returnToBox[origin.aircraftId] === true)
+            return { aircraftId: origin.aircraftId, offMapBox: true }
+          const text = airInputs.value.returnHexText[origin.aircraftId]
+          const parsed = text === undefined ? null : (parseHexPath(text)[0] ?? null)
+          // 未填即回原起飞基地（合法：14.1c 只要求「距离内的一个友方空军基地」）
+          return {
+            aircraftId: origin.aircraftId,
+            baseHex:
+              parsed ?? (forcedIds.includes(origin.aircraftId) ? state.targetHex : origin.baseHex),
+          }
+        })
     if (
       acceptAir(
         validateAirCargoReturns({
@@ -170,7 +180,13 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
         (item) => item.aircraftId === returned.aircraftId,
       )
       const air = airUnits.value.find((item) => item.instanceId === returned.aircraftId)
-      if (air !== undefined && origin?.fromOffMapBox !== true) air.hex = { ...returned.baseHex }
+      // 专规 1.4a：移入图外空军盒的飞机改盒成员，不落任何地图格
+      if (returned.offMapBox === true) {
+        ports.setInOffMapBox(returned.aircraftId)
+        continue
+      }
+      if (air !== undefined && origin?.fromOffMapBox !== true && returned.baseHex !== undefined)
+        air.hex = { ...returned.baseHex }
     }
     // 14.1c：常规任务返航一律变为非激活（例外只给成功拦截的战斗机与正常距离转移的战斗机）
     for (const id of data.inactiveAircraftIds) setAirStatus(id, 'inactive')
@@ -192,7 +208,11 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
     if (returns.length > 0)
       pushLog(
         'info',
-        `返航（14.1c）：${returns.map((item) => `${hexLabel(item.baseHex)}`).join('、')}；均转非激活`,
+        `返航（14.1c）：${returns
+          .map((item) =>
+            item.offMapBox === true ? '图外空军盒' : hexLabel(item.baseHex ?? state.targetHex),
+          )
+          .join('、')}；均转非激活`,
         '14.1c',
       )
     // ⑭ 接线：任务返航（14.1c）入会话日志（本笔不掷骰）
@@ -203,7 +223,8 @@ export function createAirMissionDomain(ports: AirMissionPorts) {
         kind: state.kind,
         returns: returns.map((item) => ({
           aircraftId: item.aircraftId,
-          baseHex: { ...item.baseHex },
+          baseHex: item.baseHex === undefined ? null : { ...item.baseHex },
+          offMapBox: item.offMapBox === true,
         })),
         inactiveAircraftIds: [...data.inactiveAircraftIds],
       },

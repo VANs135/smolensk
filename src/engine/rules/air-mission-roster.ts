@@ -119,7 +119,7 @@ export function planRetainedCargoReturn(input: {
     baseHex?: HexRef
     offMapBox?: string
   }[]
-  returns: readonly { aircraftId: string; baseHex: HexRef }[]
+  returns: readonly { aircraftId: string; baseHex?: HexRef; offMapBox?: boolean }[]
   stayedIds: readonly string[]
   /** 14.9a/14.9e（T15）：逐机货单；给出时按各机自载留存货物分流。 */
   cargoByAircraft?: readonly { aircraftId: string; cargoIds: readonly string[] }[]

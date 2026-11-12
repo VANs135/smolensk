@@ -253,7 +253,19 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
     expect(store.airState?.missionNote).toBe('轰炸：格值 DG')
     expect(store.airState?.step).toBe('returnToBase')
 
-    // G 返航：回本方基地 ⇒ 转非激活（14.1c）；本阶段该机已用掉任务（14.2e）
+    // G 返航三选一：出发基地 / 图外空军基地 / 其它己方基地
+    const choice = store.airMissionReturnChoices.find((item) => item.aircraftId === 'air-1')!
+    expect(choice.departureAvailable).toBe(true)
+    expect(choice.offMapBoxAvailable).toBe(true)
+    expect(choice.otherBases).toEqual([])
+    // 图上基地：选出发基地（不高亮）
+    expect(store.chooseAirReturnDepartureNow('air-1')).toBe(true)
+    expect(store.airReturnSelectionLabel('air-1')).toContain('出发基地')
+    // 图外盒：点即移入
+    expect(store.chooseAirReturnOffMapBoxNow('air-1')).toBe(true)
+    expect(store.airReturnSelectionLabel('air-1')).toBe('图外空军基地')
+    // 最终仍按出发基地返航 ⇒ 转非激活（14.1c）；本阶段该机已用掉任务（14.2e）
+    expect(store.chooseAirReturnDepartureNow('air-1')).toBe(true)
     expect(store.completeAirReturnNow()).toBe(true)
     expect(store.airState?.step).toBe('done')
     expect(store.airState?.finished).toBe(true)

@@ -42,9 +42,9 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).toMatch(/useUiMode\(\)/)
     // 条 24「单位信息改图」：飞机清单每行带算子缩略图
     expect(src).toMatch(/air-row__thumb/)
-    // @change 类字段（任务格/返航格）走 v-if=verify + 只读 span
+    // @change 类字段（任务格等）走 v-if=verify + 只读 span；返航已改为三选一按钮，不再手输
     expect(src).toMatch(/v-if="uiMode === 'verify'"/)
-    expect(src.match(/class="ui-field-readonly"/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+    expect(src.match(/class="ui-field-readonly"/g)?.length ?? 0).toBeGreaterThanOrEqual(1)
     // 剩余 <input 只应是 checkbox（游戏动作），或落在 verify 分支内。
     // 逐行核对：凡以 `<input` 起头且非 checkbox 的，必须紧邻 v-if="uiMode === 'verify'"。
     const lines = src.split('\n')

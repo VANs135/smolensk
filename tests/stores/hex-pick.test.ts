@@ -213,7 +213,7 @@ describe('B27：接线（源码守卫）', () => {
         [
           'beginAirPlacementHexPickNow()',
           'beginAirTransferHexPickNow()',
-          'beginAirReturnHexPickNow(origin.aircraftId)',
+          'beginAirReturnBasePickNow(choice.aircraftId)',
           'beginAirBaseHexPickNow()',
         ],
       ],

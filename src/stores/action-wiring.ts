@@ -56,7 +56,7 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
     names: [
       'beginAirBaseHexPickNow',
       'beginAirPlacementHexPickNow',
-      'beginAirReturnHexPickNow',
+      'beginAirReturnBasePickNow',
       'beginAirTargetHexPickNow',
       'beginAirTransferHexPickNow',
       'beginArrivalPlacePickNow',
@@ -274,6 +274,15 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   setTransportSpGroupDraftNow: {
     kind: 'draft',
     why: '只改"这批运输点带来的 SP 归哪个集群"的待提交选择，不落盘；落账发生在 placeArrivalNow',
+  },
+  // 14.2f-G：返航三选一的落点选择，只改待提交输入；落盘在 completeAirReturnNow
+  chooseAirReturnDepartureNow: {
+    kind: 'draft',
+    why: '只把 returnHexText 指回出发基地，不落盘；返航落盘在 completeAirReturnNow',
+  },
+  chooseAirReturnOffMapBoxNow: {
+    kind: 'draft',
+    why: '只把 returnToBox 标记为 true，不落盘；进盒发生在 completeAirReturnNow',
   },
   // 13.2f：装卸窗的待提交选择（点哪枚点数、数量），落账在 load / unload（有环节闸）
   selectTransportLoadPointNow: {
