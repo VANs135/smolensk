@@ -16,7 +16,8 @@ import type { Workbench } from '../flows/sop-harness'
  *   · **13.3b** 铁路运量只能在**移动阶段**用；当日容量由专规 1.2 给定（轴 0/苏 2，7 月 19 日起轴 1/苏 3）。
  *   · **13.3e** 三步：登车（不在 EZOC 的可卸货铁路格）→ 沿铁路移动（相连、轨距正确、受控、无敌军与 EZOC）
  *     → 卸货（同登车条件）；**卸货后不得再移动**（4.7d）。
- *   · **13.3f / 13.3h**：错误轨距与未控制的铁路格不可用。
+ *   · **13.3e-2**：错误轨距与被敌方占据的铁路格不可用；原文「未控制」按用户 2026-11-12
+ *     口径读作「该格（含同格城镇）被敌方单位占据」，与补给侧三阻断同源。
  *
  * ★ 修前 `validateRailMovement` / `railCapacityCost` / `createRailFacts` **全部零消费** ⇒
  *   盘面上根本没有「用铁路运兵/运货」这条路（而专规 1.2 的轨距账本、13.3c 的火车卸货格都已就位）。
@@ -74,14 +75,14 @@ function railUnit(store: Workbench, hex: HexRef, instanceId: string) {
 }
 
 /**
- * 把这段铁路置成**苏方可用且受控**（13.3f/13.3h），并给铁路一个**基础补给源**（13.3c）
+ * 把这段铁路置成**苏方可用**（专规 1.2 宽轨），并给铁路一个**基础补给源**（13.3c）
  *
  * - 专规 1.2：印刷图全是宽轨、轴方只能用标准轨 ⇒ 苏方在未换轨的格上天然可用（13.3f）；
- * - 13.3h 控制＝同格**唯一**战斗单位所属方（与补给层 `controlByHex` 同一口径）⇒ 沿线各格放一个苏军单位；
+ * - 2026-11-12 口径：铁路本身没有归属/控制/占领 ⇒ **不再**沿线摆苏军单位来"控住"；
+ *   13.3e-2 的「未控制」改读作「该格被敌方单位占据」（由用例按需摆敌军来验证）；
  * - 13.3c 的可火车卸货格须有一条**免 EZOC 的铁路路径回到补给源** ⇒ 在此声明起点（15.10）为该方的补给源格。
  */
-function controlRailRun(store: Workbench): void {
-  RAIL_RUN.forEach((hex) => railUnit(store, hex, `ctl-${label(hex)}`))
+function prepareRailRun(store: Workbench): void {
   // 12.6a①：把起点声明为该方的补给源格（13.3c 的「免 EZOC 铁路路径回到补给源」由此成立）
   store.supplySourceDraft = { hexText: label(FROM), kind: 'supplySourceHex' }
   expect(store.addSupplySource()).toBe(true)
@@ -101,7 +102,7 @@ describe('13.3e 三步：登车 → 铁路移动 → 卸货', () => {
     const store = sovietStore()
     store.setPhase('movement')
     store.setTurn(5) // 专规 1.2：7/19 之后苏方容量 3
-    controlRailRun(store)
+    prepareRailRun(store)
     const cargo = railUnit(store, FROM, 'cargo-1')
     store.selectedId = cargo.instanceId
     store.railMoveInputs = { toHexText: label(TO), spAmount: 1, fromDumpId: null }
@@ -119,7 +120,7 @@ describe('13.3e 三步：登车 → 铁路移动 → 卸货', () => {
     const store = sovietStore()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRailRun(store)
+    prepareRailRun(store)
     const cargo = railUnit(store, FROM, 'cargo-2')
     store.selectedId = cargo.instanceId
 
@@ -146,7 +147,7 @@ describe('13.3e 三步：登车 → 铁路移动 → 卸货', () => {
     const store = sovietStore()
     store.setPhase('combat')
     store.setTurn(5)
-    controlRailRun(store)
+    prepareRailRun(store)
     const cargo = railUnit(store, FROM, 'cargo-1')
     store.selectedId = cargo.instanceId
     store.railMoveInputs = { toHexText: label(TO), spAmount: 1, fromDumpId: null }
@@ -162,7 +163,7 @@ describe('13.3e 三步：登车 → 铁路移动 → 卸货', () => {
     const store = sovietStore()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRailRun(store)
+    prepareRailRun(store)
     const cargo = railUnit(store, FROM, 'cargo-1')
     cargo.mode = { mode: 'combat', orientation: 'combat', dg: false, exploit: false }
     store.selectedId = cargo.instanceId
@@ -177,7 +178,7 @@ describe('13.3e 三步：登车 → 铁路移动 → 卸货', () => {
     const store = sovietStore()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRailRun(store)
+    prepareRailRun(store)
     const cargo = railUnit(store, FROM, 'cargo-1')
     cargo.mode = { mode: 'move', orientation: 'move', dg: true, exploit: false }
     store.selectedId = cargo.instanceId
@@ -191,7 +192,7 @@ describe('13.3e 三步：登车 → 铁路移动 → 卸货', () => {
     const store = sovietStore()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRailRun(store)
+    prepareRailRun(store)
     const cargo = railUnit(store, FROM, 'cargo-1')
     cargo.mpSpent = cargo.raw.ma // 全部 MA 已耗 ⇒ 远超一半
     store.selectedId = cargo.instanceId
@@ -206,7 +207,7 @@ describe('13.3e 三步：登车 → 铁路移动 → 卸货', () => {
     const store = sovietStore()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRailRun(store)
+    prepareRailRun(store)
     const cargo = railUnit(store, FROM, 'cargo-1')
     store.selectedId = cargo.instanceId
     // 一个远离铁路的格（30 列之外）
@@ -220,18 +221,22 @@ describe('13.3e 三步：登车 → 铁路移动 → 卸货', () => {
     expect(store.railMoveError?.reason).toBe('noRailPath')
   })
 
-  it('13.3h：沿线被敌方战斗单位占住 ⇒ 无可用路径（不能穿过敌军的格）', () => {
+  it('13.3e-2：沿线被敌方单位占据 ⇒ 无可用路径（「未控制」＝被敌占据，不再有独立控制权）', () => {
     const store = sovietStore()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRailRun(store)
+    prepareRailRun(store)
     const cargo = railUnit(store, FROM, 'cargo-1')
     store.selectedId = cargo.instanceId
-    // 在中间格放一个**敌方**战斗单位
-    const middle = RAIL_RUN[1]!
+    /*
+     * 取 Mogilev（15.10）西北向的**死胡同支线** 15.10→14.9→13.5（Bykhov）：
+     * 这条线没有第二条路，13.9 就是割点，敌军占住它即**真的**断了路径；
+     * 敌军放 13.9（距登车格两格）以免只是把 EZOC 投到登车格上。
+     */
+    const enemyHex: HexRef = { col: 13, row: 9 }
     const enemyRecord = groundRecord('axis', (item) => item.isCombat === true)
-    placeGround(store, enemyRecord, middle, 'axis', 'enemy-1')
-    store.railMoveInputs = { toHexText: label(TO), spAmount: 1, fromDumpId: null }
+    placeGround(store, enemyRecord, enemyHex, 'axis', 'enemy-1')
+    store.railMoveInputs = { toHexText: '13.5', spAmount: 1, fromDumpId: null }
 
     expect(store.railMoveNow('unit')).toBe(false)
     expect(store.railMoveError?.reason).toBe('noRailPath')
@@ -243,7 +248,7 @@ describe('13.3b：每回合的铁路容量额度', () => {
     const store = sovietStore()
     store.setPhase('movement')
     store.setTurn(4) // 专规 1.2：7/19 **之前**苏方容量 2
-    controlRailRun(store)
+    prepareRailRun(store)
     const cargo = railUnit(store, FROM, 'cargo-1')
     store.selectedId = cargo.instanceId
     // 手工把额度用满（模拟本回合已运过）
@@ -283,7 +288,7 @@ describe('13.3a：SP 作为铁路货物', () => {
     const store = sovietStore()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRailRun(store)
+    prepareRailRun(store)
     const dump = { id: 'src', hex: { ...FROM }, side: 'soviet' as const, sp: 4, t: 0 }
     store.spDumps.push(dump)
     store.railMoveInputs = { toHexText: label(TO), spAmount: 2, fromDumpId: 'src' }
@@ -306,7 +311,7 @@ describe('13.3a：SP 作为铁路货物', () => {
     const store = sovietStore()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRailRun(store)
+    prepareRailRun(store)
     store.railMoveInputs = { toHexText: label(TO), spAmount: 1, fromDumpId: null }
     expect(store.railMoveNow('sp')).toBe(false)
     expect(store.railMoveError?.rule).toBe('13.3a')
@@ -318,7 +323,7 @@ describe('13.3a：容量费用的两条路径修正', () => {
     const store = sovietStore()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRailRun(store)
+    prepareRailRun(store)
     const cargo = railUnit(store, FROM, 'cargo-1')
     store.selectedId = cargo.instanceId
     store.railMoveInputs = { toHexText: label(TO), spAmount: 1, fromDumpId: null }
@@ -340,7 +345,7 @@ describe('13.3a：容量费用的两条路径修正', () => {
     const store = sovietStore()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRailRun(store)
+    prepareRailRun(store)
     // 用 SP 做货物：当量 = SP 数，不受 4.7b 影响，故好数
     store.spDumps.push({ id: 'src', hex: { ...FROM }, side: 'soviet', sp: 4, t: 0 })
     store.railMoveInputs = { toHexText: label(TO), spAmount: 2, fromDumpId: 'src' }
@@ -357,7 +362,7 @@ describe('13.3a：容量费用的两条路径修正', () => {
     const store = sovietStore()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRailRun(store)
+    prepareRailRun(store)
     // Mogilev（15.10）唯一西北向的支线 15.10→14.9→…→13.5（Bykhov，聚落）**整段单轨**
     const SPUR: HexRef[] = [
       { col: 14, row: 9 },
@@ -367,7 +372,6 @@ describe('13.3a：容量费用的两条路径修正', () => {
       { col: 13, row: 6 },
       { col: 13, row: 5 },
     ]
-    SPUR.forEach((hex) => railUnit(store, hex, `spur-${label(hex)}`))
     expect(store.detrainableHexes.some((hex) => label(hex) === '13.5')).toBe(true)
 
     store.spDumps.push({ id: 'src', hex: { ...FROM }, side: 'soviet', sp: 4, t: 0 })

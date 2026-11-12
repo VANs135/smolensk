@@ -71,12 +71,13 @@ function rrUnit(
   return unit
 }
 
-/** 沿线各格放一个苏军单位控住（13.3h 控制＝同格唯一战斗单位所属方；专规 1.2 苏方用宽轨） */
-function controlRun(store: Workbench): void {
-  for (const hex of RUN) {
-    const record = groundRecord('soviet', (item) => item.isCombat === true)
-    placeGround(store, record, hex, 'soviet', `ctl-${label(hex)}`)
-  }
+/**
+ * 把这段铁路置成**苏方可用**并声明起点为补给源格（13.3c）
+ *
+ * 2026-11-12 口径：铁路本身没有归属/控制/占领 ⇒ 不再沿线摆苏军单位来"控住"；
+ * 13.3e-2 的「未控制」改读作「该格被敌方单位占据」。
+ */
+function prepareRun(store: Workbench): void {
   // 13.3c：声明起点为补给源格 ⇒ 起点成为可火车卸货格
   store.supplySourceDraft = { hexText: label(FROM), kind: 'supplySourceHex' }
   expect(store.addSupplySource()).toBe(true)
@@ -93,7 +94,7 @@ describe('13.3g-C：铁路修理单位可在任意铁路格登车/卸货（不�
     plain.switchSide()
     plain.setPhase('movement')
     plain.setTurn(5)
-    controlRun(plain)
+    prepareRun(plain)
     const normal = rrUnit(plain, FROM, 'normal-1')
     normal.specialized = normal.specialized.filter((tag) => tag !== 'rail_repair')
     plain.selectedId = normal.instanceId
@@ -108,7 +109,7 @@ describe('13.3g-C：铁路修理单位可在任意铁路格登车/卸货（不�
     store.switchSide()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRun(store)
+    prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1')
     expect(rr.specialized).toContain('rail_repair')
     store.selectedId = rr.instanceId
@@ -123,7 +124,7 @@ describe('13.3g-C：铁路修理单位可在任意铁路格登车/卸货（不�
     store.switchSide()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRun(store)
+    prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1')
     rr.mpSpent = 1
     store.selectedId = rr.instanceId
@@ -141,7 +142,7 @@ describe('13.3g-C：铁路修理单位可在任意铁路格登车/卸货（不�
     store.switchSide()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRun(store)
+    prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
     store.selectedId = rr.instanceId
     store.railMoveInputs = { toHexText: label(TO), spAmount: 1, fromDumpId: null }
@@ -166,7 +167,7 @@ describe('13.3g-A：不得「接力」（用铁路移动进入本阶段刚换过
     store.switchSide()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRun(store)
+    prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
 
     expect(store.convertedHexesThisPhase).toEqual([])
@@ -186,7 +187,7 @@ describe('13.3g-A：不得「接力」（用铁路移动进入本阶段刚换过
     store.switchSide()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRun(store)
+    prepareRun(store)
 
     // ① 一号修理单位把起点格换一次轨（本阶段）
     const first = rrUnit(store, FROM, 'rr-1', 'combat')
@@ -213,7 +214,7 @@ describe('13.3g-A：不得「接力」（用铁路移动进入本阶段刚换过
     store.switchSide()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRun(store)
+    prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
     store.selectedId = rr.instanceId
     store.railMoveInputs = { toHexText: label(TO), spAmount: 1, fromDumpId: null }
@@ -230,7 +231,7 @@ describe('13.3g-A：不得「接力」（用铁路移动进入本阶段刚换过
     store.switchSide()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRun(store)
+    prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
     expect(store.convertRailGaugeNow(rr.instanceId, label(FROM))).toBe(true)
 
@@ -262,7 +263,7 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     store.switchSide() // 苏方（专规 1.2：印刷宽轨 = 苏方可用）
     store.setPhase('movement')
     store.setTurn(5)
-    controlRun(store)
+    prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
 
     expect(store.isRailGaugeUsableAt(FROM, 'soviet')).toBe(true)
@@ -281,7 +282,7 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     store.switchSide()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRun(store)
+    prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1')
 
     expect(store.convertRailGaugeNow(rr.instanceId, label(FROM))).toBe(false)
@@ -294,7 +295,7 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     store.switchSide()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRun(store)
+    prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
     rr.specialized = rr.specialized.filter((tag) => tag !== 'rail_repair')
 
@@ -307,7 +308,7 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     store.switchSide()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRun(store)
+    prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
 
     // 目标格取 16.9（15.10 的铁路邻居，格内无本方单位 ⇒ 不被 4.5b 抵消）；
@@ -325,7 +326,7 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     store.switchSide()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRun(store)
+    prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
     const enemy = groundRecord('axis', (item) => item.isCombat === true)
     placeGround(store, enemy, { col: 16, row: 10 }, 'axis', 'enemy-adj')
@@ -339,7 +340,7 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     store.switchSide()
     store.setPhase('movement')
     store.setTurn(5)
-    controlRun(store)
+    prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
     const quota = Math.min(4, rr.raw.ma)
     const hexes = RUN.slice(0, quota)

@@ -2266,7 +2266,7 @@ export const useContainersStore = defineStore('containers', () => {
         path: [hex],
         facts: {
           ...facts,
-          isControlled: () => true,
+          enemyOccupies: () => false,
           isDetrainable: () => true,
           isRailRepairUnit: () => unit.specialized.includes('rail_repair'),
         },

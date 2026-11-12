@@ -53,9 +53,9 @@ function facts(over: Partial<RailFacts> = {}): RailFacts {
     hasRail: () => true,
     isRailConnected: () => true,
     railGaugeUsable: () => true,
-    isControlled: () => true,
     inEnemyZoc: () => false,
     hasEnemyCombatUnit: () => false,
+    enemyOccupies: () => false,
     isDetrainable: () => true,
     isTrainbusting: () => false,
     isMultiTrackEdge: () => false,
@@ -234,6 +234,11 @@ describe('13.3e 铁路移动三步（登车 → 移动 → 卸货，同一阶段
       ok: false,
       reason: `entrainHexInEnemyZoc:${A.col}.${A.row}`,
     })
+    // 13.3e-2 的「未控制」＝登车格（含同格卸货城镇）被敌方单位占据（任意单位，含非战斗）
+    expect(railed({ facts: facts({ enemyOccupies: (hex) => hex.row === A.row }) })).toMatchObject({
+      ok: false,
+      reason: `entrainHexEnemyOccupied:${A.col}.${A.row}`,
+    })
   })
 
   it('5.6a：铁路运输须移动模式（3 步同阶段）', () => {
@@ -265,7 +270,7 @@ describe('13.3e 铁路移动三步（登车 → 移动 → 卸货，同一阶段
     })
   })
 
-  it('13.3e-2 / 13.3f / 13.3h：路径格不得无铁路 / 错误轨距 / 未控制', () => {
+  it('13.3e-2 / 13.3f：路径格不得无铁路 / 错误轨距 / 被敌方占据', () => {
     expect(railed({ facts: facts({ hasRail: (hex) => hex.row !== B.row }) })).toMatchObject({
       ok: false,
       reason: `pathHexHasNoRail:${B.col}.${B.row}`,
@@ -273,10 +278,10 @@ describe('13.3e 铁路移动三步（登车 → 移动 → 卸货，同一阶段
     expect(railed({ facts: facts({ railGaugeUsable: (hex) => hex.row !== B.row }) })).toMatchObject(
       { ok: false, rule: '13.3f', reason: `pathHexWrongGauge:${B.col}.${B.row}` },
     )
-    expect(railed({ facts: facts({ isControlled: (hex) => hex.row !== B.row }) })).toMatchObject({
+    // 原文「未控制」按用户 2026-11-12 口径＝该格被敌方单位占据（不再有独立控制权）
+    expect(railed({ facts: facts({ enemyOccupies: (hex) => hex.row === B.row }) })).toMatchObject({
       ok: false,
-      rule: '13.3h',
-      reason: `pathHexUncontrolled:${B.col}.${B.row}`,
+      reason: `pathHexEnemyOccupied:${B.col}.${B.row}`,
     })
   })
 
@@ -290,7 +295,7 @@ describe('13.3e 铁路移动三步（登车 → 移动 → 卸货，同一阶段
     })
   })
 
-  it('13.3e-3：卸货格必须有铁路、可卸货、轨距正确、受控，且无敌方单位与 ZOC', () => {
+  it('13.3e-3：卸货格必须有铁路、可卸货、轨距正确、无敌方占据，且无敌方单位与 ZOC', () => {
     expect(railed({ facts: facts({ hasRail: (hex) => hex.row !== C.row }) })).toMatchObject({
       ok: false,
       reason: `detrainHexHasNoRail:${C.col}.${C.row}`,
@@ -302,10 +307,10 @@ describe('13.3e 铁路移动三步（登车 → 移动 → 卸货，同一阶段
     expect(railed({ facts: facts({ railGaugeUsable: (hex) => hex.row !== C.row }) })).toMatchObject(
       { ok: false, rule: '13.3f', reason: `detrainHexWrongGauge:${C.col}.${C.row}` },
     )
-    expect(railed({ facts: facts({ isControlled: (hex) => hex.row !== C.row }) })).toMatchObject({
+    // 13.3e-2 的「未控制」＝卸货格被敌方单位占据（含同格卸货城镇）
+    expect(railed({ facts: facts({ enemyOccupies: (hex) => hex.row === C.row }) })).toMatchObject({
       ok: false,
-      rule: '13.3h',
-      reason: `detrainHexUncontrolled:${C.col}.${C.row}`,
+      reason: `detrainHexEnemyOccupied:${C.col}.${C.row}`,
     })
     expect(
       railed({ facts: facts({ hasEnemyCombatUnit: (hex) => hex.row === C.row }) }),
@@ -768,7 +773,7 @@ describe('createRailFacts：静态铁路图层（产品数据）→ 事实', () 
     ],
   }
   const railFacts = createRailFacts({
-    isControlled: () => true,
+    enemyOccupies: () => false,
     railGaugeUsable: () => true,
     inEnemyZoc: () => false,
     hasEnemyCombatUnit: () => false,
@@ -794,7 +799,7 @@ describe('createRailFacts：静态铁路图层（产品数据）→ 事实', () 
     expect(railFacts.isMultiTrackEdge(A, C)).toBe(false) // 不存在这条格边
     // 无 rail: true 的边即使标了 multiTrack 也不算（数据自洽的下界）
     const stray = createRailFacts({
-      isControlled: () => true,
+      enemyOccupies: () => false,
       railGaugeUsable: () => true,
       inEnemyZoc: () => false,
       hasEnemyCombatUnit: () => false,
@@ -808,7 +813,7 @@ describe('createRailFacts：静态铁路图层（产品数据）→ 事实', () 
 
   it('13.3a：全程多轨 ⇒ 该路径的费用减半（经 railPathFacts 与事实联动）', () => {
     const multi = createRailFacts({
-      isControlled: () => true,
+      enemyOccupies: () => false,
       railGaugeUsable: () => true,
       inEnemyZoc: () => false,
       hasEnemyCombatUnit: () => false,

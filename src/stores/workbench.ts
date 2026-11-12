@@ -3964,43 +3964,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }))
 
   /**
-   * 13.3e-2 / 13.3h：铁路**运输**（运兵/运货）沿线的格控制
-   *
-   * ★ 与用户 2026-11-12 的「轨距唯一」口径**分开**：那条口径管的是铁路**补给可用性/可卸货格**
-   *   （`railSupplyFacts`，已删除控制近似）。13.3e 原文另写「不能使用错误轨距或**未控制**的铁路格」，
-   *   故运兵/运货仍保留这一条；操作台无控制历史，沿用既有近似（同格仅有单方战斗单位 ⇒ 该方控制），
-   *   不新增控制账本。
-   */
-  function railTransportControlledBy(hex: HexRef, side: Side): boolean {
-    const sides = new Set(
-      units.value
-        .filter((unit) => unit.isCombat && sameHex(unit.hex, hex))
-        .map((unit) => unit.side),
-    )
-    return sides.size === 1 && [...sides][0] === side
-  }
-
-  /**
    * 13.3：铁路运货的运行期事实（`RailFacts` 的**唯一组装点**）
    *
    * 静态图层（哪格有铁路 / 两格是否以铁路相接）由引擎 `createRailFacts` 从 `map-layers` 建索引；
-   * 运行期六项分别取仓里既有结论：
-   *   · 13.3h 控制 ← `railTransportControlledBy`（13.3e-2 的运输限制；**补给**侧已不判控制）；
+   * 运行期各项分别取仓里既有结论：
+   *   · 13.3e-2「未控制」← **敌方单位占据**（`enemyOccupies`，与补给侧阻断②同源）。用户 2026-11-12
+   *     裁定：铁路本身没有归属/控制/占领，能被占领的是同格城镇/村镇；故不再有独立的控制权账本；
    *   · 13.3f 轨距 ← `isRailGaugeUsableAt`（专规 1.2 的轨距账本，与 13.3f 的转换共用）；
    *   · EZOC ← `inEnemyZocForAction(…, 'railTransport')`：`zoc-effects` 把 `railTransport` 定为
    *     **不可抵消**（4.5a-C ／ 13.3c 末句「运货时 EZOC 不可抵消」）；仅「连接补给源」的判定
    *     （`zocOnlySupplyFacts`）才按 4.5b 抵消，两处不可混用；
-   *   · 敌方战斗单位 ← 盘面推出；
+   *   · 敌方战斗单位 ← 盘面推出（给出专码）；非战斗敌方单位由 `enemyOccupies` 一并阻断；
    *   · 13.3c 可火车卸货格 ← 补给层的 `detrainableHexes`（**同一份结论**，不另立一条判据）；
    *   · 14.8 运输破坏区 ← `trainbustingMarks`。
    */
   const railMoveFacts = computed(() =>
     createRailFacts({
-      isControlled: (hex, side) => railTransportControlledBy(hex, side),
       railGaugeUsable: (hex, side) => isRailGaugeUsableAt(hex, side),
       inEnemyZoc: (hex, side) => inEnemyZocForAction(moveContext.value, hex, side, 'railTransport'),
       hasEnemyCombatUnit: (hex, side) =>
         units.value.some((unit) => unit.side !== side && unit.isCombat && sameHex(unit.hex, hex)),
+      // 13.3e-2 的「未控制」＝该格（含同格卸货城镇）有敌方单位；与补给侧 `enemyOccupies` 同一判据
+      enemyOccupies: (hex, side) =>
+        units.value.some((unit) => unit.side !== side && sameHex(unit.hex, hex)),
       // 13.3c 的结论由补给层按**当前行动方**给出；13.3b 也只允许本方使用自己的铁路容量
       isDetrainable: (hex, side) =>
         side === activeSide.value &&
@@ -4050,7 +4036,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           if (multiOnly && !facts.isMultiTrackEdge(hex, next)) continue
           if (nextKey !== goal) {
             if (!facts.railGaugeUsable(next, side)) continue
-            if (!facts.isControlled(next, side)) continue
+            // 13.3e-2 的「未控制」＝该格被敌方单位占据（任意单位；与补给侧同源）
+            if (facts.enemyOccupies(next, side)) continue
             if (facts.hasEnemyCombatUnit(next, side)) continue
             if (facts.inEnemyZoc(next, side)) continue
           }

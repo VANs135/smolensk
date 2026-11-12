@@ -40,13 +40,14 @@ import type { MobilityType } from './terrain'
  *   - 可火车卸货格的三条判据（13.3c）由事实提供者给出，本模块只消费结论（不臆造铁路连通性）。
  *
  * ## 数据接口
- *   运行期事实（控制 / 轨距 / EZOC / 敌方单位 / 可卸货格 / 破坏区）由 `RailFacts` 注入；
+ *   运行期事实（轨距 / EZOC / 敌方单位 / 可卸货格 / 破坏区）由 `RailFacts` 注入；
  *   静态铁路图层（哪格有铁路、两格是否以铁路相接、该格边单轨还是多轨）由 `createRailFacts`
  *   从产品数据 map-layers.json 建索引。
  *
  * ## 明确不由本模块负责（避免过度声称）
  *   - **13.3c 的「铁路路径免 EZOC 回到补给源」**：属补给网判定，由补给层/事实提供者算出「是否可卸货」后注入；
- *   - **13.3h 控制权**：随前线与敌方单位移动而变的运行期状态，由状态层给出 `isControlled`；
+ *   - **13.3e-2 的「未控制」**：原文未定义「控制」的确切含义，按用户 2026-11-12 裁定读作
+ *     「该格（含同格卸货城镇）被敌方单位占据」，由状态层以 `enemyOccupies` 注入，不设独立控制权账本；
  *   - **13.3d 铁路端头标记**：地图上的轨距分界标记属记录轨式记账（谁把端头推到哪），
  *     其机制已由 13.3f/g 的轨距转换覆盖，标记位置不在引擎建模范围；
  *   - **4.7d 的「同一阶段不能使用超过一种运输类型」**：跨动作的阶段级记账，须由命令层在阶段内累计
@@ -188,8 +189,9 @@ export function railPathFacts(
 /**
  * 铁路运行期事实（注入）
  *
- * 「可火车卸货格」的三条判据（13.3c）与「控制」（13.3h）都是运行期结论，
- * 由状态层/补给层算出后注入，本模块不臆造铁路连通性与控制权。
+ * 13.3e-2 的「未控制」按用户 2026-11-12 口径读作「该格城镇被敌方占据」，与补给侧
+ * 13.3c 的三阻断同源：轨距（13.3f）＋ 敌方 ZOC ＋ 敌方单位占据 ＋ 同格卸货城镇被敌占据。
+ * 铁路本身没有归属/控制/占领，故不再有独立的 `isControlled` 运行期状态。
  */
 export interface RailFacts {
   /** 该格是否有铁路（沿铁路移动的基本前提） */
@@ -198,13 +200,13 @@ export interface RailFacts {
   isRailConnected(from: HexRef, to: HexRef): boolean
   /** 13.3f：该格轨距是否为本方可用（苏宽轨 / 德标准轨；含已转换状态） */
   railGaugeUsable(hex: HexRef, side: Side): boolean
-  /** 13.3h：该铁路格是否处于本方控制 */
-  isControlled(hex: HexRef, side: Side): boolean
   /** 该格是否有敌方 ZOC（★ 运货时不可抵消，见 13.3c 末句） */
   inEnemyZoc(hex: HexRef, side: Side): boolean
   /** 13.3e-2：该格是否有敌方战斗单位 */
   hasEnemyCombatUnit(hex: HexRef, side: Side): boolean
-  /** 13.3c：该格是否为「可火车卸货格」（聚落/港口/工程 HQ + 受控 + 免 EZOC 铁路路径回补给源） */
+  /** 13.3e-2 的「未控制」：该格（含同格卸货城镇）是否被敌方单位占据（任意单位，含非战斗） */
+  enemyOccupies(hex: HexRef, side: Side): boolean
+  /** 13.3c：该格是否为「可火车卸货格」（聚落/港口/工程 HQ + 免 EZOC 铁路路径回补给源 + 无三阻断） */
   isDetrainable(hex: HexRef, side: Side): boolean
   /** 14.8：该格是否处于运输破坏区（13.3a 费用翻倍） */
   isTrainbusting(hex: HexRef): boolean
@@ -302,7 +304,8 @@ function sameHex(a: HexRef, b: HexRef): boolean {
  * 「铁路移动包括三个步骤：**登车、移动、卸货**。这三个步骤必须在**同一阶段**完成。」
  *   1) 登车：货物位于**不在敌方 ZOC 内**的可火车卸货铁路格；单位须移动模式，且该阶段登车前最多消耗**一半 MA**；
  *      （13.6b 的「地图外登车」忽略本步；13.3g-C 铁路修理单位可在**任意**铁路格登车）
- *   2) 移动：沿相连的铁路格移动，**不可进入**有敌方战斗单位或 ZOC 的格；不能使用**错误轨距**或**未控制**的铁路格；
+ *   2) 移动：沿相连的铁路格移动，**不可进入**有敌方单位或 ZOC 的格；不能使用**错误轨距**的铁路格；
+ *      （原文「未控制」按用户 2026-11-12 口径读作「该格城镇被敌方占据」，与补给侧三阻断同源）
  *   3) 卸货：位于**不在敌方 ZOC 内**的可火车卸货铁路格；卸货后**不得再移动**（4.7d）。
  *      ★ 13.3g-B 例外：铁路修理单位卸货后可用「完整 MA − 登车前移动」继续移动（见返回值 `postDetrainMp`）。
  */
@@ -326,6 +329,9 @@ export function validateRailMovement(input: RailMovementInput): RuleOutcome<Rail
     // 「货物必须位于**不在敌方 ZOC 内**的一个可火车卸货的铁路格」；★ 运货时 EZOC **不可**抵消（13.3c）
     if (facts.inEnemyZoc(from, cargo.side))
       return fail('13.3e', `entrainHexInEnemyZoc:${hexText(from)}`)
+    // 13.3e-2 的「未控制」＝该格（含同格卸货城镇）被敌方单位占据
+    if (facts.enemyOccupies(from, cargo.side))
+      return fail('13.3e', `entrainHexEnemyOccupied:${hexText(from)}`)
   }
 
   /* ①′ 单位自身的运输资格（5.6a / 5.10d / 13.3e-1）：与是否「地图外登车」无关 */
@@ -341,11 +347,9 @@ export function validateRailMovement(input: RailMovementInput): RuleOutcome<Rail
       return fail('13.3e', `preLoadMpExceedsHalfMa:${cargo.preLoadMp}>${preLoadLimit}`)
   }
 
-  /* ② 起点格的轨距与受控（13.3e-2：不能使用错误轨距或未控制的铁路格） */
+  /* ② 起点格的轨距（13.3e-2：不能使用错误轨距的铁路格；登车格的敌方占据已在 ① 检查） */
   if (!facts.railGaugeUsable(from, cargo.side))
     return fail('13.3f', `entrainHexWrongGauge:${hexText(from)}`)
-  if (!facts.isControlled(from, cargo.side))
-    return fail('13.3h', `entrainHexUncontrolled:${hexText(from)}`)
 
   /* ③ 沿铁路移动（13.3e-2）：逐格检查相连性；**途经格**检查可用性（终点属「卸货格」，见 ④） */
   for (let index = 1; index < path.length; index += 1) {
@@ -358,11 +362,11 @@ export function validateRailMovement(input: RailMovementInput): RuleOutcome<Rail
     if (!facts.hasRail(hex)) return fail('13.3e', `pathHexHasNoRail:${hexText(hex)}`)
     if (!facts.railGaugeUsable(hex, cargo.side))
       return fail('13.3f', `pathHexWrongGauge:${hexText(hex)}`)
-    if (!facts.isControlled(hex, cargo.side))
-      return fail('13.3h', `pathHexUncontrolled:${hexText(hex)}`)
-    // 「不可进入有敌方战斗单位或 ZOC 的格」
+    // 「不可进入有敌方单位或 ZOC 的格」：战斗单位给出专码，非战斗单位同样阻断（阻断②）
     if (facts.hasEnemyCombatUnit(hex, cargo.side))
       return fail('13.3e', `pathHexEnemyCombatUnit:${hexText(hex)}`)
+    if (facts.enemyOccupies(hex, cargo.side))
+      return fail('13.3e', `pathHexEnemyOccupied:${hexText(hex)}`)
     if (facts.inEnemyZoc(hex, cargo.side)) return fail('13.3e', `pathHexInEnemyZoc:${hexText(hex)}`)
   }
 
@@ -370,12 +374,12 @@ export function validateRailMovement(input: RailMovementInput): RuleOutcome<Rail
   if (!facts.hasRail(to)) return fail('13.3e', `detrainHexHasNoRail:${hexText(to)}`)
   if (!facts.railGaugeUsable(to, cargo.side))
     return fail('13.3f', `detrainHexWrongGauge:${hexText(to)}`)
-  if (!facts.isControlled(to, cargo.side))
-    return fail('13.3h', `detrainHexUncontrolled:${hexText(to)}`)
   if (!isRailRepair && !facts.isDetrainable(to, cargo.side))
     return fail('13.3e', `detrainHexNotDetrainable:${hexText(to)}`)
   if (facts.hasEnemyCombatUnit(to, cargo.side))
     return fail('13.3e', `detrainHexEnemyCombatUnit:${hexText(to)}`)
+  if (facts.enemyOccupies(to, cargo.side))
+    return fail('13.3e', `detrainHexEnemyOccupied:${hexText(to)}`)
   if (facts.inEnemyZoc(to, cargo.side)) return fail('13.3e', `detrainHexInEnemyZoc:${hexText(to)}`)
 
   const cost = railCapacityCost({ cargo, path: railPathFacts(path, facts) })
@@ -845,17 +849,17 @@ export function createRailGraph(source: RailLayerSource = mapLayers): RailGraph 
  * 由静态铁路图层 + 运行期谓词构造 `RailFacts`
  *
  * 静态部分（哪格有铁路、两格是否以铁路相接、**该格边是否多轨**）从地图产物建索引——一次建表，
- * 随后 O(1) 查询；运行期部分（控制 13.3h / 轨距 13.3f / EZOC / 敌方单位 / 可卸货格 13.3c / 破坏区 14.8）
- * 由调用方注入。
+ * 随后 O(1) 查询；运行期部分（轨距 13.3f / EZOC / 敌方单位 / 可卸货格 13.3c / 破坏区 14.8）
+ * 由调用方注入。★ 13.3e-2 的「未控制」按用户 2026-11-12 口径由「敌方单位占据」表达，不再单列控制权。
  *
  * ★ 单/多轨**不是**注入项：它是印刷静态图层，故与 `hasRail` 同源于 `source`
  *   （2026-09-15 由源库 `map_edges.rail_track` 导出，用户逐段口述裁定）。
  */
 export function createRailFacts(input: {
-  isControlled: (hex: HexRef, side: Side) => boolean
   railGaugeUsable: (hex: HexRef, side: Side) => boolean
   inEnemyZoc: (hex: HexRef, side: Side) => boolean
   hasEnemyCombatUnit: (hex: HexRef, side: Side) => boolean
+  enemyOccupies: (hex: HexRef, side: Side) => boolean
   isDetrainable: (hex: HexRef, side: Side) => boolean
   isRailRepairUnit: (unitId: string) => boolean
   isTrainbusting?: (hex: HexRef) => boolean
@@ -870,9 +874,9 @@ export function createRailFacts(input: {
     isRailConnected: (from, to) =>
       graph.railNeighbors(from).some((hex) => hex.col === to.col && hex.row === to.row),
     railGaugeUsable: input.railGaugeUsable,
-    isControlled: input.isControlled,
     inEnemyZoc: input.inEnemyZoc,
     hasEnemyCombatUnit: input.hasEnemyCombatUnit,
+    enemyOccupies: input.enemyOccupies,
     isDetrainable: input.isDetrainable,
     isTrainbusting: input.isTrainbusting ?? (() => false),
     isMultiTrackEdge: (from, to) => graph.isMultiTrackEdge(from, to),
