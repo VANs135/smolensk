@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { mapLayers, rulesConstants, scenarios } from '@/data'
-import { unitChoices } from '@/stores'
+import { parseConvertedRailRun, unitChoices } from '@/stores'
 import { combatRecord, label, newConsole, placeGround } from '../flows/sop-harness'
 
 /**
@@ -250,5 +250,119 @@ describe('轨距账本与装卸格判定的交叉检查', () => {
     const store = newConsole()
     const unit = placeGround(store, combatRecord('axis'), { col: 2, row: 2 }, 'axis', 'u1')
     expect(store.railGaugeAt(unit.hex)).toBe('standard')
+  })
+})
+
+/**
+ * 5-X2：剧本 7 的 4 段轴心换轨与端头格（专规 1.2 / 13.3d）
+ *
+ * 剧本页原文（逐字）：
+ *   Converted Axis Rails:
+ *    01.03 to 2.02
+ *    01.19 to 34.18
+ *    01.07 to 38.05
+ *    15.10 to 18.18
+ *
+ * - 段内＝**标准轨**（轴方可用、苏方不可用）；段外沿用专规 1.2 的默认宽轨；
+ * - 端头＝各段 **B 端（东端终点）**，用 `mk-38`（`Neutral_Railhead.png`，side=neutral）标记；
+ *   A 端与段内非端头格**不得**有标记；
+ * - `2.02` 按 `02.02` 处理（列 2 行 2），与数据里的 `2.02` 同解。
+ */
+describe('5-X2：剧本 7 轴心换轨 4 段与端头格（专规 1.2 / 13.3d）', () => {
+  /** 每段取 3 个段内格（含 B 端，另有中段格）与 1 个 B 端 */
+  const SEGMENTS = [
+    {
+      declaration: '01.03 to 2.02',
+      inside: [
+        { col: 1, row: 3 },
+        { col: 2, row: 2 },
+      ],
+      head: { col: 2, row: 2 },
+    },
+    {
+      declaration: '01.19 to 34.18',
+      inside: [
+        { col: 10, row: 17 },
+        { col: 20, row: 19 },
+        { col: 34, row: 18 },
+      ],
+      head: { col: 34, row: 18 },
+    },
+    {
+      declaration: '01.07 to 38.05',
+      inside: [
+        { col: 15, row: 10 },
+        { col: 27, row: 5 },
+        { col: 38, row: 5 },
+      ],
+      head: { col: 38, row: 5 },
+    },
+    {
+      declaration: '15.10 to 18.18',
+      inside: [
+        { col: 15, row: 13 },
+        { col: 17, row: 16 },
+        { col: 18, row: 18 },
+      ],
+      head: { col: 18, row: 18 },
+    },
+  ] as const
+
+  it('段内判标准轨（轴方可走、苏方不可走），段外仍是印刷宽轨', () => {
+    const store = newConsole()
+    store.setScenarioId('7')
+    for (const segment of SEGMENTS) {
+      for (const hex of segment.inside) {
+        expect(store.railGaugeAt(hex), `${segment.declaration} 段内 ${label(hex)}`).toBe('standard')
+        expect(store.isRailGaugeUsableAt(hex, 'axis')).toBe(true)
+        expect(store.isRailGaugeUsableAt(hex, 'soviet')).toBe(false)
+      }
+    }
+
+    // 段外：全图任意一条铁路边上、不在换轨账本里的格仍是宽轨（苏方可走、轴方不可走）
+    const converted = new Set(store.convertedRailHexes)
+    const outside = (() => {
+      for (const edge of mapLayers.edges) {
+        if (edge.rail !== true) continue
+        for (const hex of [edge.a, edge.b]) if (!converted.has(label(hex))) return hex
+      }
+      throw new Error('地图上没有段外铁路格')
+    })()
+    expect(store.railGaugeAt(outside)).toBe('broad')
+    expect(store.isRailGaugeUsableAt(outside, 'axis')).toBe(false)
+    expect(store.isRailGaugeUsableAt(outside, 'soviet')).toBe(true)
+  })
+
+  it('端头格（B 端）有 mk-38，A 端与段内非端头格没有', () => {
+    const store = newConsole()
+    store.setScenarioId('7')
+    const markers = store.railheadMarkers
+    expect(markers).toHaveLength(SEGMENTS.length)
+    for (const marker of markers) {
+      expect(marker.recordId).toBe('mk-38')
+      // 标记方别取 markers.json 的 neutral（不归属任何一方）
+      expect(marker.side).toBe('neutral')
+    }
+    const headKeys = new Set(
+      markers.filter((marker) => marker.hex !== null).map((marker) => label(marker.hex!)),
+    )
+    expect([...headKeys].sort()).toEqual(['18.18', '2.2', '34.18', '38.5'])
+
+    for (const segment of SEGMENTS) {
+      // B 端＝端头
+      expect(headKeys.has(label(segment.head))).toBe(true)
+      // A 端不是端头（端头只有东端终点那一端）
+      const from = parseConvertedRailRun(segment.declaration)!.from
+      expect(headKeys.has(label(from)), `${segment.declaration} 的 A 端不该有端头标记`).toBe(false)
+      // 段内非端头格也没有标记
+      for (const hex of segment.inside) {
+        if (label(hex) === label(segment.head)) continue
+        expect(headKeys.has(label(hex))).toBe(false)
+      }
+    }
+  })
+
+  it('2.02 按 02.02 处理（同一格的两种写法，都解成列 2 行 2）', () => {
+    expect(parseConvertedRailRun('01.03 to 2.02')).toEqual(parseConvertedRailRun('01.03 to 02.02'))
   })
 })
