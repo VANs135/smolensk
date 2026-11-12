@@ -6022,9 +6022,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 可突袭目标（8.0 / 8.1）——移动中随位置实时重算
    *
-   * 候选＝当前格的相邻敌方格 **加上** 悬停/预览终点相邻的敌方格（后者点它会先沿路径走过去再突袭）。
-   * 资格一律交给 `engine/rules/overrun.ts#overrunEligibility`（本层不重算规则），
-   * 界面据此画紫环（`overrunTargets`），玩家点它即发起突袭。
+   * 候选＝**当前格的相邻敌方格**（8.1d：每次针对一个相邻敌方格）。资格一律交给
+   * `engine/rules/overrun.ts#overrunEligibility`（本层不重算规则），界面据此画紫环，
+   * 玩家点它即发起突袭。
+   *
+   * R12（K2）：修前还把「悬停/预览终点相邻的敌方格」作为虚线环塞进集合，注释称点它会
+   * “先沿路径走过去再突袭”，但 `overrunNow` 从不执行走路，且指针移到该环上时预览终点
+   * 改变、环随即消失，点击落到普通移动分支报 6.3b。该入口不可实现（8.1b 的进格费与
+   * 8.1 的起突位置都以“此刻相邻”为前提），故只保留相邻环。
    */
   const overrunTargets = computed<WorkbenchOverrunTarget[]>(() => {
     const interaction = moveInteraction.value
@@ -6032,22 +6037,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (interaction === null || from === null) return []
     if (overrunCandidateUnits.value.length === 0) return []
 
-    const anchors: { hex: HexRef; adjacent: boolean }[] = neighbors(from).map((item) => ({
-      hex: item.hex,
-      adjacent: true,
-    }))
-    const preview = stepPreview.value?.to ?? hoverNode.value?.hex ?? null
-    if (preview !== null && !sameHex(preview, from)) {
-      for (const item of neighbors(preview)) {
-        if (!anchors.some((anchor) => sameHex(anchor.hex, item.hex))) {
-          anchors.push({ hex: item.hex, adjacent: false })
-        }
-      }
-    }
+    const anchors = neighbors(from).map((item) => item.hex)
 
     const found: WorkbenchOverrunTarget[] = []
     for (const anchor of anchors) {
-      const defenders = unitsAt(anchor.hex).filter(
+      const defenders = unitsAt(anchor).filter(
         (unit) => unit.side !== activeSide.value && unit.isCombat,
       )
       if (defenders.length === 0) continue
@@ -6055,14 +6049,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const picked = pickOverrunParticipants({
         context: moveContext.value,
         candidates: overrunCandidateUnits.value,
-        target: anchor.hex,
+        target: anchor,
         defenders: defenders.map((unit) => ({ id: unit.instanceId, isCombat: unit.isCombat })),
         mpRemainingOf: (unit) =>
           availableMaOf(unit, movementPhaseOf(phase.value), sovietFirstTurnMaFactor(unit)) -
           unit.mpSpent,
       })
       if (picked === null) continue
-      found.push({ hex: anchor.hex, mpCost: picked.mpCost, adjacentToPath: anchor.adjacent })
+      found.push({ hex: anchor, mpCost: picked.mpCost, adjacentToPath: true })
     }
     return found
   })
@@ -6170,17 +6164,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       return false
     }
-    // 若点的是「沿预览路径走过去后才相邻」的格，先走过去（6.1 逐格移动）
+    // 8.0/8.1d：突袭目标必须与当前格相邻（R12 起不再有“虚线环自动走过去”的第二入口）
     if (!areAdjacent(from, hex)) {
-      const preview = stepPreview.value
-      if (preview === null || !sameHex(preview.to, hex)) {
-        pushLog(
-          'warning',
-          `${hexLabel(hex)} 与当前格不相邻：先走到它旁边的格，再点它发起突袭（8.0）`,
-          '8.0',
-        )
-        return false
-      }
+      pushLog(
+        'warning',
+        `${hexLabel(hex)} 与当前格不相邻：先走到它旁边的格，再点它发起突袭（8.0）`,
+        '8.0',
+      )
+      return false
     }
 
     /*
