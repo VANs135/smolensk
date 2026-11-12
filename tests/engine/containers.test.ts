@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { markers, rulesConstants, scenarios } from '@/data'
+import { formations, markers, rulesConstants, scenarios } from '@/data'
 import {
   AIR_BOX_RULE,
   BREAKDOWN_BOX_RULE,
@@ -484,6 +484,56 @@ describe('W7 C12：剧本抽取盒（编队抽签）', () => {
     const gaps = scenarioDrawBoxView('1').dataGaps
     expect(gaps.some((gap) => gap.includes('池规模与数据不一致'))).toBe(false)
     expect(gaps.join('｜')).toContain('未逐条列出')
+  })
+
+  it('U21：入杯名单冻结在剧本数据里，与 formations.json 派生口径逐条一致', () => {
+    const declaredOf = (id: string) =>
+      scenarios.scenarios.find((item) => item.id === id)?.setup.formationDraw?.poolFormations
+    /** 同一口径的独立复算：该剧本轴方装甲/摩托化多单位编队（骑兵师不入杯） */
+    const derivedOf = (sourceId: string) =>
+      formations.formations
+        .filter(
+          (formation) =>
+            formation.side === 'axis' &&
+            (formation.sources ?? []).includes(`S${sourceId}·axis`) &&
+            (formation.formationId.endsWith('Pz Div') || formation.formationId.endsWith('Mtr Div')),
+        )
+        .map((formation) => formation.formationId)
+
+    for (const [sourceId, inheritors] of [
+      ['1', ['2']],
+      ['3', ['4']],
+      ['5', ['6']],
+    ] as const) {
+      const declared = declaredOf(sourceId)
+      expect(declared, sourceId).toBeDefined()
+      if (declared === undefined) continue
+      expect(declared.length, sourceId).toBe(derivedOf(sourceId).length)
+      expect([...declared].sort(), sourceId).toEqual([...derivedOf(sourceId)].sort())
+      expect(
+        axisDrawPool(sourceId).map((entry) => entry.formationId),
+        sourceId,
+      ).toEqual(declared)
+      expect(
+        axisDrawPool(sourceId).every((entry) => entry.formationCode !== ''),
+        sourceId,
+      ).toBe(true)
+      for (const id of inheritors) {
+        expect(
+          axisDrawPool(id).map((entry) => entry.formationId),
+          id,
+        ).toEqual(declared)
+        expect(scenarioDrawBoxView(id).dataGaps.join('｜'), id).not.toContain('未声明入池名单')
+      }
+    }
+
+    // 所有带抽取参数的剧本都必须有声明名单；缺了才算数据缺口
+    for (const scenario of scenarios.scenarios) {
+      if (scenario.setup.formationDraw === undefined) continue
+      expect(scenario.setup.formationDraw.poolFormations, scenario.id).toBeDefined()
+      expect(scenarioDrawBoxView(scenario.id).dataGaps.join('｜')).not.toContain('未声明入池名单')
+    }
+    expect(axisDrawPool('1').map((entry) => entry.formationId)).not.toContain('1 Cav Div')
   })
 
   it('C12：剧本 2/4/6 继承同批初设的抽取参数（sharedSetupWith）', () => {
