@@ -538,6 +538,41 @@ describe('C6 9.2 九步流程：顺序推进', () => {
     )
   })
 
+  /*
+   * C6 / 9.12d：`toBattleUnitView` 曾漏带 `isCombat` / `noncombatKind`，引擎对缺失字段按
+   * 「可跟随」放行 ⇒ 只有界面候选表在挡。非界面调用方（AI / 测试 / 未来脚本）直接写
+   * `combatTagalongIds` 时，任何非战斗单位都会被带进撤退。本例从**名单写入**这条旁路验证引擎自洽。
+   */
+  it('C6 / 9.12d：绕过界面把非战斗单位写进跟随名单 ⇒ 引擎拒绝（不再恒通过）', () => {
+    setupBattle(store)
+    driveToResolution(store)
+    driveResolution(store)
+    const plan = store.combatRetreatPlans[0]!
+    const host = plan.units[0]!
+    const faction = plan.side === 'attacker' ? 'axis' : 'soviet'
+    const impostor = place(
+      store,
+      faction === 'axis' ? attackerRecord() : defenderRecord(),
+      host.from,
+      faction,
+      'tag-dump',
+    )
+    const stored = store.units.find((unit) => unit.instanceId === impostor.instanceId)!
+    stored.isCombat = false
+    stored.noncombatKind = 'dump'
+    // 界面候选会滤掉它（`canJoinRetreat`）；这里模拟非界面调用直接写名单
+    store.combatTagalongIds = [impostor.instanceId]
+    for (const sidePlan of store.combatRetreatPlans) {
+      for (const row of sidePlan.units) {
+        if (row.chosen !== null) continue
+        expect(store.setRetreatDestinationNow(row.unitId, row.destinations[0]!.hex)).toBe(true)
+      }
+    }
+
+    expect(store.confirmCombatRetreats()).toBe(false)
+    expect(store.combatError).toMatchObject({ rule: '9.12d' })
+  })
+
   it('9.5：攻方付不出全额 ⇒ 取消攻击（12.4）', () => {
     setupBattle(store)
     expect(beginCombatWithSupply(store)).toBe(true)

@@ -1243,6 +1243,10 @@ export function toBattleUnitView(unit: ConsoleUnit, turn: number): BattleUnitVie
     dg: unit.mode.dg,
     mode: unit.mode.mode,
     releasedFromReserve: unit.mode.releasedFromReserve === true,
+    // 9.12d：跟随撤退的判据（战斗单位 ✅ / 编内卡车 ✅ / 其余非战斗单位 ❌）。
+    // 引擎按缺省 true 处理，故必须把这两项原样带过去，否则任何跟随者都会被放行。
+    isCombat: unit.isCombat,
+    noncombatKind: unit.noncombatKind ?? null,
     printedSteps: unit.printedSteps,
     steps: unit.steps,
     re: currentReOf(unit),
