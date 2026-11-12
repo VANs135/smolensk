@@ -23316,8 +23316,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 3.3b：执行治安检查
    *
-   * 需求未满足的轴控城市**立即**放置苏军 Trainbusting 标记（「标记可在任意相位放置」）；
-   * 需求已满足或该城转苏控的标记**只在 Clean Up Phase（H 段）**移除。
+   * 口径（用户 2026-11-12 确认）：**轴心占领即轴心控制**；轴控城市既没有被可攻击的轴心单位占据、
+   * **也没有**被轴心 ZOC 覆盖时才放游击队标记（两条都缺，不是「或」）。
+   * 放置可在任意阶段手动执行，**不**随阶段开始自动触发；移除只在 Clean Up Phase（H 段），
+   * 其它阶段即使调用本函数也不会移除。
    */
   function applySecurityNeedsNow(): boolean {
     const data = acceptExclusive(checkSecurityNeeds(securityCityViews.value), '治安需求检查')
