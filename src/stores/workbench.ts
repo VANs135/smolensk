@@ -514,6 +514,7 @@ import {
   // 13.8a / 5.5b / 5.10e：工程能力须叠加模式（不只查印值适格）
   engineerCapableNow,
   toMoveRuntime,
+  mobilityOf,
   toMoveUnitView,
   toExtenderView,
   toNkvdDefenseView,
@@ -1805,7 +1806,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       candidates,
       apply: (hex) => {
         railMoveInputs.value = { ...railMoveInputs.value, toHexText: hexTextOf(hex) }
-        return railMoveNow(kind)
+        // 裁定 3：点目的地只**试算**，进确认窗；确认后才落盘扣点
+        if (!railMoveNow(kind, true)) return false
+        const preview = railMovePreview.value
+        if (preview === null) return false
+        pendingRailTransport.value = {
+          kind,
+          side,
+          to: { ...hex },
+          cost: preview.cost,
+          label: `${hexLabel(from!)} → ${hexLabel(hex)}｜${preview.detail}`,
+          rule: '13.3e',
+        }
+        return true
       },
     })
   }
@@ -4047,6 +4060,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       { side, points: railCapUsedBy(side) + points },
     ]
   }
+  /** 裁定 3：撤回时退回已扣运力（同回合额度不应被界面撤回吃掉） */
+  function refundRailCapacity(side: Side, points: number): void {
+    railCapSpentThisTurn.value = [
+      ...railCapSpentThisTurn.value.filter((item) => item.side !== side),
+      { side, points: Math.max(0, railCapUsedBy(side) - points) },
+    ]
+  }
   const railCapRemaining = computed<{ axis: number; soviet: number }>(() => ({
     axis: railCapToday.value.axis - railCapUsedBy('axis'),
     soviet: railCapToday.value.soviet - railCapUsedBy('soviet'),
@@ -4163,6 +4183,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     cost: number
     path: HexRef[]
   } | null>(null)
+
+  /**
+   * 裁定 3：铁路运输的**待确认**落点
+   *
+   * 通用流程：合法位置点「铁路运输」→ 有运力则高亮可达目的地 → 点目的地**只进本状态** →
+   * 「确认」才落盘扣点，「撤回」清态且不动运力。移动阶段与增援铁路运输共用本状态。
+   */
+  interface PendingRailTransport {
+    kind: 'unit' | 'sp' | 'transportPoint' | 'arrival'
+    side: Side
+    to: HexRef
+    cost: number
+    label: string
+    rule: string
+    /** `kind === 'arrival'` 时对应的到达条目下标 */
+    arrivalIndex?: number
+  }
+  const pendingRailTransport = ref<PendingRailTransport | null>(null)
+  /** 移动阶段铁路运货的**试算**结果（点目的地时由 `railMoveNow(kind, true)` 填入） */
+  const railMovePreview = ref<{ cost: number; detail: string } | null>(null)
+  /** 13.6b：本回合经铁路抵达的到达条目 → 已扣点数（手牌撤回时按此退回） */
+  const arrivalRailSpent = ref<Record<number, number>>({})
 
   /* ────────── 13.2f：运输点数装载 / 卸载 SP ────────── */
 
@@ -4441,7 +4483,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 5.6a 移动模式、5.10d 非 DG、13.3e-1 登车前 ≤ 半 MA、13.3f 轨距、13.3h 控制）；
    * 本处负责：提案路径、**扣铁路容量**（13.3b 的当日额度）、落盘（改货物位置/账本）与留痕。
    */
-  function railMoveNow(kind: 'unit' | 'sp' | 'transportPoint'): boolean {
+  function railMoveNow(kind: 'unit' | 'sp' | 'transportPoint', dryRun = false): boolean {
     if (!requireAction('move.railTransport', '铁路运输')) return false
     const to = parseHexPath(railMoveInputs.value.toHexText)[0]
     if (to === undefined) {
@@ -4561,6 +4603,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         '13.3b',
       )
       return false
+    }
+
+    // 裁定 3：试算（点目的地时）——校验/计价全部走完，但不改货物、不扣点、不写日志
+    if (dryRun) {
+      railMovePreview.value = { cost: outcome.data.cost, detail: outcome.data.detail }
+      return true
     }
 
     // ── 落盘 ──
@@ -22577,6 +22625,209 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 13.6b：该到达条目能否走**铁路运输**（裁定 3 的增援侧入口）
+   *
+   * 条件：增援阶段、尚未投放、单枚地面单位、解算入场格是「入场格且含铁路」（裁定 1）。
+   * 只决定按钮出不出；落点合法性另由 `beginArrivalRailPickNow` 的候选给。
+   */
+  function railArrivalPlan(
+    index: number,
+  ): { entry: HexRef; cargo: RailCargoView; side: Side; recordId: string } | null {
+    if (phase.value !== 'reinforcement') return null
+    const plan = arrivalPlan.value
+    if (plan === null) return null
+    const demand = plan.units[index]
+    if (demand === undefined || demand.kind !== 'unit') return null
+    if (arrivalPlaced.value[index] === true) return null
+    // 裁定 3 第一版只做单枚条目：编成/多枚走普通投放
+    if (arrivalCopiesOf(demand) !== 1) return null
+    const placement = arrivalPlacements.value[index]
+    if (placement === undefined || placement.hex === null) return null
+    const entry = placement.hex
+    const side = activeSide.value
+    const facts = railMoveFacts.value
+    if (!facts.hasRail(entry) || !facts.isEntryHex(entry, side)) return null
+    const record = arrivalRecordOf(index)
+    if (record === null) return null
+    const ma = record.factors?.move?.ma ?? 0
+    return {
+      entry,
+      side,
+      recordId: record.id,
+      cargo: {
+        kind: 'unit',
+        id: `arrival:${String(index)}`,
+        side,
+        re: record.reSize ?? 1,
+        mobility: mobilityOf(record, 'move'),
+        moveMa: ma,
+        // 13.6b：增援可以任意主动模式入场；13.3e-1 要求铁路移动时处于移动模式
+        mode: 'move',
+        dg: false,
+        currentMa: ma,
+        preLoadMp: 0,
+      },
+    }
+  }
+
+  /** 13.6b / 裁定 3：增援铁路运输按钮是否可用（不可用项不出现） */
+  function arrivalRailEligible(index: number): boolean {
+    return railArrivalPlan(index) !== null
+  }
+
+  /**
+   * 13.6b / 裁定 3：进入增援铁路运输的落点选择
+   *
+   * 候选＝13.3c 可卸货格 ∩ 13.3e-2 路径可达 ∩ 成本 ≤ 本回合剩余运力；
+   * 点格只进待确认，确认时才落子扣点。
+   */
+  function beginArrivalRailPickNow(index: number): boolean {
+    const plan = railArrivalPlan(index)
+    if (plan === null) {
+      pushLog('warning', '该增援不能走铁路运输：入场格不含铁路或不是单枚单位（13.6b）', '13.6b')
+      return false
+    }
+    const costs = new Map<string, number>()
+    const candidates: HexRef[] = []
+    for (const hex of detrainableHexes.value) {
+      if (sameHex(hex, plan.entry)) continue
+      const path = railPathBetween(plan.entry, hex, plan.side)
+      if (path === null) continue
+      const outcome = validateRailMovement({
+        phase: phase.value as GamePhase,
+        cargo: plan.cargo,
+        from: plan.entry,
+        to: hex,
+        path,
+        facts: railMoveFacts.value,
+        arrivalRail: true,
+      })
+      if (!outcome.ok) continue
+      if (outcome.data.cost > railCapRemaining.value[plan.side]) continue
+      candidates.push(hex)
+      costs.set(hexLabel(hex), outcome.data.cost)
+    }
+    if (candidates.length === 0) {
+      pushLog(
+        'warning',
+        '该增援没有可铁路抵达的卸货格（13.3c / 13.3e-2），或本回合铁路运力不足（13.3b）',
+        '13.6b',
+      )
+      return false
+    }
+    beginHexPick({
+      label: '增援铁路运输的卸货格（13.3c 可卸货格）',
+      rule: '13.6b',
+      candidates,
+      apply: (hex) => {
+        pendingRailTransport.value = {
+          kind: 'arrival',
+          side: plan.side,
+          to: { ...hex },
+          cost: costs.get(hexLabel(hex)) ?? 0,
+          label: `${hexLabel(plan.entry)} → ${hexLabel(hex)}`,
+          rule: '13.6b',
+          arrivalIndex: index,
+        }
+        return true
+      },
+    })
+    return true
+  }
+
+  /** 13.6b：确认增援铁路运输（此刻才落子、扣运力） */
+  function confirmArrivalRailNow(pending: PendingRailTransport): boolean {
+    const index = pending.arrivalIndex
+    if (index === undefined) return false
+    const plan = railArrivalPlan(index)
+    if (plan === null) return false
+    const path = railPathBetween(plan.entry, pending.to, plan.side)
+    if (path === null) return false
+    const outcome = validateRailMovement({
+      phase: phase.value as GamePhase,
+      cargo: plan.cargo,
+      from: plan.entry,
+      to: pending.to,
+      path,
+      facts: railMoveFacts.value,
+      arrivalRail: true,
+    })
+    if (!outcome.ok) {
+      pushLog('warning', `增援铁路运输被拒：${outcome.reason}（${outcome.rule}）`, outcome.rule)
+      return false
+    }
+    const remaining = railCapRemaining.value[plan.side]
+    if (outcome.data.cost > remaining) {
+      pushLog(
+        'warning',
+        `铁路容量不足：本次需 ${String(outcome.data.cost)} 点、本回合余 ${String(remaining)} 点（13.3b）`,
+        '13.3b',
+      )
+      return false
+    }
+    const before = new Set(units.value.map((unit) => unit.instanceId))
+    if (!placeArrivalNow(index, plan.recordId, hexTextOf(plan.entry))) return false
+    const created = units.value.filter((unit) => !before.has(unit.instanceId))
+    const unit = created[0]
+    if (unit === undefined) return false
+    unit.hex = { ...pending.to }
+    // 13.3e-3 / 4.7d：卸货后不得再移动；13.3e-1 要求铁路移动时处于移动模式
+    unit.mode = { mode: 'move', orientation: 'move', dg: false, exploit: false }
+    unit.movementEnded = true
+    noteUnitLeftOwnBridgeHex(unit)
+    spendRailCapacity(plan.side, outcome.data.cost)
+    arrivalRailSpent.value[index] = outcome.data.cost
+    pendingRailTransport.value = null
+    lastRailMove.value = {
+      rule: outcome.data.rule,
+      detail: outcome.data.detail,
+      cost: outcome.data.cost,
+      path: path.map((hex) => ({ ...hex })),
+    }
+    pushLog(
+      'success',
+      `${unit.name} 经铁路抵达：${hexLabel(plan.entry)} → ${hexLabel(pending.to)}｜` +
+        `本回合已用容量 ${String(railCapUsedBy(plan.side))}/${String(railCapToday.value[plan.side])}`,
+      '13.6b',
+    )
+    recordSettlement({
+      action: 'arrivalRail',
+      rule: '13.6b',
+      data: {
+        index,
+        unitId: unit.instanceId,
+        from: { ...plan.entry },
+        to: { ...pending.to },
+        cost: outcome.data.cost,
+      },
+    })
+    return true
+  }
+
+  /** 裁定 3：确认待定的铁路运输（移动阶段 / 增援共用） */
+  function confirmRailTransportNow(): boolean {
+    const pending = pendingRailTransport.value
+    if (pending === null) return false
+    if (pending.kind === 'arrival') return confirmArrivalRailNow(pending)
+    railMoveInputs.value = { ...railMoveInputs.value, toHexText: hexTextOf(pending.to) }
+    const ok = railMoveNow(pending.kind)
+    if (ok) {
+      pendingRailTransport.value = null
+      railMovePreview.value = null
+    }
+    return ok
+  }
+
+  /** 裁定 3：撤回待定的铁路运输（不落子、不扣运力） */
+  function cancelRailTransportNow(): boolean {
+    if (pendingRailTransport.value === null) return false
+    pendingRailTransport.value = null
+    railMovePreview.value = null
+    pushLog('info', '已撤回铁路运输：单位与运力都未变动（裁定 3）', '13.3e')
+    return true
+  }
+
+  /**
    * 13.6：把已投放的到达算子**收回手牌**（可撤销重放，2026-11-09）
    *
    * 口径（按最宽松可撤销理解）：只要本笔仍在同一个到达计划键下，就按投放时登记的
@@ -22617,6 +22868,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     arrivalHexOverrides.value = nextOverrides
     pendingHexPick.value = null
     reinforcementError.value = null
+    // 裁定 3：经铁路抵达的条目被撤回 ⇒ 退回本笔运力
+    const railSpent = arrivalRailSpent.value[index]
+    if (railSpent !== undefined) {
+      refundRailCapacity(activeSide.value, railSpent)
+      const nextSpent = { ...arrivalRailSpent.value }
+      delete nextSpent[index]
+      arrivalRailSpent.value = nextSpent
+    }
     pushLog('info', `已把 ${String(ids.length)} 枚到达算子收回手牌（可重放）`, '13.6')
     return true
   }
@@ -27191,6 +27450,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     railPathBetween,
     railMoveNow,
     lastRailMove,
+    // 裁定 3：铁路运输通用流程（点目的地 → 待确认 → 确认/撤回）
+    pendingRailTransport,
+    confirmRailTransportNow,
+    cancelRailTransportNow,
+    // 13.6b：增援铁路运输
+    arrivalRailEligible,
+    beginArrivalRailPickNow,
     railMovedUnitIdsThisPhase,
     // 13.2f：运输点数的装载 / 卸载
     transportLoadInputs,

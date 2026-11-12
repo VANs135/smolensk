@@ -121,7 +121,7 @@ describe('13.3e 三步：登车 → 铁路移动 → 卸货', () => {
     expect(store.railMoveError).toBeNull()
   })
 
-  it('点地图选卸货格：候选＝可卸货格且路径可达（不再全图），点中即执行', () => {
+  it('点地图选卸货格：候选＝可卸货格且路径可达（不再全图），点中进确认窗，确认后执行', () => {
     const store = sovietStore()
     store.setPhase('movement')
     store.setTurn(5)
@@ -142,7 +142,14 @@ describe('13.3e 三步：登车 → 铁路移动 → 卸货', () => {
     expect(candidates).not.toContain('99.99')
 
     expect(store.pickHexFor(TO)).toBe(true)
+    // 裁定 3：点格只进「待确认」，不落子、不扣点
+    expect(store.pendingRailTransport).toMatchObject({ kind: 'unit', to: TO })
+    expect(cargo.hex).toEqual(FROM)
+    expect(store.railCapUsedBy('soviet')).toBe(0)
+
+    expect(store.confirmRailTransportNow()).toBe(true)
     expect(cargo.hex).toEqual(TO)
+    expect(store.pendingRailTransport).toBeNull()
     // 13.3b：容量账本记上了
     expect(store.railCapUsedBy('soviet')).toBe(store.lastRailMove!.cost)
     expect(store.railMovedUnitIdsThisPhase).toContain(cargo.instanceId)

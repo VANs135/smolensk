@@ -480,6 +480,37 @@ onBeforeUnmount(() => {
                 放入地图外空军盒 · 1.4a
               </BaseButton>
             </div>
+            <div
+              v-if="workbench.pendingRailTransport !== null"
+              class="gt__rail-confirm"
+              role="dialog"
+              aria-label="铁路运输确认"
+            >
+              <strong>铁路运输确认</strong>
+              <p class="gt__rail-confirm-route">
+                {{ workbench.pendingRailTransport.label }}
+              </p>
+              <p class="gt__rail-confirm-cost num">
+                本次耗 {{ workbench.pendingRailTransport.cost }} 点 · 本回合余
+                {{ workbench.railCapRemaining[workbench.pendingRailTransport.side] }} 点
+              </p>
+              <div class="gt__rail-confirm-actions">
+                <BaseButton
+                  variant="primary"
+                  size="sm"
+                  @click="workbench.confirmRailTransportNow()"
+                >
+                  确认
+                </BaseButton>
+                <BaseButton
+                  variant="secondary"
+                  size="sm"
+                  @click="workbench.cancelRailTransportNow()"
+                >
+                  撤回
+                </BaseButton>
+              </div>
+            </div>
             <SupplyPhasePanel
               v-if="setup.finished && workbench.phase === 'supply' && session === null"
             />
@@ -751,6 +782,43 @@ onBeforeUnmount(() => {
 .gt__air-box-menu {
   position: fixed;
   z-index: var(--layer-map-popup);
+}
+
+/* 裁定 3：铁路运输的确认／撤回小窗（点目的地后出现，不遮挡地图中心） */
+.gt__rail-confirm {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-6);
+  z-index: var(--layer-map-popup);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 16rem;
+  max-width: 26rem;
+  padding: var(--space-3);
+  transform: translateX(-50%);
+  border: 1px solid var(--color-command-line);
+  border-radius: var(--radius-md);
+  background: var(--color-command-panel);
+  color: var(--color-command-ink);
+  box-shadow: var(--shadow-lg);
+}
+
+.gt__rail-confirm-route {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.gt__rail-confirm-cost {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+.gt__rail-confirm-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
 }
 
 .gt__box-roster {

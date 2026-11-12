@@ -72,6 +72,9 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'beginRailGaugeTargetHexPickNow',
       'beginRailMoveHexPickNow',
       'cancelHexPick',
+      // 裁定 3：铁路运输的待确认态（点目的地只进确认窗；确认窗的落盘另有闸）
+      'beginArrivalRailPickNow',
+      'cancelRailTransportNow',
       'beginReplPlaceHexPickNow',
       'beginFreeRailEdgeHexPickNow',
       'beginSupplyTrainHexPickNow',
@@ -244,6 +247,12 @@ function bulkEntries(): Record<string, UngatedEntry> {
 export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   ...bulkEntries(),
   advanceSegmentNow: { kind: 'flowState', why: '统一阶段执行器先结清规则义务，再按会话状态推进' },
+  // 裁定 3：确认窗的分派器——实际落盘各走 railMoveNow（move.railTransport 闸）/
+  // confirmArrivalRailNow → placeArrivalNow（rein.arrival 闸），本入口只清待确认态
+  confirmRailTransportNow: {
+    kind: 'flowState',
+    why: '铁路运输确认窗分派：按待确认态的 kind 转给已带环节闸的移动/增援路径',
+  },
   restartGameNow: { kind: 'pregame', why: '终局后重建整局盘面与初设，不是阶段内行动' },
 
   // 13.5：死亡堆持项的"不可回场原因"——纯查询（只 `deadPile.value.find`），不改任何状态

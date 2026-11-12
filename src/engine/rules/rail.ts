@@ -302,6 +302,13 @@ export interface RailMovementInput {
    *   该情形由 `RailFacts.isEntryHex` 自动命中，调用方不必再显式传本项。
    */
   entrainOffMap?: boolean
+  /**
+   * 13.6b：本次是**增援铁路抵达**（增援阶段），作为 13.3b「运力只在移动阶段」的例外
+   *
+   * 用户 2026-11-13 裁定：只给增援铁路运输这一条路径开显式入口，**不撬** 13.3b 的通用阶段闸门；
+   * 普通铁路运货仍须 `phase === 'movement'`。其余检查（轨距、单位资格、路径、卸货）照常。
+   */
+  arrivalRail?: boolean
 }
 
 /** 格号文本（仅用于失败详情的可读性；业务坐标一律 { col, row }） */
@@ -328,7 +335,10 @@ export function validateRailMovement(input: RailMovementInput): RuleOutcome<Rail
   const { cargo, from, to, path, facts } = input
 
   // 13.3b：铁路运量只能在移动阶段使用（也因此三步必然同阶段）
-  if (input.phase !== 'movement') return fail('13.3b', 'railOnlyInMovementPhase')
+  // 13.6b：增援铁路抵达是该条的**例外**，由调用方显式传 `arrivalRail` 放行（不撬通用闸门）
+  if (input.phase !== 'movement' && input.arrivalRail !== true) {
+    return fail('13.3b', 'railOnlyInMovementPhase')
+  }
   if (path.length === 0) return fail('13.3e', 'emptyPath')
   if (!sameHex(path[0]!, from)) return fail('13.3e', 'pathMustStartAtCargoHex')
   if (!sameHex(path[path.length - 1]!, to)) return fail('13.3e', 'pathMustEndAtDestination')

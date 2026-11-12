@@ -317,6 +317,19 @@ function withdrawArrival(index: number): void {
 }
 
 /**
+ * 13.6b / 裁定 3：增援铁路运输
+ *
+ * 只在该条目的解算入场格「含铁路」时出现（不可用项不出现）；点它 → 高亮 13.3c 可达卸货格 →
+ * 点目的地进确认窗（确认才扣运力、落子；撤回不动运力）。
+ */
+function beginArrivalRail(index: number): void {
+  handError.value = ''
+  if (!workbench.beginArrivalRailPickNow(index)) {
+    handError.value = '该增援不能走铁路运输：入场格不含铁路、没有可抵达的卸货格，或运力不足'
+  }
+}
+
+/**
  * 第一段·结束本段（v7.1 §2.2）
  *
  * 到达块不再"放完自动关窗"；由本按钮收束整段。
@@ -609,6 +622,17 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           · 已放 {{ arrivalPlacedCards.length }}</template
         >
       </p>
+      <!-- 13.6b / 裁定 3：入场格含铁路时才出现；点目的地后进确认窗 -->
+      <div
+        v-if="activeArrivalIndex !== null && workbench.arrivalRailEligible(activeArrivalIndex)"
+        class="row"
+        data-testid="arrival-rail-entry"
+      >
+        <BaseButton variant="secondary" size="sm" @click="beginArrivalRail(activeArrivalIndex)">
+          铁路运输 · 13.6b
+        </BaseButton>
+        <span class="muted">从含铁路的入场格出发，消耗本回合运力</span>
+      </div>
       <!-- 3.4b：非编队运输点带来的 SP 入场前必须选定集群 -->
       <div v-if="workbench.arrivalTransportSpNeedsGroup" class="row" data-testid="arrival-sp-group">
         <span class="num">运输点带来的 SP 归属（3.4b）：</span>
