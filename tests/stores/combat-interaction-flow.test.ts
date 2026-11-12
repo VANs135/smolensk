@@ -573,6 +573,100 @@ describe('C6 9.2 九步流程：顺序推进', () => {
     expect(store.combatError).toMatchObject({ rule: '9.12d' })
   })
 
+  /*
+   * C7 / 9.12e：额外 1 点损失必须由拥有者选承受者，而不是代码取 `eligibleUnitIds[0]`。
+   * 候选由**同一份引擎预演**给出（策略：先选齐落点 → 读 `combatExtraLossPreview`），
+   * 确认后按玩家所选落账。
+   */
+  it('9.12e：撤退步可选定额外损失的承受者，结算按所选单位（≥2 个 DG 候选）', () => {
+    store.setPhase('combat')
+    goToActionStep(store, 'combat.declare')
+    store.setTool('battle')
+    store.setFuelPool(0, 20)
+    place(store, attackerRecord(), ATTACKER_HEX, 'axis', 'a1')
+    place(store, defenderRecord(), DEFENDER_HEX, 'soviet', 'd1')
+    place(store, defenderRecord(), DEFENDER_HEX, 'soviet', 'd2')
+    store.clickHex(ATTACKER_HEX)
+    store.clickHex(DEFENDER_HEX)
+    // 9.1d：防御格内所有战斗单位都参战
+    expect(store.battleDefenders.map((unit) => unit.instanceId).sort()).toEqual(['d1', 'd2'])
+
+    driveToResolution(store)
+    driveResolution(store)
+    expect(store.combatState!.step).toBe('retreat')
+
+    // 9.12e 只在「撤退落点进入敌方 ZOC」时触发；本图该结果表给 2 格撤退时落点全在 ZOC 外，
+    // 故把守方撤退格数设为 1（只设定局面，不改判据），使相邻攻方的 ZOC 覆盖部分落点。
+    const defenderOutcome = store.combatState!.resolution.defender
+    defenderOutcome.option = { ...defenderOutcome.option!, retreatHexes: 1 }
+
+    // 9.12e 的前提：撤退堆叠在进入敌方 ZOC **之前**已是 DG
+    for (const id of ['d1', 'd2']) {
+      const unit = store.units.find((item) => item.instanceId === id)!
+      unit.mode.dg = true
+    }
+
+    const defenderPlan = store.combatRetreatPlans.find((plan) => plan.side === 'defender')!
+    expect(defenderPlan.units.length).toBe(2)
+
+    /*
+     * 本图里攻方在结算中可能已被打空，撤退事实就没有 ZOC 投射源。
+     * 放一枚**不参战**的轴方战斗单位到落点旁的环格（战斗构成已定，事后加子不会被 9.1 拉进来），
+     * 只负责把 ZOC 投到那个落点上，让 9.12e 的前提真实成立。
+     */
+    const landing = defenderPlan.units[0]!.destinations.find(
+      (destination) => !destination.forcedDestruction,
+    )!.hex
+    const probeHex = HEX_DIRECTIONS.map((direction) => neighbor(landing, direction)).find(
+      (hex) =>
+        isOnMap(hex) &&
+        hexDistance(hex, DEFENDER_HEX) === 1 &&
+        hexDistance(hex, ATTACKER_HEX) !== 0 &&
+        !store.units.some((unit) => unit.hex.col === hex.col && unit.hex.row === hex.row),
+    )
+    expect(probeHex).toBeDefined()
+    place(store, attackerRecord(), probeHex!, 'axis', 'zoc-probe')
+    const probe = store.units.find((unit) => unit.instanceId === 'zoc-probe')!
+    probe.mode = { ...probe.mode, mode: 'combat' }
+
+    const updatedPlan = store.combatRetreatPlans.find((plan) => plan.side === 'defender')!
+    for (const row of updatedPlan.units) {
+      const inZoc = row.destinations.find(
+        (destination) => destination.inEnemyZoc && !destination.forcedDestruction,
+      )
+      expect(inZoc).toBeDefined()
+      expect(store.setRetreatDestinationNow(row.unitId, inZoc!.hex)).toBe(true)
+    }
+    // 其余方也选齐（候选只在落点全齐后才预演）
+    for (const plan of store.combatRetreatPlans) {
+      for (const row of plan.units) {
+        if (row.chosen !== null) continue
+        expect(store.setRetreatDestinationNow(row.unitId, row.destinations[0]!.hex)).toBe(true)
+      }
+    }
+
+    const preview = store.combatExtraLossPreview
+    expect(preview).not.toBeNull()
+    expect(preview!.points).toBe(1)
+    expect(preview!.choices.map((choice) => choice.unit.instanceId).sort()).toEqual(['d1', 'd2'])
+    // 未选时与引擎仲裁同口径：第一枚为默认
+    expect(preview!.choices.find((choice) => choice.unit.instanceId === 'd1')!.selected).toBe(true)
+
+    // 改选第二枚 ⇒ 写入玩家意图
+    expect(store.chooseExtraLossTaker('d2')).toBe(true)
+    expect(store.combatInputs.extraLossTakerId).toBe('d2')
+
+    const before = new Map(
+      ['d1', 'd2'].map((id) => [id, store.units.find((unit) => unit.instanceId === id)!.steps]),
+    )
+    expect(store.confirmCombatRetreats()).toBe(true)
+    // 结算与选择一致：扣 d2，不扣 d1
+    expect(store.units.find((unit) => unit.instanceId === 'd2')?.steps ?? 0).toBe(
+      before.get('d2')! - 1,
+    )
+    expect(store.units.find((unit) => unit.instanceId === 'd1')?.steps ?? 0).toBe(before.get('d1'))
+  })
+
   it('9.5：攻方付不出全额 ⇒ 取消攻击（12.4）', () => {
     setupBattle(store)
     expect(beginCombatWithSupply(store)).toBe(true)

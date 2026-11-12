@@ -112,6 +112,9 @@ const advanceButtonLabel = computed(() =>
     : '结束战斗（不推进）',
 )
 
+/** 9.12e：撤退堆叠的额外损失由谁承受（候选＝撤退中的 DG 单位，与引擎确认同源） */
+const extraLossPreview = computed(() => workbench.combatExtraLossPreview)
+
 /**
  * 进入推进步时把"可推进者"默认全选（9.12g-D：拥有者可选哪些，本批不强迫玩家先点地图）。
  * 取消其中几枚就在面板上点一下；全部取消＝按 9.13 结束（不推进）。不写日志、不动引擎。
@@ -723,6 +726,22 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
               @click="workbench.clearRetreatDestinationNow(row.unitId)"
             >
               清除落点
+            </BaseButton>
+          </div>
+          <!-- 9.12e：撤退堆叠在进入敌方 ZOC 前已有 DG ⇒ 额外 1 点损失的承受者由拥有者选 -->
+          <div v-if="extraLossPreview !== null" class="row">
+            <span class="warn num">
+              <BaseTag kind="warning">9.12e</BaseTag>
+              该堆叠损失 {{ extraLossPreview.points }} 点军力，由谁承受（候选＝撤退中的 DG 单位）：
+            </span>
+            <BaseButton
+              v-for="choice in extraLossPreview.choices"
+              :key="choice.unit.instanceId"
+              :variant="choice.selected ? 'primary' : 'secondary'"
+              size="sm"
+              @click="workbench.chooseExtraLossTaker(choice.unit.instanceId)"
+            >
+              {{ choice.selected ? '✓ ' : '' }}{{ choice.unit.name }}
             </BaseButton>
           </div>
           <!-- 9.12d：跟随者并入候选按钮（已选的显示 ✓），不再另起一份只读名单 -->

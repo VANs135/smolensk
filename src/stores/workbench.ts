@@ -2952,6 +2952,48 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
+   * 9.12e：额外 1 点军力损失的**承受者候选**（撤退步、落点选齐后才算）
+   *
+   * 「由拥有者玩家从撤退中的 DG 单位中选择承受损失」⇒ 候选必须与确认时引擎认的那一份同源：
+   * 这里用 `retreatResolutionInput` + `resolveRetreats` 做**纯预演**，不落盘、不改状态；
+   * 落点没选齐时返回 null（不猜）。
+   */
+  const combatExtraLossPreview = computed<{
+    points: number
+    choices: { unit: ConsoleUnit; selected: boolean }[]
+  } | null>(() => {
+    const state = combatState.value
+    if (state === null || state.step !== 'retreat') return null
+    if (combatRetreatPlans.value.some((plan) => !plan.complete)) return null
+    const input = retreatResolutionInput()
+    if (input === null) return null
+    const outcome = resolveRetreats(state, input)
+    if (!outcome.ok) return null
+    const extra = outcome.data.extraLoss
+    if (extra.points <= 0 || extra.eligibleUnitIds.length === 0) return null
+    const chosen = combatInputs.value.extraLossTakerId
+    // 没选 / 选的已不在候选里 ⇒ 与确认时的仲裁同口径：落在第一枚
+    const effective =
+      chosen !== null && extra.eligibleUnitIds.includes(chosen) ? chosen : extra.eligibleUnitIds[0]!
+    return {
+      points: extra.points,
+      choices: extra.eligibleUnitIds.flatMap((id) => {
+        const unit = units.value.find((item) => item.instanceId === id)
+        return unit === undefined ? [] : [{ unit, selected: id === effective }]
+      }),
+    }
+  })
+
+  /** 9.12e：点选额外损失的承受者（只写玩家意图；候选以预演为界，最终由引擎仲裁） */
+  function chooseExtraLossTaker(unitId: string): boolean {
+    const preview = combatExtraLossPreview.value
+    if (preview === null) return false
+    if (!preview.choices.some((choice) => choice.unit.instanceId === unitId)) return false
+    combatInputs.value = { ...combatInputs.value, extraLossTakerId: unitId }
+    return true
+  }
+
+  /**
    * 9.12（C1）：选项步的**当场提示**——按当前撤退格数，逐单位预演第 9 步落点
    *
    * `doomed`：只有必被消灭的落点；`noLanding`：排除 9.12f 不可通行格后一个落点都没有
@@ -11522,9 +11564,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /** C6 第 9 步：撤退（9.12：撤退格数＝剩余选项数；落点须满足完整撤退距离） */
-  function confirmCombatRetreats(): boolean {
+  /**
+   * 9.12：当前撤退输入的**唯一组装点**
+   *
+   * 确认撤退与 9.12e 的承受者候选预演共用这一份（路径 / 无落点兜底 / 跟随者 / 战斗视图），
+   * 避免「界面候选」和「引擎仲裁」各算一遍而分叉。
+   */
+  function retreatResolutionInput(): Parameters<typeof resolveRetreats>[1] | null {
     const state = combatState.value
-    if (state === null) return false
+    if (state === null) return null
     const paths = Object.entries(combatInputs.value.retreatPaths)
       .map(([unitId, text]) => ({ unitId, path: parseHexPath(text) }))
       .filter((item) => item.path.length > 0)
@@ -11532,20 +11580,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const noLandingUnitIds = combatRetreatPlans.value.flatMap((plan) =>
       plan.units.filter((unit) => unit.noLanding === true).map((unit) => unit.unitId),
     )
-    const data = acceptCombat(
-      resolveRetreats(state, {
-        // 9.12d：跟随者不是参战者，故这里给**全部盘面单位**（引擎只认构成里的参战者，
-        // 但仍然需要能在名单里找到跟随者）
-        units: units.value.map((unit) => toBattleUnitView(unit, turn.value)),
-        paths,
-        facts: combatRetreatFacts.value,
-        // 9.12 第三 bullet：排除 9.12f 不可通行格后无落点的单位 ⇒ 兜底消灭
-        ...(noLandingUnitIds.length === 0 ? {} : { noLandingUnitIds }),
-        // 9.12d：加入撤退的跟随者（未参战战斗单位 / 编内卡车）
-        ...(combatTagalongIds.value.length === 0 ? {} : { tagalongIds: combatTagalongIds.value }),
-      }),
-      '撤退',
-    )
+    return {
+      // 9.12d：跟随者不是参战者，故这里给**全部盘面单位**（引擎只认构成里的参战者，
+      // 但仍然需要能在名单里找到跟随者）
+      units: units.value.map((unit) => toBattleUnitView(unit, turn.value)),
+      paths,
+      facts: combatRetreatFacts.value,
+      ...(noLandingUnitIds.length === 0 ? {} : { noLandingUnitIds }),
+      // 9.12d：加入撤退的跟随者（未参战战斗单位 / 编内卡车）
+      ...(combatTagalongIds.value.length === 0 ? {} : { tagalongIds: combatTagalongIds.value }),
+    }
+  }
+
+  function confirmCombatRetreats(): boolean {
+    const state = combatState.value
+    if (state === null) return false
+    const input = retreatResolutionInput()
+    if (input === null) return false
+    const data = acceptCombat(resolveRetreats(state, input), '撤退')
     if (data === null) return false
     combatState.value = data.state
     applyCombatPatches(data.patches)
@@ -26337,6 +26389,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // W7 C16：战斗收尾的地图优先交互（9.12 撤退落点 / 9.12g 推进格 / 12.4 补给站）
     combatAdvanceHex,
     combatRetreatPlans,
+    // 9.12e：撤退堆叠额外损失的承受者候选（与确认共用一份引擎预演）
+    combatExtraLossPreview,
+    chooseExtraLossTaker,
     // 9.12：点名要撤退、但该方已无存活参战单位（计划的空行反例）
     combatRetreatSkippedSides,
     // W7 C16 + 9.12d：跟随撤退（未参战战斗单位 / 编内卡车）

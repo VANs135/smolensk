@@ -185,6 +185,8 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
     names: [
       'addBarrageLossPoint',
       'cancelTransferNow',
+      // 9.12e：只写"谁来承受额外损失"的待提交意图（候选由引擎预演给出，确认时才仲裁）
+      'chooseExtraLossTaker',
       'clearAdvanceNow',
       'clearNonSavableReplNow',
       'clearSupplyPhasePlan',
