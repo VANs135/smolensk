@@ -2,6 +2,7 @@ import type { HexRef, Side } from '@/data'
 
 import { fail, succeed, type RuleOutcome } from '../result-types'
 import type { GamePhase } from '../state-types'
+import type { SecurityCheckCityView, TrainbustingCause } from './security-needs'
 
 /**
  * H 清理阶段的**通用自动清理**（2.2 末段 + 5.9 / 5.10 / 12.5d / 10.0c-C）
@@ -24,9 +25,9 @@ import type { GamePhase } from '../state-types'
  *      编队法/HQ 法「持续到下一个友方清理阶段」（12.5d 明文如此，正是本段要摘的）；
  *      单单位法「只在**当前阶段**有效」⇒ 更早，在换阶段时即失效（判据见 fuel.ts 的
  *      `fuelExpiresOnPhaseChange`），随之的清理由状态层在换段时完成，本段只兜底。
- *   2. **运输破坏标记**：本作只登记「标记 + 放置方」（`side`），故本段按「放置方 ≠ 本段玩家」
- *      移除。3.3b 的苏军游击队标记另有一套**放置**判据（需求未满足即立即放置），其**移除**
- *      与 2.2 同一条出路，故本泛化实现一并覆盖。
+ *   2. **运输破坏标记**：本作登记「标记 + 放置方 + 放置理由（`cause`）」。10.0c-C / 14.8c 的任务标记
+ *      按「放置方 ≠ 本段玩家」无条件移除；专规 3.3b 的游击队标记只在**该城治安需求已满足或已转苏控**时
+ *      移除（条件由 `securityCities` 传入，缺城市事实则保留，不臆断）。
  *
  * 引擎不写状态（CODE_SPEC §3.1）：本模块只产出「清哪些标记」的补丁清单。
  */
@@ -48,12 +49,14 @@ export interface CleanUpUnitView {
   fuelled: boolean
 }
 
-/** 运输破坏标记视图（**放置方**是关键：移除的是对手放下的） */
+/** 运输破坏标记视图（**放置方**是关键：移除的是对手放下的；**放置理由**决定按哪条判移除） */
 export interface CleanUpMarkerView {
   id: string
   hex: HexRef
   /** 放置该标记的一方（10.0c-C：需 `*` 结果；14.8：运输破坏任务） */
   side: Side
+  /** 放置理由：3.3b 治安标记按专规条件移除；10.0c-C / 14.8c 按下一个敌方清理阶段无条件移除 */
+  cause?: TrainbustingCause
 }
 
 /* ────────────────────────────── 输出计划 ────────────────────────────── */
@@ -94,6 +97,8 @@ export function planCleanUp(input: {
   side: Side
   units: readonly CleanUpUnitView[]
   trainbustingMarks?: readonly CleanUpMarkerView[]
+  /** 3.3b：城市格的治安事实（判治安标记能否移除；缺项时该标记保留，不臆断） */
+  securityCities?: readonly SecurityCheckCityView[]
 }): RuleOutcome<CleanUpPlan> {
   if (input.phase !== CLEANUP_PHASE) return fail('2.2', `notCleanUpPhase:${input.phase}`)
 
@@ -117,8 +122,29 @@ export function planCleanUp(input: {
   }
 
   // 10.0c-C / 14.8c：运输破坏标记——移除**非本段玩家**放置的
+  // 3.3b：治安需求放置的标记例外——只有该城治安需求已满足、或已转苏控时才移除
   const marks = input.trainbustingMarks ?? []
-  const removeMarkerIds = marks.filter((mark) => mark.side !== input.side).map((mark) => mark.id)
+  const citiesByKey = new Map(
+    (input.securityCities ?? []).map((city) => [`${city.hex.col}.${city.hex.row}`, city]),
+  )
+  const removeMarkerIds: string[] = []
+  for (const mark of marks) {
+    // 3.3b：「在**任意** Clean Up Phase，若治安需求满足或该城转苏控则移除」
+    // ⇒ 不看放置方，只看城市事实（两侧清理都可移除）
+    if (mark.cause === 'securityNeeds') {
+      const city = citiesByKey.get(`${mark.hex.col}.${mark.hex.row}`)
+      // 缺城市事实 ⇒ 保留（不靠推测还原该格治安状态）
+      if (city === undefined) continue
+      const securityMet =
+        city.controlledByAxis && (city.occupiedByAttackCapable || city.coveredByAxisZoc)
+      if (!securityMet && city.controlledByAxis) continue
+      removeMarkerIds.push(mark.id)
+      continue
+    }
+    // 10.0c-C / 14.8c：只移除**对手**放置的任务标记（下一个敌方清理阶段）
+    if (mark.side === input.side) continue
+    removeMarkerIds.push(mark.id)
+  }
   counts.trainbusting = removeMarkerIds.length
 
   return succeed('2.2', {

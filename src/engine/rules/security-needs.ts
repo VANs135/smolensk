@@ -17,12 +17,22 @@ import { succeed, type RuleOutcome } from '../result-types'
  *     本作已有的标记表见 `markers.json`（`trainbusting`）。
  */
 
+/** 标记的**放置理由**：3.3b 治安需求 / 10.0c-C·14.8c 空军运输破坏任务 */
+export type TrainbustingCause = 'securityNeeds' | 'airMission'
+
 /** 3.3b / 14.8：运输破坏共用标记；治安需求放置的标记为苏军。 */
 export interface TrainbustingMarkerView {
   id: string
   hex: HexRef
   /** 实际放置方，决定 14.8c 的清理时点。 */
   side: Side
+  /**
+   * 放置理由（3.3b / 10.0c-C）
+   *
+   * 两类标记的**移除条件不同**：3.3b 只在治安需求满足或转苏控时移除；
+   * 10.0c-C / 14.8c 在下一个敌方清理阶段无条件移除。缺省按后者处理（沿袭旧存档行为，不臆断为治安标记）。
+   */
+  cause?: TrainbustingCause
 }
 
 /** 3.3b：一座轴方控制城市的治安检查输入 */

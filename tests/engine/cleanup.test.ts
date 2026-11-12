@@ -32,10 +32,15 @@ function unit(
 }
 
 const HEX: HexRef = { col: 36, row: 13 }
-const mark = (id: string, side: 'axis' | 'soviet'): CleanUpMarkerView => ({
+const mark = (
+  id: string,
+  side: 'axis' | 'soviet',
+  cause?: CleanUpMarkerView['cause'],
+): CleanUpMarkerView => ({
   id,
   hex: { ...HEX },
   side,
+  ...(cause === undefined ? {} : { cause }),
 })
 
 describe('H 清理：段闸与动作登记（2.2）', () => {
@@ -186,6 +191,95 @@ describe('H 清理：移除对手放置的运输破坏标记（2.2 / 10.0c-C / 1
     if (!outcome.ok) return
     expect(outcome.data.removeMarkerIds).toEqual([])
     expect(outcome.data.counts.trainbusting).toBe(0)
+  })
+})
+
+describe('H 清理：3.3b 治安标记按专规条件移除（不被 10.0c-C 的“无条件移除”带走）', () => {
+  const city = (overrides: {
+    controlledByAxis?: boolean
+    occupiedByAttackCapable?: boolean
+    coveredByAxisZoc?: boolean
+  }) => ({
+    hex: { ...HEX },
+    controlledByAxis: overrides.controlledByAxis ?? true,
+    occupiedByAttackCapable: overrides.occupiedByAttackCapable ?? false,
+    coveredByAxisZoc: overrides.coveredByAxisZoc ?? false,
+    hasTrainbusting: true,
+  })
+
+  it('治安需求未满足（轴控、无驻兵、无 ZOC）⇒ 保留', () => {
+    const outcome = planCleanUp({
+      phase: 'cleanUp',
+      side: 'axis',
+      units: [],
+      trainbustingMarks: [mark('tb-security', 'soviet', 'securityNeeds')],
+      securityCities: [city({})],
+    })
+    if (outcome.ok) expect(outcome.data.removeMarkerIds).toEqual([])
+  })
+
+  it('由可攻击单位占据 ⇒ 移除', () => {
+    const outcome = planCleanUp({
+      phase: 'cleanUp',
+      side: 'axis',
+      units: [],
+      trainbustingMarks: [mark('tb-security', 'soviet', 'securityNeeds')],
+      securityCities: [city({ occupiedByAttackCapable: true })],
+    })
+    if (outcome.ok) expect(outcome.data.removeMarkerIds).toEqual(['tb-security'])
+  })
+
+  it('被轴方 ZOC 覆盖 ⇒ 移除', () => {
+    const outcome = planCleanUp({
+      phase: 'cleanUp',
+      side: 'axis',
+      units: [],
+      trainbustingMarks: [mark('tb-security', 'soviet', 'securityNeeds')],
+      securityCities: [city({ coveredByAxisZoc: true })],
+    })
+    if (outcome.ok) expect(outcome.data.removeMarkerIds).toEqual(['tb-security'])
+  })
+
+  it('该城已转苏控 ⇒ 移除', () => {
+    const outcome = planCleanUp({
+      phase: 'cleanUp',
+      side: 'axis',
+      units: [],
+      trainbustingMarks: [mark('tb-security', 'soviet', 'securityNeeds')],
+      securityCities: [city({ controlledByAxis: false })],
+    })
+    if (outcome.ok) expect(outcome.data.removeMarkerIds).toEqual(['tb-security'])
+  })
+
+  it('缺城市事实 ⇒ 保留（不靠推测还原治安状态）', () => {
+    const outcome = planCleanUp({
+      phase: 'cleanUp',
+      side: 'axis',
+      units: [],
+      trainbustingMarks: [mark('tb-security', 'soviet', 'securityNeeds')],
+    })
+    if (outcome.ok) expect(outcome.data.removeMarkerIds).toEqual([])
+  })
+
+  it('“任意 Clean Up Phase”：苏军自己的清理段也可移除已满足条件的治安标记', () => {
+    const outcome = planCleanUp({
+      phase: 'cleanUp',
+      side: 'soviet',
+      units: [],
+      trainbustingMarks: [mark('tb-security', 'soviet', 'securityNeeds')],
+      securityCities: [city({ coveredByAxisZoc: true })],
+    })
+    if (outcome.ok) expect(outcome.data.removeMarkerIds).toEqual(['tb-security'])
+  })
+
+  it('10.0c-C / 14.8c 的任务标记仍按“下一个敌方清理阶段”无条件移除', () => {
+    const outcome = planCleanUp({
+      phase: 'cleanUp',
+      side: 'axis',
+      units: [],
+      trainbustingMarks: [mark('tb-air', 'soviet', 'airMission')],
+    })
+    if (outcome.ok) expect(outcome.data.removeMarkerIds).toEqual(['tb-air'])
   })
 })
 

@@ -11951,6 +11951,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           id: createId('tb'),
           hex: { ...hex },
           side: segmentGateQuery.value.side ?? activeSide.value,
+          cause: 'airMission',
         },
       ]
     }
@@ -23217,7 +23218,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     for (const hex of data.placeAt) {
       trainbustingMarks.value = [
         ...trainbustingMarks.value,
-        { id: createId('tb'), hex: { ...hex }, side: 'soviet' },
+        { id: createId('tb'), hex: { ...hex }, side: 'soviet', cause: 'securityNeeds' },
       ]
     }
 
@@ -23226,6 +23227,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (canRemove && data.removeAt.length > 0) {
       const keys = new Set(data.removeAt.map((hex) => `${hex.col}.${hex.row}`))
       trainbustingMarks.value = trainbustingMarks.value.filter((mark) => {
+        if (mark.cause !== 'securityNeeds') return true
         if (!keys.has(`${mark.hex.col}.${mark.hex.row}`)) return true
         removedCount += 1
         return false
@@ -23295,7 +23297,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         id: mark.id,
         hex: mark.hex,
         side: mark.side,
+        ...(mark.cause === undefined ? {} : { cause: mark.cause }),
       })),
+      securityCities: securityCityViews.value,
     })
     if (!plan.ok) {
       pushLog('warning', `不能执行清理：${plan.reason}（${plan.rule}）`, plan.rule)

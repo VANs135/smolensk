@@ -332,26 +332,24 @@ describe('2.2 末段：H 段通用清理（DG / 进击 / 燃料 / 对手的运�
     expect(theirs.fuelled).toBe(true)
   })
 
-  it('2.2 / 10.0c-C：H 段移除**对手**放下的运输破坏标记（本人放的不动）', () => {
+  it('2.2 / 3.3b：H 段不无条件移除苏军治安标记，须治安需求满足或转苏控', () => {
     const store = newConsole()
     // 3.3b 的路径放一枚**苏军**标记（轴控城市无驻兵 ⇒ 需求未满足）
     store.toggleAxisCityControlNow(label(CITY_HEX))
     expect(store.applySecurityNeedsNow()).toBe(true)
     expect(store.trainbustingMarks.length).toBe(1)
     expect(store.trainbustingMarks[0]!.side).toBe('soviet')
+    expect(store.trainbustingMarks[0]!.cause).toBe('securityNeeds')
 
-    // 轮到轴心方清理 ⇒ 苏军放的标记应被移除（10.0c-C：下一个敌方的清理阶段）
+    // 轮到轴心方清理，但治安需求仍未满足 ⇒ 3.3b 不允许移除（10.0c-C 的无条件移除不适用）
     store.setPhase('cleanUp')
+    expect(store.runCleanUpNow()).toBe(true)
+    expect(store.trainbustingMarks.length).toBe(1)
+
+    // 驻一个可攻击单位 ⇒ 需求满足 ⇒ 同一清理段内再清理即移除
+    placeGround(store, combatRecord('axis'), CITY_HEX, 'axis', 'u1')
     expect(store.runCleanUpNow()).toBe(true)
     expect(store.trainbustingMarks.length).toBe(0)
-
-    // 再放一枚，轮到苏方清理时**不该**移除（那是它自己放的）
-    store.applySecurityNeedsNow()
-    expect(store.trainbustingMarks.length).toBe(1)
-    store.switchSide()
-    store.setPhase('cleanUp')
-    expect(store.runCleanUpNow()).toBe(true)
-    expect(store.trainbustingMarks.length).toBe(1)
   })
 })
 
