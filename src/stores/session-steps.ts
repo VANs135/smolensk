@@ -15,7 +15,7 @@ import type { CombatStep } from '@/engine/rules/combat-interaction'
 import type { SupplyStep } from '@/engine/rules/supply-interaction'
 import { reinforcementSegmentOf } from '@/engine/rules'
 
-import type { MapSessionKind, ExclusiveSessionSection } from './map-view'
+import type { MapSessionKind, ExclusiveSessionSection, OpsFlowKind } from './map-view'
 
 /** 一步待决事项 */
 export interface SessionStepItem {
@@ -32,6 +32,17 @@ export interface SessionStepItem {
 }
 
 /**
+ * 空军任务链的事实（`air` 会话与三操作里的空军分支共用一份形状）
+ *
+ * 名称用"当前待办"的口径：`step` 就是引擎给的下一步，调用方不自己推。
+ */
+export interface AirSessionFacts {
+  step: AirMissionStep | 'done'
+  declared: boolean
+  cargoLossPending: boolean
+}
+
+/**
  * 会话事实（**只读**；全部来自既有 store 投影与引擎状态机）
  *
  * 名称用"当前待办"的口径：`step` 就是引擎给的下一步，调用方不自己推。
@@ -42,7 +53,15 @@ export interface SessionStepFacts {
   /** 未宣布时调用方传 `step: 'declare'` */
   barrage: { step: BarrageStep } | null
   /** 未宣布时调用方传 `step: 'declare'`、`declared: false`；`done` 为已收束 */
-  air: { step: AirMissionStep | 'done'; declared: boolean; cargoLossPending: boolean } | null
+  air: AirSessionFacts | null
+  /**
+   * 三操作统一流程（右键炮击 / 轰炸 / 低空扫射；2026-11-10 规格）
+   *
+   * `step` 是流程自己的步（1 选单位 / 2 分叉 / 3 炮击受损）；
+   * 空军第 2 步不另起一套步骤名，直接把任务链的当前子步带在 `air` 上
+   * ⇒ 门 id 与 `AirPanel` 同源，面板不再自己判到哪一步。
+   */
+  ops: { kind: OpsFlowKind; step: 1 | 2 | 3; air: AirSessionFacts | null } | null
   supply: { step: SupplyStep } | null
   move: {
     fuelPending: boolean
@@ -320,6 +339,56 @@ function airItems(facts: NonNullable<SessionStepFacts['air']>): SessionStepItem[
       break
   }
   return items
+}
+
+/**
+ * 三操作统一流程：一步一件事
+ *
+ * 前两步由流程自己定（选单位 / 炮击付补给）；空军第 2 步交给任务链的 `airItems`，
+ * 门 id 与 `AirPanel` 完全相同 —— 面板只按门渲染，不再自己判 `flow.step`。
+ */
+function opsItems(facts: NonNullable<SessionStepFacts['ops']>): SessionStepItem[] {
+  if (facts.kind === 'barrage') {
+    if (facts.step === 1) {
+      return [
+        item(
+          'ops:barrage:units',
+          '选参炸炮兵',
+          '目标格已定，等待挑选这一炮的参炸单位。',
+          '只从射程覆盖该格的炮兵里选，然后确认单位。',
+        ),
+      ]
+    }
+    if (facts.step === 2) {
+      return [
+        item(
+          'ops:barrage:supply',
+          '支付炮击补给',
+          '宣布后要按初始列付补给（10.1b）。',
+          '在地图上点一座高亮的补给站完成支付。',
+        ),
+      ]
+    }
+    return [
+      item(
+        'ops:barrage:loss',
+        '目标方受损',
+        '轰炸结果要求目标方先落实军力损失。',
+        '在目标格内给受损单位各记一点，然后确认受损。',
+      ),
+    ]
+  }
+  if (facts.step === 1) {
+    return [
+      item(
+        'ops:air:units',
+        '选参战机',
+        '目标格已定，等待挑选执行该任务的飞机。',
+        '只从能执行该任务且航程够得到的飞机里选，然后进入下一步。',
+      ),
+    ]
+  }
+  return facts.air === null ? [] : airItems(facts.air)
 }
 
 function supplyItems(facts: NonNullable<SessionStepFacts['supply']>): SessionStepItem[] {
@@ -662,6 +731,8 @@ export function planSessionSteps(facts: SessionStepFacts): SessionStepItem[] {
       return facts.barrage === null ? [] : barrageItems(facts.barrage)
     case 'air':
       return facts.air === null ? [] : airItems(facts.air)
+    case 'ops':
+      return facts.ops === null ? [] : opsItems(facts.ops)
     case 'supply':
       return facts.supply === null ? [] : supplyItems(facts.supply)
     case 'move':

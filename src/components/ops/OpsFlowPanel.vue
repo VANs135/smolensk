@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 import { AirPanel } from '@/components/air'
 import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
+import { SessionStep } from '@/components/session'
 import { counterImageUrlOf, hexLabel, useMapViewStore, useWorkbenchStore } from '@/stores'
 import OpsLossPicker from './OpsLossPicker.vue'
 
@@ -77,6 +78,13 @@ const picked = computed(() => {
 /** 炮击错误：中文行（不显示引擎 reason 代码） */
 const barrageErrorLine = computed(() => workbench.barrageErrorLine)
 
+/**
+ * 空军第 2 步的容器：任务链的门 id 都是 `air:*`（与 `AirPanel` 同一份 store 投影）
+ *
+ * 面板不自己判 `flow.step`，只问"当前暴露的事项属不属于任务链"。
+ */
+const airMissionActive = computed(() => map.sessionStep?.id.startsWith('air:') === true)
+
 /** 空军错误（既有形状） */
 const airError = computed(() => workbench.airError)
 const airErrorLine = computed(() => workbench.airErrorLine)
@@ -135,7 +143,7 @@ function setTargetKind(kind: string): void {
     </p>
 
     <!-- ───────── 炮击：第 1 步 选炮兵 ───────── -->
-    <template v-if="flow.kind === 'barrage' && flow.step === 1">
+    <SessionStep item="ops:barrage:units">
       <label v-if="targetKindChoices.length > 1" class="field num">
         整体目标（10.0d：宣布后只能用于该目标）
         <select
@@ -176,10 +184,10 @@ function setTargetKind(kind: string): void {
         <BaseButton :disabled="!picked" @click="map.advanceOpsFlow()">确认单位</BaseButton>
         <BaseButton variant="secondary" @click="map.cancelOpsFlow()">取消本次</BaseButton>
       </div>
-    </template>
+    </SessionStep>
 
     <!-- ───────── 炮击：第 2 步 支付补给 ───────── -->
-    <template v-else-if="flow.kind === 'barrage' && flow.step === 2">
+    <SessionStep item="ops:barrage:supply">
       <p class="muted num">
         在<b>地图上点一座高亮的补给站</b>支付（12.3a / 10.1b）。本场成本
         <b>{{ supplyCostT }} T</b>（取初始列；多门齐射须同一指挥部或同一补给站）。
@@ -214,10 +222,10 @@ function setTargetKind(kind: string): void {
         </BaseButton>
         <BaseButton variant="secondary" @click="map.cancelOpsFlow()">取消本次</BaseButton>
       </div>
-    </template>
+    </SessionStep>
 
     <!-- ───────── 炮击：第 3 步 选受损单位（与空军轰炸共用同一块） ───────── -->
-    <template v-else-if="flow.kind === 'barrage' && flow.step === 3">
+    <SessionStep item="ops:barrage:loss">
       <OpsLossPicker />
 
       <p v-if="barrageErrorLine !== null" class="warn num">
@@ -231,10 +239,10 @@ function setTargetKind(kind: string): void {
         </BaseButton>
         <BaseButton variant="secondary" @click="map.cancelOpsFlow()">取消（退回）</BaseButton>
       </div>
-    </template>
+    </SessionStep>
 
     <!-- ───────── 空军：第 1 步 选机 ───────── -->
-    <template v-else-if="flow.step === 1">
+    <SessionStep item="ops:air:units">
       <p class="muted num">
         {{ flow.kind === 'bombing' ? '轰炸（10.2b）' : '低空扫射（14.7d）' }}
         <RuleTip :rule="flow.kind === 'bombing' ? '10.2' : '14.7d'">
@@ -291,10 +299,10 @@ function setTargetKind(kind: string): void {
         <BaseButton :disabled="!picked" @click="map.advanceOpsFlow()">下一步</BaseButton>
         <BaseButton variant="secondary" @click="map.cancelOpsFlow()">取消</BaseButton>
       </div>
-    </template>
+    </SessionStep>
 
     <!-- ───────── 空军：第 2 步 空战 / 防空 / 战果（含受损分担） ───────── -->
-    <template v-else>
+    <template v-if="airMissionActive">
       <AirPanel only="mission" />
       <!-- K4：空军轰炸需要目标方选受损单位时，用与炮击第 3 步**同一块**界面 -->
       <template v-if="airLossPending">

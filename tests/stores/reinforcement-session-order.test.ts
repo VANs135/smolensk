@@ -31,6 +31,7 @@ function baseFacts(over: Partial<SessionStepFacts['reinforce']> = {}): SessionSt
     combat: null,
     barrage: null,
     air: null,
+    ops: null,
     supply: null,
     move: {
       fuelPending: false,

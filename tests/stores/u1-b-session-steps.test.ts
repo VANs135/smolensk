@@ -35,6 +35,7 @@ function baseFacts(over: Partial<SessionStepFacts> = {}): SessionStepFacts {
     combat: null,
     barrage: null,
     air: null,
+    ops: null,
     supply: null,
     move: {
       fuelPending: false,
@@ -191,6 +192,67 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
     const src = read('views/GameTableView.vue')
     expect(src).toContain('sessionExclusiveSection')
     expect(src).not.toMatch(/ExclusiveRulesPanel[^>]*only="actions"/)
+  })
+})
+
+describe('U1-b 投影：三操作统一流程（ops 也是同一套事实）', () => {
+  it('炮击第 1 步 ⇒ 只出「选参炸炮兵」', () => {
+    const items = planSessionSteps(
+      baseFacts({ kind: 'ops', ops: { kind: 'barrage', step: 1, air: null } }),
+    )
+    expect(items.map((entry) => entry.id)).toEqual(['ops:barrage:units'])
+    expect(exposedCount(items)).toBe(1)
+  })
+
+  it('炮击第 3 步 ⇒ 只出「目标方受损」', () => {
+    const items = planSessionSteps(
+      baseFacts({ kind: 'ops', ops: { kind: 'barrage', step: 3, air: null } }),
+    )
+    expect(items.map((entry) => entry.id)).toEqual(['ops:barrage:loss'])
+  })
+
+  it('空军第 2 步不另起步骤名：门 id 与 AirPanel 同源', () => {
+    const items = planSessionSteps(
+      baseFacts({
+        kind: 'ops',
+        ops: {
+          kind: 'bombing',
+          step: 2,
+          air: { step: 'flak', declared: true, cargoLossPending: false },
+        },
+      }),
+    )
+    expect(items.map((entry) => entry.id)).toEqual(['air:flak'])
+  })
+
+  it('空军货物损失优先于任务子步（与 air 会话同一顺序）', () => {
+    const items = planSessionSteps(
+      baseFacts({
+        kind: 'ops',
+        ops: {
+          kind: 'hipShoot',
+          step: 2,
+          air: { step: 'flak', declared: true, cargoLossPending: true },
+        },
+      }),
+    )
+    expect(items.map((entry) => entry.id)).toEqual(['air:cargoLoss', 'air:flak'])
+    expect(exposedSessionStep(items)?.id).toBe('air:cargoLoss')
+  })
+
+  it('源守卫：ops 面板改按门渲染，旧的 flow.step 分支已清掉', () => {
+    const panel = read('components/ops/OpsFlowPanel.vue')
+    expect(panel).toContain('<SessionStep')
+    for (const id of [
+      'ops:barrage:units',
+      'ops:barrage:supply',
+      'ops:barrage:loss',
+      'ops:air:units',
+    ]) {
+      expect(panel).toContain(`item="${id}"`)
+    }
+    // 旧写法：面板自己按流程步挑内容（内联绕过会话投影）
+    expect(panel).not.toMatch(/v-(?:else-)?if="[^"]*flow\.step/)
   })
 })
 

@@ -3019,6 +3019,25 @@ export const useMapViewStore = defineStore('mapView', () => {
               declared: air !== null,
               cargoLossPending: workbench.airCargoLossPending !== null,
             },
+      /*
+       * 三操作统一流程：与其它环节同一套投影。
+       * 空军第 2 步不另起步骤名，直接带上任务链的当前子步 ⇒ 门 id 与 `AirPanel` 同源。
+       */
+      ops:
+        kind !== 'ops' || opsFlow.value === null
+          ? null
+          : {
+              kind: opsFlow.value.kind,
+              step: opsFlow.value.step,
+              air:
+                opsFlow.value.kind === 'barrage'
+                  ? null
+                  : {
+                      step: air?.step ?? 'declare',
+                      declared: air !== null,
+                      cargoLossPending: workbench.airCargoLossPending !== null,
+                    },
+            },
       supply: kind !== 'supply' || supply === null ? null : { step: supply.step },
       move: {
         fuelPending:
