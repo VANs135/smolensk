@@ -6492,8 +6492,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
        *
        * 进入防御格＝已经离开了旧格 ⇒ 旧的「不得离开」事实作废；只有新格仍在敌方 ZOC
        * 才重新置位。未进入（相持 / 选项撤退）时保持旧事实不变（那个单位确实还在原格）。
+       *
+       * R11（K1b）：只有**真的进场**才重算。攻方在选项中撤退时（9.12g-B）防御方即便全灭也不进格，
+       * 此时旧条件 `defenderLeftHex` 会把标记打到「没人进的格」，并藏掉面板按钮。
+       * 判据以 `plan.enterDefenderHex`（＝8.0 强制进入）为准，再显式排除撤退分支。
        */
-      if (draft.defenderLeftHex) {
+      if (draft.defenderLeftHex && plan.enterDefenderHex && !attackerRetreated) {
         overrunZocHeldHex.value = null
         overrunZocHeldUnitIds.value = []
         if (inEnemyZocAt(moveContext.value, context.target, activeSide.value)) {
