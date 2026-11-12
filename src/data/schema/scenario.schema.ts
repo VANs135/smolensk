@@ -68,6 +68,13 @@ export const FormationDrawSchema = z
     pool: z.number().int().positive(),
     /** 池成员口径说明 */
     poolFrom: z.string(),
+    /**
+     * 入杯名单（Q3/Q7：由 `formations.json` 派生后**冻结为剧本数据**）
+     *
+     * 规则原文只给池规模、不逐条列名单；本字段给出冻结后的成员，引擎按名单取池，
+     * 不再按番号后缀推导。`length` 必须等于 `pool`；每个 id 必须是该剧本轴方多单位编队。
+     */
+    poolFormations: z.array(z.string()).optional(),
     groups: z.array(FormationDrawGroupSchema),
     /** 'No Counterattack' 选项下每组只抽几个（ch10：各 2 个） */
     reducedCount: z.number().int().positive().optional(),

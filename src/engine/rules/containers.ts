@@ -1036,6 +1036,7 @@ export interface ScenarioDrawBoxView extends BoxView {
 /** 剧本的编排抽取参数（`scenarios.json.setup.formationDraw`；结构化自规则书） */
 function formationDrawOf(scenarioId: string): {
   pool: number
+  poolFormations: readonly string[] | undefined
   groups: readonly ScenarioDrawGroup[]
   reducedCount: number | null
   raw: string
@@ -1051,6 +1052,7 @@ function formationDrawOf(scenarioId: string): {
   if (block === undefined) return null
   return {
     pool: block.pool,
+    poolFormations: block.poolFormations,
     groups: block.groups.map((group) => ({
       kind: group.kind,
       count: group.count,
@@ -1068,9 +1070,9 @@ function formationDrawOf(scenarioId: string): {
 /**
  * 剧本抽取盒视图（编队抽签）
  *
- * 池成员按数据推导：`formations.json` 中该剧本（`sources` 含 `S<id>·axis`）的**装甲/摩托化师**
- * （`formationId` 以 `Pz Div` / `Mtr Div` 结尾；骑兵师不入杯）。该口径与规则书给出的池规模
- * 一致（剧本 1 = 12、剧本 3/5 = 14），测试里作交叉核对。
+ * 池成员优先取剧本声明的 `poolFormations`；未声明时按 `formations.json` 推导（该剧本
+ * `sources` 含 `S<id>·axis` 的装甲/摩托化师）。两种口径都与规则书给的池规模一致
+ * （剧本 1 = 12、剧本 3/5 = 14），测试里作交叉核对；未声明时在 `dataGaps` 登记缺口。
  */
 export function scenarioDrawBoxView(scenarioId: string): ScenarioDrawBoxView {
   const info = scenarios.scenarios.find((scenario) => scenario.id === scenarioId)
@@ -1086,6 +1088,18 @@ export function scenarioDrawBoxView(scenarioId: string): ScenarioDrawBoxView {
     dataGaps.push(
       `池规模与数据不一致：规则书给定 ${block.pool}，按 formations.json 推导为 ${pool.length}（列入数据缺口，不擅自改判）`,
     )
+  }
+  if (block !== null && block.poolFormations === undefined) {
+    dataGaps.push(
+      `剧本 ${scenarioId} 未声明入池名单（setup.formationDraw.poolFormations）⇒ 暂按番号后缀推导（数据缺口）`,
+    )
+  }
+  if (block !== null && block.poolFormations !== undefined) {
+    const known = new Set(formations.formations.map((formation) => formation.formationId))
+    const unknown = block.poolFormations.filter((formationId) => !known.has(formationId))
+    if (unknown.length > 0) {
+      dataGaps.push(`入池名单含 formations.json 未登记的编队：${unknown.join('、')}（数据缺口）`)
+    }
   }
   dataGaps.push(
     '规则原文未逐条列出被抽中的编队 ⇒ 抽取结果须由调用方用 rng 在池内抽定（引擎不掷骰、不预设名单）',
@@ -1120,10 +1134,24 @@ export function scenarioDrawBoxView(scenarioId: string): ScenarioDrawBoxView {
   }
 }
 
-/** 剧本抽取池：该剧本的轴方装甲/摩托化多单位编队（不含骑兵师） */
+/**
+ * 剧本抽取池：优先取剧本声明的 `poolFormations`（Q3/Q7 冻结名单），
+ * 未声明时回退为「该剧本的轴方装甲/摩托化多单位编队（不含骑兵师）」的后缀推导，
+ * 缺口由 `scenarioDrawBoxView().dataGaps` 如实登记。
+ */
 export function axisDrawPool(
   scenarioId: string,
 ): readonly { formationId: string; formationCode: string }[] {
+  const declared = formationDrawOf(scenarioId)?.poolFormations
+  if (declared !== undefined) {
+    const byId = new Map(
+      formations.formations.map((formation) => [formation.formationId, formation]),
+    )
+    return declared.map((formationId) => ({
+      formationId,
+      formationCode: byId.get(formationId)?.formationCode ?? '',
+    }))
+  }
   const key = `S${setupSourceOf(scenarioId).source}·axis`
   return formations.formations
     .filter(
