@@ -401,6 +401,40 @@ function setAircraftRoll(unitId: string, value: number): void {
               }}
             </span>
           </div>
+          <!-- 21.10：Shells 先花（按枚整花、溢出作废），不足由 SP 补；仍不足则按额度降档 -->
+          <div class="row">
+            <label class="field">
+              Shells（21.10，1 枚 = 2T）
+              <input
+                v-model.number="workbench.barrageShellMarkers"
+                class="input num"
+                type="number"
+                min="0"
+                :max="workbench.supplyCacheHoldings[workbench.activeSide]"
+              />
+            </label>
+            <BaseTag kind="info">
+              持有 {{ workbench.supplyCacheHoldings[workbench.activeSide] }} 枚｜额度
+              {{ workbench.barrageShellBudgetT }} T
+            </BaseTag>
+            <span v-if="workbench.barrageShellPreview" class="num">
+              抵 {{ workbench.barrageShellPreview.appliedT }} T；浪费
+              {{ workbench.barrageShellPreview.wasteT }} T；SP 补
+              {{ workbench.barrageShellPreview.spT }} T
+              <template v-if="workbench.barrageShellPreview.shortT > 0">
+                ｜缺口 {{ workbench.barrageShellPreview.shortT }} T
+                <template v-if="workbench.barrageShellPreview.downgrade">
+                  ⇒ 降档 {{ workbench.barrageShellPreview.downgrade.columnLabel }} 列（值
+                  {{ workbench.barrageShellPreview.downgrade.valueUsed }}，成本
+                  {{ workbench.barrageShellPreview.downgrade.costT }} T）
+                </template>
+              </template>
+            </span>
+          </div>
+          <p class="muted">
+            21.10：Shells 只能用于 **HQ 投递** 的炮击（勾「来自同一指挥部」）；多出的 T
+            作废、不找零；不足由 SP 补，仍不足则按额度降档，成本取降档后的初始列。
+          </p>
           <div class="row">
             <label class="field">
               <input v-model="workbench.barrageInputs.fromSameHq" type="checkbox" />

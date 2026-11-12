@@ -752,13 +752,13 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         </BaseButton>
       </div>
       <div v-if="actsCache" class="row">
-        <label class="field">
-          用法
-          <select v-model="workbench.supplyCacheInputs.use" class="select">
-            <option value="shells">Shells（弹药）</option>
-            <option value="forage">Forage（应急征粮）</option>
-          </select>
-        </label>
+        <!--
+          21.10 Shells 的入口已挪到**炮击环节**（BarragePanel 的「② 按初始列付补给」）：
+          那里能同时看到轰炸成本、SP 持仓与降档列，且付款与撤销共用同一本账。
+          本栏只保留 Forage（D 段断补首回合）。
+        -->
+        <BaseTag kind="info">用法：Forage（应急征粮）</BaseTag>
+        <BaseTag kind="info">Shells 请在炮击面板的②付补给里使用（21.10）</BaseTag>
         <label class="field">
           友方 HQ 格
           <UiField
@@ -770,36 +770,19 @@ const pins = computed(() => workbench.exclusiveSectionPins)
             点地图选格
           </BaseButton>
         </label>
-        <template v-if="workbench.supplyCacheInputs.use === 'shells'">
-          <label class="field">
-            本次投递成本 T
-            <UiField
-              v-model="workbench.supplyCacheInputs.barrageCostT"
-              class="input num"
-              type="number"
-              min="1"
-            />
-          </label>
-          <label class="field">
-            <input v-model="workbench.supplyCacheInputs.hqDrawsTraceSupply" type="checkbox" />
-            该 HQ 在追溯补给中（不影响合法性）
-          </label>
-        </template>
-        <template v-else>
-          <label class="field">
-            HQ 投递距离（格）
-            <UiField
-              v-model="workbench.supplyCacheInputs.hqThrowRangeHexes"
-              class="input num"
-              type="number"
-              min="0"
-            />
-          </label>
-          <!--
-            21.10 的「断补的第一个回合」不再由玩家/裁判勾选（批 F 切片 5）：判据按盘面事实算
-            （`cutSinceTurn`，与 12.8e 同源）—— 这一行原来是个复选框，等于"自己说自己是首回合"。
-          -->
-        </template>
+        <label class="field">
+          HQ 投递距离（格）
+          <UiField
+            v-model="workbench.supplyCacheInputs.hqThrowRangeHexes"
+            class="input num"
+            type="number"
+            min="0"
+          />
+        </label>
+        <!--
+          21.10 的「断补的第一个回合」不再由玩家/裁判勾选（批 F 切片 5）：判据按盘面事实算
+          （`cutSinceTurn`，与 12.8e 同源）—— 这一行原来是个复选框，等于"自己说自己是首回合"。
+        -->
         <BaseButton variant="primary" size="sm" @click="workbench.spendSupplyCacheNow()">
           花掉 1 枚（1.7）
         </BaseButton>

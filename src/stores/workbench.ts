@@ -132,6 +132,10 @@ import {
   barrageTableMeta,
   barrageTerrainLines,
   BARRAGE_COLUMN_SHIFTS,
+  // 21.10：Shells 按枚整花 + 与 SP 混付；额度不足时降档选列
+  planBarrageSupplyPayment,
+  selectAffordableBarrageColumn,
+  SUPPLY_CACHE_SHELLS_T,
   beginAirInteraction,
   beginBarrage,
   beginCombat,
@@ -12112,6 +12116,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     barrageTargetKind.value = 'combatUnits'
     // 付款来源由统一流程在开场/收场显式清（K6：不能靠这里清——面板允许"先选站后开工具"）
     barragePaidSupply.value = null
+    barrageShellMarkers.value = 0
   }
 
   /** C7：统一收引擎结论（失败即记 `barrageError` 与日志并返回 null） */
@@ -12513,6 +12518,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const barragePaidSupply = ref<{
     dumpId: string
     t: number
+    /** 21.10：本次花掉的 Shells 枚数（撤销时原数退回） */
+    markers: number
+    /** 21.10：被浪费的 T（仅记账，不退） */
+    wasteT: number
     hexKey: string
     unitIds: string[]
   } | null>(null)
@@ -12548,6 +12557,59 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (firingUnits.length === 0) return []
     const keys = hqDeliveryDumpKeys(segmentGateQuery.value.side ?? activeSide.value, firingUnits)
     return spDumps.value.filter((dump) => keys.has(hexLabel(dump.hex)))
+  })
+
+  /** 21.10：本次炮击计划花掉的 Shells 枚数（0 = 不用；按枚整花，最后一枚可溢出作废） */
+  const barrageShellMarkers = ref(0)
+
+  /** 21.10：本次可用额度 = Shells 面值 + 所选站的 T（降档按此挑列） */
+  const barrageShellBudgetT = computed<number>(() => {
+    const dump = barrageSupplyDump.value
+    const dumpT = dump === null ? 0 : holdingsToT({ sp: dump.sp, t: dump.t })
+    return Math.max(0, Math.trunc(barrageShellMarkers.value)) * SUPPLY_CACHE_SHELLS_T + dumpT
+  })
+
+  /** 21.10：Shells 预览（抵付 / 浪费 / SP 缺口 / 降档列），界面只读 */
+  const barrageShellPreview = computed<{
+    markers: number
+    appliedT: number
+    wasteT: number
+    spT: number
+    shortT: number
+    downgrade: { columnLabel: string; costT: number; valueUsed: number } | null
+  } | null>(() => {
+    const state = barrageState.value
+    if (state === null || state.kind !== 'artillery') return null
+    const held = supplyCacheHoldings.value[activeSide.value]
+    const markers = Math.min(Math.max(0, Math.trunc(barrageShellMarkers.value)), held)
+    const dump = barrageSupplyDump.value
+    const dumpT = dump === null ? 0 : holdingsToT({ sp: dump.sp, t: dump.t })
+    const plan = planBarrageSupplyPayment({ costT: state.table.costT, markers, spT: dumpT })
+    if (!plan.ok) return null
+    const data = plan.data
+    const downgrade =
+      data.shortT > 0
+        ? selectAffordableBarrageColumn({
+            target: state.targetKind,
+            valueRange: state.totalValue,
+            availableT: markers * SUPPLY_CACHE_SHELLS_T + dumpT,
+          })
+        : null
+    return {
+      markers: data.markersSpent,
+      appliedT: data.shellsAppliedT,
+      wasteT: data.wasteT,
+      spT: data.spT,
+      shortT: data.shortT,
+      downgrade:
+        downgrade === null
+          ? null
+          : {
+              columnLabel: downgrade.columnLabel,
+              costT: downgrade.costT,
+              valueUsed: downgrade.valueUsed,
+            },
+    }
   })
 
   /** C7：点选的轰炸付款补给站（未选或已不存在 ⇒ null） */
@@ -12616,6 +12678,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (state === null) return false
     const inputs = barrageInputs.value
     const dump = barrageSupplyDump.value
+    /*
+     * 21.10：本次计划花掉的 Shells（按枚整花；上限＝该方持有）。
+     * 原文「a barrage being thrown supply by an HQ」⇒ 只有 **HQ 投递** 的炮击可用；
+     * 面板上对应「来自同一指挥部（10.1b-A）」，未勾即拒。
+     */
+    const heldMarkers = supplyCacheHoldings.value[activeSide.value]
+    const markers = Math.min(Math.max(0, Math.trunc(barrageShellMarkers.value)), heldMarkers)
+    if (markers > 0 && state.kind === 'artillery' && !inputs.fromSameHq) {
+      barrageError.value = { rule: '21.10', reason: 'shellsRequireHqThrow' }
+      pushLog(
+        'danger',
+        '21.10：Shells 只能用于**由 HQ 投递补给**的炮击 ⇒ 先选一座经 HQ 投递的来源，并勾「来自同一指挥部」',
+        '21.10',
+      )
+      return false
+    }
     // 10.2c：空军轰炸无需战斗补给 ⇒ 不要求来源；火炮按初始列收费 ⇒ 必须先有来源
     if (state.kind === 'artillery' && state.table.costT > 0) {
       if (dump === null) {
@@ -12654,10 +12732,49 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         return false
       }
     }
+    /*
+     * 21.10：额度不足时**降档**——按「Shells 面值 + 本站 T」挑最高可负担列，
+     * 用部分轰炸值开火（原文 "fire partial factors"）。成本仍取**新的初始列**（10.1b），
+     * 横移随后作用在该列上；总轰炸值一并压到所选列的上界。
+     */
+    let working = state
+    if (markers > 0 && state.kind === 'artillery' && state.table.costT > 0 && dump !== null) {
+      const budget = markers * SUPPLY_CACHE_SHELLS_T + holdingsToT({ sp: dump.sp, t: dump.t })
+      if (state.table.costT > budget) {
+        const chosen = selectAffordableBarrageColumn({
+          target: state.targetKind,
+          valueRange: state.totalValue,
+          availableT: budget,
+        })
+        if (chosen === null) {
+          barrageError.value = { rule: '21.10', reason: 'shellsCannotAffordAnyColumn' }
+          pushLog(
+            'danger',
+            `21.10：额度 ${budget} T 连最低轰炸列都付不出 ⇒ 本次炮击取消（可加 Shells 或换来源）`,
+            '21.10',
+          )
+          return false
+        }
+        working = {
+          ...state,
+          totalValue: chosen.valueUsed,
+          table: barrageTableMeta({ target: state.targetKind, valueRange: chosen.valueUsed }),
+        }
+        pushLog(
+          'info',
+          `21.10：额度 ${budget} T 不足以支付 ${state.table.columnLabel} 列的 ${state.table.costT} T` +
+            ` ⇒ 降档到 ${chosen.columnLabel} 列（轰炸值 ${state.totalValue} → ${chosen.valueUsed}，成本 ${chosen.costT} T）`,
+          '21.10',
+        )
+      }
+    }
     const data = acceptBarrage(
-      planBarrageSupply(state, {
-        // 12.1a：可用量按所选站的持仓（含 SP 折算）推出，不再采信手填数字
-        availableT: dump === null ? inputs.availableT : holdingsToT({ sp: dump.sp, t: dump.t }),
+      planBarrageSupply(working, {
+        // 12.1a：可用量按所选站的持仓（含 SP 折算）推出，不再采信手填数字；
+        // 21.10：Shells 面值也计入本次可用额度（先花 Shells、再补 SP）
+        availableT:
+          (dump === null ? inputs.availableT : holdingsToT({ sp: dump.sp, t: dump.t })) +
+          markers * SUPPLY_CACHE_SHELLS_T,
         fromSameHq: inputs.fromSameHq,
         fromSameDump: inputs.fromSameDump,
         usedInternalStocks: inputs.usedInternalStocks,
@@ -12666,39 +12783,66 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
     if (data === null) return false
     const supply = data.state.supply
-    // 10.1b：付了就真扣（原先只把状态标成已付，账本分文不动 ⇒ 免费轰炸）
+    // 10.1b / 21.10：先花 Shells（按枚整花、溢出作废），不足由 SP 补
     if (supply?.paid === true && supply.waived !== true && supply.requiredT > 0) {
       if (dump === null) {
         barrageError.value = { rule: '12.3a', reason: 'barrageSupplyNeedsADump' }
         pushLog('danger', '12.3a：这笔轰炸补给没有付款来源，交易取消', '12.3a')
         return false
       }
-      const payment = planSpPayment({
-        holdings: { sp: dump.sp, t: dump.t },
-        wantT: supply.requiredT,
-      })
-      if (!payment.ok) {
-        barrageError.value = { rule: payment.rule, reason: payment.reason }
-        pushLog(
-          'danger',
-          `轰炸补给付不出 ${supply.requiredT} T：${payment.reason}（${payment.rule}）——本次不改动任何账本`,
-          payment.rule,
-        )
-        return false
+      const requiredT = supply.requiredT
+      const shellFaceT = markers * SUPPLY_CACHE_SHELLS_T
+      const shellsAppliedT = Math.min(shellFaceT, requiredT)
+      const wasteT = shellFaceT - shellsAppliedT
+      const spNeed = requiredT - shellsAppliedT
+      let spPaid = 0
+      if (spNeed > 0) {
+        const payment = planSpPayment({
+          holdings: { sp: dump.sp, t: dump.t },
+          wantT: spNeed,
+        })
+        if (!payment.ok) {
+          barrageError.value = { rule: payment.rule, reason: payment.reason }
+          pushLog(
+            'danger',
+            `轰炸补给付不出：Shells 抵 ${shellsAppliedT} T 后仍缺 ${spNeed} T，${payment.reason}（${payment.rule}）` +
+              `——本次不改动任何账本`,
+            payment.rule,
+          )
+          return false
+        }
+        setSpDumpHoldings(dump.id, payment.data.holdingsAfter)
+        spPaid = spNeed
       }
-      setSpDumpHoldings(dump.id, payment.data.holdingsAfter)
-      // 用户口径：取消要退回原状 ⇒ 记下实扣的那一笔（站 + T + 本场涉及的账本键）
+      if (markers > 0) {
+        supplyCacheHoldings.value = {
+          ...supplyCacheHoldings.value,
+          [activeSide.value]: heldMarkers - markers,
+        }
+        pushLog(
+          'info',
+          `21.10：在 ${hexLabel(dump.hex)} 的 HQ 花掉 ${markers} 枚补给缓存 ⇒ 抵付 ${shellsAppliedT} T` +
+            `（溢出作废 ${wasteT} T；即使 HQ 不在追溯补给中也可用）`,
+          '21.10',
+        )
+      }
+      // 用户口径：取消要退回原状 ⇒ 记下实扣的那一笔（站 + T + Shells + 本场涉及的账本键）
       barragePaidSupply.value = {
         dumpId: dump.id,
-        t: supply.requiredT,
+        t: spPaid,
+        markers,
+        wasteT,
         hexKey: barrageTargetHex.value === null ? '' : hexLabel(barrageTargetHex.value),
         unitIds: data.state.units.map((unit) => unit.unitId),
       }
       pushLog(
         'info',
-        `10.1b：从 ${hexLabel(dump.hex)} 扣 ${supply.requiredT} T 作本次轰炸的战斗补给`,
+        spPaid > 0
+          ? `10.1b：从 ${hexLabel(dump.hex)} 扣 ${spPaid} T 作本次轰炸的战斗补给`
+          : `10.1b：本次战斗补给全部由 Shells 抵付，未动 SP`,
         '10.1b',
       )
+      barrageShellMarkers.value = 0
     }
     pushLog(
       'success',
@@ -12848,6 +12992,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const totalT = holdingsToT({ sp: dump.sp, t: dump.t }) + paid.t
       setSpDumpHoldings(dump.id, { sp: Math.floor(totalT / SP_TO_T), t: totalT % SP_TO_T })
     }
+    // 21.10：Shells 与 SP 一样原数退回（尚未掷骰 ⇒ 视同未使用）
+    if (paid.markers > 0) {
+      supplyCacheHoldings.value = {
+        ...supplyCacheHoldings.value,
+        [activeSide.value]: supplyCacheHoldings.value[activeSide.value] + paid.markers,
+      }
+    }
     if (paid.hexKey !== '')
       barragedHexesThisPhase.value = barragedHexesThisPhase.value.filter(
         (key) => key !== paid.hexKey,
@@ -12855,7 +13006,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     barragedUnitIdsThisPhase.value = barragedUnitIdsThisPhase.value.filter(
       (id) => !paid.unitIds.includes(id),
     )
-    pushLog('info', `退回本次炮击的战斗补给 ${paid.t} T（10.1b：取消不视为已轰炸过）`, '10.1b')
+    pushLog(
+      'info',
+      `退回本次炮击的战斗补给 ${paid.t} T` +
+        (paid.markers > 0 ? `、Shells ${paid.markers} 枚（21.10）` : '') +
+        `（10.1b：取消不视为已轰炸过）`,
+      paid.markers > 0 ? '21.10' : '10.1b',
+    )
     barragePaidSupply.value = null
   }
 
@@ -12875,6 +13032,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     barrageTargetKind.value = 'combatUnits'
     barrageSupplyDumpId.value = null
     barragePaidSupply.value = null
+    barrageShellMarkers.value = 0
     barrageError.value = null
     pushLog('info', '取消本次炮击（10.0 流程中止；补给与选子已退回）', '10.0')
   }
@@ -24213,7 +24371,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 1.7 / 21.10：补给缓存的用法输入（界面绑定） */
   const supplyCacheInputs = ref({
-    use: 'shells' as SupplyCacheUse,
+    use: 'forage' as SupplyCacheUse,
     hexText: '',
     /** 21.10 Shells：本次 HQ 投递的火炮轰炸成本（T） */
     barrageCostT: 4,
@@ -26568,6 +26726,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // G②（10.1b-A）：这批来源里哪些是经 HQ 投递达成的（付款时据此声明"来自同一指挥部"）
     barrageSupplyHqChoices,
     barrageSupplyDump,
+    // 21.10：本次实扣的 Shells/浪费（撤销时据此原数退回）
+    barragePaidSupply,
+    // 21.10：Shells 计划枚数 / 额度 / 预览（抵付、浪费、缺口、降档列）
+    barrageShellMarkers,
+    barrageShellBudgetT,
+    barrageShellPreview,
     pickBarrageSupplyDump,
     // B14b：阵列里「点同一座站即取消」（旧下拉的"未声明"空档的替代）
     toggleBarrageSupplyDump,
