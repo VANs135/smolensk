@@ -969,11 +969,14 @@ export const useMapViewStore = defineStore('mapView', () => {
   const combatSourceDumps = computed(() => {
     if (workbench.combatState?.step !== 'combatSupply') return []
     const picked = workbench.combatSupplyDumpIds
+    const multi = workbench.combatSupplyDumpPicks
     return workbench.combatSupplyDumps.flatMap((entry) =>
       entry.dumps.map((dump) => ({
         hex: dump.hex,
         label: `${dump.t}T`,
-        selected: picked[entry.side] === dump.id,
+        selected:
+          multi[entry.side].includes(dump.id) ||
+          (multi[entry.side].length === 0 && picked[entry.side] === dump.id),
         id: dump.id,
         side: entry.side,
       })),

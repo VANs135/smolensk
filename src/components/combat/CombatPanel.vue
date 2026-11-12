@@ -55,15 +55,20 @@ function nameOf(unitId: string): string {
 /**
  * 12.4：某方已声明的战斗补给来源（没声明＝null）
  *
- * 声明由地图点击（`pickCombatSupplyDump`）写入；这里只把它**显示出来**并给一个「清除」按钮
- * （修前 store 里的 `clearCombatSupplyDump` 没人调用 ⇒ 声明后无法改回手填 T）。
+ * 声明由地图点击（`pickCombatSupplyDump`）写入；原文未要求同源，故可点选多座，
+ * 各单位落盘时各自取自己拖得到的那一座。这里只**显示**并给「清除」按钮。
  */
 function declaredDumpOf(side: 'attacker' | 'defender'): string | null {
-  const id = workbench.combatSupplyDumpIds[side]
-  if (id === null) return null
+  const single = workbench.combatSupplyDumpIds[side]
+  const picks = workbench.combatSupplyDumpPicks[side]
+  const ids = picks.length > 0 ? picks : single === null ? [] : [single]
+  if (ids.length === 0) return null
   const entry = workbench.combatSupplyDumps.find((item) => item.side === side)
-  const dump = entry?.dumps.find((item) => item.id === id)
-  return dump === undefined ? id : `${hexLabel(dump.hex)}（${dump.sp} SP / ${dump.t} T）`
+  const labels = ids.map((id) => {
+    const dump = entry?.dumps.find((item) => item.id === id)
+    return dump === undefined ? id : `${hexLabel(dump.hex)}（${dump.sp} SP / ${dump.t} T）`
+  })
+  return labels.join(' + ')
 }
 
 /* ── 9.4b 逐堆叠地形：`kind|terrain` 的字符串编解码（select 只能绑一个值） ── */
