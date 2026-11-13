@@ -819,6 +819,12 @@ export const useMapViewStore = defineStore('mapView', () => {
       return '进击移动：点己方算子＝显示可移动范围（11.0a）；点紫环敌方格＝突袭（8.1a）'
     if (workbench.segmentStep?.id === 'exploitation.barrage')
       return '进击轰炸：点敌方格定目标；右键敌方格选「轰炸」，会话框里宣布（11.0d）'
+    /*
+     * A 飞机整备：本段**没有移动/射击**，通用那句「点亮可移动范围」在这里是错的；
+     * 唯一入口是"点本方空军基地格 → 小窗整备（15.1）→ 勾机 → 点高亮补给站付 1T"。
+     */
+    if (workbench.segmentStep?.id === 'aircraftRefit.refit')
+      return '飞机整备：点本方空军基地格 → 小窗「整备（15.1）」→ 勾机 → 点高亮补给站付 1T'
     // B35：不再看"工具"，看**本环节允不允许宣布战斗**（判据与闸门同源）
     if (workbench.combatPickActive)
       return '点己方算子加入攻方（9.1b），点敌方格选定防御格，会话框里走 9.2 九步'
@@ -1805,9 +1811,12 @@ export const useMapViewStore = defineStore('mapView', () => {
     const kind = unit.noncombatKind
     if (kind === null || kind === undefined) return []
     return facilityActionKeys(kind).filter((key) =>
-      key === 'move.loadUnload'
-        ? workbench.transportHandlingReadyAt(instanceId)
-        : workbench.actionAllowedNow(key),
+      key === 'air.refit'
+        ? // 15.1C / 14.2a / 15.1B：只有"这一格真能整备"才摆入口（不可用项根本不出现）
+          workbench.refitStartBases.some((base) => base.id === instanceId)
+        : key === 'move.loadUnload'
+          ? workbench.transportHandlingReadyAt(instanceId)
+          : workbench.actionAllowedNow(key),
     )
   }
 

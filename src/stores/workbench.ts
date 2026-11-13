@@ -99,6 +99,8 @@ import {
   DIRECT_DRAW_RANGE_MP,
   SP_TO_T,
   airBaseBuildCostSp,
+  // 15.1B / 15.2B：整备容量（等级×2、简易机场 1）——勾机阶段就按它收口
+  refitCapacity,
   airBoxEdgeColumn,
   airBoxRangeHexes,
   airDistanceToOffMapBox,
@@ -5695,6 +5697,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 已勾选要整备的飞机实例 id */
   const refitSelectedIds = computed<string[]>(() => airInputs.value.refitAircraftIds)
 
+  /**
+   * 15.1B / 15.2B / 14.2a：某基地**本次最多能整备几架**
+   *
+   * `min(容量, 激活堆叠余额)`：容量＝等级×2（简易机场 1）；整备会把非激活转激活，
+   * 故还须给 14.2a 的 `4 + 等级` 留出位置。0 ⇒ 这个基地此刻整备不了。
+   */
+  function refitSelectLimitAt(baseId: string): number {
+    const base = airBases.value.find((item) => item.id === baseId)
+    if (base === undefined) return 0
+    const capacity = refitCapacity({
+      isAirstrip: base.isAirstrip === true,
+      level: base.level,
+    }).capacity
+    const room = activeStackingLimitOf(base) - activeAircraftInBase(allAirViews.value, base.hex)
+    return Math.max(0, Math.min(capacity, room))
+  }
+
+  /** 当前整备交互最多能勾几架（勾机阶段就按它收口，别等付款才被引擎拒） */
+  const refitSelectLimit = computed<number>(() =>
+    refitTargetBaseId.value === null ? 0 : refitSelectLimitAt(refitTargetBaseId.value),
+  )
+
   /** 该基地可付款的补给站（15.1B：1T；地图上金黄方框高亮，点它即付款并结算） */
   const refitPayDumps = computed<readonly SpDump[]>(() =>
     refitTargetBaseId.value === null ? [] : airRefitPayDumps.value(refitTargetBaseId.value),
@@ -5849,7 +5873,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 条 4：**可开整备的基地**（15.1 / 15.1B）
    *
-   * 判据：**当前在 A 整备段** ∧ 本方基地 ∧ 本阶段尚未整备过 ∧ 格内有非激活飞机 ∧ 能拖到补给（1T）。
+   * 判据：**当前在 A 整备段** ∧ 本方基地 ∧ 本阶段尚未整备过 ∧ 格内有非激活飞机 ∧ 能拖到补给（1T）
+   *       ∧ **不在未抵消的敌方 ZOC 内**（15.1C）∧ **激活堆叠还有余额**（14.2a）。
+   * 后两条修前只在引擎的 `planBaseRefit` 里判 ⇒ 基地照样高亮/出整备入口，玩家勾完机、
+   * 付完款才被拒（回执还只在日志里）——按"不可用项不出现"的口径收在这里。
    * 提交入口 `beginRefitNow` 收的是**基地 id** ⇒ 合法动作视图的候选也从这里取（P0-02c）。
    * 「整备完消失」自动成立：整备后该基地进 `refitDoneBaseIds`、飞机转激活 ⇒ 两个条件都不再成立。
    */
@@ -5857,7 +5884,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (phase.value !== 'aircraftRefit') return []
     return ownAirBases.value
       .filter((base) => !refitDoneBaseIds.value.includes(base.id))
+      .filter((base) => base.inUnnegatedEnemyZoc !== true)
       .filter((base) => airInactiveAtBase.value(base.id).length > 0)
+      .filter((base) => refitSelectLimitAt(base.id) > 0)
       .filter((base) => airRefitPayDumps.value(base.id).length > 0)
   })
 
@@ -19607,8 +19636,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       return false
     }
+    if (base.inUnnegatedEnemyZoc === true) {
+      pushLog('warning', `${hexLabel(base.hex)} 在未抵消的敌方 ZOC 内，不能整备（15.1C）`, '15.1C')
+      return false
+    }
     if (airInactiveAtBase.value(baseId).length === 0) {
       pushLog('warning', `${hexLabel(base.hex)} 没有非激活飞机可整备（15.1B）`, '15.1B')
+      return false
+    }
+    if (refitSelectLimitAt(baseId) <= 0) {
+      pushLog(
+        'warning',
+        `${hexLabel(base.hex)} 激活堆叠已满（14.2a：上限 4 + 等级），没有整备名额`,
+        '14.2a',
+      )
       return false
     }
     refitTargetBaseId.value = baseId
@@ -19634,6 +19675,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', '请先勾选要整备的飞机（15.1B）', '15.1B')
       return false
     }
+    if (airInputs.value.refitAircraftIds.length > refitSelectLimit.value) {
+      pushLog(
+        'warning',
+        `勾选 ${airInputs.value.refitAircraftIds.length} 架超过整备上限 ${refitSelectLimit.value} 架（15.1B / 14.2a）`,
+        '15.1B',
+      )
+      return false
+    }
     if (refitPayDumps.value.length === 0) {
       pushLog('warning', `${hexLabel(base.hex)} 周围没有能付款的补给站（12.3a / 15.1B）`, '15.1B')
       return false
@@ -19647,9 +19696,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** 勾选 / 取消勾选一架要整备的飞机（15.1B） */
+  /** 勾选 / 取消勾选一架要整备的飞机（15.1B；勾机阶段就按容量与 14.2a 堆叠余额收口） */
   function toggleRefitAircraft(instanceId: string): void {
     const current = airInputs.value.refitAircraftIds
+    if (!current.includes(instanceId) && current.length >= refitSelectLimit.value) {
+      pushLog(
+        'warning',
+        `整备最多 ${refitSelectLimit.value} 架（15.1B：等级×2 / 简易机场 1；14.2a 激活堆叠）`,
+        '15.1B',
+      )
+      return
+    }
     const next = current.includes(instanceId)
       ? current.filter((id) => id !== instanceId)
       : [...current, instanceId]
@@ -28351,6 +28408,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     refitStartBases,
     refitAirbaseHexes,
     refitSelectedIds,
+    refitSelectLimit,
     refitPayDumps,
     refitStage,
     // 14.11 转场

@@ -13,6 +13,8 @@ import {
   useWorkbenchStore,
 } from '@/stores'
 
+import { fighterRecord, placeAir } from '../flows/sop-harness'
+
 /**
  * 用户 2026-10-25：**「不同环节每个单位\设施能做的事情不一样，比如移动环节点击补给站可以销毁，
  * 其它时候点击补给站都是单位指定消耗时有用，单点补给站能不能有操作得看规则书的规定」**
@@ -94,6 +96,10 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     const { workbench, mapView } = s
     place(workbench, 'sp', 'sp-1')
     place(workbench, 'air_base', 'base-1')
+    // 15.1 要真能整备：格内有非激活机 + 能拖到 1T（12.3a），否则入口按口径根本不出现
+    workbench.setAirActive(true)
+    placeAir(workbench, fighterRecord('axis'), HEX, 'axis', 'air-a', 'inactive')
+    workbench.spDumps.push({ id: 'd-base', hex: { ...HEX }, side: 'axis', sp: 1, t: 0 })
     enter(workbench, 'aircraftRefit', 'aircraftRefit.refit')
     expect(mapView.unitActionAvailableAt('sp-1')).toBe(false)
     expect(mapView.unitActionAvailableAt('base-1')).toBe(true)
@@ -196,6 +202,10 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
   it('★ 操作菜单：A 段基地只剩「整备」一项（15.1 在 A 段）', () => {
     const { workbench, mapView } = s
     place(workbench, 'air_base', 'base-1')
+    // 可整备判据（15.1B/15.1C/14.2a/12.3a）全满足时才摆这一项
+    workbench.setAirActive(true)
+    placeAir(workbench, fighterRecord('axis'), HEX, 'axis', 'air-a', 'inactive')
+    workbench.spDumps.push({ id: 'd-base', hex: { ...HEX }, side: 'axis', sp: 1, t: 0 })
     enter(workbench, 'aircraftRefit', 'aircraftRefit.refit')
     const options = mapView.unitActionOptions('base-1')
     expect(options.map((item) => item.key)).toEqual(['air.refit'])
@@ -243,6 +253,9 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     for (const [id, kind] of Object.entries(KINDS)) place(workbench, kind, id)
     // 2026-11-09 用户口径：13.2f 装卸**只列真正可用的项** ⇒ 给运输点同格一座有货的站
     workbench.spDumps.push({ id: 'd-menu', hex: { ...HEX }, side: 'axis', sp: 4, t: 0 })
+    // A 段整备同理：要有非激活机（15.1B），同一座站兼作付款来源（12.3a）
+    workbench.setAirActive(true)
+    placeAir(workbench, fighterRecord('axis'), HEX, 'axis', 'air-menu', 'inactive')
 
     /** 某环节下，各设施类型的菜单（`only` 段名），`—` ＝无操作 */
     const menuOf = (step: { phase: ConsolePhase; id: string }) => {

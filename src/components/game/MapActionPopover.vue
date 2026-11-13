@@ -205,6 +205,18 @@ const refitDoneHere = computed(
     workbench.refitDoneBases.some((base) => base.id === baseAtHex.value?.id),
 )
 
+/**
+ * 这一格的基地**此刻真能整备**（15.1B 容量 / 15.1C ZOC / 14.2a 堆叠 / 12.3a 付款来源）
+ *
+ * 判据只有一处：`workbench.refitStartBases`。修前只要在 A 段就摆「整备」按钮，
+ * 点了才被 `beginRefitNow` 拒（回执只在日志里）——等于给了一个走不通的入口。
+ */
+const refitAllowedHere = computed(
+  () =>
+    baseAtHex.value !== null &&
+    workbench.refitStartBases.some((base) => base.id === baseAtHex.value?.id),
+)
+
 /** 这一格是否正是「正在转场」的出发基地（14.11） */
 const transferHere = computed(
   () => baseAtHex.value !== null && workbench.transferBase?.id === baseAtHex.value.id,
@@ -455,7 +467,11 @@ function sideName(side: string): string {
       <!-- 本方飞机（14.1a：停在其空军基地格） -->
       <!-- 15.1 整备：点机场的「整备」按钮 → 勾选飞机 → 点地图上高亮的补给付款 -->
       <section
-        v-if="baseAtHex !== null && workbench.actionAllowedNow('air.refit')"
+        v-if="
+          baseAtHex !== null &&
+          (refitHere || refitDoneHere || refitAllowedHere) &&
+          workbench.actionAllowedNow('air.refit')
+        "
         class="block block--pick"
       >
         <h4 class="block__title">整备（15.1）· {{ hexLabel(baseAtHex.hex) }}</h4>
@@ -490,7 +506,10 @@ function sideName(side: string): string {
                 </label>
               </li>
             </ul>
-            <p class="ok num">已选 {{ workbench.refitSelectedIds.length }} 架</p>
+            <p class="ok num">
+              已选 {{ workbench.refitSelectedIds.length }} /
+              {{ workbench.refitSelectLimit }} 架（15.1B 容量）
+            </p>
             <BaseButton
               variant="primary"
               size="sm"

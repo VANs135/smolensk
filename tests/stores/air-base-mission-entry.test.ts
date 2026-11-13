@@ -172,7 +172,9 @@ describe('BUG 2：移动环节从空军基地这一侧就能发起低空扫射�
 
   it('★ 不可发起时入口不出：A 段整备只给「整备」、F 段战斗连菜单都不开', () => {
     const { workbench, mapView } = newStores()
-    setupBaseAndTarget(workbench)
+    // A 段整备要真能整备（非激活机 15.1B + 可拖 1T 12.3a），否则按"不可用项不出现"连整备项都不摆
+    setupBaseAndTarget(workbench, 'inactive')
+    workbench.spDumps.push({ id: 'd-a', hex: { ...CORE_HEX }, side: 'axis', sp: 1, t: 0 })
     enter(workbench, 'aircraftRefit', 'aircraftRefit.refit')
     expect(mapView.unitActionOptions('base-1').map((item) => item.only)).toEqual(['refit'])
     enter(workbench, 'combat', 'combat.combat')
