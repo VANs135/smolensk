@@ -138,6 +138,53 @@ describe('U1-c：战斗窗减负', () => {
     expect(panel).toContain('<RuleTip rule="9.5 / 12.4">')
   })
 
+  describe('R5 守卫：R1–R4 的删屏 / 合行 / 单入口 / 结束', () => {
+    it('R4：发起屏整块已删，面板只在战斗开始后渲染', () => {
+      const panel = combatPanel()
+      expect(panel).not.toContain('item="combat:declare"')
+      expect(panel).not.toContain('清除选择')
+      expect(panel).not.toContain('v-if="state === null"')
+      expect(panel).toContain('v-if="state !== null"')
+    })
+
+    it('B5：来源合成一行，未声明侧只留短横（不再并排两个「未声明」）', () => {
+      const panel = combatPanel()
+      expect(panel).toContain("攻方来源 {{ declaredDumpOf('attacker') ?? '—' }} ｜ 守方来源")
+      expect(panel).not.toContain("declaredDumpOf('attacker') ?? '未声明'")
+      expect(panel).not.toContain("declaredDumpOf('defender') ?? '未声明'")
+      expect(panel).not.toContain('<BaseTag kind="info"> 攻方来源')
+      expect(panel).not.toContain('<BaseTag kind="info"> 守方来源')
+    })
+
+    it('B7：「优先用储备」是条件行（v-if），不是置灰项', () => {
+      const panel = combatPanel()
+      expect(panel).toContain('v-if="workbench.combatDefenderStocksApplicable"')
+      expect(panel).toMatch(
+        /v-if="workbench\.combatDefenderStocksApplicable"[\s\S]{0,160}优先用储备/,
+      )
+      // 守方支付仍是唯一入口：只有一个 defenderProvides 复选框
+      expect(occurrences(panel, 'workbench.combatInputs.defenderProvides')).toBe(1)
+    })
+
+    it('B9：9.5b 取消参战只留地图一个入口（面板阵列不带 @pick）', () => {
+      const panel = combatPanel()
+      const supply = panel.slice(
+        panel.indexOf('item="combat:supply"'),
+        panel.indexOf('item="combat:ar:attacker"'),
+      )
+      expect(supply).toContain('<CounterPicker')
+      expect(supply).not.toContain('@pick')
+      expect(supply).not.toContain('点一枚即取消它的参战')
+    })
+
+    it('R-4：结束不单开屏——战果复核与「清理并关闭」只在验证页出现', () => {
+      const panel = combatPanel()
+      expect(panel).toContain('props.stepwise && (workbench.combatSummary !== null')
+      expect(panel).toContain('v-if="props.stepwise && state.finished"')
+      expect(panel).not.toContain('v-if="state.finished"')
+    })
+  })
+
   it('折扣勾选用极短标签，不再挂解释段落', () => {
     const panel = combatPanel()
     expect(panel).toContain('守方支付')

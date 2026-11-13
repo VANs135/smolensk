@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -339,5 +341,17 @@ describe('12.10a：部队储备只在图上付不清时出现', () => {
     const reachable = store.combatSupplyDumps.find((item) => item.side === 'defender')?.dumps ?? []
     expect(reachable).toEqual([])
     expect(store.combatDefenderStocksApplicable).toBe(true)
+  })
+
+  it('B7 守卫：判据只看全部可达来源，不看已点选那座站的 T', () => {
+    const source = readFileSync('src/stores/workbench.ts', 'utf8')
+    const start = source.indexOf('const combatDefenderStocksApplicable')
+    const end = source.indexOf('\n  })', start)
+    expect(start).toBeGreaterThan(0)
+    expect(end).toBeGreaterThan(start)
+    const block = source.slice(start, end)
+    expect(block).toContain('combatSupplyDumps')
+    expect(block).toContain('carrierIsOrganicTruck')
+    expect(block).not.toContain('defenderAvailableT')
   })
 })

@@ -4,8 +4,20 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { mapLayers, scenarios } from '@/data'
 import type { HexRef } from '@/data'
 import { hexesWithin } from '@/engine/hex-geometry'
-import { STACKING_LIMIT_RE, findUnitRecord, resolveModeStats } from '@/engine/rules'
-import { toConsoleUnit, unitChoices, useSetupStore, useWorkbenchStore } from '@/stores'
+import {
+  STACKING_LIMIT_RE,
+  findUnitRecord,
+  resolveModeStats,
+  scenarioTurnRange,
+} from '@/engine/rules'
+import {
+  availableMaOf,
+  toConsoleUnit,
+  unitChoices,
+  useGameSessionStore,
+  useSetupStore,
+  useWorkbenchStore,
+} from '@/stores'
 
 /**
  * ⑭/⑮/⑯ 的行为用例（沿用 3.3d 的做法：先写期望，再按原文接线）
@@ -14,14 +26,18 @@ import { toConsoleUnit, unitChoices, useSetupStore, useWorkbenchStore } from '@/
  * | --- | --- | --- | --- |
  * | ⑭ | IV-F / IV-I | 初设放置拒绝超堆叠、拒绝不可进入格 | **均已接线**：IV-F 注入 `existingRe`（4.8）；IV-I 逐棋子按**移动面**机动类型（3.1a）判地形禁止（6.2d），见 `factsFor.canEnter` |
  * | ⑮ | IV-J | 初设新建单位一律未加注燃料 | **已覆盖**：`toConsoleUnit` 默认 `fuelled: false`（12.5a，2026-09-16 用户裁定）⇒ 本文件用活动用例锁住该行为，不再作为待批项 |
- * | ⑯ | 剧本 1 首回合 | 苏方地面单位以 1/2 MA 移动 | **取整口径已裁定**（4.1 + 6.1h：保留小数，MA 5 ⇒ 2.5，见 `docs/2026-11-05-取整规则对照表.md`）；但数据字段运行期无消费方，接线未获授权 ⇒ 行为用例仍 `it.skip`，另用活动用例锁口径 |
+ * | ⑯ | 剧本 1 首回合 | 苏方地面单位以 1/2 MA 移动 | **已接线并锁定**：`sovietFirstTurnMaFactor` 注入 `moveContext`，`availableMa` 按 `availableMa × scenarioMaFactor` 折算（6.1h 不取整）；本文件用活动用例锁住该行为 |
  *
- * ⑭ 已接线；⑯ 的行为用例仍待接线授权（见 `docs/2026-11-05-待审批事项汇总.md`）。
+ * ⑭/⑮/⑯ 均已接线，不再有待批项。
  */
 
 const newStores = () => {
   setActivePinia(createPinia())
-  return { setup: useSetupStore(), workbench: useWorkbenchStore() }
+  return {
+    setup: useSetupStore(),
+    workbench: useWorkbenchStore(),
+    session: useGameSessionStore(),
+  }
 }
 
 /** 地图上首个沼泽格（TEC：track/truck 为 P，leg 可进） */
@@ -160,9 +176,37 @@ describe('⑯ 取整口径（已裁定：4.1 + 6.1h 保留小数）', () => {
     expect(r.ma).toBe(2.5)
   })
 
-  it.skip('苏方首回合 1/2 MA 接线（运行期无消费方；接线未获授权）', () => {
-    // 口径已定（见 docs/2026-11-05-取整规则对照表.md §4），但剧本字段尚无消费点：
-    // 启用前须先获批接线；本用例故意留空，避免把猜测写成期望。
+  it('苏方首回合 1/2 MA 接线（availableMa × scenarioMaFactor）', () => {
+    const { session, workbench } = newStores()
+    expect(session.setScenarioId('1')).toBe(true)
+    const firstTurn = scenarioTurnRange('1').firstTurn
+    workbench.turn = firstTurn
+
+    const record = unitChoices('soviet').find(
+      (item) => item.classes?.movementClass === 'leg' && item.attackCapable === true,
+    )
+    if (record === undefined) throw new Error('单位库中没有满足条件的苏军 leg 记录')
+    const soviet = toConsoleUnit({
+      record,
+      instanceId: 'half-ma-1',
+      hex: SWAMP_HEX ?? { col: 57, row: 35 },
+      side: 'soviet',
+      face: 'combat',
+    })
+    workbench.units.push(soviet)
+
+    // 剧本 1 首回合 ⇒ 系数 0.5，额度按引擎同一口径折算（6.1h 不取整）
+    expect(workbench.sovietFirstTurnMaFactor(soviet)).toBe(0.5)
+    expect(availableMaOf(soviet, 'movement', workbench.sovietFirstTurnMaFactor(soviet))).toBe(
+      soviet.raw.ma * 0.5,
+    )
+
+    // 只限首回合：回合前进后恢复 1
+    workbench.turn = firstTurn + 1
+    expect(workbench.sovietFirstTurnMaFactor(soviet)).toBe(1)
+    expect(availableMaOf(soviet, 'movement', workbench.sovietFirstTurnMaFactor(soviet))).toBe(
+      soviet.raw.ma,
+    )
   })
 })
 

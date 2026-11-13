@@ -430,6 +430,14 @@ describe('B14c：战后推进阵列（9.12g-A / 9.12b）', () => {
 describe('B14c：战斗面板的替换（源码守卫）', () => {
   const panel = readFileSync('src/components/combat/CombatPanel.vue', 'utf8')
 
+  it('B9：9.5b 减员的唯一入口是地图，面板阵列没有第二个入口', () => {
+    const mapView = readFileSync('src/stores/map-view.ts', 'utf8')
+    const workbench = readFileSync('src/stores/workbench.ts', 'utf8')
+    expect(mapView).toContain('workbench.syncCombatParticipants(hex, stackSelection.value)')
+    expect(workbench).toContain('toggleCombatSupplyAttacker(unit.instanceId)')
+    expect(panel).not.toContain('toggleCombatSupplyAttacker')
+  })
+
   it('三处「选算子」都改走 `CounterPicker`，旧的复选框 / 下拉已删', () => {
     expect(panel.match(/<CounterPicker/g)?.length ?? 0).toBeGreaterThanOrEqual(3)
     expect(panel).not.toContain('v-for="unit in attackerList"')
