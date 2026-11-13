@@ -83,20 +83,6 @@ export function fillSetup(ctx: ReturnType<typeof fresh>) {
 /** 测试玩家明确选择不供养，并按单位顺序分配已判损失；生产程序不替玩家选择。 */
 export function answerBoardChoices(ctx: ReturnType<typeof fresh>) {
   const { w } = ctx
-  /*
-   * 4.8a：超堆叠义务由「测试玩家」按该格 RE 从小到大出炉，刚好回到上限即停。
-   * 这是玩家侧的选择（不是程序自动判），与"选够才能推进、无忽略旁路"同口径；
-   * 自动初设的贪心落点会把剧本 3/4 的 34.17 堆到 10.5 RE，测试里按规则结清后继续。
-   */
-  if (w.overstackDuties.length > 0) {
-    for (const duty of w.overstackDuties) {
-      for (const unit of [...duty.units].sort((a, b) => a.re - b.re)) {
-        if ((w.overstackRemainingRe[duty.key] ?? duty.combatRe) <= 10) break
-        w.toggleOverstackPick(duty.key, unit.instanceId)
-      }
-    }
-    expect(w.destroyOverstackPicksNow(), JSON.stringify(w.log[0])).toBe(true)
-  }
   if (w.phase === 'movement' && w.actionAllowedNow('move.modeChange')) {
     for (const unit of w.units.filter(
       (u) => u.side === w.activeSide && u.mode.mode === 'reserve',

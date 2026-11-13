@@ -40,6 +40,19 @@ describe('整局主线回归：开局、自动结算、玩家义务和持久化'
       expect(replay.ok, replay.detail).toBe(true)
     }, 60000)
   }
+  it.each(['3', '4'])(
+    '剧本 %s：自动初设完成即满足 4.8a（没有任何一格 >10 RE，首回合不触发义务）',
+    (scenarioId) => {
+      const ctx = fresh()
+      expect(ctx.setup.enterSetup(scenarioId)).toBe(true)
+      fillSetup(ctx)
+      // 修前剧本 3/4 的 34.17 会到 10.5 RE：开局即列出一条 4.8a 义务
+      expect(ctx.w.overstackDuties).toEqual([])
+      expect(ctx.w.currentAdvanceBlock?.rule).not.toBe('4.8a')
+      expect(ctx.w.log.filter((entry) => entry.rule === '4.8a')).toHaveLength(0)
+    },
+    120000,
+  )
   it('剧本 1：正式流程在提前决胜生效日终止，重开重新生成初设', async () => {
     const ctx = fresh()
     ctx.setup.enterSetup('1')

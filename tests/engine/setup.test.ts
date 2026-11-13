@@ -11,6 +11,7 @@ import {
   STACKING_RULE,
   WITHIN_RULE,
   airSetupPolicyOf,
+  findUnitRecord,
   isSetupWiggleMotEntry,
   normalizeAircraftKey,
   parseSetupRadius,
@@ -672,5 +673,56 @@ describe('W7 C14：初设索引的数据自检', () => {
     expect(LOAD_RULE).toBe('IV-C')
     expect(SP_OWNERSHIP_RULE).toBe('12.1d')
     expect(PANZER_GROUP_SP_RULE).toBe('3.4b')
+  })
+})
+
+/**
+ * D2（2026-11-14）：自动初设的**堆叠上限**（IV-F / 4.8a）
+ *
+ * 剧本 3/4 的 34.17 同时列了固定格（46 军 HQ、3×Werfer）与带 † 的 17.Pz、29.Mtr。
+ * 修前按条目录入顺序把 † 编队也堆到「所列首格」⇒ 10.5 RE，开局即触发 4.8a。
+ * 现在固定格先摆、† 编队按 ±N 候选取第一个 ≤10 RE 的格。
+ */
+describe('D2：自动初设不得超过 10 RE（剧本 3/4 的 † 编队分摊）', () => {
+  /** 自动落位计划按算子库 reSize 合计到格（飞机/死亡堆不占地） */
+  function autoSetupReByHex(scenarioId: string): Map<string, number> {
+    const outcome = planAutoSetup({ scenarioId })
+    if (!outcome.ok) throw new Error(outcome.reason)
+    const map = new Map<string, number>()
+    for (const piece of outcome.data.pieces) {
+      if (piece.hex === null || piece.toDeadPile) continue
+      if (piece.unitId === null || piece.unitIdKind === 'aircraft') continue
+      const re = findUnitRecord(piece.unitId)?.reSize ?? 0
+      if (re <= 0) continue
+      const key = `${piece.hex.col}.${piece.hex.row}`
+      map.set(key, (map.get(key) ?? 0) + re)
+    }
+    return map
+  }
+
+  it.each(['3', '4'])('剧本 %s：自动落位后没有任何一格 >10 RE', (scenarioId) => {
+    const byHex = autoSetupReByHex(scenarioId)
+    const over = [...byHex.entries()].filter(([, re]) => re > 10)
+    expect(over).toEqual([])
+    // 34.17：固定格 46 军 HQ + 3×Werfer 与 † 编队共享点
+    expect(byHex.get('34.17') ?? 0).toBeLessThanOrEqual(10)
+  })
+
+  it('剧本 3：† 的 29.Mtr 不再挤在 34.17，而是整体分到相邻的一格', () => {
+    const target = setupEntryViews('3').find(
+      (entry) => entry.placement === 'fixedTolerant' && /29\s*Mtr/i.test(entry.name ?? entry.raw),
+    )!
+    expect(target.placement).toBe('fixedTolerant')
+    const outcome = planAutoSetup({ scenarioId: '3' })
+    if (!outcome.ok) throw new Error(outcome.reason)
+    const hexes = [
+      ...new Set(
+        outcome.data.pieces
+          .filter((piece) => piece.entryIndex === target.index && piece.hex !== null)
+          .map((piece) => `${piece.hex!.col}.${piece.hex!.row}`),
+      ),
+    ]
+    expect(hexes).not.toContain('34.17')
+    expect(hexes).toHaveLength(1)
   })
 })

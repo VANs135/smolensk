@@ -763,7 +763,30 @@ export function planAutoSetup(input: {
 
   if (views.length === 0) gaps.push(source.detail)
 
-  for (const entry of views) {
+  /*
+   * D2（2026-11-14）：**固定格先摆，带 † 的编队后摆并按 10 RE 上限分摊**。
+   *
+   * 剧本 3/4 的 34.17 同时列了固定格条目（46 军 HQ、3×Werfer）与带 † 的 17.Pz、29.Mtr。
+   * 修前按条目录入顺序把 † 编队也直接堆到「所列首格」⇒ 开局 10.5 RE，4.8a 在首回合就被触发。
+   * 现在：不能动的 `fixed` / `multiHex` / `deadPile` 保持原顺序先落，`fixedTolerant` 放到最后，
+   * 在 IV-A 的 ±N 候选格里挑第一个放得下（≤10 RE）的格；候选全放不下时记数据缺口并回退到首格。
+   */
+  const orderedViews = [
+    ...views.filter((entry) => entry.placement !== 'fixedTolerant'),
+    ...views.filter((entry) => entry.placement === 'fixedTolerant'),
+  ]
+  const usedReByHex = new Map<string, number>()
+  const hexKeyOf = (hex: HexRef): string => `${hex.col}.${hex.row}`
+  const reAtHex = (hex: HexRef): number => {
+    const key = hexKeyOf(hex)
+    const cached = usedReByHex.get(key)
+    if (cached !== undefined) return cached
+    const seeded = facts.existingRe?.(hex) ?? 0
+    usedReByHex.set(key, seeded)
+    return seeded
+  }
+
+  for (const entry of orderedViews) {
     // ① 放置方式不认识 ⇒ 记缺口（不猜）
     if (entry.placement === 'unknown') {
       gaps.push(`条目「${entry.raw}」的放置方式「${entry.placementText}」未识别 ⇒ 须人工判读`)
@@ -808,11 +831,30 @@ export function planAutoSetup(input: {
 
     // 自动落位的目标格：`多点位（每处各一份）` ⇒ 所列每格各一份；其余 ⇒ 所列首格
     const toDeadPile = entry.placement === 'deadPile'
-    const targets = toDeadPile
-      ? [null]
-      : entry.placement === 'multiHex'
-        ? [...entry.anchors]
-        : entry.anchors.slice(0, 1)
+    let targets: (HexRef | null)[]
+    if (toDeadPile) {
+      targets = [null]
+    } else if (entry.placement === 'multiHex') {
+      targets = [...entry.anchors]
+    } else if (entry.placement === 'fixedTolerant') {
+      /*
+       * IV-A †：所列位置 ±N 格内任选。按「固定格先摆」之后的剩余空间，
+       * 取候选顺序里第一个仍在 10 RE 以内的格（候选已按离锚格远近稳定排序）。
+       */
+      const need = reOfEntry(entry) * Math.max(entry.count, 1)
+      const anchor = entry.anchors[0] ?? null
+      const fitting = setupCandidates(entry, facts).find((hex) =>
+        isWithinStackingLimit(reAtHex(hex) + need),
+      )
+      if (fitting === undefined && anchor !== null) {
+        gaps.push(
+          `条目「${entry.raw}」在 † 容差内没有能容纳 ${need} RE 的格（上限 10 RE）⇒ 仍按所列首格 ${setupHexLabel(anchor)} 落位，须人工核对`,
+        )
+      }
+      targets = [fitting ?? anchor]
+    } else {
+      targets = entry.anchors.slice(0, 1)
+    }
     const resolvedTargets = targets.filter((hex) => hex !== null || toDeadPile)
     if (resolvedTargets.length === 0) {
       gaps.push(
@@ -896,6 +938,10 @@ export function planAutoSetup(input: {
             rule: entry.rule,
           })
         }
+      }
+      // 供后续 † 条目判剩余空间（IV-F 10 RE）；死亡堆不占地
+      if (hex !== null && !toDeadPile) {
+        usedReByHex.set(hexKeyOf(hex), reAtHex(hex) + reOfEntry(entry) * copies)
       }
     }
   }
