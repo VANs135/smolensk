@@ -461,6 +461,18 @@ export interface GaugeConversionInput {
    * 「例外：如果用于铁路移动的格刚刚在当前阶段内进行了轨距转换，则不能这样做。**不能接力！**」
    */
   usedNewlyConvertedRailThisPhase: boolean
+  /**
+   * 专规 4.1c（可选）RR Repair Restriction：早期路线限制
+   *
+   * 启用时由调用方给出「本单位的指定走廊格清单」；目标格不在清单内即拒。
+   * **不传＝不限制**（未启用时的原行为）。
+   */
+  earlyRouteRestriction?: {
+    /** 允许换轨的格（`col.row`；含两端） */
+    allowedHexKeys: readonly string[]
+    /** 拒绝时给玩家看的一句话（写明是哪条走廊） */
+    detail: string
+  }
   facts: Pick<RailFacts, 'hasRail' | 'inEnemyZoc' | 'isRailRepairUnit'>
 }
 
@@ -495,6 +507,16 @@ export function validateGaugeConversion(
   if (input.phase !== 'movement') return fail('13.3g', 'conversionOnlyInMovementPhase')
   if (!facts.hasRail(input.targetHex))
     return fail('13.3f', `targetHexHasNoRail:${hexText(input.targetHex)}`)
+  /*
+   * 专规 4.1c（可选）：「一支必须沿铁路赶到 Entry H 并把该线从地图边缘换轨到 Mogilev，
+   * 另一支……到 Orsha；抵达后才按该规则正常行动。」
+   * ⇒ 早期只允许在**本单位指定走廊**上换轨；未启用时调用方不传，本段不参与判定。
+   */
+  if (
+    input.earlyRouteRestriction !== undefined &&
+    !input.earlyRouteRestriction.allowedHexKeys.includes(hexText(input.targetHex))
+  )
+    return fail('4.1c', input.earlyRouteRestriction.detail)
   // 13.3f-A：敌方 ZOC 内不可转换，且**不可抵消**（无 4.5b 例外）
   if (facts.inEnemyZoc(input.targetHex, unit.side))
     return fail('13.3f', `enemyZocCannotConvert:${hexText(input.targetHex)}`)

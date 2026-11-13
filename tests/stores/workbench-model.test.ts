@@ -12,9 +12,11 @@ import {
   availableMaOf,
   buildLegalityRequest,
   buildMoveContext,
+  columnOneHexes,
   createRetreatFacts,
   defenseTerrainChoices,
   defaultDefenseTerrain,
+  earlyRailCorridors,
   effectiveMobilityOf,
   engineerCapableNow,
   faceFactorsOf,
@@ -839,5 +841,30 @@ describe('接线守卫：13.8a 的模式判据必须落到施工与 15.4 的组�
 
   it('13.8a：15.4 基地缩减的 operatingUnits 必须真的传 engineerCapable（此前恒缺）', () => {
     expect(text).toContain('engineerCapable: engineerCapableNow(unit)')
+  })
+})
+
+describe('专规 4.1c：早期换轨走廊与 01.xx 列入场区', () => {
+  it('两条走廊都能唯一解出，且端点分别是 Entry H/J 与 Mogilev/Orsha', () => {
+    const corridors = earlyRailCorridors()
+    expect(corridors).toHaveLength(2)
+    expect(corridors.every((item) => item.unresolved === null)).toBe(true)
+    expect(corridors.map((item) => item.label)).toEqual(['Entry H → Mogilev', 'Entry J → Orsha'])
+    for (const corridor of corridors) {
+      expect(corridor.objectiveHexKey).not.toBeNull()
+      // 走廊含两端：既含目标城市格，也含入口格
+      expect(corridor.hexKeys).toContain(corridor.objectiveHexKey)
+      expect(corridor.hexKeys.length).toBeGreaterThan(3)
+    }
+  })
+
+  it('「01.xx 列」＝col 1 的全部格（入口 H–K 所在列）', () => {
+    const hexes = columnOneHexes()
+    expect(hexes.length).toBeGreaterThan(0)
+    expect(hexes.every((hex) => hex.col === 1)).toBe(true)
+    // 按行号升序，落点解算取第一个才是确定性的
+    expect(hexes.map((hex) => hex.row)).toEqual(
+      [...hexes.map((hex) => hex.row)].sort((a, b) => a - b),
+    )
   })
 })

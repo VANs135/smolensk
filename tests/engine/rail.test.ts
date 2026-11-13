@@ -500,6 +500,35 @@ describe('13.3f / 13.3g 轨距转换', () => {
     ).toMatchObject({ ok: false, reason: `targetHexHasNoRail:${B.col}.${B.row}` })
   })
 
+  it('专规 4.1c（可选）：早期只能在指定走廊换轨；不传＝不限制', () => {
+    // 未启用（不传）：原行为，照常通过
+    expect(validateGaugeConversion(base)).toMatchObject({ ok: true })
+    // 启用且目标格在走廊上：通过
+    expect(
+      validateGaugeConversion({
+        ...base,
+        earlyRouteRestriction: {
+          allowedHexKeys: [`${B.col}.${B.row}`],
+          detail: '专规 4.1c：只能沿 Entry H → Mogilev 走廊换轨',
+        },
+      }),
+    ).toMatchObject({ ok: true })
+    // 启用且目标格不在走廊上：拒，且如实说明是哪条走廊
+    expect(
+      validateGaugeConversion({
+        ...base,
+        earlyRouteRestriction: {
+          allowedHexKeys: ['9.9'],
+          detail: '专规 4.1c：只能沿 Entry H → Mogilev 走廊换轨',
+        },
+      }),
+    ).toMatchObject({
+      ok: false,
+      rule: '4.1c',
+      reason: '专规 4.1c：只能沿 Entry H → Mogilev 走廊换轨',
+    })
+  })
+
   it('13.3f-A：敌方 ZOC 内不可转换轨距（无法被抵消）', () => {
     expect(
       validateGaugeConversion({

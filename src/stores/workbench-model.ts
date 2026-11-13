@@ -22,6 +22,7 @@ import {
   combatTerrainCandidates,
   combatHexsideTerrains,
   computeReachableHexes,
+  convertedRailRun,
   createMapFacts,
   createRailGraph,
   createTraceSupplyFacts,
@@ -2387,6 +2388,96 @@ export function railNeighborHexes(hex: HexRef): HexRef[] {
 
 /** 铁路邻接来源（`engine/rules/rail.ts#convertedRailRun` 的静态图层注入点） */
 export const railNeighborSource: RailNeighborSource = { railNeighbors: railNeighborHexes }
+
+/* ────────────────────── 专规 4.1c：两条早期换轨走廊 ────────────────────── */
+
+/** 专规 4.1c：一条早期换轨走廊（Entry H→Mogilev / Entry J→Orsha） */
+export interface EarlyRailCorridor {
+  /** 对应单位记录 id（`units-axis.json`） */
+  unitId: string
+  /** 走廊标签（给玩家看：`Entry H → Mogilev`） */
+  label: string
+  /** 目标城市格（`col.row`）；该格已换轨 ⇒ 本走廊解除限制 */
+  objectiveHexKey: string | null
+  /** 走廊上的铁路格（`col.row`，含两端） */
+  hexKeys: readonly string[]
+  /** 解不出唯一走廊的原因（非空时调用方**不做限制**，如实提示，不猜） */
+  unresolved: string | null
+}
+
+/** 4.1c 的两条走廊：单位记录 id →（入口字母, 目标城市） */
+const EARLY_RAIL_ROUTES = [
+  { unitId: 'ax-engineer-ge-i-2-rr-bn', entry: 'H', city: 'Mogilev' },
+  { unitId: 'ax-engineer-ge-ii-2-rr-bn', entry: 'J', city: 'Orsha' },
+] as const
+
+let earlyRailCorridorCache: readonly EarlyRailCorridor[] | null = null
+
+/** 城市名 → 格（`mapLayers.hexes` 的 `city.name`；找不到返回 null） */
+function cityHexByName(name: string): HexRef | null {
+  for (const record of mapLayers.hexes) {
+    const city = (record as { city?: { name?: string } }).city
+    if (city?.name === name) return { col: record.col, row: record.row }
+  }
+  return null
+}
+
+/**
+ * 专规 4.1c（可选）：两条早期换轨走廊 —— `Entry H → Mogilev`、`Entry J → Orsha`
+ *
+ * 原文（errata）：两个轴心 RR Repair「改为在 Any hexes in 01.xx row 入场，并受早期路线限制——
+ * 一支必须沿铁路赶到 Entry H 并把该线从地图边缘换轨到 Mogilev，另一支……到 Orsha；
+ * 抵达后才按该规则正常行动」。
+ *
+ * 走廊复用引擎 `convertedRailRun`（与专规 1.2 的初设换轨同源）在铁路邻接图上取**唯一最短路**：
+ * 断线或多条等长路径时不猜——`unresolved` 写明原因，调用方据此**不做限制**。
+ */
+export function earlyRailCorridors(): readonly EarlyRailCorridor[] {
+  if (earlyRailCorridorCache !== null) return earlyRailCorridorCache
+  earlyRailCorridorCache = EARLY_RAIL_ROUTES.map((route) => {
+    const objective = cityHexByName(route.city)
+    const label = `Entry ${route.entry} → ${route.city}`
+    if (objective === null)
+      return {
+        unitId: route.unitId,
+        label,
+        objectiveHexKey: null,
+        hexKeys: [],
+        unresolved: `地图上找不到 ${route.city} 的城市格`,
+      }
+    for (const from of mapConfig.entryHexes?.[route.entry] ?? []) {
+      const run = convertedRailRun(railNeighborSource, { from, to: objective })
+      if (run.ok)
+        return {
+          unitId: route.unitId,
+          label,
+          objectiveHexKey: hexLabel(objective),
+          hexKeys: run.data.hexes.map((hex) => hexLabel(hex)),
+          unresolved: null,
+        }
+    }
+    return {
+      unitId: route.unitId,
+      label,
+      objectiveHexKey: hexLabel(objective),
+      hexKeys: [],
+      unresolved: `铁路走廊不能从 Entry ${route.entry} 唯一解到 ${route.city}`,
+    }
+  })
+  return earlyRailCorridorCache
+}
+
+/**
+ * 专规 4.1c：「Any hexes in 01.xx row」＝地图**列 01** 的全部格（入口 H–K 都在 col 1）
+ *
+ * 按行号升序，供到达卡把这两个 RR 单位的入场区从「西边缘任意格」换成这一列。
+ */
+export function columnOneHexes(): HexRef[] {
+  return mapLayers.hexes
+    .filter((record) => record.col === 1)
+    .map((record) => ({ col: record.col, row: record.row }))
+    .sort((a, b) => a.row - b.row)
+}
 
 /**
  * 专规 1.2 剧本页的换轨走线原文 → 两个端点

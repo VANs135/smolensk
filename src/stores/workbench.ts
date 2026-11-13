@@ -559,6 +559,9 @@ import {
   type ActionGateQuery,
   type ActionKey,
   fuelMethodLabelOf,
+  // 专规 4.1c：两条早期换轨走廊与「01.xx 列」入场区
+  earlyRailCorridors,
+  columnOneHexes,
 } from './workbench-model'
 import { actionFamilyRowsAt } from './action-families'
 
@@ -4021,6 +4024,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   /**
+   * 专规 4.1c（可选）：轴心 RR 单位的早期换轨走廊限制
+   *
+   * 返回 null ＝ 不限制（未启用 / 不是这两个单位 / 目标城市已换轨 / 走廊解不出唯一线路）。
+   * 「抵达后才按该规则正常行动」⇒ 目标城市格进了换轨账本就解除。
+   */
+  function earlyRouteRestrictionOf(
+    unit: ConsoleUnit,
+    targetHex: HexRef,
+  ): { allowedHexKeys: readonly string[]; detail: string } | null {
+    if (!session.rule4On('rrRepairRestriction')) return null
+    if (unit.side !== 'axis' || !isRailRepairUnit(unit.instanceId)) return null
+    const corridor = earlyRailCorridors().find((item) => item.unitId === unit.unitId)
+    if (corridor === undefined || corridor.unresolved !== null || corridor.objectiveHexKey === null)
+      return null
+    if (convertedRailHexes.value.includes(corridor.objectiveHexKey)) return null
+    return {
+      allowedHexKeys: corridor.hexKeys,
+      detail: `专规 4.1c：早期只能沿 ${corridor.label} 走廊换轨，${hexLabel(targetHex)} 不在这条线上`,
+    }
+  }
+
+  /**
    * C9b：13.3f／13.3g 轨距转换（铁路修理单位**移动进入**铁路格即转换该格）
    *
    * - 转换不消耗 SP 也不消耗额外 MP（13.3f-B）；
@@ -4043,10 +4068,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `轨距转换：目标格格式应为「列.行」，收到「${targetHexText}」`, '13.3f')
       return false
     }
+    const early = earlyRouteRestrictionOf(unit, hex)
     const outcome = validateGaugeConversion({
       phase: phase.value as GamePhase,
       unit: { id: unit.instanceId, side: unit.side },
       targetHex: hex,
+      ...(early === null ? {} : { earlyRouteRestriction: early }),
       convertedThisPhase:
         gaugeConversionsThisPhase.value.find((item) => item.instanceId === instanceId)?.count ?? 0,
       mode: unit.mode.mode,
@@ -20627,6 +20654,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
+   * 专规 4.1c（可选）：两个轴心 RR 单位的入场区改为「01.xx 列任意格」
+   *
+   * 原文：RR Repair 单位「改为在 Any hexes in 01.xx row 入场」（入场卡写 West edge 是另一套机制）。
+   * 只对到达卡里那两个 RR Eng Bn 生效（按卡面原文识别）；未启用 ⇒ null（走原解算）。
+   */
+  function rrRepairEntryOverride(unit: ArrivalUnitDemand): readonly HexRef[] | null {
+    if (!session.rule4On('rrRepairRestriction')) return null
+    if (unit.side !== 'axis' || unit.placement.kind !== 'anyWestEdge') return null
+    if (!/RR (Eng|Repair)/i.test(unit.raw)) return null
+    return columnOneHexes().filter((hex) => !arrivalFacts.value.isBlocked(hex))
+  }
+
+  /**
    * 13.6：**每条到达需求的落点候选**（下标与 `arrivalPlan.units` 一致）
    *
    * ★ 用户 2026-10-25 实测 BUG①：修前"点地图选落点"给的是任意格，入场卡写 `Entry K` 的条目
@@ -20637,9 +20677,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const arrivalCandidates = computed<readonly (readonly HexRef[])[]>(() => {
     const plan = arrivalPlan.value
     if (plan === null) return []
-    return plan.units.map((unit) =>
-      arrivalPlacementCandidates(unit.placement, arrivalFacts.value).map((hex) => ({ ...hex })),
-    )
+    return plan.units.map((unit) => {
+      const override = rrRepairEntryOverride(unit)
+      if (override !== null) return override.map((hex) => ({ ...hex }))
+      return arrivalPlacementCandidates(unit.placement, arrivalFacts.value).map((hex) => ({
+        ...hex,
+      }))
+    })
   })
 
   /**
@@ -20673,6 +20717,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           rule: '13.6',
           detail: `裁判手改落点为 ${hexLabel(override)}`,
         }
+      const entryOverride = rrRepairEntryOverride(unit)
+      if (entryOverride !== null) {
+        const hex = entryOverride[0] ?? null
+        return hex === null
+          ? {
+              status: 'noHex' as const,
+              hex: null,
+              rule: '4.1c',
+              detail: '专规 4.1c：01.xx 列没有可入场的格',
+            }
+          : {
+              status: 'placed' as const,
+              hex,
+              rule: '4.1c',
+              detail: `专规 4.1c：RR Repair 改由 01.xx 列入场（${hexLabel(hex)}）`,
+            }
+      }
       return resolveArrivalPlacement(unit.placement, arrivalFacts.value)
     })
   })
