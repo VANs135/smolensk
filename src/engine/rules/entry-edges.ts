@@ -12,8 +12,9 @@ import type { HexRef, Side } from '@/data'
  *
  * ★ 专规 2.1 / 3.1 的**补给源**是地理判据，不是字母段（用户 2026-11-12 按原文裁定）：
  *   东缘 col > 12 / 西缘 col < 10 且**有任意道路或铁路入图**的图边格即为该方补给源，
- *   与字母无关（例：42.35 是苏方源但无字母；4.00 是轴方源但无字母）。该清单的权威落在
- *   `scenarios.json → supplySources`，**不要**用本表当作补给源清单。
+ *   与字母无关（例：42.35 是苏方源但无字母；4.00 是轴方源但无字母）。
+ * ★ 12.6a① 的铁路补给源（用户 2026-11-13 裁定）：**允许增援入场的图边铁路格 ∪ 专规点名的其它源**，
+ *   由 `exclusive-timing.ts#railEntrySupplySources` 合成；本表只提供「本方入场格」，不是源清单。
  */
 export const ENTRY_EDGE_LETTERS: Record<Side, readonly string[]> = {
   axis: ['K', 'J', 'I', 'H', 'G', 'F'],

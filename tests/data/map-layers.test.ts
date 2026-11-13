@@ -209,7 +209,7 @@ describe('map-layers.json 地图图层', () => {
 })
 
 describe('sync-map-layers 转换函数（脚本级）', () => {
-  it('toHexLayer：地形/城市/入口/补给源并入', () => {
+  it('toHexLayer：地形/城市并入；入口字母与补给源不落格（12.6a① 由入场格×铁路边推出）', () => {
     const raw: HexRaw = {
       col: 36,
       row: 13,
@@ -230,8 +230,6 @@ describe('sync-map-layers 转换函数（脚本级）', () => {
       terrainsPresent: ['Open'],
       movementTerrain: 'Open',
       city: { name: 'Pochinok', level: 'Village', role: 'victory_objective' },
-      entryLetter: 'F',
-      supplySource: true,
     })
   })
 

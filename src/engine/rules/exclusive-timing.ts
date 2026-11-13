@@ -2,6 +2,7 @@ import { rulesConstants } from '@/data'
 import type { HexRef, Side } from '@/data'
 
 import { succeed, type RuleOutcome } from '../result-types'
+import { entryEdgeHexes } from './entry-edges'
 import { isEntryLShutDown, isRailCapBoosted, isSouthSourcesShutDown } from './timing'
 
 /**
@@ -252,6 +253,54 @@ export function openSupplySources(input: {
   const statuses = supplySourceStatuses(input)
   const open = statuses.filter((item) => item.open).map((item) => item.hex)
   return succeed('2.1a', open)
+}
+
+/** 12.6a① 铁路补给源：入场格 × 铁路边 ∪ 专规/剧本点名的其它源 */
+export interface RailEntrySupplySourcesInput {
+  side: Side
+  date: string
+  /** 地图库字母入场表（`map-config.entryHexes`） */
+  entryHexes: Readonly<Record<string, readonly HexRef[] | undefined>>
+  /** 专规/剧本明确列出的其它源（`scenarios.json → supplySources.axisLive / sovietLive`） */
+  extraSources: readonly HexRef[]
+  /** 该格是否有铁路（引擎侧唯一实现 `RailFacts.isRailHex`） */
+  isRailHex: (hex: HexRef) => boolean
+  facts: SupplyShutdownFacts
+}
+
+/**
+ * 12.6a①（用户 2026-11-13 裁定）：**补给源 = 允许增援入场的图边铁路格 ∪ 专规点名的其它源**
+ *
+ * 原文口径（用户原话）：「允许增援入场的地图边缘铁路格，加上游戏专属规则中提到的其他补给源」。
+ * 故判据不另立字母清单：凡本方字母入场格里**有铁路边**的格，天然就是本方补给源；
+ * 剧本 `supplySources` 里列出的非入场格源（如 `42.35`、`4.00`）作为「其它源」并入。
+ *
+ * - 关闭日期照旧生效（2.1a `cease to exist`）：`Entry L` 19 July、`Entry E` 及以西的南缘源 19 August；
+ * - **关闭不转归对方**：只按本方名单过滤，轴方名单里永远不会因苏方 L 关闭而多出 L（除非剧本明确写
+ *   轴方从该格入场，此时该格会经轴方的入场格判据进入轴方名单，而不是靠「转归」）。
+ * - 输出顺序：先剧本其它源（保持既有顺序，避免扰动既有 BFS 种子顺序），再补入场铁路格。
+ */
+export function railEntrySupplySources(input: RailEntrySupplySourcesInput): HexRef[] {
+  const candidates: HexRef[] = []
+  const seen = new Set<string>()
+  const push = (hex: HexRef): void => {
+    const key = `${hex.col}.${hex.row}`
+    if (seen.has(key)) return
+    seen.add(key)
+    candidates.push({ col: hex.col, row: hex.row })
+  }
+  for (const hex of input.extraSources) push(hex)
+  for (const hex of entryEdgeHexes(input.side, input.entryHexes).hexes) {
+    if (input.isRailHex(hex)) push(hex)
+  }
+  return supplySourceStatuses({
+    side: input.side,
+    date: input.date,
+    sources: candidates,
+    facts: input.facts,
+  })
+    .filter((status) => status.open)
+    .map((status) => ({ ...status.hex }))
 }
 
 /** 1.2：当日铁路容量（轴/苏）——汇总入口，值取自 rules-constants */

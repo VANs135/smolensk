@@ -30,10 +30,6 @@ export const HexLayerSchema = z
       })
       .strict()
       .optional(),
-    /** 入口字母（A–L）；到达表落格约束 */
-    entryLetter: z.string().optional(),
-    /** 是否为苏军补给源格（专规 2.1a） */
-    supplySource: z.boolean().optional(),
   })
   .strict()
 

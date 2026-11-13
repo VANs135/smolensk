@@ -47,7 +47,7 @@ export function parseHexRef(hexId) {
   return { col, row }
 }
 
-/** map_hexes 单条 → 运行时 per-hex 记录（城市/入口/补给源合并） */
+/** map_hexes 单条 → 运行时 per-hex 记录（城市合并） */
 export function toHexLayer(item) {
   const entry = {
     col: item.col,
@@ -63,8 +63,8 @@ export function toHexLayer(item) {
       ...(item.city_role ? { role: item.city_role } : {}),
     }
   }
-  if (item.entry_letter) entry.entryLetter = item.entry_letter
-  if (item.supply_source === true) entry.supplySource = true
+  // 入口字母与补给源不落格：判据是「入场格 × 铁路边」（12.6a①，用户 2026-11-13 裁定），
+  // 见 `src/engine/rules/exclusive-timing.ts#railEntrySupplySources`；此处不再复制一份重复数据。
   return entry
 }
 
