@@ -72,6 +72,18 @@ npm run build
 
 ## 队列（不并入本批）
 
-- [ ] **Batch B**：西移「道路类边 ∪ 铁路边」并集判据 + 四编队重算表 + 冲突先报 + 「只连铁轨」断言
-- [ ] E0/E1 抽签池入剧本数据、E3 抽签按钮、E4 种子写日志头、E5 初设模式限制
-- [ ] D2 点格浮签改悬停、D4 段内切换清 `stackSelection`/`expandedStack`、D5 14.11 与 13.3g 补 `ACTION_GATES`
+- [x] **Batch B**：西移「道路类边 ∪ 铁路边」并集判据 + 四编队重算表 + 冲突先报 + 「只连铁轨」断言
+  - [x] `a8c29e9`：`ROAD_OR_RAIL_SIDES` / `hasRoadOrRailEdge`（`src/stores/containers.ts`）；四编队重算表见
+        [spec.md](../2026-11-10-西移判据并入铁路/spec.md) §3（29 Mtr `1.19`、12 Pz `1.26`、7 Pz `12.24` 不变，4 Pz 由 `8.8` 可动至 `5.8`）
+  - [x] 「只连铁轨也算合法落点」断言：`tests/engine/shift-west-road-rail.test.ts`
+- [x] E0/E1 抽签池入剧本数据、E3 抽签按钮、E4 种子写日志头、E5 初设模式限制
+  - [x] E0/E1：S1=12 / S3=14 / S5=14 入 `src/data/scenarios.json`（`setup.effects[0].poolFormations`）
+  - [x] E3：`src/components/game/DecisionQueue.vue` 的「抽取编队」按钮 ⇒ `setup.drawSetupEffectsNow()`（`200ae1b` 两段式）
+  - [x] E4：`0f09e8d` + `6d90fbb`（`createGameSeed` 移入 shared；开局写日志头含种子与版本）
+  - [x] E5：`562ecb0`（允许集合读剧本数据、预备上限/禁令统一取约束）
+  - [x] 余项不在本行：规格 §4.6 极简结果清单 UI（现有初设面板已显示同信息），见
+        [U21 核查清单](../../2026-11-13-U21-初设批次E0E1E4E5-核查清单.md) §10–§11
+- [x] D2 点格浮签改悬停、D4 段内切换清 `stackSelection`/`expandedStack`、D5 14.11 与 13.3g 补 `ACTION_GATES`
+  - [x] D2：`MapPopupVariant` 只剩 `'content' | 'context'`，格号由 `MapCanvas` 悬停提示给
+  - [x] D4：`src/stores/map-view.ts` 的 watch 键并入 `segmentStep.id`，换环节即清选择集/摊开态/就地小窗
+  - [x] D5：`14.11 air.transfer` 与 `13.3g move.railConversion` 已在 `ACTION_GATES`（`src/stores/workbench-model.ts`）
