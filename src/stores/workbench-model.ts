@@ -1469,6 +1469,12 @@ export type AttackForce =
       mpRemaining: number
       mpCost: number
       entryCost: number
+      /**
+       * 8.1b（用户 2026-11-13 裁定）：候选堆叠里**因自身进格费不够**（>3 MP / All / 禁入 /
+       * 违反 6.1d 对等）而不参突、留在原格的 id。它们视同本次移动已动完（由状态层落盘），
+       * 与「玩家主动不勾选」（8.1h 留驻、不受结果影响）不是一回事，故单列。
+       */
+      entryExcludedIds: string[]
     }
 
 export function attackForceForHex(input: {
@@ -1507,6 +1513,8 @@ export function attackForceForHex(input: {
   if (overrun === undefined || overrun.defenders.length === 0) return null
   // 8.1h：不合格单位（DG / MP 不足 / 不可攻击）不参突、也不阻塞其余单位 ⇒ 按人取合格子集
   const eligible: { id: string; mp: number }[] = []
+  /** 8.1b：仅因自身进格费不够而落下的 id（DG / MP<3 等不算「落下」，照旧可普通移动） */
+  const entryExcludedIds: string[] = []
   for (const unit of input.candidates) {
     const mp = overrun.mpRemainingOf(unit)
     if (mp < 1) continue
@@ -1520,6 +1528,8 @@ export function attackForceForHex(input: {
       defenders: [...overrun.defenders],
     })
     if (verdict.ok) eligible.push({ id: unit.instanceId, mp })
+    else if (verdict.rule === '8.1b' || verdict.rule.startsWith('6.1d'))
+      entryExcludedIds.push(unit.instanceId)
   }
   if (eligible.length === 0) return null
   // 8.1 / 4.8a / 8.1b：整组复判（同格、发起格 RE、进格费都按整堆叠口径）
@@ -1542,12 +1552,15 @@ export function attackForceForHex(input: {
   const mpById = new Map(eligible.map((item) => [item.id, item.mp]))
   const participantIds = verdict.participantIds
   if (participantIds.length === 0) return null
+  // 整组复判再筛掉的（通常与逐人复判一致）也并入落下名单：它们自身进格费不够
+  for (const item of eligible) if (!participantIds.includes(item.id)) entryExcludedIds.push(item.id)
   return {
     attackType: 'overrun',
     unitIds: participantIds,
     mpRemaining: Math.min(...participantIds.map((id) => mpById.get(id) ?? 0)),
     mpCost: verdict.mpCost,
     entryCost: verdict.entryCost,
+    entryExcludedIds,
   }
 }
 

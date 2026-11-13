@@ -662,7 +662,13 @@ describe('突袭资格（8.1 / 8.1a / 8.1b / 8.1c / 5.10b-C）', () => {
       mpRemaining: 8,
       unitIds: [...base.unitIds],
     })
-    expect(check).toEqual({ ok: true, mpCost: 3, entryCost: 1 })
+    // 用户 2026-11-13 裁定：8.1b 逐单位判定，结果额外给出通过进格费的参突名单
+    expect(check).toEqual({
+      ok: true,
+      mpCost: 3,
+      entryCost: 1,
+      participantIds: ['a1', 'a2'],
+    })
     expect(OVERRUN_MAX_ENTRY_MP).toBe(3)
   })
 
@@ -751,7 +757,12 @@ describe('突袭资格（8.1 / 8.1a / 8.1b / 8.1c / 5.10b-C）', () => {
       startedStackedTogether: true,
       mpRemaining: 8,
     })
-    expect(check).toEqual({ ok: true, mpCost: 3, entryCost: 1 })
+    expect(check).toEqual({
+      ok: true,
+      mpCost: 3,
+      entryCost: 1,
+      participantIds: ['a1', 'a2'],
+    })
   })
 
   it('5.10b-C：DG 单位不能突袭', () => {
@@ -787,7 +798,12 @@ describe('突袭资格（8.1 / 8.1a / 8.1b / 8.1c / 5.10b-C）', () => {
       startedStackedTogether: true,
       mpRemaining: 8,
     })
-    expect(trackOk).toEqual({ ok: true, mpCost: 3, entryCost: 3 })
+    expect(trackOk).toEqual({
+      ok: true,
+      mpCost: 3,
+      entryCost: 3,
+      participantIds: ['a1', 'a2'],
+    })
     const truck = unit({ id: 'a1', mobility: 'truck', fuelled: true, ma: 8 })
     const truck2 = unit({ id: 'a2', mobility: 'truck', fuelled: true, ma: 8 })
     const truckCheck = canOverrun({
