@@ -108,7 +108,7 @@ const advanceBlockedCount = computed(
 /** 有选中且防御格已空 ⇒ 推进；否则就是按 9.13 结束（不推进） */
 const advanceButtonLabel = computed(() =>
   workbench.combatDefendingHexCleared && workbench.combatInputs.advanceUnitIds.length > 0
-    ? '推进并结束（9.12g / 9.13）'
+    ? '推进并结束'
     : '结束战斗（不推进）',
 )
 
@@ -270,7 +270,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
 </script>
 
 <template>
-  <BasePanel title="战斗">
+  <BasePanel>
     <!-- 未开始：选择攻方与防御格 -->
     <SessionStep v-if="state === null" item="combat:declare">
       <RuleTip rule="9.1b / 9.1c">
@@ -346,7 +346,6 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           v-if="!workbench.combatInputs.supplyConfirmed.attacker"
           variant="primary"
           size="sm"
-          title="9.5"
           @click="workbench.confirmCombatSupplySide('attacker')"
         >
           确认攻方补给
@@ -386,7 +385,6 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           "
           variant="primary"
           size="sm"
-          title="9.5"
           @click="workbench.confirmCombatSupplySide('defender')"
         >
           确认守方补给
@@ -401,12 +399,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         </BaseButton>
 
         <div v-if="bothSupplyConfirmed" class="row">
-          <BaseButton
-            variant="primary"
-            size="sm"
-            title="9.5"
-            @click="workbench.confirmCombatSupply()"
-          >
+          <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatSupply()">
             进入行动值
           </BaseButton>
           <!-- C8：写在确认按钮旁，确认前就能看到「本场战斗须一次打完」 -->
@@ -419,12 +412,15 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         <!-- B14c：AR 单位＝**算子图阵列**（原来是两个纯文字下拉） -->
         <CounterPicker
           title="攻方 AR 单位"
-          hint="9.6：每方只能选一个参战单位担任行动值；DG 单位 −1"
           :items="attackerArItems"
           :size="40"
           @pick="workbench.combatInputs.attackerArUnitId = $event"
           @hover="hoverUnit"
         />
+        <RuleTip rule="9.6 / 专规 2.3b">
+          每方只能选一个参战单位担任行动值；DG 单位 −1。守方堆叠内有 NKVD
+          边防团时，行动值单位只能从它们中选。
+        </RuleTip>
         <div class="row">
           <BaseButton
             variant="secondary"
@@ -438,24 +434,26 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
       </SessionStep>
 
       <SessionStep item="combat:ar:defender">
-        <p class="num">攻方已宣布：{{ nameOf(state.declaredAttackerArUnitId ?? '') }}</p>
         <CounterPicker
           title="守方 AR 单位"
           :hint="
             workbench.nkvdArRequiredNow
-              ? '专规 2.3b：守方堆叠内有 NKVD 边防团 ⇒ 行动值单位只能从它们中选（阵列已收窄）'
-              : '9.6：每方只能选一个参战单位担任行动值；DG 单位 −1'
+              ? '守方堆叠内有 NKVD 边防团 ⇒ 只能从它们中选（阵列已收窄）'
+              : ''
           "
           :items="defenderArItems"
           :size="40"
           @pick="workbench.combatInputs.defenderArUnitId = $event"
           @hover="hoverUnit"
         />
+        <RuleTip rule="9.6 / 专规 2.3b">
+          每方只能选一个参战单位担任行动值；DG 单位 −1。守方堆叠内有 NKVD
+          边防团时，行动值单位只能从它们中选。
+        </RuleTip>
         <div class="row">
           <BaseButton
             variant="primary"
             size="sm"
-            title="9.6"
             :disabled="workbench.combatInputs.defenderArUnitId === null"
             @click="workbench.declareCombatArStep('defender')"
           >
@@ -510,14 +508,12 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
               三步是骰子与查表 ⇒ **自动连跑**到战果（骰面走种子化 RNG，结算日志可复算）。
               要逐步复核时，下面 ⑥⑦ 两节的手动按钮仍在（验证路径）。
             -->
-          <BaseButton
-            variant="primary"
-            size="sm"
-            title="9.7 / 9.8 / 9.9"
-            @click="workbench.autoResolveCombatToOutcome()"
-          >
+          <BaseButton variant="primary" size="sm" @click="workbench.autoResolveCombatToOutcome()">
             确认地形 ⇒ 自动结算到战果
           </BaseButton>
+          <RuleTip rule="9.7 / 9.8 / 9.9">
+            确认地形后按 9.7 取攻防比，再掷奇袭（9.8）与战斗骰（9.9）并查表，直接进入战果。
+          </RuleTip>
           <BaseButton
             v-if="props.stepwise"
             variant="ghost"
@@ -527,11 +523,6 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
             只确认地形（逐步复核）
           </BaseButton>
         </div>
-        <p v-if="state.odds !== undefined" class="ok num">
-          初始攻防比 {{ state.odds.oddsLabel }}（守方格 {{ state.odds.terrain.defenderTerrain }} /
-          {{ state.odds.terrain.combatLine }}；军力 {{ state.odds.attackerTotal }} :
-          {{ state.odds.defenderTotal }}）
-        </p>
       </SessionStep>
 
       <!-- 第 6 步：奇袭（9.8）——B30 起通常已被"确认地形 ⇒ 自动结算"连跑过；本节是逐步复核路径 -->
@@ -551,10 +542,6 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
 
       <!-- 第 7 步：战斗掷骰（9.9）——同上，通常已自动跑过 -->
       <SessionStep item="combat:battleDice">
-        <p class="num">
-          列位：{{ state.surprise?.finalColumnLabel ?? state.odds?.oddsLabel ?? '—' }}；DRM
-          {{ state.ar?.drm ?? 0 }}；工事等级 {{ state.hedgehogLevel }}
-        </p>
         <div v-if="props.stepwise" class="row">
           <BaseButton variant="secondary" size="sm" @click="workbench.rollCombatDice()">
             掷战斗骰（2d6，逐步复核）
@@ -622,12 +609,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           </BaseButton>
         </div>
         <div class="row">
-          <BaseButton
-            variant="primary"
-            size="sm"
-            title="9.11c"
-            @click="workbench.confirmCombatLosses()"
-          >
+          <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatLosses()">
             确认强制损失
           </BaseButton>
         </div>
@@ -730,7 +712,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           v-if="retreatPlan === null && workbench.combatRetreatSkippedSides.length > 0"
           class="muted"
         >
-          <BaseTag kind="warning">9.12 / 无存活单位</BaseTag>
+          <BaseTag kind="warning">无存活单位</BaseTag>
           点名要撤退的{{ workbench.combatRetreatSkippedSides.includes('attacker') ? '攻方' : ''
           }}{{
             workbench.combatRetreatSkippedSides.includes('defender') ? '守方' : ''
@@ -760,7 +742,6 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
             </span>
             <!-- 9.12（C1）：不可通行格排除后无落点 ⇒ 允许确认，但必须明示消灭后果 -->
             <span v-if="row.noLanding === true" class="warn num">
-              <BaseTag kind="danger">9.12</BaseTag>
               无合法落点：确认后该单位被消灭
             </span>
             <span
@@ -770,15 +751,17 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
               "
               class="warn num"
             >
-              <BaseTag kind="warning">9.12</BaseTag>
               只有必被消灭的落点
             </span>
           </div>
           <!-- 9.12e：撤退堆叠在进入敌方 ZOC 前已有 DG ⇒ 额外 1 点损失的承受者由拥有者选 -->
           <div v-if="extraLossPreview !== null" class="row">
             <span class="warn num">
-              <BaseTag kind="warning">9.12e</BaseTag>
               该堆叠损失 {{ extraLossPreview.points }} 点军力，由谁承受（候选＝撤退中的 DG 单位）：
+              <RuleTip rule="9.12e">
+                撤退堆叠在进入敌方 ZOC 前已有 DG ⇒ 额外损失 1 点军力；承受者由拥有者从撤退中的 DG
+                单位里选。
+              </RuleTip>
             </span>
             <BaseButton
               v-for="choice in extraLossPreview.choices"
@@ -808,7 +791,6 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           <BaseButton
             variant="primary"
             size="sm"
-            title="9.12"
             :disabled="retreatPlan !== null && !retreatPlan.complete"
             @click="workbench.confirmCombatRetreats()"
           >
@@ -821,10 +803,12 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
       <SessionStep item="combat:advance">
         <!-- B33：突袭的推进是**强制**的（9.12g-D）⇒ 说明与按钮按这个口径给 -->
         <p v-if="workbench.combatAdvanceMandatory" class="warn num">
-          <BaseTag kind="danger">9.12g-D</BaseTag>
-          本次是突袭：成功的突袭必须战后推进（8.0：防御方撤退或被摧毁 ⇒ 所有攻击单位进入该格，
-          无需额外 MP）。撤退收束后自动收束，不给"不推进"；若因 9.14 位移待决停在本步，
-          位移落点选定后即自动收束。
+          <BaseTag kind="danger">突袭</BaseTag>
+          本次必须战后推进（不给"不推进"）；撤退收束后自动收束，若位移待决停在本步，落点选定后即自动收束。
+          <RuleTip rule="9.12g-D / 8.0 / 9.14">
+            成功的突袭必须战后推进：防御方撤退或被摧毁 ⇒ 所有攻击单位进入该格，无需额外 MP。 因 9.14
+            位移待决时，位移落点选定后即自动收束。
+          </RuleTip>
         </p>
         <p class="num">
           防御格 {{ workbench.combatDefendingHexCleared ? '已空' : '未空' }}；{{
@@ -851,7 +835,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           </BaseButton>
         </div>
         <p v-if="advanceBlockedCount > 0" class="muted">
-          另有 {{ advanceBlockedCount }} 枚不能推进（9.12g-A 未付补给 / 不可移动）。
+          另有 {{ advanceBlockedCount }} 枚不能推进（未付补给 / 不可移动）。
         </p>
         <div class="row">
           <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatAdvance()">

@@ -8021,7 +8021,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
        * 不再弹「进入并突袭 / 进入停下」确认面板（用户裁定：轮式不该因守规则多一步确认）。
        * 直接落这一步；同行而仍能走的步行/履带单位继续沿原路径推进。
        * 停车的单位随后照常留在突袭候选里（`commitStep` 记 `zocStoppedIds`），
-       * 相邻敌方格的高亮与右键突袭入口与其它单位完全一致。
+       * 相邻敌方格的高亮与地图上的突袭入口与其它单位完全一致。
        */
       if (preview.needsConfirm) {
         pushLog(
@@ -21907,7 +21907,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const segmentSteps = computed(() => sopStepsOf(phase.value as GamePhase, activeSide.value))
 
   /**
-   * 本段本方**需要玩家过**的环节（滤掉自动的 / 无事可做的 / 尚未实现的）
+   * 本段本方**需要玩家过**的环节（滤掉自动的 / 无事可做的）
    *
    * 用户口径：「点击进入下一个阶段后，**自动进行的阶段不需要玩家介入**」——自动环节
    * （B 段的补员表掷骰 / 随机事件 / 可变撤离等）由引擎在推进段时结算并留痕，
@@ -21918,10 +21918,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   标了 `skipWhenIdle` 的环节（现在只有突围 12.8e —— B47 已给出入口）若**本方无人参与**则自动跳过——
    *   判据就是下面 `stepHasWork`（与闸门**同一条** `participatesIn`）：一个断补单位都没有，
    *   突围环节本就没有可做之事，不该让玩家点一次空环节。
-   *
-   * ★ 还要跳过 `implemented === false` 的环节（条文有、store 里**没有入口**的那几个：
-   *   编队抽取 专规 13.7 / 特殊补员抽取 专规 1.6c）。这一条与"无事可做"**是两回事**：
-   *   前者是"这一刻没活"，后者是"这个活还没做出来"。两处都写清，免得把实现缺口当成规则行为。
    *
    * 全自动的段（H 清理 / Turn End / Pre-Turn 的部分）滤完为空 ⇒ `segmentStep` 为 null
    * ⇒ 闸门对一切动作返回"当前段没有环节表"，**正是"这些段没有玩家动作"应有的效果**。
