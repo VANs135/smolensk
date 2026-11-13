@@ -449,6 +449,29 @@ describe('W7 C12：拆分单位盒（1.8a / 20.0）与编队抽签', () => {
     expect(workbench.units.some((unit) => unit.instanceId === breakdown.instanceId)).toBe(false)
   })
 
+  it('20.0d：H 清理段收束时**自动**吸收（无需玩家再点一次）', () => {
+    workbench.setPhase('movement')
+    const parent = place(workbench, otherClassParent(), someHex(), 'soviet', 'p-auto')
+    startMoving(workbench, [parent.instanceId])
+    expect(
+      containers.takeBreakdown({
+        parentInstanceId: parent.instanceId,
+        breakdownAr: 2,
+      }),
+    ).toBe(true)
+    const breakdown = workbench.units.find((unit) => unit.specialized.includes('breakdown'))!
+    const stepsDamaged = parent.steps
+    const poolAfterTake = workbench.breakdownPool.su ?? 0
+
+    // 阶段末（H 清理）＝ 20.0d 的强制时点 ⇒ 清理落盘时先结清吸收义务
+    workbench.setPhase('cleanUp')
+    expect(workbench.runCleanUpNow()).toBe(true)
+    expect(parent.steps).toBe(stepsDamaged + 1)
+    expect(workbench.breakdownPool.su).toBe(poolAfterTake + 1)
+    expect(workbench.units.some((unit) => unit.instanceId === breakdown.instanceId)).toBe(false)
+    expect(workbench.log.some((line) => line.rule === '20.0d')).toBe(true)
+  })
+
   it('20.0d：传单位库的**记录 id**（旧界面的口径）不再静默失败，而是给出可见反馈', () => {
     // 20.0d 只在阶段末吸收 ⇒ 用 H 清理段测"记录 id 查不到"这条拒绝，而不是被时机先拦
     workbench.setPhase('cleanUp')

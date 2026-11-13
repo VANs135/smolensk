@@ -272,6 +272,15 @@ describe('Ⓗ 整回合闭环：初设 → Pre-Turn → A–H → 下一回合 A
       expect(unit.mode.exploit, `${unit.instanceId} 进击`).toBe(false)
       expect(unit.fuelled, `${unit.instanceId} 燃料`).toBe(false)
     }
+    /*
+     * 12.8a：断补标记保留到**下一个友方补给阶段**重新判定 ⇒ 本方 H 之后到下一回合补给段之前，
+     * 供给结论不得被清理或换回合顺手清掉（"供给标记结转"）。
+     */
+    const traceBefore = new Map(
+      ctx.w.units
+        .filter((unit) => unit.side === cleaned)
+        .map((unit) => [unit.instanceId, unit.hasTraceSupply] as const),
+    )
 
     await progress(
       ctx,
@@ -295,6 +304,12 @@ describe('Ⓗ 整回合闭环：初设 → Pre-Turn → A–H → 下一回合 A
       expect(unit.mode.releasedFromReserve ?? false, `${unit.instanceId} released`).toBe(false)
     }
     for (const air of ctx.w.airUnits) expect(air.missionsFlownThisPhase).toBe(0)
+    // 12.8a：本方（已在上一回合判过）的供给结论原样结转，直到下一回合本方补给段再判
+    for (const [unitId, trace] of traceBefore) {
+      const unit = ctx.w.units.find((item) => item.instanceId === unitId)
+      if (unit === undefined) continue
+      expect(unit.hasTraceSupply, `${unitId} 供给标记结转`).toBe(trace)
+    }
     expect(ctx.w.railCapSpentThisTurn).toEqual([])
     expect(ctx.w.freeRailPicked).toEqual([])
     expect(ctx.w.supplyArrivalSp).toBe(0)
