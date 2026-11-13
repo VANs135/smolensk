@@ -565,6 +565,10 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   },
   runAirMissionNow: { kind: 'flowState', why: '14.2f 宣布 → 自动结算，入口在 `airState` 链上' },
   confirmAirMissionNow: { kind: 'flowState', why: '同上（`airState` 的步骤推进）' },
+  settleAirMissionNow: {
+    kind: 'flowState',
+    why: '14.2f-F 面板 2 的唯一出口（先补跑战果/货物，再记录任务结算）',
+  },
   chooseSupplySourceNow: {
     kind: 'flowState',
     why: '12.3 选来源是 `supplyState.step === selectSource`',

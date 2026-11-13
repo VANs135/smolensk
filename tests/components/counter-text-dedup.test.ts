@@ -20,12 +20,13 @@ describe('算子图与文字去重', () => {
   })
 
   it('选炮击 / 轰炸单位：只留图与图上没有的瞄距角标', () => {
-    const src = read('src/components/ops/OpsFlowPanel.vue')
-    expect(src).not.toContain('<span>{{ unit.name }}</span>')
-    expect(src).not.toContain('<span>{{ item.air.name }}</span>')
-    expect(src).not.toContain('>炸 {{ unit.raw.barrage')
-    // 距离 / 航程是图上没有的计算值 ⇒ 允许保留角标
-    expect(src).toContain('item.air.rangeHexes')
+    const ops = read('src/components/ops/OpsFlowPanel.vue')
+    const air = read('src/components/air/AirPanel.vue')
+    expect(ops).not.toContain('<span>{{ unit.name }}</span>')
+    expect(air).not.toContain('<span>{{ item.air.name }}</span>')
+    expect(ops).not.toContain('>炸 {{ unit.raw.barrage')
+    // 距离 / 航程是图上没有的计算值 ⇒ 允许保留角标（用户 2026-11-13：选机已并入 AirPanel 的面板 1）
+    expect(air).toContain('item.air.rangeHexes')
   })
 
   it('空军面板：本方飞机清单不再平铺印值，整行进 title', () => {
