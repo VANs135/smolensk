@@ -564,9 +564,9 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
             <RuleTip rule="9.11a">在 9.11c 的限制内由拥有者决定由哪些单位承受。</RuleTip>
           </span>
           <BaseButton
+            v-if="workbench.combatInputs.lossTakerId !== null"
             variant="ghost"
             size="sm"
-            :disabled="workbench.combatInputs.lossTakerId === null"
             @click="workbench.combatInputs.lossTakerId = null"
           >
             规范分配
