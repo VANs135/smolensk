@@ -258,28 +258,25 @@ const defenderArItems = computed(() =>
   arItems(workbench.combatDefenderArChoices, workbench.combatInputs.defenderArUnitId),
 )
 
-/** 9.10/9.11c：选项损失的逐单位候选（角标＝草稿已损；可损尽的置灰，不另摆文字按钮） */
-const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.combatOptionLossTargets.map((target) => {
+/** 9.11c：选项损失只列**当前还能记损**的单位（第一点归 AR 单位，之后只给最少者）；分完即整块消失 */
+const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
+  if (workbench.optionDraftRemaining <= 0) return []
+  return workbench.combatOptionLossTargets.flatMap((target) => {
+    if (!workbench.canTakeOptionLossPoint(target.id)) return []
     const taken = workbench.combatInputs.optionLossAllocation[target.id] ?? 0
     const unit = unitOf(target.id)
-    const reason =
-      workbench.optionDraftRemaining <= 0
-        ? '选项点数已分配完'
-        : taken >= target.steps
-          ? '已无军力可损'
-          : null
-    return {
-      id: target.id,
-      imageUrl: unit === null ? null : counterImageUrlOf(unit),
-      name: `${target.name}（军力 ${target.steps}，草稿已损 ${taken}）`,
-      selected: taken > 0,
-      disabledReason: reason,
-      hex: target.hex,
-      ...(taken > 0 ? { badge: `−${taken}` } : {}),
-    }
-  }),
-)
+    return [
+      {
+        id: target.id,
+        imageUrl: unit === null ? null : counterImageUrlOf(unit),
+        name: `${target.name}（军力 ${target.steps}，已损 ${taken}）`,
+        selected: taken > 0,
+        hex: target.hex,
+        ...(taken > 0 ? { badge: `−${taken}` } : {}),
+      },
+    ]
+  })
+})
 </script>
 
 <template>
@@ -666,8 +663,9 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
           }}结算<span v-if="resolverNotation !== ''"> · {{ resolverNotation }}</span> · 还剩
           {{ workbench.optionDraftRemaining }} 点
           <RuleTip rule="9.10a / 9.11c">
-            撤退格数与损失军力可任意组合，组合后必须完全满足选项点数；未分配的点数按规范分配折成军力损失。
             第一点必须由 AR 单位承受；各单位各受一点后才能有单位受第二点。
+            <br />
+            撤退格数与损失军力可任意组合，满点才能提交。
           </RuleTip>
         </p>
         <!--
@@ -675,6 +673,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
             点本结算方算子图即受损，地图上三色格即撤退，两件事同屏；每次只进草稿，提交时一发结算。
           -->
         <CounterPicker
+          v-if="optionLossItems.length > 0"
           title="受损"
           hint="点算子图＝记 1 点军力损失；地图三色格＝可撤退格，点格按该格距离记撤退"
           :items="optionLossItems"
@@ -711,9 +710,9 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
           >
             行使 9.10c：忽略选项
           </BaseButton>
-          <!-- 剩余点数不要求点满：提交时按规范分配折成军力损失（9.10a / 9.11c） -->
+          <!-- 9.10a：点数分配完才出现提交（未分完不置灰，直接不出现，剩余点数留在上方） -->
           <BaseButton
-            v-else
+            v-else-if="workbench.optionDraftRemaining === 0"
             variant="primary"
             size="sm"
             title="9.10"

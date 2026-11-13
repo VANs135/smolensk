@@ -11826,17 +11826,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const side = currentResolver(state)
     const inputs = combatInputs.value
     /*
-     * 一次折损（W2）：剩余未分配的点数按 9.10a 折成军力损失（引擎规范分配），
-     * 不再要求玩家逐个点单位凑满 —— 显式点过的逐单位分配随之让位于规范分配
-     * （9.11a 的授权仍在：玩家先点的那几下决定 AR 先受，折损只是把余数补齐）。
+     * 9.10a：选项点数必须**完全**分配。没分完就点结算 ⇒ 如实拒绝、不动盘面，
+     * 剩余点数继续显示在面板上（不再自动把余数折成损失，也不丢弃玩家已点的分配）。
      */
-    if (!inputs.ignoreOptions && optionDraftRemaining.value > 0) {
-      combatInputs.value.optionLossPoints = Math.max(
-        0,
-        optionDraftPoints.value - inputs.optionRetreatHexes,
-      )
-      combatInputs.value.optionLossAllocation = {}
-    }
+    if (!inputs.ignoreOptions && optionDraftRemaining.value > 0) return false
     // 专规 2.3b：NKVD 边防团担任守方行动值单位时，守方全部选项**必须**吃成军力损失
     const nkvdOverride =
       side === 'defender' && state.dice !== undefined
@@ -11978,25 +11971,54 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })),
   )
 
-  /** 草稿层容量护栏：该单位当前军力（9.11d 的承受上限由提交时引擎严格校验） */
-  function optionLossRoomOf(unitId: string): number {
-    const target = combatOptionLossTargets.value.find((item) => item.id === unitId)
-    return target === undefined ? 0 : Math.max(0, target.steps)
+  /**
+   * 9.11c：在既有分配上再给 `unitId` 记 1 点是否合法（强制损失与选项损失共用这一条规则）
+   *
+   * ① 第一点必须由该方的 AR 单位承担（9.6 的领军单位；AR 单位已不在/无军力时退回均匀展开）；
+   * ② 之后只能给当前受损最少的单位，保证"每人各受一点后才有人受第二点"。
+   */
+  function combatLossPointLegal(
+    side: CombatRole,
+    allocation: Record<string, number>,
+    unitId: string,
+  ): boolean {
+    const state = combatState.value
+    if (state === null) return false
+    const views = side === 'attacker' ? combatAttackerViews.value : combatDefenderViews.value
+    const target = views.find((unit) => unit.id === unitId)
+    if (target === undefined || target.steps <= (allocation[unitId] ?? 0)) return false
+    const total = views.reduce((sum, unit) => sum + (allocation[unit.id] ?? 0), 0)
+    if (total === 0) {
+      const arUnitId = side === 'attacker' ? state.ar?.attackerUnitId : state.ar?.defenderUnitId
+      const arUnit = views.find((unit) => unit.id === arUnitId)
+      if (arUnit === undefined || arUnit.steps <= 0) return true
+      return unitId === arUnitId
+    }
+    const min = Math.min(...views.map((unit) => allocation[unit.id] ?? 0))
+    return (allocation[unitId] ?? 0) === min
+  }
+
+  /** 9.11c：当前结算方还能把下一点损失记给谁（面板据此决定哪些候选出现） */
+  function canTakeOptionLossPoint(unitId: string): boolean {
+    const state = combatState.value
+    if (state === null || state.step !== 'options') return false
+    return combatLossPointLegal(
+      currentResolver(state),
+      combatInputs.value.optionLossAllocation,
+      unitId,
+    )
   }
 
   /**
    * 「受损」：给某参战单位记 1 点军力损失（草稿；9.11a 的逐单位分配）
    *
-   * 约束（草稿层只做护栏，严格校验仍归提交时的 `validateBattleLossAllocation`）：
-   * ① 剩余选项点数 > 0；② 该单位还有军力可损。
+   * 约束（与强制损失同一套 9.11c 规则）：① 剩余选项点数 > 0；② 该点合法（`combatLossPointLegal`）。
    */
   function applyOptionDraftLoss(unitId: string): boolean {
     const state = combatState.value
     if (state === null || state.step !== 'options') return false
     if (optionDraftRemaining.value <= 0) return false
-    if (optionLossRoomOf(unitId) - (combatInputs.value.optionLossAllocation[unitId] ?? 0) <= 0) {
-      return false
-    }
+    if (!canTakeOptionLossPoint(unitId)) return false
     combatInputs.value.optionLossAllocation = {
       ...combatInputs.value.optionLossAllocation,
       [unitId]: (combatInputs.value.optionLossAllocation[unitId] ?? 0) + 1,
@@ -27560,6 +27582,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     optionIgnoreAvailableNow,
     confirmCombatIgnoreOptions,
     applyOptionDraftLoss,
+    canTakeOptionLossPoint,
     applyOptionDraftRetreat,
     applyOptionDraftRetreatAt,
     undoOptionDraftLast,

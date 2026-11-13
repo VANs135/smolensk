@@ -237,27 +237,30 @@ describe('批 F·F1（条 15/16）：选项页逐次点选只进草稿，提交�
    * ★ 超时：扫种子建现场（每个种子都建一次 store）——与 option-loss-allocation.test.ts 同口径
    *   显式给足超时（判据与断言本身不变）。
    */
-  it('逐次点选不落盘；未点满的剩余点数提交时按规范分配折成损失', () => {
-    const store = scanSeed(1, 400)
+  it('逐次点选不落盘；未点满提交被如实拒绝（不动盘面），补满后才结算', () => {
+    const store = scanSeed(2, 400)
     const points = store.optionDraftPoints
     expect(points).toBeGreaterThanOrEqual(2)
     const stepsBefore = new Map(store.units.map((unit) => [unit.instanceId, unit.steps]))
 
-    // ① 点"受损"两次（两枚不同单位各 1 点）——只进草稿，盘面不动
+    // ① 点"受损"一次（第一点归 AR 单位）——只进草稿，盘面不动
     expect(store.applyOptionDraftLoss('d1')).toBe(true)
-    expect(store.applyOptionDraftLoss('d2')).toBe(true)
-    expect(store.optionDraftUsed).toBe(2)
-    expect(store.optionDraftRemaining).toBe(points - 2)
-    expect(store.optionDraftEntries).toHaveLength(2)
+    expect(store.optionDraftUsed).toBe(1)
+    expect(store.optionDraftRemaining).toBe(points - 1)
+    expect(store.optionDraftEntries).toHaveLength(1)
     expect(store.units.find((unit) => unit.instanceId === 'd1')?.steps).toBe(stepsBefore.get('d1'))
 
-    // ② 点数不够时拒绝再应用（草稿层护栏）
-    if (points === 2) {
-      expect(store.applyOptionDraftLoss('d3')).toBe(false)
-      expect(store.applyOptionDraftRetreat(1)).toBe(false)
-    }
+    // ② 没分完就提交 ⇒ 如实拒绝：停在选项步，草稿与盘面都不动
+    expect(store.confirmCombatOptions()).toBe(false)
+    expect(store.combatState?.step).toBe('options')
+    expect(store.optionDraftUsed).toBe(1)
+    expect(store.units.find((unit) => unit.instanceId === 'd1')?.steps).toBe(stepsBefore.get('d1'))
 
-    // ③ 提交 ⇒ planOptions 一发结算；剩余点数按规范分配折成军力损失（9.11c：AR 先受、均匀展开）
+    // ③ 补满（每次只能给当前受损最少的单位）⇒ 提交成功，按草稿分配结算
+    while (store.optionDraftRemaining > 0) {
+      const target = ['d1', 'd2', 'd3'].find((id) => store.applyOptionDraftLoss(id))
+      expect(target, '总能找到当前受损最少的单位').toBeDefined()
+    }
     expect(store.confirmCombatOptions()).toBe(true)
     const delta = (id: string): number =>
       (stepsBefore.get(id) ?? 0) - (store.units.find((unit) => unit.instanceId === id)?.steps ?? 0)
