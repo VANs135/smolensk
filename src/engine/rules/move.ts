@@ -903,7 +903,20 @@ export interface OverrunCheckInput {
 }
 
 /** 突袭资格结果 */
-export type OverrunCheck = { ok: true; mpCost: number; entryCost: number } | StepFailure
+export type OverrunCheck =
+  | {
+      ok: true
+      mpCost: number
+      entryCost: number
+      /**
+       * 8.1b：逐单位通过进格费（≤3 MP）的参突者。
+       *
+       * 用户 2026-11-13 裁定「混合堆叠逐单位独立计算」：进格费不够（自身费率 >3 或地形禁入）
+       * 的成员不进格、留在原格，也不参突；其余成员照常。调用方以此为准，不再假设 `unitIds` 全员参突。
+       */
+      participantIds: string[]
+    }
+  | StepFailure
 
 /**
  * 移动期单位视图 → 合法性层单位视图（8.1 资格统一委托 `checkLegality('overrun')`）
@@ -1024,14 +1037,47 @@ export function canOverrun(input: OverrunCheckInput): OverrunCheck {
 
   // 8.1b：进入格 MP（格内＋格边＋运输破坏）≤ 3；地形为 All 不可突袭
   // 8.1c：不得用道路/桥梁降费、不得否定禁入地形、不得满足 6.1d → 统一用 forOverrun 计费
-  const entry = costOfStep(context, units[0]!, from, target, true)
-  if (!entry.ok) return entry
-  if (entry.spendsAllMp) return reject('prohibited', '8.1b', '地形消耗为 All，不可突袭')
-  if (entry.cost > OVERRUN_MAX_ENTRY_MP)
-    return reject('prohibited', '8.1b', `进入格 ${entry.cost} MP > ${OVERRUN_MAX_ENTRY_MP} MP`)
-  // 8.1c：突袭不得借道路/桥梁把该格 MP 压低（forOverrun 计费已忽略道路；此处再挡一次禁入）
-  if (violatesReciprocity(context, units[0]!, from, target))
-    return reject('reciprocity', '6.1d 引 8.1c', `${target.col}.${target.row}`)
+  //
+  // 用户 2026-11-13 裁定：混合堆叠**逐单位独立计算**——每枚按自己的费率判进格费；
+  // 不够（>3 MP / All / 禁入 / 违反 6.1d 对等）的成员留在原格、不随堆叠进格，
+  // 不再让 `units[0]` 代表整堆（G5/U5 的根因）。全员都不够才算整堆不可突袭。
+  const participants: MoveUnitView[] = []
+  let firstEntryReject: StepFailure | null = null
+  let entryCost = 0
+  for (const unit of units) {
+    const entry = costOfStep(context, unit, from, target, true)
+    if (!entry.ok) {
+      firstEntryReject ??= entry
+      continue
+    }
+    if (entry.spendsAllMp) {
+      firstEntryReject ??= reject('prohibited', '8.1b', '地形消耗为 All，不可突袭')
+      continue
+    }
+    if (entry.cost > OVERRUN_MAX_ENTRY_MP) {
+      firstEntryReject ??= reject(
+        'prohibited',
+        '8.1b',
+        `进入格 ${entry.cost} MP > ${OVERRUN_MAX_ENTRY_MP} MP`,
+      )
+      continue
+    }
+    // 8.1c：突袭不得借道路/桥梁把该格 MP 压低（forOverrun 计费已忽略道路；此处再挡一次禁入）
+    if (violatesReciprocity(context, unit, from, target)) {
+      firstEntryReject ??= reject('reciprocity', '6.1d 引 8.1c', `${target.col}.${target.row}`)
+      continue
+    }
+    participants.push(unit)
+    entryCost = Math.max(entryCost, entry.cost)
+  }
+  if (participants.length === 0) {
+    return firstEntryReject ?? reject('prohibited', '8.1b', `进入格超过 ${OVERRUN_MAX_ENTRY_MP} MP`)
+  }
 
-  return { ok: true, mpCost: OVERRUN_MP_COST, entryCost: entry.cost }
+  return {
+    ok: true,
+    mpCost: OVERRUN_MP_COST,
+    entryCost,
+    participantIds: participants.map((unit) => unit.id),
+  }
 }

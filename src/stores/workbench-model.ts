@@ -1534,10 +1534,18 @@ export function attackForceForHex(input: {
     defenders: [...overrun.defenders],
   })
   if (!verdict.ok) return null
+  /*
+   * 8.1b（用户 2026-11-13 裁定）：整组复判会逐单位再算一次进格费，不够进格的成员被剔出
+   * `participantIds`（留原格、不参突）。故最终名单以引擎返回的 participantIds 为准，
+   * 剩余 MP 也按**这个名单**重算——不能用全部 eligible 的最紧值代表整堆。
+   */
+  const mpById = new Map(eligible.map((item) => [item.id, item.mp]))
+  const participantIds = verdict.participantIds
+  if (participantIds.length === 0) return null
   return {
     attackType: 'overrun',
-    unitIds: eligible.map((item) => item.id),
-    mpRemaining,
+    unitIds: participantIds,
+    mpRemaining: Math.min(...participantIds.map((id) => mpById.get(id) ?? 0)),
     mpCost: verdict.mpCost,
     entryCost: verdict.entryCost,
   }

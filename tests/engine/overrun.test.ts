@@ -227,6 +227,45 @@ describe('8.1b / 8.1c 地形门槛：进格 ≤3 MP，且不得用道路降费',
     ).toMatchObject({ ok: false, rule: '8.1b' })
   })
 
+  it('8.1b：混合堆叠逐单位算进格费（用户 2026-11-13 裁定），不够者留原格', () => {
+    // 同一格 Forest：步行 2 MP（够）、轮式 4 MP（不够）；交换顺序结果必须一致
+    const leg = unit({ id: 'leg', mobility: 'leg' })
+    const truck = unit({ id: 'truck', mobility: 'truck', fuelled: true })
+    const run = (units: readonly MoveUnitView[]) =>
+      overrunEligibility({
+        phase: 'movement',
+        context: context(units, { map: forestTarget }),
+        unitIds: units.map((item) => item.id),
+        target: TARGET,
+        mpRemaining: 6,
+        startedStackedTogether: true,
+        defenders: [{ id: 'd1', isCombat: true }],
+      })
+
+    const legFirst = run([leg, truck])
+    expect(legFirst.ok).toBe(true)
+    if (legFirst.ok) {
+      expect(legFirst.participantIds).toEqual(['leg'])
+      expect(legFirst.entryCost).toBe(2)
+    }
+    const truckFirst = run([truck, leg])
+    expect(truckFirst.ok).toBe(true)
+    if (truckFirst.ok) {
+      expect(truckFirst.participantIds).toEqual(['leg'])
+      expect(truckFirst.entryCost).toBe(2)
+    }
+
+    // 全员都不够 ⇒ 整堆不可突袭（仍报 8.1b）
+    expect(run([truck, unit({ id: 'truck2', mobility: 'truck', fuelled: true })])).toMatchObject({
+      ok: false,
+      rule: '8.1b',
+    })
+    // 全员都够 ⇒ 照常全参突
+    const both = run([leg, unit({ id: 'leg2', mobility: 'leg' })])
+    expect(both.ok).toBe(true)
+    if (both.ok) expect(both.participantIds).toEqual(['leg', 'leg2'])
+  })
+
   it('8.1b：地形写为「全部（All）」的格不能突袭', () => {
     // 步行过大河 = All
     const river = makeMap({ crossings: { '36.13|36.14': { river: 'Major River' } } })

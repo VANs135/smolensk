@@ -59,7 +59,14 @@ export const OVERRUN_COST_MP = OVERRUN_MP_COST
 
 /** 突袭资格判定结果 */
 export type OverrunEligibility =
-  | { ok: true; rule: string; mpCost: number; entryCost: number }
+  | {
+      ok: true
+      rule: string
+      mpCost: number
+      entryCost: number
+      /** 8.1b：逐单位通过进格费的参突者（混合堆叠里不够进格的成员留原格，见用户 2026-11-13 裁定） */
+      participantIds: string[]
+    }
   | {
       ok: false
       rule: string
@@ -114,7 +121,13 @@ export function overrunEligibility(input: {
     startedStackedTogether: input.startedStackedTogether,
   })
   if (!check.ok) return check
-  return { ok: true, rule: '8.1', mpCost: check.mpCost, entryCost: check.entryCost }
+  return {
+    ok: true,
+    rule: '8.1',
+    mpCost: check.mpCost,
+    entryCost: check.entryCost,
+    participantIds: check.participantIds,
+  }
 }
 
 /* ────────────────────────────── 8.0 / 8.1a/f 突袭后的后果 ────────────────────────────── */
