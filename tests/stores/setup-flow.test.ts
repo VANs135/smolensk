@@ -459,11 +459,21 @@ describe('W7 C14：玩家自定义初设（IV-A / IV-I）', () => {
       }
     }
     expect(setup.stepDone['selfSetup']).toBe(false) // 轴方自由项还没做
+    // 用户 2026-11-14 裁定 2：重置前游标/确认/台账都得有东西，重置后全部归零
+    expect(setup.setupSideCursor).not.toBeNull()
     setup.resetAll()
     expect(workbench.units).toHaveLength(0)
     expect(workbench.deadPile).toHaveLength(0)
     expect(setup.applied).toBe(false)
     expect(setup.spDumps).toHaveLength(0)
+    expect(setup.setupSideCursor).toBeNull()
+    expect(setup.setupSideConfirmed).toEqual({})
+    expect(setup.setupConfirmed).toBe(false)
+    expect(setup.setupEffectsExecuted).toBe(false)
+    // 空盘面不得再能"确认并开局"
+    expect(setup.canFinishSetup()).toBe(false)
+    expect(setup.lastAction?.detail).toContain('初设已重置')
+    expect(setup.initialPlacementsComplete).toBe(false)
   })
 })
 

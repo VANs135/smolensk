@@ -1636,6 +1636,8 @@ export const useContainersStore = defineStore('containers', () => {
             if (applyShiftWestOneNow(formationId))
               placements.push({ formationId, toHex: chosen, placed: true })
             else {
+              // 裁定 1：落点摆不出去（如该师不在图上）⇒ 抹掉落点，让初设栏露出该项
+              clearDrawShiftHexNow(formationId)
               pendingShift.push(formationId)
               placements.push({ formationId, toHex: chosen, placed: false })
             }
@@ -1672,6 +1674,8 @@ export const useContainersStore = defineStore('containers', () => {
             !setDrawShiftHexNow(formationId, `${target.hex.col}.${target.hex.row}`) ||
             !applyShiftWestOneNow(formationId)
           ) {
+            // 裁定 1：自动落点摆不出去 ⇒ 抹掉落点，回到「待玩家给落点」名单
+            clearDrawShiftHexNow(formationId)
             pendingShift.push(formationId)
             placements.push({
               formationId,
@@ -2048,6 +2052,18 @@ export const useContainersStore = defineStore('containers', () => {
     formationDrawOutcomes.value = formationDrawOutcomes.value.map((row) =>
       row.groupKind === 'shiftWest' ? { ...row, destinations: merged } : row,
     )
+  }
+
+  /**
+   * 用户 2026-11-14 裁定 1：抽签时**算出了落点但摆位失败**（如该师不在图上）⇒ 抹掉落点，
+   * 让该师回到「待玩家给落点」名单里（初设栏露出西移项）。
+   * 留着落点会让 `pendingShiftWestPlacements` 显示 hexText≠null、初设栏不列该项，而
+   * `canFinishSetup` 又按 pendingShift 拒绝 ⇒ 玩家既看不到项也开不了局。
+   */
+  function clearDrawShiftHexNow(formationId: string): void {
+    const next = { ...drawShiftHexText.value }
+    delete next[formationId]
+    drawShiftHexText.value = next
   }
 
   /**

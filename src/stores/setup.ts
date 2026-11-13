@@ -1519,6 +1519,12 @@ export const useSetupStore = defineStore('setup', () => {
   const finished = ref(false)
 
   /**
+   * 用户 2026-11-14 裁定 2：验证页「重置初设」把盘面清空后置真 ⇒ 禁止在空盘面上收束/开局；
+   * `runAutoSetup`（含选剧本的自动初设）落盘成功即清除。只由 `resetAll` 与 `runAutoSetup` 改。
+   */
+  const boardResetPending = ref(false)
+
+  /**
    * 两段式第一段：**初设已确认**（规格 §4.1）
    *
    * 本剧本有未执行的 `setup.effects` 时，「完成初设」只确认、不建会话/不推进；
@@ -1567,6 +1573,16 @@ export const useSetupStore = defineStore('setup', () => {
   )
 
   function canFinishSetup(): boolean {
+    /*
+     * 用户 2026-11-14 裁定 2：验证页「重置初设」清空盘面后置 `boardResetPending`
+     * ⇒ 不再允许在空盘面上确认并开局；要开局必须重新进入初设（或重跑自动初设）把盘面落回来。
+     */
+    if (boardResetPending.value)
+      return record({
+        ok: false,
+        rule: SETUP_RULE,
+        reason: '初设已重置（先进入初设或重跑自动初设）',
+      })
     // 3.4b：刚落下的 SP 未选集群 ⇒ 不算摆完，不能收束初设
     if (pendingSpPlacement.value !== null)
       return record({
@@ -1880,11 +1896,12 @@ export const useSetupStore = defineStore('setup', () => {
     setupConfirmed.value = false
     setupEffectLedger.value = null
     workbench.initialSetupInProgress = true
+    // 换剧本 = 重新开局 ⇒ 先清盘面，再自动落盘固定初设（不叠加、不残留上一剧本的算子）
+    // ★ 用户 2026-11-14 裁定 2：`resetAll` 现在会清掉分方游标/双方确认/抽签台账 ⇒
+    //   游标必须在它**之后**按新剧本重开，否则刚起的游标会被重置抹掉。
+    resetAll()
     // 第六批条 1（S1）：换剧本 ⇒ 分方游标按**新剧本的先布设方**重开
     armSetupSideCursor()
-    cancelTruckPick()
-    // 换剧本 = 重新开局 ⇒ 先清盘面，再自动落盘固定初设（不叠加、不残留上一剧本的算子）
-    resetAll()
     if (!runAutoSetup()) return false
     // G3：换剧本 ＝ 重新加载剧本数据 ⇒ 缺口登记随之重算（加载期在 notes 里可见一次）
     setupGaps.value = [...collectSetupGaps(next)]
@@ -1928,6 +1945,21 @@ export const useSetupStore = defineStore('setup', () => {
       !setupEffectsExecuted.value &&
       setupEffects.value.length > 0 &&
       game.session === null,
+  )
+
+  /**
+   * 用户 2026-11-14 裁定 1：抽签成功但仍有西移师**算不出落点**时，整笔不再回滚 ⇒
+   * 盘面与台账留在"已抽签、未开局"，由初设栏给落点；落齐（无待办）后这里露出「开始游戏」。
+   *
+   * 正常路径下 `drawSetupEffectsNow` 会一把抽签+开局，`game.session !== null` ⇒ 本按钮永不出现。
+   */
+  const setupStartEntryVisible = computed(
+    () =>
+      applied.value &&
+      setupConfirmed.value &&
+      setupEffectsExecuted.value &&
+      game.session === null &&
+      pendingPlacement.value.length === 0,
   )
 
   /** 事务快照：单位本体（含模式 / DG）+ 抽签处置状态；任一效果失败即整体回滚 */
@@ -1986,6 +2018,23 @@ export const useSetupStore = defineStore('setup', () => {
       executedAt: new Date().toISOString(),
       result: outcome,
     })
+    /*
+     * 用户 2026-11-14 裁定 1：抽签**算不出西移落点不算失败**。
+     *
+     * 保留盘面与台账（= "抽签成功、待玩家给落点"），初设栏露出西移项；落齐后由
+     * `setupStartEntryVisible` 的「开始游戏」执行开局。修前这里一律 `startGameNow` ⇒
+     * 被 `canFinishSetup` 的西移义务拒绝 → 整笔回滚 ⇒ 玩家永远没有给落点的机会。
+     */
+    const shiftPending = containers.pendingShiftWestPlacements.some((item) => item.hexText === null)
+    if (shiftPending) {
+      for (const item of outcome.executed) workbench.pushLog('success', item.detail, item.rule)
+      workbench.pushLog(
+        'warning',
+        'ch10：抽签成功，仍有西移师待给落点——在初设栏点「地面单位与基地」里的该项、再点地图；落齐后按「开始游戏」',
+        'ch10',
+      )
+      return true
+    }
     if (!startGameNow()) {
       setupEffectLedger.value = null
       restoreSetupDrawBoard(board)
@@ -2084,6 +2133,24 @@ export const useSetupStore = defineStore('setup', () => {
     workbench.airUnits.splice(0, workbench.airUnits.length)
     workbench.deadPile.splice(0, workbench.deadPile.length)
     resetInputs()
+    /*
+     * 用户 2026-11-14 裁定 2：验证页「重置初设」把**分方游标、双方确认、抽签台账**一并清掉。
+     *
+     * 修前只清盘面与输入 ⇒ 空盘面还留着"已换手/已确认/已抽签"的旧状态，
+     * 确认标记为真时能直接"完成初设"并开局。现在游标/确认/台账归零，另置
+     * `boardResetPending` 由 `canFinishSetup`/`initialPlacementsComplete` 挡住空盘面开局。
+     */
+    setupSideCursor.value = null
+    setupSideConfirmed.value = {}
+    setupConfirmed.value = false
+    setupEffectLedger.value = null
+    finished.value = false
+    placing.value = null
+    // 空盘面禁止收束/开局；`runAutoSetup` 落盘成功即清
+    boardResetPending.value = true
+    workbench.initialSetupInProgress = true
+    containers.resetSetupDraws()
+    cancelTruckPick()
   }
 
   /**
@@ -2345,6 +2412,8 @@ export const useSetupStore = defineStore('setup', () => {
       notesLocal.push(truckNote)
     }
     applied.value = true
+    // 用户 2026-11-14 裁定 2：自动初设重新落盘 ⇒ 解除「重置后空盘面」禁令
+    boardResetPending.value = false
     completed.value = { ...completed.value, autoSetup: true }
     notes.value = [
       ...built.dataGaps,
@@ -3242,6 +3311,7 @@ export const useSetupStore = defineStore('setup', () => {
 
   const initialPlacementsComplete = computed(
     () =>
+      !boardResetPending.value &&
       setupSideCursor.value === null &&
       // ch10：抽签是初设单位摆完**之后**的一次性动作，不算"初设未完成"
       setupPlacementComplete.value &&
@@ -3282,6 +3352,8 @@ export const useSetupStore = defineStore('setup', () => {
       )
     },
     restore(value) {
+      // 恢复盘面即解除「重置后空盘面」禁令（裁定 2）
+      boardResetPending.value = false
       // 旧对局可恢复盘面，但不能伪造初设历史或串入当前初设进度。
       if (value === undefined) {
         resetInputs(false)
@@ -3423,6 +3495,8 @@ export const useSetupStore = defineStore('setup', () => {
     canFinishSetup,
     setupPlacementComplete,
     setupDrawEntryVisible,
+    // 裁定 1：抽签成功但仍有待给落点的西移师 ⇒ 落齐后由这里露出「开始游戏」
+    setupStartEntryVisible,
     // 两段式（规格 §4）：确认标记 + 持久台账 + 唯一执行入口
     setupConfirmed,
     setupEffects,

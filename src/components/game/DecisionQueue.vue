@@ -152,7 +152,9 @@ function isActive(item: SetupPlacing): boolean {
 function pick(item: SetupPlacing): void {
   if (item.kind === 'truck') return
   // 卡被挡时不再借右键旁路兜底：落盒由卡下的「放入地图外盒」按钮单独承担
-  if (item.blockedReason !== null) return
+  // ★ 裁定 1：ch10 西移项的候选只是"按初设行算出的范围"；算不出来时玩家仍可点任意图上格
+  //   （`placeAtHex` 对 shift 只校验在图上）⇒ 不能因为 blockedReason 把整项锁死。
+  if (item.blockedReason !== null && item.kind !== 'shift') return
   // §6-A：ch10 抽中西移的师（落点按原文算法（沿道路西移 3 格）得出，道路数据不全 ⇒ 由玩家点地图给）
   if (item.kind === 'shift') {
     if (item.formationId !== undefined) setup.beginShiftPlacement(item.formationId)
@@ -203,6 +205,16 @@ function sideMark(side: 'axis' | 'soviet'): string {
         抽取编队
       </BaseButton>
       <span class="queue__hint">ch10 / ch11：初设已确认，抽一次即开局</span>
+    </div>
+
+    <!--
+      裁定 1：抽签成功但仍有西移师算不出落点 ⇒ 不整笔回滚、先不给开局；
+      玩家在「地面单位与基地」里把西移项落齐后，这里露出唯一开局按钮。
+      （正常路径抽签即开局、session 非空 ⇒ 本按钮不出现。）
+    -->
+    <div v-if="setup.setupStartEntryVisible" class="queue__row-actions">
+      <BaseButton variant="primary" size="sm" @click="setup.startGameNow()"> 开始游戏 </BaseButton>
+      <span class="queue__hint">ch10：西移落点已齐，开局</span>
     </div>
 
     <!--

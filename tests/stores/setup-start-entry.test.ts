@@ -36,7 +36,9 @@ const count = (file: string, pattern: RegExp): number => (read(file).match(patte
 describe('批 E 切片 1：开局入口收敛（唯一入口＝初设收束点）', () => {
   it('① 唯一入口：`startGameNow()` 的 UI 调用点**只有**决策队列的「完成初设」', () => {
     // stores/setup.ts 里是定义（1 处 function + 返回表导出），UI 侧只许 DecisionQueue 调
-    expect(count('src/components/game/DecisionQueue.vue', /\bstartGameNow\(\)/g)).toBe(2)
+    // 3 处＝「完成初设」「确认放弃并开局」与裁定 1 的「开始游戏」（抽签待落点落齐后）；
+    // 三者同在初设栏，仍只有这一个 UI 面在调 `startGameNow`。
+    expect(count('src/components/game/DecisionQueue.vue', /\bstartGameNow\(\)/g)).toBe(3)
     expect(count('src/components/setup/SetupPanel.vue', /startGameNow\(\)/g)).toBe(0)
     expect(count('src/components/session/FlowStrip.vue', /startGameNow\(\)/g)).toBe(0)
 

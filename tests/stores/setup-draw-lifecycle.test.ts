@@ -162,10 +162,15 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     expect(containers.lastAction?.detail).toContain('缺少待移动')
     expect(capture(board)).toBe(before)
     expect(containers.formationDrawOutcomes).toEqual([])
-    // 两段式：确认可过，但抽签执行失败 ⇒ 不得写台账、不得建会话
-    expect(setup.drawSetupEffectsNow()).toBe(false)
-    expect(setup.setupEffectLedger).toBeNull()
+    /*
+     * 用户 2026-11-14 裁定 1（推翻旧的"失败即回滚"口径）：缺失成员的西移师
+     * 视为"抽签成功、待玩家给落点" ⇒ 保留盘面与台账、初设栏露出该项，不建会话；
+     * 落齐后由「开始游戏」开局。
+     */
+    expect(setup.drawSetupEffectsNow(), setup.lastAction?.detail).toBe(true)
+    expect(setup.setupEffectLedger).not.toBeNull()
     expect(game.session).toBeNull()
+    expect(setup.pendingPlacement.some((item) => item.kind === 'shift')).toBe(true)
   })
 
   it('非西移组的直接应用入口也不重复提交死亡堆互换', () => {
