@@ -226,11 +226,25 @@ describe('右键：不灰按钮（不满足就不出现）', () => {
     const s = stores()
     s.workbench.setPhase('movement')
     goToActionStep(s.workbench, 'move.modeChange')
-    placeGround(s.workbench, legRecord(), HEX, 'soviet', 'l1')
-    expect(s.workbench.beginMoveFor(['l1'])).toBe(true)
+    // 20.0a 的拆分在移动中仍合法（`add()` 明列豁免），但只有**真能拆**的多军力师才出现。
+    // 用户 2026-11-14：单军力的拆分单位本身不再出这一项（入口不假、不灰）。
+    const division = placeGround(
+      s.workbench,
+      groundRecord(
+        'soviet',
+        (record) =>
+          record.isCombat === true &&
+          /Rifle Div/i.test(record.vassalName ?? '') &&
+          record.classes?.movementClass === 'leg',
+      ),
+      HEX,
+      'soviet',
+      'l1',
+    )
+    expect(s.workbench.beginMoveFor([division.instanceId])).toBe(true)
     expect(s.workbench.moveInteraction).not.toBe(null)
 
-    menuKeys(s, 'l1')
+    menuKeys(s, division.instanceId)
     // 20.0a 的拆分在移动中仍合法（`add()` 明列豁免）；其余"先结束移动"才能做的项整条消失。
     // 用户 2026-11-09：「模式改变」改列"此刻真正能切的模式"——该单位尚未耗 MP ⇒ 引擎
     // `canSwitchModeNow` 仍允许切到 move，故这项合法地留在菜单里（不再是"先结束移动"的灰按钮）。

@@ -2152,7 +2152,7 @@ export const useMapViewStore = defineStore('mapView', () => {
         disabledReason: null,
       })
     }
-    if (unit !== undefined && workbench.breakdownTimingOf(id) !== null) {
+    if (unit !== undefined && workbench.canCreateBreakdownNow(id)) {
       add('move.breakdown', {
         label: '创建拆分单位',
         rule: '20.0a',

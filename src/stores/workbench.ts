@@ -7674,6 +7674,65 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return 'startMove'
   }
 
+  /**
+   * 20.0 / 20.0a / 20.0b / 20.0g：该单位此刻**能不能**作为母单位创建拆分单位
+   *
+   * 用户 2026-11-14 口径「不可用项不出现」：修前右键菜单只看 `breakdownTimingOf`，
+   * 于是运输点数、空军基地、乃至**1 军力的拆分单位本身**都出「创建拆分单位」，
+   * 点开后才被 20.0（类型 / 最后一点军力）拒——入口是假的。这里把同一批判据前移：
+   *   · 20.0：只有「其他」类型；拆分单位本身已无军力可拆；最后一点军力不能拆；
+   *   · 20.0a：须处在真事件开出的时机窗口（`breakdownTimingOf`）；
+   *   · 20.0b：同方池里至少有一档 AR ≤ 母单位 AR；
+   *   · 20.0g：该方拆分单位池尚有存量。
+   */
+  function canCreateBreakdownNow(unitId: string): boolean {
+    const unit = unitOfInstance(unitId)
+    if (unit === undefined) return false
+    if (unit.specialized.includes('breakdown')) return false
+    if (unit.combatClass !== 'other') return false
+    if (unit.steps < 2) return false
+    if (breakdownTimingOf(unitId) === null) return false
+    if (breakdownRecordChoicesFor(unitId).length === 0) return false
+    return (breakdownPool.value[nationalityOfUnit(unit)] ?? 0) > 0
+  }
+
+  /**
+   * 20.0b：该母单位可选的拆分单位**记录**（同方、AR ≤ 母单位 AR）
+   *
+   * 面板的下拉只列这一份——修前列了整张拆分单位表，选 AR5 才被 20.0b 拒。
+   */
+  function breakdownRecordChoicesFor(parentId: string) {
+    const parent = unitOfInstance(parentId)
+    if (parent === undefined) return []
+    const parentAr = parent.faces.combat.ar
+    return choices.value.filter(
+      (item) =>
+        item.branch === 'breakdown' &&
+        item.side === parent.side &&
+        (item.factors?.combat?.ar ?? Number.POSITIVE_INFINITY) <= parentAr,
+    )
+  }
+
+  /**
+   * 20.0b / 20.0c / 20.0d：该母单位此刻可吸收的拆分单位（同方、同格堆叠、AR ≥ 母单位、标记模式相同）
+   *
+   * 吸收只发生在阶段末且须与母单位堆叠 ⇒ 面板不该列出别格 / 敌方 / 状态不一致的算子。
+   */
+  function breakdownAbsorbChoicesFor(parentId: string): ConsoleUnit[] {
+    const parent = unitOfInstance(parentId)
+    if (parent === undefined) return []
+    const parentAr = parent.faces.combat.ar
+    return unitsAt(parent.hex).filter(
+      (unit) =>
+        unit.side === parent.side &&
+        unit.specialized.includes('breakdown') &&
+        unit.faces.combat.ar >= parentAr &&
+        unit.mode.mode === parent.mode.mode &&
+        unit.mode.dg === parent.mode.dg &&
+        (unit.internalStocks ?? 'ready') === (parent.internalStocks ?? 'ready'),
+    )
+  }
+
   /** 因燃料/模式等原因没能开始移动时，条件满足后自动重试，省得玩家再点一次 */
   function retryBeginMove(): void {
     if (moveInteraction.value !== null) return
@@ -28676,6 +28735,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * （开始移动 / 战后推进 / 战后撤退），调用方不许自称"现在可以拆"。
      */
     breakdownTimingOf,
+    /*
+     * 20.0 / 20.0a–d：入口与候选的只读投影（右键菜单与拆分面板共用同一批判据）
+     *
+     * `canCreateBreakdownNow` 是「创建拆分单位」是否出现的唯一判据；
+     * `breakdownRecordChoicesFor` / `breakdownAbsorbChoicesFor` 是面板下拉的唯一数据源。
+     */
+    canCreateBreakdownNow,
+    breakdownRecordChoicesFor,
+    breakdownAbsorbChoicesFor,
     // 专规 4.3（可选）Setup Wiggle
     setupWiggleOn,
     setupWiggleParents,

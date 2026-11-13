@@ -22,12 +22,13 @@ const cargo = computed(() => {
 })
 const recordId = ref('')
 const absorbId = ref('')
+/** 20.0b：只列同方、AR ≤ 母单位 AR 的拆分单位记录（修前整张表都进下拉） */
 const breakdownRecords = computed(() =>
-  workbench.choices.filter((item) => item.branch === 'breakdown'),
+  subjectId.value === null ? [] : workbench.breakdownRecordChoicesFor(subjectId.value),
 )
-/** 20.0d 吸收对象＝图上已有的拆分单位 */
+/** 20.0b–d：只列与母单位同格堆叠、同方、AR ≥ 母单位、标记模式一致的拆分单位 */
 const breakdownUnitsOnMap = computed(() =>
-  workbench.units.filter((unit) => unit.specialized.includes('breakdown')),
+  subjectId.value === null ? [] : workbench.breakdownAbsorbChoicesFor(subjectId.value),
 )
 const refusal = computed(() =>
   props.order === 'railMove' ? workbench.railMoveError : workbench.actionRefusal,
