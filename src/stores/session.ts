@@ -21,6 +21,7 @@ import {
   applyAnswerToRecords,
   consensusDecisions,
   CONSENSUS_RULE,
+  OPTIONAL_RULES_ITEM,
   guidanceFor,
   makeSessionStepper,
   pendingAgreedOptionIndex,
@@ -350,6 +351,17 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       agreedOptionItems.value.filter((_item, index) => agreedChecks.value[index] === true).length,
   )
 
+  /**
+   * 专规 4.0：整章可选规则（4.1a–4.3）本局是否启用
+   *
+   * 唯一判据＝**选剧本前**在共识清单里勾定「可选规则与房规」那一条；未勾定 ⇒ 整章不生效。
+   * 4.0 各条没有各自的面板开关，一律读这里（不再有段内第二开关）。
+   */
+  const optionalRulesOn = computed(() => agreedOptionAdoptedOf.value(OPTIONAL_RULES_ITEM))
+
+  /** 4.0：共识是否已冻结（开局后不再允许改） */
+  const agreedLocked = computed(() => session.value !== null)
+
   /** 是否已把勾选写成日志结论（＝存档里已有共识结论） */
   const agreedRecorded = computed(
     () =>
@@ -359,6 +371,10 @@ export const useGameSessionStore = defineStore('gameSession', () => {
 
   /** 勾选 / 取消勾选一项（勾 = 采用该条；不勾 = 不用） */
   function setAgreedCheck(index: number, checked: boolean): void {
+    if (agreedLocked.value) {
+      error.value = { rule: CONSENSUS_RULE, reason: 'consensusLockedAfterStart' }
+      return
+    }
     if (index < 0 || index >= agreedOptionItems.value.length) return
     const next = [...agreedChecks.value]
     while (next.length < agreedOptionItems.value.length) next.push(false)
@@ -373,6 +389,10 @@ export const useGameSessionStore = defineStore('gameSession', () => {
 
   /** 设定该项是否**生效**（仅存档回读/测试用；界面已统一为单个勾选框） */
   function setAgreedAdopt(index: number, adopted: boolean): void {
+    if (agreedLocked.value) {
+      error.value = { rule: CONSENSUS_RULE, reason: 'consensusLockedAfterStart' }
+      return
+    }
     if (index < 0 || index >= agreedOptionItems.value.length) return
     const next = [...agreedAdopted.value]
     while (next.length < agreedOptionItems.value.length) next.push(false)
@@ -382,11 +402,15 @@ export const useGameSessionStore = defineStore('gameSession', () => {
 
   /** 一键全选 / 全不选（同时把「是否采纳」对齐到勾选） */
   function setAllAgreedChecks(checked: boolean): void {
+    if (agreedLocked.value) {
+      error.value = { rule: CONSENSUS_RULE, reason: 'consensusLockedAfterStart' }
+      return
+    }
     agreedChecks.value = agreedOptionItems.value.map(() => checked)
     agreedAdopted.value = agreedOptionItems.value.map(() => checked)
   }
 
-  /** 重置勾选与采纳（开局 / 换剧本 / 重置时调用）——默认**全部不勾（都不用）** */
+  /** 重置勾选与采纳（重开一局时调用）——默认**全部不勾（都不用）** */
   function resetAgreedChecklist(): void {
     agreedChecks.value = agreedOptionItems.value.map(() => false)
     // 「是否生效」留空 ⇒ 界面与内核都按「勾选即采纳」的缺省理解（未勾选即不生效）
@@ -583,11 +607,9 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       error.value = { rule: '2.2', reason: 'scenarioLockedWhilePlaying' }
       return false
     }
-    const changed = scenarioId.value !== next
     scenarioId.value = next
     session.value = null
-    // W7 C13：换剧本即重置共识勾选（新剧本要重新逐项一致同意，专规 4.0）
-    if (changed) resetAgreedChecklist()
+    // 4.0：共识在**选剧本之前**勾定 ⇒ 换剧本不重置（勾定的是规则，不是某个剧本）
     lastAdvanceKind.value = null
     error.value = null
     return true
@@ -625,6 +647,14 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       status: { form: 'created' },
     }
     session.value = startSession(created)
+    /*
+     * 4.0（用户 2026-11-13 口径）：共识在**选剧本之前**勾定，开局即冻结并写入日志；
+     * 此后再改一律被拒，不存在局内第二个开关。
+     */
+    if (!confirmAgreedChecklist()) {
+      session.value = null
+      return false
+    }
     phaseHooks?.started?.()
     // 4.0：开局采用玩家已经确认的草稿；不得在写入结论前清空。
     lastAdvanceKind.value = null
@@ -1024,6 +1054,9 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     agreedChecklistRows,
     agreedCheckedCount,
     agreedRecorded,
+    // 4.0：整章可选规则的总判据；开局后冻结
+    optionalRulesOn,
+    agreedLocked,
     // B50：按条目文本读共识结论（3.4b 可选项等）
     agreedOptionAdoptedOf,
     setAgreedCheck,

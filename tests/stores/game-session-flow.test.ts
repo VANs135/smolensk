@@ -74,50 +74,50 @@ describe('W6 C10：开局与初设（会话驱动）', () => {
 })
 
 describe('W7 C13：开局共识勾选列表（专规 4.0：勾 = 采用，默认全部不勾）', () => {
-  it('scenarios.agreedOptions：默认全部不用；未写入日志时步进会**自动补写**结论再推进', () => {
+  it('scenarios.agreedOptions：默认全部不用；开局即写入日志并冻结', () => {
     const store = newStore()
     store.startGame()
     // 勾选列表逐行来自数据（顺序即题号）；★ 用户口径：默认全部不勾（都不用）
     expect(store.agreedChecklistRows.map((row) => row.item)).toEqual([...store.agreedOptionItems])
     expect(store.agreedCheckedCount).toBe(0)
-    expect(store.agreedRecorded).toBe(false)
-
-    // 不勾任何一项也能直接开局：步进时按当前勾选（默认全不用）自动写入日志
-    expect(store.stepNow()).toBe(true)
+    // 4.0（2026-11-13）：决定点在选剧本之前，开局时按当前勾选写入日志
     expect(store.agreedRecorded).toBe(true)
     expect(store.consensus.every((entry) => entry.adopted === false)).toBe(true)
-    // 共识已收束 ⇒ 流程推进到 Pre-Turn 的下一步（先手判定）
-    expect(store.records?.preTurnSegment).toBe('firstPlayerDetermination')
+    expect(store.agreedLocked).toBe(true)
+
+    // 局内改勾选一律被拒（不静默、但盘面与共识都不动）
+    store.setAgreedCheck(1, true)
+    expect(store.agreedCheckedCount).toBe(0)
+    expect(store.error).toMatchObject({ rule: '4.0', reason: 'consensusLockedAfterStart' })
   })
 
-  it('scenarios.agreedOptions：勾上某条 ⇒ 自动补写时该条被采纳', () => {
+  it('scenarios.agreedOptions：选剧本前勾上某条 ⇒ 开局即采纳该条', () => {
     const store = newStore()
-    store.startGame()
     store.setAgreedCheck(1, true)
     expect(store.agreedCheckedCount).toBe(1)
-    expect(store.stepNow()).toBe(true)
+    store.startGame()
     expect(store.consensus[1]).toMatchObject({ adopted: true })
     expect(store.consensus.filter((entry) => entry.adopted === true)).toHaveLength(1)
   })
 
-  it('scenarios.agreedOptions：全部勾选 + 写入日志 ⇒ 逐条结论进日志，此后进入天气判定', () => {
+  it('scenarios.agreedOptions：选剧本前全部勾选 ⇒ 开局逐条写入日志', () => {
     const store = newStore()
+    store.setAllAgreedChecks(true)
     store.startGame()
-    confirmConsensus(store)
     expect(store.consensus.every((entry) => entry.adopted === true)).toBe(true)
-    // 共识全部答完 ⇒ 下一步是 Pre-Turn 的天气判定（自动段）
-    expect(store.stepNow()).toBe(true)
-    expect(store.records?.preTurnSegment).toBe('firstPlayerDetermination')
+    expect(store.agreedRecorded).toBe(true)
+    expect(store.error).toBeNull()
   })
 
-  it('scenarios.agreedOptions：写入日志后仍可逐条改（勾选 = 采用该条）', () => {
+  it('scenarios.agreedOptions：开局后不再允许逐条改（勾选与日志都不动）', () => {
     const store = newStore()
-    store.startGame()
     store.setAllAgreedChecks(true)
+    store.startGame()
     store.setAgreedCheck(0, false)
+    expect(store.consensus[0]).toMatchObject({ adopted: true })
+    expect(store.agreedChecklistRows[0]?.checked).toBe(true)
+    // 重复写入是幂等的
     expect(store.confirmAgreedChecklist()).toBe(true)
-    expect(store.consensus[0]).toMatchObject({ adopted: false })
-    expect(store.consensus.slice(1).every((entry) => entry.adopted === true)).toBe(true)
   })
 })
 

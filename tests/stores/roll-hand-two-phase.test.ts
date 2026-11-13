@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { PANZER_GROUP_OPTION_ITEM } from '@/engine/rules/panzer-groups'
+import { OPTIONAL_RULES_ITEM } from '@/engine/session-flow'
 import { useGameSessionStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -170,6 +171,9 @@ describe('v7.1 第二段：判定阶段 → 放置阶段', () => {
     // 统一手牌是唯一放置入口
     expect(source).toContain('workbench.beginRollHandEntryNow(entry.id)')
     expect(source).toContain('workbench.rollHandEntries')
+    // 4.0（2026-11-13）：4.1b 不再有段内第二个开关，只看选剧本前的共识
+    expect(source).not.toContain('启用可选 4.1b')
+    expect(source).not.toContain('variableReplInputs.option4_1b')
   })
 
   it('3.4b 未选归属的补给列车卡：数据层标记为 panzerGroup，选完归属即解除；计数口径不变', () => {
@@ -178,6 +182,10 @@ describe('v7.1 第二段：判定阶段 → 放置阶段', () => {
     const optionAt = session.agreedOptionItems.indexOf(PANZER_GROUP_OPTION_ITEM)
     expect(optionAt).toBeGreaterThanOrEqual(0)
     session.setAgreedAdopt(optionAt, true)
+    // 4.0：4.1b 是否启用只看「可选规则与房规」这一条（不再有段内开关）
+    const optionalAt = session.agreedOptionItems.indexOf(OPTIONAL_RULES_ITEM)
+    expect(optionalAt).toBeGreaterThanOrEqual(0)
+    session.setAgreedAdopt(optionalAt, true)
     store.setActiveSide('axis')
 
     // 4.1b 的自动补给列车日期（8 / 12 / 15 Jul）：逐个回合找一次即可
@@ -189,7 +197,6 @@ describe('v7.1 第二段：判定阶段 → 放置阶段', () => {
       expect(at).toBeGreaterThanOrEqual(0)
       store.setSegmentStepIndex(at)
       store.variableReplInputs.autoRoll = false
-      store.variableReplInputs.option4_1b = true
       roll(store)
       found = store.supplyTrainPending
     }

@@ -152,11 +152,11 @@ describe('W6 D1：读档恢复（含进行中会话）', () => {
 
   it('D1：共识开关结论随档恢复（已答的保留原选择，读回后可继续推进）', () => {
     const { store, adapter } = newStore()
-    store.startGame()
-    // 全部勾选（都已谈过），但第 1 条一致决定不用 ⇒ 结论是「不采纳」（勾选 ≠ 采纳）
+    // 4.0（2026-11-13）：勾定必须在开局前；全部勾选，但第 1 条一致决定不用
+    // ⇒ 结论是「不采纳」（勾选 ≠ 采纳）
     store.setAllAgreedChecks(true)
     store.setAgreedAdopt(0, false)
-    expect(store.confirmAgreedChecklist()).toBe(true)
+    expect(store.startGame()).toBe(true)
     expect(store.consensus[0]).toMatchObject({ adopted: false })
     expect(store.saveNow()).toBe(true)
 

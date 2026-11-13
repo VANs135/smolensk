@@ -903,16 +903,11 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           起）、3.6 随机事件（19 Jul、25 Aug）。骰面与表名只在结算日志里，便于复算。
         </p>
       </RuleNote>
-      <div v-if="showsActions" class="row">
+      <div v-if="replCheckVisible || workbench.variableReplRolled" class="row">
         <!--
-        B28（用户口径 #9「所有的随机数抽取一律自动结算」）：骰面与"是否自动掷"的勾选都撤掉 ——
-        一律走种子化 RNG（`rng` 默认 `autoRoll: true`），骰面在结果行与结算日志里可复算。
-        留在这里的只有**选择类**的输入（如可选规则的启用）。
+        B28：骰面与"是否自动掷"的勾选都撤掉 —— 一律走种子化 RNG，骰面在结果行与结算日志里可复算。
+        4.0（用户 2026-11-13 口径）：4.1b 是否启用由**选剧本前的共识**决定，段内不再有第二个开关。
       -->
-        <label class="field">
-          <input v-model="workbench.variableReplInputs.option4_1b" type="checkbox" />
-          启用可选 4.1b（8 / 12 / 15 Jul 三个回合自动 Supply Train）
-        </label>
         <BaseButton v-if="replCheckVisible" variant="primary" size="sm" @click="runReplCheck">
           掷骰检定
         </BaseButton>

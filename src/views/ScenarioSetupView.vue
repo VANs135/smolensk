@@ -164,7 +164,8 @@ function onEnterSetup(): void {
             </fieldset>
           </section>
 
-          <details class="scenario__sheet scenario__consensus">
+          <!-- 4.0：只在**选剧本之前**可勾定；开局后冻结，整块不再出现（不允许局内改） -->
+          <details v-if="!gameSession.agreedLocked" class="scenario__sheet scenario__consensus">
             <summary class="scenario__heading">
               <span>开局共识</span>
               <span class="num">{{ gameSession.agreedCheckedCount }} 项 · §4.0</span>

@@ -7,7 +7,6 @@ import { BarragePanel } from '@/components/barrage'
 import { CombatPanel } from '@/components/combat'
 import { ContainersPanel } from '@/components/containers'
 import { ExclusiveRulesPanel } from '@/components/exclusive'
-import { ConsensusChecklist } from '@/components/hotseat'
 import { MapCanvas } from '@/components/map'
 import { ReinforcementPanel } from '@/components/reinforcement'
 import {
@@ -362,8 +361,7 @@ onMounted(() => {
       <!-- W6 C10：完整流程条（会话驱动）。★ 本页是**引擎验证页**：保留「推进一步」逐步核对 -->
       <FlowStrip stepwise />
 
-      <!-- W7 C13：开局共识勾选列表（专规 4.0；选剧本后第一回合开始前须全部勾选） -->
-      <ConsensusChecklist />
+      <!-- W7 C13 已移到选剧本页：4.0 共识只在**选剧本之前**勾定，开局后不再出现/不可改 -->
 
       <!-- W7 C14：初设与开局流程（剧本选择 → 编制抽取 → 卡车满载 → SP 归属 → 自动初设 →
            飞机初设 → 玩家自定义初设） -->

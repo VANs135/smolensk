@@ -192,42 +192,38 @@ describe('W7 C13：共识勾选列表（专规 4.0：勾 = 采用该条，默认
     session = stores.session
   })
 
-  it('C13：勾选列表来自数据，开局后默认全不勾；步进时自动补写结论再推进', () => {
+  it('C13：勾选列表来自数据，默认全不勾；开局即写入日志并冻结', () => {
     session.setScenarioId('1')
     expect(session.startGame()).toBe(true)
     expect(session.agreedChecklistRows.length).toBe(session.agreedOptionItems.length)
     // ★ 用户口径：默认全部不勾（都不用）
     expect(session.agreedChecklistRows.every((row) => row.checked)).toBe(false)
     expect(session.agreedCheckedCount).toBe(0)
-    expect(session.agreedRecorded).toBe(false)
-
-    // 不勾任何一项也照样开局：步进时按当前勾选（默认全不用）自动写入日志（4.0）
-    expect(session.stepNow()).toBe(true)
+    // 4.0（2026-11-13）：决定点在选剧本之前，开局时按当前勾选写入日志并冻结
     expect(session.agreedRecorded).toBe(true)
     expect(session.consensus.every((decision) => decision.adopted === false)).toBe(true)
+    expect(session.agreedLocked).toBe(true)
   })
 
-  it('C13：单项即采用（一个勾选框：勾 = 用这条）', () => {
+  it('C13：单项即采用（一个勾选框：勾 = 用这条，开局前勾定）', () => {
     session.setScenarioId('1')
-    session.startGame()
     session.setAgreedCheck(1, true)
     expect(session.agreedCheckedCount).toBe(1)
     expect(session.agreedChecklistRows[1]?.checked).toBe(true)
     expect(session.agreedChecklistRows[0]?.checked).toBe(false)
-    expect(session.confirmAgreedChecklist()).toBe(true)
+    expect(session.startGame()).toBe(true)
     expect(session.consensus[1]?.adopted).toBe(true)
     expect(session.consensus[0]?.adopted).toBe(false)
   })
 
-  it('C13：全部勾选 + 写入日志 ⇒ 结论进日志；此后第一回合才开始', () => {
+  it('C13：选剧本前全部勾选 ⇒ 开局结论进日志；此后第一回合才开始', () => {
     session.setScenarioId('1')
-    session.startGame()
     for (let index = 0; index < session.agreedOptionItems.length; index += 1) {
       session.setAgreedCheck(index, true)
     }
     expect(session.agreedCheckedCount).toBe(session.agreedOptionItems.length)
 
-    expect(session.confirmAgreedChecklist()).toBe(true)
+    expect(session.startGame()).toBe(true)
     expect(session.agreedRecorded).toBe(true)
     // 逐条结论都写进了日志（＝存档的一部份，4.0）
     const answers = session.log.filter((entry) => entry.action === 'answer')
@@ -241,31 +237,26 @@ describe('W7 C13：共识勾选列表（专规 4.0：勾 = 采用该条，默认
 
   it('C13：谈过但不用的条目也允许（存档回读的「勾了但不生效」仍可表示）', () => {
     session.setScenarioId('1')
-    session.startGame()
     session.setAllAgreedChecks(true)
     // 第 2 条（秘密掷骰 4.9e）勾了但决定不用
     session.setAgreedAdopt(1, false)
     expect(session.agreedCheckedCount).toBe(session.agreedOptionItems.length)
-    expect(session.confirmAgreedChecklist()).toBe(true)
+    expect(session.startGame()).toBe(true)
     expect(session.consensus[0]?.adopted).toBe(true)
     expect(session.consensus[1]?.adopted).toBe(false)
     expect(session.agreedChecklistRows[1]?.adopted).toBe(false)
   })
 
-  it('C13：换剧本 / 重开一局都会把勾选恢复为默认（本局预备动作）', () => {
-    session.setScenarioId('1')
-    session.startGame()
+  it('C13：选剧本前勾定；换剧本不重置，重开一局才恢复默认', () => {
     session.setAgreedCheck(0, true)
     expect(session.agreedCheckedCount).toBe(1)
 
-    // 已开局时换剧本会被拒（2.2：避免流程与剧本错配）⇒ 先重置
-    expect(session.setScenarioId('3')).toBe(false)
-    session.resetGame()
-    // ★ 默认全不勾（用户口径）
-    expect(session.agreedCheckedCount).toBe(0)
+    // 4.0：勾定在选剧本之前 ⇒ 换剧本不动结论
     expect(session.setScenarioId('3')).toBe(true)
+    expect(session.agreedCheckedCount).toBe(1)
 
-    session.startGame()
+    // 重开一局（清空会话）才恢复默认：全不勾
+    session.resetGame()
     expect(session.agreedCheckedCount).toBe(0)
   })
 
@@ -275,13 +266,12 @@ describe('W7 C13：共识勾选列表（专规 4.0：勾 = 采用该条，默认
     const hotseat = useHotseatStore()
     const store = useGameSessionStore()
     store.setScenarioId('1')
-    store.startGame()
-    // 未写入日志 ⇒ 默认态（公开掷骰）
+    // 未开局 ⇒ 默认态（公开掷骰）
     expect(hotseat.policy.secretRolls).toBe(false)
     expect(hotseat.rollVisibleToViewer('axis')).toBe(true)
 
     store.setAllAgreedChecks(true)
-    store.confirmAgreedChecklist()
+    store.startGame()
     expect(hotseat.policy.secretRolls).toBe(true)
     // 4.9e：观察方为轴心国时，苏联的掷骰骰面对其不可见
     workbench.setActiveSide('axis')

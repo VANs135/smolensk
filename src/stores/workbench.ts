@@ -19764,13 +19764,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     variableExitDie: 1,
     randomEventDice: 7,
     autoRoll: true,
-    /**
-     * 3.6 / 可选规则 4.1b：是否启用 4.1b（19 Jul 之前的**三个回合** 8 / 12 / 15 Jul
-     * 自动发生 Supply Train；日期表取 `arrivals-axis.randomEvents.option4_1bDates`）
-     *
-     * 缺省 false ＝ 按通规 3.6 走（只有事件期内掷表）；勾上即按可选规则多那三次自动到货。
-     */
-    option4_1b: false,
   })
 
   /**
@@ -22594,8 +22587,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         randomEventDice,
         // 3.3c：已了结则不再掷（「1 或 6 ⇒ 该单位移除，撤离判定结束」）
         variableExitResolved: variableExitResolved.value,
-        // 3.6 / 4.1b：可选规则 4.1b 的 Supply Train（8 / 12 / 15 Jul 自动发生）
-        option4_1b: inputs.option4_1b,
+        // 3.6 / 4.1b：4.0 的可选规则「可选规则与房规」勾定后，8 / 12 / 15 Jul 自动 Supply Train
+        option4_1b: session.optionalRulesOn,
       }),
       '可变增援',
     )
@@ -27332,9 +27325,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       ensureReinforcement(key) {
         if (automaticPhaseKeys.value.includes(key)) return
         variableReplInputs.value.autoRoll = true
-        variableReplInputs.value.option4_1b = session.consensus.some(
-          (choice) => choice.adopted === true && choice.item.includes('4.1b'),
-        )
         if (rollVariableReplNow()) automaticPhaseKeys.value = [...automaticPhaseKeys.value, key]
       },
     }),

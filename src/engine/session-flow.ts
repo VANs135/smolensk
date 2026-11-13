@@ -70,6 +70,7 @@ export {
   AGREED_OPTION_IDS,
   AGREED_OPTION_QUESTION_KIND,
   CONSENSUS_RULE,
+  OPTIONAL_RULES_ITEM,
   INITIATIVE_QUESTION_KIND,
 } from './session-flow-steps'
 export type { SopGuidance, SopStep, SopStepDriver, SopStepRole } from './session-flow-steps'

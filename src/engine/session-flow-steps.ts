@@ -201,6 +201,14 @@ export const AGREED_OPTION_QUESTION_KIND = 'agreedOption'
  */
 export const CONSENSUS_RULE = '4.0'
 
+/**
+ * 专规 4.0 整章可选规则的**共识条目原文**
+ *
+ * `scenarios.agreedOptions.items` 必须原样包含它；界面勾定后，4.1a / 4.1b / 4.1c /
+ * 4.2a / 4.2b / 4.2c / 4.3 才生效（未勾定 ⇒ 一律不生效）。
+ */
+export const OPTIONAL_RULES_ITEM = '可选规则与房规（4.1a、4.1b、4.1c、4.2a、4.2b、4.2c、4.3）'
+
 /** 共识开关的两个选项 id（原文只有「采纳 / 不采纳」两态） */
 export const AGREED_OPTION_IDS = { adopt: 'adopt', decline: 'decline' } as const
 

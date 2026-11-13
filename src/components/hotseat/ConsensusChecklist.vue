@@ -53,8 +53,8 @@ function decidedLabel(decided: boolean | null): {
     :class="{ 'consensus--formal': formal }"
   >
     <p v-if="!formal" class="muted">
-      **勾 = 用这条，不勾 = 不用；默认全部不勾**。勾选结果会写成人人对局结论（存档的一部份）；
-      不勾任何一项也能直接开局，推进第一回合时自动补写，不会卡流程。
+      **勾 = 用这条，不勾 = 不用；默认全部不勾**。勾选结果在点「开始游戏」时写成人人对局结论
+      （存档的一部份）；**开局后不可再改**。
     </p>
 
     <p v-if="!formal" class="num">
@@ -91,18 +91,6 @@ function decidedLabel(decided: boolean | null): {
       <BaseButton variant="ghost" size="sm" @click="gameSession.setAllAgreedChecks(false)">
         全部不用
       </BaseButton>
-      <BaseButton
-        v-if="!formal || gameSession.session !== null"
-        variant="secondary"
-        size="sm"
-        :disabled="gameSession.session === null"
-        @click="gameSession.confirmAgreedChecklist()"
-      >
-        写入日志
-      </BaseButton>
-      <span v-if="!formal && gameSession.session === null" class="muted">
-        先选剧本并点「开始游戏」。
-      </span>
     </div>
 
     <p v-if="gameSession.error !== null" class="bad num">
