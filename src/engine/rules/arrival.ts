@@ -527,12 +527,13 @@ export function shutdownsFor(side: Side, date: string): readonly string[] {
 }
 
 /**
- * 专规 2.1a ＋ 用户 2026-11-12 裁定（5-D4）：**入口关闭是地图事实，对双方同时生效**
+ * 专规 2.1a ＋ 用户 2026-11-12 / 2026-11-13 裁定（5-D4）：**入口关闭是地图事实，对双方同时生效**
  *
- * 裁定原文：「苏联补给源关闭后谁也不是」。Entry L 是苏方补给源入口（`map-config.entryHexes.L`
- * = 20.35）；剧本关闭该补给源后，这个入口对**双方**都不可用——轴方的 `Entry K or L` 不得改用 L，
- * 更不转归轴心。故判关闭时不区分当前行动方（`shutdownsFor` 仍按方给「当日生效的关闭」清单，
- * 供各自到达表提示；这里只回答「这个字母还能不能用」）。
+ * 裁定原文：「苏联补给源关闭后谁也不是」「L 开局肯定是苏联的，然后到日期关闭」。Entry L 是苏方
+ * 补给源入口（`map-config.entryHexes.L` = 20.35）；剧本关闭该补给源后，这个入口对**双方**都不可用
+ * ——轴方到达表已随裁定把 10 条 `Entry K or L` 落定为 `Entry K`，既不从 L 入场，也不把 L 转归轴心。
+ * 故判关闭时不区分当前行动方（`shutdownsFor` 仍按方给「当日生效的关闭」清单，供各自到达表提示；
+ * 这里只回答「这个字母还能不能用」）。
  */
 export function entryClosedForAllSides(letter: string, date: string): boolean {
   return (['axis', 'soviet'] as const).some((side) =>

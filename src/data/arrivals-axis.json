@@ -643,7 +643,7 @@
     {
       "date": "19 Jul 41",
       "entries": {
-        "Entry K or L": [
+        "Entry K": [
           "57th Mtr Corps HQ",
           "19 Pz Div (I-27 Pz, II-27 Pz, 19 Krd, 73 Inf, 74 Inf, 19 Arty, 'F' Truck)",
           "18 Mtr Div (38 Krd, 30 Inf, 51 Inf, 18 Arty, 'F' Truck)",
@@ -667,14 +667,14 @@
       "anyWestEdge": ["(1)-2-5 RR Eng Bn (I-2, II-2)"],
       "groups": [
         {
-          "label": "Entry K or L",
+          "label": "Entry K",
           "units": [
             {
               "raw": "57th Mtr Corps HQ",
               "kind": "hq",
               "name": "57th Mtr Corps HQ",
               "locationKind": "entry",
-              "location": "Entry K or L"
+              "location": "Entry K"
             },
             {
               "raw": "19 Pz Div (I-27 Pz, II-27 Pz, 19 Krd, 73 Inf, 74 Inf, 19 Arty, 'F' Truck)",
@@ -682,7 +682,7 @@
               "kind": "formation",
               "name": "19 Pz Div",
               "locationKind": "entry",
-              "location": "Entry K or L"
+              "location": "Entry K"
             },
             {
               "raw": "18 Mtr Div (38 Krd, 30 Inf, 51 Inf, 18 Arty, 'F' Truck)",
@@ -690,7 +690,7 @@
               "kind": "formation",
               "name": "18 Mtr Div",
               "locationKind": "entry",
-              "location": "Entry K or L"
+              "location": "Entry K"
             },
             {
               "raw": "20-4-3 Inf Div (129; -1 step)",
@@ -702,7 +702,7 @@
               "parentType": "Inf Div",
               "stepsLost": 1,
               "locationKind": "entry",
-              "location": "Entry K or L"
+              "location": "Entry K"
             },
             {
               "raw": "3-3-6 PJ Bn (561)",
@@ -713,7 +713,7 @@
               "designation": "561",
               "parentType": "PJ Bn",
               "locationKind": "entry",
-              "location": "Entry K or L"
+              "location": "Entry K"
             },
             {
               "raw": "18-2-3 Werfer Bn (3, 103)",
@@ -724,7 +724,7 @@
               "designation": "3",
               "parentType": "Werfer Bn",
               "locationKind": "entry",
-              "location": "Entry K or L"
+              "location": "Entry K"
             },
             {
               "raw": "18-2-3 Werfer Bn (3, 103)",
@@ -735,7 +735,7 @@
               "designation": "103",
               "parentType": "Werfer Bn",
               "locationKind": "entry",
-              "location": "Entry K or L"
+              "location": "Entry K"
             },
             {
               "raw": "2x 26-2-2 Arty Grp",
@@ -744,13 +744,13 @@
               "kind": "unit",
               "name": "Arty Grp",
               "locationKind": "entry",
-              "location": "Entry K or L"
+              "location": "Entry K"
             },
             {
               "raw": "2 Truck Points (loaded with SP)",
               "kind": "unclassified",
               "locationKind": "entry",
-              "location": "Entry K or L"
+              "location": "Entry K"
             }
           ]
         },
@@ -1073,7 +1073,7 @@
       "date": "19 Aug 41",
       "entries": {
         "Entry F": ["20-4-3 Inf Div (162, 267; both -2 steps)"],
-        "Entry K or L": ["14 Mtr Div (14 Aufk, 11 Inf, 14 Arty, 'F' Truck)"]
+        "Entry K": ["14 Mtr Div (14 Aufk, 11 Inf, 14 Arty, 'F' Truck)"]
       },
       "notes": [
         "Begin checks for Variable Exit (3.3c).",
@@ -1139,7 +1139,7 @@
           ]
         },
         {
-          "label": "Entry K or L",
+          "label": "Entry K",
           "units": [
             {
               "raw": "14 Mtr Div (14 Aufk, 11 Inf, 14 Arty, 'F' Truck)",
@@ -1147,7 +1147,7 @@
               "kind": "formation",
               "name": "14 Mtr Div",
               "locationKind": "entry",
-              "location": "Entry K or L"
+              "location": "Entry K"
             }
           ]
         }
@@ -1284,7 +1284,7 @@
         "19 Pz Div (I-27 Pz, II-27 Pz, 19 Krd, 73 Inf, 74 Inf, 19 Arty, 'F' Truck)",
         "18 Mtr Div (38 Krd, 30 Inf, 51 Inf, 18 Arty, 'F' Truck)"
       ],
-      "resolved": "19 Jul 41 / Entry K or L",
+      "resolved": "19 Jul 41 / Entry K",
       "supersededReadings": ["29 Jul 41 / Entry I or J（PDF 文本层）"],
       "basis": "逐栏核对；死亡堆中 19 Aufk/III/27 Pz 与 18 Aufk 的加入时机同日"
     },

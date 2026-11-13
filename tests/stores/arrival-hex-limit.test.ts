@@ -132,7 +132,7 @@ describe('13.6：增援落点只能落在**卡面候选**内（不是任意格�
     expect(arrivalPlacementCandidates({ kind: 'deadPile', label: 'Dead Pile' }, facts)).toEqual([])
   })
 
-  it('5-D4：轴方 `Entry K or L` 在 L 关闭后（19 July 起）不再给出 20.35', () => {
+  it('5-D4：轴方（原 `Entry K or L`，现 `Entry K`）在 L 关闭后（19 July 起）不再给出 20.35', () => {
     /*
      * 用户 2026-11-12 裁定：「苏联补给源关闭后谁也不是」。
      * 修复点在 store 接线（`arrivalFacts.entryShutDown`）：修前按**当前行动方**查关闭清单，

@@ -131,12 +131,12 @@ describe('13.6 / 13.6c / 专规 2.1a：一日的到达计划', () => {
     expect(shutdownsFor('axis', '1941-08-19')).toEqual([])
   })
 
-  it('5-D4（用户 2026-11-12 裁定）：Entry L 关闭后「谁也不是」——轴方也不得用 L 落 20.35', () => {
+  it('5-D4（用户 2026-11-12 / 2026-11-13 裁定）：Entry L 属苏方，关闭后轴方既不用 L 也不改走 L', () => {
     /*
-     * 裁定原文：「苏联补给源关闭后谁也不是」。
+     * 裁定原文：「苏联补给源关闭后谁也不是」「L 开局肯定是苏联的，然后到日期关闭」。
      * Entry L 是苏方补给源入口（map-config.entryHexes.L = 20.35）；关闭后对**双方**都不可用，
-     * 不因当前行动方是轴方就重新开放。修前 `arrivalFacts.entryShutDown` 只查当前方，
-     * 轴方 19 Jul / 19 Aug 的 `Entry K or L` 因此仍会把 L（20.35）当候选。
+     * 不因当前行动方是轴方就重新开放。数据侧随裁定把轴方 10 条 `Entry K or L` 落定为 `Entry K`
+     * （L 不得作为轴方入场字母），故此处不再产生任何含 L 的入场需求。
      */
     expect(entryClosedForAllSides('L', '1941-07-18')).toBe(false)
     expect(entryClosedForAllSides('L', '1941-07-19')).toBe(true)
@@ -144,15 +144,22 @@ describe('13.6 / 13.6c / 专规 2.1a：一日的到达计划', () => {
     expect(entryClosedForAllSides('E', '1941-08-18')).toBe(false)
     expect(entryClosedForAllSides('K', '1941-08-19')).toBe(false)
 
-    // 数据侧：轴方 `Entry K or L` 共 10 条（19 Jul 9 条 + 19 Aug 1 条）
-    const leItems = arrivalsAxis.blocks.flatMap((block) =>
+    // 数据侧：轴方原本 `Entry K or L` 的 10 条（19 Jul 9 条 + 19 Aug 1 条）已落定为 `Entry K`
+    const landedBlocks = arrivalsAxis.blocks.filter(
+      (block) => block.date === '19 Jul 41' || block.date === '19 Aug 41',
+    )
+    const leItems = landedBlocks.flatMap((block) =>
       (block.groups ?? [])
-        .filter((group) => group.label === 'Entry K or L')
+        .filter((group) => group.label === 'Entry K')
         .flatMap((group) => group.units),
     )
     expect(leItems).toHaveLength(10)
+    const staleLeLabels = arrivalsAxis.blocks.flatMap((block) =>
+      (block.groups ?? []).filter((group) => group.label.includes('L')),
+    )
+    expect(staleLeLabels).toHaveLength(0)
 
-    // 引擎侧：这两天的 `Entry K or L` 需求全部落到 K（1.26），候选里不再出现 20.35
+    // 引擎侧：这两天的入场需求只含 K，全部落到 1.26，候选里不再出现 20.35
     const realFacts = (date: string): ArrivalPlacementFacts =>
       facts({
         entryHexes: (letter) => (mapConfig.entryHexes?.[letter] ?? []).map((hex) => ({ ...hex })),
@@ -163,11 +170,19 @@ describe('13.6 / 13.6c / 专规 2.1a：一日的到达计划', () => {
       const outcome = planArrivals({ side: 'axis', date })
       expect(outcome.ok).toBe(true)
       if (!outcome.ok) continue
-      const leDemands = outcome.data.units.filter(
-        (unit) => unit.placement.kind === 'entryHex' && unit.placement.letters.includes('L'),
+      const entryDemands = outcome.data.units.filter((unit) => unit.placement.kind === 'entryHex')
+      expect(entryDemands.length).toBeGreaterThan(0)
+      // 数据已落定 `Entry K`：不再有任何需求把 L 当轴方入场字母
+      expect(
+        entryDemands.filter(
+          (unit) => unit.placement.kind === 'entryHex' && unit.placement.letters.includes('L'),
+        ),
+      ).toHaveLength(0)
+      const kDemands = entryDemands.filter(
+        (unit) => unit.placement.kind === 'entryHex' && unit.placement.letters.includes('K'),
       )
-      expect(leDemands.length).toBeGreaterThan(0)
-      for (const demand of leDemands) {
+      expect(kDemands.length).toBeGreaterThan(0)
+      for (const demand of kDemands) {
         expect(arrivalPlacementCandidates(demand.placement, realFacts(date))).not.toContainEqual({
           col: 20,
           row: 35,
