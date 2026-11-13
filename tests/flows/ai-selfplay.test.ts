@@ -92,7 +92,11 @@ async function runScenario(id: string): Promise<{
   const preset = ctx.setup.presetSelfSetupNow()
   expect(preset.failures, `剧本 ${id} 一键预设初设失败`).toEqual([])
   expect(preset.remaining, `剧本 ${id} 一键预设初设未完成`).toBe(0)
-  // ★ 用户 2026-11-10：抽取编队只有「抽取编队」按钮一个入口（开局不再隐式兜底）
+  /*
+   * 两段式（规格 §4.1）：先「完成初设」只确认（有未执行 effects 时不建会话），
+   * 再由唯一入口「抽取编队」执行一次并开局；无 effects 的剧本确认即开局。
+   */
+  expect(ctx.setup.startGameNow(), `剧本 ${id} 确认初设`).toBe(true)
   if (ctx.setup.setupDrawEntryVisible)
     expect(ctx.setup.drawSetupEffectsNow(), `剧本 ${id} 抽取编队`).toBe(true)
   expect(ctx.setup.startGameNow(), `剧本 ${id} 开局`).toBe(true)
