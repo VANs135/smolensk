@@ -25059,13 +25059,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       agreedByConsensus: panzerGroupRulesOn.value,
       unassigned:
         panzerGroupOfDump(dump.id) === null && pendingSpGroupAssignment.value.includes(dump.id),
-      beneficiaries: beneficiaries.map((unit) => ({
-        group: groupOfUnit(unit),
-        inMultiUnitFormation:
-          groupOfUnit(unit) !== null ||
-          multiUnitFormationIds.value.includes(unit.instanceId) ||
-          unit.panzerGroup != null,
-      })),
+      beneficiaries: beneficiaries.map((unit) => {
+        /*
+         * 用户 2026-11-13 口径：多单位编队的编组归属**始终存在**（来自素材编队目录，
+         * 见 `groupOfUnit`）。因此这里"是否多单位编队"直接由归属非空判定；不存在
+         * "多单位编队但 formationGroup === null" 的合法分支，也不为它留拒绝逻辑。
+         */
+        const group = groupOfUnit(unit)
+        return { group, inMultiUnitFormation: group !== null }
+      }),
     })
     return outcome.ok ? null : fail(outcome.rule, outcome.reason)
   }
@@ -25080,7 +25082,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const where = dump === undefined ? '该补给站' : hexLabel(dump.hex)
     const detail =
       failure.reason === 'newSpMustBeAssignedToAPanzerGroup'
-        ? `${where} 的 SP **尚未归属**任何装甲集群（3.4b：新到的轴方 SP 必须立即归属）⇒ 先在专规面板为它声明归属`
+        ? `${where} 的 SP **尚未归属**任何装甲集群（3.4b）⇒ 先在专规面板为它声明归属`
         : `${where} 的 SP 归属与受益编队不符（3.4b：错误集群的 SP 不能支付${purpose}成本）`
     return `${detail}`
   }

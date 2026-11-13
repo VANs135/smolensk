@@ -331,7 +331,7 @@ export function panzerGroupRulesActive(input: {
 export function checkPanzerGroupSpPayment(input: {
   /** SP 归属的集群（或 null ＝ 尚未归属） */
   spGroup: PanzerGroup | null
-  /** 受益编队所属的集群（独立单位 / 步兵师为 null ⇒ 不受限） */
+  /** 受益编队所属的集群（独立单位 / 步兵师为 null ⇒ 不受限；多单位编队**必有归属**） */
   formationGroup: PanzerGroup | null
   /** 用途（燃油 / 战斗 / 轰炸 / 其它） */
   purpose: PanzerGroupSpPurpose | 'other'
@@ -353,9 +353,12 @@ export function checkPanzerGroupSpPayment(input: {
   if (!input.agreedByConsensus) return succeed('4.1a', { restricted: false })
   if (input.date >= PANZER_GROUP_CONSTRAINT_END) return succeed('3.4', { restricted: false })
   if (input.unassigned === true) return fail('3.4b', 'newSpMustBeAssignedToAPanzerGroup')
-  if (!input.inMultiUnitFormation || input.formationGroup === null) {
-    return succeed('3.4b', { restricted: false })
-  }
+  /*
+   * 用户 2026-11-13 口径：**多单位编队的编组归属始终存在**——
+   * `formationGroup === null` 不是多单位编队的合法状态，只对应不受限的独立单位/步兵师。
+   * 因此这里只按 `inMultiUnitFormation` 分流，不再单列 null 分支。
+   */
+  if (!input.inMultiUnitFormation) return succeed('3.4b', { restricted: false })
   if (input.purpose === 'other') return succeed('3.4b', { restricted: false })
   if (input.spGroup === input.formationGroup) return succeed('3.4b', { restricted: false })
   return fail(
@@ -380,6 +383,10 @@ export function checkPanzerGroupSpBeneficiaries(input: {
   date: string
   agreedByConsensus: boolean
   unassigned: boolean
+  /**
+   * `inMultiUnitFormation: true` 时 `group` 必须非 null（多单位编队必有归属，用户 2026-11-13 口径）；
+   * null 只与非多单位编队搭配。
+   */
   beneficiaries: readonly { group: PanzerGroup | null; inMultiUnitFormation: boolean }[]
 }): RuleOutcome<{ restricted: false }> {
   for (const unit of input.beneficiaries) {

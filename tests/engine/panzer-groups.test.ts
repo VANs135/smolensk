@@ -183,7 +183,7 @@ describe('3.4a：相位末的分界线义务', () => {
   })
 
   it('3.4：步兵师与独立单位（不属集群 / 非多单位编队）完全不受限', () => {
-    expect(isExemptFromPanzerGroupRules({ group: null, inMultiUnitFormation: true })).toBe(true)
+    expect(isExemptFromPanzerGroupRules({ group: null, inMultiUnitFormation: false })).toBe(true)
     expect(isExemptFromPanzerGroupRules({ group: 'hoth', inMultiUnitFormation: false })).toBe(true)
     const outcome = dividingLineObligations({
       units: [
@@ -295,7 +295,7 @@ describe('3.4b：错误集群的 SP 不得支付燃油 / 战斗 / 轰炸', () =>
         formationGroup: null,
         purpose: 'barrage',
         date: '1941-07-12',
-        inMultiUnitFormation: true,
+        inMultiUnitFormation: false,
       }).ok,
     ).toBe(true)
     expect(

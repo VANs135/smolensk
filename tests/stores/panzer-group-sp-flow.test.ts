@@ -204,6 +204,7 @@ describe('3.4b：SP 归属账本', () => {
       panzerGroup: 'hoth',
     }
     expect(store.addSpDump()).toBe(true)
+    const added = store.spDumps[store.spDumps.length - 1]!
     expect(store.pendingSpGroupAssignment).toEqual([])
 
     // 拨到约束失效之后的回合（日期由 turnTrack 给出，不按天数推）
@@ -218,6 +219,8 @@ describe('3.4b：SP 归属账本', () => {
     }
     expect(moved).toBe(true)
     expect(store.panzerGroupUnassignedDumps).toEqual([])
+    // 规则失效 ≠ 归属消失：已声明的集群归属仍在（只是不再限制/不再置顶）
+    expect(store.panzerGroupOfDump(added.id)).toBe('hoth')
     // 失效后即使用了新到的站也不判（引擎在日期闸门后直接放行）
     expect(
       store.panzerGroupSpGate({
