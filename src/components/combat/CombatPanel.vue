@@ -271,37 +271,8 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
 
 <template>
   <BasePanel>
-    <!-- 未开始：选择攻方与防御格 -->
-    <SessionStep v-if="state === null" item="combat:declare">
-      <RuleTip rule="9.1b / 9.1c">
-        点己方算子＝加入攻方（可跨多个相邻格）；点敌方算子所在格＝选定防御格。
-      </RuleTip>
-      <p v-if="workbench.battleTarget === null" class="num">
-        <BaseTag kind="danger">可攻击</BaseTag>
-        地图上<span v-if="workbench.combatAttackableHexes.length > 0">高亮</span
-        >{{ workbench.combatAttackableHexes.length }} 处敌方格（随选人实时算；点它即选定防御格）。
-      </p>
-      <p class="num">
-        攻方（{{ attackerList.length }}）：
-        {{ attackerList.map((unit) => unit.name).join('、') || '—' }}
-      </p>
-      <p class="num">
-        防御格：
-        <template v-if="workbench.battleTarget !== null">
-          {{ hexLabel(workbench.battleTarget.hex) }}（守方
-          {{ workbench.battleDefenders.length }} 个战斗单位）
-        </template>
-        <template v-else>—</template>
-      </p>
-      <div class="row">
-        <BaseButton variant="ghost" size="sm" @click="workbench.clearCombat()">
-          清除选择
-        </BaseButton>
-      </div>
-    </SessionStep>
-
-    <!-- 流程中 -->
-    <template v-else>
+    <!-- R-1：发起屏（S1）已删——点可攻击格即开打并直接进补给步；本面板只在战斗开始后出现 -->
+    <template v-if="state !== null">
       <p v-if="workbench.combatError !== null" class="bad">
         <BaseTag kind="danger">{{ workbench.combatError.rule }}</BaseTag>
         {{ workbench.combatErrorLine }}
@@ -845,9 +816,11 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         </div>
       </SessionStep>
 
-      <!-- U1-b：战果与复核是回执（非待决），折叠后备查 -->
+      <!-- U1-b：战果与复核是回执（非待决），折叠后备查；R-4：只在验证页出现，不挂在会话框里 -->
       <details
-        v-if="workbench.combatSummary !== null || workbench.combatReview !== null"
+        v-if="
+          props.stepwise && (workbench.combatSummary !== null || workbench.combatReview !== null)
+        "
         class="extra"
       >
         <summary class="extra__head num">战果与复核（只读）</summary>
@@ -919,7 +892,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           >放弃本场战斗</BaseButton
         >
         <BaseButton
-          v-if="state.finished"
+          v-if="props.stepwise && state.finished"
           variant="secondary"
           size="sm"
           @click="workbench.clearCombat()"

@@ -12645,6 +12645,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         }`,
       '9.12g',
     )
+    /*
+     * R-4（用户 2026-11-14）：结束不单开屏——只给 toast（map-view 的 finished 翻转）+ 这里一行回执入日志。
+     * 回执口径：CRT 记号 · 修正骰 ⇒ 守方 L/o（条款号随日志一并留痕，日志条目本身就是"结算回执"）。
+     */
+    const receipt = combatSummary.value
+    if (receipt !== null) {
+      pushLog(
+        'success',
+        `战斗回执（9.9 / 9.10）：CRT ${receipt.defender.notation} · 2d6=${receipt.modifiedDice} ⇒ 守方 L${receipt.defender.losses} o${receipt.defender.options}`,
+        '9.10',
+      )
+    }
     // 9.2：推进步已落盘即整场战斗收束（无推进候选的收尾也走本函数，故收束日志只此一处）
     pushLog('success', '本场战斗收束（9.2）：结算已落账，可继续下一步', '9.2')
     recordSettlement({

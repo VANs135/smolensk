@@ -2738,22 +2738,9 @@ export const useMapViewStore = defineStore('mapView', () => {
       }
     }
     /*
-     * B15b：**宣布之前**也开一个战斗会话（方案 §4.2 的流程：「点目标格 ⇒ 生成唯一会话框 → 逐步骤确认」）。
-     * 判据＝战斗工具开着 + 已选攻方 + 已定防御格；内容就是 `CombatPanel` 的"未开始"那一段
-     * （攻方名单 / 防御格 / 发起 / 清除）——原先这些只在小窗里，会话框里反而没有入口。
+     * R-1（用户 2026-11-14）：不再为「已选攻方、尚未开打」起会话——发起屏（S1）已删，
+     * 点可攻击格即开打并直接进补给步；这里若再给一张"发起战斗"卡，就是只能空点的残留。
      */
-    if (
-      combat === null &&
-      workbench.combatPickActive &&
-      workbench.combatAttackerIds.length > 0 &&
-      workbench.battleTarget !== null
-    ) {
-      return {
-        kind: 'combat',
-        title: `发起战斗（9.1）· 格 ${workbench.battleTarget.hex.col}.${workbench.battleTarget.hex.row}`,
-        rule: '9.1',
-      }
-    }
     const barrage = workbench.barrageState
     if (barrage !== null && !barrage.finished) {
       return { kind: 'barrage', title: '轰炸结算（10.0）', rule: '10.0', width: 'min(430px, 94%)' }

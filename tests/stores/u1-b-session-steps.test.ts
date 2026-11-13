@@ -60,6 +60,16 @@ function exposedCount(items: readonly SessionStepItem[]): number {
 }
 
 describe('U1-b 投影：按流程顺序给单一事项', () => {
+  it('R-1：未开打 / composition 不再出"发起战斗"屏（点可攻击格即开打）', () => {
+    for (const combat of [
+      { started: false, step: 'composition', attackerArDeclared: false },
+      { started: true, step: 'composition', attackerArDeclared: false },
+    ] as const) {
+      const items = planSessionSteps(baseFacts({ kind: 'combat', combat }))
+      expect(items.map((entry) => entry.id)).toEqual([])
+    }
+  })
+
   it('战斗 9.6：攻方已宣布 ⇒ 只出"守方宣布行动值"', () => {
     const items = planSessionSteps(
       baseFacts({
@@ -356,8 +366,10 @@ describe('U1-b 源码守卫：只在门里出一件，旧判定不留两份', ()
     const source = read('components/combat/CombatPanel.vue')
     expect(source).toContain('<SessionStep')
     expect(source).not.toContain('state.step ===')
+    // R-1：发起屏整块已删（连 SessionStep 与文案都不再出现）
+    expect(source).not.toContain('item="combat:declare"')
+    expect(source).not.toContain('清除选择')
     for (const id of [
-      'combat:declare',
       'combat:supply',
       'combat:ar:attacker',
       'combat:ar:defender',
@@ -369,6 +381,12 @@ describe('U1-b 源码守卫：只在门里出一件，旧判定不留两份', ()
     ]) {
       expect(source).toContain(`item="${id}"`)
     }
+  })
+
+  it('R-1：地图不再为"已选攻方未开打"起会话（发起屏已删，点格即开打）', () => {
+    const source = read('stores/map-view.ts')
+    expect(source).not.toContain('发起战斗（9.1）')
+    expect(source).not.toContain("kind: 'combat',\n        title: `发起战斗")
   })
 
   it('轰炸 / 补给面板：旧 step 判定已清掉', () => {

@@ -122,26 +122,14 @@ function item(
 
 /** 战斗：引擎步骤 → 单一事项（surprise / battleDice 为自动步） */
 function combatItems(facts: NonNullable<SessionStepFacts['combat']>): SessionStepItem[] {
-  if (!facts.started) {
-    return [
-      item(
-        'combat:declare',
-        '发起战斗',
-        '已选好攻方与防御格，等待确认开打。',
-        '开始这场战斗，或清除本次选择。',
-      ),
-    ]
-  }
+  /*
+   * R-1（用户 2026-11-14）：发起屏（S1）已删——点可攻击格即开打并直接进补给步。
+   * 故「未开始 / composition」不再出事项；宿主模式下战斗面板只在补给步起出现。
+   */
+  if (!facts.started) return []
   switch (facts.step) {
     case 'composition':
-      return [
-        item(
-          'combat:declare',
-          '发起战斗',
-          '已选好攻方与防御格，等待确认开打。',
-          '开始这场战斗，或清除本次选择。',
-        ),
-      ]
+      return []
     case 'combatSupply':
       return [
         item(
