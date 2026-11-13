@@ -532,6 +532,17 @@ watch(
 const replPendingTotal = computed(() => workbench.replPending.pax + workbench.replPending.eq)
 
 /**
+ * 统一手牌的**可见条目**
+ *
+ * 3.4b 尚未选德军归属的补给列车卡：不渲染、不置灰、不放原因文字；
+ * 玩家在补给列车步骤选完 Guderian / Hoth 后自动出现。
+ * 其余挡因（没有可落位格等）保持灰卡 + 标题原因。计数仍用 `rollHandEntries`，口径不变。
+ */
+const visibleRollHandEntries = computed(() =>
+  workbench.rollHandEntries.filter((entry) => entry.blockedKind !== 'panzerGroup'),
+)
+
+/**
  * 可变增援的**结果**（只写"拿到什么"）
  *
  * 骰面、公式、表名与条款号只在结算日志里（用户口径：过程不上屏），面板只列结果摘要。
@@ -990,7 +1001,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       </p>
       <div class="arrival-hand" data-testid="roll-hand-cards">
         <button
-          v-for="entry in workbench.rollHandEntries"
+          v-for="entry in visibleRollHandEntries"
           :key="entry.id"
           type="button"
           class="arrival-hand__card"
@@ -1016,7 +1027,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         </button>
       </div>
       <p
-        v-for="entry in workbench.rollHandEntries.filter((item) => item.blocked !== null)"
+        v-for="entry in visibleRollHandEntries.filter((item) => item.blocked !== null)"
         :key="`hand-blocked:${entry.id}`"
         class="warn num"
       >

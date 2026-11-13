@@ -1,7 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useWorkbenchStore } from '@/stores/workbench'
+import { PANZER_GROUP_OPTION_ITEM } from '@/engine/rules/panzer-groups'
+import { useGameSessionStore, useWorkbenchStore } from '@/stores'
 
 /**
  * v7.1 第二段＝**两段式**（用户 2026-11-11 口径）
@@ -169,5 +170,43 @@ describe('v7.1 第二段：判定阶段 → 放置阶段', () => {
     // 统一手牌是唯一放置入口
     expect(source).toContain('workbench.beginRollHandEntryNow(entry.id)')
     expect(source).toContain('workbench.rollHandEntries')
+  })
+
+  it('3.4b 未选归属的补给列车卡：数据层标记为 panzerGroup，选完归属即解除；计数口径不变', () => {
+    const store = newStore()
+    const session = useGameSessionStore()
+    const optionAt = session.agreedOptionItems.indexOf(PANZER_GROUP_OPTION_ITEM)
+    expect(optionAt).toBeGreaterThanOrEqual(0)
+    session.setAgreedAdopt(optionAt, true)
+    store.setActiveSide('axis')
+
+    // 4.1b 的自动补给列车日期（8 / 12 / 15 Jul）：逐个回合找一次即可
+    let found = false
+    for (let turn = 1; turn <= 12 && !found; turn += 1) {
+      store.setTurn(turn)
+      store.setPhase('reinforcement')
+      const at = store.playerSegmentSteps.findIndex((step) => step.id === 'reinforcement.replRoll')
+      expect(at).toBeGreaterThanOrEqual(0)
+      store.setSegmentStepIndex(at)
+      store.variableReplInputs.autoRoll = false
+      store.variableReplInputs.option4_1b = true
+      roll(store)
+      found = store.supplyTrainPending
+    }
+    expect(found).toBe(true)
+    expect(store.panzerGroupRulesOn).toBe(true)
+
+    const pointsBefore = store.rollHandPoints
+    const train = store.rollHandEntries.find((entry) => entry.id === 'sp:train')
+    expect(train).toBeDefined()
+    expect(train!.blockedKind).toBe('panzerGroup')
+    expect(train!.blocked).not.toBeNull()
+
+    store.setSupplyTrainGroup('guderian')
+    const unblocked = store.rollHandEntries.find((entry) => entry.id === 'sp:train')
+    expect(unblocked!.blockedKind).toBeNull()
+    expect(unblocked!.blocked).toBeNull()
+    // 计数语义不动：隐藏/解除都不改变手牌点数
+    expect(store.rollHandPoints).toBe(pointsBefore)
   })
 })

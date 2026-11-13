@@ -21394,6 +21394,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     /** 角标：待放的枚数 / SP */
     count: number
     blocked: string | null
+    /**
+     * 挡因分类（面板按它决定是否渲染）：
+     * `panzerGroup`＝3.4b 尚未选德军归属（玩家在补给列车步骤选完即消失）；
+     * `placement`＝没有可落位格等真实落位障碍（保留灰卡 + 标题原因）；
+     * `null`＝可落位。计数语义不随本字段变化。
+     */
+    blockedKind: 'panzerGroup' | 'placement' | null
     /** 卡面短标（没有算子图时回落到它） */
     short: string
     /** 算子图两面（补员＝补员算子记录；返场／编制转化＝原算子）；取不到 ⇒ null */
@@ -21412,13 +21419,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     for (const item of ['pax', 'eq'] as const) {
       const count = replPending.value[item]
       if (count <= 0) continue
+      const blocked = replPlacementBlockedReasonFor(item)
       entries.push({
         id: `repl:${item}`,
         label: `1.6b 补员表 · ${item === 'pax' ? 'Pax' : 'Eq'}`,
         rule: '13.5 / 2.1',
         detail: '点一下 → 地图只高亮合法格 → 点格落一枚',
         count,
-        blocked: replPlacementBlockedReasonFor(item),
+        blocked,
+        blockedKind: blocked === null ? null : 'placement',
         short: item === 'pax' ? 'Pax' : 'Eq',
         images: replRecordOf(activeSide.value, item)?.images ?? null,
       })
@@ -21432,6 +21441,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         detail: '死亡堆返场：点一下 → 点高亮格（HQ 或图边补给源格）',
         count: 1,
         blocked: arrivalBlocked ? '没有可返场的格（2.1：HQ 或图边补给源格）' : null,
+        blockedKind: arrivalBlocked ? 'placement' : null,
         short: entry.name,
         images: unit?.images ?? null,
       })
@@ -21444,6 +21454,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         detail: '新单位随其它到达的 SP 与补员一起摆放',
         count: 1,
         blocked: arrivalBlocked ? '没有可落位的格（2.1：HQ 或图边补给源格）' : null,
+        blockedKind: arrivalBlocked ? 'placement' : null,
         short: frontalUnitPending.value.name,
         images: frontalUnitPending.value.images,
       })
@@ -21463,6 +21474,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           cityCount === 0 && openSupplySourceHexes.value.length === 0
             ? '没有可落 SP 的格（13.3c 城市格与图边补给源格都不可用）'
             : null,
+        blockedKind:
+          cityCount === 0 && openSupplySourceHexes.value.length === 0 ? 'placement' : null,
         short: 'SP',
         images: null,
       })
@@ -21478,6 +21491,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           panzerGroupRulesOn.value && supplyTrainGroup.value === null
             ? '3.4b：德军补给列车 SP 须先选归属（Guderian / Hoth）'
             : null,
+        blockedKind:
+          panzerGroupRulesOn.value && supplyTrainGroup.value === null ? 'panzerGroup' : null,
         short: 'SP',
         images: null,
       })
