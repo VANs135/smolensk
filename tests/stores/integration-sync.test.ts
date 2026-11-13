@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { createPinia, setActivePinia } from 'pinia'
+import { nextTick } from 'vue'
 import { describe, expect, it } from 'vitest'
 
 import { scenarios } from '@/data'
@@ -479,5 +480,28 @@ describe('联调⑥：容器抽取盒的天气账本按**当前剧本**取，不
     stores.containers.resetContainers()
     const expectedAir = last.firstWeather === 'restricted' ? 'limited' : 'normal'
     expect(stores.containers.weather.air).toBe(expectedAir)
+  })
+
+  it('天气换手 ⇒ 空军面板的「天气正常」随记录轨同步（14.1f / 专规 1.5）', async () => {
+    const stores = boot()
+    expect(stores.session.startGame()).toBe(true)
+    // Pre-Turn 掷出的天气写进记录轨；这里直接改写记录轨，模拟"换回合后天气变了"
+    const withWeather = (air: 'normal' | 'limited') => {
+      const current = stores.session.session!
+      stores.session.session = {
+        ...current,
+        state: {
+          ...current.state,
+          records: { ...current.state.records, weather: { air, ground: 'good' } },
+        },
+      }
+    }
+    withWeather('limited')
+    await nextTick()
+    expect(stores.workbench.airInputs.weatherNormal).toBe(false)
+    // 下一回合恢复 normal ⇒ 勾选跟着回来（不沿用上一回合的受限）
+    withWeather('normal')
+    await nextTick()
+    expect(stores.workbench.airInputs.weatherNormal).toBe(true)
   })
 })

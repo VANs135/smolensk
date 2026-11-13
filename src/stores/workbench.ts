@@ -2214,6 +2214,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** C9：最近一次被引擎拒绝的步骤（供界面提示；成功后清空） */
   /** C9：玩家在本次空军交互里的各项输入（界面 v-model 绑定） */
   const airInputs = ref<AirInputs>(createAirInputs())
+  /*
+   * 14.1f / 专规 1.5：**天气是 Pre-Turn 掷出来的盘面事实**（`records.weather`），不是玩家的第二份输入。
+   * 修前「天气正常」复选框只由玩家手动勾——换回合后天气在记录轨里已经变了，空军面板仍沿用上一回合的
+   * 勾选（受限飞行时会误放行反应/进击段任务与低空扫射，或反过来把正常天气当受限）。天气一变即同步。
+   * 无会话（未开局演练）时 `records` 为 null，保留手动输入。
+   */
+  watch(
+    () => session.records?.weather.air ?? null,
+    (air) => {
+      if (air === null) return
+      airInputs.value.weatherNormal = air === 'normal'
+    },
+    { immediate: true },
+  )
   /** C9：本阶段已完成整备的基地 id（15.1A：每基地每整备阶段一次） */
   const refitDoneBaseIds = ref<string[]>([])
   /**
@@ -22979,8 +22993,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   watch(
     () => `${turn.value}|${activeSide.value}|${segmentStep.value?.id ?? ''}`,
     () => {
-      // 撤回只在本段内有效：离开第二段或换方/换回合即清空
-      if (segmentStep.value?.id !== 'reinforcement.replRoll') replPlacedThisSegment.value = []
+      /*
+       * 撤回只在本段内有效：离开第二段或换方/换回合即清空。
+       * ★ 1.6c 返场（`specialReplPlacedThisSegment`）与 2.3c 编制转化（`frontalUnitPlacedThisSegment`）
+       *   同样只在第二段内可收回——两条 `withdraw` 都只按 `segmentStep.id` 把关、不看回合，
+       *   修前这两个登记从不清零 ⇒ 下一回合的第二段还列着上一回合已落位的算子，能把已经
+       *   上场（甚至已移动/参战）的算子"收回"死亡堆与手牌。与补员撤回同一时点清空。
+       */
+      if (segmentStep.value?.id !== 'reinforcement.replRoll') {
+        replPlacedThisSegment.value = []
+        specialReplPlacedThisSegment.value = []
+        frontalUnitPlacedThisSegment.value = null
+      }
     },
   )
 
@@ -27874,6 +27898,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     initialSetupInProgress.value = false
     // 专规 4.3：换局/重置后初设拆团账本复位（名额重新从 6 个起算）
     setupWiggleParents.value = []
+    // 换局/重置后上一局的段内登记一律作废（撤回只在原段内有效，不能跨局）
+    replPlacedThisSegment.value = []
+    specialReplPlacedThisSegment.value = []
+    frontalUnitPlacedThisSegment.value = null
+    rebuildPlacedThisSegment.value = []
     seedVictoryControlFromScenario()
     refreshScenarioBoundLedgers(scenarioId.value)
   }

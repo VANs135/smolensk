@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
+import { nextTick } from 'vue'
 
 import { mapLayers } from '@/data'
 import type { HexRef } from '@/data'
@@ -15,6 +16,7 @@ import type { GamePhase, Records } from '@/engine/state-types'
 import { createPhaseCoordinator } from '@/stores/phase-coordinator'
 
 import { combatRecord, label, newConsole, placeGround } from './sop-harness'
+import { fillSetup, fresh, progress } from './flow-harness'
 
 /**
  * 环节 Ⓗ：**清理**（H 段）与回合收束——2.2 流程表
@@ -198,4 +200,106 @@ describe('Ⓗ 回合收束：Turn End 与下一回合的 Pre-Turn', () => {
     ])
     expect(records.phase).toBe('turnEnd')
   })
+})
+
+describe('Ⓗ 回合收束：B 段的「本段可收回」登记不得跨段 / 跨回合存活', () => {
+  it('换回合后，上一段已落位的 1.6c 返场与 2.3c 编制转化登记必须清空', async () => {
+    const store = newConsole()
+    store.specialReplPlacedThisSegment = [
+      { instanceId: 'old-special', name: '上一回合返场', steps: 2, priorSteps: 3 },
+    ]
+    store.frontalUnitPlacedThisSegment = {
+      instanceId: 'old-frontal',
+      entry: { recordId: 'x', name: '上一回合编制转化', images: null },
+    }
+    store.setPhase('movement')
+    store.setTurn(2)
+    await nextTick()
+    /*
+     * 两条 `withdraw*` 只按「仍在第二段（replRoll）」把关、不看回合 ⇒ 若登记不清零，
+     * 下一回合的第二段会把上一回合已上场的算子重新列成"本段已放置"并允许收回死亡堆。
+     */
+    expect(store.specialReplPlacedThisSegment).toEqual([])
+    expect(store.frontalUnitPlacedThisSegment).toBeNull()
+  })
+
+  it('换方同样清空（同一回合的另一半也不继承对手的收回登记）', async () => {
+    const store = newConsole()
+    store.specialReplPlacedThisSegment = [
+      { instanceId: 'old-special', name: '轴方返场', steps: 2, priorSteps: 3 },
+    ]
+    store.setActiveSide('soviet')
+    await nextTick()
+    expect(store.specialReplPlacedThisSegment).toEqual([])
+  })
+})
+
+describe('Ⓗ 整回合闭环：初设 → Pre-Turn → A–H → 下一回合 A 段', () => {
+  it('先手方 H 只清本方；换回合后新回合 A 段没有上一回合的残留', async () => {
+    const ctx = fresh()
+    expect(ctx.setup.enterSetup('1')).toBe(true)
+    fillSetup(ctx)
+    expect(ctx.setup.startGameNow()).toBe(true)
+
+    // 双方各塞一套阶段标记：formation 燃料按 12.5d 应活到本方清理段，DG / 进击同理
+    const seed = (unitId: string) => {
+      const unit = ctx.w.units.find((item) => item.instanceId === unitId)!
+      unit.mode = { ...unit.mode, dg: true, exploit: true }
+      unit.fuelled = true
+      unit.fuelMethod = 'formation'
+      unit.minimalFuel = false
+      return unit
+    }
+    const seeded = [
+      ...ctx.w.units
+        .filter((unit) => unit.side === 'axis')
+        .slice(0, 2)
+        .map((unit) => seed(unit.instanceId)),
+      ...ctx.w.units
+        .filter((unit) => unit.side === 'soviet')
+        .slice(0, 2)
+        .map((unit) => seed(unit.instanceId)),
+    ]
+
+    const cleanUpCount = () => ctx.g.log.filter((entry) => entry.action === 'cleanUp').length
+    const startedTurn = ctx.w.turn
+    await progress(ctx, () => cleanUpCount() >= 1)
+
+    // 先手方 H 之后：本方标记清空，对手原样（activeSide 已换到先手方的对手）
+    const cleaned = ctx.w.activeSide === 'soviet' ? 'axis' : 'soviet'
+    for (const unit of seeded.filter((item) => item.side === cleaned)) {
+      expect(unit.mode.dg, `${unit.instanceId} DG`).toBe(false)
+      expect(unit.mode.exploit, `${unit.instanceId} 进击`).toBe(false)
+      expect(unit.fuelled, `${unit.instanceId} 燃料`).toBe(false)
+    }
+
+    await progress(
+      ctx,
+      () =>
+        ctx.g.terminated || (ctx.w.turn > startedTurn && ctx.g.records?.phase === 'aircraftRefit'),
+    )
+    if (ctx.g.terminated) return
+
+    // 新回合 A 段：逐项核对上一回合的阶段级前值已清干净
+    expect(ctx.g.records?.phase).toBe('aircraftRefit')
+    expect(ctx.w.date).toBe(turnDate(ctx.w.turn))
+    for (const unit of ctx.w.units) {
+      expect(unit.mode.dg, `${unit.instanceId} DG 残留`).toBe(false)
+      expect(unit.mode.exploit, `${unit.instanceId} 进击残留`).toBe(false)
+      expect(unit.fuelled, `${unit.instanceId} 燃料残留`).toBe(false)
+      expect(unit.minimalFuel ?? false, `${unit.instanceId} 最省供油残留`).toBe(false)
+      expect(unit.mpSpent, `${unit.instanceId} mpSpent`).toBe(0)
+      expect(unit.movementEnded, `${unit.instanceId} movementEnded`).toBe(false)
+      expect(unit.reserveEnteredThisPhase, `${unit.instanceId} reserveEntered`).toBe(false)
+      expect(unit.mpLockedThisPhase, `${unit.instanceId} mpLocked`).toBe(false)
+      expect(unit.mode.releasedFromReserve ?? false, `${unit.instanceId} released`).toBe(false)
+    }
+    for (const air of ctx.w.airUnits) expect(air.missionsFlownThisPhase).toBe(0)
+    expect(ctx.w.railCapSpentThisTurn).toEqual([])
+    expect(ctx.w.freeRailPicked).toEqual([])
+    expect(ctx.w.supplyArrivalSp).toBe(0)
+    expect(ctx.w.supplyTrainHex).toBeNull()
+    expect(ctx.w.hedgehogTurnLedger).toEqual({})
+    expect(ctx.w.airBaseTurnLedger).toEqual({})
+  }, 180000)
 })
