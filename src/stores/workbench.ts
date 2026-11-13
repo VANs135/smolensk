@@ -6459,7 +6459,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         ? combatAttackerIds.value
             .map((id) => units.value.find((unit) => unit.instanceId === id))
             .filter((unit): unit is ConsoleUnit => unit !== undefined)
-        : units.value.filter((unit) => unit.side === side && unit.isCombat && unit.steps > 0)
+        : // 11.0a：未点选时的"全集"也要先过本环节的参战判据（进击段只先进击/已释放预备）
+          units.value.filter(
+            (unit) =>
+              unit.side === side &&
+              unit.isCombat &&
+              unit.steps > 0 &&
+              combatAttackerVerdict(unit).ok,
+          )
     if (attackers.length === 0) return []
     // 候选防御格＝所有敌方战斗单位所在格（去重）
     const enemyHexKey = new Map<string, HexRef>()
@@ -11244,6 +11251,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
   }
 
+  /**
+   * 11.0a：这一枚此刻能不能当**常规战斗**的攻方（自动取攻方 / 可攻击高亮 / 开战三处共用一条判据）
+   *
+   * 直接转调 `participatesIn`——进击段那里只放行「进击模式」与「已释放预备」，
+   * 战斗段则照旧只要求可攻击 + 本环节未攻击过。修前自动路径只按 9.0/9.1 取人，
+   * 于是进击段会把没有进击资格的单位一键收进编成（规则上不存在的战斗）。
+   */
+  function combatAttackerVerdict(unit: ConsoleUnit) {
+    return participatesIn({
+      unit,
+      phase: phase.value,
+      segment: segmentStep.value?.id ?? '',
+      activeSide: activeSide.value,
+      attackedUnitIds: attackedUnitIdsThisPhase.value,
+    })
+  }
+
   /** C6：选定防御格（9.0：只能攻击含敌方**战斗**单位的格；非战斗单位走 9.14 特殊战斗） */
   function selectCombatDefenderHex(hex: HexRef): boolean {
     if (!canReplaceCombat()) return false
@@ -11275,7 +11299,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     if (combatAttackerIds.value.length === 0) {
-      const auto = attackersForHex(units.value, hex, activeSide.value)
+      // 11.0a / 9.1b：自动取攻方也要过"本环节能不能战斗"（进击段只先进击/已释放预备）
+      const auto = attackersForHex(units.value, hex, activeSide.value).filter(
+        (unit) => combatAttackerVerdict(unit).ok,
+      )
       if (auto.length === 0) {
         pushLog('warning', `没有与 ${hexLabel(hex)} 相邻的可攻击己方单位（9.0/9.1a）`, '9.1a')
         return false
