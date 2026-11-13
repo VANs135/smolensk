@@ -133,8 +133,7 @@ function chipPickable(id: string): boolean {
 /** 6.1：堆叠取子清单的已勾选 id（界面用；`movePick` 为空时给空数组，避免模板里做空值断言） */
 const movePickIds = computed<string[]>(() => workbench.movePick?.ids ?? [])
 
-/** 6.1f：本次一起移动的单位（含已被放下的），与仍在走的那些 */
-const movingUnits = computed(() => workbench.moveUnits)
+/** 6.1f：仍在走的单位（"放下堆叠单位"的唯一入口在移动面板的移动编组里） */
 const activeMovingUnits = computed(() => workbench.activeMoveUnits)
 
 /** 6.1：小窗这一格是否正是待取子的堆叠格 ⇒ chip 直接驱动 `movePick` */
@@ -372,24 +371,10 @@ function sideName(side: string): string {
 
     <!-- 无战斗流程：只摆战斗单位 + 操作按钮（不写说明文字） -->
     <template v-if="step === null">
-      <!-- 6.1f：**移动中**可把堆叠里的某一枚就地放下（停在当前格，其余继续走） -->
-      <section v-if="movingUnits.length > 1" class="block block--pick">
-        <h4 class="block__title">移动中：放下堆叠里的单位</h4>
-        <ul class="list">
-          <li v-for="unit in movingUnits" :key="unit.instanceId" class="num">
-            {{ unit.name }} @ {{ hexLabel(unit.hex) }}
-            <span v-if="unit.movementEnded">· 已放下</span>
-            <BaseButton
-              v-else
-              variant="ghost"
-              size="sm"
-              @click="workbench.dropUnitFromMove(unit.instanceId)"
-            >
-              就地放下
-            </BaseButton>
-          </li>
-        </ul>
-      </section>
+      <!--
+        6.1f 放下堆叠单位：唯一入口在 `MovePanel` 的「移动编组」里（用户 2026-11-14 裁定）：
+        本窗不再列同名按钮，同一件事只留一处。
+      -->
 
       <!-- 8.1g/h：突袭的参突/留驻拆分（不勾选＝仍在移动的全部单位都参突） -->
       <section v-if="activeMovingUnits.length > 0" class="block block--pick">
