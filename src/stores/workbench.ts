@@ -5182,7 +5182,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *
    * - `departureAvailable`：出发基地仍是**本方**空军基地；自图外盒起飞者恒可回盒。
    * - `offMapBoxAvailable`：图上起飞的飞机，印刷航程 ≥ 盒代价（苏 20 / 轴 30）。
-   *   空运/空投任务暂不给此项（留存货物的盒返账本未建模，见未决项）。
+   *   空运/空投任务只有**货全部卸完**才放行（14.9f：未卸载的货仍在机上，返盒没有入库规则）。
+   * - `offMapBoxBlockedReason`：上一条被拒时给界面的原因（子项本身不出现）。
    * - `otherBases`：剩余航程（`target → base ≤ 印刷航程`）内的其它己方基地格。
    */
   const airMissionReturnChoices = computed<
@@ -5192,6 +5193,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       departureAvailable: boolean
       departureHex: HexRef
       offMapBoxAvailable: boolean
+      /** 14.9f：货未卸完时给界面的禁用原因（子项本身不出现） */
+      offMapBoxBlockedReason: string | null
       otherBases: HexRef[]
     }[]
   >(() => {
@@ -5205,15 +5208,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         (base) => base.side === state.side && sameHex(base.hex, origin.baseHex),
       )
       const cargoMission = state.kind === 'air_transport' || state.kind === 'air_drop'
+      // 14.9f：`assignment.cargo` 是卸载/货损后的余量 ⇒ 非空即「货还在机上」
+      // 空运/空投只有货全卸完才放行返盒（用户 2026-11-13 批复的最小改法）
+      const cargoRemaining = cargoMission && state.assignment.cargo.length > 0
+      const boxReachable = planOffMapAirBoxFlight({ side: state.side, rangeHexes: range }).ok
       return {
         aircraftId: origin.aircraftId,
         fromBox,
         departureAvailable: fromBox || departureBase !== undefined,
         departureHex: { ...origin.baseHex },
-        offMapBoxAvailable:
-          !fromBox &&
-          !cargoMission &&
-          planOffMapAirBoxFlight({ side: state.side, rangeHexes: range }).ok,
+        offMapBoxAvailable: !fromBox && !cargoRemaining && boxReachable,
+        offMapBoxBlockedReason:
+          !fromBox && cargoRemaining ? '14.9f：货物未卸载，不可返盒（原文缺口）' : null,
         otherBases: airBases.value
           .filter(
             (base) =>

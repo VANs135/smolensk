@@ -1106,6 +1106,9 @@ const displayedBases = computed(() =>
               >
                 其它己方基地
               </BaseButton>
+              <span v-if="choice.offMapBoxBlockedReason" class="muted">
+                {{ choice.offMapBoxBlockedReason }}
+              </span>
             </div>
             <div class="row">
               <BaseButton variant="primary" size="sm" @click="workbench.completeAirReturnNow()">

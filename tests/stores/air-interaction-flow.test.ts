@@ -258,6 +258,30 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
     expect(choice.departureAvailable).toBe(true)
     expect(choice.offMapBoxAvailable).toBe(true)
     expect(choice.otherBases).toEqual([])
+    /*
+     * 14.9f（用户 2026-11-13 批复的最小改法）：空运/空投的货还在机上（`assignment.cargo` 非空）
+     * ⇒ 不放行返盒，并给出原因；货全部卸完后放行。不建盒内库存账本。
+     */
+    store.airState = {
+      ...store.airState!,
+      kind: 'air_transport',
+      assignment: {
+        ...store.airState!.assignment,
+        cargo: [{ id: 'sp:cargo-1', kind: 'sp', t: 1 }],
+      },
+    }
+    const cargoLeft = store.airMissionReturnChoices.find((item) => item.aircraftId === 'air-1')!
+    expect(cargoLeft.offMapBoxAvailable).toBe(false)
+    expect(cargoLeft.offMapBoxBlockedReason).toBe('14.9f：货物未卸载，不可返盒（原文缺口）')
+    store.airState = {
+      ...store.airState!,
+      assignment: { ...store.airState!.assignment, cargo: [] },
+    }
+    const cargoGone = store.airMissionReturnChoices.find((item) => item.aircraftId === 'air-1')!
+    expect(cargoGone.offMapBoxAvailable).toBe(true)
+    expect(cargoGone.offMapBoxBlockedReason).toBeNull()
+    // 还原任务类型，继续本用例的返航落点选择
+    store.airState = { ...store.airState!, kind: 'barrage' }
     // 图上基地：选出发基地（不高亮）
     expect(store.chooseAirReturnDepartureNow('air-1')).toBe(true)
     expect(store.airReturnSelectionLabel('air-1')).toContain('出发基地')
