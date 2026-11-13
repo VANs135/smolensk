@@ -332,6 +332,7 @@ import {
   removalAllowedNow,
   removalReasonOf,
   requiresTraceSupply,
+  railEntrySupplySources,
   scenarioTurnRange,
   splitSupplyTableSp,
   distributeTransportCargo,
@@ -19523,16 +19524,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
-   * 专规 2.1 / 3.1（用户 2026-11-12 按原文裁定）：**图边补给源 = 地理判据，不是字母入场段**
+   * 专规 2.1 / 3.1 ＋ 12.6a①（用户 2026-11-13 裁定）：**补给源 = 允许增援入场的图边铁路格 ∪ 点名的其它源**
    *
    *   2.1（苏）：「Map-edge hexes **east of 12.xx** where **any type of road or railroad
    *     enters the map** are Soviet supply sources.」
    *   3.1（轴）：「Map-edge hexes **west of 10.xx** where **any type of road or railroad
    *     enters the map** are Axis supply sources.」
+   *   12.6a①（用户）：「允许增援入场的地图边缘铁路格，加上游戏专属规则中提到的其他补给源。」
    *
-   * 权威清单＝剧本数据 `supplySources.sovietLive / axisLive`（数据侧按原文从素材库
-   * `supply_sources.json` 派生，故 `42.35` / `4.00` 这类**无字母**的源也在内）。
-   * 2.1a 的关闭（Entry L 19 Jul；Entry E 及以西的南缘源 19 Aug）仍按日期过滤。
+   * 合并口径由 `railEntrySupplySources` 唯一实现：
+   *   剧本 `supplySources`（`42.35` / `4.00` 这类无字母的源）∪ `ENTRY_EDGE[side] ∩ 铁路格`；
+   *   2.1a 的关闭（Entry L 19 Jul；Entry E 及以西的南缘源 19 Aug）仍按日期过滤。
    */
   const openSourceHexesBySide = computed<Record<Side, HexRef[]>>(() => {
     const current = scenarios.scenarios.find((item) => item.id === scenarioId.value)
@@ -19540,15 +19542,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       (list ?? [])
         .map((text) => parseHexPath(text)[0])
         .filter((hex): hex is HexRef => hex !== undefined)
-    const pick = (side: Side, list: readonly string[] | undefined): HexRef[] => {
-      const statuses = supplySourceStatuses({
+    const pick = (side: Side, list: readonly string[] | undefined): HexRef[] =>
+      railEntrySupplySources({
         side,
         date: date.value,
-        sources: read(list),
+        entryHexes: mapConfig.entryHexes ?? {},
+        extraSources: read(list),
+        isRailHex: isRailHexAt,
         facts: SHUTDOWN_FACTS,
       })
-      return statuses.filter((item) => item.open).map((item) => ({ ...item.hex }))
-    }
     return {
       axis: pick('axis', current?.supplySources?.axisLive),
       soviet: pick('soviet', current?.supplySources?.sovietLive),

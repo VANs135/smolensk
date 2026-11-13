@@ -129,7 +129,6 @@ function onHexHover(hex: HexRef | null): void {
             <p v-if="focusEntryLetters.length > 0" class="mapview__note">
               入口字母：{{ focusEntryLetters.join(' / ') }}
             </p>
-            <p v-if="focusHexData.supplySource === true" class="mapview__note">苏军补给源格</p>
             <p v-if="focusHedgehog !== null" class="mapview__note">
               印刷永久工事：等级 {{ focusHedgehog.level }}（不可降低）
             </p>
