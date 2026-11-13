@@ -1064,7 +1064,19 @@ export const useMapViewStore = defineStore('mapView', () => {
   const unitActionIntent = ref<CounterAction | null>(null)
   const contextTargets = ref<readonly string[]>([])
 
-  const actingSide = computed(() => workbench.segmentGateQuery.side ?? workbench.activeSide)
+  /*
+   * 初设阶段没有环节闸（`segmentGateQuery.side` 为空），行动方跟着**初设游标**走。
+   *
+   * 修前：苏联初设时这里回落到 `activeSide`（默认轴方）⇒ 盒表里展开苏军盒卡时，
+   * 会话侧别判定（`openCardSide === actingSide`）与动作过滤都按轴方算，4.3 初设拆团的
+   * 「苏军满员步兵师」候选被全部滤掉，卡上一条动作都打不开。
+   * 游标归位（两方都确认完）后回落到 `activeSide`，与修前一致。
+   */
+  const actingSide = computed(() =>
+    !setup.finished
+      ? (setup.setupSideCursor ?? workbench.activeSide)
+      : (workbench.segmentGateQuery.side ?? workbench.activeSide),
+  )
 
   function ownCounterAt(hex: HexRef, instanceId: string): ConsoleUnit | undefined {
     return workbench.units.find(
