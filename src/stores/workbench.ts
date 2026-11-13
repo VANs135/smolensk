@@ -27351,6 +27351,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ['attritionAppliedHexes', attritionAppliedHexes],
     ['automaticPhaseKeys', automaticPhaseKeys],
     ['lastVariableRepl', lastVariableRepl],
+    ['variableReplSpecialDie', variableReplSpecialDie],
     ['supplyArrivalSp', supplyArrivalSp],
     ['supplyTrainHex', supplyTrainHex],
     ['freeRailPicked', freeRailPicked],
@@ -27454,8 +27455,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   // v8（1.4b）：盒内地面单位和入盒回合随盘面保存。
   // v9（2026-11-09）：手牌式增援的撤回账本 `arrivalPlacedUnitsRaw`（投放时新建的算子 id）。
-  const V9_FIELDS = ['arrivalPlacedUnitsRaw']
-  const BOARD_SNAPSHOT_VERSION = 9
+  // v10（2026-11-14）：1.6c 已掷骰面 `variableReplSpecialDie`（读档后「掷骰检定」复用同一颗）。
+  const V10_FIELDS = ['variableReplSpecialDie']
+  const V9_FIELDS = ['arrivalPlacedUnitsRaw', ...V10_FIELDS]
+  const BOARD_SNAPSHOT_VERSION = 10
   const V8_FIELDS = ['edgeBoxHoldings', 'edgeBoxEnteredOn']
   const V6_FIELDS = [
     'segmentStepIndex',
@@ -27554,6 +27557,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     7: [...V8_FIELDS, ...V9_FIELDS],
     // v8（1.4b）：缺撤回账本 ⇒ 读成 {}（仅不能"回手"，不影响既有投放与规则）
     8: V9_FIELDS,
+    // v9：缺 1.6c 骰面 ⇒ 读成 null（按钮会现掷一颗，与升级前行为一致）
+    9: V10_FIELDS,
   }
   const boardRegistry = createSnapshotRegistry({
     version: BOARD_SNAPSHOT_VERSION,
