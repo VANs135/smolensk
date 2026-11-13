@@ -10883,8 +10883,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     resetOptionDraft()
     combatAttackerIds.value = []
     fireResolution.resetCombat()
-    // W7 C16：战斗补给的来源声明随本场战斗一并作废
+    // W7 C16：战斗补给的来源声明随本场战斗一并作废（ids 与真正付款用的 picks 必须一起清）
     combatSupplyDumpIds.value = { attacker: null, defender: null }
+    combatSupplyDumpPicks.value = { attacker: [], defender: [] }
     // 9.12d / 9.12f：跟随者名单与「战斗开始时」快照随之作废
     combatTagalongIds.value = []
     combatStartSnapshot.value = []
@@ -11312,6 +11313,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     inputs.attackerAvailableT = 0
     inputs.defenderAvailableT = 0
+    /*
+     * 12.4：来源声明属于**本场战斗**。可用量归零的同时必须把上一场的声明（ids / picks）也清掉，
+     * 否则连续突袭（8.1a）时第二场会显示"来源已声明"、可用量却为 0 ⇒ 12.4 永远拒绝。
+     */
+    combatSupplyDumpIds.value = { attacker: null, defender: null }
+    combatSupplyDumpPicks.value = { attacker: [], defender: [] }
     inputs.defenderTerrain = defaultDefenseTerrain(input.hex)
     combatInputs.value = inputs
     pushLog('info', input.text, rule)
