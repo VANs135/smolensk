@@ -357,6 +357,10 @@ describe('C8 断补处置：12.6c 吃图上补给 / 12.6d 接受断补', () => {
     store.supplySourceDraft = { hexText: label(CORE_HEX), kind: 'supplySourceHex' }
     expect(store.addSupplySource()).toBe(true)
 
+    // 12.6a / 12.8a（用户 2026-11-13 口径）：同一补给阶段的结论已落盘，阶段中新增源
+    // 不会自动改判；此处用裁判入口重判（下一回合的补给阶段也会这样判一次）。
+    store.evaluateTraceSupplyNow()
+
     // B8：D 段的动作只在 D 段放行 ⇒ 先声明段（本段第 1 环＝追溯/拖取）
 
     store.setPhase('supply')
@@ -424,7 +428,7 @@ describe('C8 断补处置：12.6c 吃图上补给 / 12.6d 接受断补', () => {
     expect(free.hasTraceSupply).toBe(true)
   })
 
-  it('12.6 自动触发：进入补给阶段与移动阶段（突围环节）各自重判一次，不必玩家手动点', () => {
+  it('12.6 自动触发：只在进入补给阶段判一次；移动阶段不重判，突围资格按实时线变', () => {
     const store = newStore()
     // 合围 + 远源：与上一条同构，但**不手动调用**判定
     const far = mapLayers.hexes[mapLayers.hexes.length - 1]!
@@ -439,16 +443,25 @@ describe('C8 断补处置：12.6c 吃图上补给 / 12.6d 接受断补', () => {
     // 初值仍是创建时的 true（尚未判过）
     expect(surrounded.hasTraceSupply).toBe(true)
 
-    // 12.6 的评估时点：进入补给阶段即自动重判
+    // 12.6 的评估时点：进入补给阶段即自动判定，且只判当前方一次
     store.setPhase('supply')
     expect(surrounded.hasTraceSupply).toBe(false)
     // 日志能看出"是谁推动的"
     expect(store.log.some((entry) => entry.text.includes('进入补给阶段'))).toBe(true)
 
-    // 12.8e 括注「在此环节中检查追溯补给」：进入移动阶段（＝突围环节）再次自动重判
+    // 12.8a（用户 2026-11-13 口径）：进入移动阶段**不再**重判，断补标记沿用
     store.setPhase('movement')
     expect(surrounded.hasTraceSupply).toBe(false)
-    expect(store.log.some((entry) => entry.text.includes('突围环节复查'))).toBe(true)
+    expect(store.log.some((entry) => entry.text.includes('突围环节复查'))).toBe(false)
+
+    // 12.8e：突围资格在环节内**就地实时**判 —— 同格补一个源后，实时线接通，
+    // 候选立刻不含该单位，但**标记不被重写**（12.8a：留到下一个友方补给阶段）
+    store.supplySourceDraft = { hexText: label(CORE_HEX), kind: 'supplySourceHex' }
+    expect(store.addSupplySource()).toBe(true)
+    expect(store.breakoutCandidates.map((entry) => entry.unit.instanceId)).not.toContain(
+      surrounded.instanceId,
+    )
+    expect(surrounded.hasTraceSupply).toBe(false)
   })
 })
 

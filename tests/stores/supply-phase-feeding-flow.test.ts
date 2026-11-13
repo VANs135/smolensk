@@ -82,10 +82,11 @@ describe('12.6c/12.6d：喂食与断补标记的一键落盘', () => {
     const plain = placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'plain')
     placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'sustained')
     placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'strat')
-    // 12.3d：先卡断再进补给段（`supplyFeedingCandidates` 读的是重判后的 `hasTraceSupply` 标记）
+    // 12.3d：先卡断再进补给段（`supplyFeedingCandidates` 读的是判定快照的标记）
     sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
-    store.setPhase('supply')
+    // 12.6c 的可吃性（有没有可拖的站）须在**判定时**成立：补给阶段只在入口判一次
     store.spDumps.push({ id: 'd1', hex: { ...CORE_HEX }, side: 'axis', sp: 4, t: 0 })
+    store.setPhase('supply')
     // 12.8e：本回合靠特殊续命维生的单位**不算**断补
     const sustained = store.units.find((unit) => unit.instanceId === 'sustained')
     if (sustained === undefined) throw new Error('续命单位不在盘面上')

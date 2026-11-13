@@ -180,13 +180,13 @@ describe('12.8e：断补「第一个回合」的真跟踪（先突围、后补�
     const store = newStore()
     const unit = strandedUnit(store)
     store.units.push(unit)
+    // 12.1b：喂食要有粮 ⇒ 同格摆一座补给站（12.6c 的可吃性在**进入补给阶段时**判一次）
+    store.spDumpDraft = { hexText: label(TRACE_HEX), sp: 2, t: 0 }
+    expect(store.addSpDump()).toBe(true)
     store.setPhase('supply')
     const index = store.playerSegmentSteps.findIndex((step) => step.id.startsWith('supply.'))
     expect(store.setSegmentStepIndex(index)).toBe(true)
 
-    // 12.1b：喂食要有粮 ⇒ 同格摆一座补给站
-    store.spDumpDraft = { hexText: label(TRACE_HEX), sp: 2, t: 0 }
-    expect(store.addSpDump()).toBe(true)
     // 12.6c：自愿吃图上补给（面板勾选后才进计划）
     store.supplyPhaseInputs = {
       ...store.supplyPhaseInputs,
@@ -243,11 +243,12 @@ describe('12.8e：断补「第一个回合」的真跟踪（先突围、后补�
     expect(store.breakoutCandidates.find((item) => item.unit.instanceId === 'u1')?.ok).toBe(true)
 
     // T+1 补给阶段：在**已断补**状态下吃图上补给
+    // 12.1b：粮必须在进入补给阶段前就在盘上（12.6c 可吃性随判定快照锁定）
+    store.spDumpDraft = { hexText: label(TRACE_HEX), sp: 2, t: 0 }
+    expect(store.addSpDump()).toBe(true)
     store.setPhase('supply')
     const index = store.playerSegmentSteps.findIndex((step) => step.id.startsWith('supply.'))
     expect(store.setSegmentStepIndex(index)).toBe(true)
-    store.spDumpDraft = { hexText: label(TRACE_HEX), sp: 2, t: 0 }
-    expect(store.addSpDump()).toBe(true)
     store.supplyPhaseInputs = {
       ...store.supplyPhaseInputs,
       availableT: 4,

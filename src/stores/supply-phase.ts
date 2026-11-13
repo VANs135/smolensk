@@ -11,6 +11,7 @@ import {
   type FeedingSourceFacts,
   type SupplyPhasePlan,
   type TraceSupplyFacts,
+  type UnitSupplyAssessment,
 } from '@/engine/rules'
 import {
   attritionDutiesFor,
@@ -38,11 +39,12 @@ export interface SupplyPhasePorts {
    * 缺省＝不分组，保持「全阶段一批」的既有口径（独立域用例与旧存档不受影响）。
    */
   feedingSources?(): Readonly<Record<string, FeedingSourceFacts>>
+  /** 12.6：补给阶段唯一判定入口落盘的结论（只覆盖 status；阶段中新增单位由引擎现算） */
+  traceSettlementStatus?(): Readonly<Record<string, UnitSupplyAssessment['status']>>
   payFromSideDumps(amount: number, allowed?: readonly SpDump[]): string | null
   payFromUnitReachableDumps(unit: ConsoleUnit, amount: number): string | null
   markTraceSupply(id: string, ready: boolean): void
   markSustainedBySpecialSupply(ids: readonly string[]): void
-  refreshTraceSupply(reason: string): number
   eliminateEntry(unit: ConsoleUnit, rule: string, detail: string, refresh?: boolean): void
   pushLog(kind: 'info' | 'success' | 'warning' | 'danger', text: string, rule?: string): void
   recordSettlement(entry: { action: string; rule: string; data: Record<string, unknown> }): boolean
@@ -62,7 +64,6 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     payFromUnitReachableDumps,
     markTraceSupply,
     markSustainedBySpecialSupply,
-    refreshTraceSupply,
     eliminateEntry,
     pushLog,
     recordSettlement,
@@ -106,6 +107,8 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     units.value.filter((unit) => {
       if (unit.side !== activeSide.value || !unit.isCombat) return false
       if (!isOutOfSupplyNow(unit, turn())) return false
+      // 12.6c 的"能不能吃/要吃多少"是**付钱时点**的可用性（站、费、模式），实时算；
+      // 判定结论（是否断补）取标记，不再重算追溯。
       return assessUnitSupply(
         supplyFacts.value,
         {
@@ -169,6 +172,10 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
       recoverySettled: supplyRecoverySettled.value,
       // 12.6c：来源事实由工作台按真实可达站给出；引擎只按它分组算费，不自行猜来源。
       ...(ports.feedingSources === undefined ? {} : { feedingSources: ports.feedingSources() }),
+      // 12.6：判定结论读本阶段唯一入口的快照（只覆盖 status；来源/费率仍实时）
+      ...(ports.traceSettlementStatus === undefined
+        ? {}
+        : { settledStatusById: ports.traceSettlementStatus() }),
       units: mine.map((unit) => ({
         id: unit.instanceId,
         side: unit.side,
@@ -384,13 +391,24 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     // ★ 用户 2026-11-06 裁定：吃图上补给属"其它手段"，**不等同于追溯补给** ⇒
     //   `clear` 中只有 `inSupply`（trace 成功）者摘标；被喂饱者不写 `hasTraceSupply`，
     //   只由 `markSustainedBySpecialSupply` 记「本回合续命」（12.8e 括注）。
+    // ★ 计数按**真实变化**累计（不再读计划表长度）。
+    let clearedCount = 0
+    let markedCount = 0
+    const writeMark = (unitId: string, ready: boolean): void => {
+      const unit = units.value.find((item) => item.instanceId === unitId)
+      const before = unit?.hasTraceSupply
+      markTraceSupply(unitId, ready)
+      if (unit === undefined || before === ready) return
+      if (ready) clearedCount += 1
+      else markedCount += 1
+    }
     for (const unitId of plan.outOfSupply.clear) {
       const assessment = plan.assessments.find((item) => item.unitId === unitId)
-      if (assessment?.status === 'inSupply') markTraceSupply(unitId, true)
+      if (assessment?.status === 'inSupply') writeMark(unitId, true)
     }
-    for (const unitId of plan.outOfSupply.mark) markTraceSupply(unitId, false)
+    for (const unitId of plan.outOfSupply.mark) writeMark(unitId, false)
     // 落盘降级者（计划说付得起、自己的可达站却付不出）⇒ 仍置断补标（如实登记）
-    for (const unitId of degradedIds) markTraceSupply(unitId, false)
+    for (const unitId of degradedIds) writeMark(unitId, false)
     // 12.8e 括注：被喂饱者属"靠吃图上补给续命" ⇒ 本回合不算被切断的第一回合
     markSustainedBySpecialSupply(appliedIds)
 
@@ -418,7 +436,7 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
         (degradedIds.length > 0
           ? `；另有 ${degradedIds.length} 个因各自的可达站不足未喂（降级置断补）`
           : '') +
-        `；断补 置 ${plan.outOfSupply.mark.length + degradedIds.length} / 除 ${plan.outOfSupply.clear.length}`,
+        `；断补 置 ${markedCount} / 除 ${clearedCount}`,
       '12.6c',
     )
     return true
@@ -537,14 +555,7 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
       if (unit.steps <= 0)
         eliminateEntry(unit, '12.8b', `${unit.name} 损耗归零，移入死亡堆（12.8b）`, false)
     pushLog('success', `12.8b 损耗落盘 ${hexKey}：${verdict.detail}`, '12.8b')
-    // 战损即变动盘面：补给网可能因此变化（HQ/延补队被消灭）
-    if (
-      supplyPhasePlan.value?.attritionDuty.every((item) =>
-        attritionAppliedHexes.value.includes(`${item.hex.col}.${item.hex.row}`),
-      )
-    ) {
-      refreshTraceSupply('12.8b 本阶段损耗全部结清')
-    }
+    // 12.8a：损耗结清后**不**重判追溯补给 —— 断补标记保留到下一个友方补给阶段
     return true
   }
 

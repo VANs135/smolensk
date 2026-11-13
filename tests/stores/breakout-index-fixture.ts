@@ -91,6 +91,8 @@ function build(specs: Spec[], active: Side = 'axis'): string {
   for (const spec of specs) {
     const live = store.units.find((unit) => unit.instanceId === spec.id)!
     live.hasTraceSupply = spec.traced
+    // 12.8e 就地实时：突围资格不再读回合初标记 ⇒ 夹具用 12.6h 空投豁免造"真的有补给"的友军
+    if (spec.traced) live.airDropExemptTurn = store.turn
   }
   const lines = store.breakoutCandidates.map(
     (entry) =>
@@ -233,6 +235,7 @@ export function breakoutReactivityProbe(): { before: string; after: string } {
   for (const id of ['r-trap', 'r-friend', 'r-enemy']) {
     const live = store.units.find((unit) => unit.instanceId === id)!
     live.hasTraceSupply = id === 'r-friend'
+    if (id === 'r-friend') live.airDropExemptTurn = store.turn
   }
   const render = () =>
     store.breakoutCandidates
@@ -240,10 +243,11 @@ export function breakoutReactivityProbe(): { before: string; after: string } {
       .join('|')
   const before = render()
   /**
-   * 只改**非候选**单位（追踪友军）的补给状态：索引必须重建，否则会读到旧的"有友军"结论。
-   * （候选自身的字段本来就经代理读，测不出索引的失效问题。）
+   * 只改**非候选**单位的"此刻是否有补给"（12.6h 豁免）：索引必须重建，
+   * 否则会读到旧的"有友军"结论。（候选自身的字段本来就经代理读，测不出索引的失效问题。）
    */
   const friend = store.units.find((unit) => unit.instanceId === 'r-friend')!
+  friend.airDropExemptTurn = null
   friend.hasTraceSupply = false
   const after = render()
   return { before, after }

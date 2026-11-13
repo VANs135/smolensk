@@ -150,8 +150,9 @@ describe('B32 步骤 5：装载在运输点数上的 SP（12.1b / 13.2f）', () 
     expect(carrier.loadedSpT).toBe(SP_TO_T - 1)
     // 没有在 SP 账本里凭空多出/少掉条目
     expect(store.spDumps.length).toBe(dumpCountBefore)
-    // 用尽后即从"含 SP 的位置"里消失
-    carrier.loadedSpT = 0
+    // 用尽后即从"含 SP 的位置"里消失（经 store 代理写，保证 computed 失效重算）
+    const liveCarrier = store.units.find((unit) => unit.instanceId === 'tr-1')!
+    liveCarrier.loadedSpT = 0
     expect(store.carriedSpDumps).toEqual([])
   })
 

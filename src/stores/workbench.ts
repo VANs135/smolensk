@@ -447,6 +447,7 @@ import {
   SHORT_RANGE_BARRAGE_HEXES,
   // 12.7b：延补队距离＝印值 MA（卡车 20 / 马车 10），生成连通判据复用同一来源
   extenderRangeMpOf,
+  type UnitSupplyAssessment,
 } from '@/engine/rules'
 import { createGameSeed, createId } from '@/shared'
 
@@ -2043,7 +2044,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     payFromUnitReachableDumps,
     markTraceSupply,
     markSustainedBySpecialSupply,
-    refreshTraceSupply,
+    // 12.6：唯一判定入口写下的本回合结论（逐单位检查 / 阶段末总计划共读）
+    traceSettlementStatus() {
+      const settlement = traceSettlement.value
+      return settlement !== null && settlement.turn === turn.value ? settlement.byUnit : {}
+    },
     eliminateEntry,
     pushLog,
     recordSettlement,
@@ -4057,8 +4062,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
             : '该格轨距仍非本方可用'),
       '13.3f',
     )
-    // 换轨会改变铁路补给线（谁能用这条铁路）⇒ 立刻重判追溯补给
-    refreshTraceSupply('轨距转换（13.3f）')
+    // 13.3f：铁路源/卸货格由 `railSupplyPath` 实时派生；不重判断补标记（12.8a）
     return true
   }
 
@@ -7152,13 +7156,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     resetSupplyPhaseLedger()
     pushLog('info', `阶段 → ${PHASE_LABELS[next]}`)
     /*
-     * 12.6 / 12.8e：追溯补给的**自动重判时点**（补给网一过段就可能变，标记不能过期）
-     *   - 进入**补给阶段**：12.6 的评估时点；
-     *   - 进入**移动阶段**：该段的首环节即**突围环节**，12.8e 括注明写「在此环节中检查追溯补给」，
-     *     故此刻的标记必须是新鲜的。待 P1-3 把突围环节独立成子步后，本钩子再下移到该子步。
+     * 12.6：追溯补给的**唯一自动判定时点**＝进入补给阶段（判当前方一次并落标记）。
+     * 进入移动阶段**不再**重判：抽象补给不因走位立刻断补（用户 2026-11-13 口径）；
+     * 突围资格改由 `breakout*` 就地实时查询（12.8e 的「在此环节中检查」）。
      */
     if (next === 'supply') refreshTraceSupply('进入补给阶段')
-    else if (next === 'movement') refreshTraceSupply('进入移动阶段（突围环节复查）')
     // 12.6c：批量费率的"本环节"以段为单位 ⇒ 换阶段即清空已喂 RE 账本
     oosFedReByDump.value = {}
     // 12.11a（第五批 B1）：销毁补给站的限额是「**每个阶段**每站一次」⇒ 换阶段即清空尝试账本
@@ -7285,8 +7287,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       'success',
       `摆放 ${unit.name} @ ${hex.col}.${hex.row}（A${unit.raw.attack} AR${unit.raw.ar} MA${unit.raw.ma}，${effectiveMobilityOf(unit)}，${unit.re}RE）`,
     )
-    // 12.3b / 12.7：HQ 与延补队都是**补给源**，摆上即改变补给网 ⇒ 重判（其余算子不影响）
-    if (affectsSupplyNet(unit)) refreshTraceSupply(`摆上 ${unit.name}`)
+    // 12.3b / 12.7：初设/编辑器里摆上 HQ 或延补队会改变补给网；对局内回合不重判标记（12.8a）
+    if (initialSetupInProgress.value && affectsSupplyNet(unit))
+      refreshTraceSupply(`摆上 ${unit.name}`)
     return true
   }
 
@@ -7301,8 +7304,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (removed !== undefined && selectedId.value === removed.instanceId) selectedId.value = null
     battleTarget.value = null
     pushLog('info', `移除 ${removed?.name ?? '算子'} @ ${hex.col}.${hex.row}`)
-    // 12.3b / 12.7：HQ 或延补队被移除 ⇒ 补给网变化 ⇒ 重判
-    if (removed !== undefined && affectsSupplyNet(removed))
+    // 12.3b / 12.7：初设/编辑器里移除 HQ 或延补队 ⇒ 补给网变化；对局内不重判标记（12.8a）
+    if (removed !== undefined && initialSetupInProgress.value && affectsSupplyNet(removed))
       refreshTraceSupply(`移除 ${removed.name}`)
     return true
   }
@@ -9545,10 +9548,36 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const unit = toRaw(element)
       const hex = toRaw(unit.hex)
       const id = hex.col * 128 + hex.row
-      if (unit.hasTraceSupply) record(tracedFriendIds, id, unit.side)
+      // 12.8e：突围环节**就地实时**判「有追溯补给的友方单位」，不读回合初的结算标记
+      if (hasLiveTraceSupply(unit)) record(tracedFriendIds, id, unit.side)
       if (unit.isCombat) record(enemyCombatIds, id, unit.side)
     }
     return { tracedFriendIds, enemyCombatIds }
+  }
+
+  /**
+   * 12.8e / 12.6：该单位**此刻**是否有追溯补给（只读查询，不写标记）
+   *
+   * 12.8e 括注明写「在此环节中检查追溯补给」，故突围资格不能沿用补给阶段的标记。
+   * 12.6h 空投当回合与 12.9 非战斗单位照旧视为有补给；12.6f 的同源取舍
+   * 属补给阶段判定，回合内沿用最近一次结论（`traceSettlement.denied`）。
+   */
+  /** 本回合是否有"可能突围"的候选（标记断补）；没有就不必为突围资格做实时洪泛 */
+  const cutSideFlags = computed<Record<Side, boolean>>(() => {
+    const flags: Record<Side, boolean> = { axis: false, soviet: false }
+    for (const unit of units.value) if (!unit.hasTraceSupply) flags[unit.side] = true
+    return flags
+  })
+
+  function hasLiveTraceSupply(unit: ConsoleUnit): boolean {
+    // 12.8e 的突围环节只在移动阶段出现；其余阶段（初设/补给/反应/exploit）不做
+    // 这份实时洪泛，避免每次存店都白算一遍（读标记即可，结果本来也不被使用）。
+    if (phase.value !== 'movement' || !cutSideFlags.value[unit.side]) return unit.hasTraceSupply
+    if ((unit.airDropExemptTurn ?? null) === turn.value) return true
+    if (!requiresTraceSupply(unit)) return true
+    const denied = traceSettlement.value?.denied[unit.side]
+    if (denied !== undefined && denied.includes(unit.instanceId)) return false
+    return traceSupplyAtForMove.value(unit.hex, unit.side)
   }
 
   /**
@@ -9720,7 +9749,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function nearestTracedCombatFriendDistance(unit: ConsoleUnit): number | null {
     let best: number | null = null
     for (const other of units.value) {
-      if (other.side !== unit.side || !other.isCombat || !other.hasTraceSupply) continue
+      if (other.side !== unit.side || !other.isCombat || !hasLiveTraceSupply(other)) continue
       const distance = hexDistance(unit.hex, other.hex)
       if (best === null || distance < best) best = distance
     }
@@ -9767,7 +9796,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         isCombat: unit.isCombat,
         isTransportPoint: unit.noncombatKind === 'transport_point',
         moveMa: unit.faces.move.ma,
-        hasTraceSupply: unit.hasTraceSupply,
+        // 12.8e：本环节就地实时判（不读补给阶段的结算标记）
+        hasTraceSupply: hasLiveTraceSupply(unit),
       },
       /* 12.8e：首回合＝**连续**无补给的起点回合（且非靠 12.6c/12.10e/21.10 续命的那一回合） */
       firstTurnOutOfSupply: isFirstTurnOfBeingCut(unit),
@@ -9780,7 +9810,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     { unit: ConsoleUnit; ok: boolean; reason: string | null; detail: string }[]
   >(() => {
     const candidates = units.value.filter(
-      (unit) => unit.side === activeSide.value && !unit.hasTraceSupply,
+      (unit) => unit.side === activeSide.value && !hasLiveTraceSupply(unit),
     )
     // 档1/2：索引、地图事实、通行性与 ZOC 查询**每次求值建一份**，本次全部候选复用
     // （都只依赖静态 `mapLayers` 与本单位阵营，与候选无关）
@@ -9847,7 +9877,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         },
       ]
       units.value = units.value.filter((item) => item.instanceId !== unit.instanceId)
-      refreshTraceSupply(`12.8e 突围离图：${unit.name}`)
+      // 12.8a：离图不重判其他单位的断补标记（标记保留到下一个友方补给阶段）
       pushLog('success', `${unit.name} 突围成功：${attempt.detail}`, '12.8e')
       pushLog('info', final.returnInfo?.detail ?? '（未定返场回合）', '12.8e')
     } else {
@@ -9923,7 +9953,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     breakoutReturns.value = breakoutReturns.value.filter(
       (item) => item.unit.instanceId !== instanceId,
     )
-    refreshTraceSupply(`12.8e 突围返场：${unit.name}`)
+    // 12.8a：返场不重判其他单位的标记（12.8e 只要求本环节就地检查突围资格）
     pushLog(
       'success',
       `${unit.name} 于回合 ${turn.value} 作为增援返场 ${hexLabel(hex)}（12.8e）`,
@@ -10518,7 +10548,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   按判别字段决定从 `units` 还是 `airUnits` 移除，并顺带清掉与它绑定的选中/任务态。
    * ★ `text` 由调用方给出（各条的规则出处不同），但「进死亡堆」这一动作由本函数保证。
    */
-  function eliminateEntry(entry: DeadPileEntry, rule: string, text: string, refresh = true): void {
+  function eliminateEntry(entry: DeadPileEntry, rule: string, text: string, _refresh = true): void {
     if (isAirDeadPileEntry(entry)) {
       airUnits.value = airUnits.value.filter((item) => item.instanceId !== entry.instanceId)
       airMissionAirIds.value = airMissionAirIds.value.filter((id) => id !== entry.instanceId)
@@ -10549,15 +10579,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (!isAirDeadPileEntry(entry) && entry.rebuildable === false) {
       removedForever.value = [...removedForever.value, entry]
       pushLog('danger', `${text}（13.5c：AR 后有黄点 ⇒ 摧毁即永久移除，不进死亡堆）`, rule)
-      // 12.3b / 12.7：被摧毁的 HQ 或延补队是**补给源**，少一个源就要重判全场
-      if (refresh && affectsSupplyNet(entry)) refreshTraceSupply(`${entry.name} 被摧毁`)
+      // 12.8a：被摧毁的源不影响已落盘的断补标记（下一个友方补给阶段才重判）
       return
     }
     deadPile.value = [...deadPile.value, entry]
     pushLog('danger', text, rule)
-    // 12.3b / 12.7：被摧毁的 HQ 或延补队是**补给源**，少一个源就要重判全场
-    if (refresh && !isAirDeadPileEntry(entry) && affectsSupplyNet(entry))
-      refreshTraceSupply(`${entry.name} 被摧毁`)
+    // 12.8a：同上 —— 标记保留到下一个友方补给阶段
   }
 
   /**
@@ -13745,8 +13772,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     spDumps.value = spDumps.value.filter((dump) => dump.id !== id)
     if (found !== undefined) {
       pushLog('info', `移除补给站 ${hexLabel(found.hex)}（${found.sp} SP + ${found.t} T）`, '12.1b')
-      // 12.1b：补给站即**源**，移除即补给网变化 ⇒ 重判
-      refreshTraceSupply(`移除补给站 ${hexLabel(found.hex)}`)
+      // 12.6a：补给站不是追溯补给的来源 ⇒ 不重判断补标记（12.8a）
     }
   }
 
@@ -13795,14 +13821,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function setSpDumpHoldings(id: string, holdings: SpHoldings): void {
     /*
      * B32 步骤 5（12.1b / 13.2f）：来源可以是**装载在运输点数上的 SP**（id 前缀 "unit:"）⇒
-     * 写回那枚算子的 loadedSpT（12.1a 的 SP↔T 换算由 holdingsToT 兜住），并照常"用尽即重判补给网"。
+     * 写回那枚算子的 loadedSpT（12.1a 的 SP↔T 换算由 holdingsToT 兜住）。
      * 所有付款路径共用本函数，故一处分流即全覆盖。
      */
     if (id.startsWith('unit:')) {
       const target = units.value.find((unit) => 'unit:' + unit.instanceId === id)
       if (target === undefined) return
       target.loadedSpT = holdingsToT({ sp: holdings.sp, t: holdings.t })
-      if (target.loadedSpT <= 0) refreshTraceSupply(target.name + ' 的装载补给用尽')
+      // 12.8a：装载中的 SP 用尽不重判断补标记；12.3b 的投递资格按付款时点的实时持仓判
       return
     }
     const prev = spDumps.value.find((dump) => dump.id === id)
@@ -13816,19 +13842,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       dump.id === id ? { ...dump, sp: holdings.sp, t: holdings.t } : dump,
     )
     /*
-     * 12.1b：**含 SP 的位置才是补给站**（12.3a 的拖取对象、12.6c 的吃图上补给来源）。
-     *
-     * ★ 口径说明（勿夸大本钩子）：**补给站不是"追溯补给"的来源**——12.6a①②③ 的源是补给源格与
-     *   延补队，故补给站用尽**不改变** `hasTraceSupply` 的结论。它改变的是 12.3a 拖取与
-     *   12.6c 吃图上补给的**可行性**，而那两项由补给面板在 `beginSupplyCheckNow` 时按**实时事实**
-     *   现算，本来就是新鲜的。
-     *   此处仍重判一次，是让"补给网变动即刷新"这一条规则保持**单一收口**（本函数是所有扣款路径的
-     *   唯一写点，挂这里不必在七八个付款点各写一遍），成本是两次反向洪泛，可忽略。
+     * 12.1b / 12.8a（用户 2026-11-13 口径）：补给站用尽**不**重判断补标记。
+     * 追溯判定的持仓口径锁定在补给阶段入口的快照；此时刻的持仓变化只影响
+     * 付款时点的可达性（`drawableDumpsFor` / `deliverableDumpsFor` 本就实时算）。
      */
-    if (holdings.sp <= 0 && holdings.t <= 0) {
-      const dump = spDumps.value.find((item) => item.id === id)
-      refreshTraceSupply(`补给站 ${dump === undefined ? id : hexLabel(dump.hex)} 用尽（12.1b）`)
-    }
   }
 
   /** C8 12.1a：**加总**（T 满 4 并为等额 SP，减少堆叠） */
@@ -13925,6 +13942,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', '只能对**当前方**的单位做补给检查（12.6：补给按方归属）', '12.6')
       return false
     }
+    const settlement = traceSettlement.value
+    const settledStatus =
+      settlement !== null && settlement.turn === turn.value ? settlement.byUnit[unitId] : undefined
     const data = acceptSupply(
       beginSupplyCheck({
         side: activeSide.value,
@@ -13938,6 +13958,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           mode: unit.mode.mode,
         },
         facts: supplyFacts.value,
+        // 12.6：结论读本阶段唯一入口的快照；来源/费率等付款细节仍按此刻事实算
+        ...(settledStatus === undefined ? {} : { settledStatus }),
         // 12.6c：把"同一补给站本环节已喂过的 RE"带进评估，使显示的代价就是**本次增量**
         alreadyFedRe: fedReOf(nearestDrawableDump(unit.hex, unit.side)?.id ?? null),
       }),
@@ -14172,6 +14194,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 12.8e：12.3a/b 拖取成功（有补给）⇒ 连续断补期结束；标记为断补时起点由 `refreshTraceSupply` 落值
     if (hasTraceSupply) unit.cutSinceTurn = null
     else if ((unit.cutSinceTurn ?? null) === null) unit.cutSinceTurn = turn.value
+    // 单向定向写入（12.3a 拖取成功 / 断补处置）同步进本阶段快照的**结论**，避免逐单位检查读到旧状态
+    const settlement = traceSettlement.value
+    const previous = settlement?.byUnit[instanceId]
+    if (settlement !== null && previous !== undefined) {
+      traceSettlement.value = {
+        ...settlement,
+        byUnit: { ...settlement.byUnit, [instanceId]: hasTraceSupply ? 'inSupply' : 'outOfSupply' },
+      }
+    }
   }
 
   /**
@@ -14375,28 +14406,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 12.6 / 12.8：对**全场单位**重新判定追溯补给并落盘（内部实现，带触发原因）
-   *
-   * ## 为什么需要它
-   * 这是让 12.8 那一整条链真正生效的开关：断补战斗值 ×½（9.5a/12.8d）、断补不投射 ZOC（4.5）、
-   * 12.8e 突围资格（须"无追溯补给"）、界面断补图标。此前只有玩家在补给面板**逐个检查过**的单位
-   * 才有标记，其余单位的 `hasTraceSupply` 一直停在创建初值 `true` ⇒ 对它们整条链是空转的。
-   *
-   * ## 口径
-   * 判据与补给面板**同一份事实、同一实现**（`traceCoverageHexes` 覆盖集，按方各算一次），
-   * 故不存在两套口径；机动类型按 12.3a 的缺省（**轮式 MP**）。
-   * 12.9：**非战斗单位不受补给约束**，故它们恒视为有补给。
-   *
-   * ## 触发时点（`reason` 落进日志，便于复核"这次是谁推动的"）
-   * 除界面手动触发外，补给网一旦变化就必须重判，否则标记会过期。已挂钩的自动时点：
-   *   - **进入补给阶段**（12.6 的评估时点）；
-   *   - **进入移动阶段**（＝**突围环节**：12.8e 括注「在此环节中检查追溯补给」，故此处必须新鲜；
-   *     待 P1-3 把突围环节独立成子步后，本钩子应下移到该子步）；
-   *   - **延补队崩溃**（12.7：延补队本身是补给源，崩溃/位移会改变补给网）；
-   *   - **指挥部或延补队摆上/移除/被摧毁**（12.3b 投递源、12.7 延补队源变动）；
-   *   - **补给站用尽或被移除**（12.1b：含 SP 的位置才是补给站；用尽即不再是源）。
-   */
-  /**
    * 12.6f：本侧各**多单位编队**里被"同源取舍"排除掉的单位（须吃图上补给，否则断补）
    *
    * 判据只有一处：引擎 `formationTraceTradeoff`（分组由本函数给 —— 它只吃"已分好组的单位列表"）。
@@ -14407,6 +14416,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     side: Side,
     reason: string,
     facts = supplyFacts.value,
+    silent = false,
   ): Set<string> {
     const byFormation = new Map<string, ConsoleUnit[]>()
     for (const unit of units.value) {
@@ -14429,6 +14439,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       })
       if (result.sameSource) continue
       for (const id of result.uncoveredUnitIds) denied.add(id)
+      if (silent) continue
       const namesOf = (ids: readonly string[]): string =>
         ids.map((id) => units.value.find((unit) => unit.instanceId === id)?.name ?? id).join('、')
       pushLog(
@@ -14445,49 +14456,76 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return denied
   }
 
+  /** 本回合已落盘的追溯补给判定快照（补给阶段唯一入口写入；回合内只读） */
+  interface TraceSettlement {
+    turn: number
+    /** null＝裁判手动全场重判 */
+    side: Side | null
+    byUnit: Record<string, UnitSupplyAssessment['status']>
+    denied: Record<Side, string[]>
+    marked: number
+    cleared: number
+    outOfSupply: number
+    reason: string
+  }
+  const traceSettlement = ref<TraceSettlement | null>(null)
+
   /**
-   * 12.6 / 12.8e：全场追溯补给重判
+   * 12.6 / 12.8：**唯一的自动判定入口**
    *
-   * `seedCutTurn` 只在**补给阶段**落"连续断补起点"（12.8a 的判定时点）。
-   * 运动阶段进入时也要重判（突围环节要新鲜标记），但**不能**在那里落起点：
-   * 否则"敌方回合被切断、下一回合突围"会被记成本回合起点，突围豁免再多拿一轮。
+   * 只在「自己的补给阶段」判一次当前方（裁判入口可传 `side:null` 全场强制重判）；
+   * 同一回合同一方重复调用直接复用快照，不重写标记 —— 12.8a 要求断补标记
+   * 保留到下一个友方补给阶段重新判定。
+   *
+   * 判定结论同时写入 `traceSettlement.byUnit`，逐单位检查与阶段末总计划都只读快照，
+   * 不再各自现算一遍。
    */
-  function refreshTraceSupply(
+  function settleTraceSupplyNow(
     reason: string,
-    seedCutTurn: boolean = phase.value === 'supply',
+    options: { side: Side | null; force?: boolean; seedCutTurn?: boolean },
   ): number {
-    let outOfSupply = 0
+    const side = options.side
+    const existing = traceSettlement.value
+    if (
+      options.force !== true &&
+      existing !== null &&
+      existing.turn === turn.value &&
+      existing.side === side
+    )
+      return existing.outOfSupply
+    // 12.8a：连续断补起点只在**补给阶段**落值（裁判在别的阶段重判不落起点）
+    const seedCutTurn = options.seedCutTurn ?? phase.value === 'supply'
     const facts = supplyFacts.value
-    for (const side of ['axis', 'soviet'] as const) {
-      const covered = traceCoverageHexes(facts, { side, mobility: 'truck' })
-      /*
-       * 12.6f（＝13.7a 的**追溯补给那一半**）：「多单位编队中的所有战斗单位需要追溯补给线到**同一个**
-       *   指挥部，或直接拖取**同一个**补给来源。如果无法做到这一点，则应选择该编队中的一部分单位进行
-       *   『免费』的追溯补给，而编队中其他单位则必须使用图上补给，不然其他单位就会断补。」
-       * 修前引擎的 `formationTraceTradeoff` **零调用** ⇒ 编队各单位各判各的，这条从不发生（§17.73）。
-       */
-      const denied = formationTraceDeniedIds(side, reason, facts)
+    const sides: readonly Side[] = side === null ? (['axis', 'soviet'] as const) : [side]
+    const byUnit: Record<string, UnitSupplyAssessment['status']> = {}
+    const deniedBySide: Record<Side, string[]> = { axis: [], soviet: [] }
+    let marked = 0
+    let cleared = 0
+    let outOfSupply = 0
+    for (const currentSide of sides) {
+      const covered = traceCoverageHexes(facts, { side: currentSide, mobility: 'truck' })
+      // 12.6f（＝13.7a 的追溯那一半）：编队同源取舍在本阶段判一次，回合内沿用结论。
+      const denied = formationTraceDeniedIds(currentSide, reason, facts)
+      deniedBySide[currentSide] = [...denied]
       for (const unit of units.value) {
-        if (unit.side !== side) continue
-        /*
-         * 12.6h：**被空投的那个回合不需要追溯补给**（14.10b 的计划空投）；跨回合即自然失效。
-         * 12.8e 括注：本回合靠 12.6c 吃图上补给 / 12.10e 部队储备 / 21.10 缓存**续命**者
-         *   **也**不算断补（不标断补、不计入连续断补的起点），但那三种方式**不构成追溯补给**
-         *   ⇒ 用户 2026-11-06 裁定后，`hasTraceSupply` 只写**追溯类**结论，续命只落 `sustainedBySpecialSupplyTurn`。
-         */
-        const airDroppedThisTurn = (unit.airDropExemptTurn ?? null) === turn.value
+        if (unit.side !== currentSide) continue
+        // 12.6h 空投当回合 / 12.9 非战斗单位不受追溯约束 / 覆盖集命中且未被 12.6f 排除
         const inSupply =
-          airDroppedThisTurn ||
+          (unit.airDropExemptTurn ?? null) === turn.value ||
           !requiresTraceSupply(unit) ||
           (traceCoverageHas(covered, unit.hex) && !denied.has(unit.instanceId))
+        byUnit[unit.instanceId] = !requiresTraceSupply(unit)
+          ? 'notRequired'
+          : inSupply
+            ? 'inSupply'
+            : 'outOfSupply'
+        const before = unit.hasTraceSupply
         unit.hasTraceSupply = inSupply
-        /*
-         * 12.8e：维护「连续无追溯补给的起点回合」。
-         * 追溯补给恢复（含空投豁免/非战斗单位）⇒ 连续期结束；
-         * 无追溯补给且**本回合是真断补**（不是靠吃图上/储备/缓存续命）且尚未记录 ⇒ 本回合就是第一个断补回合。
-         * ★ 续命当回合**不写、也不清**该字段：既不算"被切断的第一个回合"（12.8e 括注），
-         *   也不把已在进行的连续断补期重置。
-         */
+        if (before !== inSupply) {
+          if (inSupply) cleared += 1
+          else marked += 1
+        }
+        // 12.8e：连续无追溯补给的起点只在补给阶段落值
         if (inSupply) unit.cutSinceTurn = null
         else if (
           seedCutTurn &&
@@ -14498,21 +14536,50 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         if (isOutOfSupplyNow(unit, turn.value)) outOfSupply += 1
       }
     }
-    pushLog('info', `追溯补给重判（12.6，${reason}）：断补 ${outOfSupply} 个单位`, '12.6')
+    traceSettlement.value = {
+      turn: turn.value,
+      side,
+      byUnit,
+      denied: deniedBySide,
+      marked,
+      cleared,
+      outOfSupply,
+      reason,
+    }
+    pushLog(
+      'info',
+      `追溯补给判定（12.6，${reason}）：断补 ${outOfSupply} 个单位（置 ${marked} / 除 ${cleared}）`,
+      '12.6',
+    )
     // ⑭ 接线：全场补给判定（12.6）入会话日志（本笔不掷骰）
-    recordSettlement({ action: 'supplyTrace', rule: '12.6', data: { reason, outOfSupply } })
+    recordSettlement({
+      action: 'supplyTrace',
+      rule: '12.6',
+      data: { reason, outOfSupply, marked, cleared },
+    })
     return outOfSupply
   }
 
   /**
-   * 12.6 / 12.8：**手动**触发全场追溯补给判定（与自动触发同一实现）
+   * 12.6：自动入口（进入补给阶段 / 协调器阶段切换）
    *
-   * 自动时点见 `refreshTraceSupply` 的说明；本入口供裁判在任意时刻重判。
+   * 只有补给阶段才真正结算；非补给阶段一律不写标记（用户 2026-11-13 口径：
+   * 抽象补给不因走出范围立刻断补，回合内沿用同一结论）。
+   */
+  function refreshTraceSupply(reason: string): number {
+    if (phase.value !== 'supply') return 0
+    return settleTraceSupplyNow(reason, { side: activeSide.value })
+  }
+
+  /**
+   * 12.6 / 12.8：**手动**触发全场追溯补给判定（裁判覆盖，绕过幂等闸门）
+   *
+   * 与自动入口同一实现；现有补给/突围用例依赖它在任意时刻重判。
    *
    * @returns 本次判定为断补的单位数
    */
   function evaluateTraceSupplyNow(): number {
-    return refreshTraceSupply('手动重判')
+    return settleTraceSupplyNow('手动重判', { side: null, force: true })
   }
 
   /* ────────── C8b：D 段**补给阶段总计划**（12.1–12.2 / 12.6 / 12.8 / 12.10e / 12.11a） ────────── */
@@ -14683,7 +14750,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         `余 ${after.data.holdingsAfter.sp} SP + ${after.data.holdingsAfter.t} T`,
       '12.11a',
     )
-    refreshTraceSupply(`销毁补给站 ${hexLabel(dump.hex)}`)
+    // 12.8a：补给站持仓变化不重判断补标记（取补/投递资格在付款时点实时判）
     return true
   }
 
@@ -15141,7 +15208,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     units.value = [...units.value, ...created]
     pushLog('success', `${plan.detail}；换成「${record.vassalName ?? record.id}」`, plan.rule)
-    refreshTraceSupply(`12.7a 转换出延补队`)
+    // 12.8a：新延补队作为源的连通性在 `traceCoverageHexes` 里实时算；不重判标记
     return true
   }
 
@@ -15193,7 +15260,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       `${outcome.data.detail}；消耗 ${outcome.data.costMa} MA（12.7d：自身 MA ×½）`,
       outcome.data.rule,
     )
-    refreshTraceSupply('12.7d 延补队翻面')
+    // 12.8a：翻面不重判标记；延补队是否成源由追溯覆盖集实时判
     return true
   }
 
@@ -15276,7 +15343,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         `${unit.name} 没有合法崩溃落点 ⇒ 留在原格并翻面到运输点数面；**须按 9.14c 进行夺取判定**（9.14d 重要提示）`,
         '9.14d',
       )
-      refreshTraceSupply('9.14d 主动崩溃（无合法落点）')
+      // 12.8a：崩溃不重判其他单位的断补标记
       return true
     }
     specialPending.value = {
@@ -17875,14 +17942,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
     if (outcome === null) return false
 
-    /*
-     * 12.7 / 9.14d：本场是否发生**延补队崩溃**。延补队本身是补给源，
-     * 崩溃后要么位移到新格（源位置变了）、要么原地翻面并按 9.14c 承受夺取判定（源没了），
-     * 两种都改变补给网 ⇒ 必须重判全场。
-     */
-    const collapsedExtenders = outcome.objects.filter((item) => item.kind === 'extender')
-    if (collapsedExtenders.length > 0)
-      refreshTraceSupply(`延补队崩溃 ×${collapsedExtenders.length}`)
+    // 12.8a（用户 2026-11-13 口径）：延补队崩溃只改变「此刻源的连通性」，
+    // 不重判其他单位的断补标记（标记保留到下一个友方补给阶段）。
 
     // ⑭ 接线：9.14 特殊战斗（夺取表 / 工事 / 空军基地 / 运输点 / 延补队）入会话日志。
     // 本笔只含夺取表骰（dump / trucks / wagons）；空军基地的逐机骰由 `captureAirBaseNow` 另记，
@@ -27611,6 +27672,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     cancelSupply,
     // 12.6 / 12.8：全场追溯补给判定（让断补的减半/无 ZOC/突围资格/图标真正全场生效）
     evaluateTraceSupplyNow,
+    /** 12.6：本回合唯一判定入口落盘的快照（界面计数与逐单位检查共读，不再读计划表长度） */
+    traceSettlement,
     // C8b：D 段**补给阶段总计划**（12.1–12.2 / 12.6 / 12.8 / 12.10e / 12.11a）
     supplyPhasePlan,
     supplyPhaseInputs,

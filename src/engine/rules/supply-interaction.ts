@@ -670,8 +670,15 @@ export function beginSupplyCheck(input: {
   thrownByHq?: boolean
   /** 12.6c：本环节已从**同一补给站**喂过的 RE 总量（批量费率取整用，见 `assessUnitSupply`） */
   alreadyFedRe?: number
+  /**
+   * 12.6：本阶段已落盘的判定结论（补给阶段唯一入口的快照）
+   *
+   * 给出时只覆盖 `status`（inSupply / canEatOffTheMap / outOfSupply）；
+   * 来源、费率等付款细节仍按此刻事实计算（12.6c 是付款时点的可用性）。
+   */
+  settledStatus?: UnitSupplyAssessment['status']
 }): RuleOutcome<SupplyInteractionState> {
-  const assessment = assessUnitSupply(
+  const live = assessUnitSupply(
     input.facts,
     {
       id: input.unit.id,
@@ -687,6 +694,13 @@ export function beginSupplyCheck(input: {
       ...(input.alreadyFedRe === undefined ? {} : { alreadyFedRe: input.alreadyFedRe }),
     },
   )
+  const assessment: UnitSupplyAssessment =
+    input.settledStatus === undefined
+      ? live
+      : input.settledStatus === 'outOfSupply'
+        ? // 已判断补：仍允许 12.6c 的"此刻能吃到站"分支（付款时点的可用性）
+          { ...live, status: live.canEatOffTheMap ? 'canEatOffTheMap' : 'outOfSupply' }
+        : { ...live, status: input.settledStatus }
 
   if (!assessment.required) {
     return succeed('12.0', {

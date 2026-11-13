@@ -1111,8 +1111,8 @@ const showsLedger = computed(
                 （其中 {{ workbench.supplyPhasePlan.internalStocks.wastedT }} T 按 12.10e-C 浪费）
               </template>
               ｜剩余 {{ workbench.supplyPhasePlan.remainingT }} T｜断补 置
-              {{ workbench.supplyPhasePlan.outOfSupply.mark.length }} / 除
-              {{ workbench.supplyPhasePlan.outOfSupply.clear.length }}｜需掷损耗
+              {{ workbench.traceSettlement?.marked ?? 0 }} / 除
+              {{ workbench.traceSettlement?.cleared ?? 0 }}｜需掷损耗
               {{ workbench.supplyPhasePlan.attritionDuty.length }} 格
             </p>
             <div class="row">

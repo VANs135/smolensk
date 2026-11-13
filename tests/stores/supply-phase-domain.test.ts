@@ -38,7 +38,6 @@ function domainFixture(
     return 'd'
   })
   const roll = vi.fn(() => 9)
-  const refresh = vi.fn(() => 0)
   const enterCheck = vi.fn(() => {
     step.value = 'supply.check'
     return true
@@ -70,7 +69,6 @@ function domainFixture(
         if (ids.includes(unit.instanceId)) unit.sustainedBySpecialSupplyTurn = 1
       }
     },
-    refreshTraceSupply: refresh,
     eliminateEntry(unit) {
       units.value = units.value.filter((item) => item.instanceId !== unit.instanceId)
     },
@@ -88,7 +86,6 @@ function domainFixture(
     canPay,
     pay,
     roll,
-    refresh,
     enterCheck,
     key,
     log: ports.pushLog,
@@ -359,7 +356,7 @@ describe('D段独立域：付款、待决损耗与阶段退出', () => {
     expect(a.domain.applyAttritionNow(a.key)).toBe(true)
     expect(a.domain.settleForExit()).toBe(true)
     expect(a.domain.applyAttritionNow(a.key)).toBe(true)
-    expect(a.refresh).toHaveBeenCalledTimes(1)
+    // 12.8a：损耗结清后不再触发追溯补给重判（标记保留到下一个友方补给阶段）
   })
 
   it('2.2：整段退出依次结清恢复与供养，重试不重复切环或付款', () => {

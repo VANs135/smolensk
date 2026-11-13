@@ -173,6 +173,8 @@ function openBreakoutSession(stores: Stores): boolean {
   const liveFriend = workbench.units.find((unit) => unit.instanceId === 'fr-1')!
   liveTrapped.hasTraceSupply = false
   liveFriend.hasTraceSupply = true
+  // 12.8e 就地实时：用 12.6h 空投豁免让"友军此刻真的有补给"（不再靠标记冒充）
+  liveFriend.airDropExemptTurn = workbench.turn
   const index = workbench.playerSegmentSteps.findIndex((step) => step.id === 'movement.breakout')
   if (index < 0) throw new Error('移动阶段没有突围环节（断补单位在场时它应出现）')
   if (!workbench.setSegmentStepIndex(index)) throw new Error('进入突围环节失败')

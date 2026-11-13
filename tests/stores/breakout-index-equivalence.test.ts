@@ -8,14 +8,17 @@ import { breakoutReactivityProbe, breakoutSnapshots } from './breakout-index-fix
  * 基准由**未改造代码**生成后固化于此；改造后必须逐字符一致（含候选顺序、判定与拒绝理由）。
  * 场景覆盖：可突围 / 不可突围、追踪友军相邻/同格/非战斗、敌方战斗单位/AEZOC/非战斗、
  * 双方阵营、边界格、无友军。
+ *
+ * ★ 2026-11-13 调整：12.8e 的突围资格改为**就地实时**判（不再读补给阶段的标记）。
+ *   S2（soviet）原先靠手工钉 `hasTraceSupply=false` 造"断补"，但该格在本图对苏军实际有
+ *   追溯补给 ⇒ 实时判据下它不是候选（`order:` 为空），基线与夹具随之更新。
  */
 const BASELINE = `# S1 axis 相邻追踪友军
 a-trap | ok | - | 12.8e-A/B 均满足：路径可用（无敌方战斗单位、无禁入地形）；最近有追溯补给的友方战斗单位 0 格 ≤ 15 格
 order: a-trap
 
 # S2 soviet 3 格外追踪友军
-s-trap | ok | - | 12.8e-A/B 均满足：路径可用（无敌方战斗单位、无禁入地形）；最近有追溯补给的友方战斗单位 0 格 ≤ 15 格
-order: s-trap
+order: 
 
 # S3 口袋：敌战斗单位环绕
 p-trap | reject | pathHasEnemyCombatUnit:p-trap（12.8e） | pathHasEnemyCombatUnit:p-trap（12.8e）

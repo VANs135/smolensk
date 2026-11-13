@@ -580,6 +580,13 @@ export function planSupplyPhase(
      * 与预算，避免把甲站已付过的 1T 零头借给乙站的单位免费解除断补。
      */
     feedingSources?: Readonly<Record<string, FeedingSourceFacts>>
+    /**
+     * 12.6：本阶段唯一判定入口已落盘的**结论**（按 unit id）
+     *
+     * 只覆盖 `status`；来源/费率/可吃性仍按 `facts` 现算（12.6c 是付款时点的可用性）。
+     * 快照外的单位（阶段中新增）照旧现场评估。
+     */
+    settledStatusById?: Readonly<Record<string, UnitSupplyAssessment['status']>>
   },
 ): SupplyPhasePlan {
   const mine = input.units.filter((unit) => unit.side === input.activeSide)
@@ -600,8 +607,8 @@ export function planSupplyPhase(
   })
 
   // ② 追溯/吃图上补给判定（12.6）：B10 逐单位评估
-  const assessments = mine.map((unit) =>
-    assessUnitSupply(
+  const assessments: UnitSupplyAssessment[] = mine.map((unit): UnitSupplyAssessment => {
+    const live = assessUnitSupply(
       facts,
       {
         id: unit.id,
@@ -612,8 +619,13 @@ export function planSupplyPhase(
         mode: unit.mode,
       },
       { mobility: input.mobility },
-    ),
-  )
+    )
+    const settled = input.settledStatusById?.[unit.id]
+    if (settled === undefined) return live
+    return settled === 'outOfSupply'
+      ? { ...live, status: live.canEatOffTheMap ? 'canEatOffTheMap' : 'outOfSupply' }
+      : { ...live, status: settled }
+  })
 
   // ③ 吃图上补给（12.6c）：用「恢复之后剩余」的 T 依次分配（12.10e-A：恢复优先）
   //

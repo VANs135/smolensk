@@ -48,9 +48,10 @@ beforeEach(() => {
 /**
  * 摆一个**断补**的战斗单位 + 一个**有追溯补给**的友军，并把 store 放到**突围环节**
  *
- * ★ 时序要点：`setPhase` 会触发一次**全场重判**（`refreshTraceSupply`），它会按补给网重算每个单位的
- *   `hasTraceSupply` ⇒ 手工钉的状态必须在**重判之后**再设，否则会被覆盖（第一版夹具就栽在这里：
- *   "有补给的友军"被重判成本图无补给，于是 A 路径摸不到人、判定理由全错）。
+ * ★ 时序要点（2026-11-13）：`setPhase('movement')` 起**不再**全场重判（12.8a：断补标记保留
+ *   到下一个友方补给阶段）；突围资格改由 12.8e 的「在此环节中检查」**就地实时**算。
+ *   故夹具不能再靠手工钉 `hasTraceSupply` 造"有补给的友军"——改成 12.6h 的空投当回合豁免
+ *   （实时判据同样视为有补给），断补单位则放在无源覆盖的 FAR_HEX。
  */
 function enterBreakoutWith(store: ReturnType<typeof newStore>) {
   store.setPhase('movement')
@@ -67,18 +68,14 @@ function enterBreakoutWith(store: ReturnType<typeof newStore>) {
     side: 'axis',
   })
   store.units.push(trapped, friend)
-  //
-  // 重判之后再钉状态（判据读的就是此刻的值），且**必须经 store 的代理**改：
-  // 直接改 `trapped.hasTraceSupply` 改的是**原始对象**，不会触发响应式 ⇒
-  // `playerSegmentSteps` 若已在这次赋值之前求过值，就会缓存"突围无人可动"（2026-09-18 被 slice 2 的
-  // sync watch 暴露：它在建店时就读了该 computed）。夹具按正确写法改，判据与断言一字未动。
-  //
+  // 12.6h：被空投的回合不需要追溯补给 ⇒ 实时判据也把友军视为"有补给"
   const liveTrapped = store.units.find((unit) => unit.instanceId === 'bl-1')!
   const liveFriend = store.units.find((unit) => unit.instanceId === 'fr-1')!
+  // 标记断补（12.8a 的结算结论）仍由补给阶段落；本夹具直接模拟"本回合已判为断补"
   liveTrapped.hasTraceSupply = false
-  liveFriend.hasTraceSupply = true
   trapped.hasTraceSupply = false
-  friend.hasTraceSupply = true
+  liveFriend.airDropExemptTurn = store.turn
+  friend.airDropExemptTurn = store.turn
   const index = store.playerSegmentSteps.findIndex((step) => step.id === 'movement.breakout')
   if (index < 0) throw new Error('移动阶段没有突围环节（断补单位在场时它应出现）')
   if (!store.setSegmentStepIndex(index)) throw new Error('进入突围环节失败')
