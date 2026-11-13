@@ -161,6 +161,23 @@ const mapLayerToggles = reactive({ ...DEFAULT_MAP_LAYERS })
 const drawer = ref<TableDrawer>('status')
 const openedDrawers = reactive(new Set<TableDrawer>())
 const session = computed(() => mapView.session)
+/**
+ * 用户 2026-11-13：空军任务窗按三面板给标题（① 选飞机发起 → ② 结算任务 → ③ 返航），
+ * 不再用引擎七步的措辞（空战 / 拦截 / 防空是窗内的即时裁定，不单独当一步）。
+ */
+const airStageTitle = computed(() => {
+  const step = workbench.airState?.step
+  if (step === 'returnToBase') return '返航'
+  if (step === 'resolveMission') return '结算任务'
+  return '选飞机发起任务'
+})
+const sessionTitle = computed(() => {
+  const current = session.value
+  if (current === null) return ''
+  return current.kind === 'ops' || current.kind === 'air'
+    ? `${current.title} · ${airStageTitle.value}`
+    : current.title
+})
 const panelCollapsedOnEnter = hotkeys.panelCollapsed
 
 function openDrawer(next: TableDrawer): void {
@@ -493,7 +510,7 @@ onBeforeUnmount(() => {
               v-if="session !== null"
               :key="session.sessionId"
               :session-key="session.kind"
-              :title="session.title"
+              :title="sessionTitle"
               :rule="session.rule"
               :width="session.width"
               :close-policy="session.closePolicy"
