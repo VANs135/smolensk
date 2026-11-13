@@ -6131,7 +6131,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     defenders: readonly { id: string; isCombat: boolean }[]
     /** 该候选在本步之后剩余的 MP（8.1a 需要逐单位 ≥3） */
     mpRemainingOf: (unit: ConsoleUnit) => number
-  }): { participantIds: string[]; mpRemaining: number; mpCost: number; entryCost: number } | null {
+  }): {
+    participantIds: string[]
+    mpRemaining: number
+    mpCost: number
+    entryCost: number
+    /** 8.1b：进格费不够而不参突、留原格的候选（用户 2026-11-13 裁定） */
+    entryExcludedIds: string[]
+  } | null {
     // 判据与常规侧共用 `attackForceForHex`（P2/M3）；突袭的逐人过滤保留在引擎里
     const force = attackForceForHex({
       attackType: 'overrun',
@@ -6152,6 +6159,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       mpRemaining: force.mpRemaining,
       mpCost: force.mpCost,
       entryCost: force.entryCost,
+      entryExcludedIds: force.entryExcludedIds,
     }
   }
 
@@ -6383,6 +6391,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
 
+    /*
+     * 8.1b（用户 2026-11-13 裁定）：进格费不够的单位被**落下**——留原格、本次移动结束。
+     * 不写成走格步：撤销上一步时由该步 `before` 快照把 `ended` 恢复成 false，
+     * 玩家撤回后仍可单独移动它（0 步就突袭则无步可撤，按裁定保持已结束）。
+     * `moveRuntime` 是由单位派生的 computed，改 `movementEnded` 即同步。
+     */
+    const leftBehind = (picked?.entryExcludedIds ?? []).filter((id) => movingIds.includes(id))
+    if (leftBehind.length > 0) {
+      for (const unit of units.value)
+        if (leftBehind.includes(unit.instanceId)) unit.movementEnded = true
+      pushLog(
+        'info',
+        `8.1b：${leftBehind.length} 个单位进格费超过 3 MP，留在 ${hexLabel(from)} 且本次移动结束` +
+          '（要单独移动，请先撤回到移动前）',
+        '8.1b',
+      )
+    }
+
     // 记下突袭前状态（结算后据此记账；撤销一步也能整步还原）
     overrunContext.value = {
       target: { ...hex },
@@ -6423,6 +6449,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     combatState.value = composed
+    // 8.1b 落下者已在上面按「留原格 + 本次移动结束」记账，不再重复报成 8.1h「留驻」
+    const stayIds = split.stayIds.filter((id) => !leftBehind.includes(id))
     beginGroundAttack({
       attackType: 'overrun',
       hex,
@@ -6431,10 +6459,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         `（守方 ${defenders.length} 个）；每次 3 MP（8.1a），请按 9.2 九步结算`,
       // 8.1h：留驻单位仍计入原格 4.8a 的战斗 RE，但不参突、也不受结果影响
       extraLogs:
-        split.stayIds.length > 0
+        stayIds.length > 0
           ? [
               {
-                text: `8.1g/h：留驻 ${split.stayIds.length} 个单位（原格战斗 RE ${split.originStackRe}）`,
+                text: `8.1g/h：留驻 ${stayIds.length} 个单位（原格战斗 RE ${split.originStackRe}）`,
                 rule: '8.1h',
               },
             ]
