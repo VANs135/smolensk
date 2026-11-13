@@ -150,7 +150,6 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'cancelSpecialCombatNow',
       'clearCombat',
       'clearCombatSupplyDump',
-      'clearRetreatDestinationNow',
       'completeAirReturnNow',
       'confirmAirCargoLossNow',
       'confirmAirCombatNow',

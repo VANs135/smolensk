@@ -115,6 +115,11 @@ const advanceButtonLabel = computed(() =>
 /** 9.12e：撤退堆叠的额外损失由谁承受（候选＝撤退中的 DG 单位，与引擎确认同源） */
 const extraLossPreview = computed(() => workbench.combatExtraLossPreview)
 
+/** 9.12：按当前撤退格数将被消灭的单位（只报名字；解释进 `?`） */
+const retreatWipeLabels = computed(() =>
+  workbench.combatOptionRetreatWarning.map((item) => item.label).join('、'),
+)
+
 /**
  * 进入推进步时把"可推进者"默认全选（9.12g-D：拥有者可选哪些，本批不强迫玩家先点地图）。
  * 取消其中几枚就在面板上点一下；全部取消＝按 9.13 结束（不推进）。不写日志、不动引擎。
@@ -596,20 +601,14 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
           @pick="workbench.applyOptionDraftLoss($event)"
           @hover="hoverUnit"
         />
-        <!-- 9.12（C1）：选项步当场预演第 9 步落点，避免先放行、后永久灰显（长句进 ?） -->
-        <RuleTip v-if="workbench.combatOptionRetreatWarning.length > 0" rule="9.12">
-          <p
-            v-for="item in workbench.combatOptionRetreatWarning"
-            :key="`retreat-warning-${item.unitId}`"
-            class="warn num"
-          >
-            {{ item.label }}：{{
-              item.kind === 'noLanding'
-                ? '排除战斗开始时敌方格后无合法落点，确认撤退时将按 9.12 消灭'
-                : '只有必被消灭的撤退落点（9.12/9.12b/5.8a）'
-            }}
-          </p>
-        </RuleTip>
+        <!-- 9.12（C1）：按当前撤退格数**将被消灭**的单位（一行状态；解释进 ?） -->
+        <p v-if="retreatWipeLabels !== ''" class="warn num">
+          将被消灭：{{ retreatWipeLabels }}
+          <RuleTip rule="9.12">
+            排除战斗开始时敌方格后无合法落点、或只有必被消灭的落点（9.12b / 5.8a）⇒
+            确认撤退时该单位被消灭。
+          </RuleTip>
+        </p>
         <div class="row">
           <!-- 条 16（批 F·F1）：攻方全灭 ⇒ 守方「结束战斗」一键 -->
           <BaseButton
@@ -663,14 +662,6 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
             <BaseTag kind="danger">暗红＝必被消灭</BaseTag>
           </p>
         </RuleTip>
-        <div class="row">
-          <BaseTag kind="info">
-            攻方需撤 {{ workbench.combatRetreatRequirement.attacker }} 格
-          </BaseTag>
-          <BaseTag kind="info">
-            守方需撤 {{ workbench.combatRetreatRequirement.defender }} 格
-          </BaseTag>
-        </div>
         <p
           v-if="retreatPlan === null && workbench.combatRetreatSkippedSides.length === 0"
           class="muted"
@@ -708,8 +699,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
               {{ row.label }} @ {{ hexLabel(row.from) }}
             </BaseButton>
             <span class="num">
-              落点：{{ row.chosen === null ? '（未选）' : hexLabel(row.chosen) }}｜候选
-              {{ row.destinations.length }} 格
+              落点：{{ row.chosen === null ? '（未选）' : hexLabel(row.chosen) }}
             </span>
             <!-- 9.12（C1）：不可通行格排除后无落点 ⇒ 允许确认，但必须明示消灭后果 -->
             <span v-if="row.noLanding === true" class="warn num">
@@ -726,14 +716,6 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
               <BaseTag kind="warning">9.12</BaseTag>
               只有必被消灭的落点
             </span>
-            <BaseButton
-              v-if="row.chosen !== null"
-              variant="ghost"
-              size="sm"
-              @click="workbench.clearRetreatDestinationNow(row.unitId)"
-            >
-              清除落点
-            </BaseButton>
           </div>
           <!-- 9.12e：撤退堆叠在进入敌方 ZOC 前已有 DG ⇒ 额外 1 点损失的承受者由拥有者选 -->
           <div v-if="extraLossPreview !== null" class="row">

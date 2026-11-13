@@ -3187,13 +3187,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return false
   }
 
-  /** C16：清掉某单位的撤退落点（重新选） */
-  function clearRetreatDestinationNow(unitId: string): void {
-    const next = { ...combatInputs.value.retreatPaths }
-    delete next[unitId]
-    combatInputs.value = { ...combatInputs.value, retreatPaths: next }
-  }
-
   /**
    * C16：点地图上的**推进格** ⇒ 按 9.12g-A 选出可推进的单位（付了战斗补给者）
    *
@@ -11911,9 +11904,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (state === null || state.step !== 'options') {
       return null
     }
+    /*
+     * 点数已分配完 ⇒ 本步再没有"点格记撤退"这件事（不可用项不出现）；
+     * 修前用 `Math.max(1, …)` 兜底，分配完后仍铺三色环、点它却一律被拒（点了没动作）。
+     */
+    if (optionDraftRemaining.value <= 0) return null
     const side = currentResolver(state)
     const views = side === 'attacker' ? combatAttackerViews.value : combatDefenderViews.value
-    const maxDistance = Math.max(1, optionDraftRemaining.value)
+    const maxDistance = optionDraftRemaining.value
     const byKey = new Map<
       string,
       { hex: HexRef; distance: number; kind: 'safe' | 'zoc' | 'doomed' }
@@ -27383,7 +27381,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     combatSupplyDumpIds,
     combatSupplyDumpPicks,
     setRetreatDestinationNow,
-    clearRetreatDestinationNow,
     advanceNow,
     clearAdvanceNow,
     toggleAdvanceUnit,

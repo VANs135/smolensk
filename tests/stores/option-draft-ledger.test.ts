@@ -373,4 +373,17 @@ describe('批 F·F1：选项草稿的地图点选（map-view 分派）', () => {
       false,
     )
   }, 30_000)
+
+  it('点数分配完 ⇒ 不再铺三色撤退环（不可用项不出现）', () => {
+    const { workbench, mapView } = atDefenderOptions()
+    const remaining = workbench.optionDraftRemaining
+    expect(remaining).toBeGreaterThan(0)
+    expect(workbench.optionDraftRetreatPreview).not.toBeNull()
+    expect(mapView.overlay.retreat).not.toBeNull()
+
+    expect(workbench.applyOptionDraftRetreat(remaining)).toBe(true)
+    expect(workbench.optionDraftRemaining).toBe(0)
+    expect(workbench.optionDraftRetreatPreview).toBeNull()
+    expect(mapView.overlay.retreat).toBeNull()
+  }, 30_000)
 })

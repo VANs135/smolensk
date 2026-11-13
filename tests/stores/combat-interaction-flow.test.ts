@@ -11,6 +11,7 @@ import {
   defenseTerrainChoices,
   toConsoleUnit,
   unitChoices,
+  useMapViewStore,
   useWorkbenchStore,
   type ConsoleUnit,
   actionGateOf,
@@ -1811,4 +1812,97 @@ describe('批 12：强制战果损兵后仍能收束（9.10c / 9.11b / 9.12）',
     concludeCombat(store)
     expect(store.log.some((entry) => entry.text.includes('跳过守方的选项'))).toBe(true)
   })
+})
+
+describe('9.12 撤退步：地图高亮与可点同源（只铺当前单位）', () => {
+  /*
+   * 修前地图铺的是**整方并集**（`combatRetreatPlans[*].safe/zoc/doomed`），
+   * 而可点判定只认当前单位 ⇒ 只属于另一枚的落点也被高亮，点它既不落盘、
+   * 还会落到 `clickHex` 弹一句「本场战斗进行中：请先结算完 9.2」。
+   */
+  const keyOf = (hex: HexRef) => `${hex.col},${hex.row}`
+
+  it('点别的单位专属落点 ⇒ 不高亮、不写路径、不再弹 9.2', () => {
+    let checked = false
+    for (let seed = 1; seed <= 80 && !checked; seed += 1) {
+      const store = newStore()
+      store.resetAll(seed)
+      store.setPhase('combat')
+      goToActionStep(store, 'combat.declare')
+      store.setTool('battle')
+      store.setFuelPool(0, 20)
+      const attackHexes = HEX_DIRECTIONS.map((direction) => neighbor(DEFENDER_HEX, direction))
+        .filter(
+          (hex) =>
+            isOnMap(hex) &&
+            mapLayers.hexes.some((item) => item.col === hex.col && item.row === hex.row) &&
+            canEnter('leg', hex, DEFENDER_HEX),
+        )
+        .slice(0, 2)
+      if (attackHexes.length < 2) throw new Error('防御格没有两个可进入的图内邻格')
+      const [aHex, bHex] = attackHexes
+      place(store, attackerRecord(), aHex!, 'axis', 'a1')
+      place(store, attackerRecord(), bHex!, 'axis', 'a2')
+      place(store, defenderRecord(), DEFENDER_HEX, 'soviet', 'd1')
+      store.clickHex(aHex!)
+      store.clickHex(bHex!)
+      store.clickHex(DEFENDER_HEX)
+      if (store.battleTarget === null) continue
+
+      if (!store.beginCombatNow()) continue
+      // 9.5 逐堆叠付款：两枚攻方各在自己的格上放一座补给站，多选声明
+      store.spDumps.push({ id: 'sd-a1', hex: { ...aHex! }, side: 'axis', sp: 8, t: 0 })
+      store.spDumps.push({ id: 'sd-a2', hex: { ...bHex! }, side: 'axis', sp: 8, t: 0 })
+      store.spDumps.push({ id: 'sd-d1', hex: { ...DEFENDER_HEX }, side: 'soviet', sp: 8, t: 0 })
+      for (const entry of store.combatSupplyDumps) {
+        for (const dump of entry.dumps) store.pickCombatSupplyDump(entry.side, dump.id)
+      }
+      if (!store.confirmCombatSupply()) continue
+      store.combatInputs.attackerArUnitId = store.combatAttackers[0]!.instanceId
+      if (!store.declareCombatArStep('attacker')) continue
+      store.combatInputs.defenderArUnitId = store.battleDefenders[0]!.instanceId
+      if (!store.declareCombatArStep('defender')) continue
+      if (!store.declareCombatTerrainStep()) continue
+      if (!store.rollCombatSurprise()) continue
+      if (store.combatAwaitingShiftDie && !store.rollCombatShiftDie()) continue
+      if (!store.rollCombatDice()) continue
+
+      driveResolution(store)
+      if (store.combatState === null || store.combatState.step !== 'retreat') continue
+      const plan = store.combatRetreatPlans.find((item) => item.side === 'attacker')
+      if (plan === undefined || plan.units.length < 2) continue
+      const [a, b] = plan.units
+      if (a === undefined || b === undefined) continue
+      const aKeys = new Set(a.destinations.map((item) => keyOf(item.hex)))
+      const bOnly = b.destinations.find((item) => !aKeys.has(keyOf(item.hex)))
+      if (bOnly === undefined) continue
+
+      const mapView = useMapViewStore()
+      mapView.setRetreatUnit(a.unitId)
+      const overlay = mapView.overlay.retreat
+      expect(overlay).not.toBeNull()
+      const painted = new Set(
+        [...(overlay!.safe ?? []), ...(overlay!.zoc ?? []), ...(overlay!.doomed ?? [])].map((hex) =>
+          keyOf(hex),
+        ),
+      )
+      expect([...painted].sort(), '高亮＝当前单位的落点').toEqual([...aKeys].sort())
+      expect(painted.has(keyOf(bOnly.hex)), '只属于另一枚的落点不得高亮').toBe(false)
+
+      const logsBefore = store.log.length
+      mapView.onHexClick(bOnly.hex, { x: 10, y: 10 })
+      expect(store.log.length, '点非当前单位的落点 ⇒ 静默（不弹 9.2）').toBe(logsBefore)
+      expect(store.combatInputs.retreatPaths[a.unitId]).toBeUndefined()
+      expect(store.combatInputs.retreatPaths[b.unitId]).toBeUndefined()
+
+      // 当前单位自己的落点仍然可点（分派没被一起挡掉）
+      const valid = a.destinations[0]!
+      mapView.onHexClick(valid.hex, { x: 10, y: 10 })
+      expect(store.combatInputs.retreatPaths[a.unitId]).toBe(
+        valid.path!.map((hex) => `${hex.col}.${hex.row}`).join(','),
+      )
+      checked = true
+    }
+    expect(checked, '扫了 80 个种子都没走到「攻方两枚单位都要撤退、且落点集不同」的局面').toBe(true)
+  }, 60_000)
 })

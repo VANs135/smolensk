@@ -629,18 +629,26 @@ export const useMapViewStore = defineStore('mapView', () => {
       overrunTargets: workbench.overrunTargets,
       // 条 21（批 F·F2）：战斗段「可攻击位置」高亮（随选人实时算）；仅在战斗工具态且未选防御格时给
       combatAttackableHexes: workbench.combatAttackableHexes,
-      // W7 C16：9.12 撤退落点（只画「当前该轮到的这一方」，实现「攻方先、守方后」的渲染次序；
-      // 只在 9.2 的撤退步铺出，避免在其他步误导玩家）
-      // 条 15/16（批 F·F1）：选项页同屏铺「本堆叠可撤退格」预览
-      // （点格即按该格距离记撤退草稿；正式撤退仍走 9.2 撤退步）
+      /*
+       * W7 C16：9.12 撤退落点（只画「当前该轮到的这一方、且正在选的那一枚」——
+       *   与 `retreatDestinationAt`／`onHexClick` 的可点判定**同源**；修前铺整方并集，
+       *   会高亮只属于别人的落点，点它无动作还弹「请先结算完 9.2」）。
+       *   只在 9.2 的撤退步铺出；选项页的同屏预览由 `optionDraftRetreatPreview` 给。
+       */
       retreat:
         workbench.combatState?.step === 'retreat'
-          ? retreatSidePlan.value === null
+          ? retreatUnit.value === null
             ? null
             : {
-                safe: retreatSidePlan.value.safe,
-                zoc: retreatSidePlan.value.zoc,
-                doomed: retreatSidePlan.value.doomed,
+                safe: retreatUnit.value.destinations
+                  .filter((item) => !item.forcedDestruction && !item.inEnemyZoc)
+                  .map((item) => item.hex),
+                zoc: retreatUnit.value.destinations
+                  .filter((item) => !item.forcedDestruction && item.inEnemyZoc)
+                  .map((item) => item.hex),
+                doomed: retreatUnit.value.destinations
+                  .filter((item) => item.forcedDestruction)
+                  .map((item) => item.hex),
               }
           : workbench.optionDraftRetreatPreview !== null
             ? {
@@ -3670,6 +3678,12 @@ export const useMapViewStore = defineStore('mapView', () => {
       consumed = true
     }
     if (!consumed) {
+      /*
+       * 9.2 会话进行中：地图这一击只服务**本步的落点/目标**（上面的分派已全部试过）。
+       * 未命中的点击静默吞掉 —— 修前会落到 `clickHex` → `battleToolClick`，弹一句
+       * 「本场战斗进行中：请先结算完 9.2」，而玩家本来就在这一步（观感＝"点了没反应"）。
+       */
+      if (workbench.combatState !== null && workbench.combatState.finished !== true) return
       /*
        * 条 12（M2）：**点非战斗单位 ⇒ 开对应动作会话**（SP 拖取 / 运输点装卸 / 延补队 / 基地整备 / 工事）。
        * 排在摊开 / 既有分派之前：这一击明确表达"对这枚非战斗单位做动作"，就开那一个会话
