@@ -78,7 +78,9 @@ const META: Readonly<Record<ActionKey, ActionMeta>> = {
   'move.breakout': { families: ['突围'], entry: ['面板', '会话窗'] },
   'move.modeChange': { families: ['模式切换', '预备'], entry: ['面板', '右键菜单'] },
   'move.order': { families: ['移动'], entry: ['面板', '地图'] },
-  'move.overrun': { families: ['突袭', '战斗'], entry: ['地图', '右键菜单'] },
+  // 用户 2026-11-12 裁定：突袭不在右键菜单——移动中与敌相邻、条件满足即高亮该敌格，点它发起，
+  // 与常规战斗同一流程（8.0/8.1；移动面板只放提示与 8.1g/h 参战拆分，不是第二入口）。
+  'move.overrun': { families: ['突袭', '战斗'], entry: ['地图'] },
   'move.railTransport': { families: ['移动'], entry: ['面板', '右键菜单'] },
   'move.railConversion': { families: ['换轨'], entry: ['面板', '右键菜单'] },
   'move.loadUnload': { families: ['装卸'], entry: ['面板'] },
