@@ -35,18 +35,21 @@ describe('G3：setupGaps 加载期登记', () => {
     workbench = stores.workbench
   })
 
-  it('只登记真正缺的字段（当前数据里没有 modeConstraints 的剧本才登记）', () => {
+  it('只登记真正缺的字段（缺 modeConstraints 才登记；5/6 另登记 4.3 拆团缺口）', () => {
     for (const scenario of scenarios.scenarios) {
       const gaps = collectSetupGaps(scenario.id)
+      const fields = gaps.map((gap) => gap.field)
       if (scenario.setup.modeConstraints === undefined) {
-        expect(
-          gaps.map((gap) => gap.field),
-          scenario.id,
-        ).toEqual(['modeConstraints'])
-        expect(gaps[0]?.action).toBe('skip+default')
+        expect(fields, scenario.id).toContain('modeConstraints')
       } else {
-        expect(gaps, scenario.id).toEqual([])
+        expect(fields, scenario.id).not.toContain('modeConstraints')
       }
+      if (scenario.id === '5' || scenario.id === '6') {
+        expect(fields, scenario.id).toContain('breakdownPool.ar2OnMap')
+      } else {
+        expect(fields, scenario.id).not.toContain('breakdownPool.ar2OnMap')
+      }
+      for (const gap of gaps) expect(gap.action).toBe('skip+default')
     }
   })
 

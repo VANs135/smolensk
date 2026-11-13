@@ -290,6 +290,18 @@ export function collectSetupGaps(scenarioId: string): readonly SetupGap[] {
       note: '未声明初设模式约束 ⇒ 允许集合＝默认（战斗/移动/预备/战略），预备上限＝reserveMarkers，不禁预备',
     })
   }
+  /*
+   * 专规 4.3：原文称剧本 5.1/5.2 已有两枚 AR2 拆团在场，但初设数据没有这两枚的坐标。
+   * 按缺口登记：不臆造坐标、不拿 4.3 的示例坐标顶；拆分池按「在场 0 枚」计。
+   */
+  if (scenarioId === '5' || scenarioId === '6') {
+    gaps.push({
+      scenarioId,
+      field: 'breakdownPool.ar2OnMap',
+      action: 'skip+default',
+      note: '专规 4.3 称已有两枚 AR2 拆团在场，但初设数据无坐标 ⇒ 未落位；拆分池按 6×AR2 + 2×AR3 计',
+    })
+  }
   return gaps
 }
 

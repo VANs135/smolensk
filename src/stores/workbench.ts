@@ -64,7 +64,7 @@ import { createSupplyPhaseDomain } from './supply-phase'
 import type { SpDump } from './supply-types'
 // B37：分界线的渲染投影类型（渲染层只画被给的东西）
 import type { BoundaryLine } from '@/render/map-render'
-import { battleArOf, createRailFacts, createTraceSupplyAt } from '@/engine/rules'
+import { battleArOf, createRailFacts, createTraceSupplyAt, setupEntryViews } from '@/engine/rules'
 import { entryEdgeHexes } from '@/engine/rules/entry-edges'
 import { buildUnitSelectionSet, type UnitSelectionSet } from '@/engine/rules/unit-selection'
 // B8：环节链（当前环节由本文件的 `segmentStep` 从这张表推出）
@@ -26746,6 +26746,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (offMapSetupSp.soviet > 0) addOffMapSupplyT('soviet', offMapSetupSp.soviet * SP_TO_T)
     }
     constructionMarkers.value = setup?.constructionMarkers ?? 0
+    /*
+     * 专规 4.3 / 1.8a：拆分单位池初值按剧本派生 = 印量 − 本剧本**已在场**的苏军 AR2 拆团。
+     *
+     * 原文「two AR2 breakdowns are already deployed, which leaves 4x AR2 and 2x AR3
+     * available」⇒ 池只算**还能抽**的存量，已在场的那两枚不再计入。
+     * 剧本 5/6 原文提到两枚已部署拆团，但工程数据里没有坐标（缺口登记），
+     * 按在场 0 枚计（6×AR2 + 2×AR3），不拿 4.3 示例坐标顶。
+     */
+    const onMapSovietAr2 = setupEntryViews(id, 'soviet')
+      .filter((view) => view.unitId === 'su-breakdown-russian-3-2-2-breakdown')
+      .reduce(
+        (sum, view) =>
+          sum + view.count * (view.placement === 'multiHex' ? Math.max(view.anchors.length, 1) : 1),
+        0,
+      )
+    breakdownPool.value = {
+      ax: breakdownPoolTotal('axis'),
+      su: breakdownPoolTotal('soviet') - onMapSovietAr2,
+    }
     // 5.0c 胜利格控制账本：由**后面**那个 immediate watch 按剧本与战线播种（此处不能调：
     // `victoryHexes` 尚未声明 ⇒ 会踩 TDZ）
     victoryError.value = null
