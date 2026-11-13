@@ -1192,7 +1192,7 @@ describe('W7 C16：行进间突袭的地图优先流程', () => {
     expect(store.combatState!.finished).toBe(true)
   })
 
-  it('9.12g-B：攻方在选项中撤退时推进被拒，但突袭的 3 MP 仍记账、移动就地结束（8.1f）', () => {
+  it('9.12g-B：攻方在选项中撤退 ⇒ 不推进、不再停在推进步；突袭 3 MP 仍记账、移动就地结束（8.1f）', () => {
     const target = placeDefenderForOverrun()
     const mpBefore = store.units.find((unit) => unit.instanceId === 'ov1')!.mpSpent
     expect(store.overrunNow(target)).toBe(true)
@@ -1228,23 +1228,23 @@ describe('W7 C16：行进间突袭的地图优先流程', () => {
     }
 
     const attackerRetreated = (store.combatState!.resolution.attacker.option?.retreatHexes ?? 0) > 0
-    const advanced = store.confirmCombatAdvance()
-    if (!advanced) {
-      // 被拒是规则允许的：攻方在选项中撤退（9.12g-B）或没有付过补给的攻方单位（9.12g-A）
-      expect(attackerRetreated || store.combatError?.rule === '9.12g-A').toBe(true)
-      store.clearAdvanceNow()
-      expect(store.confirmCombatAdvance()).toBe(true)
-    }
+    expect(attackerRetreated, '本场必须让攻方在选项里撤退才覆盖 9.12g-B').toBe(true)
+    // 9.12g-B：攻方撤退 ⇒ 撤退确认即收束，不再留一张只能空点的推进卡
+    expect(store.combatState!.finished).toBe(true)
+    expect(store.combatLiveStep).toBeNull()
+    expect(store.combatAdvanceHex).toBeNull()
+    expect(store.combatAdvanceCandidates).toEqual([])
+    expect(store.log.some((line) => line.rule === '9.12g-B')).toBe(true)
+    // 幂等：收束后再点推进只报成功，不再落盘
+    expect(store.confirmCombatAdvance()).toBe(true)
 
     const after = store.units.find((unit) => unit.instanceId === 'ov1')!
     expect(after.mpSpent).toBeCloseTo(mpBefore + 3, 6)
+    // 攻方已撤退 ⇒ 不进防御格（8.0 的进格被 9.12g-B 压过）
+    expect(after.hex).not.toEqual(target)
     expect(store.overrunContext).toBeNull()
-    expect(store.combatState!.finished).toBe(true)
-    // 本场的骰点未必给攻方选项点；只有**确实**选了撤退才该结束移动（8.1f），故按事实断言
-    if (attackerRetreated) {
-      expect(after.movementEnded).toBe(true)
-      expect(store.activeMoveUnits).toHaveLength(0)
-    }
+    expect(after.movementEnded).toBe(true)
+    expect(store.activeMoveUnits).toHaveLength(0)
   })
 
   it('8.1f：攻方**确实**在选项中撤退 ⇒ 其本阶段移动自动结束（不只是不能再突袭）', () => {

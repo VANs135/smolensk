@@ -2703,6 +2703,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
+   * 9.12g-B：**攻方把选项当撤退**（哪怕只有 1 格）⇒ 本场不推进。
+   * 引擎 `resolveAdvance` 已按此收口（成功但推进 0 单位）；这里把同一条事实供给三个派生，
+   * 免得界面继续铺推进格/候选，把玩家引到一张只能空点的卡上。
+   */
+  const combatAttackerRetreated = computed<boolean>(() => {
+    const state = combatState.value
+    if (state === null) return false
+    return (state.resolution.attacker.option?.retreatHexes ?? 0) > 0
+  })
+
+  /**
    * B33（9.12g-D）：这次的战后推进是不是**强制**的
    *
    * 突袭成功后**必须**推进（规则原文 9.12g-D）；常规战斗由拥有者选择（可都不推）。
@@ -2711,6 +2722,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const combatAdvanceMandatory = computed<boolean>(() => {
     const state = combatState.value
     if (state === null) return false
+    // 9.12g-B 优先于 9.12g-D：攻方已撤退 ⇒ 突袭也不推进
+    if (combatAttackerRetreated.value) return false
     return state.attackType === 'overrun'
   })
 
@@ -2865,6 +2878,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   >(() => {
     const state = combatState.value
     if (state === null) return []
+    // 9.12g-B：攻方在选项中撤退 ⇒ 没有可推进者（连候选都不列）
+    if (combatAttackerRetreated.value) return []
     const paid = state.supply?.attacker.paid === true
     return combatAttackers.value
       .filter((unit) => unit.steps > 0)
@@ -2918,6 +2933,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const combatAdvanceHex = computed<HexRef | null>(() => {
     const target = battleTarget.value
     if (target === null) return null
+    // 9.12g-B：攻方撤退 ⇒ 防御格再空也不铺推进格
+    if (combatAttackerRetreated.value) return null
     if (!combatDefendingHexCleared.value) return null
     const hex = { col: target.hex.col, row: target.hex.row }
     if (isEnemySafeEdgeHex(moveContext.value, hex, activeSide.value)) return null
@@ -12259,6 +12276,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     if (specialPending.value !== null) return true
     /*
+     * 9.12g-B：攻方把选项当撤退 ⇒ 本次不推进（防御格即便已空）。
+     * 引擎对这条的处理是"成功但推进 0 单位"，不是拒绝；这里先记一条规则日志并直接收束，
+     * 免得玩家停在一张只能空点的推进卡上。
+     */
+    if (combatAttackerRetreated.value) {
+      pushLog('info', '9.12g-B：攻方在选项中撤退 ⇒ 本次不推进（防御格即便已空）', '9.12g-B')
+      return confirmCombatAdvance()
+    }
+    /*
      * 9.12g-D：「常规战斗后并非必须如此，由拥有者玩家选择哪些攻击单位进行推进（**如果有的话**）。」
      * ⇒ **一个可推进的单位都没有**时，这一页没有任何可选项（只能"不推进"）⇒ 直接收束整场战斗：
      *   攻方被全灭后的收尾正走这条（用户 2026-09-18 报的第 2 条：没有继续挺进流程的意义）。
@@ -12352,7 +12378,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '战后推进',
     )
     if (data === null) {
-      // W7 C16：推进被拒（例如 9.12g-B「攻方在选项中撤退」）时，**突袭的 3 MP 与 8.0 后果仍须记账** ——
+      // W7 C16：推进被拒（例如 9.12g-A「候选未付战斗补给」）时，**突袭的 3 MP 与 8.0 后果仍须记账** ——
       // 否则突袭会卡在托管态、MP 永不扣除，也无法继续移动（8.1a/8.1f）。
       if (overrunContext.value !== null) settleOverrunMove(combatDefendingHexCleared.value)
       return false

@@ -409,7 +409,7 @@ describe('战斗终局组合：7 种都必须收束（9.2 / 9.10a / 9.11 / 9.12 
     )
   })
 
-  it('A6 双方留存、各自需撤退 ⇒ 先攻后守各自落点，9.12g-B 不推进', () => {
+  it('A6 双方留存、各自需撤退 ⇒ 先攻后守各自落点；攻方撤退 ⇒ 9.12g-B 不推进、确认即收束', () => {
     const { state } = toRetreatStep({
       attackerSteps: 3,
       defenderSteps: 3,
@@ -427,11 +427,42 @@ describe('战斗终局组合：7 种都必须收束（9.2 / 9.10a / 9.11 / 9.12 
     chooseAllRetreatDestinations(store)
     expect(store.confirmCombatRetreats()).toBe(true)
 
-    expect(store.combatState!.step).toBe('advance')
-    expect(store.confirmCombatAdvance()).toBe(true)
+    // 9.12g-B：攻方在选项中撤退 ⇒ 不推进；不再留一张只能空点的推进卡
     expect(store.combatState!.finished).toBe(true)
     expect(store.combatLiveStep).toBeNull()
+    expect(store.combatAdvanceHex).toBeNull()
+    expect(store.combatAdvanceCandidates).toEqual([])
+    expect(store.combatAdvanceMandatory).toBe(false)
+    expect(store.log.some((line) => line.rule === '9.12g-B')).toBe(true)
     expect(session.log.some((entry) => entry.action === 'combatRetreat')).toBe(true)
+  })
+
+  it('A6b 突袭·攻方在选项中撤退 ⇒ 不推进、不进防御格、收束后不留推进卡', () => {
+    const { state } = toRetreatStep({
+      attackerSteps: 3,
+      defenderSteps: 3,
+      die: 8,
+      shiftDie: 1,
+      attackerRetreat: 1,
+      attackerLoss: 0,
+      defenderRetreat: 1,
+      defenderLoss: 0,
+      attackType: 'overrun',
+    })
+    expect(state.attackType).toBe('overrun')
+    mount(store, state, { attackerSteps: 2, defenderSteps: 2 })
+
+    chooseAllRetreatDestinations(store)
+    expect(store.confirmCombatRetreats()).toBe(true)
+
+    // 9.12g-B 优先于 9.12g-D：攻方已撤退 ⇒ 突袭也不推进
+    expect(store.combatState!.finished).toBe(true)
+    expect(store.combatLiveStep).toBeNull()
+    expect(store.combatAdvanceHex).toBeNull()
+    expect(store.combatAdvanceCandidates).toEqual([])
+    expect(store.combatAdvanceMandatory).toBe(false)
+    expect(store.log.some((line) => line.rule === '9.12g-B')).toBe(true)
+    expect(store.units.find((unit) => unit.instanceId === 'a1')?.hex).not.toEqual(DEFENDER_HEX)
   })
 
   it('A7 守灭、攻存且无后续（突袭）⇒ 撤退步一次确认即自动收束', () => {
