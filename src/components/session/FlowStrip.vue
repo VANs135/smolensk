@@ -90,6 +90,13 @@ const phaseLabel = computed<string>(() => {
   return workbench.PHASE_LABELS[workbench.phase] ?? phase
 })
 
+/** 当前天气的中文名（面板一行用；不裸露 normal / limited 枚举） */
+const weatherLabel = computed<string>(() => {
+  const air = gameSession.records?.weather.air
+  if (air === undefined) return '—'
+  return air === 'normal' ? '正常飞行' : '受限飞行'
+})
+
 /** 步骤归属标记（先手方 / 后手方 / 回合级） */
 function roleMark(step: SopStep): string {
   if (step.role === 'first') return '先'
@@ -312,7 +319,7 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
       <span class="num">
         回合 {{ gameSession.records?.turn ?? '—' }}({{ workbench.date }})｜先手方
         {{ gameSession.records?.firstPlayer ?? '未判定' }}｜天气
-        {{ gameSession.records?.weather.air ?? '—' }}
+        {{ weatherLabel }}
       </span>
       <span class="num">剧本 {{ setup.scenarioId }}</span>
     </div>

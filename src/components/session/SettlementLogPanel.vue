@@ -28,7 +28,7 @@ const query = computed(() => gameSession.logQuery)
 /** 角色 / 阶段 / 阵营的中文名 */
 const SIDE_LABELS: Record<string, string> = { axis: '轴心国', soviet: '苏联' }
 const PHASE_LABELS: Record<string, string> = {
-  preTurn: 'Pre-Turn',
+  preTurn: '回合准备',
   aircraftRefit: 'A 飞机整备',
   reinforcement: 'B 增援',
   movement: 'C 移动',

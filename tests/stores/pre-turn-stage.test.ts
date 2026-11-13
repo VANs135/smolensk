@@ -110,3 +110,17 @@ describe('Pre-Turn：本环节没有行动段 ⇒ 不留任何动作入口（2.2
     expect(game.slice(at, at + 200)).toContain('!workbench.segmentLocked')
   })
 })
+
+describe('Pre-Turn：显示口径与界面其余处一致（中文段名 / 天气）', () => {
+  it('结算记录的阶段名用「回合准备」，不混英文 Pre-Turn', () => {
+    const panel = readFileSync('src/components/session/SettlementLogPanel.vue', 'utf8')
+    expect(panel).toContain("preTurn: '回合准备'")
+    expect(panel).not.toContain("preTurn: 'Pre-Turn'")
+  })
+
+  it('流程条上的天气显示中文（正常飞行 / 受限飞行），不裸露枚举值', () => {
+    const strip = readFileSync('src/components/session/FlowStrip.vue', 'utf8')
+    expect(strip).toContain('weatherLabel')
+    expect(strip).not.toContain("records?.weather.air ?? '—'")
+  })
+})
