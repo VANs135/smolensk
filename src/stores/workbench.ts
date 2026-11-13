@@ -122,6 +122,7 @@ import {
   PANZER_GROUP_OPTION_ITEM,
   validateConstructionBase,
   EXTENDER_REQUIRED_POINTS,
+  EXTENDER_FLIP_MA_FRACTION,
   isVariableExitActive,
   variableExitFormationOf,
   type VariableExitResult,
@@ -14629,6 +14630,50 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     convertId: string | null
   }>({ mergeIds: [], splitId: null, splitSizesText: '', convertId: null })
 
+  /** 12.7e（用户 2026-11-13 裁定）：同格同型同规模、**已耗 MP 也相同**的运输点数可合并显示为一条 */
+  const transportPointGroupsOfSide = computed<
+    readonly {
+      key: string
+      ids: string[]
+      unit: ConsoleUnit
+      count: number
+      points: number
+    }[]
+  >(() => {
+    const groups: {
+      key: string
+      ids: string[]
+      unit: ConsoleUnit
+      count: number
+      points: number
+    }[] = []
+    for (const unit of transportPointsOfSide.value) {
+      // MP 不同 ⇒ 各自能走的步数不同 ⇒ 不能合并显示（各点独立移动/拆分/翻回）
+      const key = [
+        `${unit.hex.col}.${unit.hex.row}`,
+        transportKindOf(unit),
+        unit.noncombatTransport,
+        unit.mpSpent,
+        unit.loadedSpT,
+      ].join('|')
+      const existing = groups.find((group) => group.key === key)
+      if (existing === undefined) {
+        groups.push({
+          key,
+          ids: [unit.instanceId],
+          unit,
+          count: 1,
+          points: unit.noncombatTransport,
+        })
+      } else {
+        existing.ids.push(unit.instanceId)
+        existing.count += 1
+        existing.points += unit.noncombatTransport
+      }
+    }
+    return groups
+  })
+
   function toggleTransportMerge(id: string): void {
     const current = transportPointInputs.value.mergeIds
     transportPointInputs.value = {
@@ -14707,6 +14752,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       side: activeSide.value,
     })
     merged.loadedSpT = mergedCargoT
+    // 12.7e（用户 2026-11-13 裁定）：各点各自持有自己的 MP ⇒ 合并取**最保守**的已耗 MP，
+    // 不能靠合并不花 MP 白赚机动力
+    merged.mpSpent = Math.max(...picked.map((item) => item.mpSpent))
     units.value = [...units.value, merged]
     transportPointInputs.value = { ...transportPointInputs.value, mergeIds: [] }
     pushLog(
@@ -14784,6 +14832,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           side: activeSide.value,
         })
         piece.loadedSpT = (cargoSp[index] ?? 0) * SP_TO_T
+        // 12.7e（用户 2026-11-13 裁定）：运输点数各自持有自己的 MP —— 拆分**不刷新 MP**，
+        // 各份继承原点的已耗 MP（拆一下就白得满 MP 是把规则当提款机）
+        piece.mpSpent = unit.mpSpent
         return piece
       }),
     ]
@@ -14859,6 +14910,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       id: unit.instanceId,
       kind: (unit.noncombatTransportKind ?? 'truck') as TransportKind,
       points: unit.noncombatTransport,
+      // 12.7e（用户 2026-11-13 裁定）：每个运输点数各自持有自己的 MP，转换代价花在**该点自身 MP** 上
+      ma: unit.faces.combat.ma || unit.faces.move.ma,
+      mpSpent: unit.mpSpent,
       // 12.7d：载有 SP 的运输点**不能**转延补队（必须先卸载）——判据在引擎
       loaded: unit.loadedSpT > 0,
     }))
@@ -14922,17 +14976,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         )
         return false
       }
-      units.value = [
-        ...units.value,
-        toConsoleUnit({
-          record: leftoverRecord,
-          instanceId: createId('tp'),
-          hex,
-          side: activeSide.value,
-        }),
-      ]
+      const leftover = toConsoleUnit({
+        record: leftoverRecord,
+        instanceId: createId('tp'),
+        hex,
+        side: activeSide.value,
+      })
+      // 12.7e（用户 2026-11-13 裁定）：余量来自**已付过转换代价**的点 ⇒ 不是满 MP 的新算子
+      leftover.mpSpent = leftover.faces.combat.ma * EXTENDER_FLIP_MA_FRACTION
+      units.value = [...units.value, leftover]
     }
-    // 新延补队：12.7a 的 1/2 MA 代价**按队计**（`totalCostMa = 队数 × 每队代价`）。
+    // 新延补队：12.7d 的 1/2 MA 代价 = **该延补队自身** MA 的一半（逐队、各自持有自己的 MP）
     // ★ 12.7b：延补队的距离就是它的**印值 MA**，印在**战斗面** ⇒ 以战斗面摆放。
     // ★ 第五批批 B 切片 2：修前无论 `count` 是多少都只落 **1 枚**（却按 count 扣点）⇒ 现在逐队落盘。
     const created: ConsoleUnit[] = []
@@ -14944,7 +14998,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         side: activeSide.value,
         face: 'combat',
       })
-      extender.mpSpent = plan.totalCostMa / plan.extenderCount
+      extender.mpSpent = extender.faces.combat.ma * EXTENDER_FLIP_MA_FRACTION
       created.push(extender)
     }
     units.value = [...units.value, ...created]
@@ -14986,15 +15040,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     units.value = units.value.filter((unit) => unit.instanceId !== extender.instanceId)
-    units.value = [
-      ...units.value,
-      toConsoleUnit({
-        record,
-        instanceId: createId('tp'),
-        hex: extender.hex,
-        side: activeSide.value,
-      }),
-    ]
+    const flippedPoint = toConsoleUnit({
+      record,
+      instanceId: createId('tp'),
+      hex: extender.hex,
+      side: activeSide.value,
+    })
+    // 12.7e（用户 2026-11-13 裁定）：运输点数各自持有自己的 MP ⇒ 翻面代价要**记在这枚点自己的账上**
+    // （修前新算子 mpSpent = 0，等于翻个面就白得满 MP）
+    flippedPoint.mpSpent = outcome.data.costMa
+    units.value = [...units.value, flippedPoint]
     pushLog(
       'success',
       `${outcome.data.detail}；消耗 ${outcome.data.costMa} MA（12.7d：自身 MA ×½）`,
@@ -27346,6 +27401,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     unitNameOf,
     // 13.2c：运输点数的合并 / 拆分（含编内卡车不得与常规点数合并的限制）
     transportPointsOfSide,
+    transportPointGroupsOfSide,
     transportPointInputs,
     toggleTransportMerge,
     mergeTransportPointsNow,

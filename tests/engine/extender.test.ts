@@ -77,7 +77,7 @@ describe('extender 12.7 / 9.14d', () => {
           expect(result.data.options).toHaveLength(1)
           expect(result.data.options[0]!.kind).toBe('truck')
           expect(result.data.options[0]!.count).toBe(1)
-          expect(result.data.options[0]!.costMaPerTeam).toBe(10) // MA 20 × 0.5
+          expect(result.data.options[0]!.costMaPerPoint).toBe(10) // 每点自身 MA 20 × 0.5
         }
       }
     })
@@ -220,7 +220,52 @@ describe('extender 12.7 / 9.14d', () => {
       expect(two.data.removedPoints).toBe(12)
       expect(two.data.leftoverPoints).toBe(2)
       expect(two.data.leftoverPlacement).toEqual([2])
-      expect(two.data.totalCostMa).toBe(20) // 2 队 × MA 20 × 0.5
+      expect(two.data.totalCostMa).toBe(40) // 12.7e：4 枚各付自身 MA 20 × 0.5，逐点计
+
+      /*
+       * 12.7e（用户 2026-11-13 裁定）：代价落在**每个运输点数自身**的 MP 上，逐点计、不共享。
+       * ⇒ 两枚 3+2 点、各剩 25 MP（自身 MA 45，已耗 20）都够付 22.5；合计 45。
+       */
+      const perPoint = planConvertTransportToExtender({
+        kind: 'truck',
+        count: 1,
+        entries: [
+          { id: 'a', kind: 'truck', points: 3, ma: 45, mpSpent: 20 },
+          { id: 'b', kind: 'truck', points: 2, ma: 45, mpSpent: 20 },
+        ],
+        newRecordId: 'ax-extender-truck',
+      })
+      expect(perPoint.ok).toBe(true)
+      if (perPoint.ok) {
+        expect(perPoint.data.swaps).toHaveLength(2)
+        expect(perPoint.data.totalCostMa).toBe(45) // 两枚各付自身 45 × ½，不共享
+      }
+    })
+
+    it('12.7e：某点剩余 MP 不足自身 MA 的一半 ⇒ 不参与凑数，不可拿别人的 MP 垫', () => {
+      // 3 点这枚还剩 15 MP（自身 45，已耗 30）< 22.5 ⇒ 出局；只剩 2 点 < 5 ⇒ 拒
+      const blocked = planConvertTransportToExtender({
+        kind: 'truck',
+        count: 1,
+        entries: [
+          { id: 'a', kind: 'truck', points: 3, ma: 45, mpSpent: 30 },
+          { id: 'b', kind: 'truck', points: 2, ma: 45, mpSpent: 10 },
+        ],
+        newRecordId: 'ax-extender-truck',
+      })
+      expect(blocked.ok).toBe(false)
+      if (!blocked.ok) expect(blocked.reason).toBe('insufficientMa')
+
+      // 判定入口同口径：能参与的点数只有 2 点
+      const gate = canConvertTransportToExtender({
+        phase: 'movement',
+        entries: [
+          { id: 'a', kind: 'truck', points: 3, ma: 45, mpSpent: 30 },
+          { id: 'b', kind: 'truck', points: 2, ma: 45, mpSpent: 10 },
+        ],
+      })
+      expect(gate.ok).toBe(false)
+      if (!gate.ok) expect(gate.reason).toBe('insufficientMa')
     })
 
     it('数量不够 → notEnoughPoints', () => {

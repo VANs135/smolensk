@@ -407,5 +407,92 @@ describe('12.7f：翻回 5 点后拆开分别移动（无需整叠走）', () =>
   })
 })
 
+/**
+ * 12.7e（用户 2026-11-13 裁定）：每个运输点数（运输队）都是**独立单位、各自持有自己的 MP**；
+ * 同格且已耗 MP 一致时可合并显示为一条（×N），MP 不同则分开；转换代价逐点计、不共享。
+ */
+describe('12.7e：逐点 MP 与同格合并显示', () => {
+  it('同格同型同规模、已耗 MP 相同 ⇒ 合并显示为一条（count ×2）；MP 不同 ⇒ 分开两条', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    placeTransportPoint(store, 'truck', 2, CORE_HEX, 'tp-a')
+    placeTransportPoint(store, 'truck', 2, CORE_HEX, 'tp-b')
+
+    expect(store.transportPointGroupsOfSide).toHaveLength(1)
+    expect(store.transportPointGroupsOfSide[0]).toMatchObject({ count: 2, points: 4 })
+
+    // 各自持有自己的 MP：一枚先走了 5 MP ⇒ 剩下的步数不同 ⇒ 不能再合并成一条
+    // （经 store 的响应式数组改，直接改 placeGround 的原始对象不会触发重算）
+    store.units.find((unit) => unit.instanceId === 'tp-a')!.mpSpent = 5
+    expect(store.transportPointGroupsOfSide).toHaveLength(2)
+    expect(store.transportPointGroupsOfSide.map((group) => group.count)).toEqual([1, 1])
+  })
+
+  it('转换代价逐点计：一枚剩余 MP 不足自身一半 ⇒ 拒（insufficientMa），不拿另一枚的 MP 垫', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    declareSource(store, CORE_HEX)
+    const overrun = placeTransportPoint(store, 'truck', 3, CORE_HEX, 'tp-a')
+    placeTransportPoint(store, 'truck', 2, CORE_HEX, 'tp-b')
+    // 卡车运输点数印值 MA 45：走掉 30 只剩 15 < 22.5 ⇒ 这枚不能参与
+    overrun.mpSpent = 30
+    expect(store.convertTransportToExtenderNow(`${CORE_HEX.col}.${CORE_HEX.row}`, 'truck')).toBe(
+      false,
+    )
+    expect(store.units.some(isExtenderUnit)).toBe(false)
+
+    // 走回 20（剩 25 ≥ 22.5）⇒ 两枚都能各自付一半，转换成立
+    overrun.mpSpent = 20
+    expect(store.convertTransportToExtenderNow(`${CORE_HEX.col}.${CORE_HEX.row}`, 'truck')).toBe(
+      true,
+    )
+    const extender = store.units.find(isExtenderUnit)!
+    // 12.7d：新延补队付的是**它自己** MA 的一半（不是各点之和；各点的账随算子移出而结清）
+    expect(extender.mpSpent).toBe(extender.faces.combat.ma * 0.5)
+  })
+
+  it('12.7f：翻回后的 5 点把代价记在自己账上（mpSpent = 半 MA，修前为 0 白得满 MP）', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    declareSource(store, CORE_HEX)
+    placeTransportPoint(store, 'truck', 5)
+    expect(store.convertTransportToExtenderNow(`${CORE_HEX.col}.${CORE_HEX.row}`, 'truck')).toBe(
+      true,
+    )
+    const extender = store.units.find(isExtenderUnit)!
+    expect(store.flipExtenderToTransport(extender.instanceId)).toBe(true)
+    const flipped = store.transportPointsOfSide[0]!
+    expect(flipped.mpSpent).toBe(extender.faces.combat.ma * 0.5)
+  })
+
+  it('13.2c：拆分继承已耗 MP、合并取较保守值 —— 都不刷新 MP', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    const five = placeTransportPoint(store, 'truck', 5)
+    five.mpSpent = 12
+    store.transportPointInputs = {
+      ...store.transportPointInputs,
+      splitId: five.instanceId,
+      splitSizesText: '2 3',
+    }
+    expect(store.splitTransportPointNow()).toBe(true)
+    expect(store.transportPointsOfSide.map((unit) => unit.mpSpent)).toEqual([12, 12])
+
+    const a = placeTransportPoint(store, 'truck', 2, NEAR_HEX, 'tp-a')
+    const b = placeTransportPoint(store, 'truck', 2, NEAR_HEX, 'tp-b')
+    a.mpSpent = 3
+    b.mpSpent = 7
+    store.transportPointInputs = {
+      ...store.transportPointInputs,
+      mergeIds: [a.instanceId, b.instanceId],
+    }
+    expect(store.mergeTransportPointsNow()).toBe(true)
+    const merged = store.transportPointsOfSide.find(
+      (unit) => unit.hex.col === NEAR_HEX.col && unit.hex.row === NEAR_HEX.row,
+    )!
+    expect(merged.mpSpent).toBe(7)
+  })
+})
+
 /** 让未用到的导入显式落地（命名与真实单位库一致） */
 export const __fixture = { toConsoleUnit }

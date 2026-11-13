@@ -65,6 +65,15 @@ export interface TransportPointEntry {
   kind: TransportKind
   points: number
   /**
+   * 12.7e（用户 2026-11-13 裁定）：该点**自身**的印值 MA
+   *
+   * 每个运输点数（运输队）都是独立单位、各自持有自己的 MP；转换代价落在**该点自身 MP** 上，
+   * 逐点计、不共享。缺省时按同类印值（卡车 20 / 马车 10）回退，仅用于老调用方。
+   */
+  ma?: number
+  /** 12.7e：该点已消耗的 MP（判「是否还剩得下自身 MA 的一半」） */
+  mpSpent?: number
+  /**
    * 12.7d：该算子是否**载有 SP**
    *
    * 「装载的运输点数**不能**切换为延补队（它必须先卸载）。」
@@ -127,24 +136,49 @@ export function aggregateTransportPoints(entries: readonly TransportPointEntry[]
 }
 
 /**
- * 12.7a / 12.7d：某型运输点数里**能参与凑数**的点数（装载者除外）与**被挡在门外**的点数
+ * 12.7a / 12.7d：某型运输点数里**能参与凑数**的点数（装载者、MP 不足者除外）与被挡在门外的点数
  *
  * 「装载的运输点数**不能**切换为延补队（它**必须先卸载**）」（12.7d）⇒ 装载者**不参与凑数**。
+ * 12.7e（用户 2026-11-13 裁定）：每个运输点数**各自持有自己的 MP**，转换要花掉**该点自身 MA 的一半**，
+ * 逐点计、不共享 ⇒ 已经走掉太多、剩余 MP 不足自身 MA 一半的点也**不参与凑数**（不能拿别人的 MP 垫）。
  * `canConvertTransportToExtender`（判"能建几队"）与 `planConvertTransportToExtender`（产替换计划）
  * **共用本函数**：两处若各写一遍，同一格会出现"判定说能建、计划说不够"的自相矛盾。
  */
 function convertibleOf(
   entries: readonly TransportPointEntry[],
   kind: TransportKind,
-): { points: number; loadedPoints: number } {
+  fallbackMa: number,
+): { points: number; loadedPoints: number; shortMaPoints: number } {
   const sameKind = entries.filter((entry) => entry.kind === kind)
   const usable = sameKind.filter((entry) => entry.loaded !== true)
+  const settled = usable.filter((entry) => entry.mpSpent === undefined)
+  const paid = usable.filter((entry) => entry.mpSpent !== undefined)
+  const canPay = paid.filter((entry) => hasHalfMaLeft(entry, fallbackMa))
+  const shortMa = paid.filter((entry) => !hasHalfMaLeft(entry, fallbackMa))
   return {
-    points: usable.reduce((sum, entry) => sum + entry.points, 0),
+    points: [...settled, ...canPay].reduce((sum, entry) => sum + entry.points, 0),
     loadedPoints: sameKind
       .filter((entry) => entry.loaded === true)
       .reduce((sum, entry) => sum + entry.points, 0),
+    shortMaPoints: shortMa.reduce((sum, entry) => sum + entry.points, 0),
   }
+}
+
+/** 12.7e：该点自身的印值 MA（缺省按同类回退） */
+function ownMaOf(entry: TransportPointEntry, fallbackMa: number): number {
+  return entry.ma ?? fallbackMa
+}
+
+/** 12.7e：该点剩余 MP 是否够付「自身 MA 的一半」 */
+function hasHalfMaLeft(entry: TransportPointEntry, fallbackMa: number): boolean {
+  if (entry.mpSpent === undefined) return true
+  const ma = ownMaOf(entry, fallbackMa)
+  return ma - entry.mpSpent >= ma * EXTENDER_FLIP_MA_FRACTION
+}
+
+/** 12.7e：该点参与转换要付出的 MP = 自身 MA 的一半（逐点计） */
+function costMaOfPoint(entry: TransportPointEntry, fallbackMa: number): number {
+  return ownMaOf(entry, fallbackMa) * EXTENDER_FLIP_MA_FRACTION
 }
 
 /** 转换候选：某格同方运输点数中能凑出几个延补队 */
@@ -156,8 +190,12 @@ export interface ConvertOption {
   totalPoints: number
   /** 剩余点数（换完 count 队后剩的） */
   remainder: number
-  /** 12.7a：转换代价 —— 新延补队自身 MA 的一半（每队） */
-  costMaPerTeam: number
+  /**
+   * 12.7e（用户 2026-11-13 裁定）：转换代价 —— **每个运输点数各自付自身 MA 的一半**，逐点计、不共享
+   *
+   * 这里给的是该类型的标准值（卡车 20 / 马车 10 的一半）；实际逐点金额由计划按各点自己的 `ma` 汇总。
+   */
+  costMaPerPoint: number
   rule: '12.7a'
 }
 
@@ -185,9 +223,9 @@ export function canConvertTransportToExtender(input: {
   const truckMa = input.truckMa ?? 20
   const wagonMa = input.wagonMa ?? 10
   const threshold = EXTENDER_REQUIRED_POINTS
-  // 12.7d：装载中的运输点数**不参与凑数**（必须先卸载）——与 `planConvertTransportToExtender` 同一处口径
-  const truck = convertibleOf(input.entries, 'truck')
-  const wagon = convertibleOf(input.entries, 'wagon')
+  // 12.7d / 12.7e：装载中的、MP 已不足自身一半的运输点数**不参与凑数**——与 `planConvertTransportToExtender` 同一处口径
+  const truck = convertibleOf(input.entries, 'truck', truckMa)
+  const wagon = convertibleOf(input.entries, 'wagon', wagonMa)
 
   if (truck.points >= threshold) {
     const count = Math.floor(truck.points / threshold)
@@ -196,7 +234,7 @@ export function canConvertTransportToExtender(input: {
       count,
       totalPoints: count * threshold,
       remainder: truck.points - count * threshold,
-      costMaPerTeam: truckMa * EXTENDER_FLIP_MA_FRACTION,
+      costMaPerPoint: truckMa * EXTENDER_FLIP_MA_FRACTION,
       rule: '12.7a',
     })
   }
@@ -207,7 +245,7 @@ export function canConvertTransportToExtender(input: {
       count,
       totalPoints: count * threshold,
       remainder: wagon.points - count * threshold,
-      costMaPerTeam: wagonMa * EXTENDER_FLIP_MA_FRACTION,
+      costMaPerPoint: wagonMa * EXTENDER_FLIP_MA_FRACTION,
       rule: '12.7a',
     })
   }
@@ -220,6 +258,15 @@ export function canConvertTransportToExtender(input: {
       (group) => group.loadedPoints > 0 && group.points + group.loadedPoints >= threshold,
     )
     if (blockedByLoaded) return fail('12.7d', 'loadedMustUnloadFirst')
+    /*
+     * 12.7e（用户 2026-11-13 裁定）：每个运输点数各自付自身 MA 的一半 ⇒ 已走太多、剩余不足一半的点
+     * 不能参与凑数。若"把它们也算进来就够" ⇒ 报 `insufficientMa`（12.7a），
+     * 让玩家知道拦路的是"这枚走过头了"，而不是资源不足。
+     */
+    const blockedByMa = [truck, wagon].some(
+      (group) => group.shortMaPoints > 0 && group.points + group.shortMaPoints >= threshold,
+    )
+    if (blockedByMa) return fail('12.7a', 'insufficientMa')
     return fail('12.7a', 'insufficientPoints')
   }
   return succeed('12.7a', { options })
@@ -255,7 +302,10 @@ export interface ConvertToExtenderPlan {
   leftoverPoints: number
   /** 余量的建议面额拆分（各面额一枚运输点算子；空数组 = 无余量） */
   leftoverPlacement: number[]
-  /** 12.7a：本次转换合计消耗的 MA（count × costMaPerTeam） */
+  /**
+   * 12.7e（用户 2026-11-13 裁定）：本次转换的 MA 代价合计 = **各参与点**自身 MA 的一半之和
+   * （逐点计、不共享；不是「队数 × 类型 MA × ½」）
+   */
   totalCostMa: number
   detail: string
 }
@@ -269,18 +319,25 @@ export function planConvertTransportToExtender(input: {
   wagonMa?: number
 }): RuleOutcome<ConvertToExtenderPlan> {
   if (input.count <= 0) return fail('12.7a', 'countMustBePositive')
+  const fallbackMa = input.kind === 'truck' ? (input.truckMa ?? 20) : (input.wagonMa ?? 10)
   /*
    * 12.7d：「装载的运输点数**不能**切换为延补队（它必须先卸载）。」
-   * ⇒ 装载者**先滤掉**（不参与凑数）；口径与 `canConvertTransportToExtender` 共用 `convertibleOf`
-   *   （两处各写一遍会出现"判定说能建、计划说不够"的自相矛盾）。
+   * 12.7e（用户 2026-11-13 裁定）：每个运输点数各自持有自己的 MP，转换要花掉**该点自身 MA 的一半**
+   *   ⇒ 剩余 MP 不足自身一半的点**不参与凑数**（不能拿别的点的 MP 垫）。
+   * 口径与 `canConvertTransportToExtender` 共用 `convertibleOf`（两处各写一遍会出现"判定说能建、计划说不够"）。
    */
   const need = EXTENDER_REQUIRED_POINTS * input.count
-  const group = convertibleOf(input.entries, input.kind)
-  const candidates = input.entries.filter((e) => e.kind === input.kind && e.loaded !== true)
+  const group = convertibleOf(input.entries, input.kind, fallbackMa)
+  const candidates = input.entries.filter(
+    (e) => e.kind === input.kind && e.loaded !== true && hasHalfMaLeft(e, fallbackMa),
+  )
   if (group.points < need) {
     // 12.7d：若"把装载者也算进来就够" ⇒ 报 12.7d（拦路的是"没卸载"，不是笼统的"点数不够"）
     if (group.loadedPoints > 0 && group.points + group.loadedPoints >= need)
       return fail('12.7d', 'loadedMustUnloadFirst')
+    // 12.7e：若"把 MP 已不足一半的点也算进来就够" ⇒ 报 insufficientMa
+    if (group.shortMaPoints > 0 && group.points + group.shortMaPoints >= need)
+      return fail('12.7a', 'insufficientMa')
     return fail('12.7a', 'notEnoughPoints')
   }
 
@@ -290,8 +347,14 @@ export function planConvertTransportToExtender(input: {
   const removedPoints = swaps.reduce((s, t) => s + t.points, 0)
   const leftoverPoints = removedPoints - need
 
-  const ma = input.kind === 'truck' ? (input.truckMa ?? 20) : (input.wagonMa ?? 10)
-  const cost = input.count * ma * EXTENDER_FLIP_MA_FRACTION
+  /*
+   * 12.7e（用户 2026-11-13 裁定）：代价**逐点计、不共享** ——
+   * 每个被移走的运输点数各付「自身 MA × ½」，合计 = 各点之和（不是「队数 × 类型 MA × ½」）。
+   */
+  const cost = swaps.reduce((sum, swap) => {
+    const entry = candidates.find((item) => item.id === swap.transportUnitId)
+    return sum + (entry === undefined ? 0 : costMaOfPoint(entry, fallbackMa))
+  }, 0)
   return succeed('12.7a', {
     rule: '12.7a',
     kind: input.kind,
@@ -307,7 +370,7 @@ export function planConvertTransportToExtender(input: {
       `用 ${input.kind === 'truck' ? '卡车' : '马车'}运输点数建 ${input.count} 个延补队：` +
       `消耗 ${need} 点（移走 ${swaps.length} 枚共 ${removedPoints} 点` +
       `${leftoverPoints > 0 ? `，余 ${leftoverPoints} 点留格` : '，无余'}），` +
-      `消耗 ${cost} MA`,
+      `各点分别付自身 MA 的一半（合计 ${cost} MA）`,
   })
 }
 

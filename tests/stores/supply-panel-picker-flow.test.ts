@@ -245,7 +245,9 @@ describe('B14d：补给面板的替换（源码守卫）', () => {
     // 点选直连 store 的动作
     expect(panel).toContain('@pick="workbench.toggleSupplyPayDump($event)"')
     expect(panel).toContain('@pick="workbench.chooseSupplySourceNow(Number($event))"')
-    expect(panel).toContain('@pick="workbench.toggleTransportMerge($event)"')
+    expect(panel).toContain('@pick="pickTransportMerge"')
+    // 12.7e（用户 2026-11-13 裁定）：合并显示为一条 ×N ⇒ 点组展开成逐点选中，不能再直连单点 toggle
+    expect(panel).toContain('transportPointGroupsOfSide')
   })
 
   it('★ 来源清单带**分组下拉**（组键＝引擎的 kind，组名走 store 的标签）', () => {

@@ -143,36 +143,73 @@ const destroyDumpItems = computed<readonly CounterPickerItem[]>(() =>
 )
 
 /** 13.2c：运输点数算子（合并多选 / 拆分对象 / 装卸对象 —— 三处各用自己的选中口径） */
-function transportItem(unit: (typeof workbench.transportPointsOfSide)[number]): CounterPickerItem {
+type TransportPointGroup = (typeof workbench.transportPointGroupsOfSide)[number]
+
+function transportItem(group: TransportPointGroup): CounterPickerItem {
+  const unit = group.unit
+  const ma = unit.faces.combat.ma || unit.faces.move.ma
   return {
-    id: unit.instanceId,
+    id: group.key,
     imageUrl: counterImageUrlOf(unit),
     name:
-      `${unit.name}（${unit.noncombatTransport} 点 @ ${hexLabel(unit.hex)}` +
-      `，已载 ${unit.loadedSpT / 4} SP）`,
+      `${unit.name}（${group.points} 点${group.count > 1 ? ` ×${group.count}` : ''} @ ${hexLabel(unit.hex)}` +
+      `，剩 ${ma - unit.mpSpent}/${ma} MP，已载 ${unit.loadedSpT / 4} SP）`,
     selected: false,
     hex: unit.hex,
+    // 12.7e（用户 2026-11-13 裁定）：同格同型同规模、已耗 MP 也相同 ⇒ 合并显示为一条，角标 ×N
+    badge: group.count > 1 ? `×${group.count}` : undefined,
   }
 }
 
+function transportGroupOf(key: string): TransportPointGroup | undefined {
+  return workbench.transportPointGroupsOfSide.find((group) => group.key === key)
+}
+
+/**
+ * 12.7e（用户 2026-11-13 裁定）：合并显示只是**显示**——选中仍逐点落账。
+ * 点一条 ×N 行＝对组内每一点同时开/关（它们完全相同，拆开选没有意义）。
+ */
+function pickTransportMerge(key: string): void {
+  const group = transportGroupOf(key)
+  if (group === undefined) return
+  const allSelected = group.ids.every((id) => workbench.transportPointInputs.mergeIds.includes(id))
+  for (const id of group.ids) {
+    const selected = workbench.transportPointInputs.mergeIds.includes(id)
+    if (selected === allSelected) workbench.toggleTransportMerge(id)
+  }
+}
+
+/** 12.7e：同组内各点完全相同 ⇒ 选组即选其中一枚（拆分只作用于一枚） */
+function pickTransportSplit(key: string): void {
+  const group = transportGroupOf(key)
+  if (group === undefined) return
+  workbench.transportPointInputs.splitId = group.ids[0]!
+}
+
+function pickTransportLoad(key: string): void {
+  const group = transportGroupOf(key)
+  if (group === undefined) return
+  workbench.selectTransportLoadPointNow(group.ids[0]!)
+}
+
 const transportMergeItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.transportPointsOfSide.map((unit) => ({
-    ...transportItem(unit),
-    selected: workbench.transportPointInputs.mergeIds.includes(unit.instanceId),
+  workbench.transportPointGroupsOfSide.map((group) => ({
+    ...transportItem(group),
+    selected: group.ids.every((id) => workbench.transportPointInputs.mergeIds.includes(id)),
   })),
 )
 
 const transportSplitItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.transportPointsOfSide.map((unit) => ({
-    ...transportItem(unit),
-    selected: workbench.transportPointInputs.splitId === unit.instanceId,
+  workbench.transportPointGroupsOfSide.map((group) => ({
+    ...transportItem(group),
+    selected: group.ids.includes(workbench.transportPointInputs.splitId ?? ''),
   })),
 )
 
 const transportLoadItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.transportPointsOfSide.map((unit) => ({
-    ...transportItem(unit),
-    selected: workbench.transportLoadInputs.pointId === unit.instanceId,
+  workbench.transportPointGroupsOfSide.map((group) => ({
+    ...transportItem(group),
+    selected: group.ids.includes(workbench.transportLoadInputs.pointId ?? ''),
   })),
 )
 
@@ -609,15 +646,15 @@ const showsLedger = computed(
             hint="13.2c：合并/拆分不耗 MP，只能在本方移动阶段、且所有算子须在**同一格**；不同类型永不合并"
             :items="transportMergeItems"
             :size="32"
-            @pick="workbench.toggleTransportMerge($event)"
+            @pick="pickTransportMerge"
             @hover="hoverUnit"
           />
           <CounterPicker
             title="拆分对象（点一枚）"
-            hint="13.2c：拆分只作用于这一枚（份数在上面的输入框里给）"
+            hint="13.2c：拆分只作用于这一枚（份数在上面的输入框里给）；12.7e：MP 相同的同格同型点数合并显示为 ×N"
             :items="transportSplitItems"
             :size="32"
-            @pick="workbench.transportPointInputs.splitId = $event"
+            @pick="pickTransportSplit"
             @hover="hoverUnit"
           />
           <p v-if="workbench.transportPointsOfSide.length === 0" class="muted">
@@ -644,7 +681,7 @@ const showsLedger = computed(
             hint="13.2f：装载须与补给站同格、卸载须在含友方战斗单位/港口/空军基地/已卸载补给站的格；两者都付印刷 MA 的 10%"
             :items="transportLoadItems"
             :size="32"
-            @pick="workbench.selectTransportLoadPointNow($event)"
+            @pick="pickTransportLoad"
             @hover="hoverUnit"
           />
           <p class="muted">{{ transportStageText }}</p>
