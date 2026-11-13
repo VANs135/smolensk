@@ -24,8 +24,8 @@ import {
  * 用户口径：
  *   ① 选项点数逐次点选——点算子图即受损；点地图上可撤退格即撤退（不再先选模式）；
  *   ② 每次应用只进**草稿**（不落盘），最后「提交」才一次性交给引擎（`planOptions` 不改）；
- *   ③ 未点满的剩余点数在提交时按规范分配折成军力损失（9.10a / 9.11c）；
- *   ④ 攻方全灭时守方给「结束战斗」一键（9.10c 例 B）。
+ *   ③ 未点满则提交被如实拒绝（不动盘面），补满后才结算（9.10a / 9.11c）；
+ *   ④ 攻方全灭时守方走 9.10c 的唯一出口「忽略选项」，战斗自行收束（不再有兜底按钮）。
  *
  * 夹具沿用 `option-loss-allocation.test.ts` 的扫种子建场（守方三枚、选项 ≥2），
  * 骰面由种子驱动 ⇒ 用"扫种子"找"守方选项 ≥2"的骰序（找不到即抛错，不静默跳过）。
@@ -316,24 +316,24 @@ describe('批 F·F1（条 15/16）：选项页逐次点选只进草稿，提交�
     expect(store.combatState?.step).toBe('options')
   }, 30_000)
 
-  it('★ 攻方全灭 ⇒ 守方「结束战斗」一键收尾（9.10c 例 B）', () => {
+  it('★ 攻方全灭 ⇒ 守方可行使 9.10c 忽略选项，战斗沿正常链路收束', () => {
     const store = scanSeed(1, 400)
-    // 攻方未全灭 ⇒ 一键不出现、调用也被拒
+    // 攻方未全灭 ⇒ 忽略权不出现、调用也被拒
     expect(store.attackerWipedNow).toBe(false)
-    expect(store.concludeCombatAfterWipe()).toBe(false)
+    expect(store.optionIgnoreAvailableNow).toBe(false)
+    expect(store.confirmCombatIgnoreOptions()).toBe(false)
 
     // 攻方被全灭（军力归零即离盘，与 applyCombatPatches 的死亡堆同效果）
     store.units = store.units.filter((unit) => unit.instanceId !== 'a1')
     expect(store.attackerWipedNow).toBe(true)
-
-    expect(store.concludeCombatAfterWipe()).toBe(true)
+    /*
+     * 9.10c：名单里的参战单位已离盘 ⇒ 按已消灭计入 ⇒「无法完成全部选项」成立，
+     * 守方走唯一的忽略入口（不再是面板兜底按钮），忽略后无人需撤/无人可推即自行收束。
+     */
+    expect(store.optionIgnoreAvailableNow).toBe(true)
+    expect(store.confirmCombatIgnoreOptions()).toBe(true)
     expect(store.combatState?.finished).toBe(true)
     expect(store.combatState?.resolution.defender.optionIgnored).toBe(true)
-    /*
-     * 9.10c（C2 收口）：一键收尾要把「攻方在承受选项前已被摧毁」**显式落账**——
-     * 引擎只认这条记录，不把「名单取不齐」猜成全灭。
-     */
-    expect(store.combatState?.resolution.attacker.optionsSkipped).toBe('attackerWipedOut')
   }, 30_000)
 })
 

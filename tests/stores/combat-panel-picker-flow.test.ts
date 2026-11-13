@@ -452,8 +452,9 @@ describe('B14c：战斗面板的替换（源码守卫）', () => {
     expect(panel).toMatch(/\}\}结算/)
     expect(panel).toContain('{{ resolverNotation }}')
     expect(panel).not.toMatch(/结算\s*(→|⇒)/)
-    // 攻方全灭的一键仍保留（9.10c 例 B）
-    expect(panel).toContain('结束战斗')
+    // 9.10c 的唯一人工出口：攻方撤退/无法完成选项时出现「忽略选项」，兜底「结束战斗」已删除
+    expect(panel).toContain('行使 9.10c：忽略选项')
+    expect(panel).not.toContain('concludeCombatAfterWipe')
   })
 
   /*

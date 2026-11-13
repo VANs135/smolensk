@@ -682,7 +682,8 @@ export function currentResolver(state: CombatInteractionState): CombatRole {
  *
  * 调用方（store / 测试）通常只传**本环节该方**的单位，故不能对 `units` 全体直接求值
  * （否则守方结算时攻方单位缺席会被误判成「全灭」）。这里按 `state.composition.attackerIds`
- * 逐个取：取不齐就退回 `optionsSkipped` 的记录，宁可判「攻方已完成」也不凭空发放权利。
+ * 逐个取：名单里找不到的 id 按已消灭（0 军力）计入——单位被消灭后即从 `units` 移除；
+ * 只有全员都取不到/为 0 时才算「无法完成全部选项」（9.10c）。
  */
 function attackerCannotCompleteOptions(
   state: CombatInteractionState,
@@ -691,11 +692,12 @@ function attackerCannotCompleteOptions(
   if (state.resolution.attacker.optionsSkipped === 'attackerWipedOut') return true
   const ids = state.composition.attackerIds
   if (ids.length === 0) return false
-  const views = ids
-    .map((id) => units.find((unit) => unit.id === id))
-    .filter((unit): unit is BattleUnitView => unit !== undefined)
-  if (views.length !== ids.length) return false
-  return views.every((unit) => unit.steps <= 0)
+  /*
+   * 9.10c：名单里已经消失的参战单位＝已被消灭（盘面单位被消灭后即从 `units` 移除），
+   * 按 0 军力计入；否则"取不齐"会被误判成"还完成得了"，守方的忽略权与收束链路都断掉。
+   */
+  const stepsOf = (id: string): number => units.find((unit) => unit.id === id)?.steps ?? 0
+  return ids.every((id) => stepsOf(id) <= 0)
 }
 
 /**
@@ -861,7 +863,8 @@ export function planOptions(
 
   // 9.10c（辅助卡战斗结果说明注 2）：守方在**攻方用选项撤退**或**攻方在承受选项前已被摧毁**时
   // 可以忽略自己的选项（也可主动行使全部选项）。攻方永远必须完成自己的选项。
-  // 注意：调用方只传**本环节该方**的单位，故不能直接对 `input.units` 全体求「攻方全灭」。
+  // 注意：调用方传**双方**单位（`unitsOfSide` 再按当前结算方过滤）；名单里已消失的攻方单位
+  // ⇒ 按已消灭计入，只有全员都不在/为 0 才算「无法完成全部选项」（9.10c）。
   const attackerWipedOut = attackerCannotCompleteOptions(state, input.units)
   const ignorable =
     side === 'defender'

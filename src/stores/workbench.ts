@@ -11853,7 +11853,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const data = acceptCombat(
       planOptions(state, {
-        units: side === 'attacker' ? combatAttackerViews.value : combatDefenderViews.value,
+        /*
+         * 9.10c：判「攻方无法完成选项」需要攻方单位在册（已消灭的会从 views 消失）。
+         * 引擎内部按当前结算方过滤，传双方是安全的；只传本环节该方会把攻方缺席误判成全灭。
+         */
+        units: [...combatAttackerViews.value, ...combatDefenderViews.value],
         retreatHexes: nkvdOverride === null ? inputs.optionRetreatHexes : nkvdOverride.retreatHexes,
         lossPoints: nkvdOverride === null ? inputs.optionLossPoints : nkvdOverride.lossPoints,
         // 9.11a/9.11c（第五批 A3）：玩家给了逐单位分配才上交 ⇒ 引擎严格校验；
@@ -12149,9 +12153,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
-   * 9.10c 例 B / 条 16（批 F·F1）：攻方参战单位是否已全灭。
+   * 9.10c：攻方参战单位是否已全灭（名单里的单位已离盘按 0 军力计入）。
    *
-   * 此时守方选项页给「不选 / 结束战斗」一键：无人需撤、无人可推 ⇒ 一键收尾。
+   * 全灭 ⇒ 攻方「无法完成全部选项」⇒ 守方可忽略自己的选项（9.10c），战斗沿正常链路收束。
    */
   const attackerWipedNow = computed(() => {
     const state = combatState.value
@@ -12163,7 +12167,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const optionIgnoreAvailableNow = computed(() => {
     const state = combatState.value
     if (state === null || state.resolution.stage !== 'defenderOptions') return false
-    if (state.resolution.defender.optionIgnorable !== true) return false
+    // 攻方撤退（引擎判）或攻方全灭（名单里的单位已离盘）都会让攻方取不齐选项
+    if (state.resolution.defender.optionIgnorable !== true && !attackerWipedNow.value) return false
     return !combatNkvdForcedLosses.value
   })
 
@@ -12178,43 +12183,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /**
-   * 条 16（批 F·F1）：「结束战斗」一键（仅攻方全灭的守方选项页可用）。
-   *
-   * 走既有链路：9.10c 忽略守方选项 → 无人需撤 → 无可推进单位 ⇒ 战斗自动收束
-   * （`confirmCombatRetreats` 尾部对「一个可推进单位都没有」直接收整场）。
-   */
-  function concludeCombatAfterWipe(): boolean {
-    const state = combatState.value
-    if (state === null || !attackerWipedNow.value) return false
-    /*
-     * 9.10c（C2 收口，2026-11-12）：把「攻方在承受选项前已被摧毁」**显式写进结算记录**。
-     * 引擎的 `attackerCannotCompleteOptions` 只认 `composition.attackerIds` 与 `optionsSkipped`，
-     * 不把「名单取不齐」猜成全灭 —— 而本按钮可见即等价于该事实成立（`attackerWipedNow`），
-     * 故在此落账，守卫首行短路，忽略权才有依据。
-     */
-    if (state.resolution.attacker.optionsSkipped !== 'attackerWipedOut') {
-      combatState.value = {
-        ...state,
-        resolution: {
-          ...state.resolution,
-          attacker: { ...state.resolution.attacker, optionsSkipped: 'attackerWipedOut' },
-        },
-      }
-    }
-    combatInputs.value.ignoreOptions = true
-    if (!confirmCombatOptions()) return false
-    if (combatState.value?.step === 'retreat' && !confirmCombatRetreats()) return false
-    // 「一个可推进单位都没有」时 confirmCombatRetreats 已自行收束（finished=true）⇒ 不重复推进
-    if (
-      combatState.value !== null &&
-      combatState.value.finished !== true &&
-      combatState.value.step === 'advance'
-    ) {
-      if (!confirmCombatAdvance()) return false
-    }
-    return combatState.value?.finished === true
-  }
   /**
    * 9.12f（批 F·E1）：撤退**穿越**敌方非战斗单位 / 设施时的处置
    *
@@ -27587,7 +27555,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     applyOptionDraftRetreatAt,
     undoOptionDraftLast,
     resetOptionDraft,
-    concludeCombatAfterWipe,
     combatCanonicalLosses,
     // 批 F 切片 2（9.11a）：拥有者可以把"多受的那一点"改派给谁（候选与提交分配的唯一出处）
     combatLossSwapChoices,

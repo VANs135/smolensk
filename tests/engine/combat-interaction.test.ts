@@ -774,8 +774,8 @@ describe('9.10 / 9.11 结算：攻方先、守方后，从 AR 单位起算', () 
     const afterAttacker = applyPatches(current, options.patches)
     const defenderLosses = unwrap(planLosses(options.state, { units: afterAttacker }))
     expect(defenderLosses.state.resolution.defender.optionIgnorable).toBe(false)
-    const defenderUnits = afterAttacker.filter((item) => item.side === 'soviet')
-    expect(planOptions(defenderLosses.state, { units: defenderUnits, ignore: true })).toMatchObject(
+    // 9.10c：planOptions 需要攻方单位在册才能判「攻方是否还能完成选项」⇒ 传双方
+    expect(planOptions(defenderLosses.state, { units: afterAttacker, ignore: true })).toMatchObject(
       { ok: false, rule: '9.10c' },
     )
   })

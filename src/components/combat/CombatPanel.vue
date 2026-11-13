@@ -690,19 +690,9 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           </RuleTip>
         </p>
         <div class="row">
-          <!-- 条 16（批 F·F1）：攻方全灭 ⇒ 守方「结束战斗」一键 -->
-          <BaseButton
-            v-if="workbench.attackerWipedNow"
-            variant="primary"
-            size="sm"
-            title="9.10c 例 B"
-            @click="workbench.concludeCombatAfterWipe()"
-          >
-            结束战斗
-          </BaseButton>
           <!-- 9.10c 唯一出口：可用且尚未分配点数时替掉「提交选项」（两者互斥） -->
           <BaseButton
-            v-else-if="workbench.optionIgnoreAvailableNow && workbench.optionDraftUsed === 0"
+            v-if="workbench.optionIgnoreAvailableNow && workbench.optionDraftUsed === 0"
             variant="primary"
             size="sm"
             title="9.10c"
