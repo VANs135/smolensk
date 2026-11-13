@@ -81,7 +81,7 @@ npm run build
   - [x] E3：`src/components/game/DecisionQueue.vue` 的「抽取编队」按钮 ⇒ `setup.drawSetupEffectsNow()`（`200ae1b` 两段式）
   - [x] E4：`0f09e8d` + `6d90fbb`（`createGameSeed` 移入 shared；开局写日志头含种子与版本）
   - [x] E5：`562ecb0`（允许集合读剧本数据、预备上限/禁令统一取约束）
-  - [x] 余项不在本行：规格 §4.6 极简结果清单 UI（现有初设面板已显示同信息），见
+  - [x] 规格 §4.6 抽签结果清单另随 `eb9d321` 落地，见
         [U21 核查清单](../../2026-11-13-U21-初设批次E0E1E4E5-核查清单.md) §10–§11
 - [x] D2 点格浮签改悬停、D4 段内切换清 `stackSelection`/`expandedStack`、D5 14.11 与 13.3g 补 `ACTION_GATES`
   - [x] D2：`MapPopupVariant` 只剩 `'content' | 'context'`，格号由 `MapCanvas` 悬停提示给
