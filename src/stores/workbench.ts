@@ -18514,6 +18514,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const inputs = airInputs.value
     const inPatrolZone = airTargetInEnemyPatrolZone.value
+    // 14.1b/14.4f：任务损失表的 W/S 按**当前面**轰炸值选（减损机用减损面值）
+    const missionAircraft = airMissionFlyingUnits.value.map((air) => ({
+      id: air.instanceId,
+      barrageStrength: airBarrageStrengthOf(air),
+    }))
     // ⑭ 接线：drawAir2d6 / drawAir1d6 只回报数字（不改它们）⇒ 记下掷骰前的骰源，按同法复算骰面
     let diceCursor = rng.value
     const die2d6 = inputs.flakDie ?? drawAir2d6()
@@ -18529,15 +18534,26 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       diceCursor = derived.rng
       rolls.push(derived.value)
     }
+    /*
+     * 14.4f：4 机行的 W/S（损失骰 5/6）在轰炸值并列时，原文让飞机所有方自选；
+     * 本作改为**随机**（用户 2026-11-13）：只在确实并列时抽 1 骰，骰面走固定种子 RNG（可重放）。
+     */
+    let tieBreakDie: number | undefined
+    if (missionAircraft.length >= 4 && lossDie >= 5) {
+      const strengths = missionAircraft.map((plane) => plane.barrageStrength)
+      const extreme = lossDie === 5 ? Math.min(...strengths) : Math.max(...strengths)
+      if (strengths.filter((value) => value === extreme).length > 1) {
+        const derived = roll1d6(diceCursor)
+        diceCursor = derived.rng
+        rolls.push(derived.value)
+        tieBreakDie = derived.value.faces[0] ?? 1
+      }
+    }
     const data = acceptAir(
       resolveFlakStep(state, {
         inEnemyPatrolZone: inPatrolZone,
         missionHasFighter: airMissionHasFighter.value,
-        missionAircraft: airMissionFlyingUnits.value.map((air) => ({
-          id: air.instanceId,
-          // 14.1b/14.4f：任务损失表的 W/S 按**当前面**轰炸值选（减损机用减损面值）
-          barrageStrength: airBarrageStrengthOf(air),
-        })),
+        missionAircraft,
         targetHasHQ: inputs.targetHasHQ,
         targetAirBaseLevel: airTargetBaseLevel.value,
         // 15.2F：简易机场不能提供任何防空值（14.4e 的基地那一项由 15.0b-B 的唯一实现给出）
@@ -18549,6 +18565,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           : {}),
         die2d6,
         lossDie,
+        ...(tieBreakDie === undefined ? {} : { tieBreakDie }),
       }),
       '防空',
     )
@@ -18731,6 +18748,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       } else if (!confirmAirMissionNow()) {
         return false
       }
+    }
+    /*
+     * 14.2f-E/G：任务机全被防空击落/中止（返航名单为空）⇒ 没有三选一可做，
+     * 直接收束到 done，不停在空的返航步。
+     */
+    if (airState.value?.step === 'returnToBase' && airMissionReturnChoices.value.length === 0) {
+      if (!completeAirReturnNow()) return false
     }
     /*
      * ★ 条 13（A2）：低空扫射（hip_shoot）**全自动到返航并变非激活**。
@@ -19558,7 +19582,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 最近一次可变增援结论（1.6b / 1.6c / 3.3c / 3.6） */
   const lastVariableRepl = ref<VariableReinforcementPlan | null>(null)
   /** 裁定 2：1.6b 补给表 SP 已入图外盒的记账（换掷先撤回上一笔，避免重掷叠加） */
-  const offMapRollDeposit = ref<{ turn: number; side: Side; t: number } | null>(null)
+  const offMapRollDeposit = ref<{ turn: number; side: Side; sp: number; t: number } | null>(null)
 
   /** 裁定 2：图外空军盒 SP 的账本键（与 14.9 空运退运保持同一套 `side:box`） */
   function offMapBoxSupplyKey(side: Side): string {
@@ -22321,7 +22345,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       addOffMapSupplyT(previousDeposit.side, -previousDeposit.t)
     }
     offMapRollDeposit.value =
-      offMapT > 0 ? { turn: turn.value, side: activeSide.value, t: offMapT } : null
+      offMapT > 0 ? { turn: turn.value, side: activeSide.value, sp: data.sp, t: offMapT } : null
     if (offMapT > 0) depositOffMapSupplyNow(activeSide.value, offMapT)
     // 3.6：补给列车的落点须玩家选（任一可卸货格）；换掷即作废上一次的选择
     supplyTrainHex.value = null
@@ -27908,6 +27932,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     nationalityOfUnit,
     settleAbsorbObligationsNow,
     lastVariableRepl,
+    offMapRollDeposit,
     lastRebuild,
     lastConsolidation,
     lastBreakdown,

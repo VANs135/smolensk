@@ -946,6 +946,70 @@ describe('14.4a/e/f 防空应答', () => {
     expect(resolveFlakLoss(four, 6)).toEqual({ aircraftId: 'p1', code: 'S' })
     expect(resolveFlakLoss([], 3)).toEqual({ aircraftId: null, code: null })
   })
+
+  it('14.4f：4 机行骰点 1–6 的落点（仅 5/6 落到最弱/最强）', () => {
+    const four = [
+      { id: 'p1', barrageStrength: 5 },
+      { id: 'p2', barrageStrength: 1 },
+      { id: 'p3', barrageStrength: 3 },
+      { id: 'p4', barrageStrength: 2 },
+    ]
+    expect([1, 2, 3, 4, 5, 6].map((die) => resolveFlakLoss(four, die).code)).toEqual([
+      '#1',
+      '#2',
+      '#3',
+      '#4',
+      'W',
+      'S',
+    ])
+  })
+
+  it('14.4f：轰炸值并列 ⇒ 不给玩家选，按固定骰面随机落到并列机之一', () => {
+    // 最强三机并列（p1/p2/p4），p3 唯一最弱
+    const tied = [
+      { id: 'p1', barrageStrength: 4 },
+      { id: 'p2', barrageStrength: 4 },
+      { id: 'p3', barrageStrength: 2 },
+      { id: 'p4', barrageStrength: 4 },
+    ]
+    expect(resolveFlakLoss(tied, 6, 1)).toMatchObject({ aircraftId: 'p1', code: 'S' })
+    expect(resolveFlakLoss(tied, 6, 2)).toMatchObject({ aircraftId: 'p2', code: 'S' })
+    expect(resolveFlakLoss(tied, 6, 3)).toMatchObject({ aircraftId: 'p4', code: 'S' })
+    // 骰面 4/5/6 回绕到并列顺位 1/2/3，绝不落到非并列的 p3
+    expect(resolveFlakLoss(tied, 6, 4)).toMatchObject({ aircraftId: 'p1', code: 'S' })
+    expect(resolveFlakLoss(tied, 6, 5)).toMatchObject({ aircraftId: 'p2', code: 'S' })
+    expect(resolveFlakLoss(tied, 6, 6)).toMatchObject({ aircraftId: 'p4', code: 'S' })
+    // 最弱唯一 ⇒ 骰面不影响落点
+    expect(resolveFlakLoss(tied, 5, 6)).toMatchObject({ aircraftId: 'p3', code: 'W' })
+    // 未给骰面（旧调用/回放）⇒ 退回并列顺位第一枚，行为确定
+    expect(resolveFlakLoss(tied, 6)).toMatchObject({ aircraftId: 'p1', code: 'S' })
+  })
+
+  it('14.4e 判定：修正 <11 无损失、≥11 才进 14.4f；14.4a 不适用则整段跳过', () => {
+    const base = {
+      kind: 'barrage' as const,
+      inEnemyPatrolZone: false,
+      missionAircraft: [{ id: 'p1', barrageStrength: 2 }],
+    }
+    expect(resolveFlakResponse({ ...base, die2d6: 10 })).toMatchObject({
+      applies: true,
+      hit: false,
+      lossAircraftId: null,
+      rule: '14.4e',
+    })
+    expect(resolveFlakResponse({ ...base, die2d6: 11 })).toMatchObject({
+      applies: true,
+      hit: true,
+      lossAircraftId: 'p1',
+      rule: '14.4f',
+    })
+    // 14.4a：战机扫荡永不受防空影响 ⇒ 不判命中、不落损失（即使 2 骰 12）
+    expect(resolveFlakResponse({ ...base, kind: 'fighter_sweep', die2d6: 12 })).toMatchObject({
+      applies: false,
+      hit: false,
+      lossAircraftId: null,
+    })
+  })
 })
 
 /* ────────────────────────────── 15.1 整备额度 ────────────────────────────── */

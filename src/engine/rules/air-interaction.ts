@@ -1299,7 +1299,8 @@ export interface FlakResponse {
  *   运输破坏再累计 +1；
  * - 14.4f：命中后用**任务损失表**掷 1 骰决定哪架任务机承受损失：
  *   行＝任务机架数（表内 2/3/4 架；1 架时自明即该机），列＝损失骰；格值 `#n` 为输入顺序中的第 n 架，
- *   `W`/`S` 分别为轰炸值最弱/最强者（同值时取先出现者，保证确定性）。
+ *   `W`/`S` 分别为轰炸值最弱/最强者；同值时原文由飞机所有方选择，本作改为按 `tieBreakDie` 随机
+ *   （用户 2026-11-13；骰面由调用方从固定种子 RNG 取）。
  * - 14.4b：防空从不消耗 SP、也不受补给影响 ⇒ 本函数无补给入参。
  */
 export function resolveFlakResponse(input: {
@@ -1324,6 +1325,11 @@ export function resolveFlakResponse(input: {
   die2d6: number
   /** 14.4f：损失归属骰（1 骰；未命中时忽略） */
   lossDie?: number
+  /**
+   * 14.4f：W/S 并列时的随机源（1 骰）。原文规定同值由飞机所有方选择，
+   * 本作口径改为随机（用户 2026-11-13 裁定），骰面由调用方用固定种子 RNG 给出。
+   */
+  tieBreakDie?: number
 }): FlakResponse {
   const applies = flakAppliesToMission(input.kind, input.inEnemyPatrolZone)
   if (!applies)
@@ -1365,7 +1371,7 @@ export function resolveFlakResponse(input: {
       detail: `防空：2 骰 ${input.die2d6} + 修正 ${drm} = ${modifiedDie} < 11 ⇒ 防空无效（14.4e）`,
     }
 
-  const loss = resolveFlakLoss(input.missionAircraft, input.lossDie)
+  const loss = resolveFlakLoss(input.missionAircraft, input.lossDie, input.tieBreakDie)
   return {
     applies: true,
     drm,
@@ -1389,6 +1395,7 @@ export function resolveFlakResponse(input: {
 export function resolveFlakLoss(
   missionAircraft: readonly { id: string; barrageStrength: number }[],
   lossDie = 1,
+  tieBreakDie?: number,
 ): { aircraftId: string | null; code: string | null } {
   if (missionAircraft.length === 0) return { aircraftId: null, code: null }
   if (missionAircraft.length === 1) return { aircraftId: missionAircraft[0]!.id, code: `#1` }
@@ -1403,17 +1410,17 @@ export function resolveFlakLoss(
   const code = flakMissionLoss(aircraftCount, lossDie)
 
   if (code === 'W' || code === 'S') {
-    // W＝最弱（按轰炸值） S＝最强；同值时取先出现者（确定性）
-    const picked = missionAircraft.reduce((best, plane) =>
-      code === 'W'
-        ? plane.barrageStrength < best.barrageStrength
-          ? plane
-          : best
-        : plane.barrageStrength > best.barrageStrength
-          ? plane
-          : best,
-    )
-    return { aircraftId: picked.id, code }
+    /*
+     * 14.4f：W＝最弱（按轰炸值） S＝最强。原文规定同值时由飞机所有方选择，
+     * 本作改为**随机**（用户 2026-11-13）：并列机中按 `tieBreakDie`（1–6，固定种子 RNG）取一枚。
+     * 未给骰面时退回「先出现者」，保持旧调用（测试/回放）确定性。
+     */
+    const extremes = missionAircraft.map((plane) => plane.barrageStrength)
+    const extreme = code === 'W' ? Math.min(...extremes) : Math.max(...extremes)
+    const tied = missionAircraft.filter((plane) => plane.barrageStrength === extreme)
+    if (tied.length === 1) return { aircraftId: tied[0]!.id, code }
+    const index = tieBreakDie === undefined ? 0 : (tieBreakDie - 1) % tied.length
+    return { aircraftId: tied[index]!.id, code }
   }
 
   const match = /^#(\d+)$/.exec(code)

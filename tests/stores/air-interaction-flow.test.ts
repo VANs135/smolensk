@@ -306,6 +306,97 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
   })
 
   /**
+   * 14.2f-E（用户 2026-11-13 裁定）：防空**自动结算**，只有拦截保留交互。
+   * 这一组用例只走 store 动作，不依赖界面按钮：
+   * C 空战 → D 拦截（放弃）→ E 防空（自动）→ F 结算（轰炸链）→ G 返航。
+   */
+  function setupBarrageAtFlak(store: ReturnType<typeof newStore>) {
+    store.setSegmentStepIndex(
+      store.playerSegmentSteps.findIndex((step) => step.id === 'movement.barrage'),
+    )
+    store.setAirActive(true)
+    const { plane } = setupBaseAndPlane(store)
+    store.units.push(
+      toConsoleUnit({
+        record: unitChoices('soviet').find((record) => record.isCombat)!,
+        instanceId: 'target',
+        hex: NEAR_HEX,
+        side: 'soviet',
+      }),
+    )
+    expect(store.setAirTargetFromText(label(NEAR_HEX))).toBe(true)
+    store.toggleAirMissionUnit(plane.instanceId)
+    expect(store.beginAirMissionNow()).toBe(true)
+    expect(store.confirmAirCombatNow()).toBe(true)
+    expect(store.airInterceptionResponse?.eligible).toBe(false)
+    expect(store.declareInterceptionNow()).toBe(true)
+    expect(store.airState?.step).toBe('flak')
+    return plane
+  }
+
+  it('★ 14.2f-E 自动防空：命中 ⇒ 落损失、直接进 F 并收束到返航', () => {
+    const store = newStore()
+    setupBarrageAtFlak(store)
+    store.airInputs.flakDie = 12
+    store.airInputs.lossDie = 1
+
+    expect(store.autoResolveAirMissionNow()).toBe(true)
+    expect(store.airState?.flak).toMatchObject({ applies: true, hit: true })
+    expect(store.airState?.flak?.lossAircraftId).toBe('air-1')
+    // 命中损失已落盘（2 点军力 ⇒ 1 点）
+    expect(store.airUnits.find((air) => air.instanceId === 'air-1')?.steps).toBe(1)
+    // 防空后自动跑完 F 的轰炸链，停在返航三选一
+    expect(store.airState?.step).toBe('returnToBase')
+    expect(store.airState?.missionNote).toBeTruthy()
+  })
+
+  it('★ 14.2f-E 自动防空：未命中 ⇒ 不掉军力、仍自动进 F', () => {
+    const store = newStore()
+    setupBarrageAtFlak(store)
+    store.airInputs.flakDie = 2
+
+    expect(store.autoResolveAirMissionNow()).toBe(true)
+    expect(store.airState?.flak).toMatchObject({ applies: true, hit: false, lossAircraftId: null })
+    expect(store.airUnits.find((air) => air.instanceId === 'air-1')?.steps).toBe(2)
+    expect(store.airState?.step).toBe('returnToBase')
+  })
+
+  it('★ 14.2f-E：拦截已宣布但拦截空战未结算 ⇒ 防空不跑（14.5 先于 14.4）', () => {
+    const store = newStore()
+    setupBarrageAtFlak(store)
+    // 伪造「已宣布拦截、空战未结算」：直接改状态，等价于拦截空战按钮尚未点
+    store.airState = {
+      ...store.airState!,
+      interception: {
+        response: store.airInterceptionResponse!,
+        declared: true,
+        interceptorId: 'air-1',
+        combat: null,
+      },
+    }
+    expect(store.autoResolveAirMissionNow()).toBe(false)
+    expect(store.airState?.step).toBe('flak')
+    expect(store.airState?.flak).toBeNull()
+    expect(store.resolveFlakNow()).toBe(false)
+    expect(store.airError?.reason).toBe('airFlakStepNotReady')
+  })
+
+  it('★ 14.2f-E：防空击落最后一架 ⇒ 自动收束（任务中止 → 返航步 → done）', () => {
+    const store = newStore()
+    const plane = setupBarrageAtFlak(store)
+    plane.steps = 1
+    store.airInputs.flakDie = 12
+    store.airInputs.lossDie = 1
+
+    expect(store.autoResolveAirMissionNow()).toBe(true)
+    expect(store.airState?.flak?.hit).toBe(true)
+    expect(store.airUnits.some((air) => air.instanceId === 'air-1')).toBe(false)
+    // 无返航机 ⇒ 自动收束到 done，不停在空的返航步
+    expect(store.airState?.step).toBe('done')
+    expect(store.airState?.finished).toBe(true)
+  })
+
+  /**
    * B29b-1：**air→barrage 桥**（14.7b / 10.2）
    *
    * 规则：10.2a「空军单位需要放置在目标上来结算它们的轰炸」；10.2b 短程 +1 列；

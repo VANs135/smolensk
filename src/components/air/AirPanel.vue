@@ -40,10 +40,18 @@ function declareInterceptionAndContinue(): void {
   if (workbench.declareInterceptionNow()) workbench.autoResolveAirMissionNow()
 }
 
-/** 14.2f-E：防空结算后继续跑 F/G（与 ③ 的「记录并继续」同形）；逐步复核页仍可只结算防空。 */
-function settleFlakAndContinue(): void {
-  if (workbench.resolveFlakNow()) workbench.autoResolveAirMissionNow()
+/** 14.2f-E：防空自动结算（敌方掷骰）⇒ 这里只把「拦截空战结算完」接上后续 F/G。 */
+function resolveInterceptionCombatAndContinue(): void {
+  if (workbench.resolveInterceptionCombatNow()) workbench.autoResolveAirMissionNow()
 }
+
+/** 14.4f：防空损失落到哪一架（显示名 + id；数据缺名时退回 id） */
+const flakLossLabel = computed(() => {
+  const id = workbench.airState?.flak?.lossAircraftId
+  if (id === null || id === undefined) return ''
+  const plane = workbench.airUnits.find((air) => air.instanceId === id)
+  return plane === undefined ? id : `${plane.name}（${id}）`
+})
 
 /** 14.7b / 14.7d / 14.10c：F 步需要进轰炸链的三类任务 */
 const AIR_GROUND_KINDS: readonly string[] = ['barrage', 'hip_shoot', 'trainbusting']
@@ -557,6 +565,21 @@ const displayedBases = computed(() =>
             <BaseButton variant="secondary" size="sm" @click="workbench.beginAirTargetHexPickNow()">
               在地图上点选任务格
             </BaseButton>
+            <!-- 14.4e：防空的这两项修正随任务宣布一并给出（防空在抵达后自动结算，不再另设输入步） -->
+            <label class="field">
+              <input v-model="workbench.airInputs.targetHasHQ" type="checkbox" />
+              目标格有 HQ（14.4e +1）
+            </label>
+            <label class="field">
+              印刷防空值（14.4e）
+              <UiField
+                v-model="workbench.airInputs.printedFlakValue"
+                class="input num"
+                type="number"
+                min="0"
+                stepper
+              />
+            </label>
             <label class="field">
               <input v-model="workbench.airInputs.flyingAllowed" type="checkbox" />
               天气允许飞行（14.1f）
@@ -1005,7 +1028,7 @@ const displayedBases = computed(() =>
               <BaseButton
                 variant="secondary"
                 size="sm"
-                @click="workbench.resolveInterceptionCombatNow()"
+                @click="resolveInterceptionCombatAndContinue()"
               >
                 结算拦截空战（14.5）
               </BaseButton>
@@ -1029,42 +1052,24 @@ const displayedBases = computed(() =>
                 命中，用任务损失表（14.4f）定承受者。
               </RuleTip>
             </p>
-            <div class="row">
-              <label class="field">
-                目标格有 HQ（+1）
-                <input v-model="workbench.airInputs.targetHasHQ" type="checkbox" />
-              </label>
-              <label class="field">
-                印刷防空值
-                <UiField
-                  v-model="workbench.airInputs.printedFlakValue"
-                  class="input num"
-                  type="number"
-                  min="0"
-                  stepper
-                />
-              </label>
-              <label class="field"> 目标基地等级（自动 {{ workbench.airTargetBaseLevel }}） </label>
-            </div>
-            <div class="row">
-              <BaseButton variant="primary" size="sm" @click="settleFlakAndContinue()">
-                ④ 结算防空并继续（14.2f-E）
-              </BaseButton>
-              <BaseButton
-                v-if="workbench.airError?.reason === 'cargoCarrierAllocationRequired'"
-                variant="secondary"
-                size="sm"
-                @click="workbench.cancelAir()"
-              >
-                取消本次任务
-              </BaseButton>
-            </div>
+            <p class="num">目标基地等级（自动 {{ workbench.airTargetBaseLevel }}）</p>
             <p v-if="workbench.airState.flak !== null" class="num">
               <BaseTag :kind="workbench.airState.flak.hit ? 'warning' : 'success'">
                 {{ workbench.airState.flak.rule }}
               </BaseTag>
+              2 骰 {{ workbench.airState.flak.modifiedDie - workbench.airState.flak.drm }} ＋ 修正
+              {{ workbench.airState.flak.drm }} ＝ {{ workbench.airState.flak.modifiedDie }} ⇒
+              {{ workbench.airState.flak.hit ? '命中' : '未命中' }}
+            </p>
+            <p v-if="workbench.airState.flak?.hit" class="num">损失落点：{{ flakLossLabel }}</p>
+            <p v-if="workbench.airState.flak !== null" class="muted">
               {{ workbench.airState.flak.detail }}
             </p>
+            <div v-if="workbench.airError !== null" class="row">
+              <BaseButton variant="secondary" size="sm" @click="workbench.cancelAir()">
+                取消本次任务
+              </BaseButton>
+            </div>
           </SessionStep>
 
           <!-- ── ⑤ 任务结算（14.2f-F） ── -->
