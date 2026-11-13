@@ -231,6 +231,11 @@ describe('B14d：12.11a 的"每阶段每站一次"有账本支撑（阵列灰显
 describe('B14d：补给面板的替换（源码守卫）', () => {
   const panel = readFileSync('src/components/supply/SupplyPanel.vue', 'utf8')
 
+  it('不可用来源不进入选择器：选不出手的项根本不出现（不置灰）', () => {
+    expect(panel).toContain('if (!source.ok) return')
+    expect(panel).not.toContain('disabledReason: source.ok ? null')
+  })
+
   it('七处「选算子」都改走 `CounterPicker`，旧的下拉 / 文字复选框已删', () => {
     expect(panel.match(/<CounterPicker/g)?.length ?? 0).toBeGreaterThanOrEqual(7)
     expect(panel).not.toContain('<select v-model="destroyDumpId"')

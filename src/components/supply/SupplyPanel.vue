@@ -370,6 +370,8 @@ const sourceItems = computed<readonly CounterPickerItem[]>(() => {
   const seenDumpHex = new Set<string>()
   const kept: number[] = []
   workbench.supplySources.forEach((source, index) => {
+    // 用户口径 2026-11-14：不可用项根本不出现（不置灰）⇒ 判不过的来源不进口袋名单
+    if (!source.ok) return
     if (source.kind === 'dump' && source.hex !== null) {
       const key = hexLabel(source.hex)
       if (seenDumpHex.has(key)) return
@@ -408,7 +410,7 @@ const sourceItems = computed<readonly CounterPickerItem[]>(() => {
       imageUrl,
       name: workbench.supplySourceLabel(source),
       selected: false,
-      disabledReason: source.ok ? null : `${source.rule}：${source.reason ?? source.detail}`,
+      disabledReason: null,
       groupKey: source.kind,
       groupLabel: workbench.supplySourceKindLabel(source.kind),
       hex,
