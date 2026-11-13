@@ -39,7 +39,15 @@ const setup = useSetupStore()
 const uiMode = useUiMode()
 const workbench = useWorkbenchStore()
 const hotseat = useHotseatStore()
-const actingSide = computed(() => workbench.segmentGateQuery.side ?? workbench.activeSide)
+/*
+ * 初设阶段没有环节闸 ⇒ 行动方跟初设游标走（与 `map-view` 同一口径）。
+ * 否则苏联初设时盒内动作按默认轴方过滤，4.3 拆团的苏军母师候选一条都不出现。
+ */
+const actingSide = computed(() =>
+  !setup.finished
+    ? (setup.setupSideCursor ?? workbench.activeSide)
+    : (workbench.segmentGateQuery.side ?? workbench.activeSide),
+)
 
 /** 返场落点（死亡堆 → 图；13.5a / 1.6c 的落点规则见 2.1 / 3.1） */
 /** 拆分单位取用：母单位与档位 */
