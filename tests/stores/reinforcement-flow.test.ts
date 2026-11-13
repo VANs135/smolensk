@@ -694,6 +694,8 @@ describe('W6 B18：拆分与合并（20.0 / 13.9）', () => {
     const breakdown = store.units.find((item) => item.unitId === record.id)!
 
     const before = parent.steps
+    // 20.0d：「只有在这种时机（阶段末）才能吸收」⇒ 切到 H 清理段
+    store.setPhase('cleanUp')
     expect(store.absorbBreakdownNow('u1', breakdown.instanceId)).toBe(true)
     expect(parent.steps).toBe(before + 1)
     expect(store.units.some((item) => item.instanceId === breakdown.instanceId)).toBe(false)

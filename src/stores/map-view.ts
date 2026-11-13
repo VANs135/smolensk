@@ -2162,6 +2162,22 @@ export const useMapViewStore = defineStore('mapView', () => {
       })
     }
     /*
+     * 20.0d：吸收只在**阶段末**（H 清理）出现（用户 2026-11-14 裁定 2）。
+     * 判据与落盘同源（`canAbsorbBreakdownNow` / `absorbBreakdownNow` 都要求 phase === 'cleanUp'）；
+     * 这里直接 push，不走 `add()` 的环节闸（20.0d 是段末收束，不是环节动作，见 `sop-segments` 注释）。
+     */
+    if (unit !== undefined && workbench.canAbsorbBreakdownNow(id)) {
+      actions.push({
+        key: 'move.breakdown',
+        label: '吸收拆分单位',
+        rule: '20.0d',
+        panel: 'containers',
+        only: 'breakdown',
+        group: '编组',
+        disabledReason: null,
+      })
+    }
+    /*
      * 13.5a 第 2) 项：图上打残单位的重建入口（v7.1 §4.1）
      *
      * 落点固定在本格（补员须同格），**不出高亮**；条件不满足（补员不在本格 / HQ 太远 / 敌 ZOC）

@@ -594,7 +594,7 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   },
   absorbBreakdownNow: {
     kind: 'flowState',
-    why: '20.0d 吸收是**段末强制收束**（明确不按环节设闸）',
+    why: '20.0d 吸收是**段末强制收束**（明确不按环节设闸）；函数体另按原文「只有在这种时机」要求 phase === cleanUp（H 清理）',
   },
   deployBreakoutReturnNow: {
     kind: 'flowState',
@@ -606,6 +606,10 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   isRailRepairUnit: {
     kind: 'flowState',
     why: '只读谓词：13.3g 判定实例是否铁路修理单位（函数体内无任何写操作）',
+  },
+  canAbsorbBreakdownNow: {
+    kind: 'flowState',
+    why: '只读谓词：20.0d 判定此格此刻能否吸收拆分单位（`phase.value === cleanUp` 是读取，扫描误当写盘）',
   },
 
   /* ── 原文给了动作但没给时机（或明说"任何阶段"）⇒ 不加闸 ── */

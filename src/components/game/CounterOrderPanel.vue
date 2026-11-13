@@ -30,6 +30,17 @@ const breakdownRecords = computed(() =>
 const breakdownUnitsOnMap = computed(() =>
   subjectId.value === null ? [] : workbench.breakdownAbsorbChoicesFor(subjectId.value),
 )
+/*
+ * 用户 2026-11-14 裁定 2：创建与吸收各有各的时机，面板按 store 判据分块显示——
+ *   · 创建 20.0a：开始移动 / 战后推进 / 战后撤退；
+ *   · 吸收 20.0d：**只在阶段末（H 清理）**，移动 / 战斗段不摆。
+ */
+const canCreate = computed(
+  () => subjectId.value !== null && workbench.canCreateBreakdownNow(subjectId.value),
+)
+const canAbsorb = computed(
+  () => subjectId.value !== null && workbench.canAbsorbBreakdownNow(subjectId.value),
+)
 const refusal = computed(() =>
   props.order === 'railMove' ? workbench.railMoveError : workbench.actionRefusal,
 )
@@ -91,34 +102,41 @@ function absorb(): void {
       </BaseButton>
     </template>
     <template v-else>
-      <label class="order__subject">
-        拆分单位
-        <select v-model="recordId">
-          <option value="">选择型号</option>
-          <option v-for="record in breakdownRecords" :key="record.id" :value="record.id">
-            {{ record.nameZh ?? record.nameEn ?? record.id }} · AR {{ record.factors?.combat?.ar }}
-          </option>
-        </select>
-      </label>
-      <BaseButton size="sm" :disabled="recordId === ''" @click="breakdown">创建 · 20.0a</BaseButton>
-      <label class="order__subject">
-        吸收拆分单位
-        <select v-model="absorbId">
-          <option value="">
-            {{ breakdownUnitsOnMap.length === 0 ? '（图上暂无拆分单位）' : '选择算子' }}
-          </option>
-          <option
-            v-for="unit in breakdownUnitsOnMap"
-            :key="unit.instanceId"
-            :value="unit.instanceId"
-          >
-            {{ unit.name }} @ {{ hexLabel(unit.hex) }}
-          </option>
-        </select>
-      </label>
-      <BaseButton size="sm" variant="secondary" :disabled="absorbId === ''" @click="absorb"
-        >吸收 · 20.0d</BaseButton
-      >
+      <template v-if="canCreate">
+        <label class="order__subject">
+          拆分单位
+          <select v-model="recordId">
+            <option value="">选择型号</option>
+            <option v-for="record in breakdownRecords" :key="record.id" :value="record.id">
+              {{ record.nameZh ?? record.nameEn ?? record.id }} · AR
+              {{ record.factors?.combat?.ar }}
+            </option>
+          </select>
+        </label>
+        <BaseButton size="sm" :disabled="recordId === ''" @click="breakdown"
+          >创建 · 20.0a</BaseButton
+        >
+      </template>
+      <template v-if="canAbsorb">
+        <label class="order__subject">
+          吸收拆分单位
+          <select v-model="absorbId">
+            <option value="">
+              {{ breakdownUnitsOnMap.length === 0 ? '（同格暂无可吸收的拆分单位）' : '选择算子' }}
+            </option>
+            <option
+              v-for="unit in breakdownUnitsOnMap"
+              :key="unit.instanceId"
+              :value="unit.instanceId"
+            >
+              {{ unit.name }} @ {{ hexLabel(unit.hex) }}
+            </option>
+          </select>
+        </label>
+        <BaseButton size="sm" variant="secondary" :disabled="absorbId === ''" @click="absorb"
+          >吸收 · 20.0d</BaseButton
+        >
+      </template>
     </template>
     <p v-if="refusal !== null" class="order__error" role="status">
       {{ refusal.rule }} · {{ refusal.reason }}

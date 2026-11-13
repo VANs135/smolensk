@@ -7733,6 +7733,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
   }
 
+  /**
+   * 20.0d：该母单位此刻能否**吸收**拆分单位
+   *
+   * 原文：「减损的多军力单位在任何阶段结束时，都必须吸收与之堆叠、且符合吸收规则的
+   * 拆分单位……**只有在这种时机才能吸收**」⇒ 只在 H 清理（`phase === 'cleanUp'`）露面；
+   * 移动 / 战斗 / 反应 / 进击段一律不摆入口（用户 2026-11-14 裁定 2）。
+   */
+  function canAbsorbBreakdownNow(parentId: string): boolean {
+    return phase.value === 'cleanUp' && breakdownAbsorbChoicesFor(parentId).length > 0
+  }
+
   /** 因燃料/模式等原因没能开始移动时，条件满足后自动重试，省得玩家再点一次 */
   function retryBeginMove(): void {
     if (moveInteraction.value !== null) return
@@ -24921,6 +24932,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   于是这里永远查不到、静默返回 false，玩家点了没有任何反应。
    */
   function absorbBreakdownNow(parentId: string, breakdownId: string): boolean {
+    /*
+     * 20.0d：「**只有在这种时机才能吸收拆分单位**」——阶段末（本模型＝H 清理段）。
+     * 用户 2026-11-14 裁定 2：移动阶段不放早入口，入口与落盘一起按同一判据拒绝。
+     */
+    if (phase.value !== 'cleanUp') {
+      reinforcementError.value = { rule: '20.0d', reason: `absorbOnlyAtSegmentEnd:${phase.value}` }
+      pushLog(
+        'warning',
+        `吸收被拒：20.0d 只在**阶段末（H 清理）**发生，当前是 ${phase.value}`,
+        '20.0d',
+      )
+      return false
+    }
     const parent = units.value.find((unit) => unit.instanceId === parentId)
     if (parent === undefined) {
       reinforcementError.value = { rule: '20.0d', reason: `parentNotOnMap:${parentId}` }
@@ -28756,6 +28780,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     canCreateBreakdownNow,
     breakdownRecordChoicesFor,
     breakdownAbsorbChoicesFor,
+    canAbsorbBreakdownNow,
     // 专规 4.3（可选）Setup Wiggle
     setupWiggleOn,
     setupWiggleParents,

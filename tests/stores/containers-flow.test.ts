@@ -441,6 +441,8 @@ describe('W7 C12：拆分单位盒（1.8a / 20.0）与编队抽签', () => {
     const poolAfterTake = workbench.breakdownPool.su ?? 0
     const stepsAfterTake = parent.steps
 
+    // 20.0d：「只有在这种时机（阶段末）才能吸收」⇒ 切到 H 清理段
+    workbench.setPhase('cleanUp')
     expect(workbench.absorbBreakdownNow(parent.instanceId, breakdown.instanceId)).toBe(true)
     expect(parent.steps).toBe(stepsAfterTake + 1)
     expect(workbench.breakdownPool.su).toBe(poolAfterTake + 1)
@@ -448,7 +450,8 @@ describe('W7 C12：拆分单位盒（1.8a / 20.0）与编队抽签', () => {
   })
 
   it('20.0d：传单位库的**记录 id**（旧界面的口径）不再静默失败，而是给出可见反馈', () => {
-    workbench.setPhase('movement')
+    // 20.0d 只在阶段末吸收 ⇒ 用 H 清理段测"记录 id 查不到"这条拒绝，而不是被时机先拦
+    workbench.setPhase('cleanUp')
     const parent = place(workbench, otherClassParent(), someHex(), 'soviet', 'p1')
     const beforeUnits = workbench.units.length
     const recordId = unitChoices('soviet').find((item) => item.branch === 'breakdown')!.id
