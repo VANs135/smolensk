@@ -42,7 +42,13 @@ import {
   type SetupPlan,
   type SupplyDumpRef,
 } from '@/engine/rules'
-import { runSetupEffects, setupEffectsOf } from '@/engine/rules/setup-effects'
+import {
+  collectSetupGaps,
+  runSetupEffects,
+  setupEffectsOf,
+  setupGapText,
+  type SetupGap,
+} from '@/engine/rules/setup-effects'
 import { selectMovementTerrain } from '@/engine/rules/terrain'
 import { hexDistance, hexesWithin, isOnMap, sameHex } from '@/engine/hex-geometry'
 import { createId } from '@/shared'
@@ -306,6 +312,14 @@ export const useSetupStore = defineStore('setup', () => {
 
   /** 落盘时的数据缺口与提示（如实带出，不静默） */
   const notes = ref<string[]>([])
+
+  /**
+   * G3：**加载期**初设数据缺口（`setupGaps`）
+   *
+   * 规格 §3.4：字段缺失 ⇒ 跳过该限制/效果 + 在加载与首局日志各登记一次。
+   * 只登记真正缺的字段（见 `collectSetupGaps`），不猜剧本意图；换剧本时整体重算。
+   */
+  const setupGaps = ref<SetupGap[]>([])
 
   /* ────────────────────────────── 派生（引擎结论） ────────────────────────────── */
 
@@ -1590,6 +1604,9 @@ export const useSetupStore = defineStore('setup', () => {
       }
       // E4：开局即写日志头（种子 + 算法 + 数据契约），保证一局可按种子复算
       workbench.recordLogHeader()
+      // G3：首局日志登记一次（加载期已在 `notes` 里可见；此处只在建会话这一次写日志）
+      for (const gap of setupGaps.value)
+        workbench.pushLog('warning', setupGapText(gap), 'setupGaps')
       // 开局成功 ⇒ 此刻才收束初设（未落位者记为本局移除）
       if (!finished.value) finishSetup()
       // 专规 4.0：把共识勾选写成日志结论（默认全部不勾 ⇒ 可选规则一律不采用）
@@ -1759,6 +1776,9 @@ export const useSetupStore = defineStore('setup', () => {
     // 换剧本 = 重新开局 ⇒ 先清盘面，再自动落盘固定初设（不叠加、不残留上一剧本的算子）
     resetAll()
     if (!runAutoSetup()) return false
+    // G3：换剧本 ＝ 重新加载剧本数据 ⇒ 缺口登记随之重算（加载期在 notes 里可见一次）
+    setupGaps.value = [...collectSetupGaps(next)]
+    notes.value = [...setupGaps.value.map(setupGapText), ...notes.value]
     /*
      * ★ ch10（用户 2026-11-10 裁定）：编队抽取**只在初设单位放置完成之后**执行一次，
      *   之后任何阶段都不再出现抽取窗口。故 `selectScenario` 这里**不再自动抽签**；
@@ -3126,6 +3146,8 @@ export const useSetupStore = defineStore('setup', () => {
     omittablePlacements,
     lastAction,
     notes,
+    // G3：加载期初设数据缺口（规格 §3.4；与首局日志同源）
+    setupGaps,
     // 派生
     entries,
     flow,

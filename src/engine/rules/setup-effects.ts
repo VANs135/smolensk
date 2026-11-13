@@ -235,3 +235,48 @@ export function runSetupEffects(
   }
   return { ok: true, executed, issues: [] }
 }
+
+/* ────────────────────────────── 加载期缺口（setupGaps） ────────────────────────────── */
+
+/**
+ * 初设字段缺失的登记（规格 §3.4）
+ *
+ * 缺字段 ⇒ **跳过该限制/效果并按注释默认值执行**，同时在加载期登记一条；
+ * 这条登记不等于「剧本特殊处理」：不猜测剧本意图、不静默套用别处口径。
+ * 唯一例外是抽签池名单缺失 ⇒ schema 在加载期直接拒绝（抽签无安全默认），不走本登记。
+ */
+export interface SetupGap {
+  scenarioId: string
+  /** 缺失的字段路径（如 `modeConstraints`） */
+  field: string
+  action: 'skip+default'
+  /** 缺省口径（照规格注释写，不写规则解释） */
+  note: string
+}
+
+/**
+ * 该剧本在加载期应登记的初设缺口
+ *
+ * 只登记**真正缺的字段**：当前唯一带缺省语义的是 `setup.modeConstraints`
+ * （E5 的初设模式闸门按缺省集合/`reserveMarkers`/旧 `reserveSetupForbidden` 执行）。
+ * `setup.effects` 缺失＝该剧本本就没有强制效果（不是缺口）；`poolFormations` 缺失已由 schema 拒绝。
+ */
+export function collectSetupGaps(scenarioId: string): readonly SetupGap[] {
+  const scenario = scenarios.scenarios.find((item) => item.id === scenarioId)
+  if (scenario === undefined) return []
+  const gaps: SetupGap[] = []
+  if (scenario.setup.modeConstraints === undefined) {
+    gaps.push({
+      scenarioId,
+      field: 'modeConstraints',
+      action: 'skip+default',
+      note: '未声明初设模式约束 ⇒ 允许集合＝默认（战斗/移动/预备/战略），预备上限＝reserveMarkers，不禁预备',
+    })
+  }
+  return gaps
+}
+
+/** 缺口的一行可读文本（加载提示与首局日志同源，口径只写一处） */
+export function setupGapText(gap: SetupGap): string {
+  return `初设数据缺口（剧本 ${gap.scenarioId} · ${gap.field}）：${gap.note}（${gap.action}）`
+}
