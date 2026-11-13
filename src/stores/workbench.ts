@@ -5960,6 +5960,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   /**
+   * 6.3a / 7.0a：本阶段**行动方**
+   *
+   * 反应段由**非**阶段玩家行动（`activeSide` 仍是阶段玩家），其余段两者相同。
+   * 突袭的「我方/敌方」取子、4.5a 的 ZOC 判定、推进的安全边缘格与 9.14 结算都必须用它，
+   * 不能用 `activeSide`——否则反应段会把阶段玩家的守军滤掉（7.0b 的突袭走不通）。
+   * 与 `segmentGateQuery.side` 同源（`actingSideFor` 是唯一实现）。
+   */
+  const actingSide = computed<Side>(
+    () => actingSideFor({ phase: phase.value, activeSide: activeSide.value }) ?? activeSide.value,
+  )
+
+  /**
    * 4.5a-A：**可发起突袭**的参移单位（第六批条 14）
    *
    * ＝ 仍在移动者 **加上** 「本轮因进入未抵消敌方 ZOC 而被迫停车」者。
@@ -6272,7 +6284,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         ? overrunParticipantIds.value.filter((id) => movingIds.includes(id))
         : movingIds
     return splitOverrunStack({
-      side: activeSide.value,
+      side: actingSide.value,
       friendlyUnits: unitsAt(hex).map((unit) => ({
         id: unit.instanceId,
         re: unit.re,
@@ -6367,7 +6379,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 判据与常规侧共用 `attackForceForHex`（P2/M3）；突袭的逐人过滤保留在引擎里
     const force = attackForceForHex({
       attackType: 'overrun',
-      side: activeSide.value,
+      side: actingSide.value,
       hex: input.target,
       candidates: input.candidates,
       overrun: {
@@ -6413,7 +6425,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const found: WorkbenchOverrunTarget[] = []
     for (const anchor of anchors) {
       const defenders = unitsAt(anchor).filter(
-        (unit) => unit.side !== activeSide.value && unit.isCombat,
+        (unit) => unit.side !== actingSide.value && unit.isCombat,
       )
       if (defenders.length === 0) continue
       // 8.1h：不合格单位（DG / MP 不足 / 不可攻击）不阻塞其余单位 ⇒ 按人取合格子集
@@ -6560,7 +6572,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     const candidates = overrunCandidateUnits.value
     const movingIds = candidates.map((unit) => unit.instanceId)
-    const defenders = unitsAt(hex).filter((unit) => unit.side !== activeSide.value && unit.isCombat)
+    const defenders = unitsAt(hex).filter((unit) => unit.side !== actingSide.value && unit.isCombat)
     const mpRemainingOf = (unit: ConsoleUnit) =>
       availableMaOf(unit, movementPhaseOf(phase.value), sovietFirstTurnMaFactor(unit)) -
       unit.mpSpent
@@ -6576,7 +6588,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         ? overrunParticipantIds.value.filter((id) => movingIds.includes(id))
         : (picked?.participantIds ?? [])
     const split = splitOverrunStack({
-      side: activeSide.value,
+      side: actingSide.value,
       friendlyUnits: unitsAt(from).map((unit) => ({
         id: unit.instanceId,
         re: unit.re,
@@ -6941,7 +6953,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (draft.defenderLeftHex && plan.enterDefenderHex && !attackerRetreated) {
         overrunZocHeldHex.value = null
         overrunZocHeldUnitIds.value = []
-        if (inEnemyZocAt(moveContext.value, context.target, activeSide.value)) {
+        if (inEnemyZocAt(moveContext.value, context.target, actingSide.value)) {
           overrunZocHeldHex.value = { ...context.target }
           overrunZocHeldUnitIds.value = [...plan.participantIds]
           pushLog(
@@ -12818,7 +12830,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         advanceIntoForbiddenHex: isEnemySafeEdgeHex(
           moveContext.value,
           battleTarget.value?.hex ?? { col: 0, row: 0 },
-          activeSide.value,
+          actingSide.value,
         ),
         // 9.13b-A：攻方 AR 单位处于 DG ⇒ 不给进击标记
         attackerArDg: arUnit?.mode.dg === true,
@@ -12863,7 +12875,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     //   补给站 9.14b / 运输点与延补队 9.14c-d；位移落点由玩家在地图上选）
     const entered = battleTarget.value?.hex ?? null
     if (entered !== null && data.advanceUnitIds.length > 0) {
-      resolveSpecialCombatAt(entered, activeSide.value, true)
+      resolveSpecialCombatAt(entered, actingSide.value, true)
       fireResolution.trackSpecialPending()
     }
     pushLog(
