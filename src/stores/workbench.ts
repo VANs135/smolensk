@@ -2928,8 +2928,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const combatAdvanceChoices = computed<
     readonly { unit: ConsoleUnit; selected: boolean; disabledReason: string | null }[]
-  >(() =>
-    combatAdvanceCandidates.value.flatMap((candidate) => {
+  >(() => {
+    /*
+     * 9.12g：没有推进格（防御格未空 / 攻方已撤 / 专规 1.1b 禁入）⇒ 这件事不存在，
+     * 面板一枚都不给（引擎本来就会忽略勾选，摆出按钮只会造成"点了没用"的假入口）。
+     * 与地图同源：推进格由 `combatAdvanceHex` 唯一给出。
+     */
+    if (combatAdvanceHex.value === null) return []
+    return combatAdvanceCandidates.value.flatMap((candidate) => {
       const unit = units.value.find((item) => item.instanceId === candidate.id)
       if (unit === undefined) return []
       return [
@@ -2943,8 +2949,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
               : null,
         },
       ]
-    }),
-  )
+    })
+  })
 
   /* ──────────── W7 C16：战斗收尾的**地图优先**交互（撤退落点 / 推进格 / 补给站） ──────────── */
 
