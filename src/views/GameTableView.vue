@@ -31,7 +31,7 @@ import { SupplyPanel } from '@/components/supply'
 import SupplyPhasePanel from '@/components/supply/SupplyPhasePanel.vue'
 import { provideUiMode } from '@/components/ui-mode'
 import { VictoryPanel } from '@/components/victory'
-import type { HexRef, Side } from '@/data'
+import type { HexRef } from '@/data'
 import { COUNTER_BOX_LABELS, type CounterBoxTarget } from '@/stores/map-view'
 import { DEFAULT_MAP_LAYERS } from '@/render/map-render'
 import {
@@ -242,7 +242,6 @@ function toggleRecording(): void {
   else startRecording()
 }
 
-const queuedAirDrag = ref<{ side: Side; entryIndex: number } | null>(null)
 const mapCounterDrag = ref<string | null>(null)
 const airBoxMenu = ref<{ id: string; x: number; y: number } | null>(null)
 const setupBoxOpen = ref(false)
@@ -258,7 +257,6 @@ const boxDropTargets = computed<readonly CounterBoxTarget[]>(() => {
 })
 watch([setupBoxSide, () => setup.scenarioId], () => {
   airBoxMenu.value = null
-  queuedAirDrag.value = null
   mapCounterDrag.value = null
   setupBoxOpen.value = false
 })
@@ -290,25 +288,6 @@ function onCounterDrop(id: string, point: { x: number; y: number }): void {
     ?.closest<HTMLElement>('[data-counter-box]')
   const box = boxDropTargets.value.find((item) => item === target?.dataset.counterBox)
   if (box !== undefined) mapView.dropCounterInBox(id, box)
-}
-
-function onQueuedAirDrop(event: DragEvent, box: CounterBoxTarget): void {
-  const source = queuedAirDrag.value
-  if (box !== 'air' || source === null || source.side !== setupBoxSide.value) return
-  event.preventDefault()
-  queuedAirDrag.value = null
-  setup.placeAirInOffMapBoxNow(source.side, source.entryIndex)
-}
-
-function allowQueuedAirDrop(event: DragEvent, box: CounterBoxTarget): void {
-  if (
-    box !== 'air' ||
-    queuedAirDrag.value === null ||
-    queuedAirDrag.value.side !== setupBoxSide.value
-  )
-    return
-  event.preventDefault()
-  if (event.dataTransfer !== null) event.dataTransfer.dropEffect = 'move'
 }
 
 function pickAirBox(): void {
@@ -441,13 +420,12 @@ onBeforeUnmount(() => {
               v-if="setup.applied && (!setup.finished || setup.setupDrawEntryVisible)"
               id="setup-queue"
               tabindex="-1"
-              @air-drag="queuedAirDrag = $event"
             />
             <div
               v-if="boxDropTargets.length > 0"
               class="gt__box-targets"
               :class="{
-                'gt__box-targets--drag': queuedAirDrag !== null || mapCounterDrag !== null,
+                'gt__box-targets--drag': mapCounterDrag !== null,
               }"
             >
               <BaseButton
@@ -456,9 +434,6 @@ onBeforeUnmount(() => {
                 :data-counter-box="box"
                 variant="secondary"
                 size="sm"
-                @dragenter="allowQueuedAirDrop($event, box)"
-                @dragover="allowQueuedAirDrop($event, box)"
-                @drop="onQueuedAirDrop($event, box)"
                 @click="box === 'air' && pickAirBox()"
               >
                 {{ COUNTER_BOX_LABELS[box] }}

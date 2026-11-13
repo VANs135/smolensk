@@ -32,9 +32,6 @@ import {
 
 const setup = useSetupStore()
 const hotseat = useHotseatStore()
-const emit = defineEmits<{
-  airDrag: [source: { side: 'axis' | 'soviet'; entryIndex: number } | null]
-}>()
 /**
  * 一键预设初设（B2）：与「抽取编队」同一处，只落 AI 控制的一方，不替玩家点开始游戏。
  * 修前这个入口挂在「战况」抽屉的初设面板里（与开局选剧本重复），玩家在初设栏找不到。
@@ -46,16 +43,6 @@ function runPresetSetup(): void {
     hotseat.presetSide === null
       ? setup.presetSelfSetupNow()
       : setup.presetSelfSetupNow({ onlySide: hotseat.presetSide })
-}
-
-function startAirDrag(event: DragEvent, item: SetupPlacing): void {
-  if (item.offMapAllowed !== true || event.dataTransfer === null) {
-    event.preventDefault()
-    return
-  }
-  event.dataTransfer.effectAllowed = 'move'
-  event.dataTransfer.setData('text/plain', item.label)
-  emit('airDrag', { side: item.side, entryIndex: item.entryIndex })
 }
 
 /** 展开的堆叠（同一时刻只展开一堆：四堆合计几十项，全展开会把地图盖住） */
@@ -421,17 +408,14 @@ function sideMark(side: 'axis' | 'soviet'): string {
             }"
             :title="
               item.offMapAllowed === true
-                ? '点卡后点基地放入；也可拖到空军盒或用下方按钮放入图外盒'
+                ? '点卡后点基地放入；也可用下方按钮放入图外盒'
                 : (item.blockedReason ?? `${item.raw}（${sideName(item.side)}）`)
             "
             :aria-pressed="isActive(item)"
             :disabled="
               item.kind === 'truck' || (item.blockedReason !== null && item.offMapAllowed !== true)
             "
-            :draggable="item.offMapAllowed === true"
             @click="pick(item)"
-            @dragstart="startAirDrag($event, item)"
-            @dragend="emit('airDrag', null)"
           >
             <!--
               第六批条 1（S1）：**算子图阵列** —— 有图档就画算子（与地图同一份图档来源），

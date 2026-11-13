@@ -164,7 +164,8 @@ describe('B17a：分段渲染与两处入口（源码守卫）', () => {
       'workbench.applyArrivalRemovalsNow()',
       // 2026-11-09：手牌点算子即进入落点选格（选型随卡片走，不再有「投放」按钮）
       '@click="pickArrival(card.index)"',
-      'workbench.rollVariableReplNow()',
+      // 2026-11-13：1.6c + 1.6b 合并为一次「掷骰检定」（`runReplCheck` 内部按序调用两条判定）
+      '@click="runReplCheck"',
       'workbench.claimFrontalReservesNow()',
     ])
     checkGated('showsRebuild', ['workbench.endRebuildSegmentNow()', 'rebuild-free-pax'])

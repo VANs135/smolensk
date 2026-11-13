@@ -151,6 +151,32 @@ watchEffect(() => {
 const breakdownParentId = ref('')
 
 /**
+ * 1.6c + 1.6b 的**一次掷骰检定**（用户 2026-11-13：判定只留一个入口）
+ *
+ * 次序照原文：先 1.6c 特殊补员表，再 1.6b 可变增援/补给表。
+ * 按钮只在「还没掷过」时出现：1.6b 已自动掷过且 1.6c 不可掷（19 Aug 起 / 本回合已掷）⇒ 不出现。
+ */
+const replCheckVisible = computed(
+  () => !workbench.variableReplRolled || specialReplRefusal.value === null,
+)
+
+function runReplCheck(): void {
+  if (specialReplRefusal.value === null) containers.drawSpecialRepl(workbench.activeSide)
+  if (!workbench.variableReplRolled) workbench.rollVariableReplNow()
+}
+
+/** 1.6c 骰面只在**本回合本方已掷**时展示（`specialReplLast` 跨回合不残留） */
+const specialReplLastThisTurn = computed(
+  () =>
+    containers.specialReplLast !== null &&
+    containers.specialReplLast.side === workbench.activeSide &&
+    workbench.hasSpecialReplDraw(workbench.activeSide, workbench.turn),
+)
+
+/** 1.6b 补给表进图外盒的 SP 数（T 记账 ÷ 4；只在本次检定后显示） */
+const offMapDepositSp = computed(() => Math.trunc(workbench.offMapRollDeposit?.sp ?? 0))
+
+/**
  * 批 F 切片 3：**到货 SP 落位**（专规 2.1 / 3.1 免费铁运 + 3.6 补给列车）
  *
  * 判据全在引擎与 store；本组件只把"哪些格能点、点了哪些、余额放哪"画出来并把选择写回。
@@ -533,30 +559,6 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <p v-else class="muted">本回合尚未掷出随机事件结果。</p>
     </SessionStep>
 
-    <SessionStep
-      v-if="showsActions"
-      item="reinforce:specialRepl"
-      ackable
-      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:specialRepl')"
-    >
-      <BaseButton
-        variant="primary"
-        size="sm"
-        :disabled="specialReplRefusal !== null"
-        @click="containers.drawSpecialRepl(workbench.activeSide)"
-      >
-        掷特殊补员表 · 1.6c
-      </BaseButton>
-      <p v-if="specialReplRefusal !== null" class="muted" role="status">{{ specialReplRefusal }}</p>
-      <!-- Q4：必须出骰面与查表结果（骰面来自真实 1d6；结果来自 Special Repl Table） -->
-      <p v-if="containers.specialReplLast !== null" class="num" data-testid="special-repl-last">
-        <BaseTag :kind="containers.specialReplLast.ok ? 'info' : 'warning'">
-          骰面 {{ containers.specialReplLast.die ?? '—' }}
-        </BaseTag>
-        {{ containers.specialReplLast.detail }}
-      </p>
-    </SessionStep>
-
     <SessionStep v-if="showsActions" item="reinforce:arrival">
       <!-- ── 1.6a：强制移除先于放置（原文次序）────────────────────────── -->
       <div v-if="(plan?.removals.length ?? 0) > 0" class="row" data-testid="arrival-removals">
@@ -820,13 +822,30 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           <input v-model="workbench.variableReplInputs.option4_1b" type="checkbox" />
           启用可选 4.1b（8 / 12 / 15 Jul 三个回合自动 Supply Train）
         </label>
-        <BaseButton variant="primary" size="sm" @click="workbench.rollVariableReplNow()">
-          掷可变增援
+        <BaseButton v-if="replCheckVisible" variant="primary" size="sm" @click="runReplCheck">
+          掷骰检定
         </BaseButton>
-        <BaseButton variant="ghost" size="sm" @click="workbench.clearNonSavableReplNow()">
+        <BaseButton
+          v-if="workbench.variableReplRolled"
+          variant="ghost"
+          size="sm"
+          @click="workbench.clearNonSavableReplNow()"
+        >
           清零不可保存的补员
         </BaseButton>
       </div>
+      <!-- Q4：骰面与查表结果（骰面来自真实 1d6；结果来自两张表） -->
+      <p v-if="specialReplLastThisTurn" class="num" data-testid="special-repl-last">
+        <BaseTag :kind="containers.specialReplLast?.ok === true ? 'info' : 'warning'">
+          1.6c 骰面 {{ containers.specialReplLast?.die ?? '—' }}
+        </BaseTag>
+        {{ containers.specialReplLast?.detail }}
+      </p>
+      <!-- 1.6b 补给表所得 SP 已入图外盒：给一个明确数字，别让玩家以为丢了 -->
+      <p v-if="offMapDepositSp > 0" class="num" data-testid="supply-offmap-deposit">
+        <BaseTag kind="info">1.6b</BaseTag>
+        补给表 {{ offMapDepositSp }} SP 已放入图外空军盒（可用空军任务运进地图）
+      </p>
       <!-- 只列「拿到什么」：骰面 / 表名 / 条款号不上屏 -->
       <ul v-if="variableReplResult.length > 0" class="num repl-result">
         <li v-for="line in variableReplResult" :key="line">{{ line }}</li>
@@ -876,49 +895,6 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         </div>
       </template>
     </SessionStep>
-    <SessionStep
-      v-if="showsActions"
-      item="reinforce:supplyTable"
-      ackable
-      :ack-disabled="!workbench.variableReplRolled || workbench.supplyArrivalSp > 0"
-      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:supplyTable')"
-    >
-      <!-- ── · 到货 SP 落位（专规 2.1 / 3.1 免费铁运 + 3.6 补给列车） ── -->
-      <hr />
-      <RuleNote
-        title="到货 SP 落位：可卸载城市格每格 1 SP（免费铁运），其余放图边补给源格"
-        rule="专规 2.1 / 3.1"
-      >
-        <p class="muted">
-          补给表到货（1.6b）的 SP 可用**免费铁运**落到每个**可卸载城市格**（13.3c：城格有铁路 +
-          受本方控制 + 免敌方 ZOC 的铁路路径回补给源），**每格 1 SP**、**不扣铁路运量**（13.3b
-          的运量只在移动阶段用）； 其余 SP 放本方的**图边补给源格**。3.6 的补给列车已有独立窗口。
-        </p>
-      </RuleNote>
-      <p class="num">
-        <BaseTag kind="info">补给表到货 {{ workbench.supplyArrivalSp }} SP</BaseTag>
-        <BaseTag kind="neutral">铁路运量消耗 0（免费）</BaseTag>
-        <span class="muted">判定阶段不落子：落点统一在「待放上手牌」里点格给出</span>
-      </p>
-      <p class="muted num">
-        可卸载城市格（静态）{{ workbench.freeRailCityHexes.length }} 处｜此刻候选（13.3c
-        运行期：受控 + 铁路路径通回补给源）{{ workbench.freeRailCityCandidates.length }} 处
-      </p>
-      <p v-if="workbench.freeRailCityCandidates.length === 0" class="muted">
-        此刻没有城市候选（城里要受本方控制、且铁路路径通回补给源）—— 按原文，SP 全部落图边补给源格。
-      </p>
-      <p v-if="workbench.freeRailPlan !== null" class="num">
-        <BaseTag kind="info">{{ workbench.freeRailPlan.rule }}</BaseTag>
-        {{ workbench.freeRailPlan.detail }}
-      </p>
-      <p v-if="workbench.freeRailError !== null" class="warn">
-        落点被拒：{{ workbench.freeRailError.reason }}（{{ workbench.freeRailError.rule }}）
-      </p>
-      <p v-if="workbench.lastFreeRailPlan !== null" class="ok">
-        <BaseTag kind="success">已落账</BaseTag> {{ workbench.lastFreeRailPlan.detail }}
-      </p>
-    </SessionStep>
-
     <!--
       v7.1 第二段：**统一手牌**（用户 2026-11-11 口径：判定全部走完才进放置阶段）
 

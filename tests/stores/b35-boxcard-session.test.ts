@@ -66,12 +66,13 @@ describe('B35 C-1：按展开的盒卡过滤动作', () => {
       'edgeBox',
       'airBox',
       'breakdownBox',
-      'specialReplBox',
       'formationBox',
       'scenarioDrawBox',
     ]) {
       expect(panel, `动作段没按卡过滤：${kind}`).toContain(`showsBoxActions('${kind}')`)
     }
+    // 1.6c 抽取已并入增援窗的「掷骰检定」（单入口）：特殊补员盒只列抽取项，不再有动作段
+    expect(panel).not.toContain('drawSpecialRepl')
     // 旧的"按 box.kind 直接判"的写法已不存在（那是不看卡的写法）
     expect(panel).not.toContain('v-if="showsActions && box.kind === \'')
 

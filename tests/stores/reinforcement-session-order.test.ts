@@ -107,12 +107,10 @@ describe('增援段：段 → 节集合（v7.1 第二段）', () => {
         }),
       ),
     ).toEqual([
-      'reinforce:specialRepl',
       'reinforce:randomEvent',
       'reinforce:supplyTrain',
       'reinforce:variableExit',
       'reinforce:replTable',
-      'reinforce:supplyTable',
       'reinforce:frontalReserves',
       'reinforce:endRoll',
     ])
@@ -128,12 +126,7 @@ describe('增援段：段 → 节集合（v7.1 第二段）', () => {
           handPending: true,
         }),
       ),
-    ).toEqual([
-      'reinforce:replTable',
-      'reinforce:supplyTable',
-      'reinforce:hand',
-      'reinforce:endRoll',
-    ])
+    ).toEqual(['reinforce:replTable', 'reinforce:hand', 'reinforce:endRoll'])
   })
 
   it('重建环节：只问「是否结束本段」（不夹带补员表/到达/大窗）', () => {
@@ -171,18 +164,18 @@ describe('增援段：段 → 节集合（v7.1 第二段）', () => {
     ])
   })
 
-  it('苏方专规：特殊补员 / 方面军预备队都在掷骰宿主内按序出现', () => {
+  it('苏方专规：判定并入「掷骰检定」，与方面军预备队按序出现', () => {
     expect(
       idsOf(
         baseFacts({
           stepId: 'reinforcement.replRoll',
           specialReplPending: true,
+          replTablePending: true,
           frontalReservesPending: true,
           arrivalPending: true,
-          replTablePending: false,
         }),
       ),
-    ).toEqual(['reinforce:specialRepl', 'reinforce:frontalReserves', 'reinforce:endRoll'])
+    ).toEqual(['reinforce:replTable', 'reinforce:frontalReserves', 'reinforce:endRoll'])
   })
 })
 

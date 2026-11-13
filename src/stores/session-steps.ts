@@ -590,24 +590,7 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
       '掷表、放置 Pax/Eq；Ftr/Tac 立即用掉，Pax/Eq 可留存。',
     )
   }
-  // 1.6c：19 Aug 前的特殊补员
-  if (facts.specialReplPending && !acked.has('reinforce:specialRepl')) {
-    push(
-      'reinforce:specialRepl',
-      '特殊补员（1.6c）',
-      '19 Aug 前每回合要掷一次特殊补员表；骰面决定返场单位或补给缓存。',
-      '掷 1 骰，按 Special Repl Table 的骰面结果执行；死亡堆没有合格单位则作废。',
-    )
-  }
-  // 1.6b / 2.1 / 3.1：补给表到货与落位
-  if (facts.supplyPlacePending && !acked.has('reinforce:supplyTable')) {
-    push(
-      'reinforce:supplyTable',
-      '补给到达·补给表（1.6b / 2.1 / 3.1）',
-      '本方的增援阶段要掷一次补给表，并把到货 SP 落账。',
-      '选定可卸载城市格或图边补给源格后落账；轴方按 3.4b 分栏。',
-    )
-  }
+  // 1.6c / 1.6b：判定全部并入 `reinforce:replTable` 的「掷骰检定」一处，不再单列两张卡
   /*
    * 第三段（重建 · 合并 · 整编）：**只问「是否结束本段」**（v7.1 §4.3 / §4.6）。
    *

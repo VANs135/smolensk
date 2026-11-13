@@ -788,27 +788,10 @@ function boxAircraft(side: Side) {
           </BaseButton>
         </div>
 
-        <!-- 1.6c 特殊补员抽取盒（两道闸：环节 + 日期；不放行时明说原因） -->
-        <div
-          v-if="
-            box.kind === 'specialReplBox' && box.side !== null && showsBoxActions('specialReplBox')
-          "
-          class="row"
-        >
-          <BaseButton
-            variant="primary"
-            size="sm"
-            :disabled="containers.specialReplRefusal(box.side) !== null"
-            :title="containers.specialReplRefusal(box.side) ?? undefined"
-            @click="containers.drawSpecialRepl(box.side)"
-          >
-            掷骰抽取（1.6c，1 骰）
-          </BaseButton>
-          <span class="muted">抽取项：{{ itemsOf(box).join(' ／ ') }}</span>
-          <span v-if="containers.specialReplRefusal(box.side) !== null" class="muted num">
-            {{ containers.specialReplRefusal(box.side) }}
-          </span>
-        </div>
+        <!-- 1.6c 特殊补员只在增援窗的「掷骰检定」一处掷（单入口）；本盒只列抽取项 -->
+        <p v-if="box.kind === 'specialReplBox'" class="muted num">
+          抽取项：{{ itemsOf(box).join(' ／ ') }}
+        </p>
 
         <!-- 边缘盒（1.4b） -->
         <div v-if="box.kind === 'edgeBox' && showsBoxActions('edgeBox')" class="row">
