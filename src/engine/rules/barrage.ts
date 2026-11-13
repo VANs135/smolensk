@@ -879,6 +879,16 @@ export function barrageEligibility(input: {
     return { ok: false, rule: '14.7d-D', reason: 'hipShootCannotTrainbusting' }
   if (input.declaredTarget === 'combatUnits' && input.kind === 'artillery' && input.unitCount === 0)
     return { ok: false, rule: '10.1', reason: 'noArtilleryUnit' }
+  /*
+   * 10.0c「来源 × 目标类别」交叉判据（2026-11-12 原文复核）
+   *
+   * 原文只要求事先指定「空军基地 / 港口 / **作为空军任务执行的**运输破坏」，
+   * **没有限制来源**；10.1b 的补给源与初始列同样适用于设施表 ⇒ 火炮打空军基地合法。
+   * ⇒ 这里只加能与原文对上的那一条：运输破坏必须是空军任务，非空军来源不得宣布。
+   * 港口本作无模型，其合法性由目标存在性判据承担；不按来源臆造限制。
+   */
+  if (input.declaredTarget === 'trainbusting' && input.kind !== 'air')
+    return { ok: false, rule: '10.0c', reason: `trainbustingNeedsAirMission:${input.kind}` }
   return { ok: true, rule: '10.0e' }
 }
 

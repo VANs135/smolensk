@@ -420,6 +420,36 @@ describe('10.0d / 10.0e 轰炸资格：阶段门槛、同类型、每格每阶�
     })
   })
 
+  it('10.0c：来源 × 目标类别——运输破坏必须是空军任务；空军基地不限制来源', () => {
+    // 火炮宣布运输破坏 ⇒ 拒（10.0c 原文：运输破坏是「作为空军任务执行的」）
+    expect(barrageEligibility({ ...base, declaredTarget: 'trainbusting' })).toMatchObject({
+      ok: false,
+      rule: '10.0c',
+      reason: 'trainbustingNeedsAirMission:artillery',
+    })
+    // 空军（移动阶段的轰炸）宣布运输破坏 ⇒ 通过
+    expect(
+      barrageEligibility({
+        ...base,
+        kind: 'air',
+        unitCount: 2,
+        phase: 'movement',
+        declaredTarget: 'trainbusting',
+      }),
+    ).toMatchObject({ ok: true })
+    // 10.0c 未限制来源：火炮打空军基地合法（10.1b 同样适用设施表）
+    expect(barrageEligibility({ ...base, declaredTarget: 'airBase' })).toMatchObject({ ok: true })
+    expect(
+      barrageEligibility({
+        ...base,
+        kind: 'air',
+        unitCount: 1,
+        phase: 'movement',
+        declaredTarget: 'airBase',
+      }),
+    ).toMatchObject({ ok: true })
+  })
+
   it('10.0 第二段：移动环节只放行低空扫射的空军（火炮/舰船不得借这个入口）', () => {
     const hip = { ...base, kind: 'air' as const, unitCount: 1, hipShoot: true, hasSpotter: true }
     // 移动环节：低空扫射的空军 → 通过

@@ -26,6 +26,7 @@ const BARRAGE_ERROR_TEXT: Readonly<Record<string, string>> = {
   targetKindNotInHex: '整体目标与该格不符（该格没有这类目标）',
   barrageOutcomePending: '本次炮击结果尚未确认，不能开新的一场',
   hipShootCannotTrainbusting: '低空扫射不能做运输破坏（14.7d-D）',
+  trainbustingNeedsAirMission: '运输破坏是作为空军任务执行的，火炮不能宣布（10.0c）',
   cannotSplitBarrageValue: '轰炸值不能拆分到多次炮击',
   belowPrintedBarrageValue: '不能以低于印刷值的轰炸值参战',
   hexAlreadyBarraged: '该格本阶段已经被轰炸过',
