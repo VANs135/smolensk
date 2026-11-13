@@ -18900,6 +18900,35 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return ok
   }
 
+  /**
+   * 14.2f-F：面板 2 的**唯一决定**。对地三类若战果链还没跑完、空运/空投货物还没落盘，
+   * 这里先补跑（10.2c：空军对地无补给消耗），再记录任务结算。
+   */
+  function settleAirMissionNow(): boolean {
+    const state = airState.value
+    if (state === null) return false
+    if ((state.kind === 'air_transport' || state.kind === 'air_drop') && state.cargo === null) {
+      if (!resolveAirCargoNow()) return false
+    }
+    const ground =
+      state.kind === 'barrage' || state.kind === 'hip_shoot' || state.kind === 'trainbusting'
+    if (ground && airMissionFlyingUnits.value.length > 0) {
+      const barrage = barrageState.value
+      const done =
+        barrage !== null &&
+        airMissionDomain.ownsBarrage(barrage) &&
+        barrage.finished &&
+        barrage.outcome !== undefined &&
+        sameHex(barrage.targetHex, state.targetHex) &&
+        barrage.kind === 'air'
+      if (!done) {
+        if (!beginAirBarrageNow()) return false
+        if (!runBarrageChainNow()) return false
+      }
+    }
+    return confirmAirMissionNow()
+  }
+
   /** 10.0e / 14.7d：中止的轰炸也算尝试；低空扫射不占目标格额度。 */
   function recordAbortedAirBarrage(state: AirInteractionState): void {
     if (!['barrage', 'hip_shoot', 'trainbusting'].includes(state.kind)) return
@@ -20897,6 +20926,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   interface FrontalUnitEntry {
     recordId: string
     name: string
+    /** 卡面图（领取时从单位库记录取；取不到 ⇒ null，卡面回落名字） */
+    images: { readonly front?: string | null; readonly back?: string | null } | null
   }
   const frontalUnitPending = ref<FrontalUnitEntry | null>(null)
   const frontalUnitPlacedThisSegment = ref<{ instanceId: string; entry: FrontalUnitEntry } | null>(
@@ -21153,6 +21184,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     /** 角标：待放的枚数 / SP */
     count: number
     blocked: string | null
+    /** 卡面短标（没有算子图时回落到它） */
+    short: string
+    /** 算子图两面（补员＝补员算子记录；返场／编制转化＝原算子）；取不到 ⇒ null */
+    images: { readonly front?: string | null; readonly back?: string | null } | null
   }
 
   /**
@@ -21174,9 +21209,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         detail: '点一下 → 地图只高亮合法格 → 点格落一枚',
         count,
         blocked: replPlacementBlockedReasonFor(item),
+        short: item === 'pax' ? 'Pax' : 'Eq',
+        images: replRecordOf(activeSide.value, item)?.images ?? null,
       })
     }
     specialReplPending.value.forEach((entry, index) => {
+      const unit = deadPile.value.find((item) => item.instanceId === entry.instanceId)
       entries.push({
         id: `unit:special:${String(index)}`,
         label: `1.6c 特殊补员 · ${entry.name}`,
@@ -21184,6 +21222,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         detail: '死亡堆返场：点一下 → 点高亮格（HQ 或图边补给源格）',
         count: 1,
         blocked: arrivalBlocked ? '没有可返场的格（2.1：HQ 或图边补给源格）' : null,
+        short: entry.name,
+        images: unit?.images ?? null,
       })
     })
     if (frontalUnitPending.value !== null) {
@@ -21194,6 +21234,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         detail: '新单位随其它到达的 SP 与补员一起摆放',
         count: 1,
         blocked: arrivalBlocked ? '没有可落位的格（2.1：HQ 或图边补给源格）' : null,
+        short: frontalUnitPending.value.name,
+        images: frontalUnitPending.value.images,
       })
     }
     if (supplyTableUnplaced.value > 0) {
@@ -21211,6 +21253,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           cityCount === 0 && openSupplySourceHexes.value.length === 0
             ? '没有可落 SP 的格（13.3c 城市格与图边补给源格都不可用）'
             : null,
+        short: 'SP',
+        images: null,
       })
     }
     if (supplyTrainPending.value) {
@@ -21224,6 +21268,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           panzerGroupRulesOn.value && supplyTrainGroup.value === null
             ? '3.4b：德军补给列车 SP 须先选归属（Guderian / Hoth）'
             : null,
+        short: 'SP',
+        images: null,
       })
     }
     return entries
@@ -24530,7 +24576,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         `${batch.convertTo} 须随到达摆放（产物单位库没有这个算子 ⇒ 请按卡面印值手工摆放）`,
       )
     } else {
-      frontalUnitPending.value = { recordId: newRecord.id, name: recordNameOf(newRecord) }
+      frontalUnitPending.value = {
+        recordId: newRecord.id,
+        name: recordNameOf(newRecord),
+        images: newRecord.images ?? null,
+      }
       applied.push(`${recordNameOf(newRecord)} 已进手牌（放置阶段按 2.1 落位）`)
     }
 
@@ -27853,6 +27903,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     confirmSpecialCombatNow,
     cancelSpecialCombatNow,
     confirmAirMissionNow,
+    settleAirMissionNow,
     completeAirReturnNow,
     cancelAir,
     toggleAirstripBase,

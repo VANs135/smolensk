@@ -294,6 +294,86 @@ const arrivalPlacedCards = computed<ArrivalHandCard[]>(() => {
   return cards
 })
 
+/**
+ * 第二段统一手牌的卡面图（照到达段范式：有图档就画算子，取不到回落短标）
+ *
+ * SP 在单位库里是按**当前点数**取图（与地图同一套补给算子图），其余来源的图由 store
+ * 随条目给出（补员＝补员算子记录；返场／编制转化＝原算子的两面图）。
+ */
+function rollHandImage(entry: {
+  id: string
+  count: number
+  images: { readonly front?: string | null; readonly back?: string | null } | null
+}): string | null {
+  if (entry.id === 'sp:arrival' || entry.id === 'sp:train') {
+    return tokenImageUrl({
+      side: workbench.activeSide,
+      face: 'combat',
+      noncombatKind: 'sp',
+      spPoints: entry.count,
+    })
+  }
+  return tokenImageUrl({ side: workbench.activeSide, face: 'combat', images: entry.images })
+}
+
+/** 本段已落位的**算子**（右键收回；SP 落点是账本，仍走下方那一行） */
+interface PlacedRollCard {
+  key: string
+  raw: string
+  short: string
+  image: string | null
+  withdraw: () => void
+}
+
+function placedRollImage(instanceId: string): string | null {
+  const unit = workbench.units.find((item) => item.instanceId === instanceId)
+  return unit === undefined ? null : counterImageUrlOf(unit)
+}
+
+const placedRollCards = computed<PlacedRollCard[]>(() => {
+  const cards: PlacedRollCard[] = []
+  for (const placed of workbench.replPlacedThisSegment) {
+    const label = placed.kind === 'pax' ? 'Pax' : 'Eq'
+    cards.push({
+      key: `repl:${placed.instanceId}`,
+      raw: label,
+      short: label,
+      image: placedRollImage(placed.instanceId),
+      withdraw: () => {
+        workbench.withdrawReplPlacementNow(placed.instanceId)
+      },
+    })
+  }
+  for (const placed of workbench.specialReplPlacedThisSegment) {
+    cards.push({
+      key: `special:${placed.instanceId}`,
+      raw: placed.name,
+      short: placed.name,
+      image: placedRollImage(placed.instanceId),
+      withdraw: () => {
+        workbench.withdrawSpecialReplReturnNow(placed.instanceId)
+      },
+    })
+  }
+  const frontal = workbench.frontalUnitPlacedThisSegment
+  if (frontal !== null) {
+    cards.push({
+      key: `frontal:${frontal.instanceId}`,
+      raw: frontal.entry.name,
+      short: frontal.entry.name,
+      image: tokenImageUrl({
+        side: workbench.activeSide,
+        face: 'combat',
+        images: frontal.entry.images,
+      }),
+      withdraw: () => {
+        workbench.withdrawFrontalUnitNow()
+      },
+    })
+  }
+  return cards
+})
+
 /** 卡面记账条目（不占手牌，但必须能看到/能处理） */
 const arrivalManualEntries = computed(() =>
   (plan.value?.units ?? [])
@@ -901,29 +981,39 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       合并的是**放置动作**，不是来源语义：
         · 全部来源（1.6b 补员表 / 1.6c 特殊补员 / 1.6b 补给表 SP / 3.6 补给列车 / 2.3c 新单位）
           汇成同一张手牌，每条仍带来源标签；
-        · 角标＝该条待放的枚数 / SP；点一条 → 引擎只高亮该来源的合法格 → 点格落一枚；
-        · 再点已落位的枚 ⇒ 收回；撤回只在本段内有效。
+        · 卡面＝算子图（照到达段范式），角标＝该条待放的枚数 / SP；
+        · 点算子 → 引擎只高亮该来源的合法格 → 点格落一枚；已落位同样按阵列显示，右键收回。
     -->
     <SessionStep v-if="showsActions" item="reinforce:hand" data-testid="roll-hand">
       <p v-if="!workbench.rollPlacementOpen" class="warn" data-testid="roll-hand-gate">
         判定阶段还没走完：{{ workbench.rollPlacementBlockedReason }}
       </p>
-      <p class="muted">
-        放置阶段：本轮全部产出都在这一张手牌里。点一条 → 地图只高亮该条的合法格 → 点格落一枚。
-      </p>
-      <div class="row">
-        <BaseButton
+      <div class="arrival-hand" data-testid="roll-hand-cards">
+        <button
           v-for="entry in workbench.rollHandEntries"
           :key="entry.id"
-          variant="primary"
-          size="sm"
+          type="button"
+          class="arrival-hand__card"
           :disabled="!workbench.rollPlacementOpen || entry.blocked !== null"
-          :title="entry.blocked ?? entry.detail"
+          :title="entry.blocked ?? `${entry.label}：${entry.detail}`"
           data-testid="roll-hand-card"
           @click="workbench.beginRollHandEntryNow(entry.id)"
         >
-          {{ entry.label }}<span class="num" data-testid="roll-hand-badge">{{ entry.count }}</span>
-        </BaseButton>
+          <img
+            v-if="rollHandImage(entry) !== null"
+            :src="rollHandImage(entry) ?? undefined"
+            alt=""
+            class="arrival-hand__img"
+          />
+          <span v-else class="arrival-hand__fallback" :title="entry.label">{{ entry.short }}</span>
+          <span
+            v-if="entry.count > 1"
+            class="arrival-hand__badge num"
+            data-testid="roll-hand-badge"
+          >
+            {{ entry.count }}
+          </span>
+        </button>
       </div>
       <p
         v-for="entry in workbench.rollHandEntries.filter((item) => item.blocked !== null)"
@@ -969,45 +1059,24 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           </BaseButton>
         </label>
       </div>
-      <!-- 已落位的枚/格：点一下收回（只在本段有效） -->
-      <div
-        v-if="
-          workbench.replPlacedThisSegment.length > 0 ||
-          workbench.specialReplPlacedThisSegment.length > 0 ||
-          workbench.frontalUnitPlacedThisSegment !== null
-        "
-        class="row"
-      >
-        <span class="muted num">本段已落位（点一下收回）</span>
-        <BaseButton
-          v-for="placed in workbench.replPlacedThisSegment"
-          :key="`placed:${placed.instanceId}`"
-          variant="ghost"
-          size="sm"
-          data-testid="roll-hand-placed"
-          @click="workbench.withdrawReplPlacementNow(placed.instanceId)"
-        >
-          {{ placed.kind === 'pax' ? 'Pax' : 'Eq' }} ↺
-        </BaseButton>
-        <BaseButton
-          v-for="placed in workbench.specialReplPlacedThisSegment"
-          :key="`special-placed:${placed.instanceId}`"
-          variant="ghost"
-          size="sm"
-          data-testid="roll-hand-special-placed"
-          @click="workbench.withdrawSpecialReplReturnNow(placed.instanceId)"
-        >
-          1.6c {{ placed.name }} ↺
-        </BaseButton>
-        <BaseButton
-          v-if="workbench.frontalUnitPlacedThisSegment !== null"
-          variant="ghost"
-          size="sm"
-          data-testid="roll-hand-frontal-placed"
-          @click="workbench.withdrawFrontalUnitNow()"
-        >
-          2.3c {{ workbench.frontalUnitPlacedThisSegment.entry.name }} ↺
-        </BaseButton>
+      <!-- 已落位的算子：右键收回（只在本段有效）；SP 落点是账本，仍在下一行点收回 -->
+      <div v-if="placedRollCards.length > 0" class="row">
+        <span class="muted num">本段已落位（右键收回）</span>
+        <div class="arrival-hand" data-testid="roll-hand-placed-cards">
+          <button
+            v-for="card in placedRollCards"
+            :key="card.key"
+            type="button"
+            class="arrival-hand__card arrival-hand__card--placed"
+            :title="`${card.raw}：右键收回（只在本段有效）`"
+            data-testid="roll-hand-placed"
+            @contextmenu.prevent.stop="card.withdraw()"
+          >
+            <img v-if="card.image !== null" :src="card.image" alt="" class="arrival-hand__img" />
+            <span v-else class="arrival-hand__fallback">{{ card.short }}</span>
+            <span class="arrival-hand__undo">↩</span>
+          </button>
+        </div>
       </div>
       <div
         v-if="workbench.freeRailPicked.length > 0 || workbench.freeRailEdgeHex !== null"
