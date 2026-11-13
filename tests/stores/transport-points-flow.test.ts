@@ -372,5 +372,40 @@ describe('12.7e：延补队的运输点数可来自不同格（移到同格后�
   })
 })
 
+describe('12.7f：翻回 5 点后拆开分别移动（无需整叠走）', () => {
+  it('翻回 ⇒ 13.2c 拆成两枚 ⇒ 两枚可停在不同格，点数合计仍是 5', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    declareSource(store, CORE_HEX)
+    placeTransportPoint(store, 'truck', 5)
+    expect(store.convertTransportToExtenderNow(`${CORE_HEX.col}.${CORE_HEX.row}`, 'truck')).toBe(
+      true,
+    )
+    const extender = store.units.find(isExtenderUnit)!
+    expect(store.flipExtenderToTransport(extender.instanceId)).toBe(true)
+
+    const flipped = store.transportPointsOfSide
+    expect(flipped).toHaveLength(1)
+    expect(flipped[0]!.noncombatTransport).toBe(EXTENDER_REQUIRED_POINTS)
+
+    store.transportPointInputs = {
+      ...store.transportPointInputs,
+      splitId: flipped[0]!.instanceId,
+      splitSizesText: '2 3',
+    }
+    expect(store.splitTransportPointNow()).toBe(true)
+    const pieces = store.transportPointsOfSide
+    expect(pieces.map((unit) => unit.noncombatTransport).sort()).toEqual([2, 3])
+
+    // 12.7f：这些运输点数**无需作为一个堆叠移动** ⇒ 两枚各自的格互不影响
+    pieces[0]!.hex = NEAR_HEX
+    expect(pieces[0]!.hex).toEqual(NEAR_HEX)
+    expect(pieces[1]!.hex).toEqual(CORE_HEX)
+    expect(pieces.reduce((sum, unit) => sum + unit.noncombatTransport, 0)).toBe(
+      EXTENDER_REQUIRED_POINTS,
+    )
+  })
+})
+
 /** 让未用到的导入显式落地（命名与真实单位库一致） */
 export const __fixture = { toConsoleUnit }

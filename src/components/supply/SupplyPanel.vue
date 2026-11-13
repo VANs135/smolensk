@@ -712,6 +712,9 @@ const showsLedger = computed(
               转为延补队（12.7a）
             </BaseButton>
           </div>
+          <p class="muted">
+            12.7e：只统计**该格**的运输点数。点数来自不同格时，先用各自的移动把算子走到同一格，再按该格转换。
+          </p>
           <!-- B14d：延补队＝**算子图阵列**（原来是纯文字下拉） -->
           <CounterPicker
             title="延补队（12.7d 翻回 / 9.14d 主动崩溃）"
