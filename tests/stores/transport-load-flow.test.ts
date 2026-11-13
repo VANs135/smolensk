@@ -341,7 +341,13 @@ describe('13.2f：装载—移动—卸载全流程（数量预填与阶段）',
 
     // 卸载同理：有友方战斗单位也不放行
     point.loadedSpT = 8
-    placeGround(store, groundRecord('soviet', () => true), HEX, 'soviet', 'inf-1')
+    placeGround(
+      store,
+      groundRecord('soviet', () => true),
+      HEX,
+      'soviet',
+      'inf-1',
+    )
     expect(store.transportUnloadableSpOf(point.instanceId)).toBe(0)
     expect(store.unloadTransportPointNow()).toBe(false)
     expect(store.transportLoadError?.rule).toBe('13.2f')

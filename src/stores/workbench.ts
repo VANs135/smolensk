@@ -3660,6 +3660,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 12.1b：**全部**含 SP 的位置（账本条目 + 装载在运输点数上的）——取补与候选一律走这一份 */
   const allSpDumps = computed<SpDump[]>(() => [...spDumps.value, ...carriedSpDumps.value])
 
+  /** 12.1b：当前方的全部补给站（含装载中的 `unit:` 来源；付款/回退统一走这一份） */
+  const allSpDumpsOfSide = computed<SpDump[]>(() =>
+    allSpDumps.value.filter((dump) => dump.side === activeSide.value),
+  )
+
+  /** 12.1b：按 id 取补给站——地面账本与装载中来源一视同仁 */
+  function dumpById(dumpId: string): SpDump | undefined {
+    return allSpDumps.value.find((dump) => dump.id === dumpId)
+  }
+
   /** C8：被检查的单位（null＝未开始） */
   const supplyUnit = computed<ConsoleUnit | null>(() => {
     const id = supplyUnitId.value
@@ -5571,7 +5581,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const keys = new Set(drawable.map((dump) => hexLabel(dump.hex)))
     // 12.3b：该基地格同时处在某指挥部的投递距离内 ⇒ 该 HQ 拖得到的站也是合法付款来源
     for (const key of hqDeliveryDumpKeys(base.side, [base])) keys.add(key)
-    return spDumps.value.filter(
+    // 12.1b（用户 2026-11-13）：装载中的 SP 也是补给站，整备同样可以从它付款
+    return allSpDumps.value.filter(
       (dump) => dump.side === base.side && keys.has(hexLabel(dump.hex)) && dump.sp + dump.t > 0,
     )
   })
@@ -12901,9 +12912,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
   })
 
-  /** C7：点选的轰炸付款补给站（未选或已不存在 ⇒ null） */
-  const barrageSupplyDump = computed<SpDump | null>(
-    () => spDumps.value.find((dump) => dump.id === barrageSupplyDumpId.value) ?? null,
+  /** C7：点选的轰炸付款补给站（未选或已不存在 ⇒ null；12.1b 含装载中的 SP） */
+  const barrageSupplyDump = computed<SpDump | null>(() =>
+    barrageSupplyDumpId.value === null ? null : (dumpById(barrageSupplyDumpId.value) ?? null),
   )
 
   /** C7：声明轰炸的付款来源（12.3a：只能是自己方的补给站） */
@@ -12912,7 +12923,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       barrageSupplyDumpId.value = null
       return true
     }
-    const dump = spDumps.value.find((item) => item.id === dumpId)
+    // 12.1b（用户 2026-11-13）：装载中的 SP 也是补给站 ⇒ 与候选项同一份表
+    const dump = dumpById(dumpId)
     if (dump === undefined || dump.side !== activeSide.value) {
       pushLog(
         'warning',
@@ -13281,7 +13293,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function refundBarrageSupply(): void {
     const paid = barragePaidSupply.value
     if (paid === null) return
-    const dump = spDumps.value.find((item) => item.id === paid.dumpId)
+    // 12.1b（用户 2026-11-13）：原路退回——装载中的 SP 也按同一 id 还原
+    const dump = dumpById(paid.dumpId)
     if (dump !== undefined && paid.t > 0) {
       const totalT = holdingsToT({ sp: dump.sp, t: dump.t }) + paid.t
       setSpDumpHoldings(dump.id, { sp: Math.floor(totalT / SP_TO_T), t: totalT % SP_TO_T })
@@ -14117,7 +14130,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const hex = source.hex
       if (hex === null) return null
       // 12.1b（用户 2026-11-13）：装载中的 SP 也是补给站 ⇒ 与地面账本一起参与解析
-      const sameHexDumps = spDumpsOfSide.value.filter((dump) => sameHex(dump.hex, hex))
+      const sameHexDumps = allSpDumpsOfSide.value.filter((dump) => sameHex(dump.hex, hex))
       if (!panzerGroupRulesOn.value) return sameHexDumps[0] ?? null
       /*
        * 3.4b（用户补充裁定）：
@@ -15496,7 +15509,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         return false
       }
     }
-    const dump = spDumps.value.find((item) => item.id === hedgehogInputs.value.payDumpId) ?? null
+    // 12.1b（用户 2026-11-13）：装载中的 SP 也能付工事费
+    const dump =
+      hedgehogInputs.value.payDumpId === null
+        ? null
+        : (dumpById(hedgehogInputs.value.payDumpId) ?? null)
     const outcome = planHedgehogBuild({
       side: activeSide.value,
       date: date.value,
@@ -15888,7 +15905,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function payConstructionFee(dumpId: string | null, wantT: number, rule: string): boolean {
     if (wantT <= 0) return true
-    const dump = spDumps.value.find((item) => item.id === dumpId) ?? null
+    // 12.1b（用户 2026-11-13）：装载中的 SP 也是补给站，可作为付款站
+    const dump = dumpId === null ? null : (dumpById(dumpId) ?? null)
     if (dump === null) {
       pushLog('warning', '建造费用须由**己方补给站**支付（12.1b/12.3a）⇒ 请先指定付款站', rule)
       return false

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { HexRef } from '@/data'
 import { mapLayers } from '@/data'
 import { SP_TO_T } from '@/engine/rules'
-import { needsFuelOf, toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
+import { needsFuelOf, toConsoleUnit, unitChoices, useWorkbenchStore, hexLabel } from '@/stores'
 
 /**
  * B32 步骤 5：**装载在运输点数上的 SP 也是补给站**（12.1b + 13.2f）
@@ -249,6 +249,39 @@ describe('B32 步骤 5：装载在运输点数上的 SP（12.1b / 13.2f）', () 
       expect(store.fuelDumpChoices.map((dump) => dump.id)).not.toContain('unit:tr-1')
     }
   })
+  it('★ 12.3a 直拖：整格只有装载中的 SP 也能选源、付款并扣承运车（P5）', () => {
+    const store = newStore()
+    store.setPhase('supply')
+    store.setSupplyActive(true)
+    const carrier = toConsoleUnit({
+      record: CARRIER_RECORD,
+      instanceId: 'tr-1',
+      hex: HEX,
+      side: 'axis',
+    })
+    carrier.loadedSpT = SP_TO_T
+    const tank = toConsoleUnit({ record: TANK_RECORD, instanceId: 'tk-1', hex: HEX, side: 'axis' })
+    store.units.push(carrier, tank)
+    // 12.6a①：同格声明补给源 ⇒ 该堆叠有追溯补给
+    store.supplySourceDraft = { hexText: hexLabel(HEX), kind: 'supplySourceHex' }
+    expect(store.addSupplySource()).toBe(true)
+
+    expect(store.beginSupplyCheckNow('tk-1')).toBe(true)
+    expect(store.supplySummary?.status).toBe('inSupply')
+    // 12.1b：候选里出现的是**装载来源**（地面账本为空）
+    const index = store.supplySources.findIndex((source) => source.kind === 'dump' && source.ok)
+    expect(store.spDumps).toHaveLength(0)
+    expect(index).toBeGreaterThanOrEqual(0)
+    expect(store.chooseSupplySourceNow(index)).toBe(true)
+
+    store.supplyInputs.amountT = 1
+    store.supplyInputs.purpose = 'fuel'
+    expect(store.confirmSupplyPickupNow()).toBe(true)
+    // 付款落在承运车账上（12.1a 的 SP↔T 换算：1 SP = 4 T，拖 1 T 后剩 3 T），不是去动地面账本
+    expect(carrier.loadedSpT).toBe(SP_TO_T - 1)
+    expect(store.spDumps).toHaveLength(0)
+  })
+
   it('★ 源码守卫：facts / 候选 / 扣款三处都接了"装载来源"，且 id 前缀是 unit:', () => {
     const store = readFileSync('src/stores/workbench.ts', 'utf8')
     expect(store).toContain('const carriedSpDumps = computed')
