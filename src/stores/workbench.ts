@@ -458,6 +458,9 @@ import {
   SHORT_RANGE_BARRAGE_HEXES,
   // 12.7b：延补队距离＝印值 MA（卡车 20 / 马车 10），生成连通判据复用同一来源
   extenderRangeMpOf,
+  // 4.8a：环节/阶段末的堆叠义务（阈值与文案取引擎，操作台只做盘面聚合与摧毁入口）
+  stackingObligations,
+  STACKING_LIMIT_RE,
   type UnitSupplyAssessment,
 } from '@/engine/rules'
 import { createGameSeed, createId } from '@/shared'
@@ -1106,6 +1109,29 @@ for (const side of ['axis', 'soviet'] as const) {
 export type ExclusiveSection =
   'panzer' | 'security' | 'hedgehog' | 'constructionMarker' | 'supplyCache' | 'airRestriction'
 
+/** 4.8a：超堆叠格内一枚**可被拥有者选择摧毁**的本方战斗单位 */
+export interface OverstackDutyUnit {
+  instanceId: string
+  name: string
+  re: number
+}
+
+/**
+ * 4.8a：一格超堆叠义务
+ *
+ * `rule` / `detail` 直接来自引擎 `stackingObligations()`（含 13.6 增援豁免与 >10 RE 判据），
+ * 操作台只负责把盘面按格汇总、给玩家勾选与落盘。
+ */
+export interface OverstackDuty {
+  key: string
+  hex: HexRef
+  side: Side
+  combatRe: number
+  rule: string
+  detail: string
+  units: OverstackDutyUnit[]
+}
+
 export const useWorkbenchStore = defineStore('workbench', () => {
   // ── 对局骨架状态（2.2 流程：当前方 / 阶段 / 回合 / 日期） ──
   //
@@ -1295,6 +1321,65 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   // ── 摆子 ──
   const units = ref<ConsoleUnit[]>([])
+  /**
+   * 4.8a：环节/阶段末的**超堆叠义务**（战斗单位 >10 RE 的格）
+   *
+   * 规则原文：「超堆叠，是指在**任何环节或阶段结束时**，某一格内的战斗单位超过 10RE……
+   *   超堆叠格内单位的拥有者必须摧毁单位，直到满足限制。」
+   * ★ 判据（>10 RE、13.6 增援豁免、规则号与文案）一律问引擎 `stackingObligations()`；
+   *   本 store 只做「按格汇总盘面 + 给出勾选/摧毁入口」，不另写阈值。
+   */
+  const overstackDuties = computed<OverstackDuty[]>(() => {
+    const buckets = new Map<
+      string,
+      { hex: HexRef; side: Side; combatRe: number; units: OverstackDutyUnit[] }
+    >()
+    for (const unit of units.value) {
+      if (!unit.isCombat) continue
+      const key = hexLabel(unit.hex)
+      let bucket = buckets.get(key)
+      if (bucket === undefined) {
+        bucket = { hex: unit.hex, side: unit.side, combatRe: 0, units: [] }
+        buckets.set(key, bucket)
+      }
+      bucket.combatRe += unit.re
+      bucket.units.push({ instanceId: unit.instanceId, name: unit.name, re: unit.re })
+    }
+    const duties: OverstackDuty[] = []
+    for (const bucket of buckets.values()) {
+      const [obligation] = stackingObligations(bucket.hex, bucket.combatRe, phase.value)
+      if (obligation === undefined) continue
+      duties.push({
+        ...bucket,
+        key: hexLabel(bucket.hex),
+        rule: obligation.rule,
+        detail: obligation.detail ?? '',
+      })
+    }
+    // 稳定顺序：界面不随 Map 迭代顺序跳动
+    return duties.sort((a, b) => a.key.localeCompare(b.key))
+  })
+  /** 4.8a 面板勾选：格号 → 拟摧毁的实例 id（只认该格清单里的本方战斗单位） */
+  const overstackPicks = ref<Record<string, string[]>>({})
+  /** 各超堆叠格**勾选后剩余的**战斗 RE（界面与提交判据共用） */
+  const overstackRemainingRe = computed<Record<string, number>>(() => {
+    const out: Record<string, number> = {}
+    for (const duty of overstackDuties.value) {
+      const picked = new Set(overstackPicks.value[duty.key] ?? [])
+      const destroyed = duty.units.reduce(
+        (sum, unit) => (picked.has(unit.instanceId) ? sum + unit.re : sum),
+        0,
+      )
+      out[duty.key] = duty.combatRe - destroyed
+    }
+    return out
+  })
+  /** 4.8a：当前勾选是否**已够**（每一格都回到 ≤10 RE）——界面只用它决定提交可用态 */
+  const overstackSettled = computed<boolean>(() =>
+    overstackDuties.value.every(
+      (duty) => (overstackRemainingRe.value[duty.key] ?? duty.combatRe) <= STACKING_LIMIT_RE,
+    ),
+  )
   /** 1.4b：盒内算子仍属于盘面，入盒回合防止同一移动阶段再次出盒。 */
   const edgeBoxHoldings = ref<Record<'northeast' | 'southeast', ConsoleUnit[]>>({
     northeast: [],
@@ -7226,6 +7311,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     convertedHexesThisPhase.value = []
     railMovedNewTrackThisPhase.value = []
     railMovedUnitIdsThisPhase.value = []
+    // 4.8a：换段后上一次的勾选一律作废（盘面可能已变；未处理的义务仍会被台账重新列出）
+    overstackPicks.value = {}
   }
 
   function resetSupplyPhaseLedger(): void {
@@ -27907,6 +27994,54 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     refreshScenarioBoundLedgers(scenarioId.value)
   }
 
+  /** 4.8a：勾/去勾一格内的一枚可摧毁单位（只认该格清单里的本方战斗单位） */
+  function toggleOverstackPick(hexKey: string, instanceId: string): boolean {
+    const duty = overstackDuties.value.find((item) => item.key === hexKey)
+    if (duty === undefined) return false
+    if (!duty.units.some((unit) => unit.instanceId === instanceId)) return false
+    const current = overstackPicks.value[hexKey] ?? []
+    const next = current.includes(instanceId)
+      ? current.filter((id) => id !== instanceId)
+      : [...current, instanceId]
+    overstackPicks.value = { ...overstackPicks.value, [hexKey]: next }
+    return true
+  }
+
+  /**
+   * 4.8a 落盘：把勾选的单位移入死亡堆（走 `eliminateEntry` 唯一入口）
+   *
+   * ★ 不给「忽略 / 稍后」旁路：**每一格**勾完都必须回到 ≤10 RE 才允许提交；
+   *   任一格仍超限就整批拒绝并留 warning，界面上的推进也继续被 `segmentAdvanceBlock` 拦住。
+   */
+  function destroyOverstackPicksNow(): boolean {
+    const duties = overstackDuties.value
+    if (duties.length === 0) return false
+    const toDestroy: ConsoleUnit[] = []
+    for (const duty of duties) {
+      const picked = overstackPicks.value[duty.key] ?? []
+      const chosen = duty.units.filter((unit) => picked.includes(unit.instanceId))
+      const remaining = duty.combatRe - chosen.reduce((sum, unit) => sum + unit.re, 0)
+      if (remaining > STACKING_LIMIT_RE) {
+        pushLog(
+          'warning',
+          `${duty.key} 仍超堆叠（${remaining} RE > ${STACKING_LIMIT_RE} RE）：4.8a 须由拥有者继续选择摧毁，不能跳过`,
+          '4.8a',
+        )
+        return false
+      }
+      for (const unit of chosen) {
+        const found = units.value.find((item) => item.instanceId === unit.instanceId)
+        if (found !== undefined) toDestroy.push(found)
+      }
+    }
+    if (toDestroy.length === 0) return false
+    for (const unit of toDestroy) {
+      eliminateEntry(unit, '4.8a', `${hexLabel(unit.hex)} 超堆叠：摧毁 ${unit.name}（4.8a）`)
+    }
+    overstackPicks.value = {}
+    return true
+  }
+
   /** 只自动执行规则义务；战损如何分配等玩家选择必须留在正式面板。 */
   function settleSegmentObligations(wholePhase = false): boolean {
     const block = segmentAdvanceBlock(wholePhase)
@@ -27953,6 +28088,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         reason: '轰炸结算进行中：先走完 10.0 流程或按 Esc 放弃，再进入下一环节',
       }
     }
+    /*
+     * 4.8a：**任何环节或阶段结束时**，任一格战斗单位 >10 RE 的，拥有者必须摧毁单位回到上限，
+     * 才能进入下一环节（13.6 增援阶段例外已由引擎 `stackingObligations()` 判掉）。
+     * ★ 没有「忽略」旁路：只能走超堆叠面板逐格勾选摧毁；未回到 ≤10 RE 时连环节都不许换。
+     */
+    const overstack = overstackDuties.value[0]
+    if (overstack !== undefined) {
+      return {
+        rule: overstack.rule,
+        reason: `${overstack.detail}：先在超堆叠面板勾选并摧毁单位，再进入下一环节`,
+      }
+    }
     if (
       ['movement', 'reaction', 'exploitation'].includes(phase.value) &&
       (wholePhase || segmentStep.value?.id !== 'movement.breakout')
@@ -27988,6 +28135,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         automaticPhaseKeys.value = []
       },
       settleObligations: () => settleSegmentObligations(true),
+      // 4.8a：自动段（含 H 清理 → 回合收束）也要先结清超堆叠，不能带过回合。
+      // ★ 剧本首回合的 Pre-Turn / A 段例外：初设合法性由 IV-F 与剧本固定格把关，
+      //   自动初设的贪心落点可能把带 † 的编队堆在固定格（如剧本 3 首回合的 34.17）；
+      //   4.8a 从第一个可玩环节（B 增援）末开始生效，避免"还没开局就先炸单位"。
+      settleOverstack: () => {
+        const records = session.records
+        if (
+          records !== null &&
+          records.turn === scenarioFirstTurn.value &&
+          (records.phase === 'preTurn' || records.phase === 'aircraftRefit')
+        ) {
+          return true
+        }
+        return overstackDuties.value.length === 0
+      },
       cleanUp: runCleanUpNow,
       publishVictory: pushVictoryToSessionNow,
       resetPhase() {
@@ -28114,6 +28276,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 只读闸门解释：**最近一次点击**为何没推进（流程条就地显示；不用于置灰）
     advanceBlock: advanceBlocked,
     currentAdvanceBlock: computed(() => segmentAdvanceBlock()),
+    // 4.8a：环节/阶段末超堆叠义务与摧毁入口（唯一入口；无「忽略」旁路）
+    overstackDuties,
+    overstackPicks,
+    overstackRemainingRe,
+    overstackSettled,
+    toggleOverstackPick,
+    destroyOverstackPicksNow,
     hasSpecialReplDraw,
     markSpecialReplDraw,
     pickRecord,

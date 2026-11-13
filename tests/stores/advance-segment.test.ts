@@ -478,3 +478,113 @@ describe('B5：换环节时盘面中间态自动收束', () => {
     expect(workbench.combatState).not.toBeNull()
   })
 })
+
+/**
+ * 4.8a：**任何环节或阶段结束时**，一格战斗单位 >10 RE 的，拥有者必须摧毁单位直至回到上限，
+ * 才能进入下一环节；增援阶段例外（13.6）。摧毁哪些由拥有者任选。
+ *
+ * 规则原文（`D:\OCS\OCS_TXT\_ocs_v43_clean.txt`）：
+ *   「超堆叠，是指在**任何环节或阶段结束时**，某一格内的战斗单位超过 10RE……
+ *     超堆叠格内单位的拥有者必须摧毁单位，直到满足限制。」
+ */
+describe('4.8a：环节末超堆叠义务', () => {
+  let stores: ReturnType<typeof newStores>
+
+  beforeEach(() => {
+    stores = newStores()
+  })
+
+  const OVER_HEX = { col: 36, row: 13 }
+  const OTHER_HEX = { col: 36, row: 14 }
+
+  /** 把同一张 ≥3 RE 的战斗算子摆 N 枚到一格（实例 id 区分） */
+  function stackUnits(
+    workbench: ReturnType<typeof newStores>['workbench'],
+    side: 'axis' | 'soviet',
+    hex: { col: number; row: number },
+    count: number,
+    prefix: string,
+  ): void {
+    const record = unitChoices(side).find(
+      (item) => item.isCombat === true && (item.reSize ?? 0) >= 3,
+    )!
+    for (let i = 0; i < count; i += 1) {
+      workbench.units.push(toConsoleUnit({ record, instanceId: `${prefix}${i}`, hex, side }))
+    }
+  }
+
+  it('环节末被拦：战斗单位 >10 RE ⇒ 拒绝进入下一环节（规则号 4.8a）', () => {
+    const { session, workbench } = stores
+    session.startGame()
+    workbench.setPhase('movement')
+    session.patchRecords({ activeSide: 'axis' })
+    stackUnits(workbench, 'axis', OVER_HEX, 4, 'over')
+
+    const duty = workbench.overstackDuties[0]!
+    expect(duty.hex).toEqual(OVER_HEX)
+    expect(duty.side).toBe('axis')
+    expect(duty.combatRe).toBeGreaterThan(10)
+    expect(duty.units).toHaveLength(4)
+
+    expect(workbench.currentAdvanceBlock).toMatchObject({ rule: '4.8a' })
+    expect(workbench.advanceSegmentNow()).toBeNull()
+    expect(workbench.advanceBlock).toMatchObject({ rule: '4.8a' })
+  })
+
+  it('摧毁清单只列该格本方战斗单位；选不够不放行，选够后摧毁并放行', () => {
+    const { session, workbench } = stores
+    session.startGame()
+    workbench.setPhase('movement')
+    session.patchRecords({ activeSide: 'axis' })
+    stackUnits(workbench, 'axis', OVER_HEX, 5, 'over')
+    // 别格的己方单位、敌对单位都不该出现在这一格的清单里
+    stackUnits(workbench, 'axis', OTHER_HEX, 1, 'elsewhere')
+    stackUnits(workbench, 'soviet', OTHER_HEX, 1, 'enemy')
+
+    const key = `${OVER_HEX.col}.${OVER_HEX.row}`
+    const duty = workbench.overstackDuties[0]!
+    expect(duty.units.map((unit) => unit.instanceId).sort()).toEqual([
+      'over0',
+      'over1',
+      'over2',
+      'over3',
+      'over4',
+    ])
+    // 别格的单位不能被塞进这一格的清单
+    expect(workbench.toggleOverstackPick(key, 'elsewhere0')).toBe(false)
+    expect(workbench.toggleOverstackPick(key, 'enemy0')).toBe(false)
+
+    // 只选一枚 ⇒ 仍超 10 RE ⇒ 不能过关
+    workbench.toggleOverstackPick(key, 'over0')
+    expect(workbench.overstackRemainingRe[key]).toBeGreaterThan(10)
+    expect(workbench.destroyOverstackPicksNow()).toBe(false)
+    expect(workbench.units).toHaveLength(7)
+
+    // 继续选到回到上限 ⇒ 放行
+    for (const unit of duty.units.slice(1)) {
+      if ((workbench.overstackRemainingRe[key] ?? 0) <= 10) break
+      expect(workbench.toggleOverstackPick(key, unit.instanceId)).toBe(true)
+    }
+    expect(workbench.overstackRemainingRe[key]).toBeLessThanOrEqual(10)
+    expect(workbench.destroyOverstackPicksNow()).toBe(true)
+    expect(workbench.overstackDuties).toEqual([])
+    expect(workbench.currentAdvanceBlock).toBeNull()
+    expect(workbench.advanceSegmentNow()).not.toBeNull()
+    expect(workbench.advanceBlock).toBeNull()
+  })
+
+  it('多种环节都生效：移动 / 战斗 / 补给 / 进击均被拦；增援段按 13.6 豁免', () => {
+    const { session, workbench } = stores
+    session.startGame()
+    session.patchRecords({ activeSide: 'axis' })
+    stackUnits(workbench, 'axis', OVER_HEX, 4, 'over')
+
+    for (const phase of ['movement', 'supply', 'combat', 'exploitation'] as const) {
+      workbench.setPhase(phase)
+      expect(workbench.currentAdvanceBlock, phase).toMatchObject({ rule: '4.8a' })
+    }
+    // 13.6：增援阶段不受 10 RE 限制
+    workbench.setPhase('reinforcement')
+    expect(workbench.currentAdvanceBlock).toBeNull()
+  })
+})

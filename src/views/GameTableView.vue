@@ -14,6 +14,7 @@ import {
   DecisionQueue,
   HotkeyHelpPanel,
   MapActionPopover,
+  OverstackPanel,
   UnitPanel,
 } from '@/components/game'
 import { MapCanvas, MapDock } from '@/components/map'
@@ -507,6 +508,8 @@ onBeforeUnmount(() => {
                 </BaseButton>
               </div>
             </div>
+            <!-- 4.8a：环节/阶段末超堆叠（有义务才挂载；没有「忽略」旁路） -->
+            <OverstackPanel v-if="setup.finished" />
             <SupplyPhasePanel
               v-if="setup.finished && workbench.phase === 'supply' && session === null"
             />

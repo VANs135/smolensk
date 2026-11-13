@@ -104,6 +104,7 @@ describe('Ⓗ H 段：只有「清理」这一个动作的收束段（2.2）', (
       isPlayerPhase: () => false,
       start() {},
       settleObligations: () => true,
+      settleOverstack: () => true,
       cleanUp() {
         cleaned += 1
         return true

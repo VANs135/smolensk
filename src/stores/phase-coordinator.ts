@@ -7,6 +7,8 @@ export interface PhaseCoordinatorPorts {
   isPlayerPhase(): boolean
   start(): void
   settleObligations(): boolean
+  /** 4.8a：自动段也要查的超堆叠义务（返回 false 即本步不许推进） */
+  settleOverstack(): boolean
   cleanUp(): boolean
   publishVictory(): void
   resetPhase(): void
@@ -20,6 +22,13 @@ export function createPhaseCoordinator(ports: PhaseCoordinatorPorts) {
     started: ports.start,
     beforeStep(): boolean {
       if (ports.isInitialSetup()) return false
+      /*
+       * 4.8a 是**任何环节或阶段末**的义务（含自动段：H 清理的强制吸收本身也可能把一格顶过 10 RE），
+       * 所以自动段也要查——否则会带着超堆叠跨过回合收束。
+       * ★ 不能直接复用 `settleObligations()`：它带着补给段义务链，而 preTurn 的阶段投影会回落到
+       *   本地演练值（可能是 supply），自动段调用会把补给结算误触发。
+       */
+      if (!ports.settleOverstack()) return false
       if (ports.isPlayerPhase() && !ports.settleObligations()) return false
       if (ports.current()?.phase === 'cleanUp' && !ports.cleanUp()) return false
       ports.publishVictory()

@@ -143,6 +143,7 @@ describe('2.2 生命周期仅依赖正式记录轨', () => {
       isPlayerPhase: () => true,
       start() {},
       settleObligations: () => true,
+      settleOverstack: () => true,
       cleanUp: () => true,
       publishVictory() {},
       resetPhase() {
@@ -167,6 +168,7 @@ describe('2.2 生命周期仅依赖正式记录轨', () => {
       isPlayerPhase: () => true,
       start() {},
       settleObligations: () => false,
+      settleOverstack: () => true,
       cleanUp() {
         events.push('clean')
         return true
@@ -190,6 +192,7 @@ describe('2.2 生命周期仅依赖正式记录轨', () => {
       isPlayerPhase: () => false,
       start() {},
       settleObligations: () => true,
+      settleOverstack: () => true,
       cleanUp() {
         clean++
         return true

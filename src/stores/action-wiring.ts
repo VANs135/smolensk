@@ -249,6 +249,17 @@ function bulkEntries(): Record<string, UngatedEntry> {
 export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   ...bulkEntries(),
   advanceSegmentNow: { kind: 'flowState', why: '统一阶段执行器先结清规则义务，再按会话状态推进' },
+  // 4.8a：超堆叠义务的勾选是草稿；落盘只在 destroyOverstackPicksNow（时机由推进闸门把住）
+  toggleOverstackPick: {
+    kind: 'draft',
+    why: '只改"该格拟摧毁哪几枚"的勾选集合，不落盘；落盘在 destroyOverstackPicksNow',
+  },
+  // 4.8a：原文的时机是"任何环节或阶段结束时"，不是某个宣布类动作的窗口 ⇒ 不设 ACTION_GATES；
+  // 由 segmentAdvanceBlock 在换段/换阶段时拦截（含自动段），未回到 ≤10 RE 连推进都不许。
+  destroyOverstackPicksNow: {
+    kind: 'noTiming',
+    why: '4.8a 时机="任何环节或阶段结束时"，闸门在同一次推进的 segmentAdvanceBlock，不属 ACTION_GATES',
+  },
   // 裁定 3：确认窗的分派器——实际落盘各走 railMoveNow（move.railTransport 闸）/
   // confirmArrivalRailNow → placeArrivalNow（rein.arrival 闸），本入口只清待确认态
   confirmRailTransportNow: {
