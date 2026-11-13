@@ -17,6 +17,13 @@ export interface CombatInputs {
   defenderAvailableT: number
   /** 12.10a：守方是否动用部队储备（口径同攻方） */
   defenderUsesInternalStocks: boolean
+  /**
+   * 9.5（热座）：补给段**逐方确认**状态。
+   *
+   * 攻方先确认、守方后确认；两方都确认后才出现共用出口（一次校验、一次原子扣款）。
+   * 任一方改动自己的来源/储备/名单/守方是否支付，都会撤销该方（攻方改动连带撤销守方）的确认。
+   */
+  supplyConfirmed: { attacker: boolean; defender: boolean }
   /** 9.6：攻方 AR 草稿选择；正式公开声明由 CombatInteractionState 单独保存。 */
   attackerArUnitId: string | null
   /** 9.6：守方 AR 草稿选择（null＝未选择）。 */
@@ -55,6 +62,7 @@ export function createCombatInputs(): CombatInputs {
     defenderProvides: true,
     defenderAvailableT: 0,
     defenderUsesInternalStocks: false,
+    supplyConfirmed: { attacker: false, defender: false },
     attackerArUnitId: null,
     defenderArUnitId: null,
     stackTerrain: {},

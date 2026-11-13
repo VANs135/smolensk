@@ -193,6 +193,8 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'clearAdvanceNow',
       'clearNonSavableReplNow',
       'clearSupplyPhasePlan',
+      // 9.5 热座：只翻"这一方已确认补给"的标记，付款仍由 confirmCombatSupply 一次落盘
+      'confirmCombatSupplySide',
       'pickCombatSupplyDump',
       'pickFuelDump',
       'removeBarrageLossPoint',

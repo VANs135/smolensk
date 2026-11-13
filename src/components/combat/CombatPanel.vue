@@ -202,6 +202,13 @@ const supplyAttackerItems = computed<readonly CounterPickerItem[]>(() =>
   })),
 )
 
+/** 9.5（热座）：攻方先确认、守方后确认；两方都确认后才出现共用出口 */
+const bothSupplyConfirmed = computed(
+  () =>
+    workbench.combatInputs.supplyConfirmed.attacker &&
+    workbench.combatInputs.supplyConfirmed.defender,
+)
+
 /** 9.6：某一方的行动值（AR）单位阵列。候选集由 store 给（专规 2.3b 的收窄已含在其中） */
 function arItems(
   options: readonly { id: string; label: string }[],
@@ -301,48 +308,26 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
         本场战斗须一次打完：收束前不能保存或读取对局。
       </p>
 
-      <!-- 第 2 步：战斗补给（9.5 / 12.4） -->
+      <!-- 第 2 步：战斗补给（9.5 / 12.4）——攻/守两段同窗，各自确认 -->
       <SessionStep item="combat:supply">
         <div class="row">
           <BaseTag kind="info"> 攻方来源：{{ declaredDumpOf('attacker') ?? '未声明' }} </BaseTag>
-          <BaseTag kind="info"> 守方来源：{{ declaredDumpOf('defender') ?? '未声明' }} </BaseTag>
-          <RuleTip rule="9.5 / 12.4">
-            攻方须付足全部所需 T（不足则取消攻击）；守方可不付（以一半战斗值防御，9.5-B）。
-            在地图上点补给站即声明付款来源（12.4）；来源为「未声明」时无法付款。
-          </RuleTip>
-        </div>
-        <div
-          v-if="declaredDumpOf('attacker') !== null || declaredDumpOf('defender') !== null"
-          class="row"
-        >
           <BaseButton
             v-if="declaredDumpOf('attacker') !== null"
             variant="ghost"
             size="sm"
             @click="workbench.clearCombatSupplyDump('attacker')"
           >
-            清除攻方来源
+            清除
           </BaseButton>
-          <BaseButton
-            v-if="declaredDumpOf('defender') !== null"
-            variant="ghost"
-            size="sm"
-            @click="workbench.clearCombatSupplyDump('defender')"
-          >
-            清除守方来源
-          </BaseButton>
+          <RuleTip rule="9.5 / 12.4">
+            攻方须付足全部所需 T（不足则取消攻击）；守方可不付（以一半战斗值防御，9.5-B）。
+            在地图上点补给站即声明付款来源（12.4）；来源为「未声明」时无法付款。
+          </RuleTip>
         </div>
-        <label class="check">
-          <input v-model="workbench.combatInputs.defenderProvides" type="checkbox" />
-          守方支付
-        </label>
-        <label class="check">
+        <label v-if="workbench.combatAttackerStocksApplicable" class="check">
           <input v-model="workbench.combatInputs.attackerUsesInternalStocks" type="checkbox" />
           攻方用储备
-        </label>
-        <label class="check">
-          <input v-model="workbench.combatInputs.defenderUsesInternalStocks" type="checkbox" />
-          守方用储备
         </label>
         <!-- B14c：参战攻方＝**算子图阵列**；9.5b 的取消/恢复与 9.11c 的损失分配都按这份名单 -->
         <CounterPicker
@@ -353,14 +338,72 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
           @pick="workbench.toggleCombatSupplyAttacker($event)"
           @hover="hoverUnit"
         />
+        <BaseButton
+          v-if="!workbench.combatInputs.supplyConfirmed.attacker"
+          variant="primary"
+          size="sm"
+          title="9.5"
+          @click="workbench.confirmCombatSupplySide('attacker')"
+        >
+          确认攻方补给
+        </BaseButton>
+        <BaseButton
+          v-else
+          variant="ghost"
+          size="sm"
+          @click="workbench.confirmCombatSupplySide('attacker')"
+        >
+          已确认攻方 · 改
+        </BaseButton>
+
         <div class="row">
+          <BaseTag kind="info"> 守方来源：{{ declaredDumpOf('defender') ?? '未声明' }} </BaseTag>
+          <BaseButton
+            v-if="declaredDumpOf('defender') !== null"
+            variant="ghost"
+            size="sm"
+            @click="workbench.clearCombatSupplyDump('defender')"
+          >
+            清除
+          </BaseButton>
+        </div>
+        <label class="check">
+          <input v-model="workbench.combatInputs.defenderProvides" type="checkbox" />
+          守方支付
+        </label>
+        <label v-if="workbench.combatDefenderStocksApplicable" class="check">
+          <input v-model="workbench.combatInputs.defenderUsesInternalStocks" type="checkbox" />
+          守方用储备
+        </label>
+        <BaseButton
+          v-if="
+            workbench.combatInputs.supplyConfirmed.attacker &&
+            !workbench.combatInputs.supplyConfirmed.defender
+          "
+          variant="primary"
+          size="sm"
+          title="9.5"
+          @click="workbench.confirmCombatSupplySide('defender')"
+        >
+          确认守方补给
+        </BaseButton>
+        <BaseButton
+          v-else-if="workbench.combatInputs.supplyConfirmed.defender"
+          variant="ghost"
+          size="sm"
+          @click="workbench.confirmCombatSupplySide('defender')"
+        >
+          已确认守方 · 改
+        </BaseButton>
+
+        <div v-if="bothSupplyConfirmed" class="row">
           <BaseButton
             variant="primary"
             size="sm"
             title="9.5"
             @click="workbench.confirmCombatSupply()"
           >
-            确认战斗补给
+            进入行动值
           </BaseButton>
           <!-- C8：写在确认按钮旁，确认前就能看到「本场战斗须一次打完」 -->
           <span class="muted">确认后本场战斗须一次打完：收束前不能保存或读取对局（9.2）</span>

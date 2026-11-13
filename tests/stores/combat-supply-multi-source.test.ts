@@ -256,3 +256,58 @@ describe('12.4：战斗补给逐单位取源（不要求同源）', () => {
     expect({ sp: dumpD.sp, t: dumpD.t }).toEqual(snapshotD)
   })
 })
+
+describe('9.5：补给段逐方确认（热座）', () => {
+  it('★ 两侧各自确认；改任一方输入只撤该方，攻方改动连带撤销守方', () => {
+    const store = newStore()
+    setupTwoAttackerBattle(store)
+
+    expect(store.combatInputs.supplyConfirmed).toEqual({ attacker: false, defender: false })
+    expect(store.confirmCombatSupplySide('attacker')).toBe(true)
+    expect(store.combatInputs.supplyConfirmed).toEqual({ attacker: true, defender: false })
+    expect(store.confirmCombatSupplySide('defender')).toBe(true)
+    expect(store.combatInputs.supplyConfirmed).toEqual({ attacker: true, defender: true })
+
+    // 守方改自己的输入 ⇒ 只撤守方
+    store.combatInputs.defenderProvides = false
+    expect(store.combatInputs.supplyConfirmed).toEqual({ attacker: true, defender: false })
+
+    expect(store.confirmCombatSupplySide('defender')).toBe(true)
+    // 攻方改输入 ⇒ 连带撤销守方（守方看到的是改前的攻方来源）
+    store.combatInputs.attackerUsesInternalStocks = true
+    expect(store.combatInputs.supplyConfirmed).toEqual({ attacker: false, defender: false })
+  })
+})
+
+describe('12.10a：部队储备只在图上付不清时出现', () => {
+  it('★ 图上足额⇒不适用；付不清⇒适用；全方耗尽⇒不适用；守方不付⇒不适用', () => {
+    const store = newStore()
+    setupTwoAttackerBattle(store)
+    const unitA = store.units.find((unit) => unit.instanceId === 'a1')!
+    const unitB = store.units.find((unit) => unit.instanceId === 'a2')!
+
+    // 未声明来源 ⇒ 图上付不清 ⇒ 攻方适用（默认未耗尽）
+    expect(store.combatInputs.attackerAvailableT).toBe(0)
+    expect(store.combatAttackerStocksApplicable).toBe(true)
+
+    // 声明一座足额来源 ⇒ 图上能全额付清 ⇒ 不适用
+    store.spDumps.push({ id: 'sd-a', side: 'axis', hex: { ...ATTACKER_HEX }, sp: 4, t: 0 })
+    expect(store.pickCombatSupplyDump('attacker', 'sd-a')).toBe(true)
+    expect(store.combatInputs.attackerAvailableT).toBe(holdingsToT({ sp: 4, t: 0 }))
+    expect(store.combatAttackerStocksApplicable).toBe(false)
+
+    // 清掉来源、且全方都已耗尽 ⇒ 付不清也不能用储备 ⇒ 不适用
+    store.clearCombatSupplyDump('attacker')
+    unitA.internalStocks = 'exhausted'
+    unitB.internalStocks = 'exhausted'
+    expect(store.combatAttackerStocksApplicable).toBe(false)
+    // 有一枚还能用 ⇒ 适用
+    unitB.internalStocks = null
+    expect(store.combatAttackerStocksApplicable).toBe(true)
+
+    // 守方：默认要付且图上付不清 ⇒ 适用；改为不付 ⇒ 不适用
+    expect(store.combatDefenderStocksApplicable).toBe(true)
+    store.combatInputs.defenderProvides = false
+    expect(store.combatDefenderStocksApplicable).toBe(false)
+  })
+})

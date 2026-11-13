@@ -11091,6 +11091,91 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
+  /**
+   * 12.4：攻方本场要付的 T（按当前参战名单；9.5b 减员后只剩名单内的单位）
+   */
+  const combatAttackerRequiredT = computed<number>(() => {
+    const ids = combatAttackerIds.value
+    return combatAttackerViews.value
+      .filter((unit) => ids.includes(unit.id))
+      .reduce((sum, unit) => sum + unit.steps, 0)
+  })
+
+  /** 12.4：守方本场要付的 T（每场战斗 2T，≤1 RE 取 1T） */
+  const combatDefenderRequiredT = computed<number>(
+    () =>
+      computeCombatSupplyCost({
+        attackerSteps: 0,
+        defenderRE: combatDefenderViews.value.reduce((sum, unit) => sum + unit.re, 0),
+      }).defenderT,
+  )
+
+  /**
+   * 12.10a：**部队储备**这一项是否适用（不适用就不出现在窗内）
+   *
+   * 原文：只有该单位"无法从图上补给（直接拖取或 HQ 投递）取得所需 SP"时才可用储备。
+   * 这里与引擎 `planCombatSupplyFunding` 同一判据：图上可用 T 已够全额 ⇒ 储备不适用；
+   * 已耗尽（12.10c）的单位也不能再用 ⇒ 若全方都耗尽，这一项也不出现。
+   */
+  const combatAttackerStocksApplicable = computed<boolean>(() => {
+    const ids = combatAttackerIds.value
+    const views = combatAttackerViews.value.filter((unit) => ids.includes(unit.id))
+    return (
+      combatAttackerRequiredT.value > combatInputs.value.attackerAvailableT &&
+      views.some((unit) => unit.internalStocks !== 'exhausted')
+    )
+  })
+  const combatDefenderStocksApplicable = computed<boolean>(
+    () =>
+      combatInputs.value.defenderProvides &&
+      combatDefenderRequiredT.value > combatInputs.value.defenderAvailableT &&
+      combatDefenderViews.value.some((unit) => unit.internalStocks !== 'exhausted'),
+  )
+
+  /**
+   * 9.5（热座）：确认某一方的补给（只翻标记，不落盘）
+   *
+   * 真正的付款仍由共用出口 `confirmCombatSupply()` 一次校验、一次原子扣款；
+   * 两侧都确认后界面才给共用出口，避免一方确认就把整步推过去。
+   */
+  function confirmCombatSupplySide(side: CombatRole): boolean {
+    const state = combatState.value
+    if (state === null || state.step !== 'combatSupply') return false
+    const confirmed = combatInputs.value.supplyConfirmed
+    combatInputs.value = {
+      ...combatInputs.value,
+      supplyConfirmed: { ...confirmed, [side]: !confirmed[side] },
+    }
+    return true
+  }
+
+  // 任一方改自己的输入 ⇒ 撤销该方确认；攻方改动连带撤销守方（守方看到的是改前的攻方来源）
+  watch(
+    () =>
+      `${combatInputs.value.attackerAvailableT}|${combatInputs.value.attackerUsesInternalStocks}|${combatAttackerIds.value.join(',')}`,
+    () => {
+      const confirmed = combatInputs.value.supplyConfirmed
+      if (!confirmed.attacker && !confirmed.defender) return
+      combatInputs.value = {
+        ...combatInputs.value,
+        supplyConfirmed: { attacker: false, defender: false },
+      }
+    },
+    { flush: 'sync' },
+  )
+  watch(
+    () =>
+      `${combatInputs.value.defenderAvailableT}|${combatInputs.value.defenderProvides}|${combatInputs.value.defenderUsesInternalStocks}`,
+    () => {
+      if (!combatInputs.value.supplyConfirmed.defender) return
+      combatInputs.value = {
+        ...combatInputs.value,
+        supplyConfirmed: { ...combatInputs.value.supplyConfirmed, defender: false },
+      }
+    },
+    { flush: 'sync' },
+  )
+
   /** C6 第 2 步：确认战斗补给（9.5/12.4；守方可拒付 ⇒ 以一半战斗值防御） */
   function confirmCombatSupply(): boolean {
     const state = combatState.value
@@ -27536,6 +27621,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     selectCombatDefenderHex,
     beginCombatNow,
     confirmCombatSupply,
+    confirmCombatSupplySide,
+    combatAttackerStocksApplicable,
+    combatDefenderStocksApplicable,
     declareCombatArStep,
     declareCombatTerrainStep,
     rollCombatSurprise,
