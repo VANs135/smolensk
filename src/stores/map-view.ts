@@ -3244,8 +3244,12 @@ export const useMapViewStore = defineStore('mapView', () => {
        *   修前一律调 `abortMoveNow()`，而它在没有移动交互时第一行就返回 ⇒
        *   **缺油那一路点 × 毫无反应**（用户报告 #4「堆叠会话框点 × 有时候关不掉」）。
        */
-      if (workbench.moveInteraction !== null) workbench.abortMoveNow()
-      else {
+      if (workbench.moveInteraction !== null) {
+        // 用户 2026-11-13 批：放弃＝整次回滚；越过不可逆边界（突袭/9.14/1.4b）后改走
+        // `finishMove()` 收束退出——不回滚、也不把会话留在「点了没反应」的状态。
+        if (workbench.canAbortMove) workbench.abortMoveNow()
+        else workbench.finishMove()
+      } else {
         // 没在移动 ⇒ 退掉这次选中与待付（`movePick` 也要清，否则付款受益集还挂着）
         workbench.cancelMovePick()
         workbench.selectedId = null

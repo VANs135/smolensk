@@ -75,6 +75,19 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
       moveInteraction.value.steps.length > 0 &&
       undoBlockedReason.value === null,
   )
+  /**
+   * 用户 2026-11-13 批：不可用项不出现 ⇒「放弃本次移动」同样按同源判据隐藏。
+   * 口径比 `canUndoStep` 更严一档：放弃＝整次回滚 + 收起会话，所以「无步可锚」的
+   * 1.4b 入盒（`rollbackFloor >= 0` 而 `steps.length === 0`）也算不可放弃。
+   */
+  const canAbortMove = computed<boolean>(() => {
+    const interaction = moveInteraction.value
+    if (interaction === null || !ports.mayMutate()) return false
+    const locked = interaction.unitIds.some(
+      (id) => moveContext.value.units.find((unit) => unit.id === id)?.mpLockedThisPhase,
+    )
+    return !locked && rollbackFloor.value < 0
+  })
   function refuseRollback(all = false): boolean {
     if (!ports.mayMutate()) return true
     const interaction = moveInteraction.value
@@ -227,6 +240,8 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
     /** K5：撤销一步的可用性（UI 只读这一处；判据与 `refuseRollback` 同源） */
     canUndoStep,
     undoBlockedReason,
+    /** 用户 2026-11-13 批：「放弃本次移动」的可用性（整次回滚口径，含无步可锚的 1.4b） */
+    canAbortMove,
     mayMutate: ports.mayMutate,
   }
 }

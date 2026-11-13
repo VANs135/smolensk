@@ -305,7 +305,13 @@ function hoverUnit(id: string | null): void {
         <BaseButton variant="primary" size="sm" @click="workbench.finishMove()">
           结束移动
         </BaseButton>
-        <BaseButton variant="ghost" size="sm" @click="workbench.abortMoveNow()">
+        <!-- 用户 2026-11-13 批：放弃＝整次回滚，越过不可逆边界后不出现（Esc 仍可收束退出） -->
+        <BaseButton
+          v-if="workbench.canAbortMove"
+          variant="ghost"
+          size="sm"
+          @click="workbench.abortMoveNow()"
+        >
           放弃本次移动（全部还原并退出）
         </BaseButton>
       </div>
@@ -379,7 +385,13 @@ function hoverUnit(id: string | null): void {
         >
           暂停移动（13.2a）
         </BaseButton>
-        <BaseButton variant="ghost" size="sm" @click="workbench.abortMoveNow()">
+        <!-- 用户 2026-11-13 批：放弃＝整次回滚，越过不可逆边界后不出现（Esc 仍可收束退出） -->
+        <BaseButton
+          v-if="workbench.canAbortMove"
+          variant="ghost"
+          size="sm"
+          @click="workbench.abortMoveNow()"
+        >
           放弃本次移动（全部还原并退出）
         </BaseButton>
       </div>

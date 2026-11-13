@@ -26961,6 +26961,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // K5：撤销一步的可用性（判据在 ground-movement，与 refuseRollback 同源）
     canUndoStep: groundMovement.canUndoStep,
     undoBlockedReason: groundMovement.undoBlockedReason,
+    // 用户 2026-11-13 批：「放弃本次移动」不可用时按钮不出现（Esc 仍走 finishMove 收束退出）
+    canAbortMove: groundMovement.canAbortMove,
     // B15a：放弃本次移动**并退出移动态**（会话框的取消 / Esc）
     abortMoveNow,
     finishMove,

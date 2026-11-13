@@ -166,6 +166,34 @@ function driveResolutionLossFirst(store: Store): void {
   }
 }
 
+/** 摆好 78 师 + 弱守方，按地图高亮入口发起突袭并一路走到收束 */
+function settleOverrun(store: Store) {
+  const attacker = place(store, mover(), ATTACKER_HEX, 'axis', 'k5-a1')
+  const defender = place(store, weakDefender(), DEFENDER_HEX, 'soviet', 'k5-d1')
+  expect(defender.side).toBe('soviet')
+
+  store.setPhase('movement')
+  goToMovementStep(store)
+  store.setTool('move')
+  store.setFuelPool(0, 60)
+  store.beginMovePick(ATTACKER_HEX, [attacker.instanceId])
+  expect(store.confirmMovePick()).toBe(true)
+  expect(store.overrunTargets.some((hint) => hexDistance(hint.hex, DEFENDER_HEX) === 0)).toBe(true)
+
+  expect(store.overrunNow(DEFENDER_HEX)).toBe(true)
+  driveCombatSteps(store)
+  driveResolutionLossFirst(store)
+  if (store.combatState?.step === 'retreat') {
+    for (const plan of store.combatRetreatPlans) {
+      for (const row of plan.units)
+        expect(store.setRetreatDestinationNow(row.unitId, row.destinations[0]!.hex)).toBe(true)
+    }
+    expect(store.confirmCombatRetreats()).toBe(true)
+  }
+  expect(store.combatState?.finished).toBe(true)
+  return { attacker, defender }
+}
+
 describe('K5：撤销链在不可逆步之前截断', () => {
   let store: Store
 
@@ -198,31 +226,7 @@ describe('K5：撤销链在不可逆步之前截断', () => {
   })
 
   it('突袭收束后：撤销一步消失（canUndoStep=false），强制撤也不动位置/MP', () => {
-    const attacker = place(store, mover(), ATTACKER_HEX, 'axis', 'k5-a1')
-    const defender = place(store, weakDefender(), DEFENDER_HEX, 'soviet', 'k5-d1')
-    expect(defender.side).toBe('soviet')
-
-    store.setPhase('movement')
-    goToMovementStep(store)
-    store.setTool('move')
-    store.setFuelPool(0, 60)
-    store.beginMovePick(ATTACKER_HEX, [attacker.instanceId])
-    expect(store.confirmMovePick()).toBe(true)
-    expect(store.overrunTargets.some((hint) => hexDistance(hint.hex, DEFENDER_HEX) === 0)).toBe(
-      true,
-    )
-
-    expect(store.overrunNow(DEFENDER_HEX)).toBe(true)
-    driveCombatSteps(store)
-    driveResolutionLossFirst(store)
-    if (store.combatState?.step === 'retreat') {
-      for (const plan of store.combatRetreatPlans) {
-        for (const row of plan.units)
-          expect(store.setRetreatDestinationNow(row.unitId, row.destinations[0]!.hex)).toBe(true)
-      }
-      expect(store.confirmCombatRetreats()).toBe(true)
-    }
-    expect(store.combatState?.finished).toBe(true)
+    const { attacker } = settleOverrun(store)
 
     // 突袭步已进 interaction（kind=overrun），3 MP 已记账
     const steps = store.moveInteraction?.steps ?? []
@@ -243,5 +247,55 @@ describe('K5：撤销链在不可逆步之前截断', () => {
     expect(attacker.mpSpent).toBe(3)
     expect(store.moveInteraction?.steps).toHaveLength(1)
     expect(store.log[0]?.text).toContain('只能撤销此后尚未产生额外结算的步骤')
+  })
+
+  it('放弃本次移动：普通移动可放弃（整次还原并退出会话）', () => {
+    const unit = place(store, mover(), ATTACKER_HEX, 'axis', 'k5-m2')
+    store.setPhase('movement')
+    goToMovementStep(store)
+    store.setTool('move')
+    store.setFuelPool(0, 60)
+    store.beginMovePick(ATTACKER_HEX, [unit.instanceId])
+    expect(store.confirmMovePick()).toBe(true)
+    store.clickHex(store.groupReachable.hexes[0]!.hex)
+
+    expect(store.canAbortMove).toBe(true)
+    expect(store.abortMoveNow()).toBe(true)
+    expect(store.moveInteraction).toBeNull()
+    expect(unit.hex).toEqual(ATTACKER_HEX)
+    expect(unit.mpSpent).toBe(0)
+  })
+
+  it('放弃本次移动：突袭收束后不可放弃，Esc 分支改走 finishMove 收束且不回滚', () => {
+    const { attacker } = settleOverrun(store)
+
+    expect(store.canAbortMove).toBe(false)
+    // 绕过按钮直调也必须拒（不还原盘面、不退出）
+    expect(store.abortMoveNow()).toBe(false)
+    expect(store.moveInteraction).not.toBeNull()
+    expect(attacker.hex).toEqual(DEFENDER_HEX)
+    expect(attacker.mpSpent).toBe(3)
+
+    // map-view 的 Esc / 会话 × 分支：不可放弃 ⇒ finishMove() 收束退出（会话 finished），但绝不回滚
+    store.finishMove()
+    expect(store.moveInteraction?.finished).toBe(true)
+    expect(attacker.hex).toEqual(DEFENDER_HEX)
+    expect(attacker.mpSpent).toBe(3)
+    expect(attacker.movementEnded).toBe(true)
+  })
+
+  it('放弃本次移动：1.4b 入盒（无步可锚）也算不可放弃', () => {
+    const unit = place(store, mover(), ATTACKER_HEX, 'axis', 'k5-b1')
+    store.setPhase('movement')
+    goToMovementStep(store)
+    store.setTool('move')
+    store.setFuelPool(0, 60)
+    store.beginMovePick(ATTACKER_HEX, [unit.instanceId])
+    expect(store.confirmMovePick()).toBe(true)
+    // 一步都还没走，但盒内已落盘：floor 已在 0 以上 ⇒ 整次回滚必须拒
+    store.sealEdgeBoxTransferNow(unit.instanceId)
+    expect(store.moveInteraction?.steps).toHaveLength(0)
+    expect(store.canAbortMove).toBe(false)
+    expect(store.abortMoveNow()).toBe(false)
   })
 })
