@@ -367,7 +367,11 @@ onBeforeUnmount(() => {
     <FlowStrip variant="bar">
       <template #trail>
         <BaseButton
-          v-if="workbench.segmentStep?.id === 'movement.breakout' && session === null"
+          v-if="
+            workbench.segmentStep?.id === 'movement.breakout' &&
+            !workbench.segmentLocked &&
+            session === null
+          "
           variant="secondary"
           size="sm"
           @click="mapView.openBreakoutNow()"

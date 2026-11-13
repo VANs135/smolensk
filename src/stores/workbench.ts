@@ -7659,6 +7659,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   - 多枚且已开「整堆叠」 ⇒ 整堆叠一起作为候选。
    */
   function selectForMove(hex: HexRef, only?: readonly string[]): void {
+    /*
+     * 2.2：回合准备环节（天气 / 先手判定）**没有行动段** ⇒ 左键只做只读选中，
+     * 不建「待开拔」取子清单。否则本地段的移动会话（含「开始移动」）会漏进这个环节：
+     * 玩家点了才算被 2.2 拒，观感上等于"这里本来能移动"。
+     */
+    if (segmentLocked.value) {
+      movePick.value = null
+      const atHex = friendlyUnitsAt(hex)
+      selectedId.value = only?.[only.length - 1] ?? atHex[atHex.length - 1]?.instanceId ?? null
+      refuseWhileLocked('开拔')
+      return
+    }
     const friendlies = movePickPoolAt(hex)
     if (friendlies.length === 0) {
       /*

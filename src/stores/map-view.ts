@@ -775,6 +775,12 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   const actionHint = computed<string>(() => {
+    /*
+     * 2.2：回合准备（天气 / 先手判定）不属于 A–H 任何一段 ⇒ 地图上没有任何动作可做。
+     * 修前这里落到最后那句「点己方算子＝显示可移动范围」，等于教玩家去做一件必被 2.2 拒的事。
+     */
+    if (workbench.segmentLocked)
+      return '回合准备：天气 / 先手判定自动进行（1.5 / 2.3），本环节没有行动段（2.2）'
     // B27：正在选格（通用待点格）最优先——玩家已经明确表达"我在选一个格"
     if (workbench.hexPickHint !== '') return workbench.hexPickHint
     // 9.14：待决的位移落点次优先（它必须收束，其余动作都被它挡住）

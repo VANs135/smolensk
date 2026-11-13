@@ -191,7 +191,10 @@ export function buildFlowGuide(input: FlowGuideInput): FlowGuide {
     formLabel: formText(input.form),
     phaseLabel: bare(input.phaseLabel),
     segmentLabel,
-    todoLabel: input.segmentStep === null ? '—' : `本环节可参与 ${input.participatingUnitCount} 枚`,
+    todoLabel:
+      input.segmentStep === null || input.currentStep?.phase === 'preTurn'
+        ? '—'
+        : `本环节可参与 ${input.participatingUnitCount} 枚`,
     actingSideLabel: actingSide(input.currentStep, input.firstPlayer),
     decisionRoleLabel: decisionRole(input),
     canAdvance,
