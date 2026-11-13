@@ -71,3 +71,5 @@ export * from './fog'
 // W7 C14：初设与开局流程（通规 IV Set Up Notes / 专规 Setup Notes / 12.1d SP 归属 /
 // 3.4b 装甲集群 SP / 13.2h 卡车满载 / IV-E·14.1a 飞机初设）
 export * from './setup'
+// 专规 4.3（可选）Setup Wiggle：初设拆团与 1.Mot Div 落点放宽的判据常量
+export * from './setup-wiggle'

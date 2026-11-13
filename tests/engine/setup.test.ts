@@ -11,6 +11,7 @@ import {
   STACKING_RULE,
   WITHIN_RULE,
   airSetupPolicyOf,
+  isSetupWiggleMotEntry,
   normalizeAircraftKey,
   parseSetupRadius,
   planAirSetup,
@@ -272,6 +273,29 @@ describe('W7 C14：玩家自定义初设的落位校验（通规 IV-A / F / I）
     const rejected = planSetupPlacement({ entry, targetHex: far })
     expect(rejected).toMatchObject({ ok: false, rule: WITHIN_RULE })
     if (!rejected.ok) expect(rejected.reason).toContain('setupHexOutOfRange')
+  })
+
+  it('专规 4.3（可选）B：1.Mot Div 的落点放宽到 18.17 一格内（只在传 extraCandidates 时）', () => {
+    const entry = setupEntryViews(S1, 'soviet').find((view) => view.raw.includes('1 Mtr Div'))
+    if (entry === undefined) throw new Error('剧本 1 应有 1 Mtr Div 的初设条目')
+    // 入口判据：数据写作 1 Mtr Div，勘误写作 1.Mot Div，两种写法都认
+    expect(isSetupWiggleMotEntry(entry)).toBe(true)
+    // 原落点 18.17：不传额外候选也通过
+    expect(planSetupPlacement({ entry, targetHex: { col: 18, row: 17 } }).ok).toBe(true)
+    // 一格内 18.18：未传额外候选 ⇒ 仍按原范围拒（未启用 4.3 的原行为）
+    const neighbor = { col: 18, row: 18 }
+    expect(planSetupPlacement({ entry, targetHex: neighbor })).toMatchObject({
+      ok: false,
+      rule: WITHIN_RULE,
+    })
+    // 传了额外候选（＝4.3 启用且本条是 1.Mot Div）⇒ 通过，并如实标 4.3
+    const widened = planSetupPlacement({
+      entry,
+      targetHex: neighbor,
+      extraCandidates: [neighbor],
+    })
+    expect(widened.ok).toBe(true)
+    if (widened.ok) expect(widened.data.rule).toBe('4.3')
   })
 
   it('C14：`任一指挥部同格` 的条目落在非 HQ 格 ⇒ 拒；落在 HQ 格 ⇒ 通过', () => {

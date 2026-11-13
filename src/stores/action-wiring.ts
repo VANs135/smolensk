@@ -272,6 +272,11 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     kind: 'draft',
     why: '只读投影：按同格预演列出"可移除伙伴"给整编会话选，`units.value` 仅用于取单位，不落盘',
   },
+  // 专规 4.3（可选）A：初设拆团的落点候选（母师两格内）——纯查询，`units.value` 只用来找母师
+  setupBreakdownCandidates: {
+    kind: 'draft',
+    why: '纯查询：列初设拆团的落点候选（母师两格内），只读不落盘；落盘在 takeBreakdown',
+  },
   // #13：取子勾选本身是草稿；同一入口按 12.5c-A 给"同格同编队、该编队已付过 1SP"的单位补记
   // `fuelled`（`applyFormationFuelCoverage`）。补记**不重复扣 SP**——付款账本仍只在 payFuel。
   toggleMovePick: {

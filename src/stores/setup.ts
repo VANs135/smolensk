@@ -9,6 +9,9 @@ import {
   airBoxEdgeColumn,
   assessSetupTruckLoad,
   assessSetupSpOwnership,
+  isSetupWiggleMotEntry,
+  SETUP_WIGGLE_MOT_ANCHOR,
+  SETUP_WIGGLE_MOT_RADIUS,
   boundarySideOf,
   breakdownCounterValues,
   SETUP_RULE,
@@ -450,14 +453,29 @@ export const useSetupStore = defineStore('setup', () => {
   }
 
   /**
+   * 专规 4.3（可选）B：1.Mot Div 的额外落点 —— 18.17 一格内
+   *
+   * 未启用 / 本条不是 1.Mot Div ⇒ 空数组（调用方据此保持原候选范围与原始校验）。
+   */
+  function wiggleMotExtraCandidates(entry: SetupEntryView): readonly HexRef[] {
+    if (!game.rule4On('setupWiggle')) return []
+    if (!isSetupWiggleMotEntry(entry)) return []
+    return hexesWithin(SETUP_WIGGLE_MOT_ANCHOR, SETUP_WIGGLE_MOT_RADIUS, { onMapOnly: true })
+  }
+
+  /**
    * 某条自由项的候选格（按**该条目的所属方**注入盘面事实）
    *
    * 与引擎同一条路（`setupCandidates` + IV-I 过滤），故界面给出的选项一定落在合法范围内。
+   * 专规 4.3 启用时，1.Mot Div 额外并入「18.17 一格内」。
    */
   function candidatesOf(entryIndex: number): readonly HexRef[] {
     const entry = entries.value.find((view) => view.index === entryIndex)
     if (entry === undefined) return []
-    return setupCandidates(entry, factsFor(entry.side))
+    const base = setupCandidates(entry, factsFor(entry.side))
+    const extra = wiggleMotExtraCandidates(entry)
+    if (extra.length === 0) return base
+    return [...base, ...extra.filter((hex) => !base.some((item) => sameHex(item, hex)))]
   }
 
   /* ────────────────────────────── 地图点选放置（初设重做） ────────────────────────────── */
@@ -2533,7 +2551,13 @@ export const useSetupStore = defineStore('setup', () => {
       lastAction.value = { ok: false, rule: 'IV-A', detail: `请先填写合法格号（列.行）` }
       return false
     }
-    const outcome = planSetupPlacement({ entry, targetHex: target, facts: factsFor(entry.side) })
+    const extraCandidates = wiggleMotExtraCandidates(entry)
+    const outcome = planSetupPlacement({
+      entry,
+      targetHex: target,
+      facts: factsFor(entry.side),
+      ...(extraCandidates.length === 0 ? {} : { extraCandidates }),
+    })
     if (!outcome.ok) return record(outcome)
 
     // 落盘：计数类条目按面额拆算子（SP / 运输点 / 空军基地）；棋子按 `unitId` 配子

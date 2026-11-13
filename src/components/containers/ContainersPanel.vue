@@ -7,7 +7,7 @@ import AircraftRoster from '@/components/air/AircraftRoster.vue'
 import UiField from '@/components/UiField.vue'
 import { useUiMode } from '@/components/ui-mode'
 import { formations } from '@/data'
-import type { Side } from '@/data'
+import type { HexRef, Side } from '@/data'
 import type { BoxView, EdgeBoxId, ScenarioDrawBoxView } from '@/engine/rules'
 import {
   useContainersStore,
@@ -83,8 +83,35 @@ const breakdownCountMax = computed<number>(() => {
 const breakdownCountNow = computed<number>(() =>
   breakdownCountMax.value === 0
     ? 0
-    : Math.min(Math.max(1, breakdownCount.value), breakdownCountMax.value),
+    : breakdownTimingNow.value === 'setupWiggle'
+      ? 1 // 专规 4.3：每个师只能拆一个团
+      : Math.min(Math.max(1, breakdownCount.value), breakdownCountMax.value),
 )
+
+/* ── 专规 4.3（可选）A：初设拆团的落点（玩家在地图上点选） ── */
+/** 是否处于 4.3 的初设拆团时机（未启用 4.3 时永远 false ⇒ 下面这块不出现） */
+const breakdownIsSetupWiggle = computed(() => breakdownTimingNow.value === 'setupWiggle')
+/** 本次选定的落点（换母师/换时机即清空） */
+const breakdownTargetHex = ref<HexRef | null>(null)
+const breakdownTargetLabel = computed(() =>
+  breakdownTargetHex.value === null
+    ? '（未选）'
+    : `${breakdownTargetHex.value.col}.${breakdownTargetHex.value.row}`,
+)
+/** 打开地图选点：候选＝母师两格内（引擎/store 给，不由组件算） */
+function pickBreakdownTarget(): void {
+  const parent = breakdownParent.value
+  if (parent === null) return
+  workbench.beginHexPick({
+    label: `${parent.name} 的拆分团落点（专规 4.3：母师两格内）`,
+    rule: '4.3',
+    candidates: [...workbench.setupBreakdownCandidates(parent.instanceId)],
+    apply: (hex) => {
+      breakdownTargetHex.value = { col: hex.col, row: hex.row }
+      return true
+    },
+  })
+}
 /** 编队抽签落盘的组成事实（编队 id → Mtr/Aufk/Krd 单位 id） */
 // ★ I②：组成由 store 自动推（containers.drawCompositionNoteOf），不再有玩家手输 unit id 的文本框
 /** 边缘盒进出：从可用单位中选，并决定用 MP 或铁路容量。 */
@@ -191,9 +218,16 @@ const breakdownTimingLabel = computed<string>(() => {
       return '战后推进'
     case 'retreatAfterCombat':
       return '战后撤退'
+    case 'setupWiggle':
+      return '初设拆团（专规 4.3）'
     default:
       return '—'
   }
+})
+
+// 换母师 / 换时机后清空上一师选的落点，避免拿旧落点提交
+watch([breakdownParentId, breakdownTimingNow], () => {
+  breakdownTargetHex.value = null
 })
 
 /** 编队盒：图上的编队标记名 */
@@ -231,7 +265,16 @@ const parentCandidates = computed(() =>
     .filter(
       (unit) =>
         !unit.specialized.includes('breakdown') &&
-        (uiMode === 'verify' || unit.side === actingSide.value),
+        (uiMode === 'verify' || unit.side === actingSide.value) &&
+        /*
+         * 专规 4.3（可选）A：初设阶段只列**可拆团的满员苏军步兵师**（名额未满、未用过）。
+         * 未启用 4.3 时 `setupWiggleOn` 为 false ⇒ 本段不生效，父候选与修前逐字相同。
+         */
+        !(
+          workbench.setupWiggleOn &&
+          workbench.initialSetupInProgress &&
+          workbench.setupBreakdownCandidates(unit.instanceId).length === 0
+        ),
     )
     .map((unit) => ({
       id: unit.instanceId,
@@ -763,24 +806,45 @@ function boxAircraft(side: Side) {
               type="number"
               min="1"
               :max="Math.max(1, breakdownCountMax)"
+              :disabled="breakdownIsSetupWiggle"
             />
           </label>
+          <!-- 专规 4.3（可选）A：初设拆团的落点由玩家在地图上点选（母师两格内） -->
+          <template v-if="breakdownIsSetupWiggle">
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :disabled="breakdownParentId === ''"
+              @click="pickBreakdownTarget"
+            >
+              ③ 在地图上选落点（母师两格内）
+            </BaseButton>
+            <span class="muted num">落点：{{ breakdownTargetLabel }}</span>
+          </template>
           <BaseButton
             variant="primary"
             size="sm"
             :disabled="
-              breakdownParentId === '' || breakdownTimingNow === null || breakdownCountNow === 0
+              breakdownParentId === '' ||
+              breakdownTimingNow === null ||
+              breakdownCountNow === 0 ||
+              (breakdownIsSetupWiggle && breakdownTargetHex === null)
             "
             :title="
               breakdownTimingNow === null
                 ? '20.0a：只有「开始移动 / 战后推进 / 战后撤退」三个时机能创建拆分单位（未动过的单位在本方移动环节直接可拆）'
-                : `20.0a 当前时机：${breakdownTimingLabel}；20.0b 子 AR ≤ 母 AR`
+                : breakdownIsSetupWiggle
+                  ? '专规 4.3：初设阶段每个满员苏军步兵师可拆一个团，落点须在母师两格内'
+                  : `20.0a 当前时机：${breakdownTimingLabel}；20.0b 子 AR ≤ 母 AR`
             "
             @click="
               containers.takeBreakdown({
                 parentInstanceId: breakdownParentId,
                 breakdownAr,
                 count: breakdownCountNow,
+                ...(breakdownIsSetupWiggle && breakdownTargetHex !== null
+                  ? { targetHex: breakdownTargetHex }
+                  : {}),
               })
             "
           >

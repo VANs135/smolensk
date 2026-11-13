@@ -1009,8 +1009,13 @@ export const useContainersStore = defineStore('containers', () => {
     breakdownAr: number
     /** 20.0：「一个或多个」——一次取几枚（缺省 1）；上限由引擎按军力/池量判 */
     count?: number
+    /**
+     * 专规 4.3（可选）A：初设拆团的落点（须在母师两格内）
+     *
+     * 只在 `timing === 'setupWiggle'` 时接受；未传（或其它时机）⇒ 摆到母单位所在格（20.0 原行为）。
+     */
+    targetHex?: HexRef
   }): boolean {
-    if (!workbench.requireAction('move.breakdown', '取用拆分单位')) return false
     const parentUnit = workbench.units.find((unit) => unit.instanceId === input.parentInstanceId)
     if (parentUnit === undefined) {
       lastAction.value = { ok: false, rule: '20.0', detail: '母单位不在图上', scope: '拆分单位盒' }
@@ -1023,6 +1028,45 @@ export const useContainersStore = defineStore('containers', () => {
         '（只有「开始移动 / 战后推进 / 战后撤退」这三个时机能创建拆分单位）'
       lastAction.value = { ok: false, rule: '20.0a', detail, scope: '拆分单位盒' }
       workbench.pushLog('warning', detail, '20.0a')
+      return false
+    }
+    /*
+     * 专规 4.3（可选）A：初设拆团与 20.0a 的三个时机不同——
+     *   · 不走 `move.breakdown` 环节闸（初设不是移动环节）；
+     *   · 落点由玩家在地图上选，须在母师**两格内**；
+     *   · 每个母师只能拆一个团（本函数一次只接 1 枚）。
+     * 未勾定 4.3 时 `breakdownTimingOf` 不会给出 `setupWiggle` ⇒ 本段不可达。
+     */
+    const setupWiggle = timing === 'setupWiggle'
+    if (setupWiggle) {
+      if (!workbench.initialSetupInProgress) {
+        lastAction.value = {
+          ok: false,
+          rule: '4.3',
+          detail: '初设已结束，不能再用 4.3 拆团',
+          scope: '拆分单位盒',
+        }
+        return false
+      }
+      if (input.count !== undefined && input.count !== 1) {
+        const detail = '专规 4.3：每个师只能拆一个团（一次 1 枚）'
+        lastAction.value = { ok: false, rule: '4.3', detail, scope: '拆分单位盒' }
+        workbench.pushLog('warning', detail, '4.3')
+        return false
+      }
+      const target = input.targetHex
+      const legal =
+        target !== undefined &&
+        workbench
+          .setupBreakdownCandidates(parentUnit.instanceId)
+          .some((hex) => sameHex(hex, target))
+      if (!legal) {
+        const detail = '专规 4.3：拆分团的落点须在母师两格内（先在地图上选落点）'
+        lastAction.value = { ok: false, rule: '4.3', detail, scope: '拆分单位盒' }
+        workbench.pushLog('warning', detail, '4.3')
+        return false
+      }
+    } else if (!workbench.requireAction('move.breakdown', '取用拆分单位')) {
       return false
     }
     const box = boxOf('breakdownBox', parentUnit.side)
@@ -1095,7 +1139,10 @@ export const useContainersStore = defineStore('containers', () => {
       const child = toConsoleUnit({
         record,
         instanceId: createId('brk'),
-        hex: { ...parentUnit.hex },
+        // 专规 4.3：初设拆团落在玩家选的格（已验在母师两格内）；其余时机仍落母单位格
+        hex: {
+          ...(setupWiggle && input.targetHex !== undefined ? input.targetHex : parentUnit.hex),
+        },
         side: parentUnit.side,
         face: parentUnit.mode.mode === 'move' ? 'move' : 'combat',
       })
@@ -1109,8 +1156,21 @@ export const useContainersStore = defineStore('containers', () => {
       child.internalStocks = parentUnit.internalStocks
       workbench.units.push(child)
     }
-    lastAction.value = { ok: true, rule: plan.rule, detail: plan.data.detail, scope: '拆分单位盒' }
-    workbench.pushLog('success', plan.data.detail, plan.rule)
+    if (setupWiggle) {
+      // 4.3 A：本师已用掉一个拆团名额（上限 6 个师，见 workbench.setupWiggleRemaining）
+      workbench.setupWiggleParents = [...workbench.setupWiggleParents, parentUnit.instanceId]
+    }
+    const wiggleTarget = setupWiggle ? input.targetHex : undefined
+    lastAction.value = {
+      ok: true,
+      rule: plan.rule,
+      detail:
+        wiggleTarget === undefined
+          ? plan.data.detail
+          : `${plan.data.detail}；专规 4.3：落点 ${wiggleTarget.col}.${wiggleTarget.row}（母师两格内）`,
+      scope: '拆分单位盒',
+    }
+    workbench.pushLog('success', lastAction.value.detail, plan.rule)
     return true
   }
 

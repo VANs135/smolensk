@@ -474,6 +474,13 @@ export interface SetupPlacementRequest {
   /** 玩家（或自动初设）选定的目标格 */
   targetHex: HexRef
   facts?: SetupCandidateFacts
+  /**
+   * 专规 4.3（可选）B：额外允许的落点（1.Mot Div 的「18.17 一格内」）
+   *
+   * 只有 4.3 启用且本条目是 1.Mot Div 时调用方才传；**不传＝原候选范围**。
+   * 仍要过 IV-I（在地图上 / 可进入）与 IV-F（堆叠）两关，放宽的只是「格范围」。
+   */
+  extraCandidates?: readonly HexRef[]
 }
 
 /** 单条放置的结论 */
@@ -531,12 +538,21 @@ export function planSetupPlacement(
       `setupCandidatesUnavailable:${entry.placement === 'anyHq' ? 'hqHexes' : 'airBaseHexes'}`,
     )
   }
-  if (!candidates.some((hex) => sameHex(hex, targetHex))) {
-    const allowed = candidates.slice(0, 6).map(setupHexLabel).join('、')
-    return fail(
-      WITHIN_RULE,
-      `setupHexOutOfRange:${setupHexLabel(targetHex)}（可在 ${allowed}${candidates.length > 6 ? ' 等' : ''}）`,
-    )
+  const viaWiggle = !candidates.some((hex) => sameHex(hex, targetHex))
+  if (viaWiggle) {
+    /*
+     * 专规 4.3（可选）B：1.Mot Div 放宽到「18.17 一格内」——
+     * 只有调用方传了 `extraCandidates`（＝4.3 启用且本条目是 1.Mot Div）才走这一支；
+     * 未传时与修前完全一致（直接按原范围拒）。
+     */
+    const extra = request.extraCandidates ?? []
+    if (!extra.some((hex) => sameHex(hex, targetHex))) {
+      const allowed = candidates.slice(0, 6).map(setupHexLabel).join('、')
+      return fail(
+        WITHIN_RULE,
+        `setupHexOutOfRange:${setupHexLabel(targetHex)}（可在 ${allowed}${candidates.length > 6 ? ' 等' : ''}）`,
+      )
+    }
   }
 
   if (facts.existingRe !== undefined) {
@@ -551,10 +567,12 @@ export function planSetupPlacement(
   return succeed(entry.rule, {
     hex: { ...targetHex },
     freeChoice,
-    rule: entry.rule,
-    detail: freeChoice
-      ? `${entry.raw} ⇒ ${hexText}（自由项：须与对手共享候选范围，${WITHIN_RULE}）`
-      : `${entry.raw} ⇒ ${hexText}（按剧本页清单）`,
+    rule: viaWiggle ? '4.3' : entry.rule,
+    detail: viaWiggle
+      ? `${entry.raw} ⇒ ${hexText}（专规 4.3：1.Mot Div 可在 18.17 一格内初设）`
+      : freeChoice
+        ? `${entry.raw} ⇒ ${hexText}（自由项：须与对手共享候选范围，${WITHIN_RULE}）`
+        : `${entry.raw} ⇒ ${hexText}（按剧本页清单）`,
   })
 }
 

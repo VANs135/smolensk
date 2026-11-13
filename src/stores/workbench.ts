@@ -46,6 +46,7 @@ import {
   allMapHexes,
   areAdjacent,
   hexDistance,
+  hexesWithin,
   isNorthEdge,
   isSouthEdge,
   neighbor,
@@ -314,6 +315,10 @@ import {
   addSupplyCache,
   allVictoryConditionHexes,
   breakdownPoolTotal,
+  // 专规 4.3（可选）Setup Wiggle
+  isSetupWiggleParent,
+  SETUP_WIGGLE_BREAKDOWN_RADIUS,
+  SETUP_WIGGLE_MAX_DIVISIONS,
   checkRedAirForceMission,
   checkSecurityNeeds,
   cleanupPatchById,
@@ -7550,6 +7555,41 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const breakdownWindows = ref<{ timing: BreakdownCreateTiming; unitIds: string[] }[]>([])
 
+  /*
+   * 专规 4.3（可选）Setup Wiggle A：初设阶段，最多 6 个**满员**苏军步兵师各拆一个团
+   *
+   * 本账本只记「已经拆过团」的母师实例 id（上限 6）；未勾定 4.3 时它恒空，
+   * `breakdownTimingOf` 在初设阶段仍返回 null —— 初设流程与修前逐字相同。
+   */
+  const setupWiggleParents = ref<string[]>([])
+
+  /** 4.3 是否启用（选剧本前勾定；开局冻结） */
+  const setupWiggleOn = computed(() => session.rule4On('setupWiggle'))
+
+  /** 4.3 A：还剩几个师的拆团名额（0..6） */
+  const setupWiggleRemaining = computed(() =>
+    Math.max(0, SETUP_WIGGLE_MAX_DIVISIONS - setupWiggleParents.value.length),
+  )
+
+  /**
+   * 4.3 A：该单位此刻能否在初设里拆团
+   *
+   * 三关：初设进行中 ∧ 4.3 启用；母师是**满员**苏军步兵师（印值 ≥2 步，本作无 4 步师）；本师未用过且总名额未满。
+   */
+  function setupWiggleEligible(unit: ConsoleUnit): boolean {
+    if (!setupWiggleOn.value || !initialSetupInProgress.value) return false
+    if (!isSetupWiggleParent(unit)) return false
+    if (setupWiggleParents.value.includes(unit.instanceId)) return false
+    return setupWiggleRemaining.value > 0
+  }
+
+  /** 4.3 A：初设拆团的落点候选（母师两格内；含母师格，均须在图上） */
+  function setupBreakdownCandidates(parentId: string): readonly HexRef[] {
+    const parent = units.value.find((item) => item.instanceId === parentId)
+    if (parent === undefined || !setupWiggleEligible(parent)) return []
+    return hexesWithin(parent.hex, SETUP_WIGGLE_BREAKDOWN_RADIUS, { onMapOnly: true })
+  }
+
   /** 开/换一个时机窗口（同一时机只留最新一份） */
   function openBreakdownWindow(timing: BreakdownCreateTiming, unitIds: readonly string[]): void {
     if (unitIds.length === 0) return
@@ -7580,6 +7620,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     const unit = units.value.find((item) => item.instanceId === unitId)
     if (unit === undefined) return null
+    /*
+     * 专规 4.3（可选）A：初设阶段的拆团窗口（满员苏军 4 步步兵师，最多 6 个师）。
+     * 未启用时 `setupWiggleEligible` 恒 false ⇒ 初设阶段仍返回 null（与修前逐字相同）。
+     */
+    if (setupWiggleEligible(unit)) return 'setupWiggle'
     if (phase.value !== 'movement' || activeSide.value !== unit.side) return null
     if (unit.mpSpent > 0) return null
     return 'startMove'
@@ -24540,6 +24585,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     startMove: '开始移动',
     advanceAfterCombat: '战后推进',
     retreatAfterCombat: '战后撤退',
+    setupWiggle: '初设拆团（专规 4.3）',
   }
 
   function createBreakdownNow(parentId: string, breakdownRecordId: string): boolean {
@@ -27474,6 +27520,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     localDrawCount.value = 0
     pendingRolls.splice(0)
     initialSetupInProgress.value = false
+    // 专规 4.3：换局/重置后初设拆团账本复位（名额重新从 6 个起算）
+    setupWiggleParents.value = []
     seedVictoryControlFromScenario()
     refreshScenarioBoundLedgers(scenarioId.value)
   }
@@ -28455,6 +28503,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * （开始移动 / 战后推进 / 战后撤退），调用方不许自称"现在可以拆"。
      */
     breakdownTimingOf,
+    // 专规 4.3（可选）Setup Wiggle
+    setupWiggleOn,
+    setupWiggleParents,
+    setupWiggleRemaining,
+    setupBreakdownCandidates,
     assessTurnEndVictoryNow,
     turnEndVictory,
     controlOfHex,

@@ -4,7 +4,14 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
-import { actionGateOf, useContainersStore, useWorkbenchStore, type ActionKey } from '@/stores'
+import {
+  actionGateOf,
+  useContainersStore,
+  useGameSessionStore,
+  useWorkbenchStore,
+  type ActionKey,
+} from '@/stores'
+import { OPTIONAL_RULE_ITEMS } from '@/engine/session-flow'
 
 import { CORE_HEX, groundRecord, placeGround } from '../flows/sop-harness'
 
@@ -137,6 +144,85 @@ describe('20.0c：母子模式 / DG / 部队储备按原文继承', () => {
     expect(kid.mode.mode).toBe('move')
     expect(kid.mode.dg).toBe(true)
     expect(kid.internalStocks).toBe('low')
+  })
+})
+
+describe('专规 4.3（可选）A：初设拆团窗口', () => {
+  const newSetupStores = () => {
+    setActivePinia(createPinia())
+    return {
+      workbench: useWorkbenchStore(),
+      containers: useContainersStore(),
+      session: useGameSessionStore(),
+    }
+  }
+
+  /** 勾定 4.3（选剧本前的共识清单） */
+  function adoptSetupWiggle(session: ReturnType<typeof useGameSessionStore>, adopted = true): void {
+    const at = session.agreedOptionItems.indexOf(OPTIONAL_RULE_ITEMS.setupWiggle)
+    expect(at).toBeGreaterThanOrEqual(0)
+    session.setAgreedCheck(at, adopted)
+  }
+
+  it('未勾定 4.3：初设阶段仍返回 null（初设流程与修前逐字相同）', () => {
+    const { workbench, containers } = newSetupStores()
+    workbench.initialSetupInProgress = true
+    const parent = placeGround(workbench, infDivRecord('soviet'), CORE_HEX, 'soviet', 'p1')
+    expect(workbench.breakdownTimingOf(parent.instanceId)).toBeNull()
+    expect(containers.takeBreakdown({ parentInstanceId: parent.instanceId, breakdownAr: 2 })).toBe(
+      false,
+    )
+    expect(containers.lastAction).toMatchObject({ ok: false, rule: '20.0a' })
+  })
+
+  it('勾定 4.3：满员步兵师可拆一个团，落点须在母师两格内；拆完该师不能再拆', () => {
+    const { workbench, containers, session } = newSetupStores()
+    adoptSetupWiggle(session)
+    workbench.initialSetupInProgress = true
+    const parent = placeGround(workbench, infDivRecord('soviet'), CORE_HEX, 'soviet', 'p1')
+    expect(workbench.setupWiggleOn).toBe(true)
+    expect(workbench.breakdownTimingOf(parent.instanceId)).toBe('setupWiggle')
+
+    // ① 没选落点 ⇒ 拒（4.3）
+    expect(containers.takeBreakdown({ parentInstanceId: parent.instanceId, breakdownAr: 2 })).toBe(
+      false,
+    )
+    expect(containers.lastAction).toMatchObject({ ok: false, rule: '4.3' })
+    // ② 隔三格 ⇒ 拒（4.3）
+    const far = { col: CORE_HEX.col + 3, row: CORE_HEX.row }
+    expect(
+      containers.takeBreakdown({
+        parentInstanceId: parent.instanceId,
+        breakdownAr: 2,
+        targetHex: far,
+      }),
+    ).toBe(false)
+    expect(containers.lastAction).toMatchObject({ ok: false, rule: '4.3' })
+    // ③ 两格内 ⇒ 成功：母师 −1 step、子算子落在指定格
+    const target = { col: CORE_HEX.col + 1, row: CORE_HEX.row }
+    const before = parent.steps
+    expect(
+      containers.takeBreakdown({
+        parentInstanceId: parent.instanceId,
+        breakdownAr: 2,
+        targetHex: target,
+      }),
+    ).toBe(true)
+    expect(parent.steps).toBe(before - 1)
+    const kids = kidsOf(workbench)
+    expect(kids).toHaveLength(1)
+    expect(kids[0]?.hex).toEqual(target)
+    // ④ 每个师只能拆一个团 ⇒ 该师不再出现在初设拆团时机
+    expect(workbench.breakdownTimingOf(parent.instanceId)).toBeNull()
+    expect(workbench.setupWiggleRemaining).toBe(5)
+  })
+
+  it('初设结束（initialSetupInProgress=false）⇒ 4.3 时机消失', () => {
+    const { workbench, session } = newSetupStores()
+    adoptSetupWiggle(session)
+    workbench.initialSetupInProgress = false
+    const parent = placeGround(workbench, infDivRecord('soviet'), CORE_HEX, 'soviet', 'p1')
+    expect(workbench.breakdownTimingOf(parent.instanceId)).toBeNull()
   })
 })
 

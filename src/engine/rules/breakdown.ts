@@ -41,6 +41,12 @@ export const BREAKDOWN_CREATE_TIMINGS = [
   'startMove',
   'advanceAfterCombat',
   'retreatAfterCombat',
+  /*
+   * 专规 4.3（可选）Setup Wiggle：初设阶段，6 个满员苏军步兵师各可拆一个团。
+   * ★ 这是 20.0a 的**专规例外**，只有 4.3 在选剧本前勾定时 store 才会给出这个时机；
+   *   未勾定时 store 一律不传（初设阶段仍返回 null）。
+   */
+  'setupWiggle',
 ] as const
 export type BreakdownCreateTiming = (typeof BREAKDOWN_CREATE_TIMINGS)[number]
 
