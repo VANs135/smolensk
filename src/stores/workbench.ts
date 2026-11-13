@@ -203,7 +203,6 @@ import {
   canCreateExtenderAt,
   dumpDestructionPercent,
   extenderDisplacementCandidates,
-  forageAvailable,
   needsFuelToMove,
   planDumpDestruction,
   confirmOosResolution,
@@ -341,8 +340,6 @@ import {
   timingsOn,
   traceCoverageHas,
   traceCoverageHexes,
-  useSupplyCacheAsForage,
-  useSupplyCacheAsShells,
   type AirBaseReductionPlan,
   type AirBaseView,
   type AirCombatWindow,
@@ -419,7 +416,6 @@ import {
   type SecurityNeedsResult,
   type TrainbustingRemovalReason,
   type SupplyCacheHoldings,
-  type SupplyCacheUse,
   type SupplyShutdownFacts,
   type SupplySourceStatus,
   type TrainbustingMarkerView,
@@ -1087,7 +1083,7 @@ for (const side of ['axis', 'soviet'] as const) {
   }
 }
 
-/** B37：专规面板的分节标识（与面板里的 6 节一一对应） */
+/** B37：专规面板的分节标识（与面板里的 6 节一一对应；1.7 只保留台账，Forage 入口在补给阶段面板） */
 export type ExclusiveSection =
   'panzer' | 'security' | 'hedgehog' | 'constructionMarker' | 'supplyCache' | 'airRestriction'
 
@@ -1855,19 +1851,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           label: `${hexLabel(from!)} → ${hexLabel(hex)}｜${preview.detail}`,
           rule: '13.3e',
         }
-        return true
-      },
-    })
-  }
-
-  /** 1.7 / 21.10：花掉补给缓存的位置（须在友方 HQ 处，提交时判） */
-  function beginSupplyCacheHexPickNow(): void {
-    beginHexPick({
-      label: '使用补给缓存的位置',
-      rule: '1.7',
-      candidates: 'any',
-      apply: (hex) => {
-        supplyCacheInputs.value = { ...supplyCacheInputs.value, hexText: hexTextOf(hex) }
         return true
       },
     })
@@ -9614,18 +9597,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return (unit.cutSinceTurn ?? null) === turn.value - 1
   }
 
-  /**
-   * 21.10：该 HQ 在**当前补给阶段**是否处于「被切断的第一个回合」
-   *
-   * 补给缓存是在补给阶段内使用的，判据按补给阶段的落标记回合（`cutSinceTurn === 当前回合`）。
-   * 与 12.8e 的突围豁免差一轮：后者要等下一回合的运动阶段（见 `isFirstTurnOfBeingCut`）。
-   */
-  function isFirstCutTurn(unit: ConsoleUnit): boolean {
-    return (
-      (unit.cutSinceTurn ?? null) === turn.value &&
-      (unit.sustainedBySpecialSupplyTurn ?? null) !== turn.value
-    )
-  }
+  /* ────────── 21.10：补给缓存（Forage 入口在补给阶段面板） ────────── */
 
   /**
    * 12.8e：该单位此刻的突围资格
@@ -14571,31 +14543,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function applySupplyPhaseFeedingNow(): boolean {
     return supplyPhaseDomain.applySupplyPhaseFeedingNow()
   }
-
-  /**
-   * 21.10：**Forage 可用性提示**（补给阶段 + 该 HQ 正处断补首回合 + 仍有补给缓存）
-   *
-   * 引擎的 `forageAvailable` 自注「供界面在补给阶段提示可用性，真正的合法性判定仍在
-   * `useSupplyCacheAsForage` 内」——故本处只**提示**，不代替那一步判定。
-   */
-  const forageHints = computed<{ hqId: string; hex: HexRef }[]>(() => {
-    const side = activeSide.value
-    const holdings = supplyCacheHoldings.value
-    return units.value
-      .filter(
-        (unit) =>
-          unit.side === side &&
-          isHqUnit(unit) &&
-          forageAvailable({
-            phase: phase.value,
-            // 21.10：「敌军切断该 HQ 补给的第一个回合」＝ 真跟踪的连续断补起点（12.8e 同源判据）
-            firstTurnOfBeingCut: isFirstCutTurn(unit),
-            holdings,
-            side,
-          }),
-      )
-      .map((unit) => ({ hqId: unit.instanceId, hex: unit.hex }))
-  })
 
   /* ────────── C8c：12.8b 损耗（断补堆叠逐格掷骰与分摊） ────────── */
 
@@ -24546,10 +24493,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 列进来会让专规窗在本环节无端弹出。
    * 判据＝闸门表（`allowedActionsOf`），每条都带规则号，界面直接显示。
    */
-  const EXCLUSIVE_PANEL_KEYS: readonly ActionKey[] = [
-    'exclusive.forage',
-    'exclusive.panzerObligation',
-  ]
+  const EXCLUSIVE_PANEL_KEYS: readonly ActionKey[] = ['exclusive.panzerObligation']
 
   const exclusiveActionsInStep = computed<readonly ActionGate[]>(() => {
     const allowed = allowedActionsOf(segmentGateQuery.value)
@@ -24563,7 +24507,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   · `panzer`（3.4）：段末的分界线义务可结算，**或**还有没登记集群归属的新到 SP（3.4b 要求立即归属）；
    *   · `security`（3.3b）：有城要放标记，或（清理段）有标记要移除；
    *   · `hedgehog`（16.0b/c）、`constructionMarker`（专规 3.5）：本环节的闸门放行（后者还须有枚数）；
-   *   · `supplyCache`（1.7）：本环节的闸门放行；
+   *   · `supplyCache`（1.7）：补给段的缓存台账提醒（Forage 入口已在补给阶段面板）；
    *   · `airRestriction`（1.2 苏军空军限制）：**纯只读提示** ⇒ 不置顶。
    */
   const exclusiveSectionPins = computed<Record<ExclusiveSection, boolean>>(() => {
@@ -24579,6 +24523,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         (removalAllowedNow(phase.value) && (needs?.removeAt.length ?? 0) > 0),
       hedgehog: allowed.has('move.hedgehog'),
       constructionMarker: allowed.has('move.construction') && constructionMarkers.value > 0,
+      // 1.7：补给段提醒看一眼缓存持仓（入口已迁到补给阶段面板，这里只保留台账）
       supplyCache: allowed.has('exclusive.forage'),
       airRestriction: false,
     }
@@ -24749,28 +24694,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       unit.foragedTurn = snapshot.foraged
     }
     lastForageGrant.value = null
+    lastSupplyCacheUse.value = null
     if (supplyPhasePlan.value !== null) planSupplyPhaseNow()
     pushLog('info', '21.10b：撤销本阶段内的 Forage，补给缓存退回 1 枚', '21.10')
     return true
   }
 
-  /** 1.7 / 21.10：补给缓存的用法输入（界面绑定） */
-  const supplyCacheInputs = ref({
-    use: 'forage' as SupplyCacheUse,
-    hexText: '',
-    /** 21.10 Shells：本次 HQ 投递的火炮轰炸成本（T） */
-    barrageCostT: 4,
-    /** 21.10 Forage：该 HQ 的投递距离（格；13.1b 印值） */
-    hqThrowRangeHexes: 5,
-    /*
-     * 21.10 的「敌军切断该 HQ 补给的第一个回合」**不再由裁判勾选**（批 F 切片 5 删除该字段）：
-     * 判据改由 `isFirstTurnOfBeingCut` 按盘面事实算（与 12.8e 同源，见 `cutSinceTurn`）。
-     */
-    /** 21.10 Shells：该 HQ 是否在追溯补给中（不影响合法性，仅日志） */
-    hqDrawsTraceSupply: true,
-  })
-
-  /** 1.7：最近一次补给缓存用法结论 */
+  /** 1.7：最近一次补给缓存用法结论（Forage 入口已迁到补给阶段面板） */
   const lastSupplyCacheUse = ref<string | null>(null)
 
   /** 3.5：建造标记剩余枚数（初值取剧本初设 `setup.constructionMarkers`；剧本 1/2 = 3，其余 = 0） */
@@ -25144,91 +25074,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       side,
       data: { gain: 1, holdings: { ...supplyCacheHoldings.value } },
     })
-  }
-
-  /**
-   * 1.7 / 21.10：花掉一枚补给缓存
-   *
-   * - **Shells**：抵付该 HQ 投递的火炮轰炸成本（每标记 2T，成本降到 0 以下不找零）；
-   * - **Forage**：在**补给阶段**（D 段）让 HQ 为其投递距离内所有战斗单位提供追溯补给
-   *   （仅限断补首回合、不可用于矛头部队）。
-   */
-  function spendSupplyCacheNow(): boolean {
-    // B37：1.7 / 21.10 —— 补给缓存的两个用法都只在**补给段**（引擎 `forageOnlyInSupplyPhase` 同口径）
-    if (!requireAction('exclusive.forage', '使用补给缓存')) return false
-    const inputs = supplyCacheInputs.value
-    const hex = parseHexPath(inputs.hexText)[0]
-    if (hex === undefined) {
-      exclusiveError.value = { rule: '1.7', reason: `hqHexFormatInvalid:${inputs.hexText}` }
-      pushLog('warning', `HQ 格格式应为「列.行」，收到「${inputs.hexText}」（1.7）`, '1.7')
-      return false
-    }
-
-    let detail: string
-    let rule: string
-    if (inputs.use === 'shells') {
-      const data = acceptExclusive(
-        useSupplyCacheAsShells({
-          side: activeSide.value,
-          holdings: supplyCacheHoldings.value,
-          hqHex: hex,
-          barrageCostT: inputs.barrageCostT,
-          hqDrawsTraceSupply: inputs.hqDrawsTraceSupply,
-        }),
-        '补给缓存 Shells',
-      )
-      if (data === null) return false
-      detail = data.detail
-      rule = data.rule
-    } else {
-      /*
-       * 21.10：「让**被切断的第一个回合**的 HQ 为其投递距离内的所有战斗单位提供追溯补给」——
-       * 「第一个回合」的判据取**真跟踪**（与 12.8e 同源：`isFirstTurnOfBeingCut`），
-       * 修前这里是面板上一个裁判手勾的复选框（`supplyCacheInputs.firstTurnOfBeingCut`）⇒
-       * "自己说自己是首回合就算首回合"。批 F 切片 5 起该字段删除，改由盘面事实算。
-       */
-      const hqUnit = units.value.find(
-        (unit) => unit.side === activeSide.value && isHqUnit(unit) && sameHex(unit.hex, hex),
-      )
-      if (hqUnit === undefined) {
-        exclusiveError.value = { rule: '21.10', reason: `noHqAtHex:${inputs.hexText}` }
-        pushLog('warning', `21.10：${inputs.hexText} 没有本方的指挥部 ⇒ Forage 无从谈起`, '21.10')
-        return false
-      }
-      const data = acceptExclusive(
-        useSupplyCacheAsForage({
-          side: activeSide.value,
-          holdings: supplyCacheHoldings.value,
-          phase: phase.value,
-          hqHex: hex,
-          hqThrowRangeHexes: inputs.hqThrowRangeHexes,
-          firstTurnOfBeingCut: isFirstCutTurn(hqUnit),
-        }),
-        '补给缓存 Forage',
-      )
-      if (data === null) return false
-      detail = data.detail
-      rule = data.rule
-    }
-
-    supplyCacheHoldings.value = {
-      ...supplyCacheHoldings.value,
-      [activeSide.value]: supplyCacheHoldings.value[activeSide.value] - 1,
-    }
-    lastSupplyCacheUse.value = detail
-    pushLog('success', detail, rule)
-    // ⑭ 接线：补给缓存用法（专规 1.7 / 21.10 Shells / Forage）入会话日志（本笔不掷骰）
-    recordSettlement({
-      action: 'supplyCache',
-      rule,
-      data: {
-        use: inputs.use,
-        hqHex: { ...hex },
-        detail,
-        holdings: { ...supplyCacheHoldings.value },
-      },
-    })
-    return true
   }
 
   /**
@@ -27300,7 +27145,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     beginSpDumpHexPickNow,
     beginSupplySourceHexPickNow,
     beginRailMoveHexPickNow,
-    beginSupplyCacheHexPickNow,
     beginAirPlacementHexPickNow,
     beginAirTransferHexPickNow,
     beginAirTargetHexPickNow,
@@ -27466,7 +27310,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     clearSupplyPhasePlan,
     applySupplyPhaseRecoveryNow,
     applySupplyPhaseFeedingNow,
-    forageHints,
     dumpDestructionAttempts,
     destructDumpNow,
     // 12.8b：断补堆叠的损耗掷骰与分摊
@@ -27966,7 +27809,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     supplyTableSpInput,
     panzerGroupSpSplit,
     supplyCacheHoldings,
-    supplyCacheInputs,
     lastSupplyCacheUse,
     constructionMarkers,
     constructionMarkerPieces,
@@ -27991,7 +27833,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setPanzerGroupNow,
     setMultiUnitFormationNow,
     addSupplyCacheNow,
-    spendSupplyCacheNow,
     // 21.10b：Forage 入口（与 12.6c 同面板）、执行与阶段内撤销
     forageOptions,
     useForageNow,

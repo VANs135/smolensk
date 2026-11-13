@@ -1023,10 +1023,12 @@ const showsLedger = computed(
               落盘次序照 12.10e-A：**先恢复、再喂食**；喂食只作用于勾了"自愿吃图上补给"的单位
               （12.6c 游戏说明：**永不强迫**）。
             </p>
-            <p v-if="workbench.forageHints.length > 0" class="num">
+            <p v-if="workbench.forageOptions.length > 0" class="num">
               <BaseTag kind="warning">21.10 Forage 可用</BaseTag>
-              {{ workbench.forageHints.map((item) => hexLabel(item.hex)).join('、') }}
-              —— 这些断补 HQ 可花掉一枚补给缓存，为其投递距离内的所有战斗单位提供追溯补给。
+              {{ workbench.forageOptions.map((item) => hexLabel(item.hex)).join('、') }}
+              —— 这些断补 HQ
+              可花掉一枚补给缓存，为其投递距离内的所有战斗单位提供追溯补给（入口在补给阶段面板，与
+              12.6c 二选一）。
             </p>
 
             <!-- ── ⑤ 12.8b 损耗：断补堆叠逐格掷骰 + 分摊 ── -->

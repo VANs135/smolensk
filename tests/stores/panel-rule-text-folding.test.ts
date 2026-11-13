@@ -115,6 +115,7 @@ describe('批 C 切片 2：规则文字收成"标题 + 折叠"（RuleNote）', (
     expect(supply).toContain('**卸货后不得再移动**（4.7d）')
     const exclusive = readFileSync('src/components/exclusive/ExclusiveRulesPanel.vue', 'utf8')
     expect(exclusive).toContain('Supply Table 到货在**均分**给两集群后**奇数点归 Guderian**')
-    expect(exclusive).toContain('**Shells**：在任意友方 HQ 处花 1 枚抵付该次投递的**火炮轰炸成本')
+    // F5：旧 Shells 段落随入口迁出删除，改用保留原文口径的那句（付款仍在炮击面板）
+    expect(exclusive).toContain('**Shells** 在炮击面板的「② 按初始列付补给」使用')
   })
 })

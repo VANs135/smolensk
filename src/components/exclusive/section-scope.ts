@@ -11,15 +11,15 @@
  * | `null`（验证页） | 全显 | 全显 |
  * | `actions`（会话全动作） | 全显 | 全显 |
  * | `info`（右栏只读） | **全显** | **全不显** |
- * | `panzer` / `security` / `hedgehog` / `marker` / `cache` | **只显自己那一节** | 只显自己那一节 |
+ * | `panzer` / `security` / `hedgehog` / `marker` | **只显自己那一节** | 只显自己那一节 |
  *
  * 坑：`info` 曾经被写成"只有 info 段"，结果右栏里五节整块消失 ——
- * 而「逐城治安明细 / 工事等级与上限、本回合台账 / 建造标记余量 / 缓存持仓」本来**都是只读信息**，
+ * 而「逐城治安明细 / 工事等级与上限、本回合台账 / 建造标记余量」本来**都是只读信息**，
  * 藏掉节就等于把右栏的信息也删了。`info` 的正确语义是"**节在、动作不写**"。
  */
 
 /** 本面板的分段名（单节模式用） */
-export type ExclusiveSectionScope = 'panzer' | 'security' | 'hedgehog' | 'marker' | 'cache'
+export type ExclusiveSectionScope = 'panzer' | 'security' | 'hedgehog' | 'marker'
 
 /** 本面板接受的 `only` 值 */
 export type ExclusiveOnly = 'info' | 'actions' | ExclusiveSectionScope | null

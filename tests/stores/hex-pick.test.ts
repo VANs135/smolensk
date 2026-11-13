@@ -198,7 +198,7 @@ describe('B27：接线（源码守卫）', () => {
       ],
       [
         'src/components/exclusive/ExclusiveRulesPanel.vue',
-        ['beginHedgehogHexPickNow(', 'beginSupplyCacheHexPickNow()'],
+        ['beginHedgehogHexPickNow(', 'beginConstructionMarkerHexPickNow()'],
       ],
       [
         'src/components/supply/SupplyPanel.vue',

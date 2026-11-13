@@ -243,25 +243,28 @@ describe('Ⓓ 专规 1.7 / 21.10：补给缓存 Forage（应急征粮）只在 D
      *   （`supplyCacheInputs.firstTurnOfBeingCut`），现已删除 ⇒ 判据改按盘面事实算（`cutSinceTurn`）。
      *   故本用例改为**摆出一个真的首回合**：把 HQ 摆在 ZOC_SEAL_HEX 上、用敌方 ZOC 卡断（12.3d），
      *   重判一次追溯补给（12.6）即落成"连续断补起点＝当前回合"。
+     *
+     * F5：入口已从专规面板迁到补给阶段面板 ⇒ 只经 `forageOptions` + `useForageNow(hqId)`。
      */
     placeGround(store, hqRecord('axis'), ZOC_SEAL_HEX, 'axis', 'hq-1')
     // 12.3d：HQ 是**非战斗单位**（4.5b 不抵消 ZOC）⇒ 用纯 ZOC 卡断的内部格，且同格源声明仍可用
     sealTraceSupplyByZoc(store, ZOC_SEAL_HEX)
     store.evaluateTraceSupplyNow()
-    store.supplyCacheInputs.use = 'forage'
-    store.supplyCacheInputs.hexText = label(ZOC_SEAL_HEX)
-    expect(store.spendSupplyCacheNow()).toBe(true)
+    expect(store.forageOptions.map((option) => option.hqId)).toEqual(['hq-1'])
+    expect(store.useForageNow('hq-1')).toBe(true)
     expect(store.supplyCacheHoldings.axis).toBe(1)
   })
 
   it('21.10：其它段（C/E/F/G）一律不可用——Forage 只在补给阶段', () => {
     for (const phase of ['movement', 'reaction', 'combat', 'exploitation'] as const) {
       const store = newConsole()
+      placeGround(store, hqRecord('axis'), ZOC_SEAL_HEX, 'axis', 'hq-1')
+      sealTraceSupplyByZoc(store, ZOC_SEAL_HEX)
+      store.evaluateTraceSupplyNow()
       store.setPhase(phase)
-      store.supplyCacheInputs.use = 'forage'
-      store.supplyCacheInputs.hexText = label(CORE_HEX)
-      expect(store.spendSupplyCacheNow()).toBe(false)
-      expect(store.actionRefusal?.key).toBe('exclusive.forage')
+      expect(store.forageOptions).toEqual([])
+      expect(store.useForageNow('hq-1')).toBe(false)
+      expect(store.exclusiveError?.reason).toBe('forageOnlyInSupplyPhase')
       expect(store.supplyCacheHoldings.axis).toBe(2)
     }
   })
@@ -280,10 +283,9 @@ describe('Ⓓ 专规 1.7 / 21.10：补给缓存 Forage（应急征粮）只在 D
     store.evaluateTraceSupplyNow()
     expect(hq.cutSinceTurn).toBe(store.turn - 1)
 
-    store.supplyCacheInputs.use = 'forage'
-    store.supplyCacheInputs.hexText = label(ZOC_SEAL_HEX)
-    expect(store.spendSupplyCacheNow()).toBe(false)
-    expect(store.exclusiveError?.reason).toBe('forageOnlyOnFirstTurnOfBeingCut')
+    expect(store.forageOptions).toEqual([])
+    expect(store.useForageNow('hq-1')).toBe(false)
+    expect(store.exclusiveError?.reason).toBe('forageNotAvailable')
   })
 })
 

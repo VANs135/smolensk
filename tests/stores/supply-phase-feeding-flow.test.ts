@@ -1,4 +1,4 @@
-import { createPinia, setActivePinia } from 'pinia'
+﻿import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { holdingsToT } from '@/engine/rules'
@@ -146,7 +146,7 @@ describe('21.10：Forage 可用性提示（补给阶段 + 断补首回合 + 有�
     expect(fromStore(store, 'hq1').cutSinceTurn).toBe(store.turn)
     // 缓存初值来自剧本（剧本 1 为每方 2）
     expect(store.supplyCacheHoldings.axis).toBeGreaterThan(0)
-    expect(store.forageHints.map((item) => item.hqId)).toContain('hq1')
+    expect(store.forageOptions.map((item) => item.hqId)).toContain('hq1')
 
     // 有追溯补给 ⇒ 不再"被切断"（连续期清零）⇒ 不提示
     store.supplySourceDraft = {
@@ -156,11 +156,11 @@ describe('21.10：Forage 可用性提示（补给阶段 + 断补首回合 + 有�
     expect(store.addSupplySource()).toBe(true)
     store.evaluateTraceSupplyNow()
     expect(fromStore(store, 'hq1').cutSinceTurn).toBe(null)
-    expect(store.forageHints.map((item) => item.hqId)).not.toContain('hq1')
+    expect(store.forageOptions.map((item) => item.hqId)).not.toContain('hq1')
 
     // 不在补给阶段
     store.setPhase('movement')
-    expect(store.forageHints).toEqual([])
+    expect(store.forageOptions).toEqual([])
   })
 
   it('没有补给缓存 ⇒ 不提示（21.10 要先花掉一枚缓存）', () => {
@@ -169,6 +169,6 @@ describe('21.10：Forage 可用性提示（补给阶段 + 断补首回合 + 有�
     store.setPhase('supply')
     expect(fromStore(store, 'hq1').hasTraceSupply).toBe(false)
     store.supplyCacheHoldings = { ...store.supplyCacheHoldings, axis: 0 }
-    expect(store.forageHints).toEqual([])
+    expect(store.forageOptions).toEqual([])
   })
 })

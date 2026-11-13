@@ -128,12 +128,6 @@ export const useLegalActionsStore = defineStore('legal-actions', () => {
       label: choice.air.name,
       ...(choice.disabledReason === null ? {} : { disabledReason: choice.disabledReason }),
     }))
-    candidates['exclusive.forage'] = workbench.forageHints.map((hint) => ({
-      ref: hint.hqId,
-      label:
-        workbench.units.find((unit) => unit.instanceId === hint.hqId)?.name ??
-        `${String(hint.hex.col)}.${String(hint.hex.row)}`,
-    }))
     candidates['exclusive.panzerObligation'] = workbench.panzerWrongSideHexes.map((hex) => {
       const ref = `${hex.col}.${hex.row}`
       return { ref, label: `错误一侧 ${ref}` }

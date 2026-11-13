@@ -39,7 +39,7 @@ const SUPPLY_ONLY = [
   'loadUnload',
 ] as const
 /** ExclusiveRulesPanel 认的段 */
-const FORT_ONLY = ['info', 'actions', 'panzer', 'security', 'hedgehog', 'marker', 'cache'] as const
+const FORT_ONLY = ['info', 'actions', 'panzer', 'security', 'hedgehog', 'marker'] as const
 
 type AirOnly = (typeof AIR_ONLY)[number]
 type SupplyOnly = (typeof SUPPLY_ONLY)[number]

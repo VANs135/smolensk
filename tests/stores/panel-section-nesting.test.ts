@@ -196,10 +196,10 @@ describe('分段块的**结构**不变量（空块 / 段错位都会红）', () 
     }
   })
 
-  it('★ ExclusiveRulesPanel：五节的动作门都**有正文**', () => {
+  it('★ ExclusiveRulesPanel：四节的动作门都**有正文**（1.7 只留台账，无动作门）', () => {
     const panel = readFileSync('src/components/exclusive/ExclusiveRulesPanel.vue', 'utf8')
     const blocks = blocksOf(panel, 'acts')
-    for (const flag of ['actsPanzer', 'actsSecurity', 'actsHedgehog', 'actsMarker', 'actsCache']) {
+    for (const flag of ['actsPanzer', 'actsSecurity', 'actsHedgehog', 'actsMarker']) {
       const hit = blocks.find((block) => block.expr === flag)
       expect(hit, `ExclusiveRulesPanel 缺 ${flag} 段`).toBeDefined()
       expect(hit!.body.length, `${flag} 是空段`).toBeGreaterThan(minBody(hit!) - 1)

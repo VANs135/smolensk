@@ -166,7 +166,7 @@ describe('B37：专规会话按闸门自动出现', () => {
     expect(mapView.session).toBeNull()
   })
 
-  it('★ D 补给段（1.7 可做）⇒ 自动出现；C 段**段中**无可做专规 ⇒ 不出现；C 段**段末**出现（3.4a）', () => {
+  it('★ D 补给段：1.7 台账仍置顶，但**不再自动开专规窗**（Forage 入口已迁补给阶段面板）；C 段段中出现 3.4a', () => {
     const { workbench, mapView } = newStores()
 
     workbench.setPhase('supply')
@@ -175,12 +175,9 @@ describe('B37：专规会话按闸门自动出现', () => {
     )
     if (supplyIndex < 0) throw new Error('D 段没有玩家环节？')
     expect(workbench.setSegmentStepIndex(supplyIndex)).toBe(true)
-    expect(workbench.exclusiveActionsInStep.map((item) => item.key)).toEqual(['exclusive.forage'])
-    expect(mapView.session).toMatchObject({ kind: 'exclusive' })
-    expect(mapView.session?.title).toContain('专规动作：')
-
-    // 收起后本环节不再重现（与增援/盒内动作同一套纪律）
-    expect(mapView.cancelSession()).toBe(true)
+    // F5：入口迁走后，D 段不再把 `exclusive.forage` 摆进专规会话；台账节仍按 pins 置顶
+    expect(workbench.exclusiveSectionPins.supplyCache).toBe(true)
+    expect(workbench.exclusiveActionsInStep).toEqual([])
     expect(mapView.session).toBeNull()
 
     /*

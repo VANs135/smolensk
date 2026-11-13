@@ -17,6 +17,16 @@ watch(
 
 const unitsById = computed(() => new Map(workbench.units.map((unit) => [unit.instanceId, unit])))
 
+/** 21.10b：Forage 与 12.6c 图上供养在 D 段并列二选一（入口只此一处） */
+const forageOptions = computed(() => workbench.forageOptions)
+const canUndoForage = computed(
+  () => workbench.lastSupplyCacheUse === 'Forage' && !workbench.supplyFeedingSettled,
+)
+
+function hqName(instanceId: string): string {
+  return unitsById.value.get(instanceId)?.name ?? instanceId
+}
+
 function keyOf(hex: HexRef): string {
   return `${hex.col}.${hex.row}`
 }
@@ -117,7 +127,9 @@ const pending = computed<boolean>(() => {
         <template v-else>
           <div class="phase-panel__row">
             <details v-if="!workbench.supplyFeedingSettled" class="phase-panel__feeding">
-              <summary>图上供养 · {{ workbench.supplyFeedingCandidates.length }} 单位</summary>
+              <summary>
+                图上供养（12.6c）· {{ workbench.supplyFeedingCandidates.length }} 单位
+              </summary>
               <label
                 v-for="unit in workbench.supplyFeedingCandidates"
                 :key="unit.instanceId"
@@ -131,6 +143,34 @@ const pending = computed<boolean>(() => {
                 <span class="phase-panel__data num">{{ hexLabel(unit.hex) }}</span>
               </label>
             </details>
+            <details
+              v-if="!workbench.supplyFeedingSettled && forageOptions.length > 0"
+              class="phase-panel__feeding"
+            >
+              <summary>Forage（21.10b，二选一）· {{ forageOptions.length }} 个可用 HQ</summary>
+              <div v-for="option in forageOptions" :key="option.hqId" class="phase-panel__choice">
+                <span>{{ hqName(option.hqId) }}</span>
+                <span class="phase-panel__data num"
+                  >投递 {{ option.throwRangeMp }} MP · 覆盖
+                  {{ option.coveredUnitIds.length }} 单位</span
+                >
+                <BaseButton
+                  variant="secondary"
+                  size="sm"
+                  @click="onAction(() => workbench.useForageNow(option.hqId))"
+                >
+                  花 1 枚
+                </BaseButton>
+              </div>
+            </details>
+            <BaseButton
+              v-if="canUndoForage"
+              variant="ghost"
+              size="sm"
+              @click="onAction(workbench.undoSupplyCacheUse)"
+            >
+              撤销 Forage
+            </BaseButton>
             <BaseButton
               v-if="!workbench.supplyFeedingSettled"
               variant="primary"

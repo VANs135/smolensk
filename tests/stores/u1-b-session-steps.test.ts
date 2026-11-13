@@ -181,9 +181,9 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
   })
   it('专规：按节拆成多件，一节一件（不再是"一个框装五件事"）', () => {
     const items = planSessionSteps(
-      baseFacts({ kind: 'exclusive', exclusive: true, exclusiveSections: ['panzer', 'cache'] }),
+      baseFacts({ kind: 'exclusive', exclusive: true, exclusiveSections: ['panzer', 'marker'] }),
     )
-    expect(items.map((entry) => entry.id)).toEqual(['exclusive:panzer', 'exclusive:cache'])
+    expect(items.map((entry) => entry.id)).toEqual(['exclusive:panzer', 'exclusive:marker'])
     expect(exposedCount(items)).toBe(1)
     expect(exposedSessionStep(items)?.id).toBe('exclusive:panzer')
   })

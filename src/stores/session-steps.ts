@@ -674,11 +674,6 @@ const EXCLUSIVE_SECTION_TEXT: Readonly<
     why: '本环节有建造标记可用。',
     decision: '选定用途与目标格，然后放下标记。',
   },
-  cache: {
-    title: '补给缓存',
-    why: '本环节可用补给缓存取给。',
-    decision: '选定用法与目标，然后执行。',
-  },
 }
 
 /** 专规会话标题里用的单节名（一次只出一个） */

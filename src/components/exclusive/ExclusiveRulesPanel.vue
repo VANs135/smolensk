@@ -177,14 +177,12 @@ const showsPanzer = computed(() => sectionShown(props.only, 'panzer'))
 const showsSecurity = computed(() => sectionShown(props.only, 'security'))
 const showsHedgehog = computed(() => sectionShown(props.only, 'hedgehog'))
 const showsMarker = computed(() => sectionShown(props.only, 'marker'))
-const showsCache = computed(() => sectionShown(props.only, 'cache'))
 
 /** 各节的"动作可写"开关（模板里用，避免逐处写函数调用） */
 const actsPanzer = computed(() => actsShown(props.only, 'panzer'))
 const actsSecurity = computed(() => actsShown(props.only, 'security'))
 const actsHedgehog = computed(() => actsShown(props.only, 'hedgehog'))
 const actsMarker = computed(() => actsShown(props.only, 'marker'))
-const actsCache = computed(() => actsShown(props.only, 'cache'))
 
 /**
  * B37：**分节置顶判据**（哪一节"本环节该做"）
@@ -715,27 +713,17 @@ const pins = computed(() => workbench.exclusiveSectionPins)
       </p>
     </details>
 
-    <!-- ── · 建设标记（B37：按本环节可做与否置顶/折叠） ── -->
+    <!-- ── · 补给缓存台账（B37：按本环节可做与否置顶/折叠；入口已迁补给阶段面板） ── -->
 
-    <details
-      v-if="showsCache"
-      class="excl"
-      :open="pins.supplyCache"
-      :style="{ order: pins.supplyCache ? 4 : 104 }"
-    >
-      <summary class="excl__title">1.7 / 21.10 补给缓存（Shells / Forage）</summary>
-      <!-- ── · 补给缓存（1.7 / 21.10） ── -->
+    <details class="excl" :open="pins.supplyCache" :style="{ order: pins.supplyCache ? 4 : 104 }">
+      <summary class="excl__title">1.7 补给缓存（持仓台账）</summary>
       <hr />
-      <RuleNote
-        title="补给缓存：Shells（抵付 2T 炮击成本）/ Forage（D 段断补首回合）"
-        rule="1.7 / 21.10"
-      >
+      <RuleNote title="补给缓存：Shells 在炮击面板付款 / Forage 在补给阶段面板" rule="1.7 / 21.10">
         <p class="muted">
           补给缓存（1.7，来自通规 21.10，本作为**标准规则**）：每方每剧本开局各 2 枚，可经 1.6c
-          特殊补员追加。 **Shells**：在任意友方 HQ 处花 1 枚抵付该次投递的**火炮轰炸成本
-          2T**（成本降到 0 以下不找零， 且**即使该 HQ
-          不在追溯补给中也可用**）；**Forage**：只在**补给阶段（D 段）**、 只在有 HQ
-          **断补的第一个回合**、且**不可用于矛头部队**，为其投递距离内所有战斗单位提供追溯补给。
+          特殊补员追加。**Shells** 在炮击面板的「② 按初始列付补给」使用；**Forage**
+          在**补给阶段面板**与 12.6c 吃图上补给并列二选一（仅断补首回合的
+          HQ，覆盖其投递范围内单位）。 本栏只保留持仓与裁判补录，不再提供第二入口。
         </p>
       </RuleNote>
       <div class="row">
@@ -743,7 +731,7 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         <BaseTag kind="info">苏 {{ workbench.supplyCacheHoldings.soviet }} 枚</BaseTag>
         <!-- 裁判工具：缓存来自开局 2 枚与 1.6c 掷表（结算时已自动记账）⇒ 对局台不铺 -->
         <BaseButton
-          v-if="actsCache && showsReferee"
+          v-if="showsReferee"
           variant="ghost"
           size="sm"
           @click="workbench.addSupplyCacheNow(workbench.activeSide)"
@@ -751,48 +739,9 @@ const pins = computed(() => workbench.exclusiveSectionPins)
           追加 1 枚（1.6c，裁判）
         </BaseButton>
       </div>
-      <div v-if="actsCache" class="row">
-        <!--
-          21.10 Shells 的入口已挪到**炮击环节**（BarragePanel 的「② 按初始列付补给」）：
-          那里能同时看到轰炸成本、SP 持仓与降档列，且付款与撤销共用同一本账。
-          本栏只保留 Forage（D 段断补首回合）。
-        -->
-        <BaseTag kind="info">用法：Forage（应急征粮）</BaseTag>
-        <BaseTag kind="info">Shells 请在炮击面板的②付补给里使用（21.10）</BaseTag>
-        <label class="field">
-          友方 HQ 格
-          <UiField
-            v-model="workbench.supplyCacheInputs.hexText"
-            class="input"
-            placeholder="36.13"
-          />
-          <BaseButton variant="secondary" size="sm" @click="workbench.beginSupplyCacheHexPickNow()">
-            点地图选格
-          </BaseButton>
-        </label>
-        <label class="field">
-          HQ 投递距离（格）
-          <UiField
-            v-model="workbench.supplyCacheInputs.hqThrowRangeHexes"
-            class="input num"
-            type="number"
-            min="0"
-          />
-        </label>
-        <!--
-          21.10 的「断补的第一个回合」不再由玩家/裁判勾选（批 F 切片 5）：判据按盘面事实算
-          （`cutSinceTurn`，与 12.8e 同源）—— 这一行原来是个复选框，等于"自己说自己是首回合"。
-        -->
-        <BaseButton variant="primary" size="sm" @click="workbench.spendSupplyCacheNow()">
-          花掉 1 枚（1.7）
-        </BaseButton>
-      </div>
-      <p v-if="workbench.lastSupplyCacheUse !== null" class="ok">
-        {{ workbench.lastSupplyCacheUse }}
-      </p>
     </details>
 
-    <!-- ── · 补给缓存（B37：按本环节可做与否置顶/折叠） ── -->
+    <!-- ── · 苏军空军限制（B37：按本环节可做与否置顶/折叠） ── -->
 
     <details
       class="excl"

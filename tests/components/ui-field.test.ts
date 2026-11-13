@@ -71,12 +71,14 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).not.toMatch(/airPlacement/)
   })
 
-  it('其余面板：容器(2)/专规(7)/补给(12) 的数值与格号已走 UiField', () => {
+  it('其余面板：容器(2)/专规(5)/补给(12) 的数值与格号已走 UiField', () => {
     const cases: Array<[string, number]> = [
       ['src/components/containers/ContainersPanel.vue', 2],
       // 用户 2026-11-12：Shells 入口迁至炮击面板②（21.10 付款接线）后，
       // 专规面板的 Shells 表单（投递成本 / 追溯勾选）移除 ⇒ UiField 由 8 合法降为 7。
-      ['src/components/exclusive/ExclusiveRulesPanel.vue', 7],
+      // 用户 2026-11-13（F5）：Forage 入口迁到补给阶段面板，旧的手填 HQ 格 / 投递距离两枚也删掉
+      // ⇒ 专规面板再无补给缓存输入，UiField 再降为 5。
+      ['src/components/exclusive/ExclusiveRulesPanel.vue', 5],
       // 用户 2026-11-11：补员格 / 图边源格 / 方面军落点全改「点地图选格」⇒ 增援面板已无手打格号
       // 用户 2026-11-11：铁路运货的卸货格改点地图 ⇒ 又少一处手打格号
       ['src/components/supply/SupplyPanel.vue', 12],

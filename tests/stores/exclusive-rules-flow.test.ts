@@ -430,36 +430,24 @@ describe('W6 B19：1.7 补给缓存', () => {
     expect(store.setSegmentStepIndex(index)).toBe(true)
   }
 
-  it('1.7 / 21.10 Shells：在友方 HQ 处花掉一枚，抵付 2T 且存量 −1', () => {
-    const store = newConsole()
-    goToSupplyStep(store)
-    store.supplyCacheInputs.use = 'shells'
-    store.supplyCacheInputs.hexText = label(CORE_HEX)
-    store.supplyCacheInputs.barrageCostT = 6
-    expect(store.spendSupplyCacheNow()).toBe(true)
-    expect(store.supplyCacheHoldings.axis).toBe(1)
-    expect(store.lastSupplyCacheUse).toContain('抵付 2 T')
-  })
-
-  it('21.10 Forage：只在补给阶段（D 段）可用 ⇒ 移动段被**闸门**拒（带规则号）', () => {
+  it('21.10 Forage：只在补给阶段（D 段）可用 ⇒ 移动段无候选、调用被拒', () => {
     const store = newConsole()
     store.setPhase('movement')
-    store.supplyCacheInputs.use = 'forage'
-    store.supplyCacheInputs.hexText = label(CORE_HEX)
-    expect(store.spendSupplyCacheNow()).toBe(false)
+    expect(store.forageOptions).toEqual([])
+    expect(store.useForageNow('hq-1')).toBe(false)
     /*
-     * B37：闸门是**第一道**（界面根本不该在别的段给出入口）——
-     * 故此处断的是闸门的拒绝（规则号走 1.7 / 21.10），而不是引擎那条 `forageOnlyInSupplyPhase`；
-     * 引擎自身的同口径判定仍由 `tests/engine/supply-cache.test.ts` 覆盖（两道都在）。
+     * F5/F7：入口只剩补给阶段面板 ⇒ 不再有专规闸门 `exclusive.forage` 与
+     * `spendSupplyCacheNow` 那条旧路径；此处断的是 `useForageNow` 自己的段判据
+     * （引擎同口径的 `forageOnlyInSupplyPhase` 仍由 `tests/engine/supply-cache.test.ts` 覆盖）。
      */
-    expect(store.actionRefusal?.key).toBe('exclusive.forage')
+    expect(store.exclusiveError?.reason).toBe('forageOnlyInSupplyPhase')
     expect(store.supplyCacheHoldings.axis).toBe(2)
 
     goToSupplyStep(store)
     /*
      * ★ 契约变更（批 F 切片 5，**不是放宽**）：21.10 的「被切断的第一个回合」修前由裁判在面板勾选，
-     *   现已删除 ⇒ `spendSupplyCacheNow` 按**盘面事实**判（`cutSinceTurn`，与 12.8e 同源）：
-     *   该格要有本方 HQ，且它处于**连续断补的第一个回合**。故这里先摆 HQ、再重判一次追溯补给。
+     *   现已删除 ⇒ 按**盘面事实**判（`cutSinceTurn`，与 12.8e 同源）：该格要有本方 HQ，
+     *   且它处于**连续断补的第一个回合**。故这里先摆 HQ、再重判一次追溯补给。
      */
     const hqRecord = unitChoices('axis').find((item) => (item.specialized ?? []).includes('hq'))
     if (hqRecord === undefined) throw new Error('轴方单位库里没有指挥部')
@@ -468,23 +456,19 @@ describe('W6 B19：1.7 补给缓存', () => {
     )
     // 12.3d：HQ 是非战斗单位（4.5b 不抵消 ZOC）⇒ 用纯 ZOC 卡断的内部格，同格源声明仍可用
     sealTraceSupplyByZoc(store, ZOC_SEAL_HEX)
-    store.supplyCacheInputs.hexText = label(ZOC_SEAL_HEX)
     store.evaluateTraceSupplyNow()
-    expect(store.spendSupplyCacheNow()).toBe(true)
+    expect(store.forageOptions.map((option) => option.hqId)).toEqual(['hq-1'])
+    expect(store.useForageNow('hq-1')).toBe(true)
     expect(store.supplyCacheHoldings.axis).toBe(1)
   })
 
-  it('1.7：HQ 格格式非法 / 存量耗尽 ⇒ 拒，且不扣枚数', () => {
+  it('1.7：存量耗尽 ⇒ 无 Forage 候选且拒绝，不扣枚数', () => {
     const store = newConsole()
     goToSupplyStep(store)
-    store.supplyCacheInputs.use = 'shells'
-    store.supplyCacheInputs.hexText = '不是格号'
-    expect(store.spendSupplyCacheNow()).toBe(false)
-
-    store.supplyCacheInputs.hexText = label(CORE_HEX)
     store.supplyCacheHoldings = { axis: 0, soviet: 0 }
-    expect(store.spendSupplyCacheNow()).toBe(false)
-    expect(store.exclusiveError?.reason).toBe('noSupplyCacheLeft:axis')
+    expect(store.forageOptions).toEqual([])
+    expect(store.useForageNow('hq-1')).toBe(false)
+    expect(store.exclusiveError?.reason).toBe('forageNotAvailable')
   })
 
   it('1.7：经 1.6c 特殊补员追加一枚（只加指定一方）', () => {

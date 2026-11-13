@@ -83,7 +83,6 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'beginSpDumpHexPickNow',
       'toggleConstructionPayPick',
       'toggleHedgehogPayPick',
-      'beginSupplyCacheHexPickNow',
       'beginSupplySourceHexPickNow',
       'armConstructionMarkerNow',
       // 13.5：死亡堆持项选中/预选重建对象——只改选择态（选中 + 自动映射行键），付费落盘在 rebuildUnitNow
@@ -389,17 +388,17 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     why: '13.2c 同上',
   },
   /*
-   * 专规 ch10/ch11 的抽签：**只在初设单位放置完成后执行一次**（`setup.executeSetupDraws`，
+   * 专规 ch10/ch11 的抽签：**只在初设确认之后执行一次**（`setup.drawSetupEffectsNow`，
    * 入口可见条件 `setup.setupDrawEntryVisible`）。增援段 / 回合开始 / 阶段切换都不再有抽签窗口。
    * 下面两个是内部步骤，由初设抽签驱动，不单独出口。
    */
   drawFormations: {
     kind: 'referee',
-    why: '抽签的内部步骤（由 setup.executeSetupDraws 驱动，无独立入口）',
+    why: '抽签的内部步骤（由 setup.drawSetupEffectsNow 驱动，无独立入口）',
   },
   applyDraw: {
     kind: 'referee',
-    why: '抽签落盘的内部步骤（由 setup.executeSetupDraws 驱动，无独立入口）',
+    why: '抽签落盘的内部步骤（由 setup.drawSetupEffectsNow 驱动，无独立入口）',
   },
   useConstructionMarkerNow: {
     kind: 'gated',
@@ -576,6 +575,10 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   confirmOosResolutionNow: {
     kind: 'flowState',
     why: '12.6c/d 断补处置是 `supplyState.step === resolveOos`',
+  },
+  useForageNow: {
+    kind: 'playerStep',
+    why: '21.10b 玩家在 D 段做的事：入口自带 `phase === supply` 与 HQ 断补首回合判据；补给阶段面板只在该段渲染',
   },
   absorbBreakdownNow: {
     kind: 'flowState',

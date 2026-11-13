@@ -226,12 +226,33 @@ describe('21.10b Forage', () => {
     expect(after).not.toContain(hq.instanceId)
   })
 
-  it('F5/F7（静态）：专规面板不再有 Shells 分支，Shells 指向炮击面板；Forage 表单待迁出', () => {
+  it('F5/F7（静态）：入口只在补给阶段面板；专规面板只留台账，旧 Shells/Forage 分支已清空', () => {
     const exclusive = readFileSync('src/components/exclusive/ExclusiveRulesPanel.vue', 'utf8')
+    const supplyPhase = readFileSync('src/components/supply/SupplyPhasePanel.vue', 'utf8')
+    const workbench = readFileSync('src/stores/workbench.ts', 'utf8')
+
+    // 专规面板：不再有第二入口（手填 HQ 格 / 投递距离 / 花 1 枚 / Forage 表单），Shells 也不回头
     expect(exclusive).not.toMatch(/use === 'shells'/)
     expect(exclusive).not.toMatch(/barrageCostT/)
-    expect(exclusive).toMatch(/Shells 请在炮击面板/)
-    // 实现后：Forage 表单整体消失（入口迁到补给阶段 D 段），故这里断言不再有「用法」下拉
-    expect(exclusive).not.toMatch(/用法\s*<select/)
+    expect(exclusive).not.toMatch(/supplyCacheInputs/)
+    expect(exclusive).not.toMatch(/spendSupplyCacheNow|beginSupplyCacheHexPickNow/)
+    expect(exclusive).not.toMatch(/useForageNow|forageOptions/)
+    expect(exclusive).toMatch(/Shells 在炮击面板付款 \/ Forage 在补给阶段面板/)
+    // 台账节仍在（持仓 + 裁判 1.6c 补录），仍接 B37 置顶判据
+    expect(exclusive).toMatch(/1\.7 补给缓存（持仓台账）/)
+    expect(exclusive).toContain('pins.supplyCache"')
+
+    // 补给阶段面板：Forage 与 12.6c 图上供养并列（二选一），撤销量在同一处
+    expect(supplyPhase).toMatch(/workbench\.forageOptions/)
+    expect(supplyPhase).toMatch(/useForageNow\(option\.hqId\)/)
+    expect(supplyPhase).toMatch(/undoSupplyCacheUse/)
+    expect(supplyPhase).toMatch(/图上供养（12\.6c）/)
+
+    // store：旧双分支路径与提示 computed 已删除
+    expect(workbench).not.toMatch(/supplyCacheInputs/)
+    expect(workbench).not.toMatch(/spendSupplyCacheNow|beginSupplyCacheHexPickNow/)
+    expect(workbench).not.toMatch(/forageHints/)
+    // 引擎纯函数仍保留（由 engine 测试覆盖），store 不再直接调用 Shells/Forage 旧入口
+    expect(workbench).not.toMatch(/useSupplyCacheAsShells\(/)
   })
 })

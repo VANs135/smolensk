@@ -61,8 +61,9 @@ describe('B17a-3：分段渲染与入口（源码守卫）', () => {
     /*
      * ★ 用户 2026-10-25「在什么环节，点什么单位才出现什么菜单」：
      *   原来只有两段（info / actions）⇒ 点一枚工事就把**装甲集群 / 治安 / 工事 / 建造标记 /
-     *   补给缓存**五节的动作全铺开。现在五节各有自己的段名：
-     *   `panzer` / `security` / `hedgehog` / `marker` / `cache`（由 `unitActionOptions()` 挑）。
+     *   补给缓存**五节的动作全铺开。现在各节有自己的段名：
+     *   `panzer` / `security` / `hedgehog` / `marker`（由 `unitActionOptions()` 挑）。
+     *   补给缓存一节（F5 起）只留台账、无动作，故 `cache` 段随 Forage 入口迁出一起删除。
      *   `actions` 仍＝全显（顶栏「专规动作」按钮与验证页口径不变）。
      */
     /*
@@ -73,9 +74,10 @@ describe('B17a-3：分段渲染与入口（源码守卫）', () => {
     for (const only of ["'info'", "'actions'", "'panzer'", "'security'"]) {
       expect(scope, `section-scope 缺 ${only} 分段`).toContain(only)
     }
-    for (const only of ["'hedgehog'", "'marker'", "'cache'"]) {
+    for (const only of ["'hedgehog'", "'marker'"]) {
       expect(scope, `section-scope 缺 ${only} 分段`).toContain(only)
     }
+    expect(scope).not.toContain("'cache'")
     expect(panel).toContain('showsInfo')
     expect(panel).toContain("from './section-scope'")
 
@@ -85,7 +87,7 @@ describe('B17a-3：分段渲染与入口（源码守卫）', () => {
      * `showsX` 挂在 `<details>` 上（整节出不出现）；`actsX` 挂在动作行上（本节能不能写）。
      * 两者缺一，单段模式就会出现"节在、动作全灰"或"动作在、节不在"的半吊子状态。
      */
-    for (const section of ['Panzer', 'Security', 'Hedgehog', 'Marker', 'Cache']) {
+    for (const section of ['Panzer', 'Security', 'Hedgehog', 'Marker']) {
       expect(panel, `缺 shows${section}`).toContain(`shows${section}`)
       expect(panel, `缺 acts${section}`).toContain(`acts${section}`)
     }
@@ -112,7 +114,6 @@ describe('B17a-3：分段渲染与入口（源码守卫）', () => {
       ['workbench.buildHedgehogNow()', 'Hedgehog'],
       ['workbench.reduceHedgehogNow()', 'Hedgehog'],
       ['workbench.useConstructionMarkerNow(', 'Marker'],
-      ['workbench.spendSupplyCacheNow()', 'Cache'],
     ] as const) {
       expect(inSection(marker, section), `${marker} 应落在 ${section} 那一节里`).toBe(true)
     }

@@ -181,7 +181,7 @@ export interface OpsFlowState {
  *
  * 用户 2026-11-09「一个框不能装多件事」：一节一件，逐件推进。
  */
-export type ExclusiveSessionSection = 'panzer' | 'security' | 'hedgehog' | 'marker' | 'cache'
+export type ExclusiveSessionSection = 'panzer' | 'security' | 'hedgehog' | 'marker'
 
 /**
  * 会话的**关闭语义**（P3 / UI3，方案 §5 `closePolicy`）
@@ -2105,15 +2105,6 @@ export const useMapViewStore = defineStore('mapView', () => {
         disabledReason: null,
       })
     }
-    if (workbench.forageHints.some((item) => item.hqId === id)) {
-      add('exclusive.forage', {
-        label: '应急征粮',
-        rule: '1.7 / 21.10',
-        panel: 'fort',
-        only: 'cache',
-        group: '补给',
-      })
-    }
     /*
      * 用户 2026-11-09：不满足就不出现、**不灰按钮** ⇒ 滤掉 `add()` 标了"先结束移动 / 限某环节"的项。
      * 真正能否做仍由各入口（引擎 / store 谓词）再判一次，这里只管"菜单里不摆点不动的按钮"。
@@ -2592,10 +2583,6 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (option.only === 'airstrip' && unit?.noncombatKind !== 'air_base') {
       workbench.constructionInputs.engineerId = instanceId
     }
-    if (option.only === 'cache') {
-      workbench.supplyCacheInputs.use = 'forage'
-      workbench.supplyCacheInputs.hexText = hexLabel(hex)
-    }
     // 用户 2026-11-12：14.11 转场 —— 先开基地窗勾机，再按模式选盒/目的基地
     if (option.only === 'transferBox' || option.only === 'transferBase') {
       if (unit === undefined) return false
@@ -2976,7 +2963,6 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (pins.security) out.push('security')
     if (pins.hedgehog) out.push('hedgehog')
     if (pins.constructionMarker) out.push('marker')
-    if (pins.supplyCache) out.push('cache')
     return out
   })
 
