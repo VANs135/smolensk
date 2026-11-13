@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
@@ -121,19 +121,9 @@ const retreatWipeLabels = computed(() =>
 )
 
 /**
- * 进入推进步时把"可推进者"默认全选（9.12g-D：拥有者可选哪些，本批不强迫玩家先点地图）。
- * 取消其中几枚就在面板上点一下；全部取消＝按 9.13 结束（不推进）。不写日志、不动引擎。
+ * 9.12g 战后推进：**唯一入口是地图上的推进格** —— 点它即按规则预选参与推进的单位
+ * （`advanceNow`），本面板只负责在同一张卡里改选与确认。不在这里另做一次默认全选。
  */
-watch(
-  () => state.value?.step === 'advance' && state.value?.finished !== true,
-  (inAdvance) => {
-    if (!inAdvance || workbench.combatAdvanceHex === null) return
-    if (workbench.combatInputs.advanceUnitIds.length > 0) return
-    const ids = advanceSelectable.value.map((choice) => choice.unit.instanceId)
-    if (ids.length > 0) workbench.combatInputs.advanceUnitIds = ids
-  },
-  { immediate: true },
-)
 
 /* ── 9.12 撤退：落点由**在地图上点格**选定（用户口径 2026-09-16） ──
  *
@@ -153,8 +143,8 @@ const retreatPlan = computed(() => mapView.retreatSidePlan)
 const retreatUnit = computed(() => mapView.retreatUnit)
 
 /*
- * 9.12g 推进候选勾选：**入口已收口到地图小窗**（批 F·E4），勾选动作上移到 store
- * （`workbench.toggleAdvanceUnit`），本面板只读 `combatAdvanceChoices` 展示。
+ * 9.12g 推进候选勾选：**入口是地图推进格**（点它即按规则预选），勾选动作在 store
+ * （`workbench.toggleAdvanceUnit`），本面板只读 `combatAdvanceChoices` 展示并允许改选。
  */
 
 /**
@@ -304,9 +294,6 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         <template v-else>—</template>
       </p>
       <div class="row">
-        <BaseButton variant="primary" size="sm" title="9.1" @click="workbench.beginCombatNow()">
-          开始战斗
-        </BaseButton>
         <BaseButton variant="ghost" size="sm" @click="workbench.clearCombat()">
           清除选择
         </BaseButton>
@@ -850,7 +837,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         </RuleTip>
         <!--
           9.12g-D：「由拥有者玩家选择哪些攻击单位进行推进（如果有的话）」
-          ⇒ 逐单位勾选在本面板（唯一入口）；地图绿格仍是"点该格＝全选可推进者"的快捷方式。
+          ⇒ 入口是地图推进格（点它即预选）；这里只做同一张卡里的改选与确认。
         -->
         <div v-if="advanceSelectable.length > 0" class="row">
           <BaseButton

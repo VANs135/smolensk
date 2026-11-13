@@ -10250,7 +10250,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       // C6：点敌方格＝选防御格；点己方算子＝加入/移出攻方（9.1b）
       const atHex = unitsAt(hex)
       if (atHex.some((unit) => unit.side !== activeSide.value)) {
-        selectCombatDefenderHex(hex)
+        // 用户 2026-11-13 批 F：点可攻击格＝直接发起战斗（进补给步），不再停在"只有入口"的卡上
+        if (selectCombatDefenderHex(hex)) beginCombatNow()
         return
       }
       if (atHex.some((unit) => unit.side === activeSide.value)) {
@@ -10921,8 +10922,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /** C6：选定防御格（9.0：只能攻击含敌方**战斗**单位的格；非战斗单位走 9.14 特殊战斗） */
-  function selectCombatDefenderHex(hex: HexRef): void {
-    if (!canReplaceCombat()) return
+  function selectCombatDefenderHex(hex: HexRef): boolean {
+    if (!canReplaceCombat()) return false
     const atHex = unitsAt(hex)
     const enemyCombat = atHex.filter(
       (unit) => unit.side !== activeSide.value && unit.isCombat && unit.steps > 0,
@@ -10935,7 +10936,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           : `${hexLabel(hex)} 没有敌方战斗单位：常规战斗不适用（9.0；非战斗单位走 9.14 特殊战斗）`,
         '9.0',
       )
-      return
+      return false
     }
     // 9.0：已有攻方时，逐个复核与防御格的相邻性（不相邻者不得参战）
     const notAdjacent = combatAttackerIds.value.filter((id) => {
@@ -10948,13 +10949,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         `已选攻方中 ${notAdjacent.map(nameOf).join('、')} 与 ${hexLabel(hex)} 不相邻（9.0）`,
         '9.0',
       )
-      return
+      return false
     }
     if (combatAttackerIds.value.length === 0) {
       const auto = attackersForHex(units.value, hex, activeSide.value)
       if (auto.length === 0) {
         pushLog('warning', `没有与 ${hexLabel(hex)} 相邻的可攻击己方单位（9.0/9.1a）`, '9.1a')
-        return
+        return false
       }
       combatAttackerIds.value = auto.map((unit) => unit.instanceId)
     }
@@ -10966,9 +10967,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     combatInputs.value.retreatPaths = {}
     pushLog(
       'info',
-      `选定防御格 ${hexLabel(hex)}（守方 ${enemyCombat.length} 个战斗单位）；攻方 ${combatAttackerIds.value.length} 个。点「开始战斗」进入 9.2 九步流程`,
+      `选定防御格 ${hexLabel(hex)}（守方 ${enemyCombat.length} 个战斗单位）；攻方 ${combatAttackerIds.value.length} 个`,
       '9.1',
     )
+    return true
   }
 
   /**

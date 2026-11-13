@@ -181,7 +181,7 @@ describe('批 A 切片 2：环节驱动的点击分派', () => {
     expect([...store.barrageKindsInSegment]).toEqual(['air'])
   })
 
-  it('③ F 段战斗环节：点敌方格＝选防御格、点己方单位＝加入攻方（不需要工具）', () => {
+  it('③ F 段战斗环节：点己方单位＝选攻方；点敌方格即开战进补给步（不需要工具）', () => {
     store.setPhase('combat')
     goToActionStep(store, 'combat.declare')
     expect(store.segmentStep?.id).toBe('combat.combat')
@@ -190,19 +190,20 @@ describe('批 A 切片 2：环节驱动的点击分派', () => {
     const atk1 = place(store, rifleRecord(), FIRING_HEX, 'axis', 'atk-1')
     place(store, rifleRecord(), FIRING_HEX_2, 'axis', 'atk-2')
 
-    // 点敌方格 ⇒ 选防御格（守方格内全部战斗单位自动入守方名单，9.1d）
+    // 点己方单位 ⇒ **切换**它在攻方名单里的去留（9.1b「可只用堆叠中一部分单位攻击」）
+    expect(store.combatAttackerIds).toEqual([])
+    store.clickHex(FIRING_HEX)
+    expect(store.combatAttackerIds).toEqual([atk1.instanceId])
+    store.clickHex(FIRING_HEX)
+    expect(store.combatAttackerIds).toEqual([])
+    store.clickHex(FIRING_HEX)
+    expect(store.combatAttackerIds).toEqual([atk1.instanceId])
+
+    // 点敌方格 ⇒ 直接发起战斗（9.2 第 1 步＝战斗补给），不再停在"发起战斗"卡上
     store.clickHex(TARGET_HEX)
     expect(store.battleTarget?.hex).toEqual(TARGET_HEX)
     expect(store.battleTarget?.defenderIds).toEqual([enemy.instanceId])
-
-    // 点己方单位 ⇒ **切换**它在攻方名单里的去留（9.1b「可只用堆叠中一部分单位攻击」）
-    const before = [...store.combatAttackerIds]
-    expect(before.length).toBeGreaterThan(0) // 选防御格时已自动填了相邻攻方（9.1b 的便捷）
-    const wasSelected = before.includes(atk1.instanceId)
-    store.clickHex(FIRING_HEX)
-    expect(store.combatAttackerIds.includes(atk1.instanceId)).toBe(!wasSelected)
-    store.clickHex(FIRING_HEX)
-    expect([...store.combatAttackerIds].sort()).toEqual([...before].sort())
+    expect(store.combatState?.step).toBe('combatSupply')
   })
 
   it('④ 兼容层：非轰炸环节时，战斗目标仍可作为轰炸目标（既有夹具/验证页依赖），**环节点格优先**', () => {

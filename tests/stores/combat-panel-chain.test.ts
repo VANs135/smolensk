@@ -24,8 +24,8 @@ import {
  *      **移动的取子清单**（`setMovePickIds`）⇒ 战斗那边仍要在小窗里逐枚点"加入攻方"，
  *      与「不存在『面板里再选一次』」不符。本批新增 `syncCombatParticipants(hex, ids)`（逐格镜像，
  *      仍走既有的 `toggleCombatAttacker` / `toggleCombatSupplyAttacker`，不绕过 9.1a/9.1e/9.0/9.1b 的判定）。
- *   ② **宣布之前没有任何会话**：会话只在 `combatState !== null` 时挂载，而「开始战斗（9.1）」的按钮
- *      原先只在小窗里 ⇒ 现在**点目标格即生成会话**（§4.2 的流程图），取消＝清掉这次的选子（`clearCombat`）。
+ *   ② **点目标格即开战**（批 F）：修前点防御格只生成「发起战斗（9.1）」卡、还要再点一次；
+ *      现在点可攻击格直接进 9.2 第 1 步（战斗补给），会话随之切成 9.2 的结算。
  */
 
 const newStores = () => {
@@ -157,8 +157,8 @@ describe('B15b：选择集 → 战斗参战集（§4.2）', () => {
   })
 })
 
-describe('B15b：宣布之前的战斗会话（§4.2 的流程图）', () => {
-  it('★ 点目标格即生成「发起战斗（9.1）」会话；未凑齐则不生成', () => {
+describe('B15b：点目标格即开战（§4.2 的流程图）', () => {
+  it('★ 点目标格即直接进补给步；未凑齐则不生成会话', () => {
     const { workbench, mapView } = newStores()
     workbench.setPhase('combat')
     goToActionStep(workbench, 'combat.declare')
@@ -172,21 +172,24 @@ describe('B15b：宣布之前的战斗会话（§4.2 的流程图）', () => {
     expect(workbench.combatAttackerIds).toEqual([a1.instanceId])
     expect(mapView.session).toBeNull()
 
+    // 点防御格 ⇒ 直接发起战斗（9.2 第 1 步＝战斗补给），不再停在"发起战斗"卡上
     workbench.clickHex(DEFENDER_HEX)
     expect(workbench.battleTarget?.hex).toEqual(DEFENDER_HEX)
-    expect(mapView.session).toMatchObject({ kind: 'combat', rule: '9.1' })
-    expect(mapView.session?.title).toContain('发起战斗')
+    expect(workbench.combatState?.step).toBe('combatSupply')
+    expect(mapView.session).toMatchObject({ kind: 'combat', rule: '9.2' })
+    expect(mapView.session?.title).toContain('战斗结算')
   })
 
-  it('★ 会话取消 ⇒ 清掉这次的选子与防御格（宣布之前没有引擎状态可取消）', () => {
+  it('★ 会话取消 ⇒ 放弃本场战斗并清掉选子与防御格（补给确认前可放弃）', () => {
     const { workbench, mapView } = setupBattlePrep()
     workbench.clickHex(ATTACKER_HEX)
     workbench.clickHex(DEFENDER_HEX)
-    expect(mapView.session?.rule).toBe('9.1')
+    expect(mapView.session?.rule).toBe('9.2')
 
     expect(mapView.cancelSession()).toBe(true)
     expect(workbench.combatAttackerIds).toEqual([])
     expect(workbench.battleTarget).toBeNull()
+    expect(workbench.combatState).toBeNull()
     expect(mapView.session).toBeNull()
   })
 
