@@ -186,12 +186,6 @@ function pickTransportSplit(key: string): void {
   workbench.transportPointInputs.splitId = group.ids[0]!
 }
 
-function pickTransportLoad(key: string): void {
-  const group = transportGroupOf(key)
-  if (group === undefined) return
-  workbench.selectTransportLoadPointNow(group.ids[0]!)
-}
-
 const transportMergeItems = computed<readonly CounterPickerItem[]>(() =>
   workbench.transportPointGroupsOfSide.map((group) => ({
     ...transportItem(group),
@@ -206,12 +200,83 @@ const transportSplitItems = computed<readonly CounterPickerItem[]>(() =>
   })),
 )
 
-const transportLoadItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.transportPointGroupsOfSide.map((group) => ({
-    ...transportItem(group),
-    selected: group.ids.includes(workbench.transportLoadInputs.pointId ?? ''),
-  })),
-)
+/**
+ * 13.2f（P1）：账本里的装卸列表**按格分组**——每格一条；同一格多枚时点同一格循环到下一枚。
+ * 会话模式（`only='loadUnload'`）不出现这张表，只显示被点的那一枚。
+ */
+const transportLoadHexItems = computed<readonly CounterPickerItem[]>(() => {
+  const byHex = new Map<
+    string,
+    { hex: (typeof workbench.transportPointsOfSide)[number]['hex']; ids: string[]; points: number }
+  >()
+  for (const group of workbench.transportPointGroupsOfSide) {
+    const key = `${group.unit.hex.col}.${group.unit.hex.row}`
+    const entry = byHex.get(key)
+    if (entry === undefined) {
+      byHex.set(key, { hex: group.unit.hex, ids: [...group.ids], points: group.points })
+    } else {
+      entry.ids.push(...group.ids)
+      entry.points += group.points
+    }
+  }
+  const current = workbench.transportLoadInputs.pointId
+  return [...byHex.entries()].map(([key, entry]) => {
+    const first = workbench.transportPointsOfSide.find((unit) => unit.instanceId === entry.ids[0])!
+    return {
+      id: key,
+      imageUrl: counterImageUrlOf(first),
+      name: `${hexLabel(entry.hex)} · ${entry.ids.length} 枚 / ${entry.points} 点`,
+      selected: current !== null && entry.ids.includes(current),
+      hex: entry.hex,
+      badge: entry.ids.length > 1 ? `×${entry.ids.length}` : undefined,
+    }
+  })
+})
+
+/** 13.2f（P1）：会话模式只显示被点的那一枚；账本模式用上面的按格表切换 */
+const transportLoadUnit = computed(() => {
+  const id = workbench.transportLoadInputs.pointId
+  return id === null
+    ? null
+    : (workbench.transportPointsOfSide.find((unit) => unit.instanceId === id) ?? null)
+})
+
+/** 12.1b（P2）：该格补给站——地面与「装载中」分开显示，装、卸共用这一份事实 */
+const transportHexDumps = computed<{
+  groundSp: number
+  groundT: number
+  carried: { id: string; name: string; sp: number }[]
+}>(() => {
+  const id = workbench.transportLoadInputs.pointId
+  if (id === null) return { groundSp: 0, groundT: 0, carried: [] }
+  let groundSp = 0
+  let groundT = 0
+  const carried: { id: string; name: string; sp: number }[] = []
+  for (const dump of workbench.transportDumpsOf(id)) {
+    if (workbench.spDumps.some((item) => item.id === dump.id)) {
+      groundSp += dump.sp
+      groundT += dump.t
+      continue
+    }
+    const owner = workbench.transportPointsOfSide.find((unit) => unit.instanceId === dump.carriedBy)
+    carried.push({
+      id: dump.id,
+      name: owner?.name ?? '运输点数',
+      sp: dump.sp + dump.t / 4,
+    })
+  }
+  return { groundSp, groundT, carried }
+})
+
+function pickTransportLoad(key: string): void {
+  const ids = workbench.transportPointGroupsOfSide
+    .filter((group) => `${group.unit.hex.col}.${group.unit.hex.row}` === key)
+    .flatMap((group) => group.ids)
+  if (ids.length === 0) return
+  const current = workbench.transportLoadInputs.pointId
+  const index = current === null ? -1 : ids.indexOf(current)
+  workbench.selectTransportLoadPointNow(ids[(index + 1) % ids.length]!)
+}
 
 /** 13.2f：当前选中点数此刻能装 / 能卸多少（与落账同一批判据） */
 const transportLoadable = computed<number>(() => {
@@ -221,23 +286,6 @@ const transportLoadable = computed<number>(() => {
 const transportUnloadable = computed<number>(() => {
   const id = workbench.transportLoadInputs.pointId
   return id === null ? 0 : workbench.transportUnloadableSpOf(id)
-})
-
-/** 13.2f：把「装载 → 移动 → 卸载」三步显式写出来，玩家只用看当前这一步 */
-const transportStageText = computed<string>(() => {
-  const id = workbench.transportLoadInputs.pointId
-  if (id === null) return '先点一枚运输点数；载量与运力在算子悬停里。'
-  if (transportLoadable.value > 0) {
-    return `① 同格有补给站：最多可装 ${transportLoadable.value} SP；装完移动，到含友军/基地/已卸站的格再卸。`
-  }
-  if (transportUnloadable.value > 0) {
-    return `③ 本格满足 13.2f 卸载条件：最多可卸 ${transportUnloadable.value} SP。`
-  }
-  const unit = workbench.transportPointsOfSide.find((item) => item.instanceId === id)
-  if ((unit?.loadedSpT ?? 0) > 0) {
-    return '已载货，但本格不满足卸载条件（需友方战斗单位 / 港口 / 空军基地 / 已卸载的补给站）。'
-  }
-  return '本格没有补给站，暂不能装（13.2f：装载须与补给站同格）。'
 })
 
 /** 12.6：受补给单位（当前方图上算子；点一枚即对它逐个检查） */
@@ -392,7 +440,7 @@ watch(
       destroyDumpId.value =
         workbench.spDumpsOfSide.find((dump) => dump.hex.col === hex.col && dump.hex.row === hex.row)
           ?.id ?? ''
-    } else if (only === 'loadUnload') workbench.transportLoadInputs.pointId = id
+    } else if (only === 'loadUnload') workbench.selectTransportLoadPointNow(id)
     else if (only === 'transport') workbench.transportPointInputs.splitId = id
     else if (only === 'extender') {
       workbench.convertTargetHexText = hexLabel(hex)
@@ -676,48 +724,72 @@ const showsLedger = computed(
             </p>
           </RuleNote>
           <!-- B14d：装卸对象＝**算子图阵列**（原来是纯文字下拉；已载量在 title 里） -->
+          <!-- P1：会话模式只显示被点的那一枚；账本模式按格分组，点同格循环 -->
           <CounterPicker
-            title="装卸对象（13.2f）"
-            hint="13.2f：装载须与补给站同格、卸载须在含友方战斗单位/港口/空军基地/已卸载补给站的格；两者都付印刷 MA 的 10%"
-            :items="transportLoadItems"
+            v-if="only !== 'loadUnload'"
+            title="装卸对象（按格）"
+            :items="transportLoadHexItems"
             :size="32"
             @pick="pickTransportLoad"
             @hover="hoverUnit"
           />
-          <p class="muted">{{ transportStageText }}</p>
-          <div class="row">
-            <label class="field">
-              SP 数（1 SP = 4 T）
-              <UiField
-                v-model="workbench.transportLoadInputs.amount"
-                class="input num"
-                type="number"
-                min="1"
-                :max="transportLoadable > 0 ? transportLoadable : transportUnloadable"
-                stepper
-              />
-            </label>
-            <BaseButton
-              v-if="transportLoadable > 0"
-              variant="secondary"
-              size="sm"
-              @click="workbench.loadTransportPointNow()"
-            >
-              装载 SP（13.2f）
-            </BaseButton>
-            <BaseButton
-              v-if="transportUnloadable > 0"
-              variant="secondary"
-              size="sm"
-              @click="workbench.unloadTransportPointNow()"
-            >
-              卸载 SP（13.2f）
-            </BaseButton>
-          </div>
-          <p v-if="workbench.transportLoadError !== null" class="bad">
-            <BaseTag kind="danger">{{ workbench.transportLoadError.rule }}</BaseTag>
-            {{ workbench.transportLoadError.reason }}
-          </p>
+          <template v-if="transportLoadUnit !== null">
+            <p class="num">
+              {{ transportLoadUnit.name }} · 点数 {{ transportLoadUnit.noncombatTransport }} · 已载
+              {{ transportLoadUnit.loadedSpT / 4 }} SP · 剩
+              {{ transportLoadUnit.raw.ma - transportLoadUnit.mpSpent }} MP
+            </p>
+            <!-- P2：12.1b 该格补给站——地面与装载中分开，装/卸共用这一份事实 -->
+            <p class="num">
+              该格补给站：地面 {{ transportHexDumps.groundSp }} SP +
+              {{ transportHexDumps.groundT }} T<template
+                v-for="row in transportHexDumps.carried"
+                :key="row.id"
+              >
+                ；装载中 {{ row.name }} {{ row.sp }} SP</template
+              >
+            </p>
+            <div v-if="transportLoadable > 0" class="row">
+              <label class="field">
+                装载 SP（最多 {{ transportLoadable }}）
+                <UiField
+                  v-model="workbench.transportLoadInputs.loadAmount"
+                  class="input num"
+                  type="number"
+                  min="1"
+                  :max="transportLoadable"
+                  stepper
+                />
+              </label>
+              <BaseButton variant="secondary" size="sm" @click="workbench.loadTransportPointNow()">
+                装载 SP
+              </BaseButton>
+            </div>
+            <div v-if="transportUnloadable > 0" class="row">
+              <label class="field">
+                卸载 SP（最多 {{ transportUnloadable }}）
+                <UiField
+                  v-model="workbench.transportLoadInputs.unloadAmount"
+                  class="input num"
+                  type="number"
+                  min="1"
+                  :max="transportUnloadable"
+                  stepper
+                />
+              </label>
+              <BaseButton
+                variant="secondary"
+                size="sm"
+                @click="workbench.unloadTransportPointNow()"
+              >
+                卸载 SP
+              </BaseButton>
+            </div>
+            <p v-if="workbench.transportLoadError !== null" class="bad">
+              <BaseTag kind="danger">{{ workbench.transportLoadError.rule }}</BaseTag>
+              {{ workbench.transportLoadError.reason }}
+            </p>
+          </template>
         </template>
         <template v-if="showsExtender">
           <div class="row">

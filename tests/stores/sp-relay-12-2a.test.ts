@@ -1,4 +1,4 @@
-import { createPinia, setActivePinia } from 'pinia'
+﻿import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
@@ -99,13 +99,23 @@ describe('12.2a：已卸货的 SP 同阶段不能再换一种运输方式', () =
     controlRailRun(store)
     pushDump(store, FROM, 2, 'src-relay')
     const point = placeTransportPoint(store, FROM, 'tp-relay-1')
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 2 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 2,
+      unloadAmount: 2,
+    }
     expect(store.loadTransportPointNow()).toBe(true)
 
     // 运到终点卸载（终点有友军战斗单位 / 可卸货）
     point.hex = { ...TO }
     point.mpSpent = 0
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 2 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 2,
+      unloadAmount: 2,
+    }
     expect(store.unloadTransportPointNow()).toBe(true)
     const landed = dumpAt(store, TO)!
     expect(landed.sp + landed.t / 4).toBe(2)
@@ -125,7 +135,12 @@ describe('12.2a：已卸货的 SP 同阶段不能再换一种运输方式', () =
     const arrived = dumpAt(store, TO)!
 
     const point = placeTransportPoint(store, TO, 'tp-relay-2')
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 1 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 1,
+      unloadAmount: 1,
+    }
     expect(store.loadTransportPointNow()).toBe(false)
     expect(store.transportLoadError).toMatchObject({ rule: '12.2a' })
     expect(point.loadedSpT).toBe(0)
@@ -139,15 +154,30 @@ describe('12.2a：不误伤合法路径', () => {
     controlRailRun(store)
     pushDump(store, FROM, 2, 'src-same')
     const p1 = placeTransportPoint(store, FROM, 'tp-same-1')
-    store.transportLoadInputs = { pointId: p1.instanceId, amount: 2 }
+    store.transportLoadInputs = {
+      pointId: p1.instanceId,
+      dumpId: null,
+      loadAmount: 2,
+      unloadAmount: 2,
+    }
     expect(store.loadTransportPointNow()).toBe(true)
     p1.hex = { ...TO }
     p1.mpSpent = 0
-    store.transportLoadInputs = { pointId: p1.instanceId, amount: 2 }
+    store.transportLoadInputs = {
+      pointId: p1.instanceId,
+      dumpId: null,
+      loadAmount: 2,
+      unloadAmount: 2,
+    }
     expect(store.unloadTransportPointNow()).toBe(true)
 
     const p2 = placeTransportPoint(store, TO, 'tp-same-2')
-    store.transportLoadInputs = { pointId: p2.instanceId, amount: 2 }
+    store.transportLoadInputs = {
+      pointId: p2.instanceId,
+      dumpId: null,
+      loadAmount: 2,
+      unloadAmount: 2,
+    }
     expect(store.loadTransportPointNow()).toBe(true)
   })
 
@@ -157,11 +187,21 @@ describe('12.2a：不误伤合法路径', () => {
     pushDump(store, FROM, 2, 'src-use')
     pushDump(store, TO, 2, 'to-old')
     const point = placeTransportPoint(store, FROM, 'tp-use')
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 1 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 1,
+      unloadAmount: 1,
+    }
     expect(store.loadTransportPointNow()).toBe(true)
     point.hex = { ...TO }
     point.mpSpent = 0
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 1 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 1,
+      unloadAmount: 1,
+    }
     expect(store.unloadTransportPointNow()).toBe(true)
 
     const toDump = dumpAt(store, TO)!
@@ -176,11 +216,21 @@ describe('12.2a：不误伤合法路径', () => {
     controlRailRun(store)
     pushDump(store, FROM, 2, 'src-next')
     const point = placeTransportPoint(store, FROM, 'tp-next')
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 2 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 2,
+      unloadAmount: 2,
+    }
     expect(store.loadTransportPointNow()).toBe(true)
     point.hex = { ...TO }
     point.mpSpent = 0
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 2 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 2,
+      unloadAmount: 2,
+    }
     expect(store.unloadTransportPointNow()).toBe(true)
 
     store.setPhase('combat')

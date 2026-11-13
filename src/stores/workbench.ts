@@ -4242,10 +4242,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /* ────────── 13.2f：运输点数装载 / 卸载 SP ────────── */
 
-  /** 13.2f 的输入（哪一个运输点数、装/卸多少 SP） */
-  const transportLoadInputs = ref<{ pointId: string | null; amount: number }>({
+  /** 13.2f 的输入（哪一个运输点数、装/卸各多少 SP、本次装载选定的补给站） */
+  const transportLoadInputs = ref<{
+    pointId: string | null
+    /** P3：本次装载选定的补给站 id（地面账本或 `unit:` 装载来源） */
+    dumpId: string | null
+    /** P6：装、卸各用自己的数量，互不串用 */
+    loadAmount: number
+    unloadAmount: number
+  }>({
     pointId: null,
-    amount: 1,
+    dumpId: null,
+    loadAmount: 1,
+    unloadAmount: 1,
   })
 
   /** 13.2f 的错误（统一形状） */
@@ -4264,6 +4273,53 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 12.1b（用户 2026-11-13）：**该格、该方的补给站**——地面账本在前、装载中（`unit:`）在后
+   *
+   * 原文：「Any location containing Supply Points, whether on the ground or loaded on a
+   * Transport Point, is called a dump.」⇒ 装载中的 SP 也能作为装载来源，不能再只看 `spDumps`。
+   */
+  function transportDumpsAt(unit: ConsoleUnit): readonly SpDump[] {
+    return allSpDumps.value.filter((item) => item.side === unit.side && sameHex(item.hex, unit.hex))
+  }
+
+  /** 13.2f / 6.1a：本次费用是否会把该点数推过印刷 MA（>0 ⇒ 超支 MP） */
+  function transportMpShortfall(unit: ConsoleUnit, costMp: number): number {
+    return unit.mpSpent + costMp - unit.raw.ma
+  }
+
+  /**
+   * 13.2f：该格实际可装多少 SP（运力余量 ∩ 该格可动用 T，且 12.2a 锁先扣）
+   *
+   * `lockedT` 是**格级**账（不是某一本账的属性）⇒ 先从全格合计里扣一次，再摊到"装多少"。
+   */
+  function transportLoadableAt(unit: ConsoleUnit): number {
+    const dumps = transportDumpsAt(unit)
+    if (dumps.length === 0) return 0
+    const lockedT = spRelayLockedT(unit.hex, unit.side, 'transport')
+    const groundT = dumps.reduce((sum, dump) => sum + holdingsToT({ sp: dump.sp, t: dump.t }), 0)
+    const usableT = Math.max(0, groundT - lockedT)
+    const roomSp = unit.noncombatTransport - unit.loadedSpT / SP_TO_T
+    return Math.max(0, Math.min(Math.floor(roomSp), Math.floor(usableT / SP_TO_T)))
+  }
+
+  /**
+   * 13.2f（P3）：选一本**能独自付清本次数量**的账本
+   *
+   * 同格可能有多本（G/H 两本地面账，或若干装载中的运输点数）⇒ 取"够付且持仓最大"的那本，
+   * 不让玩家再多做一次下拉/手输。
+   */
+  function transportLoadDumpFor(unit: ConsoleUnit, wantT: number): SpDump | null {
+    const able = transportDumpsAt(unit).filter(
+      (dump) => holdingsToT({ sp: dump.sp, t: dump.t }) >= wantT,
+    )
+    return (
+      able.sort(
+        (a, b) => holdingsToT({ sp: b.sp, t: b.t }) - holdingsToT({ sp: a.sp, t: a.t }),
+      )[0] ?? null
+    )
+  }
+
+  /**
    * 13.2f：**装载 SP**（运输点数与补给站同格；支付印刷 MA 的 10%）
    *
    * 「运输点数必须与**补给站**位于同一格中才能装载 SP」「运输点数可在**任何格**内装载」
@@ -4276,46 +4332,31 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', '先选择要装载的运输点数（13.2f）', '13.2f')
       return false
     }
-    const dump = spDumps.value.find(
-      (item) => item.side === unit.side && sameHex(item.hex, unit.hex),
-    )
+    const dumps = transportDumpsAt(unit)
     const outcome = validateTransportPointLoad({
       transportPoint: transportPointActorOf(unit),
-      dumpInHex: dump !== undefined,
+      dumpInHex: dumps.length > 0,
     })
     if (!outcome.ok) {
       transportLoadError.value = { rule: outcome.rule, reason: outcome.reason }
       pushLog('warning', `装载被拒：${outcome.reason}（${outcome.rule}）`, outcome.rule)
       return false
     }
-    const amount = Math.max(1, Math.trunc(transportLoadInputs.value.amount))
-    // 12.2a：该格本阶段若已有 SP 由**其他**运输方式卸下，则这批 T 不能再装到运输点数上
-    if (dump !== undefined) {
-      const lockedT = spRelayLockedT(dump.hex, dump.side, 'transport')
-      const availableT = holdingsToT({ sp: dump.sp, t: dump.t }) - lockedT
-      if (lockedT > 0 && amount * SP_TO_T > availableT) {
-        transportLoadError.value = { rule: '12.2a', reason: 'relayLockedOtherMode' }
-        pushLog(
-          'warning',
-          `12.2a：该格本阶段由其他运输方式卸下的 ${lockedT} T 不能再装于运输点数（可换回原方式，或等下一阶段）`,
-          '12.2a',
-        )
-        return false
+    // 13.2f / 6.1a：费用按正常方式计入本阶段 MP，不得把 mpSpent 推过印刷 MA
+    const shortfall = transportMpShortfall(unit, outcome.data.cost)
+    if (shortfall > 0) {
+      transportLoadError.value = {
+        rule: '13.2f',
+        reason: `剩余 MP 不足：装载需 ${outcome.data.cost} MP，超支 ${shortfall} MP（6.1a）`,
       }
-    }
-    const payment = planSpPayment({
-      holdings: { sp: dump?.sp ?? 0, t: dump?.t ?? 0 },
-      wantT: amount * SP_TO_T,
-    })
-    if (dump === undefined || !payment.ok) {
-      transportLoadError.value = { rule: '13.2f', reason: 'loadNotPayable' }
       pushLog(
         'warning',
-        `该站的 SP 不足 ${amount} 点（装载不消耗 SP 之外的东西，但货得真的在站上；13.2f）`,
+        `${unit.name} 剩余 MP 不足以支付装载费 ${outcome.data.cost} MP（13.2f / 6.1a）`,
         '13.2f',
       )
       return false
     }
+    const amount = Math.max(1, Math.trunc(transportLoadInputs.value.loadAmount))
     // 13.2c/4.7c：运输点数的运载能力**不超过其规模**（以 SP 为单位）
     if (unit.loadedSpT / SP_TO_T + amount > unit.noncombatTransport) {
       transportLoadError.value = { rule: '13.2c', reason: 'loadExceedsCapacity' }
@@ -4326,6 +4367,37 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       return false
     }
+    // 12.2a：该格本阶段若已有 SP 由**其他**运输方式卸下，则这批 T 不能再装到运输点数上
+    const lockedT = spRelayLockedT(unit.hex, unit.side, 'transport')
+    if (lockedT > 0) {
+      const availableT =
+        dumps.reduce((sum, dump) => sum + holdingsToT({ sp: dump.sp, t: dump.t }), 0) - lockedT
+      if (amount * SP_TO_T > availableT) {
+        transportLoadError.value = { rule: '12.2a', reason: 'relayLockedOtherMode' }
+        pushLog(
+          'warning',
+          `12.2a：该格本阶段由其他运输方式卸下的 ${lockedT} T 不能再装于运输点数（可换回原方式，或等下一阶段）`,
+          '12.2a',
+        )
+        return false
+      }
+    }
+    // P3：同格多本账时选能**独自付清**本次数量的那本；选中的 id 落进输入，付款走同一扣账入口
+    const dump = transportLoadDumpFor(unit, amount * SP_TO_T)
+    const payment = planSpPayment({
+      holdings: { sp: dump?.sp ?? 0, t: dump?.t ?? 0 },
+      wantT: amount * SP_TO_T,
+    })
+    if (dump === null || !payment.ok) {
+      transportLoadError.value = { rule: '13.2f', reason: 'loadNotPayable' }
+      pushLog(
+        'warning',
+        `该站的 SP 不足 ${amount} 点（装载不消耗 SP 之外的东西，但货得真的在站上；13.2f）`,
+        '13.2f',
+      )
+      return false
+    }
+    transportLoadInputs.value.dumpId = dump.id
     setSpDumpHoldings(dump.id, payment.data.holdingsAfter)
     unit.loadedSpT += amount * SP_TO_T
     // 13.2f：装载要支付印刷 MA 的 10%（按 6.1a 计入本阶段已耗 MP）
@@ -4378,7 +4450,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `卸载被拒：${outcome.reason}（${outcome.rule}）`, outcome.rule)
       return false
     }
-    const amount = Math.max(1, Math.trunc(transportLoadInputs.value.amount))
+    // 13.2f / 6.1a：卸载费同样不得把 mpSpent 推过印刷 MA
+    const shortfall = transportMpShortfall(unit, outcome.data.cost)
+    if (shortfall > 0) {
+      transportLoadError.value = {
+        rule: '13.2f',
+        reason: `剩余 MP 不足：卸载需 ${outcome.data.cost} MP，超支 ${shortfall} MP（6.1a）`,
+      }
+      pushLog(
+        'warning',
+        `${unit.name} 剩余 MP 不足以支付卸载费 ${outcome.data.cost} MP（13.2f / 6.1a）`,
+        '13.2f',
+      )
+      return false
+    }
+    const amount = Math.max(1, Math.trunc(transportLoadInputs.value.unloadAmount))
     const loaded = unit.loadedSpT / SP_TO_T
     if (loaded < amount) {
       transportLoadError.value = {
@@ -4426,16 +4512,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (!actionAllowedNow('move.loadUnload')) return false
     const unit = units.value.find((item) => item.instanceId === instanceId)
     if (unit === undefined) return false
-    const dump = spDumps.value.find(
-      (item) => item.side === unit.side && sameHex(item.hex, unit.hex),
-    )
+    const dumps = transportDumpsAt(unit)
     const outcome = validateTransportPointLoad({
       transportPoint: transportPointActorOf(unit),
-      dumpInHex: dump !== undefined,
+      dumpInHex: dumps.length > 0,
     })
-    if (!outcome.ok || dump === undefined) return false
-    if (dump.sp + dump.t <= 0) return false
-    return unit.loadedSpT / SP_TO_T < unit.noncombatTransport
+    if (!outcome.ok || dumps.length === 0) return false
+    // 13.2f / 6.1a：付不起这次装载费就不该出现入口
+    if (transportMpShortfall(unit, outcome.data.cost) > 0) return false
+    return transportLoadableAt(unit) > 0
   }
 
   function transportUnloadReadyAt(instanceId: string): boolean {
@@ -4453,7 +4538,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       transportPoint: transportPointActorOf(unit),
       hexAllowsUnload: hasFriendlyCombat || hasFacility || hasDump,
     })
-    return outcome.ok
+    if (!outcome.ok) return false
+    // 13.2f / 6.1a：付不起这次卸载费就不该出现入口
+    return transportMpShortfall(unit, outcome.data.cost) <= 0
   }
 
   function transportHandlingReadyAt(instanceId: string): boolean {
@@ -4475,15 +4562,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function transportLoadableSpOf(instanceId: string): number {
     if (!transportLoadReadyAt(instanceId)) return 0
     const unit = unitOfInstance(instanceId)
-    if (unit === undefined) return 0
-    const dump = spDumps.value.find(
-      (item) => item.side === unit.side && sameHex(item.hex, unit.hex),
-    )
-    if (dump === undefined) return 0
-    const roomT = unit.noncombatTransport * SP_TO_T - unit.loadedSpT
-    const lockedT = spRelayLockedT(dump.hex, dump.side, 'transport')
-    const usableT = Math.max(0, holdingsToT({ sp: dump.sp, t: dump.t }) - lockedT)
-    return Math.max(0, Math.min(Math.floor(roomT / SP_TO_T), Math.floor(usableT / SP_TO_T)))
+    return unit === undefined ? 0 : transportLoadableAt(unit)
   }
 
   /** 13.2f：这一枚运输点数此刻最多能**卸**多少 SP（0 ⇒ 不能卸） */
@@ -4493,12 +4572,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return unit === undefined ? 0 : Math.floor(unit.loadedSpT / SP_TO_T)
   }
 
-  /** 13.2f：点选装卸对象时预填数量（同格有站先按"能装多少"填，否则按"能卸多少"填） */
+  /** 12.1b：该运输点数所在格的补给站（地面 + 装载中）——装卸共用同一份事实 */
+  function transportDumpsOf(instanceId: string): readonly SpDump[] {
+    const unit = unitOfInstance(instanceId)
+    return unit === undefined ? [] : transportDumpsAt(unit)
+  }
+
+  /** 13.2f：点选装卸对象时预填数量——装、卸各用各的上限（P6） */
   function selectTransportLoadPointNow(instanceId: string): void {
     transportLoadInputs.value.pointId = instanceId
+    transportLoadInputs.value.dumpId = null
     const load = transportLoadableSpOf(instanceId)
     const unload = transportUnloadableSpOf(instanceId)
-    transportLoadInputs.value.amount = Math.max(1, load > 0 ? load : unload)
+    transportLoadInputs.value.loadAmount = Math.max(1, load)
+    transportLoadInputs.value.unloadAmount = Math.max(1, unload)
   }
 
   /**
@@ -14029,6 +14116,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (source.kind === 'dump') {
       const hex = source.hex
       if (hex === null) return null
+      // 12.1b（用户 2026-11-13）：装载中的 SP 也是补给站 ⇒ 与地面账本一起参与解析
       const sameHexDumps = spDumpsOfSide.value.filter((dump) => sameHex(dump.hex, hex))
       if (!panzerGroupRulesOn.value) return sameHexDumps[0] ?? null
       /*
@@ -27645,6 +27733,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     transportHandlingReadyAt,
     transportLoadableSpOf,
     transportUnloadableSpOf,
+    transportDumpsOf,
     selectTransportLoadPointNow,
     convertRailGaugeNow,
     gaugeConversionsThisPhase,

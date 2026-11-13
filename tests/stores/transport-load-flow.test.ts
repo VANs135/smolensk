@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+﻿import { readFileSync } from 'node:fs'
 
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -58,7 +58,12 @@ describe('13.2f：装载 SP', () => {
     const store = newStore()
     const point = placeTransportPoint(store)
     const dump = dumpHere(store, 4)
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 2 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 2,
+      unloadAmount: 2,
+    }
     const printedMa = point.raw.ma
     expect(printedMa).toBeGreaterThan(0)
 
@@ -77,7 +82,12 @@ describe('13.2f：装载 SP', () => {
   it('同格**没有**补给站 ⇒ 拒（13.2f：装载要求与补给站同格）', () => {
     const store = newStore()
     const point = placeTransportPoint(store)
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 1 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 1,
+      unloadAmount: 1,
+    }
     expect(store.loadTransportPointNow()).toBe(false)
     expect(store.transportLoadError).toMatchObject({
       rule: '13.2f',
@@ -92,7 +102,12 @@ describe('13.2f：装载 SP', () => {
     const point = placeTransportPoint(store)
     expect(point.noncombatTransport).toBe(2)
     const dump = dumpHere(store, 4)
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 3 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 3,
+      unloadAmount: 3,
+    }
     expect(store.loadTransportPointNow()).toBe(false)
     expect(store.transportLoadError).toMatchObject({
       rule: '13.2c',
@@ -107,7 +122,12 @@ describe('13.2f：装载 SP', () => {
     const store = newStore()
     const point = placeTransportPoint(store)
     const dump = dumpHere(store, 1)
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 3 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 2,
+      unloadAmount: 2,
+    }
     expect(store.loadTransportPointNow()).toBe(false)
     expect(store.transportLoadError?.reason).toBe('loadNotPayable')
     expect(store.spDumps.find((item) => item.id === dump.id)!.sp).toBe(1)
@@ -120,7 +140,12 @@ describe('13.2f / 13.2g：卸载 SP', () => {
     const store = newStore()
     const point = placeTransportPoint(store)
     dumpHere(store, 4)
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 2 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 2,
+      unloadAmount: 2,
+    }
     expect(store.loadTransportPointNow()).toBe(true)
 
     // 换个格：格内放一名友方战斗单位 ⇒ 满足 13.2f 的卸载条件
@@ -145,7 +170,12 @@ describe('13.2f / 13.2g：卸载 SP', () => {
     const store = newStore()
     const point = placeTransportPoint(store)
     dumpHere(store, 4)
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 1 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 1,
+      unloadAmount: 1,
+    }
     expect(store.loadTransportPointNow()).toBe(true)
 
     // 挪到一个空格的格（无友军、无港口/基地、无已卸载的站）
@@ -164,7 +194,12 @@ describe('13.2f / 13.2g：卸载 SP', () => {
     const store = newStore()
     const organic = placeTransportPoint(store, 'ot-1', true, 'axis')
     store.spDumps.push({ id: 'd-ax', hex: { ...HEX }, side: 'axis', sp: 4, t: 0 })
-    store.transportLoadInputs = { pointId: organic.instanceId, amount: 1 }
+    store.transportLoadInputs = {
+      pointId: organic.instanceId,
+      dumpId: null,
+      loadAmount: 1,
+      unloadAmount: 1,
+    }
     expect(store.loadTransportPointNow()).toBe(true)
     // 格内放友方战斗单位使 13.2f 的卸载条件成立
     const guardRecord = groundRecord('axis', (item) => item.isCombat === true)
@@ -182,11 +217,21 @@ describe('13.2f / 13.2g：卸载 SP', () => {
     const store = newStore()
     const point = placeTransportPoint(store)
     dumpHere(store, 4)
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 1 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 1,
+      unloadAmount: 1,
+    }
     expect(store.loadTransportPointNow()).toBe(true)
     const guardRecord = groundRecord('soviet', (item) => item.isCombat === true)
     placeGround(store, guardRecord, HEX, 'soviet', 'guard-1')
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 3 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 3,
+      unloadAmount: 3,
+    }
     expect(store.unloadTransportPointNow()).toBe(false)
     expect(store.transportLoadError?.reason.startsWith('unloadExceedsLoaded')).toBe(true)
   })
@@ -197,7 +242,12 @@ describe('13.2f：载量进入 9.14 的夺取事实', () => {
     const store = newStore()
     const point = placeTransportPoint(store)
     dumpHere(store, 4)
-    store.transportLoadInputs = { pointId: point.instanceId, amount: 2 }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 2,
+      unloadAmount: 2,
+    }
     expect(store.loadTransportPointNow()).toBe(true)
 
     const objects = store.specialObjectsAt(HEX)
@@ -217,10 +267,10 @@ describe('13.2f：装载—移动—卸载全流程（数量预填与阶段）',
 
     store.selectTransportLoadPointNow(point.instanceId)
     expect(store.transportLoadableSpOf(point.instanceId)).toBe(Math.min(4, capacity))
-    expect(store.transportLoadInputs.amount).toBe(Math.min(4, capacity))
+    expect(store.transportLoadInputs.loadAmount).toBe(Math.min(4, capacity))
     expect(store.transportUnloadableSpOf(point.instanceId)).toBe(0)
 
-    store.transportLoadInputs.amount = 2
+    store.transportLoadInputs.loadAmount = 2
     expect(store.loadTransportPointNow()).toBe(true)
     // ① 装载后：可装余量随站存货与运力一起下降
     expect(store.transportLoadableSpOf(point.instanceId)).toBe(Math.min(4, capacity) - 2)
@@ -234,12 +284,80 @@ describe('13.2f：装载—移动—卸载全流程（数量预填与阶段）',
     store.selectTransportLoadPointNow(point.instanceId)
     expect(store.transportLoadableSpOf(point.instanceId)).toBe(0)
     expect(store.transportUnloadableSpOf(point.instanceId)).toBe(0)
-    expect(store.transportLoadInputs.amount).toBe(1)
+    expect(store.transportLoadInputs.loadAmount).toBe(1)
   })
 
-  it('装卸窗只渲染当前可做的动作，并写出三步', () => {
+  it('P3：同格两本账 ⇒ 只取能**独自付清**本次数量的那本，另一本一字不动', () => {
+    const store = newStore()
+    const point = placeTransportPoint(store)
+    store.spDumps.push({ id: 'd1', hex: { ...HEX }, side: 'soviet', sp: 1, t: 0 })
+    store.spDumps.push({ id: 'd2', hex: { ...HEX }, side: 'soviet', sp: 3, t: 0 })
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 2,
+      unloadAmount: 2,
+    }
+    expect(store.loadTransportPointNow()).toBe(true)
+    expect(store.transportLoadInputs.dumpId).toBe('d2')
+    expect(store.spDumps.find((item) => item.id === 'd1')!.sp).toBe(1)
+    expect(store.spDumps.find((item) => item.id === 'd2')!.sp).toBe(1)
+  })
+
+  it('P3：装载来源也认「装载中的 SP」（12.1b）——地面上没有账本也能装', () => {
+    const store = newStore()
+    const point = placeTransportPoint(store)
+    const donor = placeTransportPoint(store, 'tp-donor')
+    donor.loadedSpT = 4 // 1 SP 载在另一枚运输点数上
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 1,
+      unloadAmount: 1,
+    }
+    expect(store.loadTransportPointNow()).toBe(true)
+    expect(store.transportLoadInputs.dumpId).toBe(`unit:${donor.instanceId}`)
+    expect(donor.loadedSpT).toBe(0)
+    expect(point.loadedSpT).toBe(4)
+  })
+
+  it('P4：剩余 MP 不足以付装载/卸载费 ⇒ 入口不出现且拒绝（13.2f / 6.1a）', () => {
+    const store = newStore()
+    const point = placeTransportPoint(store)
+    dumpHere(store, 4)
+    // 卡车印值 45 MA，装载费 5 MP；只剩 4 MP ⇒ 不够
+    point.mpSpent = point.raw.ma - 4
+    expect(store.transportLoadableSpOf(point.instanceId)).toBe(0)
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 1,
+      unloadAmount: 1,
+    }
+    expect(store.loadTransportPointNow()).toBe(false)
+    expect(store.transportLoadError?.rule).toBe('13.2f')
+    expect(store.transportLoadError?.reason).toContain('剩余 MP 不足')
+    expect(point.mpSpent).toBe(point.raw.ma - 4)
+
+    // 卸载同理：有友方战斗单位也不放行
+    point.loadedSpT = 8
+    placeGround(store, groundRecord('soviet', () => true), HEX, 'soviet', 'inf-1')
+    expect(store.transportUnloadableSpOf(point.instanceId)).toBe(0)
+    expect(store.unloadTransportPointNow()).toBe(false)
+    expect(store.transportLoadError?.rule).toBe('13.2f')
+    expect(point.loadedSpT).toBe(8)
+  })
+
+  it('装卸窗只渲染当前可做的动作；会话只显示被点的一枚，账本按格分组', () => {
     const src = readFileSync('src/components/supply/SupplyPanel.vue', 'utf8')
-    expect(src).toContain('transportStageText')
+    // P1：会话模式不出现整张列表；账本模式按格分组（一格一条）
+    expect(src).toContain('v-if="only !== \'loadUnload\'"')
+    expect(src).toContain('transportLoadHexItems')
+    // P2：12.1b 该格补给站（地面 + 装载中）
+    expect(src).toContain('transportHexDumps')
+    // P6：装、卸各用自己的数量与上限
+    expect(src).toContain('transportLoadInputs.loadAmount')
+    expect(src).toContain('transportLoadInputs.unloadAmount')
     expect(src).toContain('v-if="transportLoadable > 0"')
     expect(src).toContain('v-if="transportUnloadable > 0"')
     expect(src).not.toContain(':disabled="workbench.transportLoadInputs.pointId === null"')
