@@ -35,8 +35,6 @@ const hotseat = useHotseatStore()
 const emit = defineEmits<{
   airDrag: [source: { side: 'axis' | 'soviet'; entryIndex: number } | null]
 }>()
-const airMenu = ref<number | null>(null)
-
 /**
  * 一键预设初设（B2）：与「抽取编队」同一处，只落 AI 控制的一方，不替玩家点开始游戏。
  * 修前这个入口挂在「战况」抽屉的初设面板里（与开局选剧本重复），玩家在初设栏找不到。
@@ -50,24 +48,14 @@ function runPresetSetup(): void {
       : setup.presetSelfSetupNow({ onlySide: hotseat.presetSide })
 }
 
-function openAirMenu(item: SetupPlacing): void {
-  airMenu.value = item.offMapAllowed === true ? item.entryIndex : null
-}
-
 function startAirDrag(event: DragEvent, item: SetupPlacing): void {
   if (item.offMapAllowed !== true || event.dataTransfer === null) {
     event.preventDefault()
     return
   }
-  airMenu.value = null
   event.dataTransfer.effectAllowed = 'move'
   event.dataTransfer.setData('text/plain', item.label)
   emit('airDrag', { side: item.side, entryIndex: item.entryIndex })
-}
-
-function placeInBox(item: SetupPlacing): void {
-  airMenu.value = null
-  setup.placeAirInOffMapBoxNow(item.side, item.entryIndex)
 }
 
 /** 展开的堆叠（同一时刻只展开一堆：四堆合计几十项，全展开会把地图盖住） */
@@ -98,15 +86,11 @@ watch([() => setup.scenarioId, () => setup.omittablePlacements], () => {
   omitConfirmed.value = false
   presetResult.value = null
 })
-watch(cursorSide, () => {
-  airMenu.value = null
-})
 
 /** 是否**全部落位完毕**（落满 ⇒ 队列收起列表、就地给「完成初设」） */
 const allPlaced = computed(() => setup.initialPlacementsComplete)
 
 function toggleStack(key: DecisionStack['key']): void {
-  airMenu.value = null
   openKey.value = openKey.value === key ? null : key
 }
 
@@ -179,12 +163,9 @@ function isActive(item: SetupPlacing): boolean {
 
 /** 点卡片：开始在地图上落位（飞机走空军基地格；卡车直接在卡上选满载） */
 function pick(item: SetupPlacing): void {
-  airMenu.value = null
   if (item.kind === 'truck') return
-  if (item.blockedReason !== null) {
-    openAirMenu(item)
-    return
-  }
+  // 卡被挡时不再借右键旁路兜底：落盒由卡下的「放入地图外盒」按钮单独承担
+  if (item.blockedReason !== null) return
   // §6-A：ch10 抽中西移的师（落点按原文算法（沿道路西移 3 格）得出，道路数据不全 ⇒ 由玩家点地图给）
   if (item.kind === 'shift') {
     if (item.formationId !== undefined) setup.beginShiftPlacement(item.formationId)
@@ -209,7 +190,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
     @pointerdown.stop
     @click.stop
     @wheel.stop
-    @keydown.esc="airMenu = null"
   >
     <!-- B38：标题栏可拖（松手夹回地图窗口内；口径 #5「初设框不能拖」） -->
     <header
@@ -441,7 +421,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
             }"
             :title="
               item.offMapAllowed === true
-                ? '右键或拖到空军盒'
+                ? '点卡后点基地放入；也可拖到空军盒或用下方按钮放入图外盒'
                 : (item.blockedReason ?? `${item.raw}（${sideName(item.side)}）`)
             "
             :aria-pressed="isActive(item)"
@@ -450,8 +430,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
             "
             :draggable="item.offMapAllowed === true"
             @click="pick(item)"
-            @contextmenu.prevent.stop="openAirMenu(item)"
-            @keydown.shift.f10.prevent.stop="openAirMenu(item)"
             @dragstart="startAirDrag($event, item)"
             @dragend="emit('airDrag', null)"
           >
@@ -482,12 +460,12 @@ function sideMark(side: 'axis' | 'soviet'): string {
           </button>
 
           <BaseButton
-            v-if="item.offMapAllowed === true && airMenu === item.entryIndex"
-            variant="primary"
+            v-if="item.kind === 'air' && setup.canPlaceAirInOffMapBox(item.side, item.entryIndex)"
+            variant="secondary"
             size="sm"
-            @click="placeInBox(item)"
+            @click="setup.placeAirInOffMapBoxNow(item.side, item.entryIndex)"
           >
-            放入地图外空军盒 · 1.4a
+            放入地图外盒
           </BaseButton>
 
           <span v-if="item.blockedReason !== null" class="queue__blocked">

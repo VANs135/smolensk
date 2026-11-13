@@ -1287,7 +1287,13 @@ export function planAirSetup(input: {
       reduced,
       steps,
       candidates,
-      offMapAllowed: entry.placement === 'airbaseFree' || entry.placement === 'airFleet',
+      /*
+       * 专规 1.4a：双方各有一个**容量无限**的地图外空军盒（"off-map airfield"），
+       * 图上/盒内按 20（苏）/ 30（轴）格航程互转；设计注亦写明德军飞机常驻盒内、
+       * 需要时再上图上整备。⇒ 「能不能落盒」与剧本条目的放置文句无关，任何上图机型都可落盒；
+       * 修前按 `airbaseFree / airFleet` 推（把"任意基地"错当成"可入盒"），现按原文取 true。
+       */
+      offMapAllowed: true,
       detail:
         `${count}× ${name} ⇒ 任意本方空军基地（${AIR_BASE_SITE_RULE}）；` +
         `初始激活 ${count - inactiveCount} 枚 / 非激活 ${inactiveCount} 枚` +
