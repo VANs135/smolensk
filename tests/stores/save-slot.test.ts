@@ -6,6 +6,7 @@ import { SAVE_FILE_VERSION, classifySaveError } from '@/engine/save-file'
 import { createMemoryStorage, type KeyValueStorage } from '@/shared'
 import { mapLayers } from '@/data'
 import { PANZER_GROUP_OPTION_ITEM } from '@/engine/rules'
+import { OPTIONAL_RULE_CODES, OPTIONAL_RULE_ITEMS } from '@/engine/session-flow'
 import type { HexRef } from '@/data'
 import {
   SAVE_SLOT_KEY,
@@ -625,5 +626,52 @@ describe('B48 P0：存档带盘面（摆子 → 存 → 读 → 盘面一致）'
     // 版本与字段表都齐 ⇒ 认，读档应当通过并把该账本落值
     expect(session.loadNow()).toBe(true)
     expect(workbench.specialPending).toStrictEqual(pending)
+  })
+})
+
+/*
+ * 专规 4.0（v2）：**旧档的整章共识条目迁移到逐条**
+ *
+ * v1 的共识清单把 4.1a–4.3 收成一条整章勾选（`agreedOption:3`），3.4b 在 `agreedOption:4`；
+ * v2 拆成八条（3..10）＋ 3.4b 末位（11）。本组把一份**新档**改写成 v1 形状，再读档，
+ * 钉住映射规则：整章采纳 ⇒ 八条全部启用；整章不采纳 ⇒ 八条全部不启用；3.4b 跟着搬到末位。
+ */
+describe('专规 4.0（v2）：旧档共识题号迁移', () => {
+  it('旧档（schemaVersion 1）：整章采纳 ⇒ 八条全部启用；3.4b 搬到末位', () => {
+    const { store, adapter } = newStore()
+    // 只勾「4.1a 忽略 2.3e」一条，其余不勾 —— 改写后会成为旧档的「整章采纳」
+    const seedAt = store.agreedOptionItems.indexOf(OPTIONAL_RULE_ITEMS.ignoreOperationalLimits)
+    store.setAgreedCheck(seedAt, true)
+    expect(store.startGame()).toBe(true)
+    expect(store.saveNow()).toBe(true)
+
+    const file = JSON.parse(adapter.getItem(SAVE_SLOT_KEY) ?? '{}') as Record<string, unknown>
+    const session = file['session'] as {
+      meta: { schemaVersion: number }
+      log: { action: string; outcome: { ok: boolean; data: Record<string, unknown> } }[]
+    }
+    session.meta.schemaVersion = 1
+    session.log = session.log.filter((entry) => {
+      const questionId = entry.outcome.ok ? entry.outcome.data['questionId'] : undefined
+      if (typeof questionId !== 'string' || !questionId.startsWith('agreedOption:')) return true
+      const index = Number(questionId.slice('agreedOption:'.length))
+      if (index <= 3) return true
+      // 8..10（新八条的后六条）与 11（3.4b）在旧档里不存在
+      if (index <= 10) return false
+      entry.outcome.data['questionId'] = 'agreedOption:4'
+      return true
+    })
+    adapter.setItem(SAVE_SLOT_KEY, JSON.stringify(file))
+
+    const second = newStore(adapter)
+    expect(second.store.loadNow()).toBe(true)
+    // 迁移后版本升到 2（再次读档不会重复迁移）
+    expect(second.store.session?.meta.schemaVersion).toBe(2)
+    // 旧「整章采纳」⇒ 原文允许的八条全部视为启用
+    for (const code of OPTIONAL_RULE_CODES) expect(second.store.rule4On(code)).toBe(true)
+    // 3.4b 搬到末位，结论随条目一起搬（本例为不采纳）
+    const panzerAt = second.store.agreedOptionItems.indexOf(PANZER_GROUP_OPTION_ITEM)
+    expect(second.store.consensus[panzerAt]).toMatchObject({ adopted: false })
+    expect(second.store.agreedRecorded).toBe(true)
   })
 })

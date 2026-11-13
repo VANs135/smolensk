@@ -24,6 +24,7 @@ import {
 } from '@/engine/session'
 import type { SessionAnswer } from '@/engine/session-types'
 import { createRngState } from '@/engine/rng'
+import { resolveInitiative } from '@/engine/turn-driver'
 import { evaluateDecisiveVictory, evaluateFinalVictory } from '@/engine/rules/victory'
 import type { GameSession, Records } from '@/engine/state-types'
 
@@ -295,6 +296,71 @@ describe('2.3：先手判定作为待答问题', () => {
         optionId: 'nope',
       }),
     ).toThrow()
+  })
+})
+
+describe('专规 4.2a（可选）：平局由上回合先手方判胜', () => {
+  /**
+   * 找一颗「第一对掷骰平局、第二对轴方胜」的种子：
+   *   - 不启用 4.2a ⇒ 平局重掷，chooser = axis；
+   *   - 启用 4.2a ⇒ 直接判给 tieBreaker（本例 = 上回合先手 soviet）。
+   * 两者结论不同，才能证明门确实接上了。
+   */
+  function findTieSeed(): number {
+    for (let seed = 1; seed < 100_000; seed += 1) {
+      const draw = resolveInitiative(createRngState(seed), { isFirstTurn: false })
+      if (
+        draw.resolution.kind === 'choice' &&
+        draw.resolution.rerolls === 1 &&
+        draw.resolution.chooser === 'axis'
+      ) {
+        return seed
+      }
+    }
+    throw new Error('未找到可用于 4.2a 用例的平局种子')
+  }
+
+  /** 第 2 回合的会话：日志里带上「第 1 回合由剧本指定 soviet 先手」 */
+  function sessionWithPreviousFirstPlayer(seed: number): GameSession {
+    const session = createSession({ turn: 2, preTurnSegment: 'firstPlayerDetermination' })
+    return {
+      ...session,
+      state: { ...session.state, rng: createRngState(seed) },
+      log: [
+        {
+          turn: 1,
+          phase: 'preTurn',
+          side: 'axis',
+          action: 'initiative',
+          rolls: [],
+          outcome: { ok: true, rule: '2.3', data: { specified: 'soviet' }, pending: [] },
+        },
+      ],
+    }
+  }
+
+  it('启用：平局直接判给上回合先手方（不再重掷）；未启用：照原规则重掷', () => {
+    const seed = findTieSeed()
+    const on = step(
+      sessionWithPreviousFirstPlayer(seed),
+      context({ optionalRules: ['initiativeTieBreak'] }),
+    )
+    expect(on.kind).toBe('question')
+    const onQuestion = on.session.status.form === 'awaiting' ? on.session.status.question : null
+    // 上回合先手 = soviet ⇒ 平局判 soviet 为 chooser（与重掷结果 axis 相反）
+    expect(onQuestion?.responder).toBe('soviet')
+    expect(on.session.log.at(-1)).toMatchObject({
+      action: 'initiative',
+      outcome: { ok: true, data: { rerolls: 0 } },
+    })
+
+    const off = step(sessionWithPreviousFirstPlayer(seed), context())
+    const offQuestion = off.session.status.form === 'awaiting' ? off.session.status.question : null
+    expect(offQuestion?.responder).toBe('axis')
+    expect(off.session.log.at(-1)).toMatchObject({
+      action: 'initiative',
+      outcome: { ok: true, data: { rerolls: 1 } },
+    })
   })
 })
 

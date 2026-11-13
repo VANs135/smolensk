@@ -658,6 +658,8 @@ export interface ModeSwitchNowInput {
   unitClass: ModeUnitClass
   /** 当前日期（ISO，专规 2.3e 苏军战略模式闸门用） */
   date?: string
+  /** 专规 4.1a（可选）：忽略 2.3e ⇒ 苏军战略模式不受日期闸门约束 */
+  ignoreOperationalLimits?: boolean
 }
 
 /**
@@ -668,7 +670,8 @@ export interface ModeSwitchNowInput {
  * 或本轮移动已结束的单位都不能再切。
  */
 export function canSwitchModeNow(input: ModeSwitchNowInput): ModeSwitchResult {
-  const { context, unitId, runtime, to, orientation, unitClass, date } = input
+  const { context, unitId, runtime, to, orientation, unitClass, date, ignoreOperationalLimits } =
+    input
   const view = viewOf(context, unitId)
   if (view === null) return { ok: false, rule: '5.4', reason: `找不到单位 ${unitId}` }
   const item = runtimeOf(runtime, unitId)
@@ -718,6 +721,7 @@ export function canSwitchModeNow(input: ModeSwitchNowInput): ModeSwitchResult {
     side: view.side,
     phase: context.phase,
     ...(date === undefined ? {} : { date }),
+    ...(ignoreOperationalLimits === true ? { ignoreOperationalLimits: true } : {}),
   })
 }
 

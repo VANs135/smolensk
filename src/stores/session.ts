@@ -21,11 +21,15 @@ import {
   applyAnswerToRecords,
   consensusDecisions,
   CONSENSUS_RULE,
-  OPTIONAL_RULES_ITEM,
+  OPTIONAL_RULE_ITEMS,
+  OPTIONAL_RULE_CODES,
+  migrateConsensusLogV1ToV2,
+  SESSION_SCHEMA_VERSION,
   guidanceFor,
   makeSessionStepper,
   pendingAgreedOptionIndex,
   type AgreedChecklistRow,
+  type OptionalRuleCode,
   type SessionFlowContext,
   type SopGuidance,
   type SopStepDriver,
@@ -352,12 +356,19 @@ export const useGameSessionStore = defineStore('gameSession', () => {
   )
 
   /**
-   * 专规 4.0：整章可选规则（4.1a–4.3）本局是否启用
+   * 专规 4.0：本局**已启用**的逐条可选规则（4.1a 两半 / 4.1b / 4.1c / 4.2a / 4.2b / 4.2c / 4.3）
    *
-   * 唯一判据＝**选剧本前**在共识清单里勾定「可选规则与房规」那一条；未勾定 ⇒ 整章不生效。
-   * 4.0 各条没有各自的面板开关，一律读这里（不再有段内第二开关）。
+   * 唯一判据＝**选剧本前**在共识清单里逐条勾定；未勾定的条目不进本数组（＝按原文默认行为）。
+   * 引擎与操作台都只读这一个判据（不再有整章开关，也没有段内第二开关）。
    */
-  const optionalRulesOn = computed(() => agreedOptionAdoptedOf.value(OPTIONAL_RULES_ITEM))
+  const enabledOptionalRules = computed<readonly OptionalRuleCode[]>(() =>
+    OPTIONAL_RULE_CODES.filter((code) => agreedOptionAdoptedOf.value(OPTIONAL_RULE_ITEMS[code])),
+  )
+
+  /** 4.0：某条可选规则本局是否启用（按条码查；未启用＝原规则行为） */
+  const rule4On = computed(
+    () => (code: OptionalRuleCode) => enabledOptionalRules.value.includes(code),
+  )
 
   /** 4.0：共识是否已冻结（开局后不再允许改） */
   const agreedLocked = computed(() => session.value !== null)
@@ -596,6 +607,8 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       decisiveVictory: pushedVerdicts.value.decisive,
       finalVictory: pushedVerdicts.value.final,
       agreedOptionItems: agreedOptionItems.value,
+      // 4.0：逐条可选规则的启用结论（4.2a 的平局判胜在引擎里消费；其余条由操作台读取同一判据）
+      optionalRules: enabledOptionalRules.value,
     }
   })
 
@@ -624,7 +637,13 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     }
     const now = new Date().toISOString()
     const created: GameSession = {
-      meta: { sessionId: createId('session'), createdAt: now, updatedAt: now, schemaVersion: 1 },
+      meta: {
+        sessionId: createId('session'),
+        createdAt: now,
+        updatedAt: now,
+        // v2：专规 4.0 的可选规则由「整章一条」拆成逐条八条（旧档经 migrateConsensusLogV1ToV2 迁移）
+        schemaVersion: SESSION_SCHEMA_VERSION,
+      },
       state: {
         scenarioId: scenarioId.value,
         records: {
@@ -915,7 +934,16 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       return false
     }
     try {
-      const file = deserializeSaveFile(text)
+      const raw = deserializeSaveFile(text)
+      /*
+       * 专规 4.0（v2）：旧档的共识结论按「整章一条」记在 `agreedOption:3`；拆条后须改写成
+       * 逐条题号（八条 + 3.4b 末位），否则旧结论会错位、缺条还会在局中被当成"未作答"。
+       * 迁移是纯函数（`migrateConsensusLogV1ToV2`，映射规则见其注释）。
+       */
+      const file = {
+        ...raw,
+        session: migrateConsensusLogV1ToV2(raw.session, agreedOptionItems.value),
+      }
       /*
        * P0 修复（B48）：**先验后改**——注册了编解码器就必须认这份盘面，两条拒绝路径都在
        * 改动任何状态之前返回：
@@ -1054,8 +1082,9 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     agreedChecklistRows,
     agreedCheckedCount,
     agreedRecorded,
-    // 4.0：整章可选规则的总判据；开局后冻结
-    optionalRulesOn,
+    // 4.0：逐条可选规则的判据（按条码查）；开局后冻结
+    enabledOptionalRules,
+    rule4On,
     agreedLocked,
     // B50：按条目文本读共识结论（3.4b 可选项等）
     agreedOptionAdoptedOf,

@@ -3,7 +3,7 @@ import type { Side } from '@/data'
 
 import { RNG_ALGORITHM, verifyRngState } from './rng'
 import { deserializeSession, SESSION_SAVE_VERSION } from './session'
-import { consensusDecisions } from './session-flow'
+import { consensusDecisions, migrateConsensusLogV1ToV2 } from './session-flow'
 import type { SessionForm, TerminationReason } from './session-types'
 import type { GamePhase, GameSession } from './state-types'
 
@@ -31,8 +31,9 @@ import type { GamePhase, GameSession } from './state-types'
  * ## 纪律
  *   - 本模块是**纯函数**：字符串进、对象出；**不碰 localStorage**（浏览器存储属 stores 层），
  *     也**不取系统时间**（`savedAt` 由存档层盖章后传入）。
- *   - 读档只做「校验 + 还原」，**不做任何补值或迁移**：缺字段、版本不符、剧本对不上、内外剧本不一致
+ *   - 读档只做「校验 + 还原」：缺字段、版本不符、剧本对不上、内外剧本不一致
  *     ⇒ 一律报错并指出字段路径（对齐数据层 DataError 的报错风格，CODE_SPEC §3.4）。
+ *     唯一例外是专规 4.0 的共识日志 v1→v2（`migrateConsensusLogV1ToV2`，只改写题号、纯函数）。
  */
 
 /** 存档文件格式版本（外壳；破坏性变更须递增） */
@@ -358,7 +359,8 @@ export interface SaveSlotInfo {
 /** 存档摘要：内部走完整读档校验（版本不符即抛错，不产出摘要） */
 export function describeSaveFile(text: string, options: LoadSaveOptions = {}): SaveSlotInfo {
   const file = deserializeSaveFile(text, options)
-  const { session } = file
+  // 旧档的共识题号先按 v1→v2 改写，摘要里的「逐条结论」才与当前清单对齐
+  const session = migrateConsensusLogV1ToV2(file.session, scenarios.agreedOptions.items)
   const status = session.status
   const scenario = scenarios.scenarios.find((item) => item.id === file.scenarioId)
 

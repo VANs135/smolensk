@@ -19,8 +19,11 @@ import {
   AGREED_OPTION_QUESTION_KIND,
   CONSENSUS_RULE,
   INITIATIVE_QUESTION_KIND,
+  OPTIONAL_RULE_ITEMS,
   turnLevelLogSide,
+  type OptionalRuleCode,
 } from './session-flow-steps'
+import { PANZER_GROUP_OPTION_ITEM } from './rules/panzer-groups'
 import type { SessionAnswer, SessionQuestion } from './session-types'
 import type { DiceRoll, FlightWeather, GameSession, Records, SessionLogEntry } from './state-types'
 import { PRE_TURN_SEGMENTS } from './state-types'
@@ -70,10 +73,18 @@ export {
   AGREED_OPTION_IDS,
   AGREED_OPTION_QUESTION_KIND,
   CONSENSUS_RULE,
-  OPTIONAL_RULES_ITEM,
+  OPTIONAL_RULE_ITEMS,
+  OPTIONAL_RULE_CODES,
+  LEGACY_OPTIONAL_RULES_ITEM,
   INITIATIVE_QUESTION_KIND,
 } from './session-flow-steps'
-export type { SopGuidance, SopStep, SopStepDriver, SopStepRole } from './session-flow-steps'
+export type {
+  SopGuidance,
+  SopStep,
+  SopStepDriver,
+  SopStepRole,
+  OptionalRuleCode,
+} from './session-flow-steps'
 
 /* ────────────────────────────── 步进依赖（注入） ────────────────────────────── */
 
@@ -112,6 +123,13 @@ export interface SessionFlowContext {
   finalVictory?: VictoryAssessment | null
   /** 共识开关条目（`scenarios.agreedOptions.items`）；空数组表示本作无需开局共识 */
   agreedOptionItems: readonly string[]
+  /**
+   * 专规 4.0 本局**已启用**的逐条可选规则（选剧本前勾定；未列出的按原文默认行为）
+   *
+   * 引擎只消费这里列出的条目：4.2a（先手平局的判胜方）在本模块内生效；
+   * 其余各条由调用方（操作台）按同一个判据接到各自机制上。
+   */
+  optionalRules?: readonly OptionalRuleCode[]
 }
 
 /** 5.0b 是否已达成（结论优先，其次才是「无盘面时的开关」） */
@@ -300,6 +318,86 @@ export function applyAgreedChecklist(input: {
   })
 }
 
+/* ────────────────────────────── 旧档迁移（v1 → v2） ────────────────────────────── */
+
+/** 会话数据模型版本（v2：专规 4.0 的可选规则由「整章一条」拆成逐条八条） */
+export const SESSION_SCHEMA_VERSION = 2
+
+/**
+ * 旧档（`schemaVersion < 2`）里整章条目的序号与 3.4b 条目的序号
+ *
+ * v1 的 `scenarios.agreedOptions.items` 固定为 5 条：
+ * `[0] 1.4 地图外盒 / [1] 4.9e 秘密掷骰 / [2] 2.4 同步回合 / [3] 整章 4.1a–4.3 / [4] 3.4b`。
+ */
+const LEGACY_OPTIONAL_CHAPTER_INDEX = 3
+const LEGACY_PANZER_GROUP_INDEX = 4
+
+/** 改写一条作答日志的题号（只动 `data.questionId`，其余字段原样保留） */
+function withQuestionId(entry: SessionLogEntry, questionId: string): SessionLogEntry {
+  if (!entry.outcome.ok) return entry
+  return { ...entry, outcome: { ...entry.outcome, data: { ...entry.outcome.data, questionId } } }
+}
+
+/**
+ * 共识日志迁移 v1 → v2（**纯函数**；`schemaVersion >= 2` 时原样返回）
+ *
+ * ## 为什么必须迁移
+ *   共识结论按**题号**入日志（`agreedOption:<序号>`），而序号是清单下标。
+ *   v2 把原来的「一条整章」拆成八条、3.4b 顺延到末位 ⇒ 旧档的题号会与新清单错位
+ *   （旧 `agreedOption:4` 会读到新清单的「4.1c」，且 3..10 会被当成"未作答"再次提问）。
+ *
+ * ## 映射规则（旧 5 条 → 新 12 条）
+ *   - 旧 `0/1/2`（1.4 / 4.9e / 2.4）序号不变，原样保留；
+ *   - 旧 `3`「可选规则与房规（4.1a…4.3）」＝ 整章一个勾 ⇒ **复制到新清单的八条**
+ *     （`OPTIONAL_RULE_ITEMS`）。原勾为「采纳」⇒ 八条全部采纳；「不采纳」⇒ 八条全部不采纳
+ *     —— 即原文允许的部分全部视为启用、不允许的视为未启用；
+ *   - 旧 `4`「3.4b …」＝ 独立勾，搬到新清单的**末位**（按文本定位 `PANZER_GROUP_OPTION_ITEM`）。
+ *
+ * 新清单里找不到这些条目（数据未拆分）时**不做迁移**，避免把题号改成不存在的序号。
+ *
+ * @param items 新清单（`scenarios.agreedOptions.items`），用于定位八条与 3.4b 的新下标
+ */
+export function migrateConsensusLogV1ToV2(
+  session: GameSession,
+  items: readonly string[],
+): GameSession {
+  if (session.meta.schemaVersion >= SESSION_SCHEMA_VERSION) return session
+
+  const firstRuleIndex = items.indexOf(OPTIONAL_RULE_ITEMS.ignoreOperationalLimits)
+  const lastRuleIndex = items.indexOf(OPTIONAL_RULE_ITEMS.setupWiggle)
+  const panzerGroupIndex = items.indexOf(PANZER_GROUP_OPTION_ITEM)
+  if (firstRuleIndex < 0 || lastRuleIndex < firstRuleIndex || panzerGroupIndex < 0) return session
+
+  const log: SessionLogEntry[] = []
+  for (const entry of session.log) {
+    const questionId = entry.outcome.ok ? entry.outcome.data['questionId'] : undefined
+    if (
+      entry.action !== 'answer' ||
+      typeof questionId !== 'string' ||
+      !questionId.startsWith('agreedOption:')
+    ) {
+      log.push(entry)
+      continue
+    }
+    const index = Number(questionId.slice('agreedOption:'.length))
+    if (index === LEGACY_OPTIONAL_CHAPTER_INDEX) {
+      for (let next = firstRuleIndex; next <= lastRuleIndex; next += 1) {
+        log.push(withQuestionId(entry, agreedOptionQuestionId(next)))
+      }
+    } else if (index === LEGACY_PANZER_GROUP_INDEX) {
+      log.push(withQuestionId(entry, agreedOptionQuestionId(panzerGroupIndex)))
+    } else {
+      log.push(entry)
+    }
+  }
+
+  return {
+    ...session,
+    meta: { ...session.meta, schemaVersion: SESSION_SCHEMA_VERSION },
+    log,
+  }
+}
+
 /* ────────────────────────────── 作答落地 ────────────────────────────── */
 
 /**
@@ -333,6 +431,33 @@ function isTurnStart(records: Records): boolean {
 /** 该步是否处于开局前的共识阶段（首回合、Pre-Turn、尚未进入玩家段） */
 function isConsensusStage(records: Records, context: SessionFlowContext): boolean {
   return records.turn === context.firstTurn && records.phase === 'preTurn'
+}
+
+/**
+ * 从日志反推**某一回合的先手方**（4.2a 平局判胜的输入）
+ *
+ * `Records.firstPlayer` 在回合推进时被清空（2.2 / `advanceTurn`）⇒ 上一回合的先手方只能从日志取：
+ *   - 常规回合：`initiative` 的**作答**条目 —— 选项 `first` ⇒ 作答方先手；`second` ⇒ 对方先手；
+ *   - 首回合：`initiative` 的**自动**条目 —— `specified` 字段即剧本指定的先手。
+ *
+ * 找不到则返回 null（调用方据此退回「平局重掷」的原规则行为，不猜）。
+ */
+function firstPlayerOfTurn(session: GameSession, turn: number): Side | null {
+  for (let index = session.log.length - 1; index >= 0; index -= 1) {
+    const entry = session.log[index]
+    if (entry === undefined || entry.turn !== turn || !entry.outcome.ok) continue
+    const data = entry.outcome.data
+    if (entry.action === 'answer' && data['questionId'] === 'initiative') {
+      const optionId = data['optionId']
+      if (optionId === 'first') return entry.side
+      if (optionId === 'second') return entry.side === 'axis' ? 'soviet' : 'axis'
+    }
+    if (entry.action === 'initiative') {
+      const specified = data['specified']
+      if (specified === 'axis' || specified === 'soviet') return specified
+    }
+  }
+  return null
 }
 
 /**
@@ -423,9 +548,17 @@ export function makeSessionStepper(context: SessionFlowContext): SessionStepper 
         }
       }
       const isFirstTurn = records.turn === context.firstTurn
+      /*
+       * 专规 4.2a（可选）：「上一回合先动的一方赢得平手掷骰」。
+       * 未启用 ⇒ 不传 tieBreaker，平局照原规则重掷（不启用即原行为，无第二套默认值）。
+       */
+      const tieBreaker = context.optionalRules?.includes('initiativeTieBreak')
+        ? firstPlayerOfTurn(session, records.turn - 1)
+        : null
       const draw = resolveInitiative(session.state.rng, {
         isFirstTurn,
         ...(isFirstTurn ? { scenarioFirstPlayer: context.scenarioFirstPlayer } : {}),
+        ...(tieBreaker === null ? {} : { tieBreaker }),
       })
       if (draw.resolution.kind === 'specified') {
         const next = nextPhase(setFirstPlayer(records, draw.resolution.firstPlayer))

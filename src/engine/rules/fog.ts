@@ -359,7 +359,6 @@ export interface HiddenInfoPolicy {
 const OFF_MAP_ITEM = /地图外盒|1\.4/
 const SECRET_ROLL_ITEM = /秘密掷骰|4\.9e/
 const SIMULCAST_ITEM = /同步操作回合|2\.4/
-const OPTIONAL_RULES_ITEM = /可选规则|房规|4\.1|4\.2|4\.3/
 
 /**
  * 由共识结论推导信息纪律
@@ -367,7 +366,7 @@ const OPTIONAL_RULES_ITEM = /可选规则|房规|4\.1|4\.2|4\.3/
  * 「未作答（`adopted === null`）」与「不采纳」都**不启用**该纪律 —— 规则的默认态是
  * 公开掷骰（4.9e）、盒不隐藏（专规 1.4）；只有双方明确同意才加强战雾。
  *
- * @param optionalRuleKeys `scenarios.optionalRules` 的键（4.1a…4.3）；第 4 条共识条目被采纳时一并生效
+ * @param optionalRuleKeys `scenarios.optionalRules` 的键（4.1a…4.3）；逐条勾定里**被采纳**的才列入
  */
 export function hiddenInfoPolicy(
   decisions: readonly ConsensusDecision[],
@@ -378,7 +377,13 @@ export function hiddenInfoPolicy(
   const hideOffMapBoxes = adopted(OFF_MAP_ITEM)
   const secretRolls = adopted(SECRET_ROLL_ITEM)
   const simulcast = adopted(SIMULCAST_ITEM)
-  const optionalRules = adopted(OPTIONAL_RULES_ITEM) ? [...optionalRuleKeys] : []
+  /*
+   * 专规 4.0（v2）：可选规则已由「整章一条」拆成逐条勾选 ⇒ 只列**确实被采纳**的那些键
+   * （按条目文本含该键判；不再"采纳整章一条就列出全部"）。
+   */
+  const optionalRules = optionalRuleKeys.filter((key) =>
+    decisions.some((decision) => decision.adopted === true && decision.item.includes(key)),
+  )
 
   const on: string[] = []
   if (hideOffMapBoxes) on.push('地图外盒对对手隐藏（专规 1.4）')

@@ -2970,11 +2970,24 @@ export const useSetupStore = defineStore('setup', () => {
     completed.value = { ...completed.value, truckLoad: false }
   }
 
+  /**
+   * 3.4 族的**共识**结论：勾了 3.4b 且**没有**勾「4.1a 忽略 3.4」
+   *
+   * 4.1a 若被采纳，整条 3.4（含 3.4a 分界线与 3.4b 补给限制）都不生效，
+   * 故 3.4b 的独立勾选在「忽略 3.4」启用时让位（两条同时勾时以忽略为准）。
+   */
+  function panzerGroupConsensusOn(): boolean {
+    return (
+      game.agreedOptionAdoptedOf(PANZER_GROUP_OPTION_ITEM) &&
+      !game.rule4On('ignorePanzerGroupConstraints')
+    )
+  }
+
   /** 3.4b 在本局是否生效（剧本首回合早于 19 August × 共识采纳 4.1a 的可选项） */
   function panzerGroupRulesOn(): boolean {
     return panzerGroupRulesActive({
       constraintApplies: requiresPanzerGroupSpAssignment(scenarioId.value),
-      agreedByConsensus: game.agreedOptionAdoptedOf(PANZER_GROUP_OPTION_ITEM),
+      agreedByConsensus: panzerGroupConsensusOn(),
     })
   }
 
@@ -3042,8 +3055,8 @@ export const useSetupStore = defineStore('setup', () => {
       scenarioId: scenarioId.value,
       dumps: spDumps.value,
       assignments: spAssignments.value,
-      // B50：3.4b 未启用（共识未采纳）⇒ 引擎不再要求逐一点名（`requires` 由两轴合成）
-      agreedByConsensus: game.agreedOptionAdoptedOf(PANZER_GROUP_OPTION_ITEM),
+      // B50：3.4b 未启用（共识未采纳 / 被 4.1a 忽略 3.4）⇒ 引擎不再要求逐一点名
+      agreedByConsensus: panzerGroupConsensusOn(),
     })
     if (!outcome.ok) return record(outcome)
     // 3.4b：验证完整名单后才提交到付款/拖取实际读取的账本，不能仅勾选初设完成。
@@ -3067,7 +3080,7 @@ export const useSetupStore = defineStore('setup', () => {
             scenarioId: scenarioId.value,
             dumps: spDumps.value,
             assignments: spAssignments.value,
-            agreedByConsensus: game.agreedOptionAdoptedOf(PANZER_GROUP_OPTION_ITEM),
+            agreedByConsensus: panzerGroupConsensusOn(),
           },
           workbench.spDumpPanzerGroups,
         ),

@@ -8263,6 +8263,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         orientation: target,
         unitClass: modeUnitClassOf(unit),
         date: date.value,
+        // 专规 4.1a（可选）：忽略 2.3e ⇒ 苏军战略模式的日期闸门不参与判定
+        ignoreOperationalLimits: session.rule4On('ignoreOperationalLimits'),
       })
       if (!verdict.ok) {
         pushLog(
@@ -8340,6 +8342,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         orientation,
         unitClass: modeUnitClassOf(unit),
         date: date.value,
+        // 专规 4.1a（可选）：忽略 2.3e ⇒ 苏军战略模式的日期闸门不参与判定
+        ignoreOperationalLimits: session.rule4On('ignoreOperationalLimits'),
       })
       if (!verdict.ok) continue
       if (to === 'reserve') {
@@ -8449,6 +8453,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         reserveSetupForbidden: limits.reserveForbidden,
         allowedModes: limits.allowed,
         date: date.value,
+        // 专规 4.1a（可选）：忽略 2.3e ⇒ 初设也不受苏军战略模式日期闸门约束
+        ignoreOperationalLimits: session.rule4On('ignoreOperationalLimits'),
       })
       if (!verdict.ok) {
         pushLog(
@@ -15744,6 +15750,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       executor: constructionExecutor(hex),
       hex: hedgehogHexState(hex),
       availableSp: dump === null ? 0 : holdingsToT({ sp: dump.sp, t: dump.t }) / SP_TO_T,
+      // 专规 4.1a（可选）：忽略 2.3e ⇒ 苏军 8 月 1 日前也能修建环形工事
+      ignoreOperationalLimits: session.rule4On('ignoreOperationalLimits'),
     })
     if (!outcome.ok) {
       hedgehogError.value = { rule: outcome.rule, reason: outcome.reason }
@@ -22668,8 +22676,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         randomEventDice,
         // 3.3c：已了结则不再掷（「1 或 6 ⇒ 该单位移除，撤离判定结束」）
         variableExitResolved: variableExitResolved.value,
-        // 3.6 / 4.1b：4.0 的可选规则「可选规则与房规」勾定后，8 / 12 / 15 Jul 自动 Supply Train
-        option4_1b: session.optionalRulesOn,
+        // 3.6 / 4.1b：4.0 逐条勾选里「4.1b 更多轴心补给」启用时，8 / 12 / 15 Jul 自动 Supply Train
+        option4_1b: session.rule4On('moreAxisSupply'),
       }),
       '可变增援',
     )

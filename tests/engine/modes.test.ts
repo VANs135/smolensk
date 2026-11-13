@@ -576,6 +576,24 @@ describe('模式切换合法性（5.4 + 4.5a-I/J + 5.5c + 5.7c/f + 5.8a/c + 专�
     })
     expect(canSwitchMode({ ...strat, side: 'axis', date: '1941-07-08' })).toEqual({ ok: true })
   })
+
+  it('专规 4.1a（可选）「忽略 2.3e」：启用时日期闸门不参与判定；不启用仍是原规则', () => {
+    const strat = { ...base, to: 'strat' as const, orientation: 'move' as const }
+    // 启用 ⇒ 8 月 1 日前也可进战略模式
+    expect(
+      canSwitchMode({
+        ...strat,
+        side: 'soviet',
+        date: '1941-07-31',
+        ignoreOperationalLimits: true,
+      }),
+    ).toEqual({ ok: true })
+    // 不启用（缺省）⇒ 原闸门照旧
+    expect(canSwitchMode({ ...strat, side: 'soviet', date: '1941-07-31' })).toMatchObject({
+      ok: false,
+      rule: '专规 2.3e',
+    })
+  })
 })
 
 /**

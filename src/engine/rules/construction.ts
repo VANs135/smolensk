@@ -407,13 +407,20 @@ export function planHedgehogBuild(input: {
   hex: HedgehogHexState
   /** 可动用的 SP */
   availableSp: number
+  /** 专规 4.1a（可选）：忽略 2.3e ⇒ 苏军修建环形工事不受日期闸门约束 */
+  ignoreOperationalLimits?: boolean
 }): RuleOutcome<HedgehogBuildResult> {
   if (input.hex.levelsBuiltThisTurn >= HEDGEHOG_LEVELS_PER_TURN)
     return fail('16.0b', 'hedgehogAlreadyImprovedThisTurn')
   if (input.hex.level >= HEDGEHOG_MAX_LEVEL)
     return fail('16.0b', `hedgehogAtMaxLevel:${HEDGEHOG_MAX_LEVEL}`)
   // 专规 2.3e：苏军 8 月 1 日回合之前不能修建环形工事
-  if (input.side === 'soviet' && input.date < SOVIET_HEDGEHOG_BUILD_FROM)
+  // 专规 4.1a（可选）：忽略 2.3e ⇒ 本条不参与判定（未启用即原规则）
+  if (
+    input.ignoreOperationalLimits !== true &&
+    input.side === 'soviet' &&
+    input.date < SOVIET_HEDGEHOG_BUILD_FROM
+  )
     return fail('专规 2.3e', `sovietCannotBuildHedgehogBefore:${SOVIET_HEDGEHOG_BUILD_FROM}`)
 
   const verdict = checkExecutor(input.executor)

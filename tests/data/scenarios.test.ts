@@ -9,6 +9,7 @@ import {
   scenarios,
 } from '@/data'
 import { PANZER_GROUP_OPTION_ITEM } from '@/engine/rules'
+import { OPTIONAL_RULE_ITEMS } from '@/engine/session-flow'
 
 /**
  * A8 剧本与到达表数据基线（scenarios.json / scenario-setup.json / arrivals-*.json）
@@ -148,11 +149,15 @@ describe('剧本库 scenarios.json', () => {
     expect(typeof entry).toBe('object')
   })
 
-  it('共识开关默认值：5 项（1.4 / 4.9e / 2.4 / 4.1–4.3 / 3.4b 可选项）', () => {
-    // B50（用户 2026-09-17）：「3.4b 是可选，做到共识里面」⇒ 清单第 5 项＝装甲集群 SP 归属约束
-    expect(scenarios.agreedOptions.items).toHaveLength(5)
+  it('共识开关默认值：12 项（1.4 / 4.9e / 2.4 / 4.0 逐条八条 / 3.4b 可选项）', () => {
+    // 专规 4.0：整章拆成逐条勾选（4.1a 两半 + 4.1b/c + 4.2a/b/c + 4.3），3.4b 独立、仍在末位
+    expect(scenarios.agreedOptions.items).toHaveLength(12)
     expect(scenarios.agreedOptions.note).toContain('一致同意')
-    expect(scenarios.agreedOptions.items[4]).toContain('3.4b')
+    expect(scenarios.agreedOptions.items[11]).toContain('3.4b')
+    // 逐条条目必须与引擎常量**逐字**一致（按文本查共识；数据改字而不改常量 ⇒ 功能会静默失效）
+    for (const item of Object.values(OPTIONAL_RULE_ITEMS)) {
+      expect(scenarios.agreedOptions.items).toContain(item)
+    }
   })
 
   it('初设规则注记：SP 归属按 Setup Note F 归属装甲集群（3.4）', () => {

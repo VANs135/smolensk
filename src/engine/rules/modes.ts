@@ -782,6 +782,12 @@ export interface ModeSwitchRequest {
    * 故与 `inEnemyZoc` 分开传，避免把 ZOC 的窄口径套到初设上。
    */
   adjacentEnemyAttackCapable?: boolean
+  /**
+   * 专规 4.1a（可选）：「can ignore 2.3e (Operational Limits)」
+   *
+   * 启用 ⇒ 跳过下面的苏军战略模式日期闸门；**未启用（缺省）⇒ 闸门照原规则生效**。
+   */
+  ignoreOperationalLimits?: boolean
 }
 
 /** 模式切换判定结果 */
@@ -844,7 +850,13 @@ export function canSwitchMode(req: ModeSwitchRequest): ModeSwitchResult {
     return { ok: false, rule: '5.8a', reason: '不可在敌方 ZOC 内进入战略模式（4.5a-J）' }
 
   // 专规 2.3e（覆盖通规 5.8）：8 月 1 日回合之前苏军不得进入战略模式
-  if (req.to === 'strat' && req.side === 'soviet' && req.date !== undefined) {
+  // 专规 4.1a（可选）：玩家可忽略 2.3e ⇒ 此时整条闸门不参与判定（未启用即原规则）
+  if (
+    req.ignoreOperationalLimits !== true &&
+    req.to === 'strat' &&
+    req.side === 'soviet' &&
+    req.date !== undefined
+  ) {
     if (req.date < SOVIET_STRAT_MODE_FROM)
       return {
         ok: false,
@@ -882,6 +894,8 @@ export interface SetupModeRequest {
   allowedModes?: readonly BaseMode[]
   /** 当前日期（专规 2.3e：8 月 1 日前苏军不得进入战略模式） */
   date?: string
+  /** 专规 4.1a（可选）：忽略 2.3e ⇒ 初设也不受苏军战略模式日期闸门约束 */
+  ignoreOperationalLimits?: boolean
 }
 
 /**
@@ -905,6 +919,7 @@ export function canSetModeAtSetup(req: SetupModeRequest): RuleOutcome<null> {
     inEnemyZoc: false,
     adjacentEnemyAttackCapable: req.adjacentEnemyAttackCapable,
     ...(req.date === undefined ? {} : { date: req.date }),
+    ...(req.ignoreOperationalLimits === true ? { ignoreOperationalLimits: true } : {}),
   })
   if (!base.ok) return fail(base.rule, base.reason)
 

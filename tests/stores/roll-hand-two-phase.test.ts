@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { PANZER_GROUP_OPTION_ITEM } from '@/engine/rules/panzer-groups'
-import { OPTIONAL_RULES_ITEM } from '@/engine/session-flow'
+import { OPTIONAL_RULE_ITEMS } from '@/engine/session-flow'
 import { useGameSessionStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -182,8 +182,8 @@ describe('v7.1 第二段：判定阶段 → 放置阶段', () => {
     const optionAt = session.agreedOptionItems.indexOf(PANZER_GROUP_OPTION_ITEM)
     expect(optionAt).toBeGreaterThanOrEqual(0)
     session.setAgreedAdopt(optionAt, true)
-    // 4.0：4.1b 是否启用只看「可选规则与房规」这一条（不再有段内开关）
-    const optionalAt = session.agreedOptionItems.indexOf(OPTIONAL_RULES_ITEM)
+    // 4.0：4.1b 是否启用只看逐条勾选里的「4.1b 更多轴心补给」（不再有段内开关，也没有整章开关）
+    const optionalAt = session.agreedOptionItems.indexOf(OPTIONAL_RULE_ITEMS.moreAxisSupply)
     expect(optionalAt).toBeGreaterThanOrEqual(0)
     session.setAgreedAdopt(optionalAt, true)
     store.setActiveSide('axis')

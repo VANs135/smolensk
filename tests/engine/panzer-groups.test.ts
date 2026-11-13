@@ -136,6 +136,31 @@ describe('3.4a：相位末的分界线义务', () => {
     expect(hothWrong.map((item) => item.reason)).toEqual(['wrongSideOfLineEastOfOrsha'])
   })
 
+  it('专规 4.1a（可选）「忽略 3.4」：启用时 3.4a 整条不生效；不启用仍是原规则', () => {
+    const units = [unit('g1', 'guderian', SOUTH_OF_LINE), unit('h1', 'hoth', SOUTH_OF_LINE)]
+    // 不启用（缺省）：同堆叠 ⇒ 两枚都有 DG 义务
+    expect(
+      dividingLineObligations({
+        units,
+        scope: SCOPE,
+        date: '1941-07-12',
+        adjacent: areAdjacent,
+        sameHex,
+      }).length,
+    ).toBe(2)
+    // 启用：3.4 被忽略 ⇒ 不再产出任何义务
+    expect(
+      dividingLineObligations({
+        units,
+        scope: SCOPE,
+        date: '1941-07-12',
+        adjacent: areAdjacent,
+        sameHex,
+        ignorePanzerGroupConstraints: true,
+      }),
+    ).toEqual([])
+  })
+
   it('3.4a：在线上、或各自在合规一侧 ⇒ 无义务', () => {
     const outcome = dividingLineObligations({
       units: [

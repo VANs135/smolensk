@@ -222,7 +222,14 @@ export function dividingLineObligations(input: {
   date: string
   adjacent(a: HexRef, b: HexRef): boolean
   sameHex(a: HexRef, b: HexRef): boolean
+  /**
+   * 专规 4.1a（可选）：「can ignore … 3.4 (Guderian & Hoth)」
+   *
+   * 启用 ⇒ 3.4a 的分界线义务整条不生效（返回空）；**未启用（缺省）⇒ 照原规则判**。
+   */
+  ignorePanzerGroupConstraints?: boolean
 }): readonly DividingLineObligation[] {
+  if (input.ignorePanzerGroupConstraints === true) return []
   if (input.date >= PANZER_GROUP_CONSTRAINT_END) return []
 
   const formations = new Map<PanzerGroup, PanzerGroupUnitView[]>()
