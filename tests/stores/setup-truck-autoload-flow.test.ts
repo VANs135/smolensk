@@ -197,7 +197,7 @@ describe('批 B 切片 1：编队卡车满载自动落账（13.2h / IV-D）', ()
      */
     confirmSetupForStart(setup)
     // ch10：先执行编队抽取（要用盘面上的编队单位），再把盘面裁到这两枚
-    expect(setup.executeSetupDraws()).toBe(true)
+    expect(setup.drawSetupEffectsNow()).toBe(true)
     workbench.units.splice(0, workbench.units.length, truckUnit, mate)
     expect(setup.finishSetup()).toBe(true)
 

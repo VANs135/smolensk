@@ -23,7 +23,7 @@ describe('Setup Note F/3.4b：初设SP归属实际提交', () => {
     const index = game.agreedOptionItems.indexOf(PANZER_GROUP_OPTION_ITEM)
     game.setAgreedCheck(index, false)
     expect(setup.selectScenario('1')).toBe(true)
-    confirmSetupForStart(setup)
+    confirmSetupForStart(setup, { draws: false })
     game.setAgreedCheck(index, true)
     const before = JSON.stringify(board.units),
       rng = { ...board.rng }
@@ -42,7 +42,7 @@ describe('Setup Note F/3.4b：初设SP归属实际提交', () => {
   })
   it('旧确认不能覆盖改选、清空或实际账本不一致，重新确认后才恢复就绪', () => {
     const { setup, board, game } = boot()
-    confirmSetupForStart(setup)
+    confirmSetupForStart(setup, { draws: false })
     const dump = setup.spDumpsOf('axis')[0]!
     const other = board.panzerGroupOfDump(dump.id) === 'hoth' ? 'guderian' : 'hoth'
     setup.setSpAssignment(dump.id, other)
@@ -87,7 +87,7 @@ describe('Setup Note F/3.4b：初设SP归属实际提交', () => {
   })
   it('初设归属只认玩家选择，分界线不自动改写', () => {
     const { setup, board } = boot()
-    confirmSetupForStart(setup)
+    confirmSetupForStart(setup, { draws: false })
     const boundary = board.panzerGroupBoundaryWithPath
     expect(boundary).not.toBeNull()
     const dumps = setup.spDumpsOf('axis')

@@ -124,9 +124,9 @@ describe('W7 C14：开局流程进度与剧本选择', () => {
     // ch10（2026-11-10）：选剧本不再自动抽签 ⇒ 未打勾、名单为空
     expect(setup.stepDone['formationDraw']).toBe(false)
     for (const group of groups) expect(containers.drawnOf(group)).toHaveLength(0)
-    // 初设确认后执行一次 ⇒ 打勾、名单与组数一致
-    confirmSetupForStart(setup)
-    expect(setup.executeSetupDraws()).toBe(true)
+    // 初设确认后执行一次 ⇒ 打勾、名单与组数一致（本用例钉账本，不推进开局）
+    confirmSetupForStart(setup, { draws: false })
+    expect(setup.runSetupDraws()).toBe(true)
     expect(setup.stepDone['formationDraw']).toBe(true)
     for (const group of groups) {
       expect(containers.drawnOf(group).length).toBe(group.count)
@@ -134,8 +134,8 @@ describe('W7 C14：开局流程进度与剧本选择', () => {
     // 完成度仍读的是 C12 抽取盒那本账（换剧本 ⇒ 该剧本名下没有抽取 ⇒ 重新抽）
     setup.selectScenario('3')
     expect(setup.stepDone['formationDraw']).toBe(false)
-    confirmSetupForStart(setup)
-    expect(setup.executeSetupDraws()).toBe(true)
+    confirmSetupForStart(setup, { draws: false })
+    expect(setup.runSetupDraws()).toBe(true)
     expect(setup.stepDone['formationDraw']).toBe(true)
   })
 })
@@ -548,7 +548,7 @@ describe('W7 C14：初设单位 box（地图点选放置）与开始游戏', () 
     expect(setup.pendingPlacement.length).toBeGreaterThan(0)
     confirmSetupForStart(setup)
     // ch10：收束前必须先执行编队抽取（一次性入口）
-    expect(setup.executeSetupDraws()).toBe(true)
+    expect(setup.drawSetupEffectsNow()).toBe(true)
     expect(setup.finishSetup()).toBe(true)
     expect(setup.finished).toBe(true)
     expect(setup.pendingPlacement).toHaveLength(0)
@@ -558,7 +558,7 @@ describe('W7 C14：初设单位 box（地图点选放置）与开始游戏', () 
   it('C14：开始游戏 ⇒ 收束初设 + 建会话 + 共识按默认（全不用）写日志 + 进入第一阶段', () => {
     confirmSetupForStart(setup)
     // ★ 用户 2026-11-10：抽取编队只有「抽取编队」按钮一个入口，开局不再隐式兜底
-    expect(setup.executeSetupDraws()).toBe(true)
+    expect(setup.drawSetupEffectsNow()).toBe(true)
     expect(setup.startGameNow()).toBe(true)
     expect(setup.finished).toBe(true)
     expect(session.session).not.toBeNull()

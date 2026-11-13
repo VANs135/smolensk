@@ -25,9 +25,9 @@ function boot(scenarioId = '1') {
   game.setScenarioId(scenarioId)
   containers.setScenario(scenarioId)
   setup.selectScenario(scenarioId)
-  // ch10（用户 2026-11-10）：抽签只在初设单位放置完成后执行一次
-  confirmSetupForStart(setup)
-  setup.executeSetupDraws()
+  // ch10（用户 2026-11-10）：抽签只在初设确认后执行一次；本文件钉抽签落点接线，故不推进开局
+  confirmSetupForStart(setup, { draws: false })
+  expect(setup.runSetupDraws()).toBe(true)
   return { workbench, containers, setup }
 }
 

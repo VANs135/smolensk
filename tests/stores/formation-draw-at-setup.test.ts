@@ -33,7 +33,7 @@ function boot(scenarioId = '1') {
   containers.setScenario(scenarioId)
   setup.selectScenario(scenarioId)
   confirmSetupForStart(setup)
-  if (!setup.executeSetupDraws()) throw new Error(setup.lastAction?.detail ?? '抽签失败')
+  if (!setup.drawSetupEffectsNow()) throw new Error(setup.lastAction?.detail ?? '抽签失败')
   return { game, workbench, containers, setup }
 }
 

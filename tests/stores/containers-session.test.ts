@@ -183,13 +183,13 @@ describe('B17a-2：分段渲染与入口（源码守卫）', () => {
       ['workbench.runDeadPileActionNow(', ACTION_GATES],
       /*
        * ★ 2026-11-11（体检 A 组）：「抽取编队」入口已移到地图左上角「初设」栏，容器窗只读，
-       *   不再有 `setup.executeSetupDraws()` 可点件（下面单独断言"不存在"）。
+       *   不再有 `setup.drawSetupEffectsNow()` 可点件（下面单独断言"不存在"）。
        */
       ['@click="hideNow()"', ACTION_GATES],
     ] as const) {
       expect(isGated(marker, gates), `${marker} 应由 ${gates.join(' / ')} 门管着`).toBe(true)
     }
-    expect(panel).not.toContain('setup.executeSetupDraws(')
+    expect(panel).not.toContain('setup.drawSetupEffectsNow(')
   })
 
   it('★ 对局台：右栏 `only="info"`、会话 `only="actions"`；验证页仍挂全量', () => {

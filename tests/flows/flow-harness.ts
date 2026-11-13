@@ -68,11 +68,12 @@ export function fillSetup(ctx: ReturnType<typeof fresh>) {
   }
   placeRemaining()
   /*
-   * ch10（用户 2026-11-10）：抽签只在初设单位摆完**之后**执行一次；
+   * 两段式（规格 §4.1）：先「完成初设」只确认；抽签由唯一入口执行并开局，
    * 抽签产生的西移项会再回到初设 box ⇒ 执行完再摆一轮。
    */
+  if (!setup.finished) expect(setup.startGameNow(), setup.lastAction?.detail).toBe(true)
   if (setup.setupDrawEntryVisible) {
-    expect(setup.executeSetupDraws(), setup.lastAction?.detail).toBe(true)
+    expect(setup.drawSetupEffectsNow(), setup.lastAction?.detail).toBe(true)
     placeRemaining()
   }
   expect(setup.pendingPlacement.filter((p) => p.remaining > 0)).toHaveLength(0)

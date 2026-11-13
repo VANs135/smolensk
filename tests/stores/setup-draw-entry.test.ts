@@ -17,16 +17,16 @@ describe('抽取编队入口唯一 + 过期文案', () => {
   it('唯一可点入口在地图左上角「初设」栏：可见条件复用 setupDrawEntryVisible', () => {
     const queue = read('src/components/game/DecisionQueue.vue')
     expect(queue).toContain('setup.setupDrawEntryVisible')
-    expect(queue).toContain('setup.executeSetupDraws()')
+    expect(queue).toContain('setup.drawSetupEffectsNow()')
     expect(queue).toContain('抽取编队')
   })
 
   it('初设面板与容器窗只读：不再挂第二个可点的抽取按钮', () => {
     const panel = read('src/components/setup/SetupPanel.vue')
-    expect(panel).not.toContain('setup.executeSetupDraws()')
+    expect(panel).not.toContain('setup.drawSetupEffectsNow()')
     expect(panel).toContain('地图左上角「初设」栏')
     const containers = read('src/components/containers/ContainersPanel.vue')
-    expect(containers).not.toContain('setup.executeSetupDraws()')
+    expect(containers).not.toContain('setup.drawSetupEffectsNow()')
     expect(containers).toContain('地图左上角「初设」栏')
   })
 

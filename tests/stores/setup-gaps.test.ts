@@ -64,11 +64,9 @@ describe('G3：setupGaps 加载期登记', () => {
     setup.selectScenario('1')
     const gapCount = setup.setupGaps.length
     expect(gapCount).toBeGreaterThan(0)
-    confirmSetupForStart(setup)
     const logCount = () => workbench.log.filter((entry) => entry.rule === 'setupGaps').length
     expect(logCount()).toBe(0)
-
-    expect(setup.startGameNow()).toBe(true)
+    confirmSetupForStart(setup) // 两段式：确认 + 抽签 + 开局（首局）
     expect(logCount()).toBe(gapCount)
     expect(setup.startGameNow()).toBe(true)
     expect(logCount()).toBe(gapCount)

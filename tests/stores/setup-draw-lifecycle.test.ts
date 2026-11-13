@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import { scenarioSetup, scenarios } from '@/data'
 import { deriveDrawComposition, setupSourceOf } from '@/engine/rules'
+import { createMemoryStorage } from '@/shared'
 import {
   useContainersStore,
   useGameSessionStore,
@@ -24,7 +25,7 @@ function boot(scenarioId = '1', automatic = true) {
     expect(ok, setup.lastAction?.detail ?? containers.lastAction?.detail).toBe(true)
     // ch10（用户 2026-11-10）：抽签只在初设单位放置完成后执行一次 ⇒ 先摆完必做项，再执行抽签
     confirmSetupForStart(setup)
-    expect(setup.executeSetupDraws(), setup.lastAction?.detail).toBe(true)
+    expect(setup.drawSetupEffectsNow(), setup.lastAction?.detail).toBe(true)
     expect(setup.finishSetup()).toBe(true)
   } else {
     expect(game.setScenarioId(scenarioId)).toBe(true)
@@ -114,8 +115,9 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
       const outcomes = JSON.stringify(containers.formationDrawOutcomes)
       const deposit = vi.spyOn(board, 'sendToDeadPileNow')
       const returned = vi.spyOn(board, 'returnFromDeadPileNow')
-      expect(setup.runSetupDraws()).toBe(true)
-      expect(setup.runSetupDraws()).toBe(true)
+      // 已开局 ⇒ 重入被拒（台账/会话双重闸门），且盘面与处置回执不变
+      expect(setup.runSetupDraws()).toBe(false)
+      expect(setup.drawSetupEffectsNow()).toBe(true) // 台账已存在 ⇒ 幂等
       expect(capture(board)).toBe(before)
       expect(JSON.stringify(containers.formationDrawOutcomes)).toBe(outcomes)
       expect(deposit).not.toHaveBeenCalled()
@@ -138,14 +140,16 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     expect(setup.placeAtHex(changed)).toBe(true)
     const before = capture(board)
     const outcomes = JSON.stringify(containers.formationDrawOutcomes)
-    expect(setup.runSetupDraws()).toBe(true)
+    // 已开局 ⇒ 只能幂等回 true，不得覆盖玩家已提交的西移改点
+    expect(setup.runSetupDraws()).toBe(false)
+    expect(setup.drawSetupEffectsNow()).toBe(true)
     expect(capture(board)).toBe(before)
     expect(JSON.stringify(containers.formationDrawOutcomes)).toBe(outcomes)
     expect(containers.drawShiftHexOf(item.formationId)).toBe(`${changed.col}.${changed.row}`)
   })
 
   it('整组西移遇到缺失成员时拒绝全部移动，也不能写完成回执', () => {
-    const { setup, containers, board } = boot('1', false)
+    const { setup, containers, board, game } = boot('1', false)
     const group = containers.scenarioDrawBox!.groups.find((g) => g.kind === 'shiftWest')!
     containers.drawFormations(group)
     const items = containers.pendingShiftWestPlacements
@@ -158,7 +162,10 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     expect(containers.lastAction?.detail).toContain('缺少待移动')
     expect(capture(board)).toBe(before)
     expect(containers.formationDrawOutcomes).toEqual([])
-    expect(setup.startGameNow()).toBe(false)
+    // 两段式：确认可过，但抽签执行失败 ⇒ 不得写台账、不得建会话
+    expect(setup.drawSetupEffectsNow()).toBe(false)
+    expect(setup.setupEffectLedger).toBeNull()
+    expect(game.session).toBeNull()
   })
 
   it('非西移组的直接应用入口也不重复提交死亡堆互换', () => {
@@ -171,27 +178,36 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     expect(returned).not.toHaveBeenCalled()
   })
 
-  it('未点抽取入口 ⇒ 开局被拒并提示 ch10/ch11（不再隐式兜底抽签）', () => {
-    const { setup, containers, board } = boot()
-    const item = containers.pendingShiftWestPlacements[0]!
-    const selected = item.fromHexText!
-    expect(containers.setDrawShiftHexNow(item.formationId, selected)).toBe(true)
+  it('两段式：确认初设只收束不建会话；点「抽签」才执行并开局，重复点击不重抽', () => {
+    setActivePinia(createPinia())
+    useHotseatStore().setMode('solo')
+    const setup = useSetupStore()
+    const containers = useContainersStore()
+    const board = useWorkbenchStore()
+    const game = useGameSessionStore()
+    expect(setup.selectScenario('1')).toBe(true)
+    confirmSetupForStart(setup, { draws: false })
+    // 第一段：确认后仍在初设、会话未建、抽签按钮出现
+    expect(setup.finished).toBe(true)
+    expect(setup.setupConfirmed).toBe(true)
+    expect(game.session).toBeNull()
+    expect(setup.setupDrawEntryVisible).toBe(true)
     expect(setup.stepDone.formationDraw).toBe(false)
-    // ★ 用户 2026-11-10：抽取编队只有「抽取编队」按钮一个入口；没点就开局 = 没做这一步
-    expect(setup.startGameNow()).toBe(false)
-    expect(setup.lastAction?.rule).toContain('ch10')
-    // 玩家已选落点保留；执行入口一次落盘后再开局
-    expect(setup.executeSetupDraws()).toBe(true)
+    // 第二段：唯一入口执行效果 → 写台账 → 开局
+    expect(setup.drawSetupEffectsNow()).toBe(true)
+    expect(setup.setupEffectLedger).not.toBeNull()
+    expect(setup.setupEffectLedger!.scenarioId).toBe('1')
+    expect(game.session).not.toBeNull()
     expect(containers.setupDrawProgress.complete).toBe(true)
-    for (const id of item.unitIds) {
-      const hex = board.units.find((unit) => unit.instanceId === id)!.hex
-      expect(`${hex.col}.${hex.row}`).toBe(selected)
-    }
-    expect(setup.startGameNow()).toBe(true)
+    expect(setup.setupDrawEntryVisible).toBe(false)
+    // 不可重入：重复点击幂等，盘面不变
+    const before = capture(board)
+    expect(setup.drawSetupEffectsNow()).toBe(true)
+    expect(capture(board)).toBe(before)
   })
 
   it.each(['finishSetup', 'startGameNow'] as const)(
-    '%s：处置失败保留抽签结果并阻止收束；修正来源后只补做未提交组',
+    '%s：抽签处置失败不写台账、不建会话；修正来源后只补做未提交组',
     (action) => {
       const { setup, containers, board, game } = boot('1', false)
       const group = containers.scenarioDrawBox!.groups.find((g) => g.kind === 'mtrAufkSwap')!
@@ -206,16 +222,19 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
       expect(setup.stepDone.formationDraw).toBe(false)
       const failedBoard = capture(board)
       const draws = JSON.stringify(containers.drawResults)
-      expect(setup[action]()).toBe(false)
-      expect(setup.finished).toBe(false)
+      // 两段式：确认在前、抽签在后 ⇒ 确认不因抽签失败被拒；但不得建会话、不得写台账
+      expect(setup[action]()).toBe(true)
+      expect(setup.finished).toBe(true)
       expect(game.session).toBeNull()
+      expect(setup.setupEffectLedger).toBeNull()
       expect(capture(board)).toBe(failedBoard)
       board.deadPile.push(missing!)
       expect(setup.runSetupDraws()).toBe(true)
       expect(JSON.stringify(containers.drawResults)).toBe(draws)
       expect(containers.setupDrawProgress.complete).toBe(true)
       confirmSetupForStart(setup)
-      expect(setup.startGameNow()).toBe(true)
+      expect(setup.drawSetupEffectsNow()).toBe(true)
+      expect(game.session).not.toBeNull()
     },
   )
 
@@ -248,7 +267,7 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
       detail: '抽取池不足，未完成抽取',
     })
     confirmSetupForStart(setup, { draws: false })
-    expect(setup.executeSetupDraws()).toBe(false)
+    expect(setup.drawSetupEffectsNow()).toBe(false)
     expect(setup.lastAction?.ok).toBe(false)
     expect(setup.lastAction?.detail ?? containers.lastAction?.detail).toContain('抽取池不足')
     failed.mockRestore()
@@ -270,7 +289,7 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     expect(setup.enterSetup('1')).toBe(true)
     // ch10：抽签改在初设完成后执行 ⇒ 失败在执行入口报出
     confirmSetupForStart(setup, { draws: false })
-    expect(setup.executeSetupDraws()).toBe(false)
+    expect(setup.drawSetupEffectsNow()).toBe(false)
     expect(setup.lastAction?.detail).toBe('初设抽取失败')
   })
 
@@ -279,22 +298,43 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     const row = containers.drawResults['1']![0]!
     row.formationIds = row.formationIds.slice(0, 1)
     const before = capture(board)
+    // 已开局 ⇒ 重入被拒；进度未完成 ⇒ 不能标勾（台账不会再补抽）
     expect(setup.runSetupDraws()).toBe(false)
     expect(setup.stepDone.formationDraw).toBe(false)
     expect(capture(board)).toBe(before)
-    expect(setup.startGameNow()).toBe(false)
+    expect(containers.setupDrawProgress.complete).toBe(false)
+    expect(() => setup.drawSetupEffectsNow()).not.toThrow()
+  })
+
+  it('抽签台账随存读档复原：读档后不重抽，台账与抽签结果原样回来', () => {
+    const { setup, containers, game } = boot()
+    game.setSaveStorage(createMemoryStorage())
+    const ledger = JSON.stringify(setup.setupEffectLedger)
+    const draws = JSON.stringify(containers.drawResults)
+    const outcomes = JSON.stringify(containers.formationDrawOutcomes)
+    expect(ledger).not.toBe('null')
+    expect(game.saveNow()).toBe(true)
+    // 模拟刷新/换局导致的本地丢失，再从存档复原
+    setup.setupEffectLedger = null
+    expect(game.loadNow()).toBe(true)
+    expect(JSON.stringify(setup.setupEffectLedger)).toBe(ledger)
+    expect(JSON.stringify(containers.drawResults)).toBe(draws)
+    expect(JSON.stringify(containers.formationDrawOutcomes)).toBe(outcomes)
+    expect(setup.setupDrawEntryVisible).toBe(false)
+    expect(setup.drawSetupEffectsNow()).toBe(true) // 幂等：不重抽
+    expect(JSON.stringify(containers.drawResults)).toBe(draws)
   })
 
   it('清盘重建同一剧本时重做抽取处置；换无抽取剧本不会留下旧名单和落点', () => {
-    const { setup, containers, board } = boot()
+    const { setup, containers, board } = boot('1', false)
     const oldIds = board.units.map((unit) => unit.instanceId)
     expect(setup.selectScenario('1')).toBe(true)
     expect(board.units.some((unit) => oldIds.includes(unit.instanceId))).toBe(false)
     // ch10：重开剧本不再自动抽签 ⇒ 旧名单清空，需再走一次「确认初设 → 执行抽取」
     expect(containers.setupDrawProgress.complete).toBe(false)
     expect(containers.drawResults).toEqual({})
-    confirmSetupForStart(setup)
-    expect(setup.executeSetupDraws(), setup.lastAction?.detail).toBe(true)
+    confirmSetupForStart(setup, { draws: false })
+    expect(setup.runSetupDraws(), setup.lastAction?.detail).toBe(true)
     expect(containers.setupDrawProgress.complete).toBe(true)
     for (const item of containers.pendingShiftWestPlacements) {
       for (const id of item.unitIds) {
@@ -310,7 +350,7 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     expect(setup.selectScenario('2')).toBe(true)
     expect(containers.drawResults).toEqual({})
     confirmSetupForStart(setup)
-    expect(setup.executeSetupDraws(), setup.lastAction?.detail).toBe(true)
+    expect(setup.drawSetupEffectsNow(), setup.lastAction?.detail).toBe(true)
     expect(Object.keys(containers.drawResults)).toEqual(['2'])
     expect(containers.setupDrawProgress.complete).toBe(true)
   })

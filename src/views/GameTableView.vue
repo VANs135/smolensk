@@ -438,7 +438,7 @@ onBeforeUnmount(() => {
         >
           <template #overlay>
             <DecisionQueue
-              v-if="setup.applied && !setup.finished"
+              v-if="setup.applied && (!setup.finished || setup.setupDrawEntryVisible)"
               id="setup-queue"
               tabindex="-1"
               @air-drag="queuedAirDrag = $event"

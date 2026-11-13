@@ -40,14 +40,14 @@ describe('S1：必做初设、主动放弃与双方确认', () => {
     confirmSetupForStart(setup)
     expect(setup.truckLoadSummary.done).toBe(true)
     // ch10：抽签在初设单位放置完成后执行一次
-    expect(setup.executeSetupDraws()).toBe(true)
+    expect(setup.drawSetupEffectsNow()).toBe(true)
     expect(setup.requiredSetupIssues).toEqual([])
     expect(setup.startGameNow()).toBe(true)
   })
 
   it('满载已落账后更换同额名单，旧完成标记不能放行与实物不一致的载货', () => {
     const { setup, board, game } = boot('3')
-    confirmSetupForStart(setup)
+    confirmSetupForStart(setup, { draws: false })
     const old = setup.truckFullIds[0]!
     const replacement = setup.setupTrucks.find(
       (truck) => !setup.truckFullIds.includes(truck.instanceId),
@@ -70,9 +70,8 @@ describe('S1：必做初设、主动放弃与双方确认', () => {
 
   it('必做西移与普通未摆单位分别列出；未完成西移不能收束', () => {
     const { setup, containers } = boot()
-    // ch10：抽签在双方确认之后执行一次；未完成的西移再落回初设 box
-    confirmSetupForStart(setup)
-    expect(setup.executeSetupDraws()).toBe(true)
+    // ch10：抽签在双方确认之后执行一次；未完成的西移再落回初设 box（本用例只钉必做项）
+    expect(setup.runSetupDraws()).toBe(true)
     containers.drawShiftHexText = {}
     expect(setup.requiredSetupIssues.some((issue) => issue.id.startsWith('shift:'))).toBe(true)
     expect(setup.omittablePlacements.length).toBeGreaterThan(0)
@@ -103,7 +102,7 @@ describe('S1：必做初设、主动放弃与双方确认', () => {
     expect(setup.confirmSideSetup()).toBe(true)
     expect(setup.omittablePlacements.length).toBeGreaterThan(0)
     // ★ 用户 2026-11-10：抽取编队只有「抽取编队」按钮一个入口，开局不再隐式兜底
-    expect(setup.executeSetupDraws()).toBe(true)
+    expect(setup.drawSetupEffectsNow()).toBe(true)
     expect(setup.startGameNow()).toBe(true)
     expect(setup.notes.join('')).toContain('本局移除')
   })

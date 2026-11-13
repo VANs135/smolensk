@@ -227,15 +227,15 @@ function sideMark(side: 'axis' | 'soviet'): string {
     </header>
 
     <!--
-      ch10 / ch11：编队抽取的**唯一可点入口**（用户 2026-11-11：挪到玩家看得见的初设栏）。
-      可见条件沿用 `setup.setupDrawEntryVisible`；点一次即抽取 + 落位 + 落账，之后永久收起。
-      初设面板与容器窗都不再画按钮，保持全程序只有这一处可点。
+      ch10 / ch11：两段式第二段 —— 初设**确认之后**的执行入口（规格 §4.1/§4.2）。
+      可见条件沿用 `setup.setupDrawEntryVisible`（确认后且本剧本 effects 未执行）；
+      点一次即抽取 + 落位 + 落账 + 开局，之后永久收起。全程序只有这一处可点。
     -->
     <div v-if="setup.setupDrawEntryVisible" class="queue__row-actions">
-      <BaseButton variant="primary" size="sm" @click="setup.executeSetupDraws()">
+      <BaseButton variant="primary" size="sm" @click="setup.drawSetupEffectsNow()">
         抽取编队
       </BaseButton>
-      <span class="queue__hint">ch10：初设摆完后抽一次，抽完即收起</span>
+      <span class="queue__hint">ch10 / ch11：初设已确认，抽一次即开局</span>
     </div>
 
     <!--
@@ -269,7 +269,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
       B38（口径 #5「结束后不自动关」）：**全部落位完毕** ⇒ 队列收起列表、就地给「完成初设」，
       按下即开局（`startGameNow`）；初设收束后本框随 `!setup.finished` 的条件自动消失。
     -->
-    <div v-if="allPlaced && cursorSide === null" class="queue__done">
+    <div v-if="allPlaced && cursorSide === null && !setup.setupConfirmed" class="queue__done">
       <BaseButton variant="primary" size="sm" @click="setup.startGameNow()">完成初设</BaseButton>
     </div>
 

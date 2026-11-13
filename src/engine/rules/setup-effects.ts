@@ -280,3 +280,53 @@ export function collectSetupGaps(scenarioId: string): readonly SetupGap[] {
 export function setupGapText(gap: SetupGap): string {
   return `初设数据缺口（剧本 ${gap.scenarioId} · ${gap.field}）：${gap.note}（${gap.action}）`
 }
+
+/* ────────────────────────────── 抽签台账（随存档持久化） ────────────────────────────── */
+
+/** 台账里的一条效果回执（只记成功执行的；失败不写台账） */
+export interface SetupEffectLedgerEntry {
+  effectId: string
+  kind: SetupEffectKind
+  rule: string
+  detail: string
+}
+
+/**
+ * 初设效果台账（规格 §4.3）
+ *
+ * `executedAt` 存在 ⇒ 按钮不出现、不重放；新局（`selectScenario`）清空。
+ * 与 `units` / 抽签处置同层随存档持久化，刷新或读档后仍判「已执行」。
+ */
+export interface SetupEffectLedger {
+  scenarioId: string
+  /** 执行时间（ISO；只作「已执行」判据与回看，不参与任何规则计算） */
+  executedAt: string
+  entries: readonly SetupEffectLedgerEntry[]
+}
+
+/** 该剧本是否已执行过初设效果（台账按剧本隔离，换剧本不串用） */
+export function setupEffectsExecuted(
+  ledger: SetupEffectLedger | null | undefined,
+  scenarioId: string,
+): boolean {
+  return ledger !== null && ledger !== undefined && ledger.scenarioId === scenarioId
+}
+
+/** 由执行器结论生成台账（仅成功时；失败返回 null，调用方回滚且不写台账） */
+export function buildSetupEffectLedger(input: {
+  scenarioId: string
+  executedAt: string
+  result: RunSetupEffectsResult
+}): SetupEffectLedger | null {
+  if (!input.result.ok) return null
+  return {
+    scenarioId: input.scenarioId,
+    executedAt: input.executedAt,
+    entries: input.result.executed.map((item) => ({
+      effectId: item.effectId,
+      kind: item.kind,
+      rule: item.rule,
+      detail: item.detail,
+    })),
+  }
+}

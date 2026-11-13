@@ -43,10 +43,14 @@ import {
   type SupplyDumpRef,
 } from '@/engine/rules'
 import {
+  buildSetupEffectLedger,
   collectSetupGaps,
   runSetupEffects,
+  setupEffectsExecuted as setupEffectsAreExecuted,
   setupEffectsOf,
   setupGapText,
+  type RunSetupEffectsResult,
+  type SetupEffectLedger,
   type SetupGap,
 } from '@/engine/rules/setup-effects'
 import { selectMovementTerrain } from '@/engine/rules/terrain'
@@ -1474,6 +1478,29 @@ export const useSetupStore = defineStore('setup', () => {
   /** 初设是否已收束（玩家点了「开始游戏」） */
   const finished = ref(false)
 
+  /**
+   * 两段式第一段：**初设已确认**（规格 §4.1）
+   *
+   * 本剧本有未执行的 `setup.effects` 时，「完成初设」只确认、不建会话/不推进；
+   * 唯一按钮「抽签」（`drawSetupEffectsNow`）执行完后才开局。无 effects 的剧本确认即开局。
+   */
+  const setupConfirmed = ref(false)
+
+  /** 本剧本声明的初设强制效果（数组顺序＝执行顺序） */
+  const setupEffects = computed(() => setupEffectsOf(scenarioId.value))
+
+  /**
+   * 两段式第二段：**抽签台账**（规格 §4.3；随存档持久化）
+   *
+   * `executedAt` 存在 ⇒ 按钮不出现、不重放；失败不写台账（按钮保留）。
+   */
+  const setupEffectLedger = ref<SetupEffectLedger | null>(null)
+
+  /** 本剧本的 effects 是否已执行（台账按剧本隔离） */
+  const setupEffectsExecuted = computed(() =>
+    setupEffectsAreExecuted(setupEffectLedger.value, scenarioId.value),
+  )
+
   const omittablePlacements = computed(() =>
     pendingPlacement.value.filter((item) => item.kind === 'self' || item.kind === 'air'),
   )
@@ -1512,8 +1539,10 @@ export const useSetupStore = defineStore('setup', () => {
     const cursorIssue = requiredSetupIssues.value.find((issue) => issue.id === 'sideConfirmation')
     if (cursorIssue !== undefined)
       return record({ ok: false, rule: cursorIssue.rule, reason: cursorIssue.detail })
-    // 收束前必须抽完并处置完（ch10：抽签入口在"初设单位放置完成"后出现，执行后才允许收束）
-    if (!progress.complete)
+    // 两段式（规格 §4.1）：有未执行的 effects ⇒ 确认阶段**不要求**抽签处置已完成，
+    // 抽签在确认之后由唯一按钮执行；已执行的（或本剧本无 effects）仍须处置完才允许收束。
+    const effectsPending = setupEffects.value.length > 0 && !setupEffectsExecuted.value
+    if (!effectsPending && !progress.complete)
       return record({
         ok: false,
         rule: 'ch10 / ch11',
@@ -1522,7 +1551,10 @@ export const useSetupStore = defineStore('setup', () => {
           .map((group) => group.reason)
           .join('；')}`,
       })
-    const obligation = requiredSetupIssues.value[0]
+    // 未执行 effects 时，抽签义务不算在「确认」门槛里（它由确认后的唯一按钮承担）
+    const obligation = effectsPending
+      ? requiredSetupIssues.value.find((issue) => !issue.id.startsWith('draw:'))
+      : requiredSetupIssues.value[0]
     if (obligation !== undefined)
       return record({ ok: false, rule: obligation.rule, reason: obligation.detail })
     return true
@@ -1578,15 +1610,40 @@ export const useSetupStore = defineStore('setup', () => {
    *   ② 建会话并把共识勾选写成日志结论（默认全勾选，见 `resetAgreedChecklist`；专规 4.0 门禁）；
    *   ③ 推进到第一阶段（`preTurn` 的自动段）。
    */
+  /**
+   * 两段式第一段收束：沿用 `finishSetup` 的「未摆＝本局移除」口径
+   *
+   * 单独包一层是为了让 `startGameNow` 的源码守卫保持「正常路径先 startGame、后 finishSetup」。
+   */
+  function closeSetupConfirmation(): boolean {
+    return finishSetup()
+  }
+
   function startGameNow(): boolean {
     // 初设入口不承担对局阶段推进；重复点击或读档重进不能跳过首个玩家环节。
     if (finished.value && game.session !== null) return true
     /*
      * ★ 用户 2026-11-10：**删除隐式兜底抽签**。抽取编队只有一个入口
-     *   （初设窗的「抽取编队」按钮 ⇒ `executeSetupDraws`）；没点就直接开局＝没做这一步，
+     *   （初设窗的「抽取编队」按钮 ⇒ `drawSetupEffectsNow`）；没点就直接开局＝没做这一步，
      *   `canFinishSetup` 会以 ch10 / ch11 的处置义务拦下并说明缺哪一组。
      */
     if (!canFinishSetup()) return false
+    /*
+     * 两段式（规格 §4.1）：本剧本有未执行的 `setup.effects` ⇒ 「完成初设」**只确认**，
+     * 不建会话、不推进；界面出现唯一按钮「抽签」（`drawSetupEffectsNow`），
+     * 抽签成功后立刻开局并进入第一阶段。没有 effects 的剧本确认即开局。
+     */
+    const effectsPending = setupEffects.value.length > 0 && !setupEffectsExecuted.value
+    if (effectsPending && game.session === null) {
+      if (!finished.value) closeSetupConfirmation()
+      setupConfirmed.value = true
+      return record({
+        ok: true,
+        rule: SETUP_RULE,
+        data: { detail: '初设已确认：点「抽取编队」执行本剧本的强制效果后开局' },
+      })
+    }
+    setupConfirmed.value = true
     /*
      * B38（方案 §3 步骤 2 后半）：**先开局、再收初设**。
      *
@@ -1769,6 +1826,9 @@ export const useSetupStore = defineStore('setup', () => {
     notes.value = []
     placing.value = null
     finished.value = false
+    // 新局（规格 §4.3）：确认标记与抽签台账随换剧本一起清空；确认后按钮重新出现
+    setupConfirmed.value = false
+    setupEffectLedger.value = null
     workbench.initialSetupInProgress = true
     // 第六批条 1（S1）：换剧本 ⇒ 分方游标按**新剧本的先布设方**重开
     armSetupSideCursor()
@@ -1782,7 +1842,7 @@ export const useSetupStore = defineStore('setup', () => {
     /*
      * ★ ch10（用户 2026-11-10 裁定）：编队抽取**只在初设单位放置完成之后**执行一次，
      *   之后任何阶段都不再出现抽取窗口。故 `selectScenario` 这里**不再自动抽签**；
-     *   抽签入口的可见条件见 `setupDrawEntryVisible`，执行入口是 `executeSetupDraws`。
+     *   抽签入口的可见条件见 `setupDrawEntryVisible`，执行入口是 `drawSetupEffectsNow`。
      */
     return true
   }
@@ -1807,47 +1867,105 @@ export const useSetupStore = defineStore('setup', () => {
   )
 
   /**
-   * ch10：抽签入口的**唯一可见条件**（用户 2026-11-10 裁定）
+   * 两段式（规格 §4.2）：抽签入口的**唯一可见条件**
    *
-   * 三个同时满足才出现：初设单位放置完成、本局尚未抽过（`setupDrawsExecuted`）、
-   * 本剧本确有抽签组。执行过一次即永久收起；增援段 / 回合开始 / 阶段切换都不再出现。
+   * `setupConfirmed && !setupEffectsExecuted(scenarioId)`；无 `effects` 的剧本不出现。
+   * 执行过一次（台账有 `executedAt`）即永久收起；增援段 / 回合开始 / 阶段切换都不再出现。
    */
   const setupDrawEntryVisible = computed(
     () =>
-      !finished.value &&
-      setupPlacementComplete.value &&
-      !containers.setupDrawsExecuted &&
-      containers.setupDrawGroups.length > 0,
+      setupConfirmed.value &&
+      !setupEffectsExecuted.value &&
+      setupEffects.value.length > 0 &&
+      game.session === null,
   )
 
-  /** 玩家点「抽取编队」：一次抽完并落盘（幂等；初设单位放置完成之前不允许） */
-  function executeSetupDraws(): boolean {
-    if (!setupPlacementComplete.value) {
-      return record({ ok: false, rule: 'ch10', reason: '请先完成初设单位放置，再执行编队抽取' })
+  /** 事务快照：单位本体（含模式 / DG）+ 抽签处置状态；任一效果失败即整体回滚 */
+  interface SetupDrawBoardSnapshot {
+    units: typeof workbench.units
+    airUnits: typeof workbench.airUnits
+    deadPile: typeof workbench.deadPile
+  }
+
+  function captureSetupDrawBoard(): SetupDrawBoardSnapshot {
+    return JSON.parse(
+      JSON.stringify({
+        units: workbench.units,
+        airUnits: workbench.airUnits,
+        deadPile: workbench.deadPile,
+      }),
+    ) as SetupDrawBoardSnapshot
+  }
+
+  function restoreSetupDrawBoard(snapshot: SetupDrawBoardSnapshot): void {
+    const restore = <T>(target: T[], saved: T[]): void => {
+      target.splice(0, target.length, ...saved)
     }
-    // 已抽且处置已全部落账 ⇒ 幂等返回；处置未完成（例：旧存档缺落点）时补做，不重抽
-    if (containers.setupDrawsExecuted && containers.setupDrawProgress.complete) return true
-    return runSetupDraws()
+    restore(workbench.units, snapshot.units)
+    restore(workbench.airUnits, snapshot.airUnits)
+    restore(workbench.deadPile, snapshot.deadPile)
   }
 
   /**
-   * ch10 / ch11：**初设强制效果**（`setup.effects[]`）的唯一调用方
+   * 玩家点「抽取编队」（两段式第二段，规格 §4.1）
+   *
+   * 一次且不可重入：本剧本台账已有 ⇒ 幂等；执行成功写台账（随存档持久化）后立刻开局；
+   * 失败恢复执行前快照、不写台账、按钮保留。抽签算法仍在 `containers.runSetupDrawsNow`。
+   */
+  function drawSetupEffectsNow(): boolean {
+    if (!setupConfirmed.value) {
+      /*
+       * 界面只在确认后露出按钮；程序化调用（测试 / 旧入口）先走确认段，
+       * 确认不通过（放置/换手/载货未完成）就如实返回 false。
+       */
+      if (!startGameNow() || !setupConfirmed.value) return false
+    }
+    if (setupEffectsExecuted.value) return true
+    if (setupEffects.value.length === 0) return startGameNow()
+    const board = captureSetupDrawBoard()
+    const drawState = containers.setupDrawCodec.capture()
+    const outcome = executeSetupEffectsNow()
+    if (outcome === null || !outcome.ok) {
+      restoreSetupDrawBoard(board)
+      containers.setupDrawCodec.restore(drawState)
+      return false
+    }
+    // 抽签与开局视为同一笔事务：开局失败 ⇒ 清台账并回滚盘面/处置，按钮保留
+    setupEffectLedger.value = buildSetupEffectLedger({
+      scenarioId: scenarioId.value,
+      executedAt: new Date().toISOString(),
+      result: outcome,
+    })
+    if (!startGameNow()) {
+      setupEffectLedger.value = null
+      restoreSetupDrawBoard(board)
+      containers.setupDrawCodec.restore(drawState)
+      return false
+    }
+    // 规格 §4.7：每条效果一条日志（含抽中项 / 落点 / 模式）
+    for (const item of outcome.executed) workbench.pushLog('success', item.detail, item.rule)
+    return true
+  }
+
+  /**
+   * ch10 / ch11：**初设强制效果**（`setup.effects[]`）的唯一执行器（不确认、不开局、不写台账）
    *
    * 注册表、时机与「先整体校验、失败不半执行」在 `engine/rules/setup-effects.ts`
    * （当前数据只声明 `formationDraw` 一种）；本处把状态层的抽签执行器注入上下文，
    * 再按效果回执写提示、如实报失败（不静默）。抽签算法仍在 `containers.runSetupDrawsNow`。
    */
-  function runSetupDraws(): boolean {
+  function executeSetupEffectsNow(): RunSetupEffectsResult | null {
     // 对局已开局 ⇒ 不再执行任何初设效果（读档沿用已保存的盘面与记录）
     if (game.session !== null) {
-      return record({
+      record({
         ok: false,
         rule: 'ch10 / ch11',
         reason: '对局已开局，不能重新执行初设编队抽取；读档沿用已保存的盘面与记录',
       })
+      return null
     }
-    const effects = setupEffectsOf(scenarioId.value)
-    if (effects.length === 0) return true // 本剧本无初设强制效果
+    const effects = setupEffects.value
+    if (effects.length === 0) return { ok: true, executed: [], issues: [] } // 本剧本无初设强制效果
     const outcome = runSetupEffects(effects, {
       formationDraw: () => {
         const draw = containers.runSetupDrawsNow()
@@ -1876,13 +1994,19 @@ export const useSetupStore = defineStore('setup', () => {
       for (const followUp of result.followUps ?? []) notes.value = [...notes.value, followUp]
     }
     if (!outcome.ok) {
-      return record({
+      record({
         ok: false,
         rule: outcome.issues[0]?.rule ?? 'ch10 / ch11',
         reason: outcome.issues.map((issue) => issue.reason).join('；'),
       })
     }
-    return true
+    return outcome
+  }
+
+  /** 内部 / 测试：只执行效果并返回是否成功（不确认、不开局、不写台账） */
+  function runSetupDraws(): boolean {
+    const outcome = executeSetupEffectsNow()
+    return outcome !== null && outcome.ok
   }
 
   /** 清空本流程的玩家输入（不改盘面） */
@@ -2881,8 +3005,9 @@ export const useSetupStore = defineStore('setup', () => {
   function setSpAssignment(dumpId: string, group: SetupPanzerGroup | null): void {
     // 3.4b 未生效（未勾选 / 已过 19 Aug / 无德军 SP）⇒ 不写台账（用户 2026-11-10 口径）
     if (!panzerGroupRulesOn()) return
-    // 初设已收束 ⇒ 初设内不再有归属补指定入口
-    if (finished.value) return
+    // 初设已收束（且已执行 effects/已开局）⇒ 初设内不再有归属补指定入口；
+    // 两段式等待抽签期间仍可改
+    if (finished.value && !setupDrawEntryVisible.value) return
     const next = { ...spAssignments.value }
     if (group === null) delete next[dumpId]
     else next[dumpId] = group
@@ -2892,8 +3017,9 @@ export const useSetupStore = defineStore('setup', () => {
 
   /** SP 归属划分（12.1d + Setup Note F + 3.4b）：核验后记完成 */
   function confirmSpOwnership(): boolean {
-    // 初设已收束 ⇒ 不再有初设内的归属补指定入口（3.4b）
-    if (finished.value) return false
+    // 初设已收束（且已执行 effects/已开局）⇒ 不再有初设内的归属补指定入口（3.4b）
+    // 两段式等待抽签期间（已确认、未开局）仍允许补指定：确认后才采纳的选项可能新增该义务。
+    if (finished.value && !setupDrawEntryVisible.value) return false
     const outcome = planSupplyOwnership({
       scenarioId: scenarioId.value,
       dumps: spDumps.value,
@@ -3057,6 +3183,8 @@ export const useSetupStore = defineStore('setup', () => {
       JSON.stringify({
         applied: applied.value,
         finished: finished.value,
+        setupConfirmed: setupConfirmed.value,
+        setupEffectLedger: setupEffectLedger.value,
         completed: completed.value,
         selfChoices: selfChoices.value,
         truckFullIds: truckFullIds.value,
@@ -3089,6 +3217,9 @@ export const useSetupStore = defineStore('setup', () => {
         resetInputs(false)
         applied.value = true
         finished.value = true
+        // 旧档没有台账 ⇒ 沿用已保存盘面、不重抽；确认标记随 finished 置真（会话在，按钮不会出现）
+        setupConfirmed.value = true
+        setupEffectLedger.value = null
         setupSideCursor.value = null
         setupSideConfirmed.value = {}
         notes.value = ['旧存档未记录初设历史，沿用已保存盘面，不重新抽签']
@@ -3102,6 +3233,9 @@ export const useSetupStore = defineStore('setup', () => {
       const loaded = SetupSnapshotSchema.parse(value)
       applied.value = loaded.applied
       finished.value = loaded.finished
+      // 旧档缺 setupConfirmed（default false）但已收束 ⇒ 视为已确认，避免残留「抽签」按钮
+      setupConfirmed.value = loaded.setupConfirmed || loaded.finished
+      setupEffectLedger.value = loaded.setupEffectLedger as SetupEffectLedger | null
       completed.value = loaded.completed
       selfChoices.value = loaded.selfChoices
       truckFullIds.value = loaded.truckFullIds
@@ -3218,7 +3352,13 @@ export const useSetupStore = defineStore('setup', () => {
     canFinishSetup,
     setupPlacementComplete,
     setupDrawEntryVisible,
-    executeSetupDraws,
+    // 两段式（规格 §4）：确认标记 + 持久台账 + 唯一执行入口
+    setupConfirmed,
+    setupEffects,
+    setupEffectsExecuted,
+    setupEffectLedger,
+    drawSetupEffectsNow,
+    runSetupDraws,
     startGameNow,
     restartGameNow,
     // B10：前置「剧本 + 共识」视图
@@ -3232,8 +3372,6 @@ export const useSetupStore = defineStore('setup', () => {
     runAutoSetup,
     // B2：一键预设初设（可选入口；手动路径不变）
     presetSelfSetupNow,
-    // 第六批 §6-A：初设时的**自动编队抽签**（ch10 / ch11 属开局前的剧本随机化）
-    runSetupDraws,
     setSelfChoice,
     placeSelfEntry,
     toggleTruckFull,

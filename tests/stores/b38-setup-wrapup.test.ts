@@ -77,7 +77,7 @@ describe('B38：开局被拒后初设仍可改（`startGameNow` 先开局、再�
     const store = readFileSync('src/stores/setup.ts', 'utf8')
     const at = store.indexOf('function startGameNow')
     expect(at).toBeGreaterThan(0)
-    const body = store.slice(at, at + 1600)
+    const body = store.slice(at, at + 2600)
     /*
      * 只在**代码**上比次序：注释里也提到 `finishSetup()`（说明"修前是先收束"）⇒
      * 锚点取带上下文的代码串，免得被说明文字误判（这个坑本轮踩过一次）。
@@ -108,9 +108,11 @@ describe('B38：初设框可拖 + 落满给「完成初设」（源码守卫）'
     expect(queue).toContain('v-show="!allPlaced"')
     expect(queue).toContain('@click="setup.startGameNow()"')
     expect(queue).toContain('完成初设')
-    // 初设收束后本框由视图的条件移除（"结束后自动关"）
+    // 初设收束后本框由视图的条件移除（"结束后自动关"；两段式：确认后仍留到抽签完成）
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
-    expect(game).toMatch(/<DecisionQueue\s+v-if="setup\.applied && !setup\.finished"/)
+    expect(game).toMatch(
+      /<DecisionQueue\s+v-if="setup\.applied && \(!setup\.finished \|\| setup\.setupDrawEntryVisible\)"/,
+    )
   })
 
   it('★ `SetupPanel` 里那份重复的"应满载数"已删（判据只有 store 一处）', () => {

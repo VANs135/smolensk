@@ -86,6 +86,27 @@ export function validBoardEntities(fields: Record<string, unknown>): boolean {
 export const SetupSnapshotSchema = z.object({
   applied: z.boolean(),
   finished: z.boolean(),
+  // 两段式：初设已确认（有未执行的 setup.effects 时只确认、不建会话）
+  setupConfirmed: z.boolean().default(false),
+  // 抽签台账（规格 §4.3）：与盘面同层持久化，`executedAt` 存在 ⇒ 不重放
+  setupEffectLedger: z
+    .object({
+      scenarioId: z.string().min(1),
+      executedAt: z.string().min(1),
+      entries: z.array(
+        z
+          .object({
+            effectId: z.string().min(1),
+            kind: z.string().min(1),
+            rule: z.string().min(1),
+            detail: z.string(),
+          })
+          .passthrough(),
+      ),
+    })
+    .passthrough()
+    .nullable()
+    .default(null),
   completed: z.record(z.boolean()),
   selfChoices: z.record(z.string()),
   truckFullIds: z.array(z.string()),

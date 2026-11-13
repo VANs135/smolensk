@@ -29,8 +29,14 @@ export function confirmSetupForStart(
   for (let guard = 0; setup.setupSideCursor !== null && guard < 2; guard++)
     expect(setup.confirmSideSetup()).toBe(true)
   expect(setup.setupSideCursor).toBeNull()
-  // ★ 用户 2026-11-10：抽取编队只有「抽取编队」按钮一个入口，开局不再隐式兜底 ⇒ 夹具按正向路径点一次
+  // 第一段：确认初设（只收束，不建会话）；无 effects 的剧本这里直接开局
+  if (!setup.finished) expect(setup.startGameNow(), setup.lastAction?.detail).toBe(true)
+  /*
+   * 两段式（规格 §4.1）：先「完成初设」只确认；本剧本未执行的 `setup.effects`
+   * 由随后的唯一入口「抽取编队」（`drawSetupEffectsNow`）执行并开局。
+   * ★ 负向用例用 `{ draws: false }` 把这一步留给用例自己。
+   */
   if (draws && setup.setupDrawEntryVisible) {
-    expect(setup.executeSetupDraws(), setup.lastAction?.detail).toBe(true)
+    expect(setup.drawSetupEffectsNow(), setup.lastAction?.detail).toBe(true)
   }
 }

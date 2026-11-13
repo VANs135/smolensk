@@ -244,10 +244,10 @@ function sideLabel(side: Side): string {
       </p>
     </div>
 
-    <!-- ── ②b 编队抽签（ch10 / ch11：摆完初设单位后由玩家抽取一次） ── -->
+    <!-- ── ②b 编队抽签（ch10 / ch11：确认初设后由玩家抽取一次） ── -->
     <RuleNote
       v-if="drawGroups.length > 0"
-      title="编队抽签（ch10 / ch11）：摆完初设单位后抽取"
+      title="编队抽签（ch10 / ch11）：确认初设后抽取"
       rule="ch10 / ch11"
       :open="true"
     >
@@ -261,7 +261,7 @@ function sideLabel(side: Side): string {
         </span>
       </div>
       <p v-else class="muted">
-        摆完初设单位后地图左上角「初设」栏出现「抽取编队」；抽完即永久收起，后续增援段与阶段切换不再抽取。
+        确认初设后地图左上角「初设」栏出现「抽取编队」；抽完即永久收起，后续增援段与阶段切换不再抽取。
       </p>
     </RuleNote>
 

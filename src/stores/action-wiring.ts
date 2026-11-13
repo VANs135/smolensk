@@ -108,6 +108,8 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'confirmSideSetup',
       'confirmSpOwnership',
       'designateTrucks',
+      // 两段式第二段：初设确认后执行 effects 并开局（唯一入口，非阶段内行动）
+      'drawSetupEffectsNow',
       'resetAll',
       'resetSetupDraws',
       'runAirSetup',

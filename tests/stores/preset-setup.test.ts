@@ -58,7 +58,7 @@ describe('一键预设初设（B2）', () => {
     ctx.setup.presetSelfSetupNow()
     expect(ctx.setup.finished).toBe(false)
     // ch10：初设单位摆完后执行一次编队抽取，才允许收束
-    expect(ctx.setup.executeSetupDraws()).toBe(true)
+    expect(ctx.setup.drawSetupEffectsNow()).toBe(true)
     expect(ctx.setup.canFinishSetup()).toBe(true)
     expect(ctx.setup.startGameNow()).toBe(true)
   })
