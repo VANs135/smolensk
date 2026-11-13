@@ -57,6 +57,7 @@ describe('13.6：到达账本换日作废', () => {
     const store = newStore()
     const first = findTurnWithTwoPlaceable(store)
     goToStep(store, 'rein.arrival')
+    store.applyArrivalRemovalsNow()
 
     const placeableOf = (): number[] =>
       store
@@ -80,6 +81,7 @@ describe('13.6：到达账本换日作废', () => {
     store.setTurn(first.turn)
     store.setPhase('reinforcement')
     goToStep(store, 'rein.arrival')
+    store.applyArrivalRemovalsNow()
     expect(store.placeArrivalNow(staleIndex)).toBe(true)
     expect(store.arrivalPlaced[staleIndex]).toBe(true)
 
@@ -87,6 +89,7 @@ describe('13.6：到达账本换日作废', () => {
     store.setTurn(next.turn)
     store.setPhase('reinforcement')
     goToStep(store, 'rein.arrival')
+    store.applyArrivalRemovalsNow()
     expect(store.arrivalPlaced).toEqual({})
     // 手改落点同样不带过来
     expect(store.arrivalPlacements.some((item) => item.detail.includes('裁判手改落点'))).toBe(false)
@@ -109,6 +112,7 @@ describe('13.6：到达账本换日作废', () => {
     const store = newStore()
     findTurnWithTwoPlaceable(store)
     goToStep(store, 'rein.arrival')
+    store.applyArrivalRemovalsNow()
     const index = store.arrivalPlan!.units.findIndex(
       (unit) => unit.kind !== 'sp' && unit.kind !== 'unclassified',
     )

@@ -206,6 +206,7 @@ describe('W6 B18：到达表执行（13.6 / 13.6b / 1.6a）', () => {
     const store = newStore()
     store.setTurn(2)
     store.setPhase('reinforcement')
+    store.applyArrivalRemovalsNow()
     const plan = store.arrivalPlan!
     const index = plan.units.findIndex((unit) => unit.name === '5 Inf Div')
     expect(index).toBeGreaterThanOrEqual(0)
@@ -232,6 +233,7 @@ describe('W6 B18：到达表执行（13.6 / 13.6b / 1.6a）', () => {
     const store = newStore()
     store.setTurn(2)
     store.setPhase('reinforcement')
+    store.applyArrivalRemovalsNow()
     const plan = store.arrivalPlan!
     const index = plan.units.findIndex((unit) => unit.kind === 'unit')
     expect(index).toBeGreaterThanOrEqual(0)
@@ -245,6 +247,7 @@ describe('W6 B18：到达表执行（13.6 / 13.6b / 1.6a）', () => {
     const store = newStore()
     store.setTurn(2)
     store.setPhase('reinforcement')
+    store.applyArrivalRemovalsNow()
     const plan = store.arrivalPlan!
     const index = plan.units.findIndex((unit) => unit.name === '5 Inf Div')
     expect(index).toBeGreaterThanOrEqual(0)
@@ -269,6 +272,7 @@ describe('W6 B18：到达表执行（13.6 / 13.6b / 1.6a）', () => {
     const store = newStore()
     store.setTurn(2)
     store.setPhase('reinforcement')
+    store.applyArrivalRemovalsNow()
     const plan = store.arrivalPlan!
     const index = plan.units.findIndex((unit) => unit.name === '5 Inf Div')
     expect(index).toBeGreaterThanOrEqual(0)
@@ -294,6 +298,7 @@ describe('W6 B18：到达表执行（13.6 / 13.6b / 1.6a）', () => {
     const store = newStore()
     store.setTurn(2)
     store.setPhase('reinforcement')
+    store.applyArrivalRemovalsNow()
     const plan = store.arrivalPlan!
     const index = plan.units.findIndex((unit) => unit.name === '5 Inf Div')
     expect(index).toBeGreaterThanOrEqual(0)
@@ -310,6 +315,7 @@ describe('W6 B18：到达表执行（13.6 / 13.6b / 1.6a）', () => {
     const store = newStore()
     store.setTurn(2)
     store.setPhase('reinforcement')
+    store.applyArrivalRemovalsNow()
     const dateBefore = store.date
     const plan = store.arrivalPlan!
     const index = plan.units.findIndex((unit) => unit.name === '5 Inf Div')

@@ -161,8 +161,12 @@ const replCheckVisible = computed(
 )
 
 function runReplCheck(): void {
-  if (specialReplRefusal.value === null) containers.drawSpecialRepl(workbench.activeSide)
-  if (!workbench.variableReplRolled) workbench.rollVariableReplNow()
+  // 先确保 1.6b 已掷（它带着 1.6c 那颗骰），再用**同一颗**骰结算特殊补员——
+  // 否则同一回合会掷两次 1.6c（面板先显示计划结果，点按钮又按另一颗入账）。
+  if (!workbench.variableReplRolled && !workbench.rollVariableReplNow()) return
+  if (specialReplRefusal.value === null) {
+    containers.drawSpecialRepl(workbench.activeSide, workbench.variableReplSpecialDie ?? undefined)
+  }
 }
 
 /** 1.6c 骰面只在**本回合本方已掷**时展示（`specialReplLast` 跨回合不残留） */
@@ -401,6 +405,8 @@ function arrivalErrorText(reason: string): string {
   if (code.startsWith('arrivalHex')) return '这一格现在不能落：换一处高亮格试试'
   if (code === 'arrivalWithdrawNoLedger') return '这一枚缺少投放记录，暂时不能回手'
   if (code === 'arrivalRemovalsFirst') return '先执行 1.6a 强制移除，再放置到达算子'
+  if (code === 'arrivalSpGroupRequired')
+    return '运输点带来的 SP 必须先选装甲集群（Guderian / Hoth）再投放（3.4b）'
   if (code === 'arrivalHandNotEmpty') return '手牌还没放完：要结束本段请先确认放弃上场'
   return '这一枚现在放不下，换一条或换一处入场格试试'
 }
@@ -1389,7 +1395,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
 
     <p v-if="genericReinforcementError !== null" class="warn">
       <BaseTag kind="danger">{{ genericReinforcementError.rule }}</BaseTag>
-      {{ genericReinforcementError.reason }}
+      {{ arrivalErrorText(genericReinforcementError.reason) }}
     </p>
   </BasePanel>
 </template>

@@ -20116,6 +20116,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
   /** 最近一次可变增援结论（1.6b / 1.6c / 3.3c / 3.6） */
   const lastVariableRepl = ref<VariableReinforcementPlan | null>(null)
+  /**
+   * 1.6c：本次可变增援实际掷出的特殊补员骰
+   *
+   * 特殊补员与 1.6b 同属一批骰（自动掷）。手动「掷骰检定」必须复用同一颗，
+   * 否则同一回合会掷两次 1.6c：面板先显示计划里的结果，点按钮又掷出另一颗并按其入账。
+   */
+  const variableReplSpecialDie = ref<number | null>(null)
   /** 裁定 2：1.6b 补给表 SP 已入图外盒的记账（换掷先撤回上一笔，避免重掷叠加） */
   const offMapRollDeposit = ref<{ turn: number; side: Side; sp: number; t: number } | null>(null)
 
@@ -22914,6 +22921,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     freeRailEdgeHex.value = null
     clearArrivalSpGroups()
     frontalReservesSpPending.value = 0
+    variableReplSpecialDie.value = null
     const inputs = variableReplInputs.value
     // ⑭ 接线：下面两个闭包只回报数字（不改它们）⇒ 先记下掷骰前的骰源，末尾按实际掷骰顺序复算骰面
     const rngBefore = rng.value
@@ -22932,6 +22940,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const supplyDice = inputs.autoRoll ? draw2d6() : inputs.supplyDice
     const replDice = inputs.autoRoll ? draw2d6() : inputs.replDice
     const specialDie = inputs.autoRoll ? draw1d6() : inputs.specialDie
+    variableReplSpecialDie.value = specialDie
     const variableExitDie = inputs.autoRoll ? draw1d6() : inputs.variableExitDie
     const randomEventDice = inputs.autoRoll ? draw2d6() : inputs.randomEventDice
     // ⑭ 接线：按实际掷骰顺序复算骰面（补给 2d6 → 补员 2d6 → 特殊 1d6 → 可变撤离 1d6 → 随机事件 2d6）
@@ -23315,6 +23324,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       index,
       arrived.map((unit) => unit.instanceId),
     )
+    reinforcementError.value = null
     return true
   }
 
@@ -23326,6 +23336,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function placeArrivalNow(index: number, recordId?: string, hexText?: string): boolean {
     if (!requireAction('rein.arrival', '到达投放')) return false
+    // 1.6a：强制移除未执行前不得放置（与图外盒投放、结束本段同一道闸）
+    if (arrivalRemovalsPending.value) {
+      reinforcementError.value = { rule: '1.6a', reason: 'arrivalRemovalsFirst' }
+      return false
+    }
     const plan = arrivalPlan.value
     if (plan === null) return false
     const demand = plan.units[index]
@@ -23695,6 +23710,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       },
     })
     markArrivalPlaced(index, createdIds)
+    reinforcementError.value = null
     return true
   }
 
@@ -23993,6 +24009,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     // 记"本到达计划已执行过 1.6a"：未匹配的条目已在上面的警告里转手工，不再反复重跑
     arrivalRemovalsKey.value = arrivalPlanKey.value
+    reinforcementError.value = null
   }
 
   /**
@@ -28666,6 +28683,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     nationalityOfUnit,
     settleAbsorbObligationsNow,
     lastVariableRepl,
+    variableReplSpecialDie,
     offMapRollDeposit,
     lastRebuild,
     lastConsolidation,

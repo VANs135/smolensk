@@ -286,6 +286,8 @@ describe('W7 C12：死亡堆与 1.6c 特殊补员抽取（与盘面联动）', (
       guard += 1
     }
     expect(containers.date >= end, '应已推到 19 August 及以后').toBe(true)
+    // 1.6c 的日期闸以操作台的回合/日期为准（无会话时二者各自保存）⇒ 同步一次
+    workbench.setTurn(containers.turn)
 
     // 推进回合会换段 ⇒ 重新进入那一环（环节闸仍应放行，拒绝的理由必须是**日期**）
     enterSpecialReplSegment('soviet')

@@ -98,6 +98,7 @@ describe('13.6：投放真的落下两枚（并记账一次）', () => {
     store.setTurn(turn)
     store.setPhase('reinforcement')
     goToActionStep(store, 'rein.arrival')
+    store.applyArrivalRemovalsNow()
     const before = store.units.length
     expect(store.placeArrivalNow(index)).toBe(true)
     expect(store.units.length).toBe(before + 2)
@@ -112,6 +113,7 @@ describe('13.6：投放真的落下两枚（并记账一次）', () => {
     store.setTurn(turn)
     store.setPhase('reinforcement')
     goToActionStep(store, 'rein.arrival')
+    store.applyArrivalRemovalsNow()
     // 指定其中一枚（9th Corps HQ），本条只应落一枚
     const before = store.units.length
     expect(store.placeArrivalNow(index, 'ax-hq-ge-hq-9th-corps')).toBe(true)
@@ -130,6 +132,7 @@ describe('13.6：飞机到达（修前共用陆战库解析 ⇒ 一律投放失�
     store.setTurn(turn)
     store.setPhase('reinforcement')
     goToActionStep(store, 'rein.arrival')
+    store.applyArrivalRemovalsNow()
 
     const groundBefore = store.units.length
     const airBefore = store.airUnits.length
@@ -159,6 +162,7 @@ describe('13.6：飞机到达（修前共用陆战库解析 ⇒ 一律投放失�
     store.setTurn(turn)
     store.setPhase('reinforcement')
     goToActionStep(store, 'rein.arrival')
+    store.applyArrivalRemovalsNow()
 
     const airBefore = store.airUnits.length
     expect(store.placeArrivalNow(index)).toBe(false)
@@ -199,6 +203,7 @@ describe('13.6 / §5-A：编成条目逐枚投放', () => {
     store.setTurn(turn)
     store.setPhase('reinforcement')
     goToActionStep(store, 'rein.arrival')
+    store.applyArrivalRemovalsNow()
     const before = store.units.length
     expect(store.placeArrivalNow(index)).toBe(true)
     expect(store.units.length).toBe(before + 7)
@@ -221,6 +226,7 @@ describe('13.6 / §5-A：编成条目逐枚投放', () => {
       store.setTurn(turn)
       store.setPhase('reinforcement')
       goToActionStep(store, 'rein.arrival')
+      store.applyArrivalRemovalsNow()
       // 卡面原文是整师的编成（同一条 raw），本条由 name 指明自己是哪一枚
       expect(store.arrivalPlan!.units[index]!.raw).toContain('1 Cav Div (')
       const before = store.units.length
@@ -257,6 +263,7 @@ describe('13.6 / §5-A：编成条目逐枚投放', () => {
       store.setTurn(turn)
       store.setPhase('reinforcement')
       goToActionStep(store, 'rein.arrival')
+      store.applyArrivalRemovalsNow()
       const before = store.units.length
       expect(store.placeArrivalNow(index)).toBe(true)
       expect(store.units.length).toBe(before + expected.length)

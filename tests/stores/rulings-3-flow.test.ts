@@ -171,6 +171,7 @@ describe('裁定 3：增援放置的铁路运输按钮复用同一流程', () =>
     const hit = seekRailArrival(store)
     expect(hit, '真实到达表里应存在含铁路入场格的轴方增援').not.toBeNull()
     const { index, hex } = hit!
+    store.applyArrivalRemovalsNow()
 
     expect(store.arrivalRailEligible(index)).toBe(true)
     expect(store.beginArrivalRailPickNow(index)).toBe(true)

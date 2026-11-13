@@ -40,6 +40,7 @@ function newStore() {
   // turn 1 的当日到达卡没有条目；turn 2 的轴方条目是 `Entry …`（入场格 1.26 / 1.12、1.19）
   workbench.setTurn(2)
   workbench.setPhase('reinforcement')
+  workbench.applyArrivalRemovalsNow()
   return workbench
 }
 
@@ -187,6 +188,7 @@ describe('13.6b / 4.8c：投放处不得落在**敌单位格**（可进 EZOC，�
       radius = placement.radiusHexes
     }
     expect(index).toBeGreaterThanOrEqual(0)
+    workbench.applyArrivalRemovalsNow()
 
     // 半径内每一格都摆一个**敌方**战斗单位 ⇒ 该条目此刻没有合法落点
     for (const hex of hexesWithin(anchor, radius, { onMapOnly: true })) {

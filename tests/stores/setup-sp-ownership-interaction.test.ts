@@ -204,6 +204,7 @@ describe('3.4b：随运输队入场的 SP（13.6c）', () => {
     board.setActiveSide('axis')
     board.setTurn(2)
     board.setPhase('reinforcement')
+    board.applyArrivalRemovalsNow()
     const plan = board.arrivalPlan
     expect(plan).not.toBeNull()
     const index = plan!.units.findIndex(

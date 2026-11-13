@@ -842,8 +842,8 @@ export const useContainersStore = defineStore('containers', () => {
   function specialReplRefusal(side: Side): string | null {
     if (!workbench.actionAllowedNow('rein.specialRepl')) return '在增援的特殊补员环节掷表'
     if (side !== workbench.activeSide) return '只能掷本方的特殊补员表'
-    if (!isSpecialReplAvailable(date.value)) return '8 月 19 日起停止特殊补员'
-    if (workbench.hasSpecialReplDraw(side, turn.value)) return '本回合已掷表'
+    if (!isSpecialReplAvailable(workbench.date)) return '8 月 19 日起停止特殊补员'
+    if (workbench.hasSpecialReplDraw(side, workbench.turn)) return '本回合已掷表'
     return null
   }
 
@@ -853,13 +853,13 @@ export const useContainersStore = defineStore('containers', () => {
    * 掷 1 骰 → 查特殊补员表 → 固定项「师随机重建」（在死亡堆的合格池里**用 rng 抽定**）
    * → 第二项（Supply Cache / 特种营）；无可用 ⇒ 作废。
    */
-  function drawSpecialRepl(side: Side): boolean {
+  function drawSpecialRepl(side: Side, fixedDie?: number): boolean {
     /*
      * ★ 专规 1.6c 的**时机**（用户 2026-10-25「注意该操作时机」）：
      *   原文「Each turn **before 19 August**, the players also get to roll a die on their
      *   **Special Repl Table**…」——它发在**本方 B 增援段**的「特殊补员抽取」这一环
      *   （`ACTION_GATES['rein.specialRepl']` 的 `where` 只有
-     *   `{ phase: 'reinforcement', segment: 'reinforcement.specialRepl' }`，且**双方都有**：
+     *   `{ phase: 'reinforcement', segment: 'reinforcement.replRoll' }`，且**双方都有**：
      *   「the players」＋ 13.6b 的掷表也在本方增援阶段）。
      *   「19 August 起停止」是**第二道**闸门，由引擎按日期判（`isSpecialReplAvailable` /
      *   `planSpecialReplDraw` 的 `specialReplStoppedFrom`）——两道闸门各管一件事，不互相替代。
@@ -877,14 +877,15 @@ export const useContainersStore = defineStore('containers', () => {
       workbench.pushLog('warning', refusal, '1.6c')
       return false
     }
-    // 先用本地骰源拟定结果。有合法落点后才提交骰源，避免被拒时白耗骰子。
-    const roll = roll1d6(workbench.rng)
-    const die = roll.value.total
+    // 1.6c 的骰已在 1.6b 那一批里掷过（自动掷）⇒ 给了 `fixedDie` 就复用它，不得另掷一颗。
+    const roll = fixedDie === undefined ? roll1d6(workbench.rng) : null
+    const die = fixedDie ?? roll!.value.total
+    const afterDie = roll === null ? workbench.rng : roll.rng
     const dead = deadPileUnits.value[side]
     // 苏方固定项「随机重建一个师」：候选池由引擎按 1.6c 判定，抽哪一个用 rng 决定
     const candidates = planSpecialReplDraw({
       side,
-      date: date.value,
+      date: workbench.date,
       die,
       deadPile: dead,
       alarmUnitIds: effectiveAlarmUnitIds.value,
@@ -908,11 +909,11 @@ export const useContainersStore = defineStore('containers', () => {
     }
     const divisionPool = candidates.data.pools.divisionCandidates
     const picked =
-      side === 'soviet' && divisionPool.length > 0 ? pickIndex(roll.rng, divisionPool.length) : null
+      side === 'soviet' && divisionPool.length > 0 ? pickIndex(afterDie, divisionPool.length) : null
     const chosen = picked === null ? null : (divisionPool[picked.value] ?? null)
     const planned = planSpecialReplDraw({
       side,
-      date: date.value,
+      date: workbench.date,
       die,
       deadPile: dead,
       alarmUnitIds: effectiveAlarmUnitIds.value,
@@ -958,16 +959,16 @@ export const useContainersStore = defineStore('containers', () => {
       specialReplLast.value = { side, die, ok: false, detail: '返场单位登记失败' }
       return false
     }
-    workbench.rng = roll.rng
-    workbench.drawCount += 1
-    if (picked !== null && picked.rng !== roll.rng) {
+    workbench.rng = afterDie
+    if (roll !== null) workbench.drawCount += 1
+    if (picked !== null && picked.rng !== afterDie) {
       workbench.rng = picked.rng
       workbench.drawCount += 1
     }
     if (planned.data.second.kind === 'supplyCache') {
       workbench.addSupplyCacheNow(side)
     }
-    workbench.markSpecialReplDraw(side, turn.value)
+    workbench.markSpecialReplDraw(side, workbench.turn)
     // 判定阶段只出回执：返场单位已进"统一手牌"，落点在放置阶段点格给出
     const detail =
       returns.length === 0
