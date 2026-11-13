@@ -57,6 +57,7 @@ import {
   type ScenarioDrawGroup,
 } from '@/engine/rules'
 import type { BreakdownCreateRequest } from '@/engine/rules'
+import type { SetupEffectPlacement } from '@/engine/rules/setup-effects'
 
 import { useGameSessionStore, type BoardCodec } from './session'
 import { movementPhaseOf, useWorkbenchStore } from './workbench'
@@ -1503,6 +1504,8 @@ export const useContainersStore = defineStore('containers', () => {
     pendingShift: readonly string[]
     /** 无西向 road 边 ⇒ 留在原格的西移编队（不移动、不阻塞初设） */
     roadGaps: readonly { formationId: string; fromHex: string; missing: 'SW|NW' }[]
+    /** 抽中的编队逐条去向（§4.6 只读清单；`toHex === null` ⇒ 本组不改位置） */
+    placements: readonly SetupEffectPlacement[]
     detail: string
   } {
     if (session.session !== null)
@@ -1512,6 +1515,7 @@ export const useContainersStore = defineStore('containers', () => {
         appliedGroups: 0,
         pendingShift: [],
         roadGaps: [],
+        placements: [],
         detail: '对局已开局，不能重新执行初设编队抽取；读档沿用已保存的盘面与记录',
       }
     const groups = setupDrawGroups.value
@@ -1522,6 +1526,7 @@ export const useContainersStore = defineStore('containers', () => {
         appliedGroups: 0,
         pendingShift: [],
         roadGaps: [],
+        placements: [],
         detail: `剧本 ${scenarioId.value}（初设源 ${setupSourceOf(scenarioId.value).source}）的剧本页没有编队抽签条目 ⇒ 该步不适用`,
       }
     }
@@ -1533,6 +1538,7 @@ export const useContainersStore = defineStore('containers', () => {
     const placedShift: string[] = []
     /** 无西向 road 边、留在原格的西移师 */
     const roadGaps: { formationId: string; fromHex: string; missing: 'SW|NW' }[] = []
+    const placements: SetupEffectPlacement[] = []
     const failures: string[] = []
 
     for (const group of groups) {
@@ -1560,10 +1566,18 @@ export const useContainersStore = defineStore('containers', () => {
             ?.destinations.some(
               (item) => item.formationId === formationId && item.hexText === chosen,
             )
-          if (chosen !== undefined && placed) continue
+          if (chosen !== undefined && placed) {
+            placements.push({ formationId, toHex: chosen, placed: true })
+            continue
+          }
           // 玩家已选择但尚未提交的落点应沿用，不能重新套用自动落点。
           if (chosen !== undefined) {
-            if (!applyShiftWestOneNow(formationId)) pendingShift.push(formationId)
+            if (applyShiftWestOneNow(formationId))
+              placements.push({ formationId, toHex: chosen, placed: true })
+            else {
+              pendingShift.push(formationId)
+              placements.push({ formationId, toHex: chosen, placed: false })
+            }
             continue
           }
           const derived = deriveFactsFor(formationId, 'shiftWest')
@@ -1572,6 +1586,7 @@ export const useContainersStore = defineStore('containers', () => {
           const steps = group.shiftHexes ?? 0
           if (anchorText === undefined || anchor === undefined || steps <= 0) {
             pendingShift.push(formationId)
+            placements.push({ formationId, toHex: null, placed: false })
             continue
           }
           const target = shiftWestDestination(anchor, steps, hasRoadOrRailEdge)
@@ -1588,6 +1603,8 @@ export const useContainersStore = defineStore('containers', () => {
             )
             setDrawShiftHexNow(formationId, anchorText)
             noteShiftWestDestinations([{ formationId, hexText: anchorText }])
+            // 留在原格也属「已落位」（不移动，但该师已在所列位置）
+            placements.push({ formationId, toHex: anchorText, placed: true })
             continue
           }
           if (
@@ -1595,16 +1612,30 @@ export const useContainersStore = defineStore('containers', () => {
             !applyShiftWestOneNow(formationId)
           ) {
             pendingShift.push(formationId)
+            placements.push({
+              formationId,
+              toHex: `${target.hex.col}.${target.hex.row}`,
+              placed: false,
+            })
             continue
           }
+          placements.push({
+            formationId,
+            toHex: `${target.hex.col}.${target.hex.row}`,
+            placed: true,
+          })
           placedShift.push(
             `${formationId} ${anchorText} → ${target.hex.col}.${target.hex.row}（沿道路 ${target.path.map((hex) => `${hex.col}.${hex.row}`).join('–')}）`,
           )
         }
         continue
       }
-      if (progress.applied || applyDraw(group)) appliedGroups += 1
+      const appliedNow = progress.applied || applyDraw(group)
+      if (appliedNow) appliedGroups += 1
       else failures.push(`${group.label}：${lastAction.value?.detail ?? '落盘被拒'}`)
+      // 其它组不换位置（改模式 / 进出死亡堆）：落点记 `null`，落位＝处置已落盘
+      for (const formationId of drawn)
+        placements.push({ formationId, toHex: null, placed: appliedNow })
     }
 
     const detail =
@@ -1631,6 +1662,7 @@ export const useContainersStore = defineStore('containers', () => {
       appliedGroups,
       pendingShift,
       roadGaps,
+      placements,
       detail,
     }
   }

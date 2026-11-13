@@ -51,6 +51,7 @@ import {
   setupGapText,
   type RunSetupEffectsResult,
   type SetupEffectLedger,
+  type SetupEffectPlacement,
   type SetupGap,
 } from '@/engine/rules/setup-effects'
 import { selectMovementTerrain } from '@/engine/rules/terrain'
@@ -1501,6 +1502,16 @@ export const useSetupStore = defineStore('setup', () => {
     setupEffectsAreExecuted(setupEffectLedger.value, scenarioId.value),
   )
 
+  /**
+   * §4.6 抽签结果清单（只读）
+   *
+   * 唯一数据源＝台账里的 `placements`：抽中谁、目标落点、是否已落位。
+   * 未执行抽签（或旧档没有逐条数据）⇒ 空数组 ⇒ 面板该区不出现。
+   */
+  const setupDrawRows = computed<readonly SetupEffectPlacement[]>(() =>
+    (setupEffectLedger.value?.entries ?? []).flatMap((entry) => entry.placements ?? []),
+  )
+
   const omittablePlacements = computed(() =>
     pendingPlacement.value.filter((item) => item.kind === 'self' || item.kind === 'air'),
   )
@@ -1973,6 +1984,7 @@ export const useSetupStore = defineStore('setup', () => {
           ok: draw.ok,
           detail: draw.detail,
           ...(draw.ok ? {} : { reason: draw.detail }),
+          placements: draw.placements,
           followUps:
             draw.pendingShift.length === 0
               ? []
@@ -3357,6 +3369,8 @@ export const useSetupStore = defineStore('setup', () => {
     setupEffects,
     setupEffectsExecuted,
     setupEffectLedger,
+    // §4.6：抽签结果清单（只读，数据源＝台账 placements）
+    setupDrawRows,
     drawSetupEffectsNow,
     runSetupDraws,
     startGameNow,

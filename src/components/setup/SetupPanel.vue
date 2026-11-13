@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
+import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/base'
 import { useUiMode } from '@/components/ui-mode'
 import { scenarios } from '@/data'
 import type { Side } from '@/data'
@@ -264,6 +264,23 @@ function sideLabel(side: Side): string {
         确认初设后地图左上角「初设」栏出现「抽取编队」；抽完即永久收起，后续增援段与阶段切换不再抽取。
       </p>
     </RuleNote>
+
+    <!-- ── ②c 抽签结果（§4.6）：只读清单，数据源＝台账 placements；未抽签时整区不出现 ── -->
+    <section v-if="setup.setupDrawRows.length > 0" class="box" data-testid="setup-draw-result">
+      <header class="box__head">
+        <span class="box__title">抽签结果</span>
+        <RuleTip rule="ch10 / ch11" />
+      </header>
+      <ul class="box__list">
+        <li v-for="row in setup.setupDrawRows" :key="row.formationId">
+          <span class="box__label">{{ row.formationId }}</span>
+          <span class="num">→ {{ row.toHex ?? '—' }}</span>
+          <BaseTag :kind="row.placed ? 'success' : 'warning'">
+            {{ row.placed ? '已落位' : '待落位' }}
+          </BaseTag>
+        </li>
+      </ul>
+    </section>
 
     <!-- ── ③ 初设单位 box（三分类） ── -->
     <section v-for="category in CATEGORIES" :key="category.key" class="box">

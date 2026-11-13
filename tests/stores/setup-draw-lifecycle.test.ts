@@ -264,6 +264,7 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
       appliedGroups: 0,
       pendingShift: [],
       roadGaps: [],
+      placements: [],
       detail: '抽取池不足，未完成抽取',
     })
     confirmSetupForStart(setup, { draws: false })
@@ -284,6 +285,7 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
       appliedGroups: 0,
       pendingShift: [],
       roadGaps: [],
+      placements: [],
       detail: '初设抽取失败',
     })
     expect(setup.enterSetup('1')).toBe(true)
@@ -323,6 +325,50 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     expect(setup.setupDrawEntryVisible).toBe(false)
     expect(setup.drawSetupEffectsNow()).toBe(true) // 幂等：不重抽
     expect(JSON.stringify(containers.drawResults)).toBe(draws)
+  })
+
+  it('§4.6 抽签结果清单：条目与台账 placements 一致，抽中的师各一行', () => {
+    const { setup, containers } = boot()
+    const fromLedger = (setup.setupEffectLedger?.entries ?? []).flatMap(
+      (entry) => entry.placements ?? [],
+    )
+    expect(setup.setupDrawRows).toEqual(fromLedger)
+    const drawn = containers.scenarioDrawBox!.groups.flatMap((group) => containers.drawnOf(group))
+    expect(setup.setupDrawRows.map((row) => row.formationId)).toEqual([...drawn])
+    expect(new Set(setup.setupDrawRows.map((row) => row.formationId)).size).toBe(drawn.length)
+  })
+
+  it('§4.6 已落位的行：西移组落点＝盘上单位所在格；不改位置的组目标为空', () => {
+    const { setup, containers, board } = boot('1')
+    const shifted = setup.setupDrawRows.filter((row) => row.toHex !== null)
+    expect(shifted.length).toBeGreaterThan(0)
+    for (const row of shifted) {
+      expect(row.placed).toBe(true)
+      const item = containers.pendingShiftWestPlacements.find(
+        (entry) => entry.formationId === row.formationId,
+      )!
+      expect(row.toHex).toBe(item.hexText)
+      for (const instanceId of item.unitIds) {
+        const hex = board.units.find((unit) => unit.instanceId === instanceId)!.hex
+        expect(`${hex.col}.${hex.row}`).toBe(row.toHex)
+      }
+    }
+    // 改模式 / 进出死亡堆：不换位置（`toHex === null`），处置已落盘
+    const inPlace = setup.setupDrawRows.filter((row) => row.toHex === null)
+    expect(inPlace.length).toBeGreaterThan(0)
+    expect(inPlace.every((row) => row.placed)).toBe(true)
+  })
+
+  it('§4.6 未执行抽签时清单为空（面板整区不出现）', () => {
+    setActivePinia(createPinia())
+    useHotseatStore().setMode('solo')
+    const setup = useSetupStore()
+    expect(setup.selectScenario('1')).toBe(true)
+    confirmSetupForStart(setup, { draws: false })
+    expect(setup.setupDrawEntryVisible).toBe(true)
+    expect(setup.setupDrawRows).toEqual([])
+    expect(setup.drawSetupEffectsNow()).toBe(true)
+    expect(setup.setupDrawRows.length).toBeGreaterThan(0)
   })
 
   it('清盘重建同一剧本时重做抽取处置；换无抽取剧本不会留下旧名单和落点', () => {

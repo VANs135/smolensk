@@ -29,6 +29,22 @@ export interface SetupEffectOutcome {
   reason?: string
   /** 须玩家后续处理的提示（例：旧存档西移缺落点） */
   followUps?: readonly string[]
+  /** 抽中的编队逐条去向（§4.6 只读清单；由状态层给，缺失＝该效果没有逐条清单） */
+  placements?: readonly SetupEffectPlacement[]
+}
+
+/**
+ * 抽中的编队的一条去向（§4.6「抽签结果」只读区）
+ *
+ * 组件只渲染这份数据、不自己算：`toHex === null` ⇒ 本组不改位置（改模式 / 进出死亡堆），
+ * 面板显示「—」；`placed` 由状态层按盘面事实给（西移组＝已摆位，其它组＝处置已落盘）。
+ */
+export interface SetupEffectPlacement {
+  formationId: string
+  /** 目标落点 `列.行`；`null` = 本组不改位置 */
+  toHex: string | null
+  /** 是否已落位 */
+  placed: boolean
 }
 
 export interface SetupEffectResult extends SetupEffectOutcome {
@@ -184,6 +200,7 @@ function applyFormationDraw(effect: SetupEffectView, ctx: SetupEffectContext): S
     detail: outcome.detail,
     ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
     ...(outcome.followUps === undefined ? {} : { followUps: outcome.followUps }),
+    ...(outcome.placements === undefined ? {} : { placements: outcome.placements }),
   }
 }
 
@@ -289,6 +306,12 @@ export interface SetupEffectLedgerEntry {
   kind: SetupEffectKind
   rule: string
   detail: string
+  /**
+   * 抽中的编队逐条去向（§4.6 只读清单的唯一数据源）
+   *
+   * 随台账一起持久化：读档后清单与「是否已落位」照旧可看。旧档没有这个字段 ⇒ 清单区不出现。
+   */
+  placements?: readonly SetupEffectPlacement[]
 }
 
 /**
@@ -327,6 +350,7 @@ export function buildSetupEffectLedger(input: {
       kind: item.kind,
       rule: item.rule,
       detail: item.detail,
+      ...(item.placements === undefined ? {} : { placements: item.placements }),
     })),
   }
 }
