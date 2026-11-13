@@ -61,7 +61,10 @@
 - ~~`rein.specialRepl`：功能未实现~~ ⇒ ★ 2026-10-25 **已接线**（`containers.drawSpecialRepl()`，过环节闸＋日期闸）；本表其余项仍是缺口。
 - `exclusive.panzerObligation` 属"段末义务"判定（3.4b），不是玩家手里的按钮。
 
-## 2. 缺口 A：UI 未按环节收敛（已受闸门，但界面常显）
+## 2. 缺口 A：UI 未按环节收敛（已作废，2026-11-13 复核）
+
+> **本节的「35 处 / 0 处按环节禁用」整节作废。** 该统计是 2026-10-25 对 `@click` 的静态扫描，行号与结论均已失效：现在闸门由 `ACTION_GATES` 与 `actionAllowedNow` / `requireAction` 在动作层统一拦截，入口按环节收敛；本节点名的 `spendSupplyCacheNow`、旧 `BarragePanel` 申报入口等已删除或重构。保留此节只为历史留痕，**不要按下面的行号与 ✗ 清单排期**。
+
 
 统计口径：`@click` 里直接或经组件内包装函数调用到**已受闸门**的动作键。
 
