@@ -39,30 +39,54 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
     stepTextOf,
     triggerSpecialCombatAfterStep,
   } = ports
-  let rollbackFloor = -1,
-    rollbackReason = '',
-    applyingStep = false
+  const rollbackFloor = ref(-1),
+    rollbackReason = ref('')
+  let applyingStep = false
   function markIrreversible(reason: string): void {
     if (moveInteraction.value === null) return
-    rollbackFloor = Math.max(
-      rollbackFloor,
+    rollbackFloor.value = Math.max(
+      rollbackFloor.value,
       moveInteraction.value.steps.length + (applyingStep ? 1 : 0),
     )
-    rollbackReason = reason
+    rollbackReason.value = reason
   }
+  /**
+   * K5：最后一步为什么不能撤（null＝可撤或没有可撤的步）
+   *
+   * 判据与 `refuseRollback` 同一处：一步可撤销 ⇔ 它只改动了 `before` 快照能还原的运行态。
+   * 快照之外的账一旦落盘（突袭战斗 9.5/9.2、9.14 特战、1.4b 入盒……），边界就被推到该步之后；
+   * 此处只把同一判据投影成按钮态，避免 UI 留一个必被拒的「撤销一步」。
+   */
+  const undoBlockedReason = computed<string | null>(() => {
+    const interaction = moveInteraction.value
+    if (interaction === null || interaction.steps.length === 0) return null
+    const locked = interaction.unitIds.some(
+      (id) => moveContext.value.units.find((unit) => unit.id === id)?.mpLockedThisPhase,
+    )
+    if (locked) return '单位已承诺抵消ZOC，本阶段不能还原其移动'
+    if (rollbackFloor.value >= 0 && interaction.steps.length <= rollbackFloor.value)
+      return `移动已触发${rollbackReason.value}，只能撤销此后尚未产生额外结算的步骤`
+    return null
+  })
+  const canUndoStep = computed<boolean>(
+    () =>
+      ports.mayMutate() &&
+      moveInteraction.value !== null &&
+      moveInteraction.value.steps.length > 0 &&
+      undoBlockedReason.value === null,
+  )
   function refuseRollback(all = false): boolean {
     if (!ports.mayMutate()) return true
     const interaction = moveInteraction.value
     if (interaction === null) return true
-    const locked = interaction.unitIds.some(
-      (id) => moveContext.value.units.find((unit) => unit.id === id)?.mpLockedThisPhase,
-    )
-    if (locked || (rollbackFloor >= 0 && (all || interaction.steps.length <= rollbackFloor))) {
+    const reason = undoBlockedReason.value
+    const locked = reason?.startsWith('单位已承诺') === true
+    // 撤销一步：有挡因即拒；放弃整次移动：只要已越过任何不可逆边界（含无步可锚的 1.4b）即拒
+    const hit = all ? locked || rollbackFloor.value >= 0 : reason !== null
+    if (hit) {
       moveBlocked.value = {
         rule: locked ? '4.5b' : '6.1',
-        reason: locked
-          ? '单位已承诺抵消ZOC，本阶段不能还原其移动'
-          : `移动已触发${rollbackReason}，只能撤销此后尚未产生额外结算的步骤`,
+        reason: reason ?? `移动已触发${rollbackReason.value}，不能还原整次移动`,
       }
       pushLog('warning', moveBlocked.value.reason, moveBlocked.value.rule)
       return true
@@ -85,8 +109,8 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
     }
     moveInteraction.value = outcome.data
     moveBlocked.value = null
-    rollbackFloor = -1
-    rollbackReason = ''
+    rollbackFloor.value = -1
+    rollbackReason.value = ''
     return true
   }
   function commitStep(to: HexRef, path: readonly HexRef[]): boolean {
@@ -200,6 +224,9 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
     undoLastStep,
     cancelWholeMove,
     markIrreversible,
+    /** K5：撤销一步的可用性（UI 只读这一处；判据与 `refuseRollback` 同源） */
+    canUndoStep,
+    undoBlockedReason,
     mayMutate: ports.mayMutate,
   }
 }

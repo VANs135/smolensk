@@ -6608,6 +6608,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (draft.nextInteraction !== null) moveInteraction.value = draft.nextInteraction
       if (draft.movePatches.length > 0) applyMovePatches(draft.movePatches)
     }
+    /*
+     * K5：突袭的撤销边界在**收束点**锚定（此时 9.5 补给与战损/撤退/推进已落盘）。
+     * interaction 已含 `kind:'overrun'` 这一步（事务路在 `confirmCombatAdvance` 里先赋值，
+     * 非事务路在上一段赋值）⇒ `rollbackFloor = steps.length`，撤销链在这一步之前截断；
+     * 修前锚在补给提交时（步还没进 interaction），收束后会放行一次「只退位置/MP」的撤销。
+     */
+    groundMovement.markIrreversible('突袭战斗（8.0/9.2）')
     if (plan.missingParticipantIds.length > 0) {
       pushLog(
         'warning',
@@ -11166,7 +11173,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 那份作废的战斗不该占掉本环节的这一次（与 10.1b 的轰炸账本同一时点口径）。
      */
     recordAttackThisSegment(data.state.composition.attackerIds, data.state.composition.defendingHex)
-    if (data.state.attackType === 'overrun') groundMovement.markIrreversible('突袭战斗（8.0/9.2）')
+    /*
+     * K5：这里**不再**锚定撤销边界。9.5b 允许在补给步减员/根本不攻击，且 `kind:'overrun'` 这一步
+     * 要到 9.12g 推进收束（`applyOverrunMove`）才进 interaction；此时 `steps.length` 少 1，
+     * 锚早了会让收束后的「撤销一步」放行（只还原位置/MP，战损与补给不回滚）。
+     * 锚点移到 `settleOverrunPlan` 落盘之后——那里 interaction 已含突袭步。
+     */
     return true
   }
 
@@ -26940,6 +26952,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setStackSelect,
     undoLastStep,
     cancelWholeMove,
+    // K5：撤销一步的可用性（判据在 ground-movement，与 refuseRollback 同源）
+    canUndoStep: groundMovement.canUndoStep,
+    undoBlockedReason: groundMovement.undoBlockedReason,
     // B15a：放弃本次移动**并退出移动态**（会话框的取消 / Esc）
     abortMoveNow,
     finishMove,

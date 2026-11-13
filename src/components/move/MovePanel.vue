@@ -359,7 +359,13 @@ function hoverUnit(id: string | null): void {
       item="move:continue"
     >
       <div class="row">
-        <BaseButton variant="secondary" size="sm" @click="workbench.undoLastStep()">
+        <!-- K5：一步可撤销 ⇔ 只动了 before 快照能还原的运行态；突袭/9.14 收束后按钮直接消失 -->
+        <BaseButton
+          v-if="workbench.canUndoStep"
+          variant="secondary"
+          size="sm"
+          @click="workbench.undoLastStep()"
+        >
           撤销一步
         </BaseButton>
         <BaseButton variant="primary" size="sm" @click="workbench.finishMove()">
