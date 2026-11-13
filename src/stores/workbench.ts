@@ -7198,7 +7198,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `${blocked.reason}（${blocked.rule}）`, blocked.rule)
       return null
     }
-    if (stepToNextSegmentStep()) return { steps: 0, stoppedBy: 'player', driver: 'player' }
+    if (!segmentLocked.value && stepToNextSegmentStep())
+      return { steps: 0, stoppedBy: 'player', driver: 'player' }
     const before = `${turn.value}|${phase.value}|${activeSide.value}`
     const outcome = session.advanceToNextStop()
     const after = `${turn.value}|${phase.value}|${activeSide.value}`
@@ -7222,6 +7223,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
     }
     return outcome
+  }
+
+  /**
+   * 作答（2.3 先手判定：**作答即自动推进到 A 段**）
+   *
+   * 用户 2026-11-14 裁定：先手这条答完不再要求多点一次「进入下一环节」——
+   * 作答成功就继续连跑到下一个停点（A 飞机整备）。其余问题保持原语义（答完停住，
+   * 由玩家自己决定何时推进），故只在 `initiative` 上续跑。
+   */
+  function answerQuestionNow(optionId?: string): boolean {
+    const kind = session.question?.kind
+    if (!session.answerNow(optionId)) return false
+    if (kind === 'initiative') advanceSegmentNow()
+    return true
   }
 
   /** 连跑去向的中文说法（界面与日志共用一处，免得两处口径漂移） */
@@ -27804,6 +27819,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     actionRefusal,
     // B5：唯一「进入下一环节」（自动段连跑完，停到需要玩家的地方）
     advanceSegmentNow,
+    answerQuestionNow,
     // 只读闸门解释：**最近一次点击**为何没推进（流程条就地显示；不用于置灰）
     advanceBlock: advanceBlocked,
     currentAdvanceBlock: computed(() => segmentAdvanceBlock()),

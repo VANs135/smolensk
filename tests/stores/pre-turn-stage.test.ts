@@ -116,6 +116,28 @@ describe('Pre-Turn：本环节没有行动段 ⇒ 不留任何动作入口（2.2
   })
 })
 
+describe('Pre-Turn：先手判定作答即自动推进到 A 段（2.3，用户 2026-11-14 裁定）', () => {
+  it('作答后不等玩家再点「进入下一环节」，会话直接停在 A 整备', () => {
+    const s = preTurn()
+    // 第 2 回合起先手由胜方选择（2.3）：把会话一路推到 preTurn 待答
+    for (let guard = 0; guard < SOP_STEPS.length * 3 && !s.session.awaiting; guard += 1) {
+      s.session.advanceToNextStop()
+    }
+    expect(s.session.awaiting).toBe(true)
+    expect(s.session.question?.kind).toBe('initiative')
+    expect(s.workbench.segmentLocked).toBe(true)
+
+    expect(s.workbench.answerQuestionNow('first')).toBe(true)
+
+    // 作答即推进：不再停在 "advancing + preTurn"
+    expect(s.session.awaiting).toBe(false)
+    expect(s.session.records?.phase).toBe('aircraftRefit')
+    expect(s.session.guidance?.step.id).toBe('first.aircraftRefit')
+    // 推进后本段不再是"无段"，A 段闸打开
+    expect(s.workbench.segmentLocked).toBe(false)
+  })
+})
+
 describe('Pre-Turn：显示口径与界面其余处一致（中文段名 / 天气）', () => {
   it('结算记录的阶段名用「回合准备」，不混英文 Pre-Turn', () => {
     const panel = readFileSync('src/components/session/SettlementLogPanel.vue', 'utf8')

@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 
 import { BaseButton, BaseTag } from '@/components/base'
-import { useGameSessionStore, useUiStore } from '@/stores'
+import { useGameSessionStore, useUiStore, useWorkbenchStore } from '@/stores'
 
 /**
  * 待答面板（W6 C10：由**会话驱动**的强制选择呈现）
@@ -20,6 +20,7 @@ import { useGameSessionStore, useUiStore } from '@/stores'
  */
 
 const gameSession = useGameSessionStore()
+const workbench = useWorkbenchStore()
 const ui = useUiStore()
 
 /** 当前待答问题（null = 未待答，面板整体不渲染） */
@@ -28,9 +29,13 @@ const question = computed(() => gameSession.question)
 /** 选项列表（无选项 ⇒ 空数组，按确认题处理） */
 const options = computed(() => question.value?.options ?? [])
 
-/** 作答（选项 id；确认题传 undefined） */
+/** 作答（选项 id；确认题传 undefined）
+ *
+ * 2.3 先手判定（用户 2026-11-14 裁定）：**作答即自动推进到 A 段**，不再要求多点心一次
+ * 「进入下一环节」。其余问题保持原语义（答完停住，由玩家自己决定何时推进）。
+ */
 function answer(optionId?: string): void {
-  gameSession.answerNow(optionId)
+  workbench.answerQuestionNow(optionId)
 }
 </script>
 
