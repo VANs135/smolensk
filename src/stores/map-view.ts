@@ -661,6 +661,8 @@ export const useMapViewStore = defineStore('mapView', () => {
                 doomed: workbench.optionDraftRetreatPreview.doomed,
               }
             : null,
+      // 批 C：守方选落点时，用不同色画出攻方已定的撤退路径与落点（只读，不可点）
+      retreatOther: retreatOther.value,
       // W7 C16：9.12g 战后推进格（只在推进步铺出）
       advance:
         workbench.combatState?.step === 'advance' && workbench.combatAdvanceHex !== null
@@ -966,6 +968,30 @@ export const useMapViewStore = defineStore('mapView', () => {
   function setRetreatUnit(unitId: string | null): void {
     retreatUnitId.value = unitId
   }
+
+  /**
+   * 批 C（9.10b 攻先守后）：守方选落点时，攻方**已经定下**的撤退路径与落点
+   *
+   * 9.12c 只说双方各自撤自己的单位，没有隐藏信息的规则；实桌也是攻方先摆在图上、守方后选。
+   * 只在「当前轮到守方」且攻方确有已选落点时给；否则 null（守方这一段不出现）。
+   */
+  const retreatOther = computed<{ hexes: HexRef[]; paths: HexRef[][] } | null>(() => {
+    if (workbench.combatState?.step !== 'retreat') return null
+    const pending = retreatSidePlan.value
+    if (pending === null || pending.side !== 'defender') return null
+    const attacker = workbench.combatRetreatPlans.find((plan) => plan.side === 'attacker')
+    if (attacker === undefined) return null
+    const paths: HexRef[][] = []
+    for (const row of attacker.units) {
+      if (row.chosen === null) continue
+      const destination = row.destinations.find(
+        (item) => item.hex.col === row.chosen!.col && item.hex.row === row.chosen!.row,
+      )
+      if (destination !== undefined) paths.push([...destination.path])
+    }
+    if (paths.length === 0) return null
+    return { hexes: paths.map((path) => path[path.length - 1]!), paths }
+  })
 
   /** 撤退阶段的一行提示（9.12/9.12b/9.12d/9.12e） */
   const retreatHint = computed(() => {

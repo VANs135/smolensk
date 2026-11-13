@@ -170,6 +170,26 @@ const resolverNotation = computed(() => {
     : summary.defender.notation
 })
 
+/**
+ * 批 C（9.10b 攻先守后）：守方进入战果步时，攻方**已经结算**的损失与选项。
+ *
+ * 只在当前轮到守方、且攻方确有结算记录时给；攻方尚未结算时返回 null（这一段不出现，不置灰）。
+ */
+const settledAttacker = computed(() => {
+  const current = state.value
+  if (current === null) return null
+  if (current.resolution.stage.startsWith('attacker')) return null
+  const attacker = current.resolution.attacker
+  if (attacker.option === undefined && attacker.forcedLosses === undefined) return null
+  return {
+    lostSteps:
+      (attacker.forcedLosses ?? []).reduce((sum, item) => sum + item.steps, 0) +
+      (attacker.option?.lossPoints ?? 0),
+    retreatHexes: attacker.option?.retreatHexes ?? 0,
+    ignored: attacker.optionIgnored === true,
+  }
+})
+
 /** 供模板用：参战攻方（9.5b 减员时以勾选状态为准） */
 const attackerList = computed<ConsoleUnit[]>(() => workbench.combatAttackers)
 
@@ -560,6 +580,15 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
 
       <!-- 第 8 步（a）：强制军力损失（9.11） -->
       <SessionStep item="combat:losses">
+        <!-- 批 C：守方段顶部只列攻方已结算的损失/选项，不放说明文字 -->
+        <div v-if="settledAttacker !== null" class="row">
+          <BaseTag kind="info">对方已结算</BaseTag>
+          <span class="num">损失 {{ settledAttacker.lostSteps }} 点</span>
+          <span v-if="settledAttacker.retreatHexes > 0" class="num">
+            撤退 {{ settledAttacker.retreatHexes }} 格
+          </span>
+          <span v-if="settledAttacker.ignored" class="num">忽略选项</span>
+        </div>
         <p class="num">
           {{
             roleName(state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender')
@@ -622,6 +651,15 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() =>
 
       <!-- 第 8 步（b）：选项（9.10）—— 一屏一决策：算子图记损失、地图点格记撤退、底部唯一出口 -->
       <SessionStep item="combat:options">
+        <!-- 批 C：守方段顶部只列攻方已结算的损失/选项，不放说明文字 -->
+        <div v-if="settledAttacker !== null" class="row">
+          <BaseTag kind="info">对方已结算</BaseTag>
+          <span class="num">损失 {{ settledAttacker.lostSteps }} 点</span>
+          <span v-if="settledAttacker.retreatHexes > 0" class="num">
+            撤退 {{ settledAttacker.retreatHexes }} 格
+          </span>
+          <span v-if="settledAttacker.ignored" class="num">忽略选项</span>
+        </div>
         <p class="num">
           {{
             roleName(state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender')

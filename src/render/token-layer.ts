@@ -191,6 +191,13 @@ export interface MovementOverlay {
    */
   retreat?: RetreatOverlay | null
   /**
+   * 批 C（9.10b 攻先守后）：**对手已经定下**的撤退路径与落点
+   *
+   * 守方选自己的落点时，攻方的撤退已摆在图上（9.12c 无隐藏信息规则）。用与 `retreat`
+   * 不同的蓝色虚线画，避免和自己的候选（青绿/橙红）混成一个图例；只读、不可点。
+   */
+  retreatOther?: RetreatOtherOverlay | null
+  /**
    * 9.12g 战后推进格（W7 C16）
    *
    * 防御格已清空时，攻方可以推进到该格；数据来自状态层（`combatDefendingHexCleared` + 防御格坐标）。
@@ -296,6 +303,14 @@ export interface RetreatOverlay {
    * 被直接摧毁」——规则允许的结局，故同样画出来，但用危险色与虚线区分。
    */
   doomed?: readonly HexRef[]
+}
+
+/** 批 C：对手已定的撤退（落点 + 路径） */
+export interface RetreatOtherOverlay {
+  /** 已选落点（画蓝色虚线环） */
+  hexes: readonly HexRef[]
+  /** 撤退路径（含起点与落点；画蓝色虚线折线） */
+  paths: readonly (readonly HexRef[])[]
 }
 
 /** 可消耗的补给站提示（12.1b；`selected` 为已选中的那一个） */
@@ -404,6 +419,10 @@ export const OVERLAY_PALETTE = {
   retreatDoomed: 'rgba(140, 47, 34, 0.16)',
   retreatDoomedEdge: 'rgba(140, 47, 34, 0.95)',
   retreatText: '#1f5f54',
+  /** 批 C：对手已定的撤退（蓝色，与自己的青绿/橙红候选分开） */
+  retreatOther: 'rgba(47, 74, 107, 0.16)',
+  retreatOtherEdge: 'rgba(47, 74, 107, 0.95)',
+  retreatOtherText: '#2f4a6b',
   /** W7 C16：9.12g 战后推进格（橄榄绿） */
   advance: 'rgba(104, 122, 32, 0.20)',
   advanceEdge: 'rgba(104, 122, 32, 0.95)',
@@ -501,6 +520,15 @@ export function cullOverlay(
             ...(overlay.retreat.doomed === undefined
               ? {}
               : { doomed: overlay.retreat.doomed.filter((hex) => visible(hex)) }),
+          },
+        }),
+    ...(overlay.retreatOther === undefined || overlay.retreatOther === null
+      ? { retreatOther: overlay.retreatOther }
+      : {
+          retreatOther: {
+            hexes: overlay.retreatOther.hexes.filter((hex) => visible(hex)),
+            // 路径与 `path` 同口径：不裁，保证玩家能看到对手完整的撤退线
+            paths: overlay.retreatOther.paths,
           },
         }),
     ...(overlay.advance === undefined
@@ -653,6 +681,41 @@ export function drawMovementOverlay(
       ctx.setLineDash([2 / scale, 2 / scale])
       ctx.stroke()
       ctx.setLineDash([])
+    }
+  }
+
+  // ①-a3 批 C（9.10b）：对手已定的撤退路线与落点（蓝色虚线；与自己的青绿/橙红候选分开）
+  if (visible.retreatOther !== undefined && visible.retreatOther !== null) {
+    ctx.strokeStyle = OVERLAY_PALETTE.retreatOtherEdge
+    ctx.lineWidth = 3 / scale
+    for (const path of visible.retreatOther.paths) {
+      if (path.length < 2) continue
+      ctx.setLineDash([6 / scale, 4 / scale])
+      ctx.beginPath()
+      path.forEach((hex, index) => {
+        const point = hexCanvasPoint(hex)
+        if (index === 0) ctx.moveTo(point.x, point.y)
+        else ctx.lineTo(point.x, point.y)
+      })
+      ctx.stroke()
+      ctx.setLineDash([])
+    }
+    for (const hex of visible.retreatOther.hexes) {
+      traceHex(ctx, hex)
+      ctx.fillStyle = OVERLAY_PALETTE.retreatOther
+      ctx.fill()
+      ctx.setLineDash([4 / scale, 3 / scale])
+      ctx.stroke()
+      ctx.setLineDash([])
+    }
+    const first = visible.retreatOther.hexes[0]
+    if (first !== undefined) {
+      const center = hexCanvasPoint(first)
+      ctx.font = `${(11 / scale).toFixed(1)}px ui-monospace, monospace`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillStyle = OVERLAY_PALETTE.retreatOtherText
+      ctx.fillText('对方已撤', center.x, center.y - REACHABLE_RADIUS_PX * 1.1)
     }
   }
 

@@ -22,6 +22,7 @@ import {
   defenseTerrainChoices,
   toConsoleUnit,
   unitChoices,
+  useMapViewStore,
   useWorkbenchStore,
   type ConsoleUnit,
 } from '@/stores'
@@ -463,6 +464,41 @@ describe('战斗终局组合：7 种都必须收束（9.2 / 9.10a / 9.11 / 9.12 
     expect(store.combatAdvanceMandatory).toBe(false)
     expect(store.log.some((line) => line.rule === '9.12g-B')).toBe(true)
     expect(store.units.find((unit) => unit.instanceId === 'a1')?.hex).not.toEqual(DEFENDER_HEX)
+  })
+
+  it('批 C：守方选落点时能看到攻方已定的撤退路径与落点（不同色图层）', () => {
+    const { state } = toRetreatStep({
+      attackerSteps: 3,
+      defenderSteps: 3,
+      die: 8,
+      shiftDie: 1,
+      attackerRetreat: 1,
+      attackerLoss: 0,
+      defenderRetreat: 1,
+      defenderLoss: 0,
+    })
+    mount(store, state, { attackerSteps: 3, defenderSteps: 2 })
+    const mapView = useMapViewStore()
+
+    // 攻方还没选 ⇒ 守方这一段不出现
+    expect(mapView.retreatSidePlan?.side).toBe('attacker')
+    expect(mapView.overlay.retreatOther).toBeNull()
+
+    const attackerPlan = store.combatRetreatPlans.find((plan) => plan.side === 'attacker')!
+    for (const row of attackerPlan.units) {
+      expect(store.setRetreatDestinationNow(row.unitId, row.destinations[0]!.hex)).toBe(true)
+    }
+
+    // 攻方选齐 ⇒ 轮到守方；攻方的落点与路径作为只读图层出现
+    expect(mapView.retreatSidePlan?.side).toBe('defender')
+    const other = mapView.overlay.retreatOther
+    expect(other).not.toBeNull()
+    const keyOf = (hex: HexRef) => `${hex.col}.${hex.row}`
+    const chosen = store.combatRetreatPlans
+      .find((plan) => plan.side === 'attacker')!
+      .units.map((row) => keyOf(row.chosen!))
+    expect(other!.hexes.map(keyOf).sort()).toEqual(chosen.sort())
+    expect(other!.paths).toHaveLength(chosen.length)
   })
 
   it('A7 守灭、攻存且无后续（突袭）⇒ 撤退步一次确认即自动收束', () => {
