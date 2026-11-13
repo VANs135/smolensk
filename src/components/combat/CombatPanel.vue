@@ -329,13 +329,11 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           <input v-model="workbench.combatInputs.attackerUsesInternalStocks" type="checkbox" />
           攻方用储备
         </label>
-        <!-- B14c：参战攻方＝**算子图阵列**；9.5b 的取消/恢复与 9.11c 的损失分配都按这份名单 -->
+        <!-- B14c：参战攻方＝**算子图阵列**；9.5b 的取消只走地图入口（B9），此阵列只读展示 -->
         <CounterPicker
           title="参战攻方"
-          hint="点一枚即取消它的参战（再点回来）"
           :items="supplyAttackerItems"
           :size="40"
-          @pick="workbench.toggleCombatSupplyAttacker($event)"
           @hover="hoverUnit"
         />
         <BaseButton
@@ -542,7 +540,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           <span class="muted">（逐步复核用；正常流程不必点这里的按钮。）</span>
         </div>
         <p v-if="workbench.combatAwaitingShiftDie" class="bad">
-          已发生奇袭：按 9.8 须**再掷一枚骰子**决定横移列数。
+          已发生奇袭：按 9.8 须再掷一枚骰子决定横移列数。
         </p>
       </SessionStep>
 
@@ -702,9 +700,6 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           <p class="muted">
             撤退格数 ＝
             该方剩余选项数；落点与起始格的直线距离必须等于该格数，路径可之字形避开禁入地形。
-            <BaseTag kind="success">青绿＝可撤退</BaseTag>
-            <BaseTag kind="warning">橙红＝落点在敌方控制区</BaseTag>
-            <BaseTag kind="danger">暗红＝必被消灭</BaseTag>
           </p>
         </RuleTip>
         <p

@@ -437,8 +437,8 @@ describe('B14c：战斗面板的替换（源码守卫）', () => {
     expect(panel).not.toContain('<select v-model="workbench.combatInputs.attackerArUnitId"')
     expect(panel).not.toContain('<select v-model="workbench.combatInputs.defenderArUnitId"')
     expect(panel).not.toContain('<select v-model="workbench.battleDefenderArId"')
-    // 点选直连 store 的动作 / 输入项
-    expect(panel).toContain('@pick="workbench.toggleCombatSupplyAttacker($event)"')
+    // 点选直连 store 的动作 / 输入项；9.5b 参战阵列只读，取消只走地图（B9）
+    expect(panel).not.toContain('toggleCombatSupplyAttacker')
     expect(panel).toContain('@pick="workbench.combatInputs.attackerArUnitId = $event"')
     expect(panel).toContain('@pick="workbench.combatInputs.defenderArUnitId = $event"')
   })

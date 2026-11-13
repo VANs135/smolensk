@@ -1570,8 +1570,9 @@ export const useMapViewStore = defineStore('mapView', () => {
    * B15b：此刻**战斗的参战集是否跟着地图的选择集走**
    *
    * 两个阶段：① 还没宣布（9.1 选攻方）；② 已在 9.5b 的减员步（补给步里改参战名单）。
-   * 战斗一宣布（进入 9.2 的后续步骤），构成就锁定了 ⇒ 地图上的选择集不再改它
-   * （那时改名单要走 `toggleCombatSupplyAttacker` 的面板入口，而它**只在补给步**存在）。
+   * 战斗一宣布（进入 9.2 的后续步骤），构成就锁定了 ⇒ 地图上的选择集不再改它。
+   * B9：9.5b 的减员/恢复**只走地图**（金框选择集 → `syncCombatParticipants`）；
+   * 补给屏的参战阵列只读展示，不再提供点选取消。
    */
   const combatSelectionLive = computed<boolean>(() => {
     if (!workbench.combatPickActive) return false

@@ -19,10 +19,10 @@ describe('U0：同一信息全界面只出现一次', () => {
     expect(occurrences(combatPanel(), '第一点必须由 AR 单位承受')).toBe(1)
   })
 
-  it('撤退三色说明只出现一处（标题不再复述正文）', () => {
+  it('撤退三色说明只留地图那一行（面板图例已删，B26）', () => {
     const panel = combatPanel()
-    expect(occurrences(panel, '青绿＝可撤退')).toBe(1)
-    expect(occurrences(panel, '暗红＝必被消灭')).toBe(1)
+    expect(panel).not.toContain('青绿＝可撤退')
+    expect(panel).not.toContain('暗红＝必被消灭')
   })
 
   it('12.3b-A 的「只能送即用补给」只出现一处', () => {
@@ -126,11 +126,12 @@ describe('U1-c：战斗窗减负', () => {
     expect(panel).not.toContain('setBattleMode')
   })
 
-  it('付款仍可走：来源声明 + 确认按钮 + 9.5b 参战攻方阵列都在', () => {
+  it('付款仍可走：来源声明 + 确认按钮 + 9.5b 参战攻方阵列都在（阵列只读，B9）', () => {
     const panel = combatPanel()
     expect(panel).toContain('declaredDumpOf')
     expect(panel).toContain('confirmCombatSupply')
-    expect(panel).toContain('toggleCombatSupplyAttacker')
+    expect(panel).toContain('参战攻方')
+    expect(panel).not.toContain('toggleCombatSupplyAttacker')
     expect(panel).toContain('defenderProvides')
     expect(panel).toContain('attackerUsesInternalStocks')
     expect(panel).toContain('defenderUsesInternalStocks')
