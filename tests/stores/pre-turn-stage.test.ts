@@ -75,6 +75,11 @@ describe('Pre-Turn：本环节没有行动段 ⇒ 不留任何动作入口（2.2
     expect(s.mapView.actionHint).not.toContain('可移动范围')
   })
 
+  it('本环节可参与算子为 0（不沿用本地段的参与名单）', () => {
+    expect(s.workbench.participatingUnitIds).toEqual([])
+    expect(s.workbench.participatingUnitCount).toBe(0)
+  })
+
   it('流程条：不再报「本环节可参与 N 枚」（回合级判定没有参与算子）', () => {
     const guide = buildFlowGuide({
       sessionExists: true,

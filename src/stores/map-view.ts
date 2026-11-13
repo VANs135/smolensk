@@ -1539,6 +1539,16 @@ export const useMapViewStore = defineStore('mapView', () => {
     )
       return true
     /*
+     * 2.2：回合准备环节（天气 / 先手判定）**没有行动段** ⇒ 点算子只做只读查看。
+     * 不能落到下面的参与判定：那里的提示读的是本地段（如 movement.modeAndMovement），
+     * 会把"本环节没有行动段"误说成"这一枚不参与某环节"。
+     */
+    if (workbench.segmentLocked) {
+      stackSelection.value = [token.id]
+      workbench.selectedId = token.id
+      return true
+    }
+    /*
      * B9：**不参与本环节的算子点不动**（用户口径「不参与环节的算子无法点击」）。
      * 不是静默忽略——那样玩家只会觉得"点了没反应"；而是**就地给一行规则号提示**。
      *

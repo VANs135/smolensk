@@ -22239,6 +22239,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 否则"能点"与"能选"会各有一套口径。列表按盘面顺序，供渲染层做灰显与拾取过滤。
    */
   const participatingUnitIds = computed<readonly string[]>(() => {
+    /*
+     * 2.2：回合准备（天气 / 先手判定）没有行动段 ⇒ 谁都不"参与本环节"。
+     * 修前这里读的是本地段的环节（默认 movement），于是界面会报"本环节可参与 N 枚"、
+     * 地图也会把上一段的参与名单当成本环节的点击资格。
+     */
+    if (segmentLocked.value) return []
     const query = segmentGateQuery.value
     if (query.segment === '') return []
     return units.value
