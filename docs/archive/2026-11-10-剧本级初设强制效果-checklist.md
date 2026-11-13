@@ -1,3 +1,5 @@
+> 归档（2026-11-13）：随 tasks 归档；规格留在 docs。
+
 # 核对清单：剧本级 setupEffects（2026-11-10）
 
 - [ ] 数据：S1/S3/S5 的 `poolFormations` 数量分别 12/14/14，且与 `formationDraw.pool` 相等
