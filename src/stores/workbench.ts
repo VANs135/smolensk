@@ -2677,11 +2677,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 同 AR 取战斗力（印值 attack）**最小**者（少牺牲强单位），再按实例 id 稳定排序兜底。
    * 守方走 `combatDefenderArChoices`——那一条已经把专规 2.3b（NKVD 在场时行动值单位必须由它担任）
    * 收窄过了，故默认值天然合法。默认值只影响开战时的预选，玩家仍可换。
+   *
+   * `unitIds` 用于**本场战斗内部**改名单后重算（9.5b 减员）：此时 `composition` 还是旧的
+   * （提交补给才落盘），默认值必须按玩家**当前意图**的名单取，而不是按 `combatAttackers`。
    */
-  function defaultArUnitIdOf(side: CombatRole): string | null {
-    const rows = side === 'attacker' ? combatAttackerArOptions.value : combatDefenderArChoices.value
+  function defaultArUnitIdOf(side: CombatRole, unitIds?: readonly string[]): string | null {
+    const rows =
+      unitIds ??
+      (side === 'attacker'
+        ? combatAttackerArOptions.value.map((row) => row.id)
+        : combatDefenderArChoices.value.map((row) => row.id))
     const pool = rows
-      .map((row) => units.value.find((unit) => unit.instanceId === row.id))
+      .map((id) => units.value.find((unit) => unit.instanceId === id))
       .filter((unit): unit is ConsoleUnit => unit !== undefined)
     if (pool.length === 0) return null
     return pool.slice().sort((a, b) => {
@@ -11182,12 +11189,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function toggleCombatSupplyAttacker(unitId: string): void {
     if (!canReplaceCombat()) return
+    /*
+     * 9.5b 的原文是**减少参战单位**（composition 已由 9.1 锁定）⇒ 只允许在本场编成里增删。
+     * 修前对任何己方算子都放行：点一枚编成外的单位会被塞进 `combatAttackerIds`，面板与 AR 候选
+     * 都把它当参战，直到提交补给才被引擎以 9.5b `attackerNotInComposition` 拒绝（假入口）。
+     */
+    const composition = combatState.value?.composition.attackerIds ?? []
+    if (!composition.includes(unitId)) {
+      pushLog('warning', `${nameOf(unitId)} 不在本场编成里：9.5b 只能减少已参战的攻方`, '9.5b')
+      return
+    }
     if (combatAttackerIds.value.includes(unitId)) {
       if (combatAttackerIds.value.length <= 1) {
         pushLog('warning', '至少要保留一个参战单位（9.1b）', '9.5b')
         return
       }
       combatAttackerIds.value = combatAttackerIds.value.filter((id) => id !== unitId)
+      // 被减掉的若是当前 AR 预选 ⇒ 预选回到新名单里的默认值（否则 AR 屏无金框、宣布被 9.6 拒）
+      if (combatInputs.value.attackerArUnitId === unitId) {
+        combatInputs.value = {
+          ...combatInputs.value,
+          attackerArUnitId: defaultArUnitIdOf('attacker', combatAttackerIds.value),
+        }
+      }
       pushLog('info', `移出参战：${nameOf(unitId)}（9.5b 减员）`, '9.5b')
       return
     }
