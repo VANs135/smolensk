@@ -310,7 +310,7 @@ describe('B14a：15.4「被指定单位」的指定真的接线', () => {
 describe('B14a：空军面板的替换（源码守卫）', () => {
   const panel = readFileSync('src/components/air/AirPanel.vue', 'utf8')
 
-  it('四处「选算子」都改走 `CounterPicker`，付款站改地图点选（不留两套控件）', () => {
+  it('「选算子」都改走 `CounterPicker`，付款站改地图点选（不留两套控件）', () => {
     expect(panel.match(/<CounterPicker/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
     expect(panel).not.toContain('<select v-model="workbench.airPlacement.aircraftId"')
     expect(panel).not.toContain('<select v-model="workbench.airInputs.interceptorId"')
@@ -319,9 +319,13 @@ describe('B14a：空军面板的替换（源码守卫）', () => {
     // 用户 2026-11-12：付款站不再在面板选，改为地图高亮 + 点选
     expect(panel).not.toContain(':items="dumpItems"')
     expect(panel).toContain('workbench.toggleConstructionPayPick()')
-    // 参战机/被指定单位：点击直连 store 的动作（不是只改本地显示）
-    expect(panel).toContain('@pick="workbench.toggleAirMissionUnit($event)"')
+    // 被指定单位：点击直连 store 的动作（不是只改本地显示）
     expect(panel).toContain('@pick="workbench.toggleAirReductionUnit($event)"')
+    /*
+     * 用户 2026-11-13：选飞机只出现一次 —— 轰炸/低空扫射的选机在 ops 面板 1，
+     * 编组卡只对其余任务类型（空运/空投/破交/扫荡）列参战机（门＝`showsMissionRoster`）。
+     */
+    expect(panel).toContain('showsMissionRoster')
   })
 
   it('悬停同步地图高亮：其余三类对象都走既有的 `setHoverHex`（不另立通道）', () => {
@@ -363,7 +367,8 @@ describe('B14a：空军面板的替换（源码守卫）', () => {
   })
 
   it('面板不做规则判断：可选性/原因全部取自 store（不自己算闸门）', () => {
-    expect(panel).toContain('workbench.airMissionJoinChoices')
+    // 用户 2026-11-13：任务类型只读显示（类型由右键菜单定），取自 store 的选项投影
+    expect(panel).toContain('workbench.airMissionKindChoices')
     expect(panel).toContain('workbench.airInterceptorCandidates')
     expect(panel).toContain('workbench.engineerChoices')
     // 14.2f/14.2a/14.2e 的原因串只应出现在 store 里

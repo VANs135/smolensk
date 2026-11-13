@@ -96,8 +96,9 @@ describe('U0：人员空投死入口下线', () => {
     expect(panel).not.toContain('isCargoMission')
   })
 
-  it('空投给出 `?` 说明，且不再渲染单位货物标题', () => {
-    expect(airPanel()).toContain('人员空投本作不启用')
+  it('空投不再渲染单位货物（不可用项不出现）', () => {
+    // 用户 2026-11-13：不可用项不出现 ⇒ 空投不再挂「人员空投本作不启用」的说明块
+    expect(airPanel()).not.toContain('人员空投本作不启用')
     expect(occurrences(airPanel(), '14.10a：空投的战斗单位')).toBe(0)
   })
 

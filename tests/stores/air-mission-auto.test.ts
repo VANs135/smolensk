@@ -133,11 +133,13 @@ describe('B29a：任务格与迎战机（玩家自选）', () => {
     expect(panel).toContain('beginAirTargetHexPickNow()')
     /*
      * ★ 契约变更（批 C 切片 1，**不是放宽**）：面板**不再**直接挂 `autoResolveAirMissionNow()`
-     *   —— 宣布与自动结算已合成一次动作 `runAirMissionNow()`（选任务类型即触发）。
-     *   旧断言"面板有自动结算按钮"随之改写为"面板走合并入口"；断言强度不变。
+     *   —— 宣布与自动结算已合成一次动作 `runAirMissionNow()`。
+     * 用户 2026-11-13：任务类型由右键「射击/空军任务」定死 ⇒ 面板**不再**给类型下拉
+     *   （`runAirMissionWithKind` 的"选类型即开跑"入口已从 UI 撤掉），只读显示 + 单一「发起任务」。
      */
     expect(panel).toContain('workbench.runAirMissionNow()')
-    expect(panel).toContain('workbench.runAirMissionWithKind(')
+    expect(panel).not.toContain('workbench.runAirMissionWithKind(')
+    expect(panel).toContain('workbench.airMissionKindChoices')
     /*
      * 用户 2026-11-12（K2/K3）：自动连跑被空战/拦截拒停时，生产界面必须有自己的"继续结算"出口。
      * 旧断言"面板不得直接挂自动结算"随之解除（入口仍只有一个按钮，且 stepwise 时换成逐步复核）。

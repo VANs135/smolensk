@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onBeforeUnmount } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip, UI_COPY } from '@/components/base'
@@ -53,18 +53,6 @@ const flakLossLabel = computed(() => {
   return plane === undefined ? id : `${plane.name}（${id}）`
 })
 
-/** 14.7b / 14.7d / 14.10c：F 步需要进轰炸链的三类任务 */
-const AIR_GROUND_KINDS: readonly string[] = ['barrage', 'hip_shoot', 'trainbusting']
-const isAirGroundMission = computed(
-  () => workbench.airState !== null && AIR_GROUND_KINDS.includes(workbench.airState.kind),
-)
-const airGroundButtonLabel = computed(() => {
-  const kind = workbench.airState?.kind
-  if (kind === 'hip_shoot') return '结算低空扫射（10.2 / 14.7d）'
-  if (kind === 'trainbusting') return '结算运输破坏（10.2 / 14.10c）'
-  return '结算空军轰炸（10.2 / 14.7b）'
-})
-
 /** 14.9f：这里只维护玩家卸货选择，限额与不可拆分判定交给引擎。 */
 function toggleUnloadCargo(id: string): void {
   const current = workbench.airInputs.unloadCargoIds ?? []
@@ -90,15 +78,48 @@ const interception = computed(() => workbench.airInterceptionResponse)
 /** 任务格内的敌方空中/基地事实（14.3，由盘面推出） */
 const enemyAtTarget = computed(() => workbench.airEnemyAtTarget)
 
-/** 14.2e：可在「任务分配」里宣布的任务类型（拦截与基地转移不在其中） */
-const MISSION_KINDS = computed(() => workbench.airMissionKindChoices)
+/** 14.2e：任务类型由右键菜单决定，面板只读显示 */
+const airMissionKindText = computed(() => {
+  const kind = workbench.airMissionKind
+  if (kind === null) return ''
+  return workbench.airMissionKindChoices.find((item) => item.key === kind)?.label ?? kind
+})
 
-/** 14.2e：任务所属**环节**的中文名（`missionSegmentOf` 的三个取值） */
-function segmentLabel(kind: string): string {
-  const segment = workbench.missionSegmentOf(kind as typeof workbench.airMissionKind)
-  if (segment === 'movementSegment') return '移动环节'
-  if (segment === 'barrageSegment') return '轰炸环节'
-  return '拦截步（插在敌方任务的 D 步）'
+/** 10.2：对地战果摘要（自动跑出的结果，面板 2 顶部只读一行） */
+const airBarrageOutcomeLine = computed(() => {
+  const barrage = workbench.barrageState
+  if (barrage === null || barrage.outcome === undefined) return null
+  return (
+    `${airMissionKindText.value}：列 ${barrage.table.initialColumn} → ${barrage.finalColumn}` +
+    `；${barrage.outcome.value.detail}`
+  )
+})
+
+/** 14.3e：空战逐轮结果（发生了空战才有；面板 2 顶部只读一行） */
+const airCombatLine = computed(() => {
+  const combat = workbench.airState?.airCombat
+  if (combat === null || combat === undefined) return null
+  const rounds = combat.rounds.map((round) => {
+    const abort =
+      round.abortSide === 'attacker'
+        ? '攻方返航'
+        : round.abortSide === 'defender'
+          ? '守方返航'
+          : '双方返航'
+    const losses = round.stepLossIds.length > 0 ? `，损失 ${round.stepLossIds.join('、')}` : ''
+    return `第 ${round.round} 轮 修正骰 ${round.modifiedRoll} ⇒ ${abort}${losses}`
+  })
+  return rounds.length === 0 ? combat.detail : `${rounds.length} 轮：${rounds.join('｜')}`
+})
+
+/** 14.5：拦截空战结论（未发生拦截空战时为 null） */
+const interceptionCombatLine = computed(
+  () => workbench.airState?.interception?.combat?.detail ?? null,
+)
+
+/** 14.2f-F：面板 2 的唯一决定（战果链/货物未跑完时先补跑，再记录结算） */
+function settleMissionAndContinue(): void {
+  workbench.settleAirMissionNow()
 }
 
 /** 14.1b：军力点（每机 2 点） */
@@ -136,24 +157,6 @@ const aircraftItems = computed<readonly CounterPickerItem[]>(() =>
       `｜轰炸 ${item.barrageStrength ?? 0}｜航程 ${item.rangeHexes ?? 0}）`,
     selected: workbench.airPlacement.aircraftId === item.aircraftId,
   })),
-)
-
-/** 参战机（14.2a/14.2e/14.2f）：可选性与原因由 store 逐机算好（`airMissionJoinChoices`） */
-const missionJoinItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.airMissionJoinChoices.map((choice) => {
-    const air = choice.air
-    return {
-      id: air.instanceId,
-      imageUrl: counterImageUrlOf(air),
-      name:
-        `${air.name}（${air.aircraftType}｜ACV ${air.airCombatRating}` +
-        `${air.canInitiateAirCombat ? '' : '，括号值：不能发起空战 14.3a'}｜轰炸 ${air.barrageStrength}` +
-        `｜航程 ${air.rangeHexes}｜@ ${hexLabel(air.hex)}）`,
-      selected: choice.selected,
-      disabledReason: choice.disabledReason,
-      hex: air.hex,
-    }
-  }),
 )
 
 /** 14.10a：单位货物的候选阵列（候选由 store 给，组件不自己筛单位） */
@@ -346,6 +349,19 @@ const showsAssign = computed(() => {
   const step = workbench.airState?.step
   return step === undefined || step === 'declare' || step === 'move'
 })
+
+/**
+ * 用户 2026-11-13：**选飞机只出现一次**。
+ *
+ * 轰炸 / 低空扫射从「射击」菜单进 ops 流程，第 1 步已经选好参战机 ⇒ 编组卡不再重复一列；
+ * 空运 / 空投 / 破交 / 扫荡没有独立选机步 ⇒ 面板 1（编组卡）里选机并发起。
+ * 验证页（`stepwise`）照旧全显示，便于逐步复核。
+ */
+const showsMissionRoster = computed(() => {
+  if (props.stepwise) return true
+  const kind = workbench.airMissionKind
+  return kind !== 'barrage' && kind !== 'hip_shoot'
+})
 /**
  * 用户 2026-10-25：「**一个操作一个面板**」——基地会话里先给操作菜单，
  * 点哪一项就只展开那一段（不再把摆放/整备/修建/缩减/夺取全铺开）。
@@ -373,22 +389,25 @@ const displayedBases = computed(() =>
 
 <template>
   <BasePanel title="空军（OCS 14.0 / 15.0）">
-    <div class="row">
-      <BaseButton
-        variant="secondary"
-        size="sm"
-        @click="workbench.setAirActive(!workbench.airActive)"
-      >
-        {{ workbench.airActive ? '关闭空军工具' : '开启空军工具' }}
-      </BaseButton>
-    </div>
+    <!-- 用户 2026-11-13：任务窗里只做当前这一步（一窗一事）⇒ 工具开关与说明只在整页/侧栏出现 -->
+    <template v-if="props.only === null">
+      <div class="row">
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          @click="workbench.setAirActive(!workbench.airActive)"
+        >
+          {{ workbench.airActive ? '关闭空军工具' : '开启空军工具' }}
+        </BaseButton>
+      </div>
 
-    <p v-if="!workbench.airActive" class="muted">
-      开启后按 14.2f 的七步流程结算任务（宣布 → 空战 → 拦截 → 防空 → 结算 → 返航）， 并按 15.1
-      整备、14.11 转移、15.4 缩减基地。地图会画出双方巡逻区（14.4c）。
-    </p>
+      <p v-if="!workbench.airActive" class="muted">
+        开启后按 14.2f 的七步流程结算任务（宣布 → 空战 → 拦截 → 防空 → 结算 → 返航）， 并按 15.1
+        整备、14.11 转移、15.4 缩减基地。地图会画出双方巡逻区（14.4c）。
+      </p>
+    </template>
 
-    <template v-else>
+    <template v-if="workbench.airActive">
       <!-- ══ 事务性动作（14.1a 摆放 / 15.1 整备 / 15.3 修建 / 15.4 缩减 / 9.14f 夺取）══
            B15d：这一段留在**侧栏**（地图会话挂 `only="mission"` ⇒ 这里不画） -->
       <template v-if="showsPlace">
@@ -520,38 +539,15 @@ const displayedBases = computed(() =>
         </p>
         <!-- U1-b：宣布前＝一件事（任务类型 + 任务格 + 参战机 + 执行，全在同一门内） -->
         <SessionStep v-if="showsAssign" item="air:declare">
-          <div class="muted">
-            任务分配：选类型与任务格、勾选参战机。
-            <RuleTip rule="14.2">
-              合计 ≤4 架；每机每阶段一次；起飞机必须停在本方空军基地格。
-            </RuleTip>
-          </div>
           <div class="row">
-            <label class="field">
-              任务类型（14.2e）
-              <!--
-              ★ 批 C 切片 1（用户口径 9.16 #3「点机场选机 → 点目标格 → 选任务类型 → **自动结算**」）：
-                选任务类型是**最后一步玩家输入** ⇒ 这一下即「宣布 + 自动结算到停返航」（`runAirMissionWithKind`）。
-                条件不足（没点名参战机 / 没选任务格）时**如实说缺什么**，不静默。
-            -->
-              <select
-                class="select"
-                :value="workbench.airMissionKind"
-                @change="
-                  workbench.runAirMissionWithKind(
-                    ($event.target as HTMLSelectElement).value as typeof workbench.airMissionKind,
-                  )
-                "
-              >
-                <option v-for="item in MISSION_KINDS" :key="item.key" :value="item.key">
-                  {{ item.label }}（{{ segmentLabel(item.key) }}）
-                </option>
-              </select>
+            <!-- 用户 2026-11-13：任务类型在右键「射击/空军任务」时就定了，面板只读显示，不再给下拉 -->
+            <label v-if="workbench.airMissionKind !== null" class="field">
+              任务类型
+              <span class="ui-field-readonly">{{ airMissionKindText }}</span>
+              <RuleTip rule="14.2">
+                合计 ≤4 架；每机每阶段一次；起飞机必须停在本方空军基地格。
+              </RuleTip>
             </label>
-            <span class="num">
-              本环节：{{ segmentLabel(workbench.airMissionKind) }}（14.2e）；还可加
-              {{ workbench.airJoinRemaining }} 架（14.2a 上限 4）
-            </span>
             <label class="field">
               任务格
               <span class="ui-field-readonly">{{
@@ -589,21 +585,11 @@ const displayedBases = computed(() =>
               天气正常（14.7d/专规 3.2a）
             </label>
           </div>
-          <p class="num">
-            当前方空军基地：
-            <template v-if="workbench.ownAirBases.length === 0">{{ UI_COPY.noAirBase }}</template>
-            <template v-for="base in workbench.ownAirBases" :key="base.id">
-              <BaseTag :kind="base.isAirstrip === true ? 'warning' : 'info'">
-                {{ hexLabel(base.hex) }}
-                {{ base.isAirstrip === true ? '简易机场（15.2）' : `${base.level} 级（15.0）` }}
-              </BaseTag>
-            </template>
-          </p>
           <!--
             用户 2026-11-12：所有主动任务都从目标右键发起，窗内**按基地分组**列参战机（含图外盒）。
-            每组给基地名、飞机、到目标距离与"够/不够"；点基地头 ⇒ 高亮该格。
+            用户 2026-11-13：轰炸/低空扫射已在 ops 第 1 步选机 ⇒ 这里不再重复（`showsMissionRoster`）。
           -->
-          <div v-if="workbench.airMissionBaseGroupsWithBox.length > 0" class="base-roster">
+          <div v-if="showsMissionRoster" class="base-roster">
             <div
               v-for="group in workbench.airMissionBaseGroupsWithBox"
               :key="group.baseId"
@@ -651,16 +637,6 @@ const displayedBases = computed(() =>
               </div>
             </div>
           </div>
-          <!-- B14：其它任务类型仍用平铺阵列 -->
-          <CounterPicker
-            v-else
-            title="参战机（点一枚加入 / 再点一枚退出）"
-            :hint="`只有「激活」的飞机能执行任务（非激活需先在整备阶段整备）；还可加 ${workbench.airJoinRemaining} 架`"
-            :items="missionJoinItems"
-            :size="40"
-            @pick="workbench.toggleAirMissionUnit($event)"
-            @hover="hoverAir"
-          />
           <!--
           14.9 / 14.10：**载货**（只在空运 / 空投任务上）
           14.9a 运力取机型印值；14.10b 计划回合须比执行回合早 ≥2。
@@ -672,10 +648,6 @@ const displayedBases = computed(() =>
               workbench.airMissionKind === 'air_drop'
             "
           >
-            <p class="hint">
-              SP 从所选飞机共同起飞基地的地面库存装载并扣账；未卸下的 SP
-              随本次任务退运。装载后请完成任务再重新编组。
-            </p>
             <div class="row">
               <label class="field">
                 装载 SP（T）
@@ -759,10 +731,33 @@ const displayedBases = computed(() =>
               @pick="workbench.toggleAirCargoUnit($event)"
               @hover="hoverUnit"
             />
-            <div v-else class="hint">
-              人员空投本作不启用
-              <RuleTip rule="2.2b">空投单位须有空降资格；本作库未印该资格，故不提供入口。</RuleTip>
-            </div>
+            <!-- 14.9e/14.9f：卸载选择必须在发起前给定（自动连跑时货物在 F 步直接结算） -->
+            <template v-if="workbench.airMissionKind === 'air_transport'">
+              <div class="row">
+                <label v-for="item in workbench.airCargoUnloadChoices" :key="item.id" class="field">
+                  <input
+                    type="checkbox"
+                    :checked="workbench.airInputs.unloadCargoIds?.includes(item.id) ?? false"
+                    @change="toggleUnloadCargo(item.id)"
+                  />
+                  {{ item.label }}（{{ item.t }} T）
+                </label>
+              </div>
+              <div class="row">
+                <BaseButton
+                  size="sm"
+                  variant="secondary"
+                  @click="workbench.airInputs.unloadCargoIds = null"
+                  >恢复自动卸载</BaseButton
+                >
+                <BaseButton
+                  size="sm"
+                  variant="secondary"
+                  @click="workbench.airInputs.unloadCargoIds = []"
+                  >本次全部退运</BaseButton
+                >
+              </div>
+            </template>
             <p class="num">
               本次货物：{{ workbench.airInputs.cargoSpT }} T SP ＋
               {{ workbench.airInputs.cargoUnitIds.length }} 个单位（{{
@@ -793,18 +788,9 @@ const displayedBases = computed(() =>
         </div>
         <div v-if="showsAssign" class="row">
           <BaseButton variant="primary" size="sm" @click="workbench.runAirMissionNow()">
-            执行任务（14.2f：宣布 → 自动结算到停返航）
+            发起任务
           </BaseButton>
-          <span class="muted">选了任务类型就会自己跑；这里给"先选任务格、后定类型"的顺序用。</span>
         </div>
-
-        <!-- 任务已宣布：分配表单收起，只走下方步骤（14.2f-C–G） -->
-        <p v-if="!showsAssign" class="num">
-          任务已宣布（14.2f-C–G）
-          <RuleTip rule="14.2f">
-            分配表单（任务类型 / 任务格 / 参战机）只在宣布前用；下面按 C–G 步走，骰子与查表自动跑。
-          </RuleTip>
-        </p>
 
         <!-- U1-b：步骤清单是进度（非待决），会话框里不再并列显示 -->
 
@@ -874,8 +860,13 @@ const displayedBases = computed(() =>
           修前要点两次）；下面各环节的手动按钮是**逐步复核**路径，只在验证页（`stepwise`）渲染。
       -->
 
-          <!-- ── ② 空战环节（14.2f-C / 14.3） ── -->
-          <SessionStep v-if="workbench.airState.step === 'airCombat'" item="air:airCombat">
+          <!-- ── ② 空战环节（14.2f-C / 14.3）：只在该格真的打空战时出现 ── -->
+          <SessionStep
+            v-if="
+              workbench.airState.step === 'airCombat' && workbench.airState.combat?.occurs === true
+            "
+            item="air:airCombat"
+          >
             <p class="num">
               空战（14.3）：敌方基地
               <BaseTag :kind="enemyAtTarget.hasAirBase ? 'warning' : 'neutral'">
@@ -931,52 +922,6 @@ const displayedBases = computed(() =>
               >
                 ② 结算空战并继续（14.3）
               </BaseButton>
-            </div>
-          </SessionStep>
-
-          <!-- ── ②b F 步的空军轰炸（10.2 / 14.7b）：任务为"空军轰炸"时进轰炸链 ── -->
-          <SessionStep v-if="workbench.airState.step === 'resolveMission'" item="air:resolve">
-            <template v-if="workbench.airState.kind === 'air_transport'">
-              <p class="muted">
-                单位与SP共用卸载限额。默认自动卸载；含单位且超限时，请选择本次卸下的完整货物。未选货物保留退运。
-              </p>
-              <div class="row">
-                <label v-for="item in workbench.airCargoUnloadChoices" :key="item.id" class="field">
-                  <input
-                    type="checkbox"
-                    :checked="workbench.airInputs.unloadCargoIds?.includes(item.id) ?? false"
-                    @change="toggleUnloadCargo(item.id)"
-                  />
-                  {{ item.label }}（{{ item.t }} T）
-                </label>
-              </div>
-              <div class="row">
-                <BaseButton
-                  size="sm"
-                  variant="secondary"
-                  @click="workbench.airInputs.unloadCargoIds = null"
-                  >恢复自动卸载</BaseButton
-                >
-                <BaseButton
-                  size="sm"
-                  variant="secondary"
-                  @click="workbench.airInputs.unloadCargoIds = []"
-                  >本次全部退运</BaseButton
-                >
-              </div>
-            </template>
-            <p v-if="isAirGroundMission" class="num">
-              对地结算（10.2）
-              <RuleTip rule="10.2">
-                与炮兵**同一条**轰炸链（加总轰炸值 → 定纵列 → 横移 → 2 骰 → 战果）；
-                10.2c：**空军轰炸没有补给消耗**。
-              </RuleTip>
-            </p>
-            <div v-if="isAirGroundMission" class="row">
-              <BaseButton variant="primary" size="sm" @click="workbench.beginAirBarrageNow()">
-                {{ airGroundButtonLabel }}
-              </BaseButton>
-              <span class="muted">结算完再回来「结算任务」（14.2f-F）。</span>
             </div>
           </SessionStep>
 
@@ -1039,65 +984,54 @@ const displayedBases = computed(() =>
             </p>
           </template>
 
-          <!-- ── ④ 防空应答（14.2f-E / 14.4） ── -->
-          <SessionStep v-if="workbench.airState.step === 'flak'" item="air:flak">
-            <p class="num">
-              <BaseTag kind="neutral">由对手操作</BaseTag>
-              防空（14.4e）
-              <RuleTip rule="14.4e">
-                表 17-3：任务 ≥3 机 +1；目标格 HQ +1、基地等级每级 +1、印刷防空值 +value；
-                任务格在对手巡逻区内 ⇒ 任务编有战斗机 +1 / 无战斗机 +2（本任务{{
-                  workbench.airMissionHasFighter ? '有' : '无'
-                }}战斗机），不在巡逻区内则该组不适用；修正后 ≥11
-                命中，用任务损失表（14.4f）定承受者。
-              </RuleTip>
+          <!-- ── ④ 防空（14.2f-E / 14.4）：自动结算，只在被拒时展开出口 ── -->
+          <SessionStep
+            v-if="
+              workbench.airState.step === 'flak' &&
+              workbench.airError !== null &&
+              workbench.airState.interception?.declared !== true
+            "
+            item="air:flak"
+          >
+            <p class="warn num">
+              <BaseTag kind="danger">{{ workbench.airError.rule }}</BaseTag>
+              {{ workbench.airErrorLine }}
             </p>
-            <p class="num">目标基地等级（自动 {{ workbench.airTargetBaseLevel }}）</p>
-            <p v-if="workbench.airState.flak !== null" class="num">
-              <BaseTag :kind="workbench.airState.flak.hit ? 'warning' : 'success'">
-                {{ workbench.airState.flak.rule }}
-              </BaseTag>
-              2 骰 {{ workbench.airState.flak.modifiedDie - workbench.airState.flak.drm }} ＋ 修正
-              {{ workbench.airState.flak.drm }} ＝ {{ workbench.airState.flak.modifiedDie }} ⇒
-              {{ workbench.airState.flak.hit ? '命中' : '未命中' }}
-            </p>
-            <p v-if="workbench.airState.flak?.hit" class="num">损失落点：{{ flakLossLabel }}</p>
-            <p v-if="workbench.airState.flak !== null" class="muted">
-              {{ workbench.airState.flak.detail }}
-            </p>
-            <div v-if="workbench.airError !== null" class="row">
+            <div class="row">
               <BaseButton variant="secondary" size="sm" @click="workbench.cancelAir()">
                 取消本次任务
               </BaseButton>
             </div>
           </SessionStep>
 
-          <!-- ── ⑤ 任务结算（14.2f-F） ── -->
-          <!-- U1-b：与 ②b 同一事项（空军轰炸 → 回来记录任务）；这里不再重复开门，避免两个待决 -->
-          <template v-if="workbench.airState.step === 'resolveMission'">
+          <!-- ── ⑤ 任务结算（14.2f-F）：面板 2，只剩「结算任务」一个决定 ── -->
+          <SessionStep v-if="workbench.airState.step === 'resolveMission'" item="air:resolve">
+            <!-- 结果摘要（空战 / 拦截 / 防空 / 对地都是自动跑出来的，只读） -->
+            <p v-if="airCombatLine !== null" class="num">
+              <BaseTag kind="neutral">空战</BaseTag>
+              {{ airCombatLine }}
+            </p>
+            <p v-if="interceptionCombatLine !== null" class="num">
+              <BaseTag kind="neutral">拦截</BaseTag>
+              {{ interceptionCombatLine }}
+            </p>
+            <p v-if="workbench.airState.flak !== null" class="num">
+              <BaseTag kind="neutral">防空</BaseTag>
+              2 骰 {{ workbench.airState.flak.modifiedDie - workbench.airState.flak.drm }} ＋ 修正
+              {{ workbench.airState.flak.drm }} ＝ {{ workbench.airState.flak.modifiedDie }} ⇒
+              {{ workbench.airState.flak.hit ? '命中' : '未命中' }}
+              <template v-if="workbench.airState.flak.hit">｜损失 {{ flakLossLabel }}</template>
+            </p>
+            <p v-if="airBarrageOutcomeLine !== null" class="num">
+              <BaseTag kind="neutral">对地</BaseTag>
+              {{ airBarrageOutcomeLine }}
+            </p>
             <div class="row">
-              <label class="field">
-                任务结果（如 C7 的轰炸结论）
-                <UiField v-model="workbench.airInputs.missionNote" class="input" />
-              </label>
-              <!-- K1：空运/空投货物未结算时，必须给一个**可重复执行**的结算出口 -->
-              <BaseButton
-                v-if="
-                  (workbench.airState.kind === 'air_transport' ||
-                    workbench.airState.kind === 'air_drop') &&
-                  workbench.airState.cargo === null
-                "
-                variant="secondary"
-                size="sm"
-                @click="workbench.resolveAirCargoNow()"
-              >
-                重新结算货物
-              </BaseButton>
-              <BaseButton variant="primary" size="sm" @click="workbench.confirmAirMissionNow()">
-                ⑤ 记录任务结算（14.2f-F）
+              <BaseButton variant="primary" size="sm" @click="settleMissionAndContinue()">
+                结算任务
               </BaseButton>
             </div>
-          </template>
+          </SessionStep>
 
           <!-- ── ⑥ 返航（14.2f-G / 14.1c） ── -->
           <SessionStep v-if="workbench.airState.step === 'returnToBase'" item="air:return">

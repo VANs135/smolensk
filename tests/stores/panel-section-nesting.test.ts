@@ -266,9 +266,14 @@ describe('分段块的**结构**不变量（空块 / 段错位都会红）', () 
         `${block.expr}（第 ${block.openLine} 行，<${block.tag}>）是空段`,
       ).toBeGreaterThan(minBody(block) - 1)
     }
-    expect(sectionOf(panel, 'workbench.runAirMissionWithKind(', 'showsAssign')).toBe('showsAssign')
-    // 中段要有"表单已收起"的说明（不静默消失）
-    expect(panel).toContain('v-if="!showsAssign"')
+    /*
+     * 用户 2026-11-13：任务类型由右键菜单定死 ⇒ 面板里不再有"选类型即开跑"的入口，
+     *   发起只留 `runAirMissionNow()` 一个按钮（仍在 A–B 门内）。
+     * 窗内也不再放"表单已收起"这类描述文字（口径：窗内不放描述文字）。
+     */
+    expect(sectionOf(panel, 'workbench.runAirMissionNow()', 'showsAssign')).toBe('showsAssign')
+    expect(panel).not.toContain('workbench.runAirMissionWithKind(')
+    expect(panel).not.toContain('v-if="!showsAssign"')
   })
 
   it('★ ContainersPanel：记录轨的三类"改表"按钮是**裁判工具**，只有验证页才铺', () => {

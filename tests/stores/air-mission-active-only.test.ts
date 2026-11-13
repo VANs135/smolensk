@@ -160,6 +160,7 @@ describe('H⑤（14.1a）：空军任务里只可选**激活**的飞机', () => 
     const panel = readFileSync('src/components/air/AirPanel.vue', 'utf8')
     // 用户 2026-11-09：机场飞机的「选入任务」已从左键堆叠窗移出（窗内只留战斗算子），
     // 该入口只保留在空军面板；面板的可选性与原因仍只读 store 投影。
-    expect(panel).toContain('workbench.airMissionJoinChoices')
+    // 用户 2026-11-13：编组卡按基地分组列机（`airMissionBaseGroupsWithBox`），仍由 store 给可选性/原因。
+    expect(panel).toContain('workbench.airMissionBaseGroupsWithBox')
   })
 })
