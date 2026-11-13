@@ -503,7 +503,11 @@ function sideLabel(side: Side): string {
         </template>
       </p>
       <!-- 3.4b：摆一个确认一个 —— 刚落下的 SP（或地图上点中的未归属 SP）常驻二选一 -->
-      <div v-if="setup.pendingSpChoice !== null" class="row" data-testid="sp-group-choice">
+      <div
+        v-if="setup.spOwnershipEntryVisible && setup.pendingSpChoice !== null"
+        class="row"
+        data-testid="sp-group-choice"
+      >
         <span class="num">
           {{ setup.pendingSpChoice.hexText }}（{{ setup.pendingSpChoice.points }}
           SP）待指定装甲集群（3.4b）：
@@ -560,7 +564,7 @@ function sideLabel(side: Side): string {
           :disabled="setup.spDumps.length === 0"
           @click="setup.confirmSpOwnership()"
         >
-          核验 SP 归属（12.1d / 3.4b）
+          核验 SP 归属（12.1d<template v-if="setup.spOwnershipEntryVisible"> / 3.4b</template>）
         </BaseButton>
       </div>
 

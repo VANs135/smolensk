@@ -79,6 +79,8 @@ export interface SessionStepFacts {
     randomEventPending: boolean
     /** 3.6：随机事件掷出 Supply Train 且尚未落 2 SP */
     supplyTrainPending: boolean
+    /** 3.4b 在本局是否生效（未启用 ⇒ 落点说明不提归属） */
+    panzerGroupRulesOn: boolean
     variableExitPending: boolean
     replTablePending: boolean
     specialReplPending: boolean
@@ -553,7 +555,9 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
       'reinforce:supplyTrain',
       '补给列车落点（3.6）',
       '随机事件掷出 Supply Train：地图高亮全部可卸货铁路格，点一格即落 2 SP（不用 Rail Cap）。',
-      '在窗口确认 3.4b 归属后，点地图任意高亮铁路格。',
+      facts.panzerGroupRulesOn
+        ? '在窗口确认 3.4b 归属后，点地图任意高亮铁路格。'
+        : '点地图任意高亮铁路格。',
     )
   }
   // 13.6 / 1.6a：当日到达落位与强制移除

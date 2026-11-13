@@ -331,8 +331,14 @@ export const useSetupStore = defineStore('setup', () => {
   /** 初设条目视图（当前剧本；含初设源解析） */
   const entries = computed<readonly SetupEntryView[]>(() => setupEntryViews(scenarioId.value))
 
-  /** 开盘流程步骤清单（哪一步适用本剧本，由引擎给） */
-  const flow = computed<readonly SetupFlowStep[]>(() => setupFlowFor(scenarioId.value))
+  /** 开盘流程步骤清单（哪一步适用本剧本，由引擎给；3.4b 未启用时不带归属说明） */
+  const flow = computed<readonly SetupFlowStep[]>(() => {
+    const steps = setupFlowFor(scenarioId.value)
+    if (panzerGroupRulesOn()) return steps
+    return steps.map((step) =>
+      step.id === 'spOwnership' ? { ...step, detail: 'SP 归带上图的一方（12.1d）' } : step,
+    )
+  })
 
   /** 本方 HQ 格（4.8b D 的「指挥部」同义；由盘面推出） */
   function hqHexesOf(side: Side): HexRef[] {

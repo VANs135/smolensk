@@ -45,6 +45,7 @@ function baseFacts(over: Partial<SessionStepFacts['reinforce']> = {}): SessionSt
       arrivalPending: false,
       randomEventPending: false,
       supplyTrainPending: false,
+      panzerGroupRulesOn: false,
       variableExitPending: false,
       replTablePending: true,
       specialReplPending: false,

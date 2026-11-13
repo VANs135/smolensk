@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -94,6 +96,17 @@ describe('B50：3.4b 未启用（共识未采纳）⇒ 不约束、也不出界�
       beneficiaryUnitIds: [unit.instanceId],
     })
     expect(failure).toBeNull()
+  })
+
+  it('未勾共识 ⇒ 面板不留"未启用"空壳，归属入口整块不出现（启用时逐字不变）', () => {
+    const exclusive = readFileSync('src/components/exclusive/ExclusiveRulesPanel.vue', 'utf8')
+    // 旧写法是一句"本局未启用 3.4b…"的空壳说明；用户 2026-11-13 口径：不出现
+    expect(exclusive).not.toContain('本局**未启用** 3.4b')
+    expect(exclusive).toMatch(/<template v-if="workbench\.panzerGroupRulesOn">/)
+    const setup = readFileSync('src/components/setup/SetupPanel.vue', 'utf8')
+    // 归属二选一与「/ 3.4b」字样都挂在同一个入口判据上
+    expect(setup).toContain('setup.spOwnershipEntryVisible && setup.pendingSpChoice !== null')
+    expect(setup).toContain('setup.spOwnershipEntryVisible"> / 3.4b')
   })
 })
 

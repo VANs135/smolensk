@@ -236,18 +236,28 @@ const pins = computed(() => workbench.exclusiveSectionPins)
       :open="pins.panzer"
       :style="{ order: pins.panzer ? 0 : 100 }"
     >
-      <summary class="excl__title">3.4 装甲集群（分界线 / SP 归属 / 供给均分）</summary>
-      <!-- ── · 装甲集群分界线与 SP 平分（3.4 / 3.4a / 3.4b） ── -->
+      <summary class="excl__title">
+        3.4 装甲集群（分界线<template v-if="workbench.panzerGroupRulesOn">
+          / SP 归属 / 供给均分</template
+        >）
+      </summary>
+      <!-- ── · 装甲集群分界线与 SP 平分（3.4 / 3.4a；3.4b 为可选项） ── -->
       <hr />
       <RuleNote
-        title="装甲集群：分界线义务与到货 SP 均分（奇数点归 Guderian）"
-        rule="3.4 / 3.4a / 3.4b"
+        :title="
+          workbench.panzerGroupRulesOn
+            ? '装甲集群：分界线义务与到货 SP 均分（奇数点归 Guderian）'
+            : '装甲集群：分界线义务'
+        "
+        :rule="workbench.panzerGroupRulesOn ? '3.4 / 3.4a / 3.4b' : '3.4 / 3.4a'"
       >
         <p class="muted">
           装甲集群（3.4）：**至 19 August 止**、**只约束多单位编队**（步兵师与独立单位不受限）。
           Guderian 编队须在分界线**上或南**、Hoth 须在**上或北**；与另一集群**同堆叠或相邻**，
           或处于**错误一侧且在 Orsha 以东**（19.xx 以西不受约束）⇒ 相位末对该编队**一个单位投**
-          DG**（3.4a）。Supply Table 到货在**均分**给两集群后**奇数点归 Guderian**（3.4b）。
+          DG**（3.4a）。<template v-if="workbench.panzerGroupRulesOn"
+            >Supply Table 到货在**均分**给两集群后**奇数点归 Guderian**（3.4b）。</template
+          >
           **编队归属不用玩家设置**：已按素材库的编队目录（3rd Panzer Group → Hoth，其余 → Guderian）
           落进算子数据；下表只在需要**手工覆盖**时才用。
         </p>
@@ -341,13 +351,9 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         3.4b：SP 的**归属**（每座补给站挂在哪个集群）
 
         ★ B50（用户 2026-09-17 口径）：3.4b 是 4.1a 的**可选项**，进开场共识；
-          **未采纳 ⇒ 本块整块不出现**（约束也不生效），只在下面留一句说明。
+          **未采纳 ⇒ 本块整块不出现**（约束也不生效，不留空壳说明）。
       -->
-      <p v-if="!workbench.panzerGroupRulesOn" class="muted">
-        本局**未启用** 3.4b（装甲集群 SP 归属约束）—— 开场共识里那条可选项未采纳 （专规 4.1a「ignore
-        2.3e and/or 3.4」）⇒ SP 归属不受约束，也不出现归属界面。
-      </p>
-      <template v-else>
+      <template v-if="workbench.panzerGroupRulesOn">
         <RuleNote
           title="SP 归属：新到的轴方 SP 必须归属某一装甲集群，「错误」集群不得用于多单位编队"
           rule="3.4b"

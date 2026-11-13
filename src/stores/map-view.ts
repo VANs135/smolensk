@@ -3102,6 +3102,7 @@ export const useMapViewStore = defineStore('mapView', () => {
                 workbench.activeSide === 'axis' && isInRandomEventPeriod(workbench.date),
               // 3.6：只有掷出补给列车且还没落 2 SP 时才排这一窗（未掷出＝没有待办）
               supplyTrainPending: workbench.activeSide === 'axis' && workbench.supplyTrainPending,
+              panzerGroupRulesOn: workbench.panzerGroupRulesOn,
               variableExitPending: workbench.variableExitForActiveSide,
               // 1.6b：补员表窗口每个 B 段都要出现；掷表与落位都办完才允许「本步完成」
               replTablePending: true,
