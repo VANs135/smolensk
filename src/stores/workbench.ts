@@ -22534,6 +22534,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const position = segmentStepPosition.value
     if (position.total === 0) return false
     if (position.index >= position.total - 1) return false
+    /*
+     * 6.1 / 2.2：「移动」只属于本阶段的移动环节 ⇒ 离开该环节（含段内换环节）＝本次移动收束。
+     * 保留已走位置（不是撤销）；若突袭战斗未收束，finishMove() 会拒绝并写 moveBlocked，
+     * 此时不推进，逼玩家先把 8.1a 的 3 MP / 进格收掉。
+     */
+    const moving = moveInteraction.value
+    if (moving !== null && !moving.finished) {
+      finishMove()
+      // 8.1a 的突袭未收束等情况 ⇒ finishMove 拒绝（已写 moveBlocked）⇒ 本环节不推进
+      if (moveInteraction.value?.finished !== true) return false
+      // "已结束"状态下会话框仍挂着 → 换环节时一并收起（炮击/战斗环节不该再出现移动面板）
+      clearMoveInteraction()
+    }
     segmentStepIndex.value = position.index + 1
     const next = segmentStep.value
     if (next !== null) pushLog('info', `环节 → ${next.label}（${next.rule}）`, '2.2')
