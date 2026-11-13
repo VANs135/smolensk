@@ -1250,6 +1250,28 @@ export const useSetupStore = defineStore('setup', () => {
   }
 
   /**
+   * 当前布设方尚未满足的必做项（null＝可以换手）
+   *
+   * 与 `confirmSideSetup` 同一判据：本方的 `shift:` / `truckLoad` / `spOwnership` 未完成即挡；
+   * `sideConfirmation` 自身与 `draw:`（抽签是双方确认后的一次性动作）不算。
+   * UI 据此决定「确认本方布设」是否出现（不可用不摆出来，避免点了只报错）。
+   */
+  const currentSideSetupBlocker = computed(() => {
+    const current = setupSideCursor.value
+    if (current === null) return null
+    return (
+      requiredSetupIssues.value.find(
+        (issue) =>
+          issue.side === current &&
+          issue.id !== 'sideConfirmation' &&
+          // ch10：编队抽取是**双方布设确认之后**的一次性动作，不是某一方的"布设未完成"，
+          // 故不参与换手确认的判据（否则会与"先摆完再抽签"形成死锁）。
+          !issue.id.startsWith('draw:'),
+      ) ?? null
+    )
+  })
+
+  /**
    * 确认**当前方**布设完毕 ⇒ 游标移到还没确认的那一方；两方都确认 ⇒ 游标归位（队列恢复全量）
    *
    * 未落位的项**照旧按既有口径处理**（`finishSetup` 时才记为"本局移除"）——
@@ -1260,15 +1282,8 @@ export const useSetupStore = defineStore('setup', () => {
     if (current === null) {
       return record({ ok: false, rule: SETUP_RULE, reason: 'sideCursorNotArmed' })
     }
-    const required = requiredSetupIssues.value.find(
-      (issue) =>
-        issue.side === current &&
-        issue.id !== 'sideConfirmation' &&
-        // ch10：编队抽取是**双方布设确认之后**的一次性动作，不是某一方的"布设未完成"，
-        // 故不参与换手确认的判据（否则会与"先摆完再抽签"形成死锁）。
-        !issue.id.startsWith('draw:'),
-    )
-    if (required !== undefined)
+    const required = currentSideSetupBlocker.value
+    if (required !== null)
       return record({ ok: false, rule: required.rule, reason: required.detail })
     // 换手后不再接受上一方留下的地图点选。
     placing.value = null
@@ -3382,6 +3397,7 @@ export const useSetupStore = defineStore('setup', () => {
     setupSideConfirmed,
     armSetupSideCursor,
     confirmSideSetup,
+    currentSideSetupBlocker,
     sidePendingCount,
     sideQueue,
     // 初设 box（地图点选放置）

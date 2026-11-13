@@ -225,8 +225,12 @@ function sideMark(side: 'axis' | 'soviet'): string {
     <!--
       第六批条 1（S1）：**分方游标** —— 先布设方（剧本页 `setupFirst`，与"先行动方"是两回事）
       布设完按一下即换手；两方都确认 ⇒ 游标归位、队列恢复全量（未落位者仍按既有口径处理）。
+      ★ 本方还有必做项（SP 归属 / 卡车满载 / 编队西移）未落实时不出现（不摆"点了必被拒"的按钮）。
     -->
-    <div v-if="cursorSide !== null" class="queue__row-actions">
+    <div
+      v-if="cursorSide !== null && setup.currentSideSetupBlocker === null"
+      class="queue__row-actions"
+    >
       <BaseButton variant="primary" size="sm" @click="setup.confirmSideSetup()">
         确认本方布设
       </BaseButton>
@@ -260,6 +264,34 @@ function sideMark(side: 'axis' | 'soviet'): string {
       </div>
       <p class="queue__instruction">点击高亮格落位</p>
     </div>
+
+    <!--
+      3.4b：摆一个确认一个 —— 刚落下的德军 SP / 地图上点中的未归属 SP，二选一常驻在初设栏。
+      修前这份二选一只在「初设与开局」面板（对局台不挂载）⇒ 勾了 3.4b 的初设会卡在
+      「必做事项：SP 归属」且没有任何可点入口。此处与面板同源（`pendingSpChoice`）。
+    -->
+    <div
+      v-if="setup.spOwnershipEntryVisible && setup.pendingSpChoice !== null"
+      class="queue__row-actions"
+    >
+      <span class="queue__hint num">
+        {{ setup.pendingSpChoice.hexText }}（{{ setup.pendingSpChoice.points }}
+        SP）待指定装甲集群（3.4b）：
+      </span>
+      <BaseButton variant="primary" size="sm" @click="setup.choosePendingSpGroup('guderian')">
+        Guderian
+      </BaseButton>
+      <BaseButton variant="primary" size="sm" @click="setup.choosePendingSpGroup('hoth')">
+        Hoth
+      </BaseButton>
+    </div>
+    <p
+      v-else-if="setup.spOwnershipEntryVisible && setup.pendingSpOwnershipHexes.length > 0"
+      class="queue__hint"
+    >
+      地图上高亮 {{ setup.pendingSpOwnershipHexes.length }} 处未指定的德军 SP，点它再选 Guderian /
+      Hoth（3.4b）
+    </p>
 
     <!--
       ★ 用户 2026-11-10：满载名单已达剧本要求 ⇒ 整行**隐藏**（不灰显）；
