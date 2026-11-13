@@ -303,6 +303,29 @@ describe('B14c：参战攻方阵列（9.5b）', () => {
     expect(store.combatAttackerIds).toEqual([second.instanceId])
   })
 
+  it('9.6 默认领军：有效 AR 最大，同 AR 取战斗力最小（DG 的印值 AR 不参与比较）', () => {
+    const store = newStore()
+    const { attacker, extras } = setupBattle(store, 1)
+    const second = extras[0]!
+    // a1：印值 AR5 但 DG ⇒ 有效 AR4；a2：印值 AR4。两者有效 AR 并列，a2 战斗力更小 ⇒ 默认 a2。
+    attacker.raw.ar = 5
+    attacker.raw.attack = 4
+    attacker.mode.dg = true
+    second.raw.ar = 4
+    second.raw.attack = 3
+    second.mode.dg = false
+
+    expect(store.beginCombatNow()).toBe(true)
+    // 标签与默认值同源：DG 单位显示有效 AR4，而不是印值 AR5
+    expect(
+      store.combatAttackerArOptions.find((option) => option.id === attacker.instanceId)?.label,
+    ).toContain('AR4')
+    expect(
+      store.combatAttackerArOptions.find((option) => option.id === second.instanceId)?.label,
+    ).toContain('AR4')
+    expect(store.combatInputs.attackerArUnitId).toBe(second.instanceId)
+  })
+
   it('9.6 AR 候选：攻方取自参战名单、守方取自防御格内守军（阵列的 selected 就是输入项）', () => {
     const store = newStore()
     const { attacker, defender } = setupBattle(store)

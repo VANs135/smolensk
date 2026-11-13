@@ -63,7 +63,7 @@ import { createSupplyPhaseDomain } from './supply-phase'
 import type { SpDump } from './supply-types'
 // B37：分界线的渲染投影类型（渲染层只画被给的东西）
 import type { BoundaryLine } from '@/render/map-render'
-import { createRailFacts, createTraceSupplyAt } from '@/engine/rules'
+import { battleArOf, createRailFacts, createTraceSupplyAt } from '@/engine/rules'
 import { entryEdgeHexes } from '@/engine/rules/entry-edges'
 import { buildUnitSelectionSet, type UnitSelectionSet } from '@/engine/rules/unit-selection'
 // B8：环节链（当前环节由本文件的 `segmentStep` 从这张表推出）
@@ -2618,17 +2618,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return null
   })
 
+  /** 9.6a：AR 候选/默认值统一用**有效** AR（DG −1、战略 0），与引擎 `battleArOf` 同源 */
+  function effectiveArOf(unit: ConsoleUnit): number {
+    return battleArOf({ ar: unit.raw.ar, dg: unit.mode.dg, mode: unit.mode.mode })
+  }
+
   /** C6：攻方/守方的 AR 候选（9.6：每方只能选一个参战单位） */
   const combatAttackerArOptions = computed(() =>
     combatAttackers.value.map((unit) => ({
       id: unit.instanceId,
-      label: `${unit.name}（AR${unit.raw.ar}${unit.mode.dg ? '，DG−1' : ''}）`,
+      label: `${unit.name}（AR${effectiveArOf(unit)}）`,
     })),
   )
   const combatDefenderArOptions = computed(() =>
     battleDefenders.value.map((unit) => ({
       id: unit.instanceId,
-      label: `${unit.name}（AR${unit.raw.ar}${unit.mode.dg ? '，DG−1' : ''}）`,
+      label: `${unit.name}（AR${effectiveArOf(unit)}）`,
     })),
   )
 
@@ -2654,9 +2659,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * B30：**默认的行动值单位**（9.6；用户口径 2026-09-16 #19「可选的前提下默认选交战双方 AR 最高的单位」）
    *
-   * 判据只有一条：取该方**可选集合**里 `raw.ar` 最大者（并列取先，与引擎的 `pickHighestAcv` 同口径）。
+   * 判据：取该方**可选集合**里**有效** AR 最大者（DG −1、战略 0，与引擎 `battleArOf` 同源）；
+   * 同 AR 取战斗力（印值 attack）**最小**者（少牺牲强单位），再按实例 id 稳定排序兜底。
    * 守方走 `combatDefenderArChoices`——那一条已经把专规 2.3b（NKVD 在场时行动值单位必须由它担任）
-   * 收窄过了，故默认值天然合法。
+   * 收窄过了，故默认值天然合法。默认值只影响开战时的预选，玩家仍可换。
    */
   function defaultArUnitIdOf(side: CombatRole): string | null {
     const rows = side === 'attacker' ? combatAttackerArOptions.value : combatDefenderArChoices.value
@@ -2664,8 +2670,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       .map((row) => units.value.find((unit) => unit.instanceId === row.id))
       .filter((unit): unit is ConsoleUnit => unit !== undefined)
     if (pool.length === 0) return null
-    return pool.reduce((best, unit) => (unit.raw.ar > best.raw.ar ? unit : best), pool[0]!)
-      .instanceId
+    return pool.slice().sort((a, b) => {
+      const arDiff = effectiveArOf(b) - effectiveArOf(a)
+      if (arDiff !== 0) return arDiff
+      const strengthDiff = a.raw.attack - b.raw.attack
+      if (strengthDiff !== 0) return strengthDiff
+      return a.instanceId < b.instanceId ? -1 : a.instanceId > b.instanceId ? 1 : 0
+    })[0]!.instanceId
   }
 
   /** C6：守方格的地形候选（9.4c：**只能**格内地形） */
