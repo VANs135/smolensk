@@ -9,6 +9,16 @@ import { airCargoTransportT, type AirCargoLoadView } from './air-cargo'
 import type { HexRef } from '@/data'
 import { sameHex } from '../hex-geometry'
 
+/** 14.9：中止机不再承运；未毁货物按逐机货单决定「随中止机退运」还是「幸存机继续投送」。 */
+export interface AirCargoContinuation {
+  returnOnly: boolean
+  lostCargoIds: string[]
+  /** 继续投送的货物（已剔除损失与随中止机退运的部分） */
+  remainingCargoIds: string[]
+  /** 14.1c：装在中止承运机上、随该机退运的货物 */
+  returningCargoIds?: string[]
+}
+
 /** 14.9：中止机不再承运；未被摧毁的剩余货物按幸存/活动运力决定继续投送或整组返航。 */
 export function planAirCargoContinuation(
   cargo: readonly AirCargoLoadView[],
@@ -24,7 +34,7 @@ export function planAirCargoContinuation(
   },
   flakRounding: boolean,
   cargoByAircraft?: readonly { aircraftId: string; cargoIds: readonly string[] }[],
-) {
+): RuleOutcome<AirCargoContinuation> {
   const loadedT = cargo.reduce((sum, item) => sum + airCargoTransportT(item), 0)
   if (loadedT === 0)
     return succeed('14.9a', { returnOnly: false, lostCargoIds: [], remainingCargoIds: [] })
@@ -37,7 +47,10 @@ export function planAirCargoContinuation(
     const destroyed = new Set(roster.destroyedIds ?? [])
     const active = roster.activeIds === undefined ? null : new Set(roster.activeIds)
     const lostCargoIds: string[] = []
-    const remainingCargoIds: string[] = []
+    /** 仍由**活动**承运机装载、继续投送的货 */
+    const continuingCargoIds: string[] = []
+    /** 装在**已中止**承运机上、随该机退运的货（14.1c：货跟机走，不转给幸存机） */
+    const returningCargoIds: string[] = []
     let cargoOnInactiveCarrier = false
     for (const entry of cargoByAircraft) {
       const isLost =
@@ -46,14 +59,20 @@ export function planAirCargoContinuation(
         lostCargoIds.push(...entry.cargoIds)
         continue
       }
-      if (active !== null && !active.has(entry.aircraftId) && entry.cargoIds.length > 0)
+      if (active !== null && !active.has(entry.aircraftId) && entry.cargoIds.length > 0) {
         cargoOnInactiveCarrier = true
-      remainingCargoIds.push(...entry.cargoIds)
+        returningCargoIds.push(...entry.cargoIds)
+        continue
+      }
+      continuingCargoIds.push(...entry.cargoIds)
     }
-    const remainingLoadedT = remainingCargoIds.reduce((sum, id) => {
-      const item = cargo.find((entry) => entry.id === id)
-      return sum + (item === undefined ? 0 : airCargoTransportT(item))
-    }, 0)
+    const remainingCargoIds = [...continuingCargoIds, ...returningCargoIds]
+    const tOf = (ids: readonly string[]) =>
+      ids.reduce((sum, id) => {
+        const item = cargo.find((entry) => entry.id === id)
+        return sum + (item === undefined ? 0 : airCargoTransportT(item))
+      }, 0)
+    const remainingLoadedT = tOf(remainingCargoIds)
     if (remainingLoadedT === 0)
       return succeed('14.9a', { returnOnly: false, lostCargoIds, remainingCargoIds })
     const liveCapacity = flakRounding ? Math.ceil(roster.liveCapacityT) : roster.liveCapacityT
@@ -65,10 +84,24 @@ export function planAirCargoContinuation(
           : (roster.initialLiveCapacityT ?? roster.liveCapacityT)
         : liveCapacity
     const activeCapacity = flakRounding ? Math.ceil(roster.activeCapacityT) : roster.activeCapacityT
-    if (roster.activeCapacityT === 0 || cargoOnInactiveCarrier)
+    if (roster.activeCapacityT === 0 || (cargoOnInactiveCarrier && active === null))
       return returnCapacity >= remainingLoadedT
         ? succeed('14.1c / 14.9', { returnOnly: true, lostCargoIds, remainingCargoIds })
         : fail('14.9a', 'cargoCannotBeReturned')
+    /*
+     * 14.1c / 14.9e：部分承运机中止 ⇒ **中止机自载的货随它退运**，
+     * 幸存活动机继续投送自己货单里的货（不再把整组货一起退回）。
+     */
+    if (returningCargoIds.length > 0) {
+      if (activeCapacity < tOf(continuingCargoIds))
+        return fail('14.9a', 'cargoExceedsActiveCarrierCapacity')
+      return succeed('14.9a', {
+        returnOnly: false,
+        lostCargoIds,
+        remainingCargoIds: continuingCargoIds,
+        returningCargoIds,
+      })
+    }
     if (activeCapacity < remainingLoadedT) return fail('14.9a', 'cargoExceedsActiveCarrierCapacity')
     return succeed('14.9a', { returnOnly: false, lostCargoIds, remainingCargoIds })
   }
@@ -87,7 +120,18 @@ export function planAirCargoContinuation(
       lostCargoIds: [],
       remainingCargoIds: cargo.map((item) => item.id),
     })
-  if (roster.inactiveCarriers > 0) return fail('14.9a', 'cargoCarrierAllocationRequired')
+  /*
+   * 14.1c：部分承运机中止（未毁）⇒ 中止机把自载货物带回基地；没有逐机货单可归属时，
+   * 原编组按整组退运处理（不猜哪件货在谁机上，也不拒住流程）。
+   */
+  if (roster.inactiveCarriers > 0)
+    return live >= loadedT
+      ? succeed('14.1c / 14.9', {
+          returnOnly: true,
+          lostCargoIds: [],
+          remainingCargoIds: cargo.map((item) => item.id),
+        })
+      : fail('14.9a', 'cargoCannotBeReturned')
   if (active < loadedT) return fail('14.9a', 'cargoExceedsActiveCarrierCapacity')
   return succeed('14.9a', {
     returnOnly: false,

@@ -38,7 +38,7 @@ import {
   canReduceAirBase,
   refitEligibility,
   resolveBaseTransfer,
-  planOffMapAirBoxFlight,
+  planOffMapAirBoxFlightFromHex,
   type AirBaseOperatingUnit,
 } from './air-mission'
 // 15.2E：简易机场永不缩减的常量（唯一实现）在 construction.ts
@@ -2163,11 +2163,13 @@ export function completeAirReturnStep(
       continue
     }
 
-    // 专规 1.4a：图上起飞的飞机也可在返航时直接**移入图外空军盒**（固定航程代价）
+    // 专规 1.4a：图上起飞的飞机也可在返航时直接**移入图外空军盒**
+    // 代价＝连接列 20/30 + 任务格到连接列的列距（不是只看 20/30）
     if (item.offMapBox === true) {
-      const flight = planOffMapAirBoxFlight({
+      const flight = planOffMapAirBoxFlightFromHex({
         side: state.side,
         rangeHexes: origin.rangeHexes,
+        fromHex: state.targetHex,
       })
       if (!flight.ok) return flight
       if (!stayActive.includes(item.aircraftId)) inactiveAircraftIds.push(item.aircraftId)

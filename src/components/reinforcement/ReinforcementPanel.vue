@@ -247,6 +247,8 @@ interface ArrivalHandCard {
   raw: string
   image: string | null
   aircraft: boolean
+  /** 专规 1.4a：该飞机条目还能落到图外空军盒（盒无格号，走独立按钮） */
+  airBoxAvailable: boolean
   noCandidates: boolean
   detail: string
   formationMissing: number
@@ -257,12 +259,14 @@ function arrivalCardOf(index: number): ArrivalHandCard | null {
   if (unit === undefined) return null
   const candidates = workbench.arrivalCandidates[index]?.length ?? 0
   const formation = workbench.resolveArrivalFormation(index)
+  const airBoxAvailable = workbench.arrivalAirBoxAvailable(index)
   return {
     index,
     raw: unit.raw,
     image: arrivalImageUrl(index),
     aircraft: unit.kind === 'aircraft',
-    noCandidates: candidates === 0,
+    airBoxAvailable,
+    noCandidates: candidates === 0 && !airBoxAvailable,
     detail: workbench.arrivalPlacements[index]?.detail ?? '本条目没有可用的入场格',
     formationMissing: formation?.missing.length ?? 0,
   }
@@ -410,11 +414,20 @@ function pickArrival(index: number): void {
     return
   }
   activeArrivalIndex.value = index
+  // 专规 1.4a：图上没有基地格但盒可用 ⇒ 停在手牌上，由「图外空军盒」按钮投放
+  if ((workbench.arrivalCandidates[index]?.length ?? 0) === 0) return
   const picked = arrivalRecordIdOf(index)
   if (!workbench.beginArrivalPlacePickNow(index, picked === '' ? undefined : picked)) {
     activeArrivalIndex.value = null
     handError.value = card.detail
   }
+}
+
+/** 专规 1.4a / 13.6（U25）：把选中的飞机条目直接投放到图外空军盒 */
+function placeArrivalInBox(index: number): void {
+  handError.value = ''
+  if (!workbench.placeArrivalInAirBoxNow(index)) return
+  activeArrivalIndex.value = null
 }
 
 function withdrawArrival(index: number): void {
@@ -685,7 +698,9 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           :title="
             card.noCandidates
               ? `${card.raw}：${card.detail}`
-              : `${card.raw}：点一下 → 地图高亮入场格 → 点格落位`
+              : card.airBoxAvailable
+                ? `${card.raw}：点一下 → 地图入场格或图外空军盒（1.4a）`
+                : `${card.raw}：点一下 → 地图高亮入场格 → 点格落位`
           "
           data-testid="arrival-hand-card"
           @click="pickArrival(card.index)"
@@ -725,6 +740,16 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           铁路运输 · 13.6b
         </BaseButton>
         <span class="muted">从含铁路的入场格出发，消耗本回合运力</span>
+      </div>
+      <!-- 专规 1.4a：盒按空军基地计，「任意友方空军基地」含盒（U25） -->
+      <div
+        v-if="activeArrivalIndex !== null && workbench.arrivalAirBoxAvailable(activeArrivalIndex)"
+        class="row"
+        data-testid="arrival-airbox-entry"
+      >
+        <BaseButton variant="secondary" size="sm" @click="placeArrivalInBox(activeArrivalIndex)">
+          图外空军盒 · 1.4a
+        </BaseButton>
       </div>
       <!-- 3.4b：非编队运输点带来的 SP 入场前必须选定集群 -->
       <div v-if="workbench.arrivalTransportSpNeedsGroup" class="row" data-testid="arrival-sp-group">

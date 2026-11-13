@@ -2261,14 +2261,14 @@ export const useMapViewStore = defineStore('mapView', () => {
   /**
    * 14.11 + 专规 1.4a：确认把已勾选的飞机移入图外空军盒
    *
-   * 进入盒不需要在图上点格（盒没有格）。航程（20/30 + 列差）已由 store 预检，
-   * 这里只对每架飞机调用既有的盒成员入口（同一份 `setAirInBox` 账本）。
+   * 进入盒不需要在图上点格（盒没有格）。航程（1.4a：20/30 + 列差，14.11 转移可用双倍）
+   * 已由 store 预检，这里对每架飞机走**转场**入口（同一份盒成员账本 + 14.11 激活态）。
    */
   function confirmTransferToBoxNow(): boolean {
     if (!workbench.transferBoxReady) return false
     const ids = [...workbench.transferSelectedIds]
     for (const id of ids) {
-      if (!containers.setAirInBox(id, true)) return false
+      if (!containers.transferAirToBox(id)) return false
     }
     workbench.cancelTransferNow()
     return true

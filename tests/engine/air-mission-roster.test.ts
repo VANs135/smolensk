@@ -58,11 +58,11 @@ describe('14.1 / 14.9：任务存活名单与整组退运', () => {
       inactiveCarriers: 1,
     })
   })
-  it('部分中止不静默转移货物；整组中止且运力足够可退运', () => {
+  it('部分中止按 14.1c 整组退运（货随中止机回基地，不转给幸存机）', () => {
     const partial = airMissionRoster(assignment, [plane('flying'), plane('aborted', 'inactive')])
     expect(planAirCargoContinuation(assignment.cargo, partial, false)).toMatchObject({
-      ok: false,
-      reason: 'cargoCarrierAllocationRequired',
+      ok: true,
+      data: { returnOnly: true, remainingCargoIds: ['sp:1'] },
     })
     const all = airMissionRoster(assignment, [
       plane('flying', 'inactive'),
@@ -71,6 +71,34 @@ describe('14.1 / 14.9：任务存活名单与整组退运', () => {
     expect(planAirCargoContinuation(assignment.cargo, all, false)).toMatchObject({
       ok: true,
       data: { returnOnly: true },
+    })
+  })
+  it('逐机货单：部分承运机中止 ⇒ 中止机的货随它退运，幸存机继续投送自己的货（14.1c / 14.9e）', () => {
+    const cargo = [
+      { id: 'sp:1', kind: 'sp' as const, t: 1 },
+      { id: 'sp:2', kind: 'sp' as const, t: 1 },
+    ]
+    const roster = {
+      activeIds: ['b'],
+      liveIds: ['a', 'b'],
+      destroyedIds: [],
+      activeCapacityT: 1,
+      liveCapacityT: 2,
+      inactiveCarriers: 1,
+    }
+    expect(
+      planAirCargoContinuation(cargo, roster, false, [
+        { aircraftId: 'a', cargoIds: ['sp:1'] },
+        { aircraftId: 'b', cargoIds: ['sp:2'] },
+      ]),
+    ).toMatchObject({
+      ok: true,
+      data: {
+        returnOnly: false,
+        lostCargoIds: [],
+        remainingCargoIds: ['sp:2'],
+        returningCargoIds: ['sp:1'],
+      },
     })
   })
   it('逐机货单：被摧毁承运机的货物确定损失，不转给幸存机（14.9e）', () => {

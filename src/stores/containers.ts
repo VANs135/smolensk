@@ -28,6 +28,7 @@ import {
   boxOfRegion,
   planAirBoxActivate,
   planOffMapAirBoxFlight,
+  planOffMapAirBoxFlightFromHex,
   planBreakdownTake,
   planEdgeBoxMove,
   edgeBoxConnectsHex,
@@ -2151,6 +2152,57 @@ export const useContainersStore = defineStore('containers', () => {
   }
 
   /**
+   * 14.11 + 专规 1.4a：**转场（基地 → 图外空军盒）**
+   *
+   * 盒按空军基地计（用户口径）⇒ 基地转移距离可增加一倍（14.11），
+   * 代价仍按 1.4a＝连接列 20/30 + 该基地到连接列的列差。
+   * 战斗机在正常航程内保持激活；超出正常航程（≤ 双倍）转非激活（14.11）。
+   */
+  function transferAirToBox(instanceId: string): boolean {
+    if (!workbench.requireAction('air.transfer', '转场进入地图外空军盒（14.11）')) {
+      lastAction.value = {
+        ok: false,
+        rule: '14.11',
+        detail: '转场只在移动环节执行（14.2e / 14.11）',
+        scope: '地图外空军盒',
+      }
+      return false
+    }
+    const air = workbench.airUnits.find((item) => item.instanceId === instanceId)
+    if (air === undefined) return false
+    const flight = planOffMapAirBoxFlightFromHex({
+      side: air.side,
+      rangeHexes: air.rangeHexes * 2,
+      fromHex: air.hex,
+    })
+    if (!flight.ok) {
+      lastAction.value = {
+        ok: false,
+        rule: flight.rule,
+        detail: `${air.name} 转场进盒超出航程：${flight.reason}`,
+        scope: '地图外空军盒',
+      }
+      workbench.pushLog('danger', lastAction.value.detail, flight.rule)
+      return false
+    }
+    workbench.setAirInBoxMembership(instanceId, true)
+    if (!(
+      air.airStatus === 'active' &&
+      air.aircraftType === 'F' &&
+      flight.data.rangeCost <= air.rangeHexes
+    ))
+      air.airStatus = 'inactive'
+    lastAction.value = {
+      ok: true,
+      rule: '14.11',
+      detail: `${air.name} 转场进入地图外空军盒（14.11：航程 ${flight.data.rangeCost} 格；1.4a 盒）`,
+      scope: '地图外空军盒',
+    }
+    workbench.pushLog('info', lastAction.value.detail, '14.11')
+    return true
+  }
+
+  /**
    * 条 14（用户实机）：「飞出盒」不是一按就消失
    *
    * 规则上等同 14.11 基地转移：先选本方空军基地 → 按 14.11 判距离/激活态并落位 →
@@ -2627,6 +2679,7 @@ export const useContainersStore = defineStore('containers', () => {
     applyDraw,
     activateAirBox,
     setAirInBox,
+    transferAirToBox,
     flyOutOfBox,
     moveEdgeBox,
     canUseEdgeBoxes,

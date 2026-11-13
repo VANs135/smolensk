@@ -26,6 +26,8 @@ import {
   isCombatOrBarrageAllowedInOffMapBox,
   isEdgeBoxExitFuelFree,
   airUnloadLimitT,
+  airDistanceToOffMapBox,
+  planOffMapAirBoxFlightFromHex,
   missionSegmentOf,
   planAirUnload,
   refitCapacity,
@@ -533,5 +535,32 @@ describe('15.0b-C / 14.9f：空运卸载上限（等级×2T；简易机场 2T；
     expect(plan.ok).toBe(true)
     if (!plan.ok) return
     expect(plan.data).toMatchObject({ allowedT: 0, refusedT: 3, limitT: 0 })
+  })
+})
+
+describe('专规 1.4a：图上格 ↔ 图外空军盒的航程（盒按基地计）', () => {
+  it('盒代价＝连接列固定 20/30 **加上**到连接列的列距（不是只看 20/30）', () => {
+    // 轴方盒 ↔ 01.xx：30 格；苏方盒 ↔ 62.xx：20 格
+    expect(airDistanceToOffMapBox('axis', { col: 1, row: 10 })).toBe(30)
+    expect(airDistanceToOffMapBox('axis', { col: 2, row: 10 })).toBe(31)
+    expect(airDistanceToOffMapBox('soviet', { col: 62, row: 20 })).toBe(20)
+    expect(airDistanceToOffMapBox('soviet', { col: 60, row: 20 })).toBe(22)
+  })
+
+  it('航程不足即不可达；等于代价可达', () => {
+    expect(
+      planOffMapAirBoxFlightFromHex({
+        side: 'axis',
+        rangeHexes: 30,
+        fromHex: { col: 2, row: 10 },
+      }).ok,
+    ).toBe(false)
+    expect(
+      planOffMapAirBoxFlightFromHex({
+        side: 'axis',
+        rangeHexes: 31,
+        fromHex: { col: 2, row: 10 },
+      }).ok,
+    ).toBe(true)
   })
 })

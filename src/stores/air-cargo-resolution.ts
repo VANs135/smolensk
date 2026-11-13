@@ -85,7 +85,7 @@ export function createAirCargoResolutionDomain(ports: {
     if (continuation === null) {
       ports.pushLog(
         'warning',
-        '承运机已中止或运力不足；请整组返航，部分货物分流需要先明确分机货单',
+        '承运机被毁且无逐机货单（或运力不足），无法确定货物归属；请核对货单（14.9a / 14.9e）',
         '14.9a',
       )
       return false
@@ -111,7 +111,28 @@ export function createAirCargoResolutionDomain(ports: {
         detail: `${id}：承运机被毁 ⇒ 货物损失（14.9a / 14.9e）`,
       }
     })
-    const activeCargo = state.assignment.cargo.filter((item) => !lostIds.has(item.id))
+    /*
+     * 14.1c / 14.9e：装在中止承运机上的货**随该机退运**，不进入幸存机的投送/卸载判定；
+     * 在返航步按逐机货单回到该机实际选择的返航基地。
+     */
+    const returningCargoIds = continuation.returningCargoIds ?? []
+    const returningIds = new Set(returningCargoIds)
+    const returningItems = returningCargoIds.map((id) => {
+      const item = state.assignment.cargo.find((entry) => entry.id === id)
+      return {
+        id,
+        kind: item?.kind ?? ('sp' as const),
+        die2d6: null,
+        modified: null,
+        threshold: null,
+        success: true,
+        fate: 'retained' as const,
+        detail: `${id}：承运机已中止 ⇒ 随该机退运，返航时回到其返航基地（14.1c / 14.9e）`,
+      }
+    })
+    const activeCargo = state.assignment.cargo.filter(
+      (item) => !lostIds.has(item.id) && !returningIds.has(item.id),
+    )
     const rngBefore = ports.rng()
     const dice =
       state.kind === 'air_drop' && !returnOnly
@@ -167,11 +188,18 @@ export function createAirCargoResolutionDomain(ports: {
     const resolved = applyAirCargoUnloadResult(result, plan)
     const final: AirCargoResolution = {
       ...resolved,
-      items: [...lostItems, ...resolved.items],
-      detail:
+      items: [...lostItems, ...returningItems, ...resolved.items],
+      detail: [
+        resolved.detail,
         lostCargoIds.length === 0
-          ? resolved.detail
-          : `${resolved.detail}；承运机被毁致 ${String(lostCargoIds.length)} 件货物损失（14.9e）`,
+          ? null
+          : `承运机被毁致 ${String(lostCargoIds.length)} 件货物损失（14.9e）`,
+        returningCargoIds.length === 0
+          ? null
+          : `${String(returningCargoIds.length)} 件货随中止承运机退运（14.1c）`,
+      ]
+        .filter((part): part is string => part !== null)
+        .join('；'),
     }
     // 全部判定成功后只经过这一个盘面提交入口；先失败的预览不改单位、库存或账本。
     if (!ports.commit(state, final, plan)) {

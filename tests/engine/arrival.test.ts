@@ -628,3 +628,49 @@ describe('专规 2.4：Slow Mobilization 的解锁', () => {
     expect([before.active, after.active]).toEqual([true, false])
   })
 })
+
+describe('专规 1.4a / 13.6（U25）：「任意友方空军基地」含图外空军盒', () => {
+  const placement = { kind: 'anyAirbase' as const, label: 'Any Airbase' }
+  const airBox = { id: 'axis-air-box', label: 'Luftwaffe Box' }
+
+  it('图上基地可用 ⇒ 仍落图上基地，detail 说明另含盒', () => {
+    const result = resolveArrivalPlacement(placement, facts({ friendlyAirBox: () => airBox }))
+    expect(result).toMatchObject({ status: 'placed', hex: hex(36, 13) })
+    expect(result.airBox).toBeUndefined()
+    expect(result.detail).toContain('图外空军盒')
+  })
+
+  it('图上没有友方基地 ⇒ 落图外空军盒（盒按基地计）', () => {
+    const result = resolveArrivalPlacement(
+      placement,
+      facts({ friendlyAirBaseHexes: () => [], friendlyAirBox: () => airBox }),
+    )
+    expect(result).toMatchObject({
+      status: 'placedInAirBox',
+      hex: null,
+      airBox: 'axis-air-box',
+    })
+  })
+
+  it('图上基地格全被敌单位占据 ⇒ 落图外空军盒', () => {
+    const result = resolveArrivalPlacement(
+      placement,
+      facts({ isBlocked: (target) => target.col === 36, friendlyAirBox: () => airBox }),
+    )
+    expect(result).toMatchObject({ status: 'placedInAirBox', airBox: 'axis-air-box' })
+  })
+
+  it('没有注入盒事实 ⇒ 保持原行为（无基地即 noAirbase）', () => {
+    const result = resolveArrivalPlacement(placement, facts({ friendlyAirBaseHexes: () => [] }))
+    expect(result).toMatchObject({ status: 'noAirbase', hex: null })
+  })
+
+  it('盒不是「任意空军基地」落点时不出现在候选里', () => {
+    const result = resolveArrivalPlacement(
+      { kind: 'entryHex', letters: ['K'], label: 'Entry K' },
+      facts({ friendlyAirBox: () => airBox, isBlocked: () => false }),
+    )
+    expect(result.status).toBe('placed')
+    expect(result.airBox).toBeUndefined()
+  })
+})

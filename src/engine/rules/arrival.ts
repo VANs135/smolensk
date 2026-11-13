@@ -555,6 +555,12 @@ export interface ArrivalPlacementFacts {
   nearestOpenEdgeHex(from: HexRef): HexRef | null
   /** 13.6：该方当前可用的友方空军基地格 */
   friendlyAirBaseHexes(): readonly HexRef[]
+  /**
+   * 专规 1.4a / 13.6（U25）：该方的**图外空军盒**——盒按空军基地计，
+   * 故「任意友方空军基地」包含它（盒无格号，单独作为落点类型返回）。
+   * 缺省不传＝不把盒算进候选（既有调用方不必改）。
+   */
+  friendlyAirBox?(): { id: string; label: string } | null
   /** 2.1 / 3.1：能以**直接拖取**取得追溯补给的友方 HQ 格 */
   directDrawHqHexes(): readonly HexRef[]
   /** 2.1 / 3.1：地图边缘补给源格 */
@@ -581,8 +587,18 @@ export interface ArrivalPlacementFacts {
 
 /** 落点解算结论 */
 export interface ArrivalPlacementResult {
-  status: 'placed' | 'fallbackEdge' | 'entryShutDown' | 'noHex' | 'noAirbase' | 'noHq' | 'deadPile'
+  status:
+    | 'placed'
+    | 'placedInAirBox'
+    | 'fallbackEdge'
+    | 'entryShutDown'
+    | 'noHex'
+    | 'noAirbase'
+    | 'noHq'
+    | 'deadPile'
   hex: HexRef | null
+  /** 专规 1.4a：`placedInAirBox` 时落的是哪个图外空军盒（无地图格号） */
+  airBox?: string
   rule: string
   detail: string
 }
@@ -632,6 +648,7 @@ export function arrivalPlacementCandidates(
 
     case 'anyAirbase':
       // 4.8c / 13.6b：不得落在**敌单位格**（可进敌方 ZOC，但不得与敌单位同格）
+      // 专规 1.4a：图外空军盒也算基地，但盒没有格号 ⇒ 由 `arrivalPlacementAirBox` 单独给出
       return facts.friendlyAirBaseHexes().filter((hex) => !facts.isBlocked(hex))
 
     case 'anyWestEdge':
@@ -676,6 +693,21 @@ export function arrivalPlacementCandidates(
 }
 
 /**
+ * 专规 1.4a + 13.6（U25）：`anyAirbase` 的**图外空军盒**候选
+ *
+ * 「增援的飞机会在任意友方空军基地处以激活状态到达」；盒按空军基地计（用户 2026-11-13 裁定），
+ * 故盒也是合法落点。盒无格号，不能混进 `arrivalPlacementCandidates` 的 `HexRef[]`，
+ * 由界面把它作为同级的第二个落点入口（投放动作走 `placeArrivalInAirBoxNow`）。
+ */
+export function arrivalPlacementAirBox(
+  placement: ArrivalPlacement,
+  facts: ArrivalPlacementFacts,
+): { id: string; label: string } | null {
+  if (placement.kind !== 'anyAirbase') return null
+  return facts.friendlyAirBox?.() ?? null
+}
+
+/**
  * 把一个落点声明解算成具体格（13.6 / 13.6b / 专规 2.1a）
  *
  * - 入口格被敌方阻挡 ⇒ 取**最近的未被阻挡的地图边缘格**（13.6b）；
@@ -693,26 +725,47 @@ export function resolveArrivalPlacement(
 
     case 'anyAirbase': {
       const bases = facts.friendlyAirBaseHexes()
+      const box = facts.friendlyAirBox?.() ?? null
+      // 专规 1.4a（U25）：盒按空军基地计，「任意友方空军基地」包含盒
       if (bases.length === 0)
-        return {
-          status: 'noAirbase',
-          hex: null,
-          rule: '13.6',
-          detail: '该方没有友方空军基地，飞机无法以激活状态到达（13.6）',
-        }
+        return box === null
+          ? {
+              status: 'noAirbase',
+              hex: null,
+              rule: '13.6',
+              detail: '该方没有友方空军基地，飞机无法以激活状态到达（13.6）',
+            }
+          : {
+              status: 'placedInAirBox',
+              hex: null,
+              airBox: box.id,
+              rule: '13.6 / 1.4a',
+              detail: `任一友方空军基地：图外空军盒（${box.label}；13.6：以激活状态到达）`,
+            }
       const open = bases.filter((hex) => !facts.isBlocked(hex))
       if (open.length === 0)
-        return {
-          status: 'noAirbase',
-          hex: null,
-          rule: '13.6b',
-          detail: '友方空军基地格均被敌方单位占据，飞机不得与敌方单位同格（13.6b / 4.8c）',
-        }
+        return box === null
+          ? {
+              status: 'noAirbase',
+              hex: null,
+              rule: '13.6b',
+              detail: '友方空军基地格均被敌方单位占据，飞机不得与敌方单位同格（13.6b / 4.8c）',
+            }
+          : {
+              status: 'placedInAirBox',
+              hex: null,
+              airBox: box.id,
+              rule: '13.6b / 1.4a',
+              detail: `图上友方基地格均被敌单位占据 ⇒ 落图外空军盒（${box.label}；1.4a）`,
+            }
       return {
         status: 'placed',
         hex: open[0]!,
         rule: '13.6',
-        detail: `任一友方空军基地（共 ${open.length} 处候选；13.6：以激活状态到达）`,
+        detail:
+          box === null
+            ? `任一友方空军基地（共 ${open.length} 处候选；13.6：以激活状态到达）`
+            : `任一友方空军基地（图上 ${open.length} 处候选，另含图外空军盒；13.6：以激活状态到达）`,
       }
     }
 

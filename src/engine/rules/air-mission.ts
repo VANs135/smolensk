@@ -2,6 +2,7 @@ import { markers, rulesConstants } from '@/data'
 import type { HexRef, Side } from '@/data'
 
 import { fail, succeed, type RuleOutcome } from '../result-types'
+import { hexDistance } from '../hex-geometry'
 import type { AirStatus, GamePhase, UnitMode } from '../state-types'
 import {
   AIR_MISSION_MAX_AIRCRAFT,
@@ -519,6 +520,30 @@ export function planOffMapAirBoxFlight(input: {
   rangeHexes: number
 }): RuleOutcome<OffMapAirBoxFlight> {
   const rangeCost = airBoxRangeHexes(input.side)
+  if (input.rangeHexes < rangeCost)
+    return fail('专规 1.4a', `offMapBoxBeyondRange:${input.rangeHexes}<${rangeCost}`)
+  return succeed('专规 1.4a', { rangeCost })
+}
+
+/**
+ * 专规 1.4a：**图上某格 ↔ 图外空军盒**的航程
+ *
+ * 原文：「Moving between the … Box and the map's 62.xx / 01.xx row costs 20 / 30 hexes of range」，
+ * 例：「A Bf.110 based off-map is 44 hexes from Mogilev (15.10)」⇒ 44 = 20 + 62 列到 15.10 的列差。
+ * 故代价＝固定 20/30 **加上**该格到连接列的格距，不是只看 20/30。
+ */
+export function airDistanceToOffMapBox(side: AirBoxSide, hex: HexRef): number {
+  const edgeColumn = airBoxEdgeColumn(side)
+  return hexDistance({ col: edgeColumn, row: hex.row }, hex) + airBoxRangeHexes(side)
+}
+
+/** 专规 1.4a：从图上某格飞往/返回图外空军盒是否在给定航程内 */
+export function planOffMapAirBoxFlightFromHex(input: {
+  side: AirBoxSide
+  rangeHexes: number
+  fromHex: HexRef
+}): RuleOutcome<OffMapAirBoxFlight> {
+  const rangeCost = airDistanceToOffMapBox(input.side, input.fromHex)
   if (input.rangeHexes < rangeCost)
     return fail('专规 1.4a', `offMapBoxBeyondRange:${input.rangeHexes}<${rangeCost}`)
   return succeed('专规 1.4a', { rangeCost })

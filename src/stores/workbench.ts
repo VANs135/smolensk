@@ -100,10 +100,12 @@ import {
   airBaseBuildCostSp,
   airBoxEdgeColumn,
   airBoxRangeHexes,
+  airDistanceToOffMapBox,
   airMissionTargetCandidates as engineAirMissionTargetCandidates,
   airMissionTargetTypeAllowed,
   type AirTargetHexFacts,
   planOffMapAirBoxFlight,
+  planOffMapAirBoxFlightFromHex,
   claimFrontalReserves,
   constructionTaskCostsSp,
   frontalReservesBatch,
@@ -288,6 +290,7 @@ import {
   resolveAdvance,
   resolveAirCombatRounds,
   arrivalPlacementCandidates,
+  arrivalPlacementAirBox,
   airBaseAt,
   resolveArrivalPlacement,
   entryClosedForAllSides,
@@ -354,6 +357,7 @@ import {
   type ArrivalPlacementFacts,
   type ArrivalPlacementResult,
   type ArrivalPlan,
+  type ArrivalUnitDemand,
   type BarrageKind,
   type BarrageTargetKind,
   type BarrageUnitPatch,
@@ -5309,7 +5313,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 14.1c / 专规 1.4a：返航三选一的**可用性**
    *
    * - `departureAvailable`：出发基地仍是**本方**空军基地；自图外盒起飞者恒可回盒。
-   * - `offMapBoxAvailable`：图上起飞的飞机，印刷航程 ≥ 盒代价（苏 20 / 轴 30）。
+   * - `offMapBoxAvailable`：图上起飞的飞机，`目标格 → 盒`（1.4a：连接列 20/30 + 列距）
+   *   ≤ 印刷航程（14.1c 返航用正常航程，不翻倍）。
    *   空运/空投任务只有**货全部卸完**才放行（14.9f：未卸载的货仍在机上，返盒没有入库规则）。
    * - `offMapBoxBlockedReason`：上一条被拒时给界面的原因（子项本身不出现）。
    * - `otherBases`：剩余航程（`target → base ≤ 印刷航程`）内的其它己方基地格。
@@ -5339,7 +5344,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       // 14.9f：`assignment.cargo` 是卸载/货损后的余量 ⇒ 非空即「货还在机上」
       // 空运/空投只有货全卸完才放行返盒（用户 2026-11-13 批复的最小改法）
       const cargoRemaining = cargoMission && state.assignment.cargo.length > 0
-      const boxReachable = planOffMapAirBoxFlight({ side: state.side, rangeHexes: range }).ok
+      // 专规 1.4a：从**任务格**回盒的代价＝20/30 + 任务格到连接列的列距（不是只看 20/30）
+      const boxReachable = planOffMapAirBoxFlightFromHex({
+        side: state.side,
+        rangeHexes: range,
+        fromHex: state.targetHex,
+      }).ok
       return {
         aircraftId: origin.aircraftId,
         fromBox,
@@ -5676,17 +5686,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return airUnitsAt(base.hex, base.side)
   })
 
-  /** 14.11：基地 → 盒的航程（专规 1.4a：盒连接列 20/30 + 与连接列的列差） */
+  /** 14.11：基地 → 盒的航程（专规 1.4a：盒连接列 20/30 **加上**与连接列的列差） */
   function airDistanceToBox(air: ConsoleAirUnit): number {
-    return airDistanceFromRealBase(air, {
-      col: airBoxEdgeColumn(air.side),
-      row: air.hex.row,
-    })
+    return airDistanceToOffMapBox(air.side, air.hex)
   }
 
-  /** 这架机是否够得到（转场）盒 */
+  /** 这架机是否够得到（转场）盒：14.11 基地转移距离**可增加一倍** */
   function canTransferAirToBox(air: ConsoleAirUnit): boolean {
-    return airDistanceToBox(air) <= air.rangeHexes
+    return airDistanceToBox(air) <= air.rangeHexes * 2
   }
 
   const transferBoxReady = computed(
@@ -5698,18 +5705,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }),
   )
 
-  /** 14.11：基地→基地距离**可增加一倍**（`*2`）；盒→基地按 1.4a 原航程（不翻倍） */
+  /** 14.11：基地→基地距离**可增加一倍**（`*2`）；图外盒按 1.4a 也是空军基地，盒→基地按 1.4a 盒代价 */
   const transferBaseCandidates = computed<HexRef[]>(() => {
     if (transferMode.value !== 'base' || transferSelectedIds.value.length === 0) return []
-    const marker = transferFromBox.value ? 1 : 2
     const selected = transferSelectedIds.value
       .map((id) => airUnits.value.find((item) => item.instanceId === id))
       .filter((air): air is ConsoleAirUnit => air !== undefined)
     if (selected.length === 0) return []
+    const fromBox = transferFromBox.value
     return ownAirBases.value
       .filter((base) => base.id !== transferBaseId.value)
       .filter((base) =>
-        selected.every((air) => airDistanceFromRealBase(air, base.hex) <= air.rangeHexes * marker),
+        selected.every((air) =>
+          fromBox
+            ? airDistanceToOffMapBox(air.side, base.hex) <= air.rangeHexes * 2
+            : airDistanceFromRealBase(air, base.hex) <= air.rangeHexes * 2,
+        ),
       )
       .map((base) => base.hex)
   })
@@ -5788,10 +5799,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (selected.length === 0) return false
     if (!transferBaseCandidates.value.some((hex) => sameHex(hex, dest))) return false
     for (const air of selected) {
-      const distance = airDistanceFromRealBase(air, dest)
+      // 14.11：盒→基地按 1.4a 盒代价（20/30 + 列距）；图上基地→基地按格距
+      const distance = transferFromBox.value
+        ? airDistanceToOffMapBox(air.side, dest)
+        : airDistanceFromRealBase(air, dest)
       if (transferFromBox.value) setAirInBoxMembership(air.instanceId, false)
       air.hex = { col: dest.col, row: dest.row }
-      air.airStatus = distance <= air.rangeHexes ? 'active' : 'inactive'
+      // 14.11：只有**战斗机**在正常距离内保持激活；其余机型/超出正常距离一律非激活
+      air.airStatus =
+        isFighterAircraft(air.aircraftType) && distance <= air.rangeHexes ? 'active' : 'inactive'
     }
     pushLog('info', `转场（14.11）：${selected.length} 架飞机转到 ${hexLabel(dest)}`, '14.11')
     cancelTransferNow()
@@ -18703,17 +18719,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('info', '没有活动任务机，跳过防空并处理退运或货物损失', '14.2f-E')
       return true
     }
+    /*
+     * 14.1c / 14.9e：部分承运机中止时**不再拒在 E 步** ——
+     * 中止机自载的货随它退运，幸存机继续投送各自货单里的货（见 `planAirCargoContinuation`
+     * 的 `returningCargoIds`）；旧档没有逐机货单时按整组退运，不猜归属。
+     */
     if (
       state.assignment.cargo.length > 0 &&
-      ((airMissionRosterNow.value?.inactiveCarriers ?? 0) > 0 ||
-        (airMissionRosterNow.value?.lostCarriers ?? 0) > 0) &&
+      airMissionRosterNow.value?.liveCapacityT === 0 &&
       !hasCargoOwnership(state)
-    ) {
-      if (airMissionRosterNow.value?.liveCapacityT === 0) queueAirCargoLoss(0, '14.1b')
-      airError.value = { rule: '14.9a', reason: 'cargoCarrierAllocationRequired' }
-      pushLog('warning', '部分承运机已中止；当前货单需要整组返航，逐机分流尚待处理', '14.9a')
-      return false
-    }
+    )
+      queueAirCargoLoss(0, '14.1b')
     const inputs = airInputs.value
     const inPatrolZone = airTargetInEnemyPatrolZone.value
     // 14.1b/14.4f：任务损失表的 W/S 按**当前面**轰炸值选（减损机用减损面值）
@@ -19493,8 +19509,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 条 14：盒内飞出盒复用 14.11 落位判据，目的地可由调用方直接给（不写回面板输入）
     const air = airUnits.value.find((item) => item.instanceId === instanceId)
     if (air === undefined) return false
+    // 专规 1.4a：盒成员从**盒**出发（盒内飞机没有"当前所在基地格"）
+    const inBox = airBoxMembers.value.includes(air.instanceId)
     const fromBase = airBases.value.find((base) => sameHex(base.hex, air.hex))
-    if (fromBase === undefined) {
+    if (!inBox && fromBase === undefined) {
       pushLog('warning', `${air.name} 不在空军基地格内（14.1a）`, '14.1a')
       return false
     }
@@ -19508,6 +19526,40 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `${hexLabel(toHex)} 没有空军基地（14.11）`, '14.11')
       return false
     }
+    // 专规 1.4a：盒 → 图上基地。代价＝连接列 20/30 + 列距；14.11 转移可用双倍航程。
+    if (inBox) {
+      const distance = airDistanceToOffMapBox(air.side, toHex)
+      if (distance > air.rangeHexes * 2) {
+        pushLog(
+          'warning',
+          `${air.name} 飞出盒超出航程：${String(distance)} > ${String(air.rangeHexes * 2)}（14.11 / 1.4a）`,
+          '14.11',
+        )
+        return false
+      }
+      setAirInBoxMembership(air.instanceId, false)
+      air.hex = { ...toHex }
+      air.airStatus =
+        isFighterAircraft(air.aircraftType) && distance <= air.rangeHexes ? 'active' : 'inactive'
+      lastTransfer.value = {
+        aircraftId: air.instanceId,
+        fromHex: { col: airBoxEdgeColumn(air.side), row: 1 },
+        toHex: { ...toHex },
+        distanceHexes: distance,
+        maxDistanceHexes: air.rangeHexes * 2,
+        airStatus: air.airStatus,
+        rule: '14.11',
+        detail: `基地转移（图外盒 → ${hexLabel(toHex)}）：航程 ${String(distance)}/${String(air.rangeHexes * 2)}（14.11 / 1.4a）`,
+      }
+      pushLog('success', `${air.name} 从图外盒转场到 ${hexLabel(toHex)}（14.11 / 1.4a）`, '14.11')
+      recordSettlement({
+        action: 'airTransfer',
+        rule: '14.11',
+        data: { aircraftId: air.instanceId, toHex: { ...toHex }, airStatus: air.airStatus },
+      })
+      return true
+    }
+    if (fromBase === undefined) return false
     const data = acceptAir(
       planBaseTransfer({
         side: airActingSide.value,
@@ -20058,6 +20110,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         .filter((base) => base.side === activeSide.value)
         .map((base) => ({ ...base.hex })),
     /*
+     * 专规 1.4a / 13.6（U25）：图外空军盒按空军基地计
+     * ⇒「任意友方空军基地」包含盒；盒无格号，作为独立落点类型给出。
+     */
+    friendlyAirBox: () => {
+      const box = markers.containers.airBoxes.find((item) => item.side === activeSide.value)
+      if (box === undefined) return null
+      return {
+        id: box.id,
+        label:
+          box.side === 'axis'
+            ? 'Luftwaffe Box（轴方图外空军盒）'
+            : 'Red Air Force Box（苏方图外空军盒）',
+      }
+    },
+    /*
      * 专规 2.1 / 3.1（原文同句）：
      *   「Pax, Eq, special repls, and breakout returns arrive at any HQs able to get trace supply
      *     (OCS 12.6a) by direct draw, or else in any map-edge supply source hexes.」
@@ -20602,6 +20669,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const arrivalPlacedUnits = computed<Record<number, string[]>>(() =>
     arrivalPlacedKey.value === arrivalPlanKey.value ? arrivalPlacedUnitsRaw.value : {},
   )
+
+  /**
+   * 专规 1.4a / 13.6（U25）：该**飞机**到达条目可选**图外空军盒**作落点
+   *
+   * 「任意友方空军基地」按基地算 ⇒ 盒在内；盒无格号，故与地图格候选并列成第二个投放入口。
+   */
+  function arrivalAirBoxOf(index: number): { id: string; label: string } | null {
+    const demand = arrivalPlan.value?.units[index]
+    if (demand === undefined || demand.kind !== 'aircraft') return null
+    return arrivalPlacementAirBox(demand.placement, arrivalFacts.value)
+  }
+  function arrivalAirBoxAvailable(index: number): boolean {
+    return arrivalPlaced.value[index] !== true && arrivalAirBoxOf(index) !== null
+  }
 
   /*
    * 1.6a：**强制移除执行账本**（2026-11-11，第一段整改）
@@ -22861,6 +22942,94 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     hoverHex.value = unit === undefined ? null : { col: unit.hex.col, row: unit.hex.row }
   }
 
+  /** 13.6：到达卡机型 → 机型库记录（精确名 → 归一唯一命中）；找不到即报错并返回 null */
+  function resolveArrivalAircraft(demand: ArrivalUnitDemand): AircraftRecordView | null {
+    const name = demand.name ?? demand.raw
+    const pool = aircraftChoices(activeSide.value)
+    const exact = pool.find((item) => item.name === name)
+    const key = unitNameKey(name)
+    const sameKey = exact === undefined ? pool.filter((item) => unitNameKey(item.name) === key) : []
+    const aircraft = exact ?? (sameKey.length === 1 ? sameKey[0] : undefined)
+    if (aircraft === undefined) {
+      reinforcementError.value = { rule: '13.6', reason: `arrivalUnitNotResolved:${demand.raw}` }
+      pushLog(
+        'danger',
+        `机型库里找不到「${name}」对应机型 ⇒ 请在"库中型号"里挑一架再投放（13.6）`,
+        '13.6',
+      )
+      return null
+    }
+    return aircraft
+  }
+
+  /**
+   * 专规 1.4a / 13.6（U25）：把**飞机**到达条目直接投放到**图外空军盒**
+   *
+   * 「任意友方空军基地」按基地算 ⇒ 盒在内；盒无地图格号，故落点记在盒成员账本。
+   * 盒容量无限、整备免费（1.4a），故不执行 14.2a 的图上基地堆叠上限。
+   */
+  function placeArrivalInAirBoxNow(index: number): boolean {
+    if (!requireAction('rein.arrival', '到达投放')) return false
+    if (arrivalRemovalsPending.value) {
+      reinforcementError.value = { rule: '1.6a', reason: 'arrivalRemovalsFirst' }
+      return false
+    }
+    const demand = arrivalPlan.value?.units[index]
+    if (demand === undefined) return false
+    if (arrivalPlaced.value[index] === true) {
+      pushLog('warning', `${demand.raw}：该到达条目已投放，勿重复（13.6）`, '13.6')
+      return false
+    }
+    const box = arrivalAirBoxOf(index)
+    if (box === null) {
+      reinforcementError.value = { rule: '13.6', reason: 'noAirbase' }
+      pushLog(
+        'warning',
+        '无法投放到图外空军盒：该条目的落点不是「任意友方空军基地」（13.6）',
+        '13.6',
+      )
+      return false
+    }
+    const aircraft = resolveArrivalAircraft(demand)
+    if (aircraft === null) return false
+    const copies = arrivalCopiesOf(demand)
+    const anchor = { col: airBoxEdgeColumn(activeSide.value), row: 1 }
+    const arrived = Array.from({ length: copies }, () =>
+      toConsoleAirUnit({
+        aircraft,
+        instanceId: createId('arr-air'),
+        hex: anchor,
+        side: activeSide.value,
+        airStatus: 'active',
+      }),
+    )
+    airUnits.value = [...airUnits.value, ...arrived]
+    for (const unit of arrived) setAirInBoxMembership(unit.instanceId, true)
+    pushLog(
+      'success',
+      `${demand.raw} 投放于 ${box.label}（13.6 / 1.4a：飞机在友方空军基地以激活状态到达${
+        copies > 1 ? `，共 ${String(copies)} 架` : ''
+      }）`,
+      '13.6',
+    )
+    recordSettlement({
+      action: 'arrival',
+      rule: '13.6',
+      data: {
+        index,
+        kind: demand.kind,
+        raw: demand.raw,
+        airBox: box.id,
+        aircraftId: arrived[0]!.instanceId,
+      },
+    })
+    markArrivalPlaced(
+      index,
+      arrived.map((unit) => unit.instanceId),
+    )
+    return true
+  }
+
   /**
    * B18：按到达卡投放一个条目（13.6 / 13.6b / 1.6a）
    *
@@ -22951,22 +23120,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 同一套「精确 → 归一唯一命中」判据（`He.111` ↔ `Ge He.111`），并遵守卡面的 `2x` 枚数。
      */
     if (demand.kind === 'aircraft') {
-      const name = demand.name ?? demand.raw
-      const pool = aircraftChoices(activeSide.value)
-      const exact = pool.find((item) => item.name === name)
-      const key = unitNameKey(name)
-      const sameKey =
-        exact === undefined ? pool.filter((item) => unitNameKey(item.name) === key) : []
-      const aircraft = exact ?? (sameKey.length === 1 ? sameKey[0] : undefined)
-      if (aircraft === undefined) {
-        reinforcementError.value = { rule: '13.6', reason: `arrivalUnitNotResolved:${demand.raw}` }
-        pushLog(
-          'danger',
-          `机型库里找不到「${name}」对应机型 ⇒ 请在"库中型号"里挑一架再投放（13.6）`,
-          '13.6',
-        )
-        return false
-      }
+      const aircraft = resolveArrivalAircraft(demand)
+      if (aircraft === null) return false
       const copies = arrivalCopiesOf(demand)
       /*
        * 14.2a：**该基地格的激活飞机堆叠上限 = 4 + 基地等级**（简易机场恒为 4）
@@ -24948,6 +25103,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       date: date.value,
       adjacent: areAdjacent,
       sameHex,
+      // 专规 4.1a（可选）：忽略 3.4 ⇒ 分界线义务整条不生效
+      ignorePanzerGroupConstraints: session.rule4On('ignorePanzerGroupConstraints'),
     })
   })
 
@@ -25412,7 +25569,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const panzerGroupRulesOn = computed(() =>
     panzerGroupRulesActive({
       constraintApplies: date.value < PANZER_GROUP_CONSTRAINT_END,
-      agreedByConsensus: session.agreedOptionAdoptedOf(PANZER_GROUP_OPTION_ITEM),
+      // 专规 4.1a（可选）：「忽略 3.4」时 3.4b 一并失效（整条 3.4 被忽略，其分项不再单独生效）
+      agreedByConsensus:
+        session.agreedOptionAdoptedOf(PANZER_GROUP_OPTION_ITEM) &&
+        !session.rule4On('ignorePanzerGroupConstraints'),
     }),
   )
 
@@ -28217,6 +28377,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     arrivalCandidates,
     arrivalPlaced,
     arrivalPlacedUnits,
+    arrivalAirBoxAvailable,
     arrivalAllPlaced,
     arrivalUnitsDone,
     arrivalHandPending,
@@ -28247,6 +28408,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     clearNonSavableReplNow,
     rollVariableReplNow,
     placeArrivalNow,
+    placeArrivalInAirBoxNow,
     applyArrivalRemovalsNow,
     sendToDeadPileNow,
     removeForeverNow,

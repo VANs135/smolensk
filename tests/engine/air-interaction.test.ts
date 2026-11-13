@@ -4,6 +4,7 @@ import type { HexRef, Side } from '@/data'
 import { hexDistance } from '@/engine/hex-geometry'
 import {
   airTransportProfile,
+  airDistanceToOffMapBox,
   AIR_INTERACTION_STEPS,
   PATROL_ZONE_MAX_HEXES,
   activeAircraftInBase,
@@ -1508,26 +1509,34 @@ describe('14.2f A–G：任务交互状态机', () => {
     })
   })
 
-  it('专规 1.4a：返航可直接移入图外空军盒（射程须 ≥ 盒代价）', () => {
-    const atReturn = advanceToReturn(begin(), plane, bases)
+  it('专规 1.4a：返航移入盒按「连接列 20/30 + 列距」判航程', () => {
+    // 轴方盒＝01.xx 固定 30 + 任务格到 01 列的列距（TARGET 离轴方盒很远）
+    const cost = airDistanceToOffMapBox('axis', TARGET)
+    const longPlane = makePlane({ id: 'p1', baseHex: TARGET, rangeHexes: cost })
+    const longBases = [makeBase({ hex: TARGET })]
+    const atReturn = advanceToReturn(beginPlane(longPlane, longBases), longPlane, longBases)
     const boxed = completeAirReturnStep(atReturn, {
       returns: [{ aircraftId: 'p1', offMapBox: true }],
-      bases,
+      bases: longBases,
     })
     expect(boxed.ok).toBe(true)
     if (!boxed.ok) return
     expect(boxed.data.inactiveAircraftIds).toEqual(['p1'])
     expect(boxed.data.state.returns).toEqual([{ aircraftId: 'p1', offMapBox: true }])
 
-    // 轴方盒代价 30；射程 29 的机型不得进盒
-    const shortPlane = makePlane({ id: 'p1', baseHex: TARGET, rangeHexes: 29 })
-    const shortState = advanceToReturn(beginPlane(shortPlane, bases), shortPlane, bases)
+    // 差 1 格即不可达（不是只看固定的 30）
+    const shortPlane = makePlane({ id: 'p1', baseHex: TARGET, rangeHexes: cost - 1 })
+    const shortState = advanceToReturn(beginPlane(shortPlane, longBases), shortPlane, longBases)
     expect(
       completeAirReturnStep(shortState, {
         returns: [{ aircraftId: 'p1', offMapBox: true }],
-        bases,
+        bases: longBases,
       }),
-    ).toMatchObject({ ok: false, rule: '专规 1.4a', reason: 'offMapBoxBeyondRange:29<30' })
+    ).toMatchObject({
+      ok: false,
+      rule: '专规 1.4a',
+      reason: `offMapBoxBeyondRange:${cost - 1}<${cost}`,
+    })
   })
 
   it('14.1c 例外：成功拦截的战斗机返航后保持激活（由调用方声明）', () => {
