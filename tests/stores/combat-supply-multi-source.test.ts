@@ -298,8 +298,8 @@ describe('12.10a：部队储备只在图上付不清时出现', () => {
     expect(store.combatInputs.attackerAvailableT).toBe(holdingsToT({ sp: 4, t: 0 }))
     expect(store.combatAttackerStocksApplicable).toBe(false)
 
-    // 清掉来源、且全方都已耗尽 ⇒ 付不清也不能用储备 ⇒ 不适用
-    store.clearCombatSupplyDump('attacker')
+    // 再点同一座＝取消来源、且全方都已耗尽 ⇒ 付不清也不能用储备 ⇒ 不适用
+    expect(store.pickCombatSupplyDump('attacker', 'sd-a')).toBe(true)
     unitA.internalStocks = 'exhausted'
     unitB.internalStocks = 'exhausted'
     expect(store.combatAttackerStocksApplicable).toBe(false)
@@ -353,5 +353,30 @@ describe('12.10a：部队储备只在图上付不清时出现', () => {
     expect(block).toContain('combatSupplyDumps')
     expect(block).toContain('carrierIsOrganicTruck')
     expect(block).not.toContain('defenderAvailableT')
+  })
+})
+
+describe('B6：再点同一座补给站＝取消该方来源（地图唯一入口）', () => {
+  it('第二次点同一座 ⇒ 来源清空、可用 T 归零', () => {
+    const store = newStore()
+    setupTwoAttackerBattle(store)
+    store.spDumps.push({ id: 'sd-a', side: 'axis', hex: { ...ATTACKER_HEX }, sp: 4, t: 0 })
+
+    expect(store.pickCombatSupplyDump('attacker', 'sd-a')).toBe(true)
+    expect(store.combatSupplyDumpPicks.attacker).toEqual(['sd-a'])
+    expect(store.combatInputs.attackerAvailableT).toBe(holdingsToT({ sp: 4, t: 0 }))
+
+    // 再点同一座 ⇒ 从多选来源里撤掉；撤空后可用 T 归零（12.4）
+    expect(store.pickCombatSupplyDump('attacker', 'sd-a')).toBe(true)
+    expect(store.combatSupplyDumpPicks.attacker).toEqual([])
+    expect(store.combatSupplyDumpIds.attacker).toBeNull()
+    expect(store.combatInputs.attackerAvailableT).toBe(0)
+  })
+
+  it('面板不再有「清除攻方 / 清除守方」按钮，也不再暴露清除动作', () => {
+    const src = readFileSync('src/components/combat/CombatPanel.vue', 'utf8')
+    expect(src).not.toContain('清除攻方')
+    expect(src).not.toContain('清除守方')
+    expect(src).not.toContain('clearCombatSupplyDump')
   })
 })

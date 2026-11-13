@@ -3419,9 +3419,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', '该补给站不属于这一方（12.1b）', '12.1b')
       return false
     }
-    // 12.4：点另一座＝追加；重复点同一座＝保持（取消整方来源走 clearCombatSupplyDump）
+    // 12.4：点另一座＝追加；再点同一座＝取消该方来源（撤空后可用 T 归零）
     const current = combatSupplyDumpPicks.value[side]
-    const next = current.includes(dumpId) ? current : [...current, dumpId]
+    const next = current.includes(dumpId)
+      ? current.filter((id) => id !== dumpId)
+      : [...current, dumpId]
     combatSupplyDumpPicks.value = { ...combatSupplyDumpPicks.value, [side]: next }
     combatSupplyDumpIds.value = { ...combatSupplyDumpIds.value, [side]: next[0] ?? null }
     // 12.1a：可用量必须**含 SP 折算**（1 SP = 4 T），并按多选来源求和
@@ -3441,22 +3443,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '12.4',
     )
     return true
-  }
-
-  /**
-   * C16：清掉战斗补给的来源声明（改回手填 T）
-   *
-   * ★ 「改回手填」是**真的清干净**：既撤掉被点的那一枚补给站（`combatSupplyDumpIds`），
-   *   也把它之前写进引擎输入的可用 T **归零**——否则界面上来源已撤销、T 却还是那座站的数量，
-   *   玩家会在不知情的情况下用着一座已撤销的来源付费。
-   */
-  function clearCombatSupplyDump(side: CombatRole): void {
-    combatSupplyDumpIds.value = { ...combatSupplyDumpIds.value, [side]: null }
-    combatSupplyDumpPicks.value = { ...combatSupplyDumpPicks.value, [side]: [] }
-    combatInputs.value =
-      side === 'attacker'
-        ? { ...combatInputs.value, attackerAvailableT: 0 }
-        : { ...combatInputs.value, defenderAvailableT: 0 }
   }
 
   /* ── C7 轰炸交互：派生（一切结论来自引擎；此处只做视图整形） ── */
@@ -28460,7 +28446,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     clearAdvanceNow,
     toggleAdvanceUnit,
     pickCombatSupplyDump,
-    clearCombatSupplyDump,
     setBattleMode,
     clearCombat,
     toggleCombatAttacker,

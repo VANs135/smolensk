@@ -324,24 +324,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           已确认攻方 · 改
         </BaseButton>
 
-        <div class="row">
-          <BaseButton
-            v-if="declaredDumpOf('attacker') !== null"
-            variant="ghost"
-            size="sm"
-            @click="workbench.clearCombatSupplyDump('attacker')"
-          >
-            清除攻方
-          </BaseButton>
-          <BaseButton
-            v-if="declaredDumpOf('defender') !== null"
-            variant="ghost"
-            size="sm"
-            @click="workbench.clearCombatSupplyDump('defender')"
-          >
-            清除守方
-          </BaseButton>
-        </div>
+        <!-- B6：来源只走地图入口；再点同一座＝取消（不再有独立的清除按钮） -->
         <!-- B7：守方支付是唯一入口，储备只作它里面的一行（「优先用储备」） -->
         <div class="check-group">
           <label class="check">

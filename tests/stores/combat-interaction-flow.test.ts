@@ -437,6 +437,9 @@ describe('C6 9.2 九步流程：顺序推进', () => {
     const beforeT = holdingsToT({ sp: store.spDumps[0]!.sp, t: store.spDumps[0]!.t })
 
     expect(beginCombatWithSupply(store)).toBe(true)
+    // 夹具已自动声明来源；本用例只保留被测的那一座，避免「再点同站＝取消」把来源撤掉
+    store.combatSupplyDumpPicks = { ...store.combatSupplyDumpPicks, attacker: [] }
+    store.combatSupplyDumpIds = { ...store.combatSupplyDumpIds, attacker: null }
     expect(store.pickCombatSupplyDump('attacker', dumpId)).toBe(true)
     // 原先只取 `dump.t`（= 0）⇒ 4 SP 的补给站被报成 0 T，合法攻击被 12.4 拒掉
     expect(store.combatInputs.attackerAvailableT).toBe(beforeT)
@@ -1005,6 +1008,9 @@ describe('W7 C16：战斗收尾的地图优先交互', () => {
      */
     expect(store.combatSupplyDumps[0]!.dumps.map((item) => item.id)).toContain(dump.id)
     store.combatInputs.attackerAvailableT = 0
+    // 夹具已自动声明来源；先清空攻方选择，确保下面点的是「从未选过」的那一座
+    store.combatSupplyDumpPicks = { ...store.combatSupplyDumpPicks, attacker: [] }
+    store.combatSupplyDumpIds = { ...store.combatSupplyDumpIds, attacker: null }
     expect(store.pickCombatSupplyDump('attacker', dump.id)).toBe(true)
     expect(store.combatInputs.attackerAvailableT).toBe(6)
     expect(store.combatSupplyDumpIds.attacker).toBe(dump.id)

@@ -292,11 +292,12 @@ describe('F 战斗段的窗口纪律（2.2 F：炮击 → 战斗两节）', () =
     expect(panel).not.toContain('原先手填一个数字就算')
   })
 
-  it('★ 源码守卫：战斗窗里没有空态的「清除来源」，也没有整段规则讲解', () => {
+  it('★ 源码守卫：战斗窗不再有独立的「清除来源」按钮（再点同站＝取消），也没有整段规则讲解', () => {
     const combat = readFileSync('src/components/combat/CombatPanel.vue', 'utf8')
-    // 未声明来源时两个「清除」按钮都不出现
-    expect(combat).toContain('v-if="declaredDumpOf(\'attacker\') !== null"')
-    expect(combat).toContain('v-if="declaredDumpOf(\'defender\') !== null"')
+    // B6：来源只走地图入口，面板不再摆清除按钮
+    expect(combat).not.toContain('clearCombatSupplyDump')
+    expect(combat).not.toContain('清除攻方')
+    expect(combat).not.toContain('清除守方')
     // 规则讲解收进 ?，窗内不再留「在「打一仗」工具下…」的说明段
     expect(combat).not.toContain('在「打一仗」工具下')
   })
