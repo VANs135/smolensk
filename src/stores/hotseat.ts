@@ -12,7 +12,6 @@ import {
   FOG_RULE,
   hexDisplay,
   hiddenInfoPolicy,
-  isOutOfSupplyNow,
   otherSide,
   rollVisibleTo as engineRollVisibleTo,
   sideLabel,
@@ -28,7 +27,7 @@ import {
 
 import { useGameSessionStore } from './session'
 import { useWorkbenchStore } from './workbench'
-import type { ConsoleUnit } from './workbench-model'
+import { supplyStatusOf, type ConsoleUnit } from './workbench-model'
 
 /**
  * 切方与信息展示纪律（W7 C13）
@@ -166,6 +165,8 @@ export const useHotseatStore = defineStore('hotseat', () => {
   /** 操作台算子 → 战雾视图（模式判定复用 modes.exertsZoc，不在本文件另立口径） */
   function toFogUnit(unit: ConsoleUnit): FogUnitView {
     const inCombatMode = exertsZoc(unit.mode)
+    // 12.6 / 4.5：唯一派生（`supplyStatusOf`）—— 12.8e 续命当回合不算断补
+    const supply = supplyStatusOf(unit, workbench.turn)
     return {
       id: unit.instanceId,
       side: unit.side,
@@ -175,11 +176,10 @@ export const useHotseatStore = defineStore('hotseat', () => {
       attackCapable: unit.attackCapable,
       inCombatMode,
       // 4.5：可攻击 ∧ 战斗模式 ∧ 非断补（与 zoc.ts 同一判据）
-      // ★ 12.8e：吃图上/储备/缓存续命当回合**不算断补** ⇒ 不以 `hasTraceSupply` 判（用户 2026-11-06 裁定）
-      projectsZoc: unit.attackCapable && inCombatMode && !isOutOfSupplyNow(unit, workbench.turn),
+      projectsZoc: unit.attackCapable && inCombatMode && !supply.marked,
       mode: unit.mode.mode,
       dg: unit.mode.dg,
-      outOfSupply: isOutOfSupplyNow(unit, workbench.turn),
+      outOfSupply: supply.marked,
       steps: unit.steps,
       printedSteps: unit.printedSteps,
       internalStocks: unit.internalStocks,

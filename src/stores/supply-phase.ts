@@ -3,7 +3,6 @@ import type { Side } from '@/data'
 import {
   assessUnitSupply,
   holdingsToT,
-  isOutOfSupplyNow,
   planSupplyPhase,
   planInternalStocksRecovery,
   resolveAttrition,
@@ -21,6 +20,7 @@ import {
 import { nextSupplyPhaseObligation } from '@/engine/rules/supply-phase-progress'
 import type { AttritionResult } from '@/engine/tables/attrition'
 import type { ActionKey, ConsoleUnit } from './workbench-model'
+import { supplyStatusOf } from './workbench-model'
 import type { SpDump } from './supply-types'
 
 export interface SupplyPhasePorts {
@@ -100,13 +100,14 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
   /**
    * 12.6c / 12.8e：本阶段**可自愿吃图上补给**的候选
    *
-   * 真断补（`isOutOfSupplyNow`，本回合续命不算）∧ 引擎 12.6c/12.6e 允许吃图上补给
+   * 真断补（`supplyStatusOf().marked`，本回合续命不算）∧ 引擎 12.6c/12.6e 允许吃图上补给
    * （`assessUnitSupply#canEatOffTheMap`）。不在这里另写阈值或模式判据。
    */
   const supplyFeedingCandidates = computed<ConsoleUnit[]>(() =>
     units.value.filter((unit) => {
       if (unit.side !== activeSide.value || !unit.isCombat) return false
-      if (!isOutOfSupplyNow(unit, turn())) return false
+      // 12.6：断补与否统一取 `supplyStatusOf` 的标记（与地图图标/ZOC/损耗同源）
+      if (!supplyStatusOf(unit, turn()).marked) return false
       // 12.6c 的"能不能吃/要吃多少"是**付钱时点**的可用性（站、费、模式），实时算；
       // 判定结论（是否断补）取标记，不再重算追溯。
       return assessUnitSupply(
@@ -187,7 +188,7 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
         mode: unit.mode.mode,
         internalStocks: unit.internalStocks,
         // 12.6c/d：断补状态＝无追溯补给 **且** 本回合不是靠特殊方式续命（12.8e 括注）
-        outOfSupply: isOutOfSupplyNow(unit, turn()),
+        outOfSupply: supplyStatusOf(unit, turn()).marked,
         multiStep: unit.steps > 1,
       })),
       mobility: 'truck',
@@ -423,7 +424,7 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
           steps: unit.steps,
           ar: unit.raw.ar,
           mode: unit.mode.mode,
-          outOfSupply: isOutOfSupplyNow(unit, turn()),
+          outOfSupply: supplyStatusOf(unit, turn()).marked,
         })),
     )
 

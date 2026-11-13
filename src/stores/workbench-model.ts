@@ -38,6 +38,7 @@ import {
   isOutOfSupplyNow,
   legMpDistanceWithinRadius,
   overrunEligibility,
+  requiresTraceSupply,
   sopChainOf,
   sopStepById,
   modeUnitClass,
@@ -1273,12 +1274,47 @@ export function toBattleUnitView(unit: ConsoleUnit, turn: number): BattleUnitVie
     /*
      * 12.6c/d + 12.8e：断补＝无追溯补给 **且** 本回合不是靠吃图上/储备/缓存续命。
      * ★ 用户 2026-11-06 裁定：喂食不再写 `hasTraceSupply`，故此处不能直接取 `!hasTraceSupply`。
+     * ★ 2026-11-13：判定与显示同源，统一取 `supplyStatusOf`（4.5 / 9.5a / 12.8d 都看 `marked`）。
      */
-    outOfSupply: isOutOfSupplyNow(unit, turn),
+    outOfSupply: supplyStatusOf(unit, turn).marked,
     mobility: effectiveMobilityOf(unit),
     attackCapable: unit.attackCapable,
     // 规则能力标签（专规 2.3b 的 NKVD 判据取自此；引擎在 9.6 / 9.10 步消费）
     specialAbilities: unit.specialAbilities,
+  }
+}
+
+/**
+ * 12.6 / 12.8a：供给状态的**唯一派生**（显示与判定同源）
+ *
+ * `marked` 是 12.8a 的结算结论（断补标记，回合内不变）；
+ * `trace` 只是「是否有追溯补给」，不含 12.6c 续命；
+ * `sustained` 表示本回合靠吃图上/储备/缓存续命（12.8e 括注：不算断补）。
+ *
+ * 4.5 / 9.5a / 12.8d 一律看 `marked`；界面若要提示"当前线"再看 `trace`。
+ */
+export interface SupplyStatusView {
+  marked: boolean
+  trace: boolean
+  sustained: boolean
+  status: 'inSupply' | 'sustained' | 'outOfSupply' | 'notRequired'
+}
+
+export function supplyStatusOf(unit: ConsoleUnit, turn: number): SupplyStatusView {
+  const marked = isOutOfSupplyNow(unit, turn)
+  const trace = unit.hasTraceSupply
+  const sustained = (unit.sustainedBySpecialSupplyTurn ?? null) === turn
+  return {
+    marked,
+    trace,
+    sustained,
+    status: !requiresTraceSupply(unit)
+      ? 'notRequired'
+      : marked
+        ? 'outOfSupply'
+        : trace
+          ? 'inSupply'
+          : 'sustained',
   }
 }
 
@@ -2145,9 +2181,11 @@ export function toNkvdDefenseView(unit: {
  * 操作台算子 → 追溯补给单位视图（B10 的 `TraceSupplyFacts` 输入）
  *
  *   - 4.5 的「是否处于战斗模式」统一交 `modes.exertsZoc` 裁定（勿传原始模式字段）；
- *   - 4.5b 的抵消由 trace-supply 内部按「格内有己方战斗单位」处理，无需在此表达。
+ *   - 4.5b 的抵消由 trace-supply 内部按「格内有己方战斗单位」处理，无需在此表达；
+ *   - 4.5 的 `hasTraceSupply` 取**是否被标记断补**的反面（`supplyStatusOf(unit, turn).marked`）：
+ *     12.8e 的续命当回合不算断补，故不能直接搬 `unit.hasTraceSupply`（用户 2026-11-13 口径）。
  */
-export function toTraceSupplyUnitView(unit: ConsoleUnit): TraceSupplyUnitView {
+export function toTraceSupplyUnitView(unit: ConsoleUnit, turn: number): TraceSupplyUnitView {
   return {
     id: unit.instanceId,
     side: unit.side,
@@ -2155,7 +2193,7 @@ export function toTraceSupplyUnitView(unit: ConsoleUnit): TraceSupplyUnitView {
     isCombat: unit.isCombat,
     attackCapable: unit.attackCapable,
     inCombatMode: exertsZoc(unit.mode),
-    hasTraceSupply: unit.hasTraceSupply,
+    hasTraceSupply: !supplyStatusOf(unit, turn).marked,
   }
 }
 
@@ -2219,6 +2257,8 @@ export function toExtenderView(unit: ConsoleUnit): ExtenderView {
  */
 export function createSupplyFacts(input: {
   units: readonly ConsoleUnit[]
+  /** 当前回合号（4.5 / 12.8e：续命当回合不算断补） */
+  turn: number
   /** 12.1b：含 SP 的位置 */
   dumps: readonly { hex: HexRef; side: Side }[]
   /** 12.6a①②：基础补给源格（专规/剧本数据；无则空数组） */
@@ -2227,7 +2267,7 @@ export function createSupplyFacts(input: {
   throwMobilityByHq?: (unit: ConsoleUnit) => SupplyMobility | undefined
 }): TraceSupplyFacts {
   return createTraceSupplyFacts({
-    units: input.units.map(toTraceSupplyUnitView),
+    units: input.units.map((unit) => toTraceSupplyUnitView(unit, input.turn)),
     dumps: input.dumps,
     throwHqs: input.units.filter(isHqUnit).map((unit) => {
       const mobility = input.throwMobilityByHq?.(unit)

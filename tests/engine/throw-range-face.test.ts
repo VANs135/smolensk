@@ -132,6 +132,8 @@ describe('13.1a：DG 不影响指挥部的特殊功能', () => {
 
     const facts = createSupplyFacts({
       units: [hq],
+      // 4.5 的判据按回合取标记；本夹具不含续命单位，取游戏首回合（操作台初始值）
+      turn: 1,
       dumps: [],
       sources: [{ hex: CORE_HEX, side: 'axis', kind: 'supplySourceHex' }],
     })

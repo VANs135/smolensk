@@ -35,6 +35,16 @@ const workbench = useWorkbenchStore()
 const summary = computed(() => workbench.supplySummary)
 
 /**
+ * 12.6 提示：**实时补给线**与本回合标记不一致时的一行文字
+ *
+ * ★ 用户 2026-11-13 口径：只做文字提示（效果，不是结算）⇒ 不写标记、不染地图色、不加角标。
+ */
+const supplyLineHint = computed(() => {
+  const unit = workbench.supplyUnit
+  return unit === null ? null : workbench.supplyLineHintOf(unit)
+})
+
+/**
  * 12.3 / 12.5 / 15.1（批 B 切片 2）：本次拖取/投递**应付多少 T** 及其费率出处
  *
  * `null` ＝「战斗补给（12.4）」这类**不在本链付**的用途（裁定⑥）；`manual` ＝ 数量即内容
@@ -1268,6 +1278,8 @@ const showsLedger = computed(
               ｜吃图上补给需 {{ summary.eatingCostT }} T（12.6c）
             </template>
           </p>
+          <!-- 12.6 提示：实时线与标记不一致时才出现（只做文字，不写标记） -->
+          <p v-if="supplyLineHint !== null" class="muted">{{ supplyLineHint }}</p>
 
           <SessionStep item="supply:selectSource">
             <RuleNote

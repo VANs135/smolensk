@@ -14,6 +14,7 @@ import {
 import {
   needsFuelOf,
   hexLabel,
+  supplyStatusOf,
   type ActionKey,
   type ConsoleAirUnit,
   type ConsoleUnit,
@@ -37,7 +38,6 @@ import {
   toggleSelection,
 } from '@/render/stack-fan'
 import {
-  isOutOfSupplyNow,
   OVERRUN_MP_COST,
   exertsZoc,
   projectsZoc,
@@ -253,7 +253,8 @@ export const useMapViewStore = defineStore('mapView', () => {
         side: unit.side,
         attackCapable: unit.attackCapable,
         inCombatMode: exertsZoc(unit.mode),
-        hasTraceSupply: unit.hasTraceSupply,
+        // 4.5：判据是**未被标记断补**（与 `supplyStatusOf` 同源；12.8e 续命当回合不算断补）
+        hasTraceSupply: !supplyStatusOf(unit, workbench.turn).marked,
       }))
     return {
       friendly: zocHexes(sources, hotseat.viewerSide),
@@ -328,7 +329,7 @@ export const useMapViewStore = defineStore('mapView', () => {
             !spDumpHexes.value.has(`${unit.side}:${unit.hex.col},${unit.hex.row}`),
         )
         .map((unit: ConsoleUnit) => {
-          const oos = isOutOfSupplyNow(unit, workbench.turn)
+          const oos = supplyStatusOf(unit, workbench.turn).marked
           const mode = MODE_LETTER[unit.mode.mode] ?? '?'
           /*
            * 2026-11-10（用户队列 #4）：**悬停浮现全称与关键信息**。
@@ -342,6 +343,9 @@ export const useMapViewStore = defineStore('mapView', () => {
             `${unit.side === 'axis' ? '轴心' : '苏联'} · ${mode}`,
             unit.mode.dg ? 'DG' : null,
             oos ? '断补' : null,
+            // 12.6 提示：实时线与标记不一致时的一行文字（只读，不写标记、不染地图色）
+            // 4.9a：只给本方 —— 敌方的补给连线属未公开信息，不因悬停泄露
+            unit.side === hotseat.viewerSide ? workbench.supplyLineHintOf(unit) : null,
             unit.movementEnded ? '本回合移动已结束' : null,
           ]
             .filter((part): part is string => part !== null)

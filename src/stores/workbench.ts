@@ -514,6 +514,8 @@ import {
   toBarrageUnitRequest,
   isAirDeadPileEntry,
   toBattleUnitView,
+  // 12.6 / 4.5：供给状态的唯一派生（显示与判定同源）
+  supplyStatusOf,
   toBreakdownSideView,
   toConsolidationGroundView,
   toConsoleAirUnit,
@@ -3687,6 +3689,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const supplyFacts = computed(() =>
     createSupplyFacts({
       units: units.value,
+      turn: turn.value,
       // 12.1b：含 SP 的位置 —— **账本条目 + 装载在运输点数上的**（B32 步骤 5）
       dumps: allSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),
       sources: [
@@ -3711,6 +3714,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const zocOnlySupplyFacts = computed(() =>
     createSupplyFacts({
       units: units.value,
+      turn: turn.value,
       // 12.1b：含 SP 的位置 —— **账本条目 + 装载在运输点数上的**（B32 步骤 5）
       dumps: allSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),
       sources: supplySourceDecls.value
@@ -9569,15 +9573,40 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return flags
   })
 
-  function hasLiveTraceSupply(unit: ConsoleUnit): boolean {
-    // 12.8e 的突围环节只在移动阶段出现；其余阶段（初设/补给/反应/exploit）不做
-    // 这份实时洪泛，避免每次存店都白算一遍（读标记即可，结果本来也不被使用）。
-    if (phase.value !== 'movement' || !cutSideFlags.value[unit.side]) return unit.hasTraceSupply
+  /**
+   * 12.6：该单位**此刻的实时补给线**（只读查询；不写标记、不结算）
+   *
+   * 与 `settleTraceSupplyNow` 不同，这里不做整场判定，只回答"按当前盘面它能不能连到源"：
+   * 供 12.8e 突围资格与界面的「当前补给线」提示共用，避免两处各写一套。
+   * ★ 12.6f 的同源取舍仍取本回合判定快照的 `denied`（那是结算结论，不实时重算）。
+   */
+  function liveTraceLineOf(unit: ConsoleUnit): boolean {
     if ((unit.airDropExemptTurn ?? null) === turn.value) return true
     if (!requiresTraceSupply(unit)) return true
     const denied = traceSettlement.value?.denied[unit.side]
     if (denied !== undefined && denied.includes(unit.instanceId)) return false
     return traceSupplyAtForMove.value(unit.hex, unit.side)
+  }
+
+  function hasLiveTraceSupply(unit: ConsoleUnit): boolean {
+    // 12.8e 的突围环节只在移动阶段出现；其余阶段（初设/补给/反应/exploit）不做
+    // 这份实时洪泛，避免每次存店都白算一遍（读标记即可，结果本来也不被使用）。
+    if (phase.value !== 'movement' || !cutSideFlags.value[unit.side]) return unit.hasTraceSupply
+    return liveTraceLineOf(unit)
+  }
+
+  /**
+   * 12.6：界面提示用的一行文字（**只有文字**）
+   *
+   * 仅在「实时线」与「本回合标记」不一致时给出：实时通但被标记断补、或标记在补但线已断。
+   * ★ 用户 2026-11-13 口径：这是效果提示，不是结算 ⇒ 不写标记、不染地图色、不加角标。
+   */
+  function supplyLineHintOf(unit: ConsoleUnit): string | null {
+    if (!requiresTraceSupply(unit)) return null
+    const live = liveTraceLineOf(unit)
+    const marked = supplyStatusOf(unit, turn.value).marked
+    if (marked === !live) return null
+    return `当前补给线：${live ? '通' : '断'}`
   }
 
   /**
@@ -19886,6 +19915,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const arrivalDirectDrawFacts = computed(() =>
     createSupplyFacts({
       units: units.value,
+      turn: turn.value,
       dumps: allSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),
       sources: [
         ...supplySourceDecls.value
@@ -27674,6 +27704,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     evaluateTraceSupplyNow,
     /** 12.6：本回合唯一判定入口落盘的快照（界面计数与逐单位检查共读，不再读计划表长度） */
     traceSettlement,
+    /** 12.6：实时补给线（只读；界面提示与 12.8e 突围资格共用） */
+    liveTraceLineOf,
+    /** 12.6：实时线与标记不一致时的一行文字提示（不写标记、不染地图色） */
+    supplyLineHintOf,
     // C8b：D 段**补给阶段总计划**（12.1–12.2 / 12.6 / 12.8 / 12.10e / 12.11a）
     supplyPhasePlan,
     supplyPhaseInputs,
