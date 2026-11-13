@@ -8473,6 +8473,42 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * IV-B：初设阶段该单位**此刻可设**的模式（右键「初设模式」菜单的唯一数据源）
+   *
+   * 与 `setUnitModeAtSetup` 同源判定（`canSetModeAtSetup`）：当前模式不列，其余逐项判；
+   * 不可用的不返回（不摆灰项）。非初设阶段恒空 —— 初设结束后右键不再给"初设模式"。
+   */
+  function setupSwitchableModesOf(unitId: string): BaseMode[] {
+    if (!initialSetupInProgress.value) return []
+    const unit = units.value.find((item) => item.instanceId === unitId)
+    if (unit === undefined) return []
+    const limits = setupModeConstraintsOf(unit.side)
+    const reachable: BaseMode[] = []
+    for (const to of ['combat', 'move', 'reserve', 'strat'] as const) {
+      if (unit.mode.mode === to) continue
+      const target: Orientation =
+        to === 'combat' ? 'combat' : to === 'reserve' ? unit.mode.orientation : 'move'
+      const verdict = canSetModeAtSetup({
+        to,
+        orientation: target,
+        unitClass: modeUnitClassOf(unit),
+        side: unit.side,
+        hex: hexKeyOf(unit),
+        adjacentEnemyAttackCapable: adjacentEnemyAttackCapableOf(unit),
+        reserveCap: limits.reserveCap,
+        reserveOccupiedHexes: reservedHexes(unit.side),
+        reserveSetupForbidden: limits.reserveForbidden,
+        allowedModes: limits.allowed,
+        date: date.value,
+        // 专规 4.1a（可选）：忽略 2.3e ⇒ 初设也不受苏军战略模式日期闸门约束
+        ignoreOperationalLimits: session.rule4On('ignoreOperationalLimits'),
+      })
+      if (verdict.ok) reachable.push(to)
+    }
+    return reachable
+  }
+
+  /**
    * IV-B：**初设阶段**为单位设定模式（按单位/按堆叠）
    *
    * 原文「Ground units can be set up in any desired mode. (Exception: ground units adjacent to
@@ -27792,6 +27828,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     switchableModesOf,
     // IV-B：初设阶段为单位/堆叠设定模式（combat / move / reserve / strat）
     setUnitModeAtSetup,
+    // IV-B：初设右键「初设模式」只列此刻真正能设的模式（与 setUnitModeAtSetup 同判据）
+    setupSwitchableModesOf,
     setupReserveSummary,
     eliminateEntry,
     beginMoveFor,

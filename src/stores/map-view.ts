@@ -1890,12 +1890,39 @@ export const useMapViewStore = defineStore('mapView', () => {
     'move.dumpBlow': '补给',
   }
 
+  /** IV-B：初设模式菜单的中文名（只作显示；判定在 `setupSwitchableModesOf`） */
+  const SETUP_MODE_LABELS = {
+    combat: '战斗',
+    move: '移动',
+    reserve: '预备',
+    strat: '战略',
+  } as const
+
   function counterActionsAt(hex: HexRef, id: string): CounterAction[] {
     /*
      * 用户 2026-11-11：4ab30d6 起观察方为**手选**，可与行动方不同。
      * 菜单仍要能打开（看这一枚是谁），但非行动方不摆任何可执行项——否则会越过行动方权限。
      */
     if (hotseat.viewerSide !== actingSide.value) return []
+    /*
+     * 初设阶段：右键只承担 IV-B「初设模式」一件事（其余单位动作在初设里一律不开）。
+     * 只列此刻**真能设**的模式（`setupSwitchableModesOf` 与 `setUnitModeAtSetup` 同源），
+     * 不可用的不出现；格伪目标在初设里没有任何动作（不把射击菜单带进来）。
+     */
+    if (!setup.finished) {
+      if (id === HEX_CONTEXT_ID) return []
+      const own = ownCounterAt(hex, id)
+      if (own === undefined) return []
+      return workbench.setupSwitchableModesOf(own.instanceId).map((mode) => ({
+        key: `setup.mode.${mode}`,
+        label: `初设设为${SETUP_MODE_LABELS[mode]}`,
+        rule: 'IV-B',
+        panel: 'unit' as const,
+        only: `setupMode:${mode}`,
+        group: '模式改变' as const,
+        disabledReason: null,
+      }))
+    }
     // 用户 2026-11-12：格伪目标 ⇒ 目标侧空军任务（空投/破交/扫荡/空运）
     if (id === HEX_CONTEXT_ID) return hexTargetActions(hex)
     const unit = ownCounterAt(hex, id)
@@ -2366,14 +2393,13 @@ export const useMapViewStore = defineStore('mapView', () => {
 
   /** 打开右键菜单的**硬闸**：只挡"正在点选/有待决"，不要求观察方=行动方（动作项另由 `counterActionsAt` 筛） */
   function canOpenCounterMenu(): boolean {
-    if (!setup.finished) return false
     if (workbench.hexPickView !== null || workbench.refitBase !== null) return false
     if (workbench.overrunZocHeld !== null || workbench.specialPending !== null) return false
     return true
   }
 
   function canOpenCounterContext(): boolean {
-    if (!setup.finished || hotseat.viewerSide !== actingSide.value) return false
+    if (hotseat.viewerSide !== actingSide.value) return false
     if (workbench.hexPickView !== null || workbench.refitBase !== null) return false
     if (workbench.overrunZocHeld !== null || workbench.specialPending !== null) return false
     /*
@@ -2557,6 +2583,15 @@ export const useMapViewStore = defineStore('mapView', () => {
      * ★ 用户 2026-11-09（第 7 条）：「模式改变」三项各自点即切换（改模式时显式只带这一枚，
      *   不误伤 `movePick` 整组）。
      */
+    if (option.only !== null && option.only.startsWith('setupMode:')) {
+      if (unit === undefined) return false
+      const mode = option.only.slice('setupMode:'.length)
+      if (mode !== 'combat' && mode !== 'move' && mode !== 'reserve' && mode !== 'strat')
+        return false
+      workbench.setUnitModeAtSetup(mode, undefined, [instanceId])
+      closePopup()
+      return true
+    }
     if (option.only === 'move.orientation.toggle') {
       if (unit === undefined) return false
       workbench.selectedId = instanceId

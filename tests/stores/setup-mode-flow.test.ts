@@ -241,6 +241,28 @@ describe('专规 2.3e：苏军 8 月 1 日前不得初设战略', () => {
   })
 })
 
+describe('IV-B：初设可设模式投影（右键菜单与 set 动作同源）', () => {
+  it('只列此刻真能设的模式；相邻敌方攻击力单位时去掉预备/战略', () => {
+    const { workbench: store, game } = newStores()
+    startSetup(store, game, '1')
+    const unit = place(store, leg('axis'), START, 'axis', 'a1')
+    // 当前已是战斗模式 ⇒ 不列 combat；其余三种都可
+    expect(store.setupSwitchableModesOf(unit.instanceId)).toEqual(['move', 'reserve', 'strat'])
+
+    // 用几何邻格放一枚苏军攻击力单位（不猜地形）⇒ 预备/战略被 IV-B 例外挡掉
+    place(store, leg('soviet'), neighbors(START)[0]!.hex, 'soviet', 's1')
+    expect(store.setupSwitchableModesOf(unit.instanceId)).toEqual(['move'])
+  })
+
+  it('非初设阶段不列任何模式（初设结束后右键菜单不再给初设模式）', () => {
+    const { workbench: store, game } = newStores()
+    startSetup(store, game, '1')
+    const unit = place(store, leg('axis'), START, 'axis', 'a1')
+    store.initialSetupInProgress = false
+    expect(store.setupSwitchableModesOf(unit.instanceId)).toEqual([])
+  })
+})
+
 describe('初设结束后模式保持', () => {
   it('离开初设阶段、进入首个移动阶段后，模式与预备标记仍在', () => {
     const { workbench: store, game } = newStores()
