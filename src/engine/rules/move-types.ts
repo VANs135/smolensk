@@ -78,6 +78,12 @@ export interface MoveUnitView {
   /** 是否已加注燃料（12.5；仅「轮式/履带 MP 的战斗单位」需要） */
   fuelled: boolean
   /**
+   * 专规 4.2c（可选）Minimal Fueling：本阶段用「2T 最省供油」加注时的 MA 倍率（×1/4）
+   *
+   * 「……受油单位把 MA 乘 ×1/4」⇒ 与模式/剧本倍率**相乘**；缺省 1（原值）。
+   */
+  fuelMaFactor?: number
+  /**
    * 4.5b：本阶段已承诺「之后不再消耗 MP」
    *
    * 用于「垫人」——格内留一个己方战斗单位抵消该格敌方 ZOC，代价是该单位本阶段起不得再消耗 MP。

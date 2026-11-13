@@ -37,6 +37,7 @@ import {
   isMobileUnit,
   isOutOfSupplyNow,
   legMpDistanceWithinRadius,
+  MINIMAL_FUEL_MA_FACTOR,
   overrunEligibility,
   requiresTraceSupply,
   sopChainOf,
@@ -224,6 +225,8 @@ export interface ConsoleUnit {
   mobility: MoveUnitView['mobility']
   /** 9.4d 攻击方类别 */
   combatClass: CombatClass
+  /** 兵种（单位库 `branch`；专规 4.2b 的「4 步步兵师」判据取自此） */
+  branch: string | null
   re: number
   /** 模式状态（5.x：基础面 + 层叠标记） */
   mode: ModeState
@@ -240,6 +243,13 @@ export interface ConsoleUnit {
    * - `singleUnit`（12.5c-C）：**只在当前阶段有效** ⇒ 换阶段即失效。
    */
   fuelMethod: FuelMethod | null
+  /**
+   * 专规 4.2c（可选）Minimal Fueling：本阶段的燃料是用「最省供油」（2T）加的
+   *
+   * 效果：MA ×1/4（`toMoveUnitView` 折成 `fuelMaFactor`）；燃料标记在**相位末**摘除
+   * （`resetMovementTracking`），而不是等到本方清理阶段。
+   */
+  minimalFuel?: boolean
   /**
    * 4.5 / 12.6 / 12.8：该单位**此刻是否有补给**（断补则为 false）
    *
@@ -588,6 +598,7 @@ export function toConsoleUnit(input: {
     noncombatKind: record.noncombatKind ?? null,
     mobility: mobilityOf(record),
     combatClass: record.classes?.combatClass ?? 'other',
+    branch: record.branch ?? null,
     re: reOf(record),
     mode: { mode: face, orientation: face, dg: false, exploit: false },
     raw: faces[face],
@@ -605,6 +616,8 @@ export function toConsoleUnit(input: {
      */
     fuelled: false,
     fuelMethod: null,
+    // 专规 4.2c（可选）：只有用「最省供油」加注时才置真；缺省不是"半开"的倍率
+    minimalFuel: false,
     hasTraceSupply: true,
     /*
      * 12.8e / 12.6h（批 F 切片 5）：**断补状态的逐回合跟踪**——三件事分三个字段，互不覆盖：
@@ -879,6 +892,8 @@ export function toMoveUnitView(
     releasedFromReserve: unit.mode.releasedFromReserve === true,
     airTransportThisPhase: unit.airTransportThisPhase,
     fuelled: unit.fuelled,
+    // 专规 4.2c（可选）：最省供油 ⇒ 本阶段 MA ×1/4（未用最省供油时为 1）
+    fuelMaFactor: unit.minimalFuel === true ? MINIMAL_FUEL_MA_FACTOR : 1,
     // 4.5b：垫人承诺（一旦许诺，该单位本阶段起不能再消耗 MP，也不可再移动）
     mpLockedThisPhase: unit.mpLockedThisPhase,
     // 专规 1.5 / 剧本 1–2：首回合苏军地面单位 ×1/2（由调用方注入，缺省 1）
@@ -1269,6 +1284,7 @@ export function toBattleUnitView(unit: ConsoleUnit, turn: number): BattleUnitVie
     noncombatKind: unit.noncombatKind ?? null,
     printedSteps: unit.printedSteps,
     steps: unit.steps,
+    branch: unit.branch,
     re: currentReOf(unit),
     internalStocks: unit.internalStocks,
     /*

@@ -72,10 +72,13 @@ function modeStateOf(unit: MoveUnitView): ModeState {
   }
 }
 
-/** 本阶段该单位的可用 MA（模式修正 + 剧本修正；6.1h 永不取整） */
+/** 本阶段该单位的可用 MA（模式修正 + 剧本修正 + 4.2c 最省供油修正；6.1h 永不取整） */
 export function availableMa(unit: MoveUnitView, phase: MovementSegmentPhase): number {
   return limitAirTransportMa(
-    unit.ma * maMultiplier(modeStateOf(unit), phase) * (unit.scenarioMaFactor ?? 1),
+    unit.ma *
+      maMultiplier(modeStateOf(unit), phase) *
+      (unit.scenarioMaFactor ?? 1) *
+      (unit.fuelMaFactor ?? 1),
     unit.airTransportThisPhase,
   )
 }

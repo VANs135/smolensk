@@ -6985,7 +6985,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       unit.mode = clearReleasedFromReserve(unit.mode)
       // 12.5c-C：单单位法的燃料「只在当前阶段有效」⇒ 换段/换方/换回合即失效；
       // 编队法 / HQ 法（12.5c-A/B）持续到**本方清理阶段**，不在此清（见 H 段 planCleanUp，12.5d）
-      if (unit.fuelled && unit.fuelMethod !== null && fuelExpiresOnPhaseChange(unit.fuelMethod)) {
+      // 专规 4.2c：最省供油的标记按原文在**相位末**摘除 ⇒ 与单单位法同一处清
+      if (unit.fuelled && unit.minimalFuel === true) {
+        unit.fuelled = false
+        unit.fuelMethod = null
+        unit.minimalFuel = false
+      } else if (
+        unit.fuelled &&
+        unit.fuelMethod !== null &&
+        fuelExpiresOnPhaseChange(unit.fuelMethod)
+      ) {
         unit.fuelled = false
         unit.fuelMethod = null
       }
@@ -8607,7 +8616,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function payFuel(
     method: FuelMethod = fuelMethodEffective.value,
     commonSource: boolean = fuelSourcePartition.value.shared,
+    minimal = false,
   ): void {
+    // 专规 4.2c（可选）：未启用时「最省供油」这条路径在引擎侧也不成立
+    if (minimal && !session.rule4On('minimalFueling')) {
+      pushLog('danger', '专规 4.2c 未在选剧本前勾定 ⇒ 不能使用「最省供油」', '4.2c')
+      return
+    }
     // 12.5a/12.5f：加油在 C/E/G 三段的**移动环节**当场付（H④ 起 D 段那个「加油」环节已删，
     // 12.5c：付款绑在消耗时刻，而补给段不发生燃料消耗）
     if (!requireAction('supply.fuel', '付燃料')) return
@@ -8791,6 +8806,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
        */
       availableSp: dump.sp,
       availableT: holdingsToT({ sp: dump.sp, t: dump.t }),
+      ...(minimal ? { minimal: true } : {}),
     })
     if (!plan.ok) {
       pushLog('danger', `燃料支付失败：${plan.reason}（${plan.rule}）`, plan.rule)
@@ -8851,16 +8867,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         unit.fuelled = true
         // 12.5c：记下加油方法——持续期由它决定（单单位法=只本阶段；编队/HQ 法=到本方清理阶段）
         unit.fuelMethod = method
+        // 专规 4.2c：最省供油 ⇒ MA ×1/4，且标记在相位末摘除（见 resetMovementTracking）
+        unit.minimalFuel = minimal
       }
     }
-    if (paidHq !== null) {
+    if (paidHq !== null && !minimal) {
       // 12.5e/12.5d：记下**投递基点**与覆盖集 —— 窗口持续到**本方清理阶段**（`runCleanUpNow` 才清）
       hqFuelThrows.value = {
         ...hqFuelThrows.value,
         [paidHq.instanceId]: { side: paidHq.side, originKey: hexLabel(paidHq.hex), coveredIds },
       }
     }
-    if (formationCoverage !== null && fuelFormation !== null) {
+    if (formationCoverage !== null && fuelFormation !== null && !minimal) {
       // 12.5c-A（I①）：记下该编队的编队油（来源 + 覆盖集）—— 窗口内再点编队法即拒
       formationFuelThrows.value = {
         ...formationFuelThrows.value,
@@ -9231,6 +9249,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       })),
     }),
   )
+
+  /**
+   * 专规 4.2c（可选）：本局是否启用「最省供油」
+   *
+   * 未启用 ⇒ 加油窗里**不出现**该选项（不是置灰）；启用后付 2T、受油单位 MA ×1/4、相位末摘标记。
+   */
+  const minimalFuelingOn = computed(() => session.rule4On('minimalFueling'))
 
   /**
    * 12.5c：**实际生效**的方法
@@ -11664,6 +11689,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           combatInputs.value.defenderTerrain === ''
             ? defaultDefenseTerrain(target.hex)
             : combatInputs.value.defenderTerrain,
+        // 专规 4.2b（可选）：4 步轴心步兵师末步攻 ×1/4、守 ×1/2（未启用＝原值）
+        ...(session.rule4On('effectsOfLosses') ? { effectsOfLosses: true } : {}),
       }),
       '地形宣布',
     )
@@ -28227,6 +28254,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     railMovedNewTrackThisPhase,
     isRailRepairUnit,
     railRepairUnits,
+    minimalFuelingOn,
     isBarrageCapableUnit,
     segmentLabelsOfAction,
     refitDoneBases,

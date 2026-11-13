@@ -419,6 +419,62 @@ describe('9.4 / 9.4d / 9.4e / 9.11d / 9.5a 单单位战力', () => {
     expect(defenderLost2.strength).toBe(5)
   })
 
+  it('专规 4.2b（可选）：4 步轴心步兵师只剩最后一步 ⇒ 攻 ×1/4、守 ×1/2；未启用为原值', () => {
+    const lastStep = { side: 'axis' as const, branch: 'infantry', printedSteps: 4, steps: 1 }
+    // 不启用（缺省）：9.11d 的攻方减半照旧 ⇒ 10 → 5；守方 10 → 5（损失 3 ≥ 印值一半）
+    expect(
+      unitBattleStrength({
+        unit: unit({ ...lastStep }),
+        role: 'attacker',
+        terrain: 'Open',
+        combatSupplyPaid: true,
+      }).strength,
+    ).toBe(5)
+    // 启用：攻方 5 ×1/4 = 1.25；守方 5 ×1/2 = 2.5
+    expect(
+      unitBattleStrength({
+        unit: unit({ ...lastStep }),
+        role: 'attacker',
+        terrain: 'Open',
+        combatSupplyPaid: true,
+        effectsOfLosses: true,
+      }).strength,
+    ).toBe(1.25)
+    expect(
+      unitBattleStrength({
+        unit: defender({ ...lastStep }),
+        role: 'defender',
+        terrain: 'Open',
+        combatSupplyPaid: true,
+        effectsOfLosses: true,
+      }).strength,
+    ).toBe(2.5)
+    // 判据边界：非轴心 / 非步兵 / 不是 4 步 / 不是最后一步 ⇒ 4.2b 不施加
+    for (const over of [
+      { side: 'soviet' as const },
+      { branch: 'cavalry' },
+      { printedSteps: 3 },
+      { steps: 2 },
+    ]) {
+      expect(
+        unitBattleStrength({
+          unit: unit({ ...lastStep, ...over }),
+          role: 'attacker',
+          terrain: 'Open',
+          combatSupplyPaid: true,
+          effectsOfLosses: true,
+        }).strength,
+      ).toBe(
+        unitBattleStrength({
+          unit: unit({ ...lastStep, ...over }),
+          role: 'attacker',
+          terrain: 'Open',
+          combatSupplyPaid: true,
+        }).strength,
+      )
+    }
+  })
+
   it('9.5-A / 9.5a：无战斗补给的攻方不能攻击；守方未付 ½；断补再 ½（无补给的断补守方 ¼）', () => {
     expect(
       unitBattleStrength({

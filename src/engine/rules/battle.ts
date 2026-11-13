@@ -92,6 +92,12 @@ export interface BattleUnitView {
   /** 印值军力点数与当前军力（9.11d：多军力单位的攻防减半） */
   printedSteps: number
   steps: number
+  /**
+   * 兵种（单位库 `branch`：`infantry` / `cavalry` / …）
+   *
+   * 专规 4.2b 的「4 步步兵师」判据取自此；缺省视为未知（不施加 4.2b）。
+   */
+  branch?: string | null
   /** 团级当量（4.6） */
   re: number
   /** 部队储备（12.10） */
@@ -439,6 +445,11 @@ export function unitBattleStrength(input: {
   defenderAtLevel?: AtLevel
   /** 9.5：该方本场是否付了战斗补给 */
   combatSupplyPaid: boolean
+  /**
+   * 专规 4.2b（可选）Effects of Losses：启用时，只剩最后一步的 4 步轴心步兵师
+   * **攻 ×1/4、守 ×1/2**；未启用（缺省）⇒ 不加这条倍率
+   */
+  effectsOfLosses?: boolean
 }): { strength: number; rule: string; cannotAttack: boolean } {
   const { unit, role } = input
   if (role === 'attacker' && !canAttackAfterAirTransport(unit.airTransportThisPhase))
@@ -477,6 +488,22 @@ export function unitBattleStrength(input: {
     const lost = unit.printedSteps - unit.steps
     if (role === 'attacker' && lost > 0) value *= 0.5
     if (role === 'defender' && lost >= unit.printedSteps / 2) value *= 0.5
+  }
+
+  /*
+   * 专规 4.2b（可选）Effects of Losses：「一个 4 步轴心国步兵师在只剩最后一步时，
+   * 进攻 ×1/4、防御 ×1/2」。
+   * 判据三项：轴心方 ∧ 步兵 ∧ 印值 4 步；状态一项：当前只剩 1 步。
+   * 未启用（缺省）⇒ 本段不执行，值与修前完全相同。
+   */
+  if (
+    input.effectsOfLosses === true &&
+    unit.side === 'axis' &&
+    unit.branch === 'infantry' &&
+    unit.printedSteps === 4 &&
+    unit.steps === 1
+  ) {
+    value *= role === 'attacker' ? 0.25 : 0.5
   }
 
   // 9.5：守方未付（或无补给）⇒ ½；9.5a：断补 ⇒ 再 ½（无战斗补给的断补守方 = ¼）

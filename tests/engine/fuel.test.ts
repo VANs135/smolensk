@@ -90,6 +90,36 @@ describe('12.5c：三种加油方法', () => {
       rule: '12.5c-C',
     })
   })
+
+  it('专规 4.2c（可选）最省供油：编队/HQ 法改付 2 T、当期有效；单单位法不适用', () => {
+    // 编队法：2 T（0 SP），标记仍是编队标记，但持续期＝当期（相位末摘）
+    expect(computeFuelCost({ method: 'formation', commonSource: true, minimal: true })).toEqual({
+      ok: true,
+      sp: 0,
+      t: 2,
+      duration: 'currentPhaseOnly',
+      marker: 'formationMarker',
+      rule: '4.2c',
+    })
+    expect(computeFuelCost({ method: 'hq', minimal: true })).toEqual({
+      ok: true,
+      sp: 0,
+      t: 2,
+      duration: 'currentPhaseOnly',
+      marker: 'hqFuelMarker',
+      rule: '4.2c',
+    })
+    // 单单位法本来就是 T 计价/当期有效，没有"最省"的余地
+    expect(
+      computeFuelCost({ method: 'singleUnit', unitsNeedingFuel: 1, minimal: true }),
+    ).toMatchObject({ ok: false, rule: '4.2c' })
+    // 未启用（缺省）⇒ 仍是 1 SP（原费用）
+    expect(computeFuelCost({ method: 'formation', commonSource: true })).toMatchObject({
+      ok: true,
+      sp: FUEL_FORMATION_SP,
+      t: 0,
+    })
+  })
 })
 
 describe('12.5d：燃料到期时点', () => {

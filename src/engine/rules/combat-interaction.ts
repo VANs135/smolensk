@@ -494,6 +494,8 @@ export function declareCombatTerrain(
     facts: BattleFacts
     stackChoices?: readonly StackTerrainChoice[]
     defenderTerrain?: string
+    /** 专规 4.2b（可选）：Effects of Losses（未启用＝原值） */
+    effectsOfLosses?: boolean
   },
 ): RuleOutcome<{ state: CombatInteractionState }> {
   if (state.step !== 'declareTerrain') return fail('9.2', `notAtTerrainStep:${state.step}`)
@@ -526,6 +528,7 @@ export function declareCombatTerrain(
       terrain: stackTerrain?.terrain ?? terrain.data.defenderTerrain,
       defenderAtLevel,
       combatSupplyPaid: attackerPaid,
+      ...(input.effectsOfLosses === true ? { effectsOfLosses: true } : {}),
     })
     return { unitId: unit.id, strength: resolved.strength, cannotAttack: resolved.cannotAttack }
   })
@@ -535,6 +538,7 @@ export function declareCombatTerrain(
       role: 'defender',
       terrain: terrain.data.defenderTerrain,
       combatSupplyPaid: defenderPaid,
+      ...(input.effectsOfLosses === true ? { effectsOfLosses: true } : {}),
     })
     return { unitId: unit.id, strength: resolved.strength, cannotAttack: resolved.cannotAttack }
   })

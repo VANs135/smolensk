@@ -759,6 +759,8 @@ export interface FuelPaymentPlan {
   duration: FuelDuration
   marker: FuelMarker
   rule: string
+  /** 专规 4.2c（可选）：本次为「最省供油」（2T、MA ×1/4、相位末摘标记） */
+  minimal: boolean
 }
 
 /** 燃料支付判定输入 */
@@ -777,6 +779,8 @@ export interface FuelPaymentInput {
   /** 当前可用的 SP / T（由状态层给出，12.5c） */
   availableSp: number
   availableT: number
+  /** 专规 4.2c（可选）：最省供油（2T 换 MA ×1/4）；缺省 false ⇒ 原费用 */
+  minimal?: boolean
 }
 
 /**
@@ -816,6 +820,7 @@ export function planFuelPayment(input: FuelPaymentInput): RuleOutcome<FuelPaymen
     method,
     commonSource: input.commonSource,
     unitsNeedingFuel: unitIds.length,
+    ...(input.minimal === true ? { minimal: true } : {}),
   })
   if (!cost.ok) return fail(cost.rule, cost.reason)
 
@@ -832,6 +837,7 @@ export function planFuelPayment(input: FuelPaymentInput): RuleOutcome<FuelPaymen
     duration: cost.duration,
     marker: cost.marker,
     rule: cost.rule,
+    minimal: input.minimal === true,
   })
 }
 

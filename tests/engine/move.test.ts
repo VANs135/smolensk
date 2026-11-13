@@ -112,6 +112,15 @@ describe('可用 MA 与燃料需求（6.1h / 12.5a）', () => {
     // 卡车/运输点数等非战斗单位永远不需要燃料
     expect(requiresFuel(unit({ mobility: 'truck', isCombat: false }))).toBe(false)
   })
+
+  it('专规 4.2c（可选）：最省供油把 MA 乘 ×1/4；未启用（缺省 1）为原值', () => {
+    // 原文「受油单位把 MA 乘 ×1/4」⇒ 与模式折算相乘、不取整
+    expect(availableMa(unit({ ma: 8, fuelMaFactor: 0.25 }), 'movement')).toBe(2)
+    expect(availableMa(unit({ ma: 5, fuelMaFactor: 0.25 }), 'movement')).toBe(1.25)
+    expect(availableMa(unit({ ma: 5, dg: true, fuelMaFactor: 0.25 }), 'movement')).toBe(0.625)
+    // 未启用：默认倍率 1，值与修前一致
+    expect(availableMa(unit({ ma: 8 }), 'movement')).toBe(8)
+  })
 })
 
 /* ────────────────────────────── 逐步移动 ────────────────────────────── */

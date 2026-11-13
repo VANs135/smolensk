@@ -113,6 +113,16 @@ const paid = computed(() => subject.value?.fuelled ?? false)
           >
             支付燃料（{{ method === 'singleUnit' ? '1 T' : '1 SP' }}）
           </BaseButton>
+          <!-- 专规 4.2c（可选）：未启用时这个选项**不出现**（不是置灰） -->
+          <BaseButton
+            v-if="workbench.minimalFuelingOn && method !== 'singleUnit'"
+            variant="secondary"
+            size="sm"
+            :disabled="workbench.fuelDumpId === null"
+            @click="workbench.payFuel(method, undefined, true)"
+          >
+            最省供油（4.2c：2 T，MA ×1/4，相位末摘标记）
+          </BaseButton>
         </div>
       </template>
 

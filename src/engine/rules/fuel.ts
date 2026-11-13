@@ -31,6 +31,12 @@ export const FUEL_HQ_SP = rulesConstants.fuel.hqSp
 /** 独立单位加油：1 T（12.5c-C） */
 export const FUEL_SINGLE_UNIT_T = rulesConstants.fuel.singleUnitT
 
+/** 专规 4.2c（可选）最省供油：2 T（代替编队法/HQ 法的 1 SP） */
+export const FUEL_MINIMAL_T = 2
+
+/** 专规 4.2c：受油单位的 MA 倍率（×1/4） */
+export const MINIMAL_FUEL_MA_FACTOR = 0.25
+
 /* ────────────────────────────── 词表 ────────────────────────────── */
 
 /** 加油方法（12.5c） */
@@ -102,6 +108,12 @@ export interface FuelCostInput {
   commonSource?: boolean
   /** 单单位法专用（12.5c-C）：需要加油的单位数（每单位 1 T） */
   unitsNeedingFuel?: number
+  /**
+   * 专规 4.2c（可选）Minimal Fueling：编队法 / HQ 法改付 **2 T**（而非 1 SP），
+   * 受油单位 MA ×1/4，燃料标记在**相位末**摘除（不等到清理阶段）。
+   * 缺省 false ⇒ 费用与持续期完全按 12.5c 原规则。
+   */
+  minimal?: boolean
 }
 
 /** 燃料费用结果 */
@@ -124,6 +136,34 @@ export type FuelCostResult =
  * 三种方法互不叠加：单位要么按编队法/HQ 法（到下一个友方清理阶段），要么按单单位法（只本阶段）。
  */
 export function computeFuelCost(input: FuelCostInput): FuelCostResult {
+  /*
+   * 专规 4.2c（可选）Minimal Fueling：「一个编队或 HQ 可以用 **2T**（而非 1 SP）加油，
+   * 条件是受油单位 MA ×1/4；且燃料标记须在**相位末**移除（而非清理阶段）。」
+   * ⇒ 只改**费用与持续期**；覆盖集、来源同源这些原判据一律照旧（不在这里另立一套）。
+   * 单单位法本来就是 T 计价、当期有效，没有"最省"的余地 ⇒ 不适用。
+   */
+  if (input.minimal === true) {
+    if (input.method === 'singleUnit')
+      return {
+        ok: false,
+        rule: '4.2c',
+        reason: '最省供油只适用于编队法（12.5c-A）或 HQ 法（12.5c-B）',
+      }
+    if (input.commonSource === false)
+      return {
+        ok: false,
+        rule: '4.2c',
+        reason: '最省供油仍要求全体受油单位共用同一来源（12.5c-A/13.7a）',
+      }
+    return {
+      ok: true,
+      sp: 0,
+      t: FUEL_MINIMAL_T,
+      duration: 'currentPhaseOnly',
+      marker: input.method === 'formation' ? 'formationMarker' : 'hqFuelMarker',
+      rule: '4.2c',
+    }
+  }
   if (input.method === 'formation') {
     if (input.commonSource === false)
       return {
