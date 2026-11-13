@@ -10503,6 +10503,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 4.5b：当前选中单位此刻能否承担「垫人」（许诺本阶段不再消耗 MP，抵消其所在格敌方 ZOC）
+   *
+   * 用户 2026-11-14 口径「不可用项不出现」：面板不再摆一个点了只会提示"不是战斗单位"的按钮。
+   * 判据与 `lockZocNegation` 同源：战斗单位、且本阶段尚未承诺过。
+   */
+  const canLockZocNegationNow = computed<boolean>(() => {
+    const unit = selectedUnit.value
+    return unit !== null && unit.isCombat && !unit.mpLockedThisPhase
+  })
+
+  /**
    * 「打一仗」的点击分派（C6 九步流程的选格）
    *
    * ★ 批 A 切片 2：本函数是**唯一实现** —— 验证页的"工具＝battle"与对局台**战斗环节**的点击都调它，
@@ -28055,6 +28066,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     toggleBarrageSupplyDump,
     setUnitFuelled,
     lockZocNegation,
+    canLockZocNegationNow,
     openBattle,
     resolveBattleNow,
     terrainChoicesAt,

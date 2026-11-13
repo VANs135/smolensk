@@ -224,15 +224,15 @@ function hoverUnit(id: string | null): void {
     <!--
       4.5b 垫人：以某单位许诺"本阶段不再消耗 MP" ⇒ 抵消它所在格的敌方 ZOC。
       判据与落盘都在 store（`lockZocNegation`），本面板只提供"在哪按"。
+      ★ 用户 2026-11-14：只在**选中的是战斗单位、且本阶段尚未承诺**时出现
+        （修前运输点数 / 空军基地也摆这个按钮，点下去只得到"不是战斗单位"的警告）。
       ★ 5.7b 释放预备已移出本面板：唯一入口＝右键「转出预备模式」（与 5.4a 改模式同组）。
     -->
-    <div class="row">
+    <div v-if="canMove && workbench.canLockZocNegationNow" class="row">
       <!-- 4.5b 垫人：属"移动中的 ZOC 处置" ⇒ 跟着 canMove 走 -->
       <BaseButton
-        v-if="canMove"
         variant="ghost"
         size="sm"
-        :disabled="selected === null"
         title="4.5b：本阶段不再消耗 MP，抵消该格敌方 ZOC"
         @click="selected !== null && workbench.lockZocNegation(selected.instanceId)"
       >
