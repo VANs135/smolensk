@@ -305,9 +305,39 @@ describe('12.10a：部队储备只在图上付不清时出现', () => {
     unitB.internalStocks = null
     expect(store.combatAttackerStocksApplicable).toBe(true)
 
-    // 守方：默认要付且图上付不清 ⇒ 适用；改为不付 ⇒ 不适用
+    // 守方：可达来源里没有一座能付足（此处根本没有站）且要付 ⇒ 适用
     expect(store.combatDefenderStocksApplicable).toBe(true)
+    // 12.10a 新口径：看**全部可达来源**有没有一座能单座付足，不看"玩家已点选那座站的 T"。
+    // 这里只摆站、不点选 ⇒ 仍算图上付得清 ⇒ 储备行不出现。
+    store.spDumps.push({ id: 'sd-d', side: 'soviet', hex: { ...DEFENDER_HEX }, sp: 2, t: 0 })
+    expect(store.combatInputs.defenderAvailableT).toBe(0)
+    expect(store.combatDefenderStocksApplicable).toBe(false)
+    // 改为不付 ⇒ 不适用
     store.combatInputs.defenderProvides = false
     expect(store.combatDefenderStocksApplicable).toBe(false)
+  })
+
+  it('★ 守方所有可达来源都付不足 ⇒ 储备行出现', () => {
+    const store = newStore()
+    setupTwoAttackerBattle(store)
+    // 地图上离防御格最远的一格：守方拖不到、也没有 HQ 能投递到 ⇒ 全不可达
+    const far = mapLayers.hexes.reduce((best, hex) => {
+      const distance = Math.abs(hex.col - DEFENDER_HEX.col) + Math.abs(hex.row - DEFENDER_HEX.row)
+      const bestDistance =
+        Math.abs(best.col - DEFENDER_HEX.col) + Math.abs(best.row - DEFENDER_HEX.row)
+      return distance > bestDistance ? hex : best
+    })
+    expect(Math.abs(far.col - DEFENDER_HEX.col)).toBeGreaterThan(3)
+    store.spDumps.push({
+      id: 'sd-far',
+      side: 'soviet',
+      hex: { col: far.col, row: far.row },
+      sp: 8,
+      t: 0,
+    })
+
+    const reachable = store.combatSupplyDumps.find((item) => item.side === 'defender')?.dumps ?? []
+    expect(reachable).toEqual([])
+    expect(store.combatDefenderStocksApplicable).toBe(true)
   })
 })

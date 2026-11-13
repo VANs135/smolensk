@@ -314,19 +314,15 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
 
       <!-- 第 2 步：战斗补给（9.5 / 12.4）——攻/守两段同窗，各自确认 -->
       <SessionStep item="combat:supply">
+        <!-- B5：两侧来源合成一行；未声明的一侧只留一条短横，不再并排两个「未声明」 -->
         <div class="row">
-          <BaseTag kind="info"> 攻方来源：{{ declaredDumpOf('attacker') ?? '未声明' }} </BaseTag>
-          <BaseButton
-            v-if="declaredDumpOf('attacker') !== null"
-            variant="ghost"
-            size="sm"
-            @click="workbench.clearCombatSupplyDump('attacker')"
-          >
-            清除
-          </BaseButton>
+          <span class="num">
+            攻方来源 {{ declaredDumpOf('attacker') ?? '—' }} ｜ 守方来源
+            {{ declaredDumpOf('defender') ?? '—' }}
+          </span>
           <RuleTip rule="9.5 / 12.4">
             攻方须付足全部所需 T（不足则取消攻击）；守方可不付（以一半战斗值防御，9.5-B）。
-            在地图上点补给站即声明付款来源（12.4）；来源为「未声明」时无法付款。
+            在地图上点补给站即声明付款来源（12.4）；来源为「—」时无法付款。
           </RuleTip>
         </div>
         <label v-if="workbench.combatAttackerStocksApplicable" class="check">
@@ -360,24 +356,34 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         </BaseButton>
 
         <div class="row">
-          <BaseTag kind="info"> 守方来源：{{ declaredDumpOf('defender') ?? '未声明' }} </BaseTag>
+          <BaseButton
+            v-if="declaredDumpOf('attacker') !== null"
+            variant="ghost"
+            size="sm"
+            @click="workbench.clearCombatSupplyDump('attacker')"
+          >
+            清除攻方
+          </BaseButton>
           <BaseButton
             v-if="declaredDumpOf('defender') !== null"
             variant="ghost"
             size="sm"
             @click="workbench.clearCombatSupplyDump('defender')"
           >
-            清除
+            清除守方
           </BaseButton>
         </div>
-        <label class="check">
-          <input v-model="workbench.combatInputs.defenderProvides" type="checkbox" />
-          守方支付
-        </label>
-        <label v-if="workbench.combatDefenderStocksApplicable" class="check">
-          <input v-model="workbench.combatInputs.defenderUsesInternalStocks" type="checkbox" />
-          守方用储备
-        </label>
+        <!-- B7：守方支付是唯一入口，储备只作它里面的一行（「优先用储备」） -->
+        <div class="check-group">
+          <label class="check">
+            <input v-model="workbench.combatInputs.defenderProvides" type="checkbox" />
+            守方支付
+          </label>
+          <label v-if="workbench.combatDefenderStocksApplicable" class="check check--nested">
+            <input v-model="workbench.combatInputs.defenderUsesInternalStocks" type="checkbox" />
+            优先用储备
+          </label>
+        </div>
         <BaseButton
           v-if="
             workbench.combatInputs.supplyConfirmed.attacker &&
@@ -984,6 +990,17 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
   gap: var(--space-2);
   font-size: var(--text-sm);
   color: var(--color-muted);
+}
+
+/* B7：守方支付与它里面的储备行 */
+.check-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.check--nested {
+  margin-left: var(--space-4);
 }
 
 .picks {

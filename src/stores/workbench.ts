@@ -11246,12 +11246,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       views.some((unit) => unit.internalStocks !== 'exhausted')
     )
   })
-  const combatDefenderStocksApplicable = computed<boolean>(
-    () =>
-      combatInputs.value.defenderProvides &&
-      combatDefenderRequiredT.value > combatInputs.value.defenderAvailableT &&
-      combatDefenderViews.value.some((unit) => unit.internalStocks !== 'exhausted'),
-  )
+  const combatDefenderStocksApplicable = computed<boolean>(() => {
+    if (!combatInputs.value.defenderProvides) return false
+    /*
+     * 12.10a 原文：只有单位**无法**经直接拖取（12.3a）或 HQ 投递（12.3b）从图上取得所需 SP
+     * 时才可用储备。故这里不看"玩家已点选那座站的 T"，而看**守方全部可达来源**里有没有
+     * 任何一座能单座付足（12.4 的守方需求是一次性整笔）。
+     * 12.10a 的括注例外保留：唯一够额的那座是**编内卡车**上的 SP ⇒ 仍可出现储备行。
+     */
+    const needT = combatDefenderRequiredT.value
+    const reachable = combatSupplyDumps.value.find((item) => item.side === 'defender')?.dumps ?? []
+    const payableFromMap = reachable.some(
+      (dump) =>
+        dump.carrierIsOrganicTruck !== true && holdingsToT({ sp: dump.sp, t: dump.t }) >= needT,
+    )
+    return (
+      !payableFromMap &&
+      combatDefenderViews.value.some((unit) => unit.internalStocks !== 'exhausted')
+    )
+  })
 
   /**
    * 9.5（热座）：确认某一方的补给（只翻标记，不落盘）
