@@ -319,7 +319,17 @@ function surfaceRect(): DOMRect | null {
 function syncSize(): void {
   const rect = surfaceRect()
   if (rect === null) return
-  viewSize.value = { width: Math.max(rect.width, 0), height: Math.max(rect.height, 0) }
+  const width = Math.max(rect.width, 0)
+  const height = Math.max(rect.height, 0)
+  /*
+   * 尺寸没变就**不重排、不重画**。
+   *
+   * 挂载期 `onMounted` 会同步调一次，`ResizeObserver` 随后还会补一次初始回调，两次报的是
+   * 同一个尺寸；若每次都走 `fitToWindow()` / `applyViewport()`，整幅地图（两万多条格边）
+   * 会被完整画两遍——首屏最贵的一笔。尺寸不变时 `clampViewport` 的结果也不变，故跳过等价。
+   */
+  if (fitted && viewSize.value.width === width && viewSize.value.height === height) return
+  viewSize.value = { width, height }
   if (!fitted && canDraw(viewSize.value)) {
     fitted = true
     fitToWindow()
