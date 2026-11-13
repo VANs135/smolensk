@@ -5713,6 +5713,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (interaction === null) return { units: [], hexes: [] }
     // 2.2：回合准备环节没有行动段 ⇒ 不给出任何可走格（否则界面会"看起来能走"）
     if (segmentLocked.value) return { units: [], hexes: [] }
+    /*
+     * 用户 2026-11-13：9.2 战斗会话**进行中**（含从移动发起的突袭）不铺移动范围。
+     * 常规战斗本就没有 `moveInteraction`；突袭必须保留它（3MP 记账 / K5 撤销锚 / 8.1e 收束后
+     * 继续走），所以只能在这里按会话态早退。收束（`finished`）即恢复——面板可能还开着给玩家
+     * 看结算，但范围与紫环已可回到 8.1e 的「继续移动」状态。
+     */
+    if (combatState.value !== null && combatState.value.finished !== true)
+      return { units: [], hexes: [] }
     return reachableForMove({
       context: moveContext.value,
       interaction,
@@ -6179,6 +6187,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const interaction = moveInteraction.value
     const from = overrunStackHex.value
     if (interaction === null || from === null) return []
+    // 用户 2026-11-13：战斗会话进行中不铺紫环（含突袭自己这一场）；收束（finished）即恢复
+    if (combatState.value !== null && combatState.value.finished !== true) return []
     if (overrunCandidateUnits.value.length === 0) return []
 
     const anchors = neighbors(from).map((item) => item.hex)

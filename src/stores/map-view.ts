@@ -769,6 +769,12 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (overrunHint.value !== '') return overrunHint.value
     if (workbench.airActive && workbench.airMissionAirIds.length > 0)
       return '已选飞机：点地图上任意一格即定任务格（14.2f-B），再在会话框里选任务并宣布'
+    /*
+     * 用户 2026-11-13：9.2 会话进行中，移动范围与紫环已收起，这里不能再报「移动中…」。
+     * 撤退/推进步的落点提示在上面各自已有专门分支；这一句只兜住其余九步。
+     */
+    if (workbench.combatState !== null && workbench.combatState.finished !== true)
+      return '战斗中：按会话框逐步结算（9.2）；地图只显示本步的落点与目标（9.12）'
     if (workbench.moveInteraction !== null)
       return '移动中：点可到达格逐格走（6.1）；点紫环敌方格＝突袭（8.1a）；Enter 结束移动'
     /*
