@@ -1181,18 +1181,6 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
-   * 空军第 2 步：**目标方选完受损单位**后继续（与炮击第 3 步共用同一组损失分配动作）
-   *
-   * 10.0a / 10.2：空军轰炸复用炮兵的战果链；这里只把"确认受损"与"接着跑完任务"串起来。
-   */
-  function confirmOpsAirLoss(): boolean {
-    const flow = opsFlow.value
-    if (flow === null || flow.kind === 'barrage' || flow.step !== 2) return false
-    if (!workbench.confirmBarrageLossNow()) return false
-    return workbench.autoResolveAirMissionNow()
-  }
-
-  /**
    * 炮击第 2 步：确认支付 ⇒ **自动走完横移与掷骰**
    *
    * 用户口径（2026-11-12）：不再有中间的横移 / 掷骰 / 结果分步块。
@@ -1313,8 +1301,14 @@ export const useMapViewStore = defineStore('mapView', () => {
   watch(
     () => {
       const flow = opsFlow.value
-      if (flow === null || flow.step !== 2) return false
-      if (flow.kind === 'barrage') return workbench.barrageState?.finished === true
+      if (flow === null) return false
+      if (flow.kind === 'barrage') {
+        return flow.step === 2 && workbench.barrageState?.finished === true
+      }
+      /*
+       * 用户 2026-11-13：空军不再靠 `flow.step` 推进（选机并入面板 1）⇒
+       *   收束只看任务本身是否 finished，不能因为 step 停在 1 就让会话框挂着。
+       */
       return workbench.airState?.finished === true
     },
     (finished) => {
@@ -2996,6 +2990,15 @@ export const useMapViewStore = defineStore('mapView', () => {
     const moving = workbench.moveInteraction
     const stepId = workbench.segmentStep?.id ?? ''
     const batch = workbench.frontalReservesToday
+    /*
+     * 14.5：拦截已宣布、拦截空战还没结算 ⇒ 会话改挂「拦截空战」卡，
+     * 不借「防空」的名字（用户 2026-11-13）。
+     */
+    const interceptionCombatPending =
+      air !== null &&
+      air.step === 'flak' &&
+      air.interception?.declared === true &&
+      air.interception.combat === null
     return {
       kind,
       combat:
@@ -3021,6 +3024,7 @@ export const useMapViewStore = defineStore('mapView', () => {
               step: air?.step ?? 'declare',
               declared: air !== null,
               cargoLossPending: workbench.airCargoLossPending !== null,
+              interceptionCombatPending,
             },
       /*
        * 三操作统一流程：与其它环节同一套投影。
@@ -3039,6 +3043,7 @@ export const useMapViewStore = defineStore('mapView', () => {
                       step: air?.step ?? 'declare',
                       declared: air !== null,
                       cargoLossPending: workbench.airCargoLossPending !== null,
+                      interceptionCombatPending,
                     },
             },
       supply: kind !== 'supply' || supply === null ? null : { step: supply.step },
@@ -3842,7 +3847,6 @@ export const useMapViewStore = defineStore('mapView', () => {
     opsFlow,
     openOpsFlow,
     advanceOpsFlow,
-    confirmOpsAirLoss,
     confirmOpsBarrageSupply,
     confirmOpsBarrageLoss,
     cancelOpsFlow,

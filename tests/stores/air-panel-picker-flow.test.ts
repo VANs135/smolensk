@@ -322,10 +322,11 @@ describe('B14a：空军面板的替换（源码守卫）', () => {
     // 被指定单位：点击直连 store 的动作（不是只改本地显示）
     expect(panel).toContain('@pick="workbench.toggleAirReductionUnit($event)"')
     /*
-     * 用户 2026-11-13：选飞机只出现一次 —— 轰炸/低空扫射的选机在 ops 面板 1，
-     * 编组卡只对其余任务类型（空运/空投/破交/扫荡）列参战机（门＝`showsMissionRoster`）。
+     * 用户 2026-11-13：选飞机只出现一次 —— 选机并入面板 1（编组卡），
+     * ops 面板不再另列一列；AirPanel 内不再按任务类型隐藏选机（`showsMissionRoster` 已删）。
      */
-    expect(panel).toContain('showsMissionRoster')
+    expect(panel).not.toContain('showsMissionRoster')
+    expect(panel).toContain('workbench.toggleAirMissionUnit(')
   })
 
   it('悬停同步地图高亮：其余三类对象都走既有的 `setHoverHex`（不另立通道）', () => {

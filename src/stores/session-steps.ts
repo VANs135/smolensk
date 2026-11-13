@@ -40,6 +40,8 @@ export interface AirSessionFacts {
   step: AirMissionStep | 'done'
   declared: boolean
   cargoLossPending: boolean
+  /** 14.5：拦截已宣布、拦截空战还没结算 ⇒ 这一步单独成卡（不叫「防空」） */
+  interceptionCombatPending?: boolean
 }
 
 /**
@@ -286,9 +288,9 @@ function airItems(facts: NonNullable<SessionStepFacts['air']>): SessionStepItem[
     items.push(
       item(
         'air:declare',
-        '编组空军任务',
-        '已选好参战机，等待指定任务与任务格。',
-        '确认任务类型与任务格后执行。',
+        '选飞机发起任务',
+        '任务类型与任务格已定，等待挑选参战机。',
+        '点选参战机，然后发起任务。',
       ),
     )
     return items
@@ -296,18 +298,19 @@ function airItems(facts: NonNullable<SessionStepFacts['air']>): SessionStepItem[
   switch (facts.step) {
     case 'declare':
       items.push(
-        item('air:declare', '编组空军任务', '任务还没宣布。', '确认任务类型与任务格后执行。'),
-      )
-      break
-    case 'move':
-      items.push(
         item(
-          'air:move',
-          '任务进行中',
-          '飞机正在飞向任务格。',
-          '无特别决定；如有拦截方需表态则按提示处理。',
+          'air:declare',
+          '选飞机发起任务',
+          '任务类型与任务格已定，等待挑选参战机。',
+          '点选参战机，然后发起任务。',
         ),
       )
+      break
+    /*
+     * `air:move` 是死项：任务机在 B 步没有玩家决定，自动连跑会直接进 C 步
+     * （用户 2026-11-13：删掉这一步，不再占窗）。
+     */
+    case 'move':
       break
     case 'airCombat':
       items.push(
@@ -325,10 +328,24 @@ function airItems(facts: NonNullable<SessionStepFacts['air']>): SessionStepItem[
       )
       break
     case 'flak':
-      items.push(item('air:flak', '防空', '任务格有防空力量。', '确认防空结算。'))
+      /*
+       * 用户 2026-11-13：防空已自动结算 ⇒ 正常路径不停在防空。
+       *   只有两种"停住"要占窗：① 拦截已宣布、拦截空战待结算（14.5，标题「拦截空战」）；
+       *   ② 防空被拒（面板里给错误与取消出口）。
+       */
+      items.push(
+        facts.interceptionCombatPending === true
+          ? item(
+              'air:interceptionCombat',
+              '拦截空战',
+              '拦截方已宣布拦截，拦截机与迎战机还没结算。',
+              '结算这次拦截空战。',
+            )
+          : item('air:flak', '防空', '防空结算被拒，需要处置。', '按提示处置或取消本次任务。'),
+      )
       break
     case 'resolveMission':
-      items.push(item('air:resolve', '任务结算', '飞机已抵达任务格。', '确认任务本身的结果。'))
+      items.push(item('air:resolve', '结算任务', '飞机已抵达任务格。', '确认任务本身的结果。'))
       break
     case 'returnToBase':
       items.push(item('air:return', '返航', '任务已结算，飞机要回基地。', '确认返航落位。'))
@@ -378,16 +395,10 @@ function opsItems(facts: NonNullable<SessionStepFacts['ops']>): SessionStepItem[
       ),
     ]
   }
-  if (facts.step === 1) {
-    return [
-      item(
-        'ops:air:units',
-        '选参战机',
-        '目标格已定，等待挑选执行该任务的飞机。',
-        '只从能执行该任务且航程够得到的飞机里选，然后进入下一步。',
-      ),
-    ]
-  }
+  /*
+   * 用户 2026-11-13：「选机」并入面板 1 ⇒ 空军不再有独立的「选参战机」步，
+   *   从右键定好类型与目标格起，第 1 张卡就是 `air:declare`（选飞机 + 发起）。
+   */
   return facts.air === null ? [] : airItems(facts.air)
 }
 

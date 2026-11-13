@@ -196,13 +196,21 @@ describe('统一流程：第 1 步 → 第 2 步（空军轰炸的自动结算�
 
 describe('候选同源（规格 §3 集合等式）', () => {
   it('★ 空军第 1 步只取候选函数给出的那批（不列未激活 / 已出任务 / 航程不够）', () => {
-    const panel = readFileSync('src/components/ops/OpsFlowPanel.vue', 'utf8')
-    // 与右键入口同一函数：轰炸 `bombingCandidatesAt`、扫射 `hipShootCandidatesAt`
-    expect(panel).toContain('bombingCandidatesAt')
-    expect(panel).toContain('hipShootCandidatesAt')
+    /*
+     * 用户 2026-11-13：选机并入面板 1 ⇒ 参战机阵列在 `AirPanel`，ops 面板不再列机。
+     * 可选性仍只取 store 的同一份投影（`airMissionBaseGroupsWithBox` → `airMissionJoinChoices`，
+     * 与右键入口的 `bombingCandidatesAt` / `hipShootCandidatesAt` 同源）。
+     */
+    const panel = readFileSync('src/components/air/AirPanel.vue', 'utf8')
+    const ops = readFileSync('src/components/ops/OpsFlowPanel.vue', 'utf8')
+    expect(panel).toContain('workbench.airMissionBaseGroupsWithBox')
+    expect(ops).not.toContain('bombingCandidatesAt')
+    expect(ops).not.toContain('hipShootCandidatesAt')
     // 不再在组件里按机型能力二次筛选（那是第二套判据）
     expect(panel).not.toContain('barrageStrength ?? 0) > 0')
     expect(panel).not.toContain('canHipShoot === true')
+    expect(ops).not.toContain('barrageStrength ?? 0) > 0')
+    expect(ops).not.toContain('canHipShoot === true')
   })
 })
 

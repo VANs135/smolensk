@@ -236,17 +236,35 @@ describe('U1-b 投影：三操作统一流程（ops 也是同一套事实）', (
     expect(exposedSessionStep(items)?.id).toBe('air:cargoLoss')
   })
 
+  it('空军第 1 步即面板 1：选机与发起同一张卡（不再有独立选机步）', () => {
+    const items = planSessionSteps(
+      baseFacts({
+        kind: 'ops',
+        ops: {
+          kind: 'bombing',
+          step: 1,
+          air: { step: 'declare', declared: false, cargoLossPending: false },
+        },
+      }),
+    )
+    expect(items.map((entry) => entry.id)).toEqual(['air:declare'])
+    expect(items[0]?.title).toBe('选飞机发起任务')
+  })
+
   it('源守卫：ops 面板改按门渲染，旧的 flow.step 分支已清掉', () => {
     const panel = read('components/ops/OpsFlowPanel.vue')
     expect(panel).toContain('<SessionStep')
-    for (const id of [
-      'ops:barrage:units',
-      'ops:barrage:supply',
-      'ops:barrage:loss',
-      'ops:air:units',
-    ]) {
+    for (const id of ['ops:barrage:units', 'ops:barrage:supply', 'ops:barrage:loss']) {
       expect(panel).toContain(`item="${id}"`)
     }
+    /*
+     * 用户 2026-11-13：选机并入面板 1 ⇒ 空军没有独立步骤；
+     *   K4 损失块与「收起面板」也并进面板 2（窗内只剩 AirPanel 一张卡）。
+     */
+    expect(panel).not.toContain('item="ops:air:units"')
+    expect(panel).toContain('<AirPanel v-if="airMissionActive" only="mission" />')
+    expect(panel).not.toContain('confirmOpsAirLoss')
+    expect(panel).not.toContain('收起面板')
     // 旧写法：面板自己按流程步挑内容（内联绕过会话投影）
     expect(panel).not.toMatch(/v-(?:else-)?if="[^"]*flow\.step/)
   })

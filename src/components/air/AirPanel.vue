@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip, UI_COPY } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
+import OpsLossPicker from '@/components/ops/OpsLossPicker.vue'
 import UiField from '@/components/UiField.vue'
 import { useRefereeTools } from '@/components/ui-mode'
 import {
@@ -116,6 +117,17 @@ const airCombatLine = computed(() => {
 const interceptionCombatLine = computed(
   () => workbench.airState?.interception?.combat?.detail ?? null,
 )
+
+/** 10.0a：对地战果停在"目标方分配损失"（与炮击第 3 步同一块） */
+const airLossPickPending = computed(() => {
+  const barrage = workbench.barrageState
+  return (
+    barrage !== null &&
+    barrage.kind === 'air' &&
+    !barrage.finished &&
+    workbench.barrageLossRequired > 0
+  )
+})
 
 /** 14.2f-F：面板 2 的唯一决定（战果链/货物未跑完时先补跑，再记录结算） */
 function settleMissionAndContinue(): void {
@@ -349,19 +361,6 @@ const showsAssign = computed(() => {
   const step = workbench.airState?.step
   return step === undefined || step === 'declare' || step === 'move'
 })
-
-/**
- * 用户 2026-11-13：**选飞机只出现一次**。
- *
- * 轰炸 / 低空扫射从「射击」菜单进 ops 流程，第 1 步已经选好参战机 ⇒ 编组卡不再重复一列；
- * 空运 / 空投 / 破交 / 扫荡没有独立选机步 ⇒ 面板 1（编组卡）里选机并发起。
- * 验证页（`stepwise`）照旧全显示，便于逐步复核。
- */
-const showsMissionRoster = computed(() => {
-  if (props.stepwise) return true
-  const kind = workbench.airMissionKind
-  return kind !== 'barrage' && kind !== 'hip_shoot'
-})
 /**
  * 用户 2026-10-25：「**一个操作一个面板**」——基地会话里先给操作菜单，
  * 点哪一项就只展开那一段（不再把摆放/整备/修建/缩减/夺取全铺开）。
@@ -587,9 +586,9 @@ const displayedBases = computed(() =>
           </div>
           <!--
             用户 2026-11-12：所有主动任务都从目标右键发起，窗内**按基地分组**列参战机（含图外盒）。
-            用户 2026-11-13：轰炸/低空扫射已在 ops 第 1 步选机 ⇒ 这里不再重复（`showsMissionRoster`）。
+            用户 2026-11-13：选机并入面板 1 ⇒ 所有任务类型都在这里选（不再有独立的选机步）。
           -->
-          <div v-if="showsMissionRoster" class="base-roster">
+          <div class="base-roster">
             <div
               v-for="group in workbench.airMissionBaseGroupsWithBox"
               :key="group.baseId"
@@ -960,9 +959,10 @@ const displayedBases = computed(() =>
             </div>
           </SessionStep>
 
-          <!-- ── 拦截空战结算（14.5 + 14.3e） ── -->
-          <template
+          <!-- ── 拦截空战结算（14.5 + 14.3e）── -->
+          <SessionStep
             v-if="workbench.airState.step === 'flak' && workbench.airState.interception?.declared"
+            item="air:interceptionCombat"
           >
             <p class="num">
               <BaseTag kind="neutral">由对手操作</BaseTag>
@@ -982,7 +982,7 @@ const displayedBases = computed(() =>
               <BaseTag kind="success">{{ workbench.airState.interception.combat.rule }}</BaseTag>
               {{ workbench.airState.interception.combat.detail }}
             </p>
-          </template>
+          </SessionStep>
 
           <!-- ── ④ 防空（14.2f-E / 14.4）：自动结算，只在被拒时展开出口 ── -->
           <SessionStep
@@ -1026,6 +1026,8 @@ const displayedBases = computed(() =>
               <BaseTag kind="neutral">对地</BaseTag>
               {{ airBarrageOutcomeLine }}
             </p>
+            <!-- 10.0a：对地战果要目标方分配损伤 ⇒ 与炮击共用同一块（不再另开一张卡） -->
+            <OpsLossPicker v-if="airLossPickPending" />
             <div class="row">
               <BaseButton variant="primary" size="sm" @click="settleMissionAndContinue()">
                 结算任务

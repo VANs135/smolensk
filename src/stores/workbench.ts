@@ -18912,16 +18912,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       state.kind === 'barrage' || state.kind === 'hip_shoot' || state.kind === 'trainbusting'
     if (ground && airMissionFlyingUnits.value.length > 0) {
       const barrage = barrageState.value
-      const done =
+      const owns =
         barrage !== null &&
         airMissionDomain.ownsBarrage(barrage) &&
-        barrage.finished &&
-        barrage.outcome !== undefined &&
-        sameHex(barrage.targetHex, state.targetHex) &&
-        barrage.kind === 'air'
-      if (!done) {
+        barrage.kind === 'air' &&
+        sameHex(barrage.targetHex, state.targetHex)
+      const finished = barrage !== null && owns && barrage.finished && barrage.outcome !== undefined
+      if (barrage !== null && owns && !barrage.finished) {
+        /*
+         * 10.0a：战果链停在「目标方分配损失」⇒ 面板 2 里那块选择分完再点一次「结算任务」；
+         * 没分够就如实拒绝（不要静默重开会把已选的损失冲掉）。
+         */
+        if (barrageLossRequired.value > 0 && !barrageLossReady.value) {
+          airError.value = { rule: '10.0a', reason: 'barrageLossPending' }
+          pushLog('warning', '先给目标方分配完军力损失，再结算任务', '10.0a')
+          return false
+        }
+        if (!confirmBarrageLossNow()) return false
+        if (!runBarrageChainNow()) return false
+      } else if (!finished) {
         if (!beginAirBarrageNow()) return false
         if (!runBarrageChainNow()) return false
+        // 刚停在受损分配 ⇒ 停在面板 2（选完损失再点「结算任务」）
+        if (barrageState.value?.finished !== true) return false
       }
     }
     return confirmAirMissionNow()
