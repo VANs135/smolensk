@@ -166,6 +166,30 @@ describe('B15d：空军任务链进会话框', () => {
     expect(workbench.beginAirMissionNow()).toBe(true)
     expect(mapView.session).toMatchObject({ kind: 'air', rule: '14.2f' })
   })
+
+  it('★ 空军 2-10：任务 `finished` ⇒ 会话收束，不再留「已完成/主动返航」', () => {
+    const { workbench, mapView } = newStores()
+    workbench.setAirActive(true)
+    workbench.setAirMissionKind('fighter_sweep')
+    workbench.units.push(
+      toConsoleUnit({ record: airBaseRecord(), instanceId: 'base-1', hex: CORE_HEX, side: 'axis' }),
+    )
+    const plane = toConsoleAirUnit({
+      aircraft: fighterRecord('axis'),
+      instanceId: 'air-1',
+      hex: CORE_HEX,
+      side: 'axis',
+      airStatus: 'active',
+    })
+    workbench.airUnits.push(plane)
+    workbench.setAirTargetFromText(label(CORE_HEX))
+    workbench.toggleAirMissionUnit(plane.instanceId)
+    expect(workbench.beginAirMissionNow()).toBe(true)
+    expect(mapView.session?.kind).toBe('air')
+
+    workbench.airState = { ...workbench.airState!, finished: true }
+    expect(mapView.session).toBeNull()
+  })
 })
 
 describe('B15e：补给检查链进会话框', () => {

@@ -2766,6 +2766,9 @@ export const useMapViewStore = defineStore('mapView', () => {
        */
       workbench.actionAllowedNow('air.mission') &&
       workbench.airActive &&
+      // 空军 2-10：任务结束（`finished`）即收束会话，不再显示「本环节已完成/任务已宣布」
+      // 与必然被拒的主动返航入口
+      workbench.airState?.finished !== true &&
       (workbench.airState !== null ||
         workbench.airMissionAirIds.length > 0 ||
         airEntryTarget.value !== null)
