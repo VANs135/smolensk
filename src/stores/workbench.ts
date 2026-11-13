@@ -18888,12 +18888,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return autoResolveAirMissionNow()
   }
 
-  /** 14.2f：切任务类型并**接着跑完**（面板的下拉即调用它 —— 选类型是任务分配的最后一步） */
-  function runAirMissionWithKind(kind: AirMissionKind): boolean {
-    setAirMissionKind(kind)
-    return runAirMissionNow()
-  }
-
   function autoResolveAirMissionNow(): boolean {
     const state = airState.value
     if (state === null) return false
@@ -27670,7 +27664,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     autoResolveAirMissionNow,
     // 批 C 切片 1：选任务类型即"宣布 + 自动结算到停返航"（一次动作，不再两次确认）
     runAirMissionNow,
-    runAirMissionWithKind,
     beginAirReturnBasePickNow,
     chooseAirReturnDepartureNow,
     chooseAirReturnOffMapBoxNow,

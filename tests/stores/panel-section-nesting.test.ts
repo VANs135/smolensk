@@ -272,7 +272,6 @@ describe('分段块的**结构**不变量（空块 / 段错位都会红）', () 
      * 窗内也不再放"表单已收起"这类描述文字（口径：窗内不放描述文字）。
      */
     expect(sectionOf(panel, 'workbench.runAirMissionNow()', 'showsAssign')).toBe('showsAssign')
-    expect(panel).not.toContain('workbench.runAirMissionWithKind(')
     expect(panel).not.toContain('v-if="!showsAssign"')
   })
 

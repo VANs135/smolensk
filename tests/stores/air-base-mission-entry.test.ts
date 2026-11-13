@@ -31,7 +31,7 @@ import {
  *   只在"点空格/敌格"时出现，从基地/飞机这一侧完全不可见 ⇒ 用户看到的"没有 UI"。
  *
  * ## 测法
- *   全部走 store 的既有入口（`unitActionOptions` / `openUnitActionAt` / `runAirMissionWithKind`），
+ *   全部走 store 的既有入口（`unitActionOptions` / `openUnitActionAt` / `runAirMissionNow`），
  *   不渲染组件；提交链与 `air-barrage-flow.test.ts` 同源（真实地图格、真实飞机库与单位库）。
  */
 
@@ -161,8 +161,9 @@ describe('BUG 2：移动环节从空军基地这一侧就能发起低空扫射�
     // 10.0b：低空扫射要正确观察员（面板上的事实声明，与既有低空扫射用例同口径）
     workbench.barrageInputs = { ...workbench.barrageInputs, hasSpotter: true }
 
-    // 面板的"任务类型"下拉即调用这一条具名入口（组件里不写规则）
-    expect(workbench.runAirMissionWithKind('hip_shoot')).toBe(true)
+    // 面板的"任务类型"由右键菜单定死，发起走具名入口（组件里不写规则）
+    workbench.setAirMissionKind('hip_shoot')
+    expect(workbench.runAirMissionNow()).toBe(true)
     expect(workbench.barrageState?.finished).toBe(true)
     expect(workbench.barrageAirIds.length).toBe(1)
     expect(workbench.airState?.finished).toBe(true)

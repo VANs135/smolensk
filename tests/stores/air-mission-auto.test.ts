@@ -134,11 +134,10 @@ describe('B29a：任务格与迎战机（玩家自选）', () => {
     /*
      * ★ 契约变更（批 C 切片 1，**不是放宽**）：面板**不再**直接挂 `autoResolveAirMissionNow()`
      *   —— 宣布与自动结算已合成一次动作 `runAirMissionNow()`。
-     * 用户 2026-11-13：任务类型由右键「射击/空军任务」定死 ⇒ 面板**不再**给类型下拉
-     *   （`runAirMissionWithKind` 的"选类型即开跑"入口已从 UI 撤掉），只读显示 + 单一「发起任务」。
+     * 用户 2026-11-13：任务类型由右键「射击/空军任务」定死 ⇒ 面板**不再**给类型下拉，
+     *   只读显示 + 单一「发起任务」（选类型即跑的入口已删除）。
      */
     expect(panel).toContain('workbench.runAirMissionNow()')
-    expect(panel).not.toContain('workbench.runAirMissionWithKind(')
     expect(panel).toContain('workbench.airMissionKindChoices')
     /*
      * 用户 2026-11-12（K2/K3）：自动连跑被空战/拦截拒停时，生产界面必须有自己的"继续结算"出口。
@@ -247,12 +246,13 @@ describe('批 C 切片 1：选任务类型即跑到停返航（一次动作）',
     expect(store.setAirTargetFromText(label(TARGET_HEX))).toBe(true)
   }
 
-  it('★ 一次性：`runAirMissionWithKind` ⇒ 宣布与结算连跑，停在**返航**（不必再点两次确认）', () => {
+  it('★ 一次性：`runAirMissionNow` ⇒ 宣布与结算连跑，停在**返航**（不必再点两次确认）', () => {
     armMission()
     const drawsBefore = store.drawCount
     expect(store.airState).toBeNull()
 
-    expect(store.runAirMissionWithKind('barrage')).toBe(true)
+    store.setAirMissionKind('barrage')
+    expect(store.runAirMissionNow()).toBe(true)
     expect(store.airState?.step).toBe('returnToBase')
     expect(store.airState?.kind).toBe('barrage')
     // 14.4 防空那一步真的掷了骰（走种子化 RNG 并留痕）

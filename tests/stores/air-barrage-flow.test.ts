@@ -140,7 +140,8 @@ describe('G①：空军轰炸（14.7b / 10.2）真的落 CRT', () => {
     expect(store.setSegmentStepIndex(index)).toBe(true)
     setupBarrage(store)
 
-    expect(store.runAirMissionWithKind('barrage')).toBe(true)
+    store.setAirMissionKind('barrage')
+    expect(store.runAirMissionNow()).toBe(true)
     // ① 轰炸引擎真的跑过：状态机走完 + 结果落在会话日志里
     expect(store.barrageState?.finished).toBe(true)
     expect(store.log.some((entry) => (entry.text ?? '').includes('轰炸结果（10.0a）'))).toBe(true)
@@ -160,7 +161,8 @@ describe('G①：空军轰炸（14.7b / 10.2）真的落 CRT', () => {
     // 10.0b：低空扫射需要**正确观察员**（面板上的事实声明）
     store.barrageInputs = { ...store.barrageInputs, hasSpotter: true }
 
-    expect(store.runAirMissionWithKind('hip_shoot')).toBe(true)
+    store.setAirMissionKind('hip_shoot')
+    expect(store.runAirMissionNow()).toBe(true)
     expect(store.barrageState?.finished).toBe(true)
     // 14.7d-B：「A Hip Shoot must be made by a **single aircraft**」⇒ 参炸机恰一枚
     expect(store.barrageAirIds.length).toBe(1)
@@ -168,7 +170,7 @@ describe('G①：空军轰炸（14.7b / 10.2）真的落 CRT', () => {
     expect(store.log.some((entry) => (entry.text ?? '').includes('（未填结果）'))).toBe(false)
     /*
      * ★ 条 13（A2）契约变更（**不是放宽**）：干净低空扫射**全自动到返航并变非激活** ——
-     *   修前 `runAirMissionWithKind` 只到 `returnToBase`，玩家还得再点一次「返航」逐机确认；
+     *   修前 `runAirMissionNow` 只到 `returnToBase`，玩家还得再点一次「返航」逐机确认；
      *   现对 hip_shoot 自动补完返航步（`completeAirReturnNow` ⇒ 14.1c 逐机转非激活）。
      *   barrage（14.7b）不在此列，仍停 returnToBase（见上一例与 G① 口径）。
      */
