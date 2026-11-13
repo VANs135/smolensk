@@ -40,6 +40,23 @@ function declareInterceptionAndContinue(): void {
   if (workbench.declareInterceptionNow()) workbench.autoResolveAirMissionNow()
 }
 
+/** 14.2f-E：防空结算后继续跑 F/G（与 ③ 的「记录并继续」同形）；逐步复核页仍可只结算防空。 */
+function settleFlakAndContinue(): void {
+  if (workbench.resolveFlakNow()) workbench.autoResolveAirMissionNow()
+}
+
+/** 14.7b / 14.7d / 14.10c：F 步需要进轰炸链的三类任务 */
+const AIR_GROUND_KINDS: readonly string[] = ['barrage', 'hip_shoot', 'trainbusting']
+const isAirGroundMission = computed(
+  () => workbench.airState !== null && AIR_GROUND_KINDS.includes(workbench.airState.kind),
+)
+const airGroundButtonLabel = computed(() => {
+  const kind = workbench.airState?.kind
+  if (kind === 'hip_shoot') return '结算低空扫射（10.2 / 14.7d）'
+  if (kind === 'trainbusting') return '结算运输破坏（10.2 / 14.10c）'
+  return '结算空军轰炸（10.2 / 14.7b）'
+})
+
 /** 14.9f：这里只维护玩家卸货选择，限额与不可拆分判定交给引擎。 */
 function toggleUnloadCargo(id: string): void {
   const current = workbench.airInputs.unloadCargoIds ?? []
@@ -925,16 +942,16 @@ const displayedBases = computed(() =>
                 >
               </div>
             </template>
-            <p v-if="workbench.airState.kind === 'barrage'" class="num">
-              空军轰炸（10.2a / 14.7b）
+            <p v-if="isAirGroundMission" class="num">
+              对地结算（10.2）
               <RuleTip rule="10.2">
                 与炮兵**同一条**轰炸链（加总轰炸值 → 定纵列 → 横移 → 2 骰 → 战果）；
                 10.2c：**空军轰炸没有补给消耗**。
               </RuleTip>
             </p>
-            <div v-if="workbench.airState.kind === 'barrage'" class="row">
+            <div v-if="isAirGroundMission" class="row">
               <BaseButton variant="primary" size="sm" @click="workbench.beginAirBarrageNow()">
-                结算空军轰炸（10.2 / 14.7b）
+                {{ airGroundButtonLabel }}
               </BaseButton>
               <span class="muted">结算完再回来「结算任务」（14.2f-F）。</span>
             </div>
@@ -943,6 +960,7 @@ const displayedBases = computed(() =>
           <!-- ── ③ 拦截应答（14.2f-D / 14.5） ── -->
           <SessionStep v-if="workbench.airState.step === 'interception'" item="air:interception">
             <p class="num">
+              <BaseTag kind="neutral">由对手操作</BaseTag>
               拦截资格（14.5）：{{ interception === null ? '任务格未定' : interception.detail }}
               <template v-if="workbench.airTargetInEnemyPatrolZone">
                 ｜任务格在对手巡逻区内（14.4c）
@@ -979,6 +997,7 @@ const displayedBases = computed(() =>
             v-if="workbench.airState.step === 'flak' && workbench.airState.interception?.declared"
           >
             <p class="num">
+              <BaseTag kind="neutral">由对手操作</BaseTag>
               拦截空战（14.5 按空战结算）：修 2 骰 + 拦截机 ACV − 迎战机 ACV； 胜 ⇒
               拦截机保持激活（不算执行过任务），败/双方返航 ⇒ 非激活。
             </p>
@@ -1000,6 +1019,7 @@ const displayedBases = computed(() =>
           <!-- ── ④ 防空应答（14.2f-E / 14.4） ── -->
           <SessionStep v-if="workbench.airState.step === 'flak'" item="air:flak">
             <p class="num">
+              <BaseTag kind="neutral">由对手操作</BaseTag>
               防空（14.4e）
               <RuleTip rule="14.4e">
                 表 17-3：任务 ≥3 机 +1；目标格 HQ +1、基地等级每级 +1、印刷防空值 +value；
@@ -1027,8 +1047,16 @@ const displayedBases = computed(() =>
               <label class="field"> 目标基地等级（自动 {{ workbench.airTargetBaseLevel }}） </label>
             </div>
             <div class="row">
-              <BaseButton variant="primary" size="sm" @click="workbench.resolveFlakNow()">
-                ④ 结算防空（14.2f-E）
+              <BaseButton variant="primary" size="sm" @click="settleFlakAndContinue()">
+                ④ 结算防空并继续（14.2f-E）
+              </BaseButton>
+              <BaseButton
+                v-if="workbench.airError?.reason === 'cargoCarrierAllocationRequired'"
+                variant="secondary"
+                size="sm"
+                @click="workbench.cancelAir()"
+              >
+                取消本次任务
               </BaseButton>
             </div>
             <p v-if="workbench.airState.flak !== null" class="num">

@@ -18290,7 +18290,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 14.3e-B / 14.5：迎战机取"点名的那一架，未点名则 ACV 最高"（与引擎缺省同口径）
     const defender = airInterceptionDefender.value ?? undefined
     if (defender === undefined) {
-      pushLog('warning', '任务机名单为空（14.3e-B）', '14.3e-B')
+      // 14.3e-B：迎战机由任务方从参战机中指定；名单为空时 E 步会被 `interceptionCombatPending`
+      // 永远拒住 ⇒ 必须把原因写进 `airError`，否则界面只剩「结算防空(被拒)」而没有可点出口。
+      airError.value = { rule: '14.3e-B', reason: 'noDefenderToEngage' }
+      pushLog('warning', '任务机名单为空（14.3e-B）：没有可迎战的飞机', '14.3e-B')
       return false
     }
     // ⑭ 接线：drawAir2d6 / drawAir1d6 只回报数字（不改它们）⇒ 记下掷骰前的骰源，按同法复算骰面
