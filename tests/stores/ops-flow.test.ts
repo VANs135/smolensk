@@ -464,3 +464,41 @@ describe('B 增援段的顶栏提示（13.6 / 1.6b / 13.5）', () => {
     expect(mapView.actionHint).toContain('重建')
   })
 })
+
+/**
+ * 2026-11-14 E 段实点：反应轰炸的提示与入口判据**同源**。
+ *
+ * 现场：hint 写「右键敌方格选『轰炸』」，但本盘面没有已释放预备炮兵、轴方也没有
+ * 航程够的轰炸机 ⇒ 右键敌方格既无菜单也无反馈。提示不能承诺一个判据不成立的入口。
+ */
+describe('反应轰炸提示（7.0b / 10.0d）', () => {
+  function setupReaction() {
+    const { workbench, mapView } = newStores()
+    workbench.setActiveSide('soviet')
+    workbench.setPhase('reaction')
+    enterStep(workbench, 'barrage.declare')
+    expect(workbench.segmentStep?.id).toBe('reaction.barrage')
+    return { workbench, mapView }
+  }
+
+  it('★ 没有可宣布的轰炸时，不再教「右键敌方格选轰炸」', () => {
+    const { workbench, mapView } = setupReaction()
+    placeGround(workbench, defenderRecord(), TARGET_HEX, 'soviet', 'def-1')
+
+    expect(workbench.barrageTargetsNow).toEqual([])
+    expect(mapView.actionHint).not.toContain('右键敌方格')
+    expect(mapView.actionHint).toContain('没有可宣布的轰炸')
+  })
+
+  it('★ 有已释放预备炮兵与补给时，提示保留右键入口（炮击 / 轰炸）', () => {
+    const { workbench, mapView } = setupReaction()
+    const gun = placeGround(workbench, artilleryRecord(), CORE_HEX, 'axis', 'art-1')
+    gun.mode.releasedFromReserve = true
+    placeGround(workbench, defenderRecord(), TARGET_HEX, 'soviet', 'def-1')
+    workbench.spDumps.push({ id: 'dump-1', hex: CORE_HEX, side: 'axis', sp: 0, t: 20 })
+
+    expect(workbench.barrageTargetsNow.length).toBeGreaterThan(0)
+    expect(mapView.actionHint).toContain('右键敌方格')
+    expect(mapView.actionHint).toContain('炮击 / 轰炸')
+  })
+})

@@ -816,8 +816,15 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     if (workbench.segmentStep?.id === 'reaction.movement')
       return '反应：点预备单位 → 右键「转出预备模式」（MA ×½）后才能移动（5.7b / 7.0a）'
-    if (workbench.segmentStep?.id === 'reaction.barrage')
-      return '反应轰炸：点敌方格定目标；右键敌方格选「轰炸」，会话框里宣布（10.0d）'
+    /*
+     * 2026-11-14 E 段实点：提示与入口判据同源——本盘面没有已释放预备炮兵、也没有
+     * 航程够的轰炸机时，右键敌方格既没菜单也没反馈，hint 不能再教这一步（7.0b / 10.0d）。
+     */
+    if (workbench.segmentStep?.id === 'reaction.barrage') {
+      if (workbench.barrageTargetsNow.length === 0)
+        return '反应轰炸：本环节没有可宣布的轰炸（没有已释放的预备炮兵，也没有航程够的轰炸机）（7.0b / 10.0d）'
+      return '反应轰炸：点敌方格定目标；右键敌方格选「炮击 / 轰炸」，会话框里宣布（10.0d）'
+    }
     /*
      * F 段的炮击环节：本段**不能移动**，通用那句「点亮可移动范围」在这里是错的；
      * 且 2.2 的 F 段括注限定 artillery only ⇒ 提示只说炮兵，不提空军。

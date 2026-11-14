@@ -17710,6 +17710,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 本环节**任意一个可宣布轰炸的敌方格**（供提示层与右键入口同源联动）
+   *
+   * 2026-11-14 E 段实点：hint 曾承诺「右键敌方格选轰炸」，但判据不成立时右键既无菜单
+   * 也无反馈。提示层复用同一组 `barrageEntryEligible` / `bombingEntryEligible`；
+   * 没有目标就**不教这一步**（7.0b / 10.0d）。
+   */
+  const barrageTargetsNow = computed<HexRef[]>(() => {
+    const side = segmentGateQuery.value.side ?? activeSide.value
+    const seen = new Set<string>()
+    const out: HexRef[] = []
+    for (const unit of units.value) {
+      if (unit.side === side) continue
+      const key = hexLabel(unit.hex)
+      if (seen.has(key)) continue
+      seen.add(key)
+      if (barrageEntryEligible(unit.hex) || bombingEntryEligible(unit.hex)) out.push(unit.hex)
+    }
+    return out
+  })
+
+  /**
    * 14.7d + 10.0b：**右键敌方算子 ⇒「低空扫射」**的入口判据（用户 2026-11-09 口径）
    *
    * 只回答"这一格现在值不值得出现这个菜单项"，全部复用既有谓词，不在组件里写规则：
@@ -29351,6 +29372,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     hipShootEntryEligible,
     // 三操作统一流程（2026-11-10）：入口判据与窗内候选同源
     barrageEntryEligible,
+    barrageTargetsNow,
     bombingEntryEligible,
     barrageCandidatesAt,
     bombingCandidatesAt,
