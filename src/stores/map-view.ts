@@ -1605,6 +1605,18 @@ export const useMapViewStore = defineStore('mapView', () => {
       return true
     }
     /*
+     * ★ 15.1（用户 2026-11-14）：整备段**基地内的飞机**同样是可点对象——地面那行拒绝文案
+     *   自己写着「整备段只点空军基地（与基地内的飞机）」。点飞机＝点它所在的基地：
+     *   直接开基地动作面板（勾机在面板里做）。修前落到下面的参与闸：飞机实例不在 `units`
+     *   里 ⇒ 只换回一句「X 不参与本环节（整备）：找不到该算子」。
+     */
+    if (isIdleForStack() && token.air === true && workbench.phase === 'aircraftRefit') {
+      const base = workbench.ownAirBases.find(
+        (item) => item.hex.col === hex.col && item.hex.row === hex.row,
+      )
+      if (base !== undefined && selectCounterAt(hex, base.id, anchor)) return true
+    }
+    /*
      * B9：**不参与本环节的算子点不动**（用户口径「不参与环节的算子无法点击」）。
      * 不是静默忽略——那样玩家只会觉得"点了没反应"；而是**就地给一行规则号提示**。
      *

@@ -181,6 +181,22 @@ describe('Ⓐ 15.1：整备不可行时给出原因（入口不出现，但要�
   })
 })
 
+describe('Ⓐ 15.1：整备段点飞机令牌＝点它所在的基地', () => {
+  it('★ 点飞机令牌 ⇒ 开基地面板，不落「找不到该算子」', () => {
+    const s = refitStageWithoutSupply()
+    const center = hexCanvasPoint(CORE_HEX)
+    // 该格 2 枚：扇位顺序 combat 级在前 ⇒ 左＝飞机、右＝基地
+    s.mapView.onHexClick(
+      CORE_HEX,
+      { x: center.x, y: center.y },
+      { x: center.x - 0.28 * HEX_RADIUS_PX, y: center.y },
+    )
+
+    expect(s.mapView.unitActionUnitId).toBe('base-1')
+    expect(s.workbench.log.some((entry) => entry.text.includes('找不到该算子'))).toBe(false)
+  })
+})
+
 describe('Ⓐ 15.1：同格有飞机时，空军基地必须能从堆叠里选到', () => {
   it('★ 点压在基地上的飞机令牌 ⇒ 不得吞掉这一击，要开出该格小窗（里面有基地的整备入口）', () => {
     setActivePinia(createPinia())
