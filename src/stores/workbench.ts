@@ -2532,6 +2532,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return activeSide.value === 'axis' ? 'soviet' : 'axis'
   })
 
+  /**
+   * 6.3a / 7.0a：本阶段**行动方**
+   *
+   * 反应段由**非**阶段玩家行动（`activeSide` 仍是阶段玩家），其余段两者相同。
+   * 突袭的「我方/敌方」取子、4.5a 的 ZOC 判定、推进的安全边缘格与 9.14 结算都必须用它，
+   * 不能用 `activeSide`——否则反应段会把阶段玩家的守军滤掉（7.0b 的突袭走不通）。
+   * 与 `segmentGateQuery.side` 同源（`actingSideFor` 是唯一实现）。
+   */
+  const actingSide = computed<Side>(
+    () => actingSideFor({ phase: phase.value, activeSide: activeSide.value }) ?? activeSide.value,
+  )
+
   /** C6：攻方/守方单位视图（引擎 `BattleUnitView`；随落盘自动刷新） */
   const combatAttackerViews = computed<BattleUnitView[]>(() =>
     combatAttackers.value.map((unit) => toBattleUnitView(unit, turn.value)),
@@ -3287,7 +3299,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const combatSupplyDumps = computed<{ side: CombatRole; dumps: SpDump[] }[]>(() => {
     const defenderSide = combatDefenderSide.value
-    const attackerSide = activeSide.value
+    // 7.0a：反应段的突袭由非阶段玩家发起 ⇒ 攻方是 `actingSide`，不是 `activeSide`
+    const attackerSide = actingSide.value
 
     /**
      * 该方在本次战斗能动员的补给站（12.3a ∪ 12.3b；13.2g-B 的编内卡车资格同样在 `deliverableDumpsFor` 里）
@@ -3297,7 +3310,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *   修前那版还会让非同编队的同伴蹭到编内卡车上的油（用 `some` 判"堆叠里有没有同编队单位"）。
      */
     const fundableDumps = (side: Side): SpDump[] =>
-      deliverableDumpsFor(side, combatBeneficiariesOf(side))
+      deliverableDumpsFor(side, combatBeneficiariesOf(side, attackerSide))
 
     return [
       { side: 'attacker' as const, dumps: fundableDumps(attackerSide) },
@@ -6068,18 +6081,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** C5：仍在本轮移动中的参移单位（未结束） */
   const activeMoveUnits = computed<ConsoleUnit[]>(() =>
     moveUnits.value.filter((unit) => !unit.movementEnded),
-  )
-
-  /**
-   * 6.3a / 7.0a：本阶段**行动方**
-   *
-   * 反应段由**非**阶段玩家行动（`activeSide` 仍是阶段玩家），其余段两者相同。
-   * 突袭的「我方/敌方」取子、4.5a 的 ZOC 判定、推进的安全边缘格与 9.14 结算都必须用它，
-   * 不能用 `activeSide`——否则反应段会把阶段玩家的守军滤掉（7.0b 的突袭走不通）。
-   * 与 `segmentGateQuery.side` 同源（`actingSideFor` 是唯一实现）。
-   */
-  const actingSide = computed<Side>(
-    () => actingSideFor({ phase: phase.value, activeSide: activeSide.value }) ?? activeSide.value,
   )
 
   /**
@@ -13479,8 +13480,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /** 12.4 / 10.1b-A：该方在该次交互里的**受益单位**（炮击＝参炸火炮；战斗＝参战的那一叠） */
-  function combatBeneficiariesOf(side: Side): ConsoleUnit[] {
-    return side === activeSide.value
+  function combatBeneficiariesOf(side: Side, attackerSide: Side): ConsoleUnit[] {
+    // 7.0a：攻方可能是反应段的非阶段玩家 ⇒ 不能拿 `activeSide` 判"这方是不是攻方"
+    return side === attackerSide
       ? combatAttackers.value
       : units.value.filter((unit) =>
           (battleTarget.value?.defenderIds ?? []).includes(unit.instanceId),
@@ -25020,8 +25022,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 12.5：这一枚此刻要不要加油（右键「加油」入口的判据，与 `fuelCandidates` 同源） */
   function needsFuelNow(instanceId: string): boolean {
     const unit = units.value.find((item) => item.instanceId === instanceId)
+    // 7.0a：反应段由非阶段玩家行动 ⇒ 阵营判据取 `actingSide`
     return (
-      unit !== undefined && unit.side === activeSide.value && needsFuelOf(unit) && !unit.fuelled
+      unit !== undefined && unit.side === actingSide.value && needsFuelOf(unit) && !unit.fuelled
     )
   }
 

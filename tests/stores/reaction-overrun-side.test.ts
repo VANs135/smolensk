@@ -164,6 +164,40 @@ describe('7.0a：反应段的加油与补给站/延补队按行动方（非阶�
     expect(extenders[0]!.side).toBe('soviet')
   })
 
+  it('12.4：反应段突袭的战斗补给来源按行动方（苏军）找站，不列阶段玩家的站', () => {
+    const store = newConsole()
+    store.setTurn(2)
+    store.setPhase('reaction') // activeSide 缺省 axis ⇒ 反应段行动方是苏军
+    const unit = placeGround(store, sovietMover(), START, 'soviet', 'su-ov-supply')
+    unit.mode = { mode: 'reserve', orientation: 'combat', dg: false, exploit: false }
+    unit.fuelled = true
+    store.clickHex(START)
+    expect(store.releaseReserveNow()).toBe(true)
+
+    const record = axisDefender()
+    const defenderPlaced = onMapNeighbors().map((hex, index) =>
+      placeGround(store, record, hex, 'axis', `ax-sup-${index}`),
+    )
+    const target = store.overrunTargets.find((item) =>
+      defenderPlaced.some((defender) => {
+        const hex = item.hex
+        return hex.col === defender.hex.col && hex.row === defender.hex.row
+      }),
+    )
+    expect(target).toBeDefined()
+    expect(store.overrunNow(target!.hex)).toBe(true)
+
+    // 攻方苏军在敌 ZOC 内 ⇒ 12.3c 只能从本格拖取：站放在 START
+    store.spDumps.push({ id: 'su-ov-dump', side: 'soviet', hex: START, sp: 2, t: 0 })
+    store.spDumps.push({ id: 'ax-ov-dump', side: 'axis', hex: START, sp: 2, t: 0 })
+
+    const attackerEntry = store.combatSupplyDumps.find((item) => item.side === 'attacker')!
+    // 修前 attackerSide 取 activeSide（axis）⇒ 列出来的是轴心国的站
+    expect(attackerEntry.dumps.map((dump) => dump.id)).toContain('su-ov-dump')
+    expect(attackerEntry.dumps.map((dump) => dump.id)).not.toContain('ax-ov-dump')
+    expect(store.pickCombatSupplyDump('attacker', 'su-ov-dump')).toBe(true)
+  })
+
   it('12.7d：延补队翻回运输点数时也落在行动方名下', () => {
     const store = newConsole()
     store.setPhase('reaction')
