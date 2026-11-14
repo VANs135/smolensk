@@ -394,7 +394,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
         <BaseButton
           variant="primary"
           size="sm"
-          :disabled="!omitConfirmed || setup.requiredSetupIssues.length > 0"
+          :disabled="!omitConfirmed || setup.omitDiscardBlocked"
           @click="setup.startGameNow()"
         >
           确认放弃并开局

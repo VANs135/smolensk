@@ -1573,6 +1573,20 @@ export const useSetupStore = defineStore('setup', () => {
     }),
   )
 
+  /**
+   * 初设栏「确认放弃并开局」的禁用判据（与 `canFinishSetup` **同一口径**）
+   *
+   * 本剧本有未执行的 `setup.effects`（ch10 / ch11 抽签）时，确认阶段**不要求**抽签先完成
+   * ——抽签由确认之后的唯一按钮执行（规格 §4.1/§4.2）。因此抽签义务不能挡
+   * 「放弃未布设单位并开局」，否则玩家得先把全部飞机摆完才能确认，而抽签又必须确认后才能点。
+   */
+  const omitDiscardBlocked = computed(() => {
+    const effectsPending = setupEffects.value.length > 0 && !setupEffectsExecuted.value
+    return requiredSetupIssues.value.some(
+      (issue) => !(effectsPending && issue.id.startsWith('draw:')),
+    )
+  })
+
   function canFinishSetup(): boolean {
     /*
      * 用户 2026-11-14 裁定 2：验证页「重置初设」清空盘面后置 `boardResetPending`
@@ -3426,6 +3440,7 @@ export const useSetupStore = defineStore('setup', () => {
     airChoices,
     completed,
     requiredSetupIssues,
+    omitDiscardBlocked,
     omittablePlacements,
     lastAction,
     notes,
