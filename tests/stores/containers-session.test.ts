@@ -4,6 +4,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useContainersStore, useMapViewStore, useWorkbenchStore } from '@/stores'
+import { actionGateOf } from '@/stores'
+import type { ActionKey, ConsolePhase } from '@/stores'
 
 /**
  * B17a-2：**盒内动作进会话框**（方案 §4.7「在盒卡里点到需要规则判定的动作 ⇒ 不弹第二个面板，
@@ -25,6 +27,22 @@ const newStores = () => {
 beforeEach(() => {
   setActivePinia(createPinia())
 })
+
+function goToActionStep(
+  store: {
+    phase: ConsolePhase
+    playerSegmentSteps: readonly { id: string }[]
+    setSegmentStepIndex(index: number): boolean
+  },
+  key: ActionKey,
+): void {
+  const allowed = actionGateOf(key)
+    .where.filter((item) => item.phase === store.phase)
+    .map((item) => item.segment)
+  const index = store.playerSegmentSteps.findIndex((step) => allowed.includes(step.id))
+  if (index < 0) throw new Error(`${store.phase} 段没有允许 ${key} 的环节`)
+  if (!store.setSegmentStepIndex(index)) throw new Error(`进入环节失败（${key}）`)
+}
 
 describe('B17a-2：盒卡展开 ⇒ 盒内动作会话', () => {
   it('★ 没有展开盒卡时不出会话；展开一张即出现「盒内动作」', () => {
@@ -65,6 +83,33 @@ describe('B17a-2：盒卡展开 ⇒ 盒内动作会话', () => {
     expect(kinds).toContain('deadPile')
     // 原始分区名仍保留（`showsBoxActions('markers')` 这类"按分区"的调用要靠它）
     expect(kinds).toContain('dead_pile')
+  })
+
+  it('★ B 段 13.5 重建：增援面板开着时，展开死亡堆卡必须切到「盒内动作」', () => {
+    /*
+     * 实点缺陷（2026-11-14，后手方 B 段 13.5）：
+     * 重建面板写着「重建与整编都在**盘面右键**办理」，但右键死亡堆盒卡只会 `toggleCardOpen`，
+     * 而「盒内动作」会话被同环节自动出现的增援面板**抢占**（增援分支在前）⇒
+     * 重建动作（13.5 返场 / 13.5c 永久移除）在这一个环节里**根本没有入口**。
+     */
+    const { workbench, mapView, containers } = newStores()
+    workbench.setActiveSide('soviet')
+    workbench.setPhase('reinforcement')
+    goToActionStep(workbench, 'rein.rebuild')
+    expect(mapView.session?.kind).toBe('reinforce')
+
+    const deadPileCard = containers.cardViews.find(
+      (card) =>
+        card.side === 'soviet' && card.regions.some((region) => region.kind === 'dead_pile'),
+    )
+    expect(deadPileCard, '苏方应当有死亡堆盒卡').toBeDefined()
+    containers.toggleCardOpen(deadPileCard!.id)
+    expect(mapView.session?.kind).toBe('containers')
+
+    // × 收起盒内动作 ⇒ 本环节的增援面板回来（不能被"收起"一并压掉）
+    expect(mapView.cancelSession()).toBe(true)
+    expect(containers.cardOpenId).toBeNull()
+    expect(mapView.session?.kind).toBe('reinforce')
   })
 
   it('换环节后收起态失效（会话不会被"上次的收起"永久压住）', () => {

@@ -2990,6 +2990,33 @@ export const useMapViewStore = defineStore('mapView', () => {
      *   这条自动跳转已删；加油走右键（`fuel:<method>`）打开的 `fuel` 会话。
      */
     /*
+     * B17a-2（方案 §4.7）：**盒内动作也进会话框**——「在盒卡里点到需要规则判定的动作 ⇒
+     * 不弹第二个面板，而是在地图页展开那一个会话框；盒卡只负责『选谁』」。
+     * 触发判据＝托盘里**展开着一张盒卡**（`containers.cardOpenId`）：展开本身就是在说
+     * "我要对这个盒做点什么"，会话随之给出该盒相关的动作（抽签 / 收纳 / 移出 / 返场 / 离箱…）。
+     *
+     * ★ 实点缺陷（2026-11-14，B 段 13.5）：这段原先排在**增援面板之后**，而 13.5 重建环节
+     *   增援面板必然自动出现 ⇒ 玩家按面板指示"盘面右键"展开死亡堆卡后，`containers` 会话
+     *   永远被 `reinforce` 抢占，重建 / 永久移除**一个入口都没有**。盒卡展开是**玩家显式动作**，
+     *   优先级必须高于"按环节自动出现"的面板，也不受 `collapsedSessionKey`（那是给自动面板用的）约束。
+     */
+    if (
+      containers.cardOpenId !== null &&
+      (containers.openCardSide === null || containers.openCardSide === actingSide.value)
+    ) {
+      return {
+        kind: 'containers',
+        /*
+         * C-1：标题点明**是哪一张卡**（动作已按该卡覆盖的盒过滤，见 ContainersPanel）。
+         * ★ 用户 2026-11-10：标题不再挂三个条款号、标题栏也不放规则号 tag；
+         *   盒卡自己保留阵营 tag —— 条款号只在各动作的 `?` 里。
+         */
+        title:
+          containers.openCardName === null ? '盒内动作' : `盒内动作：${containers.openCardName}`,
+        width: 'min(430px, 94%)',
+      }
+    }
+    /*
      * B17a（方案 §10①「右侧栏只读」）：**增援段的动作面板**进会话框。
      *
      * 判据＝**当前环节属于增援段**（`segmentStep.id` 以 `reinforcement.` 开头）——
@@ -3045,29 +3072,6 @@ export const useMapViewStore = defineStore('mapView', () => {
         kind: 'breakout',
         title: '突围（12.8e）',
         rule: '12.8e',
-        width: 'min(430px, 94%)',
-      }
-    }
-    /*
-     * B17a-2（方案 §4.7）：**盒内动作也进会话框**——「在盒卡里点到需要规则判定的动作 ⇒
-     * 不弹第二个面板，而是在地图页展开那一个会话框；盒卡只负责『选谁』」。
-     * 触发判据＝托盘里**展开着一张盒卡**（`containers.cardOpenId`）：展开本身就是在说
-     * "我要对这个盒做点什么"，会话随之给出该盒相关的动作（抽签 / 收纳 / 移出 / 返场 / 离箱…）。
-     */
-    if (
-      containers.cardOpenId !== null &&
-      (containers.openCardSide === null || containers.openCardSide === actingSide.value) &&
-      collapsedSessionKey.value !== currentStepKey.value
-    ) {
-      return {
-        kind: 'containers',
-        /*
-         * C-1：标题点明**是哪一张卡**（动作已按该卡覆盖的盒过滤，见 ContainersPanel）。
-         * ★ 用户 2026-11-10：标题不再挂三个条款号、标题栏也不放规则号 tag；
-         *   盒卡自己保留阵营 tag —— 条款号只在各动作的 `?` 里。
-         */
-        title:
-          containers.openCardName === null ? '盒内动作' : `盒内动作：${containers.openCardName}`,
         width: 'min(430px, 94%)',
       }
     }
@@ -3424,10 +3428,13 @@ export const useMapViewStore = defineStore('mapView', () => {
     } else if (current.kind === 'supply') workbench.cancelSupply()
     // B17a：增援段的动作面板没有状态机可回滚 ⇒ 收起它（记在环节键上，换环节自然重现）
     else if (current.kind === 'reinforce') collapsedSessionKey.value = currentStepKey.value
-    // B17a-2：盒内动作同理——收起 = 把那张盒卡也合上（它正是这个会话的触发源）
+    /*
+     * B17a-2：盒内动作同理——收起 = 把那张盒卡也合上（它正是这个会话的触发源）。
+     * ★ 2026-11-14：**不**记"本环节已收起"。盒内动作是玩家显式打开的，收起后应当回到
+     *   本环节本来那张自动面板（13.5 重建段就是增援面板），否则一点 × 就把 B 段整段锁死。
+     */
     else if (current.kind === 'containers') {
       containers.cardOpenId = null
-      collapsedSessionKey.value = currentStepKey.value
     }
     //
     // B17a-3 + B37：专规动作既是"想用时打开"的会话，也会**按闸门自动出现** ⇒
