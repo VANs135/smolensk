@@ -327,3 +327,22 @@ describe('B34：拆并四处"指认单位"改成点算子图', () => {
     expect(panel).toContain('function hoverUnit(id: string | null): void')
   })
 })
+
+/**
+ * 1.6c 特殊补员：**结果等「掷骰检定」之后才显示**
+ *
+ * 修前 `variableReplResult` 直接读 `lastVariableRepl.special`——那是 1.6b 自动掷骰时
+ * 随同一颗骰预掷出来的计划结果，于是玩家还没点「掷骰检定」，面板就把「特殊补员：免费重建…」
+ * 先列了出来（实桌是先掷后才看到结果）。判据与 1.6c 回执同源：`hasSpecialReplDraw`。
+ */
+describe('1.6c：结果不在接受检定之前露出（源码守卫）', () => {
+  it('★ variableReplResult 的 special 行由 hasSpecialReplDraw 把门', () => {
+    const panel = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
+    const start = panel.indexOf('const variableReplResult')
+    expect(start).toBeGreaterThan(-1)
+    const at = panel.indexOf('const special =', start)
+    expect(at).toBeGreaterThan(start)
+    // 同一个 computed 里、取 special 之前，必须先问「1.6c 掷过没有」
+    expect(panel.slice(start, at)).toContain('hasSpecialReplDraw')
+  })
+})

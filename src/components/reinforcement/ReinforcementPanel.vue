@@ -577,7 +577,14 @@ const variableReplResult = computed<readonly string[]>(() => {
     plan.repl.tac > 0 ? `Tac ${String(plan.repl.tac)}` : '',
   ].filter((item) => item !== '')
   lines.push(repl.length === 0 ? '补员：无' : `补员：${repl.join(' / ')}`)
-  const special = plan.special
+  /*
+   * 1.6c 的结果只在「掷骰检定」之后显示：`lastVariableRepl.special` 是 1.6b 自动掷骰时
+   * 随同一颗骰**预掷**的计划值，修前直接上屏 ⇒ 玩家还没点检定就先看到结果，与实桌顺序相反。
+   * 判据与 1.6c 回执（`specialReplLastThisTurn`）同源：掷过（`hasSpecialReplDraw`）才列。
+   */
+  const special = workbench.hasSpecialReplDraw(workbench.activeSide, workbench.turn)
+    ? plan.special
+    : null
   if (special !== null) {
     const grants: string[] = []
     if (special.supplyCache) grants.push('Supply Cache ×1')
