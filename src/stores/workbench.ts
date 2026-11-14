@@ -5563,6 +5563,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 14.2f-G：这一架是否已被**明确选过**返航落点（供界面给"已选"状态）
+   *
+   * 2026-11-15 实点：未选时 `airReturnSelectionLabel` 已显示「出发基地（15.10）」，
+   * 点「返回出发基地」写回的正是同一个落点 ⇒ 文案一字不变，看起来"点了没反应"。
+   */
+  function airReturnChosen(aircraftId: string): boolean {
+    if (airInputs.value.returnToBox[aircraftId] === true) return true
+    const text = airInputs.value.returnHexText[aircraftId]
+    return text !== undefined && text !== ''
+  }
+
+  /**
    * 14.3e-B：本场空战里**攻方**在场的飞机（逐轮点名的候选取此）
    *
    * 攻方由引擎给（`combat.roles.attackerSide`，14.3c 的资格判定在引擎里），
@@ -28955,6 +28967,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     chooseAirReturnDepartureNow,
     chooseAirReturnOffMapBoxNow,
     airReturnSelectionLabel,
+    airReturnChosen,
     beginAirBaseHexPickNow,
     // B27b：最后 6 处"格子编号" → 点地图（值在 store，组件只绑字段）
     rebuildReplHexText,

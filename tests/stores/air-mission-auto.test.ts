@@ -315,3 +315,31 @@ describe('批 C 切片 1：选任务类型即跑到停返航（一次动作）',
     expect(bench).toContain('<AirPanel stepwise />')
   })
 })
+
+/**
+ * 2026-11-15 实点：返航步逐机「返回出发基地」点了**毫无反馈**。
+ *
+ * 根因：未选时 `airReturnSelectionLabel` 已显示「出发基地（15.10）」，
+ * 点按钮写回的正是同一个出发基地 ⇒ 文案一字不变。按钮本身有效，
+ * 缺的是"这一架已经被明确选过落点"的可见状态。
+ */
+describe('返航落点的可见状态（14.2f-G）', () => {
+  it('★ 未选 / 已选出发基地 / 已选图外盒 三种状态可区分', () => {
+    const store = newStore()
+    store.airInputs.returnHexText = {}
+    store.airInputs.returnToBox = {}
+    expect(store.airReturnChosen('air-1')).toBe(false)
+
+    store.airInputs.returnHexText = { 'air-1': '15.10' }
+    expect(store.airReturnChosen('air-1')).toBe(true)
+
+    store.airInputs.returnHexText = {}
+    store.airInputs.returnToBox = { 'air-1': true }
+    expect(store.airReturnChosen('air-1')).toBe(true)
+  })
+
+  it('★ 面板据 `airReturnChosen` 渲染「已选」标记', () => {
+    const panel = readFileSync('src/components/air/AirPanel.vue', 'utf8')
+    expect(panel).toContain('airReturnChosen(')
+  })
+})

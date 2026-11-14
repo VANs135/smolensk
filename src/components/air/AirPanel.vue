@@ -1052,6 +1052,9 @@ const displayedBases = computed(() =>
               <span class="num">
                 {{ choice.aircraftId }} → {{ workbench.airReturnSelectionLabel(choice.aircraftId) }}
               </span>
+              <BaseTag v-if="workbench.airReturnChosen(choice.aircraftId)" kind="success"
+                >已选</BaseTag
+              >
               <BaseButton
                 v-if="choice.departureAvailable"
                 variant="secondary"
