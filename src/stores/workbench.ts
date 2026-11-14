@@ -3821,6 +3821,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return allSpDumps.value.find((dump) => dump.id === dumpId)
   }
 
+  /**
+   * 付款站日志名：地面账本写格号；装载中的 SP（`unit:`）写「格号 承运车名」
+   *
+   * 装载中的来源不在 `spDumps` 里，修前按 `spDumps` 查格号就回落到 `{0,0}` ⇒ 日志成「付款站 0.0」。
+   */
+  function spDumpLabelOf(dumpId: string): string {
+    const dump = dumpById(dumpId)
+    if (dump === undefined) return dumpId
+    const carrier =
+      dump.carriedBy === undefined
+        ? undefined
+        : units.value.find((unit) => unit.instanceId === dump.carriedBy)
+    return carrier === undefined ? hexLabel(dump.hex) : `${hexLabel(dump.hex)} ${carrier.name}`
+  }
+
   /** C8：被检查的单位（null＝未开始） */
   const supplyUnit = computed<ConsoleUnit | null>(() => {
     const id = supplyUnitId.value
@@ -15281,11 +15296,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return null
     }
     for (const item of plans) setSpDumpHoldings(item.id, item.after)
-    return plans
-      .map((item) =>
-        hexLabel(spDumps.value.find((d) => d.id === item.id)?.hex ?? { col: 0, row: 0 }),
-      )
-      .join('、')
+    return [...new Set(plans.map((item) => spDumpLabelOf(item.id)))].join('、')
   }
 
   /**
@@ -15312,11 +15323,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     if (remaining > 0) return null
     for (const item of plans) setSpDumpHoldings(item.id, item.after)
-    return plans
-      .map((item) =>
-        hexLabel(spDumps.value.find((d) => d.id === item.id)?.hex ?? { col: 0, row: 0 }),
-      )
-      .join('、')
+    return [...new Set(plans.map((item) => spDumpLabelOf(item.id)))].join('、')
   }
 
   /**

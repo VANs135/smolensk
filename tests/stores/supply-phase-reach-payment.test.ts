@@ -4,9 +4,15 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { mapLayers } from '@/data'
 import type { HexRef } from '@/data'
 import { holdingsToT } from '@/engine/rules'
-import { useWorkbenchStore } from '@/stores'
+import { unitChoices, useWorkbenchStore } from '@/stores'
 
-import { CORE_HEX, combatRecord, placeGround, sealTraceSupplyByZoc } from '../flows/sop-harness'
+import {
+  CORE_HEX,
+  combatRecord,
+  label,
+  placeGround,
+  sealTraceSupplyByZoc,
+} from '../flows/sop-harness'
 
 /**
  * 第五批 B3（docs/第五批修改方案.md 族 B3）：D 段的扣款按 **12.3a/12.3b 可达性**收口
@@ -50,6 +56,11 @@ function placeCombat(store: ReturnType<typeof newStore>, id: string) {
   if (unit === undefined) throw new Error(`单位 ${id} 不在盘面上`)
   return unit
 }
+
+/** 12.1b：装载中的 SP 也是补给站（常规运输点数，不受 13.2g-B 编队限制） */
+const CARRIER_RECORD = unitChoices('axis').find(
+  (record) => record.noncombatKind === 'transport_point',
+)!
 
 const tonsOf = (store: ReturnType<typeof newStore>, id: string): number => {
   const dump = store.spDumps.find((item) => item.id === id)
@@ -123,5 +134,33 @@ describe('第五批 B3：12.10e/12.6c 的 D 段扣款只走**该单位可达站*
     expect(tonsOf(store, 'near')).toBe(1) // 不喂不扣
     expect(tonsOf(store, 'far')).toBe(16) // 远站不动（修前被扣 3T）
     expect(store.log.some((entry) => (entry.text ?? '').includes('因 T 不足未喂'))).toBe(true)
+  })
+
+  /**
+   * 12.1b：装载中的 SP 也是补给站 ⇒ 它可以是 12.6c 的付款来源。
+   *
+   * 缺陷：`payFromSideDumps` / `payFromUnitReachableDumps` 只在 `spDumps`（地面账本）里查
+   * 格号，`unit:` 来源查不到就回落到 `{ col: 0, row: 0 }` ⇒ 日志写成「付款站 0.0、0.0」，
+   * 玩家看不出钱是从哪辆车/哪一格扣的。
+   */
+  it('12.6c：付款来源是**装载中的 SP** 时，日志按承运车所在格标注，不退回 0.0', () => {
+    const store = newStore()
+    store.setPhase('supply')
+    const carrier = placeGround(store, CARRIER_RECORD, CORE_HEX, 'axis', 'tr-1', 'move')
+    carrier.loadedSpT = 4 // 4 T
+    const unit = placeCombat(store, 'u1')
+    unit.re = 2 // 喂食价 = ceil(2/2) = 1T
+    store.supplyPhaseInputs = {
+      availableT: 0,
+      eatOffTheMap: { [unit.instanceId]: true },
+    }
+    sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
+    expect(store.planSupplyPhaseNow()).toBe(true)
+    expect(store.supplyPhasePlan!.feeding[0]?.affordable).toBe(true)
+
+    expect(store.applySupplyPhaseFeedingNow()).toBe(true)
+    const text = store.log[0]?.text ?? ''
+    expect(text).toContain(`付款站 ${label(CORE_HEX)}`)
+    expect(text).not.toContain('付款站 0.0')
   })
 })
