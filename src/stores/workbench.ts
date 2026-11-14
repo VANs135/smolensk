@@ -22529,11 +22529,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 批 A 切片 2：**进入轰炸环节即开好轰炸工具**
    *
    * 用户口径是"由环节驱动" ⇒ 玩家不该先去找开关；离开该环节不动它（可继续在验证页用工具）。
+   *
+   * ★ 换段时的**瞬时错位**：`segmentStepIndex` 归零与本条 watch 同在换段这一拍（都是 sync），
+   *   本条先注册 ⇒ 会先按**上一段留下的越界下标**读到"本段最后一环＝轰炸"，
+   *   把工具误开进新段（实测：B 段第三环 → C 段第一环「模式与移动」时轰炸工具被残留开启，
+   *   之后每一次点算子都会走"选炮击参战"，移动准备面板再也不出现）。
+   *   故只在**下标落在本段实际环节数内**时才开工具；越界那一拍交给归零后的下一次求值。
    */
   watch(
     isBarrageSegment,
     (on) => {
-      if (on) setBarrageActive(true)
+      if (on && segmentStepIndex.value < playerSegmentSteps.value.length) setBarrageActive(true)
     },
     // ★ flush: 'sync' —— 环节一变就得把工具开好：
     //   否则同一拍里的点击（以及用例）会读到"环节到了、工具还没开"的中间态。

@@ -219,4 +219,14 @@ describe('批 A 切片 2：环节驱动的点击分派', () => {
     store.clickHex(FIRING_HEX)
     expect(store.barrageTargetHex).toEqual(FIRING_HEX)
   })
+
+  it('⑤ 从 B 段最后一环进 C 段：轰炸工具不得被残留带入「模式与移动」', () => {
+    store.setPhase('reinforcement')
+    const last = store.playerSegmentSteps.length - 1
+    expect(store.setSegmentStepIndex(last)).toBe(true)
+    // 换段时环节归零 ⇒ 新段的第一环是「模式与移动」，不是轰炸
+    store.setPhase('movement')
+    expect(store.segmentStep?.id).toBe('movement.modeAndMovement')
+    expect(store.barrageActive).toBe(false)
+  })
 })
