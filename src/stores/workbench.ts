@@ -9219,7 +9219,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       return
     }
-    setSpDumpHoldings(dump.id, payment.data.holdingsAfter)
     /*
      * 12.5c-B / 12.5e：**HQ 法的覆盖集在付款这一刻算定** ——
      *   原文：「支付 1SP，为**指挥部自己**，及它投递距离内的**所有独立单位**提供燃料补给」；
@@ -9241,6 +9240,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         : formationCoverage !== null
           ? formationCoverage.covered.map((unit) => unit.instanceId)
           : [...plan.data.unitIds]
+    /*
+     * ★ 实测（回合 04 · C 移动 · 20PZ 编队法）：扣款必须排在**覆盖集算定之后**。
+     *   来源若是「装载在运输点数上的 SP」（12.1b），扣到 0 后该格就不再是"含 SP 的位置"，
+     *   `fuelSourceKeysOfUnit` 随即看不见这座站 ⇒ 先扣款再算覆盖会得到空集：
+     *   钱扣了、编队一枚没加注（编队油窗口还记成"来源：（未定）"）。
+     */
+    setSpDumpHoldings(dump.id, payment.data.holdingsAfter)
     for (const unitId of coveredIds) {
       const unit = units.value.find((item) => item.instanceId === unitId)
       if (unit !== undefined) {

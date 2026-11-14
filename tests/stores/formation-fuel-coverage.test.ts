@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
 import { formationFuelCovers, holdingsToT } from '@/engine/rules'
-import { needsFuelOf, useWorkbenchStore } from '@/stores'
+import { needsFuelOf, toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 
 import { CORE_HEX, groundRecord, placeGround } from '../flows/sop-harness'
 
@@ -269,6 +269,56 @@ describe('I①（12.5c-A）：编队加油的覆盖集', () => {
     expect(late.fuelled).toBe(true)
     expect(late.fuelMethod).toBe('formation')
     expect(store.fuelPaymentDue).toBe(false)
+  })
+
+  it('★ 付款站只有本次这 1SP（付完即空）也必须覆盖：覆盖集按**付款前**的盘面算定', () => {
+    const store = newStore()
+    const { mine, mate } = setupFormation(store)
+    // 实测病灶（回合 04 · C 移动 · 20PZ 编队法）：站里正好 1SP，付完账本归零 ⇒
+    // 覆盖集在扣款后才算，`drawableSpDumpsAt` 已看不见这座站 ⇒ coveredIds 空、7 枚一枚没加注。
+    store.spDumps[0]!.sp = 1
+    payFormationFuel(store)
+
+    expect(mine.fuelled, '点选的那一枚').toBe(true)
+    expect(mate.fuelled, '同编队同来源的另一枚').toBe(true)
+    expect(store.formationFuelThrowOf('3PZ')?.coveredIds).toContain('mate')
+  })
+
+  it('★ 付款站是**装载在运输点数上的 SP**（12.1b）也必须覆盖：付款前算定覆盖集', () => {
+    const store = newStore()
+    const mine = placeGround(store, motRecord(), CORE_HEX, 'axis', 'mine', 'move')
+    const mate = placeGround(
+      store,
+      motRecord(),
+      { col: CORE_HEX.col + 1, row: CORE_HEX.row },
+      'axis',
+      'mate',
+    )
+    // 实测病灶（回合 04 · C 移动 · 20PZ 编队法）：来源是编内卡车上的 1 SP。
+    // 付完 loadedSpT 归零 ⇒ 该格不再是"含 SP 的位置"，扣款后才算覆盖集的实现会得到空集，
+    // 于是钱扣了、7 枚一枚没加注（编队法窗口还记成"来源：（未定）"）。
+    const carrierRecord = unitChoices('axis').find(
+      (record) => record.noncombatKind === 'transport_point',
+    )!
+    const carrier = toConsoleUnit({
+      record: carrierRecord,
+      instanceId: 'tr-1',
+      hex: { ...CORE_HEX },
+      side: 'axis',
+    })
+    carrier.loadedSpT = 4
+    store.units.push(carrier)
+
+    goToMovementStep(store)
+    store.beginMovePick(CORE_HEX, ['mine'])
+    store.fuelMethod = 'formation'
+    expect(store.pickFuelDump('unit:tr-1')).toBe(true)
+    store.payFuel()
+
+    expect(carrier.loadedSpT, '1 SP 已扣').toBe(0)
+    expect(mine.fuelled, '点选的那一枚').toBe(true)
+    expect(mate.fuelled, '同编队同来源的另一枚').toBe(true)
+    expect(store.formationFuelThrowOf(mine.formation)?.coveredIds).toContain('mate')
   })
 
   it('★ 判据只有一处：`formationFuelCovers`（12.5c-A）的真值表', () => {
