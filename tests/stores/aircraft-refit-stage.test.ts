@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
 import { SOP_STEPS } from '@/engine/session-flow'
+import { HEX_RADIUS_PX, hexCanvasPoint } from '@/render/map-layout'
 import {
   useGameSessionStore,
   useHotseatStore,
@@ -129,6 +130,34 @@ describe('Ⓐ 入口回归：可整备的基地仍给入口', () => {
     expect(popover).toContain('refitAllowedHere')
     // 段标题仍按 A 段闸门展示；按钮本身必须再收一层"这一格真能整备"
     expect(popover).toMatch(/refitHere\s*\|\|\s*refitDoneHere\s*\|\|\s*refitAllowedHere/)
+  })
+})
+
+describe('Ⓐ 15.1：同格有飞机时，空军基地必须能从堆叠里选到', () => {
+  it('★ 点压在基地上的飞机令牌 ⇒ 不得吞掉这一击，要开出该格小窗（里面有基地的整备入口）', () => {
+    setActivePinia(createPinia())
+    useSetupStore().finished = true
+    const workbench = useWorkbenchStore()
+    workbench.setActiveSide('axis')
+    useHotseatStore().setViewerSide('axis')
+    workbench.setAirActive(true)
+    placeGround(workbench, airBaseRecord(1), CORE_HEX, 'axis', 'base-1')
+    placeAir(workbench, fighterRecord('axis'), CORE_HEX, 'axis', 'air-0', 'inactive')
+    workbench.setSupplyActive(true)
+    workbench.spDumpDraft = { hexText: label(CORE_HEX), sp: 2, t: 0 }
+    workbench.addSpDump()
+    workbench.setPhase('aircraftRefit')
+    const mapView = useMapViewStore()
+    expect(workbench.refitStartBases.map((base) => base.id)).toEqual(['base-1'])
+
+    // 两枚令牌常态摊开：0 号槽（左）是飞机，1 号槽（右）是基地
+    const center = hexCanvasPoint(CORE_HEX)
+    const planePoint = { x: center.x - 0.28 * HEX_RADIUS_PX, y: center.y }
+    mapView.onHexClick(CORE_HEX, { x: center.x, y: center.y }, planePoint)
+
+    // 修前：命中飞机 ⇒ 「不参与本环节」把这一击吞掉，小窗不开，基地的整备入口出不来
+    expect(mapView.popup?.hex).toEqual(CORE_HEX)
+    expect(mapView.popupContent?.units.some((unit) => unit.id === 'base-1')).toBe(true)
   })
 })
 

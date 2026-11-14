@@ -1401,6 +1401,22 @@ export const useMapViewStore = defineStore('mapView', () => {
     return workbench.participatingUnitIds.includes(unitId)
   }
 
+  /**
+   * 这一格此刻有没有**本方设施**的动作（A 段：空军基地整备 15.1；移动段：补给站 / 工事…）
+   *
+   * 用户 2026-11-14：同格停着飞机时，点到的往往是飞机令牌——若这一击被「不参与本环节」吞掉，
+   * 被飞机压住的空军基地就再也选不到（整备入口出不来）。有设施动作时**让路**，
+   * 由格分派开堆叠小窗，玩家从窗里选到设施（与 9.1b 敌方图徽让路同型）。
+   */
+  function hexFacilityActionNow(hex: HexRef): boolean {
+    return stackTokensAt(hex).some((token) => {
+      if (token.side !== workbench.activeSide) return false
+      const unit = workbench.units.find((item) => item.instanceId === token.id)
+      if (unit === undefined || unit.noncombatKind === null) return false
+      return unitActionAvailableAt(token.id)
+    })
+  }
+
   /** 该格的可见算子实例 id（展开默认全选与命中都用它） */
 
   /** 该格是否有「取子清单」（6.1f：引擎侧那份真正的参与集合） */
@@ -1576,6 +1592,12 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     const isSelected = stackSelection.value.includes(token.id)
     if (!participatesNow(token.id) && !isSelected) {
+      /*
+       * ★ 用户 2026-11-14：这一格有本方设施动作（A 段：空军基地整备）时**不吞这一击**。
+       *   同格停着飞机，玩家点到的多半是飞机令牌；吞掉就再也选不到被压住的基地。
+       *   让路 ⇒ `onHexClick` 末尾开堆叠小窗（15.1 的「整备」入口就在窗里）。
+       */
+      if (hexFacilityActionNow(hex)) return false
       workbench.pushLog(
         'warning',
         `${token.label} 不参与本环节（${workbench.segmentStep?.label ?? '—'}）：${participationReasonOf(token.id)}`,
