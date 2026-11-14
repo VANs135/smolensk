@@ -23913,6 +23913,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         index,
         arrived.map((unit) => unit.instanceId),
       )
+      // 与地面分支同口径：成功投放即收掉上一次被拒的红字（否则面板会挂着旧原因到下一段）
+      reinforcementError.value = null
       return true
     }
 

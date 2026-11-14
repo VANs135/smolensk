@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { arrivalCopiesOf } from '@/engine/rules'
 import type { ArrivalUnitDemand } from '@/engine/rules'
-import { actionGateOf, useWorkbenchStore } from '@/stores'
+import { actionGateOf, useMapViewStore, useWorkbenchStore } from '@/stores'
 import type { ActionKey, ConsolePhase } from '@/stores'
 
 import {
@@ -169,6 +169,39 @@ describe('13.6：飞机到达（修前共用陆战库解析 ⇒ 一律投放失�
     expect(store.reinforcementError?.reason).toBe('arrivalAirBaseOverstack')
     expect(store.airUnits.length).toBe(airBefore)
     expect(store.log.some((entry) => entry.text.includes('14.2a'))).toBe(true)
+  })
+
+  it('★ 14.2a 被拒后改投另一座有空位的基地 ⇒ 成功时必须清掉上一次的红字', () => {
+    const store = newStore()
+    const mapView = useMapViewStore()
+    store.setActiveSide('axis')
+    placeGround(store, airBaseRecord(2), CORE_HEX, 'axis', 'base-full')
+    const freeHex = { col: CORE_HEX.col + 1, row: CORE_HEX.row }
+    placeGround(store, airBaseRecord(1), freeHex, 'axis', 'base-free')
+    // 2 级基地摆满 6 架激活飞机（上限 4 + 2）
+    for (let count = 0; count < 6; count += 1) {
+      placeAir(
+        store,
+        aircraftRecord('axis', (record) => (record.name ?? '').includes('He.111')),
+        CORE_HEX,
+        'axis',
+        `he-${String(count)}`,
+      )
+    }
+    const { turn, index } = findDemand(store, '2x He.111')
+    store.setTurn(turn)
+    store.setPhase('reinforcement')
+    goToActionStep(store, 'rein.arrival')
+    store.applyArrivalRemovalsNow()
+
+    // ① 先按默认落点（满基地）投放 ⇒ 14.2a 拒，红字出现在面板上
+    expect(store.placeArrivalNow(index)).toBe(false)
+    expect(store.reinforcementError?.rule).toBe('14.2a')
+    // ② 改点有空位的基地再投 ⇒ 成功；上一次的红字必须消失（地面分支一直是这么收的）
+    expect(store.beginArrivalHexPickNow(index)).toBe(true)
+    mapView.onHexClick(freeHex)
+    expect(store.placeArrivalNow(index)).toBe(true)
+    expect(store.reinforcementError).toBeNull()
   })
 })
 
