@@ -154,6 +154,14 @@ export interface ArrivalRemoval {
   side: Side
   date: string
   raw: string
+  /**
+   * 1.6a 的两种去向：
+   * - `remove`：**移出游戏**（盘面、空军、死亡堆都清；「gone for good」）；
+   * - `deadPile`：到达卡写的是「To Dead Pile」⇒ 放进**死亡堆**（13.5 可重建）。
+   *
+   * 两者在卡面是不同列，落盘方向相反；修前合并成一个列表且一律按"移出游戏"处理。
+   */
+  kind: 'remove' | 'deadPile'
   rule: '1.6a'
   detail: string
 }
@@ -307,6 +315,7 @@ export function planArrivals(input: { side: Side; date: string }): RuleOutcome<A
         side,
         date,
         raw,
+        kind: 'remove',
         rule: '1.6a',
         detail: `${raw}：按到达卡**立即**移出游戏（1.6a：不论处境，含死亡堆与包围中；出图不耗燃油，但须补足部队储备并从下次 Supply Table 中扣除）`,
       })
@@ -316,6 +325,7 @@ export function planArrivals(input: { side: Side; date: string }): RuleOutcome<A
         side,
         date,
         raw,
+        kind: 'deadPile',
         rule: '1.6a',
         detail: `${raw}：按到达卡**直接进入死亡堆**（1.6a 的到达卡用法）`,
       })

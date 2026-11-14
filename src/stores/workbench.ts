@@ -24403,6 +24403,123 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 1.6a：到达卡条目 → 该找哪些算子（**卡面写法**的三种形态，全部真实出现在到达卡里）
+   *
+   * - ① `12-2-2 Inf Div (186)` / `11-1-1 Inf Div (126, 214)` ⇒ 括号里是**番号**，
+   *   与前面的兵种拼成算子名（`186 Rifle Div`）；多个番号＝多枚不同算子，各收 1 枚。
+   * - ② `22nd Army HQ` / `26-1-1 Arty Bde` / `Ju.87b` ⇒ 没有括号，整串就是名字
+   *   （印值 `26-1-1` 由 `unitNameKey` 当强度数码丢掉）。
+   * - ③ `19 Pz Div (19 Aufk, III-27 Pz)`（只在 `deadPile` 列）⇒ 括号里是**部件名**，不是番号。
+   * - 另有运输点数（`1 Wagon Point` / `10 Truck Points`）与整编队移除（`…; all units`）。
+   *
+   * ★ 修前判据是 `removal.raw.includes(unit.name)`：卡面写 `12-2-2 Inf Div (186)`、盘面叫
+   *   `Ru 186 Rifle Div`，两者互不包含 ⇒ 19 Jul 苏方的 6 条强制移除**一条都没执行**，
+   *   却在日志里写"请手工处理"，兵不血刃地放过了 22nd Army HQ 等 6 枚算子。
+   */
+  interface RemovalTargets {
+    /** 名字键（`unitNameKey` 口径）——每个键最多收 `perKey` 枚 */
+    keys: string[]
+    /** 每个名字键收几枚（括号点名恒 1；`Nx` 同型复制为 N） */
+    perKey: number
+    /** `…; all units` ⇒ 命中这些编队番号的全部算子 */
+    formations: string[]
+    /** 运输点数（`N Truck Points` / `N Wagon Points`） */
+    pointKind: 'truck' | 'wagon' | null
+    pointCount: number
+  }
+
+  function removalTargetsOf(removal: { raw: string; kind: 'remove' | 'deadPile' }): RemovalTargets {
+    const empty: RemovalTargets = {
+      keys: [],
+      perKey: 1,
+      formations: [],
+      pointKind: null,
+      pointCount: 0,
+    }
+    const text = removal.raw.trim()
+    const points = /^(\d+)\s+(Truck|Wagon)\s+Points?$/i.exec(text)
+    if (points !== null) {
+      return {
+        ...empty,
+        pointKind: points[2]!.toLowerCase() === 'truck' ? 'truck' : 'wagon',
+        pointCount: Number(points[1]),
+      }
+    }
+    const counted = /^(\d+)\s*x\s+/i.exec(text)
+    const count = counted === null ? 1 : Number(counted[1])
+    const body = (counted === null ? text : text.slice(counted[0].length)).trim()
+    const paren = /\(([^)]*)\)/.exec(body)
+    const inside = paren === null ? '' : paren[1]!
+    const [cardList = '', annotation = ''] = inside.split(';')
+    const typeText = body
+      .replace(/\([^)]*\)/g, ' ')
+      // 印值：`12-2-2`、`(2)-3-3`、`20-1-3` 都是 attack-ar-ma，不影响"哪一枚"
+      .replace(/^(?:\(\d+\)|\d+)?-\d+-\d+\s+/, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    const parts = cardList
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part !== '')
+    // 整编队（`7x Pz Div (3, 4, …; all units)` / `1 Cav Div (all 9 units)`）
+    if (/all\s+(\d+\s+)?units/i.test(annotation) || /^all\s+(\d+\s+)?units$/i.test(cardList)) {
+      const numbers = parts.filter((part) => /^\d+$/.test(part))
+      const lead = /^(\d+)\s/.exec(body)
+      const list = numbers.length > 0 ? numbers : lead === null ? [] : [lead[1]!]
+      const suffix = /Pz\b/i.test(typeText)
+        ? 'PZ'
+        : /Mtr\b/i.test(typeText)
+          ? 'MTR'
+          : /Cav\b/i.test(typeText)
+            ? 'CAV'
+            : null
+      return { ...empty, formations: suffix === null ? [] : list.map((n) => `${n}${suffix}`) }
+    }
+    // ③ deadPile 列：括号里是部件名
+    if (removal.kind === 'deadPile') {
+      const names = parts.length > 0 ? parts : [typeText]
+      return { ...empty, keys: names.map((name) => unitNameKey(name)).filter((key) => key !== '') }
+    }
+    // ① 括号里是番号；② 无括号（整串就是名字）
+    const keys =
+      parts.length === 0
+        ? [unitNameKey(body)]
+        : parts.map((designation) => unitNameKey(`${designation} ${typeText}`))
+    return {
+      ...empty,
+      keys: keys.filter((key) => key !== ''),
+      perKey: parts.length > 0 ? 1 : count,
+    }
+  }
+
+  /**
+   * 1.6a / §5-A：两个名字键是否指向同一枚算子
+   *
+   * 与 `matchArrivalRecord` 的第三档同口径：**全等**，或**双向子集**且至少两词相交
+   * （覆盖 `IRGD Inf Rgt` ↔ `IRGD Mot Inf Rgt`、`24 Mtr Corps HQ` ↔ `HQ 24th Corps`）。
+   * 单词相交通不过（"只有一个番号"说明不了是哪一枚）。
+   */
+  function sameRemovalKey(wanted: string, candidate: string): boolean {
+    if (wanted === candidate) return true
+    const a = new Set(wanted.split(' ').filter((token) => token !== ''))
+    const b = new Set(candidate.split(' ').filter((token) => token !== ''))
+    if (a.size < 2 || b.size < 2) return false
+    let shared = 0
+    for (const token of a) if (b.has(token)) shared += 1
+    if (shared < 2) return false
+    let inside = true
+    for (const token of a) {
+      if (!b.has(token)) {
+        inside = false
+        break
+      }
+    }
+    if (inside) return true
+    for (const token of b) if (!a.has(token)) return false
+    return true
+  }
+
+  /**
    * B18：按到达卡执行强制移除（1.6a：立即移出**游戏**，不论处境）
    *
    * ★ 1.6a 原文：「When a unit is called on to be 'Removed' by the arrival charts or else a unit with
@@ -24413,6 +24530,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   修前这里把移除的算子 `push` 进 `deadPile` —— 于是「gone for good」的算子仍留在死亡堆里
    *   可被 13.5 重建 / 1.6c 免费重建返场，与条文相反（且死亡堆计数、重建候选集都被污染）。
    *   ★ 也正因为如此，专规 2.3c 的编制转化「The old unit is a Removal (1.6a)」不走死亡堆。
+   *   ★ 到达卡另有「To Dead Pile」列（`ArrivalRemoval.kind === 'deadPile'`）：那一列**进死亡堆**，
+   *     与上面"移出游戏"方向相反，不能混为一谈。
    */
   function applyArrivalRemovalsNow(): void {
     // 1.6a「When a unit is called on to be "Removed" by the arrival charts … is **immediately**
@@ -24421,23 +24540,67 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const plan = arrivalPlan.value
     if (plan === null) return
     for (const removal of plan.removals) {
-      // 1.6a：移除「该单位或一个 factors 完全相同的单位」⇒ 按名称匹配盘面算子
-      const index = units.value.findIndex(
-        (unit) => unit.side === activeSide.value && removal.raw.includes(unit.name),
-      )
-      if (index < 0) {
+      const targets = removalTargetsOf(removal)
+      const side = activeSide.value
+      /*
+       * 1.6a：不论处境 ⇒ 盘面（含空军）与**死亡堆**都要找一遍。
+       * 名字键取自算子显示名（`unitNameKey` 与 13.6 的卡面名同口径）。
+       */
+      const groundPool: ConsoleUnit[] = [
+        ...units.value.filter((unit) => unit.side === side),
+        ...deadPile.value.filter(
+          (entry): entry is ConsoleUnit => !isAirDeadPileEntry(entry) && entry.side === side,
+        ),
+      ]
+      const airPool: ConsoleAirUnit[] = [
+        ...airUnits.value.filter((air) => air.side === side),
+        ...deadPile.value.filter(
+          (entry): entry is ConsoleAirUnit => isAirDeadPileEntry(entry) && entry.side === side,
+        ),
+      ]
+      const picked = new Map<string, ConsoleUnit | ConsoleAirUnit>()
+      if (targets.formations.length > 0) {
+        for (const unit of groundPool)
+          if (unit.formation !== null && targets.formations.includes(unit.formation))
+            picked.set(unit.instanceId, unit)
+      } else if (targets.pointKind !== null) {
+        const pool = groundPool.filter(
+          (unit) =>
+            unit.noncombatKind === 'transport_point' &&
+            unit.noncombatTransportKind === targets.pointKind,
+        )
+        for (const unit of pool.slice(0, targets.pointCount)) picked.set(unit.instanceId, unit)
+      } else {
+        for (const key of targets.keys) {
+          const pool: (ConsoleUnit | ConsoleAirUnit)[] = [...groundPool, ...airPool].filter(
+            (unit) => sameRemovalKey(key, unitNameKey(unit.name)),
+          )
+          for (const unit of pool.slice(0, targets.perKey)) picked.set(unit.instanceId, unit)
+        }
+      }
+      if (picked.size === 0) {
         pushLog(
           'warning',
-          `${removal.raw}：盘面上没有可移除的同名算子 ⇒ 请手工处理（1.6a 允许用 factors 相同的单位顶替）`,
+          `${removal.raw}：盘面与死亡堆里都没有可移除的对应算子 ⇒ 请手工处理（1.6a 允许用 factors 相同的单位顶替）`,
           '1.6a',
         )
         continue
       }
-      const [unit] = units.value.splice(index, 1)
-      if (unit === undefined) continue
-      // 1.6a：不论处境 ⇒ 同名/同印值的算子若正在死亡堆里也要一并移出游戏
-      removeFromPlayEverywhere(unit)
-      pushLog('info', `${unit.name} 按到达卡移出游戏（1.6a：立即生效，不论处境）`, '1.6a')
+      for (const unit of picked.values()) {
+        if (removal.kind === 'deadPile') {
+          // 1.6a「To Dead Pile」：进死亡堆（13.5 可重建），**不是**移出游戏
+          units.value = units.value.filter((item) => item.instanceId !== unit.instanceId)
+          airUnits.value = airUnits.value.filter((item) => item.instanceId !== unit.instanceId)
+          if (selectedId.value === unit.instanceId) selectedId.value = null
+          if (!deadPile.value.some((entry) => entry.instanceId === unit.instanceId)) {
+            deadPile.value = [...deadPile.value, unit]
+          }
+          pushLog('info', `${unit.name} 按到达卡进入死亡堆（1.6a；13.5 可重建）`, '1.6a')
+        } else {
+          removeFromPlayEverywhere(unit)
+          pushLog('info', `${unit.name} 按到达卡移出游戏（1.6a：立即生效，不论处境）`, '1.6a')
+        }
+      }
     }
     // 记"本到达计划已执行过 1.6a"：未匹配的条目已在上面的警告里转手工，不再反复重跑
     arrivalRemovalsKey.value = arrivalPlanKey.value
@@ -24450,7 +24613,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 与 13.5 的「淘汰进死亡堆」（`eliminateEntry`）相反：被 Removal 的算子**不留在死亡堆**，
    * 故它不会出现在重建候选或 1.6c 的免费重建池里。
    */
-  function removeFromPlayEverywhere(unit: ConsoleUnit): void {
+  function removeFromPlayEverywhere(unit: { instanceId: string }): void {
     units.value = units.value.filter((item) => item.instanceId !== unit.instanceId)
     airUnits.value = airUnits.value.filter((item) => item.instanceId !== unit.instanceId)
     airMissionAirIds.value = airMissionAirIds.value.filter((id) => id !== unit.instanceId)
