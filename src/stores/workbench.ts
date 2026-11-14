@@ -1628,6 +1628,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   // ── C7 轰炸交互（W5 C7：10.0 通用流程；引擎状态机在 barrage-interaction.ts） ──
   /** C7：轰炸工具是否已开启（点「轰炸」按钮进入；<CombatPanel/> 走九步）*/
   const barrageActive = ref(false)
+  /**
+   * 轰炸工具是不是**进入轰炸环节时自动开的**（用于换段时收回；玩家手动开的留给他）
+   *
+   * ★ 只在两条 watch 之间用：开工具的那条置真，换段归零的那条据此关闭。
+   *   否则换段这一拍的"旧下标 → 本段轰炸环"中间态会把工具带进新段
+   *   （见 `isBarrageSegment` 的 watch）。
+   */
+  let barrageAutoOpened = false
   /** C7：参炸单位类别（10.0e-F：一次轰炸只能同一类型） */
   const barrageKind = ref<BarrageKind>('artillery')
   /** C7：10.0d 宣布的整体目标（决定用哪张表） */
@@ -13042,6 +13050,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function setBarrageActive(on: boolean): void {
     if (!canReplaceBarrage()) return
     barrageActive.value = on
+    // 关掉即不再欠"自动开的"这笔账（手动关、换段收回都走这里）
+    if (!on) barrageAutoOpened = false
     clearBarrage()
     pushLog('info', on ? '轰炸工具已开启（10.0 通用流程）' : '轰炸工具已关闭', '10.0')
   }
@@ -22539,7 +22549,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   watch(
     isBarrageSegment,
     (on) => {
-      if (on && segmentStepIndex.value < playerSegmentSteps.value.length) setBarrageActive(true)
+      if (on && segmentStepIndex.value < playerSegmentSteps.value.length) {
+        setBarrageActive(true)
+        // 记账：这一笔是自动开的，换段/换方/换回合时要收回
+        barrageAutoOpened = true
+      }
     },
     // ★ flush: 'sync' —— 环节一变就得把工具开好：
     //   否则同一拍里的点击（以及用例）会读到"环节到了、工具还没开"的中间态。
@@ -22624,6 +22638,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     () => `${turn.value}|${phase.value}|${activeSide.value}`,
     () => {
       segmentStepIndex.value = 0
+      /*
+       * ★ 换段这一拍：开工具的那条 watch 可能已按**旧下标**读到本段的轰炸环（C 段只有
+       *   「模式与移动 / 轰炸」两环，旧下标 1 恰好命中后者）⇒ 自动开的工具在归零后已不属于
+       *   轰炸环节时必须收回，否则 C 段第一环点算子会走"选炮击参战"，移动准备面板再也不出现。
+       *   **玩家手动开的工具不收回**（验证页仍要能继续用）；归零后第一环本身就是轰炸环的
+       *   （如 F 段 `combat.barrage`）也保留。
+       */
+      if (barrageAutoOpened && !isBarrageSegment.value) setBarrageActive(false)
       actionRefusal.value = null
       reinforcementAcks.value = []
       arrivalAbandoned.value = false

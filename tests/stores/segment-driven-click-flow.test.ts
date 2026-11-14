@@ -229,4 +229,19 @@ describe('批 A 切片 2：环节驱动的点击分派', () => {
     expect(store.segmentStep?.id).toBe('movement.modeAndMovement')
     expect(store.barrageActive).toBe(false)
   })
+
+  it('⑥ 换段时旧下标恰好指向本段的轰炸环：工具也不得被自动带进来', () => {
+    store.setPhase('reinforcement')
+    expect(store.playerSegmentSteps.length).toBeGreaterThan(1)
+    expect(store.setSegmentStepIndex(1)).toBe(true)
+    /*
+     * C 段只有「模式与移动 / 轰炸（仅空中）」两环 ⇒ 换段这一拍若归零晚于开工具，
+     * 开工具一侧会按**旧下标 1** 读本段，读到的正是 `movement.barrage`，于是把工具自动开上
+     * （实测：随后每次点算子都走"选炮击参战"，移动准备面板不再出现）。
+     * 两条 watch 同为 sync 且开工具先注册 ⇒ 必须由归零一侧把"自动开的"收回。
+     */
+    store.setPhase('movement')
+    expect(store.segmentStep?.id).toBe('movement.modeAndMovement')
+    expect(store.barrageActive).toBe(false)
+  })
 })
