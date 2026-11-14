@@ -142,7 +142,7 @@
 | 入口                                                 | 键                     | 原文                                                                               |
 | ---------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------- |
 | `applyArrivalRemovalsNow`                            | `rein.arrival`         | 1.6a「is **immediately** removed from play」（到达卡的一部分）                     |
-| `removeForeverNow`                                   | `rein.arrival`         | 13.5c 永久移出，入口在到达卡侧                                                     |
+| `removeForeverNow`                                   | `rein.rebuild`         | 13.5c 永久移出：死亡堆右键菜单在 B 段重建环节（另放行到货落位 1.6a 入口）          |
 | `buildAirstripNow` / `upgradeAirstripNow`            | `move.construction`    | 15.3「只能在**移动阶段**中修建或改进」/ 15.2A                                      |
 | `rollAttritionNow`                                   | `supply.attrition`     | 12.8a「在**补给阶段**中……并检查损耗」                                              |
 | `setUnitFuelled`                                     | `supply.fuel`          | 12.5c「在燃料消耗时支付」（修前 `payFuel` 有闸、这个开关没有 ⇒ 可绕过付款）        |

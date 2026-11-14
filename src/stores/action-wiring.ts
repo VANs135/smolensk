@@ -357,8 +357,8 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   },
   removeForeverNow: {
     kind: 'gated',
-    key: 'rein.arrival',
-    why: '13.5c 永久移出，入口在到达卡侧（同 1.6a）',
+    key: 'rein.rebuild',
+    why: '13.5c 永久移出：死亡堆右键菜单就在 B 段重建环节（另放行到货落位 1.6a 入口）',
   },
   // 15.3 / 15.2A：「空军基地只能在移动阶段中修建或改进」
   buildAirstripNow: {

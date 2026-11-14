@@ -128,6 +128,24 @@ describe('死亡堆：可点选 / 可右键 / 可见原因（13.5 / 13.5a / 13.5
     ])
   })
 
+  it('★ 13.5c 永久移除：菜单项真能把死亡堆条目移出（修前闸在「到货落位」且只找盘面）', () => {
+    /*
+     * 实点缺陷（2026-11-14，B 段 13.5）：右键死亡堆条目 →「永久移除（13.5c）」，
+     * 结果被拒「只能在 B 增援·到货落位进行（13.6）」；而且 `removeForeverNow` 只在
+     * `units`（盘面）里找 —— 就算闸放行，死亡堆里的条目也纹丝不动、连日志都没有。
+     */
+    const store = readyForRebuild()
+    deadUnit(store)
+
+    store.runDeadPileActionNow('dead-1', 'deadPile.removeForever')
+
+    expect(store.deadPile.some((item) => item.instanceId === 'dead-1')).toBe(false)
+    expect(store.removedForever.some((item) => item.instanceId === 'dead-1')).toBe(true)
+    expect(
+      store.log.some((entry) => entry.text.includes('永久移出') && entry.rule === '13.5c'),
+    ).toBe(true)
+  })
+
   it('13.5c：AR 后有黄点（rebuildable=false）⇒ 永久不可重建，原因写明 13.5c', () => {
     const store = readyForRebuild()
     deadUnit(store)

@@ -24706,18 +24706,35 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** B18：永久移除（13.5c：AR 后有黄点者被摧毁即永久移出） */
   function removeForeverNow(instanceId: string): void {
     /*
-     * 13.5c「永久移出」的**入口**在到达卡侧（1.6a「is immediately removed from play」）
-     * ⇒ 与 `applyArrivalRemovalsNow` 同一道闸（B 增援·到货落位）。
-     * 裁判在验证页摆件不走这里（那边可直接改 `units`）。
+     * 13.5c「永久移出」有两个入口：
+     *   · 到达卡侧（1.6a「is immediately removed from play」）—— 与 `applyArrivalRemovalsNow` 同闸；
+     *   · **B 段 13.5 重建环节**的死亡堆右键菜单「永久移除（13.5c）」。
+     * ★ 修前只认 `rein.arrival`：而 13.5 的菜单项**一直列着**（`deadPileActionsOf` 无条件 push），
+     *   点下去必然被拒「只能在 B 增援·到货落位进行（13.6）」——列出来却永远点不动。
      */
-    if (!requireAction('rein.arrival', '永久移出游戏')) return
-    const index = units.value.findIndex((unit) => unit.instanceId === instanceId)
-    if (index >= 0) {
-      const [unit] = units.value.splice(index, 1)
-      if (unit !== undefined) removedForever.value = [...removedForever.value, unit]
+    if (!actionAllowedNow('rein.arrival') && !actionAllowedNow('rein.rebuild')) {
+      requireAction('rein.rebuild', '永久移出游戏')
+      return
     }
+    actionRefusal.value = null
+    const index = units.value.findIndex((unit) => unit.instanceId === instanceId)
+    const entry =
+      index >= 0
+        ? units.value.splice(index, 1)[0]
+        : deadPile.value.find((item) => item.instanceId === instanceId)
+    if (entry === undefined) {
+      pushLog('warning', `没有找到要永久移出的算子：${instanceId}（13.5c）`, '13.5c')
+      return
+    }
+    if (isAirDeadPileEntry(entry)) {
+      pushLog('warning', `${entry.name}：13.5c 只处理地面算子（飞机走 13.5f / 专规 1.4a）`, '13.5c')
+      return
+    }
+    // ★ 修前只对**盘面**算子写进 removedForever；死亡堆条目被下面这行静默删掉 ⇒ 账本少一枚
+    removedForever.value = [...removedForever.value, entry]
     deadPile.value = deadPile.value.filter((unit) => unit.instanceId !== instanceId)
-    pushLog('info', `${instanceId} 永久移出游戏（13.5c）`, '13.5c')
+    if (selectedId.value === instanceId) selectedId.value = null
+    pushLog('info', `${entry.name} 永久移出游戏（13.5c：AR 后有黄点，不可重建）`, '13.5c')
   }
 
   /**
