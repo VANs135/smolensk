@@ -1736,6 +1736,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     candidates: HexPickCandidates
     /** 命中后写回（返回是否真的写成功；false ⇒ 保留待点态） */
     apply: (hex: HexRef) => boolean
+    /** 13.6：这一格属于第几条到达条目（同一格也可能改走图外盒，届时要把选格态收掉） */
+    arrivalIndex?: number
   }
 
   const pendingHexPick = ref<PendingHexPick | null>(null)
@@ -1854,6 +1856,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       label: `增援落点（第 ${String(index + 1)} 条）`,
       rule: '13.6',
       candidates: [...allowed],
+      arrivalIndex: index,
       apply: (hex) => placeArrivalNow(index, recordId, hexTextOf(hex)),
     })
     return true
@@ -23591,6 +23594,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       index,
       arrived.map((unit) => unit.instanceId),
     )
+    // 若这条刚刚点出了「选格」，盒投放已是终点 ⇒ 收掉选格态，免得状态栏还要求点格
+    if (pendingHexPick.value?.arrivalIndex !== undefined) pendingHexPick.value = null
     reinforcementError.value = null
     return true
   }

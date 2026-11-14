@@ -101,6 +101,28 @@ describe('B 增援：到达段拒绝提示', () => {
     expect(ids.every((id) => w.airBoxMembers.includes(id))).toBe(true)
   })
 
+  it('先点出「选格」再改用图外盒投放 ⇒ 选格态收掉（不留悬空提示）', () => {
+    const w = boot()
+    w.setTurn(4)
+    gotoStep(w, 'reinforcement.arrival')
+    w.applyArrivalRemovalsNow()
+
+    const ground = w.arrivalPlan?.units.findIndex(
+      (unit, i) => unit.kind !== 'aircraft' && (w.arrivalCandidates[i]?.length ?? 0) > 0,
+    )
+    expect(ground).toBeGreaterThanOrEqual(0)
+    expect(w.beginArrivalPlacePickNow(ground!)).toBe(true)
+    expect(w.hexPickView).not.toBeNull()
+
+    const air = w.arrivalPlan?.units.findIndex(
+      (unit, i) => unit.kind === 'aircraft' && w.arrivalAirBoxAvailable(i),
+    )
+    expect(air).toBeGreaterThanOrEqual(0)
+    expect(w.placeArrivalInAirBoxNow(air!)).toBe(true)
+    // 盒投放是终点 ⇒ 不该再要求点格（2026-11-14：真窗口里点完图外盒仍停在选格态）
+    expect(w.hexPickView).toBeNull()
+  })
+
   it('底部横幅把拒绝码翻成中文，不直接印原始码', () => {
     const source = readFileSync(
       fileURLToPath(
