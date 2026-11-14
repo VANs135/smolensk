@@ -7246,6 +7246,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (!isAirDeadPileEntry(entry)) entry.airTransportThisPhase = null
     for (const air of airUnits.value) air.missionsFlownThisPhase = 0
     moveInteraction.value = null
+    /*
+     * 缺陷 B（2026-11-14 实点）：换段/换方/换回合必须清**待开拔集**——
+     * 段内点出来的选择集属于上一步的现场，带到下一段会让「移动准备」会话顶着
+     * 上一段的单位重新弹出（反应段给轴方开出一张苏军移动面板）。
+     */
+    movePick.value = null
     moveBlocked.value = null
     lastStep.value = null
     hoverHex.value = null
@@ -7961,12 +7967,34 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 2.2：回合准备环节（天气 / 先手判定）**没有行动段** ⇒ 左键只做只读选中，
      * 不建「待开拔」取子清单。否则本地段的移动会话（含「开始移动」）会漏进这个环节：
      * 玩家点了才算被 2.2 拒，观感上等于"这里本来能移动"。
+     *
+     * 缺陷 B（2026-11-14 实点）：同样按**环节归属**收口——只有放行 `move.order` 的环节
+     * （C 移动 / E 反应 / G 进击的对应环节）才建待开拔集；补给、战斗、轰炸、重建等环节
+     * 点己方单位只做只读选中，不再写 `movePick`、不再记「已选待开拔（6.1）」。
      */
-    if (segmentLocked.value) {
+    const moveAllowed = actionAllowedNow('move.order')
+    if (segmentLocked.value || !moveAllowed) {
       movePick.value = null
       const atHex = friendlyUnitsAt(hex)
-      selectedId.value = only?.[only.length - 1] ?? atHex[atHex.length - 1]?.instanceId ?? null
-      refuseWhileLocked('开拔')
+      const picked = only?.[only.length - 1] ?? atHex[atHex.length - 1]?.instanceId ?? null
+      selectedId.value = picked
+      if (segmentLocked.value) {
+        refuseWhileLocked('开拔')
+        return
+      }
+      /*
+       * 2.2 / M9②：段别不对时仍要给**带规则号的解释**（A/B/D/F/H 没有移动环节）——
+       * 与 `beginMoveFor` 同一句文案，界面反馈条据此显示；只是不再建「待开拔」。
+       */
+      if (NO_MOVEMENT_PHASES.includes(phase.value)) {
+        const reason = `${PHASE_LABELS[phase.value]}段没有移动环节，不能移动（2.2）`
+        moveBlocked.value = { rule: '2.2', reason }
+        pushLog('warning', reason, '2.2')
+        return
+      }
+      const unit =
+        picked === null ? undefined : units.value.find((item) => item.instanceId === picked)
+      pushLog('info', `选中 ${unit?.name ?? `${hex.col}.${hex.row}`}（本环节不可移动，仅供查看）`)
       return
     }
     const friendlies = movePickPoolAt(hex)

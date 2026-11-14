@@ -3030,6 +3030,12 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (
       workbench.actionAllowedNow('move.order') &&
       workbench.movePick !== null &&
+      /*
+       * 缺陷 B（2026-11-14 实点）：**所属方校验**——取子清单按本环节行动方取池，
+       * 池空（例如反应段只剩上一段的苏军选择集）⇒ 本环节没有可开拔的单位，不开移动会话。
+       * 否则一张苏军「移动准备」会顶着轴方反应段，点 × 也因 movePick 未清而立刻重建。
+       */
+      workbench.movePickChoices.length > 0 &&
       (moving === null || moving.finished)
     ) {
       const count = workbench.movePick.ids.length
