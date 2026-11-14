@@ -203,6 +203,8 @@ describe('5.4a 读档往返（额度由 units 派生，无需重放日志）', (
     expect(game.setScenarioId('3')).toBe(true)
     game.setSaveStorage(createMemoryStorage())
     game.startGame()
+    // 先手已定：否则 records 会出现「movement + 无先手方」，读档校验（2.2）会正当拒读
+    game.patchRecords({ firstPlayer: 'axis' })
     store.setPhase('movement')
     store.setActiveSide('soviet')
     const unit = place(store, leg('soviet'), START, 'soviet', 's1')

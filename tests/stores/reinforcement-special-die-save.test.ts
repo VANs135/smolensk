@@ -18,6 +18,8 @@ describe('v10：1.6c 骰面随存档往返', () => {
     const game = useGameSessionStore()
     game.setSaveStorage(createMemoryStorage())
     game.startGame()
+    // 先手已定：否则 records 会出现「reinforcement + 无先手方」，读档校验（2.2）会正当拒读
+    game.patchRecords({ activeSide: 'axis', firstPlayer: 'axis' })
 
     w.setScenarioId('1')
     w.setActiveSide('axis')

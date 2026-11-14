@@ -29,6 +29,8 @@ function newStore() {
   const game = useGameSessionStore()
   game.setSaveStorage(createMemoryStorage())
   if (!game.startGame()) throw new Error('开局被拒')
+  // 先手已定：否则 records 会出现「reinforcement + 无先手方」，读档校验（2.2）会正当拒读
+  game.patchRecords({ activeSide: 'axis', firstPlayer: 'axis' })
   workbench.setActiveSide('axis')
   workbench.setPhase('reinforcement')
   rollToLateTurn(workbench)

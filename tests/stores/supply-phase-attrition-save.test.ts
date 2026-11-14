@@ -22,6 +22,8 @@ describe('12.8b：待决损耗的合法保存点，冷读档后账本完整', ()
     const game = useGameSessionStore()
     game.setSaveStorage(createMemoryStorage())
     game.startGame()
+    // 先手已定：否则 records 会出现「supply + 无行动方」，读档校验（2.2）会正当拒读
+    game.patchRecords({ activeSide: 'axis', firstPlayer: 'axis' })
     w.setPhase('supply')
 
     const ids = ['fed', 'oos1', 'oos2']

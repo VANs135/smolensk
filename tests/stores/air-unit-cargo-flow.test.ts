@@ -26,6 +26,8 @@ function setup(startSession = false) {
     const game = useGameSessionStore()
     game.setSaveStorage(createMemoryStorage())
     game.startGame()
+    // 先手已定：否则 records 会出现「movement + 无行动方」，读档校验（2.2）会正当拒读
+    game.patchRecords({ activeSide: 'axis', firstPlayer: 'axis' })
   }
   w.setPhase('movement')
   w.setSegmentStepIndex(
