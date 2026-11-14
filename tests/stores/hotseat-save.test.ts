@@ -5,7 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
 import { createMemoryStorage } from '@/shared'
-import { SAVE_SLOT_KEY, useGameSessionStore, useHotseatStore } from '@/stores'
+import { SAVE_SLOT_KEY, useGameSessionStore, useHotseatStore, useWorkbenchStore } from '@/stores'
 
 /**
  * 2026-11-09：对局模式随存档保存 / 恢复
@@ -68,6 +68,32 @@ describe('对局模式：随存档保存与恢复', () => {
     expect(first.hotseat.setupLocked).toBe(false)
     expect(first.hotseat.modeReady).toBe(false)
     expect(first.hotseat.hotseatEnabled).toBe(false)
+  })
+})
+
+describe('读档：观察方归位到档内行动方', () => {
+  /**
+   * 2026-11-14 实点：新窗口读档后 `viewerSide` 仍是建店时的 axis，
+   * 而档内行动方是苏军 ⇒ `canOpenCounterContext` / `counterActionsAt` 的
+   * 「观察方＝行动方」闸门把整张盘的右键菜单全挡掉（不是某格/某堆叠特有）。
+   */
+  it('读档后观察方＝档内行动方（否则盘面右键一律无菜单）', () => {
+    const first = boot()
+    const firstWb = useWorkbenchStore()
+    first.session.startGame()
+    firstWb.activeSide = 'soviet'
+    expect(first.session.saveNow()).toBe(true)
+
+    const second = boot()
+    const secondWb = useWorkbenchStore()
+    // 建店时的默认观察方：axis（与档内行动方不一致）
+    expect(second.hotseat.viewerSide).toBe('axis')
+    expect(secondWb.activeSide).toBe('axis')
+
+    second.session.setSaveStorage(first.storage)
+    expect(second.session.loadNow()).toBe(true)
+    expect(secondWb.activeSide).toBe('soviet')
+    expect(second.hotseat.viewerSide).toBe('soviet')
   })
 })
 

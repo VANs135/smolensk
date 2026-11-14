@@ -385,6 +385,14 @@ export const useHotseatStore = defineStore('hotseat', () => {
    *     选择前 AI 不接管（`aiControlMode` 由 mode 推出）、热坐遮罩也不按 PVP 口径亮起。
    */
   function restoreFromSave(saved: SaveHotseat | undefined): void {
+    /*
+     * 2026-11-14：读档时观察方**归位到档内行动方**。
+     * 建店时 `viewerSide` 取的是当时（主页）的 `activeSide`＝axis；读一份苏军回合的档后
+     * `activeSide` 变成 soviet 而观察方仍停在 axis，`canOpenCounterContext` /
+     * `counterActionsAt` 的「观察方＝行动方」闸门把整张盘的右键菜单全挡掉（表现成"某格没菜单"）。
+     * 这是读档初始化，不属于「对局中随行动方自动切视角」，与 2026-11-11 口径不冲突。
+     */
+    viewerSide.value = workbench.activeSide
     if (saved === undefined) {
       mode.value = null
       aiSide.value = null
