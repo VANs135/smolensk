@@ -9564,7 +9564,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const fuelPendingUnits = computed<ConsoleUnit[]>(() =>
     fuelTargets.value.filter(
-      (unit) => unit.side === activeSide.value && needsFuelOf(unit) && !unit.fuelled,
+      /*
+       * 7.0a：反应段的行动者是**非阶段玩家**（`activeSide` 仍是阶段玩家）⇒ 这一句必须取
+       * `actingSide`。修前取 `activeSide` ⇒ 反应段给己方预备队加油时永远不提示"该付燃料"，
+       * 而 12.5a 又要求耗 MP 前必须已付 ⇒ 轮式/履带单位在 E 段直接动弹不得。
+       */
+      (unit) => unit.side === actingSide.value && needsFuelOf(unit) && !unit.fuelled,
     ),
   )
 
@@ -9661,7 +9666,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function fuelMethodsForUnitNow(instanceId: string): FuelMethodAvailability[] {
     const unit = units.value.find((item) => item.instanceId === instanceId)
-    if (unit === undefined || unit.side !== activeSide.value) return []
+    // 7.0a：反应段由非阶段玩家行动 ⇒ 阵营判据取 `actingSide`（与 `payFuel` 同源）
+    if (unit === undefined || unit.side !== actingSide.value) return []
     if (!needsFuelOf(unit) || unit.fuelled) return []
     if (!actionAllowedNow('supply.fuel')) return []
     const choices = fuelMethodAvailability({
@@ -15346,7 +15352,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `找不到补给站 ${dumpId}（12.11a）`, '12.11a')
       return false
     }
-    if (dump.side !== activeSide.value) {
+    // 7.0a：反应段由非阶段玩家行动 ⇒「己方」取 `actingSide`
+    if (dump.side !== actingSide.value) {
       pushLog('warning', '只能销毁**己方**的补给站（12.11a）', '12.11a')
       return false
     }
@@ -15710,7 +15717,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function convertibleTransportPointsAt(hex: HexRef): ConsoleUnit[] {
     return units.value.filter(
       (unit) =>
-        unit.side === activeSide.value &&
+        // 7.0a：反应段的「本方」是 `actingSide`（非阶段玩家），不是 `activeSide`
+        unit.side === actingSide.value &&
         sameHex(unit.hex, hex) &&
         isConvertibleTransportPoint({
           noncombatKind: unit.noncombatKind ?? null,
@@ -15751,7 +15759,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 这里不再自作主张地整笔拒绝（同格另有空车时，转换本就合法）。
      */
     const entries = convertibleTransportPointsAt(hex)
-    const record = extenderRecordFor(kind, activeSide.value)
+    const record = extenderRecordFor(kind, actingSide.value)
     if (record === null) {
       pushLog('warning', `算子库里没有「${kind}」延补队算子（12.7a）`, '12.7a')
       return false
@@ -15785,7 +15793,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     const connectivity = canCreateExtenderAt(supplyFacts.value, {
       hex,
-      side: activeSide.value,
+      // 7.0a：反应段生成延补队的是非阶段玩家 ⇒ 连通性按它的补给网判
+      side: actingSide.value,
       mobility: kind === 'truck' ? 'truck' : 'leg',
       // 12.7b/12.7d：生成连通用**即将生成那一面的印值 MA**（卡车 20 / 马车 10），
       // 不是 12.3a 的 5 轮式 MP——后者只约束「单位→源」的接收段（U23/G7）
@@ -15817,7 +15826,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const removed = new Set(plan.swaps.map((swap) => swap.transportUnitId))
     units.value = units.value.filter((unit) => !removed.has(unit.instanceId))
     for (const size of plan.leftoverPlacement) {
-      const leftoverRecord = transportRecordFor(kind, size, activeSide.value)
+      const leftoverRecord = transportRecordFor(kind, size, actingSide.value)
       if (leftoverRecord === null) {
         pushLog(
           'warning',
@@ -15830,7 +15839,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         record: leftoverRecord,
         instanceId: createId('tp'),
         hex,
-        side: activeSide.value,
+        side: actingSide.value,
       })
       // 12.7e（用户 2026-11-13 裁定）：余量来自**已付过转换代价**的点 ⇒ 不是满 MP 的新算子
       leftover.mpSpent = leftover.faces.combat.ma * EXTENDER_FLIP_MA_FRACTION
@@ -15845,7 +15854,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         record,
         instanceId: createId('ext'),
         hex,
-        side: activeSide.value,
+        side: actingSide.value,
         face: 'combat',
       })
       extender.mpSpent = extender.faces.combat.ma * EXTENDER_FLIP_MA_FRACTION
@@ -15872,7 +15881,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     const kind = (extender.noncombatTransportKind ?? 'truck') as TransportKind
-    const record = transportRecordFor(kind, EXTENDER_REQUIRED_POINTS, activeSide.value)
+    // 7.0a：反应段的翻面同样落在行动方名下（非阶段玩家）
+    const record = transportRecordFor(kind, EXTENDER_REQUIRED_POINTS, actingSide.value)
     if (record === null) {
       pushLog('warning', `算子库里没有「${kind} 5」的运输点数算子（12.7d）`, '12.7d')
       return false
@@ -15894,7 +15904,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       record,
       instanceId: createId('tp'),
       hex: extender.hex,
-      side: activeSide.value,
+      side: actingSide.value,
     })
     // 12.7e（用户 2026-11-13 裁定）：运输点数各自持有自己的 MP ⇒ 翻面代价要**记在这枚点自己的账上**
     // （修前新算子 mpSpent = 0，等于翻个面就白得满 MP）
@@ -15920,7 +15930,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function flipExtenderRecordInPlace(unit: ConsoleUnit, hex: HexRef): boolean {
     const kind = (unit.noncombatTransportKind ?? 'truck') as TransportKind
-    const record = transportRecordFor(kind, EXTENDER_REQUIRED_POINTS, activeSide.value)
+    // 9.14d：翻面的是**这枚延补队自己** ⇒ 面额取它自己一方（反应段可能是非阶段玩家）
+    const record = transportRecordFor(kind, EXTENDER_REQUIRED_POINTS, unit.side)
     if (record === null) return false
     units.value = [
       ...units.value.filter((item) => item.instanceId !== unit.instanceId),
