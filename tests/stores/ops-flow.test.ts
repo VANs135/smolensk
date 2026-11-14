@@ -502,3 +502,39 @@ describe('反应轰炸提示（7.0b / 10.0d）', () => {
     expect(mapView.actionHint).toContain('炮击 / 轰炸')
   })
 })
+
+/**
+ * 2026-11-15 F 段实点：炮击环节的提示与入口判据**同源**。
+ *
+ * 现场：hint 写「右键敌方格选『炮击』」，但 2.2 的 F 段是 artillery only，
+ * 本盘面苏军火炮射程内没有轴方目标 ⇒ `barrageTargetsNow` 为空，右键敌方格毫无反应。
+ */
+describe('F 炮击环节提示（10.0d / 2.2）', () => {
+  function setupCombat() {
+    const { workbench, mapView } = newStores()
+    workbench.setPhase('combat')
+    enterStep(workbench, 'barrage.declare')
+    expect(workbench.segmentStep?.id).toBe('combat.barrage')
+    return { workbench, mapView }
+  }
+
+  it('★ 没有可宣布的轰炸时，不再教「右键敌方格选炮击」', () => {
+    const { workbench, mapView } = setupCombat()
+    placeGround(workbench, defenderRecord(), TARGET_HEX, 'soviet', 'def-1')
+
+    expect(workbench.barrageTargetsNow).toEqual([])
+    expect(mapView.actionHint).not.toContain('右键敌方格')
+    expect(mapView.actionHint).toContain('没有可宣布的轰炸')
+  })
+
+  it('★ 有炮兵与补给时保留右键入口', () => {
+    const { workbench, mapView } = setupCombat()
+    placeGround(workbench, artilleryRecord(), CORE_HEX, 'axis', 'art-1')
+    placeGround(workbench, defenderRecord(), TARGET_HEX, 'soviet', 'def-1')
+    workbench.spDumps.push({ id: 'dump-1', hex: CORE_HEX, side: 'axis', sp: 0, t: 20 })
+
+    expect(workbench.barrageTargetsNow.length).toBeGreaterThan(0)
+    expect(mapView.actionHint).toContain('右键敌方格')
+    expect(mapView.actionHint).toContain('炮击')
+  })
+})

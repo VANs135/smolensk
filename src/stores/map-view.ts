@@ -828,9 +828,14 @@ export const useMapViewStore = defineStore('mapView', () => {
     /*
      * F 段的炮击环节：本段**不能移动**，通用那句「点亮可移动范围」在这里是错的；
      * 且 2.2 的 F 段括注限定 artillery only ⇒ 提示只说炮兵，不提空军。
+     * 2026-11-15 F 段实点：提示与入口判据同源——射程内没有炮兵时右键敌方格
+     * 既无菜单也无反馈，hint 不能再教这一步（与 reaction.barrage 同一处理）。
      */
-    if (workbench.segmentStep?.id === 'combat.barrage')
+    if (workbench.segmentStep?.id === 'combat.barrage') {
+      if (workbench.barrageTargetsNow.length === 0)
+        return '炮击：本环节没有可宣布的轰炸（射程内没有炮兵；2.2 的 F 段只认炮兵）（10.0d / 10.1a）'
       return '炮击：点敌方格定目标；右键敌方格选「炮击」，会话框里宣布（10.1）'
+    }
     /*
      * G 进击：本段能动的只有进击模式单位与已释放的预备（11.0a）；
      * 射击环节只认已释放预备的火炮与飞机/舰船（2.2 进击·射击）。
