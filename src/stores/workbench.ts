@@ -21644,9 +21644,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     automaticPhaseKeys.value = [...automaticPhaseKeys.value, `specialRepl:${round}:${side}`]
   }
 
+  /**
+   * 1.6c：本回合本方的特殊补员**还欠着**（19 Aug 前每回合必掷）
+   *
+   * 进 B 段时引擎只在到达环自动掷 1.6b；1.6c 受时机闸限制，要到「补员表」这一环的
+   * 「掷骰检定」才掷。此判定给补员表那一环当 ack 前提——否则玩家可以先 ack 掉这一环，
+   * 之后手牌永久卡在"判定阶段还没走完：1.6c 特殊补员还没掷"（补给列车 2 SP 落不下去）。
+   */
+  const specialReplDue = computed<boolean>(
+    () => isSpecialReplAvailable(date.value) && !hasSpecialReplDraw(activeSide.value, turn.value),
+  )
+
   /** 1.6b：本回合本方的可变增援是否已经掷过（含补员表与补给表） */
   const variableReplRolled = computed<boolean>(() =>
     automaticPhaseKeys.value.includes(`${turn.value}|${activeSide.value}|reinforcement`),
+  )
+
+  /** 「补员表」这一环能否完成：1.6b 已掷 **且** 1.6c 不欠（19 Aug 起不再欠） */
+  const replTableAckReady = computed<boolean>(
+    () => variableReplRolled.value && !specialReplDue.value,
   )
 
   /**
@@ -22298,11 +22314,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 第二段改用"先掷完、再统一放"的批量手牌 ⇒ 掷骰块不再以"已放置"为 ack 前提
      * （放置统一由 `reinforce:hand` 与 `endRollSegmentNow` 把关）；
      * 但 1.6c 是**必须掷的表**，未掷不得 ack。
+     *
+     * ★ 1.6c 的唯一入口已并入补员表的「掷骰检定」（`reinforce:specialRepl` 不再单列），
+     *   所以闸门必须同时认 `reinforce:replTable`：否则玩家可以先 ack 掉补员表这一环，
+     *   之后 1.6c 入口随之消失，手牌永久卡在"判定阶段还没走完"（实测 turn 4 补给列车）。
      */
     if (
-      itemId === 'reinforce:specialRepl' &&
-      isSpecialReplAvailable(date.value) &&
-      !hasSpecialReplDraw(activeSide.value, turn.value)
+      (itemId === 'reinforce:specialRepl' || itemId === 'reinforce:replTable') &&
+      specialReplDue.value
     )
       return false
     const key = `${turn.value}|${activeSide.value}|${itemId}`
@@ -29050,6 +29069,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     variableExitOpen,
     variableExitForActiveSide,
     variableReplRolled,
+    specialReplDue,
+    replTableAckReady,
     reinforcementAcks,
     acknowledgeReinforcementStepNow,
     endArrivalSegmentNow,

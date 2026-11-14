@@ -922,7 +922,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       v-if="showsActions"
       item="reinforce:replTable"
       ackable
-      :ack-disabled="!workbench.variableReplRolled"
+      :ack-disabled="!workbench.replTableAckReady"
       @ack="workbench.acknowledgeReinforcementStepNow('reinforce:replTable')"
     >
       <!-- ── · 可变增援（13.6b / 1.6c / 3.3c / 3.6） ── -->
