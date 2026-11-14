@@ -1534,6 +1534,14 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     if (token === null) return false
     /*
+     * 9.1b：战斗环节里**敌方堆叠就是防御格**。
+     * 敌方令牌不在玩家的可选集合里，若照下面的参与闸门走，这一击只会换回一行
+     * 「不参与本环节……敌方算子只读（4.9a）」——玩家点在图徽上的那一击就白点了。
+     * 故此处让路：返回 false ⇒ `onHexClick` 末尾落到 `workbench.clickHex`，
+     * 由战斗环节的 `battleToolClick` 去锁定/拒绝防御格（9.0 相邻性等仍由引擎判）。
+     */
+    if (workbench.combatPickActive && token.side !== workbench.activeSide) return false
+    /*
      * ★ 用户 2026-11-09：**堆叠窗内左键只切换选中**，不触发任何动作、不跳任何会话。
      * 这里只留「没有算子记录」的令牌（SP 点数等）走原有单枚入口；有算子记录的一律落到下面的选中。
      */
