@@ -318,7 +318,7 @@ describe('I①（12.5c-A）：编队加油的覆盖集', () => {
     expect(carrier.loadedSpT, '1 SP 已扣').toBe(0)
     expect(mine.fuelled, '点选的那一枚').toBe(true)
     expect(mate.fuelled, '同编队同来源的另一枚').toBe(true)
-    expect(store.formationFuelThrowOf(mine.formation)?.coveredIds).toContain('mate')
+    expect(store.formationFuelThrowOf('3PZ')?.coveredIds).toContain('mate')
   })
 
   it('★ 判据只有一处：`formationFuelCovers`（12.5c-A）的真值表', () => {
