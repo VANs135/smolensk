@@ -605,6 +605,20 @@ export function classifySaveError(reason: string): SaveErrorInfo {
       hint: '这是修复前写下的旧档：读它会让"时钟走了、算子与账本还停在原处"，故拒读。请以当前版本重存一档。',
     }
   }
+  /*
+   * 2.2：记录轨缺行动方 / 先手方（用户 2026-11-14：拒读，不补值猜）。
+   * 这类档能读进来也走不动——H 清理收尾会报「缺少行动方或先手方」。
+   */
+  if (reason.startsWith('recordsMissingSide:')) {
+    return {
+      kind: 'corrupt',
+      layer: null,
+      expected: null,
+      actual: null,
+      detail: `记录轨里没有行动方 / 先手方，继续玩会在 H 清理收尾时卡死：${reason}`,
+      hint: '该档不能继续：请以当前版本重存一档（原档不会被改写）。',
+    }
+  }
   if (reason.startsWith('boardUnrecognized:')) {
     return {
       kind: 'versionMismatch',

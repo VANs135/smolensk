@@ -215,6 +215,33 @@ describe('W6 D1：读档逐层校验（不符即拒，且不动当前会话）',
     expect(store.records?.turn).toBe(turnBefore)
   })
 
+  it('★ 读档校验：records 缺 activeSide / firstPlayer ⇒ 拒读并说明原因（不补值猜）', () => {
+    const { store, adapter } = newStore()
+    store.startGame()
+    confirmConsensus(store)
+    store.stepNow() // 天气
+    store.stepNow() // 先手判定 ⇒ A 飞机整备（此时行动方与先手方都必须已定）
+    expect(store.records?.phase).toBe('aircraftRefit')
+    expect(store.saveNow()).toBe(true)
+
+    tamper(adapter, (file) => {
+      const session = file['session'] as
+        { state?: { records?: Record<string, unknown> } } | undefined
+      const records = session?.state?.records
+      expect(records).toBeDefined()
+      records!['activeSide'] = null
+      records!['firstPlayer'] = null
+    })
+
+    const phaseBefore = store.records?.phase
+    expect(store.loadNow()).toBe(false)
+    expect(store.saveError?.reason).toContain('recordsMissingSide')
+    // 对话框要说清原因，不能只说"读档失败"
+    expect(classifySaveError(store.saveError?.reason ?? '').detail).toContain('行动方')
+    // 拒读不动当前会话
+    expect(store.records?.phase).toBe(phaseBefore)
+  })
+
   it('D1：存档文件版本 / 剧本号 / 掷骰算法不符 ⇒ 各自带路径拒', () => {
     const cases: { patch: (file: Record<string, unknown>) => void; path: string }[] = [
       { patch: (file) => (file['saveVersion'] = 99), path: '#/saveVersion' },

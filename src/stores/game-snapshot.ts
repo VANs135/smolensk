@@ -31,6 +31,22 @@ export function prepareGameSnapshot(
   board: BoardCodec | null,
   setup: BoardCodec | null,
 ): GameSnapshot {
+  /*
+   * 2.2：除回合准备（preTurn）外，记录轨必须有行动方与先手方。
+   *
+   * 这两个字段一旦缺失，H 清理收尾会直接报「清理阶段缺少行动方或先手方（2.2）」——
+   * 等于把一份坏档变成走不动的死局。**不补值猜**（用户 2026-11-14）：当场拒读，
+   * 并在原因里说清缺的是哪一个。
+   */
+  const records = session.state.records
+  const missing = [
+    ...(records.activeSide === null ? ['行动方'] : []),
+    ...(records.firstPlayer === null ? ['先手方'] : []),
+  ]
+  if (records.phase !== 'preTurn' && missing.length > 0)
+    throw new Error(
+      `recordsMissingSide:回合记录缺少${missing.join('与')}（2.2）——拒绝读档，避免在无行动方的记录轨上继续`,
+    )
   const initial =
     typeof payload === 'object' && payload !== null
       ? (payload as Record<string, unknown>)['setup']
