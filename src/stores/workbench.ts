@@ -1409,6 +1409,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const groundMovement = createGroundMovementDomain({
     context: () => moveContext.value,
     runtime: () => moveRuntime.value,
+    unitNameOf: (unitId) => units.value.find((unit) => unit.instanceId === unitId)?.name ?? unitId,
     lastStep,
     applyMovePatches,
     pushLog,

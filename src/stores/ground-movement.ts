@@ -14,6 +14,8 @@ import type { MoveStepSnapshot } from './movement-types'
 export interface GroundMovementPorts {
   context(): MoveContext
   runtime(): readonly MoveUnitRuntime[]
+  /** 实例 id → 上屏用军名（拒绝文案不许露实例 id） */
+  unitNameOf(unitId: string): string
   lastStep: Ref<MoveStepSnapshot | null>
   applyMovePatches(patches: readonly MoveUnitRuntime[]): void
   pushLog(kind: 'info' | 'success' | 'warning' | 'danger', text: string, rule?: string): void
@@ -114,10 +116,15 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
       pushLog('warning', moveBlocked.value.reason, '6.1g')
       return false
     }
-    const outcome = beginMove({ context: moveContext.value, unitIds, runtime: moveRuntime.value })
+    const outcome = beginMove({
+      context: moveContext.value,
+      unitIds,
+      runtime: moveRuntime.value,
+      unitLabel: ports.unitNameOf,
+    })
     if (!outcome.ok) {
       moveBlocked.value = { rule: outcome.rule, reason: outcome.reason }
-      pushLog('warning', `不能移动：${outcome.reason}（${outcome.rule}）`, outcome.rule)
+      pushLog('warning', `不能移动：${outcome.reason}`, outcome.rule)
       return false
     }
     moveInteraction.value = outcome.data

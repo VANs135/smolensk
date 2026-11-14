@@ -307,6 +307,33 @@ describe('Ⓒ 移动链路端到端（6.1：选子 → 范围 → 逐格 → 结
     expect(store.moveBlocked?.rule).toBe('6.1b')
   })
 
+  it('★ D4：12.5a 未加油拒绝 ⇒ 文案带单位名与规则号，不露实例 id', () => {
+    const store = newConsole()
+    store.setPhase('movement')
+    const unit = placeGround(
+      store,
+      groundRecord(
+        'axis',
+        (record) =>
+          record.classes?.movementClass === 'tracked' &&
+          record.attackCapable === true &&
+          (record.factors?.combat?.ma ?? 0) >= 4,
+      ),
+      CORE_HEX,
+      'axis',
+      'mot-1',
+    )
+    unit.fuelled = false
+
+    store.clickHex(CORE_HEX)
+    expect(store.confirmMovePick()).toBe(false)
+    expect(store.moveBlocked?.rule).toBe('12.5a')
+    // 人话：带军名与规则号；实例 id 只用于内部，不许上屏
+    expect(store.moveBlocked?.reason).toContain(unit.name)
+    expect(store.moveBlocked?.reason).toContain('12.5a')
+    expect(store.moveBlocked?.reason).not.toContain('mot-1')
+  })
+
   it('E 段：本阶段玩家的单位不可动（6.3a）——操作台只能选本方，故 E 段做不了移动', () => {
     const store: Workbench = newConsole()
     const own = placeGround(store, legCombat(), CORE_HEX, 'axis', 'own-1')

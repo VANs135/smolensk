@@ -11,7 +11,7 @@ import {
   inEnemyZocForAction,
   type MoveStepFacts,
 } from './move'
-import type { MoveContext, MoveUnitView, StepFailure } from './move-types'
+import type { MoveContext, MoveRejectReason, MoveUnitView, StepFailure } from './move-types'
 import type { OverrunMovePlan } from './overrun'
 import { zocEntryEffect } from './zoc'
 import {
@@ -125,11 +125,29 @@ export interface MoveInteractionState {
   finished: boolean
 }
 
+/**
+ * 就绪拒绝码 → 人话（用户 2026-11-14：拒绝文案不许露实例 id）
+ *
+ * 表里只收 `prepareMove` 会返回的码；不在表里的仍退回原码，避免静默成一句空话。
+ */
+const READINESS_TEXT: Partial<Record<MoveRejectReason, string>> = {
+  unitNotFound: '找不到该单位',
+  notOnMap: '不在图上',
+  phaseNotAllowed: '本阶段不能移动',
+  noMa: '没有可用 MP',
+  immobile: '无 MA，不可移动',
+  mpLocked: '已承诺本阶段不再消耗 MP',
+  extenderCannotMove: '延补队面不可移动',
+  needsFuel: '未加油，不能消耗 MP',
+}
+
 /** 开始一次移动：校验 1 个或 1 个堆叠（6.1）能否移动 */
 export function beginMove(input: {
   context: MoveContext
   unitIds: readonly string[]
   runtime: readonly MoveUnitRuntime[]
+  /** 实例 id → 上屏用军名（缺省退回 id，供纯引擎测试） */
+  unitLabel?: (unitId: string) => string
 }): RuleOutcome<MoveInteractionState> {
   const { context, unitIds, runtime } = input
   if (unitIds.length === 0) return fail('6.1', '未选择任何单位')
@@ -140,10 +158,15 @@ export function beginMove(input: {
   for (const unitId of unitIds) {
     const item = runtimeOf(runtime, unitId)
     if (item === null) return fail('6.1', `找不到单位 ${unitId}`)
-    if (item.ended) return fail('6.1g', `${unitId} 本轮移动已结束，不能再开始移动`)
+    const label = input.unitLabel?.(unitId) ?? unitId
+    if (item.ended) return fail('6.1g', `${label} 本轮移动已结束，不能再开始移动`)
     // 就绪检查（阶段 6.0 / MA 6.1b / 垫人锁 4.5b / 燃料 12.5a / 延补队面 12.7）统一问引擎
     const readiness = computeReachableHexes(context, unitId)
-    if (!readiness.ok) return fail(readiness.rule, `${unitId}：${readiness.reason}`)
+    if (!readiness.ok)
+      return fail(
+        readiness.rule,
+        `${label} 不能开拔：${READINESS_TEXT[readiness.reason] ?? readiness.reason}（${readiness.rule}）`,
+      )
   }
 
   return succeed('6.1', {
