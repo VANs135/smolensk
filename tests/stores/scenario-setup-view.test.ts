@@ -156,3 +156,37 @@ describe('B10：路由接线（源码守卫）', () => {
     expect(view).toContain('<ConsensusChecklist />')
   })
 })
+
+/**
+ * 2026-11-14：960×571 实测裁切
+ *
+ * 展开「开局共识」后，`.scenario` 只吃 `flex: 1` 且没有 overflow，外层壳把溢出藏掉：
+ * 4.3 那条复选框落在视口外，页面滚不到、面板也裁掉 ⇒ 「窄高窗口下每条可选规则都要能点到」不成立。
+ * 守卫只钉两件不可回退的事：① 剧本页自己能纵向滚；② 共识条目不进任何固定高度/裁切盒子。
+ */
+describe('960×571：剧本页可滚动、共识条目不裁切（源码守卫）', () => {
+  const view = readFileSync('src/views/ScenarioSetupView.vue', 'utf8')
+  const checklist = readFileSync('src/components/hotseat/ConsensusChecklist.vue', 'utf8')
+
+  /** 取某个选择器的声明块（到第一个 `}` 为止） */
+  const declarations = (css: string, selector: string): string => {
+    const start = css.indexOf(`${selector} {`)
+    expect(start, `样式里没找到 ${selector}`).toBeGreaterThan(-1)
+    return css.slice(start, css.indexOf('}', start))
+  }
+
+  it('剧本页自身纵向可滚，且能在 flex 列里收缩', () => {
+    const base = declarations(view, '.scenario')
+    expect(base).toContain('overflow-y: auto')
+    expect(base).toContain('min-height: 0')
+  })
+
+  it('共识面板与清单没有固定高度、也不裁切溢出', () => {
+    expect(view).not.toContain('overflow: hidden')
+    expect(declarations(view, '.scenario__sheet')).not.toMatch(/\bheight:\s*\d/)
+    const formal = declarations(checklist, '.consensus--formal')
+    expect(formal).not.toContain('overflow: hidden')
+    expect(formal).not.toMatch(/\bheight:\s*\d/)
+    expect(checklist).not.toContain('max-height')
+  })
+})

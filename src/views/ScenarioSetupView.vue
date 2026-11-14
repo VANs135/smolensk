@@ -181,6 +181,8 @@ function onEnterSetup(): void {
 <style scoped>
 .scenario {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: var(--space-8) clamp(var(--space-4), 5vw, var(--space-16));
   background: var(--color-command-bg);
   color: var(--color-command-ink);
