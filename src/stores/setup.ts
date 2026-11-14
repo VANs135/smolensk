@@ -25,6 +25,7 @@ import {
   pendingSetupObligations,
   planTruckFullLoad,
   requiresPanzerGroupSpAssignment,
+  scenarioTurnRange,
   // B50（用户 2026-09-17）：3.4b 是 4.1a 的**可选项** ⇒ 初设的点名要求与默认归属都看共识
   panzerGroupRulesActive,
   PANZER_GROUP_OPTION_ITEM,
@@ -1900,6 +1901,12 @@ export const useSetupStore = defineStore('setup', () => {
     // ★ 用户 2026-11-14 裁定 2：`resetAll` 现在会清掉分方游标/双方确认/抽签台账 ⇒
     //   游标必须在它**之后**按新剧本重开，否则刚起的游标会被重置抹掉。
     resetAll()
+    /*
+     * 初设期的日期＝本剧本首回合：回合号是日期的唯一来源（`workbench.date` 由 `turn` 派生），
+     * 而换剧本只清盘面、不动回合号 ⇒ 剧本 3/5/7 会一直停在 1941-07-08（第 1 回合）。
+     * 日期同时是专规 1.2 铁路容量等闸门的输入，故换剧本即按回合轨落到本剧本首回合。
+     */
+    workbench.setTurn(scenarioTurnRange(next).firstTurn)
     // 第六批条 1（S1）：换剧本 ⇒ 分方游标按**新剧本的先布设方**重开
     armSetupSideCursor()
     if (!runAutoSetup()) return false

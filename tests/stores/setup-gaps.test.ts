@@ -63,6 +63,21 @@ describe('G3：setupGaps 加载期登记', () => {
     expect(setup.notes.join('｜')).toContain('剧本 3')
   })
 
+  it('初设期的日期＝本剧本首回合（回合号派生；剧本 3/5/7 不能停在 1941-07-08）', () => {
+    setup.selectScenario('5')
+    expect(workbench.turn).toBe(10)
+    expect(workbench.date).toBe('1941-08-08')
+
+    setup.selectScenario('3')
+    expect(workbench.date).toBe('1941-07-22')
+
+    setup.selectScenario('7')
+    expect(workbench.date).toBe('1941-08-26')
+
+    setup.selectScenario('1')
+    expect(workbench.date).toBe('1941-07-08')
+  })
+
   it('首局日志写一次缺口，重复开局不再追加', () => {
     setup.selectScenario('1')
     const gapCount = setup.setupGaps.length
