@@ -552,7 +552,9 @@ export const useGameSessionStore = defineStore('gameSession', () => {
    *
    * 未开局（无会话）⇒ 返回 `false`，调用方退回本地演练值（保持「未开局也能演练」的语义）。
    */
-  function patchRecords(patch: Partial<Pick<Records, 'activeSide' | 'phase' | 'turn'>>): boolean {
+  function patchRecords(
+    patch: Partial<Pick<Records, 'activeSide' | 'firstPlayer' | 'phase' | 'turn'>>,
+  ): boolean {
     const current = session.value
     if (current === null) return false
     session.value = {
