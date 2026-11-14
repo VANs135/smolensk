@@ -161,6 +161,48 @@ describe('Ⓐ 15.1：同格有飞机时，空军基地必须能从堆叠里选�
   })
 })
 
+describe('Ⓐ 15.1：同格有飞机时，空军基地**本身**也必须点得到', () => {
+  it('★ 点基地那一枚 ⇒ 开整备入口，不得落到 6.1「没有可开拔的单位」', () => {
+    /*
+     * 修前：A 段里 `participatesIn` 对 `air_base` 直接给 ok ⇒ 点基地那一枚**不**走设施让路，
+     * 落到「点某一枚＝开拔」⇒ `selectForMove`：基地没有 MA，只换回一句 6.1g，
+     * 整备入口永远出不来。扫描格内各个扇位，任何一击都必须给出入口（小窗或整备意图）。
+     */
+    const offsets: Array<[number, number]> = [
+      [0, 0],
+      [0.28, 0],
+      [-0.28, 0],
+      [0.24, -0.2],
+      [-0.24, -0.2],
+      [0, 0.42],
+      [0.24, -0.34],
+      [-0.24, -0.34],
+      [0.24, 0.34],
+      [-0.24, 0.34],
+    ]
+    const center = hexCanvasPoint(CORE_HEX)
+    const misses = offsets
+      .map(([dx, dy]) => {
+        const s = refitStage()
+        s.mapView.onHexClick(
+          CORE_HEX,
+          { x: center.x, y: center.y },
+          {
+            x: center.x + dx * HEX_RADIUS_PX,
+            y: center.y + dy * HEX_RADIUS_PX,
+          },
+        )
+        const opened =
+          s.mapView.popup?.hex.col === CORE_HEX.col ||
+          s.mapView.popup?.hex.row === CORE_HEX.row ||
+          s.mapView.unitActionUnitId === 'base-1'
+        return opened ? null : [dx, dy]
+      })
+      .filter((item) => item !== null)
+    expect(misses).toEqual([])
+  })
+})
+
 describe('Ⓐ 状态记录与日志：一笔整备在三处一致（15.1 / ⒁ 接线）', () => {
   it('lastRefit / 本阶段已整备名单 / 结算日志同源', () => {
     setActivePinia(createPinia())

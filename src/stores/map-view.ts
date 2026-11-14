@@ -1619,6 +1619,17 @@ export const useMapViewStore = defineStore('mapView', () => {
       return true
     }
     /*
+     * ★ 15.1（用户 2026-11-14 二次实测）：A 段的**空军基地本身**是「参与本环节」的
+     *   （`participatesIn` 对 `air_base` 直接给 ok），所以点基地那一枚**不**走上面的设施让路，
+     *   而是落到下面的「点某一枚＝开拔」⇒ `selectForMove`：基地没有 MA，只换回一句
+     *   「该格没有可开拔的单位」，整备入口永远出不来（同格有飞机时尤其明显）。
+     *   设施不是开拔对象 ⇒ 直接走它自己的动作族（`air_base` ⇒ 15.1 整备会话）。
+     */
+    if (isIdleForStack() && token.noncombatKind === 'air_base') {
+      selectCounterAt(hex, token.id, anchor)
+      return true
+    }
+    /*
      * ★ 用户 2026-11-10：闲置态**点某一枚 ⇒ 只选这一枚**（"点格"才是整格全选 + 开窗口）。
      *   修前点格即整格全选，玩家想看某一枚的菜单只能先进窗口。
      */
