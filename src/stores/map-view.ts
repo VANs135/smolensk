@@ -802,7 +802,7 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     if (workbench.combatState !== null && workbench.combatState.finished !== true)
       return '战斗中：按会话框逐步结算（9.2）；地图只显示本步的落点与目标（9.12）'
-    if (workbench.moveInteraction !== null)
+    if (workbench.moveInteraction !== null && workbench.moveInteraction.finished !== true)
       return '移动中：点可到达格逐格走（6.1）；点紫环敌方格＝突袭（8.1a）；Enter 结束移动'
     /*
      * C 段的轰炸环节：2.2 原文括注 **air & ship only** ⇒ 本环**不能移动**，

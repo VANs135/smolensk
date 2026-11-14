@@ -538,3 +538,38 @@ describe('F 炮击环节提示（10.0d / 2.2）', () => {
     expect(mapView.actionHint).toContain('炮击')
   })
 })
+
+/**
+ * 2026-11-15 C 段实点：结束移动（Enter）后进入「轰炸（仅空中）」，
+ * 顶部提示仍停在「移动中」——`moveInteraction` 已 `finished`，却被提示分支
+ * 当成"正在移动"，压过了 C 段轰炸环节自己的分支（2.2 air only）。
+ */
+describe('结束移动后的环节提示（2.2 air only）', () => {
+  it('★ finished 的移动交互不得压过「轰炸（仅空中）」的提示', () => {
+    const { workbench, mapView } = newStores()
+    workbench.setPhase('movement')
+    const unit = placeGround(
+      workbench,
+      groundRecord(
+        'axis',
+        (record) => record.isCombat === true && record.classes?.movementClass === 'leg',
+      ),
+      CORE_HEX,
+      'axis',
+      'leg-1',
+    )
+    workbench.clickHex(CORE_HEX)
+    expect(workbench.confirmMovePick()).toBe(true)
+    workbench.finishMove()
+    expect(workbench.moveInteraction?.finished).toBe(true)
+    expect(unit.movementEnded).toBe(true)
+
+    const index = workbench.playerSegmentSteps.findIndex((step) => step.id === 'movement.barrage')
+    expect(index).toBeGreaterThanOrEqual(0)
+    expect(workbench.setSegmentStepIndex(index)).toBe(true)
+    expect(workbench.segmentStep?.id).toBe('movement.barrage')
+
+    expect(mapView.actionHint).not.toContain('移动中')
+    expect(mapView.actionHint).toContain('轰炸（仅空中）')
+  })
+})
