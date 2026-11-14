@@ -302,7 +302,22 @@ describe('B15d/B15e：分段渲染与视图接线（源码守卫）', () => {
     const view = readFileSync('src/views/GameTableView.vue', 'utf8')
     // 右栏（aside）不再有可写入口：admin / ledger 已移出（B15d/B15e 的"侧栏常驻"被条 12 取代）
     expect(view).not.toContain('<AirPanel only="admin" />')
-    expect(view).not.toContain('<SupplyPanel only="ledger" />')
+    /*
+     * ★ 2026-11-14 缺陷 A 裁定：补给段的「受补给单位」入口在账本段，
+     *   而地图会话只画检查链（only="check"）⇒ 账本段改挂**战况抽屉**（仅补给阶段），
+     *   右栏/地图会话里仍不得出现 ledger（这里按区块切分，不再用全文件字符串）。
+     */
+    const dockStart = view.indexOf('<MapDock')
+    const dockEnd = view.indexOf('</MapDock>', dockStart)
+    expect(dockStart).toBeGreaterThan(-1)
+    expect(dockEnd).toBeGreaterThan(dockStart)
+    const dockBlock = view.slice(dockStart, dockEnd)
+    expect(dockBlock).not.toContain('only="ledger"')
+    const statusStart = view.indexOf("openedDrawers.has('status')")
+    const statusEnd = view.indexOf('</aside>', statusStart)
+    expect(statusStart).toBeGreaterThan(-1)
+    const statusBlock = view.slice(statusStart, statusEnd)
+    expect(statusBlock).toContain('<SupplyPanel only="ledger" />')
     // 点非战斗单位 ⇒ `unit` 会话，按类型分派到 UnitPanel
     expect(view).toContain('<UnitPanel v-else-if="session.kind === \'unit\'" />')
     // 空军任务 / 补给检查仍各按"动作段"进会话
