@@ -353,6 +353,12 @@ function hoverUnit(id: string | null): void {
       </p>
     </div>
 
+    <!-- 8.1b（用户 2026-11-14）：落下名单只用一行说清，不另开清单面板 -->
+    <p v-if="workbench.overrunLeftBehindNotice !== null" class="num">
+      <BaseTag kind="warning">8.1b</BaseTag>
+      {{ workbench.overrunLeftBehindNotice }}
+    </p>
+
     <!--
       ★ 12.5 燃料：**已移出本面板**（用户 2026-11-10：加油唯一入口＝右键该单位/堆叠）。
       点选单位/格子不再自动进入加油流程；付款在 `FuelPanel`（会话 kind='fuel'）内完成。

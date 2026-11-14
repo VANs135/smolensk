@@ -163,6 +163,16 @@ describe('8.1b 落下：留原格 + 本次移动结束', () => {
     expect(store.confirmMovePick()).toBe(false)
   })
 
+  it('★ 落下名单在突袭那一屏给一行提示：哪几枚没跟上、留在哪、本次移动结束', () => {
+    const { tank } = setup()
+    expect(store.overrunNow(target)).toBe(true)
+    const notice = store.overrunLeftBehindNotice
+    expect(notice).toContain(tank.name)
+    expect(notice).toContain('没跟上')
+    expect(notice).toContain('留在')
+    expect(notice).toContain('本次移动结束')
+  })
+
   it('撤回到移动前：履带 ended 回 false、回起点，随后可单独走一格', () => {
     const { leg, tank } = setup()
     expect(store.overrunNow(target)).toBe(true)

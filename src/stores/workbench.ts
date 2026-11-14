@@ -6385,6 +6385,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       : [...overrunParticipantIds.value, instanceId]
   }
 
+  /**
+   * 8.1b：本次突袭里**没跟上的单位**那一行提示（没有落下者 ⇒ null）
+   *
+   * 进格费不够的单位被留在原格、本次移动结束。玩家必须看到结果，但不另开清单面板——
+   * 就在移动/突袭面板里用一行说清「哪几枚、留在哪、本次移动结束」（用户 2026-11-14 口径）。
+   */
+  const overrunLeftBehindNotice = ref<string | null>(null)
+
   /** 8.1g：本格的参突/留驻拆分（引擎 `splitOverrunStack` 的唯一消费点；供界面显示） */
   const overrunSplitNow = computed(() => {
     const hex = overrunStackHex.value
@@ -6759,12 +6767,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (leftBehind.length > 0) {
       for (const unit of units.value)
         if (leftBehind.includes(unit.instanceId)) unit.movementEnded = true
+      const names = leftBehind.map((id) => nameOf(id)).join('、')
+      overrunLeftBehindNotice.value =
+        `8.1b：${names} 没跟上——留在 ${hexLabel(from)}，本次移动结束` +
+        '（要单独移动，请先撤回到移动前）'
       pushLog(
         'info',
         `8.1b：${leftBehind.length} 个单位进格费超过 3 MP，留在 ${hexLabel(from)} 且本次移动结束` +
           '（要单独移动，请先撤回到移动前）',
         '8.1b',
       )
+    } else {
+      overrunLeftBehindNotice.value = null
     }
 
     // 记下突袭前状态（结算后据此记账；撤销一步也能整步还原）
@@ -7158,6 +7172,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     lastStep.value = null
     // ②b：上一轮移动里的参突勾选不带到下一轮（否则新堆叠的突袭会沿用旧 id）
     overrunParticipantIds.value = []
+    // 8.1b：本次移动已收束 ⇒ 上一场的「落下名单」提示不再挂
+    overrunLeftBehindNotice.value = null
     // 4.5a-A：本次移动已收束 ⇒ 停车账本随之作废
     zocStoppedMoveUnitIds.value = []
     // 条 17（批 F·F2）：移动收束 ⇒ 4.5a 标记作废
@@ -28571,6 +28587,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     nkvdArRequiredNow,
     overrunParticipantIds,
     toggleOverrunParticipant,
+    overrunLeftBehindNotice,
     overrunSplitNow,
     combatDefenderTerrainOptions,
     combatStackTerrainOptions,
