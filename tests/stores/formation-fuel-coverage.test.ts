@@ -319,6 +319,13 @@ describe('I①（12.5c-A）：编队加油的覆盖集', () => {
     expect(mine.fuelled, '点选的那一枚').toBe(true)
     expect(mate.fuelled, '同编队同来源的另一枚').toBe(true)
     expect(store.formationFuelThrowOf('3PZ')?.coveredIds).toContain('mate')
+    /*
+     * 显示层：编队法窗口的「来源」一句人话也要在扣款前取下来 —— 车上的 SP 扣到 0 后该格
+     * 不再是"含 SP 的位置"，扣款后再查标签就只能显示「（未定）」（账目不受影响）。
+     */
+    const throwOf = store.formationFuelThrowOf('3PZ')
+    expect(throwOf?.sourceLabel).toContain('补给站')
+    expect(throwOf?.sourceLabel).not.toContain('未定')
   })
 
   it('★ 判据只有一处：`formationFuelCovers`（12.5c-A）的真值表', () => {

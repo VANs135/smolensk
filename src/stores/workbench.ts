@@ -9245,7 +9245,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *   来源若是「装载在运输点数上的 SP」（12.1b），扣到 0 后该格就不再是"含 SP 的位置"，
      *   `fuelSourceKeysOfUnit` 随即看不见这座站 ⇒ 先扣款再算覆盖会得到空集：
      *   钱扣了、编队一枚没加注（编队油窗口还记成"来源：（未定）"）。
+     *
+     * ★ 同理，窗口里**来源那一句人话**也必须在扣款之前取下来（`sourceLabel` 不是账本，
+     *   只是显示；扣款后该站若已归零就查不到标签，窗口会显示成「（未定）」）。
      */
+    const formationSourceLabel =
+      formationCoverage === null || formationCoverage.sourceKey === null || targets[0] === undefined
+        ? '（未定）'
+        : (fuelSourceKeysOfUnit(targets[0]).get(formationCoverage.sourceKey) ?? '（未定）')
     setSpDumpHoldings(dump.id, payment.data.holdingsAfter)
     for (const unitId of coveredIds) {
       const unit = units.value.find((item) => item.instanceId === unitId)
@@ -9271,10 +9278,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         [fuelFormation]: {
           side: targets[0]!.side,
           sourceKey: formationCoverage.sourceKey ?? '（未定）',
-          sourceLabel:
-            formationCoverage.sourceKey === null
-              ? '（未定）'
-              : (fuelSourceKeysOfUnit(targets[0]!).get(formationCoverage.sourceKey) ?? '（未定）'),
+          sourceLabel: formationSourceLabel,
           coveredIds,
           // #13：付款格（编队油窗口的同格判据）
           originHex: { ...targets[0]!.hex },
