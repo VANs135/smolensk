@@ -64,6 +64,11 @@ export default tseslint.config(
         },
       ],
       'vue/multi-word-component-names': ['error', { ignores: ['App'] }],
+      // 模板里用到的组件必须真的被 import/注册：漏 import 时 Vue 只在**运行时**打
+      // `Failed to resolve component` 警告并渲染成空标签（实测 AirPanel 的 SessionStep、
+      // OpsFlowPanel 的 OpsLossPicker、ReinforcementPanel 的 CounterPicker 都漏了），
+      // 静态关把这类"看不见的空白"拦在门禁里。
+      'vue/no-undef-components': 'error',
       'vue/component-name-in-template-casing': [
         'error',
         'PascalCase',

@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import { AirPanel } from '@/components/air'
 import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import { SessionStep } from '@/components/session'
+import OpsLossPicker from '@/components/ops/OpsLossPicker.vue'
 import { counterImageUrlOf, hexLabel, useMapViewStore, useWorkbenchStore } from '@/stores'
 
 /**

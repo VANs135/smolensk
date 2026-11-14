@@ -3,7 +3,7 @@ import { computed, ref, watch, watchEffect } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/base'
 import { SessionStep } from '@/components/session'
-import { type CounterPickerItem } from '@/components/game'
+import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { auxCardImageUrl } from '@/components/game/aux-card-image'
 import { arrivalCopiesOf } from '@/engine/rules'
 import { counterImages, tokenImageUrl } from '@/render/token-images'

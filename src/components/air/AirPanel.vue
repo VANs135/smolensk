@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount } from 'vue'
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip, UI_COPY } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import OpsLossPicker from '@/components/ops/OpsLossPicker.vue'
+import { SessionStep } from '@/components/session'
 import UiField from '@/components/UiField.vue'
 import { useRefereeTools } from '@/components/ui-mode'
 import {
