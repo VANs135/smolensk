@@ -3685,6 +3685,19 @@ export const useMapViewStore = defineStore('mapView', () => {
         return
       }
     }
+    /*
+     * 12.4：战斗补给选源 —— 与 12.3 选源同口径（见下一条注释），**排在堆叠展开之前**：
+     * 实战里补给站常与部队同格，若先交给摊开态，这座站就永远点不中，攻方因此付不出 T
+     * （12.4 要求全额付清才能攻击）⇒ 整场战斗被卡在补给步。
+     */
+    if (workbench.combatState?.step === 'combatSupply') {
+      const dumpNow = supplyDumpAt(hex)
+      if (dumpNow !== null) {
+        workbench.pickCombatSupplyDump(dumpNow.side, dumpNow.id)
+        closePopup()
+        return
+      }
+    }
     if (!modalPickLive && world !== undefined && handleStackClick(hex, world, scale, anchor)) return
     // W7 C14：初设放置中 ⇒ 点地图即落位（最高优先级；非候选格由 store 记拒绝，不开常规小窗）
     if (setup.placing !== null && setup.placeAtHex(hex)) {
@@ -3735,7 +3748,6 @@ export const useMapViewStore = defineStore('mapView', () => {
       (hint) => hint.hex.col === hex.col && hint.hex.row === hex.row,
     )
     const advanceHex = workbench.combatAdvanceHex
-    const dump = supplyDumpAt(hex)
     const specialItemNow = specialItem.value
     // 15.1：整备付款优先——正点着高亮的补给站即「用这个补给站付 1T」
     const refitDump = refitPayHints.value.find(
@@ -3778,10 +3790,6 @@ export const useMapViewStore = defineStore('mapView', () => {
       advanceHex.row === hex.row
     ) {
       workbench.advanceNow(hex)
-      consumed = true
-    }
-    if (!consumed && dump !== null) {
-      workbench.pickCombatSupplyDump(dump.side, dump.id)
       consumed = true
     }
     if (!consumed && workbench.airActive && workbench.airMissionAirIds.length > 0) {

@@ -7,11 +7,13 @@ import { mapLayers } from '@/data'
 import type { HexRef } from '@/data'
 import { HEX_DIRECTIONS, isOnMap, neighbor } from '@/engine/hex-geometry'
 import { createMapFacts, holdingsToT, selectMovementTerrain } from '@/engine/rules'
+import { hexCanvasPoint } from '@/render/map-layout'
 import {
   actionGateOf,
   defenseTerrainChoices,
   toConsoleUnit,
   unitChoices,
+  useMapViewStore,
   useWorkbenchStore,
   type ActionKey,
   type ConsolePhase,
@@ -177,6 +179,30 @@ function exactT(t: number): { sp: number; t: number } {
 
 beforeEach(() => {
   setActivePinia(createPinia())
+})
+
+describe('12.4：点含部队的补给站格必须选得中（与 12.3 选源同口径，先于堆叠展开）', () => {
+  it('★ 战斗补给步点「攻方同格」的补给站 ⇒ 选为来源（不被堆叠点击吃掉）', () => {
+    const store = newStore()
+    const { attackerA } = setupTwoAttackerBattle(store)
+    expect(store.combatState?.step).toBe('combatSupply')
+
+    // 站就摆在攻方脚下（12.1b：含 SP 的位置即补给站；实战里站与部队同格是常态）
+    store.spDumps.push({
+      id: 'sd-same',
+      side: 'axis',
+      hex: { ...attackerA.hex },
+      sp: 4,
+      t: 0,
+    })
+
+    const mapView = useMapViewStore()
+    // 真实地图点击：带 world/scale ⇒ 这一击会先过「摊开堆叠」这一层
+    mapView.onHexClick({ ...attackerA.hex }, undefined, hexCanvasPoint(attackerA.hex), 0.5)
+
+    expect(store.combatSupplyDumpIds.attacker, '点自己的站格＝选中这座站').toBe('sd-same')
+    expect(store.combatInputs.attackerAvailableT).toBe(holdingsToT({ sp: 4, t: 0 }))
+  })
 })
 
 describe('12.4：战斗补给逐单位取源（不要求同源）', () => {
