@@ -17447,13 +17447,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 不可用的机不就该列进「参战机」阵列 —— 修前它照列，点进窗口后才在宣布时被 2.2d 拒。
      * 引擎侧判据仍在 `beginAirMissionNow`（旁路直接写状态仍会被拒）。
      */
-    const airPhase =
-      phase.value === 'reaction'
-        ? 'reaction'
-        : phase.value === 'exploitation'
-          ? 'exploitation'
-          : 'movement'
-    if (!canMissionInPhase(airActingSide.value, airPhase)) return []
+    if (!airMissionAllowedInPhase.value) return []
     const step = airState.value?.step
     const canAdd = step === undefined ? true : step === 'done' ? false : canAddAircraftAtStep(step)
     const limit = canJoinMission(0, 0)
@@ -17712,9 +17706,26 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return dumps.some((dump) => holdingsToT({ sp: dump.sp, t: dump.t }) >= cost)
   }
 
+  /**
+   * 专规 2.2d / 14.1g：**本阶段本方能否出击**（空军任务全链共用一条判据）
+   *
+   * 修前只有 `airMissionJoinChoices` 判这一条，`bombingEntryEligible` 只看环节闸 ⇒
+   * 苏军进击段右键敌方格仍出「轰炸」，点进去参战机阵列是空的、宣布时才被 2.2d 拒。
+   */
+  const airMissionAllowedInPhase = computed<boolean>(() => {
+    const airPhase =
+      phase.value === 'reaction'
+        ? 'reaction'
+        : phase.value === 'exploitation'
+          ? 'exploitation'
+          : 'movement'
+    return canMissionInPhase(airActingSide.value, airPhase)
+  })
+
   /** 10.2c + 10.0e：**轰炸**这一项该不该出现（空军轰炸免补给 ⇒ 不判 10.1b） */
   function bombingEntryEligible(hex: HexRef): boolean {
     if (!actionAllowedNow('air.mission')) return false
+    if (!airMissionAllowedInPhase.value) return false
     if (!airMissionKindChoices.value.some((item) => item.key === 'barrage')) return false
     if (airState.value !== null && !airState.value.finished) return false
     if (barragedHexesThisPhase.value.includes(hexLabel(hex))) return false

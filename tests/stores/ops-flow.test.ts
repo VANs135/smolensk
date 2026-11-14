@@ -393,6 +393,61 @@ describe('G 进击段的窗口纪律（2.2 G：移动 → 射击 → 战斗三�
     expect(workbench.combatAttackerIds).toContain('g-a')
   })
 
+  it('★ 11.0 / 10.0d：G 轰炸环节没有可宣布的轰炸时，不再教「右键敌方格」', () => {
+    const { workbench, mapView } = newStores()
+    workbench.setPhase('exploitation')
+    enterStep(workbench, 'barrage.declare')
+    expect(workbench.segmentStep?.id).toBe('exploitation.barrage')
+    placeGround(workbench, defenderRecord(), TARGET_HEX, 'soviet', 'g-def-only')
+
+    expect(workbench.barrageTargetsNow).toEqual([])
+    expect(mapView.actionHint).not.toContain('右键敌方格')
+    expect(mapView.actionHint).toContain('没有可宣布的轰炸')
+  })
+
+  it('★ 11.0：有已释放预备火炮与补给时保留右键入口', () => {
+    const { workbench, mapView } = newStores()
+    workbench.setPhase('exploitation')
+    enterStep(workbench, 'barrage.declare')
+    placeGround(workbench, artilleryRecord(), CORE_HEX, 'axis', 'g-gun')
+    placeGround(workbench, defenderRecord(), TARGET_HEX, 'soviet', 'g-def')
+    workbench.spDumps.push({ id: 'dump-g', hex: CORE_HEX, side: 'axis', sp: 0, t: 20 })
+
+    // 2.2 进击·射击：只有释放预备模式的火炮算来源
+    const gun = workbench.units.find((unit) => unit.instanceId === 'g-gun')!
+    gun.mode = { ...gun.mode, mode: 'reserve', releasedFromReserve: true }
+
+    expect(workbench.barrageTargetsNow.length).toBeGreaterThan(0)
+    expect(mapView.actionHint).toContain('右键敌方格')
+  })
+
+  it('★ 专规 2.2d：苏军进击段不给空军轰炸入口（无参战机就不该出「轰炸」项）', () => {
+    const { workbench } = newStores()
+    workbench.setPhase('exploitation')
+    workbench.switchSide() // 阶段玩家＝苏军：专规 2.2d 禁止苏军在本方进击阶段出击
+    workbench.setSegmentStepIndex(
+      workbench.playerSegmentSteps.findIndex((step) => step.id === 'exploitation.barrage'),
+    )
+    expect(workbench.segmentStep?.id).toBe('exploitation.barrage')
+    const bomber = aircraftChoices('soviet').find(
+      (record) => (record.barrageStrength ?? 0) > 0 && (record.rangeHexes ?? 0) >= 1,
+    )
+    if (bomber === undefined) throw new Error('苏方飞机库中没有可轰炸的机')
+    placeGround(workbench, airBaseRecord(), CORE_HEX, 'soviet', 'su-base')
+    placeAir(workbench, bomber, CORE_HEX, 'soviet', 'su-bomb')
+    placeGround(
+      workbench,
+      groundRecord('axis', (record) => record.isCombat === true),
+      TARGET_HEX,
+      'axis',
+      'ax-def',
+    )
+
+    expect(workbench.airMissionJoinChoices).toEqual([])
+    expect(workbench.bombingEntryEligible(TARGET_HEX)).toBe(false)
+    expect(workbench.barrageTargetsNow).toEqual([])
+  })
+
   it('★ 进击两环的提示按环节分流，不落回通用「可移动范围」', () => {
     const { workbench, mapView } = newStores()
     workbench.setPhase('exploitation')

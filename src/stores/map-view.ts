@@ -838,12 +838,17 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     /*
      * G 进击：本段能动的只有进击模式单位与已释放的预备（11.0a）；
-     * 射击环节只认已释放预备的火炮与飞机/舰船（2.2 进击·射击）。
+     * 射击环节只认已释放预备的火炮与飞机（2.2 进击·射击 / 11.0）。
+     * 2026-11-15 G 段核对：提示与右键入口同源——没有已释放的预备炮兵、也没有航程够的轰炸机时
+     * `barrageTargetsNow` 为空，右键敌方格既无菜单也无反馈，hint 不能再教这一步（与 E/F 同处理）。
      */
     if (workbench.segmentStep?.id === 'exploitation.movement')
       return '进击移动：点己方算子＝显示可移动范围（11.0a）；点紫环敌方格＝突袭（8.1a）'
-    if (workbench.segmentStep?.id === 'exploitation.barrage')
-      return '进击轰炸：点敌方格定目标；右键敌方格选「轰炸」，会话框里宣布（11.0d）'
+    if (workbench.segmentStep?.id === 'exploitation.barrage') {
+      if (workbench.barrageTargetsNow.length === 0)
+        return '进击轰炸：本环节没有可宣布的轰炸（没有已释放的预备炮兵，也没有航程够的轰炸机）（11.0 / 10.0d）'
+      return '进击轰炸：点敌方格定目标；右键敌方格选「轰炸」，会话框里宣布（11.0 / 10.0）'
+    }
     /*
      * A 飞机整备：本段**没有移动/射击**，通用那句「点亮可移动范围」在这里是错的；
      * 唯一入口是"点本方空军基地格 → 小窗整备（15.1）→ 勾机 → 点高亮补给站付 1T"。
