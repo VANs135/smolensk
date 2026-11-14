@@ -1265,7 +1265,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     return true
   }
 
-  /** 第 1 步 → 第 2 步（炮击：宣布后进 10.1b 补给；空军：宣布 + 自动结算到停返航） */
+  /** 第 1 步 → 第 2 步（炮击：宣布后进 10.1b 补给；空军：宣布 + 自动结算到**面板 2**） */
   function advanceOpsFlow(): boolean {
     const flow = opsFlow.value
     if (flow === null || flow.step !== 1) return false
@@ -1279,10 +1279,11 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 修前只有整段 `runAirMissionNow` 成功才进第 2 步 ⇒ 自动连跑在轰炸战果处停住时
      * 面板仍停在第 1 步（`BarragePanel` 的受损选择从此不可达，K4）。
      * 现在宣布成功即进第 2 步，连跑的成功与否只决定停在哪一子步。
+     * 2026-11-15：连跑止于**面板 2（任务结算）**，由玩家点「结算任务」再进返航。
      */
     if (!workbench.beginAirMissionNow()) return false
     opsFlow.value = { ...flow, step: 2 }
-    workbench.autoResolveAirMissionNow()
+    workbench.runAirMissionNow()
     return true
   }
 

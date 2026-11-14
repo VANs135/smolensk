@@ -334,7 +334,7 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
     return plane
   }
 
-  it('★ 14.2f-E 自动防空：命中 ⇒ 落损失、直接进 F 并收束到返航', () => {
+  it('★ 14.2f-E 自动防空：命中 ⇒ 落损失，停在面板 2（任务结算）', () => {
     const store = newStore()
     setupBarrageAtFlak(store)
     store.airInputs.flakDie = 12
@@ -345,12 +345,12 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
     expect(store.airState?.flak?.lossAircraftId).toBe('air-1')
     // 命中损失已落盘（2 点军力 ⇒ 1 点）
     expect(store.airUnits.find((air) => air.instanceId === 'air-1')?.steps).toBe(1)
-    // 防空后自动跑完 F 的轰炸链，停在返航三选一
-    expect(store.airState?.step).toBe('returnToBase')
-    expect(store.airState?.missionNote).toBeTruthy()
+    // 2026-11-15：防空后停在面板 2；对地结算由玩家点「结算任务」触发
+    expect(store.airState?.step).toBe('resolveMission')
+    expect(store.barrageState).toBeNull()
   })
 
-  it('★ 14.2f-E 自动防空：未命中 ⇒ 不掉军力、仍自动进 F', () => {
+  it('★ 14.2f-E 自动防空：未命中 ⇒ 不掉军力，停在面板 2', () => {
     const store = newStore()
     setupBarrageAtFlak(store)
     store.airInputs.flakDie = 2
@@ -358,7 +358,7 @@ describe('C9 空军交互：任务分配与 14.2f 全流程', () => {
     expect(store.autoResolveAirMissionNow()).toBe(true)
     expect(store.airState?.flak).toMatchObject({ applies: true, hit: false, lossAircraftId: null })
     expect(store.airUnits.find((air) => air.instanceId === 'air-1')?.steps).toBe(2)
-    expect(store.airState?.step).toBe('returnToBase')
+    expect(store.airState?.step).toBe('resolveMission')
   })
 
   it('★ 14.2f-E：拦截已宣布但拦截空战未结算 ⇒ 防空不跑（14.5 先于 14.4）', () => {

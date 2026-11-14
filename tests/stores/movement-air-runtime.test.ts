@@ -189,6 +189,9 @@ describe('移动运行时与空军任务隔离', () => {
       mp: unit.mpSpent,
     }))
     expect(w.runAirMissionNow()).toBe(true)
+    // 2026-11-15：发起后停在面板 2（任务结算），不再一路跑到返航
+    expect(w.airState!.step).toBe('resolveMission')
+    expect(w.settleAirMissionNow()).toBe(true)
     expect(w.airState!.step).toBe('returnToBase')
     w.airInputs.returnHexText.plane = `${NEAR_HEX.col}.${NEAR_HEX.row}`
     expect(w.completeAirReturnNow()).toBe(true)

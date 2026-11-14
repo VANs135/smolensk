@@ -187,7 +187,15 @@ describe('统一流程：第 1 步 → 第 2 步（空军轰炸的自动结算�
     // 14.3：目标格无敌方空军基地、无敌机 ⇒ 不发生空战，也不会有拦截
     expect(workbench.airState?.combat?.occurs).toBe(false)
     expect(workbench.airState?.interception?.declared).not.toBe(true)
-    // 修前：只宣布（beginAirMissionNow）⇒ 停在 airCombat，界面只剩选机阵列，走不下去
+    /*
+     * 2026-11-15 玩家口径：发起后停在**面板 2（任务结算）**，由玩家点「结算任务」才进返航；
+     * 面板 2 之前不跑对地结算。
+     */
+    expect(workbench.airState?.step).toBe('resolveMission')
+    expect(workbench.barrageState).toBeNull()
+    expect(mapView.sessionStep?.id).toBe('air:resolve')
+
+    expect(workbench.settleAirMissionNow()).toBe(true)
     expect(workbench.airState?.step).toBe('returnToBase')
     // 10.2 / 14.7b：轰炸骰已结算并落账
     expect(workbench.barrageState?.outcome).toBeDefined()

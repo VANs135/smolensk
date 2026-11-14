@@ -164,6 +164,9 @@ describe('BUG 2：移动环节从空军基地这一侧就能发起低空扫射�
     // 面板的"任务类型"由右键菜单定死，发起走具名入口（组件里不写规则）
     workbench.setAirMissionKind('hip_shoot')
     expect(workbench.runAirMissionNow()).toBe(true)
+    // 2026-11-15：先在面板 2（任务结算）停一步，玩家点「结算任务」才跑轰炸链
+    expect(workbench.airState?.step).toBe('resolveMission')
+    expect(workbench.settleAirMissionNow()).toBe(true)
     expect(workbench.barrageState?.finished).toBe(true)
     expect(workbench.barrageAirIds.length).toBe(1)
     expect(workbench.airState?.finished).toBe(true)

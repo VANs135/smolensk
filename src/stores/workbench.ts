@@ -19544,25 +19544,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * B29a：**一次把本次空军任务结算到"返航"**（用户口径 2026-09-16 #3）
+   * 14.2f：**选任务类型即"宣布 + 自动结算到面板 2（任务结算）"**
    *
-   * 「空军任务应该点击机场选中飞机或者多选编队后点击目标格再选择可执行任务，**然后自动结算至
-   *   各种单位战果结算**，出现空战或者地面单位受损时会有**可能出现的玩家自选**」。
+   * 用户口径（2026-11-15 修订；原始 2026-09-16 #3 只要求"自动结算到战果"）：
+   *   选任务（右键）→ 选飞机发起（面板 1）→ 结算 14.5 拦截与 14.3 空战及损失
+   *   （按是否发生弹出，空战双方点名）→ 结算防空（自动）→ **结算任务（面板 2，玩家点）**
+   *   → 返航（面板 3）。
    *
-   * 依次调既有单一实现：空战逐轮（14.3）→ 拦截宣布与拦截空战（14.5）→ 防空（14.4）→
-   * 任务结算（14.2f-F），**停在返航（14.2f-G）**——那一步要逐机定目的地并改激活状态，值得看一眼。
-   * 需要玩家表态的地方（拦截方是否宣布、14.3e-B 点名谁迎战）一律由**面板输入**决定，本函数不替玩家选；
-   * 任何一步被拒即就地停下并保留原因。
-   */
-  /**
-   * 14.2f（批 C 切片 1）：**选任务类型即"宣布 + 自动结算到停返航"**
+   * 修前：发起后整链一次跑到返航，面板 2 从不渲染，空战/防空结果只落日志。
+   * 现在：空战真的发生 ⇒ 停在 ② 空战面板；有合格拦截机 ⇒ 停在 ③ 拦截应答；
+   *   防空自动掷；**停在面板 2**，由玩家点「结算任务」再进返航。
    *
-   * 用户口径（9.16 #3）：「空军任务应"点机场选机 → **点目标格** → **选任务类型** → **自动结算**"」
-   * ⇒ 选任务类型就是**最后一步玩家输入**：本函数把「宣布任务」（14.2f-A/B）与
-   * 「自动结算」（14.3 → 14.5 → 14.4 → 任务结算）合成**一次**动作，停在 `returnToBase`。
-   *
-   * ★ 不替玩家做表态：14.5 的拦截宣布、14.3e-B 的点名迎战机、14.9/14.10 的货物仍读面板输入
-   *   （`autoResolveAirMissionNow` 的既有口径），只把"骰子与查表"那几步连跑。
+   * ★ 不替玩家做表态：14.5 的拦截宣布、14.3e-B 的点名迎战机、14.9/14.10 的货物仍读面板输入。
    * ★ 条件不足时**如实说缺什么**（先点名参战机 / 先选任务格），不静默什么都不做。
    */
   function runAirMissionNow(): boolean {
@@ -19578,9 +19571,50 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (!beginAirMissionNow()) return false
     }
     if (airState.value === null) return false
+    /*
+     * ② 空战（14.2f-C / 14.3）：该格真的打起来 ⇒ 停在面板 ②，
+     * 双方点名（14.3e-B）后由玩家点「结算空战并继续」，不在这里替玩家掷骰。
+     */
+    if (airState.value.step === 'airCombat' && previewAirCombatRoles()) return true
     return autoResolveAirMissionNow()
   }
 
+  /**
+   * 14.2f-C：先把"会不会打、谁攻谁守"算出来并落进 `airState.combat`（**不掷骰、不挪步**）。
+   *
+   * `declareAirCombatStep` 本身是"声明并继续"——它顺手把 step 推到 interception；
+   * 而面板 ② 的入口判据是 `step === 'airCombat' && combat?.occurs` ⇒ 若照抄它，面板 ② 永不出现。
+   * 这里只取它的 combat 结论，步留在 airCombat，等玩家点「结算空战并继续」再由
+   * `confirmAirCombatNow()` 重新声明并掷骰。
+   */
+  function previewAirCombatRoles(): boolean {
+    const state = airState.value
+    const target = airTargetHex.value
+    if (state === null || target === null) return false
+    const enemyAircraft = airUnitsInHex(target, enemySide.value)
+    const data = acceptAir(
+      declareAirCombatStep(state, {
+        friendlyAircraft: airMissionFlyingUnits.value.map((plane) =>
+          toAirMissionAircraftView(plane),
+        ),
+        enemyActiveCount: enemyAircraft.length,
+        enemyCanInitiate: enemyAircraft.some((air) => air.canInitiateAirCombat),
+        enemyAirBaseInHex: airBases.value.some(
+          (base) => base.side === enemySide.value && sameHex(base.hex, target),
+        ),
+      }),
+      '空战环节',
+    )
+    if (data === null) return false
+    airState.value = { ...data.state, step: 'airCombat' }
+    return data.state.combat?.occurs === true
+  }
+
+  /**
+   * 把骰子与查表连跑到**下一个需要玩家表态的步**：
+   * ② 空战（面板）→ ③ 拦截应答（面板）→ 防空（自动）→ **⑤ 任务结算（面板 2，停）**。
+   * 返航自动补完只对 `hip_shoot`（14.1c 缺省即起飞基地）生效。
+   */
   function autoResolveAirMissionNow(): boolean {
     const state = airState.value
     if (state === null) return false
@@ -19599,62 +19633,55 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
     }
     if (airState.value?.step === 'flak' && !resolveFlakNow()) return false
+    /*
+     * ⑤ 任务结算（14.2f-F，面板 2）：**停在这里**，不替玩家点「结算任务」。
+     * 对地任务的轰炸链、受损分配、空运/空投货物都在 `settleAirMissionNow` 里跑
+     * （G① 的"任务结算真的进轰炸引擎"仍成立，只是触发者从自动连跑改成面板按钮）。
+     */
     if (airState.value?.step === 'resolveMission') {
       /*
-       * ★ G①（用户 2026-09-18 报的第 1 条）：**轰炸/低空扫射任务在 F 步必须真的进轰炸引擎**。
-       *   修前这里无条件调 `confirmAirMissionNow()`（只写一条备注就转返航）⇒ 空军轰炸从未结算，
-       *   日志每次都是「任务结算（14.2f-F）：（未填结果）」。
-       *   裁击/侦察/空运/空投等**没有轰炸结算**的任务仍走原来那条路（只记结果）。
+       * 14.2f-E 例外：任务机全被防空击落/中止 ⇒ 没有战果可结算，弹一块空面板没有意义，
+       * 直接按"任务中止"收束（与修前一致）。
        */
-      const kind = airState.value.kind
-      if (
-        airMissionFlyingUnits.value.length === 0 &&
-        kind !== 'air_transport' &&
-        kind !== 'air_drop'
-      ) {
-        airInputs.value.missionNote = '任务机已中止或被摧毁，没有执行对地任务'
-        if (!confirmAirMissionNow()) return false
-      } else if (kind === 'barrage' || kind === 'hip_shoot' || kind === 'trainbusting') {
-        if (!beginAirBarrageNow()) return false
-        if (!runBarrageChainNow()) return false
-        /*
-         * 14.2f-F 的"任务结果"由**轰炸结论**填 —— 修前它是面板上一个空备注框，
-         * 于是日志每次都是「（未填结果）」（用户报的"每次都显示未正常结算"）。
-         */
-        const barrage = barrageState.value
-        const summary =
-          barrage?.outcome === undefined
-            ? `${airMissionKindLabel(kind)}：轰炸已结算`
-            : `${airMissionKindLabel(kind)}：列 ${barrage.table.initialColumn} → ${barrage.finalColumn}；${barrage.outcome.value.detail}`
-        airInputs.value = { ...airInputs.value, missionNote: summary }
-        // 轰炸结算完 ⇒ 任务本身收尾（14.2f-F ⇒ 返航）；收束判定交给函数末尾那一句
-        if (!confirmAirMissionNow()) return false
-      } else if (
-        (kind === 'air_transport' || kind === 'air_drop') &&
-        airState.value.cargo === null
-      ) {
-        if (!resolveAirCargoNow() || !confirmAirMissionNow()) return false
-      } else if (!confirmAirMissionNow()) {
-        return false
+      if (airMissionFlyingUnits.value.length === 0 && barrageState.value === null) {
+        return finishAbortedAirMission()
       }
+      return true
     }
     /*
      * 14.2f-E/G：任务机全被防空击落/中止（返航名单为空）⇒ 没有三选一可做，
-     * 直接收束到 done，不停在空的返航步。
+     * 直接收束到 done，不停在空的返航步；hip_shoot 的缺省返航也在这里补完。
      */
-    if (airState.value?.step === 'returnToBase' && airMissionReturnChoices.value.length === 0) {
-      if (!completeAirReturnNow()) return false
+    if (!finishAutomaticAirReturn()) return false
+    return airState.value?.step === 'returnToBase' || airState.value?.step === 'done'
+  }
+
+  /**
+   * ★ 条 13（A2）：低空扫射（hip_shoot）**全自动到返航并变非激活**。
+   *   干净扫射（无拦截/无防空损失、战果落定）的返航目的地缺省即起飞基地（14.1c 合法）⇒
+   *   自动补完返航步（`completeAirReturnNow` ⇒ 逐机转非激活），不必玩家再点一次「返航」。
+   *   若返航确需玩家决策（起飞基地已不可用等）⇒ `completeAirReturnNow` 返 false，停在 returnToBase。
+   *   barrage（14.7b 空军轰炸）**不在此列**——仍停 returnToBase 供核对（沿用既有 G① 口径）。
+   *
+   * 2026-11-15：面板 2 的「结算任务」不再经 `autoResolveAirMissionNow` ⇒ 这两条
+   *   在 `settleAirMissionNow` 收尾时也要跑一次，否则会多出一个空的返航步。
+   */
+  function finishAutomaticAirReturn(): boolean {
+    if (airState.value?.step !== 'returnToBase') return true
+    // 14.2f-E/G：没有返航机 ⇒ 不停在空的返航步
+    if (airMissionReturnChoices.value.length === 0) return completeAirReturnNow()
+    if (airState.value?.kind !== 'hip_shoot') return true
+    return completeAirReturnNow()
+  }
+
+  /** 14.2f-E：任务机全失 ⇒ 记"任务中止"，不弹空的任务结算面板，直接收束到 done */
+  function finishAbortedAirMission(): boolean {
+    airInputs.value = {
+      ...airInputs.value,
+      missionNote: '任务机已中止或被摧毁，没有执行对地任务',
     }
-    /*
-     * ★ 条 13（A2）：低空扫射（hip_shoot）**全自动到返航并变非激活**。
-     *   干净扫射（无拦截/无防空损失、战果落定）的返航目的地缺省即起飞基地（14.1c 合法）⇒
-     *   自动补完返航步（`completeAirReturnNow` ⇒ 逐机转非激活），不必玩家再点一次「返航」。
-     *   若返航确需玩家决策（起飞基地已不可用等）⇒ `completeAirReturnNow` 返 false，停在 returnToBase。
-     *   barrage（14.7b 空军轰炸）**不在此列**——仍停 returnToBase 供核对（沿用既有 G① 口径）。
-     */
-    if (airState.value?.kind === 'hip_shoot' && airState.value?.step === 'returnToBase') {
-      if (!completeAirReturnNow()) return false
-    }
+    if (!confirmAirMissionNow()) return false
+    if (!finishAutomaticAirReturn()) return false
     return airState.value?.step === 'returnToBase' || airState.value?.step === 'done'
   }
 
@@ -19801,7 +19828,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const ground =
       state.kind === 'barrage' || state.kind === 'hip_shoot' || state.kind === 'trainbusting'
-    if (ground && airMissionFlyingUnits.value.length > 0) {
+    if (ground && airMissionFlyingUnits.value.length === 0) {
+      // 14.2f-E：任务机全被防空击落/中止 ⇒ 没有对地战果，如实记到任务结果里
+      airInputs.value = {
+        ...airInputs.value,
+        missionNote: '任务机已中止或被摧毁，没有执行对地任务',
+      }
+    } else if (ground) {
       const barrage = barrageState.value
       const owns =
         barrage !== null &&
@@ -19827,8 +19860,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         // 刚停在受损分配 ⇒ 停在面板 2（选完损失再点「结算任务」）
         if (barrageState.value?.finished !== true) return false
       }
+      /*
+       * 14.2f-F 的"任务结果"由**轰炸结论**填（G①：不能是空备注框，
+       * 否则日志每次都是「（未填结果）」）。
+       */
+      const done = barrageState.value
+      const summary =
+        done?.outcome === undefined
+          ? `${airMissionKindLabel(state.kind)}：轰炸已结算`
+          : `${airMissionKindLabel(state.kind)}：列 ${done.table.initialColumn} → ${done.finalColumn}；${done.outcome.value.detail}`
+      airInputs.value = { ...airInputs.value, missionNote: summary }
     }
-    return confirmAirMissionNow()
+    if (!confirmAirMissionNow()) return false
+    // 14.2f-G：低空扫射的返航缺省即起飞基地（14.1c）⇒ 自动补完，不多出一个空返航步
+    return finishAutomaticAirReturn()
   }
 
   /** 10.0e / 14.7d：中止的轰炸也算尝试；低空扫射不占目标格额度。 */

@@ -149,7 +149,7 @@ describe('B29a：任务格与迎战机（玩家自选）', () => {
   })
 })
 
-describe('B29a：自动连跑到返航（不替玩家做选择）', () => {
+describe('B29a：自动连跑到面板 2（不替玩家做选择）', () => {
   let store: ReturnType<typeof newStore>
 
   beforeEach(() => {
@@ -161,14 +161,14 @@ describe('B29a：自动连跑到返航（不替玩家做选择）', () => {
     expect(store.autoResolveAirMissionNow()).toBe(false)
   })
 
-  it('★ 宣布之后（任务格无敌情）⇒ 一次点完即到**返航**（14.3/14.5/14.4/任务结算 连跑）', () => {
+  it('★ 宣布之后（任务格无敌情）⇒ 防空自动掷，停在**任务结算（面板 2）**', () => {
     // 10.0 第二段：普通空军轰炸只在本段的**轰炸环节**
     store.setSegmentStepIndex(
       store.playerSegmentSteps.findIndex((step) => step.id === 'movement.barrage'),
     )
     /*
-     * 夹具：本方基地 + 一架激活战机；任务格选**无人格** ⇒ 空战不发生、无人拦截、防空无目标，
-     * 于是"自动连跑"要依次穿过四个环节直达返航 —— 这正是用户要的"点完自动结算到战果"。
+     * 夹具：本方基地 + 一架激活战机；任务格选**无人格** ⇒ 空战不发生、无人拦截、防空无目标。
+     * 2026-11-15 玩家口径：发起后**停在面板 2**（任务结算），对地结算等玩家点「结算任务」。
      */
     const base = toConsoleUnit({
       record: airBaseRecord(),
@@ -196,21 +196,23 @@ describe('B29a：自动连跑到返航（不替玩家做选择）', () => {
     const drawsBefore = store.drawCount
     expect(store.autoResolveAirMissionNow()).toBe(true)
 
-    // 停在返航（要逐机定目的地 / 改状态，值得看一眼）
-    expect(store.airState?.step).toBe('returnToBase')
+    // 停在任务结算（面板 2）
+    expect(store.airState?.step).toBe('resolveMission')
     // 防空那一步真的掷了骰（14.4：2 骰 + 损失骰）
     expect(store.drawCount).toBeGreaterThan(drawsBefore)
+    // 面板 2 之前不跑对地结算（轰炸链留到「结算任务」里）
+    expect(store.barrageState).toBeNull()
   })
 })
 
 /**
- * 批 C 切片 1（用户口径 9.16 #3 / #11）：**选任务类型即"宣布 + 自动结算到停返航"**
+ * 批 C 切片 1（用户口径 9.16 #3 / #11）：**选任务类型即"宣布 + 自动结算"**
  *
  * 原文流程（14.2f）：A/B 任务分配 → C 空战 → D 拦截 → E 防空 → F 结算 → G 返航。
- * 用户的玩法：「点机场选机 → **点目标格** → **选任务类型** → **自动结算**」⇒ 选类型就是最后一步输入，
- * 之后**不该再要点两次"宣布/自动结算"**。玩家步骤仍不合并（这里是空军侧；9.2 的 AR→地形那两步照旧）。
+ * 2026-11-15 玩家口径修正："自动结算"到**面板 2（任务结算）**为止，不替玩家点「结算任务」；
+ * 空战/拦截该弹就弹，防空仍自动。
  */
-describe('批 C 切片 1：选任务类型即跑到停返航（一次动作）', () => {
+describe('批 C 切片 1：选任务类型即跑到面板 2（一次动作）', () => {
   let store: ReturnType<typeof newStore>
 
   beforeEach(() => {
@@ -246,19 +248,63 @@ describe('批 C 切片 1：选任务类型即跑到停返航（一次动作）',
     expect(store.setAirTargetFromText(label(TARGET_HEX))).toBe(true)
   }
 
-  it('★ 一次性：`runAirMissionNow` ⇒ 宣布与结算连跑，停在**返航**（不必再点两次确认）', () => {
+  it('★ 一次性：`runAirMissionNow` ⇒ 宣布 + 防空，停在**面板 2**；点「结算任务」才进返航', () => {
     armMission()
     const drawsBefore = store.drawCount
     expect(store.airState).toBeNull()
 
     store.setAirMissionKind('barrage')
     expect(store.runAirMissionNow()).toBe(true)
-    expect(store.airState?.step).toBe('returnToBase')
+    expect(store.airState?.step).toBe('resolveMission')
     expect(store.airState?.kind).toBe('barrage')
+    // 面板 2 之前不跑对地结算
+    expect(store.barrageState).toBeNull()
     // 14.4 防空那一步真的掷了骰（走种子化 RNG 并留痕）
     expect(store.drawCount).toBeGreaterThan(drawsBefore)
+
+    // 面板 2 的唯一决定：结算任务
+    expect(store.settleAirMissionNow()).toBe(true)
+    expect(store.airState?.step).toBe('returnToBase')
+    // 10.2 / 14.7b：轰炸骰已结算并落账
+    expect(store.barrageState?.outcome).toBeDefined()
+    expect(store.airState?.missionNote).toBeTruthy()
     // 留痕：宣布与任务结算各有一条日志（复核用）
     expect(store.log.some((entry) => entry.text.includes('宣布任务'))).toBe(true)
+  })
+
+  it('★ 空战真的发生 ⇒ 发起后停在 ② 空战面板（不掷骰），点「结算空战并继续」才过', () => {
+    armMission()
+    const enemyBase = unitChoices('soviet').find((record) => record.noncombatKind === 'air_base')!
+    store.units.push(
+      toConsoleUnit({
+        record: enemyBase,
+        instanceId: 'base-enemy',
+        hex: TARGET_HEX,
+        side: 'soviet',
+      }),
+    )
+    store.airUnits.push(
+      toConsoleAirUnit({
+        aircraft: fighterRecord('soviet'),
+        instanceId: 'air-enemy',
+        hex: TARGET_HEX,
+        side: 'soviet',
+        airStatus: 'active',
+      }),
+    )
+    store.setAirMissionKind('barrage')
+    const drawsBefore = store.drawCount
+
+    expect(store.runAirMissionNow()).toBe(true)
+    // 14.3：有敌基地且有激活机 ⇒ 停在 ② 空战，等双方点名
+    expect(store.airState?.step).toBe('airCombat')
+    expect(store.airState?.combat?.occurs).toBe(true)
+    expect(store.drawCount).toBe(drawsBefore)
+
+    // 面板 ② 的「结算空战并继续」⇒ 空战掷骰后一路到面板 2
+    expect(store.autoResolveAirMissionNow()).toBe(true)
+    expect(store.airState?.step).toBe('resolveMission')
+    expect(store.drawCount).toBeGreaterThan(drawsBefore)
   })
 
   it('★ 条件不足时**如实说缺什么**（不静默、不半途进入状态机）', () => {

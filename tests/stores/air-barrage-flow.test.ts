@@ -132,7 +132,7 @@ beforeEach(() => {
 })
 
 describe('G①：空军轰炸（14.7b / 10.2）真的落 CRT', () => {
-  it('★ C 段宣布空军轰炸 ⇒ 自动跑完轰炸链（不是只写一条备注就返航）', () => {
+  it('★ C 段宣布空军轰炸 ⇒ 停在面板 2；点「结算任务」才跑轰炸链', () => {
     const store = newStore()
     store.setPhase('movement')
     // 进入 C 段的轰炸环节（2.2 SOP：air & ship only）
@@ -142,7 +142,12 @@ describe('G①：空军轰炸（14.7b / 10.2）真的落 CRT', () => {
 
     store.setAirMissionKind('barrage')
     expect(store.runAirMissionNow()).toBe(true)
-    // ① 轰炸引擎真的跑过：状态机走完 + 结果落在会话日志里
+    // 2026-11-15：发起后停在面板 2（任务结算），面板 2 之前不跑对地
+    expect(store.airState?.step).toBe('resolveMission')
+    expect(store.barrageState).toBeNull()
+
+    // 面板 2 的「结算任务」⇒ 轰炸引擎真的跑过：状态机走完 + 结果落在会话日志里
+    expect(store.settleAirMissionNow()).toBe(true)
     expect(store.barrageState?.finished).toBe(true)
     expect(store.log.some((entry) => (entry.text ?? '').includes('轰炸结果（10.0a）'))).toBe(true)
     // ② 任务本身也收尾（14.2f-F），日志里不再出现"（未填结果）"
@@ -163,6 +168,9 @@ describe('G①：空军轰炸（14.7b / 10.2）真的落 CRT', () => {
 
     store.setAirMissionKind('hip_shoot')
     expect(store.runAirMissionNow()).toBe(true)
+    // 2026-11-15：先在面板 2 停一步，再由玩家点「结算任务」
+    expect(store.airState?.step).toBe('resolveMission')
+    expect(store.settleAirMissionNow()).toBe(true)
     expect(store.barrageState?.finished).toBe(true)
     // 14.7d-B：「A Hip Shoot must be made by a **single aircraft**」⇒ 参炸机恰一枚
     expect(store.barrageAirIds.length).toBe(1)
