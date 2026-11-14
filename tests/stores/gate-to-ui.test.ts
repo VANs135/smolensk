@@ -124,6 +124,12 @@ describe('B9：不参与环节的算子点不动（就地展开层面）', () =>
     expect(workbench.log[0]?.kind).toBe('warning')
     expect(workbench.log[0]?.text).toContain('不参与本环节')
     expect(workbench.log[0]?.rule).toBeTruthy()
+    /*
+     * 2026-11-14（E 段实点）：拒绝文案必须**点名单位**，不能拿角标印值 `A-AR-MA`
+     * 当单位标识（现场日志是「0-0-0 不参与本环节…」，玩家看不出是哪一枚）。
+     */
+    const infName = workbench.units.find((unit) => unit.instanceId === 'inf')!.name
+    expect(workbench.log[0]?.text.startsWith(`${infName} 不参与本环节`)).toBe(true)
   })
 
   it('★ B26：不参与的那枚**不能新加入，但已选中的可以剔除**（#22 的出口）', () => {

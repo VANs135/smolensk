@@ -375,6 +375,7 @@ export const useMapViewStore = defineStore('mapView', () => {
             // 13.2f/h：编内卡车的面＝**装载**（满载 1F / 空载 1），与朝向无关（13.0：运输单位只有移动模式）
             loadedSpT: unit.loadedSpT,
             label: `${unit.raw.attack}-${unit.raw.ar}-${unit.raw.ma}`,
+            name: unit.name,
             tip,
             // 选中环：移动交互中的那些 + **就地展开里被选中的那些**（用户 2026-09-16 #1：点某一枚即切换）
             selected:
@@ -1645,7 +1646,8 @@ export const useMapViewStore = defineStore('mapView', () => {
       if (hexFacilityActionNow(hex)) return false
       workbench.pushLog(
         'warning',
-        `${token.label} 不参与本环节（${workbench.segmentStep?.label ?? '—'}）：${participationReasonOf(token.id)}`,
+        // 文案点名单位（`name`）；非单位令牌（SP / 机场等级等）没有 name，回退到角标文本
+        `${token.name ?? token.label} 不参与本环节（${workbench.segmentStep?.label ?? '—'}）：${participationReasonOf(token.id)}`,
         workbench.segmentStep?.rule ?? '2.2',
       )
       return true
@@ -3613,7 +3615,8 @@ export const useMapViewStore = defineStore('mapView', () => {
         const step = workbench.segmentStep
         return {
           id: token.id,
-          label: token.label,
+          // 同一出口同口径：清单里也点名单位，不拿印值 `A-AR-MA` 当标识
+          label: token.name ?? token.label,
           rule: verdict !== null && !verdict.ok ? verdict.rule : (step?.rule ?? '2.2'),
           reason:
             verdict !== null && !verdict.ok ? verdict.reason : '本环节不参与（不在可行动集合里）',
