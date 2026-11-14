@@ -400,6 +400,27 @@ describe('G 进击段的窗口纪律（2.2 G：移动 → 射击 → 战斗三�
   })
 })
 
+describe('C 移动段的轰炸环节提示（10.0 · air only）', () => {
+  it('★ movement.barrage 不得落回「可移动范围」，要指向空中轰炸', () => {
+    const { workbench, mapView } = newStores()
+    workbench.setPhase('movement')
+    workbench.setSegmentStepIndex(
+      workbench.playerSegmentSteps.findIndex((step) => step.id === 'movement.barrage'),
+    )
+    expect(mapView.actionHint).not.toContain('可移动范围')
+    expect(mapView.actionHint).toContain('轰炸')
+  })
+})
+
+describe('D 补给段的顶栏提示（12.1 / 12.6 / 12.10e）', () => {
+  it('★ supply 段不得落回「可移动范围」，要指向补给面板', () => {
+    const { workbench, mapView } = newStores()
+    workbench.setPhase('supply')
+    expect(mapView.actionHint).not.toContain('可移动范围')
+    expect(mapView.actionHint).toContain('补给')
+  })
+})
+
 describe('H 清理段的顶栏提示（2.2）', () => {
   it('★ cleanUp 不得落回「点己方算子＝可移动范围」，要说明本段自动结算', () => {
     const { workbench, mapView } = newStores()

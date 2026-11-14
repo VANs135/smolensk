@@ -804,6 +804,12 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (workbench.moveInteraction !== null)
       return '移动中：点可到达格逐格走（6.1）；点紫环敌方格＝突袭（8.1a）；Enter 结束移动'
     /*
+     * C 段的轰炸环节：2.2 原文括注 **air & ship only** ⇒ 本环**不能移动**，
+     * 通用那句「点己方算子＝可移动范围」在这里是错的（与 H 清理、A 整备同一类缺陷）。
+     */
+    if (workbench.segmentStep?.id === 'movement.barrage')
+      return '移动段轰炸（仅空中）：点敌方格定目标；右键敌方格选「轰炸」，会话框里宣布（10.0）'
+    /*
      * 7.0a / 5.7b：反应段的行动方是**非阶段玩家**，其预备单位未释放前不能移动。
      * 这一行是该段唯一的前置提示（释放入口在右键「模式改变」组），不放窗口里。
      */
@@ -835,6 +841,13 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (workbench.combatPickActive)
       return '点己方算子加入攻方（9.1b），点敌方格选定防御格，会话框里走 9.2 九步'
     if (workbench.tool === 'place') return '摆算子工具：先从单位列表选算子，再点地图放置（IV）'
+    /*
+     * D 补给：2.2 本段只有「恢复部队储备 + 补给检定」，**没有移动与射击** ⇒
+     * 通用那句「点己方算子＝可移动范围」在这里同样是错的（与 H 清理、A 整备、C 轰炸同一类）。
+     * 12.3 选源等"点格"动作有自己的 `hexPickHint`，在上面先命中。
+     */
+    if (workbench.phase === 'supply')
+      return '补给（D）：本段没有移动 —— 用面板生成补给计划（12.1）、恢复部队储备（12.10e）、做补给检定（12.6）'
     return '点己方算子＝选中并显示可移动范围（6.1）；点堆叠＝展开该格小窗'
   })
 
