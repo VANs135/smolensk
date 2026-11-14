@@ -781,6 +781,12 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     if (workbench.segmentLocked)
       return '回合准备：天气 / 先手判定自动进行（1.5 / 2.3），本环节没有行动段（2.2）'
+    /*
+     * H 清理：本段**没有移动与射击**（2.2：摘 DG、收回进击标记、清燃料、移除运输破坏标记
+     * 都是自动结算），通用那句「点亮可移动范围」在这里是错的（用户 2026-11-14 报缺陷）。
+     */
+    if (workbench.phase === 'cleanUp')
+      return '清理（H）：本段自动结算（摘 DG / 收进击标记 / 清燃料 / 移除运输破坏标记），没有移动与射击；点「进入下一环节」收尾（2.2）'
     // B27：正在选格（通用待点格）最优先——玩家已经明确表达"我在选一个格"
     if (workbench.hexPickHint !== '') return workbench.hexPickHint
     // 9.14：待决的位移落点次优先（它必须收束，其余动作都被它挡住）
