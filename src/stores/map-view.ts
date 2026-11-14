@@ -855,6 +855,19 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     if (workbench.phase === 'supply')
       return '补给（D）：本段没有移动 —— 用面板生成补给计划（12.1）、恢复部队储备（12.10e）、做补给检定（12.6）'
+    /*
+     * B 增援（13.6 / 1.6b / 13.5）：本段没有移动与射击，动作全在右侧「增援」窗或盘面右键；
+     * 通用那句「点己方算子＝可移动范围」在这里同样是错的（与 A 整备、C 轰炸、D 补给、H 清理同类）。
+     */
+    if (workbench.phase === 'reinforcement') {
+      const step = workbench.segmentStep?.id
+      if (step === 'reinforcement.arrival')
+        return '增援到达（13.6）：右侧「增援」窗点到达条目 → 点地图高亮格落位；手牌放完点「结束本段」'
+      if (step === 'reinforcement.replRoll')
+        return '增援掷骰与统一放置（1.6b / 1.6c / 2.3c）：点「掷骰检定」→ 在待放上手牌点条目 → 点高亮格落位；放完点「结束本段」'
+      if (step === 'reinforcement.rebuild')
+        return '重建与整编（13.5 / 13.9）：在盘面右键死亡堆 / 打残单位做重建、右键多选做合并；本段没有待放项，点「结束本段」继续'
+    }
     return '点己方算子＝选中并显示可移动范围（6.1）；点堆叠＝展开该格小窗'
   })
 

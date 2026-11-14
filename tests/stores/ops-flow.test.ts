@@ -429,3 +429,38 @@ describe('H 清理段的顶栏提示（2.2）', () => {
     expect(mapView.actionHint).toContain('清理')
   })
 })
+
+describe('B 增援段的顶栏提示（13.6 / 1.6b / 13.5）', () => {
+  const gotoReinforcementStep = (
+    workbench: ReturnType<typeof newStores>['workbench'],
+    id: string,
+  ): void => {
+    workbench.setPhase('reinforcement')
+    const index = workbench.playerSegmentSteps.findIndex((step) => step.id === id)
+    expect(index, `增援段应有 ${id}`).toBeGreaterThanOrEqual(0)
+    expect(workbench.setSegmentStepIndex(index)).toBe(true)
+  }
+
+  it('★ 到货落位不得落回「可移动范围」，要指向增援窗的到达条目与地图落点', () => {
+    const { workbench, mapView } = newStores()
+    gotoReinforcementStep(workbench, 'reinforcement.arrival')
+    expect(mapView.actionHint).not.toContain('可移动范围')
+    expect(mapView.actionHint).toContain('增援')
+    expect(mapView.actionHint).toContain('落')
+  })
+
+  it('★ 掷骰与统一放置不得落回「可移动范围」，要指向「掷骰检定」与待放上手牌', () => {
+    const { workbench, mapView } = newStores()
+    gotoReinforcementStep(workbench, 'reinforcement.replRoll')
+    expect(mapView.actionHint).not.toContain('可移动范围')
+    expect(mapView.actionHint).toContain('掷骰检定')
+    expect(mapView.actionHint).toContain('手牌')
+  })
+
+  it('★ 重建与整编不得落回「可移动范围」，要说明盘面右键重建/合并', () => {
+    const { workbench, mapView } = newStores()
+    gotoReinforcementStep(workbench, 'reinforcement.rebuild')
+    expect(mapView.actionHint).not.toContain('可移动范围')
+    expect(mapView.actionHint).toContain('重建')
+  })
+})
