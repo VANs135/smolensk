@@ -6032,6 +6032,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     refitStartBases.value.map((base) => ({ col: base.hex.col, row: base.hex.row })),
   )
 
+  /**
+   * 条 4：某基地**此刻不能整备**的原因（null＝能整备）
+   *
+   * 与 `refitStartBases` 同一组判据、同一顺序：能整备的基地在那里出入口，
+   * 不行的这里给一句"为什么"（15.1A / 15.1C / 15.1B·12.3a / 14.2a）——
+   * 入口按老口径不出现，但玩家不能看不出原因。
+   */
+  function refitBlockReasonAt(baseId: string): string | null {
+    if (phase.value !== 'aircraftRefit') return null
+    const base = ownAirBases.value.find((item) => item.id === baseId)
+    if (base === undefined) return null
+    if (refitDoneBaseIds.value.includes(base.id)) return '15.1A：本阶段该基地已整备过'
+    if (base.inUnnegatedEnemyZoc === true) return '15.1C：未抵消的敌方 ZOC 内不可整备'
+    if (airInactiveAtBase.value(base.id).length === 0) return '15.1：该基地没有非激活飞机可整备'
+    if (refitSelectLimitAt(base.id) === 0)
+      return '14.2a：激活堆叠已满（上限 4 + 等级），没有整备名额'
+    if (airRefitPayDumps.value(base.id).length === 0)
+      return '15.1B / 12.3a：该基地够不到可付款的补给站（1T）'
+    return null
+  }
+
   /** C9：本阶段已缩减过的基地（15.4；视图用） */
   const reducedBases = computed(() =>
     ownAirBases.value.filter((base) => reducedBaseIds.value.includes(base.id)),
@@ -29164,6 +29185,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     refitCandidates,
     refitStartBases,
     refitAirbaseHexes,
+    refitBlockReasonAt,
     refitSelectedIds,
     refitSelectLimit,
     refitPayDumps,

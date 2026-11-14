@@ -452,11 +452,7 @@ function sideName(side: string): string {
       <!-- 本方飞机（14.1a：停在其空军基地格） -->
       <!-- 15.1 整备：点机场的「整备」按钮 → 勾选飞机 → 点地图上高亮的补给付款 -->
       <section
-        v-if="
-          baseAtHex !== null &&
-          (refitHere || refitDoneHere || refitAllowedHere) &&
-          workbench.actionAllowedNow('air.refit')
-        "
+        v-if="baseAtHex !== null && workbench.actionAllowedNow('air.refit')"
         class="block block--pick"
       >
         <h4 class="block__title">整备（15.1）· {{ hexLabel(baseAtHex.hex) }}</h4>
@@ -464,6 +460,11 @@ function sideName(side: string): string {
         <template v-if="refitDoneHere">
           <p class="ok">本阶段已整备（15.1A：每基地每整备阶段一次）。</p>
         </template>
+
+        <!-- 用户 2026-11-14：入口按老口径不出现，但"为什么"必须写出来 -->
+        <p v-else-if="!refitAllowedHere" class="muted">
+          {{ workbench.refitBlockReasonAt(baseAtHex.id) ?? '此刻不能整备（15.1）' }}
+        </p>
 
         <template v-else-if="!refitHere">
           <BaseButton

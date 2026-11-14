@@ -835,8 +835,15 @@ export const useMapViewStore = defineStore('mapView', () => {
      * A 飞机整备：本段**没有移动/射击**，通用那句「点亮可移动范围」在这里是错的；
      * 唯一入口是"点本方空军基地格 → 小窗整备（15.1）→ 勾机 → 点高亮补给站付 1T"。
      */
-    if (workbench.segmentStep?.id === 'aircraftRefit.refit')
+    if (workbench.segmentStep?.id === 'aircraftRefit.refit') {
+      /*
+       * 一个可整备的基地都没有时，别教玩家去点根本不存在的「整备」——
+       * 直接改口让他点基地格看原因（15.1A / 15.1C / 15.1B·12.3a / 14.2a）。
+       */
+      if (workbench.refitStartBases.length === 0)
+        return '飞机整备（15.1）：本阶段没有可整备的基地 —— 点本方空军基地格看原因（14.2a 激活堆叠 / 15.1C ZOC / 15.1B 补给来源）'
       return '飞机整备：点本方空军基地格 → 小窗「整备（15.1）」→ 勾机 → 点高亮补给站付 1T'
+    }
     // B35：不再看"工具"，看**本环节允不允许宣布战斗**（判据与闸门同源）
     if (workbench.combatPickActive)
       return '点己方算子加入攻方（9.1b），点敌方格选定防御格，会话框里走 9.2 九步'

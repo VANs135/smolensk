@@ -125,11 +125,59 @@ describe('Ⓐ 入口回归：可整备的基地仍给入口', () => {
     expect(s.workbench.refitSelectedIds).toEqual(['air-0'])
   })
 
-  it('地图小窗的「整备」按钮只在可整备基地上出现（源码守卫）', () => {
+  it('地图小窗：不可整备时只出原因、不出按钮（源码守卫）', () => {
     const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
     expect(popover).toContain('refitAllowedHere')
-    // 段标题仍按 A 段闸门展示；按钮本身必须再收一层"这一格真能整备"
-    expect(popover).toMatch(/refitHere\s*\|\|\s*refitDoneHere\s*\|\|\s*refitAllowedHere/)
+    // 用户 2026-11-14：入口照旧不出现，但必须先摆一句 `refitBlockReasonAt` 的原因
+    const reasonAt = popover.indexOf('!refitAllowedHere')
+    const buttonAt = popover.indexOf('beginRefitNow(baseAtHex.id)')
+    expect(popover).toContain('refitBlockReasonAt(baseAtHex.id)')
+    expect(reasonAt).toBeGreaterThan(-1)
+    expect(buttonAt).toBeGreaterThan(reasonAt)
+  })
+})
+
+/**
+ * 没有补给来源的整备段（基地 + 1 架非激活机，不给 SP）
+ *
+ * 15.1B / 12.3a：够不到可付款的补给站 ⇒ `refitStartBases` 为空，
+ * 用来核对"不摆入口但要说清为什么"以及"点飞机令牌"两条。
+ */
+function refitStageWithoutSupply() {
+  setActivePinia(createPinia())
+  useSetupStore().finished = true
+  const workbench = useWorkbenchStore()
+  workbench.setActiveSide('axis')
+  useHotseatStore().setViewerSide('axis')
+  workbench.setAirActive(true)
+  const base = placeGround(workbench, airBaseRecord(1), CORE_HEX, 'axis', 'base-1')
+  placeAir(workbench, fighterRecord('axis'), CORE_HEX, 'axis', 'air-0', 'inactive')
+  workbench.setSupplyActive(true)
+  workbench.setPhase('aircraftRefit')
+  return { workbench, mapView: useMapViewStore(), base }
+}
+
+describe('Ⓐ 15.1：整备不可行时给出原因（入口不出现，但要看得出为什么）', () => {
+  it('★ 激活堆叠已满 ⇒ 原因指向 14.2a，顶栏不再教「点整备 → 勾机」', () => {
+    const s = refitStage()
+    for (let index = 0; index < 5; index += 1)
+      placeAir(s.workbench, fighterRecord('axis'), CORE_HEX, 'axis', `filler-${index}`, 'active')
+
+    expect(s.workbench.refitStartBases).toHaveLength(0)
+    expect(s.workbench.refitBlockReasonAt('base-1')).toContain('14.2a')
+    expect(s.mapView.actionHint).toContain('没有可整备的基地')
+    expect(s.mapView.actionHint).not.toContain('勾机')
+  })
+
+  it('★ 没有付款来源 ⇒ 原因指向 15.1B / 12.3a', () => {
+    const s = refitStageWithoutSupply()
+    expect(s.workbench.refitStartBases).toHaveLength(0)
+    expect(s.workbench.refitBlockReasonAt('base-1')).toContain('12.3a')
+  })
+
+  it('可整备的基地 ⇒ 原因为 null（不误报）', () => {
+    const s = refitStage()
+    expect(s.workbench.refitBlockReasonAt('base-1')).toBeNull()
   })
 })
 
