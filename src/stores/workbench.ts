@@ -11741,6 +11741,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         `攻方动用部队储备被拒：${attackerPlan.reason}（${attackerPlan.rule}）`,
         attackerPlan.rule,
       )
+      combatError.value = { rule: attackerPlan.rule, reason: attackerPlan.reason }
       return false
     }
     const attackerEffectiveT =
@@ -11771,6 +11772,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         `守方动用部队储备被拒：${defenderPlan.reason}（${defenderPlan.rule}）`,
         defenderPlan.rule,
       )
+      combatError.value = { rule: defenderPlan.rule, reason: defenderPlan.reason }
       return false
     }
     const defenderEffectiveT =
@@ -11935,6 +11937,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         `战斗补给：${side === 'attacker' ? '攻方' : '守方'}合计需要 ${wantT} T，已选来源余额不足（12.4）`,
         '12.4',
       )
+      combatError.value = {
+        rule: '12.4',
+        reason: `战斗补给：${side === 'attacker' ? '攻方' : '守方'}合计需要 ${wantT} T，已选来源余额不足`,
+      }
       return false
     }
 
@@ -11946,6 +11952,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const dumpId = attackerAssignment.get(payee.unitId)
       if (dumpId === undefined) {
         pushLog('danger', `战斗补给：找不到付款单位 ${payee.unitId}（12.4）`, '12.4')
+        combatError.value = { rule: '12.4', reason: '战斗补给：找不到付款单位（12.4）' }
         return false
       }
       remainingT.set(dumpId, (remainingT.get(dumpId) ?? 0) - payee.needT)
@@ -11985,6 +11992,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const holdings = allSpDumps.value.find((item) => item.id === need.dumpId) ?? null
       if (holdings === null) {
         pushLog('danger', '战斗补给付款失败：声明的补给站已不存在（12.1b）', '12.4')
+        combatError.value = { rule: '12.1b', reason: '战斗补给付款失败：声明的补给站已不存在' }
         return false
       }
       /*
@@ -12003,11 +12011,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         beneficiaryUnitIds: beneficiaries,
       })
       if (restricted !== null) {
-        pushLog(
-          'danger',
-          `战斗补给付款被拒（3.4b）：${panzerGroupSpRefusal(restricted, '战斗', need.dumpId)}——本次不改动任何账本`,
-          '3.4b',
-        )
+        const refusal = panzerGroupSpRefusal(restricted, '战斗', need.dumpId)
+        pushLog('danger', `战斗补给付款被拒（3.4b）：${refusal}——本次不改动任何账本`, '3.4b')
+        combatError.value = { rule: '3.4b', reason: refusal }
         return false
       }
       const payment = planSpPayment({
@@ -12020,6 +12026,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           `战斗补给付不出 ${need.wantT} T：${payment.reason}（${payment.rule}）——本次不改动任何账本`,
           payment.rule,
         )
+        combatError.value = {
+          rule: payment.rule,
+          reason: `战斗补给：所选来源付不出 ${need.wantT} T`,
+        }
         return false
       }
       settled.push({ dumpId: need.dumpId, after: payment.data.holdingsAfter })

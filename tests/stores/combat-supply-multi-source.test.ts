@@ -6,13 +6,19 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { mapLayers } from '@/data'
 import type { HexRef } from '@/data'
 import { HEX_DIRECTIONS, isOnMap, neighbor } from '@/engine/hex-geometry'
-import { createMapFacts, holdingsToT, selectMovementTerrain } from '@/engine/rules'
+import {
+  createMapFacts,
+  holdingsToT,
+  PANZER_GROUP_OPTION_ITEM,
+  selectMovementTerrain,
+} from '@/engine/rules'
 import { hexCanvasPoint } from '@/render/map-layout'
 import {
   actionGateOf,
   defenseTerrainChoices,
   toConsoleUnit,
   unitChoices,
+  useGameSessionStore,
   useMapViewStore,
   useWorkbenchStore,
   type ActionKey,
@@ -487,5 +493,59 @@ describe('B6：再点同一座补给站＝取消该方来源（地图唯一入�
     expect(src).not.toContain('清除攻方')
     expect(src).not.toContain('清除守方')
     expect(src).not.toContain('clearCombatSupplyDump')
+  })
+})
+
+describe('3.4b：战斗补给被规则拒 ⇒ 面板必须出红字（不能只落战报）', () => {
+  it('★ 错误装甲集群的站付款被拒 ⇒ combatError / combatErrorLine 都在', () => {
+    const store = newStore()
+    const session = useGameSessionStore()
+    const optionIndex = session.agreedOptionItems.indexOf(PANZER_GROUP_OPTION_ITEM)
+    expect(optionIndex).toBeGreaterThanOrEqual(0)
+    session.setAgreedCheck(optionIndex, true)
+    // 1941-08-15：3.4 族仍在生效期内（PANZER_GROUP_CONSTRAINT_END = 08-19）
+    store.setTurn(12)
+    store.setActiveSide('axis')
+    expect(store.panzerGroupRulesOn).toBe(true)
+
+    store.setPhase('combat')
+    goToActionStep(store, 'combat.declare')
+    store.setTool('battle')
+    const attacker = place(
+      store,
+      pickRecord(
+        'axis',
+        (record) =>
+          record.isCombat === true &&
+          record.attackCapable === true &&
+          record.panzerGroup === 'guderian',
+      ),
+      ATTACKER_HEX,
+      'axis',
+      'pg-gud',
+    )
+    place(store, defenderRecord(), DEFENDER_HEX, 'soviet', 'd-pg')
+    store.clickHex(DEFENDER_HEX)
+    ensureAttacker(store, attacker.instanceId)
+    expect(store.beginCombatNow()).toBe(true)
+    expect(store.combatState?.step).toBe('combatSupply')
+
+    // 古德里安编队却由「霍特」的站付款（3.4b：错误集群的 SP 不能支付战斗成本）
+    store.spDumps.push({ id: 'sd-hoth', side: 'axis', hex: { ...ATTACKER_HEX }, sp: 8, t: 0 })
+    store.setDumpPanzerGroupNow('sd-hoth', 'hoth')
+    expect(
+      store.panzerGroupSpGate({
+        dumpId: 'sd-hoth',
+        purpose: 'combat',
+        beneficiaryUnitIds: [attacker.instanceId],
+      }),
+    ).toMatchObject({ rule: '3.4b' })
+    expect(store.pickCombatSupplyDump('attacker', 'sd-hoth')).toBe(true)
+
+    expect(store.confirmCombatSupply()).toBe(false)
+    // 修前：只在战报留一行（danger 日志），`combatError` 仍为 null ⇒ 面板没有红字
+    expect(store.combatError).toMatchObject({ rule: '3.4b' })
+    expect(store.combatErrorLine).toContain('集群')
+    expect(store.combatState?.step).toBe('combatSupply')
   })
 })
