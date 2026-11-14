@@ -285,6 +285,89 @@ describe('12.4：战斗补给逐单位取源（不要求同源）', () => {
   })
 })
 
+describe('9.5：多枚攻方挤在同一格（实战形态）', () => {
+  /**
+   * ★ 红用例（用户实测：多攻方那场「进入行动值」点不动——按钮看着启用、点击无反应、无报错、账不扣）。
+   *
+   * 载荷：4 枚同格攻方（军力 2 / 2 / 3 / 3 ⇒ 合计 10T），已选两座各 5T 的站（合计正好 10T）。
+   * 这笔钱**付得出**（A 站付 2+3、B 站付 2+3），但"先到先得"的逐单位分配会按名单顺序
+   * 把 2、2 都塞进 A 站（剩 1），再把 3 塞进 B 站（剩 2），最后一枚 3 无处可取 ⇒ 整笔被拒：
+   * 引擎的 12.4 只按**总额**判（10 ≥ 10）已放行，于是界面既不报红字、账也不动、步也不进。
+   */
+  it('★ 四枚同格攻方 + 两座各 5T 的站（总额正好够）⇒ 进入行动值必须推进到 declareAr', () => {
+    const store = newStore()
+    store.setPhase('combat')
+    goToActionStep(store, 'combat.declare')
+    store.setTool('battle')
+    const records = [
+      place(store, attackerRecord(), ATTACKER_HEX, 'axis', 's1'),
+      place(store, attackerRecord(), ATTACKER_HEX, 'axis', 's2'),
+      place(store, attackerRecord(), ATTACKER_HEX, 'axis', 's3'),
+      place(store, attackerRecord(), ATTACKER_HEX, 'axis', 's4'),
+    ]
+    // 军力 2 / 2 / 3 / 3（12.4：攻方需求 = 参战军力合计 T）
+    const stepsOf = [2, 2, 3, 3]
+    records.forEach((unit, index) => {
+      unit.steps = stepsOf[index]!
+    })
+    place(store, defenderRecord(), DEFENDER_HEX, 'soviet', 'd1')
+    store.clickHex(DEFENDER_HEX)
+    for (const unit of records) ensureAttacker(store, unit.instanceId)
+    expect(store.beginCombatNow()).toBe(true)
+    expect(store.combatState?.composition.attackerIds).toHaveLength(4)
+
+    // 两座各 5T（1 SP + 1 T）＝合计 10T，与上面 2+2+3+3 正好相等
+    store.spDumps.push({ id: 'sd-a', side: 'axis', hex: { ...ATTACKER_HEX }, ...exactT(5) })
+    store.spDumps.push({ id: 'sd-b', side: 'axis', hex: { ...SECOND_ATTACKER_HEX }, ...exactT(5) })
+    store.spDumps.push({ id: 'sd-so', side: 'soviet', hex: { ...DEFENDER_HEX }, sp: 8, t: 0 })
+    expect(store.pickCombatSupplyDump('attacker', 'sd-a')).toBe(true)
+    expect(store.pickCombatSupplyDump('attacker', 'sd-b')).toBe(true)
+    expect(store.pickCombatSupplyDump('defender', 'sd-so')).toBe(true)
+    expect(store.combatInputs.attackerAvailableT).toBe(10)
+    expect(store.confirmCombatSupplySide('attacker')).toBe(true)
+    expect(store.confirmCombatSupplySide('defender')).toBe(true)
+
+    expect(store.confirmCombatSupply()).toBe(true)
+    expect(store.combatState?.step).toBe('declareAr')
+    // 两座站都被真的扣到 0（各付 5T：一座付 2+3，另一座付 2+3）
+    expect(store.spDumps.find((item) => item.id === 'sd-a')).toMatchObject({ sp: 0, t: 0 })
+    expect(store.spDumps.find((item) => item.id === 'sd-b')).toMatchObject({ sp: 0, t: 0 })
+  })
+
+  it('★ 仍要全额：两座 4T 凑不出「5T + 3T」的两枚 ⇒ 拒绝，且红字与日志都在', () => {
+    const store = newStore()
+    store.setPhase('combat')
+    goToActionStep(store, 'combat.declare')
+    store.setTool('battle')
+    const units = [
+      place(store, attackerRecord(), ATTACKER_HEX, 'axis', 's1'),
+      place(store, attackerRecord(), ATTACKER_HEX, 'axis', 's2'),
+    ]
+    units[0]!.steps = 5
+    units[1]!.steps = 3
+    place(store, defenderRecord(), DEFENDER_HEX, 'soviet', 'd1')
+    store.clickHex(DEFENDER_HEX)
+    for (const unit of units) ensureAttacker(store, unit.instanceId)
+    expect(store.beginCombatNow()).toBe(true)
+
+    store.spDumps.push({ id: 'sd-a', side: 'axis', hex: { ...ATTACKER_HEX }, ...exactT(4) })
+    store.spDumps.push({ id: 'sd-b', side: 'axis', hex: { ...SECOND_ATTACKER_HEX }, ...exactT(4) })
+    store.spDumps.push({ id: 'sd-so', side: 'soviet', hex: { ...DEFENDER_HEX }, sp: 8, t: 0 })
+    expect(store.pickCombatSupplyDump('attacker', 'sd-a')).toBe(true)
+    expect(store.pickCombatSupplyDump('attacker', 'sd-b')).toBe(true)
+    expect(store.pickCombatSupplyDump('defender', 'sd-so')).toBe(true)
+    // 总额 8T ＝ 需求 8T，但每枚单位只能从**一座**站取（12.3a），5T 反而无处可取
+    expect(store.combatInputs.attackerAvailableT).toBe(8)
+
+    expect(store.confirmCombatSupply()).toBe(false)
+    expect(store.combatState?.step).toBe('combatSupply')
+    // 不再是"静默无用"：红字（12.4）与结算日志都给出
+    expect(store.combatError).not.toBeNull()
+    expect(store.combatErrorLine).toContain('战斗补给')
+    expect(store.log.some((entry) => entry.rule === '12.4')).toBe(true)
+  })
+})
+
 describe('9.5：补给段逐方确认（热座）', () => {
   it('★ 两侧各自确认；改任一方输入只撤该方，攻方改动连带撤销守方', () => {
     const store = newStore()

@@ -11758,6 +11758,98 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         ? combatInputs.value.defenderAvailableT
         : defenderPlan.data.funding.reduce((sum, item) => sum + item.t, 0)
 
+    /*
+     * 12.4：原文**没有**要求多方/多单位必须同源（10.1b-A 的同源只约束炮击）。
+     * 因此落账时按「每座已选站各自持有多少 T」+「单位各自拖得到哪座站」逐单位分配；
+     * 一个单位只从一座站付（12.3a/12.3b），不同单位可以用不同站。
+     */
+    const picksFor = (side: CombatRole): SpDump[] => {
+      const ids = combatSupplyDumpPicks.value[side]
+      const fallback = combatSupplyDumpIds.value[side]
+      const wanted = ids.length > 0 ? ids : fallback === null ? [] : [fallback]
+      return wanted
+        .map((id) => allSpDumps.value.find((item) => item.id === id))
+        .filter((item): item is SpDump => item !== undefined)
+    }
+
+    /**
+     * 12.4 / 12.3a：把每个参战单位逐一落到**一座**它拖得到、且余额够的已选站上
+     *
+     * 每个单位一次只能从一座站取满（12.3a），但**不同单位可以用不同的站** ⇒ 这是"单位 → 站"的
+     * 装箱问题，**不能用先到先得**：名单顺序 2/2/3/3、已选两座各 5T 时，先到先得会把两枚 2 都
+     * 塞进第一座（剩 1），最后一枚 3 无处可取 ⇒ 整笔被判付不清。而引擎的 12.4 只按**总额**判
+     * （10 ≥ 10）已经放行，于是界面既不报红字、账也不扣、步也不进（用户实测的多攻方形态）。
+     * 规模很小（一叠参战单位 × 数座已选站），用回溯求一个可行分配。
+     */
+    function assignDumpsToUnits(
+      side: CombatRole,
+      payees: readonly { unitId: string; needT: number }[],
+    ): Map<string, string> | null {
+      const assignment = new Map<string, string>()
+      if (payees.length === 0) return assignment
+      const dumps = picksFor(side)
+      const capacity = new Map<string, number>()
+      for (const dump of dumps) capacity.set(dump.id, holdingsToT({ sp: dump.sp, t: dump.t }))
+      const legal = new Map<string, string[]>()
+      for (const payee of payees) {
+        const unit = units.value.find((item) => item.instanceId === payee.unitId)
+        if (unit === undefined) return null
+        const drawable = new Set(deliverableDumpsFor(unit.side, [unit]).map((dump) => dump.id))
+        legal.set(
+          payee.unitId,
+          dumps.filter((dump) => drawable.has(dump.id)).map((dump) => dump.id),
+        )
+      }
+      const order = [...payees].sort((a, b) => b.needT - a.needT)
+      const walk = (index: number): boolean => {
+        if (index === order.length) return true
+        const payee = order[index]!
+        const candidates = (legal.get(payee.unitId) ?? [])
+          .filter((id) => (capacity.get(id) ?? 0) >= payee.needT)
+          // 先紧后松：余额刚好够的先试，把宽裕的站留给后面的大需求
+          .sort((a, b) => (capacity.get(a) ?? 0) - (capacity.get(b) ?? 0))
+        for (const dumpId of candidates) {
+          capacity.set(dumpId, (capacity.get(dumpId) ?? 0) - payee.needT)
+          assignment.set(payee.unitId, dumpId)
+          if (walk(index + 1)) return true
+          capacity.set(dumpId, (capacity.get(dumpId) ?? 0) + payee.needT)
+          assignment.delete(payee.unitId)
+        }
+        return false
+      }
+      return walk(0) ? assignment : null
+    }
+
+    /*
+     * 12.4：喂给引擎的"可用量"必须与**真正付得清的额度**一致，否则会出现
+     * 「引擎按总额放行 → 逐单位分配付不出 ⇒ 静默失败」。这里先求分配，再让引擎裁决；
+     * 分配不出来就把原因写成红字（12.4）与结算日志，不再"点了没反应"。
+     */
+    const attackerPayees = (
+      attackerPlan === null
+        ? (useReduction
+            ? combatAttackerViews.value.filter((unit) => reduced.includes(unit.id))
+            : combatAttackerViews.value
+          ).map((unit) => ({ unitId: unit.id, needT: unit.steps }))
+        : attackerPlan.data.funding
+            .filter((item) => item.source === 'map' && item.t > 0)
+            .map((item) => ({ unitId: item.unitId, needT: item.t }))
+    ).filter((payee) => payee.needT > 0)
+    const attackerAssignment = assignDumpsToUnits('attacker', attackerPayees)
+    if (attackerAssignment === null) {
+      const detail = attackerPayees
+        .map((payee) => `${nameOf(payee.unitId)} 需 ${payee.needT} T`)
+        .join('、')
+      pushLog(
+        'danger',
+        `战斗补给：已选来源付不清这些单位——${detail}；每个单位只能从一座它拖得到的站取满（12.4/12.3a）。` +
+          '再点一座站，或用 9.5b 减少参战单位',
+        '12.4',
+      )
+      combatError.value = { rule: '12.4', reason: 'attackSupplyNotFull' }
+      return false
+    }
+
     const data = acceptCombat(
       planCombatSupply(state, {
         attackers: combatAttackerViews.value,
@@ -11783,20 +11875,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * （同一座站可反复"支付"），池子不够时又夹到 0（**攻击照样通过＝免费攻击**）。
      * 现在：**先全部校验、再一次性落盘**（避免只扣一半的半截状态），不足即整笔拒绝。
      */
-    /*
-     * 12.4：原文**没有**要求多方/多单位必须同源（10.1b-A 的同源只约束炮击）。
-     * 因此这里按「每座已选站各自持有多少 T」+「单位各自拖得到哪座站」逐单位分配；
-     * 一个单位只从一座站付（12.3a/12.3b），不同单位可以用不同站。
-     */
-    const picksFor = (side: CombatRole): SpDump[] => {
-      const ids = combatSupplyDumpPicks.value[side]
-      const fallback = combatSupplyDumpIds.value[side]
-      const wanted = ids.length > 0 ? ids : fallback === null ? [] : [fallback]
-      return wanted
-        .map((id) => allSpDumps.value.find((item) => item.id === id))
-        .filter((item): item is SpDump => item !== undefined)
-    }
-
     type CombatNeed = { dumpId: string; side: CombatRole; wantT: number; unitIds: Set<string> }
     const needs = new Map<string, CombatNeed>()
     const addNeed = (
@@ -11822,30 +11900,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
     }
 
-    /** 单位逐个取源：只允许落在该单位 12.3a/12.3b 真正可达、且余额够的已选站 */
-    const allocateUnit = (side: CombatRole, unitId: string, wantT: number): boolean => {
-      if (wantT <= 0) return true
-      const unit = units.value.find((item) => item.instanceId === unitId)
-      if (unit === undefined) {
-        pushLog('danger', `战斗补给：找不到付款单位 ${unitId}（12.4）`, '12.4')
-        return false
-      }
-      const legal = new Set(deliverableDumpsFor(unit.side, [unit]).map((dump) => dump.id))
-      for (const dump of picksFor(side)) {
-        if (!legal.has(dump.id)) continue
-        if ((remainingT.get(dump.id) ?? 0) < wantT) continue
-        remainingT.set(dump.id, (remainingT.get(dump.id) ?? 0) - wantT)
-        addNeed(dump.id, side, wantT, [unitId])
-        return true
-      }
-      pushLog(
-        'danger',
-        `战斗补给：${unitId} 付不出 ${wantT} T——已选来源里没有它拖得到且余额足够的站（12.4/12.3a）`,
-        '12.4',
-      )
-      return false
-    }
-
     /** 一次性需求（守方整场 2T / 12.10h 浪费）不按单位拆，落在任一已选站的余额上 */
     const allocateLump = (side: CombatRole, wantT: number, unitIds: Iterable<string>): boolean => {
       if (wantT <= 0) return true
@@ -11864,18 +11918,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
 
-    if (attackerPlan === null) {
-      for (const unit of combatAttackerViews.value) {
-        if (useReduction && !reduced.includes(unit.id)) continue
-        if (!allocateUnit('attacker', unit.id, unit.steps)) return false
+    /*
+     * 攻方逐单位落账：用前段求得的**可行分配**（不是先到先得），
+     * 这样"2/2/3/3 + 两座各 5T"这类付得清的组合不会再被分配顺序卡死。
+     */
+    for (const payee of attackerPayees) {
+      const dumpId = attackerAssignment.get(payee.unitId)
+      if (dumpId === undefined) {
+        pushLog('danger', `战斗补给：找不到付款单位 ${payee.unitId}（12.4）`, '12.4')
+        return false
       }
-    } else {
-      let assignedT = 0
-      for (const item of attackerPlan.data.funding) {
-        if (item.source !== 'map' || item.t <= 0) continue
-        if (!allocateUnit('attacker', item.unitId, item.t)) return false
-        assignedT += item.t
-      }
+      remainingT.set(dumpId, (remainingT.get(dumpId) ?? 0) - payee.needT)
+      addNeed(dumpId, 'attacker', payee.needT, [payee.unitId])
+    }
+    if (attackerPlan !== null) {
+      const assignedT = attackerPayees.reduce((sum, payee) => sum + payee.needT, 0)
       // 12.10h：凑不满任何单位的图上 T 会被一并消耗（引擎计入 mapTUsed）
       if (
         !allocateLump(
