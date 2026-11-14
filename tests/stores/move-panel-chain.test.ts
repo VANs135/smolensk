@@ -196,6 +196,19 @@ describe('B15a：移动面板的接线（源码守卫）', () => {
     expect(panel).not.toContain("from '@/engine")
   })
 
+  it('★ D5：会话进行中「当前选中」跟本次移动主语，不取地图残留 selectedUnit', () => {
+    const start = panel.indexOf('const selected = computed')
+    const end = panel.indexOf('const selectedBudget')
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const block = panel.slice(start, end)
+    // 移动会话进行中 ⇒ 取 moveUnits（会话主语）；地图残留选中只在没有会话时兜底
+    expect(block).toContain('workbench.moveInteraction !== null')
+    expect(block).toContain('moveUnits[0]')
+    // 兜底句必须在会话分支之后（不是无条件取 selectedUnit）
+    expect(block.indexOf('moveUnits[0]')).toBeLessThan(block.lastIndexOf('workbench.selectedUnit'))
+  })
+
   it('★ `MapDock` 的 else 分支挂的是移动面板（会话种类与视图一一对应）', () => {
     const view = readFileSync('src/views/GameTableView.vue', 'utf8')
     expect(view).toContain("session.kind === 'combat'")

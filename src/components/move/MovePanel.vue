@@ -40,8 +40,15 @@ const previewCost = computed(() =>
 )
 /** P5：单步预览被判不可提交时的原因（引擎 `StepFailure`，组件原样展示） */
 const previewBlocked = computed(() => workbench.stepPreview?.blocked ?? null)
-/** 6.1a：MA 是**一阶段的总额度** ⇒ 账要按"已耗 / 可用"显示 */
-const selected = computed(() => workbench.selectedUnit)
+/**
+ * 当前选中：**移动会话进行中**跟会话主语（`moveUnits`）走，不取地图上残留的选中枚——
+ * 修前在 move 会话里点到别的算子，「当前选中」会被换成它，与本次移动无关（用户 2026-11-14）。
+ */
+const selected = computed(() => {
+  if (workbench.moveInteraction !== null && workbench.moveUnits.length > 0)
+    return workbench.moveUnits[0] ?? null
+  return workbench.selectedUnit
+})
 /**
  * P5：逐单位的**额度投影**（可用 / 已耗 / 剩余）——判据在 store（引擎 `availableMaOf`），
  * 本组件只查表，不自己算额度。
@@ -49,6 +56,8 @@ const selected = computed(() => workbench.selectedUnit)
 function budgetOf(instanceId: string) {
   return workbench.moveBudgetRows.find((row) => row.instanceId === instanceId) ?? null
 }
+
+/** 6.1a：MA 是**一阶段的总额度** ⇒ 账要按"已耗 / 可用"显示 */
 const selectedBudget = computed(() =>
   selected.value === null ? null : budgetOf(selected.value.instanceId),
 )
