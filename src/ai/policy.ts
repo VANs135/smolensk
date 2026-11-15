@@ -141,6 +141,81 @@ export interface AiControlSnapshot {
   setup: boolean
 }
 
+/** 初设阶段：待落位的抽签西移编队（ch10；缺落点时由 AI 按候选补一个） */
+export interface AiSetupSnapshot {
+  /**
+   * 初设仍在进行（会话尚未建立）
+   *
+   * 两段式下「确认初设」先收束初设窗、但不建会话（等抽签），此时
+   * `initialSetupInProgress` 已是 false —— 故这里用「会话未建 + 初设窗/抽签/待落位任一在」判。
+   */
+  active: boolean
+  /** 分方游标仍停在某一方（该方自由项与飞机还要落） */
+  cursorActive: boolean
+  /** 还有待落位的自由项 / 飞机（枚数） */
+  remaining: number
+  /** 「抽取编队」入口此刻可见（两段式第二段） */
+  drawVisible: boolean
+  /** 抽签后仍缺落点的西移编队（稳定序） */
+  shiftFormationIds: readonly string[]
+}
+
+/** A 飞机整备：一个可整备基地的确定性候选 */
+export interface AiRefitBase {
+  baseId: string
+  hex: AiHex
+  /** 该基地全部非激活飞机（稳定序；一步整备完，别一枚一枚来） */
+  aircraftIds: readonly string[]
+  /** 第一座可付款补给站（稳定序） */
+  dumpId: string
+}
+
+/** B 增援：到货落位的一条（未投放、未试过） */
+export interface AiArrivalEntry {
+  index: number
+  /** 地图落点（候选稳定序第一个；null ⇒ 只能进图外空军盒） */
+  hex: AiHex | null
+  /** 该条目可放图外空军盒（1.4a） */
+  airBox: boolean
+}
+
+/** B 增援：到货 SP（免费铁运 + 余额）与补给列车 */
+export interface AiReinSupplySnapshot {
+  /** 1.6b 补给表当日到货 SP */
+  sp: number
+  /** 已勾选的免费铁运城市格 */
+  picked: readonly AiHex[]
+  /** 可勾选的免费铁运城市格（稳定序） */
+  cityCandidates: readonly AiHex[]
+  /** 余额的落点（图边补给源格；无则 null） */
+  edgeHex: AiHex | null
+  /** 落点计划此刻是否已可落账（`freeRailPlan !== null`） */
+  planReady: boolean
+  /** 3.4b：德军到货须逐格选归属再落账 */
+  panzerGroupRulesOn: boolean
+  /** 3.4b：按格合并后的归属目标（稳定序） */
+  groupTargets: readonly {
+    hexText: string
+    sp: number
+    group: 'guderian' | 'hoth' | null
+  }[]
+  /** 3.6 补给列车：待落的 2 SP */
+  trainPending: boolean
+  /** 3.6：可卸货铁路格（稳定序） */
+  trainHexes: readonly AiHex[]
+  /** 3.6：3.4b 生效且尚未选归属 */
+  trainGroupRequired: boolean
+}
+
+/** B 增援：重建 / 整编候选（一次只给一个，避免每步全量预演） */
+export interface AiRebuildSnapshot {
+  unitId: string
+  kind: 'airBox' | 'dead' | 'onMap'
+  /** 死亡堆重建的合法落点（`kind==='dead'` 时必有） */
+  hex: AiHex | null
+  consolidate: { keepId: string; removeId: string } | null
+}
+
 export interface AiSnapshot {
   turn: number
   phase: string
@@ -154,6 +229,22 @@ export interface AiSnapshot {
   /** 盘面提问的应答方与题面（无提问时 responder 为 null） */
   awaitingResponder: AiSide | null
   awaitingPrompt: string
+  /** 初设阶段（批 1） */
+  setup: AiSetupSnapshot
+  /** A 整备候选（批 1） */
+  refit: { bases: readonly AiRefitBase[] }
+  /** B 增援（批 1） */
+  rein: {
+    arrival: { removalsPending: boolean; entries: readonly AiArrivalEntry[] }
+    supply: AiReinSupplySnapshot
+    rebuild: AiRebuildSnapshot | null
+  }
+  /**
+   * 4.8a：超堆叠待处理（13.6 到场豁免由引擎在增援阶段判掉，故这里只会在须解决的阶段出现）
+   *
+   * `active` 仅当**所有**超堆叠格都属于当前行动方（否则勾选提交会因别格未处理被整批拒绝）。
+   */
+  overstack: { active: boolean }
   /** 初设还剩多少枚待落位（自由项 + 飞机） */
   setupRemaining: number
   /** B4：控制权（见 `AiControlSnapshot`） */
@@ -182,6 +273,28 @@ export type AiAction =
   | { kind: 'moveClick'; hex: AiHex }
   | { kind: 'moveFinish' }
   | { kind: 'specialConfirm' }
+  /* 批 1：初设（一键预设 → 抽签 → 确认/开局） */
+  | { kind: 'setupPreset' }
+  | { kind: 'setupDraw' }
+  | { kind: 'setupConfirm' }
+  | { kind: 'setupShiftPlace'; formationId: string }
+  /* 批 1：A 整备（15.1；一步式 refitBaseNow） */
+  | { kind: 'refitBase'; baseId: string; aircraftIds: readonly string[]; dumpId: string }
+  /* 批 1：B 到货落位（13.6 / 1.6a） */
+  | { kind: 'arrivalRemovals' }
+  | { kind: 'arrivalPlace'; index: number; hex: AiHex | null }
+  | { kind: 'arrivalSkip'; index: number }
+  /* 批 1：B 到货 SP（专规 2.1 / 3.1）与 3.6 补给列车 */
+  | { kind: 'supplyArrivalPick'; hex: AiHex }
+  | { kind: 'supplyArrivalGroup'; hexText: string; group: 'guderian' | 'hoth' }
+  | { kind: 'supplyArrivals' }
+  | { kind: 'supplyTrainGroup'; group: 'guderian' | 'hoth' }
+  | { kind: 'supplyTrainPlace'; hex: AiHex }
+  /* 批 1：B 重建 / 整编（13.5 / 13.9） */
+  | { kind: 'rebuild'; unitId: string; mode: 'airBox' | 'dead' | 'onMap'; hex: AiHex | null }
+  | { kind: 'consolidate'; keepId: string; removeId: string }
+  /** 4.8a：按默认取舍（先毁 RE 最大的）把超堆叠格压回 10 RE 以内 */
+  | { kind: 'overstackDestroy' }
   /** 14.2f：宣布并推进一次空军任务（低空扫射；C→G 由驱动逐段推进） */
   | { kind: 'airMission'; target: AiHex | null; aircraftId: string | null }
   | { kind: 'barrageTarget'; hex: AiHex }
@@ -240,6 +353,26 @@ export function actionKeyOf(action: AiAction): string {
       return `barrageSupply:${action.dumpId ?? 'none'}`
     case 'combatSupply':
       return `combatSupply:${action.attackerDumpId}:${action.defenderDumpId ?? 'none'}`
+    case 'setupShiftPlace':
+      return `setupShiftPlace:${action.formationId}`
+    case 'refitBase':
+      return `refitBase:${action.baseId}`
+    case 'arrivalPlace':
+      return `arrivalPlace:${String(action.index)}:${action.hex === null ? 'box' : hexKeyOf(action.hex)}`
+    case 'arrivalSkip':
+      return `arrivalSkip:${String(action.index)}`
+    case 'supplyArrivalPick':
+      return `supplyArrivalPick:${hexKeyOf(action.hex)}`
+    case 'supplyArrivalGroup':
+      return `supplyArrivalGroup:${action.hexText}:${action.group}`
+    case 'supplyTrainGroup':
+      return `supplyTrainGroup:${action.group}`
+    case 'supplyTrainPlace':
+      return `supplyTrainPlace:${hexKeyOf(action.hex)}`
+    case 'rebuild':
+      return `rebuild:${action.mode}:${action.unitId}`
+    case 'consolidate':
+      return `consolidate:${action.keepId}:${action.removeId}`
     default:
       return action.kind
   }
@@ -289,6 +422,109 @@ function pickRetreatDestination(
 /** B4：玩家侧的待办 ⇒ 返回 `wait`（不提交、不改盘面） */
 function waitForSide(side: AiSide, what: string): AiAction {
   return { kind: 'wait', reason: `等待玩家（${sideLabelOf(side)}）${what}` }
+}
+
+/**
+ * 批 1：A 整备（15.1）
+ *
+ * 只在本环节的闸门放行时行动；每基地每阶段一次（引擎同判 15.1A，驱动按记忆跳过）。
+ */
+function decideRefit(snapshot: AiSnapshot): AiAction | null {
+  if (!snapshot.can.has('air.refit')) return null
+  const base = snapshot.refit.bases[0]
+  if (base === undefined) return null
+  return {
+    kind: 'refitBase',
+    baseId: base.baseId,
+    aircraftIds: base.aircraftIds,
+    dumpId: base.dumpId,
+  }
+}
+
+/** 批 1：B 到货落位（13.6 / 1.6a） */
+function decideArrival(snapshot: AiSnapshot): AiAction | null {
+  if (!snapshot.can.has('rein.arrival')) return null
+  if (snapshot.rein.arrival.removalsPending) return { kind: 'arrivalRemovals' }
+  const entry = snapshot.rein.arrival.entries[0]
+  if (entry === undefined) return null
+  if (entry.hex !== null) return { kind: 'arrivalPlace', index: entry.index, hex: entry.hex }
+  if (entry.airBox) return { kind: 'arrivalPlace', index: entry.index, hex: null }
+  // 该条目此刻地图与图外盒都无处可放：记一次跳过，交给「进入下一环节」
+  return { kind: 'arrivalSkip', index: entry.index }
+}
+
+/**
+ * 3.4b：德军到货 SP 的**默认归属**
+ *
+ * Supply Table 到货须在两集群间均分、奇数点归 Guderian（原文 + `applySupplyArrivalsNow` 同判）。
+ * 归属只能按**整格**记，故先在未定格里找一组 SP 之和恰为 Guderian 配额的目标；
+ * 找不到（格太大分不开）就返回 null，交给「结束本段/放弃」而不是硬塞一个会被拒的组合。
+ */
+function pickArrivalSpGroup(
+  targets: AiReinSupplySnapshot['groupTargets'],
+): { hexText: string; group: 'guderian' | 'hoth' } | null {
+  const pending = targets.filter((target) => target.group === null)
+  if (pending.length === 0) return null
+  const total = targets.reduce((sum, target) => sum + target.sp, 0)
+  const fixedG = targets.reduce(
+    (sum, target) => sum + (target.group === 'guderian' ? target.sp : 0),
+    0,
+  )
+  const need = Math.ceil(total / 2) - fixedG
+  if (need < 0) return null
+  // 稳定序 DFS：优先把靠前的格记为 Guderian，求一组和恰为 need 的整格
+  const chosen = new Set<number>()
+  const solve = (index: number, remaining: number): boolean => {
+    if (remaining === 0) return true
+    if (index >= pending.length || remaining < 0) return false
+    const target = pending[index]!
+    if (target.sp <= remaining) {
+      chosen.add(index)
+      if (solve(index + 1, remaining - target.sp)) return true
+      chosen.delete(index)
+    }
+    return solve(index + 1, remaining)
+  }
+  const first = pending[0]!
+  if (need === 0) return { hexText: first.hexText, group: 'hoth' }
+  if (!solve(0, need)) return null
+  return { hexText: first.hexText, group: chosen.has(0) ? 'guderian' : 'hoth' }
+}
+
+/** 批 1：B 到货 SP（免费铁运城市格每格 1 点 → 余额落图边源格 → 归属 → 落账） */
+function decideReinSupply(snapshot: AiSnapshot): AiAction | null {
+  const supply = snapshot.rein.supply
+  if (!snapshot.can.has('rein.supplyArrival') && !snapshot.can.has('rein.supplyTrain')) return null
+  if (supply.sp > 0) {
+    // 原文：城市格每格 1 SP 免费铁运；余额落图边补给源格
+    const limit = Math.min(supply.sp, supply.cityCandidates.length)
+    if (supply.picked.length < limit) {
+      const pickedKeys = new Set(supply.picked.map(hexKeyOf))
+      const next = supply.cityCandidates.map((hex) => hex).sort(compareHex)[supply.picked.length]
+      if (next !== undefined && !pickedKeys.has(hexKeyOf(next)))
+        return { kind: 'supplyArrivalPick', hex: next }
+    }
+    if (supply.panzerGroupRulesOn) {
+      const group = pickArrivalSpGroup(supply.groupTargets)
+      if (group !== null) return { kind: 'supplyArrivalGroup', ...group }
+    }
+    if (supply.planReady) return { kind: 'supplyArrivals' }
+  }
+  if (supply.trainPending && supply.trainHexes.length > 0) {
+    if (supply.trainGroupRequired) return { kind: 'supplyTrainGroup', group: 'guderian' }
+    const hex = supply.trainHexes.map((item) => item).sort(compareHex)[0]!
+    return { kind: 'supplyTrainPlace', hex }
+  }
+  return null
+}
+
+/** 批 1：B 重建 / 整编（13.5 / 13.9） */
+function decideRebuild(snapshot: AiSnapshot): AiAction | null {
+  if (!snapshot.can.has('rein.rebuild')) return null
+  const rebuild = snapshot.rein.rebuild
+  if (rebuild === null) return null
+  if (rebuild.consolidate !== null) return { kind: 'consolidate', ...rebuild.consolidate }
+  return { kind: 'rebuild', unitId: rebuild.unitId, mode: rebuild.kind, hex: rebuild.hex }
 }
 
 function decideBarrageSettlement(snapshot: AiSnapshot): AiAction | null {
@@ -504,14 +740,20 @@ export function decideAiAction(snapshot: AiSnapshot): AiAction {
   const barrageSettle = decideBarrageSettlement(snapshot)
   if (barrageSettle !== null) return barrageSettle
 
-  // 3) 初设：一键预设（只预设自己控制的一方；另一方的自由落位留给玩家）
-  if (snapshot.setupInProgress) {
+  // 3) 初设：预设 → 抽签（ch10/ch11）→ 确认/开局（两段式）
+  if (snapshot.setup.active) {
     if (!snapshot.control.setup)
       return {
         kind: 'wait',
         reason: `等待玩家完成初设：还剩 ${String(snapshot.setupRemaining)} 枚待落位`,
       }
-    return { kind: 'preset' }
+    // 分方游标仍在某一方：先落该方自由项与飞机（无自由项时这一调用只做「确认该方」）
+    if (snapshot.setup.cursorActive) return { kind: 'setupPreset' }
+    // 抽签后仍缺落点的西移编队（ch10）：按初设面板同一入口给一个候选
+    const shift = snapshot.setup.shiftFormationIds[0]
+    if (shift !== undefined) return { kind: 'setupShiftPlace', formationId: shift }
+    if (snapshot.setup.drawVisible) return { kind: 'setupDraw' }
+    return { kind: 'setupConfirm' }
   }
 
   // 正在移动 → 已经落子就直接结束；否则落第一子（玩家侧的移动 AI 不接手）
@@ -528,6 +770,19 @@ export function decideAiAction(snapshot: AiSnapshot): AiAction {
     if (snapshot.advanceAvailable && snapshot.can.size === 0) return { kind: 'advance' }
     return waitForSide(snapshot.activeSide, '行动：本环节尚有可做动作')
   }
+
+  // 3.5) 批 1：A 整备 / B 到货落位 / 到货 SP / 补给列车 / 重建整编
+  //      （各分支内部只看 `can` 里的闸门与既有投影；闸门不放行时自然落到后面的主链）
+  const refit = decideRefit(snapshot)
+  if (refit !== null) return refit
+  const arrival = decideArrival(snapshot)
+  if (arrival !== null) return arrival
+  const reinSupply = decideReinSupply(snapshot)
+  if (reinSupply !== null) return reinSupply
+  const rebuild = decideRebuild(snapshot)
+  if (rebuild !== null) return rebuild
+  // 4.8a：超堆叠不解决就推进不了（13.6 到场豁免只覆盖增援段）；按默认取舍先压回限内
+  if (snapshot.overstack.active) return { kind: 'overstackDestroy' }
 
   // 4) 空军任务（14.2f）：已宣布的推进收尾；否则在允许宣布的环节打一次低空扫射
   //    天气受限时引擎本就不放行 `air.mission`，这里不另设天气判据（按原文不飞）

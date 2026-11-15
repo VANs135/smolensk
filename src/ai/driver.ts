@@ -10,6 +10,7 @@
  */
 import { nextTick } from 'vue'
 
+import { activeStackingLimitOf, arrivalCopiesOf, refitCapacity } from '@/engine/rules'
 import { useContainersStore } from '@/stores/containers'
 import { formatHexPath } from '@/stores/workbench-model'
 import type { useGameSessionStore } from '@/stores/session'
@@ -19,11 +20,16 @@ import type { useWorkbenchStore } from '@/stores/workbench'
 import {
   actionKeyOf,
   aiControlsSide,
+  compareHex,
   decideAiAction,
   hexKeyOf,
   type AiAction,
+  type AiArrivalEntry,
   type AiControlMode,
   type AiHex,
+  type AiRebuildSnapshot,
+  type AiRefitBase,
+  type AiReinSupplySnapshot,
   type AiSnapshot,
   type AiSide,
 } from './policy'
@@ -49,6 +55,14 @@ export interface AiMemory {
   airSorties: string[]
   /** 引擎拒绝结算而终止的任务「回合/阶段」（不再推进同一份陈旧任务态） */
   airAborted: string[]
+  /** 批 1：本环节已整备过的基地（15.1A：每基地每阶段一次） */
+  refitBaseIds: string[]
+  /** 批 1：本环节已试过的到货条目下标 */
+  arrivalTried: string[]
+  /** 批 1：本环节已试过的重建单位（避免同一枚反复被拒） */
+  rebuildUnitIds: string[]
+  /** 批 1：本环节是否已做过一次整编 */
+  consolidated: boolean
 }
 
 export function createAiMemory(): AiMemory {
@@ -63,6 +77,10 @@ export function createAiMemory(): AiMemory {
     airAircraft: [],
     airSorties: [],
     airAborted: [],
+    refitBaseIds: [],
+    arrivalTried: [],
+    rebuildUnitIds: [],
+    consolidated: false,
   }
 }
 
@@ -142,6 +160,10 @@ function syncMemory(memory: AiMemory, w: ReturnType<typeof useWorkbenchStore>): 
   memory.airAircraft = []
   memory.airSorties = []
   memory.airAborted = []
+  memory.refitBaseIds = []
+  memory.arrivalTried = []
+  memory.rebuildUnitIds = []
+  memory.consolidated = false
 }
 
 function dedupeSortedHexes(hexes: readonly AiHex[]): AiHex[] {
@@ -167,6 +189,148 @@ function compareStableUnit(
   if (ac !== bc) return ac - bc
   if (a.hex.row !== b.hex.row) return a.hex.row - b.hex.row
   return a.unitId.localeCompare(b.unitId)
+}
+
+/**
+ * 批 1：B 重建 / 整编候选（一次只给一个）
+ *
+ * 死亡堆重建要逐格预演（`rebuildLegalHexes`，与提交入口同一判据），因此**只在重建环节**
+ * 顺序扫描：扫过的非法候选记进记忆，避免每步重复预演；找到一个合法可做的就返回。
+ * 整编（13.9）每环节只做一对（`mergePartnerIds` 只列同格唯一伙伴，不替玩家挑）。
+ */
+function rebuildSnapshotOf(
+  w: ReturnType<typeof useWorkbenchStore>,
+  memory: AiMemory,
+): AiRebuildSnapshot | null {
+  if (w.segmentStep?.id !== 'reinforcement.rebuild') return null
+  const candidates = w.rebuildCandidates
+    .slice()
+    .sort((a, b) => compareHex(a.hex, b.hex) || a.name.localeCompare(b.name))
+  for (const unit of candidates) {
+    if (memory.rebuildUnitIds.includes(unit.instanceId)) continue
+    if ('aircraftId' in unit) {
+      if (w.canRebuildAircraftIntoBoxNow(unit.instanceId))
+        return { unitId: unit.instanceId, kind: 'airBox', hex: null, consolidate: null }
+      memory.rebuildUnitIds.push(unit.instanceId)
+      continue
+    }
+    if (w.canRebuildOnMapNow(unit.instanceId))
+      return { unitId: unit.instanceId, kind: 'onMap', hex: null, consolidate: null }
+    const legal = sortByLoad(
+      w.rebuildLegalHexes(unit.instanceId).map((hex) => ({ col: hex.col, row: hex.row })),
+      loadMapOf(w),
+    )
+    if (legal.length > 0 && legal[0] !== undefined)
+      return { unitId: unit.instanceId, kind: 'dead', hex: legal[0], consolidate: null }
+    memory.rebuildUnitIds.push(unit.instanceId)
+  }
+  if (!memory.consolidated) {
+    // 只挑**第一处**同格 ≥2 枚本方地面单位的堆叠去问伙伴：`mergePartnerIds` 内部要预演，
+    // 对 300 枚单位逐个问一次会把一次快照拖到十几秒（实测），而整编每段只做一对。
+    const groups = new Map<string, { unit: (typeof w.units)[number]; others: number }>()
+    for (const unit of w.units) {
+      if (unit.side !== w.activeSide || (unit.noncombatKind ?? null) !== null) continue
+      const key = `${String(unit.hex.col)}.${String(unit.hex.row)}`
+      const group = groups.get(key)
+      if (group === undefined) groups.set(key, { unit, others: 0 })
+      else group.others += 1
+    }
+    const first = [...groups.values()]
+      .filter((group) => group.others > 0)
+      .map((group) => group.unit)
+      .sort((a, b) => compareHex(a.hex, b.hex) || a.name.localeCompare(b.name))[0]
+    if (first !== undefined) {
+      const partners = w.mergePartnerIds(first.instanceId)
+      if (partners.length === 1 && partners[0] !== undefined)
+        return {
+          unitId: first.instanceId,
+          kind: 'onMap',
+          hex: null,
+          consolidate: { keepId: first.instanceId, removeId: partners[0] },
+        }
+    }
+  }
+  return null
+}
+
+/** 该格本方**激活**飞机数（14.2a 堆叠 / 15.1B 整备余额共用） */
+function activeAircraftAt(w: ReturnType<typeof useWorkbenchStore>, hex: AiHex): number {
+  return w.airUnits.filter(
+    (unit) =>
+      unit.side === w.activeSide &&
+      unit.airStatus === 'active' &&
+      unit.hex.col === hex.col &&
+      unit.hex.row === hex.row,
+  ).length
+}
+
+/**
+ * 14.2a：该基地格还能不能再落 `copies` 架激活飞机（上限 = 4 + 基地等级；简易机场恒为 4）
+ *
+ * 只做落位前的预检，拦的是 `placeArrivalNow` 一定会以 14.2a 拒绝的基地；
+ * 判据与引擎同一个 `activeStackingLimitOf`，不另写阈值。
+ */
+function aircraftBaseHasRoom(
+  w: ReturnType<typeof useWorkbenchStore>,
+  copies: number,
+  hex: AiHex,
+): boolean {
+  const base = w.airBases.find(
+    (item) => item.side === w.activeSide && item.hex.col === hex.col && item.hex.row === hex.row,
+  )
+  if (base === undefined) return false
+  return activeAircraftAt(w, hex) + copies <= activeStackingLimitOf(base)
+}
+
+/**
+ * 13.6：这条到达需求此刻是否有**可解析的算子/编成**
+ *
+ * 与 `placeArrivalNow` 同源判据：编成条目用 `resolveArrivalFormation`（缺枚即不可投），
+ * 单枚用 `arrivalRecordOf`；飞机走 13.6 的独立解析，并预检 14.2a 的基地容量。
+ * 预检只为**避免把必被拒的投放当成动作发出去**（13.6/14.2a 拒绝会污染双 AI 回归计数）。
+ */
+function arrivalResolvable(w: ReturnType<typeof useWorkbenchStore>, index: number): boolean {
+  const demand = w.arrivalPlan?.units[index]
+  if (demand === undefined) return false
+  if (demand.kind === 'aircraft') return aircraftArrivalCandidates(w, index).length > 0
+  if (demand.kind === 'sp' || demand.kind === 'unclassified') return false
+  const formation = w.resolveArrivalFormation(index)
+  if (formation !== null) return formation.missing.length === 0
+  return w.arrivalRecordOf(index) !== null
+}
+
+/** 飞机到场只在**还有容量**的友方基地格里选（14.2a），其余条目原样给候选 */
+function aircraftArrivalCandidates(
+  w: ReturnType<typeof useWorkbenchStore>,
+  index: number,
+): readonly AiHex[] {
+  const demand = w.arrivalPlan?.units[index]
+  if (demand === undefined || demand.kind !== 'aircraft') return []
+  const copies = arrivalCopiesOf(demand)
+  return (w.arrivalCandidates[index] ?? [])
+    .map((hex) => ({ col: hex.col, row: hex.row }))
+    .filter((hex) => aircraftBaseHasRoom(w, copies, hex))
+}
+
+/** 场上各格现有战斗单位 RE 之和（4.8a：每格 10 RE；到场/重建时优先挑轻格） */
+function loadMapOf(w: ReturnType<typeof useWorkbenchStore>): Map<string, number> {
+  const loads = new Map<string, number>()
+  for (const unit of w.units) {
+    const key = `${String(unit.hex.col)}.${String(unit.hex.row)}`
+    loads.set(key, (loads.get(key) ?? 0) + unit.re)
+  }
+  return loads
+}
+
+/** 落点排序：先挑当前 RE 最轻的格，再按格号稳定（每快照只建一次 load 表，避免逐次比较扫全场） */
+function sortByLoad(hexes: readonly AiHex[], loads: Map<string, number>): AiHex[] {
+  return hexes
+    .slice()
+    .sort(
+      (a, b) =>
+        (loads.get(`${String(a.col)}.${String(a.row)}`) ?? 0) -
+          (loads.get(`${String(b.col)}.${String(b.row)}`) ?? 0) || compareHex(a, b),
+    )
 }
 
 function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode): AiSnapshot {
@@ -299,6 +463,140 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
     .filter((item) => item.kind === 'self' || item.kind === 'air')
     .reduce((total, item) => total + item.remaining, 0)
 
+  /*
+   * 批 1：初设 / A 整备 / B 增援（到货、到货 SP、补给列车、重建整编）
+   *
+   * 全部取自既有投影；列表一律按「格号 + 名称」排定，不用含时间戳的 `instanceId` 当先后判据。
+   */
+  const setupShiftFormationIds = w.initialSetupInProgress
+    ? useContainersStore()
+        .pendingShiftWestPlacements.filter((item) => item.hexText === null)
+        .map((item) => item.formationId)
+        .sort()
+    : []
+  const refitBases: AiRefitBase[] =
+    w.phase === 'aircraftRefit' &&
+    w.segmentStep?.id === 'aircraftRefit.refit' &&
+    !w.initialSetupInProgress
+      ? w.refitStartBases
+          .filter((base) => !memory.refitBaseIds.includes(base.id))
+          .slice()
+          .sort((a, b) => compareHex(a.hex, b.hex) || a.id.localeCompare(b.id))
+          .flatMap((base) => {
+            const inactive = w
+              .airInactiveAtBase(base.id)
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name))
+            /*
+             * 15.1B：一次整备最多 `min(等级×2 / 简易机场 1, 激活堆叠余额)` 架。
+             * 超过这个数引擎会以 15.1B 拒绝（实测把整基地一次塞进去连吃 16 条拒绝）。
+             */
+            const capacity = refitCapacity({
+              isAirstrip: base.isAirstrip === true,
+              level: base.level,
+            }).capacity
+            const room = activeStackingLimitOf(base) - activeAircraftAt(w, base.hex)
+            const aircraft = inactive.slice(0, Math.max(0, Math.min(capacity, room)))
+            const dump = w
+              .airRefitPayDumps(base.id)
+              .slice()
+              .sort(
+                (a, b) =>
+                  compareHex(a.hex, b.hex) || a.sp + a.t - (b.sp + b.t) || a.id.localeCompare(b.id),
+              )[0]
+            if (aircraft.length === 0 || dump === undefined) return []
+            return [
+              {
+                baseId: base.id,
+                hex: { col: base.hex.col, row: base.hex.row },
+                aircraftIds: aircraft.map((item) => item.instanceId),
+                dumpId: dump.id,
+              },
+            ]
+          })
+      : []
+
+  const arrivalEntries: AiArrivalEntry[] = []
+  if (w.segmentStep?.id === 'reinforcement.arrival' && !w.initialSetupInProgress) {
+    const plan = w.arrivalPlan
+    if (plan !== null) {
+      const loads = loadMapOf(w)
+      plan.units.forEach((unit, index) => {
+        if (unit.kind === 'sp' || unit.kind === 'unclassified') return
+        if (w.arrivalPlaced[index] === true) return
+        if (memory.arrivalTried.includes(String(index))) return
+        const candidates = sortByLoad(
+          unit.kind === 'aircraft'
+            ? aircraftArrivalCandidates(w, index)
+            : (w.arrivalCandidates[index] ?? []).map((hex) => ({ col: hex.col, row: hex.row })),
+          loads,
+        )
+        const resolvable = arrivalResolvable(w, index)
+        arrivalEntries.push({
+          index,
+          hex: resolvable ? (candidates[0] ?? null) : null,
+          airBox: resolvable && w.arrivalAirBoxAvailable(index),
+        })
+      })
+    }
+  }
+
+  const inReplRoll = w.segmentStep?.id === 'reinforcement.replRoll'
+  const needsSp = inReplRoll && w.supplyArrivalSp > 0
+  const needsTrain = inReplRoll && w.supplyTrainPending
+  const arrivalSp = needsSp ? w.supplyArrivalSp : 0
+  const reinSupply: AiReinSupplySnapshot = {
+    sp: arrivalSp,
+    picked: needsSp ? w.freeRailPicked.map((hex) => ({ col: hex.col, row: hex.row })) : [],
+    cityCandidates: needsSp
+      ? w.freeRailCityCandidates
+          .map((item) => item.hex)
+          .slice()
+          .sort(compareHex)
+      : [],
+    edgeHex: (() => {
+      if (!needsSp) return null
+      const edge = w.freeRailEdgeHex ?? w.openSupplySourceHexes[0]
+      return edge === undefined ? null : { col: edge.col, row: edge.row }
+    })(),
+    planReady: needsSp && w.freeRailPlan !== null,
+    panzerGroupRulesOn: needsSp && w.panzerGroupRulesOn,
+    groupTargets: needsSp
+      ? w.arrivalSpGroupTargets
+          .map((target) => ({ hexText: target.hexText, sp: target.sp, group: target.group }))
+          .sort((a, b) => a.hexText.localeCompare(b.hexText))
+      : [],
+    trainPending: needsTrain,
+    trainHexes: needsTrain
+      ? w.supplyTrainPlacementHexes
+          .map((hex) => ({ col: hex.col, row: hex.row }))
+          .slice()
+          .sort(compareHex)
+      : [],
+    trainGroupRequired: needsTrain && w.panzerGroupRulesOn && w.supplyTrainGroup === null,
+  }
+
+  const rebuild = rebuildSnapshotOf(w, memory)
+
+  /*
+   * 4.8a：超堆叠待处理
+   *
+   * 只有**所有**超堆叠格都属于当前行动方时才接手：`destroyOverstackPicksNow` 要求每一格都回到
+   * ≤10 RE 才整批落盘，若别方还有一格未处理，勾了也会被整批拒绝。
+   */
+  const overstackDuties = w.phase === 'reinforcement' ? [] : w.overstackDuties
+  const overstackActive =
+    overstackDuties.length > 0 &&
+    !w.overstackSettled &&
+    overstackDuties.every((duty) => duty.side === side)
+
+  const setupActive =
+    ctx.session.session === null &&
+    (w.initialSetupInProgress ||
+      ctx.setup.setupDrawEntryVisible ||
+      ctx.setup.setupStartEntryVisible ||
+      ctx.setup.setupSideCursor !== null)
+
   return {
     turn: w.turn,
     phase: w.phase,
@@ -310,6 +608,20 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
     awaitingOptionIds: question === null ? [] : (question.options ?? []).map((o) => o.id),
     awaitingResponder: question === null ? null : (question.responder as AiSide),
     awaitingPrompt: question?.prompt ?? '',
+    setup: {
+      active: setupActive,
+      cursorActive: ctx.setup.setupSideCursor !== null,
+      remaining: setupRemaining,
+      drawVisible: ctx.setup.setupDrawEntryVisible,
+      shiftFormationIds: setupShiftFormationIds,
+    },
+    refit: { bases: refitBases },
+    rein: {
+      arrival: { removalsPending: w.arrivalRemovalsPending, entries: arrivalEntries },
+      supply: reinSupply,
+      rebuild,
+    },
+    overstack: { active: overstackActive },
     setupRemaining,
     control: {
       activeSide: aiControlsSide(controlMode, active),
@@ -323,8 +635,9 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
         aiControlsSide(controlMode, plan.side === 'attacker' ? active : defenderSide),
       ),
       setup:
-        ctx.setup.setupSideCursor !== null &&
-        aiControlsSide(controlMode, ctx.setup.setupSideCursor),
+        ctx.setup.setupSideCursor === null
+          ? controlMode !== 'off'
+          : aiControlsSide(controlMode, ctx.setup.setupSideCursor),
     },
     setupInProgress: w.initialSetupInProgress,
     locked: w.segmentLocked,
@@ -496,6 +809,97 @@ function execute(
           ? ctx.setup.presetSelfSetupNow()
           : ctx.setup.presetSelfSetupNow({ onlySide: presetSide })
       return result.failures.length === 0 && (presetSide !== null || result.remaining === 0)
+    }
+    case 'setupPreset':
+      return execute({ kind: 'preset' }, ctx, memory, presetSide)
+    case 'setupDraw':
+      return ctx.setup.drawSetupEffectsNow()
+    case 'setupConfirm':
+      return ctx.setup.startGameNow()
+    case 'setupShiftPlace': {
+      // ch10：西移缺落点 ⇒ 用初设面板同一入口，从候选里取稳定序第一格
+      if (!ctx.setup.beginShiftPlacement(action.formationId)) return false
+      const candidates = (ctx.setup.placing?.candidates ?? []).slice().sort(compareHex)
+      const hex = candidates[0]
+      if (hex === undefined) {
+        ctx.setup.cancelPlacement()
+        return false
+      }
+      return ctx.setup.placeAtHex({ col: hex.col, row: hex.row })
+    }
+    case 'refitBase': {
+      memory.refitBaseIds.push(action.baseId)
+      return w.refitBaseNow(action.baseId, [...action.aircraftIds], action.dumpId)
+    }
+    case 'arrivalRemovals': {
+      w.applyArrivalRemovalsNow()
+      return w.arrivalRemovalsPending === false
+    }
+    case 'arrivalPlace': {
+      const ok =
+        action.hex === null
+          ? w.placeArrivalInAirBoxNow(action.index)
+          : w.placeArrivalNow(
+              action.index,
+              w.arrivalRecordOf(action.index)?.id,
+              `${String(action.hex.col)}.${String(action.hex.row)}`,
+            )
+      if (!ok) memory.arrivalTried.push(String(action.index))
+      return ok
+    }
+    case 'arrivalSkip':
+      memory.arrivalTried.push(String(action.index))
+      return true
+    case 'supplyArrivalPick': {
+      w.toggleFreeRailPick(action.hex)
+      return w.freeRailPicked.some(
+        (hex) => hex.col === action.hex.col && hex.row === action.hex.row,
+      )
+    }
+    case 'supplyArrivalGroup': {
+      w.setArrivalSpGroup(action.hexText, action.group)
+      return (
+        w.arrivalSpGroupTargets.find((target) => target.hexText === action.hexText)?.group ===
+        action.group
+      )
+    }
+    case 'supplyArrivals':
+      return w.applySupplyArrivalsNow()
+    case 'supplyTrainGroup': {
+      w.setSupplyTrainGroup(action.group)
+      return w.supplyTrainGroup === action.group
+    }
+    case 'supplyTrainPlace':
+      return w.placeSupplyTrainSpNow(action.hex)
+    case 'rebuild': {
+      let ok = false
+      if (action.mode === 'airBox') ok = w.rebuildAircraftIntoBoxNow(action.unitId)
+      else if (action.mode === 'onMap') ok = w.rebuildOnMapUnitNow(action.unitId)
+      else if (action.hex !== null) {
+        const opened = w.beginDeadPileRebuildNow(action.unitId)
+        if (opened) w.pickHexFor(action.hex)
+        ok = w.rebuildPlacedThisSegment.some((item) => item.instanceId === action.unitId)
+      }
+      if (!ok) memory.rebuildUnitIds.push(action.unitId)
+      return ok
+    }
+    case 'consolidate': {
+      const ok = w.consolidateUnitsNow(action.keepId, action.removeId)
+      memory.consolidated = true
+      return ok
+    }
+    case 'overstackDestroy': {
+      // 4.8a 默认取舍：先毁 RE 最大的（损失枚数最少），同 RE 按名称稳定
+      for (const duty of w.overstackDuties) {
+        const units = duty.units.slice().sort((a, b) => b.re - a.re || a.name.localeCompare(b.name))
+        let remaining = duty.combatRe
+        for (const unit of units) {
+          if (remaining <= 10) break
+          w.toggleOverstackPick(duty.key, unit.instanceId)
+          remaining -= unit.re
+        }
+      }
+      return w.destroyOverstackPicksNow()
     }
     case 'wait':
       return false

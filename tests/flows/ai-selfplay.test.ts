@@ -132,7 +132,12 @@ describe('B3 AI 对打回归', () => {
       }
       const replay = replaySessionLog(ctx.g.session!)
       expect(replay.ok, `${whereOf(id, report)} 会话日志复算：${replay.detail}`).toBe(true)
-    }, 300_000)
+      /*
+       * 批 1 起 AI 会真的落实 B 段（到货逐条落位、到货 SP、补给列车、重建/整编）与 A 段整备，
+       * 单局动作数从 530 涨到 820+，盘面单位也更多 ⇒ 8 回合的实际耗时接近 10 分钟（实测）。
+       * 这里只放宽**时间预算**，判据（stalls / 白名单 / 条款覆盖 / 复算）一条不减。
+       */
+    }, 1_500_000)
   }
 
   it('剧本 1 同种子两次 ⇒ 完全一致', async () => {
@@ -151,5 +156,5 @@ describe('B3 AI 对打回归', () => {
     expect(signature(first.ctx), `${whereOf('1', first.report)} 确定性（第一次）`).toEqual(
       signature(second.ctx),
     )
-  }, 900_000)
+  }, 3_000_000)
 })
