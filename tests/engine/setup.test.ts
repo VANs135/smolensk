@@ -638,10 +638,10 @@ describe('W7 C14：飞机初设（IV-E + 14.1a + 剧本页明文）', () => {
 })
 
 describe('W7 C14：初设索引的数据自检', () => {
-  it('C14：1155 条条目全在（剧本 1/3/5/7），且棋子条目带 unitId 链接', () => {
-    expect(scenarioSetup.entries).toHaveLength(1155)
+  it('C14：1184 条条目全在（剧本 Intro/1/3/5/7），且棋子条目带 unitId 链接', () => {
+    expect(scenarioSetup.entries).toHaveLength(1184)
     const ids = new Set(scenarioSetup.entries.map((entry) => entry.scenarioId))
-    expect([...ids].sort()).toEqual(['1', '3', '5', '7'])
+    expect([...ids].sort()).toEqual(['1', '3', '5', '7', 'Intro'])
     const pieces = scenarioSetup.entries.filter((entry) =>
       ['unit', 'hq', 'formation', 'aircraft', 'extender'].includes(entry.kind),
     )
@@ -653,7 +653,7 @@ describe('W7 C14：初设索引的数据自检', () => {
     const counts = scenarioSetup.entries.filter((entry) =>
       ['sp', 'transport_point', 'airbase'].includes(entry.kind),
     )
-    expect(counts.length).toBe(97 + 58 + 48)
+    expect(counts.length).toBe(100 + 60 + 49)
     for (const entry of counts) {
       expect(entry.unitIdKind).toBe('none')
       expect(entry.unitId ?? null).toBeNull()

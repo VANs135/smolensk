@@ -108,10 +108,10 @@ export const auxCards = bootstrapData(auxCardsRaw, AuxCardsDataSchema, 'aux-card
  */
 export const panelScans = bootstrapData(panelScansRaw, PanelScansDataSchema, 'panel-scans.json')
 
-/** 剧本库（A8）：7 个剧本的初设数值/选项/继承、生效补给源、胜利条件、共识开关与可选规则 */
+/** 剧本库（A8）：8 个剧本（含入门教学 Intro: Vitebsk）的初设数值/选项/继承、生效补给源、胜利条件、共识开关与可选规则 */
 export const scenarios = bootstrapData(scenariosRaw, ScenariosDataSchema, 'scenarios.json')
 
-/** 初设索引（A8）：1155 条单位位置/减损/数量注记（scenario_id ∈ {1,3,5,7}） */
+/** 初设索引（A8）：1184 条单位位置/减损/数量注记（scenario_id ∈ {Intro,1,3,5,7}） */
 export const scenarioSetup = bootstrapData(
   scenarioSetupRaw,
   ScenarioSetupDataSchema,

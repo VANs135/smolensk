@@ -1,4 +1,4 @@
-import type { ZodType } from 'zod'
+import type { z } from 'zod'
 
 import { DataError, formatIssues } from './errors'
 import { deepFreeze } from './freeze'
@@ -34,12 +34,12 @@ function assertVersionMatches(raw: unknown, source: string, expectedVersion: str
  * 校验并返回数据（不冻结）。
  * 失败即抛 DataError，message 内含逐条「字段路径: 原因」，可精确定位到字段。
  */
-export function validateData<T>(
+export function validateData<S extends z.ZodTypeAny>(
   raw: unknown,
-  schema: ZodType<T>,
+  schema: S,
   source: string,
   expectedVersion = DATA_VERSION,
-): T {
+): z.output<S> {
   assertVersionMatches(raw, source, expectedVersion)
 
   const parsed = schema.safeParse(raw)
@@ -50,11 +50,11 @@ export function validateData<T>(
 }
 
 /** 完整管线：校验 → 深度冻结，返回只读数据 */
-export function bootstrapData<T>(
+export function bootstrapData<S extends z.ZodTypeAny>(
   raw: unknown,
-  schema: ZodType<T>,
+  schema: S,
   source: string,
   expectedVersion = DATA_VERSION,
-): DeepReadonly<T> {
+): DeepReadonly<z.output<S>> {
   return deepFreeze(validateData(raw, schema, source, expectedVersion))
 }

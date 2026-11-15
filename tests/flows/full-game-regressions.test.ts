@@ -25,7 +25,9 @@ import {
 } from './sop-harness'
 
 describe('整局主线回归：开局、自动结算、玩家义务和持久化', () => {
-  for (const scenario of scenarios.scenarios) {
+  // 入门教学剧本 Intro 只打 1 个玩家回合，不适用「双方各走一个回合」的主线回归
+  const campaignScenarios = scenarios.scenarios.filter((s) => s.id !== 'Intro')
+  for (const scenario of campaignScenarios) {
     it(`剧本 ${scenario.id}：双方完整初设并走完一个双方玩家回合`, async () => {
       const ctx = fresh()
       expect(ctx.setup.enterSetup(scenario.id)).toBe(true)

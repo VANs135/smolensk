@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  aircraft,
   arrivalsAxis,
   arrivalsSoviet,
   formations,
   mapLayers,
   scenarioSetup,
   scenarios,
+  unitsAxis,
+  unitsSoviet,
 } from '@/data'
 import { PANZER_GROUP_OPTION_ITEM } from '@/engine/rules'
 import { OPTIONAL_RULE_ITEMS } from '@/engine/session-flow'
@@ -29,9 +32,19 @@ describe('B50：3.4b 是 4.1a 的可选项（共识清单）', () => {
   })
 })
 describe('剧本库 scenarios.json', () => {
-  it('共 7 个剧本（入门剧本 Vitebsk 按裁定推迟，不计入）', () => {
-    expect(scenarios.scenarios).toHaveLength(7)
-    expect(scenarios.scenarios.map((s) => s.id)).toEqual(['1', '2', '3', '4', '5', '6', '7'])
+  it('共 8 个剧本（1–7 + 末位入门剧本 Intro: Vitebsk）', () => {
+    expect(scenarios.scenarios).toHaveLength(8)
+    // 入门剧本排在末位：默认剧本仍取首项（战役剧本 1），教学剧本不改变既有默认局
+    expect(scenarios.scenarios.map((s) => s.id)).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      'Intro',
+    ])
   })
 
   it('剧本 1：19 回合、德军先行、开局轴 0 / 苏 2 铁路容量（专规 1.2）', () => {
@@ -196,33 +209,143 @@ describe('剧本库 scenarios.json', () => {
   })
 })
 
+describe('入门剧本 Intro: Vitebsk（教学/单人）', () => {
+  const intro = () => scenarios.scenarios.find((x) => x.id === 'Intro')!
+  const introEntries = () => scenarioSetup.entries.filter((e) => e.scenarioId === 'Intro')
+
+  it('参数：1 个玩家回合、8 Jul 41 首末同日、德军先行、苏军先设、Limited Flight', () => {
+    const s = intro()
+    expect(s.name).toBe('Vitebsk')
+    expect(s.turns).toBe(1)
+    expect(s.firstTurn).toBe('8 Jul 41')
+    expect(s.lastTurn).toBe('8 Jul 41')
+    expect(s.firstPlayer).toBe('axis')
+    expect(s.setupFirst).toBe('soviet')
+    expect(s.firstWeather).toBe('restricted')
+    expect(s.hasSetup).toBe(true)
+  })
+
+  it('初设数值：铁路容量 0/0、Reserve 5/0、缓存与建造 0；卡车载荷未述 ⇒ 缺省', () => {
+    const s = intro()
+    expect(s.setup.railCap).toEqual({ axis: 0, soviet: 0 })
+    expect(s.setup.reserveMarkers).toEqual({ axis: 5, soviet: 0 })
+    expect(s.setup.supplyCache).toBe(0)
+    expect(s.setup.constructionMarkers).toBe(0)
+    // PDF 未述有机卡车载荷；数据不写该字段，运行时按 IV-D 默认空载
+    expect(s.setup.organicTrucks.mode).toBe('all_unloaded')
+    expect(s.setup.organicTrucks.raw).toContain('未述')
+    // 剧本页原文（只保留印刷行，不补苏方未列数值）
+    expect(s.setupInfo?.axis?.['Reserve Markers']).toBe('5 available')
+    expect(s.setupInfo?.axis?.['Arty Markers']).toBe('1 available')
+    expect(s.setupInfo?.axis?.['Reinforcements']).toBe('None')
+  })
+
+  it('补给源按首回合 8 Jul 41 生效（轴 1.03、苏 20.35 在列）', () => {
+    const s = intro()
+    expect(s.supplySources?.firstTurn).toBe('8 Jul 41')
+    expect(s.supplySources!.axisLive).toContain('1.03')
+    expect(s.supplySources!.sovietLive).toContain('20.35')
+  })
+
+  it('初设条目 29 条：苏 16 / 轴 13（含 4 条图外空军盒飞机）', () => {
+    const rows = introEntries()
+    expect(rows).toHaveLength(29)
+    expect(rows.filter((e) => e.side === 'soviet')).toHaveLength(16)
+    expect(rows.filter((e) => e.side === 'axis')).toHaveLength(13)
+    expect(rows.filter((e) => e.kind === 'formation')).toHaveLength(4)
+    expect(rows.filter((e) => e.kind === 'aircraft')).toHaveLength(4)
+  })
+
+  it('127 用仓库现有印值 13-3-3（Move Mode 落 19.28），20.28 放 134 战斗面', () => {
+    const rows = introEntries()
+    const div127 = rows.find((e) => e.unitId === 'su-infantry-ru-127-rifle-div')!
+    expect(div127.location).toBe('19.28')
+    expect(div127.factors).toBe('13-3-3')
+    expect(div127.setupMode).toBe('move')
+    const div134 = rows.find((e) => e.unitId === 'su-infantry-ru-134-rifle-div')!
+    expect(div134.location).toBe('20.28')
+    expect(div134.setupMode).toBeUndefined()
+  })
+
+  it('12 装甲师按剧本页 7 件套：含 2 Aufk、不含 25 Inf / III-29 Pz', () => {
+    const pz12 = introEntries().find((e) => e.unitId === '12 Pz Div')!
+    expect(pz12.location).toBe('3.25')
+    const ids = pz12.subordinates!.map((sub) => sub.unitId)
+    expect(ids).toHaveLength(7)
+    expect(ids).toContain('ax-armor_pz-ge-12-pz-2-arm-rec')
+    expect(ids).not.toContain('ax-armor_pz-ge-12-pz-25-mot-inf')
+    expect(ids).not.toContain('ax-armor_pz-ge-12-pz-iii-29-pz')
+  })
+
+  it('未列单位一律不在场（25 Inf / III-29 / III-21 / III-25 / 220）', () => {
+    const ids = new Set<string>()
+    for (const entry of introEntries()) {
+      if (entry.unitId) ids.add(entry.unitId)
+      for (const sub of entry.subordinates ?? []) if (sub.unitId) ids.add(sub.unitId)
+    }
+    const excluded = [
+      'ax-armor_pz-ge-12-pz-25-mot-inf',
+      'ax-armor_pz-ge-12-pz-iii-29-pz',
+      'ax-armor_pz-ge-20-pz-iii-21-pz',
+      'ax-armor_pz-ge-7-pz-iii-25-pz',
+      'su-infantry-ru-220-rifle-div',
+    ]
+    for (const id of excluded) expect(ids.has(id), id).toBe(false)
+  })
+
+  it('飞机 7 架进图外空军盒；Ju.87r 按裁定用 Ju.87b 记录', () => {
+    const air = introEntries().filter((e) => e.kind === 'aircraft')
+    expect(air.every((e) => e.locationKind === 'air_box')).toBe(true)
+    expect(air.reduce((n, e) => n + e.count, 0)).toBe(7)
+    const ju87 = air.find((e) => e.unitId === 'ax-aircraft-ge-ju-87b')!
+    expect(ju87.count).toBe(3)
+  })
+
+  it('每条棋子条目都有可解析的 unitId（不靠名字猜）', () => {
+    const resolvable = new Set<string>([
+      ...unitsAxis.units.map((u) => u.id),
+      ...unitsSoviet.units.map((u) => u.id),
+      ...aircraft.aircraft.map((a) => a.aircraftId),
+      ...formations.formations.map((f) => f.formationId),
+    ])
+    for (const entry of scenarioSetup.entries) {
+      if (!entry.unitId) continue
+      expect(resolvable.has(entry.unitId), `${entry.scenarioId} ${entry.raw}`).toBe(true)
+      for (const sub of entry.subordinates ?? []) {
+        if (sub.unitId) expect(resolvable.has(sub.unitId), sub.raw).toBe(true)
+      }
+    }
+  })
+})
+
 describe('初设索引 scenario-setup.json', () => {
-  it('共 1155 条，剧本归属为 1 / 3 / 5 / 7', () => {
-    expect(scenarioSetup.entries).toHaveLength(1155)
+  it('共 1184 条，剧本归属为 Intro / 1 / 3 / 5 / 7', () => {
+    expect(scenarioSetup.entries).toHaveLength(1184)
     expect([...new Set(scenarioSetup.entries.map((e) => e.scenarioId))].sort()).toEqual([
       '1',
       '3',
       '5',
       '7',
+      'Intro',
     ])
   })
 
-  it('阵营分布：德国 407 / 苏联 748', () => {
+  it('阵营分布：德国 420 / 苏联 764', () => {
     const axis = scenarioSetup.entries.filter((e) => e.side === 'axis')
     const soviet = scenarioSetup.entries.filter((e) => e.side === 'soviet')
-    expect(axis).toHaveLength(407)
-    expect(soviet).toHaveLength(748)
+    expect(axis).toHaveLength(420)
+    expect(soviet).toHaveLength(764)
   })
 
   it('条目类别齐备（含数量注记 sp / airbase / transport_point）', () => {
     const count = (kind: string) => scenarioSetup.entries.filter((e) => e.kind === kind).length
-    expect(count('unit')).toBe(680)
-    expect(count('sp')).toBe(97)
-    expect(count('formation')).toBe(96)
-    expect(count('aircraft')).toBe(89)
-    expect(count('hq')).toBe(78)
-    expect(count('transport_point')).toBe(58)
-    expect(count('airbase')).toBe(48)
+    expect(count('unit')).toBe(693)
+    expect(count('sp')).toBe(100)
+    expect(count('formation')).toBe(100)
+    expect(count('aircraft')).toBe(93)
+    expect(count('hq')).toBe(80)
+    expect(count('transport_point')).toBe(60)
+    expect(count('airbase')).toBe(49)
     expect(count('extender')).toBe(9)
   })
 

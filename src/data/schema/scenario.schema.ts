@@ -262,8 +262,16 @@ export const ScenarioSetupSchema = z
     offMapAirBoxSp: SidePairSchema.optional(),
     /** 建造标记（Construction Markers）枚数 */
     constructionMarkers: z.number().int().nonnegative(),
-    /** 德军卡车满载方式 */
-    organicTrucks: OrganicTrucksSchema,
+    /**
+     * 德军卡车满载方式
+     *
+     * 剧本页未述时数据可缺省；运行时按通规 IV-D 默认 **空载**（Intro: Vitebsk 即此情形）。
+     * 用缺省值而非可选字段，是为了让消费方（`setup.ts` / `stores/setup.ts`）不必到处判空。
+     */
+    organicTrucks: OrganicTrucksSchema.default({
+      mode: 'all_unloaded',
+      raw: '剧本页未述有机卡车载荷（按通规 IV-D 默认空载）',
+    }),
     /** 首回合天气原文（如 'Normal Flight on 8 July'） */
     weatherFirstTurnRaw: z.string(),
     /** 编队抽取规则原文（各剧本差异） */
@@ -351,7 +359,7 @@ export const SupplySourcesSchema = z
 /** 单个剧本 */
 export const ScenarioSchema = z
   .object({
-    /** 剧本标识（'1'…'7'；入门剧本 Vitebsk 未启用） */
+    /** 剧本标识（'Intro' 与 '1'…'7'） */
     id: z.string().min(1),
     name: z.string().min(1),
 

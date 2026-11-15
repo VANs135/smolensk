@@ -2,7 +2,7 @@
  * 剧本数据同步脚本（A8 产出 scenarios.json）
  *
  * 数据源（斯摩棱斯克工程数据库）：
- *   - scenarios.json：7 个剧本（1–7，入门剧本 Vitebsk 按裁定推迟不计入）
+ *   - scenarios.json：8 个剧本（入门剧本 Intro: Vitebsk + 1–7）
  *     · rules_scenarios：起止日期 / 回合数 / 首次行动方 / 布设顺序 / 初设数值与选项
  *     · victory：胜利条件（5.0a / 5.0b / 剧本 2·4 变体 / 通用格清单）
  *     · items[].supply_sources：该剧本按首回合日期算出的生效补给源
@@ -90,7 +90,10 @@ export function toScenario(record, item) {
       reserveMarkers: numbers.reserve_markers,
       supplyCache,
       constructionMarkers: numbers.construction_markers,
-      organicTrucks: parseOrganicTrucks(numbers.organic_trucks),
+      // 剧本页未述（如 Intro: Vitebsk）⇒ 不写该键，运行时按 IV-D 默认空载
+      ...(numbers.organic_trucks
+        ? { organicTrucks: parseOrganicTrucks(numbers.organic_trucks) }
+        : {}),
       weatherFirstTurnRaw: numbers.weather_first_turn,
       ...(choices.formation_draw ? { formationDrawRaw: choices.formation_draw } : {}),
       ...(Object.keys(options).length > 0 ? { options } : {}),
@@ -165,7 +168,7 @@ export function toVictory(src) {
 export function buildScenarios({ scenariosDb, rulesDb }) {
   const smolensk = rulesDb.exclusive_rules_smolensk
 
-  // 入门剧本（Vitebsk，turns = 0）按裁定推迟，不计入（turns 只在 rules_scenarios 上）
+  // 未启用（turns = 0）的存根不计入（turns 只在 rules_scenarios 上）
   const records = scenariosDb.rules_scenarios.filter((record) => record.turns > 0)
 
   // items（初设计数与补给源）按 scenario_id 索引；items 仅覆盖启用剧本
@@ -175,7 +178,7 @@ export function buildScenarios({ scenariosDb, rulesDb }) {
     meta: {
       version: SCENARIOS_VERSION,
       description:
-        '剧本库（A8）：7 个剧本的起止日期/回合数/首次行动方/布设顺序/初设数值与选项（含继承）、生效补给源、胜利条件、共识开关与可选规则',
+        '剧本库（A8）：8 个剧本（含入门教学剧本 Intro: Vitebsk）的起止日期/回合数/首次行动方/布设顺序/初设数值与选项（含继承）、生效补给源、胜利条件、共识开关与可选规则',
       source: [
         'scenarios.json（rules_scenarios / victory / items[].supply_sources）',
         'rules.json exclusive_rules_smolensk（agreed_options / optional_rules）',

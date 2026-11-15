@@ -5,7 +5,7 @@ import { DataFileMetaSchema, HexRefSchema, SideSchema } from './common.schema'
 /**
  * 初设索引契约（scenario-setup.json，A8）
  *
- * 逐条记录每个剧本的初设条目（源库 setup_index.json，1155 条）：
+ * 逐条记录每个剧本的初设条目（源库 setup_index.json，1184 条）：
  * **只搬初设条目，不搬运行时状态**。位置可为印刷格号或原文标签
  * （『死亡堆』『At any air bases』『w/i 3 hexes of …』『Stacked with any … HQs』）。
  *

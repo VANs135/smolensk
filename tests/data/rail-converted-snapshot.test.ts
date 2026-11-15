@@ -49,17 +49,23 @@ const railEdgeKeys = new Set(
   mapLayers.edges.filter((edge) => edge.rail === true).map((edge) => edgeKey(edge.a, edge.b)),
 )
 
+/**
+ * 参与换轨基线的剧本：入门教学 Intro 的剧本页未列换轨与端头（铁路容量 0，本剧本不涉及铁运），
+ * 故 `convertedAxisRails` / `railheads` 缺省，不纳入本节快照。
+ */
+const railScenarios = scenarios.scenarios.filter(
+  (scenario) => scenario.setup.convertedAxisRails !== undefined,
+)
+
 describe('剧本初设换轨快照（专规 1.2）', () => {
   it('快照覆盖的剧本与数据一一对应（7 个剧本、18 段走线）', () => {
-    expect(Object.keys(snapshot.scenarios).sort()).toEqual(
-      scenarios.scenarios.map((s) => s.id).sort(),
-    )
+    expect(Object.keys(snapshot.scenarios).sort()).toEqual(railScenarios.map((s) => s.id).sort())
     const runs = Object.values(snapshot.scenarios).reduce((sum, item) => sum + item.runs.length, 0)
     expect(runs).toBe(18)
   })
 
   it('每个剧本都有 railheads，且逐段等于原文 B 端（段数一致）', () => {
-    for (const scenario of scenarios.scenarios) {
+    for (const scenario of railScenarios) {
       const declared = scenario.setup.convertedAxisRails
       expect(declared, `剧本 ${scenario.id} 缺 convertedAxisRails`).toBeTruthy()
       const railheads = scenario.setup.railheads
@@ -71,7 +77,7 @@ describe('剧本初设换轨快照（专规 1.2）', () => {
   })
 
   it('逐剧本逐段：唯一路径推导出的边清单与快照完全一致', () => {
-    for (const scenario of scenarios.scenarios) {
+    for (const scenario of railScenarios) {
       const snapshotScenario = snapshot.scenarios[scenario.id]!
       const runs = scenario.setup.convertedAxisRails!.runs
       expect(runs, `剧本 ${scenario.id} 段数变化`).toEqual(

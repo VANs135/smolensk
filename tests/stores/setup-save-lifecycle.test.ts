@@ -85,7 +85,9 @@ describe('S1：逐枚初设进度的生命周期', () => {
 })
 
 describe('S1：开局存档与初设历史恢复', () => {
-  it.each(scenarios.scenarios.map((scenario) => scenario.id))(
+  // 入门教学剧本 Intro 的胜利口径在引擎批次落地前不参与本生命周期遍历
+  const ids = scenarios.scenarios.filter((s) => s.id !== 'Intro').map((s) => s.id)
+  it.each(ids)(
     '剧本%s：冷读档保留抽取名单、处置回执、落点、说明和双方确认，继续游戏不再抽签',
     (id) => {
       const original = save(id)

@@ -1,7 +1,7 @@
 /**
  * 初设索引同步脚本（A8 产出 scenario-setup.json）
  *
- * 数据源：斯摩棱斯克工程数据库 setup_index.json（1155 条，scenario_id ∈ {1,3,5,7}）
+ * 数据源：斯摩棱斯克工程数据库 setup_index.json（1184 条，scenario_id ∈ {Intro,1,3,5,7}）
  * 只搬初设条目，不搬运行时状态。位置为印刷格号或原文标签
  * （『死亡堆』『At any air bases』『w/i 3 hexes of …』『Stacked with any … HQs』）。
  *
@@ -116,7 +116,7 @@ export function buildScenarioSetup({ setupIndexDb }) {
     meta: {
       version: SCENARIO_SETUP_VERSION,
       description:
-        '初设索引（A8）：逐条记录剧本 1/3/5/7 的单位位置、减损、移动模式初设、† 容差、勘误、算子链接（unitId）与数量注记（SP/基地/运输点）；只搬初设条目不搬运行时状态',
+        '初设索引（A8）：逐条记录剧本 Intro/1/3/5/7 的单位位置、减损、移动模式初设、† 容差、勘误、算子链接（unitId）与数量注记（SP/基地/运输点）；只搬初设条目不搬运行时状态',
       source: ['setup_index.json（smolensk_unit_roster.json → scenarios[].groups 派生的初设条目）'],
     },
     notes: toSetupNotes(setupIndexDb.meta ?? {}),

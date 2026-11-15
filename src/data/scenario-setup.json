@@ -1,7 +1,7 @@
 {
   "meta": {
     "version": "0.4.0",
-    "description": "初设索引（A8）：逐条记录剧本 1/3/5/7 的单位位置、减损、移动模式初设、† 容差、勘误、算子链接（unitId）与数量注记（SP/基地/运输点）；只搬初设条目不搬运行时状态",
+    "description": "初设索引（A8）：逐条记录剧本 Intro/1/3/5/7 的单位位置、减损、移动模式初设、† 容差、勘误、算子链接（unitId）与数量注记（SP/基地/运输点）；只搬初设条目不搬运行时状态",
     "source": ["setup_index.json（smolensk_unit_roster.json → scenarios[].groups 派生的初设条目）"]
   },
   "notes": {
@@ -31842,6 +31842,950 @@
       "unitId": "su-aircraft-ru-tb-3",
       "unitIdKind": "aircraft",
       "linkBasis": "by_raw(机型 slug 匹配：1x TB.3)"
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 12.31",
+      "kind": "unit",
+      "count": 1,
+      "raw": "12-2-2 Inf Div (186; -1 step)",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["12.31"],
+      "locationKind": "hex",
+      "location": "12.31",
+      "name": "186 Inf Div",
+      "factors": "12-2-2",
+      "designation": "186",
+      "parentType": "Inf Div",
+      "stepPenalty": 1,
+      "stepPenaltyNote": "剧本注记：该单位以减损状态设置（-1 step）",
+      "unitId": "su-infantry-ru-186-rifle-div",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 12,
+          "row": 31
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 18.27",
+      "kind": "unit",
+      "count": 1,
+      "raw": "20-1-3 Tk Div (14; -1 step)",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["18.27"],
+      "locationKind": "hex",
+      "location": "18.27",
+      "name": "14 Tk Div",
+      "factors": "20-1-3",
+      "designation": "14",
+      "parentType": "Tk Div",
+      "stepPenalty": 1,
+      "stepPenaltyNote": "剧本注记：该单位以减损状态设置（-1 step）",
+      "unitId": "su-armor_tk-ru-14-tk-div",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 18,
+          "row": 27
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 18.28",
+      "kind": "unit",
+      "count": 1,
+      "raw": "11-1-1 Inf Div (126; -1 step)",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["18.28"],
+      "locationKind": "hex",
+      "location": "18.28",
+      "name": "126 Inf Div",
+      "factors": "11-1-1",
+      "designation": "126",
+      "parentType": "Inf Div",
+      "stepPenalty": 1,
+      "stepPenaltyNote": "剧本注记：该单位以减损状态设置（-1 step）",
+      "unitId": "su-infantry-ru-126-rifle-div",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 18,
+          "row": 28
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 19.26",
+      "kind": "unit",
+      "count": 1,
+      "raw": "20-1-3 Tk Div (18; -1 step)",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["19.26"],
+      "locationKind": "hex",
+      "location": "19.26",
+      "name": "18 Tk Div",
+      "factors": "20-1-3",
+      "designation": "18",
+      "parentType": "Tk Div",
+      "stepPenalty": 1,
+      "stepPenaltyNote": "剧本注记：该单位以减损状态设置（-1 step）",
+      "unitId": "su-armor_tk-ru-18-tk-div",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 19,
+          "row": 26
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 19.27",
+      "kind": "unit",
+      "count": 1,
+      "raw": "10-0-1 Inf Div (162; in Move Mode)",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["19.27"],
+      "locationKind": "hex",
+      "location": "19.27",
+      "name": "162 Inf Div",
+      "factors": "10-0-1",
+      "designation": "162",
+      "parentType": "Inf Div",
+      "setupMode": "move",
+      "unitId": "su-infantry-ru-162-rifle-div",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 19,
+          "row": 27
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 19.27",
+      "kind": "unit",
+      "count": 1,
+      "raw": "3-1-1 Alarm Mil Rgt",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["19.27"],
+      "locationKind": "hex",
+      "location": "19.27",
+      "name": "Alarm Mil Rgt",
+      "factors": "3-1-1",
+      "unitId": "su-militia-ru-mil-alarm-3-1-1",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 19,
+          "row": 27
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 19.28",
+      "kind": "unit",
+      "count": 1,
+      "raw": "13-3-3 Inf Div (127; in Move Mode)",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["19.28"],
+      "locationKind": "hex",
+      "location": "19.28",
+      "name": "127 Inf Div",
+      "factors": "13-3-3",
+      "designation": "127",
+      "parentType": "Inf Div",
+      "setupMode": "move",
+      "corrected": "按 2026-11-15 裁定：用仓库现有印值（13-3-3 / 6-3-5，AR3、3 步），不按剧本页另立数值",
+      "coLocated": ["airbase", "sp", "unit"],
+      "unitId": "su-infantry-ru-127-rifle-div",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 19,
+          "row": 28
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 19.28",
+      "kind": "airbase",
+      "count": 1,
+      "raw": "Level 1 Airbase",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["19.28"],
+      "locationKind": "hex",
+      "location": "19.28",
+      "coLocated": ["airbase", "sp", "unit"],
+      "unitIdKind": "none",
+      "linkBasis": "非棋条目（地图设施：空军基地属地图层（map_facilities／map_hexes.level），不指向棋子（格引用见 location_hexes））",
+      "locationRefs": [
+        {
+          "col": 19,
+          "row": 28
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 19.28",
+      "kind": "sp",
+      "count": 1,
+      "raw": "1 SP",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["19.28"],
+      "locationKind": "hex",
+      "location": "19.28",
+      "coLocated": ["airbase", "sp", "unit"],
+      "unitIdKind": "none",
+      "linkBasis": "非棋条目（按类型＋格号记录：SP 是地图上的补给点数，不指向具体棋子（格引用见 location_hexes））",
+      "locationRefs": [
+        {
+          "col": 19,
+          "row": 28
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 20.28",
+      "kind": "unit",
+      "count": 1,
+      "raw": "10-0-1 Inf Div (134)",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["20.28"],
+      "locationKind": "hex",
+      "location": "20.28",
+      "name": "134 Inf Div",
+      "factors": "10-0-1",
+      "designation": "134",
+      "parentType": "Inf Div",
+      "unitId": "su-infantry-ru-134-rifle-div",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 20,
+          "row": 28
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 19.32",
+      "kind": "hq",
+      "count": 1,
+      "raw": "22nd Army HQ",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["19.32"],
+      "locationKind": "hex",
+      "location": "19.32",
+      "name": "22nd Army HQ",
+      "unitId": "su-hq-ru-hq-22nd-army",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 19,
+          "row": 32
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 19.32",
+      "kind": "unit",
+      "count": 1,
+      "raw": "11-1-1 Inf Div (214; -1 step)",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["19.32"],
+      "locationKind": "hex",
+      "location": "19.32",
+      "name": "214 Inf Div",
+      "factors": "11-1-1",
+      "designation": "214",
+      "parentType": "Inf Div",
+      "stepPenalty": 1,
+      "stepPenaltyNote": "剧本注记：该单位以减损状态设置（-1 step）",
+      "unitId": "su-infantry-ru-214-rifle-div",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 19,
+          "row": 32
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 19.32",
+      "kind": "unit",
+      "count": 1,
+      "raw": "(2)-2-2 Alarm AT Rgt",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["19.32"],
+      "locationKind": "hex",
+      "location": "19.32",
+      "name": "Alarm AT Rgt",
+      "factors": "(2)-2-2",
+      "unitId": "su-anti_tank-ru-at-alarm-2-2-2",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 19,
+          "row": 32
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 19.32",
+      "kind": "unit",
+      "count": 1,
+      "raw": "26-1-1 Arty Bde",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["19.32"],
+      "locationKind": "hex",
+      "location": "19.32",
+      "name": "Arty Bde",
+      "factors": "26-1-1",
+      "unitId": "su-artillery-ru-arty-bde",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 19,
+          "row": 32
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 19.32",
+      "kind": "transport_point",
+      "count": 1,
+      "raw": "1 Wagon Point",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["19.32"],
+      "locationKind": "hex",
+      "location": "19.32",
+      "unitIdKind": "none",
+      "linkBasis": "非棋条目（按类型＋格号记录：运输点数量，不指向具体棋子（格引用见 location_hexes））",
+      "locationRefs": [
+        {
+          "col": 19,
+          "row": 32
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "soviet",
+      "groupLabel": "hex 19.32",
+      "kind": "sp",
+      "count": 2,
+      "raw": "2 SP",
+      "placementType": "固定格号",
+      "nation": "苏联",
+      "locationHexes": ["19.32"],
+      "locationKind": "hex",
+      "location": "19.32",
+      "unitIdKind": "none",
+      "linkBasis": "非棋条目（按类型＋格号记录：SP 是地图上的补给点数，不指向具体棋子（格引用见 location_hexes））",
+      "locationRefs": [
+        {
+          "col": 19,
+          "row": 32
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "axis",
+      "groupLabel": "hex 3.25",
+      "kind": "formation",
+      "count": 1,
+      "raw": "12 Pz Div (22 Krd, I-29 Pz, II-29 Pz, 5 Inf, 2 Aufk, 2 Arty, Truck)",
+      "placementType": "固定格号",
+      "nation": "德国",
+      "locationHexes": ["3.25"],
+      "locationKind": "hex",
+      "location": "3.25",
+      "name": "12 Pz Div",
+      "unitId": "12 Pz Div",
+      "unitIdKind": "formation",
+      "linkBasis": "by_name+side",
+      "subordinates": [
+        {
+          "component": "22 Krd",
+          "name": "12 Pz Div 22 Krd",
+          "raw": "22 Krd",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "3.25",
+          "unitId": "ax-armor_pz-ge-12-pz-22-mc",
+          "linkBasis": "分量归一（22 Krd → 22krd）＋父前缀（12 Pz）"
+        },
+        {
+          "component": "I-29 Pz",
+          "name": "12 Pz Div I-29 Pz",
+          "raw": "I-29 Pz",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "3.25",
+          "unitId": "ax-armor_pz-ge-12-pz-i-29-pz",
+          "linkBasis": "分量归一（I-29 Pz → i-29pz）＋父前缀（12 Pz）"
+        },
+        {
+          "component": "II-29 Pz",
+          "name": "12 Pz Div II-29 Pz",
+          "raw": "II-29 Pz",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "3.25",
+          "unitId": "ax-armor_pz-ge-12-pz-ii-29-pz",
+          "linkBasis": "分量归一（II-29 Pz → ii-29pz）＋父前缀（12 Pz）"
+        },
+        {
+          "component": "5 Inf",
+          "name": "12 Pz Div 5 Inf",
+          "raw": "5 Inf",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "3.25",
+          "unitId": "ax-armor_pz-ge-12-pz-5-mot-inf",
+          "linkBasis": "分量归一（5 Inf → 5inf）＋父前缀（12 Pz）"
+        },
+        {
+          "component": "2 Aufk",
+          "name": "12 Pz Div 2 Aufk",
+          "raw": "2 Aufk",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "3.25",
+          "unitId": "ax-armor_pz-ge-12-pz-2-arm-rec",
+          "linkBasis": "分量归一（2 Aufk → 2aufk）＋父前缀（12 Pz）"
+        },
+        {
+          "component": "2 Arty",
+          "name": "12 Pz Div 2 Arty",
+          "raw": "2 Arty",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "3.25",
+          "unitId": "ax-armor_pz-ge-12-pz-2-arty",
+          "linkBasis": "分量归一（2 Arty → 2arty）＋父前缀（12 Pz）"
+        },
+        {
+          "component": "Truck",
+          "name": "12 Pz Div Truck",
+          "raw": "Truck",
+          "isOrganicTruck": true,
+          "locationKind": "hex",
+          "location": "3.25",
+          "unitId": "ax-armor_pz-ge-12-pz-truck",
+          "linkBasis": "分量归一（Truck → truck）＋父前缀（12 Pz）"
+        }
+      ],
+      "locationRefs": [
+        {
+          "col": 3,
+          "row": 25
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "axis",
+      "groupLabel": "hex 5.27",
+      "kind": "hq",
+      "count": 1,
+      "raw": "39th Mtr Corps HQ",
+      "placementType": "固定格号",
+      "nation": "德国",
+      "locationHexes": ["5.27"],
+      "locationKind": "hex",
+      "location": "5.27",
+      "name": "39th Mtr Corps HQ",
+      "unitId": "ax-hq-ge-hq-39th-corps",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 5,
+          "row": 27
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "axis",
+      "groupLabel": "hex 5.27",
+      "kind": "unit",
+      "count": 1,
+      "raw": "10-5-4 Inf Bde (900)",
+      "placementType": "固定格号",
+      "nation": "德国",
+      "locationHexes": ["5.27"],
+      "locationKind": "hex",
+      "location": "5.27",
+      "name": "900 Inf Bde",
+      "factors": "10-5-4",
+      "designation": "900",
+      "parentType": "Inf Bde",
+      "unitId": "ax-motorized-ge-900-mot-inf-bde",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 5,
+          "row": 27
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "axis",
+      "groupLabel": "hex 5.27",
+      "kind": "transport_point",
+      "count": 3,
+      "raw": "3 Wagon Points",
+      "placementType": "固定格号",
+      "nation": "德国",
+      "locationHexes": ["5.27"],
+      "locationKind": "hex",
+      "location": "5.27",
+      "unitIdKind": "none",
+      "linkBasis": "非棋条目（按类型＋格号记录：运输点数量，不指向具体棋子（格引用见 location_hexes））",
+      "locationRefs": [
+        {
+          "col": 5,
+          "row": 27
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "axis",
+      "groupLabel": "hex 5.27",
+      "kind": "sp",
+      "count": 5,
+      "raw": "5 SP",
+      "placementType": "固定格号",
+      "nation": "德国",
+      "locationHexes": ["5.27"],
+      "locationKind": "hex",
+      "location": "5.27",
+      "unitIdKind": "none",
+      "linkBasis": "非棋条目（按类型＋格号记录：SP 是地图上的补给点数，不指向具体棋子（格引用见 location_hexes））",
+      "locationRefs": [
+        {
+          "col": 5,
+          "row": 27
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "axis",
+      "groupLabel": "hex 10.29",
+      "kind": "formation",
+      "count": 1,
+      "raw": "20 Pz Div (20 Krd, I-21 Pz, II-21 Pz, 59 Inf, 112 Inf, 92 Arty, Truck)",
+      "placementType": "固定格号",
+      "nation": "德国",
+      "locationHexes": ["10.29"],
+      "locationKind": "hex",
+      "location": "10.29",
+      "name": "20 Pz Div",
+      "unitId": "20 Pz Div",
+      "unitIdKind": "formation",
+      "linkBasis": "by_name+side",
+      "subordinates": [
+        {
+          "component": "20 Krd",
+          "name": "20 Pz Div 20 Krd",
+          "raw": "20 Krd",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "10.29",
+          "unitId": "ax-armor_pz-ge-20-pz-20-mc",
+          "linkBasis": "分量归一（20 Krd → 20krd）＋父前缀（20 Pz）"
+        },
+        {
+          "component": "I-21 Pz",
+          "name": "20 Pz Div I-21 Pz",
+          "raw": "I-21 Pz",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "10.29",
+          "unitId": "ax-armor_pz-ge-20-pz-i-21-pz",
+          "linkBasis": "分量归一（I-21 Pz → i-21pz）＋父前缀（20 Pz）"
+        },
+        {
+          "component": "II-21 Pz",
+          "name": "20 Pz Div II-21 Pz",
+          "raw": "II-21 Pz",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "10.29",
+          "unitId": "ax-armor_pz-ge-20-pz-ii-21-pz",
+          "linkBasis": "分量归一（II-21 Pz → ii-21pz）＋父前缀（20 Pz）"
+        },
+        {
+          "component": "59 Inf",
+          "name": "20 Pz Div 59 Inf",
+          "raw": "59 Inf",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "10.29",
+          "unitId": "ax-armor_pz-ge-20-pz-59-mot-inf",
+          "linkBasis": "分量归一（59 Inf → 59inf）＋父前缀（20 Pz）"
+        },
+        {
+          "component": "112 Inf",
+          "name": "20 Pz Div 112 Inf",
+          "raw": "112 Inf",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "10.29",
+          "unitId": "ax-armor_pz-ge-20-pz-112-mot-inf",
+          "linkBasis": "分量归一（112 Inf → 112inf）＋父前缀（20 Pz）"
+        },
+        {
+          "component": "92 Arty",
+          "name": "20 Pz Div 92 Arty",
+          "raw": "92 Arty",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "10.29",
+          "unitId": "ax-armor_pz-ge-20-pz-92-arty",
+          "linkBasis": "分量归一（92 Arty → 92arty）＋父前缀（20 Pz）"
+        },
+        {
+          "component": "Truck",
+          "name": "20 Pz Div Truck",
+          "raw": "Truck",
+          "isOrganicTruck": true,
+          "locationKind": "hex",
+          "location": "10.29",
+          "unitId": "ax-armor_pz-ge-20-pz-truck",
+          "linkBasis": "分量归一（Truck → truck）＋父前缀（20 Pz）"
+        }
+      ],
+      "locationRefs": [
+        {
+          "col": 10,
+          "row": 29
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "axis",
+      "groupLabel": "hex 11.31",
+      "kind": "unit",
+      "count": 1,
+      "raw": "2-5-4 Pio Bn (43)",
+      "placementType": "固定格号",
+      "nation": "德国",
+      "locationHexes": ["11.31"],
+      "locationKind": "hex",
+      "location": "11.31",
+      "name": "43 Pio Bn",
+      "factors": "2-5-4",
+      "designation": "43",
+      "parentType": "Pio Bn",
+      "unitId": "ax-engineer-ge-43-pioneer-bn",
+      "unitIdKind": "unit",
+      "linkBasis": "by_name+side",
+      "locationRefs": [
+        {
+          "col": 11,
+          "row": 31
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "axis",
+      "groupLabel": "hex 14.24",
+      "kind": "formation",
+      "count": 1,
+      "raw": "7 Pz Div (7 Krd, I-25 Pz, II-25 Pz, 6 Inf, 7 Inf, 78 Arty, Truck)",
+      "placementType": "固定格号",
+      "nation": "德国",
+      "locationHexes": ["14.24"],
+      "locationKind": "hex",
+      "location": "14.24",
+      "name": "7 Pz Div",
+      "unitId": "7 Pz Div",
+      "unitIdKind": "formation",
+      "linkBasis": "by_name+side",
+      "subordinates": [
+        {
+          "component": "7 Krd",
+          "name": "7 Pz Div 7 Krd",
+          "raw": "7 Krd",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "14.24",
+          "unitId": "ax-armor_pz-ge-7-pz-7-mc",
+          "linkBasis": "分量归一（7 Krd → 7krd）＋父前缀（7 Pz）"
+        },
+        {
+          "component": "I-25 Pz",
+          "name": "7 Pz Div I-25 Pz",
+          "raw": "I-25 Pz",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "14.24",
+          "unitId": "ax-armor_pz-ge-7-pz-i-25-pz",
+          "linkBasis": "分量归一（I-25 Pz → i-25pz）＋父前缀（7 Pz）"
+        },
+        {
+          "component": "II-25 Pz",
+          "name": "7 Pz Div II-25 Pz",
+          "raw": "II-25 Pz",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "14.24",
+          "unitId": "ax-armor_pz-ge-7-pz-ii-25-pz",
+          "linkBasis": "分量归一（II-25 Pz → ii-25pz）＋父前缀（7 Pz）"
+        },
+        {
+          "component": "6 Inf",
+          "name": "7 Pz Div 6 Inf",
+          "raw": "6 Inf",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "14.24",
+          "unitId": "ax-armor_pz-ge-7-pz-6-mot-inf",
+          "linkBasis": "分量归一（6 Inf → 6inf）＋父前缀（7 Pz）"
+        },
+        {
+          "component": "7 Inf",
+          "name": "7 Pz Div 7 Inf",
+          "raw": "7 Inf",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "14.24",
+          "unitId": "ax-armor_pz-ge-7-pz-7-mot-inf",
+          "linkBasis": "分量归一（7 Inf → 7inf）＋父前缀（7 Pz）"
+        },
+        {
+          "component": "78 Arty",
+          "name": "7 Pz Div 78 Arty",
+          "raw": "78 Arty",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "14.24",
+          "unitId": "ax-armor_pz-ge-7-pz-78-arty",
+          "linkBasis": "分量归一（78 Arty → 78arty）＋父前缀（7 Pz）"
+        },
+        {
+          "component": "Truck",
+          "name": "7 Pz Div Truck",
+          "raw": "Truck",
+          "isOrganicTruck": true,
+          "locationKind": "hex",
+          "location": "14.24",
+          "unitId": "ax-armor_pz-ge-7-pz-truck",
+          "linkBasis": "分量归一（Truck → truck）＋父前缀（7 Pz）"
+        }
+      ],
+      "locationRefs": [
+        {
+          "col": 14,
+          "row": 24
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "axis",
+      "groupLabel": "hex 14.27",
+      "kind": "formation",
+      "count": 1,
+      "raw": "20 Mtr Div (30 Krd, 76 Inf, 90 Inf, 20 Arty, Truck)",
+      "placementType": "固定格号",
+      "nation": "德国",
+      "locationHexes": ["14.27"],
+      "locationKind": "hex",
+      "location": "14.27",
+      "name": "20 Mtr Div",
+      "unitId": "20 Mtr Div",
+      "unitIdKind": "formation",
+      "linkBasis": "by_name+side",
+      "subordinates": [
+        {
+          "component": "30 Krd",
+          "name": "20 Mtr Div 30 Krd",
+          "raw": "30 Krd",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "14.27",
+          "unitId": "ax-motorized-ge-20-mtr-30-mc",
+          "linkBasis": "分量归一（30 Krd → 30krd）＋父前缀（20 Mtr）"
+        },
+        {
+          "component": "76 Inf",
+          "name": "20 Mtr Div 76 Inf",
+          "raw": "76 Inf",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "14.27",
+          "unitId": "ax-motorized-ge-20-mtr-76-mot-inf",
+          "linkBasis": "分量归一（76 Inf → 76inf）＋父前缀（20 Mtr）"
+        },
+        {
+          "component": "90 Inf",
+          "name": "20 Mtr Div 90 Inf",
+          "raw": "90 Inf",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "14.27",
+          "unitId": "ax-motorized-ge-20-mtr-90-mot-inf",
+          "linkBasis": "分量归一（90 Inf → 90inf）＋父前缀（20 Mtr）"
+        },
+        {
+          "component": "20 Arty",
+          "name": "20 Mtr Div 20 Arty",
+          "raw": "20 Arty",
+          "isOrganicTruck": false,
+          "locationKind": "hex",
+          "location": "14.27",
+          "unitId": "ax-motorized-ge-20-mtr-20-arty",
+          "linkBasis": "分量归一（20 Arty → 20arty）＋父前缀（20 Mtr）"
+        },
+        {
+          "component": "Truck",
+          "name": "20 Mtr Div Truck",
+          "raw": "Truck",
+          "isOrganicTruck": true,
+          "locationKind": "hex",
+          "location": "14.27",
+          "unitId": "ax-motorized-ge-20-mtr-truck",
+          "linkBasis": "分量归一（Truck → truck）＋父前缀（20 Mtr）"
+        }
+      ],
+      "locationRefs": [
+        {
+          "col": 14,
+          "row": 27
+        }
+      ]
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "axis",
+      "groupLabel": "In the Luftwaffe Box (off-map)",
+      "kind": "aircraft",
+      "count": 2,
+      "raw": "2x Bf.110",
+      "placementType": "图外空军盒（Luftwaffe Box）",
+      "nation": "德国",
+      "locationHexes": [],
+      "locationKind": "air_box",
+      "location": "Luftwaffe Box",
+      "unitId": "ax-aircraft-ge-bf-110",
+      "unitIdKind": "aircraft",
+      "linkBasis": "by_raw(机型 slug 匹配：2x Bf.110)"
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "axis",
+      "groupLabel": "In the Luftwaffe Box (off-map)",
+      "kind": "aircraft",
+      "count": 1,
+      "raw": "1x Do.17z",
+      "placementType": "图外空军盒（Luftwaffe Box）",
+      "nation": "德国",
+      "locationHexes": [],
+      "locationKind": "air_box",
+      "location": "Luftwaffe Box",
+      "unitId": "ax-aircraft-ge-do-17z",
+      "unitIdKind": "aircraft",
+      "linkBasis": "by_raw(机型 slug 匹配：1x Do.17z)"
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "axis",
+      "groupLabel": "In the Luftwaffe Box (off-map)",
+      "kind": "aircraft",
+      "count": 1,
+      "raw": "1x Ju.88",
+      "placementType": "图外空军盒（Luftwaffe Box）",
+      "nation": "德国",
+      "locationHexes": [],
+      "locationKind": "air_box",
+      "location": "Luftwaffe Box",
+      "unitId": "ax-aircraft-ge-ju-88",
+      "unitIdKind": "aircraft",
+      "linkBasis": "by_raw(机型 slug 匹配：1x Ju.88)"
+    },
+    {
+      "scenarioId": "Intro",
+      "side": "axis",
+      "groupLabel": "In the Luftwaffe Box (off-map)",
+      "kind": "aircraft",
+      "count": 3,
+      "raw": "3x Ju.87b",
+      "placementType": "图外空军盒（Luftwaffe Box）",
+      "nation": "德国",
+      "locationHexes": [],
+      "locationKind": "air_box",
+      "location": "Luftwaffe Box",
+      "unitId": "ax-aircraft-ge-ju-87b",
+      "unitIdKind": "aircraft",
+      "linkBasis": "by_raw(机型 slug 匹配：3x Ju.87r → 按 2026-11-15 裁定用 Ju.87b 记录与图)"
     }
   ]
 }
