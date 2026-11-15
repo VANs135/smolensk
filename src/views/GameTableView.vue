@@ -31,7 +31,7 @@ import {
 import { SupplyPanel } from '@/components/supply'
 import SupplyPhasePanel from '@/components/supply/SupplyPhasePanel.vue'
 import { provideUiMode } from '@/components/ui-mode'
-import { VictoryPanel } from '@/components/victory'
+import { VictoryDialog, VictoryPanel } from '@/components/victory'
 import type { HexRef } from '@/data'
 import { COUNTER_BOX_LABELS, type CounterBoxTarget } from '@/stores/map-view'
 import { DEFAULT_MAP_LAYERS } from '@/render/map-render'
@@ -694,6 +694,8 @@ onBeforeUnmount(() => {
     </div>
 
     <TerminationNotice v-if="gameSession.terminated" class="gt__termination" />
+    <!-- 用户 2026-11-15：对局终止即弹「判定胜利」窗（胜负 + 判定依据；条款号进 `?`） -->
+    <VictoryDialog />
     <QuestionPrompt />
 
     <!-- 读档后模式未设置：选齐前挡在盘面前，AI 不接管、热坐不按 PVP 遮屏 -->
