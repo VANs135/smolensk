@@ -45,13 +45,27 @@ const returnItems = computed<readonly CounterPickerItem[]>(() =>
   })),
 )
 
-const returnHexText = ref('')
 const returnSelectedId = ref<string | null>(null)
 
-function deploySelectedReturn(): void {
+/**
+ * 12.8e：返场落点**点地图选格**（不再手打格号）
+ *
+ * 候选给 `'any'`：12.8e 按 13.6b「作为增援返回」——合法落点由引擎在提交时校验
+ * （本方边缘入场格、且未被敌方阻挡），点错就地给红字并保留待点态，玩家可继续点。
+ */
+function beginReturnHexPick(): void {
   const id = returnSelectedId.value
   if (id === null) return
-  workbench.deployBreakoutReturnNow(id, returnHexText.value)
+  workbench.beginHexPick({
+    label: '返场落点',
+    rule: '12.8e',
+    candidates: 'any',
+    apply: (hex) => {
+      const ok = workbench.deployBreakoutReturnNow(id, `${hex.col}.${hex.row}`)
+      if (ok) returnSelectedId.value = null
+      return ok
+    },
+  })
 }
 </script>
 
@@ -69,9 +83,10 @@ function deploySelectedReturn(): void {
           :size="32"
           @pick="returnSelectedId = $event"
         />
-        <div class="row">
-          <input v-model="returnHexText" class="input num" placeholder="列.行" />
-          <BaseButton variant="primary" size="sm" @click="deploySelectedReturn">返场</BaseButton>
+        <div v-if="returnSelectedId !== null" class="row">
+          <BaseButton variant="primary" size="sm" @click="beginReturnHexPick">
+            点地图选返场落点
+          </BaseButton>
         </div>
       </template>
     </SessionStep>
@@ -101,15 +116,5 @@ function deploySelectedReturn(): void {
   color: var(--color-muted);
   font-size: var(--text-sm);
   margin: var(--space-1) 0;
-}
-
-.num {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  margin: var(--space-1) 0;
-}
-
-.input {
-  width: 80px;
 }
 </style>
