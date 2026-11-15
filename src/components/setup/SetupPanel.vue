@@ -3,7 +3,7 @@ import { computed } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/base'
 import { useUiMode } from '@/components/ui-mode'
-import { scenarios } from '@/data'
+import { scenarios, scenarioSetup } from '@/data'
 import type { Side } from '@/data'
 import { setupHexLabel } from '@/engine/rules'
 import { setupEffectsOf } from '@/engine/rules/setup-effects'
@@ -75,6 +75,30 @@ const drawGroups = computed(() => {
   const sourceId = setup.plan?.source.source ?? setup.scenarioId
   return setupEffectsOf(sourceId).find((effect) => effect.kind === 'formationDraw')?.groups ?? []
 })
+
+/**
+ * 初设原文对照（Intro: Vitebsk）
+ *
+ * 剧本页那一栏是「text notation + counter images」；这里把每条原文与仓库解析出的
+ * 链接 / 落点 / 减损并排给出，作为教学对照。解析不出时如实留空，不补猜。
+ */
+const introEntryRows = computed(() =>
+  setup.scenarioId === 'Intro'
+    ? scenarioSetup.entries.filter((entry) => entry.scenarioId === 'Intro')
+    : [],
+)
+
+/** 数据里的只读初设条目（与 `scenarioSetup.entries` 同型，避免与可变类型冲突） */
+type SetupEntryView = (typeof scenarioSetup.entries)[number]
+
+/** 一条初设条目的解析结果（算子链接 · 落点 · 减损） */
+function entryTargetOf(entry: SetupEntryView): string {
+  const parts: string[] = []
+  if (entry.unitId != null) parts.push(entry.unitId)
+  if (entry.location != null) parts.push(entry.location)
+  if (entry.stepPenalty != null && entry.stepPenalty > 0) parts.push(`-${entry.stepPenalty} step`)
+  return parts.length > 0 ? parts.join(' · ') : '—'
+}
 
 /** 某组已抽中的名单（账本在 C12 的剧本抽取盒里） */
 function drawnOf(kind: string): string[] {
@@ -344,6 +368,33 @@ function sideLabel(side: Side): string {
       <p v-for="(gap, index) in [...setup.dataGaps, ...setup.notes]" :key="index" class="muted num">
         · {{ gap }}
       </p>
+    </details>
+
+    <!-- ── ④b 初设原文对照（教学：text notation ↔ 解析结果） ── -->
+    <details v-if="introEntryRows.length > 0" class="detail" data-testid="intro-notation">
+      <summary>初设原文对照（Intro: Vitebsk）：{{ introEntryRows.length }} 条</summary>
+      <p class="muted">
+        逐条对照剧本页的 text notation 与仓库解析结果（算子链接 · 落点 ·
+        减损）；解析不出时留空，不补猜。
+      </p>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>原文</th>
+            <th>方</th>
+            <th>类型</th>
+            <th>解析</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(entry, index) in introEntryRows" :key="index">
+            <td class="num">{{ entry.raw }}</td>
+            <td>{{ sideLabel(entry.side) }}</td>
+            <td class="num">{{ entry.kind }}</td>
+            <td class="num">{{ entryTargetOf(entry) }}</td>
+          </tr>
+        </tbody>
+      </table>
     </details>
 
     <!-- ── ⑤ 开局流程明细（默认折叠，避免占满右侧菜单栏） ── -->
