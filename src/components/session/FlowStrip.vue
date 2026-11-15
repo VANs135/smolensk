@@ -214,9 +214,6 @@ const sideName = computed(() =>
 )
 const activeStage = computed(() => (inSetup.value ? '布设' : flow.value.phaseLabel))
 const currentSegment = computed(() => (inSetup.value ? null : segmentFacts.value.step))
-const currentRule = computed(
-  () => mapView.session?.rule ?? currentSegment.value?.rule.split(' / ')[0],
-)
 const position = computed(() => segmentFacts.value.position)
 const stages = Object.entries(workbench.PHASE_LABELS).map(([id, label]) => ({
   id,
@@ -286,29 +283,22 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
     <div class="bar__actions">
       <slot name="trail" />
       <BaseButton
+        v-if="flow.canAdvance && liveBlock === null"
         class="bar__advance"
         variant="primary"
-        :disabled="!flow.canAdvance || liveBlock !== null"
-        :title="liveBlock?.reason"
         @click="onAdvance"
-        >{{ advanceLabel }}
-        <span v-if="flow.canAdvance && liveBlock === null" aria-hidden="true">→</span></BaseButton
+        >{{ advanceLabel }} <span aria-hidden="true">→</span></BaseButton
       >
+      <span v-else class="bar__block" role="status" :title="liveBlock?.rule">
+        {{ liveBlock?.reason ?? advanceLabel }}
+      </span>
     </div>
 
     <div class="bar__status" role="status">
-      <template v-if="notice !== null">
-        <span class="bar__rule num">{{ notice.rule }}</span>
-        <span class="bar__notice" :title="notice.text">{{ notice.text }}</span>
-      </template>
-      <template v-else>
-        <span v-if="currentRule" class="bar__rule num" :title="currentSegment?.rule">{{
-          currentRule
-        }}</span>
-        <span class="bar__hint" :title="flow.hint"
-          ><slot name="status">{{ flow.hint }}</slot></span
-        >
-      </template>
+      <span v-if="notice !== null" class="bar__notice" :title="notice.rule">{{ notice.text }}</span>
+      <span v-else class="bar__hint" :title="flow.hint"
+        ><slot name="status">{{ flow.hint }}</slot></span
+      >
     </div>
   </div>
 
@@ -377,7 +367,7 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
     </div>
 
     <div class="row">
-      <BaseButton variant="primary" size="sm" :disabled="!flow.canAdvance" @click="onAdvance">
+      <BaseButton v-if="flow.canAdvance" variant="primary" size="sm" @click="onAdvance">
         {{ flow.nextActionLabel }}
       </BaseButton>
       <span class="num">{{ flow.advanceLabel }}</span>
@@ -651,9 +641,12 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
   color: var(--color-command-amber);
 }
 
-.bar__rule {
-  flex: none;
-  color: var(--color-accent);
+.bar__block {
+  max-width: min(520px, 60vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-command-amber);
 }
 
 @media (max-width: 660px) {

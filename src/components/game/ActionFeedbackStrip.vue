@@ -33,11 +33,13 @@ const rows = computed(() =>
  */
 const refusal = computed(() => workbench.actionRefusal)
 
-/** 当前环节（同一行里说清"现在该在哪儿做"） */
-const segmentLabel = computed<string>(() => {
-  const step = workbench.segmentStep
-  return step === null ? '本段没有玩家环节' : `${step.label}（${step.rule}）`
-})
+/** 类别 → 中文标签（界面不直接显示引擎枚举） */
+const TONE_LABELS: Record<string, string> = {
+  info: '提示',
+  success: '完成',
+  warning: '注意',
+  danger: '拒绝',
+}
 
 /** 类别 → 标签样式（与 `WorkbenchLogEntry.kind` 一一对应） */
 const TONE_KINDS: Record<string, 'info' | 'success' | 'warning' | 'danger' | 'neutral'> = {
@@ -52,27 +54,22 @@ const TONE_KINDS: Record<string, 'info' | 'success' | 'warning' | 'danger' | 'ne
   <section class="feedback" aria-label="操作反馈">
     <div class="feedback__head">
       <span class="feedback__title">操作反馈</span>
-      <span class="muted num">最近 {{ LIMIT }} 条（含被拒原因与规则号）</span>
+      <span class="muted num">最近 {{ LIMIT }} 条</span>
     </div>
-    <!-- 当前被闸门挡下的这一步：置顶常驻（含规则号 + 该在哪个环节做），直到被允许的动作出现 -->
-    <p v-if="refusal !== null" class="feedback__refusal">
-      <BaseTag kind="warning">{{ refusal.rule }}</BaseTag>
-      <span class="feedback__text">
-        本环节（{{ segmentLabel }}）不能做这一步：{{ refusal.reason }}
-      </span>
+    <p v-if="refusal !== null" class="feedback__refusal" :title="refusal.rule">
+      <span class="feedback__text">{{ refusal.reason }}</span>
     </p>
-    <p v-if="rows.length === 0" class="muted feedback__empty">
-      暂无反馈：选一个算子并点地图，这里会按规则编号说明每一步的结果。
-    </p>
-    <ul v-else class="feedback__list">
+    <ul v-if="rows.length > 0" class="feedback__list">
       <li
         v-for="row in rows"
         :key="row.id"
         class="feedback__row"
         :class="`feedback__row--${row.tone}`"
+        :title="row.rule ?? undefined"
       >
-        <BaseTag :kind="TONE_KINDS[row.tone] ?? 'neutral'">{{ row.tone }}</BaseTag>
-        <span v-if="row.rule !== null" class="feedback__rule num">{{ row.rule }}</span>
+        <BaseTag :kind="TONE_KINDS[row.tone] ?? 'neutral'">{{
+          TONE_LABELS[row.tone] ?? '提示'
+        }}</BaseTag>
         <span class="feedback__text">{{ row.text }}</span>
       </li>
     </ul>
@@ -105,14 +102,10 @@ const TONE_KINDS: Record<string, 'info' | 'success' | 'warning' | 'danger' | 'ne
   gap: var(--space-2);
   margin: var(--space-1) 0 0;
   padding: var(--space-1) var(--space-2);
-  border-left: 3px solid var(--color-accent);
+  border-left: 3px solid var(--color-danger);
   background: var(--color-bg-2);
   font-size: var(--text-sm);
   line-height: 1.35;
-}
-
-.feedback__empty {
-  margin: var(--space-1) 0 0;
 }
 
 .feedback__list {
@@ -140,11 +133,6 @@ const TONE_KINDS: Record<string, 'info' | 'success' | 'warning' | 'danger' | 'ne
 
 .feedback__row--danger {
   color: var(--color-danger);
-}
-
-.feedback__rule {
-  flex: none;
-  color: var(--color-muted);
 }
 
 .feedback__text {

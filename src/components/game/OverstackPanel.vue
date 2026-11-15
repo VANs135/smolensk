@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-
 import { BaseButton, BaseTag } from '@/components/base'
 import { useWorkbenchStore } from '@/stores'
 
@@ -13,11 +11,10 @@ import { useWorkbenchStore } from '@/stores'
  *
  * 判据与规则号全部来自 store（`overstackDuties` 的 `detail` / `rule` 又是引擎
  * `stackingObligations()` 给的）；本组件只画清单、转发勾选与提交，不自己判堆叠。
- * 没有「稍后 / 忽略」按钮：未回到上限时「摧毁所选」保持不可用，流程条的推进也继续被拦。
+ * 没有「稍后 / 忽略」按钮：未回到上限时「摧毁所选」不出现，流程条的推进也继续被拦。
  */
 
 const workbench = useWorkbenchStore()
-const feedback = ref('')
 
 function sideName(side: 'axis' | 'soviet'): string {
   return side === 'axis' ? '轴心国' : '苏联'
@@ -29,18 +26,10 @@ function isPicked(key: string, instanceId: string): boolean {
 
 function onToggle(key: string, instanceId: string): void {
   workbench.toggleOverstackPick(key, instanceId)
-  feedback.value = ''
 }
 
 function onSubmit(): void {
-  const previous = workbench.log[0]?.id
-  if (workbench.destroyOverstackPicksNow()) {
-    feedback.value = ''
-    return
-  }
-  const latest = workbench.log[0]
-  feedback.value =
-    latest !== undefined && latest.id !== previous ? latest.text : '未完成：请按清单选够再提交'
+  workbench.destroyOverstackPicksNow()
 }
 </script>
 
@@ -54,9 +43,7 @@ function onSubmit(): void {
     @wheel.stop
   >
     <header class="overstack__head">
-      <BaseTag kind="danger">{{ workbench.overstackDuties[0]?.rule }}</BaseTag>
-      <h3>超堆叠结算</h3>
-      <span class="overstack__note">环节末：超上限的格须由拥有者摧毁单位</span>
+      <h3 title="4.8a">超堆叠结算</h3>
     </header>
 
     <div v-for="duty in workbench.overstackDuties" :key="duty.key" class="overstack__duty">
@@ -80,19 +67,10 @@ function onSubmit(): void {
     </div>
 
     <footer class="overstack__foot">
-      <BaseButton
-        variant="primary"
-        size="sm"
-        :disabled="!workbench.overstackSettled"
-        @click="onSubmit"
-      >
+      <BaseButton v-if="workbench.overstackSettled" variant="primary" size="sm" @click="onSubmit">
         摧毁所选并回到上限
       </BaseButton>
-      <span v-if="!workbench.overstackSettled" class="overstack__hint">
-        每一格都要选够才能过关（没有“忽略”）
-      </span>
     </footer>
-    <p v-if="feedback !== ''" class="overstack__feedback">{{ feedback }}</p>
   </section>
 </template>
 
@@ -131,11 +109,6 @@ function onSubmit(): void {
   font-size: var(--text-lg);
 }
 
-.overstack__note {
-  color: var(--color-muted);
-  font-size: var(--text-xs);
-}
-
 .overstack__duty {
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--color-rule);
@@ -171,16 +144,5 @@ function onSubmit(): void {
 
 .overstack__foot {
   padding: var(--space-2) var(--space-3);
-}
-
-.overstack__hint,
-.overstack__feedback {
-  margin: 0;
-  color: var(--color-danger);
-  font-size: var(--text-xs);
-}
-
-.overstack__feedback {
-  padding: 0 var(--space-3) var(--space-2);
 }
 </style>

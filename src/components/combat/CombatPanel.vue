@@ -273,14 +273,8 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
   <BasePanel>
     <!-- R-1：发起屏（S1）已删——点可攻击格即开打并直接进补给步；本面板只在战斗开始后出现 -->
     <template v-if="state !== null">
-      <p v-if="workbench.combatError !== null" class="bad">
-        <BaseTag kind="danger">{{ workbench.combatError.rule }}</BaseTag>
+      <p v-if="workbench.combatError !== null" class="bad" :title="workbench.combatError.rule">
         {{ workbench.combatErrorLine }}
-      </p>
-      <!-- C8：补给一旦确认，存档/读档即被 settlementBlockedReason 拒绝；在此后全程显式说明 -->
-      <p v-if="workbench.combatSupplyCommitted" class="muted">
-        <BaseTag kind="warning">9.2</BaseTag>
-        本场战斗须一次打完：收束前不能保存或读取对局。
       </p>
 
       <!-- 第 2 步：战斗补给（9.5 / 12.4）——攻/守两段同窗，各自确认 -->
@@ -360,8 +354,6 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatSupply()">
             进入行动值
           </BaseButton>
-          <!-- C8：写在确认按钮旁，确认前就能看到「本场战斗须一次打完」 -->
-          <span class="muted">确认后本场战斗须一次打完：收束前不能保存或读取对局（9.2）</span>
         </div>
       </SessionStep>
 
@@ -381,9 +373,9 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         </RuleTip>
         <div class="row">
           <BaseButton
+            v-if="workbench.combatInputs.attackerArUnitId !== null"
             variant="secondary"
             size="sm"
-            :disabled="workbench.combatInputs.attackerArUnitId === null"
             @click="workbench.declareCombatArStep('attacker')"
           >
             攻方宣布
@@ -394,11 +386,6 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
       <SessionStep item="combat:ar:defender">
         <CounterPicker
           title="守方 AR 单位"
-          :hint="
-            workbench.nkvdArRequiredNow
-              ? '守方堆叠内有 NKVD 边防团 ⇒ 只能从它们中选（阵列已收窄）'
-              : ''
-          "
           :items="defenderArItems"
           :size="40"
           @pick="workbench.combatInputs.defenderArUnitId = $event"
@@ -410,9 +397,9 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         </RuleTip>
         <div class="row">
           <BaseButton
+            v-if="workbench.combatInputs.defenderArUnitId !== null"
             variant="primary"
             size="sm"
-            :disabled="workbench.combatInputs.defenderArUnitId === null"
             @click="workbench.declareCombatArStep('defender')"
           >
             守方宣布并继续
@@ -491,11 +478,8 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
               workbench.combatAwaitingShiftDie ? '补掷横移骰（1d6）' : '掷奇袭骰（2d6，逐步复核）'
             }}
           </BaseButton>
-          <span class="muted">（逐步复核用；正常流程不必点这里的按钮。）</span>
         </div>
-        <p v-if="workbench.combatAwaitingShiftDie" class="bad">
-          已发生奇袭：按 9.8 须再掷一枚骰子决定横移列数。
-        </p>
+        <p v-if="workbench.combatAwaitingShiftDie" class="bad">已发生奇袭：须补掷横移骰</p>
       </SessionStep>
 
       <!-- 第 7 步：战斗掷骰（9.9）——同上，通常已自动跑过 -->
@@ -602,7 +586,6 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         <CounterPicker
           v-if="optionLossItems.length > 0"
           title="受损"
-          hint="点算子图＝记 1 点军力损失；地图三色格＝可撤退格，点格按该格距离记撤退"
           :items="optionLossItems"
           :size="40"
           @pick="workbench.applyOptionDraftLoss($event)"
@@ -625,7 +608,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
             title="9.10c"
             @click="workbench.confirmCombatIgnoreOptions()"
           >
-            行使 9.10c：忽略选项
+            忽略选项
           </BaseButton>
           <!-- 9.10a：点数分配完才出现提交（未分完不置灰，直接不出现，剩余点数留在上方） -->
           <BaseButton
@@ -660,7 +643,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           v-if="retreatPlan === null && workbench.combatRetreatSkippedSides.length === 0"
           class="muted"
         >
-          本场战斗无人需要撤退（双方选项都未含撤退格数）。
+          无人需要撤退
         </p>
         <!-- 9.12：选项点名的撤退方已无存活参战单位 ⇒ 无撤退对象，确认即收束 -->
         <p
@@ -668,19 +651,16 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           class="muted"
         >
           <BaseTag kind="warning">无存活单位</BaseTag>
-          点名要撤退的{{ workbench.combatRetreatSkippedSides.includes('attacker') ? '攻方' : ''
-          }}{{
-            workbench.combatRetreatSkippedSides.includes('defender') ? '守方' : ''
-          }}已无存活参战单位 ⇒ 无撤退对象（格数记 0），确认即收束。
+          无撤退对象，确认即收束
         </p>
         <template v-if="retreatPlan !== null">
           <p class="num">
-            现在给{{ retreatPlan.side === 'attacker' ? '攻方' : '守方' }}选落点：{{
+            {{ retreatPlan.side === 'attacker' ? '攻方' : '守方' }}落点：{{
               retreatPlan.complete
                 ? retreatPlan.units.some((unit) => unit.noLanding === true)
                   ? '已齐（含将被消灭的单位）'
                   : '已选齐'
-                : '点地图上的高亮格'
+                : '待选'
             }}
           </p>
           <div v-for="row in retreatPlan.units" :key="row.unitId" class="row">
@@ -712,7 +692,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           <!-- 9.12e：撤退堆叠在进入敌方 ZOC 前已有 DG ⇒ 额外 1 点损失的承受者由拥有者选 -->
           <div v-if="extraLossPreview !== null" class="row">
             <span class="warn num">
-              该堆叠损失 {{ extraLossPreview.points }} 点军力，由谁承受（候选＝撤退中的 DG 单位）：
+              额外损失 {{ extraLossPreview.points }} 点：由谁承受
               <RuleTip rule="9.12e">
                 撤退堆叠在进入敌方 ZOC 前已有 DG ⇒ 额外损失 1 点军力；承受者由拥有者从撤退中的 DG
                 单位里选。
@@ -759,7 +739,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         <!-- B33：突袭的推进是**强制**的（9.12g-D）⇒ 说明与按钮按这个口径给 -->
         <p v-if="workbench.combatAdvanceMandatory" class="warn num">
           <BaseTag kind="danger">突袭</BaseTag>
-          本次必须战后推进（不给"不推进"）；撤退收束后自动收束，若位移待决停在本步，落点选定后即自动收束。
+          本次必须推进
           <RuleTip rule="9.12g-D / 8.0 / 9.14">
             成功的突袭必须战后推进：防御方撤退或被摧毁 ⇒ 所有攻击单位进入该格，无需额外 MP。 因 9.14
             位移待决时，位移落点选定后即自动收束。
@@ -790,7 +770,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           </BaseButton>
         </div>
         <p v-if="advanceBlockedCount > 0" class="muted">
-          另有 {{ advanceBlockedCount }} 枚不能推进（未付补给 / 不可移动）。
+          另有 {{ advanceBlockedCount }} 枚不可推进
         </p>
         <div class="row">
           <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatAdvance()">
@@ -843,7 +823,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
               workbench.combatSummary.defender.options
             }}
             <span v-if="workbench.combatSummary.defender.dg">· DG</span>
-            <span v-if="workbench.combatSummary.defender.ignored">· 已忽略选项（9.10c）</span>
+            <span v-if="workbench.combatSummary.defender.ignored">· 已忽略选项</span>
             <span v-else-if="workbench.combatSummary.defender.optionTaken !== null">
               （已结算：撤 {{ workbench.combatSummary.defender.optionTaken.retreatHexes }} / 损
               {{ workbench.combatSummary.defender.optionTaken.lossPoints }}）
@@ -868,9 +848,9 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         </p>
         <!-- R15（K10）：「×」在提交后是 refused（置灰），本按钮同口径 —— 有挡因即 disabled -->
         <BaseButton
+          v-if="cancelBlocker === null"
           variant="ghost"
           size="sm"
-          :disabled="cancelBlocker !== null"
           @click="workbench.cancelCombat()"
           >放弃本场战斗</BaseButton
         >

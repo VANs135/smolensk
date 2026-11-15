@@ -14,11 +14,13 @@ import { describe, expect, it } from 'vitest'
 const read = (file: string): string => fs.readFileSync(path.resolve(file), 'utf8')
 
 describe('UI1-a：存档文案与可用态', () => {
-  it('对话框说明与按钮来自既有 store 事实', () => {
+  it('对话框按钮来自 store 事实，不可保存时不出现灰按钮', () => {
     const src = read('src/components/save/SaveLoadDialog.vue')
-    expect(src).toContain('结算点才可存档')
     expect(src).toContain('workbench.saveBlockedReason')
-    expect(src).toContain(':disabled="!canSave"')
+    // 2026-11-15 口径：窗内不放说明文字，不可用项不出现（不是禁用）
+    expect(src).toContain('v-if="canSave"')
+    expect(src).not.toContain(':disabled="!canSave"')
+    expect(src).not.toContain('结算点才可存档')
     // 旧口径「任意环节都可存档」已删除
     expect(src).not.toContain('任意环节都可存档')
   })

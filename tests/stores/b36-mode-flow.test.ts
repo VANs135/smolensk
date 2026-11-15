@@ -113,7 +113,7 @@ describe('B36：接线（源码守卫）', () => {
   it('★ 选剧本页有模式单选；对局台与热键都**没有**交接链（整条移除）', () => {
     const setupView = readFileSync('src/views/ScenarioSetupView.vue', 'utf8')
     expect(setupView).toContain('hotseat.MODE_LABELS')
-    expect(setupView).toContain('<ul class="modes">')
+    expect(setupView).toContain('class="modes"')
     expect(setupView).toContain('type="radio"')
     expect(setupView).toContain('@change="hotseat.setMode(item.key)"')
 

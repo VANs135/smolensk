@@ -25,9 +25,6 @@ const selected = computed(() => choices.value.find((item) => item.id === selecte
  * 这里直接读数据，避免为了展示去改初设 store 的口径。
  */
 const fullScenarios = computed(() => new Map(scenarios.scenarios.map((item) => [item.id, item])))
-const selectedFull = computed(() =>
-  selected.value === null ? null : (fullScenarios.value.get(selected.value.id) ?? null),
-)
 
 /** 剧本页明示 `1 player turn` 的教学剧本 */
 function isTeachingScenario(id: string): boolean {
@@ -41,24 +38,11 @@ function weatherLabelOf(id: string): string {
   return weather === 'restricted' ? '受限飞行（Limited Flight）' : '正常飞行'
 }
 
-/** 教学剧本的原文摘要（放脚本里，避免模板换行把「Minor Victory」拆成两行） */
-const introSummary = computed(() => {
-  const full = selectedFull.value
-  if (full === null) return ''
-  const first = full.firstPlayer === 'axis' ? '轴心国' : '苏联'
-  const setupFirst = full.setupFirst === 'soviet' ? '苏军' : '轴心国'
-  return (
-    `单人教学：${first}先手、${setupFirst}先设；全剧本只有 1 个玩家回合，走完即终局。` +
-    '目标：两格维捷布斯克（19.27 + 19.28）均由轴方控制 = Major Victory；' +
-    '未全控但苏方无法向两格及格内单位追溯抽象补给（12.x）= Minor Victory；否则轴方失败。'
-  )
-})
-
-const modeCopy = {
-  solo: { label: '单人推演', note: '同一人操作双方；双方可见' },
-  pvp: { label: '双人热坐', note: '换手不遮屏、不自动切视角 · §4.9a' },
-  pve: { label: '人机对局', note: 'AI 打一方，你打另一方' },
-} as const
+/** 当前对局模式 / AI 方的静态名（初设开始后只显示这一行，不再摆一组不可用的单选） */
+const modeLabel = computed(
+  () => modeOptions.value.find((item) => item.key === hotseat.mode)?.label ?? '—',
+)
+const aiSideLabel = computed(() => (hotseat.aiSide === 'axis' ? '轴心国' : '苏联'))
 
 const aiSideChoices = [
   { side: 'axis', label: '轴心国' },
@@ -76,7 +60,7 @@ function onEnterSetup(): void {
   if (!setup.enterSetup(target.id)) {
     const failure = setup.lastAction
     const message = failure?.detail ?? '请重新选择剧本'
-    ui.pushToast('warning', `无法进入初设（§${failure?.rule ?? '2.2'}）${message}`)
+    ui.pushToast('warning', `无法进入初设：${message}`)
     return
   }
   ui.navigate('game')
@@ -94,9 +78,9 @@ function onEnterSetup(): void {
           <h2 class="scenario__title">战役部署</h2>
         </div>
         <button
+          v-if="selected !== null"
           class="scenario__enter"
           type="button"
-          :disabled="selected === null"
           @click="onEnterSetup"
         >
           进入初设 <span aria-hidden="true">→</span>
@@ -187,10 +171,9 @@ function onEnterSetup(): void {
                 <dd v-else>{{ weatherLabelOf(selected.id) }}</dd>
               </div>
             </dl>
-            <p v-if="isTeachingScenario(selected.id)" class="scenario__teach">{{ introSummary }}</p>
             <fieldset class="scenario__modes">
               <legend>对局模式</legend>
-              <ul class="modes">
+              <ul v-if="!hotseat.setupLocked" class="modes">
                 <li v-for="item in modeOptions" :key="item.key">
                   <label
                     class="modes__item"
@@ -201,21 +184,17 @@ function onEnterSetup(): void {
                       name="hotseat-mode"
                       :value="item.key"
                       :checked="hotseat.mode === item.key"
-                      :disabled="hotseat.setupLocked"
                       @change="hotseat.setMode(item.key)"
                     />
-                    <span class="modes__label">{{ modeCopy[item.key].label }}</span>
-                    <span class="modes__note">{{ modeCopy[item.key].note }}</span>
+                    <span class="modes__label">{{ item.label }}</span>
                   </label>
                 </li>
               </ul>
-              <p v-if="hotseat.setupLocked" class="modes__locked">
-                初设已开始，对局模式锁定；换剧本可重新选择。
-              </p>
+              <p v-else class="modes__locked">{{ modeLabel }}</p>
             </fieldset>
             <fieldset v-if="hotseat.mode === 'pve'" class="scenario__modes">
               <legend>AI 控制方</legend>
-              <ul class="modes">
+              <ul v-if="!hotseat.setupLocked" class="modes">
                 <li v-for="item in aiSideChoices" :key="item.side">
                   <label
                     class="modes__item"
@@ -226,22 +205,21 @@ function onEnterSetup(): void {
                       name="ai-side"
                       :value="item.side"
                       :checked="hotseat.aiSide === item.side"
-                      :disabled="hotseat.setupLocked"
                       @change="hotseat.setAiSide(item.side)"
                     />
                     <span class="modes__label">AI 打{{ item.label }}</span>
-                    <span class="modes__note">你操作另一方</span>
                   </label>
                 </li>
               </ul>
+              <p v-else class="modes__locked">AI 打{{ aiSideLabel }}</p>
             </fieldset>
           </section>
 
           <!-- 4.0：只在**选剧本之前**可勾定；开局后冻结，整块不再出现（不允许局内改） -->
           <details v-if="!gameSession.agreedLocked" class="scenario__sheet scenario__consensus">
-            <summary class="scenario__heading">
+            <summary class="scenario__heading" title="4.0">
               <span>开局共识</span>
-              <span class="num">{{ gameSession.agreedCheckedCount }} 项 · §4.0</span>
+              <span class="num">{{ gameSession.agreedCheckedCount }} 项</span>
             </summary>
             <ConsensusChecklist />
           </details>
@@ -363,8 +341,7 @@ function onEnterSetup(): void {
 .scenario__heading .num,
 .scenario__date,
 .scenario__meta,
-.scenario__facts dt,
-.modes__note {
+.scenario__facts dt {
   color: var(--color-command-muted);
   font-size: var(--text-xs);
 }
@@ -431,13 +408,6 @@ function onEnterSetup(): void {
   border: 1px solid var(--color-command-teal);
   border-radius: var(--radius-sm, 4px);
   color: var(--color-command-teal);
-}
-
-.scenario__teach {
-  margin: 0 var(--space-4) var(--space-3);
-  color: var(--color-command-muted);
-  font-size: var(--text-xs);
-  line-height: 1.5;
 }
 
 .scenario__facts {
@@ -516,14 +486,11 @@ function onEnterSetup(): void {
   font-weight: 700;
 }
 
-.modes__note {
-  margin-left: auto;
-}
-
 .modes__locked {
   margin: var(--space-2) 0 0;
-  color: var(--color-muted);
-  font-size: 12px;
+  color: var(--color-command-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-ui);
 }
 
 .scenario__consensus summary {

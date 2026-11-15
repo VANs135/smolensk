@@ -79,13 +79,15 @@ describe('对局模式：选剧本时定、初设前必须定', () => {
 })
 
 describe('界面接线：模式在选剧本页、顶栏只读、预设按 AI 方', () => {
-  it('选剧本页：模式单选带初设后禁用；PVE 追加 AI 方单选', () => {
+  it('选剧本页：初设后模式只读展示（不摆灰单选）；PVE 追加 AI 方单选', () => {
     const source = readSource('../../src/views/ScenarioSetupView.vue')
     expect(source).toContain('hotseat.setMode(item.key)')
-    expect(source).toContain(':disabled="hotseat.setupLocked"')
+    expect(source).toContain('v-if="!hotseat.setupLocked"')
+    expect(source).not.toContain(':disabled="hotseat.setupLocked"')
     expect(source).toContain("hotseat.mode === 'pve'")
     expect(source).toContain('hotseat.setAiSide(item.side)')
-    expect(source).toContain('初设已开始，对局模式锁定')
+    expect(source).toContain('modes__locked')
+    expect(source).not.toContain('初设已开始，对局模式锁定')
   })
 
   it('棋桌顶栏：不再有 AI 开关，只读展示当前模式，AI 方由模式推出', () => {

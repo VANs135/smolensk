@@ -173,10 +173,11 @@ describe('Intro: Vitebsk 的剧本卡（教学/单回合）', () => {
     expect(view).toContain('教学 · 单回合')
   })
 
-  it('选中 Intro 时给原文摘要：单玩家回合、两格维捷布斯克目标、Major/Minor 三级', () => {
-    expect(view).toContain('两格维捷布斯克')
-    expect(view).toContain('Minor Victory')
-    expect(view).toContain('12.x')
+  it('选中 Intro 时不铺教学摘要；剧本事实仍在数据侧，局面选项照旧', () => {
+    // 2026-11-15 口径：玩家已熟知实体规则，窗内不放胜利条件/教学式摘要
+    expect(view).not.toContain('两格维捷布斯克')
+    expect(view).not.toContain('Minor Victory')
+    expect(view).not.toContain('introSummary')
     expect(view).toContain('firstWeather')
   })
 })

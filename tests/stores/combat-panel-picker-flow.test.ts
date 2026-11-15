@@ -461,7 +461,10 @@ describe('B14c：战斗面板的替换（源码守卫）', () => {
     expect(panel).toContain('{{ resolverNotation }}')
     expect(panel).not.toMatch(/结算\s*(→|⇒)/)
     // 9.10c 的唯一人工出口：攻方撤退/无法完成选项时出现「忽略选项」，兜底「结束战斗」已删除
-    expect(panel).toContain('行使 9.10c：忽略选项')
+    // 2026-11-15 口径：按钮文字不再带条款号（条款号只进 title / ?）
+    expect(panel).toContain('忽略选项')
+    expect(panel).not.toContain('行使 9.10c')
+    expect(panel).toContain('title="9.10c"')
     expect(panel).not.toContain('concludeCombatAfterWipe')
   })
 
@@ -469,10 +472,14 @@ describe('B14c：战斗面板的替换（源码守卫）', () => {
    * C8 / 9.2：战斗中不可存档是既定取舍（不做序列化），但必须让玩家在**补给确认前后**都看得到，
    * 而不是到点「保存」时才吃一句拒绝。
    */
-  it('C8：补给按钮旁与提交后都写明「本场战斗须一次打完」', () => {
-    expect(panel).toContain('确认后本场战斗须一次打完：收束前不能保存或读取对局')
-    expect(panel).toContain('v-if="workbench.combatSupplyCommitted"')
-    expect(panel).toContain('本场战斗须一次打完：收束前不能保存或读取对局。')
+  it('C8：战斗窗不再铺说明；不可保存的原因由存档窗状态行给出', () => {
+    // 2026-11-15 口径：窗内不放描述性文字；战斗态的存在由存档窗的拒绝原因直接说明
+    expect(panel).not.toContain('本场战斗须一次打完')
+    expect(panel).not.toContain('v-if="workbench.combatSupplyCommitted"')
+    const save = readFileSync('src/components/save/SaveLoadDialog.vue', 'utf8')
+    expect(save).toContain('workbench.saveBlockedReason')
+    expect(save).toContain('暂不可保存')
+    expect(save).toContain('v-if="canSave"')
   })
 
   /*
@@ -574,9 +581,9 @@ describe('B30：战斗结算自动化（9.6 / 9.7 / 9.8 / 9.9）', () => {
     const panel = readFileSync('src/components/combat/CombatPanel.vue', 'utf8')
     expect(panel).toContain('workbench.autoResolveCombatToOutcome()')
     expect(panel).toContain('workbench.declareCombatTerrainStep()')
-    // 奇袭 / 战斗骰两节改成"逐步复核"的口径（按钮降为次要），并明说正常流程不必点
+    // 奇袭 / 战斗骰两节仍标"逐步复核"；2026-11-15 口径：不再在窗内写"不必点"的教学句
     expect(panel.match(/逐步复核/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
-    expect(panel).toContain('正常流程不必点这里的按钮')
+    expect(panel).not.toContain('正常流程不必点这里的按钮')
   })
 })
 

@@ -266,17 +266,21 @@ function sideName(side: string): string {
         免得一个堆叠把所有能力平铺成一条长列表。组内没有动作时整组不渲染（沿用原来 v-if 的语义）。
       -->
       <template v-for="group in actionGroups" :key="group">
-        <div v-if="target.actions.some((item) => item.group === group)" class="context-group">
+        <div
+          v-if="target.actions.some((item) => item.group === group && item.disabledReason === null)"
+          class="context-group"
+        >
           <div class="context-group__trigger" tabindex="0">{{ group }} ▸</div>
           <div class="context-group__submenu">
             <BaseButton
-              v-for="item in target.actions.filter((action) => action.group === group)"
+              v-for="item in target.actions.filter(
+                (action) => action.group === group && action.disabledReason === null,
+              )"
               :key="item.key"
               variant="ghost"
               size="sm"
               class="context-action"
-              :disabled="item.disabledReason !== null"
-              :title="item.disabledReason ?? item.rule"
+              :title="item.rule"
               @click="mapView.openContextAction(target.id, item.key)"
             >
               <span>{{ item.label }}</span>
@@ -284,9 +288,6 @@ function sideName(side: string): string {
           </div>
         </div>
       </template>
-      <p v-if="target.actions.length === 0" class="muted context-empty">
-        本环节无可用动作（只读查看）
-      </p>
     </section>
   </MapPopover>
   <MapPopover
@@ -301,12 +302,11 @@ function sideName(side: string): string {
   >
     <!-- ⓪ 9.14 特殊战斗：进入敌方设施格后的夺取与**位移落点选择**（优先级最高——必须收束的待决） -->
     <section v-if="special !== null" class="block block--special">
-      <h4 class="block__title">9.14 特殊战斗 · 格 {{ hexLabel(special.hex) }}</h4>
+      <h4 class="block__title" title="9.14">特殊战斗 · 格 {{ hexLabel(special.hex) }}</h4>
       <p class="muted num">
         进入方：<BaseTag :kind="special.enteringSide === 'axis' ? 'danger' : 'info'">{{
           sideName(special.enteringSide)
         }}</BaseTag>
-        （9.14：可攻击单位「进入」该格触发）
       </p>
 
       <!-- 即时结清的部分（9.14b 补给站 / 9.14e 工事 / 9.14f 基地） -->
@@ -331,12 +331,12 @@ function sideName(side: string): string {
           />
           {{ counter.label }}（{{ counter.points }} 点）
         </label>
-        <p :class="split.exact ? 'ok' : 'bad'">9.14c：{{ split.detail }}</p>
+        <p :class="split.exact ? 'ok' : 'bad'">{{ split.detail }}</p>
       </div>
 
       <!-- 9.14c/d：位移落点在地图上点选 -->
       <div v-if="special.items.length > 0" class="sub">
-        <h5 class="sub__title">位移落点（9.14c 转移 / 9.14d 崩溃）</h5>
+        <h5 class="sub__title" title="9.14c / 9.14d">位移落点</h5>
         <ul class="list">
           <li
             v-for="item in special.items"
@@ -351,18 +351,20 @@ function sideName(side: string): string {
             {{ item.chosen === null ? '（未选）' : hexLabel(item.chosen) }}
           </li>
         </ul>
-        <p v-if="isSpecialCandidate" class="ok">
-          这一格正是 {{ specialItem?.label }} 的合法落点 ⇒ 点地图即可选定。
-        </p>
-        <p class="muted">{{ mapView.specialHint }}</p>
+        <p v-if="isSpecialCandidate" class="ok">合法落点</p>
       </div>
 
       <div class="row">
-        <BaseButton variant="primary" size="sm" @click="workbench.confirmSpecialCombatNow()">
-          确认位移与分配（9.14）
+        <BaseButton
+          variant="primary"
+          size="sm"
+          title="9.14"
+          @click="workbench.confirmSpecialCombatNow()"
+        >
+          确认位移与分配
         </BaseButton>
         <BaseButton variant="ghost" size="sm" @click="workbench.cancelSpecialCombatNow()">
-          先关掉待决（位移暂不落盘）
+          取消待决
         </BaseButton>
       </div>
     </section>
@@ -455,15 +457,15 @@ function sideName(side: string): string {
         v-if="baseAtHex !== null && workbench.actionAllowedNow('air.refit')"
         class="block block--pick"
       >
-        <h4 class="block__title">整备（15.1）· {{ hexLabel(baseAtHex.hex) }}</h4>
+        <h4 class="block__title" title="15.1">整备 · {{ hexLabel(baseAtHex.hex) }}</h4>
 
         <template v-if="refitDoneHere">
-          <p class="ok">本阶段已整备（15.1A：每基地每整备阶段一次）。</p>
+          <p class="ok">本阶段已整备</p>
         </template>
 
         <!-- 用户 2026-11-14：入口按老口径不出现，但"为什么"必须写出来 -->
-        <p v-else-if="!refitAllowedHere" class="muted">
-          {{ workbench.refitBlockReasonAt(baseAtHex.id) ?? '此刻不能整备（15.1）' }}
+        <p v-else-if="!refitAllowedHere" class="muted" title="15.1">
+          {{ workbench.refitBlockReasonAt(baseAtHex.id) ?? '此刻不能整备' }}
         </p>
 
         <template v-else-if="!refitHere">
@@ -493,13 +495,12 @@ function sideName(side: string): string {
               </li>
             </ul>
             <p class="ok num">
-              已选 {{ workbench.refitSelectedIds.length }} /
-              {{ workbench.refitSelectLimit }} 架（15.1B 容量）
+              已选 {{ workbench.refitSelectedIds.length }} / {{ workbench.refitSelectLimit }} 架
             </p>
             <BaseButton
+              v-if="workbench.refitSelectedIds.length > 0"
               variant="primary"
               size="sm"
-              :disabled="workbench.refitSelectedIds.length === 0"
               @click="workbench.confirmRefitSelectionNow()"
             >
               确认整备
@@ -514,11 +515,10 @@ function sideName(side: string): string {
               已选补给站：{{ hexLabel(refitDumpChoice.hex) }}（{{ refitDumpChoice.sp }} SP +
               {{ refitDumpChoice.t }} T）
             </p>
-            <p v-else class="muted num">在地图上点选高亮的补给站（格上标有剩余 SP）</p>
             <BaseButton
+              v-if="workbench.refitStage === 'pay' && workbench.airInputs.refitDumpId !== null"
               variant="primary"
               size="sm"
-              :disabled="workbench.refitStage !== 'pay' || workbench.airInputs.refitDumpId === null"
               @click="workbench.confirmRefitPaymentNow()"
             >
               确认支付
@@ -531,9 +531,12 @@ function sideName(side: string): string {
       </section>
 
       <!-- 用户 2026-11-12：14.11 转场——勾机 → 进入图外盒 / 选目的基地（点格放置） -->
-      <section v-if="transferHere" class="block block--pick">
-        <h4 class="block__title">
-          转场（14.11）· {{ baseAtHex === null ? '' : hexLabel(baseAtHex.hex) }}
+      <section
+        v-if="transferHere && workbench.transferCandidates.length > 0"
+        class="block block--pick"
+      >
+        <h4 class="block__title" title="14.11">
+          转场 · {{ baseAtHex === null ? '' : hexLabel(baseAtHex.hex) }}
         </h4>
         <ul v-if="workbench.transferCandidates.length > 0" class="list">
           <li v-for="air in workbench.transferCandidates" :key="air.instanceId" class="num">
@@ -548,27 +551,24 @@ function sideName(side: string): string {
             </label>
           </li>
         </ul>
-        <p v-else class="muted">这一格没有可转场的飞机。</p>
         <p class="ok num">已选 {{ workbench.transferSelectedIds.length }} 架</p>
         <template v-if="workbench.transferMode === 'box'">
-          <p class="muted num">进入图外盒：1.4a 航程（苏 20 / 轴 30 格 + 与盒连接列的列差）</p>
           <BaseButton
+            v-if="workbench.transferBoxReady"
             variant="primary"
             size="sm"
-            :disabled="!workbench.transferBoxReady"
+            title="1.4a"
             @click="mapView.confirmTransferToBoxNow()"
           >
             确认移入图外盒
           </BaseButton>
         </template>
         <template v-else>
-          <p class="muted num">
-            放入别的空军基地：14.11 距离可增加一倍；够得到的基地会在图上高亮。
-          </p>
           <BaseButton
+            v-if="workbench.transferSelectedIds.length > 0"
             variant="primary"
             size="sm"
-            :disabled="workbench.transferSelectedIds.length === 0"
+            title="14.11"
             @click="mapView.beginTransferBasePickNow()"
           >
             选择目的基地

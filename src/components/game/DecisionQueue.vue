@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-import { BaseButton, BaseTag } from '@/components/base'
+import { BaseButton } from '@/components/base'
 import { clampDockOffset } from '@/components/map/dock-position'
 import {
   useHotseatStore,
@@ -225,7 +225,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
       <BaseButton variant="primary" size="sm" @click="setup.drawSetupEffectsNow()">
         抽取编队
       </BaseButton>
-      <span class="queue__hint">ch10 / ch11：初设已确认，抽一次即开局</span>
     </div>
 
     <!--
@@ -235,7 +234,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
     -->
     <div v-if="setup.setupStartEntryVisible" class="queue__row-actions">
       <BaseButton variant="primary" size="sm" @click="setup.startGameNow()"> 开始游戏 </BaseButton>
-      <span class="queue__hint">ch10：西移落点已齐，开局</span>
     </div>
 
     <!--
@@ -246,12 +244,9 @@ function sideMark(side: 'axis' | 'soviet'): string {
       <BaseButton variant="secondary" size="sm" @click="runPresetSetup()">
         一键预设初设
       </BaseButton>
-      <span v-if="presetResult === null" class="queue__hint">
-        自动落 {{ hotseat.presetSide === 'axis' ? '轴心国' : '苏联' }}一方，另一方由你摆
-      </span>
-      <span v-else class="queue__hint num">
-        已落 {{ presetResult.placed }} 项 · 剩 {{ presetResult.remaining }} 项 · 失败
-        {{ presetResult.failures.length }} 条
+      <span v-if="presetResult !== null" class="queue__hint num">
+        已落 {{ presetResult.placed }} · 剩 {{ presetResult.remaining }} · 失败
+        {{ presetResult.failures.length }}
       </span>
     </div>
 
@@ -295,7 +290,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
           {{ c }}
         </button>
       </div>
-      <p class="queue__instruction">点击高亮格落位</p>
     </div>
 
     <!--
@@ -308,8 +302,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
       class="queue__row-actions"
     >
       <span class="queue__hint num">
-        {{ setup.pendingSpChoice.hexText }}（{{ setup.pendingSpChoice.points }}
-        SP）待指定装甲集群（3.4b）：
+        {{ setup.pendingSpChoice.hexText }}（{{ setup.pendingSpChoice.points }} SP）
       </span>
       <BaseButton variant="primary" size="sm" @click="setup.choosePendingSpGroup('guderian')">
         Guderian
@@ -318,13 +311,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
         Hoth
       </BaseButton>
     </div>
-    <p
-      v-else-if="setup.spOwnershipEntryVisible && setup.pendingSpOwnershipHexes.length > 0"
-      class="queue__hint"
-    >
-      地图上高亮 {{ setup.pendingSpOwnershipHexes.length }} 处未指定的德军 SP，点它再选 Guderian /
-      Hoth（3.4b）
-    </p>
 
     <!--
       ★ 用户 2026-11-10：满载名单已达剧本要求 ⇒ 整行**隐藏**（不灰显）；
@@ -335,7 +321,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
       class="queue__row-actions"
     >
       <span class="queue__hint num">
-        满载 {{ setup.truckLoadSummary.fullCount }}/{{ setup.requiredFullTrucks }} · §13.2h
+        满载 {{ setup.truckLoadSummary.fullCount }}/{{ setup.requiredFullTrucks }}
       </span>
       <BaseButton
         variant="secondary"
@@ -351,9 +337,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
       （同型卡车同名同图，只靠格号分不出是哪一辆）。
     -->
     <div v-if="setup.truckPickPending !== null" class="queue__row-actions">
-      <span class="queue__hint"
-        >该格有 {{ setup.truckPickPending.rows.length }} 辆编内卡车，点一辆：</span
-      >
+      <span class="queue__hint num">{{ setup.truckPickPending.rows.length }} 辆</span>
       <BaseButton
         v-for="row in setup.truckPickPending.rows"
         :key="row.instanceId"
@@ -366,8 +350,13 @@ function sideMark(side: 'axis' | 'soviet'): string {
       <BaseButton variant="ghost" size="sm" @click="setup.cancelTruckPick()">取消</BaseButton>
     </div>
 
-    <p v-if="setup.lastAction !== null && !setup.lastAction.ok" class="queue__error" role="status">
-      <span class="num">§{{ setup.lastAction.rule }}</span> {{ setup.lastAction.detail }}
+    <p
+      v-if="setup.lastAction !== null && !setup.lastAction.ok"
+      class="queue__error"
+      role="status"
+      :title="`§${setup.lastAction.rule}`"
+    >
+      {{ setup.lastAction.detail }}
     </p>
 
     <!--
@@ -383,8 +372,8 @@ function sideMark(side: 'axis' | 'soviet'): string {
         v-for="issue in setup.requiredSetupIssues"
         :key="issue.id"
         class="queue__hint queue__issue"
+        :title="issue.rule"
       >
-        <BaseTag kind="warning">{{ issue.rule }}</BaseTag>
         {{ issue.detail }}
       </p>
     </details>
@@ -413,9 +402,9 @@ function sideMark(side: 'axis' | 'soviet'): string {
           <input v-model="omitConfirmed" type="checkbox" /> 放弃以上未布设单位
         </label>
         <BaseButton
+          v-if="omitConfirmed && !setup.omitDiscardBlocked"
           variant="primary"
           size="sm"
-          :disabled="!omitConfirmed || setup.omitDiscardBlocked"
           @click="setup.startGameNow()"
         >
           确认放弃并开局
@@ -678,18 +667,9 @@ function sideMark(side: 'axis' | 'soviet'): string {
   background: var(--color-command-teal-bg);
 }
 
-.queue__instruction,
 .queue__error {
   margin: 0;
   font-size: var(--text-xs);
-}
-
-.queue__instruction {
-  flex: 1 0 100%;
-  color: var(--color-command-teal);
-}
-
-.queue__error {
   padding: var(--space-2) 0;
   color: var(--color-command-danger);
 }

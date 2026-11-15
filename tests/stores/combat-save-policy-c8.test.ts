@@ -177,25 +177,18 @@ describe('C8：9.2「战斗中不可存档」的取舍守卫（只加测试）',
     // 退出真的可用：战斗清掉后保存闸门也随之解除（拒绝只针对「未收束的战斗」）
     expect(store.saveBlockedReason).toBeNull()
 
-    // 源码守卫：两处 C8 文案都是纯说明（无点击 / 禁用 / 关闭判据）
+    // 源码守卫（2026-11-15 口径）：战斗窗不再铺说明；拒绝原因只作存档窗的一行状态
     const panel = readFileSync('src/components/combat/CombatPanel.vue', 'utf8')
-    const bannerStart = panel.indexOf('C8：补给一旦确认')
-    const bannerEnd = panel.indexOf('<!-- 第 2 步：战斗补给', bannerStart)
-    expect(bannerStart).toBeGreaterThanOrEqual(0)
-    expect(bannerEnd).toBeGreaterThan(bannerStart)
-    const banner = panel.slice(bannerStart, bannerEnd)
-    expect(banner).toContain('v-if="workbench.combatSupplyCommitted"')
-    expect(banner).not.toContain('@click')
-    expect(banner).not.toContain('disabled')
-    expect(banner).not.toContain('combatCancelBlocker')
+    expect(panel).not.toContain('本场战斗须一次打完')
+    expect(panel).not.toContain('v-if="workbench.combatSupplyCommitted"')
 
-    const besideStart = panel.indexOf('C8：写在确认按钮旁')
-    const besideEnd = panel.indexOf('</span>', besideStart)
-    expect(besideStart).toBeGreaterThanOrEqual(0)
-    const beside = panel.slice(besideStart, besideEnd)
-    expect(beside).toContain('确认后本场战斗须一次打完')
-    expect(beside).not.toContain('@click')
-    expect(beside).not.toContain('disabled')
+    const save = readFileSync('src/components/save/SaveLoadDialog.vue', 'utf8')
+    const statusStart = save.indexOf('暂不可保存')
+    expect(statusStart).toBeGreaterThanOrEqual(0)
+    const status = save.slice(statusStart, save.indexOf('</p>', statusStart))
+    expect(status).toContain('workbench.saveBlockedReason')
+    expect(status).not.toContain('@click')
+    expect(status).not.toContain('disabled')
   })
 
   it('② 战斗未收束时保存/读取确实被 settlementBlockedReason 拒绝', () => {

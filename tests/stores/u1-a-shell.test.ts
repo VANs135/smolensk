@@ -26,8 +26,10 @@ describe('U1-a：L0 常驻条', () => {
     expect(FLOW).toContain('hotseat.decisionSide')
   })
 
-  it('推进入口唯一，阻断原因就地显示', () => {
-    expect(FLOW).toContain(':disabled="!flow.canAdvance || liveBlock !== null"')
+  it('推进入口唯一；被阻断时改状态行，不摆灰按钮', () => {
+    expect(FLOW).toContain('v-if="flow.canAdvance && liveBlock === null"')
+    expect(FLOW).toContain('bar__block')
+    expect(FLOW).not.toContain(':disabled="!flow.canAdvance')
     expect(FLOW).toContain('workbench.currentAdvanceBlock')
     expect(FLOW).toContain('liveBlock.value ?? workbench.advanceBlock')
     // L0 条不再自报「流程条」这种调试抬头

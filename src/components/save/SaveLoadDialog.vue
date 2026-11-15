@@ -14,12 +14,12 @@ import { useGameSessionStore, useUiStore, useWorkbenchStore } from '@/stores'
  *
  * ## 它是什么
  *   把 W6 D1 的存档数据层（`engine/save-file.ts` + `stores/session.ts`）摆成一个**独立入口**：
- *   顶栏「存档 / 读档」按钮打开本对话框。**结算点才可存档**：战斗、移动、付款、
- *   空运等结算未完成时，保存按钮按 `workbench.saveBlockedReason` 禁用并说明原因。
+ *   顶栏「存档 / 读档」按钮打开本对话框。结算未完成时，保存动作按
+ *   `workbench.saveBlockedReason` 不出现（2026-11-15 口径：不留灰按钮）。
  *
  * ## 三件事说清楚（对应用户要求）
  *   ① **存档槽**：本作只有一个槽（`SAVE_SLOT_KEY`）——摘要给出剧本 / 回合阶段 / 形态 /
- *      写盘时间 / 种子与掷骰游标 / 日志条数 / 共识结论，以及四层版本号（存档格式 · 数据契约 ·
+ *      写盘时间 / 种子与掷骰游标 / 日志条数，以及四层版本号（存档格式 · 数据契约 ·
  *      会话容器 · 掷骰算法）；
  *   ② **进行中会话的恢复提示**：档里形态是 `awaiting` 时，读回后会**照旧停在待答**
  *      （连问题一起恢复：题号 / 类别 / 应答方 / 题面），不是「出错」；
@@ -61,6 +61,24 @@ const errorInfo = computed(() =>
 
 /** 是否属于「版本不匹配」（要单独醒目提示的那一类） */
 const versionMismatch = computed(() => errorInfo.value?.kind === 'versionMismatch')
+
+/** 错误类别的中文名（界面不直接显示引擎枚举） */
+const ERROR_KIND_LABELS: Readonly<Record<string, string>> = {
+  emptySlot: '槽为空',
+  storageUnavailable: '存储不可用',
+  noSessionToSave: '无可保存的会话',
+  notJson: '文件不是 JSON',
+  scenarioUnknown: '剧本不在库内',
+  innerScenarioMismatch: '剧本不一致',
+  rngNotReplayable: '掷骰不可复算',
+  versionMismatch: '版本不匹配',
+  corrupt: '存档损坏',
+  other: '存档错误',
+}
+
+const errorKindLabel = computed(() =>
+  errorInfo.value === null ? '' : (ERROR_KIND_LABELS[errorInfo.value.kind] ?? '存档错误'),
+)
 
 /** 档里的进行中会话摘要（无待答为 null） */
 const awaiting = computed(() => slot.value?.awaiting ?? null)
@@ -110,18 +128,6 @@ function clearNow(): void {
   ui.pushToast(ok ? 'info' : 'danger', ok ? '存档槽已清空（当前会话未受影响）' : '清档失败')
 }
 
-/** 重新读槽摘要（判断「有没有档」「档还能不能读」） */
-function refreshNow(): void {
-  gameSession.refreshSlotNow()
-  const info = slot.value
-  ui.pushToast(
-    info === null ? 'warning' : 'info',
-    info === null
-      ? `槽不可读：${errorInfo.value?.detail ?? '槽为空'}`
-      : `槽摘要已刷新：${slotLine()}`,
-  )
-}
-
 /** 打开时先刷一次摘要（保证显示的是「此刻」的槽内容，可能与上次打开时不同） */
 watch(
   () => props.open,
@@ -154,11 +160,6 @@ const canSave = computed(
     @update:open="emit('update:open', $event)"
   >
     <!-- ── ① 当前会话与动作 ── -->
-    <p class="muted">
-      本作**只有一个存档槽**（浏览器本地存储）。存档内容六项：状态 / 种子 / 日志游标 /
-      进行中会话（含待答问题）/ 共识开关结论 / 剧本与数据版本；**结算点才可存档** ——
-      战斗、移动、付款、空运等结算完成后按钮才可用。读档不受此限，随时可读回。
-    </p>
     <p class="row">
       <BaseTag :kind="gameSession.session === null ? 'neutral' : 'info'">
         当前会话：{{ formLabel }}
@@ -172,32 +173,25 @@ const canSave = computed(
     </p>
 
     <div class="row">
-      <BaseButton variant="primary" size="sm" :disabled="!canSave" @click="saveNow()">
+      <BaseButton v-if="canSave" variant="primary" size="sm" @click="saveNow()">
         保存到槽
       </BaseButton>
-      <BaseButton variant="secondary" size="sm" :disabled="!slotUsable" @click="loadNow()">
+      <BaseButton v-if="slotUsable" variant="primary" size="sm" @click="loadNow()">
         从槽读档
       </BaseButton>
-      <BaseButton variant="ghost" size="sm" @click="refreshNow()">刷新槽摘要</BaseButton>
-      <BaseButton variant="ghost" size="sm" @click="clearNow()">清空槽</BaseButton>
+      <BaseButton v-if="slotUsable" variant="ghost" size="sm" @click="clearNow()">
+        清空槽
+      </BaseButton>
     </div>
-    <p v-if="gameSession.session === null" class="muted">
-      当前不支持保存未开局的初设进度；完成初设并开局后可保存对局。
-    </p>
-    <p v-else-if="!canSave" class="muted">
+    <p v-if="gameSession.session !== null && !canSave" class="muted">
       暂不可保存：{{ workbench.saveBlockedReason ?? '本地存储不可用' }}
     </p>
 
     <!-- ── ② 存档槽摘要 ── -->
     <hr />
-    <p v-if="slot === null" class="muted">
-      槽为空（或内容读不出）—— 有会话时点「保存到槽」即建立一档。
-    </p>
-    <template v-else>
+    <template v-if="slot !== null">
       <p class="row">
         <BaseTag kind="info">{{ slot.scenarioId }} · {{ slot.scenarioName }}</BaseTag>
-        <BaseTag kind="neutral">存档格式 v{{ slot.saveVersion }}</BaseTag>
-        <BaseTag kind="neutral">数据契约 {{ slot.dataVersion }}</BaseTag>
         <span class="num muted">写盘 {{ slot.savedAt }}</span>
       </p>
       <table class="table">
@@ -222,22 +216,10 @@ const canSave = computed(
           </tr>
         </tbody>
       </table>
-      <p class="num muted">
-        共识开关（读档一并恢复）：
-        {{
-          slot.consensus
-            .map(
-              (entry) =>
-                `${entry.item.slice(0, 8)}…=${entry.adopted === null ? '未答' : entry.adopted ? '采纳' : '不采纳'}`,
-            )
-            .join('｜') || '无'
-        }}
-      </p>
 
-      <!-- ── ③ 进行中会话的恢复提示 ── -->
+      <!-- ── ③ 进行中会话 ── -->
       <p v-if="awaiting !== null" class="notice notice--info num">
         <BaseTag kind="warning">进行中会话</BaseTag>
-        这一档停在**待答**：读回后会照旧停下等作答，不会跳过这一步。<br />
         题号 <code>{{ awaiting.questionId }}</code
         >｜类别 {{ awaiting.kind }}｜应答方 {{ awaiting.responder === 'axis' ? '轴心国' : '苏联'
         }}<br />
@@ -258,22 +240,20 @@ const canSave = computed(
 
     <!-- ── ⑤ 其它存档错误（无档 / 无介质 / 损坏 / 不可复算…） ── -->
     <p v-else-if="errorInfo !== null" class="notice notice--warn num">
-      <BaseTag kind="warning">{{ errorInfo.kind }}</BaseTag>
+      <BaseTag kind="warning">{{ errorKindLabel }}</BaseTag>
       {{ errorInfo.detail }}<br />
       <span class="muted">怎么办：{{ errorInfo.hint }}</span>
     </p>
 
-    <!-- ── ⑥ 版本四层（口径说明） ── -->
+    <!-- ── ⑥ 版本四层 ── -->
     <hr />
     <details class="layers">
-      <summary class="muted">四层版本（任一层不符即拒读；本作不做静默迁移）</summary>
+      <summary class="muted">版本</summary>
       <p class="num muted">
-        · 存档文件格式 v{{ SAVE_FILE_VERSION }}（外壳字段结构）<br />
-        · 数据契约 {{ DATA_VERSION }}（单位库 / 图表 / 剧本等数据文件）<br />
-        · 会话容器 v{{ SESSION_SAVE_VERSION }}（会话信封：状态 / 日志 / 待答问题）<br />
-        · 掷骰算法 {{ RNG_ALGORITHM }}（换算法后旧档不可复算）<br />
-        另有两项**内容校验**：剧本号须在剧本库内、文件头剧本须与会话状态剧本一致；
-        并检查种子—游标—内部状态自洽（决定这一档还能不能重放复算）。
+        存档格式 v{{ SAVE_FILE_VERSION }}<br />
+        数据契约 {{ DATA_VERSION }}<br />
+        会话容器 v{{ SESSION_SAVE_VERSION }}<br />
+        掷骰算法 {{ RNG_ALGORITHM }}
       </p>
     </details>
 

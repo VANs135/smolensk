@@ -10,7 +10,7 @@ import { SESSION_STEP_GATE, SESSION_STEP_HOSTED } from './gate'
  *
  * 用户口径：
  *   · 一个会话只办一件事，完成一件才出下一件，不并列堆在一屏；
- *   · 每步只显示：当前这一件事、需要你做的唯一决定、以及为什么会出现（一句，不写条款号）；
+ *   · 每步只显示当前这一件事与控件；"为什么会出现"只进标题的 title，不铺第二行；
  *   · 旧组件内的步骤判定同步清理，顺序与判据来自 store 投影（`mapView.sessionStep`）。
  *
  * 本组件**不做任何规则判断**：只在 `item` 命中当前步骤 id 时渲染插槽。
@@ -42,7 +42,6 @@ const active = computed(() => sessionStepVisible(hosted, step.value?.id ?? null,
     <p v-if="step !== null" class="step__title" :title="step.why">
       <b>{{ step.title }}</b>
     </p>
-    <p v-if="step !== null" class="step__decision">{{ step.decision }}</p>
     <slot />
     <button
       v-if="props.ackable"
@@ -66,11 +65,6 @@ const active = computed(() => sessionStepVisible(hosted, step.value?.id ?? null,
 .step__title {
   margin: 0;
   font-family: var(--font-head);
-}
-
-.step__decision {
-  margin: 0;
-  color: var(--color-ink);
 }
 
 .step__ack {
