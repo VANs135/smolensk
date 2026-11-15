@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/base'
 import { useUiMode } from '@/components/ui-mode'
 import { scenarios, scenarioSetup } from '@/data'
@@ -194,6 +195,63 @@ function boxItems(category: SetupPlacingCategory): readonly SetupPlacing[] {
   return setup.pendingPlacement.filter((item) => item.category === category)
 }
 
+/** 阵列里实际出现的项：不可用的不出现（无候选且不能入盒、以及卡车另有单入口） */
+function visibleBoxItems(category: SetupPlacingCategory): readonly SetupPlacing[] {
+  return boxItems(category).filter(
+    (item) =>
+      item.blockedReason === null &&
+      // 卡车满载/空载在下方「编内卡车」单入口处理，不重复出卡
+      item.kind !== 'truck' &&
+      (item.candidates.length > 0 || item.offMapAllowed === true),
+  )
+}
+
+/** 阵列卡的唯一键（点卡回找待落位项；同一功能单入口） */
+function pickerIdOf(item: SetupPlacing): string {
+  return [
+    item.kind,
+    item.side,
+    item.entryIndex,
+    item.formationId ?? '',
+    item.instanceId ?? '',
+  ].join(':')
+}
+
+/** 飞机下一枚的初始激活态（按 planAirSetup 的 statuses 顺序取） */
+function airStatusOf(item: SetupPlacing): 'active' | 'inactive' | null {
+  if (item.kind !== 'air') return null
+  const row = airRows(item.side).find((candidate) => candidate.entryIndex === item.entryIndex)
+  return row?.statuses[item.placed] ?? null
+}
+
+/** 待落位项 ⇒ 算子阵列卡（图 + 数量角标；名字只进 title/aria-label） */
+function pickerItemsOf(category: SetupPlacingCategory): readonly CounterPickerItem[] {
+  return visibleBoxItems(category).map((item) => {
+    const status = airStatusOf(item)
+    return {
+      id: pickerIdOf(item),
+      imageUrl: item.imageUrl,
+      name: `${sideLabel(item.side)} ${item.label}（${item.placed}/${item.total}）`,
+      selected: isPlacing(item),
+      ...(item.remaining > 1 ? { badge: String(item.remaining) } : {}),
+      ...(status === null
+        ? {}
+        : { groupKey: status, groupLabel: status === 'active' ? '激活' : '非激活' }),
+    }
+  })
+}
+
+/** 点阵列卡：同一卡再点一次＝取消；否则进入该卡的落点选择 */
+function pickBoxItem(id: string): void {
+  const item = setup.pendingPlacement.find((candidate) => pickerIdOf(candidate) === id)
+  if (item === undefined) return
+  if (isPlacing(item)) {
+    setup.cancelPlacement()
+    return
+  }
+  begin(item)
+}
+
 /** 点一项 ⇒ 地图高亮其合法落点 */
 function begin(item: SetupPlacing): void {
   if (item.kind === 'air') setup.beginAirPlacement(item.side, item.entryIndex)
@@ -330,42 +388,22 @@ function sideLabel(side: Side): string {
     <section v-for="category in CATEGORIES" :key="category.key" class="box">
       <header class="box__head">
         <span class="box__title">{{ category.label }}</span>
-        <BaseTag :kind="boxItems(category.key).length === 0 ? 'success' : 'neutral'">
+        <BaseTag :kind="visibleBoxItems(category.key).length === 0 ? 'success' : 'neutral'">
           {{
-            boxItems(category.key).length === 0
+            visibleBoxItems(category.key).length === 0
               ? '已清空'
-              : `${boxItems(category.key).length} 项待落位`
+              : `${visibleBoxItems(category.key).length} 项待落位`
           }}
         </BaseTag>
         <span class="box__hint muted">{{ category.hint }}</span>
       </header>
-      <p v-if="boxItems(category.key).length === 0" class="muted">
-        本类已全部落位（含「未设置 ⇒ 本局移除」）。
-      </p>
-      <ul v-else class="box__list">
-        <li
-          v-for="item in boxItems(category.key)"
-          :key="`${item.kind}-${item.side}-${item.entryIndex}`"
-        >
-          <BaseTag :kind="item.side === 'axis' ? 'danger' : 'info'">{{
-            sideLabel(item.side)
-          }}</BaseTag>
-          <span class="box__label">{{ item.label }} ×{{ item.count }}</span>
-          <span class="muted num">{{ item.candidates.length }} 格可选</span>
-          <BaseButton
-            v-if="!isPlacing(item)"
-            variant="secondary"
-            size="sm"
-            :disabled="item.candidates.length === 0"
-            @click="begin(item)"
-          >
-            放置
-          </BaseButton>
-          <BaseButton v-else variant="ghost" size="sm" @click="setup.cancelPlacement()">
-            取消
-          </BaseButton>
-        </li>
-      </ul>
+      <!-- 算子阵列：与增援面板同一套 CounterPicker（图 + 角标，名字只进 title） -->
+      <CounterPicker
+        v-if="visibleBoxItems(category.key).length > 0"
+        :items="pickerItemsOf(category.key)"
+        @pick="pickBoxItem"
+      />
+      <p v-else class="muted">本类已全部落位（含「未设置 ⇒ 本局移除」）。</p>
     </section>
 
     <p class="muted">
@@ -836,6 +874,10 @@ function sideLabel(side: Side): string {
   flex: 1 1 200px;
 }
 
+.box__label {
+  flex: 1 1 160px;
+}
+
 .box__list {
   margin: var(--space-1) 0;
   padding: 0;
@@ -849,10 +891,6 @@ function sideLabel(side: Side): string {
   gap: var(--space-2);
   padding: 3px 0;
   font-size: var(--text-sm);
-}
-
-.box__label {
-  flex: 1 1 160px;
 }
 
 .steps {
