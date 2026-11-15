@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { HexRef, Side } from '@/data'
 import {
   VictoryDataError,
+  allVictoryConditionHexes,
   axisVictoryCities,
   checkTurnEndVictory,
   checkTurnStartVictory,
@@ -116,6 +117,24 @@ describe('5.0c / 表 4-2：所列格清单（两套，按剧本号选用）', ()
     expect(parseVictoryHexText('36.13')).toEqual({ col: 36, row: 13 })
     expect(parseVictoryHexText('Krichev')).toBeNull()
     expect(parseVictoryHexText('')).toBeNull()
+  })
+
+  it('allVictoryConditionHexes 按剧本号组装：剧本 2/4 含 Krichev/Demidov，不含 Pusii/Spas', () => {
+    const standard = allVictoryConditionHexes('1')
+    const special = allVictoryConditionHexes('2')
+    // 通用清单：Pusii 48.25、Spas Demyansk 52.09 在列，Krichev 27.05 不在
+    expect(hasHex(standard, 48, 25)).toBe(true)
+    expect(hasHex(standard, 52, 9)).toBe(true)
+    expect(hasHex(standard, 27, 5)).toBe(false)
+    // 剧本 2/4：以 Krichev 27.05、Demidov 32.25 取代那两格
+    expect(hasHex(special, 27, 5)).toBe(true)
+    expect(hasHex(special, 32, 25)).toBe(true)
+    expect(hasHex(special, 48, 25)).toBe(false)
+    expect(hasHex(special, 52, 9)).toBe(false)
+    expect(allVictoryConditionHexes('4')).toEqual(special)
+    // 两套都是「所列 11 + 五城 7 格 + 两城 2 格」
+    expect(standard).toHaveLength(20)
+    expect(special).toHaveLength(20)
   })
 })
 

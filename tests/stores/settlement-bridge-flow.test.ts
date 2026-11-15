@@ -112,7 +112,7 @@ describe('⑬ 接线：5.0c 控制事实与判定结论推给会话', () => {
     stores.session.startGame(20260913)
     expect(stores.session.records?.victoryLocations).toEqual([])
 
-    const hex = allVictoryConditionHexes()[0]
+    const hex = allVictoryConditionHexes(stores.session.scenarioId)[0]
     if (hex === undefined) throw new Error('本剧本应有胜利条件格')
     placeAttacker(stores, hex, 'axis', 'ax-1')
     stores.workbench.refreshVictoryControlNow()
@@ -129,7 +129,7 @@ describe('⑬ 接线：5.0c 控制事实与判定结论推给会话', () => {
     stores.session.startGame(20260913)
     expect(stores.session.pushedVerdicts.decisive).toBeNull()
 
-    const hex = allVictoryConditionHexes()[0]
+    const hex = allVictoryConditionHexes(stores.session.scenarioId)[0]
     if (hex === undefined) throw new Error('本剧本应有胜利条件格')
     placeAttacker(stores, hex, 'axis', 'ax-1')
     stores.workbench.refreshVictoryControlNow()

@@ -187,8 +187,13 @@ export function sovietVictoryCities(): readonly VictoryCityGroup[] {
   return cityGroupsWithRole(SOVIET_VICTORY_CITY_ROLE)
 }
 
-/** 5.0c / 5.0a：所有胜利条件涉及的格（11 所列格 + 五城格 + 两城格；去重） */
-export function allVictoryConditionHexes(): readonly HexRef[] {
+/**
+ * 5.0c / 5.0a：**该剧本**所有胜利条件涉及的格（所列格 + 五城格 + 两城格；去重）
+ *
+ * 所列格按剧本号取（剧本 2/4 用其专属清单，其余用通用清单）——播种与盘面更新都走这一份，
+ * 否则剧本 2/4 的 Krichev 27.05、Demidov 32.25 永远无人控制、所列格计数恒少两格。
+ */
+export function allVictoryConditionHexes(scenarioId: string): readonly HexRef[] {
   const seen = new Set<string>()
   const result: HexRef[] = []
   const push = (hex: HexRef): void => {
@@ -197,7 +202,7 @@ export function allVictoryConditionHexes(): readonly HexRef[] {
     seen.add(key)
     result.push(hex)
   }
-  for (const hex of standardListedHexes()) push(hex)
+  for (const hex of listedVictoryHexes(scenarioId)) push(hex)
   for (const group of axisVictoryCities()) for (const hex of group.hexes) push(hex)
   for (const group of sovietVictoryCities()) for (const hex of group.hexes) push(hex)
   return result

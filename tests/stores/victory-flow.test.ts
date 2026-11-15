@@ -247,6 +247,34 @@ describe('5.0c：各剧本胜利格的开局归属与剧本页初设栏一致', 
   }
 })
 
+/**
+ * 5.0c / 剧本 2·4：Krichev 27.05、Demidov 32.25 属**该剧本的所列格**
+ *
+ * 两剧本的清单以这两格取代 Pusii 48.25、Spas Demyansk 52.09（剧本 2 页原文），
+ * 故控制账本必须按剧本号取清单：只播种通用 11 格会让这两格永远无人控制、
+ * 所列格计数也永远少两格（剧本 4 的轴方本应 5 格、苏方 6 格）。
+ */
+describe('5.0c：剧本 2/4 专属所列格进控制账本并按该剧本口径计数', () => {
+  it('剧本 4：27.05 Krichev、32.25 Demidov 开局属轴，所列格 轴 5 / 苏 6', () => {
+    const store = newConsole()
+    store.setScenarioId('4')
+    // 账本键是「列.行」不补零 ⇒ Krichev 27.05 记作 27.5
+    expect(store.victoryLastControl['27.5']).toBe('axis')
+    expect(store.victoryLastControl['32.25']).toBe('axis')
+    expect(store.victorySummary.listedTotal).toBe(11)
+    expect(store.victorySummary.listedBySide).toEqual({ axis: 5, soviet: 6 })
+  })
+
+  it('剧本 2：两格开局属苏，所列格 轴 0 / 苏 11', () => {
+    const store = newConsole()
+    store.setScenarioId('2')
+    expect(store.victoryLastControl['27.5']).toBe('soviet')
+    expect(store.victoryLastControl['32.25']).toBe('soviet')
+    expect(store.victorySummary.listedTotal).toBe(11)
+    expect(store.victorySummary.listedBySide).toEqual({ axis: 0, soviet: 11 })
+  })
+})
+
 describe('W6 B20：5.0a 回合末检查（仅最终回合）', () => {
   it('5.0a：未到最终回合 ⇒ 拒，并给出末回合提示', () => {
     const store = newConsole()
