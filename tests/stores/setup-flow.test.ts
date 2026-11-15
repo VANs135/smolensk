@@ -55,6 +55,20 @@ function countNoncombat(
   return units.filter((unit) => unit.side === side && unit.noncombatKind === kind).length
 }
 
+describe('Intro: Vitebsk 不引用 4.x 可选规则', () => {
+  it('共识全勾时 4.1b 仍不生效（8 Jul 不触发 Supply Train）', () => {
+    setActivePinia(createPinia())
+    const session = useGameSessionStore()
+    expect(session.setScenarioId('Intro')).toBe(true)
+    session.agreedOptionItems.forEach((_, index) => session.setAgreedCheck(index, true))
+    expect(session.rule4On('moreAxisSupply')).toBe(false)
+
+    // 换回剧本 1：同一勾选恢复生效（门控按剧本，不改用户勾选）
+    expect(session.setScenarioId('1')).toBe(true)
+    expect(session.rule4On('moreAxisSupply')).toBe(true)
+  })
+})
+
 describe('W7 C14：开局流程进度与剧本选择', () => {
   let setup: ReturnType<typeof newStores>['setup']
   let workbench: ReturnType<typeof newStores>['workbench']

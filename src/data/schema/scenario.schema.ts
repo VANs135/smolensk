@@ -262,6 +262,12 @@ export const ScenarioSetupSchema = z
      */
     panzerGroupSpAssignment: z.boolean().optional(),
     /**
+     * 本剧本不引用任何 4.x 可选规则（Intro: Vitebsk）
+     *
+     * 为真时共识勾选一律不计入生效规则（4.1b 的 Supply Train 等不会触发）。
+     */
+    optionalRulesForbidden: z.boolean().optional(),
+    /**
      * 1.6b：开局时图外空军盒内的额外 SP（枚，每方）
      *
      * 原文未给数 ⇒ 缺省 0；有剧本明确给出时按印刷值录入。

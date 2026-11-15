@@ -361,9 +361,13 @@ export const useGameSessionStore = defineStore('gameSession', () => {
    * 唯一判据＝**选剧本前**在共识清单里逐条勾定；未勾定的条目不进本数组（＝按原文默认行为）。
    * 引擎与操作台都只读这一个判据（不再有整章开关，也没有段内第二开关）。
    */
-  const enabledOptionalRules = computed<readonly OptionalRuleCode[]>(() =>
-    OPTIONAL_RULE_CODES.filter((code) => agreedOptionAdoptedOf.value(OPTIONAL_RULE_ITEMS[code])),
-  )
+  const enabledOptionalRules = computed<readonly OptionalRuleCode[]>(() => {
+    // 剧本页不引用 4.x 的剧本（Intro: Vitebsk）⇒ 共识勾选一律不生效
+    if (scenarioInfo.value?.setup.optionalRulesForbidden === true) return []
+    return OPTIONAL_RULE_CODES.filter((code) =>
+      agreedOptionAdoptedOf.value(OPTIONAL_RULE_ITEMS[code]),
+    )
+  })
 
   /** 4.0：某条可选规则本局是否启用（按条码查；未启用＝原规则行为） */
   const rule4On = computed(

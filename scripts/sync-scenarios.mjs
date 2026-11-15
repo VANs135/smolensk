@@ -67,6 +67,7 @@ export function toScenario(record, item) {
     'formation_draw',
     'organic_trucks',
     'panzer_group_sp_assignment',
+    'optional_rules',
   ])
   const options = {}
   for (const [key, value] of Object.entries(choices)) {
@@ -98,6 +99,8 @@ export function toScenario(record, item) {
       constructionMarkers: numbers.construction_markers,
       // 3.4b：剧本页明示不适用时记 false（缺省按首回合日期判）
       ...(choices.panzer_group_sp_assignment === false ? { panzerGroupSpAssignment: false } : {}),
+      // 4.x：剧本页明示不引用任何可选规则时记 true
+      ...(choices.optional_rules === 'none' ? { optionalRulesForbidden: true } : {}),
       // 剧本页未述（如 Intro: Vitebsk）⇒ 不写该键，运行时按 IV-D 默认空载
       ...(numbers.organic_trucks
         ? { organicTrucks: parseOrganicTrucks(numbers.organic_trucks) }
