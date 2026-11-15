@@ -62,7 +62,12 @@ export function toScenario(record, item) {
   const sameAs = choices.same_as
 
   // 初设选项：剔除已结构化的键，其余原文保留
-  const structuredChoiceKeys = new Set(['same_as', 'formation_draw', 'organic_trucks'])
+  const structuredChoiceKeys = new Set([
+    'same_as',
+    'formation_draw',
+    'organic_trucks',
+    'panzer_group_sp_assignment',
+  ])
   const options = {}
   for (const [key, value] of Object.entries(choices)) {
     if (!structuredChoiceKeys.has(key)) options[key] = value
@@ -91,6 +96,8 @@ export function toScenario(record, item) {
       reserveMarkers: numbers.reserve_markers,
       supplyCache,
       constructionMarkers: numbers.construction_markers,
+      // 3.4b：剧本页明示不适用时记 false（缺省按首回合日期判）
+      ...(choices.panzer_group_sp_assignment === false ? { panzerGroupSpAssignment: false } : {}),
       // 剧本页未述（如 Intro: Vitebsk）⇒ 不写该键，运行时按 IV-D 默认空载
       ...(numbers.organic_trucks
         ? { organicTrucks: parseOrganicTrucks(numbers.organic_trucks) }

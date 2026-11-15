@@ -255,6 +255,13 @@ export const ScenarioSetupSchema = z
     /** Supply Cache 枚数（每方） */
     supplyCache: z.number().int().nonnegative(),
     /**
+     * 3.4 / 3.4b：本剧本是否适用「轴方 SP 须归属装甲集群」
+     *
+     * 缺省按首回合日期判（早于解除日即适用）；剧本页明示不适用时记 `false`
+     * （Intro: Vitebsk 只有 Hoth 一个集群，不走 3.4 的分集群归属）。
+     */
+    panzerGroupSpAssignment: z.boolean().optional(),
+    /**
      * 1.6b：开局时图外空军盒内的额外 SP（枚，每方）
      *
      * 原文未给数 ⇒ 缺省 0；有剧本明确给出时按印刷值录入。

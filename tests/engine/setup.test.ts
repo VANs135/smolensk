@@ -479,6 +479,28 @@ describe('W7 C14：SP 归属划分（12.1d + Setup Note F + 3.4b）', () => {
     expect(ok.data.entries[2]?.panzerGroup).toBeNull()
   })
 
+  it('C14：Intro（8 Jul，但剧本页只有 Hoth 一个集群）不适用 3.4b，且不显示 SP 归属步骤', () => {
+    // 日期虽早于解除日，但剧本级开关关闭 ⇒ 3.4b 不适用
+    expect(requiresPanzerGroupSpAssignment('Intro')).toBe(false)
+    expect(setupFlowFor('Intro').find((step) => step.id === 'spOwnership')?.applicable).toBe(false)
+    const axisOnly = [
+      { id: 'axis:5.27', hex: { col: 5, row: 27 }, side: 'axis' as const, points: 5 },
+    ]
+    // 不点名集群即通过
+    expect(
+      planSupplyOwnership({ agreedByConsensus: true, scenarioId: 'Intro', dumps: axisOnly }).ok,
+    ).toBe(true)
+    // 点名集群反而被拒（3.4b 在本剧本不适用）
+    expect(
+      planSupplyOwnership({
+        agreedByConsensus: true,
+        scenarioId: 'Intro',
+        dumps: axisOnly,
+        assignments: { 'axis:5.27': 'hoth' },
+      }),
+    ).toMatchObject({ ok: false, reason: expect.stringContaining('spOwnershipNotApplicable') })
+  })
+
   it('C14：剧本 7（26 Aug）不适用 3.4b ⇒ 不准再点名装甲集群', () => {
     expect(requiresPanzerGroupSpAssignment(S7)).toBe(false)
     expect(scenarioFirstTurnDate(S7)).toBe('1941-08-26')

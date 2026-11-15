@@ -1295,7 +1295,8 @@
         },
         "source": [
           "Smolensk_Vitebsk_Scenario.pdf 第 1 页（2026-11-15）；未列数值按 0 记；有机卡车载荷原文未述故不写"
-        ]
+        ],
+        "panzerGroupSpAssignment": false
       },
       "hasSetup": true,
       "setupInfo": {

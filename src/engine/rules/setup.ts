@@ -1123,8 +1123,12 @@ export function scenarioFirstTurnDate(scenarioId: string): string | null {
   return markers.turnTrack.find((entry) => entry.turn === range.firstTurn)?.date ?? null
 }
 
-/** 该剧本是否适用「SP 须归属装甲集群」（首回合早于 19 August） */
+/** 该剧本是否适用「SP 须归属装甲集群」（剧本级开关优先；缺省按首回合早于 19 August） */
 export function requiresPanzerGroupSpAssignment(scenarioId: string): boolean {
+  // 剧本页明示（如 Intro: Vitebsk 只有 Hoth 一个集群，剧本不要求分集群归属）⇒ 以数据为准
+  const stated = scenarios.scenarios.find((item) => item.id === scenarioId)?.setup
+    .panzerGroupSpAssignment
+  if (stated !== undefined) return stated
   const date = scenarioFirstTurnDate(scenarioId)
   if (date === null) return false
   // ★ 口径唯一（M2③）：解除日判据只在 `timing.ts#isPanzerGroupConstraintLifted` 一处；
@@ -1173,10 +1177,7 @@ export function planSupplyOwnership(
       return fail(PANZER_GROUP_SP_RULE, `spOwnershipMissing:${dump.id}`)
     }
     if (!requires && group !== null) {
-      return fail(
-        PANZER_GROUP_SP_RULE,
-        `spOwnershipNotApplicable:${dump.id}（本剧本首回合不早于 19 August ⇒ 3.4b 不适用）`,
-      )
+      return fail(PANZER_GROUP_SP_RULE, `spOwnershipNotApplicable:${dump.id}（本剧本不适用 3.4b）`)
     }
     if (dump.side === 'soviet' && group !== null) {
       return fail(PANZER_GROUP_SP_RULE, `spOwnershipSovietGroupForbidden:${dump.id}`)
@@ -1484,7 +1485,8 @@ export function setupFlowFor(scenarioId: string): readonly SetupFlowStep[] {
       id: 'spOwnership',
       label: 'SP 归属划分',
       rule: SP_OWNERSHIP_RULE,
-      applicable: true,
+      // 剧本页明示不走 3.4 的剧本（Intro）不显示该步；其余剧本保持既有行为
+      applicable: scenario?.setup.panzerGroupSpAssignment !== false,
       detail: requiresGroup
         ? `轴方地图内 SP 须逐一点名装甲集群（Setup Note F / ${PANZER_GROUP_SP_RULE}）；苏方按 ${SP_OWNERSHIP_RULE} 归带上图的一方`
         : `SP 按 ${SP_OWNERSHIP_RULE} 归带上图的一方即可（本剧本首回合不早于 ${rulesConstPanelEnd()} ⇒ 3.4b 不适用）`,
