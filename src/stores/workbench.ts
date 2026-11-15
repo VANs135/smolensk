@@ -315,6 +315,7 @@ import {
   validateTransportPointLoad,
   validateTransportPointUnload,
   convertedRailRun,
+  deriveRailheads,
   // W6 B19：Smolensk 专规机制
   addSupplyCache,
   allVictoryConditionHexes,
@@ -4137,21 +4138,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })()
 
   /**
-   * 13.3d：剧本初设的**德军铁路端头**标记实例（`mk-38`，画在 `Neutral_Railhead.png` 上）
+   * 13.3d/13.3f：**铁路端头**标记实例（`mk-38`，画在 `Neutral_Railhead.png` 上）
    *
-   * 端头格来自剧本 `setup.railheads`（= 剧本页 `Converted Axis Rails: A to B` 的 **B 端**）；
-   * 13.3f 推进时 B 向东前移，届时把实例的 `hex` 移过去即可，标记本身不换。
-   * 铁路没有归属/控制：标记是**地图事实**，不参与命中测试，也不改任何判定。
+   * 原文（13.3f）只要求「用 Railhead 标记跟踪各路轨距的当前范围」，没有给端头取法，也没有让玩家摆：
+   * 所以这里**由换轨账本 `convertedRailHexes` + 铁路连通推导**（`deriveRailheads`）：
+   *   - 轴方换进 ⇒ 端头前移；苏方换回 ⇒ 端头后撤；
+   *   - 一条线到尽头一个端头，分叉的每个尽头各一个，同一条线不重复；
+   *   - 标记是**地图事实**：不参与命中测试、不改任何判定，也不提供手动摆放入口。
+   * 换剧本/重置时无需再播种——账本一变，端头就跟着变。
    */
-  const railheadMarkers = ref<Marker[]>([])
-
-  /** 13.3d：按剧本 `setup.railheads` 重新播种端头标记（换剧本 / 重置时清空并重算） */
-  function seedRailheadMarkersNow(): void {
-    const setup = scenarios.scenarios.find((item) => item.id === scenarioId.value)?.setup
-    const hexes = (setup?.railheads?.hexes ?? [])
-      .map((text) => parseHexPath(text)[0])
+  const railheadMarkers = computed<Marker[]>(() => {
+    const converted = convertedRailHexes.value
+      .map((key) => parseHexPath(key)[0])
       .filter((hex): hex is HexRef => hex !== undefined)
-    railheadMarkers.value = hexes.map((hex) => ({
+    return deriveRailheads({ converted, railNeighbors: railNeighborHexes }).map((hex) => ({
       id: `mk-38:${hex.col}.${hex.row}`,
       recordId: RAILHEAD_MARKER.recordId,
       // 统一取 markers.json 的 side（neutral），不在初设或渲染层另写一份
@@ -4159,7 +4159,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       hex,
       track: null,
     }))
-  }
+  })
 
   /** C9b：清空换轨账本（裁判订正用；13.3f 的初设之外不应有「已换轨」） */
   function clearConvertedRailsNow(): void {
@@ -27375,8 +27375,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     printedHedgehogOwners.value = {}
     // 13.3f / 专规 1.2 初设换轨（剧本页 `Converted Axis Rails` 的逐格推导）
     seedConvertedRailsNow()
-    // 13.3d：铁路端头标记（`setup.railheads` 的 B 端；`mk-38`）
-    seedRailheadMarkersNow()
+    // 13.3d 端头标记不播种：由上面的换轨账本 + 铁路连通推导（`railheadMarkers` computed）
     // 9.14 特殊战斗待决（落点按剧本 4 的拖取距离判，换剧本即作废）
     specialPending.value = null
   }
@@ -27801,8 +27800,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     specialPending.value = null
     // 13.3f / 专规 1.2：换轨账本回到该剧本的初设（重置后账本不得残留上一局的换轨）
     seedConvertedRailsNow()
-    // 13.3d：端头标记同样回到该剧本初设
-    seedRailheadMarkersNow()
+    // 13.3d 端头标记不播种：随换轨账本推导，上面一行落账即生效
     gaugeConversionsThisPhase.value = []
     convertedHexesThisPhase.value = []
     railMovedNewTrackThisPhase.value = []
@@ -28289,8 +28287,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ['multiUnitFormationIds', multiUnitFormationIds],
     // ②′ 账本（铁路 / 换轨 / 施工 / 机场 / 胜利格 / 印刷工事）
     ['convertedRailHexes', convertedRailHexes],
-    // 13.3d：铁路端头标记实例（初设播种；13.3f 推进时只改 hex）
-    ['railheadMarkers', railheadMarkers],
+    // 13.3d 端头标记**不存档**：由 `convertedRailHexes` + 铁路连通推导，读档后自动重算
     ['gaugeConversionsThisPhase', gaugeConversionsThisPhase],
     ['convertedHexesThisPhase', convertedHexesThisPhase],
     ['railMovedNewTrackThisPhase', railMovedNewTrackThisPhase],
@@ -29510,7 +29507,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     clearConvertedRailsNow,
     // 13.3d：铁路端头标记（`mk-38`；地图事实层）
     railheadMarkers,
-    seedRailheadMarkersNow,
     railMoveError,
     railMoveInputs,
     railCapSpentThisTurn,

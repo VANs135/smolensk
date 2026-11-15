@@ -333,11 +333,10 @@ describe('5-X2：剧本 7 轴心换轨 4 段与端头格（专规 1.2 / 13.3d）
     expect(store.isRailGaugeUsableAt(outside, 'soviet')).toBe(true)
   })
 
-  it('端头格（B 端）有 mk-38，A 端与段内非端头格没有', () => {
+  it('端头由换轨账本推导：换轨到头的 B 端各有 mk-38，A 端与已换轨的并入点不出', () => {
     const store = newConsole()
     store.setScenarioId('7')
     const markers = store.railheadMarkers
-    expect(markers).toHaveLength(SEGMENTS.length)
     for (const marker of markers) {
       expect(marker.recordId).toBe('mk-38')
       // 标记方别取 markers.json 的 neutral（不归属任何一方）
@@ -346,20 +345,27 @@ describe('5-X2：剧本 7 轴心换轨 4 段与端头格（专规 1.2 / 13.3d）
     const headKeys = new Set(
       markers.filter((marker) => marker.hex !== null).map((marker) => label(marker.hex!)),
     )
-    expect([...headKeys].sort()).toEqual(['18.18', '2.2', '34.18', '38.5'])
+    // 换轨到头的三个 B 端（2.2 / 34.18 / 38.5）各有端头；其余格（含并入点 18.18）都没有
+    const derivedHeads = new Set(['2.2', '34.18', '38.5'])
+    expect([...headKeys].sort()).toEqual([...derivedHeads].sort())
+    expect(markers).toHaveLength(derivedHeads.size)
 
+    /*
+     * ★ 端头不再是剧本手写的 4 个位置：18.18 虽然写在「15.10 to 18.18」这条支线的 B 端，
+     *   但它在账本里已并入已换轨干线（17.19 / 18.17 / 19.19 三面已换轨，只有北向 18.19 未换），
+     *   换轨范围越过它继续 ⇒ 它不是「尽头」，不额外冒一个端头（同一条线不重复）。
+     */
+    expect(headKeys.has('18.18')).toBe(false)
     for (const segment of SEGMENTS) {
-      // B 端＝端头
-      expect(headKeys.has(label(segment.head))).toBe(true)
-      // A 端不是端头（端头只有东端终点那一端）
       const from = parseConvertedRailRun(segment.declaration)!.from
       expect(headKeys.has(label(from)), `${segment.declaration} 的 A 端不该有端头标记`).toBe(false)
-      // 段内非端头格也没有标记
       for (const hex of segment.inside) {
-        if (label(hex) === label(segment.head)) continue
-        expect(headKeys.has(label(hex))).toBe(false)
+        const key = label(hex)
+        if (derivedHeads.has(key)) continue
+        expect(headKeys.has(key), `${key} 不该有端头标记`).toBe(false)
       }
     }
+    for (const key of derivedHeads) expect(headKeys.has(key)).toBe(true)
   })
 
   it('2.02 按 02.02 处理（同一格的两种写法，都解成列 2 行 2）', () => {

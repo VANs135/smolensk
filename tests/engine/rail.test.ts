@@ -14,6 +14,7 @@ import {
   convertedRailRun,
   createRailFacts,
   createRailGraph,
+  deriveRailheads,
   mergeTransportPoints,
   railCapacityCost,
   railPathFacts,
@@ -700,6 +701,61 @@ describe('专规 1.2 剧本初设换轨：端点原文 → 逐格清单', () => 
         { from: { col: 0, row: 0 }, to: { col: 100, row: 0 } },
       ),
     ).toMatchObject({ ok: false, rule: '13.3f' })
+  })
+})
+
+describe('13.3f：Railhead 端头从换轨账本 + 铁路连通推导（只显示/跟踪，不手摆）', () => {
+  const hexOf = (text: string): HexRef => {
+    const [col, row] = text.split('.').map(Number)
+    return { col: col!, row: row! }
+  }
+  const keyOf = (hex: HexRef): string => `${hex.col}.${hex.row}`
+  /** 用边集造 `railNeighbors`（无向） */
+  const railOf = (edges: readonly string[]): ((hex: HexRef) => readonly HexRef[]) => {
+    const graph = new Map<string, HexRef[]>()
+    for (const edge of edges) {
+      const [from, to] = edge.split('-').map(hexOf) as [HexRef, HexRef]
+      const push = (a: HexRef, b: HexRef): void => {
+        const list = graph.get(keyOf(a)) ?? []
+        if (!list.some((item) => keyOf(item) === keyOf(b))) list.push(b)
+        graph.set(keyOf(a), list)
+      }
+      push(from, to)
+      push(to, from)
+    }
+    return (hex) => graph.get(keyOf(hex)) ?? []
+  }
+  const heads = (converted: readonly string[], edges: readonly string[]): string[] =>
+    deriveRailheads({
+      converted: converted.map(hexOf),
+      railNeighbors: railOf(edges),
+    }).map(keyOf)
+
+  // 一条直线：1.1 — 1.2 — 1.3 — 1.4 …
+  const LINE = ['1.1-1.2', '1.2-1.3', '1.3-1.4']
+
+  it('推进：轴方换进一格，端头跟着前移（旧端头变中段）', () => {
+    expect(heads(['1.1', '1.2'], LINE)).toEqual(['1.2'])
+    expect(heads(['1.1', '1.2', '1.3'], LINE)).toEqual(['1.3'])
+  })
+
+  it('后撤：苏方换回一格，端头跟着退回', () => {
+    expect(heads(['1.1', '1.2', '1.3'], LINE)).toEqual(['1.3'])
+    expect(heads(['1.1', '1.2'], LINE)).toEqual(['1.2'])
+  })
+
+  it('分叉：换出一条支线 ⇒ 每个尽头各一个端头', () => {
+    // 1.2 是分叉口：主干 1.1—1.2—1.3，支线 1.2—1.5—1.6
+    const edges = [...LINE, '1.2-1.5', '1.5-1.6']
+    expect(heads(['1.1', '1.2', '1.3', '1.5'], edges)).toEqual(['1.3', '1.5'])
+  })
+
+  it('不重复：同一条线只在尽头出端头，分叉口与已换轨的中段都不出', () => {
+    // 1.2 另有一条**未换轨**的支线 1.2—1.9：不能因此给 1.2 也冒一个端头
+    const edges = [...LINE, '1.2-1.9']
+    expect(heads(['1.1', '1.2', '1.3'], edges)).toEqual(['1.3'])
+    // 重复传入同一格也只出一个
+    expect(heads(['1.1', '1.2', '1.2'], LINE)).toEqual(['1.2'])
   })
 })
 

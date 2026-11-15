@@ -620,6 +620,51 @@ export function convertedRailRun(
   })
 }
 
+/* ────────────────────────────── Railhead 端头推导（13.3f） ────────────────────────────── */
+
+/** 端头推导输入：换轨账本 + 铁路连通（都不带盘面实例） */
+export interface RailheadFacts {
+  /** 13.3f 账本：已换成本方轨距的格（顺序无关、可重复） */
+  converted: readonly HexRef[]
+  /** 13.3a 铁路连通：以铁路格边相接的邻格 */
+  railNeighbors(hex: HexRef): readonly HexRef[]
+}
+
+/**
+ * 13.3f：从换轨账本推导 Railhead 端头格（**只做显示与跟踪，不可手摆**）
+ *
+ * 原文只说「Players keep track of the current extent of each rail gauge using Railhead markers」，
+ * 没有规定端头怎么取。按「当前轨距范围的尽头」落成三条：
+ *
+ *   1. **线到尽头**：该格已换轨、铁路还继续（至少一个未换轨的铁路邻格），且换轨范围到此为止
+ *      （已换轨的铁路邻格 ≤1，避免把「已换轨的中段」当端头）；
+ *   2. **分叉各有尽头**：从分叉口换出的每条支线，其尽头各出一个端头（分叉口本身是内部格，不出）；
+ *   3. **不重复**：同一格最多一个；同一条线的中段不出。
+ *
+ * 已换轨的格若没有未换轨的铁路邻格（地图西缘的初设起点、或整条线换到底），不是端头——
+ * 这与剧本印的 Railhead 位置一致（例如剧本 1 的初设换轨 01.03→2.02，端头是 2.02，不是 01.03）。
+ */
+export function deriveRailheads(facts: RailheadFacts): HexRef[] {
+  const converted = new Map<string, HexRef>()
+  for (const hex of facts.converted) converted.set(hexText(hex), hex)
+
+  const heads: HexRef[] = []
+  for (const [key, hex] of converted) {
+    let convertedNeighbors = 0
+    let openNeighbors = 0
+    for (const neighbor of facts.railNeighbors(hex)) {
+      const neighborKey = hexText(neighbor)
+      if (neighborKey === key) continue
+      if (converted.has(neighborKey)) convertedNeighbors += 1
+      else openNeighbors += 1
+    }
+    if (convertedNeighbors > 1) continue
+    if (openNeighbors === 0) continue
+    heads.push(hex)
+  }
+  return heads.sort((a, b) => a.col - b.col || a.row - b.row)
+}
+
 /* ────────────────────────────── 运输点数：合并 / 拆分（13.2c） ────────────────────────────── */
 
 /** 运输点数视图（13.2） */
