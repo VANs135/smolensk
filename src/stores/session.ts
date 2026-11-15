@@ -182,6 +182,15 @@ export const useGameSessionStore = defineStore('gameSession', () => {
   const session = ref<GameSession | null>(null)
 
   /**
+   * 开局天气选择（用户 2026-11-15 口径：只给教学剧本 Intro: Vitebsk）
+   *
+   * 两档：`scenario` = 按剧本原值（默认，如 Limited Flight）；`normal` = 正常飞行。
+   * 仅在**开局前**可改；开局时写进会话记录（`records.weather.air`）即冻结，随存档保持。
+   * `scenarios.json` 的 `firstWeather` 不动，它仍是默认值。
+   */
+  const firstWeatherChoice = ref<'scenario' | 'normal'>('scenario')
+
+  /**
    * 5.0b 提前决胜是否达成（**注入的盘面事实**）
    *
    * 由调用方按 B20 的 `decisiveVictory` 结论写入（见 VictoryPanel）；本 store 只接收结论。
@@ -608,7 +617,9 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       lastTurn: range.lastTurn,
       singlePlayerTurn: info?.singlePlayerTurn === true,
       scenarioFirstPlayer: (info?.firstPlayer ?? 'axis') as Side,
-      firstTurnWeather: FIRST_TURN_WEATHER[info?.firstWeather ?? 'normal'],
+      // 首回合天气：开局时已冻结进 `records.weather`（读档后沿用记录，不再看剧本默认值）
+      firstTurnWeather:
+        records.value?.weather.air ?? FIRST_TURN_WEATHER[info?.firstWeather ?? 'normal'],
       earlyDecisionMet: earlyDecisionMet.value,
       // ⑬ 接线：判定结论（操作台推来的盘面求值结果）
       decisiveVictory: pushedVerdicts.value.decisive,
@@ -635,6 +646,35 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     return true
   }
 
+  /**
+   * 改「开局天气」（只教学剧本、只在开局前）
+   *
+   * 三条拒绝：非教学剧本（没有这个入口）、已开局/读档后（开局即冻结）、值不认识。
+   */
+  function setFirstWeatherChoice(next: 'scenario' | 'normal'): boolean {
+    if (session.value !== null && form.value !== 'terminated') {
+      error.value = { rule: '1.5', reason: 'firstWeatherLocked' }
+      return false
+    }
+    if (
+      scenarioInfo.value?.singlePlayerTurn !== true ||
+      (next !== 'scenario' && next !== 'normal')
+    ) {
+      return false
+    }
+    firstWeatherChoice.value = next
+    error.value = null
+    return true
+  }
+
+  /** 开局首回合天气：教学剧本可按用户选择覆盖，其余剧本照剧本原值 */
+  function firstTurnWeatherAtStart(): FlightWeather {
+    const info = scenarioInfo.value
+    const declared = FIRST_TURN_WEATHER[info?.firstWeather ?? 'normal']
+    if (info?.singlePlayerTurn === true && firstWeatherChoice.value === 'normal') return 'normal'
+    return declared
+  }
+
   /** 开局：建一个空白盘面的会话并置为 advancing（共识开关在首次步进时逐项提问） */
   function startGame(seed = TEST_FIXED_SEED): boolean {
     const info = scenarioInfo.value
@@ -659,7 +699,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
           preTurnSegment: 'weatherDetermination',
           activeSide: null,
           firstPlayer: null,
-          weather: { air: FIRST_TURN_WEATHER[info.firstWeather], ground: 'good' },
+          weather: { air: firstTurnWeatherAtStart(), ground: 'good' },
           railCapacity: railCapacityAtStart(),
           markerTracks: {},
           victoryLocations: [],
@@ -1118,6 +1158,8 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     pushedVerdicts,
     // 动作
     setScenarioId,
+    firstWeatherChoice,
+    setFirstWeatherChoice,
     startGame,
     stepNow,
     advanceToNextStop,

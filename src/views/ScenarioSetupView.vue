@@ -160,7 +160,30 @@ function onEnterSetup(): void {
               </div>
               <div>
                 <dt>天气</dt>
-                <dd>{{ weatherLabelOf(selected.id) }}</dd>
+                <!-- 开局天气可选（用户 2026-11-15 口径）：只教学剧本出现，一个入口、两档 -->
+                <dd v-if="isTeachingScenario(selected.id)" class="scenario__weather">
+                  <label>
+                    <input
+                      type="radio"
+                      name="first-weather"
+                      value="scenario"
+                      :checked="gameSession.firstWeatherChoice === 'scenario'"
+                      @change="gameSession.setFirstWeatherChoice('scenario')"
+                    />
+                    <span>剧本原值</span>
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="first-weather"
+                      value="normal"
+                      :checked="gameSession.firstWeatherChoice === 'normal'"
+                      @change="gameSession.setFirstWeatherChoice('normal')"
+                    />
+                    <span>正常飞行</span>
+                  </label>
+                </dd>
+                <dd v-else>{{ weatherLabelOf(selected.id) }}</dd>
               </div>
             </dl>
             <p v-if="isTeachingScenario(selected.id)" class="scenario__teach">{{ introSummary }}</p>
@@ -427,6 +450,20 @@ function onEnterSetup(): void {
 .scenario__facts dd {
   margin: 0;
   font-weight: 700;
+}
+
+.scenario__weather {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.scenario__weather label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .scenario__modes {
