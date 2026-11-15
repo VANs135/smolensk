@@ -164,6 +164,22 @@ describe('B10：路由接线（源码守卫）', () => {
  * 4.3 那条复选框落在视口外，页面滚不到、面板也裁掉 ⇒ 「窄高窗口下每条可选规则都要能点到」不成立。
  * 守卫只钉两件不可回退的事：① 剧本页自己能纵向滚；② 共识条目不进任何固定高度/裁切盒子。
  */
+describe('Intro: Vitebsk 的剧本卡（教学/单回合）', () => {
+  const view = readFileSync('src/views/ScenarioSetupView.vue', 'utf8')
+
+  it('卡片按剧本数据标「教学 · 单回合」，不写死 Intro 字样', () => {
+    expect(view).toContain("import { scenarios } from '@/data'")
+    expect(view).toContain('singlePlayerTurn')
+    expect(view).toContain('教学 · 单回合')
+  })
+
+  it('选中 Intro 时给原文摘要：单玩家回合、两格维捷布斯克目标、Minor 待定', () => {
+    expect(view).toContain('两格维捷布斯克')
+    expect(view).toContain('solid wall')
+    expect(view).toContain('firstWeather')
+  })
+})
+
 describe('960×571：剧本页可滚动、共识条目不裁切（源码守卫）', () => {
   const view = readFileSync('src/views/ScenarioSetupView.vue', 'utf8')
   const checklist = readFileSync('src/components/hotseat/ConsensusChecklist.vue', 'utf8')

@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 
 import { ConsensusChecklist } from '@/components/hotseat'
 import { provideUiMode } from '@/components/ui-mode'
+import { scenarios } from '@/data'
 import { useGameSessionStore, useHotseatStore, useSetupStore, useUiStore } from '@/stores'
 
 provideUiMode('formal')
@@ -16,6 +17,29 @@ const modeOptions = computed(() => hotseat.MODE_LABELS)
 const choices = computed(() => setup.scenarioChoices)
 const selectedId = ref(setup.scenarioId)
 const selected = computed(() => choices.value.find((item) => item.id === selectedId.value) ?? null)
+
+/**
+ * 剧本记录的完整字段
+ *
+ * `setup.scenarioChoices` 只给选择器要用的投影（B10），教学标记/天气/先设不在其中；
+ * 这里直接读数据，避免为了展示去改初设 store 的口径。
+ */
+const fullScenarios = computed(() => new Map(scenarios.scenarios.map((item) => [item.id, item])))
+const selectedFull = computed(() =>
+  selected.value === null ? null : (fullScenarios.value.get(selected.value.id) ?? null),
+)
+
+/** 剧本页明示 `1 player turn` 的教学剧本 */
+function isTeachingScenario(id: string): boolean {
+  return fullScenarios.value.get(id)?.singlePlayerTurn === true
+}
+
+/** 首回合天气的中文名（`scenarios.json` 的 firstWeather） */
+function weatherLabelOf(id: string): string {
+  const weather = fullScenarios.value.get(id)?.firstWeather
+  if (weather === undefined) return '—'
+  return weather === 'restricted' ? '受限飞行（Limited Flight）' : '正常飞行'
+}
 
 const modeCopy = {
   solo: { label: '单人推演', note: '同一人操作双方；双方可见' },
@@ -85,6 +109,9 @@ function onEnterSetup(): void {
                 <span class="scenario__entry">
                   <strong class="scenario__name">{{ item.name }}</strong>
                   <span class="scenario__date num">{{ item.firstTurn }} – {{ item.lastTurn }}</span>
+                  <span v-if="isTeachingScenario(item.id)" class="scenario__teach-tag num">
+                    教学 · 单回合
+                  </span>
                 </span>
                 <span class="scenario__meta num">{{ item.turns }} 回合</span>
                 <span class="scenario__mark" aria-hidden="true">
@@ -114,7 +141,21 @@ function onEnterSetup(): void {
                 </dd>
                 <dd v-else>—</dd>
               </div>
+              <div>
+                <dt>回合</dt>
+                <dd class="num">{{ selected.turns }} 回合</dd>
+              </div>
+              <div>
+                <dt>天气</dt>
+                <dd>{{ weatherLabelOf(selected.id) }}</dd>
+              </div>
             </dl>
+            <p v-if="isTeachingScenario(selected.id)" class="scenario__teach">
+              单人教学：{{ selected.firstPlayer === 'axis' ? '轴心国' : '苏联' }}先手、{{
+                selectedFull?.setupFirst === 'soviet' ? '苏军' : '轴心国'
+              }}先设；全剧本只有 <b>1 个玩家回合</b>，走完即终局。目标：两格维捷布斯克（19.27 +
+              19.28）均由轴方控制 = Major Victory；Minor（solid wall）原文未定义判据，待定。
+            </p>
             <fieldset class="scenario__modes">
               <legend>对局模式</legend>
               <ul class="modes">
@@ -350,6 +391,21 @@ function onEnterSetup(): void {
 
 .scenario__meta {
   white-space: nowrap;
+}
+
+.scenario__teach-tag {
+  justify-self: start;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-command-teal);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--color-command-teal);
+}
+
+.scenario__teach {
+  margin: 0 var(--space-4) var(--space-3);
+  color: var(--color-command-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
 }
 
 .scenario__facts {
