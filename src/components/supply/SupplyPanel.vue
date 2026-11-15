@@ -89,11 +89,14 @@ const gaugeUnitId = ref<string>('')
 /** 换轨账本前若干格（清单可能很长，面板只列前 12 个） */
 const convertedPreview = computed(() => workbench.convertedRailHexes.slice(0, 12))
 
-/* ── 12.11a 销毁补给站的输入（站 / 可选的销毁量；骰面已按 B28 改为自动） ── */
+/* ── 12.11a 销毁补给站的输入（站；销毁量固定为全部 SP，骰面已按 B28 改为自动） ── */
 const destroyDumpId = ref<string>('')
-const destroyT = ref<number | null>(null)
 
 /* ── 12.7 转换的输入（转换格号 / 型号 / 待翻面的延补队） ── */
+const CONVERT_KINDS = [
+  { key: 'truck', label: '卡车' },
+  { key: 'wagon', label: '马车' },
+] as const
 const convertKind = ref<'truck' | 'wagon'>('truck')
 const convertExtenderId = ref<string>('')
 
@@ -140,16 +143,14 @@ function dumpItem(dump: {
   }
 }
 
-/** 12.11a：可销毁的补给站（**每阶段每站一次** ⇒ 已试过的灰显） */
+/** 12.11a：可销毁的补给站（**每阶段每站一次** ⇒ 已试过的根本不出现） */
 const destroyDumpItems = computed<readonly CounterPickerItem[]>(() =>
-  workbench.spDumpsOfSide.map((dump) => {
-    const tried = (workbench.dumpDestructionAttempts[dump.id] ?? 0) > 0
-    return {
+  workbench.spDumpsOfSide
+    .filter((dump) => (workbench.dumpDestructionAttempts[dump.id] ?? 0) === 0)
+    .map((dump) => ({
       ...dumpItem(dump),
       selected: destroyDumpId.value === dump.id,
-      disabledReason: tried ? '12.11a：本阶段该站已尝试过销毁（每阶段每站一次）' : null,
-    }
-  }),
+    })),
 )
 
 /** 13.2c：运输点数算子（合并多选 / 拆分对象 / 装卸对象 —— 三处各用自己的选中口径） */
@@ -410,7 +411,6 @@ const sourceItems = computed<readonly CounterPickerItem[]>(() => {
       imageUrl,
       name: workbench.supplySourceLabel(source),
       selected: false,
-      disabledReason: null,
       groupKey: source.kind,
       groupLabel: workbench.supplySourceKindLabel(source.kind),
       hex,
@@ -449,9 +449,12 @@ watch(
   ([only, id, hex]) => {
     if (hex === null || hex === undefined || id === null || id === undefined) return
     if (only === 'dumpBlow') {
+      const dump = workbench.spDumpsOfSide.find(
+        (item) => item.hex.col === hex.col && item.hex.row === hex.row,
+      )
+      // 12.11a：本阶段已尝试过的站不再出现 ⇒ 也不预选（点了只会被拒）
       destroyDumpId.value =
-        workbench.spDumpsOfSide.find((dump) => dump.hex.col === hex.col && dump.hex.row === hex.row)
-          ?.id ?? ''
+        dump !== undefined && (workbench.dumpDestructionAttempts[dump.id] ?? 0) === 0 ? dump.id : ''
     } else if (only === 'loadUnload') workbench.selectTransportLoadPointNow(id)
     else if (only === 'transport') workbench.transportPointInputs.splitId = id
     else if (only === 'extender') {
@@ -624,67 +627,61 @@ const showsLedger = computed(
         </template>
         <template v-if="showsDumpBlow">
           <!-- ── ①b 12.11a 销毁补给站（只在移动环节；每阶段每站一次；运输点数不能以此摧毁） ── -->
-          <p class="muted">
-            销毁补给站（12.11a）：担心被夺时可在**移动环节**销毁本站 SP（掷 1 骰查百分比，损失按 T
-            取整）。 每个阶段每个补给站只能尝试一次；**运输点数不能以此方式摧毁**。
-          </p>
-          <div class="row">
-            <label class="field"> 已试过的站会**灰掉**（12.11a：每阶段每站一次） </label>
-          </div>
-          <!-- B14d：补给站＝**算子图阵列**（原来是纯文字下拉） -->
           <CounterPicker
-            title="要销毁的补给站（12.11a）"
-            hint="12.11a：只在移动环节；每阶段每站一次；运输点数不能以此摧毁"
+            title="要销毁的补给站"
             :items="destroyDumpItems"
             :size="32"
             @pick="destroyDumpId = $event"
             @hover="hoverDump"
           />
-          <div class="row">
-            <label class="field">
-              销毁量（T；留空＝全部 SP）
-              <UiField
-                v-model="destroyT"
-                class="input num"
-                type="number"
-                min="1"
-                placeholder="全部"
-                readonly
-              />
-            </label>
+          <div v-if="destroyDumpId !== ''" class="row">
+            <span class="num">全部 SP</span>
             <BaseButton
               variant="secondary"
               size="sm"
-              :disabled="destroyDumpId === ''"
-              @click="workbench.destructDumpNow(destroyDumpId, destroyT ?? undefined)"
+              title="12.11a"
+              @click="workbench.destructDumpNow(destroyDumpId)"
             >
-              销毁（12.11a）
+              销毁
             </BaseButton>
           </div>
         </template>
         <template v-if="showsTransport">
           <!-- ── ①c 运输点数（13.2c 合并/拆分、12.7 与延补队双向转换） ── -->
-          <RuleNote title="合并 / 拆分运输点数：同格、同类、本方移动阶段（不耗 MP）" rule="13.2c">
+          <RuleNote title="合并 / 拆分运输点数" rule="13.2c">
             <p class="muted">
-              运输点数（13.2c）：合并/拆分**不耗
-              MP**，只能在本方**移动阶段**做，且所有算子须在**同一格**；
-              **不同类型永不合并**（含编内卡车）。12.7a：同格合计满 **5 点**可转为一枚延补队（消耗 ½
-              MA， 余数留原格）；12.7d：延补队可在移动环节主动翻回 5 点运输点数（同样消耗自身 ½
+              同格、同类、本方移动阶段；不耗 MP，不同类型永不合并。同格合计满 5
+              点可转为一枚延补队（消耗 ½ MA，余数留原格）；延补队可翻回 5 点运输点数（同样消耗自身 ½
               MA）。
             </p>
           </RuleNote>
-          <div class="row">
+          <CounterPicker
+            title="合并（点两枚及以上）"
+            :items="transportMergeItems"
+            :size="32"
+            @pick="pickTransportMerge"
+            @hover="hoverUnit"
+          />
+          <div v-if="workbench.transportPointInputs.mergeIds.length >= 2" class="row">
             <BaseButton
               variant="secondary"
               size="sm"
-              :disabled="workbench.transportPointInputs.mergeIds.length < 2"
+              title="13.2c"
               @click="workbench.mergeTransportPointsNow()"
             >
-              合并选中（13.2c）
+              合并选中
             </BaseButton>
+          </div>
+          <CounterPicker
+            title="拆分对象（点一枚）"
+            :items="transportSplitItems"
+            :size="32"
+            @pick="pickTransportSplit"
+            @hover="hoverUnit"
+          />
+          <div v-if="workbench.transportPointInputs.splitId !== null" class="row">
             <label class="field">
-              拆分为（空格分隔各份规模）
-              <!-- 13.2c：各份规模是**列表**（如 "2 3"），步进表达不了 ⇒ 保留普通输入（正式界面也可用） -->
+              各份规模
               <input
                 v-model="workbench.transportPointInputs.splitSizesText"
                 class="input"
@@ -694,29 +691,12 @@ const showsLedger = computed(
             <BaseButton
               variant="secondary"
               size="sm"
-              :disabled="workbench.transportPointInputs.splitId === null"
+              title="13.2c"
               @click="workbench.splitTransportPointNow()"
             >
-              拆分（13.2c）
+              拆分
             </BaseButton>
           </div>
-          <!-- B14d：运输点数＝**算子图阵列**（原来是逐点数的文字复选框 + 每行一个"选为拆分对象"按钮） -->
-          <CounterPicker
-            title="合并（13.2c，点两枚及以上）"
-            hint="13.2c：合并/拆分不耗 MP，只能在本方移动阶段、且所有算子须在**同一格**；不同类型永不合并"
-            :items="transportMergeItems"
-            :size="32"
-            @pick="pickTransportMerge"
-            @hover="hoverUnit"
-          />
-          <CounterPicker
-            title="拆分对象（点一枚）"
-            hint="13.2c：拆分只作用于这一枚（份数在上面的输入框里给）；12.7e：MP 相同的同格同型点数合并显示为 ×N"
-            :items="transportSplitItems"
-            :size="32"
-            @pick="pickTransportSplit"
-            @hover="hoverUnit"
-          />
           <p v-if="workbench.transportPointsOfSide.length === 0" class="muted">
             （当前方图上没有运输点数算子）
           </p>
@@ -805,108 +785,90 @@ const showsLedger = computed(
         </template>
         <template v-if="showsExtender">
           <div class="row">
-            <label class="field">
-              转换格号
-              <UiField v-model="workbench.convertTargetHexText" class="input" placeholder="36.13" />
-              <BaseButton
-                variant="secondary"
-                size="sm"
-                @click="workbench.beginConvertTargetHexPickNow()"
-              >
-                点地图选格
-              </BaseButton>
-            </label>
-            <label class="field">
-              型号
-              <select v-model="convertKind" class="select">
-                <option value="truck">truck（卡车）</option>
-                <option value="wagon">wagon（马车）</option>
-              </select>
-            </label>
+            <span class="num">{{ workbench.convertTargetHexText || '未选格' }}</span>
             <BaseButton
               variant="secondary"
               size="sm"
+              @click="workbench.beginConvertTargetHexPickNow()"
+            >
+              点地图选格
+            </BaseButton>
+          </div>
+          <div class="row">
+            <BaseButton
+              v-for="item in CONVERT_KINDS"
+              :key="item.key"
+              :variant="convertKind === item.key ? 'primary' : 'secondary'"
+              size="sm"
+              @click="convertKind = item.key"
+            >
+              {{ item.label }}
+            </BaseButton>
+            <BaseButton
+              v-if="workbench.convertTargetHexText !== ''"
+              variant="secondary"
+              size="sm"
+              title="12.7a"
               @click="
                 workbench.convertTransportToExtenderNow(workbench.convertTargetHexText, convertKind)
               "
             >
-              转为延补队（12.7a）
+              转为延补队
             </BaseButton>
           </div>
-          <p class="muted">
-            12.7e：只统计**该格**的运输点数。点数来自不同格时，先用各自的移动把算子走到同一格，再按该格转换。
-          </p>
-          <!-- B14d：延补队＝**算子图阵列**（原来是纯文字下拉） -->
           <CounterPicker
-            title="延补队（12.7d 翻回 / 9.14d 主动崩溃）"
-            hint="12.7d：移动环节可主动翻回 5 点运输点数（消耗 ½ MA）；9.14d：以主动崩溃替代常规移动"
+            title="延补队"
             :items="extenderItems"
             :size="32"
             @pick="convertExtenderId = $event"
             @hover="hoverUnit"
           />
-          <div class="row">
+          <div v-if="convertExtenderId !== ''" class="row">
             <BaseButton
               variant="secondary"
               size="sm"
-              :disabled="convertExtenderId === ''"
+              title="12.7d"
               @click="workbench.flipExtenderToTransport(convertExtenderId)"
             >
-              翻回 5 点运输点数（12.7d）
+              翻回 5 点运输点数
             </BaseButton>
             <BaseButton
               variant="secondary"
               size="sm"
-              :disabled="convertExtenderId === ''"
+              title="9.14d"
               @click="workbench.collapseExtenderNow(convertExtenderId)"
             >
-              主动崩溃（9.14d：替代常规移动）
+              主动崩溃
             </BaseButton>
           </div>
-          <RuleNote
-            title="9.14d 主动崩溃：延补队在移动环节位移到「特殊拖取距离内且有追溯补给」的格"
-            rule="9.14d"
-          >
+          <RuleNote title="主动崩溃的落点与翻面" rule="9.14d">
             <p class="muted">
-              9.14d
-              主动崩溃：延补队不能移动，可在**移动环节**用它替代常规移动——位移到**特殊拖取距离**
-              （12.7b：战斗面印值 MA，卡车 20 / 马车
-              10）内、且**该格此刻有追溯补给**的任意格；敌方单位 / ZOC /
-              禁入地形概不影响。落格后翻面到运输点数面；**若无合法格则无法崩溃**：原地翻面，并按
-              9.14c 判夺取。
+              位移到特殊拖取距离内、且该格此刻有追溯补给的任意格；落格后翻面到运输点数面，无合法格则原地翻面并判夺取。
             </p>
           </RuleNote>
         </template>
         <template v-if="props.only === null || props.only === 'ledger'">
           <!-- ── ② 基础补给源声明（12.6a①②；来自专规/剧本） ── -->
-          <p class="muted">
-            基础补给源（12.6a①②：地图边缘铁路格 / 专规列出的补给源格 / 火车卸货格）——
-            该数据来自专规与剧本，故由玩家声明（不臆造）。
-          </p>
           <div class="row">
-            <label class="field">
-              格号
-              <UiField
-                v-model="workbench.supplySourceDraft.hexText"
-                class="input"
-                placeholder="36.13"
-              />
-              <BaseButton
-                variant="secondary"
-                size="sm"
-                @click="workbench.beginSupplySourceHexPickNow()"
-              >
-                点地图选格
-              </BaseButton>
-            </label>
-            <label class="field">
-              类别
-              <select v-model="workbench.supplySourceDraft.kind" class="select">
-                <option v-for="item in SOURCE_KINDS" :key="item.key" :value="item.key">
-                  {{ item.label }}
-                </option>
-              </select>
-            </label>
+            <span class="num">{{ workbench.supplySourceDraft.hexText || '未选格' }}</span>
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              @click="workbench.beginSupplySourceHexPickNow()"
+            >
+              点地图选格
+            </BaseButton>
+          </div>
+          <div class="row">
+            <BaseButton
+              v-for="item in SOURCE_KINDS"
+              :key="item.key"
+              :variant="workbench.supplySourceDraft.kind === item.key ? 'primary' : 'secondary'"
+              size="sm"
+              @click="workbench.supplySourceDraft.kind = item.key"
+            >
+              {{ item.label }}
+            </BaseButton>
             <!-- 裁判工具：12.6a 的补给源由规则/专规给定，表上只记结论 ⇒ 对局台不铺 -->
             <BaseButton
               v-if="showsReferee"
@@ -914,7 +876,7 @@ const showsLedger = computed(
               size="sm"
               @click="workbench.addSupplySource()"
             >
-              声明补给源（12.6a）
+              声明补给源
             </BaseButton>
           </div>
           <p v-for="decl in workbench.supplySourceDecls" :key="decl.id" class="num">
@@ -973,35 +935,26 @@ const showsLedger = computed(
             @pick="gaugeUnitId = $event"
             @hover="hoverUnit"
           />
-          <div class="row">
-            <label class="field">
-              目标铁路格
-              <UiField
-                v-model="workbench.railGaugeTargetHexText"
-                class="input"
-                placeholder="36.13"
-              />
-              <BaseButton
-                variant="secondary"
-                size="sm"
-                :disabled="gaugeUnitId === ''"
-                @click="workbench.beginRailGaugeTargetHexPickNow(gaugeUnitId)"
-              >
-                点地图选格
-              </BaseButton>
-            </label>
+          <div v-if="gaugeUnitId !== ''" class="row">
+            <span class="num">{{ workbench.railGaugeTargetHexText || '未选格' }}</span>
             <BaseButton
               variant="secondary"
               size="sm"
-              :disabled="gaugeUnitId === ''"
+              @click="workbench.beginRailGaugeTargetHexPickNow(gaugeUnitId)"
+            >
+              点地图选格
+            </BaseButton>
+            <BaseButton
+              v-if="workbench.railGaugeTargetHexText !== ''"
+              variant="secondary"
+              size="sm"
+              title="13.3f"
               @click="workbench.convertRailGaugeNow(gaugeUnitId, workbench.railGaugeTargetHexText)"
             >
-              转换轨距（13.3f：不耗 SP / MP）
+              转换轨距
             </BaseButton>
           </div>
-          <p v-if="workbench.railRepairUnits.length === 0" class="muted">
-            无铁路修理单位可用 · 13.3g
-          </p>
+          <p v-if="workbench.railRepairUnits.length === 0" class="muted">无铁路修理单位可用</p>
 
           <!-- ── ②c 铁路运货（13.3a / 13.3b / 13.3e） ── -->
           <hr />
