@@ -85,6 +85,15 @@ export const useHotseatStore = defineStore('hotseat', () => {
   /** 模式是否选齐（初设入口的唯一放行条件） */
   const modeReady = computed<boolean>(() => modeIssue.value === null)
 
+  /**
+   * 棋桌「对局模式」闸门是否要开（读档后未记模式时）
+   *
+   * 判据是「没选齐 **或** 还没确认锁定」：`modeIssue` 只覆盖前者，选完单选就变 null
+   * ⇒ 视图若只读它，面板会在玩家点「确认并继续」（`lockMode`）之前自己消失，
+   * `setupLocked` 永远停在 false（模式随时可改）。故闸门必须以本判据为准。
+   */
+  const modeGateNeeded = computed<boolean>(() => modeIssue.value !== null || !setupLocked.value)
+
   /** 一键预设的归属方：只有 PVE 才预设，且只预设 AI 一方；PVP/solo 恒 null（不替任何人落位） */
   const presetSide = computed<Side | null>(() => (mode.value === 'pve' ? aiSide.value : null))
   const canPreset = computed<boolean>(() => mode.value === 'pve' && aiSide.value !== null)
@@ -425,6 +434,7 @@ export const useHotseatStore = defineStore('hotseat', () => {
     setupLocked,
     modeIssue,
     modeReady,
+    modeGateNeeded,
     presetSide,
     canPreset,
     setMode,

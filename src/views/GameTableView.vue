@@ -90,7 +90,7 @@ const modeLabel = computed<string>(() => {
  * 选择前：`aiControlMode` 为 `off`（AI 不接管）、`hotseatEnabled` 为 false（不按 PVP 遮屏）。
  * 只是对局组织方式，不参与规则判定。
  */
-const modeGate = computed<boolean>(() => gameSession.session !== null && hotseat.modeIssue !== null)
+const modeGate = computed<boolean>(() => gameSession.session !== null && hotseat.modeGateNeeded)
 const gateSides = [
   { side: 'axis', label: '轴心国' },
   { side: 'soviet', label: '苏联' },
