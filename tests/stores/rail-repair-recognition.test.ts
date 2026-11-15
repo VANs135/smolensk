@@ -47,9 +47,21 @@ describe('13.3g：铁路修理单位识别链', () => {
   })
 
   it('初设层：剧本 1/2 只有苏支；3/4/5/6/7 三支齐备（4/6 继承 3/5）', () => {
+    /*
+     * 每换一次剧本都要重建整份初设条目（同步、CPU 重活）。修前同一剧本调两次
+     * `selectScenario`，等于把 7 个剧本各建两遍；在 500 文件并行满载下超出 5s 默认超时。
+     * 这里按剧本缓存一份条目（断言不变），并给这条重活用例单独的 30s 上限。
+     */
+    const idsByScenario = new Map<string, (typeof setup.entries)[number]['unitId'][]>()
     const idsOf = (scenarioId: string) => {
+      const cached = idsByScenario.get(scenarioId)
+      if (cached !== undefined) return cached
       setup.selectScenario(scenarioId)
-      return setup.entries.filter((entry) => entry.unitId !== null).map((entry) => entry.unitId)
+      const ids = setup.entries
+        .filter((entry) => entry.unitId !== null)
+        .map((entry) => entry.unitId)
+      idsByScenario.set(scenarioId, ids)
+      return ids
     }
 
     for (const scenarioId of ['1', '2']) {
@@ -61,7 +73,7 @@ describe('13.3g：铁路修理单位识别链', () => {
     for (const scenarioId of ['3', '4', '5', '6', '7']) {
       expect(idsOf(scenarioId)).toEqual(expect.arrayContaining([...RR_IDS]))
     }
-  })
+  }, 30000)
 
   it('实例层：剧本 1 苏支落位后 isRailRepairUnit 为真，普通单位恒为假', () => {
     setup.selectScenario('1')
@@ -89,7 +101,7 @@ describe('13.3g：铁路修理单位识别链', () => {
     expect(ordinary).toBeDefined()
     if (ordinary === undefined) return
     expect(workbench.isRailRepairUnit(ordinary.instanceId)).toBe(false)
-  })
+  }, 30000)
 
   it('投影层：railRepairUnits 只列当前行动方的铁路修理单位', () => {
     // selectScenario 已跑自动初设（脚本固定格），不要再调 runAutoSetup 造成重复落位
@@ -108,5 +120,5 @@ describe('13.3g：铁路修理单位识别链', () => {
         )
         .map((unit) => unit.instanceId),
     )
-  })
+  }, 30000)
 })

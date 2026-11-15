@@ -60,7 +60,7 @@ describe('S1：逐枚初设进度的生命周期', () => {
     expect(fresh.remaining).toBe(fresh.total)
     expect(setup.beginSelfPlacement(item.entryIndex)).toBe(true)
     expect(setup.placing?.placed).toBe(0)
-  })
+  }, 15000)
 
   it('换剧本再回来，飞机逐枚进度不能留下幽灵已摆单位', () => {
     const { setup, board } = boot()
@@ -81,7 +81,7 @@ describe('S1：逐枚初设进度的生命周期', () => {
         entry.kind === 'air' && entry.side === item.side && entry.entryIndex === item.entryIndex,
     )!
     expect(fresh.remaining).toBe(fresh.total)
-  })
+  }, 15000)
 })
 
 describe('S1：开局存档与初设历史恢复', () => {
@@ -123,6 +123,11 @@ describe('S1：开局存档与初设历史恢复', () => {
       expect(JSON.stringify(board.units)).toBe(units)
       expect(drawState(containers)).toBe(draws)
     },
+    /*
+     * 每个剧本都要「确认初设 → 开局 → 存档 → 冷读档 → 再开局」，全是同步 CPU 重活。
+     * 500 文件并行满载时单剧本可超过 5s 默认超时（实测 6 号剧本超时），故单独放宽。
+     */
+    30000,
   )
 
   it.each(['drawState', 'setup'] as const)(
@@ -151,6 +156,7 @@ describe('S1：开局存档与初设历史恢复', () => {
       expect(current.board.rng).toEqual(rng)
       expect(JSON.stringify(current.board.units)).toBe(units)
     },
+    30000,
   )
 
   it('旧档没有初设快照时冷读档也关闭初设，保留已恢复的补给账本', () => {
@@ -167,7 +173,7 @@ describe('S1：开局存档与初设历史恢复', () => {
     expect(useSetupStore().notes.join('')).toContain('不重新抽签')
     expect(useContainersStore().drawResults).toEqual({})
     expect(JSON.stringify(useWorkbenchStore().spDumps)).toBe(dumps)
-  })
+  }, 30000)
 
   it.each(['invalid', 'wrongScenario'] as const)(
     '初设抽取快照%s时先拒读，当前初设、盘面和正在点选的项目不变',
@@ -199,6 +205,7 @@ describe('S1：开局存档与初设历史恢复', () => {
       expect(drawState(current.containers)).toBe(before)
       expect(JSON.stringify(current.board.units)).toBe(units)
     },
+    30000,
   )
 
   it('未开局的初设不伪装成可保存对局，失败不覆盖已有存档', () => {
@@ -208,5 +215,5 @@ describe('S1：开局存档与初设历史恢复', () => {
     expect(current.game.saveNow()).toBe(false)
     expect(current.game.saveError?.reason).toBe('noSessionToSave')
     expect(current.storage.getItem(SAVE_SLOT_KEY)).toBe(text)
-  })
+  }, 30000)
 })
