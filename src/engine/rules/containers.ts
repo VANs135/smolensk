@@ -168,6 +168,13 @@ export interface BoxUnitView {
   formationId?: string | null
   /** 1.6c：该单位对应的重建表行键（数据缺口 ⇒ 由调用方注入） */
   rebuildType?: string
+  /**
+   * 1.6c：数据层的「可经特殊补员重建」标记（`specialAbilities` 含 `special_repl_to_rebuild`）
+   *
+   * 轴方的特殊补员第二项是「任一 Aufk / Krd 营」，与 2.3a 的 Alarm 单位**不是同一批**；
+   * 该标记由数据给出（31 枚：各师属装甲侦察营 + 摩托化侦察营），引擎据此建档，不猜 id。
+   */
+  specialReplRebuild?: boolean
 }
 
 /** 盒内单位的落点（状态层据此落盘） */
@@ -665,11 +672,14 @@ export interface SpecialReplDrawPlan {
   second:
     | { kind: 'supplyCache'; detail: string }
     | { kind: 'alarm'; unitId: string; inDeadPile: boolean; detail: string }
+    | { kind: 'recon'; unitId: string; inDeadPile: boolean; detail: string }
     | { kind: 'void'; reason: string; detail: string }
   /** 候选池（供界面显示与复算核对） */
   pools: {
     divisionCandidates: readonly string[]
     alarmCandidates: readonly string[]
+    /** 1.6c 轴方：死亡堆内可返场的 Aufk / Krd 营（与 2.3a 的 Alarm 不是同一批） */
+    reconCandidates: readonly string[]
     /** 2.3a 的混编核算（每型的上限/在场/余量；未提供上限时为空数组） */
     alarmMix: readonly AlarmMixRow[]
   }
@@ -708,6 +718,18 @@ export function planSpecialReplDraw(input: SpecialReplDrawInput): RuleOutcome<Sp
   const inDeadPile = input.deadPile.filter((unit) => alarmUnitIds.includes(unit.id))
   const alarmPool = inDeadPile.filter((unit) => alarmHasRoom(alarmMix, unit.id))
   const atMixLimit = inDeadPile.length > 0 && alarmPool.length === 0
+  /*
+   * 1.6c 轴方第二项是「任一 Aufk（装甲侦察）营 / Krd（摩托化侦察）营」——**不是** 2.3a 的
+   * Alarm 单位（那张清单是苏方的）。判据用数据标记 `special_repl_to_rebuild`（31 枚），
+   * 覆盖师属装甲侦察营（数据 `branch` 是 armor_pz，不能只看 branch）与摩托化侦察营。
+   * 修前这里与苏方共用 `alarmUnitIds` ⇒ 轴方掷出 5–6 永远作废。
+   */
+  const reconPool =
+    input.side === 'axis'
+      ? input.deadPile.filter(
+          (unit) => unit.specialReplRebuild === true && unit.rebuildable !== false,
+        )
+      : []
   const dataGaps =
     alarmUnitIds.length > 0 && (input.alarmQuotas ?? []).length === 0
       ? ['未提供 2.3a 的混编上限（alarmQuotas）⇒ 本次不校验上限；上限来自单位库的 alarmLimit 字段']
@@ -751,6 +773,29 @@ export function planSpecialReplDraw(input: SpecialReplDrawInput): RuleOutcome<Sp
       kind: 'supplyCache',
       detail: `Supply Cache +1（1.6c / 专规 1.7：本作标准规则，双方每剧本开局各 2 枚）`,
     }
+  } else if (input.side === 'axis') {
+    if (reconPool.length === 0) {
+      second = {
+        kind: 'void',
+        reason: 'noAufkKrdInDeadPile',
+        detail:
+          'Aufk / Krd 营项作废：死亡堆中无可用 Aufk（装甲侦察）营 / Krd（摩托化侦察）营' +
+          '（1.6c 表 1-6：dead pile 无单位即无重建）',
+      }
+    } else {
+      const chosenRecon = reconPool[0]!
+      second = {
+        kind: 'recon',
+        unitId: chosenRecon.id,
+        inDeadPile: true,
+        detail: `${chosenRecon.name ?? chosenRecon.id} 作 Aufk / Krd 营返场（1.6c；本次不可保存，1.6 表 1-6）`,
+      }
+      patches.push({
+        unitId: chosenRecon.id,
+        to: null,
+        note: '1.6c：Aufk / Krd 营从死亡堆返场',
+      })
+    }
   } else if (alarmPool.length === 0) {
     second = {
       kind: 'void',
@@ -790,7 +835,12 @@ export function planSpecialReplDraw(input: SpecialReplDrawInput): RuleOutcome<Sp
     table,
     division,
     second,
-    pools: { divisionCandidates, alarmCandidates: alarmPool.map((unit) => unit.id), alarmMix },
+    pools: {
+      divisionCandidates,
+      alarmCandidates: alarmPool.map((unit) => unit.id),
+      reconCandidates: reconPool.map((unit) => unit.id),
+      alarmMix,
+    },
     patches,
     dataGaps,
     detail,

@@ -318,6 +318,10 @@ export const useContainersStore = defineStore('containers', () => {
     die: number | null
     ok: boolean
     detail: string
+    /** 本次第二项**实际**落到什么（void = 表指的单位死亡堆里没有，作废） */
+    grant?: 'supplyCache' | 'unit' | 'void'
+    /** 苏方固定项「免费重建一个师」本次是否真的有返场单位 */
+    divisionGranted?: boolean
   } | null>(null)
 
   /* ────────────────────────────── 盘面事实 → 盒内单位视图 ────────────────────────────── */
@@ -345,6 +349,8 @@ export const useContainersStore = defineStore('containers', () => {
       ar: unit.faces.combat.ar,
       ma: unit.faces.combat.ma,
       ...(record?.rebuildable === undefined ? {} : { rebuildable: record.rebuildable }),
+      // 1.6c：轴方「任一 Aufk / Krd 营」与苏方 Alarm 单位是两批，按数据标记分
+      specialReplRebuild: record?.specialAbilities?.includes('special_repl_to_rebuild') === true,
       isBreakdown: unit.specialized.includes('breakdown'),
     }
   }
@@ -980,7 +986,19 @@ export const useContainersStore = defineStore('containers', () => {
       detail,
       scope: '1.6c 特殊补员',
     }
-    specialReplLast.value = { side, die, ok: true, detail }
+    specialReplLast.value = {
+      side,
+      die,
+      ok: true,
+      detail,
+      grant:
+        planned.data.second.kind === 'supplyCache'
+          ? 'supplyCache'
+          : planned.data.second.kind === 'void'
+            ? 'void'
+            : 'unit',
+      divisionGranted: planned.data.division !== null,
+    }
     workbench.pushLog('success', detail, planned.rule)
     return true
   }

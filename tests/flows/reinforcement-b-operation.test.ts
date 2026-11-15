@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createMemoryStorage } from '@/shared'
 import {
+  toConsoleUnit,
   useContainersStore,
   useGameSessionStore,
   useHotseatStore,
@@ -199,6 +200,33 @@ describe('B 增援段操作级实测（剧本 1）', () => {
     const hand = new Map(w.rollHandEntries.map((entry) => [entry.id, entry.count]))
     expect(hand.get('repl:pax') ?? 0).toBe(repl!.repl.pax)
     expect(hand.get('repl:eq') ?? 0).toBe(repl!.repl.eq)
+  }, 60000)
+
+  it('★ 1.6c：轴方抽到 Aufk/Krd（5–6）时，死亡堆里的侦察营进手牌而不是作废', async () => {
+    const s = await bootToAxisReinforcement()
+    const { w, containers } = s
+    const rollStep = w.playerSegmentSteps.findIndex((step) => step.id === 'reinforcement.replRoll')
+    expect(w.setSegmentStepIndex(rollStep)).toBe(true)
+    await nextTick()
+
+    // 死亡堆里放一枚轴方装甲侦察营（数据标记 special_repl_to_rebuild）
+    const record = groundRecord('axis', (item) => item.id === 'ax-arm_rec-ge-14-mtr-14-arm-rec')
+    w.deadPile.push(
+      toConsoleUnit({ record, instanceId: 'ax-dead-aufk', hex: { col: 0, row: 0 }, side: 'axis' }),
+    )
+
+    expect(containers.drawSpecialRepl('axis', 5)).toBe(true)
+    // 修前：第二项按苏方 Alarm 清单找 ⇒ 永远 `void`，手牌里没有这一枚
+    expect(w.specialReplPending.length).toBe(1)
+    const returned = w.specialReplPending[0]!
+    const returnedUnit = w.deadPile.find((item) => item.instanceId === returned.instanceId)
+    expect(returnedUnit?.side).toBe('axis')
+    // 面板摘要只写实际落到的：这一项是「unit」，不是凭空承诺
+    expect(containers.specialReplLast?.grant).toBe('unit')
+    await nextTick()
+    const hand = w.rollHandEntries.find((entry) => entry.id === 'unit:special:0')
+    expect(hand).toBeDefined()
+    expect(hand!.blocked).toBeNull()
   }, 60000)
 
   it('到货落位：候选＝卡面进场格；13.6a 允许临时超堆叠；落不下时拒绝并说明', async () => {

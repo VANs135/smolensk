@@ -586,10 +586,22 @@ const variableReplResult = computed<readonly string[]>(() => {
     ? plan.special
     : null
   if (special !== null) {
+    /*
+     * 只列**实际落到**的东西：表指的单位若死亡堆里没有，1.6c 判「该项作废」——
+     * 修前这里按计划无条件写「免费重建 1 个 …」，玩家会以为拿到了一枚（与下方 1.6c 回执矛盾）。
+     * 判据取 `drawSpecialRepl` 的实际结论（`specialReplLast.grant` / `divisionGranted`）。
+     */
+    const draw = containers.specialReplLast
     const grants: string[] = []
     if (special.supplyCache) grants.push('Supply Cache ×1')
-    if (special.freeDivisionRebuild) grants.push('免费重建 1 个步兵/民兵师（−1 step）')
-    if (special.freeAlarmOrRecon) grants.push('免费重建 1 个 Alarm / Aufk / Krd 单位')
+    if (special.freeDivisionRebuild && draw?.divisionGranted === true)
+      grants.push('免费重建 1 个步兵/民兵师（−1 step）')
+    if (special.freeAlarmOrRecon && draw?.grant === 'unit')
+      grants.push(
+        workbench.activeSide === 'axis'
+          ? '免费重建 1 个 Aufk / Krd 营'
+          : '免费重建 1 个 Alarm 单位',
+      )
     if (grants.length > 0) lines.push(`特殊补员：${grants.join(' + ')}`)
   }
   const event = plan.randomEvent

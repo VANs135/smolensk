@@ -432,15 +432,45 @@ describe('W7 C12：1.6c 特殊补员抽取盒（与死亡堆联动）', () => {
       side: 'axis',
       date: '1941-08-15',
       die: 5,
-      deadPile: [unit({ id: 'ax-aufk', side: 'axis', branch: 'arm_rec' })],
-      alarmUnitIds: ['ax-aufk'],
+      deadPile: [
+        unit({ id: 'ax-aufk', side: 'axis', branch: 'arm_rec', specialReplRebuild: true }),
+      ],
     })
     expect(plan.ok).toBe(true)
     if (!plan.ok) return
     expect(plan.data.table.kind).toBe('aufk_krd')
     expect(plan.data.division).toBeNull() // 轴方无固定项
-    expect(plan.data.second).toMatchObject({ kind: 'alarm', unitId: 'ax-aufk' })
+    expect(plan.data.second).toMatchObject({ kind: 'recon', unitId: 'ax-aufk' })
     expect(plan.data.patches.map((patch) => patch.unitId)).toEqual(['ax-aufk'])
+  })
+
+  it('★ 1.6c：轴方 5–6 不依赖 2.3a 的 Alarm 清单（Aufk/Krd 是另一批）', () => {
+    // 回归：修前第二项只在 `alarmUnitIds`（苏方 Alarm）里找 ⇒ 轴方永远作废
+    const plan = planSpecialReplDraw({
+      side: 'axis',
+      date: '1941-08-15',
+      die: 6,
+      deadPile: [
+        unit({ id: 'ax-aufk', side: 'axis', branch: 'arm_rec', specialReplRebuild: true }),
+      ],
+      alarmUnitIds: ['ru-alarm'], // 苏方清单里没有德军侦察营
+    })
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    expect(plan.data.second).toMatchObject({ kind: 'recon', unitId: 'ax-aufk' })
+  })
+
+  it('★ 1.6c：轴方 5–6 且死亡堆无 Aufk/Krd ⇒ 第二项作废（不是静默无事）', () => {
+    const plan = planSpecialReplDraw({
+      side: 'axis',
+      date: '1941-08-15',
+      die: 5,
+      deadPile: [unit({ id: 'ax-inf', side: 'axis', branch: 'infantry' })],
+    })
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    expect(plan.data.second).toMatchObject({ kind: 'void', reason: 'noAufkKrdInDeadPile' })
+    expect(plan.data.patches).toEqual([])
   })
 
   it('C12：死亡堆无合格师 ⇒ 固定项无重建（1.6 表 1-6：dead pile 无单位即无重建）', () => {
