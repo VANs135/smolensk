@@ -3004,47 +3004,40 @@ export const useSetupStore = defineStore('setup', () => {
       return { placed, remaining: presetRemaining(), failures, airPlaced }
     }
     settlePresetObligations(failures, onlySide)
-    if (onlySide === undefined) {
-      // 分方落自由项：每方落完按既有换手逻辑推进（最多两方）
-      for (let guard = 0; guard < 2 && setupSideCursor.value !== null; guard += 1) {
-        const side = setupSideCursor.value
-        for (const entry of choicesOf(side)) {
-          if (completed.value[`self:${entry.index}`] === true) continue
-          placePresetEntry(entry, failures)
-          if (completed.value[`self:${entry.index}`] === true) placed += 1
-        }
-        if (!confirmSideSetup()) {
-          failures.push({
-            entryIndex: -1,
-            label: `双方布设确认（${side === 'axis' ? '轴心国' : '苏联'}）`,
-            reason: lastAction.value?.detail ?? 'confirmSideSetupRejected',
-            tried: 1,
-          })
-          break
-        }
-      }
-    } else {
-      // B4：只落 AI 控制的一方，落完即按既有换手逻辑交给另一方
-      for (const entry of choicesOf(onlySide)) {
-        if (completed.value[`self:${entry.index}`] === true) continue
-        placePresetEntry(entry, failures)
-        if (completed.value[`self:${entry.index}`] === true) placed += 1
-      }
-      if (!confirmSideSetup()) {
-        failures.push({
-          entryIndex: -1,
-          label: `布设确认（${onlySide === 'axis' ? '轴心国' : '苏联'}）`,
-          reason: lastAction.value?.detail ?? 'confirmSideSetupRejected',
-          tried: 1,
-        })
-      }
-    }
     // 飞机：每型落第一个合法基地格（候选顺序即引擎给出的稳定顺序）
-    const airSides: readonly Side[] = onlySide === undefined ? ['axis', 'soviet'] : [onlySide]
-    for (const side of airSides) {
+    // 必须在**该方确认之前**落——`canEditAirSetup` 要求游标停在该方；
+    // 先确认两方再摆飞机会被「双方布设均已确认」全数拒掉（2026-11-15 首跑缺陷）。
+    const placeAirForSide = (side: Side): void => {
       const airPlan = airPlanOf(side)
-      if (airPlan === null) continue
+      if (airPlan === null) return
       for (const row of airPlan.placements) {
+        // 图上没有可用基地格（如 Intro 的德军：本图无轴方空军基地）⇒ 直接落图外空军盒（1.4a）
+        if (row.candidates.length === 0) {
+          if (!row.offMapAllowed) {
+            failures.push({
+              entryIndex: row.entryIndex,
+              label: row.name,
+              reason: 'noAirBaseCandidate',
+              tried: 0,
+            })
+            continue
+          }
+          while (
+            (placedAirInstances.value[airProgressKey(side, row.entryIndex)] ?? 0) < row.count
+          ) {
+            if (!placeAirRowNow(row.entryIndex, 'offMap', side)) {
+              failures.push({
+                entryIndex: row.entryIndex,
+                label: row.name,
+                reason: lastAction.value?.detail ?? 'placeAirRowNowRejected',
+                tried: 1,
+              })
+              break
+            }
+            airPlaced += 1
+          }
+          continue
+        }
         let tried = 0
         while ((placedAirInstances.value[airProgressKey(side, row.entryIndex)] ?? 0) < row.count) {
           let committed = false
@@ -3066,6 +3059,43 @@ export const useSetupStore = defineStore('setup', () => {
             break
           }
         }
+      }
+    }
+    if (onlySide === undefined) {
+      // 分方落自由项：每方落完按既有换手逻辑推进（最多两方）
+      for (let guard = 0; guard < 2 && setupSideCursor.value !== null; guard += 1) {
+        const side = setupSideCursor.value
+        for (const entry of choicesOf(side)) {
+          if (completed.value[`self:${entry.index}`] === true) continue
+          placePresetEntry(entry, failures)
+          if (completed.value[`self:${entry.index}`] === true) placed += 1
+        }
+        placeAirForSide(side)
+        if (!confirmSideSetup()) {
+          failures.push({
+            entryIndex: -1,
+            label: `双方布设确认（${side === 'axis' ? '轴心国' : '苏联'}）`,
+            reason: lastAction.value?.detail ?? 'confirmSideSetupRejected',
+            tried: 1,
+          })
+          break
+        }
+      }
+    } else {
+      // B4：只落 AI 控制的一方，落完即按既有换手逻辑交给另一方
+      for (const entry of choicesOf(onlySide)) {
+        if (completed.value[`self:${entry.index}`] === true) continue
+        placePresetEntry(entry, failures)
+        if (completed.value[`self:${entry.index}`] === true) placed += 1
+      }
+      placeAirForSide(onlySide)
+      if (!confirmSideSetup()) {
+        failures.push({
+          entryIndex: -1,
+          label: `布设确认（${onlySide === 'axis' ? '轴心国' : '苏联'}）`,
+          reason: lastAction.value?.detail ?? 'confirmSideSetupRejected',
+          tried: 1,
+        })
       }
     }
     return { placed, remaining: presetRemaining(), failures, airPlaced }
