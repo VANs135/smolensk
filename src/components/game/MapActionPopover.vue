@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { BaseButton, BaseTag } from '@/components/base'
 import { MapPopover } from '@/components/map'
@@ -44,6 +44,27 @@ const title = computed(() => (mapView.popup === null ? '' : `格 ${hexLabel(mapV
  * 离格即消失，不再留一张需要再点一下才收的小签。
  */
 const variant = computed(() => mapView.popup?.variant ?? 'content')
+/**
+ * 批 5：分组子菜单改为**点击展开并保持**
+ *
+ * 用户口径：悬停展开、移出即收太难用（手一抖就没了）；改成点一下展开、再点一下收起，
+ * 同一时刻只展开一组。键带目标 id，同名的组在不同目标下互不影响。
+ */
+const openGroup = ref<string>('')
+
+function groupKey(targetId: string, group: string): string {
+  return `${targetId}:${group}`
+}
+
+function toggleGroup(key: string): void {
+  openGroup.value = openGroup.value === key ? '' : key
+}
+
+/** 菜单关掉时把展开态一并收掉，下次右键从收起开始 */
+watch(open, (value) => {
+  if (!value) openGroup.value = ''
+})
+
 const actionGroups = [
   '射击',
   '空军任务',
@@ -262,16 +283,25 @@ function sideName(side: string): string {
     <section v-for="target in mapView.contextOptions" :key="target.id" class="context-target">
       <h4 class="block__title">{{ target.label }}</h4>
       <!--
-        用户 2026-11-09：右键菜单改为**多级**——一级只摆分组入口，悬停/聚焦才在右侧展开该组叶子，
+        用户 2026-11-09：右键菜单改为**多级**——一级只摆分组入口，展开后在右侧列该组叶子，
         免得一个堆叠把所有能力平铺成一条长列表。组内没有动作时整组不渲染（沿用原来 v-if 的语义）。
+        批 5：展开方式由 hover 改为**点击并保持**（再点收起；同屏只展开一组）。
       -->
       <template v-for="group in actionGroups" :key="group">
         <div
           v-if="target.actions.some((item) => item.group === group && item.disabledReason === null)"
           class="context-group"
         >
-          <div class="context-group__trigger" tabindex="0">{{ group }} ▸</div>
-          <div class="context-group__submenu">
+          <button
+            type="button"
+            class="context-group__trigger"
+            :class="{ 'context-group__trigger--open': openGroup === groupKey(target.id, group) }"
+            :aria-expanded="openGroup === groupKey(target.id, group)"
+            @click="toggleGroup(groupKey(target.id, group))"
+          >
+            {{ group }} {{ openGroup === groupKey(target.id, group) ? '▾' : '▸' }}
+          </button>
+          <div v-if="openGroup === groupKey(target.id, group)" class="context-group__submenu">
             <BaseButton
               v-for="item in target.actions.filter(
                 (action) => action.group === group && action.disabledReason === null,
@@ -605,15 +635,21 @@ function sideName(side: string): string {
 }
 
 .context-group__trigger {
+  display: block;
+  width: 100%;
   padding: var(--space-1) var(--space-2);
+  border: 0;
   border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--color-muted);
   font-size: var(--text-xs);
+  text-align: left;
   user-select: none;
+  cursor: pointer;
 }
 
-.context-group:hover > .context-group__trigger,
-.context-group:focus-within > .context-group__trigger {
+.context-group__trigger:hover,
+.context-group__trigger--open {
   color: var(--color-ink);
   background: var(--color-bg-2);
 }
@@ -622,7 +658,6 @@ function sideName(side: string): string {
   position: absolute;
   left: 100%;
   top: 0;
-  display: none;
   min-width: 220px;
   padding: var(--space-1);
   border: 1px solid var(--color-rule);
@@ -630,11 +665,6 @@ function sideName(side: string): string {
   background: var(--color-panel);
   box-shadow: var(--shadow-lg);
   z-index: 1;
-}
-
-.context-group:hover > .context-group__submenu,
-.context-group:focus-within > .context-group__submenu {
-  display: block;
 }
 
 .context-action {
