@@ -81,7 +81,8 @@ describe('条 24：正式/验证模式门控', () => {
       ['src/components/exclusive/ExclusiveRulesPanel.vue', 5],
       // 用户 2026-11-11：补员格 / 图边源格 / 方面军落点全改「点地图选格」⇒ 增援面板已无手打格号
       // 用户 2026-11-11：铁路运货的卸货格改点地图 ⇒ 又少一处手打格号
-      ['src/components/supply/SupplyPanel.vue', 12],
+      // 批 3：延补队转换格 / 补给源格 / 轨距目标格也改点地图 ⇒ 12 合法降为 9（仍是「数值走 UiField」）
+      ['src/components/supply/SupplyPanel.vue', 9],
     ]
     for (const [file, min] of cases) {
       const src = read(file)
@@ -91,10 +92,11 @@ describe('条 24：正式/验证模式门控', () => {
     }
   })
 
-  it('条 24：数字型默认步进；销毁量（空=全部）强制只读；拆分规模保留普通输入', () => {
+  it('条 24：数字型默认步进；销毁量按 12.11a 固定为全部（不再有只读输入）；拆分规模保留普通输入', () => {
     const src = read('src/components/supply/SupplyPanel.vue')
-    // 销毁量：空 = 全部，步进表达不了 ⇒ 显式 readonly
-    expect(src).toMatch(/v-model="destroyT"[\s\S]{0,140}?readonly/)
+    // 批 3：旧「只读空输入 + 留空＝全部」等价于「永远全部」，直接收成一行状态，不再摆一个点不动的框
+    expect(src).not.toMatch(/v-model="destroyT"/)
+    expect(src).toContain('全部 SP')
     // 拆分规模是列表，保留普通输入（否则 13.2c 在正式界面不可用）
     expect(src).toMatch(/v-model="workbench\.transportPointInputs\.splitSizesText"/)
   })

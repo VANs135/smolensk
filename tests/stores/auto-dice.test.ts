@@ -95,11 +95,13 @@ describe('B28：界面上的手填骰面已撤（源码守卫）', () => {
     }
   })
 
-  it('★ 销毁补给站：骰面输入没了，销毁量留空＝全部', () => {
+  it('★ 销毁补给站：骰面输入没了，销毁量固定为全部 SP', () => {
     const text = readFileSync('src/components/supply/SupplyPanel.vue', 'utf8')
     expect(text).not.toContain('v-model.number="destroyDie"')
-    expect(text).toContain('留空＝全部 SP')
-    expect(text).toContain('workbench.destructDumpNow(destroyDumpId, destroyT ?? undefined)')
+    // 批 3：「只读空输入 + 留空＝全部」收成一行状态（实际行为一直是全部）
+    expect(text).not.toContain('v-model="destroyT"')
+    expect(text).toContain('全部 SP')
+    expect(text).toContain('workbench.destructDumpNow(destroyDumpId)')
   })
 
   it('★ store 侧的骰面字段**保留**（验证页与既有用例仍要指定骰面）', () => {
