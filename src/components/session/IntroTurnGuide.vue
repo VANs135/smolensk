@@ -34,13 +34,14 @@ const STEPS: readonly { title: string; rule: string; detail: string }[] = [
   },
   {
     title: '占两格',
-    rule: '剧本页 Major Victory',
-    detail: '19.27 与 19.28 两格都由轴方控制 ⇒ Major Victory；否则轴方失败。',
+    rule: '剧本页 Major / Minor',
+    detail:
+      '19.27 与 19.28 都由轴方控制 ⇒ Major Victory；未全控但苏方无法向两格及格内单位追溯抽象补给（12.x）⇒ Minor Victory。',
   },
   {
     title: '统计 SP',
     rule: '战后结算',
-    detail: '记录本回合用掉的 SP；Minor（solid wall）原文未定义判据，本批不自动判。',
+    detail: '记录本回合用掉的 SP；两格既未全控、苏方也仍能追溯补给 ⇒ 轴方失败。',
   },
 ]
 </script>

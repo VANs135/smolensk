@@ -344,6 +344,14 @@ export interface VictoryAssessment {
   outcome: VictoryOutcome
   /** 胜方（draw / ongoing 为 null） */
   winner: Side | null
+  /**
+   * 胜级（仅 Intro: Vitebsk 区分）
+   *
+   * - `major`：两格维捷布斯克均由轴方控制；
+   * - `minor`：未全控，但苏方无法向两格追溯抽象补给；
+   * - 缺省：其他剧本 / 轴方失败，不标胜级。
+   */
+  grade?: 'major' | 'minor'
   rule: string
   /** 本档阈值 */
   thresholds: VictoryTier | null
@@ -387,16 +395,21 @@ function describeTier(tier: VictoryTier): string {
 }
 
 /**
- * Intro: Vitebsk 的终局判定（剧本页：`Major Victory by capturing both hexes of Vitebsk`）
+ * Intro: Vitebsk 的终局判定（剧本页 Major / Minor Victory 三级）
  *
- * - Major：Vitebsk 的**两格**都由轴方控制（城市格取自 `map-layers` 的
- *   `city.role = major_city_victory_condition`，即 19.27 + 19.28）；
+ * - Major：Vitebsk 的**两格**都由轴方控制；
+ * - Minor：未全控，但**苏方**无法向 19.27 与 19.28 追溯抽象补给（12.x 的 EZOC／敌单位阻断），
+ *   格内单位随之断补（12.5 抽象补给按格判）；判据由调用方注入 `canTraceSupplyAt`
+ *   ——与引擎既有的 `traceCoverageHexes` / `createTraceSupplyAt` 同一份事实，不另造规则；
  * - 否则：剧本页 `Otherwise, he loses the game` ⇒ 轴方失败（以苏方胜表示）。
- * - Minor（`solid wall of Axis combat units around the city`）原文未给格集/判据，**不自动判**。
+ *
+ * 判定顺序即原文顺序：Major → Minor → 失败；Major 优先于 Minor。
  */
 function evaluateIntroVictory(input: {
   scenarioId: string
   controlOf: VictoryControlLookup
+  /** 12.x：某方能否把抽象补给追溯到该格（缺省 ⇒ 无法判 Minor，不臆断） */
+  canTraceSupplyAt?: (hex: HexRef, side: Side) => boolean
 }): VictoryAssessment {
   const summary = summarizeVictoryControl(input)
   const city = axisVictoryCities().find((group) => group.name === 'Vitebsk')
@@ -404,20 +417,30 @@ function evaluateIntroVictory(input: {
     throw new VictoryDataError('map-layers 缺少 Vitebsk 的胜利城市格（应为 19.27 + 19.28）')
   }
   const held = city.hexes.length > 0 && city.hexes.every((hex) => input.controlOf(hex) === 'axis')
-  const outcome: VictoryOutcome = held ? 'axis' : 'soviet'
+  const cutOff =
+    !held &&
+    input.canTraceSupplyAt !== undefined &&
+    city.hexes.length > 0 &&
+    city.hexes.every((hex) => !input.canTraceSupplyAt?.(hex, 'soviet'))
   const hexText = city.hexes.map((hex) => hexKey(hex)).join(' + ')
+  const grade: 'major' | 'minor' | undefined = held ? 'major' : cutOff ? 'minor' : undefined
   return {
     level: 'final',
-    outcome,
-    winner: held ? 'axis' : 'soviet',
+    outcome: grade === undefined ? 'soviet' : 'axis',
+    winner: grade === undefined ? 'soviet' : 'axis',
+    ...(grade === undefined ? {} : { grade }),
     rule: INTRO_VICTORY_RULE,
     thresholds: null,
     summary,
     detail:
-      `剧本页 Major Victory（Intro: Vitebsk）：维捷布斯克 ${hexText} ` +
-      (held
+      `剧本页胜利（Intro: Vitebsk）：维捷布斯克 ${hexText} ` +
+      (grade === 'major'
         ? '全部由轴方控制 ⇒ 轴心 Major Victory'
-        : '未全部由轴方控制 ⇒ 轴方失败（Minor「solid wall」原文未定义，不自动判）'),
+        : grade === 'minor'
+          ? '未全控，但苏方无法向两格追溯抽象补给（12.x：EZOC／敌单位阻断，格内单位同断）⇒ 轴心 Minor Victory'
+          : input.canTraceSupplyAt === undefined
+            ? '未全控；本次判定未提供补给追溯事实 ⇒ 不判 Minor，轴方失败'
+            : '未全控，且苏方仍能向至少一格追溯抽象补给 ⇒ 轴方失败'),
   }
 }
 
@@ -433,6 +456,8 @@ function evaluateIntroVictory(input: {
 export function evaluateFinalVictory(input: {
   scenarioId: string
   controlOf: VictoryControlLookup
+  /** Intro: Vitebsk 的 Minor 判据（12.x 抽象补给追溯；缺省则不判 Minor） */
+  canTraceSupplyAt?: (hex: HexRef, side: Side) => boolean
 }): VictoryAssessment {
   if (isIntroScenario(input.scenarioId)) return evaluateIntroVictory(input)
   const thresholds = victoryThresholdsFor(input.scenarioId)
@@ -638,6 +663,8 @@ export function checkTurnEndVictory(input: {
   scenarioId: string
   turn: number
   controlOf: VictoryControlLookup
+  /** Intro: Vitebsk 的 Minor 判据（12.x 抽象补给追溯；缺省则不判 Minor） */
+  canTraceSupplyAt?: (hex: HexRef, side: Side) => boolean
 }): VictoryAssessment {
   const lastTurn = scenarioLastTurn(input.scenarioId)
   if (!isScenarioFinalTurn(input.scenarioId, input.turn)) {

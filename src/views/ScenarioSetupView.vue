@@ -41,6 +41,19 @@ function weatherLabelOf(id: string): string {
   return weather === 'restricted' ? '受限飞行（Limited Flight）' : '正常飞行'
 }
 
+/** 教学剧本的原文摘要（放脚本里，避免模板换行把「Minor Victory」拆成两行） */
+const introSummary = computed(() => {
+  const full = selectedFull.value
+  if (full === null) return ''
+  const first = full.firstPlayer === 'axis' ? '轴心国' : '苏联'
+  const setupFirst = full.setupFirst === 'soviet' ? '苏军' : '轴心国'
+  return (
+    `单人教学：${first}先手、${setupFirst}先设；全剧本只有 1 个玩家回合，走完即终局。` +
+    '目标：两格维捷布斯克（19.27 + 19.28）均由轴方控制 = Major Victory；' +
+    '未全控但苏方无法向两格及格内单位追溯抽象补给（12.x）= Minor Victory；否则轴方失败。'
+  )
+})
+
 const modeCopy = {
   solo: { label: '单人推演', note: '同一人操作双方；双方可见' },
   pvp: { label: '双人热坐', note: '换手不遮屏、不自动切视角 · §4.9a' },
@@ -150,12 +163,7 @@ function onEnterSetup(): void {
                 <dd>{{ weatherLabelOf(selected.id) }}</dd>
               </div>
             </dl>
-            <p v-if="isTeachingScenario(selected.id)" class="scenario__teach">
-              单人教学：{{ selected.firstPlayer === 'axis' ? '轴心国' : '苏联' }}先手、{{
-                selectedFull?.setupFirst === 'soviet' ? '苏军' : '轴心国'
-              }}先设；全剧本只有 <b>1 个玩家回合</b>，走完即终局。目标：两格维捷布斯克（19.27 +
-              19.28）均由轴方控制 = Major Victory；Minor（solid wall）原文未定义判据，待定。
-            </p>
+            <p v-if="isTeachingScenario(selected.id)" class="scenario__teach">{{ introSummary }}</p>
             <fieldset class="scenario__modes">
               <legend>对局模式</legend>
               <ul class="modes">

@@ -313,6 +313,56 @@ describe('Intro: Vitebsk 专用胜利（剧本页 Major Victory）', () => {
     })
     expect(result.outcome).toBe('axis')
   })
+
+  it('Minor：未全控但两格都追不到苏方抽象补给 ⇒ 轴心 Minor Victory', () => {
+    const result = evaluateFinalVictory({
+      scenarioId: 'Intro',
+      controlOf: control({ '19.27': 'soviet', '19.28': 'soviet' }),
+      canTraceSupplyAt: () => false,
+    })
+    expect(result.outcome).toBe('axis')
+    expect(result.grade).toBe('minor')
+  })
+
+  it('Minor 不成立：任一格仍能追溯苏方补给 ⇒ 轴方失败', () => {
+    const result = evaluateFinalVictory({
+      scenarioId: 'Intro',
+      controlOf: control({ '19.27': 'soviet', '19.28': 'soviet' }),
+      canTraceSupplyAt: (hex) => hex.col === 19 && hex.row === 27,
+    })
+    expect(result.outcome).toBe('soviet')
+    expect(result.grade).toBeUndefined()
+  })
+
+  it('Major 优先：两格轴控时即便苏方断补也判 Major', () => {
+    const result = evaluateFinalVictory({
+      scenarioId: 'Intro',
+      controlOf: control(VITEBSK),
+      canTraceSupplyAt: () => false,
+    })
+    expect(result.outcome).toBe('axis')
+    expect(result.grade).toBe('major')
+  })
+
+  it('未提供补给追溯事实时不臆断 Minor（轴方失败并说明）', () => {
+    const result = evaluateFinalVictory({
+      scenarioId: 'Intro',
+      controlOf: control({ '19.27': 'soviet', '19.28': 'soviet' }),
+    })
+    expect(result.outcome).toBe('soviet')
+    expect(result.detail).toContain('未提供')
+  })
+
+  it('回合结束检查同样能给出 Minor（末回合 = 第 1 回合）', () => {
+    const result = checkTurnEndVictory({
+      scenarioId: 'Intro',
+      turn: 1,
+      controlOf: control({ '19.27': 'soviet', '19.28': 'soviet' }),
+      canTraceSupplyAt: () => false,
+    })
+    expect(result.outcome).toBe('axis')
+    expect(result.grade).toBe('minor')
+  })
 })
 
 describe('5.0b：提前决胜（任一回合开始，19 August 起）', () => {

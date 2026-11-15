@@ -168,12 +168,18 @@ const CONTROL_RULE_TEXT =
           }}
         </BaseTag>
         <BaseTag :kind="final.outcome === 'axis' ? 'success' : 'danger'">
-          {{ final.outcome === 'axis' ? 'Major Victory' : '轴方失败' }}
+          {{
+            final.grade === 'minor'
+              ? 'Minor Victory'
+              : final.outcome === 'axis'
+                ? 'Major Victory'
+                : '轴方失败'
+          }}
         </BaseTag>
         {{ final.detail }}
         <RuleTip rule="剧本页">
-          Minor Victory（solid wall）原文未定义判据，本批不自动判。 Major Victory =
-          两格维捷布斯克均由轴方控制；否则轴方失败。
+          Major Victory = 两格维捷布斯克均由轴方控制。 Minor Victory（solid wall）=
+          未全控，但苏方无法向两格追溯抽象补给（12.x：EZOC／敌单位阻断，格内单位同断）。
         </RuleTip>
       </p>
     </template>

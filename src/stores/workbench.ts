@@ -27351,7 +27351,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 5.0a：最终评估（按当前态势，若此刻即为末回合的结果） */
   const finalVictory = computed<VictoryAssessment>(() =>
-    evaluateFinalVictory({ scenarioId: scenarioId.value, controlOf: victoryControlOf.value }),
+    evaluateFinalVictory({
+      scenarioId: scenarioId.value,
+      controlOf: victoryControlOf.value,
+      // Intro 的 Minor 判据：与补给网同一份 12.x 追溯事实（不另造规则）
+      canTraceSupplyAt: traceSupplyAtForMove.value,
+    }),
   )
 
   /**
@@ -27364,6 +27369,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       scenarioId: scenarioId.value,
       turn: turn.value,
       controlOf: victoryControlOf.value,
+      canTraceSupplyAt: traceSupplyAtForMove.value,
     }),
   )
 
