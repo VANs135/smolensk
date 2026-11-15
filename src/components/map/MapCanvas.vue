@@ -41,8 +41,6 @@ import {
 import { hitStackFan, stackFanLayout } from '@/render/stack-fan'
 import {
   FIT_PADDING_PX,
-  MAX_SCALE,
-  MIN_SCALE,
   ZOOM_STEP,
   clampViewport,
   fitViewport,
@@ -50,7 +48,6 @@ import {
   screenToWorld,
   worldToScreen,
   zoomAt,
-  zoomToScale,
   type Size,
   type ViewportTransform,
 } from '@/render/viewport'
@@ -291,12 +288,6 @@ function zoomByStep(direction: 1 | -1): void {
   if (!canDraw(viewSize.value)) return
   const anchor = { x: viewSize.value.width / 2, y: viewSize.value.height / 2 }
   applyViewport(zoomAt(viewport.value, anchor, direction > 0 ? ZOOM_STEP : 1 / ZOOM_STEP))
-}
-
-function onScaleInput(event: Event): void {
-  const value = Number((event.target as HTMLInputElement).value)
-  if (!Number.isFinite(value) || !canDraw(viewSize.value)) return
-  applyViewport(zoomToScale(viewport.value, value, viewSize.value))
 }
 
 /* ── 尺寸变化 ── */
@@ -758,16 +749,6 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
       <BaseButton variant="secondary" size="sm" title="适应窗口 0" @click="fitToWindow">
         {{ props.fill ? '全图' : '适应窗口' }}
       </BaseButton>
-      <input
-        class="mapcanvas__slider"
-        type="range"
-        aria-label="地图缩放"
-        :min="MIN_SCALE"
-        :max="MAX_SCALE"
-        step="0.01"
-        :value="viewport.scale"
-        @input="onScaleInput"
-      />
       <span class="num mapcanvas__percent">{{ scalePercent }}%</span>
       <span v-if="!props.fill" class="mapcanvas__legend">滚轮缩放 · 拖动平移 · 单击选格</span>
     </div>
@@ -936,10 +917,6 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
   gap: var(--space-2);
 }
 
-.mapcanvas__slider {
-  width: 180px;
-}
-
 .mapcanvas__percent {
   min-width: 48px;
   color: var(--color-muted);
@@ -949,11 +926,5 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
 .mapcanvas__legend {
   color: var(--color-muted);
   font-size: var(--text-xs);
-}
-
-@media (max-width: 600px) {
-  .mapcanvas--fill .mapcanvas__slider {
-    width: var(--space-16);
-  }
 }
 </style>
