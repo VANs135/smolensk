@@ -22074,8 +22074,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (isSpecialReplAvailable(date.value) && !hasSpecialReplDraw(activeSide.value, turn.value)) {
       return '1.6c 特殊补员还没掷（每回合必掷，判定阶段未完成）'
     }
-    if (variableExitSelectionOpen.value) return '3.3c 撤离还有待选算子，先选定'
+    if (activeSide.value === 'axis' && variableExitSelectionOpen.value)
+      return '3.3c 撤离还有待选算子，先选定'
     if (
+      activeSide.value === 'soviet' &&
       frontalReservesToday.value !== null &&
       !frontalReservesClaimed.value.includes(frontalReservesToday.value.date)
     ) {
@@ -22526,11 +22528,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       reinforcementError.value = { rule: '1.6c', reason: 'specialReplNotRolled' }
       return false
     }
-    if (variableExitSelectionOpen.value) {
+    if (activeSide.value === 'axis' && variableExitSelectionOpen.value) {
       reinforcementError.value = { rule: '3.3c', reason: 'variableExitSelectionPending' }
       return false
     }
     if (
+      activeSide.value === 'soviet' &&
       frontalReservesToday.value !== null &&
       !frontalReservesClaimed.value.includes(frontalReservesToday.value.date)
     ) {
@@ -28690,6 +28693,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         )
       ) {
         return { rule: '5.7g', reason: '预备单位仍位于工事格，请先移出或依法切换模式后结束环节' }
+      }
+    }
+    /*
+     * 1.6b：第二段的待放项（Pax/Eq/SP/Ftr/Tac…）必须在本方「结束本段」时结清。
+     *
+     * 没有这道闸，流程条可以直接绕过 `endRollSegmentNow` 离开第二段：
+     * 上一方的待放补员会被带进**下一方**的手牌（`replPending` 只按当前方读），
+     * 面板于是把对手的补员算到自己头上。规则上补员是各方的盘面资源，不许跨方串账。
+     */
+    if (
+      phase.value === 'reinforcement' &&
+      segmentStep.value?.id === 'reinforcement.replRoll' &&
+      rollHandPending.value
+    ) {
+      return {
+        rule: '1.6b',
+        reason: '第二段还有待放项没落位：先放完，或在「结束本段」确认放弃上场',
       }
     }
     return null

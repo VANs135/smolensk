@@ -3,7 +3,13 @@ import { createPinia, setActivePinia } from 'pinia'
 import { expect } from 'vitest'
 
 import { createMemoryStorage } from '@/shared'
-import { useSetupStore, useWorkbenchStore, useGameSessionStore, useHotseatStore } from '@/stores'
+import {
+  useContainersStore,
+  useSetupStore,
+  useWorkbenchStore,
+  useGameSessionStore,
+  useHotseatStore,
+} from '@/stores'
 
 /**
  * flow 级用例的公用夹具（从 `full-game-regressions.test.ts` 抽出）
@@ -83,6 +89,43 @@ export function fillSetup(ctx: ReturnType<typeof fresh>) {
 /** 测试玩家明确选择不供养，并按单位顺序分配已判损失；生产程序不替玩家选择。 */
 export function answerBoardChoices(ctx: ReturnType<typeof fresh>) {
   const { w } = ctx
+  /*
+   * 1.6b：第二段有未落位手牌时，流程条不再允许直接离开（workbench 的同源闸门）。
+   * 自动推进的用例不摆放补员，这里替测试玩家按「结束本段」确认放弃上场。
+   */
+  if (
+    w.phase === 'reinforcement' &&
+    w.segmentStep?.id === 'reinforcement.replRoll' &&
+    w.rollHandPending
+  ) {
+    if (
+      w.activeSide === 'soviet' &&
+      w.frontalReservesToday !== null &&
+      !w.frontalReservesClaimed.includes(w.frontalReservesToday.date)
+    ) {
+      expect(w.claimFrontalReservesNow(), JSON.stringify({ err: w.frontalReservesError })).toBe(
+        true,
+      )
+    }
+    if (w.variableExitSelectionOpen) {
+      const substitute = w.variableExitSelectionSet.eligibleIds[0]
+      if (substitute !== undefined) expect(w.confirmVariableExitSubstitute(substitute)).toBe(true)
+    }
+    useContainersStore().drawSpecialRepl(w.activeSide, w.variableReplSpecialDie ?? undefined)
+    expect(
+      w.endRollSegmentNow(true),
+      JSON.stringify({
+        step: w.segmentStep?.id,
+        err: w.reinforcementError,
+        rolled: w.variableReplRolled,
+        special: w.hasSpecialReplDraw(w.activeSide, w.turn),
+        exitOpen: w.variableExitSelectionOpen,
+        frontal: w.frontalReservesToday,
+        hand: w.rollHandEntries.map((entry) => [entry.id, entry.count]),
+        log: w.log[0],
+      }),
+    ).toBe(true)
+  }
   if (w.phase === 'movement' && w.actionAllowedNow('move.modeChange')) {
     for (const unit of w.units.filter(
       (u) => u.side === w.activeSide && u.mode.mode === 'reserve',

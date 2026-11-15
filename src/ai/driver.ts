@@ -10,6 +10,7 @@
  */
 import { nextTick } from 'vue'
 
+import { useContainersStore } from '@/stores/containers'
 import { formatHexPath } from '@/stores/workbench-model'
 import type { useGameSessionStore } from '@/stores/session'
 import type { useSetupStore } from '@/stores/setup'
@@ -412,8 +413,35 @@ function execute(
   switch (action.kind) {
     case 'answer':
       return ctx.session.answerNow(action.optionId)
-    case 'advance':
-      return w.advanceSegmentNow() !== null
+    case 'advance': {
+      if (w.advanceSegmentNow() !== null) return true
+      /*
+       * 1.6b：第二段有未落位手牌时，流程条按规则挡住（补员不得跨方串账）。
+       * 基线 AI 不做补员落位 ⇒ 走面板的「结束本段」并确认放弃上场；
+       * 2.3c 的方面军预备队是「必须当即领取」，先领再放弃（领取本身是规则义务）。
+       */
+      if (
+        w.phase === 'reinforcement' &&
+        w.segmentStep?.id === 'reinforcement.replRoll' &&
+        w.rollHandPending
+      ) {
+        if (
+          w.activeSide === 'soviet' &&
+          w.frontalReservesToday !== null &&
+          !w.frontalReservesClaimed.includes(w.frontalReservesToday.date)
+        ) {
+          w.claimFrontalReservesNow()
+        }
+        // 3.3c：轴方撤离若停在「选同印值算子顶替」，基线 AI 取第一个合法候选。
+        if (w.variableExitSelectionOpen) {
+          const substitute = w.variableExitSelectionSet.eligibleIds[0]
+          if (substitute !== undefined) w.confirmVariableExitSubstitute(substitute)
+        }
+        useContainersStore().drawSpecialRepl(w.activeSide, w.variableReplSpecialDie ?? undefined)
+        return w.endRollSegmentNow(true)
+      }
+      return false
+    }
     case 'preset': {
       // B4：只预设 AI 控制的一方；另一方（玩家）的自由落位保留
       const result =
