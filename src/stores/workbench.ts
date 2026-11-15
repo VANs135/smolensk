@@ -7401,7 +7401,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function advanceSegmentNow(): SessionAdvanceOutcome | null {
     advanceBlocked.value = null
-    if (initialSetupInProgress.value || session.terminated) return null
+    if (session.terminated) return null
+    // 初设未收束：与下面各挡下点同一口径（写原因 + 落日志），不再静默返回
+    if (initialSetupInProgress.value) {
+      advanceBlocked.value = {
+        rule: '2.2',
+        reason: '初设未收束：先在地图左上角「初设」栏完成布设 / 抽签，再进入下一环节',
+      }
+      pushLog('warning', `${advanceBlocked.value.reason}（2.2）`, '2.2')
+      return null
+    }
     /*
      * ★ 死操作①（用户 2026-11-08）：「进入下一环节」曾被补给检定等必须应答的场景挡下后
      *   **静默 return null** —— 按钮可点、点了无反应，像程序坏了。
