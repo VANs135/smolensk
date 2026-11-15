@@ -275,6 +275,19 @@ export const ScenarioSetupSchema = z
      */
     attackerInternalsForbidden: z.boolean().optional(),
     /**
+     * 剧本级炮击补给折扣（如 Intro: Vitebsk 的德军 −2T）
+     *
+     * 只作用于该方**火炮轰炸**的初始列成本（10.1b），最低 0（原文：原消耗 2T 即免费）。
+     * 剧本级规则：不改全局轰炸表成本。
+     */
+    barrageSupplyDiscount: z
+      .object({
+        side: SideSchema,
+        /** 减去的 T（非负整数） */
+        t: z.number().int().nonnegative(),
+      })
+      .optional(),
+    /**
      * 1.6b：开局时图外空军盒内的额外 SP（枚，每方）
      *
      * 原文未给数 ⇒ 缺省 0；有剧本明确给出时按印刷值录入。

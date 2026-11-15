@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -186,5 +188,11 @@ describe('21.10 Shells 付款接线（store）', () => {
     expect(store.barrageError?.rule).toBe('21.10')
     expect(store.barrageError?.reason).toBe('shellsRequireHqThrow')
     expect(store.supplyCacheHoldings.axis).toBe(1)
+  })
+
+  it('降档重建 table 时同步套用剧本级折扣（Intro 德军 −2T 不被抹掉）', () => {
+    const source = readFileSync('src/stores/workbench.ts', 'utf8')
+    expect(source).toContain('barrageTableWithScenarioRule(')
+    expect(source).toContain('side: state.side')
   })
 })

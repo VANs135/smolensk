@@ -69,6 +69,7 @@ export function toScenario(record, item) {
     'panzer_group_sp_assignment',
     'optional_rules',
     'attacker_internals_forbidden',
+    'barrage_supply_discount',
   ])
   const options = {}
   for (const [key, value] of Object.entries(choices)) {
@@ -105,6 +106,10 @@ export function toScenario(record, item) {
       // 12.10：剧本页明示攻方不得动用部队储备
       ...(choices.attacker_internals_forbidden === true
         ? { attackerInternalsForbidden: true }
+        : {}),
+      // 剧本级炮击补给折扣（如 Intro 的德军 −2T）；缺省不写
+      ...(choices.barrage_supply_discount
+        ? { barrageSupplyDiscount: choices.barrage_supply_discount }
         : {}),
       // 剧本页未述（如 Intro: Vitebsk）⇒ 不写该键，运行时按 IV-D 默认空载
       ...(numbers.organic_trucks

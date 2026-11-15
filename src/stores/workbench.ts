@@ -145,6 +145,7 @@ import {
   applyModeSwitch,
   barrageStepChecklist,
   barrageTableMeta,
+  barrageTableWithScenarioRule,
   barrageTerrainLines,
   BARRAGE_COLUMN_SHIFTS,
   // 21.10：Shells 按枚整花 + 与 SP 混付；额度不足时降档选列
@@ -13503,6 +13504,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         segment: segmentStep.value?.id,
         targetKind: barrageTargetKind.value,
         targetHex,
+        // 剧本级炮击折扣（Intro: Vitebsk 德军 −2T）：按当前剧本与开火方取初始列成本
+        scenarioId: scenarioId.value,
+        side: firingGround[0]?.side ?? firingAir[0]?.side,
         units: [
           // 10.1a：地面（火炮）不带距基地事实，其射程由引擎另行判定
           ...firingGround.map((unit) => toBarrageUnitRequest(unit, targetHex)),
@@ -13924,7 +13928,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         working = {
           ...state,
           totalValue: chosen.valueUsed,
-          table: barrageTableMeta({ target: state.targetKind, valueRange: chosen.valueUsed }),
+          // 重建 table 时同步套用剧本级折扣，避免降档把 −2T 抹掉
+          table: barrageTableWithScenarioRule(
+            barrageTableMeta({ target: state.targetKind, valueRange: chosen.valueUsed }),
+            { scenarioId: scenarioId.value, side: state.side },
+          ),
         }
         pushLog(
           'info',

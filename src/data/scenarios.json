@@ -1298,7 +1298,11 @@
         ],
         "panzerGroupSpAssignment": false,
         "optionalRulesForbidden": true,
-        "attackerInternalsForbidden": true
+        "attackerInternalsForbidden": true,
+        "barrageSupplyDiscount": {
+          "side": "axis",
+          "t": 2
+        }
       },
       "hasSetup": true,
       "setupInfo": {

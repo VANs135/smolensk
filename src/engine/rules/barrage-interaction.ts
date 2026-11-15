@@ -1,4 +1,5 @@
-import type { HexRef } from '@/data'
+import type { HexRef, Side } from '@/data'
+import { scenarios } from '@/data'
 
 import { fail, succeed, type RuleOutcome } from '../result-types'
 import type { GamePhase } from '../state-types'
@@ -203,6 +204,12 @@ export interface BarrageInteractionState {
   rawTotalValue: number
   /** 10.0：初始列（横移前）与**该列**的 T 成本（10.1b） */
   table: BarrageTableMeta
+  /**
+   * 开火方阵营（剧本级炮击折扣用；缺省表示调用方未提供）
+   *
+   * 21.10 降档会重建 `table`，重建时须用同一方重新套用折扣。
+   */
+  side?: Side
   /** 10.1b：补给支付 */
   supply?: BarrageSupplyRecord
   /** 10.0a：由**目标玩家**选择的地形线 */
@@ -300,6 +307,32 @@ export interface BarrageFacts {
 }
 
 /**
+ * 剧本级炮击补给折扣（10.1b）
+ *
+ * 原文示例（Intro: Vitebsk）：德军炮击的补给消耗 −2T；若原本消耗 2T 即免费。
+ * 这是**剧本级**规则，不改全局轰炸表成本；只按剧本记录里指明的阵营生效。
+ */
+export function scenarioBarrageSupplyDiscount(
+  scenarioId: string | undefined,
+  side: Side | undefined,
+): number {
+  if (scenarioId === undefined || side === undefined) return 0
+  const rule = scenarios.scenarios.find((item) => item.id === scenarioId)?.setup
+    .barrageSupplyDiscount
+  if (rule === undefined || rule.side !== side) return 0
+  return rule.t
+}
+
+/** 按剧本级折扣调整初始列成本（最低 0；不适用时原样返回） */
+export function barrageTableWithScenarioRule(
+  table: BarrageTableMeta,
+  input: { scenarioId?: string; side?: Side },
+): BarrageTableMeta {
+  const discount = scenarioBarrageSupplyDiscount(input.scenarioId, input.side)
+  return discount === 0 ? table : { ...table, costT: Math.max(0, table.costT - discount) }
+}
+
+/**
  * 第 1 步：宣布整体目标（10.0d）并分配轰炸值（10.0e-B/F），随后确定初始列与补给用量
  *
  * 完成后 `step` 落在 `supply`（按初始列付火炮补给）。资格判定整体委托 `barrageEligibility`；
@@ -315,6 +348,13 @@ export function beginBarrage(input: {
   targetHex: HexRef
   units: readonly BarrageUnitRequest[]
   facts?: BarrageFacts
+  /**
+   * 剧本级炮击折扣的上下文（10.1b）
+   *
+   * 如 Intro: Vitebsk 的德军炮击 −2T。缺省即不折扣（全局表成本）。
+   */
+  scenarioId?: string
+  side?: Side
 }): RuleOutcome<BarrageInteractionState> {
   if (input.units.length === 0) return fail('10.0', 'noBarrageUnit')
   if (input.kind === 'artillery') {
@@ -421,7 +461,12 @@ export function beginBarrage(input: {
   if (!eligibility.ok) return fail(eligibility.rule, eligibility.reason)
 
   // 10.0：加总轰炸值 → 确定初始列（★ 横移之前），并按该列取 T 成本（10.1b）
-  const table = barrageTableMeta({ target: input.targetKind, valueRange: totalValue })
+  const baseTable = barrageTableMeta({ target: input.targetKind, valueRange: totalValue })
+  // 剧本级规则只作用于火炮轰炸；空军轰炸本来不走 T 成本
+  const table =
+    input.kind === 'artillery'
+      ? barrageTableWithScenarioRule(baseTable, { scenarioId: input.scenarioId, side: input.side })
+      : baseTable
 
   return succeed(eligibility.rule, {
     step: 'supply',
@@ -434,6 +479,7 @@ export function beginBarrage(input: {
     totalValue,
     rawTotalValue,
     table,
+    ...(input.side === undefined ? {} : { side: input.side }),
     losses: [],
     finished: false,
   })

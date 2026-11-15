@@ -239,6 +239,8 @@ describe('入门剧本 Intro: Vitebsk（教学/单人）', () => {
     expect(s.setup.optionalRulesForbidden).toBe(true)
     // 剧本页：攻方不得动用部队储备（12.10，剧本级）
     expect(s.setup.attackerInternalsForbidden).toBe(true)
+    // 剧本页：德军炮击补给 −2T（剧本级，不改全局轰炸表）
+    expect(s.setup.barrageSupplyDiscount).toEqual({ side: 'axis', t: 2 })
     // PDF 未述有机卡车载荷；数据不写该字段，运行时按 IV-D 默认空载
     expect(s.setup.organicTrucks.mode).toBe('all_unloaded')
     expect(s.setup.organicTrucks.raw).toContain('未述')
