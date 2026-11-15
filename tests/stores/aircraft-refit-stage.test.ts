@@ -267,6 +267,30 @@ describe('Ⓐ 15.1：同格有飞机时，空军基地**本身**也必须点得�
   })
 })
 
+describe('Ⓐ 15.1：一笔整备完成后，入口与中间态一起收束', () => {
+  it('★ 付款成功后 refitBase / 已选名单清空，该基地入口消失，原因指向 15.1A', () => {
+    const s = refitStage()
+    expect(s.workbench.beginRefitNow('base-1')).toBe(true)
+    s.workbench.toggleRefitAircraft('air-0')
+    expect(s.workbench.confirmRefitSelectionNow()).toBe(true)
+    expect(s.workbench.pickRefitPayDump(s.workbench.refitPayDumps[0]!.id)).toBe(true)
+    expect(s.workbench.confirmRefitPaymentNow()).toBe(true)
+
+    expect(s.workbench.refitBase).toBeNull()
+    expect(s.workbench.refitSelectedIds).toEqual([])
+    expect(s.workbench.refitStartBases).toHaveLength(0)
+    expect(s.workbench.refitBlockReasonAt('base-1')).toContain('15.1A')
+    expect(s.workbench.refitDoneBases.map((base) => base.id)).toEqual(['base-1'])
+  })
+
+  it('★ A 段没有轰炸许可：右键敌方格不出炮击 / 轰炸入口', () => {
+    const s = refitStage()
+    placeGround(s.workbench, combatRecord('soviet'), NEAR_HEX, 'soviet', 'enemy-2')
+
+    expect(s.workbench.barrageTargetsNow).toEqual([])
+  })
+})
+
 describe('Ⓐ 状态记录与日志：一笔整备在三处一致（15.1 / ⒁ 接线）', () => {
   it('lastRefit / 本阶段已整备名单 / 结算日志同源', () => {
     setActivePinia(createPinia())
