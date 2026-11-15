@@ -21,6 +21,20 @@ const newStore = () => {
 type Workbench = ReturnType<typeof useWorkbenchStore>
 
 const label = (hex: HexRef): string => `${hex.col}.${hex.row}`
+
+/** 13.3f-B：换轨须是"移动进入"的副产品 ⇒ 先让单位真的走一格 */
+function walkInto(store: Workbench, unitId: string, from: HexRef, to: HexRef): void {
+  const active = store.moveInteraction?.unitIds.includes(unitId) === true
+  if (!active || store.moveInteraction?.finished === true) {
+    store.clickHex(from)
+    if (store.movePickHex !== null) {
+      store.setMovePickOnly(unitId)
+      expect(store.confirmMovePick()).toBe(true)
+    }
+  }
+  store.clickHex(to)
+  expect(store.units.find((unit) => unit.instanceId === unitId)?.hex).toEqual(to)
+}
 const heads = (store: Workbench): string[] =>
   store.railheadMarkers.map((marker) => label(marker.hex!))
 
@@ -52,12 +66,17 @@ describe('13.3f：Railhead 端头随换轨账本自动前移 / 后撤', () => {
     expect(heads(store)).toEqual(['2.2'])
 
     const axis = rrUnit(store, 'axis', { col: 2, row: 2 }, 'rr-axis')
+    // 13.3f-B：走进 3.2 才可换轨
+    walkInto(store, axis.instanceId, { col: 2, row: 2 }, { col: 3, row: 2 })
     expect(store.convertRailGaugeNow(axis.instanceId, '3.2')).toBe(true)
     expect(heads(store)).toEqual(['3.2'])
 
+    // 苏方要换回，须先进入该格（敌人走开后再进入）
+    store.units.splice(store.units.indexOf(axis), 1)
     store.switchSide()
     store.setPhase('movement')
-    const soviet = rrUnit(store, 'soviet', { col: 3, row: 2 }, 'rr-soviet')
+    const soviet = rrUnit(store, 'soviet', { col: 2, row: 2 }, 'rr-soviet')
+    walkInto(store, soviet.instanceId, { col: 2, row: 2 }, { col: 3, row: 2 })
     expect(store.convertRailGaugeNow(soviet.instanceId, '3.2')).toBe(true)
     expect(heads(store)).toEqual(['2.2'])
   })

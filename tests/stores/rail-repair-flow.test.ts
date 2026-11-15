@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { HexRef } from '@/data'
 import { useWorkbenchStore } from '@/stores'
 
-import { groundRecord, placeGround } from '../flows/sop-harness'
+import { combatRecord, groundRecord, placeGround } from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
 
 /**
@@ -83,9 +83,31 @@ function prepareRun(store: Workbench): void {
   expect(store.addSupplySource()).toBe(true)
 }
 
+/** 沿铁路起点/下一格（13.3f-B：换轨必须是"移动进入"的副产品，故用例要先真走一步） */
+const NEXT = RUN[1]!
+
 /** 出错时把拒绝理由带进断言信息（否则只看 false 无法定位） */
 const why = (store: Workbench): string =>
   `${store.railMoveError?.rule ?? '-'}/${store.railMoveError?.reason ?? '-'}`
+
+/**
+ * 13.3f-B：让某单位**真的走一格**（地面逐格）
+ *
+ * `clickHex` 第一下建取子清单 → `setMovePickOnly` 只选它 → 确认开拔 → `clickHex(目标)` 落这一步。
+ * 这样"刚移动进入"的记账（`migration` / `moveInteraction.steps`）才成立。
+ */
+function walkInto(store: Workbench, unitId: string, from: HexRef, to: HexRef): void {
+  const active = store.moveInteraction?.unitIds.includes(unitId) === true
+  if (!active || store.moveInteraction?.finished === true) {
+    store.clickHex(from)
+    if (store.movePickHex !== null) {
+      store.setMovePickOnly(unitId)
+      expect(store.confirmMovePick()).toBe(true)
+    }
+  }
+  store.clickHex(to)
+  expect(store.units.find((unit) => unit.instanceId === unitId)?.hex).toEqual(to)
+}
 
 describe('13.3g-C：铁路修理单位可在任意铁路格登车/卸货（不受 13.3c 可卸货格限制）', () => {
   it('同一段路上：普通单位在非聚落格卸货被 13.3e 拒，铁路修理单位放行', () => {
@@ -171,11 +193,13 @@ describe('13.3g-A：不得「接力」（用铁路移动进入本阶段刚换过
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
 
     expect(store.convertedHexesThisPhase).toEqual([])
-    expect(store.convertRailGaugeNow(rr.instanceId, label(FROM))).toBe(true)
-    expect(store.convertedHexesThisPhase).toEqual([label(FROM)])
+    // 13.3f-B：先真的走进该格，再换轨（换轨是"移动进入"的副产品）
+    walkInto(store, rr.instanceId, FROM, NEXT)
+    expect(store.convertRailGaugeNow(rr.instanceId, label(NEXT))).toBe(true)
+    expect(store.convertedHexesThisPhase).toEqual([label(NEXT)])
     // 同一格再换一次（幂等）不重复记账
-    expect(store.convertRailGaugeNow(rr.instanceId, label(FROM))).toBe(true)
-    expect(store.convertedHexesThisPhase).toEqual([label(FROM)])
+    expect(store.convertRailGaugeNow(rr.instanceId, label(NEXT))).toBe(true)
+    expect(store.convertedHexesThisPhase).toEqual([label(NEXT)])
 
     // 13.3g-A 的"刚刚在当前阶段内"⇒ 换阶段后这批格不再算数
     store.setPhase('supply')
@@ -189,24 +213,24 @@ describe('13.3g-A：不得「接力」（用铁路移动进入本阶段刚换过
     store.setTurn(5)
     prepareRun(store)
 
-    // ① 一号修理单位把起点格换一次轨（本阶段）
+    // ① 一号修理单位走进起点旁的 NEXT（本阶段）并把它换轨
     const first = rrUnit(store, FROM, 'rr-1', 'combat')
-    expect(store.convertRailGaugeNow(first.instanceId, label(FROM))).toBe(true)
+    walkInto(store, first.instanceId, FROM, NEXT)
+    expect(store.convertRailGaugeNow(first.instanceId, label(NEXT))).toBe(true)
 
-    // ② 二号修理单位沿铁路移动 FROM → TO：路径含本阶段换过轨的 FROM
+    // ② 二号修理单位沿铁路移动 FROM → TO：路径含本阶段换过轨的 NEXT
     const second = rrUnit(store, FROM, 'rr-2', 'combat')
     store.selectedId = second.instanceId
     store.railMoveInputs = { toHexText: label(TO), spAmount: 1, fromDumpId: null }
     // 狭义解释（游戏说明）：被禁的是"结合"，铁路移动本身仍然合法
     expect(store.railMoveNow('unit'), why(store)).toBe(true)
     expect(second.hex).toEqual(TO)
-    expect(store.railMovedNewTrackThisPhase).toEqual([{ instanceId: 'rr-2', hexes: [label(FROM)] }])
-
+    expect(store.railMovedNewTrackThisPhase).toEqual([{ instanceId: 'rr-2', hexes: [label(NEXT)] }])
     // ③ 该单位此后再换轨 ⇒ 13.3g-A 拒
     expect(store.convertRailGaugeNow(second.instanceId, label(TO))).toBe(false)
     expect(store.log.some((entry) => entry.text.includes('noLeapfrogging'))).toBe(true)
     // 账本没有因此改动：TO 仍未换轨
-    expect(store.convertedHexesThisPhase).toEqual([label(FROM)])
+    expect(store.convertedHexesThisPhase).toEqual([label(NEXT)])
   })
 
   it('★ 对照组：本阶段没换过任何轨 ⇒ 走完铁路的修理单位照常换轨', () => {
@@ -233,7 +257,8 @@ describe('13.3g-A：不得「接力」（用铁路移动进入本阶段刚换过
     store.setTurn(5)
     prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
-    expect(store.convertRailGaugeNow(rr.instanceId, label(FROM))).toBe(true)
+    walkInto(store, rr.instanceId, FROM, NEXT)
+    expect(store.convertRailGaugeNow(rr.instanceId, label(NEXT))).toBe(true)
 
     /*
      * 普通单位（把 rail_repair 抹掉）走同一条铁路的**前半段**：不进 13.3g-A 的账。
@@ -253,7 +278,7 @@ describe('13.3g-A：不得「接力」（用铁路移动进入本阶段刚换过
     store.selectedId = rr2.instanceId
     store.railMoveInputs = { toHexText: label(TO), spAmount: 1, fromDumpId: null }
     expect(store.railMoveNow('unit'), why(store)).toBe(true)
-    expect(store.railMovedNewTrackThisPhase).toEqual([{ instanceId: 'rr-2', hexes: [label(FROM)] }])
+    expect(store.railMovedNewTrackThisPhase).toEqual([{ instanceId: 'rr-2', hexes: [label(NEXT)] }])
   })
 })
 
@@ -266,11 +291,12 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
 
-    expect(store.isRailGaugeUsableAt(FROM, 'soviet')).toBe(true)
-    expect(store.convertRailGaugeNow(rr.instanceId, label(FROM))).toBe(true)
+    expect(store.isRailGaugeUsableAt(NEXT, 'soviet')).toBe(true)
+    walkInto(store, rr.instanceId, FROM, NEXT)
+    expect(store.convertRailGaugeNow(rr.instanceId, label(NEXT))).toBe(true)
     // 苏方转换 = 出账（把轴方换过去的轨换回来）⇒ 账本不含该格，且仍供本方使用
-    expect(store.convertedRailHexes).not.toContain(label(FROM))
-    expect(store.isRailGaugeUsableAt(FROM, 'soviet')).toBe(true)
+    expect(store.convertedRailHexes).not.toContain(label(NEXT))
+    expect(store.isRailGaugeUsableAt(NEXT, 'soviet')).toBe(true)
     // 13.3g-D 的每阶段额度记在账上
     expect(store.gaugeConversionsThisPhase.find((x) => x.instanceId === rr.instanceId)?.count).toBe(
       1,
@@ -283,10 +309,14 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     store.setPhase('movement')
     store.setTurn(5)
     prepareRun(store)
-    const rr = rrUnit(store, FROM, 'rr-1')
+    const rr = rrUnit(store, FROM, 'rr-1', 'combat')
 
-    expect(store.convertRailGaugeNow(rr.instanceId, label(FROM))).toBe(false)
-    expect(store.convertedRailHexes).not.toContain(label(FROM))
+    walkInto(store, rr.instanceId, FROM, NEXT)
+    // 进入后才切到移动面：换轨时不是战斗模式 ⇒ 13.3g-D 拒
+    rr.mode = { mode: 'move', orientation: 'move', dg: false, exploit: false }
+    rr.raw = rr.faces.move
+    expect(store.convertRailGaugeNow(rr.instanceId, label(NEXT))).toBe(false)
+    expect(store.convertedRailHexes).not.toContain(label(NEXT))
     expect(store.log.some((entry) => entry.text.includes('mustBeCombatMode'))).toBe(true)
   })
 
@@ -299,7 +329,8 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
     rr.specialized = rr.specialized.filter((tag) => tag !== 'rail_repair')
 
-    expect(store.convertRailGaugeNow(rr.instanceId, label(FROM))).toBe(false)
+    walkInto(store, rr.instanceId, FROM, NEXT)
+    expect(store.convertRailGaugeNow(rr.instanceId, label(NEXT))).toBe(false)
     expect(store.log.some((entry) => entry.text.includes('notRailRepairUnit'))).toBe(true)
   })
 
@@ -311,13 +342,12 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
 
-    // 目标格取 16.9（15.10 的铁路邻居，格内无本方单位 ⇒ 不被 4.5b 抵消）；
-    // 敌方战斗单位放在 16.10（16.9 的邻格）⇒ 16.9 落入敌方 ZOC
-    const TARGET: HexRef = { col: 16, row: 9 }
+    // 敌方战斗单位放在 16.10 ⇒ 与它相邻的 NEXT（15.11）落入敌方 ZOC
     const enemy = groundRecord('axis', (item) => item.isCombat === true)
     placeGround(store, enemy, { col: 16, row: 10 }, 'axis', 'enemy-adj')
 
-    expect(store.convertRailGaugeNow(rr.instanceId, label(TARGET))).toBe(false)
+    walkInto(store, rr.instanceId, FROM, NEXT)
+    expect(store.convertRailGaugeNow(rr.instanceId, label(NEXT))).toBe(false)
     expect(store.log.some((entry) => entry.text.includes('enemyZocCannotConvert'))).toBe(true)
   })
 
@@ -327,12 +357,16 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     store.setPhase('movement')
     store.setTurn(5)
     prepareRun(store)
-    const rr = rrUnit(store, FROM, 'rr-1', 'combat')
+    // 目标 FROM 内有本方战斗单位；敌人在 16.10 仍让 FROM 处于敌方 ZOC
+    placeGround(store, combatRecord('soviet'), FROM, 'soviet', 'own-combat')
+    const rr = rrUnit(store, NEXT, 'rr-1', 'combat')
     const enemy = groundRecord('axis', (item) => item.isCombat === true)
     placeGround(store, enemy, { col: 16, row: 10 }, 'axis', 'enemy-adj')
 
     // 4.5a-E / 13.3f-A 明确规定轨距转换不能抵消 ZOC。
+    walkInto(store, rr.instanceId, NEXT, FROM)
     expect(store.convertRailGaugeNow(rr.instanceId, label(FROM))).toBe(false)
+    expect(store.log.some((entry) => entry.text.includes('enemyZocCannotConvert'))).toBe(true)
   })
 
   it('13.3g-D：每阶段至多 min(4, 当前 MA) 格，超出即拒', () => {
@@ -343,16 +377,71 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
     const quota = Math.min(4, rr.raw.ma)
-    const hexes = RUN.slice(0, quota)
-    expect(hexes.length).toBeGreaterThan(0)
+    // 13.3f-B：逐格走进、逐格换轨（换轨不是远程动作）
+    const hexes = RUN.slice(1, quota + 1)
+    expect(hexes.length).toBe(quota)
 
-    for (const hex of hexes) expect(store.convertRailGaugeNow(rr.instanceId, label(hex))).toBe(true)
+    for (const hex of hexes) {
+      const previous = RUN[RUN.indexOf(hex) - 1]!
+      walkInto(store, rr.instanceId, previous, hex)
+      expect(store.convertRailGaugeNow(rr.instanceId, label(hex))).toBe(true)
+    }
     expect(store.gaugeConversionsThisPhase.find((x) => x.instanceId === rr.instanceId)?.count).toBe(
       hexes.length,
     )
-    const extra = RUN[quota]
-    expect(extra).not.toBeUndefined()
-    expect(store.convertRailGaugeNow(rr.instanceId, label(extra!))).toBe(false)
+    // 额度已满 ⇒ 对刚走进的最后一格再换一次也被拒（13.3g-D）
+    const last = hexes[hexes.length - 1]!
+    expect(store.convertRailGaugeNow(rr.instanceId, label(last))).toBe(false)
     expect(store.log.some((entry) => entry.text.includes('conversionLimitReached'))).toBe(true)
+  })
+
+  /* ── 13.3f-B：换轨必须是"移动进入"的副产品 ── */
+
+  it('13.3f-B：远程指定未走进的铁路格 ⇒ 拒绝并给出可读原因', () => {
+    const store = newStore()
+    store.switchSide()
+    store.setPhase('movement')
+    store.setTurn(5)
+    prepareRun(store)
+    const rr = rrUnit(store, FROM, 'rr-1', 'combat')
+    const before = [...store.convertedRailHexes]
+
+    expect(store.convertRailGaugeNow(rr.instanceId, label(TO))).toBe(false)
+    expect(store.convertedRailHexes).toEqual(before)
+    const refused = store.log.filter((entry) => entry.text.includes('轨距转换被拒'))
+    expect(refused).toHaveLength(1)
+    expect(refused[0]?.text).toContain('13.3f-B')
+    expect(refused[0]?.text).toContain('不能远程换轨')
+  })
+
+  it('13.3f-B：原地不动（未移动进入）⇒ 拒绝，账本不动', () => {
+    const store = newStore()
+    store.switchSide()
+    store.setPhase('movement')
+    store.setTurn(5)
+    prepareRun(store)
+    const rr = rrUnit(store, FROM, 'rr-1', 'combat')
+
+    expect(store.convertRailGaugeNow(rr.instanceId, label(FROM))).toBe(false)
+    expect(store.convertedHexesThisPhase).toEqual([])
+    expect(store.log.some((entry) => entry.text.includes('本阶段尚未移动进入任何格'))).toBe(true)
+  })
+
+  it('13.3f-B：真的走进该格 ⇒ 成功；进入的 MP 已由那一步支付（换轨不耗额外 MP）', () => {
+    const store = newStore()
+    store.switchSide()
+    store.setPhase('movement')
+    store.setTurn(5)
+    prepareRun(store)
+    const rr = rrUnit(store, FROM, 'rr-1', 'combat')
+
+    walkInto(store, rr.instanceId, FROM, NEXT)
+    // 进入 NEXT 的地形成本已由移动步骤扣掉
+    const spentAfterStep = rr.mpSpent
+    expect(spentAfterStep).toBeGreaterThan(0)
+    // 13.3f-B：换轨本身只付 0 额外 MP
+    expect(store.convertRailGaugeNow(rr.instanceId, label(NEXT))).toBe(true)
+    expect(rr.mpSpent).toBe(spentAfterStep)
+    expect(store.convertedHexesThisPhase).toEqual([label(NEXT)])
   })
 })

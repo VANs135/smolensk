@@ -4213,8 +4213,35 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 13.3f-B：该单位**最近一次移动进入**的格（只认最终仍停留在的格）
+   *
+   * 两个入口都要算：
+   *   - 地面逐格移动：取本次移动里**最后一笔**「该单位真的换了格」的步骤（`movedIds`，`kind === 'step'`），
+   *     撤销上一步后自然回退到更早的一笔；
+   *   - 13.3e 铁路移动：取本阶段最后一次铁路抵达（`railArrived`，换阶段即清空）。
+   * 两者都要求结果等于单位**当前**所在格（否则是旧记录，不能据此远程换轨）。
+   */
+  function justEnteredHexFor(instanceId: string, currentHex: HexRef): HexRef | null {
+    const steps = moveInteraction.value?.steps ?? []
+    for (let index = steps.length - 1; index >= 0; index -= 1) {
+      const step = steps[index]!
+      if (step.kind !== 'step' || !step.movedIds.includes(instanceId)) continue
+      // 最后一笔地面移动就是它当前所在格 ⇒ 成立；否则它此后多半是铁路移动，转去查 `railArrived`
+      if (sameHex(step.to, currentHex)) return step.to
+      break
+    }
+    const rail = railArrived.value
+    if (rail === null || rail.instanceId !== instanceId) return null
+    const hex = parseHexPath(rail.hexText)[0]
+    return hex !== undefined && sameHex(hex, currentHex) ? hex : null
+  }
+
+  /**
    * C9b：13.3f／13.3g 轨距转换（铁路修理单位**移动进入**铁路格即转换该格）
    *
+   * - **13.3f-B：只能转换本单位刚移动进入的那一格**——换轨是"移动进入"的副产品，
+   *   进入该格的地形 MP 已由那一步移动支付（原文只说不付**额外** MP，见引擎 `validateGaugeConversion`
+   *   的 `mpCost: 0`）；原地不动 / 远程指定格一律拒绝并给出可读原因；
    * - 转换不消耗 SP 也不消耗额外 MP（13.3f-B）；
    * - 敌方 ZOC 内不可转换且**不可抵消**（13.3f-A）；
    * - 仅移动阶段，每阶段至多 `min(4, 当前 MA)` 格，且不得「接力」（13.3g-A/D）；
@@ -4233,6 +4260,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const hex = parseHexPath(targetHexText)[0]
     if (hex === undefined) {
       pushLog('warning', `轨距转换：目标格格式应为「列.行」，收到「${targetHexText}」`, '13.3f')
+      return false
+    }
+    /*
+     * 13.3f-B：「一个铁路修理单位只需**移动进入**一个铁路格，就可转换该铁路格的轨距。」
+     * ⇒ 换轨不是独立动作，而是"移动进入"的副产品：
+     *   ① 单位必须**正在**目标格内；
+     *   ② 目标格必须是它**最近一次移动进入**的格（地面逐格移动或 13.3e 铁路移动皆可）；
+     *   ③ 进入该格的地形 MP 已由那一步支付；本动作只给 0 MP（不付**额外** MP）。
+     * 不满足即拒（远程换轨 / 原地换轨都不成立），并把原因写进日志。
+     */
+    if (!sameHex(unit.hex, hex)) {
+      const reason = `13.3f-B：单位不在 ${hexLabel(hex)}，不能转换（换轨须是移动进入该格的副产品，不能远程换轨）`
+      pushLog('warning', `轨距转换被拒：${reason}`, '13.3f')
+      return false
+    }
+    const entered = justEnteredHexFor(instanceId, unit.hex)
+    if (entered === null || !sameHex(entered, hex)) {
+      const reason =
+        entered === null
+          ? `13.3f-B：${unit.name} 本阶段尚未移动进入任何格，不能转换 ${hexLabel(hex)}（不能远程换轨）`
+          : `13.3f-B：只能转换刚走进的格——${unit.name} 最近进入的是 ${hexLabel(entered)}，不是 ${hexLabel(hex)}`
+      pushLog('warning', `轨距转换被拒：${reason}`, '13.3f')
       return false
     }
     const early = earlyRouteRestrictionOf(unit, hex)
@@ -4454,6 +4503,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     cost: number
     path: HexRef[]
   } | null>(null)
+
+  /**
+   * 13.3f-B：**本阶段最后一次经铁路移动进入的格**（按单位）
+   *
+   * 「一个铁路修理单位只需**移动进入**一个铁路格，就可转换该铁路格的轨距」——铁路移动同样是
+   * "移动进入"（13.3g-A 明确允许把铁路移动与换轨结合），故它与地面逐格移动并列作为
+   * `convertRailGaugeNow` 的入口依据；换阶段即清空（`resetSegmentTransient`）。
+   */
+  const railArrived = ref<{ instanceId: string; hexText: string } | null>(null)
 
   /**
    * 裁定 3：铁路运输的**待确认**落点
@@ -4975,6 +5033,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const unit = units.value.find((item) => item.instanceId === cargo.id)
       if (unit !== undefined) {
         unit.hex = { col: to.col, row: to.row }
+        // 13.3f-B：铁路移动也是"移动进入"，记下该单位本阶段最后进入的格（供换轨判定）
+        railArrived.value = { instanceId: unit.instanceId, hexText: hexLabel(to) }
         // 13.8b 末句例外：铁路离开记录格后，这条例外即用尽
         noteUnitLeftOwnBridgeHex(unit)
         // 4.7d / 13.3e-3：卸货后不得再移动（13.3g-B 的铁路修理单位例外，其剩余 MP 已由引擎给出）
@@ -7413,6 +7473,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     convertedHexesThisPhase.value = []
     railMovedNewTrackThisPhase.value = []
     railMovedUnitIdsThisPhase.value = []
+    railArrived.value = null
     // 4.8a：换段后上一次的勾选一律作废（盘面可能已变；未处理的义务仍会被台账重新列出）
     overstackPicks.value = {}
   }
@@ -7548,6 +7609,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 13.3g-A：同上 —— 换阶段后，"本阶段刚换过轨的格"与"走过这些格的单位"都不再算数
     convertedHexesThisPhase.value = []
     railMovedNewTrackThisPhase.value = []
+    railArrived.value = null
     // 4.7d：铁路运输的「同一阶段只用一种运输类型」按阶段记账 ⇒ 换阶段即清零
     railMovedUnitIdsThisPhase.value = []
     // 10.0e-A/B：轰炸账本按**阶段**计（每格/每单位每阶段一次）⇒ 换阶段即清零
@@ -27385,8 +27447,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     flush: 'sync',
   })
 
-  /** 5.0c：本剧本胜利条件涉及的格（11 所列格 + 五城格 + 两城格） */
-  const victoryHexes = computed<readonly HexRef[]>(() => allVictoryConditionHexes())
+  /** 5.0c：本剧本胜利条件涉及的格（所列格按剧本号取 + 五城格 + 两城格；剧本 2/4 含 27.05、32.25） */
+  const victoryHexes = computed<readonly HexRef[]>(() => allVictoryConditionHexes(scenarioId.value))
 
   /*
    * B17-1（5.0c）：胜利格控制的**播种**必须排在 `victoryHexes` **之后**——它要用这份清单。
