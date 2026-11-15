@@ -94,7 +94,11 @@ describe('批 2：窗内只留当前决定与控件', () => {
     absent('src/components/breakout/BreakoutPanel.vue', 'hint="12.8e')
   })
 
-  it('会话步骤不再渲染第二行“该怎么做”', () => {
-    expect(read('src/components/session/SessionStep.vue')).not.toContain('step__decision')
+  it('会话步骤不再渲染第二行“该怎么做”（批 4 起只留一行当前决定）', () => {
+    const step = read('src/components/session/SessionStep.vue')
+    // 批 2 的原意：不铺教学式第二行；批 4 把决定行收成一行 `step__decision`，只输出 decision 一句话
+    expect(step).not.toContain('{{ step.why }}')
+    expect(step.match(/class="step__decision"/g) ?? []).toHaveLength(1)
+    expect(step).toContain('{{ step.decision }}')
   })
 })
