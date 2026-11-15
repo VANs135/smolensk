@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import { BaseButton, BasePanel, BaseTag } from '@/components/base'
 import { buildFlowGuide, type FlowForm } from '@/engine/flow-model'
 import { SOP_STEPS, type SopStep } from '@/engine/session-flow'
+import IntroTurnGuide from './IntroTurnGuide.vue'
 import {
   useGameSessionStore,
   useHotseatStore,
@@ -356,6 +357,9 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
       <BaseTag kind="info">该做什么</BaseTag>
       {{ flow.hint }}
     </p>
+
+    <!-- 教学剧本：单回合的分步提示（仅 panel 形态；bar 形态只留一行） -->
+    <IntroTurnGuide />
 
     <!-- **阶段灯**（不是环节灯）：一个回合的 19 个**段**（先/后手各 A–H + Pre-Turn 2 + 回合结束 1） -->
     <div class="strip">
