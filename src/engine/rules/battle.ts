@@ -870,6 +870,13 @@ export interface RetreatFacts {
   friendlyCombatUnitsAt(hex: HexRef, side: Side): readonly string[]
   /** 9.12b：该单位在任何模式下都不可移动（被迫撤退时直接摧毁） */
   immobile(unitId: string): boolean
+  /**
+   * 剧本**活动区**（用户 2026-11-15 口径：范围外不可进入）
+   *
+   * ⇒ 撤退路径与落点一律排除活动区外的格（与禁入地形同级处理），不另造提示。
+   * 省略即全图不限（既有剧本行为不变）。
+   */
+  outsidePlayArea?(hex: HexRef): boolean
 }
 
 export interface RetreatResult {
@@ -906,7 +913,13 @@ export interface RetreatResult {
 
 /** 撤退被消灭的原因（见 `RetreatResult.reason`） */
 export type RetreatDestructionReason =
-  'noLanding' | 'mustCrossEnemyOrProhibited' | 'impassableStartOfCombat' | 'immobile' | 'stratZoc'
+  | 'noLanding'
+  | 'mustCrossEnemyOrProhibited'
+  | 'impassableStartOfCombat'
+  | 'immobile'
+  | 'stratZoc'
+  /** 剧本活动区：撤退路径进入活动区外的格（用户 2026-11-15 口径：不可进入） */
+  | 'outsidePlayArea'
 
 /**
  * 9.12 / 9.12a-f：单个单位的撤退
@@ -974,6 +987,18 @@ export function resolveRetreat(input: {
 
   for (let index = 0; index < path.length; index += 1) {
     const next = path[index]!
+    // 剧本活动区（用户 2026-11-15 口径）：范围外不可进入 ⇒ 硬塞进来的路径按不可通行处理
+    if (facts.outsidePlayArea?.(next) === true)
+      return {
+        ...base,
+        rule: '剧本·活动区',
+        hex: null,
+        destroyed: true,
+        reason: 'outsidePlayArea',
+        gainsDg: false,
+        extraLoss,
+        dgCompanions,
+      }
     // 9.12f（用户 2026-11-12 裁定）：战斗开始时敌方战斗单位所在格是**不可通行格**。
     // 规划器已排除；这里只防直接调用硬塞入这种路径。不按「9.12 穿越即消灭」记。
     if (facts.startOfCombatEnemyCombatUnitAt?.(next, unit.side) === true)
@@ -1248,6 +1273,7 @@ export function retreatPathTo(input: {
     isOnMap(hex) &&
     !sameHex(hex, from) &&
     !facts.prohibitedFor(input.mobility, hex) &&
+    facts.outsidePlayArea?.(hex) !== true &&
     !facts.enemyCombatUnitAt(hex, input.side) &&
     facts.startOfCombatEnemyCombatUnitAt?.(hex, input.side) !== true
   const shortest = monotonePath({
@@ -1314,12 +1340,16 @@ export function planRetreatDestinations(input: {
   if (input.distance <= 0) return []
   const plans: RetreatDestinationPlan[] = []
   const candidates = hexesWithin(input.from, input.distance, { onMapOnly: true }).filter(
-    (hex) => hexDistance(input.from, hex) === input.distance,
+    (hex) =>
+      hexDistance(input.from, hex) === input.distance &&
+      // 剧本活动区：范围外的格不能作为撤退落点
+      input.facts.outsidePlayArea?.(hex) !== true,
   )
   // 回退路径（必死）仍须排除 9.12f 的不可通行格；当前敌方/禁入地形允许穿过（穿过后按 9.12 消灭）
   const doomedPassable = (hex: HexRef): boolean =>
     isOnMap(hex) &&
     !sameHex(hex, input.from) &&
+    input.facts.outsidePlayArea?.(hex) !== true &&
     input.facts.startOfCombatEnemyCombatUnitAt?.(hex, input.side) !== true
   for (const hex of candidates) {
     if (input.blocked?.(hex) === true) continue
@@ -1389,12 +1419,21 @@ export function resolveAdvanceAfterCombat(input: {
    * 而突袭本就不会被允许发起到这种格上（进入判据在 `move.isEnemySafeEdgeHex` 已拦）。
    */
   advanceIntoForbiddenHex?: boolean
+  /**
+   * 剧本活动区（用户 2026-11-15 口径）：防御格在活动区外 ⇒ 不得推进进去
+   *
+   * 与 `advanceIntoForbiddenHex` 同形：合法的「无人推进」结果，不是错误。
+   */
+  advanceIntoOutsidePlayArea?: boolean
 }): RuleOutcome<{ advanceUnitIds: string[]; mandatory: boolean }> {
   if (input.attackerRetreated) return fail('9.12g-B', 'attackerRetreatedNoAdvance')
   if (!input.defendingHexCleared) return succeed('9.12g', { advanceUnitIds: [], mandatory: false })
   // 专规 1.1b：安全边缘格不可进入 ⇒ 不推进
   if (input.advanceIntoForbiddenHex === true)
     return succeed('专规 1.1b', { advanceUnitIds: [], mandatory: false })
+  // 剧本活动区：范围外不可进入 ⇒ 不推进
+  if (input.advanceIntoOutsidePlayArea === true)
+    return succeed('剧本·活动区', { advanceUnitIds: [], mandatory: false })
   // 9.12g-A + 9.12b：付过战斗补给 **且** 并非「任何模式下都不可移动」
   const eligible = input.candidates.filter(
     (unit) => unit.paidCombatSupply && unit.immobile !== true,

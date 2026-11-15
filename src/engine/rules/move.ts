@@ -23,6 +23,7 @@ import {
   type MovementSegmentPhase,
 } from './modes'
 import { STACKING_LIMIT_RE } from './movement'
+import { insidePlayArea } from './play-area'
 import { limitAirTransportMa } from './air-unit-movement'
 import { checkLegality, type LegalityUnit, type LegalityViolation } from './legality'
 import { selectMovementTerrain, type HexsideCrossing } from './terrain'
@@ -643,6 +644,11 @@ export function evaluateStepFrom(
   if (sameHex(from, to)) return reject('notAdjacent', '6.1', `${to.col}.${to.row}`)
   if (!areAdjacent(from, to)) return reject('notAdjacent', '6.1', `${to.col}.${to.row}`)
   if (!context.map.onMap(to)) return reject('destinationOffMap', '专规 1.4', `${to.col}.${to.row}`)
+
+  // 剧本活动区（用户 2026-11-15 口径）：范围外的格任何单位都不能进入。
+  // 判据只看格集（剧本读数），对普通移动与突袭进格一体生效；缺省不注入即全图不限。
+  if (!insidePlayArea(context.playAreaHexes, to))
+    return reject('outsidePlayArea', '剧本·活动区', `${to.col}.${to.row}`)
 
   /*
    * 4.5a-A（R9）：突袭强行进入敌方 ZOC 后，该格单位**不得离开**——只能就地再突袭，或停止。

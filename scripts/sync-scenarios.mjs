@@ -70,6 +70,7 @@ export function toScenario(record, item) {
     'optional_rules',
     'attacker_internals_forbidden',
     'barrage_supply_discount',
+    'play_area',
   ])
   const options = {}
   for (const [key, value] of Object.entries(choices)) {
@@ -123,6 +124,8 @@ export function toScenario(record, item) {
   }
 
   if (sameAs !== undefined) scenario.inherits = String(sameAs)
+  // 剧本活动区（用户 2026-11-15 口径：截图内可见的六角格；范围外任何单位不得进入）
+  if (choices.play_area) scenario.playArea = choices.play_area
   if (item?.shared_setup_with?.length) scenario.sharedSetupWith = item.shared_setup_with.map(String)
   if (item?.has_setup != null) scenario.hasSetup = item.has_setup
   if (item?.setup_info) scenario.setupInfo = item.setup_info

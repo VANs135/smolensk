@@ -34,6 +34,7 @@ import {
   inEnemyZocAt,
   inEnemyZocForAction,
   inEnemyZocForRetreat,
+  insidePlayArea,
   isCorrectSpotter,
   isMobileUnit,
   isOutOfSupplyNow,
@@ -1039,6 +1040,12 @@ export function buildMoveContext(input: {
    * 引擎不读 store，故由调用方把这一事实注入；缺省视为无此约束（不臆造）。
    */
   zocHeld?: { readonly hex: HexRef; readonly unitIds: readonly string[] }
+  /**
+   * 剧本活动区（用户 2026-11-15 口径）：格集来自剧本数据 `scenario.playArea.hexes`
+   *
+   * 缺省不注入 ⇒ 全图不限；注入后移动/突袭进格一律按不可进入处理（判据在 `play-area.ts`）。
+   */
+  playAreaHexes?: readonly HexRef[]
 }): MoveContext {
   // 性能优化 A：上下文必须是**plain 快照**——原样搬运 Pinia 的 `hex` 引用会让 BFS 每一步读
   // `hex.col/row` 都走 Vue 响应式 Proxy（实测占移动会话 362ms）。这里一律克隆为普通对象。
@@ -1075,6 +1082,7 @@ export function buildMoveContext(input: {
           ),
         }),
     ...(input.traceSupplyAt === undefined ? {} : { traceSupplyAt: input.traceSupplyAt }),
+    ...(input.playAreaHexes === undefined ? {} : { playAreaHexes: input.playAreaHexes.map(plain) }),
     ...(input.zocHeld === undefined
       ? {}
       : { zocHeld: { hex: plain(input.zocHeld.hex), unitIds: [...input.zocHeld.unitIds] } }),
@@ -1711,6 +1719,8 @@ export function createRetreatFacts(input: {
       if (unit === undefined) return true
       return unit.faces.combat.ma === 0 && unit.faces.move.ma === 0
     },
+    // 剧本活动区：与移动共用同一份格集（`moveContext.playAreaHexes`），不另建判据
+    outsidePlayArea: (hex) => !insidePlayArea(input.context.playAreaHexes, hex),
   }
 }
 

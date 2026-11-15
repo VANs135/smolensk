@@ -172,6 +172,14 @@ export interface MoveContext {
    * 省略本项 ⇒ 无此约束（不臆造）。
    */
   zocHeld?: { readonly hex: HexRef; readonly unitIds: readonly string[] }
+  /**
+   * 剧本**活动区**（用户 2026-11-15 口径：限定在截图内可见的六角格）
+   *
+   * 「范围外的格子任何单位都不能进入」⇒ 移动 / 突袭进格一律按不可进入处理。
+   * 格集由剧本数据给出（`scenario.playArea.hexes`），判据在 `play-area.ts#insidePlayArea`；
+   * 省略本项即全图不限（既有剧本行为不变）。
+   */
+  playAreaHexes?: readonly HexRef[]
 }
 
 /* ────────────────────────────── 结果形状 ────────────────────────────── */
@@ -223,6 +231,8 @@ export type MoveRejectReason =
   | 'extenderCannotMove'
   /** 专规 1.1b：敌方安全边缘格（作为补给源的地图边格）不可被敌方地面单位进入（含突袭） */
   | 'enemySafeEdge'
+  /** 剧本活动区：该格不在剧本给定的活动范围内（用户 2026-11-15 口径：不可进入） */
+  | 'outsidePlayArea'
 
 /** 单步移动成功 */
 export interface StepSuccess {

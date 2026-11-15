@@ -242,6 +242,7 @@ import {
   hqFuelCovers,
   // B40（12.6f / 13.7a）：编队追溯补给的同源取舍（分组由调用方给）
   formationTraceTradeoff,
+  insidePlayArea,
   isEnemySafeEdgeHex,
   isFacilityBarrage,
   isLegal,
@@ -2468,6 +2469,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return out
   })
 
+  /**
+   * 剧本**活动区**格集（用户 2026-11-15 口径：限定在截图内可见的六角格）
+   *
+   * 读数只从剧本走（`scenarios[].playArea.hexes`，逐格清单，不用包围盒推导）；
+   * 缺省（未声明）= 全图不限。范围外的格不删、照旧渲染，只是不可进入。
+   */
+  const playAreaHexes = computed<HexRef[] | undefined>(() => {
+    const declared = session.scenarioInfo?.playArea?.hexes
+    if (declared === undefined) return undefined
+    return declared.flatMap((text) => parseHexPath(text))
+  })
+
   /** 当前移动上下文（每次派生都重建，保证与摆子/切方一致） */
   const moveContext = computed(() =>
     buildMoveContext({
@@ -2498,6 +2511,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       trainbustingMarksBySide: trainbustingMarksByPlacer.value,
       // 4.5a-A（R9）：突袭进 ZOC 后「不得离开」的事实（引擎据此拦普通走法；再突袭不受限）
       ...(zocHeldFact.value === undefined ? {} : { zocHeld: zocHeldFact.value }),
+      // 剧本活动区（用户 2026-11-15 口径）：范围外不可进入；未声明即全图不限
+      ...(playAreaHexes.value === undefined ? {} : { playAreaHexes: playAreaHexes.value }),
       // 专规 1.5：首回合苏军地面单位 ×1/2（与模式折算相乘）
       maFactorOf: sovietFirstTurnMaFactor,
     }),
@@ -13131,6 +13146,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           moveContext.value,
           battleTarget.value?.hex ?? { col: 0, row: 0 },
           actingSide.value,
+        ),
+        // 剧本活动区（用户 2026-11-15 口径）：防御格在活动区外 ⇒ 不得推进进去
+        advanceIntoOutsidePlayArea: !insidePlayArea(
+          playAreaHexes.value,
+          battleTarget.value?.hex ?? { col: 0, row: 0 },
         ),
         // 9.13b-A：攻方 AR 单位处于 DG ⇒ 不给进击标记
         attackerArDg: arUnit?.mode.dg === true,

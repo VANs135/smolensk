@@ -440,6 +440,23 @@ export const ScenarioSchema = z
     /** 该剧本实际生效的补给源 */
     supplySources: SupplySourcesSchema.optional(),
 
+    /**
+     * 地图**活动区**（用户 2026-11-15 口径：限定在截图内可见的六角格）
+     *
+     * 「范围外的格子任何单位都不能进入」——判据落在移动 / 突袭进格 / 可达格 / 撤退 / 战后推进，
+     * 缺省（字段缺失）即全图不限。格集按截图**逐格读数**（`列.行`），不用包围盒推导；
+     * 范围外不删地图数据：那格照旧在 map-layers 里、照旧渲染，只是不可进入。
+     */
+    playArea: z
+      .object({
+        /** 取值口径（保留，便于回溯：如「截图内可见即算，含四条边的裁切格」） */
+        rule: z.string().min(1),
+        /** 活动区格清单（`列.行`；行可补零） */
+        hexes: z.array(z.string()),
+      })
+      .strict()
+      .optional(),
+
     /** 带 † 的轴方师可在所列位置 1 格内初设（剧本 3–7） */
     daggerRule: z.string().optional(),
 

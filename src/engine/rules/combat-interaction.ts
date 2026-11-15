@@ -1309,6 +1309,8 @@ export function resolveAdvance(
     attackerAllOptionsAsLosses?: boolean
     /** 专规 1.1b：防御格是敌方安全边缘格（补给源边格）⇒ 不得推进进去 */
     advanceIntoForbiddenHex?: boolean
+    /** 剧本活动区：防御格在活动区外 ⇒ 不得推进进去（用户 2026-11-15 口径） */
+    advanceIntoOutsidePlayArea?: boolean
   },
 ): RuleOutcome<{
   state: CombatInteractionState
@@ -1340,6 +1342,9 @@ export function resolveAdvance(
       ...(input.advanceIntoForbiddenHex === undefined
         ? {}
         : { advanceIntoForbiddenHex: input.advanceIntoForbiddenHex }),
+      ...(input.advanceIntoOutsidePlayArea === undefined
+        ? {}
+        : { advanceIntoOutsidePlayArea: input.advanceIntoOutsidePlayArea }),
     })
     // 9.12g-A：选了未付战斗补给的推进单位 ⇒ 非法选择，报错让界面纠正
     if (!advance.ok) return advance
