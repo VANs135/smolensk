@@ -1543,6 +1543,13 @@ export const useSetupStore = defineStore('setup', () => {
    */
   const setupEffectLedger = ref<SetupEffectLedger | null>(null)
 
+  /**
+   * 旧档（`setup` 快照缺失）⇒ 沿用已保存盘面、**不重抽**（规格 §4.6）
+   *
+   * 与「会话已建但初设未收束」的档区分开：只有这种档才禁止补抽签，别的档读回后仍要能补。
+   */
+  const setupHistoryMissing = ref(false)
+
   /** 本剧本的 effects 是否已执行（台账按剧本隔离） */
   const setupEffectsExecuted = computed(() =>
     setupEffectsAreExecuted(setupEffectLedger.value, scenarioId.value),
@@ -1715,7 +1722,9 @@ export const useSetupStore = defineStore('setup', () => {
      * 抽签成功后立刻开局并进入第一阶段。没有 effects 的剧本确认即开局。
      */
     const effectsPending = setupEffects.value.length > 0 && !setupEffectsExecuted.value
-    if (effectsPending && game.session === null) {
+    // 只按「抽签还没执行」判，不按「有没有建会话」判：读档读回「会话已建、初设未收束」的档时，
+    // 若要求 `game.session === null`，确认这一步会直接收束初设并推进，ch10/ch11 的抽签被静默跳过。
+    if (effectsPending) {
       if (!finished.value) closeSetupConfirmation()
       setupConfirmed.value = true
       return record({
@@ -1965,7 +1974,7 @@ export const useSetupStore = defineStore('setup', () => {
       setupConfirmed.value &&
       !setupEffectsExecuted.value &&
       setupEffects.value.length > 0 &&
-      game.session === null,
+      !setupHistoryMissing.value,
   )
 
   /**
@@ -2075,20 +2084,32 @@ export const useSetupStore = defineStore('setup', () => {
    * 再按效果回执写提示、如实报失败（不静默）。抽签算法仍在 `containers.runSetupDrawsNow`。
    */
   function executeSetupEffectsNow(): RunSetupEffectsResult | null {
-    // 对局已开局 ⇒ 不再执行任何初设效果（读档沿用已保存的盘面与记录）
-    if (game.session !== null) {
+    const effects = setupEffects.value
+    // 会话已建时只有「本剧本确有未执行的抽签」才放行（读档读回「会话已建、初设未收束」的档要能补）；
+    // 已抽过 / 本剧本无抽签 / 旧档沿用盘面 ⇒ 照旧拒绝，不重放、不改盘面。
+    const effectsPending = effects.length > 0 && !setupEffectsExecuted.value
+    if (
+      game.session !== null &&
+      (!effectsPending || setupHistoryMissing.value)
+    ) {
       record({
         ok: false,
         rule: 'ch10 / ch11',
-        reason: '对局已开局，不能重新执行初设编队抽取；读档沿用已保存的盘面与记录',
+        reason: '旧存档未记录初设历史，沿用已保存的盘面与记录，不重新抽签',
       })
       return null
     }
-    const effects = setupEffects.value
     if (effects.length === 0) return { ok: true, executed: [], issues: [] } // 本剧本无初设强制效果
     const outcome = runSetupEffects(effects, {
       formationDraw: () => {
-        const draw = containers.runSetupDrawsNow()
+        const draw = containers.runSetupDrawsNow({
+          // 会话已建但抽签**还没执行**（读档读回「初设未收束」的档）时也要能补抽；
+          // 已执行过 / 旧档沿用盘面则照旧拒绝。
+          allowAfterSessionStart:
+            !setupHistoryMissing.value &&
+            setupEffects.value.length > 0 &&
+            !setupEffectsExecuted.value,
+        })
         return {
           ok: draw.ok,
           detail: draw.detail,
@@ -3380,6 +3401,7 @@ export const useSetupStore = defineStore('setup', () => {
         resetInputs(false)
         applied.value = true
         finished.value = true
+        setupHistoryMissing.value = true
         // 旧档没有台账 ⇒ 沿用已保存盘面、不重抽；确认标记随 finished 置真（会话在，按钮不会出现）
         setupConfirmed.value = true
         setupEffectLedger.value = null
@@ -3394,6 +3416,7 @@ export const useSetupStore = defineStore('setup', () => {
         return
       }
       const loaded = SetupSnapshotSchema.parse(value)
+      setupHistoryMissing.value = false
       applied.value = loaded.applied
       finished.value = loaded.finished
       // 旧档缺 setupConfirmed（default false）但已收束 ⇒ 视为已确认，避免残留「抽签」按钮

@@ -1557,7 +1557,7 @@ export const useContainersStore = defineStore('containers', () => {
    *
    * 幂等：已抽过的组不重抽，已有匹配回执的处置不重做；清盘新建才重置三份账本。
    */
-  function runSetupDrawsNow(): {
+  function runSetupDrawsNow(options: { allowAfterSessionStart?: boolean } = {}): {
     ok: boolean
     /** 本次抽了几个组 / 落盘了几个组 */
     drawnGroups: number
@@ -1570,7 +1570,7 @@ export const useContainersStore = defineStore('containers', () => {
     placements: readonly SetupEffectPlacement[]
     detail: string
   } {
-    if (session.session !== null)
+    if (session.session !== null && options.allowAfterSessionStart !== true)
       return {
         ok: false,
         drawnGroups: 0,
