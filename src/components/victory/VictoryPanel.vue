@@ -54,6 +54,17 @@ const decisive = computed(() => workbench.decisiveVictory)
 /** 5.0a 的回合末结论（末回合收束时才有终局） */
 const atEnd = computed(() => workbench.turnEndVictory)
 
+/** 入门剧本 Intro: Vitebsk：剧本页只判两格维捷布斯克，不走 5.0a 五城/所列格 */
+const isIntro = computed(() => workbench.scenarioId === 'Intro')
+/** Intro 的胜利城（两格；取自控制汇总，不写死格号） */
+const introCity = computed(
+  () => summary.value.axisCities.find((city) => city.name === 'Vitebsk') ?? null,
+)
+/** 胜利点里列出的轴方城市：Intro 只列维捷布斯克 */
+const axisCityRows = computed(() =>
+  isIntro.value ? (introCity.value === null ? [] : [introCity.value]) : summary.value.axisCities,
+)
+
 /** 结论 → 标签类别与文案 */
 function verdictTag(
   kind: 'axis' | 'soviet' | 'draw' | 'ongoing',
@@ -128,7 +139,9 @@ const CONTROL_RULE_TEXT =
   -->
   <BasePanel title="战况">
     <p class="num">
-      <BaseTag kind="info">{{ workbench.scenarioId }} 号剧本</BaseTag>
+      <BaseTag kind="info">{{
+        isIntro ? 'Intro: Vitebsk（教学/单人）' : `${workbench.scenarioId} 号剧本`
+      }}</BaseTag>
       <BaseTag kind="neutral">
         {{ workbench.turn }} 回合（{{ workbench.date }}）｜第 {{ turnRange.firstTurn }}–{{
           turnRange.lastTurn
@@ -147,55 +160,74 @@ const CONTROL_RULE_TEXT =
 
     <!-- ① 胜利分：双方目标城市 / 所列格 / 当前结论 -->
     <h4 class="vp__title">胜利分</h4>
-    <table class="vp">
-      <thead>
-        <tr>
-          <th>方</th>
-          <th>目标城市</th>
-          <th>所列格</th>
-          <th>5.0a</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in scoreRows" :key="row.side">
-          <th>{{ row.label }}</th>
-          <td>
-            {{ row.cityNames }}
-            <span class="num">
-              （{{ row.citiesHeld }}/{{ row.citiesTotal }} 处{{
-                row.citiesTotal > 0 ? '全控' : ''
-              }}）
-            </span>
-          </td>
-          <td class="num">
-            {{ row.listed }}<span v-if="row.threshold !== null"> / ≥{{ row.threshold }}</span>
-          </td>
-          <td>
-            <BaseTag :kind="row.outcome ? 'success' : 'neutral'">
-              {{ row.outcome ? '达成' : '未达成' }}
-            </BaseTag>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <p class="num">
-      <BaseTag :kind="verdictTag(final.outcome)">{{ verdictLabel(final.outcome) }}</BaseTag>
-      {{ final.detail }}
-      <RuleTip rule="5.0a / 5.0b">
-        5.0a 最终：{{ thresholdText(final.thresholds) }}。 5.0b 提前决胜：{{
-          thresholdText(decisive.thresholds)
-        }}
-        ——{{ decisive.detail }}。回合末：{{ atEnd.detail }}（5.0a 在最终回合结束时才给终局，
-        其余回合由 5.0b 兜住）
-      </RuleTip>
-    </p>
+    <template v-if="isIntro">
+      <p class="num">
+        <BaseTag :kind="introCity?.held ? 'success' : 'neutral'">
+          维捷布斯克（{{ (introCity?.hexes ?? []).map((hex) => hexLabel(hex)).join(' + ') }}）{{
+            introCity?.held ? '两格均轴控' : '未全部轴控'
+          }}
+        </BaseTag>
+        <BaseTag :kind="final.outcome === 'axis' ? 'success' : 'danger'">
+          {{ final.outcome === 'axis' ? 'Major Victory' : '轴方失败' }}
+        </BaseTag>
+        {{ final.detail }}
+        <RuleTip rule="剧本页">
+          Minor Victory（solid wall）原文未定义判据，本批不自动判。 Major Victory =
+          两格维捷布斯克均由轴方控制；否则轴方失败。
+        </RuleTip>
+      </p>
+    </template>
+    <template v-else>
+      <table class="vp">
+        <thead>
+          <tr>
+            <th>方</th>
+            <th>目标城市</th>
+            <th>所列格</th>
+            <th>5.0a</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in scoreRows" :key="row.side">
+            <th>{{ row.label }}</th>
+            <td>
+              {{ row.cityNames }}
+              <span class="num">
+                （{{ row.citiesHeld }}/{{ row.citiesTotal }} 处{{
+                  row.citiesTotal > 0 ? '全控' : ''
+                }}）
+              </span>
+            </td>
+            <td class="num">
+              {{ row.listed }}<span v-if="row.threshold !== null"> / ≥{{ row.threshold }}</span>
+            </td>
+            <td>
+              <BaseTag :kind="row.outcome ? 'success' : 'neutral'">
+                {{ row.outcome ? '达成' : '未达成' }}
+              </BaseTag>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="num">
+        <BaseTag :kind="verdictTag(final.outcome)">{{ verdictLabel(final.outcome) }}</BaseTag>
+        {{ final.detail }}
+        <RuleTip rule="5.0a / 5.0b">
+          5.0a 最终：{{ thresholdText(final.thresholds) }}。 5.0b 提前决胜：{{
+            thresholdText(decisive.thresholds)
+          }}
+          ——{{ decisive.detail }}。回合末：{{ atEnd.detail }}（5.0a 在最终回合结束时才给终局，
+          其余回合由 5.0b 兜住）
+        </RuleTip>
+      </p>
+    </template>
 
     <!-- ② 胜利点：城市与所列格的控制 -->
     <h4 class="vp__title">胜利点</h4>
     <div class="row">
-      <span class="num">轴方五城（全部格）：</span>
+      <span class="num">{{ isIntro ? '胜利城：' : '轴方五城（全部格）：' }}</span>
       <BaseTag
-        v-for="city in summary.axisCities"
+        v-for="city in axisCityRows"
         :key="city.name"
         :kind="city.held ? 'success' : 'neutral'"
       >
@@ -204,7 +236,7 @@ const CONTROL_RULE_TEXT =
         }}
       </BaseTag>
     </div>
-    <div class="row">
+    <div v-if="!isIntro" class="row">
       <span class="num">苏方两城：</span>
       <BaseTag
         v-for="city in summary.sovietCities"
@@ -220,9 +252,11 @@ const CONTROL_RULE_TEXT =
     <!-- ③ 占领情况：所列格归属与控制账本规模 -->
     <h4 class="vp__title">占领情况</h4>
     <p class="num">
-      所列格 {{ summary.listedTotal }} 处：苏控 {{ summary.listedBySide.soviet }} / 轴方
-      {{ summary.listedBySide.axis }}；控制账本
-      {{ Object.keys(workbench.victoryLastControl).length }} 格已登记
+      <template v-if="!isIntro">
+        所列格 {{ summary.listedTotal }} 处：苏控 {{ summary.listedBySide.soviet }} / 轴方
+        {{ summary.listedBySide.axis }}；
+      </template>
+      控制账本 {{ Object.keys(workbench.victoryLastControl).length }} 格已登记
       <RuleTip rule="5.0c"> {{ CONTROL_RULE_TEXT }} </RuleTip>
     </p>
 

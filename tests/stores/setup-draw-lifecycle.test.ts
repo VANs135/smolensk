@@ -48,8 +48,7 @@ function aufkId(formationId: string) {
 }
 
 describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
-  // 入门教学剧本 Intro 的胜利口径在引擎批次落地前不参与本生命周期遍历
-  const ids = scenarios.scenarios.filter((s) => s.id !== 'Intro').map((s) => s.id)
+  const ids = scenarios.scenarios.map((s) => s.id)
   it.each(ids)(
     '剧本%s：真实自动初设完成抽取处置，重试不改盘面或骰序，并可进入首个玩家环节',
     (id) => {

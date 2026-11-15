@@ -46,6 +46,21 @@ export const DECISIVE_VICTORY_RULE = '5.0b'
 export const CONTROL_RULE = '5.0c'
 
 /**
+ * 入门剧本 `Intro: Vitebsk` 的剧本标识
+ *
+ * 剧本页只给一个玩家回合与两条结果：Major Victory / 轴方失败；不走 5.0a/5.0b 的阈值。
+ */
+export const INTRO_SCENARIO_ID = 'Intro'
+
+/** Intro: Vitebsk 的胜利依据（剧本页原文：`Major Victory by capturing both hexes of Vitebsk`） */
+export const INTRO_VICTORY_RULE = 'Intro: Vitebsk / 剧本页 Major Victory'
+
+/** 是否入门剧本（阈值表不覆盖它） */
+function isIntroScenario(scenarioId: string): boolean {
+  return scenarioId === INTRO_SCENARIO_ID
+}
+
+/**
  * `map-layers.json` 的城市角色（5.0c 的两组胜利城市）
  *
  * 产品数据用 `city.role` 把「剧本胜利条件涉及的格」与「地形等级」分开记录
@@ -372,16 +387,54 @@ function describeTier(tier: VictoryTier): string {
 }
 
 /**
+ * Intro: Vitebsk 的终局判定（剧本页：`Major Victory by capturing both hexes of Vitebsk`）
+ *
+ * - Major：Vitebsk 的**两格**都由轴方控制（城市格取自 `map-layers` 的
+ *   `city.role = major_city_victory_condition`，即 19.27 + 19.28）；
+ * - 否则：剧本页 `Otherwise, he loses the game` ⇒ 轴方失败（以苏方胜表示）。
+ * - Minor（`solid wall of Axis combat units around the city`）原文未给格集/判据，**不自动判**。
+ */
+function evaluateIntroVictory(input: {
+  scenarioId: string
+  controlOf: VictoryControlLookup
+}): VictoryAssessment {
+  const summary = summarizeVictoryControl(input)
+  const city = axisVictoryCities().find((group) => group.name === 'Vitebsk')
+  if (city === undefined) {
+    throw new VictoryDataError('map-layers 缺少 Vitebsk 的胜利城市格（应为 19.27 + 19.28）')
+  }
+  const held = city.hexes.length > 0 && city.hexes.every((hex) => input.controlOf(hex) === 'axis')
+  const outcome: VictoryOutcome = held ? 'axis' : 'soviet'
+  const hexText = city.hexes.map((hex) => hexKey(hex)).join(' + ')
+  return {
+    level: 'final',
+    outcome,
+    winner: held ? 'axis' : 'soviet',
+    rule: INTRO_VICTORY_RULE,
+    thresholds: null,
+    summary,
+    detail:
+      `剧本页 Major Victory（Intro: Vitebsk）：维捷布斯克 ${hexText} ` +
+      (held
+        ? '全部由轴方控制 ⇒ 轴心 Major Victory'
+        : '未全部由轴方控制 ⇒ 轴方失败（Minor「solid wall」原文未定义，不自动判）'),
+  }
+}
+
+/**
  * 5.0a：**最终评估**（最终回合结束时）
  *
  * 「苏胜 = Vyazma、Rzhev + ≥7 所列格；轴胜 = 五城全部格 + ≥6 所列格；否则 Draw。」
  * 双方同时满足（理论冲突）时按 Draw 处理并写进 detail —— 5.0a 只给「否则 Draw」，
  * 未规定「两者皆满足」的取法，故不得替其臆造优先序。
+ *
+ * 入门剧本 `Intro: Vitebsk` 不适用 5.0a：按剧本页只判「两格维捷布斯克均轴控 = Major，否则轴方失败」。
  */
 export function evaluateFinalVictory(input: {
   scenarioId: string
   controlOf: VictoryControlLookup
 }): VictoryAssessment {
+  if (isIntroScenario(input.scenarioId)) return evaluateIntroVictory(input)
   const thresholds = victoryThresholdsFor(input.scenarioId)
   const summary = summarizeVictoryControl(input)
   const met = conditionsMet(summary, thresholds.final)
@@ -417,8 +470,22 @@ export function evaluateDecisiveVictory(input: {
   date: string
   controlOf: VictoryControlLookup
 }): VictoryAssessment {
-  const thresholds = victoryThresholdsFor(input.scenarioId)
   const summary = summarizeVictoryControl(input)
+
+  // 入门剧本只有一个玩家回合，剧本页未给 5.0b 档 ⇒ 不做提前决胜
+  if (isIntroScenario(input.scenarioId)) {
+    return {
+      level: 'decisive',
+      outcome: 'ongoing',
+      winner: null,
+      rule: DECISIVE_VICTORY_RULE,
+      thresholds: null,
+      summary,
+      detail: '剧本 Intro: Vitebsk 只有 1 个玩家回合，剧本页未给提前决胜（5.0b）⇒ 不做提前决胜检查',
+    }
+  }
+
+  const thresholds = victoryThresholdsFor(input.scenarioId)
 
   if (thresholds.decisive === null) {
     return {

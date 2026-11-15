@@ -28,4 +28,12 @@ describe('战况面板：只留三块', () => {
     expect(panel).not.toContain('胜利格（5.0c）：所列格')
     expect(panel).not.toContain('<hr />\n    <p class="muted">')
   })
+
+  it('Intro: Vitebsk 按剧本分支：只判两格维捷布斯克，不摆五城计分表', () => {
+    expect(panel).toContain('isIntro')
+    expect(panel).toContain('Major Victory')
+    expect(panel).toContain('solid wall')
+    // 五城计分表在 Intro 分支下隐藏；两城（Vyazma + Rzhev）同样不显示
+    expect(panel).toContain('v-if="!isIntro"')
+  })
 })

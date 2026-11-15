@@ -266,6 +266,55 @@ describe('5.0a：最终评估', () => {
   })
 })
 
+describe('Intro: Vitebsk 专用胜利（剧本页 Major Victory）', () => {
+  const VITEBSK = { '19.27': 'axis' as const, '19.28': 'axis' as const }
+
+  it('19.27 + 19.28 均由轴方控制 ⇒ 轴心 Major（终局判定）', () => {
+    const result = evaluateFinalVictory({ scenarioId: 'Intro', controlOf: control(VITEBSK) })
+    expect(result.outcome).toBe('axis')
+    expect(result.winner).toBe('axis')
+    expect(result.level).toBe('final')
+    expect(result.summary.axisCities.find((city) => city.name === 'Vitebsk')?.held).toBe(true)
+  })
+
+  it('缺任一格 ⇒ 轴方未达成 Major（轴方失败，不判 Draw）', () => {
+    const result = evaluateFinalVictory({
+      scenarioId: 'Intro',
+      controlOf: control({ '19.27': 'axis' }),
+    })
+    expect(result.outcome).toBe('soviet')
+    expect(result.winner).toBe('soviet')
+    expect(result.summary.axisCities.find((city) => city.name === 'Vitebsk')?.held).toBe(false)
+  })
+
+  it('苏控两格（轴方未夺城）同样判轴方失败', () => {
+    const result = evaluateFinalVictory({
+      scenarioId: 'Intro',
+      controlOf: control({ '19.27': 'soviet', '19.28': 'soviet' }),
+    })
+    expect(result.outcome).toBe('soviet')
+  })
+
+  it('不做 5.0b 提前决胜检查（单玩家回合；剧本页只给 Major / 失败）', () => {
+    const result = evaluateDecisiveVictory({
+      scenarioId: 'Intro',
+      date: '1941-07-08',
+      controlOf: control(VITEBSK),
+    })
+    expect(result.outcome).toBe('ongoing')
+    expect(result.thresholds).toBeNull()
+  })
+
+  it('回合结束检查在第 1 回合即给出终局（末回合 = 第 1 回合）', () => {
+    const result = checkTurnEndVictory({
+      scenarioId: 'Intro',
+      turn: 1,
+      controlOf: control(VITEBSK),
+    })
+    expect(result.outcome).toBe('axis')
+  })
+})
+
 describe('5.0b：提前决胜（任一回合开始，19 August 起）', () => {
   it('5.0b：19 August 之前不做检查（ongoing）', () => {
     const map = { ...assign(SOVIET_CITY_HEXES, 'soviet'), ...assign(LISTED, 'soviet') }
