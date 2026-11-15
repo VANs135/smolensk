@@ -18,4 +18,10 @@ describe('初设原文对照（Intro: Vitebsk）', () => {
     expect(panel).toContain('unitId')
     expect(panel).toContain('stepPenalty')
   })
+
+  it('编内卡车按剧本口径标满载：4 辆、运力 1F（13.2h）', () => {
+    expect(panel).toContain('编内卡车')
+    expect(panel).toContain('introTruckLoad')
+    expect(panel).toContain("mode === 'all_loaded'")
+  })
 })

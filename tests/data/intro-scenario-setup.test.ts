@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { aircraft, formations, scenarioSetup, unitsAxis, unitsSoviet } from '@/data'
+import { aircraft, formations, scenarios, scenarioSetup, unitsAxis, unitsSoviet } from '@/data'
 
 /**
  * Intro: Vitebsk 的初设数据锁
@@ -63,6 +63,23 @@ describe('Intro: Vitebsk 初设数据', () => {
         throw new Error(`未知 unitIdKind：${String(entry.unitIdKind)}（${entry.raw}）`)
       }
     }
+  })
+
+  it('四个编队各带 1 辆编内卡车：共 4 辆，载重 1，剧本口径为全部满载', () => {
+    const formations = intro.filter((entry) => entry.kind === 'formation')
+    const trucks = formations.flatMap(
+      (entry) => entry.subordinates?.filter((item) => item.isOrganicTruck === true) ?? [],
+    )
+    expect(trucks).toHaveLength(4)
+
+    // 载重字段取算子库（13.2h：满载面记作「运力 F」，不另定数字）
+    for (const truck of trucks) {
+      const unit = unitsAxis.units.find((item) => item.id === truck.unitId)
+      expect(unit?.noncombatDetails?.transport, `${truck.name} 缺运力`).toBe(1)
+    }
+
+    const introScenario = scenarios.scenarios.find((item) => item.id === 'Intro')
+    expect(introScenario?.setup.organicTrucks.mode).toBe('all_loaded')
   })
 
   it('计数类条目（SP / 运输点 / 空军基地）不指向具体算子', () => {

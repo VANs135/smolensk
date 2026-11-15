@@ -91,12 +91,32 @@ const introEntryRows = computed(() =>
 /** 数据里的只读初设条目（与 `scenarioSetup.entries` 同型，避免与可变类型冲突） */
 type SetupEntryView = (typeof scenarioSetup.entries)[number]
 
-/** 一条初设条目的解析结果（算子链接 · 落点 · 减损） */
+/** 编内卡车总数：取自编队下属里 `isOrganicTruck` 的条目 */
+const introTruckCount = computed(() =>
+  introEntryRows.value.reduce(
+    (sum, entry) =>
+      sum + (entry.subordinates?.filter((item) => item.isOrganicTruck === true).length ?? 0),
+    0,
+  ),
+)
+
+/** 编内卡车载荷口径（13.2h；取自剧本数据，不另定数字） */
+const introTruckLoad = computed(() => {
+  const spec = scenarios.scenarios.find((item) => item.id === 'Intro')?.setup.organicTrucks
+  if (spec?.mode === 'all_loaded') return '全部满载'
+  if (spec?.mode === 'all_unloaded') return '全部空载'
+  return `自选 ${spec?.count ?? 0} 辆满载`
+})
+
+/** 一条初设条目的解析结果（算子链接 · 落点 · 减损 · 编内卡车载荷） */
 function entryTargetOf(entry: SetupEntryView): string {
   const parts: string[] = []
   if (entry.unitId != null) parts.push(entry.unitId)
   if (entry.location != null) parts.push(entry.location)
   if (entry.stepPenalty != null && entry.stepPenalty > 0) parts.push(`-${entry.stepPenalty} step`)
+  if (entry.subordinates?.some((item) => item.isOrganicTruck === true) === true) {
+    parts.push(`编内卡车：${introTruckLoad.value}（13.2h）`)
+  }
   return parts.length > 0 ? parts.join(' · ') : '—'
 }
 
@@ -372,7 +392,10 @@ function sideLabel(side: Side): string {
 
     <!-- ── ④b 初设原文对照（教学：text notation ↔ 解析结果） ── -->
     <details v-if="introEntryRows.length > 0" class="detail" data-testid="intro-notation">
-      <summary>初设原文对照（Intro: Vitebsk）：{{ introEntryRows.length }} 条</summary>
+      <summary>
+        初设原文对照（Intro: Vitebsk）：{{ introEntryRows.length }} 条 · 编内卡车
+        {{ introTruckCount }} 辆 {{ introTruckLoad }}
+      </summary>
       <p class="muted">
         逐条对照剧本页的 text notation 与仓库解析结果（算子链接 · 落点 ·
         减损）；解析不出时留空，不补猜。

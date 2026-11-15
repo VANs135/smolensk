@@ -298,7 +298,8 @@ export const ScenarioSetupSchema = z
     /**
      * 德军卡车满载方式
      *
-     * 剧本页未述时数据可缺省；运行时按通规 IV-D 默认 **空载**（Intro: Vitebsk 即此情形）。
+     * 剧本页未述时数据可缺省；运行时按通规 IV-D 默认 **空载**。
+     * 剧本明确或经裁定给出时显式录入（Intro: Vitebsk 的 4 辆编内卡车为全部满载）。
      * 用缺省值而非可选字段，是为了让消费方（`setup.ts` / `stores/setup.ts`）不必到处判空。
      */
     organicTrucks: OrganicTrucksSchema.default({

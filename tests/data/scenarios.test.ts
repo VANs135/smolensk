@@ -227,7 +227,7 @@ describe('入门剧本 Intro: Vitebsk（教学/单人）', () => {
     expect(s.singlePlayerTurn).toBe(true)
   })
 
-  it('初设数值：铁路容量 0/0、Reserve 5/0、缓存与建造 0；卡车载荷未述 ⇒ 缺省', () => {
+  it('初设数值：铁路容量 0/0、Reserve 5/0、缓存与建造 0；4 辆编内卡车全部满载', () => {
     const s = intro()
     expect(s.setup.railCap).toEqual({ axis: 0, soviet: 0 })
     expect(s.setup.reserveMarkers).toEqual({ axis: 5, soviet: 0 })
@@ -241,9 +241,9 @@ describe('入门剧本 Intro: Vitebsk（教学/单人）', () => {
     expect(s.setup.attackerInternalsForbidden).toBe(true)
     // 剧本页：德军炮击补给 −2T（剧本级，不改全局轰炸表）
     expect(s.setup.barrageSupplyDiscount).toEqual({ side: 'axis', t: 2 })
-    // PDF 未述有机卡车载荷；数据不写该字段，运行时按 IV-D 默认空载
-    expect(s.setup.organicTrucks.mode).toBe('all_unloaded')
-    expect(s.setup.organicTrucks.raw).toContain('未述')
+    // 用户裁定：Intro 的 4 辆编内卡车初设全部满载（不按 IV-D 空载缺省）
+    expect(s.setup.organicTrucks.mode).toBe('all_loaded')
+    expect(s.setup.organicTrucks.raw).toBe('德军全部满载')
     // 剧本页原文（只保留印刷行，不补苏方未列数值）
     expect(s.setupInfo?.axis?.['Reserve Markers']).toBe('5 available')
     expect(s.setupInfo?.axis?.['Arty Markers']).toBe('1 available')

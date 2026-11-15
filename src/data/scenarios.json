@@ -1302,6 +1302,10 @@
         "barrageSupplyDiscount": {
           "side": "axis",
           "t": 2
+        },
+        "organicTrucks": {
+          "mode": "all_loaded",
+          "raw": "德军全部满载"
         }
       },
       "hasSetup": true,
