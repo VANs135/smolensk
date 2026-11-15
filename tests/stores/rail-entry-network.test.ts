@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest'
 import type { HexRef } from '@/data'
 import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 
+import { groundRecord, placeGround } from '../flows/sop-harness'
+
 /**
  * 铁路网归属（专规 2.1 / 3.1；用户 2026-11-11 裁定）
  *
@@ -124,6 +126,47 @@ describe('进场铁路网：种子与两网分离', () => {
     expect(afterSoviet.every((hex) => beforeSoviet.includes(hex))).toBe(true)
     // 本剧本的德军 live 清单没有「南缘 + E 以西」的铁路源（1.3 / 1.7 / 1.19 / 4.0 / 8.0 都不是南缘）
     expect(labels(store.entryRailSeedsBySide.axis)).toEqual(beforeAxis)
+  })
+})
+
+/**
+ * 13.3e-1 / 13.6b：**入场格不是移动阶段的通用登车格**
+ *
+ * 原文 13.3e-1：「货物登车时，货物必须位于不在敌方 ZOC 内的一个**可火车卸货**的铁路格(13.3c)。
+ *   通过铁路移动的单位必须处于移动模式……**如果增援和新的 SP 的抵达格包含一条铁路(13.6b)，
+ *   则它们可以在‘地图外’登车。**」
+ * ⇒ 「地图外登车」的主语是**增援与新 SP**（13.6b 同）。普通单位在移动阶段站在入场格上，
+ *   仍须满足 13.3c 可卸货格；入场格本身不是登车格（用户 2026-11-13 裁定：读法乙不成立）。
+ */
+describe('13.6b：入场格登车只属增援/新 SP，不是移动阶段的通用登车权', () => {
+  it('★ 剧本 5：普通轴方单位在 J=1.19（非可卸货格）移动阶段铁路运输 ⇒ 拒', () => {
+    setActivePinia(createPinia())
+    const store = useWorkbenchStore()
+    store.setScenarioId('5')
+    store.setTurn(10)
+    store.seedConvertedRailsNow()
+    store.setPhase('movement')
+
+    const entry = { col: 1, row: 19 }
+    // 前提：该格已换标准轨（轴方可用），但**不是** 13.3c 可卸货格
+    expect(store.isRailGaugeUsableAt(entry, 'axis')).toBe(true)
+    expect(
+      store.railSupplyBySide.axis.detrainableHexes.some(
+        (hex) => hex.col === entry.col && hex.row === entry.row,
+      ),
+    ).toBe(false)
+
+    const record = groundRecord('axis', (item) => item.isCombat === true)
+    const unit = placeGround(store, record, entry, 'axis', 'entry-entrain')
+    unit.mode = { mode: 'move', orientation: 'move', dg: false, exploit: false }
+    unit.raw = unit.faces.move
+    unit.mpSpent = 0
+    store.selectedId = unit.instanceId
+    store.railMoveInputs = { toHexText: '18.18', spAmount: 1, fromDumpId: null }
+
+    expect(store.railMoveNow('unit'), store.railMoveError?.reason ?? '').toBe(false)
+    expect(store.railMoveError?.reason ?? '').toContain('entrainHexNotDetrainable:1.19')
+    expect(unit.hex).toEqual(entry)
   })
 })
 

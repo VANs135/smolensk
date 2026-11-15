@@ -24585,6 +24585,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         path,
         facts: railMoveFacts.value,
         arrivalRail: true,
+        // 13.6b：「地图外登车」只属增援/新 SP 的抵达格；这条路径显式豁免 13.3e-1 的登车格检查
+        entrainOffMap: true,
       })
       if (!outcome.ok) continue
       if (outcome.data.cost > railCapRemaining.value[plan.side]) continue
@@ -24635,6 +24637,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       path,
       facts: railMoveFacts.value,
       arrivalRail: true,
+      // 13.6b：增援铁路抵达 ⇒ 显式豁免 13.3e-1 的登车格检查（普通单位不传）
+      entrainOffMap: true,
     })
     if (!outcome.ok) {
       pushLog('warning', `增援铁路运输被拒：${outcome.reason}（${outcome.rule}）`, outcome.rule)

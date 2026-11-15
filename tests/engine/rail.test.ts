@@ -363,30 +363,36 @@ describe('13.3e 铁路移动三步（登车 → 移动 → 卸货，同一阶段
     })
   })
 
-  it('13.6b：显式注入的入场格判据只豁免登车格检查（缺省判据须同时含铁路，见上）', () => {
-    // 注入 isEntryHex=true 后：无铁路、不可卸货、在敌方 ZOC、且被敌方单位占据，仍允许登车
-    // （判据本身的「含铁路」由缺省实现或调用方保证；见 2026-11-13 裁定收窄 5-D3）
+  it('13.6b：**入场格判据本身不豁免登车**——只有增援路径显式传 entrainOffMap 才豁免', () => {
+    // 无铁路、不可卸货、在敌方 ZOC、且被敌方单位占据
+    // （「入场格」只是增援的抵达格；普通单位在移动阶段仍按 13.3e-1 判）
     const brokenBoarding = {
       hasRail: (hex: HexRef) => hex.row !== A.row,
       isDetrainable: (hex: HexRef) => hex.row !== A.row,
       inEnemyZoc: (hex: HexRef) => hex.row === A.row,
       enemyOccupies: (hex: HexRef) => hex.row === A.row,
     }
-    expect(railed({ facts: facts({ ...brokenBoarding, isEntryHex: () => true }) }).ok).toBe(true)
-    // 同一批坏条件、非入场格 ⇒ 仍按 13.3e-1 拒
-    expect(railed({ facts: facts({ ...brokenBoarding, isEntryHex: () => false }) })).toMatchObject({
+    // ★ 只注入 isEntryHex ⇒ 仍按 13.3e-1 拒（用户 2026-11-13：读法乙不成立）
+    expect(railed({ facts: facts({ ...brokenBoarding, isEntryHex: () => true }) })).toMatchObject({
       ok: false,
       rule: '13.3e',
       reason: `entrainHexHasNoRail:${A.col}.${A.row}`,
     })
+    // 增援铁路抵达这条路显式传 entrainOffMap ⇒ 跳过登车格检查
+    expect(
+      railed({
+        entrainOffMap: true,
+        facts: facts({ ...brokenBoarding, isEntryHex: () => true }),
+      }).ok,
+    ).toBe(true)
   })
 
-  it('13.6b：入场格登车只豁免登车格；轨距（13.3f）仍照常判', () => {
+  it('13.6b：增援登车只豁免登车格；轨距（13.3f）仍照常判', () => {
     const wrongGauge = facts({
       railGaugeUsable: (hex) => hex.row !== A.row,
       isEntryHex: () => true,
     })
-    expect(railed({ facts: wrongGauge })).toMatchObject({
+    expect(railed({ entrainOffMap: true, facts: wrongGauge })).toMatchObject({
       ok: false,
       rule: '13.3f',
       reason: `entrainHexWrongGauge:${A.col}.${A.row}`,

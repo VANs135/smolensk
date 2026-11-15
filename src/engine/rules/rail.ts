@@ -24,8 +24,9 @@ import type { MobilityType } from './terrain'
  *      短腿（步行 MA 1–6）单位当量减半；
  *   ② **铁路移动三步**（13.3e / 13.3g）：登车 → 沿铁路移动 → 卸货，**三步必须同一阶段完成**（本模块一次调用即含三步，
  *      故天然同阶段）；登车格/卸货格须为可火车卸货格且不在敌方 ZOC，路径须相连、轨距正确、受控、无敌方单位与 ZOC。
- *      13.6b 的「地图外登车」跳过登车格检查；用户 2026-11-13 裁定**入场格且该格含铁路**才可登车
- *      （`RailFacts.isEntryHex`；K/I 等无铁路入场格不放行）。
+ *      13.6b 的「地图外登车」跳过登车格检查；只属**增援与新 SP**的抵达格，由增援铁路抵达这条路径
+ *      显式传 `entrainOffMap`（`RailFacts.isEntryHex` 只用于认出「入场格且该格含铁路」，
+ *      **不**单独豁免登车）。用户 2026-11-13 裁定：入场格不是移动阶段的通用登车格（读法乙不成立）。
  *      铁路修理单位有三处例外（13.3g）：可在**战斗模式**下铁路移动（13.3g-B，5.5a/5.6a 例外）、
  *      可在**任意铁路格**登车与卸货（13.3g-C）、且**卸货后仍可按「完整 MA − 登车前移动」继续移动**
  *      （13.3g-B；4.7d 的「卸货后不得再移动」对它们不适用）；
@@ -298,8 +299,8 @@ export interface RailMovementInput {
    * 「增援单位可放置在有敌方 ZOC 的格中，也可通过铁路抵达（**忽略 13.3e 中通常要求的『登车』**）。」
    * 给出本项即跳过 13.3e-1 的**登车格**检查（是否有铁路 / 是否可卸货 / 是否在敌方 ZOC）；
    * ★ 单位自身的运输资格（5.6a 移动模式、5.10d 非 DG、13.3e-1 登车前 MP）仍照常校验。
-   * ★ 用户 2026-11-13 裁定：**入场格且该格含铁路**才可登车；轴方仅 J/H/F/G 合格，K/I 不放行。
-   *   该情形由 `RailFacts.isEntryHex` 自动命中，调用方不必再显式传本项。
+   * ★ 用户 2026-11-13 裁定：**只有增援/新 SP 的铁路抵达**可传本项；普通单位在移动阶段即使站在
+   *   （含铁路的）入场格上也不得跳过登车检查——`isEntryHex` 本身**不**触发豁免，必须由调用方显式传。
    */
   entrainOffMap?: boolean
   /**
@@ -347,8 +348,10 @@ export function validateRailMovement(input: RailMovementInput): RuleOutcome<Rail
   const isRailRepair = cargo.kind === 'unit' && facts.isRailRepairUnit(cargo.id)
 
   /* ① 登车格（13.3e-1）；13.6b 的「地图外登车」忽略本项 */
-  // 13.6b：入场格（含铁路，2026-11-13 裁定）自动按「地图外登车」处理；K/I 等无铁路入场格不再放行
-  const entrainOffMap = input.entrainOffMap === true || facts.isEntryHex(from, cargo.side)
+  // ★ 13.6b 的「地图外登车」只属**增援与新 SP**的抵达格；由调用方（增援铁路抵达这条路径）
+  //   显式传 `entrainOffMap` 才豁免。`facts.isEntryHex` 只回答「该格是不是入场格」，
+  //   不能据此让移动阶段的普通单位跳过 13.3e-1（用户 2026-11-13 裁定：读法乙不成立）。
+  const entrainOffMap = input.entrainOffMap === true
   if (!entrainOffMap) {
     if (!facts.hasRail(from)) return fail('13.3e', `entrainHexHasNoRail:${hexText(from)}`)
     if (!isRailRepair && !facts.isDetrainable(from, cargo.side))

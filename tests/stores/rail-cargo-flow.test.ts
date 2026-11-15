@@ -396,8 +396,8 @@ describe('13.3a：容量费用的两条路径修正', () => {
   })
 })
 
-describe('13.6b 入场格登车：提案放行，拒绝原因交 13.3f / 13.3e-2', () => {
-  it('Entry F=8.00 起步不再被提案预滤成 noRailPath；由引擎按 13.3f 拒绝', () => {
+describe('13.6b 入场格登车：提案放行，拒绝原因交引擎', () => {
+  it('Entry F=8.00 起步不再被提案预滤成 noRailPath；普通单位按 13.3e 拒（非可卸货格）', () => {
     const store = newStore() // 轴方
     store.setPhase('movement')
     const F: HexRef = { col: 8, row: 0 }
@@ -411,10 +411,10 @@ describe('13.6b 入场格登车：提案放行，拒绝原因交 13.3f / 13.3e-2
     store.selectedId = cargo.instanceId
     store.railMoveInputs = { toHexText: label(BEYOND), spAmount: 1, fromDumpId: null }
     expect(store.railMoveNow('unit')).toBe(false)
-    // 登车已放行（13.6b），真正的拒绝点是起点格轨距（13.3f）
+    // 普通单位在移动阶段不能凭「入场格」登车（13.3e-1 要求 13.3c 可卸货格；13.6b 只豁免增援/新 SP）
     expect(store.railMoveError).toMatchObject({
-      rule: '13.3f',
-      reason: 'entrainHexWrongGauge:8.0',
+      rule: '13.3e',
+      reason: 'entrainHexNotDetrainable:8.0',
     })
   })
 })
