@@ -649,17 +649,24 @@ export const useGameSessionStore = defineStore('gameSession', () => {
   /**
    * 改「开局天气」（只教学剧本、只在开局前）
    *
+   * ★ 实测缺陷（用户 2026-11-15）：天气单选框在**剧本页**，而剧本页的卡片选中只是界面本地状态
+   *   （`ScenarioSetupView.vue` 的 `selectedId`），要等「进入初设」才提交到本 store。
+   *   修前这里判 `scenarioInfo`（＝`scenarioId`，仍是上一个剧本）⇒ 选中 Intro 后点「正常飞行」
+   *   被判成非教学剧本而静默返回 false，天气改了不生效。
+   *   ⇒ 判据改成「**正在配置的剧本**」：由调用方把页面上选中的剧本号传进来。
+   *
    * 三条拒绝：非教学剧本（没有这个入口）、已开局/读档后（开局即冻结）、值不认识。
    */
-  function setFirstWeatherChoice(next: 'scenario' | 'normal'): boolean {
+  function setFirstWeatherChoice(
+    next: 'scenario' | 'normal',
+    forScenarioId: string = scenarioId.value,
+  ): boolean {
     if (session.value !== null && form.value !== 'terminated') {
       error.value = { rule: '1.5', reason: 'firstWeatherLocked' }
       return false
     }
-    if (
-      scenarioInfo.value?.singlePlayerTurn !== true ||
-      (next !== 'scenario' && next !== 'normal')
-    ) {
+    const target = scenarios.scenarios.find((item) => item.id === forScenarioId)
+    if (target?.singlePlayerTurn !== true || (next !== 'scenario' && next !== 'normal')) {
       return false
     }
     firstWeatherChoice.value = next

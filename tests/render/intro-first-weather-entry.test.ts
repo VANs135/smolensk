@@ -21,4 +21,9 @@ describe('开局天气入口（只教学剧本，一处）', () => {
   it('只有一处天气选择入口（不出现第二组单选）', () => {
     expect(source.match(/name="first-weather"/g) ?? []).toHaveLength(2)
   })
+
+  it('判据按页面上选中的剧本走：卡片选中尚未提交到会话 store，不能按旧剧本判', () => {
+    expect(source).toContain("gameSession.setFirstWeatherChoice('scenario', selected.id)")
+    expect(source).toContain("gameSession.setFirstWeatherChoice('normal', selected.id)")
+  })
 })

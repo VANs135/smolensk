@@ -161,6 +161,7 @@ function onEnterSetup(): void {
               <div>
                 <dt>天气</dt>
                 <!-- 开局天气可选（用户 2026-11-15 口径）：只教学剧本出现，一个入口、两档 -->
+                <!-- 传 `selected.id`：卡片选中尚未提交到会话 store，判据要按正在配置的剧本走 -->
                 <dd v-if="isTeachingScenario(selected.id)" class="scenario__weather">
                   <label>
                     <input
@@ -168,7 +169,7 @@ function onEnterSetup(): void {
                       name="first-weather"
                       value="scenario"
                       :checked="gameSession.firstWeatherChoice === 'scenario'"
-                      @change="gameSession.setFirstWeatherChoice('scenario')"
+                      @change="gameSession.setFirstWeatherChoice('scenario', selected.id)"
                     />
                     <span>剧本原值</span>
                   </label>
@@ -178,7 +179,7 @@ function onEnterSetup(): void {
                       name="first-weather"
                       value="normal"
                       :checked="gameSession.firstWeatherChoice === 'normal'"
-                      @change="gameSession.setFirstWeatherChoice('normal')"
+                      @change="gameSession.setFirstWeatherChoice('normal', selected.id)"
                     />
                     <span>正常飞行</span>
                   </label>

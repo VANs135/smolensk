@@ -56,6 +56,18 @@ describe('开局天气可选（只教学剧本）', () => {
     expect(canHipShoot('axis', board.airInputs.weatherNormal)).toBe(true)
   })
 
+  it('剧本页先选 Intro 再点天气（尚未进初设）：选择落在 Intro 上，开局即 normal', async () => {
+    // 实测路径：剧本页的卡片选中只是界面本地状态，会话 store 还停在别的剧本；
+    // 天气单选就在这一步被点。判据必须看「正在配置的剧本」，不是会话里那条旧剧本。
+    const { game, board } = boot('1')
+    expect(game.setFirstWeatherChoice('normal', 'Intro')).toBe(true)
+    expect(game.setScenarioId('Intro')).toBe(true)
+    expect(game.startGame()).toBe(true)
+    await nextTick()
+    expect(game.records?.weather.air).toBe('normal')
+    expect(board.airInputs.weatherNormal).toBe(true)
+  })
+
   it('其他剧本不出现该入口：设置被拒，开局仍取剧本原值', () => {
     const { game } = boot('1')
     expect(game.setFirstWeatherChoice('normal')).toBe(false)
