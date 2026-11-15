@@ -11,7 +11,12 @@ import {
   unitsAxis,
   unitsSoviet,
 } from '@/data'
-import { PANZER_GROUP_OPTION_ITEM } from '@/engine/rules'
+import {
+  axisVictoryCities,
+  listedVictoryHexes,
+  PANZER_GROUP_OPTION_ITEM,
+  sovietVictoryCities,
+} from '@/engine/rules'
 import { OPTIONAL_RULE_ITEMS } from '@/engine/session-flow'
 
 /**
@@ -206,6 +211,66 @@ describe('剧本库 scenarios.json', () => {
     expect(Object.isFrozen(scenarios)).toBe(true)
     expect(Object.isFrozen(scenarios.scenarios)).toBe(true)
     expect(Object.isFrozen(scenarios.scenarios[0])).toBe(true)
+  })
+})
+
+describe('5.0c：胜利格开局归属（initialVictoryControl）与剧本初设栏一致', () => {
+  /** `2.2` / `38.5` / `38.05` 统一成 `列.行`（不补零） */
+  const key = (hexText: string): string => {
+    const [col, row] = hexText.split('.').map(Number)
+    return `${col}.${row}`
+  }
+
+  /** 该剧本的胜利格全集（所列格按剧本号取，加五城/两城） */
+  const scenarioVictoryHexes = (id: string): Set<string> =>
+    new Set(
+      [
+        ...listedVictoryHexes(id),
+        ...axisVictoryCities().flatMap((city) => [...city.hexes]),
+        ...sovietVictoryCities().flatMap((city) => [...city.hexes]),
+      ].map((hex) => `${hex.col}.${hex.row}`),
+    )
+
+  /** 共用初设的剧本（2/4/6）在 scenario-setup.json 里没有自己的条目，取母剧本 */
+  const setupSourceOf = (id: string): string => ({ '2': '1', '4': '3', '6': '5' })[id] ?? id
+
+  it('剧本 1–7 均给出开局归属；轴方格全部是该剧本的胜利格（所列格或五城/两城）', () => {
+    for (const id of ['1', '2', '3', '4', '5', '6', '7']) {
+      const scenario = scenarios.scenarios.find((x) => x.id === id)!
+      const declared = scenario.setup.initialVictoryControl
+      expect(declared, `剧本 ${id} 缺少 initialVictoryControl`).toBeDefined()
+      expect(declared!.rule.length).toBeGreaterThan(0)
+      const allowed = scenarioVictoryHexes(id)
+      for (const hexText of declared!.axisOwned) {
+        expect(allowed.has(key(hexText)), `剧本 ${id} ${hexText} 不是该剧本的胜利格`).toBe(true)
+      }
+    }
+  })
+
+  it('初设栏单位与开局归属不冲突：轴方初设单位不落在种子归苏的胜利格，反之亦然', () => {
+    for (const id of ['1', '2', '3', '4', '5', '6', '7']) {
+      const declared = scenarios.scenarios.find((x) => x.id === id)!.setup.initialVictoryControl!
+      const axisSeed = new Set(declared.axisOwned.map(key))
+      const entries = scenarioSetup.entries.filter(
+        (entry) => entry.scenarioId === setupSourceOf(id) && entry.locationKind === 'hex',
+      )
+      for (const entry of entries) {
+        for (const hexText of entry.locationHexes) {
+          const hex = key(hexText)
+          if (!scenarioVictoryHexes(id).has(hex)) continue
+          const seeded = axisSeed.has(hex) ? 'axis' : 'soviet'
+          expect(
+            entry.side,
+            `剧本 ${id} ${hex} 种子归${seeded === 'axis' ? '轴' : '苏'}，但初设栏有${entry.side === 'axis' ? '轴' : '苏'}方条目「${entry.raw}」`,
+          ).toBe(seeded)
+        }
+      }
+    }
+  })
+
+  it('入门剧本不给历史归属（Vitebsk 两格由苏军初设占据，进入后按 5.0c 翻转）', () => {
+    const intro = scenarios.scenarios.find((x) => x.id === 'Intro')!
+    expect(intro.setup.initialVictoryControl).toBeUndefined()
   })
 })
 

@@ -94,6 +94,10 @@
       "setupFirst": "soviet",
       "firstWeather": "normal",
       "setup": {
+        "initialVictoryControl": {
+          "rule": "5.0c / 剧本1（8 Jul 41）：Axis Set-Up Information 的 2.02 栏有 1 Cav Div、Level 2 Airbase、2 Wagon Points、5 SP（Bobruysk，属轴）；Soviet 栏列有 15.10、18.18、19.27、19.28、34.18，故其余胜利格开局属苏军。",
+          "axisOwned": ["2.2"]
+        },
         "railCap": {
           "axis": 0,
           "soviet": 2
@@ -292,6 +296,10 @@
       "setupFirst": "soviet",
       "firstWeather": "normal",
       "setup": {
+        "initialVictoryControl": {
+          "rule": "5.0c / 剧本2（8 Jul 41，初设同剧本1）：Axis 初设栏 2.02（Bobruysk）有 1 Cav Div 与 Level 2 Airbase；其余胜利格属苏军（所列格 Krichev 27.05、Demidov 32.25 均在 Soviet 初设栏）。",
+          "axisOwned": ["2.2"]
+        },
         "railCap": {
           "axis": 0,
           "soviet": 2
@@ -383,6 +391,20 @@
       "setupFirst": "axis",
       "firstWeather": "normal",
       "setup": {
+        "initialVictoryControl": {
+          "rule": "5.0c / 剧本3（22 Jul 41）：Axis 初设栏 34.17（46th Mtr Corps HQ 等）与 34.18（Level 1 Airbase）⇒ Smolensk 两格均属轴；另占 2.02、18.18、19.28（19.27 为 Vitebsk 同城格）、36.13、37.24、43.14；15.10（Mogilev，Soviet 110 Inf Div）及其余所列格属苏军。",
+          "axisOwned": [
+            "2.2",
+            "18.18",
+            "19.27",
+            "19.28",
+            "34.17",
+            "34.18",
+            "36.13",
+            "37.24",
+            "43.14"
+          ]
+        },
         "railCap": {
           "axis": 1,
           "soviet": 3
@@ -611,6 +633,22 @@
       "setupFirst": "axis",
       "firstWeather": "normal",
       "setup": {
+        "initialVictoryControl": {
+          "rule": "5.0c / 剧本4（22 Jul 41，初设同剧本3）：同剧本3 的轴方开局格，另加所列格 Krichev 27.05（3 Pz Div）与 Demidov 32.25（39th Mtr Corps）。",
+          "axisOwned": [
+            "2.2",
+            "18.18",
+            "19.27",
+            "19.28",
+            "34.17",
+            "34.18",
+            "36.13",
+            "37.24",
+            "43.14",
+            "27.05",
+            "32.25"
+          ]
+        },
         "railCap": {
           "axis": 1,
           "soviet": 3
@@ -707,6 +745,22 @@
       "setupFirst": "axis",
       "firstWeather": "normal",
       "setup": {
+        "initialVictoryControl": {
+          "rule": "5.0c / 剧本5（8 Aug 41）：Axis 初设栏占 2.02、15.10、18.18、19.28、34.17、34.18，Vitebsk 19.27 与 19.28 同属轴；所列格 36.13、37.24、38.05、43.14 有 Axis 单位/设施。导言「the Soviets still in control of seven objective hexes」⇒ 苏方持 40.31、41.21、46.17、46.20、46.29、48.25、52.09 七格。",
+          "axisOwned": [
+            "2.2",
+            "15.10",
+            "18.18",
+            "19.27",
+            "19.28",
+            "34.17",
+            "34.18",
+            "36.13",
+            "37.24",
+            "38.5",
+            "43.14"
+          ]
+        },
         "railCap": {
           "axis": 1,
           "soviet": 3
@@ -940,6 +994,22 @@
       "setupFirst": "axis",
       "firstWeather": "normal",
       "setup": {
+        "initialVictoryControl": {
+          "rule": "5.0c / 剧本6（8 Aug 41，初设同剧本5）：开局归属同剧本5——轴方五城全部格 + 所列格 36.13、37.24、38.05、43.14；苏方持其余七个所列格。",
+          "axisOwned": [
+            "2.2",
+            "15.10",
+            "18.18",
+            "19.27",
+            "19.28",
+            "34.17",
+            "34.18",
+            "36.13",
+            "37.24",
+            "38.5",
+            "43.14"
+          ]
+        },
         "railCap": {
           "axis": 1,
           "soviet": 3

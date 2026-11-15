@@ -122,15 +122,129 @@ describe('W6 B20：5.0c 控制账本（B17-1：**进入即触发** + 初设按�
 
   it('5.0c：账本随剧本切换**重新播种**（清单与阈值都按剧本号取）', () => {
     const store = newConsole()
-    store.setVictoryControlNow(label(LISTED[0]!), 'axis')
-    expect(store.victoryLastControl[label(LISTED[0]!)]).toBe('axis')
+    // 40.31（Zharkovskiy）在剧本 3 的 Soviet 初设栏（29th Army HQ 等）⇒ 用它检验"手改被重播种覆盖"
+    const sovietHeld = { col: 40, row: 31 }
+    store.setVictoryControlNow(label(sovietHeld), 'axis')
+    expect(store.victoryLastControl[label(sovietHeld)]).toBe('axis')
     store.setScenarioId('3')
     // 换剧本 ⇒ 按新剧本的战线重播种（手改的那一笔不再保留）
     expect(Object.keys(store.victoryLastControl).length).toBeGreaterThan(0)
-    expect(store.victoryLastControl[label(LISTED[0]!)]).not.toBe('axis')
+    expect(store.victoryLastControl[label(sovietHeld)]).toBe('soviet')
     // 剧本 3 的战线有"开局属德军"的格 ⇒ 账本里应当出现轴方（数据驱动，不写死格号）
     expect(Object.values(store.victoryLastControl)).toContain('axis')
   })
+})
+
+/**
+ * 5.0c 开局归属：逐剧本对照**剧本页初设栏**（Axis Set-Up Information）与导言
+ *
+ * 判据（原文）：
+ *  - 剧本 1/2（8 Jul 41）：Axis 栏 `2.02: 1 Cav Div … Level 2 Airbase …`（Bobruysk）；
+ *    五城其余格由苏军初设占据（15.10/18.18/19.27/19.28/34.17/34.18 均列在 Soviet 栏）。
+ *  - 剧本 3/4（22 Jul 41）：Axis 栏 `34.17: 46th Mtr Corps HQ …` 与
+ *    `2.18, 23.20, and 34.18 (each): Level 1 Airbase` ⇒ Smolensk 两格均属轴方；
+ *    15.10（Mogilev）仍在 Soviet 栏 `110 Inf Div`。
+ *  - 剧本 5/6（8 Aug 41）：导言「the Soviets still in control of seven objective hexes」，
+ *    Axis 栏占 36.13/37.24/38.05/43.14 四格 ⇒ 其余七个所列格属苏方；
+ *    五城格见 Axis 栏 2.02/15.10/18.18/19.28/34.17/34.18 与 Vitebsk 19.27（同城 19.28 轴方）。
+ *  - 剧本 7（26 Aug 41）：导言「recapture an objective hex」⇒ 苏方持六个所列格，已在剧本数据显式列出。
+ *  - 剧本 2/4/6 与 1/3/5 共用初设（`inherits`），故开局归属同母剧本。
+ */
+describe('5.0c：各剧本胜利格的开局归属与剧本页初设栏一致', () => {
+  const CASES: readonly {
+    id: string
+    axis: readonly string[]
+    soviet: readonly string[]
+  }[] = [
+    {
+      id: '1',
+      axis: ['2.2'],
+      soviet: ['15.10', '18.18', '19.27', '19.28', '34.17', '34.18', '36.13', '37.24', '38.5'],
+    },
+    {
+      id: '2',
+      axis: ['2.2'],
+      // 27.05 Krichev / 32.25 Demidov 属剧本 2/4 专属清单；当前控制账本只覆盖
+      // allVictoryConditionHexes（通用清单 + 城市），未纳入这两格（见本轮核对报告）。
+      soviet: ['19.27', '19.28', '34.17', '34.18'],
+    },
+    {
+      id: '3',
+      axis: ['2.2', '18.18', '19.27', '19.28', '34.17', '34.18', '36.13', '37.24', '43.14'],
+      soviet: ['15.10', '38.5', '40.31', '41.21', '46.17', '46.20', '46.29', '48.25', '52.9'],
+    },
+    {
+      id: '4',
+      axis: ['2.2', '18.18', '19.27', '19.28', '34.17', '34.18', '36.13', '37.24', '43.14'],
+      // 27.05 Krichev / 32.25 Demidov 属剧本 2/4 专属清单；当前控制账本未覆盖（见本轮核对报告）。
+      soviet: ['15.10', '38.5', '40.31', '41.21', '46.17', '46.20', '46.29'],
+    },
+    {
+      id: '5',
+      axis: [
+        '2.2',
+        '15.10',
+        '18.18',
+        '19.27',
+        '19.28',
+        '34.17',
+        '34.18',
+        '36.13',
+        '37.24',
+        '38.5',
+        '43.14',
+      ],
+      soviet: ['40.31', '41.21', '46.17', '46.20', '46.29', '48.25', '52.9'],
+    },
+    {
+      id: '6',
+      axis: [
+        '2.2',
+        '15.10',
+        '18.18',
+        '19.27',
+        '19.28',
+        '34.17',
+        '34.18',
+        '36.13',
+        '37.24',
+        '38.5',
+        '43.14',
+      ],
+      soviet: ['40.31', '41.21', '46.17', '46.20', '46.29', '48.25', '52.9'],
+    },
+    {
+      id: '7',
+      axis: [
+        '2.2',
+        '15.10',
+        '18.18',
+        '19.27',
+        '19.28',
+        '34.17',
+        '34.18',
+        '36.13',
+        '37.24',
+        '38.5',
+        '41.21',
+        '43.14',
+      ],
+      soviet: ['40.31', '46.17', '46.20', '46.29', '48.25', '52.9'],
+    },
+  ]
+
+  for (const testCase of CASES) {
+    it(`剧本 ${testCase.id}：轴方格 / 苏方格与初设栏逐格一致`, () => {
+      const store = newConsole()
+      store.setScenarioId(testCase.id)
+      for (const key of testCase.axis) {
+        expect(store.victoryLastControl[key], `${key} 应属轴方`).toBe('axis')
+      }
+      for (const key of testCase.soviet) {
+        expect(store.victoryLastControl[key], `${key} 应属苏方`).toBe('soviet')
+      }
+    })
+  }
 })
 
 describe('W6 B20：5.0a 回合末检查（仅最终回合）', () => {
