@@ -5475,8 +5475,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 声明后按 15.2 的能力处理：无防空值（等级 0）、整备 1 架、激活堆叠 4、永不缩减；
    * 15.1C 的「未抵消敌方 ZOC」由追溯事实的 `inEnemyZoc`（含 4.5b 抵消）逐基地填入。
    */
-  const airBases = computed<AirBaseView[]>(() =>
-    units.value
+  const airBases = computed<AirBaseView[]>(() => {
+    const real = units.value
       .filter((unit) => unit.noncombatKind === 'air_base')
       .map(toAirBaseView)
       .map((base) => {
@@ -5486,8 +5486,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           inUnnegatedEnemyZoc: zocOnlySupplyFacts.value.inEnemyZoc(base.hex, base.side),
           ...(airstrip ? { level: 0, isAirstrip: true } : {}),
         }
-      }),
-  )
+      })
+    /*
+     * 专规 3.5：建造标记的**简易机场面**「按 OCS 15.2 的标准简易机场处理」⇒ 它不是"只记账"，
+     * 而要在空军侧真正可用：停机 / 整备 1 架（15.2B）/ 激活堆叠 4（15.2D）/ 无防空值 / 永不缩减（15.2E）。
+     * 这些效果全部由 `isAirstrip` 在引擎各处推出，故此处把它投影成一枚**虚拟基地**；
+     * 标记被苏方战斗单位摧毁时 `constructionMarkerPieces` 里那一项消失 ⇒ 虚拟基地随之消失。
+     */
+    const markers = constructionMarkerPieces.value
+      .filter((piece) => piece.kind === 'airStrip')
+      .map<AirBaseView>((piece) => ({
+        id: constructionMarkerAirBaseId(piece.id),
+        hex: piece.hex,
+        side: 'axis',
+        level: 0,
+        isAirstrip: true,
+        inUnnegatedEnemyZoc: zocOnlySupplyFacts.value.inEnemyZoc(piece.hex, 'axis'),
+      }))
+    return [...real, ...markers]
+  })
 
   /** C9：当前方的空军基地 */
   const ownAirBases = computed<AirBaseView[]>(() =>
@@ -5838,7 +5855,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C9：可被夺取的**敌方**空军基地（9.14f：敌方可攻击单位已进入该格） */
   const capturableEnemyAirBases = computed<AirBaseView[]>(() =>
-    airBases.value.filter((base) => base.side === enemySide.value),
+    airBases.value.filter(
+      (base) => base.side === enemySide.value && !isConstructionMarkerAirBaseId(base.id),
+    ),
   )
 
   /** C9：当前方的巡逻区覆盖格（14.4c；供地图铺色） */
@@ -17120,6 +17139,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `找不到空中设施 ${baseId}（15.2A）`, '15.2A')
       return false
     }
+    // 专规 3.5：建造标记的简易机场没有对应的空军基地算子可升格 ⇒ 不走 15.2A 的升级落盘
+    if (isConstructionMarkerAirBaseId(baseId)) {
+      pushLog(
+        'warning',
+        '建造标记的简易机场不能按 15.2A 升格（专规 3.5 的标记不可改作基地）',
+        '专规 3.5',
+      )
+      return false
+    }
     const engineer = pickedEngineer()
     const gate = constructionGateNow('upgradeAirstrip', engineer)
     if (gate !== null) {
@@ -18831,6 +18859,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 9.14f：空军基地
     for (const base of airBases.value) {
       if (!sameHex(base.hex, hex)) continue
+      /*
+       * 专规 3.5：建造标记的简易机场**只**在苏方战斗单位进入其格时被摧毁（`noteUnitEnteredHex`），
+       * 不按 9.14f 夺取 ⇒ 不进入特殊战斗的物件清单。
+       */
+      if (isConstructionMarkerAirBaseId(base.id)) continue
       objects.push({
         id: base.id,
         kind: 'airBase',
@@ -20202,6 +20235,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function toggleAirstripBase(baseId: string): void {
     const base = airBases.value.find((item) => item.id === baseId)
     if (base === undefined) return
+    // 专规 3.5：建造标记的机场不是"被声明的基地"，不能按 15.2 的反向开关改回空军基地
+    if (isConstructionMarkerAirBaseId(baseId)) return
     if (airstripBaseIds.value.includes(baseId)) {
       airstripBaseIds.value = airstripBaseIds.value.filter((id) => id !== baseId)
       pushLog('info', `${hexLabel(base.hex)} 复为空军基地（15.0：${base.level} 级）`, '15.0')
@@ -20554,6 +20589,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (!requireAction('air.baseReduce', '缩减空军基地')) return false
     const base = airBases.value.find((item) => item.id === baseId)
     if (base === undefined) return false
+    /*
+     * 专规 3.5 的简易机场面按 15.2「简易机场永不缩减」处理：它没有可降级的空军基地算子，
+     * 这里显式拒绝（而不是因找不到单位而静默 false）。
+     */
+    if (isConstructionMarkerAirBaseId(baseId)) {
+      pushLog('warning', '建造标记的简易机场按 15.2 永不缩减', '15.2')
+      return false
+    }
     const target = units.value.find((unit) => unit.instanceId === baseId)
     if (target === undefined) return false
     const selected = airInputs.value.reductionUnitIds
@@ -26999,6 +27042,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       side,
       data: { gain: 1, holdings: { ...supplyCacheHoldings.value } },
     })
+  }
+
+  /** 专规 3.5：简易机场面在空军侧使用的**虚拟基地 id**（不与任何单位实例 id 冲突） */
+  function constructionMarkerAirBaseId(pieceId: string): string {
+    return `cm-airbase:${pieceId}`
+  }
+
+  /** 该 id 是否来自建造标记的简易机场面（3.5：只可被摧毁，不参与 9.14f 夺取） */
+  function isConstructionMarkerAirBaseId(id: string): boolean {
+    return id.startsWith('cm-airbase:')
   }
 
   /**

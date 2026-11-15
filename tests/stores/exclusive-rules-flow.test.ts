@@ -7,8 +7,12 @@ import { mapLayers, scenarios } from '@/data'
 import type { HexRef } from '@/data'
 import { HEX_DIRECTIONS, isOnMap, neighbor } from '@/engine/hex-geometry'
 import { createMapFacts, selectMovementTerrain } from '@/engine/rules'
+import { baseAaValue } from '@/engine/rules/air'
+import { activeStackingLimitOf } from '@/engine/rules/air-interaction'
 import {
   TURN_TRACK,
+  aircraftChoices,
+  toConsoleAirUnit,
   toConsoleUnit,
   unitChoices,
   useMapViewStore,
@@ -257,6 +261,99 @@ describe('W6 B19：3.5 建造标记', () => {
       expect(panel).toContain('workbench.constructionMarkerPieces')
       expect(panel).not.toContain('const markerHexText = ref')
     })
+  })
+})
+
+describe('W6 B19：3.5 简易机场面按 15.2 标准简易机场生效', () => {
+  /** 轴方战斗机（15.1 整备对象） */
+  const axisFighter = () => {
+    const found = aircraftChoices('axis').find((record) => record.aircraftType === 'F')
+    if (found === undefined) throw new Error('飞机库中没有轴方战斗机')
+    return found
+  }
+
+  it('★ 放置后成为可停机的简易机场：level 0 / isAirstrip / 无防空值 / 激活堆叠 4', () => {
+    const store = newConsole()
+    store.setPhase('movement')
+    placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'a1')
+    expect(store.useConstructionMarkerNow('airStrip', label(CORE_HEX))).toBe(true)
+
+    const base = store.ownAirBases.find(
+      (item) => item.hex.col === CORE_HEX.col && item.hex.row === CORE_HEX.row,
+    )
+    expect(base).toBeDefined()
+    expect(base).toMatchObject({ side: 'axis', level: 0, isAirstrip: true })
+    // 15.2：简易机场无防空值；激活堆叠按 level 0（4 架）
+    expect(baseAaValue(base!.level, base!.isAirstrip)).toBe(0)
+    expect(activeStackingLimitOf(base!)).toBe(4)
+    // 15.2：简易机场永不缩减（标记面没有可降级的基地算子）
+    expect(store.reduceBaseNow(base!.id)).toBe(false)
+    expect(store.log.some((entry) => entry.text.includes('永不缩减'))).toBe(true)
+  })
+
+  it('★ 15.2B：标记机场可整备 1 架（付 1T）', () => {
+    const store = newConsole()
+    store.setAirActive(true)
+    store.setPhase('movement')
+    placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'a1')
+    expect(store.useConstructionMarkerNow('airStrip', label(CORE_HEX))).toBe(true)
+    const base = store.ownAirBases.find(
+      (item) => item.hex.col === CORE_HEX.col && item.hex.row === CORE_HEX.row,
+    )
+    expect(base).toBeDefined()
+
+    store.airUnits.push(
+      toConsoleAirUnit({
+        aircraft: axisFighter(),
+        instanceId: 'air-1',
+        hex: CORE_HEX,
+        side: 'axis',
+        airStatus: 'inactive',
+      }),
+    )
+    // 15.1B：1T 由同格补给站支付
+    store.setSupplyActive(true)
+    store.spDumpDraft = { hexText: label(CORE_HEX), sp: 1, t: 0 }
+    store.addSpDump()
+    store.setPhase('aircraftRefit')
+
+    expect(store.refitStartBases.map((item) => item.id)).toContain(base!.id)
+    expect(store.refitBaseNow(base!.id)).toBe(true)
+    expect(store.airUnits.find((plane) => plane.instanceId === 'air-1')?.airStatus).toBe('active')
+    expect(store.lastRefit).toMatchObject({ costT: 1, activateAircraftIds: ['air-1'] })
+  })
+
+  it('★ 苏方战斗单位进入该格 ⇒ 标记与这枚机场一并消失（不可重建）', () => {
+    const store = newConsole()
+    store.setPhase('movement')
+    placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'a1')
+    expect(store.useConstructionMarkerNow('airStrip', label(CORE_HEX))).toBe(true)
+    const baseId = store.ownAirBases.find(
+      (item) => item.hex.col === CORE_HEX.col && item.hex.row === CORE_HEX.row,
+    )?.id
+    expect(baseId).toBeDefined()
+    const markersBefore = store.constructionMarkers
+
+    // 放机场的那支轴方单位离开（标记不随单位移动）
+    store.units = store.units.filter((unit) => unit.instanceId !== 'a1')
+    const soviet = groundRecord(
+      'soviet',
+      (record) =>
+        record.classes?.movementClass === 'leg' &&
+        record.isCombat === true &&
+        record.attackCapable === true,
+    )
+    placeGround(store, soviet, NEAR_HEX, 'soviet', 's1')
+    store.setActiveSide('soviet')
+    store.clickHex(NEAR_HEX)
+    expect(store.confirmMovePick()).toBe(true)
+    store.clickHex(CORE_HEX)
+    expect(store.units.find((unit) => unit.instanceId === 's1')?.hex).toEqual(CORE_HEX)
+
+    expect(store.constructionMarkerPieces.some((piece) => piece.kind === 'airStrip')).toBe(false)
+    expect(store.ownAirBases.some((item) => item.id === baseId)).toBe(false)
+    // 3.5：不可重建 ⇒ 枚数不回补
+    expect(store.constructionMarkers).toBe(markersBefore)
   })
 })
 
