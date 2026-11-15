@@ -69,6 +69,13 @@ export interface UnitToken {
    * 只有移动模式（13.0）⇒ 它的面由**装载**决定，故这里把装载量交给选图入口。
    */
   loadedSpT?: number | null
+  /**
+   * 13.2f/h：运输点当前**载着几点 SP**（空载为 null）
+   *
+   * 用户 2026-11-15（实机试玩第 2 项）：运输点载补给时，点数上方挂一个运载 SP 标记。
+   * 值由 store 从 `loadedSpT / SP_TO_T` 折出，本层只负责画（不重复折算规则）。
+   */
+  carriedSp?: number | null
   /** 令牌上显示的印值文本（如 `5-4-6`） */
   label: string
   /**
@@ -1447,6 +1454,30 @@ function drawToken(
     const text = String(token.spPoints)
     const bx = centerX
     const by = centerY + size * 0.28
+    const w = (text.length * 6 + 8) / scale
+    const h = 12 / scale
+    ctx.fillStyle = OVERLAY_PALETTE.stackBadge
+    ctx.fillRect(bx - w / 2, by - h / 2, w, h)
+    ctx.strokeStyle = OVERLAY_PALETTE.stackBadgeEdge
+    ctx.lineWidth = 1 / scale
+    ctx.strokeRect(bx - w / 2, by - h / 2, w, h)
+    ctx.fillStyle = OVERLAY_PALETTE.stackBadgeText
+    ctx.font = `bold ${(10 / scale).toFixed(1)}px ui-monospace, monospace`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text, bx, by)
+  }
+
+  /*
+   * 用户 2026-11-15（实机试玩第 2 项）：**运输点载着 SP 时，点数上方挂运载标记**。
+   *
+   * 13.2f/h 的装载量 `loadedSpT` 在引擎里是事实，这里只把 store 折好的 `carriedSp` 画在
+   * 令牌上沿；空载（null）不画 —— 不可用项不出现。
+   */
+  if (token.carriedSp != null && token.carriedSp > 0) {
+    const text = `载 ${token.carriedSp} SP`
+    const bx = centerX
+    const by = top - 8 / scale
     const w = (text.length * 6 + 8) / scale
     const h = 12 / scale
     ctx.fillStyle = OVERLAY_PALETTE.stackBadge

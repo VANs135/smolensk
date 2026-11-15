@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { pendingRetreatPlan } from '@/engine/rules/engagement-progress'
+import { SP_TO_T } from '@/engine/rules/supply'
 import { computed, ref, watch } from 'vue'
 
 import type { HexRef, Side } from '@/data'
@@ -374,6 +375,16 @@ export const useMapViewStore = defineStore('mapView', () => {
             noncombatLevel: unit.noncombatLevel,
             // 13.2f/h：编内卡车的面＝**装载**（满载 1F / 空载 1），与朝向无关（13.0：运输单位只有移动模式）
             loadedSpT: unit.loadedSpT,
+            /*
+             * 用户 2026-11-15（实机试玩第 2 项）：运输点数载着补给时，令牌上沿挂「载 N SP」标记。
+             * 只给对方可见（4.9a：敌方顶牌不透露装载）；空载不出现 —— 不可用项不出现。
+             */
+            carriedSp:
+              unit.side === hotseat.viewerSide &&
+              unit.noncombatKind === 'transport_point' &&
+              unit.loadedSpT > 0
+                ? unit.loadedSpT / SP_TO_T
+                : null,
             label: `${unit.raw.attack}-${unit.raw.ar}-${unit.raw.ma}`,
             name: unit.name,
             tip,
