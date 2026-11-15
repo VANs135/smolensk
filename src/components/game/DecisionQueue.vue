@@ -63,6 +63,27 @@ function sideName(side: 'axis' | 'soviet'): string {
   return side === 'axis' ? '轴心国' : '苏联'
 }
 
+/**
+ * 该型飞机**即将落的这一枚**的初设激活态（14.1a）
+ *
+ * 用户 2026-11-15（实机试玩第 4 项）：初设飞机卡片左侧空着浪费，补「机型 · 激活态」。
+ * 状态取剧本初设计划里 `statuses[placed]`（与落位实际写入的是同一份），界面不另算规则。
+ */
+function airStatusText(item: SetupPlacing): string | null {
+  const row = setup
+    .airPlanOf(item.side)
+    ?.placements.find((entry) => entry.entryIndex === item.entryIndex)
+  const status = row?.statuses[item.placed]
+  if (status === undefined) return null
+  return status === 'active' ? '激活' : '非激活'
+}
+
+/** 飞机卡片上的一行字：机型，能取到状态时再补激活态 */
+function airCardText(item: SetupPlacing): string {
+  const status = airStatusText(item)
+  return status === null ? item.label : `${item.label} · ${status}`
+}
+
 /** 还没落位的**总枚数**（标题上的角标） */
 const pendingTotal = computed(() => stacks.value.reduce((total, stack) => total + stack.count, 0))
 
@@ -474,6 +495,10 @@ function sideMark(side: 'axis' | 'soviet'): string {
               />
             </span>
             <span class="queue__side num">{{ sideMark(item.side) }}</span>
+            <!-- 用户 2026-11-15：飞机卡片补机型与激活态（有算子图时原来这一带是空的） -->
+            <span v-if="item.kind === 'air' && item.imageUrl !== null" class="queue__air">
+              {{ airCardText(item) }}
+            </span>
             <!-- 用户 2026-11-11：有算子图就不再用文字重复名称；无图才退回文字 -->
             <span v-if="item.imageUrl === null" class="queue__label">{{ item.label }}</span>
             <span class="queue__badge num">
@@ -781,6 +806,17 @@ function sideMark(side: 'axis' | 'soviet'): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 飞机卡片补的一行：机型 · 激活态（其余卡片不带这行） */
+.queue__air {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
 }
 
 .queue__badge {
