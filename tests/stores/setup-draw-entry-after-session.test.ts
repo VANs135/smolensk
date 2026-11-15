@@ -1,12 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
-import {
-  useContainersStore,
-  useGameSessionStore,
-  useSetupStore,
-  useWorkbenchStore,
-} from '@/stores'
+import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchStore } from '@/stores'
 
 /**
  * 读档后「会话已建、初设未完成」时，ch10/ch11 的抽签入口必须还在
@@ -54,6 +49,8 @@ describe('ch10：会话已建但初设未完成时的抽签入口', () => {
     expect(setup.startGameNow(), setup.lastAction?.detail).toBe(true)
     expect(setup.drawSetupEffectsNow(), setup.lastAction?.detail).toBe(true)
     expect(containers.setupDrawsExecuted).toBe(true)
-    expect(setup.requiredSetupIssues.filter((issue) => issue.id.startsWith('draw:'))).toHaveLength(0)
+    expect(setup.requiredSetupIssues.filter((issue) => issue.id.startsWith('draw:'))).toHaveLength(
+      0,
+    )
   })
 })

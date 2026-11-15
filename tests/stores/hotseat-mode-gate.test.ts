@@ -37,7 +37,7 @@ describe('读档后的对局模式闸门', () => {
 
   it('档里记了模式 ⇒ 读回即锁定，闸门不出现', () => {
     const hotseat = boot()
-    hotseat.restoreFromSave({ mode: 'pvp' })
+    hotseat.restoreFromSave({ mode: 'pvp', aiSide: null })
     expect(hotseat.modeIssue).toBeNull()
     expect(hotseat.modeGateNeeded).toBe(false)
   })

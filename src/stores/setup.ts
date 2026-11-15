@@ -2088,10 +2088,7 @@ export const useSetupStore = defineStore('setup', () => {
     // 会话已建时只有「本剧本确有未执行的抽签」才放行（读档读回「会话已建、初设未收束」的档要能补）；
     // 已抽过 / 本剧本无抽签 / 旧档沿用盘面 ⇒ 照旧拒绝，不重放、不改盘面。
     const effectsPending = effects.length > 0 && !setupEffectsExecuted.value
-    if (
-      game.session !== null &&
-      (!effectsPending || setupHistoryMissing.value)
-    ) {
+    if (game.session !== null && (!effectsPending || setupHistoryMissing.value)) {
       record({
         ok: false,
         rule: 'ch10 / ch11',
