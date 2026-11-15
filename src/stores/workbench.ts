@@ -11250,7 +11250,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       movePatches.length === 0
         ? patches.map((patch) => patch.unitId)
         : [...new Set([...patches.map((patch) => patch.unitId), ...moveById.keys()])]
-    const patchById = new Map(patches.map((patch) => [patch.unitId, patch]))
+    /*
+     * 9.12g + 9.13：引擎对**同一单位**可能一次给多张补丁（推进的 `hex` 与进击标记 `exploit` 各一张）。
+     * 修前按 unitId 建 Map 直接覆盖 ⇒ 后一张顶掉前一张，推进的换格补丁被丢掉：
+     * 守方撤退后玩家点推进格，战斗显示已收束，单位却还停在原格（2026-11-15 F 段实点）。
+     * 这里按字段合并，补丁没给的字段保持原值。
+     */
+    const patchById = new Map<string, CombatUnitPatch>()
+    for (const patch of patches) {
+      const prev = patchById.get(patch.unitId)
+      if (prev === undefined) {
+        patchById.set(patch.unitId, patch)
+        continue
+      }
+      const merged: CombatUnitPatch = { unitId: patch.unitId }
+      const steps = patch.steps ?? prev.steps
+      if (steps !== undefined) merged.steps = steps
+      const hex = patch.hex ?? prev.hex
+      if (hex !== undefined) merged.hex = hex
+      if (patch.dg === true || prev.dg === true) merged.dg = true
+      if (patch.exploit === true || prev.exploit === true) merged.exploit = true
+      patchById.set(patch.unitId, merged)
+    }
     const eliminated: ConsoleUnit[] = []
     for (const id of ids) {
       const unit = units.value.find((item) => item.instanceId === id)
