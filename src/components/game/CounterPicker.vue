@@ -165,7 +165,7 @@ const gridStyle = computed<Record<string, string>>(() => ({
       </button>
     </div>
 
-    <p v-if="visible.length === 0" class="picker__empty">本组没有可选的算子。</p>
+    <p v-if="visible.length === 0" class="picker__empty">—</p>
     <p v-if="refusal !== null" class="picker__refusal">{{ refusal }}</p>
   </section>
 </template>
@@ -278,7 +278,7 @@ const gridStyle = computed<Record<string, string>>(() => ({
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
   background: rgb(32 30 26 / 0.72);
   color: var(--color-bg);
-  font-size: 9px;
+  font-size: var(--text-xs);
   line-height: 12px;
   text-align: center;
 }

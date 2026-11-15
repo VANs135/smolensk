@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 
-import { BaseButton } from '@/components/base'
+import { BaseButton, BaseIcon } from '@/components/base'
 import type { HexRef } from '@/data'
 import type { MapHint } from '@/stores/workbench-model'
 import {
@@ -735,7 +735,8 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
         title="缩小 −"
         @click="zoomByStep(-1)"
       >
-        {{ props.fill ? '−' : '缩小' }}
+        <BaseIcon name="minus" />
+        <span v-if="!props.fill">缩小</span>
       </BaseButton>
       <BaseButton
         variant="secondary"
@@ -744,7 +745,8 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
         title="放大 +"
         @click="zoomByStep(1)"
       >
-        {{ props.fill ? '+' : '放大' }}
+        <BaseIcon name="plus" />
+        <span v-if="!props.fill">放大</span>
       </BaseButton>
       <BaseButton variant="secondary" size="sm" title="适应窗口 0" @click="fitToWindow">
         {{ props.fill ? '全图' : '适应窗口' }}

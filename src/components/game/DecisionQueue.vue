@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-import { BaseButton } from '@/components/base'
+import { BaseButton, BaseIcon } from '@/components/base'
 import { clampDockOffset } from '@/components/map/dock-position'
 import {
   useHotseatStore,
@@ -453,7 +453,9 @@ function sideMark(side: 'axis' | 'soviet'): string {
       >
         <span class="queue__stack-name">{{ stack.label }}</span>
         <span class="queue__stack-count num">{{ stack.count }}</span>
-        <span class="queue__caret">{{ openKey === stack.key ? '▾' : '▸' }}</span>
+        <span class="queue__caret">
+          <BaseIcon :name="openKey === stack.key ? 'chevron-down' : 'chevron-right'" />
+        </span>
       </button>
 
       <ul v-if="openKey === stack.key && stack.items.length > 0" class="queue__cards">

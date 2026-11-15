@@ -120,7 +120,7 @@ function absorb(): void {
           吸收拆分单位
           <select v-model="absorbId">
             <option value="">
-              {{ breakdownUnitsOnMap.length === 0 ? '（同格暂无可吸收的拆分单位）' : '选择算子' }}
+              {{ breakdownUnitsOnMap.length === 0 ? '—' : '选择算子' }}
             </option>
             <option
               v-for="unit in breakdownUnitsOnMap"

@@ -129,6 +129,12 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+/* 批 6：表格里的数值列统一右对齐（RE / SP / T / MP / 回合 / 掷骰 / 格号） */
+th.num,
+td.num {
+  text-align: right;
+}
+
 /* 只对屏幕阅读器可见 */
 .visually-hidden {
   position: absolute;

@@ -39,7 +39,10 @@ describe('U1-a：L0 常驻条', () => {
   it('低频入口由棋桌导轨打开设置抽屉', () => {
     expect(VIEW).toContain('aria-controls="\'table-drawer-\' + item.id"')
     expect(VIEW).toContain('id="table-drawer-settings"')
-    expect(VIEW).toContain('视图与面板')
+    // 批 6：设置抽屉拆成「视图 / 对局控制 / 记录器」三组
+    expect(VIEW).toContain('<h2>视图</h2>')
+    expect(VIEW).toContain('<h2>对局控制</h2>')
+    expect(VIEW).toContain('<h2>记录器</h2>')
     expect(VIEW).not.toContain('gt__stat')
     expect(VIEW).not.toContain('gt__bar')
     // 正式界面不出现交接模式 / 规则号之类的调试文案

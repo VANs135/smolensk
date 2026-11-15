@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-import { BaseTag } from '@/components/base'
+import { BaseIcon, BaseTag } from '@/components/base'
 import { panelScansOf } from '@/render/charts-view'
 import { counterImages } from '@/render/token-images'
 import { useContainersStore, useHotseatStore } from '@/stores'
@@ -119,7 +119,9 @@ watch([openSection, screen], () => {
         :aria-expanded="openSection === 'boxes'"
         @click="toggle('boxes')"
       >
-        <span class="tray__caret">{{ openSection === 'boxes' ? '▾' : '▸' }}</span>
+        <span class="tray__caret">
+          <BaseIcon :name="openSection === 'boxes' ? 'chevron-down' : 'chevron-right'" />
+        </span>
         <span class="tray__title">盒</span>
         <BaseTag kind="neutral"
           >{{ cardsBySide.axis.length + cardsBySide.soviet.length }} 张卡</BaseTag
@@ -148,7 +150,9 @@ watch([openSection, screen], () => {
         :aria-expanded="openSection === 'tables'"
         @click="toggle('tables')"
       >
-        <span class="tray__caret">{{ openSection === 'tables' ? '▾' : '▸' }}</span>
+        <span class="tray__caret">
+          <BaseIcon :name="openSection === 'tables' ? 'chevron-down' : 'chevron-right'" />
+        </span>
         <span class="tray__title">表格</span>
       </button>
 
@@ -168,7 +172,7 @@ watch([openSection, screen], () => {
         </div>
 
         <!-- 印卡图：直接画素材库的官方卡面（点图在新标签打开原尺寸）——B35：托盘**只留卡图** -->
-        <p v-if="scans.length === 0" class="tray__note">暂无扫描图</p>
+        <p v-if="scans.length === 0" class="tray__note">—</p>
         <div v-for="scan in scans" :key="scan.id" class="tray__scan">
           <p class="tray__scan-title">
             {{ scan.title }}

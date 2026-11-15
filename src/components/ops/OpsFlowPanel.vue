@@ -242,7 +242,7 @@ function setTargetKind(kind: string): void {
   background: transparent;
   color: inherit;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 1.2;
   text-align: center;
 }
@@ -266,7 +266,7 @@ function setTargetKind(kind: string): void {
 }
 
 .ops__loss-count {
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .ops__actions {

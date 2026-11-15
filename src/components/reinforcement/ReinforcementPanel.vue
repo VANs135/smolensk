@@ -591,8 +591,9 @@ const rollResultLines = computed<readonly string[]>(() => {
   const plan = workbench.lastVariableRepl
   if (plan === null) return []
   const lines: string[] = []
-  // ① 1.6b 补给表：直接进图外空军盒（裁定 2；只能由空军任务运进地图）
-  if (plan.sp > 0) lines.push(`补给表 +${String(plan.sp)} SP → 图外空军盒（只能空运进图）`)
+  // ① 1.6b 补给表：按 2.1 / 3.1 走免费铁运落点（城市格每格 1 点，余额落图边补给源格）
+  if (plan.sp > 0)
+    lines.push(`补给表 +${String(plan.sp)} SP → 手牌（城市格每格 1 点，余额落图边补给源格）`)
   // ② 1.6b 补员表：Pax / Eq 进手牌；Ftr / Tac 供飞机重建（13.5f）
   const ground = [
     plan.repl.pax > 0 ? `Pax ${String(plan.repl.pax)}` : '',
@@ -915,8 +916,9 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         <p class="muted">
           可变增援（13.6b）：每个己方增援阶段掷补给表（得 SP）与补员表（得 Ftr/Tac/Pax/Eq）； 19 Aug
           起补员表 −1 且取 Late 档；1.6c 特殊补员 19 Aug 前每回合掷；轴方另掷 3.3c 可变撤离（19 Aug
-          起）、3.6 随机事件（19 Jul–15 Aug）。补给表 SP 按 1.6b 直接进图外空军盒
-          （只能由空军任务运进地图）；Pax / Eq 进下方手牌；Ftr / Tac 供重建飞机（13.5f，不可保存）。
+          起）、3.6 随机事件（19 Jul–15 Aug）。补给表 SP 按专规 2.1/3.1 用免费铁运：
+          每个可卸车城市格 1 点（需标准/宽轨铁路连通），其余落图边补给源格； Pax / Eq
+          进下方手牌；Ftr / Tac 供重建飞机（13.5f，不可保存）。
           骰面与表名只在结算日志里，结果可复算。
         </p>
       </RuleNote>

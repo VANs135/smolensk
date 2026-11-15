@@ -47,7 +47,7 @@ const allocated = computed(() => workbench.barrageLossAllocated)
       </button>
     </div>
   </div>
-  <p v-if="targets.length === 0" class="muted">目标格内没有可承受损失的单位。</p>
+  <p v-if="targets.length === 0" class="muted">—</p>
 </template>
 
 <style scoped>
@@ -70,7 +70,7 @@ const allocated = computed(() => workbench.barrageLossAllocated)
   background: transparent;
   color: inherit;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 1.2;
   text-align: center;
 }
@@ -94,7 +94,7 @@ const allocated = computed(() => workbench.barrageLossAllocated)
 }
 
 .ops__loss-count {
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .ops__minus {

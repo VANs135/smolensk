@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
 
-import { BaseButton, BaseTag } from '@/components/base'
+import { BaseButton, BaseIcon, BaseTag } from '@/components/base'
 import { clampDockOffset } from '@/components/map/dock-position'
 import { counterImages } from '@/render/token-images'
 import { useContainersStore, useWorkbenchStore, type AuxCardView } from '@/stores'
@@ -174,7 +174,9 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
   <section class="boxcard" :class="{ 'boxcard--open': open }">
     <div class="boxcard__headrow">
       <button type="button" class="boxcard__head" @click="onToggle">
-        <span class="boxcard__caret">{{ open ? '▾' : '▸' }}</span>
+        <span class="boxcard__caret">
+          <BaseIcon :name="open ? 'chevron-down' : 'chevron-right'" />
+        </span>
         <span class="boxcard__name">{{ card.name }}</span>
         <span class="boxcard__count num">{{ unitTotal }}</span>
       </button>

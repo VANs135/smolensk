@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import { BaseButton, BaseDialog } from '@/components/base'
+import { BaseButton, BaseDialog, BaseIcon } from '@/components/base'
 import { useGameSessionStore, useSetupStore, useUiStore } from '@/stores'
 
 const game = useGameSessionStore()
@@ -51,10 +51,10 @@ function onRestart(): void {
             type="button"
             @click="onNewGame"
           >
-            新建对局 <span aria-hidden="true">→</span>
+            新建对局 <BaseIcon name="chevron-right" />
           </button>
           <button class="home__action" type="button" @click="ui.openSaveDialog()">
-            读取存档 <span aria-hidden="true">↗</span>
+            读取存档 <BaseIcon name="external" />
           </button>
         </div>
       </div>

@@ -767,7 +767,7 @@ onMounted(() => {
             "
           />
         </template>
-        <p v-if="chartTables.length === 0" class="muted">当前没有可显示的投影表。</p>
+        <p v-if="chartTables.length === 0" class="muted">—</p>
       </BasePanel>
 
       <BasePanel title="日志">

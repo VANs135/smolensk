@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import { BaseButton, BasePanel, BaseTag } from '@/components/base'
+import { BaseButton, BaseIcon, BasePanel, BaseTag } from '@/components/base'
 import { GAME_PHASES } from '@/engine/state-types'
 import { useGameSessionStore } from '@/stores'
 
@@ -223,7 +223,7 @@ function filterByRule(rule: string): void {
 
     <!-- ── 日志明细（可展开） ── -->
     <hr />
-    <p v-if="gameSession.logEntries.length === 0" class="muted">暂无记录</p>
+    <p v-if="gameSession.logEntries.length === 0" class="muted">—</p>
     <div v-for="entry in gameSession.logEntries" :key="entry.index" class="entry">
       <button class="entry__head" type="button" @click="toggleExpanded(entry.index)">
         <span class="entry__cursor num">#{{ entry.index + 1 }}</span>
@@ -238,9 +238,10 @@ function filterByRule(rule: string): void {
         <span v-if="entry.rolls.length > 0" class="entry__rolls num">
           {{ entry.rolls.map((roll) => `${roll.faces.join('+')}=${roll.total}`).join(' / ') }}
         </span>
-        <span class="entry__toggle num">{{
-          expanded.includes(entry.index) ? '收起 ▾' : '展开 ▸'
-        }}</span>
+        <span class="entry__toggle">
+          <span class="num">{{ expanded.includes(entry.index) ? '收起' : '展开' }}</span>
+          <BaseIcon :name="expanded.includes(entry.index) ? 'chevron-down' : 'chevron-right'" />
+        </span>
       </button>
 
       <div v-if="expanded.includes(entry.index)" class="entry__body">
@@ -341,6 +342,9 @@ function filterByRule(rule: string): void {
 }
 
 .entry__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   margin-left: auto;
   color: var(--color-accent);
 }

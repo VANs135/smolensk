@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { BaseIcon } from './base'
 import { useUiMode } from './ui-mode'
 
 defineOptions({ inheritAttrs: false })
@@ -86,10 +87,12 @@ function step(delta: number): void {
       :disabled="numeric <= floor"
       @click="step(-1)"
     >
-      －
+      <BaseIcon name="minus" />
     </button>
     <span class="ui-field-readonly">{{ numeric }}</span>
-    <button type="button" class="ui-field-stepper__btn" @click="step(1)">＋</button>
+    <button type="button" class="ui-field-stepper__btn" @click="step(1)">
+      <BaseIcon name="plus" />
+    </button>
   </span>
   <span v-else class="ui-field-readonly">{{
     modelValue === '' || modelValue == null ? '—' : modelValue

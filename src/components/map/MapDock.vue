@@ -4,7 +4,7 @@ import { computed, provide, ref, watch } from 'vue'
 import type { MapSessionClosePolicy } from '@/stores/map-view'
 import { useMapViewStore } from '@/stores'
 
-import { BaseTag, PANEL_FLAT } from '@/components/base'
+import { BaseIcon, BaseTag, PANEL_FLAT } from '@/components/base'
 import { SESSION_STEP_GATE, SESSION_STEP_HOSTED, SESSION_STEP_PROGRESS } from '@/components/session'
 
 import { clampDockOffset, createDockMemory } from './dock-position'
@@ -242,7 +242,7 @@ function resetPosition(): void {
         @pointerdown.stop
         @click="$emit('close')"
       >
-        ×
+        <BaseIcon name="close" />
       </button>
     </header>
     <div class="dock__body">

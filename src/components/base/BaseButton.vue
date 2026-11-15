@@ -62,6 +62,12 @@ const isIconOnly = computed(() => !slots.default)
 </template>
 
 <style scoped>
+.btn__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

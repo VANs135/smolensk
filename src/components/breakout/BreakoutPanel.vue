@@ -98,7 +98,7 @@ function beginReturnHexPick(): void {
         :size="40"
         @pick="workbench.breakoutNow($event)"
       />
-      <p v-if="workbench.breakoutCandidates.length === 0" class="muted">无可突围单位</p>
+      <p v-if="workbench.breakoutCandidates.length === 0" class="muted">—</p>
     </SessionStep>
   </BasePanel>
 </template>

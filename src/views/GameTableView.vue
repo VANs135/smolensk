@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
-import { BaseButton } from '@/components/base'
+import { BaseButton, RuleTip } from '@/components/base'
 import { AirPanel } from '@/components/air'
 import { BarragePanel } from '@/components/barrage'
 import { OpsFlowPanel } from '@/components/ops'
@@ -390,7 +390,7 @@ onBeforeUnmount(() => {
           :key="item.id"
           type="button"
           class="gt__rail-button"
-          :aria-label="item.id === 'settings' ? '视图与面板' : item.label"
+          :aria-label="item.id === 'settings' ? '设置' : item.label"
           :aria-expanded="!hotkeys.panelCollapsed && drawer === item.id"
           :aria-controls="'table-drawer-' + item.id"
           @click="toggleDrawer(item.id)"
@@ -620,8 +620,8 @@ onBeforeUnmount(() => {
           id="table-drawer-settings"
           class="gt__drawer-body"
         >
-          <section class="gt__settings" aria-label="视图与面板">
-            <h2>视图与面板</h2>
+          <section class="gt__settings" aria-label="视图">
+            <h2>视图</h2>
             <div class="gt__layers">
               <label v-for="option in layers" :key="option.key" class="gt__check">
                 <input v-model="mapLayerToggles[option.key]" type="checkbox" />
@@ -671,22 +671,26 @@ onBeforeUnmount(() => {
             >
               快捷键
             </BaseButton>
-            <!-- ⑧：开始/停止记录（导出 JSONL 交回定位；不影响对局） -->
-            <BaseButton
-              v-if="canRecord"
-              variant="secondary"
-              size="sm"
-              :data-testid="recorder.active ? 'recorder-stop' : 'recorder-start'"
-              @click="toggleRecording"
-            >
-              {{ recorder.active ? '停止并保存' : '开始记录' }}
-            </BaseButton>
-            <!-- 导出落点写清楚：不弹目录选择，走浏览器/WebView 的下载目录 -->
-            <span class="gt__recorder-hint" data-testid="recorder-hint">
-              日志存到下载目录（Windows 默认「下载」，即
-              <code>%USERPROFILE%\Downloads</code>），文件名
-              <code>smolensk-log-*.jsonl</code>
-            </span>
+          </section>
+
+          <!-- 记录器：按钮 + `?`（说明收进折叠体，正文不铺字） -->
+          <section class="gt__settings" aria-label="记录器">
+            <h2>记录器</h2>
+            <div class="gt__settings-row">
+              <BaseButton
+                v-if="canRecord"
+                variant="secondary"
+                size="sm"
+                :data-testid="recorder.active ? 'recorder-stop' : 'recorder-start'"
+                @click="toggleRecording"
+              >
+                {{ recorder.active ? '停止并保存' : '开始记录' }}
+              </BaseButton>
+              <RuleTip rule="记录器">
+                日志存到下载目录（Windows 默认「下载」，即
+                <code>%USERPROFILE%\Downloads</code>），文件名 <code>smolensk-log-*.jsonl</code>。
+              </RuleTip>
+            </div>
           </section>
           <HotkeyHelpPanel v-if="hotkeys.helpOpen" />
         </div>
@@ -847,12 +851,12 @@ onBeforeUnmount(() => {
   color: var(--color-command-ink);
   font-size: var(--text-xs);
 }
-/* ⑧：记录导出的落点说明（面板可见，避免"文件去哪了"） */
-.gt__recorder-hint {
-  flex-basis: 100%;
-  color: var(--color-muted);
-  font-size: var(--text-xs);
-  line-height: 1.4;
+/* 批 6：设置分组内一行（控件 + `?`），说明文字不铺在正排 */
+.gt__settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .gt {

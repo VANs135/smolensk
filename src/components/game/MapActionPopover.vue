@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-import { BaseButton, BaseTag } from '@/components/base'
+import { BaseButton, BaseIcon, BaseTag } from '@/components/base'
 import { MapPopover } from '@/components/map'
 import {
   counterImageUrlOf,
@@ -299,7 +299,10 @@ function sideName(side: string): string {
             :aria-expanded="openGroup === groupKey(target.id, group)"
             @click="toggleGroup(groupKey(target.id, group))"
           >
-            {{ group }} {{ openGroup === groupKey(target.id, group) ? '▾' : '▸' }}
+            <span>{{ group }}</span>
+            <BaseIcon
+              :name="openGroup === groupKey(target.id, group) ? 'chevron-down' : 'chevron-right'"
+            />
           </button>
           <div v-if="openGroup === groupKey(target.id, group)" class="context-group__submenu">
             <BaseButton
@@ -635,7 +638,9 @@ function sideName(side: string): string {
 }
 
 .context-group__trigger {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   width: 100%;
   padding: var(--space-1) var(--space-2);
   border: 0;
@@ -786,7 +791,7 @@ function sideName(side: string): string {
   border-radius: var(--radius-sm);
   background: rgb(32 30 26 / 0.78);
   color: var(--color-bg);
-  font-size: 9px;
+  font-size: var(--text-xs);
   line-height: 12px;
   pointer-events: none;
 }
