@@ -932,8 +932,8 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <!-- ── 手牌式到达投放（13.6）：只列本回合算子图标；点算子 → 点图落位；已放可点回手 ── -->
       <div class="arrival-hand" data-testid="arrival-hand">
         <component
-          v-for="card in arrivalHandCards"
           :is="arrivalCardBlocked(card) ? 'div' : 'button'"
+          v-for="card in arrivalHandCards"
           :key="`hand-${card.index}`"
           :type="arrivalCardBlocked(card) ? undefined : 'button'"
           class="arrival-hand__card"

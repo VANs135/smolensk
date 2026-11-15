@@ -11,9 +11,6 @@ import { describe, expect, it } from 'vitest'
  *
  * 豁免：BaseButton 自身的 disabled 入参、UiField 的步进器，以及正由其他线
  * 收尾的 AirPanel / BarragePanel / FuelPanel / OpsFlowPanel。
- *
- * ReinforcementPanel 的置灰清理已在工作副本里做完，但该文件此刻正被增援线重写
- * （v7.1 第二段），等那边提交后再补进 SWEPT，避免两边互相覆盖。
  */
 
 const read = (path: string): string => readFileSync(path, 'utf8')
@@ -33,6 +30,7 @@ const SWEPT = [
   'src/components/game/DecisionQueue.vue',
   'src/components/map/MapDock.vue',
   'src/components/containers/ContainersPanel.vue',
+  'src/components/reinforcement/ReinforcementPanel.vue',
   'src/views/GameTableView.vue',
   'src/views/WorkbenchView.vue',
 ]
