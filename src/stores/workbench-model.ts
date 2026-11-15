@@ -2822,8 +2822,16 @@ function orientationFaceOf(unit: ConsoleUnit | ConsoleAirUnit): 'combat' | 'move
  * 但 12.1a 的拆并本来就是"多枚等额 SP 算子"的抽象 ⇒ 图上就用**当前点数的 SP 算子图**
  * （点数不同图不同，与地图上的 SP 算子同口径）。结构化入参，免得为此把 `SpDump` 搬进本模块。
  */
-export function spDumpImageUrlOf(dump: { side: Side; sp: number }): string | null {
-  return tokenImageUrl({ side: dump.side, face: 'combat', noncombatKind: 'sp', spPoints: dump.sp })
+export function spDumpImageUrlOf(dump: { side: Side; sp: number; t?: number }): string | null {
+  // 与地图令牌同口径（`spDumpTokens`）：有整 SP 用补给面 F；只剩 T 用运输面 B（12.1a：1 SP = 4 T）。
+  const hasSp = dump.sp > 0
+  const points = hasSp ? dump.sp : (dump.t ?? 0)
+  return tokenImageUrl({
+    side: dump.side,
+    face: hasSp ? 'combat' : 'move',
+    noncombatKind: 'sp',
+    spPoints: points,
+  })
 }
 
 /**

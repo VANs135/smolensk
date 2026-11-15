@@ -307,7 +307,11 @@ export const useMapViewStore = defineStore('mapView', () => {
     const keys = new Set<string>()
     for (const dump of workbench.spDumps) {
       if (dump.side !== hotseat.viewerSide) continue
-      if (dump.sp <= 0 && dump.t <= 0) continue
+      /*
+       * ★ 用户 2026-11-15（实机试玩第 3 项）：账本即使归零（0 SP / 0 T）也覆盖该格。
+       *   否则空站会把初设时落下的那枚 SP 计数算子重新露出来，贴图停在旧面额（旧值复辟）；
+       *   账本在同格存在 ⇒ 该格一律以账本为准（空的就什么都不画）。
+       */
       keys.add(`${dump.side}:${dump.hex.col},${dump.hex.row}`)
     }
     return keys

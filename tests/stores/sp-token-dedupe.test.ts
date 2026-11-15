@@ -76,4 +76,22 @@ describe('同格 SP：账本与盘面算子不各画一枚', () => {
     const tokens = mapView.overlay.tokens.filter((token) => token.noncombatKind === 'sp')
     expect(tokens.map((token) => token.id).sort()).toEqual(['sp-unit-1', 'sp:16,10'])
   })
+
+  /**
+   * ★ 用户 2026-11-15（实机试玩第 3 项）：**补给站数值改变后，算子贴图不能还显示旧面额**。
+   *
+   * 初设落下的 SP 计数算子与账本是同一件事；账本被吃空（0 SP / 0 T）后，
+   * 若又让这枚旧算子露出来，地图会重新显示初设时的面额（如 5 SP）——旧值复辟。
+   * 账本只要在同格存在（哪怕归零），该格就应以账本为准：空站什么都不画。
+   */
+  it('账本归零 ⇒ 不露出初设那枚旧面额的 SP 算子', () => {
+    const { workbench, mapView } = stores()
+    placeGround(workbench, spRecord(), HEX, 'soviet', 'sp-unit-1')
+    const placed = workbench.units.find((unit) => unit.instanceId === 'sp-unit-1')
+    if (placed === undefined) throw new Error('SP 算子未落位')
+    placed.noncombatSp = 5
+    workbench.spDumps.push({ id: 'sp:15,10', hex: { ...HEX }, side: 'soviet', sp: 0, t: 0 })
+
+    expect(mapView.overlay.tokens.filter((token) => token.noncombatKind === 'sp')).toHaveLength(0)
+  })
 })

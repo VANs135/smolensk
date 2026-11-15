@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { spDumpImageUrlOf } from '@/stores/workbench-model'
 import {
   nearestSpDenomination,
   spCounterImageUrl,
@@ -65,5 +66,26 @@ describe('条 27：SP 任意总额的取图规则', () => {
     expect(spDenominationDiffers(5)).toBe(false)
     expect(spDenominationDiffers(10)).toBe(false)
     expect(spDenominationDiffers(15)).toBe(false)
+  })
+})
+
+/**
+ * ★ 用户 2026-11-15（实机试玩第 3 项）：**补给站数值改变后，算子贴图的面额要实时跟着变**。
+ *
+ * 补给站在面板里是账本条目（`SpDump`），取图必须与地图令牌同一口径：
+ * 有整 SP 走补给面 F；只剩 T 走运输面 B（12.1a：1 SP = 4 T）。
+ */
+describe('补给站账本：面额跟随当前数值', () => {
+  it('整 SP 改变 ⇒ 换成新面额（4 → 2）', () => {
+    expect(spDumpImageUrlOf({ side: 'axis', sp: 4, t: 0 })).toContain('Neutral_SP_4')
+    expect(spDumpImageUrlOf({ side: 'axis', sp: 2, t: 0 })).toContain('Neutral_SP_2_F')
+  })
+
+  it('只剩运输点数 ⇒ 走运输面 B，不是空白', () => {
+    expect(spDumpImageUrlOf({ side: 'axis', sp: 0, t: 3 })).toContain('Neutral_SP_3_B')
+  })
+
+  it('空站 ⇒ 无图（不可用项不出现）', () => {
+    expect(spDumpImageUrlOf({ side: 'axis', sp: 0, t: 0 })).toBeNull()
   })
 })
