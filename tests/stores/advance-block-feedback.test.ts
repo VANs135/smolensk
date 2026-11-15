@@ -4,7 +4,13 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
 import { resolveAttrition } from '@/engine/rules'
-import { toConsoleUnit, useGameSessionStore, useWorkbenchStore, type ConsoleUnit } from '@/stores'
+import {
+  toConsoleUnit,
+  useContainersStore,
+  useGameSessionStore,
+  useWorkbenchStore,
+  type ConsoleUnit,
+} from '@/stores'
 import { CORE_HEX, combatRecord, label, sealTraceSupplyByZoc } from '../flows/sop-harness'
 
 /**
@@ -31,7 +37,18 @@ describe('死操作①：推进按钮不得「可点但无反应」', () => {
 
     // 走**真实会话**到 D 段（不手切阶段：手切会与会话步指针不一致而被内核拒绝）
     for (let guard = 0; guard < 20 && session.records?.phase !== 'supply'; guard += 1) {
-      workbench.advanceSegmentNow()
+      if (workbench.segmentStep?.id === 'reinforcement.replRoll' && workbench.rollHandPending) {
+        // 专规 1.6b / 2.1：补给表 SP 现在进到货手牌；本用例借道 B 段，按放弃上场收束
+        if (!workbench.hasSpecialReplDraw(workbench.activeSide, workbench.turn)) {
+          useContainersStore().drawSpecialRepl(
+            workbench.activeSide,
+            workbench.variableReplSpecialDie ?? undefined,
+          )
+        }
+        workbench.endRollSegmentNow(true)
+      } else {
+        workbench.advanceSegmentNow()
+      }
     }
     expect(session.records?.phase).toBe('supply')
 

@@ -10,6 +10,7 @@ import {
   actionGateOf,
   toConsoleUnit,
   unitChoices,
+  useContainersStore,
   useGameSessionStore,
   useWorkbenchStore,
   type ActionKey,
@@ -179,7 +180,18 @@ function advanceUntilPhase(stores: ReturnType<typeof newStores>, wanted: Console
   for (let guard = 0; guard < 200; guard += 1) {
     if (workbench.phase === wanted) return
     if (session.awaiting) session.answerNow('first')
-    workbench.advanceSegmentNow()
+    if (workbench.segmentStep?.id === 'reinforcement.replRoll' && workbench.rollHandPending) {
+      // 专规 1.6b / 2.1：补给表 SP 现在进到货手牌；本用例借道 B 段，按放弃上场收束
+      if (!workbench.hasSpecialReplDraw(workbench.activeSide, workbench.turn)) {
+        useContainersStore().drawSpecialRepl(
+          workbench.activeSide,
+          workbench.variableReplSpecialDie ?? undefined,
+        )
+      }
+      workbench.endRollSegmentNow(true)
+    } else {
+      workbench.advanceSegmentNow()
+    }
   }
   throw new Error(`推进不到 ${wanted} 段（当前：${workbench.phase}）`)
 }

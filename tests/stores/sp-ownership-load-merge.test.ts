@@ -5,6 +5,7 @@ import { PANZER_GROUP_OPTION_ITEM } from '@/engine/rules'
 import { createMemoryStorage } from '@/shared'
 import {
   SAVE_SLOT_KEY,
+  useContainersStore,
   useSetupStore,
   useWorkbenchStore,
   useGameSessionStore,
@@ -40,7 +41,21 @@ describe('12.1b/3.4b：读档归并不能改变SP归属', () => {
   it('供养额度和破坏尝试随归并迁移，再次存读档不丢失或翻倍', async () => {
     const { board, game } = boot()
     for (let step = 0; step < 100 && !board.actionAllowedNow('move.dumpBlow'); step++) {
-      board.advanceSegmentNow()
+      if (board.segmentStep?.id === 'reinforcement.replRoll' && board.rollHandPending) {
+        /*
+         * 专规 1.6b / 2.1：补给表 SP 现在进到货手牌；本用例只借道 B 段去移动段，
+         * 手牌按放弃上场收束（落位覆盖见 tests/flows/reinforcement-b-operation.test.ts）。
+         */
+        if (!board.hasSpecialReplDraw(board.activeSide, board.turn)) {
+          useContainersStore().drawSpecialRepl(
+            board.activeSide,
+            board.variableReplSpecialDie ?? undefined,
+          )
+        }
+        board.endRollSegmentNow(true)
+      } else {
+        board.advanceSegmentNow()
+      }
       await nextTick()
     }
     expect(board.actionAllowedNow('move.dumpBlow')).toBe(true)

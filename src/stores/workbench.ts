@@ -23763,22 +23763,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (data === null) return false
     lastVariableRepl.value = data
     /*
-     * 裁定 2（用户 2026-11-13）：1.6b 补给表所得 SP **直接进图外空军盒**，只能由空军任务运进地图；
-     * 不再自动填进 2.1/3.1 的免费铁运落账池。换掷时先撤回上一笔，避免叠加。
+     * 1.6b 补给表所得 SP：按原文进**到货落账池**（专规 1.6b「place new units per 2.1 and 3.1」
+     * + 专规 2.1 / 3.1 的免费铁运）——每个可卸车城市格 1 SP（需标准/宽轨铁路连通），
+     * 其余落地图边缘补给源格；玩家在统一手牌里逐格点，收束时由 `applySupplyArrivalsNow` 落账。
+     *
+     * 旧口径（用户 2026-11-13 裁定②）是把 SP 直接塞进图外空军盒；2026-11-15 按原文改回。
+     * 换掷时若本回合还留着旧口径的盒内存款，先撤回，避免同一笔重复。
      */
-    supplyArrivalSp.value = 0
-    const offMapT = data.sp * SP_TO_T
-    const ledgerKey = `${turn.value}|${activeSide.value}`
     const previousDeposit = offMapRollDeposit.value
     if (
       previousDeposit !== null &&
-      `${previousDeposit.turn}|${previousDeposit.side}` === ledgerKey
+      `${previousDeposit.turn}|${previousDeposit.side}` === `${turn.value}|${activeSide.value}`
     ) {
       addOffMapSupplyT(previousDeposit.side, -previousDeposit.t)
     }
-    offMapRollDeposit.value =
-      offMapT > 0 ? { turn: turn.value, side: activeSide.value, sp: data.sp, t: offMapT } : null
-    if (offMapT > 0) depositOffMapSupplyNow(activeSide.value, offMapT)
+    offMapRollDeposit.value = null
+    supplyArrivalSp.value = Math.max(0, Math.trunc(data.sp))
     // 3.6：补给列车的落点须玩家选（任一可卸货格）；换掷即作废上一次的选择
     supplyTrainHex.value = null
     /*

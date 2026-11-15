@@ -315,6 +315,31 @@ describe('全操作体检：store 直调', () => {
       for (let guard = 0; guard < 200 && ctx.w.phase !== 'movement'; guard += 1) {
         if (ctx.g.awaiting) {
           expect(ctx.g.answerNow('first'), `作答失败：${logText(ctx)}`).toBe(true)
+        } else if (ctx.w.segmentStep?.id === 'reinforcement.replRoll' && ctx.w.rollHandPending) {
+          /*
+           * 专规 1.6b / 2.1：补给表 SP 现在进到货手牌（不再直送图外盒），本段的唯一出口是
+           * 「结束本段」——本用例只验环节推进，手牌按放弃上场收束；逐格落位另由
+           * tests/flows/reinforcement-b-operation.test.ts 覆盖。
+           */
+          // 1.6c 必须先掷（每回合必掷），否则「结束本段」按原文拒绝
+          const containers = useContainersStore()
+          if (!ctx.w.hasSpecialReplDraw(ctx.w.activeSide, ctx.w.turn)) {
+            containers.drawSpecialRepl(ctx.w.activeSide, ctx.w.variableReplSpecialDie ?? undefined)
+          }
+          // 手牌逐条落位（SP 优先挑图边源格，把余额一次放完；放不下的走放弃上场）
+          for (let round = 0; round < 30 && ctx.w.rollHandPending; round += 1) {
+            const entry = ctx.w.rollHandEntries.find((item) => item.blocked === null)
+            if (entry === undefined) break
+            if (!ctx.w.beginRollHandEntryNow(entry.id)) break
+            const raw = ctx.w.hexPickView?.candidates
+            const picks = Array.isArray(raw) ? raw : []
+            const hex = entry.id === 'sp:arrival' ? picks[picks.length - 1] : picks[0]
+            if (hex === undefined || !ctx.w.pickHexFor(hex)) break
+          }
+          expect(
+            ctx.w.endRollSegmentNow(ctx.w.rollHandPending),
+            `补给列车/到货 SP 收束失败：${logText(ctx)}`,
+          ).toBe(true)
         } else {
           const outcome = ctx.w.advanceSegmentNow()
           expect(

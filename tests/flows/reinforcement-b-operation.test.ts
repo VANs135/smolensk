@@ -178,13 +178,13 @@ describe('B 增援段操作级实测（剧本 1）', () => {
     expect(settled.ok).toBe(true)
     const settledRepl = settled.ok ? (settled.data.repl as { pax: number; eq: number }) : undefined
     expect(settledRepl).toMatchObject({ pax: repl!.repl.pax, eq: repl!.repl.eq })
-    // SP 来源：补给表 → 图外空军盒（1.6b 裁定②）
-    const deposit = g.log.find(
-      (entry) =>
-        entry.action === 'offMapSupplyDeposit' && entry.turn === 2 && entry.side === 'axis',
+    // SP 去向（专规 1.6b「place new units per 2.1 and 3.1」+ 2.1/3.1 免费铁运）：
+    // 进到货落账池 → 城市格每格 1 SP、余额落图边补给源格；**不再**进图外空军盒
+    expect(w.offMapRollDeposit).toBeNull()
+    expect(g.log.some((entry) => entry.action === 'offMapSupplyDeposit' && entry.turn === 2)).toBe(
+      false,
     )
-    expect(deposit).toBeDefined()
-    expect(w.offMapRollDeposit).toMatchObject({ sp: repl!.sp, t: repl!.sp * 4 })
+    expect(w.supplyArrivalSp).toBe(repl!.sp)
 
     // 1.6c「掷骰检定」：同一颗骰子，结果落账
     expect(w.hasSpecialReplDraw('axis', 2)).toBe(false)
@@ -200,6 +200,55 @@ describe('B 增援段操作级实测（剧本 1）', () => {
     const hand = new Map(w.rollHandEntries.map((entry) => [entry.id, entry.count]))
     expect(hand.get('repl:pax') ?? 0).toBe(repl!.repl.pax)
     expect(hand.get('repl:eq') ?? 0).toBe(repl!.repl.eq)
+    // 补给表 SP 在同一张手牌里（判完全部骰子后可逐格点）
+    expect(hand.get('sp:arrival') ?? 0).toBe(repl!.sp)
+  }, 60000)
+
+  it('★ 1.6b 补给表 SP：城市格每格 1 点（免费铁运）+ 余额落图边补给源格', async () => {
+    const s = await bootToAxisReinforcement()
+    const { w, containers } = s
+    const rollStep = w.playerSegmentSteps.findIndex((step) => step.id === 'reinforcement.replRoll')
+    expect(w.setSegmentStepIndex(rollStep)).toBe(true)
+    await nextTick()
+    const sp = w.lastVariableRepl!.sp
+    expect(sp).toBeGreaterThan(0)
+    // 修前：SP 直接进图外空军盒，手牌里没有、图上放不了
+    expect(w.offMapRollDeposit).toBeNull()
+    expect(w.supplyArrivalSp).toBe(sp)
+
+    // 判定未走完 ⇒ 闸门关着（面板也不给可点卡）
+    expect(w.rollPlacementOpen).toBe(false)
+    expect(containers.drawSpecialRepl('axis', w.variableReplSpecialDie ?? undefined)).toBe(true)
+    expect(w.rollPlacementOpen).toBe(true)
+
+    // 免费铁运城市格（若盘面有）每格 1 SP；点图边补给源格 ⇒ 其余全部落那里
+    const city = w.freeRailCityCandidates[0]
+    if (city !== undefined) {
+      expect(w.beginRollHandEntryNow('sp:arrival')).toBe(true)
+      expect(w.pickHexFor(city.hex)).toBe(true)
+      expect(w.supplyTableUnplaced).toBe(sp - 1)
+    }
+    const edge = w.openSupplySourceHexes[0]!
+    expect(w.beginRollHandEntryNow('sp:arrival')).toBe(true)
+    expect(w.pickHexFor(edge)).toBe(true)
+    expect(w.supplyTableUnplaced).toBe(0)
+    expect(w.rollHandEntries.some((entry) => entry.id === 'sp:arrival')).toBe(false)
+
+    // 落账（12.1b）：免费铁运城市格 1 SP、余额全在那一个图边源格上
+    const spAt = (hex: { col: number; row: number }): number =>
+      w.allSpDumps
+        .filter(
+          (item) => item.side === 'axis' && item.hex.col === hex.col && item.hex.row === hex.row,
+        )
+        .reduce((sum, item) => sum + item.sp, 0)
+    const cityBefore = city === undefined ? 0 : spAt(city.hex)
+    const edgeBefore = spAt(edge)
+    expect(w.applySupplyArrivalsNow()).toBe(true)
+    const sameHex = city !== undefined && city.hex.col === edge.col && city.hex.row === edge.row
+    if (city !== undefined) {
+      expect(spAt(city.hex) - cityBefore).toBe(1)
+    }
+    expect(spAt(edge) - edgeBefore).toBe(sameHex ? sp - 1 : sp - (city === undefined ? 0 : 1))
   }, 60000)
 
   it('★ 1.6c：轴方抽到 Aufk/Krd（5–6）时，死亡堆里的侦察营进手牌而不是作废', async () => {
@@ -359,6 +408,10 @@ describe('B 增援段操作级实测（剧本 1）', () => {
     expect(w.replPending.eq).toBe(0)
     expect(w.replHoldings.eq).toBe(eqBefore)
     expect(w.rollHandEntries.filter((entry) => entry.id.startsWith('repl:'))).toHaveLength(0)
+    // 1.6b 补给表 SP 也在这张手牌里：点一个图边补给源格（余额全部落那里）才清零
+    const edgeSpHex = w.openSupplySourceHexes[0]!
+    expect(w.beginRollHandEntryNow('sp:arrival')).toBe(true)
+    expect(w.pickHexFor(edgeSpHex)).toBe(true)
     expect(w.rollHandPending).toBe(false)
     expect(w.rollHandPoints).toBe(0)
 

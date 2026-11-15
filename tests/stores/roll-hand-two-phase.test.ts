@@ -74,9 +74,12 @@ describe('v7.1 第二段：判定阶段 → 放置阶段', () => {
 
     expect(store.spDumps.length).toBe(dumpsBefore)
     expect(store.units.filter((unit) => unit.instanceId.startsWith('repl'))).toEqual([])
-    // 裁定 2：1.6b 补给表 SP 直接入图外盒，不再自动填 2.1 免费铁运池
-    expect(store.supplyArrivalSp).toBe(0)
-    expect(store.airBoxSupply(store.activeSide).sp).toBeGreaterThan(0)
+    // 专规 1.6b「place new units per 2.1 and 3.1」：补给表 SP 进到货落账池（城市格 1 点 + 图边余额）
+    expect(store.supplyArrivalSp).toBeGreaterThan(0)
+    expect(store.airBoxSupply(store.activeSide)?.sp ?? 0).toBe(0)
+    expect(store.rollHandEntries.find((entry) => entry.id === 'sp:arrival')?.count).toBe(
+      store.supplyArrivalSp,
+    )
     expect(store.rollHandPoints).toBeGreaterThan(0)
   })
 
@@ -89,9 +92,9 @@ describe('v7.1 第二段：判定阶段 → 放置阶段', () => {
     const entries = store.rollHandEntries
     const ids = entries.map((entry) => entry.id)
     expect(new Set(ids).size).toBe(ids.length)
-    // 裁定 2：1.6b 补给表 SP 已入图外盒，不再出现在 2.1 的落账手牌里
-    expect(ids).not.toContain('sp:arrival')
-    expect(store.airBoxSupply(store.activeSide).sp).toBeGreaterThan(0)
+    // 专规 1.6b：补给表 SP 也在同一张手牌里（城市格每格 1 点、余额落图边补给源格）
+    expect(ids).toContain('sp:arrival')
+    expect(store.airBoxSupply(store.activeSide)?.sp ?? 0).toBe(0)
     // 补员表的两族都在同一张手牌里（修前只有它们算"手牌"）
     if (store.replPending.pax > 0) expect(ids).toContain('repl:pax')
     if (store.replPending.eq > 0) expect(ids).toContain('repl:eq')
@@ -116,8 +119,8 @@ describe('v7.1 第二段：判定阶段 → 放置阶段', () => {
     enterRollSegment(store)
     roll(store)
     store.markSpecialReplDraw(store.activeSide, store.turn)
-    // 裁定 2 后 1.6b 的 SP 不再自动进落账池；这里手填 1 SP，继续验 2.1 的落账机制
-    store.supplyArrivalSp = 1
+    // 1.6b 的 SP 已自动进落账池（专规 1.6b / 2.1）；这里只验「指定落点 → 收束才写账本」
+    expect(store.supplyArrivalSp).toBeGreaterThan(0)
     const edge = store.openSupplySourceHexes[0]
     expect(edge).toBeDefined()
     expect(store.beginRollHandEntryNow('sp:arrival')).toBe(true)
