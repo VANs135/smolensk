@@ -38,6 +38,21 @@ export const hexKeyOf = (hex: AiHex): string => `${String(hex.col)}.${String(hex
 /** 稳定排序：先按格号，再按 id（绝不按传入顺序） */
 export const compareHex = (a: AiHex, b: AiHex): number => a.col - b.col || a.row - b.row
 
+export interface AiAirSnapshot {
+  /** 已宣布、尚未收束的任务（需按 14.2f C→G 继续推进） */
+  inProgress: boolean
+  /** 本回合本阶段是否已经飞过任务（14.1c：一架一阶段一次；回归驱动每阶段只飞一次） */
+  flownThisPhase: boolean
+  /** 14.7d 低空扫射按原文只在**移动阶段**宣布（进击阶段的轰炸走 G 进击轰炸，不由本策略发起） */
+  inMovementPhase: boolean
+  /** 2.2a：天气受限时不飞低空扫射（与 `canHipShoot` 同一口径，不放宽天气） */
+  weatherNormal: boolean
+  /** 本环节要打的敌方守格（稳定序第一个） */
+  target: AiHex | null
+  /** 参与本次任务的飞机（稳定序第一个） */
+  aircraftId: string | null
+}
+
 export interface AiMoveSnapshot {
   /** 移动交互仍在进行（且未 finished） */
   active: boolean
@@ -152,6 +167,7 @@ export interface AiSnapshot {
   reserveUnitIds: readonly string[]
   reserveTriedUnitIds: readonly string[]
   move: AiMoveSnapshot
+  air: AiAirSnapshot
   barrage: AiBarrageSnapshot
   combat: AiCombatSnapshot
   supply: AiSupplySnapshot
@@ -166,6 +182,8 @@ export type AiAction =
   | { kind: 'moveClick'; hex: AiHex }
   | { kind: 'moveFinish' }
   | { kind: 'specialConfirm' }
+  /** 14.2f：宣布并推进一次空军任务（低空扫射；C→G 由驱动逐段推进） */
+  | { kind: 'airMission'; target: AiHex | null; aircraftId: string | null }
   | { kind: 'barrageTarget'; hex: AiHex }
   | { kind: 'barrageToggleUnit'; unitId: string }
   | { kind: 'barrageBegin' }
@@ -511,7 +529,24 @@ export function decideAiAction(snapshot: AiSnapshot): AiAction {
     return waitForSide(snapshot.activeSide, '行动：本环节尚有可做动作')
   }
 
-  // 4) 预备 → 战斗（只在闸门放行的环节；每环节每单位只试一次）
+  // 4) 空军任务（14.2f）：已宣布的推进收尾；否则在允许宣布的环节打一次低空扫射
+  //    天气受限时引擎本就不放行 `air.mission`，这里不另设天气判据（按原文不飞）
+  if (
+    snapshot.air.inProgress ||
+    (!snapshot.air.flownThisPhase &&
+      snapshot.air.inMovementPhase &&
+      snapshot.air.weatherNormal &&
+      snapshot.can.has('air.mission') &&
+      snapshot.air.target !== null &&
+      snapshot.air.aircraftId !== null)
+  )
+    return {
+      kind: 'airMission',
+      target: snapshot.air.inProgress ? null : snapshot.air.target,
+      aircraftId: snapshot.air.inProgress ? null : snapshot.air.aircraftId,
+    }
+
+  // 5) 预备 → 战斗（只在闸门放行的环节；每环节每单位只试一次）
   if (snapshot.can.has('move.modeChange')) {
     // 快照已按「格号 + 型号」稳定排序（instanceId 含时间戳，不能当先后判据）
     const unitId = snapshot.reserveUnitIds.find((id) => !snapshot.reserveTriedUnitIds.includes(id))

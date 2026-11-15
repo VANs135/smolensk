@@ -2203,6 +2203,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const airTargetHex = ref<HexRef | null>(null)
   /** C9：参战飞机实例 id（14.2a：一次任务合计 ≤4 架） */
   const airMissionAirIds = ref<string[]>([])
+  /**
+   * 14.2f-E 的扩展：任务按**中止**收束（轰炸宣布被引擎拒，且任务机仍在）。
+   * 置位时跳过「必须先有一场已结算轰炸」的检查，直接记任务结算并返航，
+   * 否则任务态会永远停在 `resolveMission`（`cancelAir` 与环节推进都以 14.1c 拒绝）。
+   */
+  const airMissionAbortPending = ref(false)
   /** C9：任务交互状态机（14.2f A–G；null＝未开始） */
   const airSupply = createAirSupplyDomain({
     returnSupply(hex, side, t, fromOffMapBox) {
@@ -17150,6 +17156,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function clearAir(): void {
     if (!airMissionDomain.canReplace()) return
     airMissionAirIds.value = []
+    airMissionAbortPending.value = false
     airTargetHex.value = null
     airInputs.value = { ...airInputs.value, targetHexText: '' }
     airState.value = null
@@ -18352,6 +18359,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function canAirMissionTarget(kind: AirMissionKind, hex: HexRef): boolean {
     if (!airMissionKindChoices.value.some((choice) => choice.key === kind)) return false
     if (!airMissionTargetTypeAllowed(kind, airTargetFactsAt(hex))) return false
+    /*
+     * 10.0b：低空扫射必须有**正确观察员**（与右键入口 `hipShootEntryEligible` 同一判据）。
+     * 修前这里不判，AI / 目标候选会给出结算时必被 10.0b 拒的格 ⇒ 任务宣布后卡在结算步。
+     */
+    if (kind === 'hip_shoot' && !barrageFacts.value.hasSpotter(hex)) return false
     const side = airActingSide.value
     const planes = airUnits.value.filter(
       (air) => air.side === side && airPlaneCanPerformKind(air, kind),
@@ -19764,7 +19776,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       ...airInputs.value,
       missionNote: '任务机已中止或被摧毁，没有执行对地任务',
     }
-    if (!confirmAirMissionNow()) return false
+    // 轰炸宣布被引擎拒 ⇒ 没有可结算的战果；置位后 `airMissionResultReady` 放行，
+    // 否则 `confirmAirMissionNow` 会因「等一场永不存在的轰炸」而失败，状态死在结算步
+    airMissionAbortPending.value = true
+    if (!confirmAirMissionNow()) {
+      airMissionAbortPending.value = false
+      return false
+    }
     if (!finishAutomaticAirReturn()) return false
     return airState.value?.step === 'returnToBase' || airState.value?.step === 'done'
   }
@@ -19824,6 +19842,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       existing.units.every((unit) => state.assignment.aircraftIds.includes(unit.unitId))
     )
       return true
+    /*
+     * 上一趟任务**已结算**的轰炸仍留在 `barrageState` 里 ⇒ `barrageAirUnits` 会读它的旧 `units`：
+     * 新任务会带着旧飞机去宣布（`unitAlreadyBarraged`，10.0e-B），或把旧机算进本次参炸。
+     * 那不归本趟任务 ⇒ 先收掉再开新场。本趟任务自己的轰炸（含未结算）不进这个分支。
+     */
+    if (existing !== null && existing.finished) clearBarrage()
     if (!canReplaceBarrage()) return false
     //
     // ★ 批 A 切片 2：对齐的是**轰炸目标格**，不再去改"战斗目标" ——
@@ -19870,7 +19894,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   function airMissionResultReady(state: AirInteractionState): boolean {
     if (['barrage', 'hip_shoot', 'trainbusting'].includes(state.kind)) {
-      if (airMissionFlyingUnits.value.length === 0) return true
+      // 14.2f-E：任务机全失，或轰炸宣布已被引擎拒（中止）⇒ 没有对地战果可等
+      if (airMissionFlyingUnits.value.length === 0 || airMissionAbortPending.value) return true
       const barrage = barrageState.value
       if (
         barrage === null ||
@@ -19894,8 +19919,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
   function confirmAirMissionNow(): boolean {
     const state = airState.value
+    const aborted = airMissionAbortPending.value
     const ok = airMissionDomain.confirmAirMissionNow()
-    if (ok && state !== null && airMissionFlyingUnits.value.length === 0)
+    airMissionAbortPending.value = false
+    if (ok && state !== null && (airMissionFlyingUnits.value.length === 0 || aborted))
       recordAbortedAirBarrage(state)
     return ok
   }
@@ -19939,7 +19966,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         if (!confirmBarrageLossNow()) return false
         if (!runBarrageChainNow()) return false
       } else if (!finished) {
-        if (!beginAirBarrageNow()) return false
+        // 轰炸宣布被引擎拒（如 10.0b 观察员不合法）⇒ 任务按中止处理并返航，
+        // 否则任务态永远停在结算步：`cancelAir` 与环节推进都会以 14.1c 拒绝（状态不一致）
+        if (!beginAirBarrageNow()) return finishAbortedAirMission()
         if (!runBarrageChainNow()) return false
         // 刚停在受损分配 ⇒ 停在面板 2（选完损失再点「结算任务」）
         if (barrageState.value?.finished !== true) return false

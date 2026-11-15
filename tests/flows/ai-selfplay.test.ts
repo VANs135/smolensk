@@ -116,6 +116,20 @@ describe('B3 AI 对打回归', () => {
       describeReport(id, report)
       expectClean(id, report)
       expectOnlyExpectedRefusals(id, report)
+      /*
+       * 剧本 1 的八回合是「行政流程」的主回归：增援落位、可变补员（1.6b/1.6c）、
+       * 跨回合的补给（12.6 / 12.10e / 12.8b）与整编（13.5）都得真的走到，
+       * 不能只把回合数推过去。规则号取自驱动累积（日志只留 60 条，不能读末态日志）。
+       */
+      if (id === '1') {
+        expect(report.targetTurn, `剧本 1 应跑 8 回合`).toBe(9)
+        expect(report.reachedTarget, `剧本 1 未到达第 9 回合`).toBe(true)
+        const rules = new Set(report.rules)
+        for (const rule of ['1.6b', '1.6c', '2.2', '13.5', '12.6', '12.10e', '12.8b'])
+          expect(rules.has(rule), `剧本 1 八回合缺少 ${rule}；实际 ${[...rules].join(',')}`).toBe(
+            true,
+          )
+      }
       const replay = replaySessionLog(ctx.g.session!)
       expect(replay.ok, `${whereOf(id, report)} 会话日志复算：${replay.detail}`).toBe(true)
     }, 300_000)

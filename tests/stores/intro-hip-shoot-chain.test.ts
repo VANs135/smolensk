@@ -263,6 +263,72 @@ describe('Vitebsk 低空扫射全链实点（14.2f A→G）', () => {
     expect(workbench.airState?.combat).toMatchObject({ occurs: true })
   })
 
+  it('★ 10.0b：没有正确观察员时，低空扫射的目标格在入口判据上就不成立', async () => {
+    const { workbench } = await openIntroNormalWeather()
+    expect(workbench.canAirMissionTarget('hip_shoot', DEFENDER_HEX)).toBe(true)
+    const spotter = workbench.units.findIndex((unit) => unit.instanceId === 'spot-1')
+    workbench.units.splice(spotter, 1)
+    expect(workbench.canAirMissionTarget('hip_shoot', DEFENDER_HEX)).toBe(false)
+  })
+
+  it('★ 结算被 10.0b 拒时任务可中止返航，不把状态死在 resolveMission', async () => {
+    const { workbench } = await openIntroNormalWeather()
+    workbench.setAirMissionKind('hip_shoot')
+    expect(
+      workbench.setAirTargetFromText(`${String(DEFENDER_HEX.col)}.${String(DEFENDER_HEX.row)}`),
+    ).toBe(true)
+    workbench.toggleAirMissionUnit('hip-1')
+    expect(workbench.beginAirMissionNow()).toBe(true)
+    expect(workbench.autoResolveAirMissionNow()).toBe(true)
+    expect(workbench.airState?.step).toBe('resolveMission')
+
+    // 走到结算前拿掉观察员：轰炸宣布必被 10.0b 拒（模拟入口判据漏过的情形）
+    const spotter = workbench.units.findIndex((unit) => unit.instanceId === 'spot-1')
+    workbench.units.splice(spotter, 1)
+    expect(workbench.settleAirMissionNow()).toBe(true)
+    expect(workbench.airState?.finished).toBe(true)
+    expect(workbench.airUnits.find((air) => air.instanceId === 'hip-1')?.airStatus).toBe('inactive')
+  })
+
+  it('★ 上一趟的轰炸结算后，下一趟换机宣布：新任务用新机参炸，不拿旧机触发 10.0e-B', async () => {
+    const { workbench, mapView } = await openIntroNormalWeather()
+    const second = aircraftChoices('axis').find(
+      (record) => record.airAbilities?.canHipShoot === true && (record.barrageStrength ?? 0) > 0,
+    )!
+    workbench.airUnits.push(
+      toConsoleAirUnit({
+        aircraft: second,
+        instanceId: 'hip-2',
+        hex: BASE_HEX,
+        side: 'axis',
+        airStatus: 'active',
+      }),
+    )
+
+    // 第一趟：hip-1 打 DEFENDER_HEX，结算并自动返航（barrageState 停在 done）
+    expect(mapView.openUnitContext(DEFENDER_HEX, 'def-1', { x: 0, y: 0 })).toBe(true)
+    expect(mapView.openContextAction('def-1', 'ops.hipShoot')).toBe(true)
+    workbench.toggleAirMissionUnit('hip-1')
+    expect(mapView.advanceOpsFlow()).toBe(true)
+    expect(workbench.settleAirMissionNow()).toBe(true)
+    expect(workbench.barrageState?.finished).toBe(true)
+
+    // 第二趟：换 hip-2 打同一格（14.7d-A：低空扫射不占每格一次）
+    // 与界面同路：右键开新任务时先 `clearAir()`（opsFlow 的空军分支）
+    workbench.clearAir()
+    workbench.setAirMissionKind('hip_shoot')
+    expect(
+      workbench.setAirTargetFromText(`${String(DEFENDER_HEX.col)}.${String(DEFENDER_HEX.row)}`),
+    ).toBe(true)
+    workbench.toggleAirMissionUnit('hip-2')
+    expect(workbench.beginAirMissionNow(), JSON.stringify(workbench.airError)).toBe(true)
+    expect(workbench.autoResolveAirMissionNow()).toBe(true)
+    expect(workbench.airState?.step).toBe('resolveMission')
+
+    expect(workbench.settleAirMissionNow()).toBe(true)
+    expect(workbench.barrageState?.units.map((unit) => unit.unitId)).toEqual(['hip-2'])
+  })
+
   it('★ 结算任务（F）真的落账：轰炸结论 + 14.4 防空损失 + 14.7d-A 格账本不记 → 自动返航（G）', async () => {
     const { session, workbench, mapView } = await openIntroNormalWeather()
     expect(mapView.openUnitContext(DEFENDER_HEX, 'def-1', { x: 0, y: 0 })).toBe(true)

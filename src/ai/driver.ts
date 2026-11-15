@@ -41,6 +41,14 @@ export interface AiMemory {
   reserveUnitIds: string[]
   barrageTargets: string[]
   combatHexes: string[]
+  /** 已打过（或试过）的空军任务目标格 */
+  airTargets: string[]
+  /** 已出动过的飞机（避免反复点名同一架） */
+  airAircraft: string[]
+  /** 已飞过任务的「回合/阶段」标记 */
+  airSorties: string[]
+  /** 引擎拒绝结算而终止的任务「回合/阶段」（不再推进同一份陈旧任务态） */
+  airAborted: string[]
 }
 
 export function createAiMemory(): AiMemory {
@@ -51,6 +59,10 @@ export function createAiMemory(): AiMemory {
     reserveUnitIds: [],
     barrageTargets: [],
     combatHexes: [],
+    airTargets: [],
+    airAircraft: [],
+    airSorties: [],
+    airAborted: [],
   }
 }
 
@@ -90,6 +102,8 @@ export interface AiSelfPlayReport {
   stalls: string[]
   refused: AiRefusal[]
   refusedByRule: Record<string, number>
+  /** 本次自对打期间出现过的规则号（去重、按首次出现顺序；日志有 60 条上限，故在驱动侧累积） */
+  rules: string[]
   warnings: string[]
   noLegal: number
   awaiting: boolean
@@ -124,6 +138,10 @@ function syncMemory(memory: AiMemory, w: ReturnType<typeof useWorkbenchStore>): 
   memory.reserveUnitIds = []
   memory.barrageTargets = []
   memory.combatHexes = []
+  memory.airTargets = []
+  memory.airAircraft = []
+  memory.airSorties = []
+  memory.airAborted = []
 }
 
 function dedupeSortedHexes(hexes: readonly AiHex[]): AiHex[] {
@@ -224,6 +242,24 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
       ? barrageOutcome.value.stepLosses
       : 0
 
+  const airState = w.airState
+  const airRelevant = airState !== null || w.segmentActionKeys.has('air.mission')
+  // 14.2f-B：目标只取「引擎判定可打」的敌方战斗单位格；打过的记进 memory，避免同格重试
+  const airTargets = airRelevant
+    ? dedupeSortedHexes(
+        enemy
+          .filter((unit) => unit.isCombat)
+          .filter((unit) => w.canAirMissionTarget('hip_shoot', unit.hex))
+          .map((unit) => unit.hex),
+      ).filter((hex) => !memory.airTargets.includes(hexKeyOf(hex)))
+    : []
+  // 14.2b：只判断「本方还有能打低空扫射的飞机」（含图外空军盒）；够不够得到目标由点名时判
+  const airPlane = airRelevant
+    ? w.airMissionBaseGroupsWithBox
+        .flatMap((group) => group.aircraft)
+        .filter((item) => item.air.canHipShoot)[0]
+    : undefined
+
   const plan = w.phase === 'supply' ? w.supplyPhasePlan : null
   const duties =
     plan?.attritionDuty.map((duty) => {
@@ -309,6 +345,17 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
       triedTargets: memory.moveTargets,
       candidates,
       enemyHexes,
+    },
+    air: {
+      inProgress:
+        airState !== null &&
+        !airState.finished &&
+        !memory.airAborted.includes(`${w.turn}/${w.phase}`),
+      flownThisPhase: memory.airSorties.includes(`${w.turn}/${w.phase}`),
+      inMovementPhase: w.phase === 'movement',
+      weatherNormal: w.airInputs.weatherNormal,
+      target: airTargets[0] ?? null,
+      aircraftId: airPlane?.air.instanceId ?? null,
     },
     barrage: {
       state:
@@ -482,6 +529,100 @@ function execute(
           w.setSpecialDisplacement(item.unitId, candidate)
       }
       return w.confirmSpecialCombatNow()
+    }
+    case 'airMission': {
+      /*
+       * 14.2f A→G：未起任务就先「定种类 + 定目标 + 点名飞机」再宣布；
+       * 已起任务则按当前步推进——空战（14.3）、拦截应答（14.5，默认不拦）、
+       * 防空（14.4）、任务结算（14.2f-F）、返航（G）。
+       * 天气受限时 `air.mission` 本就不在 `can` 里，驱动不会走到这里（按原文不飞）。
+       */
+      const air = { target: action.target, aircraftId: action.aircraftId }
+      if (w.airState !== null && w.airState.finished) w.cancelAir()
+      if (w.airState === null) {
+        if (air.target === null) return false
+        const target = air.target
+        w.setAirMissionKind('hip_shoot')
+        if (!w.setAirTargetFromText(hexKeyOf(target))) {
+          memory.airTargets.push(hexKeyOf(target))
+          return false
+        }
+        // 定好目标后按引擎口径挑第一架够得到的低空扫射机（含图外空军盒，1.4a）
+        const pick = w.airMissionBaseGroupsWithBox
+          .flatMap((group) => group.aircraft)
+          .filter(
+            (item) =>
+              item.disabledReason === null &&
+              item.air.canHipShoot &&
+              !memory.airAircraft.includes(item.air.instanceId),
+          )
+          .sort((a, b) =>
+            compareStableUnit(
+              { hex: a.air.hex, unitId: a.air.instanceId },
+              { hex: b.air.hex, unitId: b.air.instanceId },
+            ),
+          )[0]
+        if (pick === undefined) {
+          memory.airTargets.push(hexKeyOf(target))
+          return false
+        }
+        w.toggleAirMissionUnit(pick.air.instanceId)
+        memory.airTargets.push(hexKeyOf(target))
+        memory.airAircraft.push(pick.air.instanceId)
+      }
+      for (let guard = 0; guard < 16; guard += 1) {
+        const state = w.airState
+        if (state === null) return w.runAirMissionNow()
+        if (state.finished) {
+          // 已收束：登记「本阶段飞过」，并清掉任务态（否则下一架会被陈旧状态挡住）
+          memory.airSorties.push(`${w.turn}/${w.phase}`)
+          w.cancelAir()
+          return true
+        }
+        switch (state.step) {
+          case 'airCombat':
+            if (!w.autoResolveAirMissionNow()) {
+              memory.airSorties.push(`${w.turn}/${w.phase}`)
+              w.cancelAir()
+              return false
+            }
+            continue
+          case 'interception':
+            w.airInputs = { ...w.airInputs, interceptDeclared: false }
+            if (!w.declareInterceptionNow()) {
+              memory.airSorties.push(`${w.turn}/${w.phase}`)
+              w.cancelAir()
+              return false
+            }
+            continue
+          case 'flak':
+            if (!w.autoResolveAirMissionNow()) {
+              memory.airSorties.push(`${w.turn}/${w.phase}`)
+              w.cancelAir()
+              return false
+            }
+            continue
+          case 'resolveMission':
+            if (!w.settleAirMissionNow()) {
+              // 引擎拒绝结算（如 10.0/10.0b 观察员不合法）⇒ 记一次、本阶段不再推进该任务
+              w.cancelAir()
+              memory.airAborted.push(`${w.turn}/${w.phase}`)
+              memory.airSorties.push(`${w.turn}/${w.phase}`)
+              return false
+            }
+            continue
+          case 'returnToBase':
+            if (!w.completeAirReturnNow()) {
+              memory.airSorties.push(`${w.turn}/${w.phase}`)
+              w.cancelAir()
+              return false
+            }
+            continue
+          default:
+            return true
+        }
+      }
+      return true
     }
     case 'barrageTarget': {
       w.clickHex(action.hex)
@@ -680,13 +821,15 @@ export async function runAiSelfPlay(options: AiSelfPlayOptions): Promise<AiSelfP
   const refused: AiRefusal[] = []
   const refusedByRule: Record<string, number> = {}
   const warnings: string[] = []
+  const rules: string[] = []
   let waiting: string | undefined
   let noLegal = 0
   let iterations = 0
   let lastToken = ''
   let lastDecision = ''
   let sameState = 0
-  let logLength = w.log.length
+  /** 上一步的日志栈顶 id：日志是 `unshift` 且截到 60 条，按 id 取边界才不会漏记 */
+  let lastTopId = w.log[0]?.id ?? null
 
   // 到达目标回合时若还挂着盘面提问（回合开始的天气/先手等），先把它答完再收尾——
   // 否则报告会停在「有未处理 awaiting」的状态，而这并非 AI 漏判。
@@ -704,10 +847,17 @@ export async function runAiSelfPlay(options: AiSelfPlayOptions): Promise<AiSelfP
       break
     }
 
-    const fresh = logLength <= w.log.length ? w.log.slice(0, w.log.length - logLength) : []
-    logLength = w.log.length
+    const fresh: typeof w.log = []
+    for (const entry of w.log) {
+      if (entry.id === lastTopId) break
+      fresh.push(entry)
+    }
+    lastTopId = w.log[0]?.id ?? null
     for (const entry of fresh) {
       if (entry.kind === 'warning' || entry.kind === 'danger') warnings.push(entry.text)
+      if (typeof entry.rule === 'string')
+        for (const rule of entry.rule.split(' / '))
+          if (rule !== '' && !rules.includes(rule)) rules.push(rule)
     }
 
     if (!result.ok) {
@@ -768,6 +918,7 @@ export async function runAiSelfPlay(options: AiSelfPlayOptions): Promise<AiSelfP
     stalls,
     refused,
     refusedByRule,
+    rules,
     warnings,
     noLegal,
     awaiting: ctx.session.awaiting,
