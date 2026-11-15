@@ -176,7 +176,7 @@ describe('U1-b 投影：按流程顺序给单一事项', () => {
         },
       }),
     )
-    expect(items.map((entry) => entry.id)).toEqual(['reinforce:replTable', 'reinforce:endRoll'])
+    expect(items.map((entry) => entry.id)).toEqual(['reinforce:roll'])
   })
 
   it('突围：返场与突围尝试是两件事，先返场（强制）再突围（选做）', () => {
@@ -425,19 +425,27 @@ describe('U1-b 源码守卫：只在门里出一件，旧判定不留两份', ()
 
     const reinforce = read('components/reinforcement/ReinforcementPanel.vue')
     for (const id of [
-      'reinforce:randomEvent',
+      'reinforce:roll',
       'reinforce:arrival',
-      'reinforce:variableExit',
       'reinforce:frontalReserves',
       'reinforce:slow',
-      'reinforce:replTable',
       'reinforce:endRebuild',
     ]) {
       expect(reinforce).toContain(`item="${id}"`)
     }
-    // 1.6c / 1.6b 已并入「掷骰检定」一张卡，不再单列
-    expect(reinforce).not.toContain('item="reinforce:specialRepl"')
-    expect(reinforce).not.toContain('item="reinforce:supplyTable"')
+    // 第二段的自动骰（3.6 / 3.3c / 1.6b / 1.6c）与手牌、结束本段已全部合进 `reinforce:roll`
+    for (const dead of [
+      'reinforce:randomEvent',
+      'reinforce:supplyTrain',
+      'reinforce:variableExit',
+      'reinforce:replTable',
+      'reinforce:specialRepl',
+      'reinforce:supplyTable',
+      'reinforce:hand',
+      'reinforce:endRoll',
+    ]) {
+      expect(reinforce, `仍残留独立窗 ${dead}`).not.toContain(`item="${dead}"`)
+    }
     expect(reinforce).not.toContain("segmentIn(['reinforcement.arrival'])")
     expect(reinforce).not.toContain("segmentIn(['reinforcement.rebuild'])")
   })

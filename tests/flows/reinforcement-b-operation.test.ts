@@ -155,9 +155,9 @@ describe('B 增援段操作级实测（剧本 1）', () => {
     expect(rollStep).toBeGreaterThanOrEqual(0)
     expect(w.setSegmentStepIndex(rollStep)).toBe(true)
     await nextTick()
-    expect(mapView.sessionStep?.id).toBe('reinforce:replTable')
-    expect(mapView.sessionStep?.title).toContain('补员表')
-    expect(mapView.sessionStep?.title).toContain('1.6b')
+    expect(mapView.sessionStep?.id).toBe('reinforce:roll')
+    expect(mapView.sessionStep?.title).toContain('掷骰')
+    expect(mapView.sessionStep?.title).toContain('落位')
 
     // store 事实：1.6b 的掷骰结果
     const repl = w.lastVariableRepl
@@ -334,7 +334,7 @@ describe('B 增援段操作级实测（剧本 1）', () => {
     expect(eqBefore).toBeGreaterThan(0)
     expect(w.replHoldings.pax).toBe(0)
     expect(w.replHoldings.eq).toBe(0)
-    expect(mapView.sessionSteps.map((step) => step.id)).toContain('reinforce:hand')
+    expect(mapView.sessionSteps.map((step) => step.id)).toContain('reinforce:roll')
 
     for (let n = 0; n < paxBefore; n++) {
       expect(w.beginRollHandEntryNow('repl:pax')).toBe(true)

@@ -473,44 +473,24 @@ function moveItems(facts: SessionStepFacts['move']): SessionStepItem[] {
  * 环节次序本身仍由 `sop-segments` 的 B 段给出；本表只回答"这一件事归哪一环"。
  */
 const REINFORCE_STEP_OF: Readonly<Record<string, string>> = {
-  // 1.6b 可变增援：掷表是自动步，玩家只负责把到货的 Pax/Eq 与 SP **落位**
-  'reinforce:replTable': 'reinforcement.replRoll',
-  'reinforce:supplyTable': 'reinforcement.replRoll',
   // 13.6 / 1.6a 到达落位；2.4 慢动员在收到锁定师之后当场解锁
   'reinforce:arrival': 'reinforcement.arrival',
   'reinforce:slow': 'reinforcement.arrival',
-  // 轴方专规
-  'reinforce:randomEvent': 'reinforcement.randomEvent',
-  'reinforce:supplyTrain': 'reinforcement.supplyTrain',
-  'reinforce:variableExit': 'reinforcement.variableExit',
+  // 专规 1.6c / 2.3c
+  'reinforce:frontalReserves': 'reinforcement.frontalReserves',
   // 13.5a / 13.9 重建与整编（第三段只保留「结束本段」；重建/整编改走盘面右键）
   'reinforce:endRebuild': 'reinforcement.rebuild',
-  // 专规 1.6c / 2.3c
-  'reinforce:specialRepl': 'reinforcement.specialRepl',
-  'reinforce:frontalReserves': 'reinforcement.frontalReserves',
-  // v7.1 第二段：批量手牌与"结束本段"都属于宿主环
-  'reinforce:hand': 'reinforcement.replRoll',
-  'reinforce:endRoll': 'reinforcement.replRoll',
+  // 第二段：掷骰与统一放置合并成**一个**窗（用户 2026-11-15）
+  'reinforce:roll': 'reinforcement.replRoll',
 }
 
 /**
  * 第二段段内次序（v7.1 §3，按原文先后）
  *
- * 只影响**显示顺序**，不改归属；未列出的条目排在列出的之后（保持 push 原序）。
- * 1.6c 最前（条件必现且决定后续可重建对象），随后 3.6 随机事件/补给列车、3.3c 撤离，
- * 再到 1.6b 两张表，2.3c 方面军预备队，最后统一手牌与结束本段。
+ * 第二段已合并为「方面军预备队（必须先领）」＋「掷骰与落位」两件；
+ * 1.6c / 3.6 / 3.3c / 1.6b 的骰与产出都在后者同一窗内（先掷、再放）。
  */
-const REINFORCE_ROLL_ORDER: readonly string[] = [
-  'reinforce:specialRepl',
-  'reinforce:randomEvent',
-  'reinforce:supplyTrain',
-  'reinforce:variableExit',
-  'reinforce:replTable',
-  'reinforce:supplyTable',
-  'reinforce:frontalReserves',
-  'reinforce:hand',
-  'reinforce:endRoll',
-]
+const REINFORCE_ROLL_ORDER: readonly string[] = ['reinforce:frontalReserves', 'reinforce:roll']
 
 function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): SessionStepItem[] {
   const acked = new Set(facts.acked)
@@ -528,26 +508,6 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
     items.push(item(id, title, why, decision))
   }
 
-  // 3.6：轴方 19 Jul–15 Aug 的随机事件（原文未定段内位置，建议开场）
-  if (facts.randomEventPending && !acked.has('reinforce:randomEvent')) {
-    push(
-      'reinforce:randomEvent',
-      '随机事件（3.6）',
-      '19 Jul–15 Aug 的轴方增援阶段要掷一次随机事件。',
-      '看本回合事件结果；若为补给列车，下一窗点地图高亮铁路格放置 2 SP。',
-    )
-  }
-  // 3.6：补给列车落点（只对轴方；未掷出则本窗空过）
-  if (facts.supplyTrainPending && !acked.has('reinforce:supplyTrain')) {
-    push(
-      'reinforce:supplyTrain',
-      '补给列车落点（3.6）',
-      '随机事件掷出 Supply Train：地图高亮全部可卸货铁路格，点一格即落 2 SP（不用 Rail Cap）。',
-      facts.panzerGroupRulesOn
-        ? '在窗口确认 3.4b 归属后，点地图任意高亮铁路格。'
-        : '点地图任意高亮铁路格。',
-    )
-  }
   // 13.6 / 1.6a：当日到达落位与强制移除
   if (facts.arrivalPending) {
     push(
@@ -566,16 +526,7 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
       '勾选当日应解锁的师并提交解锁；配额大于剩余时剩余全部解锁。',
     )
   }
-  // 3.3c：轴方 19 Aug 起的可变撤离（到达之后，14 Mtr 才在场）
-  if (facts.variableExitPending && !acked.has('reinforce:variableExit')) {
-    push(
-      'reinforce:variableExit',
-      '可变撤离（3.3c）',
-      '19 Aug 起每个轴方增援阶段掷一次，直到 SS Reich 或 14 Mtr 被撤走。',
-      '掷骰并按 1.6a 移除；2–5 则本回合不撤，下一回合再掷。',
-    )
-  }
-  // 2.3c：苏方三批方面军预备队，必须当即领取
+  // 2.3c：苏方三批方面军预备队，必须当即领取（领取物并入同一张手牌）
   if (facts.frontalReservesPending) {
     push(
       'reinforce:frontalReserves',
@@ -584,16 +535,6 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
       '落 2 SP、完成换装，并选两次免费重建的对象。',
     )
   }
-  // 13.5 / 1.6b：可变增援的补员表
-  if (facts.replTablePending && !acked.has('reinforce:replTable')) {
-    push(
-      'reinforce:replTable',
-      '可变增援·补员表（13.5 / 1.6b）',
-      '本方的增援阶段要掷一次补员表，并把 Pax/Eq 放成算子。',
-      '掷表、放置 Pax/Eq；Ftr/Tac 立即用掉，Pax/Eq 可留存。',
-    )
-  }
-  // 1.6c / 1.6b：判定全部并入 `reinforce:replTable` 的「掷骰检定」一处，不再单列两张卡
   /*
    * 第三段（重建 · 合并 · 整编）：**只问「是否结束本段」**（v7.1 §4.3 / §4.6）。
    *
@@ -608,21 +549,20 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
       '结束本段，进入后续环节。',
     )
   }
-  // ── 第二段收尾：批量手牌 + 结束本段（唯一出口） ──
-  if ((facts.handPending || facts.handPlacedCount > 0) && !acked.has('reinforce:hand')) {
+  /*
+   * ── 第二段：**掷骰与落位一个窗**（用户 2026-11-15）──────────────────────
+   *
+   * 掷骰全部是自动的（引擎用种子化 RNG 一次掷完），点一次「掷骰检定」即出结果；
+   * 结果（SP / 补员点数与来源）与可落位的单位同屏，落完由「结束本段」收束。
+   * 修前 3.6 随机事件 / 1.6b 掷表 / 统一手牌 / 结束本段各占一个窗，玩家点了检定
+   * 还要再点两次「本步完成 / 跳过」才看得到可放的算子。
+   */
+  if (facts.stepId === 'reinforcement.replRoll' && !acked.has('reinforce:roll')) {
     push(
-      'reinforce:hand',
-      '待放上手牌（13.5a / 1.6b）',
-      '骰子已判完，落位统一在这里办：点一条 → 点高亮格 → 落下；再点已落下的算子可收回。',
-      '把 Pax / Eq / SP 逐枚放到合法格；点完即生效，不弹二次确认。',
-    )
-  }
-  if (facts.stepId === 'reinforcement.replRoll' && !acked.has('reinforce:endRoll')) {
-    push(
-      'reinforce:endRoll',
-      '结束本段（第二段）',
-      '本段的掷骰与落位都办完了。',
-      '结束本段并进入重建；若手牌非空会先问一次是否放弃上场。',
+      'reinforce:roll',
+      '掷骰与落位',
+      '本阶段的可变增援还没掷完（1.6c / 3.6 / 3.3c / 1.6b 一次掷完）。',
+      '点「掷骰检定」；把 Pax / Eq / SP 落到高亮格，然后结束本段。',
     )
   }
   // 段内显示次序按 §3；未列出的条目保持 push 原序排在后面

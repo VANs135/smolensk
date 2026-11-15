@@ -90,7 +90,7 @@ describe('增援段：段 → 节集合（v7.1 第二段）', () => {
     ).toEqual(['reinforce:arrival', 'reinforce:slow'])
   })
 
-  it('掷骰宿主：段内块按 §3 次序，最后是统一手牌与结束本段', () => {
+  it('掷骰宿主：段内只剩「掷骰与落位」一个窗（骰与手牌同屏）', () => {
     expect(
       idsOf(
         baseFacts({
@@ -107,17 +107,10 @@ describe('增援段：段 → 节集合（v7.1 第二段）', () => {
           consolidationAvailable: true,
         }),
       ),
-    ).toEqual([
-      'reinforce:randomEvent',
-      'reinforce:supplyTrain',
-      'reinforce:variableExit',
-      'reinforce:replTable',
-      'reinforce:frontalReserves',
-      'reinforce:endRoll',
-    ])
+    ).toEqual(['reinforce:frontalReserves', 'reinforce:roll'])
   })
 
-  it('掷骰宿主：手牌非空时在结束本段之前插「待放上手牌」', () => {
+  it('掷骰宿主：手牌非空也不再另开一个「待放上手牌」窗', () => {
     expect(
       idsOf(
         baseFacts({
@@ -127,7 +120,7 @@ describe('增援段：段 → 节集合（v7.1 第二段）', () => {
           handPending: true,
         }),
       ),
-    ).toEqual(['reinforce:replTable', 'reinforce:hand', 'reinforce:endRoll'])
+    ).toEqual(['reinforce:roll'])
   })
 
   it('重建环节：只问「是否结束本段」（不夹带补员表/到达/大窗）', () => {
@@ -145,7 +138,7 @@ describe('增援段：段 → 节集合（v7.1 第二段）', () => {
     ).toEqual(['reinforce:endRebuild'])
   })
 
-  it('轴方专规：随机事件 / 补给列车 / 可变撤离都在掷骰宿主内按序出现', () => {
+  it('轴方专规：随机事件 / 补给列车 / 可变撤离都并入同一个掷骰与落位窗', () => {
     expect(
       idsOf(
         baseFacts({
@@ -157,15 +150,10 @@ describe('增援段：段 → 节集合（v7.1 第二段）', () => {
           replTablePending: false,
         }),
       ),
-    ).toEqual([
-      'reinforce:randomEvent',
-      'reinforce:supplyTrain',
-      'reinforce:variableExit',
-      'reinforce:endRoll',
-    ])
+    ).toEqual(['reinforce:roll'])
   })
 
-  it('苏方专规：判定并入「掷骰检定」，与方面军预备队按序出现', () => {
+  it('苏方专规：判定并入「掷骰与落位」，方面军预备队先领（必须当即领取）', () => {
     expect(
       idsOf(
         baseFacts({
@@ -176,7 +164,7 @@ describe('增援段：段 → 节集合（v7.1 第二段）', () => {
           arrivalPending: true,
         }),
       ),
-    ).toEqual(['reinforce:replTable', 'reinforce:frontalReserves', 'reinforce:endRoll'])
+    ).toEqual(['reinforce:frontalReserves', 'reinforce:roll'])
   })
 })
 
@@ -299,18 +287,11 @@ describe('增援面板：只用新窗口 id', () => {
       expect(panel).not.toContain(dead)
     }
     const allowed = new Set([
-      'reinforce:randomEvent',
-      'reinforce:supplyTrain',
+      'reinforce:roll',
       'reinforce:arrival',
-      'reinforce:variableExit',
       'reinforce:frontalReserves',
       'reinforce:slow',
-      'reinforce:replTable',
-      'reinforce:specialRepl',
-      'reinforce:supplyTable',
       'reinforce:endRebuild',
-      'reinforce:hand',
-      'reinforce:endRoll',
     ])
     const ids = [...panel.matchAll(/item="(reinforce:[^"]+)"/gu)].map((match) => match[1]!)
     expect(ids.length).toBeGreaterThan(0)

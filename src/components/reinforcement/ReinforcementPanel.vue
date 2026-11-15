@@ -84,6 +84,14 @@ const slowMobilizationLimitReached = computed(
   () => slowMobilizationPick.value.length >= slowMobilizationQuota.value,
 )
 
+/** 勾选已达配额 ⇒ 未勾的师不可再选（不可用项不出现，而不是摆灰勾选框） */
+const slowMobilizationSelectable = computed(() =>
+  slowMobilizationCandidates.value.filter(
+    (unit) =>
+      slowMobilizationPick.value.includes(unit.instanceId) || !slowMobilizationLimitReached.value,
+  ),
+)
+
 function toggleSlowMobilizationPick(instanceId: string): void {
   const index = slowMobilizationPick.value.indexOf(instanceId)
   if (index >= 0) {
@@ -153,8 +161,8 @@ const breakdownParentId = ref('')
 /**
  * 1.6c + 1.6b 的**一次掷骰检定**（用户 2026-11-13：判定只留一个入口）
  *
- * 次序照原文：先 1.6c 特殊补员表，再 1.6b 可变增援/补给表。
- * 按钮只在「还没掷过」时出现：1.6b 已自动掷过且 1.6c 不可掷（19 Aug 起 / 本回合已掷）⇒ 不出现。
+ * 次序照原文：先 1.6b 可变增援/补给表，再用同一颗骰结算 1.6c 特殊补员。
+ * 按钮在「还没掷过」或「1.6c 仍可掷」时出现；两者都不成立即不再出现。
  */
 const replCheckVisible = computed(
   () => !workbench.variableReplRolled || specialReplRefusal.value === null,
@@ -168,17 +176,6 @@ function runReplCheck(): void {
     containers.drawSpecialRepl(workbench.activeSide, workbench.variableReplSpecialDie ?? undefined)
   }
 }
-
-/** 1.6c 骰面只在**本回合本方已掷**时展示（`specialReplLast` 跨回合不残留） */
-const specialReplLastThisTurn = computed(
-  () =>
-    containers.specialReplLast !== null &&
-    containers.specialReplLast.side === workbench.activeSide &&
-    workbench.hasSpecialReplDraw(workbench.activeSide, workbench.turn),
-)
-
-/** 1.6b 补给表进图外盒的 SP 数（T 记账 ÷ 4；只在本次检定后显示） */
-const offMapDepositSp = computed(() => Math.trunc(workbench.offMapRollDeposit?.sp ?? 0))
 
 /**
  * 批 F 切片 3：**到货 SP 落位**（专规 2.1 / 3.1 免费铁运 + 3.6 补给列车）
@@ -301,6 +298,20 @@ const arrivalPlacedCards = computed<ArrivalHandCard[]>(() => {
   })
   return cards
 })
+
+/**
+ * 不可投放的卡是**待办状态**，不是可点动作（不可用项不出现）：
+ * 1.6a 强制移除未执行、或本条目没有合法入场格 ⇒ 渲染成 div，不摆一个 disabled 按钮。
+ */
+function arrivalCardBlocked(card: ArrivalHandCard): boolean {
+  return card.noCandidates || workbench.arrivalRemovalsPending
+}
+
+/** 只有可投放的卡才收点击（不可用的卡是状态，不是动作） */
+function onArrivalCardClick(card: ArrivalHandCard): void {
+  if (arrivalCardBlocked(card)) return
+  pickArrival(card.index)
+}
 
 /**
  * 第二段统一手牌的卡面图（照到达段范式：有图档就画算子，取不到回落短标）
@@ -514,12 +525,18 @@ function finishRollSegment(): void {
     rollFinishConfirm.value = true
     return
   }
-  if (!workbench.endRollSegmentNow(false)) rollFinishError.value = rollErrorText()
+  if (!workbench.endRollSegmentNow(false)) {
+    rollFinishError.value = rollErrorText()
+    return
+  }
+  // 第二段是一个窗（`reinforce:roll`）：收束后把同一个 id 记进已办，避免回看时重复出现
+  workbench.acknowledgeReinforcementStepNow('reinforce:roll')
 }
 
 function confirmAbandonRoll(): void {
   rollFinishError.value = ''
   if (workbench.endRollSegmentNow(true)) {
+    workbench.acknowledgeReinforcementStepNow('reinforce:roll')
     rollFinishConfirm.value = false
     return
   }
@@ -547,70 +564,82 @@ watch(
   },
   { deep: true },
 )
-/** §5-D：待放置的补员点数（掷出后还没放到地图上） */
-const replPendingTotal = computed(() => workbench.replPending.pax + workbench.replPending.eq)
-
 /**
  * 统一手牌的**可见条目**
  *
  * 3.4b 尚未选德军归属的补给列车卡：不渲染、不置灰、不放原因文字；
- * 玩家在补给列车步骤选完 Guderian / Hoth 后自动出现。
- * 其余挡因（没有可落位格等）保持灰卡 + 标题原因。计数仍用 `rollHandEntries`，口径不变。
+ * 玩家在同一窗内选完 Guderian / Hoth 后自动出现。
+ * 其余挡因（没有可落位格等）同样**不进阵列**，原因在阵列下方单独成行。计数仍用 `rollHandEntries`。
  */
 const visibleRollHandEntries = computed(() =>
   workbench.rollHandEntries.filter((entry) => entry.blockedKind !== 'panzerGroup'),
 )
 
+/** 可投放的条目（挡因卡是状态，不是可点动作 —— 不可用项不出现） */
+const placeableRollHandEntries = computed(() =>
+  visibleRollHandEntries.value.filter((entry) => entry.blocked === null),
+)
+
 /**
- * 可变增援的**结果**（只写"拿到什么"）
+ * 本次检定的**结果**（只写「拿到什么、去了哪」）
  *
- * 骰面、公式、表名与条款号只在结算日志里（用户口径：过程不上屏），面板只列结果摘要。
+ * 骰面、公式、表名与条款号只在结算日志与 `?` 里（用户口径：过程不上屏）。
+ * 每一项都必须能对到落点：SP 进图外盒 / Pax·Eq 进手牌 / Ftr·Tac 供重建飞机 /
+ * 1.6c 的免费重建进手牌、无合格单位时明确写「作废」。
  */
-const variableReplResult = computed<readonly string[]>(() => {
+const rollResultLines = computed<readonly string[]>(() => {
   const plan = workbench.lastVariableRepl
   if (plan === null) return []
-  const lines = [`补给 +${String(plan.sp)} SP`]
-  const repl = [
+  const lines: string[] = []
+  // ① 1.6b 补给表：直接进图外空军盒（裁定 2；只能由空军任务运进地图）
+  if (plan.sp > 0) lines.push(`补给表 +${String(plan.sp)} SP → 图外空军盒（只能空运进图）`)
+  // ② 1.6b 补员表：Pax / Eq 进手牌；Ftr / Tac 供飞机重建（13.5f）
+  const ground = [
     plan.repl.pax > 0 ? `Pax ${String(plan.repl.pax)}` : '',
     plan.repl.eq > 0 ? `Eq ${String(plan.repl.eq)}` : '',
+  ].filter((item) => item !== '')
+  const air = [
     plan.repl.ftr > 0 ? `Ftr ${String(plan.repl.ftr)}` : '',
     plan.repl.tac > 0 ? `Tac ${String(plan.repl.tac)}` : '',
   ].filter((item) => item !== '')
-  lines.push(repl.length === 0 ? '补员：无' : `补员：${repl.join(' / ')}`)
+  if (ground.length > 0) lines.push(`补员表 ${ground.join(' / ')} → 手牌（下方落位）`)
+  if (air.length > 0) lines.push(`补员表 ${air.join(' / ')} → 重建飞机时用（13.5f，不可保存）`)
+  if (ground.length === 0 && air.length === 0) lines.push('补员表：无')
   /*
-   * 1.6c 的结果只在「掷骰检定」之后显示：`lastVariableRepl.special` 是 1.6b 自动掷骰时
-   * 随同一颗骰**预掷**的计划值，修前直接上屏 ⇒ 玩家还没点检定就先看到结果，与实桌顺序相反。
-   * 判据与 1.6c 回执（`specialReplLastThisTurn`）同源：掷过（`hasSpecialReplDraw`）才列。
+   * ③ 1.6c：只在掷过之后列（`lastVariableRepl.special` 是 1.6b 自动掷骰时随同一颗骰
+   *    预掷的计划值）。「死亡堆无合格单位 ⇒ 作废」必须写出来，不能什么都不显示。
    */
-  const special = workbench.hasSpecialReplDraw(workbench.activeSide, workbench.turn)
-    ? plan.special
-    : null
-  if (special !== null) {
-    /*
-     * 只列**实际落到**的东西：表指的单位若死亡堆里没有，1.6c 判「该项作废」——
-     * 修前这里按计划无条件写「免费重建 1 个 …」，玩家会以为拿到了一枚（与下方 1.6c 回执矛盾）。
-     * 判据取 `drawSpecialRepl` 的实际结论（`specialReplLast.grant` / `divisionGranted`）。
-     */
+  if (workbench.hasSpecialReplDraw(workbench.activeSide, workbench.turn)) {
+    const special = plan.special
     const draw = containers.specialReplLast
     const grants: string[] = []
-    if (special.supplyCache) grants.push('Supply Cache ×1')
-    if (special.freeDivisionRebuild && draw?.divisionGranted === true)
+    if (special?.supplyCache === true) grants.push('Supply Cache ×1')
+    if (special?.freeDivisionRebuild === true && draw?.divisionGranted === true)
       grants.push('免费重建 1 个步兵/民兵师（−1 step）')
-    if (special.freeAlarmOrRecon && draw?.grant === 'unit')
+    if (special?.freeAlarmOrRecon === true && draw?.grant === 'unit')
       grants.push(
         workbench.activeSide === 'axis'
           ? '免费重建 1 个 Aufk / Krd 营'
           : '免费重建 1 个 Alarm 单位',
       )
-    if (grants.length > 0) lines.push(`特殊补员：${grants.join(' + ')}`)
+    lines.push(
+      grants.length > 0
+        ? `1.6c 特殊补员：${grants.join(' + ')} → 手牌`
+        : '1.6c 特殊补员：死亡堆无合格单位 ⇒ 作废',
+    )
   }
+  // ④ 3.6 随机事件：补给列车进手牌；机型结果自动转非激活
   const event = plan.randomEvent
   if (event !== null) {
     lines.push(
       event.kind === 'supplyTrain'
-        ? `随机事件：Supply Train ⇒ +${String(event.sp ?? 0)} SP（任一可卸货格，不用 Rail Cap）`
-        : `随机事件：${event.aircraftType ?? '飞机'}全部变非激活`,
+        ? `随机事件 Supply Train ⇒ +${String(event.sp ?? 0)} SP → 手牌（任一可卸货铁路格）`
+        : `随机事件：${event.aircraftType ?? '飞机'}全部转非激活`,
     )
+  }
+  // ⑤ 3.3c 可变撤离（轴方 19 Aug 起）
+  if (plan.variableExit !== null && plan.variableExit !== undefined) {
+    lines.push(`3.3c 可变撤离：${plan.variableExit.description}`)
   }
   return lines
 })
@@ -669,23 +698,211 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       </template>
     </p>
 
-    <SessionStep
-      v-if="showsActions"
-      item="reinforce:randomEvent"
-      ackable
-      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:randomEvent')"
-    >
-      <RuleNote title="3.6 随机事件：19 Jul–15 Aug，每个轴方增援阶段掷一次" rule="3.6">
+    <!--
+      第二段（v7.1）：**掷骰与落位一个窗**（用户 2026-11-15）
+
+      掷骰全部是自动的：点一次「掷骰检定」，1.6c / 3.6 / 3.3c / 1.6b 一次掷完；
+      结果（SP / 补员点数与来源）与可落位单位同屏，落完由「结束本段」收束。
+      修前随机事件 / 补员表 / 手牌 / 结束本段各占一个窗，玩家点了检定还要再点两次
+      「本步完成 / 跳过」才看得到可放的算子。
+    -->
+    <SessionStep v-if="showsActions" item="reinforce:roll" data-testid="roll-step">
+      <div v-if="replCheckVisible" class="row" data-testid="roll-check-row">
+        <BaseButton variant="primary" size="sm" @click="runReplCheck">掷骰检定</BaseButton>
+      </div>
+      <template v-if="workbench.variableReplRolled">
+        <!-- 只列「拿到什么、去了哪」：骰面 / 表名 / 条款号不上屏（收进 ?） -->
+        <ul v-if="rollResultLines.length > 0" class="num repl-result" data-testid="roll-results">
+          <li v-for="line in rollResultLines" :key="line">{{ line }}</li>
+        </ul>
+        <!-- 3.3c：目标编队盘面与死亡堆都无算子 ⇒ 玩家挑一枚同印值算子移出游戏（1.6a） -->
+        <div v-if="workbench.variableExitSelectionOpen" class="row">
+          <CounterPicker
+            title="3.3c 撤离替补"
+            :items="workbench.variableExitPickItems"
+            :size="32"
+            @pick="workbench.confirmVariableExitSubstitute"
+            @hover="workbench.setVariableExitHover"
+          />
+        </div>
+        <!-- 3.4b：德军补给列车 SP 的归属（未选不落账；选完手牌里才出现该卡） -->
+        <div
+          v-if="
+            workbench.panzerGroupRulesOn &&
+            workbench.activeSide === 'axis' &&
+            workbench.supplyTrainPending &&
+            workbench.supplyTrainGroup === null
+          "
+          class="row"
+          data-testid="roll-train-group"
+        >
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            @click="workbench.setSupplyTrainGroup('guderian')"
+          >
+            Guderian
+          </BaseButton>
+          <BaseButton variant="secondary" size="sm" @click="workbench.setSupplyTrainGroup('hoth')">
+            Hoth
+          </BaseButton>
+        </div>
+        <!-- 统一手牌：点一条 → 地图只剩该来源的合法格 → 点格落一枚 -->
+        <p v-if="!workbench.rollPlacementOpen" class="warn" data-testid="roll-hand-gate">
+          {{ workbench.rollPlacementBlockedReason }}
+        </p>
+        <div class="arrival-hand" data-testid="roll-hand-cards">
+          <button
+            v-for="entry in placeableRollHandEntries"
+            :key="entry.id"
+            type="button"
+            class="arrival-hand__card"
+            :title="`${entry.label}：${entry.detail}`"
+            data-testid="roll-hand-card"
+            @click="workbench.beginRollHandEntryNow(entry.id)"
+          >
+            <img
+              v-if="rollHandImage(entry) !== null"
+              :src="rollHandImage(entry) ?? undefined"
+              alt=""
+              class="arrival-hand__img"
+            />
+            <span v-else class="arrival-hand__fallback" :title="entry.label">{{
+              entry.short
+            }}</span>
+            <span
+              v-if="entry.count > 1"
+              class="arrival-hand__badge num"
+              data-testid="roll-hand-badge"
+            >
+              {{ entry.count }}
+            </span>
+          </button>
+        </div>
+        <!-- 挡因是状态不是动作：不摆灰卡，原因单独成行 -->
+        <p
+          v-for="entry in visibleRollHandEntries.filter((item) => item.blocked !== null)"
+          :key="`hand-blocked:${entry.id}`"
+          class="warn num"
+        >
+          {{ entry.label }}：{{ entry.blocked }}
+        </p>
+        <!-- 3.4b：德军到货 SP 的逐格归属（未选不落账；归属在选择落点后给出） -->
+        <div
+          v-if="
+            workbench.panzerGroupRulesOn &&
+            workbench.activeSide === 'axis' &&
+            workbench.arrivalSpGroupTargets.length > 0
+          "
+          class="row"
+        >
+          <span class="muted num">3.4b 德军 SP 归属（未选不落账）</span>
+          <label
+            v-for="target in workbench.arrivalSpGroupTargets"
+            :key="target.hexText"
+            class="field"
+          >
+            {{ target.hexText }} {{ target.sp }} SP
+            <span v-if="target.fixed" class="muted">
+              跟随既有：{{ target.group === 'guderian' ? 'Guderian' : 'Hoth' }}
+            </span>
+            <BaseButton
+              v-else
+              :variant="target.group === 'guderian' ? 'primary' : 'secondary'"
+              size="sm"
+              @click="onArrivalSpGroupChange(target.hexText, 'guderian')"
+            >
+              Guderian
+            </BaseButton>
+            <BaseButton
+              v-if="!target.fixed"
+              :variant="target.group === 'hoth' ? 'primary' : 'secondary'"
+              size="sm"
+              @click="onArrivalSpGroupChange(target.hexText, 'hoth')"
+            >
+              Hoth
+            </BaseButton>
+          </label>
+        </div>
+        <!-- 已落位的算子：右键收回（只在本段有效）；SP 落点是账本，仍在下一行点收回 -->
+        <div v-if="placedRollCards.length > 0" class="row">
+          <span class="muted num">本段已落位（右键收回）</span>
+          <div class="arrival-hand" data-testid="roll-hand-placed-cards">
+            <button
+              v-for="card in placedRollCards"
+              :key="card.key"
+              type="button"
+              class="arrival-hand__card arrival-hand__card--placed"
+              :title="`${card.raw}：右键收回（只在本段有效）`"
+              data-testid="roll-hand-placed"
+              @contextmenu.prevent.stop="card.withdraw()"
+            >
+              <img v-if="card.image !== null" :src="card.image" alt="" class="arrival-hand__img" />
+              <span v-else class="arrival-hand__fallback">{{ card.short }}</span>
+              <span class="arrival-hand__undo">↩</span>
+            </button>
+          </div>
+        </div>
+        <div
+          v-if="workbench.freeRailPicked.length > 0 || workbench.freeRailEdgeHex !== null"
+          class="row"
+          data-testid="roll-hand-sp-placed"
+        >
+          <span class="muted num">本段已指定的 SP 落点（点一下收回）</span>
+          <BaseButton
+            v-for="hex in workbench.freeRailPicked"
+            :key="`sp-picked:${hexLabel(hex)}`"
+            variant="ghost"
+            size="sm"
+            @click="workbench.toggleFreeRailPick(hex)"
+          >
+            城市 {{ hexLabel(hex) }} 1 SP ↺
+          </BaseButton>
+          <BaseButton
+            v-if="workbench.freeRailEdgeHex !== null"
+            variant="ghost"
+            size="sm"
+            @click="workbench.pickFreeRailEdgeHex(null)"
+          >
+            图边 {{ hexLabel(workbench.freeRailEdgeHex) }}（余额）↺
+          </BaseButton>
+        </div>
+        <!-- 13.5：Ftr / Tac 不可保存 ⇒ 只有确实还有存量时才给这一处清零点 -->
+        <div
+          v-if="workbench.replHoldings.ftr + workbench.replHoldings.tac > 0"
+          class="row"
+          data-testid="roll-clear-ftrtac"
+        >
+          <BaseButton variant="ghost" size="sm" @click="workbench.clearNonSavableReplNow()">
+            清零不可保存的 Ftr / Tac
+          </BaseButton>
+        </div>
+        <!-- 本段唯一出口：所有骰子判完、手牌清空（或确认放弃） -->
+        <div class="row" data-testid="roll-end-step">
+          <BaseButton variant="primary" size="sm" @click="finishRollSegment()">
+            结束本段
+          </BaseButton>
+          <span class="muted num">手牌 {{ workbench.rollHandPoints }} 点待放</span>
+        </div>
+        <div v-if="rollFinishConfirm" class="row" data-testid="roll-end-abandon">
+          <span class="num">手牌还没放完：结束本段将把未落位的增援作废（不结转）。</span>
+          <BaseButton variant="primary" size="sm" @click="confirmAbandonRoll()"
+            >放弃上场</BaseButton
+          >
+          <BaseButton variant="ghost" size="sm" @click="rollFinishConfirm = false">返回</BaseButton>
+        </div>
+        <p v-if="rollFinishError !== ''" class="warn" role="status">{{ rollFinishError }}</p>
+      </template>
+      <!-- 说明与条款收进 ?：窗内只留当前决定 -->
+      <RuleNote title="可变增援各表与落点" rule="13.6b">
         <p class="muted">
-          通常为补给列车（2 SP，任一可卸货格、不用 Rail Cap）；偶尔整型飞机被调离图外。
-          结果随可变增援一并落日志。
+          可变增援（13.6b）：每个己方增援阶段掷补给表（得 SP）与补员表（得 Ftr/Tac/Pax/Eq）； 19 Aug
+          起补员表 −1 且取 Late 档；1.6c 特殊补员 19 Aug 前每回合掷；轴方另掷 3.3c 可变撤离（19 Aug
+          起）、3.6 随机事件（19 Jul–15 Aug）。补给表 SP 按 1.6b 直接进图外空军盒
+          （只能由空军任务运进地图）；Pax / Eq 进下方手牌；Ftr / Tac 供重建飞机（13.5f，不可保存）。
+          骰面与表名只在结算日志里，结果可复算。
         </p>
       </RuleNote>
-      <p v-if="workbench.lastVariableRepl?.randomEvent" class="num">
-        <BaseTag kind="info">3.6</BaseTag>
-        {{ workbench.lastVariableRepl.randomEvent.detail }}
-      </p>
-      <p v-else class="muted">本回合尚未掷出随机事件结果。</p>
     </SessionStep>
 
     <SessionStep v-if="showsActions" item="reinforce:arrival">
@@ -698,14 +915,15 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           </li>
         </ul>
         <BaseButton
+          v-if="workbench.arrivalRemovalsPending"
           variant="secondary"
           size="sm"
-          :disabled="!workbench.arrivalRemovalsPending"
           data-testid="arrival-removals-apply"
           @click="workbench.applyArrivalRemovalsNow()"
         >
-          {{ workbench.arrivalRemovalsPending ? '执行移除' : '已执行' }}
+          执行移除
         </BaseButton>
+        <BaseTag v-else kind="neutral" data-testid="arrival-removals-done">已执行</BaseTag>
       </div>
       <p v-if="workbench.arrivalRemovalsPending" class="muted" data-testid="arrival-removals-first">
         先执行 1.6a 强制移除，再放置到达算子。
@@ -713,13 +931,17 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
 
       <!-- ── 手牌式到达投放（13.6）：只列本回合算子图标；点算子 → 点图落位；已放可点回手 ── -->
       <div class="arrival-hand" data-testid="arrival-hand">
-        <button
+        <component
           v-for="card in arrivalHandCards"
+          :is="arrivalCardBlocked(card) ? 'div' : 'button'"
           :key="`hand-${card.index}`"
-          type="button"
+          :type="arrivalCardBlocked(card) ? undefined : 'button'"
           class="arrival-hand__card"
-          :class="{ 'arrival-hand__card--active': activeArrivalIndex === card.index }"
-          :disabled="card.noCandidates || workbench.arrivalRemovalsPending"
+          :class="{
+            'arrival-hand__card--active': activeArrivalIndex === card.index,
+            'arrival-hand__card--blocked': arrivalCardBlocked(card),
+          }"
+          :aria-disabled="arrivalCardBlocked(card) ? 'true' : undefined"
           :title="
             card.noCandidates
               ? `${card.raw}：${card.detail}`
@@ -728,12 +950,12 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
                 : `${card.raw}：点一下 → 地图高亮入场格 → 点格落位`
           "
           data-testid="arrival-hand-card"
-          @click="pickArrival(card.index)"
+          @click="onArrivalCardClick(card)"
         >
           <img v-if="card.image !== null" :src="card.image" alt="" class="arrival-hand__img" />
           <span v-else class="arrival-hand__fallback" :title="card.raw">?</span>
           <span v-if="card.aircraft" class="arrival-hand__badge arrival-hand__badge--air">✈</span>
-        </button>
+        </component>
         <button
           v-for="card in arrivalPlacedCards"
           :key="`placed-${card.index}`"
@@ -801,16 +1023,15 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <!-- ── 第一段唯一出口：结束本段（收束整段，不再自动关窗）────────── -->
       <div class="row" data-testid="arrival-finish-row">
         <BaseButton
-          v-if="!arrivalFinishConfirm"
+          v-if="!arrivalFinishConfirm && !workbench.arrivalRemovalsPending"
           variant="primary"
           size="sm"
-          :disabled="workbench.arrivalRemovalsPending"
           data-testid="arrival-finish"
           @click="finishArrivalSegment()"
         >
           结束本段
         </BaseButton>
-        <template v-else>
+        <template v-else-if="arrivalFinishConfirm">
           <span class="warn" data-testid="arrival-finish-abandon-hint">
             手牌还有 {{ arrivalHandCards.length }} 枚未上场：结束即视为放弃上场（作废、不结转）。
           </span>
@@ -890,288 +1111,6 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           </select>
         </div>
       </details>
-    </SessionStep>
-    <SessionStep
-      v-if="showsActions"
-      item="reinforce:variableExit"
-      ackable
-      :ack-disabled="workbench.variableExitSelectionOpen"
-      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:variableExit')"
-    >
-      <RuleNote title="3.3c 可变撤离：19 Aug 起，每个轴方增援阶段掷一次" rule="3.3c">
-        <p class="muted">
-          1 / 6 分别撤走 SS Reich 或 14 Mtr，撤走即了结；2–5 本回合不撤，下回合再掷。 撤离走 1.6a
-          程序：优先移除目标编队算子，否则用同印值算子顶替。
-        </p>
-      </RuleNote>
-      <template v-if="workbench.variableExitForActiveSide">
-        <p class="num">
-          3.3c 可变撤离：窗口
-          <BaseTag :kind="workbench.variableExitOpen ? 'danger' : 'neutral'">
-            {{ workbench.variableExitOpen ? '已开（19 Aug 起）' : '未开' }}
-          </BaseTag>
-          ｜判定
-          <BaseTag :kind="workbench.variableExitResolved ? 'success' : 'info'">
-            {{
-              workbench.variableExitResolved ? '已了结（不再掷）' : '未了结（2–5，须下回合再掷）'
-            }}
-          </BaseTag>
-        </p>
-        <!-- ⑦ 3.3c：目标编队盘面与死亡堆都无算子 ⇒ 玩家从同印值算子中挑一枚移出游戏（1.6a） -->
-        <div v-if="workbench.variableExitSelectionOpen" class="row">
-          <p class="num">
-            3.3c 撤离：该编队已无算子在场 ⇒
-            请在地图高亮格（蓝框）里选一枚同印值算子移出游戏（1.6a）。
-            列表只列可选单位；堆叠中不可选者不出现。
-          </p>
-        </div>
-        <div v-if="workbench.variableExitSelectionOpen" class="row">
-          <CounterPicker
-            title="3.3c 撤离替补（只列可选）"
-            hint="1.6a：战斗面印值 attack/AR/MA 相同的算子才能顶替"
-            :items="workbench.variableExitPickItems"
-            :size="32"
-            @pick="workbench.confirmVariableExitSubstitute"
-            @hover="workbench.setVariableExitHover"
-          />
-        </div>
-      </template>
-    </SessionStep>
-    <SessionStep
-      v-if="showsActions"
-      item="reinforce:replTable"
-      ackable
-      :ack-disabled="!workbench.replTableAckReady"
-      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:replTable')"
-    >
-      <!-- ── · 可变增援（13.6b / 1.6c / 3.3c / 3.6） ── -->
-      <hr />
-      <RuleNote title="可变增援：每个己方增援阶段掷一次（19 Aug 起两次）" rule="13.6b">
-        <p class="muted">
-          可变增援（13.6b）：每个己方增援阶段掷补给表（得 SP）与补员表（得 Ftr/Tac/Pax/Eq）； 19 Aug
-          起补员表 −1 且取 Late 档；1.6c 特殊补员 19 Aug 前每回合掷； 轴方另掷 3.3c 可变撤离（19 Aug
-          起）、3.6 随机事件（19 Jul、25 Aug）。骰面与表名只在结算日志里，便于复算。
-        </p>
-      </RuleNote>
-      <div v-if="replCheckVisible || workbench.variableReplRolled" class="row">
-        <!--
-        B28：骰面与"是否自动掷"的勾选都撤掉 —— 一律走种子化 RNG，骰面在结果行与结算日志里可复算。
-        4.0（用户 2026-11-13 口径）：4.1b 是否启用由**选剧本前的共识**决定，段内不再有第二个开关。
-      -->
-        <BaseButton v-if="replCheckVisible" variant="primary" size="sm" @click="runReplCheck">
-          掷骰检定
-        </BaseButton>
-        <BaseButton
-          v-if="workbench.variableReplRolled"
-          variant="ghost"
-          size="sm"
-          @click="workbench.clearNonSavableReplNow()"
-        >
-          清零不可保存的补员
-        </BaseButton>
-      </div>
-      <!-- Q4：骰面与查表结果（骰面来自真实 1d6；结果来自两张表） -->
-      <p v-if="specialReplLastThisTurn" class="num" data-testid="special-repl-last">
-        <BaseTag :kind="containers.specialReplLast?.ok === true ? 'info' : 'warning'">
-          1.6c 骰面 {{ containers.specialReplLast?.die ?? '—' }}
-        </BaseTag>
-        {{ containers.specialReplLast?.detail }}
-      </p>
-      <!-- 1.6b 补给表所得 SP 已入图外盒：给一个明确数字，别让玩家以为丢了 -->
-      <p v-if="offMapDepositSp > 0" class="num" data-testid="supply-offmap-deposit">
-        <BaseTag kind="info">1.6b</BaseTag>
-        补给表 {{ offMapDepositSp }} SP 已放入图外空军盒（可用空军任务运进地图）
-      </p>
-      <!-- 只列「拿到什么」：骰面 / 表名 / 条款号不上屏 -->
-      <ul v-if="variableReplResult.length > 0" class="num repl-result">
-        <li v-for="line in variableReplResult" :key="line">{{ line }}</li>
-      </ul>
-      <p v-if="replPendingTotal > 0" class="muted num">
-        补员已进待放手牌（Pax {{ workbench.replPending.pax }} / Eq
-        {{ workbench.replPending.eq }}），统一在「待放上手牌」里落位。
-      </p>
-    </SessionStep>
-    <!-- 3.6：补给列车 —— 不做列车算子；窗口一出现地图高亮全部可卸货铁路格，点一格落 2 SP -->
-    <SessionStep
-      v-if="showsActions"
-      item="reinforce:supplyTrain"
-      ackable
-      @ack="workbench.acknowledgeReinforcementStepNow('reinforce:supplyTrain')"
-    >
-      <RuleNote title="补给列车：任一可卸货铁路格得 2 SP（不用 Rail Cap）" rule="专规 3.6">
-        <p class="muted">
-          随机事件掷出 Supply Train 时，在任一**可卸货（detrainable）铁路格**落 2 SP；地图已高亮
-          全部可卸货格，**点其中一格即放置**。未掷出则本窗空过。
-        </p>
-      </RuleNote>
-      <p v-if="!workbench.supplyTrainPending" class="muted">
-        本回合没有待落的补给列车，点「本步完成」继续。
-      </p>
-      <template v-else>
-        <p class="num">
-          <BaseTag kind="info">补给列车 {{ workbench.supplyTrainSp }} SP</BaseTag>
-          <span class="muted">判定阶段不落子：2 SP 已进「待放上手牌」，到放置阶段点格落位</span>
-        </p>
-        <div v-if="workbench.panzerGroupRulesOn && workbench.activeSide === 'axis'" class="row">
-          <span class="muted">3.4b 归属（未选不落）</span>
-          <BaseButton
-            :variant="workbench.supplyTrainGroup === 'guderian' ? 'primary' : 'secondary'"
-            size="sm"
-            @click="workbench.setSupplyTrainGroup('guderian')"
-          >
-            Guderian
-          </BaseButton>
-          <BaseButton
-            :variant="workbench.supplyTrainGroup === 'hoth' ? 'primary' : 'secondary'"
-            size="sm"
-            @click="workbench.setSupplyTrainGroup('hoth')"
-          >
-            Hoth
-          </BaseButton>
-        </div>
-      </template>
-    </SessionStep>
-    <!--
-      v7.1 第二段：**统一手牌**（用户 2026-11-11 口径：判定全部走完才进放置阶段）
-
-      合并的是**放置动作**，不是来源语义：
-        · 全部来源（1.6b 补员表 / 1.6c 特殊补员 / 1.6b 补给表 SP / 3.6 补给列车 / 2.3c 新单位）
-          汇成同一张手牌，每条仍带来源标签；
-        · 卡面＝算子图（照到达段范式），角标＝该条待放的枚数 / SP；
-        · 点算子 → 引擎只高亮该来源的合法格 → 点格落一枚；已落位同样按阵列显示，右键收回。
-    -->
-    <SessionStep v-if="showsActions" item="reinforce:hand" data-testid="roll-hand">
-      <p v-if="!workbench.rollPlacementOpen" class="warn" data-testid="roll-hand-gate">
-        判定阶段还没走完：{{ workbench.rollPlacementBlockedReason }}
-      </p>
-      <div class="arrival-hand" data-testid="roll-hand-cards">
-        <button
-          v-for="entry in visibleRollHandEntries"
-          :key="entry.id"
-          type="button"
-          class="arrival-hand__card"
-          :disabled="!workbench.rollPlacementOpen || entry.blocked !== null"
-          :title="entry.blocked ?? `${entry.label}：${entry.detail}`"
-          data-testid="roll-hand-card"
-          @click="workbench.beginRollHandEntryNow(entry.id)"
-        >
-          <img
-            v-if="rollHandImage(entry) !== null"
-            :src="rollHandImage(entry) ?? undefined"
-            alt=""
-            class="arrival-hand__img"
-          />
-          <span v-else class="arrival-hand__fallback" :title="entry.label">{{ entry.short }}</span>
-          <span
-            v-if="entry.count > 1"
-            class="arrival-hand__badge num"
-            data-testid="roll-hand-badge"
-          >
-            {{ entry.count }}
-          </span>
-        </button>
-      </div>
-      <p
-        v-for="entry in visibleRollHandEntries.filter((item) => item.blocked !== null)"
-        :key="`hand-blocked:${entry.id}`"
-        class="warn num"
-      >
-        {{ entry.label }}：{{ entry.blocked }}
-      </p>
-      <!-- 3.4b：德军到货 SP 的逐格归属（未选不落账；归属在选择落点后给出） -->
-      <div
-        v-if="
-          workbench.panzerGroupRulesOn &&
-          workbench.activeSide === 'axis' &&
-          workbench.arrivalSpGroupTargets.length > 0
-        "
-        class="row"
-      >
-        <span class="muted num">3.4b 德军 SP 归属（未选不落账）</span>
-        <label
-          v-for="target in workbench.arrivalSpGroupTargets"
-          :key="target.hexText"
-          class="field"
-        >
-          {{ target.hexText }} {{ target.sp }} SP
-          <span v-if="target.fixed" class="muted">
-            跟随既有：{{ target.group === 'guderian' ? 'Guderian' : 'Hoth' }}
-          </span>
-          <BaseButton
-            v-else
-            :variant="target.group === 'guderian' ? 'primary' : 'secondary'"
-            size="sm"
-            @click="onArrivalSpGroupChange(target.hexText, 'guderian')"
-          >
-            Guderian
-          </BaseButton>
-          <BaseButton
-            v-if="!target.fixed"
-            :variant="target.group === 'hoth' ? 'primary' : 'secondary'"
-            size="sm"
-            @click="onArrivalSpGroupChange(target.hexText, 'hoth')"
-          >
-            Hoth
-          </BaseButton>
-        </label>
-      </div>
-      <!-- 已落位的算子：右键收回（只在本段有效）；SP 落点是账本，仍在下一行点收回 -->
-      <div v-if="placedRollCards.length > 0" class="row">
-        <span class="muted num">本段已落位（右键收回）</span>
-        <div class="arrival-hand" data-testid="roll-hand-placed-cards">
-          <button
-            v-for="card in placedRollCards"
-            :key="card.key"
-            type="button"
-            class="arrival-hand__card arrival-hand__card--placed"
-            :title="`${card.raw}：右键收回（只在本段有效）`"
-            data-testid="roll-hand-placed"
-            @contextmenu.prevent.stop="card.withdraw()"
-          >
-            <img v-if="card.image !== null" :src="card.image" alt="" class="arrival-hand__img" />
-            <span v-else class="arrival-hand__fallback">{{ card.short }}</span>
-            <span class="arrival-hand__undo">↩</span>
-          </button>
-        </div>
-      </div>
-      <div
-        v-if="workbench.freeRailPicked.length > 0 || workbench.freeRailEdgeHex !== null"
-        class="row"
-        data-testid="roll-hand-sp-placed"
-      >
-        <span class="muted num">本段已指定的 SP 落点（点一下收回）</span>
-        <BaseButton
-          v-for="hex in workbench.freeRailPicked"
-          :key="`sp-picked:${hexLabel(hex)}`"
-          variant="ghost"
-          size="sm"
-          @click="workbench.toggleFreeRailPick(hex)"
-        >
-          城市 {{ hexLabel(hex) }} 1 SP ↺
-        </BaseButton>
-        <BaseButton
-          v-if="workbench.freeRailEdgeHex !== null"
-          variant="ghost"
-          size="sm"
-          @click="workbench.pickFreeRailEdgeHex(null)"
-        >
-          图边 {{ hexLabel(workbench.freeRailEdgeHex) }}（余额）↺
-        </BaseButton>
-      </div>
-    </SessionStep>
-
-    <!-- 第二段唯一出口：所有骰子判完、手牌清空（或确认放弃） -->
-    <SessionStep v-if="showsActions" item="reinforce:endRoll" data-testid="roll-end-step">
-      <div class="row">
-        <BaseButton variant="primary" size="sm" @click="finishRollSegment()"> 结束本段 </BaseButton>
-        <span class="muted num">手牌 {{ workbench.rollHandPoints }} 点待放</span>
-      </div>
-      <div v-if="rollFinishConfirm" class="row" data-testid="roll-end-abandon">
-        <span class="num">手牌还没放完：结束本段将把未落位的增援作废（不结转）。</span>
-        <BaseButton variant="primary" size="sm" @click="confirmAbandonRoll()">放弃上场</BaseButton>
-        <BaseButton variant="ghost" size="sm" @click="rollFinishConfirm = false">返回</BaseButton>
-      </div>
-      <p v-if="rollFinishError !== ''" class="warn" role="status">{{ rollFinishError }}</p>
     </SessionStep>
 
     <!--
@@ -1278,7 +1217,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       </div>
       <div class="row">
         <label
-          v-for="unit in slowMobilizationCandidates"
+          v-for="unit in slowMobilizationSelectable"
           :key="unit.instanceId"
           class="muted"
           :title="`${unit.name}（${slowMobilizationArmy} 集团军，仍锁定）`"
@@ -1286,9 +1225,6 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           <input
             type="checkbox"
             :checked="slowMobilizationPick.includes(unit.instanceId)"
-            :disabled="
-              !slowMobilizationPick.includes(unit.instanceId) && slowMobilizationLimitReached
-            "
             @change="toggleSlowMobilizationPick(unit.instanceId)"
           />
           {{ unit.name }}
@@ -1297,16 +1233,13 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       <p v-if="slowMobilizationCandidates.length === 0" class="muted">
         本回合没有可解锁的师（配额 0 或该集团军已全部解锁）。
       </p>
-      <div class="row">
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          :disabled="
-            slowMobilizationRequired === 0 ||
-            slowMobilizationPick.length !== slowMobilizationRequired
-          "
-          @click="submitSlowMobilizationPick"
-        >
+      <div
+        v-if="
+          slowMobilizationRequired > 0 && slowMobilizationPick.length === slowMobilizationRequired
+        "
+        class="row"
+      >
+        <BaseButton variant="secondary" size="sm" @click="submitSlowMobilizationPick">
           提交本回合解锁（2.4）
         </BaseButton>
       </div>
@@ -1359,15 +1292,14 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
             ✓ **已领取**
           </template>
         </p>
-        <div v-if="showsActions" class="row">
-          <BaseButton
-            variant="primary"
-            size="sm"
-            :disabled="
-              workbench.frontalReservesClaimed.includes(workbench.frontalReservesToday.date)
-            "
-            @click="workbench.claimFrontalReservesNow()"
-          >
+        <div
+          v-if="
+            showsActions &&
+            !workbench.frontalReservesClaimed.includes(workbench.frontalReservesToday.date)
+          "
+          class="row"
+        >
+          <BaseButton variant="primary" size="sm" @click="workbench.claimFrontalReservesNow()">
             领取方面军预备队（2.3c）
           </BaseButton>
           <span class="muted">
@@ -1520,7 +1452,7 @@ hr {
   cursor: pointer;
 }
 
-.arrival-hand__card:hover:not(:disabled) {
+.arrival-hand__card:hover:not(.arrival-hand__card--blocked) {
   border-color: var(--color-accent);
 }
 
@@ -1534,7 +1466,7 @@ hr {
   opacity: 0.72;
 }
 
-.arrival-hand__card:disabled {
+.arrival-hand__card--blocked {
   opacity: 0.45;
   cursor: not-allowed;
 }

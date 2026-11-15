@@ -176,14 +176,14 @@ describe('阶段/环节 × 操作矩阵（规则书口径）', () => {
     // 每个 B 段子环节都要有对应区块（人工环节出动作区、自动环节只留回执）
     for (const itemId of [
       'reinforce:arrival',
-      'reinforce:replTable',
+      'reinforce:roll',
       'reinforce:endRebuild',
       'reinforce:frontalReserves',
     ]) {
       expect(panel, `增援面板缺 ${itemId} 的区块收敛`).toContain(`item="${itemId}"`)
     }
-    // 区块：到达 / 可变增援 / SP 落位 / 补员 / 第三段结束 / 手牌 / 方面军预备队…
-    expect((panel.match(/item="reinforce:/g) ?? []).length).toBeGreaterThanOrEqual(7)
+    // 区块：到达 / 掷骰与落位 / 第三段结束 / 方面军预备队 / 慢动员
+    expect((panel.match(/item="reinforce:/g) ?? []).length).toBeGreaterThanOrEqual(5)
     // "人工 / 自动"的界面分界（自动环节只给回执）
     expect(panel).toContain("workbench.segmentDriver === 'automatic'")
   })
