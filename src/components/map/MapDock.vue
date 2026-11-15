@@ -4,8 +4,8 @@ import { computed, provide, ref, watch } from 'vue'
 import type { MapSessionClosePolicy } from '@/stores/map-view'
 import { useMapViewStore } from '@/stores'
 
-import { BaseTag } from '@/components/base'
-import { SESSION_STEP_GATE, SESSION_STEP_HOSTED } from '@/components/session'
+import { BaseTag, PANEL_FLAT } from '@/components/base'
+import { SESSION_STEP_GATE, SESSION_STEP_HOSTED, SESSION_STEP_PROGRESS } from '@/components/session'
 
 import { clampDockOffset, createDockMemory } from './dock-position'
 
@@ -73,6 +73,30 @@ provide(
 )
 /** 批二：标记「有宿主」，让 SessionStep 区分「无待决」与「没有宿主」 */
 provide(SESSION_STEP_HOSTED, true)
+
+/**
+ * 批 4：步进位置（当前第几件 / 共几件）
+ *
+ * 宿主手里有整张步骤清单（`mapView.sessionSteps`），内层 `SessionStep` 只有当前一件；
+ * 位置在这里算好注入，步进头显示「2/6」。
+ */
+provide(
+  SESSION_STEP_PROGRESS,
+  computed(() => {
+    const current = mapView.sessionStep
+    if (current === null) return null
+    const at = mapView.sessionSteps.findIndex((item) => item.id === current.id)
+    return at < 0 ? null : { index: at + 1, total: mapView.sessionSteps.length }
+  }),
+)
+
+/**
+ * 批 4：会话框内层面板改用扁平紧凑变体
+ *
+ * 会话框自己已经有边框、标题与外层内边距；内层 `BasePanel` 再画一遍就是双框 + 双层内边距
+ * （380px 宽下尤其挤）。这里注入后，内层面板只留内容。
+ */
+provide(PANEL_FLAT, true)
 
 /** 最小可见量（模板里给出可读提示；判定在 `clampDockOffset`） */
 

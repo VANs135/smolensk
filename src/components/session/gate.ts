@@ -22,3 +22,13 @@ export const SESSION_STEP_GATE: InjectionKey<ComputedRef<SessionStepItem | null>
  * 两者都表现为 `null`，旧逻辑一律全量渲染，导致无待决时整块面板铺满（用户截图）。
  */
 export const SESSION_STEP_HOSTED: InjectionKey<boolean> = Symbol('session-step-hosted')
+
+/**
+ * 批 4：**步进位置**（当前第几件 / 共几件）
+ *
+ * 会话步骤由 `planSessionSteps` 按节展开，宿主知道整张清单，内层 `SessionStep` 只知道当前一件；
+ * 由宿主算好位置注入，步进头才能显示「2/6」。验证页 / 右栏不 provide ⇒ 不显示步进头。
+ */
+export const SESSION_STEP_PROGRESS: InjectionKey<
+  ComputedRef<{ index: number; total: number } | null>
+> = Symbol('session-step-progress')

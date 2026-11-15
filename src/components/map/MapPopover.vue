@@ -161,7 +161,8 @@ const dragging = computed(() => drag.value !== null)
   display: flex;
   flex-direction: column;
   position: fixed;
-  z-index: var(--z-dialog-top);
+  /* 批 4：地图小窗属地图内层级，压不过右侧栏 / 流程条（shell）与模态 */
+  z-index: var(--layer-map-popup);
   transform: translate(-50%, 0);
   background: var(--color-panel);
   border: 1px solid var(--color-rule);

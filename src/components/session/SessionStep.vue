@@ -3,7 +3,7 @@ import { computed, inject } from 'vue'
 
 import { sessionStepVisible } from '@/stores/session-steps'
 
-import { SESSION_STEP_GATE, SESSION_STEP_HOSTED } from './gate'
+import { SESSION_STEP_GATE, SESSION_STEP_HOSTED, SESSION_STEP_PROGRESS } from './gate'
 
 /**
  * U1-b：**会话步骤门**（一次只显示一件事）
@@ -28,6 +28,7 @@ const emit = defineEmits<{ (event: 'ack'): void }>()
 
 const gate = inject(SESSION_STEP_GATE, null)
 const hosted = inject(SESSION_STEP_HOSTED, false)
+const progress = inject(SESSION_STEP_PROGRESS, null)
 const step = computed(() => gate?.value ?? null)
 /**
  * 没有宿主（验证页 / 右栏）⇒ 全量渲染；
@@ -39,8 +40,17 @@ const active = computed(() => sessionStepVisible(hosted, step.value?.id ?? null,
 
 <template>
   <section v-if="active" class="step" data-session-item :data-session-item-id="props.item">
-    <p v-if="step !== null" class="step__title" :title="step.why">
-      <b>{{ step.title }}</b>
+    <header v-if="step !== null" class="step__head">
+      <p class="step__title" :title="step.why">
+        <b>{{ step.title }}</b>
+      </p>
+      <!-- 批 4：步进头「当前第几件 / 共几件」（只有宿主知道整张清单） -->
+      <span v-if="progress !== null" class="step__count num">
+        {{ progress.index }}/{{ progress.total }}
+      </span>
+    </header>
+    <p v-if="step !== null && step.decision !== ''" class="step__decision">
+      {{ step.decision }}
     </p>
     <slot />
     <button
@@ -61,9 +71,29 @@ const active = computed(() => sessionStepVisible(hosted, step.value?.id ?? null,
   gap: var(--space-1);
 }
 
+.step__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
 .step__title {
   margin: 0;
   font-family: var(--font-head);
+}
+
+.step__count {
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+}
+
+.step__decision {
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .step__ack {
@@ -76,10 +106,5 @@ const active = computed(() => sessionStepVisible(hosted, step.value?.id ?? null,
   color: var(--color-ink);
   font-size: 0.85em;
   cursor: pointer;
-}
-
-.step__ack:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
 }
 </style>
