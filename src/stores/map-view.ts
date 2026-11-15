@@ -3874,6 +3874,13 @@ export const useMapViewStore = defineStore('mapView', () => {
       (hint) => hint.hex.col === hex.col && hint.hex.row === hex.row,
     )
     const advanceHex = workbench.combatAdvanceHex
+    /*
+     * 9.2 一旦收束（finished=true），「撤退落点 / 战后推进」这两种会话分派就必须关掉：
+     *   `combatRetreatPlans` / `combatAdvanceHex` 是按**旧战斗**的 resolution 算的，收束后仍非空，
+     *   于是防御格（守方已撤退腾空）会被下面的分派吞掉这一击，永远到不了 clickHex → tryMoveTo。
+     *   用户 2026-11-15 实测即此：突袭 19.27 攻方全灭后，该格对后续所有地图点击都是黑洞。
+     */
+    const combatLive = workbench.combatState !== null && workbench.combatState.finished !== true
     const specialItemNow = specialItem.value
     // 15.1：整备付款优先——正点着高亮的补给站即「用这个补给站付 1T」
     const refitDump = refitPayHints.value.find(
@@ -3904,13 +3911,14 @@ export const useMapViewStore = defineStore('mapView', () => {
       workbench.overrunNow(hex)
       consumed = true
     }
-    if (!consumed && retreatDestinationAt(hex) && retreatUnit.value !== null) {
+    if (!consumed && combatLive && retreatDestinationAt(hex) && retreatUnit.value !== null) {
       workbench.setRetreatDestinationNow(retreatUnit.value.unitId, hex)
       retreatUnitId.value = null
       consumed = true
     }
     if (
       !consumed &&
+      combatLive &&
       advanceHex !== null &&
       advanceHex.col === hex.col &&
       advanceHex.row === hex.row
