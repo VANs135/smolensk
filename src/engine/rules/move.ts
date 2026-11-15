@@ -653,10 +653,14 @@ export function evaluateStepFrom(
   /*
    * 4.5a-A（R9）：突袭强行进入敌方 ZOC 后，该格单位**不得离开**——只能就地再突袭，或停止。
    * 事实由操作台在突袭收束后注入 `context.zocHeld`；再突袭走 `forOverrun`，故不在此限。
+   *
+   * 4.5a-A 原文只约束 Truck MP：「movement using Leg or Track MP is unaffected by ZOCs」
+   * ⇒ 名单之外还要按单位机动类型收口，履带/徒步即便被列进同一事实也不受限。
    */
   const held = context.zocHeld
   if (
     !forOverrun &&
+    unit.mobility === 'truck' &&
     held !== undefined &&
     held.unitIds.includes(unit.id) &&
     sameHex(from, held.hex) &&

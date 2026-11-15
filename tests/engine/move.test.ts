@@ -947,9 +947,10 @@ describe('专规 1.1b：安全边缘格（作为补给源的地图边格）敌�
     expect(evaluateStep(context([mover]), 'u1', SAFE).ok).toBe(true)
   })
 
-  it('4.5a（R9）：突袭进敌方 ZOC 后，该格单位不得离开；再突袭不受此限', () => {
+  it('4.5a（R9）：突袭进敌方 ZOC 后，轮式单位不得离开；再突袭不受此限', () => {
     const heldHex = { col: 36, row: 13 }
-    const mover = unit({ hex: heldHex })
+    // 4.5a-A 原文只约束 Truck MP ⇒ 用轮式单位验拒绝
+    const mover = unit({ hex: heldHex, mobility: 'truck', fuelled: true })
     const held = context([mover, enemy({ col: 37, row: 13 })], {
       zocHeld: { hex: heldHex, unitIds: ['u1'] },
     })
@@ -974,6 +975,16 @@ describe('专规 1.1b：安全边缘格（作为补给源的地图边格）敌�
       zocHeld: { hex: heldHex, unitIds: ['u1'] },
     })
     expect(evaluateStep(stayer, 'u2', { col: 35, row: 12 }).ok).toBe(true)
+    /*
+     * 4.5a-A：「movement using Leg or Track MP is unaffected by ZOCs」
+     * ⇒ 徒步/履带单位即便被列进同一事实，也不得拦（逐单位按机动类型收口）。
+     */
+    for (const mobility of ['leg', 'track'] as const) {
+      const free = context([unit({ hex: heldHex, mobility, fuelled: true })], {
+        zocHeld: { hex: heldHex, unitIds: ['u1'] },
+      })
+      expect(evaluateStep(free, 'u1', { col: 36, row: 12 }), mobility).toMatchObject({ ok: true })
+    }
   })
 
   it('8.1：突袭资格同一判据——`canOverrun` 也拒绝敌方安全边缘格（规则明文「不可被突袭」）', () => {

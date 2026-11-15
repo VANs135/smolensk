@@ -7133,14 +7133,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
        * 判据以 `plan.enterDefenderHex`（＝8.0 强制进入）为准，再显式排除撤退分支。
        */
       if (draft.defenderLeftHex && plan.enterDefenderHex && !attackerRetreated) {
+        /*
+         * 4.5a-A：「**只有**以 Truck MP 移动的单位进入敌方 ZOC 后须停/再突袭；
+         *   movement using Leg or Track MP is unaffected by ZOCs」⇒ 只把轮式参突者收进名单，
+         *   履带/徒步即便一起进格也照常可走（混合堆叠逐单位判定）。
+         */
+        const heldIds = plan.participantIds.filter(
+          (id) => units.value.find((unit) => unit.instanceId === id)?.raw.mobility === 'truck',
+        )
         overrunZocHeldHex.value = null
         overrunZocHeldUnitIds.value = []
-        if (inEnemyZocAt(moveContext.value, context.target, actingSide.value)) {
+        if (
+          heldIds.length > 0 &&
+          inEnemyZocAt(moveContext.value, context.target, actingSide.value)
+        ) {
           overrunZocHeldHex.value = { ...context.target }
-          overrunZocHeldUnitIds.value = [...plan.participantIds]
+          overrunZocHeldUnitIds.value = heldIds
           pushLog(
             'warning',
-            `4.5a：突袭进入 ${hexLabel(context.target)}（敌方 ZOC）⇒ 该单位不得离开、须再突袭或停`,
+            `4.5a：轮式单位突袭进入 ${hexLabel(context.target)}（敌方 ZOC）⇒ 不得离开、须再突袭或停`,
             '4.5a',
           )
         }
@@ -29119,6 +29130,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     combatAttackableHexes,
     overrunNow,
     overrunZocHeld,
+    overrunZocHeldUnitIds,
     settleOverrunMove,
     // C7 轰炸交互
     barrageActive,
