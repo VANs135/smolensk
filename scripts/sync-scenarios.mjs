@@ -82,6 +82,7 @@ export function toScenario(record, item) {
     firstTurn: record.first_turn,
     lastTurn: record.last_turn,
     turns: record.turns,
+    ...(record.single_player_turn ? { singlePlayerTurn: true } : {}),
     firstPlayer: record.first_player,
     setupFirst: record.setup_first,
     firstWeather: toFirstWeather(record.weather_start),

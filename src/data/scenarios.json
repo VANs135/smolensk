@@ -1274,6 +1274,7 @@
       "firstTurn": "8 Jul 41",
       "lastTurn": "8 Jul 41",
       "turns": 1,
+      "singlePlayerTurn": true,
       "firstPlayer": "axis",
       "setupFirst": "soviet",
       "firstWeather": "restricted",

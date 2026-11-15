@@ -392,13 +392,23 @@ export function resolveTurnWeather(
 
 /* ────────────────────────────── 阶段流转（2.2） ────────────────────────────── */
 
+/** 阶段推进选项（剧本级差异） */
+export interface NextPhaseOptions {
+  /**
+   * 本剧本只有**一个玩家回合**（剧本页 `1 player turn`，如 Intro: Vitebsk）
+   *
+   * 为真时先手方 H 之后直接 `turnEnd`，不切后手方。
+   */
+  singlePlayerTurn?: boolean
+}
+
 /**
  * 推进一个阶段（2.2）
  *
  * 顺序：Pre-Turn（天气判定 → 先手判定）→ 先手方 A–H → 后手方 A–H → 回合结束。
  * 末段 turnEnd 不在本函数处理，须调用 advanceTurn 进入下一回合。
  */
-export function nextPhase(records: Records): Records {
+export function nextPhase(records: Records, options: NextPhaseOptions = {}): Records {
   switch (records.phase) {
     case 'preTurn': {
       if (records.preTurnSegment === 'weatherDetermination') {
@@ -447,6 +457,10 @@ export function nextPhase(records: Records): Records {
       }
       // 先手方走完 A–H → 交给后手方重做 A–H
       if (activeSide === firstPlayer) {
+        // 单玩家回合（剧本页 `1 player turn`）：先手方之后直接终局，不切后手
+        if (options.singlePlayerTurn === true) {
+          return { ...records, phase: 'turnEnd', activeSide: null }
+        }
         return { ...records, phase: 'aircraftRefit', activeSide: opponentOf(activeSide) }
       }
       // 后手方也走完 → 回合结束

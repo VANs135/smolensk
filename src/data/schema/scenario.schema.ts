@@ -370,6 +370,13 @@ export const ScenarioSchema = z
     /** 回合数（剧本 1 为 19，剧本 2 为 8） */
     turns: z.number().int().positive(),
 
+    /**
+     * 本剧本只有**一个玩家回合**（剧本页 `1 player turn`，Intro: Vitebsk）
+     *
+     * 缺省 false（双方各走一次 A–H）。为真时先手方 H 之后直接进入终局。
+     */
+    singlePlayerTurn: z.boolean().optional(),
+
     /** 首次行动方 */
     firstPlayer: SideSchema,
     /** 先布设方（与 firstPlayer 相反者） */

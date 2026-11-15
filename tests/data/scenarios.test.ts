@@ -223,6 +223,8 @@ describe('入门剧本 Intro: Vitebsk（教学/单人）', () => {
     expect(s.setupFirst).toBe('soviet')
     expect(s.firstWeather).toBe('restricted')
     expect(s.hasSetup).toBe(true)
+    // 原文 `1 player turn`：先手方走完即终局，不切后手
+    expect(s.singlePlayerTurn).toBe(true)
   })
 
   it('初设数值：铁路容量 0/0、Reserve 5/0、缓存与建造 0；卡车载荷未述 ⇒ 缺省', () => {

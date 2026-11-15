@@ -602,6 +602,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     return {
       firstTurn: range.firstTurn,
       lastTurn: range.lastTurn,
+      singlePlayerTurn: info?.singlePlayerTurn === true,
       scenarioFirstPlayer: (info?.firstPlayer ?? 'axis') as Side,
       firstTurnWeather: FIRST_TURN_WEATHER[info?.firstWeather ?? 'normal'],
       earlyDecisionMet: earlyDecisionMet.value,

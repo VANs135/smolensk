@@ -301,6 +301,31 @@ describe('阶段流转（2.2）', () => {
     expect(() => nextPhase(end)).toThrow(TurnDriverError)
   })
 
+  it('单玩家回合（Intro: Vitebsk）：先手方 H 之后直接回合结束，不切后手', () => {
+    let records = createRecords()
+    records = nextPhase(records)
+    records = nextPhase(records)
+    for (let index = 0; index < PLAYER_TURN_PHASES.length - 1; index += 1) {
+      records = nextPhase(records, { singlePlayerTurn: true })
+    }
+    expect(records.phase).toBe('cleanUp')
+    expect(records.activeSide).toBe('axis')
+
+    records = nextPhase(records, { singlePlayerTurn: true })
+    expect(records.phase).toBe('turnEnd')
+    expect(records.activeSide).toBeNull()
+  })
+
+  it('单玩家回合下 A 段只出现一次（不出现后手方的 A–H）', () => {
+    let records = nextPhase(nextPhase(createRecords()))
+    let aircraftRefitCount = 1
+    while (records.phase !== 'turnEnd') {
+      records = nextPhase(records, { singlePlayerTurn: true })
+      if (records.phase === 'aircraftRefit') aircraftRefitCount += 1
+    }
+    expect(aircraftRefitCount).toBe(1)
+  })
+
   it('Pre-Turn 子步骤缺失 / 清理阶段缺行动方 都抛错', () => {
     expect(() => nextPhase(createRecords({ preTurnSegment: null }))).toThrow(TurnDriverError)
     expect(() => nextPhase(createRecords({ phase: 'cleanUp', activeSide: null }))).toThrow(

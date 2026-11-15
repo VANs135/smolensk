@@ -98,6 +98,12 @@ export interface SessionFlowContext {
   firstTurn: number
   /** 本剧本末回合号（5.0a 的收束点；由 victory.ts 的 `scenarioLastTurn` 给出） */
   lastTurn: number
+  /**
+   * 本剧本只有**一个玩家回合**（剧本页 `1 player turn`，Intro: Vitebsk）
+   *
+   * 为真时先手方走完 A–H 即进入 Turn End，不切后手方。缺省 false。
+   */
+  singlePlayerTurn?: boolean
   /** 剧本指定的首回合先手（2.3） */
   scenarioFirstPlayer: Side
   /** 剧本指定的首回合天气（专规 1.5） */
@@ -599,7 +605,7 @@ export function makeSessionStepper(context: SessionFlowContext): SessionStepper 
 
     // ⑤ 玩家段（A–H）：本模块只推进段，不代替各机制结算算子动作
     if (records.phase !== 'turnEnd') {
-      const next = nextPhase(records)
+      const next = nextPhase(records, { singlePlayerTurn: context.singlePlayerTurn === true })
       const side = records.activeSide ?? context.scenarioFirstPlayer
       return {
         kind: 'advanced',
