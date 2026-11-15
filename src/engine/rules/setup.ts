@@ -14,7 +14,7 @@ import type { DeepReadonly, HexRef, ScenarioAirSetupPolicy, SetupEntry, Side } f
 import { hexDistance, hexesWithin, isOnMap, sameHex } from '../hex-geometry'
 import { fail, succeed, type RuleOutcome } from '../result-types'
 import type { AirStatus } from '../state-types'
-import { DEAD_PILE_RULE } from './containers'
+import { AIR_BOX_RULE, DEAD_PILE_RULE } from './containers'
 import { isWithinStackingLimit } from './movement'
 import { isPanzerGroupConstraintLifted } from './timing'
 import { panzerGroupRulesActive } from './panzer-groups'
@@ -128,6 +128,8 @@ export const SETUP_PLACEMENT_KINDS = [
   'airbaseFree',
   /** 空军机队：按空军基地部署，初设不标具体格（14.1a） */
   'airFleet',
+  /** 图外空军盒（1.4a）：剧本页明示飞机初设就在盒内，不占图上格 */
+  'airBox',
   /** 未标位置 / 未识别文案 ⇒ 记缺口 */
   'unknown',
 ] as const
@@ -185,6 +187,7 @@ export function setupPlacementOfText(placementType: string): SetupPlacementKind 
   if (text.includes('任一指挥部同格')) return 'anyHq'
   if (text.includes('任意空军基地')) return 'airbaseFree'
   if (text.includes('空军机队')) return 'airFleet'
+  if (text.includes('空军盒')) return 'airBox'
   return 'unknown'
 }
 
@@ -242,6 +245,8 @@ export interface SetupEntryView {
   count: number
   placement: SetupPlacementKind
   placementText: string
+  /** 数据里的位置类别原文（`hex` / `air_box` / `dead_pile` …） */
+  locationKind: string | null
   /** IV-A 的 X（格）；无即 null */
   radius: number | null
   /** 所列格（印刷格号解析结果；可 0/1/2 个） */
@@ -300,6 +305,7 @@ function ruleOfEntry(entry: EntryRow, placement: SetupPlacementKind): string {
   if (placement === 'anyHq') return WITHIN_RULE
   if (placement === 'radius') return WITHIN_RULE
   if (placement === 'fixedTolerant') return WITHIN_RULE
+  if (placement === 'airBox') return AIR_BOX_RULE
   if (entry.kind === 'aircraft') return AIR_BASE_SITE_RULE
   return SETUP_RULE
 }
@@ -321,6 +327,7 @@ function toEntryView(entry: EntryRow, index: number): SetupEntryView {
     count: entry.count,
     placement,
     placementText: entry.placementType,
+    locationKind: entry.locationKind ?? null,
     radius,
     anchors: (entry.locationRefs ?? []) as readonly HexRef[],
     hexTexts: entry.locationHexes ?? [],
@@ -792,6 +799,9 @@ export function planAutoSetup(input: {
       gaps.push(`条目「${entry.raw}」的放置方式「${entry.placementText}」未识别 ⇒ 须人工判读`)
       continue
     }
+
+    // 图外空军盒（1.4a）：飞机落盒由 planAirSetup 负责，这里不产生图上棋子/候选
+    if (entry.placement === 'airBox') continue
 
     // ② 自由项（`w/i X` / 任一指挥部 / 任意空军基地）⇒ 交玩家定夺，候选格一并给出
     if (!entry.automatic) {
@@ -1296,21 +1306,25 @@ export function planAirSetup(input: {
   const policy = airSetupPolicyOf(input.scenarioId, input.side)
   const facts = input.facts ?? {}
   const candidates = filterEnterable(facts.airBaseHexes ?? [], facts, null)
+  const views = setupEntryViews(input.scenarioId, input.side).filter(
+    (entry) => entry.kind === 'aircraft',
+  )
+  // 需要图上基地格的机型（死亡堆与图外空军盒都不需要）
+  const needsMapBase = views.some(
+    (entry) => entry.placement !== 'deadPile' && entry.locationKind !== 'air_box',
+  )
   const gaps: string[] = []
   if (!policy.statedInRules) {
     gaps.push(
       `剧本 ${input.scenarioId} 的${input.side === 'axis' ? '轴心' : '苏联'}方剧本页未述飞机初始激活态 ⇒ 按 ${AIR_ACTIVE_RULE} 默认全 Active`,
     )
   }
-  if (candidates.length === 0) {
+  if (candidates.length === 0 && needsMapBase) {
     gaps.push(
       `未提供本方空军基地格（airBaseHexes）⇒ 飞机落位格须由玩家指定（${AIR_BASE_SITE_RULE}）`,
     )
   }
 
-  const views = setupEntryViews(input.scenarioId, input.side).filter(
-    (entry) => entry.kind === 'aircraft',
-  )
   const placements: AirSetupPlacement[] = []
   const matchedReduced: string[] = []
   /** 位于死亡堆的飞机条目（13.5）：不进空军基地初设，由自动初设按死亡堆处理 */
@@ -1359,7 +1373,9 @@ export function planAirSetup(input: {
        */
       offMapAllowed: true,
       detail:
-        `${count}× ${name} ⇒ 任意本方空军基地（${AIR_BASE_SITE_RULE}）；` +
+        (entry.locationKind === 'air_box'
+          ? `${count}× ${name} ⇒ 图外空军盒（Luftwaffe Box，${AIR_BOX_RULE}）；`
+          : `${count}× ${name} ⇒ 任意本方空军基地（${AIR_BASE_SITE_RULE}）；`) +
         `初始激活 ${count - inactiveCount} 枚 / 非激活 ${inactiveCount} 枚` +
         `${reducedFlag ? `；其中 1 枚以减损状态初设（军力 ${printed} → ${printed - 1}）` : ''}`,
       rule: AIR_ACTIVE_RULE,

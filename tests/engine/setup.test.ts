@@ -95,6 +95,7 @@ describe('W7 C14：放置类别与 w/i X 半径（通规 IV-A）', () => {
     expect(setupPlacementOfText('条件放置（指定格附近若干格内）')).toBe('radius')
     expect(setupPlacementOfText('自由放置（任意空军基地）')).toBe('airbaseFree')
     expect(setupPlacementOfText('空军机队（按空军基地部署，初设不标具体格）')).toBe('airFleet')
+    expect(setupPlacementOfText('图外空军盒（Luftwaffe Box）')).toBe('airBox')
     expect(setupPlacementOfText('未标位置')).toBe('unknown')
   })
 
@@ -604,6 +605,22 @@ describe('W7 C14：飞机初设（IV-E + 14.1a + 剧本页明文）', () => {
     expect(plan.data.dataGaps.join('｜')).toContain('未述飞机初始激活态')
     // 剧本 3 德军仍为「半数非激活」
     expect(airSetupPolicyOf('3', 'axis')).toMatchObject({ policy: 'half_inactive_round_up' })
+  })
+
+  it('C14：Intro 剧本页明示的 7 架飞机进图外空军盒（不要求轴方有空军基地）', () => {
+    const plan = planAirSetup({ scenarioId: 'Intro', side: 'axis' })
+    if (!plan.ok) throw new Error('应当成功')
+    expect(plan.data.placements).toHaveLength(4)
+    expect(plan.data.placements.reduce((sum, row) => sum + row.count, 0)).toBe(7)
+    for (const row of plan.data.placements) {
+      // 1.4a：图外空军盒是初设落点；无空军基地格也照样可落盒
+      expect(row.offMapAllowed).toBe(true)
+      expect(row.detail).toContain('空军盒')
+    }
+    // 自动初设不把「图外空军盒」误判成未识别放置方式
+    const auto = planAutoSetup({ scenarioId: 'Intro' })
+    if (!auto.ok) throw new Error('应当成功')
+    expect(auto.data.dataGaps.join('｜')).not.toContain('未识别')
   })
 
   it('C14：剧本 2/4/6 的飞机初设政策随初设源（1 / 3 / 5）', () => {
