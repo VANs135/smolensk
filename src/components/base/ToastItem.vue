@@ -25,7 +25,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <li class="toast" :class="`toast--${toast.kind}`" role="status">
+  <li class="toast theme-command" :class="`toast--${toast.kind}`" role="status">
     <span class="toast__dot" aria-hidden="true" />
     <span class="toast__text">{{ toast.text }}</span>
     <button class="toast__close" type="button" aria-label="关闭" @click="emit('dismiss', toast.id)">
@@ -46,7 +46,8 @@ onBeforeUnmount(() => {
   border-left: 3px solid var(--color-muted);
   min-width: 240px;
   max-width: 360px;
-  font-size: 0.92rem;
+  color: var(--color-ink);
+  font-size: var(--text-sm);
 }
 
 .toast__dot {
@@ -74,18 +75,26 @@ onBeforeUnmount(() => {
 
 .toast--info {
   border-left-color: var(--color-info);
+}
+.toast--info .toast__dot {
   color: var(--color-info);
 }
 .toast--success {
   border-left-color: var(--color-success);
+}
+.toast--success .toast__dot {
   color: var(--color-success);
 }
 .toast--warning {
   border-left-color: var(--color-warning);
+}
+.toast--warning .toast__dot {
   color: var(--color-warning);
 }
 .toast--danger {
   border-left-color: var(--color-danger);
+}
+.toast--danger .toast__dot {
   color: var(--color-danger);
 }
 </style>

@@ -93,10 +93,12 @@
   /* ── 文字 ──────────────────────────────────────────── */
   --text-base-size: 16px;
   --text-base-height: 1.75;
-  --text-sm: 0.86rem;
-  --text-xs: 0.78rem;
+  --text-sm: 0.875rem; /* 14px：面板正文与控件文字 */
+  --text-xs: 0.75rem; /* 12px：角标 / 次要信息 */
   --text-lg: 1.12rem;
   --text-xl: 1.4rem;
+  --weight-head: 700;
+  --weight-ui: 600;
 
   /* ── 间距（4 步进） ────────────────────────────────── */
   --space-1: 4px;

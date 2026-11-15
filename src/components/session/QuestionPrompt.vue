@@ -44,7 +44,7 @@ function answer(optionId?: string): void {
     <div v-if="question !== null" class="prompt" role="dialog" aria-modal="true" aria-label="待答">
       <!-- 无遮罩点击关闭：遮罩只是视觉隔离，点它不会关面板 -->
       <div class="prompt__mask" />
-      <div class="prompt__panel">
+      <div class="prompt__panel theme-command">
         <header class="prompt__header">
           <h3 class="prompt__title">{{ question.responder === 'axis' ? '轴心国' : '苏联' }}应答</h3>
           <BaseTag kind="warning">{{ question.rule }}</BaseTag>
@@ -148,7 +148,7 @@ function answer(optionId?: string): void {
 .prompt__error {
   margin: var(--space-4) 0 0;
   font-size: var(--text-sm);
-  color: var(--color-accent);
+  color: var(--color-danger);
 }
 
 .prompt__footer {

@@ -57,7 +57,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         :style="{ zIndex: props.zIndex }"
       >
         <div class="dialog__mask" @click="onClose" />
-        <div class="dialog__panel" :style="{ width: props.width }">
+        <div class="dialog__panel theme-command" :style="{ width: props.width }">
           <header class="dialog__header">
             <h3 class="dialog__title">{{ props.title }}</h3>
             <button class="dialog__close-btn" type="button" aria-label="关闭" @click="onClose">
@@ -117,7 +117,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 .dialog__title {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-head);
 }
 
 .dialog__close-btn {

@@ -33,7 +33,7 @@ h4,
 h5,
 h6 {
   font-family: var(--font-head);
-  font-weight: 700;
+  font-weight: var(--weight-head);
   line-height: 1.25;
   margin: 0 0 var(--space-3);
   letter-spacing: -0.01em;
@@ -62,6 +62,46 @@ a:hover {
 
 ::selection {
   background: rgb(140 47 34 / 0.16);
+}
+
+/* 控件文字统一继承当前字号与字重（输入框 / 下拉 / 按钮不再各带一套默认值） */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/*
+ * 深色界面令牌组（弹窗 / Toast / 待答窗）
+ *
+ * 这些组件 Teleport 到 body，落在对局台 `.gt` 的令牌作用域之外 ⇒ 单独挂这一组，
+ * 让纸色组件在深色棋盘上仍读同一套语义（面板 / 文字 / 规则线 / 语义色）。
+ */
+.theme-command {
+  --color-bg: var(--color-command-bg);
+  --color-bg-2: var(--color-command-panel);
+  --color-panel: var(--color-command-panel);
+  --color-ink: var(--color-command-ink);
+  --color-muted: var(--color-command-muted);
+  --color-rule: var(--color-command-line);
+  --color-border: var(--color-command-muted);
+  --color-accent: var(--color-command-teal);
+  --color-accent-2: var(--color-command-teal);
+  --color-gold: var(--color-command-amber);
+  --color-info: var(--color-command-axis);
+  --color-success: var(--color-command-teal);
+  --color-warning: var(--color-command-amber);
+  --color-danger: var(--color-command-danger);
+  --color-info-bg: var(--color-command-raised);
+  --color-success-bg: var(--color-command-teal-bg);
+  --color-warning-bg: var(--color-command-raised);
+  --color-danger-bg: var(--color-command-raised);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
+  --focus-ring: 0 0 0 3px rgb(120 226 206 / 0.24);
+  color-scheme: dark;
 }
 
 /* 滚动条（WebKit）轻量定制，与纸张质感一致 */

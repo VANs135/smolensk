@@ -186,6 +186,8 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
 }
 
 .shell__body--full {
+  display: flex;
+  flex-direction: column;
   max-width: none;
   min-height: 0;
   padding: 0;
