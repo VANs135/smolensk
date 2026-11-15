@@ -11698,6 +11698,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   /**
+   * 剧本级：攻方不得动用部队储备（12.10；Intro: Vitebsk 剧本页明文）
+   *
+   * 剧本级规则，不改 12.10 全局：只在本剧本关掉战斗补给窗里的「攻方用储备」。
+   */
+  const attackerInternalsForbidden = computed<boolean>(() => {
+    const stated = scenarios.scenarios.find((item) => item.id === scenarioId.value)?.setup
+      .attackerInternalsForbidden
+    return stated === true
+  })
+
+  /**
    * 12.10a：**部队储备**这一项是否适用（不适用就不出现在窗内）
    *
    * 原文：只有该单位"无法从图上补给（直接拖取或 HQ 投递）取得所需 SP"时才可用储备。
@@ -11705,6 +11716,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 已耗尽（12.10c）的单位也不能再用 ⇒ 若全方都耗尽，这一项也不出现。
    */
   const combatAttackerStocksApplicable = computed<boolean>(() => {
+    // 剧本页明示禁令 ⇒ 本剧本不出现该项（按「不可用项不出现」的规矩，不置灰）
+    if (attackerInternalsForbidden.value) return false
     const ids = combatAttackerIds.value
     const views = combatAttackerViews.value.filter((unit) => ids.includes(unit.id))
     return (
@@ -11796,7 +11809,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 逐单位定"图上付 / 储备付"由引擎的 `planCombatSupplyFunding` 给结论（12.10a/b/c/g/h 都在
      * 那里，含规则书的两个例子）；本处只做两件事：① 把总额喂给引擎；② 引擎接受后按结论落盘。
      */
-    const attackerPlan = combatInputs.value.attackerUsesInternalStocks
+    const useAttackerStocks =
+      combatInputs.value.attackerUsesInternalStocks && !attackerInternalsForbidden.value
+    const attackerPlan = useAttackerStocks
       ? planCombatSupplyFunding({
           units: combatAttackerViews.value.map((unit) => ({
             unitId: unit.id,

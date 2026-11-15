@@ -268,6 +268,13 @@ export const ScenarioSetupSchema = z
      */
     optionalRulesForbidden: z.boolean().optional(),
     /**
+     * 攻方不得动用部队储备（12.10）
+     *
+     * 剧本页明示时记 `true`（Intro: Vitebsk：`Attacking units can never use Internals`）。
+     * 剧本级规则：不改 12.10 的全局行为，只在本剧本的战斗补给窗口关掉这一项。
+     */
+    attackerInternalsForbidden: z.boolean().optional(),
+    /**
      * 1.6b：开局时图外空军盒内的额外 SP（枚，每方）
      *
      * 原文未给数 ⇒ 缺省 0；有剧本明确给出时按印刷值录入。

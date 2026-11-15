@@ -237,6 +237,8 @@ describe('入门剧本 Intro: Vitebsk（教学/单人）', () => {
     expect(s.setup.panzerGroupSpAssignment).toBe(false)
     // 剧本页不引用任何 4.x 可选规则（4.1b 的 Supply Train 不触发）
     expect(s.setup.optionalRulesForbidden).toBe(true)
+    // 剧本页：攻方不得动用部队储备（12.10，剧本级）
+    expect(s.setup.attackerInternalsForbidden).toBe(true)
     // PDF 未述有机卡车载荷；数据不写该字段，运行时按 IV-D 默认空载
     expect(s.setup.organicTrucks.mode).toBe('all_unloaded')
     expect(s.setup.organicTrucks.raw).toContain('未述')
