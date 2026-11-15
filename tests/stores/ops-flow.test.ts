@@ -491,6 +491,32 @@ describe('H 清理段的顶栏提示（2.2）', () => {
     expect(mapView.actionHint).not.toContain('可移动范围')
     expect(mapView.actionHint).toContain('清理')
   })
+
+  it('★ 点己方算子不得建立待开拔清单（本段没有移动）', () => {
+    const { workbench } = newStores()
+    workbench.setPhase('cleanUp')
+    placeGround(
+      workbench,
+      groundRecord('axis', (record) => record.attackCapable === true),
+      CORE_HEX,
+      'axis',
+      'h-unit',
+    )
+
+    workbench.clickHex(CORE_HEX)
+    expect(workbench.movePick).toBeNull()
+    expect(workbench.moveInteraction).toBeNull()
+  })
+
+  it('★ 右键敌方格不得出炮击 / 轰炸入口（H 段只许可 cleanUp）', () => {
+    const { workbench } = newStores()
+    workbench.setPhase('cleanUp')
+    placeGround(workbench, artilleryRecord(), CORE_HEX, 'axis', 'h-gun')
+    placeGround(workbench, defenderRecord(), TARGET_HEX, 'soviet', 'h-def')
+    workbench.spDumps.push({ id: 'h-dump', hex: CORE_HEX, side: 'axis', sp: 0, t: 20 })
+
+    expect(workbench.barrageTargetsNow).toEqual([])
+  })
 })
 
 describe('B 增援段的顶栏提示（13.6 / 1.6b / 13.5）', () => {
