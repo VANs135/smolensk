@@ -113,9 +113,7 @@ function absorb(): void {
             </option>
           </select>
         </label>
-        <BaseButton size="sm" :disabled="recordId === ''" @click="breakdown"
-          >创建 · 20.0a</BaseButton
-        >
+        <BaseButton v-if="recordId !== ''" size="sm" @click="breakdown">创建 · 20.0a</BaseButton>
       </template>
       <template v-if="canAbsorb">
         <label class="order__subject">
@@ -133,7 +131,7 @@ function absorb(): void {
             </option>
           </select>
         </label>
-        <BaseButton size="sm" variant="secondary" :disabled="absorbId === ''" @click="absorb"
+        <BaseButton v-if="absorbId !== ''" size="sm" variant="secondary" @click="absorb"
           >吸收 · 20.0d</BaseButton
         >
       </template>

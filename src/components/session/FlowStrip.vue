@@ -377,10 +377,14 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
       </span>
       <!-- 引擎验证页专用：一步一步点，便于逐段核对 -->
       <BaseButton
-        v-if="props.stepwise"
+        v-if="
+          props.stepwise &&
+          gameSession.session !== null &&
+          !gameSession.awaiting &&
+          !gameSession.terminated
+        "
         variant="secondary"
         size="sm"
-        :disabled="gameSession.session === null || gameSession.awaiting || gameSession.terminated"
         @click="gameSession.stepNow()"
       >
         推进一步（验证用）

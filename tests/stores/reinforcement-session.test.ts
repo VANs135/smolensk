@@ -163,7 +163,8 @@ describe('B17a：分段渲染与两处入口（源码守卫）', () => {
     checkGated('showsActions', [
       'workbench.applyArrivalRemovalsNow()',
       // 2026-11-09：手牌点算子即进入落点选格（选型随卡片走，不再有「投放」按钮）
-      '@click="pickArrival(card.index)"',
+      // 2026-11-15：不可投放的卡渲染成状态（div），点击统一走 `onArrivalCardClick`
+      '@click="onArrivalCardClick(card)"',
       // 2026-11-13：1.6c + 1.6b 合并为一次「掷骰检定」（`runReplCheck` 内部按序调用两条判定）
       '@click="runReplCheck"',
       'workbench.claimFrontalReservesNow()',
@@ -248,7 +249,7 @@ describe('B21：对局台不摆算子，到达投放自带选型', () => {
     const panel = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
     expect(panel).toContain('arrivalRecordIds')
     expect(panel).toContain('onArrivalRecordPick(index')
-    expect(panel).toContain('@click="pickArrival(card.index)"')
+    expect(panel).toContain('@click="onArrivalCardClick(card)"')
     // 选型真的传下去了（空串 ⇒ undefined，交给引擎按显示名匹配）
     expect(panel).toContain("picked === '' ? undefined : picked")
   })
@@ -336,9 +337,9 @@ describe('B34：拆并四处"指认单位"改成点算子图', () => {
  * 先列了出来（实桌是先掷后才看到结果）。判据与 1.6c 回执同源：`hasSpecialReplDraw`。
  */
 describe('1.6c：结果不在接受检定之前露出（源码守卫）', () => {
-  it('★ variableReplResult 的 special 行由 hasSpecialReplDraw 把门', () => {
+  it('★ rollResultLines 的 special 行由 hasSpecialReplDraw 把门', () => {
     const panel = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
-    const start = panel.indexOf('const variableReplResult')
+    const start = panel.indexOf('const rollResultLines')
     expect(start).toBeGreaterThan(-1)
     const at = panel.indexOf('const special =', start)
     expect(at).toBeGreaterThan(start)

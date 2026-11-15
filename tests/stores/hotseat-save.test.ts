@@ -98,10 +98,11 @@ describe('读档：观察方归位到档内行动方', () => {
 })
 
 describe('棋桌：模式未设置时的继续闸门', () => {
-  it('棋桌有待选模式的闸门；确认按钮在选齐前禁用；未设置不按 PVP 口径启用热坐', () => {
+  it('棋桌有待选模式的闸门；确认按钮在选齐前不出现；未设置不按 PVP 口径启用热坐', () => {
     const view = readSource('../../src/views/GameTableView.vue')
     expect(view).toContain('data-testid="mode-gate"')
-    expect(view).toContain(':disabled="!hotseat.modeReady"')
+    expect(view).toContain('v-if="hotseat.modeReady"')
+    expect(view).not.toContain(':disabled="!hotseat.modeReady"')
 
     const store = readSource('../../src/stores/hotseat.ts')
     expect(store).toContain("mode.value === 'pvp' || mode.value === 'pve'")

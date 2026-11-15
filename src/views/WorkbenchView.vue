@@ -499,27 +499,22 @@ onMounted(() => {
           </ul>
           <div class="row">
             <BaseButton
+              v-if="workbench.canUndoStep"
               variant="secondary"
               size="sm"
-              :disabled="workbench.moveInteraction.steps.length === 0"
               @click="workbench.undoLastStep()"
             >
               撤销一步
             </BaseButton>
             <BaseButton
+              v-if="workbench.canAbortMove"
               variant="secondary"
               size="sm"
-              :disabled="workbench.moveInteraction.steps.length === 0"
               @click="workbench.cancelWholeMove()"
             >
               取消本次移动
             </BaseButton>
-            <BaseButton
-              variant="primary"
-              size="sm"
-              :disabled="workbench.activeMoveUnits.length === 0"
-              @click="workbench.finishMove()"
-            >
+            <BaseButton variant="primary" size="sm" @click="workbench.finishMove()">
               结束移动（6.1）
             </BaseButton>
           </div>

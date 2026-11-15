@@ -97,9 +97,9 @@ const pending = computed<boolean>(() => {
     <div class="phase-panel__body">
       <div class="phase-panel__row">
         <BaseButton
+          v-if="!workbench.supplyFeedingSettled"
           :variant="plan === null ? 'primary' : 'secondary'"
           size="sm"
-          :disabled="workbench.supplyFeedingSettled"
           @click="onAction(workbench.planSupplyPhaseNow)"
         >
           {{ plan === null ? '生成补给计划' : '刷新计划' }}
@@ -195,9 +195,10 @@ const pending = computed<boolean>(() => {
                 损耗已结算
               </span>
               <BaseButton
-                v-else-if="!workbench.attritionResults[keyOf(duty.hex)]"
+                v-else-if="
+                  workbench.supplyFeedingSettled && !workbench.attritionResults[keyOf(duty.hex)]
+                "
                 size="sm"
-                :disabled="!workbench.supplyFeedingSettled"
                 @click="onAction(() => workbench.rollAttritionNow(keyOf(duty.hex)))"
               >
                 掷损耗骰

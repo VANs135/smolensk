@@ -299,17 +299,17 @@ const pins = computed(() => workbench.exclusiveSectionPins)
             属多单位编队（3.4）
           </label>
           <BaseButton
+            v-if="panzerUnitId !== '' && panzerGroupChoice !== ''"
             variant="primary"
             size="sm"
-            :disabled="panzerUnitId === '' || panzerGroupChoice === ''"
             @click="declarePanzerGroup()"
           >
             手工覆盖归属（3.4）
           </BaseButton>
           <BaseButton
+            v-if="panzerUnitId !== ''"
             variant="ghost"
             size="sm"
-            :disabled="panzerUnitId === ''"
             @click="workbench.setPanzerGroupNow(panzerUnitId, null)"
           >
             撤销覆盖
@@ -321,17 +321,17 @@ const pins = computed(() => workbench.exclusiveSectionPins)
         {{ groupLabel(item.group) }}：{{ item.detail }}
         <!-- 3.4a：义务落盘 —— 只列**命中条件**的单位（编队内未命中的单位不在此处） -->
         <span v-if="actsPanzer" class="row">
-          <BaseButton
-            v-for="unitId in item.unitIds"
-            :key="unitId"
-            variant="secondary"
-            size="sm"
-            :disabled="obligationUnitDg(unitId)"
-            @click="workbench.applyPanzerGroupDgNow(unitId)"
-          >
-            {{ obligationUnitName(unitId)
-            }}{{ obligationUnitDg(unitId) ? '（已 DG）' : ' 投 DG（3.4a）' }}
-          </BaseButton>
+          <template v-for="unitId in item.unitIds" :key="unitId">
+            <BaseTag v-if="obligationUnitDg(unitId)" kind="neutral">已 DG</BaseTag>
+            <BaseButton
+              v-else
+              variant="secondary"
+              size="sm"
+              @click="workbench.applyPanzerGroupDgNow(unitId)"
+            >
+              {{ obligationUnitName(unitId) }} 投 DG（3.4a）
+            </BaseButton>
+          </template>
         </span>
       </p>
       <p v-if="workbench.panzerGroupObligations.length === 0" class="muted">
@@ -578,9 +578,9 @@ const pins = computed(() => workbench.exclusiveSectionPins)
           </div>
         </div>
         <BaseButton
+          v-if="workbench.hedgehogInputs.payDumpId !== null"
           variant="primary"
           size="sm"
-          :disabled="workbench.hedgehogInputs.payDumpId === null"
           @click="workbench.buildHedgehogNow()"
         >
           修建/改进 +1 级（16.0b）

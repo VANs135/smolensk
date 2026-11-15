@@ -38,9 +38,9 @@ const allocated = computed(() => workbench.barrageLossAllocated)
         {{ workbench.barrageLossPointsOf(unit.instanceId) }} / {{ unit.steps }}
       </span>
       <button
+        v-if="workbench.barrageLossPointsOf(unit.instanceId) > 0"
         type="button"
         class="ops__minus"
-        :disabled="workbench.barrageLossPointsOf(unit.instanceId) === 0"
         @click="workbench.removeBarrageLossPoint(unit.instanceId)"
       >
         −

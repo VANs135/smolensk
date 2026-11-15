@@ -210,11 +210,11 @@ function resetPosition(): void {
       <span class="dock__title">{{ title }}</span>
       <BaseTag v-if="props.rule !== undefined" kind="info">{{ props.rule }}</BaseTag>
       <button
+        v-if="props.closePolicy !== 'refused'"
         class="dock__close"
         type="button"
         :title="closeLabel"
         :aria-label="closeLabel"
-        :disabled="props.closePolicy === 'refused'"
         @pointerdown.stop
         @click="$emit('close')"
       >

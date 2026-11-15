@@ -673,9 +673,9 @@ onBeforeUnmount(() => {
             </BaseButton>
             <!-- ⑧：开始/停止记录（导出 JSONL 交回定位；不影响对局） -->
             <BaseButton
+              v-if="canRecord"
               variant="secondary"
               size="sm"
-              :disabled="!canRecord"
               :data-testid="recorder.active ? 'recorder-stop' : 'recorder-start'"
               @click="toggleRecording"
             >
@@ -759,9 +759,9 @@ onBeforeUnmount(() => {
           </fieldset>
           <div class="mode-gate__actions">
             <BaseButton
+              v-if="hotseat.modeReady"
               variant="primary"
               size="sm"
-              :disabled="!hotseat.modeReady"
               @click="hotseat.lockMode()"
             >
               确认并继续

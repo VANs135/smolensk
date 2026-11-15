@@ -116,22 +116,22 @@ const moveSegmentLabelText = computed(() =>
   moveSegmentLabels.value.map((label) => `「${label}」`).join('、'),
 )
 
-/** 6.1f：本次移动中的单位阵列（已放下的灰显） */
+/** 6.1f：本次移动中**仍在动**的单位阵列（已放下的不再出现，不摆灰算子） */
 const moveUnitItems = computed<readonly CounterPickerItem[]>(() =>
-  movingUnits.value.map((unit) => {
-    const budget = budgetOf(unit.instanceId)
-    return {
-      id: unit.instanceId,
-      imageUrl: counterImageUrlOf(unit),
-      name:
-        `${unit.name}（已耗 ${unit.mpSpent} MP @ ${hexLabel(unit.hex)}` +
-        `${budget === null ? '' : `｜剩余 ${budget.remaining} MP`}` +
-        `${unit.movementEnded ? '｜本次移动已结束' : '｜仍在动'}）`,
-      selected: !unit.movementEnded,
-      disabledReason: unit.movementEnded ? '6.1f：该单位本次移动已结束（放下/走完）' : null,
-      hex: unit.hex,
-    }
-  }),
+  movingUnits.value
+    .filter((unit) => !unit.movementEnded)
+    .map((unit) => {
+      const budget = budgetOf(unit.instanceId)
+      return {
+        id: unit.instanceId,
+        imageUrl: counterImageUrlOf(unit),
+        name:
+          `${unit.name}（已耗 ${unit.mpSpent} MP @ ${hexLabel(unit.hex)}` +
+          `${budget === null ? '' : `｜剩余 ${budget.remaining} MP`}｜仍在动）`,
+        selected: true,
+        hex: unit.hex,
+      }
+    }),
 )
 
 /** 悬停某一枚 ⇒ 同步地图高亮它所在的格 */
@@ -219,9 +219,9 @@ function hoverUnit(id: string | null): void {
       -->
       <div class="row">
         <BaseButton
+          v-if="workbench.movePick !== null"
           variant="primary"
           size="sm"
-          :disabled="workbench.movePick === null"
           @click="workbench.confirmMovePick()"
         >
           开始移动

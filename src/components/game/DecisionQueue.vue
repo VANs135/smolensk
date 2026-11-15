@@ -156,6 +156,15 @@ function onPointerUp(): void {
   })
 }
 
+/** 不可落位的卡片是「待办状态」，不是可点动作：渲染成 div，不摆 disabled 按钮 */
+function cardBlocked(item: SetupPlacing): boolean {
+  return item.kind === 'truck' || (item.blockedReason !== null && item.offMapAllowed !== true)
+}
+
+function onCardClick(item: SetupPlacing): void {
+  if (!cardBlocked(item)) pick(item)
+}
+
 /** 该卡是否是当前正在落位的那一项 */
 function isActive(item: SetupPlacing): boolean {
   const current = placing.value
@@ -453,8 +462,9 @@ function sideMark(side: 'axis' | 'soviet'): string {
           :key="`${item.kind}:${item.side}:${item.entryIndex}:${item.formationId ?? item.instanceId ?? ''}`"
           class="queue__row"
         >
-          <button
-            type="button"
+          <component
+            :is="cardBlocked(item) ? 'div' : 'button'"
+            :type="cardBlocked(item) ? undefined : 'button'"
             class="queue__card"
             :class="{
               'queue__card--on': isActive(item),
@@ -465,11 +475,9 @@ function sideMark(side: 'axis' | 'soviet'): string {
                 ? '点卡后点基地放入；也可用下方按钮放入图外盒'
                 : (item.blockedReason ?? `${item.raw}（${sideName(item.side)}）`)
             "
-            :aria-pressed="isActive(item)"
-            :disabled="
-              item.kind === 'truck' || (item.blockedReason !== null && item.offMapAllowed !== true)
-            "
-            @click="pick(item)"
+            :aria-pressed="cardBlocked(item) ? undefined : isActive(item)"
+            :aria-disabled="cardBlocked(item) ? 'true' : undefined"
+            @click="onCardClick(item)"
           >
             <!--
               第六批条 1（S1）：**算子图阵列** —— 有图档就画算子（与地图同一份图档来源），
@@ -499,7 +507,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
                   : `${item.placed}/${item.total}`
               }}
             </span>
-          </button>
+          </component>
 
           <BaseButton
             v-if="item.kind === 'air' && setup.canPlaceAirInOffMapBox(item.side, item.entryIndex)"

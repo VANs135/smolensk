@@ -183,9 +183,9 @@ function filterByRule(rule: string): void {
           只看被拒
         </label>
         <BaseButton
+          v-if="gameSession.logFiltered"
           variant="ghost"
           size="sm"
-          :disabled="!gameSession.logFiltered"
           @click="gameSession.clearLogQuery()"
         >
           清除筛选

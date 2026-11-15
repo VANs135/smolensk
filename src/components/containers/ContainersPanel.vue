@@ -619,9 +619,9 @@ function boxAircraft(side: Side) {
               </select>
             </label>
             <BaseButton
+              v-if="airUnitId !== ''"
               variant="secondary"
               size="sm"
-              :disabled="airUnitId === ''"
               @click="containers.setAirInBox(airUnitId, true)"
             >
               移入盒（1.4a）
@@ -751,12 +751,12 @@ function boxAircraft(side: Side) {
               <!-- 边缘盒：离开（1.4b） -->
               <template v-if="box.kind === 'edgeBox' && showsBoxActions('edgeBox')">
                 <BaseButton
+                  v-if="
+                    containers.edgeBoxExitCandidates(edgeBoxOf(box), holding.unitId, edgeUseRailCap)
+                      .length > 0
+                  "
                   variant="ghost"
                   size="sm"
-                  :disabled="
-                    containers.edgeBoxExitCandidates(edgeBoxOf(box), holding.unitId, edgeUseRailCap)
-                      .length === 0
-                  "
                   @click="
                     containers.beginEdgeBoxExitHexPickNow(
                       edgeBoxOf(box),
@@ -808,21 +808,22 @@ function boxAircraft(side: Side) {
           </label>
           <label class="field">
             ② 数量（≤ {{ breakdownCountMax }}）
+            <span v-if="breakdownIsSetupWiggle" class="num">{{ breakdownCountNow }}</span>
             <input
+              v-else
               v-model.number="breakdownCount"
               class="input"
               type="number"
               min="1"
               :max="Math.max(1, breakdownCountMax)"
-              :disabled="breakdownIsSetupWiggle"
             />
           </label>
           <!-- 专规 4.3（可选）A：初设拆团的落点由玩家在地图上点选（母师两格内） -->
           <template v-if="breakdownIsSetupWiggle">
             <BaseButton
+              v-if="breakdownParentId !== ''"
               variant="secondary"
               size="sm"
-              :disabled="breakdownParentId === ''"
               @click="pickBreakdownTarget"
             >
               ③ 在地图上选落点（母师两格内）
@@ -830,14 +831,14 @@ function boxAircraft(side: Side) {
             <span class="muted num">落点：{{ breakdownTargetLabel }}</span>
           </template>
           <BaseButton
+            v-if="
+              breakdownParentId !== '' &&
+              breakdownTimingNow !== null &&
+              breakdownCountNow > 0 &&
+              (!breakdownIsSetupWiggle || breakdownTargetHex !== null)
+            "
             variant="primary"
             size="sm"
-            :disabled="
-              breakdownParentId === '' ||
-              breakdownTimingNow === null ||
-              breakdownCountNow === 0 ||
-              (breakdownIsSetupWiggle && breakdownTargetHex === null)
-            "
             :title="
               breakdownTimingNow === null
                 ? '20.0a：只有「开始移动 / 战后推进 / 战后撤退」三个时机能创建拆分单位（未动过的单位在本方移动环节直接可拆）'
@@ -885,13 +886,13 @@ function boxAircraft(side: Side) {
             进出改用铁路运力
           </label>
           <BaseButton
-            variant="primary"
-            size="sm"
-            :disabled="
-              !containers
+            v-if="
+              containers
                 .edgeBoxEnterCandidates(edgeBoxOf(box), edgeUseRailCap)
                 .some((item) => item.id === edgeUnitId)
             "
+            variant="primary"
+            size="sm"
             @click="
               containers.moveEdgeBox({
                 box: edgeBoxOf(box),
@@ -1006,7 +1007,7 @@ function boxAircraft(side: Side) {
             本次收纳 id
             <input v-model="formationHideText" class="input path-input" placeholder="逗号分隔" />
           </label>
-          <BaseButton variant="primary" size="sm" :disabled="formationId === ''" @click="hideNow()">
+          <BaseButton v-if="formationId !== ''" variant="primary" size="sm" @click="hideNow()">
             收纳进盒（13.7：至少一个所属单位须与标记同格）
           </BaseButton>
         </template>
@@ -1032,9 +1033,9 @@ function boxAircraft(side: Side) {
           </div>
           <p v-if="formationUnitsOnMap.length === 0" class="muted">该编队当前在图上没有单位。</p>
           <BaseButton
+            v-if="formationId !== '' && formationHideSelection.length > 0"
             variant="primary"
             size="sm"
-            :disabled="formationId === '' || formationHideSelection.length === 0"
             @click="hideNowFromBox()"
           >
             收纳进盒（13.7）
@@ -1066,17 +1067,17 @@ function boxAircraft(side: Side) {
           剩余 {{ workbench.constructionMarkers }} 枚（标记盒内）
         </BaseTag>
         <BaseButton
+          v-if="workbench.constructionMarkers > 0"
           variant="primary"
           size="sm"
-          :disabled="workbench.constructionMarkers === 0"
           @click="workbench.armConstructionMarkerNow('bridge')"
         >
           拾起一枚 → 桥（13.8b）
         </BaseButton>
         <BaseButton
+          v-if="workbench.constructionMarkers > 0"
           variant="primary"
           size="sm"
-          :disabled="workbench.constructionMarkers === 0"
           @click="workbench.armConstructionMarkerNow('airStrip')"
         >
           拾起一枚 → 简易机场（15.2）

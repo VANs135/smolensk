@@ -724,9 +724,9 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         </template>
         <div class="row">
           <BaseButton
+            v-if="retreatPlan === null || retreatPlan.complete"
             variant="primary"
             size="sm"
-            :disabled="retreatPlan !== null && !retreatPlan.complete"
             @click="workbench.confirmCombatRetreats()"
           >
             确认撤退

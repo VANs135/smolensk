@@ -60,6 +60,12 @@ const scenarioChoices = computed(() =>
   scenarios.scenarios.map((item) => ({ id: item.id, name: item.name })),
 )
 
+/** 初设完成后剧本只读展示（不再摆一个不可用的下拉） */
+const currentScenarioLabel = computed(() => {
+  const item = scenarioChoices.value.find((entry) => entry.id === setup.scenarioId)
+  return item === undefined ? setup.scenarioId : `${item.id} · ${item.name}`
+})
+
 /** 开局流程步骤 + 完成度 */
 const steps = computed(() =>
   setup.flow.map((step) => ({ ...step, done: setup.stepDone[step.id] === true })),
@@ -283,9 +289,10 @@ function sideLabel(side: Side): string {
     <div class="row">
       <label class="field">
         剧本（唯一入口）
+        <span v-if="setup.finished" class="num">{{ currentScenarioLabel }}</span>
         <select
+          v-else
           class="select"
-          :disabled="setup.finished"
           :value="setup.scenarioId"
           @change="setup.selectScenario(($event.target as HTMLSelectElement).value)"
         >
@@ -671,9 +678,9 @@ function sideLabel(side: Side): string {
       <p v-else class="muted">尚无 SP 台账 —— 自动初设已在选剧本时执行。</p>
       <div class="row">
         <BaseButton
+          v-if="setup.spDumps.length > 0"
           variant="primary"
           size="sm"
-          :disabled="setup.spDumps.length === 0"
           @click="setup.confirmSpOwnership()"
         >
           核验 SP 归属（12.1d<template v-if="setup.spOwnershipEntryVisible"> / 3.4b</template>）

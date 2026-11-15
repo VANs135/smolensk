@@ -21,13 +21,13 @@ describe('P3：会话框外壳（源码守卫）', () => {
     expect(game).toContain(':session-key="session.kind"')
   })
 
-  it('MapDock：三种关闭文案 + refused 分支禁用', () => {
+  it('MapDock：三种关闭文案 + refused 不出现关闭按钮', () => {
     const dock = readFileSync('src/components/map/MapDock.vue', 'utf8')
     expect(dock).toContain('closePolicy?: MapSessionClosePolicy')
     expect(dock).toContain('取消本次操作')
     expect(dock).toContain('收起本次会话')
     expect(dock).toContain('暂不可关闭')
-    expect(dock).toContain(':disabled="props.closePolicy === \'refused\'"')
+    expect(dock).toContain('v-if="props.closePolicy !== \'refused\'"')
   })
 
   it('MapDock 不再把关闭语义写死成一种', () => {

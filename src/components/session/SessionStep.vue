@@ -44,10 +44,9 @@ const active = computed(() => sessionStepVisible(hosted, step.value?.id ?? null,
     </p>
     <slot />
     <button
-      v-if="props.ackable"
+      v-if="props.ackable && props.ackDisabled !== true"
       class="step__ack"
       type="button"
-      :disabled="props.ackDisabled === true"
       @click="emit('ack')"
     >
       {{ props.ackLabel ?? '本步完成 / 跳过' }}
