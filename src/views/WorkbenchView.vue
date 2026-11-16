@@ -345,6 +345,7 @@ onMounted(() => {
         :overlay="mapView.overlay"
         :hint="workbench.mapHint"
         @hex-click="onHexClick"
+        @blank-click="mapView.cancelBlankPick()"
         @hex-hover="onHexHover"
       />
 

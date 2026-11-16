@@ -7402,6 +7402,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     clearBarrage()
     clearSupply()
     clearAir()
+    pendingHexPick.value = null
     // 15.1A / 15.4：整备与缩减都是「每基地每阶段一次」，换阶段即清零
     refitDoneBaseIds.value = []
     reducedBaseIds.value = []
@@ -7495,6 +7496,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     railArrived.value = null
     // 4.8a：换段后上一次的勾选一律作废（盘面可能已变；未处理的义务仍会被台账重新列出）
     overstackPicks.value = {}
+    /*
+     * 11 号：换段/换方/换回合 ⇒ 退掉残留的「等玩家点一格」态。
+     * 修前它只认 Esc，切段后仍挂着 ⇒ 之后每一次点图都被当成上一次的选格（错格还吞点击），
+     * 正是"突袭后残留选格分派吃掉后续点击"那一类。取消入口统一，过渡也必须收口。
+     */
+    pendingHexPick.value = null
   }
 
   function resetSupplyPhaseLedger(): void {
@@ -7684,6 +7691,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     turn.value = clamped
     lastStep.value = null
     resetMovementTracking()
+    // 11 号：换回合同样退掉残留的待点格（与换段/换方同口径）
+    pendingHexPick.value = null
     /*
      * 16.0b/c：工事修建/缩减的额度是「**每格每回合**」⇒ 换回合即清零。
      * ★ 本账本按**格**键（`hedgehogTurnLedger`），故必须在这里显式清，否则"本回合已提升"会跨回合一直拦。
@@ -23189,6 +23198,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     segmentStepIndex.value = index
     // 9.1c：直跳也是"换环节" ⇒ 账本必须清（否则往回跳一步就能让同一单位再攻击一次）
     clearAttackPhaseLedger()
+    // 11 号：直跳环节同样退掉上一个环节遗留的待点格
+    pendingHexPick.value = null
     return true
   }
 

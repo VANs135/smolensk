@@ -432,6 +432,7 @@ onBeforeUnmount(() => {
           :construction-markers="workbench.constructionMarkerPieces"
           :hint="workbench.mapHint"
           @hex-click="onHexClick"
+          @blank-click="mapView.cancelBlankPick()"
           @hex-hover="onHexHover"
           @hex-context="onMapContext"
           @counter-drag="mapCounterDrag = $event"

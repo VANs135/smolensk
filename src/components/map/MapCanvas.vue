@@ -148,6 +148,8 @@ const emit = defineEmits<{
    * （B3），故由画布直接给出——视图那边只有窗口坐标，换算会多一份可能不同步的真相。
    */
   hexClick: [hex: HexRef, world: { x: number; y: number }, scale: number]
+  /** 左键点在**图外空白**（没命中任何格）：与 Esc 一起作为待点格/选站态的退出 */
+  blankClick: []
   hexContext: [
     hex: HexRef | null,
     world: { x: number; y: number },
@@ -501,6 +503,7 @@ function onPointerUp(event: PointerEvent): void {
   if (local === null) return
   const hit = hitAtLocal(local)
   if (hit !== null) emit('hexClick', hit.hex, hit.world, viewport.value.scale)
+  else emit('blankClick')
 }
 
 function onContextMenu(event: MouseEvent): void {

@@ -3472,6 +3472,16 @@ export const useMapViewStore = defineStore('mapView', () => {
   })
 
   /**
+   * 11 号：点地图空白处 = 退掉当前待点格（与 Esc 的第一层一致）
+   *
+   * 只退「正在选格」这一层，不顺手关会话/面板：误点空白不该把战斗或补给窗关掉；
+   * 没有待点态时返回 false，让调用方当作一次普通空白点击。
+   */
+  function cancelBlankPick(): boolean {
+    return workbench.cancelHexPick()
+  }
+
+  /**
    * 取消当前会话 —— **标题栏「×」与 `Esc` 共用的唯一一条路**
    *
    * 一律落到引擎/操作台的 `cancelXxx`（方案 §4.3「Esc = 取消当前会话（等价于「取消」按钮）」）：
@@ -4072,6 +4082,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     handleStackClick,
     // B4：唯一会话框（路由 + 唯一取消路径）
     session,
+    cancelBlankPick,
     cancelSession,
     // U1-b：会话步骤投影（一次只暴露一个待决事项；面板用 `<SessionStep :item>` 对齐）
     sessionSteps,
