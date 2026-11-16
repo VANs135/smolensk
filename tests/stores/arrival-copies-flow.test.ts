@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
-import { arrivalCopiesOf } from '@/engine/rules'
+import { arrivalCopiesOf, arrivalNamedCopiesOf } from '@/engine/rules'
 import type { ArrivalUnitDemand } from '@/engine/rules'
 import { actionGateOf, useMapViewStore, useWorkbenchStore } from '@/stores'
 import type { ActionKey, ConsolePhase } from '@/stores'
@@ -90,6 +90,23 @@ describe('13.6：枚数判据（arrivalCopiesOf）', () => {
   })
 })
 
+describe('13.6：逐枚点名的多枚条目（arrivalNamedCopiesOf）', () => {
+  it('`2x Corps HQ (9, 12)` ⇒ 两枚不同的军部；同型复制 / 单枚条目返回空', () => {
+    const hq = newStore()
+    hq.setActiveSide('axis')
+    expect(arrivalNamedCopiesOf(findDemand(hq, '2x Corps HQ').demand)).toEqual(['9', '12'])
+
+    const copies = newStore()
+    copies.setActiveSide('axis')
+    expect(arrivalNamedCopiesOf(findDemand(copies, '2x 26-2-2 Arty Grp').demand)).toEqual([])
+
+    // 括号是番号列表、数量仍是 1 ⇒ 不是"逐枚点名的多枚条目"
+    const div = newStore()
+    div.setActiveSide('axis')
+    expect(arrivalNamedCopiesOf(findDemand(div, '20-4-3 Inf Div').demand)).toEqual([])
+  })
+})
+
 describe('13.6：投放真的落下两枚（并记账一次）', () => {
   it('苏联 `2x 2-1-3 Alarm Tk Bn` ⇒ 盘面 +2 枚，且再投被拒', () => {
     const store = newStore()
@@ -106,7 +123,7 @@ describe('13.6：投放真的落下两枚（并记账一次）', () => {
     expect(store.placeArrivalNow(index)).toBe(false)
   })
 
-  it('轴心 `2x Corps HQ (9, 12)` 只放一枚（两枚不同军部由裁判各投一次……本条只投一枚）', () => {
+  it('轴心 `2x Corps HQ (9, 12)`：两枚各占一次投放，两枚都落位后条目才算投放完毕', () => {
     const store = newStore()
     store.setActiveSide('axis')
     const { turn, index, demand } = findDemand(store, '2x Corps HQ')
@@ -114,11 +131,24 @@ describe('13.6：投放真的落下两枚（并记账一次）', () => {
     store.setPhase('reinforcement')
     goToActionStep(store, 'rein.arrival')
     store.applyArrivalRemovalsNow()
-    // 指定其中一枚（9th Corps HQ），本条只应落一枚
     const before = store.units.length
-    expect(store.placeArrivalNow(index, 'ax-hq-ge-hq-9th-corps')).toBe(true)
+    // 第一次投放：自动取剩余的第一枚（9th），条目**尚未**投放完毕
+    expect(store.placeArrivalNow(index)).toBe(true)
     expect(store.units.length).toBe(before + 1)
+    expect(store.arrivalPlaced[index]).not.toBe(true)
+    expect(store.arrivalRemainingOf(index)).toBe(1)
+    // 第二次投放：另一枚（12th）落位，此时条目才结束
+    expect(store.placeArrivalNow(index)).toBe(true)
+    expect(store.units.length).toBe(before + 2)
+    expect(store.units.slice(before).map((unit) => unit.name)).toEqual([
+      'Ge HQ 9th Corps',
+      'Ge HQ 12th Corps',
+    ])
+    expect(store.arrivalPlaced[index]).toBe(true)
+    expect(store.arrivalRemainingOf(index)).toBe(0)
     expect(demand.count).toBe(2)
+    // 13.6：两枚都到齐后不能再放第三枚
+    expect(store.placeArrivalNow(index)).toBe(false)
   })
 })
 

@@ -262,6 +262,7 @@ import {
   optionsOf,
   arrivalCopiesOf,
   arrivalComponentNames,
+  arrivalNamedCopiesOf,
   patrolZoneHexes,
   planArrivals,
   planAirBaseReduction,
@@ -22245,12 +22246,32 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 只记"这一条目投放时新增了哪些 instanceId"，撤回时按 id 精确移除；不改任何规则判据。
    */
   const arrivalPlacedUnitsRaw = ref<Record<number, string[]>>({})
+  /**
+   * 13.6：逐枚点名的多枚条目已投了哪几枚（`2x Corps HQ (9, 12)` ⇒ `['9']` / `['9','12']`）
+   *
+   * `arrivalPlaced` 只在**全部**点名枚落位后才为 true；本账本按卡面点名记录进度，
+   * 换日/换方/换计划随同一计划键整本作废。
+   */
+  const arrivalPlacedSlotsRaw = ref<Record<number, string[]>>({})
   const arrivalPlaced = computed<Record<number, boolean>>(() =>
     arrivalPlacedKey.value === arrivalPlanKey.value ? arrivalPlacedRaw.value : {},
   )
   const arrivalPlacedUnits = computed<Record<number, string[]>>(() =>
     arrivalPlacedKey.value === arrivalPlanKey.value ? arrivalPlacedUnitsRaw.value : {},
   )
+  const arrivalPlacedSlots = computed<Record<number, string[]>>(() =>
+    arrivalPlacedKey.value === arrivalPlanKey.value ? arrivalPlacedSlotsRaw.value : {},
+  )
+
+  /** 13.6：该条目还剩几枚待投放（普通条目 0/1；逐枚点名条目按点名枚数倒数） */
+  function arrivalRemainingOf(index: number): number {
+    const demand = arrivalPlan.value?.units[index]
+    if (demand === undefined) return 0
+    const named = arrivalNamedCopiesOf(demand)
+    if (named.length === 0) return arrivalPlaced.value[index] === true ? 0 : 1
+    const placed = arrivalPlacedSlots.value[index] ?? []
+    return named.filter((name) => !placed.includes(name)).length
+  }
 
   /**
    * 专规 1.4a / 13.6（U25）：该**飞机**到达条目可选**图外空军盒**作落点
@@ -22303,6 +22324,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     arrivalPlacedKey.value = key
     arrivalPlacedRaw.value = {}
     arrivalPlacedUnitsRaw.value = {}
+    arrivalPlacedSlotsRaw.value = {}
     arrivalHexOverrides.value = {}
     // M2：换了到达计划键 ⇒ 上一笔"铁路抵达撤回"不再对应任何条目
     arrivalRailUndo.value = null
@@ -22322,13 +22344,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })
   })
 
-  /** 记账：把第 index 条到达标为已投放（内部用；仅在投放成功路径上调用） */
-  function markArrivalPlaced(index: number, createdUnitIds: string[] = []): void {
+  /** 记账：把第 index 条到达的**一次投放**记上；逐枚点名条目要全部落位后才算投放完毕 */
+  function markArrivalPlaced(
+    index: number,
+    createdUnitIds: string[] = [],
+    namedCopy: string | null = null,
+  ): void {
     // 换日/换方/换计划 ⇒ 先整本作废（修前把上一天的 {0..N:true} 一并带进新键，
     // 新一天除第 0 条以外全部显示"已投放"且永久投不出去）
     syncArrivalLedger()
-    arrivalPlacedRaw.value = { ...arrivalPlacedRaw.value, [index]: true }
-    arrivalPlacedUnitsRaw.value = { ...arrivalPlacedUnitsRaw.value, [index]: [...createdUnitIds] }
+    const demand = arrivalPlan.value?.units[index]
+    const named = demand === undefined ? [] : arrivalNamedCopiesOf(demand)
+    const previousSlots = arrivalPlacedSlotsRaw.value[index] ?? []
+    const nextSlots =
+      namedCopy === null
+        ? previousSlots
+        : [...previousSlots, namedCopy].filter((name, at, list) => list.indexOf(name) === at)
+    arrivalPlacedSlotsRaw.value = { ...arrivalPlacedSlotsRaw.value, [index]: nextSlots }
+    const done = named.length === 0 || nextSlots.length >= named.length
+    arrivalPlacedRaw.value = { ...arrivalPlacedRaw.value, [index]: done }
+    arrivalPlacedUnitsRaw.value = {
+      ...arrivalPlacedUnitsRaw.value,
+      [index]: [...(arrivalPlacedUnitsRaw.value[index] ?? []), ...createdUnitIds],
+    }
   }
 
   /**
@@ -22544,8 +22582,32 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 13.6：逐枚点名条目里**某一枚**在库中的记录（`2x Corps HQ (9, 12)` 的 `9` ⇒ `Ge HQ 9th Corps`）
+   *
+   * 卡面只给番号（`9`），库里印的是 `9th Corps HQ`（或 `Ge HQ 9th Corps`）⇒ 按母类补序数后
+   * 走与普通条目同一套 `matchArrivalRecord`（唯一命中才认，不猜）。
+   */
+  function arrivalRecordForNamedCopy(demand: { raw: string }, name: string): UnitRecordView | null {
+    const base = (demand.raw.replace(/^\d+\s*x\s+/i, '').split('(')[0] ?? '').trim()
+    if (base === '') return null
+    const ordinal = /^\d+$/.test(name)
+      ? (() => {
+          const value = Number(name)
+          const mod100 = value % 100
+          const suffix =
+            mod100 >= 11 && mod100 <= 13
+              ? 'th'
+              : (({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[value % 10] ?? 'th')
+          return `${name}${suffix}`
+        })()
+      : name
+    return matchArrivalRecord(`${ordinal} ${base}`)
+  }
+
+  /**
    * 13.6：该到达条目自动匹配的库中型号（与 `placeArrivalNow` 同一判据；无唯一匹配 ⇒ null）
    *
+   * 逐枚点名的多枚条目给**剩余的第一枚**（还没落位的那一枚），故 AI 与界面每次投放各取一枚。
    * 供界面"到货行出图"用（§5-A 的安全版：不臆造映射，只在匹配成功时给出那一枚的图）。
    */
   function arrivalRecordOf(index: number): UnitRecordView | null {
@@ -22553,6 +22615,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (plan === null) return null
     const demand = plan.units[index]
     if (demand === undefined) return null
+    const named = arrivalNamedCopiesOf(demand)
+    if (named.length > 0) {
+      const placed = arrivalPlacedSlots.value[index] ?? []
+      const next = named.find((name) => !placed.includes(name))
+      return next === undefined ? null : arrivalRecordForNamedCopy(demand, next)
+    }
     return matchArrivalRecord(demand.name ?? demand.raw)
   }
 
@@ -25088,18 +25156,51 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return true
     }
 
-    const record =
-      recordId === undefined
-        ? matchArrivalRecord(demand.name ?? demand.raw)
-        : (choices.value.find((item) => item.id === recordId) ?? null)
-    if (record === null) {
-      reinforcementError.value = { rule: '13.6', reason: `arrivalUnitNotResolved:${demand.raw}` }
-      pushLog(
-        'danger',
-        `单位库里找不到「${demand.name ?? demand.raw}」对应算子 ⇒ 请在**这一条到达需求的"库中型号"里挑一枚**再点投放（13.6：引擎不臆造条目→算子的映射）`,
-        '13.6',
-      )
-      return false
+    /*
+     * 13.6：**逐枚点名的多枚条目**（`2x Corps HQ (9, 12)`）
+     *
+     * 每次投放只落其中一枚，并按卡面点名记账；两枚（或 N 枚）都落位后条目才算投放完毕。
+     * 未指定型号时自动取**剩余的第一枚**；显式指定的型号必须正是剩下的某一枚（否则不猜）。
+     */
+    const namedCopies = arrivalNamedCopiesOf(demand)
+    let namedCopy: string | null = null
+    let record: UnitRecordView | null
+    if (namedCopies.length > 0) {
+      const placedNames = arrivalPlacedSlots.value[index] ?? []
+      const remaining = namedCopies.filter((name) => !placedNames.includes(name))
+      namedCopy =
+        recordId === undefined
+          ? (remaining[0] ?? null)
+          : (remaining.find((name) => arrivalRecordForNamedCopy(demand, name)?.id === recordId) ??
+            null)
+      record = namedCopy === null ? null : arrivalRecordForNamedCopy(demand, namedCopy)
+      if (record === null) {
+        reinforcementError.value = {
+          rule: '13.6',
+          reason: `arrivalNamedCopyUnresolved:${demand.raw}`,
+        }
+        pushLog(
+          'danger',
+          `${demand.raw}：还差 ${String(remaining.length)} 枚（${remaining.join('、')}），` +
+            `但所选型号不在其中或库里匹配不到唯一算子 ⇒ 请在"库中型号"里挑剩余的那一枚（13.6）`,
+          '13.6',
+        )
+        return false
+      }
+    } else {
+      record =
+        recordId === undefined
+          ? matchArrivalRecord(demand.name ?? demand.raw)
+          : (choices.value.find((item) => item.id === recordId) ?? null)
+      if (record === null) {
+        reinforcementError.value = { rule: '13.6', reason: `arrivalUnitNotResolved:${demand.raw}` }
+        pushLog(
+          'danger',
+          `单位库里找不到「${demand.name ?? demand.raw}」对应算子 ⇒ 请在**这一条到达需求的"库中型号"里挑一枚**再点投放（13.6：引擎不臆造条目→算子的映射）`,
+          '13.6',
+        )
+        return false
+      }
     }
 
     if (!ensureCargoGroup((record.panzerGroup ?? null) !== null, demand.raw)) return false
@@ -25150,7 +25251,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         loadedWithSp: demand.loadedWithSp,
       },
     })
-    markArrivalPlaced(index, createdIds)
+    markArrivalPlaced(index, createdIds, namedCopy)
+    if (namedCopy !== null) {
+      const remaining = arrivalRemainingOf(index)
+      if (remaining > 0) {
+        pushLog(
+          'info',
+          `${demand.raw}：${namedCopy} 号已落位，本条还差 ${String(remaining)} 枚（13.6）`,
+          '13.6',
+        )
+      }
+    }
     reinforcementError.value = null
     return true
   }
@@ -25170,8 +25281,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const demand = plan.units[index]
     if (demand === undefined || demand.kind !== 'unit') return null
     if (arrivalPlaced.value[index] === true) return null
-    // 裁定 3 第一版只做单枚条目：编成/多枚走普通投放
-    if (arrivalCopiesOf(demand) !== 1) return null
+    // 裁定 3 第一版只做单枚条目：编成/多枚（含逐枚点名的 HQ）走普通投放
+    if (arrivalCopiesOf(demand) !== 1 || arrivalNamedCopiesOf(demand).length > 0) return null
     const placement = arrivalPlacements.value[index]
     if (placement === undefined || placement.hex === null) return null
     const entry = placement.hex
@@ -25429,6 +25540,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const nextIds = { ...arrivalPlacedUnitsRaw.value }
     delete nextIds[index]
     arrivalPlacedUnitsRaw.value = nextIds
+    const nextSlots = { ...arrivalPlacedSlotsRaw.value }
+    delete nextSlots[index]
+    arrivalPlacedSlotsRaw.value = nextSlots
     const nextOverrides = { ...arrivalHexOverrides.value }
     delete nextOverrides[index]
     arrivalHexOverrides.value = nextOverrides
@@ -29196,6 +29310,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ['arrivalPlacedRaw', arrivalPlacedRaw],
     // 2026-11-09：手牌式增援的可撤销账本（投放时新建的 instanceId）
     ['arrivalPlacedUnitsRaw', arrivalPlacedUnitsRaw],
+    // 13.6：逐枚点名条目的投放进度（`2x Corps HQ (9, 12)` ⇒ 已投哪几枚）
+    ['arrivalPlacedSlotsRaw', arrivalPlacedSlotsRaw],
   ]
 
   /**
@@ -29226,9 +29342,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   // v8（1.4b）：盒内地面单位和入盒回合随盘面保存。
   // v9（2026-11-09）：手牌式增援的撤回账本 `arrivalPlacedUnitsRaw`（投放时新建的算子 id）。
   // v10（2026-11-14）：1.6c 已掷骰面 `variableReplSpecialDie`（读档后「掷骰检定」复用同一颗）。
-  const V10_FIELDS = ['variableReplSpecialDie']
+  // v11（2026-11-17）：逐枚点名多枚条目的投放进度 `arrivalPlacedSlotsRaw`（不存则读档后同一枚可再放一次）。
+  const V11_FIELDS = ['arrivalPlacedSlotsRaw']
+  const V10_FIELDS = ['variableReplSpecialDie', ...V11_FIELDS]
   const V9_FIELDS = ['arrivalPlacedUnitsRaw', ...V10_FIELDS]
-  const BOARD_SNAPSHOT_VERSION = 10
+  const BOARD_SNAPSHOT_VERSION = 11
   const V8_FIELDS = ['edgeBoxHoldings', 'edgeBoxEnteredOn']
   const V6_FIELDS = [
     'segmentStepIndex',
@@ -29329,6 +29447,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     8: V9_FIELDS,
     // v9：缺 1.6c 骰面 ⇒ 读成 null（按钮会现掷一颗，与升级前行为一致）
     9: V10_FIELDS,
+    // v10：缺逐枚点名条目的投放进度 ⇒ 读成 {}（升级前也放不出第二枚，不会更糟）
+    10: V11_FIELDS,
   }
   const boardRegistry = createSnapshotRegistry({
     version: BOARD_SNAPSHOT_VERSION,
@@ -30628,6 +30748,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     arrivalCandidates,
     arrivalPlaced,
     arrivalPlacedUnits,
+    arrivalRemainingOf,
     arrivalAirBoxAvailable,
     arrivalAllPlaced,
     arrivalUnitsDone,

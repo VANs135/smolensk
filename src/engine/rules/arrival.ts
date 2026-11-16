@@ -506,6 +506,23 @@ export function arrivalCopiesOf(demand: ArrivalUnitDemand): number {
 /** 一次投放最多复制几枚（防数据错写成 `99x` 时把盘面刷爆） */
 export const MAX_ARRIVAL_COPIES = 8
 
+/**
+ * 13.6：卡面 `Nx … (a, b, …)` **逐枚点名**时，本条要投放的那几枚（按卡面点名顺序）
+ *
+ * `2x Corps HQ (9, 12)`：第 9 与第 12 军部是两枚**不同**算子，不能拿同一枚复制 ⇒
+ * 每次投放消耗一枚、各占一次投放，全部落位后本条目才算投放完毕。
+ *
+ * 只在「数量与括号里的点名枚数一致且 ≥ 2」时认（防止把 `20-4-3 Inf Div (5, 35; -1 step)`
+ * 那种番号列表或批注当成分枚投放）；其余返回空数组＝按普通条目（一次投放一枚或 `Nx` 同型复制）。
+ */
+export function arrivalNamedCopiesOf(demand: ArrivalUnitDemand): readonly string[] {
+  if (demand.kind !== 'unit' && demand.kind !== 'hq' && demand.kind !== 'aircraft') return []
+  if (!/^\d+\s*x\s/i.test(demand.raw.trim())) return []
+  const names = arrivalComponentNames(demand.raw)
+  if (names.length < 2 || names.length !== demand.count) return []
+  return names
+}
+
 /** 落点描述（日志与界面用） */
 export function describePlacement(placement: ArrivalPlacement): string {
   switch (placement.kind) {

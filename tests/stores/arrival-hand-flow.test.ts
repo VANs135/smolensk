@@ -80,6 +80,8 @@ function seekSinglePlaceableTurn(store: ReturnType<typeof boot>['workbench']): n
       if (store.arrivalRecordOf(index) === null) continue
     }
     if ((store.arrivalCandidates[index]?.length ?? 0) === 0) continue
+    // 逐枚点名的多枚条目要投 N 次，本组用例只挑"一次即放完"的条目
+    if (store.arrivalRemainingOf(index) !== 1) continue
     return index
   }
   throw new Error('到达表里找不到"只有 1 条可投放算子"的回合')
@@ -94,7 +96,7 @@ describe('13.6：手牌式到达投放', () => {
     const source = readSource('../../src/components/reinforcement/ReinforcementPanel.vue')
     expect(source).toContain('data-testid="arrival-hand"')
     expect(source).toContain("if (unit.kind === 'sp' || unit.kind === 'unclassified') return")
-    expect(source).toContain('workbench.arrivalPlaced[index] === true')
+    expect(source).toContain('workbench.arrivalRemainingOf(index) <= 0')
     expect(source).not.toContain('到达表执行（13.6）')
     expect(source).not.toContain('点地图选落点（')
 

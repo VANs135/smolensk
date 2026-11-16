@@ -253,6 +253,8 @@ interface ArrivalHandCard {
   noCandidates: boolean
   detail: string
   formationMissing: number
+  /** 13.6：本条还剩几枚待投放（逐枚点名的多枚条目要逐次投放） */
+  remaining: number
 }
 
 function arrivalCardOf(index: number): ArrivalHandCard | null {
@@ -270,6 +272,7 @@ function arrivalCardOf(index: number): ArrivalHandCard | null {
     noCandidates: candidates === 0 && !airBoxAvailable,
     detail: workbench.arrivalPlacements[index]?.detail ?? '本条目没有可用的入场格',
     formationMissing: formation?.missing.length ?? 0,
+    remaining: workbench.arrivalRemainingOf(index),
   }
 }
 
@@ -279,7 +282,7 @@ const arrivalHandCards = computed<ArrivalHandCard[]>(() => {
   const cards: ArrivalHandCard[] = []
   units.forEach((unit, index) => {
     if (unit.kind === 'sp' || unit.kind === 'unclassified') return
-    if (workbench.arrivalPlaced[index] === true) return
+    if (workbench.arrivalRemainingOf(index) <= 0) return
     const card = arrivalCardOf(index)
     if (card !== null) cards.push(card)
   })
@@ -989,6 +992,13 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           <img v-if="card.image !== null" :src="card.image" alt="" class="arrival-hand__img" />
           <span v-else class="arrival-hand__fallback" :title="card.raw">?</span>
           <span v-if="card.aircraft" class="arrival-hand__badge arrival-hand__badge--air">✈</span>
+          <span
+            v-if="card.remaining > 1"
+            class="arrival-hand__badge"
+            :title="`本条还剩 ${card.remaining} 枚待投放（13.6）`"
+            data-testid="arrival-hand-remaining"
+            >×{{ card.remaining }}</span
+          >
         </component>
         <button
           v-for="card in arrivalPlacedCards"
@@ -1005,9 +1015,9 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         </button>
       </div>
       <p class="arrival-hand__meta num" data-testid="arrival-hand-meta">
-        剩余 <strong>{{ arrivalHandCards.length }}</strong> 枚<template
-          v-if="arrivalPlacedCards.length > 0"
-        >
+        剩余
+        <strong>{{ arrivalHandCards.reduce((sum, card) => sum + card.remaining, 0) }}</strong>
+        枚<template v-if="arrivalPlacedCards.length > 0">
           · 已放 {{ arrivalPlacedCards.length }}</template
         >
       </p>
