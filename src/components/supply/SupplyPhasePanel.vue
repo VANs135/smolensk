@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-import { BaseButton } from '@/components/base'
+import { BaseButton, BaseIcon } from '@/components/base'
 import type { HexRef } from '@/data'
 import { hexLabel, useWorkbenchStore } from '@/stores'
 
@@ -9,6 +9,8 @@ const workbench = useWorkbenchStore()
 const recovery = computed(() => workbench.segmentIn(['supply.recovery']))
 const plan = computed(() => workbench.supplyPhasePlan)
 const feedback = ref('')
+/** 12 号：默认展开，玩家可收起成右上角一枚小条，不挡地图 */
+const collapsed = ref(false)
 
 watch(
   () => workbench.segmentStep?.id,
@@ -83,6 +85,7 @@ const pending = computed<boolean>(() => {
   <section
     v-if="pending"
     class="phase-panel"
+    :class="{ 'phase-panel--collapsed': collapsed }"
     aria-label="补给结算"
     @pointerdown.stop
     @click.stop
@@ -92,9 +95,19 @@ const pending = computed<boolean>(() => {
       <span class="phase-panel__step num">D</span>
       <h3>{{ recovery ? '部队储备恢复' : '补给结算' }}</h3>
       <span class="phase-panel__rule num">{{ recovery ? '§12.10e' : '§12.6 / §12.8' }}</span>
+      <button
+        type="button"
+        class="phase-panel__toggle"
+        :aria-expanded="!collapsed"
+        :aria-label="collapsed ? '展开补给结算' : '收起补给结算'"
+        :title="collapsed ? '展开' : '收起'"
+        @click.stop="collapsed = !collapsed"
+      >
+        <BaseIcon :name="collapsed ? 'chevron-down' : 'chevron-right'" />
+      </button>
     </header>
 
-    <div class="phase-panel__body">
+    <div v-if="!collapsed" class="phase-panel__body">
       <div class="phase-panel__row">
         <BaseButton
           v-if="!workbench.supplyFeedingSettled"
@@ -309,6 +322,35 @@ const pending = computed<boolean>(() => {
 
 .phase-panel__rule {
   margin-left: auto;
+}
+
+/* 12 号：收起后只剩右上角一枚小条，不再压住地图 */
+.phase-panel--collapsed {
+  width: auto;
+  max-height: none;
+}
+
+.phase-panel--collapsed .phase-panel__head {
+  border-bottom: 0;
+}
+
+.phase-panel__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.phase-panel__toggle:hover {
+  color: var(--color-ink);
 }
 
 .phase-panel__body,
