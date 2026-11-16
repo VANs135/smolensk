@@ -129,6 +129,8 @@ import {
   EXTENDER_REQUIRED_POINTS,
   EXTENDER_FLIP_MA_FRACTION,
   isVariableExitActive,
+  VARIABLE_EXIT_START,
+  rollVariableExit,
   variableExitFormationOf,
   type VariableExitResult,
   airInteractionChecklist,
@@ -21164,6 +21166,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const variableExitResolved = ref<boolean>(false)
 
   /**
+   * 3.3c：本局是否已在**开局**掷过可变撤离（剧本 7 专规 `Roll for Variable Exit (3.3c).`）
+   *
+   * 只认本局结算日志里的 `mode: 'setupRoll'` 条目 ⇒ 存档/读档后同一局不会重复掷；
+   * 掷出 2–5 时它仍为 true（已掷过），但 `variableExitResolved` 为 false，下个轴方增援阶段续掷。
+   */
+  const variableExitStartRolled = computed<boolean>(() =>
+    session.log.some((entry) => {
+      if (entry.action !== 'variableExit' || !entry.outcome.ok) return false
+      return (entry.outcome.data as { mode?: unknown }).mode === 'setupRoll'
+    }),
+  )
+
+  /**
    * 3.3c：待玩家选择的替补（**从 `session.log` 反推**，不新增存档字段）
    *
    * 撤离目标编队"盘面与死亡堆都没有算子"时（1.6a 的 "or else a unit with identical factors"），
@@ -24263,6 +24278,55 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       },
       consumePendingRolls: false,
     })
+  }
+
+  /**
+   * 3.3c：剧本 7「开局即掷可变撤离」
+   *
+   * 原文：剧本 7 专规 `Roll for Variable Exit (3.3c).`；3.3c `On 19 August, start rolling during
+   * every Axis Reinforcement Phase until a division, either SS Reich or 14th Motorized, is
+   * Removed (using the 1.6a procedure).` 本局首回合 26 Aug 已在 19 Aug 之后 ⇒ **建会话时先掷一次**：
+   *   · 1 → 移除 SS Reich 全部（1.6a：不论盘面/死亡堆；都不在场则改由玩家挑同印值算子）；
+   *   · 6 → 移除 14 Mtr 全部；
+   *   · 2–5 → 本次不了结，留到下个轴方增援阶段按 3.3c 续掷。
+   *
+   * 记账：先落 `variableExit` 结算（`data.mode = 'setupRoll'`，带骰面），再执行移除 ⇒
+   * 移除产生的 `direct`/`select` 结算仍是日志末条，替补选择态与增援窗同源；
+   * 展示沿用增援窗「可变撤离」段与 `variableExitResolved` 状态。
+   */
+  function rollVariableExitAtStartNow(fixedDie?: number): boolean {
+    if (session.session === null) return false
+    if (variableExitStartRolled.value) return false
+    if (variableExitResolved.value) return false
+    if (date.value < VARIABLE_EXIT_START) return false
+    const die =
+      fixedDie ??
+      (variableReplInputs.value.autoRoll
+        ? (() => {
+            const draw = roll1d6(rng.value)
+            rng.value = draw.rng
+            drawCount.value += 1
+            return draw.value.total
+          })()
+        : variableReplInputs.value.variableExitDie)
+    const result = rollVariableExit(die, date.value)
+    if (!result.active) return false
+    recordSettlement({
+      action: 'variableExit',
+      rule: '3.3c',
+      side: 'axis',
+      data: { mode: 'setupRoll', die, kind: result.kind, removedUnit: result.removedUnit ?? null },
+      // 开局这颗骰由本条结算入账，不能被后面的可变增援结算再吃一遍
+      consumePendingRolls: true,
+    })
+    if (result.kind === 'remove') {
+      variableExitResolved.value = true
+      resolveVariableExitNow(result)
+      pushLog('warning', `3.3c 开局可变撤离已了结：${result.description}`, '3.3c')
+    } else {
+      pushLog('info', `3.3c 开局可变撤离：${result.description}（下个轴方增援阶段再掷）`, '3.3c')
+    }
+    return true
   }
 
   /** 3.3c：是否有待玩家选择的替补（= 日志里最后一条撤离结算是 `select`） */
@@ -30222,6 +30286,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     returnFromDeadPileNow,
     variableReplInputs,
     variableExitResolved,
+    variableExitStartRolled,
+    rollVariableExitAtStartNow,
     variableExitOpen,
     variableExitForActiveSide,
     variableReplRolled,

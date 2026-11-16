@@ -1852,6 +1852,12 @@ export const useSetupStore = defineStore('setup', () => {
     // 已有会话（重进）时开局分支被跳过 ⇒ 这里补上收束；开局刚成功时它已是 no-op
     if (!finished.value) finishSetup()
     /*
+     * 剧本 7 专规 `Roll for Variable Exit (3.3c).`：首回合 26 Aug 已在 19 Aug 之后
+     * ⇒ 开局即掷一次（掷出 1/6 立即按 1.6a 移出对应师；2–5 留给下个轴方增援阶段续掷）。
+     * 其他剧本首回合早于 19 Aug ⇒ 函数按日期自行跳过，不写日志。
+     */
+    workbench.rollVariableExitAtStartNow()
+    /*
      * ★ 第六批条 3（S3）：修前只走**单步推进**一次 ⇒ 玩家点「开始游戏」后停在
      *   `preTurn` 的**第一步之后**，还得自己再点几次才到 A 飞机整备段 ——
      *   「自动进行的阶段不需要玩家介入」（用户 2026-09-16 ⑩）在开局这一下就断了。
