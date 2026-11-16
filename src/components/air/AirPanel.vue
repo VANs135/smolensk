@@ -1212,9 +1212,7 @@ const displayedBases = computed(() =>
               {{ workbench.constructionPhaseLedger.task ?? '无' }}（13.8d：一格一任务）
             </span>
           </div>
-          <p v-if="workbench.engineerChoices.length === 0" class="muted">
-            当前方没有可施工的工程单位（13.8a/5.5b：须有工程能力且处于战斗模式，或 DG 朝战斗面）。
-          </p>
+          <p v-if="workbench.engineerChoices.length === 0" class="muted">—</p>
           <p v-if="workbench.constructionError !== null" class="bad">
             <BaseTag kind="danger">{{ workbench.constructionError.rule }}</BaseTag>
             {{ workbench.constructionError.reason }}
