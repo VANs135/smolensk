@@ -45,7 +45,9 @@ export const useLegalActionsStore = defineStore('legal-actions', () => {
             {
               ref: 'plan',
               label: '到货 SP 落位',
-              disabledReason: workbench.freeRailError?.reason ?? '当前落账计划不可用',
+              disabledReason:
+                workbench.freeRailError?.reason ??
+                '还没有生成落账计划：请先勾选免费铁运城市格或图边源，再确认落位',
             },
           ]
         : [

@@ -88,7 +88,11 @@ const COMBAT_ERROR_TEXT: Readonly<Record<string, string>> = {
   badLossPoints: '选项点数不合法',
   optionNotFullySatisfied: '选项点数还没有完全分配',
   optionLossExceedsAvailableSteps: '选项损失超过了该方还能承受的军力',
-  retreatEndHexUnavailable: '这个撤退落点不可用',
+  retreatEndHexUnavailable:
+    '撤退落点不合法：须正好在撤退距离上，不能进入敌方 ZOC（除非该格有己方单位），且不能超堆叠',
+  retreatPathShorterThanOptions: '撤退路径短于撤退距离：每个单位都要走满这一步要求的格数',
+  retreatMustEndAtFullDistance:
+    '撤退落点离起始格不是正好在撤退距离上：请选直线距离正好等于撤退格数的落点',
   unknownUnit: '损失名单里有不在本场战斗中的单位',
   badSteps: '给该单位分配的点数不合法',
   arUnitMustTakeFirstLoss: '第一点损失必须先由行动值单位承受（9.11c）',

@@ -407,12 +407,12 @@ const genericReinforcementError = computed(() => workbench.genericReinforcementE
 function arrivalErrorText(reason: string): string {
   const code = reason.split(':')[0] ?? reason
   if (code === 'arrivalUnitNotResolved') return '单位库里找不到对应算子，请在「?」里指定型号后再点'
-  if (code === 'arrivalHexOutsideCandidates') return '这一格不在该条目的入场格内'
+  if (code === 'arrivalHexOutsideCandidates') return '这一格不是入场格：请点地图上高亮的图边入场格'
   if (code === 'arrivalHexEnemyOccupied')
-    return '这一格有敌方单位：增援可以进敌方 ZOC，但不能与敌方单位同格（13.6b）'
-  if (code === 'arrivalAirBaseOverstack') return '该基地的激活飞机已达上限（4 + 基地等级，14.2a）'
+    return '这一格有敌方单位；增援可以进敌方 ZOC，但不能与敌方同格'
+  if (code === 'arrivalAirBaseOverstack') return '该基地的激活飞机已满（上限随基地等级）'
   if (code === 'arrivalNoCandidateHex')
-    return '这一条现在没有合法落点（候选为空），请先检查入场格/基地'
+    return '这一条没有合法落点：入场格被敌方占据、基地已停满，或该单位无处可停'
   if (code.startsWith('arrivalHex')) return '这一格现在不能落：换一处高亮格试试'
   if (code === 'arrivalWithdrawNoLedger') return '这一枚缺少投放记录，暂时不能回手'
   if (code === 'arrivalRemovalsFirst') return '先执行 1.6a 强制移除，再放置到达算子'
@@ -511,11 +511,23 @@ const rollFinishError = ref('')
 
 function rollErrorText(): string {
   const reason = workbench.reinforcementError?.reason ?? ''
+  const code = reason.split(':')[0] ?? reason
   if (reason === 'rollNotMade') return '先掷可变增援（1.6b），再结束第二段'
   if (reason === 'specialReplNotRolled') return '1.6c 特殊补员还没掷：这是每回合必掷的表'
   if (reason === 'variableExitSelectionPending') return '3.3c 撤离还有待选算子，先选定再结束'
   if (reason === 'frontalReservesPending') return '2.3c 方面军预备队必须当即领取'
   if (reason === 'rollHandNotEmpty') return '手牌还没放完：要结束本段请先确认放弃上场'
+  // 到货 SP 落账计划被拒（免费铁运 2.1/3.1）：点名缺的是城市格、图边源格（补给站）还是归属
+  if (code === 'notDetrainableCityHex')
+    return '这一格不是可卸货城市格（13.3c）：请改点有铁路连通的城市格，或把余额落到图边补给源格'
+  if (code === 'notEdgeSupplySource' || code === 'edgeHexRequiredForRemainder')
+    return '到货 SP 的余额只能落到图边补给源格（补给站）：请先点一处高亮的图边源格'
+  if (code === 'freeRailExceedsArrivalSp')
+    return '勾选的城市格多于到货 SP：每格 1 SP，不能超过总点数'
+  if (code === 'duplicateFreeRailHex') return '同一格只能落 1 SP'
+  if (code === 'badArrivalSp') return '到货 SP 点数不合法'
+  if (reason === 'supplyArrivalRejected')
+    return '到货 SP 还没落完：先按 3.4b 给 Guderian / Hoth 选归属并均分，再结束'
   return '当前不能结束第二段'
 }
 
