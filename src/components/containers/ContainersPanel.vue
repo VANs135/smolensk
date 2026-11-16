@@ -1069,7 +1069,7 @@ function boxAircraft(side: Side) {
           size="sm"
           @click="workbench.armConstructionMarkerNow('bridge')"
         >
-          拾起一枚 → 桥（13.8b）
+          拾起一枚 → 桥
         </BaseButton>
         <BaseButton
           v-if="workbench.constructionMarkers > 0"
@@ -1077,7 +1077,7 @@ function boxAircraft(side: Side) {
           size="sm"
           @click="workbench.armConstructionMarkerNow('airStrip')"
         >
-          拾起一枚 → 简易机场（15.2）
+          拾起一枚 → 简易机场
         </BaseButton>
         <BaseTag v-if="workbench.constructionMarkerPicked" kind="success">
           已拾起（点地图上有轴方战斗单位的格落位）

@@ -141,7 +141,7 @@ describe('B17a：分段渲染与两处入口（源码守卫）', () => {
     const panel = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
     // ★ B34：props 已加 rebuild 段（增援段的第二个窗口）
     expect(panel).toContain("'info' | 'actions' | 'rebuild'")
-    expect(panel).toContain('showsInfo')
+    expect(panel).not.toContain('showsInfo')
     expect(panel).toContain('showsActions')
     expect(panel).toContain('showsRebuild')
     /*

@@ -406,7 +406,7 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
           ｜掷骰 {{ entry.rolls.map((roll) => roll.total).join('/') }}
         </template>
       </p>
-      <p v-if="logTail.length === 0" class="muted">尚无日志（先点「开局」）。</p>
+      <p v-if="logTail.length === 0" class="muted">—</p>
     </details>
 
     <p v-if="gameSession.error !== null" class="warn">

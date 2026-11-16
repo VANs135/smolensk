@@ -1062,7 +1062,7 @@ const showsLedger = computed(
           </RuleNote>
           <div class="row">
             <BaseButton variant="primary" size="sm" @click="workbench.planSupplyPhaseNow()">
-              载入 D 段总计划（12.1–12.2）
+              载入 D 段总计划
             </BaseButton>
             <BaseButton variant="ghost" size="sm" @click="workbench.clearSupplyPhasePlan()">
               清空计划（改输入后重载）
@@ -1173,15 +1173,12 @@ const showsLedger = computed(
                     size="sm"
                     @click="workbench.applyAttritionNow(dutyKey(duty))"
                   >
-                    落盘分摊（12.8b）
+                    落盘分摊
                   </BaseButton>
                 </template>
               </div>
             </template>
-            <p v-else class="muted">本阶段没有需要掷损耗的断补堆叠（12.8a/b）。</p>
-            <p class="muted">
-              注：③ 喂食与 ④ 断补标记的落盘走下方既有的 12.6c/12.6d 路径（同一批单一写入点）。
-            </p>
+            <p v-else class="muted">—</p>
           </template>
           <p v-if="workbench.supplyPhaseError !== null" class="bad">
             <BaseTag kind="danger">{{ workbench.supplyPhaseError.rule }}</BaseTag>
@@ -1312,10 +1309,12 @@ const showsLedger = computed(
 
           <!-- ── ⑥ 断补处置（12.6c 吃图上补给 / 12.6d 接受断补） ── -->
           <SessionStep item="supply:resolveOos">
-            <p class="muted">
-              无追溯补给（12.6a）：可选择吃图上补给（12.6c：每 1T 覆盖最多 2RE，小数向上取整）
-              或接受断补标记（12.6d：随后按 12.8 掷损耗骰）。12.6c 明言**永不强迫**吃图上补给。
-            </p>
+            <RuleNote title="无追溯补给" rule="12.6a">
+              <p class="muted">
+                可选吃图上补给（12.6c：每 1T 覆盖最多 2RE，小数向上取整）或接受断补标记（12.6d，
+                随后按 12.8 掷损耗骰）。12.6c 明言永不强迫吃图上补给。
+              </p>
+            </RuleNote>
             <div class="row">
               <label class="field">
                 <input
@@ -1323,7 +1322,7 @@ const showsLedger = computed(
                   type="radio"
                   value="eatOffTheMap"
                 />
-                吃图上补给（12.6c，需 {{ summary.eatingCostT }} T）
+                吃图上补给（需 {{ summary.eatingCostT }} T）
               </label>
               <label class="field">
                 <input
@@ -1331,7 +1330,7 @@ const showsLedger = computed(
                   type="radio"
                   value="acceptOutOfSupply"
                 />
-                接受断补（12.6d）
+                接受断补
               </label>
             </div>
             <p v-if="workbench.supplyOosPayDump !== null" class="muted num">
@@ -1342,7 +1341,7 @@ const showsLedger = computed(
             </p>
             <div class="row">
               <BaseButton variant="primary" size="sm" @click="workbench.confirmOosResolutionNow()">
-                确认断补处置（12.6c/d）
+                确认断补处置
               </BaseButton>
             </div>
           </SessionStep>

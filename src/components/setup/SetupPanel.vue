@@ -650,8 +650,14 @@ function sideLabel(side: Side): string {
           <tr>
             <th>格</th>
             <th>点数</th>
-            <th>归属（12.1d）</th>
-            <th v-if="setup.spOwnershipEntryVisible">装甲集群（3.4b）</th>
+            <th>
+              归属
+              <RuleTip rule="12.1d" />
+            </th>
+            <th v-if="setup.spOwnershipEntryVisible">
+              装甲集群
+              <RuleTip rule="3.4b" />
+            </th>
           </tr>
         </thead>
         <tbody>

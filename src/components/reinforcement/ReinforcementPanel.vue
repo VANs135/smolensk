@@ -661,8 +661,6 @@ const props = withDefaults(defineProps<{ only?: 'info' | 'actions' | 'rebuild' |
   only: null,
 })
 
-/** 本实例是否要画"只读信息"那一段 */
-const showsInfo = computed(() => props.only === null || props.only === 'info')
 /**
  * 本实例是否要画"动作"那一段
  *
@@ -676,11 +674,16 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
 </script>
 
 <template>
-  <BasePanel title="增援与编制（13.5 / 13.6 / 13.9 / 20.0）">
-    <p v-if="showsInfo && workbench.phase !== 'reinforcement'" class="muted">
-      到达投放、重建与合并都在 **B 增援**（13.5a / 13.9）；请先把阶段切到「B 增援」。
-      拆分单位的创建在 C/E/G 段或战后结算（20.0a）。
-    </p>
+  <BasePanel>
+    <template #header>
+      <h3 class="head-title">
+        增援与编制
+        <RuleTip rule="13.5">到达投放</RuleTip>
+        <RuleTip rule="13.6">重建</RuleTip>
+        <RuleTip rule="13.9">合并</RuleTip>
+        <RuleTip rule="20.0">拆分</RuleTip>
+      </h3>
+    </template>
 
     <!--
       用户 2026-10-25：「每个阶段/环节只能出现该环节可用的 UI，不要什么都糅杂在一起」
@@ -1369,6 +1372,16 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
 </template>
 
 <style scoped>
+/* 批 B：面板标题 + 条款 `?`（条款号不再铺在可见标题里） */
+.head-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
 /* B34②：到达卡（OOA）卡面 —— 窗口窄，故限高并允许在新标签看原尺寸 */
 .ooa {
   margin: 0 0 var(--space-2);
