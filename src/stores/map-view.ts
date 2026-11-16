@@ -3974,6 +3974,8 @@ export const useMapViewStore = defineStore('mapView', () => {
       (hint) => hint.hex.col === hex.col && hint.hex.row === hex.row,
     )
     let consumed = false
+    /** 本击被「15.1 付款选站」吃掉：只用于选补给站，不再开格子内容小窗（见末尾闸） */
+    let refitPayConsumed = false
     if (workbench.refitBase !== null && refitDump !== undefined) {
       const payDump = workbench.refitPayDumps.find(
         (item) => item.hex.col === hex.col && item.hex.row === hex.row,
@@ -3981,6 +3983,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       if (payDump !== undefined) {
         workbench.pickRefitPayDump(payDump.id)
         consumed = true
+        refitPayConsumed = true
       }
     }
     if (
@@ -4084,6 +4087,15 @@ export const useMapViewStore = defineStore('mapView', () => {
     const sessionKindAfter = session.value?.kind ?? ''
     if (sessionKindAfter !== sessionKindBefore) return
     if (sessionKindAfter !== '' && !consumed) return
+    /*
+     * 15.1（用户 2026-11-16）：付款这一击只用于「选这座补给站」，不是"看这一格内容"。
+     * 补给站常与另一座空军基地同格；若照旧弹格子内容小窗，观感＝点站却把同格基地选中/开了面板。
+     * 故付款消费掉的点击直接收尾，不开小窗（退出支付步后常规命中照旧）。
+     */
+    if (refitPayConsumed) {
+      closePopup()
+      return
+    }
     /*
      * 战斗会话：地图点选只执行动作，不再弹只写内部状态的辅助窗。
      * 9.12g 推进的勾选与确认已收回 `CombatPanel`（用户 2026-11-12 第二批）⇒ 这里连"推进格小窗"也不开。
