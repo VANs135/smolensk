@@ -41,6 +41,7 @@ import {
   planSpecialReplDraw,
   isSpecialReplAvailable,
   shiftWestDestination,
+  STACKING_LIMIT_RE,
   planTurnMarkerAdvance,
   railCapPositionValid,
   railCapTrackView,
@@ -69,6 +70,7 @@ import {
   toConsoleUnit,
   unitChoices,
   isAirDeadPileEntry,
+  currentReOf,
 } from './workbench-model'
 import type { ConsoleAirUnit, ConsoleUnit, DeadPileEntry } from './workbench-model'
 
@@ -1981,6 +1983,37 @@ export const useContainersStore = defineStore('containers', () => {
       }
       return false
     }
+    /*
+     * IV-F：整批先判 10 RE（9.11d 当前 RE）。任一条放不下就整笔拒绝，
+     * 与「缺任一落点即整笔拒绝」一致，不出现搬了一半再回滚。
+     */
+    const plannedRe = new Map<string, number>()
+    for (const item of pending) {
+      const hex = parseHexOf(item.hexText ?? '')
+      if (hex === undefined) continue
+      const key = `${hex.col}.${hex.row}`
+      const issue = shiftStackingIssue({
+        formationId: item.formationId,
+        unitIds: item.unitIds,
+        hex,
+        plannedRe: plannedRe.get(key) ?? 0,
+      })
+      if (issue !== null) {
+        lastAction.value = {
+          ok: false,
+          rule: 'IV-F / 4.8',
+          detail: issue,
+          scope: '初设·编队抽取摆位',
+        }
+        workbench.pushLog('warning', issue, 'IV-F')
+        return false
+      }
+      const moving = new Set(item.unitIds)
+      const movingRe = workbench.units
+        .filter((unit) => moving.has(unit.instanceId) && unit.isCombat)
+        .reduce((sum, unit) => sum + currentReOf(unit), 0)
+      plannedRe.set(key, (plannedRe.get(key) ?? 0) + movingRe)
+    }
     let moved = 0
     const notes: string[] = []
     for (const item of pending) {
@@ -2012,11 +2045,37 @@ export const useContainersStore = defineStore('containers', () => {
   }
 
   /**
-   * 把**一个**西移编队按已记的落点摆过去（整笔与单条共用这一段）
+   * IV-F：初设落位不得超过 4.8 的 10 RE 上限（按 9.11d 当前 RE 计）。
    *
-   * 落点与原初设格的**列差**若与 ch10 的「沿道路西移 3 格」不符，只**如实记一行提示**
-   * （落点由 `shiftWestDestination` 沿道路/铁路边算出，引擎不替它判对错）。
+   * 西移属初设落位：自动落点与玩家补写的落点都要过这一关；
+   * 放得下返回 null，否则返回可直接展示的拒绝原因。
    */
+  function shiftStackingIssue(item: {
+    formationId: string
+    unitIds: readonly string[]
+    hex: HexRef
+    /** 同一批里已排到该格的其它西移编队 RE（整批校验用） */
+    plannedRe?: number
+  }): string | null {
+    const moving = new Set(item.unitIds)
+    const movingRe = workbench.units
+      .filter((unit) => moving.has(unit.instanceId) && unit.isCombat)
+      .reduce((sum, unit) => sum + currentReOf(unit), 0)
+    const existingRe = workbench.units
+      .filter(
+        (unit) => unit.isCombat && !moving.has(unit.instanceId) && sameHex(unit.hex, item.hex),
+      )
+      .reduce((sum, unit) => sum + currentReOf(unit), 0)
+    const total = existingRe + movingRe + (item.plannedRe ?? 0)
+    if (total <= STACKING_LIMIT_RE) return null
+    return (
+      `${item.formationId} 西移落位 ${item.hex.col}.${item.hex.row} 会超堆叠：` +
+      `既在 ${existingRe} RE + 本编队 ${movingRe} RE` +
+      (item.plannedRe === undefined || item.plannedRe === 0 ? '' : ` + 同批 ${item.plannedRe} RE`) +
+      ` = ${total} RE > ${STACKING_LIMIT_RE} RE（IV-F / 4.8）`
+    )
+  }
+
   function placeShiftWestItem(item: {
     formationId: string
     hexText: string | null
@@ -2097,7 +2156,12 @@ export const useContainersStore = defineStore('containers', () => {
     return applyShiftWestOneNow(formationId)
   }
 
-  /** 单条：按**已记**的落点摆位（落点缺失 / 不在待摆名单里即拒，不猜） */
+  /**
+   * 把**一个**西移编队按已记的落点摆过去（整笔与单条共用这一段）
+   *
+   * 落点与原初设格的**列差**若与 ch10 的「沿道路西移 3 格」不符，只**如实记一行提示**
+   * （落点由 `shiftWestDestination` 沿道路/铁路边算出，引擎不替它判对错）。
+   */
   function applyShiftWestOneNow(formationId: string): boolean {
     const item = pendingShiftWestPlacements.value.find((entry) => entry.formationId === formationId)
     if (item === undefined) {
@@ -2130,6 +2194,21 @@ export const useContainersStore = defineStore('containers', () => {
         scope: '初设·编队抽取摆位',
       }
       return false
+    }
+    const targetHex = parseHexOf(item.hexText)
+    if (targetHex !== undefined) {
+      // IV-F：初设落位不得超 10 RE（自动落点走同一函数）
+      const issue = shiftStackingIssue({ formationId, unitIds: item.unitIds, hex: targetHex })
+      if (issue !== null) {
+        lastAction.value = {
+          ok: false,
+          rule: 'IV-F / 4.8',
+          detail: issue,
+          scope: '初设·编队抽取摆位',
+        }
+        workbench.pushLog('warning', issue, 'IV-F')
+        return false
+      }
     }
     const placed = placeShiftWestItem(item)
     if (placed === null) {
