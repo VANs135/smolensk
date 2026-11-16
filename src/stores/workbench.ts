@@ -619,13 +619,16 @@ export interface WorkbenchLogEntry {
 export type { MoveStepSnapshot } from './movement-types'
 
 /**
- * 操作台可选阶段（2.2 SOP 段的一个子集）
+ * 操作台可选阶段（2.2 SOP 段的一个子集，外加没有行动段的「回合准备」）
  *
- * B 增援（到达表执行 13.6 / 可变增援 1.6b / 特殊补员 1.6c / 重建 13.5 / 合并 13.9）、
+ * `preTurn`（天气 / 先手判定）不属于 A–H 任何一段，但**界面停在哪、引擎就必须在哪**：
+ * 等待 2.3 应答时 `phase` 必须如实为 `preTurn`，不能回退到本地段的 C 移动。
+ *
  * C 移动 / E 反应 / G 进击 三段是**移动环节**（6.0/6.3a/11.0a）；F 战斗段只有轰炸与常规战斗（9.0），
  * 不能移动；A **飞机整备阶段**（15.1A）是整备的唯一时机，同样没有移动环节。
  */
 export type ConsolePhase =
+  | 'preTurn'
   | 'aircraftRefit'
   | 'reinforcement'
   | 'movement'
@@ -642,6 +645,7 @@ export type ConsolePhase =
  * 其余段落到 `movementPhaseOf` 只为给引擎一个合法枚举值，移动本身由 `beginMoveFor` 拦下。
  */
 const NO_MOVEMENT_PHASES: readonly ConsolePhase[] = [
+  'preTurn',
   'aircraftRefit',
   'reinforcement',
   'supply',
@@ -1178,13 +1182,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 2.2 阶段 → 操作台段（投影口径）
    *
-   * 会话的 `GamePhase` 多出两个**没有行动段**的环节：`preTurn`（天气 / 先手判定）与
-   * `turnEnd`（回合收束）。操作台的 `ConsolePhase` 只有 A–H 八段，故：
-   *   · `preTurn` ⇒ `null`（沿用本地段：判定环节不改变「盘面上现在能做哪一段的事」）；
+   * 会话的 `GamePhase` 与操作台段几乎同名，只有两处不同：
+   *   · `preTurn`（天气 / 先手判定）**原样投影**——它没有行动段，但界面停在这里，
+   *     引擎的 `phase/segmentStep` 也必须停在这里（否则会沿用本地段的 C 移动，
+   *     等待 2.3 应答时地图点击就按移动段分派）；
    *   · `turnEnd` ⇒ 归入 `cleanUp`（收束动作都发生在 H 清理段）。
    */
-  function consolePhaseOf(gamePhase: GamePhase): ConsolePhase | null {
-    if (gamePhase === 'preTurn') return null
+  function consolePhaseOf(gamePhase: GamePhase): ConsolePhase {
     if (gamePhase === 'turnEnd') return 'cleanUp'
     return gamePhase
   }
@@ -7738,6 +7742,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 阶段名（照 2.2 流程表） */
   const PHASE_LABELS: Record<ConsolePhase, string> = {
+    preTurn: '回合准备',
     aircraftRefit: 'A 飞机整备',
     reinforcement: 'B 增援',
     movement: 'C 移动',
@@ -23456,6 +23461,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ⇒ 闸门对一切动作返回"当前段没有环节表"，**正是"这些段没有玩家动作"应有的效果**。
    */
   const playerSegmentSteps = computed(() => {
+    /*
+     * 2.2：回合准备（天气 / 先手判定）**不属于 A–H 任何一段** ⇒ 没有任何"环节"可走。
+     * 2.3 的先手选择由待答问题面板作答（作答即推进，见 `answerQuestionNow`），
+     * 不能把它当成一个可点选的段内环节——否则 `segmentStep` 会挂着
+     * `preTurn.firstPlayerDetermination`，地图点击仍按"有环节"分派。
+     */
+    if (phase.value === 'preTurn') return []
     const visible = segmentSteps.value.filter(
       (step) =>
         step.driver !== 'automatic' &&

@@ -268,8 +268,9 @@ describe('联调④：无会话时操作台仍可独立演练（联调没有改�
     expect(stores.workbench.phase).toBe('supply')
 
     expect(stores.session.startGame()).toBe(true) // 记录轨 = preTurn
-    // preTurn 无对应行动段 ⇒ 段的**显示**沿用本地段；但行动由 `segmentLocked` 拦下（见联调⑦）
-    expect(stores.workbench.phase).toBe('supply')
+    // preTurn 没有行动段，但**界面停在哪、引擎就在哪**：段如实投影为 preTurn（不沿用本地 supply）
+    expect(stores.workbench.phase).toBe('preTurn')
+    expect(stores.workbench.segmentStep).toBeNull()
     expect(stores.workbench.segmentLocked).toBe(true)
 
     confirmConsensus(stores.session)

@@ -147,6 +147,29 @@ describe('B5：唯一「进入下一环节」（自动段连跑）', () => {
     expect(outcome.stoppedBy).toBe('question')
   })
 
+  it('★ 等待 2.3 应答期间：phase/segmentStep 不停在 C 段，地图点击无移动环节可分派', () => {
+    const { session, workbench } = stores
+    session.startGame()
+    for (let guard = 0; guard < SOP_STEPS.length; guard += 1) {
+      session.advanceToNextStop()
+      if (session.awaiting || session.terminated) break
+    }
+    expect(session.awaiting).toBe(true)
+    expect(session.question?.kind).toBe('initiative')
+    // 会话记录确实停在回合准备（2.3 先手待答）
+    expect(session.records?.phase).toBe('preTurn')
+    // UI 停在哪、引擎就在哪：阶段＝回合准备，环节＝无（不得沿用本地段的 C 移动）
+    expect(workbench.segmentLocked).toBe(true)
+    expect(workbench.phase).toBe('preTurn')
+    expect(workbench.segmentStep).toBeNull()
+    expect(workbench.playerSegmentSteps).toEqual([])
+    // 地图点击不能按移动段分派：移动环节判定与移动闸门都不成立
+    expect(workbench.movementStepNow).toBe(false)
+    expect(workbench.actionAllowedNow('move.order')).toBe(false)
+    expect(workbench.moveInteraction).toBeNull()
+    expect(workbench.movePick).toBeNull()
+  })
+
   it('作答后继续：连跑会继续把自动段跑完再停', () => {
     const { session } = stores
     session.startGame()
