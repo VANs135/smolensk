@@ -26681,6 +26681,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
+   * 3.4a：**必须由玩家选一枚**的 DG 义务
+   *
+   * 原文「place a DG on **a unit** from a multi-unit formation **if it is** …」——
+   * 命中单枚时没有可选空间（引擎可直接判定，见 `settlePanzerGroupDgAtPhaseEnd`）；
+   * 只有命中多枚才要玩家从中选一枚。已 DG 的单位视为该义务已结清，不重复要玩家选。
+   */
+  const panzerDgChoiceObligations = computed<readonly DividingLineObligation[]>(() =>
+    panzerGroupObligations.value.filter((item) => {
+      const open = item.unitIds.filter(
+        (unitId) => units.value.find((unit) => unit.instanceId === unitId)?.mode.dg !== true,
+      )
+      return open.length > 1
+    }),
+  )
+
+  /**
    * B37 / 3.4a：**此刻是不是结算分界线义务的时候**（相位末）
    *
    * 用户 2026-11-09 裁定**读法 A**：原文「at the end of any phase」按字面执行 ——
@@ -26757,9 +26773,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const allowed = allowedActionsOf(segmentGateQuery.value)
     const needs = securityNeeds.value
     return {
+      /*
+       * 3.4a / 3.4b：只有**真有选择**时才置顶（＝会话才弹窗）。
+       * ★ 段末闸门（`exclusive.panzerObligation`）只说明"此刻是判定时机"，
+       *   没有义务时它也放行 ⇒ 不能拿它当开关，否则每个相位末都弹一个空面板。
+       */
       panzer:
-        // 3.4a 的分界线义务与 3.4b 的待办是两半：后者只在 3.4b 生效时才算「早该做的」
-        allowed.has('exclusive.panzerObligation') ||
+        panzerDgChoiceObligations.value.length > 0 ||
         (panzerGroupRulesOn.value && pendingSpGroupAssignment.value.length > 0),
       security:
         (needs?.placeAt.length ?? 0) > 0 ||
@@ -26790,6 +26810,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ]
     return order.filter((section) => pins[section])
   })
+
+  /**
+   * 专规会话**是否该自动出现**
+   *
+   * 只有"真有选择"的两件事会开窗：3.4a 命中多枚（选哪枚投 DG）、3.4b 新到 SP 未归属（选集群）。
+   * 3.3b 治安 / 16.0b 工事 / 3.5 建造标记仍是**本环节可做**的动作（由各自的环节闸门与面板承载），
+   * 不在这里抢地图；纯告知（单候选的 DG）由引擎段末自动判定 + 一行日志。
+   */
+  const exclusiveAutoOpen = computed<boolean>(() => exclusiveSectionPins.value.panzer)
 
   /** 3.4b：Supply Table 到货点数（界面输入，用于展示均分结果） */
   const supplyTableSpInput = ref(7)
@@ -27307,6 +27336,39 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       data: { unitId, group: obligation.group, reason: obligation.reason },
     })
     return true
+  }
+
+  /**
+   * 3.4a：段末**自动**结清「命中单枚」的义务
+   *
+   * 原文「place a DG on a unit … if it is …」——命中哪枚就投哪枚，没有可选空间；
+   * 命中多枚才是玩家选择（`panzerDgChoiceObligations`）。已 DG 的义务视为已结清。
+   * 只在 `panzerObligationActive`（本段最后一个玩家环节）执行，不提前到段中；
+   * 每枚落一行日志，不另开弹窗。
+   */
+  function settlePanzerGroupDgAtPhaseEnd(): number {
+    if (!panzerObligationActive.value) return 0
+    let applied = 0
+    for (const obligation of panzerGroupObligations.value) {
+      const candidates = obligation.unitIds
+        .map((unitId) => units.value.find((unit) => unit.instanceId === unitId))
+        .filter((unit) => unit !== undefined && unit.mode.dg !== true)
+      if (candidates.length !== 1) continue
+      const unit = candidates[0]!
+      applyDgToUnit(unit)
+      pushLog(
+        'warning',
+        `3.4a：${unit.name} 命中分界线义务（${obligation.group === 'guderian' ? 'Guderian' : 'Hoth'}）⇒ 自动投 DG`,
+        '3.4a',
+      )
+      recordSettlement({
+        action: 'panzerObligationDg',
+        rule: '3.4a',
+        data: { unitId: unit.instanceId, group: obligation.group, reason: obligation.reason },
+      })
+      applied += 1
+    }
+    return applied
   }
 
   /** 1.7：补给缓存 +1（专规 1.6c 特殊补员的结果之一） */
@@ -29055,6 +29117,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (block.rule === '5.7g') pushLog('warning', block.reason, block.rule)
       return false
     }
+    /*
+     * 3.4a：段末先自动结清「命中单枚」的义务（只有多枚才要玩家选，已由上面的 block 拦住）。
+     * 放在这里而不是每个单位上单独问：原文的时机是相位末，且单枚没有可选空间。
+     */
+    settlePanzerGroupDgAtPhaseEnd()
     return phase.value !== 'supply' || supplyPhaseDomain.settleForExit(wholePhase)
   }
 
@@ -29103,6 +29170,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return {
         rule: overstack.rule,
         reason: `${overstack.detail}：先在超堆叠面板勾选并摧毁单位，再进入下一环节`,
+      }
+    }
+    /*
+     * 3.4a：段末命中**多枚**时，玩家要从中选一枚投 DG（单枚由段末自动判定，不拦）。
+     * 只在段末（`panzerObligationActive`）拦：段中还没到判定时机。
+     */
+    const panzerChoice = panzerObligationActive.value
+      ? panzerDgChoiceObligations.value[0]
+      : undefined
+    if (panzerChoice !== undefined) {
+      return {
+        rule: panzerChoice.rule,
+        reason: `${panzerChoice.group === 'guderian' ? 'Guderian' : 'Hoth'} 编队命中分界线义务：先选一枚单位投 DG 再进入下一环节`,
       }
     }
     if (
@@ -30222,6 +30302,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     panzerGroupUnitViews,
     panzerGroupObligations,
     panzerObligationActive,
+    panzerDgChoiceObligations,
+    settlePanzerGroupDgAtPhaseEnd,
+    exclusiveAutoOpen,
     applyPanzerGroupDgNow,
     panzerWrongSideHexes,
     boundaryView,

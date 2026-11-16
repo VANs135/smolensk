@@ -3246,9 +3246,14 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 修前它靠顶栏一个常驻按钮（玩家得先知道"这条专规现在能做"才会去点它）。
      * 判据走闸门（`workbench.exclusiveActionsInStep`）：本环节一条可做的都没有 ⇒ 不弹。
      * 收起后在本环节内不再重现（与增援/盒内动作同一套 `collapsedSessionKey` 纪律）。
+     *
+     * ★ 用户 2026-11-16：闸门只表达"时机到了"，**不能当开关** —— 3.4a 的段末闸门
+     *   在每个玩家相位末都放行，拿它开窗等于每次都弹一个"当前没有分界线义务"的空面板。
+     *   现在只认 `exclusiveAutoOpen`（真有选择：3.4a 命中多枚 / 3.4b 未归属 SP）；
+     *   单候选义务由引擎段末自动判定 + 一行日志。
      */
     if (
-      (workbench.exclusiveActionsInStep.length > 0 || exclusiveOpen.value) &&
+      (workbench.exclusiveAutoOpen || exclusiveOpen.value) &&
       collapsedSessionKey.value !== currentStepKey.value
     ) {
       const sections = exclusiveSessionSections.value

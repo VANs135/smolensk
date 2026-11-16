@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 
-import { BaseButton, BasePanel, BaseTag, RuleNote } from '@/components/base'
+import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/base'
 import UiField from '@/components/UiField.vue'
 import { hexLabel } from '@/stores'
 import { useWorkbenchStore } from '@/stores'
@@ -190,6 +190,16 @@ const actsMarker = computed(() => actsShown(props.only, 'marker'))
  * 只读 store 的投影（`exclusiveSectionPins`）——组件不比较规则号、也不自己判时机。
  */
 const pins = computed(() => workbench.exclusiveSectionPins)
+
+/**
+ * 会话窗（`only='panzer'`）只画**选择件**
+ *
+ * 用户 2026-11-16：「阶段末弹出的装甲集群界面太长、字太多」——
+ * 纯告知已由引擎段末自动判定 + 一行日志（不弹窗）；真需要玩家选的只剩
+ * 「命中多枚时选哪枚投 DG」与「未归属 SP 选哪个集群」。
+ * 故本分支不铺 RuleNote 长文、只读标签与均分输入，条款号收进 `?`。
+ */
+const compactPanzer = computed(() => props.only === 'panzer')
 </script>
 
 <template>
@@ -237,164 +247,221 @@ const pins = computed(() => workbench.exclusiveSectionPins)
       :style="{ order: pins.panzer ? 0 : 100 }"
     >
       <summary class="excl__title">
-        3.4 装甲集群（分界线<template v-if="workbench.panzerGroupRulesOn">
-          / SP 归属 / 供给均分</template
-        >）
+        <template v-if="compactPanzer">装甲集群</template>
+        <template v-else
+          >3.4 装甲集群（分界线<template v-if="workbench.panzerGroupRulesOn">
+            / SP 归属 / 供给均分</template
+          >）</template
+        >
       </summary>
-      <!-- ── · 装甲集群分界线与 SP 平分（3.4 / 3.4a；3.4b 为可选项） ── -->
-      <hr />
-      <RuleNote
-        :title="
-          workbench.panzerGroupRulesOn
-            ? '装甲集群：分界线义务与到货 SP 均分（奇数点归 Guderian）'
-            : '装甲集群：分界线义务'
-        "
-        :rule="workbench.panzerGroupRulesOn ? '3.4 / 3.4a / 3.4b' : '3.4 / 3.4a'"
-      >
-        <p class="muted">
-          装甲集群（3.4）：**至 19 August 止**、**只约束多单位编队**（步兵师与独立单位不受限）。
-          Guderian 编队须在分界线**上或南**、Hoth 须在**上或北**；与另一集群**同堆叠或相邻**，
-          或处于**错误一侧且在 Orsha 以东**（19.xx 以西不受约束）⇒ 相位末对该编队**一个单位投**
-          DG**（3.4a）。<template v-if="workbench.panzerGroupRulesOn"
-            >Supply Table 到货在**均分**给两集群后**奇数点归 Guderian**（3.4b）。</template
-          >
-          **编队归属不用玩家设置**：已按素材库的编队目录（3rd Panzer Group → Hoth，其余 → Guderian）
-          落进算子数据；下表只在需要**手工覆盖**时才用。
-        </p>
-      </RuleNote>
-      <div class="row">
-        <BaseTag kind="info">分界线 {{ boundaryLabel }}</BaseTag>
-        <BaseTag kind="neutral">Orsha {{ orshaLabel }}</BaseTag>
-        <span class="num">
-          已归属 {{ workbench.panzerGroupAssignedCount }} 枚（默认取自素材编队目录）· 手工覆盖
-          {{ Object.keys(workbench.panzerGroupAssignments).length }} 枚
-        </span>
-      </div>
-      <!--
-        ★ 用户 2026-11-09：集群归属**自动取自算子数据**（素材编队目录），对局台不再让玩家逐个指定；
-        这两个下拉只在裁判工具态出现（手工覆盖 = 订正）。SP 归属仍由玩家选，见下方 3.4b 块。
-      -->
-      <div v-if="actsPanzer && showsReferee" class="row">
-        <label class="field">
-          算子
-          <select v-model="panzerUnitId" class="select">
-            <option :value="''">（选择）</option>
-            <option v-for="unit in workbench.units" :key="unit.instanceId" :value="unit.instanceId">
-              {{ unit.name }} @ {{ hexLabel(unit.hex) }}
-            </option>
-          </select>
-        </label>
-        <label class="field">
-          集群
-          <select v-model="panzerGroupChoice" class="select">
-            <option value="">— 选集群（3.4：不替裁判默认）—</option>
-            <option value="guderian">Guderian</option>
-            <option value="hoth">Hoth</option>
-          </select>
-        </label>
-        <!-- 裁判工具：集群归属由算子上的白条决定（3.4），手改是订正 ⇒ 对局台不铺 -->
-        <template v-if="showsReferee">
-          <label class="field">
-            <input v-model="panzerMultiUnit" type="checkbox" />
-            属多单位编队（3.4）
-          </label>
+      <!-- ══ 会话窗：只留选择件（一窗一事；条款号进 `?`） ══ -->
+      <div v-if="compactPanzer" data-testid="panzer-minimal">
+        <div
+          v-for="item in workbench.panzerDgChoiceObligations"
+          :key="`dg-${item.group}`"
+          class="row"
+        >
+          <BaseTag kind="danger">{{ item.group === 'guderian' ? 'Guderian' : 'Hoth' }}</BaseTag>
           <BaseButton
-            v-if="panzerUnitId !== '' && panzerGroupChoice !== ''"
+            v-for="unitId in item.unitIds"
+            :key="unitId"
+            variant="secondary"
+            size="sm"
+            @click="workbench.applyPanzerGroupDgNow(unitId)"
+          >
+            {{ obligationUnitName(unitId) }} 投 DG
+          </BaseButton>
+          <RuleTip rule="3.4a" />
+        </div>
+        <div
+          v-for="dump in workbench.panzerGroupUnassignedDumps"
+          :key="`pg-${dump.id}-min`"
+          class="row"
+        >
+          <BaseTag kind="warning">{{ hexLabel(dump.hex) }}</BaseTag>
+          <BaseButton
             variant="primary"
             size="sm"
-            @click="declarePanzerGroup()"
+            @click="workbench.setDumpPanzerGroupNow(dump.id, 'guderian')"
           >
-            手工覆盖归属（3.4）
+            Guderian
           </BaseButton>
           <BaseButton
-            v-if="panzerUnitId !== ''"
-            variant="ghost"
+            variant="secondary"
             size="sm"
-            @click="workbench.setPanzerGroupNow(panzerUnitId, null)"
+            @click="workbench.setDumpPanzerGroupNow(dump.id, 'hoth')"
           >
-            撤销覆盖
+            Hoth
           </BaseButton>
-        </template>
+          <RuleTip rule="3.4b" />
+        </div>
       </div>
-      <p v-for="(item, index) in workbench.panzerGroupObligations" :key="index" class="warn">
-        <BaseTag kind="danger">{{ item.rule }}</BaseTag>
-        {{ groupLabel(item.group) }}：{{ item.detail }}
-        <!-- 3.4a：义务落盘 —— 只列**命中条件**的单位（编队内未命中的单位不在此处） -->
-        <span v-if="actsPanzer" class="row">
-          <template v-for="unitId in item.unitIds" :key="unitId">
-            <BaseTag v-if="obligationUnitDg(unitId)" kind="neutral">已 DG</BaseTag>
-            <BaseButton
-              v-else
-              variant="secondary"
-              size="sm"
-              @click="workbench.applyPanzerGroupDgNow(unitId)"
-            >
-              {{ obligationUnitName(unitId) }} 投 DG（3.4a）
-            </BaseButton>
-          </template>
-        </span>
-      </p>
-      <p v-if="workbench.panzerGroupObligations.length === 0" class="muted">
-        当前没有分界线义务（未声明归属 / 非多单位编队 / 已过 19 August / 无越线或同堆叠相邻）。
-      </p>
-      <div v-if="actsPanzer && workbench.panzerGroupRulesOn" class="row">
-        <label class="field">
-          Supply Table 到货 SP
-          <UiField v-model="workbench.supplyTableSpInput" class="input num" type="number" min="0" />
-        </label>
-        <span class="num">
-          均分（3.4b）：Hoth {{ spSplit.hoth }} / Guderian {{ spSplit.guderian }}（奇数点归
-          Guderian）
-        </span>
-      </div>
-      <!--
-        3.4b：SP 的**归属**（每座补给站挂在哪个集群）
-
-        ★ B50（用户 2026-09-17 口径）：3.4b 是 4.1a 的**可选项**，进开场共识；
-          **未采纳 ⇒ 本块整块不出现**（约束也不生效，不留空壳说明）。
-      -->
-      <template v-if="workbench.panzerGroupRulesOn">
+      <!-- ══ 非会话（验证页 / 右栏只读 / 动作全显）：保留完整说明 ══ -->
+      <template v-else>
+        <!-- ── · 装甲集群分界线与 SP 平分（3.4 / 3.4a；3.4b 为可选项） ── -->
+        <hr />
         <RuleNote
-          title="SP 归属：新到的轴方 SP 必须归属某一装甲集群，「错误」集群不得用于多单位编队"
-          rule="3.4b"
+          :title="
+            workbench.panzerGroupRulesOn
+              ? '装甲集群：分界线义务与到货 SP 均分（奇数点归 Guderian）'
+              : '装甲集群：分界线义务'
+          "
+          :rule="workbench.panzerGroupRulesOn ? '3.4 / 3.4a / 3.4b' : '3.4 / 3.4a'"
         >
           <p class="muted">
-            SP 归属（3.4b）：**所有新到的轴心国 SP 必须立即归属某一装甲集群**；「错误」集群的 SP
-            **不能**
-            支付多单位编队的**燃油、战斗或轰炸**成本（其它用途不限）。未归属的轴方补给站会让上述三类付费被拒；
-            在此逐个声明即可。
+            装甲集群（3.4）：**至 19 August 止**、**只约束多单位编队**（步兵师与独立单位不受限）。
+            Guderian 编队须在分界线**上或南**、Hoth 须在**上或北**；与另一集群**同堆叠或相邻**，
+            或处于**错误一侧且在 Orsha 以东**（19.xx 以西不受约束）⇒ 相位末对该编队**一个单位投**
+            DG**（3.4a）。<template v-if="workbench.panzerGroupRulesOn"
+              >Supply Table 到货在**均分**给两集群后**奇数点归 Guderian**（3.4b）。</template
+            >
+            **编队归属不用玩家设置**：已按素材库的编队目录（3rd Panzer Group → Hoth，其余 →
+            Guderian） 落进算子数据；下表只在需要**手工覆盖**时才用。
           </p>
         </RuleNote>
-        <p v-if="workbench.panzerGroupUnassignedDumps.length === 0" class="muted">
-          所有轴方补给站都已声明归属（或已过 19 August）。
-        </p>
-        <template v-if="actsPanzer">
-          <div
-            v-for="dump in workbench.panzerGroupUnassignedDumps"
-            :key="`pg-${dump.id}`"
-            class="row"
-          >
-            <BaseTag kind="warning">{{ hexLabel(dump.hex) }} 未归属</BaseTag>
-            <span class="num">{{ dump.sp }} SP + {{ dump.t }} T</span>
+        <div class="row">
+          <BaseTag kind="info">分界线 {{ boundaryLabel }}</BaseTag>
+          <BaseTag kind="neutral">Orsha {{ orshaLabel }}</BaseTag>
+          <span class="num">
+            已归属 {{ workbench.panzerGroupAssignedCount }} 枚（默认取自素材编队目录）· 手工覆盖
+            {{ Object.keys(workbench.panzerGroupAssignments).length }} 枚
+          </span>
+        </div>
+        <!--
+          ★ 用户 2026-11-09：集群归属**自动取自算子数据**（素材编队目录），对局台不再让玩家逐个指定；
+          这两个下拉只在裁判工具态出现（手工覆盖 = 订正）。SP 归属仍由玩家选，见下方 3.4b 块。
+        -->
+        <div v-if="actsPanzer && showsReferee" class="row">
+          <label class="field">
+            算子
+            <select v-model="panzerUnitId" class="select">
+              <option :value="''">（选择）</option>
+              <option
+                v-for="unit in workbench.units"
+                :key="unit.instanceId"
+                :value="unit.instanceId"
+              >
+                {{ unit.name }} @ {{ hexLabel(unit.hex) }}
+              </option>
+            </select>
+          </label>
+          <label class="field">
+            集群
+            <select v-model="panzerGroupChoice" class="select">
+              <option value="">— 选集群（3.4：不替裁判默认）—</option>
+              <option value="guderian">Guderian</option>
+              <option value="hoth">Hoth</option>
+            </select>
+          </label>
+          <!-- 裁判工具：集群归属由算子上的白条决定（3.4），手改是订正 ⇒ 对局台不铺 -->
+          <template v-if="showsReferee">
+            <label class="field">
+              <input v-model="panzerMultiUnit" type="checkbox" />
+              属多单位编队（3.4）
+            </label>
             <BaseButton
+              v-if="panzerUnitId !== '' && panzerGroupChoice !== ''"
               variant="primary"
               size="sm"
-              @click="workbench.setDumpPanzerGroupNow(dump.id, 'guderian')"
+              @click="declarePanzerGroup()"
             >
-              归属 Guderian（2nd PG）
+              手工覆盖归属（3.4）
             </BaseButton>
             <BaseButton
-              variant="secondary"
+              v-if="panzerUnitId !== ''"
+              variant="ghost"
               size="sm"
-              @click="workbench.setDumpPanzerGroupNow(dump.id, 'hoth')"
+              @click="workbench.setPanzerGroupNow(panzerUnitId, null)"
             >
-              归属 Hoth（3rd PG）
+              撤销覆盖
             </BaseButton>
-          </div>
-        </template>
-        <p class="num">
-          已登记归属的补给站：{{ Object.keys(workbench.spDumpPanzerGroups).length }} 座
+          </template>
+        </div>
+        <p v-for="(item, index) in workbench.panzerGroupObligations" :key="index" class="warn">
+          <BaseTag kind="danger">{{ item.rule }}</BaseTag>
+          {{ groupLabel(item.group) }}：{{ item.detail }}
+          <!-- 3.4a：义务落盘 —— 只列**命中条件**的单位（编队内未命中的单位不在此处） -->
+          <span v-if="actsPanzer" class="row">
+            <template v-for="unitId in item.unitIds" :key="unitId">
+              <BaseTag v-if="obligationUnitDg(unitId)" kind="neutral">已 DG</BaseTag>
+              <BaseButton
+                v-else
+                variant="secondary"
+                size="sm"
+                @click="workbench.applyPanzerGroupDgNow(unitId)"
+              >
+                {{ obligationUnitName(unitId) }} 投 DG（3.4a）
+              </BaseButton>
+            </template>
+          </span>
         </p>
+        <p v-if="workbench.panzerGroupObligations.length === 0" class="muted">
+          当前没有分界线义务（未声明归属 / 非多单位编队 / 已过 19 August / 无越线或同堆叠相邻）。
+        </p>
+        <div v-if="actsPanzer && workbench.panzerGroupRulesOn" class="row">
+          <label class="field">
+            Supply Table 到货 SP
+            <UiField
+              v-model="workbench.supplyTableSpInput"
+              class="input num"
+              type="number"
+              min="0"
+            />
+          </label>
+          <span class="num">
+            均分（3.4b）：Hoth {{ spSplit.hoth }} / Guderian {{ spSplit.guderian }}（奇数点归
+            Guderian）
+          </span>
+        </div>
+        <!--
+          3.4b：SP 的**归属**（每座补给站挂在哪个集群）
+
+          ★ B50（用户 2026-09-17 口径）：3.4b 是 4.1a 的**可选项**，进开场共识；
+            **未采纳 ⇒ 本块整块不出现**（约束也不生效，不留空壳说明）。
+        -->
+        <template v-if="workbench.panzerGroupRulesOn">
+          <RuleNote
+            title="SP 归属：新到的轴方 SP 必须归属某一装甲集群，「错误」集群不得用于多单位编队"
+            rule="3.4b"
+          >
+            <p class="muted">
+              SP 归属（3.4b）：**所有新到的轴心国 SP 必须立即归属某一装甲集群**；「错误」集群的 SP
+              **不能**
+              支付多单位编队的**燃油、战斗或轰炸**成本（其它用途不限）。未归属的轴方补给站会让上述三类付费被拒；
+              在此逐个声明即可。
+            </p>
+          </RuleNote>
+          <p v-if="workbench.panzerGroupUnassignedDumps.length === 0" class="muted">
+            所有轴方补给站都已声明归属（或已过 19 August）。
+          </p>
+          <template v-if="actsPanzer">
+            <div
+              v-for="dump in workbench.panzerGroupUnassignedDumps"
+              :key="`pg-${dump.id}`"
+              class="row"
+            >
+              <BaseTag kind="warning">{{ hexLabel(dump.hex) }} 未归属</BaseTag>
+              <span class="num">{{ dump.sp }} SP + {{ dump.t }} T</span>
+              <BaseButton
+                variant="primary"
+                size="sm"
+                @click="workbench.setDumpPanzerGroupNow(dump.id, 'guderian')"
+              >
+                归属 Guderian（2nd PG）
+              </BaseButton>
+              <BaseButton
+                variant="secondary"
+                size="sm"
+                @click="workbench.setDumpPanzerGroupNow(dump.id, 'hoth')"
+              >
+                归属 Hoth（3rd PG）
+              </BaseButton>
+            </div>
+          </template>
+          <p class="num">
+            已登记归属的补给站：{{ Object.keys(workbench.spDumpPanzerGroups).length }} 座
+          </p>
+        </template>
       </template>
     </details>
 

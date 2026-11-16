@@ -81,7 +81,8 @@ describe('B37：接线（源码守卫）', () => {
 
   it('★ 专规会话"自动出现"（对局台不再有常驻按钮）', () => {
     const mapView = readFileSync('src/stores/map-view.ts', 'utf8')
-    expect(mapView).toContain('workbench.exclusiveActionsInStep.length > 0')
+    // 用户 2026-11-16：自动出现只认"真有选择"（段末闸门在每个相位末都放行，不能当开关）
+    expect(mapView).toContain('workbench.exclusiveAutoOpen')
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
     expect(game).not.toContain('mapView.setExclusiveOpen(')
     expect(game).toContain("session.kind === 'exclusive'")
@@ -113,9 +114,10 @@ describe('B37：专规面板按本环节置顶', () => {
     expect(mid.airRestriction).toBe(false)
     if (steps.length > 1) expect(mid.panzer).toBe(false)
 
-    // 段末：3.4a 的分界线义务可结算 ⇒ 那一节置顶
+    // 段末：闸门放行，但**没有义务** ⇒ 3.4a 不置顶（纯告知不弹窗；有选择才置顶，见 phase-end 用例）
     expect(workbench.setSegmentStepIndex(steps.length - 1)).toBe(true)
-    expect(workbench.exclusiveSectionPins.panzer).toBe(true)
+    expect(workbench.panzerObligationActive).toBe(true)
+    expect(workbench.exclusiveSectionPins.panzer).toBe(false)
 
     // D 段：1.7 可做
     workbench.setPhase('supply')

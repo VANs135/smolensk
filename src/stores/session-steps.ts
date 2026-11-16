@@ -582,8 +582,9 @@ const EXCLUSIVE_SECTION_TEXT: Readonly<
 > = {
   panzer: {
     title: '装甲集群',
-    why: '本环节可结算分界线义务，或有新到的补给点要归属。',
-    decision: '选定要结算的编队（或补给点的归属），然后执行。',
+    // 说明只进标题 title（悬停可见），窗里不再铺一段解释；条款号由面板的 `?` 承载
+    why: '本环节有分界线义务或新到 SP 的归属要处理。',
+    decision: '',
   },
   security: {
     title: '治安检查',

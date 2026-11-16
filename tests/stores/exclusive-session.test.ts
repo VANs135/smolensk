@@ -134,10 +134,11 @@ describe('B17a-3：分段渲染与入口（源码守卫）', () => {
     expect(verify).toMatch(/<ExclusiveRulesPanel\s*\/>/)
   })
 
-  it('会话由**闸门触发的自动出现**（＋显式开关作为退路）；不比规则字面量、也不硬挑一个环节', () => {
+  it('会话由**真待办**自动出现（＋显式开关作为退路）；闸门只决定时机，不单独开窗', () => {
     const store = readFileSync('src/stores/map-view.ts', 'utf8')
-    // B37：自动出现的判据是本环节**真的**有可做的专规动作（走闸门表）
-    expect(store).toContain('workbench.exclusiveActionsInStep.length > 0')
+    // 用户 2026-11-16：段末闸门在每个相位末都放行 ⇒ 不能拿它当开关（否则空窗天天弹）
+    expect(store).toContain('workbench.exclusiveAutoOpen')
+    expect(store).not.toContain('workbench.exclusiveActionsInStep.length > 0')
     expect(store).toContain('collapsedSessionKey.value !== currentStepKey.value')
     // 显式开关仍在（验证页/测试显式打开，且收起时复位）
     expect(store).toContain('const exclusiveOpen = ref(false)')
