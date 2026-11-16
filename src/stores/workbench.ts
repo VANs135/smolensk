@@ -6019,9 +6019,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const keys = new Set(drawable.map((dump) => hexLabel(dump.hex)))
     // 12.3b：该基地格同时处在某指挥部的投递距离内 ⇒ 该 HQ 拖得到的站也是合法付款来源
     for (const key of hqDeliveryDumpKeys(base.side, [base])) keys.add(key)
-    // 12.1b（用户 2026-11-13）：装载中的 SP 也是补给站，整备同样可以从它付款
+    /*
+     * 13.2g-A/B（用户 2026-11-16 裁定）：编内卡车的 SP **永远不**能作为整备来源——
+     * 它不许在地图上卸载，且只许**同一多单位编队内**的单位拖取；指挥部也只投递给**同编队**单位。
+     * 整备的是空军基地（12.9c 的「图上补给」），不属该编队 ⇒ 候选里直接剔除编内卡车。
+     * 普通运输点数上装载的 SP 仍是 12.1b 的补给站，照常可付。
+     */
     return allSpDumps.value.filter(
-      (dump) => dump.side === base.side && keys.has(hexLabel(dump.hex)) && dump.sp + dump.t > 0,
+      (dump) =>
+        dump.side === base.side &&
+        keys.has(hexLabel(dump.hex)) &&
+        dump.sp + dump.t > 0 &&
+        dump.carrierIsOrganicTruck !== true,
     )
   })
 
