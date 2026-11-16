@@ -515,12 +515,19 @@ export const useSetupStore = defineStore('setup', () => {
    */
   const placing = ref<SetupPlacing | null>(null)
   /**
-   * H5（用户 2026-11-16）：**上一步落位的快照**（只留一步）
+   * B1（用户 2026-11-17）：初设落位的**撤回栈**
    *
    * 初设的落位会同时改算子 / 飞机 / 补给账 / 进度账；撤回时必须一并还原，
    * 不能让"算子回去了、进度还记着"这种半截状态出现。故用整体快照，不逐字段反推。
+   *
+   * 栈而不是单步：撤完最近一次后，按钮要指向真正的上一步；没有才收起。
+   * 每条都带"落位前"的绝对快照 ⇒ 连续撤回不会把更早的落位回滚两次。
    */
-  let lastPlacementSnapshot: ReturnType<typeof capturePlacementState> | null = null
+  type PlacementUndoEntry = {
+    label: string
+    snapshot: ReturnType<typeof capturePlacementState>
+  }
+  const placementUndoStack: PlacementUndoEntry[] = []
   const lastPlacement = ref<{ label: string } | null>(null)
 
   /*
@@ -788,6 +795,9 @@ export const useSetupStore = defineStore('setup', () => {
         pendingSpPlacement.value === null ? null : { ...pendingSpPlacement.value },
       pendingSpOwnershipDumpId: pendingSpOwnershipDumpId.value,
       lastAction: lastAction.value,
+      // ch10 西移：落位会写「西移落点」与「编队抽取台账」两本账（在 containers 里）
+      shiftHexText: { ...containers.drawShiftHexText },
+      formationDrawOutcomes: clone(containers.formationDrawOutcomes),
     }
   }
 
@@ -795,22 +805,23 @@ export const useSetupStore = defineStore('setup', () => {
     label: string,
     snapshot: ReturnType<typeof capturePlacementState>,
   ): void {
-    lastPlacementSnapshot = snapshot
+    placementUndoStack.push({ label, snapshot })
     lastPlacement.value = { label }
   }
 
   /**
-   * H5：**撤回上一步落位**（只留一步）
+   * B1：**撤回上一步落位**（真正的栈；撤完指向上一步，没有才收起）
    *
-   * 整体还原快照：算子与飞机、补给账（setup 与 workbench 两份）、进度、当前卡片。
-   * 撤回后玩家仍停在同一项上，可立刻改落另一格（连续操作不被打断）。
+   * 整体还原快照：算子与飞机、补给账（setup 与 workbench 两份）、进度、当前卡片、
+   * ch10 西移台账。撤回后玩家仍停在同一项上，可立刻改落另一格（连续操作不被打断）。
    */
   function undoLastPlacementNow(): boolean {
-    const snapshot = lastPlacementSnapshot
-    if (snapshot === null) return false
-    const label = lastPlacement.value?.label ?? ''
-    lastPlacementSnapshot = null
-    lastPlacement.value = null
+    const entry = placementUndoStack.pop()
+    if (entry === undefined) {
+      lastPlacement.value = null
+      return false
+    }
+    const { label, snapshot } = entry
     workbench.units = snapshot.units
     workbench.airUnits = snapshot.airUnits
     workbench.airBoxMembers = snapshot.airBoxMembers
@@ -825,8 +836,16 @@ export const useSetupStore = defineStore('setup', () => {
     pendingSpPlacement.value = snapshot.pendingSpPlacement
     pendingSpOwnershipDumpId.value = snapshot.pendingSpOwnershipDumpId
     lastAction.value = snapshot.lastAction
+    containers.drawShiftHexText = { ...snapshot.shiftHexText }
+    containers.formationDrawOutcomes = snapshot.formationDrawOutcomes.map((row) => ({
+      ...row,
+      formationIds: [...row.formationIds],
+      destinations: row.destinations.map((item) => ({ ...item })),
+    }))
     // 12.1b：初设 SP 账同步回 workbench —— 付款 / 追溯读的是那一份
     workbench.landSetupSpDumps(spDumps.value)
+    const previous = placementUndoStack[placementUndoStack.length - 1]
+    lastPlacement.value = previous === undefined ? null : { label: previous.label }
     return record({
       ok: true,
       rule: 'IV',
@@ -876,8 +895,8 @@ export const useSetupStore = defineStore('setup', () => {
       record({ ok: false, rule: SETUP_RULE, reason: `setupHexOffMap:${hex.col}.${hex.row}` })
       return true
     }
-    // H5：落位前抓快照（西移项不做撤销：它由容器账落盘，反向操作不在本批范围）
-    const undoSnapshot = current.kind === 'shift' ? null : capturePlacementState()
+    // B1：落位前抓快照（含 ch10 西移项；撤回栈只回滚最近一次）
+    const undoSnapshot = capturePlacementState()
     const ok =
       current.kind === 'self'
         ? placeSelfOneInstance(current.entryIndex, hex, current.chunk)
@@ -886,7 +905,7 @@ export const useSetupStore = defineStore('setup', () => {
           : placeShiftFormation(current.formationId, hex)
     if (!ok) return true
     // 3.4b：德军 SP 还在等选集群 ⇒ 这一步尚未真正落盘，不记撤回
-    if (undoSnapshot !== null && pendingSpPlacement.value === null) {
+    if (pendingSpPlacement.value === null) {
       recordPlacementUndo(`${current.label} → ${setupHexLabel(hex)}`, undoSnapshot)
     }
     // 还差就继续开着（换到别的格去落剩下的），落满即收
@@ -1013,6 +1032,8 @@ export const useSetupStore = defineStore('setup', () => {
   }
 
   function placeAirInOffMapBoxNow(side: Side, entryIndex: number): boolean {
+    const row = airPlanOf(side)?.placements.find((item) => item.entryIndex === entryIndex)
+    const undoSnapshot = capturePlacementState()
     if (!placeAirRowNow(entryIndex, 'offMap', side)) return false
     const current = placing.value
     if (current?.kind === 'air' && current.side === side && current.entryIndex === entryIndex) {
@@ -1020,6 +1041,8 @@ export const useSetupStore = defineStore('setup', () => {
       placing.value =
         placed >= current.total ? null : { ...current, placed, remaining: current.total - placed }
     }
+    // B1：飞机进盒与地面落位同一撤回栈
+    recordPlacementUndo(`${row?.name ?? `飞机${String(entryIndex)}`} → 地图外盒`, undoSnapshot)
     return true
   }
 
@@ -1036,7 +1059,11 @@ export const useSetupStore = defineStore('setup', () => {
 
   function moveSetupAirToBoxNow(instanceId: string): boolean {
     if (!canMoveSetupAirToBox(instanceId)) return false
+    const air = workbench.onMapAirUnits.find((item) => item.instanceId === instanceId)
+    const undoSnapshot = capturePlacementState()
     workbench.setAirInBoxMembership(instanceId, true)
+    // B1：图上飞机移入盒也是可撤回的落位
+    recordPlacementUndo(`${air?.name ?? instanceId} → 地图外盒`, undoSnapshot)
     return record({ ok: true, rule: '1.4a', data: { detail: '飞机已放入地图外空军盒' } })
   }
 
@@ -2351,8 +2378,8 @@ export const useSetupStore = defineStore('setup', () => {
     placedAirInstances.value = {}
     airStatusOrder.value = {}
     defaultFilledIds.value = new Set()
-    // H5：重置后不允许再撤回上一局的落位
-    lastPlacementSnapshot = null
+    // B1：重置后不允许再撤回上一局的落位
+    placementUndoStack.length = 0
     lastPlacement.value = null
   }
 
