@@ -32,18 +32,24 @@ export function prepareGameSnapshot(
   setup: BoardCodec | null,
 ): GameSnapshot {
   /*
-   * 2.2：除回合准备（preTurn）外，记录轨必须有行动方与先手方。
+   * 2.2：除回合准备（preTurn）与回合结束（turnEnd）外，记录轨必须有行动方与先手方。
    *
    * 这两个字段一旦缺失，H 清理收尾会直接报「清理阶段缺少行动方或先手方（2.2）」——
    * 等于把一份坏档变成走不动的死局。**不补值猜**（用户 2026-11-14）：当场拒读，
    * 并在原因里说清缺的是哪一个。
+   *
+   * S4（用户 2026-11-17 实走）：**turnEnd 是合法存档态**——
+   * `nextPhase(cleanUp)` 在后手方走完 A–H 后就把 `activeSide` 清成 null
+   *（`turn-driver.ts` 的 `phase: 'turnEnd', activeSide: null`），先手方留到
+   * `advanceTurn` 的新回合 Pre-Turn 再重判。H 收尾后存盘是玩家的正常动作，
+   * 不能存得进读不出；`advanceTurn` 本身不依赖这两个字段，故 turnEnd 一并豁免。
    */
   const records = session.state.records
   const missing = [
     ...(records.activeSide === null ? ['行动方'] : []),
     ...(records.firstPlayer === null ? ['先手方'] : []),
   ]
-  if (records.phase !== 'preTurn' && missing.length > 0)
+  if (records.phase !== 'preTurn' && records.phase !== 'turnEnd' && missing.length > 0)
     throw new Error(
       `recordsMissingSide:回合记录缺少${missing.join('与')}（2.2）——拒绝读档，避免在无行动方的记录轨上继续`,
     )
