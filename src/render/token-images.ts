@@ -53,8 +53,14 @@ export const MARKER_TEXTURES = {
   exploit: ['misc_Explt-2 small.png', 'misc_Explt-3 small.png', 'misc_Explt-4 small.png'],
   strat: 'misc_Strat small.png',
   outOfSupply: 'misc_OoS small.png',
-  /** 5.10 混乱（DG）——官方标记，批 I 起贴到算子右侧中部，替掉原来的 "DG" 文字 */
-  dg: 'Neutral_DG.png',
+  /** 5.10 混乱（DG）——官方标记，批 I 起贴到**算子自身**右侧，替掉原来的 "DG" 文字 */
+  dg: 'misc_DG.png',
+  /**
+   * 3.6e / 4.6：**扣兵力**按档位取 1/2/3 steploss（用户 2026-11-16 补进官方标记目录）
+   *
+   * 贴到**算子自身**左侧；步数不足 1 不画，超过 3 按 3 档（OCS 单枚最多 3 点减损）。
+   */
+  loss: ['misc_1steploss.png', 'misc_2steploss.png', 'misc_3steploss.png'],
   hedgehog: [
     'misc_hog-1 small.png',
     'misc_hog-2 small.png',
@@ -71,6 +77,18 @@ export function exploitTextureUrl(seed: string): string {
   }
   const variants = MARKER_TEXTURES.exploit
   return markerTextureUrl(variants[hash % variants.length]!)
+}
+
+/**
+ * 4.6：扣兵力档位 → steploss 贴图 URL（1/2/3；0 或非法返回 null）
+ *
+ * 与 DG 用同一套 `markers/` 管线（`markerTextureUrl`），不另起路径。
+ */
+export function stepLossTextureUrl(stepsLost: number): string | null {
+  if (!Number.isFinite(stepsLost)) return null
+  const tier = Math.min(3, Math.floor(stepsLost))
+  if (tier < 1) return null
+  return markerTextureUrl(MARKER_TEXTURES.loss[tier - 1]!)
 }
 
 /** 环形工事等级 → 贴图 URL（1–4 级；超出范围返回 null，调用方回退矢量画法） */
@@ -155,7 +173,7 @@ export const counterImages = createImageCache()
 export const RAILHEAD_TEXTURE = 'Neutral_Railhead.png'
 
 /**
- * 全部模式/状态贴图的 URL（`MapCanvas` 启动时一次预载：共 10 张，量小）
+ * 全部模式/状态贴图的 URL（`MapCanvas` 启动时一次预载：共 14 张，量小）
  *
  * 这些贴图与盘面无关（模式标记 / 工事等级），故不随覆盖层变化反复预载。
  */
@@ -165,6 +183,7 @@ export function allMarkerTextureUrls(): string[] {
     markerTextureUrl(MARKER_TEXTURES.strat),
     markerTextureUrl(MARKER_TEXTURES.outOfSupply),
     markerTextureUrl(MARKER_TEXTURES.dg),
+    ...MARKER_TEXTURES.loss.map((file) => markerTextureUrl(file)),
     ...MARKER_TEXTURES.hedgehog.map((file) => markerTextureUrl(file)),
     // 13.3d：铁路端头标记（`mk-38`，`setup.railheads` 播种后即画）
     markerTextureUrl(RAILHEAD_TEXTURE),

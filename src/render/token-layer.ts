@@ -17,6 +17,7 @@ import {
   exploitTextureUrl,
   markerTextureUrl,
   spDenominationDiffers,
+  stepLossTextureUrl,
   tokenImageUrl,
 } from './token-images'
 
@@ -984,7 +985,6 @@ export function drawMovementOverlay(
      */
     const facilities = group.filter((token) => isFacilityToken(token))
     const others = group.filter((token) => !isFacilityToken(token))
-    const hqInHex = group.some((token) => token.hq === true)
     const fan = others.filter((token) => token.hiddenStack !== true)
     if (fan.length >= 2) {
       const layout = stackFanLayout({
@@ -998,7 +998,7 @@ export function drawMovementOverlay(
         if (token === undefined) continue
         const centerX = slot.x + slot.size / 2
         const centerY = slot.y + slot.size / 2
-        drawToken(ctx, token, centerX, centerY, scale, slot.size, { hqInHex })
+        drawToken(ctx, token, centerX, centerY, scale, slot.size)
         drawn.push({ token, centerX, centerY, size: slot.size })
       }
       if (layout.pageBadge !== null) {
@@ -1007,7 +1007,7 @@ export function drawMovementOverlay(
     } else if (others.length > 0) {
       const tokens = collapsedStackViews(others)
       for (const view of tokens) {
-        drawToken(ctx, view.token, view.centerX, view.centerY, scale, view.size, { hqInHex })
+        drawToken(ctx, view.token, view.centerX, view.centerY, scale, view.size)
         drawn.push(view)
       }
       const top = tokens[0]!
@@ -1337,31 +1337,29 @@ export const HQ_BADGE_CORNER = { x: -0.52, y: 0 } as const
 export const HQ_BADGE_RATIO = 0.24
 
 /**
- * 批 I（用户 2026-11-16）：**单位状态改贴图**
+ * 批 I（用户 2026-11-16 返修）：**扣兵力 / DG 是单位自身状态，锚定在各自算子身上**
  *
- * · 扣兵力（3.6e / 4.6）与混乱 DG（5.10）一边一个；尺寸取算子的 0.30/0.26，贴在**左右侧边
- *   的中段**（不压图面顶部的名称、也不压底部的战斗/移动印值）；
- * · 去掉右上角的「战斗 / 移动」字母（模式已由印值那一面表达）；
- * · **让位规则**：格内有 HQ（标记占左中）时，扣兵力从左侧换到**右侧上/下两格**，
- *   DG 同步下移 —— 两者不与 HQ / 占领（左上）/ 设施（左下）/ 堆叠角标（右上）相交；
- * · 没有对应状态 ⇒ 不占位（空数组）。
+ * · 扣兵力（3.6e / 4.6）与混乱 DG（5.10）一边一个，尺寸随该枚算子的绘制框**等比缩放**；
+ * · 锚点＝**该算子自己的中心**（不是格子中心）：同格多枚各贴各的；
+ * · HQ / 编队 / 飞机等一切会画算子的地方都走同一条 `drawToken`，自然适用；
+ * · 贴在算子框内左右侧边中段：不压顶部名称、也不压底部战斗/移动印值；
+ * · 没有对应状态 ⇒ 不占位（空数组）；格级设施仍留在格子左下角，两套互不相干。
  */
 export const STATUS_TEXTURE_SIZE_RATIO = 0.3
-export const STATUS_TEXTURE_YIELD_SIZE_RATIO = 0.26
 
 export interface StatusTextureSlot {
   kind: 'dg' | 'stepsLost'
   centerX: number
   centerY: number
   size: number
-  /** `kind === 'stepsLost'` 时的损失点数（画 `-N`） */
+  /** `kind === 'stepsLost'` 时的损失点数（取 1/2/3 档贴图） */
   stepsLost?: number
 }
 
 /**
  * 状态贴图的**落位**（纯函数：绘制与用例共用；不碰画布）
  *
- * @param hqInHex 该格是否有 HQ 标记（左中已被占 ⇒ 走让位规则）
+ * `centerX/centerY/size` 是**该枚算子**的绘制框参数 —— 同格两枚各传各的，互不影响。
  */
 export function statusTextureSlots(input: {
   centerX: number
@@ -1369,39 +1367,20 @@ export function statusTextureSlots(input: {
   size: number
   dg: boolean
   stepsLost: number
-  hqInHex: boolean
 }): StatusTextureSlot[] {
-  const { centerX, centerY, size, dg, stepsLost, hqInHex } = input
+  const { centerX, centerY, size, dg, stepsLost } = input
   const slots: StatusTextureSlot[] = []
-  if (hqInHex) {
-    // 让位：两枚都贴右侧，上＝扣兵力、下＝DG（不与左中的 HQ 抢位）
-    const slotSize = size * STATUS_TEXTURE_YIELD_SIZE_RATIO
-    const x = centerX + size * 0.3
-    if (stepsLost > 0) {
-      slots.push({
-        kind: 'stepsLost',
-        centerX: x,
-        centerY: centerY - size * 0.17,
-        size: slotSize,
-        stepsLost,
-      })
-    }
-    if (dg) slots.push({ kind: 'dg', centerX: x, centerY: centerY + size * 0.17, size: slotSize })
-    return slots
-  }
-  // 中段略偏下：上沿让开占领标记（左上，底边约 −0.12R），下沿仍在印值带之上
-  const slotY = centerY + size * 0.06
   const slotSize = size * STATUS_TEXTURE_SIZE_RATIO
   if (stepsLost > 0) {
     slots.push({
       kind: 'stepsLost',
       centerX: centerX - size * 0.33,
-      centerY: slotY,
+      centerY,
       size: slotSize,
       stepsLost,
     })
   }
-  if (dg) slots.push({ kind: 'dg', centerX: centerX + size * 0.33, centerY: slotY, size: slotSize })
+  if (dg) slots.push({ kind: 'dg', centerX: centerX + size * 0.33, centerY, size: slotSize })
   return slots
 }
 
@@ -1710,12 +1689,6 @@ function drawToken(
   centerY: number,
   scale: number,
   size: number = TOKEN_SIZE_PX,
-  /**
-   * 批 I：格内是否已有 HQ 标记（左中被占 ⇒ 状态贴图走让位规则）
-   *
-   * 由调用方按**同格令牌**判定，`drawToken` 自己不看邻居。
-   */
-  options?: { hqInHex?: boolean },
 ): void {
   const half = size / 2
   const left = centerX - half
@@ -1839,12 +1812,12 @@ function drawToken(
    */
 
   /*
-   * 批 I：**状态改贴图**（一边一个）
+   * 批 I（返修）：**状态贴图锚定在这一枚算子自己的绘制框上**（一边一个）
    *
-   * · 扣兵力（3.6e / 4.6）——贴图位置见 `statusTextureSlots`；
-   * · 混乱 DG（5.10）——官方 `Neutral_DG.png`；
-   * · 两者都贴在左右侧边的中段，不压名称（上沿）与战斗/移动印值（下沿）；
-   * · 格内有 HQ（左中）时自动让到右侧上下两格（同函数内的让位规则）。
+   * · 扣兵力（3.6e / 4.6）——`misc_1/2/3steploss.png`，按档位取；
+   * · 混乱 DG（5.10）——`misc_DG.png`；
+   * · 锚点＝`centerX/centerY/size`（本枚算子），同格多枚各贴各的；
+   * · 左右侧边中段，不压名称（上沿）与战斗/移动印值（下沿）。
    */
   for (const slot of statusTextureSlots({
     centerX,
@@ -1852,7 +1825,6 @@ function drawToken(
     size,
     dg: token.dg,
     stepsLost: token.stepsLost ?? 0,
-    hqInHex: options?.hqInHex === true,
   })) {
     drawStatusTexture(ctx, slot, scale)
   }
@@ -1874,10 +1846,11 @@ function drawToken(
 }
 
 /**
- * 画一枚状态贴图（批 I）
+ * 画一枚状态贴图（批 I 返修）
  *
- * DG 用官方标记图；扣兵力没有官方贴图（素材库里只有自制的 steploss，未获授权使用），
- * 故沿用**同一套标记视觉**画一枚紧凑小牌：深底 + 红边 + `-N`。尺寸与 DG 一致，不新造风格。
+ * · DG 取官方 `misc_DG.png`；扣兵力按 1/2/3 档取 `misc_Nsteploss.png`；
+ * · 走与其它标记相同的 `markers/` 管线（`markerTextureUrl`）；
+ * · 图未就绪时回退同一套标记牌面（DG 不写字母，扣兵力写 `-N`），保证图没加载完也能看盘。
  */
 function drawStatusTexture(
   ctx: CanvasRenderingContext2D,
@@ -1887,14 +1860,15 @@ function drawStatusTexture(
   const half = slot.size / 2
   const left = slot.centerX - half
   const top = slot.centerY - half
-  if (slot.kind === 'dg') {
-    const image = counterImages.get(markerTextureUrl(MARKER_TEXTURES.dg))
-    if (image !== null) {
-      ctx.drawImage(image, left, top, slot.size, slot.size)
-      return
-    }
+  const url =
+    slot.kind === 'dg'
+      ? markerTextureUrl(MARKER_TEXTURES.dg)
+      : stepLossTextureUrl(slot.stepsLost ?? 0)
+  const image = url === null ? null : counterImages.get(url)
+  if (image !== null) {
+    ctx.drawImage(image, left, top, slot.size, slot.size)
+    return
   }
-  // 回退（DG 图未就绪 / 扣兵力无官方贴图）：同一套标记牌面
   ctx.fillStyle = slot.kind === 'stepsLost' ? OVERLAY_PALETTE.lossBadge : OVERLAY_PALETTE.badge
   ctx.fillRect(left, top, slot.size, slot.size)
   ctx.strokeStyle = OVERLAY_PALETTE.stackBadgeEdge
@@ -1905,7 +1879,7 @@ function drawStatusTexture(
     ctx.font = `bold ${(7.5 / scale).toFixed(1)}px ui-monospace, monospace`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(`-${Math.round(slot.stepsLost ?? 0)}`, slot.centerX, slot.centerY)
+    ctx.fillText(`-${Math.min(3, Math.round(slot.stepsLost ?? 0))}`, slot.centerX, slot.centerY)
   }
 }
 
