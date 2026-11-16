@@ -177,9 +177,12 @@ const airStageTitle = computed(() => {
 const sessionTitle = computed(() => {
   const current = session.value
   if (current === null) return ''
-  return current.kind === 'ops' || current.kind === 'air'
-    ? `${current.title} · ${airStageTitle.value}`
-    : current.title
+  /*
+   * C2（用户 2026-11-17 实走）：空军三面板副题只属于 `kind === 'air'`。
+   * 修前 `kind === 'ops'` 也拼了 `airStageTitle` ⇒ 地面炮击窗写成
+   * 「炮击（10.1） · 格 10.28 · 选飞机发起任务」。ops 自带「格 X · 任务」标题，不再加副题。
+   */
+  return current.kind === 'air' ? `${current.title} · ${airStageTitle.value}` : current.title
 })
 const panelCollapsedOnEnter = hotkeys.panelCollapsed
 
