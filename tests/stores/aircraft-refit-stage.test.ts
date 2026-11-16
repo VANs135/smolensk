@@ -165,7 +165,9 @@ describe('Ⓐ 15.1：整备不可行时给出原因（入口不出现，但要�
 
     expect(s.workbench.refitStartBases).toHaveLength(0)
     expect(s.workbench.refitBlockReasonAt('base-1')).toContain('14.2a')
-    expect(s.mapView.actionHint).toContain('没有可整备的基地')
+    // 用户 2026-11-17：基地在、只是没得整备 ⇒ 不能说「没有可整备的基地」
+    expect(s.mapView.actionHint).toContain('没有待整备的飞机')
+    expect(s.mapView.actionHint).not.toContain('没有本方空军基地')
     expect(s.mapView.actionHint).not.toContain('勾机')
   })
 
