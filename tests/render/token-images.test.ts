@@ -120,10 +120,10 @@ describe('各种贴图（模式标记 / 工事等级）', () => {
     expect(hedgehogTextureUrl(2.5)).toBeNull()
   })
 
-  it('预载清单覆盖全部 10 张贴图（3 进击 + 战略 + 断补 + 4 工事 + 铁路端头）', () => {
+  it('预载清单覆盖全部 11 张贴图（3 进击 + 战略 + 断补 + DG + 4 工事 + 铁路端头）', () => {
     const urls = allMarkerTextureUrls()
-    expect(urls).toHaveLength(10)
-    expect(new Set(urls).size).toBe(10)
+    expect(urls).toHaveLength(11)
+    expect(new Set(urls).size).toBe(11)
     expect(urls.every((url) => url.startsWith('/counters/markers/'))).toBe(true)
     // 13.3d：铁路端头 `mk-38` 的贴图必须在预载清单里
     expect(urls).toContain(markerTextureUrl('Neutral_Railhead.png'))

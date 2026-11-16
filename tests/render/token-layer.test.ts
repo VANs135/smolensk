@@ -266,26 +266,27 @@ describe('条 24：多军力单位的军力损失角标（-N）（3.6e / 4.6）'
     selectedIds: [],
   })
 
-  it('受损 ⇒ 左上角画 (-N)', () => {
+  it('受损 ⇒ 状态贴图画 -N（批 I：替掉原来的 (-N) 文字）', () => {
     const { ctx, rec } = makeCtx()
     drawMovementOverlay(ctx, stackOverlay([{ ...token(NEAR, 'a'), stepsLost: 2 }]), 1)
-    expect(rec.texts).toContain('(-2)')
+    expect(rec.texts).toContain('-2')
+    expect(rec.texts).not.toContain('(-2)')
   })
 
   it('未受损（stepsLost 0 / 未给）⇒ 不画角标', () => {
     const { ctx, rec } = makeCtx()
     drawMovementOverlay(ctx, stackOverlay([{ ...token(NEAR, 'a'), stepsLost: 0 }]), 1)
-    expect(rec.texts.some((text) => text.startsWith('(-'))).toBe(false)
+    expect(rec.texts.some((text) => /^-\d+$/.test(text))).toBe(false)
     const { ctx: ctx2, rec: rec2 } = makeCtx()
     drawMovementOverlay(ctx2, stackOverlay([token(NEAR, 'a')]), 1)
-    expect(rec2.texts.some((text) => text.startsWith('(-'))).toBe(false)
+    expect(rec2.texts.some((text) => /^-\d+$/.test(text))).toBe(false)
   })
 
-  it('带损且 DG ⇒ 两个角标都在（-N 优先占位，DG 顺延，不互相吃掉）', () => {
+  it('带损且 DG ⇒ 两枚贴图都画：扣兵力 -N 还在，DG 不再写成文字', () => {
     const { ctx, rec } = makeCtx()
     drawMovementOverlay(ctx, stackOverlay([{ ...token(NEAR, 'a'), stepsLost: 1, dg: true }]), 1)
-    expect(rec.texts).toContain('(-1)')
-    expect(rec.texts).toContain('DG')
+    expect(rec.texts).toContain('-1')
+    expect(rec.texts).not.toContain('DG')
   })
 })
 
@@ -370,7 +371,8 @@ describe('W7 C16：撤退落点 / 推进格 / 补给站 / 飞机令牌的绘制'
     // 画法与地面算子一致：选中环走 strokeRect，不再有 arc（菱形已取消）
     expect(rec.arcs).toBe(0)
     expect(rec.texts).toContain('F')
-    expect(rec.texts).toContain('A')
+    // 批 I：右上角的战斗/移动字母已删（印值那一面已经表达模式）
+    expect(rec.texts).not.toContain('A')
   })
 })
 

@@ -53,6 +53,8 @@ export const MARKER_TEXTURES = {
   exploit: ['misc_Explt-2 small.png', 'misc_Explt-3 small.png', 'misc_Explt-4 small.png'],
   strat: 'misc_Strat small.png',
   outOfSupply: 'misc_OoS small.png',
+  /** 5.10 混乱（DG）——官方标记，批 I 起贴到算子右侧中部，替掉原来的 "DG" 文字 */
+  dg: 'Neutral_DG.png',
   hedgehog: [
     'misc_hog-1 small.png',
     'misc_hog-2 small.png',
@@ -162,6 +164,7 @@ export function allMarkerTextureUrls(): string[] {
     ...MARKER_TEXTURES.exploit.map((file) => markerTextureUrl(file)),
     markerTextureUrl(MARKER_TEXTURES.strat),
     markerTextureUrl(MARKER_TEXTURES.outOfSupply),
+    markerTextureUrl(MARKER_TEXTURES.dg),
     ...MARKER_TEXTURES.hedgehog.map((file) => markerTextureUrl(file)),
     // 13.3d：铁路端头标记（`mk-38`，`setup.railheads` 播种后即画）
     markerTextureUrl(RAILHEAD_TEXTURE),
