@@ -120,10 +120,10 @@ const isIconOnly = computed(() => !slots.default)
 /* ── 变体 ── */
 .btn--primary {
   background: var(--color-accent-2);
-  color: #f6f4ee;
+  color: var(--color-on-accent);
 }
 .btn--primary:hover:not(.is-disabled) {
-  background: #3a5240;
+  background: var(--color-accent-2-hover);
 }
 
 .btn--secondary {
@@ -145,10 +145,10 @@ const isIconOnly = computed(() => !slots.default)
 
 .btn--danger {
   background: var(--color-danger);
-  color: #f6f4ee;
+  color: var(--color-on-accent);
 }
 .btn--danger:hover:not(.is-disabled) {
-  background: #75271d;
+  background: var(--color-danger-hover);
 }
 
 /* ── 加载 ── */

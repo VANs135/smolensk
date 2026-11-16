@@ -44,18 +44,34 @@
 }
 
 :root {
-  --color-command-bg: #101820;
-  --color-command-panel: #16232d;
-  --color-command-raised: #21323e;
-  --color-command-ink: #eef5f6;
-  --color-command-muted: #a3b7c2;
-  --color-command-line: #3a4c56;
-  --color-command-teal: #78e2ce;
-  --color-command-teal-bg: #244840;
-  --color-command-amber: #ffc576;
-  --color-command-danger: #ffada8;
-  --color-command-axis: #9bc8fc;
-  --color-command-soviet: #ffb18c;
+  /*
+   * 界面外壳令牌（默认浅色：暖灰 / 米色底 + 深色文字）
+   *
+   * 用户 2026-11-17：深色费眼 ⇒ 默认浅色；深色保留为可切换主题（见下方 data-theme 段）。
+   * 地图配色不走这一组（渲染层锁自己的 OVERLAY_PALETTE），只改界面外壳。
+   */
+  --color-command-bg: #f2efe7;
+  --color-command-panel: #f8f5ee;
+  --color-command-raised: #e9e4d9;
+  --color-command-ink: #26231e;
+  --color-command-muted: #6b665c;
+  --color-command-line: #d5cfc2;
+  --color-command-teal: #2f6b5f;
+  --color-command-teal-bg: #dde8e2;
+  --color-command-amber: #8a6420;
+  --color-command-danger: #8c2f22;
+  --color-command-axis: #2f5d8f;
+  --color-command-soviet: #8c2f22;
+  /* 实心强调底（主按钮）与其上的字色 / hover；深色主题在下方整组换回原值 */
+  --color-command-accent-solid: #3d5f4d;
+  --color-command-accent-solid-hover: #31503f;
+  --color-command-danger-hover: #73251b;
+  --color-command-on-accent: #f7f4ec;
+  /* 语义底色（提示条 / 状态块） */
+  --color-command-info-bg: #e8eef4;
+  --color-command-success-bg: #e2ebe4;
+  --color-command-warning-bg: #f2eade;
+  --color-command-danger-bg: #f2e6e3;
   --command-rail: 62px;
   --command-rail-button: 52px;
   --command-drawer: 316px;
@@ -79,6 +95,10 @@
   --color-accent: #8c2f22; /* 强调（品牌红） */
   --color-accent-2: #46604c; /* 第二强调（引擎绿） */
   --color-gold: #8a6420; /* 数据/警示金 */
+  /* 实心按钮：其上字色与 hover 底（深色主题在 data-theme 段整组换回） */
+  --color-on-accent: #f7f4ec;
+  --color-accent-2-hover: #3a5240;
+  --color-danger-hover: #75271d;
 
   /* ── 语义色 ────────────────────────────────────────── */
   --color-info: #3a5a78;
@@ -157,4 +177,40 @@
   --control-height: 36px;
   --control-height-sm: 28px;
   --focus-ring: 0 0 0 3px rgb(140 47 34 / 0.22);
+
+  /* 默认浅色主题；深色由 data-theme='dark' 整组覆盖 */
+  color-scheme: light;
+}
+
+/* ═══════════════════════════════════════════════════════════
+ * 深色主题（可切换；玩家选择由 stores/theme 记住）
+ *
+ * 只覆盖界面外壳令牌：地图渲染层的 OVERLAY_PALETTE 不随主题走。
+ * ═══════════════════════════════════════════════════════════ */
+:root[data-theme='dark'] {
+  --color-command-bg: #101820;
+  --color-command-panel: #16232d;
+  --color-command-raised: #21323e;
+  --color-command-ink: #eef5f6;
+  --color-command-muted: #a3b7c2;
+  --color-command-line: #3a4c56;
+  --color-command-teal: #78e2ce;
+  --color-command-teal-bg: #244840;
+  --color-command-amber: #ffc576;
+  --color-command-danger: #ffada8;
+  --color-command-axis: #9bc8fc;
+  --color-command-soviet: #ffb18c;
+  --color-command-accent-solid: #244840;
+  --color-command-accent-solid-hover: #3a5240;
+  --color-command-danger-hover: #75271d;
+  --color-command-on-accent: #eef5f6;
+  --color-command-info-bg: #21323e;
+  --color-command-success-bg: #244840;
+  --color-command-warning-bg: #21323e;
+  --color-command-danger-bg: #21323e;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
+  --focus-ring: 0 0 0 3px rgb(120 226 206 / 0.24);
+  color-scheme: dark;
 }

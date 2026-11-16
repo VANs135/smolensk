@@ -7,6 +7,7 @@ export { isNormalizedHoldings } from '@/engine/rules'
 
 export * from './app'
 export * from './ui'
+export * from './theme'
 export * from './workbench-model'
 export * from './action-families'
 export * from './workbench'

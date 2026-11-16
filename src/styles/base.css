@@ -73,35 +73,39 @@ textarea {
 }
 
 /*
- * 深色界面令牌组（弹窗 / Toast / 待答窗）
+ * 界面外壳令牌组（弹窗 / Toast / 待答窗）
  *
  * 这些组件 Teleport 到 body，落在对局台 `.gt` 的令牌作用域之外 ⇒ 单独挂这一组，
- * 让纸色组件在深色棋盘上仍读同一套语义（面板 / 文字 / 规则线 / 语义色）。
+ * 让纸色组件读同一套 `--color-command-*` 语义（浅色 / 深色由 data-theme 决定）。
  */
 .theme-command {
   --color-bg: var(--color-command-bg);
-  --color-bg-2: var(--color-command-panel);
+  --color-bg-2: var(--color-command-raised);
   --color-panel: var(--color-command-panel);
   --color-ink: var(--color-command-ink);
   --color-muted: var(--color-command-muted);
   --color-rule: var(--color-command-line);
   --color-border: var(--color-command-muted);
   --color-accent: var(--color-command-teal);
-  --color-accent-2: var(--color-command-teal);
+  --color-accent-2: var(--color-command-accent-solid);
+  --color-on-accent: var(--color-command-on-accent);
+  --color-accent-2-hover: var(--color-command-accent-solid-hover);
+  --color-danger-hover: var(--color-command-danger-hover);
   --color-gold: var(--color-command-amber);
   --color-info: var(--color-command-axis);
   --color-success: var(--color-command-teal);
   --color-warning: var(--color-command-amber);
   --color-danger: var(--color-command-danger);
-  --color-info-bg: var(--color-command-raised);
-  --color-success-bg: var(--color-command-teal-bg);
-  --color-warning-bg: var(--color-command-raised);
-  --color-danger-bg: var(--color-command-raised);
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.35);
-  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.4);
-  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
-  --focus-ring: 0 0 0 3px rgb(120 226 206 / 0.24);
-  color-scheme: dark;
+  --color-info-bg: var(--color-command-info-bg);
+  --color-success-bg: var(--color-command-success-bg);
+  --color-warning-bg: var(--color-command-warning-bg);
+  --color-danger-bg: var(--color-command-danger-bg);
+}
+
+/* 深色主题下页面底也换过去（避免滚动回弹露出浅色） */
+:root[data-theme='dark'] body {
+  background: var(--color-command-bg);
+  color: var(--color-command-ink);
 }
 
 /* 滚动条（WebKit）轻量定制，与纸张质感一致 */

@@ -793,8 +793,8 @@ function sideName(side: string): string {
   bottom: 0;
   padding: 0 2px;
   border-radius: var(--radius-sm);
-  background: rgb(32 30 26 / 0.78);
-  color: var(--color-bg);
+  background: var(--color-ink);
+  color: var(--color-panel);
   font-size: var(--text-xs);
   line-height: 12px;
   pointer-events: none;

@@ -160,16 +160,16 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
   font-size: var(--text-xs);
 }
 
-/* 顶栏上的「存档 / 读档」按钮：顶栏是深色，故覆写 ghost 的字色与描边
+/* 顶栏上的「存档 / 读档」按钮：顶栏用命令令牌，按钮跟着走
    （选择器带上 .shell__bar 提高优先级，确保盖过 BaseButton 自己的作用域样式） */
 .shell__bar .shell__save {
-  color: var(--color-bg);
-  border-color: rgb(255 255 255 / 0.3);
+  color: var(--color-command-ink);
+  border-color: var(--color-command-line);
 }
 
 .shell__bar .shell__save:hover {
-  background: rgb(255 255 255 / 0.14);
-  color: var(--color-bg);
+  background: var(--color-command-raised);
+  color: var(--color-command-ink);
 }
 
 .shell__body {

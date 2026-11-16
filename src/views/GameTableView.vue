@@ -43,6 +43,7 @@ import {
   useMapViewStore,
   useRecorderStore,
   useSetupStore,
+  useThemeStore,
   useUiStore,
   useWorkbenchStore,
 } from '@/stores'
@@ -56,6 +57,7 @@ const hotkeys = useHotkeyStore()
 const setup = useSetupStore()
 const gameSession = useGameSessionStore()
 const hotseat = useHotseatStore()
+const theme = useThemeStore()
 const ui = useUiStore()
 const app = useAppStore()
 const recorder = useRecorderStore()
@@ -669,6 +671,16 @@ onBeforeUnmount(() => {
                 />
                 整堆叠
               </label>
+              <label class="gt__check">
+                <input
+                  :checked="theme.mode === 'dark'"
+                  type="checkbox"
+                  @change="
+                    theme.setMode(($event.target as HTMLInputElement).checked ? 'dark' : 'light')
+                  "
+                />
+                深色界面
+              </label>
             </div>
           </section>
 
@@ -897,13 +909,19 @@ onBeforeUnmount(() => {
   --color-ink: var(--color-command-ink);
   --color-muted: var(--color-command-muted);
   --color-accent: var(--color-command-teal);
-  --color-accent-2: var(--color-command-teal-bg);
+  --color-accent-2: var(--color-command-accent-solid);
+  --color-on-accent: var(--color-command-on-accent);
+  --color-accent-2-hover: var(--color-command-accent-solid-hover);
+  --color-danger-hover: var(--color-command-danger-hover);
   --color-gold: var(--color-command-amber);
+  --color-info: var(--color-command-axis);
+  --color-success: var(--color-command-teal);
   --color-warning: var(--color-command-amber);
-  --color-warning-bg: var(--color-command-raised);
   --color-danger: var(--color-command-danger);
-  --color-danger-bg: var(--color-command-raised);
-  --focus-ring: 0 0 0 2px var(--color-command-teal);
+  --color-info-bg: var(--color-command-info-bg);
+  --color-success-bg: var(--color-command-success-bg);
+  --color-warning-bg: var(--color-command-warning-bg);
+  --color-danger-bg: var(--color-command-danger-bg);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
@@ -911,7 +929,6 @@ onBeforeUnmount(() => {
   min-width: 0;
   color: var(--color-ink);
   background: var(--color-bg);
-  color-scheme: dark;
 }
 
 .gt__workspace {
