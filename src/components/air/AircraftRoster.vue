@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import { BaseButton, BaseTag } from '@/components/base'
 import CounterPicker from '@/components/game/CounterPicker.vue'
 import type { Side } from '@/data'
+import { airDistanceToOffMapBox } from '@/engine/rules'
 import {
   counterImageUrlOf,
   useContainersStore,
@@ -22,6 +23,11 @@ const workbench = useWorkbenchStore()
 const containers = useContainersStore()
 const mapView = useMapViewStore()
 const selectedId = ref<string | null>(null)
+/**
+ * 用户 2026-11-16：盒内右键原来完全没反应——`CounterPicker` 的格子只接了 click / hover，
+ * 右键既没 emit 也没有本地菜单。现在右键与左键选中都落到 `selectedId`，动作区按同一条件显隐，
+ * 只在该架真有可用项时才出现，不为"有反应"硬摆空菜单。
+ */
 const selected = computed(() => props.aircraft.find((air) => air.instanceId === selectedId.value))
 const refit = computed(() => props.baseId !== undefined && workbench.refitBase?.id === props.baseId)
 const boxRefitAllowed = computed(
@@ -32,21 +38,35 @@ const refitSources = computed(() => workbench.refitPayDumps.length)
 /**
  * 14.11 转场（用户 2026-11-12：目标/目的地一律点图选，不再下拉）
  *
- * 图上基地：选中一架 ⇒ 两个子项「进入地图外盒」「放入别的空军基地」；
- * 图外盒：选中一架 ⇒ 只能「转场到基地」（盒到盒不提供）。
+ * 图外盒：选中一架（左键或右键）⇒ 只能「转场到基地」（盒到盒不提供）。
  */
 function startBoxToBase(): void {
   const air = selected.value
   if (air === undefined) return
-  mapView.startBoxTransfer(air.instanceId)
+  if (mapView.startBoxTransfer(air.instanceId)) selectedId.value = null
 }
+
+/**
+ * 14.11：这一架是否有航程内的己方基地（盒 → 基地，距离可加倍）
+ *
+ * 没有就不摆「转场到基地」——按既有原则，不可用项不出现、不置灰。
+ */
+const canTransferToBase = computed(() => {
+  const air = selected.value
+  if (air === undefined || props.boxSide === undefined) return false
+  if (!workbench.actionAllowedNow('air.transfer')) return false
+  return workbench.ownAirBases.some(
+    (base) => airDistanceToOffMapBox(air.side, base.hex) <= air.rangeHexes * 2,
+  )
+})
 
 const aircraftItems = computed(() =>
   (refit.value ? workbench.refitCandidates : props.aircraft).map((air) => ({
     id: air.instanceId,
     name: air.name,
     imageUrl: counterImageUrlOf(air),
-    badge: air.airStatus === 'active' ? 'A' : 'I',
+    // 1.4a：激活态**画在算子本身**（未激活压暗），不再用算子下方那行 I/A 小字
+    dimmed: air.airStatus !== 'active',
     selected: refit.value
       ? workbench.refitSelectedIds.includes(air.instanceId)
       : selectedId.value === air.instanceId,
@@ -57,11 +77,23 @@ function pick(id: string): void {
   if (refit.value) workbench.toggleRefitAircraft(id)
   else selectedId.value = selectedId.value === id ? null : id
 }
+
+/** 右键：与左键选中落到同一状态，动作区随之出现（没有可用项就不出现） */
+function onContext(id: string): void {
+  if (refit.value) return
+  selectedId.value = id
+}
 </script>
 
 <template>
   <div class="roster">
-    <CounterPicker v-if="aircraftItems.length > 0" :items="aircraftItems" :size="44" @pick="pick" />
+    <CounterPicker
+      v-if="aircraftItems.length > 0"
+      :items="aircraftItems"
+      :size="44"
+      @pick="pick"
+      @context="onContext"
+    />
     <p v-else class="roster__hint">无飞机</p>
     <div v-if="refit" class="roster__row">
       <span class="roster__hint">已选 {{ workbench.refitSelectedIds.length }} · 点补给站付款</span>
@@ -83,13 +115,12 @@ function pick(id: string): void {
           >整备盒内飞机 · 1.4a</BaseButton
         >
       </div>
-      <div v-if="selected !== undefined" class="roster__row">
-        <template v-if="boxSide !== undefined">
-          <!-- 用户 2026-11-12：盒内单位只能转入图上基地，目的地在地图上点选；盒到盒不提供 -->
-          <BaseButton size="sm" variant="ghost" @click="startBoxToBase"
-            >转场到基地（点图选）· 14.11</BaseButton
-          >
-        </template>
+      <!-- 左键选中 / 右键：同一块动作区；没有可用项就整行不出现（不留空行） -->
+      <div v-if="canTransferToBase" class="roster__row">
+        <!-- 用户 2026-11-12：盒内单位只能转入图上基地，目的地在地图上点选；盒到盒不提供 -->
+        <BaseButton size="sm" variant="ghost" @click="startBoxToBase"
+          >转场到基地（点图选）· 14.11</BaseButton
+        >
       </div>
     </template>
   </div>

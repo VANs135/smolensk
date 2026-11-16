@@ -44,6 +44,13 @@ export interface CounterPickerItem {
   hex?: { col: number; row: number } | null
   /** 数字角标（**仅在确实需要时给**，如枚数 / 序号）；不传就不画 */
   badge?: string
+  /**
+   * 视觉压暗（**不是禁用**：仍可点、可右键）
+   *
+   * 用于「未激活 / 未选中」这类**状态**，与地图堆叠窗"未选者压暗"同值；
+   * 真不可用请走 `disabledReason`（降饱和 + not-allowed）。
+   */
+  dimmed?: boolean
 }
 
 const props = withDefaults(
@@ -71,6 +78,8 @@ const emit = defineEmits<{
   (e: 'pick', id: string): void
   /** 悬停某一枚（null = 移出）；调用方据此同步地图高亮 */
   (e: 'hover', id: string | null): void
+  /** 右键某一枚（调用方决定摆哪些动作；不判规则、不提交） */
+  (e: 'context', id: string): void
 }>()
 
 /** 轮到的分组（null = 不分组的平铺） */
@@ -150,11 +159,13 @@ const gridStyle = computed<Record<string, string>>(() => ({
         :class="{
           'picker__cell--on': item.selected,
           'picker__cell--off': item.disabledReason != null,
+          'picker__cell--dim': item.dimmed === true && item.disabledReason == null,
         }"
         :title="item.disabledReason == null ? item.name : `${item.name}（${item.disabledReason}）`"
         :aria-label="item.name"
         :aria-pressed="item.selected"
         @click="pickItem(item)"
+        @contextmenu.prevent="emit('context', item.id)"
         @pointerenter="hoverItem(item)"
         @focus="hoverItem(item)"
         @blur="hoverItem(null)"
@@ -250,6 +261,15 @@ const gridStyle = computed<Record<string, string>>(() => ({
   filter: saturate(0.25);
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/*
+ * 压暗：只表达状态（如"未激活"），仍可点/右键。
+ * 取值与地图堆叠窗"未选者压暗"（MapActionPopover `.pile-item--unpicked`）一致，
+ * 不另起一套视觉。
+ */
+.picker__cell--dim {
+  opacity: 0.45;
 }
 
 .picker__img {
