@@ -378,6 +378,16 @@ describe('9.5：补给段逐方确认（热座）', () => {
   it('★ 两侧各自确认；改任一方输入只撤该方，攻方改动连带撤销守方', () => {
     const store = newStore()
     setupTwoAttackerBattle(store)
+    /*
+     * B4：逐方确认现在先验「有没有付款来源」 ⇒ 两侧各放一座可达站。
+     * 本用例只钉确认标记的翻/撤关系，付款是否够整笔仍由共用出口裁决。
+     */
+    store.spDumps.push({ id: 'sd-a1', side: 'axis', hex: { ...ATTACKER_HEX }, sp: 8, t: 0 })
+    store.spDumps.push({ id: 'sd-a2', side: 'axis', hex: { ...SECOND_ATTACKER_HEX }, sp: 8, t: 0 })
+    store.spDumps.push({ id: 'sd-d', side: 'soviet', hex: { ...DEFENDER_HEX }, sp: 8, t: 0 })
+    expect(store.pickCombatSupplyDump('attacker', 'sd-a1')).toBe(true)
+    expect(store.pickCombatSupplyDump('attacker', 'sd-a2')).toBe(true)
+    expect(store.pickCombatSupplyDump('defender', 'sd-d')).toBe(true)
 
     expect(store.combatInputs.supplyConfirmed).toEqual({ attacker: false, defender: false })
     expect(store.confirmCombatSupplySide('attacker')).toBe(true)

@@ -3517,6 +3517,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       side === 'attacker'
         ? { ...combatInputs.value, attackerAvailableT: availableT }
         : { ...combatInputs.value, defenderAvailableT: availableT }
+    // B4：玩家正在补来源 ⇒ 上一条「来源为『—』」的红字随即失效，不残留到点击确认时
+    combatError.value = null
     pushLog(
       'info',
       next.length === 0
@@ -12168,11 +12170,53 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const state = combatState.value
     if (state === null || state.step !== 'combatSupply') return false
     const confirmed = combatInputs.value.supplyConfirmed
+    // B4：先翻成「已确认」再把缺来源推给「进入行动值」＝误导性的死路，故确认这一步就拦。
+    if (!confirmed[side]) {
+      const blocker = combatSupplyConfirmBlocker(side)
+      if (blocker !== null) {
+        combatError.value = blocker
+        pushLog('warning', ruleErrorTextOf(blocker), blocker.rule)
+        return false
+      }
+    }
+    combatError.value = null
     combatInputs.value = {
       ...combatInputs.value,
       supplyConfirmed: { ...confirmed, [side]: !confirmed[side] },
     }
     return true
+  }
+
+  /**
+   * B4（用户 2026-11-17）：逐方确认前的**付款来源**闸门（9.5 / 12.4）
+   *
+   * 只拦「这一方根本没有付款来源」：图上声明 0 T 且未动用部队储备（守方还须已声明支付）。
+   * 有来源但付不清整笔（余额不足 / 逐单位分配不出）仍由共用出口 `confirmCombatSupply()`
+   * 一次裁决并给出逐单位原因——这里只避免先显示「已确认」、再把错误推给下一步。
+   */
+  function combatSupplyConfirmBlocker(side: CombatRole): { rule: string; reason: string } | null {
+    const useStocks =
+      side === 'attacker'
+        ? combatInputs.value.attackerUsesInternalStocks && !attackerInternalsForbidden.value
+        : combatInputs.value.defenderUsesInternalStocks && combatDefenderStocksApplicable.value
+    if (useStocks) return null
+    // 9.5-B：守方选择不支付＝以一半战斗值防御，无来源本来就能确认
+    if (side === 'defender' && !combatInputs.value.defenderProvides) return null
+    const available =
+      side === 'attacker'
+        ? combatInputs.value.attackerAvailableT
+        : combatInputs.value.defenderAvailableT
+    if (available > 0) return null
+    if (side === 'attacker') {
+      return {
+        rule: '12.4',
+        reason: `攻方战斗补给：来源为「—」，本场共需 ${combatAttackerRequiredT.value} T —— 先在地图上点补给站付款，或勾「攻方用储备」（12.4 / 12.10）`,
+      }
+    }
+    return {
+      rule: '12.4',
+      reason: `守方已声明支付，但来源为「—」：本场需 ${combatDefenderRequiredT.value} T —— 先在地图上点补给站付款；不付请取消「守方支付」，以一半战斗值防御（9.5-B）`,
+    }
   }
 
   // 任一方改自己的输入 ⇒ 撤销该方确认；攻方改动连带撤销守方（守方看到的是改前的攻方来源）
