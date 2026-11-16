@@ -2706,6 +2706,8 @@ export const useMapViewStore = defineStore('mapView', () => {
 
   /** 拖放与右键共用候选。判定和落账仍由初设或容器命令处理。 */
   function counterBoxTargets(instanceId: string): CounterBoxTarget[] {
+    // H1：移动交互中的算子拖动＝"走到那一格"，不给盒入口（否则拖动时冒出图外盒）
+    if (workbench.activeMoveUnits.some((unit) => unit.instanceId === instanceId)) return []
     if (!setup.finished) return setup.canMoveSetupAirToBox(instanceId) ? ['air'] : []
     if (!canOpenCounterContext() || !containers.canUseEdgeBoxes) return []
     return (['northeast', 'southeast'] as const).filter((box) =>
@@ -2726,6 +2728,40 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (token === null) return null
     const targets = counterBoxTargets(token.id)
     return targets.length === 0 ? null : { id: token.id, label: token.label, targets }
+  }
+
+  /**
+   * H1（用户 2026-11-16）：**地图内拖动源**——只有本次移动中的算子可以拖到格。
+   *
+   * 命中与绘制同源（`hitHexToken`）；本函数只读，不写任何状态。
+   */
+  function counterForMoveDragAt(hex: HexRef, world: { x: number; y: number }, scale: number) {
+    const token = hitHexToken({
+      hex,
+      group: stackTokensAt(hex),
+      page: stackFanPageAt(hex),
+      point: world,
+      scale,
+    })
+    if (token === null) return null
+    if (!workbench.activeMoveUnits.some((unit) => unit.instanceId === token.id)) return null
+    return { id: token.id, label: token.label }
+  }
+
+  /**
+   * H1：把移动中的算子放到某格 ＝ 对该格的一次点击。
+   *
+   * 直接复用 `onHexClick`：落点判定、拒绝原因（`moveBlocked` / 提示行）与点击完全同源；
+   * 不在移动中的算子一律不接受（返回 false，盘面不变）。
+   */
+  function dropMovingCounterAt(
+    instanceId: string,
+    hex: HexRef,
+    anchor?: { x: number; y: number },
+  ): boolean {
+    if (!workbench.activeMoveUnits.some((unit) => unit.instanceId === instanceId)) return false
+    onHexClick(hex, anchor)
+    return true
   }
 
   function dropCounterInBox(instanceId: string, target: CounterBoxTarget): boolean {
@@ -4254,6 +4290,8 @@ export const useMapViewStore = defineStore('mapView', () => {
     onHexContext,
     openUnitContext,
     counterForBoxAt,
+    counterForMoveDragAt,
+    dropMovingCounterAt,
     counterBoxTargets,
     dropCounterInBox,
     openContextAction,

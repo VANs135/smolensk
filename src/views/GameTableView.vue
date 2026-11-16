@@ -300,12 +300,19 @@ function onMapContext(
   mapView.onHexContext(hex, world, anchor, scale)
 }
 
-function onCounterDrop(id: string, point: { x: number; y: number }): void {
+function onCounterDrop(id: string, point: { x: number; y: number }, hex: HexRef | null): void {
   const target = document
     .elementFromPoint(point.x, point.y)
     ?.closest<HTMLElement>('[data-counter-box]')
   const box = boxDropTargets.value.find((item) => item === target?.dataset.counterBox)
-  if (box !== undefined) mapView.dropCounterInBox(id, box)
+  if (box !== undefined) {
+    mapView.dropCounterInBox(id, box)
+    return
+  }
+  // H1：拖到图外（hex === null）不落子；地图内则等同点该格（拒绝原因也同源）
+  if (hex === null) return
+  const anchor = mapRef.value?.hexToWindow(hex) ?? point
+  mapView.dropMovingCounterAt(id, hex, anchor)
 }
 
 function pickAirBox(): void {
@@ -332,6 +339,9 @@ function onHexClick(hex: HexRef, world: { x: number; y: number }, scale: number)
 function onHexHover(hex: HexRef | null): void {
   workbench.setHoverHex(hex)
 }
+
+/** H2：悬停预览文本（store 只读计算；画布不读 store） */
+const hoverPreviewText = computed(() => workbench.hoverPreviewAt(workbench.hoverHex))
 
 onMounted(() => {
   hotkeys.panelCollapsed = true
@@ -426,6 +436,8 @@ onBeforeUnmount(() => {
           :hex-labels="mapView.mapHexLabels"
           :overlay="mapView.overlay"
           :box-drag-source="mapView.counterForBoxAt"
+          :counter-drag-source="mapView.counterForMoveDragAt"
+          :hover-preview="hoverPreviewText"
           :control-markers="mapView.controlMarkers"
           :markers="mapView.railheadMarkers"
           :boundary="mapView.boundary"

@@ -87,6 +87,25 @@ const props = withDefaults(
         ) => { id: string; label: string } | null)
       | null
     /**
+     * H1：**地图内拖动源**（本次移动中的算子）
+     *
+     * 与 `boxDragSource` 分开：那个只回答"能不能拖进图外盒"，这里回答"能不能拖到另一格"。
+     * 画布只按返回值起拖，不做任何规则判断。
+     */
+    counterDragSource?:
+      | ((
+          hex: HexRef,
+          world: { x: number; y: number },
+          scale: number,
+        ) => { id: string; label: string } | null)
+      | null
+    /**
+     * H2：悬停预览的一行文本（上层算好；null = 无预览）
+     *
+     * 只读：画布把它拼进悬停提示，不据此改任何状态。
+     */
+    hoverPreview?: string | null
+    /**
      * 地图内**就地一行提示**（B9；null = 无提示）
      *
      * 由上层从 `workbench.mapHint`（纯函数 `mapHintOf`）算出后传入——画布**不读 store**，
@@ -125,6 +144,8 @@ const props = withDefaults(
     hexLabels: () => [],
     overlay: null,
     boxDragSource: null,
+    counterDragSource: null,
+    hoverPreview: null,
     hint: null,
     controlMarkers: null,
     boundary: null,
@@ -150,7 +171,8 @@ const emit = defineEmits<{
     scale: number,
   ]
   counterDrag: [id: string | null]
-  counterDrop: [id: string, point: { x: number; y: number }]
+  /** 拖放算子：落点窗口坐标 + 落点格（图外为 null，供上层区分"盒"与"地图内落子"） */
+  counterDrop: [id: string, point: { x: number; y: number }, hex: HexRef | null]
   /** 悬停格变化（离开画布为 null） */
   hexHover: [hex: HexRef | null]
 }>()
@@ -172,13 +194,29 @@ const imageLoading = ref(true)
 
 const hoverHex = ref<HexRef | null>(null)
 
+const hoverPoint = ref<{
+  x: number
+  y: number
+  world: { x: number; y: number }
+} | null>(null)
+
 /**
- * 悬停令牌的**全称提示**（缺省 null）
+ * 悬停提示：格号/令牌全称 + H2 的只读预览（两层用 `｜` 分行显示）
  *
- * 只给 `UnitToken.tip` 有值的令牌显示（如 3.4b 未归属 SP：角标只有 `? N SP`）。
- * 画布只读覆盖层里的字段，不判任何规则（CODE_SPEC §2）。
+ * 画布只读 `props.hoverPreview`，不读 store、不写任何状态。
  */
-const hoverTip = ref<{ text: string; x: number; y: number } | null>(null)
+const hoverTip = computed<{ text: string; x: number; y: number } | null>(() => {
+  const point = hoverPoint.value
+  const hex = hoverHex.value
+  if (point === null || hex === null) return null
+  const base = tokenTipAt(hex, point.world) ?? `${hex.col}.${hex.row}`
+  const preview = props.hoverPreview
+  return {
+    text: preview === null || preview === undefined ? base : `${base}｜${preview}`,
+    x: point.x,
+    y: point.y,
+  }
+})
 
 /** 高清屏后备存储系数 */
 const pixelRatio = computed(() =>
@@ -406,11 +444,16 @@ function onPointerDown(event: PointerEvent): void {
   // 多指：已在拖动中就直接忽略后续指针（否则第二根手指会替换整段手势，见 DragGesture.pointerId）
   if (drag.dragging) return
   if (!isMapGesture(event)) return
-  hoverTip.value = null
+  hoverPoint.value = null
   const local = toLocal(event)
   const hit = local === null ? null : hitAtLocal(local)
+  // 盒源优先（拖到图外盒）；没有盒入口时再看是不是"地图内可拖的算子"（H1）
   const source =
-    hit === null ? null : props.boxDragSource?.(hit.hex, hit.world, viewport.value.scale)
+    hit === null
+      ? null
+      : (props.boxDragSource?.(hit.hex, hit.world, viewport.value.scale) ??
+        props.counterDragSource?.(hit.hex, hit.world, viewport.value.scale) ??
+        null)
   counterPress = source == null ? null : { ...source, x: event.clientX, y: event.clientY }
   drag = beginDrag({ x: event.clientX, y: event.clientY }, event.pointerId)
   // 指针捕获让「拖出画布」也能继续收到 pointermove。
@@ -427,13 +470,13 @@ function onPointerMove(event: PointerEvent): void {
   if (drag.dragging && drag.pointerId !== null && event.pointerId !== drag.pointerId) return
   // B18a：悬停在浮层上不该高亮下面的格；B24：拖动中（捕获会把 target 换成捕获元素）照旧算
   if (!isMapGesture(event, drag.dragging)) {
-    hoverTip.value = null
+    hoverPoint.value = null
     return
   }
   const local = toLocal(event)
   if (local === null) return
   if (counterPress !== null) {
-    hoverTip.value = null
+    hoverPoint.value = null
     if ((event.buttons & 1) === 0) {
       drag = IDLE_DRAG
       clearCounterDrag()
@@ -465,9 +508,8 @@ function onPointerMove(event: PointerEvent): void {
   }
   // 拖动中不出提示（否则提示会跟着平移乱飞）
   // 条 25（D2）：悬停投影 —— 有令牌给令牌全称；空格回落成格号 `col.row`（点格不再弹只读浮签）
-  const tip =
-    hit === null ? null : (tokenTipAt(hit.hex, hit.world) ?? `${hit.hex.col}.${hit.hex.row}`)
-  hoverTip.value = tip === null ? null : { text: tip, x: local.x, y: local.y }
+  // H2：文本现算（`hoverTip`），这里只记指针位置 ⇒ 上层预览变化时能原地刷新。
+  hoverPoint.value = hit === null ? null : { x: local.x, y: local.y, world: hit.world }
 }
 
 function onPointerUp(event: PointerEvent): void {
@@ -480,9 +522,12 @@ function onPointerUp(event: PointerEvent): void {
   drag = ended.gesture
   const counter = counterPress
   releaseCapture(event)
-  hoverTip.value = null
+  hoverPoint.value = null
   if (counter !== null && !ended.clicked) {
-    emit('counterDrop', counter.id, { x: event.clientX, y: event.clientY })
+    // H1：落点格随拖放一起给出（图外为 null）——上层据此区分"进盒"与"地图内落子"
+    const dropLocal = toLocal(event)
+    const dropHex = dropLocal === null ? null : (hitAtLocal(dropLocal)?.hex ?? null)
+    emit('counterDrop', counter.id, { x: event.clientX, y: event.clientY }, dropHex)
   }
   clearCounterDrag()
   if (!ended.clicked) return
@@ -521,7 +566,7 @@ function onPointerCancel(event: PointerEvent): void {
   const ended = dragCancel(drag)
   if (ended.gesture === drag) return
   drag = ended.gesture
-  hoverTip.value = null
+  hoverPoint.value = null
   clearCounterDrag()
   releaseCapture(event)
 }
@@ -538,7 +583,7 @@ function releaseCapture(event: PointerEvent): void {
 }
 
 function onPointerLeave(): void {
-  hoverTip.value = null
+  hoverPoint.value = null
   if (sameHex(hoverHex.value, null)) return
   hoverHex.value = null
   emit('hexHover', null)

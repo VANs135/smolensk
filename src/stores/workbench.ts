@@ -6404,6 +6404,32 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return reachableNodeAt(groupReachable.value.hexes, hover)
   })
   /**
+   * H2（用户 2026-11-16）：**悬停预览的一行文本**（只读）
+   *
+   * 与 `hoverNode` / `stepPreview` 同一套引擎结论：只回答"走到这一格要多少 MP"，
+   * 不写 `hoverHex`、不记步、不改单位与选中集合。画布只拿到这段文本（不读 store）。
+   */
+  function hoverPreviewAt(hex: HexRef | null): string | null {
+    if (hex === null) return null
+    const interaction = moveInteraction.value
+    if (interaction === null) return null
+    const node = reachableNodeAt(groupReachable.value.hexes, hex)
+    if (node === null) return null
+    const preview = previewStep({
+      context: moveContext.value,
+      interaction,
+      runtime: moveRuntime.value,
+      to: hex,
+      path: node.path,
+    })
+    const stepCost = preview.moving.reduce((sum, item) => sum + item.cost, 0)
+    const parts = [`累计 ${node.mpSpent} MP`]
+    if (preview.ok && stepCost > 0) parts.push(`本步 ${stepCost} MP`)
+    if (preview.zocStoppingIds.length > 0) parts.push('进敌方 ZOC 后停车')
+    if (preview.needsConfirm) parts.push('需确认')
+    return `可走 · ${parts.join(' · ')}`
+  }
+  /**
    * P5（UI4/UI5）：**移动额度投影**（逐参移单位的可用 / 已耗 / 剩余，供移动面板显示）
    *
    * 额度判据来自引擎 `availableMaOf`（与 `moveMinRemainingMp` 同一处调用），
@@ -29324,6 +29350,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     groupReachable,
     stepPreview,
     hoverNode,
+    hoverPreviewAt,
     hoverHex,
     stackSelect,
     // C5 堆叠取子（6.1f / 8.1g / 8.1h）
