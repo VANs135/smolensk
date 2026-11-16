@@ -366,18 +366,23 @@ const payDumpItems = computed<readonly CounterPickerItem[]>(() =>
  * 悬停 ⇒ 走既有的 `setSupplyPreview`（地图上铺覆盖范围与最省路径，12.3d）。
  */
 const sourceItems = computed<readonly CounterPickerItem[]>(() => {
-  // 12.1b：同一格的 SP 是**一个补给站** ⇒ dump 来源按格只出一条（引擎按账本逐条给，
-  // 这里折成一条；付款按钮会再按集群拆成 Guderian / Hoth 两个算子）
-  const seenDumpHex = new Set<string>()
+  /*
+   * 12.1b：同格可能有多份持仓（地面补给站 / 装载在运输点数上的 SP）——
+   * 状态层已按**每份持仓**展开（`stockId`），这里**不再按格折叠**，让玩家能明确选一处。
+   * 只有没有 `stockId` 的重复同格来源（理论上不再出现）才折成一条。
+   */
+  const seen = new Set<string>()
   const kept: number[] = []
   workbench.supplySources.forEach((source, index) => {
     // 用户口径 2026-11-14：不可用项根本不出现（不置灰）⇒ 判不过的来源不进口袋名单
     if (!source.ok) return
-    if (source.kind === 'dump' && source.hex !== null) {
-      const key = hexLabel(source.hex)
-      if (seenDumpHex.has(key)) return
-      seenDumpHex.add(key)
-    }
+    const key =
+      source.stockId ??
+      (source.kind === 'dump' && source.hex !== null
+        ? `hex:${hexLabel(source.hex)}`
+        : `index:${index}`)
+    if (seen.has(key)) return
+    seen.add(key)
     kept.push(index)
   })
   return kept.map((index) => {
@@ -388,11 +393,19 @@ const sourceItems = computed<readonly CounterPickerItem[]>(() => {
     const ownUnits = workbench.units.filter(
       (unit) => unit.side === workbench.activeSide && sameHex(unit),
     )
-    // 图要取**对的**那一枚：投递取该格 HQ、延补队取该格的延补队，别随手取同格的第一枚
+    // 图要取**对的**那一枚：投递取该格 HQ、延补队取该格的延补队，装载来源取承运车
     const imageUrl =
       source.kind === 'dump'
         ? (() => {
-            const dump = workbench.spDumpsOfSide.find(sameHex)
+            const stock =
+              source.stockId === undefined
+                ? undefined
+                : workbench.allSpDumps.find((dump) => dump.id === source.stockId)
+            if (stock?.carriedBy !== undefined) {
+              const carrier = workbench.units.find((unit) => unit.instanceId === stock.carriedBy)
+              return carrier === undefined ? null : counterImageUrlOf(carrier)
+            }
+            const dump = stock ?? workbench.spDumpsOfSide.find(sameHex)
             return dump === undefined ? null : spDumpImageUrlOf(dump)
           })()
         : source.kind === 'hqThrow'

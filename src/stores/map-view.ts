@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { pendingRetreatPlan } from '@/engine/rules/engagement-progress'
 import { SP_TO_T } from '@/engine/rules/supply'
+import { holdingsToT } from '@/engine/rules/supply-interaction'
 import { computed, ref, watch } from 'vue'
 
 import type { HexRef, Side } from '@/data'
@@ -528,8 +529,78 @@ export const useMapViewStore = defineStore('mapView', () => {
     return workbench.refitPayDumps.map((dump) => ({
       hex: { ...dump.hex },
       label: `${dump.sp} SP + ${dump.t} T`,
-      selected: false,
+      selected: workbench.airInputs.refitDumpId === dump.id,
+      affordable: holdingsToT({ sp: dump.sp, t: dump.t }) >= workbench.refitPayNeedT,
     }))
+  })
+
+  /**
+   * 统一「可选补给源」候选（用户 2026-11-16 报告 #2）
+   *
+   * 整备 / 加油 / 攻击 / 炮击 / 建造 / 工事 / 12.3 选源**共用这一份**：金黄实心方框 ＋ 角标，
+   * `affordable === false` ＝ 本次付不出（虚线空框）。绘制层同格折成一条 ⇒ 同屏只保留一套视觉，
+   * 这些操作不再各自往 `mapHighlightHexes` 铺一圈。
+   */
+  const supplyPayHints = computed<readonly SupplyPickHint[]>(() => {
+    const holdingsOf = (dumpId: string): number => {
+      const dump = workbench.allSpDumps.find((entry) => entry.id === dumpId)
+      return dump === undefined ? Number.POSITIVE_INFINITY : holdingsToT({ sp: dump.sp, t: dump.t })
+    }
+    /** 同格多份持仓合计（12.1a：SP 与 T 可折算相加） */
+    const holdingsAt = (hex: HexRef): number =>
+      workbench.allSpDumps
+        .filter(
+          (dump) =>
+            dump.side === workbench.activeSide &&
+            dump.hex.col === hex.col &&
+            dump.hex.row === hex.row,
+        )
+        .reduce((sum, dump) => sum + holdingsToT({ sp: dump.sp, t: dump.t }), 0)
+
+    const out: SupplyPickHint[] = []
+    // 12.4 战斗：攻/守各一座站，需求 T 由 store 统一给
+    for (const item of combatSourceDumps.value) {
+      const need =
+        item.side === 'attacker'
+          ? workbench.combatSupplyNeedT.attacker
+          : workbench.combatSupplyNeedT.defender
+      out.push({
+        hex: item.hex,
+        label: item.label,
+        selected: item.selected,
+        affordable: holdingsOf(item.id) >= need,
+      })
+    }
+    // 15.1 整备
+    for (const hint of refitPayHints.value) out.push(hint)
+    // 12.3 选源（引擎已判 ok；付款需求在拖取步再填）
+    for (const hint of workbench.supplyPickSourceHints) {
+      out.push({ hex: hint.hex, label: '', selected: hint.selected, affordable: true })
+    }
+    // 12.5 加油
+    for (const hint of fuelPayHints.value) {
+      out.push({ ...hint, affordable: holdingsAt(hint.hex) >= workbench.fuelPayNeedT })
+    }
+    // 10.1b 炮击（第 2 步点站付款）
+    if (opsFlow.value !== null && opsFlow.value.kind === 'barrage' && opsFlow.value.step === 2) {
+      for (const item of workbench.barrageSupplyMapDumps) {
+        out.push({
+          hex: item.dump.hex,
+          label: item.label,
+          selected: workbench.barrageSupplyDumpId === item.dump.id,
+          affordable:
+            holdingsToT({ sp: item.dump.sp, t: item.dump.t }) >= workbench.barragePayNeedT,
+        })
+      }
+    }
+    // 15.3 / 15.2A 建造、16.0b 环形工事（候选已由 store 判过可达；付款时再按费率核）
+    for (const hint of constructionPayHints.value) {
+      out.push({ ...hint, affordable: holdingsAt(hint.hex) >= 1 })
+    }
+    for (const hint of hedgehogPayHints.value) {
+      out.push({ ...hint, affordable: holdingsAt(hint.hex) >= 1 })
+    }
+    return out
   })
 
   /**
@@ -686,6 +757,8 @@ export const useMapViewStore = defineStore('mapView', () => {
           : [],
       // W7 C16：12.4 战斗补给的付款来源候选（只在战斗补给步铺出）
       payDumps: combatSourceDumps.value,
+      // 用户 2026-11-16：整备 / 加油 / 攻击 / 炮击 / 建造 / 工事共用的一套「可选补给源」画法
+      supplyPay: supplyPayHints.value,
       // C8：补给覆盖层（12.3a 拖取 / 12.3b 投递的可视化）
       supply:
         workbench.supplyActive && workbench.supplySummary !== null
@@ -1385,18 +1458,11 @@ export const useMapViewStore = defineStore('mapView', () => {
     return workbench.barrageSupplyMapDumps.map((item) => item.dump.hex)
   })
 
-  /** 地图多格高亮 = 既有「待点格」＋ 炮击链路的高亮格 */
+  /** 地图多格高亮 = 既有「待点格」＋ 炮击第 1 步的参炸炮兵格 */
   const mapHighlightHexes = computed<readonly HexRef[]>(() => {
     const seen = new Set<string>()
     const out: HexRef[] = []
-    for (const hex of [
-      ...workbench.variableExitPickHexes,
-      ...opsBarrageUnitHexes.value,
-      ...opsBarrageSupplyHexes.value,
-      ...constructionPayHints.value.map((hint) => hint.hex),
-      ...hedgehogPayHints.value.map((hint) => hint.hex),
-      ...fuelPayHints.value.map((hint) => hint.hex),
-    ]) {
+    for (const hex of [...workbench.variableExitPickHexes, ...opsBarrageUnitHexes.value]) {
       const key = `${hex.col}.${hex.row}`
       if (seen.has(key)) continue
       seen.add(key)
@@ -1405,25 +1471,13 @@ export const useMapViewStore = defineStore('mapView', () => {
     return out
   })
 
-  /** 炮击第 2 步 / 建造 / 工事 / 加油：格上显示的 SP 数（用户口径：补给站格上要看得见有多少 SP） */
-  const mapHexLabels = computed<readonly { hex: HexRef; text: string }[]>(() => {
-    const flow = opsFlow.value
-    const labels: { hex: HexRef; text: string }[] =
-      flow !== null && flow.kind === 'barrage' && flow.step === 2
-        ? workbench.barrageSupplyMapDumps.map((item) => ({
-            hex: item.dump.hex,
-            text: item.label,
-          }))
-        : []
-    for (const hint of [
-      ...constructionPayHints.value,
-      ...hedgehogPayHints.value,
-      ...fuelPayHints.value,
-    ]) {
-      labels.push({ hex: hint.hex, text: hint.label })
-    }
-    return labels
-  })
+  /**
+   * 格上短标注
+   *
+   * 用户 2026-11-16 报告 #2：补给站持仓文本已统一由「可选补给源」角标承载
+   * （`overlay.supplyPay`）⇒ 这里不再另画一套，免得同屏两套视觉。
+   */
+  const mapHexLabels = computed<readonly { hex: HexRef; text: string }[]>(() => [])
 
   watch(
     () => {

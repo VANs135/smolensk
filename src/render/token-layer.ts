@@ -266,6 +266,14 @@ export interface MovementOverlay {
    */
   supplyPick?: readonly SupplyPickHint[] | null
   /**
+   * 统一「可选补给源」通道（用户 2026-11-16 报告 #2）
+   *
+   * 整备、加油、攻击、炮击、建造/工事这些「点补给站付具象补给」的操作**共用这一套画法**
+   * （金黄方框 ＋ 角标；不够付＝虚线空心）。状态层把各操作的候选合到这里，同屏只画一套，
+   * 不再让每个操作各自用一层地图高亮。
+   */
+  supplyPay?: readonly SupplyPickHint[] | null
+  /**
    * 条 4：**可整备的机场格**（15.1/15.1B；本轮补的 27 条核对缺口）
    *
    * 判据在状态层 `workbench.refitAirbaseHexes`（本方基地 ∧ 本阶段未整备过 ∧ 有非激活机 ∧ 能拖到 1T）。
@@ -334,6 +342,13 @@ export interface SupplyPickHint {
   label: string
   /** 是否已被选中 */
   selected: boolean
+  /**
+   * 本次付款**付得出**（12.1a：该来源的 T 够本次需求）
+   *
+   * `false` ⇒ 仍画在图上（让玩家看到"这处不够"），但用**虚线空心**方框，与可付的金黄实心方框区分。
+   * 缺省按可付处理（旧调用点不传）。
+   */
+  affordable?: boolean
 }
 
 /** 可突袭目标提示（W7 C16：8.1a 每次 3 MP） */
@@ -557,6 +572,9 @@ export function cullOverlay(
     ...(overlay.supplyPick === undefined || overlay.supplyPick === null
       ? { supplyPick: overlay.supplyPick }
       : { supplyPick: overlay.supplyPick.filter((hint) => visible(hint.hex)) }),
+    ...(overlay.supplyPay === undefined || overlay.supplyPay === null
+      ? { supplyPay: overlay.supplyPay }
+      : { supplyPay: overlay.supplyPay.filter((hint) => visible(hint.hex)) }),
     ...(overlay.refitAirbases === undefined || overlay.refitAirbases === null
       ? { refitAirbases: overlay.refitAirbases }
       : { refitAirbases: overlay.refitAirbases.filter((hex) => visible(hex)) }),
@@ -991,29 +1009,32 @@ export function drawMovementOverlay(
     drawSupplyOverlay(ctx, visible.supply, scale)
   }
 
-  // ⑥-b 可消耗的补给站（W7 C16：发起战斗/轰炸时的「选哪个补给站付款」；15.1 整备付款同画法；
-  //     ⑦ 12.3 选源的可点来源格也走这一画法）
-  const payHints = [
+  // ⑥-b 统一「可选补给源」（12.1b；用户 2026-11-16 报告 #2）
+  //     整备 / 加油 / 攻击 / 炮击 / 建造 / 12.3 选源共用一套：金黄实心方框 ＋ 角标；
+  //     付不出（`affordable === false`）改虚线空心方框。同格重复的候选只画一次（同屏一套视觉）。
+  const payHints = dedupePayHints([
     ...(visible.payDumps ?? []),
     ...(visible.refitPay ?? []),
     ...(visible.supplyPick ?? []),
-  ]
+    ...(visible.supplyPay ?? []),
+  ])
   if (payHints.length > 0) {
     ctx.lineWidth = 2 / scale
     for (const hint of payHints) {
       const center = hexCanvasPoint(hint.hex)
       const half = TOKEN_SIZE_PX * 0.42
-      ctx.fillStyle = hint.selected ? OVERLAY_PALETTE.payDumpSelected : OVERLAY_PALETTE.payDump
-      ctx.fillRect(center.x - half, center.y - half, half * 2, half * 2)
+      const affordable = hint.affordable !== false
+      if (affordable) {
+        ctx.fillStyle = hint.selected ? OVERLAY_PALETTE.payDumpSelected : OVERLAY_PALETTE.payDump
+        ctx.fillRect(center.x - half, center.y - half, half * 2, half * 2)
+      } else {
+        // 12.1a：持仓不够本次付款 ⇒ 保留位置提示，但用虚线空框区分（不假装能付）
+        ctx.setLineDash([4 / scale, 3 / scale])
+      }
       ctx.strokeStyle = OVERLAY_PALETTE.payDumpEdge
       ctx.strokeRect(center.x - half, center.y - half, half * 2, half * 2)
-      if (hint.label !== '') {
-        ctx.fillStyle = OVERLAY_PALETTE.badge
-        ctx.font = `${(10 / scale).toFixed(1)}px ui-monospace, monospace`
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-        ctx.fillText(hint.label, center.x, center.y + half + 8 / scale)
-      }
+      ctx.setLineDash([])
+      if (hint.label !== '') drawPaySourceBadge(ctx, hint.label, center, half, scale)
     }
   }
 
@@ -1062,6 +1083,57 @@ function drawPatrolZoneOverlay(
     }
   }
   ctx.setLineDash([])
+}
+
+/** 统一补给源高亮：同格只留一条（可付优先、选中合并、标签取首个非空） */
+function dedupePayHints(hints: readonly SupplyPickHint[]): SupplyPickHint[] {
+  const byHex = new Map<string, SupplyPickHint>()
+  for (const hint of hints) {
+    const key = `${hint.hex.col}.${hint.hex.row}`
+    const current = byHex.get(key)
+    if (current === undefined) {
+      byHex.set(key, hint)
+      continue
+    }
+    byHex.set(key, {
+      hex: current.hex,
+      label: current.label !== '' ? current.label : hint.label,
+      selected: current.selected || hint.selected,
+      affordable: current.affordable !== false && hint.affordable !== false,
+    })
+  }
+  return [...byHex.values()]
+}
+
+/**
+ * 「可选补给源」角标：格右上角的深底浅字小牌
+ *
+ * 复用既有角标三色（`stackBadge / stackBadgeEdge / stackBadgeText`），与堆叠枚数角标同一套令牌。
+ */
+function drawPaySourceBadge(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  center: { x: number; y: number },
+  half: number,
+  scale: number,
+): void {
+  const fontPx = 10 / scale
+  ctx.font = `600 ${fontPx.toFixed(1)}px ui-monospace, monospace`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  const padding = 3 / scale
+  // 等宽字体估算：不依赖 `measureText`（离屏/测试的 2D 上下文未必实现它）
+  const width = text.length * fontPx * 0.6 + padding * 2
+  const height = 12 / scale
+  const x = center.x + half - width / 2
+  const y = center.y - half - height / 2
+  ctx.fillStyle = OVERLAY_PALETTE.stackBadge
+  ctx.fillRect(x, y, width, height)
+  ctx.strokeStyle = OVERLAY_PALETTE.stackBadgeEdge
+  ctx.lineWidth = 1 / scale
+  ctx.strokeRect(x, y, width, height)
+  ctx.fillStyle = OVERLAY_PALETTE.stackBadgeText
+  ctx.fillText(text, x + width / 2, y + height / 2)
 }
 
 /** 绘制补给覆盖层（C8：12.3a 拖取范围 / 12.3b 投递范围 + 最省路径） */

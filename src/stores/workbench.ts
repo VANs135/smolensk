@@ -3357,6 +3357,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
+   * 12.4：本次战斗各方的**需求 T**（供「可选补给源」角标区分"本次可付 / 不够付"）
+   *
+   * 攻方每攻击军力 1T；守方每次战斗 2T（≤1RE 为 1T）——与 `confirmCombatSupply` 同一成本函数。
+   */
+  const combatSupplyNeedT = computed<{ attacker: number; defender: number }>(() => {
+    const attacker = combatAttackers.value.reduce((sum, unit) => sum + unit.steps, 0)
+    const defenderRe = combatDefenderViews.value.reduce((sum, unit) => sum + unit.re, 0)
+    return {
+      attacker,
+      defender: computeCombatSupplyCost({ attackerSteps: 0, defenderRE: defenderRe }).defenderT,
+    }
+  })
+
+  /**
    * 12.4：战斗补给允许**各单位分别取源**（原文未写「必须同源」，10.1b-A 的同源只约束炮击）。
    *
    * 每个阵营可点选多座补给站；落盘时按单位逐个分配到他真正拖得到的那一座。
@@ -3834,8 +3848,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   · 13.2g：编内卡车恒 1 SP（数据侧运力就是 1）；通用运输点数"有几点运力就是几"（用户裁定）；
    *   · 13.2b：运输点数**永不需要燃料**，故它自己不进"要加油的单位"集合（needsFuelOf 早已如此）。
    *
-   * ★ 一个**如实边界**：与补给站账本条目**同格**时，按格映射（12.3a 的判据是格）会取到账本那一条 ——
-   *   界面一律按格选来源，故两者同格时"选到哪一条"不确定；实际盘面极少出现，登记在案。
+   * ★ 同格并存（12.1b）：地面账本与装载在运输点数上的 SP 同格时，来源清单按**每份持仓**各给一条
+   *   （地面那条仍算一个补给站）⇒ 玩家明确选一处；地图点格遇到两处来源**不默认取第一条**，
+   *   只提示去清单里选（`expandSameHexStocks` / `pickSupplySourceAtHexNow`）。
    */
   const carriedSpDumps = computed<SpDump[]>(() =>
     units.value
@@ -3879,6 +3894,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         ? undefined
         : units.value.find((unit) => unit.instanceId === dump.carriedBy)
     return carrier === undefined ? hexLabel(dump.hex) : `${hexLabel(dump.hex)} ${carrier.name}`
+  }
+
+  /** 12.1b / 13.2f：**一份持仓**的界面名（地面账本 / 装载在运输点数上；编内卡车另标 13.2g-B） */
+  function supplyStockLabelOf(dump: SpDump): string {
+    if (dump.carriedBy === undefined) return `地面补给站 ${dump.sp} SP + ${dump.t} T（12.1b）`
+    const carrier = units.value.find((unit) => unit.instanceId === dump.carriedBy)
+    const name = carrier?.name ?? dump.carriedBy
+    if (dump.carrierIsOrganicTruck !== true)
+      return `装载在 ${name} 上 ${dump.sp} SP + ${dump.t} T（12.1b / 13.2f）`
+    return (
+      `编内卡车 ${name}（编队 ${dump.carrierFormation ?? '—'}）${dump.sp} SP + ${dump.t} T` +
+      `｜13.2g-B：仅同一多单位编队可取`
+    )
   }
 
   /** C8：被检查的单位（null＝未开始） */
@@ -5233,40 +5261,73 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
-   * 13.2g-B：把来源表里**编内卡车**那几条按"拖取者"复核一遍（裁定③）
+   * 13.2g-B：把**按格**给的来源展开成「每份持仓一条」（12.1b + 13.2f）
    *
-   * 编内卡车**可以**作为来源（12.1b「任何含有 SP 的位置……都被称为补给站」，含装在车上的）
-   * 供 **12.5 燃料**与 **12.4 战斗补给**取用，但 13.2g-B 明写「只允许**同一多单位编队**内的单位
-   * 拖取它们的 SP」，且**不能投递**（它不是指挥部）。引擎的来源表只认"含 SP 的位置"、
-   * 不知道拖取者是谁 ⇒ 在这里逐条复核（判据仍只有一处：引擎 `canDrawFromCarrier`）。
+   * 引擎的来源表按格给（12.1b 的「位置」），不知道同格里还分地面账本与装载在运输点数上的 SP。
+   * 同格两处来源都合法（原文没有取用先后），但 13.2g-B 只允许**同一多单位编队**拖取编内卡车的
+   * SP ⇒ 必须逐份复核，不能像修前那样只看同格第一条（那样地面账本排在前时，编内卡车的限制整个失效）。
    *
-   * ★ 不静默删掉：标成 `ok: false` 并写明 `13.2g-B` 与原因，玩家点它时能看到"为什么拖不了"。
+   * 装载来源的那几条写上 `stockId`，把付款钉到那一辆（`resolvePayDump` 据此扣账）。
    */
-  function reviewCarrierSources(
+  function expandSameHexStocks(
     sources: readonly SupplySourceOption[],
     drawer: ConsoleUnit,
   ): SupplySourceOption[] {
-    return sources.map((source) => {
-      if (source.kind !== 'dump' || source.hex === null) return source
-      const dump = allSpDumps.value.find(
-        (item) => item.side === drawer.side && sameHex(item.hex, source.hex!),
+    // 引擎按格给来源，但同格两处持仓时也可能给两条 ⇒ 展开前按格去重（否则一份持仓会被数两遍）
+    const seenHex = new Set<string>()
+    return sources.flatMap((source) => {
+      if (source.kind !== 'dump' || source.hex === null) return [source]
+      const hex = source.hex
+      const key = hexTextOf(hex)
+      const stocks = allSpDumps.value.filter(
+        (dump) => dump.side === drawer.side && sameHex(dump.hex, hex),
       )
-      if (dump === undefined || dump.carrierIsOrganicTruck !== true) return source
-      const allowed = canDrawFromCarrier({
-        carrierIsOrganicTruck: true,
-        carrierFormation: dump.carrierFormation ?? null,
-        drawerFormation: drawer.formation,
-      })
-      if (allowed) return source
-      return {
-        ...source,
-        ok: false,
-        rule: '13.2g-B',
-        reason: 'carrierFormationMismatch',
-        detail:
-          `${source.detail}｜13.2g-B：编内卡车的 SP 只许**同一多单位编队**内的单位拖取` +
-          `（本车编队 ${dump.carrierFormation ?? '—'}，本单位编队 ${drawer.formation ?? '—'}）`,
-      }
+      const carriers = stocks.filter((stock) => stock.carriedBy !== undefined)
+      // 纯地面：12.1b 同格就是一个补给站，保持引擎原样（3.4b 的集群拆分另行处理）
+      if (carriers.length === 0) return [source]
+      if (seenHex.has(key)) return []
+      seenHex.add(key)
+      /*
+       * 12.1b：同格的**地面** SP 仍是一个补给站（3.4b 的集群拆分只是显示与扣哪一摞的差别，
+       * 由 `supplyPayDumpCandidates` 承担）⇒ 地面那一条**不**写 `stockId`、不按账本条目展开。
+       * 装载在运输点数上的 SP（13.2f）是另一处来源（13.2g-B 另限编队）⇒ 逐辆一条。
+       */
+      const groundT = stocks
+        .filter((stock) => stock.carriedBy === undefined)
+        .reduce((sum, stock) => sum + stock.sp * SP_TO_T + stock.t, 0)
+      const hasGround = groundT > 0
+      const ground: SupplySourceOption[] = hasGround
+        ? [
+            {
+              ...source,
+              // 地面那一条不写 `stockId`（3.4b 的集群拆分仍由 `supplyPayDumpCandidates` 承担），
+              // 只在同格还有装载来源时补一句"这是地面补给站"，让玩家能明确选哪一处
+              ...(carriers.length > 0
+                ? {
+                    stockLabel: `地面补给站 ${Math.floor(groundT / SP_TO_T)} SP + ${groundT % SP_TO_T} T（12.1b）`,
+                  }
+                : {}),
+            },
+          ]
+        : []
+      return [
+        ...ground,
+        ...carriers.map((stock) => {
+          const allowed = canDrawFromCarrier({
+            carrierIsOrganicTruck: stock.carrierIsOrganicTruck === true,
+            carrierFormation: stock.carrierFormation ?? null,
+            drawerFormation: drawer.formation,
+          })
+          const detail = `${source.detail}｜本格来源：${supplyStockLabelOf(stock)}`
+          return {
+            ...source,
+            stockId: stock.id,
+            ...(allowed
+              ? { detail }
+              : { ok: false, rule: '13.2g-B', reason: 'carrierFormationMismatch', detail }),
+          }
+        }),
+      ]
     })
   }
 
@@ -5326,6 +5387,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const source = state.chosenSource
     if (source === undefined) return []
     if (source.kind === 'dump') {
+      // 12.1b：来源已按每份持仓展开 ⇒ 付款落点就是玩家选中的那一份，不再出「同格选哪一摞」
+      if (source.stockId !== undefined) return []
       /*
        * 3.4b（用户补充裁定）：同格同时有 Guderian / Hoth 两份 SP 时，**非编队德军**可以选扣哪一份；
        * 只有一个集群有 SP 时不出选择（`resolvePayDump` 直接扣那一条）。苏联单位与失效期不出现。
@@ -6025,6 +6088,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const refitPayDumps = computed<readonly SpDump[]>(() =>
     refitTargetBaseId.value === null ? [] : airRefitPayDumps.value(refitTargetBaseId.value),
   )
+
+  /** 15.1B：整备每个基地一次 1T（「可选补给源」角标用） */
+  const refitPayNeedT = computed<number>(() => 1)
 
   /* ── 14.11 转场（用户 2026-11-12） ── */
 
@@ -10870,6 +10936,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     () => allSpDumps.value.find((dump) => dump.id === fuelDumpId.value) ?? null,
   )
 
+  /** 12.5c：本次加油的 T 需求（编队/指挥部法 1SP，单单位法每单位 1T）——「可选补给源」角标用 */
+  const fuelPayNeedT = computed<number>(() =>
+    fuelMethod.value === 'singleUnit' ? fuelTargets.value.length : SP_TO_T,
+  )
+
   /**
    * 12.5c-A（I①）：**编队法的覆盖预览**（界面在付款前如实说明"这一付会覆盖谁"）
    *
@@ -13965,6 +14036,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 21.10：本次炮击计划花掉的 Shells 枚数（0 = 不用；按枚整花，最后一枚可溢出作废） */
   const barrageShellMarkers = ref(0)
 
+  /** 10.1b：本次炮击仍需从补给站付的 T（初始列成本 − Shells 抵付）——「可选补给源」角标用 */
+  const barragePayNeedT = computed<number>(() => {
+    const table = barrageState.value?.table
+    if (table === undefined) return 0
+    const shellsT = Math.trunc(barrageShellMarkers.value) * SUPPLY_CACHE_SHELLS_T
+    return Math.max(0, table.costT - shellsT)
+  })
+
   /** 21.10：本次可用额度 = Shells 面值 + 所选站的 T（降档按此挑列） */
   const barrageShellBudgetT = computed<number>(() => {
     const dump = barrageSupplyDump.value
@@ -15049,7 +15128,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
     if (data === null) return false
     supplyUnitId.value = unitId
-    supplyState.value = { ...data, sources: reviewCarrierSources(data.sources, unit) }
+    supplyState.value = { ...data, sources: expandSameHexStocks(data.sources, unit) }
     supplyPreviewIndex.value = null
     pushLog(
       'info',
@@ -15118,10 +15197,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 12.1b / 3.4b：**补给站来源列表**（面板/地图共用）
    *
-   * 同格多份 SP 是**同一个补给站** ⇒ 折成一条来源（不产生「并列来源」）。唯一例外是
-   * 3.4b 勾选且生效期内的轴方：同格按集群拆成两行（Guderian / Hoth），两行**指向同一条
-   * 引擎来源**（`sourceIndex` 相同）——只是让玩家知道该扣哪一摞，不是两个补给站。
-   * 苏军/失效期/单集群不拆。
+   * 每**一份持仓**一条（`expandSameHexStocks` 已按格展开）：同格的地面补给站与装载在运输点数上的
+   * SP 各占一行，玩家据此明确选一处（原文没有取用先后）。3.4b 勾选且生效期内的轴方仍给集群标签
+   * （Guderian / Hoth / 未归属），只影响显示与扣哪一摞，不是两个补给站。
    */
   const supplySourceGroups = computed<
     readonly {
@@ -15145,6 +15223,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         out.push({ sourceIndex: index, source, dumpId: null, group: null })
         return
       }
+      // 12.1b / 13.2f：装载在运输点数上的 SP 是**另一处来源** ⇒ 每份持仓各一行
+      if (source.stockId !== undefined) {
+        const dump = dumpById(source.stockId)
+        out.push({
+          sourceIndex: index,
+          source,
+          dumpId: dump?.id ?? null,
+          group:
+            dump !== undefined && panzerGroupRulesOn.value && state.side === 'axis'
+              ? panzerGroupOfDump(dump.id)
+              : null,
+        })
+        return
+      }
+      // 12.1b：同格的**地面** SP 仍是一个补给站 ⇒ 按格折一条；3.4b 再按集群拆行
       const sourceHex = source.hex
       const key = hexTextOf(sourceHex)
       if (seenDumpHex.has(key)) return
@@ -15168,19 +15261,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return out
   })
 
-  /** 该格**可点**的来源下标（引擎已判 `ok`；同格多条按引擎顺序取第一条 ⇒ 仍是同一个补给站） */
+  /**
+   * 该格**可点**的来源下标（引擎已判 `ok`）
+   *
+   * 12.1b：同格的地面 SP 是**一个补给站** ⇒ 引擎给几条都只算一处；装载在运输点数上的 SP
+   * （`stockId`）是另一处，各算一处。
+   */
   function supplyPickIndexesAt(hex: HexRef): number[] {
     const state = supplyState.value
     if (state === null) return []
     const key = hexTextOf(hex)
-    return state.sources.flatMap((source, index) =>
-      source.ok &&
-      isSpBearingSource(source.kind) &&
-      source.hex !== null &&
-      hexTextOf(source.hex) === key
-        ? [index]
-        : [],
-    )
+    const out: number[] = []
+    let groundSeen = false
+    state.sources.forEach((source, index) => {
+      if (!source.ok || !isSpBearingSource(source.kind) || source.hex === null) return
+      if (hexTextOf(source.hex) !== key) return
+      if (source.kind === 'dump' && source.stockId === undefined) {
+        if (groundSeen) return
+        groundSeen = true
+      }
+      out.push(index)
+    })
+    return out
   }
 
   /**
@@ -15205,8 +15307,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     if (state.step !== 'selectSource') return false
     const indexes = supplyPickIndexesAt(hex)
-    // 12.1b：同格多份 SP 是**同一个补给站** ⇒ 取引擎给出的第一条，不弹「并列」提示
-    if (indexes.length > 0) return chooseSupplySourceNow(indexes[0]!)
+    /*
+     * 12.1b：同格可能有多份持仓（地面补给站 / 装载在运输点数上的 SP）——原文**没有**规定先吃哪一处，
+     * 故这里**不默认取第一条**（修前总取引擎顺序第一格账本 ⇒ 编内卡车永远点不到），要求玩家在
+     * 来源清单里明确选一处（13.2g-B 的编队资格也只对其中部分持仓成立）。
+     */
+    if (indexes.length === 1) return chooseSupplySourceNow(indexes[0]!)
+    if (indexes.length > 1) {
+      const choices = indexes.map((index) => supplySourceLabel(state.sources[index]!)).join('；')
+      pushLog(
+        'warning',
+        `${hexLabel(hex)} 同格有 ${indexes.length} 处来源：${choices} —— 请在来源清单里选一处（12.1b）`,
+        '12.1b',
+      )
+      return true
+    }
     // 该格有来源但不可点（距离外 / 无 SP）：只出一行原因
     const blocking = state.sources.find(
       (source) => source.hex !== null && hexTextOf(source.hex) === key,
@@ -15231,6 +15346,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (source.kind === 'dump') {
       const hex = source.hex
       if (hex === null) return null
+      // 12.1b / 13.2f：来源已按**每份持仓**展开 ⇒ 扣玩家选中的那一份（地面账本 or 装载在车上）
+      if (source.stockId !== undefined) return dumpById(source.stockId) ?? null
       // 12.1b（用户 2026-11-13）：装载中的 SP 也是补给站 ⇒ 与地面账本一起参与解析
       const sameHexDumps = allSpDumpsOfSide.value.filter((dump) => sameHex(dump.hex, hex))
       if (!panzerGroupRulesOn.value) return sameHexDumps[0] ?? null
@@ -17330,7 +17447,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const where = source.hex === null ? '' : `${hexLabel(source.hex)} `
     const distance = source.distanceMp === null ? '' : `｜${source.distanceMp} MP`
     const via = source.viaAdjacency ? '｜相邻即可（12.3c）' : ''
-    return `${where}${supplySourceKindLabel(source.kind)}${distance}${via}`
+    // 12.1b：同格可能有多份持仓（地面账本 / 装载在运输点数上）⇒ 点名本次取的是哪一处
+    const stock = source.stockId === undefined ? undefined : dumpById(source.stockId)
+    const stockText =
+      source.stockLabel !== undefined
+        ? `｜${source.stockLabel}`
+        : stock === undefined
+          ? ''
+          : `｜${supplyStockLabelOf(stock)}`
+    return `${where}${supplySourceKindLabel(source.kind)}${distance}${via}${stockText}`
   }
 
   /** C8：12.6 判定结论的中文名 */
@@ -29192,6 +29317,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     hqFuelThrowOriginOf,
     fuelMethodEffective,
     fuelDumpChoices,
+    fuelPayNeedT,
     fuelTargets,
     // 用户 2026-11-10：加油唯一入口＝右键该单位/堆叠（只列真正可用的 12.5c 方法）
     fuelSubjectId,
@@ -29215,6 +29341,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     barragePaidSupply,
     // 21.10：Shells 计划枚数 / 额度 / 预览（抵付、浪费、缺口、降档列）
     barrageShellMarkers,
+    barragePayNeedT,
     barrageShellBudgetT,
     barrageShellPreview,
     pickBarrageSupplyDump,
@@ -29299,6 +29426,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     combatTagalongCandidates,
     toggleCombatTagalong,
     combatSupplyDumps,
+    combatSupplyNeedT,
     combatSupplyDumpIds,
     combatSupplyDumpPicks,
     setRetreatDestinationNow,
@@ -29662,6 +29790,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     refitSelectedIds,
     refitSelectLimit,
     refitPayDumps,
+    refitPayNeedT,
     refitStage,
     // 14.11 转场
     transferBase,
