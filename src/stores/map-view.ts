@@ -910,7 +910,7 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 通用那句「点己方算子＝可移动范围」在这里是错的（与 H 清理、A 整备同一类缺陷）。
      */
     if (workbench.segmentStep?.id === 'movement.barrage')
-      return '移动段轰炸（仅空中）：点敌方格定目标；右键敌方格选「轰炸」，会话框里宣布（10.0）'
+      return '移动段轰炸（仅空中）：点敌方格定目标；右键敌方格选「射击 → 轰炸」，会话框里宣布（10.0）'
     /*
      * 7.0a / 5.7b：反应段的行动方是**非阶段玩家**，其预备单位未释放前不能移动。
      * 这一行是该段唯一的前置提示（释放入口在右键「模式改变」组），不放窗口里。
@@ -924,7 +924,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (workbench.segmentStep?.id === 'reaction.barrage') {
       if (workbench.barrageTargetsNow.length === 0)
         return '反应轰炸：本环节没有可宣布的轰炸（没有已释放的预备炮兵，也没有航程够的轰炸机）（7.0b / 10.0d）'
-      return '反应轰炸：点敌方格定目标；右键敌方格选「炮击 / 轰炸」，会话框里宣布（10.0d）'
+      return '反应轰炸：点敌方格定目标；右键敌方格选「射击 → 炮击 / 轰炸」，会话框里宣布（10.0d）'
     }
     /*
      * F 段的炮击环节：本段**不能移动**，通用那句「点亮可移动范围」在这里是错的；
@@ -935,7 +935,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (workbench.segmentStep?.id === 'combat.barrage') {
       if (workbench.barrageTargetsNow.length === 0)
         return '炮击：本环节没有可宣布的轰炸（射程内没有炮兵；2.2 的 F 段只认炮兵）（10.0d / 10.1a）'
-      return '炮击：点敌方格定目标；右键敌方格选「炮击」，会话框里宣布（10.1）'
+      return '炮击：点敌方格定目标；右键敌方格选「射击 → 炮击」，会话框里宣布（10.1）'
     }
     /*
      * G 进击：本段能动的只有进击模式单位与已释放的预备（11.0a）；
@@ -948,7 +948,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (workbench.segmentStep?.id === 'exploitation.barrage') {
       if (workbench.barrageTargetsNow.length === 0)
         return '进击轰炸：本环节没有可宣布的轰炸（没有已释放的预备炮兵，也没有航程够的轰炸机）（11.0 / 10.0d）'
-      return '进击轰炸：点敌方格定目标；右键敌方格选「轰炸」，会话框里宣布（11.0 / 10.0）'
+      return '进击轰炸：点敌方格定目标；右键敌方格选「射击 → 轰炸」，会话框里宣布（11.0 / 10.0）'
     }
     /*
      * A 飞机整备：本段**没有移动/射击**，通用那句「点亮可移动范围」在这里是错的；
