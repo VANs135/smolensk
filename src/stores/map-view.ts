@@ -133,8 +133,16 @@ export interface MapPopupState {
 /** 小窗里「这一格有什么」的清单（地面 + 本方飞机；按战雾纪律裁剪） */
 export interface MapPopupContent {
   hex: HexRef
-  /** 可见的地面算子（己方全给；敌方只给 4.9a 允许的那一两枚） */
+  /**
+   * 堆叠栏只装**可操作单位**（批 F，用户 2026-11-16）
+   *
+   * ＝该格可见的**战斗单位** + **编内卡车**（13.2g：它虽是运输点数，但随编队行动，要能在这里点到）。
+   * 设施（机场 / SP / 工事）、普通运输点、补员算子不再进这一栏 —— 它们改由地图上的固定角位
+   * （批 E）或右键菜单进入，避免"先开窗、再在窗口里找"。
+   */
   units: UnitToken[]
+  /** 堆叠栏里**可点选**的 id（本方；敌方令牌是 4.9a 的目标，照列但不可选） */
+  selectableIds: readonly string[]
   /** 该格的本方飞机（飞机只画/只列本方，避免泄露对手空军布置） */
   airUnits: ConsoleAirUnit[]
   /** 该格是否还有未显示的内容（4.9a：不透露枚数） */
@@ -1579,6 +1587,43 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
   }
 
+  /**
+   * 批 F（用户 2026-11-16）：**堆叠栏里直接点选单位**
+   *
+   * 与地图上点算子共用同一份选中集（`stackSelection`），不再要求先展开/先进 6.1 取子。
+   * 有取子清单的格同步回引擎（6.1f），战斗/炮击环节同步参与者 —— 三处仍是同一口径。
+   */
+  function selectStackChip(id: string): boolean {
+    const state = popup.value
+    if (state === null) return false
+    const token = stackTokensAt(state.hex).find((item) => item.id === id)
+    if (token === undefined || token.hiddenStack === true) return false
+    // 只认堆叠栏里真正列出来的那一批（战斗单位 / 编内卡车，且为本方）
+    if (!(popupContent.value?.selectableIds ?? []).includes(id)) return false
+    stackSelection.value = toggleSelection(stackSelection.value, id)
+    if (movePickHere(state.hex)) workbench.setMovePickIds(stackSelection.value)
+    if (combatSelectionLive.value) workbench.syncCombatParticipants(state.hex, stackSelection.value)
+    if (workbench.barrageActive) workbench.syncBarrageParticipants(state.hex, stackSelection.value)
+    return true
+  }
+
+  /**
+   * 批 F：堆叠栏内右键
+   *
+   * 右键的那一枚**在已选集合里且集合 ≥2** ⇒ 出这些单位**共用**的菜单（交集，见 `contextOptions`）；
+   * 否则出这一枚自己的菜单。与地图右键的"单枚 / 选中集合"分工一致。
+   */
+  function openStackChipContext(
+    hex: HexRef,
+    id: string,
+    anchor: { x: number; y: number },
+  ): boolean {
+    if (stackSelection.value.length > 1 && stackSelection.value.includes(id)) {
+      return showCounterContext(hex, stackSelection.value, anchor)
+    }
+    return openUnitContext(hex, id, anchor, { fromStackWindow: true })
+  }
+
   /** 收起展开（**不清选择集**：用户口径下 Esc 只收展开） */
   function collapseStack(): boolean {
     if (expandedStack.value === null) return false
@@ -2585,10 +2630,23 @@ export const useMapViewStore = defineStore('mapView', () => {
       const label = ownCounterAt(hex, id)?.name ?? enemyCounterAt(hex, id)?.name ?? tip ?? '补给站'
       return [{ id, label, actions }]
     }
+    /*
+     * 批 F（用户 2026-11-16）：多选共用菜单＝**交集**，不是并集。
+     *
+     * 只保留"每一枚选中单位此刻都能用"的项；任一成员没有该项 ⇒ 整项不出现（不可用项不出现，
+     * 也不置灰）。目标格（`__hex_target__`）不属于任何一枚，单独并入，不参与交集。
+     */
+    const unitTargets = targets.filter((id) => id !== HEX_CONTEXT_ID)
+    const availablePerTarget = unitTargets.map((id) =>
+      counterActionsAt(hex, id).filter((action) => action.disabledReason === null),
+    )
     const byKey = new Map<string, CounterAction>()
-    for (const id of targets) {
-      for (const action of counterActionsAt(hex, id)) {
-        if (!byKey.has(action.key)) byKey.set(action.key, action)
+    if (availablePerTarget.length > 0) {
+      const [first, ...rest] = availablePerTarget
+      for (const action of first!) {
+        if (rest.every((list) => list.some((item) => item.key === action.key))) {
+          byKey.set(action.key, action)
+        }
       }
     }
     // 目标格动作（空投/破交/扫荡/空运）与多选单位动作合并成一份，只出现一次
@@ -3731,9 +3789,21 @@ export const useMapViewStore = defineStore('mapView', () => {
             verdict !== null && !verdict.ok ? verdict.reason : '本环节不参与（不在可行动集合里）',
         }
       })
+    /*
+     * 批 F（用户 2026-11-16）：堆叠栏只装**战斗单位 + 编内卡车**。
+     * 补员记录在数据层也是 `isCombat: true`，按 `replKind` 剔掉（13.5）。
+     */
+    const stackUnits = all.filter(
+      (token) =>
+        token.noncombatKind === 'organic_truck' ||
+        (token.combat === true && (token.replKind ?? null) === null),
+    )
     return {
       hex: state.hex,
-      units: all,
+      units: stackUnits,
+      selectableIds: stackUnits
+        .filter((token) => token.side === hotseat.viewerSide)
+        .map((token) => token.id),
       airUnits: workbench.airUnitsAt(state.hex, hotseat.viewerSide),
       hidden: hotseat.hasHiddenContent(state.hex),
       actionableOwnIds,
@@ -4158,6 +4228,9 @@ export const useMapViewStore = defineStore('mapView', () => {
     clearStackSelection,
     isStackExpanded,
     handleStackClick,
+    // 批 F：堆叠栏内直接点选 / 右键（多选出交集共用菜单）
+    selectStackChip,
+    openStackChipContext,
     // B4：唯一会话框（路由 + 唯一取消路径）
     session,
     cancelBlankPick,

@@ -146,9 +146,15 @@ const stackAircraft = computed(() => content.value?.airUnits ?? [])
 /** 6.1 取子池：只有这些 chip 能点选（敌方 / 非战斗 / 补员算子照列不可点） */
 const movableIds = computed(() => new Set(workbench.movePickChoices.map((unit) => unit.instanceId)))
 
-/** 这一枚此刻可点选：本窗就是取子格，且它在 6.1 的可开拔池里 */
+/**
+ * 批 F（用户 2026-11-16）：堆叠栏里**直接点选单位**
+ *
+ * 取子格上仍以 6.1 的可开拔池为准；其他时候按 store 的 `selectableIds`（本方）——
+ * 敌方令牌是 4.9a 的目标，照列但不可选。
+ */
 function chipPickable(id: string): boolean {
-  return isMovePickHex.value && movableIds.value.has(id)
+  if (isMovePickHex.value) return movableIds.value.has(id)
+  return (content.value?.selectableIds ?? []).includes(id)
 }
 
 /** 6.1：堆叠取子清单的已勾选 id（界面用；`movePick` 为空时给空数组，避免模板里做空值断言） */
@@ -165,10 +171,10 @@ const isMovePickHex = computed(() => {
   return hex.col === pickHex.col && hex.row === pickHex.row
 })
 
-/** chip 选中态：只有可开拔的本方算子有选中态；待取子格读 `movePick.ids`，其它窗按默认全选展示 */
+/** chip 选中态：待取子格读 `movePick.ids`，其它窗读地图共用的 `stackSelection` */
 function chipSelected(id: string): boolean {
-  if (!movableIds.value.has(id)) return false
-  return !isMovePickHex.value || movePickIds.value.includes(id)
+  if (!chipPickable(id)) return false
+  return isMovePickHex.value ? movePickIds.value.includes(id) : mapView.stackSelection.includes(id)
 }
 
 /**
@@ -185,20 +191,18 @@ function chipSelected(id: string): boolean {
 function onChipContext(event: MouseEvent, unitId: string): void {
   const hex = mapView.popup?.hex
   if (hex === undefined) return
-  mapView.openUnitContext(
-    hex,
-    unitId,
-    { x: event.clientX, y: event.clientY },
-    {
-      fromStackWindow: true,
-    },
-  )
+  // 批 F：右键落在多选集合里 ⇒ 共用菜单（交集）；否则这一枚自己的菜单
+  mapView.openStackChipContext(hex, unitId, { x: event.clientX, y: event.clientY })
 }
 
-/** 点 chip＝取消/恢复该枚开拔（仅待取子格上、且是该格可开拔的本方算子才可点） */
+/** 点 chip＝切换该枚选中（取子格同步 6.1；其它格同步地图选中集） */
 function toggleChip(id: string): void {
   if (!chipPickable(id)) return
-  workbench.toggleMovePick(id)
+  if (isMovePickHex.value) {
+    workbench.toggleMovePick(id)
+    return
+  }
+  mapView.selectStackChip(id)
 }
 
 /* ── 15.1 整备（用户口径：点机场的整备按钮 → 勾选飞机 → 点地图上高亮的补给付款） ── */

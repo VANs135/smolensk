@@ -190,8 +190,9 @@ describe('左键堆叠窗：选中集只有 movePick 一份', () => {
     )
     // 旧的"发起战斗"只显示攻方数量的信息块（无按钮）已删
     expect(popover).not.toContain('<h4 class="block__title">发起战斗</h4>')
-    // 选中集默认全选：chip 选中态读 movePick.ids（同格即全选）
-    expect(popover).toContain('!isMovePickHex.value || movePickIds.value.includes(id)')
+    // 选中集默认全选：取子格 chip 选中态读 movePick.ids；其它格读地图共用选中集（批 F）
+    expect(popover).toContain('movePickIds.value.includes(id)')
+    expect(popover).toContain('mapView.stackSelection.includes(id)')
   })
 })
 

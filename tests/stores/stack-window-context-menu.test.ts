@@ -103,8 +103,10 @@ describe('堆叠窗内右键：某一枚 ⇒ 它自己的菜单', () => {
     const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
     expect(popover).toContain('@contextmenu.prevent.stop="onChipContext($event, unit.id)"')
     expect(popover).toContain('@contextmenu.prevent.stop="onChipContext($event, air.instanceId)"')
-    // Prettier 可能把调用折成多行 ⇒ 用容错空白匹配
-    expect(popover).toMatch(/mapView\.openUnitContext\(\s*hex,\s*unitId/)
+    // 批 F：入口统一为 `openStackChipContext`（多选时出交集共用菜单，单选时回到该枚自己的菜单）
+    expect(popover).toMatch(/mapView\.openStackChipContext\(\s*hex,\s*unitId/)
+    const store = readFileSync('src/stores/map-view.ts', 'utf8')
+    expect(store).toContain('return openUnitContext(hex, id, anchor, { fromStackWindow: true })')
   })
 
   it('源码守卫：窗内分支只过硬闸、不因动作列表为空拒开', () => {
