@@ -23568,6 +23568,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
+   * D1（用户 2026-11-17 实走）：**此刻这一环是不是移动环节**（C / E / G）
+   *
+   * 点单位在移动环节＝取子开拔；在其余环节（A/B/D/F/H）＝只读查看。
+   * 修前地图单击一律走 `selectForMove`，D 段于是把"看一眼"当成移动意图，
+   * 回一条「D 补给段没有移动环节，不能移动（2.2）」的红字却没有详情可看。
+   * 判据与 `airMissionSegmentKind` 同源（`.modeAndMovement` / `.movement`）。
+   */
+  const movementStepNow = computed<boolean>(() => {
+    const stepId = segmentStep.value?.id ?? ''
+    return stepId.endsWith('.modeAndMovement') || stepId.endsWith('.movement')
+  })
+
+  /**
    * 14.2e / 10.0 第二段：**「任务分配」入口只列属于当前环节的任务类型**
    *
    * 移动环节 ⇒ 低空扫射 / 空运 / 空投 / 战机扫荡（普通轰炸不可选——10.0 第二段只给低空扫射开口子）；
@@ -29762,6 +29775,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     mapHint,
     // B8：环节进度与统一闸门（界面查表；不参与环节的动作一律拒绝）
     segmentStep,
+    // D1：移动环节判定（地图单击据此决定「取子开拔」还是「只读查看」）
+    movementStepNow,
     segmentSteps,
     playerSegmentSteps,
     segmentStepPosition,

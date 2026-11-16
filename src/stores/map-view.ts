@@ -1367,6 +1367,15 @@ export const useMapViewStore = defineStore('mapView', () => {
       expandedStack.value = null
       return true
     }
+    /*
+     * D1（用户 2026-11-17 实走）：非移动环节（A/B/D/F/H）双击单位＝只读查看。
+     * 修前照样走 `clickHex` → `selectForMove`，被「本段没有移动环节（2.2）」拒掉；
+     * 复核口径：规则拒绝只在真有动作意图时出现，看一眼不算。
+     */
+    if (!workbench.movementStepNow) {
+      expandedStack.value = null
+      return handleStackClick(hex, world, scale)
+    }
     workbench.clickHex(hex)
     if (workbench.movePick !== null) {
       workbench.setMovePickIds([token.id])
@@ -1871,6 +1880,15 @@ export const useMapViewStore = defineStore('mapView', () => {
       !(workbench.barrageActive && workbench.barrageState === null)
     ) {
       stackSelection.value = [token.id]
+      /*
+       * D1（用户 2026-11-17 实走）：非移动环节点单位＝**只读查看**——开堆叠小窗，
+       * 不进 `selectForMove`（否则 D 补给段会把"看一眼"当成移动意图，回一条
+       * 「D 补给段没有移动环节，不能移动（2.2）」的红字，且看不到任何详情）。
+       */
+      if (!workbench.movementStepNow) {
+        openPopup(hex, anchor?.x ?? 0, anchor?.y ?? 0)
+        return true
+      }
       workbench.selectForMove(hex, [token.id])
       return true
     }
