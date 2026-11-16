@@ -1326,6 +1326,39 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
+   * H3（用户 2026-11-16）：**双击算子＝常用动作**（省掉"先进堆叠窗再点"）
+   *
+   *   · 本次移动中的算子 ⇒ 结束本次移动（与 Enter 同源 `finishMove`）；
+   *   · 己方非战斗算子 / 设施 ⇒ 直接开它的动作会话（右键菜单里最常用的那一步）；
+   *   · 己方战斗单位 ⇒ 直接取子（跳过堆叠窗；可落点高亮由 M1 的预演范围给）；
+   *   · 敌方 / 空格 / 非闲置态 ⇒ 不抢这一击（null / false），照旧由单击路径处理。
+   *
+   * 本函数只调既有入口，不新写规则判定。
+   */
+  function onHexDoubleClick(hex: HexRef, world: { x: number; y: number }, scale: number): boolean {
+    const interaction = workbench.moveInteraction
+    if (interaction === null && !isIdleForStack()) return false
+    const token = hitHexToken({
+      hex,
+      group: stackTokensAt(hex),
+      page: stackFanPageAt(hex),
+      point: world,
+      scale,
+    })
+    if (token === null || token.hiddenStack === true) return false
+    if (interaction !== null) {
+      if (!workbench.activeMoveUnits.some((unit) => unit.instanceId === token.id)) return false
+      workbench.finishMove()
+      return true
+    }
+    if (token.side !== workbench.activeSide) return false
+    if (openUnitActionAt(hex, token.id)) return true
+    workbench.clickHex(hex)
+    if (workbench.movePick !== null) workbench.setMovePickIds([token.id])
+    return true
+  }
+
+  /**
    * 条 19（A1）：**点地面格 ⇒ 空军任务入口**（target-first）的引导态
    *
    * 移动/轰炸环节点到「无己方地面算子、且有飞机按航程够得到」的地面格时置位，
@@ -4328,5 +4361,6 @@ export const useMapViewStore = defineStore('mapView', () => {
     closePopup,
     // 左键堆叠窗的选中集只有一份：`workbench.movePick`（chip 直接驱动它）
     onHexClick,
+    onHexDoubleClick,
   }
 })

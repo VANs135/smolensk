@@ -3,6 +3,8 @@ import { ref } from 'vue'
 
 import { useUiStore } from './ui'
 import { useWorkbenchStore } from './workbench'
+import { useSetupStore } from './setup'
+import { useMapViewStore } from './map-view'
 
 /**
  * 快捷键（W7 C16）
@@ -148,7 +150,7 @@ export const HOTKEY_DOCS: readonly HotkeyDoc[] = [
   { keys: '1 / M', label: '工具：移动（点己方堆叠开始移动）', rule: '6.1' },
   { keys: '2 / B', label: '工具：战斗 / 轰炸 / 空军（点目标格）', rule: '9.0 / 10.0 / 14.2f' },
   { keys: 'S', label: '整堆叠开关（同格一起动）', rule: '6.1' },
-  { keys: 'Enter', label: '结束本次移动', rule: '6.1' },
+  { keys: 'Enter', label: '结束本次移动 / 没有待决时进入下一环节', rule: '6.1 / 2.2' },
   { keys: 'U / Backspace', label: '撤销一步', rule: '6.1' },
   { keys: 'Esc', label: '取消当前交互 / 关小窗', rule: '—' },
   { keys: 'T', label: '切到对手（只翻行动方，不切视角）', rule: '2.2' },
@@ -164,7 +166,7 @@ const ACTION_LABELS: Record<HotkeyAction, string> = {
   'tool.move': '工具：移动',
   'tool.battle': '工具：战斗 / 轰炸 / 空军',
   'stack.toggle': '整堆叠',
-  'move.end': '结束移动',
+  'move.end': '结束移动 / 进入下一环节',
   'move.undo': '撤销一步',
   cancel: '取消 / 关小窗',
   'side.next': '交给对手',
@@ -254,6 +256,34 @@ export const useHotkeyStore = defineStore('hotkeys', () => {
   /** 控件自己处理的键（不回给热键，也不 preventDefault） */
   const CONTROL_OWNED_KEYS = new Set(['Enter', ' '])
 
+  /**
+   * H4（用户 2026-11-16）：**Enter 推进环节前先看有没有"待决"**
+   *
+   * 有待决选择（初设落位 / 取子 / 点格选 / 铁路待确认 / 3.3c 替补 / 会话框里的操作）
+   * 时 Enter 必须**保持不动**，否则会误跳段；移动交互在 dispatch 里先一步收束。
+   * 判据全部读既有投影，不新写规则。
+   */
+  function pendingChoiceOpen(): boolean {
+    const setup = useSetupStore()
+    const mapView = useMapViewStore()
+    return (
+      !setup.finished ||
+      setup.placing !== null ||
+      mapView.session !== null ||
+      workbench.movePick !== null ||
+      workbench.hexPickView !== null ||
+      workbench.pendingRailTransport !== null ||
+      workbench.variableExitSelectionOpen ||
+      workbench.combatState !== null ||
+      workbench.barrageState !== null ||
+      workbench.overrunContext !== null ||
+      workbench.airMissionAirIds.length > 0 ||
+      workbench.supplyUnitId !== null ||
+      workbench.specialPending !== null ||
+      workbench.refitBase !== null
+    )
+  }
+
   /** 执行一个动作（返回是否真的做了事，便于调用方决定要不要 preventDefault） */
   function dispatch(action: HotkeyAction): boolean {
     switch (action) {
@@ -267,9 +297,13 @@ export const useHotkeyStore = defineStore('hotkeys', () => {
         workbench.setStackSelect(!workbench.stackSelect)
         return true
       case 'move.end':
-        if (workbench.moveInteraction === null) return false
-        workbench.finishMove()
-        return true
+        // H4：移动中 ⇒ 结束移动；无待决 ⇒ 进入下一环节；有待决 ⇒ 不动
+        if (workbench.moveInteraction !== null) {
+          workbench.finishMove()
+          return true
+        }
+        if (pendingChoiceOpen()) return false
+        return workbench.advanceSegmentNow() !== null
       case 'move.undo':
         if (workbench.moveInteraction === null) return false
         workbench.undoLastStep()

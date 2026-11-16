@@ -343,6 +343,11 @@ function onHexHover(hex: HexRef | null): void {
 /** H2：悬停预览文本（store 只读计算；画布不读 store） */
 const hoverPreviewText = computed(() => workbench.hoverPreviewAt(workbench.hoverHex))
 
+/** H3：双击算子 —— 常用动作全在 map-view 里判（本视图只转一手） */
+function onHexDoubleClick(hex: HexRef, world: { x: number; y: number }, scale: number): void {
+  mapView.onHexDoubleClick(hex, world, scale)
+}
+
 onMounted(() => {
   hotkeys.panelCollapsed = true
   setup.ensureSetupLoaded()
@@ -444,6 +449,7 @@ onBeforeUnmount(() => {
           :construction-markers="workbench.constructionMarkerPieces"
           :hint="workbench.mapHint"
           @hex-click="onHexClick"
+          @hex-dbl-click="onHexDoubleClick"
           @blank-click="mapView.cancelBlankPick()"
           @hex-hover="onHexHover"
           @hex-context="onMapContext"

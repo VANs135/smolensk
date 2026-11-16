@@ -173,6 +173,8 @@ const emit = defineEmits<{
   counterDrag: [id: string | null]
   /** 拖放算子：落点窗口坐标 + 落点格（图外为 null，供上层区分"盒"与"地图内落子"） */
   counterDrop: [id: string, point: { x: number; y: number }, hex: HexRef | null]
+  /** H3：双击算子（格 / 世界坐标 / 比例；只报位置，动作由上层决定） */
+  hexDblClick: [hex: HexRef, world: { x: number; y: number }, scale: number]
   /** 悬停格变化（离开画布为 null） */
   hexHover: [hex: HexRef | null]
 }>()
@@ -589,6 +591,19 @@ function onPointerLeave(): void {
   emit('hexHover', null)
 }
 
+/**
+ * H3：双击算子 —— 只把"双击落在哪"报给上层（画布不做动作判断）
+ *
+ * 单击已由 `onHexClick` 处理；这里不重复触发单击动作，只补充 dblclick 这一层。
+ */
+function onDoubleClick(event: MouseEvent): void {
+  const local = toLocal(event)
+  if (local === null) return
+  const hit = hitAtLocal(local)
+  if (hit === null) return
+  emit('hexDblClick', hit.hex, hit.world, viewport.value.scale)
+}
+
 /** 格号比较（对象坐标不便用 === 比） */
 function sameHex(a: HexRef | null, b: HexRef | null): boolean {
   if (a === null || b === null) return a === b
@@ -699,6 +714,7 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
       @pointerleave="onPointerLeave"
+      @dblclick="onDoubleClick"
       @contextmenu="onContextMenu"
     >
       <canvas ref="canvas" class="mapcanvas__canvas" />
