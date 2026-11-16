@@ -18108,6 +18108,49 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 右键敌方却看不到「炮击」时，**具体卡在哪条规则**（只在炮击环节、且该格确有敌方地面战斗单位时给）
+   *
+   * 用户 2026-11-16：DG 目标本身不挡炮击（10.0a「对敌方战斗单位进行轰炸」；5.10a「已经处于
+   * DG 模式的单位不会承受额外的效果」——`不会额外 DG`不等于`不能作为目标`）。
+   * 真正会让菜单项不出现的是：10.0e-A 同格本阶段已炸、10.0e-B 本阶段已射击、10.0e-D 不在
+   * 炮击环节、10.0e-C 火力不足、10.1b 付不起。菜单项按口径「不可用不出现」，所以这里把原因
+   * 交给地图内提示行，避免玩家把「没有炮击项」误判成「DG 单位不能打」。
+   */
+  function barrageEntryBlockReason(hex: HexRef): { rule: string; reason: string } | null {
+    if (!actionAllowedNow('barrage.declare')) return null
+    const side = segmentGateQuery.value.side ?? activeSide.value
+    const hasEnemyCombat = units.value.some(
+      (unit) =>
+        unit.side !== side && unit.isCombat && unit.hex.col === hex.col && unit.hex.row === hex.row,
+    )
+    if (!hasEnemyCombat) return null
+    if (barrageEntryEligible(hex)) return null
+    if (!barrageKindsInSegment.value.includes('artillery')) {
+      return { rule: '10.0e-D', reason: '本环节不允许火炮轰炸（火炮只在炮击环节）' }
+    }
+    if (!canReplaceBarrage() || (barrageState.value !== null && !barrageState.value.finished)) {
+      return { rule: '10.0e', reason: '已有一单炮击在流程中，先完成或取消' }
+    }
+    if (barragedHexesThisPhase.value.includes(hexLabel(hex))) {
+      return { rule: '10.0e-A', reason: '该格本阶段已被炮击过一次（同一格每阶段只能炸一次）' }
+    }
+    const candidates = barrageCandidatesAt(hex).filter(
+      (unit) => !barragedUnitIdsThisPhase.value.includes(unit.instanceId),
+    )
+    if (candidates.length === 0) {
+      return { rule: '10.0e-B', reason: '射程内没有可用的炮击单位（或本阶段已射击过）' }
+    }
+    const total = candidates.reduce((sum, unit) => sum + (unit.raw.barrage ?? 0), 0)
+    if (total < 1) return { rule: '10.0e-C', reason: '参炸炮兵合计不足 1 点轰炸值' }
+    return { rule: '10.1b', reason: '没有付得起这记炮击的补给站（每点至少 1T）' }
+  }
+
+  /** 把「炮击项为何缺席」写进地图内提示行（`actionRefusal` 通道，下一次动作/换段即清） */
+  function noteBarrageBlocked(reason: { rule: string; reason: string }): void {
+    actionRefusal.value = { key: 'barrage.declare', rule: reason.rule, reason: reason.reason }
+  }
+
+  /**
    * 专规 2.2d / 14.1g：**本阶段本方能否出击**（空军任务全链共用一条判据）
    *
    * 修前只有 `airMissionJoinChoices` 判这一条，`bombingEntryEligible` 只看环节闸 ⇒
@@ -29923,6 +29966,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     hipShootEntryEligible,
     // 三操作统一流程（2026-11-10）：入口判据与窗内候选同源
     barrageEntryEligible,
+    barrageEntryBlockReason,
+    noteBarrageBlocked,
     barrageTargetsNow,
     bombingEntryEligible,
     barrageCandidatesAt,

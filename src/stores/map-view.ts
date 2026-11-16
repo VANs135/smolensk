@@ -2778,7 +2778,15 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 格上有算子时也补一份"目标格"菜单，让破交/扫荡/空运/空投有唯一入口。
      */
     if (hexTargetActions(hex).length > 0) ids.push(HEX_CONTEXT_ID)
-    showCounterContext(hex, ids, anchor)
+    if (showCounterContext(hex, ids, anchor)) return
+    /*
+     * 用户 2026-11-16：右键敌方却整张菜单都没出来（例如炮击被 10.0e-A/10.1b 挡住 ⇒ 项按口径
+     * 不出现）。DG 本身不是理由（10.0a），把真正卡住的那条规则写进地图提示行，避免误判。
+     * 观察方≠行动方 / 有待决点选时菜单本就不开，不在这里解释（那是另一条权限闸，不是炮击规则）。
+     */
+    if (!canOpenCounterContext()) return
+    const blocked = workbench.barrageEntryBlockReason(hex)
+    if (blocked !== null) workbench.noteBarrageBlocked(blocked)
   }
 
   /**
