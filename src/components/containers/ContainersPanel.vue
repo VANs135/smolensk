@@ -1135,7 +1135,7 @@ function boxAircraft(side: Side) {
     </template>
     <div v-if="showsActions" class="row">
       <!--
-        13.5a / 1.6c：这是**死亡堆**的返场落点，不是空军盒的动作。
+        1.6c：这是**死亡堆**的返场落点，不是空军盒的动作。
         修前只按 `showsActions` 出，展开空军盒（only="actions"）时也把它摆出来 ⇒ 盒内一个
         与盒无关的死入口。现在按「当前展开卡覆盖的盒类型」收口（showsBoxActions('deadPile')）。
       -->
