@@ -1,7 +1,7 @@
-import { createPinia, setActivePinia } from 'pinia'
+﻿import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { actionGateOf, useWorkbenchStore, type ActionKey, type ConsolePhase } from '@/stores'
+import { actionGateOf, type ActionKey, type ConsolePhase } from '@/stores'
 
 import { CORE_HEX, NEAR_HEX, combatRecord, newConsole, placeGround } from '../flows/sop-harness'
 
@@ -13,11 +13,6 @@ import { CORE_HEX, NEAR_HEX, combatRecord, newConsole, placeGround } from '../fl
  * 口径：来源为「—」且未勾储备（守方为「已声明支付」却无来源）时，**确认这一步就拒绝**，
  * 并说明本场需要多少 T、去哪里付款；不能先显示已确认再把错误推给下一步。
  */
-
-const newStore = () => {
-  setActivePinia(createPinia())
-  return useWorkbenchStore()
-}
 
 function goToActionStep(
   store: {
@@ -51,7 +46,7 @@ function atCombatSupply() {
 }
 
 /** 声明一座本方的足量补给站（12.4：直接拖取/投递都行） */
-function declareDump(store: ReturnType<typeof newStore>, side: 'attacker' | 'defender'): void {
+function declareDump(store: ReturnType<typeof newConsole>, side: 'attacker' | 'defender'): void {
   const hex = side === 'attacker' ? CORE_HEX : NEAR_HEX
   const dumpSide = side === 'attacker' ? 'axis' : 'soviet'
   store.spDumps.push({ id: `sd-${side}`, hex: { ...hex }, side: dumpSide, sp: 8, t: 0 })
@@ -61,7 +56,7 @@ function declareDump(store: ReturnType<typeof newStore>, side: 'attacker' | 'def
   expect(store.pickCombatSupplyDump(side, dump!.id)).toBe(true)
 }
 
-const attackerRequiredT = (store: ReturnType<typeof newStore>): number =>
+const attackerRequiredT = (store: ReturnType<typeof newConsole>): number =>
   store.combatAttackers.reduce((sum, unit) => sum + unit.steps, 0)
 
 beforeEach(() => {
