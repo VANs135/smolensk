@@ -170,6 +170,21 @@ describe('B5：唯一「进入下一环节」（自动段连跑）', () => {
     expect(workbench.movePick).toBeNull()
   })
 
+  it('★ 回合准备提示如实说明 2.3 要玩家作答，不再写「先手判定自动进行」', () => {
+    const { session } = newStores()
+    const mapView = useMapViewStore()
+    session.startGame()
+    for (let guard = 0; guard < SOP_STEPS.length; guard += 1) {
+      session.advanceToNextStop()
+      if (session.awaiting || session.terminated) break
+    }
+    expect(session.question?.kind).toBe('initiative')
+    expect(mapView.actionHint).toContain('先手')
+    expect(mapView.actionHint).toContain('作答')
+    expect(mapView.actionHint).not.toContain('自动进行')
+    expect(mapView.actionHint).not.toContain('可移动范围')
+  })
+
   it('作答后继续：连跑会继续把自动段跑完再停', () => {
     const { session } = stores
     session.startGame()
