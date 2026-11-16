@@ -23284,6 +23284,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return steps[index] ?? null
   })
 
+  /*
+   * B2（用户 2026-11-17）：铁路抵达撤回条**跟着段和方走**
+   *
+   * 换日 / 换阶段 / 换环节 / 换方 ⇒ 这一笔不再对应任何可撤的增援抵达，
+   * 立即收起；切回原段原方也不复活（一次性失效）。
+   */
+  watch(
+    () =>
+      `${date.value}|${phase.value}|${activeSide.value}|${segmentStep.value?.id ?? ''}|${arrivalPlanKey.value}`,
+    () => {
+      arrivalRailUndo.value = null
+    },
+    { flush: 'sync' },
+  )
+
   /** 当前环节进度（界面显示「第 n / m 环」） */
   const segmentStepPosition = computed(() => {
     const steps = playerSegmentSteps.value
@@ -25158,8 +25173,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function undoArrivalRailNow(): boolean {
     const undo = arrivalRailUndo.value
     if (undo === null) return false
+    // B2：段 / 方已变（或闸门已关）⇒ 这一笔已失效；收起并说明原因，不静默
+    if (undo.side !== activeSide.value || !actionAllowedNow('rein.arrival')) {
+      arrivalRailUndo.value = null
+      pushLog(
+        'warning',
+        `撤回铁路抵达已失效：只能在「增援 · 抵达」环节由当时那一方撤回（13.6b）`,
+        '13.6b',
+      )
+      return false
+    }
+    if (!withdrawArrivalNow(undo.index, undo.side)) {
+      // withdrawArrivalNow 已写拒绝原因；记录已不可兑现 ⇒ 收起撤回条
+      arrivalRailUndo.value = null
+      return false
+    }
     arrivalRailUndo.value = null
-    if (!withdrawArrivalNow(undo.index)) return false
     pushLog('info', `已撤回铁路抵达：${undo.label}（运力已退回）`, '13.6b')
     return true
   }
@@ -25171,9 +25200,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * instanceId 精确移除（含 `Nx` 同型复制、编成条目、飞机），并清掉本条的"已投放"账。
    * 这只是界面层的撤回，不是规则动作；不改任何校验，也不回滚已写的会话结算行。
    */
-  function withdrawArrivalNow(index: number): boolean {
+  function withdrawArrivalNow(index: number, side: Side = activeSide.value): boolean {
     if (!requireAction('rein.arrival', '撤回到达投放')) return false
-    if (arrivalPlaced.value[index] !== true) return false
+    if (arrivalPlaced.value[index] !== true) {
+      // B2：条还挂着但账本已不认这条 ⇒ 必须给原因，不能静默返回
+      reinforcementError.value = { rule: '13.6', reason: `arrivalWithdrawNotPlaced:${index}` }
+      pushLog(
+        'warning',
+        '这一条当前没有已投放记录，无法撤回（可能已撤过，或已换段 / 换方）',
+        '13.6',
+      )
+      return false
+    }
     const ids = arrivalPlacedUnits.value[index] ?? []
     if (ids.length === 0) {
       reinforcementError.value = { rule: '13.6', reason: `arrivalWithdrawNoLedger:${index}` }
@@ -25208,7 +25246,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 裁定 3：经铁路抵达的条目被撤回 ⇒ 退回本笔运力
     const railSpent = arrivalRailSpent.value[index]
     if (railSpent !== undefined) {
-      refundRailCapacity(activeSide.value, railSpent)
+      // B2：退给记录下来的那一方，不看当前 activeSide
+      refundRailCapacity(side, railSpent)
       const nextSpent = { ...arrivalRailSpent.value }
       delete nextSpent[index]
       arrivalRailSpent.value = nextSpent
