@@ -72,6 +72,19 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
   const supplyPhasePlan = ref<SupplyPhasePlan | null>(null)
   const supplyRecoverySettled = ref(false)
   const supplyFeedingSettled = ref(false)
+  /**
+   * S1（用户 2026-11-17）：两个结算步**实际落盘了什么**
+   *
+   * 只记已发生的事实（恢复/喂食的单位数与实际消耗 T、断补置除数），供界面在结算后
+   * 就地显示完成态；不重算规则，也不因此改变任何判据。
+   */
+  const supplyRecoveryOutcome = ref<{ units: number; spentT: number } | null>(null)
+  const supplyFeedingOutcome = ref<{
+    units: number
+    spentT: number
+    marked: number
+    cleared: number
+  } | null>(null)
   const attritionAppliedHexes = ref<string[]>([])
   /** 载入计划时的错误（统一形状：rule + reason） */
   const supplyPhaseError = ref<{ rule: string; reason: string } | null>(null)
@@ -257,6 +270,7 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
      */
     if (recovery.recoveries.length === 0 && recovery.spentT <= 0) {
       supplyRecoverySettled.value = true
+      supplyRecoveryOutcome.value = { units: 0, spentT: 0 }
       pushLog('info', '12.10e：本阶段没有需要恢复的部队储备（也没有可消耗的补给）', '12.10e')
       return true
     }
@@ -322,6 +336,7 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     }
     // 12.8e 括注：12.10e 部队储备恢复也是"特殊续命" ⇒ 本回合不算被切断的第一回合
     markSustainedBySpecialSupply(appliedIds)
+    supplyRecoveryOutcome.value = { units: appliedIds.length, spentT: actualSpentT }
     pushLog(
       'success',
       `12.10e 部队储备恢复：${appliedIds.length} 个单位（${recovery.recoveries
@@ -440,6 +455,12 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
         `；断补 置 ${markedCount} / 除 ${clearedCount}`,
       '12.6c',
     )
+    supplyFeedingOutcome.value = {
+      units: appliedIds.length,
+      spentT: totalT,
+      marked: markedCount,
+      cleared: clearedCount,
+    }
     return true
   }
 
@@ -565,6 +586,8 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     supplyPhaseError.value = null
     supplyRecoverySettled.value = false
     supplyFeedingSettled.value = false
+    supplyRecoveryOutcome.value = null
+    supplyFeedingOutcome.value = null
     attritionInputs.value = {}
     attritionResults.value = {}
     attritionAppliedHexes.value = []
@@ -637,6 +660,8 @@ export function createSupplyPhaseDomain(ports: SupplyPhasePorts) {
     supplyFeedingCandidates,
     supplyRecoverySettled,
     supplyFeedingSettled,
+    supplyRecoveryOutcome,
+    supplyFeedingOutcome,
     attritionAppliedHexes,
     supplyPhaseError,
     supplyPhaseInputs,

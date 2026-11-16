@@ -65,25 +65,28 @@ function onSetLoss(hex: HexRef, id: string, max: number, event: Event): void {
 }
 
 /**
- * 本环节是否**还有待决**（无待决就不渲染，而不是留一块「已完成」的常驻面板）
+ * S1（用户 2026-11-17）：两个结算步完成后，面板**不卸载**，就地显示落盘结果与下一步
  *
- * 判据全部来自 store 的既有结算事实：计划未生成 / 恢复未结算 / 供养未结算 /
- * 还有断补堆叠没掷或没分配。玩家做完最后一件事，面板自行消失，流程条继续推进。
+ * 修前：`pending` 在 settled 后立刻为 false ⇒ 整个 section 被卸载，`已恢复 / 已结算`
+ * 永远看不到，流程条却还停在 1/2 —— 看起来像"点了没反应"。
+ * 现在完成态直接读 store 记下的落盘事实（`supplyRecoveryOutcome` / `supplyFeedingOutcome`）。
  */
-const pending = computed<boolean>(() => {
+const recoveryDone = computed(() => workbench.supplyRecoveryOutcome)
+const feedingDone = computed(() => workbench.supplyFeedingOutcome)
+const dutiesSettled = computed<boolean>(() => {
   const current = plan.value
-  if (current === null) return true
-  if (recovery.value) return !workbench.supplyRecoverySettled
-  if (!workbench.supplyFeedingSettled) return true
-  return current.attritionDuty.some(
-    (duty) => !workbench.attritionAppliedHexes.includes(keyOf(duty.hex)),
+  if (current === null) return false
+  return (
+    workbench.supplyFeedingSettled &&
+    current.attritionDuty.every((duty) =>
+      workbench.attritionAppliedHexes.includes(keyOf(duty.hex)),
+    )
   )
 })
 </script>
 
 <template>
   <section
-    v-if="pending"
     class="phase-panel"
     :class="{ 'phase-panel--collapsed': collapsed }"
     aria-label="补给结算"
@@ -125,7 +128,9 @@ const pending = computed<boolean>(() => {
             <span class="phase-panel__data num">
               {{ plan.internalStocks.recoveries.length }} 单位 · {{ plan.internalStocks.spentT }} T
             </span>
-            <span v-if="workbench.supplyRecoverySettled" class="phase-panel__done">已恢复</span>
+            <span v-if="workbench.supplyRecoverySettled" class="phase-panel__done">
+              已恢复 {{ recoveryDone?.units ?? 0 }} 单位
+            </span>
             <BaseButton
               v-else
               variant="primary"
@@ -135,6 +140,9 @@ const pending = computed<boolean>(() => {
               执行强制恢复
             </BaseButton>
           </div>
+          <p v-if="workbench.supplyRecoverySettled" class="phase-panel__next">
+            消耗 {{ recoveryDone?.spentT ?? 0 }} T；下一步：点右上「进入下一环节」（12.10e）
+          </p>
         </template>
 
         <template v-else>
@@ -192,8 +200,15 @@ const pending = computed<boolean>(() => {
             >
               确认供养与断补
             </BaseButton>
-            <span v-else class="phase-panel__done">供养已结算</span>
+            <span v-if="workbench.supplyFeedingSettled" class="phase-panel__done">
+              已结算 {{ feedingDone?.units ?? 0 }} 单位
+            </span>
           </div>
+
+          <p v-if="workbench.supplyFeedingSettled" class="phase-panel__data num">
+            喂食消耗 {{ feedingDone?.spentT ?? 0 }} T；断补 置 {{ feedingDone?.marked ?? 0 }} / 除
+            {{ feedingDone?.cleared ?? 0 }}
+          </p>
 
           <div v-for="duty in plan.attritionDuty" :key="keyOf(duty.hex)" class="phase-panel__duty">
             <div class="phase-panel__row">
@@ -260,6 +275,10 @@ const pending = computed<boolean>(() => {
               </BaseButton>
             </div>
           </div>
+
+          <p v-if="dutiesSettled" class="phase-panel__next">
+            下一步：点右上「进入下一环节」（12.6）
+          </p>
         </template>
       </template>
 
@@ -366,6 +385,12 @@ const pending = computed<boolean>(() => {
 .phase-panel__done {
   color: var(--color-command-teal);
   font-weight: 700;
+}
+
+.phase-panel__next {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
 }
 
 .phase-panel__feeding {
