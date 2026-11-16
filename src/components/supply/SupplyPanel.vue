@@ -535,10 +535,17 @@ const showsLedger = computed(
       </BaseButton>
     </div>
 
-    <p v-if="!workbench.supplyActive && props.only === null" class="muted">
-      开启后按 12.0 章逐步结算：判定补给状态（12.6）→ 选来源（12.3a 拖取 / 12.3b 投递）→ 定 T
-      数与用途 → 结算；无追溯补给时走断补处置（12.6c 吃图上补给 / 12.6d 接受断补）。
-    </p>
+    <!-- R2（用户 2026-11-16）：12.0 的流程说明收进 `?`，窗内不放规则长段 -->
+    <RuleNote
+      v-if="!workbench.supplyActive && props.only === null"
+      title="补给工具怎么用"
+      rule="12.0 / 12.6 / 12.3a / 12.3b / 12.6c / 12.6d"
+    >
+      <p class="muted">
+        开启后按 12.0 章逐步结算：判定补给状态（12.6）→ 选来源（12.3a 拖取 / 12.3b 投递）→ 定 T
+        数与用途 → 结算；无追溯补给时走断补处置（12.6c 吃图上补给 / 12.6d 接受断补）。
+      </p>
+    </RuleNote>
 
     <template v-else-if="workbench.supplyActive || props.only !== null">
       <!-- ══ 账本与事务段（12.1a/12.11a/13.2c/12.7/12.6a/13.3f/13.3a/12.1–12.2）══

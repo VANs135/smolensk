@@ -606,7 +606,12 @@ onBeforeUnmount(() => {
             修前这条常驻，突围等环节的状态抽屉里也挂着「增援与编制」面板，
             玩家在突围环节读到重建/整编的说明与入口——环节与 UI 对不上。
           -->
-          <template v-if="workbench.phase === 'reinforcement'">
+          <!--
+            R1（用户 2026-11-16）：**同一本台账只留一个入口**。
+            增援会话（MapDock 全量实例）开着时，抽屉里的 `only="info"` 让位 —— 不删挂载，
+            会话关掉后抽屉仍是完整入口（两边各删一半＝都看不全）。
+          -->
+          <template v-if="workbench.phase === 'reinforcement' && session?.kind !== 'reinforce'">
             <ReinforcementPanel only="info" />
           </template>
           <!--
