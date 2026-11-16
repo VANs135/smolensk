@@ -71,9 +71,10 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).not.toMatch(/airPlacement/)
   })
 
-  it('其余面板：容器(2)/专规(5)/补给(12) 的数值与格号已走 UiField', () => {
+  it('其余面板：专规(5)/补给(9) 的数值与格号已走 UiField', () => {
     const cases: Array<[string, number]> = [
-      ['src/components/containers/ContainersPanel.vue', 2],
+      // 批 A：收纳盒标记格与死亡堆返场改「点地图选格」⇒ ContainersPanel 已无手输格号
+      // （不再引入 UiField，见下一条守卫）。
       // 用户 2026-11-12：Shells 入口迁至炮击面板②（21.10 付款接线）后，
       // 专规面板的 Shells 表单（投递成本 / 追溯勾选）移除 ⇒ UiField 由 8 合法降为 7。
       // 用户 2026-11-13（F5）：Forage 入口迁到补给阶段面板，旧的手填 HQ 格 / 投递距离两枚也删掉
@@ -90,6 +91,14 @@ describe('条 24：正式/验证模式门控', () => {
       const uses = src.match(/<UiField\b/g)?.length ?? 0
       expect(uses, `${file} 的 UiField 用量不足（${uses} < ${min}）`).toBeGreaterThanOrEqual(min)
     }
+  })
+
+  it('批 A：ContainersPanel 标记格与死亡堆返场只走地图 ⇒ 不再有 UiField / 手输格号', () => {
+    const src = read('src/components/containers/ContainersPanel.vue')
+    expect(src).not.toMatch(/import UiField from/)
+    expect(src).not.toMatch(/v-model="workbench\.formationMarkerHexText"/)
+    expect(src).toContain('beginFormationMarkerHexPickNow')
+    expect(src).toContain('beginDeadPileReturnHexPickNow')
   })
 
   it('条 24：数字型默认步进；销毁量按 12.11a 固定为全部（不再有只读输入）；拆分规模保留普通输入', () => {
