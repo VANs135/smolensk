@@ -178,16 +178,16 @@ describe('左键堆叠窗：选中集只有 movePick 一份', () => {
     expect(popover).toContain('movePickIds.value.includes(id)')
   })
 
-  it('★ 堆叠窗极简：只有算子与勾选，开拔单入口在移动会话（2026-11-11 收口）', () => {
+  it('★ 堆叠窗极简：只有算子与勾选，开拔单入口在移动会话（2026-11-16 M1 收口）', () => {
     const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
     /*
-     * 用户 2026-11-11「同一功能单入口」：堆叠窗只负责勾选，
-     * 「开始移动」只留在移动会话框（`MovePanel` 的 move:pick 门）里。
+     * 用户 2026-11-16（批 M1）：「开始移动」确认步已删 —— 勾选后地图直接铺高亮，
+     * 点高亮格即开拔。堆叠窗仍只负责勾选，不开拔。
      */
     expect(popover).not.toContain('workbench.confirmMovePick()')
-    expect(readFileSync('src/components/move/MovePanel.vue', 'utf8')).toContain(
-      'workbench.confirmMovePick()',
-    )
+    const panel = readFileSync('src/components/move/MovePanel.vue', 'utf8')
+    expect(panel).not.toContain('workbench.confirmMovePick()')
+    expect(panel).toContain('点地图高亮格开拔')
     // 旧的"发起战斗"只显示攻方数量的信息块（无按钮）已删
     expect(popover).not.toContain('<h4 class="block__title">发起战斗</h4>')
     // 选中集默认全选：取子格 chip 选中态读 movePick.ids；其它格读地图共用选中集（批 F）

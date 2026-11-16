@@ -521,6 +521,24 @@ onBeforeUnmount(() => {
                 </BaseButton>
               </div>
             </div>
+            <!-- M2：增援铁路抵达点格即落子，原位只留一步撤回 -->
+            <div
+              v-if="workbench.arrivalRailUndo !== null"
+              class="gt__rail-confirm"
+              role="status"
+              aria-label="铁路抵达撤回"
+            >
+              <p class="gt__rail-confirm-route">{{ workbench.arrivalRailUndo.label }}</p>
+              <p class="gt__rail-confirm-cost num">
+                耗 {{ workbench.arrivalRailUndo.cost }} 点 · 本回合余
+                {{ workbench.railCapRemaining[workbench.arrivalRailUndo.side] }} 点
+              </p>
+              <div class="gt__rail-confirm-actions">
+                <BaseButton variant="secondary" size="sm" @click="workbench.undoArrivalRailNow()">
+                  撤回
+                </BaseButton>
+              </div>
+            </div>
             <!-- 4.8a：环节/阶段末超堆叠（有义务才挂载；没有「忽略」旁路） -->
             <OverstackPanel v-if="setup.finished" />
             <SupplyPhasePanel

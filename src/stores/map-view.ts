@@ -705,7 +705,8 @@ export const useMapViewStore = defineStore('mapView', () => {
 
   /** 当前覆盖层（地图要画的一切；视图直接把它交给 `MapCanvas`） */
   const overlay = computed<MovementOverlay>(() => {
-    const movingIds = workbench.moveInteraction?.unitIds ?? []
+    // M1：还没开拔时，取子清单本身就是"将要移动的这批"（高亮与起点照它画）
+    const movingIds = workbench.moveInteraction?.unitIds ?? workbench.movePick?.ids ?? []
     return {
       tokens: visibleTokens.value,
       /*
@@ -724,7 +725,7 @@ export const useMapViewStore = defineStore('mapView', () => {
         inEnemyZoc: node.inEnemyZoc,
       })),
       path: workbench.stepPreview?.path ?? [],
-      startHex: workbench.moveInteraction?.start ?? null,
+      startHex: workbench.moveInteraction?.start ?? workbench.movePick?.hex ?? null,
       selectedIds: movingIds,
       // B3：就地展开的格与页码（渲染层据此逐枚摊开；null = 未展开）
       expandedStack: expandedStack.value,

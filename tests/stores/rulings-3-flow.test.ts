@@ -166,7 +166,7 @@ function seekRailArrival(store: Workbench): { index: number; hex: HexRef } | nul
 }
 
 describe('裁定 3：增援放置的铁路运输按钮复用同一流程', () => {
-  it('铁路入场格：按钮可用，点目的地待确认，确认后落子并扣当回合运力', () => {
+  it('铁路入场格：点卸货格直接落子并扣运力；撤回一步退点', () => {
     const store = useWorkbenchStore()
     const hit = seekRailArrival(store)
     expect(hit, '真实到达表里应存在含铁路入场格的轴方增援').not.toBeNull()
@@ -188,19 +188,22 @@ describe('裁定 3：增援放置的铁路运输按钮复用同一流程', () =>
     const before = store.railCapRemaining[store.activeSide]
     const target = view === null || view.candidates === 'any' ? null : view.candidates[0]!
     expect(target).not.toBeNull()
+    // M1/M2：点卸货格＝同一击落子（不再有确认窗）
     expect(store.pickHexFor(target!)).toBe(true)
 
-    // 确认窗：尚未落子、尚未扣点
-    expect(store.pendingRailTransport).toMatchObject({ kind: 'arrival', to: target })
-    expect(store.railCapRemaining[store.activeSide]).toBe(before)
-    expect(store.units.some((unit) => sameHex(unit.hex, target!))).toBe(false)
-
-    expect(store.confirmRailTransportNow()).toBe(true)
+    expect(store.pendingRailTransport).toBeNull()
     expect(store.railCapRemaining[store.activeSide]).toBeLessThan(before)
     const landed = store.units.filter((unit) => sameHex(unit.hex, target!))
     expect(landed.length).toBeGreaterThan(0)
     // 落点是目标格，不是入场格
     expect(sameHex(landed[0]!.hex, hex)).toBe(false)
+
+    // 一步撤回：算子回手牌、运力退回
+    expect(store.arrivalRailUndo).toMatchObject({ index, side: store.activeSide })
+    expect(store.undoArrivalRailNow()).toBe(true)
+    expect(store.arrivalRailUndo).toBeNull()
+    expect(store.railCapRemaining[store.activeSide]).toBe(before)
+    expect(store.units.some((unit) => sameHex(unit.hex, target!))).toBe(false)
   })
 
   it('非铁路入场格（K=1.26 / I=1.12）：按钮不可用（不可用项不出现）', () => {

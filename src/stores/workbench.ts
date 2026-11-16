@@ -4597,22 +4597,31 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *
    * 通用流程：合法位置点「铁路运输」→ 有运力则高亮可达目的地 → 点目的地**只进本状态** →
    * 「确认」才落盘扣点，「撤回」清态且不动运力。移动阶段与增援铁路运输共用本状态。
+   *
+   * M2（用户 2026-11-16）：**增援铁路抵达**那一支不再进本状态——点卸货格即落子，
+   * 原位只留一条「撤回」（`arrivalRailUndo`），撤回时退回算子与本笔运力。
    */
   interface PendingRailTransport {
-    kind: 'unit' | 'sp' | 'transportPoint' | 'arrival'
+    kind: 'unit' | 'sp' | 'transportPoint'
     side: Side
     to: HexRef
     cost: number
     label: string
     rule: string
-    /** `kind === 'arrival'` 时对应的到达条目下标 */
-    arrivalIndex?: number
   }
   const pendingRailTransport = ref<PendingRailTransport | null>(null)
   /** 移动阶段铁路运货的**试算**结果（点目的地时由 `railMoveNow(kind, true)` 填入） */
   const railMovePreview = ref<{ cost: number; detail: string } | null>(null)
   /** 13.6b：本回合经铁路抵达的到达条目 → 已扣点数（手牌撤回时按此退回） */
   const arrivalRailSpent = ref<Record<number, number>>({})
+  /**
+   * M2：刚完成的**增援铁路抵达**（落子即完成，只保留"一步撤回"）
+   *
+   * 撤回走 `withdrawArrivalNow(index)`：算子回手牌、本笔运力退回（13.6b / 裁定 3）。
+   */
+  const arrivalRailUndo = ref<{ index: number; label: string; cost: number; side: Side } | null>(
+    null,
+  )
 
   /* ────────── 13.2f：运输点数装载 / 卸载 SP ────────── */
 
@@ -6305,13 +6314,35 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const moveRuntime = computed<MoveUnitRuntime[]>(() => units.value.map(toMoveRuntime))
   /**
+   * M1（用户 2026-11-16）：取子清单的**预演交互**（还没开拔时的可到达范围）
+   *
+   * 只用于算高亮与预览：`{unitIds, start, steps: [], finished: false}` 喂给同一个
+   * `reachableForMove`，不写盘面、不改 `movePick`。真开拔仍走 `confirmMovePick`。
+   */
+  const movePickPreviewInteraction = computed<MoveInteractionState | null>(() => {
+    if (moveInteraction.value !== null) return null
+    const pick = movePick.value
+    if (pick === null) return null
+    const pool = new Set(movePickPoolAt(pick.hex).map((unit) => unit.instanceId))
+    const ids = pick.ids.filter((id) => pool.has(id))
+    if (ids.length === 0) return null
+    return {
+      unitIds: ids,
+      start: { col: pick.hex.col, row: pick.hex.row },
+      steps: [],
+      finished: false,
+    }
+  })
+  /**
    * C5：本次移动的可到达范围（堆叠取并集；6.1/6.1b/6.1f）
    *
    * 结论全部来自引擎 `reachableForMove`（底层是 `computeReachableHexes`，与逐格 `evaluateStep`
    * 同一套判据）；F 战斗段没有移动环节（2.2），故此处不会存在「已经开始移动」的状态。
+   *
+   * M1：还没开拔时用取子清单的**预演交互**算同样的范围 ⇒ 勾选后地图上就有可落点高亮。
    */
   const groupReachable = computed<GroupReachable>(() => {
-    const interaction = moveInteraction.value
+    const interaction = moveInteraction.value ?? movePickPreviewInteraction.value
     if (interaction === null) return { units: [], hexes: [] }
     // 2.2：回合准备环节没有行动段 ⇒ 不给出任何可走格（否则界面会"看起来能走"）
     if (segmentLocked.value) return { units: [], hexes: [] }
@@ -6378,7 +6409,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C5：悬停格的单步预览（路径与消耗预览；不在范围内则为 null） */
   const stepPreview = computed<StepPreview | null>(() => {
-    const interaction = moveInteraction.value
+    const interaction = moveInteraction.value ?? movePickPreviewInteraction.value
     const hover = hoverHex.value
     if (interaction === null || hover === null) return null
     const node = reachableNodeAt(groupReachable.value.hexes, hover)
@@ -6411,7 +6442,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function hoverPreviewAt(hex: HexRef | null): string | null {
     if (hex === null) return null
-    const interaction = moveInteraction.value
+    const interaction = moveInteraction.value ?? movePickPreviewInteraction.value
     if (interaction === null) return null
     const node = reachableNodeAt(groupReachable.value.hexes, hex)
     if (node === null) return null
@@ -11214,6 +11245,31 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
       tryMoveTo(hex)
       return
+    }
+
+    /*
+     * M1（用户 2026-11-16）：**取子清单存在 ⇒ 点高亮格＝同一击开拔并落子**。
+     * 不再要求先按「开始移动」：开拔由 `confirmMovePick` 建（拒绝原因仍由它给），
+     * 随后 `tryMoveTo` 走同一条落子链 ⇒ 撤销（U/Backspace）与点击路径完全一致。
+     */
+    const pick = movePick.value
+    if (pick !== null && (pick.hex.col !== hex.col || pick.hex.row !== hex.row)) {
+      const occupied = friendlyUnitsAt(hex).length > 0
+      // 点另一支己方堆叠＝换选（与摊开/查看同一口径）；开拔只认没有己方堆叠的落点
+      if (!occupied) {
+        const node = reachableNodeAt(groupReachable.value.hexes, hex)
+        if (node !== null) {
+          if (!confirmMovePick()) return
+          tryMoveTo(hex)
+          return
+        }
+        moveBlocked.value = {
+          rule: '6.1',
+          reason: '该格不在所选单位的可到达范围内（6.1）：点地图高亮格开拔',
+        }
+        pushLog('warning', moveBlocked.value.reason, '6.1')
+        return
+      }
     }
 
     // C5：未开始移动 → 选单位或堆叠（当前方优先；6.1 可单独或以堆叠移动）
@@ -22040,6 +22096,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     arrivalPlacedRaw.value = {}
     arrivalPlacedUnitsRaw.value = {}
     arrivalHexOverrides.value = {}
+    // M2：换了到达计划键 ⇒ 上一笔"铁路抵达撤回"不再对应任何条目
+    arrivalRailUndo.value = null
   }
   /** 当日到达是否**已全部投放**（sp / unclassified 走卡面手工记账，不要求投放） */
   const arrivalAllPlaced = computed(() => {
@@ -24863,9 +24921,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 13.6b / 裁定 3：进入增援铁路运输的落点选择
    *
    * 候选＝13.3c 可卸货格 ∩ 13.3e-2 路径可达 ∩ 成本 ≤ 本回合剩余运力；
-   * 点格只进待确认，确认时才落子扣点。
+   * M2：点格**直接落子**（不再弹确认），只留一条「撤回」。
    */
   function beginArrivalRailPickNow(index: number): boolean {
+    arrivalRailUndo.value = null
     const plan = railArrivalPlan(index)
     if (plan === null) {
       pushLog('warning', '该增援不能走铁路运输：入场格不含铁路或不是单枚单位（13.6b）', '13.6b')
@@ -24906,34 +24965,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       rule: '13.6b',
       candidates,
       apply: (hex) => {
-        pendingRailTransport.value = {
-          kind: 'arrival',
-          side: plan.side,
-          to: { ...hex },
-          cost: costs.get(hexLabel(hex)) ?? 0,
-          label: `${hexLabel(plan.entry)} → ${hexLabel(hex)}`,
-          rule: '13.6b',
-          arrivalIndex: index,
-        }
+        const label = `${hexLabel(plan.entry)} → ${hexLabel(hex)}`
+        const cost = costs.get(hexLabel(hex)) ?? 0
+        if (!confirmArrivalRailNow({ to: hex, arrivalIndex: index })) return false
+        arrivalRailUndo.value = { index, label, cost, side: plan.side }
         return true
       },
     })
     return true
   }
 
-  /** 13.6b：确认增援铁路运输（此刻才落子、扣运力） */
-  function confirmArrivalRailNow(pending: PendingRailTransport): boolean {
-    const index = pending.arrivalIndex
-    if (index === undefined) return false
+  /** 13.6b：确认增援铁路运输（此刻才落子、扣运力；M2 起由点格直接调用） */
+  function confirmArrivalRailNow(input: { to: HexRef; arrivalIndex: number }): boolean {
+    const index = input.arrivalIndex
     const plan = railArrivalPlan(index)
     if (plan === null) return false
-    const path = railPathBetween(plan.entry, pending.to, plan.side)
+    const path = railPathBetween(plan.entry, input.to, plan.side)
     if (path === null) return false
     const outcome = validateRailMovement({
       phase: phase.value as GamePhase,
       cargo: plan.cargo,
       from: plan.entry,
-      to: pending.to,
+      to: input.to,
       path,
       facts: railMoveFacts.value,
       arrivalRail: true,
@@ -24958,14 +25011,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const created = units.value.filter((unit) => !before.has(unit.instanceId))
     const unit = created[0]
     if (unit === undefined) return false
-    unit.hex = { ...pending.to }
+    unit.hex = { ...input.to }
     // 13.3e-3 / 4.7d：卸货后不得再移动；13.3e-1 要求铁路移动时处于移动模式
     unit.mode = { mode: 'move', orientation: 'move', dg: false, exploit: false }
     unit.movementEnded = true
     noteUnitLeftOwnBridgeHex(unit)
     spendRailCapacity(plan.side, outcome.data.cost)
     arrivalRailSpent.value[index] = outcome.data.cost
-    pendingRailTransport.value = null
     lastRailMove.value = {
       rule: outcome.data.rule,
       detail: outcome.data.detail,
@@ -24974,7 +25026,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     pushLog(
       'success',
-      `${unit.name} 经铁路抵达：${hexLabel(plan.entry)} → ${hexLabel(pending.to)}｜` +
+      `${unit.name} 经铁路抵达：${hexLabel(plan.entry)} → ${hexLabel(input.to)}｜` +
         `本回合已用容量 ${String(railCapUsedBy(plan.side))}/${String(railCapToday.value[plan.side])}`,
       '13.6b',
     )
@@ -24985,18 +25037,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         index,
         unitId: unit.instanceId,
         from: { ...plan.entry },
-        to: { ...pending.to },
+        to: { ...input.to },
         cost: outcome.data.cost,
       },
     })
     return true
   }
 
-  /** 裁定 3：确认待定的铁路运输（移动阶段 / 增援共用） */
+  /** 裁定 3：确认待定的铁路运输（移动阶段；增援抵达已改为点格即落子，见 M2） */
   function confirmRailTransportNow(): boolean {
     const pending = pendingRailTransport.value
     if (pending === null) return false
-    if (pending.kind === 'arrival') return confirmArrivalRailNow(pending)
     railMoveInputs.value = { ...railMoveInputs.value, toHexText: hexTextOf(pending.to) }
     const ok = railMoveNow(pending.kind)
     if (ok) {
@@ -25012,6 +25063,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     pendingRailTransport.value = null
     railMovePreview.value = null
     pushLog('info', '已撤回铁路运输：单位与运力都未变动（裁定 3）', '13.3e')
+    return true
+  }
+
+  /**
+   * M2：撤回**刚完成的增援铁路抵达**（一步撤回）
+   *
+   * 走既有的 `withdrawArrivalNow`：算子回手牌、本笔运力退回、到达账本还原。
+   * 本函数只负责"这条撤回入口还挂着哪一笔"，不另立规则。
+   */
+  function undoArrivalRailNow(): boolean {
+    const undo = arrivalRailUndo.value
+    if (undo === null) return false
+    arrivalRailUndo.value = null
+    if (!withdrawArrivalNow(undo.index)) return false
+    pushLog('info', `已撤回铁路抵达：${undo.label}（运力已退回）`, '13.6b')
     return true
   }
 
@@ -25064,6 +25130,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       delete nextSpent[index]
       arrivalRailSpent.value = nextSpent
     }
+    // M2：这条撤回已把刚落下的那笔退回 ⇒ 撤回条一并收起（不指向已消失的记录）
+    if (arrivalRailUndo.value?.index === index) arrivalRailUndo.value = null
     pushLog('info', `已把 ${String(ids.length)} 枚到达算子收回手牌（可重放）`, '13.6')
     return true
   }
@@ -28258,6 +28326,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     railMoveInputs.value = { toHexText: '', spAmount: 1, fromDumpId: null }
     railMoveError.value = null
     lastRailMove.value = null
+    arrivalRailUndo.value = null
     // W6 B19：专规机制的账本一并回到初设（剧本初设值随 `scenarioId` 重取）
     supplyCacheHoldings.value = initialSupplyCacheHoldings(scenarioSetup.value?.supplyCache)
     constructionMarkers.value = scenarioSetup.value?.constructionMarkers ?? 0
@@ -30026,6 +30095,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     pendingRailTransport,
     confirmRailTransportNow,
     cancelRailTransportNow,
+    arrivalRailUndo,
+    undoArrivalRailNow,
     // 13.6b：增援铁路运输
     arrivalRailEligible,
     beginArrivalRailPickNow,

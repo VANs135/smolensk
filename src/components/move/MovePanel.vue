@@ -213,21 +213,11 @@ function hoverUnit(id: string | null): void {
       </div>
 
       <!--
-        ① 统一操作条（条 9 / 条 10，M1）：开始移动
-        ★ 改模式（5.4a）只在**右键菜单 →「模式改变」**里给，本面板不再重复摆一组模式按钮；
-          6.1 开拔在 C/E/G 的移动环节都成立 ⇒ 由 `canMove` 管。
+        M1（用户 2026-11-16）：**删掉「开始移动」这一步** —— 勾选后地图直接铺可落点高亮，
+        点高亮格＝同一击开拔并落子（撤销仍走 U/Backspace 的同一条链）。
+        改模式（5.4a）只在**右键菜单 →「模式改变」**里给；6.1 开拔由 `canMove` 管。
       -->
-      <div class="row">
-        <BaseButton
-          v-if="workbench.movePick !== null"
-          variant="primary"
-          size="sm"
-          @click="workbench.confirmMovePick()"
-        >
-          开始移动
-        </BaseButton>
-      </div>
-      <p class="num">已选 {{ workbench.movePick?.ids.length ?? 0 }} 枚</p>
+      <p class="num">已选 {{ workbench.movePick?.ids.length ?? 0 }} 枚 · 点地图高亮格开拔</p>
     </SessionStep>
 
     <!--
