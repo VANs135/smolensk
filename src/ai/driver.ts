@@ -990,6 +990,8 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
       adjacentDefenderHexes,
       attackerDumpIds,
       defenderDumpIds,
+      attackerSupplyConfirmed: w.combatInputs.supplyConfirmed.attacker,
+      defenderSupplyConfirmed: w.combatInputs.supplyConfirmed.defender,
       requirement:
         w.combatRequirement === null
           ? null
@@ -1394,7 +1396,22 @@ function execute(
       return ok
     }
     case 'combatSupply': {
-      w.pickCombatSupplyDump('attacker', action.attackerDumpId)
+      /*
+       * 12.4 / 9.5b：AI 只落 `action.side` 这一侧；两侧都归 AI（自对打）才由 `advance` 推进。
+       * 旧实现一次确认两侧 ⇒ PVE 里 AI 攻方连带代答人类守方的付款（自动扣 / 自动拒付）。
+       */
+      if (action.side === 'attacker') {
+        if (action.attackerDumpId !== null)
+          w.pickCombatSupplyDump('attacker', action.attackerDumpId)
+        return w.confirmCombatSupplySide('attacker')
+      }
+      if (action.side === 'defender') {
+        if (action.defenderDumpId !== null)
+          w.pickCombatSupplyDump('defender', action.defenderDumpId)
+        else w.combatInputs = { ...w.combatInputs, defenderProvides: false }
+        return w.confirmCombatSupplySide('defender')
+      }
+      if (action.attackerDumpId !== null) w.pickCombatSupplyDump('attacker', action.attackerDumpId)
       if (action.defenderDumpId !== null) w.pickCombatSupplyDump('defender', action.defenderDumpId)
       else w.combatInputs = { ...w.combatInputs, defenderProvides: false }
       const ok = w.confirmCombatSupply()

@@ -112,6 +112,8 @@ function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
       adjacentDefenderHexes: [],
       attackerDumpIds: [],
       defenderDumpIds: [],
+      attackerSupplyConfirmed: false,
+      defenderSupplyConfirmed: false,
       requirement: null,
       retreatPlans: [],
       triedDefenderHexes: [],

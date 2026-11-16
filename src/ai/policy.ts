@@ -88,6 +88,9 @@ export interface AiCombatSnapshot {
   adjacentDefenderHexes: readonly AiHex[]
   attackerDumpIds: readonly string[]
   defenderDumpIds: readonly string[]
+  /** 9.5/12.4：两侧已确认的付款（AI 只答自己控制的一方） */
+  attackerSupplyConfirmed: boolean
+  defenderSupplyConfirmed: boolean
   requirement: { side: 'attacker' | 'defender'; losses: number; options: number } | null
   retreatPlans: readonly {
     unitId: string
@@ -341,7 +344,16 @@ export type AiAction =
   | { kind: 'barrageCancel' }
   | { kind: 'combatSelect'; hex: AiHex }
   | { kind: 'combatBegin' }
-  | { kind: 'combatSupply'; attackerDumpId: string; defenderDumpId: string | null }
+  | {
+      kind: 'combatSupply'
+      /**
+       * 该动作由谁作答：`attacker` / `defender` ＝只落自己一侧；
+       * `advance` ＝双方都归 AI，落好两侧后推进（9.5）。
+       */
+      side: 'attacker' | 'defender' | 'advance'
+      attackerDumpId: string | null
+      defenderDumpId: string | null
+    }
   | { kind: 'combatDeclareAr'; side: 'attacker' | 'defender' }
   | { kind: 'combatAutoResolve' }
   | { kind: 'combatLosses' }
@@ -402,7 +414,7 @@ export function actionKeyOf(action: AiAction): string {
     case 'barrageSupply':
       return `barrageSupply:${action.dumpId ?? 'none'}`
     case 'combatSupply':
-      return `combatSupply:${action.attackerDumpId}:${action.defenderDumpId ?? 'none'}`
+      return `combatSupply:${action.side}:${action.attackerDumpId ?? 'none'}:${action.defenderDumpId ?? 'none'}`
     case 'setupShiftPlace':
       return `setupShiftPlace:${action.formationId}`
     case 'refitBase':
@@ -645,14 +657,49 @@ function decideCombatSettlement(snapshot: AiSnapshot): AiAction | null {
   const opponent = snapshot.defenderSide
   switch (state.step) {
     case 'combatSupply': {
-      if (!snapshot.control.attacker) return waitForSide(attacker, '选择战斗补给（9.5）')
-      const attackerDumpId = snapshot.combat.attackerDumpIds[0]
-      if (attackerDumpId === undefined) return { kind: 'combatSkip' }
-      return {
-        kind: 'combatSupply',
-        attackerDumpId,
-        defenderDumpId: snapshot.combat.defenderDumpIds[0] ?? null,
+      /*
+       * 12.4 / 9.5b：付不付、从哪付由**该方自己**选（守方可拒付、改为半战斗值防御）。
+       * 故 AI 只能答 `control` 归它的一侧；旧实现只看 `control.attacker` 就一票确认两侧，
+       * PVE 里 AI 攻方会把人类守方的付款一并代答（自动扣/自动拒付），玩家再没有落点入口。
+       */
+      const attackerAi = snapshot.control.attacker
+      const defenderAi = snapshot.control.defender
+      // 双方都归 AI（自对打）：一次落两侧并推进，保持旧行为与步数
+      if (attackerAi && defenderAi) {
+        const attackerDumpId = snapshot.combat.attackerDumpIds[0]
+        if (attackerDumpId === undefined) return { kind: 'combatSkip' }
+        return {
+          kind: 'combatSupply',
+          side: 'advance',
+          attackerDumpId,
+          defenderDumpId: snapshot.combat.defenderDumpIds[0] ?? null,
+        }
       }
+      // 攻方还没确认：AI 攻方先落攻方；攻方归玩家则停手
+      if (!snapshot.combat.attackerSupplyConfirmed) {
+        if (!attackerAi) return waitForSide(attacker, '选择战斗补给（9.5）')
+        const attackerDumpId = snapshot.combat.attackerDumpIds[0]
+        if (attackerDumpId === undefined) return { kind: 'combatSkip' }
+        return {
+          kind: 'combatSupply',
+          side: 'attacker',
+          attackerDumpId,
+          defenderDumpId: null,
+        }
+      }
+      // 攻方已确认 ⇒ 守方归 AI 才落；归玩家则等玩家自己确认
+      if (defenderAi && !snapshot.combat.defenderSupplyConfirmed) {
+        return {
+          kind: 'combatSupply',
+          side: 'defender',
+          attackerDumpId: null,
+          defenderDumpId: snapshot.combat.defenderDumpIds[0] ?? null,
+        }
+      }
+      if (!snapshot.combat.defenderSupplyConfirmed)
+        return waitForSide(opponent, '选择战斗补给（9.5）')
+      // 两侧都已确认 ⇒ 「进入行动值」是机械步骤（9.6），AI 可代点（不替任何一方做选择）
+      return { kind: 'combatSupply', side: 'advance', attackerDumpId: null, defenderDumpId: null }
     }
     case 'declareAr':
       if (state.declaredAttackerArUnitId === undefined) {
