@@ -73,6 +73,13 @@ const pickItems = computed<readonly CounterPickerItem[]>(() =>
 )
 /** 条 10（M1）：是否处于"开拔前"状态（有待开拔清单、且尚未真正开始移动） */
 const preBegin = computed(() => workbench.movePick !== null && workbench.moveInteraction === null)
+/**
+ * G1：有选中但一格也走不进去时的原因（12.5a 未加油 / 四周无可进入的格 …）
+ *
+ * 修前这里照写「点地图高亮格开拔」，而地图上没有任何高亮 ⇒ 玩家点了没反应也没解释。
+ * 判据与措辞都在 store（`movePickBlockNote`），本组件只负责显示。
+ */
+const pickBlockNote = computed(() => workbench.movePickBlockNote)
 
 /**
  * ★ 用户 2026-10-25「**每个阶段/环节只能出现该环节可用 UI**」：本面板每一块都问闸门。
@@ -217,7 +224,11 @@ function hoverUnit(id: string | null): void {
         点高亮格＝同一击开拔并落子（撤销仍走 U/Backspace 的同一条链）。
         改模式（5.4a）只在**右键菜单 →「模式改变」**里给；6.1 开拔由 `canMove` 管。
       -->
-      <p class="num">已选 {{ workbench.movePick?.ids.length ?? 0 }} 枚 · 点地图高亮格开拔</p>
+      <p v-if="pickBlockNote !== null" class="muted num">
+        <BaseTag kind="warning">{{ pickBlockNote.rule }}</BaseTag>
+        {{ pickBlockNote.text }}
+      </p>
+      <p v-else class="num">已选 {{ workbench.movePick?.ids.length ?? 0 }} 枚 · 点地图高亮格开拔</p>
     </SessionStep>
 
     <!--

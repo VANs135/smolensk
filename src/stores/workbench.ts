@@ -227,6 +227,10 @@ import {
   describeCost,
   drawableDumpsFor,
   endMoveEarly,
+  // G1（用户 2026-11-17）：点不到格时给**真实判据**（地形 / MA / 未加油），不再只说"不在范围"
+  evaluateStep,
+  evaluateStepFrom,
+  findMoveUnit,
   flipOrientation,
   fuelExpiresOnPhaseChange,
   // 12.5c（用户 2026-09-17）：三种加油法各自的适用范围
@@ -6377,6 +6381,108 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })
   })
 
+  /**
+   * G1（用户 2026-11-17 实走）：**选了单位却零高亮时必须就地说明原因**
+   *
+   * 实走现场：进击段选中无燃料的履带单位，高亮 0 格，面板仍写「已选 1 枚 · 点地图高亮格开拔」，
+   * 顶部提示仍教「点己方算子＝显示可移动范围」——点了没反应且没有解释。
+   * 引擎其实已把逐单位判据放在 `groupReachable.units[].blocked`（12.5a 未加油 / 4.5b 已承诺 /
+   * 6.1b 无 MA …），这里只把 StepFailure 折成人话；判据本身不另写一份。
+   */
+  function moveFailureNote(failure: { reason: string; rule: string; detail?: string }): {
+    rule: string
+    text: string
+  } {
+    const rule = failure.rule
+    switch (failure.reason) {
+      case 'needsFuel':
+        return { rule, text: '未加注燃料（12.5a）：右键该单位 →「加油」付款后再开拔' }
+      case 'mpLocked':
+        return { rule, text: '本阶段已承诺不再耗 MP（4.5b）：本阶段不能再移动它' }
+      case 'immobile':
+        return { rule, text: '该单位没有移动力（6.1b）' }
+      case 'extenderCannotMove':
+        return { rule, text: '延补队面不可移动（12.7）：先翻回运输点数面' }
+      case 'prohibited':
+        return { rule, text: `地形不可进（${rule}）` }
+      case 'notEnoughMp':
+        return { rule, text: `MA 不足（6.1a）：${failure.detail ?? ''}` }
+      case 'enemyOccupied':
+        return { rule, text: '敌方格须用突袭进入（6.3b）' }
+      case 'enemySafeEdge':
+        return { rule, text: '敌方安全边缘格不可进入（专规 1.1b）' }
+      case 'outsidePlayArea':
+      case 'destinationOffMap':
+        return { rule, text: '该格在地图 / 剧本活动区之外（专规 1.4）' }
+      case 'notAdjacent':
+        return { rule, text: '该格与单位不相邻（6.1）' }
+      case 'phaseNotAllowed':
+        return { rule, text: `本阶段不能移动该单位（${rule}）${failure.detail ?? ''}` }
+      default:
+        return { rule, text: `走不进（${rule}）：${failure.reason}` }
+    }
+  }
+
+  /**
+   * G1：待开拔清单「有选中、但一格也走不进去」时的原因（没有就返回 null）
+   *
+   * 两种来源分开说：引擎已给的单位级 `blocked`（12.5a 等）原样用；
+   * 单位本身能动、但 BFS 一个可停格都没产生（被地形/敌军/MP 围死）⇒ 说「四周没有可进入的格」。
+   */
+  const movePickBlockNote = computed<{ rule: string; text: string } | null>(() => {
+    const pick = movePick.value
+    if (pick === null || moveInteraction.value !== null || pick.ids.length === 0) return null
+    if (groupReachable.value.hexes.length > 0) return null
+    const blocked = groupReachable.value.units.find((item) => !item.ok)
+    if (blocked !== undefined && !blocked.ok && blocked.blocked !== undefined)
+      return moveFailureNote(blocked.blocked)
+    return {
+      rule: '6.1a',
+      text: '所选单位四周没有可进入的格（地形 / 过河 / MP 不足，6.1a / 6.2）—— 换选别的算子，或点「进入下一环节」',
+    }
+  })
+
+  /**
+   * G1：点了一个走不进的格 ⇒ 说清是**哪种**走不进（未加油 / 地形 / MA / 敌占 / 出界）
+   *
+   * 判据全部来自引擎：先按单位当前位置问 `evaluateStep`（相邻格拿到的是第一手原因）；
+   * 非相邻格则从「最省 MP 的可落点」再问一次最后一步，尽量把原因落到地形或 MA 上。
+   * 都没有就落回「MA 不足或路线被地形截断」，不再用笼统的"不在可到达范围内"盖住一切。
+   */
+  function moveRejectNoteAt(hex: HexRef): { rule: string; text: string } {
+    const unitId = movePick.value?.ids[0]
+    const view = unitId === undefined ? null : findMoveUnit(moveContext.value, unitId)
+    if (view === null)
+      return {
+        rule: '6.1',
+        text: '该格不在所选单位的可到达范围内（6.1）：点地图高亮格开拔',
+      }
+    const direct = evaluateStep(moveContext.value, view.id, hex)
+    // 单步判定对「远处的格」只会回 notAdjacent（那不是原因，是距离）⇒ 继续做最后一格分析
+    if (!direct.ok && direct.reason !== 'notAdjacent')
+      return {
+        rule: direct.rule,
+        text: `走不进 ${hex.col}.${hex.row}：${moveFailureNote(direct).text}`,
+      }
+    const approach = groupReachable.value.hexes
+      .filter((node) => areAdjacent(node.hex, hex))
+      .sort((a, b) => a.mpSpent - b.mpSpent)[0]
+    if (approach !== undefined) {
+      const last = evaluateStepFrom(moveContext.value, view, approach.hex, hex, {
+        mpSpent: approach.mpSpent,
+      })
+      if (!last.ok)
+        return {
+          rule: last.rule,
+          text: `走不进 ${hex.col}.${hex.row}：${moveFailureNote(last).text}`,
+        }
+    }
+    return {
+      rule: '6.1a',
+      text: `走不到 ${hex.col}.${hex.row}：MA 不足或路线被地形截断（6.1a）：点地图高亮格开拔`,
+    }
+  }
+
   /** C5：参移单位（选中顺序；界面显示与模式/燃料面板用） */
   const moveUnits = computed<ConsoleUnit[]>(() => {
     const interaction = moveInteraction.value
@@ -11296,11 +11402,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           tryMoveTo(hex)
           return
         }
-        moveBlocked.value = {
-          rule: '6.1',
-          reason: '该格不在所选单位的可到达范围内（6.1）：点地图高亮格开拔',
-        }
-        pushLog('warning', moveBlocked.value.reason, '6.1')
+        /*
+         * G1（用户 2026-11-17 实走）：点不到的格要说清**缺什么**——
+         * 未加油 / 地形不可进 / MA 不足 / 敌占 / 出界各一句（判据来自引擎 `evaluateStep`）。
+         */
+        const note = moveRejectNoteAt(hex)
+        moveBlocked.value = { rule: note.rule, reason: note.text }
+        pushLog('warning', moveBlocked.value.reason, note.rule)
         return
       }
     }
@@ -29598,6 +29706,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     moveBudgetRows,
     selectedAvailableMa,
     groupReachable,
+    // G1：零高亮时的原因（面板与地图提示同源，避免两处各写一句话）
+    movePickBlockNote,
     stepPreview,
     hoverNode,
     hoverPreviewAt,

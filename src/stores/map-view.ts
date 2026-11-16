@@ -906,6 +906,11 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (workbench.moveInteraction !== null && workbench.moveInteraction.finished !== true)
       return '移动中：点可到达格逐格走（6.1）；点紫环敌方格＝突袭（8.1a）；Enter 结束移动'
     /*
+     * G1（用户 2026-11-17 实走）：待开拔清单有选中、但一格也走不进去时，
+     * 提示不能再教「点地图高亮格开拔」——原因（12.5a 未加油 / 四周无可进入的格）由 store 给。
+     */
+    if (workbench.movePickBlockNote !== null) return `进不了格：${workbench.movePickBlockNote.text}`
+    /*
      * C 段的轰炸环节：2.2 原文括注 **air & ship only** ⇒ 本环**不能移动**，
      * 通用那句「点己方算子＝可移动范围」在这里是错的（与 H 清理、A 整备同一类缺陷）。
      */
