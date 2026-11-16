@@ -4230,6 +4230,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (sameHex(step.to, currentHex)) return step.to
       break
     }
+    /*
+     * 13.3f-B 的事实是「本阶段**移动进入**过该格」，不是「移动交互还开着」：
+     * 交互被别的单位替换/收起后，仍认本阶段最后一次地面入格（撤销时由 `syncGroundEntries` 回退）。
+     */
+    const ground = lastGroundEntryByUnit.value[instanceId]
+    if (ground !== undefined) {
+      const entered = parseHexPath(ground)[0]
+      if (entered !== undefined && sameHex(entered, currentHex)) return entered
+    }
     const rail = railArrived.value
     if (rail === null || rail.instanceId !== instanceId) return null
     const hex = parseHexPath(rail.hexText)[0]
@@ -4512,6 +4521,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * `convertRailGaugeNow` 的入口依据；换阶段即清空（`resetSegmentTransient`）。
    */
   const railArrived = ref<{ instanceId: string; hexText: string } | null>(null)
+
+  /**
+   * 13.3f-B：**本阶段各单位的最后一次地面入格**（按单位）
+   *
+   * 「移动进入」是本阶段的事实，不随移动交互结束、被替换而消失：`moveInteraction.steps` 只保留
+   * **当前这一组**单位的移动，玩家换去操作别的单位后原单位的历史就没了 —— 实玩里
+   * 「走一格 → 换一格 → 再走下一格」会因此被误拒（端头也就不前移）。
+   * 每笔地面步落盘时写入、撤销/取消时回退、换阶段清空。
+   */
+  const lastGroundEntryByUnit = ref<Record<string, string>>({})
 
   /**
    * 裁定 3：铁路运输的**待确认**落点
@@ -7494,6 +7513,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     railMovedNewTrackThisPhase.value = []
     railMovedUnitIdsThisPhase.value = []
     railArrived.value = null
+    lastGroundEntryByUnit.value = {}
     // 4.8a：换段后上一次的勾选一律作废（盘面可能已变；未处理的义务仍会被台账重新列出）
     overstackPicks.value = {}
     /*
@@ -8448,7 +8468,37 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C5：提交一步（引擎给出 patches 与新的交互状态） */
   function commitStep(to: HexRef, path: readonly HexRef[]): boolean {
-    return groundMovement.commitStep(to, path)
+    const ok = groundMovement.commitStep(to, path)
+    if (ok) {
+      // 13.3f-B：记「本阶段最后一次地面入格」，供移动交互被替换后仍能换轨
+      const steps = moveInteraction.value?.steps ?? []
+      const step = steps[steps.length - 1]
+      if (step !== undefined && step.kind === 'step') {
+        const next = { ...lastGroundEntryByUnit.value }
+        for (const id of step.movedIds) next[id] = hexTextOf(to)
+        lastGroundEntryByUnit.value = next
+      }
+    }
+    return ok
+  }
+
+  /** 13.3f-B：撤销/取消后按移动交互里剩余的步骤回算地面入格账本 */
+  function syncGroundEntries(unitIds: readonly string[]): void {
+    const steps = moveInteraction.value?.steps ?? []
+    const next = { ...lastGroundEntryByUnit.value }
+    for (const id of unitIds) {
+      let last: HexRef | null = null
+      for (let index = steps.length - 1; index >= 0; index -= 1) {
+        const step = steps[index]!
+        if (step.kind === 'step' && step.movedIds.includes(id)) {
+          last = step.to
+          break
+        }
+      }
+      if (last === null) delete next[id]
+      else next[id] = hexTextOf(last)
+    }
+    lastGroundEntryByUnit.value = next
   }
 
   /**
@@ -8557,12 +8607,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** C5：撤销上一步（还原该步提交前的运行态快照） */
   function undoLastStep(): void {
+    const unitIds = moveInteraction.value?.unitIds ?? []
     groundMovement.undoLastStep()
+    syncGroundEntries(unitIds)
   }
 
   /** C5：取消整次移动（回到开始移动之前） */
   function cancelWholeMove(): void {
+    const unitIds = moveInteraction.value?.unitIds ?? []
     groundMovement.cancelWholeMove()
+    syncGroundEntries(unitIds)
   }
 
   /**
@@ -27934,6 +27988,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     gaugeConversionsThisPhase.value = []
     convertedHexesThisPhase.value = []
     railMovedNewTrackThisPhase.value = []
+    lastGroundEntryByUnit.value = {}
     activeSide.value = 'axis'
     phase.value = 'movement'
     const firstTurn = TURN_TRACK[0]?.turn ?? 1
