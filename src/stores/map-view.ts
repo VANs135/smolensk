@@ -1349,12 +1349,21 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (interaction !== null) {
       if (!workbench.activeMoveUnits.some((unit) => unit.instanceId === token.id)) return false
       workbench.finishMove()
+      expandedStack.value = null
       return true
     }
     if (token.side !== workbench.activeSide) return false
-    if (openUnitActionAt(hex, token.id)) return true
+    if (openUnitActionAt(hex, token.id)) {
+      expandedStack.value = null
+      return true
+    }
     workbench.clickHex(hex)
-    if (workbench.movePick !== null) workbench.setMovePickIds([token.id])
+    if (workbench.movePick !== null) {
+      workbench.setMovePickIds([token.id])
+      // B3：双击已取走这一枚 ⇒ 扇面收起，第二击在展开态里改过的选中集不作数
+      stackSelection.value = [token.id]
+      expandedStack.value = null
+    }
     return true
   }
 
