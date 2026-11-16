@@ -101,6 +101,26 @@ watch([() => setup.scenarioId, () => setup.omittablePlacements], () => {
 /** 是否**全部落位完毕**（落满 ⇒ 队列收起列表、就地给「完成初设」） */
 const allPlaced = computed(() => setup.initialPlacementsComplete)
 
+/**
+ * M3（用户 2026-11-16）：初设收束的**唯一主入口**
+ *
+ * 抽取编队 / 开始游戏 / 完成初设 原本各挂一枚按钮，实际互斥（确认后才抽签、
+ * 抽签未落齐才补开局、全落齐才完成初设）。这里按同一组既有投影压成一枚，
+ * 模板只留一个 `BaseButton` —— 不新造判定，也不改按钮的触发函数。
+ */
+const setupPrimary = computed<{ label: string; run: () => void } | null>(() => {
+  if (setup.setupDrawEntryVisible) {
+    return { label: '抽取编队', run: () => setup.drawSetupEffectsNow() }
+  }
+  if (setup.setupStartEntryVisible) {
+    return { label: '开始游戏', run: () => setup.startGameNow() }
+  }
+  if (allPlaced.value && cursorSide.value === null && !setup.setupConfirmed) {
+    return { label: '完成初设', run: () => setup.startGameNow() }
+  }
+  return null
+})
+
 function toggleStack(key: DecisionStack['key']): void {
   openKey.value = openKey.value === key ? null : key
 }
@@ -229,23 +249,13 @@ function sideMark(side: 'axis' | 'soviet'): string {
     </header>
 
     <!--
-      ch10 / ch11：两段式第二段 —— 初设**确认之后**的执行入口（规格 §4.1/§4.2）。
-      可见条件沿用 `setup.setupDrawEntryVisible`（确认后且本剧本 effects 未执行）；
-      点一次即抽取 + 落位 + 落账 + 开局，之后永久收起。全程序只有这一处可点。
+      M3（用户 2026-11-16）：初设收束**单入口** —— 抽取编队 / 开始游戏 / 完成初设
+      由 `setupPrimary` 按状态合成一枚按钮（三者本就互斥）；条件与触发函数不变。
     -->
-    <div v-if="setup.setupDrawEntryVisible" class="queue__row-actions">
-      <BaseButton variant="primary" size="sm" @click="setup.drawSetupEffectsNow()">
-        抽取编队
+    <div v-if="setupPrimary !== null" class="queue__row-actions">
+      <BaseButton variant="primary" size="sm" @click="setupPrimary.run()">
+        {{ setupPrimary.label }}
       </BaseButton>
-    </div>
-
-    <!--
-      裁定 1：抽签成功但仍有西移师算不出落点 ⇒ 不整笔回滚、先不给开局；
-      玩家在「地面单位与基地」里把西移项落齐后，这里露出唯一开局按钮。
-      （正常路径抽签即开局、session 非空 ⇒ 本按钮不出现。）
-    -->
-    <div v-if="setup.setupStartEntryVisible" class="queue__row-actions">
-      <BaseButton variant="primary" size="sm" @click="setup.startGameNow()"> 开始游戏 </BaseButton>
     </div>
 
     <!--
@@ -276,13 +286,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
       </BaseButton>
     </div>
 
-    <!--
-      B38（口径 #5「结束后不自动关」）：**全部落位完毕** ⇒ 队列收起列表、就地给「完成初设」，
-      按下即开局（`startGameNow`）；初设收束后本框随 `!setup.finished` 的条件自动消失。
-    -->
-    <div v-if="allPlaced && cursorSide === null && !setup.setupConfirmed" class="queue__done">
-      <BaseButton variant="primary" size="sm" @click="setup.startGameNow()">完成初设</BaseButton>
-    </div>
+    <!-- M3：原来的「完成初设」已并入上面的唯一主入口（条件同 `allPlaced && 无游标 && 未确认`） -->
 
     <!-- H5（用户 2026-11-16）：落位可**一步撤回**（算子/飞机/补给账一起还原） -->
     <div v-if="setup.lastPlacement !== null" class="queue__row-actions">

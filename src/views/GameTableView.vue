@@ -608,34 +608,22 @@ onBeforeUnmount(() => {
         >
           <ActionFeedbackStrip />
           <!--
-            #6（用户 2026-11-10）：**只在本阶段挂本阶段的仪表**。
-            修前这条常驻，突围等环节的状态抽屉里也挂着「增援与编制」面板，
-            玩家在突围环节读到重建/整编的说明与入口——环节与 UI 对不上。
-          -->
-          <!--
-            R1（用户 2026-11-16）：**同一本台账只留一个入口**。
-            增援会话（MapDock 全量实例）开着时，抽屉里的 `only="info"` 让位 —— 不删挂载，
-            会话关掉后抽屉仍是完整入口（两边各删一半＝都看不全）。
+            #6 + R1 + R3（用户 2026-11-16）：**状态抽屉按段只留一段**。
+            增援 / 补给 / 容器三块不再同时挂：只显示当前段那一块（另两块让位，不是删除）；
+            增援会话开着时抽屉的 `only="info"` 也让位给地图会话，会话关掉后抽屉仍完整。
           -->
           <template v-if="workbench.phase === 'reinforcement' && session?.kind !== 'reinforce'">
             <ReinforcementPanel only="info" />
           </template>
-          <!--
-            缺陷 A（2026-11-14 实点）：补给段的「受补给单位」入口在 SupplyPanel 的账本段
-            （B15e：账本挂侧栏、逐单位检查链挂地图会话）。对局台此前只挂了会话里的
-            `only="check"`，账本段没有实例 ⇒ 「逐单位检查 → 来源同屏 → 拖取/投递 → 付款」
-            整条链在 D 段不可达。这里按既有设计把账本段挂回战况抽屉。
-          -->
-          <template v-if="workbench.phase === 'supply'">
+          <template v-else-if="workbench.phase === 'supply'">
             <SupplyPanel only="ledger" />
           </template>
+          <ContainersPanel v-else only="info" />
           <!--
-            用户 2026-11-11：**战况里删两块挂载** —— 初设面板（一键预设初设与开局选剧本重复；
-            其入口已挪进地图左上角「初设」栏，全程序只保留那一处可点）与专规机制
-            （各机制都已做到对应环节，不必在战况再挂一块）。组件与数据不动，裁判视图另有挂载。
+            用户 2026-11-11：战况里删两块挂载 —— 初设面板与专规机制；
+            组件与数据不动，裁判视图另有挂载。
           -->
           <VictoryPanel />
-          <ContainersPanel only="info" />
         </div>
 
         <div

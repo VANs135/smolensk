@@ -138,9 +138,10 @@ describe('战况抽屉挂载与一键预设初设唯一入口', () => {
     expect(drawer).not.toContain('<SetupPanel')
     expect(drawer).not.toContain('<ExclusiveRulesPanel')
     expect(drawer).toContain('<VictoryPanel />')
-    // 阶段仪表（2026-11-10 #6）与容器信息（盒子唯一展示）仍保留
+    // 阶段仪表（2026-11-10 #6）与容器信息（盒子唯一展示）仍保留；
+    // R3（2026-11-16）：三块按段只留一段 ⇒ 容器块是链尾的 `v-else`
     expect(drawer).toContain('<ReinforcementPanel only="info" />')
-    expect(drawer).toContain('<ContainersPanel only="info" />')
+    expect(drawer).toMatch(/<ContainersPanel\s+v-else\s+only="info"\s*\/>/)
   })
 
   it('一键预设初设只在地图左上角「初设」栏可点', () => {

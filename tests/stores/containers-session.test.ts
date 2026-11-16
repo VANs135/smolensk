@@ -240,7 +240,8 @@ describe('B17a-2：分段渲染与入口（源码守卫）', () => {
   it('★ 对局台：右栏 `only="info"`、会话 `only="actions"`；验证页仍挂全量', () => {
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
     const verify = readFileSync('src/views/WorkbenchView.vue', 'utf8')
-    expect(game).toContain('<ContainersPanel only="info" />')
+    // R3：状态抽屉按段只留一段 ⇒ 容器块是链尾的 `v-else`（仍是 `only="info"`）
+    expect(game).toMatch(/<ContainersPanel\s+v-else\s+only="info"\s*\/>/)
     expect(game).toContain('session.kind === \'containers\'" only="actions"')
     expect(verify).toMatch(/<ContainersPanel\s*\/>/)
   })
