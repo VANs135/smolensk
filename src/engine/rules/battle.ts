@@ -1176,6 +1176,12 @@ function simplePathWithin(input: {
 }): HexRef[] | null {
   const { from, to, minLength, maxLength } = input
   if (minLength <= 0 || maxLength < minLength) return null
+  /*
+   * 终点本身不可通行 ⇒ 任何路径都不成立（路径的最后一步就是进入 `to`，而 `walk` 对每一步都
+   * 要求 `passable`）。先挡这一条，避免为「根本到不了」的落点把整棵搜索树跑满——
+   * 结论与逐个节点展开完全一致（见 9.12f 的敌方占格落点）。
+   */
+  if (!input.passable(to)) return null
   const path: HexRef[] = []
   const visited = new Set<string>([retreatHexKey(from)])
 
@@ -1222,6 +1228,8 @@ function monotonePath(input: {
   const { from, to, distance } = input
   if (distance <= 0) return null
   if (hexDistance(from, to) !== distance) return null
+  // 终点不可通行 ⇒ 无解（同 `simplePathWithin`：路径最后一步必须能进入 `to`）
+  if (!input.passable(to)) return null
   const path: HexRef[] = []
   const walk = (current: HexRef, remaining: number): boolean => {
     if (remaining === 0) return sameHex(current, to)
@@ -1338,6 +1346,18 @@ export function planRetreatDestinations(input: {
   blocked?: (hex: HexRef) => boolean
 }): RetreatDestinationPlan[] {
   if (input.distance <= 0) return []
+  /*
+   * 同场复用：同一个 `facts`（一场战斗内由 `createRetreatFacts` 产出的同一对象）下，
+   * 「起撤格 + 距离 + 机动 + 阵营 + 不可移动 + 战略」完全相同的单位落点与路径必然相同。
+   * 攻方多单位同格撤退时，这一条把 N 份全组合路径搜索压成 1 份（9.12 的判据一处未改）。
+   * `blocked` 是调用方给的额外禁入判据，无法用本缓存表达 ⇒ 带 `blocked` 时不走缓存。
+   */
+  const cacheable = input.blocked === undefined
+  const cacheKey = cacheable ? retreatDestinationCacheKey(input) : ''
+  if (cacheable) {
+    const hit = retreatDestinationCache.get(input.facts)?.get(cacheKey)
+    if (hit !== undefined) return hit
+  }
   const plans: RetreatDestinationPlan[] = []
   const candidates = hexesWithin(input.from, input.distance, { onMapOnly: true }).filter(
     (hex) =>
@@ -1387,7 +1407,43 @@ export function planRetreatDestinations(input: {
         (input.strat === true && path.some((step) => input.facts.inEnemyZocAt(step, input.side))),
     })
   }
+  if (cacheable) {
+    let byKey = retreatDestinationCache.get(input.facts)
+    if (byKey === undefined) {
+      byKey = new Map()
+      retreatDestinationCache.set(input.facts, byKey)
+    }
+    byKey.set(cacheKey, plans)
+  }
   return plans
+}
+
+/**
+ * 9.12 落点规划的**同场复用**缓存
+ *
+ * 值只按事实对象身份存放：`createRetreatFacts` 每次盘面/单位变化都产出**新对象**，
+ * 因此「同一场战斗内同一份事实」必然对应同一批落点；对象被回收时缓存随之消失（WeakMap）。
+ * 缓存里的数组只被读、不被改（调用方只做筛选与展示）。
+ */
+const retreatDestinationCache = new WeakMap<RetreatFacts, Map<string, RetreatDestinationPlan[]>>()
+
+/** 缓存键：同一份事实下，这些输入相同 ⇒ 落点与路径必然相同 */
+function retreatDestinationCacheKey(input: {
+  from: HexRef
+  distance: number
+  mobility: MobilityType
+  side: Side
+  immobile?: boolean
+  strat?: boolean
+}): string {
+  return [
+    `${String(input.from.col)},${String(input.from.row)}`,
+    String(input.distance),
+    input.mobility,
+    input.side,
+    input.immobile === true ? 'immobile' : '-',
+    input.strat === true ? 'strat' : '-',
+  ].join('|')
 }
 
 /**

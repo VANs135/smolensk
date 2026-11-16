@@ -33,9 +33,8 @@ import {
   extenderRangeMpOf,
   inEnemyZocAt,
   inEnemyZocForAction,
-  inEnemyZocForRetreat,
-  insidePlayArea,
   isCorrectSpotter,
+  isInEnemyZoc,
   isMobileUnit,
   isOutOfSupplyNow,
   legMpDistanceWithinRadius,
@@ -49,6 +48,7 @@ import {
   resolveCombat,
   resolveCombatTerrain,
   selectMovementTerrain,
+  zocSourcesOf,
   type ActionKind,
   type AirBaseView,
   type AirMissionAircraftView,
@@ -1682,22 +1682,57 @@ export function createRetreatFacts(input: {
     isCombat: boolean
   }[]
 }): RetreatFacts {
+  /*
+   * 全部事实在**构造时**一次建好索引（下面的逐格判据只做 O(1) 查表）：
+   *
+   *   · 生成快照：此前每个闭包都现扫盘面（`some` / `filter`），而 9.12 的落点枚举是
+   *     「每单位 × 每候选落点 × 路径每个节点」反复调用这些闭包 ⇒ 多单位撤退时被放大成
+   *     O(单位数 × 落点数 × 路径节点 × 全盘单位数)。改成一次性建表后，单次判据是常量时间。
+   *   · 副作用：这些 `unit.hex / side / isCombat / ...` 的读取发生在 `combatRetreatFacts`
+   *     computed 求值内 ⇒ 任一单位位置/模式变化都会让事实对象**换新对象**，
+   *     这正是 `planRetreatDestinations` 同场缓存（按事实对象身份）的失效依据。
+   */
+  const hexKeyOf = (hex: HexRef): string => `${String(hex.col)},${String(hex.row)}`
   /** 9.12f 的判定源：战斗开始快照（优先）或当前盘面 */
   const enemyCombatSources: readonly { hex: HexRef; side: Side; isCombat: boolean }[] =
     input.combatStartSnapshot ??
     input.units.map((unit) => ({ hex: unit.hex, side: unit.side, isCombat: unit.isCombat }))
+  const axisCombatAt = new Set<string>()
+  const sovietCombatAt = new Set<string>()
+  for (const item of enemyCombatSources) {
+    if (!item.isCombat) continue
+    ;(item.side === 'axis' ? axisCombatAt : sovietCombatAt).add(hexKeyOf(item.hex))
+  }
+  /** 9.12e：9.12 的 ZOC 判据不看 4.5b 抵消 ⇒ 只需一张「谁投射 ZOC」的表 */
+  const zocSources = zocSourcesOf(input.context.units)
+  const retreating = new Set(input.retreatingUnitIds)
+  const friendlyCombatBySideHex = new Map<string, string[]>()
+  const immobileById = new Map<string, boolean>()
+  for (const unit of input.units) {
+    immobileById.set(unit.instanceId, unit.faces.combat.ma === 0 && unit.faces.move.ma === 0)
+    if (!unit.isCombat || retreating.has(unit.instanceId)) continue
+    const key = `${unit.side}|${hexKeyOf(unit.hex)}`
+    const list = friendlyCombatBySideHex.get(key)
+    if (list === undefined) friendlyCombatBySideHex.set(key, [unit.instanceId])
+    else list.push(unit.instanceId)
+  }
+  /** 9.12「禁止进入的地形」：同一次事实里同格同机动只算一次 */
+  const prohibitedByMobilityHex = new Map<string, boolean>()
+  // 剧本活动区：与移动共用同一份格集（`moveContext.playAreaHexes`），不另建判据
+  const playArea = input.context.playAreaHexes
+  const playAreaKeys = playArea === undefined ? null : new Set(playArea.map(hexKeyOf))
+  const enemyHexesOf = (side: Side, hex: HexRef): boolean =>
+    (side === 'axis' ? sovietCombatAt : axisCombatAt).has(hexKeyOf(hex))
   return {
-    enemyCombatUnitAt: (hex, side) =>
-      enemyCombatSources.some(
-        (item) => item.isCombat && item.side !== side && sameHexRef(item.hex, hex),
-      ),
+    enemyCombatUnitAt: (hex, side) => enemyHexesOf(side, hex),
     // 9.12f 的绝对禁穿：只认战斗开始快照（无快照 ⇒ 无此信息，不臆造）
     startOfCombatEnemyCombatUnitAt: (hex, side) =>
-      input.combatStartSnapshot?.some(
-        (item) => item.isCombat && item.side !== side && sameHexRef(item.hex, hex),
-      ) === true,
-    inEnemyZocAt: (hex, side) => inEnemyZocForRetreat(input.context, hex, side),
+      input.combatStartSnapshot !== undefined && enemyHexesOf(side, hex),
+    inEnemyZocAt: (hex, side) => isInEnemyZoc(hex, side === 'axis' ? 'soviet' : 'axis', zocSources),
     prohibitedFor: (mobility, hex) => {
+      const key = `${mobility}|${hexKeyOf(hex)}`
+      const cached = prohibitedByMobilityHex.get(key)
+      if (cached !== undefined) return cached
       const result = selectMovementTerrain({
         terrainsPresent: terrainsAt(hex),
         mobility,
@@ -1705,25 +1740,14 @@ export function createRetreatFacts(input: {
         followingRoad: false,
         forOverrun: false,
       })
-      return !result.ok && result.reason === 'prohibited'
+      const value = !result.ok && result.reason === 'prohibited'
+      prohibitedByMobilityHex.set(key, value)
+      return value
     },
     friendlyCombatUnitsAt: (hex, side) =>
-      input.units
-        .filter(
-          (unit) =>
-            unit.isCombat &&
-            unit.side === side &&
-            sameHexRef(unit.hex, hex) &&
-            !input.retreatingUnitIds.includes(unit.instanceId),
-        )
-        .map((unit) => unit.instanceId),
-    immobile: (unitId) => {
-      const unit = input.units.find((item) => item.instanceId === unitId)
-      if (unit === undefined) return true
-      return unit.faces.combat.ma === 0 && unit.faces.move.ma === 0
-    },
-    // 剧本活动区：与移动共用同一份格集（`moveContext.playAreaHexes`），不另建判据
-    outsidePlayArea: (hex) => !insidePlayArea(input.context.playAreaHexes, hex),
+      friendlyCombatBySideHex.get(`${side}|${hexKeyOf(hex)}`) ?? [],
+    immobile: (unitId) => immobileById.get(unitId) ?? true,
+    outsidePlayArea: (hex) => playAreaKeys !== null && !playAreaKeys.has(hexKeyOf(hex)),
   }
 }
 
