@@ -8929,7 +8929,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pausedTransportIds.value = [...new Set([...pausedTransportIds.value, ...pausedIds])]
       pushLog('info', `${names}：运输点数暂停移动（可用其装载的 SP 付款后再继续，13.2a）`, '13.2a')
     }
-    if (result.record !== null) lastStep.value = snapshotOf(result.record)
+    /*
+     * E2（用户 2026-11-17 实走）：**结束不是一步**。`endMoveEarly` 返回的是 `kind: 'end'`
+     * 的原地记录（`from === to`、`movedIds` 为空），当成「上一步结论」会渲染成
+     * `某格 → 同一格｜`（无单位、无 MP）的伪步成功行 ⇒ 这里只接受真正的移动步；
+     * 结束态由面板的中性提示（「已结束本次移动」）表达。
+     */
+    if (result.record !== null && result.record.kind !== 'end')
+      lastStep.value = snapshotOf(result.record)
+    else lastStep.value = null
     pushLog('info', `结束移动：${names}`, '6.1')
     // ⑭ 接线：结束本次移动（6.1 末句）入会话日志（本笔不掷骰）
     recordSettlement({

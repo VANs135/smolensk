@@ -250,7 +250,7 @@ function hoverUnit(id: string | null): void {
     />
     <!-- H7：结束一次移动后窗口不收起，直接提示下一次 —— 连续移动不打断 -->
     <p v-if="movingUnits.length === 0 && workbench.moveLinger" class="muted num">
-      点地图上的己方堆叠，继续下一次移动
+      已结束本次移动（6.1）—— 点地图上的己方堆叠，继续下一次移动（6.1）
     </p>
     <p v-else-if="movingUnits.length === 0" class="muted">本次移动无单位</p>
 
