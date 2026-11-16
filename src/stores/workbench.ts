@@ -7710,6 +7710,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     clearSupply()
     clearAir()
     pendingHexPick.value = null
+    // H1：换方＝上一步的现场结束，拒绝文案不跟到对方回合（与 G2 换选、换段同口径）
+    moveBlocked.value = null
     // 15.1A / 15.4：整备与缩减都是「每基地每阶段一次」，换阶段即清零
     refitDoneBaseIds.value = []
     reducedBaseIds.value = []
@@ -7810,6 +7812,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 正是"突袭后残留选格分派吃掉后续点击"那一类。取消入口统一，过渡也必须收口。
      */
     pendingHexPick.value = null
+    // H1：拒绝文案只描述「当前这一步」——换段/换环节/换方/换回合一律清掉，不得跨段存活
+    moveBlocked.value = null
   }
 
   function resetSupplyPhaseLedger(): void {
@@ -8001,6 +8005,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     resetMovementTracking()
     // 11 号：换回合同样退掉残留的待点格（与换段/换方同口径）
     pendingHexPick.value = null
+    // H1：换回合同样清掉上一条拒绝（不得跨回合存活）
+    moveBlocked.value = null
     /*
      * 16.0b/c：工事修建/缩减的额度是「**每格每回合**」⇒ 换回合即清零。
      * ★ 本账本按**格**键（`hedgehogTurnLedger`），故必须在这里显式清，否则"本回合已提升"会跨回合一直拦。
@@ -23750,6 +23756,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 上一环的攻击记录不再约束这一环。
      */
     clearAttackPhaseLedger()
+    // H1：环节一换＝上一条拒绝描述的动作已经不在本环节（与换段同口径）
+    moveBlocked.value = null
     return true
   }
 
@@ -23764,6 +23772,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     clearAttackPhaseLedger()
     // 11 号：直跳环节同样退掉上一个环节遗留的待点格
     pendingHexPick.value = null
+    // H1：直跳环节同样不能带着上一环的拒绝文案
+    moveBlocked.value = null
     return true
   }
 
