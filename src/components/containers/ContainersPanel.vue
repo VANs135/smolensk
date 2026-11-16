@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { useRefereeTools } from '@/components/ui-mode'
 import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import AircraftRoster from '@/components/air/AircraftRoster.vue'
+import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { useUiMode } from '@/components/ui-mode'
 import { formations } from '@/data'
 import type { HexRef, Side } from '@/data'
@@ -126,6 +127,20 @@ const edgeUnitId = ref('')
 const edgeUseRailCap = ref(false)
 function edgeBoxOf(box: BoxView): EdgeBoxId {
   return box.id === 'edge-northeast' ? 'northeast' : 'southeast'
+}
+
+/** 批 D：边缘盒入盒单位改**算子图阵列**（每个盒各自的候选不同，故按盒算） */
+function edgeUnitPickerItems(box: BoxView): readonly CounterPickerItem[] {
+  return containers.edgeBoxEnterCandidates(edgeBoxOf(box), edgeUseRailCap.value).map((item) => {
+    const unit = workbench.units.find((candidate) => candidate.instanceId === item.id)
+    return {
+      id: item.id,
+      imageUrl: unit === undefined ? null : counterImageUrlOf(unit),
+      name: item.label,
+      selected: edgeUnitId.value === item.id,
+      hex: unit?.hex ?? null,
+    }
+  })
 }
 /** 编队收纳盒：编队、成员、图上成员、标记格、本次收纳 */
 const formationId = ref('')
@@ -287,6 +302,20 @@ const parentCandidates = computed(() =>
       id: unit.instanceId,
       label: `${unit.name}（${sideName(unit.side)}｜AR${unit.faces.combat.ar}｜${unit.steps}/${unit.printedSteps}）`,
     })),
+)
+
+/** 批 D：拆分母单位改**算子图阵列**（原来是纯文字下拉；图上信息已够） */
+const parentPickerItems = computed<readonly CounterPickerItem[]>(() =>
+  parentCandidates.value.map((item) => {
+    const unit = workbench.units.find((candidate) => candidate.instanceId === item.id)
+    return {
+      id: item.id,
+      imageUrl: unit === undefined ? null : counterImageUrlOf(unit),
+      name: item.label,
+      selected: breakdownParentId.value === item.id,
+      hex: unit?.hex ?? null,
+    }
+  }),
 )
 
 /** 可选编队（多单位编队库，13.7） */
@@ -782,15 +811,17 @@ function boxAircraft(side: Side) {
         <!-- ── 各类盒的操作（B17a-2：动作段 ⇒ 只在会话框里画） ── -->
         <!-- 拆分单位盒（1.8a / 20.0a–g） -->
         <div v-if="box.kind === 'breakdownBox' && showsBoxActions('breakdownBox')" class="row">
-          <label class="field">
-            母单位
-            <select v-model="breakdownParentId" class="select">
-              <option value="">（选择）</option>
-              <option v-for="item in parentCandidates" :key="item.id" :value="item.id">
-                {{ item.label }}
-              </option>
-            </select>
-          </label>
+          <CounterPicker
+            title="母单位"
+            :items="parentPickerItems"
+            :size="32"
+            @pick="breakdownParentId = $event"
+            @hover="
+              workbench.setHoverHex(
+                parentPickerItems.find((item) => item.id === $event)?.hex ?? null,
+              )
+            "
+          />
           <label class="field">
             ① AR 匹配（≤ 母单位 AR）
             <span class="row">
@@ -867,19 +898,17 @@ function boxAircraft(side: Side) {
 
         <!-- 边缘盒（1.4b） -->
         <div v-if="box.kind === 'edgeBox' && showsBoxActions('edgeBox')" class="row">
-          <label class="field">
-            入盒单位
-            <select v-model="edgeUnitId" class="select">
-              <option value="">选择单位</option>
-              <option
-                v-for="item in containers.edgeBoxEnterCandidates(edgeBoxOf(box), edgeUseRailCap)"
-                :key="item.id"
-                :value="item.id"
-              >
-                {{ item.label }}
-              </option>
-            </select>
-          </label>
+          <CounterPicker
+            title="入盒单位"
+            :items="edgeUnitPickerItems(box)"
+            :size="32"
+            @pick="edgeUnitId = $event"
+            @hover="
+              workbench.setHoverHex(
+                edgeUnitPickerItems(box).find((item) => item.id === $event)?.hex ?? null,
+              )
+            "
+          />
           <label class="field">
             <input v-model="edgeUseRailCap" type="checkbox" />
             进出改用铁路运力
@@ -967,15 +996,20 @@ function boxAircraft(side: Side) {
         <RuleTip rule="4.8a">盒内单位在图上仍计入战斗 RE。</RuleTip>
       </h4>
       <div class="row">
-        <label class="field">
-          编队
-          <select v-model="formationId" class="select">
-            <option value="">（选择编队）</option>
-            <option v-for="item in formationChoices" :key="item.id" :value="item.id">
+        <div class="field">
+          <span>编队</span>
+          <span class="row">
+            <BaseButton
+              v-for="item in formationChoices"
+              :key="item.id"
+              :variant="formationId === item.id ? 'primary' : 'secondary'"
+              size="sm"
+              @click="formationId = item.id"
+            >
               {{ item.label }}
-            </option>
-          </select>
-        </label>
+            </BaseButton>
+          </span>
+        </div>
         <template v-if="uiMode === 'verify'">
           <label class="field">
             全部成员 id

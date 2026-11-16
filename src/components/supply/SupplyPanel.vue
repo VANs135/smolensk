@@ -61,12 +61,12 @@ const pickupRequirement = computed(() => workbench.supplyPickupRequirement)
  */
 const checkCandidates = computed(() => workbench.supplyCheckCandidates)
 
-/** 12.3：用途选项（12.3 首段的用途清单） */
+/** 12.3：用途选项（12.3 首段的用途清单；条款号不上屏，见 ?） */
 const PURPOSES = [
-  { key: 'fuel', label: '燃料（12.5）' },
-  { key: 'refit', label: '飞机整备（15.1）' },
-  { key: 'internalStocks', label: '补充部队储备（12.10）' },
-  { key: 'build', label: '建造费用（13.8）' },
+  { key: 'fuel', label: '燃料' },
+  { key: 'refit', label: '飞机整备' },
+  { key: 'internalStocks', label: '补充部队储备' },
+  { key: 'build', label: '建造费用' },
 ] as const
 /*
  * ★ 批 B 切片 2（裁定⑥）：「战斗补给（12.4）」**不在本链** —— 12.4 的战斗补给在**战斗的当口**
@@ -1272,14 +1272,20 @@ const showsLedger = computed(
               投递只能送**需要立即使用**的补给（本作把「立即使用」做成结构性恒真，不再给可取消的勾选）。
             </RuleTip>
             <div class="row">
-              <label class="field">
-                用途
-                <select v-model="workbench.supplyInputs.purpose" class="select">
-                  <option v-for="item in PURPOSES" :key="item.key" :value="item.key">
+              <div class="field">
+                <span>用途</span>
+                <span class="row">
+                  <BaseButton
+                    v-for="item in PURPOSES"
+                    :key="item.key"
+                    :variant="workbench.supplyInputs.purpose === item.key ? 'primary' : 'secondary'"
+                    size="sm"
+                    @click="workbench.supplyInputs.purpose = item.key"
+                  >
                     {{ item.label }}
-                  </option>
-                </select>
-              </label>
+                  </BaseButton>
+                </span>
+              </div>
               <!--
                 ★ 批 B 切片 2（裁定⑤「获取即付款」）：**T 数由用途的费率算**，只有"数量即内容"的
                   用途（12.10 补充部队储备 / 13.8 建造）才给手填框 —— 12.4/12.5 的费率是死的，
