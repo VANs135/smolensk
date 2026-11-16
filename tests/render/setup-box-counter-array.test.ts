@@ -19,6 +19,16 @@ describe('初设单位 box 的算子阵列', () => {
     expect(panel).toContain("status === 'active' ? '激活' : '非激活'")
   })
 
+  it('减损飞机按原文 `*` 显式标记（不另造 Damaged 状态、不重复计数）', () => {
+    // 原文：剧本页 `"*" = one unit begins reduced`；减损与激活态是两个维度
+    expect(panel).toContain('airReduced')
+    expect(panel).toContain(' · 减损')
+    expect(panel).toContain('减损面')
+    expect(panel).toContain('空战')
+    expect(panel).toContain('轰炸')
+    expect(panel).not.toContain("'damaged'")
+  })
+
   it('不可用项不出现（blockedReason / 无候选 / 卡车单入口）', () => {
     expect(panel).toContain('blockedReason === null')
     expect(panel).toContain("item.kind !== 'truck'")

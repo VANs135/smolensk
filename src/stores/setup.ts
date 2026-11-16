@@ -208,6 +208,15 @@ export interface SetupPlacing {
    * 而不是让玩家点了一个没有候选的卡片、再看到一个"调用方未提供 airBaseHexes"的引擎缺口。
    */
   blockedReason: string | null
+  /**
+   * 飞机（`kind === 'air'`）：**下一枚**是否以减损面初设
+   *
+   * 原文口径是剧本页 `"*" = one unit begins reduced`（不是 Damaged）：该型有一枚翻到背面，
+   * 空战 / 轰炸取背面印值。仅作展示，判定仍由 `planAirSetup` 的 `reduced[]` 给出。
+   */
+  airReduced?: boolean
+  /** 飞机：本型**尚未落位**的枚里还有几枚是减损（含下一枚）；无减损即 0 */
+  airReducedRemaining?: number
 }
 
 /**
@@ -1091,6 +1100,9 @@ export const useSetupStore = defineStore('setup', () => {
                 ? '先落本方空军基地再放飞机（14.1a）'
                 : '没有可用的空军基地格（14.1a）'
               : null,
+          // 剧本页 `"*" = one unit begins reduced`：逐枚标记，界面上单列/标记
+          airReduced: row.reduced[placed] === true,
+          airReducedRemaining: row.reduced.slice(placed).filter(Boolean).length,
         })
       }
     }

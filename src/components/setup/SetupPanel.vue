@@ -6,7 +6,7 @@ import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/
 import { useUiMode } from '@/components/ui-mode'
 import { scenarios, scenarioSetup } from '@/data'
 import type { Side } from '@/data'
-import { setupHexLabel } from '@/engine/rules'
+import { findAircraftRecord, setupHexLabel, type AirSetupPlacement } from '@/engine/rules'
 import { setupEffectsOf } from '@/engine/rules/setup-effects'
 import {
   useContainersStore,
@@ -160,6 +160,26 @@ function airPolicy(side: Side) {
   return setup.airPlanOf(side)?.policy ?? null
 }
 
+/**
+ * 该型减损机的**明示**：枚数、激活态与减损面印值
+ *
+ * 原文口径（剧本页）：`"*" = one unit begins reduced` —— 不是「Damaged」这一档；
+ * 减损机翻到背面，空战 / 轰炸按背面印值（14.1b/14.4f），可用 Ftr/Tac Repls 补回（1.6b）。
+ */
+function reducedLabelOf(row: AirSetupPlacement): string {
+  const indexes = row.reduced.flatMap((flag, index) => (flag ? [index] : []))
+  if (indexes.length === 0) return '—'
+  const states = indexes
+    .map((index) => (row.statuses[index] === 'active' ? '激活' : '非激活'))
+    .join('、')
+  const base = `${indexes.length} 枚（${states}）`
+  const record = findAircraftRecord(row.aircraftId)
+  if (record === undefined) return base
+  const combat = `${record.airCombatRating ?? 0}→${record.airCombatRatingBack ?? record.airCombatRating ?? 0}`
+  const barrage = `${record.barrageStrength ?? 0}→${record.barrageStrengthBack ?? record.barrageStrength ?? 0}`
+  return `${base}：空战 ${combat}，轰炸 ${barrage}`
+}
+
 /** 某型飞机已选的基地格 */
 function airChoiceOf(entryIndex: number): string {
   return setup.airChoices[entryIndex] ?? ''
@@ -234,15 +254,24 @@ function airStatusOf(item: SetupPlacing): 'active' | 'inactive' | null {
 function pickerItemsOf(category: SetupPlacingCategory): readonly CounterPickerItem[] {
   return visibleBoxItems(category).map((item) => {
     const status = airStatusOf(item)
+    // 原文 `"*" = one unit begins reduced`：减损是独立于激活态的一面，不另造第三种状态；
+    // 用「激活/非激活 · 减损」的显式标记，避免把同一枚既算进激活又算进减损（重复计数）。
+    const reduced = item.airReduced === true
+    const statusLabel = status === 'active' ? '激活' : '非激活'
     return {
       id: pickerIdOf(item),
       imageUrl: item.imageUrl,
-      name: `${sideLabel(item.side)} ${item.label}（${item.placed}/${item.total}）`,
+      name:
+        `${sideLabel(item.side)} ${item.label}（${item.placed}/${item.total}）` +
+        (reduced ? '（减损面）' : ''),
       selected: isPlacing(item),
       ...(item.remaining > 1 ? { badge: String(item.remaining) } : {}),
       ...(status === null
         ? {}
-        : { groupKey: status, groupLabel: status === 'active' ? '激活' : '非激活' }),
+        : {
+            groupKey: `${status}:${reduced ? 'reduced' : 'full'}`,
+            groupLabel: `${statusLabel}${reduced ? ' · 减损' : ''}`,
+          }),
     }
   })
 }
@@ -722,7 +751,8 @@ function sideLabel(side: Side): string {
           <template
             v-if="airPolicy(side)?.reducedTypes && airPolicy(side)!.reducedTypes.length > 0"
           >
-            ；`*` 减损机型：{{ airPolicy(side)!.reducedTypes.join('、') }}
+            ；`*` 减损机型：{{ airPolicy(side)!.reducedTypes.join('、') }}（原文「"*" = one unit
+            begins reduced」：每型 1 枚以减损面初设；无 Damaged 档）
           </template>
           已落位 {{ setup.airPlacedCount(side) }} 架。
         </p>
@@ -744,7 +774,7 @@ function sideLabel(side: Side): string {
                 {{ row.statuses.filter((s) => s === 'active').length }} 激活 /
                 {{ row.statuses.filter((s) => s === 'inactive').length }} 非激活
               </td>
-              <td class="num">{{ row.reduced.filter(Boolean).length }}</td>
+              <td class="num">{{ reducedLabelOf(row) }}</td>
               <td>
                 <select
                   v-if="row.candidates.length > 0"
