@@ -505,6 +505,14 @@ export const useSetupStore = defineStore('setup', () => {
    * （`setupCandidates` / `planAirSetup` 的 `candidates`），本 store 只做校验与落盘。
    */
   const placing = ref<SetupPlacing | null>(null)
+  /**
+   * H5（用户 2026-11-16）：**上一步落位的快照**（只留一步）
+   *
+   * 初设的落位会同时改算子 / 飞机 / 补给账 / 进度账；撤回时必须一并还原，
+   * 不能让"算子回去了、进度还记着"这种半截状态出现。故用整体快照，不逐字段反推。
+   */
+  let lastPlacementSnapshot: ReturnType<typeof capturePlacementState> | null = null
+  const lastPlacement = ref<{ label: string } | null>(null)
 
   /*
    * ── 逐枚落位的进度账本（B11，修备忘 #2）─────────────────────────────
@@ -748,6 +756,76 @@ export const useSetupStore = defineStore('setup', () => {
   }
 
   /**
+   * H5：落位前抓一张快照（算子 / 飞机 / 补给账 / 进度账 / 当前卡片）
+   *
+   * 只由两个落位入口调用：地图点格（`placeAtHex`）与 3.4b 选完集群后的确认。
+   */
+  function capturePlacementState() {
+    // 盘面对象是 Pinia 响应式代理，`structuredClone` 会抛 DataCloneError ⇒ 走 JSON 还原成纯数据
+    const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+    return {
+      units: clone(workbench.units),
+      airUnits: clone(workbench.airUnits),
+      airBoxMembers: [...workbench.airBoxMembers],
+      spDumps: clone(spDumps.value),
+      placedSelf: { ...placedSelfInstances.value },
+      placedAir: { ...placedAirInstances.value },
+      completed: { ...completed.value },
+      selfChoices: { ...selfChoices.value },
+      airChoices: { ...airChoices.value },
+      notes: [...notes.value],
+      placing: placing.value,
+      pendingSpPlacement:
+        pendingSpPlacement.value === null ? null : { ...pendingSpPlacement.value },
+      pendingSpOwnershipDumpId: pendingSpOwnershipDumpId.value,
+      lastAction: lastAction.value,
+    }
+  }
+
+  function recordPlacementUndo(
+    label: string,
+    snapshot: ReturnType<typeof capturePlacementState>,
+  ): void {
+    lastPlacementSnapshot = snapshot
+    lastPlacement.value = { label }
+  }
+
+  /**
+   * H5：**撤回上一步落位**（只留一步）
+   *
+   * 整体还原快照：算子与飞机、补给账（setup 与 workbench 两份）、进度、当前卡片。
+   * 撤回后玩家仍停在同一项上，可立刻改落另一格（连续操作不被打断）。
+   */
+  function undoLastPlacementNow(): boolean {
+    const snapshot = lastPlacementSnapshot
+    if (snapshot === null) return false
+    const label = lastPlacement.value?.label ?? ''
+    lastPlacementSnapshot = null
+    lastPlacement.value = null
+    workbench.units = snapshot.units
+    workbench.airUnits = snapshot.airUnits
+    workbench.airBoxMembers = snapshot.airBoxMembers
+    spDumps.value = snapshot.spDumps
+    placedSelfInstances.value = snapshot.placedSelf
+    placedAirInstances.value = snapshot.placedAir
+    completed.value = snapshot.completed
+    selfChoices.value = snapshot.selfChoices
+    airChoices.value = snapshot.airChoices
+    notes.value = snapshot.notes
+    placing.value = snapshot.placing
+    pendingSpPlacement.value = snapshot.pendingSpPlacement
+    pendingSpOwnershipDumpId.value = snapshot.pendingSpOwnershipDumpId
+    lastAction.value = snapshot.lastAction
+    // 12.1b：初设 SP 账同步回 workbench —— 付款 / 追溯读的是那一份
+    workbench.landSetupSpDumps(spDumps.value)
+    return record({
+      ok: true,
+      rule: 'IV',
+      data: { detail: `已撤回上一步落位：${label}` },
+    })
+  }
+
+  /**
    * 在地图上点了一格：若它在当前待放项的候选格内 ⇒ **落一枚**
    *
    * B11：同型多枚时**逐个落**（可落在不同格）——进度没到总数就**保持卡片打开**，
@@ -789,6 +867,8 @@ export const useSetupStore = defineStore('setup', () => {
       record({ ok: false, rule: SETUP_RULE, reason: `setupHexOffMap:${hex.col}.${hex.row}` })
       return true
     }
+    // H5：落位前抓快照（西移项不做撤销：它由容器账落盘，反向操作不在本批范围）
+    const undoSnapshot = current.kind === 'shift' ? null : capturePlacementState()
     const ok =
       current.kind === 'self'
         ? placeSelfOneInstance(current.entryIndex, hex, current.chunk)
@@ -796,6 +876,10 @@ export const useSetupStore = defineStore('setup', () => {
           ? placeAirRowNow(current.entryIndex, hex, current.side)
           : placeShiftFormation(current.formationId, hex)
     if (!ok) return true
+    // 3.4b：德军 SP 还在等选集群 ⇒ 这一步尚未真正落盘，不记撤回
+    if (undoSnapshot !== null && pendingSpPlacement.value === null) {
+      recordPlacementUndo(`${current.label} → ${setupHexLabel(hex)}`, undoSnapshot)
+    }
     // 还差就继续开着（换到别的格去落剩下的），落满即收
     const key =
       current.kind === 'air'
@@ -2255,6 +2339,9 @@ export const useSetupStore = defineStore('setup', () => {
     placedAirInstances.value = {}
     airStatusOrder.value = {}
     defaultFilledIds.value = new Set()
+    // H5：重置后不允许再撤回上一局的落位
+    lastPlacementSnapshot = null
+    lastPlacement.value = null
   }
 
   /** 重置（含盘面：清空算子与飞机） */
@@ -2664,6 +2751,8 @@ export const useSetupStore = defineStore('setup', () => {
     if (!panzerGroupRulesOn() || finished.value) return false
     const staged = pendingSpPlacement.value
     if (staged !== null) {
+      // H5：选完集群才是真正落盘 ⇒ 在这里抓快照，撤回能退回"还没落"的状态
+      const undoSnapshot = capturePlacementState()
       const ok = placeSelfInternal(staged.entryIndex, staged.hex, 'one', staged.amount, {
         panzerGroup: group,
       })
@@ -2683,6 +2772,10 @@ export const useSetupStore = defineStore('setup', () => {
                 chunk: Math.max(0, current.total - key),
               }
       }
+      recordPlacementUndo(
+        `SP → ${setupHexLabel(staged.hex)}（${String(staged.amount)}）`,
+        undoSnapshot,
+      )
       return true
     }
     const dumpId = pendingSpOwnershipDumpId.value
@@ -3638,6 +3731,9 @@ export const useSetupStore = defineStore('setup', () => {
     sideQueue,
     // 初设 box（地图点选放置）
     placing,
+    // H5：上一步落位的撤回入口（只留一步）
+    lastPlacement,
+    undoLastPlacementNow,
     pendingPlacement,
     // P4 / UI1-b：已完成项（只读投影；不参与任何判定）
     completedPlacements,

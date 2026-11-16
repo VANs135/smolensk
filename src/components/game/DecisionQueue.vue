@@ -284,6 +284,18 @@ function sideMark(side: 'axis' | 'soviet'): string {
       <BaseButton variant="primary" size="sm" @click="setup.startGameNow()">完成初设</BaseButton>
     </div>
 
+    <!-- H5（用户 2026-11-16）：落位可**一步撤回**（算子/飞机/补给账一起还原） -->
+    <div v-if="setup.lastPlacement !== null" class="queue__row-actions">
+      <BaseButton
+        variant="ghost"
+        size="sm"
+        :title="setup.lastPlacement.label"
+        @click="setup.undoLastPlacementNow()"
+      >
+        撤回上一步
+      </BaseButton>
+    </div>
+
     <div v-if="placing !== null" class="queue__active">
       <strong class="queue__label" :title="placing.label">{{ placing.label }}</strong>
       <span class="queue__pending num">剩 {{ placing.remaining }}</span>

@@ -1435,6 +1435,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     },
   })
   const { moveInteraction, zocStoppedMoveUnitIds, moveBlocked } = groundMovement
+  /**
+   * H7（用户 2026-11-16）：**结束一次移动后不立刻收窗**
+   *
+   * 移动工具仍就绪，地图会话留在"点下一支己方堆叠"状态，连续移动不被打断；
+   * 点 × / Esc 或进入新一次开拔时清掉。
+   */
+  const moveLinger = ref(false)
   /** 悬停格（用于路径与消耗预览） */
   const hoverHex = ref<HexRef | null>(null)
   /**
@@ -7504,6 +7511,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     movePick.value = null
     moveBlocked.value = null
     lastStep.value = null
+    // H7：撤回 / 中止后不再留"移动工具就绪"
+    moveLinger.value = false
     // ②b：上一轮移动里的参突勾选不带到下一轮（否则新堆叠的突袭会沿用旧 id）
     overrunParticipantIds.value = []
     // 8.1b：本次移动已收束 ⇒ 上一场的「落下名单」提示不再挂
@@ -8927,7 +8936,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         unitIds: moveUnits.value.map((unit) => unit.instanceId),
       },
     })
+    // H7：不自动收窗 —— 留成"点下一支己方堆叠"
+    moveLinger.value = true
     return true
+  }
+
+  /** H7：收掉"移动工具就绪"的滞留状态（点 × / Esc） */
+  function dismissMoveLinger(): void {
+    moveLinger.value = false
   }
 
   /** C5：悬停格（路径与消耗预览） */
@@ -28336,6 +28352,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     fireResolution.resetCombat()
     fireResolution.resetBarrage()
     units.value = []
+    moveLinger.value = false
     edgeBoxHoldings.value = { northeast: [], southeast: [] }
     edgeBoxEnteredOn.value = {}
     selectedId.value = null
@@ -29479,6 +29496,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     battleDefenders,
     // C5 移动交互
     moveInteraction,
+    moveLinger,
+    dismissMoveLinger,
     moveUnits,
     activeMoveUnits,
     moveBudgetRows,

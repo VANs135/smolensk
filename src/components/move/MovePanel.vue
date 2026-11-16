@@ -248,7 +248,11 @@ function hoverUnit(id: string | null): void {
       @pick="workbench.dropUnitFromMove($event)"
       @hover="hoverUnit"
     />
-    <p v-if="movingUnits.length === 0" class="muted">本次移动无单位</p>
+    <!-- H7：结束一次移动后窗口不收起，直接提示下一次 —— 连续移动不打断 -->
+    <p v-if="movingUnits.length === 0 && workbench.moveLinger" class="muted num">
+      点地图上的己方堆叠，继续下一次移动
+    </p>
+    <p v-else-if="movingUnits.length === 0" class="muted">本次移动无单位</p>
 
     <!-- ② 上一步结论（6.1：MP 消耗 / 掉队 / ZOC 停止都由引擎给） -->
     <div v-if="lastStep !== null" class="num">

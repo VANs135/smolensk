@@ -163,7 +163,7 @@ describe('B15a：操作链（撤销一步 / 放下 / 结束移动）真的接线
     expect(workbench.activeMoveUnits.map((unit) => unit.instanceId)).toEqual([b.instanceId])
   })
 
-  it('★ 结束移动：收束本次交互（会话随之消失）', () => {
+  it('★ 结束移动：收束本次交互，但会话留成"移动工具就绪"（H7，连续移动不打断）', () => {
     const { workbench, mapView } = newStores()
     workbench.setPhase('movement')
     place(workbench, legRecord('axis'), START, 'axis', 'a1')
@@ -173,6 +173,10 @@ describe('B15a：操作链（撤销一步 / 放下 / 结束移动）真的接线
 
     workbench.finishMove()
     expect(workbench.moveInteraction?.finished).toBe(true)
+    // H7：不再立刻收窗，改成"点下一支己方堆叠"；Esc/× 才真正收起
+    expect(mapView.session?.kind).toBe('move')
+    expect(mapView.session?.title).toContain('点下一支己方堆叠')
+    expect(mapView.cancelSession()).toBe(true)
     expect(mapView.session).toBeNull()
   })
 })

@@ -3392,6 +3392,21 @@ export const useMapViewStore = defineStore('mapView', () => {
         width: 'min(430px, 94%)',
       }
     }
+    /*
+     * H7（用户 2026-11-16）：**结束一次移动后不立刻收窗**
+     *
+     * 移动工具仍就绪 ⇒ 会话留在"点下一支己方堆叠"，连续同类操作不被打断。
+     * 放在所有具体会话之后：战斗 / 补给 / 专规等窗开着时它不抢；
+     * 点 × / Esc 由 `cancelSession` 收掉（`dismissMoveLinger`）。
+     */
+    if (workbench.moveLinger && workbench.actionAllowedNow('move.order')) {
+      return {
+        kind: 'move',
+        title: '移动工具就绪（6.1）· 点下一支己方堆叠',
+        rule: '6.1',
+        width: 'min(430px, 94%)',
+      }
+    }
     return null
   })
 
@@ -3705,6 +3720,17 @@ export const useMapViewStore = defineStore('mapView', () => {
       if (workbench.combatState === null) workbench.clearCombat()
       else workbench.cancelCombat()
     } else if (current.kind === 'move') {
+      /*
+       * H7：结束移动后的"移动工具就绪"滞留态 —— × / Esc 只收这段滞留，不碰盘面。
+       */
+      if (
+        workbench.moveInteraction === null &&
+        workbench.movePick === null &&
+        workbench.moveLinger
+      ) {
+        workbench.dismissMoveLinger()
+        return true
+      }
       /*
        * ★ B26：`kind:'move'` 有**两个来源**——真在移动的（`moveInteraction` 非空）
        *   与"选了耗油单位但还没加油"的待付态（`fuelPaymentDue` 为真时 `moveInteraction` 是 null）。

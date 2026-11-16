@@ -124,6 +124,8 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'startGameNow',
       'toggleTruckFull',
       'applyShiftWestPlacementsNow',
+      // H5：撤回上一步初设落位（初设期内，快照整体还原）
+      'undoLastPlacementNow',
     ],
   },
   {
