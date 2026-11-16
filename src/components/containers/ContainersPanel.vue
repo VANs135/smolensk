@@ -2,9 +2,8 @@
 import { computed, ref, watch } from 'vue'
 
 import { useRefereeTools } from '@/components/ui-mode'
-import { BaseButton, BasePanel, BaseTag } from '@/components/base'
+import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import AircraftRoster from '@/components/air/AircraftRoster.vue'
-import UiField from '@/components/UiField.vue'
 import { useUiMode } from '@/components/ui-mode'
 import { formations } from '@/data'
 import type { HexRef, Side } from '@/data'
@@ -914,7 +913,7 @@ function boxAircraft(side: Side) {
             size="sm"
             @click="containers.revealFromFormationBox(formationIdOf(box), hiddenIdsOf(box))"
           >
-            全部放回图上（13.7）
+            全部放回图上
           </BaseButton>
         </div>
       </details>
@@ -962,11 +961,11 @@ function boxAircraft(side: Side) {
     -->
     <template v-if="showsBoxActions('scenarioDrawBox') || showsBoxActions('formationBox')">
       <hr />
-      <h4 v-if="showsInfo" class="block-title">编队收纳盒（13.7 / 3.6f：收纳下属以制造迷雾）</h4>
-      <p v-if="showsInfo" class="muted">
-        建立收纳盒是**动作**（在托盘里展开一张盒卡后，会话框里给出表单）：本面板的只读段只说明
-        它的来由——13.7 要求「至少一个所属单位须与标记同格」，盒内单位在图上仍计入 4.8a 的战斗 RE。
-      </p>
+      <h4 v-if="showsInfo" class="block-title">
+        编队收纳盒
+        <RuleTip rule="13.7">收纳下属以制造迷雾；至少一个所属单位须与标记格同格。</RuleTip>
+        <RuleTip rule="4.8a">盒内单位在图上仍计入战斗 RE。</RuleTip>
+      </h4>
       <div class="row">
         <label class="field">
           编队
@@ -987,33 +986,31 @@ function boxAircraft(side: Side) {
             <input v-model="formationOnMapText" class="input path-input" placeholder="逗号分隔" />
           </label>
         </template>
-        <label class="field">
-          标记格
-          <UiField
-            v-model="workbench.formationMarkerHexText"
-            class="input num"
-            placeholder="列.行"
-          />
+        <div class="field">
+          <span>标记格</span>
+          <BaseTag v-if="workbench.formationMarkerHexText !== ''" kind="neutral">
+            {{ workbench.formationMarkerHexText }}
+          </BaseTag>
           <BaseButton
             variant="secondary"
             size="sm"
             @click="workbench.beginFormationMarkerHexPickNow()"
           >
-            点地图选格
+            点地图选标记格
           </BaseButton>
-        </label>
+        </div>
         <template v-if="uiMode === 'verify'">
           <label class="field">
             本次收纳 id
             <input v-model="formationHideText" class="input path-input" placeholder="逗号分隔" />
           </label>
           <BaseButton v-if="formationId !== ''" variant="primary" size="sm" @click="hideNow()">
-            收纳进盒（13.7：至少一个所属单位须与标记同格）
+            收纳进盒
           </BaseButton>
         </template>
         <!-- 条 24 / §5-E「改盒选」：正式界面没有 id 文本框，改为点选图上该编队的单位 -->
         <template v-else>
-          <p class="muted">点选要收纳的图上单位（13.7：至少一个须与标记同格）：</p>
+          <p class="muted">点选要收纳的图上单位：</p>
           <div class="row formation-pick">
             <button
               v-for="unit in formationUnitsOnMap"
@@ -1038,7 +1035,7 @@ function boxAircraft(side: Side) {
             size="sm"
             @click="hideNowFromBox()"
           >
-            收纳进盒（13.7）
+            收纳进盒
           </BaseButton>
         </template>
       </div>
@@ -1094,7 +1091,7 @@ function boxAircraft(side: Side) {
     -->
     <template v-if="props.only === null">
       <hr />
-      <p v-if="containers.lastAction === null" class="muted">尚无操作。</p>
+      <p v-if="containers.lastAction === null" class="muted">—</p>
       <p v-else class="num">
         <BaseTag :kind="containers.lastAction.ok ? 'success' : 'danger'">
           {{ containers.lastAction.scope }}｜{{ containers.lastAction.rule }}
@@ -1103,17 +1100,19 @@ function boxAircraft(side: Side) {
       </p>
     </template>
     <div v-if="showsActions" class="row">
-      <label class="field">
-        返场落点（死亡堆 → 图）
-        <UiField v-model="workbench.deadPileReturnHexText" class="input num" placeholder="列.行" />
+      <div class="field">
+        <span>返场落点（死亡堆 → 图）</span>
+        <BaseTag v-if="workbench.deadPileReturnHexText !== ''" kind="neutral">
+          {{ workbench.deadPileReturnHexText }}
+        </BaseTag>
         <BaseButton
           variant="secondary"
           size="sm"
           @click="workbench.beginDeadPileReturnHexPickNow()"
         >
-          点地图选格
+          点地图选返场落点
         </BaseButton>
-      </label>
+      </div>
       <!-- ★ 用户 2026-11-10：删掉 `alarmLimit` 只读行（整页 / 验证页仍可改） -->
       <label v-if="props.only === null" class="field">
         2.3a Alarm 单位（单位库 `alarmLimit` 自动取；手输即临时覆盖，清空即回到数据）
