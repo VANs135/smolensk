@@ -572,6 +572,8 @@ import {
   type ActionGateQuery,
   type ActionKey,
   fuelMethodLabelOf,
+  // 4.8 的 RE 上限按 9.11d 的当前 RE（印刷 − 已损）计
+  currentReOf,
   // 专规 4.1c：两条早期换轨走廊与「01.xx 列」入场区
   earlyRailCorridors,
   columnOneHexes,
@@ -1345,8 +1347,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         bucket = { hex: unit.hex, side: unit.side, combatRe: 0, units: [] }
         buckets.set(key, bucket)
       }
-      bucket.combatRe += unit.re
-      bucket.units.push({ instanceId: unit.instanceId, name: unit.name, re: unit.re })
+      const re = currentReOf(unit)
+      bucket.combatRe += re
+      bucket.units.push({ instanceId: unit.instanceId, name: unit.name, re })
     }
     const duties: OverstackDuty[] = []
     for (const bucket of buckets.values()) {

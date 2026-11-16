@@ -70,6 +70,7 @@ import { useHotseatStore } from './hotseat'
 import { useWorkbenchStore } from './workbench'
 import {
   counterImageUrlOf,
+  currentReOf,
   isHqUnit,
   mobilityOf,
   terrainsAt,
@@ -381,7 +382,7 @@ export const useSetupStore = defineStore('setup', () => {
   function existingReAt(hex: HexRef): number {
     return workbench.units
       .filter((unit) => sameHex(unit.hex, hex))
-      .reduce((sum, unit) => sum + (unit.re ?? 0), 0)
+      .reduce((sum, unit) => sum + (unit.re === undefined ? 0 : currentReOf(unit)), 0)
   }
 
   /**

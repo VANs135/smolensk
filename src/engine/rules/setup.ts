@@ -511,7 +511,11 @@ function reOfEntry(entry: SetupEntryView): number {
   for (const piece of entry.pieces) {
     if (piece.unitId === null) continue
     const record = piece.unitIdKind === 'aircraft' ? undefined : findUnitRecord(piece.unitId)
-    total += record?.reSize ?? 0
+    if (record === undefined) continue
+    // 9.11d：多步师的当前 RE = 印刷 RE − 已损军力（本作多步单位皆为师，RE 与印刷步数同值）
+    const printedSteps = record.steps?.total ?? 1
+    const lost = Math.min(printedSteps, Math.max(0, piece.stepPenalty ?? 0))
+    total += Math.max(0, (record.reSize ?? 0) - lost)
   }
   return total
 }

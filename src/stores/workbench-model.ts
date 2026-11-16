@@ -1167,7 +1167,9 @@ export function targetHexFacts(
   for (const unit of units) {
     if (unit.hex.col !== hex.col || unit.hex.row !== hex.row) continue
     if (unit.side === side) {
-      if (unit.instanceId !== excludeInstanceId && unit.isCombat) friendlyCombatRe += unit.re
+      // 9.11d：多步师按**当前 RE**（印刷 − 已损）计入 4.8 的 10 RE 上限
+      if (unit.instanceId !== excludeInstanceId && unit.isCombat)
+        friendlyCombatRe += currentReOf(unit)
       // 4.8 的「每格 1 港口」只对 port 成立；★ 本作无港口（TTW 1.1c：无海运，港口仅作地形属性），
       //   故 ports 恒为 0；**不可**把补给点/运输点等非战斗单位算成港口（SP 本可任意堆叠）。
       if (unit.noncombatKind === 'port') ports += 1
@@ -1198,7 +1200,8 @@ export function toLegalityUnit(unit: ConsoleUnit): LegalityUnit {
     attackCapable: unit.attackCapable,
     mobility: effectiveMobilityOf(unit),
     mode: unit.mode,
-    re: unit.re,
+    // 9.11d：4.8 的堆叠判据（含突袭发起格）按当前 RE 计
+    re: currentReOf(unit),
     raw: unit.raw,
     engineerCapable: unit.engineerCapable,
     noncombatKind: unit.noncombatKind ?? null,
