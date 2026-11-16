@@ -101,6 +101,13 @@ describe('14.9f：完整货物共同卸载', () => {
     })
     expect(plan([unit], [unit.id], 1)).toMatchObject({ ok: false })
   })
+  it('结果行不再写「0 T不能卸载」：全部卸完时直说全部卸完', () => {
+    const result = plan([unit], [unit.id])
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.data.detail).not.toContain('0 T不能卸载')
+    expect(result.data.detail).toContain('全部卸完')
+  })
   it('选SP时单位保留，空选择可整批退运', () => {
     expect(plan([unit, sp], [sp.id])).toMatchObject({
       ok: true,

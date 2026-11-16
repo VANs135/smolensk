@@ -99,19 +99,26 @@ export function planAirCargoUnload(input: {
                 .map((entry) => entry.aircraftId),
             ),
           ]
+  const refused = cargo.filter((item) => !chosen.has(item.id))
+  const deliveredSpT = delivered
+    .filter((item) => item.kind === 'sp')
+    .reduce((sum, item) => sum + airCargoTransportT(item), 0)
+  const refusedT = totalT - deliveredT
   return succeed(budget.rule, {
     deliveredIds: delivered.map((item) => item.id),
-    refusedIds: cargo.filter((item) => !chosen.has(item.id)).map((item) => item.id),
+    refusedIds: refused.map((item) => item.id),
     deliveredT,
-    refusedT: totalT - deliveredT,
-    deliveredSpT: delivered
-      .filter((item) => item.kind === 'sp')
-      .reduce((sum, item) => sum + airCargoTransportT(item), 0),
+    refusedT,
+    deliveredSpT,
     consumedT: input.kind === 'air_transport' ? deliveredT : 0,
     requiresDestinationStay,
     stayAircraftIds,
     rule: budget.rule,
-    detail: `本次卸载 ${deliveredT} T；${totalT - deliveredT} T不能卸载，保留退运（${budget.rule}）`,
+    // 逐件说清"卸了多少 / 留了多少"；全部卸完时不再写一句「0 T不能卸载」
+    detail:
+      refused.length === 0
+        ? `本次卸载 ${deliveredT} T（${delivered.length} 件，其中 SP ${deliveredSpT} T）；全部卸完（${budget.rule}）`
+        : `本次卸载 ${deliveredT} T（${delivered.length} 件）；另有 ${refusedT} T（${refused.length} 件）超限不能卸载，保留退运（${budget.rule}）`,
   })
 }
 
