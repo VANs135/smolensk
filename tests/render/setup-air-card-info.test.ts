@@ -3,23 +3,26 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 /**
- * ★ 用户 2026-11-15（实机试玩第 4 项）：**初设飞机卡片左侧空着浪费，写上飞机型号和是否激活**。
+ * ★ 用户 2026-11-16（批 G）：**初设飞机按激活态分两栏**
  *
- * 口径：极简、不写描述性文字 —— 卡片只补两项事实「机型 + 激活态」；
- * 激活态取剧本初设计划里**这一枚**的状态（`statuses[placed]`），不在界面另算规则。
+ * 前口径（2026-11-15）是「一行机型 · 激活态」；现口径改为：
+ * 栏头写状态（激活 / 未激活）与剩余枚数，栏内仍是算子阵列；空状态不出栏。
  */
-describe('初设飞机卡片：补机型与激活态', () => {
+describe('初设飞机：按激活态分栏', () => {
   const source = readFileSync('src/components/game/DecisionQueue.vue', 'utf8')
 
-  it('飞机卡片在算子图之外写机型', () => {
+  it('飞机不再写「机型 · 激活态」文字行，改为分栏', () => {
     expect(source).toContain("item.kind === 'air'")
     expect(source).toContain('queue__air')
-    expect(source).toContain('airCardText')
+    expect(source).toContain('airGroups')
+    expect(source).not.toContain('airCardText')
+    expect(source).not.toContain('airStatusText')
   })
 
-  it('激活态读该型这一枚的初设状态，并落成「激活 / 非激活」', () => {
-    expect(source).toContain('airStatusText')
-    expect(source).toContain('statuses[item.placed]')
-    expect(source).toContain('非激活')
+  it('栏头是「激活 / 未激活」，栏内是算子阵列', () => {
+    expect(source).toContain("label: '激活'")
+    expect(source).toContain("label: '未激活'")
+    expect(source).toContain('queue__air-col-head')
+    expect(source).toContain('v-for="n in group.count"')
   })
 })

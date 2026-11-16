@@ -46,6 +46,7 @@ import {
   type SetupPlan,
   type SupplyDumpRef,
 } from '@/engine/rules'
+import type { AirStatus } from '@/engine/state-types'
 import {
   buildSetupEffectLedger,
   collectSetupGaps,
@@ -499,6 +500,14 @@ export const useSetupStore = defineStore('setup', () => {
    */
   const placedSelfInstances = ref<Record<number, number>>({})
   const placedAirInstances = ref<Record<string, number>>({})
+  /**
+   * 批 G（用户 2026-11-16）：按**激活态分栏**点选后，该型飞机的落位顺序
+   *
+   * 计划里每型的状态数组是"先未激活、后激活"；玩家在「激活」栏点算子时，要把下一枚
+   * 换成激活态那一枚。这里只置换**同型内等价的飞机**（同机型、同减损规则），
+   * 不改变任何规则数值，也不凭空增减枚数。
+   */
+  const airStatusOrder = ref<Record<string, AirStatus[]>>({})
 
   /** 飞机进度键（同一型在两方都可能出现 ⇒ 带上阵营） */
   function airProgressKey(side: Side, entryIndex: number): string {
@@ -564,8 +573,33 @@ export const useSetupStore = defineStore('setup', () => {
     return true
   }
 
-  /** 开始在地图上放置**某一型飞机**（候选＝本方空军基地格） */
-  function beginAirPlacement(side: Side, entryIndex: number): boolean {
+  /** 该型飞机**当前**的落位状态顺序（玩家分栏点选后可能已局部置换） */
+  function airStatusOrderOf(
+    side: Side,
+    entryIndex: number,
+    planned: readonly AirStatus[],
+  ): AirStatus[] {
+    return airStatusOrder.value[airProgressKey(side, entryIndex)] ?? [...planned]
+  }
+
+  /**
+   * 批 G（用户 2026-11-16）：该型飞机**剩余**各激活态的枚数（分栏栏头的数）
+   *
+   * 只读计划；不在界面侧自己拼规则。
+   */
+  function airStatusCounts(side: Side, entryIndex: number): { active: number; inactive: number } {
+    const row = airPlanOf(side)?.placements.find((item) => item.entryIndex === entryIndex)
+    if (row === undefined) return { active: 0, inactive: 0 }
+    const placed = placedAirInstances.value[airProgressKey(side, entryIndex)] ?? 0
+    const rest = airStatusOrderOf(side, entryIndex, row.statuses).slice(placed)
+    return {
+      active: rest.filter((status) => status === 'active').length,
+      inactive: rest.filter((status) => status === 'inactive').length,
+    }
+  }
+
+  /** 开始在地图上放置**某一型飞机**（候选＝本方空军基地格；`wanted`＝从哪一栏点的） */
+  function beginAirPlacement(side: Side, entryIndex: number, wanted?: AirStatus): boolean {
     const airPlan = airPlanOf(side)
     const row = airPlan?.placements.find((item) => item.entryIndex === entryIndex)
     if (airPlan === null || row === undefined) {
@@ -583,7 +617,28 @@ export const useSetupStore = defineStore('setup', () => {
           : `没有可用的空军基地格（14.1a）`
       return record({ ok: false, rule: AIR_BASE_SITE_RULE, reason })
     }
-    const placed = placedAirInstances.value[airProgressKey(side, entryIndex)] ?? 0
+    const key = airProgressKey(side, entryIndex)
+    const placed = placedAirInstances.value[key] ?? 0
+    /*
+     * 批 G：从「激活 / 未激活」某一栏点算子 ⇒ 把**下一枚**换成该状态那一枚。
+     * 只置换同型内等价的飞机；该状态已落满则如实拒绝（不摆点了没反应的入口）。
+     */
+    if (wanted !== undefined && placed < row.count) {
+      const order = airStatusOrderOf(side, entryIndex, row.statuses)
+      if (order[placed] !== wanted) {
+        const swap = order.findIndex((status, index) => index >= placed && status === wanted)
+        if (swap < 0) {
+          return record({
+            ok: false,
+            rule: AIR_BASE_SITE_RULE,
+            reason:
+              wanted === 'active' ? '该型已没有未落位的激活飞机' : '该型已没有未落位的未激活飞机',
+          })
+        }
+        ;[order[placed], order[swap]] = [order[swap]!, order[placed]!]
+        airStatusOrder.value = { ...airStatusOrder.value, [key]: order }
+      }
+    }
     placing.value = {
       kind: 'air',
       entryIndex,
@@ -812,7 +867,8 @@ export const useSetupStore = defineStore('setup', () => {
       // 盒内飞机的位置由成员账本决定。这里的格号仅保持存档实体形状。
       hex: inBox ? { col: airBoxEdgeColumn(side), row: 1 } : { ...target },
       side,
-      airStatus: row.statuses[index] ?? 'inactive',
+      // 批 G：分栏点选可能已置换过顺序（只换同型等价飞机的落位次序）
+      airStatus: airStatusOrderOf(side, entryIndex, row.statuses)[index] ?? 'inactive',
     })
     // IV-E / 剧本明示的减损：落到该型第 n 枚时取第 n 个 loss 值
     air.steps = row.steps[index] ?? air.steps
@@ -2163,6 +2219,7 @@ export const useSetupStore = defineStore('setup', () => {
     completed.value = {}
     placedSelfInstances.value = {}
     placedAirInstances.value = {}
+    airStatusOrder.value = {}
     defaultFilledIds.value = new Set()
   }
 
@@ -3508,6 +3565,7 @@ export const useSetupStore = defineStore('setup', () => {
     candidatesOf,
     spDumpsOf,
     airPlanOf,
+    airStatusCounts,
     airPlacedCount,
     airDone,
     allDone,

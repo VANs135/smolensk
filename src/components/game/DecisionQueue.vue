@@ -64,24 +64,27 @@ function sideName(side: 'axis' | 'soviet'): string {
 }
 
 /**
- * 该型飞机**即将落的这一枚**的初设激活态（14.1a）
+ * 批 G（用户 2026-11-16）：飞机按**激活态分两栏**
  *
- * 用户 2026-11-15（实机试玩第 4 项）：初设飞机卡片左侧空着浪费，补「机型 · 激活态」。
- * 状态取剧本初设计划里 `statuses[placed]`（与落位实际写入的是同一份），界面不另算规则。
+ * 栏头写状态与剩余枚数，栏内仍是算子阵列（点哪一栏的算子就落那一枚）。
+ * 计数来自 store 的 `airStatusCounts`（与落位实际写入的是同一份计划），界面不另算规则。
+ * 没有对应状态就不显示那一栏（不留空栏占位）。
  */
-function airStatusText(item: SetupPlacing): string | null {
-  const row = setup
-    .airPlanOf(item.side)
-    ?.placements.find((entry) => entry.entryIndex === item.entryIndex)
-  const status = row?.statuses[item.placed]
-  if (status === undefined) return null
-  return status === 'active' ? '激活' : '非激活'
+function airGroups(
+  item: SetupPlacing,
+): { status: 'active' | 'inactive'; label: string; count: number }[] {
+  if (item.kind !== 'air') return []
+  const counts = setup.airStatusCounts(item.side, item.entryIndex)
+  return [
+    { status: 'active' as const, label: '激活', count: counts.active },
+    { status: 'inactive' as const, label: '未激活', count: counts.inactive },
+  ].filter((group) => group.count > 0)
 }
 
-/** 飞机卡片上的一行字：机型，能取到状态时再补激活态 */
-function airCardText(item: SetupPlacing): string {
-  const status = airStatusText(item)
-  return status === null ? item.label : `${item.label} · ${status}`
+/** 点某一栏的算子 ⇒ 落该状态的那一枚（store 负责把下一枚换成它） */
+function pickAir(item: SetupPlacing, status: 'active' | 'inactive'): void {
+  if (cardBlocked(item)) return
+  setup.beginAirPlacement(item.side, item.entryIndex, status)
 }
 
 /** 还没落位的**总枚数**（标题上的角标） */
@@ -464,8 +467,54 @@ function sideMark(side: 'axis' | 'soviet'): string {
           :key="`${item.kind}:${item.side}:${item.entryIndex}:${item.formationId ?? item.instanceId ?? ''}`"
           class="queue__row"
         >
+          <!--
+            批 G（用户 2026-11-16）：飞机不再是一行「机型 · 激活态」文字，而是**按状态分两栏**：
+            栏头＝状态 + 剩余枚数，栏内＝算子阵列；点某栏的算子就落该状态的那一枚。
+          -->
+          <div
+            v-if="item.kind === 'air'"
+            class="queue__air"
+            :class="{
+              'queue__card--on': isActive(item),
+              'queue__card--blocked': cardBlocked(item),
+            }"
+          >
+            <div class="queue__air-head">
+              <span class="queue__side num">{{ sideMark(item.side) }}</span>
+              <span class="queue__label" :title="item.label">{{ item.label }}</span>
+              <span class="queue__badge num">{{ item.placed }}/{{ item.total }}</span>
+            </div>
+            <!-- 不可用就不摆出来（不给置灰按钮）：基地未就位时这一型连栏带算子一起不出 -->
+            <div v-if="!cardBlocked(item)" class="queue__air-cols">
+              <div v-for="group in airGroups(item)" :key="group.status" class="queue__air-col">
+                <div class="queue__air-col-head">
+                  <span>{{ group.label }}</span>
+                  <span class="num">{{ group.count }}</span>
+                </div>
+                <div class="queue__air-array">
+                  <button
+                    v-for="n in group.count"
+                    :key="n"
+                    type="button"
+                    class="queue__air-chip"
+                    :title="`${group.label} · ${item.label}`"
+                    @click="pickAir(item, group.status)"
+                  >
+                    <img
+                      v-if="item.imageUrl !== null"
+                      :src="item.imageUrl"
+                      alt=""
+                      draggable="false"
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <component
             :is="cardBlocked(item) ? 'div' : 'button'"
+            v-else
             :type="cardBlocked(item) ? undefined : 'button'"
             class="queue__card"
             :class="{
@@ -494,10 +543,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
               />
             </span>
             <span class="queue__side num">{{ sideMark(item.side) }}</span>
-            <!-- 用户 2026-11-15：飞机卡片补机型与激活态（有算子图时原来这一带是空的） -->
-            <span v-if="item.kind === 'air' && item.imageUrl !== null" class="queue__air">
-              {{ airCardText(item) }}
-            </span>
             <!-- 用户 2026-11-11：有算子图就不再用文字重复名称；无图才退回文字 -->
             <span v-if="item.imageUrl === null" class="queue__label">{{ item.label }}</span>
             <span class="queue__badge num">
@@ -798,15 +843,74 @@ function sideMark(side: 'axis' | 'soviet'): string {
   white-space: nowrap;
 }
 
-/* 飞机卡片补的一行：机型 · 激活态（其余卡片不带这行） */
+/* 批 G：飞机按激活态分两栏（栏头状态 + 剩余枚数；栏内算子阵列） */
 .queue__air {
-  flex: 1;
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-2);
+}
+
+.queue__air-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--control-height-sm);
+}
+
+.queue__air-cols {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.queue__air-col {
+  display: grid;
+  gap: 2px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.queue__air-col-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   font-size: var(--text-xs);
+  font-weight: 700;
   color: var(--color-muted);
+}
+
+.queue__air-array {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.queue__air-chip {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  cursor: pointer;
+}
+
+.queue__air-chip:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.queue__air-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.queue__air-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
 }
 
 .queue__badge {
