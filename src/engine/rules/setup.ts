@@ -240,6 +240,10 @@ export interface SetupEntryView {
   side: Side
   kind: SetupEntry['kind']
   name: string | null
+  /** 印刷**番号**（如 '58' / 'IRGD'；批 H 地面单位卡右侧就是它） */
+  designation: string | null
+  /** 母类（如 'UR Bde' / 'Inf Rgt'；仅供界面识别，不参与规则） */
+  parentType: string | null
   raw: string
   /** 数量：单位数 / SP 点数 / 运输点数 / 基地数（=1，等级另在 raw） */
   count: number
@@ -323,6 +327,8 @@ function toEntryView(entry: EntryRow, index: number): SetupEntryView {
     side: entry.side as Side,
     kind: entry.kind,
     name: entry.name ?? null,
+    designation: entry.designation ?? null,
+    parentType: entry.parentType ?? null,
     raw: entry.raw,
     count: entry.count,
     placement,

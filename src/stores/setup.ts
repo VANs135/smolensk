@@ -167,6 +167,13 @@ export interface SetupPlacing {
   label: string
   /** 原文（自选格项用剧本页原文，飞机用机型 id） */
   raw: string
+  /**
+   * 批 H（用户 2026-11-16）：**地面单位的番号**（编队 / 师属标识，取自单位库 `formation`）
+   *
+   * 只给地面单位（`kind === 'self'`）；飞机 / SP / 运输点 / 编队西移没有这一项 ⇒ 不显示。
+   * 卡面只补这一个标识，**不加**任何描述文字。
+   */
+  formation?: string | null
   /** 该条目的总枚数（**数量角标的分母**） */
   count: number
   /** 本项要落几枚（棋子类＝`count`，计数类与编队＝一次落完故为 1） */
@@ -239,6 +246,13 @@ function imageUrlOfRecordId(unitId: string | null | undefined): string | null {
   if (unitId === null || unitId === undefined || unitId === '') return null
   const hit = [...unitsAxis.units, ...unitsSoviet.units].find((record) => record.id === unitId)
   return hit?.images?.front ? counterImageUrl(counterDirOfSide(hit.side), hit.images.front) : null
+}
+
+/** 批 H：单位库记录 → **番号**（编队 / 师属标识；查不到就不显示，不猜） */
+function formationOfUnitId(unitId: string | null | undefined): string | null {
+  if (unitId === null || unitId === undefined || unitId === '') return null
+  const hit = [...unitsAxis.units, ...unitsSoviet.units].find((record) => record.id === unitId)
+  return hit?.formation ?? null
 }
 
 /** 飞机库记录 → 算子正面图档（`air` 项用机型 id） */
@@ -567,6 +581,8 @@ export const useSetupStore = defineStore('setup', () => {
       category: categoryOfEntry(entry.kind),
       // 第六批条 1（S1）：算子图阵列
       imageUrl: imageUrlOfEntry(entry),
+      // 批 H：地面单位 + 番号（编队 / 师属标识；非地面类为 null，界面不显示）
+      formation: formationOfEntry(entry),
       blockedReason: null,
     }
     lastAction.value = null
@@ -955,6 +971,8 @@ export const useSetupStore = defineStore('setup', () => {
         category: categoryOfEntry(entry.kind),
         // 第六批条 1（S1）：算子图阵列（查不到图 ⇒ null，界面退回文字卡）
         imageUrl: imageUrlOfEntry(entry),
+        // 批 H：地面单位 + 番号（编队 / 师属标识；非地面类为 null，界面不显示）
+        formation: formationOfEntry(entry),
         blockedReason:
           candidates.length === 0 ? '该条目的候选格暂不可解（缺锚格 / 半径 / 地图事实）' : null,
       })
@@ -1414,6 +1432,15 @@ export const useSetupStore = defineStore('setup', () => {
         : null
     }
     return imageUrlOfRecordId(entry.unitId ?? entry.pieces[0]?.unitId ?? null)
+  }
+
+  /** 批 H：初设条目 → 地面单位番号（非地面类一律 null ⇒ 界面不显示） */
+  function formationOfEntry(entry: SetupEntryView): string | null {
+    if (entry.kind === 'sp' || entry.kind === 'transport_point' || entry.kind === 'aircraft') {
+      return null
+    }
+    // 首选剧本页印的**番号**（'IRGD' / '152'）；没有才退到单位库的编队标识（'3PZ'）
+    return entry.designation ?? formationOfUnitId(entry.unitId ?? entry.pieces[0]?.unitId ?? null)
   }
 
   /* ────────────────── 第六批条 2（S2）：卡车装载改**地图点选** ────────────────── */

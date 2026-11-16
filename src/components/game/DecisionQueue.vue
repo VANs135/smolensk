@@ -545,6 +545,8 @@ function sideMark(side: 'axis' | 'soviet'): string {
             <span class="queue__side num">{{ sideMark(item.side) }}</span>
             <!-- 用户 2026-11-11：有算子图就不再用文字重复名称；无图才退回文字 -->
             <span v-if="item.imageUrl === null" class="queue__label">{{ item.label }}</span>
+            <!-- 批 H（用户 2026-11-16）：地面单位卡右侧补**番号**（编队 / 师属标识），不加描述 -->
+            <span v-if="item.formation" class="queue__formation num">{{ item.formation }}</span>
             <span class="queue__badge num">
               {{
                 item.kind === 'truck'
@@ -841,6 +843,18 @@ function sideMark(side: 'axis' | 'soviet'): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 批 H：地面单位卡右侧的番号（编队 / 师属标识） */
+.queue__formation {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
 }
 
 /* 批 G：飞机按激活态分两栏（栏头状态 + 剩余枚数；栏内算子阵列） */
