@@ -167,6 +167,23 @@ function seekRailArrival(store: Workbench): { index: number; hex: HexRef } | nul
   return null
 }
 
+/** 按卡面分栏标签找一条单枚地面到达（`Entry I or J` 这类多入口用） */
+function seekArrivalByLabel(store: Workbench, wanted: string): { index: number } | null {
+  for (let turn = 1; turn <= 40; turn += 1) {
+    store.setTurn(turn)
+    store.setPhase('reinforcement')
+    const plan = store.arrivalPlan
+    if (plan === null) continue
+    for (let index = 0; index < plan.units.length; index += 1) {
+      const unit = plan.units[index]!
+      if (unit.kind !== 'unit') continue
+      if (unit.placement.kind !== 'entryHex' || unit.placement.label !== wanted) continue
+      return { index }
+    }
+  }
+  return null
+}
+
 describe('裁定 3：增援放置的铁路运输按钮复用同一流程', () => {
   it('铁路入场格：点卸货格直接落子并扣运力；撤回一步退点', () => {
     const store = useWorkbenchStore()
@@ -241,5 +258,18 @@ describe('裁定 3：增援放置的铁路运输按钮复用同一流程', () =>
     expect(panel).toContain('arrivalRailCapacity')
     expect(panel).toContain('arrivalRailNoDetrainable')
     expect(panel).toContain('arrivalRailEntryNoRail')
+  })
+
+  it('★ Entry I or J：铁路起点不再只按第一个入口 I(1.12) 判死，J(1.19) 的铁路可用', () => {
+    const store = useWorkbenchStore()
+    const hit = seekArrivalByLabel(store, 'Entry I or J')
+    expect(hit, '真实到达表里应有 Entry I or J 的单枚地面增援').not.toBeNull()
+    const { index } = hit!
+    store.applyArrivalRemovalsNow()
+
+    // 修前只取自动解出的 I（1.12，无铁路）⇒ 直接判「入场格不含铁路」，J 的铁路永远看不到
+    const origins = store.arrivalRailOriginsOf(index)
+    expect(origins.some((hex) => sameHex(hex, { col: 1, row: 19 }))).toBe(true)
+    expect(origins.some((hex) => sameHex(hex, { col: 1, row: 12 }))).toBe(false)
   })
 })
