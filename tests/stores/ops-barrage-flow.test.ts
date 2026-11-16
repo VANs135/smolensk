@@ -92,6 +92,9 @@ describe('炮击第 2 步：确认支付后自动结算（10.0 / 10.1b / 10.0c�
     expect(mapView.confirmOpsBarrageLoss()).toBe(true)
 
     expect(workbench.barrageState?.finished).toBe(true)
+    // C4：结算后就地停在「已结算」结果行，点「关闭」才收窗
+    expect(mapView.opsFlow?.step).toBe(4)
+    mapView.finishOpsFlow()
     expect(mapView.opsFlow).toBeNull()
     expect(workbench.barragePhaseLedger.hexes).toEqual([`${NEAR_HEX.col}.${NEAR_HEX.row}`])
     expect(workbench.barragePhaseLedger.unitIds).toEqual(['art-1'])
@@ -131,6 +134,8 @@ describe('炮击第 2 步：确认支付后自动结算（10.0 / 10.1b / 10.0c�
     expect(workbench.barrageState?.targetKind).toBe('airBase')
     expect(workbench.barrageState?.finished).toBe(true)
     expect(workbench.barrageState?.outcome?.table).toBe('barrage-vs-facility')
+    expect(mapView.opsFlow?.step).toBe(4)
+    mapView.finishOpsFlow()
     expect(mapView.opsFlow).toBeNull()
   })
 

@@ -181,11 +181,13 @@ export type MapSessionKind =
  */
 export type OpsFlowKind = 'barrage' | 'bombing' | 'hipShoot'
 
-/** 统一流程的会话态：1＝选单位，2＝分叉步（炮击＝补给 / 空军＝空战防空），3＝炮击受损单位选择 */
+/** 统一流程的会话态：1＝选单位，2＝分叉步（炮击＝补给 / 空军＝空战防空），3＝炮击受损单位选择，4＝已结算 */
 export interface OpsFlowState {
   kind: OpsFlowKind
   targetHex: HexRef
-  step: 1 | 2 | 3
+  step: 1 | 2 | 3 | 4
+  /** C4：第 4 步「已结算」就地展示的结果行（掷骰 / 最终列 / DG 或损失 / 扣 T） */
+  result?: string
 }
 
 /**
@@ -1455,10 +1457,38 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
+   * C4（用户 2026-11-17 实走）：**炮击结算结果行**
+   *
+   * 实走现场：确认支付后无损失/设施结果把整窗收掉，玩家在面板上看不到掷骰与 DG；
+   * 结果只在「战报」里。口径与 S1 一致：结算后就地留一行，再收窗。
+   * 数据全部取 `workbench.barrageSummary`（与战报同一份投影），不另算。
+   */
+  function barrageResultLine(): string {
+    const summary = workbench.barrageSummary
+    if (summary === null) return '本次炮击已结算'
+    const parts: string[] = []
+    if (summary.die !== null)
+      parts.push(
+        `掷骰 ${summary.die}${summary.halfDie === null ? '' : `（取整 ${summary.halfDie}）`}`,
+      )
+    if (summary.finalColumn !== undefined) parts.push(`最终列 ${summary.finalColumn}`)
+    if (summary.code !== null) parts.push(`格值 ${summary.code}`)
+    parts.push(`扣 ${summary.costT} T`)
+    if (summary.facilityOutcome !== null && summary.facilityOutcome !== undefined)
+      parts.push(summary.facilityOutcome.detail)
+    else if (summary.unitOutcome !== null && summary.unitOutcome !== undefined) {
+      parts.push(summary.unitOutcome.dg ? '目标格 DG' : '无 DG')
+      if (summary.unitOutcome.stepLosses > 0)
+        parts.push(`损失 ${summary.unitOutcome.stepLosses} 点`)
+    }
+    return parts.join(' · ')
+  }
+
+  /**
    * 炮击第 2 步：确认支付 ⇒ **自动走完横移与掷骰**
    *
    * 用户口径（2026-11-12）：不再有中间的横移 / 掷骰 / 结果分步块。
-   * 有军力损失时停在 `step 3` 让玩家选受损单位；设施与无损失结果当场收束。
+   * 有军力损失时停在 `step 3` 让玩家选受损单位；其余结果进 `step 4` 就地给结果行（C4）。
    */
   function confirmOpsBarrageSupply(): boolean {
     const flow = opsFlow.value
@@ -1470,16 +1500,16 @@ export const useMapViewStore = defineStore('mapView', () => {
       opsFlow.value = { ...flow, step: 3 }
       return true
     }
-    opsFlow.value = null
+    opsFlow.value = { ...flow, step: 4, result: barrageResultLine() }
     return true
   }
 
-  /** 炮击第 3 步：选完受损单位即收束（10.0a） */
+  /** 炮击第 3 步：选完受损单位 ⇒ 进「已结算」结果行（10.0a / C4） */
   function confirmOpsBarrageLoss(): boolean {
     const flow = opsFlow.value
     if (flow === null || flow.kind !== 'barrage' || flow.step !== 3) return false
     if (!workbench.confirmBarrageLossNow()) return false
-    opsFlow.value = null
+    opsFlow.value = { ...flow, step: 4, result: barrageResultLine() }
     return true
   }
 
@@ -1726,6 +1756,11 @@ export const useMapViewStore = defineStore('mapView', () => {
       // （第一个未选落点者）。不清的话，同一段里连打第二场时，上一场点过的那个单位 id
       // 只要恰好也在新名单里就会"复活"成当前焦点，而玩家并没指认它。
       retreatUnitId.value = null
+      /*
+       * C4：已结算的结果行只留在本次操作所在的环节里。
+       * 点「进入下一环节」后若还把上一场的掷骰结果挂在屏上，就成了跨段残影。
+       */
+      if (opsFlow.value !== null && opsFlow.value.step === 4) opsFlow.value = null
     },
   )
 

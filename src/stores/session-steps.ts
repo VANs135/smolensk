@@ -63,7 +63,7 @@ export interface SessionStepFacts {
    * 空军第 2 步不另起一套步骤名，直接把任务链的当前子步带在 `air` 上
    * ⇒ 门 id 与 `AirPanel` 同源，面板不再自己判到哪一步。
    */
-  ops: { kind: OpsFlowKind; step: 1 | 2 | 3; air: AirSessionFacts | null } | null
+  ops: { kind: OpsFlowKind; step: 1 | 2 | 3 | 4; air: AirSessionFacts | null } | null
   supply: { step: SupplyStep } | null
   move: {
     fuelPending: boolean
@@ -373,6 +373,17 @@ function opsItems(facts: NonNullable<SessionStepFacts['ops']>): SessionStepItem[
           '支付炮击补给',
           '宣布后要按初始列付补给（10.1b）。',
           '在地图上点一座高亮的补给站完成支付。',
+        ),
+      ]
+    }
+    // C4：结算后就地留结果行，点「关闭」才收窗（与 S1 的完成态口径一致）
+    if (facts.step === 4) {
+      return [
+        item(
+          'ops:barrage:done',
+          '已结算',
+          '本次炮击已结算，结果已入战报。',
+          '看结果行，点「关闭」继续。',
         ),
       ]
     }

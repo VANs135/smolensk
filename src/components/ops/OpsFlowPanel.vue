@@ -97,11 +97,19 @@ function setTargetKind(kind: string): void {
       <template v-else>
         <BaseTag :kind="flow.step === 1 ? 'info' : 'success'">① 选单位</BaseTag>
         <span class="ops__arrow">→</span>
-        <BaseTag :kind="flow.step === 2 ? 'info' : 'neutral'">② 支付补给（10.1b）</BaseTag>
+        <BaseTag :kind="flow.step === 2 ? 'info' : flow.step > 2 ? 'success' : 'neutral'">
+          ② 支付补给（10.1b）
+        </BaseTag>
         <template v-if="workbench.barrageTargetKind !== 'airBase'">
           <span class="ops__arrow">→</span>
-          <BaseTag :kind="flow.step === 3 ? 'info' : 'neutral'">③ 受损单位</BaseTag>
+          <BaseTag :kind="flow.step === 3 ? 'info' : flow.step > 3 ? 'success' : 'neutral'">
+            ③ 受损单位
+          </BaseTag>
         </template>
+        <span class="ops__arrow">→</span>
+        <BaseTag :kind="flow.step === 4 ? 'success' : 'neutral'">
+          {{ workbench.barrageTargetKind === 'airBase' ? '③ 已结算' : '④ 已结算' }}
+        </BaseTag>
       </template>
       <span class="muted">｜目标 {{ hexLabel(flow.targetHex) }}</span>
     </p>
@@ -202,6 +210,18 @@ function setTargetKind(kind: string): void {
           确认受损
         </BaseButton>
         <BaseButton variant="secondary" @click="map.cancelOpsFlow()">取消（退回）</BaseButton>
+      </div>
+    </SessionStep>
+
+    <!-- ───────── 炮击：第 4 步 已结算（C4：结果行就地留下，点「关闭」再收窗） ───────── -->
+    <SessionStep item="ops:barrage:done">
+      <p class="num">
+        <BaseTag kind="success">已结算</BaseTag>
+        {{ flow.result }}
+      </p>
+      <p class="muted num">结果已入战报；继续炮击请右键敌方格，或点右上「进入下一环节」。</p>
+      <div class="ops__actions">
+        <BaseButton @click="map.finishOpsFlow()">关闭</BaseButton>
       </div>
     </SessionStep>
 
