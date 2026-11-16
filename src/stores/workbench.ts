@@ -8508,6 +8508,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // #13：选中即补记编队油（同格同编队，付款后进入本格的单位不再被要求加油）
     applyFormationFuelCoverageToIds(ids)
     selectedId.value = picked.instanceId
+    /*
+     * G2（用户 2026-11-17 实走）：**换选成功即清掉旧拒绝** ——
+     * 修前 `moveBlocked` 只在成功走一步 / 撤销 / 结束移动时清；先点远格被拒、再换选另一支己方
+     * 堆叠时，顶部红字仍指着已经不存在的意图（「这一步被拒：…」挂在新的选中上）。
+     */
+    moveBlocked.value = null
     lastStep.value = null
     pushLog(
       'info',
