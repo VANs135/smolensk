@@ -421,6 +421,20 @@ function arrivalErrorText(reason: string): string {
   if (code === 'arrivalRemovalsFirst') return '先执行 1.6a 强制移除，再放置到达算子'
   if (code === 'arrivalSpGroupRequired')
     return '运输点带来的 SP 必须先选装甲集群（Guderian / Hoth）再投放（3.4b）'
+  if (code === 'arrivalRailEntryNoRail') return '这一条的入场格不含铁路（13.6b）'
+  if (code === 'arrivalRailEntryNotEntryHex') return '这一条的落点不是入场格（13.6b）'
+  if (code === 'arrivalRailNoDetrainable') return '这一条没有可铁路抵达的卸货格（13.3c / 13.3e-2）'
+  if (code === 'arrivalRailCapacity') {
+    const [, need = '0', left = '0'] = reason.split(':')
+    return `本回合铁路运力不足：需 ${need} 点、余 ${left} 点（13.3b）`
+  }
+  if (code === 'arrivalRailMultiCopy') return '这一条是多枚/编成条目，按逐枚普通投放（13.6）'
+  if (code === 'arrivalRailNotGroundUnit') return '这一条不是地面单位，不能走铁路运输（13.6b）'
+  if (code === 'arrivalRailNoPlacement') return '这一条的落点还没定（13.6）'
+  if (code === 'arrivalRailNoRecord') return '单位库里找不到对应算子，请先指定型号（13.6）'
+  if (code === 'arrivalRailAlreadyPlaced') return '这一条已经投放完毕（13.6）'
+  if (code === 'arrivalRailNotPhase') return '当前不在增援到达环节（13.6）'
+  if (code.startsWith('arrivalRail')) return '这一条现在不能走铁路运输'
   if (code === 'arrivalHandNotEmpty') return '手牌还没放完：要结束本段请先确认放弃上场'
   return '这一枚现在放不下，换一条或换一处入场格试试'
 }
@@ -464,7 +478,8 @@ function withdrawArrival(index: number): void {
 function beginArrivalRail(index: number): void {
   handError.value = ''
   if (!workbench.beginArrivalRailPickNow(index)) {
-    handError.value = '该增援不能走铁路运输：入场格不含铁路、没有可抵达的卸货格，或运力不足'
+    // 具体缺哪一条由 store 给（入场格不含铁路 / 没有可达卸货格 / 运力不足各说各的）
+    handError.value = arrivalErrorText(workbench.reinforcementError?.reason ?? '')
   }
 }
 

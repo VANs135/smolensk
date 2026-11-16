@@ -25287,63 +25287,83 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function railArrivalPlan(
     index: number,
   ): { entry: HexRef; cargo: RailCargoView; side: Side; recordId: string } | null {
-    if (phase.value !== 'reinforcement') return null
+    const base = railArrivalBaseOf(index)
+    return 'plan' in base ? base.plan : null
+  }
+
+  /**
+   * 13.6b：增援铁路运输的**结构前提**（不查可达卸货格与运力）
+   *
+   * 拆成「结构前提 / 可达路线」两步，是为了让按钮的可用判据与执行侧同源：
+   * 前者只说明"这一条是不是铁路运输的对象"，后者说明"现在真的运得走"。
+   * 被拒时按具体缺项返回原因码，不再把几种原因 OR 成一句。
+   */
+  function railArrivalBaseOf(
+    index: number,
+  ):
+    | { plan: { entry: HexRef; cargo: RailCargoView; side: Side; recordId: string } }
+    | { reason: string } {
+    if (phase.value !== 'reinforcement') return { reason: 'arrivalRailNotPhase' }
     const plan = arrivalPlan.value
-    if (plan === null) return null
+    if (plan === null) return { reason: 'arrivalRailNotPhase' }
     const demand = plan.units[index]
-    if (demand === undefined || demand.kind !== 'unit') return null
-    if (arrivalPlaced.value[index] === true) return null
+    if (demand === undefined) return { reason: 'arrivalRailNotPhase' }
+    if (demand.kind !== 'unit') return { reason: 'arrivalRailNotGroundUnit' }
+    if (arrivalPlaced.value[index] === true) return { reason: 'arrivalRailAlreadyPlaced' }
     // 裁定 3 第一版只做单枚条目：编成/多枚（含逐枚点名的 HQ）走普通投放
-    if (arrivalCopiesOf(demand) !== 1 || arrivalNamedCopiesOf(demand).length > 0) return null
+    if (arrivalCopiesOf(demand) !== 1 || arrivalNamedCopiesOf(demand).length > 0) {
+      return { reason: 'arrivalRailMultiCopy' }
+    }
     const placement = arrivalPlacements.value[index]
-    if (placement === undefined || placement.hex === null) return null
+    if (placement === undefined || placement.hex === null) {
+      return { reason: 'arrivalRailNoPlacement' }
+    }
     const entry = placement.hex
     const side = activeSide.value
     const facts = railMoveFacts.value
-    if (!facts.hasRail(entry) || !facts.isEntryHex(entry, side)) return null
+    if (!facts.hasRail(entry)) return { reason: 'arrivalRailEntryNoRail' }
+    if (!facts.isEntryHex(entry, side)) return { reason: 'arrivalRailEntryNotEntryHex' }
     const record = arrivalRecordOf(index)
-    if (record === null) return null
+    if (record === null) return { reason: 'arrivalRailNoRecord' }
     const ma = record.factors?.move?.ma ?? 0
     return {
-      entry,
-      side,
-      recordId: record.id,
-      cargo: {
-        kind: 'unit',
-        id: `arrival:${String(index)}`,
+      plan: {
+        entry,
         side,
-        re: record.reSize ?? 1,
-        mobility: mobilityOf(record, 'move'),
-        moveMa: ma,
-        // 13.6b：增援可以任意主动模式入场；13.3e-1 要求铁路移动时处于移动模式
-        mode: 'move',
-        dg: false,
-        currentMa: ma,
-        preLoadMp: 0,
+        recordId: record.id,
+        cargo: {
+          kind: 'unit',
+          id: `arrival:${String(index)}`,
+          side,
+          re: record.reSize ?? 1,
+          mobility: mobilityOf(record, 'move'),
+          moveMa: ma,
+          // 13.6b：增援可以任意主动模式入场；13.3e-1 要求铁路移动时处于移动模式
+          mode: 'move',
+          dg: false,
+          currentMa: ma,
+          preLoadMp: 0,
+        },
       },
     }
   }
 
-  /** 13.6b / 裁定 3：增援铁路运输按钮是否可用（不可用项不出现） */
-  function arrivalRailEligible(index: number): boolean {
-    return railArrivalPlan(index) !== null
-  }
-
   /**
-   * 13.6b / 裁定 3：进入增援铁路运输的落点选择
+   * 13.6b / 裁定 3：该条目**此刻**的可铁路抵达路线
    *
-   * 候选＝13.3c 可卸货格 ∩ 13.3e-2 路径可达 ∩ 成本 ≤ 本回合剩余运力；
-   * M2：点格**直接落子**（不再弹确认），只留一条「撤回」。
+   * `reachable`＝13.3c 可卸货格 ∩ 13.3e-2 路径可达（不筛运力）；
+   * `candidates`＝其中成本 ≤ 本回合剩余运力的那些（按钮只在这些格上放行）。
    */
-  function beginArrivalRailPickNow(index: number): boolean {
-    arrivalRailUndo.value = null
-    const plan = railArrivalPlan(index)
-    if (plan === null) {
-      pushLog('warning', '该增援不能走铁路运输：入场格不含铁路或不是单枚单位（13.6b）', '13.6b')
-      return false
-    }
+  function arrivalRailRoutesOf(plan: { entry: HexRef; cargo: RailCargoView; side: Side }): {
+    reachable: number
+    minCost: number | null
+    candidates: HexRef[]
+    costs: Map<string, number>
+  } {
     const costs = new Map<string, number>()
     const candidates: HexRef[] = []
+    let reachable = 0
+    let minCost: number | null = null
     for (const hex of detrainableHexes.value) {
       if (sameHex(hex, plan.entry)) continue
       const path = railPathBetween(plan.entry, hex, plan.side)
@@ -25360,14 +25380,63 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         entrainOffMap: true,
       })
       if (!outcome.ok) continue
+      reachable += 1
+      if (minCost === null || outcome.data.cost < minCost) minCost = outcome.data.cost
       if (outcome.data.cost > railCapRemaining.value[plan.side]) continue
       candidates.push(hex)
       costs.set(hexLabel(hex), outcome.data.cost)
     }
+    return { reachable, minCost, candidates, costs }
+  }
+
+  /** 13.6b / 裁定 3：增援铁路运输按钮是否可用（不可用项不出现；与执行侧同源） */
+  function arrivalRailEligible(index: number): boolean {
+    const base = railArrivalBaseOf(index)
+    if (!('plan' in base)) return false
+    return arrivalRailRoutesOf(base.plan).candidates.length > 0
+  }
+
+  /** 13.6b：铁路运输被拒的具体原因（按钮不可用时也供日志 / 面板复用） */
+  function arrivalRailRefusalOf(index: number): { rule: string; reason: string } | null {
+    const base = railArrivalBaseOf(index)
+    if (!('plan' in base)) return { rule: '13.6b', reason: base.reason }
+    const routes = arrivalRailRoutesOf(base.plan)
+    if (routes.candidates.length > 0) return null
+    if (routes.reachable === 0) return { rule: '13.3c', reason: 'arrivalRailNoDetrainable' }
+    return {
+      rule: '13.3b',
+      reason: `arrivalRailCapacity:${String(routes.minCost ?? 0)}:${String(
+        railCapRemaining.value[base.plan.side],
+      )}`,
+    }
+  }
+
+  /**
+   * 13.6b / 裁定 3：进入增援铁路运输的落点选择
+   *
+   * 候选＝13.3c 可卸货格 ∩ 13.3e-2 路径可达 ∩ 成本 ≤ 本回合剩余运力；
+   * M2：点格**直接落子**（不再弹确认），只留一条「撤回」。
+   */
+  function beginArrivalRailPickNow(index: number): boolean {
+    arrivalRailUndo.value = null
+    const refusal = arrivalRailRefusalOf(index)
+    const base = railArrivalBaseOf(index)
+    if (!('plan' in base)) {
+      reinforcementError.value = refusal
+      pushLog('warning', `该增援不能走铁路运输：${railRefusalText(refusal)}（13.6b）`, '13.6b')
+      return false
+    }
+    const plan = base.plan
+    const { candidates, costs, reachable, minCost } = arrivalRailRoutesOf(plan)
     if (candidates.length === 0) {
+      reinforcementError.value = refusal
       pushLog(
         'warning',
-        '该增援没有可铁路抵达的卸货格（13.3c / 13.3e-2），或本回合铁路运力不足（13.3b）',
+        reachable === 0
+          ? '该增援没有可铁路抵达的卸货格（13.3c / 13.3e-2：入场格与任何可卸货格之间没有铁路通路）'
+          : `本回合铁路运力不足：最近的卸货格需 ${String(minCost ?? 0)} 点、余 ${String(
+              railCapRemaining.value[plan.side],
+            )} 点（13.3b）`,
         '13.6b',
       )
       return false
@@ -25385,6 +25454,35 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       },
     })
     return true
+  }
+
+  /** 13.6b：把铁路拒绝码翻成一句具体缺项（面板与日志共用） */
+  function railRefusalText(refusal: { rule: string; reason: string } | null): string {
+    const code = (refusal?.reason ?? '').split(':')[0] ?? ''
+    switch (code) {
+      case 'arrivalRailEntryNoRail':
+        return '这一条的入场格不含铁路'
+      case 'arrivalRailEntryNotEntryHex':
+        return '这一条的落点不是入场格'
+      case 'arrivalRailNotGroundUnit':
+        return '这一条不是地面单位'
+      case 'arrivalRailMultiCopy':
+        return '这一条是多枚/编成条目，按逐枚普通投放'
+      case 'arrivalRailNoPlacement':
+        return '这一条的落点还没定'
+      case 'arrivalRailNoRecord':
+        return '单位库里找不到对应算子'
+      case 'arrivalRailAlreadyPlaced':
+        return '这一条已经投放完毕'
+      case 'arrivalRailNoDetrainable':
+        return '没有可铁路抵达的卸货格（13.3c）'
+      case 'arrivalRailCapacity': {
+        const [, need = '0', left = '0'] = refusal?.reason.split(':') ?? []
+        return `铁路运力不足：需 ${need} 点、余 ${left} 点（13.3b）`
+      }
+      default:
+        return '当前不在增援到达环节'
+    }
   }
 
   /** 13.6b：确认增援铁路运输（此刻才落子、扣运力；M2 起由点格直接调用） */

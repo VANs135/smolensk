@@ -1,4 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
+import { readFileSync } from 'node:fs'
+
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { sameHex } from '@/engine/hex-geometry'
@@ -211,5 +213,33 @@ describe('裁定 3：增援放置的铁路运输按钮复用同一流程', () =>
     const hit = seekArrivalAt(store, new Set(['1.26', '1.12']))
     expect(hit, '真实到达表里应存在 K / I 入场的轴方增援').not.toBeNull()
     expect(store.arrivalRailEligible(hit!.index)).toBe(false)
+  })
+
+  it('★ 运力为 0 ⇒ 铁路项整项不出现；真被拒时只点名"运力不足"，不把三种原因并成一句', () => {
+    const store = useWorkbenchStore()
+    const hit = seekRailArrival(store)
+    expect(hit, '真实到达表里应存在含铁路入场格的轴方增援').not.toBeNull()
+    const { index } = hit!
+    store.applyArrivalRemovalsNow()
+    // 执行侧判据（可达卸货格 + 运力）与按钮同源：先把本回合运力用光
+    const remaining = store.railCapRemaining[store.activeSide]
+    expect(remaining).toBeGreaterThan(0)
+    store.spendRailCapacity(store.activeSide, remaining)
+
+    expect(store.arrivalRailEligible(index)).toBe(false)
+    expect(store.beginArrivalRailPickNow(index)).toBe(false)
+    expect(store.reinforcementError?.reason).toMatch(/^arrivalRailCapacity:/)
+    const last = store.log[0]?.text ?? ''
+    expect(last).toContain('铁路运力不足')
+    expect(last).not.toContain('没有可铁路抵达的卸货格')
+    expect(last).not.toContain('入场格不含铁路')
+  })
+
+  it('面板拒绝文案按具体缺项给，不再把三种原因 OR 成一句', () => {
+    const panel = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
+    expect(panel).not.toContain('没有可抵达的卸货格，或运力不足')
+    expect(panel).toContain('arrivalRailCapacity')
+    expect(panel).toContain('arrivalRailNoDetrainable')
+    expect(panel).toContain('arrivalRailEntryNoRail')
   })
 })
