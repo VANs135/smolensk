@@ -1357,14 +1357,14 @@
           "axis": 5,
           "soviet": 0
         },
-        "supplyCache": 0,
+        "supplyCache": 2,
         "constructionMarkers": 0,
         "weatherFirstTurnRaw": "Limited Flight on 8 July",
         "options": {
           "note": "单人教学剧本：Reinforcements None；Variable Repls None；不引用任何 4.x 可选规则"
         },
         "source": [
-          "Smolensk_Vitebsk_Scenario.pdf 第 1 页（2026-11-15）；未列数值按 0 记；编内卡车载荷按用户裁定为全部满载"
+          "Smolensk_Vitebsk_Scenario.pdf 第 1 页（2026-11-15）；未列数值按 0 记（补给缓存除外：剧本卡未列，按通规 1.7「Both sides begin every scenario with two of Supply Cache markers」双方各 2）；编内卡车载荷按用户裁定为全部满载"
         ],
         "panzerGroupSpAssignment": false,
         "optionalRulesForbidden": true,

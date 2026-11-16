@@ -292,11 +292,12 @@ describe('入门剧本 Intro: Vitebsk（教学/单人）', () => {
     expect(s.singlePlayerTurn).toBe(true)
   })
 
-  it('初设数值：铁路容量 0/0、Reserve 5/0、缓存与建造 0；4 辆编内卡车全部满载', () => {
+  it('初设数值：铁路容量 0/0、Reserve 5/0、缓存各方 2（1.7）、建造 0；4 辆编内卡车全部满载', () => {
     const s = intro()
     expect(s.setup.railCap).toEqual({ axis: 0, soviet: 0 })
     expect(s.setup.reserveMarkers).toEqual({ axis: 5, soviet: 0 })
-    expect(s.setup.supplyCache).toBe(0)
+    // 剧本卡未列 Supply Cache，但 1.7：`Both sides begin every scenario with two`
+    expect(s.setup.supplyCache).toBe(2)
     expect(s.setup.constructionMarkers).toBe(0)
     // 剧本页只有 Hoth 一个集群 ⇒ 3.4b 的 SP 分集群归属不适用
     expect(s.setup.panzerGroupSpAssignment).toBe(false)
