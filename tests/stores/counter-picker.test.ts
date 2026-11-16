@@ -3,7 +3,13 @@ import { readFileSync } from 'node:fs'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { counterImageUrlOf, toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
+import {
+  counterImageUrlOf,
+  recordNameOf,
+  toConsoleUnit,
+  unitChoices,
+  useWorkbenchStore,
+} from '@/stores'
 
 /**
  * B13：`CounterPicker` 算子图阵列（先用于增援面板）
@@ -176,5 +182,30 @@ describe('B13：增援面板的替换（源码守卫）', () => {
     // 父级是纵向 flex ⇒ 图区与角标各占一行，互不覆盖
     const cellRule = picker.slice(picker.indexOf('.picker__cell {'))
     expect(cellRule).toContain('flex-direction: column')
+  })
+})
+
+describe('增援型号选择：按兵种分段的算子图阵列（不再 229 项原始 id 下拉）', () => {
+  const panel = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
+
+  it('旧 id 下拉已删；改 `CounterPicker` + 兵种分组 + 可读名称', () => {
+    expect(panel).not.toContain('item.nameZh ?? item.nameEn ?? item.id')
+    expect(panel).not.toContain('<option v-for="item in workbench.choices"')
+    expect(panel).toContain('BRANCH_LABELS')
+    expect(panel).toContain(':items="arrivalPickerItems"')
+    expect(panel).toContain('groupKey')
+    expect(panel).toContain('recordNameOf')
+  })
+
+  it('229 项都有可读名称：没有中文名也回落到算子印刷名，绝不拿 id 当名字', () => {
+    setActivePinia(createPinia())
+    const store = useWorkbenchStore()
+    store.setActiveSide('axis')
+    expect(store.choices.length).toBe(229)
+    for (const record of store.choices) {
+      const name = recordNameOf(record)
+      expect(name.trim()).not.toBe('')
+      expect(name).not.toBe(record.id)
+    }
   })
 })

@@ -8,8 +8,8 @@ import { auxCardImageUrl } from '@/components/game/aux-card-image'
 import { arrivalCopiesOf } from '@/engine/rules'
 import { counterImages, tokenImageUrl } from '@/render/token-images'
 import { ooaScanOf } from '@/render/charts-view'
-import { counterImageUrlOf, hexLabel } from '@/stores'
-import { useContainersStore, useWorkbenchStore } from '@/stores'
+import { counterImageUrlOf, hexLabel, recordNameOf } from '@/stores'
+import { useContainersStore, useWorkbenchStore, type UnitRecordView } from '@/stores'
 
 /**
  * 增援面板（W6 B18：OCS 13.5 / 13.6 / 13.9 / 20.0 + Smolensk 专规 1.6 / 2.1 / 2.3b / 2.4）
@@ -206,6 +206,124 @@ function arrivalRecordIdOf(index: number): string {
 
 function onArrivalRecordPick(index: number, id: string): void {
   arrivalRecordIds.value = { ...arrivalRecordIds.value, [index]: id }
+}
+
+/**
+ * ★ 2026-11-17：这里原来是**229 项原始 id 下拉**（`nameZh ?? nameEn ?? id`，而全库 nameZh/nameEn
+ *   均为空 ⇒ 实际显示的是 `ax-hq-ge-hq-9th-corps` 这种主键）。改成**按兵种分段 + 算子图阵列**：
+ *   点图即选型，名字只进 title/aria-label（与 `CounterPicker` 的既定口径一致）；
+ *   没有中文名时用「兵种中文名 · 算子印刷名」（`vassalName`），**绝不拿主键当名字**。
+ */
+const BRANCH_LABELS: Readonly<Record<string, string>> = {
+  hq: '军部 / 指挥部',
+  infantry: '步兵',
+  motorized: '摩托化',
+  armor_pz: '装甲（Pz）',
+  armor_tk: '坦克（Tk）',
+  arm_rec: '装甲侦察',
+  cavalry: '骑兵',
+  artillery: '炮兵',
+  anti_tank: '反坦克',
+  machine_gun: '机枪',
+  motorcycle: '摩托',
+  engineer: '工兵',
+  security: '保安',
+  militia: '民兵',
+  mountain: '山地',
+  nkvd_border: '内务边防',
+  fortified_region: '筑垒地域',
+  airbase: '空军基地',
+  transport: '运输',
+  supply: '补给',
+  extender: '延补队',
+  hedgehog: '支撑点',
+  breakdown: '拆分单位',
+  replacement: '补员',
+  other: '其他',
+}
+
+/** 兵种分组顺序（阵列里第一组即默认展开的组） */
+const BRANCH_ORDER: readonly string[] = [
+  'hq',
+  'infantry',
+  'motorized',
+  'armor_pz',
+  'armor_tk',
+  'arm_rec',
+  'cavalry',
+  'artillery',
+  'anti_tank',
+  'machine_gun',
+  'motorcycle',
+  'engineer',
+  'security',
+  'militia',
+  'mountain',
+  'nkvd_border',
+  'fortified_region',
+  'airbase',
+  'transport',
+  'supply',
+  'extender',
+  'hedgehog',
+  'breakdown',
+  'replacement',
+  'other',
+]
+
+function branchLabelOf(branch: string | undefined): string {
+  return BRANCH_LABELS[branch ?? 'other'] ?? branch ?? '其他'
+}
+
+/** 一条库记录的**可读名称**：兵种中文名 · 算子印刷名（无 nameZh 时也不回落到主键） */
+function arrivalRecordLabelOf(record: UnitRecordView): string {
+  return `${branchLabelOf(record.branch)} · ${recordNameOf(record)}`
+}
+
+/** 当前展开型号阵列的到达行（同一时间只展开一条，避免 229 张图 × N 行同时上屏） */
+const recordPickerIndex = ref<number | null>(null)
+
+/** 该行当前的型号显示名（未指定＝按印刷名自动匹配的那一枚） */
+function arrivalRecordLabel(index: number): string {
+  const explicit = arrivalRecordIdOf(index)
+  const record =
+    explicit === ''
+      ? workbench.arrivalRecordOf(index)
+      : (workbench.choices.find((item) => item.id === explicit) ?? null)
+  if (record === null) return explicit === '' ? '按印刷名自动匹配' : '已选型号（库中找不到）'
+  return `${explicit === '' ? '自动：' : ''}${arrivalRecordLabelOf(record)}`
+}
+
+/** 型号阵列：按兵种分段，条目按 `BRANCH_ORDER` 排（组内保持单位库顺序） */
+const arrivalPickerItems = computed<CounterPickerItem[]>(() => {
+  const index = recordPickerIndex.value
+  if (index === null) return []
+  const selectedId = arrivalRecordIdOf(index)
+  const autoId = workbench.arrivalRecordOf(index)?.id ?? ''
+  const rankOf = (branch: string | undefined): number => {
+    const at = BRANCH_ORDER.indexOf(branch ?? 'other')
+    return at < 0 ? BRANCH_ORDER.length : at
+  }
+  return [...workbench.choices]
+    .sort((left, right) => rankOf(left.branch) - rankOf(right.branch))
+    .map((record) => ({
+      id: record.id,
+      imageUrl: tokenImageUrl({
+        side: workbench.activeSide,
+        face: 'combat',
+        images: record.images ?? null,
+      }),
+      name: arrivalRecordLabelOf(record),
+      selected: selectedId === '' ? autoId === record.id : selectedId === record.id,
+      groupKey: record.branch ?? 'other',
+      groupLabel: branchLabelOf(record.branch),
+    }))
+})
+
+function pickArrivalRecord(id: string): void {
+  const index = recordPickerIndex.value
+  if (index === null) return
+  onArrivalRecordPick(index, id)
 }
 
 /**
@@ -1158,17 +1276,23 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         </p>
         <div v-for="card in arrivalHandCards" :key="`pick-${card.index}`" class="row">
           <span class="num">{{ card.raw }}</span>
-          <select
-            class="select"
-            :value="arrivalRecordIdOf(card.index)"
-            @change="onArrivalRecordPick(card.index, ($event.target as HTMLSelectElement).value)"
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            :data-testid="`arrival-pick-open-${card.index}`"
+            @click="recordPickerIndex = recordPickerIndex === card.index ? null : card.index"
           >
-            <option value="">（库中型号：按显示名自动匹配）</option>
-            <option v-for="item in workbench.choices" :key="item.id" :value="item.id">
-              {{ item.nameZh ?? item.nameEn ?? item.id }}
-            </option>
-          </select>
+            {{ arrivalRecordLabel(card.index) }}
+          </BaseButton>
         </div>
+        <CounterPicker
+          v-if="recordPickerIndex !== null"
+          :items="arrivalPickerItems"
+          hint="按兵种分段：点算子图指定这一条到达用哪一枚（不指定＝按印刷名自动匹配）"
+          :size="32"
+          :max-rows="3"
+          @pick="pickArrivalRecord"
+        />
       </details>
     </SessionStep>
 
