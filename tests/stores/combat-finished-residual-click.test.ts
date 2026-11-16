@@ -279,11 +279,12 @@ describe('9.2 收束后的残留：防御格不得继续吞掉地图点击（用
       expect(workbench.combatState?.finished).toBe(true)
 
       /*
-       * 残留证据（收束后仍按旧战斗给「撤退落点 / 推进格」）：
-       *   这两项任一为真时，map-view 的模态分派会在 `clickHex` 之前吃掉点击。
+       * 用户 2026-11-16 修复：收束后不再按旧战斗给「撤退落点 / 推进格」——
+       * 两项都必须在 finished 时为空（此前靠 map-view 的 combatLive 兜底防吞点击，
+       * 但地图仍把防御格涂成暗绿；现在残留在源头就清掉）。
        */
-      expect(workbench.combatAdvanceHex).not.toBeNull()
-      expect(workbench.combatRetreatPlans.length).toBeGreaterThan(0)
+      expect(workbench.combatAdvanceHex).toBeNull()
+      expect(workbench.combatRetreatPlans).toEqual([])
 
       // 另一支部队：从原攻击格出发，沿**真实地图点击**走进去
       goToMovementStep(workbench)

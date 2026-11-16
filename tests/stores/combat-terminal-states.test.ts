@@ -466,6 +466,56 @@ describe('战斗终局组合：7 种都必须收束（9.2 / 9.10a / 9.11 / 9.12 
     expect(store.units.find((unit) => unit.instanceId === 'a1')?.hex).not.toEqual(DEFENDER_HEX)
   })
 
+  it('A6c 突袭·守方撤退腾空 ⇒ 收束后地图不再留推进格（暗绿）高亮', () => {
+    const { state } = toRetreatStep({
+      attackerSteps: 3,
+      defenderSteps: 3,
+      die: 8,
+      shiftDie: 1,
+      attackerRetreat: 0,
+      attackerLoss: 1,
+      defenderRetreat: 1,
+      defenderLoss: 0,
+      attackType: 'overrun',
+    })
+    mount(store, state, { attackerSteps: 2, defenderSteps: 2 })
+    const mapView = useMapViewStore()
+    chooseAllRetreatDestinations(store)
+    expect(store.confirmCombatRetreats()).toBe(true)
+
+    // 突袭的推进自动收束：finished=true，但引擎把 step 留在 'advance'
+    expect(store.combatState!.finished).toBe(true)
+    expect(store.combatState!.step).toBe('advance')
+    // 守方确实撤走、防御格已空
+    expect(store.units.find((unit) => unit.instanceId === 'd1')?.hex).not.toEqual(DEFENDER_HEX)
+    // 收束后不得再画出推进格（用户 2026-11-16 报的暗绿残留）
+    expect(store.combatAdvanceHex).toBeNull()
+    expect(mapView.overlay.advance ?? []).toEqual([])
+  })
+
+  it('A6d 常规战斗·守方撤退腾空、推进步未确认 ⇒ 推进格照常高亮（反向守卫）', () => {
+    const { state } = toRetreatStep({
+      attackerSteps: 3,
+      defenderSteps: 3,
+      die: 8,
+      shiftDie: 1,
+      attackerRetreat: 0,
+      attackerLoss: 1,
+      defenderRetreat: 1,
+      defenderLoss: 0,
+    })
+    mount(store, state, { attackerSteps: 2, defenderSteps: 2 })
+    const mapView = useMapViewStore()
+    chooseAllRetreatDestinations(store)
+    expect(store.confirmCombatRetreats()).toBe(true)
+
+    // 常规战斗停在推进步，等玩家选推进单位 ⇒ 这一格该亮
+    expect(store.combatState!.finished).not.toBe(true)
+    expect(store.combatLiveStep).toBe('advance')
+    expect(store.combatAdvanceHex).toEqual(DEFENDER_HEX)
+    expect(mapView.overlay.advance).toContainEqual(DEFENDER_HEX)
+  })
+
   it('批 C：守方选落点时能看到攻方已定的撤退路径与落点（不同色图层）', () => {
     const { state } = toRetreatStep({
       attackerSteps: 3,

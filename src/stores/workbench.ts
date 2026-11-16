@@ -3115,6 +3115,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 专规 1.1b：防御格若是敌方安全边缘格（补给源边格）⇒ 不可进入，故不给推进格。
    */
   const combatAdvanceHex = computed<HexRef | null>(() => {
+    /*
+     * 9.2 收束（finished=true）后本场不再铺推进格：引擎在推进结果里把 `step` 留在 'advance'，
+     * 只看 step 会把收束后的防御格继续涂成暗绿（用户 2026-11-16 报的突袭残留）；
+     * 突袭自动推进与常规战斗确认推进两条路径都以 finished=true 收尾，这一道门同时覆盖。
+     */
+    const state = combatState.value
+    if (state !== null && state.finished === true) return null
     const target = battleTarget.value
     if (target === null) return null
     // 9.12g-B：攻方撤退 ⇒ 防御格再空也不铺推进格
@@ -3128,7 +3135,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 9.12：某方需撤退的单位的落点规划（地图优先交互数据源） */
   const combatRetreatPlans = computed<CombatRetreatSidePlan[]>(() => {
     const state = combatState.value
-    if (state === null) return []
+    // 9.2 收束后同 `combatAdvanceHex`：旧战斗的撤退计划不再对外给（落点图层 / 提示 / 点格分派）
+    if (state === null || state.finished === true) return []
     const plans: CombatRetreatSidePlan[] = []
     for (const side of ['attacker', 'defender'] as const) {
       // 9.12c/9.12e：攻方先撤、守方后撤；该方撤退格数为 0 则不参与

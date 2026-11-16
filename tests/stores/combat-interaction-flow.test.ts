@@ -1070,8 +1070,10 @@ describe('W7 C16：战斗收尾的地图优先交互', () => {
     expect(store.combatState!.step).toBe('advance')
 
     const cleared = store.combatDefendingHexCleared
-    expect(store.combatAdvanceHex === null).toBe(!cleared)
-    if (cleared && store.combatAdvanceCandidates.some((item) => item.paid)) {
+    // 收束（finished=true）后不再铺推进格：引擎把 step 留在 'advance'（用户 2026-11-16 的暗绿残留）
+    const live = store.combatState!.finished !== true
+    expect(store.combatAdvanceHex === null).toBe(!cleared || !live)
+    if (live && cleared && store.combatAdvanceCandidates.some((item) => item.paid)) {
       expect(store.advanceNow(store.combatAdvanceHex!)).toBe(true)
       expect(store.combatInputs.advanceUnitIds.length).toBeGreaterThan(0)
       // 选错了格 ⇒ 拒绝
