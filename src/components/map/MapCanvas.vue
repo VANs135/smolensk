@@ -31,14 +31,7 @@ import {
   allMarkerTextureUrls,
   counterImages,
 } from '@/render/token-images'
-import {
-  overlayImageUrls,
-  hitCollapsedToken,
-  stackFanOrder,
-  type MovementOverlay,
-  type UnitToken,
-} from '@/render/token-layer'
-import { hitStackFan, stackFanLayout } from '@/render/stack-fan'
+import { overlayImageUrls, hitHexToken, type MovementOverlay } from '@/render/token-layer'
 import {
   FIT_PADDING_PX,
   ZOOM_STEP,
@@ -362,20 +355,14 @@ function tokenTipAt(hex: HexRef, world: { x: number; y: number }): string | null
   const tokens = overlay.tokens.filter((token) => sameHex(token.hex, hex))
   if (tokens.length === 0) return null
   const expanded = overlay.expandedStack ?? null
-  const visible = tokens.filter((item) => item.hiddenStack !== true)
-  let token: UnitToken | null = null
-  if (visible.length >= 2) {
-    const layout = stackFanLayout({
-      hex,
-      total: visible.length,
-      page: expanded !== null && sameHex(expanded.hex, hex) ? expanded.page : 0,
-      order: stackFanOrder(visible),
-    })
-    const hit = hitStackFan({ layout, point: world, scale: viewport.value.scale })
-    if (hit?.kind === 'slot') token = visible[hit.index] ?? null
-  } else {
-    token = hitCollapsedToken(tokens, world, viewport.value.scale)
-  }
+  // 批 E：设施在左下角常显 ⇒ 命中统一走 `hitHexToken`（与 store 右键命中同源）
+  const token = hitHexToken({
+    hex,
+    group: tokens,
+    page: expanded !== null && sameHex(expanded.hex, hex) ? expanded.page : 0,
+    point: world,
+    scale: viewport.value.scale,
+  })
   return token?.tip ?? null
 }
 

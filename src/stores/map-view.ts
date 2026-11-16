@@ -16,6 +16,7 @@ import {
 import {
   needsFuelOf,
   hexLabel,
+  isHqUnit,
   supplyStatusOf,
   type ActionKey,
   type ConsoleAirUnit,
@@ -25,7 +26,8 @@ import { useSetupStore } from './setup'
 import { useContainersStore } from './containers'
 import { useUiStore } from './ui'
 import {
-  hitCollapsedToken,
+  hitHexToken,
+  isFacilityToken,
   stackFanOrder,
   type MovementOverlay,
   type SupplyPickHint,
@@ -423,6 +425,8 @@ export const useMapViewStore = defineStore('mapView', () => {
               unit.side === hotseat.viewerSide && unit.printedSteps > 1
                 ? Math.max(0, unit.printedSteps - unit.steps)
                 : 0,
+            // 批 E：指挥部标记（只给本方；4.9a 不额外透露敌方哪一格是 HQ）
+            hq: unit.side === hotseat.viewerSide && isHqUnit(unit),
           }
         })
     )
@@ -1656,20 +1660,28 @@ export const useMapViewStore = defineStore('mapView', () => {
     const all = stackTokensAt(hex)
     const tokens = all.filter((token) => token.hiddenStack !== true)
     if (tokens.length === 0) return false
-    let token: UnitToken | null = null
+    const token: UnitToken | null = hitHexToken({
+      hex,
+      group: all,
+      page: stackFanPageAt(hex),
+      point: world,
+      scale,
+    })
+    /*
+     * 批 E：设施已从扇面拆出（左下角常显），翻页角标只属于非设施扇面 ——
+     * 这里仍按「非设施可见枚数」判断是否处于分页态，避免点设施时误翻页。
+     */
+    const others = tokens.filter((item) => !isFacilityToken(item))
     let nextPage: number | null = null
-    if (tokens.length >= STACK_FAN_MIN_TOKENS) {
+    if (others.length >= STACK_FAN_MIN_TOKENS) {
       const layout = stackFanLayout({
         hex,
-        total: tokens.length,
+        total: others.length,
         page: stackFanPageAt(hex),
-        order: stackFanOrder(tokens),
+        order: stackFanOrder(others),
       })
       const hit = hitStackFan({ layout, point: world, scale })
       if (hit?.kind === 'page') nextPage = hit.nextPage
-      else if (hit?.kind === 'slot') token = tokens[hit.index] ?? null
-    } else {
-      token = hitCollapsedToken(all, world, scale)
     }
     if (nextPage !== null) {
       expandedStack.value = { hex: { col: hex.col, row: hex.row }, page: nextPage }
@@ -2645,21 +2657,14 @@ export const useMapViewStore = defineStore('mapView', () => {
 
   function counterForBoxAt(hex: HexRef, world: { x: number; y: number }, scale: number) {
     const tokens = stackTokensAt(hex)
-    const visible = tokens.filter((item) => item.hiddenStack !== true)
-    let token: UnitToken | null = null
-    // 用户 2026-11-10：格内常态摊开 ⇒ 命中与绘制同源（≥2 枚走扇面，单枚走折叠）
-    if (visible.length >= STACK_FAN_MIN_TOKENS) {
-      const layout = stackFanLayout({
-        hex,
-        total: visible.length,
-        page: stackFanPageAt(hex),
-        order: stackFanOrder(visible),
-      })
-      const hit = hitStackFan({ layout, point: world, scale })
-      if (hit?.kind === 'slot') token = visible[hit.index] ?? null
-    } else {
-      token = hitCollapsedToken(tokens, world, scale)
-    }
+    // 批 E：设施在左下角常显 ⇒ 命中统一走 `hitHexToken`（与绘制同源，含设施角位）
+    const token = hitHexToken({
+      hex,
+      group: tokens,
+      page: stackFanPageAt(hex),
+      point: world,
+      scale,
+    })
     if (token === null) return null
     const targets = counterBoxTargets(token.id)
     return targets.length === 0 ? null : { id: token.id, label: token.label, targets }
@@ -2757,20 +2762,14 @@ export const useMapViewStore = defineStore('mapView', () => {
      *   没命中算子（点在格内空白）才退回原来的选中集合。
      */
     const all = stackTokensAt(hex)
-    const visible = all.filter((token) => token.hiddenStack !== true)
-    let token: UnitToken | null = null
-    if (visible.length >= STACK_FAN_MIN_TOKENS) {
-      const layout = stackFanLayout({
-        hex,
-        total: visible.length,
-        page: stackFanPageAt(hex),
-        order: stackFanOrder(visible),
-      })
-      const hit = hitStackFan({ layout, point: world, scale })
-      if (hit?.kind === 'slot') token = visible[hit.index] ?? null
-    } else {
-      token = hitCollapsedToken(all, world, scale)
-    }
+    // 批 E：与绘制同源（设施在左下角常显，命中也要能点到它）
+    const token = hitHexToken({
+      hex,
+      group: all,
+      page: stackFanPageAt(hex),
+      point: world,
+      scale,
+    })
     if (token !== null && openUnitContext(hex, token.id, anchor)) return
     const ids = contextSelectionAt(hex)
     /*

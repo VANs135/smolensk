@@ -3,6 +3,7 @@ import type { HexRef, Side } from '@/data'
 import { HEX_COL_SPACING_PX, HEX_RADIUS_PX, hexCanvasCorners, hexCanvasPoint } from './map-layout'
 import {
   counterHitSize,
+  hitStackFan,
   insideCounter,
   isNoncombatTokenLike,
   stackFanLayout,
@@ -148,6 +149,12 @@ export interface UnitToken {
   air?: boolean
   /** 初设时让基地边露出可操作的本方飞机。 */
   setupAir?: boolean
+  /**
+   * 批 E（用户 2026-11-16）：该枚是**指挥部**（13.1b：`specialized` 含 `hq` 或带印值投递距离）
+   *
+   * 只在**本方**令牌上给（4.9a：敌方顶牌不额外透露"这格有 HQ"）；标记画在格内**左中**。
+   */
+  hq?: boolean
 }
 
 /** 可到达格提示 */
@@ -970,7 +977,14 @@ export function drawMovementOverlay(
   const drawn: TokenDrawView[] = []
 
   for (const [key, group] of byHex) {
-    const fan = group.filter((token) => token.hiddenStack !== true)
+    const hex = group[0]!.hex
+    /*
+     * 批 E（用户 2026-11-16）：**设施不参与扇面/分页**，固定画在左下角常显。
+     * 扇面只排非设施（战斗单位 / 飞机 / 运输点…），否则同格一多，设施会被挤到某一页或压住。
+     */
+    const facilities = group.filter((token) => isFacilityToken(token))
+    const others = group.filter((token) => !isFacilityToken(token))
+    const fan = others.filter((token) => token.hiddenStack !== true)
     if (fan.length >= 2) {
       const layout = stackFanLayout({
         hex: fan[0]!.hex,
@@ -989,17 +1003,24 @@ export function drawMovementOverlay(
       if (layout.pageBadge !== null) {
         drawStackPageBadge(ctx, `+${layout.total - layout.slots.length}`, layout.pageBadge, scale)
       }
-      continue
+    } else if (others.length > 0) {
+      const tokens = collapsedStackViews(others)
+      for (const view of tokens) {
+        drawToken(ctx, view.token, view.centerX, view.centerY, scale, view.size)
+        drawn.push(view)
+      }
+      const top = tokens[0]!
+      if (others.length > 1 && !others.some((token) => token.hiddenStack === true)) {
+        drawStackBadge(ctx, others.length, { x: top.centerX, y: top.centerY }, scale)
+      }
     }
-    const tokens = collapsedStackViews(group)
-    for (const view of tokens) {
-      drawToken(ctx, view.token, view.centerX, view.centerY, scale, view.size)
+    // 设施：左下角固定席位，缩小常显（有就画、没有就不占位）
+    for (const view of facilityTokenViews(hex, facilities)) {
+      drawFacilityToken(ctx, view.token, view.centerX, view.centerY, scale, view.size)
       drawn.push(view)
     }
-    const top = tokens[0]!
-    if (group.length > 1 && !group.some((token) => token.hiddenStack === true)) {
-      drawStackBadge(ctx, group.length, { x: top.centerX, y: top.centerY }, scale)
-    }
+    // HQ：格内左中（只画本方投影出来的 `hq`；敌方不额外透露）
+    if (group.some((token) => token.hq === true)) drawHqBadge(ctx, hex, scale)
   }
 
   drawTokenStatusTextures(ctx, drawn)
@@ -1294,8 +1315,59 @@ export function isFacilityToken(token: UnitToken): boolean {
   return kind === 'air_base' || kind === 'sp' || kind === 'hedgehog'
 }
 
-/** 设施沿同一格的下沿排布。 */
-export const FACILITY_TOKEN_RATIO = 0.36
+/**
+ * 批 E：**格子标记层的固定角位**（用户 2026-11-16）
+ *
+ *   · **左下**＝设施（机场 / SP / 工事）：缩小常显，不参与扇面分页；
+ *   · **左上**＝占领标记（在 `map-render` 的 `controlMarkers` 层，本模块不画）；
+ *   · **左中**＝HQ；
+ *   · **右上**＝堆叠枚数角标（`drawStackBadge`）。
+ *
+ * 四处都用「外接圆半径 R 的倍数」定位，故缩放时相对关系不变；数值区间已由
+ * `tests/render/ui-ux-batchE-hex-markers.test.ts` 钉死（四者矩形互不相交）。
+ */
+export const FACILITY_CORNER = { x: -0.42, y: 0.46 } as const
+/** 同格多枚设施沿左下角**向右**依次排开（步长也是 R 的倍数） */
+export const FACILITY_SLOT_STEP = 0.22
+/** 设施边长（R 的倍数）——比算子（约 0.68R）小，常显也不挡印值 */
+export const FACILITY_TOKEN_SIZE_RATIO = 0.28
+/** HQ 标记中心（左中）与边长（R 的倍数） */
+export const HQ_BADGE_CORNER = { x: -0.52, y: 0 } as const
+export const HQ_BADGE_RATIO = 0.24
+
+/** 一枚设施在左下角的画法（中心与边长，世界坐标） */
+export interface FacilityView {
+  token: UnitToken
+  centerX: number
+  centerY: number
+  size: number
+}
+
+/**
+ * 设施的**固定角位**视图（纯函数：绘制与命中测试共用同一份口径）
+ *
+ * 与格内枚数/分页无关 —— 有就画，没有就空数组（不可用项不出现）。
+ */
+export function facilityTokenViews(hex: HexRef, facilities: readonly UnitToken[]): FacilityView[] {
+  const center = hexCanvasPoint(hex)
+  const size = HEX_RADIUS_PX * FACILITY_TOKEN_SIZE_RATIO
+  return facilities.map((token, index) => ({
+    token,
+    centerX: center.x + HEX_RADIUS_PX * (FACILITY_CORNER.x + FACILITY_SLOT_STEP * index),
+    centerY: center.y + HEX_RADIUS_PX * FACILITY_CORNER.y,
+    size,
+  }))
+}
+
+/** HQ 标记在格内**左中**的位置与边长（世界坐标） */
+export function hqBadgeView(hex: HexRef): { centerX: number; centerY: number; side: number } {
+  const center = hexCanvasPoint(hex)
+  return {
+    centerX: center.x + HEX_RADIUS_PX * HQ_BADGE_CORNER.x,
+    centerY: center.y + HEX_RADIUS_PX * HQ_BADGE_CORNER.y,
+    side: HEX_RADIUS_PX * HQ_BADGE_RATIO,
+  }
+}
 
 function stackPriority(token: UnitToken): number {
   if (token.projectsZoc === true) return 3
@@ -1350,11 +1422,11 @@ function collapsedStackViews(group: readonly UnitToken[]): TokenDrawView[] {
       token.air === true &&
       (token.hiddenStack === true || token.setupAir === true),
   )
-  const facilities = group.filter((token) => isFacilityToken(token) && token !== top)
-  const companions = [
-    ...(publicAircraft === undefined ? [] : [publicAircraft]),
-    ...facilities,
-  ].slice(0, 3)
+  /*
+   * 批 E：设施已从本函数拆出（固定左下角常显，见 `facilityTokenViews`）；
+   * 这里只保留"被压掉的飞机露一角"这一种伴随牌。
+   */
+  const companions = [...(publicAircraft === undefined ? [] : [publicAircraft])].slice(0, 3)
   return [
     {
       token: top,
@@ -1366,7 +1438,7 @@ function collapsedStackViews(group: readonly UnitToken[]): TokenDrawView[] {
       token,
       centerX: center.x + (index - (companions.length - 1) / 2) * HEX_RADIUS_PX * 0.36,
       centerY: center.y + HEX_RADIUS_PX * 0.59,
-      size: TOKEN_SIZE_PX * FACILITY_TOKEN_RATIO,
+      size: TOKEN_SIZE_PX * 0.36,
     })),
   ]
 }
@@ -1392,6 +1464,45 @@ export function hitCollapsedToken(
         Math.hypot(point.x - b.centerX, point.y - b.centerY),
     )[0]
   return nearest?.token ?? null
+}
+
+/**
+ * 批 E：**格内命中（绘制同源）**
+ *
+ * 顺序与绘制一致：先试左下角的设施（缩小但触区按屏幕最小 24px 兜底），再按扇面/折叠
+ * 命中非设施。**设施不再参与扇面分页**，故不能再用 `stackFanLayout(total=全部枚数)` 的
+ * 下标去取 —— 那会把点到的位置和画出来的算子对错位。
+ */
+export function hitHexToken(input: {
+  hex: HexRef
+  group: readonly UnitToken[]
+  page: number
+  point: { x: number; y: number }
+  scale: number
+}): UnitToken | null {
+  const { hex, group, page, point, scale } = input
+  const facilities = group.filter((token) => isFacilityToken(token))
+  for (const view of facilityTokenViews(hex, facilities).reverse()) {
+    if (
+      insideCounter(point, { x: view.centerX, y: view.centerY }, counterHitSize(view.size, scale))
+    ) {
+      return view.token
+    }
+  }
+  const others = group.filter((token) => !isFacilityToken(token))
+  if (others.length === 0) return null
+  const fan = others.filter((token) => token.hiddenStack !== true)
+  if (fan.length >= 2) {
+    const layout = stackFanLayout({
+      hex,
+      total: fan.length,
+      page,
+      order: stackFanOrder(fan),
+    })
+    const hit = hitStackFan({ layout, point, scale })
+    return hit?.kind === 'slot' ? (fan[hit.index] ?? null) : null
+  }
+  return hitCollapsedToken(others, point, scale)
 }
 
 /** 格内翻页角标与图面独立命中。 */
@@ -1434,6 +1545,86 @@ function drawStackBadge(
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.fillText(String(count), x, y)
+}
+
+/**
+ * 画一枚**设施**（左下角固定席位，边长已缩小）
+ *
+ * 只画“图上有什么”：算子图（或回退色块）+ 边框 + 选中环 + SP 非标实数。
+ * **不画**模式字母 / DG / 燃料这些战斗单位状态 —— 设施没有这些语义，画上只是噪音。
+ */
+function drawFacilityToken(
+  ctx: CanvasRenderingContext2D,
+  token: UnitToken,
+  centerX: number,
+  centerY: number,
+  scale: number,
+  size: number,
+): void {
+  const half = size / 2
+  const left = centerX - half
+  const top = centerY - half
+  const image = counterImageOf(token)
+  if (image !== null) {
+    ctx.drawImage(image, left, top, size, size)
+  } else {
+    ctx.fillStyle = token.side === 'axis' ? OVERLAY_PALETTE.axis : OVERLAY_PALETTE.soviet
+    ctx.fillRect(left, top, size, size)
+  }
+  ctx.lineWidth = 1.2 / scale
+  ctx.strokeStyle = token.side === 'axis' ? OVERLAY_PALETTE.axisEdge : OVERLAY_PALETTE.sovietEdge
+  ctx.strokeRect(left, top, size, size)
+  if (token.selected) {
+    ctx.strokeStyle = OVERLAY_PALETTE.select
+    ctx.lineWidth = 2 / scale
+    ctx.strokeRect(left - 1 / scale, top - 1 / scale, size + 2 / scale, size + 2 / scale)
+  }
+  // 条 27：SP 的总额标签常显（缩小后仍要读得出「这是 9 不是 10」）
+  if (token.noncombatKind === 'sp' && token.label.length > 0) {
+    ctx.font = `bold ${(6.5 / scale).toFixed(1)}px ui-monospace, monospace`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const width = (token.label.length * 4 + 4) / scale
+    const height = 9 / scale
+    ctx.fillStyle = OVERLAY_PALETTE.stackBadge
+    ctx.fillRect(centerX - width / 2, centerY - height / 2, width, height)
+    ctx.fillStyle = OVERLAY_PALETTE.stackBadgeText
+    ctx.fillText(token.label, centerX, centerY)
+  }
+  // 非标总额（9 SP）再补一个实数角标：图面那枚是最近的 10
+  if (
+    token.noncombatKind === 'sp' &&
+    token.spPoints != null &&
+    spDenominationDiffers(token.spPoints)
+  ) {
+    const text = String(token.spPoints)
+    const fontPx = 7 / scale
+    ctx.font = `bold ${fontPx.toFixed(1)}px ui-monospace, monospace`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const width = (text.length * 5 + 4) / scale
+    const height = 9 / scale
+    ctx.fillStyle = OVERLAY_PALETTE.stackBadge
+    ctx.fillRect(centerX - width / 2, centerY + size * 0.32 - height / 2, width, height)
+    ctx.fillStyle = OVERLAY_PALETTE.stackBadgeText
+    ctx.fillText(text, centerX, centerY + size * 0.32)
+  }
+}
+
+/** 格内**左中**的 HQ 标记（只画本方投影出来的 `hq`） */
+function drawHqBadge(ctx: CanvasRenderingContext2D, hex: HexRef, scale: number): void {
+  const badge = hqBadgeView(hex)
+  const half = badge.side / 2
+  ctx.fillStyle = OVERLAY_PALETTE.badge
+  ctx.fillRect(badge.centerX - half, badge.centerY - half, badge.side, badge.side)
+  ctx.strokeStyle = OVERLAY_PALETTE.stackBadgeEdge
+  ctx.lineWidth = 1 / scale
+  ctx.strokeRect(badge.centerX - half, badge.centerY - half, badge.side, badge.side)
+  ctx.fillStyle = OVERLAY_PALETTE.stackBadgeText
+  ctx.font = `bold ${(8 / scale).toFixed(1)}px ui-monospace, monospace`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('HQ', badge.centerX, badge.centerY)
 }
 
 /** 格的键（`col.row`）——与 `overlayHexKey` 同式，文件内复用 */

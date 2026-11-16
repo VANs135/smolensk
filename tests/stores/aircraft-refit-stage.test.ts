@@ -214,14 +214,13 @@ describe('Ⓐ 15.1：同格有飞机时，空军基地必须能从堆叠里选�
     const mapView = useMapViewStore()
     expect(workbench.refitStartBases.map((base) => base.id)).toEqual(['base-1'])
 
-    // 两枚令牌常态摊开：0 号槽（左）是飞机，1 号槽（右）是基地
+    // 批 E：设施（基地）固定左下角常显、不再压住格心；格心只剩飞机一枚
     const center = hexCanvasPoint(CORE_HEX)
-    const planePoint = { x: center.x - 0.28 * HEX_RADIUS_PX, y: center.y }
-    mapView.onHexClick(CORE_HEX, { x: center.x, y: center.y }, planePoint)
+    mapView.onHexClick(CORE_HEX, { x: center.x, y: center.y }, center)
 
-    // 修前：命中飞机 ⇒ 「不参与本环节」把这一击吞掉，小窗不开，基地的整备入口出不来
-    expect(mapView.popup?.hex).toEqual(CORE_HEX)
-    expect(mapView.popupContent?.units.some((unit) => unit.id === 'base-1')).toBe(true)
+    // 修前：命中飞机 ⇒ 「不参与本环节」把这一击吞掉，基地的整备入口出不来。
+    // 批 E 后基地本身在左下角可点；点飞机仍按 15.1 落到它所在基地的面板。
+    expect(mapView.unitActionUnitId).toBe('base-1')
   })
 })
 

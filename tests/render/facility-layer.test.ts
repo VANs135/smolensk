@@ -2,9 +2,10 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
-import { HEX_RADIUS_PX, hexCanvasPoint } from '@/render/map-layout'
+import { hexCanvasPoint } from '@/render/map-layout'
 import {
-  hitCollapsedToken,
+  facilityTokenViews,
+  hitHexToken,
   isFacilityToken,
   topTokenOf,
   type UnitToken,
@@ -47,10 +48,18 @@ describe('B31b：设施单独一层（渲染）', () => {
     const infantry = token({ id: 'inf' })
     const group = [infantry, base]
     const center = hexCanvasPoint(base.hex)
-    expect(hitCollapsedToken(group, center, 0.8)).toBe(infantry)
-    expect(hitCollapsedToken(group, { ...center, y: center.y + HEX_RADIUS_PX * 0.59 }, 0.8)).toBe(
-      base,
-    )
+    // 批 E：设施固定左下角常显（见 `facilityTokenViews`），命中统一走 `hitHexToken`
+    const facility = facilityTokenViews(base.hex, [base])[0]!
+    expect(hitHexToken({ hex: base.hex, group, page: 0, point: center, scale: 0.8 })).toBe(infantry)
+    expect(
+      hitHexToken({
+        hex: base.hex,
+        group,
+        page: 0,
+        point: { x: facility.centerX, y: facility.centerY },
+        scale: 0.8,
+      }),
+    ).toBe(base)
   })
 })
 
