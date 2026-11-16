@@ -10,7 +10,15 @@
  */
 import { nextTick } from 'vue'
 
-import { activeStackingLimitOf, arrivalCopiesOf, refitCapacity } from '@/engine/rules'
+import {
+  activeStackingLimitOf,
+  arrivalCopiesOf,
+  holdingsToT,
+  refitCapacity,
+  SP_TO_T,
+  transportPointLoadCost,
+} from '@/engine/rules'
+import { hexDistance } from '@/engine/hex-geometry'
 import { useContainersStore } from '@/stores/containers'
 import { formatHexPath } from '@/stores/workbench-model'
 import type { useGameSessionStore } from '@/stores/session'
@@ -27,6 +35,7 @@ import {
   type AiArrivalEntry,
   type AiControlMode,
   type AiHex,
+  type AiMoveBranchSnapshot,
   type AiRebuildSnapshot,
   type AiRefitBase,
   type AiReinSupplySnapshot,
@@ -63,6 +72,21 @@ export interface AiMemory {
   rebuildUnitIds: string[]
   /** 批 1：本环节是否已做过一次整编 */
   consolidated: boolean
+  /** 批 2：本环节已试过的换模式单位 */
+  modeSwitchTried: string[]
+  /** 批 2：本环节已试过的突袭目标格 */
+  overrunTried: string[]
+  /** 批 2：本环节已试过铁路运输的单位 / 起运站 */
+  railTriedUnits: string[]
+  railTriedDumps: string[]
+  /** 批 2：铁路候选扫过一次且无可用（避免每步重复 BFS） */
+  railScanned: boolean
+  /** 批 2：本环节已试过的运输点数装卸 */
+  transportTried: string[]
+  /** 批 2：本环节已用过建造标记 */
+  constructionDone: boolean
+  /** 批 2：本环节已试过换轨的铁路修理单位 */
+  gaugeTried: string[]
 }
 
 export function createAiMemory(): AiMemory {
@@ -81,6 +105,14 @@ export function createAiMemory(): AiMemory {
     arrivalTried: [],
     rebuildUnitIds: [],
     consolidated: false,
+    modeSwitchTried: [],
+    overrunTried: [],
+    railTriedUnits: [],
+    railTriedDumps: [],
+    railScanned: false,
+    transportTried: [],
+    constructionDone: false,
+    gaugeTried: [],
   }
 }
 
@@ -164,6 +196,14 @@ function syncMemory(memory: AiMemory, w: ReturnType<typeof useWorkbenchStore>): 
   memory.arrivalTried = []
   memory.rebuildUnitIds = []
   memory.consolidated = false
+  memory.modeSwitchTried = []
+  memory.overrunTried = []
+  memory.railTriedUnits = []
+  memory.railTriedDumps = []
+  memory.railScanned = false
+  memory.transportTried = []
+  memory.constructionDone = false
+  memory.gaugeTried = []
 }
 
 function dedupeSortedHexes(hexes: readonly AiHex[]): AiHex[] {
@@ -331,6 +371,236 @@ function sortByLoad(hexes: readonly AiHex[], loads: Map<string, number>): AiHex[
         (loads.get(`${String(a.col)}.${String(a.row)}`) ?? 0) -
           (loads.get(`${String(b.col)}.${String(b.row)}`) ?? 0) || compareHex(a, b),
     )
+}
+
+/**
+ * 批 2：C 段支线快照（每个字段只留一个经既有投影筛过的候选）
+ *
+ * 纪律：这里的筛选只回答「入口会不会必然拒绝」与「值不值得做」，判据全部来自既有投影
+ * （`switchableModesOf` / `railMoveFacts` / `railPathBetween` / `detrainableHexes` /
+ * `transportLoadableSpOf` / `overrunTargets`）；真正的合法性仍由各提交入口再判一次。
+ */
+function moveBranchOf(
+  w: ReturnType<typeof useWorkbenchStore>,
+  memory: AiMemory,
+  side: AiSide,
+  enemyHexes: readonly AiHex[],
+  moveActive: boolean,
+  hasStepped: boolean,
+  candidates: readonly string[],
+): AiMoveBranchSnapshot {
+  const can = w.segmentActionKeys
+  const nearestEnemy = (hex: AiHex): number => {
+    let best = Number.POSITIVE_INFINITY
+    for (const enemy of enemyHexes) best = Math.min(best, hexDistance(hex, enemy))
+    return best
+  }
+
+  // 专规 3.5：建造标记只能在**任何单位移动之前**由轴方放置
+  let constructionMarker: AiMoveBranchSnapshot['constructionMarker'] = null
+  if (
+    side === 'axis' &&
+    can.has('move.construction') &&
+    !memory.constructionDone &&
+    w.constructionMarkers > 0 &&
+    w.units.every((unit) => unit.mpSpent === 0 && (unit.airTransportThisPhase ?? 0) === 0) &&
+    !w.airUnitCargoManifest.some((item) => item.fate === 'aboard')
+  ) {
+    const hex = dedupeSortedHexes(
+      w.units.filter((unit) => unit.side === 'axis' && unit.isCombat).map((unit) => unit.hex),
+    )[0]
+    if (hex !== undefined) constructionMarker = { marker: 'bridge', hex }
+  }
+
+  // 5.4：strat→move 以便开拔；已结束且邻敌的 move→combat 转入战斗姿态
+  let modeSwitch: AiMoveBranchSnapshot['modeSwitch'] = null
+  if (can.has('move.modeChange')) {
+    for (const id of candidates) {
+      if (memory.modeSwitchTried.includes(id)) continue
+      const unit = w.units.find((item) => item.instanceId === id)
+      if (unit === undefined || unit.mode.mode !== 'strat') continue
+      if (!w.switchableModesOf(id).includes('move')) continue
+      modeSwitch = { unitId: id, mode: 'move' }
+      break
+    }
+    if (modeSwitch === null) {
+      const ended = w.units
+        .filter(
+          (unit) =>
+            unit.side === side &&
+            unit.movementEnded &&
+            unit.mode.mode === 'move' &&
+            !memory.modeSwitchTried.includes(unit.instanceId),
+        )
+        .filter((unit) =>
+          w.units.some(
+            (enemy) =>
+              enemy.side !== side && enemy.isCombat && hexDistance(unit.hex, enemy.hex) === 1,
+          ),
+        )
+        .sort(compareStableUnit)
+      for (const unit of ended) {
+        if (!w.switchableModesOf(unit.instanceId).includes('combat')) continue
+        modeSwitch = { unitId: unit.instanceId, mode: 'combat' }
+        break
+      }
+    }
+  }
+
+  // 13.3e：铁路运输（单位货 → SP 货）。只在还没开拔、且本回合仍有铁路容量时提案。
+  let railUnit: AiMoveBranchSnapshot['railUnit'] = null
+  let railSp: AiMoveBranchSnapshot['railSp'] = null
+  if (
+    !moveActive &&
+    !memory.railScanned &&
+    can.has('move.railTransport') &&
+    w.railCapRemaining[side] > 0
+  ) {
+    const facts = w.railMoveFacts
+    const destinations = dedupeSortedHexes(w.detrainableHexes)
+      .filter((hex) => facts.hasRail(hex) && facts.railGaugeUsable(hex, side))
+      .filter((hex) => !facts.enemyOccupies(hex, side) && !facts.hasEnemyCombatUnit(hex, side))
+      .filter((hex) => !facts.inEnemyZoc(hex, side))
+    const closerTargets = (from: AiHex): readonly AiHex[] => {
+      const here = nearestEnemy(from)
+      return destinations
+        .filter((hex) => !(hex.col === from.col && hex.row === from.row))
+        .filter((hex) => nearestEnemy(hex) < here)
+        .sort((a, b) => nearestEnemy(a) - nearestEnemy(b) || compareHex(a, b))
+        .slice(0, 6)
+    }
+    const units = w.units
+      .filter((unit) => unit.side === side && !unit.movementEnded && !unit.mode.dg)
+      .filter((unit) => {
+        // 13.3g-B：铁路修理单位可整 MA 铁路移动；其余须移动模式（5.6a）且登车前 ≤ 半 MA（13.3e-1）
+        if (facts.isRailRepairUnit(unit.instanceId)) return unit.mpSpent <= unit.raw.ma
+        return unit.mode.mode === 'move' && unit.mpSpent * 2 <= unit.raw.ma
+      })
+      .filter((unit) => facts.hasRail(unit.hex))
+      .sort(compareStableUnit)
+    for (const unit of units) {
+      if (memory.railTriedUnits.includes(unit.instanceId)) continue
+      const toHex = closerTargets(unit.hex).find(
+        (hex) => w.railPathBetween(unit.hex, hex, side) !== null,
+      )
+      if (toHex !== undefined) {
+        railUnit = { unitId: unit.instanceId, toHex }
+        break
+      }
+    }
+    if (railUnit === null) {
+      const dumps = w.spDumps
+        .filter(
+          (dump) =>
+            dump.side === side &&
+            dump.sp > 0 &&
+            !memory.railTriedDumps.includes(dump.id) &&
+            facts.hasRail(dump.hex),
+        )
+        .sort((a, b) => compareHex(a.hex, b.hex) || a.id.localeCompare(b.id))
+      for (const dump of dumps) {
+        const toHex = closerTargets(dump.hex).find(
+          (hex) => w.railPathBetween(dump.hex, hex, side) !== null,
+        )
+        if (toHex !== undefined) {
+          railSp = { dumpId: dump.id, amount: 1, toHex }
+          break
+        }
+      }
+    }
+    // 扫过一次仍无候选 ⇒ 本环节不再重复 BFS（位置变化由下一环节重算）
+    if (railUnit === null && railSp === null) memory.railScanned = true
+  }
+
+  // 13.2f：装卸（load 优先；同格有补给站时不卸，避免「装上又卸下」空转）
+  let transport: AiMoveBranchSnapshot['transport'] = null
+  if (!moveActive && can.has('move.loadUnload')) {
+    const points = w.transportPointsOfSide.slice().sort(compareStableUnit)
+    for (const point of points) {
+      if (memory.transportTried.includes(point.instanceId)) continue
+      // 13.2f / 6.1a：装卸都按印刷 MA 的 10% 计费，MP 不够时入口必拒
+      const cost = transportPointLoadCost(point.raw.ma)
+      if (point.mpSpent + cost > point.raw.ma) continue
+      const load = w.transportLoadableSpOf(point.instanceId)
+      if (load > 0) {
+        /*
+         * 13.2f：入口要求**单本账**独自付清（`transportLoadDumpFor`），
+         * 而 `transportLoadableSpOf` 是按全格合计给的 ⇒ 这里再取「单本账最多能付多少」，
+         * 否则同格两本各 1 SP、界面预填 2 时会被 13.2f 拒。
+         */
+        const perDump = Math.max(
+          0,
+          ...w
+            .transportDumpsOf(point.instanceId)
+            .map((dump) => Math.floor(holdingsToT({ sp: dump.sp, t: dump.t }) / SP_TO_T)),
+        )
+        const amount = Math.min(load, perDump)
+        if (amount > 0) {
+          transport = { pointId: point.instanceId, mode: 'load', amount }
+          break
+        }
+      }
+      const unload = w.transportUnloadableSpOf(point.instanceId)
+      // 只在「本环节真的开过车」之后卸货；同格有补给站也不卸，避免原地装上又卸下
+      if (unload > 0 && point.movementEnded && w.transportDumpsOf(point.instanceId).length === 0) {
+        transport = { pointId: point.instanceId, mode: 'unload', amount: unload }
+        break
+      }
+    }
+  }
+
+  // 13.3f：本阶段刚走入非本方轨距格的铁路修理单位（换轨是「移动进入」的副产品）
+  let gauge: AiMoveBranchSnapshot['gauge'] = null
+  if (moveActive && hasStepped && can.has('move.railConversion')) {
+    const steps = w.moveInteraction?.steps ?? []
+    const last = steps
+      .slice()
+      .reverse()
+      .find((step) => step.kind === 'step')
+    if (last !== undefined) {
+      for (const id of w.moveInteraction?.unitIds ?? []) {
+        if (memory.gaugeTried.includes(id)) continue
+        const facts = w.railMoveFacts
+        if (!facts.isRailRepairUnit(id)) continue
+        // 13.3g-A「不能接力」：本阶段已用铁路走过刚换轨的格 ⇒ 不再换轨
+        if (
+          w.railMovedNewTrackThisPhase.some(
+            (item) => item.instanceId === id && item.hexes.length > 0,
+          )
+        )
+          continue
+        const unit = w.units.find((item) => item.instanceId === id)
+        if (unit === undefined || !last.movedIds.includes(id)) continue
+        if (unit.hex.col !== last.to.col || unit.hex.row !== last.to.row) continue
+        if (!facts.hasRail(unit.hex) || facts.railGaugeUsable(unit.hex, side)) continue
+        if (facts.inEnemyZoc(unit.hex, side)) continue
+        // 13.3g-D / 5.10e：须战斗模式，或 DG 但朝向战斗面
+        if (!(unit.mode.mode === 'combat' || (unit.mode.dg && unit.mode.orientation === 'combat')))
+          continue
+        gauge = { unitId: id, hex: { col: unit.hex.col, row: unit.hex.row } }
+        break
+      }
+    }
+  }
+
+  // 8.0：移动中尚未落子时的可突袭相邻敌格（投影与 `overrunNow` 同源）
+  const triedOverrun = new Set(memory.overrunTried)
+  const overrunTargets =
+    moveActive && !hasStepped && can.has('move.overrun')
+      ? dedupeSortedHexes(w.overrunTargets.map((hint) => hint.hex)).filter(
+          (hex) => !triedOverrun.has(hexKeyOf(hex)),
+        )
+      : []
+
+  return {
+    modeSwitch,
+    overrunTargets,
+    railUnit,
+    railSp,
+    transport,
+    constructionMarker,
+    gauge,
+  }
 }
 
 function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode): AiSnapshot {
@@ -577,6 +847,7 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
   }
 
   const rebuild = rebuildSnapshotOf(w, memory)
+  const branch = moveBranchOf(w, memory, side, enemyHexes, moveActive, hasStepped, candidates)
 
   /*
    * 4.8a：超堆叠待处理
@@ -659,6 +930,7 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
       candidates,
       enemyHexes,
     },
+    branch,
     air: {
       inProgress:
         airState !== null &&
@@ -926,6 +1198,58 @@ function execute(
     case 'moveFinish':
       w.finishMove()
       return true
+    /* ────────── 批 2：C 段支线 ────────── */
+    case 'modeChangeTo': {
+      memory.modeSwitchTried.push(action.unitId)
+      w.movePick = null
+      w.selectedId = action.unitId
+      w.switchUnitMode(action.mode)
+      const unit = w.units.find((item) => item.instanceId === action.unitId)
+      return unit !== undefined && unit.mode.mode === action.mode
+    }
+    case 'overrun': {
+      memory.overrunTried.push(hexKeyOf(action.hex))
+      return w.overrunNow(action.hex)
+    }
+    case 'railMove': {
+      memory.railTriedUnits.push(action.unitId)
+      w.selectedId = action.unitId
+      w.railMoveInputs = { ...w.railMoveInputs, toHexText: hexKeyOf(action.toHex) }
+      // 试算已含「校验 + 当日容量」两道判据：不过就不提交（不计规则拒绝，也不改货物）
+      if (!w.railMoveNow('unit', true)) return true
+      return w.railMoveNow('unit')
+    }
+    case 'railMoveSp': {
+      memory.railTriedDumps.push(action.dumpId)
+      w.railMoveInputs = {
+        ...w.railMoveInputs,
+        fromDumpId: action.dumpId,
+        spAmount: action.amount,
+        toHexText: hexKeyOf(action.toHex),
+      }
+      if (!w.railMoveNow('sp', true)) return true
+      return w.railMoveNow('sp')
+    }
+    case 'transportLoad': {
+      memory.transportTried.push(action.pointId)
+      w.selectTransportLoadPointNow(action.pointId)
+      w.transportLoadInputs = { ...w.transportLoadInputs, loadAmount: action.amount }
+      return w.loadTransportPointNow()
+    }
+    case 'transportUnload': {
+      memory.transportTried.push(action.pointId)
+      w.selectTransportLoadPointNow(action.pointId)
+      w.transportLoadInputs = { ...w.transportLoadInputs, unloadAmount: action.amount }
+      return w.unloadTransportPointNow()
+    }
+    case 'constructionMarker': {
+      memory.constructionDone = true
+      return w.useConstructionMarkerNow(action.marker, hexKeyOf(action.hex))
+    }
+    case 'gaugeConvert': {
+      memory.gaugeTried.push(action.unitId)
+      return w.convertRailGaugeNow(action.unitId, hexKeyOf(action.hex))
+    }
     case 'specialConfirm': {
       for (const item of w.specialPending?.items ?? []) {
         const candidate = item.candidates[0]

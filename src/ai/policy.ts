@@ -207,6 +207,29 @@ export interface AiReinSupplySnapshot {
   trainGroupRequired: boolean
 }
 
+/**
+ * 批 2：C 段支线（移动环节里除「逐格移动」之外的可用动作）
+ *
+ * 每个字段都只留「一个」经既有投影筛过的候选：策略层只按固定顺序取用，
+ * 不在决策里重算规则，也不会把入口必然拒绝的组合发出去。
+ */
+export interface AiMoveBranchSnapshot {
+  /** 5.4：换模式（strat→move 以便开拔；已结束且邻敌的 move→combat 转入战斗姿态） */
+  modeSwitch: { unitId: string; mode: 'move' | 'combat' } | null
+  /** 8.0：移动中可突袭、且本环节未试过的相邻敌格（稳定序） */
+  overrunTargets: readonly AiHex[]
+  /** 13.3e：单位铁路运输一条（已排除无路 / 不划算者） */
+  railUnit: { unitId: string; toHex: AiHex } | null
+  /** 13.3e：SP 铁路货运一条 */
+  railSp: { dumpId: string; amount: number; toHex: AiHex } | null
+  /** 13.2f：装卸一条（load 优先，卸货只在同格无补给站时做，避免装上又卸下） */
+  transport: { pointId: string; mode: 'load' | 'unload'; amount: number } | null
+  /** 专规 3.5：建造标记一条（只在轴方、且本阶段还没有任何单位移动之前） */
+  constructionMarker: { marker: 'bridge' | 'airStrip'; hex: AiHex } | null
+  /** 13.3f：本阶段刚走入非本方轨距格的铁路修理单位 */
+  gauge: { unitId: string; hex: AiHex } | null
+}
+
 /** B 增援：重建 / 整编候选（一次只给一个，避免每步全量预演） */
 export interface AiRebuildSnapshot {
   unitId: string
@@ -258,6 +281,8 @@ export interface AiSnapshot {
   reserveUnitIds: readonly string[]
   reserveTriedUnitIds: readonly string[]
   move: AiMoveSnapshot
+  /** 批 2：C 段支线（换模式 / 突袭 / 铁路 / 装卸 / 建造标记 / 换轨） */
+  branch: AiMoveBranchSnapshot
   air: AiAirSnapshot
   barrage: AiBarrageSnapshot
   combat: AiCombatSnapshot
@@ -272,6 +297,15 @@ export type AiAction =
   | { kind: 'moveBegin'; unitId: string }
   | { kind: 'moveClick'; hex: AiHex }
   | { kind: 'moveFinish' }
+  /* 批 2：C 段支线（换模式 / 突袭 / 铁路 / 装卸 / 建造标记 / 换轨） */
+  | { kind: 'modeChangeTo'; unitId: string; mode: 'move' | 'combat' }
+  | { kind: 'overrun'; hex: AiHex }
+  | { kind: 'railMove'; unitId: string; toHex: AiHex }
+  | { kind: 'railMoveSp'; dumpId: string; amount: number; toHex: AiHex }
+  | { kind: 'transportLoad'; pointId: string; amount: number }
+  | { kind: 'transportUnload'; pointId: string; amount: number }
+  | { kind: 'constructionMarker'; marker: 'bridge' | 'airStrip'; hex: AiHex }
+  | { kind: 'gaugeConvert'; unitId: string; hex: AiHex }
   | { kind: 'specialConfirm' }
   /* 批 1：初设（一键预设 → 抽签 → 确认/开局） */
   | { kind: 'setupPreset' }
@@ -339,6 +373,22 @@ export function actionKeyOf(action: AiAction): string {
       return `moveBegin:${action.unitId}`
     case 'moveClick':
       return `moveClick:${hexKeyOf(action.hex)}`
+    case 'modeChangeTo':
+      return `modeChangeTo:${action.unitId}:${action.mode}`
+    case 'overrun':
+      return `overrun:${hexKeyOf(action.hex)}`
+    case 'railMove':
+      return `railMove:${action.unitId}:${hexKeyOf(action.toHex)}`
+    case 'railMoveSp':
+      return `railMoveSp:${action.dumpId}:${hexKeyOf(action.toHex)}`
+    case 'transportLoad':
+      return `transportLoad:${action.pointId}`
+    case 'transportUnload':
+      return `transportUnload:${action.pointId}`
+    case 'constructionMarker':
+      return `constructionMarker:${action.marker}:${hexKeyOf(action.hex)}`
+    case 'gaugeConvert':
+      return `gaugeConvert:${action.unitId}:${hexKeyOf(action.hex)}`
     case 'barrageTarget':
       return `barrageTarget:${hexKeyOf(action.hex)}`
     case 'barrageToggleUnit':
@@ -525,6 +575,32 @@ function decideRebuild(snapshot: AiSnapshot): AiAction | null {
   if (rebuild === null) return null
   if (rebuild.consolidate !== null) return { kind: 'consolidate', ...rebuild.consolidate }
   return { kind: 'rebuild', unitId: rebuild.unitId, mode: rebuild.kind, hex: rebuild.hex }
+}
+
+/** 批 2：C 段支线（建造标记 → 换模式 → 铁路 → 装卸；都在逐格移动之前） */
+function decideMoveBranches(snapshot: AiSnapshot): AiAction | null {
+  // 已宣布的空军任务要先收尾（14.2f）；期间别插地面支线，避免撞互斥
+  if (snapshot.air.inProgress) return null
+  const branch = snapshot.branch
+  // 专规 3.5：建造标记必须在**任何单位移动之前**使用
+  if (branch.constructionMarker !== null)
+    return { kind: 'constructionMarker', ...branch.constructionMarker }
+  if (branch.modeSwitch !== null) return { kind: 'modeChangeTo', ...branch.modeSwitch }
+  if (branch.railUnit !== null) {
+    const { unitId, toHex } = branch.railUnit
+    return { kind: 'railMove', unitId, toHex }
+  }
+  if (branch.railSp !== null) {
+    const { dumpId, amount, toHex } = branch.railSp
+    return { kind: 'railMoveSp', dumpId, amount, toHex }
+  }
+  if (branch.transport !== null) {
+    const { pointId, mode, amount } = branch.transport
+    return mode === 'load'
+      ? { kind: 'transportLoad', pointId, amount }
+      : { kind: 'transportUnload', pointId, amount }
+  }
+  return null
 }
 
 function decideBarrageSettlement(snapshot: AiSnapshot): AiAction | null {
@@ -760,7 +836,16 @@ export function decideAiAction(snapshot: AiSnapshot): AiAction {
   if (snapshot.move.active) {
     if (!snapshot.control.activeSide)
       return waitForSide(snapshot.activeSide, '完成本次移动（4/5/7）')
-    if (snapshot.move.hasStepped) return { kind: 'moveFinish' }
+    // 8.0：尚未落子时先看能否突袭相邻敌格（突袭结算仍走后面的 combat 链）
+    if (!snapshot.move.hasStepped) {
+      const target = snapshot.branch.overrunTargets[0]
+      if (target !== undefined) return { kind: 'overrun', hex: target }
+    }
+    if (snapshot.move.hasStepped) {
+      // 13.3f：铁路修理单位刚走入非本方轨距格 ⇒ 先换轨，再结束本次移动
+      if (snapshot.branch.gauge !== null) return { kind: 'gaugeConvert', ...snapshot.branch.gauge }
+      return { kind: 'moveFinish' }
+    }
     const target = pickMoveTarget(snapshot)
     return target === null ? { kind: 'moveFinish' } : { kind: 'moveClick', hex: target }
   }
@@ -783,6 +868,10 @@ export function decideAiAction(snapshot: AiSnapshot): AiAction {
   if (rebuild !== null) return rebuild
   // 4.8a：超堆叠不解决就推进不了（13.6 到场豁免只覆盖增援段）；按默认取舍先压回限内
   if (snapshot.overstack.active) return { kind: 'overstackDestroy' }
+
+  // 3.6) 批 2：C 段支线（建造标记 / 换模式 / 铁路 / 装卸；闸门不放行时自然落到后面的主链）
+  const branch = decideMoveBranches(snapshot)
+  if (branch !== null) return branch
 
   // 4) 空军任务（14.2f）：已宣布的推进收尾；否则在允许宣布的环节打一次低空扫射
   //    天气受限时引擎本就不放行 `air.mission`，这里不另设天气判据（按原文不飞）

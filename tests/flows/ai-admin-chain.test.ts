@@ -78,6 +78,15 @@ function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
       candidates: [],
       enemyHexes: [],
     },
+    branch: {
+      modeSwitch: null,
+      overrunTargets: [],
+      railUnit: null,
+      railSp: null,
+      transport: null,
+      constructionMarker: null,
+      gauge: null,
+    },
     air: {
       inProgress: false,
       flownThisPhase: false,
