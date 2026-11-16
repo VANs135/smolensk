@@ -33,6 +33,17 @@ type Stores = {
   storage: ReturnType<typeof createMemoryStorage>
 }
 
+/**
+ * 「重建与整编」用的固定种子
+ *
+ * 2026-11-16：2.1 / 3.1 的图边补给源进入追溯事实后，首回合补给阶段不再对整盘断补单位
+ * 掷 12.8b 损耗骰 ⇒ 默认种子（`TEST_FIXED_SEED`）的骰序前移，第 2 回合 1.6b 落到
+ * 「7 or less（Pax0/Eq0）」行。该用例要测 **Eq 落位与 Eq 重建**，故固定一个 1.6b 掷出
+ * Pax2/Eq1、且 1.6c 抽到 Supply Cache（骰 1，不往手牌塞算子）的种子 22；
+ * 与规则实现无关，只钉骰序。其余用例仍用默认种子。
+ */
+const REBUILD_SEED = 22
+
 function mount(storage: ReturnType<typeof createMemoryStorage>): Stores {
   setActivePinia(createPinia())
   const g = useGameSessionStore()
@@ -49,8 +60,9 @@ function mount(storage: ReturnType<typeof createMemoryStorage>): Stores {
 }
 
 /** 确认布设 → 放弃未布设 → 抽编队 → 存档（用户指定的三步必做） */
-function setupConfirmAbandonDrawSave(s: Stores): void {
-  const { setup, g } = s
+function setupConfirmAbandonDrawSave(s: Stores, seed?: number): void {
+  const { setup, g, w } = s
+  if (seed !== undefined) expect(w.setSeed(seed)).toBe(true)
   expect(setup.enterSetup('1')).toBe(true)
   if (setup.requiredSetupIssues.some((issue) => issue.id === 'spOwnership')) {
     for (const dump of setup.spDumpsOf('axis')) setup.setSpAssignment(dump.id, 'hoth')
@@ -127,10 +139,10 @@ async function advanceToAxisReinforcement(s: Stores): Promise<void> {
 }
 
 /** 完整链路：确认/放弃/抽签 → 存档 → 冷读档 → 推进到 B 段 */
-async function bootToAxisReinforcement(): Promise<Stores> {
+async function bootToAxisReinforcement(seed?: number): Promise<Stores> {
   const storage = createMemoryStorage()
   const first = mount(storage)
-  setupConfirmAbandonDrawSave(first)
+  setupConfirmAbandonDrawSave(first, seed)
   const loaded = mount(storage)
   expect(loaded.g.loadNow()).toBe(true)
   expect(loaded.setup.finished).toBe(true)
@@ -365,7 +377,7 @@ describe('B 增援段操作级实测（剧本 1）', () => {
   }, 60000)
 
   it('重建与整编：补员点算子再点格落位，账本与死亡堆重建同步', async () => {
-    const s = await bootToAxisReinforcement()
+    const s = await bootToAxisReinforcement(REBUILD_SEED)
     const { w, mapView, containers } = s
     const rollStep = w.playerSegmentSteps.findIndex((step) => step.id === 'reinforcement.replRoll')
     expect(w.setSegmentStepIndex(rollStep)).toBe(true)

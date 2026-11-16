@@ -49,7 +49,7 @@ const FAR_HEX: HexRef = (() => {
   return { col: found.col, row: found.row }
 })()
 
-/** 无任何来源的格（与核心格/远格都不同，且在图上） */
+/** 与核心格/远格都不同的第三格（在图上；供「注入一条来源」分支用） */
 const EMPTY_HEX: HexRef = (() => {
   const found = mapLayers.hexes.find((hex) => {
     const ref = { col: hex.col, row: hex.row }
@@ -232,6 +232,20 @@ describe('⑦ 选源：不可点与不拦截', () => {
 
   it('点没有任何来源的格 ⇒ 不拦截（false）', () => {
     const { store } = setupTrace()
-    expect(store.pickSupplySourceAtHexNow(EMPTY_HEX)).toBe(false)
+    /*
+     * 2026-11-16：2.1 / 3.1 的图边补给源（剧本 `axisLive`，如 1.03 / 1.26 / 4.00）现在
+     * 真的进了追溯事实 ⇒ 固定「距核心 3 格」的空格可能本身就是图边源（如 1.3）。
+     * 本用例要的是「选的格不在来源清单里」，因此从实际清单反挑，而不是钉死常量。
+     */
+    const listed = new Set(
+      store.supplySources
+        .filter((source) => source.hex !== null)
+        .map((source) => label(source.hex!)),
+    )
+    const empty = mapLayers.hexes
+      .map((hex) => ({ col: hex.col, row: hex.row }))
+      .find((hex) => !listed.has(label(hex)))
+    expect(empty).toBeDefined()
+    expect(store.pickSupplySourceAtHexNow(empty!)).toBe(false)
   })
 })

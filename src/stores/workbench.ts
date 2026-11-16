@@ -3886,8 +3886,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   - dumps ← SP 账本（12.1b）；
    *   - throwHqs ← 摆好的 HQ 算子（投递距离取 13.1b 印值）；
    *   - extenders ← 摆好的延补队算子（距离取印值 MA，12.7b）；
-   *   - sources ← 玩家声明的 12.6a① 源 + **由 13.3c 派生的火车卸货格**（12.6a②；
-   *     见下方 `railSupply`：铁路可达 ∧ 村庄/城市/港口/工程 HQ ∧ 受控 ∧ 无未抵消敌 ZOC）。
+   *   - sources ← **专规 2.1 / 3.1 的图边补给源格** + 玩家声明的 12.6a① 源 +
+   *     **由 13.3c 派生的火车卸货格**（12.6a②；见下方 `railSupply`：铁路可达 ∧
+   *     村庄/城市/港口/工程 HQ ∧ 受控 ∧ 无未抵消敌 ZOC）。
+   *
+   * ★ 2026-11-16 修（用户实玩：轴方单位在 1.26 判成"无抽象补给"）：修前此处只收
+   *   「玩家手声明的源 + 铁路卸货格」，而 2.1 / 3.1 的图边源是**数据即判据**
+   *   （`scenarios.json → supplySources.axisLive / sovietLive`，原文例：1.03 / 1.26 / 4.00）——
+   *   1.26 这种**非铁路格边源**于是从不进入追溯链路。现并入 `openSourceHexesBySide`（含 2.1a 关停过滤）。
    */
   const supplyFacts = computed(() =>
     createSupplyFacts({
@@ -3896,6 +3902,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       // 12.1b：含 SP 的位置 —— **账本条目 + 装载在运输点数上的**（B32 步骤 5）
       dumps: allSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),
       sources: [
+        // 2.1 / 3.1：图边补给源格（剧本清单 ∪ 入场铁路格；按方，含 1.26 这类非铁路源）
+        ...(['axis', 'soviet'] as const).flatMap((side) =>
+          openSourceHexesBySide.value[side].map((hex) => ({
+            hex,
+            side,
+            kind: 'supplySourceHex' as const,
+          })),
+        ),
         ...supplySourceDecls.value
           .filter((decl) => decl.kind !== 'detrainable')
           .map((decl) => ({ hex: decl.hex, side: decl.side, kind: decl.kind })),
@@ -3920,9 +3934,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       turn: turn.value,
       // 12.1b：含 SP 的位置 —— **账本条目 + 装载在运输点数上的**（B32 步骤 5）
       dumps: allSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),
-      sources: supplySourceDecls.value
-        .filter((decl) => decl.kind !== 'detrainable')
-        .map((decl) => ({ hex: decl.hex, side: decl.side, kind: decl.kind })),
+      sources: [
+        // 2.1 / 3.1：图边补给源格（与 `supplyFacts` 同一份判据）
+        ...(['axis', 'soviet'] as const).flatMap((side) =>
+          openSourceHexesBySide.value[side].map((hex) => ({
+            hex,
+            side,
+            kind: 'supplySourceHex' as const,
+          })),
+        ),
+        ...supplySourceDecls.value
+          .filter((decl) => decl.kind !== 'detrainable')
+          .map((decl) => ({ hex: decl.hex, side: decl.side, kind: decl.kind })),
+      ],
     }),
   )
 
