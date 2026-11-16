@@ -39,6 +39,11 @@ const AIR_BASE = unitChoices('axis').find((record) => record.noncombatKind === '
 const ORGANIC_TRUCK = unitChoices('axis').find(
   (record) => record.noncombatKind === 'organic_truck' && typeof record.formation === 'string',
 )!
+/** 13.2：普通运输点数（与本作轴方 15 枚编内卡车相对；`carrierIsOrganicTruck === false`） */
+const TRANSPORT_POINT = unitChoices('axis').find(
+  (record) =>
+    record.noncombatKind === 'transport_point' && (record.noncombatDetails?.transport ?? 0) >= 2,
+)!
 const AIRCRAFT = aircraftChoices('axis')[0]!
 
 function withBase(): ReturnType<typeof useWorkbenchStore> {
@@ -114,5 +119,36 @@ describe('15.1B / 12.9c / 13.2g-B：整备的付款来源不含编内卡车', ()
     expect(store.pickRefitPayDump('ground')).toBe(true)
     expect(store.confirmRefitPaymentNow()).toBe(true)
     expect(store.spDumps.find((dump) => dump.id === 'ground')).toMatchObject({ sp: 0, t: 3 })
+  })
+
+  /**
+   * 守卫（用户 2026-11-16 裁定）：**普通运输点数**上装载的 SP 按 12.1b 仍是补给站，整备可付。
+   *
+   * 与上一条「编内卡车不可付」并列钉住两者的差别，防止以后把 `unit:` 来源整体当漏洞收紧掉：
+   *   · 12.1b：装载在运输点数上的 SP 是补给站 —— 普通运输点数适用；
+   *   · 13.2g-A/B：编内卡车不许卸货、只许同一多单位编队拖取 —— 仅此一类被排除。
+   */
+  it('★ 守卫：普通运输点数上装载的 SP 可付整备（12.1b；13.2g-A/B 只排编内卡车）', () => {
+    const store = withBase()
+    const point = toConsoleUnit({
+      record: TRANSPORT_POINT,
+      instanceId: 'tp-1',
+      hex: HEX,
+      side: 'axis',
+    })
+    point.loadedSpT = SP_TO_T
+    store.units.push(point)
+
+    const pays = store.airRefitPayDumps('base-1')
+    expect(pays.map((dump) => dump.id)).toEqual(['unit:tp-1'])
+    expect(pays[0]!.carrierIsOrganicTruck).toBe(false)
+
+    expect(store.beginRefitNow('base-1')).toBe(true)
+    store.toggleRefitAircraft('air-1')
+    expect(store.confirmRefitSelectionNow()).toBe(true)
+    expect(store.pickRefitPayDump('unit:tp-1')).toBe(true)
+    expect(store.confirmRefitPaymentNow()).toBe(true)
+    // 4T 里付 1T ⇒ 车上剩 3T（12.1a 找零留在原处）
+    expect(point.loadedSpT).toBe(SP_TO_T - 1)
   })
 })
