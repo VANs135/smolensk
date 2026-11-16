@@ -1,12 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import {
-  actionGateOf,
-  useWorkbenchStore,
-  type ActionKey,
-  type ConsolePhase,
-} from '@/stores'
+import { actionGateOf, useWorkbenchStore, type ActionKey, type ConsolePhase } from '@/stores'
 
 import { CORE_HEX, NEAR_HEX, combatRecord, newConsole, placeGround } from '../flows/sop-harness'
 

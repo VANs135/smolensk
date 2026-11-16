@@ -17,7 +17,6 @@ import {
   NEAR_HEX,
   artilleryRecord,
   groundRecord,
-  newConsole,
   placeGround,
 } from '../flows/sop-harness'
 
@@ -61,7 +60,13 @@ describe('S2：右键菜单层级与提示一致', () => {
     enterStep(workbench, 'barrage.declare')
     expect(workbench.segmentStep?.id).toBe('combat.barrage')
     placeGround(workbench, artilleryRecord('axis'), CORE_HEX, 'axis', 'art-1')
-    placeGround(workbench, groundRecord('soviet', (r) => r.isCombat === true), NEAR_HEX, 'soviet', 'def-1')
+    placeGround(
+      workbench,
+      groundRecord('soviet', (r) => r.isCombat === true),
+      NEAR_HEX,
+      'soviet',
+      'def-1',
+    )
     workbench.spDumps.push({ id: 'dump-1', hex: { ...CORE_HEX }, side: 'axis', sp: 0, t: 20 })
 
     expect(workbench.barrageTargetsNow.length).toBeGreaterThan(0)
@@ -76,7 +81,13 @@ describe('S2：右键菜单层级与提示一致', () => {
     expect(workbench.segmentStep?.id).toBe('exploitation.barrage')
     const gun = placeGround(workbench, artilleryRecord('axis'), CORE_HEX, 'axis', 'g-gun')
     gun.mode = { ...gun.mode, mode: 'reserve', releasedFromReserve: true }
-    placeGround(workbench, groundRecord('soviet', (r) => r.isCombat === true), NEAR_HEX, 'soviet', 'g-def')
+    placeGround(
+      workbench,
+      groundRecord('soviet', (r) => r.isCombat === true),
+      NEAR_HEX,
+      'soviet',
+      'g-def',
+    )
     workbench.spDumps.push({ id: 'dump-g', hex: { ...CORE_HEX }, side: 'axis', sp: 0, t: 20 })
 
     expect(workbench.barrageTargetsNow.length).toBeGreaterThan(0)

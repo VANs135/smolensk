@@ -78,9 +78,7 @@ const dutiesSettled = computed<boolean>(() => {
   if (current === null) return false
   return (
     workbench.supplyFeedingSettled &&
-    current.attritionDuty.every((duty) =>
-      workbench.attritionAppliedHexes.includes(keyOf(duty.hex)),
-    )
+    current.attritionDuty.every((duty) => workbench.attritionAppliedHexes.includes(keyOf(duty.hex)))
   )
 })
 </script>
