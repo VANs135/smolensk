@@ -709,6 +709,16 @@ export const useMapViewStore = defineStore('mapView', () => {
   const overlay = computed<MovementOverlay>(() => {
     // M1：还没开拔时，取子清单本身就是"将要移动的这批"（高亮与起点照它画）
     const movingIds = workbench.moveInteraction?.unitIds ?? workbench.movePick?.ids ?? []
+    /*
+     * ★ 2026-11-17：可走格只在**移动语境**里投影。
+     *   修前无条件把 `groupReachable` 画出来 ⇒ 整备段点格开堆叠时，若待开拔集/预览
+     *   还带着（从移动段残留或直接进入该段），地图会显示地面可移动格，误导玩家还能走。
+     *   判据与"哪一段才算移动"同源：当前环节是移动步，或已有一场未结束的移动交互
+     *   （8.1e 突袭后继续移动仍要看得见可走格）。
+     */
+    const reachableLive =
+      workbench.movementStepNow ||
+      (workbench.moveInteraction !== null && workbench.moveInteraction.finished !== true)
     return {
       tokens: visibleTokens.value,
       /*
@@ -719,13 +729,15 @@ export const useMapViewStore = defineStore('mapView', () => {
        * `zocHexes` 内部按 `projectsZoc` 裁定，本处不另行判定。
        */
       zoc: zocLayerVisible.value ? zocLayerFromTokens(groundAndAir.value) : null,
-      reachable: workbench.groupReachable.hexes.map((node) => ({
-        hex: node.hex,
-        mpSpent: node.mpSpent,
-        forcedStop: node.forcedStop,
-        minimumMove: node.minimumMove,
-        inEnemyZoc: node.inEnemyZoc,
-      })),
+      reachable: reachableLive
+        ? workbench.groupReachable.hexes.map((node) => ({
+            hex: node.hex,
+            mpSpent: node.mpSpent,
+            forcedStop: node.forcedStop,
+            minimumMove: node.minimumMove,
+            inEnemyZoc: node.inEnemyZoc,
+          }))
+        : [],
       path: workbench.stepPreview?.path ?? [],
       startHex: workbench.moveInteraction?.start ?? workbench.movePick?.hex ?? null,
       selectedIds: movingIds,
