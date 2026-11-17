@@ -31,13 +31,21 @@ const props = withDefaults(
     rule?: string
     /** 小窗宽度 */
     width?: string
+    /**
+     * 可用区域（视口 CSS 像素）。默认＝整个窗口。
+     *
+     * 用户 2026-11-18：地图小窗层级低于左侧指令栏/底部托盘（`--layer-shell`），
+     * 若贴边开在指令栏下面，**真实鼠标事件会被指令栏吃掉**（右键呼不出菜单）。
+     * 调用方传入地图可视区，小窗夹在地图里，既不压栏也点得到。
+     */
+    bounds?: { left: number; right: number; top: number; bottom: number } | null
   }>(),
-  { x: 0, y: 0, title: '', rule: '', width: '300px' },
+  { x: 0, y: 0, title: '', rule: '', width: '300px', bounds: null },
 )
 
 const emit = defineEmits<{ close: [] }>()
 const root = ref<HTMLElement | null>(null)
-const bounds = ref({ width: 300, height: 100 })
+const size = ref({ width: 300, height: 100 })
 const viewport = ref({
   width: typeof window === 'undefined' ? 1024 : window.innerWidth,
   height: typeof window === 'undefined' ? 768 : window.innerHeight,
@@ -46,7 +54,7 @@ let observer: ResizeObserver | null = null
 function measure(): void {
   viewport.value = { width: window.innerWidth, height: window.innerHeight }
   if (root.value !== null)
-    bounds.value = { width: root.value.offsetWidth, height: root.value.offsetHeight }
+    size.value = { width: root.value.offsetWidth, height: root.value.offsetHeight }
 }
 watch(
   root,
@@ -108,12 +116,19 @@ watch(
 const position = computed(() => {
   const clampX = (value: number, min: number, max: number): number =>
     Math.min(Math.max(value, min), Math.max(max, min))
+  const half = size.value.width / 2
   if (typeof window === 'undefined') {
     return { left: `${props.x + offset.value.dx}px`, top: `${props.y + offset.value.dy}px` }
   }
+  // 用户 2026-11-18：有可用区（地图可视区）就夹在里面，避免落到指令栏/托盘下面被吞事件
+  const area = props.bounds
+  const minX = (area === null ? 8 : area.left) + half
+  const maxX = (area === null ? viewport.value.width - 8 : area.right) - half
+  const minY = area === null ? 8 : area.top
+  const maxY = (area === null ? viewport.value.height - 8 : area.bottom) - size.value.height
   return {
-    left: `${clampX(props.x + offset.value.dx, bounds.value.width / 2 + 8, viewport.value.width - bounds.value.width / 2 - 8)}px`,
-    top: `${clampX(props.y + offset.value.dy, 8, viewport.value.height - bounds.value.height - 8)}px`,
+    left: `${clampX(props.x + offset.value.dx, minX, maxX)}px`,
+    top: `${clampX(props.y + offset.value.dy, minY, maxY)}px`,
   }
 })
 

@@ -34,6 +34,25 @@ const workbench = useWorkbenchStore()
 
 const open = computed(() => mapView.popup !== null)
 const anchor = computed(() => mapView.popup ?? { x: 0, y: 0 })
+
+/**
+ * 地图可视区（用户 2026-11-18）
+ *
+ * 小窗层级低于左侧指令栏/底部托盘；贴边开窗会落到它们下面，真实鼠标事件被吃掉
+ * （右键呼不出菜单）。开窗/换格时量一次地图矩形，交给 `MapPopover` 夹取。
+ */
+const mapArea = ref<{ left: number; right: number; top: number; bottom: number } | null>(null)
+watch(
+  () => [mapView.popup?.x, mapView.popup?.y],
+  () => {
+    const rect = document.querySelector('.mapcanvas')?.getBoundingClientRect()
+    mapArea.value =
+      rect === undefined
+        ? null
+        : { left: rect.left + 6, right: rect.right - 6, top: rect.top + 6, bottom: rect.bottom - 6 }
+  },
+  { immediate: true, flush: 'post' },
+)
 const content = computed(() => mapView.popupContent)
 const title = computed(() => (mapView.popup === null ? '' : `格 ${hexLabel(mapView.popup.hex)}`))
 
@@ -316,6 +335,7 @@ const ruleTags = computed<string>(() => {
     :x="anchor.x"
     :y="anchor.y"
     :title="`${title} · 操作`"
+    :bounds="mapArea"
     width="292px"
     class="popover--menu"
     @close="mapView.closePopup()"
@@ -370,6 +390,7 @@ const ruleTags = computed<string>(() => {
     :y="anchor.y"
     :title="title"
     :rule="ruleTags"
+    :bounds="mapArea"
     width="330px"
     @close="mapView.closePopup()"
   >
