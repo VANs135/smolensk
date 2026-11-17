@@ -2,9 +2,11 @@
 import { computed, ref, watch } from 'vue'
 
 import { BaseIcon, BaseTag } from '@/components/base'
+import { useRefereeTools } from '@/components/ui-mode'
 import { panelScansOf } from '@/render/charts-view'
 import { counterImages } from '@/render/token-images'
 import { useContainersStore, useHotseatStore } from '@/stores'
+import type { Side } from '@/data'
 
 import { panelScanImageUrl } from './aux-card-image'
 import { BoxCard } from './index'
@@ -33,6 +35,7 @@ import { BoxCard } from './index'
 
 const containers = useContainersStore()
 const hotseat = useHotseatStore()
+const showsReferee = useRefereeTools()
 
 /** 展开的那一段（null = 两段都折叠成一行） */
 const openSection = ref<'boxes' | 'tables' | null>(null)
@@ -42,16 +45,25 @@ function toggle(section: 'boxes' | 'tables'): void {
 }
 
 /**
- * 盒段：**只列当前视角方**的卡（用户 2026-11-18 阵营隔离）
+ * 盒段：**只列视角方**的卡（用户 2026-11-18 阵营隔离）
  *
  * 实盘缺陷：修前轴心/苏联两列都渲染，苏军玩家先看到轴心盒，自己的盒被挤到裁切区里点不开，
  * 且能看到对方盒的条目与右键菜单。共用盒（`side === null`）另列，不受视角影响。
+ *
+ * 例外：solo（同一人操作双方，`fogDisabled`）与裁判/验证页**没有"对手"** ⇒ 两方都列，
+ * 与盒面板同一口径（4.9a / 专规 1.4 的信息纪律只约束对手之间）。
  */
-const viewerCards = computed(() => containers.cardViewsOf(hotseat.viewerSide))
+const showsAllSides = computed<boolean>(() => hotseat.fogDisabled || showsReferee)
+const sideCards = computed<{ side: Side; cards: ReturnType<typeof containers.cardViewsOf> }[]>(
+  () =>
+    showsAllSides.value
+      ? (['axis', 'soviet'] as const).map((side) => ({ side, cards: containers.cardViewsOf(side) }))
+      : [{ side: hotseat.viewerSide, cards: containers.cardViewsOf(hotseat.viewerSide) }],
+)
 
-/** 盒段里还有多少枚没归位（只盘点**视角方** + 共用，不能借角标泄露对方数量） */
+/** 盒段里还有多少枚没归位（玩家态只盘点**视角方** + 共用，不能借角标泄露对方数量） */
 const boxUnitTotal = computed(() =>
-  [...viewerCards.value, ...containers.sharedCardViews].reduce(
+  [...sideCards.value.flatMap((group) => group.cards), ...containers.sharedCardViews].reduce(
     (total, card) => total + card.regions.reduce((sum, region) => sum + region.units.length, 0),
     0,
   ),
@@ -112,14 +124,16 @@ watch([openSection, screen], () => {
           <BaseIcon :name="openSection === 'boxes' ? 'chevron-down' : 'chevron-right'" />
         </span>
         <span class="tray__title">盒</span>
-        <BaseTag kind="neutral">{{ viewerCards.length }} 张卡</BaseTag>
+        <BaseTag kind="neutral"
+          >{{ sideCards.reduce((n, g) => n + g.cards.length, 0) }} 张卡</BaseTag
+        >
         <span class="tray__meta num">{{ boxUnitTotal }} 枚在盒</span>
       </button>
 
       <div v-if="openSection === 'boxes'" class="tray__body">
-        <div class="tray__col">
-          <p class="tray__col-head num">{{ hotseat.viewerSide === 'axis' ? '轴心国' : '苏联' }}</p>
-          <BoxCard v-for="card in viewerCards" :key="card.id" :card="card" />
+        <div v-for="group in sideCards" :key="group.side" class="tray__col">
+          <p class="tray__col-head num">{{ group.side === 'axis' ? '轴心国' : '苏联' }}</p>
+          <BoxCard v-for="card in group.cards" :key="card.id" :card="card" />
         </div>
         <!-- B31c：**双方共用**的卡（运力记录轨：一张卡上两组轨，标记按当前容量推格） -->
         <div v-if="containers.sharedCardViews.length > 0" class="tray__col">

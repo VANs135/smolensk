@@ -32,13 +32,21 @@ describe('盒表阵营隔离', () => {
     const tray = read('src/components/game/BottomTray.vue')
     expect(tray).toContain('containers.cardViewsOf(hotseat.viewerSide)')
     expect(tray).not.toContain("v-for=\"side in ['axis', 'soviet'] as const\"")
+    expect(tray).not.toContain('cardsBySide')
   })
 
   it('★ 盒表盘点角标也只算视角方 + 共用（不能泄露对方数量）', () => {
     const tray = read('src/components/game/BottomTray.vue')
-    expect(tray).toContain('...viewerCards')
+    expect(tray).toContain('...sideCards.value.flatMap')
     expect(tray).not.toContain('cardsBySide.value.axis')
     expect(tray).not.toContain('cardsBySide.value.soviet')
+  })
+
+  it('★ solo / 裁判页没有对手 ⇒ 两方盒都列（与盒面板同口径）', () => {
+    const tray = read('src/components/game/BottomTray.vue')
+    expect(tray).toContain('hotseat.fogDisabled')
+    expect(tray).toContain('showsAllSides.value')
+    expect(tray).toContain("['axis', 'soviet']")
   })
 
   it('★ 盒内动作面板按视角方取盒（actions 也不跟行动方吃对方盒）', () => {

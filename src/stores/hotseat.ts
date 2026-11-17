@@ -147,6 +147,44 @@ export const useHotseatStore = defineStore('hotseat', () => {
     viewerSide.value = next
   }
 
+  /**
+   * **本局玩家自己执的一方**（用户 2026-11-18：视角默认值必须跟玩家阵营一致）
+   *
+   *   · `pve`：AI 执 `aiSide` ⇒ 玩家执另一方（未指定 AI 方时无解，返回 null）；
+   *   · `pvp` / `solo`：同机没有"唯一玩家方"，返回 null（默认跟行动方，见 `defaultViewerSide`）。
+   */
+  const playerSide = computed<Side | null>(() => {
+    if (mode.value !== 'pve' || aiSide.value === null) return null
+    return otherSide(aiSide.value)
+  })
+
+  /**
+   * 视角方的**默认值**（选完模式 / 换 AI 方 / 换剧本时用）
+   *
+   *   · `pve` ⇒ 玩家执的一方（AI 方选定后才有解；未选定 ⇒ null＝保持当前）；
+   *   · `pvp` / `solo` ⇒ 行动方（热座双方轮流动，开局跟先手方；solo 无对手、双方内容都可见）；
+   *   · 尚未选模式 ⇒ null＝保持当前（主页时的行动方，不要凭空改写）。
+   *
+   * 依据：4.9a 的"不得看穿敌方"只对**对手**成立 ⇒ 人机里玩家的视角就是自己一方；
+   * 热座/solo 没有唯一玩家方，跟行动方是最不会误导的默认（且玩家仍可手动切）。
+   */
+  function defaultViewerSide(): Side | null {
+    if (mode.value === null) return null
+    if (mode.value === 'pve') return playerSide.value
+    return workbench.activeSide
+  }
+
+  /**
+   * 把视角方**重置为默认值**（用户 2026-11-18 第 3 条：换阵营/换局不留上一局的旧值）
+   *
+   * 只在"模式/执方/剧本"这类**对局组织方式**变化时调用；对局中的行动方轮转**不**触发
+   * （2026-11-11 口径：轮到对方行动不自动切视角）。
+   */
+  function syncViewerToDefault(): void {
+    const next = defaultViewerSide()
+    if (next !== null) viewerSide.value = next
+  }
+
   /** 对手方（相对**观察方**；如地图画敌方 ZOC） */
   const opponentSide = computed<Side>(() => otherSide(viewerSide.value))
 
@@ -355,6 +393,8 @@ export const useHotseatStore = defineStore('hotseat', () => {
     if (setupLocked.value) return false
     mode.value = next
     if (next !== 'pve') aiSide.value = null
+    // 用户 2026-11-18：模式一变就把视角默认值跟上（PVE 选定 AI 方时再同步一次）
+    syncViewerToDefault()
     return true
   }
 
@@ -363,17 +403,23 @@ export const useHotseatStore = defineStore('hotseat', () => {
     if (setupLocked.value) return false
     if (mode.value !== 'pve') return false
     aiSide.value = next
+    // 用户 2026-11-18：玩家执的一方＝AI 的另一方 ⇒ 视角默认值随之更新，不留上一局的旧值
+    syncViewerToDefault()
     return true
   }
 
   /** 初设开始 ⇒ 锁定模式（`setup.enterSetup` 成功后调用） */
   function lockMode(): void {
     setupLocked.value = true
+    // 用户 2026-11-18：进初设即按玩家阵营归位视角（PVE ⇒ 非 AI 方；热座/solo ⇒ 行动方）
+    syncViewerToDefault()
   }
 
   /** 换剧本 ＝ 重开一局 ⇒ 解锁，让玩家在选剧本页重新定模式 */
   function resetModeLock(): void {
     setupLocked.value = false
+    // 用户 2026-11-18：换局不留上一局的旧视角（随后 `lockMode` 进初设时还会再同步一次）
+    syncViewerToDefault()
   }
 
   /**
@@ -411,6 +457,11 @@ export const useHotseatStore = defineStore('hotseat', () => {
     mode.value = saved.mode
     aiSide.value = saved.mode === 'pve' ? saved.aiSide : null
     setupLocked.value = true
+    /*
+     * 用户 2026-11-18：读档也按**玩家阵营**归位视角（PVE ⇒ 非 AI 方）。
+     * 上面已先把观察方设成档内行动方；这里只在有明确默认值时覆盖（pvp/solo 仍跟行动方）。
+     */
+    syncViewerToDefault()
   }
 
   // 把「模式随档保存 / 读档恢复」挂到会话层的存档口（与 board/setup 编解码器同一惯例）
@@ -450,6 +501,9 @@ export const useHotseatStore = defineStore('hotseat', () => {
     decisionSide,
     viewerSide,
     setViewerSide,
+    playerSide,
+    defaultViewerSide,
+    syncViewerToDefault,
     opponentSide,
     // 纪律
     policy,
