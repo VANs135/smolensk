@@ -2629,6 +2629,11 @@ export const useMapViewStore = defineStore('mapView', () => {
         disabledReason: null,
       }))
     }
+    /*
+     * 用户 2026-11-11：4ab30d6 起观察方为**手选**，可与行动方不同。
+     * 菜单仍要能打开（看这一枚是谁），但非行动方不摆任何可执行项——否则会越过行动方权限。
+     */
+    if (hotseat.viewerSide !== actingSide.value) return []
     // 用户 2026-11-12：格伪目标 ⇒ 目标侧空军任务（空投/破交/扫荡/空运）
     if (id === HEX_CONTEXT_ID) return hexTargetActions(hex)
     /*
