@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs'
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 
-import { useContainersStore, useWorkbenchStore } from '@/stores'
+import { toConsoleUnit, useContainersStore, useWorkbenchStore } from '@/stores'
 import type { VariableReinforcementPlan } from '@/engine/rules/variable-repl'
+import { combatRecord } from '../flows/sop-harness'
 
 /**
  * 用户实测（2026-11-15）：轴方抽到「补给列车 2 SP」卡，点了没反应、放不到图上。
@@ -78,6 +79,7 @@ describe('补给列车卡：判定未走完时不能是「点了没反应」的�
         (dump) => dump.side === 'axis' && dump.hex.col === hex.col && dump.hex.row === hex.row,
       )
       .reduce((sum, dump) => sum + dump.sp, 0)
+    const railCapBefore = store.railCapUsedBy('axis')
     expect(store.pickHexFor(hex)).toBe(true)
     expect(store.supplyTrainPending).toBe(false)
     const after = store.allSpDumps
@@ -86,6 +88,52 @@ describe('补给列车卡：判定未走完时不能是「点了没反应」的�
       )
       .reduce((sum, dump) => sum + dump.sp, 0)
     expect(after - before).toBe(2)
+    // 3.6 原文「(no Rail Cap used)」：落 2 SP 不扣铁路运力
+    expect(store.railCapUsedBy('axis')).toBe(railCapBefore)
+  })
+})
+
+/**
+ * 用户口径（2026-11-16）：「德军的铁路入场格可以卸车，应该能放那里」。
+ *
+ * 核原文（13.3c① / 3.6）后**不支持**：
+ *   - 13.3c① 要求该铁路格有 `village, city (any size), port, or Engineer-Capable HQ`；
+ *   - 3.6 只写 `at any one detrainable hex`，没有「入场格例外」。
+ * 轴方铁路入场格（1.03 / 1.07 / 1.19 / 4.00 / 8.00）是 Woods/Swamp/Open，不是可卸车格。
+ * 因此**不放宽候选**，只在候选为空时把原因写清（不摆一张点了没反应的卡）。
+ */
+describe('13.3c：入场格不是可卸车格；候选为空时不给可点卡', () => {
+  it('入场格是铁路网的种子，但本身不进补给列车候选（缺 13.3c① 的村庄/城市）', () => {
+    const store = armedStore()
+    const text = (hex: { col: number; row: number }): string => `${hex.col}.${hex.row}`
+    expect(store.entryRailSeedsBySide.axis.length).toBeGreaterThan(0)
+    expect(store.supplyTrainPlacementHexes.length).toBeGreaterThan(0)
+    const candidates = new Set(store.supplyTrainPlacementHexes.map(text))
+    for (const seed of store.entryRailSeedsBySide.axis) {
+      expect(candidates.has(text(seed))).toBe(false)
+    }
+  })
+
+  it('唯一可卸车格被敌占 ⇒ 候选为空：卡变挡因行，点击不进选格，提示含 13.3c 依据', () => {
+    const store = armedStore()
+    expect(
+      useContainersStore().drawSpecialRepl(store.activeSide, store.variableReplSpecialDie ?? 3),
+    ).toBe(true)
+    expect(store.rollPlacementOpen).toBe(true)
+    const record = combatRecord('soviet')
+    for (const [index, hex] of [...store.supplyTrainPlacementHexes].entries()) {
+      store.units.push(
+        toConsoleUnit({ record, instanceId: `block-${String(index)}`, hex, side: 'soviet' }),
+      )
+    }
+    expect(store.supplyTrainPlacementHexes).toHaveLength(0)
+    const card = store.rollHandEntries.find((entry) => entry.id === 'sp:train')
+    expect(card?.blocked).not.toBeNull()
+    expect(card?.blocked).toContain('13.3c')
+    expect(card?.blocked).toContain('村庄/城市')
+    expect(card?.blockedKind).toBe('placement')
+    expect(store.beginRollHandEntryNow('sp:train')).toBe(false)
+    expect(store.hexPickView).toBeNull()
   })
 })
 

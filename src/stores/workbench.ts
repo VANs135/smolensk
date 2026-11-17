@@ -21910,18 +21910,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /** 3.6：进入「点地图高亮铁路格」的选格态（候选＝全部可卸货格） */
-  function beginSupplyTrainHexPickNow(): void {
+  function beginSupplyTrainHexPickNow(): boolean {
     if (!rollPlacementOpen.value) {
       pushLog(
         'warning',
         `暂不能落位：${rollPlacementBlockedReason.value ?? '判定阶段未完成'}`,
         '专规 3.6',
       )
-      return
+      return false
     }
     if (!supplyTrainPending.value) {
       pushLog('warning', '3.6：本次没有待落的补给列车', '专规 3.6')
-      return
+      return false
+    }
+    // 13.3c①：铁路格必须有村庄/城市/港口/工程 HQ；铁路入场格本身不满足，不能拿来兜底
+    if (supplyTrainPlacementHexes.value.length === 0) {
+      pushLog(
+        'warning',
+        '3.6：盘面没有可卸车格（13.3c：铁路格须带村庄/城市/港口/工程 HQ，且免敌方占据与未抵消 EZOC；铁路入场格本身不是卸车格）',
+        '13.3c',
+      )
+      return false
     }
     beginHexPick({
       label: '补给列车落点（3.6 可卸货铁路格）',
@@ -21929,6 +21938,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       candidates: supplyTrainPlacementHexes.value,
       apply: (hex) => placeSupplyTrainSpNow(hex),
     })
+    return true
   }
 
   /** 3.6：3.4b 归属选择（null ⇒ 清除） */
@@ -23230,18 +23240,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       })
     }
     if (supplyTrainPending.value) {
+      // 13.3c① 先挡：没有可卸车格时，铁路入场格不能拿来兜底（原文无此例外）
+      const noDetrainable = supplyTrainPlacementHexes.value.length === 0
+      const groupBlocked = panzerGroupRulesOn.value && supplyTrainGroup.value === null
       entries.push({
         id: 'sp:train',
         label: '3.6 补给列车',
         rule: '专规 3.6',
         detail: '点一下 → 点任一可卸货铁路格，落 2 SP（不用 Rail Cap）',
         count: supplyTrainSp.value,
-        blocked:
-          panzerGroupRulesOn.value && supplyTrainGroup.value === null
+        blocked: noDetrainable
+          ? '盘面没有可卸车格（13.3c：铁路格须带村庄/城市/港口/工程 HQ，且免敌方占据与未抵消 EZOC；铁路入场格本身不是卸车格）'
+          : groupBlocked
             ? '3.4b：德军补给列车 SP 须先选归属（Guderian / Hoth）'
             : null,
-        blockedKind:
-          panzerGroupRulesOn.value && supplyTrainGroup.value === null ? 'panzerGroup' : null,
+        blockedKind: noDetrainable ? 'placement' : groupBlocked ? 'panzerGroup' : null,
         short: 'SP',
         images: null,
       })
@@ -23262,10 +23275,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (id === 'repl:pax') return beginReplPlaceHexPickNow('pax')
     if (id === 'repl:eq') return beginReplPlaceHexPickNow('eq')
     if (id === 'sp:arrival') return beginSupplyArrivalSpHexPickNow()
-    if (id === 'sp:train') {
-      beginSupplyTrainHexPickNow()
-      return true
-    }
+    if (id === 'sp:train') return beginSupplyTrainHexPickNow()
     if (id === 'unit:frontal') return beginFrontalUnitPlaceHexPickNow()
     if (id.startsWith('unit:special:')) {
       return beginSpecialReplPlaceHexPickNow(Number(id.slice('unit:special:'.length)))
