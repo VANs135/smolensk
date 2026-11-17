@@ -38,6 +38,8 @@ function boot(): Workbench {
   const store = useWorkbenchStore()
   game.setScenarioId('1')
   setup.ensureSetupLoaded()
+  // 用户 2026-11-18：初设期不再建待开拔集（点格只做选中）⇒ 本性能夹具按「已开局」取数
+  store.initialSetupInProgress = false
   return store
 }
 
