@@ -463,4 +463,64 @@ describe('B 增援段操作级实测（剧本 1）', () => {
     expect(w.replHoldings.pax).toBe(paxBefore)
     expect(w.log.some((line) => line.text.includes('重建'))).toBe(true)
   }, 60000)
+
+  it('★ 13.5 死亡堆重建：右键合法落点格直接出「重建 <名>（13.5）」，点即回场', async () => {
+    /*
+     * 实走（2026-11-17）：重建面板只写"盘面右键"，可死亡堆里的算子并不在图上，
+     * 右键任意格都没有菜单 ⇒ 玩家找不到 13.5 的入口。
+     * 口径：右键**合法落点格 / 空军基地**时，菜单直接列出此刻能在此重建的死亡堆单位；
+     * 点它即在该格回场（落点就是玩家右键的格，不再二次点图）。
+     */
+    const s = await bootToAxisReinforcement(REBUILD_SEED)
+    const { w, mapView, containers } = s
+    const rollStep = w.playerSegmentSteps.findIndex((step) => step.id === 'reinforcement.replRoll')
+    expect(w.setSegmentStepIndex(rollStep)).toBe(true)
+    await nextTick()
+    containers.drawSpecialRepl(w.activeSide, w.variableReplSpecialDie ?? undefined)
+    await nextTick()
+
+    // 补员落到图上（重建要求所需补员全在该格）
+    const placementHex = w.replInitialPlacementHexesFor.pax[0]!
+    expect(placementHex).toBeDefined()
+    for (const kind of ['pax', 'eq'] as const) {
+      if (w.replPending[kind] <= 0) continue
+      expect(w.beginRollHandEntryNow(`repl:${kind}`)).toBe(true)
+      expect(w.pickHexFor(placementHex)).toBe(true)
+      await nextTick()
+    }
+
+    const rebuildStep = w.playerSegmentSteps.findIndex(
+      (step) => step.id === 'reinforcement.rebuild',
+    )
+    expect(w.setSegmentStepIndex(rebuildStep)).toBe(true)
+    await nextTick()
+
+    const dead = w.deadPile.find(
+      (unit) =>
+        w.deadPileRebuildBlockedReason(unit.instanceId) === null &&
+        w
+          .rebuildLegalHexes(unit.instanceId)
+          .some((hex) => hex.col === placementHex.col && hex.row === placementHex.row),
+    )
+    expect(dead, '死亡堆里应有一枚能在这格重建的单位').toBeDefined()
+
+    mapView.onHexContext(placementHex, { x: 99999, y: 99999 }, { x: 10, y: 10 }, 1)
+    const key = `rein.rebuild.deadPile:${dead!.instanceId}`
+    const keys = mapView.contextOptions.flatMap((option) =>
+      option.actions.map((action) => action.key),
+    )
+    expect(keys).toContain(key)
+    expect(mapView.openContextAction('__hex_target__', key)).toBe(true)
+    await nextTick()
+
+    expect(w.deadPile.some((unit) => unit.instanceId === dead!.instanceId)).toBe(false)
+    expect(
+      w.units.some(
+        (unit) =>
+          unit.name === dead!.name &&
+          unit.hex.col === placementHex.col &&
+          unit.hex.row === placementHex.row,
+      ),
+    ).toBe(true)
+  }, 60000)
 })

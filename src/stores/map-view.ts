@@ -2612,6 +2612,22 @@ export const useMapViewStore = defineStore('mapView', () => {
     add('trainbusting', '破交', '空军任务')
     add('air_transport', '空运', '空军任务')
     add('air_drop', '空投', '空军任务')
+    /*
+     * 13.5a：死亡堆里的单位不在图上，右键**合法落点格 / 空军基地**是它在盘面的唯一入口。
+     * 只列此刻真能在此重建的本方死亡堆单位（判据与 `beginDeadPileRebuildNow` 同源）；
+     * 没有 ⇒ 整项不出现。点它即在该格回场，落点就是玩家右键的格。
+     */
+    for (const unit of workbench.deadPileRebuildUnitsAt(hex)) {
+      out.push({
+        key: `rein.rebuild.deadPile:${unit.id}`,
+        label: `重建 ${unit.name}（13.5）`,
+        rule: '13.5a',
+        panel: 'unit',
+        only: `rebuildDeadPile:${unit.id}`,
+        group: '补给',
+        disabledReason: null,
+      })
+    }
     return out
   }
 
@@ -2883,7 +2899,19 @@ export const useMapViewStore = defineStore('mapView', () => {
     anchor: { x: number; y: number },
   ): boolean {
     if (!canOpenCounterContext()) return false
-    const targets = [...new Set(ids)].filter((id) => counterActionsAt(hex, id).length > 0)
+    const unique = [...new Set(ids)]
+    const withActions = unique.filter((id) => counterActionsAt(hex, id).length > 0)
+    /*
+     * 13.9 整编是**组动作**：某些环节（如 B 段「重建与整编」）逐枚没有可执行项
+     * （模式/加油/铁路等都按环节闸门不出），但同格多选仍可整编。
+     * 修前这里只保留"逐枚有动作"的目标 ⇒ 目标被清空、右键连菜单都不开，13.9 没有任何入口。
+     * 故只要能成对整编，就把这一组单位一并作为菜单目标（组动作由 `contextOptions` 补上）。
+     */
+    const own = unique.filter((id) => id !== HEX_CONTEXT_ID && ownCounterAt(hex, id) !== undefined)
+    const targets =
+      own.length >= 2 && workbench.canConsolidateSelectionNow(own)
+        ? [...new Set([...withActions, ...own])]
+        : withActions
     if (targets.length === 0) return false
     contextTargets.value = targets
     openPopup(hex, anchor.x, anchor.y, 'context')
@@ -3004,6 +3032,10 @@ export const useMapViewStore = defineStore('mapView', () => {
     const unit = ownCounterAt(hex, instanceId)
     // 用户 2026-11-12：格伪目标 ⇒ 目标侧主动任务（先定目标，再在窗内按基地组队）
     if (instanceId === HEX_CONTEXT_ID) {
+      // 13.5a：右键合法落点格 ⇒ 该格重建死亡堆单位（落点已由右键的格给定）
+      if (option.only?.startsWith('rebuildDeadPile:')) {
+        return workbench.rebuildDeadPileAtHexNow(option.only.slice('rebuildDeadPile:'.length), hex)
+      }
       if (option.only === null || !option.only.startsWith('airTarget:')) return false
       const kind = option.only.slice('airTarget:'.length) as AirMissionKind
       return startTargetAirMission(kind, hex)

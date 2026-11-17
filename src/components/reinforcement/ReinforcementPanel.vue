@@ -1304,8 +1304,9 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
     <SessionStep v-if="showsRebuild" item="reinforce:endRebuild" data-testid="rebuild-end-step">
       <hr />
       <p class="muted">
-        第三段（重建 · 合并 · 整编）：重建与整编都在**盘面右键**办理，本段没有待放项。
-        补员点数用不完留在图上，跨段跨回合继续可用（不清空、不作废）。
+        第三段（重建 · 合并 · 整编）：本段没有待放项。死亡堆重建＝右键合法落点格/基地，再点「重建
+        …」； 盘面打残重建＝右键该单位；整编＝同格多选右键；永久移除在托盘「死亡堆」卡。
+        补员用不完留在图上，跨段跨回合继续可用。
       </p>
       <div class="row">
         <span class="field">

@@ -94,6 +94,26 @@ describe('13.9 整编：盘面多选 → 右键 → 自动合并（不再开大�
     expect(source).toContain("key: 'rein.consolidate.selection'")
   })
 
+  it('★ 重建段盘面右键：逐枚没有动作项时，「整编（13.9）」仍必须在菜单里', () => {
+    /*
+     * 实走（2026-11-17）：B 段「重建与整编」环节，逐枚单位没有可执行动作
+     * （模式/加油/铁路等都按环节闸门不出），`showCounterContext` 把菜单目标全滤掉，
+     * 于是多选右键**连菜单都开不出来**，13.9 整编没有任何入口。
+     */
+    const record = multiStepRecord()
+    placeGround(s.workbench, record, HEX, 'soviet', 'k1')
+    placeGround(s.workbench, record, HEX, 'soviet', 'r1')
+    // 先证明确实是"逐枚无动作"的盘面：单枚右键不应开出自己的菜单
+    expect(s.mapView.openUnitContext(HEX, 'k1', { x: 0, y: 0 })).toBe(false)
+
+    // 右键该格（点在格内空白：world 给到格外的远处，避免命中算子图）
+    s.mapView.onHexContext(HEX, { x: 99999, y: 99999 }, { x: 10, y: 10 }, 1)
+    const keys = s.mapView.contextOptions.flatMap((option) =>
+      option.actions.map((action) => action.key),
+    )
+    expect(keys).toContain('rein.consolidate.selection')
+  })
+
   it('★ 单枚选择 / 跨格 / 缺一枚 ⇒ 判据不成立（菜单项不出现）', () => {
     const record = multiStepRecord()
     placeGround(s.workbench, record, HEX, 'soviet', 'k1')

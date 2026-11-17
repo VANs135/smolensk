@@ -29046,6 +29046,34 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })
   }
 
+  /**
+   * 13.5a：此刻能在**该格**重建的本方死亡堆单位（盘面右键的目标侧投影）
+   *
+   * 死亡堆单位不在图上，右键"某个合法落点格 / 空军基地"是它在盘面的唯一入口：
+   * 落点由玩家右键的格给定，菜单只列此刻真能在此重建的单位（不可用 ⇒ 整项不出现）。
+   * 与 `beginDeadPileRebuildNow` 共用同一份引擎预演（`rebuildLegalHexes`），不另写判据。
+   */
+  function deadPileRebuildUnitsAt(hex: HexRef): { id: string; name: string }[] {
+    if (!actionAllowedNow('rein.rebuild')) return []
+    const out: { id: string; name: string }[] = []
+    for (const entry of deadPile.value) {
+      if (entry.side !== activeSide.value) continue
+      if ('rebuildable' in entry && entry.rebuildable === false) continue
+      if (!rebuildCandidateHexes(entry.instanceId).some((item) => sameHex(item, hex))) continue
+      if (!rebuildLegalHexes(entry.instanceId).some((item) => sameHex(item, hex))) continue
+      out.push({ id: entry.instanceId, name: entry.name })
+    }
+    return out
+  }
+
+  /** 13.5a：右键合法落点格 → 点「重建 <名>」即在该格回场（落点已由右键的格给定） */
+  function rebuildDeadPileAtHexNow(unitId: string, hex: HexRef): boolean {
+    const row = rebuildRowFor(unitId)
+    if (row === '') return false
+    if (!rebuildLegalHexes(unitId).some((item) => sameHex(item, hex))) return false
+    return rebuildUnitNow({ unitId, rebuildType: row, replHexText: hexTextOf(hex) })
+  }
+
   /** 13.5：死亡堆右键「重建」→ 高亮该单位全部合法重建格 → 点格即扣点落位（§4.1） */
   function beginDeadPileRebuildNow(unitId: string): boolean {
     const row = rebuildRowFor(unitId)
@@ -30952,6 +30980,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     withdrawRebuildAtHexNow,
     rebuildPlacedThisSegment,
     beginDeadPileRebuildNow,
+    deadPileRebuildUnitsAt,
+    rebuildDeadPileAtHexNow,
     beginAirRebuildBasePickNow,
     rebuildAircraftIntoBoxNow,
     canRebuildAircraftIntoBoxNow,
