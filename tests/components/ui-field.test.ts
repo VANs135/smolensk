@@ -155,6 +155,12 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).toMatch(/断补处置/)
   })
 
+  it('SaveLoadDialog：初设中不能存档要说明原因与替代，不只写「未建会话」', () => {
+    const src = read('src/components/save/SaveLoadDialog.vue')
+    expect(src).toMatch(/初设中/)
+    expect(src).toMatch(/先完成.*初设.*确认/)
+  })
+
   it('ContainersPanel：编队收纳改「盒选」（正式界面点选图上单位、验证页保留文本框）', () => {
     const src = read('src/components/containers/ContainersPanel.vue')
     expect(src).toMatch(/function hideNowFromBox/)

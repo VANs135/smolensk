@@ -46,9 +46,9 @@ const FORM_LABELS: Record<SessionForm, string> = {
   terminated: '已终止',
 }
 
-/** 当前会话形态名（null = 尚未建会话） */
+/** 当前会话形态名（null = 初设尚未确认） */
 const formLabel = computed(() =>
-  gameSession.form === null ? '未建会话' : FORM_LABELS[gameSession.form],
+  gameSession.form === null ? '初设中（尚未建立会话）' : FORM_LABELS[gameSession.form],
 )
 
 /** 槽摘要（null = 无档 / 读不出） */
@@ -183,6 +183,14 @@ const canSave = computed(
         清空槽
       </BaseButton>
     </div>
+    <p
+      v-if="gameSession.session === null"
+      class="notice notice--info"
+      data-testid="save-setup-hint"
+    >
+      初设尚未确认，暂不能存档：先完成当前方初设并确认（建立会话）后，这里才会出现「保存到槽」。
+      初设中的布设可以继续操作，不会因为不能存档而丢失。
+    </p>
     <p v-if="gameSession.session !== null && !canSave" class="muted">
       暂不可保存：{{ workbench.saveBlockedReason ?? '本地存储不可用' }}
     </p>
