@@ -29936,6 +29936,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       segmentStep.value?.id === 'reinforcement.replRoll' &&
       rollHandPending.value
     ) {
+      /*
+       * 1.6c 未掷时「结束本段」整块**不出现**（`rollPlacementOpen === false`），
+       * 此时若照旧写「或在结束本段确认放弃上场」，就是让玩家去点一个不存在的按钮。
+       * 判定阶段没走完 ⇒ 只报缺的那次掷骰（与面板里的 `rollPlacementBlockedReason` 同源）。
+       */
+      if (!rollPlacementOpen.value) {
+        return {
+          rule: '1.6c',
+          reason: rollPlacementBlockedReason.value ?? '判定阶段未完成：先掷完本段各项判定',
+        }
+      }
       return {
         rule: '1.6b',
         reason: '第二段还有待放项没落位：先放完，或在「结束本段」确认放弃上场',

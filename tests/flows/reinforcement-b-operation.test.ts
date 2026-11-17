@@ -121,6 +121,16 @@ async function advanceToAxisReinforcement(s: Stores): Promise<void> {
       continue
     }
     const blocked = w.advanceBlock
+    // 1.6c 未掷：面板里「结束本段」整块不出现，正确动作是补掷特殊补员（与「掷骰检定」同一步）
+    if (
+      blocked?.rule === '1.6c' &&
+      w.segmentStep?.id === 'reinforcement.replRoll' &&
+      !w.hasSpecialReplDraw(w.activeSide, w.turn)
+    ) {
+      containers.drawSpecialRepl(w.activeSide, w.variableReplSpecialDie ?? undefined)
+      await nextTick()
+      continue
+    }
     if (
       blocked?.rule === '1.6b' &&
       w.segmentStep?.id === 'reinforcement.replRoll' &&
