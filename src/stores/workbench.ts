@@ -9659,6 +9659,54 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * IV-B：初设右键**一个模式都出不来**时的原因（界面就地给一行，不摆空菜单）
+   *
+   * 用户 2026-11-18：剧本不允许 / 没有可用预备标记 / 相邻敌方攻击力单位等情况下，
+   * 入口按既有口径**不出现**，但要按同一判据说清是哪一条挡住，不能只让玩家觉得"右键没反应"。
+   * 判据全在 `canSetModeAtSetup`，本函数只把第一条失败原因折成人话。
+   */
+  function setupModeBlockNote(unitId: string): { rule: string; text: string } | null {
+    if (!initialSetupInProgress.value) return null
+    if (setupSwitchableModesOf(unitId).length > 0) return null
+    const unit = units.value.find((item) => item.instanceId === unitId)
+    if (unit === undefined) return null
+    const limits = setupModeConstraintsOf(unit.side)
+    for (const to of SETUP_MODES_ALL) {
+      if (unit.mode.mode === to) continue
+      if (!limits.allowed.includes(to))
+        return { rule: 'IV-B', text: `本剧本初设不允许${MODE_LABELS[to]}（IV-B）` }
+      const target: Orientation =
+        to === 'combat' ? 'combat' : to === 'reserve' ? unit.mode.orientation : 'move'
+      const verdict = canSetModeAtSetup({
+        to,
+        orientation: target,
+        unitClass: modeUnitClassOf(unit),
+        side: unit.side,
+        hex: hexKeyOf(unit),
+        adjacentEnemyAttackCapable: adjacentEnemyAttackCapableOf(unit),
+        reserveCap: limits.reserveCap,
+        reserveOccupiedHexes: reservedHexes(unit.side),
+        reserveSetupForbidden: limits.reserveForbidden,
+        allowedModes: limits.allowed,
+        date: date.value,
+        ignoreOperationalLimits: session.rule4On('ignoreOperationalLimits'),
+      })
+      if (!verdict.ok)
+        return {
+          rule: verdict.rule,
+          text: `初设不能设为${MODE_LABELS[to]}：${verdict.reason}（${verdict.rule}）`,
+        }
+    }
+    return { rule: 'IV-B', text: '该单位当前没有可切换的初设模式（IV-B）' }
+  }
+
+  /** IV-B：右键没有可用模式时就地写一行原因（与菜单同判据） */
+  function noteSetupModeBlocked(unitId: string): void {
+    const note = setupModeBlockNote(unitId)
+    if (note !== null) pushLog('warning', note.text, note.rule)
+  }
+
+  /**
    * IV-B：**初设阶段**为单位设定模式（按单位/按堆叠）
    *
    * 原文「Ground units can be set up in any desired mode. (Exception: ground units adjacent to
@@ -30495,6 +30543,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setUnitModeAtSetup,
     // IV-B：初设右键「初设模式」只列此刻真正能设的模式（与 setUnitModeAtSetup 同判据）
     setupSwitchableModesOf,
+    // IV-B：一个模式都出不来时就地给原因（不摆空菜单）
+    setupModeBlockNote,
+    noteSetupModeBlocked,
     setupReserveSummary,
     eliminateEntry,
     beginMoveFor,

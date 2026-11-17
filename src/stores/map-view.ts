@@ -2595,14 +2595,12 @@ export const useMapViewStore = defineStore('mapView', () => {
 
   function counterActionsAt(hex: HexRef, id: string): CounterAction[] {
     /*
-     * 用户 2026-11-11：4ab30d6 起观察方为**手选**，可与行动方不同。
-     * 菜单仍要能打开（看这一枚是谁），但非行动方不摆任何可执行项——否则会越过行动方权限。
-     */
-    if (hotseat.viewerSide !== actingSide.value) return []
-    /*
      * 初设阶段：右键只承担 IV-B「初设模式」一件事（其余单位动作在初设里一律不开）。
      * 只列此刻**真能设**的模式（`setupSwitchableModesOf` 与 `setUnitModeAtSetup` 同源），
      * 不可用的不出现；格伪目标在初设里没有任何动作（不把射击菜单带进来）。
+     *
+     * ★ 用户 2026-11-18：初设是**按布设方**轮流操作，右键作用于 `setupSideCursor` 那一方，
+     *   不再被"观察方＝行动方"挡住（修前观察方停在另一方时右键整张菜单都不出来）。
      */
     if (!setup.finished) {
       if (id === HEX_CONTEXT_ID) return []
@@ -3169,7 +3167,8 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   function canOpenCounterContext(): boolean {
-    if (hotseat.viewerSide !== actingSide.value) return false
+    // 初设右键按布设方开放（见 `counterActionsAt` 的同一口径）
+    if (setup.finished && hotseat.viewerSide !== actingSide.value) return false
     if (workbench.hexPickView !== null || workbench.refitBase !== null) return false
     if (workbench.overrunZocHeld !== null || workbench.specialPending !== null) return false
     /*
@@ -3397,6 +3396,14 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     if (hexTargetActions(hex).length > 0) ids.push(HEX_CONTEXT_ID)
     if (showCounterContext(hex, ids, anchor)) return
+    /*
+     * 用户 2026-11-18：初设右键没有可列的模式时，按同一判据写一行原因
+     * （剧本不允许 / 无可用预备标记 / 相邻敌方攻击力单位），不摆空菜单。
+     */
+    if (!setup.finished && token !== null) {
+      const own = ownCounterAt(hex, token.id)
+      if (own !== undefined) workbench.noteSetupModeBlocked(own.instanceId)
+    }
     /*
      * 用户 2026-11-16：右键敌方却整张菜单都没出来（例如炮击被 10.0e-A/10.1b 挡住 ⇒ 项按口径
      * 不出现）。DG 本身不是理由（10.0a），把真正卡住的那条规则写进地图提示行，避免误判。
