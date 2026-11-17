@@ -10,6 +10,7 @@ import { formations } from '@/data'
 import type { HexRef, Side } from '@/data'
 import type { BoxView, EdgeBoxId, ScenarioDrawBoxView } from '@/engine/rules'
 import {
+  boxesForViewer,
   useContainersStore,
   useHotseatStore,
   useSetupStore,
@@ -39,6 +40,8 @@ const setup = useSetupStore()
 const uiMode = useUiMode()
 const workbench = useWorkbenchStore()
 const hotseat = useHotseatStore()
+/** 裁判工具（`verify` / 正式宿主都不该出）：盒列表在裁判态要看全双方 */
+const showsReferee = useRefereeTools()
 /*
  * 初设阶段没有环节闸 ⇒ 行动方跟初设游标走（与 `map-view` 同一口径）。
  * 否则苏联初设时盒内动作按默认轴方过滤，4.3 拆团的苏军母师候选一条都不出现。
@@ -152,8 +155,16 @@ const airUnitId = ref('')
 
 /** 盒的总览（顺序即引擎给出：死亡堆 → 拆分盒 → 特殊补员盒 → 空军盒（双方）→ 边缘盒 → 剧本盒 → 编队盒） */
 const boxes = computed<readonly BoxView[]>(() => {
-  if (uiMode === 'verify') return containers.boxes
-  const visible = containers.boxes.filter(
+  if (uiMode === 'verify' || showsReferee) return containers.boxes
+  /*
+   * 用户 2026-11-18：玩家态按**当前视角方**取盒。
+   * 修前直接取全量 ⇒ 苏联玩家看到的是排在前面的轴心盒，苏军盒被挤到后面/裁掉。
+   * 会话窗（`actions`）跟**行动方**（可执行方），查看面板跟**视角方**；
+   * 切方只改 `viewerSide`，本 computed 自动重算，不需要重开窗口。
+   */
+  const sideNow =
+    props.only === 'actions' || props.subjectId != null ? actingSide.value : hotseat.viewerSide
+  const visible = boxesForViewer(containers.boxes, sideNow).filter(
     (box) =>
       hotseat.fogDisabled ||
       !hotseat.policy.hideOffMapBoxes ||
@@ -500,7 +511,6 @@ function runDeadPileAction(unitId: string, key: string): void {
  *   （`ReinforcementPanel` / `BarragePanel` / `VictoryPanel` 都这样），
  *   `only === null` 就会把裁判工具放进对局台。
  */
-const showsReferee = useRefereeTools()
 
 function boxAircraft(side: Side) {
   return workbench.ownAirUnits.filter(

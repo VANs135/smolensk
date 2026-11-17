@@ -165,6 +165,17 @@ export interface AuxCardView {
   regions: readonly AuxCardRegionView[]
 }
 
+/**
+ * 玩家态的盒列表：只留**当前视角方**的盒（用户 2026-11-18）
+ *
+ * 缺陷：面板直接取全量 `containers.boxes`，苏联玩家看到的仍是排在前面的轴心盒，
+ * 自己的苏军盒被挤到后面/裁掉。共用盒（`side === null`）恒在；裁判 / 验证页不调用本函数（看全）。
+ * 纯函数、按传入 side 重算 ⇒ 热座切方 / 双 AI 换边后无需重开窗口。
+ */
+export function boxesForViewer(boxes: readonly BoxView[], side: Side): readonly BoxView[] {
+  return boxes.filter((box) => box.side === null || box.side === side)
+}
+
 export const useContainersStore = defineStore('containers', () => {
   const workbench = useWorkbenchStore()
   const session = useGameSessionStore()
