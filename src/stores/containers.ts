@@ -784,6 +784,21 @@ export const useContainersStore = defineStore('containers', () => {
   )
 
   /**
+   * 用户 2026-11-18：**展开这张卡还需不需要另开「盒内动作」窗**
+   *
+   * 死亡堆 / 空军盒的能力已经全部落在**盒贴图上**（左键选中、右键菜单）⇒ 再顶出一个
+   * 内容重复的会话窗就成了"同一件事两个入口"。其余盒（拆分池 / 边缘盒 / 编队收纳 / 剧本抽取）
+   * 仍有多字段批量动作（选母单位 + AR + 数量、入盒选单位 + 运力…），贴图做不到 ⇒ 保留窗。
+   */
+  const openCardNeedsWindow = computed<boolean>(() => {
+    const id = cardOpenId.value
+    if (id === null) return false
+    const card = cardViews.value.find((item) => item.id === id)
+    if (card === undefined) return false
+    return card.boxKind !== 'dead_pile' && card.boxKind !== 'air_box'
+  })
+
+  /**
    * B31：盒内一枚算子的**贴图 URL**（用户口径 #12「盒里的算子要显示贴图」）
    *
    * 修前组件拿 `holding.unitId` 当图档名拼文件名 —— 而死亡堆 / 空军盒 / 边缘盒里那是**实例 id**，
@@ -2827,6 +2842,7 @@ export const useContainersStore = defineStore('containers', () => {
     railCapCell,
     cardViews,
     cardViewsOf,
+    openCardNeedsWindow,
     openCardBoxKinds,
     openCardName,
     openCardSide,

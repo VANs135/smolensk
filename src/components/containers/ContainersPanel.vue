@@ -703,57 +703,60 @@ function boxAircraft(side: Side) {
           >
         </div>
 
-        <!-- 分栏与持有项 -->
-        <div v-for="section in box.sections" :key="section.id" class="box__section">
-          <p class="num box__section-title">
-            {{ section.label }}（{{ section.rule }}）：
-            {{ box.holdings.filter((holding) => holding.sectionId === section.id).length }} 枚
-          </p>
-          <ul class="picks">
-            <li
-              v-for="holding in box.holdings.filter((item) => item.sectionId === section.id)"
-              :key="holding.unitId"
-              class="num"
-              :class="{
-                'pile-item--picked':
-                  box.kind === 'deadPile' && workbench.deadPilePickId === holding.unitId,
-              }"
-              @click="pickDeadPileEntry(box, holding.unitId)"
-              @contextmenu.prevent="openDeadPileMenu(box, holding.unitId)"
-            >
-              {{ holding.name ?? holding.unitId }}
-              <span v-if="holding.note !== undefined" class="muted">（{{ holding.note }}）</span>
-              <!--
+        <!-- 分栏与持有项（2026-11-18：盒贴图已经画出同样的算子与选中/右键菜单；文字清单只在验证/裁判页保留） -->
+        <template v-if="props.only !== 'actions'">
+          <div v-for="section in box.sections" :key="section.id" class="box__section">
+            <p class="num box__section-title">
+              {{ section.label }}（{{ section.rule }}）：
+              {{ box.holdings.filter((holding) => holding.sectionId === section.id).length }} 枚
+            </p>
+            <ul class="picks">
+              <li
+                v-for="holding in box.holdings.filter((item) => item.sectionId === section.id)"
+                :key="holding.unitId"
+                class="num"
+                :class="{
+                  'pile-item--picked':
+                    box.kind === 'deadPile' && workbench.deadPilePickId === holding.unitId,
+                }"
+                @click="pickDeadPileEntry(box, holding.unitId)"
+                @contextmenu.prevent="openDeadPileMenu(box, holding.unitId)"
+              >
+                {{ holding.name ?? holding.unitId }}
+                <span v-if="holding.note !== undefined" class="muted">（{{ holding.note }}）</span>
+                <!--
                 死亡堆（13.5 / 13.5a / 13.5c）：用户 2026-11-10 报的实机 bug ——
                 这里以前是只读 `<li>`：点不动、右键无菜单、也不知道为什么不能回场。
                 现在：左键选中（预选重建对象）→ 右键出菜单；菜单里给两条动作，
                 重建项按 `deadPileRebuildBlockedReason` 逐条写明哪个条款挡的。
               -->
-              <template
-                v-if="
-                  box.kind === 'deadPile' && box.side === actingSide && showsBoxActions('deadPile')
-                "
-              >
-                <div v-if="deadPileMenuId === holding.unitId" class="pile-menu" @click.stop>
-                  <p class="muted">
-                    13.5a：重建落点由引擎算（所需补员全在该格、友方 HQ 2 格内、无未抵消敌 ZOC）；
-                    飞机可选地图基地或地图外空军盒。
-                  </p>
-                  <div class="row">
-                    <BaseButton
-                      v-for="action in deadPileActions(holding.unitId)"
-                      :key="action.key"
-                      :variant="action.key === 'deadPile.removeForever' ? 'ghost' : 'primary'"
-                      size="sm"
-                      :title="action.rule"
-                      @click="runDeadPileAction(holding.unitId, action.key)"
-                    >
-                      {{ action.label }}
-                    </BaseButton>
+                <template
+                  v-if="
+                    box.kind === 'deadPile' &&
+                    box.side === actingSide &&
+                    showsBoxActions('deadPile')
+                  "
+                >
+                  <div v-if="deadPileMenuId === holding.unitId" class="pile-menu" @click.stop>
+                    <p class="muted">
+                      13.5a：重建落点由引擎算（所需补员全在该格、友方 HQ 2 格内、无未抵消敌 ZOC）；
+                      飞机可选地图基地或地图外空军盒。
+                    </p>
+                    <div class="row">
+                      <BaseButton
+                        v-for="action in deadPileActions(holding.unitId)"
+                        :key="action.key"
+                        :variant="action.key === 'deadPile.removeForever' ? 'ghost' : 'primary'"
+                        size="sm"
+                        :title="action.rule"
+                        @click="runDeadPileAction(holding.unitId, action.key)"
+                      >
+                        {{ action.label }}
+                      </BaseButton>
+                    </div>
                   </div>
-                </div>
-                <span v-else class="muted">（左键选中 / 右键出菜单）</span>
-                <!--
+                  <span v-else class="muted">（左键选中 / 右键出菜单）</span>
+                  <!--
                 ★ 修（2026-10-30）：「返场到 X」**只留给裁判**。
                 它直接调 `returnFromDeadPileNow`（只做"从死亡堆取出 → 落到指定格"），
                 而 13.5 的重建要**付补员**且必须"补员同格 + 友方指挥部 2 格内 + 不在敌方 ZOC"，
@@ -761,44 +764,48 @@ function boxAircraft(side: Side) {
                 这三条合法路径各有自己的引擎计划与入口。玩家面上直接给一个"免费返场"按钮，
                 等于把 13.5a 的费用与位置约束全绕过去（盒子动作修好后这个按钮才真正露出来）。
               -->
-                <BaseButton
-                  v-if="showsReferee"
-                  variant="ghost"
-                  size="sm"
-                  title="裁判订正用：规则内重建请走「重建（13.5）」付补员，特殊补员请走 1.6c 抽取"
-                  @click="
-                    workbench.returnFromDeadPileNow({
-                      instanceId: holding.unitId,
-                      hexText: workbench.deadPileReturnHexText,
-                    })
-                  "
-                >
-                  返场到 {{ workbench.deadPileReturnHexText || '（点地图选格）' }}
-                </BaseButton>
-              </template>
-              <!-- 边缘盒：离开（1.4b） -->
-              <template v-if="box.kind === 'edgeBox' && showsBoxActions('edgeBox')">
-                <BaseButton
-                  v-if="
-                    containers.edgeBoxExitCandidates(edgeBoxOf(box), holding.unitId, edgeUseRailCap)
-                      .length > 0
-                  "
-                  variant="ghost"
-                  size="sm"
-                  @click="
-                    containers.beginEdgeBoxExitHexPickNow(
-                      edgeBoxOf(box),
-                      holding.unitId,
-                      edgeUseRailCap,
-                    )
-                  "
-                >
-                  点地图选出盒格
-                </BaseButton>
-              </template>
-            </li>
-          </ul>
-        </div>
+                  <BaseButton
+                    v-if="showsReferee"
+                    variant="ghost"
+                    size="sm"
+                    title="裁判订正用：规则内重建请走「重建（13.5）」付补员，特殊补员请走 1.6c 抽取"
+                    @click="
+                      workbench.returnFromDeadPileNow({
+                        instanceId: holding.unitId,
+                        hexText: workbench.deadPileReturnHexText,
+                      })
+                    "
+                  >
+                    返场到 {{ workbench.deadPileReturnHexText || '（点地图选格）' }}
+                  </BaseButton>
+                </template>
+                <!-- 边缘盒：离开（1.4b） -->
+                <template v-if="box.kind === 'edgeBox' && showsBoxActions('edgeBox')">
+                  <BaseButton
+                    v-if="
+                      containers.edgeBoxExitCandidates(
+                        edgeBoxOf(box),
+                        holding.unitId,
+                        edgeUseRailCap,
+                      ).length > 0
+                    "
+                    variant="ghost"
+                    size="sm"
+                    @click="
+                      containers.beginEdgeBoxExitHexPickNow(
+                        edgeBoxOf(box),
+                        holding.unitId,
+                        edgeUseRailCap,
+                      )
+                    "
+                  >
+                    点地图选出盒格
+                  </BaseButton>
+                </template>
+              </li>
+            </ul>
+          </div>
+        </template>
 
         <!-- 要点与缺口 -->
         <template v-if="showsReferee">
@@ -1139,7 +1146,7 @@ function boxAircraft(side: Side) {
         修前只按 `showsActions` 出，展开空军盒（only="actions"）时也把它摆出来 ⇒ 盒内一个
         与盒无关的死入口。现在按「当前展开卡覆盖的盒类型」收口（showsBoxActions('deadPile')）。
       -->
-      <div v-if="showsBoxActions('deadPile')" class="field">
+      <div v-if="props.only !== 'actions' && showsBoxActions('deadPile')" class="field">
         <span>返场落点（死亡堆 → 图）</span>
         <BaseTag v-if="workbench.deadPileReturnHexText !== ''" kind="neutral">
           {{ workbench.deadPileReturnHexText }}

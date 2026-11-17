@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
 
-import { BaseButton, BaseIcon, BaseTag } from '@/components/base'
+import { BaseIcon } from '@/components/base'
 import { clampDockOffset } from '@/components/map/dock-position'
 import { counterImages } from '@/render/token-images'
 import { useContainersStore, useWorkbenchStore, type AuxCardView } from '@/stores'
@@ -63,32 +63,15 @@ function onToggle(): void {
 }
 
 /**
- * ⑤（用户 2026-11-09）：在盒卡里右键一枚算子 ⇒ **这张卡就是"当前展开的那一张"**。
- *
- * 展开本身即"我要对这个盒做点什么"：既有会话框（`containers` 那一档）会随之摆出该盒的
- * 动作（重建 / 整编 / 抽取 / 离盒…）。这里只切展开态，不判规则、不提交动作。
+ * ★ 用户 2026-11-18：盒贴图已承载盒内算子的**全部单枚动作**（左键选中 / 右键菜单），
+ * 展开卡不再另开同名「盒内动作」窗（死亡堆、空军盒）。盒内补给这条信息挪到卡头，
+ * 免得随窗一起消失；其余盒子（拆分池 / 边缘盒…）的多字段批量窗仍由 store 决定。
  */
-function onUnitContext(): void {
-  if (containers.cardOpenId !== props.card.id) containers.toggleCardOpen(props.card.id)
-}
-
-/**
- * ★ 用户 2026-11-09：**图外盒必须有自己的整备入口**（删重复入口时把盒区那份删掉了）
- *
- * 判据不在本组件：`actionAllowedNow('air.refit')` 问的是既有闸门，`activateAirBox` 是既有 1.4a
- * 盒内整备入口（盒内没有地图格，15.1 的"基地 hex"在这里不存在）。组件只负责把按钮摆出来。
- */
-const boxRefitAllowed = computed(
-  () =>
-    props.card.boxKind === 'air_box' &&
-    props.card.side !== null &&
-    workbench.actionAllowedNow('air.refit'),
-)
-
-function refitBoxAircraft(): void {
-  if (props.card.side === null) return
-  containers.activateAirBox(props.card.side)
-}
+const airBoxSupply = computed(() => {
+  if (props.card.boxKind !== 'air_box' || props.card.side === null) return null
+  const holding = workbench.airBoxSupply(props.card.side)
+  return holding.t === 0 ? `${holding.sp} SP` : `${holding.sp} SP + ${holding.t} T`
+})
 
 /* ────────────────────────── C-2 浮窗：拖动 / 关闭 ────────────────────────── */
 
@@ -178,6 +161,7 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
           <BaseIcon :name="open ? 'chevron-down' : 'chevron-right'" />
         </span>
         <span class="boxcard__name">{{ card.name }}</span>
+        <span v-if="airBoxSupply !== null" class="boxcard__supply num">{{ airBoxSupply }}</span>
         <span class="boxcard__count num">{{ unitTotal }}</span>
       </button>
       <!-- C-2：弹出为浮窗（卡面 320px 宽时看图不方便） -->
@@ -192,18 +176,7 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
     </div>
 
     <template v-if="open">
-      <!-- 盒区整备入口（用户 2026-11-09）：盒内没有地图格，不能靠点格整备 -->
-      <div v-if="boxRefitAllowed" class="boxcard__row">
-        <BaseButton size="sm" variant="secondary" @click="refitBoxAircraft"
-          >整备盒内飞机 · 1.4a</BaseButton
-        >
-      </div>
-      <BoxCardFace :card="card" :width="displayWidth" @unit-context="onUnitContext" />
-
-      <p class="boxcard__hint num">
-        <BaseTag v-if="!boxRefitAllowed" kind="neutral">只读</BaseTag>
-        卡内算子是**选谁**用的：动作在展开卡后弹出的会话框里做（重建 / 整编 / 抽取 / 返场）。
-      </p>
+      <BoxCardFace :card="card" :width="displayWidth" />
     </template>
 
     <!-- C-2：浮窗（Teleport 到 body，免得被托盘的 overflow 裁掉） -->
@@ -227,7 +200,7 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
             ×
           </button>
         </div>
-        <BoxCardFace :card="card" :width="popupWidth" @unit-context="onUnitContext" />
+        <BoxCardFace :card="card" :width="popupWidth" />
       </div>
     </Teleport>
   </section>
@@ -244,14 +217,6 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
 .boxcard__headrow {
   display: flex;
   align-items: stretch;
-}
-
-.boxcard__row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  align-items: center;
-  padding: var(--space-1) var(--space-2);
 }
 
 .boxcard__head {
@@ -289,13 +254,11 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
   color: var(--color-muted);
 }
 
-.boxcard__hint {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin: 0 var(--space-2) var(--space-1);
+/* 空军盒：盒内补给（1.6b），原先在「盒内动作」窗里，随重复窗一起收掉后挪到卡头 */
+.boxcard__supply {
   color: var(--color-muted);
   font-size: var(--text-xs);
+  white-space: nowrap;
 }
 
 /* ── C-2 浮窗（position: fixed；拖动范围由 clampDockOffset 夹住） ── */

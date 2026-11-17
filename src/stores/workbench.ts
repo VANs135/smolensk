@@ -6321,6 +6321,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
   }
 
+  /**
+   * 14.11：**这一架**此刻是否有够得到的别的本方基地（右键菜单据此决定出不出「转移基地」）
+   *
+   * 与 `transferBaseCandidates` 同源判据（图上按格距、盒内按 1.4a 盒代价，均可双倍航程），
+   * 区别只是不要求先建转场中间态 —— 菜单要"能做的才出现"，不能在打开菜单时改状态。
+   */
+  function canTransferAirToBaseNow(instanceId: string): boolean {
+    const air = airUnits.value.find((item) => item.instanceId === instanceId)
+    if (air === undefined) return false
+    const fromBox = airBoxMembers.value.includes(instanceId)
+    return ownAirBases.value.some((dest) => {
+      if (!fromBox && sameHex(dest.hex, air.hex)) return false
+      return fromBox
+        ? airDistanceToOffMapBox(air.side, dest.hex) <= air.rangeHexes * 2
+        : airDistanceFromRealBase(air, dest.hex) <= air.rangeHexes * 2
+    })
+  }
+
   /** 14.11：开始一次转场（`baseId` 为空 ⇒ 从盒出发） */
   function beginTransferNow(
     mode: 'box' | 'base',
@@ -30930,6 +30948,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     transferBaseCandidates,
     transferHasBoxOption,
     transferHasBaseOption,
+    canTransferAirToBaseNow,
     beginTransferNow,
     toggleTransferAircraft,
     cancelTransferNow,

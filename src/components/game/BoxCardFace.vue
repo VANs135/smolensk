@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 
+import { RuleTip } from '@/components/base'
 import { counterImages } from '@/render/token-images'
-import type { AuxCardView } from '@/stores'
+import { useMapViewStore, type AuxCardView } from '@/stores'
 
 import { auxCardImageUrl } from './aux-card-image'
 
@@ -24,7 +25,54 @@ const props = defineProps<{
 /** ⑤：盒内算子被点选（第二次点同一枚 = 取消）；没有规则含义，只是"我指的是这一枚" */
 const pickedUnitId = ref<string | null>(null)
 
-const emit = defineEmits<{ unitContext: [unitId: string] }>()
+const mapView = useMapViewStore()
+
+/**
+ * 用户 2026-11-18：**贴图上直接右键出菜单**（与地图算子一致）
+ *
+ * 能力由 store 按"当前环节 + 这一枚此刻实际能做什么"给出（能做的才出现）；
+ * 这里只摆菜单、转发 key，不判规则。条款号进 `?`（`RuleTip`），菜单里不放说明文字。
+ */
+const menu = ref<{ unitId: string; x: number; y: number } | null>(null)
+
+const menuActions = computed(() =>
+  menu.value === null ? [] : mapView.boxUnitActions(props.card.id, menu.value.unitId),
+)
+
+function openMenu(unitId: string, event: MouseEvent): void {
+  event.preventDefault()
+  pickedUnitId.value = unitId
+  if (mapView.boxUnitActions(props.card.id, unitId).length === 0) {
+    menu.value = null
+    return
+  }
+  menu.value = {
+    unitId,
+    x: Math.min(event.clientX, Math.max(8, window.innerWidth - 260)),
+    y: Math.min(event.clientY, Math.max(8, window.innerHeight - 60)),
+  }
+}
+
+/** 执行一项（store 落既有入口；菜单随即收起） */
+function runAction(key: string): void {
+  const current = menu.value
+  if (current === null) return
+  menu.value = null
+  mapView.runBoxUnitAction(props.card.id, current.unitId, key)
+}
+
+/** 点菜单外 / Esc ⇒ 收起（菜单内的 pointerdown 已 stop） */
+function closeMenu(): void {
+  menu.value = null
+}
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && menu.value !== null) menu.value = null
+}
+window.addEventListener('keydown', onWindowKeydown)
+onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
+
+// 换卡（浮窗/托盘里看另一张）⇒ 旧菜单不能挂在别人身上
+watch(() => props.card.id, closeMenu)
 
 /** 卡面显示比例（分区矩形 × 这个比例 = 屏上像素） */
 const scale = computed(() => props.width / props.card.imageSize.w)
@@ -84,13 +132,6 @@ function pickUnit(unitId: string): void {
   pickedUnitId.value = pickedUnitId.value === unitId ? null : unitId
 }
 
-/** 右键：选中该枚并把"盒内动作"交给上层（展开那张卡 ⇒ 既有会话框出该盒的动作） */
-function onUnitContext(unitId: string, event: MouseEvent): void {
-  event.preventDefault()
-  pickedUnitId.value = unitId
-  emit('unitContext', unitId)
-}
-
 /** 分区在屏上的像素矩形（卡面像素 × 比例） */
 function regionStyle(rect: { x: number; y: number; w: number; h: number }): Record<string, string> {
   return {
@@ -135,9 +176,9 @@ function regionStyle(rect: { x: number; y: number; w: number; h: number }): Reco
           :class="{ 'face__unit--picked': pickedUnitId === unit.unitId }"
         >
           <!--
-            ⑤（用户 2026-11-09）：盒内算子**可点选、可右键**。
-            点 = 选中这一枚（再点取消）；右键 = 选中并由上层把该盒的既有动作会话摆出来。
-            这里不判规则、不提交动作。
+            ⑤（用户 2026-11-09）+ 2026-11-18：盒内算子**可点选、可右键**。
+            点 = 选中这一枚（再点取消）；右键 = 出**这一枚此刻能做**的菜单（条款号进 `?`）。
+            这里不判规则、不提交动作；能力来自 store，与地图空军菜单同源。
           -->
           <button
             type="button"
@@ -145,7 +186,7 @@ function regionStyle(rect: { x: number; y: number; w: number; h: number }): Reco
             :title="unit.name ?? unit.unitId"
             :aria-pressed="pickedUnitId === unit.unitId"
             @click="pickUnit(unit.unitId)"
-            @contextmenu="onUnitContext(unit.unitId, $event)"
+            @contextmenu="openMenu(unit.unitId, $event)"
           >
             <img
               v-if="unit.imageUrl !== null && unitReady(unit.imageUrl)"
@@ -168,6 +209,28 @@ function regionStyle(rect: { x: number; y: number; w: number; h: number }): Reco
         {{ region.note }}
       </p>
     </div>
+
+    <!-- 贴图右键菜单（Teleport 出卡面，免得被托盘/浮窗 overflow 裁掉） -->
+    <Teleport to="body">
+      <div
+        v-if="menu !== null"
+        class="boxmenu"
+        :style="{ left: `${menu.x}px`, top: `${menu.y}px` }"
+        @pointerdown.stop
+        @contextmenu.prevent
+      >
+        <button
+          v-for="action in menuActions"
+          :key="action.key"
+          type="button"
+          class="boxmenu__item"
+          @click="runAction(action.key)"
+        >
+          <span>{{ action.label }}</span>
+          <RuleTip :rule="action.rule" />
+        </button>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -230,6 +293,40 @@ function regionStyle(rect: { x: number; y: number; w: number; h: number }): Reco
   display: flex;
   align-items: center;
   gap: 2px;
+}
+
+/* 贴图右键菜单（Teleport 到 body，定位用 fixed） */
+.boxmenu {
+  position: fixed;
+  z-index: 60;
+  min-width: 180px;
+  max-width: 260px;
+  padding: var(--space-1);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  box-shadow: var(--shadow-lg);
+}
+
+.boxmenu__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.boxmenu__item:hover {
+  background: var(--color-bg-2);
 }
 
 .face__unit-btn {

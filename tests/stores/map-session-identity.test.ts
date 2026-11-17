@@ -271,7 +271,12 @@ describe('P3：关闭语义（cancel / collapse / refused）', () => {
     expect(mapView.session?.closePolicy).toBe('collapse')
 
     expect(mapView.cancelSession()).toBe(true)
-    containers.cardOpenId = 'c1'
+    // 2026-11-18：死亡堆/空军盒不再开窗 ⇒ 用仍需批量动作窗的盒验证 collapse 语义
+    const windowCard = containers.cardViews.find(
+      (card) => card.boxKind !== 'dead_pile' && card.boxKind !== 'air_box',
+    )
+    expect(windowCard).toBeDefined()
+    containers.cardOpenId = windowCard!.id
     expect(mapView.session?.kind).toBe('containers')
     expect(mapView.session?.closePolicy).toBe('collapse')
 

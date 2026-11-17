@@ -49,8 +49,11 @@ describe('B17a-2：盒卡展开 ⇒ 盒内动作会话', () => {
     const { mapView, containers } = newStores()
     expect(mapView.session).toBeNull()
 
-    const card = containers.cardViews[0]
-    expect(card, '本剧本应当有盒卡').toBeDefined()
+    // 2026-11-18：死亡堆/空军盒已改为贴图右键菜单 ⇒ 不再开「盒内动作」窗；改用仍需批量窗的盒
+    const card = containers.cardViews.find(
+      (item) => item.boxKind !== 'dead_pile' && item.boxKind !== 'air_box',
+    )
+    expect(card, '本剧本应当有仍需盒内动作窗的盒卡').toBeDefined()
     containers.toggleCardOpen(card!.id)
     expect(mapView.session).toMatchObject({ kind: 'containers' })
     expect(mapView.session?.title).toContain('盒内动作')
@@ -58,7 +61,10 @@ describe('B17a-2：盒卡展开 ⇒ 盒内动作会话', () => {
 
   it('★ 收起（`Esc`/×）：会话消失、那张盒卡也合上', () => {
     const { mapView, containers } = newStores()
-    containers.toggleCardOpen(containers.cardViews[0]!.id)
+    const card = containers.cardViews.find(
+      (item) => item.boxKind !== 'dead_pile' && item.boxKind !== 'air_box',
+    )
+    containers.toggleCardOpen(card!.id)
     expect(mapView.session?.kind).toBe('containers')
 
     expect(mapView.cancelSession()).toBe(true)
@@ -85,12 +91,15 @@ describe('B17a-2：盒卡展开 ⇒ 盒内动作会话', () => {
     expect(kinds).toContain('dead_pile')
   })
 
-  it('★ B 段 13.5 重建：增援面板开着时，展开死亡堆卡必须切到「盒内动作」', () => {
+  it('★ B 段 13.5 重建：展开死亡堆卡不再抢占增援面板（贴图右键已承载）', () => {
     /*
      * 实点缺陷（2026-11-14，后手方 B 段 13.5）：
      * 重建面板写着「重建与整编都在**盘面右键**办理」，但右键死亡堆盒卡只会 `toggleCardOpen`，
      * 而「盒内动作」会话被同环节自动出现的增援面板**抢占**（增援分支在前）⇒
      * 重建动作（13.5 返场 / 13.5c 永久移除）在这一个环节里**根本没有入口**。
+     *
+     * 2026-11-18 起口径变了：死亡堆/空军盒的单枚动作**直接落在盒贴图上**（左键选中、右键菜单），
+     * 展开卡不再顶出内容重复的「盒内动作」窗 ⇒ 增援面板也不再被抢占。
      */
     const { workbench, mapView, containers } = newStores()
     workbench.setActiveSide('soviet')
@@ -104,26 +113,27 @@ describe('B17a-2：盒卡展开 ⇒ 盒内动作会话', () => {
     )
     expect(deadPileCard, '苏方应当有死亡堆盒卡').toBeDefined()
     containers.toggleCardOpen(deadPileCard!.id)
-    expect(mapView.session?.kind).toBe('containers')
-
-    // × 收起盒内动作 ⇒ 本环节的增援面板回来（不能被"收起"一并压掉）
-    expect(mapView.cancelSession()).toBe(true)
-    expect(containers.cardOpenId).toBeNull()
+    expect(containers.openCardNeedsWindow).toBe(false)
+    expect(containers.cardOpenId).toBe(deadPileCard!.id)
     expect(mapView.session?.kind).toBe('reinforce')
   })
 
   it('换环节后收起态失效（会话不会被"上次的收起"永久压住）', () => {
     const { workbench, mapView, containers } = newStores()
     const cards = containers.cardViews
-    expect(cards.length).toBeGreaterThan(1)
-    containers.toggleCardOpen(cards[0]!.id)
+    // 2026-11-18：死亡堆/空军盒已不再开窗 ⇒ 选一张仍需批量窗的盒（拆分池 / 边缘盒…）
+    const windowCard = cards.find(
+      (card) => card.boxKind !== 'dead_pile' && card.boxKind !== 'air_box',
+    )
+    expect(windowCard, '应当有仍需盒内动作窗的盒').toBeDefined()
+    containers.toggleCardOpen(windowCard!.id)
     mapView.cancelSession()
     expect(mapView.session).toBeNull()
 
     // 换一个**不同的**阶段 ⇒ 环节键变 ⇒ 收起失效；盒卡再展开即重现
     //（★ 不能用 `setPhase('movement')`：新 store 的默认阶段就是它，环节键不会变）
     workbench.setPhase(workbench.phase === 'movement' ? 'combat' : 'movement')
-    containers.toggleCardOpen(cards[1]!.id)
+    containers.toggleCardOpen(windowCard!.id)
     expect(mapView.session?.kind).toBe('containers')
   })
 })

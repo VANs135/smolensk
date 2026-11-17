@@ -127,6 +127,18 @@ interface CounterAction {
   disabledReason: string | null
 }
 
+/**
+ * 图外盒贴图的右键菜单项（用户 2026-11-18）
+ *
+ * 与地图算子菜单同源：能做的才出现（不在本环节 / 该单位此刻做不了的整项不摆）。
+ * 条款号只进 `?`（组件里用 `RuleTip`），标签本身不夹规则号。
+ */
+export interface BoxUnitAction {
+  key: string
+  label: string
+  rule: string
+}
+
 export interface MapPopupState {
   hex: HexRef
   /** 锚点（视口内 CSS 像素） */
@@ -2405,6 +2417,183 @@ export const useMapViewStore = defineStore('mapView', () => {
     strat: '战略',
   } as const
 
+  /**
+   * 空军单位（地图基地窗 / 图外盒贴图）的**共同菜单源**（用户 2026-11-18）
+   *
+   * 口径：按当前环节与 10.0d / 14.x 的允许范围给任务；A 整备段按 15.1 / 1.4a 给整备。
+   * 判据全部取既有闸门与 store 投影（`airMissionKindChoices` / `actionAllowedNow` /
+   * `canTransferAirToBaseNow` / `refitStartBases`），不另写一份规则。
+   */
+  function airUnitActions(air: ConsoleAirUnit): CounterAction[] {
+    if (air.side !== actingSide.value) return []
+    const out: CounterAction[] = []
+    const inBox = workbench.airBoxMembers.includes(air.instanceId)
+    // 14.2e：本环节允许空军任务 ∩ 14.1a 激活 ∩ 一阶段一次
+    if (
+      workbench.actionAllowedNow('air.mission') &&
+      air.airStatus === 'active' &&
+      !air.missionsFlownThisPhase
+    ) {
+      for (const choice of workbench.airMissionKindChoices) {
+        out.push({
+          key: `air.unit.mission:${choice.key}`,
+          label: `出击：${choice.label}`,
+          rule: '14.2e',
+          panel: 'unit',
+          only: `airUnitMission:${choice.key}`,
+          group: '空军任务',
+          disabledReason: null,
+        })
+      }
+    }
+    // 14.11：转场（盒内 → 图上基地 / 基地 → 基地）
+    if (
+      workbench.actionAllowedNow('air.transfer') &&
+      workbench.canTransferAirToBaseNow(air.instanceId)
+    ) {
+      out.push({
+        key: 'air.unit.transfer',
+        label: inBox ? '转场到基地（点图选）' : '转移基地（点图选）',
+        rule: '14.11',
+        panel: 'unit',
+        only: 'airUnitTransfer',
+        group: '空军任务',
+        disabledReason: null,
+      })
+    }
+    // 专规 1.4a：盒内免费整备（A 整备段）
+    if (inBox && workbench.actionAllowedNow('air.refit') && air.airStatus !== 'active') {
+      out.push({
+        key: 'air.unit.refitBox',
+        label: '整备盒内飞机（1.4a）',
+        rule: '专规 1.4a',
+        panel: 'unit',
+        only: 'airUnitRefitBox',
+        group: '空军',
+        disabledReason: null,
+      })
+    }
+    // 15.1：图上基地整备（只在该基地可开整备时出现）
+    const base = workbench.ownAirBases.find(
+      (item) => item.hex.col === air.hex.col && item.hex.row === air.hex.row,
+    )
+    if (
+      !inBox &&
+      workbench.phase === 'aircraftRefit' &&
+      base !== undefined &&
+      workbench.refitStartBases.some((item) => item.id === base.id)
+    ) {
+      out.push({
+        key: 'air.unit.refitBase',
+        label: '整备该基地（15.1）',
+        rule: '15.1',
+        panel: 'unit',
+        only: `airUnitRefitBase:${base.id}`,
+        group: '空军',
+        disabledReason: null,
+      })
+    }
+    return out
+  }
+
+  /**
+   * 图外盒贴图右键菜单（用户 2026-11-18）
+   *
+   * 只回答"这枚此刻在盒里能做什么"：死亡堆 ⇒ 重建 / 返场落点 / 永久移除（13.5 系列）；
+   * 空军盒 ⇒ 与地图空军菜单同源（任务 / 转场 / 整备）；边缘盒 ⇒ 出盒（1.4b）。
+   */
+  function boxUnitActions(cardId: string, unitId: string): BoxUnitAction[] {
+    const card = containers.cardViews.find((item) => item.id === cardId)
+    if (card === undefined) return []
+    const region = card.regions.find((item) => item.units.some((unit) => unit.unitId === unitId))
+    if (region === undefined) return []
+    if (card.boxKind === 'dead_pile') {
+      const out: BoxUnitAction[] = workbench
+        .deadPileActionsOf(unitId)
+        .filter((action) => action.disabledReason === null)
+        // 13.5c 的闸在 store 里（`rein.arrival` | `rein.rebuild`）；`deadPileActionsOf` 无条件列它，菜单要再收一次
+        .filter(
+          (action) =>
+            action.key !== 'deadPile.removeForever' ||
+            workbench.actionAllowedNow('rein.arrival') ||
+            workbench.actionAllowedNow('rein.rebuild'),
+        )
+        .map((action) => ({ key: action.key, label: action.label, rule: action.rule }))
+      out.push({ key: 'deadPile.returnHex', label: '返场落点（点地图选）', rule: '1.6c' })
+      return out
+    }
+    if (card.boxKind === 'air_box') {
+      const air = workbench.airUnits.find((item) => item.instanceId === unitId)
+      if (air === undefined) return []
+      return airUnitActions(air).map((action) => ({
+        key: action.only ?? action.key,
+        label: action.label,
+        rule: action.rule,
+      }))
+    }
+    if (region.kind === 'edge_box_northeast' || region.kind === 'edge_box_southeast') {
+      const box = region.kind === 'edge_box_northeast' ? 'northeast' : 'southeast'
+      if (containers.edgeBoxExitCandidates(box, unitId, false).length > 0)
+        return [{ key: `edgeBoxExit:${box}`, label: '点地图选出盒格', rule: '1.4b' }]
+    }
+    return []
+  }
+
+  /** 空军单位菜单项的执行入口（地图 chip 与盒贴图共用；界面只按 key 转发） */
+  function runAirUnitAction(instanceId: string, key: string): boolean {
+    const air = workbench.airUnits.find((item) => item.instanceId === instanceId)
+    if (air === undefined) return false
+    if (key.startsWith('airUnitMission:')) {
+      const kind = key.slice('airUnitMission:'.length) as AirMissionKind
+      if (!workbench.airMissionKindChoices.some((choice) => choice.key === kind)) return false
+      workbench.setAirActive(true)
+      workbench.setAirMissionKind(kind)
+      workbench.toggleAirMissionUnit(instanceId)
+      closePopup()
+      return workbench.airMissionAirIds.includes(instanceId)
+    }
+    if (key === 'airUnitTransfer') return startAirTransferNow(instanceId)
+    if (key === 'airUnitRefitBox') return containers.activateAirBox(air.side)
+    if (key.startsWith('airUnitRefitBase:')) {
+      const baseId = key.slice('airUnitRefitBase:'.length)
+      const base = workbench.ownAirBases.find((item) => item.id === baseId)
+      if (base === undefined) return false
+      if (!workbench.beginRefitNow(baseId)) return false
+      openPopup(base.hex, 0, 0, 'content', { airFocus: true })
+      return true
+    }
+    return false
+  }
+
+  /** 图外盒菜单项的执行入口（界面只按 key 转发） */
+  function runBoxUnitAction(cardId: string, unitId: string, key: string): boolean {
+    const card = containers.cardViews.find((item) => item.id === cardId)
+    if (card === undefined) return false
+    if (card.boxKind === 'dead_pile') {
+      if (key === 'deadPile.returnHex') {
+        workbench.beginDeadPileReturnHexPickNow()
+        return true
+      }
+      if (!key.startsWith('deadPile.')) return false
+      return workbench.runDeadPileActionNow(
+        unitId,
+        key as
+          | 'deadPile.rebuild'
+          | 'deadPile.rebuildAirBase'
+          | 'deadPile.rebuildAirBox'
+          | 'deadPile.removeForever',
+      )
+    }
+    if (card.boxKind === 'air_box') return runAirUnitAction(unitId, key)
+    if (key.startsWith('edgeBoxExit:')) {
+      const box = key.slice('edgeBoxExit:'.length) as 'northeast' | 'southeast'
+      if (containers.edgeBoxExitCandidates(box, unitId, false).length === 0) return false
+      containers.beginEdgeBoxExitHexPickNow(box, unitId, false)
+      return true
+    }
+    return false
+  }
+
   function counterActionsAt(hex: HexRef, id: string): CounterAction[] {
     /*
      * 用户 2026-11-11：4ab30d6 起观察方为**手选**，可与行动方不同。
@@ -2432,6 +2621,14 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     // 用户 2026-11-12：格伪目标 ⇒ 目标侧空军任务（空投/破交/扫荡/空运）
     if (id === HEX_CONTEXT_ID) return hexTargetActions(hex)
+    /*
+     * 用户 2026-11-18：机场贴图上的飞机 chip ⇒ 与图外盒同一份空军菜单
+     * （按当前环节给任务 / 转场 / 整备；能做的才出现）。
+     */
+    const airHere = workbench.onMapAirUnits.find(
+      (air) => air.instanceId === id && air.hex.col === hex.col && air.hex.row === hex.row,
+    )
+    if (airHere !== undefined) return airUnitActions(airHere)
     const unit = ownCounterAt(hex, id)
     /*
      * 3.4b 把同格轴方 SP 拆成两个算子（id 形如 `sp:c,r:guderian`）⇒ 这里按格前缀找那一条账本；
@@ -2859,15 +3056,32 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
-   * 盒内单位转场：**只能转入图上基地**（用户 2026-11-12：不提供盒到盒）。
+   * 14.11：**空军单位**开始一次转场（地图基地窗 / 图外盒贴图共用）
+   *
+   * 盒内出发按 1.4a 盒代价（`fromBox=true`），图上基地出发按格距（`fromBox=false`）；
+   * 目的地仍由玩家在地图上点选（候选＝航程内己方基地，引擎算）。
    */
-  function startBoxTransfer(instanceId: string): boolean {
-    if (!workbench.beginTransferNow('base', null, true)) return false
+  function startAirTransferNow(instanceId: string): boolean {
+    const air = workbench.airUnits.find((item) => item.instanceId === instanceId)
+    if (air === undefined) return false
+    const fromBox = workbench.airBoxMembers.includes(instanceId)
+    const base = workbench.ownAirBases.find(
+      (item) => item.hex.col === air.hex.col && item.hex.row === air.hex.row,
+    )
+    if (!fromBox && base === undefined) return false
+    if (!workbench.beginTransferNow('base', fromBox ? null : base!.id, fromBox)) return false
     if (!workbench.toggleTransferAircraft(instanceId)) {
       workbench.cancelTransferNow()
       return false
     }
     return beginTransferBasePickNow()
+  }
+
+  /**
+   * 盒内单位转场：**只能转入图上基地**（用户 2026-11-12：不提供盒到盒）。
+   */
+  function startBoxTransfer(instanceId: string): boolean {
+    return startAirTransferNow(instanceId)
   }
 
   /**
@@ -3217,6 +3431,17 @@ export const useMapViewStore = defineStore('mapView', () => {
       if (option.only === null || !option.only.startsWith('airTarget:')) return false
       const kind = option.only.slice('airTarget:'.length) as AirMissionKind
       return startTargetAirMission(kind, hex)
+    }
+    /*
+     * 用户 2026-11-18：空军单位（地图基地窗 / 图外盒贴图）的动作 —— 与菜单同源，
+     * 只按 `only` 前缀转发到既有入口。
+     */
+    if (
+      workbench.airUnits.some((air) => air.instanceId === instanceId) &&
+      option.only !== null &&
+      (option.only.startsWith('airUnit') || option.only.startsWith('airUnitRefit'))
+    ) {
+      return runAirUnitAction(instanceId, option.only)
     }
     /*
      * ★ 用户 2026-11-09（第 7 条）：「模式改变」三项各自点即切换（改模式时显式只带这一枚，
@@ -3573,7 +3798,7 @@ export const useMapViewStore = defineStore('mapView', () => {
      *   优先级必须高于"按环节自动出现"的面板，也不受 `collapsedSessionKey`（那是给自动面板用的）约束。
      */
     if (
-      containers.cardOpenId !== null &&
+      containers.openCardNeedsWindow &&
       (containers.openCardSide === null || containers.openCardSide === actingSide.value)
     ) {
       return {
@@ -4745,6 +4970,9 @@ export const useMapViewStore = defineStore('mapView', () => {
     cancelCounterDragNow,
     counterBoxTargets,
     dropCounterInBox,
+    // 图外盒贴图：右键菜单（与地图空军菜单同源；能做的才出现）
+    boxUnitActions,
+    runBoxUnitAction,
     openContextAction,
     // 14.11 转场（用户 2026-11-12）：基地窗勾机 → 选盒 / 选目的基地
     confirmTransferToBoxNow,

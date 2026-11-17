@@ -38,7 +38,11 @@ describe('空军盒三处修复', () => {
 
   it('③ 返场落点只属于死亡堆，不漏进空军盒窗口', () => {
     const panel = read('src/components/containers/ContainersPanel.vue')
-    expect(panel).toContain('<div v-if="showsBoxActions(\'deadPile\')" class="field">')
+    // 2026-11-18：死亡堆改成盒贴图右键菜单 ⇒ 会话窗（actions）里不再铺这条；验证/裁判页仍可点
+    expect(panel).toContain(
+      '<div v-if="props.only !== \'actions\' && showsBoxActions(\'deadPile\')" class="field">',
+    )
     expect(panel).toContain('返场落点（死亡堆 → 图）')
+    expect(read('src/stores/map-view.ts')).toContain("'deadPile.returnHex'")
   })
 })
