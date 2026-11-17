@@ -3017,6 +3017,17 @@ export const useMapViewStore = defineStore('mapView', () => {
     return true
   }
 
+  /**
+   * 用户 2026-11-18：拖动被取消（系统接管 / 按钮位已松，不是落子）
+   *
+   * 这一手没有产生任何移动 ⇒ 把「待开拔」与地图选择环一起收掉，
+   * 避免玩家看到一圈金边却不知道它还挂在旧单位上。
+   */
+  function cancelCounterDragNow(): void {
+    if (workbench.movePick !== null) workbench.cancelMovePick()
+    stackSelection.value = []
+  }
+
   function dropCounterInBox(instanceId: string, target: CounterBoxTarget): boolean {
     if (!counterBoxTargets(instanceId).includes(target)) return false
     return target === 'air'
@@ -3926,7 +3937,22 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 没有待点态时返回 false，让调用方当作一次普通空白点击。
    */
   function cancelBlankPick(): boolean {
-    return workbench.cancelHexPick()
+    /*
+     * 用户 2026-11-18：**分层**退——先退「正在选格」，再退「待开拔」。
+     * 两层都要顺带清掉地图上的选择环（`stackSelection` 是视觉那一半）；
+     * 战斗/补给面板不动：误点空白不该把正在结算的窗关掉。
+     */
+    if (workbench.cancelHexPick()) return true
+    if (workbench.movePick !== null) {
+      workbench.cancelMovePick()
+      stackSelection.value = []
+      return true
+    }
+    if (stackSelection.value.length > 0) {
+      stackSelection.value = []
+      return true
+    }
+    return false
   }
 
   /**
@@ -3968,6 +3994,7 @@ export const useMapViewStore = defineStore('mapView', () => {
         workbench.moveLinger
       ) {
         workbench.dismissMoveLinger()
+        stackSelection.value = []
         return true
       }
       /*
@@ -4028,6 +4055,12 @@ export const useMapViewStore = defineStore('mapView', () => {
     // B15c：同理——宣布之前退掉参炸选子，宣布之后才是 `cancelBarrage`
     else if (workbench.barrageState === null) workbench.clearBarrageSelectionNow()
     else workbench.cancelBarrage()
+    /*
+     * 用户 2026-11-18：取消会话（Esc / ×）后**选择环不再留在旧单位上**。
+     * 数据态（movePick / moveInteraction）已由各自 cancel 路径清掉，这里只补视觉那一半：
+     * `stackSelection` 是地图金色环的来源，跨会话留着会让玩家以为那几枚仍然是"下一步的参与者"。
+     */
+    stackSelection.value = []
     return true
   }
 
@@ -4634,6 +4667,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     counterForBoxAt,
     counterForMoveDragAt,
     dropMovingCounterAt,
+    cancelCounterDragNow,
     counterBoxTargets,
     dropCounterInBox,
     openContextAction,

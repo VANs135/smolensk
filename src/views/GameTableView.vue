@@ -464,6 +464,7 @@ onBeforeUnmount(() => {
           @hex-hover="onHexHover"
           @hex-context="onMapContext"
           @counter-drag="mapCounterDrag = $event"
+          @counter-drag-cancel="mapView.cancelCounterDragNow()"
           @counter-drop="onCounterDrop"
         >
           <template #overlay>

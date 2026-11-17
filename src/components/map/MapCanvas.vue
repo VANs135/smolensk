@@ -171,6 +171,8 @@ const emit = defineEmits<{
     scale: number,
   ]
   counterDrag: [id: string | null]
+  /** 拖动被取消（系统接管 / 按钮位已松）：上层据此清掉这一手的选中环 */
+  counterDragCancel: []
   /** 拖放算子：落点窗口坐标 + 落点格（图外为 null，供上层区分"盒"与"地图内落子"） */
   counterDrop: [
     id: string,
@@ -256,6 +258,12 @@ function clearCounterDrag(): void {
   counterDragPath = []
   if (counterGhost.value !== null) emit('counterDrag', null)
   counterGhost.value = null
+}
+
+/** 拖动被取消（不是落子）：与 `clearCounterDrag` 分开，避免把成功落子也当成取消 */
+function abortCounterDrag(): void {
+  if (counterPress !== null) emit('counterDragCancel')
+  clearCounterDrag()
 }
 
 /* ── 绘制 ── */
@@ -495,7 +503,7 @@ function onPointerMove(event: PointerEvent): void {
     hoverPoint.value = null
     if ((event.buttons & 1) === 0) {
       drag = IDLE_DRAG
-      clearCounterDrag()
+      abortCounterDrag()
       releaseCapture(event)
     } else {
       // 记录拖动经过的格（换格时按六角直线补全，指针采样跳过中间格也不丢段）
@@ -602,7 +610,7 @@ function onPointerCancel(event: PointerEvent): void {
   if (ended.gesture === drag) return
   drag = ended.gesture
   hoverPoint.value = null
-  clearCounterDrag()
+  abortCounterDrag()
   releaseCapture(event)
 }
 

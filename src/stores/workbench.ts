@@ -416,6 +416,7 @@ import {
   type RetreatDestinationPlan,
   type RetreatFacts,
   type SpHoldings,
+  type StepFailure,
   type SpecialObjectView,
   type StackTerrainChoice,
   type StepPreview,
@@ -6502,37 +6503,59 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 引擎其实已把逐单位判据放在 `groupReachable.units[].blocked`（12.5a 未加油 / 4.5b 已承诺 /
    * 6.1b 无 MA …），这里只把 StepFailure 折成人话；判据本身不另写一份。
    */
-  function moveFailureNote(failure: { reason: string; rule: string; detail?: string }): {
+  function moveFailureNote(failure: StepFailure): {
     rule: string
     text: string
   } {
     const rule = failure.rule
+    /*
+     * 用户 2026-11-18：界面只写人话，**任何内部码都不许漏出去**。
+     * 地形名这类 detail 由引擎给（中文），可以拼进来；`reason` 代码本身一律不打印。
+     */
+    const detail = failure.detail === undefined ? '' : `：${failure.detail}`
     switch (failure.reason) {
       case 'needsFuel':
         return { rule, text: '未加注燃料（12.5a）：右键该单位 →「加油」付款后再开拔' }
       case 'mpLocked':
         return { rule, text: '本阶段已承诺不再耗 MP（4.5b）：本阶段不能再移动它' }
       case 'immobile':
+      case 'noMa':
         return { rule, text: '该单位没有移动力（6.1b）' }
       case 'extenderCannotMove':
         return { rule, text: '延补队面不可移动（12.7）：先翻回运输点数面' }
       case 'prohibited':
-        return { rule, text: `地形不可进（${rule}）` }
+        return { rule, text: `地形不可进${detail}（${rule}）` }
       case 'notEnoughMp':
         return { rule, text: `MA 不足（6.1a）：${failure.detail ?? ''}` }
       case 'enemyOccupied':
-        return { rule, text: '敌方格须用突袭进入（6.3b）' }
+        return { rule, text: '敌占格：须用突袭进入（6.3b）' }
       case 'enemySafeEdge':
         return { rule, text: '敌方安全边缘格不可进入（专规 1.1b）' }
       case 'outsidePlayArea':
+        return { rule, text: '该格在剧本活动区之外（专规 1.4）' }
       case 'destinationOffMap':
-        return { rule, text: '该格在地图 / 剧本活动区之外（专规 1.4）' }
+        return { rule, text: '该格在地图之外（专规 1.4）' }
       case 'notAdjacent':
         return { rule, text: '该格与单位不相邻（6.1）' }
+      case 'stratIntoEzoc':
+        return { rule, text: '战略模式不能进入敌方 ZOC（5.8a）' }
+      case 'stratMustEndInSupply':
+        return { rule, text: '战略模式必须在有追溯补给的格内结束移动（5.8b）' }
+      case 'stackingLimit':
+        return { rule, text: '目标格超出堆叠上限（4.8）' }
+      case 'reciprocity':
+        return { rule, text: '该格进得去、回不来（6.1d 互逆性）' }
+      case 'unknownTerrain':
+      case 'noTerrain':
+        return { rule, text: '该格地形无法判定（地形数据问题）' }
+      case 'notOnMap':
+        return { rule, text: '该单位不在图上' }
+      case 'notAttackCapable':
+        return { rule, text: '该单位不能攻击（4.4）' }
       case 'phaseNotAllowed':
-        return { rule, text: `本阶段不能移动该单位（${rule}）${failure.detail ?? ''}` }
+        return { rule, text: `本阶段不能移动该单位（${rule}）${detail}` }
       default:
-        return { rule, text: `走不进（${rule}）：${failure.reason}` }
+        return { rule, text: `该步不可进入（${rule}）` }
     }
   }
 
@@ -8955,10 +8978,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (!preview.ok) {
         const blocked = preview.blocked
         if (blocked !== undefined) {
-          moveBlocked.value = { rule: blocked.rule, reason: blocked.reason }
+          const note = moveFailureNote(blocked)
+          moveBlocked.value = {
+            rule: blocked.rule,
+            reason: `走不进 ${to.col}.${to.row}：${note.text}`,
+          }
           pushLog(
             'warning',
-            `走到 ${to.col}.${to.row} 停住：${blocked.reason}（${blocked.rule}）`,
+            `走到 ${to.col}.${to.row} 停住：${note.text}（${blocked.rule}）`,
             blocked.rule,
           )
         }
@@ -9036,6 +9063,26 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const simulatedRuntime = runtime.map((item) => ({ ...item, hex: { ...item.hex } }))
     for (let index = 1; index < path.length; index += 1) {
       const to = path[index]!
+      /*
+       * 用户 2026-11-18：中文原因要用**引擎的原始 StepFailure**（`reason` 是内部码）。
+       * `planStep` 的失败会把代码和 detail 拼成一条字符串（如 `enemyOccupied（14.9）`），
+       * 拿它反过来查表就查不到 ⇒ 先问一次纯预览，拿到原始代码再翻译。
+       */
+      const preview = previewStep({
+        context: moveContext.value,
+        interaction: simulated,
+        runtime: simulatedRuntime,
+        to,
+        path: path.slice(0, index + 1),
+      })
+      if (!preview.ok) {
+        const blocked = preview.blocked
+        if (blocked === undefined) {
+          return { ok: false, rule: '6.1', reason: '本次移动已经结束' }
+        }
+        const note = moveFailureNote(blocked)
+        return { ok: false, rule: blocked.rule, reason: `${to.col}.${to.row}：${note.text}` }
+      }
       const result = planStep({
         context: moveContext.value,
         interaction: simulated,
@@ -9044,7 +9091,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         path: path.slice(0, index + 1),
       })
       if (!result.ok) {
-        return { ok: false, rule: result.rule, reason: `${to.col}.${to.row}：${result.reason}` }
+        return { ok: false, rule: result.rule, reason: `该步不可进入（${result.rule}）` }
       }
       for (const patch of result.data.patches) {
         const at = simulatedRuntime.findIndex((item) => item.unitId === patch.unitId)
@@ -9058,7 +9105,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           return item !== undefined && !item.ended
         })
         if (!stillActive) {
-          return { ok: false, rule: '4.5a-A', reason: `${to.col}.${to.row} 之后必须停止` }
+          return {
+            ok: false,
+            rule: '4.5a-A',
+            reason: `${to.col}.${to.row} 之后必须停止：进入敌方 ZOC 必须停（4.5a-A）`,
+          }
         }
       }
     }
@@ -9086,7 +9137,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           ? { rule: '6.1', reason: '该格不在本次移动的可到达范围内' }
           : {
               rule: blocked.rule,
-              reason: `${blocked.reason}${blocked.detail === undefined ? '' : `（${blocked.detail}）`}`,
+              // 用户 2026-11-18：界面只写中文原因，引擎内部码不外泄
+              reason: `走不进 ${hex.col}.${hex.row}：${moveFailureNote(blocked).text}`,
             }
       moveBlocked.value = blockedInfo
       pushLog(
