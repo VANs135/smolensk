@@ -4326,6 +4326,22 @@ export const useMapViewStore = defineStore('mapView', () => {
         return
       }
       // ④ 其余交给操作台的既有分派（选单位 / 走一步 / 打一仗）
+      /*
+       * D1 扩展（用户 2026-11-17 实走）：A/B/D/F/H 没有移动环节，地图点击只是查看。
+       * 修前这里无条件 `clickHex` ⇒ 顶栏挂「A 飞机整备段没有移动环节，不能移动（2.2）」，
+       * 玩家只是点了一下基地/单位想看详情。例外保留真正的动作入口：
+       * 增援重建段点回刚重建的算子（收回）、摆放工具、初设落子、手动战斗工具。
+       */
+      const stepId = workbench.segmentStep?.id ?? ''
+      const needsActionApi =
+        workbench.movementStepNow ||
+        stepId === 'reinforcement.rebuild' ||
+        setup.placing !== null ||
+        workbench.tool !== 'move'
+      if (!needsActionApi) {
+        if (stack.length > 0) openPopup(hex, anchor?.x ?? 0, anchor?.y ?? 0)
+        return
+      }
       workbench.clickHex(hex)
     }
     /*

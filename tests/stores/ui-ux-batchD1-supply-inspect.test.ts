@@ -62,4 +62,18 @@ describe('D1：补给段点单位只读查看', () => {
     expect(workbench.movePick).toBeNull()
     expect(mapView.popup?.hex).toEqual(CORE_HEX)
   })
+
+  it('★ 非移动段点己方格：地图点击也只读，不落「没有移动环节」', () => {
+    const { workbench, mapView } = newStores()
+    workbench.setActiveSide('axis')
+    workbench.setPhase('aircraftRefit')
+    placeGround(workbench, LEG(), CORE_HEX, 'axis', 'd1-c')
+    // 现场：另有一段会话没收回 ⇒ 本击不走 idle 分支，直接落到末尾的 clickHex 分派
+    workbench.barrageActive = true
+
+    mapView.onHexClick(CORE_HEX, { x: 0, y: 0 }, undefined, 1)
+
+    expect(workbench.moveBlocked).toBeNull()
+    expect(workbench.log.some((line) => line.text.includes('没有移动环节'))).toBe(false)
+  })
 })
