@@ -1020,6 +1020,31 @@ export const useContainersStore = defineStore('containers', () => {
     return true
   }
 
+  /**
+   * 增援段「一次检定」：1.6b 掷表 + 1.6c 结算登记（单入口，1.6c 一笔事务）
+   *
+   * 次序照原文：1.6b 先掷（它带着 1.6c 那颗骰），再在同一颗骰上结算 1.6c。
+   * 1.6c 的骰、抽取、返场登记、Cache 入账在 `drawSpecialRepl` 内是全有或全无：
+   * 登记失败时 rng / drawCount / 死亡堆 / 待落位 / Cache 都不动，只留一条明确原因。
+   */
+  function runReinforcementCheckNow(): boolean {
+    if (!workbench.variableReplRolled && !workbench.rollVariableReplNow()) return false
+    const drew = drawSpecialRepl(
+      workbench.activeSide,
+      workbench.variableReplSpecialDie ?? undefined,
+    )
+    if (!drew) return false
+    /*
+     * 1.6c 掷完即落位：登记完成后若已在放置态且有返场单位，直接把地图点亮（第一枚），
+     * 不再要求玩家先点手牌或点「开始放置」。Cache 只入账，不进手牌，因此不会走到这里。
+     * 2.3c 尚未领取等闸门未开时保持手牌，闸门一开就按原手牌流程点格。
+     */
+    if (workbench.rollPlacementOpen && workbench.specialReplPending.length > 0) {
+      workbench.beginSpecialReplPlaceHexPickNow(0)
+    }
+    return true
+  }
+
   /** 返场落点：优先取操作台当前选中的格（没有则让裁判手工摆） */
   function newHexForReturn(): string | null {
     const selected = workbench.selectedUnit?.hex
@@ -2861,6 +2886,7 @@ export const useContainersStore = defineStore('containers', () => {
     edgeBoxUnits,
     scenarioDrawBox,
     // 操作
+    runReinforcementCheckNow,
     drawSpecialRepl,
     specialReplRefusal,
     takeBreakdown,

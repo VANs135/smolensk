@@ -169,12 +169,8 @@ const replCheckVisible = computed(
 )
 
 function runReplCheck(): void {
-  // 先确保 1.6b 已掷（它带着 1.6c 那颗骰），再用**同一颗**骰结算特殊补员——
-  // 否则同一回合会掷两次 1.6c（面板先显示计划结果，点按钮又按另一颗入账）。
-  if (!workbench.variableReplRolled && !workbench.rollVariableReplNow()) return
-  if (specialReplRefusal.value === null) {
-    containers.drawSpecialRepl(workbench.activeSide, workbench.variableReplSpecialDie ?? undefined)
-  }
+  // 单入口单笔事务：1.6b 掷表 + 1.6c 用**同一颗**骰结算登记（见 containers.runReinforcementCheckNow）。
+  containers.runReinforcementCheckNow()
 }
 
 /**
@@ -761,21 +757,47 @@ const rollResultLines = computed<readonly string[]>(() => {
   if (workbench.hasSpecialReplDraw(workbench.activeSide, workbench.turn)) {
     const special = plan.special
     const draw = containers.specialReplLast
-    const grants: string[] = []
-    if (special?.supplyCache === true) grants.push('Supply Cache ×1')
-    if (special?.freeDivisionRebuild === true && draw?.divisionGranted === true)
-      grants.push('免费重建 1 个步兵/民兵师（−1 step）')
-    if (special?.freeAlarmOrRecon === true && draw?.grant === 'unit')
-      grants.push(
-        workbench.activeSide === 'axis'
-          ? '免费重建 1 个 Aufk / Krd 营'
-          : '免费重建 1 个 Alarm 单位',
+    /*
+     * 1.6c 逐项对账：每一项单独一行（作废 / 已入账 / 待落位），
+     * 状态直接读 `specialReplPending` 与 `specialReplPlacedThisSegment`，
+     * 不另存判断——台账只记一次，这里只展示。
+     */
+    if (special?.supplyCache === true) lines.push('1.6c 特殊补员：Supply Cache ×1 → 已入账（1.7）')
+    if (special?.freeDivisionRebuild === true) {
+      lines.push(
+        draw?.divisionGranted === true
+          ? '1.6c 特殊补员：免费重建 1 个步兵/民兵师（−1 step）→ 手牌'
+          : '1.6c 特殊补员：免费重建 1 个步兵/民兵师 ⇒ 作废（死亡堆无合格师）',
       )
-    lines.push(
-      grants.length > 0
-        ? `1.6c 特殊补员：${grants.join(' + ')} → 手牌`
-        : '1.6c 特殊补员：死亡堆无合格单位 ⇒ 作废',
-    )
+    }
+    if (special?.freeAlarmOrRecon === true) {
+      const kind = workbench.activeSide === 'axis' ? 'Aufk / Krd 营' : 'Alarm 单位'
+      lines.push(
+        draw?.grant === 'unit'
+          ? `1.6c 特殊补员：免费重建 1 个${kind} → 手牌`
+          : `1.6c 特殊补员：免费重建 1 个${kind} ⇒ 作废（死亡堆无可用${kind}）`,
+      )
+    }
+    if (
+      special === null ||
+      (special.supplyCache !== true &&
+        special.freeDivisionRebuild !== true &&
+        special.freeAlarmOrRecon !== true)
+    ) {
+      lines.push('1.6c 特殊补员：死亡堆无合格单位 ⇒ 作废')
+    }
+    // 返场单位的落位状态：手牌＝待落位，已放置的进本段登记（撤回会退回手牌）
+    const pending = workbench.specialReplPending.length
+    const placed = workbench.specialReplPlacedThisSegment.length
+    if (pending + placed > 0) {
+      lines.push(
+        pending === 0
+          ? `1.6c 返场：已落位 ${String(placed)} 枚`
+          : placed === 0
+            ? '1.6c 返场：待落位（点下方手牌落位）'
+            : `1.6c 返场：已落位 ${String(placed)} 枚 / 待落位 ${String(pending)} 枚（下方手牌）`,
+      )
+    }
   }
   // ④ 3.6 随机事件：补给列车进手牌；机型结果自动转非激活
   const event = plan.randomEvent

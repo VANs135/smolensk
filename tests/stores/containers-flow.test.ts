@@ -257,6 +257,37 @@ describe('W7 C12：死亡堆与 1.6c 特殊补员抽取（与盘面联动）', (
     expect(workbench.rebuildCandidates.map((unit) => unit.instanceId)).toContain('d2')
   })
 
+  it('★ 1.6c 一次检定即进入落位：登记、点亮地图、放置、账本各一次', () => {
+    enterSpecialReplSegment('soviet')
+    const division = place(workbench, eligibleDivisionRecord(), someHex(), 'soviet', 'd1')
+    workbench.sendToDeadPileNow(division.instanceId)
+    workbench.rng = createRngState(19410708)
+    // 单入口：1.6b 掷表 + 1.6c 结算登记同一笔；抽到的单位不再需要第二次「领取 / 开始放置」
+    expect(containers.runReinforcementCheckNow()).toBe(true)
+    const drawsAfterCheck = workbench.drawCount
+    expect(workbench.specialReplPending.map((item) => item.instanceId)).toEqual(['d1'])
+    // 抽取结果与手牌条目一一对应（Cache 不进手牌，返场单位进）
+    expect(
+      workbench.rollHandEntries.filter((entry) => entry.id.startsWith('unit:special:')),
+    ).toHaveLength(workbench.specialReplPending.length)
+    // 掷完即落位：地图选格态已经打开，候选就是 2.1 的落点
+    expect(workbench.hexPickView).not.toBeNull()
+    const raw = workbench.hexPickView?.candidates
+    const candidates = Array.isArray(raw) ? raw : []
+    expect(candidates.length).toBeGreaterThan(0)
+    // 放置：死亡堆只取一次、图上只多一枚（−1 军力）、不再多掷骰
+    const before = workbench.units.length
+    expect(workbench.pickHexFor(candidates[0]!)).toBe(true)
+    expect(workbench.specialReplPending).toHaveLength(0)
+    expect(workbench.specialReplPlacedThisSegment).toHaveLength(1)
+    expect(workbench.deadPile).toHaveLength(0)
+    expect(workbench.units.length).toBe(before + 1)
+    const returned = workbench.units.find((unit) => unit.instanceId === 'd1')
+    expect(returned).toBeDefined()
+    expect(returned?.steps).toBe((returned?.printedSteps ?? 2) - 1)
+    expect(workbench.drawCount).toBe(drawsAfterCheck)
+  })
+
   it('★ 1.6c 的**时机**：不在「B 增援·特殊补员抽取」这一环 ⇒ 整笔拒绝（不改盘面）', () => {
     const division = place(workbench, eligibleDivisionRecord(), someHex(), 'soviet', 'd1')
     workbench.sendToDeadPileNow(division.instanceId)

@@ -131,4 +131,20 @@ describe('增援面板：掷骰与手牌同屏，不再有第二个掷骰窗', (
     // 1.6c 未掷时，「掷骰检定」是唯一入口（不出现第二颗骰 / 第二个掷骰按钮）
     expect((panel.match(/runReplCheck/g) ?? []).length).toBeGreaterThanOrEqual(1)
   })
+
+  it('一次检定走同一笔事务：面板只调 containers.runReinforcementCheckNow，不再自己串两步', () => {
+    expect(panel).toContain('containers.runReinforcementCheckNow()')
+    expect(panel.match(/containers\.drawSpecialRepl\(/g) ?? []).toHaveLength(0)
+  })
+
+  it('1.6c 摘要逐项对账：Alarm / Aufk 作废与已落位状态都直接读账本', () => {
+    // 苏方骰 3–6 但死亡堆无 Alarm／轴方骰 5–6 但无 Aufk ⇒ 必须明写作废
+    expect(panel).toContain('作废（死亡堆无可用')
+    // 师项无合格单位也明写
+    expect(panel).toContain('作废（死亡堆无合格师）')
+    // 落位状态同源于 store，不在面板另存判断
+    expect(panel).toContain('specialReplPending.length')
+    expect(panel).toContain('specialReplPlacedThisSegment.length')
+    expect(panel).toContain('已落位 ${String(placed)} 枚')
+  })
 })
