@@ -42,7 +42,8 @@ describe('整备段不投地面可走格', () => {
     const inf = placeGround(s.workbench, combatRecord('axis'), CORE_HEX, 'axis', 'inf-1')
     // 模拟移动段残留的待开拔集（修前 overlay 会照它把可走格画出来）
     s.workbench.movePick = { hex: CORE_HEX, ids: [inf.instanceId] }
-    expect(s.workbench.groupReachable.hexes.length).toBeGreaterThan(0)
+    // 用户 2026-11-18：整备段**一律不投**，引擎的 groupReachable 与覆盖层同一闸门
+    expect(s.workbench.groupReachable.hexes).toEqual([])
     expect(s.mapView.overlay.reachable).toEqual([])
   })
 })

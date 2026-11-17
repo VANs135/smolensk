@@ -790,9 +790,8 @@ export const useMapViewStore = defineStore('mapView', () => {
      *   判据与"哪一段才算移动"同源：当前环节是移动步，或已有一场未结束的移动交互
      *   （8.1e 突袭后继续移动仍要看得见可走格）。
      */
-    const reachableLive =
-      workbench.movementStepNow ||
-      (workbench.moveInteraction !== null && workbench.moveInteraction.finished !== true)
+    // 用户 2026-11-18：与 `groupReachable` 共用同一条闸门（初设 / A 整备一律不投）
+    const reachableLive = workbench.moveRangeDisplayLive
     return {
       tokens: visibleTokens.value,
       /*

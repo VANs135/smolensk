@@ -6486,6 +6486,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
   })
   /**
+   * 可走格此刻**该不该投**
+   *
+   * 用户 2026-11-18：初设（只做选中/堆叠显示）与 A 整备段一律不投；只有移动类环节
+   * （`.modeAndMovement` / `.movement`）才投。`groupReachable` 与地图覆盖层共用这一条判据，
+   * 不再各写一遍。真正"有没有 MP / 有没有合法落点"仍由引擎的 `reachableForMove` 决定。
+   */
+  const moveRangeDisplayLive = computed<boolean>(() => {
+    if (initialSetupInProgress.value) return false
+    const stepId = segmentStep.value?.id ?? ''
+    return stepId.endsWith('.modeAndMovement') || stepId.endsWith('.movement')
+  })
+
+  /**
    * C5：本次移动的可到达范围（堆叠取并集；6.1/6.1b/6.1f）
    *
    * 结论全部来自引擎 `reachableForMove`（底层是 `computeReachableHexes`，与逐格 `evaluateStep`
@@ -6494,6 +6507,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * M1：还没开拔时用取子清单的**预演交互**算同样的范围 ⇒ 勾选后地图上就有可落点高亮。
    */
   const groupReachable = computed<GroupReachable>(() => {
+    /*
+     * ★ 用户 2026-11-18：可走格的**唯一闸门**＝「是不是移动环节」。
+     *   初设（`initialSetupInProgress`）与 A 整备段都不投：初设左键只做选中与堆叠显示，
+     *   整备段没有任何走位提示。修前初设的地图阶段值沿用 `movement` 默认 ⇒ 点格摊堆叠
+     *   就会建待开拔集并画出可走格（用户实测），A 段残留的未结束交互也会继续投。
+     */
+    if (!moveRangeDisplayLive.value) return { units: [], hexes: [] }
     const interaction = moveInteraction.value ?? movePickPreviewInteraction.value
     if (interaction === null) return { units: [], hexes: [] }
     // 2.2：回合准备环节没有行动段 ⇒ 不给出任何可走格（否则界面会"看起来能走"）
@@ -8587,6 +8607,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * （C 移动 / E 反应 / G 进击的对应环节）才建待开拔集；补给、战斗、轰炸、重建等环节
      * 点己方单位只做只读选中，不再写 `movePick`、不再记「已选待开拔（6.1）」。
      */
+    /*
+     * 用户 2026-11-18：初设期左键只做选中与堆叠显示，**不建待开拔集**、不投移动力范围。
+     * 初设阶段值沿用 `movement` 默认，若不在这里早退，点格摊堆叠会直接建出取子清单。
+     */
+    if (initialSetupInProgress.value) {
+      movePick.value = null
+      const atHex = friendlyUnitsAt(hex)
+      selectedId.value = only?.[only.length - 1] ?? atHex[atHex.length - 1]?.instanceId ?? null
+      return
+    }
     const moveAllowed = actionAllowedNow('move.order')
     if (segmentLocked.value || !moveAllowed) {
       movePick.value = null
@@ -8784,6 +8814,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   · 该格没有己方算子 ⇒ 清掉清单。
    */
   function beginMovePick(hex: HexRef, ids: readonly string[]): void {
+    // 用户 2026-11-18：初设期不建待开拔集（只做选中/堆叠显示）
+    if (initialSetupInProgress.value) {
+      movePick.value = null
+      return
+    }
     const here = movePickPoolAt(hex).map((unit) => unit.instanceId)
     if (here.length === 0) {
       movePick.value = null
@@ -23943,10 +23978,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 回一条「D 补给段没有移动环节，不能移动（2.2）」的红字却没有详情可看。
    * 判据与 `airMissionSegmentKind` 同源（`.modeAndMovement` / `.movement`）。
    */
-  const movementStepNow = computed<boolean>(() => {
-    const stepId = segmentStep.value?.id ?? ''
-    return stepId.endsWith('.modeAndMovement') || stepId.endsWith('.movement')
-  })
+  const movementStepNow = computed<boolean>(() => moveRangeDisplayLive.value)
 
   /**
    * 14.2e / 10.0 第二段：**「任务分配」入口只列属于当前环节的任务类型**
@@ -30391,6 +30423,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     segmentStep,
     // D1：移动环节判定（地图单击据此决定「取子开拔」还是「只读查看」）
     movementStepNow,
+    // 用户 2026-11-18：可走格唯一闸门（初设 / A 整备不投；只投移动环节）
+    moveRangeDisplayLive,
     segmentSteps,
     playerSegmentSteps,
     segmentStepPosition,
