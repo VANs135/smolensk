@@ -173,13 +173,14 @@ describe('BUG 2：移动环节从空军基地这一侧就能发起低空扫射�
     expect(workbench.airUnits.find((air) => air.instanceId === 'air-1')?.airStatus).toBe('inactive')
   })
 
-  it('★ 不可发起时入口不出：A 段整备只给「整备」、F 段战斗连菜单都不开', () => {
+  it('★ 不可发起时入口不出：A 段整备不再单开基地右键、F 段战斗连菜单都不开', () => {
     const { workbench, mapView } = newStores()
-    // A 段整备要真能整备（非激活机 15.1B + 可拖 1T 12.3a），否则按"不可用项不出现"连整备项都不摆
+    // A 段整备要真能整备（非激活机 15.1B + 可拖 1T 12.3a）
     setupBaseAndTarget(workbench, 'inactive')
     workbench.spDumps.push({ id: 'd-a', hex: { ...CORE_HEX }, side: 'axis', sp: 1, t: 0 })
     enter(workbench, 'aircraftRefit', 'aircraftRefit.refit')
-    expect(mapView.unitActionOptions('base-1').map((item) => item.only)).toEqual(['refit'])
+    // 15.1 单入口：整备从堆叠窗的基地卡进，基地右键不再摆「整备」
+    expect(mapView.unitActionOptions('base-1')).toEqual([])
     enter(workbench, 'combat', 'combat.combat')
     expect(mapView.unitActionOptions('base-1')).toEqual([])
     expect(mapView.unitActionAvailableAt('base-1')).toBe(false)
