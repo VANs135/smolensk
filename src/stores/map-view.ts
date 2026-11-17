@@ -1798,6 +1798,12 @@ export const useMapViewStore = defineStore('mapView', () => {
       )
       .map((token) => token.id)
     const ids = [...new Set([...baseIds, ...truckIds])]
+    // 用户 2026-11-18：初设期摊开只做选中，不建待开拔集（也就不投移动力范围）
+    if (workbench.initialSetupInProgress) {
+      stackSelection.value = defaultSelectionOf(ids)
+      expandedStack.value = { hex: { col: hex.col, row: hex.row }, page: 0 }
+      return
+    }
     workbench.beginMovePick(hex, ids)
     /*
      * 默认全选：选中集与 `movePick.ids` 同源（只有一份状态）。
