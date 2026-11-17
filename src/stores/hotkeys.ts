@@ -305,6 +305,8 @@ export const useHotkeyStore = defineStore('hotkeys', () => {
         if (pendingChoiceOpen()) return false
         return workbench.advanceSegmentNow() !== null
       case 'move.undo':
+        // 13.2f：装卸也是「一步」——发生在最后一个移动步之后时，先退它
+        if (workbench.undoTransportHandlingNow()) return true
         if (workbench.moveInteraction === null) return false
         workbench.undoLastStep()
         return true

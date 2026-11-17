@@ -1529,6 +1529,37 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     Array<{ phaseKey: string; hex: string; side: Side; mode: 'transport' | 'rail'; t: number }>
   >([])
 
+  /**
+   * 13.2f：装卸动作的撤销账（与移动步同一把「撤销」键，按发生顺序退）
+   *
+   * 用户 2026-11-18 口径：「装完继续走、装完撤销（MP 与载荷都要回退）」。
+   * 装卸不产生移动步，但仍是可逆的一步：记下动作前后的载荷 / MP / 补给站持仓，
+   * `undoTransportHandlingNow()` 只在它比最后一个移动步更晚发生时生效。
+   * 只在内存中按阶段存活（`resetMovementTracking` 清零），不进存档。
+   */
+  interface TransportHandlingUndoEntry {
+    kind: 'load' | 'unload'
+    unitId: string
+    loadedBefore: number
+    mpBefore: number
+    /** 动作发生时已完成的移动步数：小于当前步数 ⇒ 之后又走过，撤销先退移动 */
+    stepsAt: number
+    /** 装载：被扣的补给站；卸载：接收 SP 的补给站 */
+    dumpId?: string
+    dumpHoldingsBefore?: SpHoldings
+    /** 卸载时该格原本没有补给站 ⇒ 记下新建的那本，撤销时整条删掉 */
+    dumpCreatedId?: string
+    /** 卸载会写 12.2a 接力锁：撤销按动作前的快照回退 */
+    relayLocksBefore?: Array<{
+      phaseKey: string
+      hex: string
+      side: Side
+      mode: 'transport' | 'rail'
+      t: number
+    }>
+  }
+  const transportHandlingUndo = ref<TransportHandlingUndoEntry[]>([])
+
   function spRelayPhaseKey(): string {
     return `${turn.value}|${activeSide.value}|${phase.value}`
   }
@@ -4807,6 +4838,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     transportLoadInputs.value.dumpId = dump.id
+    const loadedBefore = unit.loadedSpT
+    const mpBefore = unit.mpSpent
+    const dumpHoldingsBefore: SpHoldings = { sp: dump.sp, t: dump.t }
     setSpDumpHoldings(dump.id, payment.data.holdingsAfter)
     unit.loadedSpT += amount * SP_TO_T
     // 13.2f：装载要支付印刷 MA 的 10%（按 6.1a 计入本阶段已耗 MP）
@@ -4827,6 +4861,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         dumpHex: { ...dump.hex },
       },
     })
+    transportHandlingUndo.value = [
+      ...transportHandlingUndo.value,
+      {
+        kind: 'load',
+        unitId: unit.instanceId,
+        loadedBefore,
+        mpBefore,
+        stepsAt: moveInteraction.value?.steps.length ?? 0,
+        dumpId: dump.id,
+        dumpHoldingsBefore,
+      },
+    ]
     return true
   }
 
@@ -4883,6 +4929,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `该点数只载了 ${loaded} SP，卸不出 ${amount} SP（13.2f）`, '13.2f')
       return false
     }
+    const loadedBefore = unit.loadedSpT
+    const mpBefore = unit.mpSpent
+    const dumpBefore =
+      spDumps.value.find((item) => item.side === unit.side && sameHex(item.hex, unit.hex)) ?? null
+    const relayLocksBefore = spRelayLocks.value.map((lock) => ({ ...lock }))
     unit.loadedSpT -= amount * SP_TO_T
     grantSpDumpT(unit.hex, unit.side, amount * SP_TO_T)
     // 12.2a：这批 T 本阶段已由「运输点数」卸下 ⇒ 之后不能再用铁路等其他方式运走
@@ -4904,6 +4955,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         hex: { ...unit.hex },
       },
     })
+    const dumpAfter =
+      dumpBefore === null
+        ? (spDumps.value.find((item) => item.side === unit.side && sameHex(item.hex, unit.hex)) ??
+          null)
+        : null
+    transportHandlingUndo.value = [
+      ...transportHandlingUndo.value,
+      {
+        kind: 'unload',
+        unitId: unit.instanceId,
+        loadedBefore,
+        mpBefore,
+        stepsAt: moveInteraction.value?.steps.length ?? 0,
+        ...(dumpBefore === null ? {} : { dumpId: dumpBefore.id }),
+        ...(dumpBefore === null
+          ? {}
+          : { dumpHoldingsBefore: { sp: dumpBefore.sp, t: dumpBefore.t } }),
+        ...(dumpAfter === null ? {} : { dumpCreatedId: dumpAfter.id }),
+        relayLocksBefore,
+      },
+    ]
     return true
   }
 
@@ -4954,6 +5026,41 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   function transportHandlingReadyAt(instanceId: string): boolean {
     return transportLoadReadyAt(instanceId) || transportUnloadReadyAt(instanceId)
+  }
+
+  /**
+   * 13.2f：撤销最近一次装卸（MP / 载荷 / 补给站 / 12.2a 接力锁一并回退）
+   *
+   * 与移动步共用「撤销一步」：只有装卸发生在**最后一个移动步之后**时才先退它；
+   * 否则返回 false，让 `undoLastStep()` 先退移动（按发生顺序）。
+   */
+  function undoTransportHandlingNow(): boolean {
+    const entry = transportHandlingUndo.value[transportHandlingUndo.value.length - 1]
+    if (entry === undefined) return false
+    const currentSteps = moveInteraction.value?.steps.length ?? 0
+    if (entry.stepsAt !== currentSteps) return false
+    const unit = units.value.find((item) => item.instanceId === entry.unitId)
+    if (unit === undefined) {
+      transportHandlingUndo.value = transportHandlingUndo.value.slice(0, -1)
+      return false
+    }
+    unit.loadedSpT = entry.loadedBefore
+    unit.mpSpent = entry.mpBefore
+    if (entry.dumpId !== undefined && entry.dumpHoldingsBefore !== undefined) {
+      setSpDumpHoldings(entry.dumpId, entry.dumpHoldingsBefore)
+    } else if (entry.dumpCreatedId !== undefined) {
+      removeSpDump(entry.dumpCreatedId)
+    }
+    if (entry.relayLocksBefore !== undefined) {
+      spRelayLocks.value = entry.relayLocksBefore.map((lock) => ({ ...lock }))
+    }
+    transportHandlingUndo.value = transportHandlingUndo.value.slice(0, -1)
+    pushLog(
+      'info',
+      `撤销${entry.kind === 'load' ? '装载' : '卸载'}：${unit.name} 回到 ${unit.loadedSpT / SP_TO_T} SP（13.2f）`,
+      '13.2f',
+    )
+    return true
   }
 
   /** 按实例 id 取算子（只读；避免在"界面可点到"的读函数里直接摸 `units.value`） */
@@ -7651,6 +7758,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 14.2e：飞机「每个阶段只能执行一次任务」同属阶段级事实，一并清零。
    */
   function resetMovementTracking(): void {
+    // 13.2f：装卸撤销账只在当前阶段有效（换段/换方/换回合后不得跨段回退）
+    transportHandlingUndo.value = []
     for (const unit of units.value) {
       unit.mpSpent = 0
       unit.airTransportThisPhase = null
@@ -30241,6 +30350,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setHoverHex,
     setStackSelect,
     undoLastStep,
+    undoTransportHandlingNow,
     cancelWholeMove,
     // K5：撤销一步的可用性（判据在 ground-movement，与 refuseRollback 同源）
     canUndoStep: groundMovement.canUndoStep,
@@ -30852,6 +30962,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     transportLoadReadyAt,
     transportUnloadReadyAt,
     transportHandlingReadyAt,
+    transportHandlingUndo,
     transportLoadableSpOf,
     transportUnloadableSpOf,
     transportDumpsOf,
