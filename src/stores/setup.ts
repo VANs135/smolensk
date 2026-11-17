@@ -1089,6 +1089,12 @@ export const useSetupStore = defineStore('setup', () => {
    * ch10 西移台账。撤回后玩家仍停在同一项上，可立刻改落另一格（连续操作不被打断）。
    */
   function undoLastPlacementNow(): boolean {
+    // 用户 2026-11-18：本段掷过骰（编队抽签/特殊补员等）⇒ 撤回入口直接不可用
+    const sealed = workbench.undoSealedReason
+    if (sealed !== null) {
+      record({ ok: false, rule: 'IV', reason: sealed })
+      return false
+    }
     const entry = placementUndoStack.pop()
     if (entry === undefined) {
       lastPlacement.value = null
@@ -1126,6 +1132,11 @@ export const useSetupStore = defineStore('setup', () => {
       data: { detail: `已撤回上一步落位：${label}` },
     })
   }
+
+  /** 用户 2026-11-18：撤回入口只在「有上一步且本段未掷骰」时出现 */
+  const canUndoPlacement = computed(
+    () => lastPlacement.value !== null && workbench.undoSealedReason === null,
+  )
 
   /**
    * 在地图上点了一格：若它在当前待放项的候选格内 ⇒ **落一枚**
@@ -4166,6 +4177,8 @@ export const useSetupStore = defineStore('setup', () => {
     placing,
     // H5：上一步落位的撤回入口（只留一步）
     lastPlacement,
+    // 用户 2026-11-18：本段掷过骰后入口直接不出现
+    canUndoPlacement,
     undoLastPlacementNow,
     pendingPlacement,
     // P4 / UI1-b：已完成项（只读投影；不参与任何判定）

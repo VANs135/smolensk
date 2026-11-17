@@ -24,6 +24,8 @@ export interface GroundMovementPorts {
   stepTextOf(record: MoveStepRecord): string
   triggerSpecialCombatAfterStep(to: HexRef, movedIds: readonly string[]): void
   mayMutate(): boolean
+  /** 本段是否已经过掷骰结算（非 null ⇒ 该原因会直接关掉撤销入口） */
+  undoSealReason(): string | null
 }
 /** 6.1：地面单位的移动历史、ZOC暂停和撤销边界；空军不写这里的MP。 */
 export function createGroundMovementDomain(ports: GroundMovementPorts) {
@@ -62,12 +64,16 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
   const undoBlockedReason = computed<string | null>(() => {
     const interaction = moveInteraction.value
     if (interaction === null || interaction.steps.length === 0) return null
+    // 用户 2026-11-18：结束移动＝提交 ⇒ 之后不再有任何撤销
+    if (interaction.finished) return '本次移动已结束（6.1）：结束即提交，不能再撤销'
+    // 用户 2026-11-18：本段只要经过掷骰结算，撤销入口直接关掉（不再允许"撤骰后步"）
+    const sealed = ports.undoSealReason()
+    if (sealed !== null) return sealed
     const locked = interaction.unitIds.some(
       (id) => moveContext.value.units.find((unit) => unit.id === id)?.mpLockedThisPhase,
     )
     if (locked) return '单位已承诺抵消ZOC，本阶段不能还原其移动'
-    if (rollbackFloor.value >= 0 && interaction.steps.length <= rollbackFloor.value)
-      return `移动已触发${rollbackReason.value}，只能撤销此后尚未产生额外结算的步骤`
+    if (rollbackFloor.value >= 0) return `移动已触发${rollbackReason.value}，本段不能再撤销`
     return null
   })
   const canUndoStep = computed<boolean>(
@@ -85,15 +91,36 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
   const canAbortMove = computed<boolean>(() => {
     const interaction = moveInteraction.value
     if (interaction === null || !ports.mayMutate()) return false
+    // 用户 2026-11-18：已结束＝已提交；越过掷骰边界或无步可锚的不可逆步 ⇒ 放弃同样不可用
+    if (interaction.finished || rollbackFloor.value >= 0 || ports.undoSealReason() !== null)
+      return false
     const locked = interaction.unitIds.some(
       (id) => moveContext.value.units.find((unit) => unit.id === id)?.mpLockedThisPhase,
     )
-    return !locked && rollbackFloor.value < 0
+    return !locked
   })
   function refuseRollback(all = false): boolean {
     if (!ports.mayMutate()) return true
     const interaction = moveInteraction.value
     if (interaction === null) return true
+    /*
+     * 用户 2026-11-18：本段经过任何掷骰结算后，撤销一步与放弃整次移动都不再可用；
+     * 已结束（=已提交）的移动同样不可再还原。无步可锚的 1.4b 仍按原口径挡放弃。
+     */
+    if (interaction.finished) {
+      moveBlocked.value = {
+        rule: '6.1',
+        reason: '本次移动已结束（6.1）：结束即提交，不能再还原',
+      }
+      pushLog('warning', moveBlocked.value.reason, moveBlocked.value.rule)
+      return true
+    }
+    const sealed = ports.undoSealReason()
+    if (sealed !== null) {
+      moveBlocked.value = { rule: '6.1', reason: sealed }
+      pushLog('warning', moveBlocked.value.reason, moveBlocked.value.rule)
+      return true
+    }
     const reason = undoBlockedReason.value
     const locked = reason?.startsWith('单位已承诺') === true
     // 撤销一步：有挡因即拒；放弃整次移动：只要已越过任何不可逆边界（含无步可锚的 1.4b）即拒
@@ -201,13 +228,13 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
     return true
   }
 
-  function undoLastStep(): void {
-    if (refuseRollback(false)) return
+  function undoLastStep(): boolean {
+    if (refuseRollback(false)) return false
     const interaction = moveInteraction.value
-    if (interaction === null) return
+    if (interaction === null) return false
     if (interaction.steps.length === 0) {
       pushLog('info', '本次移动还没有可撤销的步骤')
-      return
+      return false
     }
     const reverted = revertInteractionStep(interaction)
     applyMovePatches(reverted.patches)
@@ -219,12 +246,13 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
       (id) => !interaction.steps[interaction.steps.length - 1]?.zocStoppedIds.includes(id),
     )
     pushLog('info', '撤销一步（还原运行态快照）', '6.1')
+    return true
   }
 
-  function cancelWholeMove(): void {
-    if (refuseRollback(true)) return
+  function cancelWholeMove(): boolean {
+    if (refuseRollback(true)) return false
     const interaction = moveInteraction.value
-    if (interaction === null) return
+    if (interaction === null) return false
     const reverted = revertInteraction(interaction)
     applyMovePatches(reverted.patches)
     moveInteraction.value = reverted.interaction
@@ -233,6 +261,7 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
     // 4.5a-A：整次移动还原 ⇒ 停车账本随之清空
     zocStoppedMoveUnitIds.value = []
     pushLog('info', '取消本次移动（全部还原）', '6.1')
+    return true
   }
 
   return {

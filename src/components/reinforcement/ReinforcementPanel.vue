@@ -458,7 +458,8 @@ interface PlacedRollCard {
   raw: string
   short: string
   image: string | null
-  withdraw: () => void
+  /** 用户 2026-11-18：本段掷过骰后不提供收回入口 */
+  withdraw?: () => void
 }
 
 function placedRollImage(instanceId: string): string | null {
@@ -468,6 +469,8 @@ function placedRollImage(instanceId: string): string | null {
 
 const placedRollCards = computed<PlacedRollCard[]>(() => {
   const cards: PlacedRollCard[] = []
+  // 用户 2026-11-18：本段掷过骰 ⇒ 只显示已落位状态，不再提供收回入口
+  const canWithdraw = workbench.undoSealedReason === null
   for (const placed of workbench.replPlacedThisSegment) {
     const label = placed.kind === 'pax' ? 'Pax' : 'Eq'
     cards.push({
@@ -475,9 +478,13 @@ const placedRollCards = computed<PlacedRollCard[]>(() => {
       raw: label,
       short: label,
       image: placedRollImage(placed.instanceId),
-      withdraw: () => {
-        workbench.withdrawReplPlacementNow(placed.instanceId)
-      },
+      ...(canWithdraw
+        ? {
+            withdraw: () => {
+              workbench.withdrawReplPlacementNow(placed.instanceId)
+            },
+          }
+        : {}),
     })
   }
   for (const placed of workbench.specialReplPlacedThisSegment) {
@@ -486,9 +493,13 @@ const placedRollCards = computed<PlacedRollCard[]>(() => {
       raw: placed.name,
       short: placed.name,
       image: placedRollImage(placed.instanceId),
-      withdraw: () => {
-        workbench.withdrawSpecialReplReturnNow(placed.instanceId)
-      },
+      ...(canWithdraw
+        ? {
+            withdraw: () => {
+              workbench.withdrawSpecialReplReturnNow(placed.instanceId)
+            },
+          }
+        : {}),
     })
   }
   const frontal = workbench.frontalUnitPlacedThisSegment
@@ -502,9 +513,7 @@ const placedRollCards = computed<PlacedRollCard[]>(() => {
         face: 'combat',
         images: frontal.entry.images,
       }),
-      withdraw: () => {
-        workbench.withdrawFrontalUnitNow()
-      },
+      ...(canWithdraw ? { withdraw: () => workbench.withdrawFrontalUnitNow() } : {}),
     })
   }
   return cards
@@ -998,16 +1007,20 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           </div>
           <!-- 已落位的算子：右键收回（只在本段有效）；SP 落点是账本，仍在下一行点收回 -->
           <div v-if="placedRollCards.length > 0" class="row">
-            <span class="muted num">本段已落位（右键收回）</span>
+            <span class="muted num">{{
+              workbench.undoSealedReason === null ? '本段已落位（右键收回）' : '本段已落位'
+            }}</span>
             <div class="arrival-hand" data-testid="roll-hand-placed-cards">
               <button
                 v-for="card in placedRollCards"
                 :key="card.key"
                 type="button"
                 class="arrival-hand__card arrival-hand__card--placed"
-                :title="`${card.raw}：右键收回（只在本段有效）`"
+                :title="
+                  card.withdraw === undefined ? card.raw : `${card.raw}：右键收回（只在本段有效）`
+                "
                 data-testid="roll-hand-placed"
-                @contextmenu.prevent.stop="card.withdraw()"
+                @contextmenu.prevent.stop="card.withdraw?.()"
               >
                 <img
                   v-if="card.image !== null"

@@ -147,7 +147,7 @@ describe('14.9 / 14.10：在途单位的唯一归属与地面移动交接', () =
     expect(w.completeAirReturnNow()).toBe(true)
   })
 
-  it('6.1g / 14.9d：装载交接丢弃旧移动历史，运输前后共用半MA，落地撤销不跨越飞行', () => {
+  it('6.1g / 14.9d：装载交接丢弃旧移动历史，运输前后共用半MA，落地后掷过骰不再可撤销', () => {
     const { w } = setup()
     const cargo = w.units.find((unit) => unit.instanceId === 'cargo')!
     const beforeFlightStart = moveIntoOrigin(w, ['cargo'])
@@ -181,13 +181,18 @@ describe('14.9 / 14.10：在途单位的唯一归属与地面移动交接', () =
     w.clickHex(next!.hex)
     expect(cargo.hex).toEqual(next!.hex)
     expect(cargo.mpSpent).toBeLessThanOrEqual(ma / 2)
+    // 用户 2026-11-18：空战已掷骰（14.4a 高炮）⇒ 本段撤销入口直接不可用
+    expect(w.canUndoStep).toBe(false)
+    expect(w.undoBlockedReason).toContain('掷骰')
+    expect(w.canAbortMove).toBe(false)
     w.undoLastStep()
-    expect(cargo.hex).toEqual(NEAR_HEX)
-    expect(cargo.mpSpent).toBe(beforeFlightSpent)
-    expect(w.moveInteraction!.steps).toEqual([])
+    expect(cargo.hex).toEqual(next!.hex)
+    expect(w.moveInteraction!.steps).toHaveLength(1)
     w.undoLastStep()
-    expect(cargo.hex).toEqual(NEAR_HEX)
-    expect(cargo.mpSpent).toBe(beforeFlightSpent)
+    expect(cargo.hex).toEqual(next!.hex)
+    expect(w.moveInteraction!.steps).toHaveLength(1)
+    expect(w.abortMoveNow()).toBe(false)
+    expect(cargo.hex).toEqual(next!.hex)
   })
 
   it('6.1g：同行尚未结束的非货物单位阻止空运，失败不移图、扣SP或消费骰子', () => {

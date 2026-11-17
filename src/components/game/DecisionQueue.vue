@@ -286,11 +286,11 @@ function sideMark(side: 'axis' | 'soviet'): string {
     <!-- M3：原来的「完成初设」已并入上面的唯一主入口（条件同 `allPlaced && 无游标 && 未确认`） -->
 
     <!-- H5（用户 2026-11-16）：落位可**一步撤回**（算子/飞机/补给账一起还原） -->
-    <div v-if="setup.lastPlacement !== null" class="queue__row-actions">
+    <div v-if="setup.canUndoPlacement" class="queue__row-actions">
       <BaseButton
         variant="ghost"
         size="sm"
-        :title="setup.lastPlacement.label"
+        :title="setup.lastPlacement?.label ?? ''"
         @click="setup.undoLastPlacementNow()"
       >
         撤回上一步

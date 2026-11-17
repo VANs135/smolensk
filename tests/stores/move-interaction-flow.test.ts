@@ -238,22 +238,26 @@ describe('C5 选子 → 范围 → 逐格 → 结束', () => {
     expect(store.moveInteraction!.steps.map((step) => step.to)).toEqual(far!.path.slice(1))
   })
 
-  it('「结束移动」把单位就地停下，且结束后仍可撤销（6.1 / 6.1g）', () => {
+  it('「结束移动」把单位就地停下＝提交，结束后不再可撤销（6.1 / 6.1g）', () => {
     const unit = place(store, legCombat(), START, 'axis', 'a1')
     store.clickHex(START)
     expect(store.confirmMovePick()).toBe(true)
     const node = adjacentReachable(store, START)!
     store.clickHex(node.hex)
     const hexAfterStep = { ...unit.hex }
+    const mpAfterStep = unit.mpSpent
 
     store.finishMove()
     expect(unit.movementEnded).toBe(true)
     expect(store.activeMoveUnits).toHaveLength(0)
     expect(store.moveInteraction!.finished).toBe(true)
+    expect(store.canUndoStep).toBe(false)
+    expect(store.undoBlockedReason).toContain('结束即提交')
 
     store.undoLastStep()
     expect(unit.hex).toEqual(hexAfterStep)
-    expect(unit.movementEnded).toBe(false)
+    expect(unit.mpSpent).toBe(mpAfterStep)
+    expect(unit.movementEnded).toBe(true)
   })
 
   it('撤销一步还原位置与已耗 MP；取消整次移动还原到起点', () => {

@@ -1834,6 +1834,8 @@ export const useContainersStore = defineStore('containers', () => {
       scope: '初设·编队抽取',
     }
     workbench.pushLog(failures.length === 0 ? 'success' : 'warning', detail, 'ch10 / ch11')
+    // 用户 2026-11-18：抽签也是掷骰判定 ⇒ 本段之后的落位撤回入口直接不可用
+    if (drawnGroups > 0) workbench.sealUndoNow('编队抽签已掷骰（ch10 / ch11），本段不能撤回')
     return {
       ok: failures.length === 0,
       drawnGroups,

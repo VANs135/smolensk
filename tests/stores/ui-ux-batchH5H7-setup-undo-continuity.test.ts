@@ -78,7 +78,7 @@ describe('H5：初设落位一步撤回', () => {
       new URL('../../src/components/game/DecisionQueue.vue', import.meta.url),
       'utf8',
     )
-    expect(queue).toContain('v-if="setup.lastPlacement !== null"')
+    expect(queue).toContain('v-if="setup.canUndoPlacement"')
   })
 })
 

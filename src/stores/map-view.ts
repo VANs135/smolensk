@@ -4293,6 +4293,15 @@ export const useMapViewStore = defineStore('mapView', () => {
       else workbench.cancelCombat()
     } else if (current.kind === 'move') {
       /*
+       * 用户 2026-11-18：**结束移动＝提交**——关窗只收会话，绝不再回滚位置与 MP。
+       * 修前这里落到下面的 `abortMoveNow()`，把刚提交的移动整笔退回（可满 MP 重走）。
+       */
+      if (workbench.moveInteraction?.finished === true) {
+        workbench.dismissFinishedMoveNow()
+        stackSelection.value = []
+        return true
+      }
+      /*
        * H7：结束移动后的"移动工具就绪"滞留态 —— × / Esc 只收这段滞留，不碰盘面。
        */
       if (

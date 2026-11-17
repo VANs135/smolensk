@@ -1444,8 +1444,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
       return true
     },
+    undoSealReason: () => undoSealedReasonNow(),
   })
   const { moveInteraction, zocStoppedMoveUnitIds, moveBlocked } = groundMovement
+  /**
+   * 用户 2026-11-18：**掷骰即封撤销**
+   *
+   * 「经过任何掷骰判定后的操作不得撤销」——按**本段**（回合/方/段/环节）计：
+   * 一旦本段有任何掷骰结算（战斗、补给掷骰、抽签、特殊补员……），
+   * 该段的撤销入口（移动撤销/放弃、初设撤回、增援撤回）一律直接不可用。
+   * 换段/换方/换回合后 key 不同，封印自然失效，不跨段误伤。
+   */
+  const undoSeal = ref<{ key: string; reason: string } | null>(null)
+  function sealUndo(reason: string): void {
+    undoSeal.value = { key: undoScopeKeyOf(), reason }
+  }
   /**
    * H7（用户 2026-11-16）：**结束一次移动后不立刻收窗**
    *
@@ -1453,6 +1466,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 点 × / Esc 或进入新一次开拔时清掉。
    */
   const moveLinger = ref(false)
+  /**
+   * 13.2f：本次移动开始时已有的装卸撤销账条数 —— 放弃/结束时只结算本段新产生的装卸，
+   * 不误伤开拔前的那一笔（那属于上一次动作）。
+   */
+  const transportHandlingBaseline = ref(0)
   /** 悬停格（用于路径与消耗预览） */
   const hoverHex = ref<HexRef | null>(null)
   /**
@@ -5036,13 +5054,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 否则返回 false，让 `undoLastStep()` 先退移动（按发生顺序）。
    */
   function undoTransportHandlingNow(): boolean {
+    if (undoSealedReasonNow() !== null) return false
     const entry = transportHandlingUndo.value[transportHandlingUndo.value.length - 1]
     if (entry === undefined) return false
     const currentSteps = moveInteraction.value?.steps.length ?? 0
     if (entry.stepsAt !== currentSteps) return false
+    return revertTransportHandlingEntry(transportHandlingUndo.value.length - 1)
+  }
+
+  /** 把一条装卸账回退（不看步数；供"按发生顺序"与"整次放弃"共用） */
+  function revertTransportHandlingEntry(index: number): boolean {
+    const entry = transportHandlingUndo.value[index]
+    if (entry === undefined) return false
     const unit = units.value.find((item) => item.instanceId === entry.unitId)
     if (unit === undefined) {
-      transportHandlingUndo.value = transportHandlingUndo.value.slice(0, -1)
+      transportHandlingUndo.value = transportHandlingUndo.value.filter((_, at) => at !== index)
       return false
     }
     unit.loadedSpT = entry.loadedBefore
@@ -5055,13 +5081,36 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (entry.relayLocksBefore !== undefined) {
       spRelayLocks.value = entry.relayLocksBefore.map((lock) => ({ ...lock }))
     }
-    transportHandlingUndo.value = transportHandlingUndo.value.slice(0, -1)
+    transportHandlingUndo.value = transportHandlingUndo.value.filter((_, at) => at !== index)
     pushLog(
       'info',
       `撤销${entry.kind === 'load' ? '装载' : '卸载'}：${unit.name} 回到 ${unit.loadedSpT / SP_TO_T} SP（13.2f）`,
       '13.2f',
     )
     return true
+  }
+
+  /**
+   * 13.2f：本次移动开始后产生的装卸全部回退（按相反顺序）
+   *
+   * 用于「放弃本次移动」与「关窗回滚」：位置/MP 由引擎快照回退，
+   * SP 持仓、落点、12.2a 接力锁也必须一起回退，二者同账。
+   */
+  function revertTransportHandlingSinceBaseline(): void {
+    while (transportHandlingUndo.value.length > transportHandlingBaseline.value) {
+      if (!revertTransportHandlingEntry(transportHandlingUndo.value.length - 1)) break
+    }
+  }
+
+  /**
+   * 13.2f：结束移动＝提交 —— 把本段装卸账封存（之后的撤销不得再退回这些装卸）
+   */
+  function sealTransportHandlingForCommit(): void {
+    transportHandlingUndo.value = transportHandlingUndo.value.slice(
+      0,
+      transportHandlingBaseline.value,
+    )
+    transportHandlingBaseline.value = transportHandlingUndo.value.length
   }
 
   /** 按实例 id 取算子（只读；避免在"界面可点到"的读函数里直接摸 `units.value`） */
@@ -6913,6 +6962,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         : pendingRolls.length > 0
           ? pendingRolls.splice(0)
           : [...(input.rolls ?? [])]
+    /*
+     * 用户 2026-11-18：本段一旦掷过骰，撤销入口直接关掉。
+     * 不依赖具体动作（战斗/补给/抽签/特殊补员都走这里记录掷骰），一律按「本段」封。
+     */
+    if (rolls.length > 0) sealUndo(`本段已掷骰结算（${input.action}·${input.rule}），不能撤销`)
     const entry: SessionLogEntry = {
       turn: turn.value,
       phase: phase.value,
@@ -8405,6 +8459,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       for (const unit of resumed) unit.movementEnded = true
       return false
     }
+    // 13.2f：本次移动的装卸撤销账从这一刻起算（之前的装卸属于上一笔动作）
+    transportHandlingBaseline.value = transportHandlingUndo.value.length
     pausedTransportIds.value = paused.filter((id) => !resumingIds.includes(id))
     // 条 22（批 T）：20.0a 的**创建时机**＝「开始移动」这个**事件**（不是"当前在移动段"这个状态）
     openBreakdownWindow('startMove', moveIds)
@@ -9204,17 +9260,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     advanceAlongPath(node.path)
   }
 
-  /** C5：撤销上一步（还原该步提交前的运行态快照） */
+  /**
+   * C5：撤销上一步（还原该步提交前的运行态快照）
+   *
+   * 13.2f：装卸也是「一步」——发生在最后一个移动步之后时先退它（面板按钮与快捷键同一条路）。
+   */
   function undoLastStep(): void {
+    if (undoSealedReasonNow() !== null || moveInteraction.value?.finished === true) {
+      groundMovement.undoLastStep() // 走引擎的统一拒绝并给出原因
+      return
+    }
+    if (undoTransportHandlingNow()) return
     const unitIds = moveInteraction.value?.unitIds ?? []
     groundMovement.undoLastStep()
     syncGroundEntries(unitIds)
   }
 
-  /** C5：取消整次移动（回到开始移动之前） */
+  /** C5：取消整次移动（回到开始移动之前；本段装卸与移动同账一起回退） */
   function cancelWholeMove(): void {
     const unitIds = moveInteraction.value?.unitIds ?? []
-    groundMovement.cancelWholeMove()
+    if (!groundMovement.cancelWholeMove()) return
+    revertTransportHandlingSinceBaseline()
     syncGroundEntries(unitIds)
   }
 
@@ -9365,8 +9431,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         unitIds: moveUnits.value.map((unit) => unit.instanceId),
       },
     })
+    /*
+     * 用户 2026-11-18：**结束移动＝提交**。
+     * 结束之后关窗、再点撤销都不得回滚位置/MP；本段装卸账同时封存（SP 也不退）。
+     */
+    sealTransportHandlingForCommit()
     // H7：不自动收窗 —— 留成"点下一支己方堆叠"
     moveLinger.value = true
+    return true
+  }
+
+  /**
+   * 用户 2026-11-18：关掉**已结束**的移动窗 —— 只收会话，不动盘面
+   *
+   * 修前 `map-view` 的 × / Esc 在 `moveInteraction` 非空时一律走 `abortMoveNow`，
+   * 于是「结束移动」后再关窗会把位置与 MP 整笔退回（等于免费重走）。
+   */
+  function dismissFinishedMoveNow(): boolean {
+    if (moveInteraction.value === null || moveInteraction.value.finished !== true) return false
+    clearMoveInteraction()
     return true
   }
 
@@ -23120,6 +23203,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   function markSpecialReplDraw(side: Side, round: number): void {
     automaticPhaseKeys.value = [...automaticPhaseKeys.value, `specialRepl:${round}:${side}`]
+    // 用户 2026-11-18：1.6c 特殊补员是掷骰判定 ⇒ 本段撤回入口直接不可用
+    sealUndo('1.6c 特殊补员已掷骰，本段不能撤回')
   }
 
   /**
@@ -23353,6 +23438,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 1.6c：收回本段已返场的一枚（退回死亡堆与手牌） */
   function withdrawSpecialReplReturnNow(instanceId: string): boolean {
+    if (refuseWithdrawWhenSealed()) return false
     if (segmentStep.value?.id !== 'reinforcement.replRoll') return false
     const entry = specialReplPlacedThisSegment.value.find((item) => item.instanceId === instanceId)
     if (entry === undefined) return false
@@ -23428,6 +23514,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 2.3c：收回本段已落位的新单位（退回手牌） */
   function withdrawFrontalUnitNow(): boolean {
+    if (refuseWithdrawWhenSealed()) return false
     if (segmentStep.value?.id !== 'reinforcement.replRoll') return false
     const placed = frontalUnitPlacedThisSegment.value
     if (placed === null) return false
@@ -23908,6 +23995,31 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const index = Math.min(segmentStepIndex.value, steps.length - 1)
     return steps[index] ?? null
   })
+
+  /** 撤销封印的作用域键：初设单独一段；其余按「回合|方|段|环节」 */
+  function undoScopeKeyOf(): string {
+    if (initialSetupInProgress.value) return 'setup'
+    // 增援段按**整段**封：1.6b/1.6c 掷完骰后，本段后续（重建/整编）也不得再撤回
+    if (phase.value === 'reinforcement') return `${turn.value}|${activeSide.value}|reinforcement`
+    return `${turn.value}|${activeSide.value}|${phase.value}|${segmentStep.value?.id ?? 'none'}`
+  }
+
+  /** 本段是否有掷骰封印（非 null ⇒ 撤销入口直接不可用，并作为原因） */
+  const undoSealedReason = computed<string | null>(() => {
+    const seal = undoSeal.value
+    if (seal === null) return null
+    return seal.key === undoScopeKeyOf() ? seal.reason : null
+  })
+  function undoSealedReasonNow(): string | null {
+    return undoSealedReason.value
+  }
+  /** 用户 2026-11-18：本段掷过骰 ⇒ 一切「撤回刚落的子」入口统一拒绝并给原因 */
+  function refuseWithdrawWhenSealed(): boolean {
+    const sealed = undoSealedReasonNow()
+    if (sealed === null) return false
+    pushLog('warning', sealed, '6.1')
+    return true
+  }
 
   /*
    * B2（用户 2026-11-17）：铁路抵达撤回条**跟着段和方走**
@@ -24614,6 +24726,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 仅限第二段；第三段（重建/整编）已落位的算子不得用这条撤回。
    */
   function withdrawReplPlacementNow(instanceId: string): boolean {
+    if (refuseWithdrawWhenSealed()) return false
     if (segmentStep.value?.id !== 'reinforcement.replRoll') return false
     const entry = replPlacedThisSegment.value.find((item) => item.instanceId === instanceId)
     if (entry === undefined) return false
@@ -26029,6 +26142,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 这只是界面层的撤回，不是规则动作；不改任何校验，也不回滚已写的会话结算行。
    */
   function withdrawArrivalNow(index: number, side: Side = activeSide.value): boolean {
+    if (refuseWithdrawWhenSealed()) return false
     if (!requireAction('rein.arrival', '撤回到达投放')) return false
     if (arrivalPlaced.value[index] !== true) {
       // B2：条还挂着但账本已不认这条 ⇒ 必须给原因，不能静默返回
@@ -26652,6 +26766,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 空军：把飞机放回死亡堆（盒内的先从盒里摘掉），并退回 Ftr / Tac 账本。
    */
   function withdrawRebuildNow(instanceId: string): boolean {
+    if (refuseWithdrawWhenSealed()) return false
     if (segmentStep.value?.id !== 'reinforcement.rebuild') return false
     const entry = rebuildPlacedThisSegment.value.find((item) => item.instanceId === instanceId)
     if (entry === undefined) return false
@@ -30528,11 +30643,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // K5：撤销一步的可用性（判据在 ground-movement，与 refuseRollback 同源）
     canUndoStep: groundMovement.canUndoStep,
     undoBlockedReason: groundMovement.undoBlockedReason,
+    // 用户 2026-11-18：本段掷骰封印（非 null ⇒ 一切撤销入口都不出现）
+    undoSealedReason,
+    sealUndoNow: sealUndo,
     // 用户 2026-11-13 批：「放弃本次移动」不可用时按钮不出现（Esc 仍走 finishMove 收束退出）
     canAbortMove: groundMovement.canAbortMove,
     // B15a：放弃本次移动**并退出移动态**（会话框的取消 / Esc）
     abortMoveNow,
     finishMove,
+    // 用户 2026-11-18：结束后关窗只收会话，不动盘面
+    dismissFinishedMoveNow,
     pauseTransportMove,
     // 6.1f：把某枚从正在移动的堆叠里放下（就地停住，其余继续）
     dropUnitFromMove,

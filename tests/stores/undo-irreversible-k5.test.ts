@@ -235,18 +235,16 @@ describe('K5：撤销链在不可逆步之前截断', () => {
     expect(attacker.hex).toEqual(DEFENDER_HEX)
     expect(attacker.mpSpent).toBe(3)
 
-    // K5：边界锚在收束点之后 ⇒ 按钮态为「不可撤」并给出原因
+    // K5（2026-11-18 收紧）：本段掷过骰 ⇒ 按钮态为「不可撤」并给出掷骰原因
     expect(store.canUndoStep).toBe(false)
-    expect(store.undoBlockedReason).toBe(
-      '移动已触发突袭战斗（8.0/9.2），只能撤销此后尚未产生额外结算的步骤',
-    )
+    expect(store.undoBlockedReason).toContain('已掷骰结算')
 
     // 就算绕过按钮直接调 store，也必须拒绝：位置 / MP / 步数一律不动
     store.undoLastStep()
     expect(attacker.hex).toEqual(DEFENDER_HEX)
     expect(attacker.mpSpent).toBe(3)
     expect(store.moveInteraction?.steps).toHaveLength(1)
-    expect(store.log[0]?.text).toContain('只能撤销此后尚未产生额外结算的步骤')
+    expect(store.log[0]?.text).toContain('已掷骰结算')
   })
 
   it('放弃本次移动：普通移动可放弃（整次还原并退出会话）', () => {
