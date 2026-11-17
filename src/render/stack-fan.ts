@@ -2,7 +2,14 @@ import type { HexRef } from '@/data'
 
 import { HEX_RADIUS_PX, HEX_ROW_SPACING_PX, hexCanvasPoint } from './map-layout'
 
-export const STACK_FAN_PAGE_SIZE = 6
+/**
+ * 格内**地面堆叠**能完整摆下（互不重叠、四角不越格）的枚数
+ *
+ * ★ 用户 2026-11-18：这就是「点空白」两条分支的**唯一阈值**——不随缩放/扇面漂移。
+ *   它之所以等于每页枚数：单页只摆得下这么多，超出的必须靠窗口逐枚查看。
+ */
+export const IN_HEX_GROUND_CAPACITY = 4
+export const STACK_FAN_PAGE_SIZE = IN_HEX_GROUND_CAPACITY
 export const STACK_FAN_HIT_SCREEN_PX = 24
 
 /** 格内算子原尺。内缩后给算子边框留出空间。 */
@@ -27,42 +34,33 @@ export interface StackFanLayout {
   pageBadge: { x: number; y: number; radius: number } | null
 }
 
-/** 坐标以外接圆半径为单位。重叠时每枚仍保留可独立点击的中心。 */
+/**
+ * 1–4 枚的**不重叠**排布（坐标以外接圆半径为单位）
+ *
+ * ★ 用户 2026-11-18：「完全显示」＝算子不重叠、能看全。
+ *   2 枚左右并排（边长 0.6×原尺，刚好贴住）；3/4 枚用 2×2 的四个角位，边长 0.52×原尺，
+ *   四角落在 `x + y/√3 = 0.978R < R` 内 ⇒ 既不重叠也不越出六角格。
+ */
 const POSITIONS = [
   [],
   [[0, 0]],
   [
-    [-0.28, 0],
-    [0.28, 0],
+    [-0.36, 0],
+    [0.36, 0],
   ],
   [
-    [-0.24, -0.2],
-    [0.24, -0.2],
-    [0, 0.42],
+    [-0.31, -0.31],
+    [0.31, -0.31],
+    [0, 0.31],
   ],
   [
-    [-0.24, -0.34],
-    [0.24, -0.34],
-    [-0.24, 0.34],
-    [0.24, 0.34],
-  ],
-  [
-    [-0.2, -0.4],
-    [0.2, -0.4],
-    [-0.355, 0.15],
-    [0, 0.15],
-    [0.355, 0.15],
-  ],
-  [
-    [-0.34, -0.32],
-    [0, -0.32],
-    [0.34, -0.32],
-    [-0.34, 0.32],
-    [0, 0.32],
-    [0.34, 0.32],
+    [-0.31, -0.31],
+    [0.31, -0.31],
+    [-0.31, 0.31],
+    [0.31, 0.31],
   ],
 ] as const
-const SIZE_RATIOS = [1, 1, 0.74, 0.68, 0.58, 0.58, 0.5] as const
+const SIZE_RATIOS = [1, 1, 0.6, 0.52, 0.52] as const
 
 export function normalizePage(page: number, total: number): number {
   return Number.isInteger(page) ? Math.max(0, Math.min(page, pageCountOf(total) - 1)) : 0

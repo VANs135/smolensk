@@ -1039,11 +1039,16 @@ export function drawMovementOverlay(
     const hex = group[0]!.hex
     /*
      * 批 E（用户 2026-11-16）：**设施不参与扇面/分页**，固定画在左下角常显。
-     * 扇面只排非设施（战斗单位 / 飞机 / 运输点…），否则同格一多，设施会被挤到某一页或压住。
+     *
+     * ★ 用户 2026-11-18：格内堆叠**只放地面单位**——
+     *   · 飞机不进地面堆叠（停在基地时只在「飞机堆叠窗」里看；执行任务时按 `selected` 单独画）；
+     *   · HQ 不再占堆叠席位，缩成真实算子贴图画在**左中**（占位与原 `HQ` 标记一致）。
      */
     const facilities = group.filter((token) => isFacilityToken(token))
-    const others = group.filter((token) => !isFacilityToken(token))
-    const fan = others.filter((token) => token.hiddenStack !== true)
+    const ground = group.filter(
+      (token) => !isFacilityToken(token) && token.air !== true && token.hq !== true,
+    )
+    const fan = ground.filter((token) => token.hiddenStack !== true)
     if (fan.length >= 2) {
       const layout = stackFanLayout({
         hex: fan[0]!.hex,
@@ -1062,15 +1067,15 @@ export function drawMovementOverlay(
       if (layout.pageBadge !== null) {
         drawStackPageBadge(ctx, `+${layout.total - layout.slots.length}`, layout.pageBadge, scale)
       }
-    } else if (others.length > 0) {
-      const tokens = collapsedStackViews(others)
+    } else if (ground.length > 0) {
+      const tokens = collapsedStackViews(ground)
       for (const view of tokens) {
         drawToken(ctx, view.token, view.centerX, view.centerY, scale, view.size)
         drawn.push(view)
       }
       const top = tokens[0]!
-      if (others.length > 1 && !others.some((token) => token.hiddenStack === true)) {
-        drawStackBadge(ctx, others.length, { x: top.centerX, y: top.centerY }, scale)
+      if (ground.length > 1 && !ground.some((token) => token.hiddenStack === true)) {
+        drawStackBadge(ctx, ground.length, { x: top.centerX, y: top.centerY }, scale)
       }
     }
     // 设施：左下角固定席位，缩小常显（有就画、没有就不占位）
@@ -1078,8 +1083,35 @@ export function drawMovementOverlay(
       drawFacilityToken(ctx, view.token, view.centerX, view.centerY, scale, view.size)
       drawn.push(view)
     }
-    // HQ：格内左中（只画本方投影出来的 `hq`；敌方不额外透露）
-    if (group.some((token) => token.hq === true)) drawHqBadge(ctx, hex, scale)
+    // HQ：格内左中，画**真实算子贴图**（只画本方投影出来的 `hq`；敌方不额外透露）
+    const hqToken = group.find((token) => token.hq === true)
+    if (hqToken !== undefined) drawHqToken(ctx, hqToken, scale)
+    /*
+     * 飞机：只画**正在执行任务**（`selected`）或初设未落位（`setupAir`）的那些，
+     * 停在基地的飞机只在「飞机堆叠窗」里出现（用户 2026-11-18）。
+     */
+    const airborne = group.filter(
+      (token) =>
+        token.air === true &&
+        token.hiddenStack !== true &&
+        (token.selected === true || token.setupAir === true),
+    )
+    if (airborne.length >= 2) {
+      const layout = stackFanLayout({ hex, total: airborne.length, order: stackFanOrder(airborne) })
+      for (const slot of layout.slots) {
+        const token = airborne[slot.index]
+        if (token === undefined) continue
+        const centerX = slot.x + slot.size / 2
+        const centerY = slot.y + slot.size / 2
+        drawToken(ctx, token, centerX, centerY, scale, slot.size)
+        drawn.push({ token, centerX, centerY, size: slot.size })
+      }
+    } else if (airborne.length === 1) {
+      const token = airborne[0]!
+      const center = hexCanvasPoint(hex)
+      drawToken(ctx, token, center.x, center.y, scale)
+      drawn.push({ token, centerX: center.x, centerY: center.y, size: TOKEN_SIZE_PX })
+    }
   }
 
   drawTokenStatusTextures(ctx, drawn)
@@ -1523,30 +1555,17 @@ function collapsedStackViews(group: readonly UnitToken[]): TokenDrawView[] {
   }
   const top = topTokenOf(group)
   const center = hexCanvasPoint(top.hex)
-  const publicAircraft = group.find(
-    (token) =>
-      token !== top &&
-      token.air === true &&
-      (token.hiddenStack === true || token.setupAir === true),
-  )
   /*
-   * 批 E：设施已从本函数拆出（固定左下角常显，见 `facilityTokenViews`）；
-   * 这里只保留"被压掉的飞机露一角"这一种伴随牌。
+   * 用户 2026-11-18：飞机不再混进地面堆叠（停在基地的飞机在「飞机堆叠窗」里看，
+   * 执行任务的飞机走单独的 `airborne` 通道）⇒ 这里只剩被压住的那一枚顶牌。
    */
-  const companions = [...(publicAircraft === undefined ? [] : [publicAircraft])].slice(0, 3)
   return [
     {
       token: top,
       centerX: center.x,
-      centerY: center.y - (companions.length > 0 ? HEX_RADIUS_PX * 0.1 : 0),
+      centerY: center.y,
       size: TOKEN_SIZE_PX,
     },
-    ...companions.map((token, index) => ({
-      token,
-      centerX: center.x + (index - (companions.length - 1) / 2) * HEX_RADIUS_PX * 0.36,
-      centerY: center.y + HEX_RADIUS_PX * 0.59,
-      size: TOKEN_SIZE_PX * 0.36,
-    })),
   ]
 }
 
@@ -1588,6 +1607,42 @@ export function hitHexToken(input: {
   scale: number
 }): UnitToken | null {
   const { hex, group, page, point, scale } = input
+  /*
+   * 用户 2026-11-18：命中顺序与**绘制顺序反向**——
+   * 飞行中的飞机（最后画）→ HQ（左中）→ 设施（左下）→ 地面扇面。
+   * 飞机与 HQ 都不再参与地面扇面的分页。
+   */
+  const airborne = group.filter(
+    (token) =>
+      token.air === true &&
+      token.hiddenStack !== true &&
+      (token.selected === true || token.setupAir === true),
+  )
+  if (airborne.length === 1) {
+    const center = hexCanvasPoint(hex)
+    const token = airborne[0]!
+    if (insideCounter(point, center, counterHitSize(TOKEN_SIZE_PX, scale))) return token
+  } else if (airborne.length >= 2) {
+    const layout = stackFanLayout({
+      hex,
+      total: airborne.length,
+      order: stackFanOrder(airborne),
+    })
+    const hit = hitStackFan({ layout, point, scale })
+    if (hit?.kind === 'slot') return airborne[hit.index] ?? null
+  }
+  const hqToken = group.find((token) => token.hq === true)
+  if (hqToken !== undefined) {
+    const badge = hqBadgeView(hex)
+    if (
+      insideCounter(
+        point,
+        { x: badge.centerX, y: badge.centerY },
+        counterHitSize(badge.side, scale),
+      )
+    )
+      return hqToken
+  }
   const facilities = group.filter((token) => isFacilityToken(token))
   for (const view of facilityTokenViews(hex, facilities).reverse()) {
     if (
@@ -1596,7 +1651,9 @@ export function hitHexToken(input: {
       return view.token
     }
   }
-  const others = group.filter((token) => !isFacilityToken(token))
+  const others = group.filter(
+    (token) => !isFacilityToken(token) && token.air !== true && token.hq !== true,
+  )
   if (others.length === 0) return null
   const fan = others.filter((token) => token.hiddenStack !== true)
   if (fan.length >= 2) {
@@ -1718,20 +1775,10 @@ function drawFacilityToken(
   }
 }
 
-/** 格内**左中**的 HQ 标记（只画本方投影出来的 `hq`） */
-function drawHqBadge(ctx: CanvasRenderingContext2D, hex: HexRef, scale: number): void {
-  const badge = hqBadgeView(hex)
-  const half = badge.side / 2
-  ctx.fillStyle = OVERLAY_PALETTE.badge
-  ctx.fillRect(badge.centerX - half, badge.centerY - half, badge.side, badge.side)
-  ctx.strokeStyle = OVERLAY_PALETTE.stackBadgeEdge
-  ctx.lineWidth = 1 / scale
-  ctx.strokeRect(badge.centerX - half, badge.centerY - half, badge.side, badge.side)
-  ctx.fillStyle = OVERLAY_PALETTE.stackBadgeText
-  ctx.font = `bold ${(8 / scale).toFixed(1)}px ui-monospace, monospace`
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('HQ', badge.centerX, badge.centerY)
+/** 格内**左中**的 HQ：画**真实算子贴图**（占位与原 `HQ` 标记一致，不压左下设施与左上占领） */
+function drawHqToken(ctx: CanvasRenderingContext2D, token: UnitToken, scale: number): void {
+  const badge = hqBadgeView(token.hex)
+  drawFacilityToken(ctx, token, badge.centerX, badge.centerY, scale, badge.side)
 }
 
 /** 格的键（`col.row`）——与 `overlayHexKey` 同式，文件内复用 */

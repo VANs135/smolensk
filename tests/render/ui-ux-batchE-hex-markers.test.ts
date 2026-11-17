@@ -129,12 +129,14 @@ describe('批 E：设施固定左下角、常显', () => {
     expect(hqBadgeView(HEX).centerY).toBeCloseTo(center.y, 6)
   })
 
-  it('★ 源码守卫：扇面只排非设施，设施单独常显一层；HQ 标记与 hq 投影都在', () => {
+  it('★ 源码守卫：扇面只排地面，设施单独常显一层；HQ 用真实贴图（不再是文字）', () => {
     const layer = readFileSync('src/render/token-layer.ts', 'utf8')
     expect(layer).toContain('export function facilityTokenViews')
-    expect(layer).toContain('group.filter((token) => !isFacilityToken(token))')
-    expect(layer).toContain('drawHqBadge')
-    expect(layer).toContain("ctx.fillText('HQ'")
+    // 用户 2026-11-18：扇面只排**地面**（设施 / 飞机 / HQ 都不进）
+    expect(layer).toContain('token.air !== true && token.hq !== true')
+    expect(layer).toContain('drawHqToken')
+    // HQ 是指挥部的**真实算子贴图**，不再是「HQ」文字块
+    expect(layer).not.toContain("ctx.fillText('HQ'")
     expect(layer).toContain('hq?: boolean')
     const view = readFileSync('src/stores/map-view.ts', 'utf8')
     expect(view).toContain('hq: unit.side === hotseat.viewerSide && isHqUnit(unit)')

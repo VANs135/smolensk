@@ -143,6 +143,30 @@ function chipTitle(
 /** 同格本方飞机（只读；操作走空军面板） */
 const stackAircraft = computed(() => content.value?.airUnits ?? [])
 
+/**
+ * 用户 2026-11-18：**飞机堆叠窗**
+ *
+ * 点空军基地 / 整备段点格 / 该格只有飞机时，窗口只摆飞机（地面栏不重复列）；
+ * 地面堆叠窗（点空白 >4 枚）照旧只摆地面 + 飞机 chip 作为附带入口。
+ */
+const airFocus = computed(() => mapView.popup?.airFocus === true)
+const groundChips = computed(() => (airFocus.value ? [] : stackUnits.value))
+
+/** 飞机 chip 可选中（整备段走 15.1 的复选框，避免两套勾选） */
+function airPickable(): boolean {
+  return workbench.phase !== 'aircraftRefit'
+}
+
+/** 飞机 chip 选中态＝14.2 的任务飞机名单（与地图上的金环同源） */
+function airSelected(id: string): boolean {
+  return workbench.airMissionAirIds.includes(id)
+}
+
+function toggleAirChip(id: string): void {
+  if (!airPickable()) return
+  mapView.selectStackChip(id)
+}
+
 /** 6.1 取子池：只有这些 chip 能点选（敌方 / 非战斗 / 补员算子照列不可点） */
 const movableIds = computed(() => new Set(workbench.movePickChoices.map((unit) => unit.instanceId)))
 
@@ -442,10 +466,10 @@ function sideName(side: string): string {
         窗内只摆该格可见算子（地面全部 + 本方飞机）与操作按钮，不写规则解释；
         选中集只有一份＝`workbench.movePick`，可点者仅限 6.1 可开拔池里的本方算子。
       -->
-      <section v-if="stackUnits.length > 0 || stackAircraft.length > 0" class="block">
+      <section v-if="groundChips.length > 0 || stackAircraft.length > 0" class="block">
         <div class="chips">
           <div
-            v-for="unit in stackUnits"
+            v-for="unit in groundChips"
             :key="unit.id"
             class="chip"
             :class="{
@@ -475,8 +499,18 @@ function sideName(side: string): string {
             v-for="air in stackAircraft"
             :key="air.instanceId"
             class="chip"
+            :class="{
+              'chip--pickable': airPickable(),
+              'chip--off': airPickable() && !airSelected(air.instanceId),
+            }"
+            :role="airPickable() ? 'button' : undefined"
+            :tabindex="airPickable() ? 0 : undefined"
+            :aria-pressed="airPickable() ? airSelected(air.instanceId) : undefined"
             :title="air.name"
+            @click="toggleAirChip(air.instanceId)"
             @contextmenu.prevent.stop="onChipContext($event, air.instanceId)"
+            @keydown.enter.prevent="toggleAirChip(air.instanceId)"
+            @keydown.space.prevent="toggleAirChip(air.instanceId)"
           >
             <img
               v-if="counterImageOf(air.instanceId) !== null"

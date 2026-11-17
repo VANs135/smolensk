@@ -278,7 +278,7 @@ describe('堆叠窗口收口：列全、默认全选、同格展开、删说明'
     expect(popover).not.toContain('整备容量')
   })
 
-  it('★ 13.2g：点格开窗，窗口里必须有编内卡车，并标出与编队的随行关系', () => {
+  it('★ 13.2g：窗口里必须有编内卡车，并标出与编队的随行关系', () => {
     const s = stores()
     // 编内卡车只在轴方单位库里出现 ⇒ 这一条按轴方视点摆（4.9a 会裁掉敌方不可见令牌）。
     // 2026-11-11 起观察方由玩家手动选（`setViewerSide`），不再由行动方自动推出。
@@ -295,6 +295,12 @@ describe('堆叠窗口收口：列全、默认全选、同格展开、删说明'
     )
 
     s.mapView.onHexClick(HEX)
+    /*
+     * 用户 2026-11-18：≤4 枚地面时点空白只整堆全选，**不开窗**；
+     * 窗口内容（含编内卡车）仍由同一个 `popupContent` 给出，显式开窗时照列。
+     */
+    expect(s.mapView.popup).toBeNull()
+    s.mapView.openPopup(HEX, 0, 0)
 
     // 窗口＝该格全列（含卡车），否则玩家不知道它跟着谁
     expect(s.mapView.popup?.variant).toBe('content')

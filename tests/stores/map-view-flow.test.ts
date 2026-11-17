@@ -49,7 +49,7 @@ describe('W7 C16：地图视图编排（点什么 / 画什么 / 小窗内容）'
     stores = newStores()
   })
 
-  it('点地图：把点击交给操作台；起了会话也照开堆叠窗（用户 2026-11-10）', () => {
+  it('点地图：把点击交给操作台；≤4 枚只整堆全选、不开窗（用户 2026-11-18）', () => {
     const { workbench, mapView } = stores
     const unit = toConsoleUnit({ record: legCombat(), instanceId: 'a1', hex: START, side: 'axis' })
     workbench.units.push(unit)
@@ -59,9 +59,8 @@ describe('W7 C16：地图视图编排（点什么 / 画什么 / 小窗内容）'
     // ★ 条 10（批 M）：点格只建立取子清单（movePick），**不自动开拔**；开拔交由「开始移动」按钮
     expect(workbench.movePick?.ids).toEqual(['a1'])
     expect(mapView.session?.kind).toBe('move')
-    // 用户 2026-11-10：点格就该看到该格的堆叠窗（窗口不再承担"摊开地图"的职责）
-    expect(mapView.popup?.hex).toEqual(START)
-    expect(mapView.popup?.variant).toBe('content')
+    // 用户 2026-11-18：能完整显示（≤4 枚）时点空白只全选，堆叠窗留给"看不全"的格与显式入口
+    expect(mapView.popup).toBeNull()
     // 点「开始移动」才真正开拔（这是裁定变更，非断言放宽）
     expect(workbench.confirmMovePick()).toBe(true)
     expect(workbench.moveInteraction).not.toBeNull()
@@ -209,7 +208,7 @@ describe('B3：地图上就地展开堆叠（点格展开 / 点枚切换 / 收�
     ).toHaveLength(3)
   })
 
-  it('点格内空白 ⇒ **整格全选 + 开堆叠窗口**（用户 2026-11-10：点格开窗，供成组选择）', () => {
+  it('点格内空白 ⇒ **整格全选**；≤4 枚不开窗（用户 2026-11-18）', () => {
     const { workbench, mapView } = stores
     const ids = stackOf(3)
 
@@ -223,8 +222,7 @@ describe('B3：地图上就地展开堆叠（点格展开 / 点枚切换 / 收�
     expect(mapView.stackSelection).toEqual(ids)
     expect(workbench.movePick?.ids).toEqual(ids)
     expect(mapView.expandedStack).toEqual({ hex: START, page: 0 })
-    expect(mapView.popup?.hex).toEqual(START)
-    expect(mapView.popup?.variant).toBe('content')
+    expect(mapView.popup).toBeNull()
   })
 
   it('已选整格后点某一枚 ⇒ 只剔除那一枚（选择集与引擎取子同步）', () => {
@@ -419,9 +417,8 @@ describe('批 A 切片 3：单一对话框与候选过滤', () => {
      */
     expect(mapView.session).toMatchObject({ kind: 'move', rule: '6.1' })
     expect(mapView.session?.kind).not.toBe('fuel')
-    // ★ 用户 2026-11-10：窗口不再被"刚起了会话"压掉 —— 点格就该看到该格的堆叠窗
-    expect(mapView.popup?.hex).toEqual(START)
-    expect(mapView.popup?.variant).toBe('content')
+    // 用户 2026-11-18：≤4 枚时点空白只全选，不另开堆叠窗
+    expect(mapView.popup).toBeNull()
   })
 
   it('① 小窗开着时会话**从别的路径**起来 ⇒ 小窗被收掉', () => {
@@ -447,8 +444,9 @@ describe('批 A 切片 3：单一对话框与候选过滤', () => {
     put(fuelUnitRecord(), 't1', START)
     mapView.onHexClick(START, { x: 40, y: 50 }, { x: 0, y: 0 })
     expect(mapView.session).toMatchObject({ kind: 'move' })
+    // 用户 2026-11-18：≤4 枚点空白不开窗，这里本击不产生窗口
     const opened = mapView.popup
-    expect(opened?.hex).toEqual(START)
+    expect(opened).toBeNull()
 
     // 再点别处（不是补给站 / 落点 / 任务格那种"会话自己的地图点选"）⇒ 不另开新窗
     mapView.onHexClick({ col: 36, row: 11 }, { x: 300, y: 200 })
@@ -481,10 +479,9 @@ describe('批 A 切片 3：单一对话框与候选过滤', () => {
 
     mapView.onHexClick(START, { x: 40, y: 50 }, { x: 0, y: 0 })
 
-    // ★ 条 10（批 M）：点格建立取子清单并起移动会话；用户 2026-11-10：窗口照开（点格即开窗）
+    // ★ 条 10（批 M）：点格建立取子清单并起移动会话；用户 2026-11-18：≤4 枚只全选、不开窗
     expect(mapView.session?.kind).toBe('move')
-    expect(mapView.popup?.hex).toEqual(START)
-    expect(mapView.popup?.variant).toBe('content')
+    expect(mapView.popup).toBeNull()
     // 6.1：本轮移动已结束的 m2 不参与本环节 ⇒ 被排除在取子清单之外（候选过滤现落在 movePick；非断言放宽）
     expect(workbench.movePick?.ids).toEqual(['m1'])
     // 该格确有 e1 / m1 / m2 三枚（4.9a「这一格有什么」事实层不变；过滤只发生在候选那一层）

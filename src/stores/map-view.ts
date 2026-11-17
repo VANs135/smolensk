@@ -42,6 +42,7 @@ import {
 import {
   defaultSelectionOf,
   hitStackFan,
+  IN_HEX_GROUND_CAPACITY,
   isNoncombatTokenLike,
   stackFanLayout,
   toggleSelection,
@@ -133,6 +134,13 @@ export interface MapPopupState {
   y: number
   /** 变体（条 25；缺省 `content`，与既有调用一致） */
   variant: MapPopupVariant
+  /**
+   * 用户 2026-11-18：**飞机堆叠窗**
+   *
+   * 点空军基地 / 整备段点格 / 该格只有飞机时，窗口只摆该基地的飞机（地面栏不重复列），
+   * 飞机 chip 可选中、可右键；整备按钮仍按 15.1 的既有流程长在同一张窗里。
+   */
+  airFocus?: boolean
 }
 
 /** 小窗里「这一格有什么」的清单（地面 + 本方飞机；按战雾纪律裁剪） */
@@ -1753,13 +1761,27 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 候选集＝该格**可开拔的本方战斗单位**（#12：SP / 补给站 / 编内卡车等非战斗不进默认集；
    * 补员与已结束移动者由 `movePickPoolAt` 剔除）。
    */
-  function expandStackAt(hex: HexRef): void {
+  function expandStackAt(hex: HexRef, options?: { includeOrganicTrucks?: boolean }): void {
     /*
      * #12：默认全选＝该格**可开拔的本方战斗单位**（补给站 / SP / 编内卡车等非战斗不进默认集）；
      * 非战斗仍列在堆叠窗里，玩家显式点它才进集合。默认集由 store 的同一份投影给出，
      * 避免这里再写一条"哪些算战斗单位"的判据。
+     *
+     * ★ 用户 2026-11-18：**只能靠窗口看全的堆叠**（完整显示数 > 4）里，编内卡车也要一并选中
+     *   ——「它不是战斗单位，但它跟着编队走」。≤4 的分支沿用原口径（战斗单位）。
      */
-    const ids = workbench.defaultMovePickIdsAt(hex)
+    const baseIds = workbench.defaultMovePickIdsAt(hex)
+    const extraIds = options?.includeOrganicTrucks
+      ? stackTokensAt(hex)
+          .filter(
+            (token) =>
+              token.hiddenStack !== true &&
+              token.side === actingSide.value &&
+              token.noncombatKind === 'organic_truck',
+          )
+          .map((token) => token.id)
+      : []
+    const ids = [...new Set([...baseIds, ...extraIds])]
     workbench.beginMovePick(hex, ids)
     /*
      * 默认全选：选中集与 `movePick.ids` 同源（只有一份状态）。
@@ -1783,6 +1805,19 @@ export const useMapViewStore = defineStore('mapView', () => {
   function selectStackChip(id: string): boolean {
     const state = popup.value
     if (state === null) return false
+    /*
+     * 用户 2026-11-18：飞机堆叠窗里的 chip **可选中**——选中即进 14.2 的任务飞机名单
+     * （逐架过 14.1a / 14.2a / 14.2e / 14.2f 的既有闸门）。整备段的勾选仍走 15.1 的复选框。
+     */
+    const air = workbench
+      .airUnitsAt(state.hex, hotseat.viewerSide)
+      .find((item) => item.instanceId === id)
+    if (air !== undefined) {
+      if (workbench.phase === 'aircraftRefit') return false
+      workbench.toggleAirMissionUnit(id)
+      stackSelection.value = workbench.airMissionAirIds.includes(id) ? [id] : []
+      return true
+    }
     const token = stackTokensAt(state.hex).find((item) => item.id === id)
     if (token === undefined || token.hiddenStack === true) return false
     // 只认堆叠栏里真正列出来的那一批（战斗单位 / 编内卡车，且为本方）
@@ -1910,10 +1945,12 @@ export const useMapViewStore = defineStore('mapView', () => {
       scale,
     })
     /*
-     * 批 E：设施已从扇面拆出（左下角常显），翻页角标只属于非设施扇面 ——
-     * 这里仍按「非设施可见枚数」判断是否处于分页态，避免点设施时误翻页。
+     * 批 E：设施已从扇面拆出（左下角常显），翻页角标只属于**地面**扇面 ——
+     * 飞机与 HQ 不再参与地面堆叠（用户 2026-11-18），故分页判据也只数地面枚数。
      */
-    const others = tokens.filter((item) => !isFacilityToken(item))
+    const others = tokens.filter(
+      (item) => !isFacilityToken(item) && item.air !== true && item.hq !== true,
+    )
     let nextPage: number | null = null
     if (others.length >= STACK_FAN_MIN_TOKENS) {
       const layout = stackFanLayout({
@@ -1973,7 +2010,7 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     if (isIdleForStack() && token.air === true && workbench.phase === 'aircraftRefit') {
       stackSelection.value = [token.id]
-      openPopup(hex, anchor?.x ?? 0, anchor?.y ?? 0)
+      openPopup(hex, anchor?.x ?? 0, anchor?.y ?? 0, 'content', { airFocus: true })
       return true
     }
     /*
@@ -2005,7 +2042,8 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     if (isIdleForStack() && token.noncombatKind === 'air_base') {
       stackSelection.value = [token.id]
-      openPopup(hex, anchor?.x ?? 0, anchor?.y ?? 0)
+      // 用户 2026-11-18：点基地＝摊开**该基地的飞机堆叠窗**（飞机不再画在格内）
+      openPopup(hex, anchor?.x ?? 0, anchor?.y ?? 0, 'content', { airFocus: true })
       return true
     }
     /*
@@ -4078,8 +4116,15 @@ export const useMapViewStore = defineStore('mapView', () => {
     x: number,
     y: number,
     variant: MapPopupVariant = 'content',
+    options?: { airFocus?: boolean },
   ): void {
-    popup.value = { hex: { col: hex.col, row: hex.row }, x, y, variant }
+    popup.value = {
+      hex: { col: hex.col, row: hex.row },
+      x,
+      y,
+      variant,
+      ...(options?.airFocus === true ? { airFocus: true } : {}),
+    }
   }
 
   /**
@@ -4524,16 +4569,50 @@ export const useMapViewStore = defineStore('mapView', () => {
       /*
        * 2026-11-18：目标格是移动的合法落点时，**不摊开/不弹堆叠窗**——这一击归"走到该格"。
        * 修前这里先摊开目标格的己方堆叠，`clickHex` 永远轮不到（用户走查①）。
+       *
+       * 用户 2026-11-18：点空白按「**能完整显示的地面枚数**」分两条分支——
+       *   · ≤ 4（格内地面都能不重叠摆下）⇒ 整堆全选（沿用现有整堆选中），**不开窗**；
+       *   · > 4（有地面只能靠窗口看全）⇒ 摊开堆叠窗，默认全选战斗单位 + 编内卡车。
+       * 阈值取 `IN_HEX_GROUND_CAPACITY`（＝扇面单页枚数），与缩放/扇面状态无关。
+       *
+       * 空军基地格是例外：飞机不进地面堆叠，必须从「飞机堆叠窗」查看/整备（B3）。
        */
       if (idleBefore && isIdleForStack() && stack.length > 0 && !moveDestinationAt(hex)) {
-        if (stack.some((token) => token.side === actingSide.value && token.air !== true))
-          expandStackAt(hex)
-        /*
-         * 用户 2026-11-10：**点格就开堆叠窗口**（列表形态，供成组选择）。
-         * 窗口不再承担"摊开地图"的职责（摊开已是常态），所以这里不再因"刚起了会话"而压掉它
-         * ——会话在操作条、窗口在地图旁，各管一段，不是同一块地盘。
-         */
-        openPopup(hex, anchor?.x ?? 0, anchor?.y ?? 0)
+        const ownGround = stack.filter(
+          (token) =>
+            token.side === actingSide.value &&
+            token.air !== true &&
+            token.hq !== true &&
+            !isFacilityToken(token),
+        )
+        const baseHere = stack.some(
+          (token) => token.side === actingSide.value && token.noncombatKind === 'air_base',
+        )
+        const ownAirHere = stack.some(
+          (token) => token.side === actingSide.value && token.air === true,
+        )
+        const airWindow = baseHere || ownAirHere
+        // 摊开这一格（设施/基地也照旧进入"已摊开"档，扇面/角标据此显示）
+        if (stack.some((token) => token.side === actingSide.value && token.air !== true)) {
+          expandStackAt(hex, {
+            includeOrganicTrucks: ownGround.length > IN_HEX_GROUND_CAPACITY,
+          })
+        }
+        if (ownGround.length > 0) {
+          const crowded = ownGround.length > IN_HEX_GROUND_CAPACITY
+          if (crowded) openPopup(hex, anchor?.x ?? 0, anchor?.y ?? 0)
+          else if (airWindow)
+            openPopup(hex, anchor?.x ?? 0, anchor?.y ?? 0, 'content', { airFocus: true })
+          return
+        }
+        // 没有本方地面单位：只读窗口；基地格/有飞机时直接摊开飞机堆叠窗
+        openPopup(
+          hex,
+          anchor?.x ?? 0,
+          anchor?.y ?? 0,
+          'content',
+          airWindow ? { airFocus: true } : undefined,
+        )
         return
       }
       // ④ 其余交给操作台的既有分派（选单位 / 走一步 / 打一仗）

@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
-import { hexCanvasPoint } from '@/render/map-layout'
+import { stackFanLayout } from '@/render/stack-fan'
 import { toConsoleUnit, unitChoices, useMapViewStore, useWorkbenchStore } from '@/stores'
 
 /**
@@ -44,7 +44,10 @@ describe('B3：双击堆叠收扇面', () => {
     mapView.onHexClick(START)
     expect(mapView.expandedStack).not.toBeNull()
 
-    expect(mapView.onHexDoubleClick(START, hexCanvasPoint(START), 1)).toBe(true)
+    // 用户 2026-11-18：两枚不再重叠，双击要落在**某一枚**身上（格心是两枚之间的空白）
+    const slot = stackFanLayout({ hex: START, total: 2 }).slots[0]!
+    const at = { x: slot.x + slot.size / 2, y: slot.y + slot.size / 2 }
+    expect(mapView.onHexDoubleClick(START, at, 1)).toBe(true)
     expect(store.movePick).not.toBeNull()
     expect(store.movePick!.ids).toHaveLength(1)
 

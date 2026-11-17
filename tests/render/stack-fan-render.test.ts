@@ -182,7 +182,7 @@ describe('B2 就地展开：渲染（用户 2026-11-10：**常态摊开**，不�
     expect(statusDraws, '只有带战略标记的那一枚产生贴图').toHaveLength(1)
   })
 
-  it('展开：超过六枚时，角标显示本页以外的枚数', () => {
+  it('展开：超过四枚时，角标显示本页以外的枚数', () => {
     const calls: DrawCall[] = []
     stubImages()
     const group = Array.from({ length: 7 }, (_, index) => token(`u${index}`, HEX))
@@ -201,7 +201,7 @@ describe('B2 就地展开：渲染（用户 2026-11-10：**常态摊开**，不�
     const texts = calls
       .filter((call) => call.op === 'fillText')
       .map((call) => String(call.args?.[0]))
-    expect(texts).toContain('+1')
+    expect(texts).toContain('+3')
   })
 
   it('展开第 2 页：画出前一页未容纳的算子', () => {
@@ -221,11 +221,11 @@ describe('B2 就地展开：渲染（用户 2026-11-10：**常态摊开**，不�
       SCALE,
     )
     const counterDraws = calls.filter((call) => call.url?.includes('Ru_6_Inf_Div_F.png') === true)
-    expect(counterDraws).toHaveLength(2)
+    expect(counterDraws).toHaveLength(4)
     const texts = calls
       .filter((call) => call.op === 'fillText')
       .map((call) => String(call.args?.[0]))
-    expect(texts).toContain('+6')
+    expect(texts).toContain('+4')
   })
 
   it('别格翻页时，本格仍按**第 0 页摊开**（页号只作用于那一格）', () => {
