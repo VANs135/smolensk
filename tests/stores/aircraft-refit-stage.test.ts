@@ -126,15 +126,17 @@ describe('Ⓐ 入口回归：可整备的基地仍给入口', () => {
     expect(s.workbench.refitSelectedIds).toEqual(['air-0'])
   })
 
-  it('地图小窗：不可整备时只出原因、不出按钮（源码守卫）', () => {
+  it('地图小窗：不可整备时只留空（用户 2026-11-18 口径 B：窗内不摆原因文字）', () => {
     const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
     expect(popover).toContain('refitAllowedHere')
-    // 用户 2026-11-14：入口照旧不出现，但必须先摆一句 `refitBlockReasonAt` 的原因
-    const reasonAt = popover.indexOf('!refitAllowedHere')
+    // 用户 2026-11-18：说明/提示/状态描述一律删掉，条款号只收进标题的 `?`
+    expect(popover).not.toContain('refitBlockReasonAt')
+    expect(popover).not.toContain('本阶段已整备')
+    expect(popover).not.toContain('此刻不能整备')
+    // 入口仍然只在「允许整备」时出现
     const buttonAt = popover.indexOf('beginRefitNow(baseAtHex.id)')
-    expect(popover).toContain('refitBlockReasonAt(baseAtHex.id)')
-    expect(reasonAt).toBeGreaterThan(-1)
-    expect(buttonAt).toBeGreaterThan(reasonAt)
+    const allowAt = popover.indexOf('!refitHere')
+    expect(buttonAt).toBeGreaterThan(allowAt)
   })
 })
 

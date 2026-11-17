@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-import { BaseButton, BaseIcon, BaseTag } from '@/components/base'
+import { BaseButton, BaseIcon } from '@/components/base'
 import { MapPopover } from '@/components/map'
 import {
   counterImageUrlOf,
@@ -270,9 +270,9 @@ const transferHere = computed(
   () => baseAtHex.value !== null && workbench.transferBase?.id === baseAtHex.value.id,
 )
 
-/** 付款步已点选的补给站（未选＝null；用于「确认支付」前的回显） */
-const refitDumpChoice = computed(
-  () => workbench.refitPayDumps.find((dump) => dump.id === workbench.airInputs.refitDumpId) ?? null,
+/** 整备块是否出现（点基地格且本环节允许 15.1） */
+const refitBlockVisible = computed(
+  () => baseAtHex.value !== null && workbench.actionAllowedNow('air.refit'),
 )
 
 /* ── 9.14 特殊战斗：待决的位移与运输点分配 ── */
@@ -280,18 +280,30 @@ const refitDumpChoice = computed(
 const special = computed(() => workbench.specialPending)
 /** 正在选落点的那一项（9.14c 运输点 / 9.14d 延补队） */
 const specialItem = computed(() => mapView.specialItem)
-/** 当前小窗这一格是否是这一项的合法落点（点地图即选定） */
-const isSpecialCandidate = computed(() => {
-  const hex = mapView.popup?.hex
-  const item = specialItem.value
-  if (hex === undefined || item === null) return false
-  return item.candidates.some((candidate) => candidate.col === hex.col && candidate.row === hex.row)
-})
 
-/** 9.14 待决里该由谁动手（进入方） */
-function sideName(side: string): string {
-  return side === 'axis' ? '轴心国' : '苏联'
-}
+/** 9.14 待夺取的运输点算子（各分组摊平，只为排图） */
+const specialCounters = computed(() =>
+  (special.value?.splits ?? []).flatMap((split) =>
+    split.counters.map((counter) => ({
+      ...counter,
+      captured: split.capturedIds.includes(counter.id),
+    })),
+  ),
+)
+
+/**
+ * 用户 2026-11-18：窗内**不再摆条款文字**，条款号一律收进标题右侧的 `?`
+ *
+ * 按当前窗里真正出现的块拼，避免把用不上的条款号也列出来。
+ */
+const ruleTags = computed<string>(() => {
+  if (special.value !== null) return '9.14'
+  const rules: string[] = []
+  if (activeMovingUnits.value.length > 0) rules.push('8.1g / 8.1h')
+  if (refitBlockVisible.value) rules.push('15.1')
+  if (transferHere.value) rules.push('14.11 / 1.4a')
+  return rules.length === 0 ? '4.9a' : rules.join(' · ')
+})
 
 /* ── 动作（全部转发给既有 store 动作，不新增业务规则） ── */
 </script>
@@ -357,62 +369,62 @@ function sideName(side: string): string {
     :x="anchor.x"
     :y="anchor.y"
     :title="title"
-    :rule="special !== null ? '9.14' : step === null ? '4.9a' : '9.2'"
+    :rule="ruleTags"
     width="330px"
     @close="mapView.closePopup()"
   >
     <!-- ⓪ 9.14 特殊战斗：进入敌方设施格后的夺取与**位移落点选择**（优先级最高——必须收束的待决） -->
     <section v-if="special !== null" class="block block--special">
-      <h4 class="block__title" title="9.14">特殊战斗 · 格 {{ hexLabel(special.hex) }}</h4>
-      <p class="muted num">
-        进入方：<BaseTag :kind="special.enteringSide === 'axis' ? 'danger' : 'info'">{{
-          sideName(special.enteringSide)
-        }}</BaseTag>
-      </p>
-
-      <!-- 即时结清的部分（9.14b 补给站 / 9.14e 工事 / 9.14f 基地） -->
-      <ul v-if="special.notes.length > 0" class="list">
-        <li v-for="(note, index) in special.notes" :key="index" class="num">{{ note }}</li>
-      </ul>
-
-      <!-- 9.14c：运输点组「哪些被夺取」由拥有者决定（混合类型时） -->
-      <div v-for="split in special.splits" :key="split.group.group" class="sub">
-        <h5 class="sub__title">
-          运输点 · {{ split.group.group === 'trucks' ? '卡车列（MA > 10）' : '马车列（MA ≤ 10）' }}
-        </h5>
-        <p class="num">
-          掷 {{ split.group.die }} → {{ split.group.percent }}% · 表值夺取
-          {{ split.group.capturedPoints }}/{{ split.group.totalPoints }} 点
-        </p>
-        <label v-for="counter in split.counters" :key="counter.id" class="check">
-          <input
-            type="checkbox"
-            :checked="split.capturedIds.includes(counter.id)"
-            @change="workbench.toggleSpecialCaptured(counter.id)"
+      <!-- 9.14c：运输点组「哪些被夺取」由拥有者决定（混合类型时）；点算子＝切换夺取 -->
+      <div v-if="specialCounters.length > 0" class="chips">
+        <div
+          v-for="counter in specialCounters"
+          :key="counter.id"
+          class="chip chip--pickable"
+          :class="{ 'chip--on': counter.captured }"
+          role="button"
+          tabindex="0"
+          :aria-pressed="counter.captured"
+          :title="`${counter.label} · ${counter.points} 点`"
+          @click="workbench.toggleSpecialCaptured(counter.id)"
+          @keydown.enter.prevent="workbench.toggleSpecialCaptured(counter.id)"
+          @keydown.space.prevent="workbench.toggleSpecialCaptured(counter.id)"
+        >
+          <img
+            v-if="counterImageOf(counter.id) !== null"
+            :src="counterImageOf(counter.id) ?? ''"
+            class="chip__img"
+            alt=""
           />
-          {{ counter.label }}（{{ counter.points }} 点）
-        </label>
-        <p :class="split.exact ? 'ok' : 'bad'">{{ split.detail }}</p>
+          <span class="chip__badge num">{{ counter.points }}</span>
+        </div>
       </div>
 
-      <!-- 9.14c/d：位移落点在地图上点选 -->
-      <div v-if="special.items.length > 0" class="sub">
-        <h5 class="sub__title" title="9.14c / 9.14d">位移落点</h5>
-        <ul class="list">
-          <li
-            v-for="item in special.items"
-            :key="item.unitId"
-            class="num"
-            :class="{ 'list__row--active': item.unitId === specialItem?.unitId }"
-          >
-            <BaseButton variant="ghost" size="sm" @click="mapView.setSpecialUnit(item.unitId)">
-              {{ item.label }}
-            </BaseButton>
-            {{ item.kind === 'extender' ? '崩溃' : '转移' }} →
-            {{ item.chosen === null ? '（未选）' : hexLabel(item.chosen) }}
-          </li>
-        </ul>
-        <p v-if="isSpecialCandidate" class="ok">合法落点</p>
+      <!-- 9.14c/d：位移落点在地图上点选；点算子＝选它，角标＝已选落点 -->
+      <div v-if="special.items.length > 0" class="chips">
+        <div
+          v-for="item in special.items"
+          :key="item.unitId"
+          class="chip chip--pickable"
+          :class="{ 'chip--on': item.unitId === specialItem?.unitId }"
+          role="button"
+          tabindex="0"
+          :aria-pressed="item.unitId === specialItem?.unitId"
+          :title="`${item.label} · ${item.kind === 'extender' ? '崩溃' : '转移'}`"
+          @click="mapView.setSpecialUnit(item.unitId)"
+          @keydown.enter.prevent="mapView.setSpecialUnit(item.unitId)"
+          @keydown.space.prevent="mapView.setSpecialUnit(item.unitId)"
+        >
+          <img
+            v-if="counterImageOf(item.unitId) !== null"
+            :src="counterImageOf(item.unitId) ?? ''"
+            class="chip__img"
+            alt=""
+          />
+          <span class="chip__badge num">{{
+            item.chosen === null ? '—' : hexLabel(item.chosen)
+          }}</span>
+        </div>
       </div>
 
       <div class="row">
@@ -439,26 +451,30 @@ function sideName(side: string): string {
         本窗不再列同名按钮，同一件事只留一处。
       -->
 
-      <!-- 8.1g/h：突袭的参突/留驻拆分（不勾选＝仍在移动的全部单位都参突） -->
+      <!-- 8.1g/h：突袭的参突/留驻拆分（点算子＝切换；不点＝仍在移动的全部单位都参突） -->
       <section v-if="activeMovingUnits.length > 0" class="block block--pick">
-        <h4 class="block__title">突袭时谁参战</h4>
-        <ul class="list">
-          <li v-for="unit in activeMovingUnits" :key="unit.instanceId" class="num">
-            <label class="check">
-              <input
-                type="checkbox"
-                :checked="workbench.overrunParticipantIds.includes(unit.instanceId)"
-                @change="workbench.toggleOverrunParticipant(unit.instanceId)"
-              />
-              {{ unit.name }} @ {{ hexLabel(unit.hex) }}（{{ unit.re }} RE）
-            </label>
-          </li>
-        </ul>
-        <p v-if="workbench.overrunSplitNow !== null" class="num">
-          参突 {{ workbench.overrunSplitNow.participantIds.length }} 枚 · 留驻
-          {{ workbench.overrunSplitNow.stayIds.length }} 枚 · 原格战斗 RE
-          {{ workbench.overrunSplitNow.originStackRe }}
-        </p>
+        <div class="chips">
+          <div
+            v-for="unit in activeMovingUnits"
+            :key="unit.instanceId"
+            class="chip chip--pickable"
+            :class="{ 'chip--off': !workbench.overrunParticipantIds.includes(unit.instanceId) }"
+            role="button"
+            tabindex="0"
+            :aria-pressed="workbench.overrunParticipantIds.includes(unit.instanceId)"
+            :title="`${unit.name} @ ${hexLabel(unit.hex)} · ${unit.re} RE`"
+            @click="workbench.toggleOverrunParticipant(unit.instanceId)"
+            @keydown.enter.prevent="workbench.toggleOverrunParticipant(unit.instanceId)"
+            @keydown.space.prevent="workbench.toggleOverrunParticipant(unit.instanceId)"
+          >
+            <img
+              v-if="counterImageOf(unit.instanceId) !== null"
+              :src="counterImageOf(unit.instanceId) ?? ''"
+              class="chip__img"
+              alt=""
+            />
+          </div>
+        </div>
       </section>
 
       <!--
@@ -522,24 +538,12 @@ function sideName(side: string): string {
         </div>
       </section>
 
-      <!-- 本方飞机（14.1a：停在其空军基地格） -->
       <!-- 15.1 整备：点机场的「整备」按钮 → 勾选飞机 → 点地图上高亮的补给付款 -->
       <section
-        v-if="baseAtHex !== null && workbench.actionAllowedNow('air.refit')"
+        v-if="baseAtHex !== null && refitBlockVisible && !refitDoneHere && refitAllowedHere"
         class="block block--pick"
       >
-        <h4 class="block__title" title="15.1">整备 · {{ hexLabel(baseAtHex.hex) }}</h4>
-
-        <template v-if="refitDoneHere">
-          <p class="ok">本阶段已整备</p>
-        </template>
-
-        <!-- 用户 2026-11-14：入口按老口径不出现，但"为什么"必须写出来 -->
-        <p v-else-if="!refitAllowedHere" class="muted" title="15.1">
-          {{ workbench.refitBlockReasonAt(baseAtHex.id) ?? '此刻不能整备' }}
-        </p>
-
-        <template v-else-if="!refitHere">
+        <template v-if="!refitHere">
           <BaseButton
             variant="primary"
             size="sm"
@@ -553,21 +557,28 @@ function sideName(side: string): string {
         <!-- 用户 2026-11-12：勾机 →「确认整备」→ 高亮补给站 → 点站 →「确认支付」 -->
         <template v-else>
           <template v-if="workbench.refitStage === 'select'">
-            <ul v-if="workbench.refitCandidates.length > 0" class="list">
-              <li v-for="air in workbench.refitCandidates" :key="air.instanceId" class="num">
-                <label class="check">
-                  <input
-                    type="checkbox"
-                    :checked="workbench.refitSelectedIds.includes(air.instanceId)"
-                    @change="workbench.toggleRefitAircraft(air.instanceId)"
-                  />
-                  {{ air.name }}
-                </label>
-              </li>
-            </ul>
-            <p class="ok num">
-              已选 {{ workbench.refitSelectedIds.length }} / {{ workbench.refitSelectLimit }} 架
-            </p>
+            <div v-if="workbench.refitCandidates.length > 0" class="chips">
+              <div
+                v-for="air in workbench.refitCandidates"
+                :key="air.instanceId"
+                class="chip chip--pickable"
+                :class="{ 'chip--off': !workbench.refitSelectedIds.includes(air.instanceId) }"
+                role="button"
+                tabindex="0"
+                :aria-pressed="workbench.refitSelectedIds.includes(air.instanceId)"
+                :title="air.name"
+                @click="workbench.toggleRefitAircraft(air.instanceId)"
+                @keydown.enter.prevent="workbench.toggleRefitAircraft(air.instanceId)"
+                @keydown.space.prevent="workbench.toggleRefitAircraft(air.instanceId)"
+              >
+                <img
+                  v-if="counterImageOf(air.instanceId) !== null"
+                  :src="counterImageOf(air.instanceId) ?? ''"
+                  class="chip__img"
+                  alt=""
+                />
+              </div>
+            </div>
             <BaseButton
               v-if="workbench.refitSelectedIds.length > 0"
               variant="primary"
@@ -578,14 +589,6 @@ function sideName(side: string): string {
             </BaseButton>
           </template>
           <template v-else>
-            <p class="ok num">
-              已选 {{ workbench.refitSelectedIds.length }} 架｜可付款
-              {{ workbench.refitPayDumps.length }} 处
-            </p>
-            <p v-if="refitDumpChoice !== null" class="num">
-              已选补给站：{{ hexLabel(refitDumpChoice.hex) }}（{{ refitDumpChoice.sp }} SP +
-              {{ refitDumpChoice.t }} T）
-            </p>
             <BaseButton
               v-if="workbench.refitStage === 'pay' && workbench.airInputs.refitDumpId !== null"
               variant="primary"
@@ -606,23 +609,29 @@ function sideName(side: string): string {
         v-if="transferHere && workbench.transferCandidates.length > 0"
         class="block block--pick"
       >
-        <h4 class="block__title" title="14.11">
-          转场 · {{ baseAtHex === null ? '' : hexLabel(baseAtHex.hex) }}
-        </h4>
-        <ul v-if="workbench.transferCandidates.length > 0" class="list">
-          <li v-for="air in workbench.transferCandidates" :key="air.instanceId" class="num">
-            <label class="check">
-              <input
-                type="checkbox"
-                :checked="workbench.transferSelectedIds.includes(air.instanceId)"
-                @change="workbench.toggleTransferAircraft(air.instanceId)"
-              />
-              {{ air.name }}
-              <small class="muted">航程 {{ air.rangeHexes }}</small>
-            </label>
-          </li>
-        </ul>
-        <p class="ok num">已选 {{ workbench.transferSelectedIds.length }} 架</p>
+        <div class="chips">
+          <div
+            v-for="air in workbench.transferCandidates"
+            :key="air.instanceId"
+            class="chip chip--pickable"
+            :class="{ 'chip--off': !workbench.transferSelectedIds.includes(air.instanceId) }"
+            role="button"
+            tabindex="0"
+            :aria-pressed="workbench.transferSelectedIds.includes(air.instanceId)"
+            :title="air.name"
+            @click="workbench.toggleTransferAircraft(air.instanceId)"
+            @keydown.enter.prevent="workbench.toggleTransferAircraft(air.instanceId)"
+            @keydown.space.prevent="workbench.toggleTransferAircraft(air.instanceId)"
+          >
+            <img
+              v-if="counterImageOf(air.instanceId) !== null"
+              :src="counterImageOf(air.instanceId) ?? ''"
+              class="chip__img"
+              alt=""
+            />
+            <span class="chip__badge num">{{ air.rangeHexes }}</span>
+          </div>
+        </div>
         <template v-if="workbench.transferMode === 'box'">
           <BaseButton
             v-if="workbench.transferBoxReady"
@@ -848,6 +857,27 @@ function sideName(side: string): string {
 
 .chip--off {
   opacity: 0.45;
+}
+
+/* 选中态（9.14 夺取 / 位移落点 / 参突 / 整备 / 转场）：只描边，不加文字 */
+.chip--on {
+  outline: 1px solid var(--color-command-teal);
+  outline-offset: -1px;
+  box-shadow: 0 0 0 2px var(--color-command-teal) inset;
+}
+
+/* 图上没有的计算值（点数 / 航程数 / 落点坐标）＝角标，不占文字行 */
+.chip__badge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: 0 3px;
+  border-radius: var(--radius-sm);
+  background: var(--color-ink);
+  color: var(--color-panel);
+  font-size: var(--text-xs);
+  line-height: 12px;
+  pointer-events: none;
 }
 
 .chip--pickable:focus-visible {
