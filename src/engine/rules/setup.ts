@@ -136,17 +136,14 @@ export const SETUP_PLACEMENT_KINDS = [
 export type SetupPlacementKind = (typeof SETUP_PLACEMENT_KINDS)[number]
 
 /** 该放置类别是否**可由引擎直接落位**（无需玩家定夺） */
-const AUTOMATIC_PLACEMENTS: readonly SetupPlacementKind[] = [
-  'fixed',
-  'fixedTolerant',
-  'multiHex',
-  'deadPile',
-]
+const AUTOMATIC_PLACEMENTS: readonly SetupPlacementKind[] = ['fixed', 'multiHex', 'deadPile']
 
 /** 该放置类别需要**玩家在候选格里选** */
 export const CHOICE_PLACEMENTS: readonly SetupPlacementKind[] = [
   'anyHq',
   'radius',
+  /** †：许可式（`can setup within 1 hex of the listed location`）⇒ 玩家在 ±N 内选格 */
+  'fixedTolerant',
   'airbaseFree',
   'airFleet',
 ]
@@ -565,9 +562,14 @@ export function planSetupPlacement(
     const extra = request.extraCandidates ?? []
     if (!extra.some((hex) => sameHex(hex, targetHex))) {
       const allowed = candidates.slice(0, 6).map(setupHexLabel).join('、')
+      // 许可式（`w/i X` / †）把**锚格与半径**一并说清，玩家才知道该往哪改
+      const scope =
+        entry.anchors.length > 0 && entry.radius !== null
+          ? `锚格 ${entry.anchors.map(setupHexLabel).join(' / ')}，半径 ${String(entry.radius)} 格；`
+          : ''
       return fail(
         WITHIN_RULE,
-        `setupHexOutOfRange:${setupHexLabel(targetHex)}（可在 ${allowed}${candidates.length > 6 ? ' 等' : ''}）`,
+        `setupHexOutOfRange:${setupHexLabel(targetHex)}（${scope}可在 ${allowed}${candidates.length > 6 ? ' 等' : ''}）`,
       )
     }
   }
@@ -781,29 +783,11 @@ export function planAutoSetup(input: {
   if (views.length === 0) gaps.push(source.detail)
 
   /*
-   * D2（2026-11-14）：**固定格先摆，带 † 的编队后摆并按 10 RE 上限分摊**。
-   *
-   * 剧本 3/4 的 34.17 同时列了固定格条目（46 军 HQ、3×Werfer）与带 † 的 17.Pz、29.Mtr。
-   * 修前按条目录入顺序把 † 编队也直接堆到「所列首格」⇒ 开局 10.5 RE，4.8a 在首回合就被触发。
-   * 现在：不能动的 `fixed` / `multiHex` / `deadPile` 保持原顺序先落，`fixedTolerant` 放到最后，
-   * 在 IV-A 的 ±N 候选格里挑第一个放得下（≤10 RE）的格；候选全放不下时记数据缺口并回退到首格。
+   * †（`fixedTolerant`）是许可式：`can setup within 1 hex of the listed location`
+   * ⇒ 与 `w/i X` / 任一指挥部同属**玩家选格**，不在这里替玩家定死。
+   * 自动项只剩印刷定格（`fixed` / `multiHex` / `deadPile`）。
    */
-  const orderedViews = [
-    ...views.filter((entry) => entry.placement !== 'fixedTolerant'),
-    ...views.filter((entry) => entry.placement === 'fixedTolerant'),
-  ]
-  const usedReByHex = new Map<string, number>()
-  const hexKeyOf = (hex: HexRef): string => `${hex.col}.${hex.row}`
-  const reAtHex = (hex: HexRef): number => {
-    const key = hexKeyOf(hex)
-    const cached = usedReByHex.get(key)
-    if (cached !== undefined) return cached
-    const seeded = facts.existingRe?.(hex) ?? 0
-    usedReByHex.set(key, seeded)
-    return seeded
-  }
-
-  for (const entry of orderedViews) {
+  for (const entry of views) {
     // ① 放置方式不认识 ⇒ 记缺口（不猜）
     if (entry.placement === 'unknown') {
       gaps.push(`条目「${entry.raw}」的放置方式「${entry.placementText}」未识别 ⇒ 须人工判读`)
@@ -856,22 +840,6 @@ export function planAutoSetup(input: {
       targets = [null]
     } else if (entry.placement === 'multiHex') {
       targets = [...entry.anchors]
-    } else if (entry.placement === 'fixedTolerant') {
-      /*
-       * IV-A †：所列位置 ±N 格内任选。按「固定格先摆」之后的剩余空间，
-       * 取候选顺序里第一个仍在 10 RE 以内的格（候选已按离锚格远近稳定排序）。
-       */
-      const need = reOfEntry(entry) * Math.max(entry.count, 1)
-      const anchor = entry.anchors[0] ?? null
-      const fitting = setupCandidates(entry, facts).find((hex) =>
-        isWithinStackingLimit(reAtHex(hex) + need),
-      )
-      if (fitting === undefined && anchor !== null) {
-        gaps.push(
-          `条目「${entry.raw}」在 † 容差内没有能容纳 ${need} RE 的格（上限 10 RE）⇒ 仍按所列首格 ${setupHexLabel(anchor)} 落位，须人工核对`,
-        )
-      }
-      targets = [fitting ?? anchor]
     } else {
       targets = entry.anchors.slice(0, 1)
     }
@@ -959,19 +927,10 @@ export function planAutoSetup(input: {
           })
         }
       }
-      // 供后续 † 条目判剩余空间（IV-F 10 RE）；死亡堆不占地
-      if (hex !== null && !toDeadPile) {
-        usedReByHex.set(hexKeyOf(hex), reAtHex(hex) + reOfEntry(entry) * copies)
-      }
     }
   }
 
-  // † 容差是**剧本 3/5/7** 的注记：本剧本条目里出现 † 时，把源库注记一并带出（便于界面提示）
-  if (views.some((entry) => entry.placement === 'fixedTolerant')) {
-    for (const [key, value] of Object.entries(scenarioSetup.notes.markerNotes)) {
-      if (key.startsWith('†')) gaps.push(`${key}：${value}`)
-    }
-  }
+  // †（`fixedTolerant`）是许可式，已作为 choices 交给玩家；不再记为数据缺口
 
   const counts = { pieces: pieces.length, ledger: ledger.length, choices: choices.length }
   return succeed(SETUP_RULE, {

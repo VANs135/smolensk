@@ -59,7 +59,7 @@ export function fillSetup(ctx: ReturnType<typeof fresh>) {
       if (item.kind === 'self') setup.beginSelfPlacement(item.entryIndex)
       else if (item.kind === 'air') setup.beginAirPlacement(item.side, item.entryIndex)
       else if (item.kind === 'shift') setup.beginShiftPlacement(item.formationId!)
-      const choices = [...(setup.placing?.candidates ?? [])].sort((a, b) => {
+      const sorted = [...(setup.placing?.candidates ?? [])].sort((a, b) => {
         const load = (h: { col: number; row: number }) =>
           w.units
             .filter((u) => u.hex.col === h.col && u.hex.row === h.row)
@@ -68,8 +68,48 @@ export function fillSetup(ctx: ReturnType<typeof fresh>) {
           1000 * w.spDumps.filter((d) => d.hex.col === h.col && d.hex.row === h.row).length
         return load(a) - load(b)
       })
+      // † 预置格优先：只接受预设的玩家不会再被挪到另一个格（与修前自动初设位置一致）
+      const provisional = setup.pendingPlacement.find(
+        (row) =>
+          row.kind === item.kind && row.side === item.side && row.entryIndex === item.entryIndex,
+      )?.provisionalHex
+      const preferred =
+        provisional === undefined
+          ? undefined
+          : (() => {
+              const [col, row] = provisional.split('.').map(Number)
+              return { col: col!, row: row! }
+            })()
+      const choices =
+        preferred === undefined
+          ? sorted
+          : [
+              preferred,
+              ...sorted.filter((hex) => hex.col !== preferred.col || hex.row !== preferred.row),
+            ]
       expect(choices.length).toBeGreaterThan(0)
-      expect(setup.placeAtHex(choices[0]!)).toBe(true)
+      if (item.kind !== 'self') {
+        // 飞机 / 西移仍是"一次一枚/一批"，沿用原单点逻辑
+        expect(setup.placeAtHex(choices[0]!)).toBe(true)
+        continue
+      }
+      /*
+       * 许可式（`w/i X` / †）候选是**玩家可选**的集合，第一个未必放得下（10 RE）；
+       * 按负载升序逐个试，直到该条目落完——模拟玩家在面板里换一个合法格。
+       */
+      const done = () =>
+        !setup.pendingPlacement.some(
+          (row) =>
+            row.kind === item.kind &&
+            row.side === item.side &&
+            row.entryIndex === item.entryIndex &&
+            row.remaining > 0,
+        )
+      for (const hex of choices) {
+        setup.placeAtHex(hex)
+        if (done()) break
+      }
+      expect(done(), `${item.label}: ${setup.lastAction?.detail ?? '落位失败'}`).toBe(true)
     }
   }
   placeRemaining()

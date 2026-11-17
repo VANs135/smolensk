@@ -6,7 +6,12 @@ import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/
 import { useUiMode } from '@/components/ui-mode'
 import { scenarios, scenarioSetup } from '@/data'
 import type { Side } from '@/data'
-import { findAircraftRecord, setupHexLabel, type AirSetupPlacement } from '@/engine/rules'
+import {
+  findAircraftRecord,
+  setupHexLabel,
+  type AirSetupPlacement,
+  type SetupEntryView as EngineSetupEntryView,
+} from '@/engine/rules'
 import { setupEffectsOf } from '@/engine/rules/setup-effects'
 import {
   useContainersStore,
@@ -190,11 +195,26 @@ function selfChoiceOf(entryIndex: number): string {
   return setup.selfChoices[entryIndex] ?? ''
 }
 
-/** 候选格数量为 0 时说清原因 */
-function candidateHint(candidates: readonly { col: number; row: number }[]): string {
+/** † 预置的提示：盘上已按候选第一格摆好，但条目仍等玩家确认或改点 */
+function provisionalHintOf(entryIndex: number): string {
+  const item = setup.pendingPlacement.find(
+    (row) => row.kind === 'self' && row.entryIndex === entryIndex,
+  )
+  return item?.provisionalHex === undefined ? '' : `已预置在 ${item.provisionalHex}（可直接改点）；`
+}
+
+/** 候选格数量为 0 时说清原因；许可式（`w/i X` / †）连同锚格与半径一并给出 */
+function candidateHint(
+  entry: EngineSetupEntryView,
+  candidates: readonly { col: number; row: number }[],
+): string {
+  const scope =
+    entry.anchors.length > 0 && entry.radius !== null
+      ? `锚格 ${entry.anchors.map(setupHexLabel).join(' / ')}，半径 ${entry.radius} 格；`
+      : ''
   return candidates.length === 0
-    ? '候选为空：缺盘面事实（HQ 格 / 空军基地格）或半径解析不出 ⇒ 引擎已记缺口'
-    : `${candidates.length} 个候选格（IV-A 含边界、IV-I 已过滤）`
+    ? `${scope}候选为空：缺盘面事实（HQ 格 / 空军基地格）或半径解析不出 ⇒ 引擎已记缺口`
+    : `${scope}${candidates.length} 个候选格（IV-A 含边界、IV-I 已过滤）`
 }
 
 /** SP 装甲集群下拉（空串 = 未点名；只在轴方出现） */
@@ -828,7 +848,11 @@ function sideLabel(side: Side): string {
               <td>{{ entry.raw }}</td>
               <td class="num">{{ entry.count }}</td>
               <td class="num">{{ entry.rule }}</td>
-              <td class="muted">{{ candidateHint(candidatesOf(entry.index)) }}</td>
+              <td class="muted">
+                {{
+                  provisionalHintOf(entry.index) + candidateHint(entry, candidatesOf(entry.index))
+                }}
+              </td>
               <td>
                 <select
                   v-if="candidatesOf(entry.index).length > 0"

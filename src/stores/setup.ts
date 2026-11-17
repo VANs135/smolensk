@@ -217,6 +217,8 @@ export interface SetupPlacing {
   airReduced?: boolean
   /** 飞机：本型**尚未落位**的枚里还有几枚是减损（含下一枚）；无减损即 0 */
   airReducedRemaining?: number
+  /** 地面自由项：† 预置的格号（存在＝盘上已按此格摆好，玩家可直接改） */
+  provisionalHex?: string
 }
 
 /**
@@ -453,8 +455,13 @@ export const useSetupStore = defineStore('setup', () => {
    *   现在改成：先在盘上找出**单位记录属于计划里那些卡车**的算子，再取它们的**真实实例 id**。
    */
   const setupTrucks = computed(() => {
+    /*
+     * 编内卡车来自**全部初设条目**（含 `†` / `w/i` 这些玩家选格项），不能只看自动落位计划：
+     * † 现在由玩家选格后才落盘，若只扫 `plan.pieces`，剧本 3/4 的 4 辆满载卡车会一直是空的。
+     */
     const truckRecordIds = new Set(
-      (plan.value?.pieces ?? [])
+      entries.value
+        .flatMap((entry) => entry.pieces)
         .filter((piece) => piece.isOrganicTruck && piece.unitId !== null)
         .map((piece) => piece.unitId as string),
     )
@@ -538,6 +545,13 @@ export const useSetupStore = defineStore('setup', () => {
    * 故按条目（飞机按"某方某型"）记**已落几枚**，落位时只落一枚、进度 +1。
    */
   const placedSelfInstances = ref<Record<number, number>>({})
+  /**
+   * † 许可式条目的**预置**（玩家未表态时填进候选第一格，随时可改）
+   *
+   * 只记盘上实例 id：玩家改点时先把这批实例撤掉，再按新格落；不改则视为默认接受。
+   * `completed` / `placedSelfInstances` 不因预置而记账——面板仍显示"待你定夺"。
+   */
+  const provisionalSelf = ref<Record<number, string[]>>({})
   const placedAirInstances = ref<Record<string, number>>({})
   /**
    * 批 G（用户 2026-11-16）：按**激活态分栏**点选后，该型飞机的落位顺序
@@ -785,6 +799,8 @@ export const useSetupStore = defineStore('setup', () => {
       airBoxMembers: [...workbench.airBoxMembers],
       spDumps: clone(spDumps.value),
       placedSelf: { ...placedSelfInstances.value },
+      provisionalSelf: { ...provisionalSelf.value },
+      truckFullIds: [...truckFullIds.value],
       placedAir: { ...placedAirInstances.value },
       completed: { ...completed.value },
       selfChoices: { ...selfChoices.value },
@@ -827,6 +843,8 @@ export const useSetupStore = defineStore('setup', () => {
     workbench.airBoxMembers = snapshot.airBoxMembers
     spDumps.value = snapshot.spDumps
     placedSelfInstances.value = snapshot.placedSelf
+    provisionalSelf.value = snapshot.provisionalSelf
+    truckFullIds.value = snapshot.truckFullIds
     placedAirInstances.value = snapshot.placedAir
     completed.value = snapshot.completed
     selfChoices.value = snapshot.selfChoices
@@ -1075,6 +1093,10 @@ export const useSetupStore = defineStore('setup', () => {
       const total = selfInstanceTotalOf(entry)
       const placed = selfPlacedOf(entry.index)
       const candidates = candidatesOf(entry.index)
+      const provisionalHex =
+        provisionalSelf.value[entry.index] === undefined
+          ? undefined
+          : selfChoices.value[entry.index]
       items.push({
         kind: 'self',
         entryIndex: entry.index,
@@ -1094,6 +1116,7 @@ export const useSetupStore = defineStore('setup', () => {
         imageUrl: imageUrlOfEntry(entry),
         // 批 H：地面单位 + 番号（编队 / 师属标识；非地面类为 null，界面不显示）
         formation: formationOfEntry(entry),
+        ...(provisionalHex === undefined ? {} : { provisionalHex }),
         blockedReason:
           candidates.length === 0 ? '该条目的候选格暂不可解（缺锚格 / 半径 / 地图事实）' : null,
       })
@@ -1869,9 +1892,30 @@ export const useSetupStore = defineStore('setup', () => {
       // 必做西移已在收束前验证，其余项沿用用户允许主动不摆的口径。
       if (item.kind === 'air') {
         completed.value = { ...completed.value, [`air:${item.side}:${item.entryIndex}`]: true }
-      } else {
-        completed.value = { ...completed.value, [`self:${item.entryIndex}`]: true }
+        notes.value = [
+          ...notes.value,
+          `未初设 ⇒ 本局移除：${item.side === 'axis' ? '轴心' : '苏联'}「${item.label}」（×${item.count}）`,
+        ]
+        continue
       }
+      /*
+       * † 许可式：选剧本时已预置进候选第一格（玩家可改），玩家没改点就开局 ⇒
+       * 按预置格接受，不再记「本局移除」（否则盘上有算子、账上却当它不存在）。
+       */
+      const provisional = item.kind === 'self' ? provisionalSelf.value[item.entryIndex] : undefined
+      if (provisional !== undefined) {
+        placedSelfInstances.value = { ...placedSelfInstances.value, [item.entryIndex]: item.total }
+        completed.value = { ...completed.value, [`self:${item.entryIndex}`]: true }
+        const next = { ...provisionalSelf.value }
+        delete next[item.entryIndex]
+        provisionalSelf.value = next
+        notes.value = [
+          ...notes.value,
+          `† 未改点 ⇒ 按预置格接受：${item.side === 'axis' ? '轴心' : '苏联'}「${item.label}」@ ${item.provisionalHex ?? '—'}`,
+        ]
+        continue
+      }
+      completed.value = { ...completed.value, [`self:${item.entryIndex}`]: true }
       notes.value = [
         ...notes.value,
         `未初设 ⇒ 本局移除：${item.side === 'axis' ? '轴心' : '苏联'}「${item.label}」（×${item.count}）`,
@@ -2375,6 +2419,7 @@ export const useSetupStore = defineStore('setup', () => {
     airChoices.value = {}
     completed.value = {}
     placedSelfInstances.value = {}
+    provisionalSelf.value = {}
     placedAirInstances.value = {}
     airStatusOrder.value = {}
     defaultFilledIds.value = new Set()
@@ -2639,7 +2684,64 @@ export const useSetupStore = defineStore('setup', () => {
       if (built2.dump !== null) dumps.push(built2.dump)
     }
 
-    workbench.units.push(...placedUnits, ...ledgerUnits)
+    // ②.5 † 许可式：按候选顺序**预置**第一格（玩家可改，不计入已完成）
+    /*
+     * 原文：`Axis divisions marked with a cross (†) can setup within 1 hex of the listed location.`
+     * 许可式 ⇒ 不替玩家做最终决定；但为了让卡车满载 / SP 归属等前置有盘面可核，
+     * 先落进候选第一格（通常是所列锚格），面板仍把它列在「自定义初设」里等玩家确认或改点。
+     */
+    // 固定格棋子先上盘：† 预置判 10 RE 时必须把它们算进 `existingRe`
+    workbench.units.push(...placedUnits)
+
+    const provisional = { ...provisionalSelf.value }
+    let provisionalPlaced = 0
+    for (const choice of built.choices) {
+      if (choice.placement !== 'fixedTolerant') continue
+      const entry = entries.value.find((view) => view.index === choice.entryIndex)
+      if (entry === undefined || choice.candidates.length === 0) continue
+      /*
+       * 预置沿用「所列锚格优先」的稳定候选顺序（与修前自动初设同口径），
+       * 只把最终决定权留给玩家：面板仍待确认，改点随时生效。
+       */
+      const hex = choice.candidates.find(
+        (candidate) =>
+          planSetupPlacement({
+            entry,
+            targetHex: candidate,
+            facts: factsFor(entry.side),
+          }).ok,
+      )
+      if (hex === undefined) continue
+      const ids: string[] = []
+      const units: ConsoleUnit[] = []
+      for (const piece of entry.pieces) {
+        if (piece.unitId === null) continue
+        const recordUnit = findUnitRecord(piece.unitId)
+        if (recordUnit === undefined) continue
+        const copies = entry.kind === 'formation' ? 1 : Math.max(entry.count, 1)
+        for (let copy = 0; copy < copies; copy += 1) {
+          const unit = toConsoleUnit({
+            record: recordUnit,
+            instanceId: createId('u'),
+            hex: { ...hex },
+            side: entry.side,
+            ...(entry.setupMode === 'move' ? { face: 'move' as const } : {}),
+          })
+          const penalty = entry.stepPenalty ?? 0
+          if (penalty > 0) unit.steps = Math.max(unit.steps - penalty, 0)
+          ids.push(unit.instanceId)
+          units.push(unit)
+        }
+      }
+      if (ids.length === 0) continue
+      workbench.units.push(...units) // 先上盘，后面的预置才能按真实 RE 判堆叠
+      provisional[entry.index] = ids
+      provisionalPlaced += ids.length
+      selfChoices.value = { ...selfChoices.value, [entry.index]: setupHexLabel(hex) }
+    }
+    provisionalSelf.value = provisional
+
+    workbench.units.push(...ledgerUnits)
     workbench.deadPile.push(...deadPileUnits)
     spDumps.value = dumps
     // 12.1b / 12.1c：初设的 SP 位置就是补给站 ⇒ 整批落进 workbench 账本（整备付款、战斗补给、
@@ -2686,7 +2788,7 @@ export const useSetupStore = defineStore('setup', () => {
       data: {
         detail:
           `自动初设落盘（剧本 ${scenarioId.value}，初设源剧本 ${built.source.source}）：` +
-          `棋子 ${placedUnits.length} 枚 + 计数算子 ${ledgerUnits.length} 枚（SP ${dumps.length} 处）+ 死亡堆 ${deadPileUnits.length} 枚；` +
+          `棋子 ${placedUnits.length - provisionalPlaced} 枚 + † 预置 ${provisionalPlaced} 枚（待玩家确认/改点）+ 计数算子 ${ledgerUnits.length} 枚（SP ${dumps.length} 处）+ 死亡堆 ${deadPileUnits.length} 枚；` +
           `${built.choices.length} 条自由项留待玩家定夺` +
           (truckNote === null ? '' : `；${truckNote}`),
       },
@@ -2898,10 +3000,27 @@ export const useSetupStore = defineStore('setup', () => {
       return false
     }
     const extraCandidates = wiggleMotExtraCandidates(entry)
+    /*
+     * † 预置的算子此刻已在盘上；改点校验时必须把它们从目标格的"既有 RE"里剔除，
+     * 否则玩家把预置单位点回原格会被自己的影子顶到 >10 RE（永远落不下）。
+     */
+    const provisionalIds = provisionalSelf.value[entryIndex]
+    const excluded = provisionalIds === undefined ? null : new Set(provisionalIds)
+    const baseFacts = factsFor(entry.side)
+    const selfFacts: SetupCandidateFacts =
+      excluded === null
+        ? baseFacts
+        : {
+            ...baseFacts,
+            existingRe: (hex) =>
+              workbench.units
+                .filter((unit) => sameHex(unit.hex, hex) && !excluded.has(unit.instanceId))
+                .reduce((sum, unit) => sum + (unit.re === undefined ? 0 : currentReOf(unit)), 0),
+          }
     const outcome = planSetupPlacement({
       entry,
       targetHex: target,
-      facts: factsFor(entry.side),
+      facts: selfFacts,
       ...(extraCandidates.length === 0 ? {} : { extraCandidates }),
     })
     if (!outcome.ok) return record(outcome)
@@ -2914,6 +3033,22 @@ export const useSetupStore = defineStore('setup', () => {
     const remaining = Math.max(0, total - placedBefore)
     if (remaining === 0 || completed.value[`self:${entryIndex}`]) {
       return record({ ok: false, rule: 'IV', reason: 'nothingToPlace' })
+    }
+    // † 预置：玩家一旦改点，先把预置的那批算子撤掉，避免同一编队在盘上出现两份
+    const carriedLoaded = new Set<string>()
+    const carriedFull = new Set<string>()
+    if (provisionalIds !== undefined) {
+      const drop = new Set(provisionalIds)
+      const oldUnits = workbench.units.filter((unit) => drop.has(unit.instanceId))
+      for (const unit of oldUnits) {
+        // 13.2h：改点不能把已指定的满载丢掉（否则卡车账与盘面两说）
+        if ((unit.loadedSpT ?? 0) > 0) carriedLoaded.add(unit.unitId)
+        if (truckFullIds.value.includes(unit.instanceId)) carriedFull.add(unit.unitId)
+      }
+      workbench.units = workbench.units.filter((unit) => !drop.has(unit.instanceId))
+      const next = { ...provisionalSelf.value }
+      delete next[entryIndex]
+      provisionalSelf.value = next
     }
     // `one` 模式只落一枚 ⇒ 让下面棋子类的 copies 循环只跑一次（从第 placed 枚开始）
     const copiesWanted = mode === 'one' && total > 1 ? 1 : null
@@ -3054,12 +3189,24 @@ export const useSetupStore = defineStore('setup', () => {
           // IV-G：剧本明示的**初设减损**（-N step）在此扣除（与 `runAutoSetup` 同一口径）
           const penalty = entry.stepPenalty ?? 0
           if (penalty > 0) unit.steps = Math.max(unit.steps - penalty, 0)
+          if (carriedLoaded.has(piece.unitId)) unit.loadedSpT = 1
+          else if (unit.loadedSpT === undefined) unit.loadedSpT = 0
           placed.push(unit)
         }
       }
       advancedBy = placed.length
     }
     workbench.units.push(...placed)
+    // 13.2h：预置改点后把「满载勾选」从旧实例迁到新实例（按单位记录对应）
+    if (provisionalIds !== undefined && carriedFull.size > 0) {
+      const stale = new Set(provisionalIds)
+      truckFullIds.value = [
+        ...truckFullIds.value.filter((id) => !stale.has(id)),
+        ...placed.filter((unit) => carriedFull.has(unit.unitId)).map((unit) => unit.instanceId),
+      ]
+    }
+    // 名单已落过账 ⇒ 新实例按迁移后的名单重写 loadedSpT（否则非满载卡车是 null，13.2h 判不一致）
+    if (provisionalIds !== undefined && completed.value.truckLoad === true) designateTrucks()
     notes.value = [...notes.value, ...notesLocal]
     selfChoices.value = { ...selfChoices.value, [entryIndex]: setupHexLabel(target) }
     // 进度：计数类按**量**递增；棋子类按枚递增；落满才记完成
@@ -3226,10 +3373,8 @@ export const useSetupStore = defineStore('setup', () => {
     if (onlySide !== undefined && setupSideCursor.value !== onlySide) {
       return { placed, remaining: presetRemaining(), failures, airPlaced }
     }
-    settlePresetObligations(failures, onlySide)
-    // 飞机：每型落第一个合法基地格（候选顺序即引擎给出的稳定顺序）
-    // 必须在**该方确认之前**落——`canEditAirSetup` 要求游标停在该方；
-    // 先确认两方再摆飞机会被「双方布设均已确认」全数拒掉（2026-11-15 首跑缺陷）。
+    // 卡车 / SP 的落账前置是「算子已在盘上」：† 编队现在由玩家选格（不再自动预落），
+    // 故义务结算必须**放到该方自由项落完之后**，不能提前按空卡车名单判失败。
     const placeAirForSide = (side: Side): void => {
       const airPlan = airPlanOf(side)
       if (airPlan === null) return
@@ -3293,6 +3438,8 @@ export const useSetupStore = defineStore('setup', () => {
           placePresetEntry(entry, failures)
           if (completed.value[`self:${entry.index}`] === true) placed += 1
         }
+        // 自由项落完后，编内卡车才在盘上 ⇒ 再按剧本页核满载名单（13.2h）
+        settlePresetObligations(failures, side)
         placeAirForSide(side)
         if (!confirmSideSetup()) {
           failures.push({
@@ -3311,6 +3458,7 @@ export const useSetupStore = defineStore('setup', () => {
         placePresetEntry(entry, failures)
         if (completed.value[`self:${entry.index}`] === true) placed += 1
       }
+      settlePresetObligations(failures, onlySide)
       placeAirForSide(onlySide)
       if (!confirmSideSetup()) {
         failures.push({

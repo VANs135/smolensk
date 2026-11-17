@@ -11,7 +11,6 @@ import {
   STACKING_RULE,
   WITHIN_RULE,
   airSetupPolicyOf,
-  findUnitRecord,
   isSetupWiggleMotEntry,
   normalizeAircraftKey,
   parseSetupRadius,
@@ -716,52 +715,63 @@ describe('W7 C14：初设索引的数据自检', () => {
 })
 
 /**
- * D2（2026-11-14）：自动初设的**堆叠上限**（IV-F / 4.8a）
+ * D2（修订）：† 是**许可式**（`can setup within 1 hex`）⇒ 选格权交回玩家
  *
  * 剧本 3/4 的 34.17 同时列了固定格（46 军 HQ、3×Werfer）与带 † 的 17.Pz、29.Mtr。
- * 修前按条目录入顺序把 † 编队也堆到「所列首格」⇒ 10.5 RE，开局即触发 4.8a。
- * 现在固定格先摆、† 编队按 ±N 候选取第一个 ≤10 RE 的格。
+ * 修前把 † 也放进自动初设、由引擎在 ±1 内挑格；现在 † 一律进 `choices`，
+ * 玩家在范围内自选，落位仍走 `planSetupPlacement` 的 IV-A 与 10 RE 校验。
  */
-describe('D2：自动初设不得超过 10 RE（剧本 3/4 的 † 编队分摊）', () => {
-  /** 自动落位计划按算子库 reSize 合计到格（飞机/死亡堆不占地） */
-  function autoSetupReByHex(scenarioId: string): Map<string, number> {
+describe('D2：† 许可式初设交给玩家选格', () => {
+  it.each(['3', '4'])('剧本 %s：† 条目全部是玩家选择项，自动棋子为 0', (scenarioId) => {
+    const tolerant = setupEntryViews(scenarioId, 'axis').filter(
+      (entry) => entry.placement === 'fixedTolerant',
+    )
+    expect(tolerant.length).toBeGreaterThan(0)
     const outcome = planAutoSetup({ scenarioId })
     if (!outcome.ok) throw new Error(outcome.reason)
-    const map = new Map<string, number>()
-    for (const piece of outcome.data.pieces) {
-      if (piece.hex === null || piece.toDeadPile) continue
-      if (piece.unitId === null || piece.unitIdKind === 'aircraft') continue
-      const re = findUnitRecord(piece.unitId)?.reSize ?? 0
-      if (re <= 0) continue
-      const key = `${piece.hex.col}.${piece.hex.row}`
-      map.set(key, (map.get(key) ?? 0) + re)
+    const indexes = new Set(tolerant.map((entry) => entry.index))
+    expect(outcome.data.pieces.some((piece) => indexes.has(piece.entryIndex))).toBe(false)
+    for (const entry of tolerant) {
+      const choice = outcome.data.choices.find((row) => row.entryIndex === entry.index)
+      expect(choice, entry.raw).toBeDefined()
+      expect(choice!.candidates.length, entry.raw).toBeGreaterThan(0)
     }
-    return map
-  }
-
-  it.each(['3', '4'])('剧本 %s：自动落位后没有任何一格 >10 RE', (scenarioId) => {
-    const byHex = autoSetupReByHex(scenarioId)
-    const over = [...byHex.entries()].filter(([, re]) => re > 10)
-    expect(over).toEqual([])
-    // 34.17：固定格 46 军 HQ + 3×Werfer 与 † 编队共享点
-    expect(byHex.get('34.17') ?? 0).toBeLessThanOrEqual(10)
   })
 
-  it('剧本 3：† 的 29.Mtr 不再挤在 34.17，而是整体分到相邻的一格', () => {
-    const target = setupEntryViews('3').find(
-      (entry) => entry.placement === 'fixedTolerant' && /29\s*Mtr/i.test(entry.name ?? entry.raw),
+  it('剧本 3：34.17 的 17 Pz / 29 Mtr 都是玩家选格，锚格与半径来自原文', () => {
+    const targets = setupEntryViews('3', 'axis').filter(
+      (entry) =>
+        entry.placement === 'fixedTolerant' &&
+        entry.anchors[0]?.col === 34 &&
+        entry.anchors[0]?.row === 17,
+    )
+    expect(targets.map((entry) => entry.name)).toEqual(
+      expect.arrayContaining(['17 Pz Div', '29 Mtr Div']),
+    )
+    for (const entry of targets) {
+      expect(entry.radius).toBe(1)
+      expect(entry.automatic).toBe(false)
+      expect(CHOICE_PLACEMENTS).toContain(entry.placement)
+    }
+  })
+
+  it('玩家落位仍受 10 RE 上限：34.17 已占 9.5 RE 时拒，换邻格通过', () => {
+    const entry = setupEntryViews('3', 'axis').find(
+      (row) => row.placement === 'fixedTolerant' && /29\s*Mtr/i.test(row.raw),
     )!
-    expect(target.placement).toBe('fixedTolerant')
-    const outcome = planAutoSetup({ scenarioId: '3' })
-    if (!outcome.ok) throw new Error(outcome.reason)
-    const hexes = [
-      ...new Set(
-        outcome.data.pieces
-          .filter((piece) => piece.entryIndex === target.index && piece.hex !== null)
-          .map((piece) => `${piece.hex!.col}.${piece.hex!.row}`),
-      ),
-    ]
-    expect(hexes).not.toContain('34.17')
-    expect(hexes).toHaveLength(1)
+    const stacked = planSetupPlacement({
+      entry,
+      targetHex: entry.anchors[0]!,
+      facts: { existingRe: () => 9.5 },
+    })
+    expect(stacked).toMatchObject({ ok: false, rule: STACKING_RULE })
+
+    const roomy = setupCandidates(entry).find((hex) => hex.col !== 34 || hex.row !== 17)!
+    const placed = planSetupPlacement({
+      entry,
+      targetHex: roomy,
+      facts: { existingRe: () => 0 },
+    })
+    expect(placed.ok).toBe(true)
   })
 })
