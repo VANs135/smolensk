@@ -92,19 +92,19 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     expect(mapView.unitActionFamily).toBeNull()
   })
 
-  it('★ A 段整备：补给站没有操作；空军基地**有**（15.1 整备）', () => {
+  it('★ A 段整备：补给站没有操作；空军基地也不再单开（整备走堆叠窗基地卡）', () => {
     const { workbench, mapView } = s
     place(workbench, 'sp', 'sp-1')
     place(workbench, 'air_base', 'base-1')
-    // 15.1 要真能整备：格内有非激活机 + 能拖到 1T（12.3a），否则入口按口径根本不出现
+    // 15.1 要真能整备：格内有非激活机 + 能拖到 1T（12.3a）
     workbench.setAirActive(true)
     placeAir(workbench, fighterRecord('axis'), HEX, 'axis', 'air-a', 'inactive')
     workbench.spDumps.push({ id: 'd-base', hex: { ...HEX }, side: 'axis', sp: 1, t: 0 })
     enter(workbench, 'aircraftRefit', 'aircraftRefit.refit')
     expect(mapView.unitActionAvailableAt('sp-1')).toBe(false)
-    expect(mapView.unitActionAvailableAt('base-1')).toBe(true)
-    expect(mapView.openUnitActionAt(HEX, 'base-1')).toBe(true)
-    expect(mapView.unitActionFamily).toBe('air')
+    expect(mapView.unitActionAvailableAt('base-1')).toBe(false)
+    expect(mapView.openUnitActionAt(HEX, 'base-1')).toBe(false)
+    expect(mapView.unitActionFamily).toBeNull()
   })
 
   it('★ C 段移动环节：空军基地有操作（15.3 修建 / 15.4 缩减）；工事有（16.0b）', () => {
@@ -199,17 +199,15 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     expect(options.every((item) => item.rule !== '' && item.label !== '')).toBe(true)
   })
 
-  it('★ 操作菜单：A 段基地只剩「整备」一项（15.1 在 A 段）', () => {
+  it('★ 操作菜单：A 段基地右键不再单开「整备」（15.1 只从堆叠窗的基地卡进）', () => {
     const { workbench, mapView } = s
     place(workbench, 'air_base', 'base-1')
-    // 可整备判据（15.1B/15.1C/14.2a/12.3a）全满足时才摆这一项
+    // 可整备判据（15.1B/15.1C/14.2a/12.3a）全满足，但整备不再是右键项
     workbench.setAirActive(true)
     placeAir(workbench, fighterRecord('axis'), HEX, 'axis', 'air-a', 'inactive')
     workbench.spDumps.push({ id: 'd-base', hex: { ...HEX }, side: 'axis', sp: 1, t: 0 })
     enter(workbench, 'aircraftRefit', 'aircraftRefit.refit')
-    const options = mapView.unitActionOptions('base-1')
-    expect(options.map((item) => item.key)).toEqual(['air.refit'])
-    expect(options[0]?.only).toBe('refit')
+    expect(mapView.unitActionOptions('base-1')).toEqual([])
   })
 
   it('★ 界面按"一个操作一个面板"落地（源码守卫）', () => {
@@ -285,7 +283,8 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
       sp: [],
       tp: [],
       ext: [],
-      base: ['refit'],
+      // 15.1 单入口：整备不再作为基地右键项出现（从堆叠窗的基地卡进）
+      base: [],
       hog: [],
     })
     expect(menuOf(D)).toEqual({ sp: [], tp: [], ext: [], base: [], hog: [] })
@@ -304,11 +303,7 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
   it('★ 设施动作表本身就是"规则书清单"（键与环节由闸门表给，不在这里另写一套）', () => {
     const { mapView } = s
     expect(mapView.facilityActionKeys('sp')).toEqual(['move.dumpBlow'])
-    expect(mapView.facilityActionKeys('air_base')).toEqual([
-      'air.refit',
-      'move.construction',
-      'air.baseReduce',
-    ])
+    expect(mapView.facilityActionKeys('air_base')).toEqual(['move.construction', 'air.baseReduce'])
     expect(mapView.facilityActionKeys('hedgehog')).toEqual(['move.hedgehog'])
     expect(mapView.facilityActionKeys('transport_point')).toEqual([
       'move.transportMerge',

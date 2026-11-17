@@ -1860,16 +1860,13 @@ export const useMapViewStore = defineStore('mapView', () => {
       return true
     }
     /*
-     * ★ 15.1（用户 2026-11-14）：整备段**基地内的飞机**同样是可点对象——地面那行拒绝文案
-     *   自己写着「整备段只点空军基地（与基地内的飞机）」。点飞机＝点它所在的基地：
-     *   直接开基地动作面板（勾机在面板里做）。修前落到下面的参与闸：飞机实例不在 `units`
-     *   里 ⇒ 只换回一句「X 不参与本环节（整备）：找不到该算子」。
+     * ★ 15.1（2026-11-17 收口）：整备段点**基地内的飞机**也只摊堆叠/开小窗，
+     *   由小窗里的基地卡进整备；不再借"点飞机"另开一条基地动作会话。
      */
     if (isIdleForStack() && token.air === true && workbench.phase === 'aircraftRefit') {
-      const base = workbench.ownAirBases.find(
-        (item) => item.hex.col === hex.col && item.hex.row === hex.row,
-      )
-      if (base !== undefined && selectCounterAt(hex, base.id, anchor)) return true
+      stackSelection.value = [token.id]
+      openPopup(hex, anchor?.x ?? 0, anchor?.y ?? 0)
+      return true
     }
     /*
      * B9：**不参与本环节的算子点不动**（用户口径「不参与环节的算子无法点击」）。
@@ -1894,14 +1891,13 @@ export const useMapViewStore = defineStore('mapView', () => {
       return true
     }
     /*
-     * ★ 15.1（用户 2026-11-14 二次实测）：A 段的**空军基地本身**是「参与本环节」的
-     *   （`participatesIn` 对 `air_base` 直接给 ok），所以点基地那一枚**不**走上面的设施让路，
-     *   而是落到下面的「点某一枚＝开拔」⇒ `selectForMove`：基地没有 MA，只换回一句
-     *   「该格没有可开拔的单位」，整备入口永远出不来（同格有飞机时尤其明显）。
-     *   设施不是开拔对象 ⇒ 直接走它自己的动作族（`air_base` ⇒ 15.1 整备会话）。
+     * ★ 15.1（2026-11-17 收口）：点基地**只摊堆叠 / 选中**，不再直接开基地动作会话。
+     *   整备的唯一入口是「点格展开堆叠 → 从基地卡进整备」；基地详情仍可从小窗查看。
+     *   修前这里 `selectCounterAt` 直接起基地会话，于是"点基地"与"点格→基地卡"成了两条入口。
      */
     if (isIdleForStack() && token.noncombatKind === 'air_base') {
-      selectCounterAt(hex, token.id, anchor)
+      stackSelection.value = [token.id]
+      openPopup(hex, anchor?.x ?? 0, anchor?.y ?? 0)
       return true
     }
     /*
@@ -2074,8 +2070,11 @@ export const useMapViewStore = defineStore('mapView', () => {
          * 14.1a 的飞机停在本方空军基地格 ⇒ 基地格就是"点那几架飞机"的盘面把手；
          * 14.2e 把任务类型分派到环节（低空扫射在移动环节、空军轰炸在轰炸环节），
          * 故这一项与 15.3 / 15.4 并列，是否放行仍由闸门表（`air.mission` 的 where）判。
+         *
+         * ★ 2026-11-17 收口：15.1 整备只保留**堆叠窗基地卡**这一处入口，
+         *   基地右键不再另开「整备飞机」（否则与点基地、堆叠卡构成三条入口）。
          */
-        return ['air.refit', 'move.construction', 'air.baseReduce']
+        return ['move.construction', 'air.baseReduce']
       case 'hedgehog':
         return ['move.hedgehog']
       default:
@@ -2126,7 +2125,6 @@ export const useMapViewStore = defineStore('mapView', () => {
       panel: 'supply',
       only: 'extender',
     },
-    'air.refit': { label: '整备飞机', rule: '15.1', panel: 'air', only: 'refit' },
     'move.construction': {
       label: '修建 / 改进基地（15.3）',
       rule: '15.3',
@@ -2155,12 +2153,9 @@ export const useMapViewStore = defineStore('mapView', () => {
     const kind = unit.noncombatKind
     if (kind === null || kind === undefined) return []
     return facilityActionKeys(kind).filter((key) =>
-      key === 'air.refit'
-        ? // 15.1C / 14.2a / 15.1B：只有"这一格真能整备"才摆入口（不可用项根本不出现）
-          workbench.refitStartBases.some((base) => base.id === instanceId)
-        : key === 'move.loadUnload'
-          ? workbench.transportHandlingReadyAt(instanceId)
-          : workbench.actionAllowedNow(key),
+      key === 'move.loadUnload'
+        ? workbench.transportHandlingReadyAt(instanceId)
+        : workbench.actionAllowedNow(key),
     )
   }
 
@@ -2255,7 +2250,6 @@ export const useMapViewStore = defineStore('mapView', () => {
     'move.construction': '工程',
     'move.hedgehog': '工程',
     'air.baseReduce': '工程',
-    'air.refit': '空军',
     'move.dumpBlow': '补给',
   }
 
@@ -3140,17 +3134,9 @@ export const useMapViewStore = defineStore('mapView', () => {
       return true
     }
     /*
-     * 15.1（2026-11-17 实走）：整备是「勾机 → 确认整备 → 点补给站 → 确认支付」的事务。
-     * 右键点「整备飞机」当场建立整备中间态，让基地名册（同一小窗）里直接出现勾机名单；
-     * 修前只把意图丢给单位面板，名册里既没有「整备」也没有「确认」，玩家卡在空名册上。
+     * 15.1（2026-11-17 收口）：整备**只有一个入口**——点格展开堆叠 → 从基地卡进整备。
+     * 右键「整备飞机」并入该入口，不再当场建立整备中间态（否则基地右键会成为第三条入口）。
      */
-    if (option.only === 'refit') {
-      unitActionHex.value = { ...hex }
-      unitActionUnitId.value = instanceId
-      unitActionIntent.value = option
-      workbench.beginRefitNow(instanceId)
-      return true
-    }
     unitActionHex.value = { ...hex }
     unitActionUnitId.value = instanceId
     unitActionIntent.value = option
@@ -4051,7 +4037,9 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /** 该格**本方**非战斗单位（"点哪一枚就对哪一枚操作"的候选；敌方的只显示不操作） */
-  function ownNonCombatAt(hex: HexRef): readonly { instanceId: string }[] {
+  function ownNonCombatAt(
+    hex: HexRef,
+  ): readonly { instanceId: string; noncombatKind?: string | null }[] {
     return workbench.units.filter(
       (unit) =>
         unit.side === workbench.activeSide &&
@@ -4324,9 +4312,21 @@ export const useMapViewStore = defineStore('mapView', () => {
        *   只有"该格就这一枚可见本单位"时才省掉这一步（点它＝对它操作，没有可分辨的东西）。
        *   修前：格里有非战斗单位就**立刻**开整备/补给会话 ⇒ 玩家还没看清这格有什么就被推进下一步。
        */
-      if (isIdleForStack() && hasNonCombatUnitAt(hex) && onlyOwnNonCombatAt(hex)) {
+      const soleNonCombat = ownNonCombatAt(hex)[0]
+      /*
+       * ★ 15.1（2026-11-17 收口）：整备段里"格内就一个基地"也**不能**走这个省步捷径，
+       *   否则又会直接起基地动作会话，绕开"点格 → 堆叠 → 基地卡"的唯一入口。
+       */
+      const loneBaseInRefit =
+        workbench.phase === 'aircraftRefit' && soleNonCombat?.noncombatKind === 'air_base'
+      if (
+        isIdleForStack() &&
+        hasNonCombatUnitAt(hex) &&
+        onlyOwnNonCombatAt(hex) &&
+        !loneBaseInRefit
+      ) {
         unitActionHex.value = { col: hex.col, row: hex.row }
-        unitActionUnitId.value = ownNonCombatAt(hex)[0]?.instanceId ?? null
+        unitActionUnitId.value = soleNonCombat?.instanceId ?? null
         closePopup()
         return
       }

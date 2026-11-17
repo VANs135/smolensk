@@ -102,10 +102,11 @@ describe('Ⓐ 15.1B：勾机阶段就按容量收口（等级×2 / 简易机场 
 })
 
 describe('Ⓐ 入口回归：可整备的基地仍给入口', () => {
-  it('基地有非激活机 + 可达补给 ⇒ 右键有「整备飞机」，可开整备', () => {
+  it('基地有非激活机 + 可达补给 ⇒ 整备从堆叠窗基地卡进（右键不再单开）', () => {
     const s = refitStage()
     expect(s.workbench.refitStartBases.map((base) => base.id)).toEqual(['base-1'])
-    expect(s.mapView.unitActionOptions('base-1').map((item) => item.key)).toContain('air.refit')
+    // 15.1 单入口：右键菜单不再出现「整备飞机」（否则与堆叠窗构成两条入口）
+    expect(s.mapView.unitActionOptions('base-1').map((item) => item.key)).not.toContain('air.refit')
     expect(s.workbench.beginRefitNow('base-1')).toBe(true)
   })
 
@@ -183,8 +184,8 @@ describe('Ⓐ 15.1：整备不可行时给出原因（入口不出现，但要�
   })
 })
 
-describe('Ⓐ 15.1：整备段点飞机令牌＝点它所在的基地', () => {
-  it('★ 点飞机令牌 ⇒ 开基地面板，不落「找不到该算子」', () => {
+describe('Ⓐ 15.1：整备段点飞机令牌＝摊该格堆叠小窗', () => {
+  it('★ 点飞机令牌 ⇒ 开该格小窗，不落「找不到该算子」', () => {
     const s = refitStageWithoutSupply()
     const center = hexCanvasPoint(CORE_HEX)
     // 该格 2 枚：扇位顺序 combat 级在前 ⇒ 左＝飞机、右＝基地
@@ -194,7 +195,9 @@ describe('Ⓐ 15.1：整备段点飞机令牌＝点它所在的基地', () => {
       { x: center.x - 0.28 * HEX_RADIUS_PX, y: center.y },
     )
 
-    expect(s.mapView.unitActionUnitId).toBe('base-1')
+    // 15.1 单入口：点飞机不再直接起基地会话，只摊堆叠/开小窗（整备从小窗基地卡进）
+    expect(s.mapView.unitActionUnitId).toBeNull()
+    expect(s.mapView.popup?.variant).toBe('content')
     expect(s.workbench.log.some((entry) => entry.text.includes('找不到该算子'))).toBe(false)
   })
 })
@@ -220,9 +223,10 @@ describe('Ⓐ 15.1：同格有飞机时，空军基地必须能从堆叠里选�
     const center = hexCanvasPoint(CORE_HEX)
     mapView.onHexClick(CORE_HEX, { x: center.x, y: center.y }, center)
 
-    // 修前：命中飞机 ⇒ 「不参与本环节」把这一击吞掉，基地的整备入口出不来。
-    // 批 E 后基地本身在左下角可点；点飞机仍按 15.1 落到它所在基地的面板。
-    expect(mapView.unitActionUnitId).toBe('base-1')
+    // 15.1 单入口：点飞机只摊堆叠/开小窗，不再借"点飞机"直接起基地会话
+    expect(mapView.unitActionUnitId).toBeNull()
+    expect(mapView.popup?.hex.col).toBe(CORE_HEX.col)
+    expect(mapView.popup?.hex.row).toBe(CORE_HEX.row)
   })
 })
 
@@ -293,11 +297,12 @@ describe('Ⓐ 15.1：一笔整备完成后，入口与中间态一起收束', ()
 })
 
 describe('Ⓐ 15.1 实走（2026-11-17）：整备小窗要有完整三步，不能停在空名册', () => {
-  it('★ 右键「整备飞机」＝开始整备：勾机名单立刻可点', () => {
+  it('★ 右键不再单开整备；整备从小窗基地卡（同一 store 入口）开始', () => {
     const s = refitStage()
     s.mapView.onHexContext(CORE_HEX, { x: 0, y: 0 }, { x: 0, y: 0 })
-    expect(s.mapView.openContextAction('base-1', 'air.refit')).toBe(true)
-    expect(s.workbench.refitBase?.id).toBe('base-1')
+    expect(s.mapView.openContextAction('base-1', 'air.refit')).toBe(false)
+    expect(s.workbench.refitBase).toBeNull()
+    expect(s.workbench.beginRefitNow('base-1')).toBe(true)
     expect(s.workbench.refitStage).toBe('select')
   })
 
