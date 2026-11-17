@@ -35,6 +35,82 @@ const workbench = useWorkbenchStore()
 const summary = computed(() => workbench.supplySummary)
 
 /**
+ * 12.6a-d：D 段逐单位判定明细（可展开）
+ *
+ * 修前只有一行汇总（恢复 / 剩余 T / 断补 置·除 / 损耗格数），"哪些单位被判断补、为什么、
+ * 能怎么处置"只在日志里。这里把引擎 `supplyPhasePlan.assessments` 与图上算子拼起来只读展示，
+ * 不新增判定；0 断补时也照样能翻开核对"全部通过"。
+ */
+type SupplyAssessmentStatus = 'inSupply' | 'canEatOffTheMap' | 'outOfSupply' | 'notRequired'
+
+interface SupplyAssessmentRow {
+  unitId: string
+  name: string
+  hexText: string
+  status: SupplyAssessmentStatus
+  statusLabel: string
+  rule: string
+  re: number
+  eatingCostT: number
+  feedingAffordable: boolean | null
+}
+
+const SUPPLY_STATUS_LABELS: Readonly<Record<SupplyAssessmentStatus, string>> = {
+  inSupply: '有追溯补给',
+  canEatOffTheMap: '无追溯补给 · 可吃图上补给',
+  outOfSupply: '断补',
+  notRequired: '不需判定（非战斗）',
+}
+
+const supplyAssessmentRows = computed<SupplyAssessmentRow[]>(() => {
+  const plan = workbench.supplyPhasePlan
+  if (plan === null) return []
+  return plan.assessments.map((item) => {
+    const unit = workbench.units.find((entry) => entry.instanceId === item.unitId)
+    const feeding = plan.feeding.find((entry) => entry.unitId === item.unitId) ?? null
+    const status = item.status as SupplyAssessmentStatus
+    return {
+      unitId: item.unitId,
+      name: unit?.name ?? item.unitId,
+      hexText: unit === undefined ? '—' : hexLabel(unit.hex),
+      status,
+      statusLabel: SUPPLY_STATUS_LABELS[status] ?? item.status,
+      rule: item.rule,
+      re: item.re,
+      eatingCostT: item.eatingCostT,
+      feedingAffordable: feeding === null ? null : feeding.affordable,
+    }
+  })
+})
+
+const supplyAssessmentCounts = computed(() => {
+  const counts = { total: 0, inSupply: 0, canEat: 0, out: 0, notRequired: 0 }
+  for (const row of supplyAssessmentRows.value) {
+    counts.total += 1
+    if (row.status === 'inSupply') counts.inSupply += 1
+    else if (row.status === 'canEatOffTheMap') counts.canEat += 1
+    else if (row.status === 'outOfSupply') counts.out += 1
+    else counts.notRequired += 1
+  }
+  return counts
+})
+
+/** 12.6c / 12.6d：这一枚此刻的断补处置选项（只描述，真实付款仍在下方检查链） */
+function assessmentHandling(row: SupplyAssessmentRow): string {
+  if (row.status === 'outOfSupply') return '接受断补；随后在 12.8 区块掷损耗'
+  if (row.status === 'canEatOffTheMap') {
+    const plan =
+      row.feedingAffordable === null
+        ? ''
+        : row.feedingAffordable
+          ? '（当前计划可付）'
+          : '（当前计划 T 不足 ⇒ 仍会断补）'
+    return `吃图上补给 ${row.eatingCostT} T 或接受断补（二选一）${plan}`
+  }
+  return '—'
+}
+
+/**
  * 12.6 提示：**实时补给线**与本回合标记不一致时的一行文字
  *
  * ★ 用户 2026-11-13 口径：只做文字提示（效果，不是结算）⇒ 不写标记、不染地图色、不加角标。
@@ -1100,6 +1176,41 @@ const showsLedger = computed(
               {{ workbench.traceSettlement?.cleared ?? 0 }}｜需掷损耗
               {{ workbench.supplyPhasePlan.attritionDuty.length }} 格
             </p>
+            <!-- 12.6a-d：逐单位判定（0 断补时也要能翻开核对"全部通过"） -->
+            <p class="num" data-testid="supply-assessment-counts">
+              逐单位判定：共 {{ supplyAssessmentCounts.total }} 个单位——有补给
+              {{ supplyAssessmentCounts.inSupply }}｜可吃图上补给
+              {{ supplyAssessmentCounts.canEat }}｜断补 {{ supplyAssessmentCounts.out }}｜不需判定
+              {{ supplyAssessmentCounts.notRequired }}
+            </p>
+            <details class="extra" data-testid="supply-assessment-detail">
+              <summary class="extra__head num">
+                逐单位明细（{{ supplyAssessmentCounts.total }} 枚）
+              </summary>
+              <div
+                v-for="row in supplyAssessmentRows"
+                :key="row.unitId"
+                class="assessment-row"
+                :data-testid="`supply-assessment:${row.unitId}`"
+              >
+                <span class="num">{{ row.name }} @ {{ row.hexText }}</span>
+                <BaseTag
+                  :kind="
+                    row.status === 'inSupply'
+                      ? 'success'
+                      : row.status === 'outOfSupply'
+                        ? 'danger'
+                        : row.status === 'canEatOffTheMap'
+                          ? 'warning'
+                          : 'neutral'
+                  "
+                >
+                  {{ row.statusLabel }}
+                </BaseTag>
+                <span class="muted num">{{ row.rule }}｜RE {{ row.re }}</span>
+                <span class="num">断补处置：{{ assessmentHandling(row) }}</span>
+              </div>
+            </details>
             <div class="row">
               <BaseButton
                 variant="secondary"
@@ -1423,6 +1534,16 @@ const showsLedger = computed(
   color: var(--color-muted);
   font-size: var(--text-sm);
   cursor: pointer;
+}
+
+/* 12.6a-d：逐单位判定明细的一行 */
+.assessment-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px 0;
+  border-bottom: 1px solid var(--color-rule);
 }
 
 .row {

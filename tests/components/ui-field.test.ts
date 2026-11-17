@@ -147,6 +147,14 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).toMatch(/arrival-thumb/)
   })
 
+  it('SupplyPanel：D 段逐单位补给明细可展开（单位 / 格 / 判定 / 断补处置）', () => {
+    const src = read('src/components/supply/SupplyPanel.vue')
+    // 修前只有一行汇总（恢复 / 剩余 T / 断补 置·除 / 损耗格数），逐单位判定只在日志里
+    expect(src).toMatch(/supplyAssessmentRows/)
+    expect(src).toMatch(/逐单位明细/)
+    expect(src).toMatch(/断补处置/)
+  })
+
   it('ContainersPanel：编队收纳改「盒选」（正式界面点选图上单位、验证页保留文本框）', () => {
     const src = read('src/components/containers/ContainersPanel.vue')
     expect(src).toMatch(/function hideNowFromBox/)
