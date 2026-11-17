@@ -271,7 +271,11 @@ describe('B3：地图上就地展开堆叠（点格展开 / 点枚切换 / 收�
   it('点另一格 ⇒ 页归零并改选新格（不会两格同时翻页）', () => {
     const { mapView } = stores
     stackOf(2)
-    const other = { col: START.col + 1, row: START.row }
+    /*
+     * 2026-11-18：可进入格现在优先按落点处理（用户走查①）。本用例要验的是"改选新格"，
+     * 故目标格取**不在可到达范围**里的己方堆叠。
+     */
+    const other = { col: 1, row: 1 }
     stores.workbench.units.push(
       toConsoleUnit({ record: legCombat(), instanceId: 'o1', hex: other, side: 'axis' }),
       toConsoleUnit({ record: legCombat(), instanceId: 'o2', hex: other, side: 'axis' }),

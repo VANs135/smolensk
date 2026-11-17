@@ -2,10 +2,9 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { mapLayers } from '@/data'
-import { neighbor } from '@/engine/hex-geometry'
 import { useSetupStore } from '@/stores'
 
-import { CORE_HEX, NEAR_HEX, groundRecord, newConsole, placeGround } from '../flows/sop-harness'
+import { CORE_HEX, groundRecord, newConsole, placeGround } from '../flows/sop-harness'
 
 /**
  * G2（用户 2026-11-17 实走）：**换选成功即清掉旧拒绝**
@@ -52,6 +51,25 @@ function enemyHex(
   return hex
 }
 
+/**
+ * 2026-11-18：可进入格现在优先按落点处理，换选只能发生在**不可达**的己方堆叠上。
+ * 取地图上离起点最远的格（远超任何 MA），确保不会误入一步可达范围。
+ */
+function unreachableHex(occupied: { col: number; row: number }[]): { col: number; row: number } {
+  let best = { col: 0, row: 0 }
+  let bestDistance = -1
+  for (const hex of mapLayers.hexes) {
+    const ref = { col: hex.col, row: hex.row }
+    if (occupied.some((item) => item.col === ref.col && item.row === ref.row)) continue
+    const distance = Math.abs(ref.col - CORE_HEX.col) + Math.abs(ref.row - CORE_HEX.row)
+    if (distance > bestDistance) {
+      best = ref
+      bestDistance = distance
+    }
+  }
+  return best
+}
+
 beforeEach(() => {
   setActivePinia(createPinia())
 })
@@ -60,15 +78,16 @@ describe('G2：换选后旧拒绝不残留', () => {
   it('先被拒、再点另一支己方堆叠：选中换过去，红字必须清空', () => {
     const wb = enterMovement()
     placeGround(wb, LEG(), CORE_HEX, 'axis', 'g2-a')
-    placeGround(wb, LEG(), NEAR_HEX, 'axis', 'g2-b')
+    const other = unreachableHex([CORE_HEX])
+    placeGround(wb, LEG(), other, 'axis', 'g2-b')
 
     wb.clickHex(CORE_HEX)
     expect(wb.movePick?.ids).toEqual(['g2-a'])
 
-    wb.clickHex(enemyHex(wb, 'g2-enemy-a', [CORE_HEX, NEAR_HEX]))
+    wb.clickHex(enemyHex(wb, 'g2-enemy-a', [CORE_HEX, other]))
     expect(wb.moveBlocked).not.toBeNull()
 
-    wb.clickHex(NEAR_HEX)
+    wb.clickHex(other)
 
     expect(wb.movePick?.ids).toEqual(['g2-b'])
     expect(wb.moveBlocked).toBeNull()
@@ -77,11 +96,7 @@ describe('G2：换选后旧拒绝不残留', () => {
   it('地图点单枚换选同样清掉旧拒绝', () => {
     const wb = enterMovement()
     placeGround(wb, LEG(), CORE_HEX, 'axis', 'g2-c')
-    const other = neighbor(CORE_HEX, 'NE')
-    // 换选目标必须图内；不满足就换 SE
-    const target = mapLayers.hexes.some((h) => h.col === other.col && h.row === other.row)
-      ? other
-      : neighbor(CORE_HEX, 'SE')
+    const target = unreachableHex([CORE_HEX])
     placeGround(wb, LEG(), target, 'axis', 'g2-d')
 
     wb.clickHex(CORE_HEX)

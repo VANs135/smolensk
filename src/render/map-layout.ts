@@ -223,6 +223,55 @@ export function hexsideCanvasSegment(
   return { from: first, to: second }
 }
 
+/** even-q 偏移坐标 → 立方坐标（距离/直线取整用；与 `neighbor` 的邻格表同源） */
+function toCube(hex: HexRef): { x: number; y: number; z: number } {
+  const x = hex.col
+  const z = hex.row - Math.floor((hex.col + (hex.col & 1)) / 2)
+  return { x, y: -x - z, z }
+}
+
+/** 立方坐标取整 → even-q 偏移坐标 */
+function fromCube(cube: { x: number; y: number; z: number }): HexRef {
+  let { x, y, z } = cube
+  const rx = Math.round(x)
+  const ry = Math.round(y)
+  const rz = Math.round(z)
+  const dx = Math.abs(rx - x)
+  const dy = Math.abs(ry - y)
+  const dz = Math.abs(rz - z)
+  if (dx > dy && dx > dz) x = -ry - rz
+  else if (dy > dz) y = -rx - rz
+  else z = -rx - ry
+  const col = dx > dy && dx > dz ? x : rx
+  const zz = dx > dy && dx > dz ? z : dy > dz ? y : z
+  return { col, row: zz + Math.floor((col + (col & 1)) / 2) }
+}
+
+/**
+ * 两格之间的整数六角直线（含两端）
+ *
+ * 用于拖拽落子的路径补全：指针采样可能跳过中间的格，这里按格心连线逐格补上，
+ * 保证交给引擎的是**相邻格序列**（6.1 逐格移动）。
+ */
+export function hexLineBetween(from: HexRef, to: HexRef): HexRef[] {
+  const a = toCube(from)
+  const b = toCube(to)
+  const distance = Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.z - b.z))
+  if (distance === 0) return [{ ...from }]
+  const out: HexRef[] = []
+  for (let step = 0; step <= distance; step += 1) {
+    const t = step / distance
+    const hex = fromCube({
+      x: a.x + (b.x - a.x) * t,
+      y: a.y + (b.y - a.y) * t,
+      z: a.z + (b.z - a.z) * t,
+    })
+    const last = out.at(-1)
+    if (last === undefined || last.col !== hex.col || last.row !== hex.row) out.push(hex)
+  }
+  return out
+}
+
 /** 用于「走一步」高亮的相邻格（只取图内格） */
 export function boardNeighbors(hex: HexRef): HexRef[] {
   const out: HexRef[] = []

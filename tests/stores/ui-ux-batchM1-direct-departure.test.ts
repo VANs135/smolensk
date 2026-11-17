@@ -100,19 +100,20 @@ describe('M1：勾选后点高亮格直接开拔', () => {
     expect(store.moveBlocked).not.toBeNull()
   })
 
-  it('点另一支己方堆叠：照旧换选（即使它在可到达范围内）', () => {
+  it('点可进入的己方占位格：优先按落点处理（2026-11-18 口径，不再换选）', () => {
     const store = newStore()
     store.setActiveSide('axis')
     store.setPhase('movement')
-    place(store, 'a1')
-    const other = place(store, 'a2', { col: 37, row: 13 })
+    const mover = place(store, 'a1')
+    const resident = place(store, 'a2', { col: 37, row: 13 })
     store.clickHex(START)
 
     store.clickHex({ col: 37, row: 13 })
 
-    expect(store.moveInteraction).toBeNull()
-    expect(store.movePick?.hex).toEqual({ col: 37, row: 13 })
-    expect(store.movePick?.ids).toEqual([other.instanceId])
+    expect(mover.hex).toEqual({ col: 37, row: 13 })
+    expect(store.moveInteraction?.steps).toHaveLength(1)
+    expect(store.movePick).toBeNull()
+    expect(resident.hex).toEqual({ col: 37, row: 13 })
   })
 
   it('点不可达的己方堆叠：照旧换选，不吞掉这一击', () => {

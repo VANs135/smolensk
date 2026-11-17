@@ -294,6 +294,7 @@ import {
   // 12.1a：同格并入时保持「尽可能并为 SP」的规范形（`holdingsToT` 已在上方导入）
   tToHoldings,
   planVariableReinforcement,
+  planStep,
   previewStep,
   engineerCapableHqAt,
   railSupplyPath,
@@ -8877,6 +8878,84 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
   }
 
+  /**
+   * 2026-11-18：**拖拽落子**——沿玩家实际拖过的路径逐步判通行，全部合法才走。
+   *
+   * 与点目标格共用同一套引擎判据（`planStep`／`commitStep`）：先按路径逐段预演
+   * （`planStep` 不写盘面），任一段不可进入就整次不动并报「无法通行」＋引擎给的原因；
+   * 全部通过后逐段提交，MP 与账本按 **实际走过的格** 记账，撤销仍逐步回退。
+   *
+   * `path` 含起点（画布已按六角直线补全成相邻格序列）。
+   */
+  function moveAlongDraggedPath(path: readonly HexRef[]): boolean {
+    const pick = movePick.value
+    const start = moveInteraction.value?.start ?? pick?.hex ?? null
+    if (start === null) return false
+    // 规范化：起点开头、去重、拒绝不相邻的段（画布已补全；这里只守引擎输入形状）
+    const full: HexRef[] = [{ ...start }]
+    for (const hex of path) {
+      const last = full[full.length - 1]!
+      if (sameHex(last, hex)) continue
+      if (!areAdjacent(last, hex)) {
+        moveBlocked.value = { rule: '6.1', reason: '无法通行：拖动路径不连续' }
+        pushLog('warning', moveBlocked.value.reason, '6.1')
+        return false
+      }
+      full.push({ ...hex })
+    }
+    if (full.length < 2) return false
+    const simulation = moveInteraction.value ?? movePickPreviewInteraction.value
+    if (simulation === null) return false
+    const dry = simulateMovePath(simulation, moveRuntime.value, full)
+    if (!dry.ok) {
+      moveBlocked.value = { rule: dry.rule, reason: `无法通行：${dry.reason}` }
+      pushLog('warning', `无法通行：${dry.reason}（${dry.rule}）`, dry.rule)
+      return false
+    }
+    if (moveInteraction.value === null && !confirmMovePick()) return false
+    advanceAlongPath(full)
+    return true
+  }
+
+  /** 拖拽路径的**纯预演**：按当前引擎判据逐段算一遍，不写盘面 */
+  function simulateMovePath(
+    interaction: MoveInteractionState,
+    runtime: readonly MoveUnitRuntime[],
+    path: readonly HexRef[],
+  ): { ok: true } | { ok: false; rule: string; reason: string } {
+    let simulated = interaction
+    const simulatedRuntime = runtime.map((item) => ({ ...item, hex: { ...item.hex } }))
+    for (let index = 1; index < path.length; index += 1) {
+      const to = path[index]!
+      const result = planStep({
+        context: moveContext.value,
+        interaction: simulated,
+        runtime: simulatedRuntime,
+        to,
+        path: path.slice(0, index + 1),
+      })
+      if (!result.ok) {
+        return { ok: false, rule: result.rule, reason: `${to.col}.${to.row}：${result.reason}` }
+      }
+      for (const patch of result.data.patches) {
+        const at = simulatedRuntime.findIndex((item) => item.unitId === patch.unitId)
+        if (at >= 0) simulatedRuntime[at] = { ...patch, hex: { ...patch.hex } }
+      }
+      simulated = result.data.interaction
+      // 中途已被迫收束（进 ZOC 停车 / 最小移动 / 战略模式）⇒ 路径后段走不了
+      if (index < path.length - 1) {
+        const stillActive = simulated.unitIds.some((id) => {
+          const item = simulatedRuntime.find((entry) => entry.unitId === id)
+          return item !== undefined && !item.ended
+        })
+        if (!stillActive) {
+          return { ok: false, rule: '4.5a-A', reason: `${to.col}.${to.row} 之后必须停止` }
+        }
+      }
+    }
+    return { ok: true }
+  }
+
   /** C5：点击某格走动（移动交互入口） */
   function tryMoveTo(hex: HexRef): void {
     const interaction = moveInteraction.value
@@ -11411,15 +11490,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     const pick = movePick.value
     if (pick !== null && (pick.hex.col !== hex.col || pick.hex.row !== hex.row)) {
-      const occupied = friendlyUnitsAt(hex).length > 0
-      // 点另一支己方堆叠＝换选（与摊开/查看同一口径）；开拔只认没有己方堆叠的落点
-      if (!occupied) {
-        const node = reachableNodeAt(groupReachable.value.hexes, hex)
-        if (node !== null) {
-          if (!confirmMovePick()) return
-          tryMoveTo(hex)
-          return
-        }
+      /*
+       * 2026-11-18：**可进入格优先按落点处理**（用户走查）。
+       *   修前只有"没有己方堆叠"的格才算落点 ⇒ 点到可进入、且格内有己方单位的邻格时，
+       *   这一击被堆叠/换选吃掉，单位走不进去。现在先问引擎：可达就开拔并落子；
+       *   不可达才回落到"点另一支己方堆叠＝换选"。
+       */
+      const node = reachableNodeAt(groupReachable.value.hexes, hex)
+      if (node !== null) {
+        if (!confirmMovePick()) return
+        tryMoveTo(hex)
+        return
+      }
+      if (friendlyUnitsAt(hex).length === 0) {
         /*
          * G1（用户 2026-11-17 实走）：点不到的格要说清**缺什么**——
          * 未加油 / 地形不可进 / MA 不足 / 敌占 / 出界各一句（判据来自引擎 `evaluateStep`）。
@@ -11429,6 +11512,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         pushLog('warning', moveBlocked.value.reason, note.rule)
         return
       }
+      // 有己方堆叠且不可达 ⇒ 换选（既有口径）
     }
 
     // C5：未开始移动 → 选单位或堆叠（当前方优先；6.1 可单独或以堆叠移动）
@@ -30149,6 +30233,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     placeAt,
     removeAt,
     clickHex,
+    // 2026-11-18：拖拽落子（沿玩家实际路径逐步判通行；与点击同一套判据）
+    moveAlongDraggedPath,
     // 用户 2026-11-10：地图上点**某一枚** ⇒ 只选这一枚（`only`），整格全选走"点格内空白"
     selectForMove,
     // C5 动作

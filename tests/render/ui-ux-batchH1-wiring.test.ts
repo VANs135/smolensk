@@ -21,10 +21,12 @@ describe('H1 接线：地图内拖动落子', () => {
     expect(source).toContain('props.counterDragSource?.(')
   })
 
-  it('counterDrop 带落点格（hex），供上层判断是否在地图内', () => {
+  it('counterDrop 带落点格（hex）与拖动路径，供上层区分图内/图外并按路径落子', () => {
     const source = read('../../src/components/map/MapCanvas.vue')
-    expect(source).toMatch(/counterDrop:\s*\[id: string,[\s\S]{0,120}hex: HexRef \| null\]/)
-    expect(source).toMatch(/emit\('counterDrop'[\s\S]{0,120}dropHex/)
+    expect(source).toContain('counterDrop: [')
+    expect(source).toMatch(/hex: HexRef \| null,/)
+    expect(source).toMatch(/path: readonly HexRef\[\],/)
+    expect(source).toMatch(/emit\('counterDrop'[\s\S]{0,400}counterDragPath/)
   })
 
   it('对局台：先判图外盒，再有落点格才拖到格；图外不做地图落子', () => {

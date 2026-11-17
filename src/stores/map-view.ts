@@ -1731,6 +1731,20 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
+   * 该格此刻是不是一次移动的**合法落点**
+   *
+   * 用户 2026-11-18：待开拔/移动中点到目标格（哪怕格内有己方单位）都应当**走进那一格**；
+   * 堆叠选中只留给「没有待定落点」的情形。判据只读引擎已算好的可到达范围，不另算规则。
+   */
+  function moveDestinationAt(hex: HexRef): boolean {
+    if (workbench.moveInteraction === null && workbench.movePick === null) return false
+    if (movePickHere(hex)) return false
+    return workbench.groupReachable.hexes.some(
+      (node) => node.hex.col === hex.col && node.hex.row === hex.row,
+    )
+  }
+
+  /**
    * 摊开某格（**默认全选**——用户 2026-11-10 恢复）
    *
    * ★ 2026-11-10 用户口径：堆叠窗口「列全 + 默认全选」。摊开即把该格**本方全部可开拔算子**
@@ -1878,6 +1892,11 @@ export const useMapViewStore = defineStore('mapView', () => {
       combatSelectionLive.value ||
       (workbench.barrageActive && workbench.barrageState === null)
     if (!liveForStack) return false
+    /*
+     * 2026-11-18：移动的合法落点**优先**——点在目标格里的己方令牌上也只能是「走到这一格」，
+     * 不许被堆叠命中改写成"把这一格选出来"（用户走查①）。
+     */
+    if (moveDestinationAt(hex)) return false
     // B26：与渲染同一份令牌（含飞机）⇒ 命中的槽位就是画在那儿的算子
     const all = stackTokensAt(hex)
     const tokens = all.filter((token) => token.hiddenStack !== true)
@@ -2929,6 +2948,8 @@ export const useMapViewStore = defineStore('mapView', () => {
   /**
    * H1（用户 2026-11-16）：**地图内拖动源**——只有本次移动中的算子可以拖到格。
    *
+   * 2026-11-18：**待开拔**（`movePick`，还没点「开始移动」）里被选中的算子同样可拖——
+   * 松手时先开拔再沿拖动路径落子。
    * 命中与绘制同源（`hitHexToken`）；本函数只读，不写任何状态。
    */
   function counterForMoveDragAt(hex: HexRef, world: { x: number; y: number }, scale: number) {
@@ -2940,22 +2961,37 @@ export const useMapViewStore = defineStore('mapView', () => {
       scale,
     })
     if (token === null) return null
-    if (!workbench.activeMoveUnits.some((unit) => unit.instanceId === token.id)) return null
+    const active = workbench.activeMoveUnits.some((unit) => unit.instanceId === token.id)
+    const pick = workbench.movePick
+    const picked =
+      pick !== null &&
+      pick.hex.col === hex.col &&
+      pick.hex.row === hex.row &&
+      pick.ids.includes(token.id)
+    if (!active && !picked) return null
     return { id: token.id, label: token.label }
   }
 
   /**
    * H1：把移动中的算子放到某格 ＝ 对该格的一次点击。
    *
-   * 直接复用 `onHexClick`：落点判定、拒绝原因（`moveBlocked` / 提示行）与点击完全同源；
-   * 不在移动中的算子一律不接受（返回 false，盘面不变）。
+   * 2026-11-18：带 `path` 时改走**沿拖动路径**的落子（逐步判通行；任一段不可进入就整次不动），
+   * 判据与扣费仍与点击同源（引擎 `planStep`／`commitStep`）。`path` 含起点。
    */
   function dropMovingCounterAt(
     instanceId: string,
     hex: HexRef,
     anchor?: { x: number; y: number },
+    path?: readonly HexRef[],
   ): boolean {
-    if (!workbench.activeMoveUnits.some((unit) => unit.instanceId === instanceId)) return false
+    const active = workbench.activeMoveUnits.some((unit) => unit.instanceId === instanceId)
+    const picked = workbench.movePick?.ids.includes(instanceId) === true
+    if (!active && !picked) return false
+    if (path !== undefined && path.length >= 2) {
+      workbench.moveAlongDraggedPath(path)
+      return true
+    }
+    // 无路径：等同点该格（待开拔时会先开拔再落子；拒绝原因与点击同源）
     onHexClick(hex, anchor)
     return true
   }
@@ -4426,7 +4462,11 @@ export const useMapViewStore = defineStore('mapView', () => {
        * 摊开已是常态，窗口不再承担"摊开地图"的职责。敌方格只开只读窗口，不建取子清单。
        */
       const stack = stackTokensAt(hex).filter((token) => token.hiddenStack !== true)
-      if (idleBefore && isIdleForStack() && stack.length > 0) {
+      /*
+       * 2026-11-18：目标格是移动的合法落点时，**不摊开/不弹堆叠窗**——这一击归"走到该格"。
+       * 修前这里先摊开目标格的己方堆叠，`clickHex` 永远轮不到（用户走查①）。
+       */
+      if (idleBefore && isIdleForStack() && stack.length > 0 && !moveDestinationAt(hex)) {
         if (stack.some((token) => token.side === actingSide.value && token.air !== true))
           expandStackAt(hex)
         /*

@@ -12,7 +12,7 @@ import {
   dragMove,
   type DragGesture,
 } from '@/render/drag-gesture'
-import { BOARD_SIZE_PX, hexCanvasPoint, hitTestHex } from '@/render/map-layout'
+import { BOARD_SIZE_PX, hexCanvasPoint, hexLineBetween, hitTestHex } from '@/render/map-layout'
 // B18a：手势归属（浮层是容器的子节点 ⇒ 必须按事件源判断，否则点面板会同时点到地图）
 import { isMapGestureTarget } from '@/render/map-input'
 import {
@@ -172,7 +172,12 @@ const emit = defineEmits<{
   ]
   counterDrag: [id: string | null]
   /** 拖放算子：落点窗口坐标 + 落点格（图外为 null，供上层区分"盒"与"地图内落子"） */
-  counterDrop: [id: string, point: { x: number; y: number }, hex: HexRef | null]
+  counterDrop: [
+    id: string,
+    point: { x: number; y: number },
+    hex: HexRef | null,
+    path: readonly HexRef[],
+  ]
   /** H3：双击算子（格 / 世界坐标 / 比例；只报位置，动作由上层决定） */
   hexDblClick: [hex: HexRef, world: { x: number; y: number }, scale: number]
   /** 悬停格变化（离开画布为 null） */
@@ -238,9 +243,17 @@ let resizeObserver: ResizeObserver | null = null
 let drag: DragGesture = IDLE_DRAG
 let counterPress: { id: string; label: string; x: number; y: number } | null = null
 const counterGhost = ref<{ label: string; x: number; y: number } | null>(null)
+/**
+ * 拖动经过的格序列（含起点）
+ *
+ * 指针采样可能跳过中间格（快速拖动），故每次换格用 `hexLineBetween` 补全成相邻格序列，
+ * 上层据此**逐步**判通行（用户 2026-11-18：不是直线飞到终点）。
+ */
+let counterDragPath: HexRef[] = []
 
 function clearCounterDrag(): void {
   counterPress = null
+  counterDragPath = []
   if (counterGhost.value !== null) emit('counterDrag', null)
   counterGhost.value = null
 }
@@ -457,6 +470,7 @@ function onPointerDown(event: PointerEvent): void {
         props.counterDragSource?.(hit.hex, hit.world, viewport.value.scale) ??
         null)
   counterPress = source == null ? null : { ...source, x: event.clientX, y: event.clientY }
+  counterDragPath = source == null || hit === null ? [] : [{ ...hit.hex }]
   drag = beginDrag({ x: event.clientX, y: event.clientY }, event.pointerId)
   // 指针捕获让「拖出画布」也能继续收到 pointermove。
   // 该 API 在指针已非活动时会抛错（快速点击 / 合成事件），故容错——否则拖动会卡住。
@@ -483,13 +497,23 @@ function onPointerMove(event: PointerEvent): void {
       drag = IDLE_DRAG
       clearCounterDrag()
       releaseCapture(event)
-    } else if (
-      counterGhost.value !== null ||
-      Math.hypot(event.clientX - counterPress.x, event.clientY - counterPress.y) >= 5
-    ) {
-      if (counterGhost.value === null) emit('counterDrag', counterPress.id)
-      drag = { ...drag, moved: true }
-      counterGhost.value = { label: counterPress.label, ...local }
+    } else {
+      // 记录拖动经过的格（换格时按六角直线补全，指针采样跳过中间格也不丢段）
+      const overHex = hitAtLocal(local)?.hex ?? null
+      if (overHex !== null) {
+        const last = counterDragPath.at(-1)
+        if (last === undefined) counterDragPath = [{ ...overHex }]
+        else if (last.col !== overHex.col || last.row !== overHex.row)
+          counterDragPath.push(...hexLineBetween(last, overHex).slice(1))
+      }
+      if (
+        counterGhost.value !== null ||
+        Math.hypot(event.clientX - counterPress.x, event.clientY - counterPress.y) >= 5
+      ) {
+        if (counterGhost.value === null) emit('counterDrag', counterPress.id)
+        drag = { ...drag, moved: true }
+        counterGhost.value = { label: counterPress.label, ...local }
+      }
     }
     return
   }
@@ -529,7 +553,16 @@ function onPointerUp(event: PointerEvent): void {
     // H1：落点格随拖放一起给出（图外为 null）——上层据此区分"进盒"与"地图内落子"
     const dropLocal = toLocal(event)
     const dropHex = dropLocal === null ? null : (hitAtLocal(dropLocal)?.hex ?? null)
-    emit('counterDrop', counter.id, { x: event.clientX, y: event.clientY }, dropHex)
+    // 拖动路径以落点格收尾（指针最后一次采样可能还没走到落点）
+    if (dropHex !== null) {
+      const last = counterDragPath.at(-1)
+      if (last === undefined) counterDragPath = [{ ...dropHex }]
+      else if (last.col !== dropHex.col || last.row !== dropHex.row)
+        counterDragPath.push(...hexLineBetween(last, dropHex).slice(1))
+    }
+    emit('counterDrop', counter.id, { x: event.clientX, y: event.clientY }, dropHex, [
+      ...counterDragPath,
+    ])
   }
   clearCounterDrag()
   if (!ended.clicked) return

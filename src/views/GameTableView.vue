@@ -305,7 +305,12 @@ function onMapContext(
   mapView.onHexContext(hex, world, anchor, scale)
 }
 
-function onCounterDrop(id: string, point: { x: number; y: number }, hex: HexRef | null): void {
+function onCounterDrop(
+  id: string,
+  point: { x: number; y: number },
+  hex: HexRef | null,
+  path: readonly HexRef[] = [],
+): void {
   const target = document
     .elementFromPoint(point.x, point.y)
     ?.closest<HTMLElement>('[data-counter-box]')
@@ -317,7 +322,7 @@ function onCounterDrop(id: string, point: { x: number; y: number }, hex: HexRef 
   // H1：拖到图外（hex === null）不落子；地图内则等同点该格（拒绝原因也同源）
   if (hex === null) return
   const anchor = mapRef.value?.hexToWindow(hex) ?? point
-  mapView.dropMovingCounterAt(id, hex, anchor)
+  mapView.dropMovingCounterAt(id, hex, anchor, path)
 }
 
 function pickAirBox(): void {
