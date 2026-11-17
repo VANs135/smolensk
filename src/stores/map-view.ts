@@ -792,6 +792,11 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     // 用户 2026-11-18：与 `groupReachable` 共用同一条闸门（初设 / A 整备一律不投）
     const reachableLive = workbench.moveRangeDisplayLive
+    /*
+     * 用户 2026-11-18：初设多选 † 单位时，把**各枚允许落位的格**取并集铺出来。
+     * 单枚点击仍走 `stackDisperse`；多选（堆叠栏勾选）时以选中集为唯一来源。
+     */
+    const setupDisperseIds = setup.dispersableIdsAmong(stackSelection.value)
     return {
       tokens: visibleTokens.value,
       /*
@@ -906,7 +911,9 @@ export const useMapViewStore = defineStore('mapView', () => {
       // 第六批条 2：卡车点选模式下高亮的**是卡车所在格**（不是"落点"）
       setupCandidates:
         setup.placing?.candidates ??
-        setup.stackDisperse?.candidates ??
+        (setupDisperseIds.length > 0
+          ? setup.disperseCandidatesFor(setupDisperseIds)
+          : setup.stackDisperse?.candidates) ??
         (setup.truckPickActive
           ? setup.truckPickHexes
           : setup.pendingSpOwnershipHexes.length > 0
@@ -3223,6 +3230,19 @@ export const useMapViewStore = defineStore('mapView', () => {
       scale,
     })
     if (token === null) return null
+    /*
+     * 用户 2026-11-18：初设 † 多选 —— 拖任意一枚选中单位，就把**选中的整组**一起带走。
+     * 只带当前布设方、且属于 † 条目的实例（其余单位本来就不能在初设里动）。
+     */
+    if (!setup.finished) {
+      const selected = setup.dispersableIdsAmong(stackSelection.value)
+      const ids = selected.includes(token.id)
+        ? selected
+        : setup.isStackDisperseUnit(token.id)
+          ? [token.id]
+          : []
+      return ids.length === 0 ? null : { id: token.id, label: token.label, ids }
+    }
     const active = workbench.activeMoveUnits.some((unit) => unit.instanceId === token.id)
     const pick = workbench.movePick
     const picked =
@@ -3248,13 +3268,20 @@ export const useMapViewStore = defineStore('mapView', () => {
     anchor?: { x: number; y: number },
     path?: readonly HexRef[],
   ): boolean {
-    const active = workbench.activeMoveUnits.some((unit) => unit.instanceId === instanceId)
-    const picked = workbench.movePick?.ids.includes(instanceId) === true
-    // 初设 †：拖动松手＝一次散开（与点击/普通初设同源，拒绝原因写在 lastAction）
-    if (!active && !picked && !setup.finished && setup.isStackDisperseUnit(instanceId)) {
-      setup.moveStackUnit(instanceId, hex)
+    // 初设 †：拖动松手＝一次散开；多选时整组一起落位（拒绝原因写在 lastAction）
+    if (!setup.finished) {
+      const selected = setup.dispersableIdsAmong(stackSelection.value)
+      const ids = selected.includes(instanceId)
+        ? selected
+        : setup.isStackDisperseUnit(instanceId)
+          ? [instanceId]
+          : []
+      if (ids.length === 0) return false
+      setup.moveStackUnits(ids, hex)
       return true
     }
+    const active = workbench.activeMoveUnits.some((unit) => unit.instanceId === instanceId)
+    const picked = workbench.movePick?.ids.includes(instanceId) === true
     if (!active && !picked) return false
     if (path !== undefined && path.length >= 2) {
       workbench.moveAlongDraggedPath(path)
@@ -3272,6 +3299,8 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 避免玩家看到一圈金边却不知道它还挂在旧单位上。
    */
   function cancelCounterDragNow(): void {
+    // 初设：拖动被取消不没收已勾选的单位（选中集就是待散开的那一组）
+    if (!setup.finished) return
     if (workbench.movePick !== null) workbench.cancelMovePick()
     stackSelection.value = []
   }

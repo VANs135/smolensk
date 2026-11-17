@@ -688,11 +688,64 @@ export const useSetupStore = defineStore('setup', () => {
   }
 
   /**
-   * 把一枚 † 算子散到目标格
+   * † 算子散开的一条校验（不落盘、不记日志）
    *
    * 与普通初设落位**共用** `planSetupPlacement`：IV-A 范围（±1）+ IV-I 可进入 +
-   * IV-F 10 RE（按**该枚当前 RE**，9.11d）。移动只改 `hex`、不改实例 id，
-   * 故卡车满载标记与 `loadedSpT` 原样保留（13.2h）。
+   * IV-F 10 RE（按**该枚当前 RE**，9.11d）。分组散开时逐枚独立校验，
+   * 已落位的同伴计入目标格的既有 RE。
+   */
+  function stackMoveOutcomeOf(
+    unit: (typeof workbench.units)[number],
+    entry: SetupEntryView,
+    target: HexRef,
+  ) {
+    const extraCandidates = wiggleMotExtraCandidates(entry)
+    const facts: SetupCandidateFacts = {
+      ...factsFor(unit.side),
+      // 目标格的“既有 RE”不含这一枚自己（9.11d 当前 RE）
+      existingRe: (hex) =>
+        workbench.units
+          .filter((item) => sameHex(item.hex, hex) && item.instanceId !== unit.instanceId)
+          .reduce((sum, item) => sum + (item.re === undefined ? 0 : currentReOf(item)), 0),
+    }
+    return planSetupPlacement({
+      entry,
+      targetHex: target,
+      facts,
+      re: currentReOf(unit),
+      ...(extraCandidates.length === 0 ? {} : { extraCandidates }),
+    })
+  }
+
+  /** 当前布设方、且属于 † 条目的实例（多选拖动只带这些） */
+  function dispersableIdsAmong(ids: readonly string[]): string[] {
+    return ids.filter((id) => isStackDisperseUnit(id))
+  }
+
+  /**
+   * 这些 † 单位**各自允许落位**的格并集（初设多选时地图高亮）
+   *
+   * 与落位判据同源：候选一律由 `candidatesOf`（引擎 `setupCandidates` + IV-A 过滤）给出，
+   * 本函数只做并集去重，不扩大范围。
+   */
+  function disperseCandidatesFor(ids: readonly string[]): HexRef[] {
+    const out: HexRef[] = []
+    for (const id of ids) {
+      const unit = workbench.units.find((item) => item.instanceId === id)
+      if (unit === undefined || !isStackDisperseUnit(id)) continue
+      const entry = tolerantEntryOfUnit(unit)
+      if (entry === undefined) continue
+      for (const hex of candidatesOf(entry.index)) {
+        if (!out.some((item) => sameHex(item, hex))) out.push({ col: hex.col, row: hex.row })
+      }
+    }
+    return out
+  }
+
+  /**
+   * 把一枚 † 算子散到目标格
+   *
+   * 移动只改 `hex`、不改实例 id，故卡车满载标记与 `loadedSpT` 原样保留（13.2h）。
    */
   function moveStackUnit(instanceId: string, target: HexRef): boolean {
     if (finished.value) return record({ ok: false, rule: SETUP_RULE, reason: 'setupFinished' })
@@ -705,22 +758,7 @@ export const useSetupStore = defineStore('setup', () => {
       return record({ ok: false, rule: SETUP_RULE, reason: 'notTolerantUnit' })
     if (sameHex(unit.hex, target))
       return record({ ok: false, rule: SETUP_RULE, reason: 'stackSameHex' })
-    const extraCandidates = wiggleMotExtraCandidates(entry)
-    const facts: SetupCandidateFacts = {
-      ...factsFor(unit.side),
-      // 目标格的“既有 RE”不含这一枚自己（9.11d 当前 RE）
-      existingRe: (hex) =>
-        workbench.units
-          .filter((item) => sameHex(item.hex, hex) && item.instanceId !== instanceId)
-          .reduce((sum, item) => sum + (item.re === undefined ? 0 : currentReOf(item)), 0),
-    }
-    const outcome = planSetupPlacement({
-      entry,
-      targetHex: target,
-      facts,
-      re: currentReOf(unit),
-      ...(extraCandidates.length === 0 ? {} : { extraCandidates }),
-    })
+    const outcome = stackMoveOutcomeOf(unit, entry, target)
     if (!outcome.ok) return record(outcome)
     const snapshot = capturePlacementState()
     const from = setupHexLabel(unit.hex)
@@ -739,6 +777,62 @@ export const useSetupStore = defineStore('setup', () => {
       rule: WITHIN_RULE,
       data: {
         detail: `† 散开：${entry.raw} ⇒ ${setupHexLabel(target)}（${entry.anchors.map(setupHexLabel).join(' / ')} ±${String(entry.radius ?? 1)} 格，IV-A / IV-F）`,
+      },
+    })
+  }
+
+  /**
+   * 一次拖动把**选中的多枚** † 算子一起散到同一格（用户 2026-11-18）
+   *
+   * 逐枚独立过 `stackMoveOutcomeOf`（IV-A / IV-I / IV-F 同一套判据）：先到的先占 RE，
+   * 后面的若把格塞过 10 RE 就留在原格并记原因——不因一枚失败把已经能走的同伴退回。
+   * 整组只记**一条**撤回快照（一次拖动＝一步）。
+   */
+  function moveStackUnits(ids: readonly string[], target: HexRef): boolean {
+    if (finished.value) return record({ ok: false, rule: SETUP_RULE, reason: 'setupFinished' })
+    const movable = ids
+      .map((id) => ({ unit: workbench.units.find((item) => item.instanceId === id), id }))
+      .filter(
+        (item): item is { unit: (typeof workbench.units)[number]; id: string } =>
+          item.unit !== undefined &&
+          (setupSideCursor.value === null || setupSideCursor.value === item.unit.side) &&
+          tolerantEntryOfUnit(item.unit) !== undefined,
+      )
+    if (movable.length === 0)
+      return record({ ok: false, rule: SETUP_RULE, reason: 'notTolerantUnit' })
+    const snapshot = capturePlacementState()
+    let moved = 0
+    let failure: ReturnType<typeof planSetupPlacement> | null = null
+    for (const item of movable) {
+      if (sameHex(item.unit.hex, target)) continue
+      const entry = tolerantEntryOfUnit(item.unit)
+      if (entry === undefined) continue
+      const outcome = stackMoveOutcomeOf(item.unit, entry, target)
+      if (!outcome.ok) {
+        failure ??= outcome
+        continue
+      }
+      item.unit.hex = { ...target }
+      moved += 1
+    }
+    if (moved === 0) {
+      return record(failure ?? { ok: false, rule: SETUP_RULE, reason: 'stackSameHex' })
+    }
+    recordPlacementUndo(`† 散开 ×${String(moved)} → ${setupHexLabel(target)}`, snapshot)
+    // 高亮由选中集驱动（`disperseCandidatesFor`），这里不再挂单枚候选
+    stackDisperse.value = null
+    const failed = movable.length - moved
+    const failNote =
+      failure !== null && !failure.ok
+        ? `；其余 ${String(failed)} 枚未动（${failure.rule}）`
+        : failed > 0
+          ? `；其余 ${String(failed)} 枚未动`
+          : ''
+    return record({
+      ok: true,
+      rule: WITHIN_RULE,
+      data: {
+        detail: `† 散开：${String(moved)} 枚 ⇒ ${setupHexLabel(target)}${failNote}（IV-A / IV-F）`,
       },
     })
   }
@@ -4096,6 +4190,10 @@ export const useSetupStore = defineStore('setup', () => {
     cancelStackDisperse,
     moveStackUnit,
     moveStackUnitAtHex,
+    // 用户 2026-11-18：多选整组散开（一次拖动）与多选候选并集
+    dispersableIdsAmong,
+    disperseCandidatesFor,
+    moveStackUnits,
     setPlacingChunk,
     placingChunkChoices,
     finishSetup,
