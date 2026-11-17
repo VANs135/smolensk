@@ -36,6 +36,35 @@ const boxRefitAllowed = computed(
 const refitSources = computed(() => workbench.refitPayDumps.length)
 
 /**
+ * 15.1 整备小窗的完整三步（2026-11-17 实走）
+ *
+ * 修前名册只显示「已选 N · 点补给站付款」一行，既没有开始整备的按钮，也没有
+ * 「确认整备 / 确认支付」——玩家点开基地只看到驻机名册，整备走不下去。
+ * 这里把既有 store 入口（`beginRefitNow` / `confirmRefitSelectionNow` / `confirmRefitPaymentNow`）
+ * 接到名册上，判据与结算仍只在 store 里。
+ */
+const refitSelectedCount = computed(() => workbench.refitSelectedIds.length)
+const refitSelectLimit = computed(() => workbench.refitSelectLimit)
+const refitDumpLabel = computed(() => {
+  const id = workbench.airInputs.refitDumpId
+  if (id === null) return null
+  const dump = workbench.refitPayDumps.find((item) => item.id === id)
+  return dump === undefined ? null : `${dump.hex.col}.${dump.hex.row}`
+})
+const canStartRefit = computed(
+  () =>
+    props.baseId !== undefined &&
+    workbench.refitStartBases.some((base) => base.id === props.baseId),
+)
+const refitReason = computed(() =>
+  props.baseId === undefined || refit.value ? null : workbench.refitBlockReasonAt(props.baseId),
+)
+
+function startRefit(): void {
+  if (props.baseId !== undefined) workbench.beginRefitNow(props.baseId)
+}
+
+/**
  * 14.11 转场（用户 2026-11-12：目标/目的地一律点图选，不再下拉）
  *
  * 图外盒：选中一架（左键或右键）⇒ 只能「转场到基地」（盒到盒不提供）。
@@ -96,12 +125,46 @@ function onContext(id: string): void {
     />
     <p v-else class="roster__hint">无飞机</p>
     <div v-if="refit" class="roster__row">
-      <span class="roster__hint">已选 {{ workbench.refitSelectedIds.length }} · 点补给站付款</span>
+      <template v-if="workbench.refitStage === 'select'">
+        <span class="roster__hint num">
+          已选 {{ refitSelectedCount }} / {{ refitSelectLimit }} 架
+        </span>
+        <BaseButton
+          v-if="refitSelectedCount > 0"
+          size="sm"
+          variant="primary"
+          @click="workbench.confirmRefitSelectionNow()"
+          >确认整备</BaseButton
+        >
+      </template>
+      <template v-else>
+        <span class="roster__hint">
+          已选补给站：{{ refitDumpLabel ?? '点地图上金黄的补给站' }}
+        </span>
+        <BaseButton
+          v-if="workbench.airInputs.refitDumpId !== null"
+          size="sm"
+          variant="primary"
+          @click="workbench.confirmRefitPaymentNow()"
+          >确认支付</BaseButton
+        >
+      </template>
       <BaseTag kind="neutral">15.1</BaseTag>
       <span v-if="refitSources === 0" class="roster__hint">无付款来源</span>
       <BaseButton size="sm" variant="ghost" @click="workbench.cancelRefitNow()">返回</BaseButton>
     </div>
     <template v-else>
+      <div v-if="baseId !== undefined" class="roster__row">
+        <BaseButton
+          v-if="canStartRefit"
+          size="sm"
+          variant="secondary"
+          title="15.1"
+          @click="startRefit"
+          >整备（15.1）</BaseButton
+        >
+        <span v-else-if="refitReason !== null" class="roster__hint">{{ refitReason }}</span>
+      </div>
       <div class="roster__row">
         <BaseButton
           v-if="

@@ -292,6 +292,38 @@ describe('Ⓐ 15.1：一笔整备完成后，入口与中间态一起收束', ()
   })
 })
 
+describe('Ⓐ 15.1 实走（2026-11-17）：整备小窗要有完整三步，不能停在空名册', () => {
+  it('★ 右键「整备飞机」＝开始整备：勾机名单立刻可点', () => {
+    const s = refitStage()
+    s.mapView.onHexContext(CORE_HEX, { x: 0, y: 0 }, { x: 0, y: 0 })
+    expect(s.mapView.openContextAction('base-1', 'air.refit')).toBe(true)
+    expect(s.workbench.refitBase?.id).toBe('base-1')
+    expect(s.workbench.refitStage).toBe('select')
+  })
+
+  it('★ 点补给站付款时整备小窗不关闭（否则「确认支付」随窗消失，整备永远结不掉）', () => {
+    const s = refitStage()
+    expect(s.workbench.beginRefitNow('base-1')).toBe(true)
+    s.workbench.toggleRefitAircraft('air-0')
+    expect(s.workbench.confirmRefitSelectionNow()).toBe(true)
+    const center = hexCanvasPoint(CORE_HEX)
+    s.mapView.openPopup(CORE_HEX, 10, 10, 'content')
+    s.mapView.onHexClick(CORE_HEX, { x: 10, y: 10 }, center, 1)
+
+    expect(s.workbench.airInputs.refitDumpId).not.toBeNull()
+    expect(s.mapView.popup).not.toBeNull()
+    expect(s.mapView.popup?.variant).toBe('content')
+    expect(s.workbench.confirmRefitPaymentNow()).toBe(true)
+  })
+
+  it('★ 基地名册即整备小窗：开始 / 确认整备 / 确认支付 三个入口同源', () => {
+    const roster = readFileSync('src/components/air/AircraftRoster.vue', 'utf8')
+    expect(roster).toContain('beginRefitNow')
+    expect(roster).toContain('confirmRefitSelectionNow')
+    expect(roster).toContain('confirmRefitPaymentNow')
+  })
+})
+
 describe('Ⓐ 状态记录与日志：一笔整备在三处一致（15.1 / ⒁ 接线）', () => {
   it('lastRefit / 本阶段已整备名单 / 结算日志同源', () => {
     setActivePinia(createPinia())

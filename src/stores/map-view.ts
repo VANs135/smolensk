@@ -3107,6 +3107,18 @@ export const useMapViewStore = defineStore('mapView', () => {
       openPopup(hex, anchor?.x ?? 0, anchor?.y ?? 0, 'content')
       return true
     }
+    /*
+     * 15.1（2026-11-17 实走）：整备是「勾机 → 确认整备 → 点补给站 → 确认支付」的事务。
+     * 右键点「整备飞机」当场建立整备中间态，让基地名册（同一小窗）里直接出现勾机名单；
+     * 修前只把意图丢给单位面板，名册里既没有「整备」也没有「确认」，玩家卡在空名册上。
+     */
+    if (option.only === 'refit') {
+      unitActionHex.value = { ...hex }
+      unitActionUnitId.value = instanceId
+      unitActionIntent.value = option
+      workbench.beginRefitNow(instanceId)
+      return true
+    }
     unitActionHex.value = { ...hex }
     unitActionUnitId.value = instanceId
     unitActionIntent.value = option
@@ -4335,7 +4347,11 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 故付款消费掉的点击直接收尾，不开小窗（退出支付步后常规命中照旧）。
      */
     if (refitPayConsumed) {
-      closePopup()
+      /*
+       * 15.1B（2026-11-17 实走）：点补给站只是「选定付款来源」，后面还要点「确认支付」。
+       * 修前这里 closePopup() ⇒ 确认按钮随整备小窗一起消失、入口又点不回来，整备永远结不掉。
+       * 口径：付款这一击**不关**已经在屏上的整备小窗（本来没开窗时也不另开）。
+       */
       return
     }
     /*
