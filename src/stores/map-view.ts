@@ -2464,7 +2464,12 @@ export const useMapViewStore = defineStore('mapView', () => {
     ): void {
       const disabledReason = !workbench.actionAllowedNow(key)
         ? `限${workbench.segmentLabelsOfAction(key).join(' / ')}`
-        : moving && key !== 'move.breakdown'
+        : /*
+           * 2026-11-18：13.2f 的装卸是**就地原子动作**（付印刷 MA 的 10%，见 6.1a），
+           * 不产生移动步、也不结束移动 ⇒ 不必先「暂停移动」，停在格上就能做。
+           * 其余动作仍要求先结束本次移动。
+           */
+          moving && key !== 'move.breakdown' && key !== 'move.loadUnload'
           ? '先结束移动'
           : (reason ?? null)
       actions.push({ key, ...meta, disabledReason })
