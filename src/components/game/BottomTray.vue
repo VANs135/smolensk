@@ -5,7 +5,6 @@ import { BaseIcon, BaseTag } from '@/components/base'
 import { panelScansOf } from '@/render/charts-view'
 import { counterImages } from '@/render/token-images'
 import { useContainersStore, useHotseatStore } from '@/stores'
-import type { Side } from '@/data'
 
 import { panelScanImageUrl } from './aux-card-image'
 import { BoxCard } from './index'
@@ -42,27 +41,17 @@ function toggle(section: 'boxes' | 'tables'): void {
   openSection.value = openSection.value === section ? null : section
 }
 
-/** 盒段：本剧本两方的卡（轴心 / 苏联） */
-function visibleCardsOf(side: Side) {
-  const cards = containers.cardViewsOf(side)
-  if (hotseat.fogDisabled || !hotseat.policy.hideOffMapBoxes || side === hotseat.viewerSide)
-    return cards
-  return cards
-    .filter((card) => card.boxKind !== 'air_box')
-    .map((card) => ({
-      ...card,
-      regions: card.regions.filter((region) => !region.kind.startsWith('edge_box_')),
-    }))
-}
+/**
+ * 盒段：**只列当前视角方**的卡（用户 2026-11-18 阵营隔离）
+ *
+ * 实盘缺陷：修前轴心/苏联两列都渲染，苏军玩家先看到轴心盒，自己的盒被挤到裁切区里点不开，
+ * 且能看到对方盒的条目与右键菜单。共用盒（`side === null`）另列，不受视角影响。
+ */
+const viewerCards = computed(() => containers.cardViewsOf(hotseat.viewerSide))
 
-const cardsBySide = computed(() => ({
-  axis: visibleCardsOf('axis'),
-  soviet: visibleCardsOf('soviet'),
-}))
-
-/** 盒段里还有多少枚没归位（卡头角标之和——沿用两侧的盘点口径） */
+/** 盒段里还有多少枚没归位（只盘点**视角方** + 共用，不能借角标泄露对方数量） */
 const boxUnitTotal = computed(() =>
-  [...cardsBySide.value.axis, ...cardsBySide.value.soviet, ...containers.sharedCardViews].reduce(
+  [...viewerCards.value, ...containers.sharedCardViews].reduce(
     (total, card) => total + card.regions.reduce((sum, region) => sum + region.units.length, 0),
     0,
   ),
@@ -123,16 +112,14 @@ watch([openSection, screen], () => {
           <BaseIcon :name="openSection === 'boxes' ? 'chevron-down' : 'chevron-right'" />
         </span>
         <span class="tray__title">盒</span>
-        <BaseTag kind="neutral"
-          >{{ cardsBySide.axis.length + cardsBySide.soviet.length }} 张卡</BaseTag
-        >
+        <BaseTag kind="neutral">{{ viewerCards.length }} 张卡</BaseTag>
         <span class="tray__meta num">{{ boxUnitTotal }} 枚在盒</span>
       </button>
 
       <div v-if="openSection === 'boxes'" class="tray__body">
-        <div v-for="side in ['axis', 'soviet'] as const" :key="side" class="tray__col">
-          <p class="tray__col-head num">{{ side === 'axis' ? '轴心国' : '苏联' }}</p>
-          <BoxCard v-for="card in cardsBySide[side]" :key="card.id" :card="card" />
+        <div class="tray__col">
+          <p class="tray__col-head num">{{ hotseat.viewerSide === 'axis' ? '轴心国' : '苏联' }}</p>
+          <BoxCard v-for="card in viewerCards" :key="card.id" :card="card" />
         </div>
         <!-- B31c：**双方共用**的卡（运力记录轨：一张卡上两组轨，标记按当前容量推格） -->
         <div v-if="containers.sharedCardViews.length > 0" class="tray__col">
@@ -211,6 +198,12 @@ watch([openSection, screen], () => {
 }
 
 .tray__section--open {
+  /*
+   * 用户 2026-11-18：展开段必须按内容伸展。
+   * 修前 `flex: 1`（basis 0）+ `overflow: hidden` ⇒ 段高被压到 190px，下面的苏军卡落在裁切区里，
+   * 看得见却点不到（"苏军盒点不开"）。展开后不再参与收缩，整列由外层抽屉滚动。
+   */
+  flex: 0 0 auto;
   box-shadow: var(--shadow-sm);
 }
 

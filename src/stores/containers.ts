@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref, toRef } from 'vue'
+import { computed, ref, toRef, watch } from 'vue'
 
 import {
   auxCards,
@@ -63,6 +63,7 @@ import type { SetupEffectPlacement } from '@/engine/rules/setup-effects'
 
 import { useGameSessionStore, type BoardCodec } from './session'
 import { movementPhaseOf, useWorkbenchStore } from './workbench'
+import { useHotseatStore } from './hotseat'
 import {
   counterImageUrlOf,
   availableMaOf,
@@ -179,6 +180,7 @@ export function boxesForViewer(boxes: readonly BoxView[], side: Side): readonly 
 export const useContainersStore = defineStore('containers', () => {
   const workbench = useWorkbenchStore()
   const session = useGameSessionStore()
+  const hotseat = useHotseatStore()
 
   /* ────────────────────────────── 账本（引擎不写状态） ────────────────────────────── */
 
@@ -840,6 +842,32 @@ export const useContainersStore = defineStore('containers', () => {
    */
   const sharedCardViews = computed<readonly AuxCardView[]>(() =>
     cardViews.value.filter((card) => card.side === null),
+  )
+
+  /**
+   * 用户 2026-11-18 阵营隔离：**切到对方视角时，原先展开/浮窗的对方盒立即收起**
+   *
+   * 只按列表过滤还不够——旧展开态（`cardOpenId` / `popupCardId`）仍会把对方盒的内容与
+   * 右键菜单留在界面上，也可能让"盒内动作"会话继续挂着。共用盒（`side === null`）不受影响。
+   */
+  watch(
+    () => hotseat.viewerSide,
+    (side) => {
+      const id = cardOpenId.value
+      if (id !== null) {
+        const card = cardViews.value.find((item) => item.id === id)
+        if (card !== undefined && card.side !== null && card.side !== side) {
+          cardOpenId.value = null
+        }
+      }
+      const popup = popupCardId.value
+      if (popup !== null) {
+        const card = cardViews.value.find((item) => item.id === popup)
+        if (card !== undefined && card.side !== null && card.side !== side) {
+          popupCardId.value = null
+        }
+      }
+    },
   )
 
   /**

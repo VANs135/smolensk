@@ -157,13 +157,11 @@ const airUnitId = ref('')
 const boxes = computed<readonly BoxView[]>(() => {
   if (uiMode === 'verify' || showsReferee) return containers.boxes
   /*
-   * 用户 2026-11-18：玩家态按**当前视角方**取盒。
-   * 修前直接取全量 ⇒ 苏联玩家看到的是排在前面的轴心盒，苏军盒被挤到后面/裁掉。
-   * 会话窗（`actions`）跟**行动方**（可执行方），查看面板跟**视角方**；
-   * 切方只改 `viewerSide`，本 computed 自动重算，不需要重开窗口。
+   * 用户 2026-11-18：玩家态按**当前视角方**取盒（阵营隔离）。
+   * 修前直接取全量 ⇒ 苏联玩家看到的是排在前面的轴心盒，苏军盒被挤到后面/裁掉；
+   * 会话窗也不能再跟行动方吃对方盒。切方只改 `viewerSide`，本 computed 自动重算。
    */
-  const sideNow =
-    props.only === 'actions' || props.subjectId != null ? actingSide.value : hotseat.viewerSide
+  const sideNow = hotseat.viewerSide
   const visible = boxesForViewer(containers.boxes, sideNow).filter(
     (box) =>
       hotseat.fogDisabled ||
