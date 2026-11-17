@@ -56,19 +56,20 @@ beforeEach(() => {
 })
 
 describe('① 点空白的阈值＝能完整摆下的枚数', () => {
-  it('≤ 4 枚：整堆全选，不开堆叠窗', () => {
+  it('≤ 4 枚：整堆全选（战斗单位 + 编内卡车），不开堆叠窗', () => {
     const { workbench, mapView } = stores()
     for (const id of ['a1', 'a2', 'a3']) placeInf(workbench, id)
+    placeTruck(workbench, 'truck')
 
     clickBlank(mapView)
 
     expect(IN_HEX_GROUND_CAPACITY).toBe(4)
     expect(mapView.popup).toBeNull()
-    expect([...(workbench.movePick?.ids ?? [])].sort()).toEqual(['a1', 'a2', 'a3'])
-    expect([...mapView.stackSelection].sort()).toEqual(['a1', 'a2', 'a3'])
+    expect([...(workbench.movePick?.ids ?? [])].sort()).toEqual(['a1', 'a2', 'a3', 'truck'])
+    expect([...mapView.stackSelection].sort()).toEqual(['a1', 'a2', 'a3', 'truck'])
   })
 
-  it('恰好 4 枚地面（含编内卡车）：仍全选、不开窗；卡车不进默认集（沿用现有口径）', () => {
+  it('恰好 4 枚地面（含编内卡车）：仍全选、不开窗；卡车也进默认集', () => {
     const { workbench, mapView } = stores()
     for (const id of ['a1', 'a2', 'a3']) placeInf(workbench, id)
     placeTruck(workbench, 'truck')
@@ -76,7 +77,7 @@ describe('① 点空白的阈值＝能完整摆下的枚数', () => {
     clickBlank(mapView)
 
     expect(mapView.popup).toBeNull()
-    expect([...(workbench.movePick?.ids ?? [])].sort()).toEqual(['a1', 'a2', 'a3'])
+    expect([...(workbench.movePick?.ids ?? [])].sort()).toEqual(['a1', 'a2', 'a3', 'truck'])
   })
 
   it('> 4 枚：摊开堆叠窗，默认全选战斗单位 + 编内卡车', () => {

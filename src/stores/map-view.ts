@@ -1758,30 +1758,28 @@ export const useMapViewStore = defineStore('mapView', () => {
    *
    * ★ 2026-11-10 用户口径：堆叠窗口「列全 + 默认全选」。摊开即把该格**本方全部可开拔算子**
    * 选进 `stackSelection`（地图扇面金环），点某一枚仍可取消/恢复。
-   * 候选集＝该格**可开拔的本方战斗单位**（#12：SP / 补给站 / 编内卡车等非战斗不进默认集；
+   * 候选集＝该格**可开拔的本方战斗单位 ∪ 编内卡车**（SP / 补给站等非战斗不进默认集；
    * 补员与已结束移动者由 `movePickPoolAt` 剔除）。
    */
-  function expandStackAt(hex: HexRef, options?: { includeOrganicTrucks?: boolean }): void {
+  function expandStackAt(hex: HexRef): void {
     /*
-     * #12：默认全选＝该格**可开拔的本方战斗单位**（补给站 / SP / 编内卡车等非战斗不进默认集）；
+     * #12：默认全选＝该格**可开拔的本方战斗单位**（补给站 / SP 等非战斗不进默认集）；
      * 非战斗仍列在堆叠窗里，玩家显式点它才进集合。默认集由 store 的同一份投影给出，
      * 避免这里再写一条"哪些算战斗单位"的判据。
      *
-     * ★ 用户 2026-11-18：**只能靠窗口看全的堆叠**（完整显示数 > 4）里，编内卡车也要一并选中
-     *   ——「它不是战斗单位，但它跟着编队走」。≤4 的分支沿用原口径（战斗单位）。
+     * ★ 用户 2026-11-18：**编内卡车**不是战斗单位，但它跟着编队走 ⇒ 两条分支（≤4 / >4）
+     *   都默认选中它。「默认全选该格可操作地面单位」＝战斗单位 ∪ 编内卡车。
      */
     const baseIds = workbench.defaultMovePickIdsAt(hex)
-    const extraIds = options?.includeOrganicTrucks
-      ? stackTokensAt(hex)
-          .filter(
-            (token) =>
-              token.hiddenStack !== true &&
-              token.side === actingSide.value &&
-              token.noncombatKind === 'organic_truck',
-          )
-          .map((token) => token.id)
-      : []
-    const ids = [...new Set([...baseIds, ...extraIds])]
+    const truckIds = stackTokensAt(hex)
+      .filter(
+        (token) =>
+          token.hiddenStack !== true &&
+          token.side === actingSide.value &&
+          token.noncombatKind === 'organic_truck',
+      )
+      .map((token) => token.id)
+    const ids = [...new Set([...baseIds, ...truckIds])]
     workbench.beginMovePick(hex, ids)
     /*
      * 默认全选：选中集与 `movePick.ids` 同源（只有一份状态）。
@@ -4594,9 +4592,7 @@ export const useMapViewStore = defineStore('mapView', () => {
         const airWindow = baseHere || ownAirHere
         // 摊开这一格（设施/基地也照旧进入"已摊开"档，扇面/角标据此显示）
         if (stack.some((token) => token.side === actingSide.value && token.air !== true)) {
-          expandStackAt(hex, {
-            includeOrganicTrucks: ownGround.length > IN_HEX_GROUND_CAPACITY,
-          })
+          expandStackAt(hex)
         }
         if (ownGround.length > 0) {
           const crowded = ownGround.length > IN_HEX_GROUND_CAPACITY
