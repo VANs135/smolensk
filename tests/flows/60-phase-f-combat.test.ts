@@ -628,6 +628,8 @@ describe('Ⓕ 9.12f：撤退穿越敌方非战斗单位 ⇒ 按 9.14 处置（�
 
     // 9.14b：夺取值进进入方账本，其余摧毁 ⇒ 无论如何这座苏军补给站都不再存在
     expect(store.spDumps.some((item) => item.id === dumpId)).toBe(false)
+    // 用户 2026-11-18：即时结清结果窗内不出现，**行动日志是唯一载体**
+    expect(store.log.some((entry) => entry.rule === '9.14b')).toBe(true)
   })
 
   it('对照：撤退途经**空**格 ⇒ 不触发 9.14（盘面补给站不变）', () => {

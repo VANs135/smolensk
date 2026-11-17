@@ -56,4 +56,28 @@ describe('堆叠窗只留标题、按钮、算子', () => {
     expect(src).toContain('{{ air.rangeHexes }}')
     expect(src).toContain("item.chosen === null ? '—' : hexLabel(item.chosen)")
   })
+
+  it('★ 9.14 即时结清结果只进行动日志，窗内与 `?` 都不重复', () => {
+    const src = popover()
+    // 窗内不渲染 notes（唯一载体是 `pushLog`，见 workbench 的 9.14 分支）
+    expect(src).not.toContain('special.notes')
+    expect(src).not.toContain('v-for="(note')
+    // `?` 只放掷骰与按表点数，不放结清结果
+    expect(src).toContain(':rule-note="ruleDetail"')
+    expect(src).toContain('掷 ${split.group.die} → ${split.group.percent}%')
+  })
+
+  it('★ 9.14c 精确/不精确＝绿/红描边，不写字', () => {
+    const src = popover()
+    expect(src).toContain("'chip--ok': counter.exact")
+    expect(src).toContain("'chip--bad': !counter.exact")
+    expect(src).toMatch(/\.chip--ok\s*\{[^}]*--color-accent-2/)
+    expect(src).toMatch(/\.chip--bad\s*\{[^}]*--color-accent/)
+  })
+
+  it('★ `?` 的 title 由宿主编出（规则号 + 悬停补充）', () => {
+    const map = readFileSync('src/components/map/MapPopover.vue', 'utf8')
+    expect(map).toContain('ruleNote?: string')
+    expect(map).toMatch(/规则 \$\{props\.rule\} · \$\{props\.ruleNote\}/)
+  })
 })

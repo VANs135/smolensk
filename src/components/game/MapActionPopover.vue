@@ -300,15 +300,32 @@ const special = computed(() => workbench.specialPending)
 /** 正在选落点的那一项（9.14c 运输点 / 9.14d 延补队） */
 const specialItem = computed(() => mapView.specialItem)
 
-/** 9.14 待夺取的运输点算子（各分组摊平，只为排图） */
+/** 9.14 待夺取的运输点算子（各分组摊平，只为排图；`exact` 决定绿/红描边） */
 const specialCounters = computed(() =>
   (special.value?.splits ?? []).flatMap((split) =>
     split.counters.map((counter) => ({
       ...counter,
       captured: split.capturedIds.includes(counter.id),
+      exact: split.exact,
     })),
   ),
 )
+
+/**
+ * `?` 的悬停补充（用户 2026-11-18 第 2 条）
+ *
+ * 9.14c 掷了多少、按表该夺几点 ⇒ 只放这里，窗内不出文字；即时结清结果走行动日志。
+ */
+const ruleDetail = computed<string>(() => {
+  const splits = special.value?.splits ?? []
+  return splits
+    .map(
+      (split) =>
+        `掷 ${split.group.die} → ${split.group.percent}% · 按表夺取 ` +
+        `${split.group.capturedPoints}/${split.group.totalPoints} 点`,
+    )
+    .join('；')
+})
 
 /**
  * 用户 2026-11-18：窗内**不再摆条款文字**，条款号一律收进标题右侧的 `?`
@@ -390,6 +407,7 @@ const ruleTags = computed<string>(() => {
     :y="anchor.y"
     :title="title"
     :rule="ruleTags"
+    :rule-note="ruleDetail"
     :bounds="mapArea"
     width="330px"
     @close="mapView.closePopup()"
@@ -402,7 +420,11 @@ const ruleTags = computed<string>(() => {
           v-for="counter in specialCounters"
           :key="counter.id"
           class="chip chip--pickable"
-          :class="{ 'chip--on': counter.captured }"
+          :class="{
+            'chip--on': counter.captured,
+            'chip--ok': counter.exact,
+            'chip--bad': !counter.exact,
+          }"
           role="button"
           tabindex="0"
           :aria-pressed="counter.captured"
@@ -884,7 +906,18 @@ const ruleTags = computed<string>(() => {
 .chip--on {
   outline: 1px solid var(--color-command-teal);
   outline-offset: -1px;
-  box-shadow: 0 0 0 2px var(--color-command-teal) inset;
+}
+
+/*
+ * 9.14c 是否精确夺取（用户 2026-11-18 第 3 条）：只给描边，不写字
+ *   绿＝按表精确成立；红＝不成立（多夺/少夺由日志说明，窗内不重复）
+ */
+.chip--ok {
+  box-shadow: 0 0 0 2px var(--color-accent-2) inset;
+}
+
+.chip--bad {
+  box-shadow: 0 0 0 2px var(--color-accent) inset;
 }
 
 /* 图上没有的计算值（点数 / 航程数 / 落点坐标）＝角标，不占文字行 */

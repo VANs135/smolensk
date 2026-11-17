@@ -29,6 +29,12 @@ const props = withDefaults(
     title?: string
     /** 标题右侧的规则号标签 */
     rule?: string
+    /**
+     * `?` 的悬停补充（用户 2026-11-18：9.14c 掷了多少、按表该夺几点只放这里）
+     *
+     * 窗内不摆这类说明文字；`?` 是唯一的悬停载体。
+     */
+    ruleNote?: string
     /** 小窗宽度 */
     width?: string
     /**
@@ -40,7 +46,7 @@ const props = withDefaults(
      */
     bounds?: { left: number; right: number; top: number; bottom: number } | null
   }>(),
-  { x: 0, y: 0, title: '', rule: '', width: '300px', bounds: null },
+  { x: 0, y: 0, title: '', rule: '', ruleNote: '', width: '300px', bounds: null },
 )
 
 const emit = defineEmits<{ close: [] }>()
@@ -149,7 +155,15 @@ const dragging = computed(() => drag.value !== null)
     >
       <span class="popover__title">{{ props.title }}</span>
       <!-- 规则号只进悬停提示（用户 2026-11-09：窗内不摆规则号，只留一个 `?`） -->
-      <BaseTag v-if="props.rule !== ''" kind="neutral" :title="`规则 ${props.rule}`"> ? </BaseTag>
+      <BaseTag
+        v-if="props.rule !== ''"
+        kind="neutral"
+        :title="
+          props.ruleNote === '' ? `规则 ${props.rule}` : `规则 ${props.rule} · ${props.ruleNote}`
+        "
+      >
+        ?
+      </BaseTag>
       <button
         class="popover__close"
         type="button"
