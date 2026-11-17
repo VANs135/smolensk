@@ -100,7 +100,6 @@ describe('增援段第二段：只留一个「掷骰与落位」窗', () => {
     store.variableReplInputs.autoRoll = false
     store.variableReplInputs.supplyDice = 7
     store.variableReplInputs.replDice = 7
-    store.variableReplInputs.specialDie = 3
     expect(store.rollVariableReplNow()).toBe(true)
     store.markSpecialReplDraw(store.activeSide, store.turn)
     expect(store.endRollSegmentNow(true)).toBe(true)

@@ -21605,11 +21605,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ax: breakdownPoolTotal('axis'),
     su: breakdownPoolTotal('soviet'),
   })
-  /** 可变增援的骰面（由裁判填入或点「掷」自动取种子化 RNG） */
+  /**
+   * 可变增援的骰面（由裁判填入或点「掷」自动取种子化 RNG）
+   *
+   * 1.6c 不在这一批：原文「also get to roll a die on their Special Repl Table」是独立一掷，
+   * 由 `drawSpecialRepl` 在执行时自掷（见 `variableReplSpecialDie`）。
+   */
   const variableReplInputs = ref({
     supplyDice: 7,
     replDice: 7,
-    specialDie: 1,
     variableExitDie: 1,
     randomEventDice: 7,
     autoRoll: true,
@@ -21675,10 +21679,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 最近一次可变增援结论（1.6b / 1.6c / 3.3c / 3.6） */
   const lastVariableRepl = ref<VariableReinforcementPlan | null>(null)
   /**
-   * 1.6c：本次可变增援实际掷出的特殊补员骰
+   * 1.6c：本回合**实际掷出**的特殊补员骰（由 `drawSpecialRepl` 在 1.6c 执行时自掷）
    *
-   * 特殊补员与 1.6b 同属一批骰（自动掷）。手动「掷骰检定」必须复用同一颗，
-   * 否则同一回合会掷两次 1.6c：面板先显示计划里的结果，点按钮又掷出另一颗并按其入账。
+   * 1.6b 的骰只归 1.6b；1.6c 原文「also get to roll a die」是独立一掷，不复用 1.6b 的骰面。
+   * 这里只做留痕（存读档 / 台账），不参与 1.6b 的结算。
    */
   const variableReplSpecialDie = ref<number | null>(null)
   /** 裁定 2：1.6b 补给表 SP 已入图外盒的记账（换掷先撤回上一笔，避免重掷叠加） */
@@ -24691,15 +24695,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const supplyDice = inputs.autoRoll ? draw2d6() : inputs.supplyDice
     const replDice = inputs.autoRoll ? draw2d6() : inputs.replDice
-    const specialDie = inputs.autoRoll ? draw1d6() : inputs.specialDie
-    variableReplSpecialDie.value = specialDie
+    // 1.6c 不在这一批：它在 `drawSpecialRepl` 执行时自己掷（原文「also get to roll a die」）
     const variableExitDie = inputs.autoRoll ? draw1d6() : inputs.variableExitDie
     const randomEventDice = inputs.autoRoll ? draw2d6() : inputs.randomEventDice
-    // ⑭ 接线：按实际掷骰顺序复算骰面（补给 2d6 → 补员 2d6 → 特殊 1d6 → 可变撤离 1d6 → 随机事件 2d6）
+    // ⑭ 接线：按实际掷骰顺序复算骰面（补给 2d6 → 补员 2d6 → 可变撤离 1d6 → 随机事件 2d6）
     const rolls: DiceRoll[] = []
     if (inputs.autoRoll) {
       let cursor = rngBefore
-      for (const count of [2, 2, 1, 1, 2]) {
+      for (const count of [2, 2, 1, 2]) {
         const derived = count === 2 ? roll2d6(cursor) : roll1d6(cursor)
         cursor = derived.rng
         rolls.push(derived.value)
@@ -24712,7 +24715,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         date: date.value,
         supplyDice,
         replDice,
-        specialDie,
         variableExitDie,
         randomEventDice,
         // 3.3c：已了结则不再掷（「1 或 6 ⇒ 该单位移除，撤离判定结束」）
@@ -24788,7 +24790,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         autoRoll: inputs.autoRoll,
         supplyDice,
         replDice,
-        specialDie,
         variableExitDie,
         randomEventDice,
         repl: {

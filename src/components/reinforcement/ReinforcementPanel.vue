@@ -751,40 +751,32 @@ const rollResultLines = computed<readonly string[]>(() => {
   if (air.length > 0) lines.push(`补员表 ${air.join(' / ')} → 重建飞机时用（13.5f，不可保存）`)
   if (ground.length === 0 && air.length === 0) lines.push('补员表：无')
   /*
-   * ③ 1.6c：只在掷过之后列（`lastVariableRepl.special` 是 1.6b 自动掷骰时随同一颗骰
-   *    预掷的计划值）。「死亡堆无合格单位 ⇒ 作废」必须写出来，不能什么都不显示。
+   * ③ 1.6c：只在**它自己掷过**之后列（独立一掷，不复用 1.6b 的骰面）。
+   *    逐项对账全部读 `specialReplLast`（1.6c 自己的骰面）与
+   *    `specialReplPending` / `specialReplPlacedThisSegment`，不另存判断。
    */
   if (workbench.hasSpecialReplDraw(workbench.activeSide, workbench.turn)) {
-    const special = plan.special
     const draw = containers.specialReplLast
-    /*
-     * 1.6c 逐项对账：每一项单独一行（作废 / 已入账 / 待落位），
-     * 状态直接读 `specialReplPending` 与 `specialReplPlacedThisSegment`，
-     * 不另存判断——台账只记一次，这里只展示。
-     */
-    if (special?.supplyCache === true) lines.push('1.6c 特殊补员：Supply Cache ×1 → 已入账（1.7）')
-    if (special?.freeDivisionRebuild === true) {
+    const axis = workbench.activeSide === 'axis'
+    const kind = axis ? 'Aufk / Krd 营' : 'Alarm 单位'
+    if (draw === null) {
+      lines.push('1.6c 特殊补员：未掷 / 无结果')
+    } else {
+      // 苏方两档都带「随机师」；轴方两档都不带
+      if (!axis) {
+        lines.push(
+          draw.divisionGranted
+            ? '1.6c 特殊补员：免费重建 1 个步兵/民兵师（−1 step）→ 手牌'
+            : '1.6c 特殊补员：免费重建 1 个步兵/民兵师 ⇒ 作废（死亡堆无合格师）',
+        )
+      }
       lines.push(
-        draw?.divisionGranted === true
-          ? '1.6c 特殊补员：免费重建 1 个步兵/民兵师（−1 step）→ 手牌'
-          : '1.6c 特殊补员：免费重建 1 个步兵/民兵师 ⇒ 作废（死亡堆无合格师）',
+        draw.grant === 'supplyCache'
+          ? '1.6c 特殊补员：Supply Cache ×1 → 已入账（1.7）'
+          : draw.grant === 'unit'
+            ? `1.6c 特殊补员：免费重建 1 个${kind} → 手牌`
+            : `1.6c 特殊补员：免费重建 1 个${kind} ⇒ 作废（死亡堆无可用${kind}）`,
       )
-    }
-    if (special?.freeAlarmOrRecon === true) {
-      const kind = workbench.activeSide === 'axis' ? 'Aufk / Krd 营' : 'Alarm 单位'
-      lines.push(
-        draw?.grant === 'unit'
-          ? `1.6c 特殊补员：免费重建 1 个${kind} → 手牌`
-          : `1.6c 特殊补员：免费重建 1 个${kind} ⇒ 作废（死亡堆无可用${kind}）`,
-      )
-    }
-    if (
-      special === null ||
-      (special.supplyCache !== true &&
-        special.freeDivisionRebuild !== true &&
-        special.freeAlarmOrRecon !== true)
-    ) {
-      lines.push('1.6c 特殊补员：死亡堆无合格单位 ⇒ 作废')
     }
     // 返场单位的落位状态：手牌＝待落位，已放置的进本段登记（撤回会退回手牌）
     const pending = workbench.specialReplPending.length

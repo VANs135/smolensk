@@ -64,7 +64,7 @@ function rollRepls(store: ReturnType<typeof newStore>): void {
   store.variableReplInputs.autoRoll = false
   store.variableReplInputs.supplyDice = 9
   store.variableReplInputs.replDice = 10
-  store.variableReplInputs.specialDie = 2
+
   expect(store.rollVariableReplNow()).toBe(true)
   /*
    * v7.1 第二段（用户 2026-11-11 口径）：判定阶段全部走完才进放置阶段。

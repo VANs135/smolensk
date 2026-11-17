@@ -330,20 +330,19 @@ describe('B34：拆并四处"指认单位"改成点算子图', () => {
 })
 
 /**
- * 1.6c 特殊补员：**结果等「掷骰检定」之后才显示**
+ * 1.6c 特殊补员：**结果等它自己掷过之后才显示**
  *
- * 修前 `variableReplResult` 直接读 `lastVariableRepl.special`——那是 1.6b 自动掷骰时
- * 随同一颗骰预掷出来的计划结果，于是玩家还没点「掷骰检定」，面板就把「特殊补员：免费重建…」
- * 先列了出来（实桌是先掷后才看到结果）。判据与 1.6c 回执同源：`hasSpecialReplDraw`。
+ * 1.6c 是独立一掷（不复用 1.6b 的骰面），结果只认 `containers.specialReplLast`。
+ * 面板必须先问 `hasSpecialReplDraw`，否则还没掷就把「特殊补员：免费重建…」先列出来。
  */
 describe('1.6c：结果不在接受检定之前露出（源码守卫）', () => {
-  it('★ rollResultLines 的 special 行由 hasSpecialReplDraw 把门', () => {
+  it('★ rollResultLines 的 1.6c 行由 hasSpecialReplDraw 把门，且读 1.6c 自己的回执', () => {
     const panel = readFileSync('src/components/reinforcement/ReinforcementPanel.vue', 'utf8')
     const start = panel.indexOf('const rollResultLines')
     expect(start).toBeGreaterThan(-1)
-    const at = panel.indexOf('const special =', start)
+    const at = panel.indexOf('const draw = containers.specialReplLast', start)
     expect(at).toBeGreaterThan(start)
-    // 同一个 computed 里、取 special 之前，必须先问「1.6c 掷过没有」
+    // 同一个 computed 里、取 1.6c 回执之前，必须先问「1.6c 掷过没有」
     expect(panel.slice(start, at)).toContain('hasSpecialReplDraw')
   })
 })

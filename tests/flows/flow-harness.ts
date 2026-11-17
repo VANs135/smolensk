@@ -163,7 +163,7 @@ export function answerBoardChoices(ctx: ReturnType<typeof fresh>) {
       const substitute = w.variableExitSelectionSet.eligibleIds[0]
       if (substitute !== undefined) expect(w.confirmVariableExitSubstitute(substitute)).toBe(true)
     }
-    useContainersStore().drawSpecialRepl(w.activeSide, w.variableReplSpecialDie ?? undefined)
+    useContainersStore().drawSpecialRepl(w.activeSide)
     expect(
       w.endRollSegmentNow(true),
       JSON.stringify({

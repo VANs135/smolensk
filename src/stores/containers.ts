@@ -900,7 +900,10 @@ export const useContainersStore = defineStore('containers', () => {
       workbench.pushLog('warning', refusal, '1.6c')
       return false
     }
-    // 1.6c 的骰已在 1.6b 那一批里掷过（自动掷）⇒ 给了 `fixedDie` 就复用它，不得另掷一颗。
+    /*
+     * 1.6c 自掷自己的骰（原文「also get to roll a die on their Special Repl Table」）；
+     * 1.6b 的骰只归 1.6b。`fixedDie` 仅供测试/AI 复现，正常路径不传。
+     */
     const roll = fixedDie === undefined ? roll1d6(workbench.rng) : null
     const die = fixedDie ?? roll!.value.total
     const afterDie = roll === null ? workbench.rng : roll.rng
@@ -992,6 +995,23 @@ export const useContainersStore = defineStore('containers', () => {
       workbench.addSupplyCacheNow(side)
     }
     workbench.markSpecialReplDraw(side, workbench.turn)
+    const grant =
+      planned.data.second.kind === 'supplyCache'
+        ? 'supplyCache'
+        : planned.data.second.kind === 'void'
+          ? 'void'
+          : 'unit'
+    const divisionGranted = planned.data.division !== null
+    // 1.6c 自己的骰：留痕并单独记一笔台账（1.6b 的 variableRepl 条目不再携带它）
+    workbench.variableReplSpecialDie = die
+    workbench.recordSettlement({
+      action: 'specialRepl',
+      rule: '1.6c',
+      side,
+      // 吃掉 rng setter 记下的真实掷骰：1.6c 的 1 骰（苏方随机选师时还有 1 颗选骰）。
+      // 不传 rolls / 不吃 pending 会让 1.6c 的骰被下一次结算（如 12.6 supplyTrace）记走，重放错位。
+      data: { die, grant, divisionGranted, returns: returns.map((item) => item.instanceId) },
+    })
     // 判定阶段只出回执：返场单位已进"统一手牌"，落点在放置阶段点格给出
     const detail =
       returns.length === 0
@@ -1008,13 +1028,8 @@ export const useContainersStore = defineStore('containers', () => {
       die,
       ok: true,
       detail,
-      grant:
-        planned.data.second.kind === 'supplyCache'
-          ? 'supplyCache'
-          : planned.data.second.kind === 'void'
-            ? 'void'
-            : 'unit',
-      divisionGranted: planned.data.division !== null,
+      grant,
+      divisionGranted,
     }
     workbench.pushLog('success', detail, planned.rule)
     return true
@@ -1029,10 +1044,8 @@ export const useContainersStore = defineStore('containers', () => {
    */
   function runReinforcementCheckNow(): boolean {
     if (!workbench.variableReplRolled && !workbench.rollVariableReplNow()) return false
-    const drew = drawSpecialRepl(
-      workbench.activeSide,
-      workbench.variableReplSpecialDie ?? undefined,
-    )
+    // 1.6c 独立一掷：不传 1.6b 的骰面
+    const drew = drawSpecialRepl(workbench.activeSide)
     if (!drew) return false
     /*
      * 1.6c 掷完即落位：登记完成后若已在放置态且有返场单位，直接把地图点亮（第一枚），

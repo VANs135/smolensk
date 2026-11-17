@@ -47,10 +47,7 @@ describe('12.1b/3.4b：读档归并不能改变SP归属', () => {
          * 手牌按放弃上场收束（落位覆盖见 tests/flows/reinforcement-b-operation.test.ts）。
          */
         if (!board.hasSpecialReplDraw(board.activeSide, board.turn)) {
-          useContainersStore().drawSpecialRepl(
-            board.activeSide,
-            board.variableReplSpecialDie ?? undefined,
-          )
+          useContainersStore().drawSpecialRepl(board.activeSide)
         }
         board.endRollSegmentNow(true)
       } else {

@@ -127,7 +127,7 @@ async function advanceToAxisReinforcement(s: Stores): Promise<void> {
       w.segmentStep?.id === 'reinforcement.replRoll' &&
       !w.hasSpecialReplDraw(w.activeSide, w.turn)
     ) {
-      containers.drawSpecialRepl(w.activeSide, w.variableReplSpecialDie ?? undefined)
+      containers.drawSpecialRepl(w.activeSide)
       await nextTick()
       continue
     }
@@ -136,7 +136,7 @@ async function advanceToAxisReinforcement(s: Stores): Promise<void> {
       w.segmentStep?.id === 'reinforcement.replRoll' &&
       w.rollHandPending
     ) {
-      containers.drawSpecialRepl(w.activeSide, w.variableReplSpecialDie ?? undefined)
+      containers.drawSpecialRepl(w.activeSide)
       expect(w.endRollSegmentNow(true)).toBe(true)
       await nextTick()
       continue
@@ -195,7 +195,8 @@ describe('B 增援段操作级实测（剧本 1）', () => {
     )
     expect(rollEntry).toBeDefined()
     expect(rollEntry!.outcome.rule).toBe('1.6b')
-    expect(rollEntry!.rolls).toHaveLength(5)
+    // 1.6b 自己只有 4 笔骰：补给 2d6 / 补员 2d6 / 可变撤离 1d6 / 随机事件 2d6
+    expect(rollEntry!.rolls).toHaveLength(4)
     const settled = rollEntry!.outcome
     expect(settled.ok).toBe(true)
     const settledRepl = settled.ok ? (settled.data.repl as { pax: number; eq: number }) : undefined
@@ -208,12 +209,18 @@ describe('B 增援段操作级实测（剧本 1）', () => {
     )
     expect(w.supplyArrivalSp).toBe(repl!.sp)
 
-    // 1.6c「掷骰检定」：同一颗骰子，结果落账
+    // 1.6c「掷骰检定」：独立一掷，自己那笔台账落账（不复用 1.6b 的骰面）
     expect(w.hasSpecialReplDraw('axis', 2)).toBe(false)
-    expect(containers.drawSpecialRepl('axis', w.variableReplSpecialDie ?? undefined)).toBe(true)
+    expect(containers.drawSpecialRepl('axis')).toBe(true)
     expect(containers.specialReplLast?.side).toBe('axis')
     expect(containers.specialReplLast?.die).toBe(w.variableReplSpecialDie)
     expect(containers.specialReplLast?.detail).toContain('1.6c')
+    const specialEntry = g.log.find(
+      (entry) => entry.action === 'specialRepl' && entry.turn === 2 && entry.side === 'axis',
+    )
+    expect(specialEntry).toBeDefined()
+    expect(specialEntry!.rolls).toHaveLength(1)
+    expect(specialEntry!.rolls[0]?.faces).toEqual([containers.specialReplLast!.die])
 
     // 手牌与账本：数量只能来自本方本次掷骰（不得混入对手上一方的待放项）
     expect(w.replPending).toEqual({ pax: repl!.repl.pax, eq: repl!.repl.eq })
@@ -240,7 +247,7 @@ describe('B 增援段操作级实测（剧本 1）', () => {
 
     // 判定未走完 ⇒ 闸门关着（面板也不给可点卡）
     expect(w.rollPlacementOpen).toBe(false)
-    expect(containers.drawSpecialRepl('axis', w.variableReplSpecialDie ?? undefined)).toBe(true)
+    expect(containers.drawSpecialRepl('axis')).toBe(true)
     expect(w.rollPlacementOpen).toBe(true)
 
     // 免费铁运城市格（若盘面有）每格 1 SP；点图边补给源格 ⇒ 其余全部落那里
@@ -393,7 +400,7 @@ describe('B 增援段操作级实测（剧本 1）', () => {
     expect(w.setSegmentStepIndex(rollStep)).toBe(true)
     await nextTick()
     // 1.6c 判定必须先完成，放置阶段才开放
-    containers.drawSpecialRepl(w.activeSide, w.variableReplSpecialDie ?? undefined)
+    containers.drawSpecialRepl(w.activeSide)
     await nextTick()
 
     // ① 手牌投影：点一条 → 高亮合法格 → 点格落下
@@ -486,7 +493,7 @@ describe('B 增援段操作级实测（剧本 1）', () => {
     const rollStep = w.playerSegmentSteps.findIndex((step) => step.id === 'reinforcement.replRoll')
     expect(w.setSegmentStepIndex(rollStep)).toBe(true)
     await nextTick()
-    containers.drawSpecialRepl(w.activeSide, w.variableReplSpecialDie ?? undefined)
+    containers.drawSpecialRepl(w.activeSide)
     await nextTick()
 
     // 补员落到图上（重建要求所需补员全在该格）

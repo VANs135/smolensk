@@ -136,10 +136,7 @@ describe('S1→C：真实开局后的首个地面行动', () => {
         if (board.segmentStep?.id === 'reinforcement.replRoll' && board.rollHandPending) {
           // 专规 1.6b / 2.1：补给表 SP 现在进到货手牌；本用例借道 B 段，按放弃上场收束
           if (!board.hasSpecialReplDraw(board.activeSide, board.turn)) {
-            useContainersStore().drawSpecialRepl(
-              board.activeSide,
-              board.variableReplSpecialDie ?? undefined,
-            )
+            useContainersStore().drawSpecialRepl(board.activeSide)
           }
           board.endRollSegmentNow(true)
         } else {

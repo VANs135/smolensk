@@ -1071,7 +1071,8 @@ function execute(
           const substitute = w.variableExitSelectionSet.eligibleIds[0]
           if (substitute !== undefined) w.confirmVariableExitSubstitute(substitute)
         }
-        useContainersStore().drawSpecialRepl(w.activeSide, w.variableReplSpecialDie ?? undefined)
+        // 1.6c 独立一掷：AI 也不复用 1.6b 的骰面
+        useContainersStore().drawSpecialRepl(w.activeSide)
         return w.endRollSegmentNow(true)
       }
       return false

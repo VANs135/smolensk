@@ -3,19 +3,19 @@ import { createRngState, roll1d6 } from '@/engine/rng'
 import { fresh } from '../flows/flow-harness'
 
 /**
- * 3.3c + 1.6b 记账：同一批 8 颗骰只能入账一次。
+ * 3.3c + 1.6b 记账：同一批 7 颗骰只能入账一次。
  *
  * 真实序列（`rollVariableReplNow`，autoRoll=true）：
  *   0) 剧本 7 开局已按剧本页「Roll for Variable Exit」掷过 1 颗（种子首骰），并已了结；
- *   1) 增援窗先掷 8 颗骰（2+2+1+1+2），由 `rng` setter 进 `pendingRolls`；
+ *   1) 增援窗先掷 7 颗骰（2+2+1+2；1.6c 独立一掷，不在这批），由 `rng` setter 进 `pendingRolls`；
  *   2) 撤离已了结，不再掷、也不再结算；
  *   3) 可变增援结算（`variableRepl`，带显式 rolls）。
  *
  * 修前 (2) 的 `recordSettlement` 会把 `pendingRolls` 全吃掉，(3) 又记一遍显式骰
- * ⇒ 日志 16 颗、重放游标 +8。修后 (2) 传 `consumePendingRolls: false`，骰只记在 (3)。
+ * ⇒ 同一批骰入账两次、重放错位。修后 (2) 传 `consumePendingRolls: false`，骰只记在 (3)。
  */
 describe('3.3c / 1.6b：可变撤离与可变增援不重复记骰', () => {
-  it('撤离结算不消费 variableRepl 的 8 颗骰', () => {
+  it('撤离结算不消费 variableRepl 的 7 颗骰', () => {
     const ctx = fresh()
     expect(ctx.setup.enterSetup('7')).toBe(true)
     const preset = ctx.setup.presetSelfSetupNow()
@@ -45,8 +45,8 @@ describe('3.3c / 1.6b：可变撤离与可变增援不重复记骰', () => {
     const totalDice = ledger.reduce((n, entry) => n + facesOf(entry), 0)
 
     expect(facesOf(exit)).toBe(1)
-    expect(facesOf(repl)).toBe(8)
-    expect(totalDice).toBe(9)
+    expect(facesOf(repl)).toBe(7)
+    expect(totalDice).toBe(8)
   })
 })
 

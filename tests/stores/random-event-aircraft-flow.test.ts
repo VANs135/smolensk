@@ -63,7 +63,6 @@ function rollAt19Jul(store: ReturnType<typeof newStore>, eventDice: number): voi
   store.variableReplInputs.autoRoll = false
   store.variableReplInputs.supplyDice = 8
   store.variableReplInputs.replDice = 7
-  store.variableReplInputs.specialDie = 1
   store.variableReplInputs.randomEventDice = eventDice
   expect(store.rollVariableReplNow()).toBe(true)
 }
@@ -132,7 +131,7 @@ describe('专规 3.6：机型结果 ⇒ 该型飞机全部非激活', () => {
     store.variableReplInputs.autoRoll = false
     store.variableReplInputs.supplyDice = 8
     store.variableReplInputs.replDice = 7
-    store.variableReplInputs.specialDie = 1
+
     store.variableReplInputs.randomEventDice = 2
     expect(store.rollVariableReplNow()).toBe(true)
 

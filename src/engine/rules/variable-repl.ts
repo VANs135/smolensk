@@ -5,13 +5,11 @@ import { fail, succeed, type RuleOutcome } from '../result-types'
 import { matchRowIndex } from '../tables/lookup'
 import {
   replTableRoll,
-  specialReplRoll,
   supplyTableRoll,
   REPL_ROLL_DRM_FROM_19_AUG,
   type ReplRollResult,
-  type SpecialReplResult,
 } from '../tables/supply-repl'
-import { isInRandomEventPeriod, isRailCapBoosted, isSpecialReplAvailable } from './timing'
+import { isInRandomEventPeriod, isRailCapBoosted } from './timing'
 import { rollVariableExit, type VariableExitResult } from './variable-exit'
 
 /**
@@ -39,19 +37,6 @@ import { rollVariableExit, type VariableExitResult } from './variable-exit'
  *   - 本模块**不写状态**：返回「得多少 SP / 哪些补员 / 哪些飞机转非激活」，由调用方落盘。
  */
 
-/** 特殊补员的免费重建内容（1.6c） */
-export interface SpecialReplGrant {
-  /** 表结果（division_caches / division_alarm / supply_cache / aufk_krd） */
-  result: SpecialReplResult
-  /** 是否同时免费重建一个「12-2-2 / 11-1-1 / 10-0-1」步兵或民兵师（返场 −1 step） */
-  freeDivisionRebuild: boolean
-  /** 是否给一枚 Supply Cache 标记（1.7） */
-  supplyCache: boolean
-  /** 是否给「任一 Alarm 单位」（苏）或「任一 Aufk / Krd 营」（轴） */
-  freeAlarmOrRecon: boolean
-  detail: string
-}
-
 /** 3.6 随机事件结果 */
 export interface RandomEventResult {
   /** 原始 2 骰 */
@@ -74,8 +59,6 @@ export interface VariableReinforcementInput {
   supplyDice: number
   /** 1.6b 补员表：2 骰之和（原始值；19 Aug 起由本模块施加 −1） */
   replDice: number
-  /** 1.6c 特殊补员：1 骰（19 Aug 起不掷，可省略） */
-  specialDie?: number
   /** 3.3c 可变撤离：1 骰（轴方、19 Aug 起） */
   variableExitDie?: number
   /**
@@ -97,8 +80,6 @@ export interface VariableReinforcementPlan {
   sp: number
   /** 1.6b 补员表所得（19 Aug −1 已施加） */
   repl: ReplRollResult
-  /** 1.6c 特殊补员的免费重建（未掷则不适用） */
-  special: SpecialReplGrant | null
   /** 3.3c 可变撤离结论（轴方、19 Aug 起；否则 null） */
   variableExit: VariableExitResult | null
   /** 3.6 随机事件结论（轴方事件期；否则 null） */
@@ -135,12 +116,10 @@ export function planVariableReinforcement(
   const effectiveRepl = input.replDice + (late ? REPL_ROLL_DRM_FROM_19_AUG : 0)
   const repl = replTableRoll(side, effectiveRepl)
 
-  // ③ 1.6c 特殊补员（19 Aug 前）
-  let special: SpecialReplGrant | null = null
-  if (isSpecialReplAvailable(date)) {
-    if (input.specialDie === undefined) return fail('1.6c', `specialReplDieRequired:${date}`)
-    special = buildSpecialGrant(side, input.specialDie)
-  }
+  /*
+   * 1.6c 不在这里结算：原文「also get to roll a die on their Special Repl Table」是**独立一掷**，
+   * 由 `drawSpecialRepl` 在 1.6c 实际执行时自掷（19 Aug 起自动停掷），1.6b 的骰只归 1.6b。
+   */
 
   // ④ 3.3c 可变撤离（轴方、19 Aug 起；已了结则不再掷）
   let variableExit: VariableExitResult | null = null
@@ -167,7 +146,6 @@ export function planVariableReinforcement(
     `补员表（1.6b${late ? '，19 Aug 起 −1' : ''}）：有效值 ${effectiveRepl} ⇒ ` +
       `Ftr ${repl.ftr} / Tac ${repl.tac} / Pax ${repl.pax} / Eq ${repl.eq}`,
   ]
-  if (special !== null) parts.push(`特殊补员（1.6c）：${special.detail}`)
   if (variableExit !== null) parts.push(`可变撤离（3.3c）：${variableExit.description}`)
   if (randomEvent !== null) parts.push(`随机事件（3.6）：${randomEvent.detail}`)
 
@@ -175,50 +153,10 @@ export function planVariableReinforcement(
     rule: late ? '1.6b' : '1.6b',
     sp,
     repl,
-    special,
     variableExit,
     randomEvent,
     detail: `${side === 'axis' ? '轴心' : '苏联'}方 ${date} 可变增援：${parts.join('；')}`,
   })
-}
-
-/** 1.6c：按骰面组装免费重建内容 */
-function buildSpecialGrant(side: Side, die: number): SpecialReplGrant {
-  const result = specialReplRoll(side, die)
-  switch (result.kind) {
-    case 'division_caches':
-      return {
-        result,
-        freeDivisionRebuild: true,
-        supplyCache: true,
-        freeAlarmOrRecon: false,
-        detail: `${result.label}：免费重建一个 12-2-2 / 11-1-1 / 10-0-1 步兵（或民兵）师（返场 −1 step）＋ 一枚 Supply Cache（1.7）`,
-      }
-    case 'division_alarm':
-      return {
-        result,
-        freeDivisionRebuild: true,
-        supplyCache: false,
-        freeAlarmOrRecon: true,
-        detail: `${result.label}：免费重建一个 12-2-2 / 11-1-1 / 10-0-1 步兵（或民兵）师（返场 −1 step）＋ 任一 Alarm 单位（1.6c：Alarm 单位只能经特殊补员重建）`,
-      }
-    case 'supply_cache':
-      return {
-        result,
-        freeDivisionRebuild: false,
-        supplyCache: true,
-        freeAlarmOrRecon: false,
-        detail: `${result.label}：获得一枚 Supply Cache（1.7）`,
-      }
-    case 'aufk_krd':
-      return {
-        result,
-        freeDivisionRebuild: false,
-        supplyCache: false,
-        freeAlarmOrRecon: true,
-        detail: `${result.label}：免费重建任一 Aufk / Krd 营（3.3a：这两个兵种只能经特殊补员重建）`,
-      }
-  }
 }
 
 /**

@@ -26,20 +26,21 @@ function gotoStep(w: Workbench, id: string): void {
 }
 
 describe('B 增援：1.6c 特殊补员', () => {
-  it('自动掷出的 1.6c 与「掷骰检定」共用同一颗骰，不再多掷一次', () => {
+  it('1.6c 自掷自己的骰：1.6b 掷完并不产出 1.6c 的骰面', () => {
     const w = boot()
     w.variableReplInputs.autoRoll = true
     expect(w.rollVariableReplNow()).toBe(true)
-    const die = w.variableReplSpecialDie!
-    expect(die).not.toBeNull()
+    // 1.6b 的骰只归 1.6b：特殊补员骰面在 1.6c 执行前为空
+    expect(w.variableReplSpecialDie).toBeNull()
 
     gotoStep(w, 'reinforcement.replRoll')
     const c = useContainersStore()
-    const drawsBefore = w.drawCount
-    expect(c.drawSpecialRepl(w.activeSide, die)).toBe(true)
+    const rngBefore = w.rng
+    expect(c.drawSpecialRepl(w.activeSide)).toBe(true)
 
-    expect(w.drawCount).toBe(drawsBefore)
-    expect(c.specialReplLast?.die).toBe(die)
+    expect(w.rng).not.toEqual(rngBefore)
+    expect(c.specialReplLast?.die).not.toBeNull()
+    expect(w.variableReplSpecialDie).toBe(c.specialReplLast?.die)
     expect(c.specialReplLast?.side).toBe('axis')
   })
 
@@ -50,7 +51,7 @@ describe('B 增援：1.6c 特殊补员', () => {
     gotoStep(w, 'reinforcement.replRoll')
 
     const c = useContainersStore()
-    expect(c.drawSpecialRepl(w.activeSide, w.variableReplSpecialDie ?? undefined)).toBe(true)
+    expect(c.drawSpecialRepl(w.activeSide)).toBe(true)
     expect(w.hasSpecialReplDraw('axis', w.turn)).toBe(true)
     expect(w.hasSpecialReplDraw('axis', 1)).toBe(false)
     expect(w.endRollSegmentNow(true)).toBe(true)

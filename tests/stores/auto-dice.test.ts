@@ -73,7 +73,6 @@ describe('B28：界面上的手填骰面已撤（源码守卫）', () => {
     'workbench.airInputs.lossDie',
     'workbench.barrageInputs.halfDie',
     'workbench.barrageInputs.die',
-    'workbench.variableReplInputs.specialDie',
     'workbench.variableReplInputs.variableExitDie',
     'workbench.variableReplInputs.supplyDice',
     'workbench.variableReplInputs.replDice',

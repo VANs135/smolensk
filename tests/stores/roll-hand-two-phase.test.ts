@@ -36,7 +36,7 @@ function roll(store: Store): void {
   store.variableReplInputs.autoRoll = false
   store.variableReplInputs.supplyDice = 9
   store.variableReplInputs.replDice = 10
-  store.variableReplInputs.specialDie = 2
+
   expect(store.rollVariableReplNow()).toBe(true)
 }
 

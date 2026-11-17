@@ -288,6 +288,51 @@ describe('W7 C12：死亡堆与 1.6c 特殊补员抽取（与盘面联动）', (
     expect(workbench.drawCount).toBe(drawsAfterCheck)
   })
 
+  it('★ 1.6b 与 1.6c 各自独立掷骰：1.6b 不产出 1.6c 的骰，1.6c 也不看 1.6b 的骰面', () => {
+    enterSpecialReplSegment('soviet')
+    const division = place(workbench, eligibleDivisionRecord(), someHex(), 'soviet', 'd1')
+    workbench.sendToDeadPileNow(division.instanceId)
+    workbench.variableReplInputs.autoRoll = false
+    workbench.variableReplInputs.supplyDice = 7
+    workbench.variableReplInputs.replDice = 7
+    workbench.rng = createRngState(19410708)
+    expect(workbench.rollVariableReplNow()).toBe(true)
+    const first1_6b = JSON.stringify({
+      sp: workbench.lastVariableRepl?.sp,
+      repl: workbench.lastVariableRepl?.repl,
+    })
+    // 1.6b 掷完：1.6c 的骰面仍是空（1.6b 不替 1.6c 掷）
+    expect(workbench.variableReplSpecialDie).toBeNull()
+    const rngBefore = workbench.rng
+    // 1.6c 自掷自己的 1 骰（从 RNG 里取，不动 1.6b 的结果）
+    expect(containers.drawSpecialRepl('soviet')).toBe(true)
+    const dieA = containers.specialReplLast?.die
+    expect(dieA).not.toBeNull()
+    expect(workbench.rng).not.toEqual(rngBefore)
+    const grantA = containers.specialReplLast?.grant
+    expect(workbench.variableReplSpecialDie).toBe(dieA)
+
+    // 换一组完全不同的 1.6b 骰面，但把 1.6c 固定在同一骰面 ⇒ 1.6c 结果不变、1.6b 结果变了
+    const second = newStores()
+    workbench = second.workbench
+    containers = second.containers
+    enterSpecialReplSegment('soviet')
+    const other = place(workbench, eligibleDivisionRecord(), someHex(), 'soviet', 'd2')
+    workbench.sendToDeadPileNow(other.instanceId)
+    workbench.variableReplInputs.autoRoll = false
+    workbench.variableReplInputs.supplyDice = 9
+    workbench.variableReplInputs.replDice = 10
+    expect(workbench.rollVariableReplNow()).toBe(true)
+    const second1_6b = JSON.stringify({
+      sp: workbench.lastVariableRepl?.sp,
+      repl: workbench.lastVariableRepl?.repl,
+    })
+    expect(second1_6b).not.toBe(first1_6b)
+    expect(containers.drawSpecialRepl('soviet', dieA ?? undefined)).toBe(true)
+    expect(containers.specialReplLast?.die).toBe(dieA)
+    expect(containers.specialReplLast?.grant).toBe(grantA)
+  })
+
   it('★ 1.6c 的**时机**：不在「B 增援·特殊补员抽取」这一环 ⇒ 整笔拒绝（不改盘面）', () => {
     const division = place(workbench, eligibleDivisionRecord(), someHex(), 'soviet', 'd1')
     workbench.sendToDeadPileNow(division.instanceId)

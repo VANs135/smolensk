@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { replTableRoll, supplyTableRoll } from '@/engine/tables/supply-repl'
 import {
   planRandomEvent,
+  planSpecialReplDraw,
   planVariableReinforcement,
   railCapacityAt,
   specialReplRebuildRows,
@@ -25,7 +26,6 @@ describe('1.6b：补给表与补员表（19 Aug 起 −1 并取 Late 档）', ()
       date: '1941-08-18',
       supplyDice: 9,
       replDice: 10,
-      specialDie: 1,
     })
     expect(early.ok).toBe(true)
     if (!early.ok) return
@@ -44,8 +44,8 @@ describe('1.6b：补给表与补员表（19 Aug 起 −1 并取 Late 档）', ()
     if (!late.ok) return
     expect(late.data.sp).toBe(6)
     expect(late.data.repl).toMatchObject({ ftr: 1, tac: 0, pax: 2, eq: 1 })
-    // 19 Aug 起不再掷特殊补员
-    expect(late.data.special).toBeNull()
+    // 1.6c 是独立一掷：1.6b 的结算里没有它
+    expect('special' in late.data).toBe(false)
   })
 
   it('1.6b：骰面越界即拒（不给静默默认值）', () => {
@@ -66,69 +66,43 @@ describe('1.6b：补给表与补员表（19 Aug 起 −1 并取 Late 档）', ()
   })
 })
 
-describe('1.6c：特殊补员（19 Aug 前每回合，免费重建）', () => {
-  it('1.6c：苏方 1–2 ⇒ 随机师 + 补给缓存；3–6 ⇒ 随机师 + 任一 Alarm 单位', () => {
-    const caches = planVariableReinforcement({
-      side: 'soviet',
-      date: '1941-07-12',
-      supplyDice: 7,
-      replDice: 7,
-      specialDie: 2,
-    })
-    expect(caches.ok).toBe(true)
-    if (!caches.ok) return
-    expect(caches.data.special).toMatchObject({
-      freeDivisionRebuild: true,
-      supplyCache: true,
-      freeAlarmOrRecon: false,
-    })
-
-    const alarm = planVariableReinforcement({
-      side: 'soviet',
-      date: '1941-07-12',
-      supplyDice: 7,
-      replDice: 7,
-      specialDie: 5,
-    })
-    if (!alarm.ok) return
-    expect(alarm.data.special).toMatchObject({
-      freeDivisionRebuild: true,
-      supplyCache: false,
-      freeAlarmOrRecon: true,
-    })
+describe('1.6c：特殊补员是独立一掷（不复用 1.6b 的骰面）', () => {
+  it('1.6b 的结算不含 1.6c，也不要求/消费特殊补员骰', () => {
+    for (const side of ['soviet', 'axis'] as const) {
+      const plan = planVariableReinforcement({
+        side,
+        date: '1941-07-12',
+        supplyDice: 7,
+        replDice: 7,
+      })
+      expect(plan.ok, side).toBe(true)
+      if (!plan.ok) continue
+      expect('special' in plan.data, side).toBe(false)
+    }
   })
 
-  it('1.6c：轴方 1–4 ⇒ 补给缓存；5–6 ⇒ 任一 Aufk / Krd 营（3.3a）', () => {
-    const cache = planVariableReinforcement({
-      side: 'axis',
-      date: '1941-07-19',
-      supplyDice: 7,
-      replDice: 7,
-      specialDie: 3,
-    })
-    if (!cache.ok) return
-    expect(cache.data.special).toMatchObject({ supplyCache: true, freeAlarmOrRecon: false })
-
-    const recon = planVariableReinforcement({
-      side: 'axis',
-      date: '1941-07-19',
-      supplyDice: 7,
-      replDice: 7,
-      specialDie: 6,
-    })
-    if (!recon.ok) return
-    expect(recon.data.special).toMatchObject({ freeAlarmOrRecon: true })
-  })
-
-  it('1.6c：19 Aug 前未给特殊补员骰即拒（该掷骰是必做项）', () => {
-    const missing = planVariableReinforcement({
-      side: 'soviet',
+  it('1.6b 两个骰面的组合不会改变 1.6c 的表：1.6c 只看自己那颗（planSpecialReplDraw）', () => {
+    /*
+     * 1.6b 的 7/7 与 9/10 是两组完全不同的 1.6b 输入；1.6c 若复用 1.6b 的骰，
+     * 结果就会跟着这两组变。这里断言 1.6c 的判据只认自己的 die（2 与 5 两档），
+     * 空死亡堆 ⇒ 两个档都按自己骰面给出「师作废 + Cache / Alarm 作废」。
+     */
+    const base = {
+      side: 'soviet' as const,
       date: '1941-07-12',
-      supplyDice: 7,
-      replDice: 7,
-    })
-    expect(missing.ok).toBe(false)
-    if (!missing.ok) expect(missing.reason).toBe('specialReplDieRequired:1941-07-12')
+      deadPile: [],
+      alarmUnitIds: [],
+      alarmInPlay: {},
+    }
+    const cache = planSpecialReplDraw({ ...base, die: 2 })
+    const alarm = planSpecialReplDraw({ ...base, die: 5 })
+    expect(cache.ok).toBe(true)
+    expect(alarm.ok).toBe(true)
+    if (!cache.ok || !alarm.ok) return
+    expect(cache.data.second.kind).toBe('supplyCache')
+    expect(alarm.data.second.kind).toBe('void')
+    expect(cache.data.division).toBeNull()
+    expect(alarm.data.division).toBeNull()
   })
 
   it('1.6c：特殊补员可重建的行 = 重建表里 kind=special 的行（Alarm 类）', () => {
@@ -182,7 +156,6 @@ describe('3.3c：轴方可变撤离（19 Aug 起）', () => {
       date: '1941-07-19',
       supplyDice: 7,
       replDice: 7,
-      specialDie: 1,
       randomEventDice: 7,
     })
     if (!early.ok) return
@@ -232,7 +205,6 @@ describe('3.6：轴方随机事件（19 Jul–15 Aug）', () => {
       date: '1941-07-19',
       supplyDice: 7,
       replDice: 7,
-      specialDie: 1,
     })
     expect(missing.ok).toBe(false)
     if (!missing.ok) expect(missing.reason).toBe('randomEventDieRequired:1941-07-19')

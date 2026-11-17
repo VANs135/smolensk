@@ -246,7 +246,6 @@ describe('批 F 切片 3：3.6 补给列车（2 SP，任一可卸货格，不用
     store.variableReplInputs.autoRoll = false
     store.variableReplInputs.supplyDice = 8
     store.variableReplInputs.replDice = 7
-    store.variableReplInputs.specialDie = 1
     store.variableReplInputs.randomEventDice = 7
     expect(store.rollVariableReplNow()).toBe(true)
     expect(store.lastVariableRepl?.randomEvent?.kind).toBe('supplyTrain')

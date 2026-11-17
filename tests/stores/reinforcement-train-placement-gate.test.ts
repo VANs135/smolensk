@@ -24,7 +24,6 @@ function trainPlan(): VariableReinforcementPlan {
     rule: '1.6b',
     sp: 0,
     repl: { ftr: 0, tac: 0, pax: 0, eq: 0, rowLabel: 'Early' },
-    special: null,
     variableExit: null,
     randomEvent: {
       roll: 6,
@@ -65,9 +64,7 @@ describe('补给列车卡：判定未走完时不能是「点了没反应」的�
 
   it('1.6c 掷完后：同一张卡进选格、落到合法格、标记与账本对上', () => {
     const store = armedStore()
-    expect(
-      useContainersStore().drawSpecialRepl(store.activeSide, store.variableReplSpecialDie ?? 3),
-    ).toBe(true)
+    expect(useContainersStore().drawSpecialRepl(store.activeSide, 3)).toBe(true)
     expect(store.rollPlacementOpen).toBe(true)
     expect(store.beginRollHandEntryNow('sp:train')).toBe(true)
     const candidates = store.hexPickView?.candidates
@@ -116,9 +113,7 @@ describe('13.3c：入场格不是可卸车格；候选为空时不给可点卡',
 
   it('唯一可卸车格被敌占 ⇒ 候选为空：卡变挡因行，点击不进选格，提示含 13.3c 依据', () => {
     const store = armedStore()
-    expect(
-      useContainersStore().drawSpecialRepl(store.activeSide, store.variableReplSpecialDie ?? 3),
-    ).toBe(true)
+    expect(useContainersStore().drawSpecialRepl(store.activeSide, 3)).toBe(true)
     expect(store.rollPlacementOpen).toBe(true)
     const record = combatRecord('soviet')
     for (const [index, hex] of [...store.supplyTrainPlacementHexes].entries()) {

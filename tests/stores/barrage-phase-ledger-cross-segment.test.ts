@@ -183,10 +183,7 @@ function advanceUntilPhase(stores: ReturnType<typeof newStores>, wanted: Console
     if (workbench.segmentStep?.id === 'reinforcement.replRoll' && workbench.rollHandPending) {
       // 专规 1.6b / 2.1：补给表 SP 现在进到货手牌；本用例借道 B 段，按放弃上场收束
       if (!workbench.hasSpecialReplDraw(workbench.activeSide, workbench.turn)) {
-        useContainersStore().drawSpecialRepl(
-          workbench.activeSide,
-          workbench.variableReplSpecialDie ?? undefined,
-        )
+        useContainersStore().drawSpecialRepl(workbench.activeSide)
       }
       workbench.endRollSegmentNow(true)
     } else {

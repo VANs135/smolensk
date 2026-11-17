@@ -324,7 +324,7 @@ describe('全操作体检：store 直调', () => {
           // 1.6c 必须先掷（每回合必掷），否则「结束本段」按原文拒绝
           const containers = useContainersStore()
           if (!ctx.w.hasSpecialReplDraw(ctx.w.activeSide, ctx.w.turn)) {
-            containers.drawSpecialRepl(ctx.w.activeSide, ctx.w.variableReplSpecialDie ?? undefined)
+            containers.drawSpecialRepl(ctx.w.activeSide)
           }
           // 手牌逐条落位（SP 优先挑图边源格，把余额一次放完；放不下的走放弃上场）
           for (let round = 0; round < 30 && ctx.w.rollHandPending; round += 1) {

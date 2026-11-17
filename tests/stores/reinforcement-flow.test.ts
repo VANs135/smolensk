@@ -340,7 +340,6 @@ describe('W6 B18：可变增援与补员账本（1.6b / 1.6c）', () => {
     store.variableReplInputs.autoRoll = false
     store.variableReplInputs.supplyDice = 9
     store.variableReplInputs.replDice = 10
-    store.variableReplInputs.specialDie = 2
 
     expect(store.rollVariableReplNow()).toBe(true)
     const plan = store.lastVariableRepl!
@@ -376,8 +375,8 @@ describe('W6 B18：可变增援与补员账本（1.6b / 1.6c）', () => {
     expect(store.units.filter((unit) => unit.replKind != null)).toHaveLength(
       plan.repl.pax + plan.repl.eq,
     )
-    // 轴方特殊补员表 1–4 ⇒ Supply Cache（1.6c + 表 3-5）
-    expect(plan.special).toMatchObject({ supplyCache: true })
+    // 1.6c 是独立一掷：不在 1.6b 的 plan 里（各自的骰面互不影响）
+    expect('special' in plan).toBe(false)
 
     store.clearNonSavableReplNow()
     expect(store.replHoldings.ftr).toBe(0)

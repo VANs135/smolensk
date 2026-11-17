@@ -119,7 +119,6 @@ describe('3.3c：可变撤离的窗口与了结', () => {
       autoRoll: false,
       supplyDice: 7,
       replDice: 7,
-      specialDie: 1,
       variableExitDie: 1,
       randomEventDice: 7,
     }

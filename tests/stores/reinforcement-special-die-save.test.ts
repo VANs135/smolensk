@@ -5,16 +5,16 @@ import { useContainersStore, useGameSessionStore, useWorkbenchStore } from '@/st
 import { createMemoryStorage } from '@/shared'
 
 /**
- * v10：1.6c 的已掷骰面作为**输入**进盘面快照
+ * v10：1.6c **自己掷出**的骰面随存档往返
  *
- * 修前只存 `lastVariableRepl`（结果）而不存骰面：B 段中途存档→读档后，
- * 面板仍显示自动掷出的 1.6c 结果，但「掷骰检定」会另掷一颗并按新结果入账。
- * 本用例走真实 saveNow/loadNow，确认骰面往返不变。
+ * 1.6c 是独立一掷（不复用 1.6b 的骰面）：掷完当年、还没落位时存档→读档，
+ * 面板与台账都要看到同一颗骰。本用例走真实 saveNow/loadNow，确认骰面往返不变。
  */
 describe('v10：1.6c 骰面随存档往返', () => {
   it('存档→读档后同一回合的特殊补员骰面不变', () => {
     setActivePinia(createPinia())
     const w = useWorkbenchStore()
+    const containers = useContainersStore()
     const game = useGameSessionStore()
     game.setSaveStorage(createMemoryStorage())
     game.startGame()
@@ -25,8 +25,12 @@ describe('v10：1.6c 骰面随存档往返', () => {
     w.setActiveSide('axis')
     w.setTurn(2)
     w.setPhase('reinforcement')
+    w.setSegmentStepIndex(1)
     w.variableReplInputs.autoRoll = true
     expect(w.rollVariableReplNow()).toBe(true)
+    // 1.6b 的骰不产出 1.6c 的骰面：掷完 1.6b 仍是 null
+    expect(w.variableReplSpecialDie).toBeNull()
+    expect(containers.drawSpecialRepl('axis')).toBe(true)
     const die = w.variableReplSpecialDie
     expect(die).not.toBeNull()
 
@@ -39,12 +43,15 @@ describe('v10：1.6c 骰面随存档往返', () => {
   it('旧档（v9，缺骰面键）照常读入，读成 null 而不是报错', () => {
     setActivePinia(createPinia())
     const w = useWorkbenchStore()
+    const containers = useContainersStore()
     w.setScenarioId('1')
     w.setActiveSide('axis')
     w.setTurn(2)
     w.setPhase('reinforcement')
+    w.setSegmentStepIndex(1)
     w.variableReplInputs.autoRoll = true
     expect(w.rollVariableReplNow()).toBe(true)
+    expect(containers.drawSpecialRepl('axis')).toBe(true)
     expect(w.variableReplSpecialDie).not.toBeNull()
 
     const snapshot = w.snapshotBoard() as {
