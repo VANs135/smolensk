@@ -22920,12 +22920,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 死亡堆条目含空军（与地面共用），故类型为 `DeadPileEntry`；
    * 地面重建动作内部会对空军显式拒绝（13.5 地面口径不适用于飞机）。
    */
-  const rebuildCandidates = computed<DeadPileEntry[]>(() => [
-    ...deadPile.value.filter((unit) => unit.side === activeSide.value),
-    ...units.value.filter(
-      (unit) => unit.side === activeSide.value && unit.steps < unit.printedSteps,
-    ),
-  ])
+  const rebuildCandidates = computed<DeadPileEntry[]>(() => {
+    /*
+     * 1.6c 已登记的返场单位仍在死亡堆里（放置阶段才取出），但不能再进 13.5 的重建候选：
+     * 否则同一枚会被两处消费——玩家先花 Pax/Eq 把它重建出来，1.6c 手牌再点上去时
+     * `returnFromDeadPileNow` 已找不到单位，手牌照旧挂着（实测 C 段）。
+     * 落位之后的 −1 军力单位走第二条（图上受损），仍可按原文「usual cost」再重建。
+     */
+    const pendingSpecial = new Set(specialReplPending.value.map((item) => item.instanceId))
+    return [
+      ...deadPile.value.filter(
+        (unit) => unit.side === activeSide.value && !pendingSpecial.has(unit.instanceId),
+      ),
+      ...units.value.filter(
+        (unit) => unit.side === activeSide.value && unit.steps < unit.printedSteps,
+      ),
+    ]
+  })
 
   /**
    * 13.5：重建面板的**待重建算子**与**重建表行键**（唯一状态，面板与右键共用）
@@ -26447,6 +26458,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     airBox?: boolean
   }): boolean {
     if (!requireAction('rein.rebuild', '重建')) return false
+    // 1.6c 的返场手牌已占用这枚死亡堆单位 ⇒ 13.5 不得再消费一次（同一枚只归一处）
+    if (specialReplPending.value.some((item) => item.instanceId === input.unitId)) {
+      pushLog(
+        'warning',
+        `${input.unitId} 已在 1.6c 返场手牌里：先点它落位，或在本段确认放弃（13.5 不重复重建）`,
+        '1.6c',
+      )
+      return false
+    }
     const built = rebuildRequestOf(input)
     if (built === null) {
       pushLog('warning', `找不到待重建单位 ${input.unitId}（13.5b）`, '13.5b')

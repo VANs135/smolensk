@@ -234,6 +234,29 @@ describe('W7 C12：死亡堆与 1.6c 特殊补员抽取（与盘面联动）', (
     expect(workbench.log.some((entry) => entry.text.includes('返场'))).toBe(true)
   })
 
+  it('★ 1.6c 已登记的返场单位不得同时出现在 13.5 重建候选里（同一死亡堆单位只归一处）', () => {
+    enterSpecialReplSegment('soviet')
+    const division = place(workbench, eligibleDivisionRecord(), someHex(), 'soviet', 'd1')
+    workbench.sendToDeadPileNow(division.instanceId)
+    workbench.rng = createRngState(19410708)
+    expect(workbench.rollVariableReplNow()).toBe(true)
+    workbench.rng = createRngState(19410708)
+    expect(containers.drawSpecialRepl('soviet')).toBe(true)
+    /*
+     * v7.1 第二段：判定阶段只登记，单位仍留在死亡堆（放置阶段才取出）。
+     * 但 13.5 的重建候选不能同时列出它——否则玩家可以先花 Pax/Eq 重建，
+     * 再把 1.6c 手牌点上去 ⇒ `returnFromDeadPileNow` 找不到单位、手牌照旧挂着。
+     */
+    expect(workbench.deadPile.map((unit) => unit.instanceId)).toContain('d1')
+    expect(workbench.specialReplPending.map((item) => item.instanceId)).toContain('d1')
+    expect(workbench.rebuildCandidates.map((unit) => unit.instanceId)).not.toContain('d1')
+
+    // 没被 1.6c 登记的另一枚死亡堆单位照旧可重建（不是把死亡堆整体关掉）
+    const other = place(workbench, eligibleDivisionRecord(), someHex(), 'soviet', 'd2')
+    workbench.sendToDeadPileNow(other.instanceId)
+    expect(workbench.rebuildCandidates.map((unit) => unit.instanceId)).toContain('d2')
+  })
+
   it('★ 1.6c 的**时机**：不在「B 增援·特殊补员抽取」这一环 ⇒ 整笔拒绝（不改盘面）', () => {
     const division = place(workbench, eligibleDivisionRecord(), someHex(), 'soviet', 'd1')
     workbench.sendToDeadPileNow(division.instanceId)
