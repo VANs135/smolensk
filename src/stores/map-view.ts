@@ -3252,7 +3252,8 @@ export const useMapViewStore = defineStore('mapView', () => {
         : setup.isStackDisperseUnit(token.id)
           ? [token.id]
           : []
-      return ids.length === 0 ? null : { id: token.id, label: token.label, ids }
+      // 初设里带得走的只有 † 条目；带不走就继续按普通移动拖动源判定（测试/边界混合态）
+      if (ids.length > 0) return { id: token.id, label: token.label, ids }
     }
     const active = workbench.activeMoveUnits.some((unit) => unit.instanceId === token.id)
     const pick = workbench.movePick
@@ -3292,9 +3293,11 @@ export const useMapViewStore = defineStore('mapView', () => {
         : setup.isStackDisperseUnit(instanceId)
           ? [instanceId]
           : []
-      if (ids.length === 0) return false
-      setup.moveStackUnits(ids, hex)
-      return true
+      // 初设里带得走的只有 † 条目；带不走就继续按普通移动落子判定（测试/边界混合态）
+      if (ids.length > 0) {
+        setup.moveStackUnits(ids, hex)
+        return true
+      }
     }
     const active = workbench.activeMoveUnits.some((unit) => unit.instanceId === instanceId)
     const picked = workbench.movePick?.ids.includes(instanceId) === true
