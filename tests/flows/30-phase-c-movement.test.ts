@@ -11,6 +11,7 @@ import {
 import type { BreakoutUnitView, ModeState } from '@/engine/rules'
 import { canBreakout } from '@/engine/rules/breakout'
 import { canFlipOrientation, canSwitchMode } from '@/engine/rules/modes'
+import { useMapViewStore } from '@/stores'
 import {
   CORE_HEX,
   NEAR_HEX,
@@ -233,7 +234,7 @@ describe('Ⓒ 移动链路端到端（6.1：选子 → 范围 → 逐格 → 结
     expect(store.combatAttackerIds).toContain(unit.instanceId)
   })
 
-  it('6.1：C 段选中己方算子后给出可达范围，逐格移动并把 MP 落到单位上，结束后清空交互', () => {
+  it('6.1：C 段逐格移动落 MP；未结束时取消整段可回滚，结束后关窗不回滚', () => {
     const store = newConsole()
     store.setPhase('movement')
     const unit = placeGround(store, legCombat(), CORE_HEX, 'axis', 'a1')
@@ -250,22 +251,46 @@ describe('Ⓒ 移动链路端到端（6.1：选子 → 范围 → 逐格 → 结
 
     // 走一格：位置与已耗 MP 同步落盘（逐格重算范围由 store 保证）
     // 路径含起点 ⇒ 一步移动的路径长度为 2
-    const step = store.groupReachable.hexes.find((node) => node.path.length === 2)
-    expect(step).toBeDefined()
-    store.clickHex(step!.hex)
-    expect(unit.hex).toEqual(step!.hex)
+    const firstStep = () => store.groupReachable.hexes.find((node) => node.path.length === 2)
+    expect(firstStep()).toBeDefined()
+    store.clickHex(firstStep()!.hex)
+    expect(unit.hex).not.toEqual(CORE_HEX)
     expect(store.moveInteraction!.steps).toHaveLength(1)
     expect(hexDistance(CORE_HEX, unit.hex)).toBe(1)
 
-    store.finishMove()
-    // 6.1 末句：结束移动后交互标记 finished，单位本轮不得再移动
-    expect(store.moveInteraction?.finished).toBe(true)
-    expect(unit.movementEnded).toBe(true)
-
-    // 撤销整体移动 ⇒ 交互回到起点（步数清空、单位回原位）
+    // ① 尚未结束时，「取消整次移动」是真正的整段回滚：步数清空、单位回原位、MP 归零
+    expect(store.canAbortMove).toBe(true)
     store.cancelWholeMove()
     expect(store.moveInteraction?.steps).toHaveLength(0)
     expect(unit.hex).toEqual(CORE_HEX)
+    expect(unit.mpSpent).toBe(0)
+
+    // ② 再走一格并结束移动 —— 结束即提交（6.1 末句）
+    store.clickHex(firstStep()!.hex)
+    expect(store.moveInteraction?.steps).toHaveLength(1)
+    const hexAfterEnd = { ...unit.hex }
+    const mpAfterEnd = unit.mpSpent
+    store.finishMove()
+    expect(store.moveInteraction?.finished).toBe(true)
+    expect(unit.movementEnded).toBe(true)
+
+    // ③ 已结束：撤销一步 / 放弃整段都不可用，强行调用也不动盘面
+    expect(store.canUndoStep).toBe(false)
+    expect(store.canAbortMove).toBe(false)
+    expect(store.undoBlockedReason).toContain('结束即提交')
+    store.cancelWholeMove()
+    store.undoLastStep()
+    expect(unit.hex).toEqual(hexAfterEnd)
+    expect(unit.mpSpent).toBe(mpAfterEnd)
+    expect(store.moveInteraction?.finished).toBe(true)
+
+    // ④ 关窗只关窗：会话收起，单位仍停在结束时的格与 MP（不再走取消/退选分支）
+    const mapView = useMapViewStore()
+    expect(mapView.cancelSession()).toBe(true)
+    expect(unit.hex).toEqual(hexAfterEnd)
+    expect(unit.mpSpent).toBe(mpAfterEnd)
+    expect(unit.movementEnded).toBe(true)
+    expect(store.moveInteraction).toBeNull()
   })
 
   it('6.3a / 11.0a：E 段与 G 段由引擎按「谁可动」拦下不合格单位', () => {
