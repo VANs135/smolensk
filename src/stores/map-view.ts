@@ -3250,10 +3250,15 @@ export const useMapViewStore = defineStore('mapView', () => {
       pick.hex.col === hex.col &&
       pick.hex.row === hex.row &&
       pick.ids.includes(token.id)
-    // 初设 †：原文格里的算子可从堆叠直接拖出，落到 ±1 内（复用同一套拖动原语）
-    const setupStack = !setup.finished && setup.isStackDisperseUnit(token.id)
-    if (!active && !picked && !setupStack) return null
-    return { id: token.id, label: token.label }
+    if (!active && !picked) return null
+    // 用户 2026-11-18：拖动中的算子本体跟手；一次带走的整组枚数一并交给画布显示
+    if (active)
+      return {
+        id: token.id,
+        label: token.label,
+        ids: workbench.activeMoveUnits.map((unit) => unit.instanceId),
+      }
+    return { id: token.id, label: token.label, ids: pick === null ? [token.id] : pick.ids }
   }
 
   /**

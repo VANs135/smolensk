@@ -30,8 +30,14 @@ import {
   allControlMarkerImageUrls,
   allMarkerTextureUrls,
   counterImages,
+  tokenImageUrl,
 } from '@/render/token-images'
-import { overlayImageUrls, hitHexToken, type MovementOverlay } from '@/render/token-layer'
+import {
+  overlayImageUrls,
+  hitHexToken,
+  TOKEN_SIZE_PX,
+  type MovementOverlay,
+} from '@/render/token-layer'
 import {
   FIT_PADDING_PX,
   ZOOM_STEP,
@@ -84,7 +90,7 @@ const props = withDefaults(
           hex: HexRef,
           world: { x: number; y: number },
           scale: number,
-        ) => { id: string; label: string } | null)
+        ) => { id: string; label: string; ids?: readonly string[] } | null)
       | null
     /**
      * H1：**地图内拖动源**（本次移动中的算子）
@@ -97,7 +103,7 @@ const props = withDefaults(
           hex: HexRef,
           world: { x: number; y: number },
           scale: number,
-        ) => { id: string; label: string } | null)
+        ) => { id: string; label: string; ids?: readonly string[] } | null)
       | null
     /**
      * H2：悬停预览的一行文本（上层算好；null = 无预览）
@@ -243,8 +249,38 @@ let resizeObserver: ResizeObserver | null = null
  *   「`pointerup` 丢失 ⇒ 由 `pointercancel` / 按钮位已松两条路复位」这条纪律在那边实现。
  */
 let drag: DragGesture = IDLE_DRAG
-let counterPress: { id: string; label: string; x: number; y: number } | null = null
-const counterGhost = ref<{ label: string; x: number; y: number } | null>(null)
+let counterPress: {
+  id: string
+  label: string
+  ids: readonly string[]
+  x: number
+  y: number
+} | null = null
+const counterGhost = ref<{
+  id: string
+  label: string
+  ids: readonly string[]
+  x: number
+  y: number
+} | null>(null)
+
+/**
+ * 用户 2026-11-18：拖动时**算子本体跟手**
+ *
+ * 画布只画被给的东西：从覆盖层的令牌表里按 id 找到这一枚，用与盘面相同的选图入口
+ * （`tokenImageUrl`）给出图片；找不到图（未载入/设施无图）时退回原来的文字签。
+ * 多选一次带走时在右下角标枚数，让玩家知道拖的是整组。
+ */
+const counterGhostToken = computed(() => {
+  const ghost = counterGhost.value
+  if (ghost === null || props.overlay === null || props.overlay === undefined) return null
+  return props.overlay.tokens.find((token) => token.id === ghost.id) ?? null
+})
+const counterGhostUrl = computed(() => {
+  const token = counterGhostToken.value
+  return token === null ? null : tokenImageUrl(token)
+})
+const counterGhostSize = computed(() => TOKEN_SIZE_PX * viewport.value.scale)
 /**
  * 拖动经过的格序列（含起点）
  *
@@ -477,7 +513,16 @@ function onPointerDown(event: PointerEvent): void {
       : (props.boxDragSource?.(hit.hex, hit.world, viewport.value.scale) ??
         props.counterDragSource?.(hit.hex, hit.world, viewport.value.scale) ??
         null)
-  counterPress = source == null ? null : { ...source, x: event.clientX, y: event.clientY }
+  counterPress =
+    source == null
+      ? null
+      : {
+          id: source.id,
+          label: source.label,
+          ids: source.ids ?? [source.id],
+          x: event.clientX,
+          y: event.clientY,
+        }
   counterDragPath = source == null || hit === null ? [] : [{ ...hit.hex }]
   drag = beginDrag({ x: event.clientX, y: event.clientY }, event.pointerId)
   // 指针捕获让「拖出画布」也能继续收到 pointermove。
@@ -520,7 +565,12 @@ function onPointerMove(event: PointerEvent): void {
       ) {
         if (counterGhost.value === null) emit('counterDrag', counterPress.id)
         drag = { ...drag, moved: true }
-        counterGhost.value = { label: counterPress.label, ...local }
+        counterGhost.value = {
+          id: counterPress.id,
+          label: counterPress.label,
+          ids: counterPress.ids,
+          ...local,
+        }
       }
     }
     return
@@ -810,10 +860,23 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
       <span
         v-if="counterGhost !== null"
         class="mapcanvas__counter-ghost"
+        :class="{ 'mapcanvas__counter-ghost--image': counterGhostUrl !== null }"
         :style="{ left: counterGhost.x + 'px', top: counterGhost.y + 'px' }"
         aria-hidden="true"
-        >{{ counterGhost.label }}</span
       >
+        <img
+          v-if="counterGhostUrl !== null"
+          class="mapcanvas__counter-ghost-img"
+          :src="counterGhostUrl"
+          :style="{ width: counterGhostSize + 'px', height: counterGhostSize + 'px' }"
+          alt=""
+          draggable="false"
+        />
+        <template v-else>{{ counterGhost.label }}</template>
+        <span v-if="counterGhost.ids.length > 1" class="mapcanvas__counter-ghost-count num"
+          >×{{ counterGhost.ids.length }}</span
+        >
+      </span>
     </div>
 
     <div class="mapcanvas__tools" aria-label="地图视口">
@@ -861,6 +924,35 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
   color: var(--color-command-ink);
   padding: var(--space-1) var(--space-2);
   font-size: var(--text-xs);
+}
+
+/* 用户 2026-11-18：拖动时算子本体跟手（图压在光标中心，去掉文字签的外框） */
+.mapcanvas__counter-ghost--image {
+  transform: translate(-50%, -50%);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  line-height: 0;
+}
+.mapcanvas__counter-ghost-img {
+  display: block;
+  object-fit: contain;
+  opacity: 0.92;
+  filter: drop-shadow(0 2px 6px rgb(0 0 0 / 45%));
+}
+.mapcanvas__counter-ghost-count {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  min-width: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--color-command-teal);
+  color: var(--color-command-bg);
+  font-size: var(--text-xs);
+  line-height: 18px;
+  text-align: center;
 }
 
 /* 悬停全称：贴着光标上方，不吃指针事件（否则会打断地图拖动） */
