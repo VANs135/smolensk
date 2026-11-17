@@ -136,14 +136,23 @@ export const SETUP_PLACEMENT_KINDS = [
 export type SetupPlacementKind = (typeof SETUP_PLACEMENT_KINDS)[number]
 
 /** 该放置类别是否**可由引擎直接落位**（无需玩家定夺） */
-const AUTOMATIC_PLACEMENTS: readonly SetupPlacementKind[] = ['fixed', 'multiHex', 'deadPile']
+const AUTOMATIC_PLACEMENTS: readonly SetupPlacementKind[] = [
+  'fixed',
+  /**
+   * †：`can setup within 1 hex of the listed location`
+   *
+   * 初设开始时**整堆落在所列原文格**（即使超 10 RE）；玩家随后在盘面 ±1 内散开。
+   * 故它仍属自动落位（目标＝锚格），不占初设栏的自由项。
+   */
+  'fixedTolerant',
+  'multiHex',
+  'deadPile',
+]
 
 /** 该放置类别需要**玩家在候选格里选** */
 export const CHOICE_PLACEMENTS: readonly SetupPlacementKind[] = [
   'anyHq',
   'radius',
-  /** †：许可式（`can setup within 1 hex of the listed location`）⇒ 玩家在 ±N 内选格 */
-  'fixedTolerant',
   'airbaseFree',
   'airFleet',
 ]
@@ -491,6 +500,13 @@ export interface SetupPlacementRequest {
    * 仍要过 IV-I（在地图上 / 可进入）与 IV-F（堆叠）两关，放宽的只是「格范围」。
    */
   extraCandidates?: readonly HexRef[]
+  /**
+   * IV-F：本次落位的 RE（不传＝整条条目的 RE）
+   *
+   * † 栈散开是**逐枚**移动，必须按该枚当前 RE（9.11d）计入目标格，而不是整条编队的 RE；
+   * 其余落位入口不传，口径与修前一致。
+   */
+  re?: number
 }
 
 /** 单条放置的结论 */
@@ -575,7 +591,7 @@ export function planSetupPlacement(
   }
 
   if (facts.existingRe !== undefined) {
-    const total = facts.existingRe(targetHex) + reOfEntry(entry)
+    const total = facts.existingRe(targetHex) + (request.re ?? reOfEntry(entry))
     if (!isWithinStackingLimit(total)) {
       return fail(STACKING_RULE, `setupOverStacked:${setupHexLabel(targetHex)}:${total}RE`)
     }
@@ -783,9 +799,9 @@ export function planAutoSetup(input: {
   if (views.length === 0) gaps.push(source.detail)
 
   /*
-   * †（`fixedTolerant`）是许可式：`can setup within 1 hex of the listed location`
-   * ⇒ 与 `w/i X` / 任一指挥部同属**玩家选格**，不在这里替玩家定死。
-   * 自动项只剩印刷定格（`fixed` / `multiHex` / `deadPile`）。
+   * †（`fixedTolerant`）＝**整堆先落原文格**（可超 10 RE），随后由玩家在盘面 ±1 内散开；
+   * 故它与印刷定格同属自动落位，不占 `choices`。散开的合法性由 `planSetupPlacement`
+   * 按单枚当前 RE（9.11d）校验，不在这里替玩家挑邻格。
    */
   for (const entry of views) {
     // ① 放置方式不认识 ⇒ 记缺口（不猜）
@@ -805,9 +821,7 @@ export function planAutoSetup(input: {
           ? '剧本页只要求「与任一本方指挥部同格」⇒ 由玩家在本方 HQ 格中选定'
           : entry.placement === 'radius'
             ? `剧本页「${entry.placementText}」⇒ 玩家可在 ${entry.radius ?? '?'} 格范围内任选（${WITHIN_RULE} 含边界）`
-            : entry.placement === 'fixedTolerant'
-              ? `剧本页 † 注记：可在所列位置 ${entry.radius ?? '?'} 格内初设`
-              : '剧本页只要求「放在任意空军基地」⇒ 由玩家在本方空军基地格中选定（14.1a）'
+            : '剧本页只要求「放在任意空军基地」⇒ 由玩家在本方空军基地格中选定（14.1a）'
       if (candidates.length === 0) {
         gaps.push(
           entry.placement === 'anyHq'
@@ -930,7 +944,7 @@ export function planAutoSetup(input: {
     }
   }
 
-  // †（`fixedTolerant`）是许可式，已作为 choices 交给玩家；不再记为数据缺口
+  // †（`fixedTolerant`）落锚格后由盘面散开；它不是数据缺口
 
   const counts = { pieces: pieces.length, ledger: ledger.length, choices: choices.length }
   return succeed(SETUP_RULE, {

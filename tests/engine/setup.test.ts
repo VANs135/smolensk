@@ -715,30 +715,33 @@ describe('W7 C14：初设索引的数据自检', () => {
 })
 
 /**
- * D2（修订）：† 是**许可式**（`can setup within 1 hex`）⇒ 选格权交回玩家
+ * D2（修订 2026-11-17）：† 是**整堆落原文格**，玩家在 ±1 内散开
  *
  * 剧本 3/4 的 34.17 同时列了固定格（46 军 HQ、3×Werfer）与带 † 的 17.Pz、29.Mtr。
- * 修前把 † 也放进自动初设、由引擎在 ±1 内挑格；现在 † 一律进 `choices`，
- * 玩家在范围内自选，落位仍走 `planSetupPlacement` 的 IV-A 与 10 RE 校验。
+ * 初设开始时 † 编队全部叠在 34.17（即使超 10 RE）；玩家再把它们散到 ±1 内，
+ * 散开仍走 `planSetupPlacement` 的 IV-A 与 10 RE（按**单枚当前 RE**计）。
  */
-describe('D2：† 许可式初设交给玩家选格', () => {
-  it.each(['3', '4'])('剧本 %s：† 条目全部是玩家选择项，自动棋子为 0', (scenarioId) => {
+describe('D2：† 整堆落锚格、可在 ±1 内散开', () => {
+  it.each(['3', '4'])('剧本 %s：† 条目全部自动落在所列锚格', (scenarioId) => {
     const tolerant = setupEntryViews(scenarioId, 'axis').filter(
       (entry) => entry.placement === 'fixedTolerant',
     )
     expect(tolerant.length).toBeGreaterThan(0)
     const outcome = planAutoSetup({ scenarioId })
     if (!outcome.ok) throw new Error(outcome.reason)
-    const indexes = new Set(tolerant.map((entry) => entry.index))
-    expect(outcome.data.pieces.some((piece) => indexes.has(piece.entryIndex))).toBe(false)
     for (const entry of tolerant) {
-      const choice = outcome.data.choices.find((row) => row.entryIndex === entry.index)
-      expect(choice, entry.raw).toBeDefined()
-      expect(choice!.candidates.length, entry.raw).toBeGreaterThan(0)
+      const anchor = entry.anchors[0]!
+      const pieces = outcome.data.pieces.filter((piece) => piece.entryIndex === entry.index)
+      expect(pieces.length, entry.raw).toBeGreaterThan(0)
+      expect(
+        pieces.every((piece) => piece.hex?.col === anchor.col && piece.hex?.row === anchor.row),
+        entry.raw,
+      ).toBe(true)
+      expect(outcome.data.choices.some((row) => row.entryIndex === entry.index)).toBe(false)
     }
   })
 
-  it('剧本 3：34.17 的 17 Pz / 29 Mtr 都是玩家选格，锚格与半径来自原文', () => {
+  it('剧本 3：34.17 的 17 Pz / 29 Mtr 都叠在 34.17，锚格与半径来自原文', () => {
     const targets = setupEntryViews('3', 'axis').filter(
       (entry) =>
         entry.placement === 'fixedTolerant' &&
@@ -750,19 +753,20 @@ describe('D2：† 许可式初设交给玩家选格', () => {
     )
     for (const entry of targets) {
       expect(entry.radius).toBe(1)
-      expect(entry.automatic).toBe(false)
-      expect(CHOICE_PLACEMENTS).toContain(entry.placement)
+      expect(entry.automatic).toBe(true)
+      expect(CHOICE_PLACEMENTS).not.toContain(entry.placement)
     }
   })
 
-  it('玩家落位仍受 10 RE 上限：34.17 已占 9.5 RE 时拒，换邻格通过', () => {
+  it('散开仍受 10 RE 上限：按单枚当前 RE 计，34.17 已有 9.6 RE 时拒', () => {
     const entry = setupEntryViews('3', 'axis').find(
       (row) => row.placement === 'fixedTolerant' && /29\s*Mtr/i.test(row.raw),
     )!
     const stacked = planSetupPlacement({
       entry,
       targetHex: entry.anchors[0]!,
-      facts: { existingRe: () => 9.5 },
+      re: 0.5,
+      facts: { existingRe: () => 9.6 },
     })
     expect(stacked).toMatchObject({ ok: false, rule: STACKING_RULE })
 
@@ -770,6 +774,7 @@ describe('D2：† 许可式初设交给玩家选格', () => {
     const placed = planSetupPlacement({
       entry,
       targetHex: roomy,
+      re: 0.5,
       facts: { existingRe: () => 0 },
     })
     expect(placed.ok).toBe(true)

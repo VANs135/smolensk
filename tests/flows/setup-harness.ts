@@ -26,6 +26,24 @@ export function confirmSetupForStart(
     expect(setup.truckLoadSummary.done).toBe(true)
     setup.cancelTruckPick()
   }
+  /*
+   * † 整堆默认落原文格（可超 10 RE）⇒ 开局前测试玩家在盘面把超限格散开。
+   * 与真人操作同源：`beginStackDisperse` + `moveStackUnit`（IV-A / 10 RE）。
+   */
+  for (let n = 0; n < 500 && setup.overStackedHexes.length > 0; n += 1) {
+    const over = setup.overStackedHexes[0]!
+    const id = over.movableIds[0]
+    if (id === undefined) break
+    if (!setup.beginStackDisperse(id)) break
+    let moved = false
+    for (const hex of setup.stackDisperse?.candidates ?? []) {
+      if (setup.moveStackUnit(id, hex)) {
+        moved = true
+        break
+      }
+    }
+    if (!moved) break
+  }
   for (let guard = 0; setup.setupSideCursor !== null && guard < 2; guard++)
     expect(setup.confirmSideSetup()).toBe(true)
   expect(setup.setupSideCursor).toBeNull()

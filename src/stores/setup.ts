@@ -15,6 +15,9 @@ import {
   boundarySideOf,
   breakdownCounterValues,
   SETUP_RULE,
+  STACKING_RULE,
+  WITHIN_RULE,
+  isWithinStackingLimit,
   findAircraftRecord,
   findUnitRecord,
   parseSetupHexText,
@@ -217,8 +220,6 @@ export interface SetupPlacing {
   airReduced?: boolean
   /** 飞机：本型**尚未落位**的枚里还有几枚是减损（含下一枚）；无减损即 0 */
   airReducedRemaining?: number
-  /** 地面自由项：† 预置的格号（存在＝盘上已按此格摆好，玩家可直接改） */
-  provisionalHex?: string
 }
 
 /**
@@ -456,8 +457,8 @@ export const useSetupStore = defineStore('setup', () => {
    */
   const setupTrucks = computed(() => {
     /*
-     * 编内卡车来自**全部初设条目**（含 `†` / `w/i` 这些玩家选格项），不能只看自动落位计划：
-     * † 现在由玩家选格后才落盘，若只扫 `plan.pieces`，剧本 3/4 的 4 辆满载卡车会一直是空的。
+     * 编内卡车来自**全部初设条目**（含 `w/i` 这些玩家选格项）。† 现在整堆落原文格，
+     * 但条目仍全部扫描，避免后续任何落位方式变化后卡车名单漏读。
      */
     const truckRecordIds = new Set(
       entries.value
@@ -546,12 +547,19 @@ export const useSetupStore = defineStore('setup', () => {
    */
   const placedSelfInstances = ref<Record<number, number>>({})
   /**
-   * † 许可式条目的**预置**（玩家未表态时填进候选第一格，随时可改）
+   * † 条目（`fixedTolerant`）的**盘面散开**状态
    *
-   * 只记盘上实例 id：玩家改点时先把这批实例撤掉，再按新格落；不改则视为默认接受。
-   * `completed` / `placedSelfInstances` 不因预置而记账——面板仍显示"待你定夺"。
+   * 初设开始时引擎把整堆落进原文格（可超 10 RE）；玩家在地图堆叠里点一枚 ⇒
+   * 本状态给出该条目 ±1 的候选格（地图高亮），拖/点到其中一格即散开。
+   * 不占 `placing`（初期栏自由项），也不算“未落位”；只在盘面操作。
    */
-  const provisionalSelf = ref<Record<number, string[]>>({})
+  interface StackDisperse {
+    instanceId: string
+    entryIndex: number
+    side: Side
+    candidates: HexRef[]
+  }
+  const stackDisperse = ref<StackDisperse | null>(null)
   const placedAirInstances = ref<Record<string, number>>({})
   /**
    * 批 G（用户 2026-11-16）：按**激活态分栏**点选后，该型飞机的落位顺序
@@ -585,6 +593,162 @@ export const useSetupStore = defineStore('setup', () => {
   /** 该条目已落几枚 */
   function selfPlacedOf(entryIndex: number): number {
     return placedSelfInstances.value[entryIndex] ?? 0
+  }
+
+  /**
+   * † 单位记录 → 条目（盘面实例反查“这一枚能不能散开”）
+   *
+   * 不另存实例账：读档/撤回后仍按单位库 id 反查，避免“映射丢了就不能拖”。
+   * 同一单位 id 在一个剧本里只属一个 † 条目（死亡堆同名条目不在盘上）。
+   */
+  const tolerantEntryByUnitId = computed(() => {
+    const map = new Map<string, SetupEntryView>()
+    for (const entry of entries.value) {
+      if (entry.placement !== 'fixedTolerant') continue
+      for (const piece of entry.pieces) {
+        if (piece.unitId !== null) map.set(piece.unitId, entry)
+      }
+    }
+    return map
+  })
+
+  function tolerantEntryOfUnit(unit: { unitId: string }): SetupEntryView | undefined {
+    return tolerantEntryByUnitId.value.get(unit.unitId)
+  }
+
+  /** 这一枚是否属于 † 条目（＝可从盘面堆叠里拖出散开；换手期间只动当前布设方） */
+  function isStackDisperseUnit(instanceId: string): boolean {
+    const unit = workbench.units.find((item) => item.instanceId === instanceId)
+    if (unit === undefined) return false
+    if (tolerantEntryOfUnit(unit) === undefined) return false
+    return setupSideCursor.value === null || setupSideCursor.value === unit.side
+  }
+
+  /**
+   * 当前**超 10 RE**（4.8 / IV-F）的格
+   *
+   * † 整堆默认落原文格，故这些格是**必做散开**；其余 † 格能塞下就不回填、只作可选。
+   * `movableIds` 只列本格内属于 † 条目的算子（固定格算子不能动）。
+   */
+  const overStackedHexes = computed<
+    readonly {
+      hex: HexRef
+      label: string
+      re: number
+      side: Side
+      movableIds: string[]
+    }[]
+  >(() => {
+    const groups = new Map<string, { hex: HexRef; side: Side; units: typeof workbench.units }>()
+    for (const unit of workbench.units) {
+      const key = `${unit.hex.col}.${unit.hex.row}:${unit.side}`
+      const group = groups.get(key)
+      if (group === undefined) {
+        groups.set(key, { hex: { ...unit.hex }, side: unit.side, units: [unit] })
+      } else group.units.push(unit)
+    }
+    const rows: { hex: HexRef; label: string; re: number; side: Side; movableIds: string[] }[] = []
+    for (const group of groups.values()) {
+      const re = group.units.reduce((sum, unit) => sum + currentReOf(unit), 0)
+      if (isWithinStackingLimit(re)) continue
+      rows.push({
+        hex: group.hex,
+        label: setupHexLabel(group.hex),
+        re,
+        side: group.side,
+        movableIds: group.units
+          .filter((unit) => tolerantEntryOfUnit(unit) !== undefined)
+          .map((unit) => unit.instanceId),
+      })
+    }
+    return rows.sort((a, b) => a.hex.col - b.hex.col || a.hex.row - b.hex.row)
+  })
+
+  /** 选中盘面堆叠里的某一枚 † 算子 ⇒ 铺出它所在条目的 ±1 候选（地图高亮） */
+  function beginStackDisperse(instanceId: string): boolean {
+    if (finished.value) return false
+    const unit = workbench.units.find((item) => item.instanceId === instanceId)
+    if (unit === undefined) return false
+    if (setupSideCursor.value !== null && setupSideCursor.value !== unit.side) return false
+    const entry = tolerantEntryOfUnit(unit)
+    if (entry === undefined) return false
+    const candidates = candidatesOf(entry.index)
+    if (candidates.length === 0) return false
+    stackDisperse.value = {
+      instanceId,
+      entryIndex: entry.index,
+      side: entry.side,
+      candidates: candidates.map((hex) => ({ col: hex.col, row: hex.row })),
+    }
+    return true
+  }
+
+  function cancelStackDisperse(): void {
+    stackDisperse.value = null
+  }
+
+  /**
+   * 把一枚 † 算子散到目标格
+   *
+   * 与普通初设落位**共用** `planSetupPlacement`：IV-A 范围（±1）+ IV-I 可进入 +
+   * IV-F 10 RE（按**该枚当前 RE**，9.11d）。移动只改 `hex`、不改实例 id，
+   * 故卡车满载标记与 `loadedSpT` 原样保留（13.2h）。
+   */
+  function moveStackUnit(instanceId: string, target: HexRef): boolean {
+    if (finished.value) return record({ ok: false, rule: SETUP_RULE, reason: 'setupFinished' })
+    const unit = workbench.units.find((item) => item.instanceId === instanceId)
+    if (unit === undefined) return record({ ok: false, rule: SETUP_RULE, reason: 'unitNotFound' })
+    if (setupSideCursor.value !== null && setupSideCursor.value !== unit.side)
+      return record({ ok: false, rule: SETUP_RULE, reason: 'notCurrentSetupSide' })
+    const entry = tolerantEntryOfUnit(unit)
+    if (entry === undefined)
+      return record({ ok: false, rule: SETUP_RULE, reason: 'notTolerantUnit' })
+    if (sameHex(unit.hex, target))
+      return record({ ok: false, rule: SETUP_RULE, reason: 'stackSameHex' })
+    const extraCandidates = wiggleMotExtraCandidates(entry)
+    const facts: SetupCandidateFacts = {
+      ...factsFor(unit.side),
+      // 目标格的“既有 RE”不含这一枚自己（9.11d 当前 RE）
+      existingRe: (hex) =>
+        workbench.units
+          .filter((item) => sameHex(item.hex, hex) && item.instanceId !== instanceId)
+          .reduce((sum, item) => sum + (item.re === undefined ? 0 : currentReOf(item)), 0),
+    }
+    const outcome = planSetupPlacement({
+      entry,
+      targetHex: target,
+      facts,
+      re: currentReOf(unit),
+      ...(extraCandidates.length === 0 ? {} : { extraCandidates }),
+    })
+    if (!outcome.ok) return record(outcome)
+    const snapshot = capturePlacementState()
+    const from = setupHexLabel(unit.hex)
+    unit.hex = { ...target }
+    recordPlacementUndo(`† ${unit.unitId} ${from} → ${setupHexLabel(target)}`, snapshot)
+    // 保持高亮：同一枚可继续换格，直到玩家点别的堆叠
+    const candidates = candidatesOf(entry.index)
+    stackDisperse.value = {
+      instanceId,
+      entryIndex: entry.index,
+      side: entry.side,
+      candidates: candidates.map((hex) => ({ col: hex.col, row: hex.row })),
+    }
+    return record({
+      ok: true,
+      rule: WITHIN_RULE,
+      data: {
+        detail: `† 散开：${entry.raw} ⇒ ${setupHexLabel(target)}（${entry.anchors.map(setupHexLabel).join(' / ')} ±${String(entry.radius ?? 1)} 格，IV-A / IV-F）`,
+      },
+    })
+  }
+
+  /** 地图点了一格且处于 † 散开选中态 ⇒ 当作“把这一枚散到该格” */
+  function moveStackUnitAtHex(hex: HexRef): boolean {
+    const current = stackDisperse.value
+    if (current === null) return false
+    moveStackUnit(current.instanceId, hex)
+    return true
   }
 
   /** 开始在地图上放置一条**自选格**初设项（地面单位 / HQ / 运输点…） */
@@ -799,7 +963,6 @@ export const useSetupStore = defineStore('setup', () => {
       airBoxMembers: [...workbench.airBoxMembers],
       spDumps: clone(spDumps.value),
       placedSelf: { ...placedSelfInstances.value },
-      provisionalSelf: { ...provisionalSelf.value },
       truckFullIds: [...truckFullIds.value],
       placedAir: { ...placedAirInstances.value },
       completed: { ...completed.value },
@@ -843,7 +1006,6 @@ export const useSetupStore = defineStore('setup', () => {
     workbench.airBoxMembers = snapshot.airBoxMembers
     spDumps.value = snapshot.spDumps
     placedSelfInstances.value = snapshot.placedSelf
-    provisionalSelf.value = snapshot.provisionalSelf
     truckFullIds.value = snapshot.truckFullIds
     placedAirInstances.value = snapshot.placedAir
     completed.value = snapshot.completed
@@ -1093,10 +1255,6 @@ export const useSetupStore = defineStore('setup', () => {
       const total = selfInstanceTotalOf(entry)
       const placed = selfPlacedOf(entry.index)
       const candidates = candidatesOf(entry.index)
-      const provisionalHex =
-        provisionalSelf.value[entry.index] === undefined
-          ? undefined
-          : selfChoices.value[entry.index]
       items.push({
         kind: 'self',
         entryIndex: entry.index,
@@ -1116,7 +1274,6 @@ export const useSetupStore = defineStore('setup', () => {
         imageUrl: imageUrlOfEntry(entry),
         // 批 H：地面单位 + 番号（编队 / 师属标识；非地面类为 null，界面不显示）
         formation: formationOfEntry(entry),
-        ...(provisionalHex === undefined ? {} : { provisionalHex }),
         blockedReason:
           candidates.length === 0 ? '该条目的候选格暂不可解（缺锚格 / 半径 / 地图事实）' : null,
       })
@@ -1852,6 +2009,18 @@ export const useSetupStore = defineStore('setup', () => {
         rule: result.rule,
         reason: `请先完成编队西移放置：${required.map((item) => item.label).join('、')}`,
       })
+    /*
+     * 4.8 / IV-F：† 整堆默认落原文格（可超 10 RE）⇒ 超限格是**开局前必做散开**。
+     * 只拦收束/开局，不在换手时拦（玩家可以带着超堆叠先确认本方，最后统一散开）；
+     * 未散开就绝不能建会话开局。
+     */
+    const over = overStackedHexes.value[0]
+    if (over !== undefined)
+      return record({
+        ok: false,
+        rule: STACKING_RULE,
+        reason: `${over.label} 超 10 RE（${String(over.re)} RE）：请把 † 堆叠散开到 ±1 内高亮格（4.8 / IV-F）`,
+      })
     const progress = containers.setupDrawProgress
     // 先报"还没换手确认"（否则未确认时会被后面的抽签义务抢先报错）
     const cursorIssue = requiredSetupIssues.value.find((issue) => issue.id === 'sideConfirmation')
@@ -1899,22 +2068,9 @@ export const useSetupStore = defineStore('setup', () => {
         continue
       }
       /*
-       * † 许可式：选剧本时已预置进候选第一格（玩家可改），玩家没改点就开局 ⇒
-       * 按预置格接受，不再记「本局移除」（否则盘上有算子、账上却当它不存在）。
+       * † 条目已在自动初设时整堆落原文格，不会出现在 `pendingPlacement`
+       * （超 10 RE 由 `canFinishSetup` 的 IV-F 检查拦在收束之前）。
        */
-      const provisional = item.kind === 'self' ? provisionalSelf.value[item.entryIndex] : undefined
-      if (provisional !== undefined) {
-        placedSelfInstances.value = { ...placedSelfInstances.value, [item.entryIndex]: item.total }
-        completed.value = { ...completed.value, [`self:${item.entryIndex}`]: true }
-        const next = { ...provisionalSelf.value }
-        delete next[item.entryIndex]
-        provisionalSelf.value = next
-        notes.value = [
-          ...notes.value,
-          `† 未改点 ⇒ 按预置格接受：${item.side === 'axis' ? '轴心' : '苏联'}「${item.label}」@ ${item.provisionalHex ?? '—'}`,
-        ]
-        continue
-      }
       completed.value = { ...completed.value, [`self:${item.entryIndex}`]: true }
       notes.value = [
         ...notes.value,
@@ -2419,7 +2575,7 @@ export const useSetupStore = defineStore('setup', () => {
     airChoices.value = {}
     completed.value = {}
     placedSelfInstances.value = {}
-    provisionalSelf.value = {}
+    stackDisperse.value = null
     placedAirInstances.value = {}
     airStatusOrder.value = {}
     defaultFilledIds.value = new Set()
@@ -2684,62 +2840,11 @@ export const useSetupStore = defineStore('setup', () => {
       if (built2.dump !== null) dumps.push(built2.dump)
     }
 
-    // ②.5 † 许可式：按候选顺序**预置**第一格（玩家可改，不计入已完成）
     /*
-     * 原文：`Axis divisions marked with a cross (†) can setup within 1 hex of the listed location.`
-     * 许可式 ⇒ 不替玩家做最终决定；但为了让卡车满载 / SP 归属等前置有盘面可核，
-     * 先落进候选第一格（通常是所列锚格），面板仍把它列在「自定义初设」里等玩家确认或改点。
+     * ②.5 † 条目：引擎在 `planAutoSetup` 里已按**整堆落原文格**产出棋子（允许超 10 RE）。
+     * 这里不再替玩家挑邻格，也不再预置到候选首格；玩家在盘面把超堆叠散开（见 `moveStackUnit`）。
      */
-    // 固定格棋子先上盘：† 预置判 10 RE 时必须把它们算进 `existingRe`
     workbench.units.push(...placedUnits)
-
-    const provisional = { ...provisionalSelf.value }
-    let provisionalPlaced = 0
-    for (const choice of built.choices) {
-      if (choice.placement !== 'fixedTolerant') continue
-      const entry = entries.value.find((view) => view.index === choice.entryIndex)
-      if (entry === undefined || choice.candidates.length === 0) continue
-      /*
-       * 预置沿用「所列锚格优先」的稳定候选顺序（与修前自动初设同口径），
-       * 只把最终决定权留给玩家：面板仍待确认，改点随时生效。
-       */
-      const hex = choice.candidates.find(
-        (candidate) =>
-          planSetupPlacement({
-            entry,
-            targetHex: candidate,
-            facts: factsFor(entry.side),
-          }).ok,
-      )
-      if (hex === undefined) continue
-      const ids: string[] = []
-      const units: ConsoleUnit[] = []
-      for (const piece of entry.pieces) {
-        if (piece.unitId === null) continue
-        const recordUnit = findUnitRecord(piece.unitId)
-        if (recordUnit === undefined) continue
-        const copies = entry.kind === 'formation' ? 1 : Math.max(entry.count, 1)
-        for (let copy = 0; copy < copies; copy += 1) {
-          const unit = toConsoleUnit({
-            record: recordUnit,
-            instanceId: createId('u'),
-            hex: { ...hex },
-            side: entry.side,
-            ...(entry.setupMode === 'move' ? { face: 'move' as const } : {}),
-          })
-          const penalty = entry.stepPenalty ?? 0
-          if (penalty > 0) unit.steps = Math.max(unit.steps - penalty, 0)
-          ids.push(unit.instanceId)
-          units.push(unit)
-        }
-      }
-      if (ids.length === 0) continue
-      workbench.units.push(...units) // 先上盘，后面的预置才能按真实 RE 判堆叠
-      provisional[entry.index] = ids
-      provisionalPlaced += ids.length
-      selfChoices.value = { ...selfChoices.value, [entry.index]: setupHexLabel(hex) }
-    }
-    provisionalSelf.value = provisional
 
     workbench.units.push(...ledgerUnits)
     workbench.deadPile.push(...deadPileUnits)
@@ -2788,7 +2893,7 @@ export const useSetupStore = defineStore('setup', () => {
       data: {
         detail:
           `自动初设落盘（剧本 ${scenarioId.value}，初设源剧本 ${built.source.source}）：` +
-          `棋子 ${placedUnits.length - provisionalPlaced} 枚 + † 预置 ${provisionalPlaced} 枚（待玩家确认/改点）+ 计数算子 ${ledgerUnits.length} 枚（SP ${dumps.length} 处）+ 死亡堆 ${deadPileUnits.length} 枚；` +
+          `棋子 ${placedUnits.length} 枚（含 † 整堆落原文格，待玩家散开）+ 计数算子 ${ledgerUnits.length} 枚（SP ${dumps.length} 处）+ 死亡堆 ${deadPileUnits.length} 枚；` +
           `${built.choices.length} 条自由项留待玩家定夺` +
           (truckNote === null ? '' : `；${truckNote}`),
       },
@@ -3000,27 +3105,10 @@ export const useSetupStore = defineStore('setup', () => {
       return false
     }
     const extraCandidates = wiggleMotExtraCandidates(entry)
-    /*
-     * † 预置的算子此刻已在盘上；改点校验时必须把它们从目标格的"既有 RE"里剔除，
-     * 否则玩家把预置单位点回原格会被自己的影子顶到 >10 RE（永远落不下）。
-     */
-    const provisionalIds = provisionalSelf.value[entryIndex]
-    const excluded = provisionalIds === undefined ? null : new Set(provisionalIds)
-    const baseFacts = factsFor(entry.side)
-    const selfFacts: SetupCandidateFacts =
-      excluded === null
-        ? baseFacts
-        : {
-            ...baseFacts,
-            existingRe: (hex) =>
-              workbench.units
-                .filter((unit) => sameHex(unit.hex, hex) && !excluded.has(unit.instanceId))
-                .reduce((sum, unit) => sum + (unit.re === undefined ? 0 : currentReOf(unit)), 0),
-          }
     const outcome = planSetupPlacement({
       entry,
       targetHex: target,
-      facts: selfFacts,
+      facts: factsFor(entry.side),
       ...(extraCandidates.length === 0 ? {} : { extraCandidates }),
     })
     if (!outcome.ok) return record(outcome)
@@ -3033,22 +3121,6 @@ export const useSetupStore = defineStore('setup', () => {
     const remaining = Math.max(0, total - placedBefore)
     if (remaining === 0 || completed.value[`self:${entryIndex}`]) {
       return record({ ok: false, rule: 'IV', reason: 'nothingToPlace' })
-    }
-    // † 预置：玩家一旦改点，先把预置的那批算子撤掉，避免同一编队在盘上出现两份
-    const carriedLoaded = new Set<string>()
-    const carriedFull = new Set<string>()
-    if (provisionalIds !== undefined) {
-      const drop = new Set(provisionalIds)
-      const oldUnits = workbench.units.filter((unit) => drop.has(unit.instanceId))
-      for (const unit of oldUnits) {
-        // 13.2h：改点不能把已指定的满载丢掉（否则卡车账与盘面两说）
-        if ((unit.loadedSpT ?? 0) > 0) carriedLoaded.add(unit.unitId)
-        if (truckFullIds.value.includes(unit.instanceId)) carriedFull.add(unit.unitId)
-      }
-      workbench.units = workbench.units.filter((unit) => !drop.has(unit.instanceId))
-      const next = { ...provisionalSelf.value }
-      delete next[entryIndex]
-      provisionalSelf.value = next
     }
     // `one` 模式只落一枚 ⇒ 让下面棋子类的 copies 循环只跑一次（从第 placed 枚开始）
     const copiesWanted = mode === 'one' && total > 1 ? 1 : null
@@ -3189,24 +3261,12 @@ export const useSetupStore = defineStore('setup', () => {
           // IV-G：剧本明示的**初设减损**（-N step）在此扣除（与 `runAutoSetup` 同一口径）
           const penalty = entry.stepPenalty ?? 0
           if (penalty > 0) unit.steps = Math.max(unit.steps - penalty, 0)
-          if (carriedLoaded.has(piece.unitId)) unit.loadedSpT = 1
-          else if (unit.loadedSpT === undefined) unit.loadedSpT = 0
           placed.push(unit)
         }
       }
       advancedBy = placed.length
     }
     workbench.units.push(...placed)
-    // 13.2h：预置改点后把「满载勾选」从旧实例迁到新实例（按单位记录对应）
-    if (provisionalIds !== undefined && carriedFull.size > 0) {
-      const stale = new Set(provisionalIds)
-      truckFullIds.value = [
-        ...truckFullIds.value.filter((id) => !stale.has(id)),
-        ...placed.filter((unit) => carriedFull.has(unit.unitId)).map((unit) => unit.instanceId),
-      ]
-    }
-    // 名单已落过账 ⇒ 新实例按迁移后的名单重写 loadedSpT（否则非满载卡车是 null，13.2h 判不一致）
-    if (provisionalIds !== undefined && completed.value.truckLoad === true) designateTrucks()
     notes.value = [...notes.value, ...notesLocal]
     selfChoices.value = { ...selfChoices.value, [entryIndex]: setupHexLabel(target) }
     // 进度：计数类按**量**递增；棋子类按枚递增；落满才记完成
@@ -3373,8 +3433,8 @@ export const useSetupStore = defineStore('setup', () => {
     if (onlySide !== undefined && setupSideCursor.value !== onlySide) {
       return { placed, remaining: presetRemaining(), failures, airPlaced }
     }
-    // 卡车 / SP 的落账前置是「算子已在盘上」：† 编队现在由玩家选格（不再自动预落），
-    // 故义务结算必须**放到该方自由项落完之后**，不能提前按空卡车名单判失败。
+    // 卡车 / SP 的落账前置是「算子已在盘上」：† 整堆已随自动初设落原文格，
+    // 义务结算放在该方自由项落完之后，按真实盘面核卡车名单与 SP 归属。
     const placeAirForSide = (side: Side): void => {
       const airPlan = airPlanOf(side)
       if (airPlan === null) return
@@ -3429,6 +3489,52 @@ export const useSetupStore = defineStore('setup', () => {
         }
       }
     }
+    /*
+     * 4.8 / IV-F 的**必做散开**：† 整堆默认落原文格，超 10 RE 的格必须在换手前散开。
+     * 预设只动这些超限格（能塞下的 † 格保持原文格，位置仍归玩家）；候选顺序即 ±1，
+     * 校验与手动拖动同源（`moveStackUnit`）。
+     */
+    const dispersePresetStacks = (side: Side): void => {
+      for (let guard = 0; guard < 500; guard += 1) {
+        const row = overStackedHexes.value.find((item) => item.side === side)
+        if (row === undefined) return
+        const id = row.movableIds[0]
+        if (id === undefined) {
+          failures.push({
+            entryIndex: -1,
+            label: `† 超堆叠散开（${row.label}）`,
+            reason: '该格超 10 RE 但没有可移动的 † 算子（4.8 / IV-F）',
+            tried: 1,
+          })
+          return
+        }
+        if (!beginStackDisperse(id)) {
+          failures.push({
+            entryIndex: -1,
+            label: `† 超堆叠散开（${row.label}）`,
+            reason: lastAction.value?.detail ?? 'beginStackDisperseRejected',
+            tried: 1,
+          })
+          return
+        }
+        let moved = false
+        for (const hex of stackDisperse.value?.candidates ?? []) {
+          if (moveStackUnit(id, hex)) {
+            moved = true
+            break
+          }
+        }
+        if (!moved) {
+          failures.push({
+            entryIndex: -1,
+            label: `† 超堆叠散开（${row.label}）`,
+            reason: lastAction.value?.detail ?? 'stackDisperseRejected',
+            tried: (stackDisperse.value?.candidates ?? []).length,
+          })
+          return
+        }
+      }
+    }
     if (onlySide === undefined) {
       // 分方落自由项：每方落完按既有换手逻辑推进（最多两方）
       for (let guard = 0; guard < 2 && setupSideCursor.value !== null; guard += 1) {
@@ -3441,6 +3547,7 @@ export const useSetupStore = defineStore('setup', () => {
         // 自由项落完后，编内卡车才在盘上 ⇒ 再按剧本页核满载名单（13.2h）
         settlePresetObligations(failures, side)
         placeAirForSide(side)
+        dispersePresetStacks(side)
         if (!confirmSideSetup()) {
           failures.push({
             entryIndex: -1,
@@ -3460,6 +3567,7 @@ export const useSetupStore = defineStore('setup', () => {
       }
       settlePresetObligations(failures, onlySide)
       placeAirForSide(onlySide)
+      dispersePresetStacks(onlySide)
       if (!confirmSideSetup()) {
         failures.push({
           entryIndex: -1,
@@ -3936,6 +4044,14 @@ export const useSetupStore = defineStore('setup', () => {
     beginShiftPlacement,
     cancelPlacement,
     placeAtHex,
+    // † 盘面散开：超出 10 RE 的原文格是必做项；其余格可选
+    stackDisperse,
+    overStackedHexes,
+    isStackDisperseUnit,
+    beginStackDisperse,
+    cancelStackDisperse,
+    moveStackUnit,
+    moveStackUnitAtHex,
     setPlacingChunk,
     placingChunkChoices,
     finishSetup,

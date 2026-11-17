@@ -25,7 +25,7 @@ import {
  * 初设与开局流程（W7 C14）
  *
  * ## 用户口径（本面板的形态）
- *   ① 选剧本即**自动初设**固定格号 / 死亡堆 / 多点位那些「无需玩家定夺」的单位；
+ *   ① 选剧本即**自动初设**固定格号 / 死亡堆 / 多点位 / †（整堆落原文格）那些「无需玩家定夺」的单位；
  *   ② 共识开关列表默认**全部勾选**（去会话层处理），本面板不再逐条铺开；
  *   ③ 需要玩家定夺的条目收进**初设单位 box**（按「飞机 / SP 与运输点 / 地面与基地」三类）：
  *      点一项 ⇒ 地图高亮其合法落点 ⇒ 点格落位；
@@ -195,15 +195,7 @@ function selfChoiceOf(entryIndex: number): string {
   return setup.selfChoices[entryIndex] ?? ''
 }
 
-/** † 预置的提示：盘上已按候选第一格摆好，但条目仍等玩家确认或改点 */
-function provisionalHintOf(entryIndex: number): string {
-  const item = setup.pendingPlacement.find(
-    (row) => row.kind === 'self' && row.entryIndex === entryIndex,
-  )
-  return item?.provisionalHex === undefined ? '' : `已预置在 ${item.provisionalHex}（可直接改点）；`
-}
-
-/** 候选格数量为 0 时说清原因；许可式（`w/i X` / †）连同锚格与半径一并给出 */
+/** 候选格数量为 0 时说清原因；许可式（`w/i X`）连同锚格与半径一并给出 */
 function candidateHint(
   entry: EngineSetupEntryView,
   candidates: readonly { col: number; row: number }[],
@@ -375,9 +367,11 @@ function sideLabel(side: Side): string {
       </p>
     </RuleNote>
     <p class="muted">
-      选剧本即**自动初设**固定格号 / 死亡堆 / 多点位的单位（棋子按算子链接配子、SP
-      与运输点与空军基地 按面额拆算子、剧本明示的**军力减损已自动扣除**）。其余项进下面的「初设单位
-      box」。初设源：{{ sourceDetail }}
+      选剧本即**自动初设**固定格号 / 死亡堆 / 多点位 / †（整堆落原文格，超 10 RE
+      时在盘面散开）的单位（棋子按算子链接配子、SP 与运输点与空军基地
+      按面额拆算子、剧本明示的**军力减损已自动扣除**）。其余项进下面的「初设单位 box」。初设源：{{
+        sourceDetail
+      }}
     </p>
 
     <!-- ── ②a 初设模式约束（E5）：计数从盘面 units 派生，不另记一份账 ── -->
@@ -827,6 +821,17 @@ function sideLabel(side: Side): string {
 
       <hr />
 
+      <!-- † 超堆叠：整堆默认落原文格，超过 10 RE 的格必须在盘面散开（4.8 / IV-F） -->
+      <p v-if="setup.overStackedHexes.length > 0" class="muted">
+        † 堆叠超 10 RE（4.8 / IV-F）：
+        <span v-for="row in setup.overStackedHexes" :key="row.label">
+          {{ row.label }}（{{ row.re }} RE）<template v-if="row !== setup.overStackedHexes.at(-1)"
+            >、</template
+          >
+        </span>
+        —— 在盘面点/拖该格算子散到高亮格；超限格不散开不能完成初设。
+      </p>
+
       <!-- 玩家自定义初设（自由项） -->
       <template v-for="side in ['axis', 'soviet'] as const" :key="`self-${side}`">
         <p class="muted">
@@ -848,11 +853,7 @@ function sideLabel(side: Side): string {
               <td>{{ entry.raw }}</td>
               <td class="num">{{ entry.count }}</td>
               <td class="num">{{ entry.rule }}</td>
-              <td class="muted">
-                {{
-                  provisionalHintOf(entry.index) + candidateHint(entry, candidatesOf(entry.index))
-                }}
-              </td>
+              <td class="muted">{{ candidateHint(entry, candidatesOf(entry.index)) }}</td>
               <td>
                 <select
                   v-if="candidatesOf(entry.index).length > 0"

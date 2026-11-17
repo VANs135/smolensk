@@ -50,6 +50,11 @@ export function fillSetup(ctx: ReturnType<typeof fresh>) {
         .flatMap((q) => q.items)
         .find((p) => p.remaining > 0 && p.kind !== 'truck')
       if (!item) {
+        /*
+         * 换手确认前先把超堆叠散开：4.8 / IV-F 的 `stacking:*` 会挡住
+         * `confirmSideSetup`（与真人流程一致，不能带着 >10 RE 换手）。
+         */
+        disperseStacks()
         if (setup.setupSideCursor) {
           setup.confirmSideSetup()
           continue
@@ -68,25 +73,7 @@ export function fillSetup(ctx: ReturnType<typeof fresh>) {
           1000 * w.spDumps.filter((d) => d.hex.col === h.col && d.hex.row === h.row).length
         return load(a) - load(b)
       })
-      // † 预置格优先：只接受预设的玩家不会再被挪到另一个格（与修前自动初设位置一致）
-      const provisional = setup.pendingPlacement.find(
-        (row) =>
-          row.kind === item.kind && row.side === item.side && row.entryIndex === item.entryIndex,
-      )?.provisionalHex
-      const preferred =
-        provisional === undefined
-          ? undefined
-          : (() => {
-              const [col, row] = provisional.split('.').map(Number)
-              return { col: col!, row: row! }
-            })()
-      const choices =
-        preferred === undefined
-          ? sorted
-          : [
-              preferred,
-              ...sorted.filter((hex) => hex.col !== preferred.col || hex.row !== preferred.row),
-            ]
+      const choices = sorted
       expect(choices.length).toBeGreaterThan(0)
       if (item.kind !== 'self') {
         // 飞机 / 西移仍是"一次一枚/一批"，沿用原单点逻辑
@@ -112,7 +99,31 @@ export function fillSetup(ctx: ReturnType<typeof fresh>) {
       expect(done(), `${item.label}: ${setup.lastAction?.detail ?? '落位失败'}`).toBe(true)
     }
   }
+  /*
+   * † 整堆默认落原文格（可超 10 RE）⇒ 测试玩家在盘面把超限格散开。
+   * 与真人操作同源：`beginStackDisperse` 取 ±1 候选，`moveStackUnit` 校验 IV-A / 10 RE。
+   */
+  const disperseStacks = () => {
+    for (let n = 0; n < 500; n += 1) {
+      const over = setup.overStackedHexes[0]
+      if (over === undefined) return
+      const id = over.movableIds[0]
+      expect(id, `${over.label} 超 10 RE 但无 † 算子可散`).toBeDefined()
+      expect(setup.beginStackDisperse(id!), over.label).toBe(true)
+      const candidates = [...(setup.stackDisperse?.candidates ?? [])]
+      let moved = false
+      for (const hex of candidates) {
+        if (setup.moveStackUnit(id!, hex)) {
+          moved = true
+          break
+        }
+      }
+      expect(moved, `${over.label} 的 ${id} 无处可散`).toBe(true)
+    }
+    expect(setup.overStackedHexes.length, '散开 500 步后仍超堆叠').toBe(0)
+  }
   placeRemaining()
+  disperseStacks()
   /*
    * 两段式（规格 §4.1）：先「完成初设」只确认；抽签由唯一入口执行并开局，
    * 抽签产生的西移项会再回到初设 box ⇒ 执行完再摆一轮。
@@ -121,6 +132,7 @@ export function fillSetup(ctx: ReturnType<typeof fresh>) {
   if (setup.setupDrawEntryVisible) {
     expect(setup.drawSetupEffectsNow(), setup.lastAction?.detail).toBe(true)
     placeRemaining()
+    disperseStacks()
   }
   expect(setup.pendingPlacement.filter((p) => p.remaining > 0)).toHaveLength(0)
   expect(setup.initialPlacementsComplete).toBe(true)

@@ -97,7 +97,7 @@ describe('初设范围：† 所列位置 ±1 格（剧本 3/5/7 德军）', () 
   })
 
   it.each(['3', '5', '7'] as const)(
-    '剧本 %s：† 交给玩家选格，候选都在所列格 1 格内',
+    '剧本 %s：† 整堆落锚格，散开候选都在所列格 1 格内',
     (scenarioId) => {
       const plan = planAutoSetup({ scenarioId })
       if (!plan.ok) throw new Error(plan.reason)
@@ -107,19 +107,22 @@ describe('初设范围：† 所列位置 ±1 格（剧本 3/5/7 德军）', () 
       for (const entry of tolerant) {
         const anchor = entry.anchors[0]
         if (anchor === undefined) throw new Error(`${entry.raw}: 应有锚格`)
-        const choice = plan.data.choices.find((row) => row.entryIndex === entry.index)
-        expect(choice, entry.raw).toBeDefined()
-        expect(choice!.candidates.length, entry.raw).toBeGreaterThan(0)
-        for (const hex of choice!.candidates) {
+        const candidates = setupCandidates(entry)
+        expect(candidates.length, entry.raw).toBeGreaterThan(0)
+        for (const hex of candidates) {
           expect(
             hexDistance(anchor, hex),
             `${entry.raw} → ${hex.col}.${hex.row}`,
           ).toBeLessThanOrEqual(1)
         }
+        // 默认全部叠在锚格（不替玩家挑邻格）
+        const pieces = plan.data.pieces.filter((piece) => piece.entryIndex === entry.index)
+        expect(pieces.length, entry.raw).toBeGreaterThan(0)
+        expect(
+          pieces.every((piece) => piece.hex?.col === anchor.col && piece.hex?.row === anchor.row),
+          entry.raw,
+        ).toBe(true)
       }
-      // † 一律不再产生自动落位棋子
-      const indexes = new Set(tolerant.map((entry) => entry.index))
-      expect(plan.data.pieces.some((piece) => indexes.has(piece.entryIndex))).toBe(false)
     },
   )
 })

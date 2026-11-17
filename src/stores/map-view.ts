@@ -887,6 +887,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       // 第六批条 2：卡车点选模式下高亮的**是卡车所在格**（不是"落点"）
       setupCandidates:
         setup.placing?.candidates ??
+        setup.stackDisperse?.candidates ??
         (setup.truckPickActive
           ? setup.truckPickHexes
           : setup.pendingSpOwnershipHexes.length > 0
@@ -1929,6 +1930,14 @@ export const useMapViewStore = defineStore('mapView', () => {
       return true
     }
     if (token === null) return false
+    /*
+     * 初设 †：点堆叠里的这一枚 ⇒ 选中并把它的 ±1 候选铺到地图（拖/点散开）。
+     * 这类单位不列进初设栏，只在盘面堆叠里操作。
+     */
+    if (setup.beginStackDisperse(token.id)) {
+      stackSelection.value = [token.id]
+      return true
+    }
     /*
      * 9.1b：战斗环节里**敌方堆叠就是防御格**。
      * 敌方令牌不在玩家的可选集合里，若照下面的参与闸门走，这一击只会换回一行
@@ -2973,7 +2982,9 @@ export const useMapViewStore = defineStore('mapView', () => {
       pick.hex.col === hex.col &&
       pick.hex.row === hex.row &&
       pick.ids.includes(token.id)
-    if (!active && !picked) return null
+    // 初设 †：原文格里的算子可从堆叠直接拖出，落到 ±1 内（复用同一套拖动原语）
+    const setupStack = !setup.finished && setup.isStackDisperseUnit(token.id)
+    if (!active && !picked && !setupStack) return null
     return { id: token.id, label: token.label }
   }
 
@@ -2991,6 +3002,11 @@ export const useMapViewStore = defineStore('mapView', () => {
   ): boolean {
     const active = workbench.activeMoveUnits.some((unit) => unit.instanceId === instanceId)
     const picked = workbench.movePick?.ids.includes(instanceId) === true
+    // 初设 †：拖动松手＝一次散开（与点击/普通初设同源，拒绝原因写在 lastAction）
+    if (!active && !picked && !setup.finished && setup.isStackDisperseUnit(instanceId)) {
+      setup.moveStackUnit(instanceId, hex)
+      return true
+    }
     if (!active && !picked) return false
     if (path !== undefined && path.length >= 2) {
       workbench.moveAlongDraggedPath(path)
@@ -4307,6 +4323,11 @@ export const useMapViewStore = defineStore('mapView', () => {
       }
     }
     if (!modalPickLive && world !== undefined && handleStackClick(hex, world, scale, anchor)) return
+    // 初设 †：已选中堆叠里的某一枚 ⇒ 点目标格即散开（越界/超堆叠由 store 拒绝并留原因）
+    if (setup.stackDisperse !== null && setup.moveStackUnitAtHex(hex)) {
+      closePopup()
+      return
+    }
     // W7 C14：初设放置中 ⇒ 点地图即落位（最高优先级；非候选格由 store 记拒绝，不开常规小窗）
     if (setup.placing !== null && setup.placeAtHex(hex)) {
       closePopup()
