@@ -96,6 +96,12 @@ export interface UnitToken {
   tip?: string | null
   /** 是否被选中 */
   selected: boolean
+  /**
+   * 9.x：本方在该场战斗里的角色（只给本方；敌方顶牌不标，4.9b 不展示具体参与枚）
+   */
+  combatRole?: 'attacker' | 'defender' | null
+  /** 9.x：当前结算步是否由这一侧决策（更粗的角色环） */
+  combatEmphasis?: boolean
   /** 4.8b 的显示顺序来自状态层。 */
   combat?: boolean
   projectsZoc?: boolean
@@ -171,6 +177,14 @@ export interface ReachableHint {
   inEnemyZoc: boolean
 }
 
+/** 9.x 战斗中段的格级构成（攻方格 / 防御格 / 当前强调侧） */
+export interface CombatHexOverlay {
+  attackerHexes: readonly HexRef[]
+  defenderHex: HexRef
+  /** 当前结算步该强调的一侧；null = 双方并列（补给/奇袭/战斗骰） */
+  emphasis: 'attacker' | 'defender' | null
+}
+
 /** 移动覆盖层 */
 export interface MovementOverlay {
   tokens: readonly UnitToken[]
@@ -205,6 +219,14 @@ export interface MovementOverlay {
    * 状态层的 `combatAttackableHexes`（引擎 `checkLegality` 裁决），本模块只画环。
    */
   combatAttackableHexes?: readonly HexRef[]
+  /**
+   * 9.x 战斗中段的**战斗构成**（用户 2026-11-18）
+   *
+   * 进 9.2 之后仍要看清「哪一格在攻、哪一格在守」；当前结算步（宣布/损失/撤退/推进）
+   * 用更粗的环强调该决策的一侧。参与枚的角色只放在本方 token 上（`combatRole`），
+   * 敌方顶牌不标具体参与枚（4.9b）。
+   */
+  combat?: CombatHexOverlay | null
   /**
    * 9.12 撤退落点（W7 C16：战斗收尾的「就在地图上选撤退格」）
    *
@@ -489,6 +511,11 @@ export const OVERLAY_PALETTE = {
   combatAttackable: 'rgba(176, 42, 38, 0.20)',
   combatAttackableEdge: 'rgba(176, 42, 38, 0.95)',
   combatAttackableText: '#8a1f1c',
+  /** 9.x 战斗中段：攻方格（暖红虚环）与守方格（蓝实环），同一 OVERLAY_PALETTE 内 */
+  combatAttacker: 'rgba(176, 42, 38, 0.16)',
+  combatAttackerEdge: 'rgba(176, 42, 38, 0.95)',
+  combatDefender: 'rgba(42, 96, 138, 0.18)',
+  combatDefenderEdge: 'rgba(42, 96, 138, 0.95)',
   /** 条 4：可整备机场格（15.1）——青蓝环，与付款来源金黄、可攻击暖红区分 */
   refitAirbase: 'rgba(26, 116, 138, 0.18)',
   refitAirbaseEdge: 'rgba(26, 116, 138, 0.95)',
@@ -547,6 +574,16 @@ export function cullOverlay(
       ? {}
       : {
           combatAttackableHexes: overlay.combatAttackableHexes.filter((hint) => visible(hint)),
+        }),
+    ...(overlay.combat === undefined || overlay.combat === null
+      ? { combat: overlay.combat }
+      : {
+          combat: visible(overlay.combat.defenderHex)
+            ? {
+                ...overlay.combat,
+                attackerHexes: overlay.combat.attackerHexes.filter((hex) => visible(hex)),
+              }
+            : null,
         }),
     ...(overlay.retreat === undefined || overlay.retreat === null
       ? { retreat: overlay.retreat }
@@ -704,6 +741,27 @@ export function drawMovementOverlay(
       ctx.stroke()
       ctx.setLineDash([])
     }
+  }
+
+  // ①-a1b 9.x 战斗中段：攻方格（红虚环）/ 守方格（蓝实环）；当前决策侧加粗
+  if (visible.combat !== undefined && visible.combat !== null) {
+    const { combat } = visible
+    for (const hex of combat.attackerHexes) {
+      traceHex(ctx, hex)
+      ctx.fillStyle = OVERLAY_PALETTE.combatAttacker
+      ctx.fill()
+      ctx.strokeStyle = OVERLAY_PALETTE.combatAttackerEdge
+      ctx.lineWidth = (combat.emphasis === 'attacker' ? 4.5 : 3) / scale
+      ctx.setLineDash([4 / scale, 3 / scale])
+      ctx.stroke()
+      ctx.setLineDash([])
+    }
+    traceHex(ctx, combat.defenderHex)
+    ctx.fillStyle = OVERLAY_PALETTE.combatDefender
+    ctx.fill()
+    ctx.strokeStyle = OVERLAY_PALETTE.combatDefenderEdge
+    ctx.lineWidth = (combat.emphasis === 'defender' ? 4.5 : 3) / scale
+    ctx.stroke()
   }
 
   // ①-a2 条 4：可整备机场格（15.1）——青蓝点线环（与付款来源金黄、可攻击暖红区分）
@@ -1729,6 +1787,17 @@ function drawToken(
     ctx.strokeStyle = OVERLAY_PALETTE.select
     ctx.lineWidth = 3 / scale
     ctx.strokeRect(left - 2 / scale, top - 2 / scale, size + 4 / scale, size + 4 / scale)
+  }
+
+  // 9.x 战斗角色环：只标本方参与枚；当前决策侧加粗
+  if (token.combatRole === 'attacker' || token.combatRole === 'defender') {
+    ctx.strokeStyle =
+      token.combatRole === 'attacker'
+        ? OVERLAY_PALETTE.combatAttackerEdge
+        : OVERLAY_PALETTE.combatDefenderEdge
+    ctx.lineWidth = (token.combatEmphasis === true ? 4 : 2.5) / scale
+    const inset = 4 / scale
+    ctx.strokeRect(left - inset, top - inset, size + inset * 2, size + inset * 2)
   }
 
   // W7 C13（4.9a）：敌方格顶牌的提示环 —— 虚线表示「其下还有不可见单位」，**不显示枚数**

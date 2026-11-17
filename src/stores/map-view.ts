@@ -6,7 +6,12 @@ import { computed, ref, watch } from 'vue'
 
 import type { HexRef, Side } from '@/data'
 import { markers } from '@/data'
-import { isInRandomEventPeriod, isSpecialReplAvailable, type PanzerGroup } from '@/engine/rules'
+import {
+  isInRandomEventPeriod,
+  isSpecialReplAvailable,
+  type CombatInteractionState,
+  type PanzerGroup,
+} from '@/engine/rules'
 import { useHotseatStore } from './hotseat'
 import {
   useWorkbenchStore,
@@ -237,6 +242,33 @@ export interface MapSession extends MapSessionBase {
   closeBlockedReason?: string
 }
 
+/**
+ * 9.x 战斗中段：当前结算步该强调哪一侧
+ *
+ * `null` ＝ 双方并列（9.2 补给 / 9.8 奇袭 / 9.9 掷骰 —— 这一步没有"只轮到一方"的决策）。
+ * 判据与 `CombatPanel` 同源：损失 / 选项看 `resolution.stage` 前缀，其余按步骤本身。
+ */
+function combatEmphasisOf(state: CombatInteractionState): 'attacker' | 'defender' | null {
+  switch (state.step) {
+    case 'declareAr':
+      return state.declaredAttackerArUnitId === undefined ? 'attacker' : 'defender'
+    case 'declareTerrain':
+      return 'defender'
+    // 9.10b：攻方先结算完，守方再决定 —— 强调侧就是当前正在填损失/选项的那一方
+    case 'losses':
+    case 'options':
+      return state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender'
+    // 9.12：守方选撤退落点
+    case 'retreat':
+      return 'defender'
+    // 9.12g：攻方推进
+    case 'advance':
+      return 'attacker'
+    default:
+      return null
+  }
+}
+
 export const useMapViewStore = defineStore('mapView', () => {
   const workbench = useWorkbenchStore()
   const hotseat = useHotseatStore()
@@ -332,6 +364,13 @@ export const useMapViewStore = defineStore('mapView', () => {
 
   function groundTokens(): UnitToken[] {
     const movingIds = workbench.moveInteraction?.unitIds ?? []
+    /*
+     * 9.x 战斗中段：只给**本方**参战枚标角色（4.9b：敌方只公开数值、不展示具体算子）。
+     * 参与集取自战斗构成（9.1 锁定），同格未参战的那几枚不在此列 ⇒ 不冒充参战。
+     */
+    const combatNow = workbench.combatState
+    const emphasis =
+      combatNow === null || combatNow.finished === true ? null : combatEmphasisOf(combatNow)
     return (
       workbench.units
         /*
@@ -368,6 +407,15 @@ export const useMapViewStore = defineStore('mapView', () => {
           ]
             .filter((part): part is string => part !== null)
             .join('｜')
+          // 参与角色：只认"本方 ∧ 在构成里"；同格未参战者恒 null
+          const role: 'attacker' | 'defender' | null =
+            combatNow === null || unit.side !== hotseat.viewerSide
+              ? null
+              : combatNow.composition.attackerIds.includes(unit.instanceId)
+                ? 'attacker'
+                : combatNow.composition.defenderIds.includes(unit.instanceId)
+                  ? 'defender'
+                  : null
           return {
             id: unit.instanceId,
             hex: unit.hex,
@@ -406,8 +454,14 @@ export const useMapViewStore = defineStore('mapView', () => {
             name: unit.name,
             tip,
             // 选中环：移动交互中的那些 + **就地展开里被选中的那些**（用户 2026-09-16 #1：点某一枚即切换）
+            // 4.9a：只给本方 —— 敌方令牌不挂选中环（否则守方会看到"进攻方被选中"）
             selected:
-              movingIds.includes(unit.instanceId) || stackSelection.value.includes(unit.instanceId),
+              unit.side === hotseat.viewerSide &&
+              (movingIds.includes(unit.instanceId) ||
+                stackSelection.value.includes(unit.instanceId)),
+            // 9.x 战斗中段：本方参战枚的角色环（当前结算步强调的一侧加粗）
+            combatRole: role,
+            combatEmphasis: role !== null && role === emphasis,
             /*
              * B9：**本环节不参与的本方算子灰显**（用户口径「不参与环节的算子无法点击」的可视半边）。
              * 判据是 store 里那条唯一谓词（participatingIds ← workbench.participatingUnitIds ← participatesIn），
@@ -747,6 +801,20 @@ export const useMapViewStore = defineStore('mapView', () => {
       overrunTargets: workbench.overrunTargets,
       // 条 21（批 F·F2）：战斗段「可攻击位置」高亮（随选人实时算）；仅在战斗工具态且未选防御格时给
       combatAttackableHexes: workbench.combatAttackableHexes,
+      /*
+       * 9.x 战斗中段：**攻方格 + 守方格**同时上地图（用户 2026-11-18 走查）。
+       *   判据只认战斗会话的构成（9.1 已锁定），双方视角都能看到"哪一格被打、哪一格在防"；
+       *   具体参与枚不在这里给（4.9b：敌方只公开数值），角色环只标本方。
+       *   `emphasis` 让当前结算步该决策的那一侧加粗，收敛后（finished）不再铺。
+       */
+      combat:
+        workbench.combatState === null || workbench.combatState.finished === true
+          ? null
+          : {
+              attackerHexes: workbench.combatState.composition.attackerHexes,
+              defenderHex: workbench.combatState.composition.defendingHex,
+              emphasis: combatEmphasisOf(workbench.combatState),
+            },
       /*
        * W7 C16：9.12 撤退落点（只画「当前该轮到的这一方、且正在选的那一枚」——
        *   与 `retreatDestinationAt`／`onHexClick` 的可点判定**同源**；修前铺整方并集，
