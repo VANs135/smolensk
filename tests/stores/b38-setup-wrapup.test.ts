@@ -73,11 +73,12 @@ describe('B38：开局被拒后初设仍可改（`startGameNow` 先开局、再�
     }
   })
 
-  it('★ 源码守卫：`startGameNow` 里 `startGame()` 在 `finishSetup()` **之前**', () => {
+  it('★ 源码守卫：开局段里 `startGame()` 在 `finishSetup()` **之前**', () => {
     const store = readFileSync('src/stores/setup.ts', 'utf8')
-    const at = store.indexOf('function startGameNow')
+    // 2026-11-18：抽签并入完成初设 ⇒ 开局段抽成 startGameAfterSetupDraw（startGameNow 调它）
+    const at = store.indexOf('function startGameAfterSetupDraw')
     expect(at).toBeGreaterThan(0)
-    const body = store.slice(at, at + 2600)
+    const body = store.slice(at, at + 3200)
     /*
      * 只在**代码**上比次序：注释里也提到 `finishSetup()`（说明"修前是先收束"）⇒
      * 锚点取带上下文的代码串，免得被说明文字误判（这个坑本轮踩过一次）。
@@ -108,10 +109,10 @@ describe('B38：初设框可拖 + 落满给「完成初设」（源码守卫）'
     expect(queue).toContain('v-show="!allPlaced"')
     expect(queue).toContain('@click="setup.startGameNow()"')
     expect(queue).toContain('完成初设')
-    // 初设收束后本框由视图的条件移除（"结束后自动关"；两段式：确认后仍留到抽签完成）
+    // 初设收束后本框由视图的条件移除（"结束后自动关"；抽签已改为确认时自动执行）
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
     expect(game).toMatch(
-      /<DecisionQueue\s+v-if="setup\.applied && \(!setup\.finished \|\| setup\.setupDrawEntryVisible\)"/,
+      /<DecisionQueue\s+v-if="setup\.applied && \(!setup\.finished \|\| setup\.setupStartEntryVisible\)"/,
     )
   })
 

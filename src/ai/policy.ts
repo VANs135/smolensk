@@ -157,7 +157,7 @@ export interface AiSetupSnapshot {
   cursorActive: boolean
   /** 还有待落位的自由项 / 飞机（枚数） */
   remaining: number
-  /** 「抽取编队」入口此刻可见（两段式第二段） */
+  /** 初设强制抽取尚未执行（正常路径由完成初设自动执行；此处只服务旧档/程序化补做） */
   drawVisible: boolean
   /** 抽签后仍缺落点的西移编队（稳定序） */
   shiftFormationIds: readonly string[]

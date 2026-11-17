@@ -75,9 +75,11 @@ describe('第六批 S3：完成初设 ⇒ 自动连跑到第一个玩家环节�
     }
   })
 
-  it('源码守卫：`startGameNow` 走**连跑**（`advanceToNextStop`），不再是单步 `stepNow`', () => {
+  it('源码守卫：开局段走**连跑**（`advanceToNextStop`），不再是单步 `stepNow`', () => {
     const source = readFileSync('src/stores/setup.ts', 'utf8')
-    const at = source.indexOf('function startGameNow')
+    // 2026-11-18：抽签并入完成初设 ⇒ 开局段抽成 startGameAfterSetupDraw（startGameNow 调它）
+    const at = source.indexOf('function startGameAfterSetupDraw')
+    expect(at).toBeGreaterThan(0)
     const end = source.indexOf('\n  function ', at + 100)
     const body = source.slice(at, end < 0 ? at + 4000 : end)
     expect(body).toContain('game.advanceToNextStop()')

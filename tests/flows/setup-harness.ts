@@ -4,7 +4,7 @@ import type { useSetupStore } from '@/stores'
 /** 正向开局夹具走正式卡车点图和双方确认；普通未摆单位仍由测试玩家主动放弃。 */
 export function confirmSetupForStart(
   setup: ReturnType<typeof useSetupStore>,
-  // 负向用例（要观察抽取入口失败）用 `{ draws: false }` 把「点抽取编队」留给用例自己
+  // 负向用例（要观察抽取执行失败/待办）用 `{ draws: false }` 只确认、把自动抽取留给用例自己触发
   { draws = true }: { draws?: boolean } = {},
 ): void {
   if (setup.finished) return
@@ -47,14 +47,11 @@ export function confirmSetupForStart(
   for (let guard = 0; setup.setupSideCursor !== null && guard < 2; guard++)
     expect(setup.confirmSideSetup()).toBe(true)
   expect(setup.setupSideCursor).toBeNull()
-  // 第一段：确认初设（只收束，不建会话）；无 effects 的剧本这里直接开局
-  if (!setup.finished) expect(setup.startGameNow(), setup.lastAction?.detail).toBe(true)
-  /*
-   * 两段式（规格 §4.1）：先「完成初设」只确认；本剧本未执行的 `setup.effects`
-   * 由随后的唯一入口「抽取编队」（`drawSetupEffectsNow`）执行并开局。
-   * ★ 负向用例用 `{ draws: false }` 把这一步留给用例自己。
-   */
-  if (draws && setup.setupDrawEntryVisible) {
+  // 初设收束：有 `setup.effects` 的剧本在**同一次点击**里自动抽签 + 处置 + 开局
+  if (!setup.finished) {
+    expect(setup.startGameNow({ autoDraw: draws }), setup.lastAction?.detail).toBe(true)
+  } else if (draws && setup.setupDrawEntryVisible) {
+    // 已确认但未抽签（旧档/前述用例留下的状态）⇒ 仍可程序化补做
     expect(setup.drawSetupEffectsNow(), setup.lastAction?.detail).toBe(true)
   }
 }

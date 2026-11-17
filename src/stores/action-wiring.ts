@@ -108,7 +108,7 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'confirmSideSetup',
       'confirmSpOwnership',
       'designateTrucks',
-      // 两段式第二段：初设确认后执行 effects 并开局（唯一入口，非阶段内行动）
+      // 初设确认时的自动抽取（完成初设同一笔事务）；本函数是旧档/程序化补做入口
       'drawSetupEffectsNow',
       'resetAll',
       'resetSetupDraws',

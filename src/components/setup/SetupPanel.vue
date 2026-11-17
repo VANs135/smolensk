@@ -396,10 +396,10 @@ function sideLabel(side: Side): string {
       </p>
     </div>
 
-    <!-- ── ②b 编队抽签（ch10 / ch11：确认初设后由玩家抽取一次） ── -->
+    <!-- ── ②b 编队抽签（ch10 / ch11：完成初设时自动抽取） ── -->
     <RuleNote
       v-if="drawGroups.length > 0"
-      title="编队抽签（ch10 / ch11）：确认初设后抽取"
+      title="编队抽签（ch10 / ch11）：完成初设时自动抽取"
       rule="ch10 / ch11"
       :open="true"
     >
@@ -407,13 +407,9 @@ function sideLabel(side: Side): string {
         {{ group.label }}（×{{ group.count }}）：抽中
         {{ drawnOf(group.kind).join('、') || '（尚未抽取）' }} ⇒ {{ group.effect }}
       </p>
-      <div v-if="setup.setupDrawEntryVisible" class="row">
-        <span class="muted">
-          抽取入口在地图左上角「初设」栏的「抽取编队」按钮（本面板只读，全程序只保留一处可点）。
-        </span>
-      </div>
-      <p v-else class="muted">
-        确认初设后地图左上角「初设」栏出现「抽取编队」；抽完即永久收起，后续增援段与阶段切换不再抽取。
+      <p class="muted">
+        抽签是剧本页的机械动作：点「完成初设」时自动抽取，并按原文把抽中编队的处置（西移 / Move Mode
+        / 换侦察营 / 进死亡堆）一并落盘，不需要单独点「抽取」。
       </p>
     </RuleNote>
 

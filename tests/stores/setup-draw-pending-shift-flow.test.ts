@@ -29,7 +29,7 @@ describe('ch10 抽签待给落点：不整笔回滚，落齐后再开局', () =>
     const board = useWorkbenchStore()
 
     expect(setup.selectScenario('1'), setup.lastAction?.detail).toBe(true)
-    // 先完成第一段确认（不抽签，把抽签留给本用例）
+    // 先确认但暂不自动抽取（autoDraw:false，复刻旧档），把抽签留给本用例
     confirmSetupForStart(setup, { draws: false })
     expect(setup.setupDrawEntryVisible).toBe(true)
 

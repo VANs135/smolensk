@@ -966,8 +966,7 @@ function boxAircraft(side: Side) {
     </template>
 
     <!-- ── ③ 剧本抽取盒（编队抽签；池成员由 formations.json 推导） ──
-         ch10（用户 2026-11-10 裁定）：抽取**只在初设单位放置完成后执行一次**，
-         之后任何阶段都不再出现抽取窗口/按钮 ⇒ 可见条件收紧为 `setup.setupDrawEntryVisible`。 -->
+         ch10：抽签是「完成初设」时的机械动作（自动执行）；本窗只读，不再提供可点入口。 -->
     <template v-if="setup.setupDrawEntryVisible">
       <hr />
       <h4 class="block-title">剧本抽取盒（ch10 Formation Chit Draw / ch11 随机化）</h4>
@@ -984,9 +983,10 @@ function boxAircraft(side: Side) {
       </div>
       <template v-if="scenarioBox !== null && scenarioBox.groups.length > 0">
         <p class="num">入杯池：{{ scenarioBox.pool.map((item) => item.formationId).join('、') }}</p>
-        <!-- ch10：抽取入口唯一在地图左上角「初设」栏；本窗只读，避免同一动作两处可点 -->
-        <p class="muted">抽取入口在地图左上角「初设」栏（本窗只读）。</p>
-        <p class="muted">初设完成后只执行一次；抽完即永久收起，后续增援段与阶段切换不再抽取。</p>
+        <p class="muted">
+          抽签在「完成初设」时自动执行（自动落位 / 换侦察营 / 进死亡堆）；本窗只读。
+        </p>
+        <p class="muted">每个剧本只执行一次；后续增援段与阶段切换不再抽取。</p>
       </template>
       <p v-else class="muted">本剧本无编队抽取（ch11：剧本 7 无随机化）。</p>
       <p v-for="(gap, index) in scenarioBox?.dataGaps ?? []" :key="`sg${index}`" class="warn">

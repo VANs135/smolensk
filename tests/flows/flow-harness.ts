@@ -125,12 +125,14 @@ export function fillSetup(ctx: ReturnType<typeof fresh>) {
   placeRemaining()
   disperseStacks()
   /*
-   * 两段式（规格 §4.1）：先「完成初设」只确认；抽签由唯一入口执行并开局，
-   * 抽签产生的西移项会再回到初设 box ⇒ 执行完再摆一轮。
+   * 初设收束：有 `setup.effects`（ch10/ch11 编队抽取）时**同一次点击**自动抽签 + 处置 + 开局。
+   * 抽签产生的西移项若算不出落点会再回到初设 box ⇒ 摆完后再点一次「开始游戏」。
    */
   if (!setup.finished) expect(setup.startGameNow(), setup.lastAction?.detail).toBe(true)
-  if (setup.setupDrawEntryVisible) {
-    expect(setup.drawSetupEffectsNow(), setup.lastAction?.detail).toBe(true)
+  placeRemaining()
+  disperseStacks()
+  if (setup.setupStartEntryVisible) {
+    expect(setup.startGameNow(), setup.lastAction?.detail).toBe(true)
     placeRemaining()
     disperseStacks()
   }

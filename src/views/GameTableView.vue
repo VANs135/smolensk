@@ -469,7 +469,7 @@ onBeforeUnmount(() => {
         >
           <template #overlay>
             <DecisionQueue
-              v-if="setup.applied && (!setup.finished || setup.setupDrawEntryVisible)"
+              v-if="setup.applied && (!setup.finished || setup.setupStartEntryVisible)"
               id="setup-queue"
               tabindex="-1"
             />

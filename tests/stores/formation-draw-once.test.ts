@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { sopStepById } from '@/engine/rules'
 import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchStore } from '@/stores'
@@ -8,11 +8,12 @@ import { useContainersStore, useGameSessionStore, useSetupStore, useWorkbenchSto
 import { confirmSetupForStart } from '../flows/setup-harness'
 
 /**
- * ch10 Formation Chit Draw（用户 2026-11-10 裁定）
+ * ch10 Formation Chit Draw
  *
- * 编队抽取**只发生在初设单位放置完成之后**，之后任何阶段都不应再出现抽取入口/窗口：
- *   · 入口可见条件＝「初设已确认 ∧ 抽签尚未执行」；
- *   · 执行过一次即永久收起；增援段 / 回合开始 / 阶段切换都不再出现；
+ * 编队抽取是**剧本页的纯机械动作**（把编队标记放进杯子随机抽），原文没有给玩家任何取舍：
+ *   · 抽取**只发生在初设单位放置完成之后**，确认初设（「完成初设」）时自动执行；
+ *   · 抽签后的处置（西移 / Move Mode / Mtr↔Aufk / 进死亡堆）同一笔事务自动落盘；
+ *   · 不再有独立的「抽取编队」按钮；执行过一次即永久收起，增援段 / 回合开始 / 阶段切换都不再出现；
  *   · 旧的「B 段按环节抽签」分支（`drawAndApplyStepNow` + `rein.formationDraw`）已删除。
  */
 
@@ -21,38 +22,38 @@ function boot() {
   const setup = useSetupStore()
   const containers = useContainersStore()
   const workbench = useWorkbenchStore()
-  useGameSessionStore().setScenarioId('1')
+  const game = useGameSessionStore()
+  game.setScenarioId('1')
   containers.setScenario('1')
   expect(setup.selectScenario('1')).toBe(true)
-  return { setup, containers, workbench }
+  return { setup, containers, workbench, game }
 }
 
-describe('ch10：编队抽取只在初设完成后执行一次', () => {
-  it('初设确认前不可见 → 确认后出现一次 → 执行后永久收起', () => {
-    const { setup, containers } = boot()
+describe('ch10：编队抽取只在初设完成后自动执行一次', () => {
+  it('初设确认前不抽；点「完成初设」即自动抽取一次并开局；之后不重抽', () => {
+    const { setup, containers, game } = boot()
 
-    // ① 初设未确认：不可见，且选剧本不再自动抽签
+    // ① 初设未确认：未抽签，且选剧本不自动抽签
     expect(setup.finished).toBe(false)
-    expect(setup.setupDrawEntryVisible).toBe(false)
+    expect(setup.setupConfirmed).toBe(false)
     expect(containers.setupDrawsExecuted).toBe(false)
 
-    // ② 初设单位放置完成后：仍不可见（两段式：先确认，后抽签）
+    // ② 初设单位放置完成后：仍未抽签（抽签属于初设收束这一笔事务）
     for (let guard = 0; setup.setupSideCursor !== null && guard < 3; guard++)
       expect(setup.confirmSideSetup()).toBe(true)
     expect(setup.setupPlacementComplete).toBe(true)
-    expect(setup.setupDrawEntryVisible).toBe(false)
     expect(containers.setupDrawsExecuted).toBe(false)
 
-    // ③ 确认初设（只收束不建会话）⇒ 唯一入口出现
-    expect(setup.startGameNow()).toBe(true)
+    // ③ 一次点击：确认初设 ⇒ 自动抽签 + 按原文处置 + 开局
+    const drawSpy = vi.spyOn(containers, 'runSetupDrawsNow')
+    expect(setup.startGameNow(), setup.lastAction?.detail).toBe(true)
+    expect(drawSpy).toHaveBeenCalledTimes(1)
     expect(setup.setupConfirmed).toBe(true)
-    expect(setup.setupDrawEntryVisible).toBe(true)
-
-    // ④ 执行一次 ⇒ 入口收起、账本落定
-    expect(setup.drawSetupEffectsNow()).toBe(true)
     expect(containers.setupDrawsExecuted).toBe(true)
+    expect(setup.finished).toBe(true)
+    expect(game.session).not.toBeNull()
     expect(setup.setupDrawEntryVisible).toBe(false)
-    expect(setup.finishSetup()).toBe(true)
+    drawSpy.mockRestore()
   })
 
   // 重活是全量并行跑套件时会被 CPU 争抢：本用例单跑约 2s，并行时曾越过默认 5s；放宽到 20s
@@ -83,33 +84,33 @@ describe('ch10：编队抽取只在初设完成后执行一次', () => {
   })
 
   /**
-   * ★ 用户 2026-11-10：「抽取编队」是初设窗里唯一的抽签入口——
-   *   点一次＝抽取＋自动落位＋落账；没点就开局不得隐式补做。
+   * 用户 2026-11-18：剧本页的抽签是纯机械动作——「编队抽取后该做的一系列操作应该是自动进行的」。
+   *   完成初设一次点击＝确认 + 抽取 + 按原文处置 + 落账 + 开局；界面不再给「抽取编队」按钮。
    */
-  it('★ 抽取编队唯一入口：确认后才出现，抽签落账即开局', () => {
-    const { setup, containers } = boot()
-    // 正向摆完必做项（剧本 1：卡车按剧本全满载、只剩双方确认），但**不点**抽取按钮
+  it('★ 完成初设即自动抽取并开局；界面不再有「抽取编队」按钮', () => {
+    const { setup, containers, game } = boot()
+    // 正向摆完必做项（剧本 1：卡车按剧本全满载、只剩双方确认）
     for (let guard = 0; setup.setupSideCursor !== null && guard < 3; guard++)
       expect(setup.confirmSideSetup()).toBe(true)
     expect(setup.setupPlacementComplete).toBe(true)
-    expect(setup.setupDrawEntryVisible).toBe(false)
-    // 先确认初设：只收束、不建会话、不抽签，账本原封不动
-    const ledger = JSON.stringify(containers.drawResults)
-    expect(setup.startGameNow()).toBe(true)
+    expect(containers.setupDrawsExecuted).toBe(false)
+    // 一次点击：确认 + 抽取 + 处置 + 开局
+    expect(setup.startGameNow(), setup.lastAction?.detail).toBe(true)
     expect(setup.setupConfirmed).toBe(true)
-    expect(setup.setupDrawEntryVisible).toBe(true)
-    expect(JSON.stringify(containers.drawResults)).toBe(ledger)
-    // 点一次 ⇒ 抽取 + 自动落位 + 落账 + 开局，入口与必做事项同时消失
-    expect(setup.drawSetupEffectsNow()).toBe(true)
-    expect(setup.setupDrawEntryVisible).toBe(false)
+    expect(containers.setupDrawsExecuted).toBe(true)
+    expect(game.session).not.toBeNull()
     expect(setup.requiredSetupIssues.some((issue) => issue.rule.includes('ch10'))).toBe(false)
+    // 幂等：再点不重抽、不改盘面
+    const draws = JSON.stringify(containers.drawResults)
     expect(setup.startGameNow()).toBe(true)
-    // 源码守卫：唯一可点入口在地图左上角的「初设」栏（DecisionQueue），文案「抽取编队」
+    expect(JSON.stringify(containers.drawResults)).toBe(draws)
+    // 源码守卫：地图左上角「初设」栏与初设面板都不再有「抽取编队」入口
     const queue = readFileSync('src/components/game/DecisionQueue.vue', 'utf8')
-    expect(queue).toContain('抽取编队')
-    expect(queue).toContain('setup.drawSetupEffectsNow(')
-    // 初设面板与容器窗都不得再有可点入口（全程序只允许一处）
+    expect(queue).not.toContain('抽取编队')
+    expect(queue).not.toContain('setup.drawSetupEffectsNow(')
+    expect(queue).not.toContain('setup.setupDrawEntryVisible')
     const panel = readFileSync('src/components/setup/SetupPanel.vue', 'utf8')
+    expect(panel).not.toContain('抽取编队')
     expect(panel).not.toContain('setup.drawSetupEffectsNow(')
     const containersPanel = readFileSync('src/components/containers/ContainersPanel.vue', 'utf8')
     expect(containersPanel).not.toContain('setup.drawSetupEffectsNow(')

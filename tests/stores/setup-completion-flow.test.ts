@@ -10,7 +10,7 @@ function boot({ start = true, confirm = true }: { start?: boolean; confirm?: boo
     board = useWorkbenchStore()
   const containers = useContainersStore()
   setup.selectScenario('1')
-  // 两段式：先确认初设；`start` 决定是否顺手点「抽取编队」把局面真正开起来
+  // 先确认初设；`start` 决定是否补执行抽签（autoDraw:false 复刻旧档）把局面真正开起来
   if (confirm) confirmSetupForStart(setup, { draws: false })
   else
     for (let guard = 0; setup.setupSideCursor !== null && guard < 3; guard++)

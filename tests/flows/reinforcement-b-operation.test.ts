@@ -86,15 +86,13 @@ function setupConfirmAbandonDrawSave(s: Stores, seed?: number): void {
     expect(setup.confirmSideSetup()).toBe(true)
   }
   expect(setup.setupSideCursor).toBeNull()
-  // ② 放弃未布设（以「初设已确认」收束；未落位项记为本局移除）
+  // ② 确认初设：自动抽签 + 按原文处置 + 开局（未落位项记为本局移除）
   expect(setup.startGameNow(), setup.lastAction?.detail).toBe(true)
   expect(setup.finished).toBe(true)
-  expect(setup.lastAction?.detail ?? '').toContain('初设已确认')
+  expect(s.containers.setupDrawsExecuted).toBe(true)
   const omitted = setup.notes.filter((note) => note.includes('未初设 ⇒ 本局移除'))
   expect(omitted.length).toBeGreaterThan(0)
-  // ③ 抽编队（本剧本只有 formationDraw 一种强制效果；入口必须可见）
-  expect(setup.setupDrawEntryVisible).toBe(true)
-  expect(setup.drawSetupEffectsNow(), setup.lastAction?.detail).toBe(true)
+  // ③ 抽签已在确认时自动执行：不再有单独入口，处置回执已落账
   expect(setup.setupDrawEntryVisible).toBe(false)
   expect(s.containers.formationDrawOutcomes.length).toBeGreaterThan(0)
   // ④ 存档

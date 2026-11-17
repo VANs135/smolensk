@@ -33,7 +33,7 @@ import {
 const setup = useSetupStore()
 const hotseat = useHotseatStore()
 /**
- * 一键预设初设（B2）：与「抽取编队」同一处，只落 AI 控制的一方，不替玩家点开始游戏。
+ * 一键预设初设（B2）：与初设主入口同一处，只落 AI 控制的一方，不替玩家点开始游戏。
  * 修前这个入口挂在「战况」抽屉的初设面板里（与开局选剧本重复），玩家在初设栏找不到。
  */
 const presetResult = ref<PresetSetupResult | null>(null)
@@ -102,16 +102,13 @@ watch([() => setup.scenarioId, () => setup.omittablePlacements], () => {
 const allPlaced = computed(() => setup.initialPlacementsComplete)
 
 /**
- * M3（用户 2026-11-16）：初设收束的**唯一主入口**
+ * M3（用户 2026-11-16；2026-11-18 更正）：初设收束的**唯一主入口**
  *
- * 抽取编队 / 开始游戏 / 完成初设 原本各挂一枚按钮，实际互斥（确认后才抽签、
- * 抽签未落齐才补开局、全落齐才完成初设）。这里按同一组既有投影压成一枚，
- * 模板只留一个 `BaseButton` —— 不新造判定，也不改按钮的触发函数。
+ * 剧本页的编队抽取是纯机械动作 ⇒ 「完成初设」这一下就自动抽签+处置+开局，
+ * 不再单独给抽取按钮。剩下两枚（开始游戏 / 完成初设）本就互斥，
+ * 这里按同一组既有投影压成一枚，模板只留一个 `BaseButton` —— 不新造判定。
  */
 const setupPrimary = computed<{ label: string; run: () => void } | null>(() => {
-  if (setup.setupDrawEntryVisible) {
-    return { label: '抽取编队', run: () => setup.drawSetupEffectsNow() }
-  }
   if (setup.setupStartEntryVisible) {
     return { label: '开始游戏', run: () => setup.startGameNow() }
   }
@@ -249,8 +246,8 @@ function sideMark(side: 'axis' | 'soviet'): string {
     </header>
 
     <!--
-      M3（用户 2026-11-16）：初设收束**单入口** —— 抽取编队 / 开始游戏 / 完成初设
-      由 `setupPrimary` 按状态合成一枚按钮（三者本就互斥）；条件与触发函数不变。
+      M3（用户 2026-11-16；2026-11-18 更正）：初设收束**单入口** —— 开始游戏 / 完成初设
+      由 `setupPrimary` 按状态合成一枚按钮；抽签已在「完成初设」时自动执行，不再单独给按钮。
     -->
     <div v-if="setupPrimary !== null" class="queue__row-actions">
       <BaseButton variant="primary" size="sm" @click="setupPrimary.run()">
@@ -259,7 +256,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
     </div>
 
     <!--
-      B2：**一键预设初设的唯一可点入口**（用户 2026-11-11：与「抽取编队」同一处）。
+      B2：**一键预设初设的唯一可点入口**（用户 2026-11-11：与初设主入口同一处）。
       仅人机模式（`hotseat.canPreset`）且初设未收束时出现；只落 AI 控制的一方，不替玩家开局。
     -->
     <div v-if="hotseat.canPreset && !setup.finished" class="queue__row-actions">

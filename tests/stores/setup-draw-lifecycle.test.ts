@@ -184,7 +184,7 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     expect(returned).not.toHaveBeenCalled()
   })
 
-  it('两段式：确认初设只收束不建会话；点「抽签」才执行并开局，重复点击不重抽', () => {
+  it('旧档/程序化补做：已确认但未抽签时，补执行效果并开局，重复点击不重抽', () => {
     setActivePinia(createPinia())
     useHotseatStore().setMode('solo')
     const setup = useSetupStore()
@@ -192,14 +192,14 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
     const board = useWorkbenchStore()
     const game = useGameSessionStore()
     expect(setup.selectScenario('1')).toBe(true)
+    // 正常玩家路径不再有这一步；用 autoDraw:false 复刻「已确认、未抽签」的旧档状态
     confirmSetupForStart(setup, { draws: false })
-    // 第一段：确认后仍在初设、会话未建、抽签按钮出现
     expect(setup.finished).toBe(true)
     expect(setup.setupConfirmed).toBe(true)
     expect(game.session).toBeNull()
     expect(setup.setupDrawEntryVisible).toBe(true)
     expect(setup.stepDone.formationDraw).toBe(false)
-    // 第二段：唯一入口执行效果 → 写台账 → 开局
+    // 补做入口执行效果 → 写台账 → 开局
     expect(setup.drawSetupEffectsNow()).toBe(true)
     expect(setup.setupEffectLedger).not.toBeNull()
     expect(setup.setupEffectLedger!.scenarioId).toBe('1')
@@ -228,8 +228,12 @@ describe('S1 ch10/ch11：编队抽取、处置和新局账本', () => {
       expect(setup.stepDone.formationDraw).toBe(false)
       const failedBoard = capture(board)
       const draws = JSON.stringify(containers.drawResults)
-      // 两段式：确认在前、抽签在后 ⇒ 确认不因抽签失败被拒；但不得建会话、不得写台账
-      expect(setup[action]()).toBe(true)
+      /*
+       * 2026-11-18：抽签并入完成初设这一笔事务 ⇒ `startGameNow` 抽签失败直接返回 false
+       * （不写台账、不建会话）；`finishSetup` 本身不抽签，仍返回 true。
+       */
+      const outcome = setup[action]()
+      expect(outcome).toBe(action === 'finishSetup')
       expect(setup.finished).toBe(true)
       expect(game.session).toBeNull()
       expect(setup.setupEffectLedger).toBeNull()
