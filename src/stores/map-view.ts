@@ -10,6 +10,7 @@ import {
   isInRandomEventPeriod,
   isSpecialReplAvailable,
   type CombatInteractionState,
+  type CombatRole,
   type PanzerGroup,
 } from '@/engine/rules'
 import { useHotseatStore } from './hotseat'
@@ -1302,21 +1303,60 @@ export const useMapViewStore = defineStore('mapView', () => {
   /* ────────────────────── 12.4 战斗补给的付款来源 ────────────────────── */
 
   /** 战斗补给步可点的补给站（供地图画金黄方框 + 小窗列表） */
+  /*
+   * 2026-11-18 用户实盘返修（战斗支付串方）：攻方补给只该由**攻方那一方**选源与付款。
+   * 战斗状态里只记攻/守的算子 id，阵营由参战攻方推回；取不到时按防守方反推。
+   */
+  const combatAttackerSide = computed<Side>(
+    () =>
+      workbench.combatAttackers[0]?.side ??
+      (workbench.combatDefenderSide === 'axis' ? 'soviet' : 'axis'),
+  )
+
+  /**
+   * 当前视角方可代其操作的战斗角色。
+   *
+   * · solo：一人操作双方 ⇒ 两个角色都归视角方；
+   * · PVE：只归玩家阵营（切到 AI 方视角时**一个都不给**，避免借观战视角代答）；
+   * · PVP 轮流：只归当前视角方。
+   *
+   * 这是**界面层**的收口；AI 驱动仍直接走 store 的具名入口，不经过这里。
+   */
+  const viewerCombatRoles = computed<readonly CombatRole[]>(() => {
+    const actors: readonly Side[] = hotseat.fogDisabled
+      ? ['axis', 'soviet']
+      : hotseat.mode === 'pve'
+        ? hotseat.playerSide !== null && hotseat.viewerSide === hotseat.playerSide
+          ? [hotseat.playerSide]
+          : []
+        : [hotseat.viewerSide]
+    const roles: CombatRole[] = []
+    if (actors.includes(combatAttackerSide.value)) roles.push('attacker')
+    if (actors.includes(workbench.combatDefenderSide)) roles.push('defender')
+    return roles
+  })
+
+  function canActCombatRole(role: CombatRole): boolean {
+    return viewerCombatRoles.value.includes(role)
+  }
+
   const combatSourceDumps = computed(() => {
     if (workbench.combatState?.step !== 'combatSupply') return []
     const picked = workbench.combatSupplyDumpIds
     const multi = workbench.combatSupplyDumpPicks
-    return workbench.combatSupplyDumps.flatMap((entry) =>
-      entry.dumps.map((dump) => ({
-        hex: dump.hex,
-        label: `${dump.t}T`,
-        selected:
-          multi[entry.side].includes(dump.id) ||
-          (multi[entry.side].length === 0 && picked[entry.side] === dump.id),
-        id: dump.id,
-        side: entry.side,
-      })),
-    )
+    return workbench.combatSupplyDumps
+      .filter((entry) => canActCombatRole(entry.side))
+      .flatMap((entry) =>
+        entry.dumps.map((dump) => ({
+          hex: dump.hex,
+          label: `${dump.t}T`,
+          selected:
+            multi[entry.side].includes(dump.id) ||
+            (multi[entry.side].length === 0 && picked[entry.side] === dump.id),
+          id: dump.id,
+          side: entry.side,
+        })),
+      )
   })
 
   /* ────────────────────────────── 点什么 ────────────────────────────── */
@@ -5024,6 +5064,9 @@ export const useMapViewStore = defineStore('mapView', () => {
     retreatHint,
     setRetreatUnit,
     combatSourceDumps,
+    combatAttackerSide,
+    viewerCombatRoles,
+    canActCombatRole,
     // 9.14c/d 特殊战斗：位移落点（在地图上选）
     specialItem,
     specialUnitId,

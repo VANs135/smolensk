@@ -147,13 +147,21 @@ describe('U1-c：战斗窗减负', () => {
       expect(panel).toContain('v-if="state !== null"')
     })
 
-    it('B5：来源合成一行，未声明侧只留短横（不再并排两个「未声明」）', () => {
+    it('B5：来源按视角方分侧列出，未声明侧只留短横（不再并排两个「未声明」）', () => {
       const panel = combatPanel()
-      expect(panel).toContain("攻方来源 {{ declaredDumpOf('attacker') ?? '—' }} ｜ 守方来源")
+      expect(panel).toContain("攻方来源 {{ declaredDumpOf('attacker') ?? '—' }}")
+      expect(panel).toContain("守方来源 {{ declaredDumpOf('defender') ?? '—' }}")
       expect(panel).not.toContain("declaredDumpOf('attacker') ?? '未声明'")
       expect(panel).not.toContain("declaredDumpOf('defender') ?? '未声明'")
       expect(panel).not.toContain('<BaseTag kind="info"> 攻方来源')
       expect(panel).not.toContain('<BaseTag kind="info"> 守方来源')
+      // 2026-11-18：来源行也按角色收口，对手那一侧不再出现在本方面板
+      expect(panel).toMatch(
+        /canActCombatRole\('attacker'\)[\s\S]{0,120}攻方来源 \{\{ declaredDumpOf\('attacker'\)/,
+      )
+      expect(panel).toMatch(
+        /canActCombatRole\('defender'\)[\s\S]{0,120}守方来源 \{\{ declaredDumpOf\('defender'\)/,
+      )
     })
 
     it('B7：「优先用储备」是条件行（v-if），不是置灰项', () => {

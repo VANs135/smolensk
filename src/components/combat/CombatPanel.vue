@@ -137,6 +137,16 @@ const retreatWipeLabels = computed(() =>
 
 const mapView = useMapViewStore()
 
+/*
+ * 2026-11-18 用户实盘返修（战斗支付串方）：面板上的「攻方补给 / 守方补给」控件只能给
+ * **该方自己**。视角方归谁由 `mapView.viewerCombatRoles` 统一判（solo 双方、PVE 只玩家方、
+ * PVP 只当前视角方）；验证页 `stepwise` 保留全量，供裁判逐步核对。
+ */
+function canActCombatRole(role: 'attacker' | 'defender'): boolean {
+  return props.stepwise || mapView.canActCombatRole(role)
+}
+const canActAnyCombatRole = computed(() => props.stepwise || mapView.viewerCombatRoles.length > 0)
+
 /** 正在选落点的一方（与地图高亮**同一份**计划；修前面板读的是"永远先攻方"的那份） */
 const retreatPlan = computed(() => mapView.retreatSidePlan)
 /** 正在选落点的那一枚（点行即切换；地图点格后自动跳到下一枚未选的） */
@@ -277,80 +287,92 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         {{ workbench.combatErrorLine }}
       </p>
 
-      <!-- 第 2 步：战斗补给（9.5 / 12.4）——攻/守两段同窗，各自确认 -->
+      <!-- 第 2 步：战斗补给（9.5 / 12.4）——攻/守两段同窗，但只出现视角方自己那一份 -->
       <SessionStep item="combat:supply">
-        <!-- B5：两侧来源合成一行；未声明的一侧只留一条短横，不再并排两个「未声明」 -->
+        <!-- B5：只列视角方能操作的那一侧来源；两侧都不归视角方时只留等待提示 -->
         <div class="row">
           <span class="num">
-            攻方来源 {{ declaredDumpOf('attacker') ?? '—' }} ｜ 守方来源
-            {{ declaredDumpOf('defender') ?? '—' }}
+            <template v-if="canActCombatRole('attacker')">
+              攻方来源 {{ declaredDumpOf('attacker') ?? '—' }}
+            </template>
+            <template v-if="canActCombatRole('attacker') && canActCombatRole('defender')">
+              ｜
+            </template>
+            <template v-if="canActCombatRole('defender')">
+              守方来源 {{ declaredDumpOf('defender') ?? '—' }}
+            </template>
+            <template v-if="!canActAnyCombatRole">等待对方支付战斗补给…</template>
           </span>
           <RuleTip rule="9.5 / 12.4">
             攻方须付足全部所需 T（不足则取消攻击）；守方可不付（以一半战斗值防御，9.5-B）。
             在地图上点补给站即声明付款来源（12.4）；来源为「—」时无法付款。
           </RuleTip>
         </div>
-        <label v-if="workbench.combatAttackerStocksApplicable" class="check">
-          <input v-model="workbench.combatInputs.attackerUsesInternalStocks" type="checkbox" />
-          攻方用储备
-        </label>
-        <!-- B14c：参战攻方＝**算子图阵列**；9.5b 的取消只走地图入口（B9），此阵列只读展示 -->
-        <CounterPicker
-          title="参战攻方"
-          :items="supplyAttackerItems"
-          :size="40"
-          @hover="hoverUnit"
-        />
-        <BaseButton
-          v-if="!workbench.combatInputs.supplyConfirmed.attacker"
-          variant="primary"
-          size="sm"
-          @click="workbench.confirmCombatSupplySide('attacker')"
-        >
-          确认攻方补给
-        </BaseButton>
-        <BaseButton
-          v-else
-          variant="ghost"
-          size="sm"
-          @click="workbench.confirmCombatSupplySide('attacker')"
-        >
-          已确认攻方 · 改
-        </BaseButton>
+        <template v-if="canActCombatRole('attacker')">
+          <label v-if="workbench.combatAttackerStocksApplicable" class="check">
+            <input v-model="workbench.combatInputs.attackerUsesInternalStocks" type="checkbox" />
+            攻方用储备
+          </label>
+          <!-- B14c：参战攻方＝**算子图阵列**；9.5b 的取消只走地图入口（B9），此阵列只读展示 -->
+          <CounterPicker
+            title="参战攻方"
+            :items="supplyAttackerItems"
+            :size="40"
+            @hover="hoverUnit"
+          />
+          <BaseButton
+            v-if="!workbench.combatInputs.supplyConfirmed.attacker"
+            variant="primary"
+            size="sm"
+            @click="workbench.confirmCombatSupplySide('attacker')"
+          >
+            确认攻方补给
+          </BaseButton>
+          <BaseButton
+            v-else
+            variant="ghost"
+            size="sm"
+            @click="workbench.confirmCombatSupplySide('attacker')"
+          >
+            已确认攻方 · 改
+          </BaseButton>
+        </template>
 
         <!-- B6：来源只走地图入口；再点同一座＝取消（不再有独立的清除按钮） -->
         <!-- B7：守方支付是唯一入口，储备只作它里面的一行（「优先用储备」） -->
-        <div class="check-group">
-          <label class="check">
-            <input v-model="workbench.combatInputs.defenderProvides" type="checkbox" />
-            守方支付
-          </label>
-          <label v-if="workbench.combatDefenderStocksApplicable" class="check check--nested">
-            <input v-model="workbench.combatInputs.defenderUsesInternalStocks" type="checkbox" />
-            优先用储备
-          </label>
-        </div>
-        <BaseButton
-          v-if="
-            workbench.combatInputs.supplyConfirmed.attacker &&
-            !workbench.combatInputs.supplyConfirmed.defender
-          "
-          variant="primary"
-          size="sm"
-          @click="workbench.confirmCombatSupplySide('defender')"
-        >
-          确认守方补给
-        </BaseButton>
-        <BaseButton
-          v-else-if="workbench.combatInputs.supplyConfirmed.defender"
-          variant="ghost"
-          size="sm"
-          @click="workbench.confirmCombatSupplySide('defender')"
-        >
-          已确认守方 · 改
-        </BaseButton>
+        <template v-if="canActCombatRole('defender')">
+          <div class="check-group">
+            <label class="check">
+              <input v-model="workbench.combatInputs.defenderProvides" type="checkbox" />
+              守方支付
+            </label>
+            <label v-if="workbench.combatDefenderStocksApplicable" class="check check--nested">
+              <input v-model="workbench.combatInputs.defenderUsesInternalStocks" type="checkbox" />
+              优先用储备
+            </label>
+          </div>
+          <BaseButton
+            v-if="
+              workbench.combatInputs.supplyConfirmed.attacker &&
+              !workbench.combatInputs.supplyConfirmed.defender
+            "
+            variant="primary"
+            size="sm"
+            @click="workbench.confirmCombatSupplySide('defender')"
+          >
+            确认守方补给
+          </BaseButton>
+          <BaseButton
+            v-else-if="workbench.combatInputs.supplyConfirmed.defender"
+            variant="ghost"
+            size="sm"
+            @click="workbench.confirmCombatSupplySide('defender')"
+          >
+            已确认守方 · 改
+          </BaseButton>
+        </template>
 
-        <div v-if="bothSupplyConfirmed" class="row">
+        <div v-if="bothSupplyConfirmed && canActAnyCombatRole" class="row">
           <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatSupply()">
             进入行动值
           </BaseButton>
