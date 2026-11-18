@@ -1345,6 +1345,13 @@ export const useMapViewStore = defineStore('mapView', () => {
     return viewerCombatRoles.value.includes(role)
   }
 
+  /** 当前结算段归哪一方（9.10b：攻方先结算完，守方再决定） */
+  const resolverRole = computed<CombatRole>(() =>
+    workbench.combatState?.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender',
+  )
+  /** 当前结算方是否由视角方操作（战斗窗的损失/选项按钮据此收口） */
+  const canActResolver = computed(() => canActCombatRole(resolverRole.value))
+
   const combatSourceDumps = computed(() => {
     if (workbench.combatState?.step !== 'combatSupply') return []
     const picked = workbench.combatSupplyDumpIds
@@ -5072,6 +5079,8 @@ export const useMapViewStore = defineStore('mapView', () => {
     combatAttackerSide,
     viewerCombatRoles,
     canActCombatRole,
+    resolverRole,
+    canActResolver,
     // 9.14c/d 特殊战斗：位移落点（在地图上选）
     specialItem,
     specialUnitId,

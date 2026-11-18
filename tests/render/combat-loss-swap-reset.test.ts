@@ -14,8 +14,8 @@ const combatPanel = () => readFileSync('src/components/combat/CombatPanel.vue', 
 describe('战斗 · 损失改派复位钮', () => {
   it('「规范分配」只在已改派（lossTakerId 非空）时出现', () => {
     const panel = combatPanel()
-    // 按钮内的标签行（与上方说明文字「规范分配：」区分开）
-    const labelAt = panel.indexOf('\n            规范分配\n')
+    // 按钮内的标签行（与上方说明文字「规范分配：」区分开；缩进随角色收口的 <template> 层级变化）
+    const labelAt = panel.search(/\n\s+规范分配\n/)
     expect(labelAt).toBeGreaterThan(0)
     const buttonAt = panel.lastIndexOf('<BaseButton', labelAt)
     const snippet = panel.slice(buttonAt, labelAt)

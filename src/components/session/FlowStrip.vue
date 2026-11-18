@@ -228,6 +228,19 @@ const advanceLabel = computed(() => {
   return flow.value.nextActionLabel
 })
 const liveBlock = computed(() => (inSetup.value ? null : workbench.currentAdvanceBlock))
+/*
+ * 2026-11-18 玩家间 UI 隔离（第 4 条）：PVE 轮到 AI 那一侧时，人类视角不摆「推进」——
+ * 那一步归 AI 驱动；摆着等于让玩家代对手结束阶段。PVP 仍保留（同屏轮流，没有 AI）。
+ */
+const aiTurnHidden = computed(
+  () =>
+    hotseat.mode === 'pve' &&
+    hotseat.viewerSide === hotseat.playerSide &&
+    decidingSide.value === hotseat.aiSide,
+)
+const showAdvance = computed(
+  () => flow.value.canAdvance && liveBlock.value === null && !aiTurnHidden.value,
+)
 const notice = computed(() => {
   const blocker = liveBlock.value ?? workbench.advanceBlock
   if (blocker === null) return null
@@ -282,11 +295,7 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
 
     <div class="bar__actions">
       <slot name="trail" />
-      <BaseButton
-        v-if="flow.canAdvance && liveBlock === null"
-        class="bar__advance"
-        variant="primary"
-        @click="onAdvance"
+      <BaseButton v-if="showAdvance" class="bar__advance" variant="primary" @click="onAdvance"
         >{{ advanceLabel }} <span aria-hidden="true">→</span></BaseButton
       >
       <span v-else class="bar__block" role="status" :title="liveBlock?.rule">
@@ -367,7 +376,7 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
     </div>
 
     <div class="row">
-      <BaseButton v-if="flow.canAdvance" variant="primary" size="sm" @click="onAdvance">
+      <BaseButton v-if="showAdvance" variant="primary" size="sm" @click="onAdvance">
         {{ flow.nextActionLabel }}
       </BaseButton>
       <span class="num">{{ flow.advanceLabel }}</span>

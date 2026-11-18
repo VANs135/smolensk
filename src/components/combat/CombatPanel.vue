@@ -146,6 +146,8 @@ function canActCombatRole(role: 'attacker' | 'defender'): boolean {
   return props.stepwise || mapView.canActCombatRole(role)
 }
 const canActAnyCombatRole = computed(() => props.stepwise || mapView.viewerCombatRoles.length > 0)
+/** 当前结算方是否归视角方（9.10b 攻先守后；验证页保留全量） */
+const canActResolver = computed(() => props.stepwise || mapView.canActResolver)
 
 /** 正在选落点的一方（与地图高亮**同一份**计划；修前面板读的是"永远先攻方"的那份） */
 const retreatPlan = computed(() => mapView.retreatSidePlan)
@@ -379,54 +381,60 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         </div>
       </SessionStep>
 
-      <!-- 第 3 步：宣布行动值（9.6：攻方先、守方后） -->
+      <!-- 第 3 步：宣布行动值（9.6：攻方先、守方后）——只画视角方自己那一侧 -->
       <SessionStep item="combat:ar:attacker">
-        <!-- B14c：AR 单位＝**算子图阵列**（原来是两个纯文字下拉） -->
-        <CounterPicker
-          title="攻方 AR 单位"
-          :items="attackerArItems"
-          :size="40"
-          @pick="workbench.combatInputs.attackerArUnitId = $event"
-          @hover="hoverUnit"
-        />
-        <RuleTip rule="9.6 / 专规 2.3b">
-          每方只能选一个参战单位担任行动值；DG 单位 −1。守方堆叠内有 NKVD
-          边防团时，行动值单位只能从它们中选。
-        </RuleTip>
-        <div class="row">
-          <BaseButton
-            v-if="workbench.combatInputs.attackerArUnitId !== null"
-            variant="secondary"
-            size="sm"
-            @click="workbench.declareCombatArStep('attacker')"
-          >
-            攻方宣布
-          </BaseButton>
-        </div>
+        <template v-if="canActCombatRole('attacker')">
+          <!-- B14c：AR 单位＝**算子图阵列**（原来是两个纯文字下拉） -->
+          <CounterPicker
+            title="攻方 AR 单位"
+            :items="attackerArItems"
+            :size="40"
+            @pick="workbench.combatInputs.attackerArUnitId = $event"
+            @hover="hoverUnit"
+          />
+          <RuleTip rule="9.6 / 专规 2.3b">
+            每方只能选一个参战单位担任行动值；DG 单位 −1。守方堆叠内有 NKVD
+            边防团时，行动值单位只能从它们中选。
+          </RuleTip>
+          <div class="row">
+            <BaseButton
+              v-if="workbench.combatInputs.attackerArUnitId !== null"
+              variant="secondary"
+              size="sm"
+              @click="workbench.declareCombatArStep('attacker')"
+            >
+              攻方宣布
+            </BaseButton>
+          </div>
+        </template>
+        <p v-else class="muted">对方正在宣布行动值…</p>
       </SessionStep>
 
       <SessionStep item="combat:ar:defender">
-        <CounterPicker
-          title="守方 AR 单位"
-          :items="defenderArItems"
-          :size="40"
-          @pick="workbench.combatInputs.defenderArUnitId = $event"
-          @hover="hoverUnit"
-        />
-        <RuleTip rule="9.6 / 专规 2.3b">
-          每方只能选一个参战单位担任行动值；DG 单位 −1。守方堆叠内有 NKVD
-          边防团时，行动值单位只能从它们中选。
-        </RuleTip>
-        <div class="row">
-          <BaseButton
-            v-if="workbench.combatInputs.defenderArUnitId !== null"
-            variant="primary"
-            size="sm"
-            @click="workbench.declareCombatArStep('defender')"
-          >
-            守方宣布并继续
-          </BaseButton>
-        </div>
+        <template v-if="canActCombatRole('defender')">
+          <CounterPicker
+            title="守方 AR 单位"
+            :items="defenderArItems"
+            :size="40"
+            @pick="workbench.combatInputs.defenderArUnitId = $event"
+            @hover="hoverUnit"
+          />
+          <RuleTip rule="9.6 / 专规 2.3b">
+            每方只能选一个参战单位担任行动值；DG 单位 −1。守方堆叠内有 NKVD
+            边防团时，行动值单位只能从它们中选。
+          </RuleTip>
+          <div class="row">
+            <BaseButton
+              v-if="workbench.combatInputs.defenderArUnitId !== null"
+              variant="primary"
+              size="sm"
+              @click="workbench.declareCombatArStep('defender')"
+            >
+              守方宣布并继续
+            </BaseButton>
+          </div>
+        </template>
+        <p v-else class="muted">对方正在宣布行动值…</p>
       </SessionStep>
 
       <!-- 第 4 步：宣布地形与初始攻防比（9.4 / 9.7） -->
@@ -434,7 +442,11 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
         <RuleTip rule="9.4b / 9.4c">
           攻方每个攻击堆叠可选「防御格内地形」或「所穿越的格边地形」（不累计）；守方只能选防御格内地形，并决定战斗表横行。
         </RuleTip>
-        <div v-for="stack in workbench.combatStackTerrainOptions" :key="stack.key" class="row">
+        <div
+          v-for="stack in canActCombatRole('attacker') ? workbench.combatStackTerrainOptions : []"
+          :key="stack.key"
+          class="row"
+        >
           <span class="num">攻方堆叠 {{ stack.label }}</span>
           <BaseButton
             size="sm"
@@ -457,7 +469,7 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
             {{ option.kind === 'hex' ? '格内' : '格边' }}：{{ option.terrain }}
           </BaseButton>
         </div>
-        <div class="row">
+        <div v-if="canActCombatRole('defender')" class="row">
           <span class="num">守方防御地形</span>
           <BaseButton
             v-for="name in workbench.combatDefenderTerrainOptions"
@@ -469,7 +481,8 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
             {{ name }}
           </BaseButton>
         </div>
-        <div class="row">
+        <p v-if="!canActAnyCombatRole" class="muted">对方正在宣布地形…</p>
+        <div v-if="canActAnyCombatRole" class="row">
           <!--
               B30（用户口径 #19）：地形是**玩家选的**，选完这一下之后「攻防比 / 奇袭 / 战斗骰」
               三步是骰子与查表 ⇒ **自动连跑**到战果（骰面走种子化 RNG，结算日志可复算）。
@@ -524,59 +537,62 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           </span>
           <span v-if="settledAttacker.ignored" class="num">忽略选项</span>
         </div>
-        <p class="num">
-          {{
-            roleName(state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender')
-          }}结算<template v-if="resolverNotation !== ''"> · {{ resolverNotation }}</template
-          >：需承受 {{ workbench.combatRequirement?.losses ?? 0 }} 点
-          <RuleTip rule="9.11b / 9.11c">
-            AR 单位先受第一点，之后每人各受一点；超出承受范围的损失忽略。
-          </RuleTip>
-        </p>
-        <p class="muted num">
-          规范分配：
-          {{
-            workbench.combatCanonicalLosses
-              .map((item) => `${nameOf(item.unitId)} −${item.steps}`)
-              .join('、') || '无'
-          }}
-        </p>
-        <!--
-            ★ 批 F 切片 2（9.11a 原文「在 9.11c 的限制范围内，由**拥有者玩家**决定由哪个或哪些单位
-              承受军力损失」）：当规范分配里**某单位受 2 点**而**另有单位只受 1 点**时，玩家可以把
-              那一点**改派**给另一枚（两枚互换点数，仍满足 9.11c 的"均匀展开"）。
-            修前引擎要求提交的分配与规范分配**逐单位一致** ⇒ 这种合法选择会被误判违规。
+        <template v-if="canActResolver">
+          <p class="num">
+            {{
+              roleName(state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender')
+            }}结算<template v-if="resolverNotation !== ''"> · {{ resolverNotation }}</template
+            >：需承受 {{ workbench.combatRequirement?.losses ?? 0 }} 点
+            <RuleTip rule="9.11b / 9.11c">
+              AR 单位先受第一点，之后每人各受一点；超出承受范围的损失忽略。
+            </RuleTip>
+          </p>
+          <p class="muted num">
+            规范分配：
+            {{
+              workbench.combatCanonicalLosses
+                .map((item) => `${nameOf(item.unitId)} −${item.steps}`)
+                .join('、') || '无'
+            }}
+          </p>
+          <!--
+              ★ 批 F 切片 2（9.11a 原文「在 9.11c 的限制范围内，由**拥有者玩家**决定由哪个或哪些单位
+                承受军力损失」）：当规范分配里**某单位受 2 点**而**另有单位只受 1 点**时，玩家可以把
+                那一点**改派**给另一枚（两枚互换点数，仍满足 9.11c 的"均匀展开"）。
+              修前引擎要求提交的分配与规范分配**逐单位一致** ⇒ 这种合法选择会被误判违规。
           -->
-        <div v-if="workbench.combatLossSwapChoices.length > 0" class="row">
-          <span class="muted"
-            >多受的那一点改派给
-            <RuleTip rule="9.11a">在 9.11c 的限制内由拥有者决定由哪些单位承受。</RuleTip>
-          </span>
-          <BaseButton
-            v-if="workbench.combatInputs.lossTakerId !== null"
-            variant="ghost"
-            size="sm"
-            @click="workbench.combatInputs.lossTakerId = null"
-          >
-            规范分配
-          </BaseButton>
-          <BaseButton
-            v-for="choice in workbench.combatLossSwapChoices"
-            :key="choice.unitId"
-            :variant="
-              workbench.combatInputs.lossTakerId === choice.unitId ? 'primary' : 'secondary'
-            "
-            size="sm"
-            @click="workbench.combatInputs.lossTakerId = choice.unitId"
-          >
-            {{ choice.label }}
-          </BaseButton>
-        </div>
-        <div class="row">
-          <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatLosses()">
-            确认强制损失
-          </BaseButton>
-        </div>
+          <div v-if="workbench.combatLossSwapChoices.length > 0" class="row">
+            <span class="muted"
+              >多受的那一点改派给
+              <RuleTip rule="9.11a">在 9.11c 的限制内由拥有者决定由哪些单位承受。</RuleTip>
+            </span>
+            <BaseButton
+              v-if="workbench.combatInputs.lossTakerId !== null"
+              variant="ghost"
+              size="sm"
+              @click="workbench.combatInputs.lossTakerId = null"
+            >
+              规范分配
+            </BaseButton>
+            <BaseButton
+              v-for="choice in workbench.combatLossSwapChoices"
+              :key="choice.unitId"
+              :variant="
+                workbench.combatInputs.lossTakerId === choice.unitId ? 'primary' : 'secondary'
+              "
+              size="sm"
+              @click="workbench.combatInputs.lossTakerId = choice.unitId"
+            >
+              {{ choice.label }}
+            </BaseButton>
+          </div>
+          <div class="row">
+            <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatLosses()">
+              确认强制损失
+            </BaseButton>
+          </div>
+        </template>
+        <p v-else class="muted">对方正在分配强制损失…</p>
       </SessionStep>
 
       <!-- 第 8 步（b）：选项（9.10）—— 一屏一决策：算子图记损失、地图点格记撤退、底部唯一出口 -->
@@ -590,67 +606,70 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
           </span>
           <span v-if="settledAttacker.ignored" class="num">忽略选项</span>
         </div>
-        <p class="num">
-          {{
-            roleName(state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender')
-          }}结算<span v-if="resolverNotation !== ''"> · {{ resolverNotation }}</span> · 还剩
-          {{ workbench.optionDraftRemaining }} 点
-          <RuleTip rule="9.10a / 9.11c">
-            第一点必须由 AR 单位承受；各单位各受一点后才能有单位受第二点。
-            <br />
-            撤退格数与损失军力可任意组合，满点才能提交。
-          </RuleTip>
-        </p>
-        <!--
+        <template v-if="canActResolver">
+          <p class="num">
+            {{
+              roleName(state.resolution.stage.startsWith('attacker') ? 'attacker' : 'defender')
+            }}结算<span v-if="resolverNotation !== ''"> · {{ resolverNotation }}</span> · 还剩
+            {{ workbench.optionDraftRemaining }} 点
+            <RuleTip rule="9.10a / 9.11c">
+              第一点必须由 AR 单位承受；各单位各受一点后才能有单位受第二点。
+              <br />
+              撤退格数与损失军力可任意组合，满点才能提交。
+            </RuleTip>
+          </p>
+          <!--
             ★ 条 15/16（批 F·F1）+ 重做（§5 S6）：不再先选「受损 / 撤退」模式——
             点本结算方算子图即受损，地图上三色格即撤退，两件事同屏；每次只进草稿，提交时一发结算。
           -->
-        <CounterPicker
-          v-if="optionLossItems.length > 0"
-          title="受损"
-          :items="optionLossItems"
-          :size="40"
-          @pick="workbench.applyOptionDraftLoss($event)"
-          @hover="hoverUnit"
-        />
-        <!-- 9.12（C1）：按当前撤退格数**将被消灭**的单位（一行状态；解释进 ?） -->
-        <p v-if="retreatWipeLabels !== ''" class="warn num">
-          将被消灭：{{ retreatWipeLabels }}
-          <RuleTip rule="9.12">
-            排除战斗开始时敌方格后无合法落点、或只有必被消灭的落点（9.12b / 5.8a）⇒
-            确认撤退时该单位被消灭。
-          </RuleTip>
-        </p>
-        <div class="row">
-          <!-- 9.10c 唯一出口：可用且尚未分配点数时替掉「提交选项」（两者互斥） -->
-          <BaseButton
-            v-if="workbench.optionIgnoreAvailableNow && workbench.optionDraftUsed === 0"
-            variant="primary"
-            size="sm"
-            title="9.10c"
-            @click="workbench.confirmCombatIgnoreOptions()"
-          >
-            忽略选项
-          </BaseButton>
-          <!-- 9.10a：点数分配完才出现提交（未分完不置灰，直接不出现，剩余点数留在上方） -->
-          <BaseButton
-            v-else-if="workbench.optionDraftRemaining === 0"
-            variant="primary"
-            size="sm"
-            title="9.10"
-            @click="workbench.confirmCombatOptions()"
-          >
-            提交选项
-          </BaseButton>
-          <BaseButton
-            v-if="workbench.optionDraftEntries.length > 0"
-            variant="ghost"
-            size="sm"
-            @click="workbench.undoOptionDraftLast()"
-          >
-            撤销上一次
-          </BaseButton>
-        </div>
+          <CounterPicker
+            v-if="optionLossItems.length > 0"
+            title="受损"
+            :items="optionLossItems"
+            :size="40"
+            @pick="workbench.applyOptionDraftLoss($event)"
+            @hover="hoverUnit"
+          />
+          <!-- 9.12（C1）：按当前撤退格数**将被消灭**的单位（一行状态；解释进 ?） -->
+          <p v-if="retreatWipeLabels !== ''" class="warn num">
+            将被消灭：{{ retreatWipeLabels }}
+            <RuleTip rule="9.12">
+              排除战斗开始时敌方格后无合法落点、或只有必被消灭的落点（9.12b / 5.8a）⇒
+              确认撤退时该单位被消灭。
+            </RuleTip>
+          </p>
+          <div class="row">
+            <!-- 9.10c 唯一出口：可用且尚未分配点数时替掉「提交选项」（两者互斥） -->
+            <BaseButton
+              v-if="workbench.optionIgnoreAvailableNow && workbench.optionDraftUsed === 0"
+              variant="primary"
+              size="sm"
+              title="9.10c"
+              @click="workbench.confirmCombatIgnoreOptions()"
+            >
+              忽略选项
+            </BaseButton>
+            <!-- 9.10a：点数分配完才出现提交（未分完不置灰，直接不出现，剩余点数留在上方） -->
+            <BaseButton
+              v-else-if="workbench.optionDraftRemaining === 0"
+              variant="primary"
+              size="sm"
+              title="9.10"
+              @click="workbench.confirmCombatOptions()"
+            >
+              提交选项
+            </BaseButton>
+            <BaseButton
+              v-if="workbench.optionDraftEntries.length > 0"
+              variant="ghost"
+              size="sm"
+              @click="workbench.undoOptionDraftLast()"
+            >
+              撤销上一次
+            </BaseButton>
+          </div>
+        </template>
+        <p v-else class="muted">对方正在分配选项…</p>
       </SessionStep>
 
       <!-- 第 9 步：撤退（9.12） -->
@@ -685,68 +704,73 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
                 : '待选'
             }}
           </p>
-          <div v-for="row in retreatPlan.units" :key="row.unitId" class="row">
-            <!-- 点这一行＝切换"现在给谁选"（与地图点击的同一个 `retreatUnit`） -->
-            <BaseButton
-              :variant="retreatUnit?.unitId === row.unitId ? 'primary' : 'secondary'"
-              size="sm"
-              @click="mapView.setRetreatUnit(row.unitId)"
-            >
-              {{ row.label }} @ {{ hexLabel(row.from) }}
-            </BaseButton>
-            <span class="num">
-              落点：{{ row.chosen === null ? '（未选）' : hexLabel(row.chosen) }}
-            </span>
-            <!-- 9.12（C1）：不可通行格排除后无落点 ⇒ 允许确认，但必须明示消灭后果 -->
-            <span v-if="row.noLanding === true" class="warn num">
-              无合法落点：确认后该单位被消灭
-            </span>
-            <span
-              v-else-if="
-                row.destinations.length > 0 &&
-                row.destinations.every((destination) => destination.forcedDestruction)
-              "
-              class="warn num"
-            >
-              只有必被消灭的落点
-            </span>
-          </div>
-          <!-- 9.12e：撤退堆叠在进入敌方 ZOC 前已有 DG ⇒ 额外 1 点损失的承受者由拥有者选 -->
-          <div v-if="extraLossPreview !== null" class="row">
-            <span class="warn num">
-              额外损失 {{ extraLossPreview.points }} 点：由谁承受
-              <RuleTip rule="9.12e">
-                撤退堆叠在进入敌方 ZOC 前已有 DG ⇒ 额外损失 1 点军力；承受者由拥有者从撤退中的 DG
-                单位里选。
-              </RuleTip>
-            </span>
-            <BaseButton
-              v-for="choice in extraLossPreview.choices"
-              :key="choice.unit.instanceId"
-              :variant="choice.selected ? 'primary' : 'secondary'"
-              size="sm"
-              @click="workbench.chooseExtraLossTaker(choice.unit.instanceId)"
-            >
-              {{ choice.selected ? '✓ ' : '' }}{{ choice.unit.name }}
-            </BaseButton>
-          </div>
-          <!-- 9.12d：跟随者并入候选按钮（已选的显示 ✓），不再另起一份只读名单 -->
-          <div v-if="workbench.combatTagalongCandidates.length > 0" class="row">
-            <BaseButton
-              v-for="item in workbench.combatTagalongCandidates"
-              :key="item.unit.instanceId"
-              variant="secondary"
-              size="sm"
-              @click="workbench.toggleCombatTagalong(item.unit.instanceId)"
-            >
-              {{ workbench.combatTagalongIds.includes(item.unit.instanceId) ? '✓ ' : ''
-              }}{{ item.unit.name }}（随 {{ item.hostLabel }}）
-            </BaseButton>
-          </div>
+          <template v-if="canActCombatRole(retreatPlan.side)">
+            <div v-for="row in retreatPlan.units" :key="row.unitId" class="row">
+              <!-- 点这一行＝切换"现在给谁选"（与地图点击的同一个 `retreatUnit`） -->
+              <BaseButton
+                :variant="retreatUnit?.unitId === row.unitId ? 'primary' : 'secondary'"
+                size="sm"
+                @click="mapView.setRetreatUnit(row.unitId)"
+              >
+                {{ row.label }} @ {{ hexLabel(row.from) }}
+              </BaseButton>
+              <span class="num">
+                落点：{{ row.chosen === null ? '（未选）' : hexLabel(row.chosen) }}
+              </span>
+              <!-- 9.12（C1）：不可通行格排除后无落点 ⇒ 允许确认，但必须明示消灭后果 -->
+              <span v-if="row.noLanding === true" class="warn num">
+                无合法落点：确认后该单位被消灭
+              </span>
+              <span
+                v-else-if="
+                  row.destinations.length > 0 &&
+                  row.destinations.every((destination) => destination.forcedDestruction)
+                "
+                class="warn num"
+              >
+                只有必被消灭的落点
+              </span>
+            </div>
+            <!-- 9.12e：撤退堆叠在进入敌方 ZOC 前已有 DG ⇒ 额外 1 点损失的承受者由拥有者选 -->
+            <div v-if="extraLossPreview !== null" class="row">
+              <span class="warn num">
+                额外损失 {{ extraLossPreview.points }} 点：由谁承受
+                <RuleTip rule="9.12e">
+                  撤退堆叠在进入敌方 ZOC 前已有 DG ⇒ 额外损失 1 点军力；承受者由拥有者从撤退中的 DG
+                  单位里选。
+                </RuleTip>
+              </span>
+              <BaseButton
+                v-for="choice in extraLossPreview.choices"
+                :key="choice.unit.instanceId"
+                :variant="choice.selected ? 'primary' : 'secondary'"
+                size="sm"
+                @click="workbench.chooseExtraLossTaker(choice.unit.instanceId)"
+              >
+                {{ choice.selected ? '✓ ' : '' }}{{ choice.unit.name }}
+              </BaseButton>
+            </div>
+            <!-- 9.12d：跟随者并入候选按钮（已选的显示 ✓），不再另起一份只读名单 -->
+            <div v-if="workbench.combatTagalongCandidates.length > 0" class="row">
+              <BaseButton
+                v-for="item in workbench.combatTagalongCandidates"
+                :key="item.unit.instanceId"
+                variant="secondary"
+                size="sm"
+                @click="workbench.toggleCombatTagalong(item.unit.instanceId)"
+              >
+                {{ workbench.combatTagalongIds.includes(item.unit.instanceId) ? '✓ ' : ''
+                }}{{ item.unit.name }}（随 {{ item.hostLabel }}）
+              </BaseButton>
+            </div>
+          </template>
+          <p v-else class="muted">对方正在选择撤退落点…</p>
         </template>
         <div class="row">
           <BaseButton
-            v-if="retreatPlan === null || retreatPlan.complete"
+            v-if="
+              retreatPlan === null || (retreatPlan.complete && canActCombatRole(retreatPlan.side))
+            "
             variant="primary"
             size="sm"
             @click="workbench.confirmCombatRetreats()"
@@ -758,47 +782,50 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
 
       <!-- 第 9 步：战后推进与进击（9.12g / 9.13） -->
       <SessionStep item="combat:advance">
-        <!-- B33：突袭的推进是**强制**的（9.12g-D）⇒ 说明与按钮按这个口径给 -->
-        <p v-if="workbench.combatAdvanceMandatory" class="warn num">
-          <BaseTag kind="danger">突袭</BaseTag>
-          本次必须推进
-          <RuleTip rule="9.12g-D / 8.0 / 9.14">
-            成功的突袭必须战后推进：防御方撤退或被摧毁 ⇒ 所有攻击单位进入该格，无需额外 MP。 因 9.14
-            位移待决时，位移落点选定后即自动收束。
+        <template v-if="canActCombatRole('attacker')">
+          <!-- B33：突袭的推进是**强制**的（9.12g-D）⇒ 说明与按钮按这个口径给 -->
+          <p v-if="workbench.combatAdvanceMandatory" class="warn num">
+            <BaseTag kind="danger">突袭</BaseTag>
+            本次必须推进
+            <RuleTip rule="9.12g-D / 8.0 / 9.14">
+              成功的突袭必须战后推进：防御方撤退或被摧毁 ⇒ 所有攻击单位进入该格，无需额外 MP。 因
+              9.14 位移待决时，位移落点选定后即自动收束。
+            </RuleTip>
+          </p>
+          <p class="num">
+            防御格 {{ workbench.combatDefendingHexCleared ? '已空' : '未空' }}；{{
+              workbench.combatDefendingHexCleared ? '可推进' : '本场不推进'
+            }}
+          </p>
+          <RuleTip rule="9.12g-A / 9.13">
+            只有付了战斗补给的单位（含战斗值为零的）才能推进；进击标记须满足攻击阶段、非 DG、
+            非突袭、攻方把全部选项选为军力损失等条件。
           </RuleTip>
-        </p>
-        <p class="num">
-          防御格 {{ workbench.combatDefendingHexCleared ? '已空' : '未空' }}；{{
-            workbench.combatDefendingHexCleared ? '可推进' : '本场不推进'
-          }}
-        </p>
-        <RuleTip rule="9.12g-A / 9.13">
-          只有付了战斗补给的单位（含战斗值为零的）才能推进；进击标记须满足攻击阶段、非 DG、
-          非突袭、攻方把全部选项选为军力损失等条件。
-        </RuleTip>
-        <!--
-          9.12g-D：「由拥有者玩家选择哪些攻击单位进行推进（如果有的话）」
-          ⇒ 入口是地图推进格（点它即预选）；这里只做同一张卡里的改选与确认。
-        -->
-        <div v-if="advanceSelectable.length > 0" class="row">
-          <BaseButton
-            v-for="choice in advanceSelectable"
-            :key="choice.unit.instanceId"
-            :variant="choice.selected ? 'secondary' : 'ghost'"
-            size="sm"
-            @click="workbench.toggleAdvanceUnit(choice.unit.instanceId)"
-          >
-            {{ choice.selected ? '✓ ' : '' }}{{ choice.unit.name }}
-          </BaseButton>
-        </div>
-        <p v-if="advanceBlockedCount > 0" class="muted">
-          另有 {{ advanceBlockedCount }} 枚不可推进
-        </p>
-        <div class="row">
-          <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatAdvance()">
-            {{ advanceButtonLabel }}
-          </BaseButton>
-        </div>
+          <!--
+            9.12g-D：「由拥有者玩家选择哪些攻击单位进行推进（如果有的话）」
+            ⇒ 入口是地图推进格（点它即预选）；这里只做同一张卡里的改选与确认。
+          -->
+          <div v-if="advanceSelectable.length > 0" class="row">
+            <BaseButton
+              v-for="choice in advanceSelectable"
+              :key="choice.unit.instanceId"
+              :variant="choice.selected ? 'secondary' : 'ghost'"
+              size="sm"
+              @click="workbench.toggleAdvanceUnit(choice.unit.instanceId)"
+            >
+              {{ choice.selected ? '✓ ' : '' }}{{ choice.unit.name }}
+            </BaseButton>
+          </div>
+          <p v-if="advanceBlockedCount > 0" class="muted">
+            另有 {{ advanceBlockedCount }} 枚不可推进
+          </p>
+          <div class="row">
+            <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatAdvance()">
+              {{ advanceButtonLabel }}
+            </BaseButton>
+          </div>
+        </template>
+        <p v-else class="muted">对方正在处理战后推进…</p>
       </SessionStep>
 
       <!-- U1-b：战果与复核是回执（非待决），折叠后备查；R-4：只在验证页出现，不挂在会话框里 -->

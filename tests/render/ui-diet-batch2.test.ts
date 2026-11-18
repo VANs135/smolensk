@@ -71,7 +71,10 @@ describe('批 2：窗内只留当前决定与控件', () => {
   it('流程条推进被阻断时改状态行，条上不再露出条款号', () => {
     const flow = read('src/components/session/FlowStrip.vue')
     expect(flow).toContain('bar__block')
-    expect(flow).toContain('v-if="flow.canAdvance && liveBlock === null"')
+    expect(flow).toContain('v-if="showAdvance"')
+    expect(flow).toMatch(
+      /const showAdvance = computed\(\s*\(\) => flow\.value\.canAdvance && liveBlock\.value === null/,
+    )
     expect(flow).not.toContain('class="bar__rule num"')
   })
 
