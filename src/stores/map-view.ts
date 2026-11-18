@@ -3024,7 +3024,7 @@ export const useMapViewStore = defineStore('mapView', () => {
         disabledReason: null,
       })
     }
-    add('fighter_sweep', '扫荡', '空军任务')
+    add('fighter_sweep', '战机扫荡', '空军任务')
     add('trainbusting', '破交', '空军任务')
     add('air_transport', '空运', '空军任务')
     add('air_drop', '空投', '空军任务')
@@ -3507,13 +3507,26 @@ export const useMapViewStore = defineStore('mapView', () => {
       point: world,
       scale,
     })
-    if (token !== null && openUnitContext(hex, token.id, anchor)) return
-    const ids = contextSelectionAt(hex)
+    const hexActions = hexTargetActions(hex)
+    /*
+     * 用户 2026-11-18：右键**敌格**时命中敌方算子（基地 / 战斗单位）会先出该枚的射击菜单，
+     * 目标侧的空军任务（战机扫荡 14.6 等）因此被提前返回吞掉。敌格上有目标侧任务时
+     * 把「命中的那一枚」与「目标格」并进同一份菜单：射击项归该枚，空军任务项归格。
+     * 本方算子仍按旧口径只出这一枚自己的菜单。
+     */
+    const enemyHit = token !== null && token.side !== actingSide.value
+    if (
+      token !== null &&
+      !(enemyHit && hexActions.length > 0) &&
+      openUnitContext(hex, token.id, anchor)
+    )
+      return
+    const ids = enemyHit && hexActions.length > 0 ? [token.id] : contextSelectionAt(hex)
     /*
      * 用户 2026-11-12：目标侧空军任务以"格"为对象（空投点、铁路/桥梁格、敌方激活空军基地）。
      * 格上有算子时也补一份"目标格"菜单，让破交/扫荡/空运/空投有唯一入口。
      */
-    if (hexTargetActions(hex).length > 0) ids.push(HEX_CONTEXT_ID)
+    if (hexActions.length > 0) ids.push(HEX_CONTEXT_ID)
     if (showCounterContext(hex, ids, anchor)) return
     /*
      * 用户 2026-11-18：初设右键没有可列的模式时，按同一判据写一行原因
