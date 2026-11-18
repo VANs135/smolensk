@@ -452,6 +452,7 @@ onBeforeUnmount(() => {
           :overlay="mapView.overlay"
           :box-drag-source="mapView.counterForBoxAt"
           :counter-drag-source="mapView.counterForMoveDragAt"
+          :drag-path-preview="mapView.previewMoveDragPath"
           :hover-preview="hoverPreviewText"
           :control-markers="mapView.controlMarkers"
           :markers="mapView.railheadMarkers"

@@ -3321,6 +3321,16 @@ export const useMapViewStore = defineStore('mapView', () => {
   }
 
   /**
+   * 用户 2026-11-18：拖动中的**路径预览**（画布每次换格问一次）
+   *
+   * 只把 workbench 的纯预演结果转给画布：`ok=false` 时画布只画路径线、不画落位终点。
+   * 判据不在这里另写一份（落位走 `dropMovingCounterAt` 的同一条链）。
+   */
+  function previewMoveDragPath(path: readonly HexRef[]): { ok: boolean } {
+    return workbench.previewDraggedPath(path)
+  }
+
+  /**
    * 用户 2026-11-18：拖动被取消（系统接管 / 按钮位已松，不是落子）
    *
    * 这一手没有产生任何移动 ⇒ 把「待开拔」与地图选择环一起收掉，
@@ -5055,6 +5065,8 @@ export const useMapViewStore = defineStore('mapView', () => {
     counterForBoxAt,
     counterForMoveDragAt,
     dropMovingCounterAt,
+    // 用户 2026-11-18：拖动路径预览（只读，供画布画路径线 / 决定终点）
+    previewMoveDragPath,
     cancelCounterDragNow,
     counterBoxTargets,
     dropCounterInBox,

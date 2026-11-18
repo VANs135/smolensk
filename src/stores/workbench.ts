@@ -9141,6 +9141,43 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 2026-11-18：把画布给的拖动路径规范化成「起点开头、逐格相邻」的序列。
+   *
+   * 落位（`moveAlongDraggedPath`）与预览（`previewDraggedPath`）共用这一份形状校验，
+   * 免得两处各写一遍、日后一处改了一处忘。
+   */
+  function normalizeDraggedPath(
+    path: readonly HexRef[],
+  ): { ok: true; full: HexRef[] } | { ok: false; rule: string; reason: string } {
+    const pick = movePick.value
+    const start = moveInteraction.value?.start ?? pick?.hex ?? null
+    if (start === null) return { ok: false, rule: '6.1', reason: '尚未选择要移动的单位' }
+    const full: HexRef[] = [{ ...start }]
+    for (const hex of path) {
+      const last = full[full.length - 1]!
+      if (sameHex(last, hex)) continue
+      if (!areAdjacent(last, hex)) return { ok: false, rule: '6.1', reason: '拖动路径不连续' }
+      full.push({ ...hex })
+    }
+    return { ok: true, full }
+  }
+
+  /**
+   * 2026-11-18：**拖动路径预览**（只读，画布拖动中每换一格调一次）
+   *
+   * 与 `moveAlongDraggedPath` 同一串判据（`simulateMovePath` 的纯预演）；只回答
+   * "整条路径此刻走不走得通"，**不写步、不动单位、不写 `moveBlocked`**。
+   * 画布据此决定要不要画落位终点：走不通时只留路径线（用户 2026-11-18）。
+   */
+  function previewDraggedPath(path: readonly HexRef[]): { ok: boolean } {
+    const normalized = normalizeDraggedPath(path)
+    if (!normalized.ok || normalized.full.length < 2) return { ok: false }
+    const simulation = moveInteraction.value ?? movePickPreviewInteraction.value
+    if (simulation === null) return { ok: false }
+    return { ok: simulateMovePath(simulation, moveRuntime.value, normalized.full).ok }
+  }
+
+  /**
    * 2026-11-18：**拖拽落子**——沿玩家实际拖过的路径逐步判通行，全部合法才走。
    *
    * 与点目标格共用同一套引擎判据（`planStep`／`commitStep`）：先按路径逐段预演
@@ -9150,21 +9187,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * `path` 含起点（画布已按六角直线补全成相邻格序列）。
    */
   function moveAlongDraggedPath(path: readonly HexRef[]): boolean {
-    const pick = movePick.value
-    const start = moveInteraction.value?.start ?? pick?.hex ?? null
-    if (start === null) return false
     // 规范化：起点开头、去重、拒绝不相邻的段（画布已补全；这里只守引擎输入形状）
-    const full: HexRef[] = [{ ...start }]
-    for (const hex of path) {
-      const last = full[full.length - 1]!
-      if (sameHex(last, hex)) continue
-      if (!areAdjacent(last, hex)) {
-        moveBlocked.value = { rule: '6.1', reason: '无法通行：拖动路径不连续' }
-        pushLog('warning', moveBlocked.value.reason, '6.1')
-        return false
-      }
-      full.push({ ...hex })
+    const normalized = normalizeDraggedPath(path)
+    if (!normalized.ok) {
+      moveBlocked.value = { rule: normalized.rule, reason: `无法通行：${normalized.reason}` }
+      pushLog('warning', moveBlocked.value.reason, normalized.rule)
+      return false
     }
+    const full = normalized.full
     if (full.length < 2) return false
     const simulation = moveInteraction.value ?? movePickPreviewInteraction.value
     if (simulation === null) return false
@@ -30733,6 +30763,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     clickHex,
     // 2026-11-18：拖拽落子（沿玩家实际路径逐步判通行；与点击同一套判据）
     moveAlongDraggedPath,
+    // 用户 2026-11-18：拖动中的路径预览（只读；画布据此决定终点画不画）
+    previewDraggedPath,
     // 用户 2026-11-10：地图上点**某一枚** ⇒ 只选这一枚（`only`），整格全选走"点格内空白"
     selectForMove,
     // C5 动作

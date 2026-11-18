@@ -85,6 +85,13 @@ const props = withDefaults(
     hexLabels?: readonly { hex: HexRef; text: string }[]
     /** 移动交互覆盖层（算子 / 可到达范围 / 预览路径；C5） */
     overlay?: MovementOverlay | null
+    /**
+     * 用户 2026-11-18：拖动中的**路径预览**回调（上层算好；画布只问"这一手落不落得下去"）
+     *
+     * 没给回调 / 返回 null ⇒ 不画路径线；`ok=false` ⇒ 只画路径线，**不画落位终点**。
+     * 判据由状态层给（workbench 的纯预演），画布不读 store。
+     */
+    dragPathPreview?: ((path: readonly HexRef[]) => { ok: boolean } | null) | null
     boxDragSource?:
       | ((
           hex: HexRef,
@@ -149,6 +156,7 @@ const props = withDefaults(
     highlightHexes: () => [],
     hexLabels: () => [],
     overlay: null,
+    dragPathPreview: null,
     boxDragSource: null,
     counterDragSource: null,
     hoverPreview: null,
@@ -289,9 +297,37 @@ const counterGhostSize = computed(() => TOKEN_SIZE_PX * viewport.value.scale)
  */
 let counterDragPath: HexRef[] = []
 
+/**
+ * 拖动路径预览（用户 2026-11-18）
+ *
+ * `null` = 不画（还没拖动 / 只经过起点）；`ok=false` = 路径走不通（只画红线，不画终点）。
+ * 画布只存上层给的结果，不自己判规则。
+ */
+let counterDragPreview: { path: readonly HexRef[]; ok: boolean } | null = null
+
+/** 路径变化后向上层要一次预览（只读；上层用与落位同一套判据预演） */
+function syncCounterDragPreview(): void {
+  const preview = props.dragPathPreview
+  if (preview == null || counterDragPath.length < 2) {
+    if (counterDragPreview === null) return
+    counterDragPreview = null
+    scheduleRender()
+    return
+  }
+  counterDragPreview = {
+    path: counterDragPath.map((hex) => ({ ...hex })),
+    ok: preview(counterDragPath)?.ok === true,
+  }
+  scheduleRender()
+}
+
 function clearCounterDrag(): void {
   counterPress = null
   counterDragPath = []
+  if (counterDragPreview !== null) {
+    counterDragPreview = null
+    scheduleRender()
+  }
   if (counterGhost.value !== null) emit('counterDrag', null)
   counterGhost.value = null
 }
@@ -354,6 +390,7 @@ function render(): void {
     highlightHexes: props.highlightHexes,
     hexLabels: props.hexLabels,
     overlay: props.overlay,
+    dragPath: counterDragPreview,
     controlMarkers: props.controlMarkers,
     boundary: props.boundary,
     constructionMarkers: props.constructionMarkers,
@@ -553,12 +590,19 @@ function onPointerMove(event: PointerEvent): void {
     } else {
       // 记录拖动经过的格（换格时按六角直线补全，指针采样跳过中间格也不丢段）
       const overHex = hitAtLocal(local)?.hex ?? null
+      let pathChanged = false
       if (overHex !== null) {
         const last = counterDragPath.at(-1)
-        if (last === undefined) counterDragPath = [{ ...overHex }]
-        else if (last.col !== overHex.col || last.row !== overHex.row)
+        if (last === undefined) {
+          counterDragPath = [{ ...overHex }]
+          pathChanged = true
+        } else if (last.col !== overHex.col || last.row !== overHex.row) {
           counterDragPath.push(...hexLineBetween(last, overHex).slice(1))
+          pathChanged = true
+        }
       }
+      // 用户 2026-11-18：换格就刷新路径预览（走不通 ⇒ 终点不画）
+      if (pathChanged) syncCounterDragPreview()
       if (
         counterGhost.value !== null ||
         Math.hypot(event.clientX - counterPress.x, event.clientY - counterPress.y) >= 5

@@ -184,6 +184,9 @@ export const MAP_PALETTE = {
   constructionAirStrip: '#3f6b3a',
   /** 13.3d 通用标记的回退色（铁路端头）：取铁路灰的深一档 */
   railhead: '#3a3a3a',
+  /** 用户 2026-11-18：拖动路径线（可达＝绿、走不通＝红；终点圈只在可达时画） */
+  dragPath: '#2f7d4f',
+  dragPathBlocked: '#b3261e',
 } as const
 
 /** 图层开关 */
@@ -312,6 +315,12 @@ export function visiblePrintedHedgehogs(
   })
 }
 
+/** 用户 2026-11-18：拖动中的路径预览（`ok=false` ⇒ 只画路径线，不画落位终点） */
+export interface DragPathPreview {
+  path: readonly HexRef[]
+  ok: boolean
+}
+
 /** 绘制选项 */
 export interface MapRenderOptions {
   /** 视口变换（`render/viewport.ts`） */
@@ -340,6 +349,13 @@ export interface MapRenderOptions {
   hexLabels?: readonly { hex: HexRef; text: string }[] | null
   /** 移动交互覆盖层（算子、可到达范围、预览路径；C5）；null 表示只画地图 */
   overlay?: MovementOverlay | null
+  /**
+   * 用户 2026-11-18：**拖动中的路径线**（画布拖动时每换一格更新）
+   *
+   * `path` 含起点；`ok=false`（路径走不通）时只画红色路径线，**不画落位终点**。
+   * 判据由上层（workbench 的纯预演）给，本层只画。
+   */
+  dragPath?: DragPathPreview | null
   /**
    * 5.0c：**胜利格控制标记**（B18+ 用户要求）——每格一枚官方控制标记，按控制方翻面
    *
@@ -611,6 +627,39 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
   if (overlay !== null) {
     const visibleKeys = new Set(hexes.map((hex) => overlayHexKey(hex)))
     drawMovementOverlay(ctx, overlay, scale, visibleKeys)
+  }
+
+  /*
+   * ⑧-b 拖动路径线（用户 2026-11-18）
+   *
+   * 拖动单位时把经过的格连成折线，让玩家看得见「这次拖过哪些格、终点在哪」。
+   * 路径走不通时只留一条红色线（`ok=false`）——**不画落位终点**，因为这一手落不下去。
+   * 画在覆盖层之上、工事之下：既不挡算子印值，也不会被扫描图吃掉。
+   */
+  const dragPath = options.dragPath ?? null
+  if (dragPath !== null && dragPath.path.length >= 2) {
+    const points = dragPath.path.map((hex) => hexCanvasPoint(hex))
+    ctx.strokeStyle = dragPath.ok ? MAP_PALETTE.dragPath : MAP_PALETTE.dragPathBlocked
+    ctx.lineWidth = 3 / scale
+    ctx.setLineDash([6 / scale, 4 / scale])
+    ctx.beginPath()
+    points.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(point.x, point.y)
+      else ctx.lineTo(point.x, point.y)
+    })
+    ctx.stroke()
+    ctx.setLineDash([])
+    // 终点圈只在「这一手落得下去」时画
+    if (dragPath.ok) {
+      const end = points[points.length - 1]!
+      ctx.beginPath()
+      ctx.arc(end.x, end.y, HEX_RADIUS_PX * 0.26, 0, Math.PI * 2)
+      ctx.fillStyle = MAP_PALETTE.dragPath
+      ctx.fill()
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = 2 / scale
+      ctx.stroke()
+    }
   }
 
   /*
