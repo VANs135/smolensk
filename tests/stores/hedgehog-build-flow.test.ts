@@ -259,8 +259,8 @@ describe('16.0b/c 工程兵途径（13.8d 的 2 格半径施工）', () => {
     // 13.8d：施工者在它执行建造的阶段中不能移动
     expect(engineer.movementEnded).toBe(true)
     // 13.8d 的一格一任务账本被记下（原地小队途径不记）
-    expect(store.constructionPhaseLedger.task).toBe('buildHedgehog')
-    expect(store.constructionPhaseLedger.hexes).toEqual([hexText])
+    expect(store.constructionLedgerOf(engineer.instanceId).task).toBe('buildHedgehog')
+    expect(store.constructionLedgerOf(engineer.instanceId).hexes).toEqual([hexText])
   })
 
   it('工程兵在**相邻格**（步行 1 MP ≤ 2）⇒ 照样能施工（不必在目标格内）', () => {
@@ -302,7 +302,7 @@ describe('16.0b/c 工程兵途径（13.8d 的 2 格半径施工）', () => {
     expect(engineer.movementEnded).toBe(false)
   })
 
-  it('13.8d：一格一任务 —— 同阶段已施工过另一格 ⇒ 拒', () => {
+  it('13.8d：**同一名**工程能力单位同阶段已施工过一格 ⇒ 再施工被拒', () => {
     const store = newStore()
     store.setPhase('movement')
     store.setTurn(4)
@@ -311,13 +311,37 @@ describe('16.0b/c 工程兵途径（13.8d 的 2 格半径施工）', () => {
     useEngineerRoute(store, engineer, `${CORE_HEX.col}.${CORE_HEX.row}`, dump.id)
     expect(store.buildHedgehogNow()).toBe(true)
 
-    // 同一阶段：换一名工程兵、换一格 ⇒ 13.8d 拦下
+    // 13.8d「An Engineer-Capable unit can only perform construction in a single hex」
+    // ⇒ 同一名施工者换一格再建，必须被拦下
     const second = neighbors(CORE_HEX)[0]!.hex
-    const engineer2 = placeEngineer(store, second.col, second.row, 'eng-2')
-    useEngineerRoute(store, engineer2, `${second.col}.${second.row}`, dump.id)
+    useEngineerRoute(store, engineer, `${second.col}.${second.row}`, dump.id)
     expect(store.buildHedgehogNow()).toBe(false)
     expect(store.hedgehogError?.rule).toBe('13.8d')
     expect(store.hedgehogError?.reason).toBe('oneHexPerPhase')
+  })
+
+  it('13.8d：**另一名**工程能力单位同阶段可另行施工（原文限的是"一个工程能力单位"）', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    store.setTurn(4)
+    const engineer = placeEngineer(store, CORE_HEX.col, CORE_HEX.row)
+    const dump = withDump(store, 8)
+    useEngineerRoute(store, engineer, `${CORE_HEX.col}.${CORE_HEX.row}`, dump.id)
+    expect(store.buildHedgehogNow()).toBe(true)
+
+    // 换一名工程能力单位、换一格 ⇒ 13.8d 的额度按**单位**计，第二名仍可施工
+    const second = neighbors(CORE_HEX)[0]!.hex
+    const engineer2 = placeEngineer(store, second.col, second.row, 'eng-2')
+    useEngineerRoute(store, engineer2, `${second.col}.${second.row}`, dump.id)
+    expect(store.buildHedgehogNow()).toBe(true)
+    expect(store.hedgehogLevelOf(second)).toBe(1)
+    // 各自一本账：第二名施工者的额度只记它自己的格
+    expect(store.constructionLedgerOf(engineer2.instanceId).hexes).toEqual([
+      `${second.col}.${second.row}`,
+    ])
+    expect(store.constructionLedgerOf(engineer.instanceId).hexes).toEqual([
+      `${CORE_HEX.col}.${CORE_HEX.row}`,
+    ])
   })
 
   it('13.8d：工程兵本阶段已移动 ⇒ 拒', () => {
@@ -346,9 +370,9 @@ describe('16.0b/c 工程兵途径（13.8d 的 2 格半径施工）', () => {
       payDumpId: dump.id,
     }
     expect(store.buildHedgehogNow()).toBe(true)
-    // 原地途径不记 13.8d 的账本
-    expect(store.constructionPhaseLedger.task).toBeNull()
-    expect(store.constructionPhaseLedger.hexes).toEqual([])
+    // 原地途径不记 13.8d 的账本（该条主语是"具有工程能力的单位"）
+    expect(store.constructionLedgerOf(a!.instanceId).task).toBeNull()
+    expect(store.constructionLedgerOf(a!.instanceId).hexes).toEqual([])
   })
 
   it('工程兵途径也能**缩减**（16.0c：免费），并记一格一任务', () => {
@@ -368,6 +392,6 @@ describe('16.0b/c 工程兵途径（13.8d 的 2 格半径施工）', () => {
     expect(store.reduceHedgehogNow()).toBe(true)
     expect(store.hedgehogLevelOf(CORE_HEX)).toBe(0)
     expect(engineer2.movementEnded).toBe(true)
-    expect(store.constructionPhaseLedger.task).toBe('reduceHedgehog')
+    expect(store.constructionLedgerOf(engineer2.instanceId).task).toBe('reduceHedgehog')
   })
 })

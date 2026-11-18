@@ -7964,8 +7964,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 15.1A / 15.4：整备与缩减都是「每基地每阶段一次」，换阶段即清零
     refitDoneBaseIds.value = []
     reducedBaseIds.value = []
-    // 13.8d：一格一任务按**移动阶段**计，换阶段即清零
-    constructionPhaseLedger.value = { hexes: [], task: null }
+    // 13.8d：一格一任务按**移动阶段**、按**单位**计，换阶段即清零
+    constructionLedgers.value = {}
     constructionError.value = null
     // 15.1 整备交互的中间态一并收束（换方后不该还停在「选飞机」）
     refitTargetBaseId.value = null
@@ -8032,8 +8032,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     reducedBaseIds.value = []
     // 14.9f / 15.0b-C：空运卸载限额是「**每个移动环节**每基地」⇒ 换环节即清零
     airUnloadLedger.value = {}
-    // 13.8d：一格一任务按**移动阶段**计，换阶段即清零
-    constructionPhaseLedger.value = { hexes: [], task: null }
+    // 13.8d：一格一任务按**移动阶段**、按**单位**计，换阶段即清零
+    constructionLedgers.value = {}
     constructionError.value = null
     refitTargetBaseId.value = null
     // 9.1c：攻击账本按**战斗环节**计 ⇒ 换段 / 换方 / 换回合即清零（同段的换环节见 `stepToNextSegmentStep`）
@@ -8265,7 +8265,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 15.3：空军基地的「每回合 +1 级」同样是按格按回合的额度
     airBaseTurnLedger.value = {}
     // 13.8d：一格一任务按移动阶段计 ⇒ 新回合＝新的移动环节
-    constructionPhaseLedger.value = { hexes: [], task: null }
+    constructionLedgers.value = {}
     constructionError.value = null
     // 10.0e-A/B：轰炸账本按阶段计 ⇒ 新回合也是新的阶段序列（与 13.8d 同口径）
     clearBarragePhaseLedger()
@@ -17647,7 +17647,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       toConsoleUnit({ record, instanceId: createId('hog'), hex, side: activeSide.value }),
     ]
     markConstructionWorkersImmobile(outcome.data.immobileUnitIds)
-    if (hedgehogUsesEngineerRoute.value) noteConstruction('buildHedgehog', hex)
+    if (hedgehogUsesEngineerRoute.value)
+      noteConstruction('buildHedgehog', hex, engineer?.instanceId ?? null)
     noteHedgehogLedger(hex, 'built')
     hedgehogError.value = null
     pushLog(
@@ -17705,7 +17706,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       placed.noncombatLevel = outcome.data.levelAfter
     }
     markConstructionWorkersImmobile(outcome.data.immobileUnitIds)
-    if (hedgehogUsesEngineerRoute.value) noteConstruction('reduceHedgehog', hex)
+    if (hedgehogUsesEngineerRoute.value)
+      noteConstruction('reduceHedgehog', hex, engineer?.instanceId ?? null)
     noteHedgehogLedger(hex, 'reduced')
     hedgehogError.value = null
     pushLog('success', outcome.data.detail, outcome.rule)
@@ -17715,15 +17717,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /* ────────── C8g：15.3/15.4 空军基地 / 15.2A 简易机场（＋13.8d 施工前提） ────────── */
 
   /**
-   * 13.8d：本**移动阶段**已施工过的格与已用过的任务类型
+   * 13.8d：**每名**具工程能力的单位在本移动阶段已施工过的格与已用过的任务类型
    *
-   * 「具有工程能力的单位**只能在一个格内进行建造**，而且**只能进行一种类型**的建造」——
-   * 额度按**移动阶段**计，故换阶段 / 换回合 / 换方 / 重置都清零（新的移动环节＝新的额度）。
+   * 原文：「An Engineer-Capable unit can only perform construction in a single hex, and can only
+   * perform one type of construction.」——主语是**一个工程能力单位**，故额度按 `instanceId` 分账：
+   * 甲单位施工不影响乙单位；同一单位换格或换类型才被拒。
+   * 换阶段 / 换回合 / 换方 / 重置都清零（新的移动环节＝新的额度）。
    */
-  const constructionPhaseLedger = ref<{ hexes: string[]; task: ConstructionTask | null }>({
-    hexes: [],
-    task: null,
-  })
+  const constructionLedgers = ref<
+    Record<string, { hexes: string[]; task: ConstructionTask | null }>
+  >({})
+
+  /** 13.8d：取某名施工者本阶段的额度（无记录＝尚未施工） */
+  function constructionLedgerOf(engineerId: string | null): {
+    hexes: string[]
+    task: ConstructionTask | null
+  } {
+    if (engineerId === null) return { hexes: [], task: null }
+    return constructionLedgers.value[engineerId] ?? { hexes: [], task: null }
+  }
 
   /** 15.3 / 15.2A 的玩家输入（目标格 / 施工的工程单位 / 付款站） */
   const constructionInputs = ref<{
@@ -17972,26 +17984,30 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     task: ConstructionTask,
     engineer: ConsoleUnit | null,
   ): RuleFailure | null {
+    const ledger = constructionLedgerOf(engineer?.instanceId ?? null)
     return validateConstructionBase({
       phase: phase.value as GamePhase,
       engineerCapable: engineer !== null && engineerCapableNow(engineer),
       movedThisPhase:
         engineer === null ||
         hasUnitMovementThisPhase(engineer.mpSpent, engineer.airTransportThisPhase),
-      hexesThisPhase: constructionPhaseLedger.value.hexes.length,
+      hexesThisPhase: ledger.hexes.length,
       task,
-      previousTaskThisPhase: constructionPhaseLedger.value.task,
+      previousTaskThisPhase: ledger.task,
     })
   }
 
-  /** 记一次本阶段施工（13.8d：一格一任务） */
-  function noteConstruction(task: ConstructionTask, hex: HexRef): void {
+  /** 记一次本阶段施工（13.8d：按**单位**记一格一任务） */
+  function noteConstruction(task: ConstructionTask, hex: HexRef, engineerId: string | null): void {
+    if (engineerId === null) return
     const key = hexLabel(hex)
-    constructionPhaseLedger.value = {
-      hexes: constructionPhaseLedger.value.hexes.includes(key)
-        ? [...constructionPhaseLedger.value.hexes]
-        : [...constructionPhaseLedger.value.hexes, key],
-      task,
+    const ledger = constructionLedgers.value[engineerId] ?? { hexes: [], task: null }
+    constructionLedgers.value = {
+      ...constructionLedgers.value,
+      [engineerId]: {
+        hexes: ledger.hexes.includes(key) ? [...ledger.hexes] : [...ledger.hexes, key],
+        task,
+      },
     }
   }
 
@@ -18112,7 +18128,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       ...airBaseTurnLedger.value,
       [hexLabel(hex)]: (airBaseTurnLedger.value[hexLabel(hex)] ?? 0) + 1,
     }
-    noteConstruction('buildAirBase', hex)
+    noteConstruction('buildAirBase', hex, engineer?.instanceId ?? null)
     constructionError.value = null
     pushLog(
       'success',
@@ -18174,7 +18190,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const placed = airBaseUnitAt(hex)
     if (placed !== undefined) airstripBaseIds.value = [...airstripBaseIds.value, placed.instanceId]
     if (engineer !== null) engineer.movementEnded = true
-    noteConstruction('buildAirstrip', hex)
+    noteConstruction('buildAirstrip', hex, engineer?.instanceId ?? null)
     constructionError.value = null
     pushLog(
       'success',
@@ -18238,7 +18254,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const target = units.value.find((unit) => unit.instanceId === baseId)
     if (target !== undefined) target.noncombatLevel = outcome.data.levelAfter
     if (engineer !== null) engineer.movementEnded = true
-    noteConstruction('upgradeAirstrip', base.hex)
+    noteConstruction('upgradeAirstrip', base.hex, engineer?.instanceId ?? null)
     constructionError.value = null
     pushLog('success', `${hexLabel(base.hex)} ${outcome.data.detail}`, outcome.rule)
     return true
@@ -29541,9 +29557,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 16.0b/c / 15.3 / 13.8d：按格、按回合、按阶段的施工额度一并回到初始
     hedgehogTurnLedger.value = {}
     airBaseTurnLedger.value = {}
-    constructionPhaseLedger.value = { hexes: [], task: null }
-    constructionError.value = null
-    hedgehogError.value = null
+    constructionLedgers.value = {}
     hedgehogInputs.value = { hexText: '', workerIds: [], payDumpId: null }
     hedgehogExecutorMode.value = 'inPlace'
     hedgehogEngineerId.value = null
@@ -30103,7 +30117,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ['railMovedUnitIdsThisPhase', railMovedUnitIdsThisPhase],
     ['constructionMarkers', constructionMarkers],
     ['constructionMarkerPieces', constructionMarkerPieces],
-    ['constructionPhaseLedger', constructionPhaseLedger],
+    ['constructionLedgers', constructionLedgers],
     ['hedgehogTurnLedger', hedgehogTurnLedger],
     ['airBaseTurnLedger', airBaseTurnLedger],
     ['airUnloadLedger', airUnloadLedger],
@@ -31245,7 +31259,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     constructionPayPick,
     toggleConstructionPayPick,
     pickConstructionPayDumpNow,
-    constructionPhaseLedger,
+    constructionLedgerOf,
     airBaseTurnLedger,
     // 14.9f / 15.0b-C：本环节各格已空运卸载的 T（界面据此显示还剩多少额度）
     airUnloadLedger,

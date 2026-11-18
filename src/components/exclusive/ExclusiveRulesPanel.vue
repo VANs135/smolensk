@@ -40,6 +40,9 @@ const panzerMultiUnit = ref(true)
 /** 3.4b：Supply Table 到货点数（绑定 store，均分结果由引擎给出） */
 const spSplit = computed(() => workbench.panzerGroupSpSplit)
 
+/** 13.8d 的一格一任务额度：按**当前选中的施工者**分别记账（原文主语是"一个工程能力单位"） */
+const hedgehogLedger = computed(() => workbench.constructionLedgerOf(workbench.hedgehogEngineerId))
+
 /** 3.3b / 3.5 / 1.7：格输入与城市输入 */
 
 /** 3.3b：治安检查结果 */
@@ -667,8 +670,8 @@ const compactPanzer = computed(() => props.only === 'panzer')
         {{
           workbench.hedgehogEngineerLegRange === null ? '—' : workbench.hedgehogEngineerLegRange
         }}（上限 2；超出即拒，13.8d）｜本阶段已施工：{{
-          workbench.constructionPhaseLedger.hexes.join('、') || '—'
-        }}（任务 {{ workbench.constructionPhaseLedger.task ?? '—' }}）
+          hedgehogLedger.hexes.join('、') || '—'
+        }}（任务 {{ hedgehogLedger.task ?? '—' }}）
       </p>
       <p
         v-if="workbench.hedgehogUsesEngineerRoute && workbench.engineerChoices.length === 0"

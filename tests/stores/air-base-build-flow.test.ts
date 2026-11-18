@@ -153,7 +153,7 @@ describe('15.3：修建 / 改进空军基地（1 SP/级、每回合 +1、上限 
     expect(holdingsToT(store.spDumps[0]!)).toBe(4 * SP_TO_T - AIR_BASE_COST_SP_PER_LEVEL * SP_TO_T)
     // 13.8d：施工者在它执行建造的阶段中不能移动
     expect(engineer.movementEnded).toBe(true)
-    expect(store.constructionPhaseLedger.task).toBe('buildAirBase')
+    expect(store.constructionLedgerOf(engineer.instanceId).task).toBe('buildAirBase')
     expect(store.constructionError).toBeNull()
   })
 
@@ -268,7 +268,23 @@ describe('15.3：修建 / 改进空军基地（1 SP/级、每回合 +1、上限 
     expect(store.constructionError?.reason).toBe('builderMovedThisPhase')
   })
 
-  it('同一阶段内已施工过另一格 ⇒ 拒（13.8d：只能在一个格内建造）', () => {
+  it('13.8d：**同一名**施工者同阶段已施工过一格 ⇒ 换格再建被拒', () => {
+    const store = newStore()
+    const firstHex = coreText
+    const secondHex = `${CORE_HEX.col + 1}.${CORE_HEX.row}`
+    const a = placeEngineer(store, firstHex, 'e1')
+    const dump = withDump(store, { sp: 8 })
+    prepare(store, { hexText: firstHex, engineerId: a.instanceId, payDumpId: dump.id })
+    expect(store.buildAirBaseNow()).toBe(true)
+
+    // 13.8d「An Engineer-Capable unit can only perform construction in a single hex」
+    store.constructionInputs = { hexText: secondHex, engineerId: a.instanceId, payDumpId: dump.id }
+    expect(store.buildAirBaseNow()).toBe(false)
+    expect(store.constructionError?.reason).toBe('oneHexPerPhase')
+    expect(store.airBaseLevelAt({ col: CORE_HEX.col + 1, row: CORE_HEX.row })).toBe(0)
+  })
+
+  it('13.8d：**另一名**施工者同阶段可另行施工（额度按单位分账）', () => {
     const store = newStore()
     const firstHex = coreText
     const secondHex = `${CORE_HEX.col + 1}.${CORE_HEX.row}`
@@ -279,9 +295,10 @@ describe('15.3：修建 / 改进空军基地（1 SP/级、每回合 +1、上限 
 
     const b = placeEngineer(store, secondHex, 'e2')
     store.constructionInputs = { hexText: secondHex, engineerId: b.instanceId, payDumpId: dump.id }
-    expect(store.buildAirBaseNow()).toBe(false)
-    expect(store.constructionError?.reason).toBe('oneHexPerPhase')
-    expect(store.airBaseLevelAt({ col: CORE_HEX.col + 1, row: CORE_HEX.row })).toBe(0)
+    expect(store.buildAirBaseNow()).toBe(true)
+    expect(store.airBaseLevelAt({ col: CORE_HEX.col + 1, row: CORE_HEX.row })).toBe(1)
+    expect(store.constructionLedgerOf(a.instanceId).hexes).toEqual([firstHex])
+    expect(store.constructionLedgerOf(b.instanceId).hexes).toEqual([secondHex])
   })
 
   it('同一阶段内换任务类型/换格 ⇒ 拒（13.8d 的门先在运行规则之前生效）', () => {
@@ -291,18 +308,18 @@ describe('15.3：修建 / 改进空军基地（1 SP/级、每回合 +1、上限 
     prepare(store, { hexText: coreText, engineerId: engineer.instanceId, payDumpId: dump.id })
     // 先做「修建简易机场」（buildAirstrip）
     expect(store.buildAirstripNow()).toBe(true)
-    expect(store.constructionPhaseLedger.task).toBe('buildAirstrip')
+    expect(store.constructionLedgerOf(engineer.instanceId).task).toBe('buildAirstrip')
 
     /*
      * 同一阶段内改做「修建空军基地」（buildAirBase）⇒ 13.8d 门先在 `planAirBaseBuild` 之前拦下。
      * ★ 报的是两个子理由中**先判**的那个：`validateConstructionBase` 的次序是「一格」先于「一任务」，
      *   故此处是 `oneHexPerPhase`（同格）；`oneTaskTypePerPhase` 本身的成立由引擎用例单独钉住
      *   （tests/engine/construction.test.ts 的「只能在一个格内建造、只能一种类型」）。
+     * ★ 必须用**同一名**施工者：13.8d 的额度按单位分账，换人就不该再被这条拦。
      */
-    const engineer2 = placeEngineer(store, coreText, 'e2')
     store.constructionInputs = {
       hexText: coreText,
-      engineerId: engineer2.instanceId,
+      engineerId: engineer.instanceId,
       payDumpId: dump.id,
     }
     expect(store.buildAirBaseNow()).toBe(false)
@@ -444,18 +461,18 @@ describe('13.8d / 15.3 的额度复位（换阶段 / 换回合 / 换方 / 重置
     const dump = withDump(store, { sp: 12 })
     prepare(store, { hexText: coreText, engineerId: engineer.instanceId, payDumpId: dump.id })
     expect(store.buildAirBaseNow()).toBe(true)
-    expect(store.constructionPhaseLedger.hexes).toEqual([coreText])
+    expect(store.constructionLedgerOf(engineer.instanceId).hexes).toEqual([coreText])
     expect(store.airBaseTurnLedger[coreText]).toBe(1)
 
     // 同一回合内、换阶段：13.8d 额度复位，但 15.3 的每回合 +1 仍拦
     store.setPhase('supply')
     store.setPhase('movement')
-    expect(store.constructionPhaseLedger.hexes).toEqual([])
+    expect(store.constructionLedgerOf(engineer.instanceId).hexes).toEqual([])
     expect(store.airBaseTurnLedger[coreText]).toBe(1)
 
     // 换回合：两者都复位
     store.setTurn(5)
-    expect(store.constructionPhaseLedger.hexes).toEqual([])
+    expect(store.constructionLedgerOf(engineer.instanceId).hexes).toEqual([])
     expect(store.airBaseTurnLedger).toEqual({})
   })
 
@@ -467,7 +484,7 @@ describe('13.8d / 15.3 的额度复位（换阶段 / 换回合 / 换方 / 重置
     expect(store.buildAirBaseNow()).toBe(true)
 
     store.resetAll()
-    expect(store.constructionPhaseLedger).toEqual({ hexes: [], task: null })
+    expect(store.constructionLedgerOf(engineer.instanceId)).toEqual({ hexes: [], task: null })
     expect(store.airBaseTurnLedger).toEqual({})
     expect(store.constructionError).toBeNull()
     expect(store.constructionInputs).toEqual({ hexText: '', engineerId: null, payDumpId: null })

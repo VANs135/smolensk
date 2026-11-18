@@ -276,6 +276,11 @@ const engineerItems = computed<readonly CounterPickerItem[]>(() =>
   })),
 )
 
+/** 13.8d 的一格一任务额度：按**当前选中的施工者**分别记账（原文主语是"一个工程能力单位"） */
+const constructionLedger = computed(() =>
+  workbench.constructionLedgerOf(workbench.constructionInputs.engineerId),
+)
+
 /** 15.4 的「被指定单位」：逐基地列出，点一枚即指定/取消（`toggleAirReductionUnit`） */
 function reductionItems(baseId: string): readonly CounterPickerItem[] {
   return workbench.airReductionCandidates(baseId).map((unit) => ({
@@ -1208,8 +1213,8 @@ const displayedBases = computed(() =>
               修建简易机场（15.2A：1 T）
             </BaseButton>
             <span class="num">
-              本阶段已施工：{{ workbench.constructionPhaseLedger.hexes.join('、') || '无' }}｜任务
-              {{ workbench.constructionPhaseLedger.task ?? '无' }}（13.8d：一格一任务）
+              本阶段已施工：{{ constructionLedger.hexes.join('、') || '无' }}｜任务
+              {{ constructionLedger.task ?? '无' }}（13.8d：一格一任务）
             </span>
           </div>
           <p v-if="workbench.engineerChoices.length === 0" class="muted">—</p>
