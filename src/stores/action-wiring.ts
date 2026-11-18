@@ -300,6 +300,12 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     kind: 'pickMode',
     why: '点基地分栏只改聚焦栏与地图高亮（复用 setHoverHex 的既有通道），不落盘',
   },
+  // 用户 2026-11-18（地图外盒）：贴图按钮只把"当前展开的盒卡要不要出动作窗"置为显式请求，
+  // 属界面可见性，不落盘；真正取用拆分单位仍由 takeBreakdown 的规则闸判。
+  requestCardWindow: {
+    kind: 'pickMode',
+    why: '只请求打开盒内动作窗（UI 可见性），不落盘；取用拆分单位在 takeBreakdown 的规则闸内',
+  },
   acknowledgeReinforcementStepNow: {
     kind: 'draft',
     why: '增援段单窗推进：只记"本步已完成"的窗口标记，不落盘、不改账本',

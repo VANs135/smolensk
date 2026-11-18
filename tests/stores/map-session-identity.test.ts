@@ -271,9 +271,10 @@ describe('P3：关闭语义（cancel / collapse / refused）', () => {
     expect(mapView.session?.closePolicy).toBe('collapse')
 
     expect(mapView.cancelSession()).toBe(true)
-    // 2026-11-18：死亡堆/空军盒不再开窗 ⇒ 用仍需批量动作窗的盒验证 collapse 语义
+    // 2026-11-18：死亡堆/空军盒贴图已承载；地图外盒展开也不再自动开窗 ⇒ 用仍需批量动作窗的盒验证
     const windowCard = containers.cardViews.find(
-      (card) => card.boxKind !== 'dead_pile' && card.boxKind !== 'air_box',
+      (card) =>
+        card.boxKind !== 'dead_pile' && card.boxKind !== 'air_box' && card.boxKind !== 'offboard',
     )
     expect(windowCard).toBeDefined()
     containers.cardOpenId = windowCard!.id
