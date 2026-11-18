@@ -72,6 +72,7 @@ import {
   unitChoices,
   isAirDeadPileEntry,
   currentReOf,
+  deadPileDispositionOf,
 } from './workbench-model'
 import type { ConsoleAirUnit, ConsoleUnit, DeadPileEntry } from './workbench-model'
 
@@ -409,10 +410,36 @@ export const useContainersStore = defineStore('containers', () => {
      */
     const toEntryBox = (entry: DeadPileEntry): BoxUnitView =>
       isAirDeadPileEntry(entry) ? toBoxAirUnit(entry) : toBoxUnit(entry)
+    /*
+     * 13.5 / 13.5b / 13.5c：旧存档里可能已有"设施/标记"或拆分单位被错打进死亡堆。
+     * 展示层按同一判据再滤一次（不改写老存档）：空军条目照常；地面只显示确实该在死亡堆的。
+     */
+    const viewable = (entry: DeadPileEntry): boolean =>
+      isAirDeadPileEntry(entry) || deadPileDispositionOf(entry) === 'deadPile'
     return {
-      axis: workbench.deadPile.filter((unit) => unit.side === 'axis').map(toEntryBox),
-      soviet: workbench.deadPile.filter((unit) => unit.side === 'soviet').map(toEntryBox),
+      axis: workbench.deadPile
+        .filter((unit) => unit.side === 'axis' && viewable(unit))
+        .map(toEntryBox),
+      soviet: workbench.deadPile
+        .filter((unit) => unit.side === 'soviet' && viewable(unit))
+        .map(toEntryBox),
     }
+  })
+
+  /** 专规 2.3a：死亡堆里的 Alarm 单位（第二项抽取池；按单位库 `alarmLimit` 标注） */
+  const alarmDeadPileUnits = computed<Record<Side, BoxUnitView[]>>(() => {
+    const ids = new Set(effectiveAlarmUnitIds.value)
+    const pick = (side: Side): BoxUnitView[] =>
+      workbench.deadPile
+        .filter(
+          (unit): unit is ConsoleUnit =>
+            unit.side === side &&
+            !isAirDeadPileEntry(unit) &&
+            ids.has(unit.unitId) &&
+            deadPileDispositionOf(unit) === 'deadPile',
+        )
+        .map(toBoxUnit)
+    return { axis: pick('axis'), soviet: pick('soviet') }
   })
 
   /** 拆分单位算子库（双方；`branch: 'breakdown'`，1.8a / 20.0g） */
@@ -590,6 +617,7 @@ export const useContainersStore = defineStore('containers', () => {
     allBoxViews({
       scenarioId: scenarioId.value,
       deadPile: deadPileUnits.value,
+      alarmUnits: alarmDeadPileUnits.value,
       breakdownUnits: breakdownUnits.value,
       breakdownOnMap: breakdownOnMap.value,
       aircraftInBox: aircraftInBox.value,

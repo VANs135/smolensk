@@ -441,6 +441,42 @@ export function isReplUnit(unit: { replKind?: ReplKind | null }): boolean {
 }
 
 /**
+ * 13.5 / 13.5b / 13.5c / 13.5e：一个地面条目被消灭后**该去哪儿**
+ *
+ * - `pool`：13.5b 拆分单位 ⇒ 返回拆分资源池，不进死亡堆；
+ * - `remove`：补员（13.5，是资源不是可重建单位）、`rebuildable === false`（13.5c 黄点）、
+ *   以及**重建表里没有行的设施/标记** ⇒ 永久移出，不进死亡堆；
+ * - `deadPile`：其余单位（含 HQ、运输点/编内卡车 13.5e、飞机另走空军死亡堆）。
+ *
+ * 设施/标记判据来自重建表（`charts-supply-repl.json`）：airbase / supply / extender /
+ * hedgehog / port 都没有对应行（`suggestRebuildRow` 也明确"不猜"），它们不是可重建单位，
+ * 因此不能出现在死亡堆/重建候选/特殊补员池里。
+ */
+export type DeadPileDisposition = 'deadPile' | 'remove' | 'pool'
+
+const NON_UNIT_FACILITY_KINDS: ReadonlySet<string> = new Set([
+  'air_base',
+  'sp',
+  'hedgehog',
+  'supply_extender',
+  'port',
+])
+
+export function deadPileDispositionOf(unit: {
+  replKind?: ReplKind | null
+  rebuildable?: boolean
+  noncombatKind?: string | null
+  specialized?: readonly string[]
+  isBreakdown?: boolean
+}): DeadPileDisposition {
+  if (unit.replKind != null) return 'remove'
+  if (unit.isBreakdown === true || (unit.specialized ?? []).includes('breakdown')) return 'pool'
+  if (unit.rebuildable === false) return 'remove'
+  if (NON_UNIT_FACILITY_KINDS.has(unit.noncombatKind ?? '')) return 'remove'
+  return 'deadPile'
+}
+
+/**
  * 单位记录的**显示名**（中文名 → 英文名 → **算子上的印刷名** → 主键）
  *
  * ★ 唯一实现：`toConsoleUnit` 的 `name`、到达卡的条目匹配、专规 2.3c 的编制转化对号都走这里，

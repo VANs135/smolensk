@@ -36,6 +36,8 @@ function setup(startSession = false) {
   placeGround(w, airBaseRecord(1), CORE_HEX, 'axis', 'base')
   placeGround(w, airBaseRecord(1), NEAR_HEX, 'axis', 'destination')
   const record = unitChoices('axis').find((record) => {
+    // 拆分单位被毁按 13.5b 返回资源池 ⇒ 货损夹具改用普通战斗单位
+    if (record.branch === 'breakdown') return false
     const view = toConsoleUnit({ record, instanceId: 'probe', hex: CORE_HEX, side: 'axis' })
     return (
       view.isCombat &&

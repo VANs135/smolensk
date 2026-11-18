@@ -28,7 +28,10 @@ const FACE = readFileSync(join(ROOT, 'src/components/game/BoxCardFace.vue'), 'ut
 const HEX: HexRef = { col: 30, row: 12 }
 
 function recordOf() {
-  const found = unitChoices('axis').find((record) => record.isCombat === true)
+  // 拆分单位被毁按 13.5b 返回资源池，不进死亡堆 ⇒ 取一个普通战斗单位
+  const found = unitChoices('axis').find(
+    (record) => record.isCombat === true && record.branch !== 'breakdown',
+  )
   if (found === undefined) throw new Error('单位库中没有轴心国战斗单位')
   return found
 }

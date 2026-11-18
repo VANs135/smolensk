@@ -40,10 +40,26 @@ const newStore = () => {
   return useWorkbenchStore()
 }
 
+/**
+ * 12.8b 分摊夹具：取一个**普通**战斗单位
+ *
+ * 排除拆分单位（`branch: 'breakdown'`）：单位库里拆分子排在最前，而它被毁后按 13.5b
+ * **返回资源池**、不进死亡堆；用它会让「归零进死亡堆」的断言测到另一条规则。
+ */
+const plainCombatRecord = () =>
+  groundRecord(
+    'axis',
+    (record) =>
+      record.branch !== 'breakdown' &&
+      record.isCombat === true &&
+      record.attackCapable === true &&
+      (record.reSize ?? 0) > 0,
+  )
+
 /** 摆一个断补的轴方单位并载入计划，返回其格键 */
 function oosDuty(store: Workbench, id = 'u1') {
   store.setPhase('supply')
-  const unit = placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', id)
+  const unit = placeGround(store, plainCombatRecord(), CORE_HEX, 'axis', id)
   unit.hasTraceSupply = false
   // 12.3d：用敌方 ZOC/敌占卡断补给路径 ⇒ 真的断补（不是靠"不声明源"或地形死角）
   sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
@@ -115,27 +131,29 @@ describe('12.8b：掷骰（2 骰 + 断补军力 ≥5 的 +3）', () => {
 })
 
 describe('12.8b：分摊落盘（恰好满足义务、不得超过现有军力、归零进死亡堆）', () => {
-  /** 找一个**确实产生损失**的骰面（2–12 里必存在；否则本批用例空转） */
-  function rollUntilLoss(store: Workbench, key: string): number {
+  /** 找一个**确实产生、且不超过该格现有军力**的骰面（2–12 里必存在；否则本批用例空转） */
+  function rollUntilLoss(store: Workbench, key: string, steps: number): number {
     const duty = store.supplyPhasePlan!.attritionDuty.find(
       (item) => `${item.hex.col}.${item.hex.row}` === key,
     )!
     for (let die = 12; die >= 2; die -= 1) {
       const probe = resolveAttrition({ die, bestAr: duty.bestAr, oosSteps: duty.oosSteps })
-      const lossy = probe.losses.kind === 'allSteps' || probe.losses.steps > 0
+      // 12.8b：损失不得超过该格现有军力 ⇒ 取一个「有损但吃得下」的骰面
+      const lossy =
+        probe.losses.kind === 'allSteps' || (probe.losses.steps > 0 && probe.losses.steps <= steps)
       if (lossy) {
         store.setAttritionDie(key, die)
         store.rollAttritionNow(key, die)
         return die
       }
     }
-    throw new Error('该 duty 在任何骰面下都无损失（夹具异常）')
+    throw new Error('该 duty 在任何骰面下都没有可承受的损失（夹具异常）')
   }
 
   it('分摊不足或超出 ⇒ 拒，且账本不动', () => {
     const store = newStore()
     const { unit, key } = oosDuty(store)
-    rollUntilLoss(store, key)
+    rollUntilLoss(store, key, unit.steps)
 
     store.setAttritionAllocation(key, unit.instanceId, 0)
 
@@ -155,7 +173,7 @@ describe('12.8b：分摊落盘（恰好满足义务、不得超过现有军力�
   it('恰好满足义务 ⇒ 扣军力；归零者进死亡堆（与地面/空军**同一个**死亡堆）', () => {
     const store = newStore()
     const { unit, key } = oosDuty(store)
-    rollUntilLoss(store, key)
+    rollUntilLoss(store, key, unit.steps)
     const losses = store.attritionResults[key]!.losses
     const required = losses.kind === 'allSteps' ? unit.steps : losses.steps
     expect(required).toBeGreaterThan(0)
@@ -230,8 +248,8 @@ describe('12.8b：分摊落盘（恰好满足义务、不得超过现有军力�
 
   it('分摊给不在该格断补单位之列的算子 ⇒ 拒（12.8b 只分摊给该格断补单位）', () => {
     const store = newStore()
-    const { key } = oosDuty(store)
-    rollUntilLoss(store, key)
+    const { unit, key } = oosDuty(store)
+    rollUntilLoss(store, key, unit.steps)
     store.setAttritionAllocation(key, 'not-in-hex', 1)
 
     goToAttritionStep(store)

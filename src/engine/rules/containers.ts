@@ -234,8 +234,8 @@ export const REGION_OF_BOX: Readonly<
     sectionId: MAIN_SECTION,
     rule: '1.6c',
   },
-  // 专规 2.3a 的警戒单位：数据侧同样落在特补盒的抽取池里（上限 3/5/7 见单位库 `alarmLimit`）
-  alarm_pool: { boxKind: 'specialReplBox', sectionId: MAIN_SECTION, rule: '专规 2.3a' },
+  // 专规 2.3a 的警戒单位：落在特补盒的**第二项**（与 1.6c 免费重建师池分开，不重复占同一栏）
+  alarm_pool: { boxKind: 'specialReplBox', sectionId: 'second', rule: '专规 2.3a' },
   air_box_active: { boxKind: 'airBox', sectionId: 'active', rule: '14.1a' },
   air_box_inactive: { boxKind: 'airBox', sectionId: 'inactive', rule: '14.1a' },
   edge_box_northeast: { boxKind: 'edgeBox', sectionId: 'northeast', rule: '1.4b / 6.1b' },
@@ -579,6 +579,8 @@ export function specialReplBoxView(input: {
   side: Side
   date: string
   deadPile: readonly BoxUnitView[]
+  /** 专规 2.3a：死亡堆里的 Alarm 单位（第二项：Supply Cache 或任一 Alarm 单位） */
+  alarmUnits?: readonly BoxUnitView[]
 }): SpecialReplBoxView {
   const boxId = `special-repl-${input.side}`
   const endDate = rulesConstants.smolensk.specialReplEndDate
@@ -605,11 +607,23 @@ export function specialReplBoxView(input: {
       { id: MAIN_SECTION, label: '死亡堆内可抽取', rule: SPECIAL_REPL_RULE },
       { id: 'second', label: '第二项（Supply Cache / 特种营）', rule: SPECIAL_REPL_RULE },
     ],
-    holdings: divisionCandidates.flatMap((id) =>
-      input.deadPile
-        .filter((unit) => unit.id === id)
-        .map((unit) => toHolding(unit, MAIN_SECTION, { note: '可免费重建（返场 −1 军力，1.6c）' })),
-    ),
+    holdings: [
+      ...divisionCandidates.flatMap((id) =>
+        input.deadPile
+          .filter((unit) => unit.id === id)
+          .map((unit) =>
+            toHolding(unit, MAIN_SECTION, { note: '可免费重建（返场 −1 军力，1.6c）' }),
+          ),
+      ),
+      /*
+       * 专规 2.3a 第二项：Supply Cache，或死亡堆中任一 Alarm 单位。
+       * 数据侧按 `alarmLimit` 标注（3/5/7），这里只展示**已在死亡堆**的 Alarm 单位；
+       * 与第一栏的免费重建师池分开，不再把师池重复画进「警戒单位存放」。
+       */
+      ...(input.alarmUnits ?? []).map((unit) =>
+        toHolding(unit, 'second', { note: '2.3a 警戒单位（按类型计上限 3/5/7）' }),
+      ),
+    ],
     capacity: null,
     artwork: boxArtwork(boxId),
     notes: [
@@ -1894,6 +1908,8 @@ export function allBoxViews(input: {
   scenarioId: string
   /** 各盒内容（由调用方按盘面给出；缺省即空盒） */
   deadPile: Record<Side, readonly BoxUnitView[]>
+  /** 专规 2.3a：死亡堆里的 Alarm 单位（第二项抽取池；与免费重建师池分栏） */
+  alarmUnits?: Record<Side, readonly BoxUnitView[]>
   breakdownUnits: Record<Side, readonly BoxUnitView[]>
   breakdownOnMap: Record<Side, readonly BoxUnitView[]>
   aircraftInBox: Record<Side, readonly BoxUnitView[]>
@@ -1916,7 +1932,14 @@ export function allBoxViews(input: {
         onMap: input.breakdownOnMap[side],
       }),
     )
-    views.push(specialReplBoxView({ side, date: input.date, deadPile: input.deadPile[side] }))
+    views.push(
+      specialReplBoxView({
+        side,
+        date: input.date,
+        deadPile: input.deadPile[side],
+        alarmUnits: input.alarmUnits?.[side] ?? [],
+      }),
+    )
     views.push(airBoxView({ side, aircraft: input.aircraftInBox[side] }))
   }
   views.push(edgeBoxView({ box: 'northeast', units: input.edgeBoxUnits.northeast }))

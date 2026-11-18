@@ -515,6 +515,7 @@ import {
   isGroundBarrageEligible,
   isRailHexAt,
   isReplUnit,
+  deadPileDispositionOf,
   replRecordOf,
   type ReplKind,
   isStrategicBomberAircraft,
@@ -12227,6 +12228,50 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 13.5 / 13.5b / 13.5c / 13.5e：地面条目**离场后的唯一去向分派**
+   *
+   * 返回 `true` 表示确实进了死亡堆；`false` 表示已按判据改道：
+   * - 拆分单位 ⇒ 拆分资源池（13.5b）；
+   * - 补员 / 13.5c 黄点 / 重建表无行的设施与标记 ⇒ 永久移除（13.5 / 13.5c）。
+   *
+   * ★ 修前 `eliminateEntry` 只拦补员与 13.5c，`sendToDeadPileNow` 更是完全不过判据：
+   *   空军基地、SP、工事、延补队会从这两条路进死亡堆，再漏进重建候选与 1.6c 特殊补员池。
+   */
+  function admitGroundDeadPile(
+    entry: ConsoleUnit,
+    rule: string,
+    text: string,
+    tone: 'danger' | 'info' = 'danger',
+  ): boolean {
+    const disposition = deadPileDispositionOf(entry)
+    if (disposition === 'pool') {
+      const nationality = nationalityOfUnit(entry)
+      breakdownPool.value = {
+        ...breakdownPool.value,
+        [nationality]: (breakdownPool.value[nationality] ?? 0) + 1,
+      }
+      pushLog(tone, `${text}（13.5b：拆分单位被毁 ⇒ 返回拆分资源池，不进死亡堆）`, rule)
+      return false
+    }
+    if (disposition === 'remove') {
+      if (isReplUnit(entry)) {
+        pushLog(tone, `${text}（13.5：补员算子被摧毁即消灭，不进死亡堆）`, rule)
+        return false
+      }
+      if (entry.rebuildable === false) {
+        removedForever.value = [...removedForever.value, entry]
+        pushLog(tone, `${text}（13.5c：AR 后有黄点 ⇒ 摧毁即永久移除，不进死亡堆）`, rule)
+        return false
+      }
+      pushLog(tone, `${text}（13.5：重建表无对应行 ⇒ 设施/标记不进死亡堆，直接移除）`, rule)
+      return false
+    }
+    deadPile.value = [...deadPile.value, entry]
+    pushLog(tone, text, rule)
+    return true
+  }
+
+  /**
    * 淘汰落盘：把**被摧毁**的算子移出盘面并**放进死亡堆**（唯一入口）
    *
    * ★ 为什么必须集中一处：死亡堆是 13.5 重建与专规 1.6c「随机重建一个师」的**唯一来源**
@@ -12248,28 +12293,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       if (selectedId.value === entry.instanceId) selectedId.value = null
     }
     /*
-     * §5-D（用户 2026-10-25 裁定）：**补员算子被摧毁即直接消灭移除，不进死亡堆**。
-     * 依据：13.5b「一般来说，只有死亡堆中的单位，和地图上有军力损失的单位才能被重建」，
-     * 而补员本身不是"可重建的单位"（它是被消耗的资源）；进死亡堆反而会被 13.5 重建链
-     * 与 1.6c 的随机重建误当候选。故这里只移出盘面、不打进死亡堆。
-     */
-    if (!isAirDeadPileEntry(entry) && isReplUnit(entry)) {
-      pushLog('danger', `${text}（13.5：补员算子被摧毁即消灭，不进死亡堆）`, rule)
-      return
-    }
-    /*
-     * 13.5c：**不可重建的单位**（数据层 `rebuildable === false`，即"AR 后有黄点"）
-     * 「被摧毁后会**被永久移除**」⇒ 不进死亡堆。
+     * 13.5 / 13.5b / 13.5c / 13.5e：按**唯一判据**决定去向（`deadPileDispositionOf`）。
      *
-     * ★ 修（2026-10-30）：修前一律塞进死亡堆 ⇒ 这些算子仍出现在死亡堆盒与重建候选里
-     *   （13.5 的重建虽会被引擎按 `rebuildable` 拒，但账本与界面已经错了：
-     *   13.5c 的语义是"永久移出"，不是"留在堆里但重建不了"）。
-     * 数据口径依用户 2026-10-24 裁定：**以 `rebuildable` 字段为准**，不另造判据。
+     * 修前只拦了补员与 13.5c 黄点 ⇒ 空军基地、SP、工事、延补队等**重建表里没有行的
+     * 设施/标记**也会被打进死亡堆，进而出现在死亡堆盒、重建候选与 1.6c 特殊补员池里。
+     * 13.5b 的拆分单位也被错打进死亡堆（应返回拆分资源池）。
      */
-    if (!isAirDeadPileEntry(entry) && entry.rebuildable === false) {
-      removedForever.value = [...removedForever.value, entry]
-      pushLog('danger', `${text}（13.5c：AR 后有黄点 ⇒ 摧毁即永久移除，不进死亡堆）`, rule)
-      // 12.8a：被摧毁的源不影响已落盘的断补标记（下一个友方补给阶段才重判）
+    if (!isAirDeadPileEntry(entry)) {
+      admitGroundDeadPile(entry, rule, text)
       return
     }
     deadPile.value = [...deadPile.value, entry]
@@ -23195,8 +23226,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     const pendingSpecial = new Set(specialReplPending.value.map((item) => item.instanceId))
     return [
+      /*
+       * 13.5 / 13.5b / 13.5c：地面重建池只收**确实该在死亡堆的可重建地面单位**。
+       * 修前把死亡堆原样搬来 ⇒ 空军基地/SP/工事/拆分单位/飞机都出现在重建候选里
+       * （飞机虽在动作里被拒，但仍占着候选位 = 不可用项没消失）。
+       */
       ...deadPile.value.filter(
-        (unit) => unit.side === activeSide.value && !pendingSpecial.has(unit.instanceId),
+        (unit) =>
+          !isAirDeadPileEntry(unit) &&
+          deadPileDispositionOf(unit) === 'deadPile' &&
+          unit.side === activeSide.value &&
+          !pendingSpecial.has(unit.instanceId),
       ),
       ...units.value.filter(
         (unit) => unit.side === activeSide.value && unit.steps < unit.printedSteps,
@@ -26524,8 +26564,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (index < 0) return
     const [unit] = units.value.splice(index, 1)
     if (unit === undefined) return
-    deadPile.value = [...deadPile.value, unit]
-    pushLog('info', `${unit.name} 移入死亡堆（13.5a：死亡堆中的单位可重建）`, '13.5a')
+    if (selectedId.value === unit.instanceId) selectedId.value = null
+    /*
+     * 13.5：与 `eliminateEntry` 共用同一判据 —— 手工「移入死亡堆」也不能把
+     * 设施/标记、补员、拆分单位塞进池子（否则旧口子会从这里再开一次）。
+     */
+    admitGroundDeadPile(
+      unit,
+      '13.5a',
+      `${unit.name} 移入死亡堆（13.5a：死亡堆中的单位可重建）`,
+      'info',
+    )
   }
 
   /**

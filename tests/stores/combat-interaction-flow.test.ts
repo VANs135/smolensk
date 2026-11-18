@@ -413,14 +413,22 @@ describe('C6 9.2 九步流程：顺序推进', () => {
 
   it('账本闭合（B0④）：战斗跑完后「盘面算子数 + 死亡堆数」守恒，阵亡者确实在死亡堆里', () => {
     setupBattle(store)
-    const before = store.units.length + store.deadPile.length
+    /*
+     * 13.5b：本夹具的攻守恰好取到**拆分单位**（单位库里拆分子排在最前）；
+     * 它们被摧毁后返回拆分资源池，不进死亡堆 ⇒ 守恒必须把资源池一并计入。
+     */
+    const ledgerTotal = () =>
+      store.units.length +
+      store.deadPile.length +
+      Object.values(store.breakdownPool).reduce((sum, count) => sum + count, 0)
+    const before = ledgerTotal()
 
     driveToResolution(store)
     driveResolution(store)
 
     // 本用例不断言具体骰果（真骰决定），只断言**没有算子凭空消失**——
     // 这正是原先三处淘汰各自 splice 掉单位、死亡堆却空着时能通过的断言类型（即原先不存在的断言）。
-    expect(store.units.length + store.deadPile.length).toBe(before)
+    expect(ledgerTotal()).toBe(before)
     // 死亡堆与盘面不得重复计同一单位（否则上面的守恒会假性成立）
     for (const dead of store.deadPile) {
       expect(store.units.some((unit) => unit.instanceId === dead.instanceId)).toBe(false)
@@ -1733,6 +1741,7 @@ describe('批 12：强制战果损兵后仍能收束（9.10c / 9.11b / 9.12）',
     }
     expect(found).toBeDefined()
     const { store, attacker, defender } = found!
+    const poolBefore = { ...store.breakdownPool }
 
     // 9.11c：攻方强制损失 0 点 ⇒ 先结算选项；把 o1 全吃成军力损失 ⇒ 攻方唯一一枚被消灭
     expect(store.confirmCombatLosses()).toBe(true)
@@ -1740,7 +1749,8 @@ describe('批 12：强制战果损兵后仍能收束（9.10c / 9.11b / 9.12）',
     store.combatInputs.optionLossPoints = store.combatRequirement!.options
     expect(store.confirmCombatOptions()).toBe(true)
     expect(store.combatAttackers).toHaveLength(0)
-    expect(store.deadPile.some((unit) => unit.instanceId === attacker.instanceId)).toBe(true)
+    // 13.5b：拆分单位被毁 ⇒ 返回拆分资源池（不进死亡堆）
+    expect(store.breakdownPool.ax).toBe((poolBefore.ax ?? 0) + 1)
 
     // 领队引用同步：9.6 宣布的 AR 单位已离场 ⇒ 战斗窗不再引用它（该方已无领队）
     expect(store.combatState!.ar?.attackerUnitId).not.toBe(attacker.instanceId)
@@ -1748,7 +1758,7 @@ describe('批 12：强制战果损兵后仍能收束（9.10c / 9.11b / 9.12）',
     // 9.11c：守方强制损失 L1 ⇒ 守方唯一一枚被消灭；9.10a 的选项已无单位可承受 ⇒ 不再进选项页
     expect(store.confirmCombatLosses()).toBe(true)
     expect(store.battleDefenders).toHaveLength(0)
-    expect(store.deadPile.some((unit) => unit.instanceId === defender.instanceId)).toBe(true)
+    expect(store.breakdownPool.su).toBe((poolBefore.su ?? 0) + 1)
     expect(store.combatState!.resolution.defender.optionsSkipped).toBe('defenderWipedOut')
     // 9.12：没有单位可撤退 ⇒ 撤退需求为 0（不许用"死人撤退"凑过 9.10a）；第二批：该空屏被自动越过
     expect(store.combatRetreatRequirement).toEqual({ attacker: 0, defender: 0 })
@@ -1773,10 +1783,12 @@ describe('批 12：强制战果损兵后仍能收束（9.10c / 9.11b / 9.12）',
     }
     expect(found).toBeDefined()
     const { store, attacker } = found!
+    const poolBefore = { ...store.breakdownPool }
 
     expect(store.confirmCombatLosses()).toBe(true)
     expect(store.combatAttackers).toHaveLength(0)
-    expect(store.deadPile.some((unit) => unit.instanceId === attacker.instanceId)).toBe(true)
+    // 13.5b：拆分单位被毁 ⇒ 返回拆分资源池（不进死亡堆）
+    expect(store.breakdownPool.ax).toBe((poolBefore.ax ?? 0) + 1)
     // 9.10c 例 B：攻方在承受选项前被摧毁 ⇒ 不进攻方选项步
     expect(store.combatState!.resolution.attacker.optionsSkipped).toBe('attackerWipedOut')
     /*
@@ -1803,6 +1815,7 @@ describe('批 12：强制战果损兵后仍能收束（9.10c / 9.11b / 9.12）',
     }
     expect(found).toBeDefined()
     const { store, defender } = found!
+    const poolBefore = { ...store.breakdownPool }
 
     // 攻方强制损失 0 点 ⇒ 选项也为 0 点（第二批：两个空屏由 store 自动确认）⇒ 直接到守方强制损失
     expect(store.confirmCombatLosses()).toBe(true)
@@ -1810,7 +1823,8 @@ describe('批 12：强制战果损兵后仍能收束（9.10c / 9.11b / 9.12）',
     // 守方 L1 ⇒ 唯一一枚被消灭；9.10a 的 2 点选项已无单位可承受 ⇒ 不再进选项页
     expect(store.confirmCombatLosses()).toBe(true)
     expect(store.battleDefenders).toHaveLength(0)
-    expect(store.deadPile.some((unit) => unit.instanceId === defender.instanceId)).toBe(true)
+    // 13.5b：拆分单位被毁 ⇒ 返回拆分资源池（不进死亡堆）
+    expect(store.breakdownPool.su).toBe((poolBefore.su ?? 0) + 1)
     expect(store.combatState!.resolution.defender.optionsSkipped).toBe('defenderWipedOut')
     // 9.12：无撤退对象 ⇒ 该屏自动越过，落在仍可推进的攻方那一页
     expect(store.combatRetreatRequirement).toEqual({ attacker: 0, defender: 0 })

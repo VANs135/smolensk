@@ -68,7 +68,9 @@ function stores(side: 'axis' | 'soviet' = 'axis') {
   }
 }
 
-const axisGround = () => groundRecord('axis', (record) => record.isCombat === true)
+// 拆分单位被毁按 13.5b 返回资源池，不进死亡堆 ⇒ 菜单夹具取普通战斗单位
+const axisGround = () =>
+  groundRecord('axis', (record) => record.isCombat === true && record.branch !== 'breakdown')
 
 describe('死亡堆贴图菜单（13.5）', () => {
   it('★ 右键菜单给既有能力（重建 / 返场落点 / 永久移除），不再靠弹窗', () => {
