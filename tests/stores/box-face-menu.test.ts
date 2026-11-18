@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -31,6 +34,9 @@ import {
 const DEAD_CARD = 'axis-dead-pile'
 const AIR_CARD = 'axis-airfields'
 const OFFBOARD_CARD = 'axis-offboard'
+
+const repoPath = (relative: string): string => resolve(process.cwd(), relative)
+const read = (absolute: string): string => readFileSync(absolute, 'utf8')
 
 function goToActionStep(
   store: {
@@ -196,10 +202,30 @@ describe('地图空军堆叠窗内右键飞机（14.2e）', () => {
   })
 })
 
-describe('仍有多字段批量动作的盒：保留窗', () => {
-  it('★ 拆分池 / 边缘盒等仍开窗（取用 AR+数量、入盒要选单位/运力）', () => {
+describe('地图外盒：展开只开卡面，拆分取用由贴图按钮显式请求', () => {
+  it('★ 展开地图外盒不再自动顶窗；requestCardWindow 后才开，换卡/收起即作废', () => {
     const { containers } = stores()
+
     containers.toggleCardOpen(OFFBOARD_CARD)
+    expect(containers.openCardNeedsWindow).toBe(false)
+    expect(containers.requestCardWindow()).toBe(true)
     expect(containers.openCardNeedsWindow).toBe(true)
+
+    // 收起再展开 ⇒ 旧请求作废（不会莫名其妙又弹窗）
+    containers.toggleCardOpen(OFFBOARD_CARD)
+    containers.toggleCardOpen(OFFBOARD_CARD)
+    expect(containers.openCardNeedsWindow).toBe(false)
+
+    // 死亡堆 / 空军盒：贴图已覆盖，连显式请求也不开门
+    containers.toggleCardOpen(AIR_CARD)
+    expect(containers.requestCardWindow()).toBe(false)
+    expect(containers.openCardNeedsWindow).toBe(false)
+  })
+
+  it('★ 贴图上确有「拆分取用…」按钮（唯一入口）', () => {
+    const source = read(repoPath('src/components/game/BoxCardFace.vue'))
+    expect(source).toContain('breakdownFaceAvailable')
+    expect(source).toContain('requestCardWindow')
+    expect(source).toContain('拆分取用')
   })
 })

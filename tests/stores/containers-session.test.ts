@@ -49,9 +49,11 @@ describe('B17a-2：盒卡展开 ⇒ 盒内动作会话', () => {
     const { mapView, containers } = newStores()
     expect(mapView.session).toBeNull()
 
-    // 2026-11-18：死亡堆/空军盒已改为贴图右键菜单 ⇒ 不再开「盒内动作」窗；改用仍需批量窗的盒
+    // 2026-11-18：死亡堆/空军盒贴图右键已承载；地图外盒展开也不再自动开窗（贴图按钮显式请求）
+    // ⇒ 改用仍需"展开即开窗"的批量盒（边缘盒 / 记录轨 / 编队收纳…）
     const card = containers.cardViews.find(
-      (item) => item.boxKind !== 'dead_pile' && item.boxKind !== 'air_box',
+      (item) =>
+        item.boxKind !== 'dead_pile' && item.boxKind !== 'air_box' && item.boxKind !== 'offboard',
     )
     expect(card, '本剧本应当有仍需盒内动作窗的盒卡').toBeDefined()
     containers.toggleCardOpen(card!.id)
@@ -62,7 +64,8 @@ describe('B17a-2：盒卡展开 ⇒ 盒内动作会话', () => {
   it('★ 收起（`Esc`/×）：会话消失、那张盒卡也合上', () => {
     const { mapView, containers } = newStores()
     const card = containers.cardViews.find(
-      (item) => item.boxKind !== 'dead_pile' && item.boxKind !== 'air_box',
+      (item) =>
+        item.boxKind !== 'dead_pile' && item.boxKind !== 'air_box' && item.boxKind !== 'offboard',
     )
     containers.toggleCardOpen(card!.id)
     expect(mapView.session?.kind).toBe('containers')
@@ -121,9 +124,10 @@ describe('B17a-2：盒卡展开 ⇒ 盒内动作会话', () => {
   it('换环节后收起态失效（会话不会被"上次的收起"永久压住）', () => {
     const { workbench, mapView, containers } = newStores()
     const cards = containers.cardViews
-    // 2026-11-18：死亡堆/空军盒已不再开窗 ⇒ 选一张仍需批量窗的盒（拆分池 / 边缘盒…）
+    // 2026-11-18：死亡堆/空军盒/地图外盒都不再"展开即开窗" ⇒ 选一张仍需批量窗的盒
     const windowCard = cards.find(
-      (card) => card.boxKind !== 'dead_pile' && card.boxKind !== 'air_box',
+      (card) =>
+        card.boxKind !== 'dead_pile' && card.boxKind !== 'air_box' && card.boxKind !== 'offboard',
     )
     expect(windowCard, '应当有仍需盒内动作窗的盒').toBeDefined()
     containers.toggleCardOpen(windowCard!.id)

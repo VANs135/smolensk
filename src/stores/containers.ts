@@ -630,10 +630,31 @@ export const useContainersStore = defineStore('containers', () => {
   /** 当前展开的那一张辅助卡（用户口径④：**同时只展开一张**）*/
   const cardOpenId = ref<string | null>(null)
 
+  /**
+   * 用户 2026-11-18（地图外盒）：**是否由贴图上的按钮显式请求「盒内动作」窗**
+   *
+   * 地图外盒的拆分池需要「选母单位 + AR + 数量（+ 初设落点）」这套多字段批量动作，
+   * 贴图上无法用"点一枚算子"完成。改造前是**展开卡就自动顶窗**，看起来像贴图的重复弹窗；
+   * 现在展开只开卡面，卡面上的「拆分取用…」按钮显式请求时才开窗（唯一入口）。
+   */
+  const cardWindowRequested = ref(false)
+
   /** 展开/收起某一张卡（同时只展开一张） */
   function toggleCardOpen(id: string): void {
     cardOpenId.value = cardOpenId.value === id ? null : id
     popupCardId.value = null
+    // 换卡 / 收起 ⇒ 上一次的显式请求作废（否则再展开会莫名其妙弹窗）
+    cardWindowRequested.value = false
+  }
+
+  /** 贴图按钮显式请求打开当前卡的动作窗（只对需要多字段批量动作的卡有效） */
+  function requestCardWindow(): boolean {
+    const id = cardOpenId.value
+    if (id === null) return false
+    const card = cardViews.value.find((item) => item.id === id)
+    if (card === undefined || card.boxKind !== 'offboard') return false
+    cardWindowRequested.value = true
+    return true
   }
 
   /* ────────────────────────── C-2：盒卡**弹出为浮窗**（用户口径 / 方案 §3 B35 步骤 8） ────────────────────────── */
@@ -800,15 +821,34 @@ export const useContainersStore = defineStore('containers', () => {
    * 用户 2026-11-18：**展开这张卡还需不需要另开「盒内动作」窗**
    *
    * 死亡堆 / 空军盒的能力已经全部落在**盒贴图上**（左键选中、右键菜单）⇒ 再顶出一个
-   * 内容重复的会话窗就成了"同一件事两个入口"。其余盒（拆分池 / 边缘盒 / 编队收纳 / 剧本抽取）
-   * 仍有多字段批量动作（选母单位 + AR + 数量、入盒选单位 + 运力…），贴图做不到 ⇒ 保留窗。
+   * 内容重复的会话窗就成了"同一件事两个入口"。
+   * 地图外盒（`offboard`）：贴图已承载"选谁/看什么"，但拆分池的「母单位 + AR + 数量」
+   * 多字段动作贴图做不到 ⇒ **只在贴图按钮显式请求时**开窗，展开本身不再弹。
+   * 其余盒（边缘盒 / 编队收纳 / 剧本抽取）仍有多字段批量动作 ⇒ 保留展开即开窗。
    */
   const openCardNeedsWindow = computed<boolean>(() => {
     const id = cardOpenId.value
     if (id === null) return false
     const card = cardViews.value.find((item) => item.id === id)
     if (card === undefined) return false
-    return card.boxKind !== 'dead_pile' && card.boxKind !== 'air_box'
+    if (card.boxKind === 'dead_pile' || card.boxKind === 'air_box') return false
+    if (card.boxKind === 'offboard') return cardWindowRequested.value
+    return true
+  })
+
+  /**
+   * 地图外盒贴图上的「拆分取用…」按钮是否该出现
+   *
+   * 判据：当前展开的是带拆分池分区的地图外盒，且此刻真有可拆的母单位（20.0 / 20.0a / 20.0b / 20.0g
+   * 全部由 `canCreateBreakdownNow` 一处判）。不可用项不出现。
+   */
+  const breakdownFaceAvailable = computed<boolean>(() => {
+    const id = cardOpenId.value
+    if (id === null) return false
+    const card = cardViews.value.find((item) => item.id === id)
+    if (card === undefined || card.boxKind !== 'offboard') return false
+    if (!card.regions.some((region) => region.kind === 'breakdown_pool')) return false
+    return workbench.units.some((unit) => workbench.canCreateBreakdownNow(unit.instanceId))
   })
 
   /**
@@ -858,6 +898,7 @@ export const useContainersStore = defineStore('containers', () => {
         const card = cardViews.value.find((item) => item.id === id)
         if (card !== undefined && card.side !== null && card.side !== side) {
           cardOpenId.value = null
+          cardWindowRequested.value = false
         }
       }
       const popup = popupCardId.value
@@ -2922,6 +2963,8 @@ export const useContainersStore = defineStore('containers', () => {
     cardViews,
     cardViewsOf,
     openCardNeedsWindow,
+    breakdownFaceAvailable,
+    requestCardWindow,
     openCardBoxKinds,
     openCardName,
     openCardSide,

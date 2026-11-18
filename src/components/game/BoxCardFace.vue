@@ -4,7 +4,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { RuleTip } from '@/components/base'
 import { counterImages } from '@/render/token-images'
 import { vLongPress } from '@/shared/long-press'
-import { useMapViewStore, type AuxCardView } from '@/stores'
+import { useContainersStore, useMapViewStore, type AuxCardView } from '@/stores'
 
 import { auxCardImageUrl } from './aux-card-image'
 
@@ -27,6 +27,7 @@ const props = defineProps<{
 const pickedUnitId = ref<string | null>(null)
 
 const mapView = useMapViewStore()
+const containers = useContainersStore()
 
 /**
  * 用户 2026-11-18：**贴图上直接右键出菜单**（与地图算子一致）
@@ -210,6 +211,21 @@ function regionStyle(rect: { x: number; y: number; w: number; h: number }): Reco
       <p v-if="region.units.length === 0 && region.note !== null" class="face__note">
         {{ region.note }}
       </p>
+
+      <!--
+        用户 2026-11-18（地图外盒）：多字段批量动作**在贴图上出按钮**。
+        拆分池需要「母单位 + AR + 数量」，贴图点选做不到 ⇒ 按钮显式请求既有动作窗；
+        展开卡本身不再自动顶窗（唯一入口 = 这个按钮）。
+      -->
+      <button
+        v-if="region.kind === 'breakdown_pool' && containers.breakdownFaceAvailable"
+        type="button"
+        class="face__action"
+        title="拆分取用：选母单位 + AR + 数量"
+        @click="containers.requestCardWindow()"
+      >
+        拆分取用…<RuleTip rule="20.0" />
+      </button>
     </div>
 
     <!-- 贴图右键菜单（Teleport 出卡面，免得被托盘/浮窗 overflow 裁掉） -->
@@ -289,6 +305,28 @@ function regionStyle(rect: { x: number; y: number; w: number; h: number }): Reco
   display: flex;
   flex-wrap: wrap;
   gap: 1px;
+}
+
+/* 贴图上的动作按钮（地图外盒拆分池）：不抢算子的位置，压在分区右下角 */
+.face__action {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-panel) 88%, transparent);
+  color: var(--color-ink);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.face__action:hover {
+  background: var(--color-bg-2);
 }
 
 .face__unit {
