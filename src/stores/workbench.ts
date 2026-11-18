@@ -9986,6 +9986,90 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }).ok
   }
 
+  /**
+   * 用户 2026-11-18：移动环节内，预备单位**直接换面**（5.7a 的朝向锁按玩家口径放开）
+   *
+   * 5.7a 原文把朝向锁到下一个移动阶段；玩家走查后要求「转入预备后仍要能换移动面 / 战斗面」，
+   * 故单开这条入口：不改模式、不耗 MP、不碰 `reserveEnteredThisPhase`，只换朝向并刷新印值。
+   * 判定只有两条：闸门 `move.modeChange`（移动环节）＋该单位确在预备模式。
+   * `flipUnitOrientation` 仍保留 5.7a 的锁语义（供只读口径与既有用例）。
+   */
+  function switchReserveFaceNow(orientation: Orientation, ids?: readonly string[]): boolean {
+    if (!requireAction('move.modeChange', '预备换面')) return false
+    const targets = ids ?? (selectedUnit.value === null ? [] : [selectedUnit.value.instanceId])
+    if (targets.length === 0) {
+      pushLog('warning', '先选中要换面的预备单位')
+      return false
+    }
+    let okCount = 0
+    for (const id of targets) {
+      const unit = units.value.find((item) => item.instanceId === id)
+      if (unit === undefined) continue
+      if (unit.mode.mode !== 'reserve') {
+        pushLog('warning', `${unit.name} 不在预备模式，不能换预备面（5.7a）`, '5.7a')
+        continue
+      }
+      if (unit.mode.orientation === orientation) continue
+      const wasEngineerCapable = engineerCapableNow(unit)
+      unit.mode = { ...unit.mode, orientation }
+      noteEngineerCapabilityAfter(unit, wasEngineerCapable)
+      unit.raw = unit.faces[unit.mode.orientation]
+      okCount += 1
+    }
+    if (okCount === 0) return false
+    pushLog(
+      'success',
+      `已将 ${okCount} 枚预备单位换到${orientation === 'combat' ? '战斗面' : '移动面'}（5.7a；本移动环节内仍可换）`,
+      '5.7a',
+    )
+    return true
+  }
+
+  /**
+   * 用户 2026-11-18：**直接取消预备模式**——按当前朝向回到移动 / 战斗模式
+   *
+   * 这不是 5.7b 的「转出预备」（那是反应 / 进击阶段的专门动作，`releaseReserveNow`）：
+   * 只是在移动环节里把刚转进去的预备标记摘掉，回到正常状态；不产生耗尽、不消耗 MP。
+   * 同时清掉 `reserveEnteredThisPhase`（5.7a 的朝向锁随之解除）。
+   */
+  function cancelReserveModeNow(ids?: readonly string[]): boolean {
+    if (!requireAction('move.modeChange', '取消预备')) return false
+    const targets = ids ?? (selectedUnit.value === null ? [] : [selectedUnit.value.instanceId])
+    if (targets.length === 0) {
+      pushLog('warning', '先选中要取消预备的单位')
+      return false
+    }
+    let okCount = 0
+    for (const id of targets) {
+      const unit = units.value.find((item) => item.instanceId === id)
+      if (unit === undefined || unit.mode.mode !== 'reserve') continue
+      const wasEngineerCapable = engineerCapableNow(unit)
+      unit.mode = applyModeSwitch(unit.mode, unit.mode.orientation, unit.mode.orientation)
+      unit.reserveEnteredThisPhase = false
+      noteEngineerCapabilityAfter(unit, wasEngineerCapable)
+      unit.raw = unit.faces[unit.mode.orientation]
+      okCount += 1
+    }
+    if (okCount === 0) return false
+    pushLog(
+      'success',
+      `已取消 ${okCount} 枚的预备模式，按朝向回到正常状态（不是 5.7b 转出预备）`,
+      '5.4',
+    )
+    return true
+  }
+
+  /**
+   * 用户 2026-11-18：右键「模式改变」是否给出**预备换面 / 取消预备**两项
+   *
+   * 只读投影：该枚确在预备模式，且当前环节放行 `move.modeChange`（移动环节）。
+   */
+  function canEditReserveModeOf(unitId: string): boolean {
+    const unit = units.value.find((item) => item.instanceId === unitId)
+    if (unit === undefined || unit.mode.mode !== 'reserve') return false
+    return actionAllowedNow('move.modeChange')
+  }
+
   /** C5：只改朝向而不改模式（5.4 末句 DG / 5.7a 预备） */
   function flipUnitOrientation(): void {
     if (!requireAction('move.modeChange', '翻朝向')) return
@@ -30691,6 +30775,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     releaseReserveNow,
     // 5.7b：释放预备的只读投影（右键「转出预备模式」只在它为真时出现）
     canReleaseReserveOf,
+    // 用户 2026-11-18：移动环节内的预备换面 / 取消预备（不是 5.7b 转出）
+    switchReserveFaceNow,
+    cancelReserveModeNow,
+    canEditReserveModeOf,
     payFuel,
     setFuelPool,
     fuelDumpId,

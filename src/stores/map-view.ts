@@ -2811,12 +2811,21 @@ export const useMapViewStore = defineStore('mapView', () => {
         pushMode('move.orientation.toggle', '改变朝向 → 移动模式', '5.4')
       if (modeChange && unit.mode.mode === 'move' && switchable.includes('combat'))
         pushMode('move.orientation.toggle', '改变朝向 → 战斗模式', '5.4')
-      // ② 预备：转入（5.4a）/ 转出（5.7b，只在本方反应 / 进击环节）
+      // ② 预备：转入（5.4a）/ 换面 + 取消（用户 2026-11-18，移动环节）/ 转出（5.7b，只在本方反应 / 进击环节）
       if (unit.mode.mode !== 'reserve') {
         if (modeChange && switchable.includes('reserve'))
           pushMode('move.reserve.toggle', '转入预备模式', '5.4a')
-      } else if (workbench.canReleaseReserveOf(id)) {
-        pushMode('move.reserve.toggle', '转出预备模式', '5.7b')
+      } else {
+        if (workbench.canEditReserveModeOf(id)) {
+          pushMode(
+            'move.reserve.face',
+            `预备换面 → ${unit.mode.orientation === 'combat' ? '移动面' : '战斗面'}`,
+            '5.7a',
+          )
+          pushMode('move.reserve.cancel', '取消预备模式', '5.4')
+        }
+        if (workbench.canReleaseReserveOf(id))
+          pushMode('move.reserve.toggle', '转出预备模式', '5.7b')
       }
       // ③ 战略（5.8）：转入 / 转出
       if (unit.mode.mode === 'strat') {
@@ -3516,6 +3525,22 @@ export const useMapViewStore = defineStore('mapView', () => {
       workbench.switchUnitMode(unit.mode.mode === 'combat' ? 'move' : 'combat', undefined, [
         instanceId,
       ])
+      closePopup()
+      return true
+    }
+    if (option.only === 'move.reserve.face') {
+      if (unit === undefined) return false
+      workbench.selectedId = instanceId
+      workbench.switchReserveFaceNow(unit.mode.orientation === 'combat' ? 'move' : 'combat', [
+        instanceId,
+      ])
+      closePopup()
+      return true
+    }
+    if (option.only === 'move.reserve.cancel') {
+      if (unit === undefined) return false
+      workbench.selectedId = instanceId
+      workbench.cancelReserveModeNow([instanceId])
       closePopup()
       return true
     }
