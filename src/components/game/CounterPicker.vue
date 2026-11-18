@@ -70,8 +70,29 @@ const props = withDefaults(
     size?: number
     /** 最多显示几行（超出即内部滚动）；默认 4 行 ≈ 24–32 张 */
     maxRows?: number
+    /**
+     * 分组呈现方式（2026-11-19）
+     *
+     * · `select`（默认）：标题栏右端一个下拉，组内滚动——适合"同一批东西、只是分类"；
+     * · `sections`：每组一个小标题、**全部平铺**——初设飞机要同时看见
+     *   「激活/未激活 × 完好/减损」四份，不能藏在下拉里。
+     */
+    groupMode?: 'select' | 'sections'
+    /**
+     * 选中卡上方的动作按钮文字（如「入盒」）；不给即无此按钮
+     *
+     * 只对 `selected === true` 的那张出现（与 `pick` 分开：先选、再点动作）。
+     */
+    pickActionLabel?: string
   }>(),
-  { title: '', hint: '', size: 40, maxRows: 4 },
+  {
+    title: '',
+    hint: '',
+    size: 40,
+    maxRows: 4,
+    groupMode: 'select',
+    pickActionLabel: '',
+  },
 )
 
 const emit = defineEmits<{
@@ -81,6 +102,8 @@ const emit = defineEmits<{
   (e: 'hover', id: string | null): void
   /** 右键某一枚（调用方决定摆哪些动作；不判规则、不提交） */
   (e: 'context', id: string): void
+  /** 点选中卡上方的动作按钮（`pickActionLabel`；调用方决定做什么） */
+  (e: 'action', id: string): void
 }>()
 
 /** 轮到的分组（null = 不分组的平铺） */
@@ -103,6 +126,30 @@ const visible = computed<readonly CounterPickerItem[]>(() => {
   const key = activeGroup.value ?? groups.value[0]!.key
   return props.items.filter((item) => item.groupKey === key)
 })
+
+/**
+ * 模板实际铺开的组
+ *
+ * `sections`：每组一段（标题 + 各自的算子），四份同时可见；
+ * `select` / 无分组：只有一段，标题为空（标题栏那个下拉负责换组）。
+ */
+const displayGroups = computed<
+  readonly { key: string; label: string; items: readonly CounterPickerItem[] }[]
+>(() => {
+  if (props.groupMode !== 'sections' || groups.value.length === 0) {
+    return [{ key: '__all__', label: '', items: visible.value }]
+  }
+  return groups.value.map((group) => ({
+    key: group.key,
+    label: group.label,
+    items: props.items.filter((item) => item.groupKey === group.key),
+  }))
+})
+
+/** 点选中卡上方的动作按钮（如「入盒」）——只上报，不判规则 */
+function actionItem(id: string): void {
+  emit('action', id)
+}
 
 /** 点击后**就地一行**的拒绝原因（用户口径④：只冒一行，不弹窗、不换页） */
 const refusal = ref<string | null>(null)
@@ -135,11 +182,14 @@ const gridStyle = computed<Record<string, string>>(() => ({
 
 <template>
   <section class="picker" :style="gridStyle">
-    <header v-if="props.title !== '' || groups.length > 1" class="picker__head">
+    <header
+      v-if="props.title !== '' || (props.groupMode === 'select' && groups.length > 1)"
+      class="picker__head"
+    >
       <span v-if="props.title !== ''" class="picker__title">{{ props.title }}</span>
       <!-- 分组下拉放**标题栏右端**；组内滚动、不换页 -->
       <select
-        v-if="groups.length > 1"
+        v-if="props.groupMode === 'select' && groups.length > 1"
         class="picker__group"
         :value="activeGroup ?? groups[0]!.key"
         @change="activeGroup = ($event.target as HTMLSelectElement).value"
@@ -157,30 +207,52 @@ const gridStyle = computed<Record<string, string>>(() => ({
     </p>
 
     <div class="picker__grid" @pointerleave="hoverItem(null)">
-      <button
-        v-for="item in visible"
-        :key="item.id"
-        v-long-press="() => contextItem(item.id)"
-        type="button"
-        class="picker__cell"
-        :class="{
-          'picker__cell--on': item.selected,
-          'picker__cell--off': item.disabledReason != null,
-          'picker__cell--dim': item.dimmed === true && item.disabledReason == null,
-        }"
-        :title="item.disabledReason == null ? item.name : `${item.name}（${item.disabledReason}）`"
-        :aria-label="item.name"
-        :aria-pressed="item.selected"
-        @click="pickItem(item)"
-        @contextmenu.prevent="contextItem(item.id)"
-        @pointerenter="hoverItem(item)"
-        @focus="hoverItem(item)"
-        @blur="hoverItem(null)"
-      >
-        <img v-if="item.imageUrl !== null" class="picker__img" :src="item.imageUrl" alt="" />
-        <span v-else class="picker__img picker__img--none" aria-hidden="true" />
-        <span v-if="item.badge !== undefined" class="picker__badge num">{{ item.badge }}</span>
-      </button>
+      <template v-for="group in displayGroups" :key="group.key">
+        <p v-if="group.label !== ''" class="picker__section-head">
+          {{ group.label }}
+          <span class="num">{{ group.items.length }}</span>
+        </p>
+        <div
+          v-for="item in group.items"
+          :key="item.id"
+          class="picker__slot"
+          :class="{ 'picker__slot--action': item.selected && props.pickActionLabel !== '' }"
+        >
+          <button
+            v-if="item.selected && props.pickActionLabel !== ''"
+            type="button"
+            class="picker__action"
+            :title="props.pickActionLabel"
+            @click.stop="actionItem(item.id)"
+          >
+            {{ props.pickActionLabel }}
+          </button>
+          <button
+            v-long-press="() => contextItem(item.id)"
+            type="button"
+            class="picker__cell"
+            :class="{
+              'picker__cell--on': item.selected,
+              'picker__cell--off': item.disabledReason != null,
+              'picker__cell--dim': item.dimmed === true && item.disabledReason == null,
+            }"
+            :title="
+              item.disabledReason == null ? item.name : `${item.name}（${item.disabledReason}）`
+            "
+            :aria-label="item.name"
+            :aria-pressed="item.selected"
+            @click="pickItem(item)"
+            @contextmenu.prevent="contextItem(item.id)"
+            @pointerenter="hoverItem(item)"
+            @focus="hoverItem(item)"
+            @blur="hoverItem(null)"
+          >
+            <img v-if="item.imageUrl !== null" class="picker__img" :src="item.imageUrl" alt="" />
+            <span v-else class="picker__img picker__img--none" aria-hidden="true" />
+            <span v-if="item.badge !== undefined" class="picker__badge num">{{ item.badge }}</span>
+          </button>
+        </div>
+      </template>
     </div>
 
     <p v-if="visible.length === 0" class="picker__empty">—</p>
@@ -234,16 +306,37 @@ const gridStyle = computed<Record<string, string>>(() => ({
   /* 一行按可用宽度放 6–8 张（`auto-fill` + 4px 间距） */
   grid-template-columns: repeat(auto-fill, var(--picker-size));
   gap: 4px;
+  /* 选中卡上方的动作按钮（如「入盒」）需要这一条高度 */
+  padding-top: 14px;
   max-height: var(--picker-max-height);
   overflow: auto;
   align-content: start;
 }
 
+/* sections 模式的小标题：独占一整行，把四份分开 */
+.picker__section-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+/* 一枚算子的定位容器（动作按钮相对它浮在上方） */
+.picker__slot {
+  position: relative;
+  width: var(--picker-size);
+  height: var(--picker-size);
+}
+
 .picker__cell {
   display: flex;
   flex-direction: column;
-  width: var(--picker-size);
-  height: var(--picker-size);
+  width: 100%;
+  height: 100%;
   padding: 0;
   border: 2px solid transparent;
   border-radius: var(--radius-sm);
@@ -251,6 +344,32 @@ const gridStyle = computed<Record<string, string>>(() => ({
   cursor: pointer;
   transition: transform 60ms ease-out;
   overflow: hidden;
+}
+
+/*
+ * 选中卡上方的动作按钮（2026-11-19：「入盒」）
+ * 只出现在被点中的那一张上方，不占网格行列。
+ */
+.picker__action {
+  position: absolute;
+  bottom: calc(100% - 2px);
+  left: 50%;
+  z-index: 3;
+  height: 16px;
+  padding: 0 5px;
+  transform: translateX(-50%);
+  border: 1px solid var(--color-command-teal);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-2);
+  color: var(--color-command-teal);
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.picker__action:hover {
+  background: var(--color-command-teal-bg);
 }
 
 .picker__cell:hover {
@@ -331,7 +450,7 @@ const gridStyle = computed<Record<string, string>>(() => ({
     gap: 6px;
   }
 
-  .picker__cell {
+  .picker__slot {
     width: max(var(--picker-size), 44px);
     height: max(var(--picker-size), 44px);
   }

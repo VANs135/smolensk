@@ -235,6 +235,12 @@ export interface SetupPlacing {
   airReduced?: boolean
   /** 飞机：本型**尚未落位**的枚里还有几枚是减损（含下一枚）；无减损即 0 */
   airReducedRemaining?: number
+  /**
+   * 飞机：**下一枚**在 `planAirSetup` 三条并列数组里的下标（`statuses` / `reduced` / `steps`）
+   *
+   * 界面四栏点选与「入盒」按钮都把它原样交回 store；同一下标才能保证状态与军力不串。
+   */
+  faceIndex?: number
 }
 
 /**
@@ -590,13 +596,15 @@ export const useSetupStore = defineStore('setup', () => {
   const stackDisperse = ref<StackDisperse | null>(null)
   const placedAirInstances = ref<Record<string, number>>({})
   /**
-   * 批 G（用户 2026-11-16）：按**激活态分栏**点选后，该型飞机的落位顺序
+   * 批 G / 2026-11-19：该型飞机的**落位顺序**（存计划下标，不存状态）
    *
-   * 计划里每型的状态数组是"先未激活、后激活"；玩家在「激活」栏点算子时，要把下一枚
-   * 换成激活态那一枚。这里只置换**同型内等价的飞机**（同机型、同减损规则），
-   * 不改变任何规则数值，也不凭空增减枚数。
+   * 计划里每型的 `statuses` / `reduced` / `steps` 是三条并列数组，同一个下标才是同一枚飞机的
+   * 完整“面”。旧实现只置换 `statuses`，会把「激活」贴到减损那枚的军力上——状态与印值错位。
+   * 现在置换**下标**，三条数组始终一起走：玩家在四栏里点哪一枚，就先把那一枚换到待落位位。
+   *
+   * 只置换同型内等价的飞机，不改变任何规则数值，也不凭空增减枚数。
    */
-  const airStatusOrder = ref<Record<string, AirStatus[]>>({})
+  const airFaceOrder = ref<Record<string, number[]>>({})
 
   /** 飞机进度键（同一型在两方都可能出现 ⇒ 带上阵营） */
   function airProgressKey(side: Side, entryIndex: number): string {
@@ -944,33 +952,91 @@ export const useSetupStore = defineStore('setup', () => {
     return true
   }
 
-  /** 该型飞机**当前**的落位状态顺序（玩家分栏点选后可能已局部置换） */
-  function airStatusOrderOf(
-    side: Side,
-    entryIndex: number,
-    planned: readonly AirStatus[],
-  ): AirStatus[] {
-    return airStatusOrder.value[airProgressKey(side, entryIndex)] ?? [...planned]
+  /** 该型飞机**当前**的落位顺序（计划下标；玩家四栏点选后可能已局部置换） */
+  function airFaceOrderOf(side: Side, entryIndex: number, count: number): number[] {
+    const key = airProgressKey(side, entryIndex)
+    const existing = airFaceOrder.value[key]
+    if (existing !== undefined && existing.length === count) return [...existing]
+    return Array.from({ length: count }, (_item, index) => index)
+  }
+
+  /**
+   * 把玩家点中的那一枚（计划下标 `faceIndex`）换到**待落位位**（`placed`）
+   *
+   * 返回 false ＝ 该枚已落位 / 下标越界，调用方据此如实拒绝，不静默换一枚。
+   */
+  function selectAirFace(side: Side, entryIndex: number, faceIndex: number): boolean {
+    const row = airPlanOf(side)?.placements.find((item) => item.entryIndex === entryIndex)
+    if (row === undefined) return false
+    const key = airProgressKey(side, entryIndex)
+    const placed = placedAirInstances.value[key] ?? 0
+    if (placed >= row.count) return false
+    const order = airFaceOrderOf(side, entryIndex, row.count)
+    const at = order.indexOf(faceIndex, 0)
+    if (at < placed) return false
+    ;[order[placed], order[at]] = [order[at]!, order[placed]!]
+    airFaceOrder.value = { ...airFaceOrder.value, [key]: order }
+    return true
   }
 
   /**
    * 批 G（用户 2026-11-16）：该型飞机**剩余**各激活态的枚数（分栏栏头的数）
    *
-   * 只读计划；不在界面侧自己拼规则。
+   * 只读计划与落位顺序；不在界面侧自己拼规则。
    */
   function airStatusCounts(side: Side, entryIndex: number): { active: number; inactive: number } {
     const row = airPlanOf(side)?.placements.find((item) => item.entryIndex === entryIndex)
     if (row === undefined) return { active: 0, inactive: 0 }
     const placed = placedAirInstances.value[airProgressKey(side, entryIndex)] ?? 0
-    const rest = airStatusOrderOf(side, entryIndex, row.statuses).slice(placed)
+    const rest = airFaceOrderOf(side, entryIndex, row.count)
+      .slice(placed)
+      .map((faceIndex) => row.statuses[faceIndex] ?? 'inactive')
     return {
       active: rest.filter((status) => status === 'active').length,
       inactive: rest.filter((status) => status === 'inactive').length,
     }
   }
 
+  /**
+   * 飞机剩余各“面”的投影（四栏：激活/未激活 × 完好/减损）
+   *
+   * 每项带**计划下标** `faceIndex`：界面点哪一枚，就把它交给 `beginAirPlacement` /
+   * `placeAirInOffMapBoxNow`，由 store 换到待落位位。图档按减损面取背面。
+   */
+  function pendingAirFaces(
+    side: Side,
+    entryIndex: number,
+  ): readonly {
+    faceIndex: number
+    status: AirStatus
+    reduced: boolean
+    imageUrl: string | null
+  }[] {
+    const row = airPlanOf(side)?.placements.find((item) => item.entryIndex === entryIndex)
+    if (row === undefined) return []
+    const placed = placedAirInstances.value[airProgressKey(side, entryIndex)] ?? 0
+    const front = imageUrlOfAircraftId(row.aircraftId)
+    const back = imageUrlBackOfAircraftId(row.aircraftId)
+    return airFaceOrderOf(side, entryIndex, row.count)
+      .slice(placed)
+      .map((faceIndex) => {
+        const reduced = row.reduced[faceIndex] === true
+        return {
+          faceIndex,
+          status: row.statuses[faceIndex] ?? 'inactive',
+          reduced,
+          imageUrl: reduced ? (back ?? front) : front,
+        }
+      })
+  }
+
   /** 开始在地图上放置**某一型飞机**（候选＝本方空军基地格；`wanted`＝从哪一栏点的） */
-  function beginAirPlacement(side: Side, entryIndex: number, wanted?: AirStatus): boolean {
+  function beginAirPlacement(
+    side: Side,
+    entryIndex: number,
+    wanted?: AirStatus,
+    reduced?: boolean,
+  ): boolean {
     if (!setupTurnAllows(side)) return setupTurnFailure(side)
     const airPlan = airPlanOf(side)
     const row = airPlan?.placements.find((item) => item.entryIndex === entryIndex)
@@ -981,8 +1047,10 @@ export const useSetupStore = defineStore('setup', () => {
      * ★ B11（修备忘 #1 的半个根因）：候选为空时**说清该怎么才能有候选**——
      *   飞机的候选＝**本方空军基地格**（14.1a），初设里基地本身也是一项；
      *   若基地还没落位，先前的提示会变成引擎的"调用方未提供 airBaseHexes"，把玩家引到数据问题上。
+     * 2026-11-19：允许入盒的机型即使没有基地格也**不拒绝选中**——选中后卡片上方才有「入盒」，
+     *   否则“基地未落位 ⇒ 连盒也进不去”，与 1.4a 的容量无限盒相悖。
      */
-    if (row.candidates.length === 0) {
+    if (row.candidates.length === 0 && !row.offMapAllowed) {
       const reason =
         airBaseHexesOf(side).length === 0
           ? `先落本方空军基地，再放飞机（14.1a：飞机停在其空军基地格）`
@@ -992,30 +1060,34 @@ export const useSetupStore = defineStore('setup', () => {
     const key = airProgressKey(side, entryIndex)
     const placed = placedAirInstances.value[key] ?? 0
     /*
-     * 批 G：从「激活 / 未激活」某一栏点算子 ⇒ 把**下一枚**换成该状态那一枚。
-     * 只置换同型内等价的飞机；该状态已落满则如实拒绝（不摆点了没反应的入口）。
+     * 批 G：从四栏某一栏点算子 ⇒ 把**那一枚**换到待落位位。
+     * 同型等价飞机只在落位次序上互换；该状态/面已落满则如实拒绝。
      */
     if (wanted !== undefined && placed < row.count) {
-      const order = airStatusOrderOf(side, entryIndex, row.statuses)
-      if (order[placed] !== wanted) {
-        const swap = order.findIndex((status, index) => index >= placed && status === wanted)
-        if (swap < 0) {
-          return record({
-            ok: false,
-            rule: AIR_BASE_SITE_RULE,
-            reason:
-              wanted === 'active' ? '该型已没有未落位的激活飞机' : '该型已没有未落位的未激活飞机',
-          })
-        }
-        ;[order[placed], order[swap]] = [order[swap]!, order[placed]!]
-        airStatusOrder.value = { ...airStatusOrder.value, [key]: order }
+      const order = airFaceOrderOf(side, entryIndex, row.count)
+      const at = order.findIndex((faceIndex, index) => {
+        if (index < placed) return false
+        if (row.statuses[faceIndex] !== wanted) return false
+        return reduced === undefined || row.reduced[faceIndex] === reduced
+      })
+      if (at < 0) {
+        const faceLabel = `${wanted === 'active' ? '激活' : '未激活'}${reduced === true ? '·减损' : reduced === false ? '·完好' : ''}`
+        return record({
+          ok: false,
+          rule: AIR_BASE_SITE_RULE,
+          reason: `该型已没有未落位的${faceLabel}飞机`,
+        })
       }
+      ;[order[placed], order[at]] = [order[at]!, order[placed]!]
+      airFaceOrder.value = { ...airFaceOrder.value, [key]: order }
     }
     // 用户 2026-11-18：开始布别的项 ⇒ 收起上一枚的 ±1 选中态
     stackDisperse.value = null
+    const faceOrder = airFaceOrderOf(side, entryIndex, row.count)
     placing.value = {
       kind: 'air',
       entryIndex,
+      faceIndex: faceOrder[placed],
       side,
       label: row.name,
       raw: row.aircraftId,
@@ -1123,6 +1195,10 @@ export const useSetupStore = defineStore('setup', () => {
       placedSelf: { ...placedSelfInstances.value },
       truckFullIds: [...truckFullIds.value],
       placedAir: { ...placedAirInstances.value },
+      // 2026-11-19：飞机“面”的落位顺序也必须回滚；否则撤回后状态/减损会错位
+      airFace: Object.fromEntries(
+        Object.entries(airFaceOrder.value).map(([key, order]) => [key, [...order]]),
+      ),
       completed: { ...completed.value },
       selfChoices: { ...selfChoices.value },
       airChoices: { ...airChoices.value },
@@ -1172,6 +1248,9 @@ export const useSetupStore = defineStore('setup', () => {
     placedSelfInstances.value = snapshot.placedSelf
     truckFullIds.value = snapshot.truckFullIds
     placedAirInstances.value = snapshot.placedAir
+    airFaceOrder.value = Object.fromEntries(
+      Object.entries(snapshot.airFace).map(([key, order]) => [key, [...order]]),
+    )
     completed.value = snapshot.completed
     selfChoices.value = snapshot.selfChoices
     airChoices.value = snapshot.airChoices
@@ -1262,6 +1341,11 @@ export const useSetupStore = defineStore('setup', () => {
       current.kind === 'air'
         ? (placedAirInstances.value[airProgressKey(current.side, current.entryIndex)] ?? 0)
         : selfPlacedOf(current.entryIndex)
+    // 飞机落一枚后，卡片要指向**下一枚**的面；否则「入盒」会仍停在已落位的那一枚上
+    const nextFace =
+      current.kind === 'air' && key < current.total
+        ? airFaceOrderOf(current.side, current.entryIndex, current.total)[key]
+        : undefined
     placing.value =
       key >= current.total
         ? null
@@ -1271,6 +1355,7 @@ export const useSetupStore = defineStore('setup', () => {
             remaining: current.total - key,
             // 下次默认点完剩余（玩家可再改 chunk）
             chunk: Math.max(0, current.total - key),
+            ...(nextFace === undefined ? {} : { faceIndex: nextFace }),
           }
     return true
   }
@@ -1339,17 +1424,19 @@ export const useSetupStore = defineStore('setup', () => {
         reason: `airRowAlreadyPlaced:${entryIndex}`,
       })
     }
+    const faceOrder = airFaceOrderOf(side, entryIndex, row.count)
+    const faceIndex = faceOrder[index] ?? index
     const air = toConsoleAirUnit({
       aircraft: recordAir,
       instanceId: createId('a'),
       // 盒内飞机的位置由成员账本决定。这里的格号仅保持存档实体形状。
       hex: inBox ? { col: airBoxEdgeColumn(side), row: 1 } : { ...target },
       side,
-      // 批 G：分栏点选可能已置换过顺序（只换同型等价飞机的落位次序）
-      airStatus: airStatusOrderOf(side, entryIndex, row.statuses)[index] ?? 'inactive',
+      // 批 G：四栏点选可能已置换过顺序（只换同型等价飞机的落位次序）
+      airStatus: row.statuses[faceIndex] ?? 'inactive',
     })
-    // IV-E / 剧本明示的减损：落到该型第 n 枚时取第 n 个 loss 值
-    air.steps = row.steps[index] ?? air.steps
+    // IV-E / 剧本明示的减损：同一下标的三条数组一起取，状态与军力不错位
+    air.steps = row.steps[faceIndex] ?? air.steps
     if (inBox) workbench.setAirInBoxMembership(air.instanceId, true)
     workbench.airUnits.push(air)
     const placedNow = index + 1
@@ -1380,15 +1467,33 @@ export const useSetupStore = defineStore('setup', () => {
     )
   }
 
-  function placeAirInOffMapBoxNow(side: Side, entryIndex: number): boolean {
+  /**
+   * 1.4a：把某一型的**一枚**飞机直接放入地图外空军盒
+   *
+   * `faceIndex` 给出时先把它换到待落位位——界面在某一枚算子上点「入盒」时，
+   * 放进去的必须就是**玩家点的那一枚**（激活/未激活、完好/减损不能串）。
+   */
+  function placeAirInOffMapBoxNow(side: Side, entryIndex: number, faceIndex?: number): boolean {
     const row = airPlanOf(side)?.placements.find((item) => item.entryIndex === entryIndex)
     const undoSnapshot = capturePlacementState()
+    if (faceIndex !== undefined && !selectAirFace(side, entryIndex, faceIndex)) {
+      return record({ ok: false, rule: '1.4a', reason: '该枚飞机已落位或已不在待落位列' })
+    }
     if (!placeAirRowNow(entryIndex, 'offMap', side)) return false
     const current = placing.value
     if (current?.kind === 'air' && current.side === side && current.entryIndex === entryIndex) {
       const placed = placedAirInstances.value[airProgressKey(side, entryIndex)] ?? 0
+      const nextFace =
+        row === undefined ? undefined : airFaceOrderOf(side, entryIndex, row.count)[placed]
       placing.value =
-        placed >= current.total ? null : { ...current, placed, remaining: current.total - placed }
+        placed >= current.total
+          ? null
+          : {
+              ...current,
+              placed,
+              remaining: current.total - placed,
+              ...(nextFace === undefined ? {} : { faceIndex: nextFace }),
+            }
     }
     // B1：飞机进盒与地面落位同一撤回栈
     recordPlacementUndo(`${row?.name ?? `飞机${String(entryIndex)}`} → 地图外盒`, undoSnapshot)
@@ -1453,9 +1558,12 @@ export const useSetupStore = defineStore('setup', () => {
       for (const row of planSide.placements) {
         if (completed.value[`air:${side}:${row.entryIndex}`] === true) continue
         const placed = placedAirInstances.value[airProgressKey(side, row.entryIndex)] ?? 0
+        const faceOrder = airFaceOrderOf(side, row.entryIndex, row.count)
+        const nextFace = faceOrder[placed]
         items.push({
           kind: 'air',
           entryIndex: row.entryIndex,
+          faceIndex: nextFace,
           side,
           label: row.name,
           raw: row.aircraftId,
@@ -1479,8 +1587,8 @@ export const useSetupStore = defineStore('setup', () => {
                 : '没有可用的空军基地格（14.1a）'
               : null,
           // 剧本页 `"*" = one unit begins reduced`：逐枚标记，界面上单列/标记
-          airReduced: row.reduced[placed] === true,
-          airReducedRemaining: row.reduced.slice(placed).filter(Boolean).length,
+          airReduced: nextFace === undefined ? false : row.reduced[nextFace] === true,
+          airReducedRemaining: faceOrder.slice(placed).filter((index) => row.reduced[index]).length,
         })
       }
     }
@@ -2841,7 +2949,7 @@ export const useSetupStore = defineStore('setup', () => {
     placedSelfInstances.value = {}
     stackDisperse.value = null
     placedAirInstances.value = {}
-    airStatusOrder.value = {}
+    airFaceOrder.value = {}
     defaultFilledIds.value = new Set()
     // B1：重置后不允许再撤回上一局的落位
     placementUndoStack.length = 0
@@ -4291,6 +4399,8 @@ export const useSetupStore = defineStore('setup', () => {
     spDumpsOf,
     airPlanOf,
     airStatusCounts,
+    // 2026-11-19：四栏（激活/未激活 × 完好/减损）逐枚面，带计划下标
+    pendingAirFaces,
     airPlacedCount,
     airDone,
     allDone,

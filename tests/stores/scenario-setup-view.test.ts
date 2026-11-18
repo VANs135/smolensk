@@ -225,3 +225,15 @@ describe('960×571：剧本页可滚动、共识条目不裁切（源码守卫�
     expect(checklist).not.toContain('max-height')
   })
 })
+
+describe('教学模式：苏军是人机对手（2026-11-19，源码守卫）', () => {
+  const view = readFileSync('src/views/ScenarioSetupView.vue', 'utf8')
+
+  it('勾教学 ⇒ PVE + AI 打苏联，不再固定为单人', () => {
+    expect(view).toContain("hotseat.setMode('pve')")
+    expect(view).toContain("hotseat.setAiSide('soviet')")
+    // 修前两处都写死 solo（苏军由玩家自己点，不能算人机对手）
+    expect(view).not.toContain("hotseat.setMode('solo')")
+    expect(view).toContain('人机（苏军 AI · 教学固定）')
+  })
+})

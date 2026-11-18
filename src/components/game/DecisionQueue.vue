@@ -96,98 +96,81 @@ function sideName(side: 'axis' | 'soviet'): string {
 }
 
 /**
- * 批 G（用户 2026-11-16；2026-11-19 改版）：飞机按**激活态分两栏**
+ * 批 G（用户 2026-11-16；2026-11-19 改版）：飞机按**四栏**分开
  *
- * 栏头写状态与剩余枚数，栏内是**逐枚算子**（同一状态里跨机型平铺，图上就能认出机型）。
- * 计数与逐枚面同源（`planAirSetup` 的 `statuses` / `reduced`），界面不另算规则。
- * 没有对应状态就不显示那一栏（不留空栏占位）。
+ * 激活/未激活 × 完好/减损＝四个互斥的“面”。每栏只放该面的逐枚算子（同栏内跨机型平铺），
+ * 计数与图档同源（`setup.pendingAirFaces` 读 `planAirSetup` 的三条并列数组）。
+ * 2026-11-19：**不再用下拉选图外盒**——点某一枚 ⇒ 该枚上方出现「入盒」按钮；
+ * 点算子本身则高亮地图上的合法基地格，点格落位。
  */
 interface AirChip {
   key: string
   item: SetupPlacing
   status: 'active' | 'inactive'
   reduced: boolean
+  /** 计划下标（三条并列数组的同一枚） */
+  faceIndex: number
   imageUrl: string | null
 }
 
-interface AirStatusSection {
-  status: 'active' | 'inactive'
+interface AirFaceSection {
+  key: string
   label: string
   count: number
   chips: readonly AirChip[]
 }
 
-const airStatusSections = computed<readonly AirStatusSection[]>(() => {
-  const items = stacks.value.find((stack) => stack.key === 'air')?.items ?? []
-  return (
-    [
-      { status: 'active' as const, label: '激活' },
-      { status: 'inactive' as const, label: '未激活' },
-    ] as const
+/** 四栏的固定顺序（激活完好 → 激活减损 → 未激活完好 → 未激活减损） */
+const AIR_FACE_GROUPS = [
+  { key: 'active-full', status: 'active', reduced: false, label: '激活 · 完好' },
+  { key: 'active-reduced', status: 'active', reduced: true, label: '激活 · 减损' },
+  { key: 'inactive-full', status: 'inactive', reduced: false, label: '未激活 · 完好' },
+  { key: 'inactive-reduced', status: 'inactive', reduced: true, label: '未激活 · 减损' },
+] as const
+
+const airFaceSections = computed<readonly AirFaceSection[]>(() => {
+  const items = (stacks.value.find((stack) => stack.key === 'air')?.items ?? []).filter(
+    (item) => item.kind === 'air' && !cardBlocked(item),
   )
-    .map((group) => {
-      const chips = items
-        .filter((item) => item.kind === 'air' && !cardBlocked(item))
-        .flatMap((item) =>
-          airChipFaces(item, group.status).map((face, index) => ({
-            key: `${item.side}:${item.entryIndex}:${group.status}:${index}`,
-            item,
-            status: group.status,
-            ...face,
-          })),
-        )
-      return { ...group, chips, count: chips.length }
-    })
-    .filter((group) => group.count > 0)
+  return AIR_FACE_GROUPS.map((group) => {
+    const chips = items.flatMap((item) =>
+      setup
+        .pendingAirFaces(item.side, item.entryIndex)
+        .filter((face) => face.status === group.status && face.reduced === group.reduced)
+        .map((face) => ({
+          key: `${item.side}:${item.entryIndex}:${face.faceIndex}`,
+          item,
+          status: group.status,
+          reduced: group.reduced,
+          faceIndex: face.faceIndex,
+          imageUrl: face.imageUrl,
+        })),
+    )
+    return { ...group, count: chips.length, chips }
+  })
 })
 
-/** 可放入地图外盒的飞机机型（一次一只，入口收成一行下拉，不占网格高度） */
-const airBoxItems = computed(() =>
-  (stacks.value.find((stack) => stack.key === 'air')?.items ?? []).filter(
-    (item) => item.kind === 'air' && setup.canPlaceAirInOffMapBox(item.side, item.entryIndex),
-  ),
-)
-
-/** 下拉选一型 ⇒ 放入地图外盒（1.4a；与既有的逐型入口同一 store 调用） */
-function placeAirInBox(event: Event): void {
-  const select = event.target as HTMLSelectElement
-  const value = select.value
-  select.value = ''
-  if (value === '') return
-  const [side, entryIndex] = value.split(':')
-  setup.placeAirInOffMapBoxNow(side === 'soviet' ? 'soviet' : 'axis', Number(entryIndex))
-}
-
-/** 点某一栏的算子 ⇒ 落该状态的那一枚（store 负责把下一枚换成它） */
-function pickAir(item: SetupPlacing, status: 'active' | 'inactive'): void {
+/** 点某一栏的某一枚 ⇒ 让 store 把**这一枚**换到待落位位，并高亮地图基地格 */
+function pickAir(item: SetupPlacing, chip: AirChip): void {
   if (cardBlocked(item)) return
-  setup.beginAirPlacement(item.side, item.entryIndex, status)
+  setup.beginAirPlacement(item.side, item.entryIndex, chip.status, chip.reduced)
 }
 
-/**
- * 该型某一状态**尚未落位**的逐枚面（减损面 / 正面）
- *
- * 与 `airStatusSections` 的计数同源（同一份 `planAirSetup` 的 `statuses` / `reduced`），
- * 只作为图档与角标的投影；不参与任何规则判定。
- */
-function airChipFaces(
-  item: SetupPlacing,
-  status: 'active' | 'inactive',
-): readonly { reduced: boolean; imageUrl: string | null }[] {
-  if (item.kind !== 'air') return []
-  const row = setup
-    .airPlanOf(item.side)
-    ?.placements.find((candidate) => candidate.entryIndex === item.entryIndex)
-  const faces: { reduced: boolean; imageUrl: string | null }[] = []
-  for (let index = item.placed; index < item.total; index++) {
-    if ((row?.statuses[index] ?? 'inactive') !== status) continue
-    const reduced = row?.reduced[index] === true
-    faces.push({
-      reduced,
-      imageUrl: reduced ? (item.imageUrlBack ?? item.imageUrl) : item.imageUrl,
-    })
-  }
-  return faces
+/** 当前选中的那一枚是不是这张卡（同一型、同一面） */
+function isAirChipPicked(chip: AirChip): boolean {
+  const current = placing.value
+  return (
+    current !== null &&
+    current.kind === 'air' &&
+    current.side === chip.item.side &&
+    current.entryIndex === chip.item.entryIndex &&
+    current.faceIndex === chip.faceIndex
+  )
+}
+
+/** 点「入盒」：把**玩家点的那一枚**直接放入地图外空军盒（1.4a），不再经过下拉 */
+function sendAirToBox(chip: AirChip): void {
+  setup.placeAirInOffMapBoxNow(chip.item.side, chip.item.entryIndex, chip.faceIndex)
 }
 
 /** 还没落位的**总枚数**（标题上的角标） */
@@ -419,6 +402,9 @@ function sideMark(side: 'axis' | 'soviet'): string {
         <strong class="queue__label" :title="placing.label">{{ placing.label }}</strong>
         <span class="queue__pending num">剩 {{ placing.remaining }}</span>
         <BaseButton variant="ghost" size="sm" @click="setup.cancelPlacement()">取消选格</BaseButton>
+        <span v-if="placing.kind === 'air' && placing.candidates.length === 0" class="queue__hint">
+          无基地格（14.1a）：点这一枚上方的「入盒」
+        </span>
         <div v-if="placing.category === 'supply'" class="queue__hint">
           本次落
           <button
@@ -604,46 +590,49 @@ function sideMark(side: 'axis' | 'soviet'): string {
 
           <template v-if="isOpen(stack.key)">
             <!--
-              飞机：**独立一块分区**，与地面 / 非战斗分开排列。
-              按激活态分两栏（栏头写状态与枚数），栏内逐枚平铺；减损那枚用背面图档并标「减」。
-              可入图外盒的机型收成一行下拉，不占网格高度。
+              飞机：四个面分区（激活/未激活 × 完好/减损）。
+              点某一枚 ⇒ 地图高亮合法基地格，且该枚上方出现「入盒」；点格落位，点「入盒」进图外盒。
+              2026-11-19：删掉原来的图外盒下拉——它把“哪一枚”藏在机型后面，
+              激活/未激活、完好/减损四类分不清。
             -->
             <div v-if="stack.key === 'air'" class="queue__air">
-              <div v-if="airBoxItems.length > 0" class="queue__air-boxes">
-                <select class="queue__air-box" title="放入地图外盒（1.4a）" @change="placeAirInBox">
-                  <option value="">放入图外盒…</option>
-                  <option
-                    v-for="item in airBoxItems"
-                    :key="`${item.side}:${item.entryIndex}`"
-                    :value="`${item.side}:${item.entryIndex}`"
-                  >
-                    {{ item.label }}（{{ item.placed }}/{{ item.total }}）
-                  </option>
-                </select>
-              </div>
-              <div v-for="group in airStatusSections" :key="group.status" class="queue__air-col">
+              <div
+                v-for="group in airFaceSections"
+                :key="group.key"
+                class="queue__air-col"
+                :data-face="group.key"
+              >
                 <div class="queue__air-col-head">
                   <span>{{ group.label }}</span>
                   <span class="num">{{ group.count }}</span>
                 </div>
                 <div class="queue__air-array">
-                  <button
-                    v-for="chip in group.chips"
-                    :key="chip.key"
-                    type="button"
-                    class="queue__air-chip"
-                    :class="{ 'queue__air-chip--on': isActive(chip.item) }"
-                    :title="`${group.label} · ${chip.item.label}`"
-                    @click="pickAir(chip.item, group.status)"
-                  >
-                    <img
-                      v-if="chip.imageUrl !== null"
-                      :src="chip.imageUrl"
-                      alt=""
-                      draggable="false"
-                    />
-                    <span v-if="chip.reduced" class="queue__air-flag num">减</span>
-                  </button>
+                  <div v-for="chip in group.chips" :key="chip.key" class="queue__air-slot">
+                    <button
+                      v-if="isAirChipPicked(chip)"
+                      type="button"
+                      class="queue__air-send"
+                      title="放入地图外空军盒（1.4a）"
+                      @click.stop="sendAirToBox(chip)"
+                    >
+                      入盒
+                    </button>
+                    <button
+                      type="button"
+                      class="queue__air-chip"
+                      :class="{ 'queue__air-chip--on': isAirChipPicked(chip) }"
+                      :title="`${group.label} · ${chip.item.label}（${chip.item.placed}/${chip.item.total}）`"
+                      @click="pickAir(chip.item, chip)"
+                    >
+                      <img
+                        v-if="chip.imageUrl !== null"
+                        :src="chip.imageUrl"
+                        alt=""
+                        draggable="false"
+                      />
+                      <span v-if="chip.reduced" class="queue__air-flag num">减</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -662,7 +651,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
                 }"
                 :title="
                   item.offMapAllowed === true
-                    ? '点卡后点基地放入；也可用下方按钮放入图外盒'
+                    ? '点卡后点基地放入；飞机另有逐枚「入盒」按钮'
                     : (item.blockedReason ?? `${item.raw}（${sideName(item.side)}）`)
                 "
                 :aria-pressed="cardBlocked(item) ? undefined : isActive(item)"
@@ -1075,22 +1064,18 @@ function sideMark(side: 'axis' | 'soviet'): string {
   color: var(--color-muted);
 }
 
-/* 批 G：飞机按激活态分两栏（栏头状态 + 剩余枚数；栏内逐枚平铺） */
+/* 批 G / 2026-11-19：飞机按四个“面”分区（激活/未激活 × 完好/减损） */
 .queue__air {
   display: grid;
-  gap: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
   padding-bottom: var(--space-1);
 }
 
-.queue__air-boxes {
-  display: flex;
-}
-
-/* 入图外盒入口：一行下拉，避免逐型按钮把飞机分区堆高 */
-.queue__air-box {
-  max-width: 100%;
-  height: 22px;
-  font-size: var(--text-xs);
+@media (max-width: 720px) {
+  .queue__air {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .queue__air-col {
@@ -1111,7 +1096,41 @@ function sideMark(side: 'axis' | 'soviet'): string {
 .queue__air-array {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
+  gap: 4px;
+  /* 选中枚的「入盒」浮在算子上方，给首行留出这一条高度 */
+  padding-top: 14px;
+}
+
+/* 一枚算子的定位容器：入盒按钮相对它绝对定位 */
+.queue__air-slot {
+  position: relative;
+  display: inline-flex;
+}
+
+/*
+ * 「入盒」按钮：贴在**这一枚算子正上方**（用户 2026-11-19 口径）。
+ * 只有被点中的那一枚才出现；点它把这一枚直接放进地图外空军盒（1.4a）。
+ */
+.queue__air-send {
+  position: absolute;
+  bottom: calc(100% - 2px);
+  left: 50%;
+  z-index: 2;
+  height: 16px;
+  padding: 0 5px;
+  transform: translateX(-50%);
+  border: 1px solid var(--color-command-teal);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-command-teal);
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.queue__air-send:hover {
+  background: var(--color-command-teal-bg);
 }
 
 .queue__air-chip {

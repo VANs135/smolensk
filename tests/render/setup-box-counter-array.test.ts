@@ -14,15 +14,18 @@ describe('初设单位 box 的算子阵列', () => {
     expect(panel).not.toContain('v-for="item in boxItems(')
   })
 
-  it('飞机按激活 / 非激活分组（口径取 planAirSetup 的 statuses）', () => {
-    expect(panel).toContain('statuses')
-    expect(panel).toContain("status === 'active' ? '激活' : '非激活'")
+  it('飞机按四个“面”分组（激活/未激活 × 完好/减损），逐枚出卡', () => {
+    // 2026-11-19：不再每型一张“下一枚”卡；四份同时平铺
+    expect(panel).toContain('pendingAirFaces')
+    expect(panel).toContain("row.face.status === 'active' ? '激活' : '未激活'")
+    expect(panel).toContain('group-mode')
+    expect(panel).toContain("'sections'")
   })
 
   it('减损飞机按原文 `*` 显式标记（不另造 Damaged 状态、不重复计数）', () => {
     // 原文：剧本页 `"*" = one unit begins reduced`；减损与激活态是两个维度
-    expect(panel).toContain('airReduced')
     expect(panel).toContain(' · 减损')
+    expect(panel).toContain(' · 完好')
     expect(panel).toContain('减损面')
     expect(panel).toContain('空战')
     expect(panel).toContain('轰炸')

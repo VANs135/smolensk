@@ -165,6 +165,9 @@ describe('B13：增援面板的替换（源码守卫）', () => {
       const allowed =
         slot === 'props.title' ||
         slot === 'group.label' ||
+        // 2026-11-19：sections 模式的小标题带「本组几枚」；动作按钮文字由调用方给（如「入盒」）
+        slot === 'group.items.length' ||
+        slot === 'props.pickActionLabel' ||
         slot === 'refusal' ||
         slot === 'props.hint' ||
         slot === 'item.badge' ||

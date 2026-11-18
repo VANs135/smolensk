@@ -76,16 +76,26 @@ describe('批 G：飞机按激活态分栏（store 计数与按栏落位）', ()
 })
 
 describe('批 G：界面（源码守卫）', () => {
-  it('★ 两栏渲染：栏头状态 + 算子阵列；旧的「机型 · 激活态」文字已删', () => {
+  it('★ 四栏渲染（激活/未激活 × 完好/减损）；不再用下拉放进图外盒', () => {
     const source = readFileSync('src/components/game/DecisionQueue.vue', 'utf8')
-    // 2026-11-19 初设队列改版：同一状态跨机型平铺（算子上就能认出机型），栏头口径不变
-    expect(source).toContain('airStatusSections')
-    expect(source).toContain("label: '激活'")
-    expect(source).toContain("label: '未激活'")
+    // 2026-11-19 改版：四份同时平铺；点中某一枚后，该枚上方出现「入盒」
+    expect(source).toContain('airFaceSections')
+    expect(source).toContain("label: '激活 · 完好'")
+    expect(source).toContain("label: '激活 · 减损'")
+    expect(source).toContain("label: '未激活 · 完好'")
+    expect(source).toContain("label: '未激活 · 减损'")
     expect(source).toContain('queue__air-col-head')
     expect(source).toContain('v-for="chip in group.chips"')
-    expect(source).toContain('pickAir(chip.item, group.status)')
-    expect(source).toContain('setup.beginAirPlacement(item.side, item.entryIndex, status)')
+    expect(source).toContain('pickAir(chip.item, chip)')
+    expect(source).toContain(
+      'setup.beginAirPlacement(item.side, item.entryIndex, chip.status, chip.reduced)',
+    )
+    expect(source).toContain('isAirChipPicked(chip)')
+    expect(source).toContain('sendAirToBox(chip)')
+    expect(source).toContain('queue__air-send')
+    // 旧入口彻底删掉：下拉选「放入图外盒…」不再存在
+    expect(source).not.toContain('queue__air-box')
+    expect(source).not.toContain('放入图外盒')
     expect(source).not.toContain('airCardText')
     expect(source).not.toContain('airStatusText')
   })

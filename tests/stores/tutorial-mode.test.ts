@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { nextTick } from 'vue'
 import { describe, expect, it } from 'vitest'
 
@@ -104,21 +106,28 @@ describe('教学模式：Vitebsk', () => {
     expect(victim).toBeDefined()
     mapView.openUnitContext(victim!.hex, victim!.instanceId, { x: 0, y: 0 })
     expect(mapView.openContextAction(victim!.instanceId, 'ops.bombing')).toBe(true)
-    const ju88 = ctx.w.airUnits.find(
-      (air) => air.side === 'axis' && air.aircraftId === 'ax-aircraft-ge-ju-88',
-    )
-    const bf110 = ctx.w.airUnits.find(
-      (air) => air.side === 'axis' && air.aircraftId === 'ax-aircraft-ge-bf-110',
-    )
+    // 14.2a：四机齐出（Ju.88 + Do.17z + 两架 Bf.110）⇒ 轰炸值 30，够炸出军力损失
+    const missionPlanes = [
+      ...ctx.w.airUnits.filter(
+        (air) => air.side === 'axis' && air.aircraftId === 'ax-aircraft-ge-ju-88',
+      ),
+      ...ctx.w.airUnits.filter(
+        (air) => air.side === 'axis' && air.aircraftId === 'ax-aircraft-ge-do-17z',
+      ),
+      ...ctx.w.airUnits.filter(
+        (air) => air.side === 'axis' && air.aircraftId === 'ax-aircraft-ge-bf-110',
+      ),
+    ].slice(0, 4)
     const i153 = ctx.w.airUnits.find((air) => air.aircraftId === 'su-aircraft-ru-i-153')
-    expect(ju88).toBeDefined()
-    expect(bf110).toBeDefined()
+    expect(missionPlanes.length).toBe(4)
     expect(i153).toBeDefined()
-    ctx.w.toggleAirMissionUnit(ju88!.instanceId)
-    ctx.w.toggleAirMissionUnit(bf110!.instanceId)
+    for (const plane of missionPlanes) ctx.w.toggleAirMissionUnit(plane.instanceId)
     expect(mapView.advanceOpsFlow()).toBe(true)
     expect(ctx.w.airState?.step).toBe('interception')
     expect(tutorialStep(ctx).target.texts).toContain('拦截方宣布拦截（14.5：不强制）')
+    // 教学脚本固定拦截空战骰：2d6=6 + I.153 ACV 1 − Bf.110 ACV 3 = 4 ⇒ 拦截机返航（轴心胜）
+    expect(ctx.w.airInputs.interceptDie).toBe(6)
+    expect(ctx.w.airInputs.interceptLossDie).toBe(1)
     expect(ctx.w.airInterceptorCandidates.map((item) => item.instanceId)).toContain(
       i153!.instanceId,
     )
@@ -128,9 +137,19 @@ describe('教学模式：Vitebsk', () => {
     ctx.w.airInputs.interceptorId = i153!.instanceId
     expect(ctx.w.declareInterceptionNow()).toBe(true)
     expect(ctx.w.resolveInterceptionCombatNow()).toBe(true)
+    // 14.5：拦截机战败 ⇒ 非激活；任务机继续
+    expect(i153!.airStatus).toBe('inactive')
     ctx.w.autoResolveAirMissionNow()
-    if (ctx.w.airState?.step === 'resolveMission') expect(ctx.w.settleAirMissionNow()).toBe(true)
+    // 14.2f-F：结算任务先启动轰炸链；停在「目标方分配军力损失」是设计行为
+    ctx.w.settleAirMissionNow()
+    // 10.0a：四机 30 点、骰面 11 ⇒ 「1」＝ DG + 1 点军力损失，必须落到目标格
+    const victimId = victim!.instanceId
+    const beforeSteps = victim!.steps
+    expect(ctx.w.barrageLossRequired).toBeGreaterThan(0)
     settleBarrageLosses(ctx)
+    expect(ctx.w.units.find((unit) => unit.instanceId === victimId)?.steps).toBeLessThan(
+      beforeSteps,
+    )
     if (ctx.w.airState?.step === 'resolveMission') expect(ctx.w.settleAirMissionNow()).toBe(true)
     if (ctx.w.airState?.step === 'returnToBase') expect(ctx.w.completeAirReturnNow()).toBe(true)
     expect(tutorialStep(ctx).id).toBe('supply-phase')
@@ -153,6 +172,17 @@ describe('教学模式：Vitebsk', () => {
     expect(tutorial.currentStep).toBeNull()
     tutorial.stop()
   }, 60_000)
+
+  it('教学脚本：四机轰炸、固定拦截骰、AI 苏军不代打（源码守卫）', () => {
+    const source = readFileSync('src/stores/tutorial.ts', 'utf8')
+    // 14.2a：四机齐出（Ju.88 + Do.17z + 两架 Bf.110）
+    expect(source).toContain("'ax-aircraft-ge-do-17z'")
+    // 14.3e：拦截空战固定 2d6=6（轴心胜）；10.0a：轰炸骰固定 11（DG + 1 军力损失）
+    expect(source).toContain('interceptDie = 6')
+    expect(source).toContain('barrageInputs.die = 11')
+    // 苏军是 AI ⇒ 反应阶段脚本让位
+    expect(source).toContain('if (aiSoviet.value) return')
+  })
 
   it('引导文案：霍特口径短句、单位介绍与按钮级目标齐备', async () => {
     const ctx = fresh()
@@ -209,8 +239,9 @@ function tutorialStep(_ctx: Ctx) {
 }
 
 /** 开教学局并走到「移动完成、右键扫射」这一步（与第 2 条用例共用） */
-async function startTutorial(): Promise<Ctx> {
+async function startTutorial(prepare?: (ctx: Ctx) => void): Promise<Ctx> {
   const ctx = fresh()
+  prepare?.(ctx)
   const tutorial = useTutorialStore()
   tutorial.stop()
   setTutorialAirAllInactive(true)

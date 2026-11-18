@@ -85,9 +85,12 @@ function onTutorialChange(on: boolean): void {
     tutorial.stop()
     return
   }
-  // 教学固定正常天气 + 单人（双方都由玩家点，才有「苏军初设 → 轴心」的完整交棒）
+  // 教学固定正常天气 + **人机**（用户 2026-11-19：苏军由 AI 指挥，玩家只打轴心）
   gameSession.setFirstWeatherChoice('normal', selectedId.value)
-  if (!hotseat.setupLocked) hotseat.setMode('solo')
+  if (!hotseat.setupLocked) {
+    hotseat.setMode('pve')
+    hotseat.setAiSide('soviet')
+  }
   tutorial.startFor()
 }
 
@@ -109,7 +112,11 @@ function onEnterSetup(): void {
   setTutorialAirAllInactive(teaching)
   if (teaching) {
     gameSession.setFirstWeatherChoice('normal', target.id)
-    if (!hotseat.setupLocked) hotseat.setMode('solo')
+    // 用户 2026-11-19：教学里的苏军是**人机对手**（AI 初设、AI 反应），玩家执轴心
+    if (!hotseat.setupLocked) {
+      hotseat.setMode('pve')
+      hotseat.setAiSide('soviet')
+    }
     tutorial.startFor()
   } else {
     tutorial.stop()
@@ -262,7 +269,7 @@ function onConfirmBriefing(): void {
             </dl>
             <fieldset class="scenario__modes">
               <legend>对局模式</legend>
-              <p v-if="tutorialMode" class="modes__locked">单人（教学固定）</p>
+              <p v-if="tutorialMode" class="modes__locked">人机（苏军 AI · 教学固定）</p>
               <ul v-else-if="!hotseat.setupLocked" class="modes">
                 <li v-for="item in modeOptions" :key="item.key">
                   <label

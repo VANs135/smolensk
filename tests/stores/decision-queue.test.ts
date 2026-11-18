@@ -262,17 +262,23 @@ describe('B11：飞机逐枚落位（备忘 #1：放进机场后数量要减）'
     }
   })
 
-  it('基地不在图上时，开始放飞机就被拒且**原因指向 14.1a**（不再报"调用方未提供"）', () => {
+  it('基地不在图上时仍可选中飞机（候选为空），点地图格被拒且指向 14.1a', () => {
     const { setup, workbench } = stores
     workbench.units = workbench.units.filter((unit) => unit.noncombatKind !== 'air_base')
 
     const airItem = setup.decisionQueue
       .flatMap((stack) => stack.items)
       .find((item) => item.kind === 'air')!
-    const ok = setup.beginAirPlacement(airItem.side, airItem.entryIndex)
-    expect(ok).toBe(false)
+    /*
+     * 2026-11-19：不再在 begin 就拒绝 —— 选中后那一枚上方才有「入盒」，
+     * 若这里拒掉，基地未落位时连 1.4a 的图外盒都进不去。
+     */
+    expect(setup.beginAirPlacement(airItem.side, airItem.entryIndex)).toBe(true)
+    expect(setup.placing?.candidates).toHaveLength(0)
+
+    expect(setup.placeAtHex({ col: 1, row: 1 })).toBe(true)
     expect(setup.lastAction?.ok).toBe(false)
-    expect(setup.lastAction?.detail).toContain('先落本方空军基地')
+    expect(setup.lastAction?.rule).toBe('14.1a')
   })
 
   it('1.4a：本方飞机可逐枚入盒，保留初设状态并随盘面保存', () => {

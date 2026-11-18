@@ -33,20 +33,30 @@ describe('初设队列：box 网格布局', () => {
     expect(queue).not.toContain('width: min(300px, 65%)')
   })
 
-  it('★ 飞机独立分区（与地面 / 非战斗分开），保留激活/未激活分栏', () => {
+  it('★ 飞机独立分区（与地面 / 非战斗分开），按四个面分栏', () => {
     expect(queue).toContain(':data-stack="stack.key"')
     expect(queue).toContain("stack.key === 'air'")
     expect(queue).toContain("'queue__stack--wide': stack.key === 'air'")
     expect(queue).toContain('queue__air')
-    expect(queue).toContain('airStatusSections')
+    expect(queue).toContain('airFaceSections')
     expect(queue).toContain('queue__air-col-head')
-    expect(queue).toContain("label: '激活'")
-    expect(queue).toContain("label: '未激活'")
+    // 2026-11-19：激活/未激活 × 完好/减损 = 四栏
+    expect(queue).toContain("label: '激活 · 完好'")
+    expect(queue).toContain("label: '激活 · 减损'")
+    expect(queue).toContain("label: '未激活 · 完好'")
+    expect(queue).toContain("label: '未激活 · 减损'")
+    // 点中的那一枚上方出「入盒」，不再用下拉选图外盒
+    expect(queue).toContain('isAirChipPicked(chip)')
+    expect(queue).toContain('sendAirToBox(chip)')
+    expect(queue).not.toContain('queue__air-box')
   })
 
   it('★ 受损面：减损飞机用背面图档，并在算子上标「减」', () => {
     expect(store).toContain('imageUrlBack')
-    expect(queue).toContain('imageUrlBack')
+    expect(store).toContain('pendingAirFaces')
+    // 逐枚面的图档由 store 按 reduced 取背面；组件只画 face.imageUrl
+    expect(queue).toContain('pendingAirFaces')
+    expect(queue).toContain('chip.imageUrl')
     expect(queue).toContain('queue__air-flag')
     expect(queue).toContain('减')
   })

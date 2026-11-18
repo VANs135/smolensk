@@ -237,7 +237,8 @@ function boxItems(category: SetupPlacingCategory): readonly SetupPlacing[] {
 function visibleBoxItems(category: SetupPlacingCategory): readonly SetupPlacing[] {
   return boxItems(category).filter(
     (item) =>
-      item.blockedReason === null &&
+      // 飞机即使基地未落位，也仍可「入盒」（1.4a 不需要图上基地）⇒ 不整项藏掉
+      (item.blockedReason === null || (item.kind === 'air' && item.offMapAllowed === true)) &&
       // 卡车满载/空载在下方「编内卡车」单入口处理，不重复出卡
       item.kind !== 'truck' &&
       (item.candidates.length > 0 || item.offMapAllowed === true),
@@ -255,41 +256,106 @@ function pickerIdOf(item: SetupPlacing): string {
   ].join(':')
 }
 
-/** 飞机下一枚的初始激活态（按 planAirSetup 的 statuses 顺序取） */
-function airStatusOf(item: SetupPlacing): 'active' | 'inactive' | null {
-  if (item.kind !== 'air') return null
-  const row = airRows(item.side).find((candidate) => candidate.entryIndex === item.entryIndex)
-  return row?.statuses[item.placed] ?? null
+/** 四栏的固定顺序（激活完好 → 激活减损 → 未激活完好 → 未激活减损） */
+const AIR_GROUP_RANK: Record<string, number> = {
+  'active:full': 0,
+  'active:reduced': 1,
+  'inactive:full': 2,
+  'inactive:reduced': 3,
 }
 
-/** 待落位项 ⇒ 算子阵列卡（图 + 数量角标；名字只进 title/aria-label） */
-function pickerItemsOf(category: SetupPlacingCategory): readonly CounterPickerItem[] {
-  return visibleBoxItems(category).map((item) => {
-    const status = airStatusOf(item)
-    // 原文 `"*" = one unit begins reduced`：减损是独立于激活态的一面，不另造第三种状态；
-    // 用「激活/非激活 · 减损」的显式标记，避免把同一枚既算进激活又算进减损（重复计数）。
-    const reduced = item.airReduced === true
-    const statusLabel = status === 'active' ? '激活' : '非激活'
-    return {
-      id: pickerIdOf(item),
-      imageUrl: item.imageUrl,
-      name:
-        `${sideLabel(item.side)} ${item.label}（${item.placed}/${item.total}）` +
-        (reduced ? '（减损面）' : ''),
-      selected: isPlacing(item),
-      ...(item.remaining > 1 ? { badge: String(item.remaining) } : {}),
-      ...(status === null
-        ? {}
-        : {
-            groupKey: `${status}:${reduced ? 'reduced' : 'full'}`,
-            groupLabel: `${statusLabel}${reduced ? ' · 减损' : ''}`,
-          }),
+interface AirPickerRow {
+  /** 阵列卡 id：`种类型卡 id#计划下标`（同一型的不同面是不同卡） */
+  id: string
+  item: SetupPlacing
+  face: {
+    faceIndex: number
+    status: 'active' | 'inactive'
+    reduced: boolean
+    imageUrl: string | null
+  }
+}
+
+/**
+ * 飞机阵列的**逐枚面**（激活/未激活 × 完好/减损）
+ *
+ * 修前每型只出一张卡（只代表“下一枚”那一面），四栏里永远只有一份，既点不到别的面，
+ * 也看不出该型还有哪些状态。现在把 `setup.pendingAirFaces` 的每一枚都摊成一张卡。
+ */
+const airPickerRows = computed<readonly AirPickerRow[]>(() => {
+  const rows: AirPickerRow[] = []
+  for (const item of visibleBoxItems('air')) {
+    if (item.kind !== 'air') continue
+    for (const face of setup.pendingAirFaces(item.side, item.entryIndex)) {
+      rows.push({ id: `${pickerIdOf(item)}#${face.faceIndex}`, item, face })
     }
-  })
+  }
+  return rows.sort(
+    (a, b) =>
+      (AIR_GROUP_RANK[`${a.face.status}:${a.face.reduced ? 'reduced' : 'full'}`] ?? 9) -
+      (AIR_GROUP_RANK[`${b.face.status}:${b.face.reduced ? 'reduced' : 'full'}`] ?? 9),
+  )
+})
+
+/** 正在地图上等的，是不是这一枚面 */
+function isFacePlacing(row: AirPickerRow): boolean {
+  const current = setup.placing
+  return (
+    current !== null &&
+    current.kind === 'air' &&
+    current.side === row.item.side &&
+    current.entryIndex === row.item.entryIndex &&
+    current.faceIndex === row.face.faceIndex
+  )
+}
+
+/**
+ * 待落位项 ⇒ 算子阵列卡（图 + 数量角标；名字只进 title/aria-label）
+ *
+ * 飞机按四个“面”分组（激活/未激活 × 完好/减损），用 `group-mode="sections"`
+ * 四份同时平铺——不塞进下拉里。
+ */
+function pickerItemsOf(category: SetupPlacingCategory): readonly CounterPickerItem[] {
+  if (category === 'air') {
+    return airPickerRows.value.map((row) => {
+      const statusLabel = row.face.status === 'active' ? '激活' : '未激活'
+      return {
+        id: row.id,
+        imageUrl: row.face.imageUrl,
+        name:
+          `${sideLabel(row.item.side)} ${row.item.label}` +
+          `（${statusLabel}${row.face.reduced ? ' · 减损' : ' · 完好'}）`,
+        selected: isFacePlacing(row),
+        groupKey: `${row.face.status}:${row.face.reduced ? 'reduced' : 'full'}`,
+        groupLabel: `${statusLabel} · ${row.face.reduced ? '减损' : '完好'}`,
+      } satisfies CounterPickerItem
+    })
+  }
+  return visibleBoxItems(category).map((item) => ({
+    id: pickerIdOf(item),
+    imageUrl: item.imageUrl,
+    name: `${sideLabel(item.side)} ${item.label}（${item.placed}/${item.total}）`,
+    selected: isPlacing(item),
+    ...(item.remaining > 1 ? { badge: String(item.remaining) } : {}),
+  }))
 }
 
 /** 点阵列卡：同一卡再点一次＝取消；否则进入该卡的落点选择 */
 function pickBoxItem(id: string): void {
+  const airRow = airPickerRows.value.find((row) => row.id === id)
+  if (airRow !== undefined) {
+    if (isFacePlacing(airRow)) {
+      setup.cancelPlacement()
+      return
+    }
+    setup.beginAirPlacement(
+      airRow.item.side,
+      airRow.item.entryIndex,
+      airRow.face.status,
+      airRow.face.reduced,
+    )
+    return
+  }
   const item = setup.pendingPlacement.find((candidate) => pickerIdOf(candidate) === id)
   if (item === undefined) return
   if (isPlacing(item)) {
@@ -297,6 +363,17 @@ function pickBoxItem(id: string): void {
     return
   }
   begin(item)
+}
+
+/**
+ * 飞机卡上方的「入盒」：把**玩家点中的那一枚**放进地图外空军盒（1.4a）
+ *
+ * 与点地图落位是两条互斥出口：入盒不需要地图候选，也不需要先落空军基地。
+ */
+function sendBoxItem(id: string): void {
+  const row = airPickerRows.value.find((candidate) => candidate.id === id)
+  if (row === undefined || row.item.offMapAllowed !== true) return
+  setup.placeAirInOffMapBoxNow(row.item.side, row.item.entryIndex, row.face.faceIndex)
 }
 
 /** 点一项 ⇒ 地图高亮其合法落点 */
@@ -391,7 +468,10 @@ function sideLabel(side: Side): string {
         候选 {{ setup.placing.candidates.length }} 格
       </span>
       <BaseButton variant="ghost" size="sm" @click="setup.cancelPlacement()">取消</BaseButton>
-      <p class="muted">
+      <p v-if="setup.placing.kind === 'air' && setup.placing.candidates.length === 0" class="muted">
+        没有可用的空军基地格（14.1a）：点这一枚上方的「入盒」直接进图外盒。
+      </p>
+      <p v-else class="muted">
         在地图上点**青柠色高亮格**落位（候选格由引擎按 IV-A / IV-I / 14.1a 给出）。
       </p>
     </div>
@@ -447,7 +527,10 @@ function sideLabel(side: Side): string {
       <CounterPicker
         v-if="visibleBoxItems(category.key).length > 0"
         :items="pickerItemsOf(category.key)"
+        :group-mode="category.key === 'air' ? 'sections' : 'select'"
+        :pick-action-label="category.key === 'air' ? '入盒' : ''"
         @pick="pickBoxItem"
+        @action="sendBoxItem"
       />
       <p v-else class="muted">本类已全部落位（含「未设置 ⇒ 本局移除」）。</p>
     </section>

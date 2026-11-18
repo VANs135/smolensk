@@ -7,6 +7,7 @@ import { hexDistance, sameHex } from '@/engine/hex-geometry'
 import { BATTLE_SEQUENCE } from '@/engine/rules/battle'
 
 import { useGameSessionStore } from './session'
+import { useHotseatStore } from './hotseat'
 import { useSetupStore } from './setup'
 import { setTutorialSovietFirstTurnFullMa } from './tutorial-settings'
 import { useWorkbenchStore } from './workbench'
@@ -52,9 +53,10 @@ export interface TutorialStepView {
   done: boolean
 }
 
-/** 轰炸任务的两种机型：Ju.88 投弹、Bf.110 护航 */
+/** 轰炸任务的机型：Ju.88 + Do.17z 投弹、两架 Bf.110 护航（14.2a 最多 4 机） */
 const BOMBING_AIRCRAFT = [
   ['ax-aircraft-ge-ju-88', 'Ju.88'],
+  ['ax-aircraft-ge-do-17z', 'Do.17z'],
   ['ax-aircraft-ge-bf-110', 'Bf.110'],
 ] as const
 
@@ -113,6 +115,10 @@ export const useTutorialStore = defineStore('tutorial', () => {
   const workbench = useWorkbenchStore()
   const setup = useSetupStore()
   const gameSession = useGameSessionStore()
+  const hotseat = useHotseatStore()
+
+  /** 教学局是 PVE（苏军 AI）⇒ 反应阶段由 AI 自己打，脚本不再代打 */
+  const aiSoviet = computed(() => hotseat.mode === 'pve' && hotseat.aiSide === 'soviet')
 
   const active = ref(false)
   /** 已放行到第几步；只向前，不因后续动作（如再起飞一架又变未激活）回退 */
@@ -236,10 +242,16 @@ export const useTutorialStore = defineStore('tutorial', () => {
       if (workbench.airTargetHex === null) {
         return { hex: BOMB_HEX, texts: ['轰炸'], buttonTexts: ['轰炸'] }
       }
+      // 14.2a：一次任务最多 4 机 ⇒ Ju.88 + Do.17z + 两架 Bf.110，逐枚都要选中
       for (const [aircraftId, name] of BOMBING_AIRCRAFT) {
-        const unit = workbench.airUnits.find((air) => air.aircraftId === aircraftId)
-        if (unit !== undefined && !workbench.airMissionAirIds.includes(unit.instanceId)) {
-          return { hex: BOMB_HEX, buttonTexts: [name] }
+        const units = workbench.airUnits.filter(
+          (air) =>
+            air.aircraftId === aircraftId && air.side === 'axis' && air.airStatus === 'active',
+        )
+        for (const unit of units) {
+          if (!workbench.airMissionAirIds.includes(unit.instanceId)) {
+            return { hex: BOMB_HEX, buttonTexts: [name] }
+          }
         }
       }
       return { hex: BOMB_HEX, buttonTexts: ['发起任务'] }
@@ -384,8 +396,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
     }[] = [
       {
         id: 'setup-soviet',
-        title: '苏军初设',
-        hint: '霍特：先看清苏军把破铜烂铁摆在哪。',
+        title: '苏军初设（AI）',
+        hint: '霍特：苏军由 AI 布置，你看清他们把破铜烂铁摆在哪。',
         done: () => setup.finished || setup.setupSideCursor !== 'soviet',
       },
       {
@@ -472,8 +484,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
       {
         id: 'bombing',
         title: '呼叫轰炸',
-        hint: '霍特：向集群申请 Ju.88 与护航，去炸 19.27。',
-        intro: 'Ju.88 是水平轰炸机，Bf.110 战斗机护航。',
+        hint: '霍特：四机齐出，把 19.27 炸开。',
+        intro: 'Ju.88 与 Do.17z 投弹，两架 Bf.110 护航；炸弹够了才炸得出损伤。',
         done: () => bombingDone(),
       },
       {
@@ -484,10 +496,13 @@ export const useTutorialStore = defineStore('tutorial', () => {
       },
       {
         id: 'reaction-attack',
-        title: '苏军反击',
-        hint: '霍特：残部竟敢反扑——看他们撞碎在防线上。',
-        intro: '苏军 18 坦克师从预备队扑向 17.27。',
-        done: () => reaction.value === 'done' || reaction.value === 'skipped',
+        title: '苏军反击（AI）',
+        hint: '霍特：苏军由 AI 指挥——看他们撞碎在防线上。',
+        intro: '反应阶段由 AI 决定苏军怎么动，你只负责守住 17.27。',
+        done: () =>
+          aiSoviet.value
+            ? phaseAtLeast(workbench.phase, 'combat')
+            : reaction.value === 'done' || reaction.value === 'skipped',
       },
     ]
     return source.map((step) => ({
@@ -584,6 +599,44 @@ export const useTutorialStore = defineStore('tutorial', () => {
       if (!sameHex(state.targetHex, TARGET_HEX)) return
       // 第一次固定为 2（Ju.87 的 12-16 列 ⇒ 未命中）；第二次固定为 9（同列 ⇒ [1/2]，飞机轰炸按 10.0a 直接判 DG）
       workbench.barrageInputs.die = strafeCount.value === 0 ? 2 : 9
+    },
+    { flush: 'sync' },
+  )
+
+  /*
+   * 2026-11-19：轰炸教学要**轴心稳赢且炸出防御方受损**，不能靠运气。
+   *
+   * · 拦截空战（14.3e）：I.153 ACV 1 vs 迎战 Bf.110 ACV 3 ⇒ 修正骰 = 6 + 1 − 3 = 4 ≤ 6，
+   *   拦截机返航（轴心胜）；损失骰固定 1（无损失）。
+   * · 防空（14.4e）：固定 12 + 损失骰 1 ⇒ 不命中，任务机完整进入轰炸。
+   * · 轰炸（10.0a）：四机轰炸值 12+8+5+5 = 30 ⇒ 初始列 25-40；骰面 11 ⇒ 「1」
+   *   （DG + 1 点军力损失），随后由玩家在「确认受损单位」里落盘。
+   */
+  watch(
+    () => workbench.airState,
+    (state) => {
+      if (!active.value || state === null || state.finished) return
+      if (state.kind !== 'barrage' || state.targetHex === null) return
+      if (!sameHex(state.targetHex, BOMB_HEX)) return
+      if (state.step === 'interception') {
+        workbench.airInputs.interceptDie = 6
+        workbench.airInputs.interceptLossDie = 1
+      }
+      if (state.step === 'flak') {
+        workbench.airInputs.flakDie = 12
+        workbench.airInputs.lossDie = 1
+      }
+    },
+    { flush: 'sync' },
+  )
+
+  watch(
+    () => workbench.barrageState,
+    (state) => {
+      if (!active.value || state === null || state.finished) return
+      if (state.targetHex === null || !sameHex(state.targetHex, BOMB_HEX)) return
+      // 30 点轰炸值的初始列 25-40：骰面 11 ⇒ 「1」（DG + 1 军力损失）
+      workbench.barrageInputs.die = 11
     },
     { flush: 'sync' },
   )
@@ -694,6 +747,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
     () => {
       if (!active.value || reaction.value !== 'idle') return
       if (workbench.phase !== 'reaction') return
+      // 2026-11-19：苏军是 AI ⇒ 反应阶段归 AI 打，脚本不再代打（否则会和 AI 抢同一批动作）
+      if (aiSoviet.value) return
       reaction.value = 'running'
       reaction.value = runReactionAttack() ? 'done' : 'skipped'
     },
