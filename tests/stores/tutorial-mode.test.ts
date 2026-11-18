@@ -58,7 +58,7 @@ describe('教学模式：Vitebsk', () => {
     const target = ctx.w.units.find((unit) => unit.hex.col === 18 && unit.hex.row === 27)
     expect(target?.mode.dg ?? false).toBe(false)
 
-    // 第二轮：脚本把骰面固定为 9（同一列 ⇒ DG + 1 点损失），必中
+    // 第二轮：脚本把骰面固定为 9（同一列 ⇒ [1/2]，飞机轰炸按 10.0a 直接判 DG），必中
     const second = await hipShoot(ctx, 18, 27)
     expect(second).toBeDefined()
     expect(ctx.w.barrageState?.dice?.die).toBe(9)

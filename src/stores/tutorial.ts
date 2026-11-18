@@ -582,7 +582,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
       if (!active.value || state === null || state.finished) return
       if (state.kind !== 'air' || state.targetHex === null) return
       if (!sameHex(state.targetHex, TARGET_HEX)) return
-      // 第一次固定为 2（Ju.87 的 12-16 列 ⇒ 未命中）；第二次固定为 9（同列 ⇒ DG + 1 点损失）
+      // 第一次固定为 2（Ju.87 的 12-16 列 ⇒ 未命中）；第二次固定为 9（同列 ⇒ [1/2]，飞机轰炸按 10.0a 直接判 DG）
       workbench.barrageInputs.die = strafeCount.value === 0 ? 2 : 9
     },
     { flush: 'sync' },
