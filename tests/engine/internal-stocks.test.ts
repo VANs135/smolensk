@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { canUseInternalStocks, planCombatSupplyFunding } from '@/engine/rules/supply'
+import {
+  canUseInternalStocks,
+  planCombatSupplyFunding,
+  planDefenderCombatSupplyFunding,
+} from '@/engine/rules/supply'
 
 /**
  * 12.10 部队储备：支付战斗补给的付款规划（12.10a/b/c/g/h）
@@ -166,5 +170,89 @@ describe('12.10：需求为 0 时不动任何账本', () => {
     const plan = planCombatSupplyFunding({ units: [], availableMapT: 4 })
     expect(plan.ok && plan.data.mapTUsed).toBe(0)
     expect(plan.ok && plan.data.funding).toEqual([])
+  })
+})
+
+/**
+ * 守方整堆叠：12.4 的 2T 是**整笔需求**，但 12.10b/12.10d 的降级是**逐单位**的
+ *
+ *   · 12.10b「当一个单位从其部队储备中获得战斗补给时，将它标记为部队储备低下」
+ *   · 12.10d「任何单位都不能使用其他单位的部队储备，**即使是堆叠在一起也不行**」
+ *
+ * ⇒ 整堆叠改用储备时，每一枚参战单位都用自己的储备、**各降一级**；
+ *   只让首枚出储备＝其他单位借用它的储备，12.10d 明禁。
+ */
+const defenderUnit = (unitId: string, internalStocks: 'low' | 'exhausted' | null) => ({
+  unitId,
+  internalStocks,
+})
+
+describe('12.10b/d：守方两枚以上堆叠、只能走储备 ⇒ 每枚各降一级', () => {
+  it('两枚都没有图上补给 ⇒ 两枚都从 ready 降为 low，不是只降首枚', () => {
+    const plan = planDefenderCombatSupplyFunding({
+      units: [defenderUnit('d1', null), defenderUnit('d2', null)],
+      requiredT: 2,
+      availableMapT: 0,
+    })
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    expect(plan.data.funding).toEqual([
+      { unitId: 'd1', source: 'stocks', t: 0, from: null, to: 'low' },
+      { unitId: 'd2', source: 'stocks', t: 0, from: null, to: 'low' },
+    ])
+    expect(plan.data.downgraded).toBe(2)
+    expect(plan.data.mapTUsed).toBe(0)
+  })
+
+  it('已有 low 的那枚翻面为 exhausted，另一枚仍 ready→low（各用自己的储备，12.10d）', () => {
+    const plan = planDefenderCombatSupplyFunding({
+      units: [defenderUnit('d1', 'low'), defenderUnit('d2', null)],
+      requiredT: 2,
+      availableMapT: 0,
+    })
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    expect(plan.data.funding).toEqual([
+      { unitId: 'd1', source: 'stocks', t: 0, from: 'low', to: 'exhausted' },
+      { unitId: 'd2', source: 'stocks', t: 0, from: null, to: 'low' },
+    ])
+  })
+
+  it('图上够整笔 2T ⇒ 全部走图上，两枚都不降级（12.10a）', () => {
+    const plan = planDefenderCombatSupplyFunding({
+      units: [defenderUnit('d1', null), defenderUnit('d2', null)],
+      requiredT: 2,
+      availableMapT: 2,
+    })
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    expect(plan.data.funding).toEqual([{ unitId: 'd1', source: 'map', t: 2, from: null, to: null }])
+    expect(plan.data.downgraded).toBe(0)
+    expect(plan.data.wastedT).toBe(0)
+  })
+
+  it('图上只有 1T、整笔要 2T ⇒ 整堆叠走储备，那 1T 按 12.10h 浪费', () => {
+    const plan = planDefenderCombatSupplyFunding({
+      units: [defenderUnit('d1', null), defenderUnit('d2', null)],
+      requiredT: 2,
+      availableMapT: 1,
+    })
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    expect(plan.data.downgraded).toBe(2)
+    expect(plan.data.mapTUsed).toBe(1)
+    expect(plan.data.wastedT).toBe(1)
+  })
+
+  it('堆叠里有一枚已耗尽 ⇒ 整笔拒绝（12.10c；守方可改选不付、以一半战斗值防御）', () => {
+    const plan = planDefenderCombatSupplyFunding({
+      units: [defenderUnit('d1', null), defenderUnit('d2', 'exhausted')],
+      requiredT: 2,
+      availableMapT: 0,
+    })
+    expect(plan.ok).toBe(false)
+    if (plan.ok) return
+    expect(plan.rule).toBe('12.10c')
+    expect(plan.reason).toBe('internalStocksExhausted:d2')
   })
 })

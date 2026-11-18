@@ -252,6 +252,90 @@ export function planCombatSupplyFunding(input: {
   })
 }
 
+/* ── 12.10b/d：守方整堆叠动用部队储备（逐单位降级） ── */
+
+/**
+ * 12.4 / 12.10b / 12.10c / 12.10d / 12.10h：**守方整堆叠**改用部队储备的付款计划
+ *
+ * 条文（逐句）：
+ *   · 12.4「防御者每次战斗的消耗合计为 2T（守方规模 ≤1 RE 时为 1T）」⇒ 守方需求是**整笔**，
+ *     不是逐单位需求；
+ *   · 12.10b「当一个单位从其部队储备中获得战斗补给时，将它标记为部队储备低下……」；
+ *   · 12.10d「任何单位都不能使用其他单位的部队储备，**即使是堆叠在一起也不行**」⇒ 整堆叠改走
+ *     储备时，**每一枚参战单位都得用自己的储备**；只让其中一枚出储备，等于其他单位借用了它的
+ *     储备，12.10d 明禁；
+ *   · 12.10 首段「玩家需要为每一个单位标记部队储备的使用情况，在每一个需要标记的单位下方，
+ *     放置一枚 Low/Exhausted 标记」⇒ 降级是**逐单位**的，不存在「整方降一级」；
+ *   · 12.10a「只有在单位无法从图上补给获得所需 SP 时……才能使用部队储备」⇒ 图上够整笔时不得动
+ *     储备；
+ *   · 12.10h「如果一个多军力单位因为没有足够的图上补给，而选择使用部队储备，此时图上补给也会被
+ *     消耗掉」⇒ 整笔需求凑不满时，已选来源上的那点 T 一并消耗/浪费（不得与储备逐单位混用；
+ *     守方整笔需求没有逐单位份额，无法拆给某一枚）。
+ *
+ * ★ 修前：调用方把整笔 2T 记在**首个守方单位**名下 ⇒ 两枚以上堆叠只降首枚（12.10d 反例）。
+ */
+export function planDefenderCombatSupplyFunding(input: {
+  /** 参战守方（整堆叠，含多编队同格堆叠）——顺序即降级落盘顺序 */
+  units: readonly { unitId: string; internalStocks: InternalStocks }[]
+  /** 12.4：守方整笔需求（2T；守方 ≤1 RE 时 1T） */
+  requiredT: number
+  /** 图上可动用的 T（12.3a 直接拖取 ∪ 12.3b 指挥部投递的**实得**量） */
+  availableMapT: number
+}): RuleOutcome<CombatSupplyFunding> {
+  const requiredT = Math.max(0, input.requiredT)
+  const units = input.units
+  if (requiredT <= 0 || units.length === 0)
+    return succeed('12.10', {
+      funding: [],
+      mapTUsed: 0,
+      wastedT: 0,
+      downgraded: 0,
+      rule: '12.10',
+      detail: '无需战斗补给（需求为 0）',
+    })
+
+  const availableMapT = Math.max(0, input.availableMapT)
+
+  // 12.10a：图上够整笔 ⇒ 必须走图上（守方整笔需求，一笔落账，不降级）
+  if (availableMapT >= requiredT) {
+    return succeed('12.10', {
+      funding: [{ unitId: units[0]!.unitId, source: 'map', t: requiredT, from: null, to: null }],
+      mapTUsed: requiredT,
+      wastedT: 0,
+      downgraded: 0,
+      rule: '12.10',
+      detail: `守方战斗补给 ${requiredT} T 全部走图上，未动用部队储备`,
+    })
+  }
+
+  // 12.10c：已耗尽者不能再动储备（守方仍可改选不付，按 9.5-B 以一半战斗值防御）
+  const spent = units.find((unit) => unit.internalStocks === 'exhausted')
+  if (spent !== undefined) return fail('12.10c', `internalStocksExhausted:${spent.unitId}`)
+
+  // 12.10b/12.10d：每一枚各用自己的储备、各降一级
+  const funding: StockFunding[] = units.map((unit) => ({
+    unitId: unit.unitId,
+    source: 'stocks' as const,
+    t: 0,
+    from: unit.internalStocks ?? null,
+    to: unit.internalStocks === 'low' ? 'exhausted' : 'low',
+  }))
+
+  return succeed('12.10', {
+    funding,
+    // 12.10h：整笔凑不满 ⇒ 已选来源上的 T 被消耗/浪费
+    mapTUsed: availableMapT,
+    wastedT: availableMapT,
+    downgraded: funding.length,
+    rule: '12.10',
+    detail:
+      `守方整堆叠 ${funding.length} 枚各自动用部队储备（12.10b/12.10d：${funding
+        .map((item) => `${item.unitId} ${item.from ?? 'ready'}→${item.to}`)
+        .join('、')}）` +
+      (availableMapT > 0 ? `；图上 ${availableMapT} T 因整笔凑不满而浪费（12.10h）` : ''),
+  })
+}
+
 /* ── 补给站爆破（12.11a） ── */
 
 /**

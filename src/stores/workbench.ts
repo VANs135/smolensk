@@ -274,6 +274,7 @@ import {
   planBreakdownCreate,
   planCombatSupply,
   planCombatSupplyFunding,
+  planDefenderCombatSupplyFunding,
   planConsolidation,
   planConvertTransportToExtender,
   planFlipExtenderToTransport,
@@ -13020,19 +13021,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         : attackerPlan.data.funding.reduce((sum, item) => sum + item.t, 0)
 
     const defenderViews = combatDefenderViews.value
+    const defenderRequiredT = combatDefenderRequiredT.value
+    /*
+     * 12.4：守方需求是**整笔**（2T；≤1 RE 时 1T），但 12.10b/12.10d 的降级是**逐单位**的。
+     * 修前把整笔 2T 记在 `defenderViews.slice(0, 1)` 名下 ⇒ 两枚以上堆叠只降首枚；
+     * 那等于其余单位借用首枚的部队储备，12.10d 明禁（"即使是堆叠在一起也不行"）。
+     * 现在把**整堆叠每一枚**交给守方专用计划：储备路径下每枚各用自己的储备、各降一级。
+     */
     const defenderPlan =
       combatInputs.value.defenderUsesInternalStocks && combatInputs.value.defenderProvides
-        ? planCombatSupplyFunding({
-            // 守方是一次性需求（12.4「每次战斗的消耗合计为 2T」）：记在首个守方单位名下
-            units: defenderViews.slice(0, 1).map((unit) => ({
+        ? planDefenderCombatSupplyFunding({
+            units: defenderViews.map((unit) => ({
               unitId: unit.id,
-              // 12.4：守方一次性需求 2T（≤1RE 取 1T）——走 M2④ 收敛后的唯一成本函数
-              requiredT: computeCombatSupplyCost({
-                attackerSteps: 0,
-                defenderRE: defenderViews.reduce((sum, item) => sum + item.re, 0),
-              }).defenderT,
               internalStocks: unit.internalStocks ?? null,
             })),
+            requiredT: defenderRequiredT,
             availableMapT: combatInputs.value.defenderAvailableT,
           })
         : null
@@ -13048,7 +13051,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const defenderEffectiveT =
       defenderPlan === null
         ? combatInputs.value.defenderAvailableT
-        : defenderPlan.data.funding.reduce((sum, item) => sum + item.t, 0)
+        : defenderPlan.data.funding.some((item) => item.source === 'stocks')
+          ? // 12.10b：储备替代的是守方整笔战斗补给 ⇒ 对 9.5 而言守方已获补给
+            defenderRequiredT
+          : defenderPlan.data.mapTUsed
 
     /*
      * 12.4：原文**没有**要求多方/多单位必须同源（10.1b-A 的同源只约束炮击）。

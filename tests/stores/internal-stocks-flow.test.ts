@@ -190,3 +190,56 @@ describe('12.10c：已耗尽的单位无法再用 ⇒ 攻击不成立', () => {
     expect(store.log.some((entry) => entry.rule === '12.10c')).toBe(true)
   })
 })
+
+/**
+ * 守方整堆叠：12.4 的 2T 是整笔需求，但 12.10b/12.10d 的降级逐单位
+ *
+ * 12.10d「任何单位都不能使用其他单位的部队储备，即使是堆叠在一起也不行」
+ * ⇒ 守方两枚以上堆叠只能走储备时，不允许只让首枚出储备（那等于另一枚借它的储备）。
+ */
+function setupDefenderStack(store: ReturnType<typeof newStore>) {
+  store.setPhase('combat')
+  goToActionStep(store, 'combat.declare')
+  store.setTool('battle')
+  const attacker = place(store, attackerRecord(), ATTACKER_HEX, 'axis', 'a1')
+  const d1 = place(store, defenderRecord(), DEFENDER_HEX, 'soviet', 'd1')
+  const d2 = place(store, defenderRecord(), DEFENDER_HEX, 'soviet', 'd2')
+  store.clickHex(ATTACKER_HEX)
+  store.clickHex(DEFENDER_HEX)
+  expect(store.beginCombatNow()).toBe(true)
+  // 攻方付得起（把变量留给守方）
+  store.spDumps.push({ id: 'sd-rich-att', hex: { ...ATTACKER_HEX }, side: 'axis', sp: 8, t: 0 })
+  store.pickCombatSupplyDump('attacker', 'sd-rich-att')
+  store.combatInputs.defenderProvides = true
+  store.combatInputs.defenderUsesInternalStocks = true
+  return { attacker, d1, d2 }
+}
+
+describe('12.10b/d：守方两枚以上堆叠、无图上补给 ⇒ 每枚各降一级', () => {
+  it('两枚守方都从 ready 降为 low（修前只降首枚）', () => {
+    const store = newStore()
+    const { d1, d2 } = setupDefenderStack(store)
+
+    expect(store.confirmCombatSupply()).toBe(true)
+    expect(d1.internalStocks).toBe('low')
+    expect(d2.internalStocks).toBe('low')
+    expect(store.log.some((entry) => entry.rule === '12.10')).toBe(true)
+  })
+
+  it('图上够整笔 2T ⇒ 两枚都不降级（12.10a）', () => {
+    const store = newStore()
+    const { d1, d2 } = setupDefenderStack(store)
+    store.spDumps.push({
+      id: 'sd-rich-def',
+      hex: { ...DEFENDER_HEX },
+      side: 'soviet',
+      sp: 2,
+      t: 0,
+    })
+    store.pickCombatSupplyDump('defender', 'sd-rich-def')
+
+    expect(store.confirmCombatSupply()).toBe(true)
+    expect(d1.internalStocks).toBeNull()
+    expect(d2.internalStocks).toBeNull()
+  })
+})
