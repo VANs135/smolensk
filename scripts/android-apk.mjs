@@ -24,10 +24,26 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const ANDROID_DIR = join(ROOT, 'android')
 const IS_WINDOWS = process.platform === 'win32'
 
-/** 本机（这台开发机）默认的工具链位置；环境变量优先 */
-const FALLBACK_JAVA_HOME = 'F:\\ocs-android-build\\jdk21\\jdk-21.0.13+9'
-const FALLBACK_ANDROID_HOME = 'F:\\ocs-android-build\\android-sdk'
-const FALLBACK_GRADLE_USER_HOME = 'F:\\ocs-android-build\\gradle-home'
+/**
+ * 本机（这台开发机）默认的工具链位置；环境变量优先
+ *
+ * 2026-11-19：F 盘（原移动工具链）离线后，在本机 E 盘重建了一套等价工具链。
+ * 两处都列出，按顺序取第一个存在的；换机器时仍以 `JAVA_HOME` / `ANDROID_HOME` 为准。
+ */
+const FALLBACK_JAVA_HOMES = [
+  'F:\\ocs-android-build\\jdk21\\jdk-21.0.13+9',
+  'E:\\ocs-android-build\\jdk-21.0.13+9',
+]
+const FALLBACK_ANDROID_HOMES = [
+  'F:\\ocs-android-build\\android-sdk',
+  'E:\\ocs-android-build\\android-sdk',
+]
+const FALLBACK_GRADLE_USER_HOMES = [
+  'F:\\ocs-android-build\\gradle-home',
+  'E:\\ocs-android-build\\gradle-home',
+]
+
+const firstExisting = (paths) => paths.find((path) => existsSync(path)) ?? paths[0]
 
 /**
  * 最低 Java 版本
@@ -48,8 +64,8 @@ function javaFeatureVersion(javaHome) {
 }
 
 function resolveEnv() {
-  const javaHome = process.env.JAVA_HOME || FALLBACK_JAVA_HOME
-  const androidHome = process.env.ANDROID_HOME || FALLBACK_ANDROID_HOME
+  const javaHome = process.env.JAVA_HOME || firstExisting(FALLBACK_JAVA_HOMES)
+  const androidHome = process.env.ANDROID_HOME || firstExisting(FALLBACK_ANDROID_HOMES)
 
   if (!existsSync(javaHome)) {
     throw new Error(
@@ -93,8 +109,8 @@ function main() {
    * 第一次构建正是因此中途撑爆。故：环境变量优先；否则用本机已备好那份（存在才用，
    * 换机器时不会因为路径不存在而报错，退回 Gradle 默认位置）。
    */
-  if (!process.env.GRADLE_USER_HOME && existsSync(FALLBACK_GRADLE_USER_HOME)) {
-    env.GRADLE_USER_HOME = FALLBACK_GRADLE_USER_HOME
+  if (!process.env.GRADLE_USER_HOME && existsSync(firstExisting(FALLBACK_GRADLE_USER_HOMES))) {
+    env.GRADLE_USER_HOME = firstExisting(FALLBACK_GRADLE_USER_HOMES)
   }
   if (env.GRADLE_USER_HOME) console.log(`[android] GRADLE_USER_HOME=${env.GRADLE_USER_HOME}`)
 
