@@ -12,9 +12,10 @@ describe('初设飞机：按激活态分栏', () => {
   const source = readFileSync('src/components/game/DecisionQueue.vue', 'utf8')
 
   it('飞机不再写「机型 · 激活态」文字行，改为分栏', () => {
-    expect(source).toContain("item.kind === 'air'")
+    // 2026-11-19 初设队列改版：飞机改为**独立分区**（按 stack.key 判定），栏内仍是阵列
+    expect(source).toContain("stack.key === 'air'")
     expect(source).toContain('queue__air')
-    expect(source).toContain('airGroups')
+    expect(source).toContain('airStatusSections')
     expect(source).not.toContain('airCardText')
     expect(source).not.toContain('airStatusText')
   })
@@ -23,6 +24,7 @@ describe('初设飞机：按激活态分栏', () => {
     expect(source).toContain("label: '激活'")
     expect(source).toContain("label: '未激活'")
     expect(source).toContain('queue__air-col-head')
-    expect(source).toContain('v-for="n in group.count"')
+    // 2026-11-19：同一状态跨机型平铺（逐枚算子阵列）
+    expect(source).toContain('v-for="chip in group.chips"')
   })
 })

@@ -78,12 +78,13 @@ describe('批 G：飞机按激活态分栏（store 计数与按栏落位）', ()
 describe('批 G：界面（源码守卫）', () => {
   it('★ 两栏渲染：栏头状态 + 算子阵列；旧的「机型 · 激活态」文字已删', () => {
     const source = readFileSync('src/components/game/DecisionQueue.vue', 'utf8')
-    expect(source).toContain('function airGroups(')
+    // 2026-11-19 初设队列改版：同一状态跨机型平铺（算子上就能认出机型），栏头口径不变
+    expect(source).toContain('airStatusSections')
     expect(source).toContain("label: '激活'")
     expect(source).toContain("label: '未激活'")
     expect(source).toContain('queue__air-col-head')
-    expect(source).toContain('v-for="n in group.count"')
-    expect(source).toContain('pickAir(item, group.status)')
+    expect(source).toContain('v-for="chip in group.chips"')
+    expect(source).toContain('pickAir(chip.item, group.status)')
     expect(source).toContain('setup.beginAirPlacement(item.side, item.entryIndex, status)')
     expect(source).not.toContain('airCardText')
     expect(source).not.toContain('airStatusText')

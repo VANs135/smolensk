@@ -213,6 +213,13 @@ export interface SetupPlacing {
    */
   imageUrl: string | null
   /**
+   * 飞机（`kind === 'air'`）：**减损面（背面）**图档；无背面图即 null
+   *
+   * 剧本页 `"*" = one unit begins reduced`：减损那枚翻到背面初设，界面上用背面算子图 + 「减」角标，
+   * 与激活 / 未激活分栏并存（两个维度，不互相顶替）。
+   */
+  imageUrlBack?: string | null
+  /**
    * 该格/该型此刻**不能落位的原因**（null = 可以）
    *
    * 例：飞机条目在本方还没有空军基地时无处可放 ⇒ 提示"先落空军基地（14.1a）"，
@@ -281,6 +288,13 @@ function imageUrlOfAircraftId(aircraftId: string | null | undefined): string | n
   if (aircraftId === null || aircraftId === undefined || aircraftId === '') return null
   const hit = aircraft.aircraft.find((record) => record.aircraftId === aircraftId)
   return hit?.images?.front ? counterImageUrl(counterDirOfSide(hit.side), hit.images.front) : null
+}
+
+/** 飞机库记录 → **减损面（背面）**图档；无背面图即 null（界面回退正面，不猜文件名） */
+function imageUrlBackOfAircraftId(aircraftId: string | null | undefined): string | null {
+  if (aircraftId === null || aircraftId === undefined || aircraftId === '') return null
+  const hit = aircraft.aircraft.find((record) => record.aircraftId === aircraftId)
+  return hit?.images?.back ? counterImageUrl(counterDirOfSide(hit.side), hit.images.back) : null
 }
 
 /** 决策队列的一堆叠（用户口径：地面 / 非战斗 / 飞机 / 卡车各一堆） */
@@ -1455,6 +1469,8 @@ export const useSetupStore = defineStore('setup', () => {
           offMapAllowed: row.offMapAllowed && canEditAirSetup(side),
           // 第六批条 1（S1）：机型图档
           imageUrl: imageUrlOfAircraftId(row.aircraftId),
+          // 减损面（背面）图档：界面据此把减损那枚画成背面
+          imageUrlBack: imageUrlBackOfAircraftId(row.aircraftId),
           // ★ 备忘 #1：基地未落位时**说清前置**（14.1a 的候选＝本方空军基地格）
           blockedReason:
             row.candidates.length === 0
