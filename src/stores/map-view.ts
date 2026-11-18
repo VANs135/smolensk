@@ -2530,38 +2530,7 @@ export const useMapViewStore = defineStore('mapView', () => {
         disabledReason: null,
       })
     }
-    // 专规 1.4a：盒内免费整备（A 整备段）
-    if (inBox && workbench.actionAllowedNow('air.refit') && air.airStatus !== 'active') {
-      out.push({
-        key: 'air.unit.refitBox',
-        label: '整备盒内飞机（1.4a）',
-        rule: '专规 1.4a',
-        panel: 'unit',
-        only: 'airUnitRefitBox',
-        group: '空军',
-        disabledReason: null,
-      })
-    }
-    // 15.1：图上基地整备（只在该基地可开整备时出现）
-    const base = workbench.ownAirBases.find(
-      (item) => item.hex.col === air.hex.col && item.hex.row === air.hex.row,
-    )
-    if (
-      !inBox &&
-      workbench.phase === 'aircraftRefit' &&
-      base !== undefined &&
-      workbench.refitStartBases.some((item) => item.id === base.id)
-    ) {
-      out.push({
-        key: 'air.unit.refitBase',
-        label: '整备该基地（15.1）',
-        rule: '15.1',
-        panel: 'unit',
-        only: `airUnitRefitBase:${base.id}`,
-        group: '空军',
-        disabledReason: null,
-      })
-    }
+    // 用户 2026-11-18 第 5 条：右键只保留**空军任务**；整备唯一入口在空军盒的「整备」按钮
     return out
   }
 
@@ -2569,7 +2538,7 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 图外盒贴图右键菜单（用户 2026-11-18）
    *
    * 只回答"这枚此刻在盒里能做什么"：死亡堆 ⇒ 重建 / 返场落点 / 永久移除（13.5 系列）；
-   * 空军盒 ⇒ 与地图空军菜单同源（任务 / 转场 / 整备）；边缘盒 ⇒ 出盒（1.4b）。
+   * 空军盒 ⇒ 与地图空军菜单同源（只有任务 / 转场；整备唯一入口在盒内按钮）；边缘盒 ⇒ 出盒（1.4b）。
    */
   function boxUnitActions(cardId: string, unitId: string): BoxUnitAction[] {
     const card = containers.cardViews.find((item) => item.id === cardId)
@@ -2622,15 +2591,6 @@ export const useMapViewStore = defineStore('mapView', () => {
       return workbench.airMissionAirIds.includes(instanceId)
     }
     if (key === 'airUnitTransfer') return startAirTransferNow(instanceId)
-    if (key === 'airUnitRefitBox') return containers.activateAirBox(air.side)
-    if (key.startsWith('airUnitRefitBase:')) {
-      const baseId = key.slice('airUnitRefitBase:'.length)
-      const base = workbench.ownAirBases.find((item) => item.id === baseId)
-      if (base === undefined) return false
-      if (!workbench.beginRefitNow(baseId)) return false
-      openPopup(base.hex, 0, 0, 'content', { airFocus: true })
-      return true
-    }
     return false
   }
 

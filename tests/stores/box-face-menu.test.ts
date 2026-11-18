@@ -138,7 +138,7 @@ describe('空军盒贴图菜单（10.0d / 14.x / 15.1）', () => {
     expect(s.workbench.airMissionKind).toBe(first.key)
   })
 
-  it('★ A 整备段右键盒内非激活机 ⇒ 出 1.4a 整备项，执行后转激活', () => {
+  it('★ A 整备段右键盒内非激活机 ⇒ 不再提供整备（唯一入口在盒内「整备」按钮）', () => {
     const plane = placeAir(
       s.workbench,
       fighterRecord('axis'),
@@ -152,8 +152,10 @@ describe('空军盒贴图菜单（10.0d / 14.x / 15.1）', () => {
     goToActionStep(s.workbench, 'air.refit')
 
     const keys = s.mapView.boxUnitActions(AIR_CARD, plane.instanceId).map((item) => item.key)
-    expect(keys).toContain('airUnitRefitBox')
-    expect(s.mapView.runBoxUnitAction(AIR_CARD, plane.instanceId, 'airUnitRefitBox')).toBe(true)
+    expect(keys).not.toContain('airUnitRefitBox')
+    expect(s.mapView.runBoxUnitAction(AIR_CARD, plane.instanceId, 'airUnitRefitBox')).toBe(false)
+    // 入口仍在：空军盒名册的「整备盒内飞机」按钮走同一个 store 动作
+    expect(s.containers.activateAirBox('axis')).toBe(true)
     expect(plane.airStatus).toBe('active')
   })
 
