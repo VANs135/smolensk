@@ -743,6 +743,27 @@ export const useSetupStore = defineStore('setup', () => {
   }
 
   /**
+   * 当前布设方 † 条目的**常亮范围**（各条目 ±N 候选格的并集）
+   *
+   * 用户 2026-11-18：范围高亮不再依赖"点中某一枚"——轮到该方初设时，这些格一直铺在
+   * 地图上（由 `map-view` 的 `setupCandidates` 投影，渲染层照旧画青柠环）。
+   * 只收 `fixedTolerant`；其它放置方式仍按既有初设规则处理，不并入这里。
+   */
+  const rangeCandidatesOfSetupSide = computed<readonly HexRef[]>(() => {
+    if (finished.value) return []
+    const side = setupSideCursor.value
+    if (side === null) return []
+    const out: HexRef[] = []
+    for (const entry of entries.value) {
+      if (entry.side !== side || entry.placement !== 'fixedTolerant') continue
+      for (const hex of candidatesOf(entry.index)) {
+        if (!out.some((item) => sameHex(item, hex))) out.push({ col: hex.col, row: hex.row })
+      }
+    }
+    return out
+  })
+
+  /**
    * 把一枚 † 算子散到目标格
    *
    * 移动只改 `hex`、不改实例 id，故卡车满载标记与 `loadedSpT` 原样保留（13.2h）。
@@ -837,10 +858,16 @@ export const useSetupStore = defineStore('setup', () => {
     })
   }
 
-  /** 地图点了一格且处于 † 散开选中态 ⇒ 当作“把这一枚散到该格” */
+  /**
+   * 地图点了一格且处于 † 散开选中态 ⇒ 当作“把这一枚散到该格”
+   *
+   * 用户 2026-11-18：**只接管范围内的格**。范围外的一击必须交回常规初设分派
+   * （选别的单位 / 落 box 里的项），否则玩家会被"散开这一枚"困住，没法先去布别的单位。
+   */
   function moveStackUnitAtHex(hex: HexRef): boolean {
     const current = stackDisperse.value
     if (current === null) return false
+    if (!current.candidates.some((item) => sameHex(item, hex))) return false
     moveStackUnit(current.instanceId, hex)
     return true
   }
@@ -861,6 +888,8 @@ export const useSetupStore = defineStore('setup', () => {
       placing.value = null
       return record({ ok: false, rule: 'IV', reason: 'nothingToPlace' })
     }
+    // 用户 2026-11-18：开始布别的项 ⇒ 收起上一枚的 ±1 选中态（不拿旧选中吞这一轮点击）
+    stackDisperse.value = null
     placing.value = {
       kind: 'self',
       entryIndex,
@@ -952,6 +981,8 @@ export const useSetupStore = defineStore('setup', () => {
         airStatusOrder.value = { ...airStatusOrder.value, [key]: order }
       }
     }
+    // 用户 2026-11-18：开始布别的项 ⇒ 收起上一枚的 ±1 选中态
+    stackDisperse.value = null
     placing.value = {
       kind: 'air',
       entryIndex,
@@ -994,6 +1025,8 @@ export const useSetupStore = defineStore('setup', () => {
         : hexesWithin(from, Math.max(item.shiftHexes, 0), { onMapOnly: true }).filter(
             (hex) => hex.col <= from.col,
           )
+    // 用户 2026-11-18：开始布别的项 ⇒ 收起上一枚的 ±1 选中态
+    stackDisperse.value = null
     placing.value = {
       kind: 'shift',
       formationId,
@@ -4206,6 +4239,8 @@ export const useSetupStore = defineStore('setup', () => {
     // 用户 2026-11-18：多选整组散开（一次拖动）与多选候选并集
     dispersableIdsAmong,
     disperseCandidatesFor,
+    // 用户 2026-11-18：当前布设方 † 范围常亮（不依赖选中）
+    rangeCandidatesOfSetupSide,
     moveStackUnits,
     setPlacingChunk,
     placingChunkChoices,

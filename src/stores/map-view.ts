@@ -919,7 +919,12 @@ export const useMapViewStore = defineStore('mapView', () => {
           ? setup.truckPickHexes
           : setup.pendingSpOwnershipHexes.length > 0
             ? setup.pendingSpOwnershipHexes
-            : null),
+            : null) ??
+        /*
+         * 用户 2026-11-18：当前布设方的 † 范围**常亮**（不看选中）。
+         * 放在最后：有明确落位/散开态时仍只显示那一份候选。
+         */
+        setup.rangeCandidatesOfSetupSide,
       // 15.1：整备付款的补给站候选（用户口径：与其它补给消耗一样，点地图上高亮的补给）
       refitPay: refitPayHints.value,
       // ⑦ 12.3a / 12.3b：选源时地图上可点的来源格（点格即选定；再点取消）
