@@ -71,6 +71,7 @@ import { useContainersStore } from './containers'
 import { useGameSessionStore } from './session'
 import { useHotseatStore } from './hotseat'
 import { useWorkbenchStore } from './workbench'
+import { tutorialAirAllInactive } from './tutorial-settings'
 import {
   counterImageUrlOf,
   currentReOf,
@@ -449,7 +450,13 @@ export const useSetupStore = defineStore('setup', () => {
 
   /** 该方的飞机初设计划 */
   function airPlanOf(side: Side): AirSetupPlan | null {
-    const outcome = planAirSetup({ scenarioId: scenarioId.value, side, facts: factsFor(side) })
+    const outcome = planAirSetup({
+      scenarioId: scenarioId.value,
+      side,
+      facts: factsFor(side),
+      // 教学开局：盒子里的飞机以未激活开始，整备（14.1a）才有对象；判定仍走原路
+      policyOverride: tutorialAirAllInactive.value ? 'all_inactive' : undefined,
+    })
     return outcome.ok ? outcome.data : null
   }
 

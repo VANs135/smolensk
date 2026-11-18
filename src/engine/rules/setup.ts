@@ -1283,11 +1283,27 @@ export function planAirSetup(input: {
   scenarioId: string
   side: Side
   facts?: SetupCandidateFacts
+  /**
+   * 开局方式覆盖初始激活态（教学模式用）
+   *
+   * 只改「这些飞机以什么状态开始」，不改任何判定：仍未激活的飞机依旧只能走 14.1a 整备。
+   * 缺省（undefined）＝按剧本页政策，与既有行为完全一致。
+   */
+  policyOverride?: ScenarioAirSetupPolicy['policy']
 }): RuleOutcome<AirSetupPlan> {
   const scenario = scenarios.scenarios.find((item) => item.id === input.scenarioId)
   if (scenario === undefined) return fail(AIR_ACTIVE_RULE, `scenarioNotFound:${input.scenarioId}`)
 
-  const policy = airSetupPolicyOf(input.scenarioId, input.side)
+  const basePolicy = airSetupPolicyOf(input.scenarioId, input.side)
+  const policy: ScenarioAirSetupPolicyShape =
+    input.policyOverride === undefined
+      ? basePolicy
+      : {
+          ...basePolicy,
+          policy: input.policyOverride,
+          statedInRules: true,
+          raw: `开局方式：飞机初始激活态按 ${input.policyOverride}（教学模式）`,
+        }
   const facts = input.facts ?? {}
   const candidates = filterEnterable(facts.airBaseHexes ?? [], facts, null)
   const views = setupEntryViews(input.scenarioId, input.side).filter(

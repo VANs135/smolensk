@@ -1,17 +1,25 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { ConsensusChecklist } from '@/components/hotseat'
 import { ScenarioBriefingDialog } from '@/components/setup'
 import { provideUiMode } from '@/components/ui-mode'
 import { scenarios } from '@/data'
-import { useGameSessionStore, useHotseatStore, useSetupStore, useUiStore } from '@/stores'
+import {
+  useGameSessionStore,
+  useHotseatStore,
+  useSetupStore,
+  useTutorialStore,
+  useUiStore,
+} from '@/stores'
+import { setTutorialAirAllInactive } from '@/stores/tutorial-settings'
 
 provideUiMode('formal')
 
 const setup = useSetupStore()
 const gameSession = useGameSessionStore()
 const hotseat = useHotseatStore()
+const tutorial = useTutorialStore()
 const ui = useUiStore()
 
 const modeOptions = computed(() => hotseat.MODE_LABELS)
@@ -63,6 +71,31 @@ const briefingOpen = computed({
   },
 })
 
+/* ── 用户 2026-11-18 第 2 条：Vitebsk 教学模式的独立开局方式 ── */
+
+/** 教学开关（只对单回合教学剧本出现） */
+const tutorialMode = ref(false)
+/** 目标窗关掉前先记住这一局是不是教学，防止中途换剧本把标记带错 */
+const pendingTutorial = ref(false)
+
+function onTutorialChange(on: boolean): void {
+  tutorialMode.value = on
+  setTutorialAirAllInactive(on)
+  if (!on) {
+    tutorial.stop()
+    return
+  }
+  // 教学固定正常天气 + 单人（双方都由玩家点，才有「苏军初设 → 轴心」的完整交棒）
+  gameSession.setFirstWeatherChoice('normal', selectedId.value)
+  if (!hotseat.setupLocked) hotseat.setMode('solo')
+  tutorial.startFor()
+}
+
+/** 换到非教学剧本就收起教学开局，避免把未激活空军/引导带到别的剧本 */
+watch(selectedId, (id) => {
+  if (!isTeachingScenario(id) && tutorialMode.value) onTutorialChange(false)
+})
+
 /**
  * 进入初设（用户 2026-11-18 第 1 条）
  *
@@ -71,9 +104,20 @@ const briefingOpen = computed({
 function onEnterSetup(): void {
   const target = selected.value
   if (target === null) return
+  const teaching = tutorialMode.value && isTeachingScenario(target.id)
+  pendingTutorial.value = teaching
+  setTutorialAirAllInactive(teaching)
+  if (teaching) {
+    gameSession.setFirstWeatherChoice('normal', target.id)
+    if (!hotseat.setupLocked) hotseat.setMode('solo')
+    tutorial.startFor()
+  } else {
+    tutorial.stop()
+  }
   const result = setup.requestEnterSetup(target.id)
   if (result === 'blocked') {
     const failure = setup.lastAction
+    pendingTutorial.value = false
     ui.pushToast('warning', `无法进入初设：${failure?.detail ?? '请重新选择剧本'}`)
     return
   }
@@ -87,6 +131,8 @@ function onConfirmBriefing(): void {
     ui.pushToast('warning', `无法进入初设：${failure?.detail ?? '请重新选择剧本'}`)
     return
   }
+  if (pendingTutorial.value) tutorial.startFor()
+  pendingTutorial.value = false
   ui.navigate('game')
 }
 </script>
@@ -170,7 +216,13 @@ function onConfirmBriefing(): void {
                 <dt>天气</dt>
                 <!-- 开局天气可选（用户 2026-11-15 口径）：只教学剧本出现，一个入口、两档 -->
                 <!-- 传 `selected.id`：卡片选中尚未提交到会话 store，判据要按正在配置的剧本走 -->
-                <dd v-if="isTeachingScenario(selected.id)" class="scenario__weather">
+                <dd
+                  v-if="isTeachingScenario(selected.id) && tutorialMode"
+                  class="scenario__weather"
+                >
+                  <span>正常飞行（教学固定）</span>
+                </dd>
+                <dd v-else-if="isTeachingScenario(selected.id)" class="scenario__weather">
                   <label>
                     <input
                       type="radio"
@@ -194,10 +246,24 @@ function onConfirmBriefing(): void {
                 </dd>
                 <dd v-else>{{ weatherLabelOf(selected.id) }}</dd>
               </div>
+              <div v-if="isTeachingScenario(selected.id)">
+                <dt>教学模式</dt>
+                <dd class="scenario__weather">
+                  <label>
+                    <input
+                      type="checkbox"
+                      :checked="tutorialMode"
+                      @change="onTutorialChange(($event.target as HTMLInputElement).checked)"
+                    />
+                    <span>逐步引导 UI</span>
+                  </label>
+                </dd>
+              </div>
             </dl>
             <fieldset class="scenario__modes">
               <legend>对局模式</legend>
-              <ul v-if="!hotseat.setupLocked" class="modes">
+              <p v-if="tutorialMode" class="modes__locked">单人（教学固定）</p>
+              <ul v-else-if="!hotseat.setupLocked" class="modes">
                 <li v-for="item in modeOptions" :key="item.key">
                   <label
                     class="modes__item"
@@ -216,7 +282,7 @@ function onConfirmBriefing(): void {
               </ul>
               <p v-else class="modes__locked">{{ modeLabel }}</p>
             </fieldset>
-            <fieldset v-if="hotseat.mode === 'pve'" class="scenario__modes">
+            <fieldset v-if="hotseat.mode === 'pve' && !tutorialMode" class="scenario__modes">
               <legend>AI 控制方</legend>
               <ul v-if="!hotseat.setupLocked" class="modes">
                 <li v-for="item in aiSideChoices" :key="item.side">

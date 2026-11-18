@@ -30,6 +30,7 @@ import {
 } from '@/components/session'
 import { SupplyPanel } from '@/components/supply'
 import SupplyPhasePanel from '@/components/supply/SupplyPhasePanel.vue'
+import { TutorialGuide } from '@/components/tutorial'
 import { provideUiMode } from '@/components/ui-mode'
 import { VictoryDialog, VictoryPanel } from '@/components/victory'
 import type { HexRef } from '@/data'
@@ -160,6 +161,12 @@ const layers = [
 ] as const
 
 const mapRef = ref<MapBridge | null>(null)
+
+/** 教学模式指格子时用的地图桥（窗口坐标；没挂地图就退回不画环） */
+function tutorialHexToWindow(hex: HexRef): { x: number; y: number } | null {
+  return mapRef.value?.hexToWindow(hex) ?? null
+}
+
 const mapLayerToggles = reactive({ ...DEFAULT_MAP_LAYERS })
 const drawer = ref<TableDrawer>('status')
 const openedDrawers = reactive(new Set<TableDrawer>())
@@ -753,6 +760,8 @@ onBeforeUnmount(() => {
     <!-- 用户 2026-11-15：对局终止即弹「判定胜利」窗（胜负 + 判定依据；条款号进 `?`） -->
     <VictoryDialog />
     <QuestionPrompt />
+    <!-- 用户 2026-11-18 第 2 条：Vitebsk 教学模式（逐步指到格子/算子/盒/按钮） -->
+    <TutorialGuide :hex-to-window="tutorialHexToWindow" />
 
     <!-- 读档后模式未设置：选齐前挡在盘面前，AI 不接管、热坐不按 PVP 遮屏 -->
     <Teleport to="body">
