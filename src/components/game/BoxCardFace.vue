@@ -4,7 +4,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { RuleTip } from '@/components/base'
 import { counterImages } from '@/render/token-images'
 import { vLongPress } from '@/shared/long-press'
-import { useContainersStore, useMapViewStore, type AuxCardView } from '@/stores'
+import { useContainersStore, useMapViewStore, useWorkbenchStore, type AuxCardView } from '@/stores'
 
 import { auxCardImageUrl } from './aux-card-image'
 
@@ -28,6 +28,7 @@ const pickedUnitId = ref<string | null>(null)
 
 const mapView = useMapViewStore()
 const containers = useContainersStore()
+const workbench = useWorkbenchStore()
 
 /**
  * 用户 2026-11-18：**贴图上直接右键出菜单**（与地图算子一致）
@@ -129,9 +130,16 @@ function unitReady(url: string): boolean {
   return counterImages.get(url) !== null
 }
 
-/** 点选 / 取消（只影响卡面高亮，不提交任何动作） */
+/**
+ * 点选 / 取消（只影响卡面高亮，不提交任何动作）
+ *
+ * 用户 2026-11-18：**死亡堆**里点选一枚 = 直接进入 13.5 重建选格（高亮合法格 → 点格落位），
+ * 不再经会话框/二次确认；其余盒的"选谁"仍只是卡面高亮。
+ */
 function pickUnit(unitId: string): void {
-  pickedUnitId.value = pickedUnitId.value === unitId ? null : unitId
+  const same = pickedUnitId.value === unitId
+  pickedUnitId.value = same ? null : unitId
+  mapView.pickBoxUnitAtFace(props.card.boxKind, unitId, same)
 }
 
 /** 分区在屏上的像素矩形（卡面像素 × 比例） */
@@ -205,6 +213,8 @@ function regionStyle(rect: { x: number; y: number; w: number; h: number }): Reco
             >
               {{ (unit.name ?? unit.unitId).slice(0, 2) }}
             </span>
+            <!-- 标记盒的成组存量（如预备标记 ×14）：消耗时随派生值即时变化 -->
+            <span v-if="unit.badge != null" class="face__badge">{{ unit.badge }}</span>
           </button>
         </li>
       </ul>
@@ -225,6 +235,25 @@ function regionStyle(rect: { x: number; y: number; w: number; h: number }): Reco
         @click="containers.requestCardWindow()"
       >
         拆分取用…<RuleTip rule="20.0" />
+      </button>
+
+      <!--
+        用户 2026-11-18（范围更正）：贴图按钮**只加给盒内唯一入口**的操作。
+        空军盒的「整备」（1.4a）只能从盒里做，地图上没有别的入口 ⇒ 放在未激活分区的贴图上；
+        建造标记的入口在地图上（对可用单位右键，专规 3.5），标记盒只显示存量、不加按钮。
+      -->
+      <button
+        v-if="
+          region.kind === 'air_box_inactive' &&
+          card.side === workbench.activeSide &&
+          region.units.length > 0
+        "
+        type="button"
+        class="face__action"
+        title="1.4a：盒内免费整备（Inactive → Active，不耗 SP）"
+        @click="containers.activateAirBox(workbench.activeSide)"
+      >
+        整备<RuleTip rule="1.4a" />
       </button>
     </div>
 
@@ -370,6 +399,7 @@ function regionStyle(rect: { x: number; y: number; w: number; h: number }): Reco
 }
 
 .face__unit-btn {
+  position: relative;
   display: block;
   padding: 0;
   border: 2px solid transparent;
@@ -377,6 +407,21 @@ function regionStyle(rect: { x: number; y: number; w: number; h: number }): Reco
   background: none;
   cursor: pointer;
   line-height: 0;
+}
+
+/* 标记盒的存量角标（如「×14」）：压在这一枚贴图右下角 */
+.face__badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-panel);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  pointer-events: none;
 }
 
 /* ⑤：点选中的那一枚给一圈金色，与地图上"已选中"同一套视觉 */

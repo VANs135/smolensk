@@ -101,10 +101,14 @@ describe('批 D 切片 2：建造标记（标记盒 → 二选一 → 点图落�
     // 剧本 1 初设 3 枚（本组 store 未换剧本 ⇒ 取剧本初设值）
     const remaining = stores.workbench.constructionMarkers
     expect(remaining).toBeGreaterThan(0)
-    expect(markers.units).toHaveLength(remaining)
-    expect(markers.units[0]?.unitId).toBe('construction-marker:1')
-    expect(markers.units[0]?.name).toContain('二选一')
-    expect(markers.note).toContain('拾起并落位')
+    // 2026-11-18：标记盒同时显示预备标记存量 ⇒ 只数建造标记那几条
+    const construction = markers.units.filter((unit) =>
+      unit.unitId.startsWith('construction-marker:'),
+    )
+    expect(construction).toHaveLength(remaining)
+    expect(construction[0]?.unitId).toBe('construction-marker:1')
+    expect(construction[0]?.name).toContain('二选一')
+    expect(markers.note).toContain('地图上')
 
     const sovietCard = stores.containers
       .cardViewsOf('soviet')

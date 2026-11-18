@@ -15,6 +15,7 @@ import type { HexRef, Side } from '@/data'
 import { hexsideOf, sameHex } from '@/engine/hex-geometry'
 import { pickIndex, roll1d6 } from '@/engine/rng'
 import { SetupDrawSnapshotSchema } from '@/engine/setup-draw-snapshot'
+import { MARKER_TEXTURES, markerTextureUrl } from '@/render/token-images'
 import { createId } from '@/shared'
 import {
   ALARM_MIX_RULE,
@@ -131,6 +132,13 @@ function hasRoadOrRailEdge(a: HexRef, b: HexRef): boolean {
 export interface BoxHoldingView extends BoxHolding {
   /** 贴图 URL（null ＝ 取不到图 ⇒ 组件退回一个空位，不臆造文件名） */
   imageUrl: string | null
+  /**
+   * 2026-11-18：卡面上的**存量角标**（如「×14」）
+   *
+   * 用于**标记盒**的成组贴图：预备标记按 5.4a 有 5–14 枚额度，逐个铺贴图会溢出分区；
+   * 这里只铺一枚官方贴图 + 角标写剩余数，消耗时角标随派生值即时变化。
+   */
+  badge?: string | null
 }
 
 /** 卡上一个分区（含该分区里摆着的算子） */
@@ -794,25 +802,50 @@ export const useContainersStore = defineStore('containers', () => {
              *   苏方卡如实说明"建造标记是轴方专规 3.5"。
              */
             if (region.boxKind === 'markers') {
-              const axisSide = (side ?? workbench.activeSide) === 'axis'
+              const viewerSide = side ?? workbench.activeSide
+              const axisSide = viewerSide === 'axis'
               const remaining = axisSide ? workbench.constructionMarkers : 0
-              return {
-                id: region.id,
-                label: region.label,
-                kind: region.boxKind,
-                rect: region.rect,
-                rule: target.rule,
-                units: Array.from({ length: remaining }, (_, index) => ({
+              /*
+               * 用户 2026-11-18（范围更正）：标记盒**只显示存量，不加按钮**。
+               *   · 建造标记：使用入口在地图上（对有可用单位的格右键，专规 3.5），盒里只列未放置的枚数；
+               *   · 预备标记：5.4a 的额度是**派生值**（`reservedHexes` 的格数），消耗即随单位模式变化；
+               *     这里铺一枚官方贴图 + `badge` 写剩余数（5–14 枚逐个铺会溢出分区）。
+               */
+              const reserve = workbench.reserveMarkerStatusOf(viewerSide)
+              const units = [
+                ...Array.from({ length: remaining }, (_, index) => ({
                   unitId: `construction-marker:${index + 1}`,
                   name: '建造标记（放置时二选一：桥 13.8b / 简易机场 15.2）',
                   side: 'axis' as const,
                   sectionId: 'markers',
                   imageUrl: null,
                 })),
+                ...(reserve.cap > 0
+                  ? [
+                      {
+                        unitId: `reserve-marker:${viewerSide}`,
+                        name:
+                          `预备标记 剩余 ${String(reserve.remaining)}/${String(reserve.cap)} 枚` +
+                          '（5.4a：一格预备单位占 1 枚，同格堆叠不重复占）',
+                        side: viewerSide,
+                        sectionId: 'markers',
+                        imageUrl: markerTextureUrl(MARKER_TEXTURES.reserve[viewerSide]),
+                        badge: `×${String(reserve.remaining)}`,
+                      },
+                    ]
+                  : []),
+              ]
+              return {
+                id: region.id,
+                label: region.label,
+                kind: region.boxKind,
+                rect: region.rect,
+                rule: target.rule,
+                units,
                 note: axisSide
                   ? remaining === 0
                     ? '本剧本没有建造标记（专规 3.5：剧本 1/2 各 3 枚，其余 0 枚）'
-                    : '展开本卡即在会话框里「拾起并落位」（专规 3.5：轴方移动阶段、单位移动之前）'
+                    : '建造标记在**地图上**对可用单位右键放置（专规 3.5）；盒里只显示未放置的枚数'
                   : '建造标记是**轴方**专规 3.5 的内容 ⇒ 苏方此盒无此项',
               }
             }

@@ -123,16 +123,21 @@ describe('B12：卡面投影（分区 + 区内容物）', () => {
         /*
          * ★ 契约变更（批 D 切片 2，用户 9.16 #15，**不是放宽**）：`markers`（标记存放盒）**不再算"结构性缺栏"**——
          *   它装的正是**建造标记**（专规 3.5：剧本 1/2 各 3 枚），投影按剩余枚数给内容物。
-         *   本条替它加两条**新**判据：必须有说明；轴方卡上的枚数＝`workbench.constructionMarkers`。
-         *   其余 `sectionId === null` 的分区照旧必须"有说明 + 无内容物"。
+         *   2026-11-18：同一分区还要放**预备标记存量**（5.4a，一枚贴图 + 角标），故按前缀分别计数。
          */
         if (region.kind === 'markers') {
           expect(region.note, `${card.id}/${region.id} 标记盒没有说明`).not.toBeNull()
+          const construction = region.units.filter((unit) =>
+            unit.unitId.startsWith('construction-marker:'),
+          )
+          const reserve = region.units.filter((unit) => unit.unitId.startsWith('reserve-marker:'))
+          const reserveCap = stores.workbench.reserveMarkerStatusOf(card.side ?? 'axis').cap
+          expect(reserve).toHaveLength(reserveCap > 0 ? 1 : 0)
           if (card.side === 'axis') {
-            expect(region.units).toHaveLength(stores.workbench.constructionMarkers)
-            expect(region.units[0]?.unitId).toBe('construction-marker:1')
+            expect(construction).toHaveLength(stores.workbench.constructionMarkers)
+            expect(construction[0]?.unitId).toBe('construction-marker:1')
           } else {
-            expect(region.units).toEqual([])
+            expect(construction).toEqual([])
             expect(region.note ?? '').toContain('轴方')
           }
           continue

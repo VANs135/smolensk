@@ -1530,6 +1530,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
+   * 5.4a：某方预备标记的 上限 / 占用 / 剩余（**显示与转入闸门共用这一份派生值**）
+   *
+   * 用户 2026-11-18：「预备标记要能在标记盒里看到，并在玩家消耗时即时减少；消耗入口与显示
+   * 同源，不要各存一份计数。」⇒ 不新增账本：`used` 仍由 `reservedHexes`（单位的当前模式）
+   * 派生，`cap` 读剧本数据；标记盒卡与 `canEnterReserveMode` 都读本函数。
+   */
+  function reserveMarkerStatusOf(side: Side): { cap: number; used: number; remaining: number } {
+    const cap = session.scenarioInfo?.setup.reserveMarkers?.[side] ?? 0
+    const used = reservedHexes(side).length
+    return { cap, used, remaining: Math.max(0, cap - used) }
+  }
+
+  /**
    * 13.2a：已「暂停移动」的运输点数（原文「运输点数可以移动、暂停移动……然后继续移动」）
    *
    * 只记**玩家主动结束移动**的运输点数：它们在同一移动阶段内可以再次开拔（6.1g 的
@@ -9018,17 +9031,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * @returns 能否转入（被拒时已写日志）
    */
   function canEnterReserveMode(unit: ConsoleUnit): boolean {
-    const cap = session.scenarioInfo?.setup.reserveMarkers?.[unit.side] ?? 0
+    const status = reserveMarkerStatusOf(unit.side)
     const outcome = allowReserveEntryAtHex({
       side: unit.side,
-      cap,
+      cap: status.cap,
       hex: hexKeyOf(unit),
       occupiedHexes: reservedHexes(unit.side),
     })
     if (outcome.ok) return true
     const detail = outcome.reason.startsWith('noReserveMarkerAvailable')
       ? '剧本未给本方预备标记（0 枚），无预备权（5.4a）'
-      : `本方的预备标记已用完（${String(cap)} 个格子），不能再把一个格子转入预备（5.4a）`
+      : `本方的预备标记已用完（${String(status.cap)} 个格子），不能再把一个格子转入预备（5.4a）`
     pushLog('warning', `${unit.name} 不能转入预备模式：${detail}`, outcome.rule)
     return false
   }
@@ -29861,6 +29874,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     deadPilePickId.value = instanceId
     // 13.5：选中即按算子类型自动映射行键（唯一行才写，推不出唯一行留空）
     selectRebuildUnitNow(instanceId)
+    /*
+     * 用户 2026-11-18：死亡堆里**选中一枚**就直接进入重建选格——
+     * 地图立刻高亮该单位的全部合法落点（`rebuildLegalHexes`，13.5a 既有判据），
+     * 点其中一格即落盘（`rebuildUnitNow`），不再经会话框确认或二次点选。
+     * 不在重建环节/无合法落点时不强行开选格：仍保留 `deadPileRebuildBlockedReason` 的可见原因。
+     */
+    if (
+      rebuildPickUnitId.value === instanceId &&
+      actionAllowedNow('rein.rebuild') &&
+      rebuildCandidateHexes(instanceId).length > 0
+    ) {
+      beginDeadPileRebuildNow(instanceId)
+    }
   }
 
   /**
@@ -30720,6 +30746,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     movePick,
     // 5.4a：预备额度按格派生（同格已有预备单位 ⇒ 不额外占；界面/测试读它核对占用）
     reservedHexes,
+    // 5.4a：预备标记存量（显示与转入闸门同源，避免各存一份计数）
+    reserveMarkerStatusOf,
     // 专规 1.5 / 剧本 1–2：首回合苏军地面单位 ×1/2（界面额度显示与引擎同一口径）
     sovietFirstTurnMaFactor,
     movePickHex,

@@ -2577,6 +2577,28 @@ export const useMapViewStore = defineStore('mapView', () => {
     return []
   }
 
+  /**
+   * 死亡堆贴图**左键点选** = 直接进入 13.5 重建选格（用户 2026-11-18）
+   *
+   * 「死亡堆里选中一个单位后，地图上直接高亮该单位所有合法放置格；玩家点其中一个格就完成放置，
+   * 不需要再走弹窗确认或二次点选。」
+   *
+   * 合法格**不另写判据**：直接调 `workbench.beginDeadPileRebuildNow`，它内部用
+   * `rebuildLegalHexes`（逐格拿 `planRebuild` 预演）开好待点格；点格由既有 `pickHexFor` 落盘。
+   * 只在 13.5 的重建环节放行（`rein.rebuild`），其余环节点选仍只是"选谁"。
+   */
+  function pickBoxUnitAtFace(boxKind: string, unitId: string, deselect: boolean): boolean {
+    if (boxKind !== 'dead_pile') return false
+    if (deselect) {
+      if (workbench.rebuildPickUnitId !== unitId && workbench.hexPickView === null) return false
+      workbench.cancelHexPick()
+      return true
+    }
+    if (workbench.deadPilePickId === unitId && workbench.hexPickView !== null) return false
+    workbench.pickDeadPileUnitNow(unitId)
+    return workbench.hexPickView !== null
+  }
+
   /** 空军单位菜单项的执行入口（地图 chip 与盒贴图共用；界面只按 key 转发） */
   function runAirUnitAction(instanceId: string, key: string): boolean {
     const air = workbench.airUnits.find((item) => item.instanceId === instanceId)
@@ -5105,6 +5127,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     dropCounterInBox,
     // 图外盒贴图：右键菜单（与地图空军菜单同源；能做的才出现）
     boxUnitActions,
+    pickBoxUnitAtFace,
     runBoxUnitAction,
     openContextAction,
     // 14.11 转场（用户 2026-11-12）：基地窗勾机 → 选盒 / 选目的基地
