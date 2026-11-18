@@ -146,6 +146,13 @@ export interface ScenarioChoice {
 export type SetupPlacingCategory = 'air' | 'supply' | 'ground'
 
 /**
+ * `requestEnterSetup` 的三种结果（用户 2026-11-18 第 1 条）
+ *
+ * `blocked` 模式未选齐 / 进初设被拒；`briefing` 目标窗已挂起待确认；`setup` 直接进初设。
+ */
+export type SetupEntryKind = 'blocked' | 'briefing' | 'setup'
+
+/**
  * 初设里**待在地图上落位**的一项
  *
  * 四类：`self` = 剧本页只给了条件（`w/i N` / 任一指挥部）的地面项；`air` = 某一型飞机
@@ -2073,6 +2080,16 @@ export const useSetupStore = defineStore('setup', () => {
   const finished = ref(false)
 
   /**
+   * 任务目标 / 胜利条件窗（用户 2026-11-18 第 1 条）
+   *
+   * `briefingPendingId`：待确认目标窗的剧本（null ＝ 无窗）；
+   * `briefingAcknowledged`：本次开局内已确认过目标窗的剧本（同一剧本不弹第二遍）。
+   * 只由 `requestEnterSetup` / `confirmBriefing` / `dismissBriefing` / `restartGameNow` 改。
+   */
+  const briefingPendingId = ref<string | null>(null)
+  const briefingAcknowledged = ref<Record<string, boolean>>({})
+
+  /**
    * 用户 2026-11-14 裁定 2：验证页「重置初设」把盘面清空后置真 ⇒ 禁止在空盘面上收束/开局；
    * `runAutoSetup`（含选剧本的自动初设）落盘成功即清除。只由 `resetAll` 与 `runAutoSetup` 改。
    */
@@ -2897,6 +2914,41 @@ export const useSetupStore = defineStore('setup', () => {
       id !== scenarioId.value ? selectScenario(id) : !needsLoad() || ensureSetupLoaded()
     if (entered) hotseat.lockMode()
     return entered
+  }
+
+  /**
+   * 进初设前先过「任务目标 / 胜利条件」窗（用户 2026-11-18 第 1 条）
+   *
+   * 返回值：
+   *   · `blocked`——模式未选齐（与 `enterSetup` 同一闸门，原样报因）；
+   *   · `briefing`——窗口已挂起，等玩家点「确定」；
+   *   · `setup`——本剧本本次开局已确认过，直接进初设。
+   *
+   * ★ 视图的「进入初设」只走这里，不再直接调 `enterSetup`；窗口唯一出口是 `confirmBriefing`。
+   */
+  function requestEnterSetup(id: string): SetupEntryKind {
+    if (hotseat.modeIssue !== null) {
+      lastAction.value = { ok: false, rule: '2.2', detail: hotseat.modeIssue }
+      return 'blocked'
+    }
+    if (briefingAcknowledged.value[id] === true) return enterSetup(id) ? 'setup' : 'blocked'
+    briefingPendingId.value = id
+    return 'briefing'
+  }
+
+  /** 目标窗「确定」：确认后进入初设（窗口唯一出口；不额外弹第二遍） */
+  function confirmBriefing(): boolean {
+    const pending = briefingPendingId.value
+    if (pending === null) return false
+    briefingPendingId.value = null
+    if (!enterSetup(pending)) return false
+    briefingAcknowledged.value = { ...briefingAcknowledged.value, [pending]: true }
+    return true
+  }
+
+  /** 关窗＝取消：不落盘，下次请求仍会弹 */
+  function dismissBriefing(): void {
+    briefingPendingId.value = null
   }
 
   /** `enterSetup` 的「需要重新加载盘面」判据 */
@@ -4179,6 +4231,9 @@ export const useSetupStore = defineStore('setup', () => {
     const nextSeed = workbench.seed
     game.resetGame(true)
     workbench.resetBoardNow(nextSeed)
+    // 新的一局 ⇒ 目标窗重新确认（用户 2026-11-18 第 1 条）
+    briefingPendingId.value = null
+    briefingAcknowledged.value = {}
     return selectScenario(scenarioId.value)
   }
 
@@ -4307,6 +4362,11 @@ export const useSetupStore = defineStore('setup', () => {
     // B10：前置「剧本 + 共识」视图
     scenarioChoices,
     enterSetup,
+    // 用户 2026-11-18 第 1 条：进初设前的任务目标 / 胜利条件窗（唯一入口 + 确认后进初设）
+    briefingPendingId,
+    requestEnterSetup,
+    confirmBriefing,
+    dismissBriefing,
     // 动作
     selectScenario,
     ensureSetupLoaded,

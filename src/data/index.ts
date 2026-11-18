@@ -173,6 +173,8 @@ export type {
   Scenario,
   ScenarioAirSetup,
   ScenarioAirSetupPolicy,
+  ScenarioBriefing,
+  ScenarioBriefingItem,
   ScenarioSetup,
   ScenarioSetupData,
   ScenariosData,

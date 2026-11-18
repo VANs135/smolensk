@@ -87,6 +87,51 @@
     {
       "id": "1",
       "name": "Smolensk Campaign",
+      "briefing": {
+        "objectives": [
+          {
+            "text": "轴方：夺取并保持斯摩棱斯克、维捷布斯克、奥尔沙、莫吉廖夫、博布鲁伊斯克的控制",
+            "rule": "5.0a"
+          },
+          {
+            "text": "苏方：守住维亚济马与勒热夫，并控制 11 个目标格中的多数",
+            "rule": "5.0a / 5.0c"
+          }
+        ],
+        "victory": [
+          {
+            "text": "终局（第 19 回合末，8 Sep 41）：苏方控制维亚济马、勒热夫且至少 7 个目标格 ⇒ 苏方胜",
+            "rule": "5.0a"
+          },
+          {
+            "text": "轴方控制五座城市的全部格且至少 6 个目标格 ⇒ 轴方胜；两者都不满足为平局",
+            "rule": "5.0a"
+          },
+          {
+            "text": "8 月 19 日或以后任一回合开始时：苏方至少 9 个目标格 / 轴方至少 8 个目标格 ⇒ 决定性胜利",
+            "rule": "5.0b"
+          },
+          {
+            "text": "目标格 11 处：36.13、37.24、38.05、40.31、41.21、43.14、46.17、46.20、46.29、48.25、52.09；控制＝格内有可攻击单位（空格取最后拥有者）",
+            "rule": "5.0c"
+          }
+        ],
+        "restrictions": [
+          {
+            "text": "苏方首回合所有地面单位以 1/2 MA 移动（DG 等模式效果可再下调）",
+            "rule": "剧本 1 / 1.5"
+          },
+          {
+            "text": "轴方编内卡车全部满载初设",
+            "rule": "剧本 1"
+          },
+          {
+            "text": "12 个德军装甲 / 摩托化师抽签：4 个沿道路西移 3 格，4 个以摩托化团换死亡堆中的侦察营",
+            "rule": "ch10 / 剧本 1"
+          }
+        ],
+        "source": "_pdf_text/Smolensk_Rules_v1.1.txt 5.0a–5.0c；Scenario 1: Smolensk Campaign"
+      },
       "firstTurn": "8 Jul 41",
       "lastTurn": "8 Sep 41",
       "turns": 19,
@@ -289,6 +334,39 @@
     {
       "id": "2",
       "name": "Short Campaign",
+      "briefing": {
+        "objectives": [
+          {
+            "text": "轴方：夺取五座城市的全部格，并取得目标格中的多数",
+            "rule": "5.0a"
+          },
+          {
+            "text": "苏方：守住维亚济马与勒热夫",
+            "rule": "5.0a"
+          }
+        ],
+        "victory": [
+          {
+            "text": "终局（第 8 回合末，1 Aug 41）：苏方控制维亚济马、勒热夫且至少 6 个目标格 ⇒ 苏方胜",
+            "rule": "剧本 2"
+          },
+          {
+            "text": "轴方控制五座城市的全部格且至少 7 个目标格 ⇒ 轴方胜；两者都不满足为平局",
+            "rule": "剧本 2"
+          },
+          {
+            "text": "目标格 11 处：27.05（Krichev）、32.25（Demidov）、36.13、37.24、38.05、40.31、41.21、43.14、46.17、46.20、46.29；控制按 5.0c",
+            "rule": "5.0c / 剧本 2"
+          }
+        ],
+        "restrictions": [
+          {
+            "text": "初设与特殊规则同剧本 1（含苏军首回合 1/2 MA、轴军编内卡车满载、12 师编队抽签）",
+            "rule": "剧本 2"
+          }
+        ],
+        "source": "_pdf_text/Smolensk_Rules_v1.1.txt Scenario 2: Short Campaign；5.0c"
+      },
       "firstTurn": "8 Jul 41",
       "lastTurn": "1 Aug 41",
       "turns": 8,
@@ -384,6 +462,55 @@
     {
       "id": "3",
       "name": "Late July Start",
+      "briefing": {
+        "objectives": [
+          {
+            "text": "轴方：夺取五座城市的全部格，并取得 11 个目标格中至少 6 个",
+            "rule": "5.0a"
+          },
+          {
+            "text": "苏方：守住维亚济马与勒热夫，并取得至少 7 个目标格",
+            "rule": "5.0a"
+          }
+        ],
+        "victory": [
+          {
+            "text": "终局（第 15 回合末，8 Sep 41）：苏方控制维亚济马、勒热夫且至少 7 个目标格 ⇒ 苏方胜",
+            "rule": "5.0a"
+          },
+          {
+            "text": "轴方控制五座城市的全部格且至少 6 个目标格 ⇒ 轴方胜；两者都不满足为平局",
+            "rule": "5.0a"
+          },
+          {
+            "text": "8 月 19 日或以后任一回合开始时：苏方至少 9 个目标格 / 轴方至少 8 个目标格 ⇒ 决定性胜利",
+            "rule": "5.0b"
+          },
+          {
+            "text": "目标格 11 处同 5.0c 清单，控制＝格内有可攻击单位（空格取最后拥有者）",
+            "rule": "5.0c"
+          }
+        ],
+        "restrictions": [
+          {
+            "text": "带 † 的轴方师可在所列位置 1 格内初设",
+            "rule": "剧本 3"
+          },
+          {
+            "text": "任何单位不得以预备模式初设",
+            "rule": "剧本 3"
+          },
+          {
+            "text": "4 辆轴方编内卡车自选满载，其余空载",
+            "rule": "剧本 3"
+          },
+          {
+            "text": "14 个德军装甲 / 摩托化师抽签：5 个战斗单位全部以移动模式初设；5 个以一个摩托化团换死亡堆中的侦察营",
+            "rule": "剧本 3"
+          }
+        ],
+        "source": "_pdf_text/Smolensk_Rules_v1.1.txt Scenario 3: Late July Start；5.0a–5.0c"
+      },
       "firstTurn": "22 Jul 41",
       "lastTurn": "8 Sep 41",
       "turns": 15,
@@ -626,6 +753,39 @@
     {
       "id": "4",
       "name": "1st Counteroffensive",
+      "briefing": {
+        "objectives": [
+          {
+            "text": "轴方：夺取五座城市的全部格，并取得目标格中的多数",
+            "rule": "5.0a"
+          },
+          {
+            "text": "苏方：守住维亚济马与勒热夫",
+            "rule": "5.0a"
+          }
+        ],
+        "victory": [
+          {
+            "text": "终局（第 4 回合末，1 Aug 41）：苏方控制维亚济马、勒热夫且至少 6 个目标格 ⇒ 苏方胜",
+            "rule": "剧本 4 / 剧本 2"
+          },
+          {
+            "text": "轴方控制五座城市的全部格且至少 7 个目标格 ⇒ 轴方胜；两者都不满足为平局",
+            "rule": "剧本 4 / 剧本 2"
+          },
+          {
+            "text": "目标格清单同剧本 2（27.05、32.25、36.13、37.24、38.05、40.31、41.21、43.14、46.17、46.20、46.29）",
+            "rule": "5.0c / 剧本 4"
+          }
+        ],
+        "restrictions": [
+          {
+            "text": "初设与特殊规则同剧本 3（† 师 1 格内初设、禁预备模式初设、4 辆卡车自选满载、14 师抽签）",
+            "rule": "剧本 4 / 剧本 3"
+          }
+        ],
+        "source": "_pdf_text/Smolensk_Rules_v1.1.txt Scenario 4: 1st Counteroffensive（Victory Conditions 同 Scenario 2）"
+      },
       "firstTurn": "22 Jul 41",
       "lastTurn": "1 Aug 41",
       "turns": 4,
@@ -738,6 +898,51 @@
     {
       "id": "5",
       "name": "Early August Start",
+      "briefing": {
+        "objectives": [
+          {
+            "text": "轴方：夺取五座城市的全部格，并取得 11 个目标格中至少 6 个",
+            "rule": "5.0a"
+          },
+          {
+            "text": "苏方：守住维亚济马与勒热夫，并取得至少 7 个目标格",
+            "rule": "5.0a"
+          }
+        ],
+        "victory": [
+          {
+            "text": "终局（第 10 回合末，8 Sep 41）：苏方控制维亚济马、勒热夫且至少 7 个目标格 ⇒ 苏方胜",
+            "rule": "5.0a"
+          },
+          {
+            "text": "轴方控制五座城市的全部格且至少 6 个目标格 ⇒ 轴方胜；两者都不满足为平局",
+            "rule": "5.0a"
+          },
+          {
+            "text": "8 月 19 日或以后任一回合开始时：苏方至少 9 个目标格 / 轴方至少 8 个目标格 ⇒ 决定性胜利",
+            "rule": "5.0b"
+          },
+          {
+            "text": "目标格 11 处同 5.0c 清单，控制＝格内有可攻击单位（空格取最后拥有者）",
+            "rule": "5.0c"
+          }
+        ],
+        "restrictions": [
+          {
+            "text": "带 † 的轴方师可在所列位置 1 格内初设",
+            "rule": "剧本 5"
+          },
+          {
+            "text": "2 辆轴方编内卡车自选满载，其余空载",
+            "rule": "剧本 5"
+          },
+          {
+            "text": "14 个德军装甲 / 摩托化师抽签：5 个把 Krd 营加入死亡堆；7 个把 Aufk 营加入死亡堆",
+            "rule": "剧本 5"
+          }
+        ],
+        "source": "_pdf_text/Smolensk_Rules_v1.1.txt Scenario 5: Early August Start；5.0a–5.0c"
+      },
       "firstTurn": "8 Aug 41",
       "lastTurn": "8 Sep 41",
       "turns": 10,
@@ -987,6 +1192,43 @@
     {
       "id": "6",
       "name": "2nd Counteroffensive",
+      "briefing": {
+        "objectives": [
+          {
+            "text": "轴方：夺取五座城市的全部格，并取得 11 个目标格中至少 6 个",
+            "rule": "5.0a"
+          },
+          {
+            "text": "苏方：守住维亚济马与勒热夫，并取得至少 7 个目标格",
+            "rule": "5.0a"
+          }
+        ],
+        "victory": [
+          {
+            "text": "终局（第 5 回合末，22 Aug 41）：苏方控制维亚济马、勒热夫且至少 7 个目标格 ⇒ 苏方胜",
+            "rule": "5.0a"
+          },
+          {
+            "text": "轴方控制五座城市的全部格且至少 6 个目标格 ⇒ 轴方胜；两者都不满足为平局",
+            "rule": "5.0a"
+          },
+          {
+            "text": "8 月 19 日或以后任一回合开始时：苏方至少 9 个目标格 / 轴方至少 8 个目标格 ⇒ 决定性胜利",
+            "rule": "5.0b"
+          },
+          {
+            "text": "目标格 11 处同 5.0c 清单，控制＝格内有可攻击单位（空格取最后拥有者）",
+            "rule": "5.0c"
+          }
+        ],
+        "restrictions": [
+          {
+            "text": "初设与特殊规则同剧本 5（† 师 1 格内初设、2 辆卡车自选满载、14 师 Krd / Aufk 抽签）",
+            "rule": "剧本 6 / 剧本 5"
+          }
+        ],
+        "source": "_pdf_text/Smolensk_Rules_v1.1.txt Scenario 6: 2nd Counteroffensive（Setup and Special Scenario Rules 同 Scenario 5）"
+      },
       "firstTurn": "8 Aug 41",
       "lastTurn": "22 Aug 41",
       "turns": 5,
@@ -1104,6 +1346,51 @@
     {
       "id": "7",
       "name": "3rd Counteroffensive",
+      "briefing": {
+        "objectives": [
+          {
+            "text": "轴方：夺取五座城市的全部格，并取得 11 个目标格中至少 6 个",
+            "rule": "5.0a"
+          },
+          {
+            "text": "苏方：守住维亚济马与勒热夫，并取得至少 7 个目标格",
+            "rule": "5.0a"
+          }
+        ],
+        "victory": [
+          {
+            "text": "终局（第 5 回合末，8 Sep 41）：苏方控制维亚济马、勒热夫且至少 7 个目标格 ⇒ 苏方胜",
+            "rule": "5.0a"
+          },
+          {
+            "text": "轴方控制五座城市的全部格且至少 6 个目标格 ⇒ 轴方胜；两者都不满足为平局",
+            "rule": "5.0a"
+          },
+          {
+            "text": "8 月 19 日或以后任一回合开始时：苏方至少 9 个目标格 / 轴方至少 8 个目标格 ⇒ 决定性胜利",
+            "rule": "5.0b"
+          },
+          {
+            "text": "目标格 11 处同 5.0c 清单，控制＝格内有可攻击单位（空格取最后拥有者）",
+            "rule": "5.0c"
+          }
+        ],
+        "restrictions": [
+          {
+            "text": "带 † 的轴方师可在所列位置 1 格内初设",
+            "rule": "剧本 7"
+          },
+          {
+            "text": "轴方编内卡车全部空载初设",
+            "rule": "剧本 7"
+          },
+          {
+            "text": "掷可变撤离",
+            "rule": "3.3c / 剧本 7"
+          }
+        ],
+        "source": "_pdf_text/Smolensk_Rules_v1.1.txt Scenario 7: 3rd Counteroffensive；5.0a–5.0c"
+      },
       "firstTurn": "26 Aug 41",
       "lastTurn": "8 Sep 41",
       "turns": 5,
@@ -1341,6 +1628,39 @@
     {
       "id": "Intro",
       "name": "Vitebsk",
+      "briefing": {
+        "objectives": [
+          {
+            "text": "轴方：攻占维捷布斯克（控制两格）",
+            "rule": "剧本 Intro"
+          },
+          {
+            "text": "尽量少用 SP（剧本卡挑战目标）",
+            "rule": "剧本 Intro"
+          }
+        ],
+        "victory": [
+          {
+            "text": "夺取维捷布斯克两格 ⇒ 大胜（Major Victory）",
+            "rule": "剧本 Intro"
+          },
+          {
+            "text": "以轴方战斗单位在城周围形成实心墙 ⇒ 小胜（Minor Victory）",
+            "rule": "剧本 Intro"
+          },
+          {
+            "text": "两者均未达成 ⇒ 失败，重打",
+            "rule": "剧本 Intro"
+          }
+        ],
+        "restrictions": [
+          {
+            "text": "攻方在任何战斗中不得使用 Internals（部队储备）",
+            "rule": "剧本 Intro / 12.10"
+          }
+        ],
+        "source": "_pdf_text/Smolensk_Vitebsk_Scenario.txt Intro Scenario: Vitebsk（Special Scenario Rules）"
+      },
       "firstTurn": "8 Jul 41",
       "lastTurn": "8 Jul 41",
       "turns": 1,

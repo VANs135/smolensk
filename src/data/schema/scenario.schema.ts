@@ -220,6 +220,39 @@ export const RailheadsSchema = z
 
 export type Railheads = z.infer<typeof RailheadsSchema>
 
+/**
+ * 任务目标 / 胜利条件窗的一条（用户 2026-11-18 第 1 条）
+ *
+ * `text` 按剧本原文摘录（不写描述性长文）；条款号只进 `?`（`rule`）。
+ */
+export const ScenarioBriefingItemSchema = z
+  .object({
+    /** 条目正文（剧本原文摘录的中文短句） */
+    text: z.string().min(1),
+    /** 条款号 / 剧本页出处（只进 `?`） */
+    rule: z.string().min(1),
+  })
+  .strict()
+
+/**
+ * 剧本开局后、进入初设前的「任务目标 / 胜利条件」窗（用户 2026-11-18 第 1 条）
+ *
+ * 内容只来自剧本原文（5.0a–5.0c、各剧本 General Information / Special Scenario Rules、
+ * Intro: Vitebsk 的剧本卡），原文有的才写；缺字段时按原文补进 `scenarios.json`。
+ */
+export const ScenarioBriefingSchema = z
+  .object({
+    /** 任务目标（双方各自要达成的态势） */
+    objectives: z.array(ScenarioBriefingItemSchema).min(1),
+    /** 胜利条件（终局判定 / 提前决胜阈值） */
+    victory: z.array(ScenarioBriefingItemSchema).min(1),
+    /** 随之必需的限制条目（专规 Special Scenario Rules 明写者） */
+    restrictions: z.array(ScenarioBriefingItemSchema).optional(),
+    /** 原文出处（文件名 + 章节 / 剧本页） */
+    source: z.string().min(1),
+  })
+  .strict()
+
 /** 剧本初设数值与选项（Setup Notes A 的剧本页旋钮） */
 export const ScenarioSetupSchema = z
   .object({
@@ -419,6 +452,9 @@ export const ScenarioSchema = z
     /** 首回合天气（剧本指定，不掷骰） */
     firstWeather: z.enum(['restricted', 'normal']),
 
+    /** 开局后、进初设前的任务目标 / 胜利条件窗（用户 2026-11-18；按剧本原文摘录） */
+    briefing: ScenarioBriefingSchema,
+
     /** 初设与特殊规则继承自哪个剧本（1-2 / 3-4 / 5-6 共用初设） */
     inherits: z.string().optional(),
 
@@ -472,6 +508,8 @@ export const ScenarioSchema = z
   .strict()
 
 export type Scenario = z.infer<typeof ScenarioSchema>
+export type ScenarioBriefing = z.infer<typeof ScenarioBriefingSchema>
+export type ScenarioBriefingItem = z.infer<typeof ScenarioBriefingItemSchema>
 export type ScenarioSetup = z.infer<typeof ScenarioSetupSchema>
 export type SidePair = z.infer<typeof SidePairSchema>
 export type { AirSetup as ScenarioAirSetup, AirSetupPolicy as ScenarioAirSetupPolicy }

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import { ConsensusChecklist } from '@/components/hotseat'
+import { ScenarioBriefingDialog } from '@/components/setup'
 import { provideUiMode } from '@/components/ui-mode'
 import { scenarios } from '@/data'
 import { useGameSessionStore, useHotseatStore, useSetupStore, useUiStore } from '@/stores'
@@ -49,18 +50,41 @@ const aiSideChoices = [
   { side: 'soviet', label: '苏联' },
 ] as const
 
+/** 目标窗对应的剧本（挂起时按挂起的剧本取；未挂起时按当前选中的剧本给标题） */
+const briefingTarget = computed(
+  () => fullScenarios.value.get(setup.briefingPendingId ?? selectedId.value) ?? null,
+)
+
+/** 目标窗开合＝store 的挂起状态（关闭即取消，不落盘） */
+const briefingOpen = computed({
+  get: () => setup.briefingPendingId !== null,
+  set: (open: boolean) => {
+    if (!open) setup.dismissBriefing()
+  },
+})
+
+/**
+ * 进入初设（用户 2026-11-18 第 1 条）
+ *
+ * 先过「任务目标 / 胜利条件」窗：确认后才进初设；同一剧本本局已确认过则直接进。
+ */
 function onEnterSetup(): void {
   const target = selected.value
   if (target === null) return
-  // 2026-11-09：模式与 PVE 的 AI 方在进初设前必须选定；未选齐不进初设
-  if (hotseat.modeIssue !== null) {
-    ui.pushToast('warning', hotseat.modeIssue)
+  const result = setup.requestEnterSetup(target.id)
+  if (result === 'blocked') {
+    const failure = setup.lastAction
+    ui.pushToast('warning', `无法进入初设：${failure?.detail ?? '请重新选择剧本'}`)
     return
   }
-  if (!setup.enterSetup(target.id)) {
+  if (result === 'setup') ui.navigate('game')
+}
+
+/** 目标窗「确定」：确认后进入初设（窗口唯一出口） */
+function onConfirmBriefing(): void {
+  if (!setup.confirmBriefing()) {
     const failure = setup.lastAction
-    const message = failure?.detail ?? '请重新选择剧本'
-    ui.pushToast('warning', `无法进入初设：${message}`)
+    ui.pushToast('warning', `无法进入初设：${failure?.detail ?? '请重新选择剧本'}`)
     return
   }
   ui.navigate('game')
@@ -226,6 +250,14 @@ function onEnterSetup(): void {
         </div>
       </div>
     </div>
+
+    <!-- 用户 2026-11-18 第 1 条：开局后、进初设前的任务目标 / 胜利条件窗（唯一入口） -->
+    <ScenarioBriefingDialog
+      v-model:open="briefingOpen"
+      :title="`任务目标 / 胜利条件 · ${briefingTarget?.name ?? ''}`"
+      :briefing="briefingTarget?.briefing ?? null"
+      @confirm="onConfirmBriefing"
+    />
   </div>
 </template>
 

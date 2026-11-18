@@ -139,8 +139,11 @@ describe('B10：路由接线（源码守卫）', () => {
     expect(viewTypes).toContain("'scenario'")
   })
 
-  it("前置视图：进游戏＝`enterSetup` + `navigate('game')`（不自己建会话）", () => {
-    expect(view).toContain('setup.enterSetup')
+  it('前置视图：先过目标窗，确认后＝进入初设 + `navigate(game)`（不自己建会话）', () => {
+    // 用户 2026-11-18 第 1 条：进初设前先弹「任务目标 / 胜利条件」，确认后才进初设
+    expect(view).toContain('setup.requestEnterSetup')
+    expect(view).toContain('setup.confirmBriefing')
+    expect(view).toContain('<ScenarioBriefingDialog')
     expect(view).toContain("ui.navigate('game')")
     /*
      * 它不**调用**开局动作（开局属初设收束时的「开始游戏」）。
@@ -179,6 +182,20 @@ describe('Intro: Vitebsk 的剧本卡（教学/单回合）', () => {
     expect(view).not.toContain('Minor Victory')
     expect(view).not.toContain('introSummary')
     expect(view).toContain('firstWeather')
+  })
+})
+
+describe('任务目标 / 胜利条件窗（用户 2026-11-18 第 1 条）', () => {
+  const dialog = readFileSync('src/components/setup/ScenarioBriefingDialog.vue', 'utf8')
+
+  it('只有「确定」一个出口，不给「不再显示」之类选项', () => {
+    expect(dialog).toContain('确定')
+    expect(dialog).not.toContain('不再显示')
+    expect(dialog).not.toContain('跳过')
+  })
+
+  it('条款号只进 `?`（RuleTip），条目正文不写条款号', () => {
+    expect(dialog).toContain('<RuleTip :rule="item.rule" />')
   })
 })
 
