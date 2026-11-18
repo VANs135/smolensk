@@ -878,6 +878,7 @@ export const useSetupStore = defineStore('setup', () => {
     if (entry === undefined) {
       return record({ ok: false, rule: SETUP_RULE, reason: `selfEntryNotFound:${entryIndex}` })
     }
+    if (!setupTurnAllows(entry.side)) return setupTurnFailure(entry.side)
     const candidates = candidatesOf(entryIndex)
     if (candidates.length === 0) {
       return record({ ok: false, rule: SETUP_RULE, reason: `noCandidates:${entryIndex}` })
@@ -942,6 +943,7 @@ export const useSetupStore = defineStore('setup', () => {
 
   /** 开始在地图上放置**某一型飞机**（候选＝本方空军基地格；`wanted`＝从哪一栏点的） */
   function beginAirPlacement(side: Side, entryIndex: number, wanted?: AirStatus): boolean {
+    if (!setupTurnAllows(side)) return setupTurnFailure(side)
     const airPlan = airPlanOf(side)
     const row = airPlan?.placements.find((item) => item.entryIndex === entryIndex)
     if (airPlan === null || row === undefined) {
@@ -1012,6 +1014,7 @@ export const useSetupStore = defineStore('setup', () => {
    * （`containers.pendingShiftWestPlacements`）⇒ 以 `formationId` 为主键，没有 `entryIndex`。
    */
   function beginShiftPlacement(formationId: string): boolean {
+    if (!setupTurnAllows('axis')) return setupTurnFailure('axis')
     const item = containers.pendingShiftWestPlacements.find(
       (entry) => entry.formationId === formationId,
     )
@@ -1759,6 +1762,29 @@ export const useSetupStore = defineStore('setup', () => {
   /** 各方是否已「确认布设完毕」 */
   const setupSideConfirmed = ref<Record<string, boolean>>({})
 
+  /**
+   * 2026-11-18（用户第 5 条）：落位入口按游标归属放行。
+   *
+   * 游标归位（null＝双方都确认）时不再限制；否则只接受**当前布设方**的条目。
+   * 这是 UI 过滤之外的兜底：残留卡片、错误点击、旧会话都不会替对方布设。
+   */
+  function setupTurnAllows(side: Side): boolean {
+    const current = setupSideCursor.value
+    if (current === null || current === side) return true
+    // 只冻结**已确认**的那一方：交棒后对手已落完的条目不能再被操作；
+    // 同一屏逐项摆放（solo / 自动布置 / 测试）时对手尚未确认，仍按旧口径放行。
+    return setupSideConfirmed.value[side] !== true
+  }
+
+  function setupTurnFailure(side: Side) {
+    const current = setupSideCursor.value
+    return record({
+      ok: false,
+      rule: SETUP_RULE,
+      reason: `当前轮到${current === 'axis' ? '轴心国' : '苏联'}布设，不能操作${side === 'axis' ? '轴心国' : '苏联'}的条目`,
+    })
+  }
+
   /** 按剧本的先布设方**起游标**（换剧本时重开） */
   function armSetupSideCursor(): void {
     setupSideConfirmed.value = {}
@@ -1939,6 +1965,8 @@ export const useSetupStore = defineStore('setup', () => {
 
   /** 开启地图点选（没有可点卡车 ⇒ 明确拒绝并说清原因，不让界面开一个空模式） */
   function beginTruckPick(): boolean {
+    // 13.2h 的满载选择是轴心专属义务；苏联窗口里不给入口。
+    if (!setupTurnAllows('axis')) return setupTurnFailure('axis')
     if (truckLoadMode.value !== 'choose_loaded') {
       return record({
         ok: false,
@@ -2104,6 +2132,20 @@ export const useSetupStore = defineStore('setup', () => {
       ownership: spOwnershipReadiness.value,
     }),
   )
+
+  /**
+   * 2026-11-18（用户第 5 条）：初设窗只该显示**当前布设方**的必做项。
+   *
+   * 轴心专属义务（ch10 西移 / 3.4b SP 归属 / 13.2h 卡车满载）此前会在苏联的窗口里
+   * 一并列出，和苏联自己的条目混在同一张「必做事项」里。这里按游标切一份；
+   * 游标归位（双方确认完）后恢复全量，供收束前统一核对。
+   */
+  const sideSetupIssues = computed(() => {
+    const current = setupSideCursor.value
+    return current === null
+      ? requiredSetupIssues.value
+      : requiredSetupIssues.value.filter((issue) => issue.side === current)
+  })
 
   /**
    * 初设栏「确认放弃并开局」的禁用判据（与 `canFinishSetup` **同一口径**）
@@ -4151,6 +4193,7 @@ export const useSetupStore = defineStore('setup', () => {
     airChoices,
     completed,
     requiredSetupIssues,
+    sideSetupIssues,
     omitDiscardBlocked,
     omittablePlacements,
     lastAction,

@@ -18,13 +18,15 @@ describe('P4 UI1-b：初设队列按必做/可放弃/已完成分组（源码守
     expect(queue).toContain('必做事项')
     expect(queue).toContain('可自主放弃项')
     expect(queue).toContain('已完成项')
-    expect(queue).toContain('setup.requiredSetupIssues.length')
+    // 2026-11-18：必做项按当前布设方切一份（不再把对手的 ch10/3.4b/13.2h 义务混进来）
+    expect(queue).toContain('setup.sideSetupIssues.length')
     expect(queue).toContain('setup.omittablePlacements.length')
-    expect(queue).toContain('setup.completedPlacements.length')
+    // 已完成项同样按游标切方
+    expect(queue).toContain('viewerCompleted.length')
   })
 
   it('★ 已完成列表用稳定 key（`placement.key`），算子图/名称/方标/进度逐条显示', () => {
-    expect(queue).toContain('v-for="placement in setup.completedPlacements"')
+    expect(queue).toContain('v-for="placement in viewerCompleted"')
     expect(queue).toContain(':key="placement.key"')
     expect(queue).toContain('placement.imageUrl')
     expect(queue).toContain('placement.label')

@@ -59,6 +59,29 @@ const stacks = computed(() => setup.sideQueue)
 /** 当前轮到哪一方布设（null = 不分方 / 两方都已确认） */
 const cursorSide = computed(() => setup.setupSideCursor)
 
+/*
+ * 2026-11-18（用户第 5 条）：初设窗按游标只归**当前布设方**。
+ *
+ * · PVE：游标在 AI 那一侧 ⇒ 玩家只看到「等待」，不出现 AI 的布置卡与按钮；
+ * · PVP 同屏轮流：游标不在视角方 ⇒ 同样只显示等待，切到本方视角才给操作；
+ * · solo：一人操作双方 ⇒ 始终全给。
+ */
+const cursorWindowForViewer = computed(() => {
+  if (cursorSide.value === null) return true
+  if (hotseat.fogDisabled) return true
+  const mine = hotseat.mode === 'pve' ? hotseat.playerSide : hotseat.viewerSide
+  return cursorSide.value === mine
+})
+const waitingSideName = computed(() => (cursorSide.value === 'axis' ? '轴心国' : '苏联'))
+/** 轴心专属义务（ch10 西移 / 3.4b SP 归属 / 13.2h 卡车满载）只在轴心窗口露出 */
+const axisWindow = computed(() => cursorSide.value === null || cursorSide.value === 'axis')
+/** 已完成项也按游标切方，避免苏联窗口里混着轴心的布置清单 */
+const viewerCompleted = computed(() =>
+  cursorSide.value === null
+    ? setup.completedPlacements
+    : setup.completedPlacements.filter((item) => item.side === cursorSide.value),
+)
+
 function sideName(side: 'axis' | 'soviet'): string {
   return side === 'axis' ? '轴心国' : '苏联'
 }
@@ -269,324 +292,331 @@ function sideMark(side: 'axis' | 'soviet'): string {
       </span>
     </div>
 
-    <!--
-      第六批条 1（S1）：**分方游标** —— 先布设方（剧本页 `setupFirst`，与"先行动方"是两回事）
-      布设完按一下即换手；两方都确认 ⇒ 游标归位、队列恢复全量（未落位者仍按既有口径处理）。
-      ★ 本方还有必做项（SP 归属 / 卡车满载 / 编队西移）未落实时不出现（不摆"点了必被拒"的按钮）。
-    -->
-    <div
-      v-if="cursorSide !== null && setup.currentSideSetupBlocker === null"
-      class="queue__row-actions"
-    >
-      <BaseButton variant="primary" size="sm" @click="setup.confirmSideSetup()">
-        确认本方布设
-      </BaseButton>
-    </div>
-
-    <!-- M3：原来的「完成初设」已并入上面的唯一主入口（条件同 `allPlaced && 无游标 && 未确认`） -->
-
-    <!-- H5（用户 2026-11-16）：落位可**一步撤回**（算子/飞机/补给账一起还原） -->
-    <div v-if="setup.canUndoPlacement" class="queue__row-actions">
-      <BaseButton
-        variant="ghost"
-        size="sm"
-        :title="setup.lastPlacement?.label ?? ''"
-        @click="setup.undoLastPlacementNow()"
+    <p v-if="!cursorWindowForViewer" class="queue__wait" role="status">
+      {{ waitingSideName }}正在初设，等当前方完成后自动轮到你。
+    </p>
+    <template v-else>
+      <!--
+        第六批条 1（S1）：**分方游标** —— 先布设方（剧本页 `setupFirst`，与"先行动方"是两回事）
+        布设完按一下即换手；两方都确认 ⇒ 游标归位、队列恢复全量（未落位者仍按既有口径处理）。
+        ★ 本方还有必做项（SP 归属 / 卡车满载 / 编队西移）未落实时不出现（不摆"点了必被拒"的按钮）。
+      -->
+      <div
+        v-if="cursorSide !== null && setup.currentSideSetupBlocker === null"
+        class="queue__row-actions"
       >
-        撤回上一步
-      </BaseButton>
-    </div>
-
-    <div v-if="placing !== null" class="queue__active">
-      <strong class="queue__label" :title="placing.label">{{ placing.label }}</strong>
-      <span class="queue__pending num">剩 {{ placing.remaining }}</span>
-      <BaseButton variant="ghost" size="sm" @click="setup.cancelPlacement()">取消选格</BaseButton>
-      <div v-if="placing.category === 'supply'" class="queue__hint">
-        本次落
-        <button
-          v-for="c in setup.placingChunkChoices"
-          :key="c"
-          type="button"
-          class="queue__chunk"
-          :class="{ 'queue__chunk--on': placing.chunk === c }"
-          :aria-pressed="placing.chunk === c"
-          @click="setup.setPlacingChunk(c)"
-        >
-          {{ c }}
-        </button>
+        <BaseButton variant="primary" size="sm" @click="setup.confirmSideSetup()">
+          确认本方布设
+        </BaseButton>
       </div>
-    </div>
 
-    <!--
+      <!-- M3：原来的「完成初设」已并入上面的唯一主入口（条件同 `allPlaced && 无游标 && 未确认`） -->
+
+      <!-- H5（用户 2026-11-16）：落位可**一步撤回**（算子/飞机/补给账一起还原） -->
+      <div v-if="setup.canUndoPlacement" class="queue__row-actions">
+        <BaseButton
+          variant="ghost"
+          size="sm"
+          :title="setup.lastPlacement?.label ?? ''"
+          @click="setup.undoLastPlacementNow()"
+        >
+          撤回上一步
+        </BaseButton>
+      </div>
+
+      <div v-if="placing !== null" class="queue__active">
+        <strong class="queue__label" :title="placing.label">{{ placing.label }}</strong>
+        <span class="queue__pending num">剩 {{ placing.remaining }}</span>
+        <BaseButton variant="ghost" size="sm" @click="setup.cancelPlacement()">取消选格</BaseButton>
+        <div v-if="placing.category === 'supply'" class="queue__hint">
+          本次落
+          <button
+            v-for="c in setup.placingChunkChoices"
+            :key="c"
+            type="button"
+            class="queue__chunk"
+            :class="{ 'queue__chunk--on': placing.chunk === c }"
+            :aria-pressed="placing.chunk === c"
+            @click="setup.setPlacingChunk(c)"
+          >
+            {{ c }}
+          </button>
+        </div>
+      </div>
+
+      <!--
       3.4b：摆一个确认一个 —— 刚落下的德军 SP / 地图上点中的未归属 SP，二选一常驻在初设栏。
       修前这份二选一只在「初设与开局」面板（对局台不挂载）⇒ 勾了 3.4b 的初设会卡在
       「必做事项：SP 归属」且没有任何可点入口。此处与面板同源（`pendingSpChoice`）。
     -->
-    <div
-      v-if="setup.spOwnershipEntryVisible && setup.pendingSpChoice !== null"
-      class="queue__row-actions"
-    >
-      <span class="queue__hint num">
-        {{ setup.pendingSpChoice.hexText }}（{{ setup.pendingSpChoice.points }} SP）
-      </span>
-      <BaseButton variant="primary" size="sm" @click="setup.choosePendingSpGroup('guderian')">
-        Guderian
-      </BaseButton>
-      <BaseButton variant="primary" size="sm" @click="setup.choosePendingSpGroup('hoth')">
-        Hoth
-      </BaseButton>
-    </div>
+      <div
+        v-if="axisWindow && setup.spOwnershipEntryVisible && setup.pendingSpChoice !== null"
+        class="queue__row-actions"
+      >
+        <span class="queue__hint num">
+          {{ setup.pendingSpChoice.hexText }}（{{ setup.pendingSpChoice.points }} SP）
+        </span>
+        <BaseButton variant="primary" size="sm" @click="setup.choosePendingSpGroup('guderian')">
+          Guderian
+        </BaseButton>
+        <BaseButton variant="primary" size="sm" @click="setup.choosePendingSpGroup('hoth')">
+          Hoth
+        </BaseButton>
+      </div>
 
-    <!--
+      <!--
       ★ 用户 2026-11-10：满载名单已达剧本要求 ⇒ 整行**隐藏**（不灰显）；
       `beginTruckPick()` 用同一判据拒绝，界面不会出现「点了没反应」的按钮。
     -->
-    <div
-      v-if="setup.truckLoadSummary.mode === 'choose_loaded' && !setup.truckFullDone"
-      class="queue__row-actions"
-    >
-      <span class="queue__hint num">
-        满载 {{ setup.truckLoadSummary.fullCount }}/{{ setup.requiredFullTrucks }}
-      </span>
-      <BaseButton
-        variant="secondary"
-        size="sm"
-        @click="setup.truckPickActive ? setup.cancelTruckPick() : setup.beginTruckPick()"
+      <div
+        v-if="axisWindow && setup.truckLoadSummary.mode === 'choose_loaded' && !setup.truckFullDone"
+        class="queue__row-actions"
       >
-        {{ setup.truckPickActive ? '收起高亮' : '点图指定满载' }}
-      </BaseButton>
-    </div>
+        <span class="queue__hint num">
+          满载 {{ setup.truckLoadSummary.fullCount }}/{{ setup.requiredFullTrucks }}
+        </span>
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          @click="setup.truckPickActive ? setup.cancelTruckPick() : setup.beginTruckPick()"
+        >
+          {{ setup.truckPickActive ? '收起高亮' : '点图指定满载' }}
+        </BaseButton>
+      </div>
 
-    <!--
+      <!--
       ★ 用户 2026-11-10：同格多辆编内卡车 ⇒ 先按实例 id 列候选，点哪一辆装哪一辆
       （同型卡车同名同图，只靠格号分不出是哪一辆）。
     -->
-    <div v-if="setup.truckPickPending !== null" class="queue__row-actions">
-      <span class="queue__hint num">{{ setup.truckPickPending.rows.length }} 辆</span>
-      <BaseButton
-        v-for="row in setup.truckPickPending.rows"
-        :key="row.instanceId"
-        variant="secondary"
-        size="sm"
-        @click="setup.pickTruckInstance(row.instanceId)"
+      <div v-if="axisWindow && setup.truckPickPending !== null" class="queue__row-actions">
+        <span class="queue__hint num">{{ setup.truckPickPending.rows.length }} 辆</span>
+        <BaseButton
+          v-for="row in setup.truckPickPending.rows"
+          :key="row.instanceId"
+          variant="secondary"
+          size="sm"
+          @click="setup.pickTruckInstance(row.instanceId)"
+        >
+          {{ row.name }}（{{ row.full ? '已满载' : '空载' }}）
+        </BaseButton>
+        <BaseButton variant="ghost" size="sm" @click="setup.cancelTruckPick()">取消</BaseButton>
+      </div>
+
+      <p
+        v-if="setup.lastAction !== null && !setup.lastAction.ok"
+        class="queue__error"
+        role="status"
+        :title="`§${setup.lastAction.rule}`"
       >
-        {{ row.name }}（{{ row.full ? '已满载' : '空载' }}）
-      </BaseButton>
-      <BaseButton variant="ghost" size="sm" @click="setup.cancelTruckPick()">取消</BaseButton>
-    </div>
+        {{ setup.lastAction.detail }}
+      </p>
 
-    <p
-      v-if="setup.lastAction !== null && !setup.lastAction.ok"
-      class="queue__error"
-      role="status"
-      :title="`§${setup.lastAction.rule}`"
-    >
-      {{ setup.lastAction.detail }}
-    </p>
-
-    <!--
+      <!--
       P4 / UI1-b：三组只读分组（必做事项 / 可自主放弃项 / 已完成项）。
       计数与条目全部来自 store 投影；四堆叠仍是下面可点图落位的操作区。
     -->
-    <details v-if="setup.requiredSetupIssues.length > 0" class="queue__group">
-      <summary class="queue__group-title">
-        <span>必做事项</span>
-        <span class="queue__group-count num">{{ setup.requiredSetupIssues.length }}</span>
-      </summary>
-      <p
-        v-for="issue in setup.requiredSetupIssues"
-        :key="issue.id"
-        class="queue__hint queue__issue"
-        :title="issue.rule"
-      >
-        {{ issue.detail }}
-      </p>
-    </details>
+      <details v-if="setup.sideSetupIssues.length > 0" class="queue__group">
+        <summary class="queue__group-title">
+          <span>必做事项</span>
+          <span class="queue__group-count num">{{ setup.sideSetupIssues.length }}</span>
+        </summary>
+        <p
+          v-for="issue in setup.sideSetupIssues"
+          :key="issue.id"
+          class="queue__hint queue__issue"
+          :title="issue.rule"
+        >
+          {{ issue.detail }}
+        </p>
+      </details>
 
-    <details
-      v-if="cursorSide === null && setup.omittablePlacements.length > 0"
-      class="queue__group"
-    >
-      <summary class="queue__group-title">
-        <span>可自主放弃项</span>
-        <span class="queue__group-count num">{{ setup.omittablePlacements.length }}</span>
-      </summary>
-      <div class="queue__done">
-        <ul class="queue__cards">
-          <li
-            v-for="item in setup.omittablePlacements"
-            :key="item.kind + ':' + item.side + ':' + item.entryIndex"
-            class="queue__placed-row"
+      <details
+        v-if="cursorSide === null && setup.omittablePlacements.length > 0"
+        class="queue__group"
+      >
+        <summary class="queue__group-title">
+          <span>可自主放弃项</span>
+          <span class="queue__group-count num">{{ setup.omittablePlacements.length }}</span>
+        </summary>
+        <div class="queue__done">
+          <ul class="queue__cards">
+            <li
+              v-for="item in setup.omittablePlacements"
+              :key="item.kind + ':' + item.side + ':' + item.entryIndex"
+              class="queue__placed-row"
+            >
+              <span class="queue__side num">{{ sideMark(item.side) }}</span>
+              <span class="queue__label" :title="item.label">{{ item.label }}</span>
+              <span class="num">× {{ item.remaining }}</span>
+            </li>
+          </ul>
+          <label class="queue__check">
+            <input v-model="omitConfirmed" type="checkbox" /> 放弃以上未布设单位
+          </label>
+          <BaseButton
+            v-if="omitConfirmed && !setup.omitDiscardBlocked"
+            variant="primary"
+            size="sm"
+            @click="setup.startGameNow()"
           >
-            <span class="queue__side num">{{ sideMark(item.side) }}</span>
-            <span class="queue__label" :title="item.label">{{ item.label }}</span>
-            <span class="num">× {{ item.remaining }}</span>
+            确认放弃并开局
+          </BaseButton>
+        </div>
+      </details>
+
+      <details v-if="viewerCompleted.length > 0" class="queue__group">
+        <summary class="queue__group-title">
+          <span>已完成项</span>
+          <span class="queue__group-count num">{{ viewerCompleted.length }}</span>
+        </summary>
+        <ul class="queue__placed">
+          <li
+            v-for="placement in viewerCompleted"
+            :key="placement.key"
+            class="queue__placed-row"
+            :title="placement.label"
+          >
+            <span v-if="placement.imageUrl !== null" class="queue__counter">
+              <img :src="placement.imageUrl" :alt="placement.label" class="queue__counter-img" />
+            </span>
+            <span class="queue__side num">{{ sideMark(placement.side) }}</span>
+            <!-- 用户 2026-11-11：有算子图就不再用文字重复名称（图上已印） -->
+            <span v-if="placement.imageUrl === null" class="queue__label">{{
+              placement.label
+            }}</span>
+            <span class="queue__badge num">{{ placement.placed }}/{{ placement.total }}</span>
           </li>
         </ul>
-        <label class="queue__check">
-          <input v-model="omitConfirmed" type="checkbox" /> 放弃以上未布设单位
-        </label>
-        <BaseButton
-          v-if="omitConfirmed && !setup.omitDiscardBlocked"
-          variant="primary"
-          size="sm"
-          @click="setup.startGameNow()"
-        >
-          确认放弃并开局
-        </BaseButton>
-      </div>
-    </details>
+      </details>
 
-    <details v-if="setup.completedPlacements.length > 0" class="queue__group">
-      <summary class="queue__group-title">
-        <span>已完成项</span>
-        <span class="queue__group-count num">{{ setup.completedPlacements.length }}</span>
-      </summary>
-      <ul class="queue__placed">
-        <li
-          v-for="placement in setup.completedPlacements"
-          :key="placement.key"
-          class="queue__placed-row"
-          :title="placement.label"
+      <div v-for="stack in stacks" v-show="!allPlaced" :key="stack.key" class="queue__stack">
+        <button
+          type="button"
+          class="queue__stack-btn"
+          :aria-expanded="openKey === stack.key"
+          @click="toggleStack(stack.key)"
         >
-          <span v-if="placement.imageUrl !== null" class="queue__counter">
-            <img :src="placement.imageUrl" :alt="placement.label" class="queue__counter-img" />
+          <span class="queue__stack-name">{{ stack.label }}</span>
+          <span class="queue__stack-count num">{{ stack.count }}</span>
+          <span class="queue__caret">
+            <BaseIcon :name="openKey === stack.key ? 'chevron-down' : 'chevron-right'" />
           </span>
-          <span class="queue__side num">{{ sideMark(placement.side) }}</span>
-          <!-- 用户 2026-11-11：有算子图就不再用文字重复名称（图上已印） -->
-          <span v-if="placement.imageUrl === null" class="queue__label">{{ placement.label }}</span>
-          <span class="queue__badge num">{{ placement.placed }}/{{ placement.total }}</span>
-        </li>
-      </ul>
-    </details>
+        </button>
 
-    <div v-for="stack in stacks" v-show="!allPlaced" :key="stack.key" class="queue__stack">
-      <button
-        type="button"
-        class="queue__stack-btn"
-        :aria-expanded="openKey === stack.key"
-        @click="toggleStack(stack.key)"
-      >
-        <span class="queue__stack-name">{{ stack.label }}</span>
-        <span class="queue__stack-count num">{{ stack.count }}</span>
-        <span class="queue__caret">
-          <BaseIcon :name="openKey === stack.key ? 'chevron-down' : 'chevron-right'" />
-        </span>
-      </button>
-
-      <ul v-if="openKey === stack.key && stack.items.length > 0" class="queue__cards">
-        <li
-          v-for="item in stack.items"
-          :key="`${item.kind}:${item.side}:${item.entryIndex}:${item.formationId ?? item.instanceId ?? ''}`"
-          class="queue__row"
-        >
-          <!--
+        <ul v-if="openKey === stack.key && stack.items.length > 0" class="queue__cards">
+          <li
+            v-for="item in stack.items"
+            :key="`${item.kind}:${item.side}:${item.entryIndex}:${item.formationId ?? item.instanceId ?? ''}`"
+            class="queue__row"
+          >
+            <!--
             批 G（用户 2026-11-16）：飞机不再是一行「机型 · 激活态」文字，而是**按状态分两栏**：
             栏头＝状态 + 剩余枚数，栏内＝算子阵列；点某栏的算子就落该状态的那一枚。
           -->
-          <div
-            v-if="item.kind === 'air'"
-            class="queue__air"
-            :class="{
-              'queue__card--on': isActive(item),
-              'queue__card--blocked': cardBlocked(item),
-            }"
-          >
-            <div class="queue__air-head">
-              <span class="queue__side num">{{ sideMark(item.side) }}</span>
-              <span class="queue__label" :title="item.label">{{ item.label }}</span>
-              <span class="queue__badge num">{{ item.placed }}/{{ item.total }}</span>
-            </div>
-            <!-- 不可用就不摆出来（不给置灰按钮）：基地未就位时这一型连栏带算子一起不出 -->
-            <div v-if="!cardBlocked(item)" class="queue__air-cols">
-              <div v-for="group in airGroups(item)" :key="group.status" class="queue__air-col">
-                <div class="queue__air-col-head">
-                  <span>{{ group.label }}</span>
-                  <span class="num">{{ group.count }}</span>
-                </div>
-                <div class="queue__air-array">
-                  <button
-                    v-for="n in group.count"
-                    :key="n"
-                    type="button"
-                    class="queue__air-chip"
-                    :title="`${group.label} · ${item.label}`"
-                    @click="pickAir(item, group.status)"
-                  >
-                    <img
-                      v-if="item.imageUrl !== null"
-                      :src="item.imageUrl"
-                      alt=""
-                      draggable="false"
-                    />
-                  </button>
+            <div
+              v-if="item.kind === 'air'"
+              class="queue__air"
+              :class="{
+                'queue__card--on': isActive(item),
+                'queue__card--blocked': cardBlocked(item),
+              }"
+            >
+              <div class="queue__air-head">
+                <span class="queue__side num">{{ sideMark(item.side) }}</span>
+                <span class="queue__label" :title="item.label">{{ item.label }}</span>
+                <span class="queue__badge num">{{ item.placed }}/{{ item.total }}</span>
+              </div>
+              <!-- 不可用就不摆出来（不给置灰按钮）：基地未就位时这一型连栏带算子一起不出 -->
+              <div v-if="!cardBlocked(item)" class="queue__air-cols">
+                <div v-for="group in airGroups(item)" :key="group.status" class="queue__air-col">
+                  <div class="queue__air-col-head">
+                    <span>{{ group.label }}</span>
+                    <span class="num">{{ group.count }}</span>
+                  </div>
+                  <div class="queue__air-array">
+                    <button
+                      v-for="n in group.count"
+                      :key="n"
+                      type="button"
+                      class="queue__air-chip"
+                      :title="`${group.label} · ${item.label}`"
+                      @click="pickAir(item, group.status)"
+                    >
+                      <img
+                        v-if="item.imageUrl !== null"
+                        :src="item.imageUrl"
+                        alt=""
+                        draggable="false"
+                      />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <component
-            :is="cardBlocked(item) ? 'div' : 'button'"
-            v-else
-            :type="cardBlocked(item) ? undefined : 'button'"
-            class="queue__card"
-            :class="{
-              'queue__card--on': isActive(item),
-              'queue__card--blocked': item.blockedReason !== null,
-            }"
-            :title="
-              item.offMapAllowed === true
-                ? '点卡后点基地放入；也可用下方按钮放入图外盒'
-                : (item.blockedReason ?? `${item.raw}（${sideName(item.side)}）`)
-            "
-            :aria-pressed="cardBlocked(item) ? undefined : isActive(item)"
-            :aria-disabled="cardBlocked(item) ? 'true' : undefined"
-            @click="onCardClick(item)"
-          >
-            <!--
+            <component
+              :is="cardBlocked(item) ? 'div' : 'button'"
+              v-else
+              :type="cardBlocked(item) ? undefined : 'button'"
+              class="queue__card"
+              :class="{
+                'queue__card--on': isActive(item),
+                'queue__card--blocked': item.blockedReason !== null,
+              }"
+              :title="
+                item.offMapAllowed === true
+                  ? '点卡后点基地放入；也可用下方按钮放入图外盒'
+                  : (item.blockedReason ?? `${item.raw}（${sideName(item.side)}）`)
+              "
+              :aria-pressed="cardBlocked(item) ? undefined : isActive(item)"
+              :aria-disabled="cardBlocked(item) ? 'true' : undefined"
+              @click="onCardClick(item)"
+            >
+              <!--
               第六批条 1（S1）：**算子图阵列** —— 有图档就画算子（与地图同一份图档来源），
               没有才退回文字（数据里缺图的项目如实退回，不画占位方块冒充算子）。
             -->
-            <span v-if="item.imageUrl !== null" class="queue__counter">
-              <img
-                :src="item.imageUrl"
-                :alt="item.label"
-                class="queue__counter-img"
-                draggable="false"
-              />
-            </span>
-            <span class="queue__side num">{{ sideMark(item.side) }}</span>
-            <!-- 用户 2026-11-11：有算子图就不再用文字重复名称；无图才退回文字 -->
-            <span v-if="item.imageUrl === null" class="queue__label">{{ item.label }}</span>
-            <!-- 批 H（用户 2026-11-16）：地面单位卡右侧补**番号**（编队 / 师属标识），不加描述 -->
-            <span v-if="item.formation" class="queue__formation num">{{ item.formation }}</span>
-            <span class="queue__badge num">
-              {{
-                item.kind === 'truck'
-                  ? item.placed > 0
-                    ? '满载'
-                    : '空载'
-                  : `${item.placed}/${item.total}`
-              }}
-            </span>
-          </component>
+              <span v-if="item.imageUrl !== null" class="queue__counter">
+                <img
+                  :src="item.imageUrl"
+                  :alt="item.label"
+                  class="queue__counter-img"
+                  draggable="false"
+                />
+              </span>
+              <span class="queue__side num">{{ sideMark(item.side) }}</span>
+              <!-- 用户 2026-11-11：有算子图就不再用文字重复名称；无图才退回文字 -->
+              <span v-if="item.imageUrl === null" class="queue__label">{{ item.label }}</span>
+              <!-- 批 H（用户 2026-11-16）：地面单位卡右侧补**番号**（编队 / 师属标识），不加描述 -->
+              <span v-if="item.formation" class="queue__formation num">{{ item.formation }}</span>
+              <span class="queue__badge num">
+                {{
+                  item.kind === 'truck'
+                    ? item.placed > 0
+                      ? '满载'
+                      : '空载'
+                    : `${item.placed}/${item.total}`
+                }}
+              </span>
+            </component>
 
-          <BaseButton
-            v-if="item.kind === 'air' && setup.canPlaceAirInOffMapBox(item.side, item.entryIndex)"
-            variant="secondary"
-            size="sm"
-            @click="setup.placeAirInOffMapBoxNow(item.side, item.entryIndex)"
-          >
-            放入地图外盒
-          </BaseButton>
+            <BaseButton
+              v-if="item.kind === 'air' && setup.canPlaceAirInOffMapBox(item.side, item.entryIndex)"
+              variant="secondary"
+              size="sm"
+              @click="setup.placeAirInOffMapBoxNow(item.side, item.entryIndex)"
+            >
+              放入地图外盒
+            </BaseButton>
 
-          <span v-if="item.blockedReason !== null" class="queue__blocked">
-            {{ item.blockedReason }}
-          </span>
-        </li>
-      </ul>
-      <p v-else-if="openKey === stack.key" class="queue__empty">无待布设项</p>
-    </div>
+            <span v-if="item.blockedReason !== null" class="queue__blocked">
+              {{ item.blockedReason }}
+            </span>
+          </li>
+        </ul>
+        <p v-else-if="openKey === stack.key" class="queue__empty">无待布设项</p>
+      </div>
+    </template>
   </section>
 </template>
 
@@ -976,6 +1006,13 @@ function sideMark(side: 'axis' | 'soviet'): string {
   gap: var(--space-1);
   margin: 0;
   font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+/* 2026-11-18：轮到对手（PVE 的 AI / PVP 的对方）布设时只留这一行 */
+.queue__wait {
+  margin: var(--space-2) 0;
+  font-size: var(--text-sm);
   color: var(--color-muted);
 }
 
