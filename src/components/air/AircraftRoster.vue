@@ -151,7 +151,9 @@ function onContext(id: string): void {
       </template>
       <BaseTag kind="neutral">15.1</BaseTag>
       <span v-if="refitSources === 0" class="roster__hint">无付款来源</span>
-      <BaseButton size="sm" variant="ghost" @click="workbench.cancelRefitNow()">返回</BaseButton>
+      <BaseButton size="sm" variant="ghost" @click="workbench.cancelRefitNow()"
+        >取消整备</BaseButton
+      >
     </div>
     <template v-else>
       <div v-if="baseId !== undefined" class="roster__row">
@@ -161,7 +163,7 @@ function onContext(id: string): void {
           variant="secondary"
           title="15.1"
           @click="startRefit"
-          >整备（15.1）</BaseButton
+          >整备</BaseButton
         >
         <span v-else-if="refitReason !== null" class="roster__hint">{{ refitReason }}</span>
       </div>
@@ -174,8 +176,9 @@ function onContext(id: string): void {
           "
           size="sm"
           variant="secondary"
+          title="专规 1.4a"
           @click="containers.activateAirBox(boxSide)"
-          >整备盒内飞机 · 1.4a</BaseButton
+          >整备盒内飞机</BaseButton
         >
       </div>
       <!-- 左键选中 / 右键：同一块动作区；没有可用项就整行不出现（不留空行） -->
