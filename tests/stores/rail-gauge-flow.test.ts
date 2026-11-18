@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { mapLayers, rulesConstants, scenarios } from '@/data'
 import { parseConvertedRailRun, unitChoices } from '@/stores'
-import { combatRecord, label, newConsole, placeGround } from '../flows/sop-harness'
+import { combatRecord, groundRecord, label, newConsole, placeGround } from '../flows/sop-harness'
 
 /**
  * 专规 1.2 / 通规 13.3f：**轨距账本**（谁能用这条铁路）
@@ -370,5 +370,88 @@ describe('5-X2：剧本 7 轴心换轨 4 段与端头格（专规 1.2 / 13.3d）
 
   it('2.02 按 02.02 处理（同一格的两种写法，都解成列 2 行 2）', () => {
     expect(parseConvertedRailRun('01.03 to 2.02')).toEqual(parseConvertedRailRun('01.03 to 02.02'))
+  })
+})
+
+/**
+ * 13.3f：端头标记**随该单位换轨实时增减**
+ *
+ * 原文只说「Players keep track of the current extent of each rail gauge using Railhead markers」，
+ * 本条不新增规则，只钉住既有推导链路的**时序**：`railheadMarkers` 由换轨账本 computed 派生，
+ * 换轨动作一提交就变，不等阶段末、不靠刷新。两条方向都要成立：
+ *   · 轴方换进一格（入账）⇒ 新端头**当场**出现、旧端头当场消失；
+ *   · 苏方把该格换回宽轨（出账）⇒ 端头**当场**退回。
+ */
+describe('13.3f：换轨当即更新端头（不等阶段末 / 不靠刷新）', () => {
+  const headKeys = (store: ReturnType<typeof newConsole>): string[] =>
+    store.railheadMarkers
+      .filter((marker) => marker.hex !== null)
+      .map((marker) => label(marker.hex!))
+      .sort()
+
+  /** 铁路修理单位（真实单位库记录）；换轨须战斗面（13.3g-D） */
+  function rrUnit(
+    store: ReturnType<typeof newConsole>,
+    side: 'axis' | 'soviet',
+    hex: { col: number; row: number },
+    instanceId: string,
+  ) {
+    const record = groundRecord(side, (item) => (item.specialized ?? []).includes('rail_repair'))
+    const unit = placeGround(store, record, hex, side, instanceId, 'combat')
+    unit.mode = { mode: 'combat', orientation: 'combat', dg: false, exploit: false }
+    unit.raw = unit.faces.combat
+    unit.mpSpent = 0
+    unit.movementEnded = false
+    return unit
+  }
+
+  /** 13.3f-B：换轨必须是“移动进入”的副产品 ⇒ 先真的走一格 */
+  function walkInto(
+    store: ReturnType<typeof newConsole>,
+    unitId: string,
+    from: { col: number; row: number },
+    to: { col: number; row: number },
+  ): void {
+    if (store.moveInteraction?.unitIds.includes(unitId) !== true) {
+      store.clickHex(from)
+      if (store.movePickHex !== null) {
+        store.setMovePickOnly(unitId)
+        expect(store.confirmMovePick()).toBe(true)
+      }
+    }
+    store.clickHex(to)
+    expect(store.units.find((unit) => unit.instanceId === unitId)?.hex).toEqual(to)
+  }
+
+  it('★ 转换即增：轴方换进 3.2，端头当场由 2.2 移到 3.2', () => {
+    const store = newConsole()
+    store.setPhase('movement')
+    store.setTurn(5)
+    // 剧本 1 初设换轨 01.03→02.02 ⇒ 端头原在 2.2
+    expect(headKeys(store)).toEqual(['2.2'])
+
+    const rr = rrUnit(store, 'axis', { col: 2, row: 2 }, 'ax-rr-1')
+    walkInto(store, rr.instanceId, { col: 2, row: 2 }, { col: 3, row: 2 })
+    expect(store.convertRailGaugeNow(rr.instanceId, '3.2')).toBe(true)
+
+    // 不换阶段、不做任何刷新：账本与端头同时到位
+    expect(store.convertedRailHexes).toContain('3.2')
+    expect(headKeys(store)).toEqual(['3.2'])
+  })
+
+  it('★ 撤销即减：苏方把 2.2 换回宽轨，端头当场退回 1.3', () => {
+    const store = newConsole()
+    store.setPhase('movement')
+    store.setTurn(5)
+    store.switchSide()
+    expect(headKeys(store)).toEqual(['2.2'])
+
+    const rr = rrUnit(store, 'soviet', { col: 1, row: 3 }, 'su-rr-1')
+    walkInto(store, rr.instanceId, { col: 1, row: 3 }, { col: 2, row: 2 })
+    expect(store.convertRailGaugeNow(rr.instanceId, '2.2')).toBe(true)
+
+    // 出账 ⇒ 原端头格的标记消失；换轨范围缩回 1.3，端头随之回到 1.3
+    expect(store.convertedRailHexes).not.toContain('2.2')
+    expect(headKeys(store)).toEqual(['1.3'])
   })
 })
