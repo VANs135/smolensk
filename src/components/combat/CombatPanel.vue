@@ -279,6 +279,22 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
     ]
   })
 })
+/**
+ * 9.10a / 9.12（用户 2026-11-18 第 3 条）：选项步「撤退」直接点单位
+ *
+ * 撤退是整方各撤 1 格 ⇒ 点该方任一存活参战单位即消耗 1 点；落点仍留到第 9 步按既有候选选。
+ * 与「受损」分开列，避免同一枚算子被两种语义共用。
+ */
+const optionRetreatItems = computed<readonly CounterPickerItem[]>(() => {
+  if (workbench.optionDraftRemaining <= 0) return []
+  return workbench.optionRetreatUnits.map((unit) => ({
+    id: unit.instanceId,
+    imageUrl: counterImageUrlOf(unit),
+    name: `${unit.name}（军力 ${unit.steps}）`,
+    selected: false,
+    hex: unit.hex,
+  }))
+})
 </script>
 
 <template>
@@ -619,8 +635,9 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
             </RuleTip>
           </p>
           <!--
-            ★ 条 15/16（批 F·F1）+ 重做（§5 S6）：不再先选「受损 / 撤退」模式——
-            点本结算方算子图即受损，地图上三色格即撤退，两件事同屏；每次只进草稿，提交时一发结算。
+            ★ 条 15/16（批 F·F1）+ 用户 2026-11-18 第 3 条：
+            选项一律在**战果窗口里点单位**——「受损」按 9.11c 选人，「撤退」点任一参战单位
+            即整方各撤 1 格；不再先点地图上「单位后面的格子」。
           -->
           <CounterPicker
             v-if="optionLossItems.length > 0"
@@ -628,6 +645,14 @@ const optionLossItems = computed<readonly CounterPickerItem[]>(() => {
             :items="optionLossItems"
             :size="40"
             @pick="workbench.applyOptionDraftLoss($event)"
+            @hover="hoverUnit"
+          />
+          <CounterPicker
+            v-if="optionRetreatItems.length > 0"
+            :title="`撤退（点任一单位，全体各 1 格 · 已分配 ${workbench.combatInputs.optionRetreatHexes} 格）`"
+            :items="optionRetreatItems"
+            :size="40"
+            @pick="workbench.applyOptionDraftRetreatFor($event)"
             @hover="hoverUnit"
           />
           <!-- 9.12（C1）：按当前撤退格数**将被消灭**的单位（一行状态；解释进 ?） -->

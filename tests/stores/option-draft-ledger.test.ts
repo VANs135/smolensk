@@ -337,7 +337,7 @@ describe('批 F·F1（条 15/16）：选项页逐次点选只进草稿，提交�
   }, 30_000)
 })
 
-describe('批 F·F1：选项草稿的地图点选（map-view 分派）', () => {
+describe('用户 2026-11-18 第 3 条：选项页直接点单位（受损 / 撤退），不再点地图格定撤退', () => {
   /** 建到守方选项步（复用扫种子夹具） */
   function atDefenderOptions() {
     const store = scanSeed(1, 400)
@@ -355,38 +355,38 @@ describe('批 F·F1：选项草稿的地图点选（map-view 分派）', () => {
     expect(workbench.combatInputs.optionLossPoints).toBe(1)
   }, 30_000)
 
-  it('选项步同屏铺出三色可撤退格；点高亮格按距离记草稿', () => {
-    const { workbench } = atDefenderOptions()
-    const preview = workbench.optionDraftRetreatPreview
-    expect(preview).not.toBeNull()
-    // 1 格距离的预览至少存在（起点邻格图内且可入）
-    const near = preview!.distanceOf
-    const anyHex = Object.keys(near)[0]
-    expect(anyHex, '撤退预览应至少给出一个可退格').toBeDefined()
-    const [col, row] = anyHex!.split(',').map(Number)
-    const distance = near[anyHex!]!
-    expect(workbench.applyOptionDraftRetreatAt({ col: col!, row: row! })).toBe(true)
-    expect(workbench.combatInputs.optionRetreatHexes).toBe(
-      Math.min(distance, workbench.optionDraftRemaining + distance),
-    )
-    // 非预览格 ⇒ 拒绝
-    const outside = mapLayers.hexes.find((hex) => near[`${hex.col},${hex.row}`] === undefined)
-    expect(outside, '地图上应有预览之外的格').toBeDefined()
-    expect(workbench.applyOptionDraftRetreatAt({ col: outside!.col, row: outside!.row })).toBe(
-      false,
-    )
+  it('点参战单位 ⇒ 整方各撤 1 格（草稿）；地图点格不再记撤退', () => {
+    const { workbench, mapView } = atDefenderOptions()
+    const units = workbench.optionRetreatUnits
+    expect(units.length, '选项步应列出该方存活参战单位').toBeGreaterThan(0)
+    const picked = units[0]!
+    const remaining = workbench.optionDraftRemaining
+
+    expect(workbench.applyOptionDraftRetreatFor(picked.instanceId)).toBe(true)
+    expect(workbench.combatInputs.optionRetreatHexes).toBe(1)
+    expect(workbench.optionDraftRemaining).toBe(remaining - 1)
+    expect(workbench.optionDraftEntries.at(-1)?.label).toContain('全体')
+
+    // 地图上不再有「选项步可撤退格」（同屏预览已删）
+    expect(mapView.overlay.retreat).toBeNull()
+    const neighborHex = { col: picked.hex.col + 1, row: picked.hex.row }
+    mapView.onHexClick(neighborHex, { x: 40, y: 40 })
+    expect(workbench.combatInputs.optionRetreatHexes).toBe(1)
+
+    // 不在该方参战名单里的 id ⇒ 拒绝
+    expect(workbench.applyOptionDraftRetreatFor('not-a-participant')).toBe(false)
   }, 30_000)
 
-  it('点数分配完 ⇒ 不再铺三色撤退环（不可用项不出现）', () => {
+  it('点数分配完 ⇒ 撤退候选整块消失（不可用项不出现）', () => {
     const { workbench, mapView } = atDefenderOptions()
     const remaining = workbench.optionDraftRemaining
     expect(remaining).toBeGreaterThan(0)
-    expect(workbench.optionDraftRetreatPreview).not.toBeNull()
-    expect(mapView.overlay.retreat).not.toBeNull()
+    expect(workbench.optionRetreatUnits.length).toBeGreaterThan(0)
+    expect(mapView.overlay.retreat).toBeNull()
 
     expect(workbench.applyOptionDraftRetreat(remaining)).toBe(true)
     expect(workbench.optionDraftRemaining).toBe(0)
-    expect(workbench.optionDraftRetreatPreview).toBeNull()
+    expect(workbench.optionRetreatUnits).toHaveLength(0)
     expect(mapView.overlay.retreat).toBeNull()
   }, 30_000)
 })

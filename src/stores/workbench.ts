@@ -13808,9 +13808,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       label:
         entry.kind === 'loss'
           ? `${nameOf(entry.unitId ?? '')} 受损 ${entry.amount} 军力`
-          : `撤退 ${entry.amount} 格`,
+          : entry.unitId !== undefined && entry.unitId !== ''
+            ? `${nameOf(entry.unitId)} → 撤退 ${entry.amount} 格（全体）`
+            : `撤退 ${entry.amount} 格（全体）`,
     })),
   )
+
+  /**
+   * 9.10a / 9.12（用户 2026-11-18 第 3 条）：选项步的**撤退点选对象**
+   *
+   * 撤退是「整方各撤 1 格」的战果 ⇒ 点该方任一存活参战单位即分配 1 点；
+   * 不再先点地图上「单位后面的格子」。落点仍留到第 9 步按既有候选选。
+   */
+  const optionRetreatUnits = computed<ConsoleUnit[]>(() => {
+    const state = combatState.value
+    if (state === null || state.step !== 'options') return []
+    if (optionDraftRemaining.value <= 0) return []
+    const side = currentResolver(state)
+    return (side === 'attacker' ? combatAttackers.value : battleDefenders.value).filter(
+      (unit) => unit.steps > 0,
+    )
+  })
 
   /**
    * 9.11c：在既有分配上再给 `unitId` 记 1 点是否合法（强制损失与选项损失共用这一条规则）
@@ -13881,13 +13899,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** 点地图上的高亮撤退格 ⇒ 按该格距起点的直线距离记撤退（点数不够截断） */
-  function applyOptionDraftRetreatAt(hex: HexRef): boolean {
-    const preview = optionDraftRetreatPreview.value
-    if (preview === null) return false
-    const distance = preview.distanceOf[`${hex.col},${hex.row}`]
-    if (distance === undefined) return false
-    return applyOptionDraftRetreat(distance)
+  /**
+   * 点选项步的某一枚参战单位 ⇒ 该方全体各撤 1 格（消耗 1 点）
+   *
+   * 用户 2026-11-18 第 3 条：战果窗口里直接点单位，不再先点「单位后面的格子」。
+   * 撤退的落点仍留到第 9 步按 9.12 既有候选判据选（本函数不产生落点）。
+   */
+  function applyOptionDraftRetreatFor(unitId: string): boolean {
+    if (!optionRetreatUnits.value.some((unit) => unit.instanceId === unitId)) return false
+    const before = combatInputs.value.optionRetreatHexes
+    if (!applyOptionDraftRetreat(1)) return false
+    const log = optionDraftLog.value
+    const last = log[log.length - 1]
+    if (last !== undefined && last.kind === 'retreat') {
+      optionDraftLog.value = [...log.slice(0, -1), { ...last, unitId }]
+    }
+    return combatInputs.value.optionRetreatHexes > before
   }
 
   /** 撤销上一次草稿应用（流水末条按 amount 精确回退） */
@@ -13918,76 +13945,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function resetOptionDraft(): void {
     optionDraftLog.value = []
   }
-
-  /**
-   * 条 15/16（批 F·F1）：选项步地图上铺「本堆叠可撤退格」预览。
-   *
-   * 取当前结算方各参战单位在 **1..剩余点数** 各距离上撤退落点（`planRetreatDestinations`，
-   * 9.12）的并集；每格记**最小直线距离** ⇒ 玩家点格即按该距离消耗点数。
-   * 分类沿用撤退步的三色（安全 / 敌方 ZOC / 必被消灭 9.12b）。
-   */
-  const optionDraftRetreatPreview = computed<{
-    safe: HexRef[]
-    zoc: HexRef[]
-    doomed: HexRef[]
-    distanceOf: Record<string, number>
-  } | null>(() => {
-    const state = combatState.value
-    if (state === null || state.step !== 'options') {
-      return null
-    }
-    /*
-     * 点数已分配完 ⇒ 本步再没有"点格记撤退"这件事（不可用项不出现）；
-     * 修前用 `Math.max(1, …)` 兜底，分配完后仍铺三色环、点它却一律被拒（点了没动作）。
-     */
-    if (optionDraftRemaining.value <= 0) return null
-    const side = currentResolver(state)
-    const views = side === 'attacker' ? combatAttackerViews.value : combatDefenderViews.value
-    const maxDistance = optionDraftRemaining.value
-    const byKey = new Map<
-      string,
-      { hex: HexRef; distance: number; kind: 'safe' | 'zoc' | 'doomed' }
-    >()
-    const keyOf = (hex: HexRef) => `${hex.col},${hex.row}`
-    for (const view of views) {
-      for (let distance = 1; distance <= maxDistance; distance += 1) {
-        for (const destination of planRetreatDestinations({
-          from: view.hex,
-          distance,
-          mobility: view.mobility,
-          side: view.side,
-          facts: combatRetreatFacts.value,
-          immobile: combatRetreatFacts.value.immobile(view.id),
-          // 5.8a：战略模式单位撤退路径进入敌方 ZOC ⇒ 被摧毁
-          strat: view.mode === 'strat',
-        })) {
-          const key = keyOf(destination.hex)
-          const kind = destination.forcedDestruction
-            ? 'doomed'
-            : destination.inEnemyZoc
-              ? 'zoc'
-              : 'safe'
-          const prev = byKey.get(key)
-          if (prev === undefined || distance < prev.distance) {
-            byKey.set(key, { hex: { ...destination.hex }, distance, kind })
-          } else if (distance === prev.distance && kind === 'doomed' && prev.kind !== 'doomed') {
-            byKey.set(key, { ...prev, kind })
-          }
-        }
-      }
-    }
-    const safe: HexRef[] = []
-    const zoc: HexRef[] = []
-    const doomed: HexRef[] = []
-    const distanceOf: Record<string, number> = {}
-    for (const item of byKey.values()) {
-      if (item.kind === 'doomed') doomed.push(item.hex)
-      else if (item.kind === 'zoc') zoc.push(item.hex)
-      else safe.push(item.hex)
-      distanceOf[keyOf(item.hex)] = item.distance
-    }
-    return { safe, zoc, doomed, distanceOf }
-  })
 
   /**
    * 9.10c：攻方参战单位是否已全灭（名单里的单位已离盘按 0 军力计入）。
@@ -30892,7 +30849,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     optionDraftUsed,
     optionDraftRemaining,
     optionDraftEntries,
-    optionDraftRetreatPreview,
+    optionRetreatUnits,
     combatOptionRetreatWarning,
     attackerWipedNow,
     optionIgnoreAvailableNow,
@@ -30900,7 +30857,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     applyOptionDraftLoss,
     canTakeOptionLossPoint,
     applyOptionDraftRetreat,
-    applyOptionDraftRetreatAt,
+    applyOptionDraftRetreatFor,
     undoOptionDraftLast,
     resetOptionDraft,
     combatCanonicalLosses,

@@ -844,7 +844,8 @@ export const useMapViewStore = defineStore('mapView', () => {
        * W7 C16：9.12 撤退落点（只画「当前该轮到的这一方、且正在选的那一枚」——
        *   与 `retreatDestinationAt`／`onHexClick` 的可点判定**同源**；修前铺整方并集，
        *   会高亮只属于别人的落点，点它无动作还弹「请先结算完 9.2」）。
-       *   只在 9.2 的撤退步铺出；选项页的同屏预览由 `optionDraftRetreatPreview` 给。
+       *   用户 2026-11-18 第 3 条：选项步不再点地图定撤退（改为点参战单位），
+       *   故这里只在 9.2 的撤退步铺出。
        */
       retreat:
         workbench.combatState?.step === 'retreat'
@@ -861,13 +862,7 @@ export const useMapViewStore = defineStore('mapView', () => {
                   .filter((item) => item.forcedDestruction)
                   .map((item) => item.hex),
               }
-          : workbench.optionDraftRetreatPreview !== null
-            ? {
-                safe: workbench.optionDraftRetreatPreview.safe,
-                zoc: workbench.optionDraftRetreatPreview.zoc,
-                doomed: workbench.optionDraftRetreatPreview.doomed,
-              }
-            : null,
+          : null,
       // 批 C：守方选落点时，用不同色画出攻方已定的撤退路径与落点（只读，不可点）
       retreatOther: retreatOther.value,
       // W7 C16：9.12g 战后推进格（只在推进步铺出）
@@ -4825,11 +4820,10 @@ export const useMapViewStore = defineStore('mapView', () => {
       return
     }
     /*
-     * 条 15/16（批 F·F1）：选项页的**地图点选**（模态式，优先于常规分派）。
-     * 同屏两件事，不再先选模式：
-     *   · 点本结算方参战单位 ⇒ 该单位记 1 点军力损失（草稿）
-     *   · 点高亮的可撤退格 ⇒ 按该格距离记撤退（草稿）
-     * 两处都点不中只当「取消选择」——不让这一击落到别的分派上。
+     * 条 15/16（批 F·F1）+ 用户 2026-11-18 第 3 条：
+     * 选项页只保留「点本结算方参战单位 ⇒ 记 1 点军力损失」；
+     * 撤退改为在战果窗口点单位（`applyOptionDraftRetreatFor`），地图上不再点格定撤退。
+     * 点不中只当「取消选择」——不让这一击落到别的分派上。
      */
     if (workbench.combatState?.step === 'options') {
       const target = workbench.combatOptionLossTargets.find(
@@ -4839,7 +4833,6 @@ export const useMapViewStore = defineStore('mapView', () => {
         closePopup()
         return
       }
-      workbench.applyOptionDraftRetreatAt(hex)
       closePopup()
       return
     }
