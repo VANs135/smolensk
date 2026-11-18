@@ -24,6 +24,7 @@ import { createAirUnitTransitDomain } from './air-unit-transit'
 import { planAirSupplyLoad } from '@/engine/rules/air-supply'
 import type { AirCargoResolution } from '@/engine/rules/air-interaction'
 import type { MoveStepSnapshot } from './movement-types'
+import { tutorialSovietFirstTurnFullMa } from './tutorial-settings'
 import { inEnemyZocForAction } from '@/engine/rules/move'
 import { ruleErrorTextOf } from '@/engine/rules/rule-error-text'
 import { createFireResolutionDomain } from './fire-resolution'
@@ -2544,6 +2545,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function sovietFirstTurnMaFactor(unit: ConsoleUnit): number {
     if (unit.side !== 'soviet') return 1
+    // 教学局关掉「苏军首回合 ×1/2」这条剧本专规（见 tutorial-settings 的说明）
+    if (tutorialSovietFirstTurnFullMa.value) return 1
     return sovietFirstTurnHalfMaActive.value ? FIRST_TURN_HALF_MA_MULT : 1
   }
 

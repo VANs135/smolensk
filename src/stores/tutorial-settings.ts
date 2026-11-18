@@ -13,3 +13,17 @@ export const tutorialAirAllInactive = ref(false)
 export function setTutorialAirAllInactive(on: boolean): void {
   tutorialAirAllInactive.value = on
 }
+
+/**
+ * 教学局的苏军首回合移动力开关（用户 2026-11-19 第 6 条）
+ *
+ * 剧本专规「苏军首回合地面单位 ×1/2 MA」叠加反应阶段 ×1/2 后，18 Tk Div 只剩 2 MP，
+ * 连 8.1a 的 3 MP 突袭门槛都够不到，反应阶段就无法安排一次合法的苏军进攻。
+ * 教学局关掉这一条**剧本专规**（不是通用规则），让反击能真实发生；
+ * 引擎的突袭/战斗判定一条不改。
+ */
+export const tutorialSovietFirstTurnFullMa = ref(false)
+
+export function setTutorialSovietFirstTurnFullMa(on: boolean): void {
+  tutorialSovietFirstTurnFullMa.value = on
+}

@@ -40,6 +40,23 @@ const CANDIDATES = [
   '.box-card',
   '[class*="box-card__head"]',
   '[class*="arrival"]',
+  '.face__action',
+  '.picker__cell',
+  '.base-roster__plane',
+  '.boxmenu__item',
+  'label',
+  'input',
+].join(',')
+
+/** 按钮级候选（用户 2026-11-19 第 1 条：引导要直接框住该点的按钮） */
+const BUTTONS = [
+  'button',
+  '[role="button"]',
+  '.face__action',
+  '.boxmenu__item',
+  '.picker__cell',
+  '.base-roster__plane',
+  'label',
 ].join(',')
 
 function compact(text: string): string {
@@ -53,8 +70,8 @@ function visible(rect: DOMRect): boolean {
   return true
 }
 
-function findText(texts: readonly string[]): HTMLElement | null {
-  const nodes = Array.from(document.querySelectorAll<HTMLElement>(CANDIDATES))
+function findText(texts: readonly string[], selector = CANDIDATES): HTMLElement | null {
+  const nodes = Array.from(document.querySelectorAll<HTMLElement>(selector))
   for (const text of texts) {
     const needle = compact(text)
     let best: { node: HTMLElement; area: number } | null = null
@@ -85,6 +102,24 @@ function refresh(): void {
   if (!tutorial.active || step === null) {
     ring.value = null
     return
+  }
+
+  // ① 按钮级目标优先：直接框住该点的按钮（整备 / 发起任务 / 拦截复选框…）
+  const buttonTexts = step.target.buttonTexts ?? []
+  if (buttonTexts.length > 0) {
+    const node = findText(buttonTexts, BUTTONS)
+    if (node !== null) {
+      const rect = node.getBoundingClientRect()
+      const pad = 5
+      ring.value = {
+        left: rect.left - pad,
+        top: rect.top - pad,
+        width: rect.width + pad * 2,
+        height: rect.height + pad * 2,
+        radius: 10,
+      }
+      return
+    }
   }
 
   const texts = step.target.texts ?? []
@@ -165,11 +200,17 @@ watch(
           ×
         </button>
       </header>
+      <p v-if="tutorial.currentStep.intro !== undefined" class="tut__intro">
+        {{ tutorial.currentStep.intro }}
+      </p>
       <p class="tut__hint">{{ tutorial.currentStep.hint }}</p>
     </aside>
 
     <aside v-else-if="tutorial.completed" class="tut__card tut__card--done">
       <strong class="tut__title">教学完成</strong>
+      <p v-if="tutorial.reactionOutcome !== null" class="tut__intro">
+        苏军反击战果 {{ tutorial.reactionOutcome }}：攻方损失，进攻失败。
+      </p>
       <button type="button" class="tut__close" aria-label="关闭教学" @click="tutorial.stop()">
         关闭
       </button>
@@ -255,6 +296,13 @@ watch(
 .tut__hint {
   margin: 5px 0 0;
   color: var(--color-muted);
+}
+
+.tut__intro {
+  margin: 4px 0 0;
+  color: var(--color-ink);
+  font-size: var(--text-xs);
+  opacity: 0.8;
 }
 
 .tut__card--done {
