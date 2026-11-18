@@ -16,6 +16,7 @@ import {
   bestCombatTerrainForDefender,
   bridgedCrossing,
   canEngineer,
+  canEnterForCombat,
   canonicalMode,
   canMoveInPhase,
   canReleaseReserve,
@@ -1450,25 +1451,42 @@ export function createBattleFacts(input: {
   const attackedUnits = new Set(input.attackedUnitIdsThisSegment ?? [])
   const attackedHexes = new Set(input.attackedHexesThisSegment ?? [])
   return {
-    // 9.1f：「能移动进入」才能攻击；只能靠**道路**进入者仍可常规战斗（8.1c 只禁突袭）
+    /**
+     * 9.1f：不能进入的格不得攻击；只能沿路进入者仍可常规战斗（8.1c 只禁突袭）。
+     *
+     * 正向用 `canEnterForCombat` 区分 `normal` / `roadOnly`；`roadOnly` 在这里照常放行
+     * （常规战斗允许沿路进攻），突袭一侧由 `move.ts#canOverrun` 用 `forOverrun` 计费拦下。
+     *
+     * 6.1d（9.1f 明文点名）：正向能进、反向却被禁止的格同样不能攻击 —— 与移动/突袭
+     * 共用同一条互逆性口径（反向沿同一条路时仍按沿路计）。
+     */
     canEnterForAttack: (view, from, to) => {
       const keys = bridgedFor(view.side)
       const touchesEngineerHex =
         keys.has(`${from.col}.${from.row}`) || keys.has(`${to.col}.${to.row}`)
-      const result = selectMovementTerrain({
-        terrainsPresent: map.terrainsAt(to),
-        mobility: view.mobility,
-        crossing: bridgedCrossing(map.crossingBetween(from, to), {
-          touchesEngineerHex,
-          bridgePresent: true,
-          // 13.8b / 8.1c：攻击单位不得借架桥过河**突袭**；本判只问"能否攻击"，
-          // 故按常规战斗（forOverrun: false）——突袭那一侧由 8.1b/8.1c 的地形判据另行拦下。
-          forOverrun: false,
-        }),
-        followingRoad: true,
+      const crossing = bridgedCrossing(map.crossingBetween(from, to), {
+        touchesEngineerHex,
+        bridgePresent: true,
+        // 13.8b / 8.1c：攻击单位不得借架桥过河**突袭**；本判只问"能否攻击"，
+        // 故按常规战斗（forOverrun: false）——突袭那一侧由 8.1b/8.1c 的地形判据另行拦下。
         forOverrun: false,
       })
-      return result.ok
+      const forward = canEnterForCombat({
+        terrainsPresent: map.terrainsAt(to),
+        mobility: view.mobility,
+        crossing,
+        followingRoad: true,
+      })
+      if (!forward.ok) return false
+      const routes = crossing?.routes ?? []
+      const back = selectMovementTerrain({
+        terrainsPresent: map.terrainsAt(from),
+        mobility: view.mobility,
+        crossing,
+        followingRoad: routes.length > 0,
+        forOverrun: false,
+      })
+      return back.ok || back.reason !== 'prohibited'
     },
     // 9.9：环形工事完整等级（印刷工事 + 摆上的工事算子，取高者）
     hedgehogLevelAt: (hex) =>

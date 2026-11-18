@@ -7284,6 +7284,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const result: HexRef[] = []
     for (const hex of enemyHexKey.values()) {
+      // 9.1c：本环节已被攻击过的格不能再次攻击（与 `beginCombat` 的账本同一份事实）
+      if (combatFacts.value.attackedThisSegmentAt(hex)) continue
       // P2（M3）：先用**同一份参战投影**取合格者（与 `attackersForHex` / 突袭共用判据），再问合法性层
       const canStackAttack = (group: ConsoleUnit[]): boolean => {
         const force = attackForceForHex({
@@ -7297,6 +7299,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         return group.some((unit) => {
           if (!eligible.has(unit.instanceId)) return false
           if (!combatAttackerVerdict(unit).ok) return false
+          /*
+           * 9.1f / 8.1c：与结算共用 `combatFacts.canEnterForAttack` —— 高亮不再只看
+           * 相邻与模式，移动规则禁止进入的格（含 6.1d 反向禁入）在这里同样被排除；
+           * 只能沿路进入的格仍照常高亮（常规战斗允许，8.1c 只禁突袭）。
+           */
+          if (
+            !combatFacts.value.canEnterForAttack(toBattleUnitView(unit, turn.value), unit.hex, hex)
+          )
+            return false
           const verdict = checkLegality(
             buildLegalityRequest({
               action: 'attack',
