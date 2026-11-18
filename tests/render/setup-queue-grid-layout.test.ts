@@ -47,7 +47,7 @@ describe('初设队列：box 网格布局', () => {
     expect(queue).toContain("label: '未激活 · 减损'")
     // 点中的那一枚上方出「入盒」，不再用下拉选图外盒
     expect(queue).toContain('isAirChipPicked(chip)')
-    expect(queue).toContain('sendAirToBox(chip)')
+    expect(queue).toContain('sendAirToBox(airPickedChip)')
     expect(queue).not.toContain('queue__air-box')
   })
 

@@ -3,15 +3,19 @@ import { createApp } from 'vue'
 
 import App from './App.vue'
 import '@/styles/base.css'
+import '@/styles/android.css'
+import { applyPlatformAttribute } from '@/shared/platform'
 import { useWorkbenchStore } from '@/stores/workbench'
 import { useThemeStore } from '@/stores/theme'
 
 /**
  * 应用装配（Global Step 00：脚手架）
  *
- * 顺序：创建应用 → 挂 Pinia → 挂根组件。
- * 数据加载管线（校验→冻结→类型）在接入 src/data/index.ts 后于此扩展。
+ * 顺序：挂平台属性 → 创建应用 → 挂 Pinia → 挂根组件。
+ * 平台属性先挂：首帧就能命中 `html[data-platform='android']`，避免闪一下桌面尺度。
  */
+applyPlatformAttribute()
+
 const app = createApp(App)
 
 const pinia = createPinia()

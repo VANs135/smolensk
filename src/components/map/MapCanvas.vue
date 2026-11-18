@@ -256,6 +256,14 @@ const pixelRatio = computed(() =>
 
 /** 是否已完成首次「适应窗口」 */
 let fitted = false
+/**
+ * 用户是否手动缩放过 / 平移过
+ *
+ * 未手动前，容器尺寸变化（手机首屏地址栏收起、流程条换行、底部导航落位）必须**重新适配**；
+ * 否则地图会停在按“挂载瞬间那个更小的视口”算出的位置，表现为上/下留一大块空白。
+ * 用户一旦自己缩放过，就尊重其视口，不再自动拉回整图。
+ */
+let userAdjusted = false
 let resizeObserver: ResizeObserver | null = null
 
 /**
@@ -383,6 +391,7 @@ function updatePinch(event: PointerEvent): void {
   const target = toLocalOf(midpoint(a, b))
   if (target === null) return
   const factor = distanceBetween(a, b) / pinch.startDistance
+  userAdjusted = true
   applyViewport(pinchViewport(pinch.viewport, pinch.anchor, target, factor))
 }
 
@@ -536,6 +545,7 @@ function applyViewport(next: ViewportTransform): void {
 /** 适应窗口：整幅地图进视口并居中 */
 function fitToWindow(): void {
   if (!canDraw(viewSize.value)) return
+  userAdjusted = false
   viewport.value = fitViewport(BOARD_SIZE_PX, viewSize.value, FIT_PADDING_PX)
   render()
 }
@@ -543,6 +553,7 @@ function fitToWindow(): void {
 /** 以视口中心为锚点放大/缩小一档 */
 function zoomByStep(direction: 1 | -1): void {
   if (!canDraw(viewSize.value)) return
+  userAdjusted = true
   const anchor = { x: viewSize.value.width / 2, y: viewSize.value.height / 2 }
   applyViewport(zoomAt(viewport.value, anchor, direction > 0 ? ZOOM_STEP : 1 / ZOOM_STEP))
 }
@@ -577,9 +588,15 @@ function syncSize(): void {
    * 会被完整画两遍——首屏最贵的一笔。尺寸不变时 `clampViewport` 的结果也不变，故跳过等价。
    */
   if (fitted && viewSize.value.width === width && viewSize.value.height === height) return
+  const sizeChanged = viewSize.value.width !== width || viewSize.value.height !== height
   viewSize.value = { width, height }
   if (!fitted && canDraw(viewSize.value)) {
     fitted = true
+    fitToWindow()
+    return
+  }
+  // 手机首屏布局会二次撑开（地址栏 / 流程条 / 底部导航）⇒ 未手动操作过就重新适配
+  if (sizeChanged && !userAdjusted) {
     fitToWindow()
     return
   }
@@ -644,6 +661,7 @@ function onWheel(event: WheelEvent): void {
   event.preventDefault()
   const local = toLocal(event)
   if (local === null) return
+  userAdjusted = true
   applyViewport(zoomAt(viewport.value, local, event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP))
 }
 
@@ -795,6 +813,7 @@ function onPointerMove(event: PointerEvent): void {
   if (step.kind === 'aborted') drag = step.gesture
   else if (step.kind === 'pan') {
     drag = step.gesture
+    userAdjusted = true
     applyViewport(panBy(viewport.value, step.dx, step.dy))
   }
 

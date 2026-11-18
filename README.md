@@ -57,6 +57,10 @@ export ANDROID_HOME=<android sdk 目录>
 | 平移地图     | 左键拖动    | 单指拖动                                |
 | 控件命中区   | 36 / 28px   | 46 / 36px（`@media (pointer: coarse)`） |
 
+安卓壳还会在根元素挂 `data-platform="android"`，启用 `src/styles/android.css` 的
+Material 3 触摸皮肤：48dp 命中区、底部导航（选中药丸）、抽屉/初设队列转底部 sheet、
+地图缩放转右下 FAB、安全区让位。桌面与手机浏览器不命中这段样式。
+
 实现落点：`src/shared/long-press.ts`（长按判定与 `v-long-press` 指令）、
 `src/render/viewport.ts#pinchViewport`（捏合几何）、`src/components/map/MapCanvas.vue`
 （地图侧接线）、`src/styles/base.css` 与 `src/styles/tokens.css`（触摸基线）。

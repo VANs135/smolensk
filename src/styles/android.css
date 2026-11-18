@@ -1,0 +1,345 @@
+/* ═══════════════════════════════════════════════════════════
+ * 安卓触摸屏（Material 3 尺度）—— 2026-11-19
+ *
+ * 只在 **Capacitor 安卓壳** 里生效：`html[data-platform='android']` 由
+ * `src/shared/platform.ts` 在装配时挂上；桌面浏览器与手机浏览器一律不命中。
+ *
+ * 三条原则：
+ *   ① 只改**尺度 / 形状 / 层级**，不改颜色语义（主题仍由 tokens.css 与 data-theme 决定）；
+ *   ② 命中区按 Material 的 48dp 下限，密集阵列（算子）保持 44dp；
+ *   ③ 面板从「桌面浮窗」改为「底部 sheet」：拇指可达、可滚动、不挤压地图。
+ *
+ * 不引入任何组件库：现有 BaseButton / BasePanel / 抽屉 / 队列都沿用，只换外壳。
+ * ═══════════════════════════════════════════════════════════ */
+
+html[data-platform='android'] {
+  /* Material 3 的圆角与高度档位（与现有 --radius-* 同名，组件无需改） */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --control-height: 48px;
+  --control-height-sm: 40px;
+  --command-rail: 80px;
+  --command-rail-button: 64px;
+  /* 底部导航总高（含手势条安全区）：抽屉与初设 sheet 都以此为下边界 */
+  --android-nav-height: calc(68px + var(--safe-bottom));
+  --android-sheet-radius: 28px;
+  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.16);
+  --shadow-md: 0 2px 8px rgb(0 0 0 / 0.18);
+  --shadow-lg: 0 8px 28px rgb(0 0 0 / 0.24);
+  /* 触摸屏不需要桌面那圈细边框；用高度差表达层级 */
+  --android-hairline: color-mix(in srgb, var(--color-command-line) 70%, transparent);
+}
+
+/* 根容器给状态栏让位（Android 15 强制 edge-to-edge 时 env 才非 0） */
+html[data-platform='android'] .gt,
+html[data-platform='android'] .home {
+  padding-top: var(--safe-top);
+}
+
+/* 剧本页本来就有 8 档上内边距：在它基础上叠加安全区，不能整段覆盖 */
+html[data-platform='android'] .scenario {
+  padding-top: calc(var(--space-8) + var(--safe-top));
+}
+
+/* 触摸反馈：按下轻微内缩 + 去高亮，接近 Material 的 state layer */
+html[data-platform='android'] button,
+html[data-platform='android'] [role='button'] {
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 90ms var(--ease-out),
+    background-color 120ms linear,
+    border-color 120ms linear;
+}
+
+html[data-platform='android'] button:active:not(:disabled),
+html[data-platform='android'] [role='button']:active:not([aria-disabled='true']) {
+  transform: scale(0.97);
+}
+
+html[data-platform='android'] button:focus-visible,
+html[data-platform='android'] [role='button']:focus-visible {
+  outline: 2px solid var(--color-command-teal);
+  outline-offset: 2px;
+}
+
+/* 输入控件统一 16px：低于 16px 的输入在移动端会被系统放大 */
+html[data-platform='android'] input,
+html[data-platform='android'] select,
+html[data-platform='android'] textarea {
+  min-height: var(--control-height-sm);
+  font-size: 16px;
+}
+
+/* 指纹式滚动：面板内部滚动不把整页带走，滚动条隐藏 */
+html[data-platform='android'] .queue,
+html[data-platform='android'] .gt__drawer-body,
+html[data-platform='android'] .tray__body {
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+html[data-platform='android'] .queue::-webkit-scrollbar,
+html[data-platform='android'] .gt__drawer-body::-webkit-scrollbar,
+html[data-platform='android'] .tray__body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* ────────────────────────────── 底部导航 ────────────────────────────── */
+
+@media (max-width: 1024px) {
+  /* 横屏手机可能宽于 900：安卓壳统一在 1024 以下转「上地图、下导航」 */
+  html[data-platform='android'] .gt__workspace {
+    flex-direction: column;
+  }
+
+  html[data-platform='android'] .gt__main {
+    order: 1;
+  }
+
+  html[data-platform='android'] .gt__rail {
+    order: 2;
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: stretch;
+    min-height: var(--android-nav-height);
+    padding: 6px calc(8px + var(--safe-right)) calc(8px + var(--safe-bottom))
+      calc(8px + var(--safe-left));
+    border-top: 1px solid var(--android-hairline);
+    background: var(--color-command-panel);
+    box-shadow: 0 -8px 24px rgb(0 0 0 / 0.08);
+    overflow: visible;
+  }
+
+  /* 五项等分：图标在上、11px 标签在下（Material navigation bar） */
+  html[data-platform='android'] .gt__rail-button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 56px;
+    padding: 4px 2px;
+    gap: 2px;
+    border-radius: 16px;
+    font-size: var(--text-xs);
+    line-height: 1.1;
+  }
+
+  html[data-platform='android'] .gt__rail-button svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  /* 当前面板：药丸底 + 主题色（Material 的 active indicator） */
+  html[data-platform='android'] .gt__rail-button[aria-expanded='true'] {
+    background: var(--color-command-teal-bg);
+    color: var(--color-command-teal);
+    font-weight: 700;
+  }
+
+  html[data-platform='android'] .gt__rail-end {
+    flex: 1 1 0;
+    margin-left: 0;
+  }
+}
+
+/* ────────────────────────────── 抽屉 → 底部 sheet ────────────────────────────── */
+
+@media (max-width: 1024px) {
+  html[data-platform='android'] .gt__drawer,
+  html[data-platform='android'] .gt__drawer--wide {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: var(--android-nav-height);
+    width: auto;
+    max-height: 72%;
+    border: 0;
+    border-radius: var(--android-sheet-radius) var(--android-sheet-radius) 0 0;
+    background: var(--color-command-panel);
+    box-shadow: 0 -10px 36px rgb(0 0 0 / 0.26);
+    animation: android-sheet-up 180ms var(--ease-out);
+  }
+
+  /* 顶部拖动指示条（纯装饰，不接手势；关闭仍点导航栏同一项） */
+  html[data-platform='android'] .gt__drawer::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    z-index: 2;
+    width: 36px;
+    height: 4px;
+    transform: translateX(-50%);
+    border-radius: 2px;
+    background: var(--color-command-line);
+  }
+
+  html[data-platform='android'] .gt__drawer-head {
+    padding-top: 18px;
+  }
+}
+
+/* ────────────────────────────── 初设队列 → 底部 sheet ────────────────────────────── */
+
+@media (max-width: 1024px) {
+  html[data-platform='android'] .queue {
+    left: 8px;
+    right: 8px;
+    top: auto;
+    bottom: calc(8px + var(--safe-bottom));
+    width: auto;
+    max-height: 58%;
+    padding-top: 16px;
+    border: 1px solid var(--android-hairline);
+    border-radius: var(--android-sheet-radius) var(--android-sheet-radius) 16px 16px;
+    box-shadow: 0 -10px 36px rgb(0 0 0 / 0.26);
+  }
+
+  html[data-platform='android'] .queue::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    z-index: 2;
+    width: 36px;
+    height: 4px;
+    transform: translateX(-50%);
+    border-radius: 2px;
+    background: var(--color-command-line);
+  }
+
+  /* 标题栏不再作为拖拽抓手（JS 侧也拒绝拖动，见 DecisionQueue#onPointerDown） */
+  html[data-platform='android'] .queue__head {
+    cursor: default;
+    touch-action: auto;
+  }
+}
+
+/* ────────────────────────────── 地图视口 → FAB 簇 ────────────────────────────── */
+
+html[data-platform='android'] .mapcanvas {
+  position: relative;
+}
+
+html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools {
+  position: absolute;
+  top: 12px;
+  right: calc(12px + var(--safe-right));
+  bottom: auto;
+  z-index: var(--layer-map-popup);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools .btn {
+  width: auto;
+  min-width: 52px;
+  height: 52px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--color-command-panel);
+  color: var(--color-command-ink);
+  box-shadow: var(--shadow-md);
+}
+
+/* 视口内的坐标/百分比/图例在触屏上不占位（手指本来就点不到那么细的字） */
+html[data-platform='android'] .mapcanvas__coord,
+html[data-platform='android'] .mapcanvas__percent,
+html[data-platform='android'] .mapcanvas__legend {
+  display: none;
+}
+
+/* ────────────────────────────── 盒子目标 / 芯片 / 面板 ────────────────────────────── */
+
+html[data-platform='android'] .gt__box-targets .btn,
+html[data-platform='android'] .gt__box-targets button {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 22px;
+}
+
+/*
+ * 初设已有「逐枚入盒」（算子上方按钮）⇒ 右下角那个通用「地图外空军盒」按钮在触屏上多余，
+ * 还会压住教学卡与 FAB。拖动进盒时仍保留（`.gt__box-targets--drag`），那是拖放的落点。
+ */
+html[data-platform='android'] .gt__box-targets:not(.gt__box-targets--drag) {
+  display: none;
+}
+
+/* 教学卡：安卓上移到顶部，避免盖住底部初设 sheet 里的算子阵列 */
+@media (max-width: 1024px) {
+  html[data-platform='android'] .tut__card {
+    top: calc(var(--safe-top) + 8px);
+    right: auto;
+    bottom: auto;
+    left: 8px;
+    /* 右侧给地图 FAB 留 88px：教学卡不能把 + / − / 全图 盖掉 */
+    width: min(320px, calc(100% - 88px));
+    border-radius: 18px;
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+/* 竖屏手机上再往下让一条流程条的高度：别把回合/布设方/定位初设挡住 */
+@media (max-width: 1024px) and (min-height: 600px) {
+  html[data-platform='android'] .tut__card {
+    top: calc(var(--safe-top) + 200px);
+  }
+}
+
+html[data-platform='android'] .gt__air-box-menu .btn {
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 24px;
+  box-shadow: var(--shadow-md);
+}
+
+/* 顶部流程条：贴住状态栏，减少一行占高 */
+html[data-platform='android'] .bar {
+  padding: 6px 12px 0;
+  background: var(--color-command-panel);
+}
+
+/* 底部托盘（若有）让开手势条 */
+html[data-platform='android'] .tray {
+  padding-bottom: calc(var(--space-2) + var(--safe-bottom));
+}
+
+/* 弹窗在窄屏上贴底（Material full-width dialog），避免居中浮窗两侧留白过窄 */
+@media (max-width: 600px) {
+  html[data-platform='android'] .base-dialog,
+  html[data-platform='android'] .dialog {
+    width: calc(100% - 16px);
+    max-width: none;
+    border-radius: var(--android-sheet-radius);
+  }
+}
+
+/* 尊重系统“减少动画” */
+@media (prefers-reduced-motion: reduce) {
+  html[data-platform='android'] button,
+  html[data-platform='android'] [role='button'],
+  html[data-platform='android'] .gt__drawer,
+  html[data-platform='android'] .queue {
+    animation: none;
+    transition: none;
+  }
+}
+
+@keyframes android-sheet-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

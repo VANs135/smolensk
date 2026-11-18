@@ -91,8 +91,8 @@ describe('批 G：界面（源码守卫）', () => {
       'setup.beginAirPlacement(item.side, item.entryIndex, chip.status, chip.reduced)',
     )
     expect(source).toContain('isAirChipPicked(chip)')
-    expect(source).toContain('sendAirToBox(chip)')
-    expect(source).toContain('queue__air-send')
+    expect(source).toContain('sendAirToBox(airPickedChip)')
+    expect(source).toContain('queue__air-pickbar')
     // 旧入口彻底删掉：下拉选「放入图外盒…」不再存在
     expect(source).not.toContain('queue__air-box')
     expect(source).not.toContain('放入图外盒')

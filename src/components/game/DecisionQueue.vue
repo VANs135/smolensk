@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 
 import { BaseButton, BaseIcon } from '@/components/base'
 import { clampDockOffset } from '@/components/map/dock-position'
+import { isAndroidPlatform } from '@/shared/platform'
 import {
   useHotseatStore,
   useSetupStore,
@@ -147,7 +148,8 @@ const airFaceSections = computed<readonly AirFaceSection[]>(() => {
         })),
     )
     return { ...group, count: chips.length, chips }
-  })
+    // 空栏不占版面：四类仍然存在，但没有该面的飞机时不出空标题（手机上尤其宝贵）
+  }).filter((group) => group.count > 0)
 })
 
 /** 点某一栏的某一枚 ⇒ 让 store 把**这一枚**换到待落位位，并高亮地图基地格 */
@@ -167,6 +169,14 @@ function isAirChipPicked(chip: AirChip): boolean {
     current.faceIndex === chip.faceIndex
   )
 }
+
+/** 当前选中的那一枚（没有则为 null）：用来在阵列上方摆「入盒」 */
+const airPickedChip = computed<AirChip | null>(() => {
+  for (const group of airFaceSections.value) {
+    for (const chip of group.chips) if (isAirChipPicked(chip)) return chip
+  }
+  return null
+})
 
 /** 点「入盒」：把**玩家点的那一枚**直接放入地图外空军盒（1.4a），不再经过下拉 */
 function sendAirToBox(chip: AirChip): void {
@@ -224,6 +234,9 @@ const drag = ref<{ startX: number; startY: number; dx: number; dy: number } | nu
 
 function onPointerDown(event: PointerEvent): void {
   if (event.button !== 0) return
+  // 2026-11-19：安卓壳里队列是底部 sheet（由 android.css 定位），不再允许拖动——
+  // 拖拽会把它从拇指区挪走，且与地图平移手势争夺 pointer capture。
+  if (isAndroidPlatform()) return
   drag.value = {
     startX: event.clientX,
     startY: event.clientY,
@@ -596,6 +609,20 @@ function sideMark(side: 'axis' | 'soviet'): string {
               激活/未激活、完好/减损四类分不清。
             -->
             <div v-if="stack.key === 'air'" class="queue__air">
+              <!--
+                选中的那一枚：在阵列**正上方**给一条动作条（「入盒」）。
+                不再把按钮贴在算子边缘——底部 sheet 滚动时贴边按钮会被裁掉半个。
+              -->
+              <div v-if="airPickedChip !== null" class="queue__air-pickbar">
+                <span class="queue__air-picklabel">
+                  {{ airPickedChip.item.label }} ·
+                  {{ airPickedChip.status === 'active' ? '激活' : '未激活' }}
+                  {{ airPickedChip.reduced ? '· 减损' : '· 完好' }}
+                </span>
+                <BaseButton variant="primary" size="sm" @click="sendAirToBox(airPickedChip)">
+                  入盒
+                </BaseButton>
+              </div>
               <div
                 v-for="group in airFaceSections"
                 :key="group.key"
@@ -608,15 +635,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
                 </div>
                 <div class="queue__air-array">
                   <div v-for="chip in group.chips" :key="chip.key" class="queue__air-slot">
-                    <button
-                      v-if="isAirChipPicked(chip)"
-                      type="button"
-                      class="queue__air-send"
-                      title="放入地图外空军盒（1.4a）"
-                      @click.stop="sendAirToBox(chip)"
-                    >
-                      入盒
-                    </button>
                     <button
                       type="button"
                       class="queue__air-chip"
@@ -1097,40 +1115,38 @@ function sideMark(side: 'axis' | 'soviet'): string {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  /* 选中枚的「入盒」浮在算子上方，给首行留出这一条高度 */
-  padding-top: 14px;
 }
 
-/* 一枚算子的定位容器：入盒按钮相对它绝对定位 */
+/* 一枚算子的定位容器 */
 .queue__air-slot {
   position: relative;
   display: inline-flex;
 }
 
 /*
- * 「入盒」按钮：贴在**这一枚算子正上方**（用户 2026-11-19 口径）。
- * 只有被点中的那一枚才出现；点它把这一枚直接放进地图外空军盒（1.4a）。
+ * 选中某一枚后，在四栏**正上方**出现动作条（用户 2026-11-19：入盒按钮在飞机上方）。
+ * 做成横条而不是贴着算子边缘的浮标：底部 sheet 滚动时不会被裁掉半个。
  */
-.queue__air-send {
-  position: absolute;
-  bottom: calc(100% - 2px);
-  left: 50%;
-  z-index: 2;
-  height: 16px;
-  padding: 0 5px;
-  transform: translateX(-50%);
+.queue__air-pickbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 8px;
   border: 1px solid var(--color-command-teal);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg);
-  color: var(--color-command-teal);
-  font-size: 10px;
-  line-height: 14px;
-  white-space: nowrap;
-  cursor: pointer;
+  border-radius: 12px;
+  background: var(--color-command-teal-bg);
 }
 
-.queue__air-send:hover {
-  background: var(--color-command-teal-bg);
+.queue__air-picklabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-command-teal);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .queue__air-chip {

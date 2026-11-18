@@ -335,7 +335,8 @@ function onCounterDrop(
 function pickAirBox(): void {
   const item = setup.placing
   if (item?.kind === 'air' && setup.canPlaceAirInOffMapBox(item.side, item.entryIndex)) {
-    setup.placeAirInOffMapBoxNow(item.side, item.entryIndex)
+    // 2026-11-19：放进盒的必须是玩家点中的那一枚（激活/未激活、完好/减损不能串）
+    setup.placeAirInOffMapBoxNow(item.side, item.entryIndex, item.faceIndex)
     return
   }
   setupBoxOpen.value = !setupBoxOpen.value
