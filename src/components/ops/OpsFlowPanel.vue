@@ -225,6 +225,25 @@ function setTargetKind(kind: string): void {
       </div>
     </SessionStep>
 
+    <!--
+      10.0d / 10.0c：**空军轰炸也要预先指定整体目标**（战斗单位 10.0a / 空军基地 10.0c）。
+      轰炸结算尚未开始（`barrageState === null`）时可选；一旦开始，整体目标随本次轰炸锁定。
+    -->
+    <p v-if="flow.kind === 'bombing' && workbench.barrageState === null" class="muted num">
+      整体目标（10.0d：宣布后只能用于该目标）：
+      <select
+        v-if="targetKindChoices.length > 1"
+        class="select"
+        :value="workbench.barrageTargetKind"
+        @change="setTargetKind(($event.target as HTMLSelectElement).value)"
+      >
+        <option v-for="item in targetKindChoices" :key="item.key" :value="item.key">
+          {{ item.label }}
+        </option>
+      </select>
+      <b v-else>{{ workbench.targetKindLabel(workbench.barrageTargetKind) }}</b>
+    </p>
+
     <!-- ───────── 空军：任务链（选机发起 / 拦截 / 空战 / 结算 / 返航，全部在 AirPanel 内） ───────── -->
     <AirPanel v-if="airMissionActive" only="mission" />
   </BasePanel>

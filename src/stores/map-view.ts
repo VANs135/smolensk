@@ -1587,6 +1587,16 @@ export const useMapViewStore = defineStore('mapView', () => {
       workbench.setAirActive(true)
       workbench.setAirMissionKind(kind === 'bombing' ? 'barrage' : 'hip_shoot')
       if (!workbench.setAirTargetFromText(`${hex.col}.${hex.row}`)) return false
+      /*
+       * 10.0d / 10.0c：空军轰炸同样要**预先指定整体目标**（战斗单位或空军基地），
+       * 表随目标（10.0a / 10.0c）。修前这里不落目标格与目标类别 ⇒ 恒用残留的
+       * `combatUnits`，基地格永远走不到 10.0c-A 的降级与逐机掷骰。
+       * 低空扫射（14.7d）只打地面单位 ⇒ 固定回战斗单位，避免继承上一场的设施选择。
+       */
+      workbench.pickBarrageTargetAt(hex)
+      workbench.setBarrageTargetKind(
+        kind === 'bombing' ? workbench.defaultBarrageTargetKindAt(hex) : 'combatUnits',
+      )
     }
     opsFlow.value = { kind, targetHex: { col: hex.col, row: hex.row }, step: 1 }
     closePopup()
