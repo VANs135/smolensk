@@ -110,6 +110,31 @@ export function zoomAt(
   }
 }
 
+/**
+ * 双指捏合的一步（触摸屏）
+ *
+ * 捏合同时含两种意图：**缩放**（两指距离变化）与**平移**（两指中点移动）。
+ * 只按缩放算会漏掉后者——玩家常常一边捏一边拖着走，地图会"粘"在原地。
+ *
+ * 做法分两步、顺序不可换：
+ *   ① 在**起始中点**上缩放 `factor`（该点下的世界点缩放后仍落在起始中点，即 `zoomAt` 的语义）；
+ *   ② 再把这块内容整体搬到**当前中点** ⇒ 玩家指间的那个世界点始终跟着指间走。
+ *
+ * @param viewport     手势开始时的视口（不是上一帧的 —— 每帧都从起点重算，累积误差不回卷）
+ * @param anchorScreen 起始两指中点（屏幕坐标）
+ * @param targetScreen 当前两指中点（屏幕坐标）
+ * @param factor       本次手势累计的缩放倍率（当前距离 ÷ 起始距离）
+ */
+export function pinchViewport(
+  viewport: ViewportTransform,
+  anchorScreen: Point,
+  targetScreen: Point,
+  factor: number,
+): ViewportTransform {
+  const zoomed = zoomAt(viewport, anchorScreen, factor)
+  return panBy(zoomed, targetScreen.x - anchorScreen.x, targetScreen.y - anchorScreen.y)
+}
+
 /** 以视口中心为锚点缩放到指定倍率（缩放按钮用） */
 export function zoomToScale(
   viewport: ViewportTransform,

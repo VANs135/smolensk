@@ -8,6 +8,7 @@ import { auxCardImageUrl } from '@/components/game/aux-card-image'
 import { arrivalCopiesOf } from '@/engine/rules'
 import { counterImages, tokenImageUrl } from '@/render/token-images'
 import { ooaScanOf } from '@/render/charts-view'
+import { vLongPress } from '@/shared/long-press'
 import { counterImageUrlOf, hexLabel, recordNameOf } from '@/stores'
 import { useContainersStore, useWorkbenchStore, type UnitRecordView } from '@/stores'
 
@@ -1014,6 +1015,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
               <button
                 v-for="card in placedRollCards"
                 :key="card.key"
+                v-long-press="() => card.withdraw?.()"
                 type="button"
                 class="arrival-hand__card arrival-hand__card--placed"
                 :title="

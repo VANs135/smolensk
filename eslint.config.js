@@ -23,6 +23,12 @@ export default tseslint.config(
       // 人工备份逐字节原样保存（含事故现场快照），不参与任何格式化/静态检查
       // ——与 `.prettierignore` 同一口径。
       'backup/**',
+      /*
+       * 安卓壳：`android/` 由 `cap add android` 生成，里面既有 Gradle 模板、
+       * 也有 `cap sync` 每次覆盖的 `assets/public`（dist 的副本）。
+       * 对它跑 lint/format 只会得到一堆"别人的代码不合规范"。
+       */
+      'android/**',
     ],
   },
 

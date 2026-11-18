@@ -178,6 +178,17 @@
   --control-height-sm: 28px;
   --focus-ring: 0 0 0 3px rgb(140 47 34 / 0.22);
 
+  /*
+   * 安全区（刘海 / 圆角屏 / 手势条）
+   *
+   * 由 `index.html` 的 `viewport-fit=cover` 打开：桌面浏览器上 `env()` 一律为 0，
+   * 故这里无条件定义、无条件使用即可，不必再按设备分叉。
+   */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
   /* 默认浅色主题；深色由 data-theme='dark' 整组覆盖 */
   color-scheme: light;
 }
@@ -213,4 +224,22 @@
   --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
   --focus-ring: 0 0 0 3px rgb(120 226 206 / 0.24);
   color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════════
+ * 触摸屏尺度（用户 2026-11-18：打包安卓安装包）
+ *
+ * 只改**尺度**、不改颜色与层级：桌面浏览器是 `pointer: fine`，整段不命中，
+ * 鼠标端的观感与排版一字不变。
+ *
+ * 依据：手指的稳定命中区约 44px（戴手套 / 横握时更差）；原值 36 / 28 对鼠标够用、
+ * 对指头偏小——点偏一格就会选错算子，比"按钮小一点"的代价高得多。
+ * ═══════════════════════════════════════════════════════════ */
+@media (pointer: coarse) {
+  :root {
+    --control-height: 46px;
+    --control-height-sm: 36px;
+    --command-rail: 72px;
+    --command-rail-button: 60px;
+  }
 }

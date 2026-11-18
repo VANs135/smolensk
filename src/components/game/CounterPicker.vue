@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import { BaseTag } from '@/components/base'
+import { vLongPress } from '@/shared/long-press'
 
 /**
  * **算子图阵列选择器**（B13；用户口径⑪ —— 所有"选算子"的地方都用它）
@@ -116,6 +117,11 @@ function pickItem(item: CounterPickerItem): void {
   emit('pick', item.id)
 }
 
+/** 右键（= 触摸长按）：只把"哪一枚"报给上层，动作由上层决定（与 `pick` 分开） */
+function contextItem(id: string): void {
+  emit('context', id)
+}
+
 function hoverItem(item: CounterPickerItem | null): void {
   emit('hover', item === null ? null : item.id)
 }
@@ -154,6 +160,7 @@ const gridStyle = computed<Record<string, string>>(() => ({
       <button
         v-for="item in visible"
         :key="item.id"
+        v-long-press="() => contextItem(item.id)"
         type="button"
         class="picker__cell"
         :class="{
@@ -165,7 +172,7 @@ const gridStyle = computed<Record<string, string>>(() => ({
         :aria-label="item.name"
         :aria-pressed="item.selected"
         @click="pickItem(item)"
-        @contextmenu.prevent="emit('context', item.id)"
+        @contextmenu.prevent="contextItem(item.id)"
         @pointerenter="hoverItem(item)"
         @focus="hoverItem(item)"
         @blur="hoverItem(null)"
@@ -312,5 +319,21 @@ const gridStyle = computed<Record<string, string>>(() => ({
 
 .picker__refusal {
   color: var(--color-warning);
+}
+
+/*
+ * 触摸屏：算子格放大到 44px（手指的稳定命中区）。
+ * 列宽与格子尺寸必须一起放大——只放格子会溢出列宽、把相邻两枚叠在一起。
+ */
+@media (pointer: coarse) {
+  .picker__grid {
+    grid-template-columns: repeat(auto-fill, max(var(--picker-size), 44px));
+    gap: 6px;
+  }
+
+  .picker__cell {
+    width: max(var(--picker-size), 44px);
+    height: max(var(--picker-size), 44px);
+  }
 }
 </style>

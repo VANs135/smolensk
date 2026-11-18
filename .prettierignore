@@ -1,6 +1,8 @@
 # 大文件与构建产物不参与格式检查
 dist/
 release/
+# 安卓壳：Capacitor 生成的工程与构建产物，不是本仓源码（模板会随升级整体替换）
+android/
 node_modules/
 public/map/
 public/counters/

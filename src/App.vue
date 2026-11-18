@@ -110,7 +110,12 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-2) var(--space-4);
+  /*
+   * 顶栏贴着屏幕最上沿 ⇒ 必须自己让开刘海/状态栏（`--safe-*` 在桌面恒为 0，
+   * 所以这一行对鼠标端没有任何影响）。
+   */
+  padding: calc(var(--space-2) + var(--safe-top)) calc(var(--space-4) + var(--safe-right))
+    var(--space-2) calc(var(--space-4) + var(--safe-left));
   background: var(--color-command-panel);
   color: var(--color-command-ink);
   border-bottom: 1px solid var(--color-command-line);

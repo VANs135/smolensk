@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  原生资源侧的配色
+
+  取值与 Web 端命令台令牌同源（见 src/styles/tokens.css），首帧、启动图、状态栏
+  与界面底色必须一致，否则横屏启动时会白闪一下再跳到米色。
+  · colorPrimary     #f2efe7 界面暖纸底（命令台底色）
+  · colorPrimaryDark #16211d 地图与图标底色
+  · colorAccent      #3d5f4d 主按钮绿（实心强调）
+  注意：XML 注释里不能出现连续两个减号，故这里不再照抄 CSS 变量名。
+-->
+<resources>
+    <color name="colorPrimary">#f2efe7</color>
+    <color name="colorPrimaryDark">#16211d</color>
+    <color name="colorAccent">#3d5f4d</color>
+</resources>

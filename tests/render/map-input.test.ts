@@ -138,8 +138,15 @@ describe('B18a：MapCanvas 的接线（源码守卫）', () => {
   })
 
   it('指针取消**不**过闸门（它只做复位，必须无条件执行，否则拖动会永久卡住）', () => {
+    /*
+     * 切片方式改为「到下一个函数声明」（与其他守卫用例同口径）。
+     * 原先取固定 400 字符窗口，触摸适配在函数头部加了「退出触摸登记 + 收起捏合」两行后
+     * 就把 `dragCancel(drag)` 挤出了窗口——那被测的接线其实**没变**，是窗口太窄。
+     * 意图（不过闸门、必须调 dragCancel）一字未改。
+     */
     const start = source.indexOf('function onPointerCancel(')
-    const body = source.slice(start, start + 400)
+    const next = source.indexOf('function ', start + 10)
+    const body = source.slice(start, next > 0 ? next : source.length)
     expect(body).not.toContain('isMapGesture(event)')
     expect(body).toContain('dragCancel(drag)')
   })

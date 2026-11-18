@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "serve:dist": "node scripts/serve-dist.mjs",
     "pack": "npm run build && node scripts/pack-release.mjs",
+    "android:sync": "npm run build && cap sync android",
+    "android:apk": "npm run android:sync && node scripts/android-apk.mjs",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "perf:compare": "node scripts/perf-compare.mjs",
@@ -24,11 +26,14 @@
     "check": "npm run lint && npm run format:check && npm run typecheck && npm run test && npm run arch"
   },
   "dependencies": {
+    "@capacitor/android": "^7.6.10",
+    "@capacitor/core": "^7.6.10",
     "pinia": "^3.0.1",
     "vue": "^3.5.13",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.10",
     "@eslint/js": "^9.17.0",
     "@rolldown/binding-win32-x64-msvc": "1.2.8",
     "@tauri-apps/cli": "^2.12.4",

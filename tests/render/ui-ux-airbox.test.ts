@@ -27,7 +27,15 @@ describe('空军盒三处修复', () => {
   it('② 盒内右键接上既有 14.11 转场（无可用项不出现）', () => {
     const picker = read('src/components/game/CounterPicker.vue')
     expect(picker).toContain("(e: 'context', id: string): void")
-    expect(picker).toContain('@contextmenu.prevent="emit(\'context\', item.id)"')
+    /*
+     * 触摸屏适配（2026-11-18）：模板里改成调用本组件的 `contextItem(item.id)`
+     * ——因为同一处还要挂 `v-long-press`（手指端没有右键），两个入口必须走同一个函数。
+     * 出口本身没变：`contextItem` 内部仍是 `emit('context', id)`，故这里钉住"右键 → context"这条链。
+     */
+    expect(picker).toContain('@contextmenu.prevent="contextItem(item.id)"')
+    expect(picker).toContain("emit('context', id)")
+    // 触摸端的长按必须也通向同一个出口
+    expect(picker).toContain('v-long-press="() => contextItem(item.id)"')
 
     const roster = read('src/components/air/AircraftRoster.vue')
     expect(roster).toContain('@context="onContext"')

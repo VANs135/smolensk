@@ -9,6 +9,7 @@ import { useUiMode } from '@/components/ui-mode'
 import { formations } from '@/data'
 import type { HexRef, Side } from '@/data'
 import type { BoxView, EdgeBoxId, ScenarioDrawBoxView } from '@/engine/rules'
+import { vLongPress } from '@/shared/long-press'
 import {
   boxesForViewer,
   useContainersStore,
@@ -722,6 +723,7 @@ function boxAircraft(side: Side) {
               <li
                 v-for="holding in box.holdings.filter((item) => item.sectionId === section.id)"
                 :key="holding.unitId"
+                v-long-press="() => openDeadPileMenu(box, holding.unitId)"
                 class="num"
                 :class="{
                   'pile-item--picked':

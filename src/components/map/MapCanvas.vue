@@ -44,12 +44,20 @@ import {
   clampViewport,
   fitViewport,
   panBy,
+  pinchViewport,
   screenToWorld,
   worldToScreen,
   zoomAt,
   type Size,
   type ViewportTransform,
 } from '@/render/viewport'
+// 触摸屏：长按＝右键、双指＝缩放（用户 2026-11-18 要求）；判定逻辑与其余面板共用一份
+import {
+  LONG_PRESS_MS,
+  isTouchPointer,
+  longPressMoved,
+  suppressNextClick,
+} from '@/shared/long-press'
 
 /**
  * 地图画布（C2 地图渲染与视口）
@@ -264,6 +272,126 @@ let counterPress: {
   x: number
   y: number
 } | null = null
+
+/* ── 触摸屏手势状态（鼠标路径完全不读这些） ── */
+
+/** 当前按在画布上的触摸点（`pointerId → 客户端坐标`）；≥2 即转入双指 */
+const touchPoints = new Map<number, { x: number; y: number }>()
+
+/**
+ * 双指捏合中的一段手势
+ *
+ * `viewport` 是**手势开始时**的视口：每帧都从它重算（而不是在上一帧结果上继续乘），
+ * 否则缩放会按手指采样次数累积误差，捏一下就从 1 倍跳到 3 倍。
+ */
+let pinch: {
+  ids: [number, number]
+  startDistance: number
+  anchor: { x: number; y: number }
+  viewport: ViewportTransform
+} | null = null
+
+/** 长按计时器与其起点（触摸专用；判成后等同右键） */
+let longPressTimer: number | null = null
+let longPressStart: { x: number; y: number } | null = null
+/** 本次手势已判成长按 ⇒ 抬起时不再算点击 */
+let longPressFired = false
+/** 上一次长按的时刻：WebView 有时会跟着补发 `contextmenu`，用它去重 */
+let lastLongPressAt = 0
+
+/** 双指距离小到无法判方向（两指几乎重合）时不起捏合 */
+const PINCH_MIN_DISTANCE_PX = 12
+/** 长按与 `contextmenu` 的去重窗口 */
+const CONTEXT_DEDUPE_MS = 800
+
+function midpoint(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+): { x: number; y: number } {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+}
+
+function distanceBetween(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y)
+}
+
+/** 起长按计时（触摸）：位移超容差、抬手、系统取消都会作废它 */
+function startLongPress(event: PointerEvent): void {
+  cancelLongPress()
+  longPressStart = { x: event.clientX, y: event.clientY }
+  longPressTimer = window.setTimeout(() => {
+    longPressTimer = null
+    const start = longPressStart
+    longPressStart = null
+    if (start === null) return
+    longPressFired = true
+    lastLongPressAt = Date.now()
+    /*
+     * 长按的是「这一格要干嘛」，不是「拖这枚算子」⇒ 先把拖动的意图撤掉。
+     *
+     * ★ 这里**故意不复位 `drag`**：`drag` 一复位，抬起时 `dragEnd` 会走「未在拖动中」
+     *   的早退分支，`longPressFired` 就没人消费、留到下一次点击上（表现为"长按过之后
+     *   第一次点击没反应"）。让它保持 dragging，抬起时由 `longPressFired` 分支收尾。
+     */
+    if (counterPress !== null) abortCounterDrag()
+    hoverPoint.value = null
+    // 松手后浏览器仍可能补发 click；画布自己的点击在 pointerup 里由 longPressFired 拦
+    suppressNextClick()
+    emitContextAt(start)
+  }, LONG_PRESS_MS)
+}
+
+function cancelLongPress(): void {
+  if (longPressTimer !== null) {
+    window.clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+  longPressStart = null
+}
+
+/** 第二根手指落下 ⇒ 转入捏合，单指那一段手势（平移 / 拖子 / 长按）整体作废 */
+function beginPinch(): void {
+  const entries = [...touchPoints.values()]
+  const ids = [...touchPoints.keys()]
+  const a = entries[0]
+  const b = entries[1]
+  const firstId = ids[0]
+  const secondId = ids[1]
+  if (a === undefined || b === undefined || firstId === undefined || secondId === undefined) return
+  cancelLongPress()
+  if (counterPress !== null) abortCounterDrag()
+  drag = IDLE_DRAG
+  hoverPoint.value = null
+  const anchor = toLocalOf(midpoint(a, b))
+  if (anchor === null) return
+  pinch = {
+    ids: [firstId, secondId],
+    startDistance: distanceBetween(a, b),
+    anchor,
+    viewport: { ...viewport.value },
+  }
+}
+
+/** 捏合的一步：缩放比＝当前两指距离 ÷ 起始距离，同时把起始中点搬到当前中点（捏着走） */
+function updatePinch(event: PointerEvent): void {
+  if (pinch === null) return
+  touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY })
+  const a = touchPoints.get(pinch.ids[0])
+  const b = touchPoints.get(pinch.ids[1])
+  if (a === undefined || b === undefined) return
+  if (pinch.startDistance < PINCH_MIN_DISTANCE_PX) return
+  const target = toLocalOf(midpoint(a, b))
+  if (target === null) return
+  const factor = distanceBetween(a, b) / pinch.startDistance
+  applyViewport(pinchViewport(pinch.viewport, pinch.anchor, target, factor))
+}
+
+/** 少于两指 ⇒ 捏合结束（此后仍按着的那根手指不承接成平移） */
+function endPinchIfNeeded(): void {
+  if (pinch === null) return
+  if (touchPoints.size >= 2) return
+  pinch = null
+}
 const counterGhost = ref<{
   id: string
   label: string
@@ -467,6 +595,16 @@ function toLocal(event: { clientX: number; clientY: number }): { x: number; y: n
   return { x: event.clientX - rect.left, y: event.clientY - rect.top }
 }
 
+/**
+ * 同 `toLocal`，但吃的是**已经算好的 `{x,y}`**
+ *
+ * 触摸的捏合中点、长按起点都是自己算出来的点（不是事件对象），交给 `toLocal` 会被
+ * 类型挡住——而换算规则必须只有一份（矩形取画布内容盒），故在此薄薄转一层。
+ */
+function toLocalOf(point: { x: number; y: number }): { x: number; y: number } | null {
+  return toLocal({ clientX: point.x, clientY: point.y })
+}
+
 /** 视口内坐标 → 世界坐标 + 命中格（两处输入共用的唯一变换） */
 function hitAtLocal(point: { x: number; y: number }): {
   hex: HexRef
@@ -536,6 +674,22 @@ function captureTarget(): Element | null {
 }
 
 function onPointerDown(event: PointerEvent): void {
+  /*
+   * 触摸：先把这根手指登记下来。
+   * 第二根落下 ⇒ 立刻转入双指捏合（这一段必须赶在 `drag.dragging` 的早退之前，
+   * 否则第一根手指正在平移时第二根永远不会被认出来）。
+   */
+  if (isTouchPointer(event.pointerType)) {
+    touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    // 新手势开始 ⇒ 上一段遗留的"已长按"标记先清掉（否则这一次点击会被当成余波吞掉）
+    if (touchPoints.size === 1) longPressFired = false
+    if (touchPoints.size === 2) {
+      if (!isMapGesture(event)) return
+      beginPinch()
+      return
+    }
+    if (touchPoints.size > 2) return
+  }
   if (event.button !== 0) return
   // 多指：已在拖动中就直接忽略后续指针（否则第二根手指会替换整段手势，见 DragGesture.pointerId）
   if (drag.dragging) return
@@ -562,6 +716,8 @@ function onPointerDown(event: PointerEvent): void {
         }
   counterDragPath = source == null || hit === null ? [] : [{ ...hit.hex }]
   drag = beginDrag({ x: event.clientX, y: event.clientY }, event.pointerId)
+  // 触摸：起长按计时（判成＝右键；拖动 / 抬手都会作废它）
+  if (isTouchPointer(event.pointerType)) startLongPress(event)
   // 指针捕获让「拖出画布」也能继续收到 pointermove。
   // 该 API 在指针已非活动时会抛错（快速点击 / 合成事件），故容错——否则拖动会卡住。
   try {
@@ -572,8 +728,22 @@ function onPointerDown(event: PointerEvent): void {
 }
 
 function onPointerMove(event: PointerEvent): void {
+  // 双指：捏合优先于一切单指逻辑（缩放 + 跟手平移）
+  if (pinch !== null) {
+    updatePinch(event)
+    return
+  }
+  // 触摸：位移超出容差 ⇒ 这一手是拖动，不是长按
+  if (
+    longPressStart !== null &&
+    longPressMoved(longPressStart, { x: event.clientX, y: event.clientY })
+  )
+    cancelLongPress()
   // 多指：只认发起这次手势的那一根指针（另一根的手指移动不得参与平移）
   if (drag.dragging && drag.pointerId !== null && event.pointerId !== drag.pointerId) return
+
+  // 长按已经开出菜单：手指还没抬起，剩下的移动不再平移地图（菜单正开着，底下的图乱动只会让人点错）
+  if (longPressFired) return
   // B18a：悬停在浮层上不该高亮下面的格；B24：拖动中（捕获会把 target 换成捕获元素）照旧算
   if (!isMapGesture(event, drag.dragging)) {
     hoverPoint.value = null
@@ -637,10 +807,23 @@ function onPointerMove(event: PointerEvent): void {
   // 拖动中不出提示（否则提示会跟着平移乱飞）
   // 条 25（D2）：悬停投影 —— 有令牌给令牌全称；空格回落成格号 `col.row`（点格不再弹只读浮签）
   // H2：文本现算（`hoverTip`），这里只记指针位置 ⇒ 上层预览变化时能原地刷新。
-  hoverPoint.value = hit === null ? null : { x: local.x, y: local.y, world: hit.world }
+  // 触摸屏没有"悬停"：手指按着时不出浮签（否则松手后浮签会停在原地，看着像卡住了）
+  hoverPoint.value =
+    hit === null || isTouchPointer(event.pointerType)
+      ? null
+      : { x: local.x, y: local.y, world: hit.world }
 }
 
 function onPointerUp(event: PointerEvent): void {
+  if (isTouchPointer(event.pointerType)) {
+    touchPoints.delete(event.pointerId)
+    // 捏合中抬手 ⇒ 只收起捏合，绝不当成"点了一下"
+    if (pinch !== null) {
+      endPinchIfNeeded()
+      return
+    }
+  }
+  cancelLongPress()
   // 多指：别的指针抬起不算"本次手势结束"（否则会判一次单击、并把还在屏上的手势作废）
   if (drag.dragging && drag.pointerId !== null && event.pointerId !== drag.pointerId) return
   // B24：抬起这一击属于"已在画布上按下"的那段手势 ⇒ 即便 target 被捕获改成别的元素也照收
@@ -651,6 +834,15 @@ function onPointerUp(event: PointerEvent): void {
   const counter = counterPress
   releaseCapture(event)
   hoverPoint.value = null
+  /*
+   * 触摸长按已经开过菜单 ⇒ 这一次抬起不再算点击。
+   * 不清 `counterPress` 会留下幽灵手势（下次按下就被它抢走），故照常收尾再返回。
+   */
+  if (longPressFired) {
+    longPressFired = false
+    clearCounterDrag()
+    return
+  }
   if (counter !== null && !ended.clicked) {
     // H1：落点格随拖放一起给出（图外为 null）——上层据此区分"进盒"与"地图内落子"
     const dropLocal = toLocal(event)
@@ -675,19 +867,29 @@ function onPointerUp(event: PointerEvent): void {
   else emit('blankClick')
 }
 
-function onContextMenu(event: MouseEvent): void {
-  if (!props.fill || !isMapGestureTarget(event.target, canvas.value)) return
-  event.preventDefault()
-  const local = toLocal(event)
+/** 在某个客户端坐标上喊出「右键这里」（鼠标右键与触摸长按共用同一条出口） */
+function emitContextAt(point: { x: number; y: number }): void {
+  const local = toLocalOf(point)
   if (local === null) return
   const world = screenToWorld(local, viewport.value)
   emit(
     'hexContext',
     hitTestHex(world.x, world.y)?.hex ?? null,
     world,
-    { x: event.clientX, y: event.clientY },
+    { x: point.x, y: point.y },
     viewport.value.scale,
   )
+}
+
+function onContextMenu(event: MouseEvent): void {
+  if (!props.fill || !isMapGestureTarget(event.target, canvas.value)) return
+  event.preventDefault()
+  /*
+   * 触摸长按刚开过菜单：部分 WebView 会在长按后再补发一次 `contextmenu`，
+   * 不去重就会把同一个菜单连开两次（第二次看着像"点不动"）。
+   */
+  if (Date.now() - lastLongPressAt < CONTEXT_DEDUPE_MS) return
+  emitContextAt({ x: event.clientX, y: event.clientY })
 }
 
 /**
@@ -697,6 +899,12 @@ function onContextMenu(event: MouseEvent): void {
  * 拖动状态就会永久卡住（此后所有点选都被当成平移）。
  */
 function onPointerCancel(event: PointerEvent): void {
+  // 触摸：这根手指没了 ⇒ 退出登记（否则下一次按下会被当成"第二根手指"直接进捏合）
+  if (isTouchPointer(event.pointerType)) {
+    touchPoints.delete(event.pointerId)
+    endPinchIfNeeded()
+  }
+  cancelLongPress()
   // 多指：别的指针被取消不该把这一段手势一起作废（否则仍在屏上的那根手指拖不动）
   if (drag.dragging && drag.pointerId !== null && event.pointerId !== drag.pointerId) return
   // 取消只复位：即使指针已经不在画布上（`target` 变了）也必须复位，故**不**过归属闸门
@@ -1065,7 +1273,11 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
   border-radius: var(--radius-sm);
   background: var(--color-bg-2);
   cursor: grab;
+  /* 手势全归本组件：双击缩放 / 双指缩放 / 长按选择都不得由浏览器接管 */
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .mapcanvas__viewport:active {

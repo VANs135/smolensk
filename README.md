@@ -22,6 +22,45 @@ npm run pack
 npm run serve:dist
 ```
 
+## 安卓安装包（触摸屏）
+
+盘面是手机/平板上"摊开看"的东西，故提供安卓壳：Capacitor 包一层 WebView，
+产物是可直接侧载的 `release/SmolenskOCS-v<版本>-android.apk`。
+
+```bash
+npm run android:apk     # build → cap sync → gradle assembleRelease → 搬到 release/
+```
+
+首次构建需要本机具备 **JDK 21** 与 **Android SDK**（`platforms;android-35` +
+`build-tools;35.0.0`）。JDK 必须是 21：`@capacitor/android` 7.6 的库以 Java 21 编译，
+17 会在编译期报「无效源发行版: 21」：
+
+```bash
+export JAVA_HOME=<jdk21 目录>
+export ANDROID_HOME=<android sdk 目录>
+# 也可写进 android/local.properties：sdk.dir=<android sdk 目录>（该文件不入库）
+```
+
+签名用本地自签密钥 `android/keystore/ocs-release.jks`（口令在
+`android/keystore.properties`，两者都**不入库**）。换机器打包时这两样要一起带走，
+否则签名不一致，只能卸载重装——而卸载会连同 WebView 域里的存档一起清掉。
+
+桌面端不受影响：`src-tauri/` 原样保留，`npm run tauri:build` 仍出 Windows 安装包；
+网页端就是 `npm run build` 出来的 `dist/`。三端共用同一份前端产物。
+
+触摸端与鼠标端的差异（同一套代码、按 `pointer` 类型分派）：
+
+| 操作         | 鼠标 / 桌面 | 触摸屏                                  |
+| ------------ | ----------- | --------------------------------------- |
+| 打开单位菜单 | 右键        | **长按 500ms**                          |
+| 地图缩放     | 滚轮        | **双指捏合**（同时可拖）                |
+| 平移地图     | 左键拖动    | 单指拖动                                |
+| 控件命中区   | 36 / 28px   | 46 / 36px（`@media (pointer: coarse)`） |
+
+实现落点：`src/shared/long-press.ts`（长按判定与 `v-long-press` 指令）、
+`src/render/viewport.ts#pinchViewport`（捏合几何）、`src/components/map/MapCanvas.vue`
+（地图侧接线）、`src/styles/base.css` 与 `src/styles/tokens.css`（触摸基线）。
+
 ## 技术栈
 
 TypeScript（strict）· Vue 3（组合式 API）· Vite · Pinia · Canvas 2D 自绘 · Zod · Vitest。

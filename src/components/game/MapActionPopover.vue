@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 
 import { BaseButton, BaseIcon } from '@/components/base'
 import { MapPopover } from '@/components/map'
+import { vLongPress } from '@/shared/long-press'
 import {
   counterImageUrlOf,
   hexLabel,
@@ -530,6 +531,7 @@ const ruleTags = computed<string>(() => {
           <div
             v-for="unit in groundChips"
             :key="unit.id"
+            v-long-press="(event) => onChipContext(event, unit.id)"
             class="chip"
             :class="{
               'chip--pickable': chipPickable(unit.id),
@@ -557,6 +559,7 @@ const ruleTags = computed<string>(() => {
           <div
             v-for="air in stackAircraft"
             :key="air.instanceId"
+            v-long-press="(event) => onChipContext(event, air.instanceId)"
             class="chip"
             :class="{
               'chip--pickable': airPickable(),

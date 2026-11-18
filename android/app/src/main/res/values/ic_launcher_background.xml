@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 自适应图标的底：与图标自身底色同值，圆形/方圆形遮罩下看不出接缝 -->
+    <color name="ic_launcher_background">#16211D</color>
+</resources>

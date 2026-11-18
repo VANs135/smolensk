@@ -1,6 +1,11 @@
 # 文本统一按 LF 入库/检出，与 .editorconfig、Prettier（endOfLine: lf）一致
 * text=auto eol=lf
 
+# Windows 批处理例外：cmd.exe 解析纯 LF 的 .bat 时，goto/label 可能错位
+# （android/gradlew.bat 正是带 label 的批处理，坏掉只表现为"构建莫名失败"）
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
 # 二进制图档与字体：禁止任何换行转换
 *.png binary
 *.jpg binary

@@ -3,6 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 
 import { RuleTip } from '@/components/base'
 import { counterImages } from '@/render/token-images'
+import { vLongPress } from '@/shared/long-press'
 import { useMapViewStore, type AuxCardView } from '@/stores'
 
 import { auxCardImageUrl } from './aux-card-image'
@@ -181,6 +182,7 @@ function regionStyle(rect: { x: number; y: number; w: number; h: number }): Reco
             这里不判规则、不提交动作；能力来自 store，与地图空军菜单同源。
           -->
           <button
+            v-long-press="(event) => openMenu(unit.unitId, event)"
             type="button"
             class="face__unit-btn"
             :title="unit.name ?? unit.unitId"

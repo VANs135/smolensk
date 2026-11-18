@@ -1239,4 +1239,75 @@ onBeforeUnmount(() => {
     width: min(var(--command-drawer-wide), calc(100% - var(--command-rail)));
   }
 }
+
+/*
+ * ═══════════════════════════════════════════════════════════
+ * 触摸屏 / 窄屏（用户 2026-11-18：打包安卓安装包）
+ *
+ * 桌面版是「左侧竖栏 + 右侧抽屉」的写法，放到手机上会两头都不够用：
+ *   · 竖栏 62px 在 800px 宽的横屏里吃掉 8%，而它只放了 4 个按钮；
+ *   · 抽屉 316px 盖上去后地图只剩一条缝，等于"开面板就看不见盘面"。
+ * 故窄屏改成：**竖栏转到底部横排**、**抽屉变成底部上浮的浮层**（覆盖地图、不挤压它）。
+ * 宽屏（平板横屏 ≥900px）保持原构图，只是命中尺寸由令牌放大。
+ * ═══════════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .gt__workspace {
+    flex-direction: column;
+  }
+
+  .gt__main {
+    order: 1;
+  }
+
+  .gt__rail {
+    order: 2;
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--space-1);
+    /* 横握时手势条 / 刘海在左右两侧：内边距要跟着安全区走，否则最右那颗按钮压在手势条底下 */
+    padding: var(--space-1) calc(var(--space-2) + var(--safe-right))
+      calc(var(--space-1) + var(--safe-bottom)) calc(var(--space-2) + var(--safe-left));
+    border-right: none;
+    border-top: 1px solid var(--color-rule);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .gt__rail-button {
+    width: auto;
+    min-width: 68px;
+    flex: 0 0 auto;
+  }
+
+  .gt__rail-end {
+    display: flex;
+    margin-top: 0;
+    margin-left: auto;
+  }
+
+  /* 底部浮层：从下往上盖住地图一部分，地图仍然完整可平移/缩放 */
+  .gt__drawer,
+  .gt__drawer--wide {
+    position: absolute;
+    top: auto;
+    right: var(--space-2);
+    bottom: calc(var(--command-rail-button) + 2 * var(--space-2) + var(--safe-bottom));
+    left: var(--space-2);
+    width: auto;
+    max-height: 56%;
+    border-left: 1px solid var(--color-rule);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+}
+
+/* 横屏手机：竖向空间比宽度还紧，进一步压薄顶栏与流程条占位 */
+@media (max-width: 900px) and (max-height: 480px) {
+  .gt__rail-button {
+    min-width: 56px;
+    min-height: 40px;
+  }
+}
 </style>

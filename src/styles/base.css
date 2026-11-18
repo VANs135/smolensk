@@ -15,6 +15,41 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   font-family: var(--font-body);
+  /* 触摸屏：点击不要那一下灰色高亮（整屏都是可点区域，闪一下很花） */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * 触摸屏基线（安卓打包）
+ *
+ * 三条都是"手指端才会暴露"的问题：
+ *   ① **长按选择**：WebView 默认长按会弹「选择文字 / 复制」，把我们自己的长按菜单盖掉
+ *      （地图、卡面、算子图都是大块元素，几乎每次长按都会撞上）；
+ *   ② **滚动回弹 / 下拉刷新**：WebView 的 overscroll 会把整页连同固定浮层一起拽走；
+ *   ③ **文字选中**：拖地图时手指划过文字会把整段高亮，看着像 bug。
+ *
+ * 例外：输入框与可编辑区域仍要能选中、能长按弹系统菜单（改名、粘贴坐标都要用）。
+ */
+@media (pointer: coarse) {
+  html {
+    -webkit-touch-callout: none;
+    overscroll-behavior: none;
+  }
+
+  body {
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  input,
+  textarea,
+  select,
+  [contenteditable='true'] {
+    user-select: text;
+    -webkit-user-select: text;
+    -webkit-touch-callout: default;
+  }
 }
 
 body {
