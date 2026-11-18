@@ -45,6 +45,7 @@ export function markerTextureUrl(file: string): string {
  * 各种贴图的文件名（素材库 `图片浏览库/各种贴图/`，同步脚本原样拷入 markers）
  *
  * - `exploit`：进击标记的 2/3/4 号变体（同一个标记有多个编号变体，便于同场区分归属）；
+ * - `reserve`：预备模式标记（轴心 / 苏联各一张官方图）；
  * - `strat`：战略模式标记；
  * - `outOfSupply`：断补标记；
  * - `hedgehog`：环形工事 1–4 级。
@@ -53,6 +54,13 @@ export const MARKER_TEXTURES = {
   exploit: ['misc_Explt-2 small.png', 'misc_Explt-3 small.png', 'misc_Explt-4 small.png'],
   strat: 'misc_Strat small.png',
   outOfSupply: 'misc_OoS small.png',
+  /**
+   * 3.6b：**预备模式**标记（官方图库按阵营各一张）
+   *
+   * `markers.json` 的 `mk-276` / `mk-67` 均属「模式标记（预备／混乱 DG／进击／战略）」。
+   * 用户 2026-11-18：有官方贴图的模式都要贴到单位上，预备模式是重点之一。
+   */
+  reserve: { axis: 'Ge_Reserve_F.png', soviet: 'Ru_Russian_Reserve.png' },
   /** 5.10 混乱（DG）——官方标记，批 I 起贴到**算子自身**右侧，替掉原来的 "DG" 文字 */
   dg: 'misc_DG.png',
   /**
@@ -77,6 +85,16 @@ export function exploitTextureUrl(seed: string): string {
   }
   const variants = MARKER_TEXTURES.exploit
   return markerTextureUrl(variants[hash % variants.length]!)
+}
+
+/**
+ * 3.6b：**预备模式**标记的官方贴图 URL（轴心 / 苏联各一张）
+ *
+ * 只按阵营取图，不判断该单位现在是不是预备——是否贴由渲染层读 `modeLetter` 决定。
+ */
+export function reserveModeTextureUrl(side: string): string {
+  const file = side === 'axis' ? MARKER_TEXTURES.reserve.axis : MARKER_TEXTURES.reserve.soviet
+  return markerTextureUrl(file)
 }
 
 /**
@@ -180,6 +198,8 @@ export const RAILHEAD_TEXTURE = 'Neutral_Railhead.png'
 export function allMarkerTextureUrls(): string[] {
   return [
     ...MARKER_TEXTURES.exploit.map((file) => markerTextureUrl(file)),
+    markerTextureUrl(MARKER_TEXTURES.reserve.axis),
+    markerTextureUrl(MARKER_TEXTURES.reserve.soviet),
     markerTextureUrl(MARKER_TEXTURES.strat),
     markerTextureUrl(MARKER_TEXTURES.outOfSupply),
     markerTextureUrl(MARKER_TEXTURES.dg),

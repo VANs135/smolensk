@@ -12,6 +12,7 @@ import {
   hedgehogCounterImageUrl,
   hedgehogTextureUrl,
   markerTextureUrl,
+  reserveModeTextureUrl,
   spCounterImageUrl,
   tokenImageUrl,
 } from '@/render/token-images'
@@ -120,13 +121,16 @@ describe('各种贴图（模式标记 / 工事等级）', () => {
     expect(hedgehogTextureUrl(2.5)).toBeNull()
   })
 
-  it('预载清单覆盖全部 14 张贴图（3 进击 + 战略 + 断补 + DG + 3 扣兵力 + 4 工事 + 铁路端头）', () => {
+  it('预载清单覆盖全部 16 张贴图（3 进击 + 2 预备 + 战略 + 断补 + DG + 3 扣兵力 + 4 工事 + 铁路端头）', () => {
     const urls = allMarkerTextureUrls()
-    expect(urls).toHaveLength(14)
-    expect(new Set(urls).size).toBe(14)
+    expect(urls).toHaveLength(16)
+    expect(new Set(urls).size).toBe(16)
     expect(urls.every((url) => url.startsWith('/counters/markers/'))).toBe(true)
     // 13.3d：铁路端头 `mk-38` 的贴图必须在预载清单里
     expect(urls).toContain(markerTextureUrl('Neutral_Railhead.png'))
+    // 用户 2026-11-18：预备模式标记要随启动预载，否则整局都看不到
+    expect(urls).toContain(reserveModeTextureUrl('axis'))
+    expect(urls).toContain(reserveModeTextureUrl('soviet'))
   })
 })
 

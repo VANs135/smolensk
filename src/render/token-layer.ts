@@ -16,6 +16,7 @@ import {
   counterImages,
   exploitTextureUrl,
   markerTextureUrl,
+  reserveModeTextureUrl,
   spDenominationDiffers,
   stepLossTextureUrl,
   tokenImageUrl,
@@ -523,9 +524,6 @@ export const OVERLAY_PALETTE = {
 
 /** 可到达圈的半径（世界像素） */
 const REACHABLE_RADIUS_PX = HEX_COL_SPACING_PX * 0.3
-
-/** 模式/状态贴图相对令牌边长的占比（贴在算子上，故略小于算子） */
-const MARKER_TEXTURE_RATIO = 0.62
 
 /**
  * 该覆盖层要用到的**算子图** URL（供 `MapCanvas` 预载；已去重）
@@ -1337,26 +1335,92 @@ interface TokenDrawView {
   size: number
 }
 
-/** 画一张贴图（居中、按边长比例）；未就绪则跳过（不占位、不报错） */
+/**
+ * 模式/状态角标的尺寸与落位（用户 2026-11-18）
+ *
+ * · **小**：单枚至少为算子边长的 `MODE_BADGE_SIZE_RATIO`（约 1/4），一排多枚算子并排时也不互相压住；
+ * · **成排**：多状态并存时在算子**下沿中段**横排（左右两侧留给扣兵力 / DG，见 `statusTextureSlots`）；
+ * · 枚数多时按 `MODE_BADGE_MAX_SPAN_RATIO` 均分，保证整排仍在算子框内（不会压到邻格）。
+ */
+export const MODE_BADGE_SIZE_RATIO = 0.26
+/** 整排角标最多占算子边长的比例（留出边框） */
+const MODE_BADGE_MAX_SPAN_RATIO = 0.88
+/** 相邻角标之间的空隙（相对角标自身边长） */
+const MODE_BADGE_GAP_RATIO = 0.15
+/** 角标行中心相对算子中心的纵向偏移（下沿中段） */
+const MODE_BADGE_BOTTOM_RATIO = 0.34
+
+/** 有官方贴图的模式/状态（基础战斗/移动面本身已印在算子图上，不需要角标） */
+export type ModeBadgeKind = 'exploit' | 'reserve' | 'strat' | 'outOfSupply'
+
+export interface ModeBadgeSlot {
+  kind: ModeBadgeKind
+  centerX: number
+  centerY: number
+  size: number
+}
+
+/**
+ * 模式角标的**落位**（纯函数：绘制与用例共用；不碰画布、不判规则）
+ *
+ * 预备模式只读呈现层已有的 `modeLetter === 'R'`（规则状态由 `workbench` 判定，这里只显示）；
+ * 没有对应模式 ⇒ 空数组（不占位）。
+ */
+export function modeBadgeSlots(input: {
+  centerX: number
+  centerY: number
+  size: number
+  /** 生效模式字母：C / M / **R（预备）** / S */
+  modeLetter: string
+  exploit?: boolean
+  strat?: boolean
+  outOfSupply?: boolean
+}): ModeBadgeSlot[] {
+  const { centerX, centerY, size } = input
+  const kinds: ModeBadgeKind[] = []
+  if (input.exploit === true) kinds.push('exploit')
+  if (input.modeLetter === 'R') kinds.push('reserve')
+  if (input.strat === true) kinds.push('strat')
+  if (input.outOfSupply === true) kinds.push('outOfSupply')
+  if (kinds.length === 0) return []
+
+  const badgeSize =
+    size *
+    Math.min(
+      MODE_BADGE_SIZE_RATIO,
+      MODE_BADGE_MAX_SPAN_RATIO /
+        (kinds.length * (1 + MODE_BADGE_GAP_RATIO) - MODE_BADGE_GAP_RATIO),
+    )
+  const step = badgeSize * (1 + MODE_BADGE_GAP_RATIO)
+  return kinds.map((kind, index) => ({
+    kind,
+    centerX: centerX + (index - (kinds.length - 1) / 2) * step,
+    centerY: centerY + size * MODE_BADGE_BOTTOM_RATIO,
+    size: badgeSize,
+  }))
+}
+
+/** 画一张贴图（居中；`side` 为最终边长）；未就绪则跳过（不占位、不报错） */
 function drawMarkerTexture(
   ctx: CanvasRenderingContext2D,
   url: string,
   centerX: number,
   centerY: number,
-  size: number,
+  side: number,
 ): boolean {
   const image = counterImages.get(url)
   if (image === null) return false
-  const side = size * MARKER_TEXTURE_RATIO
   ctx.drawImage(image, centerX - side / 2, centerY - side / 2, side, side)
   return true
 }
 
 /**
- * 模式/状态贴图（5.8 战略 / 5.9 进击 / 12.8 断补）
+ * 模式/状态贴图（5.8 战略 / 5.9 进击 / 3.6b 预备 / 12.8 断补）
  *
- * 贴图**叠在该算子自己的图之上**（真实桌面玩法就是把标记压在算子上的）：进击与断补语义上不并存，
- * 但战略与断补可以同时出现，故三者各画各、不互相 `else`。图未就绪时跳过（不占位、不报错）。
+ * 贴图**叠在该算子自己的图之上**（真实桌面玩法就是把标记压在算子上的）；各状态各画各、
+ * 不互相 `else`。用户 2026-11-18：贴图改为**小角标**并成排落在算子下沿中段——
+ * 左右两侧留给扣兵力 / DG（`statusTextureSlots`），一排多枚算子也不互相压住。
+ * 图未就绪时跳过（不占位、不报错）。
  *
  * ★ 用户 2026-09-16 #2：「给单位标状态的贴图要显示在**该单位图片上层**」⇒ 本函数不再由 `drawToken`
  *   内部调用，改由 `drawTokenStatusTextures` 在**算子层画完之后**统一跑一遍（见 `MAP_LAYER_ORDER`
@@ -1369,19 +1433,30 @@ function drawModeTextures(
   centerY: number,
   size: number,
 ): void {
-  if (token.exploit === true) {
-    drawMarkerTexture(ctx, exploitTextureUrl(token.id), centerX, centerY, size)
-  }
-  if (token.strat === true) {
-    drawMarkerTexture(ctx, markerTextureUrl(MARKER_TEXTURES.strat), centerX, centerY, size)
-  }
-  if (token.outOfSupply === true) {
-    drawMarkerTexture(ctx, markerTextureUrl(MARKER_TEXTURES.outOfSupply), centerX, centerY, size)
+  const slots = modeBadgeSlots({
+    centerX,
+    centerY,
+    size,
+    modeLetter: token.modeLetter,
+    exploit: token.exploit === true,
+    strat: token.strat === true,
+    outOfSupply: token.outOfSupply === true,
+  })
+  for (const slot of slots) {
+    const url =
+      slot.kind === 'exploit'
+        ? exploitTextureUrl(token.id)
+        : slot.kind === 'reserve'
+          ? reserveModeTextureUrl(token.side)
+          : slot.kind === 'strat'
+            ? markerTextureUrl(MARKER_TEXTURES.strat)
+            : markerTextureUrl(MARKER_TEXTURES.outOfSupply)
+    drawMarkerTexture(ctx, url, slot.centerX, slot.centerY, slot.size)
   }
 }
 
 /**
- * **状态贴图层**（进击 / 战略 / 断补）—— 在算子层之后调用一次
+ * **状态贴图层**（进击 / 预备 / 战略 / 断补）—— 在算子层之后调用一次
  *
  * 传入「实际画出的那些算子」（同格只画顶牌 ⇒ 传顶牌集合，与算子层一致），逐枚把状态贴图
  * 压在该算子图之上。层次顺序见 `MAP_LAYER_ORDER`（用户 2026-09-16 #2）。
