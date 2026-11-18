@@ -7236,22 +7236,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const overrunTargetHexes = computed<HexRef[]>(() => overrunTargets.value.map((hint) => hint.hex))
 
   /**
-   * 条 21（批 F·F2）：战斗段「可攻击位置」高亮（随选人实时算）
+   * 战斗环节「可攻击位置」高亮（9.0/9.1；随选人实时算）
    *
-   * 触发：战斗工具已开（`battleMode` 非 null）且尚未选定防御格（`battleTarget` 为 null）。
+   * 触发：战斗环节（闸门允许 `combat.declare`）或「打一仗」工具激活，且尚未选定防御格。
    * 含义：把「当前攻方选择集能合法攻击的敌方战斗单位所在格」实时算出来画到地图上，
-   * 玩家点它即 `selectCombatDefenderHex` 选定防御格（9.0/9.1）。
+   * 玩家点它即 `selectCombatDefenderHex` 选定防御格并直接进入 9.2 结算。
    *
-   * 攻方选择集：
-   *   · 已点选攻方（`combatAttackerIds` 非空）⇒ 取该集合（群攻要求**全部**攻方都邻接防御格，故取交集）；
-   *   · 尚未点选 ⇒ 取全部己方战斗单位（「本方可攻击的格」全集，便于玩家先点防御格再自动收攻方）。
+   * 多堆叠口径（用户 2026-11-18）：一次选中多个堆叠时取**堆叠间交集** ——
+   * 每一堆叠都至少有一枚能打到的目标格才高亮；某堆叠打不到就整体不高亮。
    *
    * 每枚候选防御格的合法性一律交给引擎 `checkLegality`（`action:'attack'`），本层不重算规则。
-   * 只在战斗工具态、且未选防御格时给（选定后高亮即撤，避免与战斗流程图层打架）。
+   * 只在战斗环节/战斗工具态、且未选防御格时给（选定后高亮即撤，避免与战斗流程图层打架）。
    */
   const combatAttackableHexes = computed<HexRef[]>(() => {
-    // 战斗工具（「打一仗」）激活、且尚未选定防御格时，才把可攻击位置画到地图上
-    if (tool.value !== 'battle') return []
+    // 战斗环节由闸门驱动，不需要玩家先切工具（工具只在验证页显式使用）
+    if (!combatPickActive.value && tool.value !== 'battle') return []
     if (battleTarget.value !== null) return []
     const side = activeSide.value
     const attackers =
@@ -7268,6 +7267,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
               combatAttackerVerdict(unit).ok,
           )
     if (attackers.length === 0) return []
+    /** 按所在格分组：交集以**堆叠**为单位，不是以单枚为单位 */
+    const stacks = new Map<string, ConsoleUnit[]>()
+    for (const unit of attackers) {
+      const key = `${unit.hex.col}.${unit.hex.row}`
+      const group = stacks.get(key)
+      if (group === undefined) stacks.set(key, [unit])
+      else group.push(unit)
+    }
     // 候选防御格＝所有敌方战斗单位所在格（去重）
     const enemyHexKey = new Map<string, HexRef>()
     for (const unit of units.value) {
@@ -7277,36 +7284,35 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const result: HexRef[] = []
     for (const hex of enemyHexKey.values()) {
-      const adjacencyOk = attackers.every((unit) => areAdjacent(unit.hex, hex))
-      const someAdjacent = attackers.some((unit) => areAdjacent(unit.hex, hex))
-      // 群攻（已点选）→ 全部攻方须邻接且该格合法；未点选 → 任一己方邻接且合法即可
-      const candidateOk = combatAttackerIds.value.length > 0 ? adjacencyOk : someAdjacent
-      if (!candidateOk) continue
       // P2（M3）：先用**同一份参战投影**取合格者（与 `attackersForHex` / 突袭共用判据），再问合法性层
-      const force = attackForceForHex({
-        attackType: 'regular',
-        side,
-        hex,
-        candidates: attackers,
-      })
-      if (force === null) continue
-      const eligible = new Set(force.unitIds)
-      const legal = attackers.some((unit) => {
-        if (!eligible.has(unit.instanceId)) return false
-        const verdict = checkLegality(
-          buildLegalityRequest({
-            action: 'attack',
-            unit,
-            context: moveContext.value,
-            units: units.value,
-            date: date.value,
-            target: hex,
-            phase: phase.value,
-          }),
-        )
-        return verdict.ok
-      })
-      if (legal) result.push(hex)
+      const canStackAttack = (group: ConsoleUnit[]): boolean => {
+        const force = attackForceForHex({
+          attackType: 'regular',
+          side,
+          hex,
+          candidates: group,
+        })
+        if (force === null) return false
+        const eligible = new Set(force.unitIds)
+        return group.some((unit) => {
+          if (!eligible.has(unit.instanceId)) return false
+          if (!combatAttackerVerdict(unit).ok) return false
+          const verdict = checkLegality(
+            buildLegalityRequest({
+              action: 'attack',
+              unit,
+              context: moveContext.value,
+              units: units.value,
+              date: date.value,
+              target: hex,
+              phase: phase.value,
+            }),
+          )
+          return verdict.ok
+        })
+      }
+      // 交集：每一个已选堆叠都要能打到该格
+      if ([...stacks.values()].every(canStackAttack)) result.push(hex)
     }
     return result
   })

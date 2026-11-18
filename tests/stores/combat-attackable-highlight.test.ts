@@ -102,10 +102,10 @@ describe('条 21（批 F·F2）：战斗段「可攻击位置」高亮', () => {
     expect(workbench.combatAttackableHexes).toContainEqual(DEFENDER_HEX)
   })
 
-  it('非战斗工具（移动）激活 ⇒ 不高亮', () => {
+  it('战斗环节由环节驱动：工具切到「移动」仍高亮（工具只供验证页显式使用）', () => {
     setupBattleTool(workbench)
     workbench.setTool('move')
-    expect(workbench.combatAttackableHexes).toEqual([])
+    expect(workbench.combatAttackableHexes).toContainEqual(DEFENDER_HEX)
   })
 
   it('选定防御格后 ⇒ 高亮撤掉（避免与战斗流程图层打架）', () => {
