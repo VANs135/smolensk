@@ -80,6 +80,26 @@ function railUnit(
 }
 
 /**
+ * 摆一个**移动模式**的指挥部（13.8c：HQ 才具工程能力；铁路运输须 5.6a 移动模式）
+ *
+ * 用户 2026-11-19 裁定：工程 HQ 登车与卸车都按铁路运输规则放行，且**卸车点当场成为卸货格**
+ * 供后续使用；换移动模式时原格失能仍保留原义，不得让 HQ 一路带着卸货格。
+ */
+function railHq(
+  store: Workbench,
+  hex: HexRef,
+  instanceId: string,
+  side: 'axis' | 'soviet' = 'soviet',
+) {
+  const record = groundRecord(side, (item) => (item.specialized ?? []).includes('hq'))
+  const unit = placeGround(store, record, hex, side, instanceId)
+  unit.mode = { mode: 'move', orientation: 'move', dg: false, exploit: false }
+  unit.mpSpent = 0
+  unit.movementEnded = false
+  return unit
+}
+
+/**
  * 把这段铁路置成**苏方可用**（专规 1.2 宽轨），并给铁路一个**基础补给源**（13.3c）
  *
  * - 专规 1.2：印刷图全是宽轨、轴方只能用标准轨 ⇒ 苏方在未换轨的格上天然可用（13.3f）；
@@ -416,5 +436,77 @@ describe('13.6b 入场格登车：提案放行，拒绝原因交引擎', () => {
       rule: '13.3e',
       reason: 'entrainHexNotDetrainable:8.0',
     })
+  })
+})
+
+describe('13.8c 例外：工程 HQ 自行登车/卸车，卸车点成为卸货格', () => {
+  /** 15.13：铁路干线上的**非聚落**格 ⇒ 本身不是可火车卸货格 */
+  const PLAIN_RAIL: HexRef = RAIL_RUN[3]!
+
+  it('工程 HQ 可在非卸货格卸车，该格当场成为卸货格（供后续使用）', () => {
+    const store = sovietStore()
+    store.setPhase('movement')
+    store.setTurn(5)
+    prepareRailRun(store)
+    // 前提：15.13 不是聚落格，按 13.3c 本来不可卸货
+    expect(store.detrainableHexes.map(label)).not.toContain(label(PLAIN_RAIL))
+
+    const hq = railHq(store, FROM, 'hq-1')
+    store.selectedId = hq.instanceId
+    store.railMoveInputs = { toHexText: label(PLAIN_RAIL), spAmount: 1, fromDumpId: null }
+    expect(store.railMoveNow('unit')).toBe(true)
+    expect(hq.hex).toEqual(PLAIN_RAIL)
+    // 13.8c：卸车那一刻生成卸货格
+    expect(store.detrainableHexes.map(label)).toContain(label(PLAIN_RAIL))
+  })
+
+  it('工程 HQ 可从非卸货格登车（登车与卸车同等放行）', () => {
+    const store = sovietStore()
+    store.setPhase('movement')
+    store.setTurn(5)
+    prepareRailRun(store)
+    expect(store.detrainableHexes.map(label)).not.toContain(label(PLAIN_RAIL))
+
+    const hq = railHq(store, PLAIN_RAIL, 'hq-2')
+    store.selectedId = hq.instanceId
+    store.railMoveInputs = { toHexText: label(TO), spAmount: 1, fromDumpId: null }
+    expect(store.railMoveNow('unit')).toBe(true)
+    expect(hq.hex).toEqual(TO)
+    // 原格不因这次移动而保留卸货格（13.8c 末句仍按原义：换模式即失能）
+    expect(store.detrainableHexes.map(label)).not.toContain(label(PLAIN_RAIL))
+  })
+
+  it('非 HQ 单位仍受 13.3e 限制（不得在非卸货格卸车）', () => {
+    const store = sovietStore()
+    store.setPhase('movement')
+    store.setTurn(5)
+    prepareRailRun(store)
+    const cargo = railUnit(store, FROM, 'cargo-1')
+    store.selectedId = cargo.instanceId
+    store.railMoveInputs = { toHexText: label(PLAIN_RAIL), spAmount: 1, fromDumpId: null }
+    expect(store.railMoveNow('unit')).toBe(false)
+    expect(store.railMoveError?.reason).toBe(`detrainHexNotDetrainable:${label(PLAIN_RAIL)}`)
+  })
+
+  it('换移动模式后原格立刻失能，但 HQ 仍可自行登车（13.8c 末句原义保留）', () => {
+    const store = sovietStore()
+    store.setPhase('movement')
+    store.setTurn(5)
+    prepareRailRun(store)
+    // 战斗模式 HQ 占据非聚落铁路格 ⇒ 该格成为卸货格
+    const hq = railHq(store, PLAIN_RAIL, 'hq-3')
+    hq.mode = { mode: 'combat', orientation: 'combat', dg: false, exploit: false }
+    expect(store.detrainableHexes.map(label)).toContain(label(PLAIN_RAIL))
+
+    // 13.8c 末句：一换成移动模式，该格立即失能
+    store.selectedId = hq.instanceId
+    store.switchUnitMode('move', 'move', [hq.instanceId])
+    expect(hq.mode.mode).toBe('move')
+    expect(store.detrainableHexes.map(label)).not.toContain(label(PLAIN_RAIL))
+
+    // 例外：HQ 仍可从这里登车（登车格豁免可卸货判定，其余照常）
+    store.railMoveInputs = { toHexText: label(TO), spAmount: 1, fromDumpId: null }
+    expect(store.railMoveNow('unit')).toBe(true)
+    expect(hq.hex).toEqual(TO)
   })
 })

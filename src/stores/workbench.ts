@@ -4078,6 +4078,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   /**
+   * 13.8c 例外（用户 2026-11-19 裁定）：工程 HQ 铁路卸车时当场生成的卸货格
+   *
+   * 「工程 HQ 就是可以随铁路运输规则登车、卸车；它卸车所在的位置即成为卸货格。」
+   * ★ 只记**卸车那一刻的落点**（格的状态），不是单位的随行光环：HQ 在移动模式里一路走，
+   *   不会沿途带出卸货格；换移动模式时原格失能仍按 13.8c 原义由「工程能力 HQ 占据」实时判定。
+   * ★ 与 13.8b 的 `ownBridgeHexByUnitId` 分开记账，互不推断、互不复用。
+   */
+  const engineerHqDetrainableHexes = ref<{ hex: HexRef; side: Side }[]>([])
+
+  /**
    * C9：铁路补给事实（13.3a / 13.3c / 12.7a-B/C）
    *
    * - sources ← **专规 2.1 / 3.1 的进场铁路格**，按连通性分属两方各自的网（用户 2026-11-11 裁定：
@@ -4100,7 +4110,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       zocAt: (hex, side) => zocOnlySupplyFacts.value.inEnemyZoc(hex, side),
       // 13.3c①后半 / 13.8a / 5.5b：本方具工程能力的指挥部。
       // 港口分支恒 false 属预期：本作无港口地形与港口专规（用户裁定 2026-11-05），非遗漏。
-      hasPortOrEngineerHqAt: (hex, side) => engineerCapableHqAt(units.value, hex, side),
+      hasPortOrEngineerHqAt: (hex, side) =>
+        engineerCapableHqAt(units.value, hex, side) ||
+        // 13.8c 例外：工程 HQ 卸车时生成的卸货格（与「当前占据的工程 HQ」分开记账）
+        engineerHqDetrainableHexes.value.some(
+          (item) => item.side === side && sameHex(item.hex, hex),
+        ),
       // 13.3f／专规 1.2：轨距只回答「谁能用这条铁路」（与 13.3a 多轨的运量费用无关）
       railGaugeUsable: (hex, side) => isRailGaugeUsableAt(hex, side),
       // 13.3f：逐边查 gauge —— 两端都必须是本方可用轨距（混合边任一方都不通过）
@@ -5203,6 +5218,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 货物：单位（选中者）或 SP（指定站）
     let from: HexRef
     let cargo: RailCargoView
+    /** 13.8c 例外：货物是工程 HQ 时，登车/卸车都跳过「可卸货格」判定 */
+    let engineerHqRailMove = false
     if (kind === 'unit') {
       const unit = selectedUnit.value
       if (unit === null) {
@@ -5216,6 +5233,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         return false
       }
       from = unit.hex
+      // 13.8c：工程能力 HQ 才享有自行登车/卸车的例外；本作 HQ 即工程能力单位（Pioneer 不算）
+      engineerHqRailMove = (unit.specialized ?? []).includes('hq')
       cargo = {
         kind: 'unit',
         id: unit.instanceId,
@@ -5286,6 +5305,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       to,
       path,
       facts,
+      engineerHqRailMove,
     })
     if (!outcome.ok) {
       railMoveError.value = { rule: outcome.rule, reason: outcome.reason }
@@ -5314,11 +5334,33 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
 
     // ── 落盘 ──
+    /*
+     * 13.8c：HQ 卸车点「当场成为卸货格」——只在该格**本来不是**可卸货格时新增一条，
+     * 避免给城镇/村庄格重复记账；判定取**移动前**的结论（HQ 挪位后实时判定会变）。
+     */
+    const detrainHexAlreadyUsable =
+      engineerHqRailMove &&
+      cargo.kind === 'unit' &&
+      cargoDetrainableHexesBySide.value[side].some((hex) => sameHex(hex, to))
+    let detrainCreated = false
     // B-3：运输点数货物与单位货物一样是**把那枚算子挪过去**（13.3e-3 卸货）
     if (cargo.kind === 'unit' || cargo.kind === 'transportPoint') {
       const unit = units.value.find((item) => item.instanceId === cargo.id)
       if (unit !== undefined) {
         unit.hex = { col: to.col, row: to.row }
+        // 13.8c：工程 HQ 的卸车点立刻成为卸货格，供后续铁路运输使用
+        if (engineerHqRailMove && !detrainHexAlreadyUsable) {
+          const alreadyRecorded = engineerHqDetrainableHexes.value.some(
+            (item) => item.side === side && sameHex(item.hex, to),
+          )
+          if (!alreadyRecorded) {
+            engineerHqDetrainableHexes.value = [
+              ...engineerHqDetrainableHexes.value,
+              { hex: { col: to.col, row: to.row }, side },
+            ]
+          }
+          detrainCreated = true
+        }
         // 13.3f-B：铁路移动也是"移动进入"，记下该单位本阶段最后进入的格（供换轨判定）
         railArrived.value = { instanceId: unit.instanceId, hexText: hexLabel(to) }
         // 13.8b 末句例外：铁路离开记录格后，这条例外即用尽
@@ -5393,7 +5435,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     pushLog(
       'success',
       `${outcome.data.detail}；${hexLabel(from)} → ${hexLabel(to)}（${path.length - 1} 格）｜` +
-        `本回合已用容量 ${railCapUsedBy(side)}/${railCapToday.value[side]}`,
+        `本回合已用容量 ${railCapUsedBy(side)}/${railCapToday.value[side]}` +
+        (detrainCreated ? `｜13.8c：卸车点 ${hexLabel(to)} 成为卸货格` : ''),
       outcome.data.rule,
     )
     recordSettlement({
@@ -29579,6 +29622,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     railCapSpentThisTurn.value = []
     railMovedUnitIdsThisPhase.value = []
     railMovedNewTrackThisPhase.value = []
+    // 13.8c 例外：工程 HQ 卸车生成的卸货格属于盘面基建，只在新局/换剧本时清零
+    engineerHqDetrainableHexes.value = []
     railMoveInputs.value = { toHexText: '', spAmount: 1, fromDumpId: null }
     railMoveError.value = null
     lastRailMove.value = null
@@ -30141,6 +30186,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ['railMovedNewTrackThisPhase', railMovedNewTrackThisPhase],
     ['railCapSpentThisTurn', railCapSpentThisTurn],
     ['railMovedUnitIdsThisPhase', railMovedUnitIdsThisPhase],
+    ['engineerHqDetrainableHexes', engineerHqDetrainableHexes],
     ['constructionMarkers', constructionMarkers],
     ['constructionMarkerPieces', constructionMarkerPieces],
     ['constructionLedgers', constructionLedgers],

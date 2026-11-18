@@ -310,6 +310,16 @@ export interface RailMovementInput {
    * 普通铁路运货仍须 `phase === 'movement'`。其余检查（轨距、单位资格、路径、卸货）照常。
    */
   arrivalRail?: boolean
+  /**
+   * 13.8c 例外（用户 2026-11-19 裁定）：工程能力 HQ 可沿铁路运输规则**自行登车与卸车**
+   *
+   * 「An Engineer-Capable HQ can entrain itself before switching to Move Mode.」
+   * 给出本项即跳过 13.3e-1／13.3e-3 的**「可火车卸货格」**判定（登车格与卸货格都放行），
+   * 其余条件——铁路格、轨距、敌方单位／ZOC、单位自身资格（5.6a/5.10d/半 MA）——照常校验。
+   * ★ 只由 store 在货物是 HQ 时传入；卸货点是否当场生成卸货格由 store 记账，不在此处改盘面。
+   * ★ 与 13.8b 的 `ownBridgeHexByUnitId` 无关，两条例外各管各的状态。
+   */
+  engineerHqRailMove?: boolean
 }
 
 /** 格号文本（仅用于失败详情的可读性；业务坐标一律 { col, row }） */
@@ -346,6 +356,8 @@ export function validateRailMovement(input: RailMovementInput): RuleOutcome<Rail
 
   // 13.3g-C：铁路修理单位可在任何铁路格登车与卸货（不受「可火车卸货格」限制）
   const isRailRepair = cargo.kind === 'unit' && facts.isRailRepairUnit(cargo.id)
+  // 13.8c：工程 HQ 自行登车/卸车时，同样不受「可火车卸货格」限制（其余条件照常）
+  const engineerHqRailMove = input.engineerHqRailMove === true && cargo.kind === 'unit'
 
   /* ① 登车格（13.3e-1）；13.6b 的「地图外登车」忽略本项 */
   // ★ 13.6b 的「地图外登车」只属**增援与新 SP**的抵达格；由调用方（增援铁路抵达这条路径）
@@ -354,7 +366,7 @@ export function validateRailMovement(input: RailMovementInput): RuleOutcome<Rail
   const entrainOffMap = input.entrainOffMap === true
   if (!entrainOffMap) {
     if (!facts.hasRail(from)) return fail('13.3e', `entrainHexHasNoRail:${hexText(from)}`)
-    if (!isRailRepair && !facts.isDetrainable(from, cargo.side))
+    if (!isRailRepair && !engineerHqRailMove && !facts.isDetrainable(from, cargo.side))
       return fail('13.3e', `entrainHexNotDetrainable:${hexText(from)}`)
     // 「货物必须位于**不在敌方 ZOC 内**的一个可火车卸货的铁路格」；★ 运货时 EZOC **不可**抵消（13.3c）
     if (facts.inEnemyZoc(from, cargo.side))
@@ -404,7 +416,7 @@ export function validateRailMovement(input: RailMovementInput): RuleOutcome<Rail
   if (!facts.hasRail(to)) return fail('13.3e', `detrainHexHasNoRail:${hexText(to)}`)
   if (!facts.railGaugeUsable(to, cargo.side))
     return fail('13.3f', `detrainHexWrongGauge:${hexText(to)}`)
-  if (!isRailRepair && !facts.isDetrainable(to, cargo.side))
+  if (!isRailRepair && !engineerHqRailMove && !facts.isDetrainable(to, cargo.side))
     return fail('13.3e', `detrainHexNotDetrainable:${hexText(to)}`)
   if (facts.hasEnemyCombatUnit(to, cargo.side))
     return fail('13.3e', `detrainHexEnemyCombatUnit:${hexText(to)}`)
