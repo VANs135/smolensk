@@ -18953,9 +18953,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (total < 1) return false
     // 10.0d / 10.0c：整体目标决定用哪张表（成本取该表的初始列）
     const target = defaultBarrageTargetKindAt(hex)
-    const cost = barrageTableMeta({ target, valueRange: total }).costT
+    const side = segmentGateQuery.value.side ?? activeSide.value
+    /*
+     * 剧本级炮击折扣（10.1b；Intro: Vitebsk 德军 −2T）必须与 `beginBarrage` 同口径：
+     * 只在这里用原价判“付得起”会把折后 0T 的炮击误判成付不起，连右键「炮击」入口都不出现。
+     */
+    const cost = barrageTableWithScenarioRule(barrageTableMeta({ target, valueRange: total }), {
+      scenarioId: scenarioId.value,
+      side,
+    }).costT
     if (cost <= 0) return true
-    const dumps = deliverableDumpsFor(segmentGateQuery.value.side ?? activeSide.value, candidates)
+    const dumps = deliverableDumpsFor(side, candidates)
     return dumps.some((dump) => holdingsToT({ sp: dump.sp, t: dump.t }) >= cost)
   }
 
