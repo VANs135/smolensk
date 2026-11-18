@@ -146,6 +146,7 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'abortMoveNow',
       'advanceNow',
       'applyOptionDraftLoss',
+      'applyOptionDraftRetreatFor',
       'beginAirBarrageNow',
       'cancelMovePick',
       'cancelRefitNow',

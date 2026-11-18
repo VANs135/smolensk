@@ -70,17 +70,18 @@ describe('动作族权威表：覆盖与依据', () => {
 
   it('★ 整备（air.refit）：图上格 / 图外盒 / 面板 三类载体各自可达', () => {
     expect(read(repoPath('src/components/game/MapActionPopover.vue'))).toContain('beginRefitNow')
-    // 2026-11-18：盒内整备从卡头的独立按钮挪进**盒贴图右键菜单** ⇒ 入口在 BoxCardFace + store
-    expect(read(repoPath('src/components/game/BoxCardFace.vue'))).toContain('boxUnitActions')
-    expect(read(repoPath('src/stores/map-view.ts'))).toContain('activateAirBox')
+    // 2026-11-18（第 5 条）：地图与盒内的整备**唯一入口**都在名册/基地弹层；
+    // 右键只保留空军任务，不再提供整备 ⇒ 盒区入口 = AircraftRoster 的「整备盒内飞机」按钮
     expect(read(repoPath('src/components/air/AircraftRoster.vue'))).toContain('activateAirBox')
+    expect(read(repoPath('src/components/air/AircraftRoster.vue'))).toContain('beginRefitNow')
+    expect(read(repoPath('src/stores/map-view.ts'))).not.toContain('air.unit.refit')
   })
 })
 
 /** 各动作族的载体实现探针（新增载体声明时同步加一条） */
 const BOX_ENTRY_PROBES: Record<string, { files: readonly string[]; pattern: RegExp }> = {
   'air.refit': {
-    files: ['src/stores/map-view.ts', 'src/components/air/AircraftRoster.vue'],
+    files: ['src/components/air/AircraftRoster.vue'],
     pattern: /activateAirBox/,
   },
   'air.mission': {
