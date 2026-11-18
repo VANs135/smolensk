@@ -27,6 +27,7 @@ const IS_WINDOWS = process.platform === 'win32'
 /** 本机（这台开发机）默认的工具链位置；环境变量优先 */
 const FALLBACK_JAVA_HOME = 'F:\\ocs-android-build\\jdk21\\jdk-21.0.13+9'
 const FALLBACK_ANDROID_HOME = 'F:\\ocs-android-build\\android-sdk'
+const FALLBACK_GRADLE_USER_HOME = 'F:\\ocs-android-build\\gradle-home'
 
 /**
  * 最低 Java 版本
@@ -85,17 +86,39 @@ function main() {
     ANDROID_SDK_ROOT: androidHome,
   }
 
+  /*
+   * Gradle 主目录（发行版 + 依赖缓存）
+   *
+   * 默认落在 `%USERPROFILE%\.gradle`，首次构建要吃掉 1.5 GB 以上——本机系统盘只剩 1.5 GB，
+   * 第一次构建正是因此中途撑爆。故：环境变量优先；否则用本机已备好那份（存在才用，
+   * 换机器时不会因为路径不存在而报错，退回 Gradle 默认位置）。
+   */
+  if (!process.env.GRADLE_USER_HOME && existsSync(FALLBACK_GRADLE_USER_HOME)) {
+    env.GRADLE_USER_HOME = FALLBACK_GRADLE_USER_HOME
+  }
+  if (env.GRADLE_USER_HOME) console.log(`[android] GRADLE_USER_HOME=${env.GRADLE_USER_HOME}`)
+
   if (!existsSync(join(ANDROID_DIR, 'app', 'build.gradle'))) {
     throw new Error('android/ 工程不存在：先跑 `npx cap add android`。')
   }
 
   const gradlew = join(ANDROID_DIR, IS_WINDOWS ? 'gradlew.bat' : 'gradlew')
   console.log('[android] gradle assembleRelease …')
-  execFileSync(gradlew, ['assembleRelease', '--no-daemon'], {
-    cwd: ANDROID_DIR,
-    env,
-    stdio: 'inherit',
-  })
+  /*
+   * Windows 上不能直接 `execFileSync('gradlew.bat')`：Node 18 起禁止不经 shell 启动
+   * .bat/.cmd（会抛 EINVAL，报错里只有一句 "spawnSync … EINVAL"，看不出是这条规矩）。
+   * 走 `cmd.exe /c` 显式调用，既绕开限制，也不必给带空格的路径手工加引号。
+   */
+  const gradleArgs = ['assembleRelease', '--no-daemon']
+  if (IS_WINDOWS) {
+    execFileSync('cmd.exe', ['/c', gradlew, ...gradleArgs], {
+      cwd: ANDROID_DIR,
+      env,
+      stdio: 'inherit',
+    })
+  } else {
+    execFileSync(gradlew, gradleArgs, { cwd: ANDROID_DIR, env, stdio: 'inherit' })
+  }
 
   const apk = join(ANDROID_DIR, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
   if (!existsSync(apk)) throw new Error(`没有产出 APK：${apk}`)
@@ -116,7 +139,13 @@ function main() {
     IS_WINDOWS ? 'apksigner.bat' : 'apksigner',
   )
   if (existsSync(apksigner)) {
-    const out = execFileSync(apksigner, ['verify', '--print-certs', target], { env }).toString()
+    // 同 gradlew：.bat 必须经 cmd.exe 调用（Node 18+ 否则 EINVAL）
+    const verifyArgs = ['verify', '--print-certs', target]
+    const out = (
+      IS_WINDOWS
+        ? execFileSync('cmd.exe', ['/c', apksigner, ...verifyArgs], { env })
+        : execFileSync(apksigner, verifyArgs, { env })
+    ).toString()
     console.log(out.trim().split('\n').slice(0, 3).join('\n'))
   } else {
     console.log('[android] 未找到 apksigner，跳过签名校验')
