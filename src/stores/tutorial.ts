@@ -78,12 +78,10 @@ const TARGET_HEX: HexRef = { col: 18, row: 27 }
 /** 轰炸任务的目标：19.27 的苏军步兵堆叠（I.153 从 19.28 起飞拦截） */
 const BOMB_HEX: HexRef = { col: 19, row: 27 }
 /** 13.5 重建教学：补员 / 侦察车 / 指挥部都在这一格（20 Mtr 堆叠东侧邻格） */
-const REBUILD_HEX: HexRef = { col: 14, row: 28 }
+const REBUILD_HEX: HexRef = { col: 5, row: 28 }
 /** 教学用的侦察营：Intro 剧本没有它 ⇒ 重建前后可用“盘面是否出现该型”判定 */
 const AX_RECON_ID = 'ax-arm_rec-ge-14-mtr-14-arm-rec'
 const TUTORIAL_RECON_ID = 'tutorial-axis-recon'
-const TUTORIAL_PAX_ID = 'tutorial-pax-repl'
-const TUTORIAL_EQ_ID = 'tutorial-eq-repl'
 /** 反应段苏军 18 Tk Div 的出发格 */
 const REACTION_START: HexRef = { col: 19, row: 26 }
 /** 反应段的中转格（18.26 与 17.27 / 18.27 都相邻） */
@@ -467,7 +465,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
       {
         id: 'rebuild-place',
         title: '落地并付补员',
-        hint: '霍特：点高亮的 14.28，花 1 Eq 把它拉回来。',
+        hint: '霍特：点高亮的 5.28，花 1 Eq 把它拉回来。',
         done: () => workbench.units.some((unit) => unit.unitId === AX_RECON_ID),
       },
       {
@@ -615,47 +613,11 @@ export const useTutorialStore = defineStore('tutorial', () => {
     }
 
     /*
-     * 13.5 重建教学：把 39 军 HQ 挪到 20 Mtr 堆叠东侧并转战斗模式
-     *
-     * 13.5a 要求「补员同格 + 战斗模式友方 HQ 两格内」；剧本原本只有一个 HQ 在 5.27，
-     * 离教学堆叠太远（玩家要横跨半张图）。这里只搬**教学局**的 HQ，不动规则、不动剧本数据。
+     * 13.5a 重建教学：**不动 HQ**（用户 2026-11-19）——39 军 HQ 就留在剧本初设的 5.27。
+     * 重建演示点改到它两格内的 5.28（REBUILD_HEX）；补员单位由增援补员表发放后，
+     * 玩家把 Pax/Eq 落在 5.28（HQ 可溯源 ⇒ 合法），再花 1 Eq 从死人堆拉回侦察营。
+     * 重建后的单位**不需要马上移动**：教学后续步骤不再要求它开拔。
      */
-    const hq = workbench.units.find(
-      (unit) => unit.side === 'axis' && unit.unitId === 'ax-hq-ge-hq-39th-corps',
-    )
-    if (hq !== undefined) {
-      hq.hex = { ...REBUILD_HEX }
-      hq.mode = { mode: 'combat', orientation: 'combat', dg: false, exploit: false }
-      hq.raw = hq.faces.combat
-    }
-
-    // 增援补员：Pax ×1、Eq ×1（侦察营重建表按 Arm Car Bn 计 1 Eq）
-    if (!workbench.units.some((unit) => unit.instanceId === TUTORIAL_PAX_ID)) {
-      const record = findUnitRecord('ax-replacement-ge-pax-repl')
-      if (record !== undefined) {
-        workbench.units.push(
-          toConsoleUnit({
-            record,
-            instanceId: TUTORIAL_PAX_ID,
-            hex: { ...REBUILD_HEX },
-            side: 'axis',
-          }),
-        )
-      }
-    }
-    if (!workbench.units.some((unit) => unit.instanceId === TUTORIAL_EQ_ID)) {
-      const record = findUnitRecord('ax-replacement-ge-eq-repl')
-      if (record !== undefined) {
-        workbench.units.push(
-          toConsoleUnit({
-            record,
-            instanceId: TUTORIAL_EQ_ID,
-            hex: { ...REBUILD_HEX },
-            side: 'axis',
-          }),
-        )
-      }
-    }
 
     // 死亡堆放一辆侦察营（Intro 没有该型 ⇒ 重建后 `units` 里才会出现）
     if (!workbench.deadPile.some((entry) => entry.instanceId === TUTORIAL_RECON_ID)) {
@@ -671,7 +633,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
         )
         workbench.pushLog(
           'info',
-          '教学：增援补员 Pax ×1、Eq ×1 已到 14.28；死亡堆有一辆侦察营可重建（13.5）',
+          '教学：死亡堆有一辆侦察营可重建（13.5a：补员同格、战斗模式 HQ 两格内）',
           '13.5',
         )
       }

@@ -10,6 +10,7 @@ import { counterImages, tokenImageUrl } from '@/render/token-images'
 import { ooaScanOf } from '@/render/charts-view'
 import { vLongPress } from '@/shared/long-press'
 import { counterImageUrlOf, hexLabel, recordNameOf } from '@/stores'
+import { tutorialFixedReinforcement } from '@/stores/tutorial-settings'
 import { useContainersStore, useWorkbenchStore, type UnitRecordView } from '@/stores'
 
 /**
@@ -770,7 +771,12 @@ const rollResultLines = computed<readonly string[]>(() => {
     const axis = workbench.activeSide === 'axis'
     const kind = axis ? 'Aufk / Krd 营' : 'Alarm 单位'
     if (draw === null) {
-      lines.push('1.6c 特殊补员：未掷 / 无结果')
+      // 教学局（用户 2026-11-19）：1.6c 不掷，补员由 1.6b 补员表发放
+      lines.push(
+        tutorialFixedReinforcement.value
+          ? '1.6c 特殊补员：教学不掷（补员已由补员表发放）'
+          : '1.6c 特殊补员：未掷 / 无结果',
+      )
     } else {
       // 苏方两档都带「随机师」；轴方两档都不带
       if (!axis) {

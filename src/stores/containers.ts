@@ -1019,8 +1019,22 @@ export const useContainersStore = defineStore('containers', () => {
    * → 第二项（Supply Cache / 特种营）；无可用 ⇒ 作废。
    */
   function drawSpecialRepl(side: Side, fixedDie?: number): boolean {
-    // 教学局免掷骰（用户 2026-11-19）：固定骰面 5 ⇒ 轴心「Aufk/Krd 营」（=重建演示那辆侦察营）
-    const die0 = fixedDie ?? (tutorialFixedReinforcement.value ? 5 : undefined)
+    /*
+     * 教学局（用户 2026-11-19 改口径）：**不掷 1.6c 特殊补员**，也不给免费重建 ——
+     * 重建演示改为「增援补员表发 Pax/Eq → 玩家在重建阶段花补员从死人堆重建」（13.5a）。
+     * 只记一笔日志说明，不消耗骰子、不改任何状态。
+     */
+    if (fixedDie === undefined && tutorialFixedReinforcement.value) {
+      // 记「本回合已掷」把 1.6c 闸门清掉（不掷骰、不发任何东西），否则段落收束会卡住
+      workbench.markSpecialReplDraw(side, workbench.turn)
+      workbench.pushLog(
+        'info',
+        '教学：本局不掷特殊补员；重建用增援补员表发放的 Pax/Eq（13.5a）',
+        '1.6c',
+      )
+      return true
+    }
+    const die0 = fixedDie
     /*
      * ★ 专规 1.6c 的**时机**（用户 2026-10-25「注意该操作时机」）：
      *   原文「Each turn **before 19 August**, the players also get to roll a die on their

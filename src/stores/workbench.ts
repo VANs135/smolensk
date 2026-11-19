@@ -25143,6 +25143,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '可变增援',
     )
     if (data === null) return false
+    /*
+     * 教学局（用户 2026-11-19 改口径）：**不给免费补员/免费重建** ——
+     * 补员单位改从 1.6b 补员表发放（Pax ×1、Eq ×1），玩家在重建阶段花补员
+     * 从死人堆拉回单位（13.5a：补员同格、战斗模式 HQ 两格内）。
+     * 剧本卡 Variable Repls: None 的"零补员"对教学是障碍，故这里按教学局口径固定发放。
+     */
+    if (tutorialFixedReinforcement.value) {
+      data.repl = { ...data.repl, ftr: 0, tac: 0, pax: 1, eq: 1, rowLabel: '教学发放' }
+      // 1.6c 在教学中整个跳过：随补员表发放一并标记「已掷」，闸门才不会卡段落收束
+      markSpecialReplDraw(activeSide.value, turn.value)
+    }
     lastVariableRepl.value = data
     /*
      * 1.6b 补给表所得 SP：按原文进**到货落账池**（专规 1.6b「place new units per 2.1 and 3.1」
