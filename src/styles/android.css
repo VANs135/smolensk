@@ -1657,3 +1657,12 @@ html[data-platform='android'] .tray {
   padding: 6px;
   gap: 6px;
 }
+
+/* 抽屉内长英文词/路径不换行造成横向溢出（实测 战况 69px / 设置 169px）⇒ 强制断词 */
+html[data-platform='android'] .rule-tip__body,
+html[data-platform='android'] .gt__drawer,
+html[data-platform='android'] .gt__drawer p,
+html[data-platform='android'] .gt__drawer span {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
