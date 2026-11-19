@@ -944,7 +944,7 @@ html[data-platform='android'] .bar__advance {
 }
 
 html[data-platform='android'] .bar {
-  overflow-x: auto;
+  overflow: hidden; /* 内容已按视口收敛，不再需要滚动（用户 2026-11-19） */
 }
 
 /* ③ 窄竖屏：隐藏日期 / 角色字 / 控制数，顶栏一行放下 */
@@ -1154,8 +1154,18 @@ html[data-platform='android'] .gt__rail-button svg {
   }
 
   html[data-platform='android'] .bar {
-    left: calc(var(--safe-left) + 66px);
+    left: calc(var(--safe-left) + 70px);
     right: calc(var(--safe-right) + 118px);
+  }
+
+  /* 阶段格不再伸展占位；动作区取消 margin-left:auto ——
+     信息、教学卡、图标连成一条无缝带（用户「一栏贯通」） */
+  html[data-platform='android'] .bar__phase {
+    flex: 0 1 auto;
+  }
+
+  html[data-platform='android'] .bar__actions {
+    margin-left: 0;
   }
 
   /* 推进按钮窄屏只留箭头：30px 方形居中（初设中整个按钮已被 data-in-setup 藏掉） */
@@ -1312,6 +1322,7 @@ html[data-platform='android'] .queue {
 
 html[data-platform='android'] .home__hero {
   min-height: auto;
+  align-items: start; /* 内容顶对齐：不再垂直居中留出大片空档 */
 }
 
 html[data-platform='android'] .home__art {
@@ -1332,4 +1343,181 @@ html[data-platform='android'] .scenario {
 
 html[data-platform='android'] .scenario__sheet {
   padding: var(--space-3);
+}
+
+/* ══════════ 顶栏右侧重构：齿轮菜单 + 三个盒标记（用户 2026-11-19）══════════
+ * 抽象图标带（战况/盒表/战报/设置）撤掉 ⇒ 换成：
+ *   [死人堆][空军盒][苏军盒(苏联视角)] [⚙] —— 文字标记一步直达盒卡弹窗；
+ *   ⚙ 点开文字菜单：战况/盒表/战报/设置/存读档/退出对局。
+ * 流程条右缘让位给快捷区；图标带整体隐藏（桌面左侧竖栏不受影响）。
+ * ══════════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] .gt__rail {
+  display: none;
+}
+
+html[data-platform='android'] .shell__bar {
+  justify-content: flex-start; /* 主页/存读 徽章恒在最左 */
+}
+
+html[data-platform='android'] .bar {
+  right: calc(var(--safe-right) + 178px);
+}
+
+html[data-platform='android'] .gt__quick {
+  position: fixed;
+  top: calc(var(--safe-top) + 3px);
+  right: calc(var(--safe-right) + 6px);
+  z-index: calc(var(--layer-shell) + 2);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 标记 chip：无底色无描边，与左侧信息同属一条带（用户「不要两块顶栏」） */
+html[data-platform='android'] .gt__quick-chip {
+  font-size: var(--text-xs);
+  min-height: 26px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ops-khaki);
+  border: 0;
+}
+
+html[data-platform='android'] .gt__gear {
+  font-size: 15px;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+html[data-platform='android'] .gt__quick-menu {
+  position: fixed;
+  top: calc(var(--safe-top) + 32px);
+  right: calc(var(--safe-right) + 6px);
+  z-index: calc(var(--layer-shell) + 3);
+  display: grid;
+  min-width: 128px;
+  padding: 4px;
+  background: var(--ops-canvas);
+  border: 1px solid var(--ops-line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
+}
+
+html[data-platform='android'] .gt__quick-menu button {
+  font-size: var(--text-xs);
+  min-height: 34px;
+  padding: 0 10px;
+  text-align: left;
+  color: var(--ops-khaki, #e8dfc4);
+  background: transparent;
+  border-radius: 6px;
+}
+
+html[data-platform='android'] .gt__quick-menu button:active {
+  background: rgb(232 223 196 / 0.12);
+}
+
+/* ══════════ 顶栏结构合一（用户 2026-11-19「不要分层」）══════════
+ * 安卓游戏页隐藏应用头，.gt__topbar 成为唯一顶栏容器：
+ * 主页徽章 / 流程条 / 快捷标记都是它的真实 flex 子元素，零 fixed 浮层。
+ * 菜单面板 absolute 锚定在顶栏容器内。桌面完全不受影响。
+ * ══════════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] .shell--board .shell__bar {
+  display: none; /* 游戏页的应用头整行让位（其功能已并入 gt__topbar） */
+}
+
+html[data-platform='android'] .gt__topbar {
+  position: relative; /* 菜单面板的定位锚 */
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  padding: 2px 6px;
+  background: var(--ops-canvas);
+  border-bottom: 1px solid var(--ops-line);
+}
+
+html[data-platform='android'] .gt__topbar .bar {
+  position: static;
+  left: auto;
+  right: auto;
+  top: auto;
+  z-index: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 26px;
+  padding: 1px 4px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+html[data-platform='android'] .gt__topbar .gt__quick {
+  position: static;
+  top: auto;
+  right: auto;
+  flex: 0 0 auto;
+}
+
+html[data-platform='android'] .gt__home {
+  font-size: var(--text-xs);
+  height: 26px;
+  min-height: 26px;
+  padding: 0 7px;
+}
+
+html[data-platform='android'] .gt__quick-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  z-index: calc(var(--layer-shell) + 3);
+}
+
+/* ══════════ 页面级竖向滑块根除（用户 2026-11-19）══════════
+ * 剧本选择页 doc 高 1195 > 视口 915 ⇒ 浏览器级竖向滚动条。
+ * 根因：.shell 仅 min-height:100vh 随内容长高（只有游戏页 .shell--board 锁了 100dvh）。
+ * 安卓统一锁 100dvh + body 关闭滚动，让列表在自身容器内滚（移动端滚动条为悬浮式）。
+ * ══════════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] .shell {
+  height: 100dvh;
+  min-height: 0;
+}
+
+html[data-platform='android'] .shell__body {
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ══════════ 隐藏滚动条滑块（用户 2026-11-19「死人堆左侧的滚动条」）══════════
+ * 流程条 overflow-x:auto 画出的横向滑块正卡在「死人堆」左侧 ⇒ 安卓全局隐藏滚动条
+ * （保留滚动能力；移动端惯例为悬浮式，触屏拖动即可滚，桌面不受影响）。
+ * ══════════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] * {
+  scrollbar-width: none; /* Firefox / 新 Chromium */
+}
+
+html[data-platform='android'] *::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* ══════════ 面板说明段落隐藏（用户 2026-11-19「留标题和按钮就行」）══════════
+ * 各面板的 p.muted 规则长段（补给/空军/轰炸/战斗/容器/盒卡注释）安卓下隐藏；
+ * RuleNote（? 帮助）里的正文**保留**——那是玩家主动点开才出现的按需内容。
+ * ══════════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] p.muted {
+  display: none;
+}
+
+html[data-platform='android'] .rule-note p.muted {
+  display: block;
+}
+
+/* 初设选中单位后的操作提示（无基地格 14.1a 等）属说明文字 ⇒ 安卓隐藏（用户 2026-11-19） */
+html[data-platform='android'] .queue__active .queue__hint {
+  display: none;
 }

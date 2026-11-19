@@ -38,6 +38,7 @@ import { COUNTER_BOX_LABELS, type CounterBoxTarget } from '@/stores/map-view'
 import { DEFAULT_MAP_LAYERS } from '@/render/map-render'
 import {
   useAppStore,
+  useContainersStore,
   useGameSessionStore,
   useHotkeyStore,
   useHotseatStore,
@@ -57,8 +58,49 @@ import { isAndroidPlatform } from '@/shared/platform'
 /** 安卓壳专用布局开关：教学卡内联顶栏（桌面保持悬浮独立卡） */
 const androidUi = isAndroidPlatform()
 
+/**
+ * 2026-11-19（用户口径）：安卓顶栏右侧不再用一排抽象图标 ——
+ * 三个文字标记（死人堆 / 空军盒 / 苏军盒）一步直达对应盒卡弹窗；⚙ 点开全部抽屉菜单。
+ * 苏军图外盒只有苏联视角才有（苏军援军从图外进场）。
+ */
+const quickMenu = ref(false)
+
+type QuickBoxKind = 'dead_pile' | 'air_box' | 'offboard'
+
+const quickBoxes = computed<{ label: string; kind: QuickBoxKind }[]>(() => {
+  const list: { label: string; kind: QuickBoxKind }[] = [
+    { label: '死人堆', kind: 'dead_pile' },
+    { label: '空军盒', kind: 'air_box' },
+  ]
+  if (hotseat.viewerSide === 'soviet') list.push({ label: '苏军盒', kind: 'offboard' })
+  return list
+})
+
+/** 一步直达：打开盒表抽屉并弹出对应盒卡 */
+function focusBox(kind: QuickBoxKind): void {
+  const side = hotseat.viewerSide
+  const card =
+    containers.cardViewsOf(side).find((item) => item.boxKind === kind) ??
+    containers.sharedCardViews.find((item) => item.boxKind === kind)
+  if (card === undefined) return
+  openDrawer('cards')
+  containers.setPopupCard(card.id)
+  quickMenu.value = false
+}
+
+function openQuickDrawer(next: TableDrawer): void {
+  openDrawer(next)
+  quickMenu.value = false
+}
+
+function openSaveFromMenu(): void {
+  ui.openSaveDialog()
+  quickMenu.value = false
+}
+
 const workbench = useWorkbenchStore()
 const mapView = useMapViewStore()
+const containers = useContainersStore()
 const hotkeys = useHotkeyStore()
 const setup = useSetupStore()
 const gameSession = useGameSessionStore()
@@ -420,13 +462,66 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="gt">
-    <FlowStrip variant="bar">
+    <!--
+      2026-11-19（用户口径「不要分层」）：安卓壳顶栏 = **一条真实容器**，
+      主页徽章 + 流程条 + 快捷标记（死人堆/空军盒/苏军盒）+ ⚙ 都是它的真实 flex 子元素，
+      不再有任何 fixed 浮层；应用头在游戏页由 CSS 隐藏（.shell--board .shell__bar）。
+      桌面沿用「应用头 + 桌面流程条」的原结构（下方 v-else 分支）。
+    -->
+    <header v-if="androidUi" class="gt__topbar">
+      <BaseButton variant="ghost" size="sm" class="gt__home" @click="ui.navigate('home')">
+        主页
+      </BaseButton>
+      <FlowStrip variant="bar">
+        <template #trail>
+          <!-- 教学卡内联进流程条（桌面是独立悬浮卡，见模板尾部 v-if="!androidUi" 实例） -->
+          <TutorialGuide :hex-to-window="tutorialHexToWindow" />
+          <BaseButton
+            v-if="
+              workbench.segmentStep?.id === 'movement.breakout' &&
+              !workbench.segmentLocked &&
+              session === null
+            "
+            variant="secondary"
+            size="sm"
+            @click="mapView.openBreakoutNow()"
+          >
+            突围
+          </BaseButton>
+        </template>
+        <template v-if="aiWaiting" #status>{{ aiWaiting }}</template>
+      </FlowStrip>
+      <div class="gt__quick">
+        <button
+          v-for="chip in quickBoxes"
+          :key="chip.kind"
+          type="button"
+          class="gt__quick-chip"
+          @click="focusBox(chip.kind)"
+        >
+          {{ chip.label }}
+        </button>
+        <button
+          type="button"
+          class="gt__quick-chip gt__gear"
+          aria-label="设置与抽屉菜单"
+          :aria-expanded="quickMenu"
+          @click="quickMenu = !quickMenu"
+        >
+          ⚙
+        </button>
+      </div>
+      <div v-if="quickMenu" class="gt__quick-menu">
+        <button type="button" @click="openQuickDrawer('status')">战况</button>
+        <button type="button" @click="openQuickDrawer('cards')">盒表</button>
+        <button type="button" @click="openQuickDrawer('log')">战报</button>
+        <button type="button" @click="openQuickDrawer('settings')">设置</button>
+        <button type="button" @click="openSaveFromMenu()">存读档</button>
+        <button type="button" @click="ui.navigate('home')">退出对局</button>
+      </div>
+    </header>
+    <FlowStrip v-else variant="bar">
       <template #trail>
-        <!--
-          2026-11-19「顶栏二合一」：安卓壳把教学卡内联进流程条同一行（桌面仍悬浮独立）。
-          卡片自身 position:fixed，安卓由 android.css 末段改 static 内联。
-        -->
-        <TutorialGuide v-if="androidUi" :hex-to-window="tutorialHexToWindow" />
         <BaseButton
           v-if="
             workbench.segmentStep?.id === 'movement.breakout' &&
