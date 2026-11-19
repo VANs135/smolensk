@@ -88,11 +88,11 @@ function focusBox(kind: QuickBoxKind): void {
     containers.sharedCardViews.find((item) => item.boxKind === kind)
   if (card === undefined) return
   quickBoxCard.value = card
-  // 只展开盒面（不触发盒内浮层，避免与浮窗本体重复渲染）
-  if (containers.cardOpenId !== card.id) containers.toggleCardOpen(card.id)
+  containers.setPopupCard(card.id)
 }
 
 function closeQuickBox(): void {
+  containers.setPopupCard(null)
   quickBoxCard.value = null
 }
 
@@ -519,26 +519,17 @@ onBeforeUnmount(() => {
           ⚙
         </button>
       </div>
-      <!-- 盒面直弹窗（安卓）：点盒标记 → 只显示盒面，不出盒表抽屉 -->
+      <!--
+        盒面直弹窗（安卓）：点盒标记 → 只弹 setPopupCard 的盒内浮层（Teleport 到 body，
+        贴图自带标题，含 × 关闭与「整备」等贴面按钮），不出盒表抽屉；
+        BoxCard 仅作隐藏挂载（android.css 折叠其头行与卡面），点空白处关闭。
+      -->
       <div
         v-if="androidUi && quickBoxCard !== null"
         class="gt__boxface"
         @click.self="closeQuickBox()"
       >
-        <div class="gt__boxface-panel">
-          <header class="gt__boxface-head">
-            <strong>{{ quickBoxCard.name }}</strong>
-            <button
-              type="button"
-              class="gt__boxface-close"
-              aria-label="关闭"
-              @click="closeQuickBox()"
-            >
-              ×
-            </button>
-          </header>
-          <BoxCard :card="quickBoxCard" />
-        </div>
+        <BoxCard :card="quickBoxCard" />
       </div>
       <div v-if="quickMenu" class="gt__quick-menu">
         <button type="button" @click="openQuickDrawer('status')">战况</button>
