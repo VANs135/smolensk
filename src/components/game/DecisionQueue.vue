@@ -33,6 +33,8 @@ import {
 
 const setup = useSetupStore()
 const hotseat = useHotseatStore()
+/** 2026-11-19：安卓壳走极简按钮（次要动作收进「更多」）；平台装配时一次确定 */
+const androidUi = isAndroidPlatform()
 /**
  * 一键预设初设（B2）：与初设主入口同一处，只落 AI 控制的一方，不替玩家点开始游戏。
  * 修前这个入口挂在「战况」抽屉的初设面板里（与开局选剧本重复），玩家在初设栏找不到。
@@ -359,6 +361,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
       H5：落位可一步撤回。四类动作收进**同一行**，避免初设框被按钮堆高。
     -->
     <div class="queue__actions">
+      <!-- 主操作常驻：开始游戏 / 完成初设；分方游标下的「确认本方布设」也是推进主动作 -->
       <BaseButton
         v-if="setupPrimary !== null"
         variant="primary"
@@ -367,18 +370,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
       >
         {{ setupPrimary.label }}
       </BaseButton>
-      <BaseButton
-        v-if="hotseat.canPreset && !setup.finished"
-        variant="secondary"
-        size="sm"
-        @click="runPresetSetup()"
-      >
-        一键预设初设
-      </BaseButton>
-      <span v-if="presetResult !== null" class="queue__hint num">
-        已落 {{ presetResult.placed }} · 剩 {{ presetResult.remaining }} · 失败
-        {{ presetResult.failures.length }}
-      </span>
       <template v-if="cursorWindowForViewer">
         <!--
           第六批条 1（S1）：分方游标 —— 先布设方布设完按一下即换手；
@@ -392,16 +383,42 @@ function sideMark(side: 'axis' | 'soviet'): string {
         >
           确认本方布设
         </BaseButton>
-        <BaseButton
-          v-if="setup.canUndoPlacement"
-          variant="ghost"
-          size="sm"
-          :title="setup.lastPlacement?.label ?? ''"
-          @click="setup.undoLastPlacementNow()"
-        >
-          撤回上一步
-        </BaseButton>
       </template>
+
+      <!--
+        2026-11-19「只留最简化按钮」：一键预设 / 撤回 / 结果提示属次要动作 ⇒
+        安卓壳收进「更多」折叠（summary 用 CSS 做成图标按钮）；桌面照旧平铺。
+        `:open="!androidUi"` ⇒ 桌面恒展开、安卓默认收起。
+      -->
+      <details class="queue__more" :open="!androidUi">
+        <summary class="queue__more-toggle" :title="androidUi ? '更多操作' : undefined">
+          <BaseIcon name="chevron-down" />
+          <span v-if="!androidUi">更多</span>
+        </summary>
+        <div class="queue__more-body">
+          <BaseButton
+            v-if="hotseat.canPreset && !setup.finished"
+            variant="secondary"
+            size="sm"
+            @click="runPresetSetup()"
+          >
+            一键预设初设
+          </BaseButton>
+          <span v-if="presetResult !== null" class="queue__hint num">
+            已落 {{ presetResult.placed }} · 剩 {{ presetResult.remaining }} · 失败
+            {{ presetResult.failures.length }}
+          </span>
+          <BaseButton
+            v-if="cursorWindowForViewer && setup.canUndoPlacement"
+            variant="ghost"
+            size="sm"
+            :title="setup.lastPlacement?.label ?? ''"
+            @click="setup.undoLastPlacementNow()"
+          >
+            撤回上一步
+          </BaseButton>
+        </div>
+      </details>
     </div>
 
     <p v-if="!cursorWindowForViewer" class="queue__wait" role="status">
@@ -854,6 +871,22 @@ function sideMark(side: 'axis' | 'soviet'): string {
   flex-wrap: wrap;
   gap: var(--space-2);
   padding: 2px 0;
+}
+
+/* 2026-11-19：次要动作折叠。桌面 summary 隐藏、body 平铺（保持原观感）；安卓见 android.css */
+.queue__more {
+  display: contents;
+}
+
+.queue__more-toggle {
+  display: none;
+}
+
+.queue__more-body {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .queue__row-actions :deep(.btn) {

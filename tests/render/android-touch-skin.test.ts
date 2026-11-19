@@ -52,4 +52,25 @@ describe('安卓触摸皮肤', () => {
     // 竖屏专属的「教学卡下移 200px」已加 portrait 限定，横屏不再中招
     expect(css).toContain('(orientation: portrait)')
   })
+
+  it('去白框 + 初设单排横向带 + 按钮精简（用户 2026-11-19）', () => {
+    // 深色玻璃 HUD 变量（去白框、地图上可读）
+    expect(css).toContain('--glass-bg:')
+    expect(css).toContain('--glass-ink:')
+    expect(css).toContain('background-color: var(--glass-bg)')
+    // 面板字色就地重映射（流程条小字也要提亮）
+    expect(css).toContain('--color-muted: var(--glass-ink-dim)')
+    // 初设待落项 → 单排横向带：flex + overflow-x:auto + 不换行 + max-content
+    expect(css).toContain("html[data-platform='android'] .queue__sections,")
+    expect(css).toContain('overflow-x: auto')
+    expect(css).toContain('flex-wrap: nowrap')
+    expect(css).toContain('width: max-content')
+    // 按钮精简：次要动作收进「更多」details
+    expect(css).toContain('.queue__more-toggle')
+    expect(queue).toContain('const androidUi = isAndroidPlatform()')
+    expect(queue).toContain('class="queue__more"')
+    expect(queue).toContain(':open="!androidUi"')
+    // 桌面仍平铺：summary 默认隐藏、details display:contents
+    expect(queue).toContain('.queue__more {\n  display: contents;\n}')
+  })
 })

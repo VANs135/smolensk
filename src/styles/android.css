@@ -29,6 +29,19 @@ html[data-platform='android'] {
   --shadow-lg: 0 8px 28px rgb(0 0 0 / 0.24);
   /* 触摸屏不需要桌面那圈细边框；用高度差表达层级 */
   --android-hairline: color-mix(in srgb, var(--color-command-line) 70%, transparent);
+
+  /*
+   * 2026-11-19 用户「白框 UI 都去掉」：面板改深色玻璃 HUD（不是白卡）。
+   * 深半透明底 + 浅字 ⇒ 压在彩色地图上仍可读，且没有白色方框感。
+   * 与明暗主题无关（HUD 恒定），只改观感不改规则。
+   */
+  --glass-bg: rgb(24 27 26 / 0.86);
+  --glass-bg-strong: rgb(20 23 22 / 0.94);
+  --glass-bg-soft: rgb(238 242 238 / 0.1);
+  --glass-ink: #eef2ee;
+  --glass-ink-dim: #b9c4bc;
+  --glass-line: rgb(238 242 238 / 0.16);
+  --glass-teal: rgb(0 137 123 / 0.26);
 }
 
 /* 根容器给状态栏让位（Android 15 强制 edge-to-edge 时 env 才非 0） */
@@ -414,6 +427,193 @@ html[data-platform='android'] .tray {
     animation: none;
     transition: none;
   }
+}
+
+/* ═══════════════ 去白框 · 深色玻璃 HUD（用户 2026-11-19）═══════════════
+ * 把初设队列 / 教学卡 / 流程条 / 底部导航 / FAB / 各类子卡的白底+边框
+ * 统一改成深半透明玻璃 + 浅字。变量就地重映射，组件样式无需改、规则不动。
+ * 只在安卓壳命中；用 --glass-* 保证明暗主题下对比度一致（HUD 恒定深色）。
+ * ═══════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] .queue,
+html[data-platform='android'] .tut__card,
+html[data-platform='android'] .bar,
+html[data-platform='android'] .gt__rail,
+html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools .btn,
+html[data-platform='android'] .gt__drawer,
+html[data-platform='android'] .queue__group,
+html[data-platform='android'] .queue__active,
+html[data-platform='android'] .queue__air-pickbar {
+  --color-ink: var(--glass-ink);
+  --color-command-ink: var(--glass-ink);
+  --color-command-muted: var(--glass-ink-dim);
+  --color-muted: var(--glass-ink-dim);
+  --color-rule: var(--glass-line);
+  --color-command-line: var(--glass-line);
+  --color-panel: var(--glass-bg);
+  --color-command-panel: var(--glass-bg);
+  --color-bg: var(--glass-bg-strong);
+  --color-bg-2: var(--glass-bg-soft);
+  --color-command-teal-bg: var(--glass-teal);
+  color: var(--glass-ink);
+  background-color: var(--glass-bg);
+  border-color: transparent;
+  box-shadow: 0 4px 20px rgb(0 0 0 / 0.32);
+  backdrop-filter: blur(8px);
+}
+
+/* FAB 三键：玻璃圆钮、去白底 */
+html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools .btn {
+  border-color: transparent;
+}
+
+/* 流式导航当前项药丸：玻璃青底，别再用主题浅底 */
+html[data-platform='android'] .gt__rail-button[aria-expanded='true'] {
+  background: var(--glass-teal);
+  color: var(--glass-ink);
+}
+
+/* 算子小卡 / 计数角标 / 图档底：去白边，透出玻璃 */
+html[data-platform='android'] .queue__cell,
+html[data-platform='android'] .queue__air-chip,
+html[data-platform='android'] .queue__counter {
+  border-color: var(--glass-line);
+  background-color: var(--glass-bg-soft);
+}
+
+/* 底部导航与流程条的分隔线改细玻璃线 */
+html[data-platform='android'] .gt__rail {
+  border-top-color: var(--glass-line);
+}
+
+html[data-platform='android'] .bar {
+  border-bottom: 1px solid var(--glass-line);
+}
+
+/* sheet 顶部拖动指示条：玻璃线下仍可见（提亮一档） */
+html[data-platform='android'] .queue::before,
+html[data-platform='android'] .gt__drawer::before {
+  background: var(--glass-ink-dim);
+}
+
+/* ═══════════════ 初设待落项 → 单排横向带（用户 2026-11-19）═══════════════
+ * 四堆叠（地面/非战斗/飞机/卡车）不再纵向分区，全部待落算子铺成**一条横向带**，
+ * 手指左右滑动浏览，点算子落位。只改布局不改组件逻辑；桌面 grid 布局不动。
+ * ═══════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] .queue__sections,
+html[data-platform='android'] .queue__sections--split {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+}
+
+html[data-platform='android'] .queue__sections > .queue__stack,
+html[data-platform='android'] .queue__sections--split > .queue__stack {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: none;
+  scroll-snap-align: start;
+  border-top: 0;
+  border-left: 1px solid var(--glass-line);
+  padding-left: 10px;
+}
+
+/* 分区名做小标题，箭头省略（横向带里点了直接展开/收起） */
+html[data-platform='android'] .queue__stack-btn {
+  gap: 4px;
+  padding: 0 0 4px;
+}
+
+/* 地面 / 非战斗 / 卡车：算子网格改单行，不换行 */
+html[data-platform='android'] .queue__grid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 4px;
+  width: max-content;
+}
+
+/* 飞机：四栏横向并排成一行（激活完好→激活减损→未激活完好→未激活减损） */
+html[data-platform='android'] .queue__air {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 8px;
+  width: max-content;
+}
+
+html[data-platform='android'] .queue__air-col {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
+html[data-platform='android'] .queue__air-array {
+  flex-wrap: nowrap;
+}
+
+/* 选中枚的动作条在横向带里只占自己那一栏宽，不把整条带撑断行 */
+html[data-platform='android'] .queue__air-pickbar {
+  position: sticky;
+  left: 0;
+  width: fit-content;
+  max-width: 92vw;
+  z-index: 2;
+}
+
+/* 初设按钮精简（用户 2026-11-19）：次要动作收进「更多」图标按钮 */
+html[data-platform='android'] .queue__more {
+  display: block;
+  position: relative;
+}
+
+html[data-platform='android'] .queue__more-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--glass-line);
+  border-radius: 12px;
+  background: var(--glass-bg-soft);
+  color: var(--glass-ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+html[data-platform='android'] .queue__more-toggle::-webkit-details-marker {
+  display: none;
+}
+
+html[data-platform='android'] .queue__more-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+html[data-platform='android'] .queue__more[open] .queue__more-toggle {
+  background: var(--glass-teal);
+}
+
+/* 展开的次要动作：浮在按钮下方的小玻璃面板，不占横向带高度 */
+html[data-platform='android'] .queue__more-body {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 150px;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--glass-line);
+  border-radius: 14px;
+  background: var(--glass-bg-strong);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.4);
 }
 
 @keyframes android-sheet-up {
