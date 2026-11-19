@@ -5,14 +5,18 @@
  * `src/shared/platform.ts` 在装配时挂上；桌面浏览器与手机浏览器一律不命中。
  *
  * 三条原则：
- *   ① 只改**尺度 / 形状 / 层级**，不改颜色语义（主题仍由 tokens.css 与 data-theme 决定）；
+ *   ① 只改**尺度 / 形状 / 层级 / 观感**，不改任何规则与交互逻辑；
  *   ② 命中区按 Material 的 48dp 下限，密集阵列（算子）保持 44dp；
  *   ③ 面板从「桌面浮窗」改为「底部 sheet」：拇指可达、可滚动、不挤压地图。
  *
- * 不引入任何组件库：现有 BaseButton / BasePanel / 抽屉 / 队列都沿用，只换外壳。
+ * 2026-11-19 全流程视觉改版「军事沙盘复古 / 夜间作战室」：
+ *   --ops-* 是沙盘原色；入口页读 --color-command-*、对局 HUD 读 --glass-*，
+ *   两组令牌在本文件内一并重映射到 --ops-*，故全流程只需改这一处。
+ *   ★ 选择器写 `html[data-platform='android']:root`（优先级 0,2,1），
+ *     必须压过 tokens.css 的 `:root[data-theme='dark']`（0,2,0），否则切深色主题会回退。
  * ═══════════════════════════════════════════════════════════ */
 
-html[data-platform='android'] {
+html[data-platform='android']:root {
   /* Material 3 的圆角与高度档位（与现有 --radius-* 同名，组件无需改） */
   --radius-sm: 10px;
   --radius-md: 16px;
@@ -24,24 +28,79 @@ html[data-platform='android'] {
   /* 底部导航总高（含手势条安全区）：抽屉与初设 sheet 都以此为下边界 */
   --android-nav-height: calc(68px + var(--safe-bottom));
   --android-sheet-radius: 28px;
-  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.16);
-  --shadow-md: 0 2px 8px rgb(0 0 0 / 0.18);
-  --shadow-lg: 0 8px 28px rgb(0 0 0 / 0.24);
+  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.24);
+  --shadow-md: 0 2px 8px rgb(0 0 0 / 0.28);
+  --shadow-lg: 0 8px 28px rgb(0 0 0 / 0.36);
   /* 触摸屏不需要桌面那圈细边框；用高度差表达层级 */
-  --android-hairline: color-mix(in srgb, var(--color-command-line) 70%, transparent);
+  --android-hairline: color-mix(in srgb, var(--ops-line) 80%, transparent);
 
-  /*
-   * 2026-11-19 用户「白框 UI 都去掉」：面板改深色玻璃 HUD（不是白卡）。
-   * 深半透明底 + 浅字 ⇒ 压在彩色地图上仍可读，且没有白色方框感。
-   * 与明暗主题无关（HUD 恒定），只改观感不改规则。
-   */
-  --glass-bg: rgb(24 27 26 / 0.86);
-  --glass-bg-strong: rgb(20 23 22 / 0.94);
-  --glass-bg-soft: rgb(238 242 238 / 0.1);
-  --glass-ink: #eef2ee;
-  --glass-ink-dim: #b9c4bc;
-  --glass-line: rgb(238 242 238 / 0.16);
-  --glass-teal: rgb(0 137 123 / 0.26);
+  /* ── 军事沙盘原色（唯一来源，其余全部引用这组） ────────────────── */
+  --ops-table: #141712; /* 沙盘桌面（最底） */
+  --ops-canvas: #22271f; /* 做旧军绿帆布（面板） */
+  --ops-raised: #2e3429; /* 浮起块 */
+  --ops-line: #4a5238; /* 黄铜暗线 / 帆布缝线 */
+  --ops-khaki: #e8dfc4; /* 褪色卡其（主文字，压深底 11:1） */
+  --ops-khaki-dim: #b0a586; /* 次卡其（压深底 5.4:1，WCAG AA 达标） */
+  --ops-brass: #c9a227; /* 氧化黄铜（主操作 / 当前环节） */
+  --ops-brass-hi: #e0b84f; /* 黄铜提亮（hover / 警示数字） */
+  --ops-brass-deep: #a8861f; /* 黄铜实心底 */
+  --ops-brass-soft: rgb(201 162 39 / 0.16); /* 黄铜淡底（选中 / 药丸） */
+  --ops-oxide: #d47460; /* 铁锈红（苏军 / 危险，压帆布 4.69:1 达 WCAG AA） */
+  --ops-oxide-bg: rgb(212 116 96 / 0.16);
+  --ops-steel: #7aa8cf; /* 军蓝（轴心 / 信息） */
+  --ops-steel-bg: rgb(122 168 207 / 0.16);
+  --ops-olive: #9cb268; /* 军绿（成功 / 通过） */
+  --ops-olive-bg: rgb(156 178 104 / 0.16);
+
+  /* ── 入口页（主页 / 剧本 / 简报 / 弹窗）令牌重映射 ──────────────── */
+  --color-command-bg: var(--ops-table);
+  --color-command-panel: var(--ops-canvas);
+  --color-command-raised: var(--ops-raised);
+  --color-command-ink: var(--ops-khaki);
+  --color-command-muted: var(--ops-khaki-dim);
+  --color-command-line: var(--ops-line);
+  --color-command-teal: var(--ops-brass);
+  --color-command-teal-bg: var(--ops-brass-soft);
+  --color-command-amber: var(--ops-brass-hi);
+  --color-command-danger: var(--ops-oxide);
+  --color-command-axis: var(--ops-steel);
+  --color-command-soviet: var(--ops-oxide);
+  --color-command-accent-solid: var(--ops-brass-deep);
+  --color-command-accent-solid-hover: #95751a;
+  --color-command-on-accent: var(--ops-table);
+  --color-command-danger-hover: #a84335;
+  --color-command-info-bg: var(--ops-steel-bg);
+  --color-command-success-bg: var(--ops-olive-bg);
+  --color-command-warning-bg: var(--ops-brass-soft);
+  --color-command-danger-bg: var(--ops-oxide-bg);
+  /* 底层语义令牌（Toast / 通用面板）同步，避免弹层露出旧浅色 */
+  --color-bg: var(--ops-table);
+  --color-bg-2: var(--ops-raised);
+  --color-panel: var(--ops-canvas);
+  --color-ink: var(--ops-khaki);
+  --color-muted: var(--ops-khaki-dim);
+  --color-rule: var(--ops-line);
+  --color-accent: var(--ops-brass);
+  --color-accent-2: var(--ops-brass-deep);
+  --color-gold: var(--ops-brass-hi);
+  --color-on-accent: var(--ops-table);
+  --color-info: var(--ops-steel);
+  --color-success: var(--ops-olive);
+  --color-warning: var(--ops-brass-hi);
+  --color-danger: var(--ops-oxide);
+  --focus-ring: 0 0 0 3px rgb(201 162 39 / 0.32);
+
+  /* ── 对局 HUD 玻璃令牌（深帆布 + 卡其字，与入口页同源） ─────────── */
+  --glass-bg: rgb(34 39 31 / 0.92);
+  --glass-bg-strong: rgb(20 23 18 / 0.96);
+  --glass-bg-soft: rgb(232 223 196 / 0.08);
+  --glass-ink: var(--ops-khaki);
+  --glass-ink-dim: var(--ops-khaki-dim);
+  --glass-line: rgb(201 162 39 / 0.24);
+  --glass-teal: var(--ops-brass-soft);
+
+  /* 原生控件（滚动条 / 日期选择）跟随深色沙盘 */
+  color-scheme: dark;
 }
 
 /* 根容器给状态栏让位（Android 15 强制 edge-to-edge 时 env 才非 0） */

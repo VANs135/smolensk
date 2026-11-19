@@ -327,6 +327,12 @@ export interface MapRenderOptions {
   viewport: ViewportTransform
   /** 视口尺寸（CSS 像素） */
   viewSize: Size
+  /**
+   * 画布底板色（呈现用，无规则含义）。
+   * 缺省沿用 `MAP_PALETTE.board`（地图纸米白）；安卓军事沙盘壳传入深色桌面色，
+   * 让"桌面"与"地图纸"分层。桌面端不传 ⇒ 观感一字不变。
+   */
+  boardColor?: string
   /** 设备像素比（默认 1；高清屏由组件传 window.devicePixelRatio） */
   pixelRatio?: number
   /** 图层开关（缺省项按 DEFAULT_MAP_LAYERS 补齐） */
@@ -492,7 +498,7 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
   // ① 底板：清空 + 铺底色（在 CSS 像素坐标系里做，避免受 world 变换影响）
   ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
   ctx.clearRect(0, 0, viewSize.width, viewSize.height)
-  ctx.fillStyle = MAP_PALETTE.board
+  ctx.fillStyle = options.boardColor ?? MAP_PALETTE.board
   ctx.fillRect(0, 0, viewSize.width, viewSize.height)
 
   // 进入世界坐标：screen = world × scale + offset

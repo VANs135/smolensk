@@ -13,6 +13,8 @@ import {
   type DragGesture,
 } from '@/render/drag-gesture'
 import { BOARD_SIZE_PX, hexCanvasPoint, hexLineBetween, hitTestHex } from '@/render/map-layout'
+// 军事沙盘：安卓壳把画布"桌面"填深色，与地图纸分层；桌面端不传、观感不变
+import { isAndroidPlatform } from '@/shared/platform'
 // B18a：手势归属（浮层是容器的子节点 ⇒ 必须按事件源判断，否则点面板会同时点到地图）
 import { isMapGestureTarget } from '@/render/map-input'
 import {
@@ -520,6 +522,8 @@ function render(): void {
   drawMap(context, {
     viewport: viewport.value,
     viewSize: size,
+    // 安卓军事沙盘：画布底板 = 沙盘桌面深色（地图扫描图仍是浅色纸张，浮于其上）
+    boardColor: isAndroidPlatform() ? '#141712' : undefined,
     pixelRatio: ratio,
     layers: props.layers,
     image: image.value,
