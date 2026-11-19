@@ -33,8 +33,6 @@ import {
 
 const setup = useSetupStore()
 const hotseat = useHotseatStore()
-/** 2026-11-19：安卓壳走极简按钮（次要动作收进「更多」）；平台装配时一次确定 */
-const androidUi = isAndroidPlatform()
 /**
  * 一键预设初设（B2；2026-11-19 用户裁定改为**一键全落**）
  *
@@ -401,33 +399,25 @@ function sideMark(side: 'axis' | 'soviet'): string {
       </BaseButton>
 
       <!--
-        2026-11-19「只留最简化按钮」：撤回 / 结果提示属次要动作 ⇒
-        安卓壳收进「更多」折叠（summary 用 CSS 做成图标按钮）；桌面照旧平铺。
-        `:open="!androidUi"` ⇒ 桌面恒展开、安卓默认收起。
+        2026-11-19（用户「不需要箭头呼出和文字了」）：撤回 ↺ 直接平铺在动作列，
+        「更多」折叠整个去掉（桌面此前也恒展开，观感不变）；结果提示保留给读屏，
+        安卓由 android.css 隐藏文字。
       -->
-      <details class="queue__more" :open="!androidUi">
-        <summary class="queue__more-toggle" :title="androidUi ? '更多操作' : undefined">
-          <BaseIcon name="chevron-down" />
-          <span v-if="!androidUi">更多</span>
-        </summary>
-        <div class="queue__more-body">
-          <span v-if="presetResult !== null" class="queue__hint num">
-            已落 {{ presetResult.placed }} · 剩 {{ presetResult.remaining }} · 失败
-            {{ presetResult.failures.length }}
-          </span>
-          <BaseButton
-            v-if="cursorWindowForViewer && setup.canUndoPlacement"
-            variant="ghost"
-            size="sm"
-            class="queue__undo"
-            :title="setup.lastPlacement?.label ?? ''"
-            aria-label="撤回上一步"
-            @click="setup.undoLastPlacementNow()"
-          >
-            撤回上一步
-          </BaseButton>
-        </div>
-      </details>
+      <span v-if="presetResult !== null" class="queue__hint num">
+        已落 {{ presetResult.placed }} · 剩 {{ presetResult.remaining }} · 失败
+        {{ presetResult.failures.length }}
+      </span>
+      <BaseButton
+        v-if="cursorWindowForViewer && setup.canUndoPlacement"
+        variant="ghost"
+        size="sm"
+        class="queue__undo"
+        :title="setup.lastPlacement?.label ?? ''"
+        aria-label="撤回上一步"
+        @click="setup.undoLastPlacementNow()"
+      >
+        撤回上一步
+      </BaseButton>
     </div>
 
     <p v-if="!cursorWindowForViewer" class="queue__wait" role="status">
@@ -444,8 +434,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
         <span v-if="placing.kind === 'air' && placing.candidates.length === 0" class="queue__hint">
           无基地格（14.1a）：点这一枚上方的「入盒」
         </span>
-        <div v-if="placing.category === 'supply'" class="queue__hint">
-          本次落
+        <div v-if="placing.category === 'supply'" class="queue__chunks">
           <button
             v-for="c in setup.placingChunkChoices"
             :key="c"
@@ -637,16 +626,21 @@ function sideMark(side: 'axis' | 'soviet'): string {
             <div v-if="stack.key === 'air'" class="queue__air">
               <!--
                 选中的那一枚：在阵列**正上方**给一条动作条（「入盒」）。
-                2026-11-19（用户「突变影响操作」）：动作条**恒占位**（空态隐藏内容），
-                点选算子时不再引起单位栏高度跳变。贴图自带状态，只留机型名。
+                2026-11-19（用户「突变影响操作」）：动作条**恒占位**（空态隐藏内容）；
+                （用户「不需要文字」）机型名去掉——选中态由算子高亮表达，只留「入盒」钮。
               -->
-              <div class="queue__air-pickbar" :class="{ 'queue__air-pickbar--empty': airPickedChip === null }">
-                <template v-if="airPickedChip !== null">
-                  <span class="queue__air-picklabel">{{ airPickedChip.item.label }}</span>
-                  <BaseButton variant="primary" size="sm" @click="sendAirToBox(airPickedChip)">
-                    入盒
-                  </BaseButton>
-                </template>
+              <div
+                class="queue__air-pickbar"
+                :class="{ 'queue__air-pickbar--empty': airPickedChip === null }"
+              >
+                <BaseButton
+                  v-if="airPickedChip !== null"
+                  variant="primary"
+                  size="sm"
+                  @click="sendAirToBox(airPickedChip)"
+                >
+                  入盒
+                </BaseButton>
               </div>
               <div
                 v-for="group in airFaceSections"
@@ -881,21 +875,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
   padding: 2px 0;
 }
 
-/* 2026-11-19：次要动作折叠。桌面 summary 隐藏、body 平铺（保持原观感）；安卓见 android.css */
-.queue__more {
-  display: contents;
-}
-
-.queue__more-toggle {
-  display: none;
-}
-
-.queue__more-body {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
+/* 2026-11-19（用户「不需要箭头呼出」）：「更多」折叠整体移除，撤回 ↺ 直接平铺在动作列 */
 
 .queue__row-actions :deep(.btn) {
   margin-left: auto;

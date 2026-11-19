@@ -1666,3 +1666,24 @@ html[data-platform='android'] .gt__drawer span {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
+
+/* ══════════ 初设选中态再瘦身 + 盒表去图表段（用户 2026-11-19）══════════
+ * ① 点单位后：番号 / 剩 N / 取消选格按钮一律不显示（桌面保留）；
+ *    补给拆分按钮（queue__chunks）是功能件 ⇒ 保留可见；
+ * ② 「已落 X · 剩 Y」结果文字安卓隐藏（算子计数本身可见）；
+ * ③ 盒表抽屉：隐藏「表格」段（图表栏）与「盒 N 张卡」头行，只留盒卡与弹窗。
+ * ══════════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] .queue__active .queue__label,
+html[data-platform='android'] .queue__active .queue__pending,
+html[data-platform='android'] .queue__active > .btn {
+  display: none;
+}
+
+html[data-platform='android'] .queue__actions .queue__hint {
+  display: none;
+}
+
+html[data-platform='android'] .tray__section:last-child,
+html[data-platform='android'] .tray__head {
+  display: none;
+}

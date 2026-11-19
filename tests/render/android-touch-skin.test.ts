@@ -57,14 +57,16 @@ describe('安卓触摸皮肤', () => {
     expect(css).toContain('height: 34px')
   })
 
-  it('一键预设与确认同排常驻：安卓不再把预设折进「更多」（用户 2026-11-19 第 1 条）', () => {
+  it('一键预设与确认同排常驻：动作列不再有「更多」折叠（用户 2026-11-19「不需要箭头呼出」）', () => {
     const actions = queue.indexOf('class="queue__actions"')
     const preset = queue.indexOf('@click="runPresetSetup()"')
-    const more = queue.indexOf('class="queue__more"')
     expect(actions).toBeGreaterThanOrEqual(0)
-    // 预设按钮位于 actions 行内，且在「更多」折叠之前（常驻而非折进折叠）
+    // 预设按钮位于 actions 行内（常驻）
     expect(preset).toBeGreaterThan(actions)
-    expect(preset).toBeLessThan(more)
+    // 撤回 ↺ 直接平铺在动作列（不再折进「更多」details）
+    expect(queue).toContain('class="queue__undo"')
+    // 「更多」折叠整个移除
+    expect(queue).not.toContain('class="queue__more"')
     // 一键全落：无 onlySide 参数
     expect(queue).toContain('presetResult.value = setup.presetSelfSetupNow()')
   })
@@ -95,12 +97,10 @@ describe('安卓触摸皮肤', () => {
     expect(css).toContain('overflow-x: auto')
     expect(css).toContain('flex-wrap: nowrap')
     expect(css).toContain('width: max-content')
-    // 按钮精简：次要动作收进「更多」details
-    expect(css).toContain('.queue__more-toggle')
-    expect(queue).toContain('const androidUi = isAndroidPlatform()')
-    expect(queue).toContain('class="queue__more"')
-    expect(queue).toContain(':open="!androidUi"')
-    // 桌面仍平铺：summary 默认隐藏、details display:contents
-    expect(queue).toContain('.queue__more {\n  display: contents;\n}')
+    // 按钮精简：撤回 ↺ 直接平铺（2026-11-19 用户「不需要箭头呼出和文字」）
+    expect(css).toContain('.queue__undo')
+    // 「更多」details 已整体移除（撤回不再折进折叠）
+    expect(queue).not.toContain('class="queue__more"')
+    expect(queue).not.toContain('queue__more-toggle')
   })
 })
