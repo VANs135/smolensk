@@ -331,6 +331,9 @@ export const useTutorialStore = defineStore('tutorial', () => {
         if (!phaseAtLeast(workbench.phase, 'movement')) return { buttonTexts: ['进入下一环节'] }
         return { hex: stackHex.value, texts: ['加油'] }
       }
+      case 'move-mode':
+        // 模式切换在右键菜单里（map-view 的动作表「模式改变 · 5.4」）
+        return { texts: ['改变朝向 → 移动模式'] }
       case 'move':
         return { hex: MOVE_HEX, texts: ['移动模式'] }
       case 'strafe-1':
@@ -449,8 +452,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
         id: 'advance-rebuild',
         title: '进入重建段',
         hint: '霍特：补给发完，点「进入下一环节」到重建段。',
-        intro:
-          '增援只有 SP：剧本无部队增援、无可变补员。重建走 1.6c 特殊补员——免费取一个 Aufk 营。',
+        intro: '增援补员表发 Pax ×1、Eq ×1；重建侦察车花 1 Eq（13.5a）。',
         done: () =>
           workbench.segmentStep?.id === 'reinforcement.rebuild' ||
           phaseAtLeast(workbench.phase, 'movement'),
@@ -476,10 +478,17 @@ export const useTutorialStore = defineStore('tutorial', () => {
         done: () => stackUnits.value.some((unit) => unit.fuelled),
       },
       {
+        id: 'move-mode',
+        title: '切换移动面',
+        hint: '霍特：右键这堆 →「改变朝向 → 移动模式」。战斗面只有 2 MP，移动面 5 MP——突袭一次要吃 3 MP（8.1a）。',
+        intro: '20 摩托化师：两个步兵团、装甲侦察营、炮兵团；出击前先翻到移动面。',
+        done: () => stackUnits.value.some((unit) => unit.mode.mode === 'move'),
+      },
+      {
         id: 'move',
         title: '移动到苏军旁',
-        hint: '霍特：推到苏军门前，别急着开火。',
-        intro: '30 装甲侦察营跑得最快，探路靠它。',
+        hint: '霍特：选中这堆 → 开拔 → 推到 17.27（沿次干道 3 格只花 1.5 MP）。',
+        intro: '道路行军半价：省下的 MP 留给突袭。',
         done: () => stackUnits.value.some((unit) => hexDistance(unit.hex, TARGET_HEX) === 1),
       },
       {
@@ -500,7 +509,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
         id: 'overrun',
         title: '堆叠突袭',
         hint: '霍特：压上去，堆叠突袭碾碎他们。',
-        intro: '20 炮兵团贴身支援，工兵 43 营保障通路。',
+        intro:
+          '6-5-4 炮兵团贴身支援、30 侦察营开路；一次突袭固定 3 MP——移动面 5 MP 正好够 1.5 行军 + 3 突袭。',
         done: () => overrunStarted(),
       },
       {
