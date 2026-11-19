@@ -24,7 +24,7 @@ import { createAirUnitTransitDomain } from './air-unit-transit'
 import { planAirSupplyLoad } from '@/engine/rules/air-supply'
 import type { AirCargoResolution } from '@/engine/rules/air-interaction'
 import type { MoveStepSnapshot } from './movement-types'
-import { tutorialSovietFirstTurnFullMa } from './tutorial-settings'
+import { tutorialFixedReinforcement, tutorialSovietFirstTurnFullMa } from './tutorial-settings'
 import { inEnemyZocForAction } from '@/engine/rules/move'
 import { ruleErrorTextOf } from '@/engine/rules/rule-error-text'
 import { createFireResolutionDomain } from './fire-resolution'
@@ -25103,11 +25103,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       drawCount.value += 1
       return draw.value.total
     }
-    const supplyDice = inputs.autoRoll ? draw2d6() : inputs.supplyDice
-    const replDice = inputs.autoRoll ? draw2d6() : inputs.replDice
+    /*
+     * 教学局免掷骰（用户 2026-11-19）：剧本卡 Reinforcements: None + Variable Repls: None
+     * ⇒ 增援段本无部队、无可变补员。教学不消耗 RNG，直接给固定结果：
+     *   补给表 2d6=7 → 7 SP（"6-8" 行）；补员表 2d6=5 → "7 or less" 行 = 零；
+     *   可变撤离 1（8 Jul 未到 19 Aug，不结算）；随机事件 7（19 Jul 前不在窗口）。
+     * 判定仍走 planVariableReinforcement 原路，只是骰面固定。
+     */
+    const drill = tutorialFixedReinforcement.value
+    const supplyDice = drill ? 7 : inputs.autoRoll ? draw2d6() : inputs.supplyDice
+    const replDice = drill ? 5 : inputs.autoRoll ? draw2d6() : inputs.replDice
     // 1.6c 不在这一批：它在 `drawSpecialRepl` 执行时自己掷（原文「also get to roll a die」）
-    const variableExitDie = inputs.autoRoll ? draw1d6() : inputs.variableExitDie
-    const randomEventDice = inputs.autoRoll ? draw2d6() : inputs.randomEventDice
+    const variableExitDie = drill ? 1 : inputs.autoRoll ? draw1d6() : inputs.variableExitDie
+    const randomEventDice = drill ? 7 : inputs.autoRoll ? draw2d6() : inputs.randomEventDice
     // ⑭ 接线：按实际掷骰顺序复算骰面（补给 2d6 → 补员 2d6 → 可变撤离 1d6 → 随机事件 2d6）
     const rolls: DiceRoll[] = []
     if (inputs.autoRoll) {

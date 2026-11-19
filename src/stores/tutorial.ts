@@ -451,7 +451,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
         id: 'advance-rebuild',
         title: '进入重建段',
         hint: '霍特：补给发完，点「进入下一环节」到重建段。',
-        intro: '增援把 Pax ×1、Eq ×1 送到 14.28；重建侦察车要 1 Eq。',
+        intro:
+          '增援只有 SP：剧本无部队增援、无可变补员。重建走 1.6c 特殊补员——免费取一个 Aufk 营。',
         done: () =>
           workbench.segmentStep?.id === 'reinforcement.rebuild' ||
           phaseAtLeast(workbench.phase, 'movement'),

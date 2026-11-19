@@ -12,7 +12,10 @@ import {
   useTutorialStore,
   useUiStore,
 } from '@/stores'
-import { setTutorialAirAllInactive } from '@/stores/tutorial-settings'
+import {
+  setTutorialAirAllInactive,
+  setTutorialFixedReinforcement,
+} from '@/stores/tutorial-settings'
 
 provideUiMode('formal')
 
@@ -81,6 +84,7 @@ const pendingTutorial = ref(false)
 function onTutorialChange(on: boolean): void {
   tutorialMode.value = on
   setTutorialAirAllInactive(on)
+  setTutorialFixedReinforcement(on)
   if (!on) {
     tutorial.stop()
     return
@@ -110,6 +114,7 @@ function onEnterSetup(): void {
   const teaching = tutorialMode.value && isTeachingScenario(target.id)
   pendingTutorial.value = teaching
   setTutorialAirAllInactive(teaching)
+  setTutorialFixedReinforcement(teaching)
   if (teaching) {
     gameSession.setFirstWeatherChoice('normal', target.id)
     // 用户 2026-11-19：教学里的苏军是**人机对手**（AI 初设、AI 反应），玩家执轴心

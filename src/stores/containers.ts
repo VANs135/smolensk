@@ -64,6 +64,7 @@ import type { SetupEffectPlacement } from '@/engine/rules/setup-effects'
 
 import { useGameSessionStore, type BoardCodec } from './session'
 import { movementPhaseOf, useWorkbenchStore } from './workbench'
+import { tutorialFixedReinforcement } from './tutorial-settings'
 import { useHotseatStore } from './hotseat'
 import {
   counterImageUrlOf,
@@ -1018,6 +1019,8 @@ export const useContainersStore = defineStore('containers', () => {
    * → 第二项（Supply Cache / 特种营）；无可用 ⇒ 作废。
    */
   function drawSpecialRepl(side: Side, fixedDie?: number): boolean {
+    // 教学局免掷骰（用户 2026-11-19）：固定骰面 5 ⇒ 轴心「Aufk/Krd 营」（=重建演示那辆侦察营）
+    const die0 = fixedDie ?? (tutorialFixedReinforcement.value ? 5 : undefined)
     /*
      * ★ 专规 1.6c 的**时机**（用户 2026-10-25「注意该操作时机」）：
      *   原文「Each turn **before 19 August**, the players also get to roll a die on their
@@ -1045,8 +1048,8 @@ export const useContainersStore = defineStore('containers', () => {
      * 1.6c 自掷自己的骰（原文「also get to roll a die on their Special Repl Table」）；
      * 1.6b 的骰只归 1.6b。`fixedDie` 仅供测试/AI 复现，正常路径不传。
      */
-    const roll = fixedDie === undefined ? roll1d6(workbench.rng) : null
-    const die = fixedDie ?? roll!.value.total
+    const roll = die0 === undefined ? roll1d6(workbench.rng) : null
+    const die = die0 ?? roll!.value.total
     const afterDie = roll === null ? workbench.rng : roll.rng
     const dead = deadPileUnits.value[side]
     // 苏方固定项「随机重建一个师」：候选池由引擎按 1.6c 判定，抽哪一个用 rng 决定
