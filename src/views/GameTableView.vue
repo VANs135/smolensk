@@ -13,10 +13,12 @@ import {
   BottomTray,
   DecisionQueue,
   HotkeyHelpPanel,
+  BoxCard,
   MapActionPopover,
   OverstackPanel,
   UnitPanel,
 } from '@/components/game'
+import type { AuxCardView } from '@/stores/containers'
 import { MapCanvas, MapDock } from '@/components/map'
 import { MovePanel } from '@/components/move'
 import { FuelPanel } from '@/components/fuel'
@@ -76,16 +78,22 @@ const quickBoxes = computed<{ label: string; kind: QuickBoxKind }[]>(() => {
   return list
 })
 
-/** 一步直达：打开盒表抽屉并弹出对应盒卡 */
+/** 一步直达：不开盒表抽屉，直接弹独立的盒面浮窗（用户 2026-11-19「不要出现盒列表」） */
+const quickBoxCard = ref<AuxCardView | null>(null)
+
 function focusBox(kind: QuickBoxKind): void {
   const side = hotseat.viewerSide
   const card =
     containers.cardViewsOf(side).find((item) => item.boxKind === kind) ??
     containers.sharedCardViews.find((item) => item.boxKind === kind)
   if (card === undefined) return
-  openDrawer('cards')
-  containers.setPopupCard(card.id)
-  quickMenu.value = false
+  quickBoxCard.value = card
+  // 只展开盒面（不触发盒内浮层，避免与浮窗本体重复渲染）
+  if (containers.cardOpenId !== card.id) containers.toggleCardOpen(card.id)
+}
+
+function closeQuickBox(): void {
+  quickBoxCard.value = null
 }
 
 function openQuickDrawer(next: TableDrawer): void {
@@ -510,6 +518,27 @@ onBeforeUnmount(() => {
         >
           ⚙
         </button>
+      </div>
+      <!-- 盒面直弹窗（安卓）：点盒标记 → 只显示盒面，不出盒表抽屉 -->
+      <div
+        v-if="androidUi && quickBoxCard !== null"
+        class="gt__boxface"
+        @click.self="closeQuickBox()"
+      >
+        <div class="gt__boxface-panel">
+          <header class="gt__boxface-head">
+            <strong>{{ quickBoxCard.name }}</strong>
+            <button
+              type="button"
+              class="gt__boxface-close"
+              aria-label="关闭"
+              @click="closeQuickBox()"
+            >
+              ×
+            </button>
+          </header>
+          <BoxCard :card="quickBoxCard" />
+        </div>
       </div>
       <div v-if="quickMenu" class="gt__quick-menu">
         <button type="button" @click="openQuickDrawer('status')">战况</button>

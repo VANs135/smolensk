@@ -1687,3 +1687,47 @@ html[data-platform='android'] .tray__section:last-child,
 html[data-platform='android'] .tray__head {
   display: none;
 }
+
+/* ══════════ 盒面直弹窗（用户 2026-11-19「不要出现盒列表」）══════════
+ * 顶栏盒标记 → 只弹盒面（独立居中浮窗，含盒卡与分区弹层），不再打开盒表抽屉。
+ * ══════════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] .gt__boxface {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--layer-shell) + 4);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 46px 8px 8px;
+  background: rgb(0 0 0 / 0.45);
+}
+
+html[data-platform='android'] .gt__boxface-panel {
+  width: min(94vw, 380px);
+  max-height: 78vh;
+  overflow: auto;
+  padding: 8px;
+  background: var(--ops-canvas);
+  border: 1px solid var(--ops-line);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.5);
+}
+
+html[data-platform='android'] .gt__boxface-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: var(--text-sm);
+  color: var(--ops-khaki);
+}
+
+html[data-platform='android'] .gt__boxface-close {
+  font-size: 15px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: var(--ops-khaki);
+  background: transparent;
+  border: 0;
+}
