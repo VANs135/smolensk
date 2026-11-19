@@ -209,9 +209,9 @@ watch(
     <aside v-else-if="tutorial.completed" class="tut__card tut__card--done">
       <strong class="tut__title">教学完成</strong>
       <p v-if="tutorial.reactionOutcome !== null" class="tut__intro">
-        报告：苏军反击战果 {{ tutorial.reactionOutcome }}。其付出代价，17.27 仍在我手。
+        苏军反击战果 {{ tutorial.reactionOutcome }}：攻方损失，进攻失败。
       </p>
-      <p v-else class="tut__intro">报告：本日作战结束。门已顶开——余下按 2.2 之流程，自行处置。</p>
+      <p v-else class="tut__intro">苏军由 AI 指挥；本回合教学结束，后续按 2.2 流程继续。</p>
       <button type="button" class="tut__close" aria-label="关闭教学" @click="tutorial.stop()">
         关闭
       </button>
