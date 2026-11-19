@@ -30,9 +30,10 @@ describe('P6：折叠右栏回收列宽（源码守卫）', () => {
     expect(canvas).toContain('min-height: 360px')
   })
 
-  it('BottomTray：两段默认折叠为一行且同时只展开一段', () => {
+  it('BottomTray：同时只展开一段（桌面默认折叠；安卓默认开盒段供盒标记直弹）', () => {
     const tray = readFileSync('src/components/game/BottomTray.vue', 'utf8')
-    expect(tray).toContain("ref<'boxes' | 'tables' | null>(null)")
+    // 2026-11-19（用户「一步到位」）：安卓默认展开盒段，桌面保持折叠
+    expect(tray).toContain("ref<'boxes' | 'tables' | null>(isAndroidPlatform() ? 'boxes' : null)")
   })
 
   it('无调试标识', () => {

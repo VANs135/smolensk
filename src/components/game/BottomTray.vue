@@ -5,6 +5,7 @@ import { BaseIcon, BaseTag } from '@/components/base'
 import { useRefereeTools } from '@/components/ui-mode'
 import { panelScansOf } from '@/render/charts-view'
 import { counterImages } from '@/render/token-images'
+import { isAndroidPlatform } from '@/shared/platform'
 import { useContainersStore, useHotseatStore } from '@/stores'
 import type { Side } from '@/data'
 
@@ -37,8 +38,9 @@ const containers = useContainersStore()
 const hotseat = useHotseatStore()
 const showsReferee = useRefereeTools()
 
-/** 展开的那一段（null = 两段都折叠成一行） */
-const openSection = ref<'boxes' | 'tables' | null>(null)
+/** 展开的那一段（null = 两段都折叠成一行）；
+ *  2026-11-19（用户「一步到位」）：安卓默认展开盒段，顶栏盒标记才能直接弹卡 */
+const openSection = ref<'boxes' | 'tables' | null>(isAndroidPlatform() ? 'boxes' : null)
 
 function toggle(section: 'boxes' | 'tables'): void {
   openSection.value = openSection.value === section ? null : section

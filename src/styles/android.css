@@ -1521,3 +1521,139 @@ html[data-platform='android'] .rule-note p.muted {
 html[data-platform='android'] .queue__active .queue__hint {
   display: none;
 }
+
+/* ══════════ 安卓操作习惯整合（用户 2026-11-19 十一条）══════════
+ * ① 单位栏横滑修复：初设条挂在地图视口（touch-action:none）内，祖先 none 拦截横滑
+ *    ⇒ 子树显式 pan-x；
+ * ② 剧本页三列各自独立滚动、页面零滚动；
+ * ③ 开始页恢复裁剪版渐变地图背景（不再纯黑）；
+ * ④ 主页左上「存读」徽章与页内存档按钮重合 ⇒ 隐藏（剧本页保留）；
+ * ⑤ 点飞机不再突变：动作条恒占位（模板侧已改）；未激活/已行动用灰色、去文字；
+ * ⑥ 撤回改圆圈箭头图标；
+ * ⑦ 盒标记直弹：BottomTray 安卓默认开盒段（模板侧已改）+ 盒卡弹窗贴紧凑；
+ * ⑧ 增援等窗口：描述进标题行、窗口只留单位与按钮；
+ * ⑨ 齿轮菜单宽度贴内容（不再撑满屏宽）；
+ * ⑩ 边框留白收紧。
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/* ① 初设条横滑：显式允许横向平移（覆盖地图视口的 touch-action:none 拦截） */
+html[data-platform='android'] .queue,
+html[data-platform='android'] .queue__sections,
+html[data-platform='android'] .queue__air,
+html[data-platform='android'] .queue__air-array {
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+}
+
+/* ② 剧本页：容器锁高，三块各自独立滚动 */
+html[data-platform='android'] .scenario {
+  height: 100%;
+  overflow: hidden;
+}
+
+html[data-platform='android'] .scenario__cols {
+  height: 100%;
+}
+
+html[data-platform='android'] .scenario__frame {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+html[data-platform='android'] .scenario__side {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ③ 开始页背景：恢复裁剪版渐变地图（右上透出，不再纯黑） */
+html[data-platform='android'] .home__hero {
+  min-height: 46svh;
+  overflow: hidden;
+}
+
+html[data-platform='android'] .home__art {
+  display: block;
+  inset: 0;
+  opacity: 0.3; /* 整体压暗：地图只作淡淡的桌布质感（用户「裁剪或缩小使用」） */
+  background:
+    linear-gradient(90deg, var(--color-command-bg) 26%, rgb(34 39 31 / 0.4) 60%, transparent 92%),
+    url('/map/Smolensk-map-011717.png') 75% 30% / 58% auto no-repeat;
+}
+
+/* ④ 主页左上存读徽章与页内按钮重合 ⇒ 隐藏（剧本页保留） */
+html[data-platform='android'] .shell[data-view='home'] .shell__save {
+  display: none;
+}
+
+/* ⑤ 动作条恒占位：空态不塌陷、不跳变 */
+html[data-platform='android'] .queue__air-pickbar {
+  min-height: 30px;
+}
+
+html[data-platform='android'] .queue__air-pickbar--empty {
+  visibility: hidden;
+}
+
+/* 灰色 = 未激活 / 已行动（贴图自带数值，无需文字） */
+html[data-platform='android'] .queue__air-col[data-face='inactive-full'] .queue__air-chip,
+html[data-platform='android'] .queue__air-col[data-face='inactive-reduced'] .queue__air-chip {
+  filter: grayscale(1) opacity(0.55);
+}
+
+html[data-platform='android'] .queue__air-flag {
+  display: none;
+}
+
+/* ⑥ 撤回改圆圈箭头图标（文字保留给读屏与 title） */
+html[data-platform='android'] .queue__undo {
+  font-size: 0;
+  min-width: 30px;
+  width: 30px;
+  min-height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgb(232 223 196 / 0.4);
+}
+
+html[data-platform='android'] .queue__undo::after {
+  content: '↺';
+  font-size: 15px;
+}
+
+/* ⑦ 盒卡弹窗贴紧凑：限宽、去粗边 */
+html[data-platform='android'] .boxpopup {
+  max-width: min(92vw, 340px);
+  border: 0;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+  padding: 6px;
+}
+
+/* ⑧ 增援等面板：描述行并入标题行后（缩小字号），窗口内只留单位与按钮 */
+html[data-platform='android'] .panel__title,
+html[data-platform='android'] .panel h3 {
+  font-size: var(--text-sm);
+}
+
+html[data-platform='android'] .panel .row,
+html[data-platform='android'] .panel p.num {
+  font-size: var(--text-xs);
+}
+
+/* ⑨ 齿轮菜单宽度贴内容 */
+html[data-platform='android'] .gt__quick-menu {
+  width: max-content;
+  min-width: 96px;
+}
+
+/* ⑩ 边框留白收紧 */
+html[data-platform='android'] .gt__drawer {
+  padding: 8px;
+}
+
+html[data-platform='android'] .tray {
+  padding: 6px;
+  gap: 6px;
+}

@@ -419,7 +419,9 @@ function sideMark(side: 'axis' | 'soviet'): string {
             v-if="cursorWindowForViewer && setup.canUndoPlacement"
             variant="ghost"
             size="sm"
+            class="queue__undo"
             :title="setup.lastPlacement?.label ?? ''"
+            aria-label="撤回上一步"
             @click="setup.undoLastPlacementNow()"
           >
             撤回上一步
@@ -635,17 +637,16 @@ function sideMark(side: 'axis' | 'soviet'): string {
             <div v-if="stack.key === 'air'" class="queue__air">
               <!--
                 选中的那一枚：在阵列**正上方**给一条动作条（「入盒」）。
-                不再把按钮贴在算子边缘——底部 sheet 滚动时贴边按钮会被裁掉半个。
+                2026-11-19（用户「突变影响操作」）：动作条**恒占位**（空态隐藏内容），
+                点选算子时不再引起单位栏高度跳变。贴图自带状态，只留机型名。
               -->
-              <div v-if="airPickedChip !== null" class="queue__air-pickbar">
-                <span class="queue__air-picklabel">
-                  {{ airPickedChip.item.label }} ·
-                  {{ airPickedChip.status === 'active' ? '激活' : '未激活' }}
-                  {{ airPickedChip.reduced ? '· 减损' : '· 完好' }}
-                </span>
-                <BaseButton variant="primary" size="sm" @click="sendAirToBox(airPickedChip)">
-                  入盒
-                </BaseButton>
+              <div class="queue__air-pickbar" :class="{ 'queue__air-pickbar--empty': airPickedChip === null }">
+                <template v-if="airPickedChip !== null">
+                  <span class="queue__air-picklabel">{{ airPickedChip.item.label }}</span>
+                  <BaseButton variant="primary" size="sm" @click="sendAirToBox(airPickedChip)">
+                    入盒
+                  </BaseButton>
+                </template>
               </div>
               <div
                 v-for="group in airFaceSections"
