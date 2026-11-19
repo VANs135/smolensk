@@ -311,10 +311,16 @@ export const useTutorialStore = defineStore('tutorial', () => {
         if (!phaseAtLeast(workbench.phase, 'reinforcement'))
           return { buttonTexts: ['进入下一环节'] }
         const hex = workbench.freeRailPlan?.placements[0]?.hex
+        /*
+         * 2026-11-19（PC 教学审计）：原目标文本「到货 SP（1.6b 补给表）」在界面上不存在
+         * （现界面写的是「补给表 +N SP → 手牌（城市格每格 1 点…）」）⇒ 环永远指不到。
+         * 改成真实存在的「补给表」子串（findText 取最小面积节点 = 手牌那一行）。
+         */
         return {
           hex,
           buttonTexts: ['进入下一环节'],
-          texts: ['到货 SP（1.6b 补给表）'],
+          // 只匹配手牌那一行「补给表 +N SP → 手牌」；顶栏操作反馈里的「补给表（1.6b）」面积更小会抢目标
+          texts: ['补给表 +'],
         }
       }
       case 'advance-rebuild':
