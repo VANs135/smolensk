@@ -204,6 +204,9 @@ describe('教学模式：Vitebsk', () => {
       'setup-start',
       'air-refit',
       'reinforce-sp',
+      'advance-rebuild',
+      'rebuild-open',
+      'rebuild-place',
       'fuel',
       'move',
       'strafe-1',
@@ -261,6 +264,26 @@ async function startTutorial(prepare?: (ctx: Ctx) => void): Promise<Ctx> {
   ctx.w.advanceSegmentNow()
   expect(ctx.w.phase).toBe('reinforcement')
   expect(ctx.w.applySupplyArrivalsNow()).toBe(true)
+
+  /*
+   * 2026-11-19：新增 13.5 重建教学
+   *
+   * 补给落完 ⇒ 进入下一环节到重建段；玩家在死亡堆选中侦察营即自动进入选格
+   * （pickDeadPileUnitNow → beginDeadPileRebuildNow，2026-11-18 口径），再点 14.28 落地。
+   * 教学只保留「选中死亡堆 → 点高亮格」两步：引擎里没有独立的「下达重建」动作。
+   */
+  for (let n = 0; n < 4 && ctx.w.segmentStep?.id !== 'reinforcement.rebuild'; n++) {
+    expect(ctx.w.advanceSegmentNow()).not.toBeNull()
+  }
+  expect(ctx.w.segmentStep?.id).toBe('reinforcement.rebuild')
+  ctx.w.pickDeadPileUnitNow('tutorial-axis-recon')
+  expect(ctx.w.deadPilePickId).toBe('tutorial-axis-recon')
+  // 选中即自动进入选格：地图已高亮 13.5a 合法落点，教学应前进到「点高亮格」
+  expect(ctx.w.hexPickView?.label).toBe('重建落点（13.5a 合法格）')
+  expect(tutorial.currentStep?.id).toBe('rebuild-place')
+  expect(ctx.w.pickHexFor({ col: 14, row: 28 })).toBe(true)
+  expect(ctx.w.units.some((unit) => unit.unitId === 'ax-arm_rec-ge-14-mtr-14-arm-rec')).toBe(true)
+
   await progress(ctx, () => ctx.w.phase === 'movement')
 
   const stack = ctx.w.units.filter((unit) => unit.hex.col === 14 && unit.hex.row === 27)

@@ -2,7 +2,7 @@ import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 import type { HexRef } from '@/data'
-import { findAircraftRecord } from '@/engine/rules/setup'
+import { findAircraftRecord, findUnitRecord } from '@/engine/rules/setup'
 import { hexDistance, sameHex } from '@/engine/hex-geometry'
 import { BATTLE_SEQUENCE } from '@/engine/rules/battle'
 
@@ -11,7 +11,7 @@ import { useHotseatStore } from './hotseat'
 import { useSetupStore } from './setup'
 import { setTutorialSovietFirstTurnFullMa } from './tutorial-settings'
 import { useWorkbenchStore } from './workbench'
-import { toConsoleAirUnit } from './workbench-model'
+import { toConsoleAirUnit, toConsoleUnit } from './workbench-model'
 
 /**
  * Vitebsk 教学模式（用户 2026-11-18 第 2 条；2026-11-19 扩充）
@@ -77,6 +77,13 @@ const MOVE_HEX: HexRef = { col: 17, row: 27 }
 const TARGET_HEX: HexRef = { col: 18, row: 27 }
 /** 轰炸任务的目标：19.27 的苏军步兵堆叠（I.153 从 19.28 起飞拦截） */
 const BOMB_HEX: HexRef = { col: 19, row: 27 }
+/** 13.5 重建教学：补员 / 侦察车 / 指挥部都在这一格（20 Mtr 堆叠东侧邻格） */
+const REBUILD_HEX: HexRef = { col: 14, row: 28 }
+/** 教学用的侦察营：Intro 剧本没有它 ⇒ 重建前后可用“盘面是否出现该型”判定 */
+const AX_RECON_ID = 'ax-arm_rec-ge-14-mtr-14-arm-rec'
+const TUTORIAL_RECON_ID = 'tutorial-axis-recon'
+const TUTORIAL_PAX_ID = 'tutorial-pax-repl'
+const TUTORIAL_EQ_ID = 'tutorial-eq-repl'
 /** 反应段苏军 18 Tk Div 的出发格 */
 const REACTION_START: HexRef = { col: 19, row: 26 }
 /** 反应段的中转格（18.26 与 17.27 / 18.27 都相邻） */
@@ -310,6 +317,12 @@ export const useTutorialStore = defineStore('tutorial', () => {
           texts: ['到货 SP（1.6b 补给表）'],
         }
       }
+      case 'advance-rebuild':
+        return { buttonTexts: ['进入下一环节'], texts: ['重建'] }
+      case 'rebuild-open':
+        return { texts: ['Arm Rec', '死亡堆'] }
+      case 'rebuild-place':
+        return { hex: REBUILD_HEX, texts: ['重建'] }
       case 'fuel': {
         if (!phaseAtLeast(workbench.phase, 'movement')) return { buttonTexts: ['进入下一环节'] }
         return { hex: stackHex.value, texts: ['加油'] }
@@ -427,6 +440,28 @@ export const useTutorialStore = defineStore('tutorial', () => {
         hint: '霍特：把补给表上的 SP 落到高亮格。',
         intro: 'SP 是油和弹药，装甲没有它就动不了。',
         done: () => hasSupplyArrival() || phaseAtLeast(workbench.phase, 'movement'),
+      },
+      {
+        id: 'advance-rebuild',
+        title: '进入重建段',
+        hint: '霍特：补给发完，点「进入下一环节」到重建段。',
+        intro: '增援把 Pax ×1、Eq ×1 送到 14.28；重建侦察车要 1 Eq。',
+        done: () =>
+          workbench.segmentStep?.id === 'reinforcement.rebuild' ||
+          phaseAtLeast(workbench.phase, 'movement'),
+      },
+      {
+        id: 'rebuild-open',
+        title: '选中死亡堆的侦察车',
+        hint: '霍特：盒表 → 死亡堆，点这辆侦察营；点中即自动进入选格。',
+        intro: '死人堆不是终点：补员同格、战斗模式 HQ 两格内就能重建，花 1 Eq。',
+        done: () => workbench.deadPilePickId === TUTORIAL_RECON_ID,
+      },
+      {
+        id: 'rebuild-place',
+        title: '落地并付补员',
+        hint: '霍特：点高亮的 14.28，花 1 Eq 把它拉回来。',
+        done: () => workbench.units.some((unit) => unit.unitId === AX_RECON_ID),
       },
       {
         id: 'fuel',
@@ -570,6 +605,69 @@ export const useTutorialStore = defineStore('tutorial', () => {
         sp: 6,
         t: 0,
       })
+    }
+
+    /*
+     * 13.5 重建教学：把 39 军 HQ 挪到 20 Mtr 堆叠东侧并转战斗模式
+     *
+     * 13.5a 要求「补员同格 + 战斗模式友方 HQ 两格内」；剧本原本只有一个 HQ 在 5.27，
+     * 离教学堆叠太远（玩家要横跨半张图）。这里只搬**教学局**的 HQ，不动规则、不动剧本数据。
+     */
+    const hq = workbench.units.find(
+      (unit) => unit.side === 'axis' && unit.unitId === 'ax-hq-ge-hq-39th-corps',
+    )
+    if (hq !== undefined) {
+      hq.hex = { ...REBUILD_HEX }
+      hq.mode = { mode: 'combat', orientation: 'combat', dg: false, exploit: false }
+      hq.raw = hq.faces.combat
+    }
+
+    // 增援补员：Pax ×1、Eq ×1（侦察营重建表按 Arm Car Bn 计 1 Eq）
+    if (!workbench.units.some((unit) => unit.instanceId === TUTORIAL_PAX_ID)) {
+      const record = findUnitRecord('ax-replacement-ge-pax-repl')
+      if (record !== undefined) {
+        workbench.units.push(
+          toConsoleUnit({
+            record,
+            instanceId: TUTORIAL_PAX_ID,
+            hex: { ...REBUILD_HEX },
+            side: 'axis',
+          }),
+        )
+      }
+    }
+    if (!workbench.units.some((unit) => unit.instanceId === TUTORIAL_EQ_ID)) {
+      const record = findUnitRecord('ax-replacement-ge-eq-repl')
+      if (record !== undefined) {
+        workbench.units.push(
+          toConsoleUnit({
+            record,
+            instanceId: TUTORIAL_EQ_ID,
+            hex: { ...REBUILD_HEX },
+            side: 'axis',
+          }),
+        )
+      }
+    }
+
+    // 死亡堆放一辆侦察营（Intro 没有该型 ⇒ 重建后 `units` 里才会出现）
+    if (!workbench.deadPile.some((entry) => entry.instanceId === TUTORIAL_RECON_ID)) {
+      const record = findUnitRecord(AX_RECON_ID)
+      if (record !== undefined) {
+        workbench.deadPile.push(
+          toConsoleUnit({
+            record,
+            instanceId: TUTORIAL_RECON_ID,
+            hex: { ...REBUILD_HEX },
+            side: 'axis',
+          }),
+        )
+        workbench.pushLog(
+          'info',
+          '教学：增援补员 Pax ×1、Eq ×1 已到 14.28；死亡堆有一辆侦察营可重建（13.5）',
+          '13.5',
+        )
+      }
     }
   }
 

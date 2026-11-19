@@ -45,6 +45,7 @@ import {
   useRecorderStore,
   useSetupStore,
   useThemeStore,
+  useTutorialStore,
   useUiStore,
   useWorkbenchStore,
 } from '@/stores'
@@ -59,6 +60,7 @@ const setup = useSetupStore()
 const gameSession = useGameSessionStore()
 const hotseat = useHotseatStore()
 const theme = useThemeStore()
+const tutorial = useTutorialStore()
 const ui = useUiStore()
 const app = useAppStore()
 const recorder = useRecorderStore()
@@ -198,6 +200,22 @@ function openDrawer(next: TableDrawer): void {
   openedDrawers.add(next)
   hotkeys.panelCollapsed = false
 }
+
+/*
+ * 2026-11-19：重建教学的**开盒/关盒**由引导代劳
+ *
+ * 玩家要先在盒表里选中死亡堆的侦察营（点中即自动进入选格），再回到地图点高亮格。
+ * 让玩家自己在盒与地图之间来回切太琐碎 ⇒ 进入 `rebuild-open` 自动开盒表，
+ * 进入 `rebuild-place` 自动收起，把注意力交回地图。
+ */
+watch(
+  () => tutorial.currentStep?.id,
+  (id) => {
+    if (id === 'rebuild-open') openDrawer('cards')
+    if (id === 'rebuild-place' && drawer.value === 'cards') hotkeys.panelCollapsed = true
+  },
+  { immediate: true },
+)
 
 function toggleDrawer(next: TableDrawer): void {
   if (!hotkeys.panelCollapsed && drawer.value === next) {

@@ -88,7 +88,12 @@ html[data-platform='android'] .tray__body::-webkit-scrollbar {
 
 /* ────────────────────────────── 底部导航 ────────────────────────────── */
 
-@media (max-width: 1024px) {
+/*
+ * 断点：窄屏 **或横屏** 都走「上地图、下导航」。
+ * 横屏手机宽度常 >1024（如 1280×720），只看 max-width 会退回桌面竖排导航 ⇒ UI 巨大。
+ * 所有规则都带 html[data-platform='android'] 前缀，桌面 / 手机浏览器横屏不受影响。
+ */
+@media (max-width: 1024px), (orientation: landscape) {
   /* 横屏手机可能宽于 900：安卓壳统一在 1024 以下转「上地图、下导航」 */
   html[data-platform='android'] .gt__workspace {
     flex-direction: column;
@@ -144,7 +149,7 @@ html[data-platform='android'] .tray__body::-webkit-scrollbar {
 
 /* ────────────────────────────── 抽屉 → 底部 sheet ────────────────────────────── */
 
-@media (max-width: 1024px) {
+@media (max-width: 1024px), (orientation: landscape) {
   html[data-platform='android'] .gt__drawer,
   html[data-platform='android'] .gt__drawer--wide {
     top: auto;
@@ -181,7 +186,7 @@ html[data-platform='android'] .tray__body::-webkit-scrollbar {
 
 /* ────────────────────────────── 初设队列 → 底部 sheet ────────────────────────────── */
 
-@media (max-width: 1024px) {
+@media (max-width: 1024px), (orientation: landscape) {
   html[data-platform='android'] .queue {
     left: 8px;
     right: 8px;
@@ -274,7 +279,7 @@ html[data-platform='android'] .gt__box-targets:not(.gt__box-targets--drag) {
 }
 
 /* 教学卡：安卓上移到顶部，避免盖住底部初设 sheet 里的算子阵列 */
-@media (max-width: 1024px) {
+@media (max-width: 1024px), (orientation: landscape) {
   html[data-platform='android'] .tut__card {
     top: calc(var(--safe-top) + 8px);
     right: auto;
@@ -287,8 +292,8 @@ html[data-platform='android'] .gt__box-targets:not(.gt__box-targets--drag) {
   }
 }
 
-/* 竖屏手机上再往下让一条流程条的高度：别把回合/布设方/定位初设挡住 */
-@media (max-width: 1024px) and (min-height: 600px) {
+/* 竖屏手机上再往下让一条流程条的高度：别把回合/布设方/定位初设挡住（横屏不套用） */
+@media (max-width: 1024px) and (min-height: 600px) and (orientation: portrait) {
   html[data-platform='android'] .tut__card {
     top: calc(var(--safe-top) + 200px);
   }
@@ -319,6 +324,84 @@ html[data-platform='android'] .tray {
     width: calc(100% - 16px);
     max-width: none;
     border-radius: var(--android-sheet-radius);
+  }
+}
+
+/* ═══════════════════════ 横屏紧凑档（用户 2026-11-19「横屏太大」）═══════════════════════
+ * 横屏高度只有 412–720px：竖屏那套 68px 导航 + 58% sheet + 大 FAB 会把地图挤没。
+ * 这里在通用安卓皮肤之上**再压一档**，全部只在 data-platform=android + landscape 命中。
+ * 只改尺度不删功能：导航五项、地图三键、初设操作都保留，只是更矮更小。
+ * ═══════════════════════════════════════════════════════════════════════════════════ */
+@media (orientation: landscape) {
+  html[data-platform='android'] {
+    /* 横屏导航 52px（竖屏 68）：省下的 16px 全给地图 */
+    --android-nav-height: calc(52px + var(--safe-bottom));
+    --control-height: 40px;
+    --control-height-sm: 34px;
+    --android-sheet-radius: 18px;
+  }
+
+  /* 流程条：横屏压到 3 行以内，字号与内边距收紧 */
+  html[data-platform='android'] .bar {
+    padding: 2px 10px 0;
+  }
+
+  html[data-platform='android'] .bar__turn,
+  html[data-platform='android'] .bar__identity {
+    gap: 2px;
+  }
+
+  /* 底部导航横屏：图标与标签更紧凑，命中区仍有 44px */
+  html[data-platform='android'] .gt__rail {
+    padding: 2px calc(8px + var(--safe-right)) calc(2px + var(--safe-bottom))
+      calc(8px + var(--safe-left));
+  }
+
+  html[data-platform='android'] .gt__rail-button {
+    min-height: 46px;
+    gap: 0;
+    padding: 2px;
+    font-size: 10px;
+  }
+
+  html[data-platform='android'] .gt__rail-button svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* 初设 sheet 横屏：限高 62%，内部滚动；不再顶到流程条 */
+  html[data-platform='android'] .queue {
+    max-height: 62%;
+    padding-top: 12px;
+  }
+
+  /* 地图工具 FAB 横屏缩小：44px 命中区、贴右上 */
+  html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools {
+    top: 6px;
+    right: calc(6px + var(--safe-right));
+    gap: 5px;
+  }
+
+  html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools .btn {
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+    padding: 0 6px;
+    border-radius: 14px;
+    font-size: var(--text-xs);
+  }
+
+  /* 教学卡横屏：限宽 260px，缩到地图左上，不压 FAB / 流程条 */
+  html[data-platform='android'] .tut__card {
+    top: calc(var(--safe-top) + 4px);
+    width: min(260px, calc(100% - 72px));
+    padding: 6px 10px;
+    font-size: var(--text-xs);
+  }
+
+  /* 横屏最简化：隐藏介绍段（补充知识），只留「当前步骤 + 关键指引」一行提示 */
+  html[data-platform='android'] .tut__card .tut__intro {
+    display: none;
   }
 }
 

@@ -38,4 +38,18 @@ describe('安卓触摸皮肤', () => {
     expect(queue).toContain('isAndroidPlatform')
     expect(queue).toContain('if (isAndroidPlatform()) return')
   })
+
+  it('横屏适配（用户 2026-11-19「横屏太大」）：断点含 orientation，且横屏再压一档', () => {
+    // 断点从只看 max-width 改为「窄屏或横屏」：横屏宽 1280 不再退回桌面竖排导航
+    expect(css).toContain('@media (max-width: 1024px), (orientation: landscape)')
+    // 所有横屏覆盖仍锁在 android 平台，桌面/手机浏览器横屏不受影响
+    expect(css).toContain('@media (orientation: landscape)')
+    // 横屏紧凑：导航降到 52px、FAB 44px、教学卡隐藏介绍段
+    expect(css).toContain('--android-nav-height: calc(52px + var(--safe-bottom))')
+    expect(css).toContain('width: 44px')
+    expect(css).toContain('.tut__card .tut__intro')
+    expect(css).toContain('display: none')
+    // 竖屏专属的「教学卡下移 200px」已加 portrait 限定，横屏不再中招
+    expect(css).toContain('(orientation: portrait)')
+  })
 })
