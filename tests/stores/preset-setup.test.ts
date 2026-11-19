@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 import { fresh, fillSetup } from '../flows/flow-harness'
+import { useHotseatStore } from '@/stores'
 
 /** 一键预设初设：每个剧本一条独立用例（不参数化巨型用例） */
 function presetOf(id: string) {
@@ -8,6 +9,34 @@ function presetOf(id: string) {
   expect(ctx.setup.enterSetup(id)).toBe(true)
   return { ctx, result: ctx.setup.presetSelfSetupNow() }
 }
+
+describe('一键全落（2026-11-19：PVE 轴心先手不再空转）', () => {
+  /**
+   * 回归：修前界面只传 `onlySide: presetSide`（AI 方）。剧本 3–7 是轴心先手，
+   * 游标尚在玩家方 ⇒ `presetSelfSetupNow` 直接空转（placed=0 / remaining=78）。
+   * 用户裁定改为全落双方后，无参调用在轴心先手剧本同样落完。
+   */
+  for (const id of ['3', '4', '5', '6', '7']) {
+    it(`PVE+AI苏联 · 轴心先手剧本 ${id}：一键全落不空转`, () => {
+      const ctx = fresh()
+      const hot = useHotseatStore()
+      hot.setMode('pve')
+      hot.setAiSide('soviet')
+      expect(ctx.setup.enterSetup(id)).toBe(true)
+      expect(ctx.setup.setupSideCursor).toBe('axis')
+      // 进入初设时确有必做项（空转特征：remaining 停在 78/38/28）
+      const before = ctx.setup.initialPlacementsComplete
+      expect(before).toBe(false)
+      // 界面现在的调用：无参全落（而非只传 AI 方）
+      const result = ctx.setup.presetSelfSetupNow()
+      expect(result.failures, JSON.stringify(result.failures)).toEqual([])
+      expect(result.remaining).toBe(0)
+      expect(ctx.setup.setupSideCursor).toBeNull()
+      // 全落收束后初设完成
+      expect(ctx.setup.initialPlacementsComplete).toBe(true)
+    })
+  }
+})
 
 describe('一键预设初设（B2）', () => {
   it('剧本 1：预设后无失败、无剩余', () => {

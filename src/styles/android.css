@@ -170,7 +170,8 @@ html[data-platform='android'] .tray__body::-webkit-scrollbar {
     right: 0;
     bottom: var(--android-nav-height);
     width: auto;
-    max-height: 72%;
+    /* 2026-11-19（用户第 1 条）：其它面板同样收紧，不再占 72% 大屏 */
+    max-height: 60%;
     border: 0;
     border-radius: var(--android-sheet-radius) var(--android-sheet-radius) 0 0;
     background: var(--color-command-panel);
@@ -197,29 +198,45 @@ html[data-platform='android'] .tray__body::-webkit-scrollbar {
   }
 }
 
-/* ────────────────────────────── 初设队列 → 底部 sheet ────────────────────────────── */
-
+/* ────────────────────────────── 初设队列 → 紧凑浮窗 ──────────────────────────────
+ * 2026-11-19（用户第 1 条）：「初设窗口和其它窗口没必要搞这么大，比算子略大一圈就行」。
+ * 修前是 left/right:8px、max-height 58%/62% 的整宽底部 sheet —— 算子只有一格高时
+ * 仍占掉小半屏。改为**内容驱动的紧凑浮窗**：宽度贴合横向算子带（不超过视口留边），
+ * 高度由内容决定（不强制百分比），只留一个防溢出上限。横向带仍可左右滑。
+ * ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 1024px), (orientation: landscape) {
   html[data-platform='android'] .queue {
+    /* 居中用 left/right:8px + margin:auto + 内容宽，不碰 transform：
+       模板给 .queue 写了 inline transform:translate(dx,dy)（拖动偏移，安卓恒 0），
+       若这里再写 translateX(-50%) 会被 inline 覆盖、导致浮窗偏右。 */
     left: 8px;
     right: 8px;
+    margin-inline: auto;
     top: auto;
     bottom: calc(8px + var(--safe-bottom));
-    width: auto;
-    max-height: 58%;
-    padding-top: 16px;
+    width: max-content;
+    max-width: calc(100% - 16px);
+    max-height: 46%;
+    min-width: min(240px, calc(100% - 16px));
+    padding: 14px 12px 10px;
     border: 1px solid var(--android-hairline);
-    border-radius: var(--android-sheet-radius) var(--android-sheet-radius) 16px 16px;
-    box-shadow: 0 -10px 36px rgb(0 0 0 / 0.26);
+    border-radius: 20px;
+    box-shadow: 0 -8px 28px rgb(0 0 0 / 0.3);
+  }
+
+  /* 让横向带在紧凑浮窗里仍能滑：内部带子吃满浮窗宽度但不撑破 */
+  html[data-platform='android'] .queue__sections,
+  html[data-platform='android'] .queue__sections--split {
+    max-width: 100%;
   }
 
   html[data-platform='android'] .queue::before {
     content: '';
     position: absolute;
-    top: 8px;
+    top: 6px;
     left: 50%;
     z-index: 2;
-    width: 36px;
+    width: 32px;
     height: 4px;
     transform: translateX(-50%);
     border-radius: 2px;
@@ -382,10 +399,10 @@ html[data-platform='android'] .tray {
     height: 20px;
   }
 
-  /* 初设 sheet 横屏：限高 62%，内部滚动；不再顶到流程条 */
+  /* 初设浮窗横屏：同样贴合内容，只给一个防溢出上限（不再顶到流程条） */
   html[data-platform='android'] .queue {
-    max-height: 62%;
-    padding-top: 12px;
+    max-height: 52%;
+    padding: 12px 10px 8px;
   }
 
   /* 地图工具 FAB 横屏缩小：44px 命中区、贴右上 */
@@ -564,6 +581,25 @@ html[data-platform='android'] .queue__air-pickbar {
   width: fit-content;
   max-width: 92vw;
   z-index: 2;
+}
+
+/* 初设按钮缩小（用户 2026-11-19 第 1 条）：确认 / 一键预设 / 更多 同排、紧凑一档 */
+html[data-platform='android'] .queue__actions {
+  gap: 6px;
+}
+
+html[data-platform='android'] .queue__actions .btn,
+html[data-platform='android'] .queue__actions .queue__more-toggle {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 10px;
+}
+
+html[data-platform='android'] .queue__actions .queue__more-toggle {
+  width: 34px;
+  padding: 0;
 }
 
 /* 初设按钮精简（用户 2026-11-19）：次要动作收进「更多」图标按钮 */

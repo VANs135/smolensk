@@ -34,9 +34,39 @@ describe('安卓触摸皮肤', () => {
     expect(css).toContain('flex-direction: column')
   })
 
-  it('安卓壳里初设队列固定为底部 sheet，不接拖动', () => {
+  it('初设队列在安卓壳里不接拖动', () => {
     expect(queue).toContain('isAndroidPlatform')
     expect(queue).toContain('if (isAndroidPlatform()) return')
+  })
+
+  it('窗口紧凑（用户 2026-11-19 第 1 条）：初设浮窗贴合内容、抽屉收高，不再占大屏', () => {
+    // 初设窗口：内容驱动宽高（max-content + margin 居中），只留防溢出上限；
+    // 居中不能用 transform（模板 inline transform:translate(dx,dy) 会覆盖它）
+    expect(css).toContain("html[data-platform='android'] .queue {")
+    expect(css).toContain('width: max-content')
+    expect(css).toContain('margin-inline: auto')
+    expect(css).toContain('max-height: 46%')
+    // 横屏再压一档（原 62% 已收紧）
+    expect(css).toContain('max-height: 52%')
+    // 其它窗口：战况抽屉从 72% 收到 60%
+    expect(css).toContain('max-height: 60%')
+    expect(css).not.toContain('max-height: 72%')
+    expect(css).not.toContain('max-height: 58%')
+    // 按钮缩小且同排
+    expect(css).toContain('.queue__actions .btn,')
+    expect(css).toContain('height: 34px')
+  })
+
+  it('一键预设与确认同排常驻：安卓不再把预设折进「更多」（用户 2026-11-19 第 1 条）', () => {
+    const actions = queue.indexOf('class="queue__actions"')
+    const preset = queue.indexOf('@click="runPresetSetup()"')
+    const more = queue.indexOf('class="queue__more"')
+    expect(actions).toBeGreaterThanOrEqual(0)
+    // 预设按钮位于 actions 行内，且在「更多」折叠之前（常驻而非折进折叠）
+    expect(preset).toBeGreaterThan(actions)
+    expect(preset).toBeLessThan(more)
+    // 一键全落：无 onlySide 参数
+    expect(queue).toContain('presetResult.value = setup.presetSelfSetupNow()')
   })
 
   it('横屏适配（用户 2026-11-19「横屏太大」）：断点含 orientation，且横屏再压一档', () => {

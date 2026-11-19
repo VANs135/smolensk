@@ -78,7 +78,9 @@ describe('H5：初设落位一步撤回', () => {
       new URL('../../src/components/game/DecisionQueue.vue', import.meta.url),
       'utf8',
     )
-    expect(queue).toContain('v-if="setup.canUndoPlacement"')
+    // 撤回按钮以 setup.canUndoPlacement 为放行条件（可与其它视图条件复合）；
+    // 没有落位时该投影为 false ⇒ 入口不出现。2026-11-19：复合 cursorWindow 条件后仍含此投影。
+    expect(queue).toContain('setup.canUndoPlacement')
   })
 })
 

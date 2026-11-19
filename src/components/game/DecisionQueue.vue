@@ -36,16 +36,17 @@ const hotseat = useHotseatStore()
 /** 2026-11-19：安卓壳走极简按钮（次要动作收进「更多」）；平台装配时一次确定 */
 const androidUi = isAndroidPlatform()
 /**
- * 一键预设初设（B2）：与初设主入口同一处，只落 AI 控制的一方，不替玩家点开始游戏。
- * 修前这个入口挂在「战况」抽屉的初设面板里（与开局选剧本重复），玩家在初设栏找不到。
+ * 一键预设初设（B2；2026-11-19 用户裁定改为**一键全落**）
+ *
+ * 修前只传 `onlySide: presetSide`（仅 AI 方）：轴心先手的剧本 3–7 游标还在玩家方，
+ * `presetSelfSetupNow` 直接空转 ⇒ 按钮"点了没反应"。用户改为一键全落双方：
+ * 复用既有无参路径（7 剧本测试全绿，`remaining=0`），教学/PVE 也走同一条，落完即可开局。
+ * 入口与初设主入口同一处；不替玩家点开始游戏。
  */
 const presetResult = ref<PresetSetupResult | null>(null)
 
 function runPresetSetup(): void {
-  presetResult.value =
-    hotseat.presetSide === null
-      ? setup.presetSelfSetupNow()
-      : setup.presetSelfSetupNow({ onlySide: hotseat.presetSide })
+  presetResult.value = setup.presetSelfSetupNow()
 }
 
 /** 展开的堆叠（默认全开：整批一眼看完，不必逐堆点开） */
@@ -386,7 +387,20 @@ function sideMark(side: 'axis' | 'soviet'): string {
       </template>
 
       <!--
-        2026-11-19「只留最简化按钮」：一键预设 / 撤回 / 结果提示属次要动作 ⇒
+        2026-11-19（用户第 1 条）：一键预设改为**一键全落双方**，与确认/主入口同排常驻
+        （安卓不再折进「更多」，避免"点了没反应"被藏起来）；撤回与结果提示仍属次要，收进折叠。
+      -->
+      <BaseButton
+        v-if="hotseat.canPreset && !setup.finished"
+        variant="secondary"
+        size="sm"
+        @click="runPresetSetup()"
+      >
+        一键预设初设
+      </BaseButton>
+
+      <!--
+        2026-11-19「只留最简化按钮」：撤回 / 结果提示属次要动作 ⇒
         安卓壳收进「更多」折叠（summary 用 CSS 做成图标按钮）；桌面照旧平铺。
         `:open="!androidUi"` ⇒ 桌面恒展开、安卓默认收起。
       -->
@@ -396,14 +410,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
           <span v-if="!androidUi">更多</span>
         </summary>
         <div class="queue__more-body">
-          <BaseButton
-            v-if="hotseat.canPreset && !setup.finished"
-            variant="secondary"
-            size="sm"
-            @click="runPresetSetup()"
-          >
-            一键预设初设
-          </BaseButton>
           <span v-if="presetResult !== null" class="queue__hint num">
             已落 {{ presetResult.placed }} · 剩 {{ presetResult.remaining }} · 失败
             {{ presetResult.failures.length }}
