@@ -850,21 +850,26 @@ onBeforeUnmount(() => {
             <p class="gt__mode" data-testid="match-mode">
               对局模式 <strong>{{ modeLabel }}</strong>
             </p>
-            <!-- 用户 2026-11-11：换手不自动切视角，看哪一方由玩家自己点 -->
-            <BaseButton
-              :variant="hotseat.viewerSide === 'axis' ? 'primary' : 'secondary'"
-              size="sm"
-              @click="hotseat.setViewerSide('axis')"
-            >
-              看轴心国
-            </BaseButton>
-            <BaseButton
-              :variant="hotseat.viewerSide === 'soviet' ? 'primary' : 'secondary'"
-              size="sm"
-              @click="hotseat.setViewerSide('soviet')"
-            >
-              看苏联
-            </BaseButton>
+            <!--
+              用户 2026-11-11：换手不自动切视角，看哪一方由玩家自己点。
+              2026-11-20：PVE 下不能再看苏方（AI）⇒ 视角开关只留给人人对战。
+            -->
+            <template v-if="hotseat.mode !== 'pve'">
+              <BaseButton
+                :variant="hotseat.viewerSide === 'axis' ? 'primary' : 'secondary'"
+                size="sm"
+                @click="hotseat.setViewerSide('axis')"
+              >
+                看轴心国
+              </BaseButton>
+              <BaseButton
+                :variant="hotseat.viewerSide === 'soviet' ? 'primary' : 'secondary'"
+                size="sm"
+                @click="hotseat.setViewerSide('soviet')"
+              >
+                看苏联
+              </BaseButton>
+            </template>
             <BaseButton
               variant="ghost"
               size="sm"

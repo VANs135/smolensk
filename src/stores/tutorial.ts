@@ -661,13 +661,6 @@ export const useTutorialStore = defineStore('tutorial', () => {
         done: () => artilleryInRange(),
       },
       {
-        id: 'barrage-city',
-        title: '弹幕轰小城',
-        hint: '霍特：炮兵弹幕打 19.27 的守军。',
-        intro: '弹幕先扣补给点、再按轰炸表结算（10.0a）：炸出 DG，城里就软了。',
-        done: () => cityBarraged(),
-      },
-      {
         id: 'bombing',
         title: '空军轰大城',
         hint: '霍特：四机齐出，轰 19.28 的大城守军。',
@@ -686,11 +679,20 @@ export const useTutorialStore = defineStore('tutorial', () => {
             : reaction.value === 'done' || reaction.value === 'skipped',
       },
       {
+        id: 'barrage-city',
+        title: '弹幕轰小城',
+        hint: '霍特：炮兵弹幕打 19.27 的守军。',
+        intro:
+          '炮兵弹幕在 F 段结算（SOP：C 段只给空军、F 段只给炮兵）；先扣补给点，再按 10.0a 炸出 DG。',
+        // 弹幕是可选动作：没炮弹/没到 F 段时也不能把引导卡死
+        done: () => cityBarraged() || phaseAtLeast(workbench.phase, 'combat'),
+      },
+      {
         id: 'capture-city',
         title: '打下小城 19.27',
         hint: '霍特：轮到我们了——进攻 19.27，把城格拿下来。',
         intro: '战斗阶段由你宣布进攻：补给 → AR → 地形 → 奇袭 → 骰面，走完就是你的城。',
-        done: () => cityTaken(),
+        done: () => cityTaken() || phaseAtLeast(workbench.phase, 'exploitation'),
       },
     ]
     return source.map((step) => ({

@@ -143,9 +143,9 @@ describe('教学模式：Vitebsk', () => {
       'combat-ar',
       'combat-finish',
       'artillery-move',
-      'barrage-city',
       'bombing',
       'reaction-attack',
+      'barrage-city',
       'capture-city',
     ])
     // 每条提示都短（一行）且以霍特口吻下达
