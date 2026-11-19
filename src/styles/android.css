@@ -1184,3 +1184,152 @@ html[data-platform='android'] .gt__rail-button svg {
     font-size: 14px;
   }
 }
+
+/* ══════════ 顶栏贯通 + 弹窗去说明（用户 2026-11-19）══════════
+ * ① 流程条药丸观感去除：背景透明、无边框，与壳条融成一条贯通带；
+ * ② 弹窗只留「标题(≤4字) + 内容/按钮」：说明性灰字/引导文隐藏（安卓作用域，桌面零影响）；
+ * ③ 短标题用 font-size:0 + ::after 提供原位替换（读档/选模式/应答/超堆叠）；
+ *    简报窗本轮不动（用户：后面有文案安排）；危险告警（旧档兼容）保留。
+ * ══════════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] .bar {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* 存读窗：标题短化 + 信息性提示摘除（危险告警保留） */
+html[data-platform='android'] .dialog__title--save {
+  font-size: 0;
+}
+
+html[data-platform='android'] .dialog__title--save::after {
+  content: '存读';
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+html[data-platform='android'] .dialog__panel:has(.dialog__title--save) .notice--info {
+  display: none;
+}
+
+/* 无模式门：标题「选模式」+ 引导文/头部摘除 */
+html[data-platform='android'] .mode-gate__hint,
+html[data-platform='android'] .mode-gate__head {
+  display: none;
+}
+
+html[data-platform='android'] .mode-gate__title {
+  font-size: 0;
+}
+
+html[data-platform='android'] .mode-gate__title::after {
+  content: '选模式';
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+/* 应答窗：标题「应答」（问题文本是操作内容，保留） */
+html[data-platform='android'] .prompt__title {
+  font-size: 0;
+}
+
+html[data-platform='android'] .prompt__title::after {
+  content: '应答';
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+/* 超堆叠窗：标题「超堆叠」（数字行是操作数据，保留） */
+html[data-platform='android'] .overstack__head h3 {
+  font-size: 0;
+}
+
+html[data-platform='android'] .overstack__head h3::after {
+  content: '超堆叠';
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+/* ══════════ 顶栏一栏贯通收尾：去分格竖线 + 全行字号降档（用户 2026-11-19）══════════
+ * 「回合 / 布设方 / 布设」三块各带竖分隔线与内距，看起来仍像多栏 ⇒ 安卓下全部摘除，
+ * 连成一条无缝文字带；回合改「当前/总」格式（模板侧已改），字号整体降一档。
+ * ══════════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] .bar__turn,
+html[data-platform='android'] .bar__identity {
+  border-right: 0;
+  padding-right: 8px;
+}
+
+html[data-platform='android'] .bar__date {
+  display: none; /* 日期从回合可推，省宽 */
+}
+
+html[data-platform='android'] .bar__turn strong,
+html[data-platform='android'] .bar__identity strong {
+  font-size: var(--text-sm);
+}
+
+html[data-platform='android'] .shell__bar {
+  min-height: 34px;
+  padding-top: calc(1px + var(--safe-top));
+  padding-bottom: 1px;
+}
+
+html[data-platform='android'] .bar {
+  top: calc(var(--safe-top) + 1px);
+  min-height: 26px;
+  padding: 1px 6px;
+}
+
+html[data-platform='android'] .gt__rail {
+  top: calc(var(--safe-top) + 2px) !important;
+}
+
+html[data-platform='android'] .gt__rail-button {
+  min-height: 28px !important;
+}
+
+html[data-platform='android'] .shell__save {
+  height: 26px;
+  min-height: 26px;
+}
+
+/* ══════════ 开始页/剧本页去留白 + 隐藏地图缩放 FAB（用户 2026-11-19）══════════
+ * ① −/+/全图 缩放钮：触屏有双指捏合与拖动 ⇒ 安卓端整组隐藏；
+ * ② 主页 hero：装饰图隐藏、内距收窄、不再撑 83svh ⇒ 开始页一屏看完，无需拖动；
+ * ③ 剧本页：外层大内距收窄、卡片紧凑；
+ * ④ 顶栏两栏感的真根因：初设条 max-content 超出视口把页面横向撑开（shell 头 756px）
+ *    ⇒ 队列限宽视口内，内部横向滚动。
+ * ══════════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools {
+  display: none;
+}
+
+html[data-platform='android'] .queue {
+  max-width: calc(100vw - 16px);
+}
+
+html[data-platform='android'] .home__hero {
+  min-height: auto;
+}
+
+html[data-platform='android'] .home__art {
+  display: none;
+}
+
+html[data-platform='android'] .home__content {
+  padding: var(--space-6) var(--space-4);
+}
+
+html[data-platform='android'] .home {
+  padding-bottom: var(--space-4);
+}
+
+html[data-platform='android'] .scenario {
+  padding: var(--space-4) var(--space-3);
+}
+
+html[data-platform='android'] .scenario__sheet {
+  padding: var(--space-3);
+}

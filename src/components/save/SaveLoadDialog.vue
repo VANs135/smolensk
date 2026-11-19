@@ -155,6 +155,7 @@ const canSave = computed(
   <BaseDialog
     :open="props.open"
     title="存档 / 读档"
+    title-class="dialog__title--save"
     width="640px"
     z-index="var(--z-dialog-top)"
     @update:open="emit('update:open', $event)"

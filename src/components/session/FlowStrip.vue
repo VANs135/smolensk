@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag } from '@/components/base'
+import { scenarios } from '@/data'
 import { buildFlowGuide, type FlowForm } from '@/engine/flow-model'
 import { SOP_STEPS, type SopStep } from '@/engine/session-flow'
 import IntroTurnGuide from './IntroTurnGuide.vue'
@@ -205,6 +206,13 @@ function onAdvance(): void {
  * —— 数字全部取自既有只读派生（`workbench.turn` / `victorySummary`），本组件不计数。
  */
 const turnNow = computed<number>(() => gameSession.records?.turn ?? workbench.turn)
+
+/** 当前剧本总回合数（「回合 1/19」的分母；取不到时退当前回合数，避免显示 1/—） */
+const totalTurns = computed<number>(() => {
+  const scenario = scenarios.scenarios.find((item) => item.id === setup.scenarioId)
+  return scenario?.turns ?? turnNow.value ?? 1
+})
+
 const score = computed(() => workbench.victorySummary)
 
 const inSetup = computed(() => gameSession.session === null)
@@ -262,7 +270,8 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
   <div v-if="isBar" class="bar" :data-in-setup="inSetup ? '1' : undefined" aria-label="对局流程">
     <div class="bar__turn num">
       <span class="bar__label">回合</span>
-      <strong>{{ inSetup ? '—' : String(turnNow).padStart(2, '0') }}</strong>
+      <!-- 用户 2026-11-19：不写「—」，统一「当前/总回合」格式（初设按第 1 回合展示） -->
+      <strong>{{ inSetup ? 1 : turnNow }}/{{ totalTurns }}</strong>
       <span class="bar__date">{{ workbench.date }}</span>
     </div>
 

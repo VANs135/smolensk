@@ -11,11 +11,14 @@ const props = withDefaults(
     width?: string
     /** 遮罩层叠值（缺省 `--z-panel`；须盖在其它模态之上时传 `--z-dialog-top`） */
     zIndex?: string
+    /** 标题附加类：安卓壳用 ::after 提供短标题（「仅安卓改短」口径）时挂钩 */
+    titleClass?: string
   }>(),
   {
     title: '',
     width: '480px',
     zIndex: 'var(--z-panel)',
+    titleClass: '',
   },
 )
 
@@ -59,7 +62,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         <div class="dialog__mask" @click="onClose" />
         <div class="dialog__panel theme-command" :style="{ width: props.width }">
           <header class="dialog__header">
-            <h3 class="dialog__title">{{ props.title }}</h3>
+            <h3 class="dialog__title" :class="props.titleClass">{{ props.title }}</h3>
             <button class="dialog__close-btn" type="button" aria-label="关闭" @click="onClose">
               ×
             </button>
