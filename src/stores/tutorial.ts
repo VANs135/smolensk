@@ -69,23 +69,37 @@ const STACK_UNIT_IDS = new Set([
   'ax-motorized-ge-20-mtr-truck',
 ])
 
+/**
+ * 突袭主力的两个摩步团（8.1「可攻击单位」）
+ *
+ * 炮兵团 `attackCapable=false`（括号攻击值 = 只能弹幕），**不能参突**；
+ * 所以教学的两连突袭只靠这两枚：战斗面 8-4-3（MA 3），移动面 4-4-14。
+ */
+const MOT_INF_IDS = ['ax-motorized-ge-20-mtr-76-mot-inf', 'ax-motorized-ge-20-mtr-90-mot-inf']
+
 /** 这一堆的起始格 */
 const STACK_START: HexRef = { col: 14, row: 27 }
 /** 走到这里就贴着苏军（18.27 的 14 Tk Div） */
 const MOVE_HEX: HexRef = { col: 17, row: 27 }
-/** 扫射 / 突袭的目标：维捷布斯克西侧的苏军 14 Tk Div */
+/** 第一次突袭的目标：维捷布斯克西侧的苏军 14 Tk Div（20-1-3，−1 step） */
 const TARGET_HEX: HexRef = { col: 18, row: 27 }
-/** 轰炸任务的目标：19.27 的苏军步兵堆叠（I.153 从 19.28 起飞拦截） */
-const BOMB_HEX: HexRef = { col: 19, row: 27 }
-/** 13.5 重建教学：补员 / 侦察车 / 指挥部都在这一格（20 Mtr 堆叠东侧邻格） */
-const REBUILD_HEX: HexRef = { col: 5, row: 28 }
+/** 第二次突袭的目标：城格 19.27（Minor City；162 Inf Div 移动面 5 + Alarm Mil 3） */
+const CITY_HEX: HexRef = { col: 19, row: 27 }
+/** 空军轰炸的目标：**大城** 19.28（Major City；I.153 就驻扎在这格，起飞拦截后被打回） */
+const BOMB_HEX: HexRef = { col: 19, row: 28 }
+/** 13.5 重建教学：补员就落在 39 军 HQ 这一格（5.27）⇒ 重建也在同格（13.5a 补员同格） */
+const REBUILD_HEX: HexRef = { col: 5, row: 27 }
 /** 教学用的侦察营：Intro 剧本没有它 ⇒ 重建前后可用“盘面是否出现该型”判定 */
 const AX_RECON_ID = 'ax-arm_rec-ge-14-mtr-14-arm-rec'
 const TUTORIAL_RECON_ID = 'tutorial-axis-recon'
+/** 侦察营（30 Krd，履带）绕进的侧后格：沼泽里，补给线过不去 */
+const SCOUT_HEX: HexRef = { col: 18, row: 26 }
+const SCOUT_UNIT_ID = 'ax-motorized-ge-20-mtr-30-mc'
+const ARTILLERY_UNIT_ID = 'ax-motorized-ge-20-mtr-20-arty'
 /** 反应段苏军 18 Tk Div 的出发格 */
 const REACTION_START: HexRef = { col: 19, row: 26 }
 /** 反应段的中转格（18.26 与 17.27 / 18.27 都相邻） */
-const REACTION_STAGE: HexRef = { col: 18, row: 26 }
+const REACTION_STAGE: HexRef = SCOUT_HEX
 
 /** 9.2 段序：只用来判断“当前还在不在该步所需的段之前” */
 const DICE_STEPS = new Set(['surprise', 'battleDice'])
@@ -138,6 +152,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
   function startFor(): void {
     active.value = true
     cursor.value = 0
+    overrunLaunches.value = 0
+    overrunOpen = false
     reaction.value = 'idle'
     reactionOutcome.value = null
     scriptApplied.value = false
@@ -154,6 +170,50 @@ export const useTutorialStore = defineStore('tutorial', () => {
   )
 
   const stackHex = computed<HexRef>(() => stackUnits.value[0]?.hex ?? STACK_START)
+
+  /** 两个摩步团（突袭主力）；炮兵不在其中——8.1 只认可攻击单位 */
+  const motInfUnits = computed(() =>
+    workbench.units.filter((unit) => MOT_INF_IDS.includes(unit.unitId)),
+  )
+
+  /** 摩步是否（两枚都在）翻到移动面：战斗面 MA 3 只够走 3 格，突袭一次还要 3 MP */
+  const motInfInMoveMode = computed(
+    () =>
+      motInfUnits.value.length === MOT_INF_IDS.length &&
+      motInfUnits.value.every((unit) => unit.mode.mode === 'move'),
+  )
+
+  /** 突袭堆叠所在格（炮兵/卡车不参突、可能留在原地 ⇒ 不能拿 stackHex 当突袭位置） */
+  const assaultHex = computed<HexRef>(() => motInfUnits.value[0]?.hex ?? STACK_START)
+
+  function motInfAt(hex: HexRef): boolean {
+    return motInfUnits.value.some((unit) => sameHex(unit.hex, hex))
+  }
+
+  /** 已发起的突袭次数（一场战斗只记一次）；两连突靠它分步，撤销/失败都不回退 */
+  const overrunLaunches = ref(0)
+  let overrunOpen = false
+
+  /**
+   * 8.1a：突袭是移动环节里的一场独立战斗 ⇒ 用「战斗开始 / 结束」的沿变计数。
+   * 战斗状态每走一步都会被替换，所以只能看 attackType + finished 的翻转，不能看对象身份。
+   */
+  watch(
+    () => workbench.combatState,
+    (state) => {
+      if (!active.value) return
+      const running = state !== null && state.attackType === 'overrun' && !state.finished
+      // 只数**本方**的突袭：反应段苏军也会突袭，不能算进教学两连突
+      const ours =
+        running &&
+        workbench.combatAttackerViews.some((view) =>
+          motInfUnits.value.some((unit) => unit.instanceId === view.id),
+        )
+      if (ours && !overrunOpen) overrunLaunches.value += 1
+      overrunOpen = ours
+    },
+    { flush: 'sync' },
+  )
 
   /**
    * 已飞过任务的斯图卡枚数（14.2e：每机每阶段一次）
@@ -197,8 +257,42 @@ export const useTutorialStore = defineStore('tutorial', () => {
     return airMissionReturned('barrage')
   }
 
-  function overrunStarted(): boolean {
-    return workbench.combatState?.attackType === 'overrun'
+  /** 打过第 n 次突袭（或已经站到该格）——骰子输了也不该把引导卡死 */
+  function overrunDoneAt(count: number, hex: HexRef): boolean {
+    return overrunLaunches.value >= count || motInfAt(hex)
+  }
+
+  /** 30 侦察营是否已绕到 18.26（履带无视 ZOC 的教学点） */
+  function scoutInPlace(): boolean {
+    return workbench.units.some(
+      (unit) => unit.unitId === SCOUT_UNIT_ID && sameHex(unit.hex, SCOUT_HEX),
+    )
+  }
+
+  /** 炮兵团是否已进入弹幕射程（3 格）——不要求贴到城边 */
+  function artilleryInRange(): boolean {
+    const artillery = workbench.units.find((unit) => unit.unitId === ARTILLERY_UNIT_ID)
+    if (artillery === undefined) return false
+    return hexDistance(artillery.hex, CITY_HEX) <= 3
+  }
+
+  /** 炮兵弹幕是否已对 19.27 结算完（10.0a） */
+  function cityBarraged(): boolean {
+    const state = workbench.barrageState
+    return (
+      state !== null &&
+      state.kind === 'artillery' &&
+      state.targetHex !== null &&
+      sameHex(state.targetHex, CITY_HEX) &&
+      state.finished
+    )
+  }
+
+  /** 城格 19.27 是否已由轴心占领（战斗推进后进城） */
+  function cityTaken(): boolean {
+    return workbench.units.some(
+      (unit) => unit.side === 'axis' && sameHex(unit.hex, CITY_HEX) && unit.isCombat,
+    )
   }
 
   function supplyStepDone(): boolean {
@@ -220,8 +314,11 @@ export const useTutorialStore = defineStore('tutorial', () => {
     return workbench.combatState?.finished === true
   }
 
-  /** 反应段的防守格：突袭推进后可能在 18.27，未推进时仍在 17.27 */
-  const reactionDefenseHex = computed<HexRef>(() => stackHex.value)
+  /**
+   * 反应段的防守格：两连突之后摩步已经进城（19.27），未推进时留在 17.27 / 18.27。
+   * 取**摩步**的位置——炮兵/卡车不参突，会留在原格，不能拿来当被反击的格。
+   */
+  const reactionDefenseHex = computed<HexRef>(() => assaultHex.value)
 
   /** 低空扫射：菜单 / 选机 / 发起 / 结算 按当前会话步给按钮 */
   function strikeTarget(): TutorialTarget {
@@ -334,13 +431,23 @@ export const useTutorialStore = defineStore('tutorial', () => {
       case 'move-mode':
         // 模式切换在右键菜单里（map-view 的动作表「模式改变 · 5.4」）
         return { texts: ['改变朝向 → 移动模式'] }
-      case 'move':
-        return { hex: MOVE_HEX, texts: ['移动模式'] }
+      case 'scout':
+        return { hex: SCOUT_HEX, texts: ['开拔'] }
+      case 'scout-supply':
+        return { hex: SCOUT_HEX, texts: ['补给'] }
       case 'strafe-1':
       case 'strafe-2':
         return strikeTarget()
-      case 'overrun':
+      case 'move':
+        return { hex: MOVE_HEX, texts: ['开拔'] }
+      case 'overrun-1':
         return { hex: TARGET_HEX, texts: ['突袭'] }
+      case 'artillery-move':
+        return { hex: MOVE_HEX, texts: ['开拔'] }
+      case 'barrage-city':
+        return { hex: CITY_HEX, texts: ['弹幕'] }
+      case 'capture-city':
+        return { hex: CITY_HEX, texts: ['进攻'] }
       case 'combat-supply': {
         const state = workbench.combatState
         if (state !== null && state.step === 'combatSupply') {
@@ -467,34 +574,42 @@ export const useTutorialStore = defineStore('tutorial', () => {
       {
         id: 'rebuild-place',
         title: '落地并付补员',
-        hint: '霍特：点高亮的 5.28，花 1 Eq 把它拉回来。',
+        hint: '霍特：点高亮的 5.27（HQ 格），花 1 Eq 把它拉回来。',
         done: () => workbench.units.some((unit) => unit.unitId === AX_RECON_ID),
       },
       {
+        id: 'move-mode',
+        title: '两个摩步翻移动面',
+        hint: '霍特：右键这堆 →「改变朝向 → 移动模式」，两个摩步都要翻。',
+        intro: '摩步战斗面 8-4-3：MA 3 连行军都紧；移动面 4-4-14 才有余量突袭（一次 3 MP，8.1a）。',
+        done: () => motInfInMoveMode.value,
+      },
+      {
         id: 'fuel',
-        title: '单位加油',
-        hint: '霍特：右键这堆加油，没油坦克就是废铁。',
-        intro: '20 摩托化师：两个步兵团、装甲侦察营、炮兵团。',
+        title: '编队法加油',
+        hint: '霍特：右键这堆 →「加油」→ 编队法，油从补给堆里扣。',
+        intro: '支付流程：整堆一次付清，燃料点从该格补给堆（SP）里扣；堆里没有补给就得先补运。',
         done: () => stackUnits.value.some((unit) => unit.fuelled),
       },
       {
-        id: 'move-mode',
-        title: '切换移动面',
-        hint: '霍特：右键这堆 →「改变朝向 → 移动模式」。战斗面只有 2 MP，移动面 5 MP——突袭一次要吃 3 MP（8.1a）。',
-        intro: '20 摩托化师：两个步兵团、装甲侦察营、炮兵团；出击前先翻到移动面。',
-        done: () => stackUnits.value.some((unit) => unit.mode.mode === 'move'),
+        id: 'scout',
+        title: '侦察营绕进 18.26',
+        hint: '霍特：只选 30 侦察营，开拔 → 绕到 18.26。',
+        intro: '履带与徒步单位可以无视敌方控制区（ZOC）穿行；侦察营正好绕到坦克师侧后。',
+        done: () => scoutInPlace(),
       },
       {
-        id: 'move',
-        title: '移动到苏军旁',
-        hint: '霍特：选中这堆 → 开拔 → 推到 17.27（沿次干道 3 格只花 1.5 MP）。',
-        intro: '道路行军半价：省下的 MP 留给突袭。',
-        done: () => stackUnits.value.some((unit) => hexDistance(unit.hex, TARGET_HEX) === 1),
+        id: 'scout-supply',
+        title: '补给接不上',
+        hint: '霍特：看见了？中间是沼泽，补给线过不去。',
+        intro: '18.26 在沼泽里、与后方不连通 ⇒ 这枚侦察营本回合吃不到补给（12.x）。',
+        // 信息步：玩家叫第一轮斯图卡即视为看过、继续推进
+        done: () => strafeCount.value >= 1,
       },
       {
         id: 'strafe-1',
         title: '空中扫射（第一次）',
-        hint: '霍特：你呼叫，集群派斯图卡扫一轮。',
+        hint: '霍特：你呼叫，集群派斯图卡扫 18.27。',
         intro: '斯图卡低空扫射，专打暴露的坦克。',
         done: () => strafeCount.value >= 1,
       },
@@ -506,12 +621,19 @@ export const useTutorialStore = defineStore('tutorial', () => {
         done: () => strafeCount.value >= 2,
       },
       {
-        id: 'overrun',
-        title: '堆叠突袭',
-        hint: '霍特：压上去，堆叠突袭碾碎他们。',
+        id: 'move',
+        title: '两个摩步贴上去',
+        hint: '霍特：两个摩步开到 17.27，贴住坦克师。',
+        intro: '沿次干道 3 格只花 1.5 MP；移动面 14 MP，突袭的 3 MP 留得下。',
+        done: () => motInfUnits.value.every((unit) => hexDistance(unit.hex, TARGET_HEX) === 1),
+      },
+      {
+        id: 'overrun-1',
+        title: '两个摩步突袭 18.27',
+        hint: '霍特：两个摩步一起压上去，突袭坦克师。',
         intro:
-          '6-5-4 炮兵团贴身支援、30 侦察营开路；一次突袭固定 3 MP——移动面 5 MP 正好够 1.5 行军 + 3 突袭。',
-        done: () => overrunStarted(),
+          '炮兵团是括号攻击值 ⇒ 没有进攻能力、不参与突袭（8.1 只认可攻击单位）；两个摩步 4+4 打，突袭扣 3 MP（8.1a）。',
+        done: () => overrunDoneAt(1, TARGET_HEX),
       },
       {
         id: 'combat-supply',
@@ -532,27 +654,43 @@ export const useTutorialStore = defineStore('tutorial', () => {
         done: () => combatFinished(),
       },
       {
+        id: 'artillery-move',
+        title: '炮兵跟上来',
+        hint: '霍特：单独选炮兵团，开拔 → 推到 17.27。',
+        intro: '炮兵不需要贴脸：弹幕射程 3 格，站在 17.27 就能轰到城格 19.27。',
+        done: () => artilleryInRange(),
+      },
+      {
+        id: 'barrage-city',
+        title: '弹幕轰小城',
+        hint: '霍特：炮兵弹幕打 19.27 的守军。',
+        intro: '弹幕先扣补给点、再按轰炸表结算（10.0a）：炸出 DG，城里就软了。',
+        done: () => cityBarraged(),
+      },
+      {
         id: 'bombing',
-        title: '呼叫轰炸',
-        hint: '霍特：四机齐出，把 19.27 炸开。',
-        intro: 'Ju.88 与 Do.17z 投弹，两架 Bf.110 护航；炸弹够了才炸得出损伤。',
+        title: '空军轰大城',
+        hint: '霍特：四机齐出，轰 19.28 的大城守军。',
+        intro:
+          'Ju.88 与 Do.17z 投弹、两架 Bf.110 护航；苏军 I.153 起飞拦截——它打不过护航（14.3e）。',
         done: () => bombingDone(),
       },
       {
-        id: 'supply-phase',
-        title: '补给阶段',
-        hint: '霍特：把后勤理顺，再放苏军进来。',
-        done: () => phaseAtLeast(workbench.phase, 'reaction'),
-      },
-      {
         id: 'reaction-attack',
-        title: '苏军反击（AI）',
-        hint: '霍特：苏军由 AI 指挥——看他们撞碎在防线上。',
-        intro: '反应阶段由 AI 决定苏军怎么动，你只负责守住 17.27。',
+        title: '苏军坦克师反扑',
+        hint: '霍特：他们另一支坦克师扑上来了，顶住。',
+        intro: '反应段苏军释放预备、照 9.2 打一轮——按他们的兵力，这一下必输（苏军失败）。',
         done: () =>
           aiSoviet.value
             ? phaseAtLeast(workbench.phase, 'combat')
             : reaction.value === 'done' || reaction.value === 'skipped',
+      },
+      {
+        id: 'capture-city',
+        title: '打下小城 19.27',
+        hint: '霍特：轮到我们了——进攻 19.27，把城格拿下来。',
+        intro: '战斗阶段由你宣布进攻：补给 → AR → 地形 → 奇袭 → 骰面，走完就是你的城。',
+        done: () => cityTaken(),
       },
     ]
     return source.map((step) => ({
@@ -624,8 +762,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
 
     /*
      * 13.5a 重建教学：**不动 HQ**（用户 2026-11-19）——39 军 HQ 就留在剧本初设的 5.27。
-     * 重建演示点改到它两格内的 5.28（REBUILD_HEX）；补员单位由增援补员表发放后，
-     * 玩家把 Pax/Eq 落在 5.28（HQ 可溯源 ⇒ 合法），再花 1 Eq 从死人堆拉回侦察营。
+     * 重建演示点就是它脚下的 5.27（REBUILD_HEX，13.5a 允许 0 格）；补员单位由增援补员表发放后，
+     * 玩家把 Pax/Eq 落在 5.27（39 军 HQ 格，2.1 的可溯源格），再花 1 Eq 从死人堆拉回侦察营。
      * 重建后的单位**不需要马上移动**：教学后续步骤不再要求它开拔。
      */
 
@@ -712,8 +850,13 @@ export const useTutorialStore = defineStore('tutorial', () => {
     (state) => {
       if (!active.value || state === null || state.finished) return
       if (state.targetHex === null || !sameHex(state.targetHex, BOMB_HEX)) return
-      // 30 点轰炸值的初始列 25-40：骰面 11 ⇒ 「1」（DG + 1 军力损失）
+      /*
+       * 30 点轰炸值、骰面 11：城格（Minor City）把列下压一档 ⇒ 落在「1/2」格。
+       * 10.0a 的「1/2」要再掷取整骰（4-6 才损 1 点军力）——教学要**稳出损伤**，
+       * 所以连取整骰一起固定为 5（≥4 ⇒ DG + 1 军力损失）。
+       */
       workbench.barrageInputs.die = 11
+      workbench.barrageInputs.halfDie = 5
     },
     { flush: 'sync' },
   )
@@ -796,7 +939,6 @@ export const useTutorialStore = defineStore('tutorial', () => {
     )
     if (tk === undefined || tk.steps <= 0) return false
     const defense = reactionDefenseHex.value
-    if (hexDistance(defense, REACTION_STAGE) !== 1) return false
 
     if (tk.mode.mode !== 'reserve') {
       tk.mode = { mode: 'reserve', orientation: 'move', dg: false, exploit: false }
@@ -807,8 +949,18 @@ export const useTutorialStore = defineStore('tutorial', () => {
 
     workbench.beginMovePick(tk.hex, [tk.instanceId])
     if (!workbench.confirmMovePick()) return false
+    /*
+     * 2026-11-20：侦察营的教学绕行点就在 18.26 ⇒ 苏军不能再用它当中转格。
+     * 从「与防守格相邻」的候选里挑第一个可达格（18.28 / 17.28 等），找不到就放弃脚本。
+     */
+    const stageCandidates: HexRef[] = [
+      REACTION_STAGE,
+      { col: 18, row: 28 },
+      { col: 17, row: 28 },
+      { col: 19, row: 28 },
+    ].filter((hex) => hexDistance(defense, hex) === 1)
     const node = (workbench.groupReachable?.hexes ?? []).find((item) =>
-      sameHex(item.hex, REACTION_STAGE),
+      stageCandidates.some((hex) => sameHex(item.hex, hex)),
     )
     if (node === undefined) return false
     if (!workbench.moveAlongDraggedPath(node.path)) return false
