@@ -54,11 +54,16 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
         <span class="shell__route">{{ activeRoute.meta.title }}</span>
       </div>
       <div class="shell__right">
+        <!--
+          2026-11-19（用户「不必要的字去掉」）：安卓壳把两枚按钮都缩成双字徽章
+          （主页 / 存读），文字由 android.css 的 ::after 提供、原文字 0 号字隐藏；
+          桌面端保持完整文字。
+        -->
         <BaseButton
           v-if="currentView === 'game'"
           variant="ghost"
           size="sm"
-          class="shell__save"
+          class="shell__save shell__save--home"
           @click="ui.navigate('home')"
           >开始台</BaseButton
         >
@@ -66,7 +71,7 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
           v-if="currentView !== 'game'"
           variant="ghost"
           size="sm"
-          class="shell__save"
+          class="shell__save shell__save--disk"
           @click="ui.openSaveDialog()"
         >
           存档 / 读档（{{ saveBadge }}）

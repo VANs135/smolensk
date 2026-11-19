@@ -52,6 +52,10 @@ import {
 
 import { createAiMemory, runAiStep } from '@/ai/driver'
 import type { AiControlMode } from '@/ai/policy'
+import { isAndroidPlatform } from '@/shared/platform'
+
+/** 安卓壳专用布局开关：教学卡内联顶栏（桌面保持悬浮独立卡） */
+const androidUi = isAndroidPlatform()
 
 const workbench = useWorkbenchStore()
 const mapView = useMapViewStore()
@@ -418,6 +422,11 @@ onBeforeUnmount(() => {
   <div class="gt">
     <FlowStrip variant="bar">
       <template #trail>
+        <!--
+          2026-11-19「顶栏二合一」：安卓壳把教学卡内联进流程条同一行（桌面仍悬浮独立）。
+          卡片自身 position:fixed，安卓由 android.css 末段改 static 内联。
+        -->
+        <TutorialGuide v-if="androidUi" :hex-to-window="tutorialHexToWindow" />
         <BaseButton
           v-if="
             workbench.segmentStep?.id === 'movement.breakout' &&
@@ -449,7 +458,7 @@ onBeforeUnmount(() => {
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path :d="item.icon" />
           </svg>
-          {{ item.label }}
+          <span class="gt__rail-label">{{ item.label }}</span>
         </button>
 
         <div class="gt__rail-end">
@@ -462,7 +471,7 @@ onBeforeUnmount(() => {
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 4h13l3 3v13H4z M8 4v6h8V4 M8 20v-6h8v6" />
             </svg>
-            存读档
+            <span class="gt__rail-label">存读档</span>
           </button>
         </div>
       </nav>
@@ -780,7 +789,8 @@ onBeforeUnmount(() => {
     <VictoryDialog />
     <QuestionPrompt />
     <!-- 用户 2026-11-18 第 2 条：Vitebsk 教学模式（逐步指到格子/算子/盒/按钮） -->
-    <TutorialGuide :hex-to-window="tutorialHexToWindow" />
+    <!-- 安卓壳已把教学卡内联进顶部流程条（见 #trail），桌面保留独立悬浮卡 -->
+    <TutorialGuide v-if="!androidUi" :hex-to-window="tutorialHexToWindow" />
 
     <!-- 读档后模式未设置：选齐前挡在盘面前，AI 不接管、热坐不按 PVP 遮屏 -->
     <Teleport to="body">

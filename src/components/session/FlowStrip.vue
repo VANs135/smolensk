@@ -256,8 +256,10 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
   <!--
     bar 形态（对局台）：地图上方的一条线 —— 阶段名 + 环节名 + 唯一推进按钮 + 一行「该做什么」。
     其余（回合/天气摘要、阶段灯、日志、重置、5.0b 勾选、共识提示）只在 panel 形态出现。
+    data-in-setup：初设进行中给安卓壳一个样式钩子 —— 此时「定位初设」只是聚焦眼前就挂着的
+    初设浮窗（纯冗余），android.css 据此把它连 block 文案一起藏掉；桌面保留原行为。
   -->
-  <div v-if="isBar" class="bar" aria-label="对局流程">
+  <div v-if="isBar" class="bar" :data-in-setup="inSetup ? '1' : undefined" aria-label="对局流程">
     <div class="bar__turn num">
       <span class="bar__label">回合</span>
       <strong>{{ inSetup ? '—' : String(turnNow).padStart(2, '0') }}</strong>

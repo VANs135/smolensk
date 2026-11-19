@@ -721,3 +721,466 @@ html[data-platform='android'] .queue__more-body {
     opacity: 1;
   }
 }
+
+/* ═══════════════ 地图优先 · 单条 HUD（用户 2026-11-19「上下都开窗太挤」）═══════════════
+ * 参照用户给的参考图：地图占大头，操作图标化，描述操作的文字交给教学模式。
+ * 只改观感/尺度，不动规则；全部锁 data-platform=android，桌面零影响。
+ * 本段置末尾、同优先级后者胜，覆盖上面的旧教学卡/导航定位。
+ *
+ * ① 教学卡 → 单行图标条：去掉「霍特：…」指引(hint)与介绍(intro)，只留 n/N + 标题 + 关闭。
+ * ② 底部导航 → 极简图标条：隐藏文字标签（aria-label 仍可读），高度压到约 44px。
+ * ③ 顶部流程条 → 删描述行：「等待玩家完成初设…/该做什么」整行隐藏，只留徽标与按钮。
+ * ═══════════════════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] .tut__card .tut__hint,
+html[data-platform='android'] .tut__card .tut__intro {
+  display: none;
+}
+
+html[data-platform='android'] .tut__card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  max-width: calc(100% - 96px);
+  min-height: 34px;
+  padding: 4px 8px;
+  border-radius: 10px;
+}
+
+html[data-platform='android'] .tut__head {
+  align-items: center;
+  gap: 6px;
+}
+
+/* 教学卡贴顶栏下方（不再下移 200px 让流程条）：流程条已压成单条。
+ * 实测竖屏：应用头 shell__bar 57px + 流程条 .bar 57px ⇒ 卡片从 118px 起，避免压住「轴心国」。 */
+@media (max-width: 1024px) and (min-height: 600px) and (orientation: portrait) {
+  html[data-platform='android'] .tut__card {
+    top: calc(var(--safe-top) + 118px);
+  }
+}
+
+/* 底部导航文字隐藏，图标居中；命中区仍 ≥44px */
+html[data-platform='android'] .gt__rail-label {
+  display: none;
+}
+
+html[data-platform='android'] .gt__rail-button {
+  flex-direction: column;
+  gap: 0;
+  min-height: 44px;
+  padding: 2px;
+}
+
+html[data-platform='android'] .gt__rail-button svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* 顶栏描述行整行隐藏（唯一「该做什么 / 等待玩家完成初设」文字来源） */
+html[data-platform='android'] .bar__status {
+  display: none;
+}
+
+/* 顶栏压成单条：去掉多余行高，徽标与按钮同一行 */
+html[data-platform='android'] .bar {
+  flex-wrap: nowrap;
+  align-items: center;
+  padding: 4px 8px;
+  column-gap: 8px;
+  row-gap: 0;
+  min-height: 44px;
+}
+
+html[data-platform='android'] .bar__phase {
+  flex: 1 1 auto;
+  white-space: nowrap; /* 窄屏禁止「飞机整备」换行 */
+}
+
+html[data-platform='android'] .bar__track {
+  display: none;
+}
+
+html[data-platform='android'] .bar__advance {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+/* ④ 放单位/堆叠时的单位窗（MapPopover）→ 贴底窄带（用户 2026-11-19）
+ * 参考图「放单位才出现的下方单位窗」：按需弹出、贴底、宽度铺满，不再浮在格子旁挡地图。
+ * 组件用 inline left/top/width + translate(-50%,0) 定位 ⇒ 这里用 !important 覆盖成底部带。
+ */
+html[data-platform='android'] .popover {
+  left: 8px !important;
+  right: 8px;
+  top: auto !important;
+  bottom: calc(var(--android-nav-height) + 8px + var(--safe-bottom));
+  width: auto !important;
+  max-width: calc(100% - 16px);
+  max-height: 42%;
+  transform: none !important;
+  border-radius: 16px 16px 0 0;
+  border-bottom: 0;
+}
+
+/* 单位窗标题栏在触屏上不做抓手（位置已固定，拖动无意义） */
+html[data-platform='android'] .popover__header {
+  cursor: default;
+  touch-action: auto;
+}
+
+/* 单位窗上下留白收紧，chips 阵列横向可扫 */
+html[data-platform='android'] .popover .chips {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+/* ══════════ 顶栏「二合一」+ 底部导航上收（用户 2026-11-19 截图标注）══════════
+ * 参考图哲学：一条顶栏 + 全屏地图。三件事：
+ * ① 教学卡内联进流程条同一行（组件已渲染进 #trail；这里把 fixed 覆盖层改随流）。
+ * ② 底部导航整体搬上 shell 头右侧（fixed 图标带），底部空间全部还给地图。
+ * ③ 窄竖屏隐藏日期 / 角色字 / 控制数，保证顶栏一行放下；溢出时可横向滑。
+ * 全部锁 data-platform=android；桌面端教学卡悬浮、导航在底部，均不受影响。
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+html[data-platform='android'] {
+  /* 底部导航已上收 ⇒ 抽屉 / 单位窗不再给导航让位，底部还给地图 */
+  --android-nav-height: 0px;
+}
+
+/* 抽屉 sheet 直接贴底（保留手势条安全区） */
+html[data-platform='android'] .gt__drawer,
+html[data-platform='android'] .gt__drawer--wide {
+  bottom: var(--safe-bottom);
+}
+
+/* ① 教学卡内联：.tut 是 inset:0 的 fixed 覆盖层 ⇒ 安卓改为 contents，
+ *    卡片成为 .bar__actions 的普通 flex 项；指向环 .tut__ring 仍 fixed 覆盖地图。 */
+html[data-platform='android'] .bar__actions .tut {
+  position: static;
+  inset: auto;
+  display: contents;
+}
+
+html[data-platform='android'] .bar__actions .tut__card {
+  position: static;
+  order: -1;
+  width: auto;
+  max-width: 46vw;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+html[data-platform='android'] .bar__actions .tut__head {
+  min-width: 0;
+}
+
+html[data-platform='android'] .bar__actions .tut__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ② 底部导航 → shell 头右侧图标带（右侧留出 开始台/存读档 按钮区） */
+html[data-platform='android'] .gt__rail {
+  position: fixed;
+  /* !important 兜底：桌面 scoped 样式与旧媒体档可能残留 left/bottom/width，导致 fixed 解析异常 */
+  top: calc(var(--safe-top) + 9px) !important;
+  right: calc(var(--safe-right) + 176px) !important;
+  left: auto !important;
+  bottom: auto !important;
+  z-index: calc(var(--layer-shell) + 2);
+  flex: 0 0 auto;
+  width: max-content !important;
+  height: auto !important;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  background: transparent !important;
+  border: 0 !important;
+  border-top: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+html[data-platform='android'] .gt__rail-button {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: 24px !important;
+  min-height: 34px !important;
+  padding: 4px 3px !important;
+  border-radius: 8px;
+}
+
+html[data-platform='android'] .gt__rail-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 窄竖屏放不下 6 枚 ⇒ 存读档不进图标带（开局前 shell 头有存读档；对局中经开始台回主页存读） */
+@media (max-width: 520px) and (orientation: portrait) {
+  html[data-platform='android'] .gt__rail-end {
+    display: none;
+  }
+}
+
+html[data-platform='android'] .gt__rail-end {
+  flex: 0 0 auto;
+  margin-left: 2px;
+}
+
+/* 视图标题（对局台 / 开始台等）在图标带旁冗余 ⇒ 藏 */
+html[data-platform='android'] .shell__route {
+  display: none;
+}
+
+/* 推进按钮不换行；顶栏溢出时允许横向滑兜底 */
+html[data-platform='android'] .bar__advance {
+  white-space: nowrap;
+}
+
+html[data-platform='android'] .bar {
+  overflow-x: auto;
+}
+
+/* ③ 窄竖屏：隐藏日期 / 角色字 / 控制数，顶栏一行放下 */
+@media (max-width: 520px) and (orientation: portrait) {
+  html[data-platform='android'] .bar__date,
+  html[data-platform='android'] .bar__label,
+  html[data-platform='android'] .bar__score {
+    display: none;
+  }
+}
+
+/* 横屏空间充裕：图标带放大到舒适命中区 */
+@media (orientation: landscape) {
+  html[data-platform='android'] .gt__rail {
+    gap: 4px;
+  }
+
+  html[data-platform='android'] .gt__rail-button {
+    min-width: 40px;
+    min-height: 38px;
+  }
+
+  html[data-platform='android'] .gt__rail-button svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+/* ══════════ 初设窗口二次瘦身：按钮上单位栏侧面（用户 2026-11-19 三次反馈）══════════
+ * ① 阵营名「轴心国」去掉（玩家选剧本/选边时已确定）⇒ 标题栏整行隐藏；
+ * ② 「确认」「自动放置」两枚按钮放到单位条**侧面**（同一行右端），字号收到 --text-xs；
+ * ③ 堆叠头「飞机 7 ⌄」、飞机分区小标题、纯信息分组（必做事项/已完成项）继续隐藏；
+ * ④ 「可自主放弃项」含放弃勾选与开局按钮 ⇒ 保留（:has 判定，老 WebView 优雅降级）。
+ * 仅安卓作用域，桌面端初设面板不受影响。
+ * ══════════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] .queue {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 6px;
+  padding: 6px 8px;
+}
+
+html[data-platform='android'] .queue > * {
+  grid-column: 1 / -1;
+}
+
+/* 标题栏整行隐藏：初设 / 阵营名 / N 待处理 全部不要 */
+html[data-platform='android'] .queue__head {
+  display: none;
+}
+
+/* 单位条占左列，按钮排右侧面 */
+html[data-platform='android'] .queue__sections {
+  grid-column: 1 / 2;
+  grid-row: 1;
+}
+
+html[data-platform='android'] .queue__actions {
+  grid-column: 2 / 3;
+  grid-row: 1;
+  justify-self: end;
+  align-self: center;
+  padding: 0;
+  gap: 4px;
+}
+
+/* 按钮字号缩小、压矮：height 必须显式覆盖 BaseButton 的 --control-height-sm(40px)，
+   内边距贴字（用户 2026-11-19「字的框贴着字」） */
+html[data-platform='android'] .queue__actions .btn {
+  font-size: var(--text-xs);
+  height: 28px;
+  min-height: 28px;
+  padding: 0 6px;
+}
+
+/* 「更多 ⌄」与两枚按钮同高同档 */
+html[data-platform='android'] .queue__actions .queue__more-toggle {
+  height: 28px;
+  width: 28px;
+  min-height: 28px;
+}
+
+/* 「更多 ⌄」与两枚按钮同高同档 */
+html[data-platform='android'] .queue__actions .queue__more-toggle {
+  height: 28px;
+  width: 28px;
+  min-height: 28px;
+}
+
+/* 扁平算子条 */
+html[data-platform='android'] .queue__stack-btn,
+html[data-platform='android'] .queue__air-col-head {
+  display: none; /* 「飞机 7 ⌄」「未激活 完好 7」文字行去掉；堆叠默认展开 */
+}
+
+html[data-platform='android'] .queue__air {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 6px;
+}
+
+html[data-platform='android'] .queue__air-col {
+  display: contents;
+}
+
+html[data-platform='android'] .queue__air-array {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+/* 纯信息分组藏掉；「可自主放弃项」有交互 ⇒ 保留 */
+html[data-platform='android'] .queue__group:not(:has(.queue__check)) {
+  display: none;
+}
+
+/* ══════════ 应用头与流程条终极合一：单行顶栏（用户 2026-11-19）══════════
+ * 「17 / 斯摩棱斯克」去掉；流程条 fixed 覆盖进应用头同一行。
+ * 四次反馈：整条顶栏再压矮一档（44 → 38px 行高，控件 30px）。
+ * 「定位初设」按钮：初设进行中它只做「聚焦眼前就挂着的初设浮窗」，纯冗余
+ *   ⇒ 安卓在 data-in-setup 时连同 block 文案一起隐藏；桌面保留。
+ * ════════════════════════════════════════════════════════════════════════ */
+html[data-platform='android'] .shell__bar {
+  min-height: 38px;
+  padding-top: calc(2px + var(--safe-top));
+  padding-bottom: 2px;
+}
+
+html[data-platform='android'] .shell__identity {
+  display: none; /* 「17 斯摩棱斯克」标识去掉 */
+}
+
+html[data-platform='android'] .shell__save {
+  font-size: 0; /* 原文字隐藏，双字徽章由 ::after 提供 */
+  height: 28px;
+  min-height: 28px;
+  padding: 0 7px;
+}
+
+html[data-platform='android'] .shell__save--home::after {
+  content: '主页';
+  font-size: var(--text-xs);
+}
+
+html[data-platform='android'] .shell__save--disk::after {
+  content: '存读';
+  font-size: var(--text-xs);
+}
+
+html[data-platform='android'] .bar {
+  position: fixed;
+  top: calc(var(--safe-top) + 2px);
+  left: calc(var(--safe-left) + 8px);
+  right: calc(var(--safe-right) + 270px);
+  z-index: calc(var(--layer-shell) + 1);
+  min-height: 30px;
+  padding: 2px 6px;
+}
+
+/* 初设中「定位初设 / 阻断文案」纯冗余 ⇒ 藏（桌面不受影响） */
+html[data-platform='android'] .bar[data-in-setup] .bar__advance,
+html[data-platform='android'] .bar[data-in-setup] .bar__block {
+  display: none;
+}
+
+/* 流程条 fixed 脱流后，.gt 两行 grid 的 auto 行变空 ⇒ 工作区钉在 1fr 行 */
+html[data-platform='android'] .gt__workspace {
+  grid-row: 2;
+}
+
+html[data-platform='android'] .gt__rail {
+  top: calc(var(--safe-top) + 4px) !important;
+}
+
+html[data-platform='android'] .gt__rail-button {
+  min-width: 24px !important;
+  min-height: 30px !important;
+}
+
+html[data-platform='android'] .gt__rail-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+@media (orientation: landscape) {
+  html[data-platform='android'] .gt__rail {
+    right: calc(var(--safe-right) + 96px) !important;
+  }
+
+  html[data-platform='android'] .gt__rail-button {
+    min-width: 30px !important;
+    min-height: 30px !important;
+  }
+}
+
+@media (max-width: 520px) and (orientation: portrait) {
+  html[data-platform='android'] .shell__bar {
+    justify-content: flex-start; /* 「主页 / 存读」徽章挪到最左 */
+  }
+
+  html[data-platform='android'] .gt__rail {
+    right: calc(var(--safe-right) + 12px) !important;
+  }
+
+  html[data-platform='android'] .bar {
+    left: calc(var(--safe-left) + 66px);
+    right: calc(var(--safe-right) + 118px);
+  }
+
+  /* 推进按钮窄屏只留箭头：30px 方形居中（初设中整个按钮已被 data-in-setup 藏掉） */
+  html[data-platform='android'] .bar__advance {
+    font-size: 0;
+    min-width: 30px;
+    height: 30px;
+    min-height: 30px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* 阶段文字行窄屏隐藏：活动内容由教学卡传达 */
+  html[data-platform='android'] .bar__phase-label {
+    display: none;
+  }
+
+  /* 教学卡收窄：只露进度徽章 + 截断标题，防把箭头钮挤出可视区 */
+  html[data-platform='android'] .bar__actions .tut__card {
+    max-width: 64px;
+  }
+
+  html[data-platform='android'] .bar__advance span[aria-hidden='true'] {
+    font-size: 14px;
+  }
+}

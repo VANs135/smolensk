@@ -382,13 +382,14 @@ function sideMark(side: 'axis' | 'soviet'): string {
           size="sm"
           @click="setup.confirmSideSetup()"
         >
-          确认本方布设
+          确认
         </BaseButton>
       </template>
 
       <!--
         2026-11-19（用户第 1 条）：一键预设改为**一键全落双方**，与确认/主入口同排常驻
         （安卓不再折进「更多」，避免"点了没反应"被藏起来）；撤回与结果提示仍属次要，收进折叠。
+        2026-11-19（用户二次反馈）：文案「一键预设初设」→「自动放置」（更短、语义更直白）。
       -->
       <BaseButton
         v-if="hotseat.canPreset && !setup.finished"
@@ -396,7 +397,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
         size="sm"
         @click="runPresetSetup()"
       >
-        一键预设初设
+        自动放置
       </BaseButton>
 
       <!--

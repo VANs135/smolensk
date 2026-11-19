@@ -145,9 +145,10 @@ describe('战况抽屉挂载与一键预设初设唯一入口', () => {
     expect(drawer).toMatch(/<ContainersPanel\s+v-else\s+only="info"\s*\/>/)
   })
 
-  it('一键预设初设只在地图左上角「初设」栏可点', () => {
+  it('一键预设（自动放置）只在地图左上角「初设」栏可点', () => {
     const queue = readFileSync('src/components/game/DecisionQueue.vue', 'utf8')
-    expect(queue).toContain('一键预设初设')
+    // 2026-11-19（用户）：文案「一键预设初设」→「自动放置」
+    expect(queue).toContain('自动放置')
     expect(queue).toContain('setup.presetSelfSetupNow(')
     const panel = readFileSync('src/components/setup/SetupPanel.vue', 'utf8')
     expect(panel).not.toContain('setup.presetSelfSetupNow(')
