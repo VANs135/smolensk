@@ -5,7 +5,6 @@ import { ConsensusChecklist } from '@/components/hotseat'
 import { ScenarioBriefingDialog } from '@/components/setup'
 import { provideUiMode } from '@/components/ui-mode'
 import { scenarios } from '@/data'
-import { MAP_IMAGE_SRC } from '@/render/map-render'
 import {
   useGameSessionStore,
   useHotseatStore,
@@ -27,8 +26,6 @@ const modeOptions = computed(() => hotseat.MODE_LABELS)
 const choices = computed(() => setup.scenarioChoices)
 const selectedId = ref(setup.scenarioId)
 const selected = computed(() => choices.value.find((item) => item.id === selectedId.value) ?? null)
-/** 剧本页右侧的地图预览底图（与对局同一张，参考图「大地图预览」） */
-const mapPreviewSrc = MAP_IMAGE_SRC
 
 /**
  * 剧本记录的完整字段
@@ -200,25 +197,7 @@ function onConfirmBriefing(): void {
         </section>
 
         <div class="scenario__side">
-          <!--
-            安卓壳：参考图式「右侧大地图预览 + 选中战役名 + 开始」沉浸式布局。
-            桌面端由 CSS 隐藏本块，沿用原来的列表 + 设置面板。
-          -->
-          <section v-if="selected !== null" class="scenario__preview">
-            <div class="scenario__preview-head">
-              <h3 class="scenario__preview-title">{{ selected.name }}</h3>
-              <span class="scenario__preview-date num"
-                >{{ selected.firstTurn }} – {{ selected.lastTurn }}</span
-              >
-            </div>
-            <div class="scenario__preview-map">
-              <img :src="mapPreviewSrc" alt="斯摩棱斯克战役地图预览" />
-            </div>
-            <button class="scenario__preview-go" type="button" @click="onEnterSetup">
-              开始 <span aria-hidden="true">→</span>
-            </button>
-          </section>
-
+          <!-- 用户 2026-11-19：选择剧本界面不放地图（预览块已撤） -->
           <section v-if="selected !== null" class="scenario__sheet" aria-labelledby="mode-title">
             <header class="scenario__heading">
               <h3 id="mode-title">对局设置</h3>
@@ -663,9 +642,6 @@ function onConfirmBriefing(): void {
 /* ── 安卓壳：参考图式剧本选择（左列选剧本 + 右侧大地图预览 + 开始）──
  * 桌面端隐藏预览块，沿用上面的列表 + 设置双栏；只在安卓启用沉浸式布局。
  */
-.scenario__preview {
-  display: none;
-}
 
 html[data-platform='android'] .scenario {
   padding: var(--safe-top) 12px calc(12px + var(--safe-bottom));
@@ -697,63 +673,7 @@ html[data-platform='android'] .scenario__cols {
   align-items: stretch;
 }
 
-html[data-platform='android'] .scenario__preview {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-  border: 1px solid var(--color-command-line);
-  border-radius: var(--radius-lg);
-  background: var(--color-command-panel);
-}
-
-html[data-platform='android'] .scenario__preview-head {
-  flex: none;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--color-command-line);
-}
-
-html[data-platform='android'] .scenario__preview-title {
-  margin: 0;
-  font-size: clamp(16px, 3.5vw, 24px);
-  color: var(--color-command-ink);
-  line-height: 1.2;
-}
-
-html[data-platform='android'] .scenario__preview-date {
-  display: block;
-  margin-top: 4px;
-  color: var(--color-command-muted);
-  font-size: 12px;
-}
-
-html[data-platform='android'] .scenario__preview-map {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  background: var(--color-command-bg);
-}
-
-html[data-platform='android'] .scenario__preview-map img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center;
-  display: block;
-}
-
-html[data-platform='android'] .scenario__preview-go {
-  flex: none;
-  min-height: 48px;
-  margin: 8px 12px 12px;
-  border: 1px solid var(--color-command-teal);
-  border-radius: var(--radius-md);
-  background: var(--color-command-teal);
-  color: var(--color-command-bg);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-}
+/* 用户 2026-11-19：剧本页不放地图，预览样式已撤 */
 
 html[data-platform='android'] .scenario__side {
   min-height: 0;
@@ -765,11 +685,6 @@ html[data-platform='android'] .scenario__side {
   html[data-platform='android'] .scenario__cols {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  html[data-platform='android'] .scenario__preview-map {
-    height: 34vh;
-    flex: none;
   }
 
   html[data-platform='android'] .scenario__side {
