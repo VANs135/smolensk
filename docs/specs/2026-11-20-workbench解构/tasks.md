@@ -32,7 +32,7 @@
 
 理由：切片若 `import … from './workbench'` 会造 facade ⇄ 切片环；当端口传又能传（但纯类型/纯函数没必要占端口位）。
 
-扣除这两项后，**端口 33 项 = 按值 26 + 晚绑定 7**：
+扣除这两项后，**端口 34 项 = 按值 27 + 晚绑定 7**（下表逐行数出来正好 27+7；文字里的 33/26 是嘴算错的，2026-11-21 用脚本复核修正）：
 
 | 端口                                                                             | 类型（照声明抄）                                                                                                                                                                                                                                          |
 | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -54,9 +54,11 @@
 | `noteUnitEnteredHex`                                                             | `(unit: ConsoleUnit, hex: HexRef) => void`                                                                                                                                                                                                                |
 | **晚绑定 7**                                                                     | `barrageFacts`(computed 3682) / `railMoveFacts`(computed 4520) / `airUnloadLedger`(ref 15966) / `airMissionJoinChoices`(computed 16814) / `specialPending`(ref 18126) / `airMissionSegmentKind`(computed 22401) / `airMissionKindChoices`(computed 22425) |
 
+**剪端口那一侧的连带义务（复核补）**：6 个内部化名字在**区外都还有引用**（实测 `applyAirCargoDelivery` 1、`airUnitsInHex` 2、`isAirInOffMapBox` 2、`onMapAirUnits` 4、`airUnitsAt` 4、`airDistanceFromRealBase` 10）。所以搬完必须把它们**加进切片 `return` 并在 facade 解构**，否则 facade 其余代码断（`applyAirCargoDelivery` 区外那 1 处其实就是 ports 实参本身，删掉后可能为 0——**搬完重新数一遍再决定要不要解构**，别照抄这张表）。
+
 **同时要剪掉的 6 个既有端口**（定义就在本区间里）：`isAirInOffMapBox`/`onMapAirUnits`/`airUnitsAt`/`airDistanceFromRealBase`/`airUnitsInHex`/`applyAirCargoDelivery`——接口成员、`createAirDomain` 解构、facade ports 实参（含 `get` 访问器）三处同删，并把切片里已有的 `ports.X` 改回裸名。
 
-端口总数：36 − 6 + 21 = **51**（单批新增 27 < 40 红线 ✓，但接口本身开始变宽，B3 之后应考虑把 `pushLog`/`recordSettlement`/`requireAction` 这类基础设施挪进 `workbench-core` 的共享固定面）。
+端口总数：36 − 6 + 20 = **50**（34 端口 − 已有 14 = 新增 20；单批新增 20 < 40 红线 ✓，但接口本身开始变宽，B3 之后应考虑把 `pushLog`/`recordSettlement`/`requireAction` 这类基础设施挪进 `workbench-core` 的共享固定面）。
 
 - 验收：`npm run check` 绿 + `tests/stores/*` 日志/撤销/存档用例绿 + 公开面键集不变
 
