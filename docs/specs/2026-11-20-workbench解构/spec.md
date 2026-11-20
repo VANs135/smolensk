@@ -280,7 +280,16 @@ HIT recordSettlement    decls=1 7123   ← 对照组，正确定位到函数声�
 2. **晚绑定端口在切片里的写法是 `ports.x.value`，不 destructure。** 若切片顶部 `const { zocOnlySupplyFacts } = ports`，getter 会在建域那一刻被求值 ⇒ 撞 TDZ。B2-1 只有 6 处引用，改写成 `ports.x.value` 即成（`lateFix` 的正则命中数 1/2/1/1/1/1，与预期一致）。
 3. 顺带验证了一个一直没被证明的假设：**`tests/shared/store-source.ts` 用 `readdirSync` 自动纳入新切片**，38 处源码守卫测试零改动即全绿——不需要为每批新增切片去改测试。
 
-实装结果：`workbench.ts` 31,074 → **30,648 行**，`workbench-air.ts` 486 行，公开面 1,013 键不变，`npm run check` 623 文件 / 6,256 用例 / 201.16s / exit 0。
+实装结果：`workbench.ts` **31,036 → 30,649 行（−387）**，`workbench-air.ts` 487 行，`workbench-model.ts` +153 行，公开面 1,013 键不变，`npm run check` 623 文件 / 6,256 用例 / 201.16s / exit 0。
+
+**⚠ 上一条落地记录里的「31,074 → 30,648（−426）」是错的**（第六轮复核抓出）：31,074 是 **P2-1 之前**的行数，P2-1 把四个共享类型搬进 `workbench-model.ts` 时已经先减了 38 行。B2-1 的真实基线是 31,036。**教训与 §1.5 同源**：跨批引用规模数字必须重新量，不能沿用上一批的读数。
+
+**B2-1 的三条机器证据（第六轮复核，可直接复跑 `E:\Temp\ocs-review-pw\verify-b21b.mjs`）**：
+
+1. **逐字对拍**：把 `git show HEAD~2:src/stores/workbench.ts` 的同三个区间取出来、施加同样的 6 处 `ports.x` 改写，再在切片里 `indexOf` —— 三段 **128 / 35 / 138 行全部完整命中**，字节级没有丢行。
+   （第一次跑这条是拿 `HEAD~1` 比的，结果三段全部"未命中"，因为 `HEAD~1` 已是 B2-1 之后的文件——**基线提交取错了，差点误判成丢内容**。）
+2. **TDZ 扫描**：40 个公开名在 facade 里逐名找首次出现行，只有 3 项出现在建域点（2251）之前——`airState`@1210、`ownAirBases`@2036、`airInputs`@2051，三者分别落在 `mayMutate() {}`、`beginAirPlacementHexPickNow()`、`beginAirTransferHexPickNow()` 的函数体内，**调用时才求值，不构成 TDZ**。
+3. **`ports.x` 逐个归位**：切片里 11 处 `ports.` 命中，去掉文档注释 2 处与 `transports.length` 的假命中 1 处，其余 8 处全在 `computed(...)` 体内或 `lossPending: () => …` 这类回调里。**没有一处是在建域那一刻执行的**——这正是晚绑定能成立的前提。
 
 ---
 

@@ -41,7 +41,7 @@
 
 ### B2-1 状态 + 派生（先做，无函数体）
 
-- [x] 新建 `src/stores/workbench-air.ts`（**486 行**），搬 **状态块 2416–2543 + 整备块 2558–2592**（26 个 ref）+ **派生块 5949–6086**（12 个 computed）
+- [x] 新建 `src/stores/workbench-air.ts`（**487 行**），搬 **状态块 2416–2543 + 整备块 2558–2592**（26 个 ref）+ **派生块 5949–6086**（12 个 computed）
 - [x] 建域点落在 2416（替换原状态块首行），**没有压到 setup 末尾**——只有 5 项晚绑定，其余按值即可
 - [x] 实装端口 **25 项 = 20 按值 + 5 晚绑定**（⚠ 上一版写的"6 直连 / 19 getter"被实装推翻：**函数声明会提升，无论声明多晚都能按值传**，真正需要晚绑定的只有 `const`/`computed` 五个——`zocOnlySupplyFacts`(4192)、`onMapAirUnits`(18612)、`airCargoLossPending`(19673)、`segmentGateQuery`(23302)、`constructionMarkerPieces`(27836)；`constructionMarkerAirBaseId`(27821) 是函数，按值传）
 - [x] 不能漏的三个端口 `setAirStatus`(:17440)、`markAirMissionFlown`(:17459)、`pushLog`(:7075) 已在端口表内（靠 `scripts/port-crosscheck.mjs` 对拍才发现）
@@ -49,7 +49,7 @@
 - [x] 切口落实：2416–2543（**2550–2557 的 weather watch 与其注释留在 facade**——切片内 watch 会双触发）/ 2558–2592 / 5949–6086
 - [x] 切片 `return` **40 个名**，公开面 **1,013 键不变**
 - 命名：**域对象叫 `airDomain`，不要叫 `air`**——facade 里已有 `airSupply` / `airUnitTransit` / `airMissionDomain` / `airCargoResolution` 四个 air 开头的域，再加一个 `air` 无法区分（另：`(air) => …` 这种回调参数在文件里出现几十次，`air` 这个名字太容易被误读成本地变量）
-- **验收实测**：`npm run check` → 623 文件 / 6,256 用例 / 201.16s / exit 0；`arch` 949 源码（+1 切片）；`workbench.ts` 31,074 → **30,648 行**；测试零改动（`tests/shared/store-source.ts` 用 `readdirSync` 自动纳入新切片，38 处源码守卫无需改）
+- **验收实测**：`npm run check` → 623 文件 / 6,256 用例 / 201.16s / exit 0；`arch` 949 源码（+1 切片）；`workbench.ts` **31,036 → 30,649 行（−387，注意 31,074 是 P2-1 之前的旧读数）**；测试零改动（`tests/shared/store-source.ts` 用 `readdirSync` 自动纳入新切片，38 处源码守卫无需改）
 
 ### B2-2 动作块（后做）
 
