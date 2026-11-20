@@ -62,7 +62,7 @@ B2-1 只搬了派生的一半——`5949–6086` 那一簇；`5701–6321` 的 *
 - [x] 这簇里含**动作**（`toggleAirCargoUnit`/`beginTransferNow`/`toggleTransferAircraft`/`cancelTransferNow`/`completeTransferToBaseNow`），搬的是行为而不只是派生——公开面 **1,013 键不变**
 - [x] 边界：start 取 **5701**（`airMissionReturnChoices` 的文档注释首行；上一条 `supplyPickupRequirement` 在 5699 收尾）；end 取 **6321**（`reducedBases` 的 `)`；6323 起是 `moveRuntime` 的注释）。**按 5711/6319 切会把注释留成孤儿、把函数切在中间**
 - [x] **源码级测试要跟着改**：`tests/stores/action-wiring.test.ts` 的 `STORE_FILES` 是硬编码清单，只列了 `workbench.ts` ⇒ 搬走的 `cancelTransferNow` 立刻"不是 store 函数"。改为 `globSync('src/stores/workbench-*.ts')`，且**必须排在卫星 store 之后**——`rollAttritionNow` 在 facade 已只剩三行转发壳（壳里没有 `requireAction`），先扫会抢到壳、报"标了已加闸其实没加"
-- **验收实测**：`npm run check` → 623 文件 / 6,256 用例 / **208.62s** / exit 0；`arch` 949 源码；`workbench.ts` **30,649 → 30,075 行（−574）**、`workbench-air.ts` **487 → 1,197 行（+710）**；逐字对拍（归一化去 `ports.`/`.value`/空白）**621 行完整命中**；重复定义 0、僵尸函数 0；`/= airDomain` 解构 **85 项 = 88 公开名 − 3 个只有切片自己用的**（`transferBaseId`/`airDistanceToBox`/`canTransferAirToBox`）
+- **验收实测**：`npm run check` → 623 文件 / 6,256 用例 / **208.62s** / exit 0；`arch` 949 源码；`workbench.ts` **30,649 → 30,075 行（−574）**、`workbench-air.ts` **487 → 1,202 行（+715）**；逐字对拍**只去 `ports.` 前缀、`.value` 与空白都不动** ⇒ **621 行完整命中**（2026-11-21 收紧口径复核）；重复定义 0、僵尸函数 0；`/= airDomain` 解构 **85 项 = 88 公开名 − 3 个只有切片自己用的**（`transferBaseId`/`airDistanceToBox`/`canTransferAirToBox`，已核公开面快照里从来没有这 3 个键）
 
 ### B2-2 动作块（后做，**2026-11-20 重测：拆 4 批，全部 < 40 端口**）
 

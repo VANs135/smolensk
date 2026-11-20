@@ -17,49 +17,53 @@
  */
 import { computed, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
+
 import { createAirCargoResolutionDomain } from './air-cargo-resolution'
 import { createAirMissionDomain } from './air-mission'
 import { createAirSupplyDomain } from './air-supply'
 import { createAirUnitTransitDomain } from './air-unit-transit'
+import type { SpDump } from './supply-types'
 import type { SettlementRecordInput } from './workbench-core'
-import type { createSupplyFacts } from './workbench-model'
 import {
+  airCombatRatingOf,
   createAirInputs,
   hexLabel,
   isFighterAircraft,
+  parseHexPath,
   terrainsAt,
   toAirBaseView,
   toAirMissionAircraftView,
   type ActionGateQuery,
+  type ActionKey,
   type AirInputs,
   type ConsoleAirUnit,
+  type ConsolePhase,
   type ConsoleUnit,
   type WorkbenchLogEntry,
+  type createSupplyFacts,
 } from './workbench-model'
 import type { HexRef, Side } from '@/data'
-import { sameHex } from '@/engine/hex-geometry'
-import { hexDistance } from '@/engine/hex-geometry'
-import { planOffMapAirBoxFlightFromHex } from '@/engine/rules/air-mission'
-import { isAirTransportableUnit } from '@/engine/rules/air-cargo'
-import { canUseTransport } from '@/engine/rules/modes'
-import { airCombatRatingOf, parseHexPath } from './workbench-model'
-import type { ActionKey, ConsolePhase } from './workbench-model'
-import { airCargoTransportT } from '@/engine/rules/air-cargo'
-import { airMissionRoster } from '@/engine/rules/air-mission-roster'
+import type { Derivation } from '@/engine/derivation'
+import { hexDistance, sameHex } from '@/engine/hex-geometry'
 import type { RuleOutcome } from '@/engine/result-types'
+import { airCargoTransportT, isAirTransportableUnit } from '@/engine/rules/air-cargo'
+import type { AirCargoUnloadPlan } from '@/engine/rules/air-cargo-unload'
+import { planOffMapAirBoxFlightFromHex } from '@/engine/rules/air-mission'
+import { airMissionRoster } from '@/engine/rules/air-mission-roster'
+import { canUseTransport } from '@/engine/rules/modes'
 import type { AirStatus, RngState } from '@/engine/state-types'
 import {
   activeAircraftInBase,
   activeStackingLimitOf,
-  airInteractionChecklist,
   airDistanceToOffMapBox,
+  airInteractionChecklist,
   airTransportProfile,
+  airTransportTerrainIsClosed,
   drawableDumpsFor,
+  holdingsToT,
   inPatrolZoneOf,
   patrolZoneHexes,
   planInterceptionResponse,
-  airTransportTerrainIsClosed,
-  holdingsToT,
   refitCapacity,
   tToHoldings,
   transportCapacityOf,
@@ -70,16 +74,13 @@ import {
   type AirMissionAircraftView,
   type AirMissionKind,
   type BaseRefitPlan,
-  type InterceptionResponse,
   type BaseTransferPlan,
+  type InterceptionResponse,
   type PanzerGroup,
   type SpHoldings,
 } from '@/engine/rules'
-import type { AirCargoUnloadPlan } from '@/engine/rules/air-cargo-unload'
-import type { SpDump } from './supply-types'
-import type { Derivation } from '@/engine/derivation'
 
-/** © 空军的端口。20 项按值、5 项晚绑定（见文件头）。 */
+/** © 空军的端口。29 项按值、7 项晚绑定（见文件头）。 */
 export interface AirDomainPorts {
   activeSide: ComputedRef<Side>
   rng: ComputedRef<RngState>
