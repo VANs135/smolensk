@@ -51,14 +51,27 @@
 - 命名：**域对象叫 `airDomain`，不要叫 `air`**——facade 里已有 `airSupply` / `airUnitTransit` / `airMissionDomain` / `airCargoResolution` 四个 air 开头的域，再加一个 `air` 无法区分（另：`(air) => …` 这种回调参数在文件里出现几十次，`air` 这个名字太容易被误读成本地变量）
 - **验收实测**：`npm run check` → 623 文件 / 6,256 用例 / 201.16s / exit 0；`arch` 949 源码（+1 切片）；`workbench.ts` **31,036 → 30,649 行（−387，注意 31,074 是 P2-1 之前的旧读数）**；测试零改动（`tests/shared/store-source.ts` 用 `readdirSync` 自动纳入新切片，38 处源码守卫无需改）
 
-### B2-2 动作块（后做）
+### B2-2 动作块（后做，**2026-11-20 重测：拆 4 批，全部 < 40 端口**）
 
-- [ ] 搬函数块 **18136–18148 / 18198–18502 / 18503–18953 / 19673–20865 / 23386**
-- [ ] 开工先复测端口，**> 40 再拆一刀**
-- [ ] 边界：`captureAirBaseNow` 实际 18812–**18953**，分节横幅在 **18950**（横幅落在函数体内）⇒ 按横幅取 end 会把后半段切给下一批
-- [ ] 不含 §19 的 18003–18135（轰炸/炮击入口判据，跨域协调层，留 B5 之后）
-- [ ] 不含 `airUnits`(1921) / `airBoxMembers`(1928)（与地图/到货/轰炸共享，留 facade/core）
-- 验收：`npm run check` 绿 + 公开面不变 + 文案/函数名双对拍 0 差
+B2-1 落地后行号全部漂移（facade 少了 387 行），旧编号 **全部作废**。按符号名重新定位、用 `port-crosscheck.mjs` 扣掉"已属切片内部"的 40 个名字后实测：
+
+| 批次      | 当前区间      | 内容                                                                                                                                                                                                                                                                                                                        | 真端口 | 行数 |
+| --------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---- |
+| **B2-2a** | `17772–18578` | `beginAirMissionNow` … `captureAirBaseNow`（含 `confirmAirCombatNow`、`resolveAirCargoNow`、`applyAirCargoDelivery`）                                                                                                                                                                                                       | **35** | 807  |
+| **B2-2b** | `19283–19720` | `airMissionCargoCapacityNow` / `airCargoLossPending` / `queueAirCargoLoss` / `confirmAirCargoLossNow` / `hasCargoOwnership` / `resolveFlakNow` / 任务执行前半（`beginAirTargetHexPickNow`、`runAirMissionNow`、`previewAirCombatRoles`、`autoResolveAirMissionNow`、`finishAutomaticAirReturn`、`finishAbortedAirMission`） | **27** | 438  |
+| **B2-2c** | `19729–20047` | `beginAirBarrageNow` / `runBarrageChainNow` / `airMissionResultReady` / `confirmAirMissionNow` / `settleAirMissionNow` / `recordAbortedAirBarrage` / `completeAirCargoReturn` / `completeAirReturnNow`                                                                                                                      | **31** | 319  |
+| **B2-2d** | `20048–20490` | `cancelAir` / `toggleAirstripBase` / `refitBaseNow` / `beginRefitNow` / `confirmRefitSelectionNow` / `toggleRefitAircraft` / `cancelRefitNow` / `pickRefitPayDump` / `confirmRefitPaymentNow` / `transferAircraftNow` / `toggleAirReductionUnit` / `reduceBaseNow` / `airMissionKindLabel` / `airStatusLabel`               | **21** | 443  |
+
+（合并量过一次：`19283–20490` 一起切要 **90 项**、扣掉切片内部仍剩 65 项，超红线 ⇒ 必须拆。）
+
+- [ ] 顺序：a → b → c → d（d 里的 `airMissionKindLabel`(20473) 被 a/b/c 引用，先做 d 可少一个端口；先做 a 则它按值传，也无妨）
+- [ ] 边界：`captureAirBaseNow` 现在 **18425** 起、**18578** 止（旧记录 18812–18953 已漂移）；`18579` 起是 `printedHedgehogOwners`（C6 特种战斗），**不属于空军**——这批的"不连续"就是被它和 18700–19282 的 `specialPending`/`resolveSpecialCombatAt`/拦截 夹开的
+- [ ] 不含 `airMissionAllowedInPhase`(17710) 与 `bombingEntryEligible`(17721)/`barrageTargetsNow`(17737)/`hipShootEntryEligible`(17761)：§19 跨轰炸+空军的入口判据，留 B5 之后
+- [ ] 不含 `airMissionKindChoices`(22999)、`airMissionSegmentKind`(22975)：单点派生，随 B5/B6 走
+- [ ] 不含 `airUnits`(1755) / `airBoxMembers`(1767)（与地图/到货/轰炸共享，留 facade）
+- 验收：`npm run check` 绿 + 公开面 1,013 键不变 + facade 函数数 707 递减到对应值 + 画面/文案对拍 0 差
+
+**工具口径提醒（本轮实测）**：`port-crosscheck.mjs` 的「端口」一栏可信，但它的「未在 setup 体内声明（真·外部）」一栏**不可信**——函数局部变量与回调参数（`unit`/`entry`/`index`/`target` 等）会被列进去（a 批就列了 128 项假外部）。只看端口那一栏，剩下靠 `vue-tsc` 收口。
 
 ## 4. B3 移动三切片
 
