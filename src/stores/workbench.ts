@@ -1,15 +1,11 @@
 import { createGroundMovementDomain } from './ground-movement'
-import {
-  airCargoTransportT,
-  isAirTransportableUnit,
-  checkAirTransportMovementHandoff,
-} from '@/engine/rules/air-cargo'
+import { airCargoTransportT, checkAirTransportMovementHandoff } from '@/engine/rules/air-cargo'
 import {
   planAirUnitTransport,
   hasUnitMovementThisPhase,
   type AirUnitTransportState,
 } from '@/engine/rules/air-unit-movement'
-import { canonicalMode, canUseTransport } from '@/engine/rules/modes'
+import { canonicalMode } from '@/engine/rules/modes'
 import { isSpBearingSource } from '@/engine/rules/supply-interaction'
 import type { AirCargoUnloadPlan } from '@/engine/rules/air-cargo-unload'
 import { planAirSupplyLoad } from '@/engine/rules/air-supply'
@@ -89,7 +85,6 @@ import {
   DIRECT_DRAW_RANGE_MP,
   SP_TO_T,
   airBaseBuildCostSp,
-  refitCapacity,
   airBoxEdgeColumn,
   airBoxRangeHexes,
   airDistanceToOffMapBox,
@@ -97,7 +92,6 @@ import {
   airMissionTargetTypeAllowed,
   type AirTargetHexFacts,
   planOffMapAirBoxFlight,
-  planOffMapAirBoxFlightFromHex,
   claimFrontalReserves,
   constructionTaskCostsSp,
   frontalReservesBatch,
@@ -121,7 +115,6 @@ import {
   rollVariableExit,
   variableExitFormationOf,
   type VariableExitResult,
-  airInteractionChecklist,
   transportCapacityOf,
   planCargoLoss,
   validateCargoLossChoice,
@@ -203,7 +196,6 @@ import {
   formationFuelCovers,
   getPrintedHedgehog,
   holdingsToT,
-  inPatrolZoneOf,
   isConvertibleTransportPoint,
   isIndependentUnit,
   hqFuelCovers,
@@ -223,7 +215,6 @@ import {
   arrivalCopiesOf,
   arrivalComponentNames,
   arrivalNamedCopiesOf,
-  patrolZoneHexes,
   planArrivals,
   planAirBaseReduction,
   planBaseRefit,
@@ -238,7 +229,6 @@ import {
   planConvertTransportToExtender,
   planFlipExtenderToTransport,
   planFuelPayment,
-  planInterceptionResponse,
   planLosses,
   planOptions,
   planRebuild,
@@ -320,7 +310,6 @@ import {
   timingsOn,
   traceCoverageHas,
   traceCoverageHexes,
-  type AirBaseView,
   type AirCombatWindow,
   type AirMissionSegment,
   type AirInteractionState,
@@ -354,7 +343,6 @@ import {
   type DrawableDump,
   type SupplyMobility,
   type GroupReachable,
-  type InterceptionResponse,
   type LegalityVerdict,
   type MoveStepRecord,
   type MoveInteractionState,
@@ -2285,6 +2273,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     get constructionMarkerPieces() {
       return constructionMarkerPieces
     },
+    phase,
+    airBoxMembers,
+    isAirInOffMapBox,
+    airUnitsAt,
+    airDistanceFromRealBase,
+    airUnitsInHex,
+    hqDeliveryDumpKeys,
+    actionAllowedNow,
+    isConstructionMarkerAirBaseId,
+    get allSpDumps() {
+      return allSpDumps
+    },
+    get supplyFacts() {
+      return supplyFacts
+    },
   })
   const {
     airActive,
@@ -2306,7 +2309,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     refitDoneBaseIds,
     refitTargetBaseId,
     refitStage,
-    transferBaseId,
     transferMode,
     transferFromBox,
     transferSelectedIds,
@@ -2327,6 +2329,52 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     airMissionRosterNow,
     airMissionFlyingUnits,
     airMissionReturnOrigins,
+    airMissionReturnChoices,
+    airReturnSelectionLabel,
+    airReturnChosen,
+    airCombatAttackerPlanes,
+    airCombatDefenderPlanes,
+    airCombatRoundBudget,
+    airInterceptionDefender,
+    toggleAirCargoUnit,
+    airCargoUnitChoices,
+    airMissionHasFighter,
+    airChecklist,
+    airTargetInEnemyPatrolZone,
+    airInterceptionResponse,
+    airInterceptorCandidates,
+    airTargetBaseLevel,
+    airTargetBaseIsAirstrip,
+    airEnemyAtTarget,
+    capturableEnemyAirBases,
+    airPatrolZoneHexes,
+    airEnemyPatrolZoneHexes,
+    airInactiveAtBase,
+    airRefitPayDumps,
+    airReductionCandidates,
+    refitDoneBases,
+    refitBase,
+    refitCandidates,
+    refitSelectedIds,
+    refitSelectLimitAt,
+    refitSelectLimit,
+    refitPayDumps,
+    refitPayNeedT,
+    transferBase,
+    transferCandidates,
+    transferBoxReady,
+    transferBaseCandidates,
+    transferHasBoxOption,
+    transferHasBaseOption,
+    canTransferAirToBaseNow,
+    beginTransferNow,
+    toggleTransferAircraft,
+    cancelTransferNow,
+    completeTransferToBaseNow,
+    refitStartBases,
+    refitAirbaseHexes,
+    refitBlockReasonAt,
+    reducedBases,
   } = airDomain
   /*
    * 14.1f / 专规 1.5：**天气是 Pre-Turn 掷出来的盘面事实**（`records.weather`），不是玩家的第二份输入。
@@ -5697,628 +5745,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           manual: true,
         }
   })
-
-  /**
-   * 14.1c / 专规 1.4a：返航三选一的**可用性**
-   *
-   * - `departureAvailable`：出发基地仍是**本方**空军基地；自图外盒起飞者恒可回盒。
-   * - `offMapBoxAvailable`：图上起飞的飞机，`目标格 → 盒`（1.4a：连接列 20/30 + 列距）
-   *   ≤ 印刷航程（14.1c 返航用正常航程，不翻倍）。
-   *   空运/空投任务只有**货全部卸完**才放行（14.9f：未卸载的货仍在机上，返盒没有入库规则）。
-   * - `offMapBoxBlockedReason`：上一条被拒时给界面的原因（子项本身不出现）。
-   * - `otherBases`：剩余航程（`target → base ≤ 印刷航程`）内的其它己方基地格。
-   */
-  const airMissionReturnChoices = computed<
-    {
-      aircraftId: string
-      fromBox: boolean
-      departureAvailable: boolean
-      departureHex: HexRef
-      offMapBoxAvailable: boolean
-      /** 14.9f：货未卸完时给界面的禁用原因（子项本身不出现） */
-      offMapBoxBlockedReason: string | null
-      otherBases: HexRef[]
-    }[]
-  >(() => {
-    const state = airState.value
-    if (state === null) return []
-    return airMissionReturnOrigins.value.map((origin) => {
-      const plane = airUnits.value.find((air) => air.instanceId === origin.aircraftId)
-      const range = plane?.rangeHexes ?? origin.rangeHexes
-      const fromBox = origin.fromOffMapBox === true
-      const departureBase = airBases.value.find(
-        (base) => base.side === state.side && sameHex(base.hex, origin.baseHex),
-      )
-      const cargoMission = state.kind === 'air_transport' || state.kind === 'air_drop'
-      // 14.9f：`assignment.cargo` 是卸载/货损后的余量 ⇒ 非空即「货还在机上」
-      // 空运/空投只有货全卸完才放行返盒（用户 2026-11-13 批复的最小改法）
-      const cargoRemaining = cargoMission && state.assignment.cargo.length > 0
-      // 专规 1.4a：从**任务格**回盒的代价＝20/30 + 任务格到连接列的列距（不是只看 20/30）
-      const boxReachable = planOffMapAirBoxFlightFromHex({
-        side: state.side,
-        rangeHexes: range,
-        fromHex: state.targetHex,
-      }).ok
-      return {
-        aircraftId: origin.aircraftId,
-        fromBox,
-        departureAvailable: fromBox || departureBase !== undefined,
-        departureHex: { ...origin.baseHex },
-        offMapBoxAvailable: !fromBox && !cargoRemaining && boxReachable,
-        offMapBoxBlockedReason:
-          !fromBox && cargoRemaining ? '14.9f：货物未卸载，不可返盒（原文缺口）' : null,
-        otherBases: airBases.value
-          .filter(
-            (base) =>
-              base.side === state.side &&
-              !sameHex(base.hex, origin.baseHex) &&
-              hexDistance(state.targetHex, base.hex) <= range,
-          )
-          .map((base) => ({ ...base.hex })),
-      }
-    })
-  })
-
-  /** 14.2f-G：某架机当前选定的返航落点（供界面显示） */
-  function airReturnSelectionLabel(aircraftId: string): string {
-    if (airInputs.value.returnToBox[aircraftId] === true) return '图外空军基地'
-    const text = airInputs.value.returnHexText[aircraftId]
-    const choice = airMissionReturnChoices.value.find((item) => item.aircraftId === aircraftId)
-    if (text !== undefined && text !== '') {
-      const parsed = parseHexPath(text)[0]
-      if (
-        choice !== undefined &&
-        !choice.fromBox &&
-        parsed !== undefined &&
-        sameHex(parsed, choice.departureHex)
-      )
-        return `出发基地（${text}）`
-      return text
-    }
-    if (choice === undefined) return ''
-    return choice.fromBox ? '出发基地（图外盒）' : `出发基地（${hexLabel(choice.departureHex)}）`
-  }
-
-  /**
-   * 14.2f-G：这一架是否已被**明确选过**返航落点（供界面给"已选"状态）
-   *
-   * 2026-11-15 实点：未选时 `airReturnSelectionLabel` 已显示「出发基地（15.10）」，
-   * 点「返回出发基地」写回的正是同一个落点 ⇒ 文案一字不变，看起来"点了没反应"。
-   */
-  function airReturnChosen(aircraftId: string): boolean {
-    if (airInputs.value.returnToBox[aircraftId] === true) return true
-    const text = airInputs.value.returnHexText[aircraftId]
-    return text !== undefined && text !== ''
-  }
-
-  /**
-   * 14.3e-B：本场空战里**攻方**在场的飞机（逐轮点名的候选取此）
-   *
-   * 攻方由引擎给（`combat.roles.attackerSide`，14.3c 的资格判定在引擎里），
-   * 本投影只做"哪一方 / 格内哪几架"的搬运 —— 界面据此铺阵列，缺省仍可全自动。
-   */
-  const airCombatAttackerPlanes = computed<ConsoleAirUnit[]>(() => {
-    const hex = airTargetHex.value
-    const side = airState.value?.combat?.roles.attackerSide ?? null
-    if (hex === null || side === null) return []
-    return airUnitsInHex(hex, side)
-  })
-
-  /** 14.3e-B：本场空战里**守方**在场的飞机（守方**任选**，含括号值的飞机） */
-  const airCombatDefenderPlanes = computed<ConsoleAirUnit[]>(() => {
-    const hex = airTargetHex.value
-    const side = airState.value?.combat?.roles.defenderSide ?? null
-    if (hex === null || side === null) return []
-    return airUnitsInHex(hex, side)
-  })
-
-  /**
-   * 14.3e-B：逐轮点名的**轮数上界**（双方在场机数之和）
-   *
-   * 实际轮数由骰面与返航决定（14.3e-D：直到一方成为该格唯一一方），故这是"最多可能几轮"，
-   * 界面按它铺点名的行数；少铺的行玩家不点名，即交给引擎自动。
-   */
-  const airCombatRoundBudget = computed<number>(
-    () => airCombatAttackerPlanes.value.length + airCombatDefenderPlanes.value.length,
-  )
-
-  /**
-   * 14.5 / 14.3e-B：**迎战拦截机的那一架任务机**（拦截空战里的守方）
-   *
-   * 缺省口径与引擎**一致**：ACV 最高（`resolveAirCombatRounds` 的 `pickHighestAcv`）。
-   * ★ 修前 store 在未点名时回落"任务机名单第一架"，与引擎的缺省不一致 ——
-   *   同一件事两处不同答案，玩家看到的那一架与实际交手的那一架可能不是同一架。
-   */
-  const airInterceptionDefender = computed<ConsoleAirUnit | null>(() => {
-    const named = airInputs.value.namedDefenderId
-    if (named !== null) {
-      return airMissionFlyingUnits.value.find((air) => air.instanceId === named) ?? null
-    }
-    const planes = airMissionFlyingUnits.value
-    if (planes.length === 0) return null
-    // 14.1b：ACV 取**当前面**（减损机用减损面值；与引擎 `pickHighestAcv` 的入参同源）
-    return planes.reduce((best, plane) =>
-      airCombatRatingOf(plane) > airCombatRatingOf(best) ? plane : best,
-    )
-  })
-
-  /**
-   * 14.10a：把某枚单位加入 / 移出**本次的货物**（面板点算子图阵列直连这里）
-   *
-   * 只做清单维护：资格（Para 声明）、运力、计划回合、目标格全部由引擎在**宣布任务**时判。
-   */
-  function toggleAirCargoUnit(instanceId: string): void {
-    const ids = airInputs.value.cargoUnitIds
-    airInputs.value = {
-      ...airInputs.value,
-      cargoUnitIds: ids.includes(instanceId)
-        ? ids.filter((id) => id !== instanceId)
-        : [...ids, instanceId],
-    }
-  }
-
-  /**
-   * 14.9c（第五批批 C 切片 2）：**可作单位货物的本方单位**
-   *
-   * 候选＝图上本方**地面战斗**单位且**处于移动模式**——「处于**移动模式**的战斗单位也可以空运，
-   * 前提是其 MA 为 **10 或以下的步行 MP**」。本作数据里战斗面 MA 最大 10 ⇒ "步行 MP≤10" 恒满足
-   * （判据层真值表在引擎 `missionCargoCheck` 里钉），候选只筛"模式"这一半；
-   * 空投的人员/战斗单位投送在本作 N/A（R6），候选仍可供空运使用；空投只允许 SP。
-   */
-  const airCargoUnitChoices = computed<ConsoleUnit[]>(() =>
-    units.value.filter(
-      (unit) =>
-        unit.side === airActingSide.value &&
-        canUseTransport(unit.mode) &&
-        isAirTransportableUnit({
-          id: `unit:${unit.instanceId}`,
-          kind: 'unit',
-          isCombat: unit.isCombat,
-          re: unit.re,
-          ma: unit.faces.move.ma,
-          mobility: unit.faces.move.mobility,
-        }),
-    ),
-  )
-
-  /** C9：任务编成里是否编有战斗机（14.4e 表 17-3 的 +1/+2 分档以此为准） */
-  const airMissionHasFighter = computed<boolean>(() =>
-    airMissionFlyingUnits.value.some((air) => isFighterAircraft(air.aircraftType)),
-  )
-
-  /** C9：步骤清单（14.2f A–G；给界面打勾用） */
-  const airChecklist = computed(() =>
-    airState.value === null ? [] : airInteractionChecklist(airState.value),
-  )
-
-  /** C9：任务格是否位于对手的巡逻区内（14.4a/14.4e ⇒ 防空加强；也是拦截的前提） */
-  const airTargetInEnemyPatrolZone = computed<boolean>(() => {
-    const hex = airTargetHex.value
-    if (hex === null) return false
-    return inPatrolZoneOf({
-      hex,
-      side: enemySide.value,
-      bases: airBases.value,
-      aircraft: allAirViews.value,
-    })
-  })
-
-  /** C9：对手的拦截资格与候选拦截机（14.5；null＝任务格未定） */
-  const airInterceptionResponse = computed<InterceptionResponse | null>(() => {
-    const hex = airTargetHex.value
-    if (hex === null) return null
-    return planInterceptionResponse({
-      side: enemySide.value,
-      missionKind: airMissionKind.value,
-      missionHex: hex,
-      // 14.5：一次任务只能被拦截一次；操作台在声明拦截后即由 `airState` 记录下来
-      alreadyIntercepted: airState.value?.interception?.declared === true,
-      aircraft: allAirViews.value,
-      bases: airBases.value,
-    })
-  })
-
-  /** C9：可作为拦截机的对手飞机（14.5：一次仅一架） */
-  const airInterceptorCandidates = computed<ConsoleAirUnit[]>(() => {
-    const response = airInterceptionResponse.value
-    if (response === null) return []
-    return response.eligibleFighterIds
-      .map((id) => airUnits.value.find((air) => air.instanceId === id))
-      .filter((air): air is ConsoleAirUnit => air !== undefined)
-  })
-
-  /** C9：任务格的空军基地等级（14.4e 的 +# 项；简易机场为 0，15.2F） */
-  const airTargetBaseLevel = computed<number>(() => {
-    const hex = airTargetHex.value
-    if (hex === null) return 0
-    return airBases.value.find((base) => sameHex(base.hex, hex))?.level ?? 0
-  })
-
-  /** C9：任务格的空中设施**是否为简易机场**（15.2F：不能提供任何防空值） */
-  const airTargetBaseIsAirstrip = computed<boolean>(() => {
-    const hex = airTargetHex.value
-    if (hex === null) return false
-    return airBases.value.find((base) => sameHex(base.hex, hex))?.isAirstrip === true
-  })
-
-  /**
-   * C9：任务格内的**敌方**空中/基地事实（14.3 空战前提）
-   *
-   * 全部由**盘面**推出（不再手工填数字）：敌方激活机数、是否有可发起空战的机、是否有敌方基地。
-   * 14.3：任务格内没有敌方基地就不会发生空战。
-   */
-  const airEnemyAtTarget = computed<{
-    activeAircraft: number
-    canInitiate: boolean
-    hasAirBase: boolean
-  }>(() => {
-    const hex = airTargetHex.value
-    if (hex === null) return { activeAircraft: 0, canInitiate: false, hasAirBase: false }
-    // 专规 1.4a：盒内驻机不在图上任何一格 ⇒ 不参与"该格有敌机"的判定
-    const aircraft = onMapAirUnits.value.filter(
-      (air) =>
-        air.side === enemySide.value &&
-        air.airStatus === 'active' &&
-        air.steps > 0 &&
-        sameHex(air.hex, hex),
-    )
-    return {
-      activeAircraft: aircraft.length,
-      canInitiate: aircraft.some((air) => air.canInitiateAirCombat),
-      hasAirBase: airBases.value.some(
-        (base) => base.side === enemySide.value && sameHex(base.hex, hex),
-      ),
-    }
-  })
-
-  /** C9：可被夺取的**敌方**空军基地（9.14f：敌方可攻击单位已进入该格） */
-  const capturableEnemyAirBases = computed<AirBaseView[]>(() =>
-    airBases.value.filter(
-      (base) => base.side === enemySide.value && !isConstructionMarkerAirBaseId(base.id),
-    ),
-  )
-
-  /** C9：当前方的巡逻区覆盖格（14.4c；供地图铺色） */
-  const airPatrolZoneHexes = computed<HexRef[]>(() =>
-    patrolZoneHexes({
-      side: airActingSide.value,
-      bases: airBases.value,
-      aircraft: allAirViews.value,
-    }),
-  )
-
-  /** C9：对手的巡逻区覆盖格（14.4c；供地图铺色） */
-  const airEnemyPatrolZoneHexes = computed<HexRef[]>(() =>
-    patrolZoneHexes({ side: enemySide.value, bases: airBases.value, aircraft: allAirViews.value }),
-  )
-
-  /** C9：某基地格内的非激活飞机（15.1B：由玩家选择整备哪些） */
-  const airInactiveAtBase = computed<(baseId: string) => ConsoleAirUnit[]>(
-    () => (baseId: string) => {
-      const base = airBases.value.find((item) => item.id === baseId)
-      if (base === undefined) return []
-      // 专规 1.4a：盒内驻机由「盒内免费整备」（activateAirBox）处理，不占图上基地的整备名额
-      return onMapAirUnits.value.filter(
-        (air) =>
-          air.side === base.side && air.airStatus === 'inactive' && sameHex(air.hex, base.hex),
-      )
-    },
-  )
-
-  /**
-   * C9：某基地的**整备付款补给站**候选（15.1B：1T/基地）
-   *
-   * 15.1 只规定费用，取用仍走 12.3 的补给渠道：「图上补给……可通过**直接拖取或从指挥部投递**
-   * 获得」⇒ 候选＝ 12.3a 直拖可达的站 **∪** 12.3b 指挥部投递可达的站（第五批 B1 补上后半，
-   * 判据与燃料链 `hqDeliveryDumpKeys` 共用一处；修前只有直拖半边 ⇒ 基地 5MP 内无站但
-   * 在某 HQ 投递距离内时合法整备被拒）。
-   */
-  const airRefitPayDumps = computed<(baseId: string) => SpDump[]>(() => (baseId: string) => {
-    const base = airBases.value.find((item) => item.id === baseId)
-    if (base === undefined) return []
-    const drawable = drawableDumpsFor(supplyFacts.value, {
-      hex: base.hex,
-      side: base.side,
-    }).filter((dump) => dump.ok)
-    const keys = new Set(drawable.map((dump) => hexLabel(dump.hex)))
-    // 12.3b：该基地格同时处在某指挥部的投递距离内 ⇒ 该 HQ 拖得到的站也是合法付款来源
-    for (const key of hqDeliveryDumpKeys(base.side, [base])) keys.add(key)
-    /*
-     * 13.2g-A/B（用户 2026-11-16 裁定）：编内卡车的 SP **永远不**能作为整备来源——
-     * 它不许在地图上卸载，且只许**同一多单位编队内**的单位拖取；指挥部也只投递给**同编队**单位。
-     * 整备的是空军基地（12.9c 的「图上补给」），不属该编队 ⇒ 候选里直接剔除编内卡车。
-     * 普通运输点数上装载的 SP 仍是 12.1b 的补给站，照常可付。
-     */
-    return allSpDumps.value.filter(
-      (dump) =>
-        dump.side === base.side &&
-        keys.has(hexLabel(dump.hex)) &&
-        dump.sp + dump.t > 0 &&
-        dump.carrierIsOrganicTruck !== true,
-    )
-  })
-
-  /** C9：某基地格内**可被指定**执行缩减的地面单位（15.4：战斗模式且本阶段未移动） */
-  const airReductionCandidates = computed<(baseId: string) => ConsoleUnit[]>(
-    () => (baseId: string) => {
-      const base = airBases.value.find((item) => item.id === baseId)
-      if (base === undefined) return []
-      return units.value.filter(
-        (unit) =>
-          unit.side === base.side &&
-          unit.isCombat &&
-          !unit.movementEnded &&
-          sameHex(unit.hex, base.hex),
-      )
-    },
-  )
-
-  /** C9：本阶段已完成整备的基地（15.1A；视图用） */
-  const refitDoneBases = computed(() =>
-    ownAirBases.value.filter((base) => refitDoneBaseIds.value.includes(base.id)),
-  )
-
-  /* ── 15.1 整备的交互三件套（点基地 → 勾飞机 → 点地图上的补给付款） ── */
-
-  /** 正在整备的基地（null = 没有进行中的整备） */
-  const refitBase = computed(() =>
-    refitTargetBaseId.value === null
-      ? null
-      : (airBases.value.find((base) => base.id === refitTargetBaseId.value) ?? null),
-  )
-
-  /** 该基地格内可勾选整备的非激活飞机（15.1B） */
-  const refitCandidates = computed<readonly ConsoleAirUnit[]>(() =>
-    refitTargetBaseId.value === null ? [] : airInactiveAtBase.value(refitTargetBaseId.value),
-  )
-
-  /** 已勾选要整备的飞机实例 id */
-  const refitSelectedIds = computed<string[]>(() => airInputs.value.refitAircraftIds)
-
-  /**
-   * 15.1B / 15.2B / 14.2a：某基地**本次最多能整备几架**
-   *
-   * `min(容量, 激活堆叠余额)`：容量＝等级×2（简易机场 1）；整备会把非激活转激活，
-   * 故还须给 14.2a 的 `4 + 等级` 留出位置。0 ⇒ 这个基地此刻整备不了。
-   */
-  function refitSelectLimitAt(baseId: string): number {
-    const base = airBases.value.find((item) => item.id === baseId)
-    if (base === undefined) return 0
-    const capacity = refitCapacity({
-      isAirstrip: base.isAirstrip === true,
-      level: base.level,
-    }).capacity
-    const room = activeStackingLimitOf(base) - activeAircraftInBase(allAirViews.value, base.hex)
-    return Math.max(0, Math.min(capacity, room))
-  }
-
-  /** 当前整备交互最多能勾几架（勾机阶段就按它收口，别等付款才被引擎拒） */
-  const refitSelectLimit = computed<number>(() =>
-    refitTargetBaseId.value === null ? 0 : refitSelectLimitAt(refitTargetBaseId.value),
-  )
-
-  /** 该基地可付款的补给站（15.1B：1T；地图上金黄方框高亮，点它即付款并结算） */
-  const refitPayDumps = computed<readonly SpDump[]>(() =>
-    refitTargetBaseId.value === null ? [] : airRefitPayDumps.value(refitTargetBaseId.value),
-  )
-
-  /** 15.1B：整备每个基地一次 1T（「可选补给源」角标用） */
-  const refitPayNeedT = computed<number>(() => 1)
-
-  /* ── 14.11 转场（用户 2026-11-12） ── */
-
-  const transferBase = computed(() =>
-    transferBaseId.value === null
-      ? null
-      : (airBases.value.find((base) => base.id === transferBaseId.value) ?? null),
-  )
-
-  /** 可勾选的转场飞机：图上基地 = 本格驻机；盒 = 盒内驻机（盒只转入图上基地） */
-  const transferCandidates = computed<readonly ConsoleAirUnit[]>(() => {
-    if (transferFromBox.value) {
-      return ownAirUnits.value.filter((air) => isAirInOffMapBox(air))
-    }
-    const base = transferBase.value
-    if (base === null) return []
-    return airUnitsAt(base.hex, base.side)
-  })
-
-  /** 14.11：基地 → 盒的航程（专规 1.4a：盒连接列 20/30 **加上**与连接列的列差） */
-  function airDistanceToBox(air: ConsoleAirUnit): number {
-    return airDistanceToOffMapBox(air.side, air.hex)
-  }
-
-  /** 这架机是否够得到（转场）盒：14.11 基地转移距离**可增加一倍** */
-  function canTransferAirToBox(air: ConsoleAirUnit): boolean {
-    return airDistanceToBox(air) <= air.rangeHexes * 2
-  }
-
-  const transferBoxReady = computed(
-    () =>
-      transferSelectedIds.value.length > 0 &&
-      transferSelectedIds.value.every((id) => {
-        const air = airUnits.value.find((item) => item.instanceId === id)
-        return air !== undefined && canTransferAirToBox(air)
-      }),
-  )
-
-  /** 14.11：基地→基地距离**可增加一倍**（`*2`）；图外盒按 1.4a 也是空军基地，盒→基地按 1.4a 盒代价 */
-  const transferBaseCandidates = computed<HexRef[]>(() => {
-    if (transferMode.value !== 'base' || transferSelectedIds.value.length === 0) return []
-    const selected = transferSelectedIds.value
-      .map((id) => airUnits.value.find((item) => item.instanceId === id))
-      .filter((air): air is ConsoleAirUnit => air !== undefined)
-    if (selected.length === 0) return []
-    const fromBox = transferFromBox.value
-    return ownAirBases.value
-      .filter((base) => base.id !== transferBaseId.value)
-      .filter((base) =>
-        selected.every((air) =>
-          fromBox
-            ? airDistanceToOffMapBox(air.side, base.hex) <= air.rangeHexes * 2
-            : airDistanceFromRealBase(air, base.hex) <= air.rangeHexes * 2,
-        ),
-      )
-      .map((base) => base.hex)
-  })
-
-  /** 14.11：该基地是否有飞机够得到图外盒（够 ⇒ 菜单出现「进入地图外盒」） */
-  function transferHasBoxOption(baseId: string): boolean {
-    const base = ownAirBases.value.find((item) => item.id === baseId)
-    if (base === undefined) return false
-    return airUnitsAt(base.hex, base.side).some((air) => canTransferAirToBox(air))
-  }
-
-  /** 14.11：该基地是否有飞机够得到另一个己方基地（够 ⇒ 菜单出现「放入别的空军基地」） */
-  function transferHasBaseOption(baseId: string): boolean {
-    const base = ownAirBases.value.find((item) => item.id === baseId)
-    if (base === undefined) return false
-    const planes = airUnitsAt(base.hex, base.side)
-    return planes.some((air) =>
-      ownAirBases.value.some(
-        (dest) =>
-          dest.id !== baseId && airDistanceFromRealBase(air, dest.hex) <= air.rangeHexes * 2,
-      ),
-    )
-  }
-
-  /**
-   * 14.11：**这一架**此刻是否有够得到的别的本方基地（右键菜单据此决定出不出「转移基地」）
-   *
-   * 与 `transferBaseCandidates` 同源判据（图上按格距、盒内按 1.4a 盒代价，均可双倍航程），
-   * 区别只是不要求先建转场中间态 —— 菜单要"能做的才出现"，不能在打开菜单时改状态。
-   */
-  function canTransferAirToBaseNow(instanceId: string): boolean {
-    const air = airUnits.value.find((item) => item.instanceId === instanceId)
-    if (air === undefined) return false
-    const fromBox = airBoxMembers.value.includes(instanceId)
-    return ownAirBases.value.some((dest) => {
-      if (!fromBox && sameHex(dest.hex, air.hex)) return false
-      return fromBox
-        ? airDistanceToOffMapBox(air.side, dest.hex) <= air.rangeHexes * 2
-        : airDistanceFromRealBase(air, dest.hex) <= air.rangeHexes * 2
-    })
-  }
-
-  /** 14.11：开始一次转场（`baseId` 为空 ⇒ 从盒出发） */
-  function beginTransferNow(
-    mode: 'box' | 'base',
-    baseId: string | null,
-    fromBox: boolean,
-  ): boolean {
-    if (!actionAllowedNow('air.transfer')) {
-      pushLog('warning', '当前环节不能转场（14.11）', '14.11')
-      return false
-    }
-    transferMode.value = mode
-    transferBaseId.value = baseId
-    transferFromBox.value = fromBox
-    transferSelectedIds.value = []
-    pushLog(
-      'info',
-      mode === 'box'
-        ? '转场（14.11）：勾选要移入图外空军盒的飞机，再点「确认移入」'
-        : '转场（14.11）：勾选要转场的飞机，再点「选择目的基地」',
-      '14.11',
-    )
-    return true
-  }
-
-  function toggleTransferAircraft(instanceId: string): boolean {
-    if (!transferCandidates.value.some((air) => air.instanceId === instanceId)) return false
-    const current = transferSelectedIds.value
-    transferSelectedIds.value = current.includes(instanceId)
-      ? current.filter((id) => id !== instanceId)
-      : [...current, instanceId]
-    return true
-  }
-
-  /** 结束转场交互（不改盘面） */
-  function cancelTransferNow(): void {
-    transferMode.value = null
-    transferBaseId.value = null
-    transferFromBox.value = false
-    transferSelectedIds.value = []
-  }
-
-  /**
-   * 14.11：落到目的基地（用户点选高亮基地格后调用）
-   *
-   * 战斗机在**正常航程内**保持激活；超出正常航程（但 ≤ 双倍）转入非激活。
-   * 盒→图上基地：先 `setAirInBoxMembership(false)` 把飞机放回图上，再改格。
-   */
-  function completeTransferToBaseNow(dest: HexRef): boolean {
-    const selected = transferSelectedIds.value
-      .map((id) => airUnits.value.find((item) => item.instanceId === id))
-      .filter((air): air is ConsoleAirUnit => air !== undefined)
-    if (selected.length === 0) return false
-    if (!transferBaseCandidates.value.some((hex) => sameHex(hex, dest))) return false
-    for (const air of selected) {
-      // 14.11：盒→基地按 1.4a 盒代价（20/30 + 列距）；图上基地→基地按格距
-      const distance = transferFromBox.value
-        ? airDistanceToOffMapBox(air.side, dest)
-        : airDistanceFromRealBase(air, dest)
-      if (transferFromBox.value) setAirInBoxMembership(air.instanceId, false)
-      air.hex = { col: dest.col, row: dest.row }
-      // 14.11：只有**战斗机**在正常距离内保持激活；其余机型/超出正常距离一律非激活
-      air.airStatus =
-        isFighterAircraft(air.aircraftType) && distance <= air.rangeHexes ? 'active' : 'inactive'
-    }
-    pushLog('info', `转场（14.11）：${selected.length} 架飞机转到 ${hexLabel(dest)}`, '14.11')
-    cancelTransferNow()
-    return true
-  }
-
-  /**
-   * 条 4：**可开整备的基地**（15.1 / 15.1B）
-   *
-   * 判据：**当前在 A 整备段** ∧ 本方基地 ∧ 本阶段尚未整备过 ∧ 格内有非激活飞机 ∧ 能拖到补给（1T）
-   *       ∧ **不在未抵消的敌方 ZOC 内**（15.1C）∧ **激活堆叠还有余额**（14.2a）。
-   * 后两条修前只在引擎的 `planBaseRefit` 里判 ⇒ 基地照样高亮/出整备入口，玩家勾完机、
-   * 付完款才被拒（回执还只在日志里）——按"不可用项不出现"的口径收在这里。
-   * 提交入口 `beginRefitNow` 收的是**基地 id** ⇒ 合法动作视图的候选也从这里取（P0-02c）。
-   * 「整备完消失」自动成立：整备后该基地进 `refitDoneBaseIds`、飞机转激活 ⇒ 两个条件都不再成立。
-   */
-  const refitStartBases = computed<AirBaseView[]>(() => {
-    if (phase.value !== 'aircraftRefit') return []
-    return ownAirBases.value
-      .filter((base) => !refitDoneBaseIds.value.includes(base.id))
-      .filter((base) => base.inUnnegatedEnemyZoc !== true)
-      .filter((base) => airInactiveAtBase.value(base.id).length > 0)
-      .filter((base) => refitSelectLimitAt(base.id) > 0)
-      .filter((base) => airRefitPayDumps.value(base.id).length > 0)
-  })
-
-  /** 条 4：可整备的机场格（地图高亮；由 `refitStartBases` 映射，判据只留一处） */
-  const refitAirbaseHexes = computed<readonly HexRef[]>(() =>
-    refitStartBases.value.map((base) => ({ col: base.hex.col, row: base.hex.row })),
-  )
-
-  /**
-   * 条 4：某基地**此刻不能整备**的原因（null＝能整备）
-   *
-   * 与 `refitStartBases` 同一组判据、同一顺序：能整备的基地在那里出入口，
-   * 不行的这里给一句"为什么"（15.1A / 15.1C / 15.1B·12.3a / 14.2a）——
-   * 入口按老口径不出现，但玩家不能看不出原因。
-   */
-  function refitBlockReasonAt(baseId: string): string | null {
-    if (phase.value !== 'aircraftRefit') return null
-    const base = ownAirBases.value.find((item) => item.id === baseId)
-    if (base === undefined) return null
-    if (refitDoneBaseIds.value.includes(base.id)) return '15.1A：本阶段该基地已整备过'
-    if (base.inUnnegatedEnemyZoc === true) return '15.1C：未抵消的敌方 ZOC 内不可整备'
-    if (airInactiveAtBase.value(base.id).length === 0) return '15.1：该基地没有非激活飞机可整备'
-    if (refitSelectLimitAt(base.id) === 0)
-      return '14.2a：激活堆叠已满（上限 4 + 等级），没有整备名额'
-    if (airRefitPayDumps.value(base.id).length === 0)
-      return '15.1B / 12.3a：该基地够不到可付款的补给站（1T）'
-    return null
-  }
-
-  /** C9：本阶段已缩减过的基地（15.4；视图用） */
-  const reducedBases = computed(() =>
-    ownAirBases.value.filter((base) => reducedBaseIds.value.includes(base.id)),
-  )
 
   /**
    * C5：全部单位的运行态视图（引擎 `move-interaction` 函数的输入）

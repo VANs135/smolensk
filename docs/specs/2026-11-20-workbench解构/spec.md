@@ -329,6 +329,35 @@ B2-1 的 `AirDomainPorts` 里有 **5 个成员会被后续批次搬进切片本�
 2. **TDZ 扫描**：40 个公开名在 facade 里逐名找首次出现行，只有 3 项出现在建域点（2251）之前——`airState`@1210、`ownAirBases`@2036、`airInputs`@2051，三者分别落在 `mayMutate() {}`、`beginAirPlacementHexPickNow()`、`beginAirTransferHexPickNow()` 的函数体内，**调用时才求值，不构成 TDZ**。
 3. **`ports.x` 逐个归位**：切片里 11 处 `ports.` 命中，去掉文档注释 2 处与 `transports.length` 的假命中 1 处，其余 8 处全在 `computed(...)` 体内或 `lossPending: () => …` 这类回调里。**没有一处是在建域那一刻执行的**——这正是晚绑定能成立的前提。
 
+### 6.1.3 B2-1b 落地（2026-11-21 实测，含三条被推翻的预判）
+
+搬 `5701–6321`（621 行 / **48 个声明 = 14 function + 34 const/computed**）进 `workbench-air.ts`：
+
+| 量                          | 搬前   | 搬后                                |
+| --------------------------- | ------ | ----------------------------------- |
+| `workbench.ts` 行           | 30,649 | **30,075**（−574）                  |
+| `workbench-air.ts` 行       | 487    | **1,197**（+710）                   |
+| `AirDomainPorts` 成员       | 25     | **36**（+11，含 2 晚绑定）          |
+| 切片 `return` 公开名        | 40     | **88**                              |
+| facade `= airDomain` 解构项 | 40     | **85**（88 − 3 个只有切片自己用的） |
+| 公开面键（快照 1,013）      | 1,013  | 1,013（不变）                       |
+
+**被推翻的预判**（这三条是下一批还要用的判据，记清楚）：
+
+1. **"这簇端口 16 项"** → 实装 25 候选、**净增 11**。原因是 crosscheck 只认"区间标识符 − 区间内声明"，而 `hqDeliveryDumpKeys`(14205)、`actionAllowedNow`(23285)、`isConstructionMarkerAirBaseId`(27439) 这三个**被调用的函数声明在区间之后**，落在 crosscheck 的"真外部"栏——而那一栏本来就不可信（§6.1.1 第 5 条）。**端口数只能靠 `vue-tsc` 收口。**
+2. **"facade 报 TS6133 的 import 都要变成端口"** → 错。13 个里 12 个是**引擎导出**（`refitCapacity`/`isFighterAircraft`/`hexLabel`/`planOffMapAirBoxFlightFromHex`/`airInteractionChecklist`/`inPatrolZoneOf`/`patrolZoneHexes`/`planInterceptionResponse`/`drawableDumpsFor`/`canUseTransport`/`isAirTransportableUnit`/`type AirBaseView`）：facade 删 import、**切片重新 import 就够**，一个端口都不用加；只有**facade 自有符号**才进端口。判据：在 `src/engine/**`、`src/data/**` 有 `export` 就算"免费"，否则算端口。把免费的当端口会白加 12 项。
+3. **"裸名可以原样搬"** → 不成立。`onMapAirUnits` 已是 B2-1 的晚绑定端口，本簇里 `airEnemyAtTarget`、`airEnemyPatrolZoneHexes` 两个 computed 各有一处裸名使用，必须改写为 `ports.onMapAirUnits.value`，否则切片里 `Cannot find name`。**推论**：凡是被搬的簇"使用"了某端口而端口是晚绑定，正文改写与逐字对拍都要把这个前缀算进去。
+
+**两个新坑（不是代码逻辑问题，而是"工具/测试与切片脱节"）**：
+
+1. **源码级测试有硬编码文件清单。** `tests/stores/action-wiring.test.ts` 的 `STORE_FILES` 只列 `workbench.ts` ⇒ 切片搬走的 `cancelTransferNow` 立刻"不是 store 里的函数"。修法：`...globSync('src/stores/workbench-*.ts')`。
+2. **转发壳会抢到"函数体"。** 同一张表里 `rollAttritionNow` 在 facade 只剩 `return supplyPhaseDomain.rollAttritionNow(...)` 三行，而 `bodiesOf` 取**第一个**命中；把 workbench 族排前面就抢到壳（壳里没有 `requireAction`）⇒ 报"标了已加闸其实没加"。修法：**卫星 store 先扫、workbench 族（含切片）在后**。
+   **通用结论**：拆域后，"函数体扫描型"测试的语义从"这个函数在不在 store 里"变成"在不在**这一族文件里、且不是转发壳**"。每搬一个域都要跑一遍 `grep -rn "src/stores/workbench.ts'" tests/` 找出同类硬编码清单（`tests/shared/store-source.ts` 那种 `readdirSync` 自动纳入的不受影响）。
+
+第三个坑只属于生成脚本：找 `return {` 的收尾**不能用 `findIndex('  }')`**（正文里全是 `  }`）；要取**最后一个** `  return {`，并要求它的收尾 `  }` 紧接 `createAirDomain` 的 `}`。
+
+验收证据（可复跑）：`npm run check` → 623 文件 / 6,256 用例 / **208.62s** / exit 0；逐字对拍（归一化去掉 `ports.` / `.value` 与空白）**621 行完整命中**；重复定义 0、僵尸函数 0（`dup-b21b.mjs`）。
+
 ---
 
 ## 7. 搬运的 8 条机械规则

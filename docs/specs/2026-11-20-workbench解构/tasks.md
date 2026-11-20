@@ -55,11 +55,14 @@
 
 B2-1 只搬了派生的一半——`5949–6086` 那一簇；`5701–6321` 的 **48 个声明（621 行）**还留在 facade，且都是空军域的东西（返航三选一 / 空战轮对 / 巡逻区 / 任务格敌方事实 / 可夺基地 / 整备套件 / 转移 / 缩减）。漏的原因是**按分节横幅 `/* ── C9 空军交互：派生 ── */` 取 range，而横幅只覆盖后半**。
 
-- [ ] 搬 `5701–6321`（`airMissionReturnChoices` … `reducedBases`；621 行 / 48 个声明）到 `workbench-air.ts`
-- [ ] 端口实测 **16 项**：`phase` / `units` / `airUnits` / `airBoxMembers` / `allSpDumps` / `supplyFacts` / `pushLog` / `setAirInBoxMembership` / `hqDeliveryDumpKeys` / `isAirInOffMapBox` / `onMapAirUnits` / `airUnitsAt` / `airDistanceFromRealBase` / `airUnitsInHex` / `actionAllowedNow` / `isConstructionMarkerAirBaseId`
-- [ ] 其中 5 项（`isAirInOffMapBox`/`onMapAirUnits`/`airUnitsAt`/`airDistanceFromRealBase`/`airUnitsInHex`）就在 B2-2a 的区间里 ⇒ **先做 1b，a 批端口会跟着降**
-- [ ] 这簇里含**动作**（`toggleAirCargoUnit`/`beginTransferNow`/`toggleTransferAircraft`/`cancelTransferNow`/`completeTransferToBaseNow`），搬的是行为而不只是派生——验收仍按公开面 1,013 键不变
-- [ ] 边界：start 取 **5701**（`airMissionReturnChoices` 的文档注释首行；上一条 `supplyPickupRequirement` 在 5699 收尾）；end 取 **6321**（`reducedBases` 的 `)`；6323 起是 `moveRuntime` 的注释）。**按 5711/6319 切会把注释留成孤儿、把函数切在中间**
+- [x] 搬 `5701–6321`（`airMissionReturnChoices` … `reducedBases`；621 行 / **48 个声明 = 14 function + 34 const/computed**）到 `workbench-air.ts`
+- [x] 端口：**预判 16 → 实装 25 候选 → 净增 11**（`phase`(953) / `airBoxMembers`(1767) / `allSpDumps`(3849,晚绑定) / `supplyFacts`(3911,晚绑定) / `hqDeliveryDumpKeys`(14205) / `isAirInOffMapBox`(18220) / `airUnitsAt`(18229) / `airDistanceFromRealBase`(18343) / `airUnitsInHex`(18352) / `actionAllowedNow`(23285) / `isConstructionMarkerAirBaseId`(27439)）；`units`/`airUnits`/`pushLog`/`setAirInBoxMembership` 早已在 B2-1 的 25 项里，`onMapAirUnits` 也是（**晚绑定，本簇只是使用者**）。`AirDomainPorts` **25 → 36 项**
+- [x] **预判被推翻的一处**：`onMapAirUnits` 在切片里不能写裸名——它已是 B2-1 的晚绑定端口，正文必须改写成 `ports.onMapAirUnits.value`，否则 `Cannot find name`（生成脚本必须做这个改写，逐字对拍也要按此归一化）
+- [x] **`TS6133` 的正确解读**：facade 报"未使用"的名字分两类——(a) **引擎导出**（`refitCapacity`/`isFighterAircraft`/`hexLabel`/`planOffMapAirBoxFlightFromHex`/`airInteractionChecklist`/`inPatrolZoneOf`/`patrolZoneHexes`/`planInterceptionResponse`/`drawableDumpsFor`/`type AirBaseView`/`type InterceptionResponse`/`canUseTransport`/`isAirTransportableUnit`）⇒ facade 删、**切片重新 import**，不进端口；(b) **facade 自有**（`onMapAirUnits` 等）⇒ 进端口。把 (a) 当端口会白加 12 个端口
+- [x] 这簇里含**动作**（`toggleAirCargoUnit`/`beginTransferNow`/`toggleTransferAircraft`/`cancelTransferNow`/`completeTransferToBaseNow`），搬的是行为而不只是派生——公开面 **1,013 键不变**
+- [x] 边界：start 取 **5701**（`airMissionReturnChoices` 的文档注释首行；上一条 `supplyPickupRequirement` 在 5699 收尾）；end 取 **6321**（`reducedBases` 的 `)`；6323 起是 `moveRuntime` 的注释）。**按 5711/6319 切会把注释留成孤儿、把函数切在中间**
+- [x] **源码级测试要跟着改**：`tests/stores/action-wiring.test.ts` 的 `STORE_FILES` 是硬编码清单，只列了 `workbench.ts` ⇒ 搬走的 `cancelTransferNow` 立刻"不是 store 函数"。改为 `globSync('src/stores/workbench-*.ts')`，且**必须排在卫星 store 之后**——`rollAttritionNow` 在 facade 已只剩三行转发壳（壳里没有 `requireAction`），先扫会抢到壳、报"标了已加闸其实没加"
+- **验收实测**：`npm run check` → 623 文件 / 6,256 用例 / **208.62s** / exit 0；`arch` 949 源码；`workbench.ts` **30,649 → 30,075 行（−574）**、`workbench-air.ts` **487 → 1,197 行（+710）**；逐字对拍（归一化去 `ports.`/`.value`/空白）**621 行完整命中**；重复定义 0、僵尸函数 0；`/= airDomain` 解构 **85 项 = 88 公开名 − 3 个只有切片自己用的**（`transferBaseId`/`airDistanceToBox`/`canTransferAirToBox`）
 
 ### B2-2 动作块（后做，**2026-11-20 重测：拆 4 批，全部 < 40 端口**）
 
@@ -87,48 +90,48 @@ B2-1 落地后行号全部漂移（facade 少了 387 行），旧编号 **全部
 
 ## 4. B3 移动三切片
 
-- [ ] `flows/move.ts` ← section 3（451 / 15）
-- [ ] `flows/stack-pick.ts` ← section 4（3,381 / 81，含突围与补给缓存）
-- [ ] `flows/raid.ts` ← section 2（1,344 / 28）
+- [ ] `workbench-move.ts` ← section 3（451 / 15）
+- [ ] `workbench-stack-pick.ts` ← section 4（3,381 / 81，含突围与补给缓存）
+- [ ] `workbench-raid.ts` ← section 2（1,344 / 28）
 - [ ] 暴露 `nameOf`(4)、`applyMovePatches`(2)、`refuseWhileSettling`(2)、`retryBeginMove`(2)、`selectForMove`、`openBreakdownWindow`、`closeBreakdownWindows`
 - 注意：`4→1` 有 10 条出边（铁路），port 化后不要把铁路逻辑拖进来
 - 验收：同上（≈24,246 行）
 
 ## 5. B4 补给
 
-- [ ] `flows/supply.ts` ← section 9（2,734 / 91）
+- [ ] `workbench-supply.ts` ← section 9（2,734 / 91）
 - [ ] 暴露 15 个 inbound 函数（CSV 查 `section=9`）
 - 验收：同上（≈21,512 行）
 
 ## 6. B5 战斗四节
 
-- [ ] `flows/combat.ts` ← section 5（1,643 / 33）
-- [ ] `flows/combat-draft.ts` ← section 7（591 / 14，选项战果草稿账本）
-- [ ] `flows/combat-finish.ts` ← section 0（963 / 9，9.12g 撤退/推进/补给站）
-- [ ] `flows/special-combat.ts` ← section 12（2,424 / 51，9.14）
+- [ ] `workbench-combat.ts` ← section 5（1,643 / 33）
+- [ ] `workbench-combat-draft.ts` ← section 7（591 / 14，选项战果草稿账本）
+- [ ] `workbench-combat-finish.ts` ← section 0（963 / 9，9.12g 撤退/推进/补给站）
+- [ ] `workbench-special-combat.ts` ← section 12（2,424 / 51，9.14）
 - [ ] 暴露 `combatCancelBlocker`(7)、`clearCombat`(4)、`applyCombatPatches`(4)、`resolveSpecialCombatAt`(2) 等
 - 注意：`12→8` 8 条、`12→10` 8 条（特战要调轰炸与空军），走 ports
 - 验收：同上（≈15,891 行）
 
 ## 7. B6 到货与铁路
 
-- [ ] `flows/arrival.ts` ← section 13（1,044 / 26）
-- [ ] `flows/rail.ts` ← section 1（2,903 / 61）
+- [ ] `workbench-arrival.ts` ← section 13（1,044 / 26）
+- [ ] `workbench-rail.ts` ← section 1（2,903 / 61）
 - [ ] 暴露 `clearArrivalSpGroups`(3) 等 18 个；铁路 23 个
 - 验收：同上（≈11,944 行）
 
 ## 8. B7 环节闸门（唯一巨型枢纽，拆 4 个子提交）
 
-- [ ] `services/segment-gate.ts` ← 段状态机（`segmentStep` / `segmentAdvanceBlock`）
-- [ ] `services/placement.ts` ← 放置阶段
-- [ ] `services/spec-rules.ts` ← 专规机制
-- [ ] `services/victory.ts` ← 胜利判定
+- [ ] `workbench-segment-gate.ts` ← 段状态机（`segmentStep` / `segmentAdvanceBlock`）
+- [ ] `workbench-placement.ts` ← 放置阶段
+- [ ] `workbench-spec-rules.ts` ← 专规机制
+- [ ] `workbench-victory.ts` ← 胜利判定
 - 注意：`14→13` 有 18 条最紧边，先在 CSV 里把 18 个函数列全再动手
 - 验收：每子提交 ≤ 1,500 行、`npm run check` 绿（≈5,206 行）
 
 ## 9. B8 快照与 facade 收口
 
-- [ ] `services/snapshot.ts` ← section 15（1,792 / 12）
+- [ ] `workbench-snapshot.ts` ← section 15（1,792 / 12）
 - [ ] facade 只留装配 + `watch` + `return` 汇编 + 薄转发
 - [ ] 加 `max-lines` / `forbidden-imports` 到 `scripts/check-arch.mjs`
 - 验收：按上面切分，`workbench.ts` 落到 **≈3,400 行**（不是 ≤3,000）—— 分节外的核心区实测 3,414 行、`return` 字面量 1,155 行，B8 之后余量比目标多约 400 行

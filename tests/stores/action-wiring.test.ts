@@ -20,12 +20,20 @@ import { UNGATED_ACTIONS, type UngatedKind } from '@/stores/action-wiring'
  * `setup.X(` 的调用名，再扫 `src/stores/*.ts` 的函数体。
  */
 
+/**
+ * 2026-11-21：workbench 拆域后，动作从 `workbench.ts` 搬进了 `workbench-<域>.ts`。
+ * 这里改成整族取——再切一个新域不必改测试（否则测试会静默漏扫，表现为"登记表与实现脱节"）。
+ */
 const STORE_FILES = [
+  // 卫星 store 先扫：它们才是有 `requireAction` 的真实现
   'src/stores/air-cargo-resolution.ts',
   'src/stores/ground-movement.ts',
   'src/stores/air-mission.ts',
   'src/stores/fire-resolution.ts',
   'src/stores/supply-phase.ts',
+  // workbench 域切片：同样是真实现
+  ...globSync('src/stores/workbench-*.ts').map((f) => f.replace(/\\/g, '/')),
+  // facade 最后：拆域后它可能只剩三行转发壳（壳里没有闸，抢到就先输了）
   'src/stores/workbench.ts',
   'src/stores/containers.ts',
   'src/stores/setup.ts',
