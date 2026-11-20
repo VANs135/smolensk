@@ -512,6 +512,8 @@ section 4（B3 第二批）实测 **3,377 行 / 81 声明**（7593–10969），
 
 **取证**：`npm run typecheck` 通过 → `npm run check` **623 文件 / 6,256 用例 / 197.39s / exit 0**；`audit:ports` 七域全绿（新增 `createStackPickDomain @7612` **按值 12 项全安全**，12 + 1 getter = 13 自洽）；`arch` 源码 **952**（+1 新文件）；切片回边 **0**（只用 `import type` 引 `./workbench-move`）；公开面 **1,013 键不变**。
 
+**两轮复核**：R1（`git show HEAD~1` 逐行对拍，只去 `ports.` 前缀）**211 ↔ 211 行、不一致 0**，零使用端口 0/13，facade 13 名只剩 4 个薄转发，快照 blob 与 HEAD~1 相同；R2（token 流 + AST 反向）**1,109 ↔ 1,109 token、不一致 0**，AST 节点 +2 恰为唯一 1 个 `ports.` 前缀，反向 5 项全过（facade 残留 0 / 薄转发 4×1 条且指向 `stackPickDomain.<同名>` / 切片 `import './workbench'` 0 / 裸 `initialSetupInProgress` 0 / 行数 27,542·303 与 numstat +51/−211 吻合）。两次复核**未推翻**本轮结论，但量具自身各误报一次（域级 `return {` 被 `snapshotOf` 内部返回抢先匹配、未用端口检查漏去前缀、行数口径、0-based 偏移），已改。
+
 **本批两个新坑**：
 
 1. **「所有端口都写 `ports.`」会触发 TS6198「解构元素全部未使用」**：按值端口必须走解构、用裸名；只有晚绑定写 `ports.x`。AST 批量加前缀时若一律加，typecheck 立刻红。

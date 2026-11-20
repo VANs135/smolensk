@@ -316,6 +316,9 @@ B2-1 落地后行号全部漂移（facade 少了 387 行），旧编号 **全部
 - [x] 规模：`workbench.ts` **27,703 → 27,542（−161；`git numstat` +51/−211）**；`workbench-stack-pick.ts` **303 行**（新建）
 - [x] 门禁：`npm run typecheck` 通过 → `npm run check` **623 文件 / 6,256 用例 / 197.39s / exit 0**；`audit:ports` 新增 `createStackPickDomain @7612` **按值 12 项全部安全**（12 + 1 getter = 13，自洽）；`arch` 源码 **952**（+1 新文件）；`format:check` 全 matched
 - [x] 公开面快照 **1,013 键不变**（未触碰 fixture）
+- [x] 复核 R1（**换证据源**：`git show HEAD~1` 取搬前原文 7590–7800 逐行对拍，只去 `ports.` 前缀、保留 `.value`）：**211 ↔ 211 行 / 不一致 0**；接口 **13** = 解构 **12** + 晚绑定 **1**、覆盖差集 0、**零使用端口 0/13**；切片 `return` 恰为 13 个声明（重复 0）；facade 内 13 个名字只剩 4 个薄转发（无其它残留）；快照 blob `a2fcb6e…` 与 HEAD~1 **同一 blob**
+- [x] 复核 R2（**换口径 + 反向验证**）：token 流 **1,109 ↔ 1,109、不一致 0**；AST 节点 **1,104 ↔ 1,106**（差 2 = 唯一 1 个 `ports.` 前缀的 Identifier + PropertyAccess）；反向 5 项全过 —— facade AST 残留问题 **0**、4 个薄转发各 **1 条** `return stackPickDomain.<同名>(…)`、`slice import './workbench'` **0**、裸 `initialSetupInProgress` **0**（只有 `ports.` 形式 1 处）、facade **27,542** / 切片 **303** 行与文档一致、numstat **+51/−211** 吻合
+- [x] 两次复核均未推翻本轮结论；但 R1/R2 的**量具自身**各误报一次，已修：① 取域级 `return {` 不能用首个匹配（`snapshotOf` 内部也有 `return {`，会截短 13 行）；② 检查未使用端口必须先去掉 `ports.` 前缀（否则把唯一晚绑定端口误判为 0 引用）；③ 行数按 `wc -l`（`split('\n')` 结果减 1）；④ 0-based 区间断言的偏移要跟着 `END-1/END+2`
 
 **落地期暴露的两个新坑**：
 
