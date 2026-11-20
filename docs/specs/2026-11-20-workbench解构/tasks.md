@@ -9,8 +9,8 @@
 - [x] `package.json` 拆 `test:fast` / `test:ai`，`check` 改用 `test:fast`，新增 `check:all`
 - [x] `git config diff.renames copies`（仓库级，不入库）
 - [x] 接通 SSH（`core.sshCommand` 指向 `~/.ssh/id_ed25519_smolensk`），`ssh -T` 返回 `Hi VANs135!`
-- [ ] 建分支 `refactor/workbench-decouple` 并 `git push -u origin`
-- [ ] 新增 `tests/stores/public-surface.test.ts`，把当前 1,013 键写成基线（先绿再动刀）
+- [x] 建分支 `refactor/workbench-decouple` 并 `git push -u origin`
+- [x] 新增 `tests/stores/workbench-public-surface.test.ts` + `tests/stores/fixtures/workbench-public-surface.snapshot.json`，实测冻结 **1,013** 键（先绿再动刀）；反向验证过：从基线删一个键即红，并报出键名
 
 ## 1. B0 核心服务
 
