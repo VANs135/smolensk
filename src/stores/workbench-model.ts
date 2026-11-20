@@ -1,5 +1,6 @@
 import { aircraft, mapConfig, mapLayers, markers, unitsAxis, unitsSoviet } from '@/data'
 import type { AircraftRecord, DeepReadonly, HexRef, Side, UnitRecord } from '@/data'
+import type { SpHoldings } from '@/engine/rules'
 import { areAdjacent, hexDistance } from '@/engine/hex-geometry'
 import { roll2d6, type RngDraw } from '@/engine/rng'
 import { turnDate } from '@/engine/turn-driver'
@@ -4174,4 +4175,34 @@ export function createAirInputs(): AirInputs {
     baseCaptureByAdvance: false,
     baseCaptureDice: null,
   }
+}
+
+/**
+ * 13.2f：装卸动作的撤销账（与移动步同一把「撤销」键，按发生顺序退）
+ *
+ * 用户 2026-11-18 口径：「装完继续走、装完撤销（MP 与载荷都要回退）」。
+ * 装卸不产生移动步，但仍是可逆的一步：记下动作前后的载荷 / MP / 补给站持仓，
+ * `undoTransportHandlingNow()` 只在它比最后一个移动步更晚发生时生效。
+ * 只在内存中按阶段存活（`resetMovementTracking` 清零），不进存档。
+ */
+export interface TransportHandlingUndoEntry {
+  kind: 'load' | 'unload'
+  unitId: string
+  loadedBefore: number
+  mpBefore: number
+  /** 动作发生时已完成的移动步数：小于当前步数 ⇒ 之后又走过，撤销先退移动 */
+  stepsAt: number
+  /** 装载：被扣的补给站；卸载：接收 SP 的补给站 */
+  dumpId?: string
+  dumpHoldingsBefore?: SpHoldings
+  /** 卸载时该格原本没有补给站 ⇒ 记下新建的那本，撤销时整条删掉 */
+  dumpCreatedId?: string
+  /** 卸载会写 12.2a 接力锁：撤销按动作前的快照回退 */
+  relayLocksBefore?: Array<{
+    phaseKey: string
+    hex: string
+    side: Side
+    mode: 'transport' | 'rail'
+    t: number
+  }>
 }
