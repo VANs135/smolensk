@@ -809,6 +809,52 @@ describe('9.12e / 9.12f：撤退事实的两条硬口径', () => {
     ).not.toBeNull()
   })
 
+  it('9.12：敌方「设施格」不是硬禁——仅含非战斗单位可撤入，含战斗单位仍禁', () => {
+    const context = buildMoveContext({ units: [], activeSide: 'soviet', phase: 'movement' })
+    const defender = { col: 18, row: 27 }
+    const facility = { col: 16, row: 28 }
+    const combat = { col: 17, row: 27 }
+    const facts = createRetreatFacts({
+      units: [],
+      context,
+      retreatingUnitIds: [],
+      combatStartSnapshot: [
+        // 敌方只有设施（基地/工事/补给站……非战斗单位）——9.14 处理，不是 9.12 硬禁
+        { hex: facility, side: 'axis', isCombat: false },
+        // 敌方战斗单位——9.12 硬禁
+        { hex: combat, side: 'axis', isCombat: true },
+        { hex: defender, side: 'soviet', isCombat: true },
+      ],
+    })
+    expect(facts.enemyCombatUnitAt(facility, 'soviet')).toBe(false)
+    expect(facts.startOfCombatEnemyCombatUnitAt?.(facility, 'soviet')).toBe(false)
+    expect(facts.enemyCombatUnitAt(combat, 'soviet')).toBe(true)
+    expect(facts.startOfCombatEnemyCombatUnitAt?.(combat, 'soviet')).toBe(true)
+    // 方向判据也只认战斗单位（设施不作为“背后”锚点）
+    expect(facts.enemyCombatHexesAtStart?.('soviet')).toEqual([combat])
+
+    const plans = planRetreatDestinations({
+      from: defender,
+      distance: 2,
+      mobility: 'track',
+      side: 'soviet',
+      facts,
+    })
+    // 仅含敌方设施的格可作落点（不会被“敌方财产”挡掉）
+    expect(
+      plans.some(
+        (plan) =>
+          plan.hex.col === facility.col &&
+          plan.hex.row === facility.row &&
+          plan.forcedDestruction === false,
+      ),
+    ).toBe(true)
+    // 有敌方战斗单位的格仍是硬禁（不能作为落点）
+    expect(plans.some((plan) => plan.hex.col === combat.col && plan.hex.row === combat.row)).toBe(
+      false,
+    )
+  })
+
   it('9.1f：沼泽对履带只有沿路可入（有路边 ⇒ 可进，无路边 ⇒ 禁入）', () => {
     const context = buildMoveContext({ units: [], activeSide: 'axis', phase: 'movement' })
     const facts = createRetreatFacts({ units: [], context, retreatingUnitIds: [] })

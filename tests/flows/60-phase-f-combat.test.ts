@@ -632,6 +632,25 @@ describe('Ⓕ 9.12f：撤退穿越敌方非战斗单位 ⇒ 按 9.14 处置（�
     expect(store.log.some((entry) => entry.rule === '9.14b')).toBe(true)
   })
 
+  it('撤退**落点**是仅含敌方设施的格 ⇒ 可进入，并按 9.14b 处置设施', () => {
+    const store: Store = newConsole()
+    const { distance, mobility } = driveToAttackerRetreat(store)
+    const path = straightPathAvoiding(ATTACKER_HEX, distance, [DEFENDER_HEX], mobility)
+    const landing = path[path.length - 1]!
+
+    // 落点只有敌方设施（非战斗）：9.12 硬禁只针对敌方战斗单位 ⇒ 可以撤进来
+    const dumpId = 'sd-soviet-landing'
+    store.spDumps.push({ id: dumpId, hex: { ...landing }, side: 'soviet', sp: 4, t: 0 })
+    store.combatInputs.retreatPaths = { a1: path.map(label).join(',') }
+    expect(store.confirmCombatRetreats()).toBe(true)
+
+    const mover = store.units.find((item) => item.instanceId === 'a1')
+    expect(`${mover?.hex.col}.${mover?.hex.row}`).toBe(label(landing))
+    // 进格后设施按 9.14b 处置（夺取/摧毁），并写入行动日志
+    expect(store.spDumps.some((item) => item.id === dumpId)).toBe(false)
+    expect(store.log.some((entry) => entry.rule === '9.14b')).toBe(true)
+  })
+
   it('对照：撤退途经**空**格 ⇒ 不触发 9.14（盘面补给站不变）', () => {
     const store: Store = newConsole()
     const { distance, mobility } = driveToAttackerRetreat(store)

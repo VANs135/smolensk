@@ -1342,6 +1342,68 @@ describe('9.12 撤退落点规划：完整撤退距离、路径与 ZOC 分类', 
     expect(onlyBehind.some((plan) => plan.hex.col === 16 && plan.hex.row === 27)).toBe(true)
   })
 
+  it('9.12 硬禁独立于 9.12c 方向偏好：后方全无活路时仍不得穿战斗开始时的敌方格', () => {
+    const defender: HexRef = { col: 18, row: 27 }
+    // 关闭方向过滤（不给 enemyCombatHexesAtStart），只看硬禁；
+    // 只留 17.27 作为进入西侧的唯一通道，而它是「战斗开始时敌占格」。
+    const plans = planRetreatDestinations({
+      from: defender,
+      distance: 2,
+      mobility: 'track',
+      side: 'soviet',
+      facts: retreatFacts({
+        startOfCombatEnemyCombatUnitAt: (hex) => hex.col === 17 && hex.row === 27,
+        outsidePlayArea: (hex) => hex.col === 17 && hex.row !== 27,
+      }),
+    })
+    // 16.27 只能穿 17.27 ⇒ 硬禁；连「必死兜底」都不出现
+    expect(plans.some((plan) => plan.hex.col === 16 && plan.hex.row === 27)).toBe(false)
+    // 任何「不会必死」的落点都不得把 17.27 放进路径
+    for (const plan of plans) {
+      if (plan.forcedDestruction === true) continue
+      expect(plan.path.some((hex) => hex.col === 17 && hex.row === 27)).toBe(false)
+    }
+  })
+
+  it('9.12c 软放宽只作用于方向：保留背部落点，但路径仍不经过敌方格', () => {
+    const defender: HexRef = { col: 18, row: 27 }
+    const attacker: HexRef = { col: 17, row: 27 }
+    const plans = planRetreatDestinations({
+      from: defender,
+      distance: 2,
+      mobility: 'track',
+      side: 'soviet',
+      facts: retreatFacts({
+        startOfCombatEnemyCombatUnitAt: (hex) => hex.col === 17 && hex.row === 27,
+        enemyCombatHexesAtStart: () => [attacker],
+      }),
+      // 只留 16.27（背后、可绕开敌格的活路）一个几何落点 ⇒ 触发方向层「后方无活路才通融」
+      blocked: (hex) => !(hex.col === 16 && hex.row === 27),
+    })
+    const behind = plans.find((plan) => plan.hex.col === 16 && plan.hex.row === 27)
+    expect(behind).toBeDefined()
+    expect(behind!.forcedDestruction).toBe(false)
+    expect(behind!.path.some((hex) => hex.col === 17 && hex.row === 27)).toBe(false)
+  })
+
+  it('9.12 第三 bullet：可穿「当前」敌方占据格的落点只以「必被消灭」出现，不会成为干净落点', () => {
+    const plans = planRetreatDestinations({
+      from: { col: 18, row: 27 },
+      distance: 2,
+      mobility: 'track',
+      side: 'soviet',
+      facts: retreatFacts({
+        enemyCombatUnitAt: (hex) => hex.col === 17 && hex.row === 27,
+        // 唯一通道就是当前敌方占据的 17.27
+        outsidePlayArea: (hex) => hex.col === 17 && hex.row !== 27,
+      }),
+      blocked: (hex) => !(hex.col === 16 && hex.row === 27),
+    })
+    const doomed = plans.find((plan) => plan.hex.col === 16 && plan.hex.row === 27)
+    expect(doomed).toBeDefined()
+    expect(doomed!.forcedDestruction).toBe(true)
+  })
+
   it('专规 1.4b：规划器产出的路径每一步都在图内（不出现“能点、确认却报图外”）', () => {
     // (2,0) 靠近地图西北削角；若不做 isOnMap 过滤，最短路径可能借用图外格
     const edgeFrom: HexRef = { col: 2, row: 0 }

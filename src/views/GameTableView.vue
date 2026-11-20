@@ -577,18 +577,24 @@ onBeforeUnmount(() => {
         </button>
 
         <!--
-          2026-11-20（用户）：初设的撤回改成图标，放在「设置」按钮下方。
+          2026-11-20（用户）：初设的撤回改成图标，放在「设置」按钮下方，**常显**；
+          无可撤操作时只压暗待命并标 aria-disabled，避免按钮出现/消失导致位置跳动。
           行为**沿用既有入口** `setup.undoLastPlacementNow()`（另一条线会把撤销语义收成共用入口，
-          届时只需把这枚按钮接到共用动作上）。批 3 纪律：不可用不出现 ⇒ 只在 `canUndoPlacement`
-          时渲染；掷骰封账后它自然消失（动作本身仍会记录拒绝原因）。
+          届时只需把这枚按钮接到共用动作上）。批 3 纪律：不摆 `disabled` 灰按钮；封账原因挂在
+          title 上（`undoSealedReason`）。
         -->
         <button
-          v-if="!setup.finished && setup.canUndoPlacement"
           type="button"
           class="gt__rail-button gt__rail-undo"
-          :title="`撤回上一步：${setup.lastPlacement?.label ?? ''}`"
+          :class="{ 'gt__rail-undo--idle': !setup.canUndoPlacement }"
+          :aria-disabled="!setup.canUndoPlacement"
+          :title="
+            setup.canUndoPlacement
+              ? `撤回上一步：${setup.lastPlacement?.label ?? ''}`
+              : (workbench.undoSealedReason ?? '没有可撤回的步骤')
+          "
           aria-label="撤回上一步"
-          @click="setup.undoLastPlacementNow()"
+          @click="setup.canUndoPlacement && setup.undoLastPlacementNow()"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M9 14 4 9l5-5 M4 9h9a6 6 0 0 1 0 12h-3" />
@@ -1177,7 +1183,17 @@ onBeforeUnmount(() => {
   border-color: var(--color-rule);
 }
 
-/* 撤回图标：无文字，尺寸与其它栏钮一致（不可撤时整枚不出现，见模板 v-if） */
+/* 撤回图标：无文字，尺寸与其它栏钮一致；无可撤操作时压暗待命（整枚常显，位置不跳） */
+.gt__rail-undo--idle {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.gt__rail-undo--idle:hover {
+  background: transparent;
+  color: var(--color-muted);
+  border-color: transparent;
+}
 
 .gt__main {
   flex: 1 1 auto;
