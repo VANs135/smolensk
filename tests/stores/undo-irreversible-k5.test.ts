@@ -297,3 +297,41 @@ describe('K5：撤销链在不可逆步之前截断', () => {
     expect(store.abortMoveNow()).toBe(false)
   })
 })
+
+describe('用户 2026-11-20：封账按笔走，不按阶段连坐', () => {
+  let store: Store
+
+  beforeEach(() => {
+    store = newStore()
+    store.resetAll(11)
+  })
+
+  it('★ 突袭封账 → 下一支堆叠移动 → 撤销：只退这次移动，突袭结果保持原样', () => {
+    const { attacker } = settleOverrun(store)
+    const attackerAfter = { ...attacker.hex }
+    const attackerMp = attacker.mpSpent
+    store.finishMove()
+
+    // 另一支堆叠从突袭前的空位开拔（突袭那一笔的封账不该连坐它）
+    const second = place(store, mover(), ATTACKER_HEX, 'axis', 'k5-n2')
+    store.setTool('move')
+    store.setFuelPool(0, 60)
+    store.beginMovePick(ATTACKER_HEX, [second.instanceId])
+    expect(store.confirmMovePick()).toBe(true)
+    const node = store.groupReachable.hexes.find((item) => item.path.length === 2)
+    expect(node).toBeDefined()
+    store.clickHex(node!.hex)
+    expect(store.moveInteraction?.steps).toHaveLength(1)
+
+    // 这一笔在封账之后 ⇒ 统一入口可撤，且只退它
+    expect(store.canUndoOperation).toBe(true)
+    expect(store.undoLastOperationNow()).toBe(true)
+    expect(second.hex).toEqual(ATTACKER_HEX)
+    expect(second.mpSpent).toBe(0)
+    expect(store.moveInteraction?.steps).toHaveLength(0)
+
+    // 突袭那一笔（含位置与 MP）原样保留
+    expect(attacker.hex).toEqual(attackerAfter)
+    expect(attacker.mpSpent).toBe(attackerMp)
+  })
+})

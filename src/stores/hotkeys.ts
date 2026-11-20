@@ -305,11 +305,8 @@ export const useHotkeyStore = defineStore('hotkeys', () => {
         if (pendingChoiceOpen()) return false
         return workbench.advanceSegmentNow() !== null
       case 'move.undo':
-        // 13.2f：装卸也是「一步」——发生在最后一个移动步之后时，先退它
-        if (workbench.undoTransportHandlingNow()) return true
-        if (workbench.moveInteraction === null) return false
-        workbench.undoLastStep()
-        return true
+        // 用户 2026-11-20：Backspace 统一走全局撤销（最近一笔；装卸/移动按发生顺序回退）
+        return workbench.undoLastOperationNow()
       case 'cancel':
         // 层层退回：会话框（最重）→ 就地摊开的堆叠 → 小程序小窗 → 整次移动
         if (viewBridge.value?.cancelSession() === true) return true

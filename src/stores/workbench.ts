@@ -1447,7 +1447,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
       return true
     },
-    undoSealReason: () => undoSealedReasonNow(),
+    undoSealReason: () => moveUndoSealReasonNow(),
   })
   const { moveInteraction, zocStoppedMoveUnitIds, moveBlocked } = groundMovement
   /**
@@ -1458,9 +1458,208 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 该段的撤销入口（移动撤销/放弃、初设撤回、增援撤回）一律直接不可用。
    * 换段/换方/换回合后 key 不同，封印自然失效，不跨段误伤。
    */
-  const undoSeal = ref<{ key: string; reason: string } | null>(null)
+  const undoSeal = ref<{ seq: number; key: string; session: number | null; reason: string } | null>(
+    null,
+  )
+  /**
+   * 用户 2026-11-20：封账按**笔**走，不按阶段连坐。
+   *
+   * `session` = 掷骰发生在哪一次移动交互（开拔一次加一）。同一次交互内步骤不可退
+   * （骰前的步也不能退），但下一支堆叠开拔是新的 session ⇒ 它的移动仍可撤。
+   * 不在移动交互里的掷骰（补给/抽签/补员）保持原来的段级口径（`session = null`）。
+   */
+  const moveSessionSeq = ref(0)
   function sealUndo(reason: string): void {
-    undoSeal.value = { key: undoScopeKeyOf(), reason }
+    undoSeal.value = {
+      seq: undoTrailSeq,
+      key: undoScopeKeyOf(),
+      session: moveInteraction.value === null ? null : moveSessionSeq.value,
+      reason,
+    }
+  }
+
+  /** 移动撤销的封账判据：只有**同一次开拔**的掷骰才连坐 */
+  function moveUndoSealReasonNow(): string | null {
+    const seal = undoSeal.value
+    if (seal === null || seal.key !== undoScopeKeyOf()) return null
+    if (seal.session === null) return seal.reason
+    return seal.session === moveSessionSeq.value ? seal.reason : null
+  }
+
+  /**
+   * 用户 2026-11-20：**全局共用撤销账**（最近一笔可撤操作）
+   *
+   * 每个动作族在**成功落账时**登记一条；族内既有撤销按钮走完也要销账。
+   * `undoLastOperationNow()` 只看栈顶，按族分派到该族既有实现（或整盘快照），
+   * 因此「移动 → 装卸 → 撤销 → 再撤销」严格按发生顺序回退，不再出现两本账各退一半。
+   *
+   * 作用域＝`undoScopeKeyOf()`：换段/换方/换回合后旧账不再可撤（不跨段误伤）。
+   */
+  type UndoFamily = 'move.step' | 'transport' | 'setup' | 'draft' | 'arrival' | 'cache' | 'snapshot'
+  interface UndoTrailEntry {
+    seq: number
+    family: UndoFamily
+    label: string
+    scope: string
+  }
+  const undoTrail = ref<UndoTrailEntry[]>([])
+  /** snapshot 族的整盘快照（只在内存；读档/换段即失效，不进存档） */
+  const undoSnapshots = new Map<number, unknown>()
+  /** 各族撤销实现（'setup' 由 setup store 在初始化时注册，避免循环依赖） */
+  const undoFamilyHandlers = new Map<UndoFamily, () => boolean>()
+  let undoTrailSeq = 0
+
+  /** 登记一笔可撤操作（family='snapshot' 时附整盘快照） */
+  function noteUndoable(family: UndoFamily, label: string, snapshot?: unknown): number {
+    undoTrailSeq += 1
+    const entry: UndoTrailEntry = { seq: undoTrailSeq, family, label, scope: undoScopeKeyOf() }
+    undoTrail.value = [...undoTrail.value, entry]
+    if (snapshot !== undefined) undoSnapshots.set(entry.seq, snapshot)
+    return entry.seq
+  }
+
+  /** 快照族登记：先整盘快照再落账；取不到快照（如空军载货在途）就只登记跳过撤销 */
+  function captureUndoSnapshot(label: string): number | null {
+    try {
+      return noteUndoable('snapshot', label, snapshotBoard())
+    } catch {
+      return null
+    }
+  }
+
+  function dropUndoBySeq(seq: number): void {
+    undoSnapshots.delete(seq)
+    undoTrail.value = undoTrail.value.filter((entry) => entry.seq !== seq)
+  }
+
+  /** 销掉该族**最近**的一笔（族内按钮直接撤销后调用） */
+  function dropUndoOf(family: UndoFamily): void {
+    const trail = undoTrail.value
+    for (let index = trail.length - 1; index >= 0; index -= 1) {
+      if (trail[index]!.family === family) {
+        dropUndoBySeq(trail[index]!.seq)
+        return
+      }
+    }
+  }
+
+  /** 整族销账（如放弃整次移动时，移动步与装卸一起作废） */
+  function dropUndoFamilies(families: readonly UndoFamily[]): void {
+    const dead = new Set(
+      undoTrail.value.filter((entry) => families.includes(entry.family)).map((entry) => entry.seq),
+    )
+    if (dead.size === 0) return
+    for (const seq of dead) undoSnapshots.delete(seq)
+    undoTrail.value = undoTrail.value.filter((entry) => !dead.has(entry.seq))
+  }
+
+  function clearUndoTrail(): void {
+    undoTrail.value = []
+    undoSnapshots.clear()
+  }
+
+  /** 各族把「撤销自己最近一笔」的实现注册进来（统一入口据此分派） */
+  function registerUndoFamily(family: UndoFamily, handler: () => boolean): void {
+    undoFamilyHandlers.set(family, handler)
+  }
+
+  /** 统一入口的按钮态：本段未封账且栈顶属于当前作用域 */
+  const canUndoOperation = computed<boolean>(() => {
+    const entry = undoTrail.value[undoTrail.value.length - 1]
+    if (entry === undefined || entry.scope !== undoScopeKeyOf()) return false
+    // 移动类：本次移动已结束（=提交）⇒ 栈顶这两族不再可撤
+    if (
+      (entry.family === 'move.step' || entry.family === 'transport') &&
+      (moveInteraction.value === null || moveInteraction.value.finished)
+    )
+      return false
+    // 用户 2026-11-20：封账只压住它之前落在**同一作用域**的笔；之后的新操作照常可撤
+    const seal = undoSeal.value
+    if (seal !== null && seal.key === entry.scope && entry.seq <= seal.seq) return false
+    return true
+  })
+
+  /** 栈顶那一笔的人话（供按钮提示） */
+  const undoOperationLabel = computed<string | null>(
+    () => undoTrail.value[undoTrail.value.length - 1]?.label ?? null,
+  )
+
+  /**
+   * 用户 2026-11-20：**全局共用撤销入口**（同一个 action / 同一套「最近一笔」语义）
+   *
+   * 顺序：先查本段掷骰封账 → 再看栈顶 → 分派到该族撤销。
+   * 覆盖所有不涉及掷骰检定的操作：移动步、装卸、初设落位、战果草稿、增援铁路抵达、
+   * 补给缓存，以及换轨/建造/建造标记/加油/整备（整盘快照族）。
+   */
+  function undoLastOperationNow(): boolean {
+    const entry = undoTrail.value[undoTrail.value.length - 1]
+    if (entry === undefined) {
+      pushLog('info', '没有可撤销的操作')
+      return false
+    }
+    if (entry.scope !== undoScopeKeyOf()) {
+      clearUndoTrail()
+      pushLog('warning', '上一环节的操作已封存，不能再撤销', '6.1')
+      return false
+    }
+    // 移动类：结束移动＝提交（用户 2026-11-18）⇒ 之后不再回退
+    if (
+      (entry.family === 'move.step' || entry.family === 'transport') &&
+      (moveInteraction.value === null || moveInteraction.value.finished)
+    ) {
+      dropUndoBySeq(entry.seq)
+      pushLog('warning', '本次移动已结束（6.1）：结束即提交，不能再撤销', '6.1')
+      return false
+    }
+    /*
+     * 用户 2026-11-20：封账只作用于**它那一笔及其之前的账**（同一作用域）；
+     * 掷骰之后的新操作序号更大 ⇒ 照常可撤，不被前一笔连坐。
+     */
+    const seal = undoSeal.value
+    if (seal !== null && seal.key === entry.scope && entry.seq <= seal.seq) {
+      // 这些笔已经不能撤了，一并摘掉，免得入口卡在一笔废账上
+      const dead = new Set(
+        undoTrail.value
+          .filter((item) => item.scope === entry.scope && item.seq <= seal.seq)
+          .map((item) => item.seq),
+      )
+      for (const seq of dead) undoSnapshots.delete(seq)
+      undoTrail.value = undoTrail.value.filter((item) => !dead.has(item.seq))
+      pushLog('warning', seal.reason, '6.1')
+      return false
+    }
+    if (entry.family === 'snapshot') {
+      const board = undoSnapshots.get(entry.seq)
+      if (board === undefined) {
+        dropUndoBySeq(entry.seq)
+        pushLog('warning', `「${entry.label}」没有可还原的快照`, '6.1')
+        return false
+      }
+      /*
+       * 整盘还原会重置移动/战斗等会话；但快照是**该动作发生前**拍的，
+       * 当时的移动会话仍成立 ⇒ 把会话壳原样放回去，撤销一个建造/加油不该把移动打断。
+       */
+      const interaction = moveInteraction.value
+      const pick = movePick.value
+      restoreBoard(board, true)
+      moveInteraction.value = interaction
+      movePick.value = pick
+      dropUndoBySeq(entry.seq)
+      pushLog('info', `撤销：${entry.label}（盘面还原）`, '6.1')
+      return true
+    }
+    const handler = undoFamilyHandlers.get(entry.family)
+    if (handler === undefined) {
+      dropUndoBySeq(entry.seq)
+      pushLog('warning', `「${entry.label}」暂不支持撤销`, '6.1')
+      return false
+    }
+    const ok = handler()
+    if (!ok) {
+      // 族实现已拒绝（并给出原因）；把这一笔从账上摘掉，避免入口卡死
+      dropUndoBySeq(entry.seq)
+    }
+    return ok
   }
   /**
    * H7（用户 2026-11-16）：**结束一次移动后不立刻收窗**
@@ -4489,11 +4688,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     const key = hexLabel(hex)
-    /**
+    /*
      * 13.3f：双方**各换各的**轨距——账本的语义是「该格已换成标准轨（轴方可用）」，
      * 故轴方转换＝入账，苏方转换＝**出账**（恢复印刷宽轨）。
      * 按**本方可用轨距**判定（不写死阵营），印刷轨距若改则行为自动跟随。
      */
+    captureUndoSnapshot(`换轨 ${key}`)
     const wasOwnGauge = isRailGaugeUsableAt(hex, unit.side)
     if (rulesConstants.smolensk.railGauge.usableBySide[unit.side] === convertedRailGauge) {
       if (!convertedRailHexes.value.includes(key)) convertedRailHexes.value.push(key)
@@ -4925,6 +5125,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         dumpHoldingsBefore,
       },
     ]
+    // 用户 2026-11-20：装卸也是一笔可撤操作（与移动步共用一个撤销栈，按发生顺序回退）
+    noteUndoable('transport', `装载 ${amount} SP：${unit.name}`)
     return true
   }
 
@@ -5028,6 +5230,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         relayLocksBefore,
       },
     ]
+    // 用户 2026-11-20：装卸也是一笔可撤操作（与移动步共用一个撤销栈，按发生顺序回退）
+    noteUndoable('transport', `卸载 SP：${unit.name}`)
     return true
   }
 
@@ -5087,12 +5291,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 否则返回 false，让 `undoLastStep()` 先退移动（按发生顺序）。
    */
   function undoTransportHandlingNow(): boolean {
-    if (undoSealedReasonNow() !== null) return false
+    if (moveUndoSealReasonNow() !== null) return false
     const entry = transportHandlingUndo.value[transportHandlingUndo.value.length - 1]
     if (entry === undefined) return false
     const currentSteps = moveInteraction.value?.steps.length ?? 0
     if (entry.stepsAt !== currentSteps) return false
-    return revertTransportHandlingEntry(transportHandlingUndo.value.length - 1)
+    const ok = revertTransportHandlingEntry(transportHandlingUndo.value.length - 1)
+    if (ok) dropUndoOf('transport')
+    return ok
   }
 
   /** 把一条装卸账回退（不看步数；供"按发生顺序"与"整次放弃"共用） */
@@ -8539,6 +8745,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     // 13.2f：本次移动的装卸撤销账从这一刻起算（之前的装卸属于上一笔动作）
     transportHandlingBaseline.value = transportHandlingUndo.value.length
+    // 用户 2026-11-20：新开拔＝新的一笔；上一支堆叠的掷骰封账不连坐这一笔
+    moveSessionSeq.value += 1
     pausedTransportIds.value = paused.filter((id) => !resumingIds.includes(id))
     // 条 22（批 T）：20.0a 的**创建时机**＝「开始移动」这个**事件**（不是"当前在移动段"这个状态）
     openBreakdownWindow('startMove', moveIds)
@@ -9104,6 +9312,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         for (const id of step.movedIds) next[id] = hexTextOf(to)
         lastGroundEntryByUnit.value = next
       }
+      // 用户 2026-11-20：全局撤销账 —— 每一步都是一笔可撤操作
+      noteUndoable('move.step', `移动一步 → ${hexLabel(to)}`)
     }
     return ok
   }
@@ -9373,15 +9583,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *
    * 13.2f：装卸也是「一步」——发生在最后一个移动步之后时先退它（面板按钮与快捷键同一条路）。
    */
-  function undoLastStep(): void {
-    if (undoSealedReasonNow() !== null || moveInteraction.value?.finished === true) {
+  function undoLastStep(): boolean {
+    if (moveUndoSealReasonNow() !== null || moveInteraction.value?.finished === true) {
       groundMovement.undoLastStep() // 走引擎的统一拒绝并给出原因
-      return
+      return false
     }
-    if (undoTransportHandlingNow()) return
+    if (undoTransportHandlingNow()) return true
     const unitIds = moveInteraction.value?.unitIds ?? []
-    groundMovement.undoLastStep()
-    syncGroundEntries(unitIds)
+    const ok = groundMovement.undoLastStep()
+    if (ok) {
+      // 用户 2026-11-20：族内按钮直接撤销后销掉统一账上的同一笔
+      dropUndoOf('move.step')
+      syncGroundEntries(unitIds)
+    }
+    return ok
   }
 
   /** C5：取消整次移动（回到开始移动之前；本段装卸与移动同账一起回退） */
@@ -9389,6 +9604,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const unitIds = moveInteraction.value?.unitIds ?? []
     if (!groundMovement.cancelWholeMove()) return
     revertTransportHandlingSinceBaseline()
+    dropUndoFamilies(['move.step', 'transport'])
     syncGroundEntries(unitIds)
   }
 
@@ -10454,6 +10670,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       formationCoverage === null || formationCoverage.sourceKey === null || targets[0] === undefined
         ? '（未定）'
         : (fuelSourceKeysOfUnit(targets[0]).get(formationCoverage.sourceKey) ?? '（未定）')
+    captureUndoSnapshot(
+      `加油支付（${method === 'singleUnit' ? '单独单位法' : method === 'formation' ? '编队法' : 'HQ 法'}）`,
+    )
     setSpDumpHoldings(dump.id, payment.data.holdingsAfter)
     for (const unitId of coveredIds) {
       const unit = units.value.find((item) => item.instanceId === unitId)
@@ -13980,6 +14199,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     combatInputs.value.optionLossPoints += 1
     optionDraftLog.value = [...optionDraftLog.value, { kind: 'loss', unitId, amount: 1 }]
+    noteUndoable('draft', '战果草稿：损失 +1')
     return true
   }
 
@@ -13992,6 +14212,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const applied = Math.min(Math.max(1, Math.round(distance)), room)
     combatInputs.value.optionRetreatHexes += applied
     optionDraftLog.value = [...optionDraftLog.value, { kind: 'retreat', amount: applied }]
+    noteUndoable('draft', '战果草稿：撤退 +1 格')
     return true
   }
 
@@ -14017,6 +14238,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function undoOptionDraftLast(): boolean {
     const last = optionDraftLog.value[optionDraftLog.value.length - 1]
     if (last === undefined) return false
+    dropUndoOf('draft')
     optionDraftLog.value = optionDraftLog.value.slice(0, -1)
     if (last.kind === 'loss' && last.unitId !== undefined) {
       const next = (combatInputs.value.optionLossAllocation[last.unitId] ?? 0) - last.amount
@@ -17702,7 +17924,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `算子库没有 ${outcome.data.levelAfter} 级工事算子（16.0b）`, '16.0b')
       return false
     }
-    if (!paySpFromDump(hedgehogInputs.value.payDumpId, outcome.data.costSp)) return false
+    const undoSeq = captureUndoSnapshot(`修建环形工事 ${hexLabel(hex)}`)
+    if (!paySpFromDump(hedgehogInputs.value.payDumpId, outcome.data.costSp)) {
+      if (undoSeq !== null) dropUndoBySeq(undoSeq)
+      return false
+    }
     // 4.8：一格至多 1 个工事 ⇒ 摆出该等级的算子；8.1e/9.14e 的归属随算子
     units.value = [
       ...units.value,
@@ -17761,6 +17987,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const placed = units.value.find(
       (unit) => sameHex(unit.hex, hex) && unit.noncombatKind === 'hedgehog',
     )
+    captureUndoSnapshot(`缩减环形工事 ${hexLabel(hex)}`)
     if (outcome.data.removes) {
       if (placed !== undefined)
         units.value = units.value.filter((unit) => unit.instanceId !== placed.instanceId)
@@ -18183,8 +18410,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     const feeT = constructionFeeT('buildAirBase', outcome.data.costSp, 0)
-    if (!payConstructionFee(constructionInputs.value.payDumpId, feeT, '15.3')) return false
-    if (!placeAirBaseOperator(hex, outcome.data.levelAfter)) return false
+    const undoSeq = captureUndoSnapshot(`修建空军基地 ${hexLabel(hex)}`)
+    if (!payConstructionFee(constructionInputs.value.payDumpId, feeT, '15.3')) {
+      if (undoSeq !== null) dropUndoBySeq(undoSeq)
+      return false
+    }
+    if (!placeAirBaseOperator(hex, outcome.data.levelAfter)) {
+      if (undoSeq !== null) dropUndoBySeq(undoSeq)
+      return false
+    }
     if (engineer !== null) engineer.movementEnded = true
     airBaseTurnLedger.value = {
       ...airBaseTurnLedger.value,
@@ -18240,15 +18474,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `修建简易机场被拒：${outcome.reason}（${outcome.rule}）`, outcome.rule)
       return false
     }
+    const undoSeq = captureUndoSnapshot(`修建简易机场 ${hexLabel(hex)}`)
     if (
       !payConstructionFee(
         constructionInputs.value.payDumpId,
         constructionFeeT('buildAirstrip', 0, outcome.data.costT),
         '15.2A',
       )
-    )
+    ) {
+      if (undoSeq !== null) dropUndoBySeq(undoSeq)
       return false
-    if (!placeAirBaseOperator(hex, 1)) return false
+    }
+    if (!placeAirBaseOperator(hex, 1)) {
+      if (undoSeq !== null) dropUndoBySeq(undoSeq)
+      return false
+    }
     const placed = airBaseUnitAt(hex)
     if (placed !== undefined) airstripBaseIds.value = [...airstripBaseIds.value, placed.instanceId]
     if (engineer !== null) engineer.movementEnded = true
@@ -21663,8 +21903,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', '请先在地图上点选高亮的补给站（15.1B）', '15.1B')
       return false
     }
+    const base = airBases.value.find((item) => item.id === baseId)
+    const undoSeq = captureUndoSnapshot(
+      `整备支付：${base === undefined ? baseId : hexLabel(base.hex)}`,
+    )
     const ok = refitBaseNow(baseId, airInputs.value.refitAircraftIds, dumpId)
     if (ok) refitStage.value = null
+    if (!ok && undoSeq !== null) dropUndoBySeq(undoSeq)
     return ok
   }
 
@@ -26207,6 +26452,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           cost: route.cost,
           side: base.plans[0]!.side,
         }
+        // 用户 2026-11-20：增援铁路抵达也进统一撤销账
+        noteUndoable('arrival', `增援铁路抵达 ${label}`)
         return true
       },
     })
@@ -26370,6 +26617,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     arrivalRailUndo.value = null
     pushLog('info', `已撤回铁路抵达：${undo.label}（运力已退回）`, '13.6b')
+    dropUndoOf('arrival')
     return true
   }
 
@@ -28361,6 +28609,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '21.10',
     )
     lastSupplyCacheUse.value = 'Forage'
+    noteUndoable('cache', '补给缓存：Forage')
     return true
   }
 
@@ -28387,6 +28636,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     lastForageGrant.value = null
     lastSupplyCacheUse.value = null
     if (supplyPhasePlan.value !== null) planSupplyPhaseNow()
+    dropUndoOf('cache')
     pushLog('info', '21.10b：撤销本阶段内的 Forage，补给缓存退回 1 枚', '21.10')
     return true
   }
@@ -28931,6 +29181,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       '放置建造标记',
     )
     if (data === null) return false
+    captureUndoSnapshot(`放置建造标记（${kind === 'bridge' ? '桥' : '简易机场'}）${hexLabel(hex)}`)
     constructionMarkers.value -= 1
     // 专规 3.5：标记**落盘**（原来只减枚数、标记本身没记住 ⇒ 看不见也毁不掉）
     constructionMarkerPieces.value = [
@@ -30410,6 +30661,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       clearSupply()
       refitTargetBaseId.value = null
       initialSetupInProgress.value = false
+      // 用户 2026-11-20：读档/重开是换了一局，上一局的撤销账不再可撤
+      if (!silent) clearUndoTrail()
       // 5.4a：额度由 `units` 的当前模式派生（`reservedHexes`）⇒ 随单位一起还原，无需重放日志
       if (silent) return
       syncVictoryControlFromBoard()
@@ -30759,6 +31012,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }),
   )
 
+  /*
+   * 用户 2026-11-20：统一撤销入口的分派表。
+   * `setup` 由 setup store 初始化时注册（它与本 store 互相引用，避免循环依赖）。
+   */
+  registerUndoFamily('move.step', () => undoLastStep())
+  registerUndoFamily('transport', () => undoTransportHandlingNow())
+  registerUndoFamily('draft', () => undoOptionDraftLast())
+  registerUndoFamily('arrival', () => undoArrivalRailNow())
+  registerUndoFamily('cache', () => undoSupplyCacheUse())
+
   return {
     activeSide,
     engagementDecisionRole: fireResolution.decisionRole,
@@ -30906,6 +31169,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     undoLastStep,
     undoTransportHandlingNow,
     cancelWholeMove,
+    // 用户 2026-11-20：全局共用撤销（同一 action / 最近一笔可撤操作；掷骰按笔封账）
+    undoLastOperationNow,
+    canUndoOperation,
+    undoOperationLabel,
+    /** 供各族登记 / 销账 / 注册撤销实现（setup 等兄弟 store 使用） */
+    noteUndoable,
+    dropUndoOf,
+    registerUndoFamily,
     // K5：撤销一步的可用性（判据在 ground-movement，与 refuseRollback 同源）
     canUndoStep: groundMovement.canUndoStep,
     undoBlockedReason: groundMovement.undoBlockedReason,

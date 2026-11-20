@@ -1220,6 +1220,8 @@ export const useSetupStore = defineStore('setup', () => {
   ): void {
     placementUndoStack.push({ label, snapshot })
     lastPlacement.value = { label }
+    // 用户 2026-11-20：初设落位也进全局撤销账（与其它动作共用「最近一笔」语义）
+    workbench.noteUndoable('setup', label)
   }
 
   /**
@@ -1269,6 +1271,7 @@ export const useSetupStore = defineStore('setup', () => {
     workbench.landSetupSpDumps(spDumps.value)
     const previous = placementUndoStack[placementUndoStack.length - 1]
     lastPlacement.value = previous === undefined ? null : { label: previous.label }
+    workbench.dropUndoOf('setup')
     return record({
       ok: true,
       rule: 'IV',
@@ -4367,6 +4370,9 @@ export const useSetupStore = defineStore('setup', () => {
     briefingAcknowledged.value = {}
     return selectScenario(scenarioId.value)
   }
+
+  // 用户 2026-11-20：把初设撤回登记到全局撤销入口（workbench 统一分派）
+  workbench.registerUndoFamily('setup', () => undoLastPlacementNow())
 
   return {
     // 状态
