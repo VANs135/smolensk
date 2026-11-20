@@ -1,0 +1,89 @@
+# `stores/workbench.ts` 解构 — 任务分解
+
+日期：2026-11-20　状态：待批　配套：`spec.md`、`migration.csv`
+
+> 全程在 `refactor/workbench-decouple` 分支；每完成一项即 commit + push，不攒。门禁一律 `npm run check`（约 250s，不含 AI 套件）。
+
+## 0. 前置（B-1，0.5 天）
+
+- [x] `package.json` 拆 `test:fast` / `test:ai`，`check` 改用 `test:fast`，新增 `check:all`
+- [x] `git config diff.renames copies`（仓库级，不入库）
+- [x] 接通 SSH（`core.sshCommand` 指向 `~/.ssh/id_ed25519_smolensk`），`ssh -T` 返回 `Hi VANs135!`
+- [ ] 建分支 `refactor/workbench-decouple` 并 `git push -u origin`
+- [ ] 新增 `tests/stores/public-surface.test.ts`，把当前 1,013 键写成基线（先绿再动刀）
+
+## 1. B0 核心服务
+
+- [ ] 新建 `src/stores/workbench-core.ts`：`createWorkbenchCore(deps)`，`deps` ≤ 17 个成员
+- [ ] 迁入 `pushLog` / `recordSettlement` / `requireAction` / `actionAllowedNow` / `refuseWhileSettling`
+- [ ] 迁入撤销账（`undoTrail` / `noteUndoable` / `captureUndoSnapshot` / `dropUndoOf` / `undoFamilyHandlers`），保留后注册
+- [ ] facade 改别名解构 `const { pushLog, … } = core`，**800+ 调用点零改动**
+- [ ] `segmentStep` / `segmentAdvanceBlock` 仅打成 port 透传（留给 B7）
+- 验收：`npm run check` 绿 + `tests/stores/*` 日志/撤销/存档用例绿 + 公开面键集不变
+
+## 2. B1 轰炸
+
+- [ ] `flows/barrage.ts` ← section 8（1,212 行 / 38 函数）
+- [ ] ports 按 `migration.csv` 筛 `section=8 and inbound_sections_count>0`（`deliverableDumpsFor` 5 节、`clearBarrage` 4 节、`setAirInBoxMembership` 4 节 …）
+- 验收：`workbench.ts` 32,193 → ≈30,981；`npm run check` 绿
+
+## 3. B2 空军
+
+- [ ] `flows/air-ops.ts` ← section 10（560 / 16）+ section 11（999 / 22）
+- [ ] 暴露 `clearAir`(4)、`acceptAir`(2)、`setAirStatus`(2)、`applyAirStepLoss`(2)、`setAirMissionKind`、`setAirTargetFromText`
+- 验收：同上（≈29,422 行）
+
+## 4. B3 移动三切片
+
+- [ ] `flows/move.ts` ← section 3（451 / 15）
+- [ ] `flows/stack-pick.ts` ← section 4（3,381 / 81，含突围与补给缓存）
+- [ ] `flows/raid.ts` ← section 2（1,344 / 28）
+- [ ] 暴露 `nameOf`(4)、`applyMovePatches`(2)、`refuseWhileSettling`(2)、`retryBeginMove`(2)、`selectForMove`、`openBreakdownWindow`、`closeBreakdownWindows`
+- 注意：`4→1` 有 10 条出边（铁路），port 化后不要把铁路逻辑拖进来
+- 验收：同上（≈24,246 行）
+
+## 5. B4 补给
+
+- [ ] `flows/supply.ts` ← section 9（2,734 / 91）
+- [ ] 暴露 15 个 inbound 函数（CSV 查 `section=9`）
+- 验收：同上（≈21,512 行）
+
+## 6. B5 战斗四节
+
+- [ ] `flows/combat.ts` ← section 5（1,643 / 33）
+- [ ] `flows/combat-draft.ts` ← section 7（591 / 14，选项战果草稿账本）
+- [ ] `flows/combat-finish.ts` ← section 0（963 / 9，9.12g 撤退/推进/补给站）
+- [ ] `flows/special-combat.ts` ← section 12（2,424 / 51，9.14）
+- [ ] 暴露 `combatCancelBlocker`(7)、`clearCombat`(4)、`applyCombatPatches`(4)、`resolveSpecialCombatAt`(2) 等
+- 注意：`12→8` 8 条、`12→10` 8 条（特战要调轰炸与空军），走 ports
+- 验收：同上（≈15,891 行）
+
+## 7. B6 到货与铁路
+
+- [ ] `flows/arrival.ts` ← section 13（1,044 / 26）
+- [ ] `flows/rail.ts` ← section 1（2,903 / 61）
+- [ ] 暴露 `clearArrivalSpGroups`(3) 等 18 个；铁路 23 个
+- 验收：同上（≈11,944 行）
+
+## 8. B7 环节闸门（唯一巨型枢纽，拆 4 个子提交）
+
+- [ ] `services/segment-gate.ts` ← 段状态机（`segmentStep` / `segmentAdvanceBlock`）
+- [ ] `services/placement.ts` ← 放置阶段
+- [ ] `services/spec-rules.ts` ← 专规机制
+- [ ] `services/victory.ts` ← 胜利判定
+- 注意：`14→13` 有 18 条最紧边，先在 CSV 里把 18 个函数列全再动手
+- 验收：每子提交 ≤ 1,500 行、`npm run check` 绿（≈5,206 行）
+
+## 9. B8 快照与 facade 收口
+
+- [ ] `services/snapshot.ts` ← section 15（1,792 / 12）
+- [ ] facade 只留装配 + `watch` + `return` 汇编 + 薄转发
+- [ ] 加 `max-lines` / `forbidden-imports` 到 `scripts/check-arch.mjs`
+- 验收：按上面切分，`workbench.ts` 落到 **≈3,400 行**（不是 ≤3,000）—— 分节外的核心区实测 3,414 行、`return` 字面量 1,155 行，B8 之后余量比目标多约 400 行
+- [ ] 若要真正 ≤3,000：**二选一**（a）B0 里把核心区再拆成 `core-state.ts` / `core-undo.ts`；（b）`return` 改按域拼装（`Object.assign(..., barrageSurface(), airSurface(), …)`），facade 可降到 ≈600 行
+- 验收（最终）：`workbench.ts` ≤ 3,000；`npm run check:all`（含 AI）绿一次；打 tag `decouple-b8`
+
+## 10. 收尾
+
+- [ ] `docs/待办清单.md` 更新为"已完成"并写清各批 commit
+- [ ] 合并 `refactor/workbench-decouple` → `main`（PR 里贴每批 `git show -C --find-copies-harder` 摘要）
