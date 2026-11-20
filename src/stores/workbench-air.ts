@@ -1,15 +1,19 @@
 /**
- * workbench-air.ts —— C9 空军域（解构 B2-1：状态 + 派生）
+ * workbench-air.ts —— C9 空军域（状态 + 派生 + 整备/转移动作）
  *
- * 为什么先只搬"状态 + 派生"：空军的 26 个 ref 住在 workbench.ts 的 2416–2592，而它的动作
- * 分散在 17k–23k 五段里。先让 `airDomain` 拥有状态，B2-2 搬动作时就不用再把状态当端口。
+ * 搬了两批：
+ *   · B2-1：26 个 ref（2416–2592）+ 派生块 5949–6086；
+ *   · B2-1b：5701–6321 的 48 个声明（返航三选一 / 空战轮对 / 巡逻区 / 任务格敌方事实 /
+ *     可夺基地 / 整备套件 / 转移 / 缩减），其中含 `beginTransferNow` 这类**动作**。
+ * 动作块（17k–20k 四段）是 B2-2，届时不用再把状态当端口。
  *
- * 端口 25 项，两种接法：
- *   · 按值（20 项）：声明在建域点（≈2593）之前，或是有提升的函数声明；
- *   · 晚绑定（5 项）：`zocOnlySupplyFacts`/`onMapAirUnits`/`airCargoLossPending`/
- *     `segmentGateQuery`/`constructionMarkerPieces` 声明在 4192–27836 之间，facade 用
- *     `get` 访问器传进来，切片里一律写成 `ports.x.value` —— 只在 computed 求值时读取，
- *     避免建 store 时撞 TDZ（§12.3 记录过一次同源事故）。
+ * 端口 36 项，两种接法：
+ *   · 按值（29 项）：声明在建域点（2239）之前，或是有提升的函数声明（声明在 13k–27k 也能传）；
+ *   · 晚绑定（7 项）：`zocOnlySupplyFacts`/`onMapAirUnits`/`airCargoLossPending`/
+ *     `segmentGateQuery`/`constructionMarkerPieces`/`allSpDumps`/`supplyFacts` 是 `const`/`computed`
+ *     且声明在建域点之后，facade 用 `get` 访问器传进来，切片里一律写成 `ports.x.value` ——
+ *     只在 computed 求值时读取，避免建 store 时撞 TDZ（§12.3 记录过一次同源事故）。
+ *     注意：**晚绑定端口在被搬的正文里也是 `ports.x.value`**，不要写裸名。
  */
 import { computed, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
