@@ -30,7 +30,47 @@
 | 规则号注释       | 2,225 行                               | 说明它承担大量规则前置条件编排，不只是搬状态                                                                                                                                                          |
 | 已拆出的 domain  | 10 个                                  | `air-mission` / `ground-movement` / `fire-resolution` / `supply-phase` / `air-supply` / `air-cargo-resolution` / `air-unit-transit` / `phase-coordinator` / `snapshot-registry` / `engagement-inputs` |
 
-**已有的拆分先例就是模板**：`createGroundMovementDomain(ports)`，切片顶部 `const { pushLog, applyMovePatches, … } = ports`，函数体原样不动。`AirMissionPorts` 现为 **17 个成员**，是 ports 规模的标尺。
+**已有的拆分先例就是模板**：`createGroundMovementDomain(ports)`，切片顶部 `const { pushLog, applyMovePatches, … } = ports`，函数体原样不动。`AirMissionPorts` 现为 **17 个成员**，是 ports 规模的标尺（但 B1 实测一个 1,212 行的切片要 51 项，见 §6 的 P2-4 结论：**端口 > 40 就该再拆一刀**）。
+
+---
+
+## 1.5 坐标与编号（每次搬家后必须重算）
+
+**本文件与 `tasks.md` 里出现的所有行号，都是"动手之前"的坐标。** 每搬完一批，facade 会短上千行，其余分节的坐标全部漂移；照旧坐标切下一批会切错位置。
+
+B0 + B1 之后的实测漂移量：
+
+| 符号                     | 旧坐标 | 现坐标 | 偏差   |
+| ------------------------ | ------ | ------ | ------ |
+| `requireAction`          | 24,900 | 23,715 | -1,185 |
+| `setSpDumpHoldings`      | 16,120 | 14,917 | -1,203 |
+| `resolveSpecialCombatAt` | 20,346 | 19,143 | -1,203 |
+
+偏差 ≈ **1,185–1,203 行**，由 B0 的 -61、B1 的净减（-1,057，含把 119 行转发壳放回原位置）与顺手清掉的 import（≈-40）累计而成。注意偏差**不是一个全文件统一的常数**：同一批里，落在不同位置的符号偏差会差十几行（谁在被删段落之前、之后各不一样）——所以别拿一个数字去平移推算，只能重算。
+
+所以坐标一律**重算，不手抄**：
+
+```bash
+node scripts/migration-report.mjs --out docs/specs/2026-11-20-workbench解构/migration-当前坐标.csv
+```
+
+脚本用类型检查器解析**真实调用边**（不是"名字出现过"的近似），输出 `section, section_title, function, kind, line, inbound_sections_count, inbound_from_sections`。
+
+**编号不可跨文档互换**：旧 `migration.csv` 的 0–15 是"粗粒度分节序"（只认 16 处注释），新脚本认 31 处（连后来新增的注释也算）——所以同一个 `section 8` 在旧表里是「C7 轰炸」，在新表里是「21.10 补给缓存」。**跨批引用请用 `section_title` 的关键词，不要用编号**。B1 之后的分节对照（节选）：
+
+| 新编号 | 标题关键词         | 函数数 | 对应旧编号    |
+| ------ | ------------------ | ------ | ------------- |
+| 10     | C7 轰炸（已迁出）  | 38     | 旧 8          |
+| 11     | C8 补给交互        | 29     | 旧 9          |
+| **18** | **C9 空军交互**    | **16** | 旧 10         |
+| **19** | **三操作统一流程** | **22** | 旧 11         |
+| 20     | 9.14 特殊战斗      | 44     | 旧 12         |
+| 22     | 批 F 到货 SP 落点  | 26     | 旧 13         |
+| 23     | B8 环节状态与闸门  | 5      | 旧 14（部分） |
+| 24     | v7.1 放置阶段      | 93     | 旧 14（主体） |
+| 30     | B48 盘面快照       | 12     | 旧 15         |
+
+（B2 要动的就是上表加粗的 **18 + 19 = 38 个函数**。）
 
 ---
 
@@ -168,14 +208,33 @@
 
 ## 9. Git 落地（每批都必须能 push）
 
-| 约束                         | 做法                                                                                |
-| ---------------------------- | ----------------------------------------------------------------------------------- |
-| 一批 = 一 commit = 一 push   | DoD 第 5 条；`git status --porcelain` 为空才提交                                    |
-| 纯搬移不混改动               | 同一 commit 不出现逻辑/文案改动，便于二分定位                                       |
-| 让 git 认得出"搬家"          | `git config diff.renames copies`（已配）；审阅用 `git show -C --find-copies-harder` |
-| 新文件一律 LF + UTF-8 无 BOM | `.gitattributes` 已是 `* text=auto eol=lf`；禁止用 PowerShell `>` 重定向生成源码    |
-| 分支                         | `refactor/workbench-decouple`，每批一 commit 推远端                                 |
-| 回退                         | 每批合并后本地打 tag `decouple-b<N>`                                                |
+| 约束                         | 做法                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------- |
+| 一批 = 一 commit = 一 push   | DoD 第 5 条；`git status --porcelain` 为空才提交                                 |
+| 纯搬移不混改动               | 同一 commit 不出现逻辑/文案改动，便于二分定位                                    |
+| 新文件一律 LF + UTF-8 无 BOM | `.gitattributes` 已是 `* text=auto eol=lf`；禁止用 PowerShell `>` 重定向生成源码 |
+| 分支                         | `refactor/workbench-decouple`，每批一 commit 推远端                              |
+| 回退                         | 每批合并后本地打 tag `decouple-b<N>`                                             |
+
+**关于"让 git 认得出搬家"——这条原方案是错的，B1 实测推翻**：
+
+原来写的是「`git config diff.renames copies`（已配）；审阅用 `git show -C --find-copies-harder`」。B1 提交实测：
+
+```
+git show --find-copies-harder --stat 62c128c
+ src/stores/workbench-barrage.ts | 1478 ++++++++++++++++++++++++++++++++++++++++
+ src/stores/workbench.ts         | 1326 ++++++---------------------------
+```
+
+git 报的是「新增 1,478 行 + 删除 1,192 行」，**不是** copy/rename。`-C -C`、`-C50%` 全试过，都不认。原因是 copy 检测要求目标文件与源文件的相似度过阈，而切出来的切片只有源文件的 **4.6%**（1,478 / 32,132）——"从巨型文件里切一小块"这类搬家，git 的启发式天生不适用。
+
+所以审阅不能指望 `-C`，改用三条可复现的机器证据（B1 已实际跑通）：
+
+1. **函数名集合对拍**（AST 口径）：facade 的 `FunctionDeclaration` 名字集前后比对，只允许"转为切片内部"这一种差异；
+2. **双向文案对拍**：原文分节的字符串字面量 ↔ 切片，缺/增必须为 0（B1：68 ↔ 68）；
+3. **规模对拍**：`git diff --stat` 的 deletion 与 slice 的 insertion 量应大致相当（B1：删 1,192 / 增 1,478，差额 286 = 切片新增的 ports 接口 51 行 + 文档注释 + `return` 汇编）。
+
+这三条脚本都在 `E:\Temp\ocs-review-pw\verify-b1*.mjs`，属于一次性工具；若要长期留，建议合进 `scripts/migration-report.mjs` 一族。
 
 ---
 
