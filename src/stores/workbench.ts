@@ -76,7 +76,6 @@ import {
   SP_TO_T,
   airBaseBuildCostSp,
   airBoxEdgeColumn,
-  airDistanceToOffMapBox,
   claimFrontalReserves,
   constructionTaskCostsSp,
   frontalReservesBatch,
@@ -196,9 +195,6 @@ import {
   arrivalComponentNames,
   arrivalNamedCopiesOf,
   planArrivals,
-  planAirBaseReduction,
-  planBaseRefit,
-  planBaseTransfer,
   breakdownAbsorbObligations,
   planBreakdownAbsorb,
   planBreakdownCreate,
@@ -410,7 +406,6 @@ import {
   hexLabel,
   hexsideTerrainNames,
   isExtenderUnit,
-  isFighterAircraft,
   isHqUnit,
   throwRangeMpOf,
   throwMobilityOf,
@@ -2228,9 +2223,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     eliminateEntry,
     applyAirStepLoss,
     drawAir1d6,
-    airMissionKindLabel,
     requireAction,
     noteUnitEnteredHex,
+    // B2-2d：按值（建域点前声明 / 可提升函数声明）
+    captureUndoSnapshot,
+    dropUndoBySeq,
+    setSpDumpHoldings,
+    clearAir,
+    AIR_MISSION_KIND_LABELS,
+    AIR_STATUS_LABELS,
     // 晚绑定（B2-2a）：声明在 3682–22425，晚于建域点
     get barrageFacts() {
       return barrageFacts
@@ -2325,7 +2326,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     refitBase,
     refitCandidates,
     refitSelectedIds,
-    refitSelectLimitAt,
     refitSelectLimit,
     refitPayDumps,
     refitPayNeedT,
@@ -2372,6 +2372,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     beginAirBarrageNow,
     settleAirMissionNow,
     recordAbortedAirBarrage,
+    // B2-2d：搬走后回补（区外仍引用）
+    cancelAir,
+    toggleAirstripBase,
+    refitBaseNow,
+    beginRefitNow,
+    confirmRefitSelectionNow,
+    toggleRefitAircraft,
+    cancelRefitNow,
+    pickRefitPayDump,
+    confirmRefitPaymentNow,
+    transferAircraftNow,
+    toggleAirReductionUnit,
+    reduceBaseNow,
+    airMissionKindLabel,
+    airStatusLabel,
   } = airDomain
   /*
    * 14.1f / 专规 1.5：**天气是 Pre-Turn 掷出来的盘面事实**（`records.weather`），不是玩家的第二份输入。
@@ -17897,441 +17912,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       },
     })
     return true
-  }
-
-  /** C9：放弃本次任务（中止 14.2f 流程；已落盘的结算不自动回滚） */
-  function cancelAir(): void {
-    if (!airMissionDomain.canReplace()) return
-    clearAir()
-    pushLog('info', '放弃本次空军任务（14.2f 流程中止）', '14.2f')
-  }
-
-  /** C9：声明/取消某基地为**简易机场**（15.2；本作单位库无独立算子，故由玩家声明） */
-  function toggleAirstripBase(baseId: string): void {
-    const base = airBases.value.find((item) => item.id === baseId)
-    if (base === undefined) return
-    // 专规 3.5：建造标记的机场不是"被声明的基地"，不能按 15.2 的反向开关改回空军基地
-    if (isConstructionMarkerAirBaseId(baseId)) return
-    if (airstripBaseIds.value.includes(baseId)) {
-      airstripBaseIds.value = airstripBaseIds.value.filter((id) => id !== baseId)
-      pushLog('info', `${hexLabel(base.hex)} 复为空军基地（15.0：${base.level} 级）`, '15.0')
-      return
-    }
-    airstripBaseIds.value = [...airstripBaseIds.value, baseId]
-    pushLog(
-      'info',
-      `${hexLabel(base.hex)} 声明为简易机场（15.2：整备 1 架、激活堆叠 4、无防空值、永不缩减）`,
-      '15.2',
-    )
-  }
-
-  /**
-   * C9 15.1：整备某基地的非激活飞机（容量＝等级×2、费用 1T、每基地每整备阶段一次）
-   *
-   * @param aircraftIds 本次要整备的**具体飞机**（用户口径：由玩家勾选）；缺省按 `refitCount` 取前 N 架
-   * @param payDumpId   付款补给站（用户口径：由玩家在地图上点选）；缺省用输入框里的 / 最近的
-   */
-  function refitBaseNow(
-    baseId: string,
-    aircraftIds?: readonly string[],
-    payDumpId?: string | null,
-  ): boolean {
-    if (!requireAction('air.refit', '整备基地飞机')) return false
-    const base = airBases.value.find((item) => item.id === baseId)
-    if (base === undefined) return false
-    const inactive = airInactiveAtBase.value(baseId)
-    const picked =
-      aircraftIds !== undefined && aircraftIds.length > 0
-        ? inactive.filter((air) => aircraftIds.includes(air.instanceId))
-        : inactive
-    const requested =
-      aircraftIds !== undefined && aircraftIds.length > 0
-        ? picked.length
-        : Math.max(1, Math.trunc(airInputs.value.refitCount))
-    const pays = airRefitPayDumps.value(baseId)
-    const wanted = payDumpId !== undefined ? payDumpId : airInputs.value.refitDumpId
-    const chosen = pays.find((dump) => dump.id === wanted) ?? pays[0] ?? null
-    const data = acceptAir(
-      planBaseRefit({
-        base: { ...base, refitDoneThisPhase: refitDoneBaseIds.value.includes(baseId) },
-        side: airActingSide.value,
-        phase: phase.value,
-        // 15.1B：只把**勾选的那几架**交给引擎 ⇒ 转激活的就是玩家点的那几架
-        inactiveAircraft:
-          aircraftIds !== undefined && aircraftIds.length > 0
-            ? picked.map((air) => ({ id: air.instanceId, side: air.side }))
-            : inactive.map((air) => ({ id: air.instanceId, side: air.side })),
-        activeAircraftInBase: activeAircraftInBase(allAirViews.value, base.hex),
-        requested,
-        // 15.1B：1T —— 由引擎判定的可拖取补给站是否付得出（12.3a）
-        availableT: chosen !== null && chosen.sp + chosen.t >= 1 ? 1 : 0,
-      }),
-      '整备',
-    )
-    if (data === null) return false
-    // 15.1B：付 1T（走 12.1a 的统一扣款入口：必要时找零）
-    if (chosen !== null && data.costT > 0) {
-      const payment = planSpPayment({ holdings: { sp: chosen.sp, t: chosen.t }, wantT: data.costT })
-      if (payment.ok) setSpDumpHoldings(chosen.id, payment.data.holdingsAfter)
-    }
-    for (const id of data.activateAircraftIds) setAirStatus(id, 'active')
-    refitDoneBaseIds.value = [...refitDoneBaseIds.value, baseId]
-    lastRefit.value = data
-    // 收束交互（整备已落盘 ⇒ 不再处于「选飞机 / 选补给」的中间态）
-    refitTargetBaseId.value = null
-    refitStage.value = null
-    airInputs.value = { ...airInputs.value, refitAircraftIds: [], refitDumpId: null }
-    pushLog(
-      'success',
-      `${hexLabel(base.hex)} 整备（15.1）：${data.detail}；转为激活 ${data.activateAircraftIds.length} 架`,
-      '15.1',
-    )
-    // ⑭ 接线：基地整备（15.1）入会话日志（本笔不掷骰；1T 费用已在账本扣除）
-    recordSettlement({
-      action: 'airRefit',
-      rule: '15.1',
-      data: {
-        baseHex: { ...base.hex },
-        costT: data.costT,
-        activateAircraftIds: [...data.activateAircraftIds],
-        detail: data.detail,
-      },
-    })
-    return true
-  }
-
-  /* ── 15.1 整备交互（用户口径：点机场的整备按钮 → 勾选飞机 → 点地图上高亮的补给付款） ── */
-
-  /**
-   * 打开某基地的整备交互（＝点机场的「整备」按钮）
-   *
-   * 只建立中间态（选飞机 / 选补给），不落盘；真正结算在点地图上的补给站时（`pickRefitPayDump`）。
-   */
-  function beginRefitNow(baseId: string): boolean {
-    if (!requireAction('air.refit', '整备基地飞机')) return false
-    const base = airBases.value.find((item) => item.id === baseId)
-    if (base === undefined) {
-      pushLog('warning', `找不到空军基地 ${baseId}（15.1）`, '15.1')
-      return false
-    }
-    if (base.side !== airActingSide.value) {
-      pushLog(
-        'warning',
-        `${hexLabel(base.hex)} 不是本方空军基地：只能在**本方**基地整备（15.1）`,
-        '15.1',
-      )
-      return false
-    }
-    if (refitDoneBaseIds.value.includes(baseId)) {
-      pushLog(
-        'warning',
-        `${hexLabel(base.hex)} 本阶段已整备（15.1A：每基地每整备阶段一次）`,
-        '15.1A',
-      )
-      return false
-    }
-    if (base.inUnnegatedEnemyZoc === true) {
-      pushLog('warning', `${hexLabel(base.hex)} 在未抵消的敌方 ZOC 内，不能整备（15.1C）`, '15.1C')
-      return false
-    }
-    if (airInactiveAtBase.value(baseId).length === 0) {
-      pushLog('warning', `${hexLabel(base.hex)} 没有非激活飞机可整备（15.1B）`, '15.1B')
-      return false
-    }
-    if (refitSelectLimitAt(baseId) <= 0) {
-      pushLog(
-        'warning',
-        `${hexLabel(base.hex)} 激活堆叠已满（14.2a：上限 4 + 等级），没有整备名额`,
-        '14.2a',
-      )
-      return false
-    }
-    refitTargetBaseId.value = baseId
-    refitStage.value = 'select'
-    airInputs.value = { ...airInputs.value, refitAircraftIds: [], refitDumpId: null }
-    pushLog(
-      'info',
-      `整备（15.1）：在 ${hexLabel(base.hex)} 勾选要整备的飞机，点「确认整备」后再在图上选补给站付款（1T）`,
-      '15.1',
-    )
-    return true
-  }
-
-  /**
-   * 15.1：**确认整备名单** → 进入付款步（此时才在地图上高亮可用补给站）
-   *
-   * 用户 2026-11-12 流程第 4 步。名单为空或没有可付款来源就如实拒绝，不进入高亮态。
-   */
-  function confirmRefitSelectionNow(): boolean {
-    const base = refitBase.value
-    if (base === null || refitStage.value !== 'select') return false
-    if (airInputs.value.refitAircraftIds.length === 0) {
-      pushLog('warning', '请先勾选要整备的飞机（15.1B）', '15.1B')
-      return false
-    }
-    if (airInputs.value.refitAircraftIds.length > refitSelectLimit.value) {
-      pushLog(
-        'warning',
-        `勾选 ${airInputs.value.refitAircraftIds.length} 架超过整备上限 ${refitSelectLimit.value} 架（15.1B / 14.2a）`,
-        '15.1B',
-      )
-      return false
-    }
-    if (refitPayDumps.value.length === 0) {
-      pushLog('warning', `${hexLabel(base.hex)} 周围没有能付款的补给站（12.3a / 15.1B）`, '15.1B')
-      return false
-    }
-    refitStage.value = 'pay'
-    pushLog(
-      'info',
-      `整备（15.1）：请在**地图上点选高亮的补给站**付款（1T），再点「确认支付」`,
-      '15.1B',
-    )
-    return true
-  }
-
-  /** 勾选 / 取消勾选一架要整备的飞机（15.1B；勾机阶段就按容量与 14.2a 堆叠余额收口） */
-  function toggleRefitAircraft(instanceId: string): void {
-    const current = airInputs.value.refitAircraftIds
-    if (!current.includes(instanceId) && current.length >= refitSelectLimit.value) {
-      pushLog(
-        'warning',
-        `整备最多 ${refitSelectLimit.value} 架（15.1B：等级×2 / 简易机场 1；14.2a 激活堆叠）`,
-        '15.1B',
-      )
-      return
-    }
-    const next = current.includes(instanceId)
-      ? current.filter((id) => id !== instanceId)
-      : [...current, instanceId]
-    airInputs.value = { ...airInputs.value, refitAircraftIds: next }
-  }
-
-  /** 关掉整备交互（不改盘面、不扣补给） */
-  function cancelRefitNow(): void {
-    refitTargetBaseId.value = null
-    refitStage.value = null
-    airInputs.value = { ...airInputs.value, refitAircraftIds: [], refitDumpId: null }
-  }
-
-  /**
-   * 15.1B：点地图上高亮的补给站 ⇒ **只选中**，不立即结算
-   *
-   * 用户 2026-11-12：支付流程与炮击统一为「高亮可用站 → 点站 → 确认支付」；
-   * 真正扣款在 `confirmRefitPaymentNow`（与炮击的 `confirmOpsBarrageSupply` 同形态）。
-   */
-  function pickRefitPayDump(dumpId: string): boolean {
-    const baseId = refitTargetBaseId.value
-    if (baseId === null || refitStage.value !== 'pay') return false
-    const dump = refitPayDumps.value.find((item) => item.id === dumpId)
-    if (dump === undefined) return false
-    airInputs.value = { ...airInputs.value, refitDumpId: dumpId }
-    pushLog(
-      'info',
-      `整备付款（15.1B）：已选 ${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T），点「确认支付」扣 1T`,
-      '15.1B',
-    )
-    return true
-  }
-
-  /** 15.1B：确认支付并结算整备（与炮击付款同一套 12.1a 扣款入口） */
-  function confirmRefitPaymentNow(): boolean {
-    const baseId = refitTargetBaseId.value
-    if (baseId === null || refitStage.value !== 'pay') return false
-    const dumpId = airInputs.value.refitDumpId
-    if (dumpId === null) {
-      pushLog('warning', '请先在地图上点选高亮的补给站（15.1B）', '15.1B')
-      return false
-    }
-    const base = airBases.value.find((item) => item.id === baseId)
-    const undoSeq = captureUndoSnapshot(
-      `整备支付：${base === undefined ? baseId : hexLabel(base.hex)}`,
-    )
-    const ok = refitBaseNow(baseId, airInputs.value.refitAircraftIds, dumpId)
-    if (ok) refitStage.value = null
-    if (!ok && undoSeq !== null) dropUndoBySeq(undoSeq)
-    return ok
-  }
-
-  /** C9 14.11：把一架飞机转移到另一个**本方**基地（距离可加倍；战斗机在正常距离内保持激活） */
-  function transferAircraftNow(instanceId: string, toHexText?: string): boolean {
-    // 14.2e / 14.11：基地转移只在移动环节（C 移动 / G 进击；引擎同判 `movementSegment`）
-    if (!requireAction('air.transfer', '飞机转移')) return false
-    // 条 14：盒内飞出盒复用 14.11 落位判据，目的地可由调用方直接给（不写回面板输入）
-    const air = airUnits.value.find((item) => item.instanceId === instanceId)
-    if (air === undefined) return false
-    // 专规 1.4a：盒成员从**盒**出发（盒内飞机没有"当前所在基地格"）
-    const inBox = airBoxMembers.value.includes(air.instanceId)
-    const fromBase = airBases.value.find((base) => sameHex(base.hex, air.hex))
-    if (!inBox && fromBase === undefined) {
-      pushLog('warning', `${air.name} 不在空军基地格内（14.1a）`, '14.1a')
-      return false
-    }
-    const toHex = parseHexPath(toHexText ?? airInputs.value.transferToHexText)[0] ?? null
-    if (toHex === null) {
-      pushLog('warning', '转移目的地应为「列.行」（14.11）', '14.11')
-      return false
-    }
-    const toBase = airBases.value.find((base) => sameHex(base.hex, toHex))
-    if (toBase === undefined) {
-      pushLog('warning', `${hexLabel(toHex)} 没有空军基地（14.11）`, '14.11')
-      return false
-    }
-    // 专规 1.4a：盒 → 图上基地。代价＝连接列 20/30 + 列距；14.11 转移可用双倍航程。
-    if (inBox) {
-      const distance = airDistanceToOffMapBox(air.side, toHex)
-      if (distance > air.rangeHexes * 2) {
-        pushLog(
-          'warning',
-          `${air.name} 飞出盒超出航程：${String(distance)} > ${String(air.rangeHexes * 2)}（14.11 / 1.4a）`,
-          '14.11',
-        )
-        return false
-      }
-      setAirInBoxMembership(air.instanceId, false)
-      air.hex = { ...toHex }
-      air.airStatus =
-        isFighterAircraft(air.aircraftType) && distance <= air.rangeHexes ? 'active' : 'inactive'
-      lastTransfer.value = {
-        aircraftId: air.instanceId,
-        fromHex: { col: airBoxEdgeColumn(air.side), row: 1 },
-        toHex: { ...toHex },
-        distanceHexes: distance,
-        maxDistanceHexes: air.rangeHexes * 2,
-        airStatus: air.airStatus,
-        rule: '14.11',
-        detail: `基地转移（图外盒 → ${hexLabel(toHex)}）：航程 ${String(distance)}/${String(air.rangeHexes * 2)}（14.11 / 1.4a）`,
-      }
-      pushLog('success', `${air.name} 从图外盒转场到 ${hexLabel(toHex)}（14.11 / 1.4a）`, '14.11')
-      recordSettlement({
-        action: 'airTransfer',
-        rule: '14.11',
-        data: { aircraftId: air.instanceId, toHex: { ...toHex }, airStatus: air.airStatus },
-      })
-      return true
-    }
-    if (fromBase === undefined) return false
-    const data = acceptAir(
-      planBaseTransfer({
-        side: airActingSide.value,
-        aircraft: {
-          id: air.instanceId,
-          isFighter: isFighterAircraft(air.aircraftType),
-          rangeHexes: air.rangeHexes,
-        },
-        fromBase,
-        toBase,
-        activeAircraftAtDestination: activeAircraftInBase(allAirViews.value, toHex),
-      }),
-      '基地转移',
-    )
-    if (data === null) return false
-    air.hex = { ...toHex }
-    air.airStatus = data.airStatus
-    lastTransfer.value = data
-    pushLog('success', `${air.name} ${data.detail}`, '14.11')
-    // ⑭ 接线：飞机转移（14.11）入会话日志（本笔不掷骰）
-    recordSettlement({
-      action: 'airTransfer',
-      rule: '14.11',
-      data: {
-        aircraftId: air.instanceId,
-        toHex: { ...toHex },
-        airStatus: data.airStatus,
-        detail: data.detail,
-      },
-    })
-    return true
-  }
-
-  /**
-   * B14（用户口径⑪）：勾选/取消一名**被指定**执行 15.4 基地缩减的单位
-   *
-   * 15.4 要求缩减「由格内**被指定**的单位执行」（RE 合计 ≥1 或具工程能力，逐员战斗模式且本阶段未移动），
-   * 故「指定哪几枚」是玩家的一步操作 —— 原先面板只会一键「取全部候选」，等于替玩家做了决定。
-   * 本函数只改输入清单（`airInputs.reductionUnitIds`），合法性仍由引擎的 `planAirBaseReduction` 判。
-   */
-  function toggleAirReductionUnit(instanceId: string): void {
-    const ids = airInputs.value.reductionUnitIds
-    airInputs.value.reductionUnitIds = ids.includes(instanceId)
-      ? ids.filter((id) => id !== instanceId)
-      : [...ids, instanceId]
-  }
-
-  /**
-   * C9 15.4：缩减某本方基地一级（不耗 SP；被指定单位本阶段不能再移动）
-   *
-   * ★ 15.2E（简易机场永不缩减）在这一条链里由引擎判：`planAirBaseReduction` 会返回
-   *   `15.2E / airstripCannotBeReduced`，经 `airError` 显示给玩家。
-   */
-  function reduceBaseNow(baseId: string): boolean {
-    // 15.4：基地缩减只在移动阶段（判据的下半段由引擎的 canReduceAirBase 给）
-    if (!requireAction('air.baseReduce', '缩减空军基地')) return false
-    const base = airBases.value.find((item) => item.id === baseId)
-    if (base === undefined) return false
-    /*
-     * 专规 3.5 的简易机场面按 15.2「简易机场永不缩减」处理：它没有可降级的空军基地算子，
-     * 这里显式拒绝（而不是因找不到单位而静默 false）。
-     */
-    if (isConstructionMarkerAirBaseId(baseId)) {
-      pushLog('warning', '建造标记的简易机场按 15.2 永不缩减', '15.2')
-      return false
-    }
-    const target = units.value.find((unit) => unit.instanceId === baseId)
-    if (target === undefined) return false
-    const selected = airInputs.value.reductionUnitIds
-    const operatingUnits = selected
-      .map((id) => units.value.find((unit) => unit.instanceId === id))
-      .filter((unit): unit is ConsoleUnit => unit !== undefined)
-      .map((unit) => ({
-        id: unit.instanceId,
-        re: unit.re,
-        mode: unit.mode.mode,
-        // 15.4：有人具工程能力时可免 RE≥1（13.8a 的印值适格 × 模式，此前该字段恒缺）
-        engineerCapable: engineerCapableNow(unit),
-        // 15.4「且不能移动」：空运也改变过位置，不能仅查地面MP。
-        movedThisPhase: hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase),
-      }))
-    const data = acceptAir(
-      planAirBaseReduction({
-        side: airActingSide.value,
-        base: { ...base, reducedThisPhase: reducedBaseIds.value.includes(baseId) },
-        phase: phase.value,
-        operatingUnits,
-      }),
-      '基地缩减',
-    )
-    if (data === null) return false
-    target.noncombatLevel = data.levelAfter
-    for (const id of data.immobileUnitIds) {
-      const unit = units.value.find((item) => item.instanceId === id)
-      if (unit !== undefined) unit.movementEnded = true
-    }
-    reducedBaseIds.value = [...reducedBaseIds.value, baseId]
-    lastReduction.value = data
-    pushLog('success', `${hexLabel(base.hex)} ${data.detail}`, '15.4')
-    // ⑭ 接线：基地缩减（15.4）入会话日志（本笔不掷骰）
-    recordSettlement({
-      action: 'airBaseReduce',
-      rule: '15.4',
-      data: {
-        baseHex: { ...base.hex },
-        levelAfter: data.levelAfter,
-        immobileUnitIds: [...data.immobileUnitIds],
-        detail: data.detail,
-      },
-    })
-    return true
-  }
-
-  /** C9：任务类型中文名（14.2e） */
-  function airMissionKindLabel(kind: string): string {
-    return AIR_MISSION_KIND_LABELS[kind] ?? kind
-  }
-
-  /** C9：激活状态中文名（14.1a） */
-  function airStatusLabel(status: string): string {
-    return AIR_STATUS_LABELS[status] ?? status
   }
 
   /* ────────── W6 B18：到达、补员与编制调整（13.5 / 13.6 / 13.9 / 20.0 / 专规 1.6 / 2.1 / 2.3b / 2.3c / 2.4） ────────── */
