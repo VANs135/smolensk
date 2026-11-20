@@ -274,6 +274,14 @@ HIT recordSettlement    decls=1 7123   ← 对照组，正确定位到函数声�
 
 **这条减法规则写进方法论**：端口 = （各段 ref 集合的并集）− （各段声明集合的并集）− （真外部）。单独量一段必然偏大。
 
+**B2-1 落地后的两条实测修正（第五轮，2026-11-20）**：
+
+1. **"须走 getter" 的判据不是行号，是声明形态。** 上一版本节写"19 项须 getter"，实装时发现：**`function` 声明会提升，声明在 27k 行也能在建域点按值传**；只有 `const`/`computed` 才受 TDZ 约束。所以真实切分是 **20 按值 + 5 晚绑定**（`zocOnlySupplyFacts` / `onMapAirUnits` / `airCargoLossPending` / `segmentGateQuery` / `constructionMarkerPieces`），`constructionMarkerAirBaseId`(:27821) 虽然最晚，但它是函数，照样按值。往后每批都按这个判据数，不要按"行号 > 建域点"数。
+2. **晚绑定端口在切片里的写法是 `ports.x.value`，不 destructure。** 若切片顶部 `const { zocOnlySupplyFacts } = ports`，getter 会在建域那一刻被求值 ⇒ 撞 TDZ。B2-1 只有 6 处引用，改写成 `ports.x.value` 即成（`lateFix` 的正则命中数 1/2/1/1/1/1，与预期一致）。
+3. 顺带验证了一个一直没被证明的假设：**`tests/shared/store-source.ts` 用 `readdirSync` 自动纳入新切片**，38 处源码守卫测试零改动即全绿——不需要为每批新增切片去改测试。
+
+实装结果：`workbench.ts` 31,074 → **30,648 行**，`workbench-air.ts` 486 行，公开面 1,013 键不变，`npm run check` 623 文件 / 6,256 用例 / 201.16s / exit 0。
+
 ---
 
 ## 7. 搬运的 8 条机械规则

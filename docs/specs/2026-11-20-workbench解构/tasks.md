@@ -41,15 +41,15 @@
 
 ### B2-1 状态 + 派生（先做，无函数体）
 
-- [ ] 新建 `src/stores/workbench-air.ts`，搬 **状态块 2416–2592**（26 个 ref）+ **派生块 5944–6088**（12 个 computed；**不是 5944–6063**——6063 正好切在 `airMissionRosterNow` 的函数体里，会把它的局部 `state` / `air` 误算成端口）
-- [ ] 建域点可放在 2593 附近（新出现的外部依赖全在 2593 之后 ⇒ 走 getter 延迟绑定），**不必像 B1 那样压到 setup 末尾**
-- [ ] 实测端口 **25 项**（口径见 spec §6.1.1：三段并集再减掉切片自己的声明），其中仅 6 项（`rng`/`units`/`selectedId`/`airUnits`/`offMapSupplyStocks`/`activeSide`）可在建域点直连，**19 项须走 getter**（含 `segmentGateQuery` @23302、`constructionMarkerAirBaseId` @27821、`constructionMarkerPieces` @27836、`pushLog` @7075）
-- [ ] 不能漏的三个端口：`setAirStatus`(:17440)、`markAirMissionFlown`(:17459)、`pushLog`(:7075)——`port-report.mjs` 会把它们漏掉，**必须用 `node scripts/port-crosscheck.mjs --start .. --end ..` 对拍**
-- [ ] `AirInputs`(:825) + `createAirInputs`(:937) 整块搬进 `workbench-model.ts`（已核对 :825–927 无 facade 内部类型依赖，不增端口、不造回边）
-- [ ] 切口已逐行确认：2416–2549（2549 是 watch 的文档注释尾，**2550–2557 的 watch 留在 facade**）/ 2558–2592 / 5949–6086（5949 是分节横幅，6086 是 `airMissionReturnOrigins` 收尾）
-- [ ] 切片 `return` **40 个名**（14 const + `airState`/`airError` 解构 + 12 + 12），公开面仍为 1,013 键
+- [x] 新建 `src/stores/workbench-air.ts`（**486 行**），搬 **状态块 2416–2543 + 整备块 2558–2592**（26 个 ref）+ **派生块 5949–6086**（12 个 computed）
+- [x] 建域点落在 2416（替换原状态块首行），**没有压到 setup 末尾**——只有 5 项晚绑定，其余按值即可
+- [x] 实装端口 **25 项 = 20 按值 + 5 晚绑定**（⚠ 上一版写的"6 直连 / 19 getter"被实装推翻：**函数声明会提升，无论声明多晚都能按值传**，真正需要晚绑定的只有 `const`/`computed` 五个——`zocOnlySupplyFacts`(4192)、`onMapAirUnits`(18612)、`airCargoLossPending`(19673)、`segmentGateQuery`(23302)、`constructionMarkerPieces`(27836)；`constructionMarkerAirBaseId`(27821) 是函数，按值传）
+- [x] 不能漏的三个端口 `setAirStatus`(:17440)、`markAirMissionFlown`(:17459)、`pushLog`(:7075) 已在端口表内（靠 `scripts/port-crosscheck.mjs` 对拍才发现）
+- [x] `AirInputs`(:819–927) + `createAirInputs`(:936–976) 整块搬进 `workbench-model.ts` 并 `export`；facade 补 `createAirInputs` / `createAirDomain`、清掉 13 个搬后失效的 import
+- [x] 切口落实：2416–2543（**2550–2557 的 weather watch 与其注释留在 facade**——切片内 watch 会双触发）/ 2558–2592 / 5949–6086
+- [x] 切片 `return` **40 个名**，公开面 **1,013 键不变**
 - 命名：**域对象叫 `airDomain`，不要叫 `air`**——facade 里已有 `airSupply` / `airUnitTransit` / `airMissionDomain` / `airCargoResolution` 四个 air 开头的域，再加一个 `air` 无法区分（另：`(air) => …` 这种回调参数在文件里出现几十次，`air` 这个名字太容易被误读成本地变量）
-- 验收：`npm run check` 绿 + 公开面 1,013 键不变（状态与派生仍在 `return` 里按原名暴露）
+- **验收实测**：`npm run check` → 623 文件 / 6,256 用例 / 201.16s / exit 0；`arch` 949 源码（+1 切片）；`workbench.ts` 31,074 → **30,648 行**；测试零改动（`tests/shared/store-source.ts` 用 `readdirSync` 自动纳入新切片，38 处源码守卫无需改）
 
 ### B2-2 动作块（后做）
 
