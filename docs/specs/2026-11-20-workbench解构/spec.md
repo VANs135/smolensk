@@ -495,6 +495,28 @@ B2-1 的 `AirDomainPorts` 里有 **5 个成员会被后续批次搬进切片本�
 
 **取证**：`npm run typecheck` 通过 → `npm run check` **623 文件 / 6,256 用例 / 196.38s / exit 0**；`arch` 源码 **951**；`audit:ports` 报 `createMovementDomain @7520` 按值 **37** 项全安全（37 + 3 getter = 40）；切片回边 **0 处**；公开面 **1,013 键不变**。 **两轮复核**：R1（`git show HEAD~2` 逐行对拍，只去 `ports.`）443 ↔ 443 行、不一致 0，零使用端口 0/40；R2（token/AST 口径）1,737 ↔ 1,737 token、不一致 0，节点 +8 恰为 3 个 `ports.` 前缀，反向验证 5 项全过（残留 0 / 薄转发 4×1 语句 / 晚绑定裸名 0 / 快照字节一致）。**R1 推翻了本批自报的「445 行」→ 443 行**（445 是 AST 全范围含 2 行前置空行）。
 
+### 6.1.9 B3-2a 落地（2026-11-21 实测，堆叠取子族）
+
+section 4（B3 第二批）实测 **3,377 行 / 81 声明**（7593–10969），端口远超单批 40 红线 ⇒ 按功能族切。本批只取**取子族** `7590–7800`（**211 行 / 13 声明**：11 `function` + 2 `computed`）进新切片 `workbench-stack-pick.ts`。
+
+| 量                        | 搬前   | 搬后                                 |
+| ------------------------- | ------ | ------------------------------------ |
+| `workbench.ts` 行         | 27,703 | **27,542**（−161；numstat +51/−211） |
+| `workbench-stack-pick.ts` | —      | **303**（新建）                      |
+| `StackPickDomainPorts`    | —      | **13**（12 按值 + 1 晚绑定）         |
+| 公开面键（1,013）         | 1,013  | 1,013（不变）                        |
+
+**section 4 的实测分解**（81 声明，不一次搬完）：取子族 7590–7800（13 声明）→ 推进族 7770–8379（24 声明，**44 端口**，超红线 ⇒ 下一批还要再切两刀）→ 模式族 8379–8726（9）→ 预备族 8743–8934（6）→ 燃油族 8934–9732（8，跨 3 个空档）→ 突围族 9894–10413（12）→ 工具族 10565–10969（9）。
+
+**建域点判据第二次生效**：提前到 `groundMovement`(1152) 之前，要给 `moveBlocked`(1173) / `movePick`(1403) / `pausedTransportIds`(1452) / `beginMoveFor`(7575) / `initialSetupInProgress`(19100) 开 **5 个 getter**；原地建域（7612）只要 **1 个 getter**，代价是 4 个薄转发（`snapshotOf` 1160 / `stepTextOf` 1161 被 `createGroundMovementDomain` 吃；`movePickPoolAt` 5768、7552 / `defaultMovePickIdsAt` 7553 被移动域吃）。
+
+**取证**：`npm run typecheck` 通过 → `npm run check` **623 文件 / 6,256 用例 / 197.39s / exit 0**；`audit:ports` 七域全绿（新增 `createStackPickDomain @7612` **按值 12 项全安全**，12 + 1 getter = 13 自洽）；`arch` 源码 **952**（+1 新文件）；切片回边 **0**（只用 `import type` 引 `./workbench-move`）；公开面 **1,013 键不变**。
+
+**本批两个新坑**：
+
+1. **「所有端口都写 `ports.`」会触发 TS6198「解构元素全部未使用」**：按值端口必须走解构、用裸名；只有晚绑定写 `ports.x`。AST 批量加前缀时若一律加，typecheck 立刻红。
+2. **prettier 会把 `ports.friendlyUnitsAt(hex).filter(...)` 拆成 `ports` + 换行 + `.friendlyUnitsAt(...)`**：按字面 `ports.` 计数或替换会漏 3 处；去前缀必须用允许空白的正则（`ports\s*\.\s*name`），否则切片里留下散落的 `ports` 行首。
+
 ---
 
 ## 7. 搬运的 8 条机械规则

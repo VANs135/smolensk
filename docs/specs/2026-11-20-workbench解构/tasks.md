@@ -300,7 +300,30 @@ B2-1 落地后行号全部漂移（facade 少了 387 行），旧编号 **全部
 
 ---
 
-- [ ] `workbench-stack-pick.ts` ← section 4（3,381 / 81，含突围与补给缓存）
+- [ ] `workbench-stack-pick.ts` ← section 4（台账原估 3,381 / 81 ⇒ **实测 3,377 行 / 81 声明**，7593–10969）
+
+### B3-2a 堆叠取子（**已落地 2026-11-21**）
+
+- [x] 新建 `workbench-stack-pick.ts`，搬 `7590–7800`：**211 行 / 13 顶层声明（11 `function` + 2 `computed`）** —— `movePickHex`(7593) / `movePickPoolAt`(7604) / `defaultMovePickIdsAt`(7636) / `movePickChoices`(7643) / `toggleMovePick`(7649) / `setMovePickOnly`(7664) / `setMovePickAll`(7671) / `beginMovePick`(7688) / `setMovePickIds`(7713) / `cancelMovePick`(7722) / `confirmMovePick`(7726) / `stepTextOf`(7773) / `snapshotOf`(7787)
+- [x] 端口 **13 项** = **按值 12** + **晚绑定 1**
+      · 按值 12：`activeSide`(855) / `phase`(863) / `units`(997) / `nameOf`(1114 薄转发) / `moveBlocked`(1173) / `movePick`(1403) / `pausedTransportIds`(1452) / `pushLog`(6117) / `friendlyUnitsAt`(7035) / `beginMoveFor`(7575) / `applyFormationFuelCoverage`(9342) / `applyFormationFuelCoverageToIds`(9354)
+      · 晚绑定 1：`initialSetupInProgress`(19100) —— facade 用 `get` 访问器传，切片正文写 `ports.initialSetupInProgress.value`
+      · 正文引用这 13 个端口共 **42** 处（AST 逐标识符统计，注释不计）：`movePick` 12 / `nameOf` 8 / `ToIds` 4 / `phase` 3 / `moveBlocked` 3 / `pushLog` 3 / `friendlyUnitsAt` 3 / 其余各 1
+- [x] 建域位置仍是「原地」（`createStackPickDomain` @7612）：提前到 `groundMovement` 之前要给 `moveBlocked` / `movePick` / `pausedTransportIds` / `beginMoveFor` / `initialSetupInProgress` 开 **5 个 getter**；原地只要 **1 个 getter + 4 个薄转发**
+- [x] 薄转发 4 个（1131–1150，各一行）：`snapshotOf`(1160) / `stepTextOf`(1161) 被 `createGroundMovementDomain` 当端口吃；`movePickPoolAt`(5768、7552) / `defaultMovePickIdsAt`(7553) 被移动域吃
+- [x] 解构回补 9 个：`movePickHex` / `movePickChoices` / `toggleMovePick` / `setMovePickOnly` / `setMovePickAll` / `beginMovePick` / `setMovePickIds` / `cancelMovePick` / `confirmMovePick`；切片 `return` 13 名；回边 0（只 `import type` 引 `./workbench-move` / `./ground-movement`）
+- [x] 连带 import：facade 删 `canMoveInPhase`（切片接管）；切片新增 `computed` / `isReplUnit` / `canMoveInPhase` / `MoveStepRecord` / `MoveStepSnapshot` / `HexRef` / `Side` / `ConsolePhase` / `ConsoleUnit` / `WorkbenchLogEntry` / `Derivation`
+- [x] 规模：`workbench.ts` **27,703 → 27,542（−161；`git numstat` +51/−211）**；`workbench-stack-pick.ts` **303 行**（新建）
+- [x] 门禁：`npm run typecheck` 通过 → `npm run check` **623 文件 / 6,256 用例 / 197.39s / exit 0**；`audit:ports` 新增 `createStackPickDomain @7612` **按值 12 项全部安全**（12 + 1 getter = 13，自洽）；`arch` 源码 **952**（+1 新文件）；`format:check` 全 matched
+- [x] 公开面快照 **1,013 键不变**（未触碰 fixture）
+
+**落地期暴露的两个新坑**：
+
+1. **「所有端口都写 `ports.`」⇒ TS6198「解构元素全部未使用」**：按值端口必须走解构、用裸名；只有晚绑定写 `ports.x`。AST 批量加大前缀时若一律加，typecheck 立刻红（本批第一次 typecheck 就是这么红的）。
+2. **prettier 会把 `ports.friendlyUnitsAt(hex).filter(...)` 拆成 `ports` + 换行 + `.friendlyUnitsAt(...)`**：按字面 `ports.` 计数/替换会漏 **3 处**；去前缀必须用允许空白的正则（`ports\s*\.\s*name`）。
+
+**section 4 剩余 68 声明 / 约 3,166 行的实测分解**：推进族 7770–8379（24 声明，**44 端口** ⇒ 需再切两刀）→ 模式族 8379–8726（9）→ 预备族 8743–8934（6）→ 燃油族 8934–9732（8，跨 3 个空档）→ 突围族 9894–10413（12）→ 工具族 10565–10969（9）。
+
 - [ ] `workbench-raid.ts` ← section 2（1,344 / 28）
 - [ ] 暴露 `nameOf`(4)、`applyMovePatches`(2)、`refuseWhileSettling`(2)、`retryBeginMove`(2)、`selectForMove`、`openBreakdownWindow`、`closeBreakdownWindows`
 - 注意：`4→1` 有 10 条出边（铁路），port 化后不要把铁路逻辑拖进来
