@@ -54,6 +54,20 @@
 | `noteUnitEnteredHex`                                                                                                                      | `(unit: ConsoleUnit, hex: HexRef) => void`                                                  |
 | **接法实测**：14 个已有端口全部是**按值**且判定已在切片解构表里 ⇒ 本批不需要给它们做 `.value` 改写，只有 7 个晚绑定要写 `ports.x.value`。 |
 
+**晚绑定 7 项的精确类型（TS 编译器 API 打印，可直接抄进接口）**：
+
+| 成员                    | 类型                                                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `barrageFacts`          | `ComputedRef<{ enemyREInHex: (hex: HexRef) => number; hedgehogLevelInHex: (hex: HexRef) => number; stratModeInHex: (hex: HexRef) => boolean; hasSpotter: (hex: HexRef) => boolean }>` |
+| `railMoveFacts`         | `ComputedRef<RailFacts>`                                                                                                                                                              |
+| `airUnloadLedger`       | `Ref<Record<string, number>>`                                                                                                                                                         |
+| `airMissionJoinChoices` | `ComputedRef<readonly AirMissionJoinChoice[]>`                                                                                                                                        |
+| `specialPending`        | `Ref<SpecialCombatPending \| null>`                                                                                                                                                   |
+| `airMissionSegmentKind` | `ComputedRef<AirMissionSegment \| null>`                                                                                                                                              |
+| `airMissionKindChoices` | `ComputedRef<readonly { key: AirMissionKind; label: string }[]>`                                                                                                                      |
+
+取法：`scripts/tmp-port-types.mjs`（`ts.createProgram` + `typeToString`，`tsconfig.json` 的 paths 生效）。其中 `barrageFacts` / `specialPending` 是**推断**类型，其余 5 项有显式类型参数可对拍。
+
 | **晚绑定 7** | `barrageFacts`(computed 3682) / `railMoveFacts`(computed 4520) / `airUnloadLedger`(ref 15966) / `airMissionJoinChoices`(computed 16814) / `specialPending`(ref 18126) / `airMissionSegmentKind`(computed 22401) / `airMissionKindChoices`(computed 22425) |
 
 **剪端口那一侧的连带义务（复核补，第二次实测已排掉 ports 实参 2239–2378）**：
