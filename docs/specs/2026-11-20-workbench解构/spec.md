@@ -362,6 +362,29 @@ B2-1 的 `AirDomainPorts` 里有 **5 个成员会被后续批次搬进切片本�
 
 ---
 
+### 6.1.4 B2-2a 落地（2026-11-21 实测）
+
+搬 `17197–17992`（796 行 / 16 声明 = 14 function + 2 computed）进 `workbench-air.ts`：
+
+| 量                      | 搬前   | 搬后                                                          |
+| ----------------------- | ------ | ------------------------------------------------------------- |
+| `workbench.ts` 行       | 30,074 | **29,253**（−821 = 796 搬走 + 25 条搬后失效的 import/解构项） |
+| `workbench-air.ts` 行   | 1,201  | **2,070**                                                     |
+| `workbench-model.ts` 行 | 4,104  | **4,162**（+58：3 个 interface + `movementPhaseOf`）          |
+| `AirDomainPorts` 成员   | 36     | **50**（+20 = 按值 13 + 晚绑定 7；另 6 项剪掉、14 项既有）    |
+| 切片 `return` 公开名    | 88     | **104**（+16）                                                |
+| 公开面键（快照 1,013）  | 1,013  | 1,013（不变）                                                 |
+
+**三条落地期才暴露的坑（下一批直接引用）**：
+
+1. **晚绑定改写的 lookbehind 会漏展开运算符。** `(?<![\w.$])x.value` 对 `...x.value` 失效（`...` 的 `.` 被当成属性访问）⇒ `airUnloadLedger.value = { ...airUnloadLedger.value, … }` 只改到赋值一半，切片报 `Cannot find name`。**必须单独处理 `\.\.\.x\.value`**。
+2. **"回补清单"在 `return` / 解构侧是重复劳动。** 那 5 个名字（`isAirInOffMapBox`/`onMapAirUnits`/`airUnitsAt`/`airDistanceFromRealBase`/`airUnitsInHex`）**本身就是区间内声明**，已随 16 声明进了 `return`；再按回补清单插一遍 ⇒ 对象字面量重复键（**TS1117**）+ 解构重复绑定。回补清单的用途是"确认它们确实在 `return` 里"，不是"再插一次"。
+3. **按行号批量清 unused 会误伤同一条 import 的其它名字。** `import { airCargoTransportT, checkAirTransportMovementHandoff } from …` 中只有后者未用，按行删把前者也带走 ⇒ 后续 `Cannot find name airCargoTransportT`。**按导入名删，不按行删。**
+
+**门禁与取证**：`npm run typecheck` 通过；`npm run check` → 623 文件 / 6,256 用例 / **195.66s** / exit 0；`arch` 源码 950；`audit:ports` 5 域全绿。逐字对拍只去 `ports.` 前缀 ⇒ **796 行对 796 行、不一致 0 行**；文案多重集对拍 110 种 / 169 条**双向 0 差异**；切片内 `ports.X` 只出现 7 次（正是 7 个晚绑定）；切片 → facade 回边 **0 处**。
+
+---
+
 ## 7. 搬运的 8 条机械规则
 
 1. **类型先立**：`export type Workbench = ReturnType<typeof useWorkbenchStore>`；切片之间只互认 `Ports` 接口，**不要 import 对方的返回类型**（会造类型环）。
