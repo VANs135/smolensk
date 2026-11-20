@@ -62,6 +62,8 @@ import { actingSideFor } from '@/engine/game-lifecycle'
 import { createSnapshotRegistry } from './snapshot-registry'
 // B0（解构第一批）：日志与结算账本的实现搬到 workbench-core，facade 只留薄转发
 import { createWorkbenchCore, type SettlementRecordInput } from './workbench-core'
+// B0（解构第二批）：环节闸门搬到 workbench-gates，facade 只留同名转发
+import { createWorkbenchGates } from './workbench-gates'
 import { createPhaseCoordinator } from './phase-coordinator'
 import { createSupplyPhaseDomain } from './supply-phase'
 import type { SpDump } from './supply-types'
@@ -75,7 +77,6 @@ import {
   isSpecialReplAvailable,
   reinforcementSegmentOf,
   reinforcementSegmentsOf,
-  sopStepById,
   sopStepsOf,
   type ReinforcementSegment,
   type SopSegmentStep,
@@ -8626,14 +8627,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 不静默：`moveBlocked` 给对局台状态条、日志给侧栏，玩家看得见"为什么动不了"以及怎么办。
    */
   function refuseWhileSettling(action: string): boolean {
-    const lock = settlementInProgress.value
-    if (lock === null) return false
-    const reason =
-      `${lock.label}正在结算：先走完流程或按 Esc 放弃，之后才能${action}（${lock.rule}）——` +
-      `否则这一场的结果（8.1a 的 3 MP / 9.12 的推进与撤退 / 10.0 的 DG 与损失）无处落盘`
-    moveBlocked.value = { rule: lock.rule, reason }
-    pushLog('warning', reason, lock.rule)
-    return true
+    return gates.refuseWhileSettling(action)
   }
 
   /**
@@ -24835,6 +24829,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return current !== undefined && ids.includes(current)
   }
 
+  /*
+   * ── B0 装配（解构第二批）────────────────────────────────────────────
+   * `actionAllowedNow` / `requireAction` 的实现搬到 workbench-gates.ts，facade 只留同名转发。
+   * 依赖全传 getter：`segmentGateQuery` / `segmentActionKeys` / `initialSetupInProgress`
+   * 都在本文件后段声明，装配期取不到值。
+   * ───────────────────────────────────────────────────────────────────
+   */
+  const gates = createWorkbenchGates({
+    initialSetupInProgress: () => initialSetupInProgress.value,
+    terminated: () => session.terminated,
+    segmentLocked: () => segmentLocked.value,
+    segmentGateQuery: () => segmentGateQuery.value,
+    segmentActionKeys: () => segmentActionKeys.value,
+    actionRefusal,
+    refuseWhileLocked,
+    phaseLabel: (phase) => PHASE_LABELS[phase],
+    settlementLock: () => settlementInProgress.value,
+    moveBlocked,
+    log: core.pushLog,
+  })
+
   /**
    * 闸门**预测**（供界面判断"这个动作此刻能不能点"；无副作用、不写日志、不改拒绝状态）
    *
@@ -24844,40 +24859,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   界面一律用本函数判可点，不要自己拿规则号/阶段名再拼一套口径。
    */
   function actionAllowedNow(key: ActionKey): boolean {
-    if (initialSetupInProgress.value || session.terminated || segmentLocked.value) return false
-    if (segmentGateQuery.value.segment === '') return false
-    // 与 `segmentActionKeys` 同一条投影（权威表），不在组件或本函数里另拼判据
-    return segmentActionKeys.value.has(key)
+    return gates.actionAllowedNow(key)
   }
 
   function requireAction(key: ActionKey, action: string): boolean {
-    if (initialSetupInProgress.value || session.terminated) {
-      actionRefusal.value = { key, rule: '2.2', reason: '请先完成初设，且对局须处于进行中' }
-      pushLog('warning', `${action}被拒绝：${actionRefusal.value.reason}`, '2.2')
-      return false
-    }
-    if (segmentLocked.value) return refuseWhileLocked(action)
-    const query = segmentGateQuery.value
-    if (query.segment === '') {
-      actionRefusal.value = { key, rule: '2.2', reason: 'noSegmentStep' }
-      pushLog('warning', `${action}被拒绝：当前段没有环节表（2.2）`, '2.2')
-      return false
-    }
-    if (allowedActionsOf(query).has(key)) {
-      actionRefusal.value = null
-      return true
-    }
-    const gate = actionGateOf(key)
-    const where = gate.where
-      .map((item) => {
-        const label = sopStepById(item.segment)?.label ?? item.segment
-        return `${PHASE_LABELS[item.phase as ConsolePhase] ?? item.phase} · ${label}`
-      })
-      .join(' / ')
-    const reason = `只能在「${where}」进行`
-    actionRefusal.value = { key, rule: gate.rule, reason }
-    pushLog('warning', `${action}被拒绝：${reason}（${gate.rule}）`, gate.rule)
-    return false
+    return gates.requireAction(key, action)
   }
 
   /**
