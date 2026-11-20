@@ -3945,3 +3945,156 @@ export interface BattleTarget {
   /** 目标格内参与防御的单位（实例 id，按摆放顺序） */
   defenderIds: string[]
 }
+
+// ── B2-1：空军输入类型（原在 workbench.ts 模块级；切片需要它，按 P2-1 先例搬到这里） ──
+/**
+ * C9：空军交互里的玩家输入（界面 v-model 绑定）
+ *
+ * 纪律同 C6/C7/C8：本项**只承载玩家的选择与骰面**，不含任何规则结论；装备/归属/距离/命中
+ * 一律由引擎裁定（`air-interaction.ts`）。
+ */
+export interface AirInputs {
+  /** 14.1f：天气是否允许飞行（受限飞行一律禁飞） */
+  flyingAllowed: boolean
+  /** 14.7d：天气是否「正常」（专规 3.2a 轴方低空扫射的前提） */
+  weatherNormal: boolean
+  /** 14.2f-A：任务格（`列.行`文本） */
+  targetHexText: string
+  /** 14.2f-D：拦截方是否决定拦截（14.5：不强制） */
+  interceptDeclared: boolean
+  /**
+   * 14.3e-B：**任务方点名的迎战机**（从参战飞机中任选一架；null ＝ 交引擎按 ACV 最高自动取）
+   *
+   * 条文：「防守方（任务方）从参战机中**指定一架**迎战」⇒ 这是玩家的**选择**，不是掷骰，
+   * 故 B29 把它透出来（修前 store 里写死"名单第一架"）。
+   */
+  namedDefenderId: string | null
+  /**
+   * 14.3e-B：**逐轮点名的参战机**（下标＝第几轮；该轮不给字段 ⇒ 引擎按 ACV 最高自动取）
+   *
+   * 原文 B：「攻击方选择他的一个**非括号**的空军单位，然后防御方选择**任意一个**他的空军单位；
+   * 这些就是**当前战斗轮**中使用的飞机」+ D：「**为每对进行一轮战斗**，直到一方成为唯一的一方」
+   * ⇒ 点名是逐轮的玩家选择。攻方**只有非括号机**可选（引擎会拒括号机，见
+   * `attackerMustPickNonBracketedAircraft`），守方任选。
+   */
+  airCombatPicks: { attackerAircraftId: string | null; defenderAircraftId: string | null }[]
+  /**
+   * 14.3e：逐轮空战的 2 骰 / 损失骰覆写（留空＝照常从会话 RNG 掷）
+   *
+   * 教学模式用它钉住「Bf.110 扫荡 LaGG.3：双方返航且各损 1 军力」这一课的骰面；
+   * 与 `interceptDie` / `flakDie` 同类，只提供已存在的裁判骰入口，不改空战判定。
+   */
+  airCombatDice: { die: number; lossDie: number }[] | null
+  /** 14.2f-D：出动的拦截机实例 id（单架，14.5） */
+  interceptorId: string | null
+  /** 14.5/14.3e：拦截空战的 2 骰（留空＝自动掷） */
+  interceptDie: number | null
+  /** 14.3e-C：拦截空战的损失骰（留空＝自动掷） */
+  interceptLossDie: number | null
+  /** 14.2f-E：防空 2 骰之和（留空＝自动掷） */
+  flakDie: number | null
+  /** 14.2f-E：14.4f 的损失归属骰（留空＝自动掷） */
+  lossDie: number | null
+  /** 14.4e：目标格内有 HQ（+1） */
+  targetHasHQ: boolean
+  /** 14.4e：目标格印刷防空值 */
+  printedFlakValue: number
+  /** 14.2f-F：任务本身的结果说明（由玩家记入，如 C7 的轰炸结论） */
+  missionNote: string
+  /** 15.1B：本次整备请求的架数（逐基地操作） */
+  refitCount: number
+  /**
+   * 15.1B：本次整备**勾选的具体飞机**（实例 id；空数组 = 按 `refitCount` 自动取前 N 架）
+   *
+   * 用户口径：「点机场整备按钮 → 勾选要整备的飞机」⇒ 玩家点的就是这几架。
+   */
+  refitAircraftIds: string[]
+  /** 15.1B：付款补给站（SP 账本条目 id；缺省＝自动取最近可拖取者） */
+  refitDumpId: string | null
+  /** 14.11：基地转移的目的地（`列.行`文本） */
+  transferToHexText: string
+  /** 15.4：被指定执行缩减的地面单位实例 id（多不退、少必须补） */
+  reductionUnitIds: string[]
+  /** 14.2f-G：逐机返航目的地（实例 id → `列.行`文本） */
+  returnHexText: Record<string, string>
+  /** 14.2f-G / 专规 1.4a：逐机选择“移入图外空军盒”（true 时忽略 returnHexText） */
+  returnToBox: Record<string, boolean>
+  /** 14.9a：本次空运/空投装载的 **SP（T）** */
+  cargoSpT: number
+  /**
+   * 14.9a / 14.9e（T14）：逐机货单（实例 id → 该机承运的货物 id）。
+   * null＝由引擎按编成顺序确定性自动分配；显式分单时每机不得超过自身有效运力。
+   */
+  cargoByAircraft: { aircraftId: string; cargoIds: string[] }[] | null
+  /**
+   * 14.9f / 15.0b-C 的例外：**超出卸载限额的那部分货物由"在目的地格变为非激活"的运输机承运**
+   *
+   * 原文：「如果货物超过此限额，**如果超出部分对应的运输机在目的地格变为非激活状态**，则可以卸载
+   *   超额部分的货物。」（14.9e-A 的双程飞法即在目的地变非激活）
+   */
+  unloadOverLimitInactive: boolean
+  /** F步显式选择本次卸载的完整货物；null为自动（含单位且超限时必须选择）。 */
+  unloadCargoIds: string[] | null
+  /** 14.10a：本次空投的**战斗单位**（从己方已摆放单位中勾选） */
+  cargoUnitIds: string[]
+  /** 14.10b：空投计划的制定回合（须比执行回合早 ≥2） */
+  airdropPlannedTurn: number
+  /** 14.10b：计划执行回合 */
+  airdropScheduledTurn: number
+  /** 14.10d：逐件 2 骰和（留空自动掷；按货物件数依次取用） */
+  cargoDice: number | null
+  /** 表 17-4：目标格在**本阶段开始时**有己方单位（Friendly 列） */
+  targetFriendlyAtPhaseStart: boolean
+  /** 14.10e-E：滑翔机降落（+1） */
+  gliderLanding: boolean
+  /** 可选 21.12e：目标格地形 DRM（0＝不用该可选规则） */
+  optionalTerrainDrm: number
+  /** 14.10d：目标格内有**敌方战斗单位**（在其上着陆的货物摧毁） */
+  enemyCombatUnitInTarget: boolean
+  /** 9.14f：本次夺取是否**战后推进**所致（+2 DRM，表 17-6） */
+  baseCaptureByAdvance: boolean
+  /** 9.14f：逐机 2 骰（留空自动掷） */
+  baseCaptureDice: number | null
+}
+
+/** C9：本次空军交互的初始输入（数值一律由玩家填入，界面不代猜） */
+export function createAirInputs(): AirInputs {
+  return {
+    flyingAllowed: true,
+    weatherNormal: true,
+    targetHexText: '',
+    interceptDeclared: false,
+    namedDefenderId: null,
+    airCombatPicks: [],
+    airCombatDice: null,
+    interceptorId: null,
+    interceptDie: null,
+    interceptLossDie: null,
+    flakDie: null,
+    lossDie: null,
+    targetHasHQ: false,
+    printedFlakValue: 0,
+    missionNote: '',
+    refitCount: 1,
+    refitAircraftIds: [],
+    refitDumpId: null,
+    transferToHexText: '',
+    reductionUnitIds: [],
+    returnHexText: {},
+    returnToBox: {},
+    cargoSpT: 0,
+    cargoByAircraft: null,
+    unloadOverLimitInactive: false,
+    unloadCargoIds: null,
+    cargoUnitIds: [],
+    airdropPlannedTurn: 0,
+    airdropScheduledTurn: 0,
+    cargoDice: null,
+    targetFriendlyAtPhaseStart: true,
+    gliderLanding: false,
+    optionalTerrainDrm: 0,
+    enemyCombatUnitInTarget: false,
+    baseCaptureByAdvance: false,
+    baseCaptureDice: null,
+  }
+}
