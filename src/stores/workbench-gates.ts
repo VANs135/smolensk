@@ -9,7 +9,7 @@ import {
   type ActionKey,
 } from './workbench-model'
 import type { WorkbenchCore } from './workbench-core'
-import type { ConsolePhase, SettlementLock } from './workbench'
+import type { ConsolePhase, SettlementLock } from './workbench-model'
 
 /**
  * 环节闸门（B8 的唯一判据出口）：`actionAllowedNow` 给界面判"能不能点"，

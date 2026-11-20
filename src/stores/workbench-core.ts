@@ -7,7 +7,7 @@ import type { DiceRoll, SessionLogEntry } from '@/engine/state-types'
 import { createId } from '@/shared'
 
 import type { RecorderEventInput } from './recorder'
-import type { ConsolePhase, WorkbenchLogEntry } from './workbench'
+import type { ConsolePhase, WorkbenchLogEntry } from './workbench-model'
 
 /**
  * workbench 的全局服务：日志、结算账本。

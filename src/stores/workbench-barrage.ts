@@ -60,7 +60,7 @@ import type { Ref, ComputedRef, WritableComputedRef } from 'vue'
 import type { createFireResolutionDomain } from './fire-resolution'
 import type { createAirMissionDomain } from './air-mission'
 import type { HexRef, Side } from '@/data'
-import type { ConsolePhase, BattleTarget } from './workbench'
+import type { BattleTarget, ConsolePhase } from './workbench-model'
 import type { SettlementRecordInput } from './workbench-core'
 import type { TraceSupplyFacts } from '@/engine/rules/trace-supply'
 

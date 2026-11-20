@@ -5,6 +5,7 @@ import { roll2d6, type RngDraw } from '@/engine/rng'
 import { turnDate } from '@/engine/turn-driver'
 import { GAME_PHASES } from '@/engine/state-types'
 import type { AirStatus, GamePhase, InternalStocks, RngState } from '@/engine/state-types'
+import type { Derivation } from '@/engine/derivation'
 import type { SlowMobilizationArmy } from '@/engine/rules'
 import {
   canAttackAfterAirTransport,
@@ -3869,4 +3870,78 @@ export function canReleaseReserveNow(
   })
   if (!verdict.ok) return cannotParticipate(verdict.rule, verdict.reason)
   return { ok: true, rule: verdict.rule }
+}
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * P2-1（2026-11-20）：从 `workbench.ts` 迁出的**共享类型**
+ *
+ * 动机：三个已切出的域切片（`workbench-core` / `workbench-gates` /
+ * `workbench-barrage`）都要用下面这几个类型，而它们原先住在 facade 里 ⇒ 每个切片
+ * 都留了一条 `import type … from './workbench'` 的**回边**（类型环）。类型在编译期
+ * 擦除、运行时不炸，但代价是：
+ *   · `tsc` 要顺着环再解析一遍 facade（B1 实测过一次 2,611 errors 的类型退化事故）；
+ *   · 环里的类型一旦被 facade 的局部别名展开，`checker.typeToString` 会给出 5–15KB 的
+ *     结构串（B1 生成 ports 时踩过，见解构 spec §6）。
+ *
+ * 放在 `workbench-model.ts` 是安全的：它只 import `@/data` / `@/engine/*` / `@/render`，
+ * **不 import 任何 slice 或 facade**，所以这条边是单向的。
+ * facade 仍以 `export type { … } from './workbench-model'` 原样转出，外部导入路径不变。
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/** 操作台日志条目（按类别着色） */
+export interface WorkbenchLogEntry {
+  id: string
+  kind: 'info' | 'success' | 'warning' | 'danger'
+  /** 规则编号（有则显示，便于对着规则书核对） */
+  rule?: string
+  text: string
+  /**
+   * 结算复核过程（W7 C11：骰点 / 计算过程 / 规则编号 / 修正来源）
+   *
+   * 有则界面可展开逐项复核；由 `engine/derivation-builders.ts` 的构造器给出
+   * （与引擎实际用的算式同源，不是另写一遍规则）。
+   */
+  derivation?: Derivation
+}
+
+/**
+ * 操作台可选阶段（2.2 SOP 段的一个子集，外加没有行动段的「回合准备」）
+ *
+ * `preTurn`（天气 / 先手判定）不属于 A–H 任何一段，但**界面停在哪、引擎就必须在哪**：
+ * 等待 2.3 应答时 `phase` 必须如实为 `preTurn`，不能回退到本地段的 C 移动。
+ *
+ * C 移动 / E 反应 / G 进击 三段是**移动环节**（6.0/6.3a/11.0a）；F 战斗段只有轰炸与常规战斗（9.0），
+ * 不能移动；A **飞机整备阶段**（15.1A）是整备的唯一时机，同样没有移动环节。
+ */
+export type ConsolePhase =
+  | 'preTurn'
+  | 'aircraftRefit'
+  | 'reinforcement'
+  | 'movement'
+  | 'supply'
+  | 'reaction'
+  | 'combat'
+  | 'exploitation'
+  | 'cleanUp'
+
+/**
+ * 9.2 / 10.0：**结算进行中**（一场战斗或轰炸已开局、尚未收束）
+ *
+ * 用途：见 `settlementInProgress` 的说明 —— 它是「结算期间不许动任何单位」的唯一判据。
+ */
+export interface SettlementLock {
+  kind: 'combat' | 'barrage'
+  /** 流程所在的规则条文 */
+  rule: string
+  /** 给界面/日志看的中文名 */
+  label: string
+}
+
+/** 已选定的交战（9.3b 地形与 9.6 行动值在此由双方选定后再结算） */
+export interface BattleTarget {
+  hex: HexRef
+  /** 目标格内参与防御的单位（实例 id，按摆放顺序） */
+  defenderIds: string[]
 }

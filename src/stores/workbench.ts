@@ -525,6 +525,10 @@ import {
   type ActionGate,
   type ActionGateQuery,
   type ActionKey,
+  type BattleTarget,
+  type ConsolePhase,
+  type SettlementLock,
+  type WorkbenchLogEntry,
   fuelMethodLabelOf,
   currentReOf,
   earlyRailCorridors,
@@ -544,44 +548,21 @@ import { actionFamilyRowsAt } from './action-families'
  * 种子与掷骰次数全部留在本 store，可复算（B2）。
  */
 
-/** 操作台日志条目（按类别着色） */
-export interface WorkbenchLogEntry {
-  id: string
-  kind: 'info' | 'success' | 'warning' | 'danger'
-  /** 规则编号（有则显示，便于对着规则书核对） */
-  rule?: string
-  text: string
-  /**
-   * 结算复核过程（W7 C11：骰点 / 计算过程 / 规则编号 / 修正来源）
-   *
-   * 有则界面可展开逐项复核；由 `engine/derivation-builders.ts` 的构造器给出
-   * （与引擎实际用的算式同源，不是另写一遍规则）。
-   */
-  derivation?: Derivation
-}
+/*
+ * P2-1（2026-11-20）：原先在这四个位置声明的 `WorkbenchLogEntry` / `ConsolePhase` /
+ * `SettlementLock` / `BattleTarget` 已迁进 `workbench-model.ts`（原因：三个域切片都要用，
+ * 放在 facade 会让每个切片留一条 `import type … from './workbench'` 的回边）。
+ * 这里原样转出，外部 `from '@/stores/workbench'` 的导入路径不变。
+ */
+export type {
+  BattleTarget,
+  ConsolePhase,
+  SettlementLock,
+  WorkbenchLogEntry,
+} from './workbench-model'
 
 /** C5：一步移动的展示快照（全部来自引擎给出的步骤记录，界面不重算规则） */
 export type { MoveStepSnapshot } from './movement-types'
-
-/**
- * 操作台可选阶段（2.2 SOP 段的一个子集，外加没有行动段的「回合准备」）
- *
- * `preTurn`（天气 / 先手判定）不属于 A–H 任何一段，但**界面停在哪、引擎就必须在哪**：
- * 等待 2.3 应答时 `phase` 必须如实为 `preTurn`，不能回退到本地段的 C 移动。
- *
- * C 移动 / E 反应 / G 进击 三段是**移动环节**（6.0/6.3a/11.0a）；F 战斗段只有轰炸与常规战斗（9.0），
- * 不能移动；A **飞机整备阶段**（15.1A）是整备的唯一时机，同样没有移动环节。
- */
-export type ConsolePhase =
-  | 'preTurn'
-  | 'aircraftRefit'
-  | 'reinforcement'
-  | 'movement'
-  | 'supply'
-  | 'reaction'
-  | 'combat'
-  | 'exploitation'
-  | 'cleanUp'
 
 /**
  * 2.2：**没有移动环节**的段（A 整备 / B 增援 / D 补给 / F 战斗 / H 清理）
@@ -608,19 +589,6 @@ export interface WorkbenchOverrunTarget {
   hex: HexRef
   mpCost: number
   adjacentToPath: boolean
-}
-
-/**
- * 9.2 / 10.0：**结算进行中**（一场战斗或轰炸已开局、尚未收束）
- *
- * 用途：见 `settlementInProgress` 的说明 —— 它是「结算期间不许动任何单位」的唯一判据。
- */
-export interface SettlementLock {
-  kind: 'combat' | 'barrage'
-  /** 流程所在的规则条文 */
-  rule: string
-  /** 给界面/日志看的中文名 */
-  label: string
 }
 
 /**
@@ -747,13 +715,6 @@ export function movementPhaseOf(phase: ConsolePhase): MovementSegmentPhase {
  */
 function airMissionPhaseOf(phase: ConsolePhase): AirMissionPhase | null {
   return phase === 'movement' || phase === 'reaction' || phase === 'exploitation' ? phase : null
-}
-
-/** 已选定的交战（9.3b 地形与 9.6 行动值在此由双方选定后再结算） */
-export interface BattleTarget {
-  hex: HexRef
-  /** 目标格内参与防御的单位（实例 id，按摆放顺序） */
-  defenderIds: string[]
 }
 
 /**
