@@ -463,7 +463,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
       case 'scout':
         return { hex: SCOUT_HEX, texts: ['开拔'] }
       case 'scout-supply':
-        return { hex: SCOUT_HEX, texts: ['补给'] }
+        // 断补是既成事实；这一步真正的"下一步动作"是叫斯图卡 ⇒ 环指向 18.27 的坦克师
+        return { hex: TARGET_HEX, texts: ['低空扫射', 'Ju.87b'] }
       case 'strafe-1':
       case 'strafe-2':
         return strikeTarget()
@@ -634,7 +635,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
       {
         id: 'scout-supply',
         title: '补给接不上',
-        hint: '霍特：看见了？中间是沼泽，补给线过不去。',
+        // 信息步也要写清"下一步做什么"，否则玩家以为卡住了（用户 2026-11-20）
+        hint: '霍特：它断补了——别管它，去叫斯图卡扫 18.27。',
         intro: '18.26 在沼泽里、与后方不连通 ⇒ 这枚侦察营本回合吃不到补给（12.x）。',
         // 信息步：玩家叫第一轮斯图卡即视为看过、继续推进
         done: () => strafeCount.value >= 1,
@@ -1030,7 +1032,11 @@ export const useTutorialStore = defineStore('tutorial', () => {
 
   const progressLabel = computed(() => {
     const total = steps.value.length
-    return `${String(Math.min(cursor.value, total))}/${String(total)}`
+    /*
+     * 1 基显示（用户 2026-11-20）：原来直接用 `cursor`，第一步显示「0/24」，
+     * 于是站在第 12 步时显示「11/24」，被误读成"卡在第 11 步没往下走"。
+     */
+    return `${String(Math.min(cursor.value + 1, Math.max(total, 1)))}/${String(total)}`
   })
 
   return {

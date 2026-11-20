@@ -40,6 +40,8 @@ describe('教学模式：Vitebsk', () => {
     expect(ctx.g.firstWeatherChoice).toBe('normal')
     expect(tutorial.active).toBe(true)
     expect(tutorial.currentStep?.id).toBe('air-refit')
+    // 进度数字 1 基（原来 0 起 ⇒ 站第 12 步显示 11/24，被误读成卡住）
+    expect(tutorial.progressLabel).toBe(`4/${String(tutorial.steps.length)}`)
     // 条 1：整备步要框住「整备」按钮本身，而不是只圈空军盒
     expect(tutorial.currentStep?.target.buttonTexts).toContain('整备')
 
