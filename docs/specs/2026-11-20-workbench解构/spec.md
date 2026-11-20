@@ -469,7 +469,7 @@ B2-1 的 `AirDomainPorts` 里有 **5 个成员会被后续批次搬进切片本�
 
 ### 6.1.8 B3-1 落地（2026-11-21 实测，移动交互域起步）
 
-搬 `7527–7969`（**445 行 / 21 顶层声明**：15 `function` + 6 `const`）进新切片 `workbench-move.ts`：选子 → 范围 → 逐格 → 结束/撤销、20.0a 拆分窗口、4.3 初设摆位（Setup Wiggle）。
+搬 `7527–7969`（**443 行 / 21 顶层声明**：15 `function` + 6 `const`）进新切片 `workbench-move.ts`：选子 → 范围 → 逐格 → 结束/撤销、20.0a 拆分窗口、4.3 初设摆位（Setup Wiggle）。
 
 | 量                    | 搬前   | 搬后                                        |
 | --------------------- | ------ | ------------------------------------------- |
@@ -479,7 +479,7 @@ B2-1 的 `AirDomainPorts` 里有 **5 个成员会被后续批次搬进切片本�
 | `MovementDomainPorts` | —      | **40**（37 按值 + 3 晚绑定）                |
 | 公开面键（1,013）     | 1,013  | 1,013（不变）                               |
 
-**台账口径修正**：原估「section 3 = 451 行 / 15 个函数」→ 实测 **445 行 / 21 个声明**。多出的 6 个是 `const` 状态与派生（`settlementInProgress` / `breakdownWindows` / `setupWiggleParents` / `setupWiggleOn` / `setupWiggleRemaining` / `breakdownTimingOf`）——迁移清单只统计 `function`，**按清单数区间会漏掉状态块**。
+**台账口径修正**：原估「section 3 = 451 行 / 15 个函数」→ 实测 **443 行 / 21 个声明**（AST `getFullStart` 口径 445 行，多含区间前 2 行空行；**搬运正文 7527–7969 = 443 行**）。多出的 6 个是 `const` 状态与派生（`settlementInProgress` / `breakdownWindows` / `setupWiggleParents` / `setupWiggleOn` / `setupWiggleRemaining` / `breakdownTimingOf`）——迁移清单只统计 `function`，**按清单数区间会漏掉状态块**。
 
 **本批的结构性发现：建域点的位置由「谁先吃这些函数」决定，而它直接决定端口成本。**
 
@@ -493,7 +493,7 @@ B2-1 的 `AirDomainPorts` 里有 **5 个成员会被后续批次搬进切片本�
 1. **`choices` 的端口类型是 `ComputedRef<UnitRecordView[]>`**，不是 `{ unit: ConsoleUnit; selected: boolean }[]`。`unitChoices()` 返回单位记录视图；按字面猜类型会让公开面 `choices` 变窄，连带 2 个组件 + 2 个测试报 TS2339。
 2. **`TransportHandlingUndoEntry`（facade 1453 的非导出接口）必须随批搬进 `workbench-model.ts`**；漏在 facade 补 `import type` 时，`ref<T[]>` 的 `T` 解析失败 ⇒ 4 处 `TS7006` 隐式 any，症状像「函数体搬坏了」。
 
-**取证**：`npm run typecheck` 通过 → `npm run check` **623 文件 / 6,256 用例 / 196.38s / exit 0**；`arch` 源码 **951**；`audit:ports` 报 `createMovementDomain @7520` 按值 **37** 项全安全（37 + 3 getter = 40）；切片回边 **0 处**；公开面 **1,013 键不变**。
+**取证**：`npm run typecheck` 通过 → `npm run check` **623 文件 / 6,256 用例 / 196.38s / exit 0**；`arch` 源码 **951**；`audit:ports` 报 `createMovementDomain @7520` 按值 **37** 项全安全（37 + 3 getter = 40）；切片回边 **0 处**；公开面 **1,013 键不变**。 **两轮复核**：R1（`git show HEAD~2` 逐行对拍，只去 `ports.`）443 ↔ 443 行、不一致 0，零使用端口 0/40；R2（token/AST 口径）1,737 ↔ 1,737 token、不一致 0，节点 +8 恰为 3 个 `ports.` 前缀，反向验证 5 项全过（残留 0 / 薄转发 4×1 语句 / 晚绑定裸名 0 / 快照字节一致）。**R1 推翻了本批自报的「445 行」→ 443 行**（445 是 AST 全范围含 2 行前置空行）。
 
 ---
 

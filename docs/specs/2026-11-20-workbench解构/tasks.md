@@ -269,11 +269,11 @@ B2-1 落地后行号全部漂移（facade 少了 387 行），旧编号 **全部
 
 ## 4. B3 移动三切片
 
-- [x] `workbench-move.ts` ← section 3（台账原估 451 行 / 15 个函数 ⇒ **实测 445 行 / 21 个声明**：15 `function` + 6 `const`；**已落地 2026-11-21**）
+- [x] `workbench-move.ts` ← section 3（台账原估 451 行 / 15 个函数 ⇒ **实测 443 行 / 21 个声明**：15 `function` + 6 `const`；**已落地 2026-11-21**）
 
 ### B3-1 移动交互（**已落地 2026-11-21**）
 
-- [x] 搬 `7527–7969`：**445 行 / 21 顶层声明（15 function + 6 const）** —— `nameOf`(7530) / `unitNameOf`(7539) / `applyMovePatches`(7544) / `settlementInProgress`(7570, computed) / `refuseWhileSettling`(7585) / `beginMoveFor`(7587) / `breakdownWindows`(7678, ref) / `setupWiggleParents`(7686, ref) / `setupWiggleOn`(7689, computed) / `setupWiggleRemaining`(7691, computed) / `setupWiggleEligible`(7694) / `setupBreakdownCandidates`(7706) / `openBreakdownWindow`(7713) / `closeBreakdownWindows`(7725) / `breakdownTimingOf`(7733, const 箭头) / `canCreateBreakdownNow`(7753) / `breakdownRecordChoicesFor`(7775) / `breakdownAbsorbChoicesFor`(7792) / `canAbsorbBreakdownNow`(7812) / `retryBeginMove`(7823) / `selectForMove`(7853)。首行是 `/* ─ C5 移动交互 …` 横幅，末行 `  }`，下一行空行、再下一行是 `movePickHex`(7974)
+- [x] 搬 `7527–7969`：**443 行 / 21 顶层声明（15 function + 6 const；AST `getFullStart` 口径 445 行，多含前置 2 行空行）** —— `nameOf`(7530) / `unitNameOf`(7539) / `applyMovePatches`(7544) / `settlementInProgress`(7570, computed) / `refuseWhileSettling`(7585) / `beginMoveFor`(7587) / `breakdownWindows`(7678, ref) / `setupWiggleParents`(7686, ref) / `setupWiggleOn`(7689, computed) / `setupWiggleRemaining`(7691, computed) / `setupWiggleEligible`(7694) / `setupBreakdownCandidates`(7706) / `openBreakdownWindow`(7713) / `closeBreakdownWindows`(7725) / `breakdownTimingOf`(7733, const 箭头) / `canCreateBreakdownNow`(7753) / `breakdownRecordChoicesFor`(7775) / `breakdownAbsorbChoicesFor`(7792) / `canAbsorbBreakdownNow`(7812) / `retryBeginMove`(7823) / `selectForMove`(7853)。首行是 `/* ─ C5 移动交互 …` 横幅，末行 `  }`，下一行空行、再下一行是 `movePickHex`(7974)
 - [x] 端口 **40 项**，`audit:ports` 实测 `createMovementDomain @7520` **按值 37 项全部安全**（37 + 3 getter = 40，自洽）
       · **按值 24**（状态/派生，声明在 519–7171）：`NO_MOVEMENT_PHASES`(519 模块级) / `session`(830) / `activeSide`(858) / `phase`(866) / `segmentLocked`(887) / `units`(1000) / `selectedId`(1068) / `lastStep`(1076) / `groundMovement`(1110) / `moveBlocked`+`moveInteraction`(1131，从 `groundMovement` 解构) / `moveSessionSeq`(1150) / `transportHandlingBaseline`(1354) / `stackSelect`(1371) / `movePick`(1383) / `pausedTransportIds`(1432) / `transportHandlingUndo`(1474) / `combatState`(1582) / `barrageState`(1591) / `airUnitTransit`(2272) / `selectedUnit`(2408) / `choices`(2412) / `moveUnits`(5960) / `PHASE_LABELS`(7171)
       · **按值 13**（函数声明，**可提升** ⇒ 声明在 8k–25k 也按值安全）：`refuseWhileLocked`(890) / `noteUnitLeftOwnBridgeHex`(2466) / `unitOfInstance`(5100) / `pushLog`(6126) / `unitsAt`(6179) / `friendlyUnitsAt`(7044) / `movePickPoolAt`(7985) / `defaultMovePickIdsAt`(8017) / `applyFormationFuelCoverageToIds`(9735) / `actionAllowedNow`(20720) / `requireAction`(20724) / `noteUnitEnteredHex`(24898) / `nationalityOfUnit`(25200)
@@ -284,8 +284,11 @@ B2-1 落地后行号全部漂移（facade 少了 387 行），旧编号 **全部
 - [x] 新类型迁移：`TransportHandlingUndoEntry`（facade 1453–1473 的**非导出** `interface`，含 8 行文档注释）搬进 `workbench-model.ts` 并 `export`，facade 补 `import type`；model 顺带补 `import type { SpHoldings } from '@/engine/rules'`
 - [x] 连带 import：切片新增 `hexesWithin` / `canMoveInPhase` / `SETUP_WIGGLE_*` / `isSetupWiggleParent` / `type SettlementLock` 等；facade 删 5 处搬后失效 import（`hexesWithin` / `isSetupWiggleParent` / `SETUP_WIGGLE_BREAKDOWN_RADIUS` / `SETUP_WIGGLE_MAX_DIVISIONS` / `type SettlementLock`）
 - [x] 回边归零：切片 `import … from './workbench'` **0 处**（只 `import type` 自 `./workbench-model` / `./workbench-air` / `./ground-movement` / `./workbench-gates` / `./movement-types`）
-- [x] 规模：`workbench.ts` **28,083 → 27,702（−381 = −445 区间 −29 接口/文档 −5 失效 import +86 装配 +24 转发 +1 import）**；`workbench-move.ts` **607 行**（新建）；`workbench-model.ts` **4,177 → 4,208（+31 = +21 接口 +8 文档 +1 import +1 空行）**
+- [x] 规模：`workbench.ts` **28,083 → 27,702（净 −381；`git numstat` −475/+94）**：删 443 行区间 + 29 行接口/文档 + 5 行失效 import；加 69 行装配 + 23 行薄转发 + 2 行 import（`type SettlementLock` 那行由新 `TransportHandlingUndoEntry` 顶替）；`workbench-move.ts` **607 行**（新建）；`workbench-model.ts` **4,177 → 4,208（+31 = +21 接口 +8 文档 +1 import +1 空行）**
 - [x] 门禁：`npm run typecheck` 通过 → `npm run check` **623 文件 / 6,256 用例 / 196.38s / exit 0**；`arch` 源码 **951**（+1 新文件）；`format:check` 全 matched；`audit:ports` 六域全绿
+- [x] 复核 R1（**换证据源**：`git show HEAD~2` 取搬前原文逐行对拍，只去 `ports.` 前缀、保留 `.value`）：**443 ↔ 443 行 / 非空 422 ↔ 422 / 不一致 0**；块内 `ports.` 恰好 **4**（gates 1 + initialSetupInProgress 2 + breakdownPool 1）；接口 **40** = 解构 **37** + getter **3**、覆盖差集 0、**零使用端口 0/40**；切片 `return` **19**（重复 0，缺的正是 `breakdownWindows`/`setupWiggleEligible`）；公开面 **1,013 键**
+- [x] 复核 R2（**换口径 + 反向验证**）：21 个声明 token 流 **1,737 ↔ 1,737、不一致 0/21**（AST 节点 1,959 ↔ 1,967，多出的 **8** 恰为 3 个 `ports.` 前缀带来的 8 个节点）；反向——facade(HEAD) 残留（除 4 个薄转发）**0**、4 个薄转发各 **1 条语句**且指向 `movementDomain.<同名>`、晚绑定裸名 **0/3**、接口−解构−3 晚绑定 **0**、切片回边 **0**、快照与 HEAD~2 **字节完全一致**
+- [x] **R1 推翻了本批自己的一个数字**：文档原写「445 行」——那是 AST `getFullStart` 口径（含区间前 2 行空行），**真正搬走的正文是 443 行（7527–7969）**，已改；R2 未再推翻其它结论
 - [x] 公开面快照 **1,013 键不变**（本提交未触碰 fixture）
 
 **落地期暴露的四个坑**：

@@ -1,7 +1,7 @@
 /**
  * workbench-move.ts —— C5 地面移动交互域（选子 → 范围 → 逐格 → 结束/撤销；含 20.0a 拆分/4.3 初设摆位）
  *
- * 搬了 **B3-1**：workbench.ts 7527–7969 的 **445 行 / 21 个顶层声明**
+ * 搬了 **B3-1**：workbench.ts 7527–7969 的 **443 行 / 21 个顶层声明**
  * （15 个 function + 6 个 const：`settlementInProgress` / `breakdownWindows` / `setupWiggleParents` /
  * `setupWiggleOn` / `setupWiggleRemaining` / `breakdownTimingOf`）。
  *
