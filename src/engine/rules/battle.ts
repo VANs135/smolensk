@@ -864,12 +864,28 @@ export interface RetreatFacts {
   startOfCombatEnemyCombatUnitAt?(hex: HexRef, side: Side): boolean
   /** 9.12e：该格是否在敌方未抵消 ZOC 内 */
   inEnemyZocAt(hex: HexRef, side: Side): boolean
-  /** 9.12：该格是否禁止该机动类型进入（穿禁入地形者被消灭） */
-  prohibitedFor(mobility: MobilityType, hex: HexRef): boolean
+  /**
+   * 9.12 / 9.1f：该格是否禁止该机动类型进入（穿禁入地形者被消灭）
+   *
+   * `from` 给出「从哪一格进入」，用于 9.1f 的「只能沿路进入」：沼泽等对轮式/履带是 P，
+   * 但**该格边有可走的路时**允许沿路进入（TEC 星号 / 9.1f 原文）。省略 `from` 时按
+   * 「不借道路」判（旧口径：一律禁入），供没有路径上下文的调用方使用。
+   */
+  prohibitedFor(mobility: MobilityType, hex: HexRef, from?: HexRef): boolean
   /** 9.12e：「恰好」在该格的友方战斗单位（一并 DG） */
   friendlyCombatUnitsAt(hex: HexRef, side: Side): readonly string[]
   /** 9.12b：该单位在任何模式下都不可移动（被迫撤退时直接摧毁） */
   immobile(unitId: string): boolean
+  /**
+   * 9.12c：**战斗开始时**敌方战斗单位所在格（方向判据的参考点）
+   *
+   * 原文：撤退「应大致背离参与本场战斗的敌方单位」。本函数用于排除「撤到进攻方背后」的落点：
+   * 若起点→落点的最短路径必经某个敌方格，则该落点属于背后，规划时剔除。
+   * 调用方给的是**战斗开始时该方全部敌方战斗单位**所在格（战斗开始时参战者的超集；
+   * 非参战者若恰在撤退走廊上，其格本身也是 9.12f 的不可通行格，不会误放行）。
+   * 省略即不做方向过滤（既有调用/单测行为不变）。
+   */
+  enemyCombatHexesAtStart?(side: Side): readonly HexRef[]
   /**
    * 剧本**活动区**（用户 2026-11-15 口径：范围外不可进入）
    *
@@ -1013,7 +1029,10 @@ export function resolveRetreat(input: {
         dgCompanions,
       }
     // 9.12 第三 bullet：必须穿过**当前**敌方占据格或禁入地形 ⇒ 消灭该单位
-    if (facts.enemyCombatUnitAt(next, unit.side) || facts.prohibitedFor(unit.mobility, next))
+    if (
+      facts.enemyCombatUnitAt(next, unit.side) ||
+      facts.prohibitedFor(unit.mobility, next, current)
+    )
       return {
         ...base,
         rule: '9.12',
@@ -1172,16 +1191,15 @@ function simplePathWithin(input: {
   to: HexRef
   minLength: number
   maxLength: number
-  passable: (hex: HexRef) => boolean
+  passable: (from: HexRef, to: HexRef) => boolean
 }): HexRef[] | null {
   const { from, to, minLength, maxLength } = input
   if (minLength <= 0 || maxLength < minLength) return null
   /*
-   * 终点本身不可通行 ⇒ 任何路径都不成立（路径的最后一步就是进入 `to`，而 `walk` 对每一步都
-   * 要求 `passable`）。先挡这一条，避免为「根本到不了」的落点把整棵搜索树跑满——
-   * 结论与逐个节点展开完全一致（见 9.12f 的敌方占格落点）。
+   * ★ 不做「终点自身是否可通行」的前置剪枝：9.1f 的禁入判据依赖**进入方向**
+   *   （沼泽对履带只有沿路可入），同一个落点可能从一个邻格进得去、从另一个进不去。
+   *   终点是否可进由 `walk` 的最后一步用 `passable(current, to)` 判定。
    */
-  if (!input.passable(to)) return null
   const path: HexRef[] = []
   const visited = new Set<string>([retreatHexKey(from)])
 
@@ -1197,7 +1215,7 @@ function simplePathWithin(input: {
       if (!isOnMap(next)) continue
       const key = retreatHexKey(next)
       if (visited.has(key)) continue
-      if (!input.passable(next)) continue
+      if (!input.passable(current, next)) continue
       if (sameHex(next, to) && depth + 1 < minLength) continue
       visited.add(key)
       path.push(next)
@@ -1223,13 +1241,12 @@ function monotonePath(input: {
   from: HexRef
   to: HexRef
   distance: number
-  passable: (hex: HexRef) => boolean
+  passable: (from: HexRef, to: HexRef) => boolean
 }): HexRef[] | null {
   const { from, to, distance } = input
   if (distance <= 0) return null
   if (hexDistance(from, to) !== distance) return null
-  // 终点不可通行 ⇒ 无解（同 `simplePathWithin`：路径最后一步必须能进入 `to`）
-  if (!input.passable(to)) return null
+  // ★ 同 `simplePathWithin`：不再用「终点自身可通行」做前置剪枝（9.1f 的禁入取决于进入方向）
   const path: HexRef[] = []
   const walk = (current: HexRef, remaining: number): boolean => {
     if (remaining === 0) return sameHex(current, to)
@@ -1239,7 +1256,7 @@ function monotonePath(input: {
       // 必须更贴近落点一格（单调），保证路径长度恰好等于直线距离
       if (hexDistance(next, to) !== currentGap - 1) continue
       if (!isOnMap(next)) continue
-      if (!input.passable(next)) continue
+      if (!input.passable(current, next)) continue
       path.push(next)
       if (walk(next, remaining - 1)) return true
       path.pop()
@@ -1277,13 +1294,13 @@ export function retreatPathTo(input: {
 }): HexRef[] | null {
   const { from, facts } = input
   if (hexDistance(input.from, input.to) !== input.distance) return null
-  const passable = (hex: HexRef): boolean =>
-    isOnMap(hex) &&
-    !sameHex(hex, from) &&
-    !facts.prohibitedFor(input.mobility, hex) &&
-    facts.outsidePlayArea?.(hex) !== true &&
-    !facts.enemyCombatUnitAt(hex, input.side) &&
-    facts.startOfCombatEnemyCombatUnitAt?.(hex, input.side) !== true
+  const passable = (fromHex: HexRef, toHex: HexRef): boolean =>
+    isOnMap(toHex) &&
+    !sameHex(toHex, from) &&
+    !facts.prohibitedFor(input.mobility, toHex, fromHex) &&
+    facts.outsidePlayArea?.(toHex) !== true &&
+    !facts.enemyCombatUnitAt(toHex, input.side) &&
+    facts.startOfCombatEnemyCombatUnitAt?.(toHex, input.side) !== true
   const shortest = monotonePath({
     from: input.from,
     to: input.to,
@@ -1366,11 +1383,11 @@ export function planRetreatDestinations(input: {
       input.facts.outsidePlayArea?.(hex) !== true,
   )
   // 回退路径（必死）仍须排除 9.12f 的不可通行格；当前敌方/禁入地形允许穿过（穿过后按 9.12 消灭）
-  const doomedPassable = (hex: HexRef): boolean =>
-    isOnMap(hex) &&
-    !sameHex(hex, input.from) &&
-    input.facts.outsidePlayArea?.(hex) !== true &&
-    input.facts.startOfCombatEnemyCombatUnitAt?.(hex, input.side) !== true
+  const doomedPassable = (_fromHex: HexRef, toHex: HexRef): boolean =>
+    isOnMap(toHex) &&
+    !sameHex(toHex, input.from) &&
+    input.facts.outsidePlayArea?.(toHex) !== true &&
+    input.facts.startOfCombatEnemyCombatUnitAt?.(toHex, input.side) !== true
   for (const hex of candidates) {
     if (input.blocked?.(hex) === true) continue
     const clean = retreatPathTo({
@@ -1407,15 +1424,47 @@ export function planRetreatDestinations(input: {
         (input.strat === true && path.some((step) => input.facts.inEnemyZocAt(step, input.side))),
     })
   }
+  const result = preferAwayFromEnemy(
+    input.from,
+    plans,
+    input.facts.enemyCombatHexesAtStart?.(input.side) ?? [],
+  )
   if (cacheable) {
     let byKey = retreatDestinationCache.get(input.facts)
     if (byKey === undefined) {
       byKey = new Map()
       retreatDestinationCache.set(input.facts, byKey)
     }
-    byKey.set(cacheKey, plans)
+    byKey.set(cacheKey, result)
   }
-  return plans
+  return result
+}
+
+/**
+ * 9.12c：撤到「参战敌方单位背后」的落点剔除
+ *
+ * 判据：起点→落点的**最短路径必经**某个参战敌方战斗单位格（六角格三角等式取等）。
+ * 例：守方 18.27、攻方 17.27，落点 16.27 满足 2 = 1 + 1 ⇒ 属于攻方背后，剔除。
+ *
+ * 只在**存在「非背后且不会必死」的落点**时才剔除；若剔除后一个可活命的落点都没有，
+ * 按 9.12c「为避免损失，允许弯曲『本地后方』的定义」保留原表（含必死兜底与背后落点）。
+ */
+function preferAwayFromEnemy(
+  from: HexRef,
+  plans: RetreatDestinationPlan[],
+  enemies: readonly HexRef[],
+): RetreatDestinationPlan[] {
+  if (enemies.length === 0) return plans
+  const isBehind = (hex: HexRef): boolean =>
+    enemies.some(
+      (enemy) =>
+        !sameHex(enemy, from) &&
+        !sameHex(enemy, hex) &&
+        hexDistance(from, hex) === hexDistance(from, enemy) + hexDistance(enemy, hex),
+    )
+  const cleanAway = plans.filter((plan) => plan.forcedDestruction !== true && !isBehind(plan.hex))
+  if (cleanAway.length === 0) return plans
+  return plans.filter((plan) => plan.forcedDestruction === true || !isBehind(plan.hex))
 }
 
 /**

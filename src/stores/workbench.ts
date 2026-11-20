@@ -14098,10 +14098,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const unit = units.value.find((item) => item.instanceId === unitId)
       if (unit === undefined || unit.steps <= 0) continue
       const mobility = effectiveMobilityOf(unit)
-      for (const hex of path) {
+      for (let index = 0; index < path.length; index += 1) {
+        const hex = path[index]!
+        // 9.1f：禁入判据依赖进入方向（沼泽对轮式/履带只有沿路可入）
+        const previous = index === 0 ? unit.hex : path[index - 1]!
         // 9.12：本格「敌方占据 / 禁入」⇒ 单位在此被消灭，不算进入 ⇒ 到此为止
         if (combatRetreatFacts.value.enemyCombatUnitAt(hex, unit.side)) break
-        if (combatRetreatFacts.value.prohibitedFor(mobility, hex)) break
+        if (combatRetreatFacts.value.prohibitedFor(mobility, hex, previous)) break
         crossings.push({ unitId, hex })
       }
     }

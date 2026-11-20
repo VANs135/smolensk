@@ -1060,6 +1060,30 @@ describe('9.12g 战后推进', () => {
     expect(regular.ok && regular.data).toMatchObject({ advanceUnitIds: [], mandatory: false })
   })
 
+  it('9.12g：守方未撤出防御格 ⇒ 推进为空；守方撤空后才允许（突袭则必须）推进', () => {
+    const candidates = [{ id: 'a1', paidCombatSupply: true }]
+    const notCleared = resolveAdvanceAfterCombat({
+      attackType: 'overrun',
+      defendingHexCleared: false,
+      attackerRetreated: false,
+      candidates,
+    })
+    expect(notCleared.ok && notCleared.data).toMatchObject({
+      advanceUnitIds: [],
+      mandatory: false,
+    })
+    const cleared = resolveAdvanceAfterCombat({
+      attackType: 'overrun',
+      defendingHexCleared: true,
+      attackerRetreated: false,
+      candidates,
+    })
+    expect(cleared.ok && cleared.data).toMatchObject({
+      advanceUnitIds: ['a1'],
+      mandatory: true,
+    })
+  })
+
   it('9.12g-A：选了没付战斗补给的单位推进 ⇒ 非法', () => {
     expect(
       resolveAdvanceAfterCombat({
@@ -1264,6 +1288,58 @@ describe('9.12 撤退落点规划：完整撤退距离、路径与 ZOC 分类', 
     expect(plans.some((plan) => plan.hex.col === to.col && plan.hex.row === to.row)).toBe(false)
     for (const plan of plans)
       expect(plan.path.some((hex) => hex.col === to.col && hex.row === to.row)).toBe(false)
+  })
+
+  it('9.12c：不得撤到参战敌军背后（18.27 被 17.27 突袭，2 格撤退排除 16.27）', () => {
+    const defender: HexRef = { col: 18, row: 27 }
+    const attacker: HexRef = { col: 17, row: 27 }
+    const facts = retreatFacts({
+      // 9.12f：攻方所在格是战斗开始时的敌方战斗单位格 ⇒ 不可通行（路径绕开）
+      startOfCombatEnemyCombatUnitAt: (hex) => hex.col === attacker.col && hex.row === attacker.row,
+      enemyCombatHexesAtStart: () => [attacker],
+    })
+    const plans = planRetreatDestinations({
+      from: defender,
+      distance: 2,
+      mobility: 'track',
+      side: 'soviet',
+      facts,
+    })
+    // 16.27 满足 2 = dist(18.27,17.27) + dist(17.27,16.27) ⇒ 在攻方背后，剔除
+    expect(plans.some((plan) => plan.hex.col === 16 && plan.hex.row === 27)).toBe(false)
+    // 合法落点仍可撤：16.28 背离攻方且是干净路径
+    const legal = plans.find((plan) => plan.hex.col === 16 && plan.hex.row === 28)
+    expect(legal).toBeDefined()
+    expect(legal!.forcedDestruction).toBe(false)
+    expect(
+      retreatPathTo({
+        from: defender,
+        to: { col: 16, row: 28 },
+        distance: 2,
+        mobility: 'track',
+        side: 'soviet',
+        facts,
+      }),
+    ).not.toBeNull()
+  })
+
+  it('9.12c：若剔除背后落点后一个都不会死，才保留表（避免因方向软规则逼死单位）', () => {
+    const defender: HexRef = { col: 18, row: 27 }
+    const attacker: HexRef = { col: 17, row: 27 }
+    // 只留 16.27 一个几何落点：距离 2 的其余格全被额外 blocked 剔除
+    const onlyBehind = planRetreatDestinations({
+      from: defender,
+      distance: 2,
+      mobility: 'track',
+      side: 'soviet',
+      facts: retreatFacts({
+        startOfCombatEnemyCombatUnitAt: (hex) =>
+          hex.col === attacker.col && hex.row === attacker.row,
+        enemyCombatHexesAtStart: () => [attacker],
+      }),
+      blocked: (hex) => !(hex.col === 16 && hex.row === 27),
+    })
+    expect(onlyBehind.some((plan) => plan.hex.col === 16 && plan.hex.row === 27)).toBe(true)
   })
 
   it('专规 1.4b：规划器产出的路径每一步都在图内（不出现“能点、确认却报图外”）', () => {

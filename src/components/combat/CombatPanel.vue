@@ -704,6 +704,10 @@ const optionRetreatItems = computed<readonly CounterPickerItem[]>(() => {
             撤退格数 ＝
             该方剩余选项数；落点与起始格的直线距离必须等于该格数，路径可之字形避开禁入地形。
           </p>
+          <p class="muted">
+            落点须大致背离参战敌军（9.12c）：绕到进攻方背后的格不会出现在候选里；只有后方全无活路时，
+            才允许通融保留。
+          </p>
         </RuleTip>
         <p
           v-if="retreatPlan === null && workbench.combatRetreatSkippedSides.length === 0"

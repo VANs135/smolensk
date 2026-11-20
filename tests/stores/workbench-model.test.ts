@@ -6,6 +6,7 @@ import { chartsCrt, mapLayers } from '@/data'
 import type { HexRef } from '@/data'
 import { createRngState } from '@/engine/rng'
 import { checkLegality, bestCombatTerrainForDefender, inEnemyZocAt } from '@/engine/rules'
+import { planRetreatDestinations, retreatPathTo } from '@/engine/rules'
 import { boardNeighbors } from '@/render/map-layout'
 import {
   TURN_TRACK,
@@ -768,6 +769,56 @@ describe('9.12e / 9.12f：撤退事实的两条硬口径', () => {
     // 未给快照 ⇒ 退回当前盘面（无敌人 ⇒ 不挡）
     const live = createRetreatFacts({ units: [], context, retreatingUnitIds: [] })
     expect(live.enemyCombatUnitAt(NEIGHBOR, 'axis')).toBe(false)
+  })
+
+  it('9.12c：撤退事实给出战斗开始时的敌方战斗单位格 ⇒ 撤到攻方背后（16.27）被剔除', () => {
+    const context = buildMoveContext({ units: [], activeSide: 'soviet', phase: 'movement' })
+    const attacker = { col: 17, row: 27 }
+    const defender = { col: 18, row: 27 }
+    const facts = createRetreatFacts({
+      units: [],
+      context,
+      retreatingUnitIds: [],
+      combatStartSnapshot: [
+        { hex: attacker, side: 'axis', isCombat: true },
+        { hex: defender, side: 'soviet', isCombat: true },
+      ],
+    })
+    // 苏方撤退时，敌方（轴心）战斗单位格 = 17.27
+    expect(facts.enemyCombatHexesAtStart?.('soviet')).toEqual([attacker])
+    const plans = planRetreatDestinations({
+      from: defender,
+      distance: 2,
+      mobility: 'track',
+      side: 'soviet',
+      facts,
+    })
+    expect(plans.some((plan) => plan.hex.col === 16 && plan.hex.row === 27)).toBe(false)
+    // 合法落点仍可撤：16.28 背离攻方且路径干净
+    const legal = plans.find((plan) => plan.hex.col === 16 && plan.hex.row === 28)
+    expect(legal?.forcedDestruction).toBe(false)
+    expect(
+      retreatPathTo({
+        from: defender,
+        to: { col: 16, row: 28 },
+        distance: 2,
+        mobility: 'track',
+        side: 'soviet',
+        facts,
+      }),
+    ).not.toBeNull()
+  })
+
+  it('9.1f：沼泽对履带只有沿路可入（有路边 ⇒ 可进，无路边 ⇒ 禁入）', () => {
+    const context = buildMoveContext({ units: [], activeSide: 'axis', phase: 'movement' })
+    const facts = createRetreatFacts({ units: [], context, retreatingUnitIds: [] })
+    // 1.7 是沼泽，格边 (2.6)—(1.7) 有道路 ⇒ 履带可沿路进入
+    expect(facts.prohibitedFor('track', { col: 1, row: 7 }, { col: 2, row: 6 })).toBe(false)
+    // 1.2 是沼泽，四邻无路 ⇒ 履带禁入（省略 from 时按“不借道路”判，结果相同）
+    expect(facts.prohibitedFor('track', { col: 1, row: 2 })).toBe(true)
+    expect(facts.prohibitedFor('track', { col: 1, row: 2 }, { col: 1, row: 3 })).toBe(true)
+    // 徒步不受沼泽 P 限制
+    expect(facts.prohibitedFor('leg', { col: 1, row: 2 })).toBe(false)
   })
 })
 

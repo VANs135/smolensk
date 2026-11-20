@@ -1753,9 +1753,22 @@ export function createRetreatFacts(input: {
     input.units.map((unit) => ({ hex: unit.hex, side: unit.side, isCombat: unit.isCombat }))
   const axisCombatAt = new Set<string>()
   const sovietCombatAt = new Set<string>()
+  /** 9.12c：战斗开始时的敌方战斗单位所在格（方向判据用；按格去重） */
+  const axisCombatHexes: HexRef[] = []
+  const sovietCombatHexes: HexRef[] = []
+  const axisSeen = new Set<string>()
+  const sovietSeen = new Set<string>()
   for (const item of enemyCombatSources) {
     if (!item.isCombat) continue
-    ;(item.side === 'axis' ? axisCombatAt : sovietCombatAt).add(hexKeyOf(item.hex))
+    const key = hexKeyOf(item.hex)
+    const combatAt = item.side === 'axis' ? axisCombatAt : sovietCombatAt
+    combatAt.add(key)
+    const hexes = item.side === 'axis' ? axisCombatHexes : sovietCombatHexes
+    const seen = item.side === 'axis' ? axisSeen : sovietSeen
+    if (!seen.has(key)) {
+      seen.add(key)
+      hexes.push({ col: item.hex.col, row: item.hex.row })
+    }
   }
   /** 9.12e：9.12 的 ZOC 判据不看 4.5b 抵消 ⇒ 只需一张「谁投射 ZOC」的表 */
   const zocSources = zocSourcesOf(input.context.units)
@@ -1783,15 +1796,20 @@ export function createRetreatFacts(input: {
     startOfCombatEnemyCombatUnitAt: (hex, side) =>
       input.combatStartSnapshot !== undefined && enemyHexesOf(side, hex),
     inEnemyZocAt: (hex, side) => isInEnemyZoc(hex, side === 'axis' ? 'soviet' : 'axis', zocSources),
-    prohibitedFor: (mobility, hex) => {
-      const key = `${mobility}|${hexKeyOf(hex)}`
+    // 9.12c：撤退应大致背离参战敌军；「起点→落点的最短路径必经某个敌方格」即算撤到背后
+    enemyCombatHexesAtStart: (side) => (side === 'axis' ? sovietCombatHexes : axisCombatHexes),
+    prohibitedFor: (mobility, hex, from) => {
+      // 9.1f：禁入判据依赖**进入方向**——沼泽对轮式/履带是 P，但该格边有可走的路时允许沿路进入
+      const fromKey = from === undefined ? '' : hexKeyOf(from)
+      const key = `${mobility}|${fromKey}|${hexKeyOf(hex)}`
       const cached = prohibitedByMobilityHex.get(key)
       if (cached !== undefined) return cached
       const result = selectMovementTerrain({
         terrainsPresent: terrainsAt(hex),
         mobility,
-        crossing: null,
-        followingRoad: false,
+        crossing: from === undefined ? null : mapFacts().crossingBetween(from, hex),
+        // 有格边道路时按「沿路进入」计；没有道路时仍回落到格内地形判 P
+        followingRoad: from !== undefined,
         forOverrun: false,
       })
       const value = !result.ok && result.reason === 'prohibited'
