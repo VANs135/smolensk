@@ -263,16 +263,14 @@ export const useTutorialStore = defineStore('tutorial', () => {
   }
 
   /**
-   * 30 侦察营是否已绕到侧后（履带无视 ZOC 的教学点）
+   * MC 营（30 侦察营）是否已经离开起始堆叠
    *
-   * 判定放宽到「到了 18.26，或停在它相邻的一格」：地形/ZOC 常让人停在邻格，
-   * 死认一格会把引导卡死（用户 2026-11-20「MC 营停下后没到下一步」）。
+   * 用户 2026-11-20：「MC 停止移动就到下一步」——判定只看它有没有开出去，
+   * 不再死认 18.26（地形/ZOC 常让人停在邻格，硬判定会把引导卡死）。
    */
-  function scoutInPlace(): boolean {
+  function scoutMoved(): boolean {
     const scout = workbench.units.find((unit) => unit.unitId === SCOUT_UNIT_ID)
-    if (scout === undefined) return false
-    if (sameHex(scout.hex, SCOUT_HEX)) return true
-    return !sameHex(scout.hex, STACK_START) && hexDistance(scout.hex, SCOUT_HEX) <= 2
+    return scout !== undefined && !sameHex(scout.hex, STACK_START)
   }
 
   /** 炮兵团是否已进入弹幕射程（3 格）——不要求贴到城边 */
@@ -412,20 +410,34 @@ export const useTutorialStore = defineStore('tutorial', () => {
         if (!phaseAtLeast(workbench.phase, 'reinforcement'))
           return { buttonTexts: ['进入下一环节'] }
         /*
-         * 2026-11-20（用户）：增援段玩家实际按三次——
-         *   ①「掷骰检定」（1.6b 补给表 + 补员表）→ ② 手牌点条目 → 点地图高亮格落位
-         *   → ③ 放完点「结束本段」。引导按前两段分别指路，别只挂一句空话。
+         * 2026-11-20（用户）：「高亮一个放一个」——增援段逐项指路：
+         *   ① 未掷表 → 「掷骰检定」
+         *   ② 补给表 SP 还没落 → 框住手牌里的「到货 SP」卡，并亮出它的落点格
+         *   ③ 补员 Pax 还没落 → 框「1.6b 补员表 · Pax」卡 + 落点格
+         *   ④ 补员 Eq 还没落 → 框「1.6b 补员表 · Eq」卡 + 落点格
+         *   ⑤ 都放完 → 「结束本段」
+         * 手牌卡是 `<button title="到货 SP（1.6b 补给表）：…">`，按 title 里的短串框住整张卡。
          */
         if (workbench.lastVariableRepl === null) {
           return { buttonTexts: ['掷骰检定'], texts: ['掷骰检定'] }
         }
-        const hex = workbench.freeRailPlan?.placements[0]?.hex
-        return {
-          hex,
-          buttonTexts: ['结束本段'],
-          // 手牌那一行「补给表 +N SP → 手牌」：取面积最小的节点，避开顶栏反馈里的「补给表（1.6b）」
-          texts: ['补给表 +'],
+        if (workbench.supplyTableUnplaced > 0) {
+          const hex = workbench.freeRailPlan?.placements[0]?.hex
+          return {
+            ...(hex === undefined ? {} : { hex }),
+            buttonTexts: ['到货 SP'],
+            texts: ['到货 SP'],
+          }
         }
+        const paxHex = workbench.replInitialPlacementHexesFor.pax[0]
+        if (workbench.replPending.pax > 0 && paxHex !== undefined) {
+          return { hex: paxHex, buttonTexts: ['补员表 · Pax'], texts: ['补员表 · Pax'] }
+        }
+        const eqHex = workbench.replInitialPlacementHexesFor.eq[0]
+        if (workbench.replPending.eq > 0 && eqHex !== undefined) {
+          return { hex: eqHex, buttonTexts: ['补员表 · Eq'], texts: ['补员表 · Eq'] }
+        }
+        return { buttonTexts: ['结束本段'], texts: ['结束本段'] }
       }
       case 'advance-rebuild':
         return { buttonTexts: ['进入下一环节'], texts: ['重建'] }
@@ -561,9 +573,12 @@ export const useTutorialStore = defineStore('tutorial', () => {
       {
         id: 'reinforce-sp',
         title: '增援 SP',
-        hint: '霍特：点「掷骰检定」→ 手牌点条目 → 点高亮格落位。',
-        intro: 'SP 是油和弹药，装甲没有它就动不了。',
-        done: () => hasSupplyArrival() || phaseAtLeast(workbench.phase, 'movement'),
+        hint: '霍特：掷骰检定 → 一张一张点手牌 → 点高亮格落位。',
+        intro: '补给表给 SP、补员表给 Pax/Eq：一张放完再放下一张，别的先别点。',
+        // 手牌放完（SP 已落 + Pax/Eq 归零）才过；「结束本段」会作废未放项 ⇒ 也归零
+        done: () =>
+          (hasSupplyArrival() && workbench.replPending.pax + workbench.replPending.eq === 0) ||
+          phaseAtLeast(workbench.phase, 'movement'),
       },
       {
         id: 'advance-rebuild',
@@ -604,9 +619,9 @@ export const useTutorialStore = defineStore('tutorial', () => {
       {
         id: 'scout',
         title: '侦察营绕进 18.26',
-        hint: '霍特：只选 30 侦察营，开拔 → 绕到 18.26。',
+        hint: '霍特：只选 30 侦察营，开到 18.26，停下就过。',
         intro: '履带与徒步单位可以无视敌方控制区（ZOC）穿行；侦察营正好绕到坦克师侧后。',
-        done: () => scoutInPlace(),
+        done: () => scoutMoved(),
       },
       {
         id: 'scout-supply',

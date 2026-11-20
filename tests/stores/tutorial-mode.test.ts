@@ -183,6 +183,12 @@ describe('教学模式：Vitebsk', () => {
     // 摩步战斗面 MA 3（8-4-3）、移动面 14：突袭一次 3 MP，两连突 6 MP
     expect(steps.find((step) => step.id === 'move-mode')?.intro).toContain('8-4-3')
     expect(steps.find((step) => step.id === 'scout')?.intro).toContain('控制区')
+    // 增援段「高亮一个放一个」：SP → Pax → Eq 逐张框手牌卡（按 title 短串命中）
+    expect(source).toContain("buttonTexts: ['到货 SP']")
+    expect(source).toContain("buttonTexts: ['补员表 · Pax']")
+    expect(source).toContain("buttonTexts: ['补员表 · Eq']")
+    // 侦察营：停下即过（不再死认 18.26 一格）
+    expect(source).toContain('scoutMoved')
   }, 20_000)
 })
 
