@@ -114,7 +114,7 @@
 | 批  | 切出                                                                         | 源分节                                                      | 规模                       |
 | --- | ---------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------- |
 | B0  | `workbench-core.ts`                                                          | 核心区 48 函数 + 上表服务                                   | ≤ 1,500                    |
-| B1  | `flows/barrage.ts`                                                           | 8（C7 轰炸）                                                | 1,212 / 38                 |
+| B1  | `workbench-barrage.ts`                                                       | 8（C7 轰炸）                                                | 1,212 / 39 动作 + 18 派生  |
 | B2  | `flows/air-ops.ts`                                                           | 10（C9 空军）+ 11（三操作统一流程）                         | 560 + 999                  |
 | B3  | `flows/move.ts` + `flows/raid.ts`                                            | 3（C5 移动）+ 4（堆叠取子）+ 2（移动中的突袭）              | 451 + 3,381 + 1,344        |
 | B4  | `flows/supply.ts`                                                            | 9（C8 补给 12.x）                                           | 2,734 / 91                 |
@@ -123,13 +123,25 @@
 | B7  | `services/segment-gate.ts` → `placement.ts` → `spec-rules.ts` → `victory.ts` | 14（B8 环节闸门）                                           | 6,738 / 162，拆 4 个子提交 |
 | B8  | `services/snapshot.ts` + facade 收口                                         | 15（盘面快照）+ `return` 汇编                               | 1,792 / 12                 |
 
+**批次表的一处命名修正（B1 实测后确定）**：切片一律放 `src/stores/workbench-<域>.ts`，**不放 `flows/`**。理由：① B0 已经用 `workbench-core.ts` / `workbench-gates.ts` 立了先例，同族文件放同目录，找起来不用跨目录；② `flows/` 现有内容全是「整局流程」编排（`tests/flows/` 也是这个含义），把某个动作域塞进去会混淆两次词义；③ `forbidden-imports` 对 `stores/*` 的限制（不得 import `@/components`、`@/views`）本来就更适合这类纯状态切片。下面表里的 `flows/xxx.ts` 一律读作 `stores/workbench-xxx.ts`。
+
+**下面是修正后的净下降公式（B1 实测校准）**：
+
+```
+净下降 = 迁出量 − 3 × 仍需在 facade 保留转发的动作数 − 装配段（约 40–80 行） + 顺手清掉的 import 行
+```
+
+原因：真正搬走的是实现，但**动作的调用点没有改**（669 处 `pushLog` 的先例），所以每个动作要在 facade 留一个三行壳（`function x(...) { return slice.x(...) }`）。这个成本随函数数线性增长——B1 是 39 个动作 → 114 行壳；B7 有 162 个函数，照这个做法要 486 行壳。**所以给 B2 之后一条可选优化**：只有被"setup 期立即求值"引用的动作必须有提升的函数壳（用 AST 扫一遍就能列出，B1 实测只有 5 个：`acceptBarrage` / `applyBarragePatches` / `applyBarrageFacilityPatch` / `barrageFacilityFacts` / `deliverableDumpsFor`），其余可以在装配点用一行 `const { a, b, … } = slice` 集体绑定。函数数 < 40 时差别不大（30 行），B7 能省 400+ 行。
+
 **每批 DoD（缺一不可）**：
 
 1. `npm run check` 绿（lint / format / typecheck / test:fast / arch）；
 2. 公开面键集快照 diff 为空；
-3. `workbench.ts` 行数下降量 ≈ 迁出量（±50 行装配容差）；
-4. 新增文件 ≤ 预算上限；
-5. commit message 写明「纯搬移，无行为变化」，且 **push 成功**。
+3. `workbench.ts` 行数下降 ≈ 上式（±50 行）；B1 实测 1,212 − 114 − 75 + 39 = **1,062**，实际 **1,057**，差 5；
+4. 新增文件 ≤ 预算上限（切片 ≤ 3,000 行）；
+5. commit message 写明「纯搬移，无行为变化」，且 **push 成功**；
+6. **双向文案对拍**：原文分节的字符串字面量 ↔ 切片，缺/增都必须为 0（B1：68 ↔ 68）；
+7. **函数名集合对拍**：facade 的函数声明集合只允许"内部自用者转进切片"这一种差异（B1：708 → 707，差 `bestDefenderTerrainLine`）。
 
 ---
 
