@@ -289,11 +289,40 @@ HIT recordSettlement    decls=1 7123   ← 对照组，正确定位到函数声�
 ⚠ 我先前写的"搬完 `airDomain` 就拥有自己的状态 + 派生"是不准确的。**派生被分成了两簇**，B2-1 只搬了后一簇：
 
 - 搬走的：`5949–6086`（含 `/* ── C9 空军交互：派生 ── */` 横幅之后的 12 个 computed）
-- **没搬的：`5711–6319`（609 行 / 44 个声明）**——`airMissionReturnChoices`（返航三选一）、`airReturnSelectionLabel` / `airReturnChosen`、`airCombatAttackerPlanes` / `airCombatDefenderPlanes` / `airCombatRoundBudget` / `airInterceptionDefender`、`toggleAirCargoUnit` / `airCargoUnitChoices`、`airMissionHasFighter` / `airChecklist` / `airTargetInEnemyPatrolZone` / `airInterceptionResponse` / `airInterceptorCandidates` / `airTargetBaseLevel` / `airTargetBaseIsAirstrip` / `airEnemyAtTarget` / `capturableEnemyAirBases` / `airPatrolZoneHexes` / `airEnemyPatrolZoneHexes`、`airInactiveAtBase` / `airRefitPayDumps` / `airReductionCandidates` / `refitDoneBases` / `refitBase` / `refitCandidates` / `refitSelectedIds` / `refitSelectLimitAt` / `refitSelectLimit` / `refitPayDumps` / `refitPayNeedT`、`transferBase` / `transferCandidates` / `airDistanceToBox` / `canTransferAirToBox` / `transferBoxReady` / `transferBaseCandidates` / `transferHasBoxOption` / `transferHasBaseOption` / `canTransferAirToBaseNow` / `beginTransferNow` / `toggleTransferAircraft` / `cancelTransferNow` / `completeTransferToBaseNow`、`refitStartBases` / `refitAirbaseHexes` / `refitBlockReasonAt` / `reducedBases`
+- **没搬的：`5701–6321`（621 行 / 48 个声明）**——`airMissionReturnChoices`（返航三选一）、`airReturnSelectionLabel` / `airReturnChosen`、`airCombatAttackerPlanes` / `airCombatDefenderPlanes` / `airCombatRoundBudget` / `airInterceptionDefender`、`toggleAirCargoUnit` / `airCargoUnitChoices`、`airMissionHasFighter` / `airChecklist` / `airTargetInEnemyPatrolZone` / `airInterceptionResponse` / `airInterceptorCandidates` / `airTargetBaseLevel` / `airTargetBaseIsAirstrip` / `airEnemyAtTarget` / `capturableEnemyAirBases` / `airPatrolZoneHexes` / `airEnemyPatrolZoneHexes`、`airInactiveAtBase` / `airRefitPayDumps` / `airReductionCandidates` / `refitDoneBases` / `refitBase` / `refitCandidates` / `refitSelectedIds` / `refitSelectLimitAt` / `refitSelectLimit` / `refitPayDumps` / `refitPayNeedT`、`transferBase` / `transferCandidates` / `airDistanceToBox` / `canTransferAirToBox` / `transferBoxReady` / `transferBaseCandidates` / `transferHasBoxOption` / `transferHasBaseOption` / `canTransferAirToBaseNow` / `beginTransferNow` / `toggleTransferAircraft` / `cancelTransferNow` / `completeTransferToBaseNow`、`refitStartBases` / `refitAirbaseHexes` / `refitBlockReasonAt` / `reducedBases`
+
+**（第七轮复核的数字更正）** 上一版本节先写「`5711–6319`、609 行、44 个声明」，**三项全错**：逐行实点为 **`5701–6321`、621 行、48 个声明**。
+
+- 左端 `5711` 是 `airMissionReturnChoices` 的 `const` 行，但它的文档注释在 **5701–5710**；从 5711 起切会把注释留在 facade 变成孤注释。正确左端 = **5701**（上一条 `supplyPickupRequirement` 在 5699 收尾、5700 空行）。
+- 右端 `6319` 是 `reducedBases` 的**起始行**，它的体到 **6321** 的 `)` 才结束，6323 才是下一条 `moveRuntime` 的注释。取 6319 等于把 `reducedBases` 切在函数体中间——**这正是 `port-report` 的"区间在函数体中间截断"告警专门要抓的那类错**，只是这次我用的是 crosscheck（它不打这个告警）。
+- 声明数 44 是我手抄 `5711–6319` 清单时的漏计，实点 48。
+
+**取 range 的两端纪律（补进方法论）**：`--start` 取「目标语句自己的文档注释首行」（上一条语句收尾的下一行），`--end` 取「目标语句最后一行 `}`/`)`」，两端都不许落在语句内部；而 **crosscheck 不检查这一点**，只有 `port-report` 的截断告警会提醒——所以**两套工具都要跑一遍**，各管一头。
 
 **为什么漏了**：我按分节横幅 `/* ── C9 空军交互：派生 ── */` 取切口，而横幅**只标记了后半**；前半（5711 起）在它上面，紧挨着 `supplyPickupRequirement`(5661) 这样的非空军内容，所以按横幅取 range 时看不见它。**教训：分节横幅是"作者写文档时的分组"，不是"域边界"** —— 这与 §6.1 抓 `captureAirBaseNow` 被横幅切开的坑同源，只是方向相反（那次是横幅落在函数体里，这次是横幅只覆盖半个域）。
 
-**这簇的端口只有 16 项**（`5711–6319`，扣掉切片内部 18 项后）：`phase`/`units`/`airUnits`/`airBoxMembers`/`allSpDumps`/`supplyFacts`/`pushLog`/`setAirInBoxMembership`/`hqDeliveryDumpKeys`/`isAirInOffMapBox`/`onMapAirUnits`/`airUnitsAt`/`airDistanceFromRealBase`/`airUnitsInHex`/`actionAllowedNow`/`isConstructionMarkerAirBaseId`。⇒ 补一批 **B2-1b** 即可，而且**它应该排在 B2-2a 之前**：这 16 项里有 5 项（`isAirInOffMapBox`/`onMapAirUnits`/`airUnitsAt`/`airDistanceFromRealBase`/`airUnitsInHex`）就在 B2-2a 的区间里，先做 B2-1b 能让它们变成切片内部；同理 B2-2d 的 21 项里有 5 项（`airInactiveAtBase`/`airRefitPayDumps`/`refitSelectLimitAt`/`refitSelectLimit`/`refitPayDumps`）是本簇自己的派生，做完 1b 也一并消失。
+**这簇的端口只有 16 项**（扣掉切片内部 18 项后）：`phase`/`units`/`airUnits`/`airBoxMembers`/`allSpDumps`/`supplyFacts`/`pushLog`/`setAirInBoxMembership`/`hqDeliveryDumpKeys`/`isAirInOffMapBox`/`onMapAirUnits`/`airUnitsAt`/`airDistanceFromRealBase`/`airUnitsInHex`/`actionAllowedNow`/`isConstructionMarkerAirBaseId`。⇒ 补一批 **B2-1b** 即可，而且**它应该排在 B2-2a 之前**：这 16 项里有 5 项（`isAirInOffMapBox`/`onMapAirUnits`/`airUnitsAt`/`airDistanceFromRealBase`/`airUnitsInHex`）就在 B2-2a 的区间里，先做 B2-1b 能让它们变成切片内部；同理 B2-2d 的 21 项里有 5 项（`airInactiveAtBase`/`airRefitPayDumps`/`refitSelectLimitAt`/`refitSelectLimit`/`refitPayDumps`）是本簇自己的派生，做完 1b 也一并消失。
+
+### 6.1.2 每批的共同动作：搬走的名字要从端口表里剪掉
+
+B2-1 的 `AirDomainPorts` 里有 **5 个成员会被后续批次搬进切片本身**，实测（用 `^  (function|const) <名>` 在 facade 里定位）：
+
+| 端口成员                 | facade 声明行 | 会被哪批搬走 |
+| ------------------------ | ------------- | ------------ |
+| `onMapAirUnits`          | 18225         | **B2-2a**    |
+| `applyAirCargoDelivery`  | 18368         | **B2-2a**    |
+| `airCargoLossPending`    | 19286         | **B2-2b**    |
+| `airMissionResultReady`  | 19821         | **B2-2c**    |
+| `completeAirCargoReturn` | 19931         | **B2-2c**    |
+
+所以每批搬动时必须同步做四件事，**少一件就编译不过或行为重复**：
+
+1. 从 `AirDomainPorts` 接口里删掉该成员；
+2. 从 `createAirDomain` 顶部的解构里删掉（或从 `ports.x` 改写改回裸名）；
+3. 从 facade 传给 `createAirDomain` 的 ports 实参里删掉，**连 `get` 访问器一起删**（`onMapAirUnits`/`airCargoLossPending` 现在是用 getter 传的）；
+4. 若该名字还被 facade 其余代码用，facade 的解构表（40 名那张）本身不用改——它们本来就在里面。
+
+反过来，**搬走一个名字时不要顺手把它从 facade 的 40 名解构里删掉**：那个解构是公开面的一部分（`return` 里按原名暴露 1,013 键），删了会破快照。
 
 1. **逐字对拍**：把 `git show HEAD~2:src/stores/workbench.ts` 的同三个区间取出来、施加同样的 6 处 `ports.x` 改写，再在切片里 `indexOf` —— 三段 **128 / 35 / 138 行全部完整命中**，字节级没有丢行。
    （第一次跑这条是拿 `HEAD~1` 比的，结果三段全部"未命中"，因为 `HEAD~1` 已是 B2-1 之后的文件——**基线提交取错了，差点误判成丢内容**。）

@@ -53,13 +53,13 @@
 
 ### B2-1b 派生补遗（**第七轮复核发现，排在 B2-2a 之前**）
 
-B2-1 只搬了派生的一半——`5949–6086` 那一簇；`5711–6319` 的 **44 个声明（609 行）**还留在 facade，且都是空军域的东西（返航三选一 / 空战轮对 / 巡逻区 / 任务格敌方事实 / 可夺基地 / 整备套件 / 转移 / 缩减）。漏的原因是**按分节横幅 `/* ── C9 空军交互：派生 ── */` 取 range，而横幅只覆盖后半**。
+B2-1 只搬了派生的一半——`5949–6086` 那一簇；`5701–6321` 的 **48 个声明（621 行）**还留在 facade，且都是空军域的东西（返航三选一 / 空战轮对 / 巡逻区 / 任务格敌方事实 / 可夺基地 / 整备套件 / 转移 / 缩减）。漏的原因是**按分节横幅 `/* ── C9 空军交互：派生 ── */` 取 range，而横幅只覆盖后半**。
 
-- [ ] 搬 `5711–6319`（`airMissionReturnChoices` … `reducedBases`）到 `workbench-air.ts`
+- [ ] 搬 `5701–6321`（`airMissionReturnChoices` … `reducedBases`；621 行 / 48 个声明）到 `workbench-air.ts`
 - [ ] 端口实测 **16 项**：`phase` / `units` / `airUnits` / `airBoxMembers` / `allSpDumps` / `supplyFacts` / `pushLog` / `setAirInBoxMembership` / `hqDeliveryDumpKeys` / `isAirInOffMapBox` / `onMapAirUnits` / `airUnitsAt` / `airDistanceFromRealBase` / `airUnitsInHex` / `actionAllowedNow` / `isConstructionMarkerAirBaseId`
 - [ ] 其中 5 项（`isAirInOffMapBox`/`onMapAirUnits`/`airUnitsAt`/`airDistanceFromRealBase`/`airUnitsInHex`）就在 B2-2a 的区间里 ⇒ **先做 1b，a 批端口会跟着降**
 - [ ] 这簇里含**动作**（`toggleAirCargoUnit`/`beginTransferNow`/`toggleTransferAircraft`/`cancelTransferNow`/`completeTransferToBaseNow`），搬的是行为而不只是派生——验收仍按公开面 1,013 键不变
-- [ ] 边界：`5661 supplyPickupRequirement` 是非空军，**不能带进来**；end 取 `6319`（`reducedBases` 之后是 `replay*` 一族）
+- [ ] 边界：start 取 **5701**（`airMissionReturnChoices` 的文档注释首行；上一条 `supplyPickupRequirement` 在 5699 收尾）；end 取 **6321**（`reducedBases` 的 `)`；6323 起是 `moveRuntime` 的注释）。**按 5711/6319 切会把注释留成孤儿、把函数切在中间**
 
 ### B2-2 动作块（后做，**2026-11-20 重测：拆 4 批，全部 < 40 端口**）
 
@@ -73,6 +73,8 @@ B2-1 落地后行号全部漂移（facade 少了 387 行），旧编号 **全部
 | **B2-2d** | `20048–20490` | `cancelAir` / `toggleAirstripBase` / `refitBaseNow` / `beginRefitNow` / `confirmRefitSelectionNow` / `toggleRefitAircraft` / `cancelRefitNow` / `pickRefitPayDump` / `confirmRefitPaymentNow` / `transferAircraftNow` / `toggleAirReductionUnit` / `reduceBaseNow` / `airMissionKindLabel` / `airStatusLabel`               | **21** | 443  |
 
 （合并量过一次：`19283–20490` 一起切要 **90 项**、扣掉切片内部仍剩 65 项，超红线 ⇒ 必须拆。）
+
+**每批搬动前先按 spec §6.1.2 剪端口**：`onMapAirUnits`(18225)、`applyAirCargoDelivery`(18368) 属 a 批；`airCargoLossPending`(19286) 属 b 批；`airMissionResultReady`(19821)、`completeAirCargoReturn`(19931) 属 c 批。搬到时要从 `AirDomainPorts`、解构表、facade 的 ports 实参（含 `get` 访问器）三处同时删，否则要么重复声明、要么 getter 自指。
 
 - [ ] 顺序：a → b → c → d（d 里的 `airMissionKindLabel`(20473) 被 a/b/c 引用，先做 d 可少一个端口；先做 a 则它按值传，也无妨）
 - [ ] 边界：`captureAirBaseNow` 现在 **18425** 起、**18578** 止（旧记录 18812–18953 已漂移）；`18579` 起是 `printedHedgehogOwners`（C6 特种战斗），**不属于空军**——这批的"不连续"就是被它和 18700–19282 的 `specialPending`/`resolveSpecialCombatAt`/拦截 夹开的
