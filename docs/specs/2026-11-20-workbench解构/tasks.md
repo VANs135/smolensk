@@ -45,7 +45,9 @@
 - [ ] 建域点可放在 2593 附近（新出现的外部依赖全在 2593 之后 ⇒ 走 getter 延迟绑定），**不必像 B1 那样压到 setup 末尾**
 - [ ] 实测端口 **25 项**（口径见 spec §6.1.1：三段并集再减掉切片自己的声明），其中仅 6 项（`rng`/`units`/`selectedId`/`airUnits`/`offMapSupplyStocks`/`activeSide`）可在建域点直连，**19 项须走 getter**（含 `segmentGateQuery` @23302、`constructionMarkerAirBaseId` @27821、`constructionMarkerPieces` @27836、`pushLog` @7075）
 - [ ] 不能漏的三个端口：`setAirStatus`(:17440)、`markAirMissionFlown`(:17459)、`pushLog`(:7075)——`port-report.mjs` 会把它们漏掉，**必须用 `node scripts/port-crosscheck.mjs --start .. --end ..` 对拍**
-- [ ] `AirInputs`(:825 `export interface`) 搬进 `workbench-model.ts`；`createAirInputs`(:937，无 export) 保留为端口或同搬 model（二选一）
+- [ ] `AirInputs`(:825) + `createAirInputs`(:937) 整块搬进 `workbench-model.ts`（已核对 :825–927 无 facade 内部类型依赖，不增端口、不造回边）
+- [ ] 切口已逐行确认：2416–2549（2549 是 watch 的文档注释尾，**2550–2557 的 watch 留在 facade**）/ 2558–2592 / 5949–6086（5949 是分节横幅，6086 是 `airMissionReturnOrigins` 收尾）
+- [ ] 切片 `return` **40 个名**（14 const + `airState`/`airError` 解构 + 12 + 12），公开面仍为 1,013 键
 - 命名：**域对象叫 `airDomain`，不要叫 `air`**——facade 里已有 `airSupply` / `airUnitTransit` / `airMissionDomain` / `airCargoResolution` 四个 air 开头的域，再加一个 `air` 无法区分（另：`(air) => …` 这种回调参数在文件里出现几十次，`air` 这个名字太容易被误读成本地变量）
 - 验收：`npm run check` 绿 + 公开面 1,013 键不变（状态与派生仍在 `return` 里按原名暴露）
 
@@ -55,7 +57,7 @@
 - [ ] 开工先复测端口，**> 40 再拆一刀**
 - [ ] 边界：`captureAirBaseNow` 实际 18812–**18953**，分节横幅在 **18950**（横幅落在函数体内）⇒ 按横幅取 end 会把后半段切给下一批
 - [ ] 不含 §19 的 18003–18135（轰炸/炮击入口判据，跨域协调层，留 B5 之后）
-- [ ] 不含 `airUnits`(1916) / `airBoxMembers`(1928)（与地图/到货/轰炸共享，留 facade/core）
+- [ ] 不含 `airUnits`(1921) / `airBoxMembers`(1928)（与地图/到货/轰炸共享，留 facade/core）
 - 验收：`npm run check` 绿 + 公开面不变 + 文案/函数名双对拍 0 差
 
 ## 4. B3 移动三切片

@@ -237,9 +237,22 @@ node scripts/migration-report.mjs --out docs/specs/2026-11-20-workbench解构/mi
 
 ### 6.1.1 端口口径纠错（第三轮复核，2026-11-20）
 
-`port-report.mjs` 走 TypeScript 符号解析，快且类型准，但**已证实会漏收引用**：`createAirMissionDomain({ … })` 实参里的 `setAirStatus`（声明 :17440）、`markAirMissionFlown`（:17459）、`pushLog`（:7075）三个简写属性，工具一个都没报出来——它们既不在「端口」列表，也不在「直接 import」列表，说明是在聚合阶段被当作"零声明的全局"丢了。同区间里同样写法的 `recordSettlement` / `nameOf` / `acceptAir` 却正常报出，所以不是"简写属性一律不认"，而是这三个具体符号解析异常。
+`port-report.mjs` 走 TypeScript 符号解析，快且类型准，但**已证实会漏报**：`createAirMissionDomain({ … })` 实参里的 `setAirStatus`、`markAirMissionFlown`、`pushLog` 三个简写属性，工具一个都没报出来——它们既不在「端口」列表，也不在「直接 import」列表。同区间里同样写法的 `recordSettlement` / `nameOf` / `acceptAir` 却正常报出。
 
-因为我上一轮把端口数当成了既成事实（先报 15–20、再报 26、再报 25），**这次不再用单一工具的口径**：新增 `scripts/port-crosscheck.mjs`（纯语法、无反解析），规则是「区间内出现的标识符 − 区间内声明的名字 − setup 体里声明过的名字 = 端口」，与 `port-report` 交叉对拍。B2-1 三段实测：
+**（第四轮复核实测，推翻上一轮的猜测）** 上一轮我把原因写成"在聚合阶段被当作零声明的全局丢了"。插桩验证（插桩标记先确认已落盘，再跑）打印出的是：
+
+```
+HIT setAirStatus        decls=1 2485
+HIT markAirMissionFlown decls=1 2487
+HIT pushLog             decls=1 2489
+HIT recordSettlement    decls=1 7123   ← 对照组，正确定位到函数声明
+```
+
+即这三个简写属性被 `getSymbolAtLocation` 解析成了 `declarations = 简写属性节点自身`，于是 `allInside = decls.every(d => inRange(d))` 为真，聚类直接 `continue` 当成"区间内声明"，**方向不是漏收引用，而是把端口误判成本地**。所以工具报的是"没有这回事"，而不是"少了一条"。这类误判无法靠工具自证，只能靠另一套口径对拍。
+
+由此也得出一条更硬的结论：**端口清单的最终闸门是 `vue-tsc` 而不是这个工具**——切片里少一个端口会直接报未定义符号。B1 那 51 项是被类型检查验收的（漏一项就红），工具只负责开切前估规模。
+
+因为我上一轮把端口数当成了既成事实（先报 15–20、再报 26、再报 25），**这次不再用单一工具的口径**：新增 `scripts/port-crosscheck.mjs`（纯语法、无符号解析），规则是「区间内出现的标识符 − 区间内声明的名字 − setup 体里声明过的名字 = 端口」，与 `port-report` 交叉对拍。B2-1 三段实测：
 
 | 区间                            | port-report | crosscheck | 结论                                                                                                                  |
 | ------------------------------- | ----------- | ---------- | --------------------------------------------------------------------------------------------------------------------- |
@@ -249,8 +262,11 @@ node scripts/migration-report.mjs --out docs/specs/2026-11-20-workbench解构/mi
 
 **两处口径修正**：
 
-- `AirInputs`（:825 `export interface`）与 `createAirInputs`（:937，**无 export**）是**模块级**声明，不在 setup 体内。工具把它们错算成"端口"，crosscheck 把它们算成"外部"。裁决：`AirInputs` 属共享类型，按 P2-1 的先例搬进 `workbench-model.ts`；`createAirInputs` 不是导出符号，切片无法 import，只能**保留为端口**（或一并搬进 model，B2-1 开工时二选一）。
+- `AirInputs`（:825 `export interface`）与 `createAirInputs`（:937，**无 export**）是**模块级**声明，不在 setup 体内。工具把它们错算成"端口"，crosscheck 把它们算成"外部"。**已逐字段核对（:825–927 全部是 `string`/`number`/`boolean`/内联对象，无一处依赖 facade 内部类型；`createAirInputs` 只返回这个字面量）** ⇒ 两者都可整块搬进 `workbench-model.ts`，切片从 model 取，既不增端口也不造回边。这比上一轮写的"createAirInputs 只能留作端口"更省事。
 - 派生块的 12 项里 4 项随状态块一起进切片，**不重复计入端口**。
+- 三段各自的顶层声明（逐行实点，不是估计）：2416–2549 = **15 条**（14 个 `const` + 2492 的解构 `const { airState, airError }`）；2558–2592 = **12 条**；5949–6086 = **12 条**。⇒ 切片要 `return` 的公开名是 **40 个**（上一轮写 38 是漏算了解构出来的 `airState`/`airError`）。
+- 四条切口已逐行确认干净：**2549** 是 `watch` 那段文档注释的 `*/`（2550–2557 的 `watch` 与它的注释一起留在 facade）；**2558** 起新注释新声明；**2592** 是 `lastReduction` 的收尾、2593 空行；**5949** 是 `/* ── C9 空军交互：派生 ── */` 分节横幅；**6086** 是 `airMissionReturnOrigins` 的收尾，6087 空行、6088 起是下一组（`departureAvailable` 系列，不属于本批）。
+- 另修正一处行号：`airUnits` 的声明在 **1921**（tasks 里 B2-2 写的 1916 是它的文档注释首行，不是声明行）。
 
 ⇒ **B2-1 端口 = 25 项**。算法必须按"三段一起搬"来做减法，否则会把切片自己的声明当端口：2416–2549 报 23 项，但其中 `airBases`(5983) / `airTransportProfiles`(6027) / `airOverLimitAircraftInactive`(6047) / `airMissionRosterNow`(6063) **四项就声明在派生块里**，随派生块一起进切片 ⇒ 剩 19；派生块另外只需要 6 项（`activeSide`/`zocOnlySupplyFacts`/`onMapAirUnits`/`segmentGateQuery`/`constructionMarkerAirBaseId`/`constructionMarkerPieces`，`units`/`airUnits` 与状态块重复已去重）⇒ 19 + 6 = **25**。
 
