@@ -41,6 +41,13 @@ export const compareHex = (a: AiHex, b: AiHex): number => a.col - b.col || a.row
 export interface AiAirSnapshot {
   /** 已宣布、尚未收束的任务（需按 14.2f C→G 继续推进） */
   inProgress: boolean
+  /** 任务归属方（null = 没有挂起的任务） */
+  missionSide: AiSide | null
+  /**
+   * 任务能否由本 AI 驱动（2026-11-20）：任务归属**玩家**时 AI 不得代推
+   * （结算 / 损耗分配是攻方的操作）⇒ 等玩家，别抢。
+   */
+  driveable: boolean
   /** 本回合本阶段是否已经飞过任务（14.1c：一架一阶段一次；回归驱动每阶段只飞一次） */
   flownThisPhase: boolean
   /** 14.7d 低空扫射按原文只在**移动阶段**宣布（进击阶段的轰炸走 G 进击轰炸，不由本策略发起） */
@@ -140,6 +147,8 @@ export interface AiControlSnapshot {
   requirement: boolean
   /** 未选齐的撤退计划所涉各方 */
   retreat: boolean
+  /** 14.5：空袭拦截应答的守方（空袭挂起等待应答时才有意义） */
+  interceptAnswer: boolean
   /** 初设当前光标方（`setupSideCursor`） */
   setup: boolean
 }
@@ -287,6 +296,17 @@ export interface AiSnapshot {
   /** 批 2：C 段支线（换模式 / 突袭 / 铁路 / 装卸 / 建造标记 / 换轨） */
   branch: AiMoveBranchSnapshot
   air: AiAirSnapshot
+  /**
+   * 14.5：空袭的拦截应答挂起（非 null = 等守方决定派不派拦截机）。
+   *
+   * PVE 基础口径（用户 2026-11-20）：这一步归**守方 AI**——派自己的飞机或宣布不拦，
+   * 不该让玩家替对手点拦截 UI。
+   */
+  airInterception: {
+    missionSide: AiSide
+    candidates: readonly string[]
+    controlled: boolean
+  } | null
   barrage: AiBarrageSnapshot
   combat: AiCombatSnapshot
   supply: AiSupplySnapshot
@@ -332,6 +352,8 @@ export type AiAction =
   | { kind: 'consolidate'; keepId: string; removeId: string }
   /** 4.8a：按默认取舍（先毁 RE 最大的）把超堆叠格压回 10 RE 以内 */
   | { kind: 'overstackDestroy' }
+  /** 14.5：拦截应答（守方 AI：派己方拦截机，或宣布不拦） */
+  | { kind: 'interceptAnswer' }
   /** 14.2f：宣布并推进一次空军任务（低空扫射；C→G 由驱动逐段推进） */
   | { kind: 'airMission'; target: AiHex | null; aircraftId: string | null }
   | { kind: 'barrageTarget'; hex: AiHex }
@@ -850,6 +872,17 @@ export function decideAiAction(snapshot: AiSnapshot): AiAction {
     return { kind: 'answer', optionId: snapshot.awaitingOptionIds[0]! }
   }
 
+  // 1b) 14.5：空袭的拦截应答归守方 —— PVE 下 AI 替守方应答（派己机或宣布不拦）
+  if (snapshot.airInterception !== null) {
+    if (!snapshot.airInterception.controlled) {
+      return waitForSide(
+        snapshot.airInterception.missionSide === 'axis' ? 'soviet' : 'axis',
+        '拦截应答（14.5：不强制）',
+      )
+    }
+    return { kind: 'interceptAnswer' }
+  }
+
   // 会话停在回合准备（天气/先手判定）：workbench 仍挂着上一环节的旧闸门，只能交给推进
   if (snapshot.locked) return { kind: 'advance' }
 
@@ -922,6 +955,10 @@ export function decideAiAction(snapshot: AiSnapshot): AiAction {
 
   // 4) 空军任务（14.2f）：已宣布的推进收尾；否则在允许宣布的环节打一次低空扫射
   //    天气受限时引擎本就不放行 `air.mission`，这里不另设天气判据（按原文不飞）
+  //    2026-11-20：任务归属**玩家**时 AI 不得代推（结算 / 损耗分配是攻方的操作）⇒ 交还玩家
+  if (snapshot.air.inProgress && !snapshot.air.driveable) {
+    return waitForSide(snapshot.air.missionSide ?? snapshot.activeSide, '推进空军任务（14.2f C→G）')
+  }
   if (
     snapshot.air.inProgress ||
     (!snapshot.air.flownThisPhase &&

@@ -61,6 +61,7 @@ function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
       defender: true,
       requirement: true,
       retreat: true,
+      interceptAnswer: true,
       setup: true,
     },
     setupInProgress: false,
@@ -96,7 +97,10 @@ function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
       weatherNormal: true,
       target: null,
       aircraftId: null,
+      missionSide: null,
+      driveable: true,
     },
+    airInterception: null,
     barrage: {
       state: null,
       choices: [],
@@ -263,6 +267,8 @@ describe('批 2 AI C 段支线：纯决策', () => {
           weatherNormal: true,
           target,
           aircraftId: 'ac1',
+          missionSide: null,
+          driveable: true,
         },
       }),
     )

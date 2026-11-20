@@ -370,6 +370,11 @@ export const useTutorialStore = defineStore('tutorial', () => {
       return { hex: BOMB_HEX, buttonTexts: ['发起任务'] }
     }
     if (state.step === 'interception') {
+      /*
+       * 2026-11-20（用户「以 PVE 为基础」）：拦截应答归**守方** —— 教学局里苏军是 AI，
+       * 由 AI 派自己的 I.153（tutorial 的固定骰保证它被打回），玩家不替对手点拦截 UI。
+       */
+      if (aiSoviet.value) return {}
       if (!workbench.airInputs.interceptDeclared) {
         return { texts: ['拦截方宣布拦截（14.5：不强制）'] }
       }
@@ -378,7 +383,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
       }
       return { buttonTexts: ['③ 记录拦截应答并继续'] }
     }
-    if (state.step === 'flak' && workbench.airInputs.interceptDeclared) {
+    if (state.step === 'flak' && workbench.airInputs.interceptDeclared && !aiSoviet.value) {
       return { buttonTexts: ['结算拦截空战（14.5）'] }
     }
     if (state.step === 'airCombat') return { buttonTexts: ['② 结算空战并继续（14.3）'] }
@@ -868,13 +873,22 @@ export const useTutorialStore = defineStore('tutorial', () => {
     () => workbench.airState,
     (state) => {
       if (!active.value || state === null || state.finished) return
-      if (state.kind !== 'barrage' || state.targetHex === null) return
-      if (!sameHex(state.targetHex, BOMB_HEX)) return
+      // 教学的两类空袭：轰炸是 barrage，低空扫射是 hip_shoot——拦截骰都要固定
+      if (state.kind !== 'barrage' && state.kind !== 'hip_shoot') return
+      if (state.targetHex === null) return
+      /*
+       * 教学局的两类空袭（扫射 18.27 / 轰炸 19.28）都可能被 I.153 拦截
+       * （2026-11-20：拦截应答归苏军 AI）。拦截空战骰一并固定 ⇒ 苏机必被
+       * 打回（2d6=6 + ACV 1 − 3 = 4 ≤ 6），损失骰固定 1 ⇒ 我机无损失。
+       */
+      const isTutorialTarget =
+        sameHex(state.targetHex, BOMB_HEX) || sameHex(state.targetHex, TARGET_HEX)
+      if (!isTutorialTarget) return
       if (state.step === 'interception') {
         workbench.airInputs.interceptDie = 6
         workbench.airInputs.interceptLossDie = 1
       }
-      if (state.step === 'flak') {
+      if (state.step === 'flak' && sameHex(state.targetHex, BOMB_HEX)) {
         workbench.airInputs.flakDie = 12
         workbench.airInputs.lossDie = 1
       }

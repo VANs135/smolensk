@@ -59,6 +59,7 @@ function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
       defender: true,
       requirement: true,
       retreat: true,
+      interceptAnswer: true,
       setup: true,
     },
     setupInProgress: false,
@@ -94,7 +95,10 @@ function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
       weatherNormal: true,
       target: null,
       aircraftId: null,
+      missionSide: null,
+      driveable: true,
     },
+    airInterception: null,
     barrage: {
       state: null,
       choices: [],

@@ -92,8 +92,9 @@ describe('批 G：界面（源码守卫）', () => {
     )
     expect(source).toContain('isAirChipPicked(chip)')
     expect(source).toContain('sendAirToBox(airPickedChip)')
-    // 2026-11-20：独立的入盒动作条撤掉，入盒并入选中行（queue__active）
-    expect(source).not.toContain('queue__air-pickbar')
+    // 2026-11-20：合并行恢复在飞机阵列上方（queue__air-pickbar），带取消选格与说明
+    expect(source).toContain('queue__air-pickbar')
+    expect(source).toContain('取消选格')
     // 旧入口彻底删掉：下拉选「放入图外盒…」不再存在
     expect(source).not.toContain('queue__air-box')
     expect(source).not.toContain('放入图外盒')

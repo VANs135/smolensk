@@ -725,6 +725,12 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
    *   · 初设归属取 `setupSideCursor`。
    */
   const active = w.activeSide as AiSide
+  /*
+   * 反应段的行动方是**非行进方**（`actingSideFor`，game-lifecycle.ts:26）。
+   * 用户 2026-11-20：PVE 下 AI 执守方 ⇒ 反应段必须认得"现在轮到我"，否则
+   * 苏军在反应段永远 wait，不移动、不进攻。
+   */
+  const acting = (w.segmentGateQuery.side ?? active) as AiSide
   const defenderSide = w.combatDefenderSide as AiSide
   const question = ctx.session.awaiting ? ctx.session.question : null
   const requirement = w.combatRequirement
@@ -895,10 +901,16 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
     overstack: { active: overstackActive },
     setupRemaining,
     control: {
-      activeSide: aiControlsSide(controlMode, active),
+      // 反应段按 `acting`（非行进方）算控制权；其余阶段两者同值
+      activeSide: aiControlsSide(controlMode, acting),
       responder: question !== null && aiControlsSide(controlMode, question.responder as AiSide),
-      attacker: aiControlsSide(controlMode, active),
+      attacker: aiControlsSide(controlMode, acting),
       defender: aiControlsSide(controlMode, defenderSide),
+      // 14.5：拦截应答归守方 —— PVE 下 AI 替守方应答（用户 2026-11-20「以 PVE 为基础」）
+      interceptAnswer:
+        w.airState !== null &&
+        w.airState.step === 'interception' &&
+        aiControlsSide(controlMode, (w.airState.side === 'axis' ? 'soviet' : 'axis') as AiSide),
       requirement:
         requirement !== null &&
         aiControlsSide(controlMode, requirement.side === 'attacker' ? active : defenderSide),
@@ -941,7 +953,21 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
       weatherNormal: w.airInputs.weatherNormal,
       target: airTargets[0] ?? null,
       aircraftId: airPlane?.air.instanceId ?? null,
+      missionSide: airState !== null ? (airState.side as AiSide) : null,
+      driveable:
+        airState === null || aiControlsSide(controlMode, (airState.side ?? active) as AiSide),
     },
+    airInterception:
+      airState !== null && !airState.finished && airState.step === 'interception'
+        ? {
+            missionSide: airState.side as AiSide,
+            candidates: w.airInterceptorCandidates.map((item) => item.instanceId).sort(),
+            controlled: aiControlsSide(
+              controlMode,
+              (airState.side === 'axis' ? 'soviet' : 'axis') as AiSide,
+            ),
+          }
+        : null,
     barrage: {
       state:
         barrageState === null
@@ -1260,6 +1286,26 @@ function execute(
           w.setSpecialDisplacement(item.unitId, candidate)
       }
       return w.confirmSpecialCombatNow()
+    }
+    case 'interceptAnswer': {
+      /*
+       * 14.5：守方应答拦截 —— 有候选机就派第一架（教学局=I.153 起飞后被打回），
+       * 没有就宣布不拦。只做"应答 + 空战结算"，任务其余步骤仍归任务方。
+       */
+      if (w.airState === null || w.airState.step !== 'interception' || w.airState.finished)
+        return false
+      const candidate = w.airInterceptorCandidates[0]
+      if (candidate !== undefined) {
+        w.airInputs = {
+          ...w.airInputs,
+          interceptDeclared: true,
+          interceptorId: candidate.instanceId,
+        }
+        if (!w.declareInterceptionNow()) return false
+        return w.resolveInterceptionCombatNow()
+      }
+      w.airInputs = { ...w.airInputs, interceptDeclared: false }
+      return w.declareInterceptionNow()
     }
     case 'airMission': {
       /*

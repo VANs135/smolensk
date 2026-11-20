@@ -1669,6 +1669,29 @@ html[data-platform='android'] .queue__active .btn {
   font-size: var(--text-xs);
 }
 
+/* 合并行（飞机阵列上方）：与选中行同档 —— 单行不折、整行横滑、按钮 28px */
+html[data-platform='android'] .queue__air-pickbar {
+  flex-wrap: nowrap;
+  gap: 4px 6px;
+  padding: 3px 6px;
+  border-radius: 8px;
+  font-size: var(--text-xs);
+  overflow-x: auto;
+}
+
+html[data-platform='android'] .queue__air-pickbar .queue__label,
+html[data-platform='android'] .queue__air-pickbar .queue__hint {
+  font-size: var(--text-xs);
+}
+
+html[data-platform='android'] .queue__air-pickbar .btn {
+  flex: 0 0 auto;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: var(--text-xs);
+}
+
 html[data-platform='android'] .queue__actions .queue__hint {
   display: none;
 }
