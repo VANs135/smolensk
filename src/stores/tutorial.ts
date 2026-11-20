@@ -265,30 +265,36 @@ export const useTutorialStore = defineStore('tutorial', () => {
       )?.instanceId ?? null,
   )
 
-  /** 战机扫荡用的 Bf110：扫荡后认已飞过那枚，扫荡前取第一枚可出击的 */
-  const sweepPlaneId = computed(() => {
-    const planes = workbench.airUnits.filter(
-      (air) => air.side === 'axis' && air.aircraftId === SWEEP_AIRCRAFT_ID,
-    )
-    return (
-      planes.find((air) => air.missionsFlownThisPhase > 0)?.instanceId ??
-      planes.find((air) => air.airStatus === 'active' && air.missionsFlownThisPhase === 0)
-        ?.instanceId ??
-      null
-    )
-  })
+  /**
+   * 战机扫荡用的 Bf110：扫荡课选机阶段取第一枚可出击（未飞过）的。
+   * 扫荡完成后本步即 `done()`、目标不再被查询，故无需「认已飞过那枚」的分支。
+   */
+  const sweepPlaneId = computed(
+    () =>
+      workbench.airUnits.find(
+        (air) =>
+          air.side === 'axis' &&
+          air.aircraftId === SWEEP_AIRCRAFT_ID &&
+          air.airStatus === 'active' &&
+          air.missionsFlownThisPhase === 0,
+      )?.instanceId ?? null,
+  )
 
   /** 轰炸编成：两队 Ju.88 + 一队 Do.17z + 一队未飞过任务的 Bf110（扫荡那架不参轰炸） */
   const bombingPlaneIds = computed(() => {
-    const active = (aircraftId: string) =>
+    // 全部机型都按「激活且未飞过」筛：让玩家此前误用 Ju.88 / Do.17z 另飞任务时，
+    // 引导仍指向可点的那一枚，不会卡在已飞过、不可再选的飞机上（review 2026-11-20）。
+    const available = (aircraftId: string) =>
       workbench.airUnits.filter(
-        (air) => air.side === 'axis' && air.aircraftId === aircraftId && air.airStatus === 'active',
+        (air) =>
+          air.side === 'axis' &&
+          air.aircraftId === aircraftId &&
+          air.airStatus === 'active' &&
+          air.missionsFlownThisPhase === 0,
       )
-    const ju88 = active(BOMBING_AIRCRAFT[0][0]).slice(0, 2)
-    const do17z = active(BOMBING_AIRCRAFT[1][0]).slice(0, 1)
-    const bf110 = active(BOMBING_AIRCRAFT[2][0])
-      .filter((air) => air.missionsFlownThisPhase === 0)
-      .slice(0, 1)
+    const ju88 = available(BOMBING_AIRCRAFT[0][0]).slice(0, 2)
+    const do17z = available(BOMBING_AIRCRAFT[1][0]).slice(0, 1)
+    const bf110 = available(BOMBING_AIRCRAFT[2][0]).slice(0, 1)
     return [...ju88, ...do17z, ...bf110].map((air) => air.instanceId)
   })
 

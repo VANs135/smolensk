@@ -204,18 +204,29 @@ describe('教学模式：Vitebsk', () => {
     // 14.4c：I.153 的基地罩住 19.28 ⇒ 它才是轰炸的拦截机
     expect(ctx.w.airTargetInEnemyPatrolZone).toBe(true)
     expect(ctx.w.airInterceptionResponse?.eligibleFighterIds).toContain(i153.instanceId)
-    const activeOf = (aircraftId: string) =>
+    const availableOf = (aircraftId: string) =>
       ctx.w.airUnits.filter(
-        (air) => air.side === 'axis' && air.aircraftId === aircraftId && air.airStatus === 'active',
+        (air) =>
+          air.side === 'axis' &&
+          air.aircraftId === aircraftId &&
+          air.airStatus === 'active' &&
+          air.missionsFlownThisPhase === 0,
       )
     const expectedBombingIds = [
-      ...activeOf('ax-aircraft-ge-ju-88').map((air) => air.instanceId),
-      ...activeOf('ax-aircraft-ge-do-17z').map((air) => air.instanceId),
-      ...activeOf('ax-aircraft-ge-bf-110')
-        .filter((air) => air.missionsFlownThisPhase === 0)
-        .map((air) => air.instanceId),
+      ...availableOf('ax-aircraft-ge-ju-88').map((air) => air.instanceId),
+      ...availableOf('ax-aircraft-ge-do-17z').map((air) => air.instanceId),
+      ...availableOf('ax-aircraft-ge-bf-110').map((air) => air.instanceId),
     ]
     expect(expectedBombingIds).toHaveLength(4)
+
+    // review 2026-11-20：把第一架 Ju.88 标成「已飞过」⇒ 引导应跳过它、指向第二架；
+    // 恢复后重新指回第一架。钉住「所有机型都按激活且未飞过筛」这条健壮性口径。
+    const firstJu88 = ctx.w.airUnits.find((air) => air.instanceId === expectedBombingIds[0])!
+    firstJu88.missionsFlownThisPhase = 1
+    expect(tutorial.currentStep?.target.airInstanceId).toBe(expectedBombingIds[1])
+    firstJu88.missionsFlownThisPhase = 0
+    expect(tutorial.currentStep?.target.airInstanceId).toBe(firstJu88.instanceId)
+
     for (const id of expectedBombingIds) {
       expect(tutorial.currentStep?.target.airInstanceId).toBe(id)
       ctx.w.toggleAirMissionUnit(id)
