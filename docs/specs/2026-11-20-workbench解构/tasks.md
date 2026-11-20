@@ -88,6 +88,29 @@
 
 - 验收：`npm run check` 绿 + `tests/stores/*` 日志/撤销/存档用例绿 + 公开面键集不变
 
+### B2-2a 空军动作块（**已落地 2026-11-21**）
+
+- [x] 区间 `17197–17992` 全数搬进 `workbench-air.ts`：**796 行 / 16 声明（14 function + 2 computed）**
+- [x] 逐字对拍：搬入块 796 行 ↔ HEAD 区间 796 行，**只去 `ports.` 前缀（`.value` 与空白保留）⇒ 不一致 0 行**
+- [x] 端口实装 **50 项 = 按值 43 + 晚绑定 7**（施工单预算 50 项 ✓；本批新增 20 = 按值 13 + 晚绑定 7，其余 14 是 B2-1/B2-1b 既有）
+- [x] 剪掉 6 个既有端口（`isAirInOffMapBox`/`onMapAirUnits`/`airUnitsAt`/`airDistanceFromRealBase`/`airUnitsInHex`/`applyAirCargoDelivery`）：接口成员、`createAirDomain` 解构、facade 实参（含 `get onMapAirUnits`）三处同删；实测 ports 实参里残留 **0** 处
+- [x] 切片内既有 `ports.onMapAirUnits` 改回裸名 **3 处**（它现在是切片内部声明）
+- [x] `return` **104 名 = 88 + 16**，重复 **0**；facade 解构回补 21（16 声明 + 5 回补），去重 5 行（那 5 个本来就在 16 声明里，回补是重复计算）
+- [x] `movementPhaseOf`（`export function`）+ `SpecialCombatPending`/`SpecialTransportSplit`/`SpecialDisplacementItem`（3 个 interface）搬进 `workbench-model.ts`；facade 用 `export type {…} from './workbench-model'` + `export { movementPhaseOf } from './workbench-model'` 原样转出，**外部导入路径不变**
+- [x] 回边归零：切片 `import … from './workbench'` 实测 **0 处**
+- [x] 规模：`workbench.ts` **30,074 → 29,253 行（−821 = 796 搬走 + 25 条搬后失效的 import/解构项被删）**；`workbench-air.ts` **1,201 → 2,070**；`workbench-model.ts` **4,104 → 4,162**
+- [x] 门禁：`npm run typecheck` 通过 → `npm run check` **623 文件 / 6,256 用例 / 195.66s / exit 0**；`arch` 源码 950（不变）；`audit:ports` 5 个域全绿
+- [x] 公开面快照 1,013 键不变（`workbench-public-surface` 用例绿）
+
+**落地时才暴露的四个坑（施工单里没有）**：
+
+1. **晚绑定改写不能只匹配 `x.value` 前面不是 `.`**：`...airUnloadLedger.value`（展开运算符）的 `.` 会被 `(?<![\w.$])` 当成属性访问而漏掉 ⇒ `airUnloadLedger.value = { ...airUnloadLedger.value, … }` 只改到一半。必须单独处理 `...x.value`。实测该处补漏 1 处。
+2. **"回补 5 项"在 `return` 侧是重复劳动**：那 5 个名字**本身就是区间内声明**（16 声明里就有），`return` 与 facade 解构各补一遍 ⇒ 对象字面量重复键（TS1117）+ 解构重复绑定。正确做法：回补清单只用于"确认它们确实在 return 里"，不额外插入。
+3. **type-only import**：`verbatimModuleSyntax` 打开着，`AirMissionJoinChoice`/`DeadPileEntry`/`SpecialCombatPending`/`AirMissionCargo`/`AirMissionSegment`/`AirTargetHexFacts`/`SupplyInteractionState`/`AirUnitTransportState` 必须写 `type X`；`createGroundMovementDomain` 只在 `ReturnType<typeof …>` 里出现 ⇒ 必须 `import type`（否则 eslint `consistent-type-imports` 报红）。
+4. **"删除自身行号"批量清 unused 会误删整条 import**：`import { airCargoTransportT, checkAirTransportMovementHandoff } from …` 里只有后者未用，按行删把前者也带走，后续 `airCargoTransportT` 找不到名。清 unused 必须按**导入名**删，不能按行删。
+
+**第五个坑（测试与切片脱节，与 B2-1b 同源）**：`tests/engine/single-implementation.test.ts` 有两处直接 `readSource('src/stores/workbench.ts')` 找 `weatherLimited: airInputs.value…` 这段字；搬到切片后守门假红。改成 `readStoreSource()`（facade + 全部切片聚合）后 15 用例全绿。⇒ **凡是"源码里必须有这段字"的守卫，一律走 `readStoreSource()`**。
+
 ## 2. B1 轰炸（已落地，`e0f…`→待填）
 
 - [x] 新建 `src/stores/workbench-barrage.ts`（1,479 行）：`createBarrageDomain(ports)` ← section 8（1,212 行 / **39 动作 + 18 账本派生**）
@@ -133,12 +156,12 @@ B2-1 只搬了派生的一半——`5949–6086` 那一簇；`5701–6321` 的 *
 
 B2-1 落地后行号全部漂移（facade 少了 387 行），旧编号 **全部作废**。按符号名重新定位、用 `port-crosscheck.mjs` 扣掉"已属切片内部"的 40 个名字后实测：
 
-| 批次      | 当前区间      | 内容                                                                                                                                                                                                                                                                                                                        | 真端口 | 行数 |
-| --------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---- |
-| **B2-2a** | `17197–17992` | `beginAirMissionNow` … `captureAirBaseNow`（含 `confirmAirCombatNow`、`airTargetFactsAt`、`airTypeCanPerformKind`、`airPlaneCanPerformKind`、`airMissionTargetCandidates`、`resolveAirCargoNow`、`applyAirCargoDelivery`）                                                                                                  | **35** | 796  |
-| **B2-2b** | `19283–19720` | `airMissionCargoCapacityNow` / `airCargoLossPending` / `queueAirCargoLoss` / `confirmAirCargoLossNow` / `hasCargoOwnership` / `resolveFlakNow` / 任务执行前半（`beginAirTargetHexPickNow`、`runAirMissionNow`、`previewAirCombatRoles`、`autoResolveAirMissionNow`、`finishAutomaticAirReturn`、`finishAbortedAirMission`） | **27** | 438  |
-| **B2-2c** | `19729–20047` | `beginAirBarrageNow` / `runBarrageChainNow` / `airMissionResultReady` / `confirmAirMissionNow` / `settleAirMissionNow` / `recordAbortedAirBarrage` / `completeAirCargoReturn` / `completeAirReturnNow`                                                                                                                      | **31** | 319  |
-| **B2-2d** | `20048–20490` | `cancelAir` / `toggleAirstripBase` / `refitBaseNow` / `beginRefitNow` / `confirmRefitSelectionNow` / `toggleRefitAircraft` / `cancelRefitNow` / `pickRefitPayDump` / `confirmRefitPaymentNow` / `transferAircraftNow` / `toggleAirReductionUnit` / `reduceBaseNow` / `airMissionKindLabel` / `airStatusLabel`               | **21** | 443  |
+| 批次         | 当前区间      | 内容                                                                                                                                                                                                                                                                                                                        | 真端口 | 行数 |
+| ------------ | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---- |
+| **B2-2a** ✅ | `17197–17992` | `beginAirMissionNow` … `captureAirBaseNow`（含 `confirmAirCombatNow`、`airTargetFactsAt`、`airTypeCanPerformKind`、`airPlaneCanPerformKind`、`airMissionTargetCandidates`、`resolveAirCargoNow`、`applyAirCargoDelivery`）                                                                                                  | **35** | 796  |
+| **B2-2b**    | `19283–19720` | `airMissionCargoCapacityNow` / `airCargoLossPending` / `queueAirCargoLoss` / `confirmAirCargoLossNow` / `hasCargoOwnership` / `resolveFlakNow` / 任务执行前半（`beginAirTargetHexPickNow`、`runAirMissionNow`、`previewAirCombatRoles`、`autoResolveAirMissionNow`、`finishAutomaticAirReturn`、`finishAbortedAirMission`） | **27** | 438  |
+| **B2-2c**    | `19729–20047` | `beginAirBarrageNow` / `runBarrageChainNow` / `airMissionResultReady` / `confirmAirMissionNow` / `settleAirMissionNow` / `recordAbortedAirBarrage` / `completeAirCargoReturn` / `completeAirReturnNow`                                                                                                                      | **31** | 319  |
+| **B2-2d**    | `20048–20490` | `cancelAir` / `toggleAirstripBase` / `refitBaseNow` / `beginRefitNow` / `confirmRefitSelectionNow` / `toggleRefitAircraft` / `cancelRefitNow` / `pickRefitPayDump` / `confirmRefitPaymentNow` / `transferAircraftNow` / `toggleAirReductionUnit` / `reduceBaseNow` / `airMissionKindLabel` / `airStatusLabel`               | **21** | 443  |
 
 （合并量过一次：`19283–20490` 一起切要 **90 项**、扣掉切片内部仍剩 65 项，超红线 ⇒ 必须拆。）
 

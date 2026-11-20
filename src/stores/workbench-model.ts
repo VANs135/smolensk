@@ -86,6 +86,7 @@ import {
   type TraceSupplyFacts,
   type TraceSupplySourceView,
   type TraceSupplyUnitView,
+  type TransportGroupResult,
 } from '@/engine/rules'
 
 /**
@@ -3944,6 +3945,66 @@ export interface BattleTarget {
   hex: HexRef
   /** 目标格内参与防御的单位（实例 id，按摆放顺序） */
   defenderIds: string[]
+}
+
+// ── B2-2a：从 facade 迁入（空军动作切片要用；留在 facade 会造回边）──
+/**
+ * 9.14c：运输点组的**算子级分配**（哪些被夺取、哪些被位移）
+ *
+ * 规则把「混合类型时哪些被夺取」交给**拥有者玩家**选择，故界面须让他能改；
+ * 默认值取引擎 `planTransportSplit` 的方案（能精确拼出表值时即精确）。
+ */
+export interface SpecialTransportSplit {
+  group: TransportGroupResult
+  /** 该组算子的**原主**（9.14c 的「拥有者玩家」；取消勾选时按它复原归属） */
+  ownerSide: Side
+  counters: { id: string; label: string; points: number; loadedT: number }[]
+  /** 玩家当前勾选为「被夺取」的算子 */
+  capturedIds: string[]
+  exact: boolean
+  detail: string
+}
+
+/** 9.14c/d：待玩家选择**落点**的位移项（在地图上点格） */
+export interface SpecialDisplacementItem {
+  unitId: string
+  label: string
+  kind: 'transport' | 'extender'
+  detail: string
+  /** 合法落点（9.14c：格距 ≤ 上限的任意图内格；9.14d：特殊拖取距离内且该格有追溯补给） */
+  candidates: HexRef[]
+  chosen: HexRef | null
+}
+
+/** 9.14：一次「进入敌方设施格」触发的全部待决事项 */
+export interface SpecialCombatPending {
+  hex: HexRef
+  enteringSide: Side
+  /** 9.14c：各运输点组的分配（玩家可改） */
+  splits: SpecialTransportSplit[]
+  /** 9.14c/d：待选落点的位移项 */
+  items: SpecialDisplacementItem[]
+  /** 即时处置的说明（dump/基地/工事的夺取与摧毁） */
+  notes: string[]
+  /** 本次掷骰（展示与复核） */
+  dice: { dump?: number; trucks?: number; wagons?: number }
+}
+
+/**
+ * 移动环节阶段的映射（6.0/6.3a/11.0a）
+ *
+ * A 整备段、B 增援段、D 补给段、F 战斗段、H 清理段都**没有移动环节**，故落到 `movement`
+ * 只为给引擎一个合法枚举值；移动本身在 `beginMoveFor` 里按非移动段明确拦下（同 C5 既有做法）。
+ */
+export function movementPhaseOf(phase: ConsolePhase): MovementSegmentPhase {
+  switch (phase) {
+    case 'movement':
+    case 'reaction':
+    case 'exploitation':
+      return phase
+    default:
+      return 'movement'
+  }
 }
 
 // ── B2-1：空军输入类型（原在 workbench.ts 模块级；切片需要它，按 P2-1 先例搬到这里） ──

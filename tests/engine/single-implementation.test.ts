@@ -16,6 +16,7 @@ import { requiresPanzerGroupSpAssignment } from '@/engine/rules/setup'
 import { turnDate } from '@/engine/turn-driver'
 import { TURN_TRACK, toBattleUnitView, toConsoleUnit, turnDateOf } from '@/stores'
 import { unitChoices } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * M2 口径收敛的**守门用例**（同一规则不得有两套实现）
@@ -180,7 +181,7 @@ describe('M2⑥ 轰炸成本与防空阈值：表模块只转发、产品路径�
 
 describe('M6② 9.13 逐单位进击 + 14.7d 低空扫射 + 专规 1.5 气象闸：口径与接线守门', () => {
   it('源码守门：操作台把**逐单位**的 AR/DG 交给引擎（否则只标记一个单位）', () => {
-    const store = stripComments(readSource('src/stores/workbench.ts'))
+    const store = stripComments(readStoreSource())
     expect(store).toMatch(/attackerUnits:\s*combatAttackers\.value\.map/)
     expect(store).toContain('ar: unit.raw.ar')
     expect(store).toContain('dg: unit.mode.dg')
@@ -196,7 +197,7 @@ describe('M6② 9.13 逐单位进击 + 14.7d 低空扫射 + 专规 1.5 气象闸
   it('源码守门：受限飞行的阶段闸接在空任务链上（专规 1.5）', () => {
     const interaction = stripComments(readSource('src/engine/rules/air-interaction.ts'))
     expect(interaction).toContain('isAirMissionAllowedInPhase(')
-    const store = stripComments(readSource('src/stores/workbench.ts'))
+    const store = stripComments(readStoreSource())
     expect(store).toContain(
       'weatherLimited: airInputs.value.flyingAllowed && !airInputs.value.weatherNormal',
     )
