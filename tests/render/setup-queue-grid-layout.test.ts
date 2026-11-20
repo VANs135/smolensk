@@ -71,12 +71,16 @@ describe('初设队列：2026-11-20 手感与正确性', () => {
   const setupPanel = readFileSync('src/components/setup/SetupPanel.vue', 'utf8')
   const table = readFileSync('src/views/GameTableView.vue', 'utf8')
 
-  it('★ 飞机「入盒」常显：未选中只压暗待命，动作条高度不随选中态跳变', () => {
-    expect(queue).toContain(':aria-disabled="airPickedChip === null"')
-    expect(queue).toContain('queue__air-pickbar-btn--idle')
-    // 不再按选中态整枚出现/消失；也不在清点窗口摆 disabled 灰按钮
-    expect(queue).not.toContain('v-if="airPickedChip !== null"')
+  it('★ 飞机「入盒」并入选中行：机型 · 剩 N · 说明 · 取消选格 · 入盒（2026-11-20）', () => {
+    // 旧的独立动作条整体撤掉
+    expect(queue).not.toContain('queue__air-pickbar')
     expect(queue).not.toContain('queue__air-pickbar--empty')
+    // 选中行里：说明文字在「取消选格」左边，「入盒」（sendAirToBox）在「取消选格」右边
+    expect(queue.indexOf('queue__hint')).toBeGreaterThan(-1)
+    expect(queue.indexOf('取消选格')).toBeGreaterThan(queue.indexOf('queue__hint'))
+    expect(queue.indexOf('sendAirToBox(airPickedChip)')).toBeGreaterThan(queue.indexOf('取消选格'))
+    // 未选中时入盒只压暗待命（aria-disabled），不摆 disabled 灰按钮
+    expect(queue).toContain(':aria-disabled="airPickedChip === null"')
     expect(queue).not.toContain(':disabled=')
   })
 

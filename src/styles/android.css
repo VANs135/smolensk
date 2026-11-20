@@ -517,8 +517,7 @@ html[data-platform='android'] .gt__rail,
 html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools .btn,
 html[data-platform='android'] .gt__drawer,
 html[data-platform='android'] .queue__group,
-html[data-platform='android'] .queue__active,
-html[data-platform='android'] .queue__air-pickbar {
+html[data-platform='android'] .queue__active {
   --color-ink: var(--glass-ink);
   --color-command-ink: var(--glass-ink);
   --color-command-muted: var(--glass-ink-dim);
@@ -631,15 +630,6 @@ html[data-platform='android'] .queue__air-col {
 
 html[data-platform='android'] .queue__air-array {
   flex-wrap: nowrap;
-}
-
-/* 选中枚的动作条在横向带里只占自己那一栏宽，不把整条带撑断行 */
-html[data-platform='android'] .queue__air-pickbar {
-  position: sticky;
-  left: 0;
-  width: fit-content;
-  max-width: 92vw;
-  z-index: 2;
 }
 
 /* 初设按钮缩小（用户 2026-11-19 第 1 条）：确认 / 一键预设 / 更多 同排、紧凑一档 */
@@ -1517,10 +1507,7 @@ html[data-platform='android'] .rule-note p.muted {
   display: block;
 }
 
-/* 初设选中单位后的操作提示（无基地格 14.1a 等）属说明文字 ⇒ 安卓隐藏（用户 2026-11-19） */
-html[data-platform='android'] .queue__active .queue__hint {
-  display: none;
-}
+/* 2026-11-20（用户）：14.1a 的说明文字不再隐藏——它现在与按钮同排，放在「取消选格」左边 */
 
 /* ══════════ 安卓操作习惯整合（用户 2026-11-19 十一条）══════════
  * ① 单位栏横滑修复：初设条挂在地图视口（touch-action:none）内，祖先 none 拦截横滑
@@ -1585,11 +1572,6 @@ html[data-platform='android'] .shell[data-view='home'] .shell__save {
   display: none;
 }
 
-/* ⑤ 动作条恒占位：空态不塌陷、不跳变 */
-html[data-platform='android'] .queue__air-pickbar {
-  min-height: 30px;
-}
-
 /* 灰色 = 未激活 / 已行动（贴图自带数值，无需文字）；桌面与安卓同一份在 DecisionQueue.vue */
 
 html[data-platform='android'] .queue__air-flag {
@@ -1642,16 +1624,49 @@ html[data-platform='android'] .gt__drawer span {
   word-break: break-word;
 }
 
-/* ══════════ 初设选中态再瘦身 + 盒表去图表段（用户 2026-11-19）══════════
- * ① 点单位后：番号 / 剩 N / 取消选格按钮一律不显示（桌面保留）；
- *    补给拆分按钮（queue__chunks）是功能件 ⇒ 保留可见；
- * ② 「已落 X · 剩 Y」结果文字安卓隐藏（算子计数本身可见）；
- * ③ 盒表抽屉：隐藏「表格」段（图表栏）与「盒 N 张卡」头行，只留盒卡与弹窗。
+/* ══════════ 初设选中态：与「入盒」合成一条（用户 2026-11-20）══════════
+ * 选中行 = 机型 · 剩 N · 说明文字 · 取消选格 · 入盒，安卓压成一档字号、单行不折；
+ * 放不下时整行横滑（滚动条已全局隐藏）。
  * ══════════════════════════════════════════════════════════════════════════ */
-html[data-platform='android'] .queue__active .queue__label,
-html[data-platform='android'] .queue__active .queue__pending,
-html[data-platform='android'] .queue__active > .btn {
-  display: none;
+html[data-platform='android'] .queue__active {
+  flex-wrap: nowrap;
+  gap: 4px 6px;
+  padding: 4px 6px;
+  font-size: var(--text-xs);
+  overflow-x: auto;
+}
+
+html[data-platform='android'] .queue__active .queue__label {
+  font-size: var(--text-xs);
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-platform='android'] .queue__active .queue__pending {
+  font-size: var(--text-xs);
+  flex: 0 0 auto;
+}
+
+html[data-platform='android'] .queue__active .queue__hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--glass-ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 两枚按钮同高同档：取消选格在左、入盒在右 */
+html[data-platform='android'] .queue__active .btn {
+  flex: 0 0 auto;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: var(--text-xs);
 }
 
 html[data-platform='android'] .queue__actions .queue__hint {

@@ -418,13 +418,27 @@ function sideMark(side: 'axis' | 'soviet'): string {
       <!-- M3：原来的「完成初设」已并入上面的唯一主入口（条件同 `allPlaced && 无游标 && 未确认`） -->
       <!-- H5：撤回入口已并入上面的同一行 -->
 
+      <!--
+        2026-11-20（用户）：选中行与「入盒」合成一条 ——
+        机型 · 剩 N · 说明文字 · 取消选格 · 入盒，一路从左排到右；
+        说明文字在「取消选格」左边，两个按钮并排（取消在左、入盒在右）。
+      -->
       <div v-if="placing !== null" class="queue__active">
         <strong class="queue__label" :title="placing.label">{{ placing.label }}</strong>
         <span class="queue__pending num">剩 {{ placing.remaining }}</span>
-        <BaseButton variant="ghost" size="sm" @click="setup.cancelPlacement()">取消选格</BaseButton>
         <span v-if="placing.kind === 'air' && placing.candidates.length === 0" class="queue__hint">
-          无基地格（14.1a）：点这一枚上方的「入盒」
+          无基地格（14.1a）：点「入盒」
         </span>
+        <BaseButton variant="ghost" size="sm" @click="setup.cancelPlacement()">取消选格</BaseButton>
+        <BaseButton
+          v-if="placing.kind === 'air'"
+          variant="primary"
+          size="sm"
+          :aria-disabled="airPickedChip === null"
+          @click="airPickedChip !== null && sendAirToBox(airPickedChip)"
+        >
+          入盒
+        </BaseButton>
         <div v-if="placing.category === 'supply'" class="queue__chunks">
           <button
             v-for="c in setup.placingChunkChoices"
@@ -616,24 +630,9 @@ function sideMark(side: 'axis' | 'soviet'): string {
             -->
             <div v-if="stack.key === 'air'" class="queue__air">
               <!--
-                选中的那一枚：在阵列**正上方**给一条动作条（「入盒」）。
-                2026-11-19（用户「突变影响操作」）：动作条**恒占位**（空态隐藏内容）；
-                （用户「不需要文字」）机型名去掉——选中态由算子高亮表达，只留「入盒」钮。
-                2026-11-20（用户「按钮常显，别让窗口一跳一跳」）：按钮**恒显**；未选中时压暗
-                并标 aria-disabled（批 3 纪律：清点窗口不摆 `disabled` 灰按钮），点击不落账。
-                此前按选中态整枚出现/消失，动作条高度随之变化，初设框会跳。
+                2026-11-20（用户）：动作条整体撤掉 ——「入盒」已并入上方的选中行
+                （机型 · 剩 N · 说明 · 取消选格 · 入盒），不再单独占一行。
               -->
-              <div class="queue__air-pickbar">
-                <BaseButton
-                  variant="primary"
-                  size="sm"
-                  :class="{ 'queue__air-pickbar-btn--idle': airPickedChip === null }"
-                  :aria-disabled="airPickedChip === null"
-                  @click="airPickedChip !== null && sendAirToBox(airPickedChip)"
-                >
-                  入盒
-                </BaseButton>
-              </div>
               <div
                 v-for="group in airFaceSections"
                 :key="group.key"
@@ -1140,33 +1139,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
  * 选中某一枚后，在四栏**正上方**出现动作条（用户 2026-11-19：入盒按钮在飞机上方）。
  * 做成横条而不是贴着算子边缘的浮标：底部 sheet 滚动时不会被裁掉半个。
  */
-.queue__air-pickbar {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 4px 8px;
-  border: 1px solid var(--color-command-teal);
-  border-radius: 12px;
-  background: var(--color-command-teal-bg);
-}
-
-.queue__air-picklabel {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--color-command-teal);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 「入盒」未选中时的待命态：只压暗，不改变高度（按钮常驻，避免初设框跳变） */
-.queue__air-pickbar-btn--idle {
-  opacity: 0.55;
-  cursor: default;
-}
 
 .queue__air-chip {
   position: relative;
