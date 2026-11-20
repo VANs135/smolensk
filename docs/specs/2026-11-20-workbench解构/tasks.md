@@ -35,11 +35,16 @@
 - [x] **源码守卫测试改造**：tests 里 35 处 `readFileSync('src/stores/workbench.ts')` → `tests/shared/store-source.ts` 的 `readStoreSource()`（facade + 全部 `workbench-*.ts` 切片；**切片排在前**，否则 `indexOf('function X')` 会撞到 facade 的同名转发壳）
 - 验收：`npm run check` 绿
 
-## 3. B2 空军
+## 3. B2 空军（**2026-11-20 重划：按域切，不按分节切**）
 
-- [ ] `flows/air-ops.ts` ← section 10（560 / 16）+ section 11（999 / 22）
-- [ ] 暴露 `clearAir`(4)、`acceptAir`(2)、`setAirStatus`(2)、`applyAirStepLoss`(2)、`setAirMissionKind`、`setAirTargetFromText`
-- 验收：同上（≈29,422 行）
+原计划「section 10 + section 11」实测端口 **82 项**（43 + 65），超过「> 40 就再拆」的红线，故重划为**空军域整体**。详见 spec §6.1。
+
+- [ ] 新建 `src/stores/workbench-air.ts`：**状态块 2416–2592（26 个 ref）+ §18 全部（16 函数 / 8 const）+ §19 的空军半段（18503–18851）+ 散落空军函数（18092–20860）**
+- [ ] 开工第一步：`node scripts/port-report.mjs --start <首> --end <尾>` 对齐区间，**端口 > 40 就再拆一刀**，不要硬切（B1 那三个一次性脚本已固化成这个 `scripts/port-report.mjs`）
+- [ ] 判据：`airUnits`(1916) / `airBoxMembers`(1928) **不进切片**（与地图/到货/轰炸共享，属于 facade 或 core 的 state）；`SUPPLY_STATUS_LABELS`、`round` 类工具函数走 import，不做端口
+- [ ] §19 的另一半（轰炸/炮击入口判据 18003–18198）**不进本批**——它是跨轰炸+空军的协调层，留到 B5 之后
+- [ ] 预计端口 15–20 项、切口 ≈1,100–1,300 行 ⇒ `workbench.ts` 应落 ≈29,900 ± 100
+- 验收：`npm run check` 绿 + 公开面 1,013 键不变 + 文案/函数名双对拍 0 差
 
 ## 4. B3 移动三切片
 
