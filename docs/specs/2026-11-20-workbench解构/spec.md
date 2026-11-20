@@ -467,6 +467,36 @@ B2-1 的 `AirDomainPorts` 里有 **5 个成员会被后续批次搬进切片本�
 
 ---
 
+### 6.1.8 B3-1 落地（2026-11-21 实测，移动交互域起步）
+
+搬 `7527–7969`（**445 行 / 21 顶层声明**：15 `function` + 6 `const`）进新切片 `workbench-move.ts`：选子 → 范围 → 逐格 → 结束/撤销、20.0a 拆分窗口、4.3 初设摆位（Setup Wiggle）。
+
+| 量                    | 搬前   | 搬后                                        |
+| --------------------- | ------ | ------------------------------------------- |
+| `workbench.ts` 行     | 28,083 | **27,702**（−381）                          |
+| `workbench-move.ts`   | —      | **607**（新建）                             |
+| `workbench-model.ts`  | 4,177  | **4,208**（+31：接口 21 + 文档 8 + import） |
+| `MovementDomainPorts` | —      | **40**（37 按值 + 3 晚绑定）                |
+| 公开面键（1,013）     | 1,013  | 1,013（不变）                               |
+
+**台账口径修正**：原估「section 3 = 451 行 / 15 个函数」→ 实测 **445 行 / 21 个声明**。多出的 6 个是 `const` 状态与派生（`settlementInProgress` / `breakdownWindows` / `setupWiggleParents` / `setupWiggleOn` / `setupWiggleRemaining` / `breakdownTimingOf`）——迁移清单只统计 `function`，**按清单数区间会漏掉状态块**。
+
+**本批的结构性发现：建域点的位置由「谁先吃这些函数」决定，而它直接决定端口成本。**
+
+- 反向约束：`nameOf` / `applyMovePatches` / `refuseWhileSettling` / `closeBreakdownWindows` 在 1113–1122、1567、2159、2222、7066 就被 `groundMovement` / 轰炸 / 空军当端口吃掉，早于区块位置（7527）。
+- 若把移动域提前到 `groundMovement`(1110) 之前：需要为 18 项状态开 getter，其中 `moveBlocked` / `moveInteraction` 是从 `groundMovement` 解构来的 ⇒ 与它成环（只能靠 getter 晚读绕开）。
+- 原地建域（7527）：只要 **3** 个 getter（`breakdownPool` 18046 / `initialSetupInProgress` 19481 / `gates` 20698），代价是那 4 个名字在 facade 各留 **一行薄转发**（`function nameOf(id) { return movementDomain.nameOf(id) }`）。⇒ 选后者。
+- 一般化判据：**先数「建域点之前的 `const` 有多少」**（= getter 数）与「建域点之前被外域消费的函数有多少」（= 薄转发数），取总代价小的那个。
+
+**其它两处口径**：
+
+1. **`choices` 的端口类型是 `ComputedRef<UnitRecordView[]>`**，不是 `{ unit: ConsoleUnit; selected: boolean }[]`。`unitChoices()` 返回单位记录视图；按字面猜类型会让公开面 `choices` 变窄，连带 2 个组件 + 2 个测试报 TS2339。
+2. **`TransportHandlingUndoEntry`（facade 1453 的非导出接口）必须随批搬进 `workbench-model.ts`**；漏在 facade 补 `import type` 时，`ref<T[]>` 的 `T` 解析失败 ⇒ 4 处 `TS7006` 隐式 any，症状像「函数体搬坏了」。
+
+**取证**：`npm run typecheck` 通过 → `npm run check` **623 文件 / 6,256 用例 / 196.38s / exit 0**；`arch` 源码 **951**；`audit:ports` 报 `createMovementDomain @7520` 按值 **37** 项全安全（37 + 3 getter = 40）；切片回边 **0 处**；公开面 **1,013 键不变**。
+
+---
+
 ## 7. 搬运的 8 条机械规则
 
 1. **类型先立**：`export type Workbench = ReturnType<typeof useWorkbenchStore>`；切片之间只互认 `Ports` 接口，**不要 import 对方的返回类型**（会造类型环）。

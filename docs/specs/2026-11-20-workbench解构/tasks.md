@@ -269,7 +269,34 @@ B2-1 落地后行号全部漂移（facade 少了 387 行），旧编号 **全部
 
 ## 4. B3 移动三切片
 
-- [ ] `workbench-move.ts` ← section 3（451 / 15）
+- [x] `workbench-move.ts` ← section 3（台账原估 451 行 / 15 个函数 ⇒ **实测 445 行 / 21 个声明**：15 `function` + 6 `const`；**已落地 2026-11-21**）
+
+### B3-1 移动交互（**已落地 2026-11-21**）
+
+- [x] 搬 `7527–7969`：**445 行 / 21 顶层声明（15 function + 6 const）** —— `nameOf`(7530) / `unitNameOf`(7539) / `applyMovePatches`(7544) / `settlementInProgress`(7570, computed) / `refuseWhileSettling`(7585) / `beginMoveFor`(7587) / `breakdownWindows`(7678, ref) / `setupWiggleParents`(7686, ref) / `setupWiggleOn`(7689, computed) / `setupWiggleRemaining`(7691, computed) / `setupWiggleEligible`(7694) / `setupBreakdownCandidates`(7706) / `openBreakdownWindow`(7713) / `closeBreakdownWindows`(7725) / `breakdownTimingOf`(7733, const 箭头) / `canCreateBreakdownNow`(7753) / `breakdownRecordChoicesFor`(7775) / `breakdownAbsorbChoicesFor`(7792) / `canAbsorbBreakdownNow`(7812) / `retryBeginMove`(7823) / `selectForMove`(7853)。首行是 `/* ─ C5 移动交互 …` 横幅，末行 `  }`，下一行空行、再下一行是 `movePickHex`(7974)
+- [x] 端口 **40 项**，`audit:ports` 实测 `createMovementDomain @7520` **按值 37 项全部安全**（37 + 3 getter = 40，自洽）
+      · **按值 24**（状态/派生，声明在 519–7171）：`NO_MOVEMENT_PHASES`(519 模块级) / `session`(830) / `activeSide`(858) / `phase`(866) / `segmentLocked`(887) / `units`(1000) / `selectedId`(1068) / `lastStep`(1076) / `groundMovement`(1110) / `moveBlocked`+`moveInteraction`(1131，从 `groundMovement` 解构) / `moveSessionSeq`(1150) / `transportHandlingBaseline`(1354) / `stackSelect`(1371) / `movePick`(1383) / `pausedTransportIds`(1432) / `transportHandlingUndo`(1474) / `combatState`(1582) / `barrageState`(1591) / `airUnitTransit`(2272) / `selectedUnit`(2408) / `choices`(2412) / `moveUnits`(5960) / `PHASE_LABELS`(7171)
+      · **按值 13**（函数声明，**可提升** ⇒ 声明在 8k–25k 也按值安全）：`refuseWhileLocked`(890) / `noteUnitLeftOwnBridgeHex`(2466) / `unitOfInstance`(5100) / `pushLog`(6126) / `unitsAt`(6179) / `friendlyUnitsAt`(7044) / `movePickPoolAt`(7985) / `defaultMovePickIdsAt`(8017) / `applyFormationFuelCoverageToIds`(9735) / `actionAllowedNow`(20720) / `requireAction`(20724) / `noteUnitEnteredHex`(24898) / `nationalityOfUnit`(25200)
+      · **晚绑定 3**（声明在建域点之后，facade 用 `get` 访问器传、正文写 `ports.x`）：`breakdownPool`(18046, `Ref`) / `initialSetupInProgress`(19481, `Ref`) / `gates`(20698, `WorkbenchGates` 对象，写 `ports.gates` 不带 `.value`)
+- [x] **本批的结构难题（按代价口径解出来的）：建域点的位置决定 getter 数。** 这 4 个函数（`nameOf` / `applyMovePatches` / `refuseWhileSettling` / `closeBreakdownWindows`）被**更早创建**的域当端口吃（`groundMovement` 1113–1122、轰炸 1567、空军 2159/2222、7066），而区块自己的状态（`movePick` / `stackSelect` / `moveUnits` / `PHASE_LABELS` …）声明在 1.1k–7.2k。**若把域提前到 `groundMovement`(1110) 之前**，就要为 18 项状态开 getter（其中 `moveBlocked`/`moveInteraction` 还是从 `groundMovement` 解构来的，成环）；**原地建域**只要 3 个 getter，代价是那 4 个名字在 facade 各留一行薄转发 ⇒ 选后者
+- [x] 薄转发 **4 个**（facade 1110 前，各一行）：`nameOf` / `applyMovePatches` / `refuseWhileSettling` / `closeBreakdownWindows` —— forward 到 `movementDomain.x`，行为不变、**1.1k–7.0k 的调用点一个都没改**
+- [x] 回补 **15 个**、切片内部自用 **2 个**（`breakdownWindows` / `setupWiggleEligible` 区外引用 0 ⇒ 不进 facade 解构，避免 TS6133）；`unitNameOf` 只有 1 处区外引用（27496）⇒ 解构即可，无需转发
+- [x] 新类型迁移：`TransportHandlingUndoEntry`（facade 1453–1473 的**非导出** `interface`，含 8 行文档注释）搬进 `workbench-model.ts` 并 `export`，facade 补 `import type`；model 顺带补 `import type { SpHoldings } from '@/engine/rules'`
+- [x] 连带 import：切片新增 `hexesWithin` / `canMoveInPhase` / `SETUP_WIGGLE_*` / `isSetupWiggleParent` / `type SettlementLock` 等；facade 删 5 处搬后失效 import（`hexesWithin` / `isSetupWiggleParent` / `SETUP_WIGGLE_BREAKDOWN_RADIUS` / `SETUP_WIGGLE_MAX_DIVISIONS` / `type SettlementLock`）
+- [x] 回边归零：切片 `import … from './workbench'` **0 处**（只 `import type` 自 `./workbench-model` / `./workbench-air` / `./ground-movement` / `./workbench-gates` / `./movement-types`）
+- [x] 规模：`workbench.ts` **28,083 → 27,702（−381 = −445 区间 −29 接口/文档 −5 失效 import +86 装配 +24 转发 +1 import）**；`workbench-move.ts` **607 行**（新建）；`workbench-model.ts` **4,177 → 4,208（+31 = +21 接口 +8 文档 +1 import +1 空行）**
+- [x] 门禁：`npm run typecheck` 通过 → `npm run check` **623 文件 / 6,256 用例 / 196.38s / exit 0**；`arch` 源码 **951**（+1 新文件）；`format:check` 全 matched；`audit:ports` 六域全绿
+- [x] 公开面快照 **1,013 键不变**（本提交未触碰 fixture）
+
+**落地期暴露的四个坑**：
+
+1. **建域点选位要按"getter 数"算，不是按"哪一段代码看起来更内聚"。** 提前建域是 18 getter + 与 `groundMovement` 的环；原地建域是 3 getter + 4 行薄转发。以后同类批次先数"建域点之前有多少 `const`"再决定。
+2. **`choices` 的端口类型不能按字面猜。** `const choices = computed(() => unitChoices(activeSide.value))` 的真实类型是 `ComputedRef<UnitRecordView[]>`（`unitChoices` 返回单位**记录视图**，不是 `{unit,selected}`）；按"看着像"写成 `{ unit: ConsoleUnit; selected: boolean }[]` 会把公开面类型带歪，连累 2 个 Vue 组件 + 2 个测试文件。取型必须走 checker。
+3. **接口搬出后忘补 import ⇒ 类型名变 any，连锁 4 处 TS7006。** `TransportHandlingUndoEntry` 搬进 model 但 facade 没 import 时，`ref<TransportHandlingUndoEntry[]>` 的 `T` 解析失败，跟着报 `_`/`at`/`lock` 隐式 any（5050–5063），看着像"函数体搬坏了"，其实是类型丢了。
+4. **新加的装配块会被 prettier 重排** ⇒ 跑门禁前先 `prettier --write` 三文件，否则 `format:check` 必红（本轮第一次门禁就红在这里，不是逻辑问题）。
+
+---
+
 - [ ] `workbench-stack-pick.ts` ← section 4（3,381 / 81，含突围与补给缓存）
 - [ ] `workbench-raid.ts` ← section 2（1,344 / 28）
 - [ ] 暴露 `nameOf`(4)、`applyMovePatches`(2)、`refuseWhileSettling`(2)、`retryBeginMove`(2)、`selectForMove`、`openBreakdownWindow`、`closeBreakdownWindows`
