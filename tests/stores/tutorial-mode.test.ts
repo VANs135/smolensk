@@ -189,6 +189,9 @@ describe('教学模式：Vitebsk', () => {
     expect(source).toContain("buttonTexts: ['补员表 · Eq']")
     // 侦察营：停下即过（不再死认 18.26 一格）
     expect(source).toContain('scoutMoved')
+    // 12.5a：加油步必须要求「堆里每个战斗单位都加过油」，否则 MC 没油开不动会把引导卡死
+    expect(source).toContain('stackCombatFuelled')
+    expect(source).toContain('scout.mpSpent > 0')
   }, 20_000)
 })
 

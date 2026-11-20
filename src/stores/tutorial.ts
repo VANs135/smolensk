@@ -263,14 +263,21 @@ export const useTutorialStore = defineStore('tutorial', () => {
   }
 
   /**
-   * MC 营（30 侦察营）是否已经离开起始堆叠
+   * MC 营（30 侦察营）是否已经动过
    *
-   * 用户 2026-11-20：「MC 停止移动就到下一步」——判定只看它有没有开出去，
-   * 不再死认 18.26（地形/ZOC 常让人停在邻格，硬判定会把引导卡死）。
+   * 用户 2026-11-20：「MC 停止移动就到下一步」——只要它离开起始格、或已经花过 MP，
+   * 就算这一步做到。花 MP 这一条是兜底：万一棋盘上的 hex 回写有延迟，也不至于把引导卡死。
    */
   function scoutMoved(): boolean {
     const scout = workbench.units.find((unit) => unit.unitId === SCOUT_UNIT_ID)
-    return scout !== undefined && !sameHex(scout.hex, STACK_START)
+    if (scout === undefined) return false
+    return !sameHex(scout.hex, STACK_START) || scout.mpSpent > 0
+  }
+
+  /** 堆里**每个战斗单位**都加过油（12.5a：没燃料不能花 MP；卡车属非战斗，不吃燃料） */
+  function stackCombatFuelled(): boolean {
+    const combat = stackUnits.value.filter((unit) => unit.isCombat)
+    return combat.length > 0 && combat.every((unit) => unit.fuelled)
   }
 
   /** 炮兵团是否已进入弹幕射程（3 格）——不要求贴到城边 */
@@ -612,9 +619,10 @@ export const useTutorialStore = defineStore('tutorial', () => {
       {
         id: 'fuel',
         title: '编队法加油',
-        hint: '霍特：右键这堆 →「加油 · 编队法」，油从补给堆里扣。',
-        intro: '支付流程：整堆一次付清，燃料点从该格补给堆（SP）里扣；堆里没有补给就得先补运。',
-        done: () => stackUnits.value.some((unit) => unit.fuelled),
+        hint: '霍特：右键这堆 →「加油 · 编队法」，整堆都要加。',
+        intro: '整堆一次付清，燃料点从该格补给堆（SP）里扣；漏加一枚它就一步也走不了（12.5a）。',
+        // 12.5a：没燃料就不能花 MP ⇒ 堆里**每个战斗单位**都得加过油，否则后面 MC 会开不动
+        done: () => stackCombatFuelled(),
       },
       {
         id: 'scout',
