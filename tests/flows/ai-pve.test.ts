@@ -56,7 +56,9 @@ describe('B4 PVE 控制方回归', () => {
       const before = {
         awaiting: ctx.g.awaiting,
         responder: ctx.g.question?.responder ?? null,
-        activeSide: ctx.w.activeSide,
+        // 6.3a / 7.0：反应段的操作方是非行进方，与 segmentGateQuery.side 同源；
+        // 不能用 activeSide（那是「本玩家回合」归属，反应段恰好相反）。
+        actingSide: ctx.w.segmentGateQuery.side ?? ctx.w.activeSide,
         locked: ctx.w.segmentLocked,
         canSize: ctx.w.segmentActionKeys.size,
         inCombat: ctx.w.combatState !== null,
@@ -83,7 +85,7 @@ describe('B4 PVE 控制方回归', () => {
 
       // ② 玩家行动环节：AI 不得擅自推进有可做动作的环节
       if (
-        before.activeSide === 'soviet' &&
+        before.actingSide === 'soviet' &&
         !before.locked &&
         !before.setup &&
         !before.inCombat &&

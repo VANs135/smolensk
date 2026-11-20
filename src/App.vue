@@ -46,11 +46,7 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
 </script>
 
 <template>
-  <div
-    class="shell"
-    :class="{ 'shell--board': currentView === 'game' }"
-    :data-view="currentView"
-  >
+  <div class="shell" :class="{ 'shell--board': currentView === 'game' }" :data-view="currentView">
     <header class="shell__bar">
       <div class="shell__identity">
         <span class="shell__mark" aria-hidden="true">17</span>

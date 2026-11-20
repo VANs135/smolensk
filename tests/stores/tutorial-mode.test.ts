@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { nextTick } from 'vue'
 import { describe, expect, it } from 'vitest'
 
+import type { HexRef } from '@/data'
 import { hexDistance } from '@/engine/hex-geometry'
 import { useContainersStore, useMapViewStore, useTutorialStore } from '@/stores'
 import {
@@ -46,7 +47,8 @@ describe('教学模式：Vitebsk', () => {
     expect(tutorial.currentStep?.target.buttonTexts).toContain('整备')
 
     const boxed = ctx.w.airUnits.filter((air) => ctx.w.airBoxMembers.includes(air.instanceId))
-    expect(boxed.length).toBe(7)
+    // Intro 自身 7 架 + 教学为「两队 Ju.88」补的第 8 架（开局脚本进空军盒）
+    expect(boxed.length).toBe(8)
     expect(boxed.every((air) => air.airStatus === 'inactive')).toBe(true)
 
     const containers = useContainersStore()
@@ -98,13 +100,147 @@ describe('教学模式：Vitebsk', () => {
     tutorial.stop()
   }, 60_000)
 
-  it('教学脚本：四机轰炸、固定拦截骰、AI 苏军不代打（源码守卫）', () => {
+  it('战机扫荡：另一架 Bf110 扫 LaGG.3，两败俱伤都返航，然后才轮到轰炸', async () => {
+    const ctx = await startTutorial()
+    const tutorial = useTutorialStore()
+    const airBase: HexRef = { col: 19, row: 28 }
+
+    // 先走完两次斯图卡与突袭战斗，炮兵推到射程内 ⇒ 引导进「战机扫荡」
+    await hipShoot(ctx, 18, 27)
+    await hipShoot(ctx, 18, 27)
+    expect(ctx.w.overrunNow({ col: 18, row: 27 })).toBe(true)
+    const attackerDump = ctx.w.combatSupplyDumps.find((item) => item.side === 'attacker')?.dumps[0]
+    if (attackerDump !== undefined) ctx.w.pickCombatSupplyDump('attacker', attackerDump.id)
+    ctx.w.confirmCombatSupplySide('attacker')
+    ctx.w.confirmCombatSupplySide('defender')
+    expect(ctx.w.confirmCombatSupply()).toBe(true)
+    expect(ctx.w.declareCombatArStep('attacker')).toBe(true)
+    expect(ctx.w.declareCombatArStep('defender')).toBe(true)
+    expect(ctx.w.autoResolveCombatToOutcome()).toBe(true)
+    for (let guard = 0; guard < 12 && ctx.w.combatState?.finished !== true; guard++) {
+      const step = ctx.w.combatState?.step
+      if (step === 'losses') expect(ctx.w.confirmCombatLosses()).toBe(true)
+      else if (step === 'options') {
+        ctx.w.combatInputs.optionRetreatHexes = ctx.w.combatRequirement?.options ?? 0
+        ctx.w.combatInputs.optionLossPoints = 0
+        expect(ctx.w.confirmCombatOptions()).toBe(true)
+      } else if (step === 'retreat') {
+        for (const plan of ctx.w.combatRetreatPlans)
+          for (const unit of plan.units) {
+            const destination =
+              unit.destinations.find((item) => !item.forcedDestruction) ?? unit.destinations[0]!
+            ctx.w.combatInputs.retreatPaths[unit.unitId] = destination.path
+              .map((hex) => `${String(hex.col)}.${String(hex.row)}`)
+              .join(',')
+          }
+        expect(ctx.w.confirmCombatRetreats()).toBe(true)
+      } else if (step === 'advance') expect(ctx.w.confirmCombatAdvance()).toBe(true)
+    }
+    expect(ctx.w.combatState?.finished).toBe(true)
+
+    ctx.w.finishMove()
+    const artillery = ctx.w.units.find((unit) => unit.unitId === 'ax-motorized-ge-20-mtr-20-arty')!
+    ctx.w.beginMovePick(artillery.hex, [artillery.instanceId])
+    expect(ctx.w.confirmMovePick()).toBe(true)
+    const artyNode = (ctx.w.groupReachable?.hexes ?? []).find(
+      (item) => hexDistance(item.hex, { col: 19, row: 27 }) <= 3,
+    )
+    expect(artyNode).toBeDefined()
+    expect(ctx.w.moveAlongDraggedPath(artyNode?.path ?? [])).toBe(true)
+    ctx.w.finishMove()
+    expect(tutorial.currentStep?.id).toBe('fighter-sweep')
+
+    const lagg = ctx.w.airUnits.find((air) => air.instanceId === 'tutorial-su-lagg3')!
+    const i153 = ctx.w.airUnits.find((air) => air.instanceId === 'tutorial-su-i153')!
+    expect(lagg.airStatus).toBe('active')
+    // I.153 留到轰炸课才升空，不提前拦截扫荡
+    expect(i153.airStatus).toBe('inactive')
+
+    expect(ctx.w.canAirMissionTarget('fighter_sweep', airBase)).toBe(true)
+    ctx.w.setAirActive(true)
+    ctx.w.setAirMissionKind('fighter_sweep')
+    expect(ctx.w.setAirTargetFromText('19.28')).toBe(true)
+
+    const sweepPlane = ctx.w.airUnits.find(
+      (air) =>
+        air.side === 'axis' &&
+        air.aircraftId === 'ax-aircraft-ge-bf-110' &&
+        air.airStatus === 'active' &&
+        air.missionsFlownThisPhase === 0,
+    )!
+    expect(tutorial.currentStep?.target.airInstanceId).toBe(sweepPlane.instanceId)
+    ctx.w.toggleAirMissionUnit(sweepPlane.instanceId)
+    expect(ctx.w.beginAirMissionNow()).toBe(true)
+
+    // 14.6 不受防空影响 ⇒ 直接 14.3e 逐轮空战；教学固定骰让双方返航且各损 1
+    expect(ctx.w.airInputs.airCombatDice).toEqual([{ die: 6, lossDie: 5 }])
+    expect(ctx.w.confirmAirCombatNow()).toBe(true)
+    const round = ctx.w.airState?.airCombat?.rounds[0]
+    expect(round?.abortSide).toBe('both')
+    expect([...(round?.stepLossIds ?? [])].sort()).toEqual(
+      [lagg.instanceId, sweepPlane.instanceId].sort(),
+    )
+    expect(lagg.steps).toBe(1)
+    expect(sweepPlane.steps).toBe(1)
+    expect(lagg.airStatus).toBe('inactive')
+    expect(sweepPlane.airStatus).toBe('inactive')
+
+    ctx.w.autoResolveAirMissionNow()
+    if (ctx.w.airState?.step === 'resolveMission') ctx.w.settleAirMissionNow()
+    if (ctx.w.airState?.step === 'returnToBase') ctx.w.completeAirReturnNow()
+    expect(ctx.w.airState?.step).toBe('done')
+    expect(ctx.w.airState?.finished).toBe(true)
+    expect(tutorial.currentStep?.id).toBe('bombing')
+
+    // 进轰炸环节后 I.153 才升空；四机按 Ju.88 ×2 → Do.17z → 未扫荡的 Bf110 逐枚高亮
+    for (let guard = 0; guard < 8 && ctx.w.segmentStep?.id !== 'movement.barrage'; guard++)
+      ctx.w.advanceSegmentNow()
+    expect(ctx.w.segmentStep?.id).toBe('movement.barrage')
+    expect(i153.airStatus).toBe('active')
+    // 上一波任务选机名单要清掉（真实 UI 从菜单重新发起时会重置）
+    ctx.w.toggleAirMissionUnit(sweepPlane.instanceId)
+    ctx.w.setAirMissionKind('barrage')
+    expect(ctx.w.setAirTargetFromText('19.28')).toBe(true)
+    // 14.4c：I.153 的基地罩住 19.28 ⇒ 它才是轰炸的拦截机
+    expect(ctx.w.airTargetInEnemyPatrolZone).toBe(true)
+    expect(ctx.w.airInterceptionResponse?.eligibleFighterIds).toContain(i153.instanceId)
+    const activeOf = (aircraftId: string) =>
+      ctx.w.airUnits.filter(
+        (air) => air.side === 'axis' && air.aircraftId === aircraftId && air.airStatus === 'active',
+      )
+    const expectedBombingIds = [
+      ...activeOf('ax-aircraft-ge-ju-88').map((air) => air.instanceId),
+      ...activeOf('ax-aircraft-ge-do-17z').map((air) => air.instanceId),
+      ...activeOf('ax-aircraft-ge-bf-110')
+        .filter((air) => air.missionsFlownThisPhase === 0)
+        .map((air) => air.instanceId),
+    ]
+    expect(expectedBombingIds).toHaveLength(4)
+    for (const id of expectedBombingIds) {
+      expect(tutorial.currentStep?.target.airInstanceId).toBe(id)
+      ctx.w.toggleAirMissionUnit(id)
+    }
+    expect(tutorial.currentStep?.target.buttonTexts).toContain('发起任务')
+    tutorial.stop()
+  }, 90_000)
+
+  it('教学脚本：两队 Ju.88 + Do.17z + Bf110 轰炸、扫荡两败俱伤、固定拦截骰、AI 苏军不代打（源码守卫）', () => {
     const source = readFileSync('src/stores/tutorial.ts', 'utf8')
-    // 14.2a：四机齐出（Ju.88 + Do.17z + 两架 Bf.110）
+    // 14.2a：四机齐出（两队 Ju.88 + 一队 Do.17z + 一队未扫荡的 Bf110）
     expect(source).toContain("'ax-aircraft-ge-do-17z'")
+    expect(source).toContain('tutorial-axis-ju88-2')
+    // 14.6：扫荡用另一架 Bf110，2d6=6 + ACV 3 − 2 = 7 ⇒ 双方返航；损失骰 5 ⇒ 各损 1
+    expect(source).toContain('airCombatDice = [{ die: 6, lossDie: 5 }]')
+    // 14.4c：敌方空军基地 10 格内都是拦截范围
+    expect(source).toContain('10 格内都是拦截范围（14.4c）')
     // 14.3e：拦截空战固定 2d6=6（轴心胜）；10.0a：轰炸骰固定 11（DG + 1 军力损失）
     expect(source).toContain('interceptDie = 6')
     expect(source).toContain('barrageInputs.die = 11')
+    // 逐枚高亮：同名机两枚，只能按实例 id 框住当前该点的那枚
+    const guide = readFileSync('src/components/tutorial/TutorialGuide.vue', 'utf8')
+    const panel = readFileSync('src/components/air/AirPanel.vue', 'utf8')
+    expect(guide).toContain('data-air-instance-id')
+    expect(panel).toContain(':data-air-instance-id="item.air.instanceId"')
     // 苏军是 AI ⇒ 反应阶段脚本让位
     expect(source).toContain('if (aiSoviet.value) return')
   })
@@ -145,6 +281,7 @@ describe('教学模式：Vitebsk', () => {
       'combat-ar',
       'combat-finish',
       'artillery-move',
+      'fighter-sweep',
       'bombing',
       'reaction-attack',
       'barrage-city',
@@ -157,7 +294,11 @@ describe('教学模式：Vitebsk', () => {
     // 加油步讲的是「编队法 + 支付流程」（用户 2026-11-20 口径）
     expect(steps.find((step) => step.id === 'fuel')?.intro).toContain('补给堆')
     expect(steps.find((step) => step.id === 'strafe-1')?.intro).toContain('斯图卡')
+    // 选机阶段（打开任务面板后）才逐枚高亮斯图卡；见 hipShoot 助手里的按钮断言
+    expect(steps.find((step) => step.id === 'fighter-sweep')?.intro).toContain('10 格')
+    expect(steps.find((step) => step.id === 'fighter-sweep')?.hint).toContain('Bf110')
     expect(steps.find((step) => step.id === 'bombing')?.intro).toContain('Ju.88')
+    expect(steps.find((step) => step.id === 'bombing')?.intro).toContain('10 格')
     // 引导真实指到按钮
     expect(steps.find((step) => step.id === 'air-refit')?.target.buttonTexts).toContain('整备')
     // 突袭只打 18.27 的坦克师；炮兵另有弹幕步、空军另有空袭步
@@ -328,7 +469,10 @@ async function hipShoot(ctx: Ctx, col: number, row: number) {
   const stepNow = useTutorialStore().currentStep
   // 第一轮扫射正好也是「补给接不上」信息步的放行条件（那一步只指格、不指按钮）
   expect(['scout-supply', 'strafe-1', 'strafe-2']).toContain(stepNow?.id)
-  if (stepNow?.id !== 'scout-supply') expect(stepNow?.target.buttonTexts).toContain('Ju.87b')
+  if (stepNow?.id !== 'scout-supply') {
+    expect(stepNow?.target.buttonTexts).toContain('Ju.87b')
+    expect(stepNow?.target.airInstanceId).toBeTruthy()
+  }
   const plane = ctx.w.airUnits.find(
     (air) =>
       air.side === 'axis' &&
@@ -337,6 +481,7 @@ async function hipShoot(ctx: Ctx, col: number, row: number) {
       air.aircraftId === 'ax-aircraft-ge-ju-87b',
   )
   expect(plane).toBeDefined()
+  if (stepNow?.id !== 'scout-supply') expect(stepNow?.target.airInstanceId).toBe(plane!.instanceId)
   ctx.w.toggleAirMissionUnit(plane!.instanceId)
   expect(mapView.advanceOpsFlow()).toBe(true)
   ctx.w.autoResolveAirMissionNow()

@@ -946,6 +946,13 @@ export interface AirInputs {
    * `attackerMustPickNonBracketedAircraft`），守方任选。
    */
   airCombatPicks: { attackerAircraftId: string | null; defenderAircraftId: string | null }[]
+  /**
+   * 14.3e：逐轮空战的 2 骰 / 损失骰覆写（留空＝照常从会话 RNG 掷）
+   *
+   * 教学模式用它钉住「Bf.110 扫荡 LaGG.3：双方返航且各损 1 军力」这一课的骰面；
+   * 与 `interceptDie` / `flakDie` 同类，只提供已存在的裁判骰入口，不改空战判定。
+   */
+  airCombatDice: { die: number; lossDie: number }[] | null
   /** 14.2f-D：出动的拦截机实例 id（单架，14.5） */
   interceptorId: string | null
   /** 14.5/14.3e：拦截空战的 2 骰（留空＝自动掷） */
@@ -1034,6 +1041,7 @@ function createAirInputs(): AirInputs {
     interceptDeclared: false,
     namedDefenderId: null,
     airCombatPicks: [],
+    airCombatDice: null,
     interceptorId: null,
     interceptDie: null,
     interceptLossDie: null,
@@ -19771,21 +19779,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       toAirMissionAircraftView(plane),
     )
     // ⑭ 接线：drawAir2d6 / drawAir1d6 只回报数字（不改它们）⇒ 先记下掷骰前的骰源，
-    // 按同一颗 PRNG 逐轮复算出骰面（14.3e 每对一轮：2 骰 + 1 损失骰）供会话日志复算
+    // 按同一颗 PRNG 逐轮复算出骰面（14.3e 每对一轮：2 骰 + 1 损失骰）供会话日志复算。
+    // 教学模式可走既有的「裁判骰覆写」入口钉住某一课的骰面（覆写时不记 rolls，同 interceptDie）。
+    const overrideDice = airInputs.value.airCombatDice
     const rngBefore = rng.value
     const dice: { die: number; lossDie: number }[] = []
-    const roundBudget = Math.max(1, attackerViews.length + defenderViews.length)
-    for (let index = 0; index < roundBudget; index += 1)
-      dice.push({ die: drawAir2d6(), lossDie: drawAir1d6() })
     const rolls: DiceRoll[] = []
-    let cursor = rngBefore
-    for (let index = 0; index < dice.length; index += 1) {
-      const dieDraw = roll2d6(cursor)
-      cursor = dieDraw.rng
-      rolls.push(dieDraw.value)
-      const lossDraw = roll1d6(cursor)
-      cursor = lossDraw.rng
-      rolls.push(lossDraw.value)
+    if (overrideDice !== null) {
+      dice.push(...overrideDice.map((item) => ({ die: item.die, lossDie: item.lossDie })))
+    } else {
+      const roundBudget = Math.max(1, attackerViews.length + defenderViews.length)
+      for (let index = 0; index < roundBudget; index += 1)
+        dice.push({ die: drawAir2d6(), lossDie: drawAir1d6() })
+      let cursor = rngBefore
+      for (let index = 0; index < dice.length; index += 1) {
+        const dieDraw = roll2d6(cursor)
+        cursor = dieDraw.rng
+        rolls.push(dieDraw.value)
+        const lossDraw = roll1d6(cursor)
+        cursor = lossDraw.rng
+        rolls.push(lossDraw.value)
+      }
     }
     const resolved = acceptAir(
       resolveAirCombatRounds({

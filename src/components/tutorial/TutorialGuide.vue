@@ -97,6 +97,18 @@ function findText(texts: readonly string[], selector = CANDIDATES): HTMLElement 
   return null
 }
 
+function ringFrom(node: HTMLElement): void {
+  const rect = node.getBoundingClientRect()
+  const pad = 5
+  ring.value = {
+    left: rect.left - pad,
+    top: rect.top - pad,
+    width: rect.width + pad * 2,
+    height: rect.height + pad * 2,
+    radius: 10,
+  }
+}
+
 function refresh(): void {
   const step = tutorial.currentStep
   if (!tutorial.active || step === null) {
@@ -104,20 +116,23 @@ function refresh(): void {
     return
   }
 
+  // ⓪ 逐枚飞机：任务选机面板里同名机有两枚，只能按实例 id 框住该点的那一枚
+  if (step.target.airInstanceId !== undefined) {
+    const node = Array.from(document.querySelectorAll<HTMLElement>('[data-air-instance-id]')).find(
+      (item) => item.dataset.airInstanceId === step.target.airInstanceId,
+    )
+    if (node !== null && node !== undefined && visible(node.getBoundingClientRect())) {
+      ringFrom(node)
+      return
+    }
+  }
+
   // ① 按钮级目标优先：直接框住该点的按钮（整备 / 发起任务 / 拦截复选框…）
   const buttonTexts = step.target.buttonTexts ?? []
   if (buttonTexts.length > 0) {
     const node = findText(buttonTexts, BUTTONS)
     if (node !== null) {
-      const rect = node.getBoundingClientRect()
-      const pad = 5
-      ring.value = {
-        left: rect.left - pad,
-        top: rect.top - pad,
-        width: rect.width + pad * 2,
-        height: rect.height + pad * 2,
-        radius: 10,
-      }
+      ringFrom(node)
       return
     }
   }
@@ -126,15 +141,7 @@ function refresh(): void {
   if (texts.length > 0) {
     const node = findText(texts)
     if (node !== null) {
-      const rect = node.getBoundingClientRect()
-      const pad = 5
-      ring.value = {
-        left: rect.left - pad,
-        top: rect.top - pad,
-        width: rect.width + pad * 2,
-        height: rect.height + pad * 2,
-        radius: 10,
-      }
+      ringFrom(node)
       return
     }
   }

@@ -105,11 +105,15 @@ describe('B35：流程条 / 工具按钮 / 纯文字面板（源码守卫）', (
  * （托盘里的"数据表"那一面在 B35 切片 A 已删，note 却还写着"下方数据表…"）。
  */
 describe('批 D 切片 1：界面收口（右栏 / 盒图 / 辅助卡）', () => {
-  it('① 右栏只留只读信息：`<FlowStrip />` 那一份已从对局台删除，bar 那份仍在地图上方', () => {
+  it('① 右栏只留只读信息：`<FlowStrip />` 那一份已从对局台删除，地图上方各平台各留一条 bar', () => {
     const game = readFileSync('src/views/GameTableView.vue', 'utf8')
-    // 只有 bar 形态那一处（模板里 `<FlowStrip variant="bar">` **恰好一次**）
-    expect((game.match(/<FlowStrip/g) ?? []).length).toBe(1)
-    expect(game).toContain('<FlowStrip variant="bar">')
+    /*
+     * 2026-11-20：安卓单层顶栏（`gt__topbar`）与桌面 `shell__bar` 是 v-if / v-else 两条
+     * 互斥分支，模板里各有一条 `<FlowStrip variant="bar">`；panel 形态仍不从对局台出现。
+     */
+    expect((game.match(/<FlowStrip/g) ?? []).length).toBe(2)
+    expect((game.match(/<FlowStrip[^>]*variant="bar"/g) ?? []).length).toBe(2)
+    expect(game).toContain('gt__topbar')
     // panel 形态本身仍留给引擎验证页
     const bench = readFileSync('src/views/WorkbenchView.vue', 'utf8')
     expect(bench).toContain('<FlowStrip stepwise />')

@@ -21,11 +21,13 @@ import { toConsoleAirUnit, toConsoleUnit } from './workbench-model'
  *   做完一步才放开下一步。**不新增任何规则判定**：每一步的“做完”只读既有 store 的状态，
  *   真正的落位、加油、扫射、突袭、补给、AR 仍由原 action 走引擎。
  *
- * ## 教学脚本的边界（2026-11-19）
- *   只做三件“开局数据 / 固定骰面”的事，不改任何判定：
- *   · 在 19.28 放一架苏军 I.153（剧本本身没有苏机，轰炸任务要有一架拦截机）；
+ * ## 教学脚本的边界（2026-11-20）
+ *   只做开局数据 / 固定骰面这类“摆盘 + 裁判骰”的事，不改任何判定：
+ *   · 在 19.28 苏军空军基地放一队 I.153 与一队 LaGG.3（Intro 无苏机），
+ *     LaGG.3 在战机扫荡课激活、I.153 在轰炸课激活；
+ *   · 额外摆一队 Ju.88 进图外盒（教学轰炸要求两队 Ju.88 + 一队 Do.17z + 一队 Bf110）；
  *   · 把苏军 18 Tk Div 置为预备并补足油（反应段才有合法反击对象）；
- *   · 两次低空扫射前把 `barrageInputs.die` 固定为 2 / 9（这是既有的裁判骰面入口）。
+ *   · 扫射 / 扫荡 / 轰炸只钉既有裁判骰入口，空战与轰炸判定仍走 14.x / 10.0。
  *   反应段的反击由脚本按既有 `releaseReserveNow → move → overrun → 9.2` 走完，骰子照掷；
  *   结果落在 CRT 攻方损失列（苏军失败），不靠玩家操作运气。
  *
@@ -40,6 +42,8 @@ export interface TutorialTarget {
   texts?: readonly string[]
   /** 只在这些控件里找文字（按钮 / 标签），优先于 `texts`：用于“直接框住按钮” */
   buttonTexts?: readonly string[]
+  /** 任务选机面板里**这一枚**飞机（逐枚高亮，避免同名机误指到已选/已飞的那枚） */
+  airInstanceId?: string
 }
 
 export interface TutorialStepView {
@@ -53,12 +57,21 @@ export interface TutorialStepView {
   done: boolean
 }
 
-/** 轰炸任务的机型：Ju.88 + Do.17z 投弹、两架 Bf.110 护航（14.2a 最多 4 机） */
+/** 轰炸任务的机型：两队 Ju.88 + 一队 Do.17z 投弹、一队 Bf.110 护航（14.2a 最多 4 机） */
 const BOMBING_AIRCRAFT = [
-  ['ax-aircraft-ge-ju-88', 'Ju.88'],
-  ['ax-aircraft-ge-do-17z', 'Do.17z'],
-  ['ax-aircraft-ge-bf-110', 'Bf.110'],
+  ['ax-aircraft-ge-ju-88', 'Ge Ju.88'],
+  ['ax-aircraft-ge-do-17z', 'Ge Do.17z'],
+  ['ax-aircraft-ge-bf-110', 'Ge Bf.110'],
 ] as const
+
+/** 低空扫射（两次）与战机扫荡（一次）的机型；扫荡用**另一架** Bf110 */
+const STRAFE_AIRCRAFT_ID = 'ax-aircraft-ge-ju-87b'
+const SWEEP_AIRCRAFT_ID = 'ax-aircraft-ge-bf-110'
+
+/** 教学脚本新增的实例：Intro 只有 1 队 Ju.88 / 没有苏机 */
+const TUTORIAL_EXTRA_JU88_ID = 'tutorial-axis-ju88-2'
+const TUTORIAL_SU_I153_ID = 'tutorial-su-i153'
+const TUTORIAL_SU_LAGG_ID = 'tutorial-su-lagg3'
 
 /** 教学线用的 20.Mtr 堆叠（初始 14.27；编制内 5 枚） */
 const STACK_UNIT_IDS = new Set([
@@ -85,7 +98,7 @@ const MOVE_HEX: HexRef = { col: 17, row: 27 }
 const TARGET_HEX: HexRef = { col: 18, row: 27 }
 /** 第二次突袭的目标：城格 19.27（Minor City；162 Inf Div 移动面 5 + Alarm Mil 3） */
 const CITY_HEX: HexRef = { col: 19, row: 27 }
-/** 空军轰炸的目标：**大城** 19.28（Major City；I.153 就驻扎在这格，起飞拦截后被打回） */
+/** 空军任务目标：**大城 / 苏军 1 级空军基地** 19.28；基地里摆一队 I.153 与一队 LaGG.3 */
 const BOMB_HEX: HexRef = { col: 19, row: 28 }
 /** 13.5 重建教学：补员就落在 39 军 HQ 这一格（5.27）⇒ 重建也在同格（13.5a 补员同格） */
 const REBUILD_HEX: HexRef = { col: 5, row: 27 }
@@ -240,6 +253,45 @@ export const useTutorialStore = defineStore('tutorial', () => {
       ).length,
   )
 
+  /** 下一次低空扫射该点的那一枚斯图卡（已飞过任务的自然排除） */
+  const nextStrafePlaneId = computed(
+    () =>
+      workbench.airUnits.find(
+        (air) =>
+          air.side === 'axis' &&
+          air.aircraftId === STRAFE_AIRCRAFT_ID &&
+          air.airStatus === 'active' &&
+          air.missionsFlownThisPhase === 0,
+      )?.instanceId ?? null,
+  )
+
+  /** 战机扫荡用的 Bf110：扫荡后认已飞过那枚，扫荡前取第一枚可出击的 */
+  const sweepPlaneId = computed(() => {
+    const planes = workbench.airUnits.filter(
+      (air) => air.side === 'axis' && air.aircraftId === SWEEP_AIRCRAFT_ID,
+    )
+    return (
+      planes.find((air) => air.missionsFlownThisPhase > 0)?.instanceId ??
+      planes.find((air) => air.airStatus === 'active' && air.missionsFlownThisPhase === 0)
+        ?.instanceId ??
+      null
+    )
+  })
+
+  /** 轰炸编成：两队 Ju.88 + 一队 Do.17z + 一队未飞过任务的 Bf110（扫荡那架不参轰炸） */
+  const bombingPlaneIds = computed(() => {
+    const active = (aircraftId: string) =>
+      workbench.airUnits.filter(
+        (air) => air.side === 'axis' && air.aircraftId === aircraftId && air.airStatus === 'active',
+      )
+    const ju88 = active(BOMBING_AIRCRAFT[0][0]).slice(0, 2)
+    const do17z = active(BOMBING_AIRCRAFT[1][0]).slice(0, 1)
+    const bf110 = active(BOMBING_AIRCRAFT[2][0])
+      .filter((air) => air.missionsFlownThisPhase === 0)
+      .slice(0, 1)
+    return [...ju88, ...do17z, ...bf110].map((air) => air.instanceId)
+  })
+
   function hasSupplyArrival(): boolean {
     return (gameSession.session?.log ?? []).some((entry) => entry.action === 'supplyArrival')
   }
@@ -255,6 +307,11 @@ export const useTutorialStore = defineStore('tutorial', () => {
 
   function bombingDone(): boolean {
     return airMissionReturned('barrage')
+  }
+
+  /** 战机扫荡完成（14.6 的 `airReturn` 回执） */
+  function fighterSweepDone(): boolean {
+    return airMissionReturned('fighter_sweep')
   }
 
   /** 打过第 n 次突袭（或已经站到该格）——骰子输了也不该把引导卡死 */
@@ -339,7 +396,12 @@ export const useTutorialStore = defineStore('tutorial', () => {
         return { hex: TARGET_HEX, texts: ['低空扫射'], buttonTexts: ['低空扫射'] }
       }
       if (workbench.airMissionAirIds.length === 0) {
-        return { hex: TARGET_HEX, buttonTexts: ['Ju.87b'] }
+        // 逐枚指到**未飞过任务**的斯图卡，不再靠同名文字猜（同名机有两枚）
+        return {
+          hex: TARGET_HEX,
+          ...(nextStrafePlaneId.value === null ? {} : { airInstanceId: nextStrafePlaneId.value }),
+          buttonTexts: ['Ge Ju.87b', 'Ju.87b'],
+        }
       }
       return { hex: TARGET_HEX, buttonTexts: ['发起任务'] }
     }
@@ -348,24 +410,40 @@ export const useTutorialStore = defineStore('tutorial', () => {
     return { buttonTexts: ['发起任务', '结算任务'] }
   }
 
-  /** 轰炸任务：Ju.88 + Bf.110 都要选中；拦截应答要点复选框并选 I.153 */
+  /** 战机扫荡：右键 19.28 苏军基地 → 选**另一架** Bf110 → 结算 14.3e 空战 → 返航 */
+  function fighterSweepTarget(): TutorialTarget {
+    const state = workbench.airState
+    if (state === null) {
+      if (workbench.airTargetHex === null) {
+        return { hex: BOMB_HEX, texts: ['战机扫荡'], buttonTexts: ['战机扫荡'] }
+      }
+      if (workbench.airMissionAirIds.length === 0) {
+        return {
+          hex: BOMB_HEX,
+          ...(sweepPlaneId.value === null ? {} : { airInstanceId: sweepPlaneId.value }),
+          buttonTexts: ['Ge Bf.110', 'Bf.110'],
+        }
+      }
+      return { hex: BOMB_HEX, buttonTexts: ['发起任务'] }
+    }
+    if (state.step === 'airCombat') return { buttonTexts: ['② 结算空战并继续（14.3）'] }
+    if (state.step === 'resolveMission') return { buttonTexts: ['结算任务'] }
+    if (state.step === 'returnToBase') return { buttonTexts: ['⑥ 返航（14.2f-G）'] }
+    return { buttonTexts: ['发起任务', '结算任务'] }
+  }
+
+  /** 轰炸任务：两队 Ju.88 + 一队 Do.17z + 一队 Bf110 逐枚点；拦截应答由苏军 AI 给 */
   function bombingTarget(): TutorialTarget {
     const state = workbench.airState
     if (state === null) {
       if (workbench.airTargetHex === null) {
         return { hex: BOMB_HEX, texts: ['轰炸'], buttonTexts: ['轰炸'] }
       }
-      // 14.2a：一次任务最多 4 机 ⇒ Ju.88 + Do.17z + 两架 Bf.110，逐枚都要选中
-      for (const [aircraftId, name] of BOMBING_AIRCRAFT) {
-        const units = workbench.airUnits.filter(
-          (air) =>
-            air.aircraftId === aircraftId && air.side === 'axis' && air.airStatus === 'active',
-        )
-        for (const unit of units) {
-          if (!workbench.airMissionAirIds.includes(unit.instanceId)) {
-            return { hex: BOMB_HEX, buttonTexts: [name] }
-          }
-        }
+      // 14.2a：一次任务最多 4 机，逐枚高亮（同名机两枚 ⇒ 只认实例 id）
+      const pendingId = bombingPlaneIds.value.find((id) => !workbench.airMissionAirIds.includes(id))
+      if (pendingId !== undefined) {
+        const plane = workbench.airUnits.find((air) => air.instanceId === pendingId)
+        return { hex: BOMB_HEX, airInstanceId: pendingId, buttonTexts: [plane?.name ?? 'Ju.88'] }
       }
       return { hex: BOMB_HEX, buttonTexts: ['发起任务'] }
     }
@@ -473,6 +551,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
       case 'strafe-1':
       case 'strafe-2':
         return strikeTarget()
+      case 'fighter-sweep':
+        return fighterSweepTarget()
       case 'move':
         return { hex: MOVE_HEX, texts: ['开拔'] }
       case 'overrun-1':
@@ -701,11 +781,19 @@ export const useTutorialStore = defineStore('tutorial', () => {
         done: () => artilleryInRange(),
       },
       {
+        id: 'fighter-sweep',
+        title: '扫荡苏军基地',
+        hint: '霍特：用另一架 Bf110 扫荡 19.28 的拉格3。',
+        intro:
+          '14.6：战斗机飞进有激活敌机的敌方基地打空战；这一轮两败俱伤，各掉 1 军力后都返航。敌方空军基地 10 格内都是拦截范围（14.4c）。',
+        done: () => fighterSweepDone(),
+      },
+      {
         id: 'bombing',
         title: '空军轰大城',
-        hint: '霍特：四机齐出，轰 19.28 的大城守军。',
+        hint: '霍特：两队 Ju.88、一队 Do.17z、一队 Bf110 轰 19.28。',
         intro:
-          'Ju.88 与 Do.17z 投弹、两架 Bf.110 护航；苏军 I.153 起飞拦截——它打不过护航（14.3e）。',
+          '苏军基地 10 格内都是巡逻区（14.4c），I.153 必然拦截；Ju.88 与 Do.17z 投弹、没扫荡过的 Bf110 护航，把它打回去。',
         done: () => bombingDone(),
       },
       {
@@ -759,25 +847,63 @@ export const useTutorialStore = defineStore('tutorial', () => {
 
   /* ────────────────────── 开局脚本（只改开局数据，不改判定） ────────────────────── */
 
-  /** 教学局需要一架苏军 I.153（剧本无苏机）与一个合法的反击预备 */
+  /** 教学脚本：苏军基地两架敌机 + 第二队 Ju.88 + 一个合法的反击预备 */
   function applyBoardScript(): void {
     if (!active.value || scriptApplied.value) return
     if (!setup.finished) return
     scriptApplied.value = true
 
-    if (!workbench.airUnits.some((air) => air.aircraftId === 'su-aircraft-ru-i-153')) {
+    /*
+     * 苏军空军基地 19.28 正好有一队 I.153 和一队 LaGG.3（用户口径）。
+     * 两者先不激活：扫射目标 18.27 虽在 10 格巡逻区内，也不能让它们提前参战；
+     * LaGG.3 在战机扫荡课激活，I.153 到轰炸课才升空拦截。
+     */
+    if (!workbench.airUnits.some((air) => air.instanceId === TUTORIAL_SU_I153_ID)) {
       const record = findAircraftRecord('su-aircraft-ru-i-153')
       if (record !== undefined) {
         workbench.airUnits.push(
           toConsoleAirUnit({
             aircraft: record,
-            instanceId: 'tutorial-su-i153',
-            hex: { col: 19, row: 28 },
+            instanceId: TUTORIAL_SU_I153_ID,
+            hex: { ...BOMB_HEX },
             side: 'soviet',
-            // 扫射阶段先不让它起飞（否则两次斯图卡都会被它拦下）；进轰炸环节再激活
             airStatus: 'inactive',
           }),
         )
+      }
+    }
+    if (!workbench.airUnits.some((air) => air.instanceId === TUTORIAL_SU_LAGG_ID)) {
+      const record = findAircraftRecord('su-aircraft-ru-lagg-3')
+      if (record !== undefined) {
+        workbench.airUnits.push(
+          toConsoleAirUnit({
+            aircraft: record,
+            instanceId: TUTORIAL_SU_LAGG_ID,
+            hex: { ...BOMB_HEX },
+            side: 'soviet',
+            airStatus: 'inactive',
+          }),
+        )
+      }
+    }
+
+    // Intro 只有一队 Ju.88；教学轰炸要求两队 ⇒ 第二队随开局脚本进图外盒、同受整备
+    if (!workbench.airUnits.some((air) => air.instanceId === TUTORIAL_EXTRA_JU88_ID)) {
+      const record = findAircraftRecord(BOMBING_AIRCRAFT[0][0])
+      if (record !== undefined) {
+        const origin = workbench.airUnits.find(
+          (air) => air.side === 'axis' && air.aircraftId === BOMBING_AIRCRAFT[0][0],
+        )?.hex ?? { col: 2, row: 2 }
+        workbench.airUnits.push(
+          toConsoleAirUnit({
+            aircraft: record,
+            instanceId: TUTORIAL_EXTRA_JU88_ID,
+            hex: { ...origin },
+            side: 'axis',
+            airStatus: 'inactive',
+          }),
+        )
+        workbench.setAirInBoxMembership(TUTORIAL_EXTRA_JU88_ID, true)
       }
     }
 
@@ -835,12 +961,23 @@ export const useTutorialStore = defineStore('tutorial', () => {
     flush: 'sync',
   })
 
+  // 战机扫荡课：LaGG.3 升空当靶子；扫荡后它两败俱伤返航，I.153 仍留在基地等轰炸课
+  watch(
+    () => steps.value[cursor.value]?.id ?? '',
+    (id) => {
+      if (!active.value || id !== 'fighter-sweep') return
+      const lagg = workbench.airUnits.find((air) => air.instanceId === TUTORIAL_SU_LAGG_ID)
+      if (lagg !== undefined && lagg.airStatus === 'inactive') lagg.airStatus = 'active'
+    },
+    { flush: 'sync' },
+  )
+
   // 进入移动段的轰炸环节时，苏军 I.153 才升空待命（拦截走 14.5 既有判定）
   watch(
     () => `${String(active.value)}|${workbench.segmentStep?.id ?? ''}`,
     () => {
       if (!active.value || workbench.segmentStep?.id !== 'movement.barrage') return
-      const i153 = workbench.airUnits.find((air) => air.aircraftId === 'su-aircraft-ru-i-153')
+      const i153 = workbench.airUnits.find((air) => air.instanceId === TUTORIAL_SU_I153_ID)
       if (i153 !== undefined && i153.airStatus === 'inactive') i153.airStatus = 'active'
     },
     { flush: 'sync' },
@@ -866,7 +1003,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
    * · 拦截空战（14.3e）：I.153 ACV 1 vs 迎战 Bf.110 ACV 3 ⇒ 修正骰 = 6 + 1 − 3 = 4 ≤ 6，
    *   拦截机返航（轴心胜）；损失骰固定 1（无损失）。
    * · 防空（14.4e）：固定 12 + 损失骰 1 ⇒ 不命中，任务机完整进入轰炸。
-   * · 轰炸（10.0a）：四机轰炸值 12+8+5+5 = 30 ⇒ 初始列 25-40；骰面 11 ⇒ 「1」
+   * · 轰炸（10.0a）：四机轰炸值 12+12+8+5 = 37 ⇒ 初始列 25-40；骰面 11 ⇒ 「1/2」
    *   （DG + 1 点军力损失），随后由玩家在「确认受损单位」里落盘。
    */
   watch(
@@ -892,6 +1029,30 @@ export const useTutorialStore = defineStore('tutorial', () => {
         workbench.airInputs.flakDie = 12
         workbench.airInputs.lossDie = 1
       }
+    },
+    { flush: 'sync' },
+  )
+
+  /*
+   * 14.6 战机扫荡的 14.3e 空战：Bf110 ACV 3 vs LaGG.3 ACV 2。
+   * 固定 2 骰 = 6 ⇒ 修正骰 6+3−2 = 7（双方返航）；损失骰 5 ⇒ 两架各损 1 军力
+   * （14.3e-C：双方返航也掷损失骰）——正是用户要的「两败俱伤，两个都回去」。
+   * 走既有 `airInputs.airCombatDice` 裁判骰入口，不改空战表 / 损失判定。
+   */
+  watch(
+    () => workbench.airState,
+    (state) => {
+      if (!active.value) return
+      if (
+        state === null ||
+        state.finished ||
+        state.kind !== 'fighter_sweep' ||
+        state.step !== 'airCombat'
+      ) {
+        workbench.airInputs.airCombatDice = null
+        return
+      }
+      workbench.airInputs.airCombatDice = [{ die: 6, lossDie: 5 }]
     },
     { flush: 'sync' },
   )

@@ -628,6 +628,10 @@ const displayedBases = computed(() =>
                   } 格 / 航程 ${item.air.rangeHexes}${
                     item.disabledReason === null ? '' : `｜${item.disabledReason}`
                   }`"
+                  :data-aircraft-id="item.air.aircraftId"
+                  :data-air-instance-id="item.air.instanceId"
+                  :data-air-selected="item.selected ? 'true' : 'false'"
+                  :data-air-disabled="item.disabledReason === null ? 'false' : 'true'"
                   @click="workbench.toggleAirMissionUnit(item.air.instanceId)"
                 >
                   <img :src="counterImageUrlOf(item.air) ?? ''" class="base-roster__img" alt="" />
