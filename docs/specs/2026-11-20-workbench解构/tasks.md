@@ -21,6 +21,43 @@
 - [x] 迁入 `refuseWhileSettling`（5 处）
 - [ ] 迁入撤销账（`undoTrail` / `noteUndoable` / `captureUndoSnapshot` / `dropUndoOf` / `undoFamilyHandlers`）—— **延后到 B7 之后**，理由见 `B0-审查记录.md` §3
 - [ ] `segmentStep` / `segmentAdvanceBlock` 仅打成 port 透传（留给 B7）
+      **B2-2a 施工单（2026-11-21 抽签名后定稿）**：区间 `17197–17992`（796 行 / 16 声明 = 14 function + 2 computed）。
+
+先说一个上一版没看出来的类别：**"facade 自己 export 出去的符号"既不是端口、也不能 import**。
+
+| 符号                   | 位置                    | 处理                                                                                                                                       |
+| ---------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `movementPhaseOf`      | `export function` @673  | **搬进 `workbench-model.ts`**（纯映射，只依赖 `ConsolePhase`/`MovementSegmentPhase`），facade 原地 `export { movementPhaseOf }` 兼容旧导入 |
+| `SpecialCombatPending` | `export interface` @654 | 同样搬进 `workbench-model.ts` 并 re-export                                                                                                 |
+
+理由：切片若 `import … from './workbench'` 会造 facade ⇄ 切片环；当端口传又能传（但纯类型/纯函数没必要占端口位）。
+
+扣除这两项后，**端口 33 项 = 按值 26 + 晚绑定 7**：
+
+| 端口                                                                             | 类型（照声明抄）                                                                                                                                                                                                                                          |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `phase` `turn`                                                                   | `ComputedRef<ConsolePhase>` / `ComputedRef<number>`                                                                                                                                                                                                       |
+| `rng`                                                                            | `ComputedRef<RngState>`                                                                                                                                                                                                                                   |
+| `units` `airUnits` `airBoxMembers`                                               | `Ref<ConsoleUnit[]>` / `Ref<ConsoleAirUnit[]>` / `Ref<string[]>`                                                                                                                                                                                          |
+| `groundMovement`                                                                 | `ReturnType<typeof createGroundMovementDomain>`                                                                                                                                                                                                           |
+| `moveInteraction`                                                                | `ReturnType<typeof createGroundMovementDomain>['moveInteraction']`                                                                                                                                                                                        |
+| `spDumps` `offMapSupplyStocks` `supplyState`                                     | `Ref<SpDump[]>` / `Ref<Record<string, SpHoldings>>` / `Ref<SupplyInteractionState \| null>`                                                                                                                                                               |
+| `pushLog` `recordSettlement`                                                     | 既有签名                                                                                                                                                                                                                                                  |
+| `clearMoveInteraction`                                                           | `() => void`                                                                                                                                                                                                                                              |
+| `refuseWhileSettling`                                                            | `(action: string) => boolean`                                                                                                                                                                                                                             |
+| `eliminateEntry`                                                                 | `(entry: DeadPileEntry, rule: string, text: string, refresh?: boolean) => void`                                                                                                                                                                           |
+| `setAirInBoxMembership` `addSpAtHex` `airUnloadedTAt` `acceptAir` `setAirStatus` | 既有签名                                                                                                                                                                                                                                                  |
+| `applyAirStepLoss`                                                               | `(instanceId: string) => void`                                                                                                                                                                                                                            |
+| `drawAir2d6` `drawAir1d6`                                                        | `() => number`                                                                                                                                                                                                                                            |
+| `airMissionKindLabel`                                                            | `(kind: string) => string`                                                                                                                                                                                                                                |
+| `requireAction`                                                                  | `(key: ActionKey, action: string) => boolean`                                                                                                                                                                                                             |
+| `noteUnitEnteredHex`                                                             | `(unit: ConsoleUnit, hex: HexRef) => void`                                                                                                                                                                                                                |
+| **晚绑定 7**                                                                     | `barrageFacts`(computed 3682) / `railMoveFacts`(computed 4520) / `airUnloadLedger`(ref 15966) / `airMissionJoinChoices`(computed 16814) / `specialPending`(ref 18126) / `airMissionSegmentKind`(computed 22401) / `airMissionKindChoices`(computed 22425) |
+
+**同时要剪掉的 6 个既有端口**（定义就在本区间里）：`isAirInOffMapBox`/`onMapAirUnits`/`airUnitsAt`/`airDistanceFromRealBase`/`airUnitsInHex`/`applyAirCargoDelivery`——接口成员、`createAirDomain` 解构、facade ports 实参（含 `get` 访问器）三处同删，并把切片里已有的 `ports.X` 改回裸名。
+
+端口总数：36 − 6 + 21 = **51**（单批新增 27 < 40 红线 ✓，但接口本身开始变宽，B3 之后应考虑把 `pushLog`/`recordSettlement`/`requireAction` 这类基础设施挪进 `workbench-core` 的共享固定面）。
+
 - 验收：`npm run check` 绿 + `tests/stores/*` 日志/撤销/存档用例绿 + 公开面键集不变
 
 ## 2. B1 轰炸（已落地，`e0f…`→待填）
