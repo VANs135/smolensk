@@ -43,7 +43,9 @@
 
 - [ ] 新建 `src/stores/workbench-air.ts`，搬 **状态块 2416–2592**（26 个 ref）+ **派生块 5944–6088**（12 个 computed；**不是 5944–6063**——6063 正好切在 `airMissionRosterNow` 的函数体里，会把它的局部 `state` / `air` 误算成端口）
 - [ ] 建域点可放在 2593 附近（新出现的外部依赖全在 2593 之后 ⇒ 走 getter 延迟绑定），**不必像 B1 那样压到 setup 末尾**
-- [ ] 实测端口 **26 项**，其中 16 项须走 getter（含 `segmentGateQuery` @23302、`constructionMarkerAirBaseId`、`constructionMarkerPieces` @27821）
+- [ ] 实测端口 **25 项**（口径见 spec §6.1.1：三段并集再减掉切片自己的声明），其中仅 6 项（`rng`/`units`/`selectedId`/`airUnits`/`offMapSupplyStocks`/`activeSide`）可在建域点直连，**19 项须走 getter**（含 `segmentGateQuery` @23302、`constructionMarkerAirBaseId` @27821、`constructionMarkerPieces` @27836、`pushLog` @7075）
+- [ ] 不能漏的三个端口：`setAirStatus`(:17440)、`markAirMissionFlown`(:17459)、`pushLog`(:7075)——`port-report.mjs` 会把它们漏掉，**必须用 `node scripts/port-crosscheck.mjs --start .. --end ..` 对拍**
+- [ ] `AirInputs`(:825 `export interface`) 搬进 `workbench-model.ts`；`createAirInputs`(:937，无 export) 保留为端口或同搬 model（二选一）
 - 命名：**域对象叫 `airDomain`，不要叫 `air`**——facade 里已有 `airSupply` / `airUnitTransit` / `airMissionDomain` / `airCargoResolution` 四个 air 开头的域，再加一个 `air` 无法区分（另：`(air) => …` 这种回调参数在文件里出现几十次，`air` 这个名字太容易被误读成本地变量）
 - 验收：`npm run check` 绿 + 公开面 1,013 键不变（状态与派生仍在 `return` 里按原名暴露）
 

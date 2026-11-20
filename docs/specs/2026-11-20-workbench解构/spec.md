@@ -223,7 +223,7 @@ node scripts/migration-report.mjs --out docs/specs/2026-11-20-workbench解构/mi
 
 **因此 B2 拆成两个提交，第一步只搬"状态 + 派生"：**
 
-- **B2-1（先做）**：搬 2416–2592（状态，26 ref）+ **5944–6088**（派生，12 computed；**不能用 5944–6063**——6063 切在 `airMissionRosterNow` 的函数体里）。实测合并端口 **26 项**，其中 16 项须 getter。这两个块是纯声明、无函数体、互相引用密集；搬完 `airDomain` 就**拥有自己的状态**，后续函数搬进同一文件时不再需要把状态当端口。此时建域点可以放在 2593 附近（新出现的外部依赖全是 2593 之后声明的，走 getter），**不会像 B1 那样被迫把装配点压到 setup 末尾**。
+- **B2-1（先做）**：搬 2416–2592（状态，26 ref）+ **5944–6088**（派生，12 computed；**不能用 5944–6063**——6063 切在 `airMissionRosterNow` 的函数体里）。**端口经两套口径交叉复核后定为 29 项**（原写 26 / 25 都是错的，见 §6.1.1）。这两个块是纯声明、无函数体、互相引用密集；搬完 `airDomain` 就**拥有自己的状态**，后续函数搬进同一文件时不再需要把状态当端口。此时建域点可以放在 2593 附近（新出现的外部依赖全是 2593 之后声明的，走 getter），**不会像 B1 那样被迫把装配点压到 setup 末尾**。
 - **B2-2（后做）**：搬函数块（18136–18148 / 18198–18502 / 18503–18953 / 19673–20865 / 23386）。到这一步端口应显著低于 48（因为状态与派生已进切片），仍需先 `port-report` 复测确认 < 40。
 - **§19 的 18003–18135（轰炸/炮击入口判据）不进空军切片**，它是跨轰炸+空军的协调层，留到 B5 之后。
 
@@ -234,6 +234,29 @@ node scripts/migration-report.mjs --out docs/specs/2026-11-20-workbench解构/mi
 **命名还有一处坑**：facade 已有 `airSupply` / `airUnitTransit` / `airMissionDomain` / `airCargoResolution` 四个 air 开头的域，新域**不能叫 `air`**（文件里还有几十处 `(air) => …` 回调参数，会读成本地变量）。用 `airDomain`。
 
 **方法论定下来**：每批开工第一步跑 `node scripts/port-report.mjs --start <首> --end <尾>`；**> 40 就重新划批**，不要硬切；**看它的截断警告**，预警说明 `--end` 取错了。这条替代了 B1 时那三个一次性脚本。
+
+### 6.1.1 端口口径纠错（第三轮复核，2026-11-20）
+
+`port-report.mjs` 走 TypeScript 符号解析，快且类型准，但**已证实会漏收引用**：`createAirMissionDomain({ … })` 实参里的 `setAirStatus`（声明 :17440）、`markAirMissionFlown`（:17459）、`pushLog`（:7075）三个简写属性，工具一个都没报出来——它们既不在「端口」列表，也不在「直接 import」列表，说明是在聚合阶段被当作"零声明的全局"丢了。同区间里同样写法的 `recordSettlement` / `nameOf` / `acceptAir` 却正常报出，所以不是"简写属性一律不认"，而是这三个具体符号解析异常。
+
+因为我上一轮把端口数当成了既成事实（先报 15–20、再报 26、再报 25），**这次不再用单一工具的口径**：新增 `scripts/port-crosscheck.mjs`（纯语法、无反解析），规则是「区间内出现的标识符 − 区间内声明的名字 − setup 体里声明过的名字 = 端口」，与 `port-report` 交叉对拍。B2-1 三段实测：
+
+| 区间                            | port-report | crosscheck | 结论                                                                                                                  |
+| ------------------------------- | ----------- | ---------- | --------------------------------------------------------------------------------------------------------------------- |
+| 2416–2549（状态块前段 14 ref）  | 22          | **23**     | crosscheck 多出 3 个漏收符号；工具多算了 2 个模块级函数                                                               |
+| 2558–2592（状态块后段 12 ref）  | —           | 0          | 纯声明，只用到 3 个 import 的类型                                                                                     |
+| 5949–6086（派生块 12 computed） | 12          | 12         | 但其中 4 项（`airState`/`airMissionAirIds`/`airMissionDomain`/`airstripBaseIds`）是状态块里的本地声明，搬完就同属切片 |
+
+**两处口径修正**：
+
+- `AirInputs`（:825 `export interface`）与 `createAirInputs`（:937，**无 export**）是**模块级**声明，不在 setup 体内。工具把它们错算成"端口"，crosscheck 把它们算成"外部"。裁决：`AirInputs` 属共享类型，按 P2-1 的先例搬进 `workbench-model.ts`；`createAirInputs` 不是导出符号，切片无法 import，只能**保留为端口**（或一并搬进 model，B2-1 开工时二选一）。
+- 派生块的 12 项里 4 项随状态块一起进切片，**不重复计入端口**。
+
+⇒ **B2-1 端口 = 25 项**。算法必须按"三段一起搬"来做减法，否则会把切片自己的声明当端口：2416–2549 报 23 项，但其中 `airBases`(5983) / `airTransportProfiles`(6027) / `airOverLimitAircraftInactive`(6047) / `airMissionRosterNow`(6063) **四项就声明在派生块里**，随派生块一起进切片 ⇒ 剩 19；派生块另外只需要 6 项（`activeSide`/`zocOnlySupplyFacts`/`onMapAirUnits`/`segmentGateQuery`/`constructionMarkerAirBaseId`/`constructionMarkerPieces`，`units`/`airUnits` 与状态块重复已去重）⇒ 19 + 6 = **25**。
+
+其中只有 6 项（`rng` 1230 / `units` 1253 / `selectedId` 1321 / `airUnits` 1921 / `offMapSupplyStocks` 2305 / `activeSide` 1111）声明在建域点（≈2593）之前，可直连注入；**其余 19 项必须走 getter**（`pushLog` 7075、`recordSettlement` 7123、`nameOf` 8479、`setAirInBoxMembership` 14562、`addSpAtHex` 14697、`airUnloadedTAt` 16930、`acceptAir` 17429、`setAirStatus` 17440、`markAirMissionFlown` 17459、`drawAir2d6` 17474、`applyAirCargoDelivery` 18755、`airCargoLossPending` 19673、`airMissionResultReady` 20208、`completeAirCargoReturn` 20318、`zocOnlySupplyFacts` 4192、`onMapAirUnits` 18612、`segmentGateQuery` 23302、`constructionMarkerAirBaseId` 27821、`constructionMarkerPieces` 27836）。
+
+**这条减法规则写进方法论**：端口 = （各段 ref 集合的并集）− （各段声明集合的并集）− （真外部）。单独量一段必然偏大。
 
 ---
 
