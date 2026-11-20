@@ -262,11 +262,17 @@ export const useTutorialStore = defineStore('tutorial', () => {
     return overrunLaunches.value >= count || motInfAt(hex)
   }
 
-  /** 30 侦察营是否已绕到 18.26（履带无视 ZOC 的教学点） */
+  /**
+   * 30 侦察营是否已绕到侧后（履带无视 ZOC 的教学点）
+   *
+   * 判定放宽到「到了 18.26，或停在它相邻的一格」：地形/ZOC 常让人停在邻格，
+   * 死认一格会把引导卡死（用户 2026-11-20「MC 营停下后没到下一步」）。
+   */
   function scoutInPlace(): boolean {
-    return workbench.units.some(
-      (unit) => unit.unitId === SCOUT_UNIT_ID && sameHex(unit.hex, SCOUT_HEX),
-    )
+    const scout = workbench.units.find((unit) => unit.unitId === SCOUT_UNIT_ID)
+    if (scout === undefined) return false
+    if (sameHex(scout.hex, SCOUT_HEX)) return true
+    return !sameHex(scout.hex, STACK_START) && hexDistance(scout.hex, SCOUT_HEX) <= 2
   }
 
   /** 炮兵团是否已进入弹幕射程（3 格）——不要求贴到城边 */
@@ -405,16 +411,19 @@ export const useTutorialStore = defineStore('tutorial', () => {
       case 'reinforce-sp': {
         if (!phaseAtLeast(workbench.phase, 'reinforcement'))
           return { buttonTexts: ['进入下一环节'] }
-        const hex = workbench.freeRailPlan?.placements[0]?.hex
         /*
-         * 2026-11-19（PC 教学审计）：原目标文本「到货 SP（1.6b 补给表）」在界面上不存在
-         * （现界面写的是「补给表 +N SP → 手牌（城市格每格 1 点…）」）⇒ 环永远指不到。
-         * 改成真实存在的「补给表」子串（findText 取最小面积节点 = 手牌那一行）。
+         * 2026-11-20（用户）：增援段玩家实际按三次——
+         *   ①「掷骰检定」（1.6b 补给表 + 补员表）→ ② 手牌点条目 → 点地图高亮格落位
+         *   → ③ 放完点「结束本段」。引导按前两段分别指路，别只挂一句空话。
          */
+        if (workbench.lastVariableRepl === null) {
+          return { buttonTexts: ['掷骰检定'], texts: ['掷骰检定'] }
+        }
+        const hex = workbench.freeRailPlan?.placements[0]?.hex
         return {
           hex,
-          buttonTexts: ['进入下一环节'],
-          // 只匹配手牌那一行「补给表 +N SP → 手牌」；顶栏操作反馈里的「补给表（1.6b）」面积更小会抢目标
+          buttonTexts: ['结束本段'],
+          // 手牌那一行「补给表 +N SP → 手牌」：取面积最小的节点，避开顶栏反馈里的「补给表（1.6b）」
           texts: ['补给表 +'],
         }
       }
@@ -426,7 +435,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
         return { hex: REBUILD_HEX, texts: ['重建'] }
       case 'fuel': {
         if (!phaseAtLeast(workbench.phase, 'movement')) return { buttonTexts: ['进入下一环节'] }
-        return { hex: stackHex.value, texts: ['加油'] }
+        // 12.5c-A：右键菜单里点的是「加油 · 编队法」这一项，不是单独单位法
+        return { hex: stackHex.value, texts: ['加油 · 编队法'], buttonTexts: ['加油 · 编队法'] }
       }
       case 'move-mode':
         // 模式切换在右键菜单里（map-view 的动作表「模式改变 · 5.4」）
@@ -551,14 +561,14 @@ export const useTutorialStore = defineStore('tutorial', () => {
       {
         id: 'reinforce-sp',
         title: '增援 SP',
-        hint: '霍特：把补给表上的 SP 落到高亮格。',
+        hint: '霍特：点「掷骰检定」→ 手牌点条目 → 点高亮格落位。',
         intro: 'SP 是油和弹药，装甲没有它就动不了。',
         done: () => hasSupplyArrival() || phaseAtLeast(workbench.phase, 'movement'),
       },
       {
         id: 'advance-rebuild',
         title: '进入重建段',
-        hint: '霍特：补给发完，点「进入下一环节」到重建段。',
+        hint: '霍特：手牌放完点「结束本段」，再点「进入下一环节」。',
         intro: '增援补员表发 Pax ×1、Eq ×1；重建侦察车花 1 Eq（13.5a）。',
         done: () =>
           workbench.segmentStep?.id === 'reinforcement.rebuild' ||
@@ -587,7 +597,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
       {
         id: 'fuel',
         title: '编队法加油',
-        hint: '霍特：右键这堆 →「加油」→ 编队法，油从补给堆里扣。',
+        hint: '霍特：右键这堆 →「加油 · 编队法」，油从补给堆里扣。',
         intro: '支付流程：整堆一次付清，燃料点从该格补给堆（SP）里扣；堆里没有补给就得先补运。',
         done: () => stackUnits.value.some((unit) => unit.fuelled),
       },
