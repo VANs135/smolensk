@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -15,6 +13,7 @@ import {
   type ActionKey,
   type ConsolePhase,
 } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * 21.10 Shells 的 **store 级接线**：付款、降档、撤销与「必须 HQ 投递」。
@@ -191,7 +190,7 @@ describe('21.10 Shells 付款接线（store）', () => {
   })
 
   it('降档重建 table 时同步套用剧本级折扣（Intro 德军 −2T 不被抹掉）', () => {
-    const source = readFileSync('src/stores/workbench.ts', 'utf8')
+    const source = readStoreSource()
     expect(source).toContain('barrageTableWithScenarioRule(')
     expect(source).toContain('side: state.side')
   })

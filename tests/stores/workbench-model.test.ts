@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-
 import { describe, expect, it } from 'vitest'
 
 import { chartsCrt, mapLayers } from '@/data'
@@ -38,6 +36,7 @@ import {
   unitChoices,
   type UnitRecordView,
 } from '@/stores/workbench-model'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * 骨架操作台（U0）纯逻辑测试
@@ -926,7 +925,7 @@ describe('13.8a / 5.5b：工程能力 = 印值适格 × 模式', () => {
 })
 
 describe('接线守卫：13.8a 的模式判据必须落到施工与 15.4 的组装点', () => {
-  const text = readFileSync('src/stores/workbench.ts', 'utf8')
+  const text = readStoreSource()
 
   it('13.8a：施工执行者与施工前提均用 engineerCapableNow（不是裸 engineerCapable）', () => {
     expect(text).toContain('engineerCapable: engineer !== null && engineerCapableNow(engineer)')

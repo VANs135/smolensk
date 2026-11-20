@@ -14,6 +14,7 @@ import {
   useWorkbenchStore,
   type ConsoleUnit,
 } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * 批 B 切片 2：**12.3 的用途落地**（用户 2026-09-17 夜六条裁定）
@@ -251,7 +252,7 @@ describe('批 B 切片 2：12.3 的用途落地（燃料 ⇒ 真的能走了）'
     expect(panel).not.toContain("{ key: 'combat',")
     // T 数手填框只在 `pickupRequirement.manual` 时渲染
     expect(panel).toContain('pickupRequirement.manual')
-    const engineSource = readFileSync('src/stores/workbench.ts', 'utf8')
+    const engineSource = readStoreSource()
     // 费率取自引擎的 12.5c 计价（不在 store 里写死 1T）
     expect(engineSource).toContain("computeFuelCost({ method: 'singleUnit', unitsNeedingFuel: 1 })")
   })

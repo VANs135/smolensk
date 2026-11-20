@@ -30,6 +30,7 @@ import {
   placeGround,
   sealTraceSupplyByZoc,
 } from '../flows/sop-harness'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * W6 B19 的**端到端流程**（store 级）：专规机制 1.2 / 1.7 / 2.1a / 2.2 / 3.3b / 3.4 / 3.5
@@ -224,7 +225,7 @@ describe('W6 B19：3.5 建造标记', () => {
     })
 
     it('★ 五处"单位进入某格"的写点都挂了同一个判定；面板绑 store 字段（源码守卫）', () => {
-      const store = readFileSync('src/stores/workbench.ts', 'utf8')
+      const store = readStoreSource()
       // 判定交给引擎，调用点覆盖五条进入路径
       expect(store).toContain('isConstructionMarkerDestroyed({ enteredBySovietCombatUnit: true })')
       // 命中数 - 定义本身 = 调用点数（`function noteUnitEnteredHex(` 那条不算调用）

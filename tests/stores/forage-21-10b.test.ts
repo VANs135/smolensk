@@ -15,6 +15,7 @@ import {
   placeGround,
   type Workbench,
 } from '../flows/sop-harness'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * 21.10b **Forage**
@@ -229,7 +230,7 @@ describe('21.10b Forage', () => {
   it('F5/F7（静态）：入口只在补给阶段面板；专规面板只留台账，旧 Shells/Forage 分支已清空', () => {
     const exclusive = readFileSync('src/components/exclusive/ExclusiveRulesPanel.vue', 'utf8')
     const supplyPhase = readFileSync('src/components/supply/SupplyPhasePanel.vue', 'utf8')
-    const workbench = readFileSync('src/stores/workbench.ts', 'utf8')
+    const workbench = readStoreSource()
 
     // 专规面板：不再有第二入口（手填 HQ 格 / 投递距离 / 花 1 枚 / Forage 表单），Shells 也不回头
     expect(exclusive).not.toMatch(/use === 'shells'/)

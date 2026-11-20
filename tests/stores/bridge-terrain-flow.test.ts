@@ -1,5 +1,4 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { readFileSync } from 'node:fs'
 
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -16,6 +15,7 @@ import {
   unitChoices,
   useWorkbenchStore,
 } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * 13.8b 架桥的**接线**（store 侧）：架桥格从哪来、给到了哪两处判据
@@ -253,7 +253,7 @@ describe('13.8b：真实地图上的大河 —— 架桥把"轮式禁入"变成"
   })
 
   it('★ 源码守卫：store 把**同一份**架桥格同时给了 `moveContext` 与 `combatFacts`', () => {
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     // 架桥格只由 `bridgedHexesBySide` 产出（同一处判据），并注入两处
     expect(store).toContain('const bridgedHexes = computed')
     expect(store).toContain('bridgedHexesBySide: bridgedHexes.value')

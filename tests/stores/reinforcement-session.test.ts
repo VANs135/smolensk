@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useMapViewStore, useWorkbenchStore, toConsoleUnit, unitChoices } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B17a：**右栏只读化的第一步**（用户决定 ①「右侧栏只读」，方案 §5 验收「右栏无任何可写控件」）
@@ -180,7 +181,7 @@ describe('B17a：分段渲染与两处入口（源码守卫）', () => {
      * 但"store 给引擎喂假事实"本身就是隐患（闸门表一改就会立刻变成可绕过的免费合兵）。
      * 故按"事实必须如实上报"钉住：传的是当前阶段，常量不得再出现。
      */
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     const at = store.indexOf('function consolidateUnitsNow')
     expect(at).toBeGreaterThan(-1)
     const body = store.slice(at, at + 1600)
@@ -232,7 +233,7 @@ describe('B21：对局台不摆算子，到达投放自带选型', () => {
      */
     expect(game).not.toContain('TOOL_OPTIONS')
     expect(game).not.toContain('workbench.setTool(')
-    const wb = readFileSync('src/stores/workbench.ts', 'utf8')
+    const wb = readStoreSource()
     expect(wb).toContain('const combatPickActive = computed<boolean>(')
   })
 
@@ -322,7 +323,7 @@ describe('B34：拆并四处"指认单位"改成点算子图', () => {
     expect(panel).toContain(':items="slowMobilizationUnitItems(breakdownParentId)"')
     // 候选来自 store 的投影（组件不自己筛单位）
     expect(panel).toContain('workbench.ownUnitsOnMap')
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     expect(store).toContain('const ownUnitsOnMap = computed<ConsoleUnit[]>')
     // 悬停同步地图高亮（与其余面板同一手感）
     expect(panel).toContain('function hoverUnit(id: string | null): void')

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import { auxCards, markers, panelScans } from '@/data'
 import { useWorkbenchStore } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B35 切片 B：对局台骨架（流程条上移 / 删工具按钮 / 删纯文字面板 / 右栏收窄）
@@ -74,7 +75,7 @@ describe('B35：流程条 / 工具按钮 / 纯文字面板（源码守卫）', (
     expect(popover).toContain('workbench.combatLiveStep')
 
     // `tool` 本体保留（验证页与流程用例仍靠它；只是不再出现在对局台的按钮上）
-    const wb = readFileSync('src/stores/workbench.ts', 'utf8')
+    const wb = readStoreSource()
     expect(wb).toContain("const tool = ref<'move' | 'place' | 'battle'>('move')")
     expect(wb).toContain('const combatPickActive = computed<boolean>(')
     expect(wb).toContain("allowedActionsOf(segmentGateQuery.value).has('combat.declare')")

@@ -15,6 +15,7 @@ import {
   type ActionKey,
   type ConsolePhase,
 } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B15b：**战斗操作链**（方案 §4.2「选择集就是后续动作的参与集合」+ §4.3「唯一会话框」）
@@ -218,7 +219,7 @@ describe('B15b：接线（源码守卫）', () => {
   })
 
   it('镜像只走既有两个动作（不另立一套参战判定）', () => {
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     const section = store.slice(
       store.indexOf('function syncCombatParticipants'),
       store.indexOf('function syncCombatParticipants') + 1400,

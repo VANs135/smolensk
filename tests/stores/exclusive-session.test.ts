@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useMapViewStore, useWorkbenchStore } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B17a-3：**专规动作进会话框**（方案 §10①「右侧栏只读」的最后一块）
@@ -145,7 +146,7 @@ describe('B17a-3：分段渲染与入口（源码守卫）', () => {
     expect(store).toContain("kind: 'exclusive'")
     expect(store).toContain('exclusiveOpen.value = false')
     // store 侧的判据来自闸门（不在 map-view 里比规则号）
-    const wb = readFileSync('src/stores/workbench.ts', 'utf8')
+    const wb = readStoreSource()
     expect(wb).toContain('const EXCLUSIVE_PANEL_KEYS: readonly ActionKey[]')
     expect(wb).toContain('allowedActionsOf(segmentGateQuery.value)')
   })

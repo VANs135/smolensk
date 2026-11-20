@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * E5（批 F·F2）：流程条「阶段 / 环节」两行**来源一致**（初设与 Pre-Turn 不错配）
@@ -41,7 +42,7 @@ describe('E5（批 F·F2）：流程条「阶段 / 环节」两行来源一致',
   })
 
   it('④ store 只**暴露**段名常量表，不改回退口径（PHASE_LABELS 可读、不含回退逻辑）', () => {
-    const bench = readFileSync('src/stores/workbench.ts', 'utf8')
+    const bench = readStoreSource()
     // 常量表本身未变（仍是 8 个段 + 无 preTurn）
     expect(bench).toContain("movement: 'C 移动'")
     expect(bench).toContain("combat: 'F 战斗'")

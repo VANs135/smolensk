@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-
 import { describe, expect, it } from 'vitest'
 
 import { mapLayers, type HexRef, type Side } from '@/data'
@@ -9,6 +7,7 @@ import {
   type EngineerHqFacts,
   type RailSupplyFacts,
 } from '@/engine/rules'
+import { readStoreSource } from '../shared/store-source'
 
 const at = (row: number): HexRef => ({ col: 36, row })
 
@@ -166,7 +165,7 @@ describe('13.3c① / 5.5b / 13.8a：Engineer-Capable HQ 的判据', () => {
 
 describe('接线守卫：store 必须把该事实注入铁路补给事实', () => {
   it('13.3c：workbench.ts 传入 hasPortOrEngineerHqAt 且使用 engineerCapableHqAt', () => {
-    const text = readFileSync('src/stores/workbench.ts', 'utf8')
+    const text = readStoreSource()
     expect(text).toContain('hasPortOrEngineerHqAt:')
     expect(text).toContain('engineerCapableHqAt(')
   })

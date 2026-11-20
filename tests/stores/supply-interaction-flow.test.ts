@@ -10,6 +10,7 @@ import { holdingsToT } from '@/engine/rules'
 import { toConsoleUnit, unitChoices, useWorkbenchStore, type ConsoleUnit } from '@/stores'
 
 import { CORE_HEX, sealTraceSupplyByZoc } from '../flows/sop-harness'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * C8 补给交互与 SP 管理的**端到端流程**（store 级）
@@ -562,7 +563,7 @@ describe('C8 12.3b：指挥部投递（付款补给站由引擎裁定）', () =>
      * 可观测证据。本仓库不挂组件渲染测试 ⇒ "面板上真的没有那个勾选框"用源码守卫钉住。
      * 引擎侧的 12.3b-A 判据另有 `tests/engine/supply-interaction.test.ts` 覆盖。
      */
-    const storeSource = readFileSync('src/stores/workbench.ts', 'utf8')
+    const storeSource = readStoreSource()
     expect(storeSource).toContain('forImmediateUse: true,')
     expect(storeSource).not.toContain('supplyInputs.value.forImmediateUse')
     const panelSource = readFileSync('src/components/supply/SupplyPanel.vue', 'utf8')

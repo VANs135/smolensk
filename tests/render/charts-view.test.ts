@@ -19,6 +19,7 @@ import {
   turnWeatherTableView,
 } from '@/render/charts-view'
 import { useWorkbenchStore } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B16：**表格屏的只读投影**（方案 §5 底部托盘「表格」段 + §6「`charts.*` 视图模型」）
@@ -248,7 +249,7 @@ describe('B16：托盘与右栏的接线（源码守卫）', () => {
   })
 
   it('★ 5.0c 的控制改为**触发**（进入即记账）＋ 开局按剧本与战线播种（B17-1）', () => {
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     // 触发：位置键 + 同步 flush（否则同一 tick 里紧跟的判定读到旧账本）
     expect(store).toContain('victoryOccupancyKey')
     expect(store).toContain("{ flush: 'sync' }")

@@ -15,6 +15,7 @@ import {
   unitChoices,
   useWorkbenchStore,
 } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B14a：空军面板迁移到 `CounterPicker`（用户口径⑪ 后半）
@@ -346,7 +347,7 @@ describe('B14a：空军面板的替换（源码守卫）', () => {
     expect(panel).toContain('workbench.airCombatAttackerPlanes')
     expect(panel).toContain('workbench.airCombatDefenderPlanes')
     // 写回落在 airInputs 上（组件不另立状态）
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     expect(store).toContain(
       'airCombatPicks: { attackerAircraftId: string | null; defenderAircraftId: string | null }[]',
     )

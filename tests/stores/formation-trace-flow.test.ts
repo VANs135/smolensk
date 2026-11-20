@@ -1,11 +1,10 @@
-import { readFileSync } from 'node:fs'
-
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { mapLayers } from '@/data'
 import type { HexRef } from '@/data'
 import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B40（12.6f / 13.7a）：**多单位编队的追溯补给必须同源**
@@ -106,7 +105,7 @@ describe('B40：12.6f 编队追溯补给的同源取舍', () => {
   })
 
   it('★ 源码守卫：接线在 store 这一侧（分组键＝`unit.formation`，判据给引擎的唯一实现）', () => {
-    const source = readFileSync('src/stores/workbench.ts', 'utf8')
+    const source = readStoreSource()
     expect(source).toContain('function formationTraceDeniedIds')
     expect(source).toContain('const formation = unit.formation')
     expect(source).toContain('formationTraceTradeoff(facts, {')

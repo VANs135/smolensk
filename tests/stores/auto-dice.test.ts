@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
 import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B28：**随机数一律自动结算**（用户口径 2026-09-16 #9）
@@ -104,7 +105,7 @@ describe('B28：界面上的手填骰面已撤（源码守卫）', () => {
   })
 
   it('★ store 侧的骰面字段**保留**（验证页与既有用例仍要指定骰面）', () => {
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     expect(store).toContain('interceptDie')
     expect(store).toContain('flakDie')
     expect(store).toContain('halfDie')

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * 阶段末「装甲集群」窗口减负（源码守卫）
@@ -12,7 +13,7 @@ import { describe, expect, it } from 'vitest'
 const panel = (): string => readFileSync('src/components/exclusive/ExclusiveRulesPanel.vue', 'utf8')
 const mapView = (): string => readFileSync('src/stores/map-view.ts', 'utf8')
 const sessionSteps = (): string => readFileSync('src/stores/session-steps.ts', 'utf8')
-const workbench = (): string => readFileSync('src/stores/workbench.ts', 'utf8')
+const workbench = (): string => readStoreSource()
 
 describe('阶段末装甲集群：无选择不弹窗', () => {
   it('会话自动出现只认「真有选择」，不再由段末闸门单独触发', () => {

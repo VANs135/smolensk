@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -17,6 +15,7 @@ import {
   type ConsolePhase,
   type ConsoleUnit,
 } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * 第六批批 P0 切片 1（条 23）：**10.0e-A/B 轰炸账本的换段清零**
@@ -297,7 +296,7 @@ describe('第六批 P0-1：10.0e-A/B 账本的换段清零（条 23）', () => {
   })
 
   it('⑤ 源码守卫：清零点合一（`resetSegmentTransient` 是唯一清零点，换段/换阶段/换回合/换方/复位都走它）', () => {
-    const source = readFileSync('src/stores/workbench.ts', 'utf8')
+    const source = readStoreSource()
     // ① `resetSegmentTransient` 里必须清
     const start = source.indexOf('function resetSegmentTransient(): void {')
     const body = source.slice(start, source.indexOf('\n  }', start))

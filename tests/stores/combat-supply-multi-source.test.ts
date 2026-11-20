@@ -25,6 +25,7 @@ import {
   type ConsolePhase,
   type ConsoleUnit,
 } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * 12.4：战斗补给**不要求同源**
@@ -469,7 +470,7 @@ describe('12.10a：部队储备只在图上付不清时出现', () => {
   })
 
   it('B7 守卫：判据只看全部可达来源，不看已点选那座站的 T', () => {
-    const source = readFileSync('src/stores/workbench.ts', 'utf8')
+    const source = readStoreSource()
     const start = source.indexOf('const combatDefenderStocksApplicable')
     const end = source.indexOf('\n  })', start)
     expect(start).toBeGreaterThan(0)

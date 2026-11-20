@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -7,6 +5,7 @@ import {
   validateBattleLossAllocation,
   type BattleUnitView,
 } from '@/engine/rules'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * 批 F 切片 2（B49 清单前两项）
@@ -144,7 +143,7 @@ describe('批 F 切片 2①：9.11a 的分配自由（9.11c 的两条约束之�
 
 describe('专规 3.3d：轴心国多单位编队不得整编（源码守卫）', () => {
   it('★ 地面与飞机两处合并共用一处阵营判据（两处各写一遍会在改口径时漂移）', () => {
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     // 判据实现只有一处：禁条原话 + 规则号都在那一个函数里（3.3d；原误标 3.2 已于 2026-11-05 更正）
     const helper = store.slice(store.indexOf('function axisConsolidationRefused'))
     expect(helper.slice(0, 900)).toContain('轴心国多单位编队不得整编')

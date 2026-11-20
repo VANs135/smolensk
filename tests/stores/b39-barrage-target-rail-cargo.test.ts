@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { HexRef } from '@/data'
 import { mapLayers } from '@/data'
 import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B39 / A-1：**宣布轰炸前按盘面校验"整体目标"**（10.0c / 10.0d）
@@ -179,7 +180,7 @@ describe('B39 / B-3：运输点数作铁路货物', () => {
   })
 
   it('★ 源码守卫：三种货物共用同一条链（面板有第三个按钮）', () => {
-    const wb = readFileSync('src/stores/workbench.ts', 'utf8')
+    const wb = readStoreSource()
     expect(wb).toContain("kind: 'unit' | 'sp' | 'transportPoint'")
     expect(wb).toContain("cargo.kind === 'unit' || cargo.kind === 'transportPoint'")
     expect(wb).toContain(

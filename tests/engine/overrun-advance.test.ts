@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import { resolveAdvanceAfterCombat } from '@/engine/rules'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B33：**突袭推进收束**（用户报告 #16）
@@ -85,7 +86,7 @@ describe('B33：界面不给"不推进"（源码守卫）', () => {
     expect(panel).toContain('9.12g-D')
     // 突袭下没有单独的「不推进」按钮：唯一主按钮由 advanceButtonLabel 给"推进并结束"
     expect(panel).not.toContain('不推进（9.12g）')
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     expect(store).toContain("state.attackType === 'overrun'")
   })
 })

@@ -13,6 +13,7 @@ import {
   unitChoices,
   useWorkbenchStore,
 } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B29a：**空军任务正规化（第一批）**——用户口径 2026-09-16 #3
@@ -114,7 +115,7 @@ describe('B29a：任务格与迎战机（玩家自选）', () => {
   })
 
   it('★ 源码守卫：store 不再写死"名单第一架"当迎战机；面板给出点名阵列与自动结算按钮', () => {
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     /*
      * B29a 修的是"未点名就回落名单第一架"；B29b-2 把回落口径也换成**ACV 最高**
      * （与引擎 `pickHighestAcv` 的缺省一致）⇒ 现在 store 里**不再有**任何 `.value[0]` 式回落。

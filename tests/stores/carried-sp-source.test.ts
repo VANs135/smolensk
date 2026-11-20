@@ -7,6 +7,7 @@ import type { HexRef } from '@/data'
 import { mapLayers } from '@/data'
 import { SP_TO_T } from '@/engine/rules'
 import { needsFuelOf, toConsoleUnit, unitChoices, useWorkbenchStore, hexLabel } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B32 步骤 5：**装载在运输点数上的 SP 也是补给站**（12.1b + 13.2f）
@@ -284,7 +285,7 @@ describe('B32 步骤 5：装载在运输点数上的 SP（12.1b / 13.2f）', () 
   })
 
   it('★ 源码守卫：facts / 候选 / 扣款三处都接了"装载来源"，且 id 前缀是 unit:', () => {
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     expect(store).toContain('const carriedSpDumps = computed')
     expect(store).toContain('allSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side }))')
     /*

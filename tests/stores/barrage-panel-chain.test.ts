@@ -16,6 +16,7 @@ import {
   type ConsolePhase,
   type ConsoleUnit,
 } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B15c：**炮击操作链**（方案 §4.2「选择集就是后续动作的参与集合」+ §4.3「唯一会话框」）
@@ -337,7 +338,7 @@ describe('A 组：10.0e-A/B 的按阶段轰炸账本', () => {
   })
 
   it('源码守卫：账本喂给引擎的两条事实，且清零点齐全（换阶段 / 换回合 / 复位）', () => {
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     expect(store).toContain('barragedHexesThisPhase')
     expect(store).toContain('barragedUnitIdsThisPhase')
     expect(store).toContain('hexAlreadyBarragedThisPhase:')
@@ -360,7 +361,7 @@ describe('B15c：接线（源码守卫）', () => {
   })
 
   it('镜像只走既有的 `toggleBarrageUnit`，候选只取 `barrageUnitChoices`（不另筛一遍）', () => {
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     const start = store.indexOf('function syncBarrageParticipants')
     const section = store.slice(start, start + 900)
     expect(section).toContain('barrageUnitChoices.value')

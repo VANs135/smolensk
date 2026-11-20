@@ -18,6 +18,7 @@ import {
   type ConsolePhase,
   type ConsoleUnit,
 } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B14c：战斗面板迁移到 `CounterPicker`（用户口径⑪ 后半）
@@ -432,7 +433,7 @@ describe('B14c：战斗面板的替换（源码守卫）', () => {
 
   it('B9：9.5b 减员的唯一入口是地图，面板阵列没有第二个入口', () => {
     const mapView = readFileSync('src/stores/map-view.ts', 'utf8')
-    const workbench = readFileSync('src/stores/workbench.ts', 'utf8')
+    const workbench = readStoreSource()
     expect(mapView).toContain('workbench.syncCombatParticipants(hex, stackSelection.value)')
     expect(workbench).toContain('toggleCombatSupplyAttacker(unit.instanceId)')
     expect(panel).not.toContain('toggleCombatSupplyAttacker')
@@ -499,7 +500,7 @@ describe('B14c：战斗面板的替换（源码守卫）', () => {
     expect(popover).not.toContain('workbench.confirmCombatAdvance()')
 
     // 勾选动作仍在 store（面板与小窗共用一份，不各写一遍）
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     expect(store).toContain('function toggleAdvanceUnit(')
   })
 
@@ -714,7 +715,7 @@ describe('B20：撤退落点在地图上点格（9.12）', () => {
     expect(popover).not.toContain('computed(() => workbench.combatRetreatSide)')
 
     // 两个口径里只剩下一处（`combatRetreatSide` 已删：它取 plans[0]，永远先攻方）
-    const workbenchSource = readFileSync('src/stores/workbench.ts', 'utf8')
+    const workbenchSource = readStoreSource()
     expect(workbenchSource).not.toContain('const combatRetreatSide')
     expect(workbenchSource).not.toContain('const combatRetreatingUnits')
   })

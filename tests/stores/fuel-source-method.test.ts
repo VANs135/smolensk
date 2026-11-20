@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -8,6 +6,7 @@ import { mapLayers } from '@/data'
 import { HEX_DIRECTIONS, isOnMap, neighbor } from '@/engine/hex-geometry'
 import { createMapFacts, holdingsToT, selectMovementTerrain } from '@/engine/rules'
 import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * B32（步骤 1–2）：**燃料的候选来源按方法分派**（12.5c-B / 12.5e；按 12.0 的取补机制实现）
@@ -199,7 +198,7 @@ describe('B32：候选来源按方法分派（步骤 2，按 12.3 的走法）',
   })
 
   it('★ 步骤 3：拒付话术**按方法**给（三种方法的可达性口径不同，出处 12.5c-A/B/C）', () => {
-    const store = readFileSync('src/stores/workbench.ts', 'utf8')
+    const store = readStoreSource()
     expect(store).toContain('12.5c-B/12.5e：HQ 法要求')
     expect(store).toContain('12.5c-A/13.7a：编队法要求')
     expect(store).toContain('12.5c-C：单独单位法要求')

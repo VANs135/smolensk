@@ -1,11 +1,10 @@
-import { readFileSync } from 'node:fs'
-
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
 import { areAdjacent, neighbor } from '@/engine/hex-geometry'
 import { toConsoleUnit, unitChoices, useWorkbenchStore, type ConsoleUnit } from '@/stores'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * 第六批 BUG ②：**在任何结算战斗或者轰炸的时候，不应该有单位能动**
@@ -211,7 +210,7 @@ describe('第六批 BUG ②：结算进行中 ⇒ 任何单位都不得移动', 
   })
 
   it('源码守卫：两个移动入口都问同一个闸门，且锁同时覆盖战斗与轰炸', () => {
-    const source = readFileSync('src/stores/workbench.ts', 'utf8')
+    const source = readStoreSource()
     // ① 判据唯一：只看 `combatState` / `barrageState` 的"未收束"
     const lockStart = source.indexOf('const settlementInProgress = computed')
     const lockBody = source.slice(lockStart, lockStart + 700)
