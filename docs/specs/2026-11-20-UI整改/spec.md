@@ -38,6 +38,10 @@
 
 **令牌实测（浅色 / 深色）**：`bg #f2efe7 / #101820`、`panel #f8f5ee / #16232d`、`ink #26231e / #eef5f6`、`muted #6b665c / #a3b7c2`、`teal #2f6b5f / #78e2ce`、`amber #8a6420 / #ffc576`、`danger #8c2f22 / #ffada8`、`accent-solid #3d5f4d / #244840`、`on-accent #f7f4ec / #eef5f6`。
 
+> ⚠️ **这组数是 `.theme-command` 作用域的值，不是全站的值**（2026-11-20 复核修正）。`base.css` 的 `.theme-command` 只挂在三处 Teleport 到 body 的组件上（`BaseDialog` / `ToastItem` / `QuestionPrompt`），把 `--color-*` 整组重映射到 `--color-command-*`。**普通页面组件（含 `FlowStrip`）读到的是 `tokens.css` 的 `:root` 原值**：`bg #f6f4ee`、`panel #ffffff`、`ink #201e1a`、`muted #6a655c`、`accent #8c2f22`、`accent-2 #46604c`。判断某处对比度前先确认它落在哪个作用域，否则会像本文件 §1 那样用错一套数。
+>
+> 另：`:root[data-theme='dark']` **没有**覆盖 `--color-accent` / `--color-accent-2`（只有 `--color-command-*` 有深色值）⇒ 页面作用域里这对颜色**深浅主题同值**。
+
 **对比度实测（浅 / 深）**：`ink/bg` 13.62 / 16.21；`muted/bg` 4.97 / 8.61；`on-accent on accent-solid` 6.49 / 9.17；**`teal on accent-solid` 1.15 / 6.54、`amber` 1.33 / 6.50、`danger` 1.16 / 5.68** —— 浅色下三种语义色压在强调底上全部不可读，深色下全部可用，这是系统性缺陷而非单点。
 
 ---
@@ -46,18 +50,38 @@
 
 ### 2.1 环节条"当前环节"隐形（UI-1）
 
-改 `FlowStrip.vue:598-603`：`aria-current` 徽标前景改用 `on-accent` 家族（浅 6.49 / 深 9.17）。**不要就地换一个颜色了事** —— 见 §3 的两条硬规则。
+改 `FlowStrip.vue:598-603`：`aria-current` 徽标前景改用 `on-accent` 家族（**页面作用域 7.51:1**；若沿用 §1 的 command 口径则是 6.49，两个目标值都过 AA，选哪个取决于最终改在哪一层）。**不要就地换一个颜色了事** —— 见 §3 的两条硬规则。
+
+> **复核修正（2026-11-20）**：本文件 §1 原写「实测 1.15:1」，那是 `.theme-command` 作用域（`teal #2f6b5f` on `accent-solid #3d5f4d`）的值。`FlowStrip` 不在该作用域，实际继承 `:root` 的 `#8c2f22` on `#46604c` = **1.19:1**。两者都远低于 4.5，所以**结论不变、修复方法不变**，但验收时别拿 1.15 去对——量出来 1.19 会以为改坏了。顺带：深色主题**不覆盖**这两枚令牌，这个缺陷**与主题无关**（不是"浅色才隐形"）。
 
 ### 2.2 toast 压住「存档/读档」（UI-2）
 
+**先说一个改不动的物理事实**：`ToastHost` 在 `App.vue` 里被 `<Teleport to="body">` 扔到 body 上，它继承的是 `body` / `:root` 的自定义属性。所以「在棋桌 root（`.gt`）上设 `--toast-top`」**传不到它**——CSS 变量只沿元素树向下继承，`.gt` 不是它的祖先。原方案这句是无效的，别照着写。
+
+两种可行解，推荐第 1 种（即原方案里被列为"备选"的那种）：
+
 ```css
-/* ToastHost.vue */
+/* 1) 换锚点：常驻左下，与任何顶栏都不相交（一处改完，剧本页/棋桌/对局台全适用） */
+.toast-host {
+  top: auto;
+  bottom: var(--space-5);
+  right: auto;
+  left: var(--space-5);
+}
+```
+
+```css
+/* 2) 坚持右上：把变量挂到能继承到 body 的地方（如 body[data-layout='board']），
+      由视图层切 body 属性，而不是挂在 .gt 上 */
+body[data-layout='board'] {
+  --toast-top: 112px;
+}
 .toast-host {
   top: var(--toast-top, var(--space-5));
 }
 ```
 
-棋桌 root 设 `--toast-top: 112px`（`Teleport` 到 `body`，挂 `.gt` 上继承不到），剧本/首页设 `72px`。备选：常驻左下角。**二选一，别做半透明压住。**
+**为什么这是功能级缺陷而不只是"压住"**：`.toast-host` 本体 `pointer-events: none`，但 `.toast-host > *` 设了 `pointer-events: auto`；`z-index: var(--z-toast)`（300）高于顶栏。所以 toast 可见期间，玩家点右上「存档/读档」，**点击命中的是 toast，不是按钮**——表现就是"按钮点了没反应"，而不是"看不清"。修的时候这条也要验（判据 UI-2 建议加一句"toast 显示时按钮仍可点"）。
 
 ### 2.3 初设飞机提示被裁（UI-3）
 

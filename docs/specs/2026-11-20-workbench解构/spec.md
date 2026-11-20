@@ -284,23 +284,25 @@ R3 是 R2 的下游事故：**同一份数据两种口径**（fn-only vs fn+cons
 ### 12.2 被确认（B1 的转发层没有问题）
 
 1. **38 个转发壳的参数一一对应**：逐壳比"形参个数/顺序/名字 ↔ 实参数"，并对齐切片里同名函数的声明元数 → 0 处丢参、0 处错位（脚本 `audit-shells.mjs`）。这是纯搬移最容易悄悄坏掉的地方（掉一个可选参数不报错，行为变了）。
-2. **`barrageAutoOpened` 只有一份**：`:1900` 的 `let` + 装配点的 getter/setter 槽（`:29890`），切片内改一行 `autoOpened.value = false`，**没有影子副本**。
+2. **`barrageAutoOpened` 只有一份**：facade 里一个 `let barrageAutoOpened`（C7 状态块内）+ 装配点的 getter/setter 槽，切片内改一行 `autoOpened.value = false`，**没有影子副本**。
 3. **重跑坐标脚本字节级一致**：`node scripts/migration-report.mjs --out <临时路径>` 与已提交的 `migration-当前坐标.csv` **完全相同**（1,322 行）。可复现这条不是声明，是实测。
 
 ### 12.3 仍然存在的风险：装配点后置 → TDZ 面
 
-`barrage` 这个域在 **setup 末尾**（`:29898` 附近）才初始化（因为 51 个端口里有 13 个声明在 24k–29k 行）。facade 里 38 个转发壳是**函数声明**（会提升），所以：
+`barrage` 这个域在 **setup 末尾**（`return {` 之前那一段装配区）才初始化（因为 51 个端口里有 13 个声明在 24k–29k 行）。facade 里 38 个转发壳是**函数声明**（会提升），所以：
 
-- **只是"把函数当值传出去"** → 安全（`:1917` 那 5 处裸引用就是这种）；
-- **在 `:29898` 之前同步调用** → `barrage` 处于暂时性死区，**建 store 这一步就抛 `ReferenceError`**。
+- **只是"把函数当值传出去"** → 安全（`createFireResolutionDomain` 调用处那 5 处裸引用就是这种）；
+- **在装配点之前同步调用** → `barrage` 处于暂时性死区，**建 store 这一步就抛 `ReferenceError`**。
 
-现状实测（`find-tdz-sites.mjs`：把 38 个名字在 facade 的全部出现点扫出来，排除壳块与装配点）：22k–29.8k 段只剩 6 个名字有引用，**全部在函数体里**（`reset` / 到货落点 / `afterRestore` / 两个 `flush:'sync'` 但非 `immediate` 的 watch 回调），setup 期一个都不会执行 → 当前**不炸**。
+现状实测（`find-tdz-sites.mjs`：把 38 个名字在 facade 的全部出现点扫出来，排除壳块与装配点）：22k–29.8k 段只剩 6 个名字有引用，**全部在函数体里**（`reset` 全家桶 / 到货落点 / `afterRestore` / 两个 `flush:'sync'` 但非 `immediate` 的 watch 回调），setup 期一个都不会执行 → 当前**不炸**。
 
-但这不是安全的，只是**还没踩**。同一个文件里已经记过一次同类事故（`:28321` 注释：把播种塞进 `immediate` watch，"建 store 这一步就抛错，全套用例一起红（660 条）"）。所以给后续批次一条硬约束：
+但这不是安全的，只是**还没踩**。同一个文件里已经记过一次同类事故（`seedVictoryControlFromScenario` 上方那段注释：把播种塞进 `immediate` watch，"建 store 这一步就抛错，全套用例一起红（660 条）"）。所以给后续批次一条硬约束：
 
 > **禁止在装配点之前注册 `immediate: true` 的 watch，去触达任何转发名。** 需要 setup 期初值 → 直接调切片方法（`fireResolution.resetBarrage()` 这种），或在装配点之后再注册。
 
 配套闸门（建议 B2 一起加）：`scripts/check-tdz.mjs` — 扫 facade 里"装配点之前"的 `watch(..., { immediate: true })` 回调体，若出现转发名就报错。比人工看注释可靠。
+
+> 注：本节原稿写了一串行号（`~:1917`、`~:29898`、`~:23469` 等），已改成符号引用——这正是 §1.5 那个毛病：**坐标会随每批搬家漂移，写进文档当日有效、次日误导**。要定位用符号名或重跑 `scripts/migration-report.mjs`。
 
 ### 12.4 一条给自己（也适用于后续审查）的教训
 
