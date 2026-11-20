@@ -284,7 +284,16 @@ HIT recordSettlement    decls=1 7123   ← 对照组，正确定位到函数声�
 
 **⚠ 上一条落地记录里的「31,074 → 30,648（−426）」是错的**（第六轮复核抓出）：31,074 是 **P2-1 之前**的行数，P2-1 把四个共享类型搬进 `workbench-model.ts` 时已经先减了 38 行。B2-1 的真实基线是 31,036。**教训与 §1.5 同源**：跨批引用规模数字必须重新量，不能沿用上一批的读数。
 
-**B2-1 的三条机器证据（第六轮复核，可直接复跑 `E:\Temp\ocs-review-pw\verify-b21b.mjs`）**：
+**B2-1 只搬了空军派生的一半（第七轮复核，2026-11-20 夜）**
+
+⚠ 我先前写的"搬完 `airDomain` 就拥有自己的状态 + 派生"是不准确的。**派生被分成了两簇**，B2-1 只搬了后一簇：
+
+- 搬走的：`5949–6086`（含 `/* ── C9 空军交互：派生 ── */` 横幅之后的 12 个 computed）
+- **没搬的：`5711–6319`（609 行 / 44 个声明）**——`airMissionReturnChoices`（返航三选一）、`airReturnSelectionLabel` / `airReturnChosen`、`airCombatAttackerPlanes` / `airCombatDefenderPlanes` / `airCombatRoundBudget` / `airInterceptionDefender`、`toggleAirCargoUnit` / `airCargoUnitChoices`、`airMissionHasFighter` / `airChecklist` / `airTargetInEnemyPatrolZone` / `airInterceptionResponse` / `airInterceptorCandidates` / `airTargetBaseLevel` / `airTargetBaseIsAirstrip` / `airEnemyAtTarget` / `capturableEnemyAirBases` / `airPatrolZoneHexes` / `airEnemyPatrolZoneHexes`、`airInactiveAtBase` / `airRefitPayDumps` / `airReductionCandidates` / `refitDoneBases` / `refitBase` / `refitCandidates` / `refitSelectedIds` / `refitSelectLimitAt` / `refitSelectLimit` / `refitPayDumps` / `refitPayNeedT`、`transferBase` / `transferCandidates` / `airDistanceToBox` / `canTransferAirToBox` / `transferBoxReady` / `transferBaseCandidates` / `transferHasBoxOption` / `transferHasBaseOption` / `canTransferAirToBaseNow` / `beginTransferNow` / `toggleTransferAircraft` / `cancelTransferNow` / `completeTransferToBaseNow`、`refitStartBases` / `refitAirbaseHexes` / `refitBlockReasonAt` / `reducedBases`
+
+**为什么漏了**：我按分节横幅 `/* ── C9 空军交互：派生 ── */` 取切口，而横幅**只标记了后半**；前半（5711 起）在它上面，紧挨着 `supplyPickupRequirement`(5661) 这样的非空军内容，所以按横幅取 range 时看不见它。**教训：分节横幅是"作者写文档时的分组"，不是"域边界"** —— 这与 §6.1 抓 `captureAirBaseNow` 被横幅切开的坑同源，只是方向相反（那次是横幅落在函数体里，这次是横幅只覆盖半个域）。
+
+**这簇的端口只有 16 项**（`5711–6319`，扣掉切片内部 18 项后）：`phase`/`units`/`airUnits`/`airBoxMembers`/`allSpDumps`/`supplyFacts`/`pushLog`/`setAirInBoxMembership`/`hqDeliveryDumpKeys`/`isAirInOffMapBox`/`onMapAirUnits`/`airUnitsAt`/`airDistanceFromRealBase`/`airUnitsInHex`/`actionAllowedNow`/`isConstructionMarkerAirBaseId`。⇒ 补一批 **B2-1b** 即可，而且**它应该排在 B2-2a 之前**：这 16 项里有 5 项（`isAirInOffMapBox`/`onMapAirUnits`/`airUnitsAt`/`airDistanceFromRealBase`/`airUnitsInHex`）就在 B2-2a 的区间里，先做 B2-1b 能让它们变成切片内部；同理 B2-2d 的 21 项里有 5 项（`airInactiveAtBase`/`airRefitPayDumps`/`refitSelectLimitAt`/`refitSelectLimit`/`refitPayDumps`）是本簇自己的派生，做完 1b 也一并消失。
 
 1. **逐字对拍**：把 `git show HEAD~2:src/stores/workbench.ts` 的同三个区间取出来、施加同样的 6 处 `ports.x` 改写，再在切片里 `indexOf` —— 三段 **128 / 35 / 138 行全部完整命中**，字节级没有丢行。
    （第一次跑这条是拿 `HEAD~1` 比的，结果三段全部"未命中"，因为 `HEAD~1` 已是 B2-1 之后的文件——**基线提交取错了，差点误判成丢内容**。）

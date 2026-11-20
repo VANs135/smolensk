@@ -51,6 +51,16 @@
 - 命名：**域对象叫 `airDomain`，不要叫 `air`**——facade 里已有 `airSupply` / `airUnitTransit` / `airMissionDomain` / `airCargoResolution` 四个 air 开头的域，再加一个 `air` 无法区分（另：`(air) => …` 这种回调参数在文件里出现几十次，`air` 这个名字太容易被误读成本地变量）
 - **验收实测**：`npm run check` → 623 文件 / 6,256 用例 / 201.16s / exit 0；`arch` 949 源码（+1 切片）；`workbench.ts` **31,036 → 30,649 行（−387，注意 31,074 是 P2-1 之前的旧读数）**；测试零改动（`tests/shared/store-source.ts` 用 `readdirSync` 自动纳入新切片，38 处源码守卫无需改）
 
+### B2-1b 派生补遗（**第七轮复核发现，排在 B2-2a 之前**）
+
+B2-1 只搬了派生的一半——`5949–6086` 那一簇；`5711–6319` 的 **44 个声明（609 行）**还留在 facade，且都是空军域的东西（返航三选一 / 空战轮对 / 巡逻区 / 任务格敌方事实 / 可夺基地 / 整备套件 / 转移 / 缩减）。漏的原因是**按分节横幅 `/* ── C9 空军交互：派生 ── */` 取 range，而横幅只覆盖后半**。
+
+- [ ] 搬 `5711–6319`（`airMissionReturnChoices` … `reducedBases`）到 `workbench-air.ts`
+- [ ] 端口实测 **16 项**：`phase` / `units` / `airUnits` / `airBoxMembers` / `allSpDumps` / `supplyFacts` / `pushLog` / `setAirInBoxMembership` / `hqDeliveryDumpKeys` / `isAirInOffMapBox` / `onMapAirUnits` / `airUnitsAt` / `airDistanceFromRealBase` / `airUnitsInHex` / `actionAllowedNow` / `isConstructionMarkerAirBaseId`
+- [ ] 其中 5 项（`isAirInOffMapBox`/`onMapAirUnits`/`airUnitsAt`/`airDistanceFromRealBase`/`airUnitsInHex`）就在 B2-2a 的区间里 ⇒ **先做 1b，a 批端口会跟着降**
+- [ ] 这簇里含**动作**（`toggleAirCargoUnit`/`beginTransferNow`/`toggleTransferAircraft`/`cancelTransferNow`/`completeTransferToBaseNow`），搬的是行为而不只是派生——验收仍按公开面 1,013 键不变
+- [ ] 边界：`5661 supplyPickupRequirement` 是非空军，**不能带进来**；end 取 `6319`（`reducedBases` 之后是 `replay*` 一族）
+
 ### B2-2 动作块（后做，**2026-11-20 重测：拆 4 批，全部 < 40 端口**）
 
 B2-1 落地后行号全部漂移（facade 少了 387 行），旧编号 **全部作废**。按符号名重新定位、用 `port-crosscheck.mjs` 扣掉"已属切片内部"的 40 个名字后实测：
