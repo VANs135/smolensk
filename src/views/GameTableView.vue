@@ -579,22 +579,22 @@ onBeforeUnmount(() => {
         <!--
           2026-11-20（用户）：初设的撤回改成图标，放在「设置」按钮下方，**常显**；
           无可撤操作时只压暗待命并标 aria-disabled，避免按钮出现/消失导致位置跳动。
-          行为**沿用既有入口** `setup.undoLastPlacementNow()`（另一条线会把撤销语义收成共用入口，
-          届时只需把这枚按钮接到共用动作上）。批 3 纪律：不摆 `disabled` 灰按钮；封账原因挂在
-          title 上（`undoSealedReason`）。
+          行为走**全局共用撤销入口** `workbench.undoLastOperationNow()`（c25cfc5），
+          与移动步/装卸/初设落位等同一套「最近一笔」语义；无可撤时该入口会写一行原因日志，
+          所以这里**无条件调用**，不要静默吞掉。批 3 纪律：不摆 `disabled` 灰按钮。
         -->
         <button
           type="button"
           class="gt__rail-button gt__rail-undo"
-          :class="{ 'gt__rail-undo--idle': !setup.canUndoPlacement }"
-          :aria-disabled="!setup.canUndoPlacement"
+          :class="{ 'gt__rail-undo--idle': !workbench.canUndoOperation }"
+          :aria-disabled="!workbench.canUndoOperation"
           :title="
-            setup.canUndoPlacement
-              ? `撤回上一步：${setup.lastPlacement?.label ?? ''}`
-              : (workbench.undoSealedReason ?? '没有可撤回的步骤')
+            workbench.canUndoOperation
+              ? `撤回上一步：${workbench.undoOperationLabel ?? ''}`
+              : (workbench.undoSealedReason ?? '没有可撤销的操作')
           "
           aria-label="撤回上一步"
-          @click="setup.canUndoPlacement && setup.undoLastPlacementNow()"
+          @click="workbench.undoLastOperationNow()"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M9 14 4 9l5-5 M4 9h9a6 6 0 0 1 0 12h-3" />

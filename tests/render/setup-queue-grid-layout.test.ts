@@ -95,11 +95,11 @@ describe('初设队列：2026-11-20 手感与正确性', () => {
     const undo = table.indexOf('gt__rail-undo')
     expect(settings).toBeGreaterThanOrEqual(0)
     expect(undo).toBeGreaterThan(settings)
-    expect(table).toContain('setup.undoLastPlacementNow()')
-    // 常显 + 压暗待命：不再按 canUndoPlacement 整枚隐藏，也不摆 disabled 灰按钮
-    expect(table).toContain(':aria-disabled="!setup.canUndoPlacement"')
+    expect(table).toContain('workbench.undoLastOperationNow()')
+    // 常显 + 压暗待命：用共用入口自己的 canUndoOperation，不按条件整枚隐藏，也不摆 disabled
+    expect(table).toContain(':aria-disabled="!workbench.canUndoOperation"')
     expect(table).toContain('gt__rail-undo--idle')
-    expect(table).not.toContain('v-if="!setup.finished && setup.canUndoPlacement"')
+    expect(table).not.toContain('setup.undoLastPlacementNow()')
     expect(table).not.toContain(':disabled=')
   })
 })

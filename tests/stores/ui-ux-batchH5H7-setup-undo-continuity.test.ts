@@ -61,7 +61,9 @@ describe('H5：初设落位一步撤回', () => {
     expect(ctx.w.units.length).toBeGreaterThan(unitsBefore)
     expect(ctx.setup.lastPlacement).not.toBeNull()
 
-    expect(ctx.setup.undoLastPlacementNow()).toBe(true)
+    expect(ctx.w.canUndoOperation).toBe(true)
+    // 2026-11-20：走共用撤销入口（与移动步/装卸同一套「最近一笔」）
+    expect(ctx.w.undoLastOperationNow()).toBe(true)
     expect(ctx.setup.lastPlacement).toBeNull()
     expect(ctx.w.units.length).toBe(unitsBefore)
     expect(ctx.setup.pendingPlacement.length).toBe(pendingBefore)
@@ -69,18 +71,20 @@ describe('H5：初设落位一步撤回', () => {
     expect(ctx.setup.placing).not.toBeNull()
   })
 
-  it('没有落位时撤回入口不出现（不可用不出现）', () => {
+  it('没有落位时共用入口常显压暗，点击给出原因（不静默）', () => {
     const ctx = fresh()
     expect(ctx.setup.enterSetup('1')).toBe(true)
     expect(ctx.setup.lastPlacement).toBeNull()
-    expect(ctx.setup.undoLastPlacementNow()).toBe(false)
+    expect(ctx.w.canUndoOperation).toBe(false)
+    expect(ctx.w.undoLastOperationNow()).toBe(false)
+    expect(ctx.w.log[0]?.text).toContain('没有可撤销的操作')
     const table = readFileSync(
       new URL('../../src/views/GameTableView.vue', import.meta.url),
       'utf8',
     )
-    // 撤回入口以 setup.canUndoPlacement 为放行条件；2026-11-20 移到棋桌左栏「设置」下方
-    expect(table).toContain('setup.canUndoPlacement')
-    expect(table).toContain('setup.undoLastPlacementNow()')
+    // 撤回入口以共用入口为唯一放行条件；2026-11-20 移到棋桌左栏「设置」下方
+    expect(table).toContain('workbench.canUndoOperation')
+    expect(table).toContain('workbench.undoLastOperationNow()')
   })
 })
 
