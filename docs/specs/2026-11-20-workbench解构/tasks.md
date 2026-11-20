@@ -17,8 +17,9 @@
 - [x] 新建 `src/stores/workbench-core.ts`：`createWorkbenchCore(deps)`，deps 9 项（全部传引用或 getter）
 - [x] 迁入 `pushLog`（669 处调用）/ `recordSettlement`（77 处）/ `noteRecord`；facade 只留同名薄转发，**存量调用点零改动**
 - [x] 实测：`workbench.ts` 32,193 → 32,146；公开面 1,013 键不变；test:fast 623 文件 / 6,256 用例全绿
-- [ ] 迁入 `requireAction` / `actionAllowedNow`（47 + 23 处）—— 写法同上：deps 传 gate 状态 getter
-- [ ] 迁入 `refuseWhileSettling` 与撤销账（`undoTrail` / `noteUndoable` / `captureUndoSnapshot` / `dropUndoOf` / `undoFamilyHandlers`），保留后注册
+- [x] 迁入 `requireAction` / `actionAllowedNow`（47 + 23 处）—— 见 `workbench-gates.ts`
+- [x] 迁入 `refuseWhileSettling`（5 处）
+- [ ] 迁入撤销账（`undoTrail` / `noteUndoable` / `captureUndoSnapshot` / `dropUndoOf` / `undoFamilyHandlers`）—— **延后到 B7 之后**，理由见 `B0-审查记录.md` §3
 - [ ] `segmentStep` / `segmentAdvanceBlock` 仅打成 port 透传（留给 B7）
 - 验收：`npm run check` 绿 + `tests/stores/*` 日志/撤销/存档用例绿 + 公开面键集不变
 
