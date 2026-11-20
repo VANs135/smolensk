@@ -12,12 +12,13 @@
 - [x] 建分支 `refactor/workbench-decouple` 并 `git push -u origin`
 - [x] 新增 `tests/stores/workbench-public-surface.test.ts` + `tests/stores/fixtures/workbench-public-surface.snapshot.json`，实测冻结 **1,013** 键（先绿再动刀）；反向验证过：从基线删一个键即红，并报出键名
 
-## 1. B0 核心服务
+## 1. B0 核心服务（切片 1 已落地）
 
-- [ ] 新建 `src/stores/workbench-core.ts`：`createWorkbenchCore(deps)`，`deps` ≤ 17 个成员
-- [ ] 迁入 `pushLog` / `recordSettlement` / `requireAction` / `actionAllowedNow` / `refuseWhileSettling`
-- [ ] 迁入撤销账（`undoTrail` / `noteUndoable` / `captureUndoSnapshot` / `dropUndoOf` / `undoFamilyHandlers`），保留后注册
-- [ ] facade 改别名解构 `const { pushLog, … } = core`，**800+ 调用点零改动**
+- [x] 新建 `src/stores/workbench-core.ts`：`createWorkbenchCore(deps)`，deps 9 项（全部传引用或 getter）
+- [x] 迁入 `pushLog`（669 处调用）/ `recordSettlement`（77 处）/ `noteRecord`；facade 只留同名薄转发，**存量调用点零改动**
+- [x] 实测：`workbench.ts` 32,193 → 32,146；公开面 1,013 键不变；test:fast 623 文件 / 6,256 用例全绿
+- [ ] 迁入 `requireAction` / `actionAllowedNow`（47 + 23 处）—— 写法同上：deps 传 gate 状态 getter
+- [ ] 迁入 `refuseWhileSettling` 与撤销账（`undoTrail` / `noteUndoable` / `captureUndoSnapshot` / `dropUndoOf` / `undoFamilyHandlers`），保留后注册
 - [ ] `segmentStep` / `segmentAdvanceBlock` 仅打成 port 透传（留给 B7）
 - 验收：`npm run check` 绿 + `tests/stores/*` 日志/撤销/存档用例绿 + 公开面键集不变
 

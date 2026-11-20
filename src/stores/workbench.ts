@@ -1,4 +1,4 @@
-﻿import { createAirMissionDomain } from './air-mission'
+import { createAirMissionDomain } from './air-mission'
 import { createGroundMovementDomain } from './ground-movement'
 import {
   airMissionRoster,
@@ -60,6 +60,8 @@ import { createRngState, RNG_ALGORITHM, roll1d6, roll2d6 } from '@/engine/rng'
 import { validBoardEntities } from '@/engine/board-validation'
 import { actingSideFor } from '@/engine/game-lifecycle'
 import { createSnapshotRegistry } from './snapshot-registry'
+// B0（解构第一批）：日志与结算账本的实现搬到 workbench-core，facade 只留薄转发
+import { createWorkbenchCore, type SettlementRecordInput } from './workbench-core'
 import { createPhaseCoordinator } from './phase-coordinator'
 import { createSupplyPhaseDomain } from './supply-phase'
 import type { SpDump } from './supply-types'
@@ -78,20 +80,13 @@ import {
   type ReinforcementSegment,
   type SopSegmentStep,
 } from '@/engine/rules'
-import {
-  fail,
-  succeed,
-  type PendingEffect,
-  type RuleFailure,
-  type RuleOutcome,
-} from '@/engine/result-types'
+import { fail, type RuleFailure, type RuleOutcome } from '@/engine/result-types'
 import type {
   AirStatus,
   DiceRoll,
   GamePhase,
   Marker,
   RngState,
-  SessionLogEntry,
   VictoryLocationState,
 } from '@/engine/state-types'
 import {
@@ -1428,6 +1423,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const lastStep = ref<MoveStepSnapshot | null>(null)
   const lastBattle = ref<BattleReport | null>(null)
   const log = ref<WorkbenchLogEntry[]>([])
+
+  /*
+   * ── B0 装配（解构第一批）──────────────────────────────────────────────
+   * 日志与结算账本的实现已搬进 `workbench-core.ts`；这里只组装依赖并让同名函数转发。
+   * 存量 669 处 `pushLog(...)` 与 77 处 `recordSettlement(...)` **一个调用点都不用改**。
+   *
+   * 依赖一律传引用或 getter：
+   * - `log` / `pendingRolls` 是稳定引用（后者靠 `splice` 就地出账）；
+   * - `segmentStepId` 必须用 getter —— `segmentStep` 在文件后段（`B8 环节闸门` 分节）才声明，
+   *   装配期直接取值会是 `undefined`。
+   * ────────────────────────────────────────────────────────────────────
+   */
+  const core = createWorkbenchCore({
+    log,
+    recorder,
+    turn: () => turn.value,
+    phase: () => phase.value,
+    activeSide: () => activeSide.value,
+    segmentStepId: () => segmentStep.value?.id ?? null,
+    pendingRolls,
+    sealUndo,
+    appendSettlement: (entry) => session.appendSettlement(entry),
+  })
 
   // ── C5 移动交互（W4 C5） ──
   /**
@@ -7145,11 +7163,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 记录是**旁路**：未开启时 `note` 立即返回；任何异常都在这里吞掉，绝不影响对局。
    */
   function noteRecord(input: RecorderEventInput): void {
-    try {
-      recorder.note(input)
-    } catch {
-      // 记录失败不阻断游戏
-    }
+    core.noteRecord(input)
   }
 
   function pushLog(
@@ -7158,24 +7172,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     rule?: string,
     derivation?: Derivation,
   ): void {
-    log.value.unshift({
-      id: createId('log'),
-      kind,
-      text,
-      ...(rule === undefined ? {} : { rule }),
-      ...(derivation === undefined ? {} : { derivation }),
-    })
-    if (log.value.length > 60) log.value.length = 60
-    noteRecord({
-      kind: 'log',
-      level: kind,
-      text,
-      rule: rule ?? null,
-      turn: turn.value,
-      phase: phase.value,
-      side: activeSide.value,
-      step: segmentStep.value?.id ?? null,
-    })
+    core.pushLog(kind, text, rule, derivation)
   }
 
   /**
@@ -7217,52 +7214,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * @param input.data   结算数据（进 `outcome.data`；放复核过程时用 `[DERIVATION_KEY]`）
    * @returns 是否真的入账（未开局 ⇒ false）
    */
-  function recordSettlement(input: {
-    action: string
-    rule: string
-    side?: Side
-    rolls?: readonly DiceRoll[]
-    pending?: PendingEffect[]
-    data?: Record<string, unknown>
-    /**
-     * 3.3c 的撤离结算是「同批骰子里的中间结算」，这批骰属于紧随其后的 `variableRepl`；
-     * 传 false 可避免它把 `pendingRolls` 吃掉、导致同一批骰被记两次（修 1.6b 重放错位）。
-     * 默认 true，其他调用点行为不变。
-     */
-    consumePendingRolls?: boolean
-  }): boolean {
-    const rolls =
-      input.consumePendingRolls === false
-        ? [...(input.rolls ?? [])]
-        : pendingRolls.length > 0
-          ? pendingRolls.splice(0)
-          : [...(input.rolls ?? [])]
-    /*
-     * 用户 2026-11-18：本段一旦掷过骰，撤销入口直接关掉。
-     * 不依赖具体动作（战斗/补给/抽签/特殊补员都走这里记录掷骰），一律按「本段」封。
-     */
-    if (rolls.length > 0) sealUndo(`本段已掷骰结算（${input.action}·${input.rule}），不能撤销`)
-    const entry: SessionLogEntry = {
-      turn: turn.value,
-      phase: phase.value,
-      side: input.side ?? activeSide.value,
-      action: input.action,
-      rolls,
-      outcome: succeed(input.rule, input.data ?? {}, [...(input.pending ?? [])]),
-    }
-    const recorded = session.appendSettlement(entry)
-    if (recorded) {
-      noteRecord({
-        kind: 'settle',
-        turn: entry.turn,
-        phase: entry.phase,
-        side: entry.side,
-        step: segmentStep.value?.id ?? null,
-        rule: input.rule,
-        detail: { action: input.action, rolls, outcome: entry.outcome },
-      })
-    }
-    return recorded
+  function recordSettlement(input: SettlementRecordInput): boolean {
+    return core.recordSettlement(input)
   }
 
   /** 该格的算子（按摆放顺序） */
