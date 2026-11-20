@@ -1,19 +1,22 @@
 /**
  * workbench-air.ts —— C9 空军域（状态 + 派生 + 整备/转移动作）
  *
- * 搬了两批：
+ * 搬了四批：
  *   · B2-1：26 个 ref（2416–2592）+ 派生块 5949–6086；
  *   · B2-1b：5701–6321 的 48 个声明（返航三选一 / 空战轮对 / 巡逻区 / 任务格敌方事实 /
- *     可夺基地 / 整备套件 / 转移 / 缩减），其中含 `beginTransferNow` 这类**动作**。
- * 动作块（17k–20k 四段）是 B2-2，届时不用再把状态当端口。
+ *     可夺基地 / 整备套件 / 转移 / 缩减），其中含 `beginTransferNow` 这类**动作**；
+ *   · B2-2a：17197–17992 的 796 行 / 16 声明（任务开始、空战确认、目标候选、载货结算、夺基地）；
+ *   · B2-2b：17880–18318 的 439 行 / 14 声明（货物损失、防空、任务执行前半、自动返航收束）。
  *
- * 端口 36 项，两种接法：
- *   · 按值（29 项）：声明在建域点（2239）之前，或是有提升的函数声明（声明在 13k–27k 也能传）；
- *   · 晚绑定（7 项）：`zocOnlySupplyFacts`/`onMapAirUnits`/`airCargoLossPending`/
- *     `segmentGateQuery`/`constructionMarkerPieces`/`allSpDumps`/`supplyFacts` 是 `const`/`computed`
- *     且声明在建域点之后，facade 用 `get` 访问器传进来，切片里一律写成 `ports.x.value` ——
- *     只在 computed 求值时读取，避免建 store 时撞 TDZ（§12.3 记录过一次同源事故）。
- *     注意：**晚绑定端口在被搬的正文里也是 `ports.x.value`**，不要写裸名。
+ * 端口 **57 项**（2026-11-21 实测），两种接法：
+ *   · 按值解构（44 项）：声明在建域点（2239）之前，或是**有提升的函数声明**（声明在 13k–27k 也能按值传）；
+ *   · 走 `ports.X`（13 项）：`constructionMarkerAirBaseId`（函数）+ 12 个 `const`/`computed` ——
+ *     声明在建域点之后，facade 用 `get` 访问器传进来，切片里一律写成 `ports.x.value`（函数写 `ports.x(...)`）。
+ *     只在求值时读取，避免建 store 时撞 TDZ（§12.3 记录过一次同源事故）。
+ *     名单：`zocOnlySupplyFacts`/`segmentGateQuery`/`constructionMarkerPieces`/`allSpDumps`/`supplyFacts`/
+ *     `barrageFacts`/`railMoveFacts`/`airUnloadLedger`/`airMissionJoinChoices`/`specialPending`/
+ *     `airMissionSegmentKind`/`airMissionKindChoices`。
+ *     注意：**这类端口在被搬的正文里也是 `ports.x.value`**，不要写裸名。
  */
 import { computed, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
@@ -45,6 +48,8 @@ import {
   type DeadPileEntry,
   type SpecialCombatPending,
   airRangeFromBase,
+  airBarrageStrengthOf,
+  type PendingHexPick,
   movementPhaseOf,
 } from './workbench-model'
 import { mapLayers } from '@/data'
@@ -52,6 +57,7 @@ import type { HexRef, Side } from '@/data'
 import type { Derivation } from '@/engine/derivation'
 import { hexDistance, sameHex } from '@/engine/hex-geometry'
 import type { RuleOutcome } from '@/engine/result-types'
+import type { BarrageInteractionState } from '@/engine/rules/barrage-interaction'
 import {
   checkAirTransportMovementHandoff,
   airCargoTransportT,
@@ -60,6 +66,7 @@ import {
 import type { AirCargoUnloadPlan } from '@/engine/rules/air-cargo-unload'
 import { planOffMapAirBoxFlightFromHex } from '@/engine/rules/air-mission'
 import { airMissionRoster } from '@/engine/rules/air-mission-roster'
+import { skipEmptyAirMissionFlak } from '@/engine/rules/air-mission-roster'
 import { canonicalMode, canUseTransport } from '@/engine/rules/modes'
 import type { AirStatus, DiceRoll, RngState } from '@/engine/state-types'
 import {
@@ -98,6 +105,9 @@ import {
   airMissionTargetTypeAllowed,
   beginAirInteraction,
   declareAirCombatStep,
+  planCargoLoss,
+  resolveFlakStep,
+  validateCargoLossChoice,
   missionSegmentOf,
   planOffMapAirBoxFlight,
   resolveAirCombatRounds,
@@ -149,13 +159,6 @@ export interface AirDomainPorts {
   constructionMarkerAirBaseId: (pieceId: string) => string
   /** ── 以下 5 项晚绑定（facade 用 getter 传入，切片里写 ports.x） ── */
   zocOnlySupplyFacts: ComputedRef<ReturnType<typeof createSupplyFacts>>
-  airCargoLossPending: Ref<{
-    rule: string
-    capacityAfter: number
-    allowedT: number
-    excessT: number
-    detail: string
-  } | null>
   segmentGateQuery: ComputedRef<ActionGateQuery>
   constructionMarkerPieces: Ref<{ id: string; kind: 'bridge' | 'airStrip'; hex: HexRef }[]>
   phase: ComputedRef<ConsolePhase>
@@ -193,6 +196,15 @@ export interface AirDomainPorts {
   specialPending: Ref<SpecialCombatPending | null>
   airMissionSegmentKind: ComputedRef<AirMissionSegment | null>
   airMissionKindChoices: ComputedRef<readonly { key: AirMissionKind; label: string }[]>
+  /** ── 以下 8 项 B2-2b 新增（按值；函数声明可提升，不需要 getter） ── */
+  barrageState: Ref<BarrageInteractionState | null>
+  beginHexPick: (pick: PendingHexPick) => void
+  hexTextOf: (hex: HexRef) => string
+  setAirTargetFromText: (text: string) => boolean
+  declareInterceptionNow: () => boolean
+  resolveInterceptionCombatNow: () => boolean
+  confirmAirMissionNow: () => boolean
+  completeAirReturnNow: () => boolean
 }
 
 export function createAirDomain(ports: AirDomainPorts) {
@@ -233,6 +245,14 @@ export function createAirDomain(ports: AirDomainPorts) {
     airMissionKindLabel,
     requireAction,
     noteUnitEnteredHex,
+    barrageState,
+    beginHexPick,
+    hexTextOf,
+    setAirTargetFromText,
+    declareInterceptionNow,
+    resolveInterceptionCombatNow,
+    confirmAirMissionNow,
+    completeAirReturnNow,
   } = ports
 
   /**
@@ -335,7 +355,7 @@ export function createAirDomain(ports: AirDomainPorts) {
           airInputs.value.unloadOverLimitInactive || airOverLimitAircraftInactive.value,
       }
     },
-    lossPending: () => ports.airCargoLossPending.value !== null,
+    lossPending: () => airCargoLossPending.value !== null,
     roster: () => airMissionRosterNow.value!,
     unitExists: (id) => airUnitTransit.canLand([id]),
     draw2d6: drawAir2d6,
@@ -1957,6 +1977,447 @@ export function createAirDomain(ports: AirDomainPorts) {
     })
     return true
   }
+  /* ── B2-2b：货物损失 / 防空结算 / 任务执行前半（2026-11-21 从 facade 迁入） ── */
+
+  /**
+   * 14.4f/14.4g：该任务**此刻**的货物容量（T）
+   *
+   * 按**仍在任务里的飞机**逐机重算：减损者取减损面印值（14.4f「减少后的数值」），
+   * 并沿用分配时算定的距离档位（14.9e-C 的容量翻倍按各机在 `origins` 里的距离判定）。
+   * 被防空摧毁的飞机已移出任务名单，故它的容量自然消失 —— 这正是 14.4g 的触发条件。
+   */
+  const airMissionCargoCapacityNow = computed(() => airMissionRosterNow.value?.activeCapacityT ?? 0)
+
+  /** 14.4g：待玩家选择的**货物损失**（容量因防空变小、有超出部分时才落值） */
+  const airCargoLossPending = ref<{
+    rule: string
+    capacityAfter: number
+    allowedT: number
+    excessT: number
+    detail: string
+  } | null>(null)
+
+  function queueAirCargoLoss(capacityAfter: number, rule: string): void {
+    const state = airState.value
+    if (state === null || (state.kind !== 'air_transport' && state.kind !== 'air_drop')) return
+    const plan = planCargoLoss({
+      cargo: state.assignment.cargo.map((item) => ({ id: item.id, t: airCargoTransportT(item) })),
+      capacityAfter,
+    })
+    if (plan.ok && plan.data.excessT > 0) {
+      airCargoLossPending.value = {
+        capacityAfter,
+        allowedT: plan.data.allowedT,
+        excessT: plan.data.excessT,
+        detail: plan.data.detail,
+        rule,
+      }
+      pushLog('warning', `${plan.data.detail}；请先确认货物损失`, rule)
+    }
+  }
+
+  /** 14.4g：玩家勾选要摧毁的货物件 */
+  const airCargoLossPicked = ref<string[]>([])
+
+  /** 14.4g：勾选/取消一件要摧毁的货物 */
+  function toggleAirCargoLossPick(cargoId: string): void {
+    airCargoLossPicked.value = airCargoLossPicked.value.includes(cargoId)
+      ? airCargoLossPicked.value.filter((id) => id !== cargoId)
+      : [...airCargoLossPicked.value, cargoId]
+  }
+
+  /**
+   * 14.4g：**落盘货物损失**（把选中的货物从任务货物清单里移除）
+   *
+   * 判据走引擎（`validateCargoLossChoice`：摧毁量必须覆盖超出部分）；
+   * 提交在途账本、单位淘汰及任务清单，避免仍能退回已损失的货物。
+   */
+  function confirmAirCargoLossNow(): boolean {
+    const state = airState.value
+    const pending = airCargoLossPending.value
+    if (state === null || pending === null) return false
+    const cargo = state.assignment.cargo.map((item) => ({
+      id: item.id,
+      t: airCargoTransportT(item),
+    }))
+    const verdict = validateCargoLossChoice({
+      cargo,
+      capacityAfter: pending.capacityAfter,
+      destroyedIds: airCargoLossPicked.value,
+    })
+    if (!verdict.ok) {
+      pushLog('danger', `货物损失被拒：${verdict.reason}（${verdict.rule}）`, verdict.rule)
+      return false
+    }
+    const destroyed = new Set(airCargoLossPicked.value)
+    const unitLossIds = state.assignment.cargo
+      .filter((item) => item.kind === 'unit' && destroyed.has(item.id))
+      .map((item) => item.id)
+    const lostUnits = airUnitTransit.lose(unitLossIds)
+    if (lostUnits === null) {
+      airError.value = { rule: pending.rule, reason: 'airCargoLossUnitMissing' }
+      return false
+    }
+    airSupply.settle([...destroyed], 'lost')
+    for (const unit of lostUnits)
+      eliminateEntry(unit, pending.rule, `${unit.name} 作为运输货物损失（${pending.rule}）`)
+    const kept = state.assignment.cargo.filter((item) => !destroyed.has(item.id))
+    airState.value = {
+      ...state,
+      assignment: {
+        ...state.assignment,
+        cargo: kept,
+        // 14.9a/14.9e（T14）：货单与实际在途货物保持同步，避免 F 步再结算已摧毁货物。
+        cargoByAircraft: state.assignment.cargoByAircraft.map((entry) => ({
+          ...entry,
+          cargoIds: entry.cargoIds.filter((id) => !destroyed.has(id)),
+        })),
+      },
+      cargo: null,
+    }
+    pushLog(
+      'success',
+      `${pending.rule}：${verdict.data.detail}；余下 ${String(kept.length)} 件货物继续本任务`,
+      pending.rule,
+    )
+    // ⑭ 接线：货物损失（14.4g）入会话日志（本笔不掷骰）
+    recordSettlement({
+      action: 'airCargoLoss',
+      rule: pending.rule,
+      data: {
+        capacityAfter: pending.capacityAfter,
+        allowedT: pending.allowedT,
+        excessT: pending.excessT,
+        destroyedIds: [...destroyed],
+        destroyedT: verdict.data.destroyedT,
+        remaining: kept.map((item) => item.id),
+        detail: verdict.data.detail,
+      },
+    })
+    airCargoLossPending.value = null
+    airCargoLossPicked.value = []
+    return true
+  }
+
+  /** 14.9a / 14.9e（T14）：本任务是否已有可确定损失归属的逐机货单。 */
+  function hasCargoOwnership(state: AirInteractionState): boolean {
+    return state.assignment.cargo.length > 0 && state.assignment.cargoByAircraft.length > 0
+  }
+
+  /** C9 第 4 步（14.2f-E / 14.4）：防空应答（对手掷骰；命中则按 14.4f 的任务损失表定承受者） */
+  function resolveFlakNow(): boolean {
+    const state = airState.value
+    if (state === null) return false
+    if (
+      state.step !== 'flak' ||
+      (state.interception?.declared && state.interception.combat === null)
+    ) {
+      airError.value = { rule: '14.2f-E', reason: 'airFlakStepNotReady' }
+      return false
+    }
+    if (airMissionFlyingUnits.value.length === 0) {
+      const skipped = acceptAir(skipEmptyAirMissionFlak(state), '中止任务跳过防空')
+      if (skipped === null) return false
+      airState.value = skipped.state
+      if (airMissionRosterNow.value?.liveCapacityT === 0 && !hasCargoOwnership(state))
+        queueAirCargoLoss(0, '14.1b')
+      pushLog('info', '没有活动任务机，跳过防空并处理退运或货物损失', '14.2f-E')
+      return true
+    }
+    /*
+     * 14.1c / 14.9e：部分承运机中止时**不再拒在 E 步** ——
+     * 中止机自载的货随它退运，幸存机继续投送各自货单里的货（见 `planAirCargoContinuation`
+     * 的 `returningCargoIds`）；旧档没有逐机货单时按整组退运，不猜归属。
+     */
+    if (
+      state.assignment.cargo.length > 0 &&
+      airMissionRosterNow.value?.liveCapacityT === 0 &&
+      !hasCargoOwnership(state)
+    )
+      queueAirCargoLoss(0, '14.1b')
+    const inputs = airInputs.value
+    const inPatrolZone = airTargetInEnemyPatrolZone.value
+    // 14.1b/14.4f：任务损失表的 W/S 按**当前面**轰炸值选（减损机用减损面值）
+    const missionAircraft = airMissionFlyingUnits.value.map((air) => ({
+      id: air.instanceId,
+      barrageStrength: airBarrageStrengthOf(air),
+    }))
+    // ⑭ 接线：drawAir2d6 / drawAir1d6 只回报数字（不改它们）⇒ 记下掷骰前的骰源，按同法复算骰面
+    let diceCursor = rng.value
+    const die2d6 = inputs.flakDie ?? drawAir2d6()
+    const rolls: DiceRoll[] = []
+    if (inputs.flakDie === null) {
+      const derived = roll2d6(diceCursor)
+      diceCursor = derived.rng
+      rolls.push(derived.value)
+    }
+    const lossDie = inputs.lossDie ?? drawAir1d6()
+    if (inputs.lossDie === null) {
+      const derived = roll1d6(diceCursor)
+      diceCursor = derived.rng
+      rolls.push(derived.value)
+    }
+    /*
+     * 14.4f：4 机行的 W/S（损失骰 5/6）在轰炸值并列时，原文让飞机所有方自选；
+     * 本作改为**随机**（用户 2026-11-13）：只在确实并列时抽 1 骰，骰面走固定种子 RNG（可重放）。
+     */
+    let tieBreakDie: number | undefined
+    if (missionAircraft.length >= 4 && lossDie >= 5) {
+      const strengths = missionAircraft.map((plane) => plane.barrageStrength)
+      const extreme = lossDie === 5 ? Math.min(...strengths) : Math.max(...strengths)
+      if (strengths.filter((value) => value === extreme).length > 1) {
+        const derived = roll1d6(diceCursor)
+        diceCursor = derived.rng
+        rolls.push(derived.value)
+        tieBreakDie = derived.value.faces[0] ?? 1
+      }
+    }
+    const data = acceptAir(
+      resolveFlakStep(state, {
+        inEnemyPatrolZone: inPatrolZone,
+        missionHasFighter: airMissionHasFighter.value,
+        missionAircraft,
+        targetHasHQ: inputs.targetHasHQ,
+        targetAirBaseLevel: airTargetBaseLevel.value,
+        // 15.2F：简易机场不能提供任何防空值（14.4e 的基地那一项由 15.0b-B 的唯一实现给出）
+        targetBaseIsAirstrip: airTargetBaseIsAirstrip.value,
+        printedFlakValue: inputs.printedFlakValue,
+        // 14.4e：运输破坏在敌方巡逻区内再 +1（与同组修正累计）
+        ...(state.kind === 'trainbusting' && inPatrolZone
+          ? { trainbustingInPatrolZone: true }
+          : {}),
+        die2d6,
+        lossDie,
+        ...(tieBreakDie === undefined ? {} : { tieBreakDie }),
+      }),
+      '防空',
+    )
+    if (data === null) return false
+    airState.value = data.state
+    // 14.4f：命中 ⇒ 该任务机损失 1 点军力
+    if (data.flak.hit && data.flak.lossAircraftId !== null)
+      applyAirStepLoss(data.flak.lossAircraftId)
+    /*
+     * 14.4g：**运输任务的货容量因防空变化 ⇒ 重算可用装载量、摧毁超出部分（由玩家选择）**。
+     *   · 容量按**此刻仍在任务的飞机**重算（被摧毁的已移出、减损的取减损面印值）；
+     *   · 取整按**有利于货物存留**（`planCargoLoss` 的 `ceil`，即 14.9b 明写的例外）；
+     *   · 有超出部分 ⇒ 落一个**待决**，玩家选完之前 14.2f-F 的货物检定不许进行。
+     */
+    if (data.flak.hit) {
+      /*
+       * 14.9a / 14.9e（T14）：有逐机货单且确有承运机被摧毁时，损失归属已由分单确定，
+       * 不需要玩家再选 14.4g 的超额货损；由 F 步结算按 `lostCargoIds` 一次性结清。
+       */
+      const destroyedCarriers = airMissionRosterNow.value?.destroyedIds ?? []
+      if (hasCargoOwnership(state) && destroyedCarriers.length > 0)
+        pushLog(
+          'warning',
+          `逐机货单：${String(destroyedCarriers.length)} 架承运机被毁，其货物按确定损失结算（14.9e）`,
+          '14.9e',
+        )
+      else queueAirCargoLoss(airMissionCargoCapacityNow.value, '14.4g')
+    } else if (airMissionRosterNow.value?.liveCapacityT === 0 && !hasCargoOwnership(state))
+      queueAirCargoLoss(0, '14.1b')
+    pushLog(data.flak.hit ? 'warning' : 'info', data.flak.detail, data.flak.rule)
+    // ⑭ 接线：防空应答（14.4e / 14.4f）入会话日志；rolls＝2 骰 + 1 损失骰
+    recordSettlement({
+      action: 'airFlak',
+      rule: data.flak.rule,
+      rolls,
+      data: {
+        kind: state.kind,
+        inEnemyPatrolZone: inPatrolZone,
+        die2d6,
+        lossDie,
+        hit: data.flak.hit,
+        lossAircraftId: data.flak.lossAircraftId,
+        detail: data.flak.detail,
+      },
+    })
+    return true
+  }
+
+  /** C9 第 5 步（14.2f-F）：记录任务本身的结果（如 C7 的轰炸结论） */
+  /**
+   * B29a：**任务格改成点地图选**（14.2f-B；第 12 处"待点格"）
+   *
+   * 用户 2026-11-12：候选＝**任务对象类型合法**（14.6–14.10）∩ **参战机航程可达**（14.2d / 1.4a），
+   * 由引擎统一算（`airMissionTargetCandidates`）；不再允许手输格号。图外盒不在候选内。
+   */
+  function beginAirTargetHexPickNow(): void {
+    const kind = airMissionKind.value
+    /*
+     * 还没定任务类型时（target-first 入口：先点格再开会话）无法算"类型合法"，
+     * 退回落点即任意格；定了类型后一律走类型 ∩ 航程的候选集。
+     */
+    const candidates = kind === null ? ('any' as const) : airMissionTargetCandidates.value
+    if (kind !== null && candidates.length === 0)
+      pushLog(
+        'warning',
+        '没有合法目标格：任务类型要求的对象与参战机航程没有交集（14.2f-B）',
+        '14.2f-B',
+      )
+    beginHexPick({
+      label:
+        kind === null ? '空军任务的目标格' : `空军任务的目标格（${airMissionKindLabel(kind)}）`,
+      rule: '14.2f-B',
+      // 候选＝类型合法 ∩ 航程可达（引擎统一算）；UI 只负责高亮与接收点击
+      candidates,
+      /*
+       * K16：这里必须写**实际目标** `airTargetHex`（`beginAirMissionNow` 与预检都读它）。
+       * 修前只写显示用的 `airInputs.targetHexText` ⇒ 改格后仍按旧格结算（静默打错目标）。
+       */
+      apply: (hex) => setAirTargetFromText(hexTextOf(hex)),
+    })
+  }
+
+  /**
+   * 14.2f：**选任务类型即"宣布 + 自动结算到面板 2（任务结算）"**
+   *
+   * 用户口径（2026-11-15 修订；原始 2026-09-16 #3 只要求"自动结算到战果"）：
+   *   选任务（右键）→ 选飞机发起（面板 1）→ 结算 14.5 拦截与 14.3 空战及损失
+   *   （按是否发生弹出，空战双方点名）→ 结算防空（自动）→ **结算任务（面板 2，玩家点）**
+   *   → 返航（面板 3）。
+   *
+   * 修前：发起后整链一次跑到返航，面板 2 从不渲染，空战/防空结果只落日志。
+   * 现在：空战真的发生 ⇒ 停在 ② 空战面板；有合格拦截机 ⇒ 停在 ③ 拦截应答；
+   *   防空自动掷；**停在面板 2**，由玩家点「结算任务」再进返航。
+   *
+   * ★ 不替玩家做表态：14.5 的拦截宣布、14.3e-B 的点名迎战机、14.9/14.10 的货物仍读面板输入。
+   * ★ 条件不足时**如实说缺什么**（先点名参战机 / 先选任务格），不静默什么都不做。
+   */
+  function runAirMissionNow(): boolean {
+    if (airState.value === null) {
+      if (airMissionAirIds.value.length === 0) {
+        pushLog('warning', '先点名参战飞机（14.2a/14.2d：在基地格内勾选）', '14.2a')
+        return false
+      }
+      if (airTargetHex.value === null) {
+        pushLog('warning', '先选任务格（14.2f-B：点地图上的目标格）', '14.2f-B')
+        return false
+      }
+      if (!beginAirMissionNow()) return false
+    }
+    if (airState.value === null) return false
+    /*
+     * ② 空战（14.2f-C / 14.3）：该格真的打起来 ⇒ 停在面板 ②，
+     * 双方点名（14.3e-B）后由玩家点「结算空战并继续」，不在这里替玩家掷骰。
+     */
+    if (airState.value.step === 'airCombat' && previewAirCombatRoles()) return true
+    return autoResolveAirMissionNow()
+  }
+
+  /**
+   * 14.2f-C：先把"会不会打、谁攻谁守"算出来并落进 `airState.combat`（**不掷骰、不挪步**）。
+   *
+   * `declareAirCombatStep` 本身是"声明并继续"——它顺手把 step 推到 interception；
+   * 而面板 ② 的入口判据是 `step === 'airCombat' && combat?.occurs` ⇒ 若照抄它，面板 ② 永不出现。
+   * 这里只取它的 combat 结论，步留在 airCombat，等玩家点「结算空战并继续」再由
+   * `confirmAirCombatNow()` 重新声明并掷骰。
+   */
+  function previewAirCombatRoles(): boolean {
+    const state = airState.value
+    const target = airTargetHex.value
+    if (state === null || target === null) return false
+    const enemyAircraft = airUnitsInHex(target, enemySide.value)
+    const data = acceptAir(
+      declareAirCombatStep(state, {
+        friendlyAircraft: airMissionFlyingUnits.value.map((plane) =>
+          toAirMissionAircraftView(plane),
+        ),
+        enemyActiveCount: enemyAircraft.length,
+        enemyCanInitiate: enemyAircraft.some((air) => air.canInitiateAirCombat),
+        enemyAirBaseInHex: airBases.value.some(
+          (base) => base.side === enemySide.value && sameHex(base.hex, target),
+        ),
+      }),
+      '空战环节',
+    )
+    if (data === null) return false
+    airState.value = { ...data.state, step: 'airCombat' }
+    return data.state.combat?.occurs === true
+  }
+
+  /**
+   * 把骰子与查表连跑到**下一个需要玩家表态的步**：
+   * ② 空战（面板）→ ③ 拦截应答（面板）→ 防空（自动）→ **⑤ 任务结算（面板 2，停）**。
+   * 返航自动补完只对 `hip_shoot`（14.1c 缺省即起飞基地）生效。
+   */
+  function autoResolveAirMissionNow(): boolean {
+    const state = airState.value
+    if (state === null) return false
+    if (state.step === 'airCombat' && !confirmAirCombatNow()) return false
+    if (airState.value?.step === 'interception') {
+      /*
+       * K3：拦截方的「是否宣布拦截」是**真实决策**（14.5：不强制）。
+       * 修前自动连跑立刻按默认 `interceptDeclared=false` 跳过该步 ⇒ 14.5 这一支永远走不到。
+       * 有合格拦截机时**停在 D 步**，由面板记录应答后再次调用本函数继续。
+       */
+      if (airInterceptorCandidates.value.length > 0 && !airInputs.value.interceptDeclared)
+        return true
+      if (!declareInterceptionNow()) return false
+      if (airState.value?.interception?.declared === true && !resolveInterceptionCombatNow()) {
+        return false
+      }
+    }
+    if (airState.value?.step === 'flak' && !resolveFlakNow()) return false
+    /*
+     * ⑤ 任务结算（14.2f-F，面板 2）：**停在这里**，不替玩家点「结算任务」。
+     * 对地任务的轰炸链、受损分配、空运/空投货物都在 `settleAirMissionNow` 里跑
+     * （G① 的"任务结算真的进轰炸引擎"仍成立，只是触发者从自动连跑改成面板按钮）。
+     */
+    if (airState.value?.step === 'resolveMission') {
+      /*
+       * 14.2f-E 例外：任务机全被防空击落/中止 ⇒ 没有战果可结算，弹一块空面板没有意义，
+       * 直接按"任务中止"收束（与修前一致）。
+       */
+      if (airMissionFlyingUnits.value.length === 0 && barrageState.value === null) {
+        return finishAbortedAirMission()
+      }
+      return true
+    }
+    /*
+     * 14.2f-E/G：任务机全被防空击落/中止（返航名单为空）⇒ 没有三选一可做，
+     * 直接收束到 done，不停在空的返航步；hip_shoot 的缺省返航也在这里补完。
+     */
+    if (!finishAutomaticAirReturn()) return false
+    return airState.value?.step === 'returnToBase' || airState.value?.step === 'done'
+  }
+
+  /**
+   * ★ 条 13（A2）：低空扫射（hip_shoot）**全自动到返航并变非激活**。
+   *   干净扫射（无拦截/无防空损失、战果落定）的返航目的地缺省即起飞基地（14.1c 合法）⇒
+   *   自动补完返航步（`completeAirReturnNow` ⇒ 逐机转非激活），不必玩家再点一次「返航」。
+   *   若返航确需玩家决策（起飞基地已不可用等）⇒ `completeAirReturnNow` 返 false，停在 returnToBase。
+   *   barrage（14.7b 空军轰炸）**不在此列**——仍停 returnToBase 供核对（沿用既有 G① 口径）。
+   *
+   * 2026-11-15：面板 2 的「结算任务」不再经 `autoResolveAirMissionNow` ⇒ 这两条
+   *   在 `settleAirMissionNow` 收尾时也要跑一次，否则会多出一个空的返航步。
+   */
+  function finishAutomaticAirReturn(): boolean {
+    if (airState.value?.step !== 'returnToBase') return true
+    // 14.2f-E/G：没有返航机 ⇒ 不停在空的返航步
+    if (airMissionReturnChoices.value.length === 0) return completeAirReturnNow()
+    if (airState.value?.kind !== 'hip_shoot') return true
+    return completeAirReturnNow()
+  }
+
+  /** 14.2f-E：任务机全失 ⇒ 记"任务中止"，不弹空的任务结算面板，直接收束到 done */
+  function finishAbortedAirMission(): boolean {
+    airInputs.value = {
+      ...airInputs.value,
+      missionNote: '任务机已中止或被摧毁，没有执行对地任务',
+    }
+    // 轰炸宣布被引擎拒 ⇒ 没有可结算的战果；置位后 `airMissionResultReady` 放行，
+    // 否则 `confirmAirMissionNow` 会因「等一场永不存在的轰炸」而失败，状态死在结算步
+    airMissionAbortPending.value = true
+    if (!confirmAirMissionNow()) {
+      airMissionAbortPending.value = false
+      return false
+    }
+    if (!finishAutomaticAirReturn()) return false
+    return airState.value?.step === 'returnToBase' || airState.value?.step === 'done'
+  }
 
   return {
     airActive,
@@ -2063,6 +2524,18 @@ export function createAirDomain(ports: AirDomainPorts) {
     resolveAirCargoNow,
     applyAirCargoDelivery,
     captureAirBaseNow,
+    airMissionCargoCapacityNow,
+    airCargoLossPending,
+    airCargoLossPicked,
+    toggleAirCargoLossPick,
+    confirmAirCargoLossNow,
+    hasCargoOwnership,
+    resolveFlakNow,
+    beginAirTargetHexPickNow,
+    runAirMissionNow,
+    autoResolveAirMissionNow,
+    finishAutomaticAirReturn,
+    finishAbortedAirMission,
   }
 }
 

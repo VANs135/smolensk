@@ -3947,6 +3947,22 @@ export interface BattleTarget {
   defenderIds: string[]
 }
 
+// ── B2-2b：待点格类型（从 facade 迁入，切片与 facade 共用） ──
+
+export type HexPickCandidates = readonly HexRef[] | 'any'
+
+export interface PendingHexPick {
+  /** 用途名（界面显示"正在选格：<label>"） */
+  label: string
+  /** 规则号（提示里带上，玩家知道凭什么） */
+  rule: string
+  candidates: HexPickCandidates
+  /** 命中后写回（返回是否真的写成功；false ⇒ 保留待点态） */
+  apply: (hex: HexRef) => boolean
+  /** 13.6：这一格属于第几条到达条目（同一格也可能改走图外盒，届时要把选格态收掉） */
+  arrivalIndex?: number
+}
+
 // ── B2-2a：从 facade 迁入（空军动作切片要用；留在 facade 会造回边）──
 /**
  * 9.14c：运输点组的**算子级分配**（哪些被夺取、哪些被位移）
