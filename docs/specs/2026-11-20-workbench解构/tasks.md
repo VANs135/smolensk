@@ -30,7 +30,7 @@
 | `movementPhaseOf`      | `export function` @673  | **搬进 `workbench-model.ts`**（纯映射，只依赖 `ConsolePhase`/`MovementSegmentPhase`），facade 原地 `export { movementPhaseOf }` 兼容旧导入 |
 | `SpecialCombatPending` | `export interface` @654 | 同样搬进 `workbench-model.ts` 并 re-export                                                                                                 |
 
-理由：切片若 `import … from './workbench'` 会造 facade ⇄ 切片环；当端口传又能传（但纯类型/纯函数没必要占端口位）。
+理由（复核后的精确版）：**值**不能从 `./workbench` import——会造运行时的 facade ⇄ 切片环。现有切片里**没有一个**这么做（已扫全 `workbench-*.ts`）；唯一带回边的是 `workbench-model.ts`，而且它明确写着这是"类型环、编译期擦除、但 `tsc` 要顺环再解析一遍，B1 撞过 2,611 errors 的类型退化"，P2-1 把 4 个共享类型搬进 model 就是为了消掉这类回边。⇒ `SpecialCombatPending` 按同一政策搬 model，不是"技术上非搬不可"，而是**不给自己留回边**。
 
 扣除这两项后，**端口 34 项 = 按值 27 + 晚绑定 7**（下表逐行数出来正好 27+7；文字里的 33/26 是嘴算错的，2026-11-21 用脚本复核修正）：
 
@@ -54,7 +54,17 @@
 | `noteUnitEnteredHex`                                                             | `(unit: ConsoleUnit, hex: HexRef) => void`                                                                                                                                                                                                                |
 | **晚绑定 7**                                                                     | `barrageFacts`(computed 3682) / `railMoveFacts`(computed 4520) / `airUnloadLedger`(ref 15966) / `airMissionJoinChoices`(computed 16814) / `specialPending`(ref 18126) / `airMissionSegmentKind`(computed 22401) / `airMissionKindChoices`(computed 22425) |
 
-**剪端口那一侧的连带义务（复核补）**：6 个内部化名字在**区外都还有引用**（实测 `applyAirCargoDelivery` 1、`airUnitsInHex` 2、`isAirInOffMapBox` 2、`onMapAirUnits` 4、`airUnitsAt` 4、`airDistanceFromRealBase` 10）。所以搬完必须把它们**加进切片 `return` 并在 facade 解构**，否则 facade 其余代码断（`applyAirCargoDelivery` 区外那 1 处其实就是 ports 实参本身，删掉后可能为 0——**搬完重新数一遍再决定要不要解构**，别照抄这张表）。
+**剪端口那一侧的连带义务（复核补，第二次实测已排掉 ports 实参 2239–2378）**：
+
+| 名字                                 | 真实区外引用                                             | 要不要 return + 解构     |
+| ------------------------------------ | -------------------------------------------------------- | ------------------------ |
+| `airDistanceFromRealBase`            | 9（含 3799 与 16.8k 三处校验）                           | **要**                   |
+| `airUnitsAt`                         | 3（其中 `29754` 是**别的域的 ports 实参**）              | **要**                   |
+| `onMapAirUnits`                      | 2（`28888`/`29362` 都在 `createBarrageDomain` 的实参里） | **要**（轰炸域还在吃它） |
+| `isAirInOffMapBox` / `airUnitsInHex` | 1 / 1                                                    | **要**                   |
+| `applyAirCargoDelivery`              | **0**（唯一那处就是 ports 实参本身）                     | **不要**，剪干净即可     |
+
+⇒ 5 个要回补、1 个不用；"回补"不只是 facade 自己用，**还因为其它域（轰炸）的 ports 实参在吃这些名字**。
 
 **同时要剪掉的 6 个既有端口**（定义就在本区间里）：`isAirInOffMapBox`/`onMapAirUnits`/`airUnitsAt`/`airDistanceFromRealBase`/`airUnitsInHex`/`applyAirCargoDelivery`——接口成员、`createAirDomain` 解构、facade ports 实参（含 `get` 访问器）三处同删，并把切片里已有的 `ports.X` 改回裸名。
 
