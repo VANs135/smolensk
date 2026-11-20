@@ -205,16 +205,35 @@ node scripts/migration-report.mjs --out docs/specs/2026-11-20-workbench解构/mi
 
 真正的原因在 §2 早就写过：**切缝是状态归属**。B1 能按分节切，是因为轰炸的状态恰好就写在那个分节里；**空军的 26 个 ref 住在 2416–2592，离它的动作有 15,000 行**。所以 B2 必须按**域**切：
 
-> **B2 = `workbench-air.ts`（空军域整体）**：状态块 2416–2592 + §18 全部 + §19 的空军半段（18503–18851：`airCombatPicksPayload` / `confirmAirCombatNow` / `airUnitsAt` / `canAirMissionTarget` / `resolveAirCargoNow` / `captureAirBaseNow` 等）+ 散落在 18092–20860 的空军函数（`beginAirMissionNow` / `confirmAirMissionNow` / `recordAbortedAirBarrage` / `completeAirReturnNow` / `airStatusLabel` 等）。
+> **B2 = `workbench-air.ts`（空军域整体）**：状态块 2416–2592 + §18 全部 + §19 的空军半段（18503–18953：`airCombatPicksPayload` / `confirmAirCombatNow` / `airUnitsAt` / `canAirMissionTarget` / `resolveAirCargoNow` / `captureAirBaseNow` 等）+ 散落在 18092–20860 的空军函数（`beginAirMissionNow` / `confirmAirMissionNow` / `recordAbortedAirBarrage` / `completeAirReturnNow` / `airStatusLabel` 等）。
 
-预计端口 **15–20 项**，切口 ≈ 1,100–1,300 行。开工前先用 `scripts/port-report.mjs` 对齐一次真实区间（把上面几段的首尾行取准），**别照抄本节的行号**（§1.5 的老毛病）。
+**⚠ 上面这段是"意图"，不是"已核实的切口"——本节初稿写的「预计端口 15–20 项、切口 1,100–1,300 行」是错的，实测推翻了自己**（2026-11-20 二次测量）：
 
-同期判据：
+| 合并口径                                                      | 端口   |
+| ------------------------------------------------------------- | ------ |
+| 状态块 2416–2592 + §18 17391–17950 + §19 空军半段 18503–18953 | **48** |
 
-- **§19 的另一半（轰炸/炮击入口判据 18003–18198）不进空军切片**——它是"三操作"的**协调层**，同时依赖轰炸与空军两域；留到 B5 之后单独做，或与 §19 剩余部分一起并进协调层。
-- `airUnits`（1916，盘面飞机算子）与 `airBoxMembers`（1928）**不属于空军切片**：它们与地图/到货/轰炸共享，留在 facade 或 `workbench-core.ts`，由 ports 传入。这是"域"的边界，不是"名字里有 air"就该搬。
+48 项里 16 项在 2593 之前声明（可直连注入），**32 项必须走 getter 延迟绑定**。而且这 32 项里有 **20 项本来就是空军域的成员，只是不在我列的那三段里**：
 
-**方法论定下来**：每批开工第一步跑 `node scripts/port-report.mjs --start <首> --end <尾>`；**> 40 就重新划批**，不要硬切。这条替代了 B1 时那三个一次性脚本。
+- 派生块 **5944–6063**：`airActingSide` / `ownAirUnits` / `airBases` / `ownAirBases` / `airTransportProfiles` / `airOverLimitAircraftInactive` / `airMissionAirUnits` / `airMissionRosterNow`（8 项）
+- 空军账本 **16927–16930**：`airUnloadLedger` / `airUnloadedTAt`
+- 空军动作 **18136–18148 / 18198–18502 / 19673–20865**：`airMissionAllowedInPhase` / `beginAirMissionNow` / `airCargoLossPending` / `hasCargoOwnership` / `airMissionResultReady` / `confirmAirMissionNow` / `recordAbortedAirBarrage` / `completeAirCargoReturn` / `completeAirReturnNow` / `airStatusLabel` / `airMissionKindChoices`(23386)
+
+⇒ **空军域在 facade 里不是一段，是 6 段不连续的区间**（2416–2592、5944–6063、16927–16930、18136–18148、18198–18502、18503–18953、19673–20865、23386）。这也解释了它为什么端口大：**同一个域被 15,000 行切成了 6 截**。
+
+**因此 B2 拆成两个提交，第一步只搬"状态 + 派生"：**
+
+- **B2-1（先做）**：搬 2416–2592（状态，26 ref）+ **5944–6088**（派生，12 computed；**不能用 5944–6063**——6063 切在 `airMissionRosterNow` 的函数体里）。实测合并端口 **26 项**，其中 16 项须 getter。这两个块是纯声明、无函数体、互相引用密集；搬完 `airDomain` 就**拥有自己的状态**，后续函数搬进同一文件时不再需要把状态当端口。此时建域点可以放在 2593 附近（新出现的外部依赖全是 2593 之后声明的，走 getter），**不会像 B1 那样被迫把装配点压到 setup 末尾**。
+- **B2-2（后做）**：搬函数块（18136–18148 / 18198–18502 / 18503–18953 / 19673–20865 / 23386）。到这一步端口应显著低于 48（因为状态与派生已进切片），仍需先 `port-report` 复测确认 < 40。
+- **§19 的 18003–18135（轰炸/炮击入口判据）不进空军切片**，它是跨轰炸+空军的协调层，留到 B5 之后。
+
+**切割时必须人工确认边界**：`captureAirBaseNow` 实际占 **18812–18953**，而 §20 的分节横幅在 **18950**——**横幅落在函数体内部**。任何按横幅取 `--end` 的切法都会把它的后半段切给下一个切片。（`port-report` 现在会在"区间在函数体中间截断"时报警，别忽略那条警告。）
+
+**另一类假端口**：区间**起点**落在函数体中间时，函数内的 `const state = …` / 回调参数 `(air) => …` 会被算成"外部符号"（它们的声明行在区间之外）。测 5944–6063 就这样凭空多出 `state` 与 `air` 两项。**测量前先确认两端都落在声明之间，不是表达式内部。**
+
+**命名还有一处坑**：facade 已有 `airSupply` / `airUnitTransit` / `airMissionDomain` / `airCargoResolution` 四个 air 开头的域，新域**不能叫 `air`**（文件里还有几十处 `(air) => …` 回调参数，会读成本地变量）。用 `airDomain`。
+
+**方法论定下来**：每批开工第一步跑 `node scripts/port-report.mjs --start <首> --end <尾>`；**> 40 就重新划批**，不要硬切；**看它的截断警告**，预警说明 `--end` 取错了。这条替代了 B1 时那三个一次性脚本。
 
 ---
 

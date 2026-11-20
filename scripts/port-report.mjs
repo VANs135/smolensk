@@ -124,7 +124,22 @@ if (setupBody === null) {
 
 /** ① 区间内的本地声明 ② 扫描引用 */
 const local = []
+/** 跨越 END 的语句：区间在函数体中间截断 ⇒ 会把它的局部变量误算成端口 */
+const straddling = []
 for (const stmt of setupBody.statements) {
+  const s = lineOf(stmt)
+  const e = sf.getLineAndCharacterOfPosition(stmt.getEnd()).line + 1
+  if (s <= END && e > END) {
+    const name =
+      ts.isFunctionDeclaration(stmt) && stmt.name !== undefined
+        ? stmt.name.text
+        : ts.isVariableStatement(stmt)
+          ? stmt.declarationList.declarations
+              .map((d) => (ts.isIdentifier(d.name) ? d.name.text : '?'))
+              .join(',')
+          : '（非声明语句）'
+    straddling.push(`${name} ${s}–${e}`)
+  }
   if (!inRange(stmt)) continue
   if (ts.isFunctionDeclaration(stmt) && stmt.name !== undefined)
     local.push({ name: stmt.name.text, kind: 'function' })
@@ -177,6 +192,15 @@ modules.sort((a, b) =>
 console.log(
   `${own} :${START}-${END}  本地声明 ${local.length} 个（function ${local.filter((x) => x.kind === 'function').length} / const ${local.filter((x) => x.kind === 'const').length}）`,
 )
+if (straddling.length > 0) {
+  console.warn(
+    `\n⚠ 区间在 ${straddling.length} 处函数体中间截断，截断处内部的局部变量会被误算成端口：`,
+  )
+  for (const s of straddling) console.warn(`    ${s}`)
+  console.warn(
+    '  ⇒ 把 --end 收到分节边界（或该函数最后一个 } 之后）再测，否则端口数偏高、不可用。\n',
+  )
+}
 console.log(
   `\n=== 端口（facade 本地，需做成 ports）${facade.length} 项 ${facade.length > 40 ? '⚠ 超过 40 阈值，再拆一刀' : ''} ===`,
 )

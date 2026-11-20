@@ -35,16 +35,26 @@
 - [x] **源码守卫测试改造**：tests 里 35 处 `readFileSync('src/stores/workbench.ts')` → `tests/shared/store-source.ts` 的 `readStoreSource()`（facade + 全部 `workbench-*.ts` 切片；**切片排在前**，否则 `indexOf('function X')` 会撞到 facade 的同名转发壳）
 - 验收：`npm run check` 绿
 
-## 3. B2 空军（**2026-11-20 重划：按域切，不按分节切**）
+## 3. B2 空军（**2026-11-20 重划：按域切，且分两步**）
 
-原计划「section 10 + section 11」实测端口 **82 项**（43 + 65），超过「> 40 就再拆」的红线，故重划为**空军域整体**。详见 spec §6.1。
+原计划「section 10 + section 11」实测端口 **82 项**（43 + 65），超过「> 40 就再拆」的红线；改按域切后复测仍有 **48 项**（详见 spec §6.1）。故分两个提交。
 
-- [ ] 新建 `src/stores/workbench-air.ts`：**状态块 2416–2592（26 个 ref）+ §18 全部（16 函数 / 8 const）+ §19 的空军半段（18503–18851）+ 散落空军函数（18092–20860）**
-- [ ] 开工第一步：`node scripts/port-report.mjs --start <首> --end <尾>` 对齐区间，**端口 > 40 就再拆一刀**，不要硬切（B1 那三个一次性脚本已固化成这个 `scripts/port-report.mjs`）
-- [ ] 判据：`airUnits`(1916) / `airBoxMembers`(1928) **不进切片**（与地图/到货/轰炸共享，属于 facade 或 core 的 state）；`SUPPLY_STATUS_LABELS`、`round` 类工具函数走 import，不做端口
-- [ ] §19 的另一半（轰炸/炮击入口判据 18003–18198）**不进本批**——它是跨轰炸+空军的协调层，留到 B5 之后
-- [ ] 预计端口 15–20 项、切口 ≈1,100–1,300 行 ⇒ `workbench.ts` 应落 ≈29,900 ± 100
-- 验收：`npm run check` 绿 + 公开面 1,013 键不变 + 文案/函数名双对拍 0 差
+### B2-1 状态 + 派生（先做，无函数体）
+
+- [ ] 新建 `src/stores/workbench-air.ts`，搬 **状态块 2416–2592**（26 个 ref）+ **派生块 5944–6088**（12 个 computed；**不是 5944–6063**——6063 正好切在 `airMissionRosterNow` 的函数体里，会把它的局部 `state` / `air` 误算成端口）
+- [ ] 建域点可放在 2593 附近（新出现的外部依赖全在 2593 之后 ⇒ 走 getter 延迟绑定），**不必像 B1 那样压到 setup 末尾**
+- [ ] 实测端口 **26 项**，其中 16 项须走 getter（含 `segmentGateQuery` @23302、`constructionMarkerAirBaseId`、`constructionMarkerPieces` @27821）
+- 命名：**域对象叫 `airDomain`，不要叫 `air`**——facade 里已有 `airSupply` / `airUnitTransit` / `airMissionDomain` / `airCargoResolution` 四个 air 开头的域，再加一个 `air` 无法区分（另：`(air) => …` 这种回调参数在文件里出现几十次，`air` 这个名字太容易被误读成本地变量）
+- 验收：`npm run check` 绿 + 公开面 1,013 键不变（状态与派生仍在 `return` 里按原名暴露）
+
+### B2-2 动作块（后做）
+
+- [ ] 搬函数块 **18136–18148 / 18198–18502 / 18503–18953 / 19673–20865 / 23386**
+- [ ] 开工先复测端口，**> 40 再拆一刀**
+- [ ] 边界：`captureAirBaseNow` 实际 18812–**18953**，分节横幅在 **18950**（横幅落在函数体内）⇒ 按横幅取 end 会把后半段切给下一批
+- [ ] 不含 §19 的 18003–18135（轰炸/炮击入口判据，跨域协调层，留 B5 之后）
+- [ ] 不含 `airUnits`(1916) / `airBoxMembers`(1928)（与地图/到货/轰炸共享，留 facade/core）
+- 验收：`npm run check` 绿 + 公开面不变 + 文案/函数名双对拍 0 差
 
 ## 4. B3 移动三切片
 
