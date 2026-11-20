@@ -74,13 +74,13 @@ describe('H5：初设落位一步撤回', () => {
     expect(ctx.setup.enterSetup('1')).toBe(true)
     expect(ctx.setup.lastPlacement).toBeNull()
     expect(ctx.setup.undoLastPlacementNow()).toBe(false)
-    const queue = readFileSync(
-      new URL('../../src/components/game/DecisionQueue.vue', import.meta.url),
+    const table = readFileSync(
+      new URL('../../src/views/GameTableView.vue', import.meta.url),
       'utf8',
     )
-    // 撤回按钮以 setup.canUndoPlacement 为放行条件（可与其它视图条件复合）；
-    // 没有落位时该投影为 false ⇒ 入口不出现。2026-11-19：复合 cursorWindow 条件后仍含此投影。
-    expect(queue).toContain('setup.canUndoPlacement')
+    // 撤回入口以 setup.canUndoPlacement 为放行条件；2026-11-20 移到棋桌左栏「设置」下方
+    expect(table).toContain('setup.canUndoPlacement')
+    expect(table).toContain('setup.undoLastPlacementNow()')
   })
 })
 

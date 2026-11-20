@@ -576,6 +576,25 @@ onBeforeUnmount(() => {
           <span class="gt__rail-label">{{ item.label }}</span>
         </button>
 
+        <!--
+          2026-11-20（用户）：初设的撤回改成图标，放在「设置」按钮下方。
+          行为**沿用既有入口** `setup.undoLastPlacementNow()`（另一条线会把撤销语义收成共用入口，
+          届时只需把这枚按钮接到共用动作上）。批 3 纪律：不可用不出现 ⇒ 只在 `canUndoPlacement`
+          时渲染；掷骰封账后它自然消失（动作本身仍会记录拒绝原因）。
+        -->
+        <button
+          v-if="!setup.finished && setup.canUndoPlacement"
+          type="button"
+          class="gt__rail-button gt__rail-undo"
+          :title="`撤回上一步：${setup.lastPlacement?.label ?? ''}`"
+          aria-label="撤回上一步"
+          @click="setup.undoLastPlacementNow()"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 14 4 9l5-5 M4 9h9a6 6 0 0 1 0 12h-3" />
+          </svg>
+        </button>
+
         <div class="gt__rail-end">
           <button
             type="button"
@@ -1157,6 +1176,8 @@ onBeforeUnmount(() => {
   color: var(--color-accent);
   border-color: var(--color-rule);
 }
+
+/* 撤回图标：无文字，尺寸与其它栏钮一致（不可撤时整枚不出现，见模板 v-if） */
 
 .gt__main {
   flex: 1 1 auto;

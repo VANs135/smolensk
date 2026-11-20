@@ -326,6 +326,8 @@ function pickerItemsOf(category: SetupPlacingCategory): readonly CounterPickerIt
           `${sideLabel(row.item.side)} ${row.item.label}` +
           `（${statusLabel}${row.face.reduced ? ' · 减损' : ' · 完好'}）`,
         selected: isFacePlacing(row),
+        // 用户 2026-11-20：未激活算子与盒内一致压灰（只表达状态，仍可点着落位/入盒）
+        dimmed: row.face.status === 'inactive',
         groupKey: `${row.face.status}:${row.face.reduced ? 'reduced' : 'full'}`,
         groupLabel: `${statusLabel} · ${row.face.reduced ? '减损' : '完好'}`,
       } satisfies CounterPickerItem

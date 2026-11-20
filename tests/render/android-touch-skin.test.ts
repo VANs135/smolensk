@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest'
 const css = readFileSync('src/styles/android.css', 'utf8')
 const main = readFileSync('src/main.ts', 'utf8')
 const queue = readFileSync('src/components/game/DecisionQueue.vue', 'utf8')
+const table = readFileSync('src/views/GameTableView.vue', 'utf8')
 const platform = readFileSync('src/shared/platform.ts', 'utf8')
 
 describe('安卓触摸皮肤', () => {
@@ -63,8 +64,8 @@ describe('安卓触摸皮肤', () => {
     expect(actions).toBeGreaterThanOrEqual(0)
     // 预设按钮位于 actions 行内（常驻）
     expect(preset).toBeGreaterThan(actions)
-    // 撤回 ↺ 直接平铺在动作列（不再折进「更多」details）
-    expect(queue).toContain('class="queue__undo"')
+    // 撤回 ↺ 改为图标、挪到棋桌左栏「设置」下方（2026-11-20 用户）
+    expect(table).toContain('class="gt__rail-button gt__rail-undo"')
     // 「更多」折叠整个移除
     expect(queue).not.toContain('class="queue__more"')
     // 一键全落：无 onlySide 参数
@@ -97,8 +98,8 @@ describe('安卓触摸皮肤', () => {
     expect(css).toContain('overflow-x: auto')
     expect(css).toContain('flex-wrap: nowrap')
     expect(css).toContain('width: max-content')
-    // 按钮精简：撤回 ↺ 直接平铺（2026-11-19 用户「不需要箭头呼出和文字」）
-    expect(css).toContain('.queue__undo')
+    // 按钮精简：撤回 ↺ 改为图标，落在棋桌左栏（2026-11-20 用户「放到设置按钮下方」）
+    expect(table).toContain('gt__rail-undo')
     // 「更多」details 已整体移除（撤回不再折进折叠）
     expect(queue).not.toContain('class="queue__more"')
     expect(queue).not.toContain('queue__more-toggle')

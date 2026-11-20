@@ -66,3 +66,36 @@ describe('初设队列：box 网格布局', () => {
     expect(queue).toContain('queue__formation')
   })
 })
+
+describe('初设队列：2026-11-20 手感与正确性', () => {
+  const setupPanel = readFileSync('src/components/setup/SetupPanel.vue', 'utf8')
+  const table = readFileSync('src/views/GameTableView.vue', 'utf8')
+
+  it('★ 飞机「入盒」常显：未选中只压暗待命，动作条高度不随选中态跳变', () => {
+    expect(queue).toContain(':aria-disabled="airPickedChip === null"')
+    expect(queue).toContain('queue__air-pickbar-btn--idle')
+    // 不再按选中态整枚出现/消失；也不在清点窗口摆 disabled 灰按钮
+    expect(queue).not.toContain('v-if="airPickedChip !== null"')
+    expect(queue).not.toContain('queue__air-pickbar--empty')
+    expect(queue).not.toContain(':disabled=')
+  })
+
+  it('★ 未激活飞机压灰：桌面与安卓同一份（仍可点着落位/入盒）', () => {
+    expect(queue).toMatch(/\.queue__air-col\[data-face='inactive-full'\] \.queue__air-chip/)
+    expect(queue).toContain('grayscale(1) opacity(0.55)')
+    // 右栏初设阵列也压灰，不靠“未激活”字样
+    expect(setupPanel).toContain("dimmed: row.face.status === 'inactive'")
+  })
+
+  it('★ 撤回改为图标，放在棋桌左栏「设置」下方，沿用既有撤回入口', () => {
+    // 初设框动作列不再放撤回
+    expect(queue).not.toContain('撤回上一步')
+    // 左栏：设置按钮（rail 的 aria-label 分支）之后紧跟图标按钮
+    const settings = table.indexOf("item.id === 'settings'")
+    const undo = table.indexOf('gt__rail-undo')
+    expect(settings).toBeGreaterThanOrEqual(0)
+    expect(undo).toBeGreaterThan(settings)
+    expect(table).toContain('setup.undoLastPlacementNow()')
+    expect(table).toContain('v-if="!setup.finished && setup.canUndoPlacement"')
+  })
+})

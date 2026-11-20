@@ -1590,38 +1590,13 @@ html[data-platform='android'] .queue__air-pickbar {
   min-height: 30px;
 }
 
-html[data-platform='android'] .queue__air-pickbar--empty {
-  visibility: hidden;
-}
-
-/* 灰色 = 未激活 / 已行动（贴图自带数值，无需文字） */
-html[data-platform='android'] .queue__air-col[data-face='inactive-full'] .queue__air-chip,
-html[data-platform='android'] .queue__air-col[data-face='inactive-reduced'] .queue__air-chip {
-  filter: grayscale(1) opacity(0.55);
-}
+/* 灰色 = 未激活 / 已行动（贴图自带数值，无需文字）；桌面与安卓同一份在 DecisionQueue.vue */
 
 html[data-platform='android'] .queue__air-flag {
   display: none;
 }
 
-/* ⑥ 撤回改圆圈箭头图标（文字保留给读屏与 title） */
-html[data-platform='android'] .queue__undo {
-  font-size: 0;
-  min-width: 30px;
-  width: 30px;
-  min-height: 30px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: 1px solid rgb(232 223 196 / 0.4);
-}
-
-html[data-platform='android'] .queue__undo::after {
-  content: '↺';
-  font-size: 15px;
-}
+/* ⑥ 撤回已挪到棋桌左栏「设置」下方（图标按钮见 GameTableView 的 rail），本处不再单列 */
 
 /* ⑦ 盒卡弹窗贴紧凑：限宽、去粗边 */
 html[data-platform='android'] .boxpopup {

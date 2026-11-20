@@ -402,22 +402,13 @@ function sideMark(side: 'axis' | 'soviet'): string {
         2026-11-19（用户「不需要箭头呼出和文字了」）：撤回 ↺ 直接平铺在动作列，
         「更多」折叠整个去掉（桌面此前也恒展开，观感不变）；结果提示保留给读屏，
         安卓由 android.css 隐藏文字。
+        2026-11-20（用户）：撤回改成图标、挪到棋桌左栏「设置」下方（`GameTableView` 的 rail），
+        本动作列不再放撤回，避免初设框多一行。
       -->
       <span v-if="presetResult !== null" class="queue__hint num">
         已落 {{ presetResult.placed }} · 剩 {{ presetResult.remaining }} · 失败
         {{ presetResult.failures.length }}
       </span>
-      <BaseButton
-        v-if="cursorWindowForViewer && setup.canUndoPlacement"
-        variant="ghost"
-        size="sm"
-        class="queue__undo"
-        :title="setup.lastPlacement?.label ?? ''"
-        aria-label="撤回上一步"
-        @click="setup.undoLastPlacementNow()"
-      >
-        撤回上一步
-      </BaseButton>
     </div>
 
     <p v-if="!cursorWindowForViewer" class="queue__wait" role="status">
@@ -628,16 +619,17 @@ function sideMark(side: 'axis' | 'soviet'): string {
                 选中的那一枚：在阵列**正上方**给一条动作条（「入盒」）。
                 2026-11-19（用户「突变影响操作」）：动作条**恒占位**（空态隐藏内容）；
                 （用户「不需要文字」）机型名去掉——选中态由算子高亮表达，只留「入盒」钮。
+                2026-11-20（用户「按钮常显，别让窗口一跳一跳」）：按钮**恒显**；未选中时压暗
+                并标 aria-disabled（批 3 纪律：清点窗口不摆 `disabled` 灰按钮），点击不落账。
+                此前按选中态整枚出现/消失，动作条高度随之变化，初设框会跳。
               -->
-              <div
-                class="queue__air-pickbar"
-                :class="{ 'queue__air-pickbar--empty': airPickedChip === null }"
-              >
+              <div class="queue__air-pickbar">
                 <BaseButton
-                  v-if="airPickedChip !== null"
                   variant="primary"
                   size="sm"
-                  @click="sendAirToBox(airPickedChip)"
+                  :class="{ 'queue__air-pickbar-btn--idle': airPickedChip === null }"
+                  :aria-disabled="airPickedChip === null"
+                  @click="airPickedChip !== null && sendAirToBox(airPickedChip)"
                 >
                   入盒
                 </BaseButton>
@@ -1170,6 +1162,12 @@ function sideMark(side: 'axis' | 'soviet'): string {
   white-space: nowrap;
 }
 
+/* 「入盒」未选中时的待命态：只压暗，不改变高度（按钮常驻，避免初设框跳变） */
+.queue__air-pickbar-btn--idle {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .queue__air-chip {
   position: relative;
   width: var(--queue-air-counter);
@@ -1185,6 +1183,15 @@ function sideMark(side: 'axis' | 'soviet'): string {
   border-color: var(--color-command-teal);
   background: var(--color-command-teal-bg);
   box-shadow: var(--shadow-sm);
+}
+
+/*
+ * 未激活（规则态）：与盒内未激活一致压灰；仍可点（初设正是要把它落到基地 / 图外盒）。
+ * 2026-11-20（用户）：此前只有安卓压灰，桌面看起来像“已激活可用”。
+ */
+.queue__air-col[data-face='inactive-full'] .queue__air-chip,
+.queue__air-col[data-face='inactive-reduced'] .queue__air-chip {
+  filter: grayscale(1) opacity(0.55);
 }
 
 .queue__air-chip:hover:not(:disabled) {
