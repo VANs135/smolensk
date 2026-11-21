@@ -44,9 +44,11 @@ import { canMoveInPhase } from '@/engine/rules/modes'
 import type { MoveUnitRuntime } from '@/engine/rules/move-interaction'
 import type { MoveInteractionState, GroupReachable } from '@/engine/rules/move-interaction'
 import type { MoveContext, StepFailure } from '@/engine/rules/move-types'
+import type { MoveStepRecord } from '@/engine/rules'
 import type * as Rules from '@/engine/rules'
 import type * as Geo from '@/engine/hex-geometry'
 import type * as Model from './workbench-model'
+import type { SettlementRecordInput } from './workbench-core'
 import {
   SETUP_WIGGLE_BREAKDOWN_RADIUS,
   SETUP_WIGGLE_MAX_DIVISIONS,
@@ -72,6 +74,14 @@ export interface MovementCore {
   requireAction: (key: ActionKey, action: string) => boolean
   actionAllowedNow: (key: ActionKey) => boolean
   refuseWhileLocked: (action: string) => boolean
+  /** B3-2b2：撤销账读写（撤销 / 取消整次移动 / 装卸同账回退） */
+  moveUndoSealReasonNow: () => string | null
+  undoTransportHandlingNow: () => boolean
+  dropUndoOf: (family: MovementUndoFamily) => void
+  dropUndoFamilies: (families: readonly MovementUndoFamily[]) => void
+  revertTransportHandlingSinceBaseline: () => void
+  sealTransportHandlingForCommit: () => void
+  clearMoveInteraction: () => void
 }
 
 /** 端口束 2：板面状态 —— 所有地面交互域共读的 ref / computed 与查询函数 */
@@ -103,9 +113,19 @@ export interface MovementBoard {
   friendlyUnitsAt: (hex: HexRef) => ConsoleUnit[]
   movePickPoolAt: (hex: HexRef) => ConsoleUnit[]
   defaultMovePickIdsAt: (hex: HexRef) => string[]
+  /** B3-2b2：收束 / 悬停 / 过筹结算的板面状态 */
+  moveLinger: Ref<boolean>
+  hoverHex: Ref<HexRef | null>
+  overrunContext: Ref<{
+    target: HexRef
+    participantIds: string[]
+    mpRemainingBefore: number
+    runtimeBefore: MoveUnitRuntime[]
+  } | null>
+  combatDefendingHexCleared: ComputedRef<boolean>
 }
 
-/** 端口束 3：纯判据 / 格式化 —— 全部是可提升的函数声明或静态 import */
+/** 端口束 3：纯判据 / 格式化 / 结算辅助 —— 全部是可提升的函数声明或静态 import */
 export interface MovementHelpers {
   noteUnitLeftOwnBridgeHex: (unit: ConsoleUnit) => void
   unitOfInstance: (instanceId: string) => ConsoleUnit | undefined
@@ -125,6 +145,13 @@ export interface MovementHelpers {
   reachableNodeAt: typeof Rules.reachableNodeAt
   sameHex: typeof Geo.sameHex
   areAdjacent: typeof Geo.areAdjacent
+  /** B3-2b2：结算 / 过筹 / 步记录查询（按值可提升） */
+  settleOverrunMove: (defenderLeftHex: boolean) => boolean
+  snapshotOf: (record: MoveStepRecord) => MoveStepSnapshot
+  recordSettlement: (input: SettlementRecordInput) => boolean
+  hedgehogLevelOf: (hex: HexRef) => number
+  endMoveEarly: typeof Rules.endMoveEarly
+  zocStoppedMoveUnitIds: Ref<string[]>
 }
 
 /** C5 移动交互的端口：3 个共享束 + 8 个域对象 + 5 个晚绑定访问器（2026-11-21 实测 16 项）。 */
@@ -163,7 +190,20 @@ export function createMovementDomain(ports: MovementDomainPorts) {
   } = ports
 
   /** 端口束 1：日志 / 撤销 / 闸门 */
-  const { pushLog, noteUndoable, requireAction, actionAllowedNow, refuseWhileLocked } = ports.core
+  const {
+    pushLog,
+    noteUndoable,
+    requireAction,
+    actionAllowedNow,
+    refuseWhileLocked,
+    moveUndoSealReasonNow,
+    undoTransportHandlingNow,
+    dropUndoOf,
+    dropUndoFamilies,
+    revertTransportHandlingSinceBaseline,
+    sealTransportHandlingForCommit,
+    clearMoveInteraction,
+  } = ports.core
 
   /** 端口束 2：板面状态 */
   const {
@@ -193,9 +233,13 @@ export function createMovementDomain(ports: MovementDomainPorts) {
     friendlyUnitsAt,
     movePickPoolAt,
     defaultMovePickIdsAt,
+    moveLinger,
+    hoverHex,
+    overrunContext,
+    combatDefendingHexCleared,
   } = ports.board
 
-  /** 端口束 3：纯判据 / 格式化 */
+  /** 端口束 3：纯判据 / 格式化 / 结算辅助 */
   const {
     noteUnitLeftOwnBridgeHex,
     unitOfInstance,
@@ -215,6 +259,12 @@ export function createMovementDomain(ports: MovementDomainPorts) {
     reachableNodeAt,
     sameHex,
     areAdjacent,
+    settleOverrunMove,
+    snapshotOf,
+    recordSettlement,
+    hedgehogLevelOf,
+    endMoveEarly,
+    zocStoppedMoveUnitIds,
   } = ports.helpers
 
   /* ──────────────── C5 移动交互：选子 → 范围 → 逐格 → 结束/撤销 ──────────────── */
@@ -969,6 +1019,267 @@ export function createMovementDomain(ports: MovementDomainPorts) {
     advanceAlongPath(node.path)
   }
 
+  /**
+   * C5：撤销上一步（还原该步提交前的运行态快照）
+   *
+   * 13.2f：装卸也是「一步」——发生在最后一个移动步之后时先退它（面板按钮与快捷键同一条路）。
+   */
+  function undoLastStep(): boolean {
+    if (moveUndoSealReasonNow() !== null || moveInteraction.value?.finished === true) {
+      groundMovement.undoLastStep() // 走引擎的统一拒绝并给出原因
+      return false
+    }
+    if (undoTransportHandlingNow()) return true
+    const unitIds = moveInteraction.value?.unitIds ?? []
+    const ok = groundMovement.undoLastStep()
+    if (ok) {
+      // 用户 2026-11-20：族内按钮直接撤销后销掉统一账上的同一笔
+      dropUndoOf('move.step')
+      syncGroundEntries(unitIds)
+    }
+    return ok
+  }
+
+  /** C5：取消整次移动（回到开始移动之前；本段装卸与移动同账一起回退） */
+  function cancelWholeMove(): void {
+    const unitIds = moveInteraction.value?.unitIds ?? []
+    if (!groundMovement.cancelWholeMove()) return
+    revertTransportHandlingSinceBaseline()
+    dropUndoFamilies(['move.step', 'transport'])
+    syncGroundEntries(unitIds)
+  }
+
+  /**
+   * B15a：**放弃本次移动并退出移动态**（地图会话框的「取消」＝ `Esc`，方案 §4.3）
+   *
+   * 与 `cancelWholeMove` 的区别：那个**只把盘面还原**（单位仍处于"已选中、可继续走"的移动态，
+   * 引擎验证页的按钮就是它）；本动作在还原之后**再清掉本次交互** ⇒ 地图上的移动会话随之收起。
+   * 两者都落到同一份 `revertInteraction`（唯一实现），不存在两套"还原"。
+   */
+  function abortMoveNow(): boolean {
+    if (moveInteraction.value === null) return false
+    cancelWholeMove()
+    if (moveBlocked.value !== null) return false
+    clearMoveInteraction()
+    return true
+  }
+
+  /**
+   * C5：结束当前单位/堆叠的移动（6.1 末句；仍可撤销）
+   *
+   * ★ 用户 2026-11-10 实机 #15：**「结束移动」＝完成**。修前这里把主动停车的运输点数自动记成
+   *   13.2a 的「暂停」⇒ 别的单位永远被拦（"运输点数没有移动完"），且已结束的点数还能再「开始移动」。
+   *   13.2a 的暂停是**可选动作**（「运输点数可以移动、暂停移动并使用它装载的部分补给、然后继续移动」），
+   *   只由 `pauseTransportMove` 触发；这里不再代替玩家做这个决定。
+   */
+  function finishMove(): void {
+    concludeMove(false)
+  }
+
+  /** 13.2a：显式「暂停移动」——只有本次移动里有运输点数时才有意义（其它单位按结束移动处理） */
+  function pauseTransportMove(): boolean {
+    const interaction = moveInteraction.value
+    if (interaction === null || interaction.finished) {
+      pushLog('warning', '当前没有正在进行的移动（6.1）', '6.1')
+      return false
+    }
+    const hasTransport = moveUnits.value.some(
+      (unit) =>
+        !unit.movementEnded &&
+        !unit.isCombat &&
+        unit.noncombatTransport > 0 &&
+        unit.noncombatKind !== 'organic_truck',
+    )
+    if (!hasTransport) {
+      pushLog('warning', '本次移动里没有可暂停的运输点数（13.2a）', '13.2a')
+      return false
+    }
+    return concludeMove(true)
+  }
+
+  /** 结束/暂停的共用实现（`pauseTransports` 只决定是否记 13.2a 的暂停账） */
+  function concludeMove(pauseTransports: boolean): boolean {
+    if (moveInteraction.value === null) return false
+    /*
+     * 8.1a：突袭的 3 MP 是在 9.2 推进步记账的 ⇒ 战斗未收束就结束移动会让这笔账无处落盘。
+     *
+     * ★ 批 A 切片 1（2026-09-18 修）：这里原先**只记一行日志就 return** —— 玩家点「结束移动 / 收束」
+     *   在界面上看起来**毫无反应**（会话框挡住日志时更是如此）。现在按**事实**分两路：
+     *   · 战斗已结束或已放弃（`combatState` 为 null 或 `finished`）⇒ 托管信息本就该清 ⇒
+     *     先 `settleOverrunMove` 就地收束，再照常结束移动（并顺带维持不变量：
+     *     `overrunContext !== null ⇒ 战斗仍在进行`）；
+     *   · 战斗仍在进行 ⇒ **可见地**拒绝：写 `moveBlocked`（对局台的状态条会显示它）+ 日志，
+     *     并明确给出两条出路。
+     */
+    if (overrunContext.value !== null) {
+      const combat = combatState.value
+      if (combat === null || combat.finished) {
+        settleOverrunMove(combatDefendingHexCleared.value)
+      } else {
+        const reason =
+          '本场突袭尚未收束（8.0）：请先走完 9.2 流程的推进步，或点「放弃本场战斗 / 突袭」后再结束移动；' +
+          '否则 8.1a 的 3 MP 与 8.0 的进格都无法记账'
+        moveBlocked.value = { rule: '8.1a', reason }
+        pushLog('warning', reason, '8.1a')
+        return false
+      }
+    }
+    // 收束可能已经把本次移动就近结束（参突者全灭那一路）⇒ 重新读取，避免二次落盘
+    const interaction = moveInteraction.value
+    if (interaction === null || interaction.finished) return false
+    if (!groundMovement.mayMutate()) return false
+    // 走到这里说明本步能落地 ⇒ 清掉上一次的拒绝原因（moveBlocked 是当前这一步被拒的显示位）
+    moveBlocked.value = null
+    /*
+     * 5.7g（用户 2026-11-01 口径）兜底：预备（未释放）单位不得停在环形工事格。
+     * 正常路径下可停列表已排除工事格；但若中转途中因工事格触发 ZOC 确认 / 设施夺取而暂停，
+     * 玩家可能在工事格里点「结束移动」——此处拦截，要求先走出工事格再结束。
+     */
+    const reserveStuckInHedgehog = moveUnits.value
+      .filter((unit) => !unit.movementEnded)
+      .some((unit) => unit.mode.mode === 'reserve' && hedgehogLevelOf(unit.hex) > 0)
+    if (reserveStuckInHedgehog) {
+      moveBlocked.value = {
+        rule: '5.7g',
+        reason: '预备模式的单位不得停在环形工事格（5.7g）：请先走出工事格再结束移动',
+      }
+      pushLog('warning', moveBlocked.value.reason, '5.7g')
+      return false
+    }
+    const names = moveUnits.value.map((unit) => unit.name).join(' + ')
+    /*
+     * 13.2a：只有**显式暂停**才记这笔账（3.3b 的运输点数＝非战斗、带运力点数的算子；
+     * 编内卡车（13.2g）虽 `isCombat:false`，但不是独立运输点数，必须排除）。
+     * 记账必须在 `applyMovePatches` 之前 —— 补丁会把它们的 `movementEnded` 置真，
+     * 之后就分不出"本来就停下的"与"这次停的"。
+     */
+    const pausedIds = pauseTransports
+      ? moveUnits.value
+          .filter(
+            (unit) =>
+              !unit.movementEnded &&
+              !unit.isCombat &&
+              unit.noncombatTransport > 0 &&
+              unit.noncombatKind !== 'organic_truck', // 13.2g：编内卡车不是「3.3b 运输点数」
+          )
+          .map((unit) => unit.instanceId)
+      : []
+    const result = endMoveEarly({ interaction, runtime: moveRuntime.value })
+    applyMovePatches(result.patches)
+    moveInteraction.value = result.interaction
+    /*
+     * 4.5a-A：玩家主动「结束移动」＝选了原文的两个分支中的**前者**（就地结束移动）
+     * ⇒ 停车账本随之作废，这些单位此后不再出现在突袭候选里（否则界面会一直挂紫环）。
+     */
+    zocStoppedMoveUnitIds.value = []
+    // 13.2a：显式暂停的运输点数＝「暂停」——同一阶段内可继续（其它单位开拔须等它完成）
+    if (pausedIds.length > 0) {
+      pausedTransportIds.value = [...new Set([...pausedTransportIds.value, ...pausedIds])]
+      pushLog('info', `${names}：运输点数暂停移动（可用其装载的 SP 付款后再继续，13.2a）`, '13.2a')
+    }
+    /*
+     * E2（用户 2026-11-17 实走）：**结束不是一步**。`endMoveEarly` 返回的是 `kind: 'end'`
+     * 的原地记录（`from === to`、`movedIds` 为空），当成「上一步结论」会渲染成
+     * `某格 → 同一格｜`（无单位、无 MP）的伪步成功行 ⇒ 这里只接受真正的移动步；
+     * 结束态由面板的中性提示（「已结束本次移动」）表达。
+     */
+    if (result.record !== null && result.record.kind !== 'end')
+      lastStep.value = snapshotOf(result.record)
+    else lastStep.value = null
+    pushLog('info', `结束移动：${names}`, '6.1')
+    // ⑭ 接线：结束本次移动（6.1 末句）入会话日志（本笔不掷骰）
+    recordSettlement({
+      action: 'move',
+      rule: '6.1',
+      data: {
+        stage: 'endMove',
+        unitIds: moveUnits.value.map((unit) => unit.instanceId),
+      },
+    })
+    /*
+     * 用户 2026-11-18：**结束移动＝提交**。
+     * 结束之后关窗、再点撤销都不得回滚位置/MP；本段装卸账同时封存（SP 也不退）。
+     */
+    sealTransportHandlingForCommit()
+    // H7：不自动收窗 —— 留成"点下一支己方堆叠"
+    moveLinger.value = true
+    return true
+  }
+
+  /**
+   * 用户 2026-11-18：关掉**已结束**的移动窗 —— 只收会话，不动盘面
+   *
+   * 修前 `map-view` 的 × / Esc 在 `moveInteraction` 非空时一律走 `abortMoveNow`，
+   * 于是「结束移动」后再关窗会把位置与 MP 整笔退回（等于免费重走）。
+   */
+  function dismissFinishedMoveNow(): boolean {
+    if (moveInteraction.value === null || moveInteraction.value.finished !== true) return false
+    clearMoveInteraction()
+    return true
+  }
+
+  /** H7：收掉"移动工具就绪"的滞留状态（点 × / Esc） */
+  function dismissMoveLinger(): void {
+    moveLinger.value = false
+  }
+
+  /** C5：悬停格（路径与消耗预览） */
+  function setHoverHex(hex: HexRef | null): void {
+    hoverHex.value = hex
+  }
+
+  /**
+   * 6.1f：把某一枚从**正在移动的堆叠**里「放下」（就地停住，其余继续走）
+   *
+   * 规则依据：6.1f「离开堆叠即不得再移动」——移动中的堆叠本就允许「走不动的留下、其余继续」
+   * （`planStep` 的 `droppedIds` 就是这条），本函数是玩家**主动**的那一版：走到半路把某几枚留在当前格。
+   *
+   * 实现只做一件事：把该单位的 `movementEnded` 置真。引擎侧无需新规则——
+   * `reachableForMove` 的 `activeUnitIds` 本就按 `ended` 过滤，故它自动退出后续移动与突袭资格。
+   */
+  function dropUnitFromMove(instanceId: string): boolean {
+    if (!groundMovement.mayMutate()) return false
+    const interaction = moveInteraction.value
+    if (interaction === null) {
+      pushLog('warning', '当前没有正在进行的移动（6.1）')
+      return false
+    }
+    if (!interaction.unitIds.includes(instanceId)) {
+      pushLog('warning', '该单位不在本次移动中')
+      return false
+    }
+    const unit = units.value.find((item) => item.instanceId === instanceId)
+    if (unit === undefined) return false
+    if (unit.movementEnded) {
+      pushLog('info', `${unit.name} 本次移动已经结束，无需再放下`)
+      return false
+    }
+    unit.movementEnded = true
+    pushLog(
+      'success',
+      `${unit.name} 就地放下（停在 ${hexLabel(unit.hex)}，本次移动结束；其余单位继续走，6.1f）`,
+      '6.1f',
+    )
+    // ⑭ 接线：放下（6.1f）入会话日志（无骰）
+    recordSettlement({
+      action: 'move',
+      rule: '6.1f',
+      data: { stage: 'drop', unitId: instanceId, hex: { ...unit.hex } },
+    })
+    // 全部放完 ⇒ 本次移动就地收束（不必再点「结束移动」）
+    if (activeMoveUnits.value.length === 0) finishMove()
+    return true
+  }
+
+  /** 1.4b：入盒已经落盘，旧移动的撤销不得把盒内单位拖回图上。 */
+  function sealEdgeBoxTransferNow(unitId: string): void {
+    groundMovement.markIrreversible('边缘盒进出（1.4b）')
+    const move = moveInteraction.value
+    if (move !== null && move.unitIds.includes(unitId) && activeMoveUnits.value.length === 0) {
+      moveInteraction.value = { ...move, finished: true }
+    }
+  }
+
   return {
     nameOf,
     unitNameOf,
@@ -999,5 +1310,16 @@ export function createMovementDomain(ports: MovementDomainPorts) {
     setupWiggleOn,
     setupWiggleRemaining,
     breakdownTimingOf,
+    // B3-2b2：撤销 / 收束族
+    undoLastStep,
+    cancelWholeMove,
+    abortMoveNow,
+    finishMove,
+    pauseTransportMove,
+    dismissFinishedMoveNow,
+    dismissMoveLinger,
+    setHoverHex,
+    dropUnitFromMove,
+    sealEdgeBoxTransferNow,
   }
 }
