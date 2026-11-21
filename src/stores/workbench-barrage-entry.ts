@@ -3,7 +3,7 @@
  *
  * 从 `workbench.ts` 的「三操作统一流程」整段搬出（B3-2b23）：9 个声明 / 183 行，函数体只做
  * deps 前缀改写（6 个晚声明必须晚绑定，见下），其余逐字不动。
- * 端口 31 项 = 22 依赖（16 按值 + 6 晚绑定 getter）+ 9 返回。
+ * 端口 33 项 = 24 依赖（18 按值 + 6 晚绑定 getter）+ 9 返回。
  * 六个 getter 对应的声明都在本段之后（`segmentGateQuery` / `barrageKindsInSegment` / `actionRefusal` /
  * `scenarioId` / `airMissionSegmentKind` / `airMissionKindChoices`），只在函数被调用时求值，故无 TDZ。
  */
