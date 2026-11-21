@@ -3,6 +3,7 @@
   "over40Exempt": ["workbench-air.ts", "workbench-barrage.ts"],
   "files": {
     "workbench-air-facility.ts": 16,
+    "workbench-air-primitives.ts": 6,
     "workbench-air.ts": 76,
     "workbench-barrage.ts": 51,
     "workbench-combat-advance.ts": 20,

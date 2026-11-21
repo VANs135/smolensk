@@ -22,6 +22,7 @@ import { createHedgehogsDomain } from './workbench-hedgehogs'
 import { createConstructionDomain } from './workbench-construction'
 import { createAirFacilityDomain } from './workbench-air-facility'
 import { createSupplyLabelsDomain } from './workbench-supply-labels'
+import { createAirPrimitivesDomain } from './workbench-air-primitives'
 import { createCombatInputs } from './engagement-inputs'
 import { defineStore } from 'pinia'
 import { computed, ref, toRaw, watch, type Ref } from 'vue'
@@ -76,7 +77,6 @@ import {
 } from '@/engine/rules'
 import { fail, type RuleFailure, type RuleOutcome } from '@/engine/result-types'
 import type {
-  AirStatus,
   DiceRoll,
   GamePhase,
   Marker,
@@ -1538,7 +1538,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     nameOf,
     barrageLossTargets: () => barrageLossTargets.value,
     applyBarragePatches,
-    applyAirStepLoss,
+    applyAirStepLoss: (id) => applyAirStepLoss(id),
     applyFacilityPatch: applyBarrageFacilityPatch,
     barrageAircraftTargets: () => barrageAircraftRollTargets.value,
     facilityFacts: barrageFacilityFacts,
@@ -2321,6 +2321,34 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     supplySourceLabel,
     supplyStatusLabel,
   } = supplyLabelsDomain
+
+  /* ────────── C9 空军原语（14.1a / 14.1b / 14.2e 与掷骰，B3-2b19） ────────── */
+
+  /*
+   * B3-2b19（2026-11-21）：7 个声明搬进 `workbench-air-primitives.ts`（57 行零改写）。
+   * ★ 装配点必须**早于** `createAirDomain`：它的 deps 按值吃 setAirStatus / markAirMissionFlown /
+   *   drawAir2d6 / applyAirStepLoss / drawAir1d6（建域即求值）。
+   * ★ fire 域（`createFireResolutionDomain`）更早，按值吃 applyAirStepLoss ⇒ 那一处改转发箭头。
+   * ★ `airStatusLabel` 来自 air 域解构（晚于本处）⇒ deps 给转发箭头。
+   * ★ 端口 13 项 = 6 依赖（5 按值 + 1 箭头）+ 7 返回。
+   */
+  const airPrimitivesDomain = createAirPrimitivesDomain({
+    airUnits,
+    rng,
+    drawCount,
+    pushLog,
+    eliminateEntry,
+    airStatusLabel: (status) => airStatusLabel(status),
+  })
+  const {
+    setAirStatus,
+    applyAirStepLoss,
+    markAirMissionFlown,
+    toggleAirUnitStatus,
+    drawAir2d6,
+    drawAir1d6,
+    drawD6,
+  } = airPrimitivesDomain
 
   // ── C9 空军交互（W6 C9：OCS 14.0 / 15.0；引擎状态机在 air-interaction.ts） ──
   // ── B2-1：空军状态 + 派生已搬进 workbench-air（25 端口，其中 5 项晚绑定走 getter） ──
@@ -11970,64 +11998,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     airError.value = { rule: outcome.rule, reason: outcome.reason }
     pushLog('danger', `${action}被拒绝：${outcome.reason}（${outcome.rule}）`, outcome.rule)
     return null
-  }
-
-  /** C9：14.1a 激活状态写盘（整备 ⇒ 激活；返航 ⇒ 非激活） */
-  function setAirStatus(instanceId: string, status: AirStatus): void {
-    const air = airUnits.value.find((item) => item.instanceId === instanceId)
-    if (air !== undefined) air.airStatus = status
-  }
-
-  /** C9：14.1b 军力损失（每机 2 点；损失第二点即摧毁并**移入死亡堆**——与地面单位同一个堆） */
-  function applyAirStepLoss(instanceId: string): void {
-    const air = airUnits.value.find((item) => item.instanceId === instanceId)
-    if (air === undefined) return
-    air.steps -= 1
-    if (air.steps > 0) {
-      pushLog('warning', `${air.name} 损失 1 点军力（14.1b；现 ${air.steps} 点）`, '14.1b')
-      return
-    }
-    // 与其他淘汰点同一入口：原先这里只把飞机从 airUnits 里滤掉，死亡堆里查不到它
-    eliminateEntry(air, '14.1b', `${air.name} 军力归零，移入死亡堆（14.1b）`)
-  }
-
-  /** C9：14.2e 标记该机本阶段已执行过任务 */
-  function markAirMissionFlown(instanceId: string): void {
-    const air = airUnits.value.find((item) => item.instanceId === instanceId)
-    if (air !== undefined) air.missionsFlownThisPhase += 1
-  }
-
-  /** C9：手改某机的激活状态（部署/演示用；规则上的转换由整备 15.1 与返航 14.1c 驱动） */
-  function toggleAirUnitStatus(instanceId: string): boolean {
-    const air = airUnits.value.find((item) => item.instanceId === instanceId)
-    if (air === undefined) return false
-    air.airStatus = air.airStatus === 'active' ? 'inactive' : 'active'
-    pushLog('info', `${air.name} → ${airStatusLabel(air.airStatus)}`, '14.1a')
-    return true
-  }
-
-  /** C9：掷 2 骰（14.4e 防空 / 14.3e 拦截空战），并推进 rng 与计数 */
-  function drawAir2d6(): number {
-    const draw = roll2d6(rng.value)
-    rng.value = draw.rng
-    drawCount.value += 1
-    return draw.value.total
-  }
-
-  /** C9：掷 1 骰（14.4f 的损失归属骰 / 14.3e-C 的损失骰） */
-  function drawAir1d6(): number {
-    const draw = roll1d6(rng.value)
-    rng.value = draw.rng
-    drawCount.value += 1
-    return draw.value.total
-  }
-
-  /** 9.14：掷 1 骰（9.14b/c 夺取表；与其余掷骰同源，走 `state.rng` 可复算） */
-  function drawD6(): number {
-    const draw = roll1d6(rng.value)
-    rng.value = draw.rng
-    drawCount.value += 1
-    return draw.value.total
   }
 
   /** C9：切任务类型（14.2e；换类型即作废进行中的流程） */
