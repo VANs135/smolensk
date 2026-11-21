@@ -1,7 +1,7 @@
 /**
  * workbench-air-facility.ts —— 15.3 / 15.4 空军基地 与 15.2A 简易机场的盘面事实与四个动作
  *
- * B3-2b17（2026-11-21）：从 facade 的 C8g 段搬出 15 个声明 / 216 行（两段不连续，中间隔着
+ * B3-2b17（2026-11-21）：从 facade 的 C8g 段搬出 15 个声明 / 294 行（两段不连续，中间隔着
  * `canEngineerInPhase`）：`airBaseTurnLedger` / `airUnloadLedger` / `airUnloadedTAt` /
  * `engineerChoices` / `airBaseUnitAt` / `isAirstripAt` / `airBaseLevelAt` / `hexHasAirFacility` /
  * `airBaseBuildCostSpPerLevel` / `airBaseRecordFor` / `pickedEngineer` / `placeAirBaseOperator` /
@@ -18,7 +18,7 @@
  *   二者来自 air 域解构（facade 的 `} = airDomain` 段），晚于本装配点 ⇒ deps 给 getter，
  *   本切片**不解构**它们、一律写 `deps.xxx`，于是求值推迟到调用期（无 TDZ）。
  *
- * ## 端口（32 项 = 18 依赖 + 14 返回）
+ * ## 端口（31 项 = 18 依赖 + 13 返回）
  *   `airBaseRecordFor` 只被本切片内部调用（`placeAirBaseOperator`），故不 return。
  */
 

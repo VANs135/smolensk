@@ -2143,7 +2143,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /*
    * B3-2b16（2026-11-21）：13.8d 的账本 / 公共前提 / 付款唯一入口搬进 `workbench-construction.ts`。
    * ★ `constructionInputs` 留在 facade（见上方前移处）：B27a 的 `beginAirBaseHexPickNow` 在声明区之前写它；
-   *   前移声明后作为端口按值传。`pickedEngineer`（空中设施段）与 `setSpDumpHoldings`（b11）都是提升/已解构项。
+   *   前移声明后作为端口按值传。`setSpDumpHoldings`（b11）已解构；`pickedEngineer` 见下方转发箭头
+   *   （B3-2b17 起它已搬进空中设施切片）。
    * ★ 端口 21 项 = 8 依赖 + 13 返回。
    */
   const constructionDomain = createConstructionDomain({
@@ -2263,7 +2264,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ★ 装配点必须早于 air 建域——`createAirDomain` 的 `airUnloadedTAt` 是**按值** deps（建域即求值）。
    * ★ `airstripBaseIds` / `airBases` 来自 air 域解构（本处之后）⇒ deps 给 getter，切片不解构它们。
    * ★ `pickedEngineer` 随本批搬走 ⇒ b16 的施工域构造处改成转发箭头。
-   * ★ 端口 32 项 = 18 依赖 + 14 返回。
+   * ★ 端口 31 项 = 18 依赖 + 13 返回（placeAirBaseOperator 只被切片内部的 build* 用 ⇒ 不 return）。
    */
   const airFacilityDomain = createAirFacilityDomain({
     activeSide,
