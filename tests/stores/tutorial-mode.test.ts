@@ -252,8 +252,10 @@ describe('教学模式：Vitebsk', () => {
     const panel = readFileSync('src/components/air/AirPanel.vue', 'utf8')
     expect(guide).toContain('data-air-instance-id')
     expect(panel).toContain(':data-air-instance-id="item.air.instanceId"')
-    // 苏军是 AI ⇒ 反应阶段脚本让位
-    expect(source).toContain('if (aiSoviet.value) return')
+    // 2026-11-21：教学是 PvE 外壳、苏军由脚本固定行动 ⇒ 反应段「脚本接管才代打」，普通 PvE 才让位给 AI
+    expect(source).toContain("if (hotseat.scriptedSide !== 'soviet') return")
+    // 不能跳过这一步：反扑不得再有 skipped 通道
+    expect(source).not.toContain("reaction.value === 'skipped'")
   })
 
   it('引导文案：霍特口径短句、单位介绍与按钮级目标齐备', async () => {

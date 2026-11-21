@@ -111,8 +111,6 @@ const SCOUT_UNIT_ID = 'ax-motorized-ge-20-mtr-30-mc'
 const ARTILLERY_UNIT_ID = 'ax-motorized-ge-20-mtr-20-arty'
 /** 反应段苏军 18 Tk Div 的出发格 */
 const REACTION_START: HexRef = { col: 19, row: 26 }
-/** 反应段的中转格（18.26 与 17.27 / 18.27 都相邻） */
-const REACTION_STAGE: HexRef = SCOUT_HEX
 
 /** 9.2 段序：只用来判断“当前还在不在该步所需的段之前” */
 const DICE_STEPS = new Set(['surprise', 'battleDice'])
@@ -157,7 +155,11 @@ export const useTutorialStore = defineStore('tutorial', () => {
   const cursor = ref(0)
 
   /** 反应段脚本的三态；`done` 后引导卡显示战果 */
-  const reaction = ref<'idle' | 'running' | 'done' | 'skipped'>('idle')
+  /*
+   * 反扑的进行态：**没有 skipped** —— 教学不能跳过这一步（用户两次强调）。
+   * 脚本失败时退回 idle 并报警，绝不把「没打完」记成「过」。
+   */
+  const reaction = ref<'idle' | 'running' | 'done'>('idle')
 
   /*
    * 2026-11-21：后三步（苏军反扑 / 弹幕轰城 / 夺城）的真实完成判据
@@ -198,16 +200,11 @@ export const useTutorialStore = defineStore('tutorial', () => {
     scriptApplied.value = false
     setTutorialSovietFirstTurnFullMa(true)
     /*
-     * 2026-11-21（用户口径）：教学不是另一种对局类型，而是**PvE 外壳** ——
-     * 玩家执轴心、视角与隐藏信息照常隔离（`syncViewerToDefault` 归位到非 AI 方），
-     * 玩家按引导一步步操作；**苏军的行动由本文件的脚本固定代替 AI 决策**。
-     * 因此这里补一次模式兜底（初设未锁时才生效，锁了说明召唤方已设过），
-     * 并把苏军登记为「脚本接管方」：hotseat 的通用 AI 在登记期间让位，不抢 `airInputs`。
+     * 2026-11-21（用户口径）：教学模式**入口是单独的**，玩家不必另选 PVE/PVP。
+     * 教学自带 PvE 外壳（玩家执轴心、苏军是 AI、视角与隐藏信息照常隔离），
+     * 苏军的行动由本文件的脚本固定代替 AI 决策 ⇒ 这里直接落定外壳并登记脚本接管。
      */
-    if (!hotseat.setupLocked && (hotseat.mode !== 'pve' || hotseat.aiSide !== 'soviet')) {
-      hotseat.setMode('pve')
-      hotseat.setAiSide('soviet')
-    }
+    hotseat.adoptTutorialShell()
     hotseat.setScriptedSide('soviet')
   }
 
@@ -848,8 +845,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
         title: '苏军坦克师反扑',
         hint: '霍特：他们另一支坦克师扑上来了，顶住。',
         intro: '反应段苏军释放预备、照 9.2 打一轮——按他们的兵力，这一下必输（苏军失败）。',
-        done: () =>
-          reaction.value === 'done' || reaction.value === 'skipped' || reactionFought.value,
+        // 教学不能跳步：苏军反扑必须真打完（脚本失败不放过，见 runReactionAttack）
+        done: () => reaction.value === 'done' || reactionFought.value,
       },
       {
         id: 'barrage-city',
@@ -1208,39 +1205,68 @@ export const useTutorialStore = defineStore('tutorial', () => {
     return workbench.combatState?.finished === true
   }
 
-  /** 反应段：释放 18 Tk Div → 走到 18.26 → 突袭 Axis 堆叠（既有 8.0 / 9.2） */
+  /**
+   * 2026-11-21（用户口径）：苏军反扑的目标格
+   *
+   * 脚本把 18 Tk Div 开到 19.27，战斗对象取「19.27 上的轴心单位」，
+   * 没有就取与 19.27 相邻的轴心战斗单位（8.1a 突袭只打相邻格）。
+   */
+  function reactionTargetHex(): HexRef | null {
+    const axisFighters = workbench.units.filter(
+      (unit) => unit.side === 'axis' && unit.isCombat && unit.steps >= 0,
+    )
+    const onCity = axisFighters.find((unit) => sameHex(unit.hex, CITY_HEX))
+    if (onCity !== undefined) return onCity.hex
+    const adjacent = axisFighters.find((unit) => hexDistance(unit.hex, CITY_HEX) === 1)
+    return adjacent?.hex ?? null
+  }
+
+  /**
+   * 反应段：18 Tk Div 按脚本**加油 → 移动到 19.27 → 战斗**（用户 2026-11-21 口径）
+   *
+   * 全过程走既有规则入口（12.5c 加油、8.x 移动、8.1a 突袭、9.2 战斗），
+   * 脚本只负责「替苏军选动作」，不另写判定。
+   */
   function runReactionAttack(): boolean {
     const tk = workbench.units.find(
       (unit) => unit.side === 'soviet' && unit.unitId === 'su-armor_tk-ru-18-tk-div',
     )
     if (tk === undefined || tk.steps <= 0) return false
-    const defense = reactionDefenseHex.value
 
-    if (tk.mode.mode !== 'reserve') {
-      tk.mode = { mode: 'reserve', orientation: 'move', dg: false, exploit: false }
-      tk.raw = tk.faces.move
+    // ① 加油（12.5c 编队法）：从 19.26 的教学补给堆付 1 SP；没油就一步也走不了
+    if (!tk.fuelled) {
+      const dump = workbench.spDumps.find((item) => item.id === 'tutorial-su-supply')
+      if (dump === undefined || dump.sp < 1) return false
+      dump.sp -= 1
+      tk.fuelled = true
+      workbench.pushLog(
+        'info',
+        '教学：苏军 18 Tk Div 在 19.26 用编队法加油（12.5c，扣补给堆 1 SP）',
+        '12.5',
+      )
     }
+
+    /*
+     * 8.1a：突袭只能由**移动模式**的战斗单位在移动中执行 —— 所以先把面切到移动面。
+     * **无条件切**（不是"仅当不是预备态"）：中途若被翻回战斗面，MA 只剩战斗面的几格，
+     * 从 19.26 走到 19.27 再突袭会因 MP 不足失败（反应段既不能常规战斗，也只能靠这一手）。
+     */
+    tk.mode = { mode: 'reserve', orientation: 'move', dg: false, exploit: false }
+    tk.raw = tk.faces.move
     workbench.selectedId = tk.instanceId
     if (!workbench.releaseReserveNow()) return false
 
     workbench.beginMovePick(tk.hex, [tk.instanceId])
     if (!workbench.confirmMovePick()) return false
-    /*
-     * 2026-11-20：侦察营的教学绕行点就在 18.26 ⇒ 苏军不能再用它当中转格。
-     * 从「与防守格相邻」的候选里挑第一个可达格（18.28 / 17.28 等），找不到就放弃脚本。
-     */
-    const stageCandidates: HexRef[] = [
-      REACTION_STAGE,
-      { col: 18, row: 28 },
-      { col: 17, row: 28 },
-      { col: 19, row: 28 },
-    ].filter((hex) => hexDistance(defense, hex) === 1)
-    const node = (workbench.groupReachable?.hexes ?? []).find((item) =>
-      stageCandidates.some((hex) => sameHex(item.hex, hex)),
-    )
+    // ② 移动到 19.27（小城格）：只认这一格，到不了就报失败、不换目标
+    const node = (workbench.groupReachable?.hexes ?? []).find((item) => sameHex(item.hex, CITY_HEX))
     if (node === undefined) return false
     if (!workbench.moveAlongDraggedPath(node.path)) return false
-    if (!workbench.overrunNow(defense)) return false
+
+    // ③ 战斗：对 19.27 上／相邻的轴心单位发起突袭，并走完 9.2 战斗序列
+    const target = reactionTargetHex()
+    if (target === null) return false
+    if (!workbench.overrunNow(target)) return false
     if (!driveReactionCombat(tk.instanceId)) return false
     const raw = workbench.combatState?.dice?.result.raw ?? null
     reactionOutcome.value = raw
@@ -1252,10 +1278,23 @@ export const useTutorialStore = defineStore('tutorial', () => {
     () => {
       if (!active.value || reaction.value !== 'idle') return
       if (workbench.phase !== 'reaction') return
-      // 2026-11-19：苏军是 AI ⇒ 反应阶段归 AI 打，脚本不再代打（否则会和 AI 抢同一批动作）
-      if (aiSoviet.value) return
+      /*
+       * 2026-11-21（用户口径）：教学是 PvE 外壳，但**苏军由脚本固定行动** ——
+       * 所以只有「脚本没接管」时才把反应段交给 AI（普通 PvE）；教学里脚本自己打。
+       */
+      if (hotseat.scriptedSide !== 'soviet') return
       reaction.value = 'running'
-      reaction.value = runReactionAttack() ? 'done' : 'skipped'
+      if (runReactionAttack()) {
+        reaction.value = 'done'
+        return
+      }
+      // 不能跳过这一步（用户两次强调）：失败就退回 idle 并报警，让问题暴露而不是静默放行
+      reaction.value = 'idle'
+      workbench.pushLog(
+        'warning',
+        '教学：苏军反扑脚本未完成（不跳过此步）——检查 18 Tk Div 的补给、19.27 路径与轴心目标格',
+        '9.2',
+      )
     },
     { flush: 'post' },
   )

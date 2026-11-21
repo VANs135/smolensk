@@ -491,6 +491,19 @@ export const useHotseatStore = defineStore('hotseat', () => {
     scriptedSide.value = side
   }
 
+  /**
+   * 2026-11-21（用户口径）：**教学模式的入口是单独的**
+   *
+   * 玩家不需要在选剧本页先选 PVE/PVP —— 教学自带 PvE 外壳：玩家执一方（轴心）、
+   * 苏军是 AI、视角与隐藏信息照常隔离。故这里无视 `setupLocked`（从教学入口进来时
+   * 模式可能还没定、甚至初设已经锁），直接落定外壳并归位视角。
+   */
+  function adoptTutorialShell(): void {
+    mode.value = 'pve'
+    aiSide.value = 'soviet'
+    syncViewerToDefault()
+  }
+
   /*
    * 2026-11-21：拦截由拦截方自己决定（14.5）
    *
@@ -534,6 +547,8 @@ export const useHotseatStore = defineStore('hotseat', () => {
     // 脚本接管的一方（教学等固定流程；登记后通用 AI 让位）
     scriptedSide,
     setScriptedSide,
+    // 教学入口专用：直接落定 PvE 外壳（玩家不必另选模式）
+    adoptTutorialShell,
     aiSide,
     setupLocked,
     modeIssue,

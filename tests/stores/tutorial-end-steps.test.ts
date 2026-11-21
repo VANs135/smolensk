@@ -22,10 +22,11 @@ describe('教学模式后三步：只认真实事件，无跳过通道', () => {
     expect(source).not.toContain("phaseAtLeast(workbench.phase, 'exploitation')")
   })
 
-  it('反扑：由「反应段真的打过」判定（PvE 下苏军归 AI）', () => {
-    expect(source).toContain('reactionFought.value')
-    expect(source).toContain("reaction.value === 'done'")
-    expect(source).toContain("reaction.value === 'skipped'")
+  it('反扑：只认「反应段真的打过」，且没有 skipped 旁路', () => {
+    expect(source).toContain("done: () => reaction.value === 'done' || reactionFought.value,")
+    // 2026-11-21：教学不能跳过这一步 ⇒ 'skipped' 通道逐条清掉
+    expect(source).not.toContain("reaction.value === 'skipped'")
+    expect(source).not.toContain("'done' | 'skipped'")
   })
 
   it('弹幕与夺城：只认真实事件，不带任何旁路', () => {
