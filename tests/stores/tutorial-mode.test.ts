@@ -390,8 +390,8 @@ describe('教学模式：Vitebsk', () => {
     expect(source).toContain('tutorial-axis-ju88-2')
     // 14.6：扫荡用另一架 Bf110，2d6=6 + ACV 3 − 2 = 7 ⇒ 双方返航；损失骰 5 ⇒ 各损 1
     expect(source).toContain('airCombatDice = [{ die: 6, lossDie: 5 }]')
-    // 14.4c：敌方空军基地 10 格内都是拦截范围
-    expect(source).toContain('10 格内都是拦截范围（14.4c）')
+    // 文案口径：不写格子编号，巡逻区讲成「从拦截距离内起飞迎击」
+    expect(source).toContain('从拦截距离内起飞迎击')
     // 14.3e：拦截空战固定 2d6=6（轴心胜）；10.0a：轰炸骰固定 11（DG + 1 军力损失）
     expect(source).toContain('interceptDie = 6')
     expect(source).toContain('barrageInputs.die = 11')
@@ -456,10 +456,11 @@ describe('教学模式：Vitebsk', () => {
     expect(steps.find((step) => step.id === 'fuel')?.intro).toContain('补给堆')
     expect(steps.find((step) => step.id === 'strafe-1')?.intro).toContain('斯图卡')
     // 选机阶段（打开任务面板后）才逐枚高亮斯图卡；见 hipShoot 助手里的按钮断言
-    expect(steps.find((step) => step.id === 'fighter-sweep')?.intro).toContain('10 格')
+    // 文案口径（docs/教学文案.md）：不写格子编号 ⇒ 讲「截击机够得着的距离内 / 拦截距离」
+    expect(steps.find((step) => step.id === 'fighter-sweep')?.intro).toContain('LaGG.3')
     expect(steps.find((step) => step.id === 'fighter-sweep')?.hint).toContain('Bf110')
     expect(steps.find((step) => step.id === 'bombing')?.intro).toContain('Ju.88')
-    expect(steps.find((step) => step.id === 'bombing')?.intro).toContain('10 格')
+    expect(steps.find((step) => step.id === 'bombing')?.intro).toContain('起飞迎击')
     // 引导真实指到按钮
     expect(steps.find((step) => step.id === 'air-refit')?.target.buttonTexts).toContain('整备')
     // 突袭只打 18.27 的坦克师；炮兵另有弹幕步、空军另有空袭步
