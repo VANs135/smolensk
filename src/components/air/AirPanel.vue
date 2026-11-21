@@ -12,6 +12,7 @@ import {
   counterImageUrlOf,
   hexLabel,
   isFighterAircraft,
+  useHotseatStore,
   useWorkbenchStore,
 } from '@/stores'
 
@@ -33,6 +34,13 @@ import {
  */
 
 const workbench = useWorkbenchStore()
+/*
+ * 2026-11-21（用户口径）：拦截方是守方，PvE 下就是 AI 的苏军。
+ * 玩家是被拦截方，不能替对手勾「宣布拦截」、也不能替对手挑拦截机 ——
+ * 拦截应答完全交给 AI（hotseat 里的自动拦截），这里只显示「由苏军决定」。
+ */
+const hotseat = useHotseatStore()
+const aiChoosesInterception = computed(() => hotseat.mode === 'pve')
 
 /**
  * K3：拦截应答是**决策步**，记录后必须继续跑完（否则会话停在此步没有出口）。
@@ -947,15 +955,18 @@ const displayedBases = computed(() =>
                 拦截不强制；声明拦截时须给出一架合格战斗机（按 14.4c 的巡逻区判资格），一次一架。
               </RuleTip>
             </p>
-            <div class="row">
+            <div v-if="!aiChoosesInterception" class="row">
               <label class="field">
                 <input v-model="workbench.airInputs.interceptDeclared" type="checkbox" />
                 拦截方宣布拦截（14.5：不强制）
               </label>
             </div>
-            <!-- B14：拦截机＝**算子图阵列**（候选由引擎的资格判定给） -->
+            <p v-else class="num">
+              拦截方是苏军（AI）：由苏军按 14.4c 资格自行决定是否拦截、派哪一架，你只等结果。
+            </p>
+            <!-- B14：拦截机＝**算子图阵列**（候选由引擎的资格判定给）；PvE 下不给玩家代对手选 -->
             <CounterPicker
-              v-if="workbench.airInputs.interceptDeclared"
+              v-if="!aiChoosesInterception && workbench.airInputs.interceptDeclared"
               title="拦截机（14.5：一次一架）"
               hint="14.5 拦截资格由引擎按 14.4c 的巡逻区判定；一次只能派一架"
               :items="interceptorItems"
@@ -963,7 +974,7 @@ const displayedBases = computed(() =>
               @pick="workbench.airInputs.interceptorId = $event"
               @hover="hoverAir"
             />
-            <div class="row">
+            <div v-if="!aiChoosesInterception" class="row">
               <BaseButton variant="primary" size="sm" @click="declareInterceptionAndContinue()">
                 ③ 记录拦截应答并继续
               </BaseButton>

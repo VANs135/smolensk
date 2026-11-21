@@ -27,7 +27,7 @@ import {
 
 import { useGameSessionStore } from './session'
 import { useWorkbenchStore } from './workbench'
-import { supplyStatusOf, type ConsoleUnit } from './workbench-model'
+import { airCombatRatingOf, supplyStatusOf, type ConsoleUnit } from './workbench-model'
 
 /**
  * 切方与信息展示纪律（W7 C13）
@@ -477,6 +477,37 @@ export const useHotseatStore = defineStore('hotseat', () => {
     },
     { key: 'pve', label: 'PVE（人机）', note: 'AI 打一方、玩家打另一方；AI 只走既有具名入口' },
   ]
+
+  /*
+   * 2026-11-21：拦截由拦截方自己决定（14.5）
+   *
+   * 拦截方是守方 —— PvE 下就是 AI 的苏军，玩家是被拦截方。以前玩家在空军面板里替苏军勾
+   * 「拦截方宣布拦截」并挑机，等于玩家替对手做决定（用户 2026-11-21 指出的问题）。
+   * 现在只要拦截方是 AI，就由 AI 按 14.4c 资格自行挑一架（缺省口径同引擎 `pickHighestAcv`：
+   * 当前面 ACV 最高），玩家不再接触拦截 UI。
+   */
+  watch(
+    () =>
+      `${String(mode.value)}|${String(aiSide.value)}|${String(workbench.airState?.step ?? '')}|${String(workbench.airState?.interception?.declared ?? false)}`,
+    () => {
+      if (mode.value !== 'pve' || aiSide.value === null) return
+      if (workbench.airState?.step !== 'interception') return
+      if (workbench.airState.interception?.declared === true) return
+      const candidates = workbench.airInterceptorCandidates
+      if (candidates.length === 0) return
+      // 14.1b：ACV 取当前面，与引擎缺省口径一致
+      const best = candidates.reduce((a, b) =>
+        airCombatRatingOf(b) > airCombatRatingOf(a) ? b : a,
+      )
+      workbench.airInputs = {
+        ...workbench.airInputs,
+        interceptDeclared: true,
+        interceptorId: best.instanceId,
+      }
+      workbench.declareInterceptionNow()
+    },
+    { flush: 'post' },
+  )
 
   return {
     // 状态
