@@ -103,14 +103,12 @@ import {
   activeAircraftInBase,
   activeStackingLimitOf,
   allocateBattleLosses,
-  applyModeSwitch,
   barrageStepChecklist,
   barrageTableMeta,
   barrageTableWithScenarioRule,
   barrageTerrainLines,
   beginCombat,
   beginSupplyCheck,
-  canFlipOrientation,
   canFlyMission,
   canHipShoot,
   canMissionInPhase,
@@ -122,7 +120,6 @@ import {
   missionSegmentOf,
   nkvdArRequired,
   splitOverrunStack,
-  canReleaseReserve,
   canThrowViaHQ,
   canDrawFromCarrier,
   canBreakout,
@@ -166,7 +163,6 @@ import {
   evaluateStep,
   evaluateStepFrom,
   findMoveUnit,
-  flipOrientation,
   fuelExpiresOnPhaseChange,
   fuelMethodAvailability,
   type FuelMethodAvailability,
@@ -316,7 +312,6 @@ import {
   type OverrunMovePlan,
   type MovementSegmentPhase,
   type OosAction,
-  type Orientation,
   type RebuildPlan,
   type RailCargoView,
   type ReplHoldings,
@@ -360,7 +355,6 @@ import {
   resolveOverrunAftermath,
   canBarrageAtRange,
   allowReserveEntryAtHex,
-  canSetModeAtSetup,
   hasMarker,
   hasDirectDrawTraceSupply,
   reserveHexesInUse,
@@ -7679,11 +7673,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setStackSelect,
     switchUnitMode,
     switchableModesOf,
-    adjacentEnemyAttackCapableOf,
-    setupModeConstraintsOf,
     setupSwitchableModesOf,
     setupModeBlockNote,
     noteSetupModeBlocked,
+  } = movementDomain
+  /* B3-2b4：初设设模式 / 预备换面（全部只在公开面被引用） */
+  const {
+    setUnitModeAtSetup,
+    setupReserveSummary,
+    releaseReserveNow,
+    switchReserveFaceNow,
+    canEditReserveModeOf,
+    flipUnitOrientation,
+    canReleaseReserveOf,
+    cancelReserveModeNow,
   } = movementDomain
 
   /**
@@ -7724,296 +7727,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     cancelMovePick,
     confirmMovePick,
   } = stackPickDomain
-
-  /**
-   * IV-B：**初设阶段**为单位设定模式（按单位/按堆叠）
-   *
-   * 原文「Ground units can be set up in any desired mode. (Exception: ground units adjacent to
-   * enemy Attack-Capable units cannot be set up in Reserve or Strat Mode.)」
-   * ⇒ 初设可选 combat / move / reserve / strat，**不受 5.4 的"开始移动那一刻"限制**；
-   * 相邻于敌方攻击力单位者不得设预备/战略（IV-B）；预备按 5.4a 的**按格额度**占用。
-   *
-   * 判据全在 `canSetModeAtSetup`（内部复用 `canSwitchMode` 的全部通用闸门：5.1/5.5/5.5c/
-   * 5.6/5.7f/5.8/5.8c + 专规 2.3e），本函数只负责选目标、落盘与日志 ⇒ 不存在"初设一套、
-   * 游戏中一套"的双口径。不新增存档字段（模式本就在 `units` 里）。
-   */
-  function setUnitModeAtSetup(
-    to: BaseMode,
-    orientation?: Orientation,
-    ids?: readonly string[],
-  ): boolean {
-    if (!initialSetupInProgress.value) {
-      pushLog('warning', '初设模式只能在初设阶段设定（IV-B）', 'IV-B')
-      return false
-    }
-    const targets =
-      ids ??
-      (movePick.value !== null
-        ? movePick.value.ids
-        : selectedUnit.value === null
-          ? []
-          : [selectedUnit.value.instanceId])
-    if (targets.length === 0) {
-      pushLog('warning', '先选中要设模式的算子（可多选/按堆叠）')
-      return false
-    }
-    let okCount = 0
-    for (const id of targets) {
-      const unit = units.value.find((item) => item.instanceId === id)
-      if (unit === undefined) continue
-      // 朝向：战斗/移动面＝模式本身；战略必为移动面（5.8）；预备可任选（5.7a）
-      const target: Orientation =
-        to === 'combat'
-          ? 'combat'
-          : to === 'move'
-            ? 'move'
-            : to === 'strat'
-              ? 'move'
-              : (orientation ?? unit.mode.orientation)
-      const limits = setupModeConstraintsOf(unit.side)
-      if (!limits.allowed.includes(to)) {
-        pushLog('warning', `${unit.name}：本剧本初设不允许${MODE_LABELS[to]}（IV-B）`, 'IV-B')
-        continue
-      }
-      const verdict = canSetModeAtSetup({
-        to,
-        orientation: target,
-        unitClass: modeUnitClassOf(unit),
-        side: unit.side,
-        hex: hexKeyOf(unit),
-        adjacentEnemyAttackCapable: adjacentEnemyAttackCapableOf(unit),
-        reserveCap: limits.reserveCap,
-        reserveOccupiedHexes: reservedHexes(unit.side),
-        reserveSetupForbidden: limits.reserveForbidden,
-        allowedModes: limits.allowed,
-        date: date.value,
-        // 专规 4.1a（可选）：忽略 2.3e ⇒ 初设也不受苏军战略模式日期闸门约束
-        ignoreOperationalLimits: session.rule4On('ignoreOperationalLimits'),
-      })
-      if (!verdict.ok) {
-        pushLog(
-          'warning',
-          `${unit.name} 初设不能设为${MODE_LABELS[to]}：${verdict.reason}（${verdict.rule}）`,
-          verdict.rule,
-        )
-        continue
-      }
-      unit.mode = applyModeSwitch(unit.mode, to, target)
-      unit.raw = unit.faces[unit.mode.orientation]
-      okCount += 1
-    }
-    if (okCount > 0)
-      pushLog('success', `初设已为 ${String(okCount)} 枚设定${MODE_LABELS[to]}（IV-B）`, 'IV-B')
-    return okCount > 0
-  }
-
-  /**
-   * E5：初设面板的预备计数（从 `units` 派生，不另记一份账）
-   *
-   * 占用＝`reservedHexes(side).length`（5.4a 按格，同格堆叠只算 1 格）；上限与禁令读剧本数据。
-   */
-  const setupReserveSummary = computed(() =>
-    (['axis', 'soviet'] as const).map((side) => {
-      const limits = setupModeConstraintsOf(side)
-      return {
-        side,
-        used: reservedHexes(side).length,
-        cap: limits.reserveCap,
-        forbidden: limits.reserveForbidden,
-      }
-    }),
-  )
-
-  /**
-   * E5：释放预备（5.7b）——把选中的预备模式单位的预备标记摘掉
-   *
-   * 「被玩家『释放』的预备模式单位可在该玩家的**反应阶段或进击阶段**使用……只需移除它的预备标记」
-   * （5.7b）。故只在本方反应阶段（非阶段玩家，MA ×1/2）或进击阶段（阶段玩家，MA ×1）可行；
-   * 判据全在引擎 `canReleaseReserve`，本函数只落盘 + 记账。
-   */
-  function releaseReserveNow(): boolean {
-    if (!requireAction('reserve.release', '释放预备')) return false
-    const unit = selectedUnit.value
-    if (unit === null) {
-      pushLog('warning', '先选中一个算子')
-      return false
-    }
-    const current = phase.value
-    if (current !== 'reaction' && current !== 'exploitation') {
-      pushLog(
-        'warning',
-        `不能释放预备：${PHASE_LABELS[current]} 不是反应 / 进击阶段（5.7b）`,
-        '5.7b',
-      )
-      return false
-    }
-    const verdict = canReleaseReserve({
-      state: unit.mode,
-      side: unit.side,
-      activeSide: activeSide.value,
-      phase: current,
-    })
-    if (!verdict.ok) {
-      pushLog('warning', `不能释放预备：${verdict.reason}（${verdict.rule}）`, verdict.rule)
-      return false
-    }
-    unit.mode = verdict.mode
-    pushLog(
-      'success',
-      `${unit.name} 已释放预备（5.7b）：回到朝向面，本阶段 MA ×${verdict.maMult}`,
-      '5.7b',
-    )
-    // ⑭ 接线：释放预备（5.7b）入会话日志（本笔不掷骰）
-    recordSettlement({
-      action: 'reserveRelease',
-      rule: '5.7b',
-      data: {
-        unitId: unit.instanceId,
-        maMult: verdict.maMult,
-        phase: current,
-      },
-    })
-    /*
-     * 释放成功后自动重试开拔（与付款同款）：非阶段玩家的已释放预备在反应/进击段可动，
-     * 玩家点它→释放→直接进入移动交互，省得再点一次「开始移动」。
-     * ★ 条 10（M1）只解耦 `switchUnitMode` 尾部的 `retryBeginMove`；释放预备的重试**保留**——
-     *   非阶段玩家单位点格只按「查看」选中（不进 `movePick`），`confirmMovePick` 无从开拔，
-     *   故这里仍走 `selectedUnit` 自动重试（见 50-phase-e「端到端释放预备」用例）。
-     */
-    retryBeginMove()
-    return true
-  }
-
-  /**
-   * 5.7b：此刻该单位能否「转出预备」——`releaseReserveNow` 的只读投影
-   *
-   * 与落账函数同一串判据（闸门 `reserve.release` + 阶段 + 引擎 `canReleaseReserve`），
-   * 但**不写日志、不改状态**：右键菜单只用它决定「这一项列不列」。
-   */
-  function canReleaseReserveOf(unitId: string): boolean {
-    const unit = units.value.find((item) => item.instanceId === unitId)
-    // 反应段的行动者是**非阶段玩家**，故不在这里比 `activeSide`——阵营资格交给引擎判
-    if (unit === undefined) return false
-    const current = phase.value
-    if (current !== 'reaction' && current !== 'exploitation') return false
-    if (!actionAllowedNow('reserve.release')) return false
-    return canReleaseReserve({
-      state: unit.mode,
-      side: unit.side,
-      activeSide: activeSide.value,
-      phase: current,
-    }).ok
-  }
-
-  /**
-   * 用户 2026-11-18：移动环节内，预备单位**直接换面**（5.7a 的朝向锁按玩家口径放开）
-   *
-   * 5.7a 原文把朝向锁到下一个移动阶段；玩家走查后要求「转入预备后仍要能换移动面 / 战斗面」，
-   * 故单开这条入口：不改模式、不耗 MP、不碰 `reserveEnteredThisPhase`，只换朝向并刷新印值。
-   * 判定只有两条：闸门 `move.modeChange`（移动环节）＋该单位确在预备模式。
-   * `flipUnitOrientation` 仍保留 5.7a 的锁语义（供只读口径与既有用例）。
-   */
-  function switchReserveFaceNow(orientation: Orientation, ids?: readonly string[]): boolean {
-    if (!requireAction('move.modeChange', '预备换面')) return false
-    const targets = ids ?? (selectedUnit.value === null ? [] : [selectedUnit.value.instanceId])
-    if (targets.length === 0) {
-      pushLog('warning', '先选中要换面的预备单位')
-      return false
-    }
-    let okCount = 0
-    for (const id of targets) {
-      const unit = units.value.find((item) => item.instanceId === id)
-      if (unit === undefined) continue
-      if (unit.mode.mode !== 'reserve') {
-        pushLog('warning', `${unit.name} 不在预备模式，不能换预备面（5.7a）`, '5.7a')
-        continue
-      }
-      if (unit.mode.orientation === orientation) continue
-      const wasEngineerCapable = engineerCapableNow(unit)
-      unit.mode = { ...unit.mode, orientation }
-      noteEngineerCapabilityAfter(unit, wasEngineerCapable)
-      unit.raw = unit.faces[unit.mode.orientation]
-      okCount += 1
-    }
-    if (okCount === 0) return false
-    pushLog(
-      'success',
-      `已将 ${okCount} 枚预备单位换到${orientation === 'combat' ? '战斗面' : '移动面'}（5.7a；本移动环节内仍可换）`,
-      '5.7a',
-    )
-    return true
-  }
-
-  /**
-   * 用户 2026-11-18：**直接取消预备模式**——按当前朝向回到移动 / 战斗模式
-   *
-   * 这不是 5.7b 的「转出预备」（那是反应 / 进击阶段的专门动作，`releaseReserveNow`）：
-   * 只是在移动环节里把刚转进去的预备标记摘掉，回到正常状态；不产生耗尽、不消耗 MP。
-   * 同时清掉 `reserveEnteredThisPhase`（5.7a 的朝向锁随之解除）。
-   */
-  function cancelReserveModeNow(ids?: readonly string[]): boolean {
-    if (!requireAction('move.modeChange', '取消预备')) return false
-    const targets = ids ?? (selectedUnit.value === null ? [] : [selectedUnit.value.instanceId])
-    if (targets.length === 0) {
-      pushLog('warning', '先选中要取消预备的单位')
-      return false
-    }
-    let okCount = 0
-    for (const id of targets) {
-      const unit = units.value.find((item) => item.instanceId === id)
-      if (unit === undefined || unit.mode.mode !== 'reserve') continue
-      const wasEngineerCapable = engineerCapableNow(unit)
-      unit.mode = applyModeSwitch(unit.mode, unit.mode.orientation, unit.mode.orientation)
-      unit.reserveEnteredThisPhase = false
-      noteEngineerCapabilityAfter(unit, wasEngineerCapable)
-      unit.raw = unit.faces[unit.mode.orientation]
-      okCount += 1
-    }
-    if (okCount === 0) return false
-    pushLog(
-      'success',
-      `已取消 ${okCount} 枚的预备模式，按朝向回到正常状态（不是 5.7b 转出预备）`,
-      '5.4',
-    )
-    return true
-  }
-
-  /**
-   * 用户 2026-11-18：右键「模式改变」是否给出**预备换面 / 取消预备**两项
-   *
-   * 只读投影：该枚确在预备模式，且当前环节放行 `move.modeChange`（移动环节）。
-   */
-  function canEditReserveModeOf(unitId: string): boolean {
-    const unit = units.value.find((item) => item.instanceId === unitId)
-    if (unit === undefined || unit.mode.mode !== 'reserve') return false
-    return actionAllowedNow('move.modeChange')
-  }
-
-  /** C5：只改朝向而不改模式（5.4 末句 DG / 5.7a 预备） */
-  function flipUnitOrientation(): void {
-    if (!requireAction('move.modeChange', '翻朝向')) return
-    const unit = selectedUnit.value
-    if (unit === null) return
-    const verdict = canFlipOrientation({
-      state: unit.mode,
-      phase: moveContext.value.phase,
-      // 5.7a：本移动阶段刚进入预备的单位，朝向锁定
-      enteredReserveThisTurn: unit.reserveEnteredThisPhase,
-    })
-    if (!verdict.ok) {
-      pushLog('warning', `不能改变朝向：${verdict.reason}（${verdict.rule}）`, verdict.rule)
-      return
-    }
-    const wasEngineerCapable = engineerCapableNow(unit)
-    unit.mode = flipOrientation(unit.mode)
-    noteEngineerCapabilityAfter(unit, wasEngineerCapable)
-    unit.raw = unit.faces[unit.mode.orientation]
-    pushLog(
-      'success',
-      `${unit.name} 朝向 → ${unit.mode.orientation === 'combat' ? '战斗面' : '移动面'}（${verdict.rule}）`,
-      verdict.rule,
-    )
-  }
 
   /**
    * C5：付燃料（12.5c 三法）——费用由引擎算，本 store 只**从声明的补给站**扣款并打标记
