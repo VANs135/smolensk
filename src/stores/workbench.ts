@@ -2061,9 +2061,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /*
    * B3-2b11（2026-11-21）：C8 的 SP 账本（`addSpAtHex` 等 10 个动作）搬进 `workbench-supply-dumps.ts`。
-   * 装配**必须在 air 域（2147）之前**：`addSpAtHex` 是 air 的端口（2161），`setSpDumpHoldings` 也被 2231 的域收走。
-   * 三个晚声明状态：`panzerGroupRulesOn`（21625 computed ⇒ getter）、
-   * `spDumpPanzerGroups`(21602) / `pendingSpGroupAssignment`(21635)（本块只整体重置 ⇒ 写穿回调）。
+   * 装配**必须在 air 域装配段之前**（`const airDomain = createAirDomain`）：`addSpAtHex` 是 air 的端口，
+   * `setSpDumpHoldings` 也被紧随其后的一个域收走 ⇒ 收它的域在前，本域就必须更前。
+   * 三个晚声明状态：`panzerGroupRulesOn`（3.4b 段的 computed ⇒ getter）、
+   * `spDumpPanzerGroups` / `pendingSpGroupAssignment`（3.4b 段的两个 `ref`，本块只整体重置 ⇒ 写穿回调）。
    */
   const supplyDumpsDomain = createSupplyDumpsDomain({
     spDumps,
@@ -11691,7 +11692,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /*
    * B3-2b12（2026-11-21）：13.2c 运输点数合并/拆分（7 个声明）搬进 `workbench-transport-points.ts`。
-   * `transportKindOf` 留在此处原位：4736 的 `transportPointActorOf`（13.2f 装载量快照）在**建域点之前**
+   * `transportKindOf` 留在此处原位：`transportPointActorOf`（13.2f 装载量快照）在**建域点之前**
    * 就读它 ⇒ 只能反向当端口（`function` 声明 ⇒ 提升，按值传）。
    */
   const transportPointsDomain = createTransportPointsDomain({

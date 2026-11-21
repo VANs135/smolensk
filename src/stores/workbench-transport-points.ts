@@ -1,15 +1,16 @@
 /**
  * workbench-transport-points.ts —— C8d：13.2c 运输点数的合并 / 拆分（含 12.7e 的合并显示）
  *
- * B3-2b12（2026-11-21）：从 facade 搬出 7 个声明（253 行区块里扣掉留下的 `transportKindOf` 后 246 行）：
+ * B3-2b12（2026-11-21）：从 facade 搬出 7 个声明（声明区 250 行，留下 `transportKindOf` 的注释与函数共
+ * 4 行 ⇒ 实搬 246 行；C8d 的 banner 与前后两个空行不计入）：
  * `transportPointsOfSide` / `transportPointInputs` / `transportPointGroupsOfSide` /
  * `toggleTransportMerge` / `transportRecordFor` / `mergeTransportPointsNow` /
  * `splitTransportPointNow`。**函数体零改写**（装配点就在原块位置，所有端口按值传）。
  *
  * ## 为什么 `transportKindOf` 留在 facade
- *   `transportKindOf`（facade 11789）被 **`transportPointActorOf`（4736，13.2f 装载量快照）在建域点
- *   之前读取** ⇒ 它与 b10 的 `retreatResolutionInput` 同属"被早读者"，搬走即 TDZ。故留在 facade、
- *   反向当端口传进来（`function` 声明 ⇒ 提升，按值传安全）。
+ *   `transportKindOf`（C8d 段末尾那个 `function`）被 **`transportPointActorOf`（13.2f 装载量快照，
+ *   `function transportPointActorOf`）在建域点之前读取** ⇒ 它与 b10 的 `retreatResolutionInput`
+ *   同属"被早读者"，搬走即 TDZ。故留在 facade、反向当端口传进来（`function` 声明 ⇒ 提升，按值传安全）。
  */
 import { computed, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
@@ -37,9 +38,9 @@ export interface TransportPointsDeps {
     rule?: string,
     derivation?: Derivation,
   ) => void
-  /** 行动闸门（`function` 声明在 facade 17468 ⇒ 提升，按值传安全） */
+  /** 行动闸门（facade 的 `function requireAction` ⇒ 提升，按值传安全） */
   requireAction: (key: ActionKey, action: string) => boolean
-  /** facade 11789，被 4736 的早读者占住 ⇒ 反向端口（`function` 声明 ⇒ 提升） */
+  /** C8d 段末尾那个 `function`，被 `transportPointActorOf` 的早读占住 ⇒ 反向端口（提升，按值传安全） */
   transportKindOf: (unit: ConsoleUnit) => string
 }
 

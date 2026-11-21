@@ -4,16 +4,16 @@
  * B3-2b11（2026-11-21）：`addSpAtHex`（SP 落账**唯一入口**，手工新增与空运卸载共用）及其余
  * 9 个账本动作整块搬出 facade（265 行）。函数体只改写 2 行（见下）。
  *
- * ## 装配位置为什么在 facade 2066 一带（而不是惯常的 7xxx）
- *   `addSpAtHex` 是 air 域的端口（facade 2161 处被 `createAirDomain` 收走），
- *   `setSpDumpHoldings` 也在 2231 被另一个域收走 ⇒ 本域**必须先于 2147 建**。端口里除
+ * ## 装配位置为什么在 C8 段开头（而不是惯常的 7xxx 建域区）
+ *   `addSpAtHex` 是 air 域的端口（被 `const airDomain = createAirDomain` 的装配段收走），
+ *   `setSpDumpHoldings` 也被紧随其后的一个域收走 ⇒ 本域**必须先于 air 域装配**。端口里除
  *   `panzerGroupRulesOn`（晚声明 computed）外都能按值传；那三个晚声明只读/写穿状态用下面三种招法：
  *
- *   1. `panzerGroupRulesOn`（facade 21625 的 computed）：给 getter，切片内就地
+ *   1. `panzerGroupRulesOn`（facade 3.4b 段的 computed）：给 getter，切片内就地
  *      `computed(() => deps.panzerGroupRulesOn())` ⇒ 函数体继续按 `.value` 读；
- *   2. `spDumpPanzerGroups`（21602 的 `ref`，本块只**整体重置**）：给回调
+ *   2. `spDumpPanzerGroups`（3.4b 段的 `ref`，本块只**整体重置**）：给回调
  *      `resetSpDumpPanzerGroups()`，切片里写 `spDumpPanzerGroups.value = {}` → 改调它；
- *   3. `pendingSpGroupAssignment`（21635 的 `ref`，同样只整体重置）：同上。
+ *   3. `pendingSpGroupAssignment`（同段的 `ref`，同样只整体重置）：同上。
  *
  *   这两处 `ref` 是**写穿**用法（不是只读），getter + `computed` 包装解决不了赋值，故改用回调 ——
  *   回调在装配处创建、在函数被调用时才执行，因此晚声明不构成 TDZ。
