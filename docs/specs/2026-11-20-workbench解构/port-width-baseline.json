@@ -13,6 +13,7 @@
     "workbench-gates.ts": 11,
     "workbench-move.ts": 16,
     "workbench-stack-pick.ts": 13,
-    "workbench-supply-dumps.ts": 12
+    "workbench-supply-dumps.ts": 12,
+    "workbench-transport-points.ts": 6
   }
 }
