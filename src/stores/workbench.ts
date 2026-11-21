@@ -20,6 +20,7 @@ import { createTransportPointsDomain } from './workbench-transport-points'
 import { createExtendersDomain } from './workbench-extenders'
 import { createHedgehogsDomain } from './workbench-hedgehogs'
 import { createConstructionDomain } from './workbench-construction'
+import { createAirFacilityDomain } from './workbench-air-facility'
 import { createCombatInputs } from './engagement-inputs'
 import { defineStore } from 'pinia'
 import { computed, ref, toRaw, watch, type Ref } from 'vue'
@@ -85,13 +86,9 @@ import {
   BARRAGE_SOURCES_BY_PHASE,
   DIRECT_DRAW_RANGE_MP,
   SP_TO_T,
-  airBaseBuildCostSp,
   airBoxEdgeColumn,
   claimFrontalReserves,
   frontalReservesBatch,
-  planAirBaseBuild,
-  planAirstripBuild,
-  planAirstripUpgrade,
   PANZER_GROUP_CONSTRAINT_END,
   checkPanzerGroupSpBeneficiaries,
   normalizeSupplyDumps,
@@ -2151,7 +2148,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const constructionDomain = createConstructionDomain({
     constructionInputs,
-    pickedEngineer,
+    // pickedEngineer 已在 B3-2b17 搬走（解构晚于本装配点）⇒ 转发箭头
+    pickedEngineer: () => pickedEngineer(),
     activeSide,
     phase,
     pushLog,
@@ -2257,6 +2255,55 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   } = supplyPhaseDomain
   /** 12.11a：本阶段各补给站的销毁尝试次数（每阶段每站只能尝试一次） */
   const dumpDestructionAttempts = ref<Record<string, number>>({})
+
+  /* ────────── C8g 空中设施（15.3 / 15.4 / 15.2A，B3-2b17） ────────── */
+
+  /*
+   * B3-2b17（2026-11-21）：15 项空中设施声明搬进 `workbench-air-facility.ts`。
+   * ★ 装配点必须早于 air 建域——`createAirDomain` 的 `airUnloadedTAt` 是**按值** deps（建域即求值）。
+   * ★ `airstripBaseIds` / `airBases` 来自 air 域解构（本处之后）⇒ deps 给 getter，切片不解构它们。
+   * ★ `pickedEngineer` 随本批搬走 ⇒ b16 的施工域构造处改成转发箭头。
+   * ★ 端口 32 项 = 18 依赖 + 14 返回。
+   */
+  const airFacilityDomain = createAirFacilityDomain({
+    activeSide,
+    units,
+    spDumps,
+    constructionInputs,
+    pushLog,
+    requireAction,
+    captureUndoSnapshot,
+    dropUndoBySeq,
+    isConstructionMarkerAirBaseId,
+    canEngineerInPhase,
+    constructionError,
+    constructionFeeT,
+    constructionGateNow,
+    noteConstruction,
+    engineerExecutorFor,
+    payConstructionFee,
+    get airstripBaseIds() {
+      return airstripBaseIds
+    },
+    get airBases() {
+      return airBases
+    },
+  })
+  const {
+    airBaseTurnLedger,
+    airUnloadLedger,
+    airUnloadedTAt,
+    engineerChoices,
+    airBaseUnitAt,
+    isAirstripAt,
+    airBaseLevelAt,
+    hexHasAirFacility,
+    airBaseBuildCostSpPerLevel,
+    pickedEngineer,
+    buildAirBaseNow,
+    buildAirstripNow,
+    upgradeAirstripNow,
+  } = airFacilityDomain
 
   // ── C9 空军交互（W6 C9：OCS 14.0 / 15.0；引擎状态机在 air-interaction.ts） ──
   // ── B2-1：空军状态 + 派生已搬进 workbench-air（25 端口，其中 5 项晚绑定走 getter） ──
@@ -11835,26 +11882,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /* ────────── C8g：15.3/15.4 空军基地 / 15.2A 简易机场（＋13.8d 施工前提） ────────── */
 
-  /**
-   * 15.3：**空军基地**每格每回合的已提升级数（15.3「等级每回合只能提升一级」）
-   *
-   * 与 16.0b/c 的 `hedgehogTurnLedger` 同构：按格按回合记账，换回合即清零。
+  /*
+   * B3-2b17（2026-11-21）：15.3/15.4 空军基地与 15.2A 简易机场的 15 个声明搬进
+   * `workbench-air-facility.ts`（装配在 supplyPhase 域之后、air 域之前）。
+   * ★ 仅 `canEngineerInPhase` 留在这里：它读 `moveContext`（晚于装配点）且是 store 公开键。
+   * ★ `engineerChoices` 也已搬走，用 deps 里的 `canEngineerInPhase`（`function` ⇒ 提升）。
    */
-  const airBaseTurnLedger = ref<Record<string, number>>({})
-
-  /**
-   * 14.9f / 15.0b-C / 15.2C：本**移动环节**各格**已空运卸载**的 T
-   *
-   * 「同一个空军基地在每个移动环节中，只能使用**空运**卸载 2T 乘上其**基地等级**的货物量。」
-   * 键＝`${side}:${列}.${行}`（基地会换手，故按归属分开记）；换环节/换阶段即清零
-   * （`resetSegmentTransient`），与 `refitDoneBaseIds` 同生命周期。
-   */
-  const airUnloadLedger = ref<Record<string, number>>({})
-
-  /** 14.9f：本格本环节**已**空运卸载的 T（该格此刻无记录即 0） */
-  function airUnloadedTAt(hex: HexRef, side: Side): number {
-    return airUnloadLedger.value[`${side}:${hexLabel(hex)}`] ?? 0
-  }
 
   /** 13.8a / 5.5b / 5.10e：该单位此刻是否具备工程能力（印值能力 × 模式） */
   function canEngineerInPhase(unit: ConsoleUnit): boolean {
@@ -11872,282 +11905,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       ),
     )
   }
-
-  /** 13.8d：本阶段可派去施工的本方工程单位（模式门槛走 `checkLegality`，不另写判据） */
-  const engineerChoices = computed<ConsoleUnit[]>(() =>
-    units.value.filter((unit) => unit.side === activeSide.value && canEngineerInPhase(unit)),
-  )
-
-  /** 该格上的空中设施算子（4.8：每格至多 1 个空军基地/简易机场） */
-  function airBaseUnitAt(hex: HexRef): ConsoleUnit | undefined {
-    return units.value.find((unit) => unit.noncombatKind === 'air_base' && sameHex(unit.hex, hex))
-  }
-
-  /** 15.2F：该格是否为**简易机场**（口径同 `airBases`：被声明者等级记 0） */
-  function isAirstripAt(hex: HexRef): boolean {
-    const base = airBaseUnitAt(hex)
-    return base !== undefined && airstripBaseIds.value.includes(base.instanceId)
-  }
-
-  /** 15.3：该格当前**空军基地**等级（0 ＝ 尚无基地，或该格是简易机场） */
-  function airBaseLevelAt(hex: HexRef): number {
-    const base = airBaseUnitAt(hex)
-    if (base === undefined) return 0
-    return airstripBaseIds.value.includes(base.instanceId) ? 0 : base.noncombatLevel
-  }
-
-  /** 4.8 / 15.0a：该格是否已有空中设施（空军基地或简易机场 ⇒ 不可再建） */
-  function hexHasAirFacility(hex: HexRef): boolean {
-    return airBaseUnitAt(hex) !== undefined
-  }
-
-  /**
-   * 15.3：**加一级**空军基地的 SP 费用（供界面预显；引擎口径）
-   *
-   * 「费用为 1SP」「等级每回合只能提升一级」⇒ 单次施工恒为一级的价钱，故直接取 1 级的费用。
-   */
-  const airBaseBuildCostSpPerLevel = airBaseBuildCostSp(1)
-
-  /** 15.0c：该等级的空军基地算子记录（1–3 级各一枚中立算子） */
-  function airBaseRecordFor(level: number): UnitRecordView | null {
-    return (
-      unitChoices(activeSide.value).find(
-        (record) => record.noncombatKind === 'air_base' && record.noncombatDetails?.level === level,
-      ) ?? null
-    )
-  }
-
-  /** 13.8d：指定的施工工程单位（未指定或找不到 ⇒ null） */
-  function pickedEngineer(): ConsoleUnit | null {
-    const id = constructionInputs.value.engineerId
-    if (id === null) return null
-    return units.value.find((unit) => unit.instanceId === id) ?? null
-  }
-
-  /** 15.3：把该格的设施换成**该等级**的空军基地算子（升级＝换算子；无则新摆） */
-  function placeAirBaseOperator(hex: HexRef, level: number): boolean {
-    const record = airBaseRecordFor(level)
-    if (record === null) {
-      pushLog('warning', `算子库没有 ${level} 级空军基地算子（15.0c）`, '15.3')
-      return false
-    }
-    const existing = airBaseUnitAt(hex)
-    if (existing !== undefined) {
-      // 简易机场升格为空军基地：撤掉简易机场声明（15.2A）
-      airstripBaseIds.value = airstripBaseIds.value.filter((id) => id !== existing.instanceId)
-      units.value = units.value.filter((unit) => unit.instanceId !== existing.instanceId)
-    }
-    units.value = [
-      ...units.value,
-      toConsoleUnit({ record, instanceId: createId('ab'), hex, side: activeSide.value }),
-    ]
-    return true
-  }
-
-  /**
-   * 15.3：**修建 / 改进**空军基地（+1 级，1 SP/级）
-   *
-   * 硬条件由引擎判（`validateConstructionBase` ＋ `planAirBaseBuild`）：移动阶段、施工者具工程能力
-   * 且在 2 格**步行 MP** 半径内、本阶段未移动、本格本阶段未施工过、该格每回合最多 +1 级、
-   * 未达 3 级上限、SP 足够（1 SP/级）。
-   *
-   * ★ 与 15.2A 的分工（判读）：**简易机场的升格走 15.2A 的 3 T**，不走本处 1 SP——
-   *   15.2A 为简易机场专设了那条价钱，若允许 1 SP 升格会把专条架空。
-   */
-  function buildAirBaseNow(): boolean {
-    // 13.8d / 15.3：修建空军基地只在移动阶段（判据的下半段问引擎）
-    if (!requireAction('move.construction', '修建空军基地')) return false
-    const hex = parseHexPath(constructionInputs.value.hexText)[0]
-    if (hex === undefined) {
-      pushLog(
-        'warning',
-        `目标格号应为「列.行」，收到「${constructionInputs.value.hexText}」（15.3）`,
-        '15.3',
-      )
-      return false
-    }
-    const engineer = pickedEngineer()
-    const gate = constructionGateNow('buildAirBase', engineer)
-    if (gate !== null) {
-      constructionError.value = { rule: gate.rule, reason: gate.reason }
-      pushLog('warning', `修建空军基地被拒：${gate.reason}（${gate.rule}）`, gate.rule)
-      return false
-    }
-    if (isAirstripAt(hex)) {
-      constructionError.value = { rule: '15.2A', reason: 'airstripMustUseAirstripUpgrade' }
-      pushLog(
-        'warning',
-        `${hexLabel(hex)} 是**简易机场**：升格为一级空军基地按 15.2A 的 3 T，不适用 15.3 的 1 SP`,
-        '15.2A',
-      )
-      return false
-    }
-    const dump =
-      spDumps.value.find((item) => item.id === constructionInputs.value.payDumpId) ?? null
-    const outcome = planAirBaseBuild({
-      executor: engineerExecutorFor(engineer, hex),
-      currentLevel: airBaseLevelAt(hex),
-      levelsBuiltThisTurn: airBaseTurnLedger.value[hexLabel(hex)] ?? 0,
-      availableSp: dump === null ? 0 : holdingsToT({ sp: dump.sp, t: dump.t }) / SP_TO_T,
-    })
-    if (!outcome.ok) {
-      constructionError.value = { rule: outcome.rule, reason: outcome.reason }
-      pushLog('warning', `修建空军基地被拒：${outcome.reason}（${outcome.rule}）`, outcome.rule)
-      return false
-    }
-    const feeT = constructionFeeT('buildAirBase', outcome.data.costSp, 0)
-    const undoSeq = captureUndoSnapshot(`修建空军基地 ${hexLabel(hex)}`)
-    if (!payConstructionFee(constructionInputs.value.payDumpId, feeT, '15.3')) {
-      if (undoSeq !== null) dropUndoBySeq(undoSeq)
-      return false
-    }
-    if (!placeAirBaseOperator(hex, outcome.data.levelAfter)) {
-      if (undoSeq !== null) dropUndoBySeq(undoSeq)
-      return false
-    }
-    if (engineer !== null) engineer.movementEnded = true
-    airBaseTurnLedger.value = {
-      ...airBaseTurnLedger.value,
-      [hexLabel(hex)]: (airBaseTurnLedger.value[hexLabel(hex)] ?? 0) + 1,
-    }
-    noteConstruction('buildAirBase', hex, engineer?.instanceId ?? null)
-    constructionError.value = null
-    pushLog(
-      'success',
-      `${hexLabel(hex)} ${outcome.data.detail}；付款站 ${dump === null ? '—' : hexLabel(dump.hex)}；` +
-        `施工者 ${engineer === null ? '—' : engineer.name} 本阶段不能再移动`,
-      outcome.rule,
-    )
-    return true
-  }
-
-  /**
-   * 15.2A：**修建简易机场**（1 T）
-   *
-   * 「按照 15.3 中的流程，它们的建造费用为 1T」⇒ 时机与执行者与 15.3 相同（移动阶段、具工程能力
-   * 单位、13.8d 的一格一任务）。本处落盘方式：摆出 1 级基地算子并**声明为简易机场**
-   * （本作单位库无独立简易机场算子，口径同 `toggleAirstripBase`）⇒ 整备 1 架 / 激活堆叠 4 /
-   * 无防空值 / 永不缩减（15.2B/E）。
-   */
-  function buildAirstripNow(): boolean {
-    // 15.3「空军基地**只能在移动阶段**中修建或改进，而且只能由具备工程能力的单位执行（13.8d）」
-    if (!requireAction('move.construction', '修建简易机场')) return false
-    const hex = parseHexPath(constructionInputs.value.hexText)[0]
-    if (hex === undefined) {
-      pushLog(
-        'warning',
-        `目标格号应为「列.行」，收到「${constructionInputs.value.hexText}」（15.2A）`,
-        '15.2A',
-      )
-      return false
-    }
-    const engineer = pickedEngineer()
-    const gate = constructionGateNow('buildAirstrip', engineer)
-    if (gate !== null) {
-      constructionError.value = { rule: gate.rule, reason: gate.reason }
-      pushLog('warning', `修建简易机场被拒：${gate.reason}（${gate.rule}）`, gate.rule)
-      return false
-    }
-    const dump =
-      spDumps.value.find((item) => item.id === constructionInputs.value.payDumpId) ?? null
-    const outcome = planAirstripBuild({
-      executor: engineerExecutorFor(engineer, hex),
-      hexHasAirFacility: hexHasAirFacility(hex),
-      availableT: dump === null ? 0 : dump.sp * SP_TO_T + dump.t,
-    })
-    if (!outcome.ok) {
-      constructionError.value = { rule: outcome.rule, reason: outcome.reason }
-      pushLog('warning', `修建简易机场被拒：${outcome.reason}（${outcome.rule}）`, outcome.rule)
-      return false
-    }
-    const undoSeq = captureUndoSnapshot(`修建简易机场 ${hexLabel(hex)}`)
-    if (
-      !payConstructionFee(
-        constructionInputs.value.payDumpId,
-        constructionFeeT('buildAirstrip', 0, outcome.data.costT),
-        '15.2A',
-      )
-    ) {
-      if (undoSeq !== null) dropUndoBySeq(undoSeq)
-      return false
-    }
-    if (!placeAirBaseOperator(hex, 1)) {
-      if (undoSeq !== null) dropUndoBySeq(undoSeq)
-      return false
-    }
-    const placed = airBaseUnitAt(hex)
-    if (placed !== undefined) airstripBaseIds.value = [...airstripBaseIds.value, placed.instanceId]
-    if (engineer !== null) engineer.movementEnded = true
-    noteConstruction('buildAirstrip', hex, engineer?.instanceId ?? null)
-    constructionError.value = null
-    pushLog(
-      'success',
-      `${hexLabel(hex)} ${outcome.data.detail}；付款站 ${dump === null ? '—' : hexLabel(dump.hex)}`,
-      outcome.rule,
-    )
-    return true
-  }
-
-  /**
-   * 15.2A：把**简易机场**升级为一级空军基地（3 T）
-   *
-   * 15.2E 的另一面：简易机场可被升格，但**永不能被缩减**（`canReduceAirstrip` 恒 false）。
-   */
-  function upgradeAirstripNow(baseId: string): boolean {
-    // 15.2A「简易机场可通过支付 3T 升级为一级空军基地」＋ 15.3「只能在移动阶段」⇒ 同一道闸
-    if (!requireAction('move.construction', '改进空军基地')) return false
-    const base = airBases.value.find((item) => item.id === baseId)
-    if (base === undefined) {
-      pushLog('warning', `找不到空中设施 ${baseId}（15.2A）`, '15.2A')
-      return false
-    }
-    // 专规 3.5：建造标记的简易机场没有对应的空军基地算子可升格 ⇒ 不走 15.2A 的升级落盘
-    if (isConstructionMarkerAirBaseId(baseId)) {
-      pushLog(
-        'warning',
-        '建造标记的简易机场不能按 15.2A 升格（专规 3.5 的标记不可改作基地）',
-        '专规 3.5',
-      )
-      return false
-    }
-    const engineer = pickedEngineer()
-    const gate = constructionGateNow('upgradeAirstrip', engineer)
-    if (gate !== null) {
-      constructionError.value = { rule: gate.rule, reason: gate.reason }
-      pushLog('warning', `简易机场升格被拒：${gate.reason}（${gate.rule}）`, gate.rule)
-      return false
-    }
-    const dump =
-      spDumps.value.find((item) => item.id === constructionInputs.value.payDumpId) ?? null
-    const outcome = planAirstripUpgrade({
-      executor: engineerExecutorFor(engineer, base.hex),
-      hexHasAirstrip: base.isAirstrip === true,
-      availableT: dump === null ? 0 : dump.sp * SP_TO_T + dump.t,
-    })
-    if (!outcome.ok) {
-      constructionError.value = { rule: outcome.rule, reason: outcome.reason }
-      pushLog('warning', `简易机场升格被拒：${outcome.reason}（${outcome.rule}）`, outcome.rule)
-      return false
-    }
-    if (
-      !payConstructionFee(
-        constructionInputs.value.payDumpId,
-        constructionFeeT('upgradeAirstrip', 0, outcome.data.costT),
-        '15.2A',
-      )
-    )
-      return false
-    // 15.2A：升格＝撤掉简易机场声明并把等级落到 1 级（整备 2 架、有防空值、可再被改进）
-    airstripBaseIds.value = airstripBaseIds.value.filter((id) => id !== baseId)
-    const target = units.value.find((unit) => unit.instanceId === baseId)
-    if (target !== undefined) target.noncombatLevel = outcome.data.levelAfter
-    if (engineer !== null) engineer.movementEnded = true
-    noteConstruction('upgradeAirstrip', base.hex, engineer?.instanceId ?? null)
-    constructionError.value = null
-    pushLog('success', `${hexLabel(base.hex)} ${outcome.data.detail}`, outcome.rule)
-    return true
-  }
-
   /*
    * 15.2E：简易机场**永不能被缩减**（伤害或玩家自愿都不行）
    *

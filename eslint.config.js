@@ -156,9 +156,9 @@ export default tseslint.config(
   },
 
   {
-    // facade：每搬完一批必须把本值下调到实测值 + 5（只降不升）。当前实测 23,853（B3-2b16 后）
+    // facade：每搬完一批必须把本值下调到实测值 + 5（只降不升）。当前实测 23,610（B3-2b17 后）
     files: ['src/stores/workbench.ts'],
-    rules: { 'max-lines': ['error', { max: 23858, skipBlankLines: false, skipComments: false }] },
+    rules: { 'max-lines': ['error', { max: 23615, skipBlankLines: false, skipComments: false }] },
   },
 
   {
