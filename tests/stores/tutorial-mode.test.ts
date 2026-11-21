@@ -389,6 +389,57 @@ describe('教学模式：Vitebsk', () => {
     expect(raw?.startsWith('A')).toBe(true)
     expect(ctx.w.combatState?.finished).toBe(true)
     expect(tutorial.currentStep?.id).toBe('barrage-city')
+
+    // 6) 炮火压制维捷布斯克：10.0 全流程（教学固定骰，10.0a 炸出 DG）
+    for (let guard = 0; guard < 12 && ctx.w.phase !== 'combat'; guard++) ctx.w.advanceSegmentNow()
+    const cityDefenders = ctx.w.units.filter(
+      (unit) => unit.side === 'soviet' && unit.hex.col === 19 && unit.hex.row === 27,
+    )
+    expect(cityDefenders.length).toBeGreaterThan(0)
+    ctx.w.battleTarget = {
+      hex: { col: 19, row: 27 },
+      defenderIds: cityDefenders.map((unit) => unit.instanceId),
+    }
+    // 空军那一步把 19.28 留在轰炸目标上 ⇒ 炮兵这一步必须显式改指城格（10.0d）
+    ctx.w.pickBarrageTargetAt({ col: 19, row: 27 })
+    ctx.w.setBarrageActive(true)
+    ctx.w.toggleBarrageUnit(artillery.instanceId)
+    expect(ctx.w.beginBarrageNow()).toBe(true)
+    // 10.1b：先声明付款来源（教学脚本在炮位备的弹药站），再付补给
+    expect(ctx.w.pickBarrageSupplyDump('tutorial-axis-arty-supply')).toBe(true)
+    expect(ctx.w.confirmBarrageSupplyStep()).toBe(true)
+    expect(ctx.w.confirmBarrageShiftsStep()).toBe(true)
+    // 10.0a：骰 12 必出 DG，把城里的守军打残，第 25 步的攻入才有胜算
+    ctx.w.barrageInputs.die = 12
+    ctx.w.barrageInputs.halfDie = 4
+    expect(ctx.w.rollBarrageDiceStep()).toBe(true)
+    const stepLosses = ctx.w.barrageSummary?.unitOutcome?.stepLosses ?? 0
+    if (stepLosses > 0) {
+      // 10.0a：损失必须按目标格内的守军足额分配（单枚吃不下就跨枚接着吃）
+      const losses: Record<string, number> = {}
+      let remaining = stepLosses
+      for (const unit of [...ctx.w.barrageLossTargets].sort((a, b) => b.steps - a.steps)) {
+        if (remaining <= 0) break
+        const take = Math.min(remaining, unit.steps)
+        if (take > 0) {
+          losses[unit.instanceId] = take
+          remaining -= take
+        }
+      }
+      expect(remaining).toBe(0)
+      ctx.w.barrageInputs.losses = losses
+    }
+    expect(ctx.w.confirmBarrageOutcomeStep()).toBe(true)
+    expect(ctx.w.barrageState?.finished).toBe(true)
+    expect(ctx.w.barrageState?.targetHex).toEqual({ col: 19, row: 27 })
+    expect(tutorial.currentStep?.id).toBe('capture-city')
+
+    /*
+     * 第 25 步「攻入维捷布斯克」的端到端还差最后一段：beginCombatNow 在测试路径下
+     * 不写日志、也不落 combatError / actionRefusal 就返回 false，需要单独排查那条闸门
+     * （同一次调用在既有轰炸用例里是正常的，所以不是测试写法问题）。
+     * 本用例覆盖到「炮火压制完成 → 引导推进到攻入」，攻入另起一条用例。
+     */
     tutorial.stop()
   }, 120_000)
 
@@ -403,7 +454,7 @@ describe('教学模式：Vitebsk', () => {
     expect(source).toContain('从拦截距离内起飞迎击')
     // 14.3e：拦截空战固定 2d6=6（轴心胜）；10.0a：轰炸骰固定 11（DG + 1 军力损失）
     expect(source).toContain('interceptDie = 6')
-    expect(source).toContain('barrageInputs.die = 11')
+    expect(source).toContain('barrageInputs.die = 12')
     // 逐枚高亮：同名机两枚，只能按实例 id 框住当前该点的那枚
     const guide = readFileSync('src/components/tutorial/TutorialGuide.vue', 'utf8')
     const panel = readFileSync('src/components/air/AirPanel.vue', 'utf8')
