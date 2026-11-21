@@ -665,7 +665,14 @@ export const useTutorialStore = defineStore('tutorial', () => {
         return { buttonTexts: ['进入下一环节'] }
       }
       case 'reaction-attack':
-        return { hex: reactionDefenseHex.value, texts: ['苏军', '确认强制作战损失', '确认撤退'] }
+        /*
+         * 2026-11-21：反扑**全程由脚本代打**（加油 → 19.27 → 突袭 18.27 → 补给 / AR /
+         * 骰面 / 损失 / 撤退），玩家一个按钮都不用点。所以这里只框战斗格并说明
+         * 「等苏军打完」，不再指向「确认强制作战损失 / 确认撤退」——那些按钮会被脚本
+         * 瞬间点掉，指过去反而让玩家找不到。脚本若失败会退回 idle 并 pushLog warning，
+         * 此时玩家可在同一格按既有按钮手动接手。
+         */
+        return { hex: reactionDefenseHex.value, texts: ['苏军反扑（脚本自动）', '等结果'] }
       default:
         return {}
     }
@@ -1186,7 +1193,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
       if (state.step === 'options') {
         const requirement = workbench.combatRequirement
         if (requirement === null) return false
-        // 宁可吃损失也不撤退：保持 17.27 的防御位置
+        // 苏军反扑要打到底：宁可吃损失也不撤退（不改变盘面位置）
         workbench.combatInputs.optionRetreatHexes = 0
         workbench.combatInputs.optionLossPoints = requirement.options
         if (!workbench.confirmCombatOptions()) return false
