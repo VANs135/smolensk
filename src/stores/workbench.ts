@@ -12172,13 +12172,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     actionRefusal.value = { key: 'barrage.declare', rule: reason.rule, reason: reason.reason }
   }
 
-  /**
-   * 专规 2.2d / 14.1g：**本阶段本方能否出击**（空军任务全链共用一条判据）
-   *
-   * 修前只有 `airMissionJoinChoices` 判这一条，`bombingEntryEligible` 只看环节闸 ⇒
-   * 苏军进击段右键敌方格仍出「轰炸」，点进去参战机阵列是空的、宣布时才被 2.2d 拒。
-   */
-
   /** 10.2c + 10.0e：**轰炸**这一项该不该出现（空军轰炸免补给 ⇒ 不判 10.1b） */
   function bombingEntryEligible(hex: HexRef): boolean {
     if (!actionAllowedNow('air.mission')) return false

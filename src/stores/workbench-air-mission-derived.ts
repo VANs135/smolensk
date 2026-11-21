@@ -70,6 +70,12 @@ export function createAirMissionDerivedDomain(deps: AirMissionDerivedDeps) {
     phase,
   } = deps
 
+  /**
+   * 专规 2.2d / 14.1g：**本阶段本方能否出击**（空军任务全链共用一条判据）
+   *
+   * 修前只有 `airMissionJoinChoices` 判这一条，`bombingEntryEligible` 只看环节闸 ⇒
+   * 苏军进击段右键敌方格仍出「轰炸」，点进去参战机阵列是空的、宣布时才被 2.2d 拒。
+   */
   const airMissionAllowedInPhase = computed<boolean>(() => {
     const airPhase =
       phase.value === 'reaction'
