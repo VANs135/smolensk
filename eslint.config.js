@@ -84,6 +84,115 @@ export default tseslint.config(
   },
 
   {
+    /*
+     * 其它 stores 的层间约束：**类型导入放行**（如 ui.ts 只 `import type { ViewName }`），
+     * 值导入一律禁止 —— 用 allowTypeImports 避免误伤既有类型依赖。
+     * 注意：本块必须排在下面的"切片"块之前，否则会覆盖切片的 ./workbench 禁令。
+     */
+    files: ['src/stores/**/*.ts'],
+    plugins: { '@typescript-eslint': tseslint.plugin },
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: '@/components', message: 'stores 不得 import 组件层', allowTypeImports: true },
+            { name: '@/views', message: 'stores 不得 import 视图层', allowTypeImports: true },
+          ],
+          patterns: [
+            {
+              group: ['@/components/**'],
+              message: 'stores 不得 import 组件层',
+              allowTypeImports: true,
+            },
+            { group: ['@/views/**'], message: 'stores 不得 import 视图层', allowTypeImports: true },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    /*
+     * 解构的机器闸（docs/specs/2026-11-20-workbench解构/ §8）：
+     *   ① max-lines —— 起手按现值卡住、只降不升；每落地一批就把数字下调到实测值；
+     *   ② 切片不得从 facade 取值或取类型（类型一律走 ./workbench-model）。
+     * 下列阈值均为 2026-11-21 实测值 + 5 行余量，只许改小。
+     */
+    files: ['src/stores/workbench-*.ts'],
+    plugins: { '@typescript-eslint': tseslint.plugin },
+    rules: {
+      'max-lines': ['error', { max: 2005, skipBlankLines: false, skipComments: false }],
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: './workbench',
+              message: '切片不得从 facade 取值（类型请走 ./workbench-model）',
+            },
+            { name: '@/components', message: 'stores 不得 import 组件层' },
+            { name: '@/views', message: 'stores 不得 import 视图层' },
+          ],
+          patterns: [
+            { group: ['@/components/**'], message: 'stores 不得 import 组件层' },
+            { group: ['@/views/**'], message: 'stores 不得 import 视图层' },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    // 空军切片拆分前的临时豁免：B2-4 拆成 air / air-mission / air-state 后删掉本块
+    files: ['src/stores/workbench-air.ts'],
+    rules: { 'max-lines': ['error', { max: 3384, skipBlankLines: false, skipComments: false }] },
+  },
+
+  {
+    // model 拆分前的临时卡口（目标：类型 ≤1,000 + 纯函数 ≤800）
+    files: ['src/stores/workbench-model.ts'],
+    rules: { 'max-lines': ['error', { max: 4213, skipBlankLines: false, skipComments: false }] },
+  },
+
+  {
+    // facade：每搬完一批必须把 27542 下调到实测值（只降不升）
+    files: ['src/stores/workbench.ts'],
+    rules: { 'max-lines': ['error', { max: 27277, skipBlankLines: false, skipComments: false }] },
+  },
+
+  {
+    // engine 只依赖纯逻辑：不许碰框架、store 与渲染层
+    files: ['src/engine/**/*.ts'],
+    plugins: { '@typescript-eslint': tseslint.plugin },
+    rules: {
+      'max-lines': ['error', { max: 2320, skipBlankLines: false, skipComments: false }],
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['vue', 'pinia', '@/stores', '@/stores/**', '@/render', '@/render/**'],
+              message: 'engine 不得依赖框架、store 与渲染层',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    // 组件行预算（ReinforcementPanel 为既成事实的临时豁免，拆完删）
+    files: ['src/components/**/*.vue', 'src/views/**/*.vue'],
+    rules: { 'max-lines': ['error', { max: 1605, skipBlankLines: false, skipComments: false }] },
+  },
+
+  {
+    files: ['src/components/reinforcement/ReinforcementPanel.vue'],
+    rules: { 'max-lines': ['error', { max: 1761, skipBlankLines: false, skipComments: false }] },
+  },
+
+  {
     // 构建期 Node 脚本与 ESLint 自身
     //
     // 此前 `scripts/*.mjs` **不在任何规则集内**（实测 `eslint --print-config scripts/sync-units.mjs`

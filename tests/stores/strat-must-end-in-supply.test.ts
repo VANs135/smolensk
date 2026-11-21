@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { createTraceSupplyAt, mustEndMoveInSupply } from '@/engine/rules'
 import { buildMoveContext, toConsoleUnit, unitChoices } from '@/stores'
 import { CORE_HEX, NEAR_HEX, newConsole } from '../flows/sop-harness'
+import { readStoreSource } from '../shared/store-source'
 
 /**
  * 5.8b：**战略模式单位必须停在有追溯补给的格**
@@ -70,7 +71,7 @@ describe('5.8b：移动上下文必须注入 traceSupplyAt（与 12.6 同源）'
     expect(model).toContain('traceSupplyAt?: (hex: HexRef, side: Side) => boolean')
     expect(model).toMatch(/traceSupplyAt:\s*input\.traceSupplyAt/)
 
-    const store = stripComments(readSource('src/stores/workbench.ts'))
+    const store = stripComments(readStoreSource())
     expect(store).toMatch(/traceSupplyAt:\s*\(hex, side\)\s*=>/)
     // 注入的事实必须来自 12.6 的同一份（`createTraceSupplyAt(supplyFacts)`）
     expect(store).toContain('createTraceSupplyAt(supplyFacts.value)')

@@ -9,6 +9,8 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
+import { readStoreSource } from '../shared/store-source'
+
 const read = (path: string): string => readFileSync(path, 'utf8')
 
 describe('11 号：空白点击退选格', () => {
@@ -26,7 +28,7 @@ describe('11 号：空白点击退选格', () => {
   })
 
   it('换段/换方/换回合/直跳环节都清 pendingHexPick', () => {
-    const code = read('src/stores/workbench.ts')
+    const code = readStoreSource()
     // 四处过渡各一句；总量至少 4
     const hits = code.match(/pendingHexPick\.value = null/g)?.length ?? 0
     expect(hits).toBeGreaterThanOrEqual(4)

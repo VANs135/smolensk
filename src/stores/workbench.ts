@@ -7541,43 +7541,63 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const movementDomain = createMovementDomain({
     NO_MOVEMENT_PHASES,
     session,
-    activeSide,
-    phase,
-    segmentLocked,
-    units,
-    selectedId,
-    lastStep,
     groundMovement,
-    moveBlocked,
-    moveInteraction,
-    moveSessionSeq,
-    transportHandlingBaseline,
-    stackSelect,
-    movePick,
-    pausedTransportIds,
-    transportHandlingUndo,
-    combatState,
-    barrageState,
     airUnitTransit,
     selectedUnit,
     choices,
     moveUnits,
     PHASE_LABELS,
-    // 按值：函数声明可提升（声明在 8k–25k）
-    refuseWhileLocked,
-    noteUnitLeftOwnBridgeHex,
-    unitOfInstance,
-    pushLog,
-    unitsAt,
-    friendlyUnitsAt,
-    movePickPoolAt,
-    defaultMovePickIdsAt,
-    applyFormationFuelCoverageToIds,
-    actionAllowedNow,
-    requireAction,
-    noteUnitEnteredHex,
-    nationalityOfUnit,
-    // 晚绑定：声明在 18046 / 19481 / 20698，用访问器传，切片只在调用时取值
+    // B-4 端口束试点（2026-11-21）：共享面各收成 1 项，切片内仍按原名解构，函数体零改动
+    core: { pushLog, noteUndoable, requireAction, actionAllowedNow, refuseWhileLocked },
+    board: {
+      activeSide,
+      phase,
+      segmentLocked,
+      units,
+      selectedId,
+      lastStep,
+      moveBlocked,
+      moveInteraction,
+      moveSessionSeq,
+      transportHandlingBaseline,
+      stackSelect,
+      movePick,
+      pausedTransportIds,
+      transportHandlingUndo,
+      combatState,
+      barrageState,
+      lastGroundEntryByUnit,
+      activeMoveUnits,
+      moveContext,
+      moveRuntime,
+      movePickPreviewInteraction,
+      groupReachable,
+      unitsAt,
+      friendlyUnitsAt,
+      movePickPoolAt,
+      defaultMovePickIdsAt,
+    },
+    helpers: {
+      noteUnitLeftOwnBridgeHex,
+      unitOfInstance,
+      noteUnitEnteredHex,
+      nationalityOfUnit,
+      reserveMarkerStatusOf,
+      reservedHexes,
+      hexKeyOf,
+      hexTextOf,
+      moveFailureNote,
+      applyFormationFuelCoverageToIds,
+      resolveSpecialCombatAt,
+      hexLabel,
+      allowReserveEntryAtHex,
+      previewStep,
+      planStep,
+      reachableNodeAt,
+      sameHex,
+      areAdjacent,
+    },
+    // 晚绑定：声明在建域点之后，用访问器传，切片只在调用/求值时取值
     get breakdownPool() {
       return breakdownPool
     },
@@ -7587,11 +7607,22 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     get gates() {
       return gates
     },
+    get specialPending() {
+      return specialPending
+    },
+    get confirmMovePick() {
+      return confirmMovePick
+    },
   })
   // B3-1：搬走后回补（区外仍引用；nameOf/unitNameOf*/applyMovePatches/refuseWhileSettling/
   // closeBreakdownWindows 走上面的薄转发或此处解构）
   const {
     unitNameOf,
+    canEnterReserveMode,
+    syncGroundEntries,
+    previewDraggedPath,
+    moveAlongDraggedPath,
+    tryMoveTo,
     settlementInProgress,
     beginMoveFor,
     setupBreakdownCandidates,
@@ -7607,6 +7638,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setupWiggleRemaining,
     breakdownTimingOf,
   } = movementDomain
+
+  /**
+   * B3-2b1：`triggerSpecialCombatAfterStep` 在 1110 行就被当端口传给 `groundMovement`，
+   * 早于本域解构 ⇒ facade 只能保留**函数声明**形式（提升）的一行薄转发。
+   */
+  function triggerSpecialCombatAfterStep(to: HexRef, movedIds: readonly string[]): void {
+    movementDomain.triggerSpecialCombatAfterStep(to, movedIds)
+  }
 
   /* ──────────── C5：堆叠取子（已搬进 `workbench-stack-pick.ts`） ──────────── */
   const stackPickDomain = createStackPickDomain({
@@ -7638,315 +7677,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     cancelMovePick,
     confirmMovePick,
   } = stackPickDomain
-
-  /**
-   * 5.4a：该单位此刻能否**转入预备模式**（按格额度闸门；电子版＝程序校验）
-   *
-   * 用户 2026-11-06 裁定：
-   *   - 一枚标记＝**一个格子**里处于预备模式的那部分单位（5.4a / 4.8b）⇒ 同格已有预备单位
-   *     ⇒ 不额外占额度；同格没有 ⇒ 占 1 格；
-   *   - 剧本给几枚 ＝ 能同时保持几个格子处于预备；**没给就是 0** ⇒ 该方完全没有预备权
-   *     （进入即拒，不是"不校验"）；
-   *   - 转入那一刻即占（原文「完成 25% 移动后才需要放置标记」是实体版省标记的宽容条款）。
-   *
-   * 额度由 `units` 的当前模式**派生**（见 `reservedHexes`），不维护账本 ⇒ 被拒时单位仍停在
-   * 原模式，不留半截状态。
-   *
-   * @returns 能否转入（被拒时已写日志）
-   */
-  function canEnterReserveMode(unit: ConsoleUnit): boolean {
-    const status = reserveMarkerStatusOf(unit.side)
-    const outcome = allowReserveEntryAtHex({
-      side: unit.side,
-      cap: status.cap,
-      hex: hexKeyOf(unit),
-      occupiedHexes: reservedHexes(unit.side),
-    })
-    if (outcome.ok) return true
-    const detail = outcome.reason.startsWith('noReserveMarkerAvailable')
-      ? '剧本未给本方预备标记（0 枚），无预备权（5.4a）'
-      : `本方的预备标记已用完（${String(status.cap)} 个格子），不能再把一个格子转入预备（5.4a）`
-    pushLog('warning', `${unit.name} 不能转入预备模式：${detail}`, outcome.rule)
-    return false
-  }
-
-  /** C5：提交一步（引擎给出 patches 与新的交互状态） */
-  function commitStep(to: HexRef, path: readonly HexRef[]): boolean {
-    const ok = groundMovement.commitStep(to, path)
-    if (ok) {
-      // 13.3f-B：记「本阶段最后一次地面入格」，供移动交互被替换后仍能换轨
-      const steps = moveInteraction.value?.steps ?? []
-      const step = steps[steps.length - 1]
-      if (step !== undefined && step.kind === 'step') {
-        const next = { ...lastGroundEntryByUnit.value }
-        for (const id of step.movedIds) next[id] = hexTextOf(to)
-        lastGroundEntryByUnit.value = next
-      }
-      // 用户 2026-11-20：全局撤销账 —— 每一步都是一笔可撤操作
-      noteUndoable('move.step', `移动一步 → ${hexLabel(to)}`)
-    }
-    return ok
-  }
-
-  /** 13.3f-B：撤销/取消后按移动交互里剩余的步骤回算地面入格账本 */
-  function syncGroundEntries(unitIds: readonly string[]): void {
-    const steps = moveInteraction.value?.steps ?? []
-    const next = { ...lastGroundEntryByUnit.value }
-    for (const id of unitIds) {
-      let last: HexRef | null = null
-      for (let index = steps.length - 1; index >= 0; index -= 1) {
-        const step = steps[index]!
-        if (step.kind === 'step' && step.movedIds.includes(id)) {
-          last = step.to
-          break
-        }
-      }
-      if (last === null) delete next[id]
-      else next[id] = hexTextOf(last)
-    }
-    lastGroundEntryByUnit.value = next
-  }
-
-  /**
-   * 9.14：移动进入某格后的**特殊战斗**触发
-   *
-   * 前提（规则原文）：「（敌方）可攻击单位**进入**该格」——故要传本次**实际移动**的单位
-   * （`movedIds`），由进入方阵营与 `attackCapable` 决定是否成立；引擎会再核一遍。
-   * 位移落点由玩家在地图上选（`specialPending`），因此移动路径在待决清空前应当停住。
-   */
-  function triggerSpecialCombatAfterStep(to: HexRef, movedIds: readonly string[]): void {
-    if (specialPending.value !== null) return
-    const enteringSide = movedIds
-      .map((id) => units.value.find((unit) => unit.instanceId === id)?.side)
-      .find((side) => side !== undefined)
-    if (enteringSide === undefined) return
-    resolveSpecialCombatAt(to, enteringSide)
-  }
-
-  /**
-   * 沿路径逐格推进（点远处的可达格 = 沿预览路径一直走过去；6.1 逐格移动）
-   *
-   * 每一格都重新问引擎（`previewStep`）——「走一格、范围重算一次」由此自然成立；
-   * 遇到 4.5a-A 的敌方 ZOC 会**停下来先问玩家**，确认后从该步继续。
-   * `path` 含起点，故从下标 1 起。
-   */
-  function advanceAlongPath(path: readonly HexRef[]): void {
-    for (let index = 1; index < path.length; index += 1) {
-      if (moveInteraction.value === null) return
-      if (activeMoveUnits.value.length === 0) return
-      const to = path[index]!
-      const preview = previewStep({
-        context: moveContext.value,
-        interaction: moveInteraction.value,
-        runtime: moveRuntime.value,
-        to,
-        path: path.slice(0, index + 1),
-      })
-      if (!preview.ok) {
-        const blocked = preview.blocked
-        if (blocked !== undefined) {
-          const note = moveFailureNote(blocked)
-          moveBlocked.value = {
-            rule: blocked.rule,
-            reason: `走不进 ${to.col}.${to.row}：${note.text}`,
-          }
-          pushLog(
-            'warning',
-            `走到 ${to.col}.${to.row} 停住：${note.text}（${blocked.rule}）`,
-            blocked.rule,
-          )
-        }
-        return
-      }
-      /*
-       * 4.5a-A：轮式单位进入未抵消的敌方 ZOC ⇒ **必须就地停止**。这是规则既定后果，
-       * 不再弹「进入并突袭 / 进入停下」确认面板（用户裁定：轮式不该因守规则多一步确认）。
-       * 直接落这一步；同行而仍能走的步行/履带单位继续沿原路径推进。
-       * 停车的单位随后照常留在突袭候选里（`commitStep` 记 `zocStoppedIds`），
-       * 相邻敌方格的高亮与地图上的突袭入口与其它单位完全一致。
-       */
-      if (preview.needsConfirm) {
-        pushLog(
-          'warning',
-          `进入 ${to.col}.${to.row} 的敌方 ZOC：轮式单位就地停止（4.5a-A；仍可对相邻敌方格发起突袭）`,
-          '4.5a-A',
-        )
-        if (!commitStep(to, path.slice(0, index + 1))) return
-        if (specialPending.value !== null) return
-        continue
-      }
-      if (!commitStep(to, path.slice(0, index + 1))) return
-      // 9.14：该步触发了设施夺取的待决（位移落点待选）⇒ 停住推进，先让玩家处置
-      if (specialPending.value !== null) return
-    }
-  }
-
-  /**
-   * 2026-11-18：把画布给的拖动路径规范化成「起点开头、逐格相邻」的序列。
-   *
-   * 落位（`moveAlongDraggedPath`）与预览（`previewDraggedPath`）共用这一份形状校验，
-   * 免得两处各写一遍、日后一处改了一处忘。
-   */
-  function normalizeDraggedPath(
-    path: readonly HexRef[],
-  ): { ok: true; full: HexRef[] } | { ok: false; rule: string; reason: string } {
-    const pick = movePick.value
-    const start = moveInteraction.value?.start ?? pick?.hex ?? null
-    if (start === null) return { ok: false, rule: '6.1', reason: '尚未选择要移动的单位' }
-    const full: HexRef[] = [{ ...start }]
-    for (const hex of path) {
-      const last = full[full.length - 1]!
-      if (sameHex(last, hex)) continue
-      if (!areAdjacent(last, hex)) return { ok: false, rule: '6.1', reason: '拖动路径不连续' }
-      full.push({ ...hex })
-    }
-    return { ok: true, full }
-  }
-
-  /**
-   * 2026-11-18：**拖动路径预览**（只读，画布拖动中每换一格调一次）
-   *
-   * 与 `moveAlongDraggedPath` 同一串判据（`simulateMovePath` 的纯预演）；只回答
-   * "整条路径此刻走不走得通"，**不写步、不动单位、不写 `moveBlocked`**。
-   * 画布据此决定要不要画落位终点：走不通时只留路径线（用户 2026-11-18）。
-   */
-  function previewDraggedPath(path: readonly HexRef[]): { ok: boolean } {
-    const normalized = normalizeDraggedPath(path)
-    if (!normalized.ok || normalized.full.length < 2) return { ok: false }
-    const simulation = moveInteraction.value ?? movePickPreviewInteraction.value
-    if (simulation === null) return { ok: false }
-    return { ok: simulateMovePath(simulation, moveRuntime.value, normalized.full).ok }
-  }
-
-  /**
-   * 2026-11-18：**拖拽落子**——沿玩家实际拖过的路径逐步判通行，全部合法才走。
-   *
-   * 与点目标格共用同一套引擎判据（`planStep`／`commitStep`）：先按路径逐段预演
-   * （`planStep` 不写盘面），任一段不可进入就整次不动并报「无法通行」＋引擎给的原因；
-   * 全部通过后逐段提交，MP 与账本按 **实际走过的格** 记账，撤销仍逐步回退。
-   *
-   * `path` 含起点（画布已按六角直线补全成相邻格序列）。
-   */
-  function moveAlongDraggedPath(path: readonly HexRef[]): boolean {
-    // 规范化：起点开头、去重、拒绝不相邻的段（画布已补全；这里只守引擎输入形状）
-    const normalized = normalizeDraggedPath(path)
-    if (!normalized.ok) {
-      moveBlocked.value = { rule: normalized.rule, reason: `无法通行：${normalized.reason}` }
-      pushLog('warning', moveBlocked.value.reason, normalized.rule)
-      return false
-    }
-    const full = normalized.full
-    if (full.length < 2) return false
-    const simulation = moveInteraction.value ?? movePickPreviewInteraction.value
-    if (simulation === null) return false
-    const dry = simulateMovePath(simulation, moveRuntime.value, full)
-    if (!dry.ok) {
-      moveBlocked.value = { rule: dry.rule, reason: `无法通行：${dry.reason}` }
-      pushLog('warning', `无法通行：${dry.reason}（${dry.rule}）`, dry.rule)
-      return false
-    }
-    if (moveInteraction.value === null && !confirmMovePick()) return false
-    advanceAlongPath(full)
-    return true
-  }
-
-  /** 拖拽路径的**纯预演**：按当前引擎判据逐段算一遍，不写盘面 */
-  function simulateMovePath(
-    interaction: MoveInteractionState,
-    runtime: readonly MoveUnitRuntime[],
-    path: readonly HexRef[],
-  ): { ok: true } | { ok: false; rule: string; reason: string } {
-    let simulated = interaction
-    const simulatedRuntime = runtime.map((item) => ({ ...item, hex: { ...item.hex } }))
-    for (let index = 1; index < path.length; index += 1) {
-      const to = path[index]!
-      /*
-       * 用户 2026-11-18：中文原因要用**引擎的原始 StepFailure**（`reason` 是内部码）。
-       * `planStep` 的失败会把代码和 detail 拼成一条字符串（如 `enemyOccupied（14.9）`），
-       * 拿它反过来查表就查不到 ⇒ 先问一次纯预览，拿到原始代码再翻译。
-       */
-      const preview = previewStep({
-        context: moveContext.value,
-        interaction: simulated,
-        runtime: simulatedRuntime,
-        to,
-        path: path.slice(0, index + 1),
-      })
-      if (!preview.ok) {
-        const blocked = preview.blocked
-        if (blocked === undefined) {
-          return { ok: false, rule: '6.1', reason: '本次移动已经结束' }
-        }
-        const note = moveFailureNote(blocked)
-        return { ok: false, rule: blocked.rule, reason: `${to.col}.${to.row}：${note.text}` }
-      }
-      const result = planStep({
-        context: moveContext.value,
-        interaction: simulated,
-        runtime: simulatedRuntime,
-        to,
-        path: path.slice(0, index + 1),
-      })
-      if (!result.ok) {
-        return { ok: false, rule: result.rule, reason: `该步不可进入（${result.rule}）` }
-      }
-      for (const patch of result.data.patches) {
-        const at = simulatedRuntime.findIndex((item) => item.unitId === patch.unitId)
-        if (at >= 0) simulatedRuntime[at] = { ...patch, hex: { ...patch.hex } }
-      }
-      simulated = result.data.interaction
-      // 中途已被迫收束（进 ZOC 停车 / 最小移动 / 战略模式）⇒ 路径后段走不了
-      if (index < path.length - 1) {
-        const stillActive = simulated.unitIds.some((id) => {
-          const item = simulatedRuntime.find((entry) => entry.unitId === id)
-          return item !== undefined && !item.ended
-        })
-        if (!stillActive) {
-          return {
-            ok: false,
-            rule: '4.5a-A',
-            reason: `${to.col}.${to.row} 之后必须停止：进入敌方 ZOC 必须停（4.5a-A）`,
-          }
-        }
-      }
-    }
-    return { ok: true }
-  }
-
-  /** C5：点击某格走动（移动交互入口） */
-  function tryMoveTo(hex: HexRef): void {
-    const interaction = moveInteraction.value
-    if (interaction === null) return
-    // 9.2 / 10.0：战斗或轰炸正在结算 ⇒ 这一步也不许走（第六批 BUG ②）
-    if (refuseWhileSettling('继续移动')) return
-    const node = reachableNodeAt(groupReachable.value.hexes, hex)
-    if (node === null) {
-      // 不在可到达范围内：给出引擎对该单步的判定，说明为什么不能走
-      const probe = previewStep({
-        context: moveContext.value,
-        interaction,
-        runtime: moveRuntime.value,
-        to: hex,
-      })
-      const blocked = probe.blocked
-      const blockedInfo =
-        blocked === undefined
-          ? { rule: '6.1', reason: '该格不在本次移动的可到达范围内' }
-          : {
-              rule: blocked.rule,
-              // 用户 2026-11-18：界面只写中文原因，引擎内部码不外泄
-              reason: `走不进 ${hex.col}.${hex.row}：${moveFailureNote(blocked).text}`,
-            }
-      moveBlocked.value = blockedInfo
-      pushLog(
-        'warning',
-        `不能走到 ${hex.col}.${hex.row}：${blockedInfo.reason}（${blockedInfo.rule}）`,
-        blockedInfo.rule,
-      )
-      return
-    }
-    advanceAlongPath(node.path)
-  }
 
   /**
    * C5：撤销上一步（还原该步提交前的运行态快照）

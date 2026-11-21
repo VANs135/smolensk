@@ -11,6 +11,7 @@
  * 用法：node scripts/port-tdz-audit.mjs [--file src/stores/workbench.ts]
  */
 import fs from 'node:fs'
+import path from 'node:path'
 import process from 'node:process'
 
 const argv = process.argv.slice(2)
@@ -25,7 +26,7 @@ for (let i = 0; i < lines.length; i++) {
   if (m) sites.push({ line: i + 1, varName: m[1], factory: m[2] })
 }
 
-/** 取实参名（跳过 `get x() {}` 访问器） */
+/** 取实参名（跳过 `get x() {}` 访问器；含 core/board/helpers 之类对象束的成员） */
 function argsOf(siteLine) {
   const names = []
   for (let i = siteLine; i < lines.length; i++) {
@@ -69,5 +70,100 @@ for (const site of sites) {
   for (const l of late) console.log(`   · ${l}`)
   problems += late.length
 }
-console.log(problems === 0 ? '通过' : `★ 共 ${problems} 处 TDZ 风险`)
+/**
+ * 端口宽度棘轮（A5）：
+ *   每个 `workbench-*.ts` 切片的 `*Ports` / `*Deps` 接口成员数，与基线比对：
+ *     · 已有基线 ⇒ **只许降不许升**；
+ *     · 超过 40 项 ⇒ 必须列进 `over40Exempt`（拆分后删除豁免）。
+ *   基线文件：docs/specs/2026-11-20-workbench解构/port-width-baseline.json
+ *   重新生成（只应在"确认拆分/收口后"执行）：node scripts/port-tdz-audit.mjs --write-baseline
+ */
+const STORE_DIR = path.dirname(path.resolve(file))
+const BASELINE_PATH = path.join(
+  ROOT_DIR(),
+  'docs/specs/2026-11-20-workbench解构/port-width-baseline.json',
+)
+const WIDTH_HARD_LIMIT = 40
+
+function ROOT_DIR() {
+  // 以 package.json 所在目录为准（与 port-report 同口径）
+  let dir = process.cwd()
+  for (let i = 0; i < 5; i++) {
+    if (fs.existsSync(path.join(dir, 'package.json'))) return dir
+    dir = path.dirname(dir)
+  }
+  return process.cwd()
+}
+
+/** 数接口成员：只看两格缩进的 `name:` / `name(` / `readonly name:` */
+function interfaceWidths(text) {
+  const lines = text.split('\n')
+  const widths = []
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^export interface (\w+(?:Ports|Deps))\s*\{/.exec(lines[i])
+    if (!m) continue
+    let count = 0
+    for (let j = i + 1; j < lines.length; j++) {
+      if (/^\}/.test(lines[j])) break
+      if (/^\s{2}(?:readonly )?[A-Za-z_$][\w$]*\??\s*[:(]/.test(lines[j])) count += 1
+    }
+    widths.push({ name: m[1], count })
+  }
+  return widths
+}
+
+function widthEntries() {
+  const entries = []
+  for (const name of fs.readdirSync(STORE_DIR)) {
+    if (!/^workbench-.*\.ts$/.test(name)) continue
+    const text = fs.readFileSync(path.join(STORE_DIR, name), 'utf8')
+    for (const w of interfaceWidths(text)) entries.push({ file: name, ...w })
+  }
+  return entries
+}
+
+const entries = widthEntries()
+const writeBaseline = argv.includes('--write-baseline')
+if (writeBaseline) {
+  const existing = fs.existsSync(BASELINE_PATH)
+    ? JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8'))
+    : { over40Exempt: ['workbench-air.ts', 'workbench-barrage.ts'] }
+  const files = {}
+  for (const e of entries) files[e.file] = e.count
+  const payload = {
+    note: '端口宽度棘轮：只许降不许升。超过 40 项的切片须列进 over40Exempt，并在拆分后删除豁免。',
+    over40Exempt: existing.over40Exempt ?? [],
+    files,
+  }
+  fs.mkdirSync(path.dirname(BASELINE_PATH), { recursive: true })
+  fs.writeFileSync(BASELINE_PATH, `${JSON.stringify(payload, null, 2)}\n`, 'utf8')
+  console.log(`已写入宽度基线：${path.relative(ROOT_DIR(), BASELINE_PATH)}`)
+}
+
+const baseline = fs.existsSync(BASELINE_PATH)
+  ? JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8'))
+  : { over40Exempt: ['workbench-air.ts', 'workbench-barrage.ts'], files: {} }
+const exempt = new Set(baseline.over40Exempt ?? [])
+
+console.log('—— 端口宽度（棘轮）——')
+for (const e of entries) {
+  const base = baseline.files?.[e.file]
+  const over = e.count > WIDTH_HARD_LIMIT && !exempt.has(e.file)
+  if (base !== undefined && e.count > base) {
+    console.log(`   ★ ${e.file} / ${e.name}：${base} → ${e.count}（宽度增长）`)
+    problems += 1
+  } else if (over) {
+    console.log(
+      `   ★ ${e.file} / ${e.name}：${e.count} 项（超过 ${WIDTH_HARD_LIMIT} 红线且未豁免）`,
+    )
+    problems += 1
+  } else {
+    console.log(
+      `   ${e.file} / ${e.name}：${e.count} 项` +
+        (e.count > WIDTH_HARD_LIMIT ? '（豁免中，拆分后须删除豁免）' : ''),
+    )
+  }
+}
+
+console.log(problems === 0 ? '通过' : `★ 共 ${problems} 处问题（TDZ 或端口宽度）`)
 process.exit(problems === 0 ? 0 : 1)

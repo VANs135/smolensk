@@ -5,11 +5,12 @@
  * （15 个 function + 6 个 const：`settlementInProgress` / `breakdownWindows` / `setupWiggleParents` /
  * `setupWiggleOn` / `setupWiggleRemaining` / `breakdownTimingOf`）。
  *
- * 端口 **40 项**（2026-11-21 实测），两种接法：
- *   · 按值解构（37 项）：声明在建域点之前，或是**有提升的函数声明**（声明在 8k–25k 也能按值传）；
- *   · 走 `ports.X`（3 项）：`breakdownPool`(18046) / `initialSetupInProgress`(19481) / `gates`(20698)
- *     —— 声明在建域点之后，facade 用 `get` 访问器传，切片里写 `ports.x.value`（`gates` 是对象，写 `ports.gates`）。
- *     只在求值时读取，避免建 store 时撞 TDZ（§12.3 记录过一次同源事故）。
+ * 端口 **16 项**（2026-11-21 B-4 端口束试点后实测）：
+ *   · 3 个共享束：`core`（日志/撤销/闸门）、`board`（板面 ref/computed 与查询）、`helpers`（纯判据/格式化）；
+ *   · 8 个域对象/常量：NO_MOVEMENT_PHASES / session / groundMovement / airUnitTransit / selectedUnit /
+ *     choices / moveUnits / PHASE_LABELS；
+ *   · 5 个晚绑定访问器：breakdownPool / initialSetupInProgress / gates / specialPending / confirmMovePick。
+ * 切片顶部仍按原名从束里解构，函数体零改动；晚绑定项只在调用时读 `ports.x`。
  *
  * 序列上的特殊之处：**建域点就在原区间位置（7527）**，因为 `movePick`/`stackSelect`/`moveUnits` 等
  * 状态都声明在 1.1k–7.2k，若把域提前到 `groundMovement`(1110) 之前，就得为 18 项状态开 getter。
@@ -41,24 +42,46 @@ import type { CombatInteractionState } from '@/engine/rules/combat-interaction'
 import type { BreakdownCreateTiming } from '@/engine/rules/breakdown'
 import { canMoveInPhase } from '@/engine/rules/modes'
 import type { MoveUnitRuntime } from '@/engine/rules/move-interaction'
+import type { MoveInteractionState, GroupReachable } from '@/engine/rules/move-interaction'
+import type { MoveContext, StepFailure } from '@/engine/rules/move-types'
+import type * as Rules from '@/engine/rules'
+import type * as Geo from '@/engine/hex-geometry'
+import type * as Model from './workbench-model'
 import {
   SETUP_WIGGLE_BREAKDOWN_RADIUS,
   SETUP_WIGGLE_MAX_DIVISIONS,
   isSetupWiggleParent,
 } from '@/engine/rules/setup-wiggle'
 
-/** C5 移动交互的端口。37 项按值解构、3 项走 ports（见文件头）。 */
-export interface MovementDomainPorts {
-  /** ── 按值：建域点之前声明的状态/派生 ── */
-  NO_MOVEMENT_PHASES: readonly ConsolePhase[]
-  session: ReturnType<typeof useGameSessionStore>
+/** 撤销账的族名（与 facade 私有 `UndoFamily` 同构；本切片只登记 `move.step`） */
+export type MovementUndoFamily =
+  'move.step' | 'transport' | 'setup' | 'draft' | 'arrival' | 'cache' | 'snapshot'
+
+/**
+ * 端口束 1：日志 / 撤销账 / 闸门 —— 每个交互域都要用的同一批能力。
+ * 束化后它只占 1 个端口，而不是散成 5 项（见 2026-11-21 计划 §5 B-4）。
+ */
+export interface MovementCore {
+  pushLog: (
+    kind: WorkbenchLogEntry['kind'],
+    text: string,
+    rule?: string,
+    derivation?: Derivation,
+  ) => void
+  noteUndoable: (family: MovementUndoFamily, label: string, snapshot?: unknown) => number
+  requireAction: (key: ActionKey, action: string) => boolean
+  actionAllowedNow: (key: ActionKey) => boolean
+  refuseWhileLocked: (action: string) => boolean
+}
+
+/** 端口束 2：板面状态 —— 所有地面交互域共读的 ref / computed 与查询函数 */
+export interface MovementBoard {
   activeSide: ComputedRef<Side>
   phase: ComputedRef<ConsolePhase>
   segmentLocked: ComputedRef<boolean>
   units: Ref<ConsoleUnit[]>
   selectedId: Ref<string | null>
   lastStep: Ref<MoveStepSnapshot | null>
-  groundMovement: ReturnType<typeof createGroundMovementDomain>
   moveBlocked: ReturnType<typeof createGroundMovementDomain>['moveBlocked']
   moveInteraction: ReturnType<typeof createGroundMovementDomain>['moveInteraction']
   moveSessionSeq: Ref<number>
@@ -69,47 +92,87 @@ export interface MovementDomainPorts {
   transportHandlingUndo: Ref<TransportHandlingUndoEntry[]>
   combatState: Ref<CombatInteractionState | null>
   barrageState: Ref<BarrageInteractionState | null>
+  /** 13.3f-B：每单位最后一次地面入格的格号文本 */
+  lastGroundEntryByUnit: Ref<Record<string, string>>
+  activeMoveUnits: ComputedRef<ConsoleUnit[]>
+  moveContext: ComputedRef<MoveContext>
+  moveRuntime: ComputedRef<MoveUnitRuntime[]>
+  movePickPreviewInteraction: ComputedRef<MoveInteractionState | null>
+  groupReachable: ComputedRef<GroupReachable>
+  unitsAt: (hex: HexRef) => ConsoleUnit[]
+  friendlyUnitsAt: (hex: HexRef) => ConsoleUnit[]
+  movePickPoolAt: (hex: HexRef) => ConsoleUnit[]
+  defaultMovePickIdsAt: (hex: HexRef) => string[]
+}
+
+/** 端口束 3：纯判据 / 格式化 —— 全部是可提升的函数声明或静态 import */
+export interface MovementHelpers {
+  noteUnitLeftOwnBridgeHex: (unit: ConsoleUnit) => void
+  unitOfInstance: (instanceId: string) => ConsoleUnit | undefined
+  noteUnitEnteredHex: (unit: ConsoleUnit, hex: HexRef) => void
+  nationalityOfUnit: (unit: ConsoleUnit) => string
+  reserveMarkerStatusOf: (side: Side) => { cap: number; used: number; remaining: number }
+  reservedHexes: (side: Side) => string[]
+  hexKeyOf: (unit: ConsoleUnit) => string
+  hexTextOf: (hex: HexRef) => string
+  moveFailureNote: (failure: StepFailure) => { rule: string; text: string }
+  applyFormationFuelCoverageToIds: (ids: readonly string[]) => void
+  resolveSpecialCombatAt: (hex: HexRef, enteringSide: Side, byAdvance?: boolean) => void
+  hexLabel: typeof Model.hexLabel
+  allowReserveEntryAtHex: typeof Rules.allowReserveEntryAtHex
+  previewStep: typeof Rules.previewStep
+  planStep: typeof Rules.planStep
+  reachableNodeAt: typeof Rules.reachableNodeAt
+  sameHex: typeof Geo.sameHex
+  areAdjacent: typeof Geo.areAdjacent
+}
+
+/** C5 移动交互的端口：3 个共享束 + 8 个域对象 + 5 个晚绑定访问器（2026-11-21 实测 16 项）。 */
+export interface MovementDomainPorts {
+  /** ── 按值：常量 / 会话 / 域对象 ── */
+  NO_MOVEMENT_PHASES: readonly ConsolePhase[]
+  session: ReturnType<typeof useGameSessionStore>
+  groundMovement: ReturnType<typeof createGroundMovementDomain>
   airUnitTransit: ReturnType<typeof createAirDomain>['airUnitTransit']
   selectedUnit: ComputedRef<ConsoleUnit | null>
   choices: ComputedRef<UnitRecordView[]>
   moveUnits: ComputedRef<ConsoleUnit[]>
   PHASE_LABELS: Record<ConsolePhase, string>
-  /** ── 按值：函数声明（可提升，声明在 8k–25k 也能按值传） ── */
-  refuseWhileLocked: (action: string) => boolean
-  noteUnitLeftOwnBridgeHex: (unit: ConsoleUnit) => void
-  unitOfInstance: (instanceId: string) => ConsoleUnit | undefined
-  pushLog: (
-    kind: WorkbenchLogEntry['kind'],
-    text: string,
-    rule?: string,
-    derivation?: Derivation,
-  ) => void
-  unitsAt: (hex: HexRef) => ConsoleUnit[]
-  friendlyUnitsAt: (hex: HexRef) => ConsoleUnit[]
-  movePickPoolAt: (hex: HexRef) => ConsoleUnit[]
-  defaultMovePickIdsAt: (hex: HexRef) => string[]
-  applyFormationFuelCoverageToIds: (ids: readonly string[]) => void
-  actionAllowedNow: (key: ActionKey) => boolean
-  requireAction: (key: ActionKey, action: string) => boolean
-  noteUnitEnteredHex: (unit: ConsoleUnit, hex: HexRef) => void
-  nationalityOfUnit: (unit: ConsoleUnit) => string
-  /** ── 以下 3 项晚绑定（声明在 18046 / 19481 / 20698，晚于建域点） ── */
+  /** ── 端口束（B-4 试点） ── */
+  core: MovementCore
+  board: MovementBoard
+  helpers: MovementHelpers
+  /** ── 晚绑定：声明在建域点之后，只在求值时读取 ── */
   breakdownPool: Ref<Record<string, number>>
   initialSetupInProgress: Ref<boolean>
   gates: WorkbenchGates
+  specialPending: Ref<Model.SpecialCombatPending | null>
+  confirmMovePick: () => boolean
 }
 
 export function createMovementDomain(ports: MovementDomainPorts) {
   const {
     NO_MOVEMENT_PHASES,
     session,
+    groundMovement,
+    airUnitTransit,
+    selectedUnit,
+    choices,
+    moveUnits,
+    PHASE_LABELS,
+  } = ports
+
+  /** 端口束 1：日志 / 撤销 / 闸门 */
+  const { pushLog, noteUndoable, requireAction, actionAllowedNow, refuseWhileLocked } = ports.core
+
+  /** 端口束 2：板面状态 */
+  const {
     activeSide,
     phase,
     segmentLocked,
     units,
     selectedId,
     lastStep,
-    groundMovement,
     moveBlocked,
     moveInteraction,
     moveSessionSeq,
@@ -120,25 +183,39 @@ export function createMovementDomain(ports: MovementDomainPorts) {
     transportHandlingUndo,
     combatState,
     barrageState,
-    airUnitTransit,
-    selectedUnit,
-    choices,
-    moveUnits,
-    PHASE_LABELS,
-    refuseWhileLocked,
-    noteUnitLeftOwnBridgeHex,
-    unitOfInstance,
-    pushLog,
+    lastGroundEntryByUnit,
+    activeMoveUnits,
+    moveContext,
+    moveRuntime,
+    movePickPreviewInteraction,
+    groupReachable,
     unitsAt,
     friendlyUnitsAt,
     movePickPoolAt,
     defaultMovePickIdsAt,
-    applyFormationFuelCoverageToIds,
-    actionAllowedNow,
-    requireAction,
+  } = ports.board
+
+  /** 端口束 3：纯判据 / 格式化 */
+  const {
+    noteUnitLeftOwnBridgeHex,
+    unitOfInstance,
     noteUnitEnteredHex,
     nationalityOfUnit,
-  } = ports
+    reserveMarkerStatusOf,
+    reservedHexes,
+    hexKeyOf,
+    hexTextOf,
+    moveFailureNote,
+    applyFormationFuelCoverageToIds,
+    resolveSpecialCombatAt,
+    hexLabel,
+    allowReserveEntryAtHex,
+    previewStep,
+    planStep,
+    reachableNodeAt,
+    sameHex,
+    areAdjacent,
+  } = ports.helpers
 
   /* ──────────────── C5 移动交互：选子 → 范围 → 逐格 → 结束/撤销 ──────────────── */
 
@@ -583,10 +660,329 @@ export function createMovementDomain(ports: MovementDomainPorts) {
       '6.1',
     )
   }
+  /**
+   * 5.4a：该单位此刻能否**转入预备模式**（按格额度闸门；电子版＝程序校验）
+   *
+   * 用户 2026-11-06 裁定：
+   *   - 一枚标记＝**一个格子**里处于预备模式的那部分单位（5.4a / 4.8b）⇒ 同格已有预备单位
+   *     ⇒ 不额外占额度；同格没有 ⇒ 占 1 格；
+   *   - 剧本给几枚 ＝ 能同时保持几个格子处于预备；**没给就是 0** ⇒ 该方完全没有预备权
+   *     （进入即拒，不是"不校验"）；
+   *   - 转入那一刻即占（原文「完成 25% 移动后才需要放置标记」是实体版省标记的宽容条款）。
+   *
+   * 额度由 `units` 的当前模式**派生**（见 `reservedHexes`），不维护账本 ⇒ 被拒时单位仍停在
+   * 原模式，不留半截状态。
+   *
+   * @returns 能否转入（被拒时已写日志）
+   */
+  function canEnterReserveMode(unit: ConsoleUnit): boolean {
+    const status = reserveMarkerStatusOf(unit.side)
+    const outcome = allowReserveEntryAtHex({
+      side: unit.side,
+      cap: status.cap,
+      hex: hexKeyOf(unit),
+      occupiedHexes: reservedHexes(unit.side),
+    })
+    if (outcome.ok) return true
+    const detail = outcome.reason.startsWith('noReserveMarkerAvailable')
+      ? '剧本未给本方预备标记（0 枚），无预备权（5.4a）'
+      : `本方的预备标记已用完（${String(status.cap)} 个格子），不能再把一个格子转入预备（5.4a）`
+    pushLog('warning', `${unit.name} 不能转入预备模式：${detail}`, outcome.rule)
+    return false
+  }
+
+  /** C5：提交一步（引擎给出 patches 与新的交互状态） */
+  function commitStep(to: HexRef, path: readonly HexRef[]): boolean {
+    const ok = groundMovement.commitStep(to, path)
+    if (ok) {
+      // 13.3f-B：记「本阶段最后一次地面入格」，供移动交互被替换后仍能换轨
+      const steps = moveInteraction.value?.steps ?? []
+      const step = steps[steps.length - 1]
+      if (step !== undefined && step.kind === 'step') {
+        const next = { ...lastGroundEntryByUnit.value }
+        for (const id of step.movedIds) next[id] = hexTextOf(to)
+        lastGroundEntryByUnit.value = next
+      }
+      // 用户 2026-11-20：全局撤销账 —— 每一步都是一笔可撤操作
+      noteUndoable('move.step', `移动一步 → ${hexLabel(to)}`)
+    }
+    return ok
+  }
+
+  /** 13.3f-B：撤销/取消后按移动交互里剩余的步骤回算地面入格账本 */
+  function syncGroundEntries(unitIds: readonly string[]): void {
+    const steps = moveInteraction.value?.steps ?? []
+    const next = { ...lastGroundEntryByUnit.value }
+    for (const id of unitIds) {
+      let last: HexRef | null = null
+      for (let index = steps.length - 1; index >= 0; index -= 1) {
+        const step = steps[index]!
+        if (step.kind === 'step' && step.movedIds.includes(id)) {
+          last = step.to
+          break
+        }
+      }
+      if (last === null) delete next[id]
+      else next[id] = hexTextOf(last)
+    }
+    lastGroundEntryByUnit.value = next
+  }
+
+  /**
+   * 9.14：移动进入某格后的**特殊战斗**触发
+   *
+   * 前提（规则原文）：「（敌方）可攻击单位**进入**该格」——故要传本次**实际移动**的单位
+   * （`movedIds`），由进入方阵营与 `attackCapable` 决定是否成立；引擎会再核一遍。
+   * 位移落点由玩家在地图上选（`specialPending`），因此移动路径在待决清空前应当停住。
+   */
+  function triggerSpecialCombatAfterStep(to: HexRef, movedIds: readonly string[]): void {
+    if (ports.specialPending.value !== null) return
+    const enteringSide = movedIds
+      .map((id) => units.value.find((unit) => unit.instanceId === id)?.side)
+      .find((side) => side !== undefined)
+    if (enteringSide === undefined) return
+    resolveSpecialCombatAt(to, enteringSide)
+  }
+
+  /**
+   * 沿路径逐格推进（点远处的可达格 = 沿预览路径一直走过去；6.1 逐格移动）
+   *
+   * 每一格都重新问引擎（`previewStep`）——「走一格、范围重算一次」由此自然成立；
+   * 遇到 4.5a-A 的敌方 ZOC 会**停下来先问玩家**，确认后从该步继续。
+   * `path` 含起点，故从下标 1 起。
+   */
+  function advanceAlongPath(path: readonly HexRef[]): void {
+    for (let index = 1; index < path.length; index += 1) {
+      if (moveInteraction.value === null) return
+      if (activeMoveUnits.value.length === 0) return
+      const to = path[index]!
+      const preview = previewStep({
+        context: moveContext.value,
+        interaction: moveInteraction.value,
+        runtime: moveRuntime.value,
+        to,
+        path: path.slice(0, index + 1),
+      })
+      if (!preview.ok) {
+        const blocked = preview.blocked
+        if (blocked !== undefined) {
+          const note = moveFailureNote(blocked)
+          moveBlocked.value = {
+            rule: blocked.rule,
+            reason: `走不进 ${to.col}.${to.row}：${note.text}`,
+          }
+          pushLog(
+            'warning',
+            `走到 ${to.col}.${to.row} 停住：${note.text}（${blocked.rule}）`,
+            blocked.rule,
+          )
+        }
+        return
+      }
+      /*
+       * 4.5a-A：轮式单位进入未抵消的敌方 ZOC ⇒ **必须就地停止**。这是规则既定后果，
+       * 不再弹「进入并突袭 / 进入停下」确认面板（用户裁定：轮式不该因守规则多一步确认）。
+       * 直接落这一步；同行而仍能走的步行/履带单位继续沿原路径推进。
+       * 停车的单位随后照常留在突袭候选里（`commitStep` 记 `zocStoppedIds`），
+       * 相邻敌方格的高亮与地图上的突袭入口与其它单位完全一致。
+       */
+      if (preview.needsConfirm) {
+        pushLog(
+          'warning',
+          `进入 ${to.col}.${to.row} 的敌方 ZOC：轮式单位就地停止（4.5a-A；仍可对相邻敌方格发起突袭）`,
+          '4.5a-A',
+        )
+        if (!commitStep(to, path.slice(0, index + 1))) return
+        if (ports.specialPending.value !== null) return
+        continue
+      }
+      if (!commitStep(to, path.slice(0, index + 1))) return
+      // 9.14：该步触发了设施夺取的待决（位移落点待选）⇒ 停住推进，先让玩家处置
+      if (ports.specialPending.value !== null) return
+    }
+  }
+
+  /**
+   * 2026-11-18：把画布给的拖动路径规范化成「起点开头、逐格相邻」的序列。
+   *
+   * 落位（`moveAlongDraggedPath`）与预览（`previewDraggedPath`）共用这一份形状校验，
+   * 免得两处各写一遍、日后一处改了一处忘。
+   */
+  function normalizeDraggedPath(
+    path: readonly HexRef[],
+  ): { ok: true; full: HexRef[] } | { ok: false; rule: string; reason: string } {
+    const pick = movePick.value
+    const start = moveInteraction.value?.start ?? pick?.hex ?? null
+    if (start === null) return { ok: false, rule: '6.1', reason: '尚未选择要移动的单位' }
+    const full: HexRef[] = [{ ...start }]
+    for (const hex of path) {
+      const last = full[full.length - 1]!
+      if (sameHex(last, hex)) continue
+      if (!areAdjacent(last, hex)) return { ok: false, rule: '6.1', reason: '拖动路径不连续' }
+      full.push({ ...hex })
+    }
+    return { ok: true, full }
+  }
+
+  /**
+   * 2026-11-18：**拖动路径预览**（只读，画布拖动中每换一格调一次）
+   *
+   * 与 `moveAlongDraggedPath` 同一串判据（`simulateMovePath` 的纯预演）；只回答
+   * "整条路径此刻走不走得通"，**不写步、不动单位、不写 `moveBlocked`**。
+   * 画布据此决定要不要画落位终点：走不通时只留路径线（用户 2026-11-18）。
+   */
+  function previewDraggedPath(path: readonly HexRef[]): { ok: boolean } {
+    const normalized = normalizeDraggedPath(path)
+    if (!normalized.ok || normalized.full.length < 2) return { ok: false }
+    const simulation = moveInteraction.value ?? movePickPreviewInteraction.value
+    if (simulation === null) return { ok: false }
+    return { ok: simulateMovePath(simulation, moveRuntime.value, normalized.full).ok }
+  }
+
+  /**
+   * 2026-11-18：**拖拽落子**——沿玩家实际拖过的路径逐步判通行，全部合法才走。
+   *
+   * 与点目标格共用同一套引擎判据（`planStep`／`commitStep`）：先按路径逐段预演
+   * （`planStep` 不写盘面），任一段不可进入就整次不动并报「无法通行」＋引擎给的原因；
+   * 全部通过后逐段提交，MP 与账本按 **实际走过的格** 记账，撤销仍逐步回退。
+   *
+   * `path` 含起点（画布已按六角直线补全成相邻格序列）。
+   */
+  function moveAlongDraggedPath(path: readonly HexRef[]): boolean {
+    // 规范化：起点开头、去重、拒绝不相邻的段（画布已补全；这里只守引擎输入形状）
+    const normalized = normalizeDraggedPath(path)
+    if (!normalized.ok) {
+      moveBlocked.value = { rule: normalized.rule, reason: `无法通行：${normalized.reason}` }
+      pushLog('warning', moveBlocked.value.reason, normalized.rule)
+      return false
+    }
+    const full = normalized.full
+    if (full.length < 2) return false
+    const simulation = moveInteraction.value ?? movePickPreviewInteraction.value
+    if (simulation === null) return false
+    const dry = simulateMovePath(simulation, moveRuntime.value, full)
+    if (!dry.ok) {
+      moveBlocked.value = { rule: dry.rule, reason: `无法通行：${dry.reason}` }
+      pushLog('warning', `无法通行：${dry.reason}（${dry.rule}）`, dry.rule)
+      return false
+    }
+    if (moveInteraction.value === null && !ports.confirmMovePick()) return false
+    advanceAlongPath(full)
+    return true
+  }
+
+  /** 拖拽路径的**纯预演**：按当前引擎判据逐段算一遍，不写盘面 */
+  function simulateMovePath(
+    interaction: MoveInteractionState,
+    runtime: readonly MoveUnitRuntime[],
+    path: readonly HexRef[],
+  ): { ok: true } | { ok: false; rule: string; reason: string } {
+    let simulated = interaction
+    const simulatedRuntime = runtime.map((item) => ({ ...item, hex: { ...item.hex } }))
+    for (let index = 1; index < path.length; index += 1) {
+      const to = path[index]!
+      /*
+       * 用户 2026-11-18：中文原因要用**引擎的原始 StepFailure**（`reason` 是内部码）。
+       * `planStep` 的失败会把代码和 detail 拼成一条字符串（如 `enemyOccupied（14.9）`），
+       * 拿它反过来查表就查不到 ⇒ 先问一次纯预览，拿到原始代码再翻译。
+       */
+      const preview = previewStep({
+        context: moveContext.value,
+        interaction: simulated,
+        runtime: simulatedRuntime,
+        to,
+        path: path.slice(0, index + 1),
+      })
+      if (!preview.ok) {
+        const blocked = preview.blocked
+        if (blocked === undefined) {
+          return { ok: false, rule: '6.1', reason: '本次移动已经结束' }
+        }
+        const note = moveFailureNote(blocked)
+        return { ok: false, rule: blocked.rule, reason: `${to.col}.${to.row}：${note.text}` }
+      }
+      const result = planStep({
+        context: moveContext.value,
+        interaction: simulated,
+        runtime: simulatedRuntime,
+        to,
+        path: path.slice(0, index + 1),
+      })
+      if (!result.ok) {
+        return { ok: false, rule: result.rule, reason: `该步不可进入（${result.rule}）` }
+      }
+      for (const patch of result.data.patches) {
+        const at = simulatedRuntime.findIndex((item) => item.unitId === patch.unitId)
+        if (at >= 0) simulatedRuntime[at] = { ...patch, hex: { ...patch.hex } }
+      }
+      simulated = result.data.interaction
+      // 中途已被迫收束（进 ZOC 停车 / 最小移动 / 战略模式）⇒ 路径后段走不了
+      if (index < path.length - 1) {
+        const stillActive = simulated.unitIds.some((id) => {
+          const item = simulatedRuntime.find((entry) => entry.unitId === id)
+          return item !== undefined && !item.ended
+        })
+        if (!stillActive) {
+          return {
+            ok: false,
+            rule: '4.5a-A',
+            reason: `${to.col}.${to.row} 之后必须停止：进入敌方 ZOC 必须停（4.5a-A）`,
+          }
+        }
+      }
+    }
+    return { ok: true }
+  }
+
+  /** C5：点击某格走动（移动交互入口） */
+  function tryMoveTo(hex: HexRef): void {
+    const interaction = moveInteraction.value
+    if (interaction === null) return
+    // 9.2 / 10.0：战斗或轰炸正在结算 ⇒ 这一步也不许走（第六批 BUG ②）
+    if (refuseWhileSettling('继续移动')) return
+    const node = reachableNodeAt(groupReachable.value.hexes, hex)
+    if (node === null) {
+      // 不在可到达范围内：给出引擎对该单步的判定，说明为什么不能走
+      const probe = previewStep({
+        context: moveContext.value,
+        interaction,
+        runtime: moveRuntime.value,
+        to: hex,
+      })
+      const blocked = probe.blocked
+      const blockedInfo =
+        blocked === undefined
+          ? { rule: '6.1', reason: '该格不在本次移动的可到达范围内' }
+          : {
+              rule: blocked.rule,
+              // 用户 2026-11-18：界面只写中文原因，引擎内部码不外泄
+              reason: `走不进 ${hex.col}.${hex.row}：${moveFailureNote(blocked).text}`,
+            }
+      moveBlocked.value = blockedInfo
+      pushLog(
+        'warning',
+        `不能走到 ${hex.col}.${hex.row}：${blockedInfo.reason}（${blockedInfo.rule}）`,
+        blockedInfo.rule,
+      )
+      return
+    }
+    advanceAlongPath(node.path)
+  }
+
   return {
     nameOf,
     unitNameOf,
     applyMovePatches,
+    canEnterReserveMode,
+    commitStep,
+    syncGroundEntries,
+    triggerSpecialCombatAfterStep,
+    advanceAlongPath,
+    normalizeDraggedPath,
+    previewDraggedPath,
+    moveAlongDraggedPath,
+    simulateMovePath,
+    tryMoveTo,
     refuseWhileSettling,
     beginMoveFor,
     closeBreakdownWindows,
