@@ -2302,7 +2302,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /*
    * B3-2b18（2026-11-21）：6 个声明搬进 `workbench-supply-labels.ts`（含 `SUPPLY_STATUS_LABELS` 常量）。
-   * ★ 4 个依赖全是 `function` 声明（提升）、5 个消费者全在运行期 ⇒ 无 TDZ 约束，装配点就近选在此处。
+   * ★ 4 个依赖全是 `function` 声明（提升）、6 处调用（`placeAt` / `removeAt` 的摆子钩子、
+   *   `addSupplySource` / `beginSupplyCheckNow` / `chooseSupplySourceNow` / `pickSupplySourceAtHexNow`
+   *   的日志文案 + store 返回）全在运行期 ⇒ 无 TDZ 约束，装配点就近选在此处。
    * ★ `affectsSupplyNet` 不在公开面，但摆子钩子要用 ⇒ 仍 return 并解构。
    * ★ 端口 9 项 = 4 依赖 + 5 返回。
    */

@@ -8,7 +8,8 @@
  *
  * ## 为什么能放任意装配点
  *   4 个依赖（`clearSupply` / `dumpById` / `pushLog` / `supplyStockLabelOf`）全是 `function` 声明（提升），
- *   5 个消费者（7666/7683 的摆子钩子、10891/10951/10982/11133 的日志文案、store 返回）全在运行期，
+ *   6 处调用（`placeAt` / `removeAt` 的摆子钩子；`addSupplySource` / `beginSupplyCheckNow` /
+ *   `chooseSupplySourceNow` / `pickSupplySourceAtHexNow` 的日志文案；store 返回）全在运行期，
  *   故本域**没有** TDZ 约束，装配点选在 airFacility 段之后只为就近读。
  *
  * ## 端口（9 项 = 4 依赖 + 5 返回）
