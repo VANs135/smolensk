@@ -8,6 +8,7 @@
     "workbench-air-primitives.ts": 6,
     "workbench-air-state.ts": 13,
     "workbench-air.ts": 76,
+    "workbench-barrage-entry.ts": 24,
     "workbench-barrage.ts": 51,
     "workbench-combat-advance.ts": 20,
     "workbench-combat-ignore.ts": 5,
