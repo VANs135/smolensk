@@ -1233,7 +1233,11 @@ export const useTutorialStore = defineStore('tutorial', () => {
     )
     if (tk === undefined || tk.steps <= 0) return false
 
-    // ① 加油（12.5c 编队法）：从 19.26 的教学补给堆付 1 SP；没油就一步也走不了
+    /*
+     * ① 加油：18 Tk Div 是**独立单位**（3.2f）⇒ 只能走 12.5c-B 的 HQ 法或 12.5c-C 的
+     * 单独单位法；编队法（12.5c-A）要求"一整个多单位编队"，对它不成立。教学里 19.26
+     * 没有苏军指挥部在场，故用**单独单位法**：各 1 T，从脚下补给堆扣 1 SP。
+     */
     if (!tk.fuelled) {
       const dump = workbench.spDumps.find((item) => item.id === 'tutorial-su-supply')
       if (dump === undefined || dump.sp < 1) return false
@@ -1241,7 +1245,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
       tk.fuelled = true
       workbench.pushLog(
         'info',
-        '教学：苏军 18 Tk Div 在 19.26 用编队法加油（12.5c，扣补给堆 1 SP）',
+        '教学：苏军 18 Tk Div（独立单位）单独单位法加油（12.5c-C，扣补给堆 1 SP）',
         '12.5',
       )
     }
