@@ -68,4 +68,13 @@ describe('教学模式后三步：只认真实事件，无跳过通道', () => {
     expect(mapView).toContain('加油 · ${workbench.fuelMethodLabel')
     expect(source).toContain("texts: ['加油 · 编队法']")
   })
+
+  it('改模式这步的指引必须交代「右键 + 展开折叠分组」', () => {
+    // 用户 2026-11-22：「指引细一点，包括告诉玩家要右键点击」
+    // 「改变朝向 → 移动模式」挂在右键菜单的「模式改变」分组里且默认收起，
+    // 只说菜单项名字，玩家会当场找不到入口。
+    expect(source).toContain('右键点在堆上')
+    expect(source).toContain('「模式改变」')
+    expect(source).toContain('展开')
+  })
 })
