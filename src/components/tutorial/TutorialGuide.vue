@@ -213,16 +213,23 @@ watch(
       <p class="tut__hint">{{ tutorial.currentStep.hint }}</p>
     </aside>
 
-    <aside v-else-if="tutorial.completed" class="tut__card tut__card--done">
-      <strong class="tut__title">教学完成</strong>
-      <p v-if="tutorial.reactionOutcome !== null" class="tut__intro">
-        苏军反击战果 {{ tutorial.reactionOutcome }}：攻方损失，进攻失败。
-      </p>
-      <p v-else class="tut__intro">苏军由 AI 指挥；本回合教学结束，后续按 2.2 流程继续。</p>
-      <button type="button" class="tut__close" aria-label="关闭教学" @click="tutorial.stop()">
-        关闭
-      </button>
-    </aside>
+    <div
+      v-else-if="tutorial.completed"
+      class="tut__modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="tut-done-title"
+    >
+      <section class="tut__dialog">
+        <strong id="tut-done-title" class="tut__done-title">教程结束</strong>
+        <p class="tut__intro">维捷布斯克已由我部拿下，这一天的教学到此收束。</p>
+        <p v-if="tutorial.reactionOutcome !== null" class="tut__intro">
+          苏军反击战果 {{ tutorial.reactionOutcome }}：攻方损失，进攻失败。
+        </p>
+        <p v-else class="tut__intro">苏军由 AI 指挥；本回合教学结束，后续按 2.2 流程继续。</p>
+        <button type="button" class="tut__done-close" @click="tutorial.stop()">关闭</button>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -313,10 +320,46 @@ watch(
   opacity: 0.8;
 }
 
-.tut__card--done {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
+/*
+ * 教学收束＝弹窗（用户 2026-11-22）：教学走完 25 步后不能只在小角标一张"完成"卡，
+ * 玩家可能根本没注意到。遮罩 + 居中对话框把「教程结束」摆在盘面正中，关掉即退出教学。
+ */
+.tut__modal {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--layer-modal) + 3);
+  display: grid;
+  padding: 24px;
+  background: rgb(24 22 18 / 46%);
+  place-items: center;
+  pointer-events: auto;
+}
+
+.tut__dialog {
+  width: min(400px, calc(100vw - 32px));
+  padding: 20px 22px 18px;
+  color: var(--color-ink);
+  text-align: center;
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgb(32 30 26 / 28%);
+}
+
+.tut__done-title {
+  display: block;
+  font-size: var(--text-base-size);
+  letter-spacing: 0.04em;
+}
+
+.tut__done-close {
+  margin-top: 14px;
+  padding: 7px 22px;
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+  border: 0;
+  border-radius: 8px;
+  font-size: var(--text-sm);
+  cursor: pointer;
 }
 </style>

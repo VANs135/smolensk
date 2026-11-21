@@ -596,8 +596,12 @@ export const useTutorialStore = defineStore('tutorial', () => {
         return { hex: stackHex.value, texts: ['加油 · 编队法'], buttonTexts: ['加油 · 编队法'] }
       }
       case 'move-mode':
-        // 模式切换在右键菜单里（map-view 的动作表「模式改变 · 5.4」）
-        return { texts: ['改变朝向 → 移动模式'] }
+        /*
+         * 5.4a：改模式只有右键菜单这一个入口（项名「改变朝向 → 移动模式」）。
+         * 该子菜单默认**折叠**、项在展开后才渲染 ⇒ 单靠文字定位会一个环都画不出来，
+         * 故同时给堆叠格：玩家先看到单位被框住，右键再展开「模式改变」组。
+         */
+        return { hex: stackHex.value, texts: ['改变朝向 → 移动模式'] }
       case 'scout':
         return { hex: SCOUT_HEX, texts: ['开拔'] }
       case 'scout-supply':
@@ -615,7 +619,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
       case 'artillery-move':
         return { hex: MOVE_HEX, texts: ['开拔'] }
       case 'barrage-city':
-        return { hex: CITY_HEX, texts: ['弹幕'] }
+        // 10.1：火炮开火的入口是右键敌方目标后的菜单项「炮击」——面板里并没有叫「弹幕」的按钮
+        return { hex: CITY_HEX, texts: ['炮击', '弹幕'] }
       case 'capture-city':
         return { hex: CITY_HEX, texts: ['进攻'] }
       case 'combat-supply': {

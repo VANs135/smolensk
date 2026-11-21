@@ -45,4 +45,27 @@ describe('教学模式后三步：只认真实事件，无跳过通道', () => {
     expect(guide).toContain('tutorial.stop()')
     expect(guide).not.toContain('tut__skip')
   })
+
+  it('教学收束：完成态是居中弹窗「教程结束」，不再只是角标小卡', () => {
+    // 用户 2026-11-22：走完 25 步要弹窗告诉玩家教程结束，角标小卡玩家根本注意不到
+    expect(guide).toContain('tut__modal')
+    expect(guide).toContain('role="dialog"')
+    expect(guide).toContain('教程结束')
+    expect(guide).toContain('tut__done-close')
+    // 旧的小卡形态必须收掉，否则弹窗与小卡会同时出现
+    expect(guide).not.toContain('tut__card--done')
+  })
+
+  it('引导指向的按钮文字必须是界面上真有的控件', () => {
+    const mapView = readFileSync('src/stores/map-view.ts', 'utf8')
+    // 10.1：火炮入口是右键菜单项「炮击」——面板里没有叫「弹幕」的按钮
+    expect(mapView).toContain("label: '炮击'")
+    expect(source).toContain("texts: ['炮击', '弹幕']")
+    // 5.4a：改模式项在**折叠**子菜单里 ⇒ 必须同时给格子，否则一个环都画不出来
+    expect(source).toContain("hex: stackHex.value, texts: ['改变朝向 → 移动模式']")
+    expect(mapView).toContain("pushMode('move.orientation.toggle', '改变朝向 → 移动模式'")
+    // 12.5c：右键加油项的真实文案拼自 fuelMethodLabel（「编队法（12.5c-A）」），教学只用前缀
+    expect(mapView).toContain('加油 · ${workbench.fuelMethodLabel')
+    expect(source).toContain("texts: ['加油 · 编队法']")
+  })
 })
