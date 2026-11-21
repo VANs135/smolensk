@@ -43,3 +43,7 @@ backup/
 /o9.txt
 /o11.txt
 /tmp-receipt.txt
+
+# 迁移脚本的临时备份，禁止入库
+*.bak
+*.b25bak
