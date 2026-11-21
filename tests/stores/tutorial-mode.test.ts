@@ -480,8 +480,9 @@ describe('教学模式：Vitebsk', () => {
     // 9.4b / 9.7：守方宣布地形并定初始攻防比
     expect(ctx.w.declareCombatTerrainStep()).toBe(true)
     expect(ctx.w.combatState?.step).toBe('surprise')
-    combatFixedSurprise.value = { die: 12, shiftDie: 6 }
-    combatFixedDie.value = 8
+    // 教学演出：这一步的奇袭/骰面由教学脚本钉死（否则 2d6 随机一输就卡死）
+    expect(combatFixedSurprise.value).toEqual({ die: 12, shiftDie: 6 })
+    expect(combatFixedDie.value).toBe(8)
     expect(ctx.w.rollCombatSurprise()).toBe(true)
     if (ctx.w.combatAwaitingShiftDie) expect(ctx.w.rollCombatShiftDie()).toBe(true)
     expect(ctx.w.rollCombatDice()).toBe(true)

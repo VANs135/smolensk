@@ -1402,6 +1402,22 @@ export const useTutorialStore = defineStore('tutorial', () => {
         )
       }
     }
+    /*
+     * 2026-11-21：第 25 步是教学的最后一仗，而教学**不能跳步**——若让 2d6 随机掷，
+     * 玩家一次打输就再也走不下去。故这一步同样按演出钉死：
+     * 攻方奇袭（2d6=12）横移 6 列上到 24:1，9.9 骰面取 8 ⇒ Ae2 DL2o3DG，
+     * 守方选项点数换军力损失后城里守军全灭，攻方 9.12g 推进进城。
+     * 城格一易手就收回固定骰，别的回合照常随机。
+     */
+    if (step?.id === 'capture-city') {
+      if (cityTaken()) {
+        combatFixedSurprise.value = null
+        combatFixedDie.value = null
+      } else if (workbench.combatState === null) {
+        combatFixedSurprise.value = { die: 12, shiftDie: 6 }
+        combatFixedDie.value = 8
+      }
+    }
     return step
   })
 
