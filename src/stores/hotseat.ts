@@ -481,9 +481,10 @@ export const useHotseatStore = defineStore('hotseat', () => {
   /**
    * 2026-11-21：**脚本接管的一方**（教学等固定流程用）
    *
-   * 教学模式是独立的一套流程（`tutorial.ts` 自带 `active`/步骤机/固定骰），
-   * 不能和普通 PvE 的通用 AI 混在一起 —— 否则同一个 `airInputs` 会被两边抢写。
-   * 教学在 `startFor()` 里登记 `'soviet'`、`stop()` 里清空；登记期间通用 AI 一律让位。
+   * 教学模式不是另一种对局类型，而是 **PvE 外壳**：玩家执一方、UI 与隐藏信息照常隔离，
+   * 玩家按引导操作；苏军的行动由 `tutorial.ts` 的脚本固定代替 AI 决策。
+   * 登记期间通用 AI 一律让位 —— 否则同一个 `airInputs` 会被脚本和 AI 抢写。
+   * 教学在 `startFor()` 登记 `'soviet'`、`stop()` 清空。
    */
   const scriptedSide = ref<Side | null>(null)
   function setScriptedSide(side: Side | null): void {

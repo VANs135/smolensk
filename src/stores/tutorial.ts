@@ -198,10 +198,16 @@ export const useTutorialStore = defineStore('tutorial', () => {
     scriptApplied.value = false
     setTutorialSovietFirstTurnFullMa(true)
     /*
-     * 2026-11-21：教学模式是**独立的一套流程**，不与普通 PvE 的通用 AI 混用。
-     * 这里把苏军登记为「脚本接管方」，hotseat 的通用 AI 在登记期间一律让位，
-     * 苏军的每一步（含拦截）都由本文件的教学脚本按固定流程执行。
+     * 2026-11-21（用户口径）：教学不是另一种对局类型，而是**PvE 外壳** ——
+     * 玩家执轴心、视角与隐藏信息照常隔离（`syncViewerToDefault` 归位到非 AI 方），
+     * 玩家按引导一步步操作；**苏军的行动由本文件的脚本固定代替 AI 决策**。
+     * 因此这里补一次模式兜底（初设未锁时才生效，锁了说明召唤方已设过），
+     * 并把苏军登记为「脚本接管方」：hotseat 的通用 AI 在登记期间让位，不抢 `airInputs`。
      */
+    if (!hotseat.setupLocked && (hotseat.mode !== 'pve' || hotseat.aiSide !== 'soviet')) {
+      hotseat.setMode('pve')
+      hotseat.setAiSide('soviet')
+    }
     hotseat.setScriptedSide('soviet')
   }
 
