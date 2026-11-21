@@ -527,9 +527,9 @@ describe('教学模式：Vitebsk', () => {
     // 城格易手 ⇒ 教学最后一步也随之收束
     await nextTick()
     expect(tutorial.currentStep ?? null).toBeNull()
-    // 固定骰是模块级演出开关，用完必须收回，否则会污染其他用例的随机骰
-    combatFixedDie.value = null
-    combatFixedSurprise.value = null
+    // 教学收束时产品必须自己收回演出固定骰，否则本局后续战斗全被钉死（此处不再手动兜底）
+    expect(combatFixedDie.value).toBeNull()
+    expect(combatFixedSurprise.value).toBeNull()
     tutorial.stop()
   }, 120_000)
 

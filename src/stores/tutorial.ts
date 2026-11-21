@@ -218,6 +218,9 @@ export const useTutorialStore = defineStore('tutorial', () => {
 
   function stop(): void {
     active.value = false
+    // 中途退出教学同样要收回演出固定骰（见 cursor 推进处的说明）
+    combatFixedDie.value = null
+    combatFixedSurprise.value = null
     setTutorialSovietFirstTurnFullMa(false)
     hotseat.setScriptedSide(null)
   }
@@ -906,6 +909,18 @@ export const useTutorialStore = defineStore('tutorial', () => {
       while (cursor.value < steps.value.length && steps.value[cursor.value]?.done === true) {
         cursor.value += 1
       }
+      /*
+       * 2026-11-22：教学收束（越过最后一步）后必须把演出用的固定骰收回。
+       * 这对 ref 是**模块级**的（`fire-resolution` 的 `rollCombatDice` / `rollCombatSurprise`
+       * 直接读），不收回则本局后续每一场战斗都被钉成这一场的奇袭与骰面。
+       * 收回点放在这里而不是 `currentStep`：末步一达成，`cursor` 立刻越过它、
+       * `currentStep` 随即返回 null，任何依赖 `step.id === 'capture-city'` 的清空分支
+       * 都再也进不去了。
+       */
+      if (cursor.value >= steps.value.length) {
+        combatFixedDie.value = null
+        combatFixedSurprise.value = null
+      }
     },
     { immediate: true, flush: 'sync' },
   )
@@ -1407,16 +1422,12 @@ export const useTutorialStore = defineStore('tutorial', () => {
      * 玩家一次打输就再也走不下去。故这一步同样按演出钉死：
      * 攻方奇袭（2d6=12）横移 6 列上到 24:1，9.9 骰面取 8 ⇒ Ae2 DL2o3DG，
      * 守方选项点数换军力损失后城里守军全灭，攻方 9.12g 推进进城。
-     * 城格一易手就收回固定骰，别的回合照常随机。
+     * 这里只管**投放**；收回由 cursor 越末步与 `stop()` 负责——末步一达成
+     * `currentStep` 立刻返回 null，放在这里的清空分支根本走不到。
      */
-    if (step?.id === 'capture-city') {
-      if (cityTaken()) {
-        combatFixedSurprise.value = null
-        combatFixedDie.value = null
-      } else if (workbench.combatState === null) {
-        combatFixedSurprise.value = { die: 12, shiftDie: 6 }
-        combatFixedDie.value = 8
-      }
+    if (step?.id === 'capture-city' && !cityTaken() && workbench.combatState === null) {
+      combatFixedSurprise.value = { die: 12, shiftDie: 6 }
+      combatFixedDie.value = 8
     }
     return step
   })
