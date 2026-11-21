@@ -211,8 +211,6 @@ watch(
         {{ tutorial.currentStep.intro }}
       </p>
       <p class="tut__hint">{{ tutorial.currentStep.hint }}</p>
-      <!-- 2026-11-21：后三步不再由阶段推进自动放行，玩家确实不做时必须能显式跳过，否则引导会卡住 -->
-      <button type="button" class="tut__skip" @click="tutorial.skipCurrent()">跳过这一步</button>
     </aside>
 
     <aside v-else-if="tutorial.completed" class="tut__card tut__card--done">
