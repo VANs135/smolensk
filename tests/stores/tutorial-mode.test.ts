@@ -405,9 +405,19 @@ describe('教学模式：Vitebsk', () => {
     ctx.w.setBarrageActive(true)
     ctx.w.toggleBarrageUnit(artillery.instanceId)
     expect(ctx.w.beginBarrageNow()).toBe(true)
-    // 10.1b：先声明付款来源（教学脚本在炮位备的弹药站），再付补给
-    expect(ctx.w.pickBarrageSupplyDump('tutorial-axis-arty-supply')).toBe(true)
+    // 10.1b：付款来源只能取盘上真实候选（HQ 投递 / 编内卡车拖取），不得凭空加补给站
+    const supplyChoices = ctx.w.barrageSupplyDumpChoices
+    expect(supplyChoices.length).toBeGreaterThan(0)
+    // 该剧本由随摩步推进的编内卡车（装载中的 SP，12.1b）供这一发弹幕
+    const truckSupply = supplyChoices.find((dump) => dump.id.startsWith('unit:'))
+    expect(truckSupply).toBeDefined()
+    expect(ctx.w.pickBarrageSupplyDump(truckSupply!.id)).toBe(true)
+    // 这一发要付多少 T 由 10.1b 的列成本算；该剧本炮兵带 −2T 修正，故只需 1 T
+    // （编内卡车那 1 SP 按 3.3a 折 4 T，付得起这 1 T，不另加补给站）
+    expect(ctx.w.barragePayNeedT).toBe(1)
     expect(ctx.w.confirmBarrageSupplyStep()).toBe(true)
+    // 真扣款（12.3a）：编内卡车上的 SP 必须实打实扣掉（1 → 0）
+    expect(ctx.w.spDumps.find((dump) => dump.id === truckSupply!.id)?.sp ?? 0).toBe(0)
     expect(ctx.w.confirmBarrageShiftsStep()).toBe(true)
     // 10.0a：骰 12 必出 DG，把城里的守军打残，第 25 步的攻入才有胜算
     ctx.w.barrageInputs.die = 12

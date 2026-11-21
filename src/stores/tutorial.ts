@@ -73,8 +73,6 @@ const SWEEP_AIRCRAFT_ID = 'ax-aircraft-ge-bf-110'
 const TUTORIAL_EXTRA_JU88_ID = 'tutorial-axis-ju88-2'
 const TUTORIAL_SU_I153_ID = 'tutorial-su-i153'
 const TUTORIAL_SU_LAGG_ID = 'tutorial-su-lagg3'
-/** 教学脚本在城下炮位备的轴心弹药站（弹幕步 10.1b 的付款来源） */
-const TUTORIAL_AXIS_ARTY_SUPPLY_ID = 'tutorial-axis-arty-supply'
 /*
  * 反应段苏军反扑的固定骰（用户 2026-11-21 口径）：
  * 攻方被奇袭、按 6 列结算、进攻骰 2 ⇒ 坦克师必败，城里的苏军守军仍留在维捷布斯克，
@@ -992,31 +990,6 @@ export const useTutorialStore = defineStore('tutorial', () => {
         hex: { ...REACTION_START },
         sp: 6,
         t: 0,
-      })
-    }
-
-    /*
-     * 攻入课（第 25 步）要打得动：维捷布斯克只留那一枚民兵守军。
-     * 162 步兵师按本教学口径改驻 19.28 大城 —— 两个守军叠在城里时，
-     * 我部在 9.9 会被判满额损失（实测 Ae4，直接全灭），教学就卡死在最后一步。
-     */
-    const rifle = workbench.units.find(
-      (unit) => unit.unitId === 'su-infantry-ru-162-rifle-div' && sameHex(unit.hex, CITY_HEX),
-    )
-    if (rifle !== undefined) rifle.hex = { ...BOMB_HEX }
-
-    /*
-     * 弹幕课要付 10.1b 的火炮战斗补给，而剧本自带的轴心补给站都在后方（5.27 / 1.26），
-     * 拖取不到维捷布斯克城下的炮位（12.3a）。教学里由脚本在炮位备一处弹药站，
-     * 否则第 24 步的弹幕会因为"付不出补给"整步走不下去（实测 beginBarrageNow 通过、confirm 被拒）。
-     */
-    if (!workbench.spDumps.some((dump) => dump.id === TUTORIAL_AXIS_ARTY_SUPPLY_ID)) {
-      workbench.spDumps.push({
-        id: TUTORIAL_AXIS_ARTY_SUPPLY_ID,
-        side: 'axis',
-        hex: { ...MOVE_HEX },
-        sp: 4,
-        t: 2,
       })
     }
 
