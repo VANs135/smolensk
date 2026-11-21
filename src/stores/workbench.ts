@@ -9,6 +9,7 @@ import { createFireResolutionDomain } from './fire-resolution'
 import { createBarrageDomain } from './workbench-barrage'
 import { createAirDomain } from './workbench-air'
 import { createAirBarrageChainDomain } from './workbench-air-barrage-chain'
+import { createRootState } from './root-state'
 import { createMovementDomain } from './workbench-move'
 import { createStackPickDomain } from './workbench-stack-pick'
 import { createFuelDomain } from './workbench-fuel'
@@ -944,8 +945,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     },
   })
 
-  // ── 摆子 ──
-  const units = ref<ConsoleUnit[]>([])
+  // ── 根状态（P1-a：已搬至 ./root-state.ts，此处仅取同一批 ref 的引用）──
+  const rootState = createRootState()
+  /** 场上全部算子实例 */
+  const units = rootState.units
+  /** 当前选中的算子实例 id */
+  const selectedId = rootState.selectedId
+  /** 待摆放的单位库记录（从单位列表里点选后进入「摆放模式」） */
+  const pendingRecord = rootState.pendingRecord
   /**
    * 4.8a：环节/阶段末的**超堆叠义务**（战斗单位 >10 RE 的格）
    *
@@ -1012,10 +1019,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     southeast: [],
   })
   const edgeBoxEnteredOn = ref<Record<string, number>>({})
-  /** 当前选中的算子实例 id */
-  const selectedId = ref<string | null>(null)
-  /** 待摆放的单位库记录（从单位列表里点选后进入「摆放模式」） */
-  const pendingRecord = ref<UnitRecordView | null>(null)
   /** 工具模式：点地图时做什么（放大镜/摆子/打一仗） */
   const tool = ref<'move' | 'place' | 'battle'>('move')
 
