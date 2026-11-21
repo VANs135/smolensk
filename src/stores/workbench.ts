@@ -1773,6 +1773,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     session,
     pushLog,
     requireAction,
+    deliverableDumpsFor,
     dumpById,
     captureUndoSnapshot,
     dropUndoBySeq,
@@ -1798,6 +1799,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     printedHedgehogPositions,
     buildHedgehogNow,
     reduceHedgehogNow,
+    hedgehogPayDumps,
+    hedgehogPayPick,
+    toggleHedgehogPayPick,
+    pickHedgehogPayDumpNow,
   } = hedgehogsDomain
 
   /* ── 各动作的待点格入口（B27a：目标状态已在 store 的那些） ── */
@@ -11865,66 +11870,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     pushLog(
       'info',
       `修建付款站：${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T，12.1b）`,
-      '12.1b',
-    )
-    return true
-  }
-
-  /** 16.0b/c：环形工事的付款站候选（施工小队或 13.8d 工程兵可达的来源） */
-  const hedgehogPayDumps = computed<SpDump[]>(() => {
-    const beneficiaries: ConsoleUnit[] = []
-    if (hedgehogUsesEngineerRoute.value) {
-      const engineer = pickedHedgehogEngineer()
-      if (engineer !== null) beneficiaries.push(engineer)
-    } else {
-      for (const id of hedgehogInputs.value.workerIds) {
-        const unit = units.value.find((item) => item.instanceId === id)
-        if (unit !== undefined) beneficiaries.push(unit)
-      }
-    }
-    if (beneficiaries.length === 0) return []
-    return deliverableDumpsFor(activeSide.value, beneficiaries)
-  })
-
-  /** 工事付款的「点地图选站」模式 */
-  const hedgehogPayPick = ref(false)
-
-  /** 开启/取消工事付款的地图选站模式 */
-  function toggleHedgehogPayPick(): boolean {
-    if (hedgehogPayPick.value) {
-      hedgehogPayPick.value = false
-      return true
-    }
-    const executorMissing = hedgehogUsesEngineerRoute.value
-      ? pickedHedgehogEngineer() === null
-      : hedgehogInputs.value.workerIds.length === 0
-    if (executorMissing) {
-      pushLog(
-        'warning',
-        hedgehogUsesEngineerRoute.value
-          ? '先指定 13.8d 的施工工程兵，再选付款补给站（16.0b）'
-          : '先在目标格勾选施工小队，再选付款补给站（16.0b）',
-        '16.0b',
-      )
-      return false
-    }
-    if (hedgehogPayDumps.value.length === 0) {
-      pushLog('warning', '施工者此刻没有可达的己方补给站（12.3a/12.3b）', '12.3a')
-      return false
-    }
-    hedgehogPayPick.value = true
-    return true
-  }
-
-  /** 地图点到某一座候选站 ⇒ 写入工事付款站并退出选站模式 */
-  function pickHedgehogPayDumpNow(dumpId: string): boolean {
-    const dump = hedgehogPayDumps.value.find((item) => item.id === dumpId)
-    if (dump === undefined) return false
-    hedgehogInputs.value = { ...hedgehogInputs.value, payDumpId: dump.id }
-    hedgehogPayPick.value = false
-    pushLog(
-      'info',
-      `工事付款站：${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T，12.1b）`,
       '12.1b',
     )
     return true

@@ -12,7 +12,7 @@
     "workbench-extenders.ts": 9,
     "workbench-fuel.ts": 3,
     "workbench-gates.ts": 11,
-    "workbench-hedgehogs.ts": 13,
+    "workbench-hedgehogs.ts": 14,
     "workbench-move.ts": 16,
     "workbench-stack-pick.ts": 13,
     "workbench-supply-dumps.ts": 12,

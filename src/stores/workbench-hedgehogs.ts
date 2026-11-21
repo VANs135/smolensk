@@ -10,6 +10,11 @@
  * `markConstructionWorkersImmobile` / `buildHedgehogNow` / `reduceHedgehogNow`。
  * 函数体**零改写**（状态全部随块搬进本域，facade 侧只按 ref 对象读写）。
  *
+ * B3-2b15（2026-11-21）：补搬 16.0b 的**付款站面板** 4 个声明（45 + 13 行）——
+ * `hedgehogPayDumps` / `hedgehogPayPick` / `toggleHedgehogPayPick` / `pickHedgehogPayDumpNow`。
+ * 这四件物理上住在 C8g 段（banner 属 15.3/15.4），语义属本域；零改写，端口 29 → **34**
+ * （新增依赖 `deliverableDumpsFor`、新增 4 名返回）。合计 25 个声明 / 356 行。
+ *
  * ## 为什么 facade 的装配点要前移到「各动作的待点格入口」段之前
  *   本域的三个符号在**声明区之前**就被读：
  *   · `hedgehogInputs`：B27a 的 `beginHedgehogHexPickNow` 在点地图上写 `hexText`；
@@ -19,10 +24,10 @@
  *   `engineerExecutorFor` / `constructionGateNow` / `noteConstruction` / `payConstructionFee`
  *   全部是 `function` 声明（提升），晚于装配点也能按值传。
  *
- * ## 端口为什么是 29 项
- *   13 依赖 + 16 返回。返回名单只含「别人要用的」：`hedgehogRecordFor` / `noteHedgehogLedger` /
- *   `paySpFromDump` / `constructionExecutor` / `markConstructionWorkersImmobile` 只在域内被调，
- *   不 return、facade 不解构。
+ * ## 端口为什么是 34 项
+ *   14 依赖 + 20 返回（b15 各 +1 / +4）。返回名单只含「别人要用的」：`hedgehogRecordFor` /
+ *   `noteHedgehogLedger` / `paySpFromDump` / `constructionExecutor` / `markConstructionWorkersImmobile`
+ *   只在域内被调，不 return、facade 不解构。
  */
 
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
@@ -55,7 +60,7 @@ import type { ActionKey, ConsoleUnit, UnitRecordView, WorkbenchLogEntry } from '
 import type { useGameSessionStore } from './session'
 import type { SpDump } from './supply-types'
 
-/** C8f 环形工事域的端口（29 项 = 13 依赖 + 16 返回，2026-11-21 实测）。 */
+/** C8f 环形工事域的端口（34 项 = 14 依赖 + 20 返回，2026-11-21 实测）。 */
 export interface HedgehogsDeps {
   activeSide: ComputedRef<Side>
   date: ComputedRef<string>
@@ -73,6 +78,8 @@ export interface HedgehogsDeps {
   dumpById: (dumpId: string) => SpDump | undefined
   captureUndoSnapshot: (label: string) => number | null
   dropUndoBySeq: (seq: number) => void
+  /** 12.3a/12.3b：施工者可达的己方补给站（barrage 域的薄转发，`function` ⇒ 提升） */
+  deliverableDumpsFor: (side: Side, beneficiaries: readonly ConsoleUnit[]) => SpDump[]
   /** 13.8d 的两条途径共用的执行者构造（C8g 段声明，`function` ⇒ 提升） */
   engineerExecutorFor: (
     engineer: ConsoleUnit | null,
@@ -91,6 +98,7 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     session,
     pushLog,
     requireAction,
+    deliverableDumpsFor,
     dumpById,
     captureUndoSnapshot,
     dropUndoBySeq,
@@ -255,6 +263,66 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     return constructionLegMpDistance(engineer.hex, hex)
   })
 
+  /** 16.0b/c：环形工事的付款站候选（施工小队或 13.8d 工程兵可达的来源） */
+  const hedgehogPayDumps = computed<SpDump[]>(() => {
+    const beneficiaries: ConsoleUnit[] = []
+    if (hedgehogUsesEngineerRoute.value) {
+      const engineer = pickedHedgehogEngineer()
+      if (engineer !== null) beneficiaries.push(engineer)
+    } else {
+      for (const id of hedgehogInputs.value.workerIds) {
+        const unit = units.value.find((item) => item.instanceId === id)
+        if (unit !== undefined) beneficiaries.push(unit)
+      }
+    }
+    if (beneficiaries.length === 0) return []
+    return deliverableDumpsFor(activeSide.value, beneficiaries)
+  })
+
+  /** 工事付款的「点地图选站」模式 */
+  const hedgehogPayPick = ref(false)
+
+  /** 开启/取消工事付款的地图选站模式 */
+  function toggleHedgehogPayPick(): boolean {
+    if (hedgehogPayPick.value) {
+      hedgehogPayPick.value = false
+      return true
+    }
+    const executorMissing = hedgehogUsesEngineerRoute.value
+      ? pickedHedgehogEngineer() === null
+      : hedgehogInputs.value.workerIds.length === 0
+    if (executorMissing) {
+      pushLog(
+        'warning',
+        hedgehogUsesEngineerRoute.value
+          ? '先指定 13.8d 的施工工程兵，再选付款补给站（16.0b）'
+          : '先在目标格勾选施工小队，再选付款补给站（16.0b）',
+        '16.0b',
+      )
+      return false
+    }
+    if (hedgehogPayDumps.value.length === 0) {
+      pushLog('warning', '施工者此刻没有可达的己方补给站（12.3a/12.3b）', '12.3a')
+      return false
+    }
+    hedgehogPayPick.value = true
+    return true
+  }
+
+  /** 地图点到某一座候选站 ⇒ 写入工事付款站并退出选站模式 */
+  function pickHedgehogPayDumpNow(dumpId: string): boolean {
+    const dump = hedgehogPayDumps.value.find((item) => item.id === dumpId)
+    if (dump === undefined) return false
+    hedgehogInputs.value = { ...hedgehogInputs.value, payDumpId: dump.id }
+    hedgehogPayPick.value = false
+    pushLog(
+      'info',
+      `工事付款站：${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T，12.1b）`,
+      '12.1b',
+    )
+    return true
+  }
+
   /** 16.0b/c：把「本阶段不能再移动」落到被指定的单位上（仅这些单位受约束） */
   function markConstructionWorkersImmobile(ids: readonly string[]): void {
     for (const id of ids) {
@@ -416,5 +484,9 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     printedHedgehogPositions,
     buildHedgehogNow,
     reduceHedgehogNow,
+    hedgehogPayDumps,
+    hedgehogPayPick,
+    toggleHedgehogPayPick,
+    pickHedgehogPayDumpNow,
   }
 }
