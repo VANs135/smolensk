@@ -23,6 +23,7 @@ import { createConstructionDomain } from './workbench-construction'
 import { createAirFacilityDomain } from './workbench-air-facility'
 import { createSupplyLabelsDomain } from './workbench-supply-labels'
 import { createAirPrimitivesDomain } from './workbench-air-primitives'
+import { createAirStateDomain } from './workbench-air-state'
 import { createCombatInputs } from './engagement-inputs'
 import { defineStore } from 'pinia'
 import { computed, ref, toRaw, watch, type Ref } from 'vue'
@@ -358,7 +359,6 @@ import {
   bridgedHexesBySide,
   buildLegalityRequest,
   buildMoveContext,
-  createAirInputs,
   createBarrageFacts,
   createBattleFacts,
   createRetreatFacts,
@@ -2365,7 +2365,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setAirInBoxMembership,
     addSpAtHex,
     airUnloadedTAt,
-    acceptAir,
+    acceptAir: <T>(outcome: RuleOutcome<T>, action: string) => acceptAir(outcome, action),
     setAirStatus,
     markAirMissionFlown,
     drawAir2d6,
@@ -2434,7 +2434,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     captureUndoSnapshot,
     dropUndoBySeq,
     setSpDumpHoldings,
-    clearAir,
+    clearAir: () => clearAir(),
     AIR_MISSION_KIND_LABELS,
     AIR_STATUS_LABELS,
     // 晚绑定（B2-2a）：声明在 3682–22425，晚于建域点
@@ -2607,6 +2607,32 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     },
     { immediate: true },
   )
+
+  /* ────────── C9 空军状态原语（14.0 开关 / 15.x 收束 / 统一收引擎结论，B3-2b20） ────────── */
+
+  /*
+   * B3-2b20（2026-11-21）：3 个声明搬进 `workbench-air-state.ts`（40 行零改写）。
+   * ★ 装配点选在 `} = airDomain` 之后：11 个状态与 `airMissionDomain` 全部已解构 ⇒ 按值传、零改写。
+   * ★ air 域 deps 的 `acceptAir` / `clearAir` 原本吃 function 声明（提升），搬走后提升消失
+   *   ⇒ 这两处改转发箭头（`acceptAir` 是泛型，箭头必须显式写 `<T>`），建域期只构造不求值。
+   * ★ 端口 16 项 = 13 依赖 + 3 返回；`createAirInputs` 直接 import model，不进端口。
+   */
+  const airStateDomain = createAirStateDomain({
+    airActive,
+    airMissionAirIds,
+    airMissionAbortPending,
+    airTargetHex,
+    airInputs,
+    airState,
+    airError,
+    lastRefit,
+    lastTransfer,
+    lastReduction,
+    refitTargetBaseId,
+    airMissionDomain,
+    pushLog,
+  })
+  const { setAirActive, clearAir, acceptAir } = airStateDomain
 
   // ── 派生 ──
   /** 选中的算子 */
@@ -11958,47 +11984,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
 
   /* ──────────────── C9 空军交互：14.2f 任务 → 15.1 整备 / 14.11 转移 / 15.4 缩减 ──────────────── */
-
-  /** C9：开/关空军工具（开启时清空上一场；基地声明与飞机保留） */
-  function setAirActive(on: boolean): void {
-    if (!airMissionDomain.canReplace()) return
-    airActive.value = on
-    clearAir()
-    pushLog('info', on ? '空军工具已开启（14.0 / 15.0 章）' : '空军工具已关闭', '14.0')
-  }
-
-  /** C9：清空本次空军交互（飞机与基地声明保留；换方/换阶段/重置/关闭时调用） */
-  function clearAir(): void {
-    if (!airMissionDomain.canReplace()) return
-    airMissionAirIds.value = []
-    airMissionAbortPending.value = false
-    airTargetHex.value = null
-    airInputs.value = { ...airInputs.value, targetHexText: '' }
-    airState.value = null
-    airError.value = null
-    lastRefit.value = null
-    lastTransfer.value = null
-    lastReduction.value = null
-    // 15.1：整备交互的中间态一并收束（选飞机 / 选补给）
-    refitTargetBaseId.value = null
-    // 保留「天气是否允许飞行」等盘面事实，其余玩家输入复位
-    airInputs.value = {
-      ...createAirInputs(),
-      flyingAllowed: airInputs.value.flyingAllowed,
-      weatherNormal: airInputs.value.weatherNormal,
-    }
-  }
-
-  /** C9：统一收引擎结论（失败即记 `airError` 与日志并返回 null） */
-  function acceptAir<T>(outcome: RuleOutcome<T>, action: string): T | null {
-    if (outcome.ok) {
-      airError.value = null
-      return outcome.data
-    }
-    airError.value = { rule: outcome.rule, reason: outcome.reason }
-    pushLog('danger', `${action}被拒绝：${outcome.reason}（${outcome.rule}）`, outcome.rule)
-    return null
-  }
 
   /** C9：切任务类型（14.2e；换类型即作废进行中的流程） */
   function setAirMissionKind(kind: AirMissionKind): void {
