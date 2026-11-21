@@ -4,6 +4,7 @@
   "files": {
     "workbench-air.ts": 76,
     "workbench-barrage.ts": 51,
+    "workbench-combat-ignore.ts": 5,
     "workbench-combat-options.ts": 9,
     "workbench-core.ts": 9,
     "workbench-fuel.ts": 3,

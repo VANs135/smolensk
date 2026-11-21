@@ -12,6 +12,7 @@ import { createMovementDomain } from './workbench-move'
 import { createStackPickDomain } from './workbench-stack-pick'
 import { createFuelDomain } from './workbench-fuel'
 import { createCombatOptionsDomain } from './workbench-combat-options'
+import { createCombatIgnoreDomain } from './workbench-combat-ignore'
 import { createCombatInputs } from './engagement-inputs'
 import { defineStore } from 'pinia'
 import { computed, ref, toRaw, watch, type Ref } from 'vue'
@@ -7820,6 +7821,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     resetOptionDraft,
   } = combatOptionsDomain
 
+  /*
+   * B3-2b8（2026-11-21）：9.10c 忽略权三件搬进 `workbench-combat-ignore.ts`。
+   * `combatNkvdForcedLosses`（16690 声明）是唯一晚于本处的依赖 ⇒ 唯一一个 getter。
+   */
+  const combatIgnoreDomain = createCombatIgnoreDomain({
+    combatState,
+    combatInputs,
+    combatAttackerViews,
+    combatNkvdForcedLosses: () => combatNkvdForcedLosses.value,
+    confirmCombatOptions,
+  })
+  const { attackerWipedNow, optionIgnoreAvailableNow, confirmCombatIgnoreOptions } =
+    combatIgnoreDomain
+
   /* ────────── B47（12.8e）：突围尝试 ────────── */
 
   /** 12.8e：本次突围的骰值（留空即自动掷；供裁判订正 / 复算） */
@@ -10414,37 +10429,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     resetOptionDraft()
     // 下一方若也是 0 点选项 ⇒ 不停屏；撤退也一样
     settlePassiveCombatSteps()
-    return true
-  }
-
-  /**
-   * 9.10c：攻方参战单位是否已全灭（名单里的单位已离盘按 0 军力计入）。
-   *
-   * 全灭 ⇒ 攻方「无法完成全部选项」⇒ 守方可忽略自己的选项（9.10c），战斗沿正常链路收束。
-   */
-  const attackerWipedNow = computed(() => {
-    const state = combatState.value
-    if (state === null || state.resolution.stage !== 'defenderOptions') return false
-    return combatAttackerViews.value.every((view) => view.steps <= 0)
-  })
-
-  /** 9.10c「忽略守方自己的选项」是否可用（专规 2.3b 的 NKVD 强制损失场次禁用） */
-  const optionIgnoreAvailableNow = computed(() => {
-    const state = combatState.value
-    if (state === null || state.resolution.stage !== 'defenderOptions') return false
-    // 攻方撤退（引擎判）或攻方全灭（名单里的单位已离盘）都会让攻方取不齐选项
-    if (state.resolution.defender.optionIgnorable !== true && !attackerWipedNow.value) return false
-    return !combatNkvdForcedLosses.value
-  })
-
-  /** 9.10c 唯一出口：行使忽略权并当场结算（面板只放这一处，不再另设勾选框） */
-  function confirmCombatIgnoreOptions(): boolean {
-    if (!optionIgnoreAvailableNow.value) return false
-    combatInputs.value.ignoreOptions = true
-    if (!confirmCombatOptions()) {
-      combatInputs.value.ignoreOptions = false
-      return false
-    }
     return true
   }
 
