@@ -1,5 +1,5 @@
 /**
- * 根状态容器（P1-a）
+ * 根状态容器（P1-a / P1-b）
  *
  * 目的：把 facade `workbench.ts` 里的根级状态搬到独立模块，让各域（先自 air 试点）
  * 有一个明确的「根状态」来源，而不是继续穿过 facade 的 ports 取值。
@@ -9,11 +9,22 @@
  * **当前值快照**，会当场破坏 facade 现有的逐名解构与响应性；普通对象解构拿到的仍是同一个
  * ref 对象，读写与响应性零变化，因而 facade 可以原样保留解构写法。
  *
+ * 边界（方案 §4.5，实测结论）：本模块只收**纯本地状态**。
+ * `activeSide` / `phase` / `turn` / `seed` / `rng` / `date` 等看似「根状态」，实则都是
+ * **session 适配层的投影**（读 `session.records.*`、写 `session.patchRecords(...)`、
+ * 回落 `localXxx`），依赖会话层，不能独立成域，继续留在 facade。
+ *
  * 迁移纪律：每批只搬「纯状态」（ref / 无副作用派生），不搬函数；搬完立刻全量 check。
  */
 
 import { ref } from 'vue'
-import type { ConsoleUnit, UnitRecordView } from './workbench-model'
+import type { MoveStepSnapshot } from './movement-types'
+import type {
+  BattleReport,
+  ConsoleUnit,
+  UnitRecordView,
+  WorkbenchLogEntry,
+} from './workbench-model'
 
 export function createRootState() {
   // ── 摆子 ──
@@ -23,8 +34,16 @@ export function createRootState() {
   const selectedId = ref<string | null>(null)
   /** 待摆放的单位库记录（从单位列表里点选后进入「摆放模式」） */
   const pendingRecord = ref<UnitRecordView | null>(null)
+  /** 工具模式：点地图时做什么（放大镜/摆子/打一仗） */
+  const tool = ref<'move' | 'place' | 'battle'>('move')
 
-  return { units, selectedId, pendingRecord }
+  // ── 结果与日志 ──
+  /** C5：最近一步的展示快照（撤销后为 null） */
+  const lastStep = ref<MoveStepSnapshot | null>(null)
+  const lastBattle = ref<BattleReport | null>(null)
+  const log = ref<WorkbenchLogEntry[]>([])
+
+  return { units, selectedId, pendingRecord, tool, lastStep, lastBattle, log }
 }
 
 export type RootState = ReturnType<typeof createRootState>

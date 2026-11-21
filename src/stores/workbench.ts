@@ -408,7 +408,6 @@ import {
   unitChoices,
   counterImageUrlOf,
   type AircraftRecordView,
-  type BattleReport,
   type ConsoleAirUnit,
   type ConsoleUnit,
   type DeadPileEntry,
@@ -1020,13 +1019,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
   const edgeBoxEnteredOn = ref<Record<string, number>>({})
   /** 工具模式：点地图时做什么（放大镜/摆子/打一仗） */
-  const tool = ref<'move' | 'place' | 'battle'>('move')
+  const tool = rootState.tool
 
-  // ── 结果与日志 ──
+  // ── 结果与日志（P1-b：已搬至 ./root-state.ts）──
   /** C5：最近一步的展示快照（撤销后为 null） */
-  const lastStep = ref<MoveStepSnapshot | null>(null)
-  const lastBattle = ref<BattleReport | null>(null)
-  const log = ref<WorkbenchLogEntry[]>([])
+  const lastStep = rootState.lastStep
+  const lastBattle = rootState.lastBattle
+  const log = rootState.log
 
   /*
    * ── B0 装配（解构第一批）──────────────────────────────────────────────

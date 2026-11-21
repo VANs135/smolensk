@@ -76,7 +76,12 @@ describe('B35：流程条 / 工具按钮 / 纯文字面板（源码守卫）', (
 
     // `tool` 本体保留（验证页与流程用例仍靠它；只是不再出现在对局台的按钮上）
     const wb = readStoreSource()
-    expect(wb).toContain("const tool = ref<'move' | 'place' | 'battle'>('move')")
+    // P1-b：`tool` 的声明已搬到根状态容器（root-state.ts），store 侧改为取同一批 ref 的引用，
+    // 断言随之分两处：本体仍在（换了家），store 侧按引用取用。
+    expect(wb).toContain('const tool = rootState.tool')
+    expect(readFileSync('src/stores/root-state.ts', 'utf8')).toContain(
+      "const tool = ref<'move' | 'place' | 'battle'>('move')",
+    )
     expect(wb).toContain('const combatPickActive = computed<boolean>(')
     expect(wb).toContain("allowedActionsOf(segmentGateQuery.value).has('combat.declare')")
   })
