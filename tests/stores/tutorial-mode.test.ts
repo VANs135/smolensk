@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import type { HexRef } from '@/data'
 import { hexDistance } from '@/engine/hex-geometry'
 import { useContainersStore, useMapViewStore, useTutorialStore } from '@/stores'
+import { combatFixedDie, combatFixedSurprise } from '@/stores/fire-resolution'
 import {
   setTutorialAirAllInactive,
   setTutorialFixedReinforcement,
@@ -444,12 +445,90 @@ describe('教学模式：Vitebsk', () => {
     expect(ctx.w.barrageState?.targetHex).toEqual({ col: 19, row: 27 })
     expect(tutorial.currentStep?.id).toBe('capture-city')
 
+    // 第 25 步：攻入维捷布斯克 —— 18.27 的两枚德军压上城格，走 9.2 九步
+    // 10.0 的炮击会话必须先收走，才允许换环节（canReplaceBarrage）
+    ctx.w.clearBarrage()
+    expect(ctx.w.setSegmentStepIndex(1)).toBe(true)
+    ctx.w.setBattleMode('full')
+    const siege = ctx.w.units.filter(
+      (unit) => unit.hex.col === 18 && unit.hex.row === 27 && unit.side === 'axis' && unit.isCombat,
+    )
+    expect(siege.length).toBe(2)
+    // 9.1：宣告交战要先选中一个攻方算子（战斗环节不可移动 ⇒ 这里只做只读选中）
+    ctx.w.selectForMove({ col: 18, row: 27 }, [siege[0]!.instanceId])
+    expect(ctx.w.selectedUnit?.instanceId).toBe(siege[0]!.instanceId)
+    ctx.w.openBattle({ col: 19, row: 27 })
+    expect(ctx.w.battleTarget?.hex).toEqual({ col: 19, row: 27 })
+    expect(ctx.w.battleDefenders.length).toBe(2)
+    for (const unit of siege) ctx.w.toggleCombatAttacker(unit.instanceId)
+    expect(ctx.w.combatAttackers.length).toBe(2)
+    expect(ctx.w.beginCombatNow()).toBe(true)
+    expect(ctx.w.combatState?.step ?? 'NULL').toBe('combatSupply')
+    // 9.5 / 12.4：攻方这一仗的车马费仍由随摩步前推的编内卡车付（12.1b：装载中的 SP 算补给站）
+    const battleTruck = ctx.w.combatSupplyDumps
+      .find((group) => group.side === 'attacker')
+      ?.dumps.find((dump) => dump.id.startsWith('unit:'))
+    expect(battleTruck).toBeDefined()
+    expect(ctx.w.pickCombatSupplyDump('attacker', battleTruck!.id)).toBe(true)
+    expect(ctx.w.confirmCombatSupply()).toBe(true)
+    expect(ctx.w.combatState?.step).toBe('declareAr')
+    // 9.6：攻方先宣布 AR 单位，守方后宣布
+    ctx.w.combatInputs.attackerArUnitId = siege[0]!.instanceId
+    expect(ctx.w.declareCombatArStep('attacker')).toBe(true)
+    ctx.w.combatInputs.defenderArUnitId = ctx.w.battleDefenders[0]!.instanceId
+    expect(ctx.w.declareCombatArStep('defender')).toBe(true)
+    // 9.4b / 9.7：守方宣布地形并定初始攻防比
+    expect(ctx.w.declareCombatTerrainStep()).toBe(true)
+    expect(ctx.w.combatState?.step).toBe('surprise')
+    combatFixedSurprise.value = { die: 12, shiftDie: 6 }
+    combatFixedDie.value = 8
+    expect(ctx.w.rollCombatSurprise()).toBe(true)
+    if (ctx.w.combatAwaitingShiftDie) expect(ctx.w.rollCombatShiftDie()).toBe(true)
+    expect(ctx.w.rollCombatDice()).toBe(true)
     /*
-     * 第 25 步「攻入维捷布斯克」的端到端还差最后一段：beginCombatNow 在测试路径下
-     * 不写日志、也不落 combatError / actionRefusal 就返回 false，需要单独排查那条闸门
-     * （同一次调用在既有轰炸用例里是正常的，所以不是测试写法问题）。
-     * 本用例覆盖到「炮火压制完成 → 引导推进到攻入」，攻入另起一条用例。
+     * 9.11 / 9.10 / 9.12：按实际待决的步子逐步确有地推进；守方的选项点数全部换成军力损失
+     * （不换撤退格），把城里守军吃干净，攻方才能推进占城。
      */
+    let guard = 0
+    while (guard < 12) {
+      guard += 1
+      const step = ctx.w.combatState?.step
+      if (step === 'losses') {
+        expect(ctx.w.confirmCombatLosses()).toBe(true)
+        continue
+      }
+      if (step === 'options') {
+        const stage = ctx.w.combatState?.resolution.stage ?? ''
+        const units = stage.startsWith('attacker') ? ctx.w.combatAttackers : ctx.w.battleDefenders
+        const capacity = units.reduce((sum, unit) => sum + unit.steps, 0)
+        const pending = ctx.w.combatRequirement
+        if (pending !== null && pending.options > 0 && pending.options <= capacity) {
+          ctx.w.combatInputs.optionRetreatHexes = 0
+          ctx.w.combatInputs.optionLossPoints = pending.options
+        }
+        expect(ctx.w.confirmCombatOptions()).toBe(true)
+        continue
+      }
+      break
+    }
+    // 9.12g：防御格已空 ⇒ 攻方战后推进，进格即占领维捷布斯克
+    expect(ctx.w.combatState?.step).toBe('advance')
+    ctx.w.combatInputs.advanceUnitIds = [siege[0]!.instanceId]
+    expect(ctx.w.confirmCombatAdvance()).toBe(true)
+    expect(ctx.w.combatState?.finished).toBe(true)
+    expect(
+      ctx.w.units.some(
+        (unit) =>
+          unit.side === 'axis' && unit.isCombat && unit.hex.col === 19 && unit.hex.row === 27,
+      ),
+    ).toBe(true)
+    expect(ctx.w.battleDefenders.length).toBe(0)
+    // 城格易手 ⇒ 教学最后一步也随之收束
+    await nextTick()
+    expect(tutorial.currentStep ?? null).toBeNull()
+    // 固定骰是模块级演出开关，用完必须收回，否则会污染其他用例的随机骰
+    combatFixedDie.value = null
+    combatFixedSurprise.value = null
     tutorial.stop()
   }, 120_000)
 
