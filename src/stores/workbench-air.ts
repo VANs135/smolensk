@@ -777,7 +777,12 @@ export function createAirDomain(ports: AirDomainPorts) {
 
   /** C9：对手的拦截资格与候选拦截机（14.5；null＝任务格未定） */
   const airInterceptionResponse = computed<InterceptionResponse | null>(() => {
-    const hex = airTargetHex.value
+    /*
+     * 2026-11-21：任务**发起后**输入层的 `airTargetHex` 可能已被清空，而此刻拦截步才真正
+     * 要表态 —— 只认输入层会让候选算成 0（`airInterceptorCandidates` 空 ⇒ 没人能宣布拦截）。
+     * 进行中的任务以 `airState.targetHex` 为准，两者取先有的那个。
+     */
+    const hex = airTargetHex.value ?? airState.value?.targetHex ?? null
     if (hex === null) return null
     return planInterceptionResponse({
       side: enemySide.value,

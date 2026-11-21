@@ -1022,11 +1022,22 @@ export const useTutorialStore = defineStore('tutorial', () => {
     { flush: 'sync' },
   )
 
-  // 进入移动段的轰炸环节时，苏军 I.153 才升空待命（拦截走 14.5 既有判定）
+  /*
+   * 苏军 I.153 升空待命（拦截走 14.5 既有判定）
+   *
+   * 2026-11-21：原来只绑「进入 `movement.barrage` 段」这一个时机会——若该段在扫荡课时
+   * 就已经是当前段，等真到轰炸时 watch 不再触发，I.153 仍是 inactive ⇒ 巡逻区不成立
+   * （`missionHexOutsidePatrolZone`）、拦截步被整段跳过，`interceptDeclared` 永远 false。
+   * 现在同时认「教学步骤到 bombing」这个可靠信号，段信号留作兜底。
+   */
   watch(
-    () => `${String(active.value)}|${workbench.segmentStep?.id ?? ''}`,
+    () =>
+      `${String(active.value)}|${steps.value[cursor.value]?.id ?? ''}|${workbench.segmentStep?.id ?? ''}`,
     () => {
-      if (!active.value || workbench.segmentStep?.id !== 'movement.barrage') return
+      if (!active.value) return
+      const bombingStep = steps.value[cursor.value]?.id === 'bombing'
+      const inBarrageSegment = workbench.segmentStep?.id === 'movement.barrage'
+      if (!bombingStep && !inBarrageSegment) return
       const i153 = workbench.airUnits.find((air) => air.instanceId === TUTORIAL_SU_I153_ID)
       if (i153 !== undefined && i153.airStatus === 'inactive') i153.airStatus = 'active'
     },
@@ -1062,15 +1073,18 @@ export const useTutorialStore = defineStore('tutorial', () => {
       if (!active.value || state === null || state.finished) return
       // 教学的两类空袭：轰炸是 barrage，低空扫射是 hip_shoot——拦截骰都要固定
       if (state.kind !== 'barrage' && state.kind !== 'hip_shoot') return
-      if (state.targetHex === null) return
       /*
-       * 教学局的两类空袭（扫射 18.27 / 轰炸 19.28）都可能被 I.153 拦截
-       * （2026-11-20：拦截应答归苏军 AI）。拦截空战骰一并固定 ⇒ 苏机必被
-       * 打回（2d6=6 + ACV 1 − 3 = 4 ≤ 6），损失骰固定 1 ⇒ 我机无损失。
+       * 2026-11-21：**任务刚发起时 `airState.targetHex` 可能还没落地**（目标还只在输入层），
+       * 旧代码在这里 `return` ⇒ 拦截步永远没人宣布，教学直接卡死。
+       * 改按 kind 兜底：教学里 barrage 就是 19.28 的轰炸、hip_shoot 就是 18.27 的扫射；
+       * targetHex 一旦有值仍按格精确判定，不放松。
        */
       const isTutorialTarget =
-        sameHex(state.targetHex, BOMB_HEX) || sameHex(state.targetHex, TARGET_HEX)
+        state.targetHex === null
+          ? true
+          : sameHex(state.targetHex, BOMB_HEX) || sameHex(state.targetHex, TARGET_HEX)
       if (!isTutorialTarget) return
+      const isBombingRun = state.kind === 'barrage'
       if (state.step === 'interception') {
         workbench.airInputs.interceptDie = 6
         workbench.airInputs.interceptLossDie = 1
@@ -1093,7 +1107,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
           }
         }
       }
-      if (state.step === 'flak' && sameHex(state.targetHex, BOMB_HEX)) {
+      if (state.step === 'flak' && isBombingRun) {
         workbench.airInputs.flakDie = 12
         workbench.airInputs.lossDie = 1
       }
@@ -1314,7 +1328,18 @@ export const useTutorialStore = defineStore('tutorial', () => {
 
   const currentStep = computed<TutorialStepView | null>(() => {
     if (!active.value) return null
-    return steps.value[cursor.value] ?? null
+    const step = steps.value[cursor.value] ?? null
+    /*
+     * 2026-11-21：苏军 I.153 必须**在轰炸任务发起前**升空，否则 14.4c 巡逻区不成立
+     * （`missionHexOutsidePatrolZone`）⇒ 引擎把拦截步整段跳过 ⇒ `interceptDeclared` 永远 false。
+     * 不能写在 `targetOf` 里：`steps` 会为**所有**步骤算 target，那等于第一步就把它升空、
+     * 扫射当场带上拦截。放在「当前步恰好是 bombing」这一处最准确；watch 保留作兜底。
+     */
+    if (step?.id === 'bombing') {
+      const i153 = workbench.airUnits.find((air) => air.instanceId === TUTORIAL_SU_I153_ID)
+      if (i153 !== undefined && i153.airStatus === 'inactive') i153.airStatus = 'active'
+    }
+    return step
   })
 
   const completed = computed(() => active.value && cursor.value >= steps.value.length)
