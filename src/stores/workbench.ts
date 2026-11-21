@@ -21843,6 +21843,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   } = barrage
 
   return {
+    /*
+     * ── 公开面登记表（1005 个逐名键）──
+     * 键的归属与迁移批次见 docs/specs/2026-11-20-workbench解构/key-ownership.csv。
+     * P2 起每迁移一个域，就把该域整段键从本表摘除，改由兼容投影的显式 getter 接管；
+     * 新增键一律加在所属批次的段尾，避免与并行批次在同一位置产生冲突。
+     */
+    /*
+     * ── 公开面登记表（1005 个逐名键）──
+     * 键的归属与迁移批次见 docs/specs/2026-11-20-workbench解构/key-ownership.csv。
+     * P2 起每迁移一个域，就把该域整段键从本表摘除，改由兼容投影的显式 getter 接管；
+     * 新增键一律加在所属批次的段尾，避免与并行批次在同一位置产生冲突。
+     */
     activeSide,
     engagementDecisionRole: fireResolution.decisionRole,
     initialSetupInProgress,
