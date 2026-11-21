@@ -377,6 +377,15 @@ describe('教学模式：Vitebsk', () => {
     for (let guard = 0; guard < 24; guard++) await nextTick()
     expect(tutorial.reaction).toBe('done')
     const raw = ctx.w.combatState?.dice?.result.raw ?? null
+    /*
+     * 用户口径（2026-11-21）：反扑固定成「攻方被奇袭、取端列、进攻骰 2」的必败局，
+     * 城里的苏军守军不受影响 —— 玩家第 25 步照样有城可攻。
+     */
+    const onCity = ctx.w.units.filter(
+      (unit) => unit.hex.col === 19 && unit.hex.row === 27 && unit.isCombat,
+    )
+    expect(onCity.some((unit) => unit.side === 'soviet')).toBe(true)
+    expect(onCity.some((unit) => unit.side === 'axis')).toBe(false)
     expect(raw?.startsWith('A')).toBe(true)
     expect(ctx.w.combatState?.finished).toBe(true)
     expect(tutorial.currentStep?.id).toBe('barrage-city')

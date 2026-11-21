@@ -35,6 +35,14 @@ import type { ConsoleUnit } from './workbench-model'
  */
 export const combatFixedDie = ref<number | null>(null)
 
+/**
+ * 教学/复现用：把 9.8 的奇袭判定（2d6）与横移骰（1d6）钉死（null = 正常掷骰）。
+ *
+ * 用户口径（2026-11-21）：教学里苏军坦克师的反扑必须是「攻方被奇袭、6 列、进攻骰 2」的必败局，
+ * 这样城里的苏军守军不会因为这场突袭而消失，玩家第 25 步照样有城可攻。
+ */
+export const combatFixedSurprise = ref<{ die: number; shiftDie: number } | null>(null)
+
 export interface FireResolutionPorts {
   rng: Ref<RngState>
   drawCount: Ref<number>
@@ -146,7 +154,14 @@ export function createFireResolutionDomain(ports: FireResolutionPorts) {
     const state = combatState.value
     if (state === null || state.step !== 'surprise' || state.finished) return false
     if (combatAwaitingShiftDie.value) return rollCombatShiftDie()
-    const draw = roll2d6(rng.value)
+    const surpriseFixed = combatFixedSurprise.value
+    const draw =
+      surpriseFixed === null
+        ? roll2d6(rng.value)
+        : {
+            value: { count: 2, faces: [1, surpriseFixed.die - 1], total: surpriseFixed.die },
+            rng: rng.value,
+          }
     rng.value = draw.rng
     drawCount.value += 1
     combatSurpriseDie.value = draw.value.total
@@ -190,7 +205,14 @@ export function createFireResolutionDomain(ports: FireResolutionPorts) {
       die === null
     )
       return false
-    const draw = roll1d6(rng.value)
+    const shiftFixed = combatFixedSurprise.value
+    const draw =
+      shiftFixed === null
+        ? roll1d6(rng.value)
+        : {
+            value: { count: 1, faces: [shiftFixed.shiftDie], total: shiftFixed.shiftDie },
+            rng: rng.value,
+          }
     rng.value = draw.rng
     drawCount.value += 1
     combatShiftRoll.value = draw.value

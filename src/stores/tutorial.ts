@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { combatFixedDie } from './fire-resolution'
+import { combatFixedDie, combatFixedSurprise } from './fire-resolution'
 
 import type { HexRef } from '@/data'
 import { findAircraftRecord, findUnitRecord } from '@/engine/rules/setup'
@@ -73,8 +73,13 @@ const SWEEP_AIRCRAFT_ID = 'ax-aircraft-ge-bf-110'
 const TUTORIAL_EXTRA_JU88_ID = 'tutorial-axis-ju88-2'
 const TUTORIAL_SU_I153_ID = 'tutorial-su-i153'
 const TUTORIAL_SU_LAGG_ID = 'tutorial-su-lagg3'
-/** 反应段苏军反扑的 9.9 固定骰：固定演出，保证每次教学结果一致 */
-const TUTORIAL_REACTION_COMBAT_DIE = 12
+/*
+ * 反应段苏军反扑的固定骰（用户 2026-11-21 口径）：
+ * 攻方被奇袭、按 6 列结算、进攻骰 2 ⇒ 坦克师必败，城里的苏军守军仍留在维捷布斯克，
+ * 玩家第 25 步照样有城可攻（德军 AR 高，本来就更易奇袭对方）。
+ */
+const TUTORIAL_REACTION_COMBAT_DIE = 2
+const TUTORIAL_REACTION_SURPRISE = { die: 2, shiftDie: 6 }
 
 /** 教学线用的 20.Mtr 堆叠（初始 14.27；编制内 5 枚） */
 const STACK_UNIT_IDS = new Set([
@@ -1316,16 +1321,20 @@ export const useTutorialStore = defineStore('tutorial', () => {
      * 这段战斗是**教学演出**：9.9 的 2d6 必须固定，否则同一步每次结果都不同
      * （实测随机骰打出 AL2 会把 18 Tk Div 直接抹掉，教学就断在这里了）。
      */
+    combatFixedSurprise.value = { ...TUTORIAL_REACTION_SURPRISE }
     combatFixedDie.value = TUTORIAL_REACTION_COMBAT_DIE
     if (!workbench.overrunNow(target)) {
       combatFixedDie.value = null
+      combatFixedSurprise.value = null
       return fail('发起突袭（overrunNow）')
     }
     if (!driveReactionCombat(tk.instanceId)) {
       combatFixedDie.value = null
+      combatFixedSurprise.value = null
       return fail('走完 9.2 战斗序列')
     }
     combatFixedDie.value = null
+    combatFixedSurprise.value = null
     const raw = workbench.combatState?.dice?.result.raw ?? null
     reactionOutcome.value = raw
     return raw !== null && raw.startsWith('A')
