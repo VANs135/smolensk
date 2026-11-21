@@ -18,6 +18,7 @@
     "workbench-move.ts": 16,
     "workbench-stack-pick.ts": 13,
     "workbench-supply-dumps.ts": 12,
+    "workbench-supply-labels.ts": 4,
     "workbench-transport-points.ts": 6
   }
 }

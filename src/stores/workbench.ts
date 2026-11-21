@@ -21,6 +21,7 @@ import { createExtendersDomain } from './workbench-extenders'
 import { createHedgehogsDomain } from './workbench-hedgehogs'
 import { createConstructionDomain } from './workbench-construction'
 import { createAirFacilityDomain } from './workbench-air-facility'
+import { createSupplyLabelsDomain } from './workbench-supply-labels'
 import { createCombatInputs } from './engagement-inputs'
 import { defineStore } from 'pinia'
 import { computed, ref, toRaw, watch, type Ref } from 'vue'
@@ -305,7 +306,6 @@ import {
   type SupplyPurpose,
   type SupplyReachableHex,
   type SupplySourceOption,
-  type SupplySourceKind,
   type TransportPointActor,
   type VariableReinforcementPlan,
   type DividingLineObligation,
@@ -669,14 +669,6 @@ function createSupplyInputs(): SupplyInputs {
     payFromDumpId: null,
     oosAction: 'eatOffTheMap',
   }
-}
-
-/** C8：12.6 判定结论的中文名（供界面显示；键为引擎的 `status` 值） */
-const SUPPLY_STATUS_LABELS: Record<string, string> = {
-  inSupply: '有追溯补给（12.6a）',
-  canEatOffTheMap: '无追溯补给，可吃图上补给（12.6c）',
-  outOfSupply: '断补（12.6d）',
-  notRequired: '不需补给（12.0）',
 }
 
 /** 逐机输入表：删掉某一架机的键（返航三选一切换时用） */
@@ -2305,6 +2297,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     buildAirstripNow,
     upgradeAirstripNow,
   } = airFacilityDomain
+
+  /* ────────── C8 补给标签（12.3 / 12.6 / 12.7 的界面文案，B3-2b18） ────────── */
+
+  /*
+   * B3-2b18（2026-11-21）：6 个声明搬进 `workbench-supply-labels.ts`（含 `SUPPLY_STATUS_LABELS` 常量）。
+   * ★ 4 个依赖全是 `function` 声明（提升）、5 个消费者全在运行期 ⇒ 无 TDZ 约束，装配点就近选在此处。
+   * ★ `affectsSupplyNet` 不在公开面，但摆子钩子要用 ⇒ 仍 return 并解构。
+   * ★ 端口 9 项 = 4 依赖 + 5 返回。
+   */
+  const supplyLabelsDomain = createSupplyLabelsDomain({
+    clearSupply,
+    dumpById,
+    pushLog,
+    supplyStockLabelOf,
+  })
+  const {
+    affectsSupplyNet,
+    cancelSupply,
+    supplySourceKindLabel,
+    supplySourceLabel,
+    supplyStatusLabel,
+  } = supplyLabelsDomain
 
   // ── C9 空军交互（W6 C9：OCS 14.0 / 15.0；引擎状态机在 air-interaction.ts） ──
   // ── B2-1：空军状态 + 派生已搬进 workbench-air（25 端口，其中 5 项晚绑定走 getter） ──
@@ -11912,64 +11926,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ★ 判据只有一处：引擎的 `planAirBaseReduction` 在自家 `canReduceAirstrip()` 的分支里就把简易机场
    *   拒掉（`rule: '15.2E'`），操作台经 `airError` 原样显示。操作台**不另建**一份拒绝，免得两处漂移。
    */
-
-  /**
-   * 补给网是否会被这个单位影响（12.3b 的投递 HQ、12.7 的延补队都是**源**）
-   *
-   * 只有这两类单位的摆上/移除/被摧毁才需要重判，避免每次摆子都白算一遍。
-   */
-  function affectsSupplyNet(unit: ConsoleUnit): boolean {
-    return unit.specialized.includes('hq') || isExtenderUnit(unit)
-  }
-
-  /** C8：放弃本次补给检查（中止 12.0 流程；已落盘的结算不自动回滚） */
-  function cancelSupply(): void {
-    clearSupply()
-    pushLog('info', '放弃本次补给检查（12.0 流程中止）', '12.0')
-  }
-
-  /** C8：来源类别名（12.3a/b、12.6a①②、12.7、12.6c） */
-  function supplySourceKindLabel(kind: SupplySourceKind | BaseSourceKind): string {
-    switch (kind) {
-      case 'dump':
-        return '补给站直接拖取（12.3a）'
-      case 'hqThrow':
-        return '指挥部投递（12.3b）'
-      case 'baseSource':
-        return '追溯补给源（12.6a）'
-      case 'extender':
-        return '延补队（12.7）'
-      case 'eatOffTheMap':
-        return '吃图上补给（12.6c）'
-      case 'edgeRail':
-        return '地图边缘铁路格（12.6a①）'
-      case 'supplySourceHex':
-        return '专规补给源格（12.6a①）'
-      case 'detrainable':
-        return '火车卸货格（12.6a②）'
-    }
-  }
-
-  /** C8：来源条目文本（日志与界面；距离/「相邻即可」都是引擎给的结论） */
-  function supplySourceLabel(source: SupplySourceOption): string {
-    const where = source.hex === null ? '' : `${hexLabel(source.hex)} `
-    const distance = source.distanceMp === null ? '' : `｜${source.distanceMp} MP`
-    const via = source.viaAdjacency ? '｜相邻即可（12.3c）' : ''
-    // 12.1b：同格可能有多份持仓（地面账本 / 装载在运输点数上）⇒ 点名本次取的是哪一处
-    const stock = source.stockId === undefined ? undefined : dumpById(source.stockId)
-    const stockText =
-      source.stockLabel !== undefined
-        ? `｜${source.stockLabel}`
-        : stock === undefined
-          ? ''
-          : `｜${supplyStockLabelOf(stock)}`
-    return `${where}${supplySourceKindLabel(source.kind)}${distance}${via}${stockText}`
-  }
-
-  /** C8：12.6 判定结论的中文名 */
-  function supplyStatusLabel(status: string): string {
-    return SUPPLY_STATUS_LABELS[status] ?? status
-  }
 
   /* ──────────────── C9 空军交互：14.2f 任务 → 15.1 整备 / 14.11 转移 / 15.4 缩减 ──────────────── */
 
