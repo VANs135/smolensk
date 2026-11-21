@@ -2111,18 +2111,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pendingSpGroupAssignment.value = []
     },
   })
-  const {
-    addSpAtHex,
-    addSpDump,
-    setSpDumpDraftGroup,
-    removeSpDump,
-    landSetupSpDumps,
-    clearSpDumps,
-    setSpDumpHoldings,
-    mergeSpDumpHoldings,
-    grantSpDumpT,
-    splitSpDumpHoldings,
-  } = supplyDumpsDomain
+  const { addSpAtHex, removeSpDump, setSpDumpHoldings, grantSpDumpT } = supplyDumpsDomain
 
   /* ────────── 13.8d 施工前提与付款（15.3 / 15.2A / 16.0b 共用，B3-2b16） ────────── */
 
@@ -2227,18 +2216,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
   const {
     supplyPhasePlan,
-    supplyFeedingCandidates,
     supplyRecoverySettled,
     supplyFeedingSettled,
-    supplyRecoveryOutcome,
-    supplyFeedingOutcome,
     attritionAppliedHexes,
-    supplyPhaseError,
     supplyPhaseInputs,
     attritionInputs,
     attritionResults,
-    attritionNeedsAllocation,
-    supplyPhaseAvailableCap,
   } = supplyPhaseDomain
   /** 12.11a：本阶段各补给站的销毁尝试次数（每阶段每站只能尝试一次） */
   const dumpDestructionAttempts = ref<Record<string, number>>({})
@@ -2308,13 +2291,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     pushLog,
     supplyStockLabelOf,
   })
-  const {
-    affectsSupplyNet,
-    cancelSupply,
-    supplySourceKindLabel,
-    supplySourceLabel,
-    supplyStatusLabel,
-  } = supplyLabelsDomain
+  const { affectsSupplyNet, supplySourceKindLabel, supplySourceLabel, supplyStatusLabel } =
+    supplyLabelsDomain
 
   /* ────────── C9 空军原语（14.1a / 14.1b / 14.2e 与掷骰，B3-2b19） ────────── */
 
@@ -21793,11 +21771,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     boardSnapshotFits,
     restoreBoard,
     saveBlockedReason,
-    supplyRecoverySettled,
-    supplyFeedingSettled,
-    supplyRecoveryOutcome,
-    supplyFeedingOutcome,
-    attritionAppliedHexes,
+    // ── supplyPhaseDomain（P2：本段键已由 supply-phase.ts 的 publicSurface 提供）──
+    ...supplyPhaseDomain.publicSurface,
     phase,
     segmentLocked,
     turn,
@@ -22299,14 +22274,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     supplySourceDraft,
     setSupplyActive,
     clearSupply,
-    addSpDump,
-    setSpDumpDraftGroup,
-    removeSpDump,
-    landSetupSpDumps,
-    clearSpDumps,
-    setSpDumpHoldings,
-    mergeSpDumpHoldings,
-    splitSpDumpHoldings,
+    // ── supplyDumpsDomain（P2：本段键已由 workbench-supply-dumps.ts 的 publicSurface 提供）──
+    ...supplyDumpsDomain.publicSurface,
     addSupplySource,
     removeSupplySource,
     setSupplyPreview,
@@ -22317,7 +22286,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     pickSupplySourceAtHexNow,
     confirmSupplyPickupNow,
     confirmOosResolutionNow,
-    cancelSupply,
+    // ── supplyLabelsDomain（P2：本段键已由 workbench-supply-labels.ts 的 publicSurface 提供）──
+    ...supplyLabelsDomain.publicSurface,
     // 12.6 / 12.8：全场追溯补给判定（让断补的减半/无 ZOC/突围资格/图标真正全场生效）
     evaluateTraceSupplyNow,
     /** 12.6：本回合唯一判定入口落盘的快照（界面计数与逐单位检查共读，不再读计划表长度） */
@@ -22327,11 +22297,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     /** 12.6：实时线与标记不一致时的一行文字提示（不写标记、不染地图色） */
     supplyLineHintOf,
     // C8b：D 段**补给阶段总计划**（12.1–12.2 / 12.6 / 12.8 / 12.10e / 12.11a）
-    supplyPhasePlan,
-    supplyPhaseInputs,
-    supplyPhaseError,
-    supplyPhaseAvailableCap,
-    supplyFeedingCandidates,
     planSupplyPhaseNow,
     clearSupplyPhasePlan,
     applySupplyPhaseRecoveryNow,
@@ -22339,9 +22304,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     dumpDestructionAttempts,
     destructDumpNow,
     // 12.8b：断补堆叠的损耗掷骰与分摊
-    attritionInputs,
-    attritionResults,
-    attritionNeedsAllocation,
     setAttritionDie,
     setAttritionAllocation,
     rollAttritionNow,
@@ -22403,9 +22365,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     buildAirBaseNow,
     buildAirstripNow,
     upgradeAirstripNow,
-    supplySourceKindLabel,
-    supplySourceLabel,
-    supplyStatusLabel,
     // C9 空军交互
     beginAirBarrageNow,
     // B44（14.9e）：逐机档位与"是否有 A 档"（14.9f 的例外据此自动成立）
