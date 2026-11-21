@@ -8,6 +8,7 @@ import { ruleErrorTextOf } from '@/engine/rules/rule-error-text'
 import { createFireResolutionDomain } from './fire-resolution'
 import { createBarrageDomain } from './workbench-barrage'
 import { createAirDomain } from './workbench-air'
+import { createAirBarrageChainDomain } from './workbench-air-barrage-chain'
 import { createMovementDomain } from './workbench-move'
 import { createStackPickDomain } from './workbench-stack-pick'
 import { createFuelDomain } from './workbench-fuel'
@@ -2368,22 +2369,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setAirTargetFromText: (text) => setAirTargetFromText(text),
     declareInterceptionNow,
     resolveInterceptionCombatNow,
-    // B2-2c：按值（轰炸链动作为函数声明可提升；三个 ref 早于建域点）
-    barrageInputs,
-    barrageKind,
-    barrageTargetKind,
-    barrageUnitIds,
-    barragedHexesThisPhase,
-    barragedUnitIdsThisPhase,
-    barrageAirIds,
-    canReplaceBarrage,
-    clearBarrage,
-    beginBarrageNow,
-    confirmBarrageSupplyStep,
-    confirmBarrageShiftsStep,
-    confirmBarrageLossNow,
-    rollBarrageDiceStep,
-    confirmBarrageOutcomeStep,
+    // B2-2c：轰炸链已上移切片（15 个输入项随之移出），只留两个回调
     // B2-2c 晚绑定：声明晚于建域点（3644 / 27646 / 27648），用访问器传
     get barragePickHex() {
       return barragePickHex
@@ -2455,6 +2441,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     },
     get supplyFacts() {
       return supplyFacts
+    },
+    get airMissionResultReady() {
+      return airBarrageChainDomain.airMissionResultReady
+    },
+    get recordAbortedAirBarrage() {
+      return airBarrageChainDomain.recordAbortedAirBarrage
     },
   })
   const {
@@ -2562,12 +2554,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     beginAirTargetHexPickNow,
     runAirMissionNow,
     autoResolveAirMissionNow,
-    // B2-2c：搬走后回补（区外仍引用）
+    // B2-2c：轰炸链已上移切片，这里补两个内部收尾函数（不暴露给 store）；
+    // 三个轰炸动作名改由切片解构提供
     confirmAirMissionNow,
     completeAirReturnNow,
-    beginAirBarrageNow,
-    settleAirMissionNow,
-    recordAbortedAirBarrage,
+    finishAbortedAirMission,
+    finishAutomaticAirReturn,
     // B2-2d：搬走后回补（区外仍引用）
     cancelAir,
     toggleAirstripBase,
@@ -2584,6 +2576,51 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     airMissionKindLabel,
     airStatusLabel,
   } = airDomain
+
+  /* ── B2-2c：轰炸结算链（air 的第三刀，独立切片） ── */
+  const airBarrageChainDomain = createAirBarrageChainDomain({
+    airState,
+    airError,
+    airInputs,
+    airTargetHex,
+    airMissionFlyingUnits,
+    airMissionDomain,
+    airMissionAbortPending,
+    airMissionKindLabel,
+    resolveAirCargoNow,
+    finishAbortedAirMission,
+    finishAutomaticAirReturn,
+    confirmAirMissionNow,
+    pushLog,
+    barrageState,
+    barrageInputs,
+    barrageKind,
+    barrageTargetKind,
+    barrageUnitIds,
+    barragedHexesThisPhase,
+    barragedUnitIdsThisPhase,
+    barrageAirIds,
+    canReplaceBarrage,
+    clearBarrage,
+    beginBarrageNow,
+    confirmBarrageSupplyStep,
+    confirmBarrageShiftsStep,
+    confirmBarrageLossNow,
+    rollBarrageDiceStep,
+    confirmBarrageOutcomeStep,
+    // 三个 ref 声明在本行之后 ⇒ 用访问器传（建域时求值会撞 TDZ）
+    get barragePickHex() {
+      return barragePickHex
+    },
+    get barrageLossRequired() {
+      return barrageLossRequired
+    },
+    get barrageLossReady() {
+      return barrageLossReady
+    },
+  })
+  // 只解构 store 公开面需要的三个动作（另两个是切片内部入口）
+  const { beginAirBarrageNow, settleAirMissionNow, recordAbortedAirBarrage } = airBarrageChainDomain
   /*
    * 14.1f / 专规 1.5：**天气是 Pre-Turn 掷出来的盘面事实**（`records.weather`），不是玩家的第二份输入。
    * 修前「天气正常」复选框只由玩家手动勾——换回合后天气在记录轨里已经变了，空军面板仍沿用上一回合的
