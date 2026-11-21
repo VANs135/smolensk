@@ -478,23 +478,41 @@ export const useHotseatStore = defineStore('hotseat', () => {
     { key: 'pve', label: 'PVE（人机）', note: 'AI 打一方、玩家打另一方；AI 只走既有具名入口' },
   ]
 
+  /**
+   * 2026-11-21：**脚本接管的一方**（教学等固定流程用）
+   *
+   * 教学模式是独立的一套流程（`tutorial.ts` 自带 `active`/步骤机/固定骰），
+   * 不能和普通 PvE 的通用 AI 混在一起 —— 否则同一个 `airInputs` 会被两边抢写。
+   * 教学在 `startFor()` 里登记 `'soviet'`、`stop()` 里清空；登记期间通用 AI 一律让位。
+   */
+  const scriptedSide = ref<Side | null>(null)
+  function setScriptedSide(side: Side | null): void {
+    scriptedSide.value = side
+  }
+
   /*
    * 2026-11-21：拦截由拦截方自己决定（14.5）
    *
-   * 拦截方是守方 —— PvE 下就是 AI 的苏军，玩家是被拦截方。以前玩家在空军面板里替苏军勾
-   * 「拦截方宣布拦截」并挑机，等于玩家替对手做决定（用户 2026-11-21 指出的问题）。
-   * 现在只要拦截方是 AI，就由 AI 按 14.4c 资格自行挑一架（缺省口径同引擎 `pickHighestAcv`：
-   * 当前面 ACV 最高），玩家不再接触拦截 UI。
+   * 判据是**语义判据**，不是 `mode === 'pve'`：拦截方由引擎定（`airInterceptionResponse`
+   * 用 `enemySide` 出候选），所以只要「候选拦截机的阵营 === AI 阵营」，拦截就归 AI。
+   * 这样教学模式与普通 PvE 走同一条规则，但各有各的驱动者：
+   *   · 教学 → 由 `tutorial.ts` 的脚本决定（本 watch 因 `scriptedSide` 让位，不插手）；
+   *   · 普通 PvE → 由本 watch 的通用 AI 决定。
    */
   watch(
     () =>
-      `${String(mode.value)}|${String(aiSide.value)}|${String(workbench.airState?.step ?? '')}|${String(workbench.airState?.interception?.declared ?? false)}`,
+      `${String(mode.value)}|${String(aiSide.value)}|${String(scriptedSide.value)}|${String(workbench.airState?.step ?? '')}|${String(workbench.airState?.interception?.declared ?? false)}|${String(workbench.airInterceptorCandidates.length)}`,
     () => {
-      if (mode.value !== 'pve' || aiSide.value === null) return
+      if (aiSide.value === null) return
+      // 脚本接管时不插手：教学有自己的定死流程
+      if (scriptedSide.value !== null) return
       if (workbench.airState?.step !== 'interception') return
       if (workbench.airState.interception?.declared === true) return
       const candidates = workbench.airInterceptorCandidates
       if (candidates.length === 0) return
+      // 拦截方＝候选机的阵营（引擎按 enemySide 出候选）；拦截方不是 AI 就不归 AI 决定
+      const intercepting = candidates[0]?.side ?? null
+      if (intercepting !== aiSide.value) return
       // 14.1b：ACV 取当前面，与引擎缺省口径一致
       const best = candidates.reduce((a, b) =>
         airCombatRatingOf(b) > airCombatRatingOf(a) ? b : a,
@@ -512,6 +530,9 @@ export const useHotseatStore = defineStore('hotseat', () => {
   return {
     // 状态
     mode,
+    // 脚本接管的一方（教学等固定流程；登记后通用 AI 让位）
+    scriptedSide,
+    setScriptedSide,
     aiSide,
     setupLocked,
     modeIssue,

@@ -40,7 +40,14 @@ const workbench = useWorkbenchStore()
  * 拦截应答完全交给 AI（hotseat 里的自动拦截），这里只显示「由苏军决定」。
  */
 const hotseat = useHotseatStore()
-const aiChoosesInterception = computed(() => hotseat.mode === 'pve')
+const aiChoosesInterception = computed(() => {
+  // 拦截方由引擎定（候选机阵营＝enemySide）：判「拦截方阵营」而不是判 mode
+  const intercepting = workbench.airInterceptorCandidates[0]?.side ?? null
+  if (intercepting === null) return false
+  if (hotseat.aiSide !== null && intercepting === hotseat.aiSide) return true
+  // 教学等固定流程：苏军由脚本接管，同样不该让玩家代对手操作
+  return hotseat.scriptedSide !== null && intercepting === hotseat.scriptedSide
+})
 
 /**
  * K3：拦截应答是**决策步**，记录后必须继续跑完（否则会话停在此步没有出口）。

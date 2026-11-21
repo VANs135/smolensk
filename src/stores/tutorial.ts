@@ -197,11 +197,18 @@ export const useTutorialStore = defineStore('tutorial', () => {
     reactionOutcome.value = null
     scriptApplied.value = false
     setTutorialSovietFirstTurnFullMa(true)
+    /*
+     * 2026-11-21：教学模式是**独立的一套流程**，不与普通 PvE 的通用 AI 混用。
+     * 这里把苏军登记为「脚本接管方」，hotseat 的通用 AI 在登记期间一律让位，
+     * 苏军的每一步（含拦截）都由本文件的教学脚本按固定流程执行。
+     */
+    hotseat.setScriptedSide('soviet')
   }
 
   function stop(): void {
     active.value = false
     setTutorialSovietFirstTurnFullMa(false)
+    hotseat.setScriptedSide(null)
   }
 
   const stackUnits = computed(() =>
@@ -483,8 +490,10 @@ export const useTutorialStore = defineStore('tutorial', () => {
       /*
        * 2026-11-20（用户「以 PVE 为基础」）：拦截应答归**守方** —— 教学局里苏军是 AI，
        * 由 AI 派自己的 I.153（tutorial 的固定骰保证它被打回），玩家不替对手点拦截 UI。
+       * 2026-11-21（用户「教学模式独立，不要和普通 PVE 混」）：教学一律由脚本接管苏军，
+       * 所以这里除 `aiSoviet` 外还要认 `scriptedSide === 'soviet'`，两种驱动者都不给玩家 UI。
        */
-      if (aiSoviet.value) return {}
+      if (aiSoviet.value || hotseat.scriptedSide === 'soviet') return {}
       if (!workbench.airInputs.interceptDeclared) {
         return { texts: ['拦截方宣布拦截（14.5：不强制）'] }
       }
@@ -1055,6 +1064,24 @@ export const useTutorialStore = defineStore('tutorial', () => {
       if (state.step === 'interception') {
         workbench.airInputs.interceptDie = 6
         workbench.airInputs.interceptLossDie = 1
+        /*
+         * 2026-11-21：**脚本演苏军**。教学流程定死，苏军的拦截由脚本宣布并选机，
+         * 玩家是被拦截方（不再替对手勾「宣布拦截」、选机）。I.153 是教学里唯一的
+         * 苏军战斗机，找不到就退回引擎给的第一架候选（资格由 14.4c 判定）。
+         */
+        if (workbench.airState?.interception?.declared !== true) {
+          const candidates = workbench.airInterceptorCandidates
+          const fixed =
+            candidates.find((air) => air.instanceId === TUTORIAL_SU_I153_ID) ?? candidates[0]
+          if (fixed !== undefined) {
+            workbench.airInputs = {
+              ...workbench.airInputs,
+              interceptDeclared: true,
+              interceptorId: fixed.instanceId,
+            }
+            workbench.declareInterceptionNow()
+          }
+        }
       }
       if (state.step === 'flak' && sameHex(state.targetHex, BOMB_HEX)) {
         workbench.airInputs.flakDie = 12
