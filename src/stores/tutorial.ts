@@ -158,6 +158,41 @@ export const useTutorialStore = defineStore('tutorial', () => {
 
   /** 反应段脚本的三态；`done` 后引导卡显示战果 */
   const reaction = ref<'idle' | 'running' | 'done' | 'skipped'>('idle')
+
+  /*
+   * 2026-11-21：后三步（苏军反扑 / 弹幕轰城 / 夺城）的真实完成判据
+   *
+   * 原实现用 `phaseAtLeast(phase, 'combat' | 'exploitation')` 兜底，结果阶段一进战斗段
+   * 就同时判完「反扑」与「弹幕」、一进挺进段就判完「夺城」——玩家什么都没做，引导也显示
+   * 全部完成（而 `cityBarraged()` / `cityTaken()` 的真实检查被 `||` 短路成永不生效）。
+   * 现在只认真实事件；「这一步不做也能往下」交给玩家显式跳过（`skipCurrent`），
+   * 不再由阶段推进代替。
+   */
+  const reactionFought = ref(false)
+  const skippedSteps = ref<Set<string>>(new Set())
+
+  /** 反应段是否真的打过一仗（PvE 下苏军由 AI 执行，这里只观察战斗是否发生） */
+  watch(
+    () =>
+      `${String(active.value)}|${String(workbench.phase)}|${String(workbench.combatState === null)}`,
+    () => {
+      if (!active.value || reactionFought.value) return
+      if (workbench.phase !== 'reaction') return
+      if (workbench.combatState === null) return
+      reactionFought.value = true
+    },
+    { flush: 'post' },
+  )
+
+  /** 显式跳过当前步：唯一的「不做事也能往下」入口 */
+  function skipCurrent(): boolean {
+    const step = steps.value[cursor.value]
+    if (step === undefined) return false
+    const next = new Set(skippedSteps.value)
+    next.add(step.id)
+    skippedSteps.value = next
+    return true
+  }
   const reactionOutcome = ref<string | null>(null)
   /** 开局脚本只落一次（读档 / 撤销不重放） */
   const scriptApplied = ref(false)
@@ -808,9 +843,10 @@ export const useTutorialStore = defineStore('tutorial', () => {
         hint: '霍特：他们另一支坦克师扑上来了，顶住。',
         intro: '反应段苏军释放预备、照 9.2 打一轮——按他们的兵力，这一下必输（苏军失败）。',
         done: () =>
-          aiSoviet.value
-            ? phaseAtLeast(workbench.phase, 'combat')
-            : reaction.value === 'done' || reaction.value === 'skipped',
+          reaction.value === 'done' ||
+          reaction.value === 'skipped' ||
+          reactionFought.value ||
+          skippedSteps.value.has('reaction-attack'),
       },
       {
         id: 'barrage-city',
@@ -818,15 +854,15 @@ export const useTutorialStore = defineStore('tutorial', () => {
         hint: '霍特：炮兵弹幕打 19.27 的守军。',
         intro:
           '炮兵弹幕在 F 段结算（SOP：C 段只给空军、F 段只给炮兵）；先扣补给点，再按 10.0a 炸出 DG。',
-        // 弹幕是可选动作：没炮弹/没到 F 段时也不能把引导卡死
-        done: () => cityBarraged() || phaseAtLeast(workbench.phase, 'combat'),
+        // 弹幕不是可选动作：必须真的落在 19.27 并结算，或玩家显式跳过；阶段推进不再兜底
+        done: () => cityBarraged() || skippedSteps.value.has('barrage-city'),
       },
       {
         id: 'capture-city',
         title: '打下小城 19.27',
         hint: '霍特：轮到我们了——进攻 19.27，把城格拿下来。',
         intro: '战斗阶段由你宣布进攻：补给 → AR → 地形 → 奇袭 → 骰面，走完就是你的城。',
-        done: () => cityTaken() || phaseAtLeast(workbench.phase, 'exploitation'),
+        done: () => cityTaken() || skippedSteps.value.has('capture-city'),
       },
     ]
     return source.map((step) => ({
@@ -1232,5 +1268,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
     stackHex,
     reaction,
     reactionOutcome,
+    reactionFought,
+    skippedSteps,
+    skipCurrent,
   }
 })
