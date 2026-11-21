@@ -245,7 +245,27 @@ export function createConstructionDomain(deps: ConstructionDeps) {
     return true
   }
 
+  /**
+   * 公开面清单（P2）：原 facade `workbench.ts` return 区属于本域的键，搬回域内。
+   *
+   * 为什么搬：这批键是对外承诺的接口，以前登记在 facade 的 1,005 键 return 表里，
+   * 于是任何本域改动都要去共享文件登记一次 —— 两人并行改 store 必在 return 区冲突。
+   * 搬到域内后，本域的改动人只改本文件；facade 只留一行 `...xxx.publicSurface`。
+   *
+   * 纪律：增删对外键时**同步改这里的清单**，否则公开面快照（1,013 键）会红。
+   */
+  const publicSurface = {
+    constructionError,
+    constructionPayDumps,
+    constructionPayPick,
+    toggleConstructionPayPick,
+    pickConstructionPayDumpNow,
+    constructionLedgerOf,
+    constructionLegRangeTo,
+    constructionGateNow,
+  }
   return {
+    publicSurface,
     constructionLedgers,
     constructionLedgerOf,
     constructionError,

@@ -1556,7 +1556,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     barrageState,
     barrageError,
     barrageInputs,
-    barrageAwaitingHalfDie,
     barrageCommitted,
   } = fireResolution
 
@@ -1767,23 +1766,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     hedgehogInputs,
     hedgehogExecutorMode,
     hedgehogEngineerId,
-    hedgehogUsesEngineerRoute,
-    hedgehogTargetHex,
-    hedgehogEngineer,
-    hedgehogEngineerLegRange,
-    pickedHedgehogEngineer,
-    hedgehogError,
     hedgehogTurnLedger,
     hedgehogLevelOf,
     hedgehogHexState,
-    isPrintedHedgehogAt,
-    printedHedgehogPositions,
-    buildHedgehogNow,
-    reduceHedgehogNow,
-    hedgehogPayDumps,
-    hedgehogPayPick,
-    toggleHedgehogPayPick,
-    pickHedgehogPayDumpNow,
   } = hedgehogsDomain
 
   /** 15.3 / 15.2A 的玩家输入（目标格 / 施工的工程单位 / 付款站） */
@@ -2135,13 +2120,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
   const {
     constructionLedgers,
-    constructionLedgerOf,
     constructionError,
-    constructionPayDumps,
-    constructionPayPick,
-    toggleConstructionPayPick,
-    pickConstructionPayDumpNow,
-    constructionLegRangeTo,
     engineerExecutorFor,
     constructionGateNow,
     noteConstruction,
@@ -2259,21 +2238,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return airBases
     },
   })
-  const {
-    airBaseTurnLedger,
-    airUnloadLedger,
-    airUnloadedTAt,
-    engineerChoices,
-    airBaseUnitAt,
-    isAirstripAt,
-    airBaseLevelAt,
-    hexHasAirFacility,
-    airBaseBuildCostSpPerLevel,
-    pickedEngineer,
-    buildAirBaseNow,
-    buildAirstripNow,
-    upgradeAirstripNow,
-  } = airFacilityDomain
+  const { airBaseTurnLedger, airUnloadLedger, airUnloadedTAt, pickedEngineer } = airFacilityDomain
 
   /* ────────── C8 补给标签（12.3 / 12.6 / 12.7 的界面文案，B3-2b18） ────────── */
 
@@ -2312,15 +2277,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     eliminateEntry,
     airStatusLabel: (status) => airStatusLabel(status),
   })
-  const {
-    setAirStatus,
-    applyAirStepLoss,
-    markAirMissionFlown,
-    toggleAirUnitStatus,
-    drawAir2d6,
-    drawAir1d6,
-    drawD6,
-  } = airPrimitivesDomain
+  const { setAirStatus, applyAirStepLoss, markAirMissionFlown, drawAir2d6, drawAir1d6, drawD6 } =
+    airPrimitivesDomain
 
   // ── C9 空军交互（W6 C9：OCS 14.0 / 15.0；引擎状态机在 air-interaction.ts） ──
   // ── B2-1：空军状态 + 派生已搬进 workbench-air（25 端口，其中 5 项晚绑定走 getter） ──
@@ -7827,58 +7785,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   // B3-1：搬走后回补（区外仍引用；nameOf/unitNameOf*/applyMovePatches/refuseWhileSettling/
   // closeBreakdownWindows 走上面的薄转发或此处解构）
   const {
-    unitNameOf,
-    previewDraggedPath,
-    moveAlongDraggedPath,
     tryMoveTo,
     settlementInProgress,
     beginMoveFor,
-    setupBreakdownCandidates,
     openBreakdownWindow,
-    canCreateBreakdownNow,
-    breakdownRecordChoicesFor,
-    breakdownAbsorbChoicesFor,
-    canAbsorbBreakdownNow,
     retryBeginMove,
     selectForMove,
     setupWiggleParents,
-    setupWiggleOn,
-    setupWiggleRemaining,
     breakdownTimingOf,
   } = movementDomain
   /* B3-2b2：撤销 / 收束族（区外仍引用；`concludeMove` 只被族内调用，不进公开面） */
-  const {
-    undoLastStep,
-    cancelWholeMove,
-    abortMoveNow,
-    finishMove,
-    pauseTransportMove,
-    dismissFinishedMoveNow,
-    dismissMoveLinger,
-    setHoverHex,
-    dropUnitFromMove,
-    sealEdgeBoxTransferNow,
-  } = movementDomain
+  const { undoLastStep, finishMove, setHoverHex } = movementDomain
   /* B3-2b3：模式切换 / 初设模式判据（`SETUP_MODES_ALL` 只被族内用，不进 facade） */
-  const {
-    setStackSelect,
-    switchUnitMode,
-    switchableModesOf,
-    setupSwitchableModesOf,
-    setupModeBlockNote,
-    noteSetupModeBlocked,
-  } = movementDomain
   /* B3-2b4：初设设模式 / 预备换面（全部只在公开面被引用） */
-  const {
-    setUnitModeAtSetup,
-    setupReserveSummary,
-    releaseReserveNow,
-    switchReserveFaceNow,
-    canEditReserveModeOf,
-    flipUnitOrientation,
-    canReleaseReserveOf,
-    cancelReserveModeNow,
-  } = movementDomain
 
   /**
    * B3-2b1：`triggerSpecialCombatAfterStep` 在 1110 行就被当端口传给 `groundMovement`，
@@ -7907,17 +7826,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return initialSetupInProgress
     },
   })
-  const {
-    movePickHex,
-    movePickChoices,
-    toggleMovePick,
-    setMovePickOnly,
-    setMovePickAll,
-    beginMovePick,
-    setMovePickIds,
-    cancelMovePick,
-    confirmMovePick,
-  } = stackPickDomain
+  const { confirmMovePick } = stackPickDomain
 
   /* ──────────── 12.5 燃料域（B3-2b5：payFuel + 燃料来源/面板整块，已搬进 `workbench-fuel.ts`） ──────────── */
   const fuelDomain = createFuelDomain({
@@ -7947,35 +7856,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       panzerGroupSpRefusal,
     },
   })
-  const {
-    payFuel,
-    fuelDumpId,
-    hqFuelThrows,
-    formationFuelThrows,
-    hqFuelThrowOriginOf,
-    formationFuelThrowOf,
-    fuelTargets,
-    fuelPendingUnits,
-    fuelPaymentDue,
-    supplyCheckCandidates,
-    fuelMethod,
-    fuelSubjectId,
-    fuelMethodChoices,
-    minimalFuelingOn,
-    fuelMethodEffective,
-    fuelMethodsForUnitNow,
-    openFuelNow,
-    closeFuelNow,
-    fuelMethodLabel,
-    fuelSourcePartition,
-    fuelDumpChoices,
-    fuelDump,
-    fuelPayNeedT,
-    fuelFormationCoverage,
-    pickFuelDump,
-    setFuelPool,
-    setUnitFuelled,
-  } = fuelDomain
+  const { hqFuelThrows, formationFuelThrows } = fuelDomain
   /*
    * B3-2b5：`applyFormationFuelCoverage*` 在 7600/7712 就被当端口传给 stack-pick / movement，
    * 早于本域解构 ⇒ facade 只能保留**函数声明**（提升）形式的一行薄转发。
@@ -8003,19 +7884,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     noteUndoable,
     dropUndoOf,
   })
-  const {
-    optionDraftPoints,
-    optionDraftUsed,
-    optionDraftRemaining,
-    optionDraftEntries,
-    optionRetreatUnits,
-    canTakeOptionLossPoint,
-    applyOptionDraftLoss,
-    applyOptionDraftRetreat,
-    applyOptionDraftRetreatFor,
-    undoOptionDraftLast,
-    resetOptionDraft,
-  } = combatOptionsDomain
+  const { optionDraftRemaining, undoOptionDraftLast, resetOptionDraft } = combatOptionsDomain
 
   /*
    * B3-2b9（2026-11-21）：C6 第 8 步（b）选项结算搬进 `workbench-combat-settle.ts`。
@@ -11863,15 +11732,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     requireAction,
     transportKindOf,
   })
-  const {
-    transportPointsOfSide,
-    transportPointInputs,
-    transportPointGroupsOfSide,
-    toggleTransportMerge,
-    transportRecordFor,
-    mergeTransportPointsNow,
-    splitTransportPointNow,
-  } = transportPointsDomain
+  const { transportPointsOfSide, transportRecordFor } = transportPointsDomain
 
   /** 该单位的运输点数型号（数据层 `noncombatDetails.transportKind`） */
   function transportKindOf(unit: ConsoleUnit): string {
@@ -11898,13 +11759,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       specialPending.value = value
     },
   })
-  const {
-    convertTransportToExtenderNow,
-    flipExtenderToTransport,
-    flipExtenderRecordInPlace,
-    collapseExtenderNow,
-    extenderLabelOf,
-  } = extendersDomain
+  const { flipExtenderRecordInPlace, extenderLabelOf } = extendersDomain
 
   /* ────────── C8f：16.0b/c 环形工事的修建与缩减（＋专规 1.3a 印刷工事） ────────── */
 
@@ -11965,17 +11820,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setHoverHex,
     phase,
   })
-  const {
-    airMissionSegment,
-    airJoinRemaining,
-    airMissionJoinChoices,
-    airMissionBaseFocus,
-    airMissionBaseGroups,
-    airMissionBaseGroupsWithBox,
-    focusAirMissionBase,
-    anyOwnAircraftReaches,
-    airMissionAllowedInPhase,
-  } = airMissionDerivedDomain
+  const { airMissionJoinChoices, airMissionAllowedInPhase } = airMissionDerivedDomain
 
   /* ──────────── 三操作统一流程（2026-11-10 规格）：入口判据 + 候选集合（两处同源） ──────────── */
 
@@ -12018,17 +11863,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return airMissionKindChoices
     },
   })
-  const {
-    barrageCandidatesAt,
-    bombingCandidatesAt,
-    hipShootCandidatesAt,
-    barrageEntryEligible,
-    barrageEntryBlockReason,
-    noteBarrageBlocked,
-    bombingEntryEligible,
-    barrageTargetsNow,
-    hipShootEntryEligible,
-  } = barrageEntryDomain
   /* ──────────── 9.14 特殊战斗：进入敌方设施格（落点由玩家选择） ──────────── */
 
   /**
@@ -21728,26 +21562,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       },
     },
   })
-  const {
-    barrageSupplyDumpId,
-    barragePaidSupply,
-    barrageSupplyDumpChoices,
-    barrageSupplyHqChoices,
-    barrageShellMarkers,
-    barragePayNeedT,
-    barrageShellBudgetT,
-    barrageShellPreview,
-    barrageSupplyDump,
-    barrageLossRequired,
-    barrageLossAllocated,
-    barrageLossReady,
-    barrageSupplyMapDumps,
-    barrageErrorLine,
-    combatErrorLine,
-    airErrorLine,
-    barrageLossTargets,
-    barrageAircraftRollTargets,
-  } = barrage
+  const { barrageLossRequired, barrageLossReady, barrageLossTargets, barrageAircraftRollTargets } =
+    barrage
 
   return {
     /*
@@ -21785,7 +21601,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     units,
     edgeBoxHoldings,
     edgeBoxEnteredOn,
-    sealEdgeBoxTransferNow,
+    // ── movementDomain（P2：本段键已由 workbench-move.ts 的 publicSurface 提供）──
+    ...movementDomain.publicSurface,
     selectedId,
     pendingRecord,
     tool,
@@ -21799,7 +21616,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // C5 移动交互
     moveInteraction,
     moveLinger,
-    dismissMoveLinger,
     moveUnits,
     activeMoveUnits,
     moveBudgetRows,
@@ -21820,16 +21636,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     reserveMarkerStatusOf,
     // 专规 1.5 / 剧本 1–2：首回合苏军地面单位 ×1/2（界面额度显示与引擎同一口径）
     sovietFirstTurnMaFactor,
-    movePickHex,
-    movePickChoices,
-    toggleMovePick,
-    setMovePickIds,
-    setMovePickOnly,
-    beginMovePick,
-    setMovePickAll,
+    // ── stackPickDomain（P2：本段键已由 workbench-stack-pick.ts 的 publicSurface 提供）──
+    ...stackPickDomain.publicSurface,
     defaultMovePickIdsAt,
-    cancelMovePick,
-    confirmMovePick,
     moveBlocked,
     fuelPool,
     moveRuntime,
@@ -21894,17 +21703,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     removeAt,
     clickHex,
     // 2026-11-18：拖拽落子（沿玩家实际路径逐步判通行；与点击同一套判据）
-    moveAlongDraggedPath,
     // 用户 2026-11-18：拖动中的路径预览（只读；画布据此决定终点画不画）
-    previewDraggedPath,
     // 用户 2026-11-10：地图上点**某一枚** ⇒ 只选这一枚（`only`），整格全选走"点格内空白"
-    selectForMove,
     // C5 动作
-    setHoverHex,
-    setStackSelect,
-    undoLastStep,
     undoTransportHandlingNow,
-    cancelWholeMove,
     // 用户 2026-11-20：全局共用撤销（同一 action / 最近一笔可撤操作；掷骰按笔封账）
     undoLastOperationNow,
     canUndoOperation,
@@ -21922,81 +21724,31 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 用户 2026-11-13 批：「放弃本次移动」不可用时按钮不出现（Esc 仍走 finishMove 收束退出）
     canAbortMove: groundMovement.canAbortMove,
     // B15a：放弃本次移动**并退出移动态**（会话框的取消 / Esc）
-    abortMoveNow,
-    finishMove,
     // 用户 2026-11-18：结束后关窗只收会话，不动盘面
-    dismissFinishedMoveNow,
-    pauseTransportMove,
     // 6.1f：把某枚从正在移动的堆叠里放下（就地停住，其余继续）
-    dropUnitFromMove,
-    switchUnitMode,
     // 5.4a：右键「模式改变」子菜单只列此刻真正能切过去的模式（与 switchUnitMode 同判据、不写日志）
-    switchableModesOf,
     // IV-B：初设阶段为单位/堆叠设定模式（combat / move / reserve / strat）
-    setUnitModeAtSetup,
     // IV-B：初设右键「初设模式」只列此刻真正能设的模式（与 setUnitModeAtSetup 同判据）
-    setupSwitchableModesOf,
     // IV-B：一个模式都出不来时就地给原因（不摆空菜单）
-    setupModeBlockNote,
-    noteSetupModeBlocked,
-    setupReserveSummary,
     eliminateEntry,
-    beginMoveFor,
-    flipUnitOrientation,
     // 5.7b：E/G 段释放预备（把预备标记摘掉，回朝向面）
-    releaseReserveNow,
     // 5.7b：释放预备的只读投影（右键「转出预备模式」只在它为真时出现）
-    canReleaseReserveOf,
     // 用户 2026-11-18：移动环节内的预备换面 / 取消预备（不是 5.7b 转出）
-    switchReserveFaceNow,
-    cancelReserveModeNow,
-    canEditReserveModeOf,
-    payFuel,
-    setFuelPool,
-    fuelDumpId,
-    fuelSourcePartition,
-    fuelMethod,
+    // ── fuelDomain（P2：本段键已由 workbench-fuel.ts 的 publicSurface 提供）──
+    ...fuelDomain.publicSurface,
     // 12.5c（用户 2026-09-17）：点谁就决定能点哪一法（可用性 + 原因）
-    fuelMethodChoices,
     // 12.5e：HQ 法的投递基点台账（本阶段每指挥部最多一个位置；清理阶段/换回合清空）
-    hqFuelThrows,
-    formationFuelThrows,
-    formationFuelThrowOf,
-    fuelFormationCoverage,
-    hqFuelThrowOriginOf,
-    fuelMethodEffective,
-    fuelDumpChoices,
-    fuelPayNeedT,
-    fuelTargets,
     // 用户 2026-11-10：加油唯一入口＝右键该单位/堆叠（只列真正可用的 12.5c 方法）
-    fuelSubjectId,
-    fuelMethodsForUnitNow,
-    openFuelNow,
-    closeFuelNow,
-    fuelMethodLabel,
     // B18b：12.5a「耗油且未加注」的单位与"此刻该付油了吗"（地图据此展开燃料段）
-    fuelPendingUnits,
-    fuelPaymentDue,
     // B18c（12.0）：受补给单位的候选（只有战斗单位需要追溯补给）
-    supplyCheckCandidates,
-    fuelDump,
-    pickFuelDump,
-    barrageSupplyDumpId,
-    barrageSupplyDumpChoices,
+    // ── barrage（P2：本段键已由 workbench-barrage.ts 的 publicSurface 提供）──
+    ...barrage.publicSurface,
     // G②（10.1b-A）：这批来源里哪些是经 HQ 投递达成的（付款时据此声明"来自同一指挥部"）
-    barrageSupplyHqChoices,
-    barrageSupplyDump,
     // 21.10：本次实扣的 Shells/浪费（撤销时据此原数退回）
-    barragePaidSupply,
     // 21.10：Shells 计划枚数 / 额度 / 预览（抵付、浪费、缺口、降档列）
-    barrageShellMarkers,
-    barragePayNeedT,
-    barrageShellBudgetT,
-    barrageShellPreview,
     pickBarrageSupplyDump,
     // B14b：阵列里「点同一座站即取消」（旧下拉的"未声明"空档的替代）
     toggleBarrageSupplyDump,
-    setUnitFuelled,
     lockZocNegation,
     canLockZocNegationNow,
     openBattle,
@@ -22005,12 +21757,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // C6 战斗交互
     battleMode,
     combatAttackerIds,
-    combatState,
-    combatError,
-    combatErrorLine,
-    combatInputs,
-    combatAwaitingShiftDie,
-    combatSurpriseDie,
+    // ── fireResolution（P2：本段键已由 fire-resolution.ts 的 publicSurface 提供）──
+    ...fireResolution.publicSurface,
     combatAttackers,
     combatDefenderSide,
     combatAttackerViews,
@@ -22020,21 +21768,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     combatResolver,
     combatRequirement,
     combatOptionLossTargets,
-    optionDraftPoints,
-    optionDraftUsed,
-    optionDraftRemaining,
-    optionDraftEntries,
-    optionRetreatUnits,
+    // ── combatOptionsDomain（P2：本段键已由 workbench-combat-options.ts 的 publicSurface 提供）──
+    ...combatOptionsDomain.publicSurface,
     combatOptionRetreatWarning,
     attackerWipedNow,
     optionIgnoreAvailableNow,
     confirmCombatIgnoreOptions,
-    applyOptionDraftLoss,
-    canTakeOptionLossPoint,
-    applyOptionDraftRetreat,
-    applyOptionDraftRetreatFor,
-    undoOptionDraftLast,
-    resetOptionDraft,
     combatCanonicalLosses,
     // 批 F 切片 2（9.11a）：拥有者可以把"多受的那一点"改派给谁（候选与提交分配的唯一出处）
     combatLossSwapChoices,
@@ -22055,7 +21794,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     autoResolveCombatToOutcome,
     combatLiveStep,
     // C8：补给已提交 ⇒ 存档/读档被 settlementBlockedReason 拒绝，面板据此全程提示
-    combatSupplyCommitted,
     combatAdvanceMandatory,
     combatRetreatRequirement,
     combatDefendingHexCleared,
@@ -22117,7 +21855,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     overrunTargets,
     overrunTargetHexes,
     // 9.2 / 10.0：结算进行中 ⇒ 任何单位都不得移动（第六批 BUG ②）
-    settlementInProgress,
     combatAttackableHexes,
     overrunNow,
     overrunZocHeld,
@@ -22127,10 +21864,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     barrageActive,
     barrageKind,
     barrageTargetKind,
-    barrageLossTargets,
-    barrageAircraftRollTargets,
     barrageUnitIds,
-    barrageState,
     hexPickView,
     // 批 E 切片 2：B27 的通用待点格入口**开放给别的 store**（`containers` 的"西移落点"要用它）
     beginHexPick,
@@ -22170,15 +21904,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     beginCityControlHexPickNow,
     beginFormationMarkerHexPickNow,
     beginDeadPileReturnHexPickNow,
-    barrageError,
     // 用户 2026-11-12：错误提示中文化（面板不再显示引擎 reason 代码）
-    barrageErrorLine,
-    barrageInputs,
     // A 组接线：10.0e-A/B 的按阶段轰炸账本（界面显示"本阶段已轰炸 N 格 / M 单位"）
     barragePhaseLedger,
     // 批 A 切片 3：9.1c 的按**环节**攻击账本（界面显示"本环节已攻击 N 单位 / M 格"）
     attackPhaseLedger,
-    barrageAwaitingHalfDie,
     barrageUnits,
     // B14b：参炸单位 / 参炸飞机的算子图阵列（含逐枚灰显原因）
     barrageUnitChoices,
@@ -22219,7 +21949,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     addAirUnit,
     removeAirUnit,
     // 14.1b：空军军力损失（归零即与地面单位**共用同一个死亡堆**）
-    applyAirStepLoss,
+    // ── airPrimitivesDomain（P2：本段键已由 workbench-air-primitives.ts 的 publicSurface 提供）──
+    ...airPrimitivesDomain.publicSurface,
     toggleBarrageAirUnit,
     beginBarrageNow,
     confirmBarrageSupplyStep,
@@ -22233,13 +21964,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     runBarrageResolution,
     refundBarrageSupply,
     cancelOpsBarrage,
-    barrageSupplyMapDumps,
-    barrageLossRequired,
-    barrageLossAllocated,
     barrageLossPointsOf,
     addBarrageLossPoint,
     removeBarrageLossPoint,
-    barrageLossReady,
     confirmBarrageLossNow,
     // P3 / UI3：会话「域拒绝」的唯一只读判据（与 canReplaceBarrage 同源）
     barrageCancelBlocker,
@@ -22308,63 +22035,24 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setAttritionAllocation,
     rollAttritionNow,
     applyAttritionNow,
-    unitNameOf,
     // 13.2c：运输点数的合并 / 拆分（含编内卡车不得与常规点数合并的限制）
-    transportPointsOfSide,
-    transportPointGroupsOfSide,
-    transportPointInputs,
-    toggleTransportMerge,
-    mergeTransportPointsNow,
-    splitTransportPointNow,
+    // ── transportPointsDomain（P2：本段键已由 workbench-transport-points.ts 的 publicSurface 提供）──
+    ...transportPointsDomain.publicSurface,
     // 12.7：延补队 ⇄ 运输点数的双向转换
-    convertTransportToExtenderNow,
-    flipExtenderToTransport,
+    // ── extendersDomain（P2：本段键已由 workbench-extenders.ts 的 publicSurface 提供）──
+    ...extendersDomain.publicSurface,
     // 9.14d：移动阶段的**主动**崩溃（替代常规移动）
-    collapseExtenderNow,
     // 16.0b/c：环形工事的修建与缩减（＋专规 1.3a 印刷工事查询）
-    hedgehogInputs,
-    hedgehogExecutorMode,
-    hedgehogEngineerId,
-    hedgehogUsesEngineerRoute,
-    hedgehogTargetHex,
-    hedgehogEngineer,
-    hedgehogEngineerLegRange,
-    pickedHedgehogEngineer,
-    hedgehogError,
-    hedgehogTurnLedger,
-    hedgehogLevelOf,
-    isPrintedHedgehogAt,
-    printedHedgehogPositions,
-    buildHedgehogNow,
-    reduceHedgehogNow,
-    hedgehogPayDumps,
-    hedgehogPayPick,
-    toggleHedgehogPayPick,
-    pickHedgehogPayDumpNow,
+    // ── hedgehogsDomain（P2：本段键已由 workbench-hedgehogs.ts 的 publicSurface 提供）──
+    ...hedgehogsDomain.publicSurface,
     // 15.3 / 15.2A：空军基地与简易机场的修建、升格（13.8d 施工前提一并接上）
     constructionInputs,
-    constructionError,
-    constructionPayDumps,
-    constructionPayPick,
-    toggleConstructionPayPick,
-    pickConstructionPayDumpNow,
-    constructionLedgerOf,
-    airBaseTurnLedger,
+    // ── constructionDomain（P2：本段键已由 workbench-construction.ts 的 publicSurface 提供）──
+    ...constructionDomain.publicSurface,
+    // ── airFacilityDomain（P2：本段键已由 workbench-air-facility.ts 的 publicSurface 提供）──
+    ...airFacilityDomain.publicSurface,
     // 14.9f / 15.0b-C：本环节各格已空运卸载的 T（界面据此显示还剩多少额度）
-    airUnloadLedger,
-    airUnloadedTAt,
-    engineerChoices,
     canEngineerInPhase,
-    airBaseLevelAt,
-    airBaseUnitAt,
-    airBaseBuildCostSpPerLevel,
-    isAirstripAt,
-    hexHasAirFacility,
-    constructionLegRangeTo,
-    constructionGateNow,
-    buildAirBaseNow,
-    buildAirstripNow,
-    upgradeAirstripNow,
     // C9 空军交互
     beginAirBarrageNow,
     // B44（14.9e）：逐机档位与"是否有 A 档"（14.9f 的例外据此自动成立）
@@ -22375,7 +22063,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     breakoutNow,
     breakoutReturns,
     deployBreakoutReturnNow,
-    airErrorLine,
     // 15.1 整备交互（点基地 → 勾飞机 → 点地图上的补给付款）
     // 14.11 转场
     railSupply,
@@ -22469,7 +22156,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     railMovedNewTrackThisPhase,
     isRailRepairUnit,
     railRepairUnits,
-    minimalFuelingOn,
     isBarrageCapableUnit,
     segmentLabelsOfAction,
     setAirActive,
@@ -22478,29 +22164,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     setAirTargetFromText,
     toggleAirMissionUnit,
     voluntaryReturnNow,
-    airMissionSegment,
-    airJoinRemaining,
+    // ── airMissionDerivedDomain（P2：本段键已由 workbench-air-mission-derived.ts 的 publicSurface 提供）──
+    ...airMissionDerivedDomain.publicSurface,
     // B14：参战机的算子图阵列（逐机可选性 + 原因）
-    airMissionJoinChoices,
     // 用户 2026-11-09：轰炸/低空扫射按基地分栏的驻机名册与距离（点基地高亮）
-    airMissionBaseGroups,
-    airMissionBaseFocus,
-    focusAirMissionBase,
-    anyOwnAircraftReaches,
-    hipShootEntryEligible,
+    // ── barrageEntryDomain（P2：本段键已由 workbench-barrage-entry.ts 的 publicSurface 提供）──
+    ...barrageEntryDomain.publicSurface,
     // 三操作统一流程（2026-11-10）：入口判据与窗内候选同源
-    barrageEntryEligible,
-    barrageEntryBlockReason,
-    noteBarrageBlocked,
-    barrageTargetsNow,
-    bombingEntryEligible,
-    barrageCandidatesAt,
-    bombingCandidatesAt,
-    hipShootCandidatesAt,
-    airMissionBaseGroupsWithBox,
     pickBarrageTargetAt,
     missionSegmentOf,
-    toggleAirUnitStatus,
     declareInterceptionNow,
     resolveInterceptionCombatNow,
     // 14.4g：防空致容量变化后的货物损失（重算容量 / 勾选摧毁 / 落盘）
@@ -22575,22 +22247,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * **不导出写入口**（`openBreakdownWindow`）——时机只能由真实事件开窗
      * （开始移动 / 战后推进 / 战后撤退），调用方不许自称"现在可以拆"。
      */
-    breakdownTimingOf,
     /*
      * 20.0 / 20.0a–d：入口与候选的只读投影（右键菜单与拆分面板共用同一批判据）
      *
      * `canCreateBreakdownNow` 是「创建拆分单位」是否出现的唯一判据；
      * `breakdownRecordChoicesFor` / `breakdownAbsorbChoicesFor` 是面板下拉的唯一数据源。
      */
-    canCreateBreakdownNow,
-    breakdownRecordChoicesFor,
-    breakdownAbsorbChoicesFor,
-    canAbsorbBreakdownNow,
     // 专规 4.3（可选）Setup Wiggle
-    setupWiggleOn,
-    setupWiggleParents,
-    setupWiggleRemaining,
-    setupBreakdownCandidates,
     assessTurnEndVictoryNow,
     turnEndVictory,
     controlOfHex,
