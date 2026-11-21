@@ -136,7 +136,11 @@ if (writeBaseline) {
     files,
   }
   fs.mkdirSync(path.dirname(BASELINE_PATH), { recursive: true })
-  fs.writeFileSync(BASELINE_PATH, `${JSON.stringify(payload, null, 2)}\n`, 'utf8')
+  // 生成物必须同时是 prettier-clean，否则 `npm run check` 会在 format:check 步红
+  const { format, resolveConfig } = await import('prettier')
+  const prettierCfg = (await resolveConfig(BASELINE_PATH)) ?? {}
+  const text = await format(JSON.stringify(payload), { ...prettierCfg, filepath: BASELINE_PATH })
+  fs.writeFileSync(BASELINE_PATH, text, 'utf8')
   console.log(`已写入宽度基线：${path.relative(ROOT_DIR(), BASELINE_PATH)}`)
 }
 

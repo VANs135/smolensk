@@ -1,9 +1,6 @@
 {
   "note": "端口宽度棘轮：只许降不许升。超过 40 项的切片须列进 over40Exempt，并在拆分后删除豁免。",
-  "over40Exempt": [
-    "workbench-air.ts",
-    "workbench-barrage.ts"
-  ],
+  "over40Exempt": ["workbench-air.ts", "workbench-barrage.ts"],
   "files": {
     "workbench-air.ts": 76,
     "workbench-barrage.ts": 51,
