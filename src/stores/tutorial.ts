@@ -1,5 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { combatFixedDie } from './fire-resolution'
 
 import type { HexRef } from '@/data'
 import { findAircraftRecord, findUnitRecord } from '@/engine/rules/setup'
@@ -72,6 +73,8 @@ const SWEEP_AIRCRAFT_ID = 'ax-aircraft-ge-bf-110'
 const TUTORIAL_EXTRA_JU88_ID = 'tutorial-axis-ju88-2'
 const TUTORIAL_SU_I153_ID = 'tutorial-su-i153'
 const TUTORIAL_SU_LAGG_ID = 'tutorial-su-lagg3'
+/** 反应段苏军反扑的 9.9 固定骰：固定演出，保证每次教学结果一致 */
+const TUTORIAL_REACTION_COMBAT_DIE = 12
 
 /** 教学线用的 20.Mtr 堆叠（初始 14.27；编制内 5 枚） */
 const STACK_UNIT_IDS = new Set([
@@ -1249,10 +1252,16 @@ export const useTutorialStore = defineStore('tutorial', () => {
    * 脚本只负责「替苏军选动作」，不另写判定。
    */
   function runReactionAttack(): boolean {
+    // 每一步失败都点名报出来：用户要求「每一步都不能跳过」，静默 false 会让问题藏起来
+    const fail = (where: string): false => {
+      workbench.pushLog('warning', `教学反扑：${where} 未成功（不跳过此步）`, '9.2')
+      return false
+    }
     const tk = workbench.units.find(
       (unit) => unit.side === 'soviet' && unit.unitId === 'su-armor_tk-ru-18-tk-div',
     )
-    if (tk === undefined || tk.steps <= 0) return false
+    if (tk === undefined) return fail('找不到 18 Tk Div')
+    if (tk.steps <= 0) return fail('18 Tk Div 没有 MA（steps=0）')
 
     /*
      * ① 加油：18 Tk Div 是**独立单位**（3.2f）⇒ 只能走 12.5c-B 的 HQ 法或 12.5c-C 的
@@ -1261,7 +1270,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
      */
     if (!tk.fuelled) {
       const dump = workbench.spDumps.find((item) => item.id === 'tutorial-su-supply')
-      if (dump === undefined || dump.sp < 1) return false
+      if (dump === undefined) return fail('找不到 19.26 的苏军补给堆')
+      if (dump.sp < 1) return fail('补给堆 SP 不足 1')
       dump.sp -= 1
       tk.fuelled = true
       workbench.pushLog(
@@ -1279,20 +1289,36 @@ export const useTutorialStore = defineStore('tutorial', () => {
     tk.mode = { mode: 'reserve', orientation: 'move', dg: false, exploit: false }
     tk.raw = tk.faces.move
     workbench.selectedId = tk.instanceId
-    if (!workbench.releaseReserveNow()) return false
+    if (!workbench.releaseReserveNow()) return fail('解除预备态（releaseReserveNow）')
 
     workbench.beginMovePick(tk.hex, [tk.instanceId])
-    if (!workbench.confirmMovePick()) return false
-    // ② 移动到 19.27（小城格）：只认这一格，到不了就报失败、不换目标
-    const node = (workbench.groupReachable?.hexes ?? []).find((item) => sameHex(item.hex, CITY_HEX))
-    if (node === undefined) return false
-    if (!workbench.moveAlongDraggedPath(node.path)) return false
+    if (!workbench.confirmMovePick()) return fail('选移动单位（confirmMovePick）')
+    /*
+     * ② 移动到 19.27（小城格）：只认这一格，到不了就报失败、不换目标。
+     * 直接给出「19.26 → 19.27」的单步路径，不读 groupReachable ——
+     * 那是 UI 用 nextTick 之后才刷新出来的计算值，脚本同步跑时读到的是空集（实测）。
+     * 合法性仍由 moveAlongDraggedPath 内部照 8.x 校验（MP/地形/Zone of Control）。
+     */
+    const path = [{ ...tk.hex }, { ...CITY_HEX }]
+    if (!workbench.moveAlongDraggedPath(path)) return fail('沿路径移动到 19.27')
 
     // ③ 战斗：对 19.27 上／相邻的轴心单位发起突袭，并走完 9.2 战斗序列
     const target = reactionTargetHex()
-    if (target === null) return false
-    if (!workbench.overrunNow(target)) return false
-    if (!driveReactionCombat(tk.instanceId)) return false
+    if (target === null) return fail('19.27 附近没有轴心战斗单位')
+    /*
+     * 这段战斗是**教学演出**：9.9 的 2d6 必须固定，否则同一步每次结果都不同
+     * （实测随机骰打出 AL2 会把 18 Tk Div 直接抹掉，教学就断在这里了）。
+     */
+    combatFixedDie.value = TUTORIAL_REACTION_COMBAT_DIE
+    if (!workbench.overrunNow(target)) {
+      combatFixedDie.value = null
+      return fail('发起突袭（overrunNow）')
+    }
+    if (!driveReactionCombat(tk.instanceId)) {
+      combatFixedDie.value = null
+      return fail('走完 9.2 战斗序列')
+    }
+    combatFixedDie.value = null
     const raw = workbench.combatState?.dice?.result.raw ?? null
     reactionOutcome.value = raw
     return raw !== null && raw.startsWith('A')
@@ -1313,7 +1339,6 @@ export const useTutorialStore = defineStore('tutorial', () => {
         reaction.value = 'done'
         return
       }
-      // 不能跳过这一步（用户两次强调）：失败就退回 idle 并报警，让问题暴露而不是静默放行
       reaction.value = 'idle'
       workbench.pushLog(
         'warning',
@@ -1338,6 +1363,28 @@ export const useTutorialStore = defineStore('tutorial', () => {
     if (step?.id === 'bombing') {
       const i153 = workbench.airUnits.find((air) => air.instanceId === TUTORIAL_SU_I153_ID)
       if (i153 !== undefined && i153.airStatus === 'inactive') i153.airStatus = 'active'
+    }
+    /*
+     * 2026-11-21：反扑同理——只在「当前步恰好是 reaction-attack」时驱动脚本一次。
+     * watch 在无组件渲染（测试）环境下不保证触发，靠这里推一把才可靠；
+     * 失败回 idle 并报警，不把没打完记成过（用户「每一步都不能跳过」）。
+     */
+    if (
+      step?.id === 'reaction-attack' &&
+      reaction.value === 'idle' &&
+      workbench.phase === 'reaction' &&
+      hotseat.scriptedSide === 'soviet'
+    ) {
+      reaction.value = 'running'
+      if (runReactionAttack()) reaction.value = 'done'
+      else {
+        reaction.value = 'idle'
+        workbench.pushLog(
+          'warning',
+          '教学：苏军反扑脚本未完成（不跳过此步）——检查 18 Tk Div 的补给、19.27 路径与轴心目标格',
+          '9.2',
+        )
+      }
     }
     return step
   })
@@ -1366,5 +1413,10 @@ export const useTutorialStore = defineStore('tutorial', () => {
     reaction,
     reactionOutcome,
     reactionFought,
+    /**
+     * 2026-11-21：把苏军反扑脚本单独暴露出来（教学里苏军由脚本行动）。
+     * 供调试/回归直接驱动：返回 false 表示脚本没跑通（补给、路径、目标格任一不满足）。
+     */
+    driveReactionAttack: runReactionAttack,
   }
 })

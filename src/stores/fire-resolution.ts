@@ -27,6 +27,14 @@ import {
 import { createCombatInputs, createBarrageInputs } from './engagement-inputs'
 import type { ConsoleUnit } from './workbench-model'
 
+/**
+ * 教学/复现用：把 9.9 的 2d6 钉成固定点数（null = 正常掷骰）。
+ *
+ * 用户口径：教学模式的每一步都必须稳定复现，关键战斗骰面不能每次都变。
+ * 模块级单例——教学在同一进程里只有一个，用完必须清零（见 tutorial 的反扑脚本）。
+ */
+export const combatFixedDie = ref<number | null>(null)
+
 export interface FireResolutionPorts {
   rng: Ref<RngState>
   drawCount: Ref<number>
@@ -201,7 +209,21 @@ export function createFireResolutionDomain(ports: FireResolutionPorts) {
   function rollCombatDice(): boolean {
     const state = combatState.value
     if (state === null || state.step !== 'battleDice' || state.finished) return false
-    const draw = roll2d6(rng.value)
+    const fixed = combatFixedDie.value
+    const draw =
+      fixed === null
+        ? roll2d6(rng.value)
+        : {
+            value: {
+              count: 2,
+              faces: [
+                Math.max(1, Math.min(6, Math.floor(fixed / 2))),
+                fixed - Math.floor(fixed / 2),
+              ],
+              total: fixed,
+            },
+            rng: rng.value,
+          }
     rng.value = draw.rng
     drawCount.value += 1
     combatDiceRoll.value = draw.value

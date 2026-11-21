@@ -235,6 +235,154 @@ describe('教学模式：Vitebsk', () => {
     tutorial.stop()
   }, 90_000)
 
+  it('端到端（一）：轰炸结算（含受损确认）→ 苏军反扑脚本自打完 → 引导推进到弹幕', async () => {
+    const ctx = await startTutorial()
+    const tutorial = useTutorialStore()
+
+    const same = (a: { col: number; row: number }, b: { col: number; row: number }): boolean =>
+      a.col === b.col && a.row === b.row
+
+    /** 把一场 9.2 战斗从补给步一路走完（与界面点法同序） */
+    const drainCombat = (): void => {
+      const attackerDump = ctx.w.combatSupplyDumps.find((item) => item.side === 'attacker')
+        ?.dumps[0]
+      if (attackerDump !== undefined) ctx.w.pickCombatSupplyDump('attacker', attackerDump.id)
+      ctx.w.confirmCombatSupplySide('attacker')
+      ctx.w.confirmCombatSupplySide('defender')
+      ctx.w.confirmCombatSupply()
+      ctx.w.declareCombatArStep('attacker')
+      ctx.w.declareCombatArStep('defender')
+      ctx.w.autoResolveCombatToOutcome()
+      for (let guard = 0; guard < 12 && ctx.w.combatState?.finished !== true; guard++) {
+        const step = ctx.w.combatState?.step
+        if (step === 'losses') void ctx.w.confirmCombatLosses()
+        else if (step === 'options') {
+          ctx.w.combatInputs.optionRetreatHexes = ctx.w.combatRequirement?.options ?? 0
+          ctx.w.combatInputs.optionLossPoints = 0
+          void ctx.w.confirmCombatOptions()
+        } else if (step === 'retreat') {
+          for (const plan of ctx.w.combatRetreatPlans)
+            for (const unit of plan.units) {
+              const destination =
+                unit.destinations.find((item) => !item.forcedDestruction) ?? unit.destinations[0]
+              if (destination === undefined) continue
+              ctx.w.combatInputs.retreatPaths[unit.unitId] = destination.path
+                .map((hex) => `${String(hex.col)}.${String(hex.row)}`)
+                .join(',')
+            }
+          void ctx.w.confirmCombatRetreats()
+        } else if (step === 'advance') void ctx.w.confirmCombatAdvance()
+        else return
+      }
+    }
+
+    /** 10.0a 的「1/2」要玩家落盘受损单位：逐点到够，再确认 */
+    const drainBarrageLoss = (): void => {
+      for (let guard = 0; guard < 8 && !ctx.w.barrageLossReady; guard++) {
+        const hex = ctx.w.airState?.targetHex ?? null
+        const loser =
+          hex === null
+            ? undefined
+            : ctx.w.units.find((unit) => unit.side === 'soviet' && same(unit.hex, hex))
+        if (loser === undefined) return
+        ctx.w.addBarrageLossPoint(loser.instanceId)
+      }
+      if (ctx.w.barrageLossReady) ctx.w.confirmBarrageLossNow()
+    }
+
+    // 1) 两次扫射 + 突袭 → 战斗走完
+    await hipShoot(ctx, 18, 27)
+    await hipShoot(ctx, 18, 27)
+    expect(ctx.w.overrunNow({ col: 18, row: 27 })).toBe(true)
+    drainCombat()
+    expect(ctx.w.combatState?.finished).toBe(true)
+
+    // 2) 炮兵推进到 17.27（弹幕射程覆盖 19.27）
+    ctx.w.finishMove()
+    const artillery = ctx.w.units.find((unit) => unit.unitId === 'ax-motorized-ge-20-mtr-20-arty')!
+    ctx.w.beginMovePick(artillery.hex, [artillery.instanceId])
+    expect(ctx.w.confirmMovePick()).toBe(true)
+    const artyNode = (ctx.w.groupReachable?.hexes ?? []).find(
+      (item) => item.hex.col === 17 && item.hex.row === 27,
+    )
+    expect(artyNode).toBeDefined()
+    expect(ctx.w.moveAlongDraggedPath(artyNode?.path ?? [])).toBe(true)
+    ctx.w.finishMove()
+    expect(tutorial.currentStep?.id).toBe('fighter-sweep')
+
+    // 3) 扫荡 LaGG.3：教学固定骰让双方返航、各损 1
+    ctx.w.setAirActive(true)
+    ctx.w.setAirMissionKind('fighter_sweep')
+    expect(ctx.w.setAirTargetFromText('19.28')).toBe(true)
+    const sweepPlane = ctx.w.airUnits.find(
+      (air) =>
+        air.side === 'axis' &&
+        air.aircraftId === 'ax-aircraft-ge-bf-110' &&
+        air.airStatus === 'active' &&
+        air.missionsFlownThisPhase === 0,
+    )!
+    ctx.w.toggleAirMissionUnit(sweepPlane.instanceId)
+    expect(ctx.w.beginAirMissionNow()).toBe(true)
+    expect(ctx.w.confirmAirCombatNow()).toBe(true)
+    ctx.w.autoResolveAirMissionNow()
+    if (ctx.w.airState?.step === 'resolveMission') ctx.w.settleAirMissionNow()
+    if (ctx.w.airState?.step === 'returnToBase') ctx.w.completeAirReturnNow()
+    expect(ctx.w.airState?.finished).toBe(true)
+    expect(tutorial.currentStep?.id).toBe('bombing')
+    // 引导走到轰炸步 ⇒ 苏军 I.153 已升空（14.4c 巡逻区成立的前提）
+    const i153 = ctx.w.airUnits.find((air) => air.instanceId === 'tutorial-su-i153')!
+    expect(i153.airStatus).toBe('active')
+
+    // 4) 轰炸：四机齐出 → 发起 → 结算（含 10.0a 的受损落盘）
+    for (let guard = 0; guard < 8 && ctx.w.segmentStep?.id !== 'movement.barrage'; guard++)
+      ctx.w.advanceSegmentNow()
+    ctx.w.toggleAirMissionUnit(sweepPlane.instanceId)
+    ctx.w.setAirMissionKind('barrage')
+    expect(ctx.w.setAirTargetFromText('19.28')).toBe(true)
+    const availableOf = (aircraftId: string) =>
+      ctx.w.airUnits.filter(
+        (air) =>
+          air.side === 'axis' &&
+          air.aircraftId === aircraftId &&
+          air.airStatus === 'active' &&
+          air.missionsFlownThisPhase === 0,
+      )
+    for (const id of [
+      ...availableOf('ax-aircraft-ge-ju-88').map((air) => air.instanceId),
+      ...availableOf('ax-aircraft-ge-do-17z').map((air) => air.instanceId),
+      ...availableOf('ax-aircraft-ge-bf-110').map((air) => air.instanceId),
+    ])
+      ctx.w.toggleAirMissionUnit(id)
+    expect(ctx.w.beginAirMissionNow()).toBe(true)
+    for (let guard = 0; guard < 20; guard++) {
+      const state = ctx.w.airState
+      if (state === null || state.finished) break
+      if (state.step === 'resolveMission') {
+        drainBarrageLoss()
+        ctx.w.settleAirMissionNow()
+        continue
+      }
+      if (state.step === 'returnToBase') {
+        ctx.w.completeAirReturnNow()
+        continue
+      }
+      ctx.w.autoResolveAirMissionNow()
+    }
+    expect(ctx.w.airState?.finished).toBe(true)
+    expect(tutorial.currentStep?.id).toBe('reaction-attack')
+
+    // 5) 推到反应阶段：苏军 18 Tk Div 由脚本加油 → 19.27 → 突袭 18.27，自己打完
+    for (let guard = 0; guard < 12 && ctx.w.phase !== 'reaction'; guard++) ctx.w.advanceSegmentNow()
+    expect(ctx.w.phase).toBe('reaction')
+    for (let guard = 0; guard < 24; guard++) await nextTick()
+    expect(tutorial.reaction).toBe('done')
+    const raw = ctx.w.combatState?.dice?.result.raw ?? null
+    expect(raw?.startsWith('A')).toBe(true)
+    expect(ctx.w.combatState?.finished).toBe(true)
+    expect(tutorial.currentStep?.id).toBe('barrage-city')
+    tutorial.stop()
+  }, 120_000)
+
   it('教学脚本：两队 Ju.88 + Do.17z + Bf110 轰炸、扫荡两败俱伤、固定拦截骰、AI 苏军不代打（源码守卫）', () => {
     const source = readFileSync('src/stores/tutorial.ts', 'utf8')
     // 14.2a：四机齐出（两队 Ju.88 + 一队 Do.17z + 一队未扫荡的 Bf110）
