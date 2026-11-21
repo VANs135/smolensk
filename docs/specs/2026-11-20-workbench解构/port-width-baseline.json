@@ -7,6 +7,7 @@
     "workbench-air-mission-derived.ts": 13,
     "workbench-air-primitives.ts": 6,
     "workbench-air-state.ts": 13,
+    "workbench-air-transfer.ts": 17,
     "workbench-air.ts": 76,
     "workbench-barrage-entry.ts": 24,
     "workbench-barrage.ts": 51,
