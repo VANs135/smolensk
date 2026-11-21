@@ -40,7 +40,9 @@ import type { BarrageInteractionState } from '@/engine/rules/barrage-interaction
 import { hexesWithin } from '@/engine/hex-geometry'
 import type { CombatInteractionState } from '@/engine/rules/combat-interaction'
 import type { BreakdownCreateTiming } from '@/engine/rules/breakdown'
-import { canMoveInPhase } from '@/engine/rules/modes'
+import { canMoveInPhase, canSetModeAtSetup, canStackWithHedgehog } from '@/engine/rules/modes'
+import type { BaseMode, Orientation } from '@/engine/rules/modes'
+import { applyModeSwitch, canSwitchModeNow } from '@/engine/rules/move-interaction'
 import type { MoveUnitRuntime } from '@/engine/rules/move-interaction'
 import type { MoveInteractionState, GroupReachable } from '@/engine/rules/move-interaction'
 import type { MoveContext, StepFailure } from '@/engine/rules/move-types'
@@ -48,6 +50,7 @@ import type { MoveStepRecord } from '@/engine/rules'
 import type * as Rules from '@/engine/rules'
 import type * as Geo from '@/engine/hex-geometry'
 import type * as Model from './workbench-model'
+import { engineerCapableNow, isReplUnit, modeUnitClassOf } from './workbench-model'
 import type { SettlementRecordInput } from './workbench-core'
 import {
   SETUP_WIGGLE_BREAKDOWN_RADIUS,
@@ -113,6 +116,8 @@ export interface MovementBoard {
   friendlyUnitsAt: (hex: HexRef) => ConsoleUnit[]
   movePickPoolAt: (hex: HexRef) => ConsoleUnit[]
   defaultMovePickIdsAt: (hex: HexRef) => string[]
+  /** B3-2b3：当前日期（模式切换的日期闸门） */
+  date: ComputedRef<string>
   /** B3-2b2：收束 / 悬停 / 过筹结算的板面状态 */
   moveLinger: Ref<boolean>
   hoverHex: Ref<HexRef | null>
@@ -152,6 +157,10 @@ export interface MovementHelpers {
   hedgehogLevelOf: (hex: HexRef) => number
   endMoveEarly: typeof Rules.endMoveEarly
   zocStoppedMoveUnitIds: Ref<string[]>
+  /** B3-2b3：模式名 / 工事状态 / 工程能力记账 */
+  MODE_LABELS: Record<BaseMode, string>
+  hedgehogHexState: (hex: HexRef) => { level: number }
+  noteEngineerCapabilityAfter: (unit: ConsoleUnit, wasCapable: boolean) => void
 }
 
 /** C5 移动交互的端口：3 个共享束 + 8 个域对象 + 5 个晚绑定访问器（2026-11-21 实测 16 项）。 */
@@ -237,6 +246,7 @@ export function createMovementDomain(ports: MovementDomainPorts) {
     hoverHex,
     overrunContext,
     combatDefendingHexCleared,
+    date,
   } = ports.board
 
   /** 端口束 3：纯判据 / 格式化 / 结算辅助 */
@@ -265,6 +275,9 @@ export function createMovementDomain(ports: MovementDomainPorts) {
     hedgehogLevelOf,
     endMoveEarly,
     zocStoppedMoveUnitIds,
+    MODE_LABELS,
+    hedgehogHexState,
+    noteEngineerCapabilityAfter,
   } = ports.helpers
 
   /* ──────────────── C5 移动交互：选子 → 范围 → 逐格 → 结束/撤销 ──────────────── */
@@ -1280,6 +1293,280 @@ export function createMovementDomain(ports: MovementDomainPorts) {
     }
   }
 
+  /** C5：选择方式 —— 单个单位 / 整堆叠（6.1） */
+  function setStackSelect(on: boolean): void {
+    stackSelect.value = on
+    pushLog(
+      'info',
+      on ? '选择方式 → 整堆叠（同格内当前方全部单位一起移动，6.1）' : '选择方式 → 单个单位',
+    )
+  }
+
+  /**
+   * C5：切换主动模式（5.4：只在本方移动阶段、且在该单位开始移动时；切换不消耗 MP）
+   *
+   * ★ 条 9（M1）：**按选中集合批量**切换——优先作用于「取子清单」（`movePick.ids`，即开始移动前
+   *   玩家在地图上勾选的那一组），没有取子清单时退回单枚 `selectedUnit`。这样多选的单位能一次切完，
+   *   且 5.4a 的"开始移动前可随意改"才落得到实处。
+   * ★ 用户 2026-11-09：新增可选第三形参 `ids`——窗内右键单枚改模式必须显式传 `[该枚]`，
+   *   否则会误伤 `movePick` 整组（右键菜单走这条）。
+   * 引擎 `canSwitchModeNow` 已支持 reserve/strat（5.7a / 5.8），故 combat/move/reserve/strat 四向都走同一批处理。
+   */
+  function switchUnitMode(to: BaseMode, orientation?: Orientation, ids?: readonly string[]): void {
+    if (!requireAction('move.modeChange', '改模式')) return
+    // 批量目标：显式给定 > 取子清单（开始移动前的选中集合）> 单枚选中单位
+    const targets =
+      ids ??
+      (movePick.value !== null
+        ? movePick.value.ids
+        : selectedUnit.value === null
+          ? []
+          : [selectedUnit.value.instanceId])
+    if (targets.length === 0) {
+      pushLog('warning', '先选中要改模式的算子（在地图上勾选，或在移动中的单位里选一枚）')
+      return
+    }
+    let okCount = 0
+    for (const id of targets) {
+      const unit = units.value.find((item) => item.instanceId === id)
+      if (unit === undefined) continue
+      /*
+       * 13.5（§5-D）：「补员永远无法进入战斗模式，但可以进入所有其他模式」⇒ 目标若为战斗模式
+       * （或战斗面朝向），对补员算子直接拒。移动/战略/预备照常放行（它们都是"其他模式"）。
+       */
+      if (isReplUnit(unit) && to === 'combat') {
+        pushLog('warning', `${unit.name} 是补员算子，不能进入战斗模式（13.5）`, '13.5')
+        continue
+      }
+      // 朝向：战斗/移动面＝模式本身；战略必为移动面（5.8）；预备可任选（5.7a）
+      const target: Orientation =
+        to === 'combat'
+          ? 'combat'
+          : to === 'move'
+            ? 'move'
+            : to === 'strat'
+              ? 'move'
+              : (orientation ?? unit.mode.orientation)
+      const verdict = canSwitchModeNow({
+        context: moveContext.value,
+        unitId: id,
+        runtime: moveRuntime.value,
+        to,
+        orientation: target,
+        unitClass: modeUnitClassOf(unit),
+        date: date.value,
+        // 专规 4.1a（可选）：忽略 2.3e ⇒ 苏军战略模式的日期闸门不参与判定
+        ignoreOperationalLimits: session.rule4On('ignoreOperationalLimits'),
+      })
+      if (!verdict.ok) {
+        pushLog(
+          'warning',
+          `${unit.name} 不能切换到${MODE_LABELS[to]}：${verdict.reason}（${verdict.rule}）`,
+          verdict.rule,
+        )
+        continue
+      }
+      /*
+       * 5.4a（用户 2026-11-06 裁定）：额度**按格**计，在转入那一刻校验；0 枚＝无预备权。
+       * 必须放在 `applyModeSwitch` 之前——被拒时单位仍停在原模式，不留半截状态。
+       * 同批同格：先转的那枚已把该格算作"有预备单位"⇒ 后续同格单位不再占新额度（派生判定）。
+       */
+      if (to === 'reserve' && !canEnterReserveMode(unit)) continue
+      // 13.8b 末句例外：切换前记下当时的工程能力，切换后按"由真变假"登记自有桥格
+      const wasEngineerCapable = engineerCapableNow(unit)
+      unit.mode = applyModeSwitch(unit.mode, to, target)
+      noteEngineerCapabilityAfter(unit, wasEngineerCapable)
+      // 5.7a：本移动阶段内进入预备 ⇒ 该朝向锁定到下一个移动阶段
+      if (to === 'reserve') unit.reserveEnteredThisPhase = true
+      // 5.4a：一切数值以朝向那一面为基准 → 换面后刷新印值缓存
+      unit.raw = unit.faces[unit.mode.orientation]
+      /*
+       * 5.7g：「在**任何移动环节结束时**，处于预备模式内的单位都**不可与环形工事堆叠**在一起。」
+       *
+       * ★ 修（2026-11-01）：修前这条判据只活在引擎的 `modeEffectsFor` 里（`canStackWithHedgehog`），
+       *   盘面侧**无人读取** —— 玩家可以让预备单位与工事同格，一路走到环节结束都不被提示。
+       *   这里不**拦**（预备单位之后还能走开，5.7 允许预备移动），只在切换那一刻把义务说出来；
+       *   判据仍取引擎的 `canStackWithHedgehog`（不另写一份）。
+       */
+      if (!canStackWithHedgehog(unit.mode) && hedgehogHexState(unit.hex).level > 0)
+        pushLog(
+          'warning',
+          `${unit.name} 进入预备模式但与环形工事同格 ⇒ 本移动环节结束时必须分开（5.7g）`,
+          '5.7g',
+        )
+      okCount += 1
+    }
+    if (okCount > 0) {
+      pushLog(
+        'success',
+        `已将 ${okCount} 枚切换到${MODE_LABELS[to]}（5.4 切换不消耗 MP；可开始移动前随意改）`,
+        '5.4',
+      )
+    }
+    // 条 10（M1）：模式切换不再自动开拔——改由「开始移动」按钮显式触发（与 retryBeginMove 解耦）
+  }
+
+  /**
+   * 5.4a：该单位此刻**真正**可以切换到的模式（右键「模式改变」子菜单的唯一来源）
+   *
+   * 与 `switchUnitMode` 同一串判据（补员禁战斗 / 朝向 / 引擎 `canSwitchModeNow` / 预备按格额度），
+   * 差别只在**不写日志**、也**不判环节闸门**——菜单投影随时可算，闸门由调用方先用
+   * `actionAllowedNow('move.modeChange')` 挡一层。预备额度必须走纯函数 `allowReserveEntryAtHex`：
+   * `canEnterReserveMode` 会 `pushLog`，投影里调它会把"看一眼菜单"写成一条警告。
+   */
+  function switchableModesOf(unitId: string): BaseMode[] {
+    const unit = units.value.find((item) => item.instanceId === unitId)
+    if (unit === undefined || unit.side !== activeSide.value) return []
+    const reachable: BaseMode[] = []
+    for (const to of ['combat', 'move', 'reserve', 'strat'] as const) {
+      // 当前模式不必列（切到自己没有意义）
+      if (unit.mode.mode === to) continue
+      // 13.5：补员永远无法进入战斗模式，但可以进入所有其他模式
+      if (isReplUnit(unit) && to === 'combat') continue
+      // 朝向：战斗/移动面＝模式本身；战略必为移动面（5.8）；预备可任选（5.7a）
+      const orientation: Orientation =
+        to === 'combat' ? 'combat' : to === 'reserve' ? unit.mode.orientation : 'move'
+      const verdict = canSwitchModeNow({
+        context: moveContext.value,
+        unitId,
+        runtime: moveRuntime.value,
+        to,
+        orientation,
+        unitClass: modeUnitClassOf(unit),
+        date: date.value,
+        // 专规 4.1a（可选）：忽略 2.3e ⇒ 苏军战略模式的日期闸门不参与判定
+        ignoreOperationalLimits: session.rule4On('ignoreOperationalLimits'),
+      })
+      if (!verdict.ok) continue
+      if (to === 'reserve') {
+        const cap = session.scenarioInfo?.setup.reserveMarkers?.[unit.side] ?? 0
+        const outcome = allowReserveEntryAtHex({
+          side: unit.side,
+          cap,
+          hex: hexKeyOf(unit),
+          occupiedHexes: reservedHexes(unit.side),
+        })
+        if (!outcome.ok) continue
+      }
+      reachable.push(to)
+    }
+    return reachable
+  }
+
+  /** IV-B（4.4）：该单位所在格是否与**敌方攻击力单位**相邻 */
+  function adjacentEnemyAttackCapableOf(unit: ConsoleUnit): boolean {
+    const enemy: Side = unit.side === 'axis' ? 'soviet' : 'axis'
+    return units.value.some(
+      (other) =>
+        other.side === enemy &&
+        areAdjacent(other.hex, unit.hex) &&
+        // 4.4：印有战斗值且非括号、且不在预备/战略模式 ⇒ 攻击力单位
+        other.attackCapable &&
+        other.mode.mode !== 'reserve' &&
+        other.mode.mode !== 'strat',
+    )
+  }
+
+  /** E5：初设模式约束（剧本数据优先；缺省按规格 §2.1：四种主动模式、上限取标记数、不禁预备） */
+  const SETUP_MODES_ALL: readonly BaseMode[] = ['combat', 'move', 'reserve', 'strat']
+  function setupModeConstraintsOf(side: Side): {
+    allowed: readonly BaseMode[]
+    reserveCap: number
+    reserveForbidden: boolean
+  } {
+    const setup = session.scenarioInfo?.setup
+    const constraints = setup?.modeConstraints
+    return {
+      allowed: constraints?.allowedSetupModes ?? SETUP_MODES_ALL,
+      reserveCap: constraints?.reserveMax?.[side] ?? setup?.reserveMarkers?.[side] ?? 0,
+      reserveForbidden: constraints?.reserveSetupForbidden ?? setup?.reserveSetupForbidden === true,
+    }
+  }
+
+  /**
+   * IV-B：初设阶段该单位**此刻可设**的模式（右键「初设模式」菜单的唯一数据源）
+   *
+   * 与 `setUnitModeAtSetup` 同源判定（`canSetModeAtSetup`）：当前模式不列，其余逐项判；
+   * 不可用的不返回（不摆灰项）。非初设阶段恒空 —— 初设结束后右键不再给"初设模式"。
+   */
+  function setupSwitchableModesOf(unitId: string): BaseMode[] {
+    if (!ports.initialSetupInProgress.value) return []
+    const unit = units.value.find((item) => item.instanceId === unitId)
+    if (unit === undefined) return []
+    const limits = setupModeConstraintsOf(unit.side)
+    const reachable: BaseMode[] = []
+    for (const to of ['combat', 'move', 'reserve', 'strat'] as const) {
+      if (unit.mode.mode === to) continue
+      const target: Orientation =
+        to === 'combat' ? 'combat' : to === 'reserve' ? unit.mode.orientation : 'move'
+      const verdict = canSetModeAtSetup({
+        to,
+        orientation: target,
+        unitClass: modeUnitClassOf(unit),
+        side: unit.side,
+        hex: hexKeyOf(unit),
+        adjacentEnemyAttackCapable: adjacentEnemyAttackCapableOf(unit),
+        reserveCap: limits.reserveCap,
+        reserveOccupiedHexes: reservedHexes(unit.side),
+        reserveSetupForbidden: limits.reserveForbidden,
+        allowedModes: limits.allowed,
+        date: date.value,
+        // 专规 4.1a（可选）：忽略 2.3e ⇒ 初设也不受苏军战略模式日期闸门约束
+        ignoreOperationalLimits: session.rule4On('ignoreOperationalLimits'),
+      })
+      if (verdict.ok) reachable.push(to)
+    }
+    return reachable
+  }
+
+  /**
+   * IV-B：初设右键**一个模式都出不来**时的原因（界面就地给一行，不摆空菜单）
+   *
+   * 用户 2026-11-18：剧本不允许 / 没有可用预备标记 / 相邻敌方攻击力单位等情况下，
+   * 入口按既有口径**不出现**，但要按同一判据说清是哪一条挡住，不能只让玩家觉得"右键没反应"。
+   * 判据全在 `canSetModeAtSetup`，本函数只把第一条失败原因折成人话。
+   */
+  function setupModeBlockNote(unitId: string): { rule: string; text: string } | null {
+    if (!ports.initialSetupInProgress.value) return null
+    if (setupSwitchableModesOf(unitId).length > 0) return null
+    const unit = units.value.find((item) => item.instanceId === unitId)
+    if (unit === undefined) return null
+    const limits = setupModeConstraintsOf(unit.side)
+    for (const to of SETUP_MODES_ALL) {
+      if (unit.mode.mode === to) continue
+      if (!limits.allowed.includes(to))
+        return { rule: 'IV-B', text: `本剧本初设不允许${MODE_LABELS[to]}（IV-B）` }
+      const target: Orientation =
+        to === 'combat' ? 'combat' : to === 'reserve' ? unit.mode.orientation : 'move'
+      const verdict = canSetModeAtSetup({
+        to,
+        orientation: target,
+        unitClass: modeUnitClassOf(unit),
+        side: unit.side,
+        hex: hexKeyOf(unit),
+        adjacentEnemyAttackCapable: adjacentEnemyAttackCapableOf(unit),
+        reserveCap: limits.reserveCap,
+        reserveOccupiedHexes: reservedHexes(unit.side),
+        reserveSetupForbidden: limits.reserveForbidden,
+        allowedModes: limits.allowed,
+        date: date.value,
+        ignoreOperationalLimits: session.rule4On('ignoreOperationalLimits'),
+      })
+      if (!verdict.ok)
+        return {
+          rule: verdict.rule,
+          text: `初设不能设为${MODE_LABELS[to]}：${verdict.reason}（${verdict.rule}）`,
+        }
+    }
+    return { rule: 'IV-B', text: '该单位当前没有可切换的初设模式（IV-B）' }
+  }
+
+  /** IV-B：右键没有可用模式时就地写一行原因（与菜单同判据） */
+  function noteSetupModeBlocked(unitId: string): void {
+    const note = setupModeBlockNote(unitId)
+    if (note !== null) pushLog('warning', note.text, note.rule)
+  }
+
   return {
     nameOf,
     unitNameOf,
@@ -1321,5 +1608,14 @@ export function createMovementDomain(ports: MovementDomainPorts) {
     setHoverHex,
     dropUnitFromMove,
     sealEdgeBoxTransferNow,
+    // B3-2b3：模式切换 / 初设模式判据
+    setStackSelect,
+    switchUnitMode,
+    switchableModesOf,
+    adjacentEnemyAttackCapableOf,
+    setupModeConstraintsOf,
+    setupSwitchableModesOf,
+    setupModeBlockNote,
+    noteSetupModeBlocked,
   }
 }
