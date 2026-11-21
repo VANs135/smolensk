@@ -19,6 +19,7 @@ import { createSupplyDumpsDomain } from './workbench-supply-dumps'
 import { createTransportPointsDomain } from './workbench-transport-points'
 import { createExtendersDomain } from './workbench-extenders'
 import { createHedgehogsDomain } from './workbench-hedgehogs'
+import { createConstructionDomain } from './workbench-construction'
 import { createCombatInputs } from './engagement-inputs'
 import { defineStore } from 'pinia'
 import { computed, ref, toRaw, watch, type Ref } from 'vue'
@@ -87,7 +88,6 @@ import {
   airBaseBuildCostSp,
   airBoxEdgeColumn,
   claimFrontalReserves,
-  constructionTaskCostsSp,
   frontalReservesBatch,
   planAirBaseBuild,
   planAirstripBuild,
@@ -98,7 +98,6 @@ import {
   remapSupplyDumpAmounts,
   panzerGroupRulesActive,
   PANZER_GROUP_OPTION_ITEM,
-  validateConstructionBase,
   isVariableExitActive,
   VARIABLE_EXIT_START,
   rollVariableExit,
@@ -278,8 +277,6 @@ import {
   type CombatInteractionState,
   type CombatLine,
   type CombatRole,
-  type ConstructionExecutor,
-  type ConstructionTask,
   type CombatUnitPatch,
   type ConsolidationPlan,
   type FacilityPatch,
@@ -364,7 +361,6 @@ import {
   bridgedHexesBySide,
   buildLegalityRequest,
   buildMoveContext,
-  constructionLegMpDistance,
   createAirInputs,
   createBarrageFacts,
   createBattleFacts,
@@ -1777,10 +1773,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     dumpById,
     captureUndoSnapshot,
     dropUndoBySeq,
-    engineerExecutorFor,
-    constructionGateNow,
-    noteConstruction,
-    payConstructionFee,
+    // 这 4 项在 b16 之后搬到 C8g 切片、其解构晚于本装配点（1765 < 2,1xx），
+    // 故包成转发箭头：deps 在建域时按值取的是箭头本身，真正调用发生在其后（无 TDZ）。
+    engineerExecutorFor: (engineer, target) => engineerExecutorFor(engineer, target),
+    constructionGateNow: (task, engineer) => constructionGateNow(task, engineer),
+    noteConstruction: (task, hex, engineerId) => noteConstruction(task, hex, engineerId),
+    payConstructionFee: (dumpId, wantT, rule) => payConstructionFee(dumpId, wantT, rule),
   })
   const {
     hedgehogInputs,
@@ -1804,6 +1802,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     toggleHedgehogPayPick,
     pickHedgehogPayDumpNow,
   } = hedgehogsDomain
+
+  /** 15.3 / 15.2A 的玩家输入（目标格 / 施工的工程单位 / 付款站） */
+  const constructionInputs = ref<{
+    hexText: string
+    engineerId: string | null
+    payDumpId: string | null
+  }>({ hexText: '', engineerId: null, payDumpId: null })
 
   /* ── 各动作的待点格入口（B27a：目标状态已在 store 的那些） ── */
 
@@ -2135,6 +2140,40 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     grantSpDumpT,
     splitSpDumpHoldings,
   } = supplyDumpsDomain
+
+  /* ────────── 13.8d 施工前提与付款（15.3 / 15.2A / 16.0b 共用，B3-2b16） ────────── */
+
+  /*
+   * B3-2b16（2026-11-21）：13.8d 的账本 / 公共前提 / 付款唯一入口搬进 `workbench-construction.ts`。
+   * ★ `constructionInputs` 留在 facade（见上方前移处）：B27a 的 `beginAirBaseHexPickNow` 在声明区之前写它；
+   *   前移声明后作为端口按值传。`pickedEngineer`（空中设施段）与 `setSpDumpHoldings`（b11）都是提升/已解构项。
+   * ★ 端口 21 项 = 8 依赖 + 13 返回。
+   */
+  const constructionDomain = createConstructionDomain({
+    constructionInputs,
+    pickedEngineer,
+    activeSide,
+    phase,
+    pushLog,
+    dumpById,
+    deliverableDumpsFor,
+    setSpDumpHoldings,
+  })
+  const {
+    constructionLedgers,
+    constructionLedgerOf,
+    constructionError,
+    constructionPayDumps,
+    constructionPayPick,
+    toggleConstructionPayPick,
+    pickConstructionPayDumpNow,
+    constructionLegRangeTo,
+    engineerExecutorFor,
+    constructionGateNow,
+    noteConstruction,
+    constructionFeeT,
+    payConstructionFee,
+  } = constructionDomain
 
   /* ── C8b：D 段**补给阶段总计划**（12.1–12.2 / 12.6 / 12.8 / 12.10e） ── */
 
@@ -11797,85 +11836,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /* ────────── C8g：15.3/15.4 空军基地 / 15.2A 简易机场（＋13.8d 施工前提） ────────── */
 
   /**
-   * 13.8d：**每名**具工程能力的单位在本移动阶段已施工过的格与已用过的任务类型
-   *
-   * 原文：「An Engineer-Capable unit can only perform construction in a single hex, and can only
-   * perform one type of construction.」——主语是**一个工程能力单位**，故额度按 `instanceId` 分账：
-   * 甲单位施工不影响乙单位；同一单位换格或换类型才被拒。
-   * 换阶段 / 换回合 / 换方 / 重置都清零（新的移动环节＝新的额度）。
-   */
-  const constructionLedgers = ref<
-    Record<string, { hexes: string[]; task: ConstructionTask | null }>
-  >({})
-
-  /** 13.8d：取某名施工者本阶段的额度（无记录＝尚未施工） */
-  function constructionLedgerOf(engineerId: string | null): {
-    hexes: string[]
-    task: ConstructionTask | null
-  } {
-    if (engineerId === null) return { hexes: [], task: null }
-    return constructionLedgers.value[engineerId] ?? { hexes: [], task: null }
-  }
-
-  /** 15.3 / 15.2A 的玩家输入（目标格 / 施工的工程单位 / 付款站） */
-  const constructionInputs = ref<{
-    hexText: string
-    engineerId: string | null
-    payDumpId: string | null
-  }>({ hexText: '', engineerId: null, payDumpId: null })
-
-  /** 15.3 / 15.2A 的错误（统一形状：rule + reason） */
-  const constructionError = ref<{ rule: string; reason: string } | null>(null)
-
-  /**
-   * 15.3 / 15.2A / 16.0b：建造付款站候选（12.3a 直拖 / 12.3b HQ 投递）
-   *
-   * 用户 2026-11-12：与炮击一致——**只把施工者真正拖得到的站铺到地图上**。
-   * 受益单位取施工者本身（16.0b 的 `inPlace` 途径取目标格内的施工小队）。
-   */
-  const constructionPayDumps = computed<SpDump[]>(() => {
-    const engineer = pickedEngineer()
-    if (engineer === null) return []
-    return deliverableDumpsFor(activeSide.value, [engineer])
-  })
-
-  /** 建造付款的「点地图选站」模式（面板按钮开启；选中一站后自动退出） */
-  const constructionPayPick = ref(false)
-
-  /** 开启/取消建造付款的地图选站模式（无施工者或无候选 ⇒ 拒并给话术） */
-  function toggleConstructionPayPick(): boolean {
-    if (constructionPayPick.value) {
-      constructionPayPick.value = false
-      return true
-    }
-    const engineer = pickedEngineer()
-    if (engineer === null) {
-      pushLog('warning', '先指定施工的工程单位，再选付款补给站（13.8d）', '13.8d')
-      return false
-    }
-    if (constructionPayDumps.value.length === 0) {
-      pushLog('warning', '该施工者此刻没有可达的己方补给站（12.3a/12.3b）', '12.3a')
-      return false
-    }
-    constructionPayPick.value = true
-    return true
-  }
-
-  /** 地图点到某一座候选站 ⇒ 写入付款站并退出选站模式 */
-  function pickConstructionPayDumpNow(dumpId: string): boolean {
-    const dump = constructionPayDumps.value.find((item) => item.id === dumpId)
-    if (dump === undefined) return false
-    constructionInputs.value = { ...constructionInputs.value, payDumpId: dump.id }
-    constructionPayPick.value = false
-    pushLog(
-      'info',
-      `修建付款站：${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T，12.1b）`,
-      '12.1b',
-    )
-    return true
-  }
-
-  /**
    * 15.3：**空军基地**每格每回合的已提升级数（15.3「等级每回合只能提升一级」）
    *
    * 与 16.0b/c 的 `hedgehogTurnLedger` 同构：按格按回合记账，换回合即清零。
@@ -11962,111 +11922,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const id = constructionInputs.value.engineerId
     if (id === null) return null
     return units.value.find((unit) => unit.instanceId === id) ?? null
-  }
-
-  /**
-   * 13.8d：施工者在**步行 MP** 口径下到目标格的距离（无视敌方 ZOC）
-   *
-   * ★ 步行价目是**固定口径**（用户 2026-09-15 裁定），与施工者自身机动类型无关，故不传机动类型。
-   * `null` = 半径内不可达 ⇒ 交给引擎当作超距（`Number.POSITIVE_INFINITY`）。
-   */
-  function constructionLegRangeTo(engineer: ConsoleUnit, hex: HexRef): number {
-    return constructionLegMpDistance(engineer.hex, hex) ?? Number.POSITIVE_INFINITY
-  }
-
-  /**
-   * 13.8d：把一名工程兵组装成引擎的 `engineer` 执行者（**唯一组装点**）
-   *
-   * 15.3/15.2A（空军基地与简易机场）与 16.0b/c 的工程兵途径共用它——四条施工路径若各写一份
-   * 「工程能力 / 本阶段是否已移动 / 到目标格的步行 MP 距离」，迟早会有一条忘记更新。
-   */
-  function engineerExecutorFor(
-    engineer: ConsoleUnit | null,
-    target: HexRef,
-  ): Extract<ConstructionExecutor, { kind: 'engineer' }> {
-    return {
-      kind: 'engineer',
-      engineerCapable: engineer !== null && engineerCapableNow(engineer),
-      unitId: engineer?.instanceId ?? '',
-      movedThisPhase:
-        engineer === null ||
-        hasUnitMovementThisPhase(engineer.mpSpent, engineer.airTransportThisPhase),
-      legMpDistanceToTarget: engineer === null ? 0 : constructionLegRangeTo(engineer, target),
-    }
-  }
-
-  /**
-   * 13.8d 的公共前提（阶段 / 工程能力 / 未移动 / **一格一任务**）
-   *
-   * 唯一实现是引擎的 `validateConstructionBase`；本处只把盘面事实填进去。
-   */
-  function constructionGateNow(
-    task: ConstructionTask,
-    engineer: ConsoleUnit | null,
-  ): RuleFailure | null {
-    const ledger = constructionLedgerOf(engineer?.instanceId ?? null)
-    return validateConstructionBase({
-      phase: phase.value as GamePhase,
-      engineerCapable: engineer !== null && engineerCapableNow(engineer),
-      movedThisPhase:
-        engineer === null ||
-        hasUnitMovementThisPhase(engineer.mpSpent, engineer.airTransportThisPhase),
-      hexesThisPhase: ledger.hexes.length,
-      task,
-      previousTaskThisPhase: ledger.task,
-    })
-  }
-
-  /** 记一次本阶段施工（13.8d：按**单位**记一格一任务） */
-  function noteConstruction(task: ConstructionTask, hex: HexRef, engineerId: string | null): void {
-    if (engineerId === null) return
-    const key = hexLabel(hex)
-    const ledger = constructionLedgers.value[engineerId] ?? { hexes: [], task: null }
-    constructionLedgers.value = {
-      ...constructionLedgers.value,
-      [engineerId]: {
-        hexes: ledger.hexes.includes(key) ? [...ledger.hexes] : [...ledger.hexes, key],
-        task,
-      },
-    }
-  }
-
-  /**
-   * 13.8d：本次施工任务应付的**吨位**
-   *
-   * 「所有修建/改进/修理任务都需要消耗 SP。而缩减/伤害任务是**免费**的」——判据只有一处
-   * （引擎的 `constructionTaskCostsSp`）：免费任务一律收 0，收费任务按调用方给的计价单位折算
-   * （SP 任务 ×4 转 T，15.2A 的简易机场任务本就以 T 计）。
-   */
-  function constructionFeeT(task: ConstructionTask, costSp: number, costT: number): number {
-    if (!constructionTaskCostsSp(task)) return 0
-    return costSp > 0 ? costSp * SP_TO_T : costT
-  }
-
-  /**
-   * 15.3 / 15.2A 的**唯一**扣款入口
-   *
-   * 取「指定的己方补给站」付款（12.1b/12.3a：只能从己方补给站扣），必要时找零（12.1a）。
-   */
-  function payConstructionFee(dumpId: string | null, wantT: number, rule: string): boolean {
-    if (wantT <= 0) return true
-    // 12.1b（用户 2026-11-13）：装载中的 SP 也是补给站，可作为付款站
-    const dump = dumpId === null ? null : (dumpById(dumpId) ?? null)
-    if (dump === null) {
-      pushLog('warning', '建造费用须由**己方补给站**支付（12.1b/12.3a）⇒ 请先指定付款站', rule)
-      return false
-    }
-    const payment = planSpPayment({ holdings: { sp: dump.sp, t: dump.t }, wantT })
-    if (!payment.ok) {
-      pushLog(
-        'danger',
-        `建造付款失败：${payment.reason}（${payment.rule}）——本次不改动任何账本`,
-        payment.rule,
-      )
-      return false
-    }
-    setSpDumpHoldings(dump.id, payment.data.holdingsAfter)
-    return true
   }
 
   /** 15.3：把该格的设施换成**该等级**的空军基地算子（升级＝换算子；无则新摆） */

@@ -8,6 +8,7 @@
     "workbench-combat-ignore.ts": 5,
     "workbench-combat-options.ts": 9,
     "workbench-combat-settle.ts": 15,
+    "workbench-construction.ts": 8,
     "workbench-core.ts": 9,
     "workbench-extenders.ts": 9,
     "workbench-fuel.ts": 3,
