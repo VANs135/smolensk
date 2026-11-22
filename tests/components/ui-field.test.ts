@@ -63,10 +63,13 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).not.toContain('defenderAvailableT')
   })
 
-  it('BarragePanel：4 处已走 UiField（14.1a 摆放块已删）', () => {
+  it('BarragePanel：3 处已走 UiField（14.1a 摆放块已删；受损选择已改点算子图）', () => {
     const src = read('src/components/barrage/BarragePanel.vue')
     expect(src).toMatch(/import UiField from/)
-    expect(src.match(/<UiField\b/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
+    // 用户 2026-11-22：受损单位改成「点算子图分配 1 点」⇒ 原先逐单位的数值输入（第 4 处
+    // UiField）随 `OpsLossPicker` 一起移出本面板，合法降为 3。剩下的仍是数值输入
+    //（基地等级 / 港口伤害 / 逐机掷骰），依旧全部走 UiField。
+    expect(src.match(/<UiField\b/g)?.length ?? 0).toBeGreaterThanOrEqual(3)
     // G2：摆放飞机的裁判工具整块删除 ⇒ 本面板不再有基地格输入
     expect(src).not.toMatch(/airPlacement/)
   })
