@@ -5,8 +5,8 @@ import { fail, succeed, type RuleOutcome } from '../result-types'
 
 /**
  * 条文索引（本文件与本仓库实现的对应）
- *   通规：20.0–20.0g / 13.9 / 5.10
- *   专规：2.4 锁定师不可拆；4.3 Setup Wiggle
+ *   通规：20.0–20.0g / 13.9 / 通规 5.10
+ *   专规：2.4 锁定师不可拆；专规 4.3 Setup Wiggle
  */
 
 /**
@@ -17,7 +17,7 @@ import { fail, succeed, type RuleOutcome } from '../result-types'
  *           有的带「拆分/Brkdown」标识、有的没有；通常不受算子数量限制（玩家愿自制额外算子的话）。
  *           多军力单位通过**拆分其中一点军力**在其所在格创建拆分单位，用军力损失标记记录
  *           （本质上就像战斗损失一样）。**单位的最后一点军力永远不能创建拆分单位。**
- *   - 20.0   「**装甲**或**机械化**（3.2a）的多军力单位无法创建或吸收拆分单位。**只有「其他」类型**可以。」
+ *   - 20.0   「**装甲**或**机械化**（通规 3.2a）的多军力单位无法创建或吸收拆分单位。**只有「其他」类型**可以。」
  *   - 20.0a  创建时机：多军力单位在**开始移动、战后推进或战后撤退**时，可以创建一个或多个拆分单位；
  *           **只有在这些时机**才能创建。
  *   - 20.0b  只能创建 **AR 等于或小于自己**的拆分单位；只能吸收 **AR 大于或等于自己**的拆分单位。
@@ -39,7 +39,7 @@ import { fail, succeed, type RuleOutcome } from '../result-types'
  *   - 「类型」判据用 3.2a 的 `combatClass`（armor / mech / other），由调用方从数据给出，不按兵种推定。
  */
 
-/** 3.2a 的战斗类型（20.0：只有 `other` 能创建/吸收拆分单位） */
+/** 通规 3.2a 的战斗类型（20.0：只有 `other` 能创建/吸收拆分单位） */
 export type BreakdownClassKind = 'armor' | 'mech' | 'other'
 
 /** 20.0a：允许创建拆分单位的三个时机（战后推进 / 战后撤退归在战斗结算内） */
@@ -49,7 +49,7 @@ export const BREAKDOWN_CREATE_TIMINGS = [
   'retreatAfterCombat',
   /*
    * 专规 4.3（可选）Setup Wiggle：初设阶段，6 个满员苏军步兵师各可拆一个团。
-   * ★ 这是 20.0a 的**专规例外**，只有 4.3 在选剧本前勾定时 store 才会给出这个时机；
+   * ★ 这是 20.0a 的**专规例外**，只有专规 4.3 在选剧本前勾定时 store 才会给出这个时机；
    *   未勾定时 store 一律不传（初设阶段仍返回 null）。
    */
   'setupWiggle',
@@ -72,7 +72,7 @@ export const BREAKDOWN_STEPS = rulesConstants.breakdown.breakdownSteps
 /**
  * 20.0c：参与创建/吸收的一方视图
  *
- * 「标记和模式」在引擎里拆成三项可比较的状态：DG（5.10）、部队储备（12.10）、基础模式（5.4）。
+ * 「标记和模式」在引擎里拆成三项可比较的状态：DG（通规 5.10）、部队储备（12.10）、基础模式（5.4）。
  * AR 只用于 20.0b 的方向性比较，不参与「相同」判定。
  */
 export interface BreakdownSideView {
@@ -80,18 +80,18 @@ export interface BreakdownSideView {
   side: Side
   /** 20.0g：国籍/池归属（德、意、罗、匈各一池；苏方单一池） */
   nationality: string
-  /** 3.2a 战斗类型（20.0：只有 `other` 可参与） */
+  /** 通规 3.2a 战斗类型（20.0：只有 `other` 可参与） */
   classKind: BreakdownClassKind
   /** 行动值（20.0b） */
   ar: number
   /** 当前军力与印值军力（20.0：最后一点不能创建） */
   steps: number
   printedSteps: number
-  /** 5.10 混乱 */
+  /** 通规 5.10 混乱 */
   dg: boolean
   /** 12.10 部队储备（null ＝ 就绪） */
   internalStocks: 'low' | 'exhausted' | null
-  /** 5.4 基础模式 */
+  /** 通规 5.4 基础模式 */
   mode: 'combat' | 'move' | 'strat' | 'reserve'
 }
 

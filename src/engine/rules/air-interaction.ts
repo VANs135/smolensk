@@ -371,7 +371,7 @@ export interface AirMissionCargo extends AirCargoLoadView {
    * 「补给点数可以被空运，**处于移动模式**的战斗单位也可以空运，前提是其 MA 为 10 或以下的步行 MP。」
    */
   mode?: BaseMode
-  /** 14.9c / 4.7b：移动面的步行MA，不能用战斗面MA替代。 */
+  /** 14.9c / 通规 4.7b：移动面的步行MA，不能用战斗面MA替代。 */
   ma?: number
 }
 
@@ -453,7 +453,7 @@ export interface AirTransportProfileResult {
  * 而不是让玩家手填一个布尔（§17.71 当时的如实边界②）。
  *
  * 边界口径：距离与航程都以**格**计（14.1c/14.2d 同口径，引擎不换算英里）；半程取 `range / 2` 的**实数**
- * 比较（不预先取整），与 4.2「永远不要对移动力上限的小数取整」同一精神。
+ * 比较（不预先取整），与 通规 4.2「永远不要对移动力上限的小数取整」同一精神。
  */
 export function airTransportProfile(input: {
   distanceHexes: number
@@ -857,7 +857,7 @@ function missionAbilityCheck(input: AirMissionRequest): RuleOutcome<{ ok: true }
       if (!planes.some((plane) => (plane.transportCapacity ?? 0) > 0))
         return fail('14.9a', 'noTransportCapableAircraft')
       /*
-       * ★ P0（R6）：人员空投已整体 N/A，统一由 `missionCargoCheck` 以 2.2b 拒绝；
+       * ★ P0（R6）：人员空投已整体 N/A，统一由 `missionCargoCheck` 以 专规 2.2b 拒绝；
        *   这里只保留「至少一架具备运输能力」的门槛，补给空投照常通过。
        */
       return succeed('14.9a', { ok: true })

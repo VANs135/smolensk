@@ -113,15 +113,15 @@ export interface BarrageUnitRequest {
   /** 13.4a：火炮是否处于预备/战略模式（该状态不得轰炸） */
   inReserveOrStrat?: boolean
   /**
-   * 5.10b-A：该单位是否 DG（**轰炸值减半**）
+   * 通规 5.10b-A：该单位是否 DG（**轰炸值减半**）
    *
    * 与 `battle.BattleUnitView.dg` 同源；折算在 `beginBarrage` 一处施加，
    * 故调用方传**印值**即可，不要自行折半（否则会折两次）。
    */
   dg?: boolean
-  /** 5.10b-A：生效模式（战略模式轰炸值为零；缺省按战斗模式） */
+  /** 通规 5.10b-A：生效模式（战略模式轰炸值为零；缺省按战斗模式） */
   mode?: BaseMode
-  /** 5.7b：本阶段刚释放的预备（标记已移除，数值回到基础行） */
+  /** 通规 5.7b：本阶段刚释放的预备（标记已移除，数值回到基础行） */
   releasedFromReserve?: boolean
   /** 14.9d：地面参炸单位本阶段的空运限制；不约束空军任务。 */
   airTransportThisPhase?: AirUnitTransportState | null
@@ -168,7 +168,7 @@ export type BarrageOutcomeRecord =
 /** 轰炸对单位/设施的变更（绝对值，交状态层落盘） */
 export interface BarrageUnitPatch {
   unitId: string
-  /** 5.10：置为 DG */
+  /** 通规 5.10：置为 DG */
   dg?: true
   /** 本次损失的军力点数（10.0a），与战斗补丁的剩余军力明确区分。 */
   stepLoss?: number
@@ -199,11 +199,11 @@ export interface BarrageInteractionState {
   /** 资格判定通过的条文（10.0e 等） */
   eligibilityRule: string
   /**
-   * 10.0：加总后的轰炸值（已按 4.2 **取整**）——确定纵列与 T 成本用的就是它
+   * 10.0：加总后的轰炸值（已按 通规 4.2 **取整**）——确定纵列与 T 成本用的就是它
    */
   totalValue: number
   /**
-   * 4.2：取整**之前**的合并值（仅当带小数时与 `totalValue` 不同）
+   * 通规 4.2：取整**之前**的合并值（仅当带小数时与 `totalValue` 不同）
    *
    * 供结算明细展示「合并得 2.5 → 取整 3」这一步；规则结论一律以 `totalValue` 为准。
    */
@@ -372,11 +372,11 @@ export function beginBarrage(input: {
   }
 
   /*
-   * 5.10b-A：DG 单位的轰炸值减半；5.8：战略模式轰炸值为零（`modeEffect` 给出倍率）。
+   * 通规 5.10b-A：DG 单位的轰炸值减半；5.8：战略模式轰炸值为零（`modeEffect` 给出倍率）。
    *
    * ★ 折算**只在这一处**施加（与 `battle.unitBattleStrength` 同一份模式矩阵、同一条优先级链）。
    *   调用方传印值即可——若调用方也折半，会折两次。
-   * ★ 按单位折半后**再合并**，随后按 4.2 对合并值取整（取整必须在合并之后）。
+   * ★ 按单位折半后**再合并**，随后按 通规 4.2 对合并值取整（取整必须在合并之后）。
    */
   const units = input.units.map((unit) => {
     const multiplier = modeEffect({
@@ -388,7 +388,7 @@ export function beginBarrage(input: {
   })
 
   /*
-   * 2.2 反应 / 进击的**射击**环节（`_ocs_sop_clean.txt` 39–53 行）：
+   * 通规 2.2 反应 / 进击的**射击**环节（`_ocs_sop_clean.txt` 39–53 行）：
    *   · 反应：「飞机单位，舰船单位（1 回合只能 1 次），或**释放预备模式的地面单位**可以射击。」
    *   · 进击：「飞机单位，舰船单位，**释放预备模式的火炮单位**可以射击。」
    * ⇒ 这两段的火炮射击只认**已释放的预备**；10.0e-E 的「所有类型都可以」是类型口径，
@@ -443,7 +443,7 @@ export function beginBarrage(input: {
     )
 
   const rawTotalValue = units.reduce((sum, unit) => sum + (unit.assignedValue ?? 0), 0)
-  // 4.2：合并后取整，取整值即确定纵列与 T 成本所用的值
+  // 通规 4.2：合并后取整，取整值即确定纵列与 T 成本所用的值
   const totalValue = roundBarrageValue(rawTotalValue)
 
   const facts = input.facts ?? {}

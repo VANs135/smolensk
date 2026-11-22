@@ -9,7 +9,7 @@ import { rulesConstants } from '@/data'
 /**
  * 燃料补给（OCS 12.5）——编队法 / HQ 法 / 单单位法、燃料的持续期与到期时点
  *
- * 条文出处（中文规则书 12.5 / 12.5a–g；5.8b 与 12.6e 另见模式与补给模块）：
+ * 条文出处（中文规则书 12.5 / 12.5a–g；通规 5.8b 与 12.6e 另见模式与补给模块）：
  *   - 12.5a 使用轮式或履带 MP 的**战斗单位**要消耗 MP 就必须付燃料，否则**不能消耗任何 MP**；
  *           「即使就移动一格」也要付。步行单位、卡车、舰船、飞机、补给拖取/投递永远不需要燃料。
  *   - 12.5b 需要燃料才能移动的战斗单位，在**攻击、防御、轰炸、撤退、战后推进**时无需燃料；
@@ -239,20 +239,20 @@ export function fuelExpiresOnPhaseChange(method: FuelMethod): boolean {
 }
 
 /**
- * 3.2f：**独立单位**判据（12.5c-B/12.5e 的 HQ 法只覆盖独立单位）
+ * 通规 3.2f：**独立单位**判据（12.5c-B/12.5e 的 HQ 法只覆盖独立单位）
  *
- * 「任何既**不属于多单位编队 (3.1c)** 也**不属于多军力单位 (3.2d)** 的单位都是『独立单位』。
+ * 「任何既**不属于多单位编队 ( 通规 3.1c)** 也**不属于多军力单位 (3.2d)** 的单位都是『独立单位』。
  *   这在燃料补给 (12.5e) 中很重要。」
  * ⇒ 判据两项，缺一不可：
- *   ① `formation` 为空（3.1c 的多单位编队归属，**由数据定死**）；
- *   ② `printedSteps ≤ 1`（3.2d 的多军力单位，印值军力 > 1 者不是独立单位）。
+ *   ① `formation` 为空（通规 3.1c 的多单位编队归属，**由数据定死**）；
+ *   ② `printedSteps ≤ 1`（通规 3.2d 的多军力单位，印值军力 > 1 者不是独立单位）。
  *
  * 用户 2026-09-17 裁定与本条一致：「编队单位肯定是定死的……**编队单位是无法利用 HQ 补给法的**」。
  */
 export function isIndependentUnit(input: {
-  /** 3.1c：多单位编队番号（`null`/缺省 ＝ 不属于任何编队） */
+  /** 通规 3.1c：多单位编队番号（`null`/缺省 ＝ 不属于任何编队） */
   formation?: string | null
-  /** 3.2d：印值军力点数 */
+  /** 通规 3.2d：印值军力点数 */
   printedSteps: number
 }): boolean {
   if (typeof input.formation === 'string' && input.formation.length > 0) return false
@@ -263,7 +263,7 @@ export function isIndependentUnit(input: {
  * 12.5c-B / 12.5e：HQ 法**能覆盖谁**
  *
  * 原文（B）「支付 1SP，为**指挥部自己**，及它投递距离内的**所有独立单位**提供燃料补给。」
- * 原文（12.5e）「……可『免费』为其投递距离内的**所有独立单位（定义见 3.2f）**提供燃料补给（从而避免
+ * 原文（12.5e）「……可『免费』为其投递距离内的**所有独立单位（定义见 通规 3.2f）**提供燃料补给（从而避免
  *   单独单位使用燃料补给法每单位每阶段消耗 1T 的燃料）。」
  * ⇒ 只有 **①该指挥部自己** 与 **②独立单位** 能被 HQ 法覆盖；**编队单位与多军力单位都不在覆盖内**
  *   —— 它们要么走 12.5c-A 编队法（整编队 1SP），要么走 12.5c-C 单独单位法（每单位 1T；
@@ -272,7 +272,7 @@ export function isIndependentUnit(input: {
 export function hqFuelCovers(input: {
   /** 受益单位就是这台被付了 1SP 的指挥部自己 */
   targetIsTheHq: boolean
-  /** 受益单位是独立单位（3.2f，见 `isIndependentUnit`） */
+  /** 受益单位是独立单位（通规 3.2f，见 `isIndependentUnit`） */
   targetIsIndependent: boolean
 }): boolean {
   return input.targetIsTheHq || input.targetIsIndependent
@@ -285,7 +285,7 @@ export function hqFuelCovers(input: {
  *   检查每个单位使用了哪个指挥部或补给站进行补给的**投递或拖取**。如果为其中一些单位投递补给的不是
  *   同一个指挥部，或者一些单位直接拖取补给的来源不是同一个补给站，那么**这些使用不同来源的单位只能按
  *   单独单位燃料补给法**来获得燃料补给。」
- * ⇒ 覆盖 = ①属于**该编队**（3.1c 番号一致，本函数判这一半） ∧ ②该单位**能从本次付款的那个来源取到**
+ * ⇒ 覆盖 = ①属于**该编队**（通规 3.1c 番号一致，本函数判这一半） ∧ ②该单位**能从本次付款的那个来源取到**
  *   （来源那一半按盘面事实由调用方判，分工同 `hqFuelCovers`）。
  *
  * ★ 用户 2026-09-18 报告第 7 条把这一条明确成界面行为：点一枚编队单位付编队法后，**同编队且在本次
@@ -296,7 +296,7 @@ export function hqFuelCovers(input: {
  * 与 `hqFuelCovers`（12.5c-B）互不替代：编队单位走不了 HQ 法、独立单位走不了编队法（用户 2026-09-17 裁定）。
  */
 export function formationFuelCovers(input: {
-  /** 3.1c：该单位的编队番号（`null`/缺省 ＝ 不属于任何编队） */
+  /** 通规 3.1c：该单位的编队番号（`null`/缺省 ＝ 不属于任何编队） */
   unitFormation?: string | null
   /** 本次付款覆盖的编队番号（编队法要求受益单位同属一个编队） */
   fuelFormation?: string | null
@@ -324,19 +324,19 @@ export interface FuelMethodAvailability {
  *   · **12.5c-C 单独单位法**：「为每个需要燃料补给的单位支付 1T。**任何单位都可以使用此方法**，无论其
  *     RE 规模或军力多少，也无论它是独立单位、多军力单位，还是多单位编队中的单位。」⇒ 恒可用；
  *   · **12.5c-A 编队法**：「为**一整个多单位编队**支付 1SP」⇒ 需要受益单位**同属一个多单位编队**
- *     （3.1c 的番号，**由数据定死**），且（13.7a）共用同一来源 —— 来源那一半在 store 里按盘面事实另判；
+ *     （通规 3.1c 的番号，**由数据定死**），且（13.7a）共用同一来源 —— 来源那一半在 store 里按盘面事实另判；
  *   · **12.5c-B 指挥部法**：「支付 1SP，为**指挥部自己**，及它投递距离内的**所有独立单位**提供燃料补给。」
  *     ⇒ 受益单位里必须**有一台指挥部**（它才是付款与投递的主体；用户：「点击 HQ 时才能加 HQ 法」），
- *     且其余受益单位都必须是独立单位（3.2f）—— 编队单位与多军力单位都不在内。
+ *     且其余受益单位都必须是独立单位（通规 3.2f）—— 编队单位与多军力单位都不在内。
  */
 export function fuelMethodAvailability(input: {
   /** 本次受益单位（界面里已选中的那一批；空数组即"没选单位"） */
   targets: readonly {
     /** 该单位是不是指挥部 */
     isHq: boolean
-    /** 3.1c：多单位编队番号（null ＝ 不属于任何编队） */
+    /** 通规 3.1c：多单位编队番号（null ＝ 不属于任何编队） */
     formation: string | null
-    /** 3.2f：是不是独立单位（`isIndependentUnit` 的结论） */
+    /** 通规 3.2f：是不是独立单位（`isIndependentUnit` 的结论） */
     isIndependent: boolean
   }[]
 }): FuelMethodAvailability[] {
@@ -349,7 +349,7 @@ export function fuelMethodAvailability(input: {
       ? { method: 'singleUnit', available: false, reason: '12.5c-C：先选中要加油的单位' }
       : { method: 'singleUnit', available: true, reason: null }
 
-  /* 12.5c-A：一整个多单位编队 ⇒ 受益单位须同属**一个**编队（3.1c 的番号非空且一致） */
+  /* 12.5c-A：一整个多单位编队 ⇒ 受益单位须同属**一个**编队（通规 3.1c 的番号非空且一致） */
   const formations = new Set(targets.map((target) => target.formation))
   const formationName = targets[0]?.formation ?? null
   const formationAvailable = targets.length > 0 && formations.size === 1 && formationName !== null

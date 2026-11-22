@@ -9,7 +9,7 @@ import type { HexRef } from '@/data'
 /**
  * 专规 4.3（可选）**Setup Wiggle** —— 初设微调
  *
- * 原文（Scenario 5.1 / 5.2）：
+ * 原文（Scenario 通规 5.1 / 5.2）：
  *   A. 「六个满员苏军步兵师各可派出一个拆分团（置于母师两格内）」；
  *   B. 「1.Mot Div 可在 18.17 一格内初设」。
  *
@@ -48,7 +48,7 @@ export function isSetupWiggleMotEntry(entry: {
  * A 的母师判据：苏军 ∧ 步兵 ∧ **满员** ∧ 多军力（≥2 步，才拆得动）
  *
  * ★ 原文只说「six full-strength Soviet rifle divisions」，没有「4 步」这类印值门槛；
- *   本作苏军步兵师印值是 2–3 步（数据实测），所以**不能**照 4.2b 的「4 步」去卡。
+ *   本作苏军步兵师印值是 2–3 步（数据实测），所以**不能**照 专规 4.2b 的「4 步」去卡。
  */
 export function isSetupWiggleParent(candidate: {
   side: string

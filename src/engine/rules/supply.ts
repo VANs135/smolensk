@@ -44,13 +44,13 @@ export interface CombatSupplyCost {
  *
  * 12.4 原文：「攻击者的消耗为**每个攻击的军力**各消耗 1T（例外：在《非洲军》中，2 军力的旅消耗为 1T）；
  *   防御者每次战斗的消耗合计为 2T（例外：对于 1RE 或以下规模的防御者，消耗仅为 1T）。」
- * 故**攻方按军力点数（step，3.2）计**、守方按**总 RE** 是否 ≤1 取 1T 或 2T。
+ * 故**攻方按军力点数（step，通规 3.2）计**、守方按**总 RE** 是否 ≤1 取 1T 或 2T。
  * 本作是斯摩棱斯克而非《非洲军》，故不使用 2 军力旅的例外。
  */
 export function computeCombatSupplyCost(opts: {
   /** 参战**攻击军力点数**（step；不是 RE——两者在 9.5 的战斗补给里口径不同） */
   attackerSteps: number
-  /** 参战**守方总 RE**（4.6；≤1 时守方只耗 1T） */
+  /** 参战**守方总 RE**（通规 4.6；≤1 时守方只耗 1T） */
   defenderRE: number
 }): CombatSupplyCost {
   const attackerT = opts.attackerSteps * COMBAT_SUPPLY_ATTACKER_T_PER_STEP
@@ -368,7 +368,7 @@ export function computeDumpBlowLoss(die: number): number {
  *
  * ⇒ 判据两条：
  *   ① **只有编内卡车**受此限（13.2g 讲的是编内卡车；常规运输点数按 13.2f/12.1b 照常可拖）；
- *   ② 编内卡车 ⇒ 拖取方须与其**同属一个多单位编队**（3.1c 的番号相等，且**两者都非空** ——
+ *   ② 编内卡车 ⇒ 拖取方须与其**同属一个多单位编队**（通规 3.1c 的番号相等，且**两者都非空** ——
  *      数据缺编队号的编内卡车**不**因此变成"谁都能拖"）。
  *
  * ★ 用户 2026-09-17 裁定「编队单位肯定是定死的」⇒ 编队号一律来自数据（`unit.formation`），不由玩家声明。
@@ -376,9 +376,9 @@ export function computeDumpBlowLoss(die: number): number {
 export function canDrawFromCarrier(input: {
   /** 承运算子是不是**编内卡车**（13.2g / 13.2h） */
   carrierIsOrganicTruck: boolean
-  /** 承运算子的编队番号（3.1c；非编内卡车传 null 亦可） */
+  /** 承运算子的编队番号（通规 3.1c；非编内卡车传 null 亦可） */
   carrierFormation: string | null
-  /** 拖取方的编队番号（3.1c） */
+  /** 拖取方的编队番号（通规 3.1c） */
   drawerFormation: string | null
 }): boolean {
   if (!input.carrierIsOrganicTruck) return true

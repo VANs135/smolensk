@@ -411,7 +411,7 @@ export const ENGINEERING_MIN_RE = CONSTRUCTION_MIN_BUILDER_RE
 /** 15.4：在目标格内被指定执行缩减的**作业单位**（格内堆叠的一支分队） */
 export interface AirBaseOperatingUnit {
   id: string
-  /** 4.6：团级当量（作业单位的 RE **合计**须 ≥ 1，除非其中有人具工程能力） */
+  /** 通规 4.6：团级当量（作业单位的 RE **合计**须 ≥ 1，除非其中有人具工程能力） */
   re: number
   /** 15.4：该单位须处于**战斗模式** */
   mode: UnitMode
@@ -561,13 +561,13 @@ export function planOffMapAirBoxFlightFromHex(input: {
 
 /** 专规 1.4a 图外空军盒的能力（容量无限、整备免费） */
 export interface AirBoxRules {
-  /** 无限驻机容量（1.4a） */
+  /** 无限驻机容量（专规 1.4a） */
   infiniteCapacity: boolean
-  /** 每回合免费整备任意架数（1.4a） */
+  /** 每回合免费整备任意架数（专规 1.4a） */
   freeRefitPerTurn: boolean
-  /** 盒内的「额外」SP 可经**空运任务**飞入地图（1.4a / 1.6b Notes） */
+  /** 盒内的「额外」SP 可经**空运任务**飞入地图（专规 1.4a / 1.6b Notes） */
   extraSpFlownByAirTransport: true
-  /** 盒内永不允许战斗或轰炸（1.4） */
+  /** 盒内永不允许战斗或轰炸（专规 1.4） */
   combatOrBarrageAllowed: boolean
 }
 
@@ -609,22 +609,22 @@ export function edgeBoxConnection(box: EdgeBoxId): EdgeBoxConnection {
 
 /** 专规 1.4b 边缘盒的静态规则（供引擎与界面单点读取） */
 export interface EdgeBoxRules {
-  /** 仅苏方地面单位可使用（1.4b） */
+  /** 仅苏方地面单位可使用（专规 1.4b） */
   sovietOnly: boolean
-  /** 只在移动阶段可进出（1.4b：反应/进击阶段不得进出） */
+  /** 只在移动阶段可进出（专规 1.4b：反应/进击阶段不得进出） */
   movementPhaseOnly: boolean
-  /** 进入费用：1 MP，或改用铁路容量（1.4b） */
+  /** 进入费用：1 MP，或改用铁路容量（专规 1.4b） */
   entryMp: number
   allowsRailCapEntry: true
-  /** 盒内含追溯补给（1.4b） */
+  /** 盒内含追溯补给（专规 1.4b） */
   hasTraceSupply: boolean
-  /** **图上单位不得**从边缘盒取得 SP 或追溯补给（1.4b） */
+  /** **图上单位不得**从边缘盒取得 SP 或追溯补给（专规 1.4b） */
   onMapUnitsCanDraw: boolean
-  /** 撤退不得进出边缘盒（1.4b） */
+  /** 撤退不得进出边缘盒（专规 1.4b） */
   retreatAllowed: boolean
   /** 进入边缘盒即须停止移动（勘误：units must stop when entering a box） */
   mustStopOnEntry: boolean
-  /** 离开边缘盒时按「1T/单位」免费加注燃料（1.4b） */
+  /** 离开边缘盒时按「1T/单位」免费加注燃料（专规 1.4b） */
   exitFuelsFree: boolean
 }
 
@@ -646,13 +646,13 @@ export function edgeBoxRules(): EdgeBoxRules {
 }
 
 export interface EdgeBoxEntryInput {
-  /** 行动方（1.4b：仅苏方） */
+  /** 行动方（专规 1.4b：仅苏方） */
   side: Side
-  /** 当前阶段（1.4b：仅移动阶段） */
+  /** 当前阶段（专规 1.4b：仅移动阶段） */
   phase: GamePhase
-  /** 进出单位类别（1.4b：仅地面单位） */
+  /** 进出单位类别（专规 1.4b：仅地面单位） */
   unitKind: 'ground' | 'air'
-  /** 是否在己方地图边缘补给源格与边缘盒之间移动（1.4b） */
+  /** 是否在己方地图边缘补给源格与边缘盒之间移动（专规 1.4b） */
   fromSupplySourceHex: boolean
 }
 
@@ -678,7 +678,7 @@ export function canEnterEdgeBox(
 /**
  * 一个候选格的**盘面事实**（由 store 从盘面投影，引擎只按任务类型判"这类目标能否落在这格"）
  *
- * 图外空军盒不是地图格，不会出现在候选集的输入里；且 1.4「盒内不允许战斗与轰炸」
+ * 图外空军盒不是地图格，不会出现在候选集的输入里；且 专规 1.4「盒内不允许战斗与轰炸」
  * ⇒ 任何任务都不把盒当目标（无专规例外）。
  */
 export interface AirTargetHexFacts {
@@ -708,7 +708,7 @@ export interface AirTargetHexFacts {
  *   · 战机扫荡（14.6）：有敌方**激活飞机**的敌方空军基地格（用户 2026-11-12 口径）；
  *   · 基地转移（14.11）：友方空军基地。
  *
- * 注意：这里**不含图外盒**——输入只会是地图格，1.4 也禁止对盒内战斗。
+ * 注意：这里**不含图外盒**——输入只会是地图格，专规 1.4 也禁止对盒内战斗。
  */
 export function airMissionTargetTypeAllowed(
   kind: AirMissionKind,
@@ -737,7 +737,7 @@ export function airMissionTargetTypeAllowed(
  * 14.2f-B：任务目标格候选集 = **类型合法** ∩ **航程可达**
  *
  * 用户 2026-11-12 口径：目标格只在地图上高亮点选，候选由引擎统一算，UI 只渲染。
- * `reachable` 由调用方按参战飞机的"当前位置/基地 → 目标格"距离与该机航程给出（14.2d / 1.4a）。
+ * `reachable` 由调用方按参战飞机的"当前位置/基地 → 目标格"距离与该机航程给出（14.2d / 专规 1.4a）。
  */
 export function airMissionTargetCandidates(input: {
   kind: AirMissionKind
@@ -752,7 +752,7 @@ export function airMissionTargetCandidates(input: {
 /**
  * 专规 1.4b：离开边缘盒时的燃料
  *
- * 回到图上时按「1T/单位」的方式加注燃料，但**不消耗 SP**（1.4b：fueled at no SP cost）。
+ * 回到图上时按「1T/单位」的方式加注燃料，但**不消耗 SP**（专规 1.4b：fueled at no SP cost）。
  */
 export function isEdgeBoxExitFuelFree(): boolean {
   return rulesConstants.smolensk.offMapBox.edge.exitFuelsFree

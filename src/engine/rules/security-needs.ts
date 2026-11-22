@@ -12,57 +12,57 @@ import { succeed, type RuleOutcome } from '../result-types'
  * 治安需求（Smolensk 专规 3.3b，轴方）
  *
  * ## 条文原文（ch03 引录）
- *   「**Security Needs 框架（3.3b）**：轴心国控制的城市格（按 5.0c 定义）应由一个 **Attack-Capable**
+ *   「**Security Needs 框架（专规 3.3b）**：轴心国控制的城市格（按 5.0c 定义）应由一个 **Attack-Capable**
  *     单位占据或被 **ZOC** 覆盖；否则在该格放一个苏军 **Trainbusting** 标记（代表游击队活动）。
  *     标记可在**任意相位**放置；在**任意 Clean Up Phase**，若安全需求满足或该城转为苏军控制则移除。」
  *
  * ## 实现口径
  *   - **「轴心占领即轴心控制」**：调用方给出的 `controlledByAxis` 就是「该城已被轴心占领」；
- *     不再另设 5.0c 的控制推演。未占领的城市不参与 3.3b 判定。
+ *     不再另设 专规 5.0c 的控制推演。未占领的城市不参与 3.3b 判定。
  *   - **放置（缺一不可）**：轴控城市**未被可攻击的轴心单位占据**，**且未被轴心 ZOC 覆盖**，
  *     才放游击队/运输破坏标记。不是「或」——只要占据或 ZOC 覆盖有一条成立，就不放。
  *   - **移除只发生在 Clean Up Phase**：`removalAllowedNow` 仅对 `cleanUp` 放行；其它阶段
  *     只放置、不移除。放置本身不随阶段开始自动触发，由玩家手动执行治安检查。
  *   - 本模块只判「该格现在是否需要标记 / 该标记现在是否该移除」，不写状态；
- *   - 「城市格」由调用方按产品数据给出（map-layers 的 `city` 字段 + 5.0c 的控制判定）；
+ *   - 「城市格」由调用方按产品数据给出（map-layers 的 `city` 字段 + 专规 5.0c 的控制判定）；
  *   - Trainbusting 标记的**效果**（移动/铁路惩罚）不在本模块——它属 10.0 / 13.x 的取表；
  *     本作已有的标记表见 `markers.json`（`trainbusting`）。
  */
 
-/** 标记的**放置理由**：3.3b 治安需求 / 10.0c-C·14.8c 空军运输破坏任务 */
+/** 标记的**放置理由**：专规 3.3b 治安需求 / 10.0c-C·14.8c 空军运输破坏任务 */
 export type TrainbustingCause = 'securityNeeds' | 'airMission'
 
-/** 3.3b / 14.8：运输破坏共用标记；治安需求放置的标记为苏军。 */
+/** 专规 3.3b / 14.8：运输破坏共用标记；治安需求放置的标记为苏军。 */
 export interface TrainbustingMarkerView {
   id: string
   hex: HexRef
   /** 实际放置方，决定 14.8c 的清理时点。 */
   side: Side
   /**
-   * 放置理由（3.3b / 10.0c-C）
+   * 放置理由（专规 3.3b / 10.0c-C）
    *
-   * 两类标记的**移除条件不同**：3.3b 只在治安需求满足或转苏控时移除；
+   * 两类标记的**移除条件不同**：专规 3.3b 只在治安需求满足或转苏控时移除；
    * 10.0c-C / 14.8c 在下一个敌方清理阶段无条件移除。缺省按后者处理（沿袭旧存档行为，不臆断为治安标记）。
    */
   cause?: TrainbustingCause
 }
 
-/** 3.3b：一座轴方控制城市的治安检查输入 */
+/** 专规 3.3b：一座轴方控制城市的治安检查输入 */
 export interface SecurityCheckCityView {
   hex: HexRef
   /** 城市名（日志用；产品数据 map-layers 的 `city.name`） */
   name?: string
-  /** 5.0c：该城当前由**轴心国**控制 */
+  /** 专规 5.0c：该城当前由**轴心国**控制 */
   controlledByAxis: boolean
-  /** 该城是否由**可攻击单位**占据（3.3b 条件①） */
+  /** 该城是否由**可攻击单位**占据（专规 3.3b 条件①） */
   occupiedByAttackCapable: boolean
-  /** 该城是否被轴心国 **ZOC** 覆盖（3.3b 条件②；4.5 的投射 ZOC） */
+  /** 该城是否被轴心国 **ZOC** 覆盖（专规 3.3b 条件②；通规 4.5 的投射 ZOC） */
   coveredByAxisZoc: boolean
   /** 该城是否已有一枚 Trainbusting 标记 */
   hasTrainbusting: boolean
 }
 
-/** 3.3b：治安检查结论 */
+/** 专规 3.3b：治安检查结论 */
 export interface SecurityNeedsResult {
   /** 需要**新放**标记的城（需求未满足且尚无标记） */
   placeAt: readonly HexRef[]
@@ -73,7 +73,7 @@ export interface SecurityNeedsResult {
 }
 
 /**
- * 3.3b：治安需求检查（可在任意相位调用做放置判定）
+ * 专规 3.3b：治安需求检查（可在任意相位调用做放置判定）
  *
  * - 需求未满足（既无可攻击单位占据、也无 ZOC 覆盖）且尚无标记 ⇒ 需在该格**放置**一枚；
  * - 需求已满足（或有标记但城已转苏控）⇒ 需在该格**移除**标记。
@@ -88,7 +88,7 @@ export function checkSecurityNeeds(
   const removeAt: HexRef[] = []
 
   for (const city of cities) {
-    // 非轴控城市不属于 3.3b 的「占城税」范围（含已转苏控者 ⇒ 其标记应移除）
+    // 非轴控城市不属于 专规 3.3b 的「占城税」范围（含已转苏控者 ⇒ 其标记应移除）
     if (!city.controlledByAxis) {
       if (city.hasTrainbusting) removeAt.push(city.hex)
       continue
@@ -112,7 +112,7 @@ export function checkSecurityNeeds(
 }
 
 /**
- * 3.3b：标记的**移除**只在 Clean Up Phase 进行
+ * 专规 3.3b：标记的**移除**只在 Clean Up Phase 进行
  *
  * 「在**任意 Clean Up Phase**，若安全需求满足或该城转为苏军控制则移除」⇒ 其它阶段不移除。
  */
@@ -121,11 +121,11 @@ export function removalAllowedNow(phase: string): boolean {
 }
 
 /**
- * 3.3b：标记被移除的两个理由（与 `checkSecurityNeeds` 一致，供日志/界面用）
+ * 专规 3.3b：标记被移除的两个理由（与 `checkSecurityNeeds` 一致，供日志/界面用）
  */
 export type TrainbustingRemovalReason = 'securityNeedsMet' | 'citySovietControlled'
 
-/** 3.3b：为何移除这枚标记（返回 null 表示不该移除） */
+/** 专规 3.3b：为何移除这枚标记（返回 null 表示不该移除） */
 export function removalReasonOf(city: SecurityCheckCityView): TrainbustingRemovalReason | null {
   if (!city.controlledByAxis) return 'citySovietControlled'
   if (city.occupiedByAttackCapable || city.coveredByAxisZoc) return 'securityNeedsMet'

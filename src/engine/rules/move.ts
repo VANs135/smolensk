@@ -31,7 +31,7 @@ import { isInEnemyZoc, projectsZoc, zocEntryEffect, type ZocSource } from './zoc
 import { zocAffectsAction, type ZocAction } from './zoc-effects'
 
 /**
- * 地面移动的执行与可达性（OCS 6.0 / 6.1 / 6.2 + 4.5a-A + 4.5b + 8.1）
+ * 地面移动的执行与可达性（OCS 6.0 / 6.1 / 6.2 + 通规 4.5a-A + 4.5b + 8.1）
  *
  * 本模块只做**移动**：取费、逐步合法性、可达格集合、突袭资格（突袭的战斗结算属 8.0/9.x）。
  * 一律纯函数；地图事实由 MapFacts 注入（默认实现 map-facts.ts）；数值全部来自 rules-constants.json。
@@ -47,12 +47,12 @@ import { zocAffectsAction, type ZocAction } from './zoc-effects'
  *   - 6.2b   格边地形消耗与进入格消耗相加；沿路时忽略格边地形
  *   - 6.2c   不能进入或穿越禁入的格与格边（除非桥梁或道路）；被迫者摧毁
  *   - 6.2d   格内多地形取最贵；符号有无即算
- *   - 4.5a-A 轮式 MP 单位进入未抵消敌方 ZOC 必须停止或突袭
- *   - 4.5b   抵消：格内有友方战斗单位（该单位本阶段起不得再消耗 MP）
+ *   - 通规 4.5a-A 轮式 MP 单位进入未抵消敌方 ZOC 必须停止或突袭
+ *   - 通规 4.5b   抵消：格内有友方战斗单位（该单位本阶段起不得再消耗 MP）
  *   - 8.1/8.1a/8.1b/8.1c  突袭资格：阶段开始时同格堆叠的可攻击单位、战斗/移动/进击模式、
  *                          3 MP/次、进入格 MP ≤ 3、不得借道路桥梁降费或否定禁入地形
  *   - 12.5a  使用轮式/履带 MP 的战斗单位要消耗 MP 必须先付燃料
- *   - 5.8b   战略模式单位必须在当前拥有追溯补给的格内结束移动
+ *   - 通规 5.8b   战略模式单位必须在当前拥有追溯补给的格内结束移动
  */
 
 /* ────────────────────────────── 常量 ────────────────────────────── */
@@ -73,7 +73,7 @@ function modeStateOf(unit: MoveUnitView): ModeState {
   }
 }
 
-/** 本阶段该单位的可用 MA（模式修正 + 剧本修正 + 4.2c 最省供油修正；6.1h 永不取整） */
+/** 本阶段该单位的可用 MA（模式修正 + 剧本修正 + 专规 4.2c 最省供油修正；6.1h 永不取整） */
 export function availableMa(unit: MoveUnitView, phase: MovementSegmentPhase): number {
   return limitAirTransportMa(
     unit.ma *
@@ -96,11 +96,11 @@ export function requiresFuel(unit: MoveUnitView): boolean {
 }
 
 /**
- * 由单位视图汇总 ZOC 来源（4.5：战斗模式 + 可攻击 + 非断补）
+ * 由单位视图汇总 ZOC 来源（通规 4.5：战斗模式 + 可攻击 + 非断补）
  *
  * ★ 「是否处于战斗模式」一律交给 modes.exertsZoc 裁定（基础模式 + 层叠标记 → ZOC 规则），
- *   本处不自行从 `unit.mode` 推导：那样会漏掉 **进击保留基础模式**（5.9c），
- *   也会把**已释放的预备**误判成仍在预备模式（5.7b 释放即回战斗/移动模式）。
+ *   本处不自行从 `unit.mode` 推导：那样会漏掉 **进击保留基础模式**（通规 5.9c），
+ *   也会把**已释放的预备**误判成仍在预备模式（通规 5.7b 释放即回战斗/移动模式）。
  */
 export function zocSourcesOf(units: readonly MoveUnitView[]): ZocSource[] {
   const sources: ZocSource[] = []
@@ -118,7 +118,7 @@ export function zocSourcesOf(units: readonly MoveUnitView[]): ZocSource[] {
 }
 
 /**
- * 4.5b：该格的敌方 ZOC 是否被己方「垫人」抵消
+ * 通规 4.5b：该格的敌方 ZOC 是否被己方「垫人」抵消
  *
  * 「如果某一格内包含友方战斗单位，则该格内的敌方 ZOC 会被抵消。但是用于抵消 ZOC 的单位
  *   在之后时间里不能消耗 MP 直到当前阶段结束。」→ 判据 = 格内有己方**战斗单位**且其
@@ -140,9 +140,9 @@ export function zocNegatedAt(
 }
 
 /**
- * 该格是否处于敌方 ZOC（4.5），已计入 4.5b 抵消
+ * 该格是否处于敌方 ZOC（通规 4.5），已计入 4.5b 抵消
  *
- * 注意 4.5a-A 的另一半：「在某个阶段开始时就在敌方 ZOC 内的单位，可以使用轮式 MP 离开该格」
+ * 注意 通规 4.5a-A 的另一半：「在某个阶段开始时就在敌方 ZOC 内的单位，可以使用轮式 MP 离开该格」
  * —— 那只影响「进入」判定，不影响本函数对格的描述。
  */
 export function inEnemyZocAt(
@@ -154,7 +154,7 @@ export function inEnemyZocAt(
   return inEnemyZocForAction(context, hex, movingSide, 'truckMovement', facts)
 }
 
-/** 4.5a：原始投射与合法抵消分别保留，再按动作类别裁决。 */
+/** 通规 4.5a：原始投射与合法抵消分别保留，再按动作类别裁决。 */
 export function inEnemyZocForAction(
   context: MoveContext,
   hex: { col: number; row: number },
@@ -192,12 +192,12 @@ export function isEnemySafeEdgeHex(
 }
 
 /**
- * 该格是否处于敌方 ZOC（4.5）**且不计 4.5b 抵消**（9.12e 专用）
+ * 该格是否处于敌方 ZOC（通规 4.5）**且不计 4.5b 抵消**（9.12e 专用）
  *
  * 9.12e：「当一个战斗单位撤退进入一个敌方 ZOC 时，会立即切换为 DG 模式……此 ZOC 效果
  *   **无法被友方战斗单位『抵消』**，也不受地形影响。」
  *
- * ⇒ 撤退判定必须绕开 4.5b 的抵消（撤退是无计划移动，友军「保护」并不能避免混乱），
+ * ⇒ 撤退判定必须绕开 通规 4.5b 的抵消（撤退是无计划移动，友军「保护」并不能避免混乱），
  *   故本函数与 `inEnemyZocAt` 的唯一差别就是**不接受** `friendlyCombatUnitInHex` 抵消。
  */
 export function inEnemyZocForRetreat(
@@ -209,10 +209,10 @@ export function inEnemyZocForRetreat(
 }
 
 /**
- * 格内**同方战斗单位**的 RE 合计（4.8 / 4.8a）
+ * 格内**同方战斗单位**的 RE 合计（通规 4.8 / 4.8a）
  *
  * 「在一个格中，允许堆叠的**战斗单位**合计上限为 10RE。任意数量的 SP 或运输点数都可以堆叠在
- *   同一格中」→ 只计战斗单位，且只计请求方自己的单位（敌我同格属 4.8c 的极少数情形）。
+ *   同一格中」→ 只计战斗单位，且只计请求方自己的单位（敌我同格属 通规 4.8c 的极少数情形）。
  */
 function stackCombatReAt(
   context: MoveContext,
@@ -277,11 +277,11 @@ export interface MoveStepFacts {
   neighborsOf(hex: { col: number; row: number }): readonly { col: number; row: number }[]
   /** 6.3b：该格有敌方战斗单位 */
   enemyOccupiedAt(hex: { col: number; row: number }): boolean
-  /** 4.8a：该格本方战斗单位 RE 合计 */
+  /** 通规 4.8a：该格本方战斗单位 RE 合计 */
   friendlyCombatReAt(hex: { col: number; row: number }): number
-  /** 4.5：该格处于敌方 ZOC（未计 4.5b 抵消） */
+  /** 通规 4.5：该格处于敌方 ZOC（未计 4.5b 抵消） */
   rawEnemyZocAt(hex: { col: number; row: number }): boolean
-  /** 4.5b：该格敌方 ZOC 被本方垫人单位抵消 */
+  /** 通规 4.5b：该格敌方 ZOC 被本方垫人单位抵消 */
   zocNegatedAt(hex: { col: number; row: number }): boolean
   /** 专规 1.1b：该格是敌方安全边缘格 */
   isEnemySafeEdge(hex: { col: number; row: number }): boolean
@@ -305,7 +305,7 @@ export interface MoveStepFacts {
 export function buildStepFacts(context: MoveContext, side: Side, unitId?: string): MoveStepFacts {
   const enemySide: Side = side === 'axis' ? 'soviet' : 'axis'
 
-  // 4.5：投射单位的**六邻格**（不含自身格；原文明确不论格内地形与格边）
+  // 通规 4.5：投射单位的**六邻格**（不含自身格；原文明确不论格内地形与格边）
   const zocCovered = new Set<number>()
   for (const source of zocSourcesOf(context.units)) {
     if (source.side !== enemySide || !projectsZoc(source)) continue
@@ -314,7 +314,7 @@ export function buildStepFacts(context: MoveContext, side: Side, unitId?: string
     }
   }
 
-  // 4.8a 堆叠 / 6.3b 敌方占据 / 4.5b 抵消者（同一趟扫描，一次算定）
+  // 通规 4.8a 堆叠 / 6.3b 敌方占据 / 4.5b 抵消者（同一趟扫描，一次算定）
   const friendlyCombatRe = new Map<number, number>()
   const negated = new Set<number>()
   const enemyOccupied = new Set<number>()
@@ -582,7 +582,7 @@ function violatesReciprocity(
 }
 
 /**
- * 逐步移动判定（6.1a/6.1c/6.1d/6.2/4.5a-A/4.5b/12.5a/5.8b）
+ * 逐步移动判定（6.1a/6.1c/6.1d/6.2/ 通规 4.5a-A/4.5b/12.5a/5.8b）
  *
  * 这是「单位可逐格移动」的唯一入口：UI 每次点一格都调它；
  * 可达格 BFS 走 `evaluateStepFrom`（同一套判据，只是起点由模拟路径给出），
@@ -632,7 +632,7 @@ export function evaluateStepFrom(
   // 6.1b：无 MA（SP/港口/空军基地/环形工事）不可移动；MA 为 0 同理
   if (unit.ma <= 0) return reject('immobile', '6.1b', unit.id)
 
-  // 4.5b：已承诺本阶段不再消耗 MP 的垫人单位不能再动
+  // 通规 4.5b：已承诺本阶段不再消耗 MP 的垫人单位不能再动
   if (unit.mpLockedThisPhase) return reject('mpLocked', '4.5b', unit.id)
 
   // 12.7：延补队面不可移动——「延补队不能移动」；12.7d 要求先翻回运输点数面（翻面耗半个 MA）
@@ -651,10 +651,10 @@ export function evaluateStepFrom(
     return reject('outsidePlayArea', '剧本·活动区', `${to.col}.${to.row}`)
 
   /*
-   * 4.5a-A（R9）：突袭强行进入敌方 ZOC 后，该格单位**不得离开**——只能就地再突袭，或停止。
+   * 通规 4.5a-A（R9）：突袭强行进入敌方 ZOC 后，该格单位**不得离开**——只能就地再突袭，或停止。
    * 事实由操作台在突袭收束后注入 `context.zocHeld`；再突袭走 `forOverrun`，故不在此限。
    *
-   * 4.5a-A 原文只约束 Truck MP：「movement using Leg or Track MP is unaffected by ZOCs」
+   * 通规 4.5a-A 原文只约束 Truck MP：「movement using Leg or Track MP is unaffected by ZOCs」
    * ⇒ 名单之外还要按单位机动类型收口，履带/徒步即便被列进同一事实也不受限。
    */
   const held = context.zocHeld
@@ -686,7 +686,7 @@ export function evaluateStepFrom(
   if (violatesReciprocity(context, unit, from, to, facts))
     return reject('reciprocity', '6.1d', `${to.col}.${to.row}`)
 
-  // 4.8a：堆叠上限**不是逐步禁令**——「超堆叠，是指在任何环节或阶段结束时，某一格内的战斗单位
+  // 通规 4.8a：堆叠上限**不是逐步禁令**——「超堆叠，是指在任何环节或阶段结束时，某一格内的战斗单位
   //   超过 10RE」且「单位在移动过程中可以暂时地超堆叠」。故此处只如实标记「本步造成暂时超堆叠」，
   //   由合法性校验层（legality.stackingObligations）在环节/阶段结束时结算义务。
   //   唯一在本步就要拦的堆叠例外是**突袭**（见 canOverrun）。
@@ -694,21 +694,21 @@ export function evaluateStepFrom(
     facts === undefined ? stackCombatReAt(context, to, unit.side) : facts.friendlyCombatReAt(to)
   const createsOverstack = stackedRe + (unit.isCombat ? unit.re : 0) > STACKING_LIMIT_RE
 
-  // 4.5a-A：进入未抵消敌方 ZOC 后，轮式必须停止（或突袭）
+  // 通规 4.5a-A：进入未抵消敌方 ZOC 后，轮式必须停止（或突袭）
   const zocAt = (action: ZocAction): boolean =>
     facts === undefined
       ? inEnemyZocForAction(context, to, unit.side, action)
       : zocAffectsAction(action, facts.rawEnemyZocAt(to), facts.zocNegatedAt(to))
   const enteringEnemyZoc = zocAt('truckMovement')
-  // 5.8a：战略模式单位**不可移动进入敌方 ZOC**（与 4.5a-A 的「进入后可停」不同，这里是禁止进入）。
-  //   注意只约束「进入」：若单位在本阶段开始时已在敌方 ZOC 内（敌方后来靠上来的情形，5.8a 括注
+  // 通规 5.8a：战略模式单位**不可移动进入敌方 ZOC**（与 4.5a-A 的「进入后可停」不同，这里是禁止进入）。
+  //   注意只约束「进入」：若单位在本阶段开始时已在敌方 ZOC 内（敌方后来靠上来的情形，通规 5.8a 括注
   //   「如果是敌方单位移动到它们相邻处，不会发生任何特殊情况」），它仍可以走出该 ZOC。
   if (hasMarker(state, 'strat') && zocAt('stratMovement'))
     return reject('stratIntoEzoc', '5.8a', `${to.col}.${to.row}`)
   const forcedStop = enteringEnemyZoc && zocEntryEffect(unit.mobility) === 'mustStopOrOverrun'
 
   /*
-   * 5.7g：「在任何移动环节结束时，处于预备模式内的单位都不可与环形工事堆叠在一起。」
+   * 通规 5.7g：「在任何移动环节结束时，处于预备模式内的单位都不可与环形工事堆叠在一起。」
    * ★ 用户 2026-11-01 口径（按此执行）：**预备单位可以路过工事格，但不得停在工事格内**。
    *   故本步**不拦**预备进工事格——"进不进得去、停不停得下"由 `computeReachableHexes`
    *   在 BFS 末段统一裁决：工事格只作**中转节点**（能扩展过去＝可路过），但**不进可停列表**
@@ -729,9 +729,9 @@ export function evaluateStepFrom(
     minimumMove = true
   }
 
-  // 6.1c 的最小移动会把剩余 MA 用尽 → 本轮移动结束；4.5a-A 强制停止；6.2b 的 All 亦然
+  // 6.1c 的最小移动会把剩余 MA 用尽 → 本轮移动结束；通规 4.5a-A 强制停止；6.2b 的 All 亦然
   let mustEndMove = forcedStop || cost.spendsAllMp || minimumMove
-  // 5.8b：战略模式单位必须在当前拥有追溯补给的格内结束移动（补齐补给模块前不施加）
+  // 通规 5.8b：战略模式单位必须在当前拥有追溯补给的格内结束移动（补齐补给模块前不施加）
   if (mustEndMoveInSupply(state) && context.traceSupplyAt !== undefined) {
     if (!context.traceSupplyAt(to, unit.side)) mustEndMove = true
   }
@@ -749,7 +749,7 @@ export function evaluateStepFrom(
     spendsAllMp: cost.spendsAllMp,
     forcedStop,
     mustEndMove,
-    // 4.8a：是否造成「暂时超堆叠」——由合法性校验层在环节/阶段末结算义务，此处只记录事实
+    // 通规 4.8a：是否造成「暂时超堆叠」——由合法性校验层在环节/阶段末结算义务，此处只记录事实
     createsOverstack,
   }
 }
@@ -784,7 +784,7 @@ function prepareMove(
  *
  * 算法：以「格 → 最小已耗 MP」为状态做 Dijkstra/BFS（每步取费为正且离散，故用最小堆式松弛）。
  *   ① 每步都走 `evaluateStep` —— 与逐格点击同一套判据，高亮与实走不会不一致；
- *   ② `mustEndMove`（4.5a-A 强制停止 / 6.2b All 地形 / 5.8b 战略补给）标为终点不继续扩展；
+ *   ② `mustEndMove`（通规 4.5a-A 强制停止 / 6.2b All 地形 / 5.8b 战略补给）标为终点不继续扩展；
  *   ③ 6.1c 最小移动只在起点格生效，故它只贡献「邻格可达」这一条，不递归。
  *
  * 返回值按「距起点格数 → MP → 列 → 行」升序，保证 UI 与回归测试确定性。
@@ -794,7 +794,7 @@ export function computeReachableHexes(context: MoveContext, unitId: string): Rea
   if (!prepared.ok) return prepared
   const { unit, ma, start } = prepared
   const state = modeStateOf(unit)
-  // 5.7g（用户 2026-11-01 口径）：预备（未释放）单位不得**停在**环形工事格——
+  // 通规 5.7g（用户 2026-11-01 口径）：预备（未释放）单位不得**停在**环形工事格——
   // 工事格只作 BFS 中转节点（可路过），不进最终可停列表（不能停）。
   const isReserve = hasMarker(state, 'reserve')
   // 记忆化只对「结果只取决于上下文静态事实」的单位启用：战略要看 `traceSupplyAt`、
@@ -873,7 +873,7 @@ export function computeReachableHexes(context: MoveContext, unitId: string): Rea
     forcedStop: node.forcedStop,
     path: pathOf(node),
   }))
-  // 5.7g（用户 2026-11-01 口径）：预备单位不得**停在**环形工事格。
+  // 通规 5.7g（用户 2026-11-01 口径）：预备单位不得**停在**环形工事格。
   // 工事格只作 BFS 中转（能扩展过去＝可路过），但**不进可停列表**＝不能停；
   // 于是预备单位只能穿过工事格到达另一侧，落地必在非工事格。移动力不足以"进得去也出得来"时，
   // BFS 不会产生任何经该格的可停终点 ⇒ 等于进不去。非预备单位不受影响。
@@ -934,7 +934,7 @@ export type OverrunCheck =
 /**
  * 移动期单位视图 → 合法性层单位视图（8.1 资格统一委托 `checkLegality('overrun')`）
  *
- * `raw` 只给 `ma`：突袭资格读的是模式能力（5.5–5.10）、6.1b 的 MA 与 14.9d 的空运额度，
+ * `raw` 只给 `ma`：突袭资格读的是模式能力（通规 5.5–5.10）、6.1b 的 MA 与 14.9d 的空运额度，
  * 攻击/防御/轰炸值不参与（战斗值在 9.x 由 `battle.ts` 按各自单位视图取）。
  */
 function legalityUnitOf(unit: MoveUnitView): LegalityUnit {
@@ -993,7 +993,7 @@ function overrunRejectReason(violation: LegalityViolation): MoveRejectReason {
  * 8.1h（出发格可另有友军）不在此判——用户裁定：突袭由玩家选部分单位作为堆叠发起，
  * 选子集即自然满足 8.1h。
  *
- * ★ **单一判据**：单位资格（模式 / DG / 攻击能力 / MA / 燃料 / 空运 / 12.7 / 4.5b）与 4.8a
+ * ★ **单一判据**：单位资格（模式 / DG / 攻击能力 / MA / 燃料 / 空运 / 12.7 / 通规 4.5b）与 4.8a
  *   一律问 `checkLegality('overrun')`，本函数不再自己重算一份（P3 合并，K6 的根因）；
  *   这里只保留 8.1 的「同格 + 阶段开始即同格」、8.1a 的 3 MP、8.1b/8.1c 的进格费用与
  *   专规 1.1b 的安全边缘格禁令。
@@ -1026,7 +1026,7 @@ export function canOverrun(input: OverrunCheckInput): OverrunCheck {
     units: units.map((unit) => legalityUnitOf(unit)),
     // 12.5b：突袭需要燃料（常规攻击不需要）；逐单位判据仍是 fuel.ts 的单一出处
     fuelPaid: units.every((unit) => !requiresFuel(unit) || unit.fuelled),
-    // 4.8a：突袭发起格此刻就必须 ≤10RE（不能等环节末）
+    // 通规 4.8a：突袭发起格此刻就必须 ≤10RE（不能等环节末）
     overrun: { originCombatRe: stackCombatReAt(context, from, side) },
   })
   if (!verdict.ok) {

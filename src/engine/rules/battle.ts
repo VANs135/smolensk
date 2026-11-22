@@ -76,16 +76,16 @@ const AT_RANK: Record<AtLevel, number> = { none: 0, light: 1, heavy: 2 }
 /** 战斗中的角色 */
 export type CombatRole = 'attacker' | 'defender'
 
-/** 战斗单位视图（字段名照 state-types。**战斗值按印值传入**：模式折算由 `unitBattleStrength` 按角色施加，见 5.10b-A / 5.7 / 5.8） */
+/** 战斗单位视图（字段名照 state-types。**战斗值按印值传入**：模式折算由 `unitBattleStrength` 按角色施加，见 通规 5.10b-A / 5.7 / 5.8） */
 export interface BattleUnitView {
   id: string
   side: Side
   hex: HexRef
-  /** 3.2a：装甲 / 机械化 / 其他（决定地形倍率与 9.4e 的 AT 等级） */
+  /** 通规 3.2a：装甲 / 机械化 / 其他（决定地形倍率与 9.4e 的 AT 等级） */
   attackerType: AttackerType
   /** **模式折算后**的战斗值（调用方算好；本模块不做模式折算） */
   attack: number
-  /** 印值行动值（3.2c） */
+  /** 印值行动值（通规 3.2c） */
   ar: number
   /** 是否 DG（9.6a：AR −1） */
   dg: boolean
@@ -104,7 +104,7 @@ export interface BattleUnitView {
    * 专规 4.2b 的「4 步步兵师」判据取自此；缺省视为未知（不施加 4.2b）。
    */
   branch?: string | null
-  /** 团级当量（4.6） */
+  /** 团级当量（通规 4.6） */
   re: number
   /** 部队储备（12.10） */
   internalStocks: InternalStocks
@@ -112,7 +112,7 @@ export interface BattleUnitView {
   outOfSupply: boolean
   /** 机动类型（9.1f/9.3a 的进入合法性） */
   mobility: MobilityType
-  /** 3.2b：战斗值带括号的单位只能防御 */
+  /** 通规 3.2b：战斗值带括号的单位只能防御 */
   attackCapable: boolean
   /**
    * 规则能力标签（数据层 `special_abilities`）
@@ -224,7 +224,7 @@ export function validateBattleComposition(input: {
     if (unit.mode === 'reserve' && unit.releasedFromReserve !== true)
       return fail('9.1e', `unreleasedReserveCannotAttack:${unit.id}`)
     if (!unit.attackCapable) return fail('9.1e', `defenseOnlyUnit:${unit.id}`)
-    // 4.4a：攻击单位（包括战斗和突袭）必须是**可攻击单位**——原文 4.4a 的判据即此行；
+    // 通规 4.4a：攻击单位（包括战斗和突袭）必须是**可攻击单位**——原文 4.4a 的判据即此行；
     // 失败码沿用 9.1e（9.1 的攻击前置同源），两号并存以便追溯。
     if (!facts.canEnterForAttack(unit, unit.hex, defendingHex))
       return fail('9.1f', `cannotEnterDefendingHex:${unit.id}`)
@@ -439,7 +439,7 @@ export function antiTankMultiplier(
 /**
  * 9.4 / 9.4d / 9.4e / 9.5 / 9.5a / 9.11d：单个单位的战斗值
  *
- * 次序即规则次序：印值 → **模式折算**（5.10b-A / 5.7 / 5.8）→ 地形倍率（9.4d 方括号只作用攻方）
+ * 次序即规则次序：印值 → **模式折算**（通规 5.10b-A / 5.7 / 5.8）→ 地形倍率（9.4d 方括号只作用攻方）
  * → 9.4e 反坦克 → 9.11d 多军力单位减半 → 9.5/9.5a 补给。
  * 9.5a 的三种组合：有战斗补给的断补单位 ×½；没有战斗补给的断补单位**完全无法攻击**、防御 ×¼；
  * 攻方没有战斗补给则**不能攻击**（9.5-A）。
@@ -466,11 +466,11 @@ export function unitBattleStrength(input: {
     return { strength: 0, rule: '9.5-A', cannotAttack: true }
 
   /*
-   * 5.10b-A / 5.7 / 5.8：模式折算
+   * 通规 5.10b-A / 5.7 / 5.8：模式折算
    *
-   * - 5.10b-A：DG 单位的**战斗、轰炸与移动值**都减半（对攻守两个角色都生效）；
-   * - 5.7：**预备模式的守方**防御值减半（攻方不受影响）；
-   * - 5.8：战略模式的战斗值降为零。
+   * - 通规 5.10b-A：DG 单位的**战斗、轰炸与移动值**都减半（对攻守两个角色都生效）；
+   * - 通规 5.7：**预备模式的守方**防御值减半（攻方不受影响）；
+   * - 通规 5.8：战略模式的战斗值降为零。
    *
    * ★ 攻方取 `combatMult`、守方取 `defenseMult`——同一单位在两个角色上的倍率不同
    *   （预备守方 ×½ 而预备攻方不变），故**不能**预先折算成一个 `attack` 字段，
@@ -523,11 +523,11 @@ export function unitBattleStrength(input: {
 
 /* ────────────────────────────── ⑥ 9.7 攻防比与列位 ────────────────────────────── */
 // 9.7 / 9.7a / 9.7b / 9.1g / 9.14a 的实现见 `combat.ts`，本模块直接复用，不自持第二份口径：
-//   battleOdds             9.7 除以较小者 + 4.2 四舍五入 → `N:1` / `1:N`
+//   battleOdds             9.7 除以较小者 + 通规 4.2 四舍五入 → `N:1` / `1:N`
 //   battleRatioLabel       同上口径的标签（显示/日志用）
 //   resolveRatioColumnIndex 9.7a 取「≤ 取整后比值」的最大列
 //   battleColumnIndex      叠加 9.14a 零战斗值的左右端列特例
-// ★ 4.2 是**四舍五入**（小数 ≥ .5 进位），不是向下取整——两处若口径不一，列位会系统性偏移。
+// ★ 通规 4.2 是**四舍五入**（小数 ≥ .5 进位），不是向下取整——两处若口径不一，列位会系统性偏移。
 
 /* ────────────────────────────── ⑦ 9.8 奇袭与横移 ────────────────────────────── */
 
@@ -829,10 +829,10 @@ export function exploitEligibility(input: {
     succeed(rule, { granted: false, grantedUnitIds: [], reason })
 
   if (input.eThreshold === undefined) return none('9.13', 'noEResult')
-  // 5.9a：原文「获得进击标记的限制见 9.13b」⇒ 本函数的全部限制都是 9.13b 的内容，5.9a 为自指。
+  // 通规 5.9a：原文「获得进击标记的限制见 9.13b」⇒ 本函数的全部限制都是 9.13b 的内容，5.9a 为自指。
   if (input.attackType === 'overrun') return none('9.13b-B', 'overrunNoExploit')
   // 9.13b-B + 辅助卡战斗结果说明：`e#` **只对战斗阶段发起的攻击生效**。
-  // 进击阶段也有战斗环节（2.2 的 G 段），但那里的攻击不给进击标记；反应阶段无战斗环节。
+  // 进击阶段也有战斗环节（通规 2.2 的 G 段），但那里的攻击不给进击标记；反应阶段无战斗环节。
   if (input.phase !== 'combat') return none('9.13b-B', 'exploitOnlyInCombatPhase')
   if (input.attackerRetreatedInOptions) return none('9.10d', 'retreatedIgnoresExploit')
   if (!input.attackerAllOptionsAsLosses) return none('9.10d', 'optionsNotAllLosses')
@@ -917,7 +917,7 @@ export interface RetreatResult {
    * - `mustCrossEnemyOrProhibited`：路径必须穿过当前敌方战斗单位格或禁入地形（9.12 第三 bullet）；
    * - `impassableStartOfCombat`：路径进入战斗开始时敌方战斗单位所在格（9.12f，用户 2026-11-12 裁定为不可通行）；
    * - `immobile`：任何模式下都不可移动（9.12b）；
-   * - `stratZoc`：战略模式进入敌方 ZOC（5.8a）。
+   * - `stratZoc`：战略模式进入敌方 ZOC（通规 5.8a）。
    */
   reason?: RetreatDestructionReason
   /** 撤退后是否 DG（9.12a 的 2 格规则 / 9.12e 进入敌方 ZOC） */
@@ -969,7 +969,7 @@ export function resolveRetreat(input: {
     hex: HexRef
     mobility: MobilityType
     dg: boolean
-    /** 5.8a：该单位处于战略模式（不得撤退进入敌方 ZOC，被迫如此 ⇒ 被摧毁） */
+    /** 通规 5.8a：该单位处于战略模式（不得撤退进入敌方 ZOC，被迫如此 ⇒ 被摧毁） */
     strat?: boolean
   }
   /**
@@ -1052,7 +1052,7 @@ export function resolveRetreat(input: {
         extraLoss,
         dgCompanions,
       }
-    // 5.8a：「处于战略模式的单位不可移动或撤退进入敌方 ZOC。如果被迫这样做（在撤退中），
+    // 通规 5.8a：「处于战略模式的单位不可移动或撤退进入敌方 ZOC。如果被迫这样做（在撤退中），
     //   则单位会被摧毁」⇒ 一旦路径进入未抵消 EZOC 即被消灭，不再走 9.12e 的 DG 后果。
     if (unit.strat === true && facts.inEnemyZocAt(next, unit.side))
       return {
@@ -1109,7 +1109,7 @@ export function resolveStackRetreat(input: {
     hex: HexRef
     mobility: MobilityType
     dg: boolean
-    /** 5.8a：战略模式（不得撤退进入敌方 ZOC，被迫如此 ⇒ 被摧毁） */
+    /** 通规 5.8a：战略模式（不得撤退进入敌方 ZOC，被迫如此 ⇒ 被摧毁） */
     strat?: boolean
   }[]
   /** 各单位的撤退路径（含落点、不含起始格）；长度可 ≥ 完整撤退距离（见 9.12 用户裁定） */
@@ -1159,11 +1159,11 @@ export interface RetreatDestinationPlan {
   /** 起始格 → 落点的合法路径（含落点、**不含**起始格；长度＝完整撤退距离） */
   path: HexRef[]
   /**
-   * 9.12 / 9.12b / 5.8a：选这个落点会**被消灭**
+   * 9.12 / 9.12b / 通规 5.8a：选这个落点会**被消灭**
    *
    * 情形：撤退必然穿过敌方战斗单位/禁入地形（9.12：「则消灭这些单位」）、该单位在任何模式下
    * 都不可移动（9.12b：「在被迫撤退时会被直接摧毁」），或战略模式单位的路径进入敌方 ZOC
-   * （5.8a：「不可移动或撤退进入敌方 ZOC……被迫这样做则单位会被摧毁」）。界面须把这类落点
+   * （通规 5.8a：「不可移动或撤退进入敌方 ZOC……被迫这样做则单位会被摧毁」）。界面须把这类落点
    * 单独标注，由玩家自负后果。
    */
   forcedDestruction: boolean
@@ -1337,7 +1337,7 @@ export function retreatPathTo(input: {
  *   · 求不出再求「只避开不可通行格」的回退路径并标 `forcedDestruction: true`：
  *       - 路径必须穿过**当前**敌方战斗单位格或禁入地形 ⇒ 9.12 第三 bullet 消灭该单位；
  *       - 9.12b 不可移动者被迫撤退 ⇒ 直接摧毁；
- *       - 5.8a 战略模式进入敌方 ZOC ⇒ 摧毁；
+ *       - 通规 5.8a 战略模式进入敌方 ZOC ⇒ 摧毁；
  *     这些都属于**规则允许的结果**，故必须可选，否则玩家在「必须撤退」的局面下无路可走。
  *   · 回退路径同样**排除 9.12f 的不可通行格**（用户 2026-11-12 裁定：战斗开始时含敌方战斗单位
  *     的格连走都不能走，不是「穿越即消灭」）。
@@ -1361,7 +1361,7 @@ export function planRetreatDestinations(input: {
    */
   immobile?: boolean
   /**
-   * 5.8a：该单位处于战略模式
+   * 通规 5.8a：该单位处于战略模式
    *
    * ⇒ 撤退路径一旦进入敌方 ZOC，该单位**被摧毁**（原文「不可移动或撤退进入敌方 ZOC；
    *   如果被迫这样做（在撤退中），则单位会被摧毁」）。故这类落点全部标 `forcedDestruction`，

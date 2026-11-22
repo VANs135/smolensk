@@ -226,7 +226,7 @@ export interface CombatUnitPatch {
   unitId: string
   /** 结算后的剩余军力（9.11） */
   steps?: number
-  /** 置为 DG（5.10） */
+  /** 置为 DG（通规 5.10） */
   dg?: true
   /** 移动到新格（撤退 9.12 / 推进 9.12g） */
   hex?: HexRef
@@ -638,7 +638,7 @@ export function resolveSurprise(
  *   进行此操作（由于 9.12e 的规定，这非常重要）。」
  *   故在掷骰这一步就把 `dg: true` 交给状态层落盘（早于损失/选项/撤退步），这样 9.12e 的
  *   「撤退堆叠在进入敌方 ZOC **之前**已是 DG ⇒ 该堆叠损失 1 点」才会被正确判定。
- *   注意 DG 只改 AR 与战斗模式（5.4a），**不回改**已经宣布过的 AR 与已掷出的骰值。
+ *   注意 DG 只改 AR 与战斗模式（通规 5.4a），**不回改**已经宣布过的 AR 与已掷出的骰值。
  */
 export function resolveCombatDice(
   state: CombatInteractionState,
@@ -848,7 +848,7 @@ export function planOptions(
   patches: CombatUnitPatch[]
   /** 该方需要撤退的格数（第 9 步据此收撤退方向） */
   retreatHexes: number
-  /** 只有`forcedDestruction`落点的单位（9.12/9.12b/5.8a；界面应提示「将被消灭」） */
+  /** 只有`forcedDestruction`落点的单位（9.12/9.12b/ 通规 5.8a；界面应提示「将被消灭」） */
   retreatDoomedUnitIds: string[]
   /** 一个落点都没有的单位（9.12 第三 bullet：无合法落点 ⇒ 消灭） */
   retreatNoLandingUnitIds: string[]
@@ -1100,7 +1100,7 @@ export function resolveRetreats(
         hex: unit.hex,
         mobility: unit.mobility,
         dg: unit.dg,
-        // 5.8a：战略模式单位被迫撤退进入敌方 ZOC ⇒ 被摧毁
+        // 通规 5.8a：战略模式单位被迫撤退进入敌方 ZOC ⇒ 被摧毁
         strat: unit.mode === 'strat',
       }))
 

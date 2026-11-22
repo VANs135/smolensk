@@ -14,7 +14,7 @@ export interface SetupObligation {
   detail: string
 }
 
-/** Setup Note F/3.4b：当前选择必须合法并已提交到实际补给站归属，不能沿用旧完成标记。 */
+/** Setup Note F/ 专规 3.4b：当前选择必须合法并已提交到实际补给站归属，不能沿用旧完成标记。 */
 export function assessSetupSpOwnership(
   request: SupplyOwnershipRequest,
   actual: Readonly<Record<string, 'hoth' | 'guderian'>>,

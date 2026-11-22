@@ -14,28 +14,28 @@ import { rollVariableExit, type VariableExitResult } from './variable-exit'
 
 /**
  * 条文索引（本文件与本仓库实现的对应）
- *   通规：13.5 / 1.6b / 1.6c
- *   专规：1.6/2.3c/3.3c/3.6 覆盖补员池
+ *   通规：13.5 / 专规 1.6b / 1.6c
+ *   专规：1.6/ 2.3c/ 3.3c/3.6 覆盖补员池
  */
 
 /**
  * 可变增援（通规 13.5 / 1.6b / 1.6c ← 专规 1.6 / 2.3c / 3.3c / 3.6）
  *
  * ## 条文索引
- *   - **13.5 / 1.6b**：「玩家在每个自己的**增援阶段**中，都会根据各自的可变补员表进行掷骰。
+ *   - **13.5 / 专规 1.6b**：「玩家在每个自己的**增援阶段**中，都会根据各自的可变补员表进行掷骰。
  *     通过这种掷骰获得的补员（Repls）是该回合**正常增援之外**的额外补充。」补员分 **Eq（装备）**
  *     与 **Pax（人员）** 两类，用于重建失去的军力或重建单位；补员算子不计入算子上限。
  *     **本作覆盖（专规 1.6 Notes）**：Pax / Eq 是**唯一可跨回合保存**的补员；**Eq 不重建飞机**；
  *     **Ftr / Tac Repl 只补 1 step**（Ftr 限 **F** 型、Tac 限 **T / S / Tpt** 型）且**不可保存**。
- *   - **1.6b 补给表**：掷 2 骰得新增 SP；本作 **19 August 起掷骰 −1** 并取「Late」档。
- *   - **1.6c 特殊补员**：不花 Pax/Eq 的**免费重建**，**19 August 起停止**；死亡堆无对应单位即无重建。
+ *   - **专规 1.6b 补给表**：掷 2 骰得新增 SP；本作 **19 August 起掷骰 −1** 并取「Late」档。
+ *   - **专规 1.6c 特殊补员**：不花 Pax/Eq 的**免费重建**，**19 August 起停止**；死亡堆无对应单位即无重建。
  *     苏方：① 随机 12-2-2 / 11-1-1 / 10-0-1 步兵（或民兵）师重建（返场 −1 step）；
  *     ② Supply Cache 或任一 **Alarm** 单位。轴方：Supply Cache 或任一 **Aufk / Krd** 营。
- *   - **3.3c 可变撤离**（轴方）：19 August 起每个轴方增援阶段掷 1 骰，直到 SS Reich 或 14 Mtr 被移除。
- *   - **3.6 随机事件**（轴方）：**19 July – 15 August（含）**每个轴方增援阶段掷 2 骰；
+ *   - **专规 3.3c 可变撤离**（轴方）：19 August 起每个轴方增援阶段掷 1 骰，直到 SS Reich 或 14 Mtr 被移除。
+ *   - **专规 3.6 随机事件**（轴方）：**19 July – 15 August（含）**每个轴方增援阶段掷 2 骰；
  *     机型结果 ⇒ 该型飞机**立即全部变 Inactive**（被派去地图外任务）；**Supply Train** ⇒
  *     轴方在**任一可卸货格**获得 **2 SP** 额外补给且**不用 Rail Cap**。
- *     可选 4.1b：Supply Train 在 8 July 与 12 July 自动发生。
+ *     可选 专规 4.1b：Supply Train 在 8 July 与 12 July 自动发生。
  *
  * ## 设计口径
  *   - 掷骰由调用方注入骰面（种子化 RNG 可复算），本模块不含随机；
@@ -43,7 +43,7 @@ import { rollVariableExit, type VariableExitResult } from './variable-exit'
  *   - 本模块**不写状态**：返回「得多少 SP / 哪些补员 / 哪些飞机转非激活」，由调用方落盘。
  */
 
-/** 3.6 随机事件结果 */
+/** 专规 3.6 随机事件结果 */
 export interface RandomEventResult {
   /** 原始 2 骰 */
   roll: number
@@ -51,7 +51,7 @@ export interface RandomEventResult {
   kind: 'aircraft' | 'supplyTrain'
   /** 机型（kind = aircraft 时） */
   aircraftType?: string
-  /** 额外 SP（kind = supplyTrain 时，3.6：2 SP、不用 Rail Cap） */
+  /** 额外 SP（kind = supplyTrain 时，专规 3.6：2 SP、不用 Rail Cap） */
   sp?: number
   detail: string
 }
@@ -59,51 +59,51 @@ export interface RandomEventResult {
 /** 可变增援的输入（骰面全部由调用方注入） */
 export interface VariableReinforcementInput {
   side: Side
-  /** 当前 ISO 日期（19 Aug 边界与 3.6 事件期由它判定） */
+  /** 当前 ISO 日期（19 Aug 边界与 专规 3.6 事件期由它判定） */
   date: string
-  /** 1.6b 补给表：2 骰之和 */
+  /** 专规 1.6b 补给表：2 骰之和 */
   supplyDice: number
-  /** 1.6b 补员表：2 骰之和（原始值；19 Aug 起由本模块施加 −1） */
+  /** 专规 1.6b 补员表：2 骰之和（原始值；19 Aug 起由本模块施加 −1） */
   replDice: number
-  /** 3.3c 可变撤离：1 骰（轴方、19 Aug 起） */
+  /** 专规 3.3c 可变撤离：1 骰（轴方、19 Aug 起） */
   variableExitDie?: number
   /**
-   * 3.3c：本局的**可变撤离是否已了结**
+   * 专规 3.3c：本局的**可变撤离是否已了结**
    *
    * 「19 August 起在 Axis Reinforcement Phase 掷骰，**直到一个师被移除为止**」⇒ 已移除过即不再掷。
    */
   variableExitResolved?: boolean
-  /** 3.6 随机事件：2 骰（轴方、19 Jul–15 Aug） */
+  /** 专规 3.6 随机事件：2 骰（轴方、19 Jul–15 Aug） */
   randomEventDice?: number
-  /** 可选 4.1b：8 Jul / 12 Jul 自动发生 Supply Train */
+  /** 可选 专规 4.1b：8 Jul / 12 Jul 自动发生 Supply Train */
   option4_1b?: boolean
 }
 
 /** 可变增援的结论 */
 export interface VariableReinforcementPlan {
   rule: string
-  /** 1.6b 补给表所得 SP */
+  /** 专规 1.6b 补给表所得 SP */
   sp: number
-  /** 1.6b 补员表所得（19 Aug −1 已施加） */
+  /** 专规 1.6b 补员表所得（19 Aug −1 已施加） */
   repl: ReplRollResult
-  /** 3.3c 可变撤离结论（轴方、19 Aug 起；否则 null） */
+  /** 专规 3.3c 可变撤离结论（轴方、19 Aug 起；否则 null） */
   variableExit: VariableExitResult | null
-  /** 3.6 随机事件结论（轴方事件期；否则 null） */
+  /** 专规 3.6 随机事件结论（轴方事件期；否则 null） */
   randomEvent: RandomEventResult | null
   detail: string
 }
 
-/** 19 Aug 边界（1.6b 的「Late」档与 −1 掷骰修正共用） */
+/** 19 Aug 边界（专规 1.6b 的「Late」档与 −1 掷骰修正共用） */
 const LATE_SUPPLY_FROM = rulesConstants.smolensk.variableExitStart
 
-/** 3.6：Supply Train 给出的额外 SP（不用 Rail Cap） */
+/** 专规 3.6：Supply Train 给出的额外 SP（不用 Rail Cap） */
 const RANDOM_EVENT_SUPPLY_TRAIN_SP = 2
 
 /**
- * 13.5 / 1.6b / 1.6c / 3.3c / 3.6：一次增援阶段的全部掷表结算
+ * 13.5 / 专规 1.6b / 专规 1.6c / 专规 3.3c / 3.6：一次增援阶段的全部掷表结算
  *
- * 顺序照 SOP 与条文：① 补给表（1.6b）→ ② 补员表（1.6b，19 Aug −1）→ ③ 特殊补员（1.6c，19 Aug 前）
- * → ④ 轴方可变撤离（3.3c，19 Aug 起）→ ⑤ 轴方随机事件（3.6，19 Jul–15 Aug）。
+ * 顺序照 SOP 与条文：① 补给表（专规 1.6b）→ ② 补员表（1.6b，19 Aug −1）→ ③ 特殊补员（1.6c，19 Aug 前）
+ * → ④ 轴方可变撤离（专规 3.3c，19 Aug 起）→ ⑤ 轴方随机事件（3.6，19 Jul–15 Aug）。
  */
 export function planVariableReinforcement(
   input: VariableReinforcementInput,
@@ -116,18 +116,18 @@ export function planVariableReinforcement(
   if (!Number.isInteger(input.replDice) || input.replDice < 2 || input.replDice > 12)
     return fail('1.6b', `replDiceOutOfRange:${input.replDice}`)
 
-  // ① 1.6b 补给表（19 Aug 起取 Late 档）
+  // ① 专规 1.6b 补给表（19 Aug 起取 Late 档）
   const sp = supplyTableRoll(side, late, input.supplyDice)
-  // ② 1.6b 补员表（19 Aug 起 −1）
+  // ② 专规 1.6b 补员表（19 Aug 起 −1）
   const effectiveRepl = input.replDice + (late ? REPL_ROLL_DRM_FROM_19_AUG : 0)
   const repl = replTableRoll(side, effectiveRepl)
 
   /*
-   * 1.6c 不在这里结算：原文「also get to roll a die on their Special Repl Table」是**独立一掷**，
-   * 由 `drawSpecialRepl` 在 1.6c 实际执行时自掷（19 Aug 起自动停掷），1.6b 的骰只归 1.6b。
+   * 专规 1.6c 不在这里结算：原文「also get to roll a die on their Special Repl Table」是**独立一掷**，
+   * 由 `drawSpecialRepl` 在 专规 1.6c 实际执行时自掷（19 Aug 起自动停掷），1.6b 的骰只归 1.6b。
    */
 
-  // ④ 3.3c 可变撤离（轴方、19 Aug 起；已了结则不再掷）
+  // ④ 专规 3.3c 可变撤离（轴方、19 Aug 起；已了结则不再掷）
   let variableExit: VariableExitResult | null = null
   if (side === 'axis' && late && input.variableExitResolved !== true) {
     if (input.variableExitDie === undefined)
@@ -135,7 +135,7 @@ export function planVariableReinforcement(
     variableExit = rollVariableExit(input.variableExitDie, date)
   }
 
-  // ⑤ 3.6 随机事件（轴方、19 Jul–15 Aug）
+  // ⑤ 专规 3.6 随机事件（轴方、19 Jul–15 Aug）
   let randomEvent: RandomEventResult | null = null
   if (side === 'axis') {
     randomEvent = planRandomEvent({
@@ -166,23 +166,23 @@ export function planVariableReinforcement(
 }
 
 /**
- * 3.6：轴方随机事件
+ * 专规 3.6：轴方随机事件
  *
- * 事件期内（19 Jul–15 Aug）必掷；可选 4.1b 另在 **19 Jul 之前的三个回合**自动发生 Supply Train。
+ * 事件期内（19 Jul–15 Aug）必掷；可选 专规 4.1b 另在 **19 Jul 之前的三个回合**自动发生 Supply Train。
  *
- * ★ 修（2026-11-01）：4.1b 的原文是「apply the 'Supply Train' event on the **three turns before
+ * ★ 修（2026-11-01）：专规 4.1b 的原文是「apply the 'Supply Train' event on the **three turns before
  *   19 July**」——回合是 8 / 12 / 15 Jul，故应为**三次**；轴心到达卡也写着
  *   「occurs automatically on **8 July through 15 July**」。修前只做了 8 Jul 与 12 Jul（少一次）。
  *   日期表由数据给（`arrivals-axis.randomEvents.option4_1bDates`），引擎不写死。
  *
- * 返回 null 表示「当前不掷（不在事件期且无 4.1b 自动项）或未给骰面」。
+ * 返回 null 表示「当前不掷（不在事件期且无 专规 4.1b 自动项）或未给骰面」。
  */
 export function planRandomEvent(input: {
   date: string
   dice?: number
   option4_1b?: boolean
 }): RandomEventResult | null {
-  // 4.1b：19 Jul 之前的三个回合（8 / 12 / 15 Jul）自动 Supply Train
+  // 专规 4.1b：19 Jul 之前的三个回合（8 / 12 / 15 Jul）自动 Supply Train
   const optionDates = arrivalsAxis.randomEvents?.option4_1bDates ?? []
   if (input.option4_1b === true && optionDates.includes(input.date)) {
     return {
@@ -216,7 +216,7 @@ export function planRandomEvent(input: {
   }
 }
 
-/** 1.2：当日铁路容量（提示用；值取自 rules-constants） */
+/** 专规 1.2：当日铁路容量（提示用；值取自 rules-constants） */
 export function railCapacityAt(date: string, side: Side): number {
   const boosted = isRailCapBoosted(date)
   const table = boosted
@@ -225,7 +225,7 @@ export function railCapacityAt(date: string, side: Side): number {
   return table[side]
 }
 
-/** 1.6c：特殊补员的免费重建所需的重建表行（供界面提示） */
+/** 专规 1.6c：特殊补员的免费重建所需的重建表行（供界面提示） */
 export function specialReplRebuildRows(side: Side): readonly string[] {
   const rows = chartsSupplyRepl.rebuild[side]
   return rows.filter((row) => row.rebuild.kind === 'special').map((row) => row.unitType)

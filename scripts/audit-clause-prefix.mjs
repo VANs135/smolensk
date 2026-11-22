@@ -18,10 +18,25 @@ const rootArg = args.find((a) => !a.startsWith('--'))
 const root = rootArg ?? 'src/engine/rules'
 
 const CLAUSE = /(?<![\w.:])([1-5]\.\d{1,2}[a-h]?)(?![0-9])/g
-const PREFIX = /专规|通规|OCS|Smolensk|斯摩棱斯克|原文|规则书/i
+const PREFIX = /专规[ ：]|通规[ ：]/
 const COMMENT = /^\s*(\/\/|\*|\/\*)/
 /** 文档流程/坐标/批次号等非条款号的典型写法 */
-const NOISE = /§|方案|格号|坐标|bat|批次/
+const NOISE = /§|方案|格号|坐标|bat|批次|Bobruysk|Mogilev|Orsha|Vyazma|Rzhev/
+/** 明确是格号/数值、不是条款号的号 */
+const NUM_SKIP = new Set(['2.5', '4.00', '2.02', '1.03', '1.07', '1.12', '1.19', '1.26'])
+
+/** 逐号过滤：倍率（×1.5）、秒（2.5 s）、百分比、取整展示 */
+const realNums = (line) =>
+  [...line.matchAll(CLAUSE)]
+    .filter((m) => {
+      const pre = line.slice(Math.max(0, m.index - 4), m.index)
+      if (/(×|=|＝|≈|~)\s*$/.test(pre)) return false
+      if (/倍\s*$/.test(pre)) return false
+      if (/^\s*(s|秒|%|倍)/.test(line.slice(m.index + m[1].length))) return false
+      if (NUM_SKIP.has(m[1])) return false
+      return true
+    })
+    .map((m) => m[1])
 
 const walk = (p) => {
   const st = statSync(p)
@@ -36,8 +51,8 @@ for (const file of files) {
     .split('\n')
     .forEach((line, i) => {
       if (!COMMENT.test(line) || PREFIX.test(line) || NOISE.test(line)) return
-      const nums = line.match(CLAUSE)
-      if (!nums) return
+      const nums = realNums(line)
+      if (!nums.length) return
       hits.push({
         file: relative(process.cwd(), file).replace(/\\/g, '/'),
         line: i + 1,

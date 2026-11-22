@@ -1,7 +1,7 @@
 import { fail, succeed, type RuleOutcome } from '../result-types'
 import { canUseTransport, maMultiplier, type ModeState, type MovementSegmentPhase } from './modes'
 
-/** 4.7d / 14.9d：本阶段已执行的单位空运事实，不以虚假MP消耗代替。 */
+/** 通规 4.7d / 14.9d：本阶段已执行的单位空运事实，不以虚假MP消耗代替。 */
 export interface AirUnitTransportState {
   kind: 'air_transport' | 'air_drop'
   phase: MovementSegmentPhase
@@ -17,7 +17,7 @@ export function hasUnitMovementThisPhase(
   return spentMp > 0 || transport != null
 }
 
-/** 14.9d / 4.7d：在正常阶段/模式额度上施加一次运输限制，保留分数。 */
+/** 14.9d / 通规 4.7d：在正常阶段/模式额度上施加一次运输限制，保留分数。 */
 export function limitAirTransportMa(
   normalMa: number,
   transport?: AirUnitTransportState | null,
@@ -38,7 +38,7 @@ export function canAttackAfterAirTransport(transport?: AirUnitTransportState | n
   )
 }
 
-/** 5.6a / 14.9c/d / 4.7d：装载前校验真实已耗MP，并生成可持久化的阶段义务。 */
+/** 通规 5.6a / 14.9c/d / 4.7d：装载前校验真实已耗MP，并生成可持久化的阶段义务。 */
 export function planAirUnitTransport(input: {
   kind: AirUnitTransportState['kind']
   phase: MovementSegmentPhase

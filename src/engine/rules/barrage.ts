@@ -310,7 +310,7 @@ export function canBarrageAtRange(input: { rangeHexes: number; distanceHexes: nu
 export function barrageCostT(valueRange: number): number {
   const table = findTable(chartsTables.tables, 'barrage')
   const columns = table.columns ?? []
-  // 4.2：纵列按**取整后**的轰炸值确定，故成本也跟着取整值走
+  // 通规 4.2：纵列按**取整后**的轰炸值确定，故成本也跟着取整值走
   const columnIndex = resolveNumericColumnIndex(columns, roundBarrageValue(valueRange), 'barrage')
   return table.cost?.[columnIndex] ?? 0
 }
@@ -395,7 +395,7 @@ export interface AffordableBarrageColumn {
  */
 export function selectAffordableBarrageColumn(input: {
   target: BarrageTargetKind
-  /** 本次总轰炸值（加总后、任何横移之前；4.2 取整由本函数内部完成） */
+  /** 本次总轰炸值（加总后、任何横移之前；通规 4.2 取整由本函数内部完成） */
   valueRange: number
   /** 可用支付额度（Shells 抵付 + SP，T） */
   availableT: number
@@ -462,16 +462,16 @@ export function canPayBarrageCost(input: {
   return { ok: true, rule: '10.1b' }
 }
 
-/* ── 4.2 轰炸值取整（唯一口径） ── */
+/* ── 通规 4.2 轰炸值取整（唯一口径） ── */
 
 /**
- * 4.2：小数轰炸值**先合并、再取整**
+ * 通规 4.2：小数轰炸值**先合并、再取整**
  *
  * 「Fractional barrage factors are **combined and then rounded** to determine the barrage column.」
  * ⇒ 取整作用在**加总之后**的值上，不能先逐个取整再相加；口径与 9.7 攻防比一致（四舍五入，
  * 见 `combat.roundHalfUp`）。
  *
- * 本作印值均为整数，出现小数只有一个来源：**DG 单位的轰炸值减半**（5.10b-A）。
+ * 本作印值均为整数，出现小数只有一个来源：**DG 单位的轰炸值减半**（通规 5.10b-A）。
  * 故 `barrageTableMeta` / `barrageCostT` / `resolveBarrage` 三个入口都必须先过这里，
  * 否则 2.5 这类值既不落在 `2` 段也不落在 `3-4` 段，会直接抛 TableLookupError。
  */
@@ -504,7 +504,7 @@ export function resolveBarrage(input: ResolveBarrageInput): BarrageResult {
   const table = findTable(chartsTables.tables, 'barrage')
   const columns = table.columns ?? []
 
-  // 4.2：纵列按**合并后取整**的轰炸值确定（本函数也可能被直接以小数调用）
+  // 通规 4.2：纵列按**合并后取整**的轰炸值确定（本函数也可能被直接以小数调用）
   const roundedValue = roundBarrageValue(valueRange)
   if (roundedValue < BARRAGE_MIN_VALUE)
     throw new RangeError(
@@ -796,10 +796,10 @@ export type BarrageEligibility =
  */
 export function barrageEligibility(input: {
   kind: BarrageKind
-  /** 当前 SOP 段（2.2） */
+  /** 当前 SOP 段（通规 2.2） */
   phase: GamePhase
   /**
-   * 当前 SOP 环节 id（2.2；可选）
+   * 当前 SOP 环节 id（通规 2.2；可选）
    *
    * 10.0 第二段：轰炸只在各段的**轰炸环节**；移动环节只在「允许低空扫射」时开一个
    * 仅限空军的口子（火炮/舰船不得借这个入口）。段名（`phase`）分不出

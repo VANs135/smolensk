@@ -33,7 +33,7 @@ import { setupSourceOf } from './setup-source'
 /**
  * 条文索引（本文件与本仓库实现的对应）
  *   通规：13.3b / 13.7
- *   专规：专规 1.2 铁路容量轨
+ *   专规：1.2 铁路容量轨
  */
 
 /**
@@ -42,18 +42,18 @@ import { setupSourceOf } from './setup-source'
  * ## 这一层做什么
  *   把「桌面上摆着的那些**轨**与**盒**」变成可查看、可操作、且**与规则一一对应**的数据：
  *     · **记录轨**：回合轨（Turn Record Track）、天气标记、铁路容量轨（13.3b / 专规 1.2）；
- *     · **容器**：死亡堆、拆分单位盒、1.6c 特殊补员抽取盒、剧本抽取盒、
- *       地图外空军盒（1.4a）、边缘盒（1.4b）、编队收纳盒（13.7 / 3.6f）。
+ *     · **容器**：死亡堆、拆分单位盒、专规 1.6c 特殊补员抽取盒、剧本抽取盒、
+ *       地图外空军盒（专规 1.4a）、边缘盒（专规 1.4b）、编队收纳盒（13.7 / 通规 3.6f）。
  *   每个盒给出**名册（BoxView）**与**操作计划（planXxx）**；名册供界面铺开，
  *   计划交给状态层落盘（引擎不写状态，CODE_SPEC §3.1）。
  *
  * ## 硬纪律（不得无中生有）
  *   1. **数值全部来自数据**：轨位数与刻度取自 `markers.json`，容量取自 `rules-constants.json`，
- *      拆解单位上限取自 `1.8a counterLimits`，特殊补员表取自 `charts-supply-repl.json`；
+ *      拆解单位上限取自 ` 专规 1.8a counterLimits`，特殊补员表取自 `charts-supply-repl.json`；
  *      本模块**不含任何规则数字字面量**。
  *   2. **不掷骰**：抽取类操作由调用方用 `engine/rng.ts` 掷骰并把结果传入；
  *      本模块只按规则**判候选池、判资格、给出抽中后的落点**（种子化重放的唯一入口在 rng.ts）。
- *   3. **数据缺口如实标注**：凡规则书要求、但当前数据里查不到的（例如单位库未标注 2.3a Alarm 单位、
+ *   3. **数据缺口如实标注**：凡规则书要求、但当前数据里查不到的（例如单位库未标注 专规 2.3a Alarm 单位、
  *      剧本原文未逐条列出被抽中的编队、编队下属标签与单位库命名不同口径），
  *      一律进 `dataGaps` 或要求调用方注入，**绝不猜**。
  *   4. **复用既有判定**：地图外盒与边缘盒的静态规则走 `air-mission.ts`（`airBoxRules` / `edgeBoxRules`
@@ -110,17 +110,17 @@ export interface BoxHolding {
 export type BoxKind =
   /** 13.5 死亡堆 */
   | 'deadPile'
-  /** 1.8a + 20.0g 拆分单位盒（算子池） */
+  /** 专规 1.8a + 20.0g 拆分单位盒（算子池） */
   | 'breakdownBox'
-  /** 1.6c 特殊补员抽取盒 */
+  /** 专规 1.6c 特殊补员抽取盒 */
   | 'specialReplBox'
   /** 剧本抽取盒（编队抽签 / 子单位抽取） */
   | 'scenarioDrawBox'
-  /** 13.7 + 3.6f 编队收纳盒（收纳下属以制造迷雾） */
+  /** 13.7 + 通规 3.6f 编队收纳盒（收纳下属以制造迷雾） */
   | 'formationBox'
-  /** 1.4a 地图外空军盒 */
+  /** 专规 1.4a 地图外空军盒 */
   | 'airBox'
-  /** 1.4b 边缘盒 */
+  /** 专规 1.4b 边缘盒 */
   | 'edgeBox'
 
 /** 盒的名册（界面直接铺开；不做任何规则计算） */
@@ -134,7 +134,7 @@ export interface BoxView {
   side: Side | null
   sections: readonly BoxSection[]
   holdings: readonly BoxHolding[]
-  /** 容量上限（null = 无限，如 1.4a 的图外空军盒） */
+  /** 容量上限（null = 无限，如 专规 1.4a 的图外空军盒） */
   capacity: number | null
   artwork: BoxArtwork | null
   /** 面向玩家的要点（规则原文摘句，便于对着规则书核对） */
@@ -149,14 +149,14 @@ export interface BoxUnitView {
   name?: string
   side: UnitSide
   kind?: UnitKind
-  /** 兵种（units-*.json branch）：1.6c 的 Aufk/Krd 判定、20.0 的类型判定用 */
+  /** 兵种（units-*.json branch）：专规 1.6c 的 Aufk/Krd 判定、20.0 的类型判定用 */
   branch?: string
   /** 番号（如 `10 Aufk`）：供界面显示与人工核对 */
   designation?: string
   /** 13.5b：当前军力 / 印值军力 */
   steps?: number
   printedSteps?: number
-  /** 1.6c 免费重建资格（`isFreeSpecialReplEligible`）用的印值三项 */
+  /** 专规 1.6c 免费重建资格（`isFreeSpecialReplEligible`）用的印值三项 */
   attack?: number
   ar?: number
   ma?: number
@@ -172,12 +172,12 @@ export interface BoxUnitView {
   aircraftType?: string | null
   /** 13.7：所属多单位编队 */
   formationId?: string | null
-  /** 1.6c：该单位对应的重建表行键（数据缺口 ⇒ 由调用方注入） */
+  /** 专规 1.6c：该单位对应的重建表行键（数据缺口 ⇒ 由调用方注入） */
   rebuildType?: string
   /**
-   * 1.6c：数据层的「可经特殊补员重建」标记（`specialAbilities` 含 `special_repl_to_rebuild`）
+   * 专规 1.6c：数据层的「可经特殊补员重建」标记（`specialAbilities` 含 `special_repl_to_rebuild`）
    *
-   * 轴方的特殊补员第二项是「任一 Aufk / Krd 营」，与 2.3a 的 Alarm 单位**不是同一批**；
+   * 轴方的特殊补员第二项是「任一 Aufk / Krd 营」，与 专规 2.3a 的 Alarm 单位**不是同一批**；
    * 该标记由数据给出（31 枚：各师属装甲侦察营 + 摩托化侦察营），引擎据此建档，不猜 id。
    */
   specialReplRebuild?: boolean
@@ -190,7 +190,7 @@ export interface BoxPatch {
   to: BoxKind | null
   /** 回到图上时的落点格（对象坐标；缺省表示由调用方决定） */
   hex?: { col: number; row: number }
-  /** 军力变化（如 1.6c 免费重建返场 −1 军力） */
+  /** 军力变化（如 专规 1.6c 免费重建返场 −1 军力） */
   steps?: number
   /** 模式变化（如 S3 的 Move Mode 抽签） */
   mode?: 'combat' | 'move'
@@ -226,7 +226,7 @@ export const MAIN_SECTION = 'main'
  *   · `BoxKind` + `sectionId`（本模块）＝**引擎名册**里的盒与栏（空军盒按 14.1a 分 Active/Inactive）。
  * 界面要"把盒内算子摆进真实分区"，就得知道哪个分区装哪个盒/哪一栏 ⇒ 这张表是唯一的对应处。
  *
- * `sectionId: null` ＝ 该分区不对应任何盒的栏（例如"标记存放"装的是 3.6 的**标记**、
+ * `sectionId: null` ＝ 该分区不对应任何盒的栏（例如"标记存放"装的是 通规 3.6 的**标记**、
  * 不是名册里的单位；界面照别处画或先空着，不臆造）。
  */
 export const REGION_OF_BOX: Readonly<
@@ -308,7 +308,7 @@ export interface TurnRecordFacts {
   railCapacity: Record<Side, number>
 }
 
-/** 回合轨视图（OCS 2.2 Turn End：推进 Turn Record 标记） */
+/** 回合轨视图（OCS 通规 2.2 Turn End：推进 Turn Record 标记） */
 export interface TurnTrackView {
   rule: string
   /** 轨格（markers.json 的 19 个半周） */
@@ -317,7 +317,7 @@ export interface TurnTrackView {
   markers: readonly TrackMarker[]
 }
 
-/** 3.6d：回合与阶段标记（OCS 2.2 Turn End 推进） */
+/** 通规 3.6d：回合与阶段标记（OCS 2.2 Turn End 推进） */
 export const TURN_TRACK_RULE = '2.2'
 
 /** 回合轨视图：19 格 + 当前格上的回合标记 */
@@ -347,7 +347,7 @@ export function turnTrackView(facts: TurnRecordFacts): TurnTrackView {
 }
 
 /**
- * 2.2 Turn End：推进回合标记
+ * 通规 2.2 Turn End：推进回合标记
  *
  * 「推进 Turn Record 标记，回到开头」——回合末把标记移到下一格。
  * 这里是**纯计划**：只校验目标回合在轨上（1–19），状态由调用方落盘。
@@ -379,11 +379,11 @@ export interface WeatherTrackView {
   note: string
 }
 
-/** 1.5 / 3.6c：天气标记与天气表 */
+/** 专规 1.5 / 通规 3.6c：天气标记与天气表 */
 export const WEATHER_TRACK_RULE = '1.5'
 
 /**
- * 3.6c 的天气标记（数据 `markers.json` 里 `Ground` / `Flight` 两枚；本作无算子）
+ * 通规 3.6c 的天气标记（数据 `markers.json` 里 `Ground` / `Flight` 两枚；本作无算子）
  *
  * 本作天气由**天气表**给出（专规 1.5），标记库里的两枚只作展示，故这里按名称取。
  */
@@ -538,7 +538,7 @@ export function deadPileView(input: {
 }
 
 /**
- * 1.6c：可从死亡堆**免费重建**的师池
+ * 专规 1.6c：可从死亡堆**免费重建**的师池
  *
  * 表 1-3：「12-2-2 / 11-1-1 / 10-0-1 步兵（或民兵）师随机重建，返场 −1 step」；
  * 资格判定走数据层 `charts-supply-repl.json` 的 `freeSpecialReplFactors`
@@ -554,9 +554,9 @@ export function freeSpecialReplPool(units: readonly BoxUnitView[]): readonly Box
   })
 }
 
-/* ────────────────────────────── 1.6c 特殊补员抽取盒 ────────────────────────────── */
+/* ────────────────────────────── 专规 1.6c 特殊补员抽取盒 ────────────────────────────── */
 
-/** 1.6c：特殊补员（免费重建） */
+/** 专规 1.6c：特殊补员（免费重建） */
 export const SPECIAL_REPL_RULE = '1.6c'
 
 /** 特殊补员抽取盒视图 */
@@ -570,7 +570,7 @@ export interface SpecialReplBoxView extends BoxView {
   items: readonly string[]
   /** 当前死亡堆内的免费重建师池 */
   divisionCandidates: readonly string[]
-  /** 重建表里标 `special` 的行键（1.6c 的两类单位） */
+  /** 重建表里标 `special` 的行键（专规 1.6c 的两类单位） */
   specialRows: readonly string[]
 }
 
@@ -590,7 +590,7 @@ export function specialReplBoxView(input: {
 }): SpecialReplBoxView {
   const boxId = `special-repl-${input.side}`
   const endDate = rulesConstants.smolensk.specialReplEndDate
-  // 1.6c 的日期闸门只有一处实现（`timing.isSpecialReplAvailable`）——此处不再自算 `date < endDate`
+  // 专规 1.6c 的日期闸门只有一处实现（`timing.isSpecialReplAvailable`）——此处不再自算 `date < endDate`
   const active = isSpecialReplAvailable(input.date)
   const divisionCandidates = freeSpecialReplPool(input.deadPile).map((unit) => unit.id)
   const specialRows = specialReplRebuildRows(input.side)
@@ -641,7 +641,7 @@ export function specialReplBoxView(input: {
       `2.3a 的 Alarm 单位已在单位库标注（\`alarmLimit\`：3 / 5 / 7），上限按**算子类型**计`,
     ],
     /*
-     * 2.3a 的数据缺口已补齐（2026-09-16）：单位库三条警戒算子带 `alarmLimit`，
+     * 专规 2.3a 的数据缺口已补齐（2026-09-16）：单位库三条警戒算子带 `alarmLimit`，
      * 引擎/面板不再需要「未标注 ⇒ 由调用方注入」的提示。此处保留空数组以维持视图结构。
      */
     dataGaps: [],
@@ -654,7 +654,7 @@ export function specialReplBoxView(input: {
   }
 }
 
-/** 1.6c 抽取的输入（骰点与抽签结果由调用方给出；引擎不掷骰） */
+/** 专规 1.6c 抽取的输入（骰点与抽签结果由调用方给出；引擎不掷骰） */
 export interface SpecialReplDrawInput {
   side: Side
   /** 当日日期（ISO；≥ `specialReplEndDate` 即停止） */
@@ -664,14 +664,14 @@ export interface SpecialReplDrawInput {
   /** 死亡堆内单位（含印值三项与战斗类型） */
   deadPile: readonly BoxUnitView[]
   /**
-   * 2.3a Alarm 单位的 id 清单
+   * 专规 2.3a Alarm 单位的 id 清单
    *
    * 单位库三条警戒算子已带 `alarmLimit`（2026-09-16 起）⇒ 调用方通常直接用
    * 「`alarmLimit !== undefined` 的记录 id」填充本字段；传入空数组仍表示「本局无可用 Alarm 单位」，
    * 按表 1-3 的脚注，该项目**作废**（ch01 完整示例原文）。
    */
   alarmUnitIds?: readonly string[]
-  /** 2.3a 的每型混编上限（`{ [unitId]: limit }`；来自数据字段 `alarmLimit`，缺省视为不受限） */
+  /** 专规 2.3a 的每型混编上限（`{ [unitId]: limit }`；来自数据字段 `alarmLimit`，缺省视为不受限） */
   alarmQuotas?: readonly AlarmQuota[]
   /** 各型 Alarm 单位**目前在场**的枚数（地图 + 死亡堆 + 待入场；缺省 0） */
   alarmInPlay?: Readonly<Record<string, number>>
@@ -681,7 +681,7 @@ export interface SpecialReplDrawInput {
   secondChoice?: 'cache' | 'alarm'
 }
 
-/** 1.6c 抽取结论 */
+/** 专规 1.6c 抽取结论 */
 export interface SpecialReplDrawPlan {
   rule: string
   /** 掷表结果（`charts-supply-repl.json` 的 specialRepl 段） */
@@ -698,9 +698,9 @@ export interface SpecialReplDrawPlan {
   pools: {
     divisionCandidates: readonly string[]
     alarmCandidates: readonly string[]
-    /** 1.6c 轴方：死亡堆内可返场的 Aufk / Krd 营（与 2.3a 的 Alarm 不是同一批） */
+    /** 专规 1.6c 轴方：死亡堆内可返场的 Aufk / Krd 营（与 2.3a 的 Alarm 不是同一批） */
     reconCandidates: readonly string[]
-    /** 2.3a 的混编核算（每型的上限/在场/余量；未提供上限时为空数组） */
+    /** 专规 2.3a 的混编核算（每型的上限/在场/余量；未提供上限时为空数组） */
     alarmMix: readonly AlarmMixRow[]
   }
   patches: readonly BoxPatch[]
@@ -709,7 +709,7 @@ export interface SpecialReplDrawPlan {
 }
 
 /**
- * 1.6c：结算一次特殊补员抽取
+ * 专规 1.6c：结算一次特殊补员抽取
  *
  * 判定顺序照表 1-3 与 ch01 的完整示例：
  *   ① 日期（19 August 起停止）→ ② 掷表（1 骰）→ ③ 固定项「师随机重建」：只在**死亡堆**内、
@@ -727,19 +727,19 @@ export function planSpecialReplDraw(input: SpecialReplDrawInput): RuleOutcome<Sp
   const divisionCandidates = freeSpecialReplPool(input.deadPile).map((unit) => unit.id)
   const alarmUnitIds = input.alarmUnitIds ?? []
   /*
-   * 2.3a 的混编上限（3 / 5 / 7，按**算子类型**计）：只在还有余量时该型才能从死亡堆返场。
+   * 专规 2.3a 的混编上限（3 / 5 / 7，按**算子类型**计）：只在还有余量时该型才能从死亡堆返场。
    * 未提供 `alarmQuotas`（或某型未列）⇒ 该型不受限（旧调用方与单测仍按老语义工作）。
    */
   const alarmMix = alarmMixRows({
     quotas: input.alarmQuotas ?? [],
     inPlay: input.alarmInPlay ?? {},
   })
-  // 2.3a 的 Alarm 单位同样只能在**死亡堆**里找（ch01 完整示例：dead pile 没有可用 Alarm ⇒ 作废）
+  // 专规 2.3a 的 Alarm 单位同样只能在**死亡堆**里找（ch01 完整示例：dead pile 没有可用 Alarm ⇒ 作废）
   const inDeadPile = input.deadPile.filter((unit) => alarmUnitIds.includes(unit.id))
   const alarmPool = inDeadPile.filter((unit) => alarmHasRoom(alarmMix, unit.id))
   const atMixLimit = inDeadPile.length > 0 && alarmPool.length === 0
   /*
-   * 1.6c 轴方第二项是「任一 Aufk（装甲侦察）营 / Krd（摩托化侦察）营」——**不是** 2.3a 的
+   * 专规 1.6c 轴方第二项是「任一 Aufk（装甲侦察）营 / Krd（摩托化侦察）营」——**不是** 2.3a 的
    * Alarm 单位（那张清单是苏方的）。判据用数据标记 `special_repl_to_rebuild`（31 枚），
    * 覆盖师属装甲侦察营（数据 `branch` 是 armor_pz，不能只看 branch）与摩托化侦察营。
    * 修前这里与苏方共用 `alarmUnitIds` ⇒ 轴方掷出 5–6 永远作废。
@@ -758,7 +758,7 @@ export function planSpecialReplDraw(input: SpecialReplDrawInput): RuleOutcome<Sp
   const patches: BoxPatch[] = []
   let division: SpecialReplDrawPlan['division'] = null
   /*
-   * ★ 固定项「一个步兵（或民兵）师」是**苏方专属**（1.6c：「**The Soviets always get one
+   * ★ 固定项「一个步兵（或民兵）师」是**苏方专属**（专规 1.6c：「**The Soviets always get one
    *   infantry (or militia) division**…」）；轴方的两项是「补给缓存 / Aufk·Krd 营」，
    *   **不重建师**。故这里必须按方判定——否则若轴方死亡堆里恰好躺着同印值的师，
    *   会被误当成"特殊补员师"返场（规则没给轴方这种做法）。
@@ -867,24 +867,24 @@ export function planSpecialReplDraw(input: SpecialReplDrawInput): RuleOutcome<Sp
   })
 }
 
-/** 1.6c：该方重建表内标 special 的行键（Aufk/Krd 营 或 Alarm 类） */
+/** 专规 1.6c：该方重建表内标 special 的行键（Aufk/Krd 营 或 Alarm 类） */
 function alarmSpecialRows(side: Side): readonly string[] {
   return specialReplRebuildRows(side)
 }
 
 /* ───────────────────────── 专规 2.3a：警戒单位的混编上限 ───────────────────────── */
 
-/** 2.3a 的规则号（复核与留痕用） */
+/** 专规 2.3a 的规则号（复核与留痕用） */
 export const ALARM_MIX_RULE = '专规 2.3a'
 
 /** 一个警戒（Alarm）算子类型的在场配额（按类型计，同型可同时在场多枚） */
 export interface AlarmQuota {
   unitId: string
-  /** 2.3a 的混编上限（3 / 5 / 7） */
+  /** 专规 2.3a 的混编上限（3 / 5 / 7） */
   limit: number
 }
 
-/** 2.3a 混编核算的一行结论 */
+/** 专规 2.3a 混编核算的一行结论 */
 export interface AlarmMixRow {
   unitId: string
   limit: number
@@ -892,7 +892,7 @@ export interface AlarmMixRow {
   inPlay: number
   /** 余量（可再返场几枚；0 = 已满编） */
   remaining: number
-  /** 是否超出 2.3a 的混编上限 */
+  /** 是否超出 专规 2.3a 的混编上限 */
   over: boolean
 }
 
@@ -924,21 +924,21 @@ export function alarmMixRows(input: {
   })
 }
 
-/** 2.3a：是否仍可返场该型警戒算子（余量 > 0；未知类型视为不受限） */
+/** 专规 2.3a：是否仍可返场该型警戒算子（余量 > 0；未知类型视为不受限） */
 export function alarmHasRoom(rows: readonly AlarmMixRow[], unitId: string): boolean {
   const row = rows.find((item) => item.unitId === unitId)
   return row === undefined ? true : row.remaining > 0
 }
 
-/* ────────────────────────────── 拆分单位盒（1.8a / 20.0g） ────────────────────────────── */
+/* ────────────────────────────── 拆分单位盒（专规 1.8a / 20.0g） ────────────────────────────── */
 
-/** 1.8a（上限）+ 20.0g（算子池）：拆分单位盒 */
+/** 专规 1.8a（上限）+ 20.0g（算子池）：拆分单位盒 */
 export const BREAKDOWN_BOX_RULE = '1.8a'
 
-/** 拆分单位盒的一档（按 AR 分档，照 1.8a 表 1-4） */
+/** 拆分单位盒的一档（按 AR 分档，照 专规 1.8a 表 1-4） */
 export interface BreakdownPoolSlot {
   ar: number
-  /** 1.8a：该档算子总数上限 */
+  /** 专规 1.8a：该档算子总数上限 */
   limit: number
   /** 图上的该档拆分单位数（盘面事实） */
   onMap: number
@@ -956,9 +956,9 @@ export interface BreakdownBoxView extends BoxView {
 }
 
 /**
- * 拆分单位盒视图（1.8a 上限 + 20.0g 算子池 + 13.5b 回池）
+ * 拆分单位盒视图（专规 1.8a 上限 + 20.0g 算子池 + 13.5b 回池）
  *
- * 「1.8a 拆解单位受固定数量上限约束」（表 1-4：轴 28× AR4 + 2× AR5；苏 6× AR2 + 2× AR3）；
+ * 「专规 1.8a 拆解单位受固定数量上限约束」（表 1-4：轴 28× AR4 + 2× AR5；苏 6× AR2 + 2× AR3）；
  * 「20.0g 同一国籍的所有多军力单位使用相同的拆分单位算子池」⇒ 盒＝池，取用＝
  * `planBreakdownCreate`（20.0 / 20.0a–g），被毁＝返回池（13.5b）。
  */
@@ -971,7 +971,7 @@ export function breakdownBoxView(input: {
   /**
    * 盒内存量账本（按 AR 分档；**状态层给的实测存量**）
    *
-   * 给了就以它为准（状态层的账本可能已因取用/回池变动）；没给才退回「1.8a 上限 − 图上枚数」。
+   * 给了就以它为准（状态层的账本可能已因取用/回池变动）；没给才退回「专规 1.8a 上限 − 图上枚数」。
    */
   remaining?: readonly { ar: number; count: number }[]
 }): BreakdownBoxView {
@@ -982,7 +982,7 @@ export function breakdownBoxView(input: {
     const inBox = Math.max(0, ledger ?? entry.count - onMap)
     return { ar: entry.ar, limit: entry.count, onMap, inBox, overLimit: onMap > entry.count }
   })
-  // 盒内可用＝按 AR 档各取前 `inBox` 枚（1.8a 的档位上限；同一档的算子同质，取哪一枚不影响判定）
+  // 盒内可用＝按 AR 档各取前 `inBox` 枚（专规 1.8a 的档位上限；同一档的算子同质，取哪一枚不影响判定）
   const available: BoxUnitView[] = []
   for (const slot of slots) {
     const ofSlot = input.breakdownUnits.filter((unit) => unit.ar === slot.ar)
@@ -1009,7 +1009,7 @@ export function breakdownBoxView(input: {
       '20.0：由多军力单位拆分其中 1 点军力创建（最后一点军力永远不能创建），不消耗 MP（20.0e）',
       '13.5b：拆分单位被摧毁后**返回资源池**，不重建',
     ],
-    // 盒内存量是**计数**（1.8a 的固定上限），而算子库只登记有限的拆分单位**型别**（同型别多枚，
+    // 盒内存量是**计数**（专规 1.8a 的固定上限），而算子库只登记有限的拆分单位**型别**（同型别多枚，
     // 不再逐枚建记录）⇒ 两者数量不同是正常的，但必须说清楚，免得把「列出的枚数」当成「盒内存量」。
     dataGaps:
       available.length === slots.reduce((sum, slot) => sum + slot.inBox, 0)
@@ -1026,7 +1026,7 @@ export function breakdownBoxView(input: {
 /**
  * 20.0 / 20.0a–g：从拆分单位盒**取用**一枚（创建拆分单位）
  *
- * 本函数是 `planBreakdownCreate` 的「盒内取用」包装：先按 1.8a 的档位上限核对盒内存量，
+ * 本函数是 `planBreakdownCreate` 的「盒内取用」包装：先按 专规 1.8a 的档位上限核对盒内存量，
  * 再交给既有的 20.0 判定（类型 / 时机 / 军力 / AR 方向 / 标记模式 / 池），**不另写规则**。
  */
 export function planBreakdownTake(input: {
@@ -1579,9 +1579,9 @@ export function planScenarioDraw(input: {
   })
 }
 
-/* ────────────────────────────── 地图外空军盒（1.4a） ────────────────────────────── */
+/* ────────────────────────────── 地图外空军盒（专规 1.4a） ────────────────────────────── */
 
-/** 1.4a：地图外空军盒 */
+/** 专规 1.4a：地图外空军盒 */
 export const AIR_BOX_RULE = '1.4a'
 
 /** 空军盒视图（Active / Inactive 两栏） */
@@ -1590,7 +1590,7 @@ export interface AirBoxView extends BoxView {
   edgeRow: number
   rules: AirBoxRules
   /**
-   * 1.4a：盒内**整备额度**（容量无限 / 费用 0T）
+   * 专规 1.4a：盒内**整备额度**（容量无限 / 费用 0T）
    *
    * 取 `airBoxRefitCapacity()`——与图上基地的 `refitCapacity({isAirBox:false})` 同一实现的另一分支，
    * 而不是把 `infiniteCapacity` / `freeRefitPerTurn` 两个布尔各自解读一遍。
@@ -1642,7 +1642,7 @@ export function airBoxView(input: { side: Side; aircraft: readonly BoxUnitView[]
     rangeHexes: airBoxRangeHexes(input.side),
     edgeRow: data?.edgeRow ?? 0,
     rules,
-    // 1.4a：盒内整备额度（容量无限 / 0T）——与图上基地同源（`refitCapacity` 的 isAirBox 分支）
+    // 专规 1.4a：盒内整备额度（容量无限 / 0T）——与图上基地同源（`refitCapacity` 的 isAirBox 分支）
     refit: airBoxRefitCapacity(),
     activation: {
       activatable: rules.freeRefitPerTurn && rules.infiniteCapacity,
@@ -1655,7 +1655,7 @@ export function airBoxView(input: { side: Side; aircraft: readonly BoxUnitView[]
 }
 
 /**
- * 1.4a：盒内免费整备（Inactive → Active）
+ * 专规 1.4a：盒内免费整备（Inactive → Active）
  *
  * 「箱内任意数量飞机每回合免费 refit」⇒ 一次性把盒内 Inactive 全部翻为 Active，不消耗 SP。
  * 与之对照：**图上**空军基地的整备受 15.1C 约束（EZOC 内不可整备、每基地 1T、可整备 2×等级架），
@@ -1676,9 +1676,9 @@ export function planAirBoxActivate(input: {
   })
 }
 
-/* ────────────────────────────── 边缘盒（1.4b） ────────────────────────────── */
+/* ────────────────────────────── 边缘盒（专规 1.4b） ────────────────────────────── */
 
-/** 1.4b：边缘盒 */
+/** 专规 1.4b：边缘盒 */
 export const EDGE_BOX_RULE = '1.4b'
 
 /** 边缘盒视图 */
@@ -1688,7 +1688,7 @@ export interface EdgeBoxView extends BoxView {
   rules: EdgeBoxRules
 }
 
-/** 1.4b：东北盒接北/东边，东南盒接南/东边。开放补给源由剧本账本提供。 */
+/** 专规 1.4b：东北盒接北/东边，东南盒接南/东边。开放补给源由剧本账本提供。 */
 export function edgeBoxConnectsHex(box: EdgeBoxId, hex: HexRef): boolean {
   return (
     isOnMap(hex) &&
@@ -1732,7 +1732,7 @@ export function edgeBoxView(input: { box: EdgeBoxId; units: readonly BoxUnitView
 }
 
 /**
- * 1.4b：边缘盒进出资格
+ * 专规 1.4b：边缘盒进出资格
  *
  * 直接复用 `canEnterEdgeBox`（专规 1.4b 的四项同时成立），本函数只补上「盒」的语境说明。
  */
@@ -1742,7 +1742,7 @@ export function planEdgeBoxMove(input: {
   unitKind: UnitKind
   fromSupplySourceHex: boolean
   direction: 'enter' | 'exit'
-  /** 进出是否改用铁路容量（1.4b：1 MP 或 Rail Cap） */
+  /** 进出是否改用铁路容量（专规 1.4b：1 MP 或 Rail Cap） */
   useRailCap?: boolean
 }): RuleOutcome<{ rule: string; entryMp: number; exitFuelsFree: boolean; detail: string }> {
   const check = canEnterEdgeBox({
@@ -1763,16 +1763,16 @@ export function planEdgeBoxMove(input: {
   })
 }
 
-/* ────────────────────────────── 编队收纳盒（13.7 / 3.6f） ────────────────────────────── */
+/* ────────────────────────────── 编队收纳盒（13.7 / 通规 3.6f） ────────────────────────────── */
 
-/** 13.7 + 3.6f：编队标记与编队收纳盒 */
+/** 13.7 + 通规 3.6f：编队标记与编队收纳盒 */
 export const FORMATION_BOX_RULE = '13.7'
 
 /** 编队盒视图 */
 export interface FormationBoxView extends BoxView {
   formationId: string
   formationCode: string
-  /** 图上的编队标记（3.6f） */
+  /** 图上的编队标记（通规 3.6f） */
   marker: { markerId: string; markerName: string; imageKey: string | null } | null
   /** 收纳在盒内（图上只余标记）的单位 */
   hiddenIds: readonly string[]
@@ -1781,7 +1781,7 @@ export interface FormationBoxView extends BoxView {
 }
 
 /**
- * 3.6f 编队标记（标记库命名：轴方 `<编号>.<兵种> Draw`，苏方 `<编号> <兵种> Div`）
+ * 通规 3.6f 编队标记（标记库命名：轴方 `<编号>.<兵种> Draw`，苏方 `<编号> <兵种> Div`）
  *
  * 名字口径由数据给定（`markers.json`），此处只做「编队 → 其标记」的**匹配**：
  * 取编队名的前两段（编号 + 兵种，如 `10 Mtr` / `3 Pz` / `SS-R Mtr`），
@@ -1812,7 +1812,7 @@ function formationMarkerOf(
 }
 
 /**
- * 编队收纳盒视图（13.7 编队标记 + 专规 3.6f）
+ * 编队收纳盒视图（13.7 编队标记 + 通规 3.6f）
  *
  * 「13.7 Formation Marker：**离图表示多单位编队**、降低堆叠密度；有 normal/fueled 两面；
  * **至少一个所属单位须与其同格**（除作 Fueling 提示外）」⇒ 本盒＝收纳多单位编队的下属单位，
@@ -1828,7 +1828,7 @@ export function formationBoxView(input: {
 }): FormationBoxView {
   const formation = formations.formations.find((item) => item.formationId === input.formationId)
   const boxId = `formation-${input.formationId}`
-  // 3.6f：编队标记（正面普通 / 背面已加油）
+  // 通规 3.6f：编队标记（正面普通 / 背面已加油）
   const marker = formationMarkerOf(input.side, input.formationId)
   const hidden = input.members.filter((unit) => !input.onMapIds.includes(unit.id))
   return {

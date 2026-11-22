@@ -41,19 +41,19 @@ import {
  *
  * | 族 | 内容 | 条文 |
  * |---|---|---|
- * | `timing` | SOP 槽位许可动作 + 行动者身份 | 2.2 流程表、6.0/6.3a/7.0a/11.0a |
- * | `mode` | 该模式下能否做该动作 | 5.5a/5.5b/5.6a/5.7/5.8/5.9/5.10b/5.10e、8.1 |
- * | `zoc` | 敌方 ZOC 内的禁止动作（含能否被抵消） | 4.5 / 4.5a A–K / 4.5b |
+ * | `timing` | SOP 槽位许可动作 + 行动者身份 | 通规 2.2 流程表、6.0/6.3a/7.0a/11.0a |
+ * | `mode` | 该模式下能否做该动作 | 通规 5.5a/5.5b/5.6a/5.7/5.8/5.9/5.10b/5.10e、8.1 |
+ * | `zoc` | 敌方 ZOC 内的禁止动作（含能否被抵消） | 通规 4.5 / 4.5a A–K / 4.5b |
  * | `fuel` | 是否需要燃料、编队法来源是否同源 | 12.5a/12.5b/12.5c-A |
- * | `stacking` | 堆叠上限与**阶段末**义务（4.8a：移动中可暂时超堆叠） | 4.8 / 4.8a / 4.8c |
+ * | `stacking` | 堆叠上限与**阶段末**义务（通规 4.8a：移动中可暂时超堆叠） | 4.8 / 4.8a / 4.8c |
  * | `allowance` | 额度（铁路容量、每阶段轨距转换上限） | 专规 1.2 / 13.3 / 13.3g |
  * | `formation` | 编队同源（同一 HQ 投递或同一补给站拖取） | 12.5c-A |
  *
  * ## 二、三种结论（不是简单的「能/不能」）
  *   - **违规（violations）**：此刻不允许，动作被否决；
- *   - **提示（warnings）**：允许，但有后果须让玩家看见（如 4.5a-A 轮式进入敌方 ZOC 后必须停止）；
+ *   - **提示（warnings）**：允许，但有后果须让玩家看见（如 通规 4.5a-A 轮式进入敌方 ZOC 后必须停止）；
  *   - **义务（obligations）**：允许，但稍后（环节/阶段结束时）必须结清——
- *     典型是 4.8a 超堆叠：**移动过程中可以暂时超堆叠**，只在「任何环节或阶段结束时」才要求 ≤10 RE，
+ *     典型是 通规 4.8a 超堆叠：**移动过程中可以暂时超堆叠**，只在「任何环节或阶段结束时」才要求 ≤10 RE，
  *     故它不是逐步禁令，而是阶段末义务（由 `stackingObligations()` 结算）。
  *
  * ## 三、单一来源原则（本层**不重复实现**任何规则）
@@ -64,7 +64,7 @@ import {
 /* ────────────────────────────── 词表 ────────────────────────────── */
 
 /**
- * 可被校验的动作（同时是 4.5a A–K 与 SOP 段内容的索引键）
+ * 可被校验的动作（同时是 通规 4.5a A–K 与 SOP 段内容的索引键）
  *
  * 刻意保持「规则书里的动作名」粒度，而不是 UI 操作粒度：一个 UI 操作可能触发多个动作校验。
  */
@@ -79,13 +79,13 @@ export type ActionKind =
   | 'barrage'
   /** 12.8e 突围（C 段最先行） */
   | 'breakout'
-  /** 5.4 主动模式切换 */
+  /** 通规 5.4 主动模式切换 */
   | 'modeChange'
-  /** 5.7b 释放预备 */
+  /** 通规 5.7b 释放预备 */
   | 'reserveRelease'
   /** 13.3c 铁路运输（literal，占用铁路容量） */
   | 'railTransport'
-  /** 13.3 沿铁路的追溯补给（4.5a-D） */
+  /** 13.3 沿铁路的追溯补给（通规 4.5a-D） */
   | 'railTraceSupply'
   /** 13.3f/g 轨距转换 */
   | 'railConversion'
@@ -107,19 +107,19 @@ export type ActionKind =
   | 'airTransfer'
   /** 15.1 整备 */
   | 'refit'
-  /** 19.x 港口追溯补给（4.5a-F；本作无海运，保留以完整覆盖 A–K） */
+  /** 19.x 港口追溯补给（通规 4.5a-F；本作无海运，保留以完整覆盖 A–K） */
   | 'portTraceSupply'
-  /** 19.x 港口海运（4.5a-G） */
+  /** 19.x 港口海运（通规 4.5a-G） */
   | 'portSeaCap'
   /** 13.5 重建（增援阶段） */
   | 'rebuild'
   /** 13.9 合并（增援阶段） */
   | 'consolidate'
-  /** 1.6a / 13.6 到达表执行与增援投放（增援阶段） */
+  /** 专规 1.6a / 13.6 到达表执行与增援投放（增援阶段） */
   | 'arrival'
   /** 20.0a 创建拆分单位（开始移动 / 战后推进 / 战后撤退三个时机） */
   | 'breakdown'
-  /** 2.2 末段 H 清理阶段的通用自动清理（摘 DG/进击/燃料标记 + 移除敌方运输破坏标记） */
+  /** 通规 2.2 末段 H 清理阶段的通用自动清理（摘 DG/进击/燃料标记 + 移除敌方运输破坏标记） */
   | 'cleanUp'
 
 /** 约束族 */
@@ -142,33 +142,33 @@ export const LEGALITY_FAMILIES: readonly LegalityFamily[] = [
 /** 参与动作的单位（最小视图；字段名照 state-types 与数据层） */
 export interface LegalityUnit {
   id: string
-  /** 是否战斗单位（4.5b 抵消 ZOC 要求「友方战斗单位」；4.8 堆叠上限只计战斗单位） */
+  /** 是否战斗单位（通规 4.5b 抵消 ZOC 要求「友方战斗单位」；4.8 堆叠上限只计战斗单位） */
   isCombat: boolean
-  /** 是否可攻击（4.4/3.2b） */
+  /** 是否可攻击（通规 4.4/3.2b） */
   attackCapable: boolean
-  /** 机动类型（3.1a） */
+  /** 机动类型（通规 3.1a） */
   mobility: MobilityType
   /** 模式状态（5.x） */
   mode: ModeState
-  /** 14.9d / 4.7d：本阶段空运对地面行动的限制。 */
+  /** 14.9d / 通规 4.7d：本阶段空运对地面行动的限制。 */
   airTransportThisPhase?: AirUnitTransportState | null
-  /** 团级当量（4.6） */
+  /** 团级当量（通规 4.6） */
   re: number
   /** 朝向那一面的印值（用于 5.x 的数值改写） */
   raw: { attack: number; ar: number; ma: number; barrage?: number }
-  /** 是否具备工程能力（5.10e / 13.8a）；未给出按 false 处理 */
+  /** 是否具备工程能力（通规 5.10e / 13.8a）；未给出按 false 处理 */
   engineerCapable?: boolean
   /**
    * 13.3g：是否为**铁路修理单位**；未给出按 false 处理
    *
-   * 铁路修理单位有两条例外：5.6a/5.5a 的「须移动模式」不适用（13.3g-B：可在**战斗模式**下铁路移动），
+   * 铁路修理单位有两条例外：通规 5.6a/5.5a 的「须移动模式」不适用（13.3g-B：可在**战斗模式**下铁路移动），
    * 且只有它能做轨距转换（13.3g）。深度校验见 `rail.ts`，本层只做模式族的粗筛。
    */
   railRepair?: boolean
-  /** 非战斗单位类型（4.8 的「每格 1 港口 + 1 空军基地 + 1 环形工事」用） */
+  /** 非战斗单位类型（通规 4.8 的「每格 1 港口 + 1 空军基地 + 1 环形工事」用） */
   noncombatKind?: string | null
   /**
-   * 4.5b：本阶段已承诺「之后不再消耗 MP」（垫人代价）
+   * 通规 4.5b：本阶段已承诺「之后不再消耗 MP」（垫人代价）
    *
    * 突袭每次至少消耗 3 MP（8.1a），故这类单位不得突袭；由 `modeAllows` 的 overrun 分支判。
    */
@@ -202,16 +202,16 @@ export interface FormationFacts {
   unitCount?: number
 }
 
-/** 目标格事实（堆叠与 4.8c 用） */
+/** 目标格事实（堆叠与 通规 4.8c 用） */
 export interface TargetHexFacts {
   hex: HexRef
   /** 格内战斗单位 RE 合计（不含本次移动的单位） */
   friendlyCombatRe: number
-  /** 格内敌方战斗单位数（4.8c：有敌方战斗单位则不可进入） */
+  /** 格内敌方战斗单位数（通规 4.8c：有敌方战斗单位则不可进入） */
   enemyCombatUnits: number
-  /** 格内敌方非战斗单位/飞机/舰船数（4.8c-A：可进入并按 9.14 结算） */
+  /** 格内敌方非战斗单位/飞机/舰船数（通规 4.8c-A：可进入并按 9.14 结算） */
   enemyNonCombatUnits?: number
-  /** 格内已有的港口 / 空军基地 / 环形工事数（4.8：各自至多 1） */
+  /** 格内已有的港口 / 空军基地 / 环形工事数（通规 4.8：各自至多 1） */
   ports?: number
   airBases?: number
   hedgehogs?: number
@@ -222,9 +222,9 @@ export interface LegalityRequest {
   action: ActionKind
   /** 执行方 */
   side: Side
-  /** 当前阶段（2.2 流程表 A–H） */
+  /** 当前阶段（通规 2.2 流程表 A–H） */
   phase: GamePhase
-  /** 当前阶段玩家（2.2） */
+  /** 当前阶段玩家（通规 2.2） */
   activeSide: Side
   /**
    * 当前日期（ISO，专规时点与铁路容量用）
@@ -237,9 +237,9 @@ export interface LegalityRequest {
   units?: readonly LegalityUnit[]
   /** 目标格事实 */
   target?: TargetHexFacts
-  /** 所在格是否处于**未被 4.5b 抵消**的敌方 ZOC */
+  /** 所在格是否处于**未被 通规 4.5b 抵消**的敌方 ZOC */
   inEnemyZoc?: boolean
-  /** 模式切换的目标模式（5.4；action='modeChange' 时必给） */
+  /** 模式切换的目标模式（通规 5.4；action='modeChange' 时必给） */
   modeTarget?: BaseMode
   /** 轰炸来源（10.1a：炮兵 / 空中；SOP 各段的许可不同；本作无海军） */
   barrageSource?: 'artillery' | 'air'
@@ -254,9 +254,9 @@ export interface LegalityRequest {
   /** 本条移动所耗 MP（预留给调用方展示；不参与判定） */
   mpSpent?: number
   /**
-   * 8.1 / 4.8a：突袭专用事实（`action='overrun'` 时必给）
+   * 8.1 / 通规 4.8a：突袭专用事实（`action='overrun'` 时必给）
    *
-   * 4.8a 的「≤10 RE」平时是**环节末义务**（移动过程中可以暂时超堆叠），但突袭例外：
+   * 通规 4.8a 的「≤10 RE」平时是**环节末义务**（移动过程中可以暂时超堆叠），但突袭例外：
    * 「所有参与突袭的单位加上它们所在格内的所有其他友方单位，合计规模不能超过 10 RE」
    * ⇒ 发起时就必须满足，不能等到环节末。该数值来自**发起格**（含 8.1h 的留驻者），
    * 无法由 `target`（目标敌方格）推出，故必须显式带入。
@@ -308,10 +308,10 @@ export type LegalityVerdict =
   | ({ ok: true } & LegalityCommon)
   | ({ ok: false; violations: readonly LegalityViolation[] } & LegalityCommon)
 
-/* ────────────────────────────── 时机表（2.2 SOP） ────────────────────────────── */
+/* ────────────────────────────── 时机表（通规 2.2 SOP） ────────────────────────────── */
 
 /**
- * SOP 槽位 → 许可动作（2.2 流程表原文段落照录，见工程库 charts.json `tables.sop`）
+ * SOP 槽位 → 许可动作（通规 2.2 流程表原文段落照录，见工程库 charts.json `tables.sop`）
  *
  * | 段 | 原文 | 许可动作 |
  * |---|---|---|
@@ -327,7 +327,7 @@ export type LegalityVerdict =
  * 注意两处**同一动作不同段许可范围不同**，必须靠 `barrageSource` 区分：
  * C 段只允许空中轰炸，F 段只允许炮兵轰炸。
  *
- * ★ **燃料不在本表任何一段**（用户 2026-09-19 口径）：2.2 的段名里没有它，12.5c 把付款绑在
+ * ★ **燃料不在本表任何一段**（用户 2026-09-19 口径）：通规 2.2 的段名里没有它，12.5c 把付款绑在
  *   「发生燃料消耗的**任何阶段**」的消耗时刻 ⇒ 它的"时机"由 `fuel.ts` 定义，故列在
  *   `TIMING_DEFERRED_ACTIONS`（本表只登记"段名里写出的动作族"）。
  */
@@ -335,7 +335,7 @@ export const ACTIONS_BY_PHASE: Record<GamePhase, readonly ActionKind[]> = {
   // Pre-Turn 只有天气判定与先手判定（引擎自动 + 胜者选择，无地面/空中动作）
   preTurn: [],
   aircraftRefit: ['refit'],
-  // B 增援：到达表投放（13.6 / 2.1 / 3.1）、重建（13.5a）、合并（13.9）
+  // B 增援：到达表投放（13.6 / 专规 2.1 / 3.1）、重建（13.5a）、合并（13.9）
   reinforcement: ['arrival', 'rebuild', 'consolidate'],
   movement: [
     'breakout',
@@ -358,9 +358,9 @@ export const ACTIONS_BY_PHASE: Record<GamePhase, readonly ActionKind[]> = {
   // F 战斗：20.0a 的「战后推进 / 战后撤退」同属战斗结算，故允许创建拆分单位
   combat: ['barrage', 'attack', 'breakdown'],
   exploitation: ['reserveRelease', 'move', 'overrun', 'barrage', 'attack', 'breakdown'],
-  // H 清理：2.2 末段的**通用自动清理**（摘 DG/进击/燃料标记 + 移除敌方运输破坏标记）
+  // H 清理：通规 2.2 末段的**通用自动清理**（摘 DG/进击/燃料标记 + 移除敌方运输破坏标记）
   cleanUp: ['cleanUp'],
-  // Turn End 只推进回合标记（2.2）
+  // Turn End 只推进回合标记（通规 2.2）
   turnEnd: [],
 }
 
@@ -398,15 +398,15 @@ export const BARRAGE_SOURCES_BY_PHASE: Partial<Record<GamePhase, readonly string
   exploitation: ['artillery', 'air'],
 }
 
-/* ────────────────────────────── 4.5a 敌方 ZOC 内禁止的动作（A–K） ────────────────────────────── */
+/* ────────────────────────────── 通规 4.5a 敌方 ZOC 内禁止的动作（A–K） ────────────────────────────── */
 
-/** 4.5a 清单项 */
+/** 通规 4.5a 清单项 */
 export interface ZocForbiddenItem {
   /** 清单字母（照原文） */
   item: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K'
   /** 原文动作名 */
   text: string
-  /** 能否被 4.5b 抵消（原文带 <Negation> 的项） */
+  /** 能否被 通规 4.5b 抵消（原文带 <Negation> 的项） */
   negatable: boolean
   /** 由哪一族执行（I/J 属模式切换，由 mode 族判，避免重复报错） */
   family: 'zoc' | 'mode'
@@ -415,9 +415,9 @@ export interface ZocForbiddenItem {
 }
 
 /**
- * 4.5a：敌方 ZOC 内禁止的动作清单（原文 A–K，逐条照录）
+ * 通规 4.5a：敌方 ZOC 内禁止的动作清单（原文 A–K，逐条照录）
  *
- * 「以下动作不能在敌方 ZOC 中执行。但是，标记为 <Negation> 的动作，在 ZOC 被抵消 (4.5b) 后
+ * 「以下动作不能在敌方 ZOC 中执行。但是，标记为 <Negation> 的动作，在 ZOC 被抵消 ( 通规 4.5b) 后
  * 就可以执行；其他动作即使 ZOC 被抵消也无法执行。」
  */
 export const ZOC_FORBIDDEN: readonly (ZocForbiddenItem & { actions: readonly ActionKind[] })[] = [
@@ -427,7 +427,7 @@ export const ZOC_FORBIDDEN: readonly (ZocForbiddenItem & { actions: readonly Act
     negatable: true,
     family: 'zoc',
     actions: ['move'],
-    // 4.5a-A：进入敌方 ZOC 的**轮式 MP 单位**必须停止或突袭（徒步/履带不受影响）
+    // 通规 4.5a-A：进入敌方 ZOC 的**轮式 MP 单位**必须停止或突袭（徒步/履带不受影响）
     appliesWhen: { moveMobility: 'truck' },
   },
   {
@@ -515,7 +515,7 @@ function movementSegmentOf(phase: GamePhase): MovementSegmentPhase | null {
 }
 
 /**
- * 时机族（2.2 流程表 + 6.3a/7.0a/11.0a）
+ * 时机族（通规 2.2 流程表 + 6.3a/7.0a/11.0a）
  *
  * ① SOP 槽位：动作必须出现在当前段的许可集合里（`ACTIONS_BY_PHASE`）；
  * ② 同段内可执行者不同：移动类动作还要满足行动者身份——反应阶段只有非行动方的
@@ -553,7 +553,7 @@ export function checkTiming(request: LegalityRequest): LegalityViolation[] {
   }
 
   // 行动者身份（6.3a / 7.0a / 11.0a）——只对「由单位执行」的移动类动作判
-  // 5.7b 的「释放预备」同属阶段限定的单位动作，但判据少一层：释放**不要求**已释放 / 进击标记
+  // 通规 5.7b 的「释放预备」同属阶段限定的单位动作，但判据少一层：释放**不要求**已释放 / 进击标记
   const movable: readonly ActionKind[] = ['move', 'overrun', 'breakout', 'reserveRelease']
   const isRelease = request.action === 'reserveRelease'
   if (movable.includes(request.action) && request.units !== undefined && request.units.length > 0) {
@@ -584,7 +584,7 @@ export function checkTiming(request: LegalityRequest): LegalityViolation[] {
             break
           }
           // 7.0a：此阶段唯一可以行动的地面单位，是非阶段玩家释放的预备模式单位
-          // （释放动作本身除外——5.7b 的释放正是把「未释放」变成「已释放」的那一步）
+          // （释放动作本身除外—— 通规 5.7b 的释放正是把「未释放」变成「已释放」的那一步）
           if (!isRelease && unit.mode.releasedFromReserve !== true) {
             violations.push({
               family: 'timing',
@@ -684,7 +684,7 @@ function modeAllows(
             detail: `${unit.id} 当前模式不可轰炸（生效模式 ${stats.effectiveMode}）`,
           }
     case 'overrun':
-      // 8.1：须处于战斗、移动或进击模式；5.10b-C：DG 不能突袭
+      // 8.1：须处于战斗、移动或进击模式；通规 5.10b-C：DG 不能突袭
       if (hasMarker(unit.mode, 'dg'))
         return {
           ok: false,
@@ -693,7 +693,7 @@ function modeAllows(
           reason: 'dgCannotOverrun',
           detail: `${unit.id} 处于 DG 模式`,
         }
-      // 8.1：「可攻击」是参突的资格之一（4.4/3.2b 的括注、无攻击值等都不行）
+      // 8.1：「可攻击」是参突的资格之一（通规 4.4/3.2b 的括注、无攻击值等都不行）
       if (!unit.attackCapable)
         return {
           ok: false,
@@ -720,7 +720,7 @@ function modeAllows(
           reason: 'extenderCannotMove',
           detail: `${unit.id} 以延补队面在场（12.7）`,
         }
-      // 4.5b：许诺抵消 ZOC 的单位本阶段不得再消耗 MP ⇒ 不得突袭（8.1a 每次突袭耗 3 MP）
+      // 通规 4.5b：许诺抵消 ZOC 的单位本阶段不得再消耗 MP ⇒ 不得突袭（8.1a 每次突袭耗 3 MP）
       if (unit.mpLockedThisPhase === true)
         return {
           ok: false,
@@ -739,7 +739,7 @@ function modeAllows(
             detail: `${unit.id} 当前模式不可突袭`,
           }
     case 'railTransport':
-      // 5.10d：DG 单位不能使用铁路运输（无例外）
+      // 通规 5.10d：DG 单位不能使用铁路运输（无例外）
       if (hasMarker(unit.mode, 'dg'))
         return {
           ok: false,
@@ -748,7 +748,7 @@ function modeAllows(
           reason: 'dgCannotRail',
           detail: `${unit.id} 处于 DG 模式（5.10d）`,
         }
-      // 5.6a：铁路运输须移动模式；★ 13.3g-B 例外——**铁路修理单位可在战斗模式下**使用铁路移动
+      // 通规 5.6a：铁路运输须移动模式；★ 13.3g-B 例外——**铁路修理单位可在战斗模式下**使用铁路移动
       return canUseTransport(unit.mode) || (unit.railRepair === true && isInCombatMode(unit.mode))
         ? { ok: true }
         : {
@@ -791,7 +791,7 @@ function modeAllows(
           reason: 'notRailRepairUnit',
           detail: `${unit.id} 不是铁路修理单位（13.3g）`,
         }
-      // 5.5b / 5.10e：须战斗模式，或 DG 但朝向战斗面
+      // 通规 5.5b / 5.10e：须战斗模式，或 DG 但朝向战斗面
       return canConvertGauge(unit.mode)
         ? { ok: true }
         : {
@@ -802,7 +802,7 @@ function modeAllows(
             detail: `${unit.id} 不处于战斗模式（5.5b）`,
           }
     case 'buildHedgehog':
-      // 5.10e：DG 时工程单位（朝战斗面）仍可施工，但**非工程兵不能修建环形工事**
+      // 通规 5.10e：DG 时工程单位（朝战斗面）仍可施工，但**非工程兵不能修建环形工事**
       if (hasMarker(unit.mode, 'dg') && unit.engineerCapable !== true) {
         return {
           ok: false,
@@ -822,7 +822,7 @@ function modeAllows(
           reason: 'modeTargetMissing',
           detail: 'modeChange 必须给出 modeTarget',
         }
-      // 4.5a-I / 5.7c：不可在敌方 ZOC 内进入预备模式
+      // 通规 4.5a-I / 5.7c：不可在敌方 ZOC 内进入预备模式
       if (request.modeTarget === 'reserve' && request.inEnemyZoc === true)
         return {
           ok: false,
@@ -831,7 +831,7 @@ function modeAllows(
           reason: 'enterReserveInEnemyZoc',
           detail: '不可在敌方 ZOC 内进入预备模式（4.5a-I）',
         }
-      // 4.5a-J / 5.8a：不可在敌方 ZOC 内进入战略模式
+      // 通规 4.5a-J / 5.8a：不可在敌方 ZOC 内进入战略模式
       if (request.modeTarget === 'strat' && request.inEnemyZoc === true)
         return {
           ok: false,
@@ -840,7 +840,7 @@ function modeAllows(
           reason: 'enterStratInEnemyZoc',
           detail: '不可在敌方 ZOC 内进入战略模式（4.5a-J）',
         }
-      // 5.8：战略模式朝向必须是移动面（mode∈{combat,move} 时模式兼作朝向，故取 baseOrientation）
+      // 通规 5.8：战略模式朝向必须是移动面（mode∈{combat,move} 时模式兼作朝向，故取 baseOrientation）
       if (request.modeTarget === 'strat' && baseOrientation(unit.mode) !== 'move')
         return {
           ok: false,
@@ -857,7 +857,7 @@ function modeAllows(
 }
 
 /**
- * 模式族（5.5–5.10 / 8.1）
+ * 模式族（通规 5.5–5.10 / 8.1）
  *
  * 逐单位问 modes.ts 的裁定结果；本层不自行推断模式语义（避免与 zoc/move 两处判据漂移）。
  */
@@ -876,9 +876,9 @@ export function checkMode(request: LegalityRequest): LegalityViolation[] {
 }
 
 /**
- * 控制区族（4.5 / 4.5a / 4.5b）
+ * 控制区族（通规 4.5 / 4.5a / 4.5b）
  *
- * 4.5a 的 A–K 清单按动作查表：命中且处于**未被抵消**的敌方 ZOC → 违规；
+ * 通规 4.5a 的 A–K 清单按动作查表：命中且处于**未被抵消**的敌方 ZOC → 违规；
  * 带 `<Negation>` 的项在 `inEnemyZoc=false`（已抵消）时放行。
  * A 项（轮式移动）不是禁令而是**后果**：进入后可停或突袭，故降级为提示。
  */
@@ -899,7 +899,7 @@ export function checkZoc(request: LegalityRequest): {
     }
     if (!inZoc) continue
     if (entry.item === 'A') {
-      // 4.5a-A：轮式进入敌方 ZOC 后「必须结束移动，或进行一次突袭」
+      // 通规 4.5a-A：轮式进入敌方 ZOC 后「必须结束移动，或进行一次突袭」
       warnings.push({
         family: 'zoc',
         rule: '4.5a-A',
@@ -916,7 +916,7 @@ export function checkZoc(request: LegalityRequest): {
     })
   }
 
-  // 4.8c：有敌方战斗单位的格不能进入（须以 8.0 突袭处理）
+  // 通规 4.8c：有敌方战斗单位的格不能进入（须以 8.0 突袭处理）
   if (
     request.action === 'move' &&
     request.target !== undefined &&
@@ -962,20 +962,20 @@ export function checkFuel(request: LegalityRequest): LegalityViolation[] {
 }
 
 /**
- * 堆叠族（4.8 / 4.8a / 4.8c）
+ * 堆叠族（通规 4.8 / 4.8a / 4.8c）
  *
- * ★ 关键口径：4.8a「**超堆叠，是指在任何环节或阶段结束时**，某一格内的战斗单位超过 10RE」，
+ * ★ 关键口径：通规 4.8a「**超堆叠，是指在任何环节或阶段结束时**，某一格内的战斗单位超过 10RE」，
  * 且「单位在**移动过程中**可以暂时地超堆叠」——所以堆叠**不是逐步禁令**：
- *   - 本族只在两种**即时禁令**上判违规：4.8 的「每格 1 港口 + 1 空军基地 + 1 环形工事」、
- *     以及 4.8c 的敌方单位同格限制（后者由 zoc 族按 4.8c 报）；
+ *   - 本族只在两种**即时禁令**上判违规：通规 4.8 的「每格 1 港口 + 1 空军基地 + 1 环形工事」、
+ *     以及 通规 4.8c 的敌方单位同格限制（后者由 zoc 族按 4.8c 报）；
  *   - 「合计 ≤10 RE」属**阶段末义务**，见 `stackingObligations()`（增援阶段例外，13.6）；
- *   - 唯一例外是**突袭**：4.8a 明确要求发起时就 ≤10 RE，故 `action='overrun'` 按 `overrun`
+ *   - 唯一例外是**突袭**：通规 4.8a 明确要求发起时就 ≤10 RE，故 `action='overrun'` 按 `overrun`
  *     专用事实当场判（见下）。
  */
 export function checkStacking(request: LegalityRequest): LegalityViolation[] {
   const violations: LegalityViolation[] = []
   /*
-   * 4.8a（**突袭例外**）：平时「≤10 RE」只在环节/阶段末结算，但突袭是「发起时必须满足」的门槛
+   * 通规 4.8a（**突袭例外**）：平时「≤10 RE」只在环节/阶段末结算，但突袭是「发起时必须满足」的门槛
    * （8.1h 的留驻者也计入）——故凡 `action='overrun'` 一律按 `overrun.originCombatRe` 当场判，
    * 不借用 `target`（那是目标敌方格，不是发起格）。
    */
@@ -992,7 +992,7 @@ export function checkStacking(request: LegalityRequest): LegalityViolation[] {
   const target = request.target
   if (target === undefined || request.action !== 'move') return violations
 
-  // 4.8：一格中累计不可超过一个港口、一个空军基地加上一个环形工事
+  // 通规 4.8：一格中累计不可超过一个港口、一个空军基地加上一个环形工事
   for (const unit of request.units ?? []) {
     const kind = unit.noncombatKind ?? null
     if (kind === 'port' && (target.ports ?? 0) >= 1)
@@ -1115,7 +1115,7 @@ export function checkFormation(request: LegalityRequest): LegalityViolation[] {
 /* ────────────────────────────── 聚合入口 ────────────────────────────── */
 
 /**
- * 堆叠阶段末义务（4.8a）
+ * 堆叠阶段末义务（通规 4.8a）
  *
  * 「超堆叠，是指在**任何环节或阶段结束时**，某一格内的战斗单位超过 10RE。
  *   但有一个例外：在**增援阶段**中没有超堆叠限制（见 13.6）。」
@@ -1165,7 +1165,7 @@ export function checkLegality(request: LegalityRequest): LegalityVerdict {
   ]
   const checked = LEGALITY_FAMILIES
   const warnings = zoc.warnings
-  // 4.8a：本动作造成的暂时超堆叠 → 记为阶段末义务（不是违规）
+  // 通规 4.8a：本动作造成的暂时超堆叠 → 记为阶段末义务（不是违规）
   const obligations: LegalityObligation[] = []
   if (request.action === 'move' && request.target !== undefined) {
     for (const unit of request.units ?? []) {

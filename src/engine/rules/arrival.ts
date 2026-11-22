@@ -8,8 +8,8 @@ import { isEntryLShutDown, isSouthSourcesShutDown } from './timing'
 
 /**
  * 条文索引（本文件与本仓库实现的对应）
- *   通规：13.6 / 1.6a / 13.6b/c / 13.3e
- *   专规：1.6 / 2.1 / 3.1 落点；2.1a Entry L/E 关闭；2.3c/2.4 方面军预备队
+ *   通规：13.6 / 专规 1.6a / 13.6b/c / 13.3e
+ *   专规：专规 1.6 / 专规 2.1 / 专规 3.1 落点；专规 2.1a Entry L/E 关闭；专规 2.3c/2.4 方面军预备队
  */
 
 /**
@@ -24,7 +24,7 @@ import { isEntryLShutDown, isSouthSourcesShutDown } from './timing'
  *     最近的且未被阻挡的地图边缘格内**。
  *   - **13.6c**：编内卡车抵达时是装载 SP 的；其他运输点数只有与 SP 在该回合抵达同一地点时才装载 SP 抵达。
  *     （本作到达卡表头另明写：「All types of Transport Points arrive loaded with SP.」）
- *   - **1.6a Removals**：被 Arrival Chart 要求「Removed」的单位（或一个 factors 完全相同的单位）
+ *   - **专规 1.6a Removals**：被 Arrival Chart 要求「Removed」的单位（或一个 factors 完全相同的单位）
  *     **立即**移出游戏，**不论处境**（在 dead pile、被包围也算）；出图不需燃油（不进行实际移动），
  *     但必须补足 internal stocks（从下一次 Supply Table 增援中扣除）。
  *   - **专规 2.1 / 3.1 落点**：Supply Table 的 SP 放「可卸货城市格（每格 1 SP，用免费 Rail Cap，
@@ -95,7 +95,7 @@ export function arrivalDateIso(text: string): string | null {
 
 /* ────────────────────────────── 投放需求 ────────────────────────────── */
 
-/** 落点类别（照到达卡的分栏与 2.1 / 3.1 的落点条文） */
+/** 落点类别（照到达卡的分栏与 专规 2.1 / 3.1 的落点条文） */
 export type ArrivalPlacement =
   /** 指定入口字母（如 `Entry K` / `Entry I or J` / `B or C`） */
   | { kind: 'entryHex'; letters: readonly string[]; label: string }
@@ -107,7 +107,7 @@ export type ArrivalPlacement =
   | { kind: 'anyAirbase'; label: string }
   /** `Any west edge hexes`（轴方 RR Eng Bn 入场卡原文） */
   | { kind: 'anyWestEdge'; label: string }
-  /** 能直接抽取 trace supply 的 HQ，或任一地图边缘补给源格（2.1 / 3.1：Pax/Eq/special repls/回归） */
+  /** 能直接抽取 trace supply 的 HQ，或任一地图边缘补给源格（专规 2.1 / 3.1：Pax/Eq/special repls/回归） */
   | { kind: 'hqOrEdgeSource'; label: string }
   /** 直接进死亡堆 */
   | { kind: 'deadPile'; label: string }
@@ -146,8 +146,8 @@ export interface ArrivalUnitDemand {
   /**
    * 专规 2.4：该条目是某集团军的**师**时给出集团军归属
    *
-   * 卡面只在分栏里用 `30th/28th/24th Army HQ (see 2.4)` 标明集团军，单位库本身没有集团军字段；
-   * 故归属只能从**到达卡分组**得到。HQ 与本条独立单位不带此字段（2.4 只锁师）。
+   * 卡面只在分栏里用 `30th/28th/24th Army HQ (see 专规 2.4)` 标明集团军，单位库本身没有集团军字段；
+   * 故归属只能从**到达卡分组**得到。HQ 与本条独立单位不带此字段（专规 2.4 只锁师）。
    */
   slowMobilizationArmy: SlowMobilizationArmy | null
   placement: ArrivalPlacement
@@ -155,13 +155,13 @@ export interface ArrivalUnitDemand {
   detail: string
 }
 
-/** 到达卡的强制移除（1.6a） */
+/** 到达卡的强制移除（专规 1.6a） */
 export interface ArrivalRemoval {
   side: Side
   date: string
   raw: string
   /**
-   * 1.6a 的两种去向：
+   * 专规 1.6a 的两种去向：
    * - `remove`：**移出游戏**（盘面、空军、死亡堆都清；「gone for good」）；
    * - `deadPile`：到达卡写的是「To Dead Pile」⇒ 放进**死亡堆**（13.5 可重建）。
    *
@@ -178,9 +178,9 @@ export interface ArrivalPlan {
   date: string
   /** 当日到达卡上的投放需求 */
   units: readonly ArrivalUnitDemand[]
-  /** 1.6a 强制移除 */
+  /** 专规 1.6a 强制移除 */
   removals: readonly ArrivalRemoval[]
-  /** 当日按 2.1a 关闭的补给源（供界面提示） */
+  /** 当日按 专规 2.1a 关闭的补给源（供界面提示） */
   shutdowns: readonly string[]
   /** 卡面上的规则提示原文（照录） */
   notes: readonly string[]
@@ -350,7 +350,7 @@ export function planArrivals(input: { side: Side; date: string }): RuleOutcome<A
             date,
             placement,
             item,
-            // 2.4 只锁**师**；HQ 与独立单位照常可动
+            // 专规 2.4 只锁**师**；HQ 与独立单位照常可动
             slowMobilizationArmy: slowArmy !== null && isDivisionItem(item) ? slowArmy : null,
           }),
         )
@@ -416,9 +416,9 @@ export function planArrivals(input: { side: Side; date: string }): RuleOutcome<A
 }
 
 /**
- * 该到达分组属于哪个慢动员集团军（2.4）
+ * 该到达分组属于哪个慢动员集团军（专规 2.4）
  *
- * 只认卡面明写的 `30th/28th/24th Army HQ (see 2.4)`；不按番号前缀猜。
+ * 只认卡面明写的 `30th/28th/24th Army HQ (see 专规 2.4)`；不按番号前缀猜。
  */
 function slowMobilizationArmyOfGroup(items: readonly RosterItem[]): SlowMobilizationArmy | null {
   for (const item of items) {
@@ -428,7 +428,7 @@ function slowMobilizationArmyOfGroup(items: readonly RosterItem[]): SlowMobiliza
   return null
 }
 
-/** 该条目是否为**师**（2.4 锁定对象；编成条目与 HQ/独立单位都不算） */
+/** 该条目是否为**师**（专规 2.4 锁定对象；编成条目与 HQ/独立单位都不算） */
 function isDivisionItem(item: RosterItem): boolean {
   if (item.kind === 'formation' || item.kind === 'hq') return false
   if (/Div\b/i.test((item.parentType ?? '').trim())) return true
@@ -594,9 +594,9 @@ export interface ArrivalPlacementFacts {
    * 缺省不传＝不把盒算进候选（既有调用方不必改）。
    */
   friendlyAirBox?(): { id: string; label: string } | null
-  /** 2.1 / 3.1：能以**直接拖取**取得追溯补给的友方 HQ 格 */
+  /** 专规 2.1 / 3.1：能以**直接拖取**取得追溯补给的友方 HQ 格 */
   directDrawHqHexes(): readonly HexRef[]
-  /** 2.1 / 3.1：地图边缘补给源格 */
+  /** 专规 2.1 / 3.1：地图边缘补给源格 */
   edgeSupplySourceHexes(): readonly HexRef[]
   /** 西缘格（轴方 RR Eng Bn 的「Any west edge hexes」） */
   westEdgeHexes(): readonly HexRef[]
@@ -639,7 +639,7 @@ export interface ArrivalPlacementResult {
 /**
  * 13.6b：图边补给源格的候选（被敌方单位阻挡的源格 ⇒ 改投最近的未阻挡边缘格）
  *
- * 2.1 / 3.1 对补员的落点只写「any map-edge supply source hexes」；13.6b 给了唯一的退路：
+ * 专规 2.1 / 3.1 对补员的落点只写「any map-edge supply source hexes」；13.6b 给了唯一的退路：
  * 「If an entry hex at the map edge is blocked by enemy units, reinforcements can be placed
  *  in the nearest unblocked map-edge hex.」补员的到货格就是这些边缘源格，故同源奉行。
  * **HQ 分支不受此影响**（HQ 格有己方 HQ，不会被敌单位占据）。
@@ -680,7 +680,7 @@ export function arrivalPlacementCandidates(
       return []
 
     case 'anyAirbase':
-      // 4.8c / 13.6b：不得落在**敌单位格**（可进敌方 ZOC，但不得与敌单位同格）
+      // 通规 4.8c / 13.6b：不得落在**敌单位格**（可进敌方 ZOC，但不得与敌单位同格）
       // 专规 1.4a：图外空军盒也算基地，但盒没有格号 ⇒ 由 `arrivalPlacementAirBox` 单独给出
       return facts.friendlyAirBaseHexes().filter((hex) => !facts.isBlocked(hex))
 
@@ -689,7 +689,7 @@ export function arrivalPlacementCandidates(
 
     case 'hqOrEdgeSource': {
       const hqs = facts.directDrawHqHexes()
-      // 2.1 / 3.1：有"可直接拖取"的 HQ 就只落在那些 HQ；没有才退到边缘补给源格
+      // 专规 2.1 / 3.1：有"可直接拖取"的 HQ 就只落在那些 HQ；没有才退到边缘补给源格
       return hqs.length > 0 ? hqs : edgeSourceCandidates(facts)
     }
 
@@ -744,7 +744,7 @@ export function arrivalPlacementAirBox(
  * 把一个落点声明解算成具体格（13.6 / 13.6b / 专规 2.1a）
  *
  * - 入口格被敌方阻挡 ⇒ 取**最近的未被阻挡的地图边缘格**（13.6b）；
- * - 该入口已按 2.1a 关闭 ⇒ `entryShutDown`（不得在该处入场，须改走仍开放的入口）；
+ * - 该入口已按 专规 2.1a 关闭 ⇒ `entryShutDown`（不得在该处入场，须改走仍开放的入口）；
  * - 飞机 ⇒ 任一友方空军基地；无基地即 `noAirbase`；
  * - Pax/Eq/特殊补员/回归 ⇒ 能直接拖取的 HQ，否则边缘补给源格；都没有即 `noHq`。
  */
@@ -963,11 +963,11 @@ export interface FreeRailCandidate {
   name: string
 }
 
-/** 免费铁运 / 3.6 补给列车 / 余额 的落点（一条 = 一个格） */
+/** 免费铁运 / 专规 3.6 补给列车 / 余额 的落点（一条 = 一个格） */
 export interface FreeRailPlacement {
   hex: HexRef
   sp: number
-  /** 这一笔的依据：免费铁运（2.1/3.1）／3.6 补给列车／图边补给源格（余额） */
+  /** 这一笔的依据：免费铁运（专规 2.1/3.1）／3.6 补给列车／图边补给源格（余额） */
   reason: 'freeRail' | 'supplyTrain' | 'edgeSource'
 }
 
@@ -978,12 +978,12 @@ export interface FreeRailPlan {
   freeSp: number
   /** 其余落到图边补给源格的 SP */
   edgeSp: number
-  /** 3.6 Supply Train 给的额外 SP（不用 Rail Cap） */
+  /** 专规 3.6 Supply Train 给的额外 SP（不用 Rail Cap） */
   supplyTrainSp: number
   /**
    * 本笔消耗的铁路运量 —— **恒 0**
    *
-   * 2.1/3.1 明写用「free Rail Cap」，3.6 明写「no Rail Cap used」⇒ 这一项是**判据的表达**，
+   * 专规 2.1/3.1 明写用「free Rail Cap」，3.6 明写「no Rail Cap used」⇒ 这一项是**判据的表达**，
    * 不是"还没算"：日后若给免费铁运加运量上限，这里就是唯一要改的地方。
    */
   railCapUsed: 0
@@ -999,26 +999,26 @@ export interface FreeRailPlan {
  *   - 只能勾**候选格**（候选＝13.3c 可卸货格中的城市格；候选本身必须 ⊆ 注入的可卸货格 —— 接线守卫）；
  *   - 勾的数量不能超过当日到货 SP（否则是"多给了 SP"）；
  *   - 还有余额（`edgeSp > 0`）⇒ **必须**给定一个图边补给源格；余额为 0 时不需要；
- *   - 3.6 的 Supply Train（2 SP）落**任一可卸货格**（不限城市），也**不用 Rail Cap**。
+ *   - 专规 3.6 的 Supply Train（2 SP）落**任一可卸货格**（不限城市），也**不用 Rail Cap**。
  *
  * 本函数**只算落点**（哪个格几 SP）；落盘（12.1b 的账本条目）由调用方做。
  */
 export function planFreeRailArrivals(input: {
-  /** 1.6b 补给表当日到货 SP */
+  /** 专规 1.6b 补给表当日到货 SP */
   sp: number
   /** 免费铁运候选（可卸载**城市**格；运行时结论由调用方按 13.3c 注入） */
   candidates: readonly FreeRailCandidate[]
-  /** 运行期的 13.3c 可卸货格全集（用于校验候选与 3.6 的落点） */
+  /** 运行期的 13.3c 可卸货格全集（用于校验候选与 专规 3.6 的落点） */
   detrainableHexes: readonly HexRef[]
   /** 玩家勾选的格（每格 1 SP；允许为空＝全部走图边源） */
   picked: readonly HexRef[]
   /** 余额的落点：图边补给源格（`edgeSp === 0` 时可省略） */
   edgeHex: HexRef | null
-  /** 本剧本本方的图边补给源格（2.1 / 3.1） */
+  /** 本剧本本方的图边补给源格（专规 2.1 / 3.1） */
   edgeSourceHexes: readonly HexRef[]
-  /** 3.6 Supply Train 的额外 SP（缺省 0） */
+  /** 专规 3.6 Supply Train 的额外 SP（缺省 0） */
   supplyTrainSp?: number
-  /** 3.6 的落点：**任一可卸货格**（有额外 SP 时必须给） */
+  /** 专规 3.6 的落点：**任一可卸货格**（有额外 SP 时必须给） */
   supplyTrainHex?: HexRef | null
 }): RuleOutcome<FreeRailPlan> {
   const key = (hex: HexRef): string => `${hex.col}.${hex.row}`
@@ -1112,7 +1112,7 @@ export function frontalReservesBatch(date: string): FrontalReservesBatch | null 
  * 专规 2.3c：方面军预备队的领取
  *
  * 「到货**必须立刻使用**，不能保存」⇒ 本函数只返回当日批次内容，
- * 由调用方按 2.1 的落点条文投放 2 SP、执行编制转化（旧单位按 1.6a Removal 处理）并发两次免费重建
+ * 由调用方按 专规 2.1 的落点条文投放 2 SP、执行编制转化（旧单位按 1.6a Removal 处理）并发两次免费重建
  * （一架 IL.2 ＋ 一个 HQ 或 artillery，玩家择一）。
  */
 export function claimFrontalReserves(date: string): RuleOutcome<FrontalReservesBatch> {
@@ -1139,9 +1139,9 @@ export function slowMobilizationUnlocks(date: string): readonly SlowMobilization
 /** 玩家选中的一个锁定师（由调用方从盘面事实取出） */
 export interface SlowMobilizationSelectionFact {
   instanceId: string
-  /** 该算子当前是否仍被锁（2.4 的锁定态） */
+  /** 该算子当前是否仍被锁（专规 2.4 的锁定态） */
   locked: boolean
-  /** 是否为**师**级战斗单位（2.4 只锁师；独立单位不锁） */
+  /** 是否为**师**级战斗单位（专规 2.4 只锁师；独立单位不锁） */
   isDivision: boolean
   /** 该师的集团军归属（数据未落此字段时为 null） */
   army: SlowMobilizationArmy | null
@@ -1293,7 +1293,7 @@ export function planSlowMobilization(input: {
 }
 
 /*
- * 1.6c 的日期闸门（「19 August 起停止」）**只有一处实现**：`timing.isSpecialReplAvailable`。
+ * 专规 1.6c 的日期闸门（「19 August 起停止」）**只有一处实现**：`timing.isSpecialReplAvailable`。
  * 消费方：`containers.specialReplBoxView`（盒的 active 旗标 → 面板按钮可用性）。
  * 本模块原先另有一个 `specialReplRollRequired` 只是它的同义转发（多一个公开名、零额外语义），已删。
  */

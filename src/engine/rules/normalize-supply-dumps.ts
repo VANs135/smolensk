@@ -17,7 +17,7 @@ export function remapSupplyDumpAmounts(
   return Object.fromEntries(totals)
 }
 
-/** 12.1b/3.4b：恢复时同格同方同归属归并，并把归属待办迁移到保留的ID。 */
+/** 12.1b/ 专规 3.4b：恢复时同格同方同归属归并，并把归属待办迁移到保留的ID。 */
 export function normalizeSupplyDumps<
   T extends { id: string; side: Side; hex: HexRef; sp: number; t: number },
 >(dumps: readonly T[], groups: Readonly<Record<string, PanzerGroup>>, pending: readonly string[]) {

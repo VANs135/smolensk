@@ -36,19 +36,19 @@ import { projectsZoc, type ZocSource } from './zoc'
  *             一律按**正常**地形成本计（忽略泥泞/积雪与运输破坏的额外消耗，但可享受天气降低的消耗）
  *   - 12.6a   补给源三种：① 允许增援入场的地图边缘铁路格 + 专规列出的源；② 火车卸货格（13.3c）；
  *             ③ 与火车卸货格或补给源相连的**延补队**（12.7）
- *   - 12.6b   补给源格内有未抵消的敌方 ZOC ⇒ 不能从该源获得追溯补给（4.5b 可抵消）
+ *   - 12.6b   补给源格内有未抵消的敌方 ZOC ⇒ 不能从该源获得追溯补给（通规 4.5b 可抵消）
  *   - 12.6c   吃图上补给：每 **1 T** 喂**最多 2 RE**，小数**向上取整**（6.5 RE → 4 T）；
  *             只有在**没有**追溯补给时才可吃；且**永不被强迫**吃
  *   - 12.6d   不能追溯且不吃图上补给 ⇒ 标记断补并掷损耗（12.8）
- *   - 12.6e   战略模式单位不允许吃图上补给，必须在该时有追溯补给的格内结束移动（另见 5.8b）
+ *   - 12.6e   战略模式单位不允许吃图上补给，必须在该时有追溯补给的格内结束移动（另见 通规 5.8b）
  *   - 12.6f   多单位编队的所有战斗单位须 trace 到**同一个 HQ**或**直接拖取同一个补给源**；
  *             做不到时，选一部分「免费」，其余吃图上补给否则断补
  *   - 12.7a   延补队唯一作用＝创造**新的追溯补给取用点**；不能运 SP、不增加拖取/投递距离
  *   - 12.7b   延补队有距离（MP）＝距后方被连接格的最远距离；永远放在连接的前方
  *   - 12.7c   延补队可与延补队连接成「锁链」
  *   - 12.7d   生成：同格 5 点**同型**运输点数消耗**一半 MA**；生成时该格必须能连上补给来源
- *   - 4.5b    抵消：格内有己方战斗单位即抵消该格敌方 ZOC
- *   - 5.8b    战略模式单位必须在拥有追溯补给的格内结束移动（本模块提供桥接函数）
+ *   - 通规 4.5b    抵消：格内有己方战斗单位即抵消该格敌方 ZOC
+ *   - 通规 5.8b    战略模式单位必须在拥有追溯补给的格内结束移动（本模块提供桥接函数）
  *
  * ## 设计口径
  *   - **纯函数 + 视图输入**：补给源、HQ、延补队、dump、单位与 ZOC 全由 `TraceSupplyFacts` 注入；
@@ -131,13 +131,13 @@ export interface TraceSupplyUnitView {
   side: Side
   /** 图上位置；不在图上为 null */
   hex: HexRef | null
-  /** 是否战斗单位（12.0：只有战斗单位需要 trace；4.5b：只有战斗单位能抵消敌方 ZOC） */
+  /** 是否战斗单位（12.0：只有战斗单位需要 trace；通规 4.5b：只有战斗单位能抵消敌方 ZOC） */
   isCombat: boolean
-  /** 是否可攻击（4.5 ZOC 投射三条件之一） */
+  /** 是否可攻击（通规 4.5 ZOC 投射三条件之一） */
   attackCapable?: boolean
-  /** 是否处于战斗模式（4.5；由 modes.exertsZoc 裁定后传入，勿传原始模式字段） */
+  /** 是否处于战斗模式（通规 4.5；由 modes.exertsZoc 裁定后传入，勿传原始模式字段） */
   inCombatMode?: boolean
-  /** 是否有追溯补给（4.5：断补单位不投射 ZOC）；缺省视为 true */
+  /** 是否有追溯补给（通规 4.5：断补单位不投射 ZOC）；缺省视为 true */
   hasTraceSupply?: boolean
 }
 
@@ -168,7 +168,7 @@ export interface ThrowHqView {
   mobility: SupplyMobility
   /** 印值投递距离（MP，12.3b） */
   throwRangeMp: number
-  /** 投递距离的颜色所示机动类型（3.1a/12.3b） */
+  /** 投递距离的颜色所示机动类型（通规 3.1a/12.3b） */
   throwMobility: SupplyMobility
   /** 该 HQ 是否由别的 HQ 投递获得补给（12.3b-D：不可转投） */
   receivedByThrow?: boolean
@@ -186,7 +186,7 @@ export interface TraceSupplyFactsSource {
   throwHqs?: readonly ThrowHqView[]
   /** 含 SP 的格（dump，12.1b） */
   dumps?: readonly { hex: HexRef; side: Side }[]
-  /** 单位视图（4.5b 抵消、12.3d 敌方战斗单位阻断、ZOC 投射） */
+  /** 单位视图（通规 4.5b 抵消、12.3d 敌方战斗单位阻断、ZOC 投射） */
   units?: readonly TraceSupplyUnitView[]
 }
 
@@ -209,7 +209,7 @@ export interface TraceSupplyFacts {
   dumpsFor(side: Side): readonly HexRef[]
   /** 12.3d：该格是否有**敌方战斗单位**（阻断一切路径，也使该格不能作源） */
   hasEnemyCombatUnit(hex: HexRef, side: Side): boolean
-  /** 12.3d/4.5b：该格是否处于**未被抵消**的敌方 ZOC（阻挡卡车 MP 路径的进入与离开） */
+  /** 12.3d/ 通规 4.5b：该格是否处于**未被抵消**的敌方 ZOC（阻挡卡车 MP 路径的进入与离开） */
   inEnemyZoc(hex: HexRef, side: Side): boolean
   /** 12.3d：正常地形成本下的一步 MP（含 6.2a 道路优先）；不可通行 → null */
   stepCost(from: HexRef, to: HexRef, mobility: SupplyMobility): number | null
@@ -273,9 +273,9 @@ function supplyStepCost(
 /**
  * 由原始素材建事实（默认地图取 map-layers.json）
  *
- * ZOC 投射与 4.5b 抵消一律交给现有 zoc.ts，避免两处判据漂移：
- *   - 投射 = 可攻击 ∧ 战斗模式 ∧ 非断补（4.5）；
- *   - 抵消 = 格内有己方战斗单位（不论模式，4.5b）。
+ * ZOC 投射与 通规 4.5b 抵消一律交给现有 zoc.ts，避免两处判据漂移：
+ *   - 投射 = 可攻击 ∧ 战斗模式 ∧ 非断补（通规 4.5）；
+ *   - 抵消 = 格内有己方战斗单位（不论模式，通规 4.5b）。
  */
 export function createTraceSupplyFacts(source: TraceSupplyFactsSource = {}): TraceSupplyFacts {
   const map = createMapFacts(source.map)
@@ -353,7 +353,7 @@ export function createTraceSupplyFacts(source: TraceSupplyFactsSource = {}): Tra
       return sides !== undefined && sides.some((item) => item !== side)
     },
     inEnemyZoc: (hex, side) => {
-      // 4.5b：格内有己方战斗单位即抵消（不论该单位是否投射 ZOC、是否处于战斗模式）
+      // 通规 4.5b：格内有己方战斗单位即抵消（不论该单位是否投射 ZOC、是否处于战斗模式）
       const id = hexId(hex)
       const friendlies = combatByHex.get(id)
       if (friendlies !== undefined && friendlies.includes(side)) return false
@@ -1583,7 +1583,7 @@ export interface UnitSupplyAssessment {
   unitId: string
   /** 12.0：是否需要追溯补给（只有战斗单位需要） */
   required: boolean
-  /** 3.2：该单位的团级当量（12.6c 的批量费率按 RE 合计取整，故结论里带上它） */
+  /** 通规 3.2：该单位的团级当量（12.6c 的批量费率按 RE 合计取整，故结论里带上它） */
   re: number
   trace: TraceVerdict
   /** 12.6c：trace 失败时能否改吃图上补给 */
@@ -1715,7 +1715,7 @@ export function planOutOfSupply(input: {
   return { rule: '12.6d', mark, clear }
 }
 
-/* ────────────────────────────── 5.8b 桥接（供 MoveContext.traceSupplyAt） ────────────────────────────── */
+/* ────────────────────────────── 通规 5.8b 桥接（供 MoveContext.traceSupplyAt） ────────────────────────────── */
 
 /**
  * 覆盖集的**成员判定**
@@ -1727,7 +1727,7 @@ export function traceCoverageHas(coverage: ReadonlySet<string>, hex: HexRef): bo
 }
 
 /**
- * 生成 `MoveContext.traceSupplyAt` 回调（5.8b/12.6e：战略模式单位须在有追溯补给的格结束移动）
+ * 生成 `MoveContext.traceSupplyAt` 回调（通规 5.8b/12.6e：战略模式单位须在有追溯补给的格结束移动）
  *
  * 该钩子只带 `(hex, side)`，不含单位，故机动类型由调用方按方指定
  * （12.3a：计数默认用轮式 MP，故缺省 `truck`）。

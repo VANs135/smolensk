@@ -1,7 +1,7 @@
 /**
- * 4.5a / 9.12e：按动作解释同一个敌方ZOC，禁止把抵消结果通用到所有操作。
+ * 通规 4.5a / 9.12e：按动作解释同一个敌方ZOC，禁止把抵消结果通用到所有操作。
  *
- * 4.5c「ZOC 与撤退」原文只有一句「见 9.12e」⇒ 本条由下表 `retreat` 项承载，不另立判据。
+ * 通规 4.5c「ZOC 与撤退」原文只有一句「见 9.12e」⇒ 本条由下表 `retreat` 项承载，不另立判据。
  */
 export const ZOC_ACTION_POLICIES = {
   truckMovement: { negatable: true, rule: '4.5a-A' },

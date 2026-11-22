@@ -15,17 +15,17 @@ import { isEntryLShutDown, isRailCapBoosted, isSouthSourcesShutDown } from './ti
  * 专规时点与补给源状态（Smolensk 专规 1.2 / 1.5 / 1.6c / 2.1a / 2.3c / 2.3e / 2.4 / 3.3c / 3.4 / 3.6 / 5.0b）
  *
  * ## 条文依据（逐条给出）
- *   - **1.2 铁路容量**：苏 2→3、轴 0→1，提升日 **19 July**（含勘误：剧本 3/5/7 初值已为 1）；
- *   - **2.1a 补给源关闭**：**Entry L 于 19 July**；**Entry E 及以西所有南缘源于 19 August** 永久关闭；
- *   - **1.6c 特殊补员**：**19 August 起停止**；
- *   - **3.3c 可变撤离**：**19 August 起**每个轴方增援阶段掷；
- *   - **3.6 随机事件**：**19 July – 15 August（含）**每个轴方增援阶段掷；
- *   - **3.4 装甲集群约束**：**19 August 前**生效（含 3.4a/3.4b）；
- *   - **2.3e 苏军作战限制**：**8 月 1 日回合之前**不得用战略模式、不得修环形工事；
- *   - **2.3c 方面军预备队**：**22 July / 1 Aug / 1 Sep** 三批，必须当即领取；
- *   - **2.4 慢动员**：解锁日 **12 / 15 / 19 / 22 July**（表 2-2）；
- *   - **5.0b 提前决胜检查**：**19 August 起**；
- *   - **1.5 天气**：每回合 Pre-Turn 掷（首回合按剧本指定）。
+ *   - **专规 1.2 铁路容量**：苏 2→3、轴 0→1，提升日 **19 July**（含勘误：剧本 3/5/7 初值已为 1）；
+ *   - **专规 2.1a 补给源关闭**：**Entry L 于 19 July**；**Entry E 及以西所有南缘源于 19 August** 永久关闭；
+ *   - **专规 1.6c 特殊补员**：**19 August 起停止**；
+ *   - **专规 3.3c 可变撤离**：**19 August 起**每个轴方增援阶段掷；
+ *   - **专规 3.6 随机事件**：**19 July – 15 August（含）**每个轴方增援阶段掷；
+ *   - **专规 3.4 装甲集群约束**：**19 August 前**生效（含 3.4a/3.4b）；
+ *   - **专规 2.3e 苏军作战限制**：**8 月 1 日回合之前**不得用战略模式、不得修环形工事；
+ *   - **专规 2.3c 方面军预备队**：**22 July / 1 Aug / 1 Sep** 三批，必须当即领取；
+ *   - **专规 2.4 慢动员**：解锁日 **12 / 15 / 19 / 22 July**（表 2-2）；
+ *   - **专规 5.0b 提前决胜检查**：**19 August 起**；
+ *   - **专规 1.5 天气**：每回合 Pre-Turn 掷（首回合按剧本指定）。
  *
  * ## 设计口径
  *   - 本模块把「什么时候发生什么」集中成**一张日历**，供界面提示与集成测试对账；
@@ -54,7 +54,7 @@ export interface ExclusiveTimingEntry {
   detail: string
 }
 
-/** 1.2 / 1.6c / 2.1a / 2.3c / 2.3e / 2.4 / 3.3c / 3.4 / 3.6 / 5.0b：专规时点日历 */
+/** 专规 1.2 / 专规 1.6c / 专规 2.1a / 专规 2.3c / 专规 2.3e / 2.4 / 专规 3.3c / 专规 3.4 / 3.6 / 专规 5.0b：专规时点日历 */
 export function exclusiveTimingCalendar(): readonly ExclusiveTimingEntry[] {
   const smolensk = rulesConstants.smolensk
   const entries: ExclusiveTimingEntry[] = [
@@ -148,7 +148,7 @@ export function timingsOn(date: string): readonly ExclusiveTimingEntry[] {
   return exclusiveTimingCalendar().filter((entry) => entry.date === date)
 }
 
-/* ────────────────────────────── 补给源状态（2.1a / 3.1） ────────────────────────────── */
+/* ────────────────────────────── 补给源状态（专规 2.1a / 3.1） ────────────────────────────── */
 
 /** 补给源关闭的判据事实（地图事实由调用方注入） */
 export interface SupplyShutdownFacts {
@@ -193,11 +193,11 @@ export function isWestOfEntryE(hex: HexRef, facts: SupplyShutdownFacts): boolean
 }
 
 /**
- * 2.1a：逐条给出补给源当日是否仍开放
+ * 专规 2.1a：逐条给出补给源当日是否仍开放
  *
  * - **Entry L 于 19 July 关闭**；
  * - **Entry E 及以西所有南缘源于 19 August 关闭**；
- * - 本作 2.1a 只约束**苏方**（轴方补给源在 3.1 里没有对应的关闭条款）。
+ * - 本作 专规 2.1a 只约束**苏方**（轴方补给源在 3.1 里没有对应的关闭条款）。
  */
 export function supplySourceStatuses(input: {
   side: Side
@@ -249,7 +249,7 @@ export function supplySourceStatuses(input: {
   })
 }
 
-/** 2.1a：当日仍开放的补给源 */
+/** 专规 2.1a：当日仍开放的补给源 */
 export function openSupplySources(input: {
   side: Side
   date: string
@@ -281,7 +281,7 @@ export interface RailEntrySupplySourcesInput {
  * 故判据不另立字母清单：凡本方字母入场格里**有铁路边**的格，天然就是本方补给源；
  * 剧本 `supplySources` 里列出的非入场格源（如 `42.35`、`4.00`）作为「其它源」并入。
  *
- * - 关闭日期照旧生效（2.1a `cease to exist`）：`Entry L` 19 July、`Entry E` 及以西的南缘源 19 August；
+ * - 关闭日期照旧生效（专规 2.1a `cease to exist`）：`Entry L` 19 July、`Entry E` 及以西的南缘源 19 August；
  * - **关闭不转归对方**：只按本方名单过滤，轴方名单里永远不会因苏方 L 关闭而多出 L（除非剧本明确写
  *   轴方从该格入场，此时该格会经轴方的入场格判据进入轴方名单，而不是靠「转归」）。
  * - 输出顺序：先剧本其它源（保持既有顺序，避免扰动既有 BFS 种子顺序），再补入场铁路格。
@@ -309,7 +309,7 @@ export function railEntrySupplySources(input: RailEntrySupplySourcesInput): HexR
     .map((status) => ({ ...status.hex }))
 }
 
-/** 1.2：当日铁路容量（轴/苏）——汇总入口，值取自 rules-constants */
+/** 专规 1.2：当日铁路容量（轴/苏）——汇总入口，值取自 rules-constants */
 export function railCapacitiesOn(date: string): { axis: number; soviet: number } {
   const table = isRailCapBoosted(date)
     ? rulesConstants.smolensk.railCapAfter
@@ -318,7 +318,7 @@ export function railCapacitiesOn(date: string): { axis: number; soviet: number }
 }
 
 /**
- * 1.8a：拆解单位（拆分团）的算子上限
+ * 专规 1.8a：拆解单位（拆分团）的算子上限
  *
  * 产品数据（工程库 rules.json → counter_limits）：
  *   轴「28x AR4 + 2x AR5 regiments」、苏「6x AR2 + 2x AR3 regiments」。
@@ -329,26 +329,26 @@ export interface BreakdownPoolEntry {
   count: number
 }
 
-/** 1.8a：某方的拆分单位池上限（按 AR 分档） */
+/** 专规 1.8a：某方的拆分单位池上限（按 AR 分档） */
 export function breakdownPoolLimits(side: Side): readonly BreakdownPoolEntry[] {
   return side === 'axis'
     ? rulesConstants.smolensk.counterLimits.axisBreakdown
     : rulesConstants.smolensk.counterLimits.sovietBreakdown
 }
 
-/** 1.8a：某方拆分单位池的**总存量**（各 AR 档之和） */
+/** 专规 1.8a：某方拆分单位池的**总存量**（各 AR 档之和） */
 export function breakdownPoolTotal(side: Side): number {
   return breakdownPoolLimits(side).reduce((sum, entry) => sum + entry.count, 0)
 }
 
 /**
- * 3.5 说明：建造标记的初始枚数**不由本模块给出**
+ * 专规 3.5 说明：建造标记的初始枚数**不由本模块给出**
  *
- * 3.5 的初设枚数是**剧本数据**（`scenarios.setup.constructionMarkers`：剧本 1/2 = 3、其余 = 0），
+ * 专规 3.5 的初设枚数是**剧本数据**（`scenarios.setup.constructionMarkers`：剧本 1/2 = 3、其余 = 0），
  * 按「剧本 > 专规」的层级由剧本层落值，避免在此另立一处判据。
  */
 
-/** 5.0b：该日是否需要进行提前决胜检查 */
+/** 专规 5.0b：该日是否需要进行提前决胜检查 */
 export function earlyDecisionCheckDue(date: string): boolean {
   return date >= rulesConstants.smolensk.earlyDecisionStart
 }

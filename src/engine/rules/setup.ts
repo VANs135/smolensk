@@ -22,8 +22,8 @@ import { scenarioTurnRange } from './victory'
 
 /**
  * 条文索引（本文件与本仓库实现的对应）
- *   通规：12.1d / 3.4b / 3.6 / 9.14b / 13.2h / 13.5 / 14.1a
- *   专规：专规 Setup Notes A/C；1.4a 飞机与基地同格
+ *   通规：12.1d / 专规 3.4b / 3.6 / 9.14b / 13.2h / 13.5 / 14.1a
+ *   专规：Setup Notes A/C；1.4a 飞机与基地同格
  */
 
 /** 剧本ch10/ch11：已有编队的必做西移不能按未摆新单位的放弃规则收束。 */
@@ -49,7 +49,7 @@ export function validateRequiredSetupPlacements(
  *       本模块只把「抽中后的处置」（西移 / Move Mode / Mtr↔Aufk / Krd·Aufk 入死亡堆）
  *       译成落盘参数（`face: 'move'`、死亡堆投放等），供状态层执行；
  *     · **卡车满载指定**：建制内卡车（organic truck）开局「满载 / 空载」由剧本页明示（Setup Note C）；
- *     · **SP 归属划分**：地图内 SP 的归属（12.1d）+ 轴方 SP 须归属某装甲集群（Setup Note F / 3.4b）；
+ *     · **SP 归属划分**：地图内 SP 的归属（12.1d）+ 轴方 SP 须归属某装甲集群（Setup Note F / 专规 3.4b）；
  *     · **自动初设**：按剧本页逐格清单把**战斗单位与非战斗单位**逐条落位（只按数据里的显式
  *       算子链接 `unitId` 落子，**不靠名字猜**）；
  *     · **玩家自定义初设**：剧本页留给玩家的自由项——「w/i X hexes（指定格若干格内）」
@@ -64,7 +64,7 @@ export function validateRequiredSetupPlacements(
  *     K（死亡堆与增援用索引卡）；
  *   - **专规 Setup Notes**：A（剧本指定首回合天气与布设/先动方）、C（剧本页说明卡车空/满）、
  *     D（`w/i X` 的多军力单位可部署拆分单位）、F（开局地图内 SP 须在初设期归属装甲集群）；
- *   - **12.1d**（SP 归属：谁带上图即谁拥有，缴获另按 9.14b）、**3.4b**（轴方 SP 均分与归属）、
+ *   - **12.1d**（SP 归属：谁带上图即谁拥有，缴获另按 9.14b）、**专规 3.4b**（轴方 SP 均分与归属）、
  *     **13.2h**（满载面记法「F」）、**14.1a**（飞机与空军基地同格、Active/Inactive 两态）、
  *     **13.5**（死亡堆）。
  *
@@ -98,12 +98,12 @@ export const ENTERABILITY_RULE = 'IV-I'
 export const AIR_BASE_SITE_RULE = '14.1a'
 /** 12.1d：SP 归属 */
 export const SP_OWNERSHIP_RULE = '12.1d'
-/** 3.4b + Setup Note F：轴方 SP 须归属装甲集群 */
+/** 专规 3.4b + Setup Note F：轴方 SP 须归属装甲集群 */
 export const PANZER_GROUP_SP_RULE = '3.4b'
 /** 13.2h：满载面记法 */
 export const TRUCK_LOAD_RULE = '13.2h'
 
-/** 装甲集群（3.4）：轴方 SP 归属的两选一 */
+/** 装甲集群（专规 3.4）：轴方 SP 归属的两选一 */
 export const SETUP_PANZER_GROUPS = ['guderian', 'hoth'] as const
 export type SetupPanzerGroup = (typeof SETUP_PANZER_GROUPS)[number]
 
@@ -134,7 +134,7 @@ export const SETUP_PLACEMENT_KINDS = [
   'airbaseFree',
   /** 空军机队：按空军基地部署，初设不标具体格（14.1a） */
   'airFleet',
-  /** 图外空军盒（1.4a）：剧本页明示飞机初设就在盒内，不占图上格 */
+  /** 图外空军盒（专规 1.4a）：剧本页明示飞机初设就在盒内，不占图上格 */
   'airBox',
   /** 未标位置 / 未识别文案 ⇒ 记缺口 */
   'unknown',
@@ -394,7 +394,7 @@ export function setupEntryViews(
  * 缺哪一项，就只报对应缺口（不代替玩家决定、也不臆造位置）。
  */
 export interface SetupCandidateFacts {
-  /** 本方 HQ 所在格（`Stacked with any … HQs` 的候选；4.8b D 的「指挥部」同义） */
+  /** 本方 HQ 所在格（`Stacked with any … HQs` 的候选；通规 4.8b D 的「指挥部」同义） */
   hqHexes?: readonly HexRef[]
   /** 本方空军基地格（14.1a：飞机算子停在其空军基地格） */
   airBaseHexes?: readonly HexRef[]
@@ -477,7 +477,7 @@ function filterEnterable(
  *
  * **逐棋子**判定（原文说的是"单位"）：条目里每一枚能落到盘上的地面棋子都要能进入；
  * 飞机按 14.1a 停机场，不吃 IV-I 的常规移动；计数类棋子（无 `unitId`）不判。
- * 只给一面机动类型（调用方按 3.1a 的**移动面**取）⇒ 所有棋子同面即同判。
+ * 只给一面机动类型（调用方按 通规 3.1a 的**移动面**取）⇒ 所有棋子同面即同判。
  */
 function canEnterForEntry(
   hex: HexRef,
@@ -502,7 +502,7 @@ export interface SetupPlacementRequest {
   /**
    * 专规 4.3（可选）B：额外允许的落点（1.Mot Div 的「18.17 一格内」）
    *
-   * 只有 4.3 启用且本条目是 1.Mot Div 时调用方才传；**不传＝原候选范围**。
+   * 只有 专规 4.3 启用且本条目是 1.Mot Div 时调用方才传；**不传＝原候选范围**。
    * 仍要过 IV-I（在地图上 / 可进入）与 IV-F（堆叠）两关，放宽的只是「格范围」。
    */
   extraCandidates?: readonly HexRef[]
@@ -545,7 +545,7 @@ function reOfEntry(entry: SetupEntryView): number {
  * 逐条对照：
  *   · **IV-A**：目标格须在候选集内（`w/i X` 含边界，† 容差同理）；
  *   · **IV-I**：须在地图上，且（若调用方给了 `canEnter`）可按常规移动进入；
- *   · **IV-F**：不得超堆叠（若调用方给了 `existingRe`；上限取 4.8 的 10 RE）。
+ *   · **IV-F**：不得超堆叠（若调用方给了 `existingRe`；上限取 通规 4.8 的 10 RE）。
  */
 export function planSetupPlacement(
   request: SetupPlacementRequest,
@@ -578,7 +578,7 @@ export function planSetupPlacement(
   if (viaWiggle) {
     /*
      * 专规 4.3（可选）B：1.Mot Div 放宽到「18.17 一格内」——
-     * 只有调用方传了 `extraCandidates`（＝4.3 启用且本条目是 1.Mot Div）才走这一支；
+     * 只有调用方传了 `extraCandidates`（＝ 专规 4.3 启用且本条目是 1.Mot Div）才走这一支；
      * 未传时与修前完全一致（直接按原范围拒）。
      */
     const extra = request.extraCandidates ?? []
@@ -816,7 +816,7 @@ export function planAutoSetup(input: {
       continue
     }
 
-    // 图外空军盒（1.4a）：飞机落盒由 planAirSetup 负责，这里不产生图上棋子/候选
+    // 图外空军盒（专规 1.4a）：飞机落盒由 planAirSetup 负责，这里不产生图上棋子/候选
     if (entry.placement === 'airBox') continue
 
     // ② 自由项（`w/i X` / 任一指挥部 / 任意空军基地）⇒ 交玩家定夺，候选格一并给出
@@ -1076,7 +1076,7 @@ export interface SupplyOwnershipRequest {
   /** 轴方 dump → 装甲集群（Setup Note F：分界线仅作参考，归属由玩家自定） */
   assignments?: Readonly<Record<string, SetupPanzerGroup>>
   /**
-   * 4.1a 可选：本局共识是否采纳了 3.4b 的约束（**必填**；判据见 `panzerGroupRulesActive`）
+   * 专规 4.1a 可选：本局共识是否采纳了 3.4b 的约束（**必填**；判据见 `panzerGroupRulesActive`）
    *
    * 用户 2026-09-17 口径：未采纳 ⇒ 初设**不要求**逐一点名装甲集群（也不填默认归属）。
    */
@@ -1096,16 +1096,16 @@ export interface SupplyOwnershipEntry {
 export interface SupplyOwnershipPlan {
   rule: string
   entries: readonly SupplyOwnershipEntry[]
-  /** 本剧本是否适用 3.4b 的「SP 须归属装甲集群」 */
+  /** 本剧本是否适用 专规 3.4b 的「SP 须归属装甲集群」 */
   requiresPanzerGroup: boolean
   detail: string
 }
 
 /**
- * 该剧本首回合日期（ISO；取自回合轨）——3.4b 的时点判据用它
+ * 该剧本首回合日期（ISO；取自回合轨）—— 专规 3.4b 的时点判据用它
  *
- * 3.4b 原文：`At the start of a scenario, SP must be divided per Setup Note 'F' (p. 5).`
- * 而 3.4/3.4a 的约束在 19 August 起失效（`rules-constants.panzerGroupConstraintEnd`）。
+ * 专规 3.4b 原文：`At the start of a scenario, SP must be divided per Setup Note 'F' (p. 5).`
+ * 而 专规 3.4/3.4a 的约束在 19 August 起失效（`rules-constants.panzerGroupConstraintEnd`）。
  */
 export function scenarioFirstTurnDate(scenarioId: string): string | null {
   const range = scenarioTurnRange(scenarioId)
@@ -1126,20 +1126,20 @@ export function requiresPanzerGroupSpAssignment(scenarioId: string): boolean {
 }
 
 /**
- * SP 归属划分（12.1d + Setup Note F + 3.4b）
+ * SP 归属划分（12.1d + Setup Note F + 专规 3.4b）
  *
  * 规则原文：
  *   · **12.1d**：`The generic SP counters are common to both players, so it is important that players
  *     keep track of who owns what. An SP belongs to (and can only be used by) the player who brought
  *     it onto the map unless it has been captured (see 9.14b).` ⇒ 初设期**归属＝带上图的一方**；
- *   · **Setup Note F**：`When using 3.4b (part of "Guderian & Hoth"), on-map SP should be assigned to
+ *   · **Setup Note F**：`When using 专规 3.4b (part of "Guderian & Hoth"), on-map SP should be assigned to
  *     a Pz Grp during setup. Use the Dividing Line as a guide, but the player can freely decide
  *     ownership of dumps.`；
- *   · **3.4b**：`At the start of a scenario, SP must be divided per Setup Note 'F' (p. 5).`，
+ *   · **专规 3.4b**：`At the start of a scenario, SP must be divided per Setup Note 'F' (p. 5).`，
  *     且「来自『错误』装甲集群的 SP 不能用于多单位编队的燃料/战斗/轰炸费用」。
  *
- * ⇒ 本模块只做**归属登记与归属完备性校验**：轴方地图内 dump 在适用 3.4b 的剧本里必须逐一点名装甲集群，
- *   未点名即拒绝（`spOwnershipMissing:<id>`）；苏方无需装甲集群（3.4b 只约束轴方）。
+ * ⇒ 本模块只做**归属登记与归属完备性校验**：轴方地图内 dump 在适用 专规 3.4b 的剧本里必须逐一点名装甲集群，
+ *   未点名即拒绝（`spOwnershipMissing:<id>`）；苏方无需装甲集群（专规 3.4b 只约束轴方）。
  */
 export function planSupplyOwnership(
   request: SupplyOwnershipRequest,
@@ -1148,7 +1148,7 @@ export function planSupplyOwnership(
   if (scenario === undefined)
     return fail(SP_OWNERSHIP_RULE, `scenarioNotFound:${request.scenarioId}`)
 
-  // 3.4b 生效＝**剧本适用**（首回合早于 19 August）**且**共识采纳了 4.1a 这个可选项
+  // 专规 3.4b 生效＝**剧本适用**（首回合早于 19 August）**且**共识采纳了 4.1a 这个可选项
   const requires = panzerGroupRulesActive({
     constraintApplies: requiresPanzerGroupSpAssignment(request.scenarioId),
     agreedByConsensus: request.agreedByConsensus,
@@ -1490,7 +1490,7 @@ export function setupFlowFor(scenarioId: string): readonly SetupFlowStep[] {
       id: 'spOwnership',
       label: 'SP 归属划分',
       rule: SP_OWNERSHIP_RULE,
-      // 剧本页明示不走 3.4 的剧本（Intro）不显示该步；其余剧本保持既有行为
+      // 剧本页明示不走 专规 3.4 的剧本（Intro）不显示该步；其余剧本保持既有行为
       applicable: scenario?.setup.panzerGroupSpAssignment !== false,
       detail: requiresGroup
         ? `轴方地图内 SP 须逐一点名装甲集群（Setup Note F / ${PANZER_GROUP_SP_RULE}）；苏方按 ${SP_OWNERSHIP_RULE} 归带上图的一方`

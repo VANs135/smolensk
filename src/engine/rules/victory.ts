@@ -14,19 +14,19 @@ import { earlyDecisionCheckDue } from './exclusive-timing'
  * 胜利判定（Smolensk 专规 5.0 / 5.0a / 5.0b / 5.0c）
  *
  * ## 条文原文
- *   - **5.0a Final Victory Assessment**（表 4-1）：「**最终回合结束时**，按特定城市与 5.0c 所列格的
+ *   - **专规 5.0a Final Victory Assessment**（表 4-1）：「**最终回合结束时**，按特定城市与 5.0c 所列格的
  *     控制判定。**苏联胜** = 控制 **Vyazma、Rzhev** 且控制所列格中**至少 7 个**；
  *     **轴心胜** = 控制 **Smolensk、Vitebsk、Orsha、Mogilev、Bobruysk 的全部格** 且控制所列格中
  *     **至少 6 个**；**否则 Draw**。」
- *   - **5.0b Early Decision Check**：「**任何回合开始**（**19 August 或之后**），若有一方达成
+ *   - **专规 5.0b Early Decision Check**：「**任何回合开始**（**19 August 或之后**），若有一方达成
  *     Decisive Win 条件则游戏结束。**苏 Decisive** = Vyazma、Rzhev + 至少 **9** 个所列格；
  *     **轴 Decisive** = 上述五城全部格 + 至少 **8** 个所列格。」
- *   - **5.0c Victory Locations and Control**：「**控制** = 该格有一个 **Attack-Capable** 单位；
+ *   - **专规 5.0c Victory Locations and Control**：「**控制** = 该格有一个 **Attack-Capable** 单位；
  *     若该格为空，则由**最后一个**曾在该格的单位所属方控制。」所列格清单（表 4-2，11 处）见
  *     `map-config.json → victoryLocations`。
  *   - **剧本 2 与 4 的明文例外**（表 4-2b / 技能 ch11 参考表）：改用
  *     「苏 ≥6 所列格 / 轴五城全部格 + ≥7 所列格」；且其 **listed hexes 清单不同** ——
- *     以 **Krichev 27.05、Demidov 32.25** 取代 5.0c 的 **Pusii 48.25、Spas Demyansk 52.09**，
+ *     以 **Krichev 27.05、Demidov 32.25** 取代 专规 5.0c 的 **Pusii 48.25、Spas Demyansk 52.09**，
  *     其余 9 项相同（见 `scenarios.json → victory.scenario2HexList`）。
  *
  * ## 数据来源与口径
@@ -38,7 +38,7 @@ import { earlyDecisionCheckDue } from './exclusive-timing'
  *     `major_city_victory_condition`（= 2.2 Bobruysk / 15.10 Mogilev / 18.18 Orsha /
  *     19.27+19.28 Vitebsk / 34.17+34.18 Smolensk）与 `victory_objective`（= 56.20 Vyazma /
  *     60.34 Rzhev）。**城市可能跨多格**（Vitebsk、Smolensk 各 2 格），故「控制该城」=
- *     **其全部格**都被该方控制（5.0a 原文 all hexes of…）。
+ *     **其全部格**都被该方控制（专规 5.0a 原文 all hexes of…）。
  *   - 本模块**不持盘面状态**：控制事实由调用方以 `controlOf(hex)` 注入（引擎不写状态）。
  */
 
@@ -46,11 +46,11 @@ import { earlyDecisionCheckDue } from './exclusive-timing'
  * 胜利条件的编号空间提醒（任务 #6「撞号隔离」）
  *
  * 这四个号是 **Smolensk 专规 v1.1** 的 5.0 段（`5.0 Victory Conditions` /
- * `5.0a Final Victory Assessment` / `5.0c Victory Locations and Control`），
+ * ` 专规 5.0a Final Victory Assessment` / `5.0c Victory Locations and Control`），
  * 源文件 `…\raw_text\专规及表格__Smolensk_Rules_v1.1.txt`。
  *
  * ★ **通规 OCS v4.3 的 5.0 是「模式」章**（`_ocs_v43_clean.txt:682`），与胜利无关。
- *   ⇒ 只用「5.0a」检索会把胜利条件误指到模式章；追溯时必须带「专规」限定。
+ *   ⇒ 只用「专规 5.0a」检索会把胜利条件误指到模式章；追溯时必须带「专规」限定。
  */
 /** 胜利条件总规则依据 */
 export const VICTORY_RULE = '5.0'
@@ -64,7 +64,7 @@ export const CONTROL_RULE = '5.0c'
 /**
  * 入门剧本 `Intro: Vitebsk` 的剧本标识
  *
- * 剧本页只给一个玩家回合与两条结果：Major Victory / 轴方失败；不走 5.0a/5.0b 的阈值。
+ * 剧本页只给一个玩家回合与两条结果：Major Victory / 轴方失败；不走 专规 5.0a/5.0b 的阈值。
  */
 export const INTRO_SCENARIO_ID = 'Intro'
 
@@ -77,7 +77,7 @@ function isIntroScenario(scenarioId: string): boolean {
 }
 
 /**
- * `map-layers.json` 的城市角色（5.0c 的两组胜利城市）
+ * `map-layers.json` 的城市角色（专规 5.0c 的两组胜利城市）
  *
  * 产品数据用 `city.role` 把「剧本胜利条件涉及的格」与「地形等级」分开记录
  * （工程库 `city_model.role_vs_terrain`：两者**不得互推**），本模块只读角色、不读等级。
@@ -94,12 +94,12 @@ export class VictoryDataError extends Error {
   }
 }
 
-/* ────────────────────────────── 5.0c：控制判定 ────────────────────────────── */
+/* ────────────────────────────── 专规 5.0c：控制判定 ────────────────────────────── */
 
 /**
- * 5.0c：一格的控制事实（由调用方从盘面推出）
+ * 专规 5.0c：一格的控制事实（由调用方从盘面推出）
  *
- * - `attackCapableSide`：格内**可攻击单位**的归属方（14.4c / 3.1：有攻击值即可攻击）；
+ * - `attackCapableSide`：格内**可攻击单位**的归属方（14.4c / 通规 3.1：有攻击值即可攻击）；
  *   双方都有时由调用方裁定（本作同格异方单位不可能共存，故不在此判重）。
  * - `lastControllingSide`：该格**最后一个**曾有单位的所属方（空格时生效；格从未被占据则为 null）。
  */
@@ -109,7 +109,7 @@ export interface VictoryHexFacts {
   lastControllingSide: Side | null
 }
 
-/** 5.0c：该格由谁控制（无可攻击单位 ⇒ 最后在场的方；从未被占据 ⇒ null＝无人控制） */
+/** 专规 5.0c：该格由谁控制（无可攻击单位 ⇒ 最后在场的方；从未被占据 ⇒ null＝无人控制） */
 export function controlOfHex(facts: VictoryHexFacts): Side | null {
   return facts.attackCapableSide ?? facts.lastControllingSide
 }
@@ -137,7 +137,7 @@ export function parseVictoryHexText(text: string): HexRef | null {
   return { col: Number(match[1]), row: Number(match[2]) }
 }
 
-/** 通用清单（5.0c 表 4-2 的 11 处；产品数据 map-config.victoryLocations） */
+/** 通用清单（专规 5.0c 表 4-2 的 11 处；产品数据 map-config.victoryLocations） */
 function standardListedHexes(): readonly HexRef[] {
   return (mapConfig.victoryLocations ?? []).map((hex) => ({ col: hex.col, row: hex.row }))
 }
@@ -155,10 +155,10 @@ function scenario2ListedHexes(): readonly HexRef[] {
 }
 
 /**
- * 5.0c / 剧本 2·4：本剧本的**所列格清单**（11 处）
+ * 专规 5.0c / 剧本 2·4：本剧本的**所列格清单**（11 处）
  *
  * 剧本 2/4 使用专属清单（Krichev 27.05、Demidov 32.25 取代 Pusii、Spas Demyansk），
- * 其余剧本使用 5.0c 通用清单；两套清单**各 11 格**，按剧本号选用。
+ * 其余剧本使用 专规 5.0c 通用清单；两套清单**各 11 格**，按剧本号选用。
  */
 export function listedVictoryHexes(scenarioId: string): readonly HexRef[] {
   return usesScenario2HexList(scenarioId) ? scenario2ListedHexes() : standardListedHexes()
@@ -198,13 +198,13 @@ export function axisVictoryCities(): readonly VictoryCityGroup[] {
   return cityGroupsWithRole(AXIS_VICTORY_CITY_ROLE)
 }
 
-/** 5.0a：苏方必须**全部格**控制的两城（Vyazma / Rzhev） */
+/** 专规 5.0a：苏方必须**全部格**控制的两城（Vyazma / Rzhev） */
 export function sovietVictoryCities(): readonly VictoryCityGroup[] {
   return cityGroupsWithRole(SOVIET_VICTORY_CITY_ROLE)
 }
 
 /**
- * 5.0c / 5.0a：**该剧本**所有胜利条件涉及的格（所列格 + 五城格 + 两城格；去重）
+ * 专规 5.0c / 5.0a：**该剧本**所有胜利条件涉及的格（所列格 + 五城格 + 两城格；去重）
  *
  * 所列格按剧本号取（剧本 2/4 用其专属清单，其余用通用清单）——播种与盘面更新都走这一份，
  * 否则剧本 2/4 的 Krichev 27.05、Demidov 32.25 永远无人控制、所列格计数恒少两格。
@@ -224,7 +224,7 @@ export function allVictoryConditionHexes(scenarioId: string): readonly HexRef[] 
   return result
 }
 
-/* ────────────────────────────── 阈值（5.0a / 5.0b / 剧本 2·4） ────────────────────────────── */
+/* ────────────────────────────── 阈值（专规 5.0a / 5.0b / 剧本 2·4） ────────────────────────────── */
 
 /** 一档阈值（数值唯一来源 rules-constants.smolensk.victory） */
 export interface VictoryTier {
@@ -239,14 +239,14 @@ export interface VictoryTier {
 /** 某剧本的阈值集合 */
 export interface VictoryThresholds {
   scenarioId: string
-  /** 5.0a 最终评估（必然存在） */
+  /** 专规 5.0a 最终评估（必然存在） */
   final: VictoryTier
   /**
-   * 5.0b 提前决胜（可能为 null）
+   * 专规 5.0b 提前决胜（可能为 null）
    *
-   * 规则书的表 4-1 与技能 ch11 参考表**只为剧本 1/3/5/6/7 列出 5.0b**；
-   * 剧本 2/4 是 5.0a 的**明文例外**（只给特例终局阈值），故此处为 null
-   * ——引擎不替其臆造提前决胜数值（且这两个剧本最迟回合为 1 Aug，早于 5.0b 的起始日）。
+   * 规则书的表 4-1 与技能 ch11 参考表**只为剧本 1/3/5/6/7 列出 专规 5.0b**；
+   * 剧本 2/4 是 专规 5.0a 的**明文例外**（只给特例终局阈值），故此处为 null
+   * ——引擎不替其臆造提前决胜数值（且这两个剧本最迟回合为 1 Aug，早于 专规 5.0b 的起始日）。
    */
   decisive: VictoryTier | null
 }
@@ -263,7 +263,7 @@ function tierFrom(data: {
   }
 }
 
-/** 5.0a / 5.0b / 剧本 2·4：本剧本的阈值（按数据里的适用剧本号选择） */
+/** 专规 5.0a / 5.0b / 剧本 2·4：本剧本的阈值（按数据里的适用剧本号选择） */
 export function victoryThresholdsFor(scenarioId: string): VictoryThresholds {
   const data = rulesConstants.smolensk.victory
   const final = tierFrom(data.final)
@@ -282,7 +282,7 @@ export function victoryThresholdsFor(scenarioId: string): VictoryThresholds {
   return {
     scenarioId,
     final,
-    // 5.0b 只列于 5.0a 标准剧本；未来若数据为某剧本单独加档，此处自然生效
+    // 专规 5.0b 只列于 5.0a 标准剧本；未来若数据为某剧本单独加档，此处自然生效
     decisive: decisiveAll.scenarios.includes(scenarioId) ? decisiveAll : null,
   }
 }
@@ -293,11 +293,11 @@ export function victoryThresholdsFor(scenarioId: string): VictoryThresholds {
 export interface CityControl {
   name: string
   hexes: readonly HexRef[]
-  /** 5.0a：该城**全部格**都被该方控制 */
+  /** 专规 5.0a：该城**全部格**都被该方控制 */
   held: boolean
 }
 
-/** 5.0c 的控制汇总（供判定与界面显示） */
+/** 专规 5.0c 的控制汇总（供判定与界面显示） */
 export interface VictoryControlSummary {
   scenarioId: string
   /** 所列格总数（11） */
@@ -308,13 +308,13 @@ export interface VictoryControlSummary {
   axisCities: readonly CityControl[]
   /** 苏方两城的逐城控制状态 */
   sovietCities: readonly CityControl[]
-  /** 五城是否全被轴方控制（5.0a / 5.0b 的轴方前置条件） */
+  /** 五城是否全被轴方控制（专规 5.0a / 5.0b 的轴方前置条件） */
   axisCitiesAllHeld: boolean
-  /** 两城是否全被苏方控制（5.0a / 5.0b 的苏方前置条件） */
+  /** 两城是否全被苏方控制（专规 5.0a / 5.0b 的苏方前置条件） */
   sovietCitiesAllHeld: boolean
 }
 
-/** 5.0c：汇总当前控制（所列格计数 + 两城/五城是否全格控制） */
+/** 专规 5.0c：汇总当前控制（所列格计数 + 两城/五城是否全格控制） */
 export function summarizeVictoryControl(input: {
   scenarioId: string
   controlOf: VictoryControlLookup
@@ -354,7 +354,7 @@ export type VictoryLevel = 'final' | 'decisive'
  * 判定结果
  *
  * - `axis` / `soviet`：该方胜（`level='final'`）或达成提前决胜（`level='decisive'`）；
- * - `draw`：双方条件都不满足（**只可能出现在最终评估**，5.0a 原文 else draw）；
+ * - `draw`：双方条件都不满足（**只可能出现在最终评估**，专规 5.0a 原文 else draw）；
  * - `ongoing`：本次检查不产生结论（未到末回合 / 未到 19 Aug / 本剧本无该档判定）。
  */
 export type VictoryOutcome = Side | 'draw' | 'ongoing'
@@ -396,9 +396,9 @@ function conditionsMet(
  * 满足条件时的胜方
  *
  * 「双方同时满足」**不可能出现**：所列格共 11 处、每格只归一方的控制，
- * 而两档阈值之和都大于 11（5.0a 7+6=13、5.0b 9+8=17），故苏方达标即轴方必然不达标。
+ * 而两档阈值之和都大于 11（专规 5.0a 7+6=13、5.0b 9+8=17），故苏方达标即轴方必然不达标。
  *
- * - **双方都不满足**：5.0a 明文「否则 Draw」⇒ `neitherIsDraw = true`；5.0b 是「达成即结束」的检查，
+ * - **双方都不满足**：专规 5.0a 明文「否则 Draw」⇒ `neitherIsDraw = true`；5.0b 是「达成即结束」的检查，
  *   未达成即**游戏继续** ⇒ `neitherIsDraw = false`（返回 `ongoing`）。
  */
 function outcomeOf(
@@ -466,13 +466,13 @@ function evaluateIntroVictory(input: {
 }
 
 /**
- * 5.0a：**最终评估**（最终回合结束时）
+ * 专规 5.0a：**最终评估**（最终回合结束时）
  *
  * 「苏胜 = Vyazma、Rzhev + ≥7 所列格；轴胜 = 五城全部格 + ≥6 所列格；否则 Draw。」
- * 双方同时满足（理论冲突）时按 Draw 处理并写进 detail —— 5.0a 只给「否则 Draw」，
+ * 双方同时满足（理论冲突）时按 Draw 处理并写进 detail —— 专规 5.0a 只给「否则 Draw」，
  * 未规定「两者皆满足」的取法，故不得替其臆造优先序。
  *
- * 入门剧本 `Intro: Vitebsk` 不适用 5.0a：按剧本页只判「两格维捷布斯克均轴控 = Major，否则轴方失败」。
+ * 入门剧本 `Intro: Vitebsk` 不适用 专规 5.0a：按剧本页只判「两格维捷布斯克均轴控 = Major，否则轴方失败」。
  */
 export function evaluateFinalVictory(input: {
   scenarioId: string
@@ -484,7 +484,7 @@ export function evaluateFinalVictory(input: {
   const thresholds = victoryThresholdsFor(input.scenarioId)
   const summary = summarizeVictoryControl(input)
   const met = conditionsMet(summary, thresholds.final)
-  // 5.0a：「否则 Draw」⇒ 双方都不满足时判 Draw（不同于 5.0b 的「未达成即继续」）
+  // 专规 5.0a：「否则 Draw」⇒ 双方都不满足时判 Draw（不同于 5.0b 的「未达成即继续」）
   const outcome = outcomeOf(met, true)
   return {
     level: 'final',
@@ -506,10 +506,10 @@ export function evaluateFinalVictory(input: {
 }
 
 /**
- * 5.0b：**提前决胜检查**（任一回合**开始**，19 August 或之后）
+ * 专规 5.0b：**提前决胜检查**（任一回合**开始**，19 August 或之后）
  *
- * 未到起始日、或本剧本无 5.0b 档（剧本 2/4）⇒ `ongoing`（不产生结论）。
- * 判断与 5.0a 并列：两者条件都在，只是阈值不同（苏 9 / 轴 8）。
+ * 未到起始日、或本剧本无 专规 5.0b 档（剧本 2/4）⇒ `ongoing`（不产生结论）。
+ * 判断与 专规 5.0a 并列：两者条件都在，只是阈值不同（苏 9 / 轴 8）。
  */
 export function evaluateDecisiveVictory(input: {
   scenarioId: string
@@ -518,7 +518,7 @@ export function evaluateDecisiveVictory(input: {
 }): VictoryAssessment {
   const summary = summarizeVictoryControl(input)
 
-  // 入门剧本只有一个玩家回合，剧本页未给 5.0b 档 ⇒ 不做提前决胜
+  // 入门剧本只有一个玩家回合，剧本页未给 专规 5.0b 档 ⇒ 不做提前决胜
   if (isIntroScenario(input.scenarioId)) {
     return {
       level: 'decisive',
@@ -559,7 +559,7 @@ export function evaluateDecisiveVictory(input: {
   }
 
   const met = conditionsMet(summary, tier)
-  // 5.0b 是「达成即结束」的检查：未达成的两方 ⇒ 游戏继续（不判 Draw）
+  // 专规 5.0b 是「达成即结束」的检查：未达成的两方 ⇒ 游戏继续（不判 Draw）
   const outcome = outcomeOf(met, false)
   return {
     level: 'decisive',
@@ -579,9 +579,9 @@ export function evaluateDecisiveVictory(input: {
   }
 }
 
-/* ────────────────────────────── 回合时点（5.0a / 5.0b） ────────────────────────────── */
+/* ────────────────────────────── 回合时点（专规 5.0a / 5.0b） ────────────────────────────── */
 
-/** 剧本的回合区间（末回合号驱动 5.0a 的检查时点） */
+/** 剧本的回合区间（末回合号驱动 专规 5.0a 的检查时点） */
 export interface ScenarioTurnRange {
   scenarioId: string
   /** 首回合号（由 firstTurn 文本对齐回合轨得出） */
@@ -651,21 +651,21 @@ export function scenarioTurnRange(scenarioId: string): ScenarioTurnRange {
   return { scenarioId, firstTurn, lastTurn, dataNote }
 }
 
-/** 剧本末回合号（5.0a 的检查时点） */
+/** 剧本末回合号（专规 5.0a 的检查时点） */
 export function scenarioLastTurn(scenarioId: string): number {
   return scenarioTurnRange(scenarioId).lastTurn
 }
 
-/** 是否为该剧本的**最终回合**（5.0a 的检查时点） */
+/** 是否为该剧本的**最终回合**（专规 5.0a 的检查时点） */
 export function isScenarioFinalTurn(scenarioId: string, turn: number): boolean {
   return turn >= scenarioLastTurn(scenarioId)
 }
 
 /**
- * 回合**开始**检查（5.0b）
+ * 回合**开始**检查（专规 5.0b）
  *
  * 「任何回合开始（19 August 或之后）」⇒ 未到末回合时唯一的判定入口；
- * 到末回合时仍可先做提前决胜（达成即提前结束），再做 5.0a。
+ * 到末回合时仍可先做提前决胜（达成即提前结束），再做 专规 5.0a。
  */
 export function checkTurnStartVictory(input: {
   scenarioId: string
@@ -676,9 +676,9 @@ export function checkTurnStartVictory(input: {
 }
 
 /**
- * 回合**结束**检查（5.0a）
+ * 回合**结束**检查（专规 5.0a）
  *
- * 只在最终回合结束时给出终局判定；未到末回合 ⇒ `ongoing`（5.0a 明文限定「最终回合结束时」）。
+ * 只在最终回合结束时给出终局判定；未到末回合 ⇒ `ongoing`（专规 5.0a 明文限定「最终回合结束时」）。
  */
 export function checkTurnEndVictory(input: {
   scenarioId: string

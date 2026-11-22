@@ -40,7 +40,7 @@ export * from './breakout'
 export * from './variable-exit'
 export * from './hedgehog'
 export * from './zoc'
-// 5.4a / 5.7：预备标记的计量单位（覆盖组）与校验时点
+// 通规 5.4a / 5.7：预备标记的计量单位（覆盖组）与校验时点
 export * from './reserve-markers'
 // W6 B18：到达、补员与编制调整
 export * from './arrival'
@@ -64,13 +64,13 @@ export * from './containers'
 export * from './setup-draw-progress'
 export * from './setup-obligations'
 export * from './normalize-supply-dumps'
-// W7 C17（B6）：SOP 环节链（2.2 段名原文里的子步）
+// W7 C17（B6）：SOP 环节链（通规 2.2 段名原文里的子步）
 export * from './sop-segments'
-// W7 C13：切方与信息展示纪律（4.9a 敌方堆叠可见性 / 4.8b 堆叠顺序 / 4.9b 参战公开数值 /
-// 4.9e 秘密掷骰 / 共识开关 → 信息纪律）
+// W7 C13：切方与信息展示纪律（通规 4.9a 敌方堆叠可见性 / 4.8b 堆叠顺序 / 4.9b 参战公开数值 /
+// 通规 4.9e 秘密掷骰 / 共识开关 → 信息纪律）
 export * from './fog'
 // W7 C14：初设与开局流程（通规 IV Set Up Notes / 专规 Setup Notes / 12.1d SP 归属 /
-// 3.4b 装甲集群 SP / 13.2h 卡车满载 / IV-E·14.1a 飞机初设）
+// 专规 3.4b 装甲集群 SP / 13.2h 卡车满载 / IV-E·14.1a 飞机初设）
 export * from './setup'
 // 专规 4.3（可选）Setup Wiggle：初设拆团与 1.Mot Div 落点放宽的判据常量
 export * from './setup-wiggle'

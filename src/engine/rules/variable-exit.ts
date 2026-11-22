@@ -39,7 +39,7 @@ export interface VariableExitResult {
 export const VARIABLE_EXIT_TABLE = rulesConstants.smolensk.variableExitTable
 
 /**
- * 战役称谓 → 单位库**编队代号**（3.3c 表值 ↔ `formations.json` 的 `code`）
+ * 战役称谓 → 单位库**编队代号**（专规 3.3c 表值 ↔ `formations.json` 的 `code`）
  *
  * 表值写的是战役称谓（`SS Reich` / `14 Mtr`），单位库里的 `formation` 是代号（`SS-R` / `14MTR`）；
  * 这里只做**精确查表**，不做模糊匹配——认不出就返回 `null`，由调用方记警告、不推进。

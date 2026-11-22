@@ -75,7 +75,7 @@ export const DUMP_DESTRUCTION_SEGMENTS: readonly GamePhase[] = [
  * 12.8c：取列用的行动值
  *
  * 「不要因单位处于 DG 模式而修正单位的 AR，但要按战略模式进行修正」——
- * 故 DG 一律**不加修正**；战略模式的 AR 按 0（5.8：战略模式行动值降为 0）。
+ * 故 DG 一律**不加修正**；战略模式的 AR 按 0（通规 5.8：战略模式行动值降为 0）。
  */
 export function attritionArOf(unit: { ar: number; mode: BaseMode }): number {
   return unit.mode === 'strat' ? 0 : unit.ar
@@ -199,7 +199,7 @@ export function automaticAttritionAllocation(
  *   只能每个补给站只能尝试销毁一次。」
  */
 export function canAttemptDumpDestruction(input: {
-  /** 当前 SOP 段（2.2：只有三个移动环节可尝试） */
+  /** 当前 SOP 段（通规 2.2：只有三个移动环节可尝试） */
   segment: GamePhase
   /** 本阶段已对该补给站尝试销毁的次数（0＝尚未尝试） */
   attemptsThisPhase?: number
@@ -304,7 +304,7 @@ export type { StockLevel }
  */
 export function internalStocksReplenishCost(input: {
   level: StockLevel
-  /** 团级当量（4.6） */
+  /** 团级当量（通规 4.6） */
   reSize: number
   /** 是否多军力单位（多军力按其 RE 计） */
   multiStep: boolean
@@ -455,11 +455,11 @@ export interface SupplyPhaseUnitView {
   hex: HexRef | null
   /** 是否战斗单位（12.0：只有战斗单位需要追溯补给与部队储备） */
   isCombat: boolean
-  /** 当前军力（3.2） */
+  /** 当前军力（通规 3.2） */
   steps: number
-  /** 团级当量（4.6） */
+  /** 团级当量（通规 4.6） */
   re: number
-  /** 印值行动值（3.2c） */
+  /** 印值行动值（通规 3.2c） */
   ar: number
   /** 模式（12.8c：战略模式取列时按 0） */
   mode: BaseMode
@@ -555,7 +555,7 @@ export interface SupplyPhasePlan {
 }
 
 /**
- * 补给阶段总计划（2.2 的 D 段；SP 分配顺序照 12.10e-A）
+ * 补给阶段总计划（通规 2.2 的 D 段；SP 分配顺序照 12.10e-A）
  *
  * 顺序：① 强制恢复部队储备（含「多军力按 RE」「不足则降级/浪费」）→ ② 判定追溯补给与吃图上补给
  * （12.6/12.6c）→ ③ 按剩余 T 分配吃图上补给 → ④ 置/除断补标记（12.6d，只有**真付得起**的才算免于断补）

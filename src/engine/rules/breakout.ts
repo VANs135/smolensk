@@ -29,7 +29,7 @@ import type { MobilityType } from './terrain'
  *     **再掷一次骰子**：从当前回合向后数掷骰结果的回合数，它会在未来的这个回合返回。返回时，单位**保留所有
  *     军力损失标记**，但会**失去所有其他标记**（弹药不足、DG 等）。」
  *
- * ## 时机（2.2 流程表）
+ * ## 时机（通规 2.2 流程表）
  * 突围是**移动阶段的首环节**：`C. 移动阶段 → 突围环节 → 移动环节 → 轰炸环节（仅飞机/舰船）`。
  * 故本模块只接受 `phase === 'movement'`；「处于突围环节」这一更细的时点由命令层掌握（SOP 槽位见 legality.ts）。
  *
@@ -72,7 +72,7 @@ export interface BreakoutPathFacts {
 /** 12.8e：突围单位的资格视图 */
 export interface BreakoutUnitView {
   id: string
-  /** 3.2：是否战斗单位（12.8e：「印刷的 MA 至少为 1 的**战斗单位**（**非战斗单位除外**）」） */
+  /** 通规 3.2：是否战斗单位（12.8e：「印刷的 MA 至少为 1 的**战斗单位**（**非战斗单位除外**）」） */
   isCombat: boolean
   /**
    * 13.2：是否为运输点数
@@ -82,7 +82,7 @@ export interface BreakoutUnitView {
    */
   isTransportPoint: boolean
   /**
-   * 3.1a：**移动模式下**的印刷 MA（12.8e：至少为 1）
+   * 通规 3.1a：**移动模式下**的印刷 MA（12.8e：至少为 1）
    *
    * 条文作「印刷的 MA 至少为 1」，未点明面；此处取**移动模式面**——与 12.8e-A「以该突围单位
    * **移动模式**的 MA 类型判断」同源，且该条要排除的本就是 MA 为 0 的不可移动单位。
@@ -117,11 +117,11 @@ export interface BreakoutEligibility {
 /**
  * 12.8e：能否尝试突围
  *
- * 判定次序照条文：① 时机（2.2：移动阶段的首环节）→ ② 无追溯补给 → ③ 战斗单位（首回合豁免时运输点数亦可）
+ * 判定次序照条文：① 时机（通规 2.2：移动阶段的首环节）→ ② 无追溯补给 → ③ 战斗单位（首回合豁免时运输点数亦可）
  * → ④ 印刷 MA ≥ 1 → ⑤ 首回合豁免（免除 A/B）否则查 A 与 B。
  */
 export function canBreakout(input: {
-  /** 2.2：突围是**移动阶段的首环节** */
+  /** 通规 2.2：突围是**移动阶段的首环节** */
   phase: GamePhase
   unit: BreakoutUnitView
   /**
@@ -137,7 +137,7 @@ export function canBreakout(input: {
 }): RuleOutcome<BreakoutEligibility> {
   const { unit } = input
 
-  // 2.2：突围是移动阶段的首环节
+  // 通规 2.2：突围是移动阶段的首环节
   if (input.phase !== 'movement') return fail('2.2', 'breakoutOnlyInMovementPhaseBreakoutSegment')
   // 12.8e：「任何当前**没有追溯补给**的……」——有追溯补给者无须（也无从）突围
   if (unit.hasTraceSupply) return fail('12.8e', `hasTraceSupply:${unit.id}`)
@@ -273,7 +273,7 @@ export interface BreakoutReturnResult {
  * @throws RangeError 骰值不是 1–6 的整数，或当前回合号不是 ≥1 的整数
  */
 export function resolveBreakoutReturn(input: {
-  /** 2.2 回合轨：当前回合号 */
+  /** 通规 2.2 回合轨：当前回合号 */
   currentTurn: number
   /** 12.8e：为每个成功单位再掷的骰（1d6） */
   returnDie: number
@@ -325,7 +325,7 @@ export function resolveBreakout(input: {
   die: number
   /** 12.8e：是否为断补首回合（+1 DRM） */
   firstTurnOutOfSupply: boolean
-  /** 2.2 回合轨：当前回合号（成功返场时用） */
+  /** 通规 2.2 回合轨：当前回合号（成功返场时用） */
   currentTurn: number
   /** 12.8e：成功者须再掷的返场骰（1d6）；未给则回 `pendingReturnDie` */
   returnDie?: number

@@ -31,7 +31,7 @@ import type { SupplyMobility } from './trace-supply'
  *   - **12.7c** 延补队可与其它延补队连接成**锁链**
  *   - **13.3c 火车卸货格**须同时满足：① 该格有村庄、城市（任意规模）、港口或**有工程能力的指挥部**
  *           （13.8a）；② 该格有一条由**铁路**构成的路径可延伸至一个补给源，且该路径上**没有敌方 ZOC**
- *           （判断与补给源是否连接时 EZOC **可以**按 4.5b 被抵消；但**运输货物时** EZOC 不可抵消——本模块
+ *           （判断与补给源是否连接时 EZOC **可以**按 通规 4.5b 被抵消；但**运输货物时** EZOC 不可抵消——本模块
  *           只判「与补给源是否连接」，故按可抵消处理）；③ 不命中三种阻断：敌方 ZOC 覆盖、敌方单位占据、
  *           铁路同格的城市/村镇（卸货格）被敌方占领。
  *           ★ 用户 2026-11-12 口径：**铁路没有归属、没有控制、没有占领**；13.3c 原文的「受控（13.3h）」
@@ -99,7 +99,7 @@ export interface RailSupplyFacts extends Pick<RailFacts, 'railGaugeUsable'> {
   /**
    * 13.3c③：该格是否有**未被抵消**的敌方 ZOC
    *
-   * 「判断与补给源是否连接时，EZOC 可以（按 4.5b）被抵消」⇒ 调用方须按「抵消后」的结果传入。
+   * 「判断与补给源是否连接时，EZOC 可以（按 通规 4.5b）被抵消」⇒ 调用方须按「抵消后」的结果传入。
    */
   inUnnegatedEnemyZoc(hex: HexRef, side: Side): boolean
   /** 12.6a①：地图边缘铁路格 / 专规补给源格（铁路路径的**起点**） */
@@ -156,7 +156,7 @@ export interface EngineerHqFacts {
   /** 战斗单位（指挥部在库内均为 `isCombat: true`） */
   isCombat: boolean
   /**
-   * 5.5b / 13.8a / 5.10e：模式状态（判据交给 `canEngineer`，不在这里另写一份）
+   * 通规 5.5b / 13.8a / 5.10e：模式状态（判据交给 `canEngineer`，不在这里另写一份）
    *
    * 13.8a 的例外（DG 但「朝向战斗面」）也只有 `canEngineer` 一处实现。
    */
@@ -166,10 +166,10 @@ export interface EngineerHqFacts {
 }
 
 /**
- * 13.3c①后半 / 13.8a / 5.5b：该格是否有 `side` 方**具工程能力的指挥部**
+ * 13.3c①后半 / 13.8a / 通规 5.5b：该格是否有 `side` 方**具工程能力的指挥部**
  *
  * 原文：13.3c「It has a village, city (any size), port, **or Engineer-Capable HQ (13.8a)**」；
- * 5.5b「Units must be in Combat Mode … to perform Engineering functions (13.8a)」；
+ * 通规 5.5b「Units must be in Combat Mode … to perform Engineering functions (13.8a)」；
  * 13.8 首段：只有**指挥部**与**工程兵(Engineer)** 可执行工程能力，Pioneer / 铁路修理 / 突击工兵**不算**。
  * ⇒ 本作没有 Engineer 类型算子，故判据＝同格 ∧ 本方 ∧ `specialized` 含 `'hq'` ∧ `mode === 'combat'`。
  */
@@ -212,7 +212,7 @@ export function railSupplyPath(
      * U17：**装车/运货**用的卸货格
      *
      * 同 13.3c 过滤、BFS 只走铁路边，**不接延补队**（延补队是补给线接续，不是货物可卸货的铁路）。
-     * 只给 2.1/3.1 的免费铁运消费方使用；补给追溯仍用缺省的 `facts.extenderLinks`。
+     * 只给 专规 2.1/3.1 的免费铁运消费方使用；补给追溯仍用缺省的 `facts.extenderLinks`。
      */
     cargoOnly?: boolean
   },
@@ -235,7 +235,7 @@ export function railSupplyPath(
     // 专规 1.2：轨距不可用的铁路格不得作为本条铁路路径的一部分
     if (!facts.railGaugeUsable(source, side)) continue
     // 13.3c③＋12.6b：源格自身在**未被抵消**的敌方 ZOC 内 ⇒ 路径起点即断；
-    // 4.5b 的抵消由调用方在 `inUnnegatedEnemyZoc` 内完成，本模块不另设口径。
+    // 通规 4.5b 的抵消由调用方在 `inUnnegatedEnemyZoc` 内完成，本模块不另设口径。
     if (facts.inUnnegatedEnemyZoc(source, side)) continue
     // 阻断②：源格被敌方单位占据
     if (facts.enemyOccupies(source, side)) continue

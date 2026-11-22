@@ -26,7 +26,7 @@ export interface AirCargoLoadView {
   /**
    * 13.2e：该货物是**运输点数**（卡车 / 马车 / 骡子 / 编内卡车）
    *
-   * 原文「运输点数可以被海运或铁路运输，**但不能被空运**」——13.2e 是 4.7c
+   * 原文「运输点数可以被海运或铁路运输，**但不能被空运**」——13.2e 是 通规 4.7c
    * 「运输点数……不能通过空运」的同义复述。运输点非战斗单位，14.9c 本已把它挡在外面，
    * 但那是**资格判据**（只运战斗单位），不是 13.2e 的禁令；本条单独判、单独给原因码。
    */
@@ -34,14 +34,14 @@ export interface AirCargoLoadView {
   t?: number
   re?: number
   mobility?: MobilityType
-  /** 移动面的印刷MA（4.7b / 14.9c），不能使用战斗面的MA。 */
+  /** 移动面的印刷MA（通规 4.7b / 14.9c），不能使用战斗面的MA。 */
   ma?: number
   side?: Side
   sourceHex?: HexRef
   isCombat?: boolean
 }
 
-/** 4.7a/b / 14.9a：单位与SP使用同一T计量；不在这里进行损失取整。 */
+/** 通规 4.7a/b / 14.9a：单位与SP使用同一T计量；不在这里进行损失取整。 */
 export function airCargoTransportT(cargo: AirCargoLoadView): number {
   if (cargo.kind === 'sp') return cargo.t ?? NaN
   if (cargo.mobility === undefined) return NaN
@@ -55,7 +55,7 @@ export function airCargoTransportT(cargo: AirCargoLoadView): number {
   )
 }
 
-/** 14.9c / 4.7：只判单位自身资格；归属、基地、模式和实际运力由各自入口核对。 */
+/** 14.9c / 通规 4.7：只判单位自身资格；归属、基地、模式和实际运力由各自入口核对。 */
 export function isAirTransportableUnit(item: AirCargoLoadView): boolean {
   // 13.2e：运输点数不能被空运（先排除，避免被 14.9c 的「非战斗单位」判据含糊带过）
   if (item.isTransportPoint === true) return false

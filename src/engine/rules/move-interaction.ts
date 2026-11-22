@@ -34,7 +34,7 @@ import {
 import { reserveQuarterMa } from './reserve-markers'
 
 /**
- * 移动交互（C5，OCS 6.0 / 6.1 / 6.3 / 4.5 / 5.4 / 12.5）——**纯函数状态机**
+ * 移动交互（C5，OCS 6.0 / 6.1 / 6.3 / 通规 4.5 / 5.4 / 12.5）——**纯函数状态机**
  *
  * 定位：把「玩家选单位/堆叠 → 看可到达范围 → 逐格点过去 → 不想走了就结束」这套交互
  * 里**所有需要按规则裁决的东西**集中到本模块，界面层只负责画图与收点击。
@@ -50,10 +50,10 @@ import { reserveQuarterMa } from './reserve-markers'
  *   - 6.1f   堆叠可一起开始移动，途中可把单位**留在经过的格中**从而离开堆叠；
  *           一旦离开堆叠，该单位不能再继续移动（即使还有剩余 MA）
  *   - 6.1g   一旦一个单位开始移动，就必须持续移动直到该单位移动结束
- *   - 4.5a-A 轮式单位进入未抵消的敌方 ZOC 后，必须就地结束移动或进行突袭
- *   - 4.5b   格内有友方战斗单位则抵消该格敌方 ZOC（但该单位本阶段起不能再消耗 MP）
- *   - 5.8a   战略模式单位不可进入敌方 ZOC（引擎直接拒绝，无需确认）
- *   - 5.4    主动模式切换只在本方移动阶段、且在**单位或堆叠开始移动时**进行；切换不消耗 MP
+ *   - 通规 4.5a-A 轮式单位进入未抵消的敌方 ZOC 后，必须就地结束移动或进行突袭
+ *   - 通规 4.5b   格内有友方战斗单位则抵消该格敌方 ZOC（但该单位本阶段起不能再消耗 MP）
+ *   - 通规 5.8a   战略模式单位不可进入敌方 ZOC（引擎直接拒绝，无需确认）
+ *   - 通规 5.4    主动模式切换只在本方移动阶段、且在**单位或堆叠开始移动时**进行；切换不消耗 MP
  *   - 12.5a  轮式/履带 MP 的战斗单位要消耗 MP 必须先付燃料
  *   - 12.5c  三种加油方法：编队法 1SP / HQ 法 1SP / 单单位法每单位 1T
  *   - 12.5e  HQ 法覆盖其投递距离内的所有独立单位（投递距离在移动开始前一次算定）
@@ -65,7 +65,7 @@ import { reserveQuarterMa } from './reserve-markers'
  * 参移单位的运行态（由状态层给出）
  *
  * 字段与 `state-types.Unit` 一一对应：`hex`→`hex`、`spentMp`→（本阶段累计已耗 MP）、
- * `ended`→`movementEnded`（4.5a-A / 6.1c / 6.2b 的「本轮必须停止」）。
+ * `ended`→`movementEnded`（通规 4.5a-A / 6.1c / 6.2b 的「本轮必须停止」）。
  */
 export interface MoveUnitRuntime {
   unitId: string
@@ -105,7 +105,7 @@ export interface MoveStepRecord {
   movedIds: string[]
   /** 因本步走不动而留在原格的单位（6.1f：离开堆叠即不得再移动） */
   droppedIds: string[]
-  /** 进入未抵消敌方 ZOC 后被迫停止的单位（4.5a-A） */
+  /** 进入未抵消敌方 ZOC 后被迫停止的单位（通规 4.5a-A） */
   zocStoppedIds: string[]
   /** 各随行单位本步消耗的 MP（6.1e：彼此独立） */
   costById: Record<string, number>
@@ -160,7 +160,7 @@ export function beginMove(input: {
     if (item === null) return fail('6.1', `找不到单位 ${unitId}`)
     const label = input.unitLabel?.(unitId) ?? unitId
     if (item.ended) return fail('6.1g', `${label} 本轮移动已结束，不能再开始移动`)
-    // 就绪检查（阶段 6.0 / MA 6.1b / 垫人锁 4.5b / 燃料 12.5a / 延补队面 12.7）统一问引擎
+    // 就绪检查（阶段 6.0 / MA 6.1b / 垫人锁 通规 4.5b / 燃料 12.5a / 延补队面 12.7）统一问引擎
     const readiness = computeReachableHexes(context, unitId)
     if (!readiness.ok)
       return fail(
@@ -182,7 +182,7 @@ export function beginMove(input: {
 /** 单个参移单位的就绪情况 */
 export interface ActiveUnitReachability {
   unitId: string
-  /** 能否移动（阶段/MA/垫人锁/燃料，6.0/6.1b/4.5b/12.5a） */
+  /** 能否移动（阶段/MA/垫人锁/燃料，6.0/6.1b/ 通规 4.5b/12.5a） */
   ok: boolean
   /** 不可移动时的原因（含规则号） */
   blocked?: StepFailure
@@ -199,11 +199,11 @@ export interface GroupReachableHex {
   hex: HexRef
   /** 走到该格的累计 MP（取最小者；含各单位已耗基数） */
   mpSpent: number
-  /** 到达后被迫停止（4.5a-A） */
+  /** 到达后被迫停止（通规 4.5a-A） */
   forcedStop: boolean
   /** 只能靠 6.1c 最小移动到达 */
   minimumMove: boolean
-  /** 该格处于未抵消的敌方 ZOC（4.5a-A：进入须确认；5.8a 战略模式禁入） */
+  /** 该格处于未抵消的敌方 ZOC（通规 4.5a-A：进入须确认；5.8a 战略模式禁入） */
   inEnemyZoc: boolean
   /** 能到达该格的单位及其累计 MP（升序） */
   byUnit: { unitId: string; mpSpent: number }[]
@@ -241,7 +241,7 @@ export function reachableForMove(input: {
   const { context, interaction, runtime } = input
   const units: ActiveUnitReachability[] = []
   const merged = new Map<string, GroupReachableHex>()
-  // 5.7g（用户 2026-11-01 口径）：堆叠里**任何一枚**处于预备模式 ⇒ 整堆叠都不得停在环形工事格
+  // 通规 5.7g（用户 2026-11-01 口径）：堆叠里**任何一枚**处于预备模式 ⇒ 整堆叠都不得停在环形工事格
   const anyReserve = interaction.unitIds.some((id) => {
     const v = viewOf(context, id)
     return v !== null && v.mode === 'reserve'
@@ -275,12 +275,12 @@ export function reachableForMove(input: {
     }
     const remaining = result.ma - item.spentMp
     units.push({ unitId, ok: true, ma: result.ma, spentMp: item.spentMp, remaining })
-    // 已结束本轮移动的单位不再参与范围（4.5a-A / 6.1c / 6.2b / 掉队）
+    // 已结束本轮移动的单位不再参与范围（通规 4.5a-A / 6.1c / 6.2b / 掉队）
     if (item.ended || interaction.finished || remaining <= 0) continue
 
     for (const node of result.reachable) {
       if (node.mpSpent > remaining) continue
-      // 5.7g：堆叠含预备单位 ⇒ 环形工事格不得作为可停终点（只能路过）
+      // 通规 5.7g：堆叠含预备单位 ⇒ 环形工事格不得作为可停终点（只能路过）
       if (anyReserve && (context.hedgehogLevelAt?.(node.hex) ?? 0) > 0) continue
       const absolute = node.mpSpent + item.spentMp
       const key = hexKey(node.hex)
@@ -291,7 +291,7 @@ export function reachableForMove(input: {
           mpSpent: absolute,
           forcedStop: node.forcedStop,
           minimumMove: node.minimumMove,
-          // 4.5a-A / 5.8a：该格是否处于未抵消的敌方 ZOC（界面据此提示与确认）
+          // 通规 4.5a-A / 5.8a：该格是否处于未抵消的敌方 ZOC（界面据此提示与确认）
           inEnemyZoc: inEnemyZocAt(context, node.hex, view.side, zocFactsOf(view.side)),
           byUnit: [{ unitId, mpSpent: absolute }],
           path: node.path,
@@ -353,7 +353,7 @@ export interface StepMovingUnit {
   crossedOnBridge: boolean
   /** 是否借 6.1c 最小移动 */
   minimumMove: boolean
-  /** 本步之后必须结束移动（4.5a-A / 6.2b All / 6.1c / 5.8b） */
+  /** 本步之后必须结束移动（通规 4.5a-A / 6.2b All / 6.1c / 5.8b） */
   mustEndMove: boolean
 }
 
@@ -368,13 +368,13 @@ export interface StepPreview {
   moving: StepMovingUnit[]
   /** 本步走不动、将留在原格的单位（6.1f） */
   droppingIds: string[]
-  /** 5.8a：战略模式单位不能进入敌方 ZOC（这些单位只能留下） */
+  /** 通规 5.8a：战略模式单位不能进入敌方 ZOC（这些单位只能留下） */
   stratBlockedIds: string[]
-  /** 4.5a-A：目标格是否处于未抵消的敌方 ZOC */
+  /** 通规 4.5a-A：目标格是否处于未抵消的敌方 ZOC */
   enteringEnemyZoc: boolean
-  /** 进入 ZOC 后必须就停的轮式单位（4.5a-A） */
+  /** 进入 ZOC 后必须就停的轮式单位（通规 4.5a-A） */
   zocStoppingIds: string[]
-  /** 是否需要玩家确认（4.5a-A 的「就地停止或突袭」二选一） */
+  /** 是否需要玩家确认（通规 4.5a-A 的「就地停止或突袭」二选一） */
   needsConfirm: boolean
   /** 逐格预览路径（起点…目标；取自 MP 最小的能到者） */
   path: HexRef[]
@@ -437,7 +437,7 @@ export function previewStep(input: {
     rules.add(outcome.forcedStop ? '4.5a-A' : '6.1a')
   }
 
-  // 4.5a-A：目标格是否处于（未被抵消的）敌方 ZOC
+  // 通规 4.5a-A：目标格是否处于（未被抵消的）敌方 ZOC
   const enteringEnemyZoc = side === null ? false : inEnemyZocAt(context, to, side)
   const zocStoppingIds = enteringEnemyZoc
     ? moving
@@ -484,12 +484,12 @@ export interface MoveStepPlan {
 }
 
 /**
- * 提交一步（6.1a/6.1e/6.1f/4.5a-A）
+ * 提交一步（6.1a/6.1e/6.1f/ 通规 4.5a-A）
  *
  * 变更规则：
  *   - 能走的单位 → 换格、按**各自**的费率累加 MP（6.1e）；
  *   - 走不动的单位 → 留在原格并**就此结束本轮移动**（6.1f：离开堆叠即不得再移动）；
- *   - 引擎判 `mustEndMove`（4.5a-A 强制停止 / 6.2b All / 6.1c 最小移动 / 5.8b 战略）→ 该单位就地结束。
+ *   - 引擎判 `mustEndMove`（通规 4.5a-A 强制停止 / 6.2b All / 6.1c 最小移动 / 5.8b 战略）→ 该单位就地结束。
  */
 export function planStep(input: {
   context: MoveContext
@@ -660,20 +660,20 @@ export function cancelMove(interaction: MoveInteractionState): MoveRevert {
   }
 }
 
-/* ────────────────────────────── 模式切换（5.4 + 5.x） ────────────────────────────── */
+/* ────────────────────────────── 模式切换（通规 5.4 + 5.x） ────────────────────────────── */
 
 /** 模式切换时机判定输入 */
 export interface ModeSwitchNowInput {
   context: MoveContext
   unitId: string
   runtime: readonly MoveUnitRuntime[]
-  /** 目标主动模式（5.3：被动模式不可选择） */
+  /** 目标主动模式（通规 5.3：被动模式不可选择） */
   to: BaseMode
-  /** 目标朝向（5.7a 预备可任选；5.8 战略须移动面） */
+  /** 目标朝向（通规 5.7a 预备可任选；5.8 战略须移动面） */
   orientation: Orientation
   /**
-   * 该单位的规则类别（5.5c 补员/运输点数不得进战斗模式、5.7f 运输点数不得进预备、
-   * 5.8c 运输点数不得进战略、6.1b 设施无 MA）
+   * 该单位的规则类别（通规 5.5c 补员/运输点数不得进战斗模式、5.7f 运输点数不得进预备、
+   * 通规 5.8c 运输点数不得进战略、6.1b 设施无 MA）
    *
    * 由状态层用 `modes.modeUnitClass(profile)` 归类后传入——`MoveUnitView` 不含
    * `specialized`/`noncombatKind` 这两个静态字段，引擎不自行臆造。
@@ -688,7 +688,7 @@ export interface ModeSwitchNowInput {
 /**
  * 此刻能否切换主动模式（5.4 / 5.4 末句 / 5.5c / 5.7c / 5.8a / 5.8c / 专规 2.3e）
  *
- * 5.4 的**时机**要求是本函数相对 `modes.canSwitchMode` 多出来的一层：
+ * 通规 5.4 的**时机**要求是本函数相对 `modes.canSwitchMode` 多出来的一层：
  * 切换模式「是在每个单位或堆叠开始移动时进行的」，故**已消耗过 MP**（6.1g 一旦开始就必须走完）
  * 或本轮移动已结束的单位都不能再切。
  */
@@ -705,11 +705,11 @@ export function canSwitchModeNow(input: ModeSwitchNowInput): ModeSwitchResult {
   if (item.ended)
     return { ok: false, rule: '5.4', reason: '本轮移动已结束，不能再切换模式（6.1g）' }
   /*
-   * 5.4a + 用户 2026-11-06 裁定：预备模式的**准入**只看已耗 MP 是否 ≤ 当前面 MA 的 1/4
+   * 通规 5.4a + 用户 2026-11-06 裁定：预备模式的**准入**只看已耗 MP 是否 ≤ 当前面 MA 的 1/4
    * （25% 边界上允许；**0 MP 也满足**——"单位哪怕不移动也可以转入预备"）。
    * 原文「完成 25% 的移动后，才需要放置该预备标记」管的是**实体标记的摆放时点**，
    * 不是准入；额度在转入那一刻由状态层**按格**校验（见 `allowReserveEntryAtHex`）。
-   * 其它主动模式仍受 5.4「在该单位/堆叠开始移动时切换」的原限制。
+   * 其它主动模式仍受 通规 5.4「在该单位/堆叠开始移动时切换」的原限制。
    */
   if (to === 'reserve') {
     const quarterMa = reserveQuarterMa(view.ma)
@@ -726,14 +726,14 @@ export function canSwitchModeNow(input: ModeSwitchNowInput): ModeSwitchResult {
       reason: '模式切换只在该单位开始移动时进行，本阶段已消耗过 MP（6.1g）',
     }
   /*
-   * 5.7g 不在此处拦：原文只约束「在任何**移动环节结束时**」，转入预备后仍可在本环节内走离
+   * 通规 5.7g 不在此处拦：原文只约束「在任何**移动环节结束时**」，转入预备后仍可在本环节内走离
    * 工事格。停步的拦截见 `reachableHexes`（工事格不得作可停终点）与 `finishMove` 的兜底。
    */
 
   return canSwitchMode({
     to,
     orientation,
-    // 4.5a-I/J：转入预备/战略模式不允许抵消。
+    // 通规 4.5a-I/J：转入预备/战略模式不允许抵消。
     inEnemyZoc: inEnemyZocForAction(
       context,
       item.hex,
@@ -749,11 +749,11 @@ export function canSwitchModeNow(input: ModeSwitchNowInput): ModeSwitchResult {
 }
 
 /**
- * 施加模式切换（5.5/5.6/5.7a/5.8）
+ * 施加模式切换（通规 5.5/5.6/5.7a/5.8）
  *
- * 战斗/移动模式就定义在对应那一面上，故 `to` 为二者时朝向随之确定（5.5/5.6）；
- * 预备可任选朝向（5.7a）；战略必须移动面（5.8，已由 `canSwitchMode` 拦下）。
- * 被动标记（DG/进击）**不因主动模式切换而改变**——它们只能在该玩家的清理阶段移除（5.4 / 5.10）。
+ * 战斗/移动模式就定义在对应那一面上，故 `to` 为二者时朝向随之确定（通规 5.5/5.6）；
+ * 预备可任选朝向（通规 5.7a）；战略必须移动面（5.8，已由 `canSwitchMode` 拦下）。
+ * 被动标记（DG/进击）**不因主动模式切换而改变**——它们只能在该玩家的清理阶段移除（通规 5.4 / 5.10）。
  */
 export function applyModeSwitch(
   state: ModeState,
@@ -765,7 +765,7 @@ export function applyModeSwitch(
   return { ...state, mode: to, orientation }
 }
 
-/** 该单位建议的模式类别（供界面在调用 canSwitchModeNow 前归类，5.5c/5.7f/5.8c/6.1b） */
+/** 该单位建议的模式类别（供界面在调用 canSwitchModeNow 前归类，通规 5.5c/5.7f/5.8c/6.1b） */
 export function classifyForMode(profile: ModeUnitProfile): ModeUnitClass {
   return modeUnitClass(profile)
 }

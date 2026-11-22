@@ -16,7 +16,7 @@ import { actionNeedsFuel, type FuelRelevantAction } from './fuel'
  *
  * ## 这张表不是设计出来的，是**抄**出来的
  *
- * 「环节」不是我发明的粒度——**2.2 流程表的段名原文里就带子步**（源库 `charts.json → tables.sop`，
+ * 「环节」不是我发明的粒度——**通规 2.2 流程表的段名原文里就带子步**（源库 `charts.json → tables.sop`，
  * 状态 `confirmed`，出处 `OCS_SOP_CN.pdf / v4.3 charts p1`）：
  *
  * ```
@@ -62,7 +62,7 @@ import { actionNeedsFuel, type FuelRelevantAction } from './fuel'
  *     store 的 `settleAbsorbObligationsNow` / `absorbBreakdownNow` 走的就是 20.0d 的 `segmentEnd` 时机）。
  *     20.0a 的**创建**才是环节内动作（「开始移动」⇒ C 段；「战后推进/撤退」⇒ F/G 段的战斗环节）。
  *   - **12.8a 断补损耗**：D 段的**段末**检查（故它作为 D 的最后一环登记，但判定口径是"段末"，见该环 `note`）。
- *   - **5.10 / 2.2 注的清理**：H 段全自动，无玩家动作。
+ *   - **通规 5.10 / 2.2 注的清理**：H 段全自动，无玩家动作。
  *
  * ## 次序纪律
  *   SOP 原文给了子步的段（C/E/F/G）**照原文次序**；A/H 原文一块一环；
@@ -76,7 +76,7 @@ import { actionNeedsFuel, type FuelRelevantAction } from './fuel'
 
 /* ────────────────────────────── 类型 ────────────────────────────── */
 
-/** 一个**环节**（2.2 段名原文里的子步，或原文未列子步时该段唯一的那个环节） */
+/** 一个**环节**（通规 2.2 段名原文里的子步，或原文未列子步时该段唯一的那个环节） */
 export interface SopSegmentStep {
   /** 稳定标识：`<段>.<环节>`（如 `movement.barrage`、`combat.combat`） */
   id: string
@@ -119,7 +119,7 @@ export interface SopSegmentStep {
 /** 一个段的**环节链** */
 export interface SopSegmentChain {
   phase: GamePhase
-  /** 段名（2.2 流程表的中文名） */
+  /** 段名（通规 2.2 流程表的中文名） */
   label: string
   /** SOP 段名原文（逐字照录，便于与源库对账） */
   sopText: string
@@ -129,7 +129,7 @@ export interface SopSegmentChain {
 
 /* ────────────────────────────── 环节链 ────────────────────────────── */
 
-/** 2.2 流程表：Pre-Turn + A–H + Turn End 共 10 段的环节链 */
+/** 通规 2.2 流程表：Pre-Turn + A–H + Turn End 共 10 段的环节链 */
 export const SOP_SEGMENT_CHAINS: readonly SopSegmentChain[] = [
   {
     phase: 'preTurn',
@@ -183,8 +183,8 @@ export const SOP_SEGMENT_CHAINS: readonly SopSegmentChain[] = [
         /*
          * ★ 2026-11-11（v7.1 第二段，用户 Q2）：本步是**第二段的宿主步**（实现分层）。
          *
-         * 原文（2.2 SOP 卡面）把 B 段写成三句：到达 → 掷可变增援表并放置 → 重建/合并。
-         * 第二句里的「掷表」与「放置」在引擎里原本散在 1.6b / 1.6c / 3.3c / 3.6 / 2.3c
+         * 原文（通规 2.2 SOP 卡面）把 B 段写成三句：到达 → 掷可变增援表并放置 → 重建/合并。
+         * 第二句里的「掷表」与「放置」在引擎里原本散在 专规 1.6b / 专规 1.6c / 专规 3.3c / 3.6 / 专规 2.3c
          * 五个自动步上（`replRoll` 自动 → … → `specialRepl`），玩家要连点好几次空环节。
          * 现在把这五个掷骰与其产出**统一挂到本步**：流程条在第二段只停这一环，
          * 段内各件事仍按 §3 的次序作为**块**逐张出现（次序见 `session-steps.ts#reinforceItems`）。
@@ -247,7 +247,7 @@ export const SOP_SEGMENT_CHAINS: readonly SopSegmentChain[] = [
         // 玩家入口与环节闸门由 `ACTION_GATES['rein.specialRepl']` 给
         actions: [],
         /*
-         * ★ 2026-10-25（用户「补 1.6c，注意该操作时机」）：
+         * ★ 2026-10-25（用户「补 专规 1.6c，注意该操作时机」）：
          *   原文「Each turn **before 19 August**, **the players** also get to roll a die on their
          *   **Special Repl Table** to check for 'free' rebuilds… **The Soviets always get two and
          *   the Axis one**」＋ 表（Soviet Table / Axis Table）⇒ **双方各掷自己的表**，
@@ -368,7 +368,7 @@ export const SOP_SEGMENT_CHAINS: readonly SopSegmentChain[] = [
          * 7.0 首句：「反应阶段是非阶段玩家可利用**移动、突袭和轰炸**打乱敌方计划的机会」；
          * 7.0b：「反应阶段中，轰炸和**突袭**的结算照常」。
          * ⇒ 突袭属本环（8.0 亦云「发生在各个移动环节」）。修前本环只给了 `move`
-         *   ⇒ 反应阶段按 4.5a-A 停车的轮式单位**无处突袭**（第六批 BUG ①）。
+         *   ⇒ 反应阶段按 通规 4.5a-A 停车的轮式单位**无处突袭**（第六批 BUG ①）。
          */
         actions: ['reserveRelease', 'move', 'overrun'],
         note: '非行动方的**已释放预备**单位才可动（7.0a）；释放动作本身即 5.7b；7.0b：本阶段的轰炸与**突袭**照常结算',
@@ -597,7 +597,7 @@ export function sopStepForAction(phase: GamePhase, action: ActionKind): SopSegme
   return null
 }
 
-/** 本模块覆盖的段数（= 2.2 流程表的段数；测试用它钉住"一段不落"） */
+/** 本模块覆盖的段数（= 通规 2.2 流程表的段数；测试用它钉住"一段不落"） */
 export const SOP_CHAIN_PHASE_COUNT = GAME_PHASES.length
 
 /* ────────────────────────────── 各操作的**时机**（12.5b 那张表） ────────────────────────────── */

@@ -47,31 +47,31 @@ export interface MapFacts {
 export interface MoveUnitView {
   id: string
   side: Side
-  /** 是否战斗单位（4.5b：只有「友方战斗单位」能抵消敌方 ZOC） */
+  /** 是否战斗单位（通规 4.5b：只有「友方战斗单位」能抵消敌方 ZOC） */
   isCombat: boolean
-  /** 是否可攻击（4.4/3.2b：括注战斗值、战略模式、预备模式任一命中即不具攻击能力） */
+  /** 是否可攻击（通规 4.4/3.2b：括注战斗值、战略模式、预备模式任一命中即不具攻击能力） */
   attackCapable: boolean
-  /** 是否有追溯补给（12.6；4.5：断补单位不投射 ZOC） */
+  /** 是否有追溯补给（12.6；通规 4.5：断补单位不投射 ZOC） */
   hasTraceSupply: boolean
   /** 图上位置；不在图上（容器内）为 null */
   hex: HexRef | null
-  /** 机动类型（3.1a） */
+  /** 机动类型（通规 3.1a） */
   mobility: MobilityType
   /** 朝向那一面的原始 MA（未按模式修正；6.1b） */
   ma: number
-  /** 团级当量（4.6；4.8 堆叠上限按 RE 计） */
+  /** 团级当量（通规 4.6；4.8 堆叠上限按 RE 计） */
   re: number
-  /** 模式（5.5–5.8；`combat/move` 时兼作朝向） */
+  /** 模式（通规 5.5–5.8；`combat/move` 时兼作朝向） */
   mode: BaseMode
-  /** 朝向（5.7a） */
+  /** 朝向（通规 5.7a） */
   orientation: Orientation
-  /** 混乱（5.10） */
+  /** 混乱（通规 5.10） */
   dg: boolean
-  /** 进击（5.9） */
+  /** 进击（通规 5.9） */
   exploit: boolean
-  /** 本阶段刚被释放的预备（5.7b） */
+  /** 本阶段刚被释放的预备（通规 5.7b） */
   releasedFromReserve: boolean
-  /** 14.9d / 4.7d：本阶段已提交的单位空运事实，与实际MP消耗分开。 */
+  /** 14.9d / 通规 4.7d：本阶段已提交的单位空运事实，与实际MP消耗分开。 */
   airTransportThisPhase?: AirUnitTransportState | null
   /**
    * 专规 1.5 / 剧本 1–2：苏方首回合地面单位移动力 ×1/2
@@ -90,7 +90,7 @@ export interface MoveUnitView {
    */
   fuelMaFactor?: number
   /**
-   * 4.5b：本阶段已承诺「之后不再消耗 MP」
+   * 通规 4.5b：本阶段已承诺「之后不再消耗 MP」
    *
    * 用于「垫人」——格内留一个己方战斗单位抵消该格敌方 ZOC，代价是该单位本阶段起不得再消耗 MP。
    */
@@ -107,18 +107,18 @@ export interface MoveUnitView {
 
 /** 移动上下文 */
 export interface MoveContext {
-  /** 当前移动环节属于哪个阶段（2.2：C 移动 / E 反应 / G 进击） */
+  /** 当前移动环节属于哪个阶段（通规 2.2：C 移动 / E 反应 / G 进击） */
   phase: MovementSegmentPhase
-  /** 当前行动方（2.2 阶段玩家） */
+  /** 当前行动方（通规 2.2 阶段玩家） */
   activeSide: Side
   /** 地图事实 */
   map: MapFacts
   /** 全部单位（含不在图上的） */
   units: readonly MoveUnitView[]
   /**
-   * 12.6 追溯补给可用性（5.8b：战略模式单位必须在当前拥有追溯补给的格内结束移动）
+   * 12.6 追溯补给可用性（通规 5.8b：战略模式单位必须在当前拥有追溯补给的格内结束移动）
    *
-   * 追溯补给属 12.6/12.8，由补给模块提供；未接入时省略本项即**不施加 5.8b 检查**
+   * 追溯补给属 12.6/12.8，由补给模块提供；未接入时省略本项即**不施加 通规 5.8b 检查**
    * （宁可少判，也不臆造一张补给网）。
    */
   traceSupplyAt?: (hex: HexRef, side: Side) => boolean
@@ -149,7 +149,7 @@ export interface MoveContext {
    */
   ownBridgeHexByUnitId?: Readonly<Record<string, HexRef>>
   /**
-   * 5.7g / 16.0：该格的**环形工事等级**（0＝无）
+   * 通规 5.7g / 16.0：该格的**环形工事等级**（0＝无）
    *
    * 「在**任何移动环节结束时**，处于预备模式内的单位都**不可与环形工事堆叠**在一起。」
    * ★ 用户 2026-11-01 口径（比原文更硬，按此执行）：「**预备单位不能进工事格**」
@@ -169,11 +169,11 @@ export interface MoveContext {
    */
   trainbustingMarksBySide?: { readonly axis: readonly HexRef[]; readonly soviet: readonly HexRef[] }
   /**
-   * 4.5a-A（R9）：**突袭强行进入敌方 ZOC 后「不得离开」**的单位与所在格
+   * 通规 4.5a-A（R9）：**突袭强行进入敌方 ZOC 后「不得离开」**的单位与所在格
    *
    * 原文：「……若所在格处于敌方 ZOC，该单位**不得离开**，必须再次突袭或停止」。
    * 这是操作台在突袭收束后得到的**事实**（引擎不读 store），由 `buildMoveContext` 注入；
-   * `evaluateStepFrom` 见到「这些单位从该格走向别格」即拒（4.5a），于是
+   * `evaluateStepFrom` 见到「这些单位从该格走向别格」即拒（通规 4.5a），于是
    * `reachableForMove` 的 BFS 与逐格预览自动同规；`forOverrun` 的再突袭不受此限。
    * 省略本项 ⇒ 无此约束（不臆造）。
    */
@@ -205,15 +205,15 @@ export type MoveRejectReason =
   /** 12.5a：需要燃料而未加注 |
    */
   | 'needsFuel'
-  /** 4.5b：该单位已承诺本阶段不再消耗 MP（垫人代价） */
+  /** 通规 4.5b：该单位已承诺本阶段不再消耗 MP（垫人代价） */
   | 'mpLocked'
   /** 6.1：移动必须沿连续格，目标格与当前位置不相邻 */
   | 'notAdjacent'
   /** 6.3b / 8.0：目标格被敌方战斗单位占据（须以突袭处理，不能直接走进） */
   | 'enemyOccupied'
-  /** 5.8a：战略模式单位不可移动（或撤退）进入敌方 ZOC */
+  /** 通规 5.8a：战略模式单位不可移动（或撤退）进入敌方 ZOC */
   | 'stratIntoEzoc'
-  /** 4.4 / 8.1：该单位不可攻击（无攻击值 / 括注 / 战略或预备模式） */
+  /** 通规 4.4 / 8.1：该单位不可攻击（无攻击值 / 括注 / 战略或预备模式） */
   | 'notAttackCapable'
   /** 目标格不在图内（含 offMapStub 一侧） */
   | 'destinationOffMap'
@@ -224,14 +224,14 @@ export type MoveRejectReason =
   /** 6.1d：互逆性——目标格回不到当前格 |
    */
   | 'reciprocity'
-  /** 4.8：目标格堆叠超限 |
+  /** 通规 4.8：目标格堆叠超限 |
    */
   | 'stackingLimit'
   /** 6.1a：MP 不足（且不适用 6.1c 最小移动） */
   | 'notEnoughMp'
   /** 6.2d：目标格无可用地形（数据为空） */
   | 'noTerrain'
-  /** 5.8b：战略模式单位必须在当前有追溯补给的格内结束移动 */
+  /** 通规 5.8b：战略模式单位必须在当前有追溯补给的格内结束移动 */
   | 'stratMustEndInSupply'
   /** 12.7：延补队面不可移动（须先翻回运输点数面，翻面消耗一半 MA，见 12.7d） */
   | 'extenderCannotMove'
@@ -259,12 +259,12 @@ export interface StepSuccess {
   minimumMove: boolean
   /** 该步是否耗尽全部残余 MA（地形列写 All） */
   spendsAllMp: boolean
-  /** 进入后是否被未抵消的敌方 ZOC 强制停止（4.5a-A：轮式） */
+  /** 进入后是否被未抵消的敌方 ZOC 强制停止（通规 4.5a-A：轮式） */
   forcedStop: boolean
-  /** 该步之后本轮移动必须结束（4.5a-A 强制停止；5.8b 战略模式落到无追溯补给的格） */
+  /** 该步之后本轮移动必须结束（通规 4.5a-A 强制停止；5.8b 战略模式落到无追溯补给的格） */
   mustEndMove: boolean
   /**
-   * 本步是否造成**暂时超堆叠**（4.8a）
+   * 本步是否造成**暂时超堆叠**（通规 4.8a）
    *
    * 「超堆叠，是指在任何环节或阶段结束时，某一格内的战斗单位超过 10RE」，
    * 且「单位在移动过程中可以暂时地超堆叠」→ 故这不是逐步禁令，而是**阶段末义务**：
@@ -277,7 +277,7 @@ export interface StepSuccess {
 export interface StepFailure {
   ok: false
   reason: MoveRejectReason
-  /** 规则条文号（如 '6.1c' / '4.5a-A'） */
+  /** 规则条文号（如 '6.1c' / ' 通规 4.5a-A'） */
   rule: string
   /** 补充说明（地形名、RE 数等） */
   detail?: string
@@ -294,7 +294,7 @@ export interface ReachableHex {
   mpSpent: number
   /** 是否只能靠 6.1c 最小移动到达（UI 可另色标注） */
   minimumMove: boolean
-  /** 到达后是否被迫停止（4.5a-A：进入未抵消敌方 ZOC 的轮式单位） */
+  /** 到达后是否被迫停止（通规 4.5a-A：进入未抵消敌方 ZOC 的轮式单位） */
   forcedStop: boolean
   /** 从起点到该格的格序列（含起点；供 UI 画路径与逐格回放） */
   path: HexRef[]

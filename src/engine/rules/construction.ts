@@ -20,10 +20,10 @@ import { selectMovementTerrain, type HexsideCrossing, type MobilityType } from '
  *
  * 本模块覆盖**特殊单位与设施的作业面**：工程能力（13.8a）、架桥（13.8b）、建造（13.8d）、
  * 环形工事的修建与缩减（16.0b/c）、空军基地的修建与改进（15.3）、简易机场（15.2），
- * 以及 Smolensk 专规的印刷永久工事（1.3a）、工事等级上限（1.3b）、苏军禁建期（2.3e）与建造标记（3.5）。
+ * 以及 Smolensk 专规的印刷永久工事（专规 1.3a）、工事等级上限（1.3b）、苏军禁建期（2.3e）与建造标记（3.5）。
  *
  * ## 条文要点（逐句落实现）
- *   - **13.8a**「指挥部或工程兵必须处于**战斗模式**，或处于 DG 模式并**朝向战斗模式面**（5.10e），
+ *   - **13.8a**「指挥部或工程兵必须处于**战斗模式**，或处于 DG 模式并**朝向战斗模式面**（通规 5.10e），
  *     才能被视为具有工程能力。」→ 判定复用 `modes.canEngineer`（唯一实现），本模块只消费结论。
  *   - **13.8b 架桥**「当与一个大河相邻时，具有工程能力的单位会自动将大河格边的 MP 消耗降至小河格边的
  *     MP 消耗。同样……将小河格边降级为『无额外消耗』。只有友方单位移动**进入或离开**工程能力单位所在格时，
@@ -59,7 +59,7 @@ import { selectMovementTerrain, type HexsideCrossing, type MobilityType } from '
  * ## 明确不由本模块负责（避免重复实现）
  *   - **15.4 空军基地缩减**：已实现在 `air-mission.ts#canReduceAirBase`（含 15.0c 的 Level-1 下限与每阶段一次）；
  *   - **10.0c 对设施轰炸**：已实现在 `barrage.ts#resolveFacilityOutcome`（含 15.2E：简易机场永不被击降级）；
- *   - **4.8 / 15.0a / 16.0g 每格至多 1 个港口/空军基地/环形工事**：已实现在 `legality.ts`（stacking 族）；
+ *   - **通规 4.8 / 15.0a / 16.0g 每格至多 1 个港口/空军基地/环形工事**：已实现在 `legality.ts`（stacking 族）；
  *   - **9.14e/f 工事与空军基地的夺取**：已实现在 `special-combat.ts`；
  *   - **13.8c 创建火车卸货格**：属铁路子系统，见 `rail.ts` 与 `trace-supply.ts` 的 detrainable 事实。
  */
@@ -159,7 +159,7 @@ export function constructionTaskCostsSp(task: ConstructionTask): boolean {
 
 /** 13.8d 的建造前提（调用方给出的事实） */
 export interface ConstructionContext {
-  /** 2.2：建造只能在**移动阶段**（13.8d） */
+  /** 通规 2.2：建造只能在**移动阶段**（13.8d） */
   phase: GamePhase
   /** 13.8a：工程能力（战斗模式，或 DG 但朝向战斗面；判定见 `modes.canEngineer`） */
   engineerCapable: boolean
@@ -234,7 +234,7 @@ export interface LegMpRangeInput {
  * 与 6.2 移动同源，机动类型固定为 `CONSTRUCTION_WALKING_MOBILITY`）求到目标格的**最小 MP 和**，
  * 返回该值；`withinConstructionRange` 再与半径比较。
  * 与普通移动的三点不同（都是条文明确要求的）：
- *   - **无视敌方 ZOC**（4.5a-A 的强制停止不施加）；
+ *   - **无视敌方 ZOC**（通规 4.5a-A 的强制停止不施加）；
  *   - **不施加 MA 预算**（13.8d 的半径不是「走得动」而是「够得着」）；
  *   - **不施加 6.1c 最小移动**（半径内不足 1 MP 的格也够得着）。
  * 唯一保留的限制是「禁入地形不可穿越」——它是地形本身不可进入（6.2c），不是预算。
@@ -303,7 +303,7 @@ function crossingCarriesRoute(crossing: HexsideCrossing | null): boolean {
 /** 16.0b/c：被指定执行施工的**作业单位**（格内堆叠的一支分队） */
 export interface ConstructionWorker {
   id: string
-  /** 4.6：团级当量（作业单位的 RE **合计**须 ≥ `CONSTRUCTION_MIN_BUILDER_RE`） */
+  /** 通规 4.6：团级当量（作业单位的 RE **合计**须 ≥ `CONSTRUCTION_MIN_BUILDER_RE`） */
   re: number
   /** 16.0b/c：该单位须处于**战斗模式** */
   mode: BaseMode
@@ -346,7 +346,7 @@ function checkExecutor(executor: ConstructionExecutor): ExecutorVerdict {
     // 16.0b/c：「且不能移动」——被指定的单位**逐员**须本阶段未移动
     const moved = executor.units.find((unit) => unit.movedThisPhase)
     if (moved !== undefined) return fail('16.0b', `operatingUnitAlreadyMoved:${moved.id}`)
-    // 16.0b/c：须**逐个**处于战斗模式（同格可因多个模式标记而混合模式，见 4.8b）
+    // 16.0b/c：须**逐个**处于战斗模式（同格可因多个模式标记而混合模式，见 通规 4.8b）
     const notCombat = executor.units.find((unit) => unit.mode !== 'combat')
     if (notCombat !== undefined)
       return fail('16.0b', `operatingUnitMustBeCombatMode:${notCombat.id}`)
@@ -559,7 +559,7 @@ export function planAirBaseBuild(input: {
  */
 export function planAirstripBuild(input: {
   executor: Extract<ConstructionExecutor, { kind: 'engineer' }>
-  /** 该格是否已有设施（简易机场或空军基地）——一格至多一个（4.8 / 15.0a） */
+  /** 该格是否已有设施（简易机场或空军基地）——一格至多一个（通规 4.8 / 15.0a） */
   hexHasAirFacility: boolean
   /** 可动用的 T */
   availableT: number
@@ -664,11 +664,11 @@ export function planConstructionMarkerUse(input: {
   kind: ConstructionMarkerKind
   side: Side
   phase: GamePhase
-  /** 3.5：须在「单位移动之前」（该阶段尚未开始移动） */
+  /** 专规 3.5：须在「单位移动之前」（该阶段尚未开始移动） */
   beforeMovement: boolean
-  /** 3.5：目标格须有**轴方战斗单位** */
+  /** 专规 3.5：目标格须有**轴方战斗单位** */
   hexHasAxisCombatUnit: boolean
-  /** 3.5：该枚标记尚未使用过 */
+  /** 专规 3.5：该枚标记尚未使用过 */
   markerAvailable: boolean
 }): RuleOutcome<{ costSp: number; rule: string; detail: string }> {
   if (input.side !== 'axis') return fail('专规 3.5', 'constructionMarkerIsAxisOnly')
@@ -678,7 +678,7 @@ export function planConstructionMarkerUse(input: {
   if (!input.hexHasAxisCombatUnit)
     return fail('专规 3.5', 'constructionMarkerRequiresAxisCombatUnit')
   return succeed('专规 3.5', {
-    // 3.5：免费（不耗补给）
+    // 专规 3.5：免费（不耗补给）
     costSp: 0,
     rule: '专规 3.5',
     detail:

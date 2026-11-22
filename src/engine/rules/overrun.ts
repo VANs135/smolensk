@@ -32,11 +32,11 @@ import type { SurpriseAttackType } from '../tables/surprise'
  *   - 8.1e **任何单位在突袭时都不会获得进击标记**
  *   - 8.1f 若在**一个或多个选项结果中选择撤退**，则**结束它们在当前阶段中的移动**；不撤退则可继续移动
  *   - 8.1g **只有进行突袭的单位**才能与正在突袭中的堆叠一同移动
- *   - 8.1h 不参与突袭的友方单位可留在突袭格内；它们**计入堆叠上限（4.8a）**但不参与，
+ *   - 8.1h 不参与突袭的友方单位可留在突袭格内；它们**计入堆叠上限（通规 4.8a）**但不参与，
  *          且**突袭结果对它们没有任何影响**
  *
  * ## 与既有模块的分工（不重复实现）
- *   - 8.1 / 8.1a / 8.1b / 8.1c / 8.1d 的**资格门槛**（含 4.8a 超堆叠、5.10b DG、12.7 延补队面、
+ *   - 8.1 / 8.1a / 8.1b / 8.1c / 8.1d 的**资格门槛**（含 通规 4.8a 超堆叠、5.10b DG、12.7 延补队面、
  *     12.5a 燃料、8.1c 的 forOverrun 计费）：`move.ts#canOverrun` —— 本模块直接委托；
  *   - 9.2 战斗流程与 9.13b-B（突袭不给进击）：`battle.ts`；
  *   - 9.8 奇袭表：`tables/surprise.ts` 的 `overrun` 行。
@@ -47,7 +47,7 @@ import type { SurpriseAttackType } from '../tables/surprise'
 /**
  * 可发生突袭的 SOP 段（8.0：「在各个移动环节中」）
  *
- * 即 2.2 的三个移动环节：移动阶段 / 反应阶段 / 进击阶段（各自含他们的战斗环节）。
+ * 即 通规 2.2 的三个移动环节：移动阶段 / 反应阶段 / 进击阶段（各自含他们的战斗环节）。
  */
 export const OVERRUN_SEGMENTS: readonly GamePhase[] = ['movement', 'reaction', 'exploitation']
 
@@ -82,7 +82,7 @@ export type OverrunEligibility =
  *
  * 顺序即规则顺序：① 必须是移动环节（8.0）；② 目标格必须有**敌方战斗单位**，否则改走 9.14（8.0 末段）；
  * ③ 其余门槛交给 `move.ts#canOverrun`（8.1 系列，含 8.1a 的 3 MP、8.1b 的 ≤3 MP 地形门槛、
- *    8.1c 的「不得用道路降费」、8.1d 的相邻、4.8a 的超堆叠、5.10b 的 DG、12.7 的延补队面）。
+ *    8.1c 的「不得用道路降费」、8.1d 的相邻、通规 4.8a 的超堆叠、5.10b 的 DG、12.7 的延补队面）。
  *
  * @param defenders 目标格内的**全部**单位（战斗与非战斗都要给，用于区分 9.14 与 8.0）
  */
@@ -316,7 +316,7 @@ export interface OverrunStackSplit {
   participantIds: string[]
   /** 8.1h：不参与突袭的友方单位留在原格；结果对它们没有任何影响 */
   stayIds: string[]
-  /** 8.1h：原格堆叠规模仍需满足 4.8a（留驻单位照常计入） */
+  /** 8.1h：原格堆叠规模仍需满足 通规 4.8a（留驻单位照常计入） */
   originStackRe: number
   detail: string
 }
@@ -325,9 +325,9 @@ export interface OverrunStackSplit {
  * 8.1g / 8.1h：把「同格友军」拆成参突者与留驻者
  *
  * 「只有进行突袭的单位，才能与正在突袭中的堆叠一同移动」（8.1g）；
- * 「其他不进行突袭的友方单位可以位于进行突袭的格内……影响该格的堆叠限制（4.8a），
+ * 「其他不进行突袭的友方单位可以位于进行突袭的格内……影响该格的堆叠限制（通规 4.8a），
  *   但不参与突袭。突袭的战斗结果对这些单位没有任何影响」（8.1h）。
- * 故原格留驻单位仍计入堆叠规模（4.8a 的判定已由 `canOverrun` 在执行时把关）。
+ * 故原格留驻单位仍计入堆叠规模（通规 4.8a 的判定已由 `canOverrun` 在执行时把关）。
  */
 export function splitOverrunStack(input: {
   side: Side
@@ -342,7 +342,7 @@ export function splitOverrunStack(input: {
   const stayIds = input.friendlyUnits
     .filter((unit) => !input.participantIds.includes(unit.id))
     .map((unit) => unit.id)
-  // 4.8a：只计**战斗单位**的 RE（与非战斗单位的堆叠规则见 4.8）
+  // 通规 4.8a：只计**战斗单位**的 RE（与非战斗单位的堆叠规则见 4.8）
   const originStackRe = input.friendlyUnits
     .filter((unit) => unit.isCombat)
     .reduce((sum, unit) => sum + unit.re, 0)

@@ -31,13 +31,13 @@ import { SUPPLY_CACHE_PER_SIDE } from './timing'
  *     引擎不臆造判据。
  */
 
-/** 1.7：每方每剧本开局的补给缓存枚数（唯一实现在 `timing.ts`） */
+/** 专规 1.7：每方每剧本开局的补给缓存枚数（唯一实现在 `timing.ts`） */
 const SUPPLY_CACHE_PER_SCENARIO = SUPPLY_CACHE_PER_SIDE
 
 /** 21.10 Shells：一枚标记抵付的轰炸成本（T） */
 export const SUPPLY_CACHE_SHELLS_T = rulesConstants.smolensk.supplyCacheShellsT
 
-/** 1.7 / 21.10：两种用法 */
+/** 专规 1.7 / 21.10：两种用法 */
 export type SupplyCacheUse = 'shells' | 'forage'
 
 /** 补给缓存持有量（按方） */
@@ -47,7 +47,7 @@ export interface SupplyCacheHoldings {
 }
 
 /**
- * 1.7：开局持有量
+ * 专规 1.7：开局持有量
  *
  * 层级为 **剧本 > 专规**：调用方应传入剧本初设的枚数（`scenarios.setup.supplyCache`）；
  * 缺省值取专规 1.7 的规则值（`rules-constants.smolensk.supplyCachePerSide`）。
@@ -58,12 +58,12 @@ export function initialSupplyCacheHoldings(
   return { axis: perSide, soviet: perSide }
 }
 
-/** 1.7 / 21.10：某方还剩几枚 */
+/** 专规 1.7 / 21.10：某方还剩几枚 */
 export function supplyCacheCount(holdings: SupplyCacheHoldings, side: 'axis' | 'soviet'): number {
   return holdings[side]
 }
 
-/** 1.7：经 1.6c 特殊补员追加一枚（苏方 `division_caches` / 轴方 `supply_cache` 结果） */
+/** 专规 1.7：经 1.6c 特殊补员追加一枚（苏方 `division_caches` / 轴方 `supply_cache` 结果） */
 export function addSupplyCache(
   holdings: SupplyCacheHoldings,
   side: 'axis' | 'soviet',

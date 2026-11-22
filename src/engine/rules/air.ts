@@ -17,9 +17,9 @@ import { AIR_BASE_CAPTURE_NO_LOSS_MIN_DICE } from './combat'
  *   1) 通规（series_rules_v43.air）：低空扫射 14.7d、空战 14.3e、防空 14.4e、
  *      空运成功 14.10d、基地 15.0b/15.1/15.2/15.3、计划空降 14.10b —— 构成默认行为；
  *   2) 专规（exclusive_rules_smolensk）覆盖上述默认：
- *      - 2.2「Red Air Force」**只针对苏联空军**：禁低空扫射 2.2a、禁计划空降 2.2b、
- *        禁反应/进击阶段任务 2.2d、早期 IL-2 单军力 2.2c；
- *      - 3.2a 轴方：天气允许时可低空扫射（axis_special.hip_shoot）。
+ *      - 专规 2.2「Red Air Force」**只针对苏联空军**：禁低空扫射 2.2a、禁计划空降 2.2b、
+ *        禁反应/进击阶段任务 专规 2.2d、早期 IL-2 单军力 2.2c；
+ *      - 专规 3.2a 轴方：天气允许时可低空扫射（axis_special.hip_shoot）。
  * 具体某型是否具备某项能力，另由 aircraft.json 的 airAbilities / specialAbilities 提供。
  */
 
@@ -415,17 +415,17 @@ export function planAirUnload(input: {
   })
 }
 
-/* ── 专规覆盖（2.2 苏联 / 3.2a 轴心） ── */
+/* ── 专规覆盖（专规 2.2 苏联 / 3.2a 轴心） ── */
 
 const EXCLUSIVE_AIR = rulesConstants.smolensk.air
 
-/** 任务阶段（2.2d 约束苏军的反应 / 进击阶段） */
+/** 任务阶段（专规 2.2d 约束苏军的反应 / 进击阶段） */
 export type AirMissionPhase = 'movement' | 'reaction' | 'exploitation'
 
 /**
  * 低空扫射可用性（通规 14.7d ← 专规覆盖）
  *
- * 通规允许；专规覆盖：苏军不得执行（2.2a），轴方天气允许时可执行（3.2a）。
+ * 通规允许；专规覆盖：苏军不得执行（专规 2.2a），轴方天气允许时可执行（3.2a）。
  *
  * ★ 口径唯一（M2⑤）：**「天气是否允许低空扫射」只有这一处实现**。天气层的
  *   `weather.ts#isHipShootAllowed` 曾另持一份只看天气的比较，二者并存 ⇒ 已删除该副本，

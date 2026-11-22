@@ -17,7 +17,7 @@ import { fail, succeed, type RuleOutcome } from '../result-types'
  *           可以**立即使用**或保留待用（专规 1.6 Notes 明确 Pax/Eq 是本作唯一可跨回合保存的补员）；
  *           补员永不能进入战斗模式；堆叠时计 1/4 RE；具可攻击能力、可承受损失；须正常获得战斗补给与燃料。
  *   - 13.5a 重建位置：所需补员须**都在一个格中**，且该格在一个**友方指挥部的 2 格内（含 2 格）**；
- *           该 HQ 须处于**战斗模式**，或 DG 但朝向战斗模式面（5.10e）；该格**不可在敌方 ZOC 内**（4.5a）。
+ *           该 HQ 须处于**战斗模式**，或 DG 但朝向战斗模式面（通规 5.10e）；该格**不可在敌方 ZOC 内**（4.5a）。
  *           移除补员，把重建单位放入该格。重建**图上有军力损失的单位**时，还须该单位与所用补员**堆叠在一起**。
  *   - 13.5b 一回合内可重建任意数量军力（有足够补员即可）；补给状态与模式**不影响**重建；重建不消耗 MP；
  *           重建出的单位可设为任意主动模式；只有**死亡堆中的单位**与**图上有军力损失的单位**才能重建；
@@ -189,7 +189,7 @@ export function suggestRebuildRow(hint: RebuildRowHint): string | null {
       return /\bflm\b/.test(name) ? row('Flm Panzer Bn') : row('Panzer Bn')
     case 'armor_tk':
       if (echelon === 'div') return row('Tank Div step')
-      // 苏军另有独立的 `Tank Alarm Bn` 行（Special 1.6c），不能并到常规坦克行
+      // 苏军另有独立的 `Tank Alarm Bn` 行（Special 专规 1.6c），不能并到常规坦克行
       if (/alarm/.test(name)) return row('Tank Alarm Bn')
       if (echelon === 'bn' || echelon === 'rgt' || echelon === 'bde') {
         return row('Tank Bn, Rgt, or Bde')
@@ -297,11 +297,11 @@ export interface RebuildCandidateView {
   destroyedByEnemy?: boolean
 }
 
-/** 重建须注入的落点事实（13.5a / 4.5a / 13.5f） */
+/** 重建须注入的落点事实（13.5a / 通规 4.5a / 13.5f） */
 export interface RebuildPlacementFacts {
-  /** 13.5a：该格是否在「战斗模式的友方 HQ（或 DG 但朝向战斗面，5.10e）」2 格内 */
+  /** 13.5a：该格是否在「战斗模式的友方 HQ（或 DG 但朝向战斗面，通规 5.10e）」2 格内 */
   withinHqThrowOfFriendlyHq(hex: HexRef): boolean
-  /** 4.5a：该格是否在**未被抵消**的敌方 ZOC 内 */
+  /** 通规 4.5a：该格是否在**未被抵消**的敌方 ZOC 内 */
   inUnnegatedEnemyZoc(hex: HexRef): boolean
   /** 13.5f：该方是否有可用的友方空军基地（飞机重建的落点） */
   hasFriendlyAirBase(): boolean
@@ -574,7 +574,7 @@ function chartRebuildCost(
       }
       return cost
     }
-    // 13.5c 不可重建 / 13.5b 返回资源池 / 1.6c 仅特殊补员 / 仅补员表 / 条文另见
+    // 13.5c 不可重建 / 13.5b 返回资源池 / 专规 1.6c 仅特殊补员 / 仅补员表 / 条文另见
     case 'none':
     case 'pool':
     case 'special':

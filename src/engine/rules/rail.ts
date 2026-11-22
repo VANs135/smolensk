@@ -23,29 +23,29 @@ import type { MobilityType } from './terrain'
  */
 
 /**
- * 铁路运输与运输点数（B8，OCS 13.2 / 13.3 / 4.7 / 13.9）
+ * 铁路运输与运输点数（B8，OCS 13.2 / 13.3 / 通规 4.7 / 13.9）
  *
  * 覆盖四件事，全部为纯函数（玩家决策与运行期事实作为入参给出，故可脱离整局状态独立测试）：
- *   ① **铁路容量与运输当量**（4.7 / 13.3a / 13.3b）：1 点容量 = 1 SP 或 1 RE；破坏区加倍、全程多轨减半，
+ *   ① **铁路容量与运输当量**（通规 4.7 / 13.3a / 13.3b）：1 点容量 = 1 SP 或 1 RE；破坏区加倍、全程多轨减半，
  *      短腿（步行 MA 1–6）单位当量减半；
  *   ② **铁路移动三步**（13.3e / 13.3g）：登车 → 沿铁路移动 → 卸货，**三步必须同一阶段完成**（本模块一次调用即含三步，
  *      故天然同阶段）；登车格/卸货格须为可火车卸货格且不在敌方 ZOC，路径须相连、轨距正确、受控、无敌方单位与 ZOC。
  *      13.6b 的「地图外登车」跳过登车格检查；只属**增援与新 SP**的抵达格，由增援铁路抵达这条路径
  *      显式传 `entrainOffMap`（`RailFacts.isEntryHex` 只用于认出「入场格且该格含铁路」，
  *      **不**单独豁免登车）。用户 2026-11-13 裁定：入场格不是移动阶段的通用登车格（读法乙不成立）。
- *      铁路修理单位有三处例外（13.3g）：可在**战斗模式**下铁路移动（13.3g-B，5.5a/5.6a 例外）、
+ *      铁路修理单位有三处例外（13.3g）：可在**战斗模式**下铁路移动（13.3g-B，通规 5.5a/5.6a 例外）、
  *      可在**任意铁路格**登车与卸货（13.3g-C）、且**卸货后仍可按「完整 MA − 登车前移动」继续移动**
- *      （13.3g-B；4.7d 的「卸货后不得再移动」对它们不适用）；
+ *      （13.3g-B；通规 4.7d 的「卸货后不得再移动」对它们不适用）；
  *   ③ **轨距转换**（13.3f / 13.3g）：仅铁路修理单位可做，敌方 ZOC 内不可转换（不可抵消），
  *      每移动阶段至多 4 格（当前 MA 更小则取 MA），且不得「接力」；另含**剧本初设换轨**的逐格推导
  *      （专规 1.2 剧本页只给端点，见 `convertedRailRun`）；
- *   ④ **运输点数的装载卸货与合并拆分**（13.2c / 13.2f）：装载/卸载各耗印刷 MA 的 10%（4.2 取整），
+ *   ④ **运输点数的装载卸货与合并拆分**（13.2c / 13.2f）：装载/卸载各耗印刷 MA 的 10%（通规 4.2 取整），
  *      合并/拆分不耗 MP、仅友方移动阶段、同类型且同格。
  *
  * ## 与既有模块的分工（不重复实现）
  *   - 铁路容量数值：`rail-cap.ts#getRailCap`（13.3b / 专规 1.2 的日期闸门）；
- *   - 4.2 取整：`combat.ts#roundHalfUp`（与攻防比同口径）；装载费与容量费都走它；
- *   - 4.5/4.5b 的 ZOC 判定：`zoc.ts`（★ 运货时敌方 ZOC **不可抵消**，见 13.3c 末句）；
+ *   - 通规 4.2 取整：`combat.ts#roundHalfUp`（与攻防比同口径）；装载费与容量费都走它；
+ *   - 通规 4.5/4.5b 的 ZOC 判定：`zoc.ts`（★ 运货时敌方 ZOC **不可抵消**，见 13.3c 末句）；
  *   - 可火车卸货格的三条判据（13.3c）由事实提供者给出，本模块只消费结论（不臆造铁路连通性）。
  *
  * ## 数据接口
@@ -59,46 +59,46 @@ import type { MobilityType } from './terrain'
  *     「该格（含同格卸货城镇）被敌方单位占据」，由状态层以 `enemyOccupies` 注入，不设独立控制权账本；
  *   - **13.3d 铁路端头标记**：地图上的轨距分界标记属记录轨式记账（谁把端头推到哪），
  *     其机制已由 13.3f/g 的轨距转换覆盖，标记位置不在引擎建模范围；
- *   - **4.7d 的「同一阶段不能使用超过一种运输类型」**：跨动作的阶段级记账，须由命令层在阶段内累计
+ *   - **通规 4.7d 的「同一阶段不能使用超过一种运输类型」**：跨动作的阶段级记账，须由命令层在阶段内累计
  *     （本模块是无状态纯函数，只判单次铁路移动本身）。
  */
 
 /* ────────────────────────────── 常量 ────────────────────────────── */
 
-/** 4.7a：1 点铁路容量可运 1 SP 或 1 RE（任意距离）——运输当量即容量基准，比值恒为 1 */
+/** 通规 4.7a：1 点铁路容量可运 1 SP 或 1 RE（任意距离）——运输当量即容量基准，比值恒为 1 */
 export const RAIL_CAP_PER_TRANSPORT_EQUIVALENT = 1
 
-/** 4.7d / 13.3e-3：铁路运输卸货后**不允许继续移动**，故普通单位卸货后的可用 MP 恒为 0 */
+/** 通规 4.7d / 13.3e-3：铁路运输卸货后**不允许继续移动**，故普通单位卸货后的可用 MP 恒为 0 */
 export const RAIL_POST_DETRAIN_MP = 0
 
 /**
- * 13.3e / 4.7d：铁路移动**本身不消耗 MP**（只按铁路容量点数计费，距离不限）
+ * 13.3e / 通规 4.7d：铁路移动**本身不消耗 MP**（只按铁路容量点数计费，距离不限）
  *
  * 单位在铁路上的移动不由 MA 结算，唯一的 MA 消耗是「登车前最多一半 MA」的正常地面移动
- * （13.3e-1 / 4.7d）；铁路修理单位例外可于卸货后继续用剩余 MA（13.3g-B）。
+ * （13.3e-1 / 通规 4.7d）；铁路修理单位例外可于卸货后继续用剩余 MA（13.3g-B）。
  */
 export const RAIL_MOVEMENT_MP_COST = 0
 
-/* ────────────────────────────── 运输当量（4.7） ────────────────────────────── */
+/* ────────────────────────────── 运输当量（通规 4.7） ────────────────────────────── */
 
 /** 铁路货物（13.3a：只有战斗单位、运输点数与 SP 可作为铁路货物；飞机/舰船/环形工事永远不可） */
 export type RailCargo =
   | {
       kind: 'unit'
-      /** 4.6：团级当量 */
+      /** 通规 4.6：团级当量 */
       re: number
-      /** 3.1a：机动类型（4.7b 只对**步行** MP 减半） */
+      /** 通规 3.1a：机动类型（4.7b 只对**步行** MP 减半） */
       mobility: MobilityType
-      /** 4.7b：**移动模式下**的印刷 MA */
+      /** 通规 4.7b：**移动模式下**的印刷 MA */
       moveMa: number
     }
-  /** 3.3a：补给点数 */
+  /** 通规 3.3a：补给点数 */
   | { kind: 'sp'; amount: number }
-  /** 13.2/4.7c：运输点数（按自身规模计，无论是否装载 SP） */
+  /** 13.2/ 通规 4.7c：运输点数（按自身规模计，无论是否装载 SP） */
   | { kind: 'transportPoint'; size: number }
 
 /**
- * 4.7 / 4.7a / 4.7b / 4.7c：运输当量
+ * 通规 4.7 / 4.7a / 4.7b / 4.7c：运输当量
  *
  * 「一点铁路容量可以运输 1SP 或 1RE（也可二者组合，如 2T 的补给和 1/2 RE 的单位）。」
  * 「如果一个单位在**移动模式下**的印刷 MA 为 1 至 6 的**步行 MP**（含 1 和 6），则它所需的运输当量减半。」
@@ -132,9 +132,9 @@ export interface RailPathFacts {
 
 /** 铁路容量成本明细 */
 export interface RailCapacityCost {
-  /** 运输当量（4.7） */
+  /** 运输当量（通规 4.7） */
   equivalent: number
-  /** 13.3a 修正系数 = 破坏区倍率 × 多轨倍率（4.3：修正累计） */
+  /** 13.3a 修正系数 = 破坏区倍率 × 多轨倍率（通规 4.3：修正累计） */
   factor: number
   /** 应付铁路容量点数（可含小数，如 2T + 1/2 RE） */
   cost: number
@@ -148,7 +148,7 @@ export interface RailCapacityCost {
  * 「通过铁路移动，每个铁路运量点数可以运输一个 SP 或 RE，距离不限。有两种可能的修正：
  *   · 如果货物移动的路径上包含一个或多个运输破坏区，则铁路运量的费用翻倍；
  *   · 如果货物移动的路径全部是多轨铁路格，则将正常的铁路运量费用减半。」
- * 4.3：两条修正**累计**（×2 与 ×½ 同时命中即回到原值）。
+ * 通规 4.3：两条修正**累计**（×2 与 ×½ 同时命中即回到原值）。
  */
 export function railCapacityCost(input: {
   cargo: RailCargo
@@ -243,20 +243,20 @@ export interface RailFacts {
 
 /* ────────────────────────────── 铁路移动三步（13.3e） ────────────────────────────── */
 
-/** 参与铁路移动的货物（在 4.7 当量之外，单位还需要模式、当前 MA 与登车前 MP） */
+/** 参与铁路移动的货物（在 通规 4.7 当量之外，单位还需要模式、当前 MA 与登车前 MP） */
 export type RailCargoView =
   | (Extract<RailCargo, { kind: 'unit' }> & {
       id: string
       side: Side
-      /** 5.6a：铁路运输须移动模式；13.3g-B 例外——铁路修理单位可在战斗模式下铁路移动 */
+      /** 通规 5.6a：铁路运输须移动模式；13.3g-B 例外——铁路修理单位可在战斗模式下铁路移动 */
       mode: BaseMode
-      /** 5.10d：DG 单位不能使用铁路运输 */
+      /** 通规 5.10d：DG 单位不能使用铁路运输 */
       dg: boolean
       /**
        * 当前**生效**面的印刷 MA（6.1h：不取整）
        *
        * 13.3e-1 的「登车前最多消耗**一半 MA**」与 13.3g-B 的「完整 MA（减去登车前的移动）」都以它为准
-       * （移动模式单位＝移动面 MA，即与 4.7b 的 `moveMa` 相同；战斗模式的铁路修理单位＝战斗面 MA）。
+       * （移动模式单位＝移动面 MA，即与 通规 4.7b 的 `moveMa` 相同；战斗模式的铁路修理单位＝战斗面 MA）。
        */
       currentMa: number
       /** 13.3e-1：登车前已消耗的 MP（≤ 当前 MA 的一半） */
@@ -269,16 +269,16 @@ export type RailCargoView =
 export interface RailMovementResult {
   /** 13.3a：应付铁路容量点数 */
   cost: number
-  /** 4.7：运输当量 */
+  /** 通规 4.7：运输当量 */
   equivalent: number
   /** 13.3a：路径修正系数 */
   factor: number
-  /** 13.3e / 4.7d：铁路移动**本身不消耗的 MP**（恒为 0；只按铁路容量计费，距离不限） */
+  /** 13.3e / 通规 4.7d：铁路移动**本身不消耗的 MP**（恒为 0；只按铁路容量计费，距离不限） */
   mpCost: number
   /**
    * 卸货后仍可用的 MP
    *
-   * - 普通单位：**0** —— 4.7d / 13.3e-3「单位卸货后，不允许继续移动」；
+   * - 普通单位：**0** —— 通规 4.7d / 13.3e-3「单位卸货后，不允许继续移动」；
    * - 铁路修理单位：**当前 MA − 登车前已耗** —— 13.3g-B「铁路修理单位在使用铁路移动之后，
    *   可以用它们的完整 MA 移动（要减去登车前的移动）」。
    */
@@ -289,7 +289,7 @@ export interface RailMovementResult {
 
 /** 铁路移动输入 */
 export interface RailMovementInput {
-  /** 2.2 SOP 段：铁路运输只能在**移动阶段**使用（13.3b） */
+  /** 通规 2.2 SOP 段：铁路运输只能在**移动阶段**使用（13.3b） */
   phase: GamePhase
   cargo: RailCargoView
   /** 登车格（起点） */
@@ -304,7 +304,7 @@ export interface RailMovementInput {
    *
    * 「增援单位可放置在有敌方 ZOC 的格中，也可通过铁路抵达（**忽略 13.3e 中通常要求的『登车』**）。」
    * 给出本项即跳过 13.3e-1 的**登车格**检查（是否有铁路 / 是否可卸货 / 是否在敌方 ZOC）；
-   * ★ 单位自身的运输资格（5.6a 移动模式、5.10d 非 DG、13.3e-1 登车前 MP）仍照常校验。
+   * ★ 单位自身的运输资格（通规 5.6a 移动模式、5.10d 非 DG、13.3e-1 登车前 MP）仍照常校验。
    * ★ 用户 2026-11-13 裁定：**只有增援/新 SP 的铁路抵达**可传本项；普通单位在移动阶段即使站在
    *   （含铁路的）入场格上也不得跳过登车检查——`isEntryHex` 本身**不**触发豁免，必须由调用方显式传。
    */
@@ -321,7 +321,7 @@ export interface RailMovementInput {
    *
    * 「An Engineer-Capable HQ can entrain itself before switching to Move Mode.」
    * 给出本项即跳过 13.3e-1／13.3e-3 的**「可火车卸货格」**判定（登车格与卸货格都放行），
-   * 其余条件——铁路格、轨距、敌方单位／ZOC、单位自身资格（5.6a/5.10d/半 MA）——照常校验。
+   * 其余条件——铁路格、轨距、敌方单位／ZOC、单位自身资格（通规 5.6a/5.10d/半 MA）——照常校验。
    * ★ 只由 store 在货物是 HQ 时传入；卸货点是否当场生成卸货格由 store 记账，不在此处改盘面。
    * ★ 与 13.8b 的 `ownBridgeHexByUnitId` 无关，两条例外各管各的状态。
    */
@@ -345,7 +345,7 @@ function sameHex(a: HexRef, b: HexRef): boolean {
  *      （13.6b 的「地图外登车」忽略本步；13.3g-C 铁路修理单位可在**任意**铁路格登车）
  *   2) 移动：沿相连的铁路格移动，**不可进入**有敌方单位或 ZOC 的格；不能使用**错误轨距**的铁路格；
  *      （原文「未控制」按用户 2026-11-12 口径读作「该格城镇被敌方占据」，与补给侧三阻断同源）
- *   3) 卸货：位于**不在敌方 ZOC 内**的可火车卸货铁路格；卸货后**不得再移动**（4.7d）。
+ *   3) 卸货：位于**不在敌方 ZOC 内**的可火车卸货铁路格；卸货后**不得再移动**（通规 4.7d）。
  *      ★ 13.3g-B 例外：铁路修理单位卸货后可用「完整 MA − 登车前移动」继续移动（见返回值 `postDetrainMp`）。
  */
 export function validateRailMovement(input: RailMovementInput): RuleOutcome<RailMovementResult> {
@@ -382,14 +382,14 @@ export function validateRailMovement(input: RailMovementInput): RuleOutcome<Rail
       return fail('13.3e', `entrainHexEnemyOccupied:${hexText(from)}`)
   }
 
-  /* ①′ 单位自身的运输资格（5.6a / 5.10d / 13.3e-1）：与是否「地图外登车」无关 */
+  /* ①′ 单位自身的运输资格（通规 5.6a / 5.10d / 13.3e-1）：与是否「地图外登车」无关 */
   if (cargo.kind === 'unit') {
-    // 5.10d：DG 单位不能使用铁路运输（无例外）
+    // 通规 5.10d：DG 单位不能使用铁路运输（无例外）
     if (cargo.dg) return fail('5.10d', `dgUnitCannotRail:${cargo.id}`)
-    // 5.6a 铁路运输须移动模式；13.3g-B 例外——铁路修理单位可在战斗模式下铁路移动
+    // 通规 5.6a 铁路运输须移动模式；13.3g-B 例外——铁路修理单位可在战斗模式下铁路移动
     if (cargo.mode !== 'move' && !(isRailRepair && cargo.mode === 'combat'))
       return fail('5.6a', `railRequiresMoveMode:${cargo.id}`)
-    // 13.3e-1 / 4.7d：登车前最多消耗一半 MA（6.1h：MA 不取整）
+    // 13.3e-1 / 通规 4.7d：登车前最多消耗一半 MA（6.1h：MA 不取整）
     const preLoadLimit = cargo.currentMa * RAIL_PRE_LOAD_MA_FRACTION
     if (cargo.preLoadMp > preLoadLimit)
       return fail('13.3e', `preLoadMpExceedsHalfMa:${cargo.preLoadMp}>${preLoadLimit}`)
@@ -431,7 +431,7 @@ export function validateRailMovement(input: RailMovementInput): RuleOutcome<Rail
   if (facts.inEnemyZoc(to, cargo.side)) return fail('13.3e', `detrainHexInEnemyZoc:${hexText(to)}`)
 
   const cost = railCapacityCost({ cargo, path: railPathFacts(path, facts) })
-  // 卸货后的可用 MP：普通单位 0（4.7d）；铁路修理单位＝完整 MA − 登车前移动（13.3g-B，4.7d 的例外）
+  // 卸货后的可用 MP：普通单位 0（通规 4.7d）；铁路修理单位＝完整 MA − 登车前移动（13.3g-B，4.7d 的例外）
   const isUnit = cargo.kind === 'unit'
   const postDetrainMp =
     isUnit && isRailRepair ? Math.max(0, cargo.currentMa - cargo.preLoadMp) : RAIL_POST_DETRAIN_MP
@@ -470,7 +470,7 @@ export interface GaugeConversionInput {
    * 13.3g-D：「在移动阶段……最多可转换 4 格（如果其当前 MA 小于 4，则为其当前 MA 的格数）」
    */
   convertedThisPhase: number
-  /** 5.10e / 13.3g-D：转换时须处于战斗模式，或 DG 但朝向战斗面 */
+  /** 通规 5.10e / 13.3g-D：转换时须处于战斗模式，或 DG 但朝向战斗面 */
   mode: BaseMode
   orientation: Orientation
   dg: boolean
@@ -515,7 +515,7 @@ export interface GaugeConversionResult {
  * 「A) 铁路**不能**在敌方 ZOC 内转换轨距（无法被抵消）。B) 一个铁路修理单位只需**移动进入**一个铁路格，
  *   就可转换该铁路格的轨距。轨距转换**不消耗 SP，也不消耗额外的移动点数**。」
  * 「D) 在移动阶段（而非其他阶段），铁路修理单位最多可转换 4 格（如果其当前 MA 小于 4，则为其当前 MA 的格数）。
- *   它们必须处于战斗模式，或处于 DG 模式但朝向战斗模式面（根据 5.10e）。」
+ *   它们必须处于战斗模式，或处于 DG 模式但朝向战斗模式面（根据 通规 5.10e）。」
  */
 export function validateGaugeConversion(
   input: GaugeConversionInput,
@@ -538,10 +538,10 @@ export function validateGaugeConversion(
     !input.earlyRouteRestriction.allowedHexKeys.includes(hexText(input.targetHex))
   )
     return fail('4.1c', input.earlyRouteRestriction.detail)
-  // 13.3f-A：敌方 ZOC 内不可转换，且**不可抵消**（无 4.5b 例外）
+  // 13.3f-A：敌方 ZOC 内不可转换，且**不可抵消**（无 通规 4.5b 例外）
   if (facts.inEnemyZoc(input.targetHex, unit.side))
     return fail('13.3f', `enemyZocCannotConvert:${hexText(input.targetHex)}`)
-  // 13.3g-D via 5.10e：战斗模式，或 DG 但朝向战斗面
+  // 13.3g-D via 通规 5.10e：战斗模式，或 DG 但朝向战斗面
   const canConvert = input.mode === 'combat' || (input.dg && input.orientation === 'combat')
   if (!canConvert) return fail('13.3g', `mustBeCombatMode:${unit.id}`)
 
