@@ -668,6 +668,8 @@ export interface RailheadFacts {
  *   · **交汇 / 三角收口处不出端头**：某格若有两个以上已换轨的铁路邻格（＝两段已换轨线在此收口），
  *     即便它还有未换轨邻格，也按第 1 条跳过。宁可少出一个端头，也不把中段或交汇点当端头——
  *     实体版端头本就不摆在交汇点。
+ *     ★ 例外：剧本页印出的 B 端若正好落在交汇格（如剧本 7 的 18.18 / Orsha），用
+ *       `deriveSegmentRailheads`（按换轨段推）而不是本函数，store 侧两者取并集。
  *   · **地图边缘的「换到底」格不出**：没有未换轨铁路邻格即视为线路已到尽头（第 1 条要求 ≥1）。
  */
 export function deriveRailheads(facts: RailheadFacts): HexRef[] {
