@@ -1067,8 +1067,7 @@ const showsLedger = computed(
               {{ workbench.railCapToday.axis }} / 苏
               {{ workbench.railCapToday.soviet }} 点，**每回合**清零。 单位须**移动模式**、非
               DG，且登车前移动不超过**一半 MA**（13.3e-1）；铁路格须**轨距正确**
-              （13.3f）且**受本方控制**（13.3h）；沿途**不可进入**敌战斗单位或 EZOC
-              之格；**卸货后不得再移动**（4.7d）。
+              （13.3f）；沿途**不可进入**敌战斗单位或 EZOC 之格；**卸货后不得再移动**（4.7d）。
             </p>
           </RuleNote>
           <p class="num">

@@ -5348,7 +5348,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *
    * 货类两种（13.3a）：**单位**（当前选中者）与 **SP**（指定补给站里的若干点）。
    * 硬条件全由引擎判（`validateRailMovement`：13.3b 移动阶段、13.3e 的登车/沿途/卸货、
-   * 5.6a 移动模式、5.10d 非 DG、13.3e-1 登车前 ≤ 半 MA、13.3f 轨距、13.3h 控制）；
+   * 5.6a 移动模式、5.10d 非 DG、13.3e-1 登车前 ≤ 半 MA、13.3f 轨距）；
+   * 13.3c 原文的「受控（13.3h）」按用户 2026-11-12 口径不适用（铁路没有归属/控制/占领，
+   * 能被占领的只是同格城镇/村镇），故这里不再列该判据（引擎 `rail-supply.ts` 已删 `isControlledBy`）。
    * 本处负责：提案路径、**扣铁路容量**（13.3b 的当日额度）、落盘（改货物位置/账本）与留痕。
    */
   function railMoveNow(kind: 'unit' | 'sp' | 'transportPoint', dryRun = false): boolean {
@@ -16592,8 +16594,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
 
     /*
-     * 13.6a：**地面单位允许到场时超堆叠**——到场阶段不做 4.8a 的 10 RE 拦截，
-     * 到场结束后再由 `stackingObligations` 按 4.8a 处理（4.8a 对增援阶段本来就豁免）。
+     * 4.8a：**增援阶段没有超堆叠限制**（原文 4.8a「但有一个例外：在增援阶段中没有超堆叠限制（见 13.6）」）
+     * ⇒ 到场阶段不做 10 RE 拦截，到场结束后再由 `stackingObligations` 按 4.8a 处理。
      */
 
     const formation = resolveArrivalFormation(index)
