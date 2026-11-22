@@ -36,6 +36,16 @@ import { earlyDecisionCheckDue } from './exclusive-timing'
  *   - 本模块**不持盘面状态**：控制事实由调用方以 `controlOf(hex)` 注入（引擎不写状态）。
  */
 
+/**
+ * 胜利条件的编号空间提醒（任务 #6「撞号隔离」）
+ *
+ * 这四个号是 **Smolensk 专规 v1.1** 的 5.0 段（`5.0 Victory Conditions` /
+ * `5.0a Final Victory Assessment` / `5.0c Victory Locations and Control`），
+ * 源文件 `…\raw_text\专规及表格__Smolensk_Rules_v1.1.txt`。
+ *
+ * ★ **通规 OCS v4.3 的 5.0 是「模式」章**（`_ocs_v43_clean.txt:682`），与胜利无关。
+ *   ⇒ 只用「5.0a」检索会把胜利条件误指到模式章；追溯时必须带「专规」限定。
+ */
 /** 胜利条件总规则依据 */
 export const VICTORY_RULE = '5.0'
 /** 最终评估依据 */
