@@ -218,6 +218,8 @@ export function validateBattleComposition(input: {
     if (unit.mode === 'reserve' && unit.releasedFromReserve !== true)
       return fail('9.1e', `unreleasedReserveCannotAttack:${unit.id}`)
     if (!unit.attackCapable) return fail('9.1e', `defenseOnlyUnit:${unit.id}`)
+    // 4.4a：攻击单位（包括战斗和突袭）必须是**可攻击单位**——原文 4.4a 的判据即此行；
+    // 失败码沿用 9.1e（9.1 的攻击前置同源），两号并存以便追溯。
     if (!facts.canEnterForAttack(unit, unit.hex, defendingHex))
       return fail('9.1f', `cannotEnterDefendingHex:${unit.id}`)
   }
@@ -821,6 +823,7 @@ export function exploitEligibility(input: {
     succeed(rule, { granted: false, grantedUnitIds: [], reason })
 
   if (input.eThreshold === undefined) return none('9.13', 'noEResult')
+  // 5.9a：原文「获得进击标记的限制见 9.13b」⇒ 本函数的全部限制都是 9.13b 的内容，5.9a 为自指。
   if (input.attackType === 'overrun') return none('9.13b-B', 'overrunNoExploit')
   // 9.13b-B + 辅助卡战斗结果说明：`e#` **只对战斗阶段发起的攻击生效**。
   // 进击阶段也有战斗环节（2.2 的 G 段），但那里的攻击不给进击标记；反应阶段无战斗环节。

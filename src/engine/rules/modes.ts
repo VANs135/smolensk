@@ -484,7 +484,12 @@ export function canEngineer(state: ModeState): boolean {
   return baseOrientation(state) === 'combat' // DG：朝向战斗面即可（5.10e）
 }
 
-/** 5.7g：任何移动环节结束时，预备模式单位不可与环形工事堆叠 */
+/**
+ * 5.7g：任何移动环节结束时，预备模式单位不可与环形工事堆叠
+ *
+ * 16.0f 是同一句在环形工事章的重述（「一个阶段结束时，预备模式的单位不可在环形工事格」），
+ * 故本条同时承载 16.0f，不另立判据。
+ */
 export function canStackWithHedgehog(state: ModeState): boolean {
   return modeEffect(state).canStackWithHedgehog
 }
@@ -819,6 +824,12 @@ export function canSwitchMode(req: ModeSwitchRequest): ModeSwitchResult {
   if (req.unitClass === 'facility')
     return { ok: false, rule: '6.1b', reason: 'SP/港口/空军基地/环形工事没有 MA，不可移动或撤退' }
 
+  /*
+   * 13.2d：运输点数「在任何时候都处于移动模式（永远不能进入战斗、战略、预备、DG 或进击模式；
+   *   例外：编内卡车可进入预备模式，13.2g）」——原文一句话，实现按模式拆成下面三条判据
+   *   （5.5c 禁战斗、5.7f 禁预备、5.8c 禁战略；DG/进击对运输点数本就不成立）。
+   *   ⇒ 追溯「13.2d」请看这一段，而不是某个单一函数。
+   */
   // 5.5c：补员单位和运输点数不能进入战斗模式
   if (req.to === 'combat' && (req.unitClass === 'repl' || req.unitClass === 'transportPoint'))
     return { ok: false, rule: '5.5c', reason: '补员单位与运输点数不能进入战斗模式' }

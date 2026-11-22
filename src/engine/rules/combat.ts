@@ -47,7 +47,12 @@ export interface AttackerResult {
    * ★ 只记 `hasOption` 会丢掉 `o1`/`o2`/`o3` 的区别 —— 那正是选项分配的全部自由度所在。
    */
   optionPoints: number
-  /** 进击标记门槛（e#：行动值 ≥ # 的攻方获进击标记）；无则 undefined */
+  /**
+   * 进击标记门槛（e#：行动值 ≥ # 的攻方获进击标记）；无则 undefined
+   *
+   * 5.9b：进击标记上印的数字，就是「堆叠内单位切换到进击模式所需的最低行动值」——
+   * 与本字段同义（`e#` 的 # 即该门槛）。
+   */
   exploitationAR?: number
   /** 本格攻方段的原文记号（如 `AL1o1`）—— 结算窗直接显示 CRT 原文，不另造译名 */
   notation: string

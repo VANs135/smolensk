@@ -28,7 +28,11 @@ export const FactorSetSchema = z
 
 export type FactorSet = z.infer<typeof FactorSetSchema>
 
-/** HQ 投递距离（通规 13.1b：战斗面与移动面不同） */
+/**
+ * HQ 投递距离（通规 13.1a：战斗模式的一面有更远的投递距离，故按面分开记）
+ *
+ * 13.1b 讲的是「指挥部的特殊功能」，不是距离本身；本条的主号是 13.1a。
+ */
 const ThrowRangeSchema = z
   .object({
     combatFace: z.number().int().nonnegative().nullish(),

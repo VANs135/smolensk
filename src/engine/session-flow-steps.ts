@@ -77,6 +77,14 @@ const SEGMENT_INFO: Record<
   supply: { label: 'D 补给段', rule: '12.0', driver: 'player' },
   reaction: { label: 'E 反应段', rule: '7.0', driver: 'player' },
   combat: { label: 'F 战斗段', rule: '9.0', driver: 'player' },
+  /*
+   * G 进击段：`rule` 取 11.0（章号）。三个子条分别落在本段的三件事上——
+   *   · **9.13a**：被标记为进击的单位，可在**之后的**进击阶段行动（标记与本段的入口条件）；
+   *   · **11.0c**：本阶段按正常规则处理战斗（常规战斗、突袭或轰炸三种都允许）；
+   *   · **11.0d**：本阶段玩家的**舰船与激活飞机**也可行动（本作无海军 ⇒ 只余飞机）。
+   * 本表只登记段名/章号，动作清单在 `legality` 侧（`exploitationPhase` 的许可集），
+   * 上面的三个子条因此不各立字段，而是由本段与 legality 的动作集共同承载。
+   */
   exploitation: { label: 'G 进击段', rule: '11.0', driver: 'player' },
   // 2.2 注：H 清理段的收束（移除 DG / 进击标记、翻面燃料标记、移除敌方运输破坏标记）为**自动**
   cleanUp: { label: 'H 清理段', rule: '2.2', driver: 'automatic' },
