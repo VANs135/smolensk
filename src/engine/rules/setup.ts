@@ -1132,7 +1132,7 @@ export function requiresPanzerGroupSpAssignment(scenarioId: string): boolean {
  *   · **12.1d**：`The generic SP counters are common to both players, so it is important that players
  *     keep track of who owns what. An SP belongs to (and can only be used by) the player who brought
  *     it onto the map unless it has been captured (see 9.14b).` ⇒ 初设期**归属＝带上图的一方**；
- *   · **Setup Note F**：`When using 专规 3.4b (part of "Guderian & Hoth"), on-map SP should be assigned to
+ *   · **Setup Note F**：`When using 3.4b (part of "Guderian & Hoth"), on-map SP should be assigned to
  *     a Pz Grp during setup. Use the Dividing Line as a guide, but the player can freely decide
  *     ownership of dumps.`；
  *   · **专规 3.4b**：`At the start of a scenario, SP must be divided per Setup Note 'F' (p. 5).`，

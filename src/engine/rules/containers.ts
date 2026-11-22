@@ -49,7 +49,7 @@ import { setupSourceOf } from './setup-source'
  *
  * ## 硬纪律（不得无中生有）
  *   1. **数值全部来自数据**：轨位数与刻度取自 `markers.json`，容量取自 `rules-constants.json`，
- *      拆解单位上限取自 ` 专规 1.8a counterLimits`，特殊补员表取自 `charts-supply-repl.json`；
+ *      拆解单位上限取自 `1.8a counterLimits`，特殊补员表取自 `charts-supply-repl.json`；
  *      本模块**不含任何规则数字字面量**。
  *   2. **不掷骰**：抽取类操作由调用方用 `engine/rng.ts` 掷骰并把结果传入；
  *      本模块只按规则**判候选池、判资格、给出抽中后的落点**（种子化重放的唯一入口在 rng.ts）。

@@ -333,7 +333,7 @@ export const SESSION_SCHEMA_VERSION = 2
  * 旧档（`schemaVersion < 2`）里整章条目的序号与 专规 3.4b 条目的序号
  *
  * v1 的 `scenarios.agreedOptions.items` 固定为 5 条：
- * `[0] 专规 1.4 地图外盒 / [1] 4.9e 秘密掷骰 / [2] 2.4 同步回合 / [3] 整章 专规 4.1a–4.3 / [4] 专规 3.4b`。
+ * `[0] 1.4 地图外盒 / [1] 4.9e 秘密掷骰 / [2] 2.4 同步回合 / [3] 整章 4.1a–4.3 / [4] 3.4b`。
  */
 const LEGACY_OPTIONAL_CHAPTER_INDEX = 3
 const LEGACY_PANZER_GROUP_INDEX = 4

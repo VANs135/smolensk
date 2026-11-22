@@ -15,7 +15,7 @@ import { fail, succeed, type RuleOutcome } from '../result-types'
  *
  *   ch02 的伪代码给出验收口径：
  *   ```
- *   function nkvdDefend(hex):          # 专规 2.3b
+ *   function nkvdDefend(hex):          # 2.3b
  *       if hex.has(NKVD_Border_Regiment):
  *           assert NKVD_Border_Regiment.isARUnit()
  *           takeAllDefenderOptionsAsLosses()   # 含本可抵消的选项

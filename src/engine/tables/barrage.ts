@@ -16,7 +16,7 @@ import type { TableLike } from './lookup'
  * ★ 口径唯一（M2⑥ + M6⑤）：
  *   - **T 成本**只在 `rules/barrage.ts#barrageCostT` 一处实现（那里先按 4.2 取整再定列），本模块只转发；
  *   - **列位**也必须先过 4.2 的 `roundBarrageValue`：常规轰炸的取表此前**不取整**，
- *     于是 ` 专规 1.5 / 2.5 / 4.5 …` 这类半数值会落到与产品路径（`rules/barrage.ts#resolveBarrage`，
+ *     于是 `1.5 / 2.5 / 4.5 …` 这类半数值会落到与产品路径（`rules/barrage.ts#resolveBarrage`，
  *     那里明确取整）**不同的列**——正是 M2⑥ 修掉的「测试测这份、产品用另一份」那一类。
  *     （对设施轰炸那一张表产品侧本身不取整，故此处与之保持一致。）
  */

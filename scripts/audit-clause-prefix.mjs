@@ -19,11 +19,20 @@ const root = rootArg ?? 'src/engine/rules'
 
 const CLAUSE = /(?<![\w.:])([1-5]\.\d{1,2}[a-h]?)(?![0-9])/g
 const PREFIX = /专规[ ：]|通规[ ：]/
-const COMMENT = /^\s*(\/\/|\*|\/\*)/
+/**
+ * 注释判定：`//`、`/*`（含 `/** *\/`）开头，或块注释内的 `*` 续行。
+ * `**` 开头的行是粗体文案 / Vue 模板正文，**不算**注释 —— 否则会把
+ * `.vue` 的 `<p class="muted">**2.2d** …` 当注释改写，污染界面文案。
+ */
+const COMMENT = (line) =>
+  /^\s*\/\//.test(line) || /^\s*\*(?!\*)/.test(line) || /^\s*\/\*/.test(line)
 /** 文档流程/坐标/批次号等非条款号的典型写法 */
 const NOISE = /§|方案|格号|坐标|bat|批次|Bobruysk|Mogilev|Orsha|Vyazma|Rzhev/
 /** 明确是格号/数值、不是条款号的号 */
-const NUM_SKIP = new Set(['2.5', '4.00', '2.02', '1.03', '1.07', '1.12', '1.19', '1.26'])
+const NUM_SKIP = new Set(['2.5', '4.00', '2.02', '1.03', '1.07', '1.12', '1.19', '1.26', '1.25'])
+
+/** 引文（反引号 / 双引号内）里的号不判：原文引用必须保持字面，不加前缀 */
+const stripQuoted = (line) => line.replace(/`[^`]*`/g, '').replace(/"[^"]*"/g, '')
 
 /** 逐号过滤：倍率（×1.5）、秒（2.5 s）、百分比、取整展示 */
 const realNums = (line) =>
@@ -32,7 +41,12 @@ const realNums = (line) =>
       const pre = line.slice(Math.max(0, m.index - 4), m.index)
       if (/(×|=|＝|≈|~)\s*$/.test(pre)) return false
       if (/倍\s*$/.test(pre)) return false
-      if (/^\s*(s|秒|%|倍)/.test(line.slice(m.index + m[1].length))) return false
+      if (
+        /^\s*(s|秒|%|倍|px|em|rem|线宽|字号|间距|透明度|毫米)/.test(
+          line.slice(m.index + m[1].length),
+        )
+      )
+        return false
       if (NUM_SKIP.has(m[1])) return false
       return true
     })
@@ -47,19 +61,31 @@ const walk = (p) => {
 const files = walk(root)
 const hits = []
 for (const file of files) {
-  readFileSync(file, 'utf8')
-    .split('\n')
-    .forEach((line, i) => {
-      if (!COMMENT.test(line) || PREFIX.test(line) || NOISE.test(line)) return
-      const nums = realNums(line)
-      if (!nums.length) return
-      hits.push({
-        file: relative(process.cwd(), file).replace(/\\/g, '/'),
-        line: i + 1,
-        nums,
-        text: line.trim(),
-      })
+  const lines = readFileSync(file, 'utf8').split('\n')
+  /** 围栏代码块（```）内的号不判：那是伪代码示意，不是条款引用 */
+  let inFence = false
+  /** 跨行反引号引文（原文引用跨两行书写）里也不判 */
+  let inQuote = false
+  lines.forEach((line, i) => {
+    if (/^\s*(?:\/\/|\*)?\s*```/.test(line)) {
+      inFence = !inFence
+      return
+    }
+    if (inFence) return
+    const oddBacktick = ((line.match(/`/g) || []).length & 1) === 1
+    const wasInQuote = inQuote
+    if (oddBacktick) inQuote = !inQuote
+    if (wasInQuote || oddBacktick) return
+    if (!COMMENT(line) || PREFIX.test(line) || NOISE.test(line)) return
+    const nums = realNums(stripQuoted(line))
+    if (!nums.length) return
+    hits.push({
+      file: relative(process.cwd(), file).replace(/\\/g, '/'),
+      line: i + 1,
+      nums,
+      text: line.trim(),
     })
+  })
 }
 
 const byFile = new Map()

@@ -4,7 +4,7 @@ import { computed } from 'vue'
 /**
  * 线性图标（批 6：全站只此一套，不再散装 `▸ × + − ↗`）
  *
- * 画法统一：16×16 视框、`stroke="currentColor"`、专规 1.5 线宽、圆头圆角、不填充。
+ * 画法统一：16×16 视框、`stroke="currentColor"`、1.5 线宽、圆头圆角、不填充。
  * 组件只负责画，不携带语义/文案（`aria-hidden`，标签由按钮自己给）。
  */
 const props = withDefaults(

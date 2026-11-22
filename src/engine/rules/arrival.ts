@@ -146,7 +146,7 @@ export interface ArrivalUnitDemand {
   /**
    * 专规 2.4：该条目是某集团军的**师**时给出集团军归属
    *
-   * 卡面只在分栏里用 `30th/28th/24th Army HQ (see 专规 2.4)` 标明集团军，单位库本身没有集团军字段；
+   * 卡面只在分栏里用 `30th/28th/24th Army HQ (see 2.4)` 标明集团军，单位库本身没有集团军字段；
    * 故归属只能从**到达卡分组**得到。HQ 与本条独立单位不带此字段（专规 2.4 只锁师）。
    */
   slowMobilizationArmy: SlowMobilizationArmy | null
@@ -418,7 +418,7 @@ export function planArrivals(input: { side: Side; date: string }): RuleOutcome<A
 /**
  * 该到达分组属于哪个慢动员集团军（专规 2.4）
  *
- * 只认卡面明写的 `30th/28th/24th Army HQ (see 专规 2.4)`；不按番号前缀猜。
+ * 只认卡面明写的 `30th/28th/24th Army HQ (see 2.4)`；不按番号前缀猜。
  */
 function slowMobilizationArmyOfGroup(items: readonly RosterItem[]): SlowMobilizationArmy | null {
   for (const item of items) {

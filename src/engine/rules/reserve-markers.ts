@@ -33,7 +33,7 @@ import { fail, succeed, type RuleOutcome } from '@/engine/result-types'
 /**
  * 通规 5.4 / 5.4a：当前面 MA 的 25%
  *
- * **不取整**（`docs/2026-11-05-取整规则对照表.md` U4：绝不取整 MA）⇒ MA 5 的 25% 是 专规 1.25。
+ * **不取整**（`docs/2026-11-05-取整规则对照表.md` U4：绝不取整 MA）⇒ MA 5 的 25% 是 1.25。
  */
 export function reserveQuarterMa(ma: number): number {
   return ma / 4

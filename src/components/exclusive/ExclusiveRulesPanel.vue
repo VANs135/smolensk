@@ -156,12 +156,12 @@ const showsInfo = computed(() => infoShown(props.only))
  * ★ 用户 2026-10-25：**裁判工具统一按 `showsReferee` 收掉**（对局台不铺、验证页保留）。
  *
  * 本面板里的裁判工具（改值 / 订正 / 覆写）：
- *   · ** 专规 3.4 装甲集群归属的手工覆盖**（`setPanzerGroupNow` / `setMultiUnitFormationNow`）——
+ *   · **专规 3.4 装甲集群归属的手工覆盖**（`setPanzerGroupNow` / `setMultiUnitFormationNow`）——
  *     集群由**算子上的白条**决定（原文「A thin white stripe differentiates Hoth's units」，
  *     本作落在 `units-axis.json` 的 `panzerGroup`），手改是订正；
- *   · ** 专规 3.5 建造标记「手改枚数」**（`setConstructionMarkersNow`）—— 枚数由剧本初设给定；
+ *   · **专规 3.5 建造标记「手改枚数」**（`setConstructionMarkersNow`）—— 枚数由剧本初设给定；
  *   · **3.3b 轴控城市声明的切换**（`toggleAxisCityControlNow`）—— 面板自己写着"由裁判维护"；
- *   · ** 专规 1.7 补给缓存「追加 1 枚」**（`addSupplyCacheNow`）—— 缓存来自开局 2 枚与 专规 1.6c 掷表。
+ *   · **专规 1.7 补给缓存「追加 1 枚」**（`addSupplyCacheNow`）—— 缓存来自开局 2 枚与 专规 1.6c 掷表。
  *
  * ★ 明确**不**收的（原文要求玩家声明）：
  *   「SP 归属（专规 3.4b）」——原文「All new Axis SP must **immediately** be assigned to a panzer group」，
@@ -833,8 +833,8 @@ const compactPanzer = computed(() => props.only === 'panzer')
       >
         <p class="muted">
           赤色空军限制（1.2）：**2.2a** 苏军不得低空扫射（轴方 3.2a：天气允许时可用）； **2.2b**
-          允许补给空投、不得需计划的空降（14.10b）；**2.2c** IL.2（Early Sturmovik）只有一步； **
-          专规 2.2d** 苏军不得在本方**反应 / 进击阶段**出击。下列为**当前任务选择的预检**；
+          允许补给空投、不得需计划的空降（14.10b）；**2.2c** IL.2（Early Sturmovik）只有一步；
+          **2.2d** 苏军不得在本方**反应 / 进击阶段**出击。下列为**当前任务选择的预检**；
           权威否决在引擎宣布任务时给出。
         </p>
       </RuleNote>
