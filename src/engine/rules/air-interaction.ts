@@ -800,6 +800,12 @@ function missionCargoCheck(input: AirMissionRequest): RuleOutcome<{ ok: true }> 
    */
   for (const item of cargo) {
     if (item.kind !== 'unit') continue
+    /*
+     * 13.2e 先于 14.9c（2026-11-22）：运输点数不能空运是**货物类型**禁令，
+     * 不该被随后的「模式 / MA」资格判据抢答，否则原因码会指向 14.9c、失去可追溯性。
+     */
+    if (item.isTransportPoint === true)
+      return fail('13.2e', `transportPointCannotAirMove:${item.id}`)
     if (item.mode !== 'move') return fail('14.9c', `cargoUnitNotInMoveMode:${item.id}`)
     if (item.ma === undefined || item.ma > CARGO_UNIT_MAX_WALKING_MA)
       return fail('14.9c', `cargoUnitMaAboveTen:${item.id}`)

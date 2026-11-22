@@ -3,6 +3,7 @@ import {
   airCargoTransportT,
   checkAirCargoLoad,
   checkAirTransportMovementHandoff,
+  isAirTransportableUnit,
   type AirCargoLoadView,
 } from '@/engine/rules/air-cargo'
 
@@ -98,5 +99,18 @@ describe('4.7 / 14.9：单位货物使用真实运输当量和起点', () => {
   })
   it('重复货物ID拒绝，不能对同一单位装载两次', () => {
     expect(load([unit, unit])).toMatchObject({ ok: false, reason: 'duplicateAirCargo' })
+  })
+  it('13.2e：运输点数不能空运，且须给 13.2e 原因码而非 14.9c 的资格判据', () => {
+    // 13.2e「运输点数可以被海运或铁路运输，但不能被空运」：即使把 isCombat 误读为 true，
+    // 运输点标记本身也要挡住——否则本条会被 14.9c「只运战斗单位」含糊带过、失去可追溯性。
+    const transportPoint: AirCargoLoadView = { ...unit, isTransportPoint: true }
+    expect(isAirTransportableUnit(transportPoint)).toBe(false)
+    expect(load([transportPoint])).toMatchObject({
+      ok: false,
+      rule: '13.2e',
+      reason: 'transportPointCannotAirMove:unit:u',
+    })
+    // 同样 1T 的 SP 不受影响（13.2e 只禁运输点数，不禁补给指示物）
+    expect(load([{ id: 'sp:1', kind: 'sp', t: 1 }]).ok).toBe(true)
   })
 })

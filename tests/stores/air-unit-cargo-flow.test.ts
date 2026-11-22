@@ -62,6 +62,24 @@ function setup(startSession = false) {
 }
 
 describe('14.9a / 14.4g：单位载货与真实盘面闭环', () => {
+  it('13.2e：运输点数不进空运候选，点名挂上货单也在宣布时按 13.2e 拒载', () => {
+    const w = setup()
+    const transportPoint = unitChoices('axis').find(
+      (record) => record.noncombatKind === 'transport_point',
+    )
+    expect(transportPoint).toBeDefined()
+    const placed = placeGround(w, transportPoint!, CORE_HEX, 'axis', 'transport-point')
+    // 13.2e「运输点数可以被海运或铁路运输，但不能被空运」：候选里先挡一道
+    expect(placed.noncombatKind).toBe('transport_point')
+    expect(w.airCargoUnitChoices.some((unit) => unit.instanceId === 'transport-point')).toBe(false)
+    // 再模拟绕过面板直接挂货单（例如旧存档 / 直连 store）：宣布仍须以 13.2e 拒，而不是含糊的 14.9c
+    w.toggleAirCargoUnit('cargo')
+    w.toggleAirCargoUnit('transport-point')
+    expect(w.airInputs.cargoUnitIds).toEqual(['transport-point'])
+    expect(w.beginAirMissionNow()).toBe(false)
+    expect(w.airError).toMatchObject({ rule: '13.2e' })
+    expect(w.airState).toBeNull()
+  })
   it('宣布后不能加机重装，原任务及在途单位保留且仍可整组返航', () => {
     const w = setup()
     const record = aircraftChoices('axis').find((record) => (record.transportCapacity ?? 0) > 0)!

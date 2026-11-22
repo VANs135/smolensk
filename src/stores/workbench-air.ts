@@ -746,6 +746,8 @@ export function createAirDomain(ports: AirDomainPorts) {
           id: `unit:${unit.instanceId}`,
           kind: 'unit',
           isCombat: unit.isCombat,
+          // 13.2e：运输点数不能空运 ⇒ 候选列表里直接排除
+          isTransportPoint: isTransportPointUnit(unit),
           re: unit.re,
           ma: unit.faces.move.ma,
           mobility: unit.faces.move.mobility,
@@ -1140,6 +1142,8 @@ export function createAirDomain(ports: AirDomainPorts) {
         id: `unit:${unitId}`,
         kind: 'unit',
         isCombat: unit.isCombat,
+        // 13.2e：若绕过候选列表直接点名运输点数，`checkAirCargoLoad` 会以该原因码拒绝
+        isTransportPoint: isTransportPointUnit(unit),
         // 14.9c（第五批批 C 切片 2）：单位货物须**移动模式**、且**步行 MP ≤ 10**
         // 使用移动面的印刷MA、机动类型和RE；不得用战斗面步行MA代替移动面轮式MA。
         mode: canonicalMode(unit.mode),
@@ -1410,13 +1414,23 @@ export function createAirDomain(ports: AirDomainPorts) {
     }
     const enemy = enemySide.value
     const friendlyAircraft = airMissionFlyingUnits.value
+    /*
+     * 14.4d：额外的空军单位（与任务机**同格的非任务机**）不受防空影响，但会受拦截影响、
+     * 「与执行任务的飞机一起参加空战」。防空侧仍只用 `friendlyAircraft`
+     * （见 `resolveFlakNow` 的 `missionAircraft`），这里只把它们并入空战编成。
+     * 例：友方空军基地正在进行空运任务，基地里的其它激活飞机就是这种「额外飞机」。
+     */
+    const friendlyHelpers = airUnitsInHex(target, airActingSide.value).filter(
+      (air) => !friendlyAircraft.some((plane) => plane.instanceId === air.instanceId),
+    )
+    const combatFriendly = [...friendlyAircraft, ...friendlyHelpers]
     const enemyAircraft = airUnitsInHex(target, enemy)
     const enemyAirBaseInHex = airBases.value.some(
       (base) => base.side === enemy && sameHex(base.hex, target),
     )
     const data = acceptAir(
       declareAirCombatStep(state, {
-        friendlyAircraft: friendlyAircraft.map((plane) => toAirMissionAircraftView(plane)),
+        friendlyAircraft: combatFriendly.map((plane) => toAirMissionAircraftView(plane)),
         enemyActiveCount: enemyAircraft.length,
         enemyCanInitiate: enemyAircraft.some((air) => air.canInitiateAirCombat),
         enemyAirBaseInHex,
@@ -1449,10 +1463,10 @@ export function createAirDomain(ports: AirDomainPorts) {
       return true
     }
     const ours = roles.attackerSide === airActingSide.value
-    const attackerViews = (ours ? friendlyAircraft : enemyAircraft).map((plane) =>
+    const attackerViews = (ours ? combatFriendly : enemyAircraft).map((plane) =>
       toAirMissionAircraftView(plane),
     )
-    const defenderViews = (ours ? enemyAircraft : friendlyAircraft).map((plane) =>
+    const defenderViews = (ours ? enemyAircraft : combatFriendly).map((plane) =>
       toAirMissionAircraftView(plane),
     )
     // ⑭ 接线：drawAir2d6 / drawAir1d6 只回报数字（不改它们）⇒ 先记下掷骰前的骰源，
@@ -1652,6 +1666,17 @@ export function createAirDomain(ports: AirDomainPorts) {
       hexDistance({ col: airBoxEdgeColumn(air.side), row: hex.row }, hex) +
       airBoxRangeHexes(air.side)
     )
+  }
+
+  /**
+   * 13.2e：该地面单位是不是**运输点数**（卡车 / 马车 / 骡子 / 编内卡车）
+   *
+   * 原文「运输点数可以被海运或铁路运输，但不能被空运」。判定取两个来源：
+   * 记录级 `noncombatKind === 'transport_point'`，或非战斗详情里的运输点数容量 > 0
+   * （后者覆盖只带 `noncombatDetails.transport` 的条目）。
+   */
+  function isTransportPointUnit(unit: ConsoleUnit): boolean {
+    return unit.noncombatKind === 'transport_point' || unit.noncombatTransport > 0
   }
 
   /** C9：该格内某方的**激活**飞机（14.1a/14.3：非激活飞机不参加空战） */

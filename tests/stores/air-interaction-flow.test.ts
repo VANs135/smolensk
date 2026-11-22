@@ -968,7 +968,7 @@ describe('C9 空军交互：14.3e 逐轮空战与 14.10d 空投检定（端到�
   }
 
   /** 空战场面：同格双方基地 + 两架轴方战斗机（ACV 不同）+ 一架苏方战斗机，并已宣布任务 */
-  function setupAirCombat(store: ReturnType<typeof newStore>): void {
+  function setupAirCombat(store: ReturnType<typeof newStore>, enlistLow = true): void {
     store.setAirMissionKind('fighter_sweep')
     const { high, low } = twoFighters()
     store.units.push(
@@ -1010,9 +1010,25 @@ describe('C9 空军交互：14.3e 逐轮空战与 14.10d 空投检定（端到�
     )
     expect(store.setAirTargetFromText(label(CORE_HEX))).toBe(true)
     store.toggleAirMissionUnit('air-high')
-    store.toggleAirMissionUnit('air-low') // 两架参战机都必须正式编入任务。
+    if (enlistLow) store.toggleAirMissionUnit('air-low') // 两架参战机都必须正式编入任务。
     expect(store.beginAirMissionNow()).toBe(true)
   }
+
+  it('★ 14.4d：与任务机同格的**额外**飞机并入空战编成，但防空侧仍只打任务机', () => {
+    const store = newStore()
+    store.setAirActive(true)
+    // 只编入 ACV 最高的一架；air-low 是同格的激活飞机 ⇒ 14.4d 的「额外飞机」
+    setupAirCombat(store, false)
+    expect(store.airState?.assignment.aircraftIds).toEqual(['air-high'])
+    // 14.4d 后半句：额外飞机「与执行任务的飞机一起参加空战」⇒ 可被点名出战
+    store.airInputs.airCombatPicks = [{ attackerAircraftId: 'air-low', defenderAircraftId: null }]
+    expect(store.confirmAirCombatNow()).toBe(true)
+    expect(store.airState?.airCombat?.rounds[0]?.attackerAircraftId).toBe('air-low')
+    // 14.4d 前半句：只有执行任务的飞机才受防空影响 ⇒ 防空侧读的是任务编成
+    // （`resolveFlakNow` 的 `missionAircraft` 唯一来源是 `airMissionFlyingUnits`，
+    //  它由 `assignment.aircraftIds` 派生；此处经确认后仍只有 1 架任务机）
+    expect(store.airState?.assignment.aircraftIds).toHaveLength(1)
+  })
 
   it('★ 14.3e-B：未点名 ⇒ 第 1 轮由引擎取 **ACV 最高**的那一架', () => {
     const store = newStore()
