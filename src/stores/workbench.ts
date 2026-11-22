@@ -221,6 +221,7 @@ import {
   validateTransportPointUnload,
   convertedRailRun,
   deriveRailheads,
+  deriveSegmentRailheads,
   addSupplyCache,
   allVictoryConditionHexes,
   breakdownPoolTotal,
@@ -4331,22 +4332,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * C9b：推导某剧本的初设换轨格清单（纯推导，不写日志、不触发重判）
+   * C9b：逐段推导剧本初设换轨的**走线格清单**（纯推导，不写日志、不触发重判）
    *
    * 剧本页只给两个端点，给的是**那一条铁路线**；逐格清单由引擎沿铁路邻接图取唯一最短路径
    * （`convertedRailRun`，分叉或不连通即失败——把不该给的格标成已换轨，等于把整段铁路白送给轴方）。
-   * 任一走线失败即整体作废（`keys` 为空）并把原因放进 `problems`，由调用方决定告警口径。
+   * 返回逐段 `hexes`（A→B 顺序，含两端），失败段不进结果、原因进 `problems`。
+   * 段端法端头（13.3f，`deriveSegmentRailheads`）与账本展开（`deriveConvertedRailHexes`）共用它。
    */
-  function deriveConvertedRailHexes(id: string): {
-    keys: string[]
+  function deriveConvertedRailRuns(id: string): {
+    segments: HexRef[][]
     problems: string[]
-    runs: number
   } {
     const decl = scenarios.scenarios.find((item) => item.id === id)?.setup.convertedAxisRails
-    if (decl === undefined) return { keys: [], problems: [], runs: 0 }
-    const keys: string[] = []
+    if (decl === undefined) return { segments: [], problems: [] }
+    const segments: HexRef[][] = []
     const problems: string[] = []
-    let runs = 0
     for (const run of decl.runs) {
       const endpoints = parseConvertedRailRun(run)
       if (endpoints === null) {
@@ -4358,13 +4358,35 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         problems.push(`${run}（${outcome.reason}）`)
         continue
       }
-      runs += 1
-      for (const hex of outcome.data.hexes) keys.push(hexLabel(hex))
+      segments.push(outcome.data.hexes)
     }
-    return problems.length > 0
-      ? { keys: [], problems, runs }
-      : { keys: [...new Set(keys)], problems, runs }
+    return { segments, problems }
   }
+
+  /**
+   * C9b：推导某剧本的初设换轨格清单（纯推导，不写日志、不触发重判）
+   *
+   * 剧本页只给两个端点，给的是**那一条铁路线**；逐格清单由引擎沿铁路邻接图取唯一最短路径
+   * （`convertedRailRun`，分叉或不连通即失败——把不该给的格标成已换轨，等于把整段铁路白送给轴方）。
+   * 任一走线失败即整体作废（`keys` 为空）并把原因放进 `problems`，由调用方决定告警口径。
+   */
+  function deriveConvertedRailHexes(id: string): {
+    keys: string[]
+    problems: string[]
+    runs: number
+  } {
+    const { segments, problems } = deriveConvertedRailRuns(id)
+    const keys = [...new Set(segments.flat().map((hex) => hexLabel(hex)))]
+    return problems.length > 0
+      ? { keys: [], problems, runs: segments.length }
+      : { keys, problems, runs: segments.length }
+  }
+
+  /** 当前的初设换轨段（逐段走线，供段端法端头推导；随剧本切换重算） */
+  const convertedRailSegments = computed<readonly (readonly HexRef[])[]>(() => {
+    const { segments } = deriveConvertedRailRuns(scenarioId.value)
+    return segments
+  })
 
   /**
    * C9b：剧本初设换轨（专规 1.2 剧本页 `Converted Axis Rails: A to B`）
@@ -4413,12 +4435,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 13.3d/13.3f：**铁路端头**标记实例（`mk-38`，画在 `Neutral_Railhead.png` 上）
    *
-   * 原文（13.3f）只要求「用 Railhead 标记跟踪各路轨距的当前范围」，没有给端头取法，也没有让玩家摆：
-   * 所以这里**由换轨账本 `convertedRailHexes` + 铁路连通推导**（`deriveRailheads`）：
-   *   - 用户 2026-11-22：换轨范围**自本方的铁路补给源格起步**（剧本 `supplySources` 的图边铁路源）
-   *     ⇒ 以轴方图边铁路源为根、取「账本可达的叶」为端头（快照语义＝标准轨，根取 axis 侧）；
+   * 原文（13.3f）只要求「用 Railhead 标记跟踪各路轨距的当前范围」，没有给端头取法，也没有让玩家摆。
+   * 初设端头是**剧本页已印的事实**（`setup.railheads`＝各段 `A to B` 的 B 端），所以这里两路合用：
+   *   - **段端法**（`deriveSegmentRailheads`）：逐段取「自 A 端起最长已换轨前缀」末端 ⇒
+   *     初设时与剧本页 B 端逐一对应（含剧本 7 的 18.18 / Orsha——它有 3 个已换轨邻格，
+   *     会被逐格法当成交汇点跳过，见《端头一致性实测》）；
+   *   - **逐格法**（`deriveRailheads`）：沿铁路越段推进后的新前沿，只由它给出（段端法会主动让位）；
+   *   - 用户 2026-11-22：换轨范围**自本方的铁路补给源格起步**（`entryRailSeedsBySide.axis`），
+   *     两路都只认根可达，与补给源断开的换轨段不出端头；
    *   - 轴方换进 ⇒ 端头前移；苏方换回 ⇒ 端头后撤；
-   *   - 一条线到尽头一个端头，分叉的每个尽头各一个，同一条线不重复；
    *   - 标记是**地图事实**：不参与命中测试、不改任何判定，也不提供手动摆放入口。
    * 换剧本/重置时无需再播种——账本一变，端头就跟着变。
    */
@@ -4426,19 +4451,28 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const converted = convertedRailHexes.value
       .map((key) => parseHexPath(key)[0])
       .filter((hex): hex is HexRef => hex !== undefined)
-    return deriveRailheads({
+    const facts = {
       converted,
       railNeighbors: railNeighborHexes,
-      // 2026-11-22：根＝本方轨距的图边铁路补给源（见 `entryRailSeedsBySide`），端头只朝范围末端长
       roots: entryRailSeedsBySide.value.axis,
-    }).map((hex) => ({
-      id: `mk-38:${hex.col}.${hex.row}`,
-      recordId: RAILHEAD_MARKER.recordId,
-      // 统一取 markers.json 的 side（neutral），不在初设或渲染层另写一份
-      side: RAILHEAD_MARKER.side as MarkerSide,
-      hex,
-      track: null,
+    }
+    const heads = new Map<string, HexRef>()
+    for (const hex of deriveSegmentRailheads({
+      ...facts,
+      segments: convertedRailSegments.value.map((hexes) => ({ hexes })),
     }))
+      heads.set(hexLabel(hex), hex)
+    for (const hex of deriveRailheads(facts)) heads.set(hexLabel(hex), hex)
+    return [...heads.values()]
+      .sort((a, b) => a.col - b.col || a.row - b.row)
+      .map((hex) => ({
+        id: `mk-38:${hex.col}.${hex.row}`,
+        recordId: RAILHEAD_MARKER.recordId,
+        // 统一取 markers.json 的 side（neutral），不在初设或渲染层另写一份
+        side: RAILHEAD_MARKER.side as MarkerSide,
+        hex,
+        track: null,
+      }))
   })
 
   /** C9b：清空换轨账本（裁判订正用；13.3f 的初设之外不应有「已换轨」） */

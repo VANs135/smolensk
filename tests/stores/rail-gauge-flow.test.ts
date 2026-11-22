@@ -345,17 +345,19 @@ describe('5-X2：剧本 7 轴心换轨 4 段与端头格（专规 1.2 / 13.3d）
     const headKeys = new Set(
       markers.filter((marker) => marker.hex !== null).map((marker) => label(marker.hex!)),
     )
-    // 换轨到头的三个 B 端（2.2 / 34.18 / 38.5）各有端头；其余格（含并入点 18.18）都没有
-    const derivedHeads = new Set(['2.2', '34.18', '38.5'])
+    // 换轨到头的四个 B 端（2.2 / 34.18 / 38.5 / 18.18）各有端头；其余格都没有
+    const derivedHeads = new Set(['2.2', '34.18', '38.5', '18.18'])
     expect([...headKeys].sort()).toEqual([...derivedHeads].sort())
     expect(markers).toHaveLength(derivedHeads.size)
 
     /*
-     * ★ 端头不再是剧本手写的 4 个位置：18.18 虽然写在「15.10 to 18.18」这条支线的 B 端，
-     *   但它在账本里已并入已换轨干线（17.19 / 18.17 / 19.19 三面已换轨，只有北向 18.19 未换），
-     *   换轨范围越过它继续 ⇒ 它不是「尽头」，不额外冒一个端头（同一条线不重复）。
+     * ★ 18.18（Orsha）在列：剧本页把它印成「15.10 to 18.18」这条北向支线的 B 端
+     *   （`setup.railheads` 第 4 项，两营 RR Bn 驻此），往北 18.19 仍是宽轨。
+     *   它虽有 17.19 / 18.17 / 19.19 三个已换轨邻格（逐格法会当交汇点跳过），
+     *   但按段端法「段内最长已换轨前缀的末端」它仍是该段前沿 ⇒ 必须有 mk-38
+     *   （2026-11-22 修正；见《端头一致性实测-2026-11-22.md》）。
      */
-    expect(headKeys.has('18.18')).toBe(false)
+    expect(headKeys.has('18.18')).toBe(true)
     for (const segment of SEGMENTS) {
       const from = parseConvertedRailRun(segment.declaration)!.from
       expect(headKeys.has(label(from)), `${segment.declaration} 的 A 端不该有端头标记`).toBe(false)

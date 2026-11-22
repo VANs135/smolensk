@@ -15,6 +15,7 @@ import {
   createRailFacts,
   createRailGraph,
   deriveRailheads,
+  deriveSegmentRailheads,
   mergeTransportPoints,
   railCapacityCost,
   railPathFacts,
@@ -746,6 +747,19 @@ describe('13.3f：Railhead 端头从换轨账本 + 铁路连通推导（只显�
       railNeighbors: railOf(edges),
       roots: roots.map(hexOf),
     }).map(keyOf)
+  /** 段端法（`deriveSegmentRailheads`）：段为剧本页 A→B 的逐格清单 */
+  const segmentHeads = (
+    converted: readonly string[],
+    edges: readonly string[],
+    segments: readonly (readonly string[])[],
+    roots?: readonly string[],
+  ): string[] =>
+    deriveSegmentRailheads({
+      converted: converted.map(hexOf),
+      railNeighbors: railOf(edges),
+      segments: segments.map((hexes) => ({ hexes: hexes.map(hexOf) })),
+      roots: roots?.map(hexOf),
+    }).map(keyOf)
 
   // 一条直线：1.1 — 1.2 — 1.3 — 1.4 …
   const LINE = ['1.1-1.2', '1.2-1.3', '1.3-1.4']
@@ -791,6 +805,58 @@ describe('13.3f：Railhead 端头从换轨账本 + 铁路连通推导（只显�
     expect(headsWithRoots(['1.1', '1.2', '1.3', '5.1', '5.2'], edges, ['1.1'])).toEqual(['1.3'])
     // 根全部落在账本外（该格还没换成己方轨距）⇒ 无可用根，退回旧近似而不是清空端头
     expect(headsWithRoots(['1.1', '1.2', '1.3'], LINE, ['9.9'])).toEqual(['1.3'])
+  })
+
+  it('★ 段端法：交汇格照剧本页照样出端头（剧本 7 的 18.18 / Orsha 口径）', () => {
+    // 主线 [1.1,1.2,1.3] 与支线 [1.4,1.3] 在 1.3 交汇：1.3 有 1.2 / 1.4 两个已换轨邻格，
+    // 往 1.5 仍是未换轨（＝线路还在继续）⇒ 剧本页会把 1.3 印成支线 B 端。
+    const edges = ['1.1-1.2', '1.2-1.3', '1.3-1.4', '1.3-1.5']
+    const converted = ['1.1', '1.2', '1.3', '1.4']
+    const segments = [
+      ['1.1', '1.2', '1.3'],
+      ['1.4', '1.3'],
+    ]
+    // 逐格法按「已换轨邻格 ≤1」跳过交汇格 ⇒ 一个都不出（这正是剧本 7 少 Orsha 的成因）
+    expect(heads(converted, edges)).toEqual([])
+    // 段端法按「段内最长前缀末端」⇒ 与剧本页 B 端一致
+    expect(segmentHeads(converted, edges, segments)).toEqual(['1.3'])
+    expect(segmentHeads(converted, edges, segments, ['1.1'])).toEqual(['1.3'])
+  })
+
+  it('★ 段端法：初设各段 B 端逐一对应；沿铁路越段推进后本段让位给逐格法', () => {
+    // 两段互不相连：1.x 主干到 1.3（1.4 起仍是宽轨），2.x 支线到 2.3
+    const edges = ['1.1-1.2', '1.2-1.3', '1.3-1.4', '1.4-1.5', '2.1-2.2', '2.2-2.3', '2.3-2.4']
+    const segments = [
+      ['1.1', '1.2', '1.3'],
+      ['2.1', '2.2', '2.3'],
+    ]
+    expect(segmentHeads(['1.1', '1.2', '1.3', '2.1', '2.2', '2.3'], edges, segments)).toEqual([
+      '1.3',
+      '2.3',
+    ])
+    // 越段推进：1.4 被换进（不属于任何段的走线）⇒ 1.3 不再算段端；逐格法给出 1.4
+    const advanced = ['1.1', '1.2', '1.3', '2.1', '2.2', '2.3', '1.4']
+    expect(segmentHeads(advanced, edges, segments)).toEqual(['2.3'])
+    expect(heads(advanced, edges)).toEqual(['1.4', '2.3'])
+  })
+
+  it('★ 段端法：段内后撤 ⇒ 前缀变短、端头退回；整段未换轨则不出', () => {
+    const edges = ['1.1-1.2', '1.2-1.3', '1.3-1.4']
+    const segments = [['1.1', '1.2', '1.3']]
+    expect(segmentHeads(['1.1', '1.2', '1.3'], edges, segments)).toEqual(['1.3'])
+    expect(segmentHeads(['1.1', '1.2'], edges, segments)).toEqual(['1.2'])
+    expect(segmentHeads([], edges, segments)).toEqual([])
+  })
+
+  it('★ 段端法：给出 roots 时只认根可达（与补给源断开的段不出）', () => {
+    const edges = ['1.1-1.2', '1.2-1.3', '1.3-1.4', '5.1-5.2', '5.2-5.3', '5.3-5.4']
+    const segments = [
+      ['1.1', '1.2', '1.3'],
+      ['5.1', '5.2', '5.3'],
+    ]
+    const converted = ['1.1', '1.2', '1.3', '5.1', '5.2', '5.3']
+    expect(segmentHeads(converted, edges, segments)).toEqual(['1.3', '5.3'])
+    expect(segmentHeads(converted, edges, segments, ['1.1'])).toEqual(['1.3'])
   })
 })
 

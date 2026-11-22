@@ -746,6 +746,104 @@ export function deriveRailheads(facts: RailheadFacts): HexRef[] {
   return heads.sort((a, b) => a.col - b.col || a.row - b.row)
 }
 
+/**
+ * 单条换轨段：剧本页 `A to B` 的逐格清单（A→B 顺序、含两端）
+ *
+ * 由 `convertedRailRun` 给出（唯一最短路径），store 侧对应 `setup.convertedAxisRails.runs`。
+ */
+export interface RailheadSegment {
+  hexes: readonly HexRef[]
+}
+
+/** 段端法端头推导输入：换轨账本 + 逐段走线 + 铁路连通 */
+export interface SegmentRailheadFacts extends RailheadFacts {
+  /** 各换轨段的逐格清单（专规 1.2 剧本页 A→B） */
+  segments: readonly RailheadSegment[]
+}
+
+/**
+ * 13.3f：**按换轨段**推导 Railhead 端头格（初设与剧本页 B 端逐一对应）
+ *
+ * 与 `deriveRailheads` 的差别只在端头的取法：
+ *   - `deriveRailheads` 逐格看「已换轨邻格 ≤1」，交汇 / 三角收口处一律跳过（已知边界）；
+ *   - 本函数逐段看「自 A 端起最长的连续已换轨前缀」，前缀末端就是该段当前前沿，
+ *     **初设（全段已换）时恰好等于剧本页的 B 端**——交汇格（如剧本 7 的 18.18 / Orsha，
+ *     有三个已换轨邻格、往北 18.19 仍是宽轨）因此不再被误跳过。
+ *
+ * 仍保留的两条既有语义：
+ *   · **越段推进不再算本段端头**：前缀末端若已有「不属于任何段」的已换轨铁路邻格
+ *     （＝玩家沿铁路继续往前换过了），本段不再报该格，改由 `deriveRailheads` 给出新前沿；
+ *   · **换到底不出端头**：末端没有任何未换轨铁路邻格（线路已到图边 / 尽头）即视为无端头，
+ *     与剧本 1「端头是 2.02、不是 01.03」一致；
+ *   · 给出 `roots` 时只认根可达（与补给源断开的换轨段不出端头）。
+ *
+ * 段内后撤（苏方换回中段/末端）时前缀变短，端头自然退回。
+ */
+export function deriveSegmentRailheads(facts: SegmentRailheadFacts): HexRef[] {
+  const converted = new Map<string, HexRef>()
+  for (const hex of facts.converted) converted.set(hexText(hex), hex)
+  if (converted.size === 0 || facts.segments.length === 0) return []
+
+  /** 落在任一换轨段走线上的格（与「段外新增格」区分用） */
+  const segmentKeys = new Set<string>()
+  for (const segment of facts.segments)
+    for (const hex of segment.hexes) segmentKeys.add(hexText(hex))
+
+  /** 根可达（可选）：换轨范围从本方铁路补给源格起步，与源断开的段不出端头 */
+  const reachable = new Set<string>()
+  const rootKeys = (facts.roots ?? []).map(hexText).filter((key) => converted.has(key))
+  if (rootKeys.length > 0) {
+    const queue: string[] = []
+    for (const key of rootKeys) {
+      if (reachable.has(key)) continue
+      reachable.add(key)
+      queue.push(key)
+    }
+    for (let index = 0; index < queue.length; index += 1) {
+      const key = queue[index]!
+      const hex = converted.get(key)!
+      for (const neighbor of facts.railNeighbors(hex)) {
+        const neighborKey = hexText(neighbor)
+        if (neighborKey === key || !converted.has(neighborKey) || reachable.has(neighborKey))
+          continue
+        reachable.add(neighborKey)
+        queue.push(neighborKey)
+      }
+    }
+  }
+  const isReachable = (key: string): boolean => rootKeys.length === 0 || reachable.has(key)
+
+  const heads = new Map<string, HexRef>()
+  for (const segment of facts.segments) {
+    let last: HexRef | undefined
+    for (const hex of segment.hexes) {
+      const key = hexText(hex)
+      if (!converted.has(key)) break
+      last = converted.get(key)!
+    }
+    if (last === undefined) continue
+    const lastKey = hexText(last)
+    if (!isReachable(lastKey)) continue
+
+    let openNeighbors = 0
+    let pushedBeyondSegment = false
+    for (const neighbor of facts.railNeighbors(last)) {
+      const neighborKey = hexText(neighbor)
+      if (neighborKey === lastKey) continue
+      if (converted.has(neighborKey)) {
+        if (segmentKeys.has(neighborKey)) continue
+        pushedBeyondSegment = true
+        break
+      }
+      openNeighbors += 1
+    }
+    if (pushedBeyondSegment) continue
+    if (openNeighbors === 0) continue
+    heads.set(lastKey, last)
+  }
+  return [...heads.values()].sort((a, b) => a.col - b.col || a.row - b.row)
+}
+
 /* ────────────────────────────── 运输点数：合并 / 拆分（13.2c） ────────────────────────────── */
 
 /** 运输点数视图（13.2） */
