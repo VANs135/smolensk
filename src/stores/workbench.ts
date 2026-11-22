@@ -3990,7 +3990,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })),
   )
 
-  /** C7：结果摘要（格值 / 横移后列位 / 成本 / 损失，供界面显示） */
+  /**
+   * C7：结果摘要（格值 / 横移后列位 / 成本 / 损失，供界面显示）
+   *
+   * 4.9c：原文「在轰炸中，轰炸方玩家应展示其**轰炸值的总值**，并被告知所有适用的
+   *   **轰炸表横移或防空点数**」⇒ `totalValue` 是参炸单位/飞机的加总值（10.0 加总后、
+   *   任何横移之前），`shifts` 是横移合计；两者随宣布即写入 `barrageState`（`beginBarrageNow`）
+   *   ⇒ 宣布后、掷骰前对手即可读到，不是结算后才补的回执。
+   *   空军轰炸的「防空点数」不在此表：它由 14.2f-E 的防空应答（`airState.flak.drm`）给出。
+   */
   const barrageSummary = computed(() => {
     const state = barrageState.value
     if (state === null) return null

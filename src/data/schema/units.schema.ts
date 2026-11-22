@@ -118,6 +118,13 @@ export const UnitSchema = z
      * 3.2f 的**独立单位**＝「既不属于多单位编队 (3.1c) 也**不属于多军力单位** (3.2d)」⇒ 本字段是判"是否独立单位"
      * 的一半（另一半是 `steps.total > 1`）。**由数据定死**、不由玩家声明（用户 2026-09-17 裁定）。
      * 源库 `units.json` 的 `formation` 导出；缺键 ＝ 该单位不属于任何多单位编队。
+     *
+     * ★ 13.1d 的已知限制（2026-11-22 核实，未实现）：原文「师指挥部只能向**自己师中的单位**，或
+     *   同一国籍的**独立单位**（3.2f）提供补给」需要逐单位的师属番号才能判。本库该字段覆盖不足
+     *   （轴 110/190、苏 **6/192** 条战斗单位有值）⇒ 若照原文硬判，绝大多数苏军单位会被错误拒投递。
+     *   故本作按专规未见额外限制、且数据不足，**暂不做师属过滤**（HQ 对全部友方地面单位投递）。
+     *   若日后补齐苏军番号，实现点应在补给投递的候选/判据处（`trace-supply` / `supply-interaction`），
+     *   与 `isIndependentUnitOf`（3.2f）同源，不要另造第二份"是否本师"。
      */
     formation: z.string().min(1).optional(),
     echelon: z
@@ -178,8 +185,21 @@ export const UnitSchema = z
       .optional(),
     reSize: z.number().nonnegative().optional(),
 
-    /** 攻击资格（4.4：括注战斗值只能防御） */
+    /**
+     * 攻击资格（4.4：括注战斗值只能防御）
+     *
+     * - **13.4b**：火炮在战斗 / 移动模式下战斗值都是**带括号的 1**（只可防御），且该数字
+     *   **不印在算子上** ⇒ 火炮记录统一 `attack: 1`（两面）+ 本字段 `false` + `attackValueBracketed: true`；
+     * - **13.1c**：指挥部行动值 0；战斗模式战斗值**带括号的 5**、移动模式降至**带括号的 1**
+     *   （同样只可防御、不印在算子上）⇒ HQ 记录 `factors.combat.attack: 5` / `factors.move.attack: 1`
+     *   + 本字段 `false`（合法数据：`ax-hq-ge-hq-5th-corps` 等 13 枚轴方 HQ，苏方同值）；
+     * - **3.1b**：算子上的「一个轮子＝半摩托化 / 两个轮子＝全摩托化」原文自述**仅供参考、
+     *   只是提示历史信息** ⇒ 本作**不建模**该符号（不设字段、不参与任何判定）。
+     *
+     * 唯一消费方是 `battle.ts#resolveBattleLegality` 的 9.1e 判据（攻方取不到资格即拒）。
+     */
     attackCapable: z.boolean().optional(),
+    /** 13.4b / 13.1c：该记录的战斗值是**括号值**（只可防御；数据侧与 `attackCapable: false` 同源） */
     attackValueBracketed: z.boolean().optional(),
     /*
      * 批 F 切片 6（B49 收尾）：原 `combatValuePrinted` 字段**已删**——它零消费（全仓只有本 schema
