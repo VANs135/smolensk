@@ -28,6 +28,12 @@ import { combatLineOf, type CombatLine } from './terrain'
 import { canAttackAfterAirTransport, type AirUnitTransportState } from './air-unit-movement'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：10.0–10.2c / 13.4a
+ *   专规：**2.3d 苏炮合并轰炸须同堆叠**；10.2c 无海军（1.1c，:508）
+ */
+
+/**
  * 轰炸交互（C7，OCS 10.0 章）——**10.0 通用流程的状态机**（纯函数）
  *
  * 定位与 C6 战斗交互（`combat-interaction.ts`）同规：把「宣布整体目标与轰炸值分配 → 按初始列付火炮补给

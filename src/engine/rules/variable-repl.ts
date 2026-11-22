@@ -13,6 +13,12 @@ import { isInRandomEventPeriod, isRailCapBoosted } from './timing'
 import { rollVariableExit, type VariableExitResult } from './variable-exit'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：13.5 / 1.6b / 1.6c
+ *   专规：1.6/2.3c/3.3c/3.6 覆盖补员池
+ */
+
+/**
  * 可变增援（通规 13.5 / 1.6b / 1.6c ← 专规 1.6 / 2.3c / 3.3c / 3.6）
  *
  * ## 条文索引

@@ -1,6 +1,12 @@
 import { fail, succeed, type RuleOutcome } from '../result-types'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：（判定主体为专规，通规仅引原文）
+ *   专规：2.3b
+ */
+
+/**
  * NKVD 边防团（Smolensk 专规 2.3b）
  *
  * ## 条文原文（专规 2.3b，ch02 引录）

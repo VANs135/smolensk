@@ -5,6 +5,12 @@ import { fail, succeed, type RuleOutcome } from '../result-types'
 import { AIR_BASE_CAPTURE_NO_LOSS_MIN_DICE } from './combat'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：14.0 / 15.0
+ *   专规：1.4 / 1.5 / 2.2 / 3.2a；2.2 能力标签
+ */
+
+/**
  * 空军（通规 OCS 14.0 / 15.0 → 专规 Smolensk 1.4 / 1.5 / 2.2 / 3.2a）
  *
  * 实现顺序遵循「通规基线 ← 专规覆盖」：

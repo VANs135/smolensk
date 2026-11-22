@@ -3,6 +3,12 @@ import type { HexRef, Side } from '@/data'
 import { succeed, type RuleOutcome } from '../result-types'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：（判定主体为专规，通规仅引原文）
+ *   专规：3.3b
+ */
+
+/**
  * 治安需求（Smolensk 专规 3.3b，轴方）
  *
  * ## 条文原文（ch03 引录）

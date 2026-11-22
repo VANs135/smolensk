@@ -46,6 +46,12 @@ import { canReduceAirstrip } from './construction'
 import { isAirMissionAllowedInPhase } from './weather'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：14.0–14.11 / 15.0–15.4
+ *   专规：1.4a 图外空军盒；拦截永不受专规天气与阶段限制
+ */
+
+/**
  * 空军交互（C9，OCS 14.0 / 15.0 章）
  *
  * 本模块是**交互层**：把用户在界面上的动作（选任务、点飞机、应答拦截、掷防空骰、整备、搬家、缩减）

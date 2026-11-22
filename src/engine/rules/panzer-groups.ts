@@ -5,6 +5,12 @@ import { fail, succeed, type RuleOutcome } from '../result-types'
 import { PANZER_GROUP_CONSTRAINT_END } from './timing'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：（判定主体为专规，通规仅引原文）
+ *   专规：3.4 / 3.4a / 3.4b
+ */
+
+/**
  * 装甲集群分界线与补给分配（Smolensk 专规 3.4 / 3.4a / 3.4b）
  *
  * ## 条文原文（ch03 引录，源 = Smolensk_Rules_v1.1 §3.4）

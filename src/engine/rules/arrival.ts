@@ -7,6 +7,12 @@ import { hexesWithin } from '../hex-geometry'
 import { isEntryLShutDown, isSouthSourcesShutDown } from './timing'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：13.6 / 1.6a / 13.6b/c / 13.3e
+ *   专规：1.6 / 2.1 / 3.1 落点；2.1a Entry L/E 关闭；2.3c/2.4 方面军预备队
+ */
+
+/**
  * 到达表执行（通规 13.6 / 1.6a ← 专规 1.6 / 2.1 / 3.1 / 2.1a / 2.3c / 2.4）
  *
  * ## 条文索引

@@ -3,6 +3,12 @@ import type { HexRef, Side } from '@/data'
 import type { AirStatus } from '../state-types'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：4.8b / 4.9
+ *   专规：1.4 图外盒双方同意可隐藏
+ */
+
+/**
  * 切方与信息展示纪律（W7 C13）
  *
  * ## 条文出处（通规 4.8b / 4.9；专规 1.4）

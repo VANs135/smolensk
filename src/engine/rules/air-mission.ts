@@ -20,6 +20,12 @@ import { EDGE_BOX_ENTRY_MP } from './movement'
 import { AXIS_AIR_BOX_RANGE_HEXES, SOVIET_AIR_BOX_RANGE_HEXES } from './timing'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：14.x / 15.x
+ *   专规：1.4 图外盒不许战斗/轰炸；1.4a 无限驻机；1.4b 边缘盒进出
+ */
+
+/**
  * 空军任务流程、整备额度、基地转移与缩减、地图外盒（W5 B16）
  *
  * 本模块承接 `air.ts` 的**判定原语**（空战 14.3e / 防空 14.4e / 空运 14.10d / 基地能力 15.0b），

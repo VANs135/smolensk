@@ -10,6 +10,12 @@ import { selectMovementTerrain, type MobilityType } from './terrain'
 import { projectsZoc, type ZocSource } from './zoc'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：12.0–12.8 / 12.6a
+ *   专规：专规列出的补给源 2.1/3.1；含图外盒接图边格
+ */
+
+/**
  * 补给追溯（B10，OCS 12.0 章）
  *
  * 「能用 trace 的地方就能用 combat，反之不成立」——本模块只管**追溯补给**这条抽象补给线；

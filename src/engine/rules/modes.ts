@@ -4,6 +4,12 @@ import { fail, succeed, type RuleOutcome } from '@/engine/result-types'
 import { allowReserveEntryAtHex } from './reserve-markers'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：5.0–5.10
+ *   专规：2.3e 苏军 8/1 前不得进战略模式；1.5 首回合 MA 折半
+ */
+
+/**
  * 模式（OCS 5.0 章）——基础模式 + 层叠标记、完整影响矩阵、模式切换合法性
  *
  * 条文出处均为**中文规则书**（CODE_SPEC §5 术语表以中文规则书为唯一来源）。

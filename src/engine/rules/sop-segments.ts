@@ -6,6 +6,12 @@ import type { ActionKind } from './legality'
 import { actionNeedsFuel, type FuelRelevantAction } from './fuel'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：13.6 / 13.5 / 20.0c / 12.10e / 12.6 / 12.8
+ *   专规：3.6 事件与 3.3c 可变撤离挂轴方增援阶段；1.6c 特殊补员抽取；1.3/13.7 编队抽取
+ */
+
+/**
  * **环节链**：一个 SOP 段里玩家依次过哪几个环节（B6）
  *
  * ## 这张表不是设计出来的，是**抄**出来的

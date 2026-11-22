@@ -17,6 +17,12 @@ import type { BaseMode, Orientation } from './modes'
 import type { MobilityType } from './terrain'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：13.2 / 13.3 / 4.7
+ *   专规：1.2 剧本页只给端点；容量值走 `rail-cap`
+ */
+
+/**
  * 铁路运输与运输点数（B8，OCS 13.2 / 13.3 / 4.7 / 13.9）
  *
  * 覆盖四件事，全部为纯函数（玩家决策与运行期事实作为入参给出，故可脱离整局状态独立测试）：

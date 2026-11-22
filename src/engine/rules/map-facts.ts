@@ -5,6 +5,12 @@ import type { MapFacts } from './move-types'
 import type { HexsideCrossing } from './terrain'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：6.2a–d
+ *   专规：3.4 多轨铁路判据
+ */
+
+/**
  * 地图事实提供者（B7 移动模块用）
  *
  * 把 map-layers.json 的字段形状收敛成移动模块需要的两个语义化查询：

@@ -6,6 +6,12 @@ import { entryEdgeHexes } from './entry-edges'
 import { isEntryLShutDown, isRailCapBoosted, isSouthSourcesShutDown } from './timing'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：（判定主体为专规，通规仅引原文）
+ *   专规：1.2 / 1.5 / 1.6c / 2.1a / 2.3c / 2.3e / 2.4 / 3.3c / 3.4 / 3.6 / 5.0b
+ */
+
+/**
  * 专规时点与补给源状态（Smolensk 专规 1.2 / 1.5 / 1.6c / 2.1a / 2.3c / 2.3e / 2.4 / 3.3c / 3.4 / 3.6 / 5.0b）
  *
  * ## 条文依据（逐条给出）

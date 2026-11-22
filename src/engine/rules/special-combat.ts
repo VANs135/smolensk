@@ -10,6 +10,12 @@ import { SP_TO_T } from './supply'
 import { resolveExtenderCollapse, extenderDisplacementCandidates } from './supply-phase'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：9.14 / 21.11c
+ *   专规：1.3a 印刷工事保持原级；1.1c 无海军
+ */
+
+/**
  * 特殊战斗（B13，OCS 9.14）
  *
  * 「特殊战斗」＝**进入**某格时对格内**设施与后勤目标**的处置，与 9.0 的野战战斗是两套流程：

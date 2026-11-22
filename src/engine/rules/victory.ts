@@ -5,6 +5,12 @@ import { normalizeArrivalDate } from './arrival'
 import { earlyDecisionCheckDue } from './exclusive-timing'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：（判定主体为专规，通规仅引原文）
+ *   专规：5.0 / 5.0a / 5.0b / 5.0c
+ */
+
+/**
  * 胜利判定（Smolensk 专规 5.0 / 5.0a / 5.0b / 5.0c）
  *
  * ## 条文原文

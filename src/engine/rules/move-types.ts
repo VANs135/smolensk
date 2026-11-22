@@ -5,6 +5,12 @@ import type { AirUnitTransportState } from './air-unit-movement'
 import type { HexsideCrossing, MobilityType } from './terrain'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：6.2
+ *   专规：1.5 首回合苏军 MA ×1/2；4.2c ×1/4；1.1b 安全边缘格
+ */
+
+/**
  * 移动模块的输入/输出类型（B7）
  *
  * 设计口径：移动是**纯函数 + 视图输入**——引擎不直接读 GameState 全量，

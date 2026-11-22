@@ -5,6 +5,12 @@ import type { InternalStocks } from '../state-types'
 import { matchRowIndex } from '../tables/lookup'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：12.0 / 12.4
+ *   专规：无编号（本作非《非洲军》⇒ 2 军力旅例外不适用）
+ */
+
+/**
  * 补给与储备（OCS 12.0）——战斗补给成本 / 补给站爆破 / 部队储备判定
  */
 

@@ -30,6 +30,12 @@ import { canAttackAfterAirTransport, type AirUnitTransportState } from './air-un
 import type { HexRef, Side } from '@/data'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：9.0–9.13 / 12.4 / 12.10
+ *   专规：4.2b 四步步兵师判据；2.3b NKVD 判据；1.1b 安全边缘格不得推进
+ */
+
+/**
  * 战斗判定与结算（B12，OCS 9.0 章）
  *
  * 本模块只做**一次战斗**的判定与结算，逐步实现 9.2 的九步流程。每一步都是纯函数；玩家的决策

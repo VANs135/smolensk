@@ -6,6 +6,12 @@ import type { RailFacts } from './rail'
 import type { SupplyMobility } from './trace-supply'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：12.6a / 13.3f
+ *   专规：1.2 轨距只回答"谁能用"；港口恒 false 属预期
+ */
+
+/**
  * 铁路补给连接（12.7a-B/C）与**火车卸货格**（13.3c）——W6 C9 补全
  *
  * 本模块把「铁路线怎么把补给送出去」这条链补全：`12.6a` 列出三种补给源，其中

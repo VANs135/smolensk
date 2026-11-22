@@ -4,6 +4,12 @@ import { matchRowIndex } from '../tables/lookup'
 import { VARIABLE_EXIT_START } from './timing'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：（判定主体为专规，通规仅引原文）
+ *   专规：3.3c
+ */
+
+/**
  * 可变撤离（专规 3.3c）
  *
  * 19 August 起每回合轴方增援阶段掷 1 骰查可变撤离表：

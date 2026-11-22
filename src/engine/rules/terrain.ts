@@ -2,6 +2,12 @@ import { chartsTec } from '@/data'
 import type { DeepReadonly, TecAttackMod, TecFeature, TecMpValue } from '@/data'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：6.2a–d / 9.3b / 9.4b–d / 8.1a–c
+ *   专规：★ **自陈未接入**：13.8b 工程桥接、专规 3.5 桥面标记
+ */
+
+/**
  * 地形选取引擎（6.2d / 9.3b / 9.4b–9.4d）
  *
  * 本模块是「格内地形集合」的唯一消费者，数值全部取自 charts-tec.json（冻结）。

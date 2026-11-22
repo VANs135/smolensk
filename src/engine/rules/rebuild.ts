@@ -4,6 +4,12 @@ import type { DeepReadonly, HexRef, RebuildRow, Side } from '@/data'
 import { fail, succeed, type RuleOutcome } from '../result-types'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：13.5
+ *   专规：1.6 Notes：Pax/Eq 可跨回合保存；Eq 不重建飞机（覆盖 13.5f，:23/:24）
+ */
+
+/**
  * 补员与重建（通规 13.5 ← 专规 1.6 覆盖）
  *
  * ## 条文索引（中文规则书 13.5 / Smolensk 专规 1.6 Notes）

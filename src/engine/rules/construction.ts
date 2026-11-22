@@ -10,6 +10,12 @@ import type { BaseMode } from './modes'
 import { selectMovementTerrain, type HexsideCrossing, type MobilityType } from './terrain'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：13.0 / 13.8 / 15.2–15.4 / 16.0
+ *   专规：1.3a 印刷永久工事；1.3b 上限 1 级；2.3e 禁建期；3.5 建造标记
+ */
+
+/**
  * 建设与设施（B17，OCS 13.0 / 13.8 / 15.2–15.4 / 16.0；Smolensk 专规 1.3 / 2.3e / 3.5）
  *
  * 本模块覆盖**特殊单位与设施的作业面**：工程能力（13.8a）、架桥（13.8b）、建造（13.8d）、

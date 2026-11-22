@@ -31,6 +31,12 @@ import { setupEffectOf } from './setup-effects'
 import { setupSourceOf } from './setup-source'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：13.3b / 13.7
+ *   专规：专规 1.2 铁路容量轨
+ */
+
+/**
  * 记录轨与容器管理（W7 C12）
  *
  * ## 这一层做什么

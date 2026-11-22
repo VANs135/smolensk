@@ -5,6 +5,12 @@ import type { GamePhase } from '../state-types'
 import type { SecurityCheckCityView, TrainbustingCause } from './security-needs'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：2.2 / 5.9 / 5.10 / 12.5
+ *   专规：3.3b 游击队标记按专规条件移除
+ */
+
+/**
  * H 清理阶段的**通用自动清理**（2.2 末段 + 5.9 / 5.10 / 12.5d / 10.0c-C）
  *
  * ## 条文索引

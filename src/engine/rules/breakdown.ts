@@ -4,6 +4,12 @@ import type { Side } from '@/data'
 import { fail, succeed, type RuleOutcome } from '../result-types'
 
 /**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：20.0–20.0g / 13.9 / 5.10
+ *   专规：2.4 锁定师不可拆；4.3 Setup Wiggle
+ */
+
+/**
  * 拆分单位（通规 20.0 / 13.9 的拆分面）
  *
  * ## 条文索引（中文规则书 20.0）

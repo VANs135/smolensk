@@ -20,6 +20,12 @@ import { isPanzerGroupConstraintLifted } from './timing'
 import { panzerGroupRulesActive } from './panzer-groups'
 import { scenarioTurnRange } from './victory'
 
+/**
+ * 条文索引（本文件与本仓库实现的对应）
+ *   通规：12.1d / 3.4b / 3.6 / 9.14b / 13.2h / 13.5 / 14.1a
+ *   专规：专规 Setup Notes A/C；1.4a 飞机与基地同格
+ */
+
 /** 剧本ch10/ch11：已有编队的必做西移不能按未摆新单位的放弃规则收束。 */
 export function validateRequiredSetupPlacements(
   pending: readonly { id: string; remaining: number }[],
