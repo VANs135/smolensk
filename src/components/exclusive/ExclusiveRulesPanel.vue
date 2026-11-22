@@ -20,7 +20,7 @@ import { actsShown, infoShown, sectionShown, type ExclusiveOnly } from './sectio
  *   · 治安需求（专规 3.3b）：轴控城市未驻防、未盖 ZOC ⇒ 放苏军 Trainbusting；满足或转苏军 ⇒ H 清理段移除；
  *   · 可变撤离（专规 3.3c）与随机事件（专规 3.6，本作为 Supply Train / 地图外任务）：日历给时点，掷骰在 B18 面板；
  *   · 建设标记（3.5）：剧本 1/2 各 3 枚，免费建桥（13.8b）或简易机场（15.2），一次性、不可重建；
- *   · 苏军空军限制（专规 1.2 / 轴方 专规 3.2a）：阵营层预检（权威否决在引擎 assignAirMission 内）。
+ *   · 苏军空军限制（专规 2.2 Red Air Force / 轴方 专规 3.2a）：阵营层预检（权威否决在引擎 assignAirMission 内）。
  *
  * 分层纪律（CODE_SPEC）：结论一律来自 store 对引擎的调用，这里不做任何规则计算。 */
 
@@ -817,25 +817,25 @@ const compactPanzer = computed(() => props.only === 'panzer')
       </div>
     </details>
 
-    <!-- ── · 苏军空军限制（B37：按本环节可做与否置顶/折叠） ── -->
+    <!-- ── · 苏军空军限制（专规 2.2 Red Air Force；B37：按本环节可做与否置顶/折叠） ── -->
 
     <details
       class="excl"
       :open="pins.airRestriction"
       :style="{ order: pins.airRestriction ? 5 : 105 }"
     >
-      <summary class="excl__title">1.2 苏军空军限制（只读提示）</summary>
-      <!-- ── · 苏军空军限制（1.2 / 轴方 3.2a） ── -->
+      <summary class="excl__title">专规 2.2 苏军空军限制（只读提示）</summary>
+      <!-- ── · 苏军空军限制（专规 2.2 Red Air Force / 轴方 专规 3.2a Hip Shoots） ── -->
       <hr />
       <RuleNote
         title="赤色空军限制：不得低空扫射 / 不得需计划的空降 / IL.2 一步 / 反应与进击阶段不出击"
-        rule="1.2 / 3.2a"
+        rule="专规 2.2 / 专规 3.2a"
       >
         <p class="muted">
-          赤色空军限制（1.2）：**2.2a** 苏军不得低空扫射（轴方 3.2a：天气允许时可用）； **2.2b**
-          允许补给空投、不得需计划的空降（14.10b）；**2.2c** IL.2（Early Sturmovik）只有一步；
-          **2.2d** 苏军不得在本方**反应 / 进击阶段**出击。下列为**当前任务选择的预检**；
-          权威否决在引擎宣布任务时给出。
+          赤色空军限制（专规 2.2）：**2.2a** 苏军不得低空扫射（轴方 3.2a：天气允许时可用）；
+          **2.2b** 允许补给空投、不得需计划的空降（14.10b）；**2.2c** IL.2（Early
+          Sturmovik）只有一步； **2.2d** 苏军不得在本方**反应 /
+          进击阶段**出击。下列为**当前任务选择的预检**； 权威否决在引擎宣布任务时给出。
         </p>
       </RuleNote>
       <p v-if="airAdvisory === null" class="muted">

@@ -18994,7 +18994,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   · `security`（3.3b）：有城要放标记，或（清理段）有标记要移除；
    *   · `hedgehog`（16.0b/c）、`constructionMarker`（专规 3.5）：本环节的闸门放行（后者还须有枚数）；
    *   · `supplyCache`（专规 1.7）：补给段的缓存台账提醒（Forage 入口已在补给阶段面板）；
-   *   · `airRestriction`（专规 1.2 苏军空军限制）：**纯只读提示** ⇒ 不置顶。
+   *   · `airRestriction`（专规 2.2 Red Air Force 苏军空军限制）：**纯只读提示** ⇒ 不置顶。
    */
   const exclusiveSectionPins = computed<Record<ExclusiveSection, boolean>>(() => {
     const allowed = allowedActionsOf(segmentGateQuery.value)
@@ -19024,7 +19024,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *
    * 用户 2026-11-09：「一个框不能装多件事」——会话按节逐件推进，每次只出第一节可做的。
    * 判据全部复用 `exclusiveSectionPins`（在上一处），不在这里另写规则；
-   * `airRestriction`（专规 1.2 只读）不置顶 ⇒ 不进会话（仍留在右栏只读信息里）。
+   * `airRestriction`（专规 2.2 只读）不置顶 ⇒ 不进会话（仍留在右栏只读信息里）。
    */
   const exclusiveSectionsNow = computed<readonly ExclusiveSection[]>(() => {
     const pins = exclusiveSectionPins.value
