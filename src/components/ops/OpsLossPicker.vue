@@ -20,7 +20,7 @@ const allocated = computed(() => workbench.barrageLossAllocated)
 <template>
   <p class="num">本次结果：{{ workbench.barrageSummary?.unitOutcome?.detail ?? '—' }}</p>
   <p class="num">
-    请选择承受损失的单位：还需
+    请选择承受损失的单位：<b>点算子图</b>分配 1 点，还需
     <b>{{ Math.max(0, required - allocated) }}</b> 点（共 {{ required }} 点）
   </p>
   <div class="ops__grid">
@@ -34,16 +34,17 @@ const allocated = computed(() => workbench.barrageLossAllocated)
       >
         <img :src="counterImageUrlOf(unit) ?? ''" class="ops__img" alt="" />
       </button>
-      <span class="ops__loss-count">
-        {{ workbench.barrageLossPointsOf(unit.instanceId) }} / {{ unit.steps }}
+      <span class="ops__loss-count num">
+        {{ workbench.barrageLossPointsOf(unit.instanceId) }} / {{ unit.steps }} 军力
       </span>
       <button
         v-if="workbench.barrageLossPointsOf(unit.instanceId) > 0"
         type="button"
-        class="ops__minus"
+        class="ops__undo"
+        title="撤销这一枚的 1 点损失"
         @click="workbench.removeBarrageLossPoint(unit.instanceId)"
       >
-        −
+        撤销
       </button>
     </div>
   </div>
@@ -97,17 +98,17 @@ const allocated = computed(() => workbench.barrageLossAllocated)
   font-size: var(--text-xs);
 }
 
-.ops__minus {
-  width: 22px;
-  height: 20px;
+.ops__undo {
+  padding: 2px 8px;
   border: 1px solid var(--color-rule);
   border-radius: 3px;
   background: transparent;
   color: inherit;
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 
-.ops__minus:disabled {
+.ops__undo:disabled {
   opacity: 0.4;
   cursor: default;
 }

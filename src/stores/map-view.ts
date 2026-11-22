@@ -4943,8 +4943,22 @@ export const useMapViewStore = defineStore('mapView', () => {
        * 阈值取 `IN_HEX_GROUND_CAPACITY`（＝扇面单页枚数），与缩放/扇面状态无关。
        *
        * 空军基地格是例外：飞机不进地面堆叠，必须从「飞机堆叠窗」查看/整备（B3）。
+       *
+       * ★ 战斗环节例外（9.1b，2026-11-22）：本环节**点格面**必须落到 `workbench.clickHex`
+       *   → `battleToolClick`（点己方格＝加入/移出攻方，点敌方格＝定防御格并直接进 9.2），
+       *   不能被下面的摊开/开窗分支先吞掉。修前现场：`combat.combat` 环节（正式界面不切工具）
+       *   点己方格面只摊开 ⇒ 攻方恒为空；再点敌方格面又只开窗 ⇒ `battleTarget` 仍 null，
+       *   常规战斗发不起来。判据 `combatPickActive`＝闸门允许 `combat.declare`，只覆盖
+       *   `combat.combat` / `exploitation.combat`，与 `clickHex` 的分派同源。
        */
-      if (idleBefore && isIdleForStack() && stack.length > 0 && !moveDestinationAt(hex)) {
+      if (
+        idleBefore &&
+        isIdleForStack() &&
+        stack.length > 0 &&
+        !moveDestinationAt(hex) &&
+        // 9.1b：战斗环节不摊开——格面点击交给 `clickHex`（己方加入攻方 / 敌方定防御格）
+        !workbench.combatPickActive
+      ) {
         const ownGround = stack.filter(
           (token) =>
             token.side === actingSide.value &&
@@ -4990,6 +5004,8 @@ export const useMapViewStore = defineStore('mapView', () => {
       const stepId = workbench.segmentStep?.id ?? ''
       const needsActionApi =
         workbench.movementStepNow ||
+        // 9.1b：战斗环节点地图就是"选攻方 / 定防御格"（正式界面不切工具，tool 恒为 move）
+        workbench.combatPickActive ||
         stepId === 'reinforcement.rebuild' ||
         setup.placing !== null ||
         workbench.tool !== 'move'

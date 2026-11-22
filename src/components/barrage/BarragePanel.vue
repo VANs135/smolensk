@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import { SessionStep } from '@/components/session'
+import OpsLossPicker from '@/components/ops/OpsLossPicker.vue'
 import { useRefereeTools } from '@/components/ui-mode'
 import UiField from '@/components/UiField.vue'
 import { counterImageUrlOf, hexLabel, spDumpImageUrlOf, useWorkbenchStore } from '@/stores'
@@ -47,9 +48,6 @@ const cancelBlocker = computed(() => workbench.barrageCancelBlocker())
 
 /** 10.0a 的 `1/2` 取整骰是否仍待掷 */
 const awaitingHalfDie = computed(() => workbench.barrageAwaitingHalfDie)
-
-/** 10.0a：目标格内的敌方战斗单位（由目标玩家选择哪些单位承受损失；候选与引擎校验同源） */
-const lossTargets = computed(() => workbench.barrageLossTargets)
 
 /** 10.0c-A：目标格内所有敌方飞机（逐机掷骰 ≥# 者损 1 军力；修前错取 battleDefenders＝地面单位） */
 const aircraftRollTargets = computed(() => workbench.barrageAircraftRollTargets)
@@ -132,7 +130,7 @@ const dumpItems = computed<readonly CounterPickerItem[]>(() =>
   })),
 )
 
-/** 损失分配输入（unitId → 点数）；`setLoss` 只写玩家输入，不改盘面 */
+/** 10.0d：整体目标类别（格内有敌战斗单位 ⇒ 战斗单位；否则基地；本作无港口） */
 const TARGET_KINDS = [
   { key: 'combatUnits', label: '战斗单位' },
   { key: 'airBase', label: '空军基地' },
@@ -177,17 +175,6 @@ const KINDS = [{ key: 'artillery', label: '火炮' }] as const
 const kindsHere = computed(() =>
   KINDS.filter((kind) => workbench.barrageKindsInSegment.includes(kind.key)),
 )
-
-/** 损失分配输入（unitId → 点数）；`setLoss` 只写玩家输入，不改盘面 */
-function lossValue(unitId: string): number {
-  return workbench.barrageInputs.losses[unitId] ?? 0
-}
-function setLoss(unitId: string, value: number): void {
-  workbench.barrageInputs.losses = {
-    ...workbench.barrageInputs.losses,
-    [unitId]: Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0,
-  }
-}
 
 /** 10.0c-A：格内每架飞机的掷骰输入 */
 function aircraftValue(unitId: string): number {
@@ -501,18 +488,12 @@ function setAircraftRoll(unitId: string, value: number): void {
             由目标玩家选择承受损失的单位
             <RuleTip rule="10.0a">各单位的点数合计须等于结果点数。</RuleTip>
           </p>
-          <div class="row">
-            <label v-for="unit in lossTargets" :key="unit.instanceId" class="field">
-              {{ unit.name }}
-              <UiField
-                class="input"
-                type="number"
-                min="0"
-                :model-value="lossValue(unit.instanceId)"
-                @update:model-value="setLoss(unit.instanceId, Number($event))"
-              />
-            </label>
-          </div>
+          <!--
+            10.0a：受损单位一律**点算子图**选（与炮击 / 空军轰炸共用 `OpsLossPicker`）。
+            修前这里是每个单位一个数字输入框（type=number）⇒ 玩家得去填数，
+            与「选单位」的实感差太远（用户 2026-11-22 第 1 条）。
+          -->
+          <OpsLossPicker />
         </template>
         <template v-else>
           <div class="row">

@@ -269,10 +269,15 @@ describe('第五批 A1：轰炸输入源按目标格（10.0a / 10.0c）', () => 
     expect(planeB.steps).toBe(stepsBBefore)
   })
 
-  it('源码守卫：面板的两处输入都读新投影，不再读 battleDefenders', () => {
+  it('源码守卫：两处输入都读新投影，不再读 battleDefenders', () => {
+    // 逐机掷骰仍在面板；损失点选择在共用块（点算子图），两者都不再回落到 battleDefenders。
     const panel = readFileSync('src/components/barrage/BarragePanel.vue', 'utf8')
-    expect(panel).toContain('workbench.barrageLossTargets')
+    const picker = readFileSync('src/components/ops/OpsLossPicker.vue', 'utf8')
     expect(panel).toContain('workbench.barrageAircraftRollTargets')
-    expect(panel).not.toContain('workbench.battleDefenders')
+    expect(panel).toContain('<OpsLossPicker')
+    expect(picker).toContain('workbench.barrageLossTargets')
+    expect(picker).toContain('addBarrageLossPoint')
+    expect(picker).toContain('removeBarrageLossPoint')
+    expect(panel + picker).not.toContain('workbench.battleDefenders')
   })
 })
