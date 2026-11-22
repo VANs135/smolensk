@@ -1,0 +1,357 @@
+{
+  "meta": {
+    "note": "专规条款号清单：从原文抽「号 + 英文标题」再人工复核补齐；改规则书后重跑并复核。",
+    "source": "D:/OCS/OCS斯摩棱斯克素材/斯摩棱斯克工程数据库/raw_text/专规及表格__Smolensk_Rules_v1.1.txt",
+    "count": 58
+  },
+  "clauses": [
+    {
+      "num": "1.0",
+      "title": "General Rules entering a box",
+      "line": 67,
+      "snippet": "1.0 General Rules entering a box. When leaving a"
+    },
+    {
+      "num": "1.1a",
+      "title": "Entry Hexes",
+      "line": 71,
+      "snippet": "1.1a Entry Hexes. These are marked by are some Hedgehogs (OC"
+    },
+    {
+      "num": "1.1b",
+      "title": "Safe Edges",
+      "line": 15,
+      "snippet": "1.1b Safe Edges. Map-edge hexes that"
+    },
+    {
+      "num": "1.1c",
+      "title": "Swamps",
+      "line": 24,
+      "snippet": "1.1c Swamps. To count as a Swamp,"
+    },
+    {
+      "num": "1.2",
+      "title": "Railroads",
+      "line": 34,
+      "snippet": "1.2 Railroads"
+    },
+    {
+      "num": "1.3a",
+      "title": "Defense Lines",
+      "line": 70,
+      "snippet": "1.3a Defense Lines. Printed on the map"
+    },
+    {
+      "num": "1.3b",
+      "title": "Limits",
+      "line": 73,
+      "snippet": "1.3b Limits. Neither player can ever to the Southeast Box (i"
+    },
+    {
+      "num": "1.4",
+      "title": "Off-Map Boxes",
+      "line": 5,
+      "snippet": "1.4 Off-Map Boxes"
+    },
+    {
+      "num": "1.4a",
+      "title": "Off-Map Airfields",
+      "line": 10,
+      "snippet": "1.4a Off-Map Airfields. Each player"
+    },
+    {
+      "num": "1.4b",
+      "title": "Edge Boxes",
+      "line": 33,
+      "snippet": "1.4b Edge Boxes. During their Move-"
+    },
+    {
+      "num": "1.5",
+      "title": "Weather be saved for later",
+      "line": 86,
+      "snippet": "1.5 Weather be saved for later. of this game (not optional)."
+    },
+    {
+      "num": "1.6a",
+      "title": "Arrival Schedules",
+      "line": 105,
+      "snippet": "1.6a Arrival Schedules. The Soviet and in the dead pile (oth"
+    },
+    {
+      "num": "1.6b",
+      "title": "Variable Arrivals",
+      "line": 124,
+      "snippet": "1.6b Variable Arrivals. A player rolls type of road or railr"
+    },
+    {
+      "num": "1.6c",
+      "title": "Special Repls",
+      "line": 93,
+      "snippet": "1.6c Special Repls. Each turn before 19 Play Note: The Axis "
+    },
+    {
+      "num": "1.7",
+      "title": "Supply Cache Markers",
+      "line": 80,
+      "snippet": "1.7 Supply Cache Markers"
+    },
+    {
+      "num": "1.8",
+      "title": "The Armies",
+      "line": 102,
+      "snippet": "1.8 The Armies"
+    },
+    {
+      "num": "1.8a",
+      "title": "Counter Limits",
+      "line": 110,
+      "snippet": "1.8a Counter Limits. Breakdown units"
+    },
+    {
+      "num": "2.0",
+      "title": "Soviet Special Rules",
+      "line": 118,
+      "snippet": "2.0 Soviet Special Rules"
+    },
+    {
+      "num": "2.1",
+      "title": "Supply and Reinforcements",
+      "line": 121,
+      "snippet": "2.1 Supply and Reinforcements"
+    },
+    {
+      "num": "2.1a",
+      "title": "Supply Shutdown",
+      "line": 160,
+      "snippet": "2.1a Supply Shutdown. These supply • 2 SP and a conversion ("
+    },
+    {
+      "num": "2.2a",
+      "title": "No Hip Shoots",
+      "line": 176,
+      "snippet": "2.2a No Hip Shoots. Soviet air units placed in each detraina"
+    },
+    {
+      "num": "2.2b",
+      "title": "No Airborne Landings",
+      "line": 181,
+      "snippet": "2.2b No Airborne Landings. Supply"
+    },
+    {
+      "num": "2.2c",
+      "title": "Early Sturmoviks",
+      "line": 187,
+      "snippet": "2.2c Early Sturmoviks. The IL.2 air"
+    },
+    {
+      "num": "2.2d",
+      "title": "Lack of Responsiveness",
+      "line": 192,
+      "snippet": "2.2d Lack of Responsiveness. Soviet"
+    },
+    {
+      "num": "2.3",
+      "title": "Soviet Miscellany",
+      "line": 209,
+      "snippet": "2.3 Soviet Miscellany"
+    },
+    {
+      "num": "2.3a",
+      "title": "Alarm Units",
+      "line": 211,
+      "snippet": "2.3a Alarm Units. These will start on sion is not allowed to"
+    },
+    {
+      "num": "2.3b",
+      "title": "The NKVD",
+      "line": 224,
+      "snippet": "2.3b The NKVD. The NKVD Border"
+    },
+    {
+      "num": "2.3c",
+      "title": "Frontal Reserves",
+      "line": 153,
+      "snippet": "2.3c Frontal Reserves. At three sched-"
+    },
+    {
+      "num": "2.3d",
+      "title": "Soviet Artillery",
+      "line": 175,
+      "snippet": "2.3d Soviet Artillery. To combine for"
+    },
+    {
+      "num": "2.3e",
+      "title": "Operational Limits",
+      "line": 182,
+      "snippet": "2.3e Operational Limits. Soviet units OCS 13.3e) via standar"
+    },
+    {
+      "num": "2.4",
+      "title": "Slow Mobilization",
+      "line": 199,
+      "snippet": "...Reducing 2.4 Slow Mobilization 3.2a Hip Shoots. Weather permitting,"
+    },
+    {
+      "num": "3.0",
+      "title": "Axis Special Rules",
+      "line": 154,
+      "snippet": "3.0 Axis Special Rules"
+    },
+    {
+      "num": "3.1",
+      "title": "Supply and Reinforcements",
+      "line": 156,
+      "snippet": "3.1 Supply and Reinforcements"
+    },
+    {
+      "num": "3.2",
+      "title": "Luftwaffe",
+      "line": 197,
+      "snippet": "3.2 Luftwaffe"
+    },
+    {
+      "num": "3.2a",
+      "title": "Hip Shoots",
+      "line": 199,
+      "snippet": "3.2a Hip Shoots. Weather permitting,"
+    },
+    {
+      "num": "3.3",
+      "title": "Axis Miscellany",
+      "line": 205,
+      "snippet": "3.3 Axis Miscellany"
+    },
+    {
+      "num": "3.3a",
+      "title": "Aufk & Krd Units",
+      "line": 207,
+      "snippet": "3.3a Aufk & Krd Units. Special Repls"
+    },
+    {
+      "num": "3.3b",
+      "title": "Security Needs",
+      "line": 210,
+      "snippet": "3.3b Security Needs. City hexes under"
+    },
+    {
+      "num": "3.3c",
+      "title": "Variable Exit",
+      "line": 227,
+      "snippet": "3.3c Variable Exit. On 19 August, start"
+    },
+    {
+      "num": "3.3d",
+      "title": "No Formation Consolidation",
+      "line": 240,
+      "snippet": "3.3d No Formation Consolidation."
+    },
+    {
+      "num": "3.4",
+      "title": "Guderian & Hoth",
+      "line": 247,
+      "snippet": "3.4 Guderian & Hoth • It is usually easy to remember which"
+    },
+    {
+      "num": "3.4a",
+      "title": "Dividing Line",
+      "line": 284,
+      "snippet": "3.4a Dividing Line. The multi-track • As a bridge, the marke"
+    },
+    {
+      "num": "3.4b",
+      "title": "Supply Restrictions",
+      "line": 309,
+      "snippet": "3.4b Supply Restrictions. The Axis Phase from 19 July to 15 "
+    },
+    {
+      "num": "3.5",
+      "title": "Construction Markers",
+      "line": 254,
+      "snippet": "3.5 Construction Markers"
+    },
+    {
+      "num": "3.6",
+      "title": "Random Events",
+      "line": 303,
+      "snippet": "line and in a hex east of Orsha. Note 3.6 Random Events the historical underpin"
+    },
+    {
+      "num": "4.0",
+      "title": "Optional Rules",
+      "line": 256,
+      "snippet": "4.0 Optional Rules"
+    },
+    {
+      "num": "4.1",
+      "title": "Situation Changes",
+      "line": 259,
+      "snippet": "4.1 Situation Changes"
+    },
+    {
+      "num": "4.1a",
+      "title": "Fewer Command Limits",
+      "line": 263,
+      "snippet": "4.1a Fewer Command Limits. Players"
+    },
+    {
+      "num": "4.1b",
+      "title": "More Axis Supply",
+      "line": 275,
+      "snippet": "4.1b More Axis Supply. It is tough,"
+    },
+    {
+      "num": "4.1c",
+      "title": "RR Repair Restriction",
+      "line": 284,
+      "snippet": "4.1c RR Repair Restriction. The two"
+    },
+    {
+      "num": "4.2a",
+      "title": "Initiative Rolls",
+      "line": 335,
+      "snippet": "4.2a Initiative Rolls. The side that went Vitebsk"
+    },
+    {
+      "num": "4.2b",
+      "title": "Effects of Losses",
+      "line": 340,
+      "snippet": "4.2b Effects of Losses. An Axis 4-step control of certain ci"
+    },
+    {
+      "num": "4.2c",
+      "title": "Minimal Fueling",
+      "line": 346,
+      "snippet": "4.2c Minimal Fueling. A Formation Soviet Win for Vyazma, Rzh"
+    },
+    {
+      "num": "4.3",
+      "title": "Setup Wiggle",
+      "line": 358,
+      "snippet": "4.3 Setup Wiggle"
+    },
+    {
+      "num": "5.0",
+      "title": "Victory Conditions",
+      "line": 334,
+      "snippet": "4.2 Try Some House Rules! 5.0 Victory Conditions Intro Scenario:"
+    },
+    {
+      "num": "5.0a",
+      "title": "Final Victory Assessment",
+      "line": 336,
+      "snippet": "5.0a Final Victory Assessment. At the"
+    },
+    {
+      "num": "5.0b",
+      "title": "Early Decision Check",
+      "line": 359,
+      "snippet": "5.0b Early Decision Check. At the “see” what is meant by the"
+    },
+    {
+      "num": "5.0c",
+      "title": "Victory Locations and Control",
+      "line": 370,
+      "snippet": "5.0c Victory Locations and Control."
+    }
+  ]
+}
