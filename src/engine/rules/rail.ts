@@ -663,6 +663,12 @@ export interface RailheadFacts {
  *
  * 已换轨的格若没有未换轨的铁路邻格（地图西缘的初设起点、或整条线换到底），不是端头——
  * 这与剧本印的 Railhead 位置一致（例如剧本 1 的初设换轨 01.03→2.02，端头是 2.02，不是 01.03）。
+ *
+ * ## 已知边界（有意取舍，不是 bug）
+ *   · **交汇 / 三角收口处不出端头**：某格若有两个以上已换轨的铁路邻格（＝两段已换轨线在此收口），
+ *     即便它还有未换轨邻格，也按第 1 条跳过。宁可少出一个端头，也不把中段或交汇点当端头——
+ *     实体版端头本就不摆在交汇点。
+ *   · **地图边缘的「换到底」格不出**：没有未换轨铁路邻格即视为线路已到尽头（第 1 条要求 ≥1）。
  */
 export function deriveRailheads(facts: RailheadFacts): HexRef[] {
   const converted = new Map<string, HexRef>()
@@ -671,9 +677,12 @@ export function deriveRailheads(facts: RailheadFacts): HexRef[] {
   /*
    * 用户 2026-11-22 口径：换轨范围**自本方的铁路补给源格起步**
    * （剧本 `supplySources` 的图边铁路源，store 侧取 `entryRailSeedsBySide` ∩ 铁路格）。
-   * ⇒ 端头 = 从这些根沿**已换轨**铁路多源 BFS 可达的**叶节点**，而不是「已换轨段的两端」。
-   * 只数 BFS 树里的真正子节点（`parent.get(子) === key`），分叉不会重复计数。
-   * 未提供 roots 时退回下面的旧近似，保证既有调用点行为不变。
+   * ⇒ 先以这些根沿**已换轨**铁路做多源 BFS，只保留「根可达」的格；端头判据仍用上面三条。
+   *
+   * ★ 为什么不用「BFS 树的叶子」：环形 / 交叉处被别的分支抢先认领的格会没有子节点，
+   *   从而被误判成叶——剧本 7 就是这样多出 16.15 / 17.16 两个假端头。
+   *
+   * 未提供 roots（或 roots 全部不在账本里）时退回下面的旧近似，保证既有调用点行为不变。
    */
   const rootKeys = (facts.roots ?? [])
     .map((hex) => hexText(hex))
