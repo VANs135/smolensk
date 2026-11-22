@@ -28,10 +28,10 @@
     "arch": "node scripts/check-arch.mjs",
     "tdz": "node scripts/check-tdz.mjs",
     "gen:counters": "node scripts/gen-counter-data.mjs",
-    "check": "npm run lint && npm run format:check && npm run typecheck && npm run audit:ports && npm run tdz && npm run gen:counters -- --check && npm run test:fast && npm run arch",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm run audit:ports && npm run audit:clauses && npm run tdz && npm run gen:counters -- --check && npm run test:fast && npm run arch",
     "check:all": "npm run lint && npm run format:check && npm run typecheck && npm run audit:ports && npm run tdz && npm run gen:counters -- --check && npm run test && npm run arch",
     "audit:ports": "node scripts/port-tdz-audit.mjs",
-    "audit:clauses": "node scripts/audit-clause-prefix.mjs"
+    "audit:clauses": "node scripts/audit-clause-prefix.mjs --fail"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.10",
