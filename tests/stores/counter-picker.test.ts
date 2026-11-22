@@ -11,6 +11,8 @@ import {
   useWorkbenchStore,
 } from '@/stores'
 
+import { counterKeyOf, isCounterUrl } from '../counter-url-helper'
+
 /**
  * B13：`CounterPicker` 算子图阵列（先用于增援面板）
  *
@@ -49,7 +51,7 @@ describe('B13：面板选图（counterImageUrlOf）与地图同源', () => {
     })
     const combat = counterImageUrlOf(unit)
     expect(combat).not.toBeNull()
-    expect(combat).toContain(record.images?.front ?? '')
+    expect(counterKeyOf(combat!)).toContain(record.images?.front ?? '')
 
     // 翻到移动面 ⇒ 取背面图（若该记录是单面算子则两面同图，断言随之成立）
     const moved = toConsoleUnit({
@@ -61,7 +63,7 @@ describe('B13：面板选图（counterImageUrlOf）与地图同源', () => {
     })
     const moveFace = counterImageUrlOf(moved)
     expect(moveFace).not.toBeNull()
-    expect(moveFace).toContain(record.images?.back ?? record.images?.front ?? '')
+    expect(counterKeyOf(moveFace!)).toContain(record.images?.back ?? record.images?.front ?? '')
   })
 
   it('★ SP 算子：图**随当前点数走**（拆并后台面会变，图必须跟着变）', () => {
@@ -82,8 +84,8 @@ describe('B13：面板选图（counterImageUrlOf）与地图同源', () => {
     expect(five).not.toBeNull()
     // 点数不同 ⇒ 图不同（这正是"图随数值走"的判据）
     expect(three).not.toBe(five)
-    expect(three).toContain('3')
-    expect(five).toContain('5')
+    expect(counterKeyOf(three!)).toContain('3')
+    expect(counterKeyOf(five!)).toContain('5')
   })
 
   it('★ 编内卡车：面＝**装载**（满载 1 SP / 空载 0），与朝向无关（13.2f/h、13.0）', () => {
@@ -129,7 +131,7 @@ describe('B13：面板选图（counterImageUrlOf）与地图同源', () => {
       for (const unit of workbench.rebuildCandidates) {
         // 不抛错即可；取不到图返回 null（界面退回只写名字）
         const url = counterImageUrlOf(unit)
-        expect(url === null || url.startsWith('/')).toBe(true)
+        expect(url === null || isCounterUrl(url)).toBe(true)
       }
       void side
     }

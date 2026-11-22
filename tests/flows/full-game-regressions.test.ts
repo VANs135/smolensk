@@ -23,6 +23,7 @@ import {
   groundRecord,
   CORE_HEX,
 } from './sop-harness'
+import { isCounterUrl } from '../counter-url-helper'
 
 describe('整局主线回归：开局、自动结算、玩家义务和持久化', () => {
   // 入门教学剧本 Intro 只打 1 个玩家回合，不适用「双方各走一个回合」的主线回归
@@ -154,7 +155,7 @@ describe('整局主线回归：开局、自动结算、玩家义务和持久化'
       setup.sideQueue
         .flatMap((q) => q.items)
         .filter((i) => i.imageUrl)
-        .every((i) => i.imageUrl!.startsWith('/counters/')),
+        .every((i) => isCounterUrl(i.imageUrl!)),
     ).toBe(true)
   })
   it('首页冷读档恢复盘面、环节、MP、燃料窗口与初设完成状态', () => {

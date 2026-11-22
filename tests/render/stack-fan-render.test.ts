@@ -5,6 +5,8 @@ import { stackFanLayout } from '@/render/stack-fan'
 import { counterImages } from '@/render/token-images'
 import { drawMovementOverlay, type UnitToken } from '@/render/token-layer'
 
+import { counterKeyOf } from '../counter-url-helper'
+
 /**
  * B2：**就地展开的渲染**（用户 2026-09-16 #1「点格即在该格内摊开每一枚」）
  *
@@ -39,7 +41,12 @@ function recordingCtx(calls: DrawCall[]): CanvasRenderingContext2D {
     fillRect: (): void => void calls.push({ op: 'fillRect' }),
     drawImage: (image: unknown, x?: number, y?: number, w?: number, h?: number): void => {
       const url = (image as { url?: string } | null)?.url
-      calls.push({ op: 'drawImage', ...(url === undefined ? {} : { url }), args: [x, y, w, h] })
+      // 取图可能是内联 data URI：反查回 `dir/file` 键，断言才按"哪一张"判定
+      calls.push({
+        op: 'drawImage',
+        ...(url === undefined ? {} : { url: counterKeyOf(url) }),
+        args: [x, y, w, h],
+      })
     },
     fillStyle: '',
     strokeStyle: '',

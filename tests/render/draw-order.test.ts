@@ -12,6 +12,8 @@ import {
 import { drawMovementOverlay, type UnitToken } from '@/render/token-layer'
 import type { Size, ViewportTransform } from '@/render/viewport'
 
+import { counterKeyOf } from '../counter-url-helper'
+
 /**
  * **绘制层次断言**（B1，用户 2026-09-16 #2）
  *
@@ -48,7 +50,8 @@ function recordingCtx(calls: DrawCall[]): CanvasRenderingContext2D {
     fillRect: (): void => void calls.push({ op: 'fillRect' }),
     drawImage: (image: unknown): void => {
       const url = (image as { url?: string } | null)?.url
-      calls.push({ op: 'drawImage', ...(url === undefined ? {} : { url }) })
+      // 取图可能已内联成 data URI：反查回 `dir/file` 键，断言才按"哪一张"判定
+      calls.push({ op: 'drawImage', ...(url === undefined ? {} : { url: counterKeyOf(url) }) })
     },
     // 样式属性可写即可
     fillStyle: '',
@@ -135,7 +138,9 @@ describe('B1 绘制层次（用户 2026-09-16 #2）', () => {
 
     const images = calls.filter((call) => call.op === 'drawImage')
     const tokenIdx = images.findIndex((call) => call.url?.includes('Ru_6_Inf_Div_F.png') === true)
-    const hedgeIdx = images.findIndex((call) => call.url === hedgehogTextureUrl(hedgehog.level))
+    const hedgeIdx = images.findIndex(
+      (call) => call.url === counterKeyOf(hedgehogTextureUrl(hedgehog.level) ?? ''),
+    )
     expect(tokenIdx).toBeGreaterThanOrEqual(0)
     expect(hedgeIdx).toBeGreaterThanOrEqual(0)
     expect(hedgeIdx, '工事必须在算子之后画').toBeGreaterThan(tokenIdx)
@@ -157,7 +162,7 @@ describe('B1 绘制层次（用户 2026-09-16 #2）', () => {
     const images = calls.filter((call) => call.op === 'drawImage')
     const tokenIdx = images.findIndex((call) => call.url?.includes('Ru_6_Inf_Div_F.png') === true)
     const stratIdx = images.findIndex(
-      (call) => call.url === markerTextureUrl(MARKER_TEXTURES.strat),
+      (call) => call.url === counterKeyOf(markerTextureUrl(MARKER_TEXTURES.strat)),
     )
     expect(tokenIdx).toBeGreaterThanOrEqual(0)
     expect(stratIdx).toBeGreaterThanOrEqual(0)
@@ -183,7 +188,9 @@ describe('B1 绘制层次（用户 2026-09-16 #2）', () => {
     )
 
     const stratDraws = calls.filter(
-      (call) => call.op === 'drawImage' && call.url === markerTextureUrl(MARKER_TEXTURES.strat),
+      (call) =>
+        call.op === 'drawImage' &&
+        call.url === counterKeyOf(markerTextureUrl(MARKER_TEXTURES.strat)),
     )
     expect(stratDraws).toHaveLength(1)
   })

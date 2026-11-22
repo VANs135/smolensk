@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 
 import { useContainersStore } from '@/stores'
 
+import { isCounterUrl } from '../counter-url-helper'
+
 /**
  * B31a：**盒内算子显示贴图**（用户口径 2026-09-16 #12）
  *
@@ -31,7 +33,8 @@ describe('B31a：盒子项的贴图 URL', () => {
     )
     // 空盒也算有效场面；这里钉的是"字段存在且取值只可能有两种"
     for (const holding of all) {
-      expect(holding.imageUrl === null || holding.imageUrl.startsWith('/counters/')).toBe(true)
+      // 真图（静态路径或已内联的 data URI）或 null，二者之外一律不允许
+      expect(holding.imageUrl === null || isCounterUrl(holding.imageUrl)).toBe(true)
     }
     // 卡面信息本身该有的还在（贴图是在它之上多出来的那一层）
     for (const card of containers.cardViews) {

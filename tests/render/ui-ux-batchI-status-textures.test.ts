@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { MARKER_TEXTURES, markerTextureUrl, stepLossTextureUrl } from '@/render/token-images'
 import { STATUS_TEXTURE_SIZE_RATIO, statusTextureSlots, TOKEN_SIZE_PX } from '@/render/token-layer'
 
+import { packedCounterUrl } from '../counter-url-helper'
+
 /**
  * 批 I 返修（用户 2026-11-16）：**扣兵力 / DG 是单位自身状态，贴在各自算子身上**
  *
@@ -84,15 +86,15 @@ describe('批 I：状态贴图锚定在算子自身', () => {
 
 describe('批 I：四张官方图怎么接进管线', () => {
   it('★ 扣 1/2/3 分别取到 misc_1/2/3steploss；0 不画，超过 3 按 3 档', () => {
-    expect(stepLossTextureUrl(1)).toBe('/counters/markers/misc_1steploss.png')
-    expect(stepLossTextureUrl(2)).toBe('/counters/markers/misc_2steploss.png')
-    expect(stepLossTextureUrl(3)).toBe('/counters/markers/misc_3steploss.png')
+    expect(stepLossTextureUrl(1)).toBe(packedCounterUrl('markers', 'misc_1steploss.png'))
+    expect(stepLossTextureUrl(2)).toBe(packedCounterUrl('markers', 'misc_2steploss.png'))
+    expect(stepLossTextureUrl(3)).toBe(packedCounterUrl('markers', 'misc_3steploss.png'))
     expect(stepLossTextureUrl(0)).toBeNull()
-    expect(stepLossTextureUrl(4)).toBe('/counters/markers/misc_3steploss.png')
+    expect(stepLossTextureUrl(4)).toBe(packedCounterUrl('markers', 'misc_3steploss.png'))
   })
 
   it('★ DG 取 misc_DG；四张图都已同步进 public/counters/markers（打包随 public 直出）', () => {
-    expect(markerTextureUrl(MARKER_TEXTURES.dg)).toBe('/counters/markers/misc_DG.png')
+    expect(markerTextureUrl(MARKER_TEXTURES.dg)).toBe(packedCounterUrl('markers', 'misc_DG.png'))
     for (const file of [
       'misc_1steploss.png',
       'misc_2steploss.png',

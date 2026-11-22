@@ -6,6 +6,8 @@ import { organicTruckImageUrl, tokenImageUrl } from '@/render/token-images'
 import { SP_TO_T } from '@/engine/rules'
 import { modeUnitClassOf, toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 
+import { counterKeyOf } from '../counter-url-helper'
+
 /**
  * 运输单位与运输点数（**用户 2026-09-15 裁定**）
  *
@@ -118,8 +120,8 @@ describe('13.2h：编内卡车的**面＝装载**（满载 1F / 空载 1），�
       noncombatKind: 'organic_truck',
       loadedSpT: 0,
     })
-    expect(loaded).toContain(record.images!.front)
-    expect(empty).toContain(record.images!.back)
+    expect(counterKeyOf(loaded!)).toContain(record.images!.front)
+    expect(counterKeyOf(empty!)).toContain(record.images!.back)
     expect(loaded).not.toBe(empty)
     // 「面随朝向变」在这里**不成立**：两种朝向都必须给出同一张（装载面）
     const sameFaceCombat = tokenImageUrl({

@@ -9,6 +9,8 @@ import {
   MARKER_TEXTURES,
   reserveModeTextureUrl,
 } from '@/render/token-images'
+
+import { counterKeyOf, packedCounterUrl } from '../counter-url-helper'
 import {
   MODE_BADGE_SIZE_RATIO,
   drawTokenStatusTextures,
@@ -145,17 +147,21 @@ describe('模式角标：小尺寸、成排、互不压住', () => {
 
 describe('模式贴图：官方素材', () => {
   it('★ 预备模式按阵营取官方标记（轴心 Ge_Reserve_F / 苏联 Ru_Russian_Reserve）', () => {
-    expect(reserveModeTextureUrl('axis')).toBe('/counters/markers/Ge_Reserve_F.png')
-    expect(reserveModeTextureUrl('soviet')).toBe('/counters/markers/Ru_Russian_Reserve.png')
+    expect(reserveModeTextureUrl('axis')).toBe(packedCounterUrl('markers', 'Ge_Reserve_F.png'))
+    expect(reserveModeTextureUrl('soviet')).toBe(
+      packedCounterUrl('markers', 'Ru_Russian_Reserve.png'),
+    )
     expect(existsSync('public/counters/markers/Ge_Reserve_F.png')).toBe(true)
     expect(existsSync('public/counters/markers/Ru_Russian_Reserve.png')).toBe(true)
   })
 
   it('★ 进击 / 战略 / 断补仍走既有官方贴图，不另起素材', () => {
-    expect(exploitTextureUrl('u-1')).toMatch(/^\/counters\/markers\/misc_Explt-[234]%20small\.png$/)
-    expect(markerTextureUrl(MARKER_TEXTURES.strat)).toBe('/counters/markers/misc_Strat%20small.png')
+    expect(counterKeyOf(exploitTextureUrl('u-1'))).toMatch(/^markers\/misc_Explt-[234] small\.png$/)
+    expect(markerTextureUrl(MARKER_TEXTURES.strat)).toBe(
+      packedCounterUrl('markers', 'misc_Strat small.png'),
+    )
     expect(markerTextureUrl(MARKER_TEXTURES.outOfSupply)).toBe(
-      '/counters/markers/misc_OoS%20small.png',
+      packedCounterUrl('markers', 'misc_OoS small.png'),
     )
   })
 })

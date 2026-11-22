@@ -7,14 +7,11 @@ import { mapLayers } from '@/data'
 import { isOnMap } from '@/engine/hex-geometry'
 import { listedVictoryHexes } from '@/engine/rules'
 import { DEFAULT_MAP_LAYERS, drawMap, MAP_PALETTE, type ControlMarker } from '@/render/map-render'
-import {
-  allControlMarkerImageUrls,
-  controlMarkerImageUrl,
-  COUNTERS_BASE,
-} from '@/render/token-images'
+import { allControlMarkerImageUrls, controlMarkerImageUrl } from '@/render/token-images'
 import { useMapViewStore, useWorkbenchStore } from '@/stores'
 
 import { combatRecord, label, placeGround } from '../flows/sop-harness'
+import { counterKeyOf } from '../counter-url-helper'
 
 /**
  * 5.0c：**胜利格控制标记**（用户 2026-09-16 要求）
@@ -72,15 +69,17 @@ beforeEach(() => {
 
 describe('5.0c 控制标记：图与取面', () => {
   it('★ F 面＝苏联、B 面＝轴心（用户指定的官方标记）', () => {
-    expect(controlMarkerImageUrl('soviet')).toContain('Neutral_Control_Marker_F.png')
-    expect(controlMarkerImageUrl('axis')).toContain('Neutral_Control_Marker_B.png')
+    expect(counterKeyOf(controlMarkerImageUrl('soviet'))).toContain('Neutral_Control_Marker_F.png')
+    expect(counterKeyOf(controlMarkerImageUrl('axis'))).toContain('Neutral_Control_Marker_B.png')
     expect(allControlMarkerImageUrls()).toHaveLength(2)
   })
 
   it('★ 两张图**真在 public/ 里**（同步脚本没拷进来时地图上会是一片空白，而断言不会失败）', () => {
     for (const url of allControlMarkerImageUrls()) {
-      expect(url.startsWith(`${COUNTERS_BASE}/markers/`)).toBe(true)
-      expect(existsSync(`public${decodeURIComponent(url)}`), `图档缺失：${url}`).toBe(true)
+      // 取图可能是内联 data URI：反查回 `markers/<文件名>` 再查源文件
+      const key = counterKeyOf(url)
+      expect(key.startsWith('markers/'), `不是 markers 图档：${url}`).toBe(true)
+      expect(existsSync(`public/counters/${key}`), `图档缺失：${key}`).toBe(true)
     }
   })
 

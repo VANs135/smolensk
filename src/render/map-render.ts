@@ -45,7 +45,7 @@ import { drawMovementOverlay, overlayHexKey, type MovementOverlay } from './toke
  */
 
 /** 地图扫描图（沿用素材库原文件名，CODE_SPEC §4） */
-export const MAP_IMAGE_SRC = '/map/Smolensk-map-011717.png'
+export const MAP_IMAGE_SRC = `${import.meta.env.BASE_URL}map/Smolensk-map-011717.png`
 
 /**
  * 地图图片在**世界坐标**中的左上角

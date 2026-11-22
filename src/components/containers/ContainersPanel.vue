@@ -5,6 +5,7 @@ import { useRefereeTools } from '@/components/ui-mode'
 import { BaseButton, BasePanel, BaseTag, RuleTip } from '@/components/base'
 import AircraftRoster from '@/components/air/AircraftRoster.vue'
 import { CounterPicker, type CounterPickerItem } from '@/components/game'
+import { auxCardKeyUrl } from '@/components/game/aux-card-image'
 import { useUiMode } from '@/components/ui-mode'
 import { formations } from '@/data'
 import type { HexRef, Side } from '@/data'
@@ -638,7 +639,7 @@ function boxAircraft(side: Side) {
             <img
               v-if="box.artwork?.imageKey"
               class="box__img"
-              :src="box.artwork.imageKey"
+              :src="auxCardKeyUrl(box.artwork.imageKey)"
               alt="盒图"
             />
             <span v-else class="muted"
@@ -704,7 +705,7 @@ function boxAircraft(side: Side) {
           <img
             v-if="box.artwork?.imageKey"
             class="box__img"
-            :src="box.artwork.imageKey"
+            :src="auxCardKeyUrl(box.artwork.imageKey)"
             alt="盒图"
           />
           <span v-else class="muted"

@@ -1564,7 +1564,7 @@ html[data-platform='android'] .home__art {
   opacity: 0.3; /* 整体压暗：地图只作淡淡的桌布质感（用户「裁剪或缩小使用」） */
   background:
     linear-gradient(90deg, var(--color-command-bg) 26%, rgb(34 39 31 / 0.4) 60%, transparent 92%),
-    url('/map/Smolensk-map-011717.png') 75% 30% / 58% auto no-repeat;
+    url('../map/Smolensk-map-011717.png') 75% 30% / 58% auto no-repeat;
 }
 
 /* ④ 主页左上存读徽章与页内按钮重合 ⇒ 隐藏（剧本页保留） */

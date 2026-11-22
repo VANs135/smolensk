@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useSetupStore, useWorkbenchStore } from '@/stores'
 
+import { counterKeyOf } from '../counter-url-helper'
+
 /**
  * 第六批批 S 切片 1（条 1）：**初设队列的算子图阵列 + 分方游标**
  *
@@ -103,8 +105,9 @@ describe('第六批 S1：初设的算子图阵列与分方游标（条 1）', ()
     for (const item of items) {
       expect(item).toHaveProperty('imageUrl')
       if (item.imageUrl !== null) {
-        // 图档一律来自数据（public/counters 下的文件名），不是拼出来的路径
-        expect(item.imageUrl).toMatch(/\.(png|jpg|webp)$/i)
+        // 图档一律来自数据（public/counters 下的文件名），不是拼出来的路径；
+        // 图档可能已内联成 data URI ⇒ 先反查回 `dir/文件名` 再检查后缀
+        expect(counterKeyOf(item.imageUrl)).toMatch(/\.(png|jpg|webp)$/i)
       }
     }
     // 反空转：至少有一类项真的取到了图（否则"图阵列"是空的，等于没做）

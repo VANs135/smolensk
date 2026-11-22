@@ -13,6 +13,8 @@ import {
   useWorkbenchStore,
 } from '@/stores'
 
+import { counterKeyOf } from '../counter-url-helper'
+
 /**
  * 拖动时算子本体跟手（用户 2026-11-18）
  *
@@ -53,7 +55,7 @@ describe('拖动算子跟手', () => {
     expect(source?.ids).toEqual(['u1'])
     const token = mapView.overlay.tokens.find((item) => item.id === 'u1')
     expect(token).toBeDefined()
-    expect(tokenImageUrl(token!)).toMatch(/\.(png|jpg|webp)$/)
+    expect(counterKeyOf(tokenImageUrl(token!)!)).toMatch(/\.(png|jpg|webp)$/)
   })
 
   it('★ 初设 † 拖动源带的是选中整组（不是单枚）', () => {

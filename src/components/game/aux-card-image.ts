@@ -6,12 +6,27 @@
  * 本处只把"卡面名 → URL"这一步单写一处，免得两个组件各编码一次。
  */
 
-/** 辅助卡卡面图所在目录（Vite 的 public ⇒ 运行期按此路径取） */
-export const AUX_CARDS_BASE = '/aux-cards'
+/** 辅助卡卡面图所在目录（Vite 的 public ⇒ 跟随构建 base） */
+export const AUX_CARDS_BASE = `${import.meta.env.BASE_URL}aux-cards`
 
 /** 卡面图档名 → URL（名字里的空格/大写交给 `encodeURIComponent`） */
 export function auxCardImageUrl(image: string): string {
-  return `${AUX_CARDS_BASE}/${encodeURIComponent(image)}`
+  return `${AUX_CARDS_BASE}/${image
+    .split('/')
+    .map((part) => encodeURIComponent(part))
+    .join('/')}`
+}
+
+/**
+ * 盒美工数据里的 `imageKey` → URL
+ *
+ * `containers.artwork[].imageKey` 既可能是纯文件名，也可能是历史数据里的
+ * `/aux-cards/xxx.png` 绝对路径；这里统一换到当前构建 base 下。
+ */
+export function auxCardKeyUrl(key: string): string {
+  const legacy = '/aux-cards/'
+  if (key.startsWith(legacy)) return `${AUX_CARDS_BASE}/${key.slice(legacy.length)}`
+  return auxCardImageUrl(key)
 }
 
 /**

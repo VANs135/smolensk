@@ -7,6 +7,8 @@ node_modules/
 public/map/
 public/counters/
 public/fonts/
+# 自动生成的算子图内联表（2.7 MB 单文件，由 scripts/gen-counter-data.mjs 产出，不参与排版）
+src/data/counter-data.ts
 # 人工备份（本工程无版本控制 ⇒ 只能靠手工备份；备份须**逐字节**保持原样，不做格式化）
 backup/
 *.ttf

@@ -101,7 +101,7 @@ function onRestart(): void {
       transparent 76%
     ),
     linear-gradient(0deg, var(--color-command-bg), transparent 27%),
-    url('/map/Smolensk-map-011717.png') center 46% / cover;
+    url('../map/Smolensk-map-011717.png') center 46% / cover;
 }
 
 .home__content {
@@ -192,7 +192,7 @@ function onRestart(): void {
         color-mix(in srgb, var(--color-command-bg) 47%, transparent)
       ),
       linear-gradient(0deg, var(--color-command-bg), transparent 45%),
-      url('/map/Smolensk-map-011717.png') center / cover;
+      url('../map/Smolensk-map-011717.png') center / cover;
   }
 }
 </style>

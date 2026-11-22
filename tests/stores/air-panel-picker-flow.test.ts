@@ -16,6 +16,7 @@ import {
   useWorkbenchStore,
 } from '@/stores'
 import { readStoreSource } from '../shared/store-source'
+import { counterKeyOf } from '../counter-url-helper'
 
 /**
  * B14a：空军面板迁移到 `CounterPicker`（用户口径⑪ 后半）
@@ -104,9 +105,13 @@ function setupBaseAndPlanes(store: ReturnType<typeof newStore>, count = 1) {
   return { base, planes }
 }
 
-/** 把图 URL 还原成 `public/` 下的真实路径（文件名含空格 ⇒ 须解码） */
+/** 把图 URL 还原成 `public/` 下的真实路径（内联 data URI 先反查 `dir/文件名`；静态路径须解码） */
 function diskPathOf(url: string): string {
-  return `public${decodeURIComponent(url)}`
+  const key = counterKeyOf(url)
+  const rel = key.startsWith('/counters/')
+    ? decodeURIComponent(key.slice('/counters/'.length))
+    : key
+  return `public/counters/${rel}`
 }
 
 /**
@@ -131,8 +136,9 @@ describe('B14a：机型与补给站的取图（图上真的取得到）', () => 
       for (const record of records) {
         const url = aircraftRecordImageUrlOf(record, side)
         expect(url, `${record.aircraftId} 取不到图`).not.toBeNull()
-        expect(url).toContain(`/counters/${side}/`)
-        expect(url).toContain(record.images?.front ?? '')
+        const key = counterKeyOf(url!)
+        expect(key.startsWith(`${side}/`), `${record.aircraftId} 取错阵营目录：${key}`).toBe(true)
+        expect(key).toContain(record.images?.front ?? '')
         expect(existsSync(diskPathOf(url!)), `图档缺失：${url}`).toBe(true)
       }
     }
@@ -144,8 +150,8 @@ describe('B14a：机型与补给站的取图（图上真的取得到）', () => 
     expect(three).not.toBeNull()
     expect(five).not.toBeNull()
     expect(three).not.toBe(five)
-    expect(three).toContain('Neutral_SP_3_F.png')
-    expect(five).toContain('Neutral_SP_5.png')
+    expect(counterKeyOf(three!)).toContain('Neutral_SP_3_F.png')
+    expect(counterKeyOf(five!)).toContain('Neutral_SP_5.png')
     expect(existsSync(diskPathOf(three!))).toBe(true)
     expect(existsSync(diskPathOf(five!))).toBe(true)
     // 0 点 ⇒ 取不到图：界面退回空框（不臆造文件名）

@@ -18,8 +18,10 @@
  *   （无 DOM、无 Image）照旧跑在矢量路径上——与 `map-render` 对地图扫描图的处理同一思路。
  */
 
-/** 图档根（Vite `public/` 直出） */
-export const COUNTERS_BASE = '/counters'
+import { COUNTER_DATA } from '@/data/counter-data'
+
+/** 图档根（Vite `public/` 直出，跟随构建 base，支持部署在子路径） */
+export const COUNTERS_BASE = `${import.meta.env.BASE_URL}counters`
 
 /** 三个图档子目录（`markers` 同时承载中立法与各种贴图） */
 export type CounterDir = 'axis' | 'soviet' | 'markers'
@@ -31,8 +33,10 @@ export function counterDirOfSide(side: string): CounterDir {
   return 'markers'
 }
 
-/** 算子图 URL（文件名可能含空格，须编码） */
+/** 算子图 URL；全部图档已内联为 WebP data URI，回退到静态路径 */
 export function counterImageUrl(dir: CounterDir, file: string): string {
+  const packed = COUNTER_DATA[`${dir}/${file}`]
+  if (packed) return packed
   return `${COUNTERS_BASE}/${dir}/${encodeURIComponent(file)}`
 }
 
