@@ -700,7 +700,7 @@ const AIR_STATUS_LABELS: Record<string, string> = {
 }
 
 /**
- * 2.1a：补给源关闭判据的地图事实
+ * 专规 2.1a：补给源关闭判据的地图事实
  *
  * 只依赖产品数据（`map-config.entryHexes` 与图内格清单），**与对局状态无关**，
  * 故放在模块级：这样"安全边剔除已关闭源"与"补给源当日状态"两处用的是同一份事实，
@@ -1013,7 +1013,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       (duty) => (overstackRemainingRe.value[duty.key] ?? duty.combatRe) <= STACKING_LIMIT_RE,
     ),
   )
-  /** 1.4b：盒内算子仍属于盘面，入盒回合防止同一移动阶段再次出盒。 */
+  /** 专规 1.4b：盒内算子仍属于盘面，入盒回合防止同一移动阶段再次出盒。 */
   const edgeBoxHoldings = ref<Record<'northeast' | 'southeast', ConsoleUnit[]>>({
     northeast: [],
     southeast: [],
@@ -1638,7 +1638,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   ① 盒本身就是飞机的一个**空军基地**（容量无限、整备免费）⇒ 它决定任务航程
    *      （「从对应行入场，剩余航程 = 印刷航程 − 20/30 格」），任务判定在操作台/引擎这一侧；
    *   ② 它是**盘面状态**，必须进存档——原先记在 `containers` 里、不在任何快照字段表，
-   *      于是"存档再读档，盒里的飞机就回到图上"（1.4a 的事实被静默丢掉）。
+   *      于是"存档再读档，盒里的飞机就回到图上"（专规 1.4a 的事实被静默丢掉）。
    * 用户 2026-10-30 口径：不可能没有空军基地（至少有图外的）；若剧本不允许用图外盒，
    * 或基地被占后航程不够飞去新基地，则该机**视为被摧毁**。
    */
@@ -1815,7 +1815,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * `placeArrivalNow` 的校验，界面不自己算、不放宽。
    */
   function beginArrivalPlacePickNow(index: number, recordId?: string): boolean {
-    // 1.6a 先于放置：强制移除未执行时不允许开始落位
+    // 专规 1.6a 先于放置：强制移除未执行时不允许开始落位
     if (arrivalRemovalsPending.value) {
       reinforcementError.value = { rule: '1.6a', reason: 'arrivalRemovalsFirst' }
       return false
@@ -2063,7 +2063,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     hexText: string
     sp: number
     t: number
-    /** 3.4b：解除日前的德军新到 SP 归属（`null`/缺省＝未选，落账会被拒） */
+    /** 专规 3.4b：解除日前的德军新到 SP 归属（`null`/缺省＝未选，落账会被拒） */
     panzerGroup?: PanzerGroup | null
   }>({ hexText: '', sp: 1, t: 0, panzerGroup: null })
   /** C8：新增基础补给源声明的输入（格号文本 + 类别） */
@@ -2076,8 +2076,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * B3-2b11（2026-11-21）：C8 的 SP 账本（`addSpAtHex` 等 10 个动作）搬进 `workbench-supply-dumps.ts`。
    * 装配**必须在 air 域装配段之前**（`const airDomain = createAirDomain`）：`addSpAtHex` 是 air 的端口，
    * `setSpDumpHoldings` 也被紧随其后的一个域收走 ⇒ 收它的域在前，本域就必须更前。
-   * 三个晚声明状态：`panzerGroupRulesOn`（3.4b 段的 computed ⇒ getter）、
-   * `spDumpPanzerGroups` / `pendingSpGroupAssignment`（3.4b 段的两个 `ref`，本块只整体重置 ⇒ 写穿回调）。
+   * 三个晚声明状态：`panzerGroupRulesOn`（专规 3.4b 段的 computed ⇒ getter）、
+   * `spDumpPanzerGroups` / `pendingSpGroupAssignment`（专规 3.4b 段的两个 `ref`，本块只整体重置 ⇒ 写穿回调）。
    */
   const supplyDumpsDomain = createSupplyDumpsDomain({
     spDumps,
@@ -2989,14 +2989,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 专规 2.3b：守方堆叠内是否有 **NKVD 边防团**（有则行动值单位必须由它担任）
    *
-   * 取引擎的 `nkvdArRequired`（判据即 2.3b 的强制候选集）；并据此把**候选表收窄到那几个单位**——
+   * 取引擎的 `nkvdArRequired`（判据即 专规 2.3b 的强制候选集）；并据此把**候选表收窄到那几个单位**——
    * 界面上于是根本选不出违规的行动值单位（权威否决仍是引擎的 `checkDefenderArChoice`）。
    */
   const nkvdArRequiredNow = computed<boolean>(() =>
     nkvdArRequired(combatNkvdDefenders.value.map(toNkvdDefenseView)),
   )
 
-  /** 2.3b：守方**可选的**行动值单位（被迫时只剩 NKVD 边防团） */
+  /** 专规 2.3b：守方**可选的**行动值单位（被迫时只剩 NKVD 边防团） */
   const combatDefenderArChoices = computed(() =>
     nkvdArRequiredNow.value
       ? combatDefenderArOptions.value.filter((option) =>
@@ -3723,7 +3723,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 候选＝当前方**有印刷轰炸值**的单位（`raw.barrage > 0`，10.0e-B 的印值基准）。
    * 灰显原因有两个：**13.4a**（火炮处于预备/战略模式不得轰炸）与**专规 2.3d**（第五批 A4：
    * 已选一枚带 `sov_artillery_stack_to_combine` 标签的苏炮 ⇒ 其它格的带标签苏炮不得并入合并齐射）。
-   * 2.3d 的最终裁决在引擎 `beginBarrage`（同一次宣布里判），此处只做同口径的**提前灰显**。
+   * 专规 2.3d 的最终裁决在引擎 `beginBarrage`（同一次宣布里判），此处只做同口径的**提前灰显**。
    *
    * ★ **不在这里替引擎判**别的（10.0e-A/B 的逐格/逐单位账本、10.0e-F 的类别相符）——
    *   那些引擎目前没接线，若在此处拦下来，界面会比引擎"更严"，反而掩盖规则缺口（已登记待改）。
@@ -4128,7 +4128,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ★ 2026-11-16 修（用户实玩：轴方单位在 1.26 判成"无抽象补给"）：修前此处只收
    *   「玩家手声明的源 + 铁路卸货格」，而 2.1 / 3.1 的图边源是**数据即判据**
    *   （`scenarios.json → supplySources.axisLive / sovietLive`，原文例：1.03 / 1.26 / 4.00）——
-   *   1.26 这种**非铁路格边源**于是从不进入追溯链路。现并入 `openSourceHexesBySide`（含 2.1a 关停过滤）。
+   *   1.26 这种**非铁路格边源**于是从不进入追溯链路。现并入 `openSourceHexesBySide`（含 专规 2.1a 关停过滤）。
    */
   const supplyFacts = computed(() =>
     createSupplyFacts({
@@ -4137,7 +4137,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       // 12.1b：含 SP 的位置 —— **账本条目 + 装载在运输点数上的**（B32 步骤 5）
       dumps: allSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),
       sources: [
-        // 2.1 / 3.1：图边补给源格（剧本清单 ∪ 入场铁路格；按方，含 1.26 这类非铁路源）
+        // 专规 2.1 / 专规 3.1：图边补给源格（剧本清单 ∪ 入场铁路格；按方，含 1.26 这类非铁路源）
         ...(['axis', 'soviet'] as const).flatMap((side) =>
           openSourceHexesBySide.value[side].map((hex) => ({
             hex,
@@ -4170,7 +4170,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       // 12.1b：含 SP 的位置 —— **账本条目 + 装载在运输点数上的**（B32 步骤 5）
       dumps: allSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),
       sources: [
-        // 2.1 / 3.1：图边补给源格（与 `supplyFacts` 同一份判据）
+        // 专规 2.1 / 专规 3.1：图边补给源格（与 `supplyFacts` 同一份判据）
         ...(['axis', 'soviet'] as const).flatMap((side) =>
           openSourceHexesBySide.value[side].map((hex) => ({
             hex,
@@ -4242,7 +4242,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const railSupply = computed(() => railSupplyBySide.value[activeSide.value])
 
   /**
-   * U17（用户 2026-11-13 批准）：2.1/3.1 **免费铁运**专用的卸货格
+   * U17（用户 2026-11-13 批准）：2.1/ 专规 3.1 **免费铁运**专用的卸货格
    *
    * 与 `railSupply` 的区别只有一条：BFS 只走铁路边、**不接延补队**（延补队接续的是补给线，
    * 不是「货物可在该格卸车」）。只替换免费铁运这一个消费方；追溯补给仍用 `railSupply`。
@@ -4727,7 +4727,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 13.3b：**本回合**各方已用的铁路容量点数
    *
-   * 「每个铁路运量点数可以运输一个 SP 或 RE，距离不限」＋当日容量（1.2：轴 0/苏 2，7 月 19 日起
+   * 「每个铁路运量点数可以运输一个 SP 或 RE，距离不限」＋当日容量（专规 1.2：轴 0/苏 2，7 月 19 日起
    * 轴 1/苏 3）⇒ 额度是**按回合**计的，故换回合清零（与 16.0b/c 的每回合额度同构）。
    */
   const railCapSpentThisTurn = ref<{ side: Side; points: number }[]>([])
@@ -5507,7 +5507,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `铁路运货被拒：${outcome.reason}（${outcome.rule}）`, outcome.rule)
       return false
     }
-    // 13.3b：当日额度（1.2）——超出即拒，**不改动任何货物**
+    // 13.3b：当日额度（专规 1.2）——超出即拒，**不改动任何货物**
     const remaining = railCapRemaining.value[side]
     if (outcome.data.cost > remaining) {
       railMoveError.value = {
@@ -5728,12 +5728,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         (dump) => dump.side === drawer.side && sameHex(dump.hex, hex),
       )
       const carriers = stocks.filter((stock) => stock.carriedBy !== undefined)
-      // 纯地面：12.1b 同格就是一个补给站，保持引擎原样（3.4b 的集群拆分另行处理）
+      // 纯地面：12.1b 同格就是一个补给站，保持引擎原样（专规 3.4b 的集群拆分另行处理）
       if (carriers.length === 0) return [source]
       if (seenHex.has(key)) return []
       seenHex.add(key)
       /*
-       * 12.1b：同格的**地面** SP 仍是一个补给站（3.4b 的集群拆分只是显示与扣哪一摞的差别，
+       * 12.1b：同格的**地面** SP 仍是一个补给站（专规 3.4b 的集群拆分只是显示与扣哪一摞的差别，
        * 由 `supplyPayDumpCandidates` 承担）⇒ 地面那一条**不**写 `stockId`、不按账本条目展开。
        * 装载在运输点数上的 SP（13.2f）是另一处来源（13.2g-B 另限编队）⇒ 逐辆一条。
        */
@@ -5745,7 +5745,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         ? [
             {
               ...source,
-              // 地面那一条不写 `stockId`（3.4b 的集群拆分仍由 `supplyPayDumpCandidates` 承担），
+              // 地面那一条不写 `stockId`（专规 3.4b 的集群拆分仍由 `supplyPayDumpCandidates` 承担），
               // 只在同格还有装载来源时补一句"这是地面补给站"，让玩家能明确选哪一处
               ...(carriers.length > 0
                 ? {
@@ -5835,7 +5835,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       // 12.1b：来源已按每份持仓展开 ⇒ 付款落点就是玩家选中的那一份，不再出「同格选哪一摞」
       if (source.stockId !== undefined) return []
       /*
-       * 3.4b（用户补充裁定）：同格同时有 Guderian / Hoth 两份 SP 时，**非编队德军**可以选扣哪一份；
+       * 专规 3.4b（用户补充裁定）：同格同时有 Guderian / Hoth 两份 SP 时，**非编队德军**可以选扣哪一份；
        * 只有一个集群有 SP 时不出选择（`resolvePayDump` 直接扣那一条）。苏联单位与失效期不出现。
        */
       const sourceHex = source.hex
@@ -7702,14 +7702,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *   （例：后手方在第一半场的反应阶段投递 ⇒ 己方清理阶段在下一次己方半场）
      *   ⇒ 该窗口会正常跨过回合边界，清零只发生在那次清理（见 `runCleanUpNow`）。
      */
-    // 13.3b：铁路容量是「**每回合**每方若干点」（1.2）⇒ 换回合即清零
+    // 13.3b：铁路容量是「**每回合**每方若干点」（专规 1.2）⇒ 换回合即清零
     railCapSpentThisTurn.value = []
     // 专规 2.1/3.1：到货 SP 的落点按**回合**清（每回合的补给表到货各落各的）
     freeRailPicked.value = []
     supplyArrivalSp.value = 0
     supplyTrainHex.value = null
     clearArrivalSpGroups()
-    // ⑬ 接线：回合变了，5.0b 的时点（19 Aug 起）与 5.0a 的末回合判定都随之变，重推结论
+    // ⑬ 接线：回合变了，专规 5.0b 的时点（19 Aug 起）与 专规 5.0a 的末回合判定都随之变，重推结论
     pushVictoryToSessionNow()
     pushLog('info', `回合 ${clamped}（${date.value}）`)
   }
@@ -9077,7 +9077,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * - 补员 / 13.5c 黄点 / 重建表无行的设施与标记 ⇒ 永久移除（13.5 / 13.5c）。
    *
    * ★ 修前 `eliminateEntry` 只拦补员与 13.5c，`sendToDeadPileNow` 更是完全不过判据：
-   *   空军基地、SP、工事、延补队会从这两条路进死亡堆，再漏进重建候选与 1.6c 特殊补员池。
+   *   空军基地、SP、工事、延补队会从这两条路进死亡堆，再漏进重建候选与 专规 1.6c 特殊补员池。
    */
   function admitGroundDeadPile(
     entry: ConsoleUnit,
@@ -9138,7 +9138,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 13.5 / 13.5b / 13.5c / 13.5e：按**唯一判据**决定去向（`deadPileDispositionOf`）。
      *
      * 修前只拦了补员与 13.5c 黄点 ⇒ 空军基地、SP、工事、延补队等**重建表里没有行的
-     * 设施/标记**也会被打进死亡堆，进而出现在死亡堆盒、重建候选与 1.6c 特殊补员池里。
+     * 设施/标记**也会被打进死亡堆，进而出现在死亡堆盒、重建候选与 专规 1.6c 特殊补员池里。
      * 13.5b 的拆分单位也被错打进死亡堆（应返回拆分资源池）。
      */
     if (!isAirDeadPileEntry(entry)) {
@@ -10007,7 +10007,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 12.4 / 12.6：**攻守各自付款，且扣款只能落在己方补给站上**。
      *
      * 12.3a 直接拖取 / 12.3b HQ 投递是仅有的两条取补途径；除专规的补给储备标记
-     * （1.7 / 21.10 的 Shells 与 Forage，各由引擎的专用动作处理）外，SP 不存在
+     * （专规 1.7 / 21.10 的 Shells 与 Forage，各由引擎的专用动作处理）外，SP 不存在
      * 「凭空可用的池子」——共用演示池不得充作战斗补给的付款来源。
      *
      * 原先这里从 `fuelPool` 扣并带 `Math.max(0, …)` 夹断：声明了来源却不动它
@@ -10113,7 +10113,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         return false
       }
       /*
-       * 3.4b：错误集群的 SP 不能支付**多单位编队**的战斗成本。
+       * 专规 3.4b：错误集群的 SP 不能支付**多单位编队**的战斗成本。
        * 受益方＝这一笔实际分配到该站的单位（12.4 多源后不再是"整方一堆"）。
        */
       const beneficiaries =
@@ -10983,7 +10983,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * ⑦ 12.3a / 12.3b：**地图上可点的来源格**（一格一条 ⇒ 12.1b 同格多份 SP 是同一个补给站）
    *
    * 口径全部来自引擎：只收 `ok` 且 `isSpBearingSource(kind)` 的来源（12.6a 追溯源 / 12.6c
-   * 吃图上补给没有可拖取的 SP，也不参与选源）。3.4b 的两集群拆分只在**算子显示与付款**上，
+   * 吃图上补给没有可拖取的 SP，也不参与选源）。专规 3.4b 的两集群拆分只在**算子显示与付款**上，
    * 这里始终一格一条，不产生「并列来源」。
    */
   const supplyPickSourceHints = computed<readonly { hex: HexRef; selected: boolean }[]>(() => {
@@ -11005,10 +11005,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
-   * 12.1b / 3.4b：**补给站来源列表**（面板/地图共用）
+   * 12.1b / 专规 3.4b：**补给站来源列表**（面板/地图共用）
    *
    * 每**一份持仓**一条（`expandSameHexStocks` 已按格展开）：同格的地面补给站与装载在运输点数上的
-   * SP 各占一行，玩家据此明确选一处（原文没有取用先后）。3.4b 勾选且生效期内的轴方仍给集群标签
+   * SP 各占一行，玩家据此明确选一处（原文没有取用先后）。专规 3.4b 勾选且生效期内的轴方仍给集群标签
    * （Guderian / Hoth / 未归属），只影响显示与扣哪一摞，不是两个补给站。
    */
   const supplySourceGroups = computed<
@@ -11047,7 +11047,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         })
         return
       }
-      // 12.1b：同格的**地面** SP 仍是一个补给站 ⇒ 按格折一条；3.4b 再按集群拆行
+      // 12.1b：同格的**地面** SP 仍是一个补给站 ⇒ 按格折一条；专规 3.4b 再按集群拆行
       const sourceHex = source.hex
       const key = hexTextOf(sourceHex)
       if (seenDumpHex.has(key)) return
@@ -11162,10 +11162,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const sameHexDumps = allSpDumpsOfSide.value.filter((dump) => sameHex(dump.hex, hex))
       if (!panzerGroupRulesOn.value) return sameHexDumps[0] ?? null
       /*
-       * 3.4b（用户补充裁定）：
+       * 专规 3.4b（用户补充裁定）：
        *   · 玩家点选过哪一个算子 ⇒ 扣那一条（非编队德军可在 G/H 之间二选一）；
        *   · 没点选 ⇒ 多单位编队取本集群；非编队/未归属取第一条（同格总量不变）。
-       * 编队扣错集群由 `confirmSupplyPickupNow` 的 3.4b 闸门拒付并给出条款号。
+       * 编队扣错集群由 `confirmSupplyPickupNow` 的 专规 3.4b 闸门拒付并给出条款号。
        */
       const chosen = sameHexDumps.find((dump) => dump.id === supplyInputs.value.payFromDumpId)
       if (chosen !== undefined) return chosen
@@ -11252,8 +11252,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
     const inputs = supplyInputs.value
     /*
-     * 3.4b（用户补充裁定）：付款站的集群必须与受益编队的集群一致 ——
-     * 多单位编队扣错集群就在这里拒，并给出条款号（12.3 拖取同样受 3.4b 约束）。
+     * 专规 3.4b（用户补充裁定）：付款站的集群必须与受益编队的集群一致 ——
+     * 多单位编队扣错集群就在这里拒，并给出条款号（12.3 拖取同样受 专规 3.4b 约束）。
      * 苏军/非编队/失效期由既有闸门自己放行（`panzerGroupSpGate` 只约束轴方编队）。
      */
     const panzerPurpose =
@@ -12778,7 +12778,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 死亡堆（13.5a 重建来源；**地面与空军共用**——用户裁定，依据 14.1b 飞机亦可重建）
    *
-   * ★ 注意与 1.6a 的**移除**区分：被到达卡 Removal 的算子**离开游戏**（不在这里），
+   * ★ 注意与 专规 1.6a 的**移除**区分：被到达卡 Removal 的算子**离开游戏**（不在这里），
    *   见 `removeFromPlayEverywhere`；两者原先被混为一谈（移除也进死亡堆）。
    */
   const deadPile = ref<DeadPileEntry[]>([])
@@ -12798,7 +12798,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 可变增援的骰面（由裁判填入或点「掷」自动取种子化 RNG）
    *
-   * 1.6c 不在这一批：原文「also get to roll a die on their Special Repl Table」是独立一掷，
+   * 专规 1.6c 不在这一批：原文「also get to roll a die on their Special Repl Table」是独立一掷，
    * 由 `drawSpecialRepl` 在执行时自掷（见 `variableReplSpecialDie`）。
    */
   const variableReplInputs = ref({
@@ -12810,7 +12810,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
-   * 3.3c：可变撤离是否**已了结**
+   * 专规 3.3c：可变撤离是否**已了结**
    *
    * 「轴方在 19 August 之后的每个增援阶段掷 1 骰：1 ? 移除 SS Reich（全部）、6 ? 移除 14 Mtr（全部）、
    *  2–5 ? 下回合再掷」⇒ 一旦掷出 1 或 6，该判定**结束**（不再逐回合掷）。
@@ -12819,7 +12819,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const variableExitResolved = ref<boolean>(false)
 
   /**
-   * 3.3c：本局是否已在**开局**掷过可变撤离（剧本 7 专规 `Roll for Variable Exit (3.3c).`）
+   * 专规 3.3c：本局是否已在**开局**掷过可变撤离（剧本 7 专规 `Roll for Variable Exit (3.3c).`）
    *
    * 只认本局结算日志里的 `mode: 'setupRoll'` 条目 ⇒ 存档/读档后同一局不会重复掷；
    * 掷出 2–5 时它仍为 true（已掷过），但 `variableExitResolved` 为 false，下个轴方增援阶段续掷。
@@ -12832,9 +12832,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   /**
-   * 3.3c：待玩家选择的替补（**从 `session.log` 反推**，不新增存档字段）
+   * 专规 3.3c：待玩家选择的替补（**从 `session.log` 反推**，不新增存档字段）
    *
-   * 撤离目标编队"盘面与死亡堆都没有算子"时（1.6a 的 "or else a unit with identical factors"），
+   * 撤离目标编队"盘面与死亡堆都没有算子"时（专规 1.6a 的 "or else a unit with identical factors"），
    * 掷骰那次会落一条 `mode: 'select'` 的结算；确认移除落 `mode: 'confirm'`。
    * ⇒ 从日志末尾往前找**第一条** `variableExit` 条目即可判定"是否仍在等玩家选"，
    *   存档 → 读档后日志还在，选择态自然恢复（无需为它动 save schema）。
@@ -12854,10 +12854,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     },
   )
 
-  /** 3.3c：当前是否处于可变撤离的窗口内（19 Aug 起；供界面提示与按钮可用性） */
+  /** 专规 3.3c：当前是否处于可变撤离的窗口内（19 Aug 起；供界面提示与按钮可用性） */
   const variableExitOpen = computed<boolean>(() => isVariableExitActive(date.value))
   /**
-   * ② 按方不渲染：3.3c 可变撤离是**轴方专规**内容
+   * ② 按方不渲染：专规 3.3c 可变撤离是**轴方专规**内容
    *
    * 界面只在轴方回合画这一段（含"已了结/未了结"状态行与替补选择）；
    * 苏方回合根本不渲染 —— 不是变灰、不是不可点。判据只取 `activeSide` 与日期事实。
@@ -12866,16 +12866,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     () =>
       activeSide.value === 'axis' && (variableExitOpen.value || variableExitSelectionOpen.value),
   )
-  /** 最近一次可变增援结论（1.6b / 1.6c / 3.3c / 3.6） */
+  /** 最近一次可变增援结论（专规 1.6b / 专规 1.6c / 专规 3.3c / 3.6） */
   const lastVariableRepl = ref<VariableReinforcementPlan | null>(null)
   /**
-   * 1.6c：本回合**实际掷出**的特殊补员骰（由 `drawSpecialRepl` 在 1.6c 执行时自掷）
+   * 专规 1.6c：本回合**实际掷出**的特殊补员骰（由 `drawSpecialRepl` 在 专规 1.6c 执行时自掷）
    *
-   * 1.6b 的骰只归 1.6b；1.6c 原文「also get to roll a die」是独立一掷，不复用 1.6b 的骰面。
-   * 这里只做留痕（存读档 / 台账），不参与 1.6b 的结算。
+   * 专规 1.6b 的骰只归 专规 1.6b；专规 1.6c 原文「also get to roll a die」是独立一掷，不复用 专规 1.6b 的骰面。
+   * 这里只做留痕（存读档 / 台账），不参与 专规 1.6b 的结算。
    */
   const variableReplSpecialDie = ref<number | null>(null)
-  /** 裁定 2：1.6b 补给表 SP 已入图外盒的记账（换掷先撤回上一笔，避免重掷叠加） */
+  /** 裁定 2：专规 1.6b 补给表 SP 已入图外盒的记账（换掷先撤回上一笔，避免重掷叠加） */
   const offMapRollDeposit = ref<{ turn: number; side: Side; sp: number; t: number } | null>(null)
 
   /** 裁定 2：图外空军盒 SP 的账本键（与 14.9 空运退运保持同一套 `side:box`） */
@@ -12893,7 +12893,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 裁定 2：把 N T 补给放进**图外空军盒**（1.6b Notes：extra SP 只能空运进图）
+   * 裁定 2：把 N T 补给放进**图外空军盒**（专规 1.6b Notes：extra SP 只能空运进图）
    *
    * 复用 `offMapSupplyStocks`，不新造第二套账；盒内 SP 不能直接给地图单位供给，
    * 只能在合法阶段由 14.9 空运任务运进地图。
@@ -12911,7 +12911,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       action: 'offMapSupplyDeposit',
       rule: '1.6b',
       data: { side, t: amount },
-      // 这笔是随掷表自动发生的附带结算，不得吃掉 1.6b 那批骰（否则重放游标错位）
+      // 这笔是随掷表自动发生的附带结算，不得吃掉 专规 1.6b 那批骰（否则重放游标错位）
       consumePendingRolls: false,
     })
     return true
@@ -12939,7 +12939,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 「敌方地面单位不得进入；这些格可以被常规战斗攻击，但不可被突袭（因为可能需要推进）。」
    * 数据即地图库的**字母入场段**（专规 2.1/3.1；用户 2026-11-11 追加裁定），按方取表。
    *
-   * ★ 2.1a：**已关闭的源不再享受 1.1b 保护**——Entry L（19 Jul 起）与 Entry E 及以西南缘源
+   * ★ 专规 2.1a：**已关闭的源不再享受 专规 1.1b 保护**——Entry L（19 Jul 起）与 Entry E 及以西南缘源
    *   （19 Aug 起）关闭后若仍计入，会让轴军进不去本应可进的格（过度限制）。
    */
   const safeEdgeHexesBySide = computed(() => {
@@ -12960,7 +12960,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
   })
 
-  /** 当前方的图边补给源格（2.1 / 3.1：地图库字母入场段，按方取表） */
+  /** 当前方的图边补给源格（专规 2.1 / 专规 3.1：地图库字母入场段，按方取表） */
   const scenarioSupplySourceHexes = computed<HexRef[]>(() =>
     ENTRY_EDGE[activeSide.value].hexes.map((hex) => ({ ...hex })),
   )
@@ -12968,14 +12968,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 专规 2.1a：**当日仍开放**的图边补给源格
    *
-   * 原文（2.1a）：「These supply sources cease to exist on fixed dates: **Entry L on 19 July**.
+   * 原文（专规 2.1a）：「These supply sources cease to exist on fixed dates: **Entry L on 19 July**.
    *   **Entry E (and all South edge sources west of there) on 19 August**.」
    *
    * ★ 修（2026-11-01）：`scenarioSupplySourceHexes` 取 **字母入场段、不看日期**，
-   *   而 2.1/3.1 的落点规则是「其余 SP 放**图边补给源格**」「补员/突围返场同理」——
+   *   而 专规 2.1/ 专规 3.1 的落点规则是「其余 SP 放**图边补给源格**」「补员/突围返场同理」——
    *   关停之后那些格**不再是补给源**，却仍能接货。修前 `arrivalFacts.edgeSupplySourceHexes()`
    *   与免费铁运的余额落点都直接用原始清单 ⇒ 19 Jul 之后还能往 20.35 塞 SP。
-   *   现在两处都改用本投影（与 1.1b 的 `safeEdgeHexesBySide` 同一份判据、同一份事实）。
+   *   现在两处都改用本投影（与 专规 1.1b 的 `safeEdgeHexesBySide` 同一份判据、同一份事实）。
    */
   const openSupplySourceHexes = computed<HexRef[]>(() => {
     const statuses = supplySourceStatuses({
@@ -12999,7 +12999,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *
    * 合并口径由 `railEntrySupplySources` 唯一实现：
    *   剧本 `supplySources`（`42.35` / `4.00` 这类无字母的源）∪ `ENTRY_EDGE[side] ∩ 铁路格`；
-   *   2.1a 的关闭（Entry L 19 Jul；Entry E 及以西的南缘源 19 Aug）仍按日期过滤。
+   *   专规 2.1a 的关闭（Entry L 19 Jul；Entry E 及以西的南缘源 19 Aug）仍按日期过滤。
    */
   const openSourceHexesBySide = computed<Record<Side, HexRef[]>>(() => {
     const current = scenarios.scenarios.find((item) => item.id === scenarioId.value)
@@ -13027,7 +13027,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *
    * 原文没有「转换规矩」的铁路 ⇒ 不存在交叉可用，也没有共用段：整段铁路自然归其中一方。
    * 两网各自从本方**进场铁路**出发做连通性 BFS，种子判据：
-   *   本侧图边补给源（2.1/3.1 的地理判据，见 `openSourceHexesBySide`）∩ 铁路格 ∩ 当日仍开放（2.1a）。
+   *   本侧图边补给源（专规 2.1/ 专规 3.1 的地理判据，见 `openSourceHexesBySide`）∩ 铁路格 ∩ 当日仍开放（专规 2.1a）。
    * ★ 不再是「字母入场段」：`42.35`（苏）与 `4.00`（轴）是源但不是字母入口，同样作种子。
    * 多轨与单轨的差别只是 13.3c 的运量费用，**不参与归属判定**。
    */
@@ -13071,7 +13071,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 专规 2.1 / 3.1 的「by direct draw」判据事实（只服务 `directDrawHqHexes`）
    *
    * 源取三样，缺一不可：
-   *   ① 剧本图边补给源（2.1/3.1 的权威清单，已按 2.1a 过滤关停）——**不能漏**：
+   *   ① 剧本图边补给源（专规 2.1/ 专规 3.1 的权威清单，已按 专规 2.1a 过滤关停）——**不能漏**：
    *      `supplyFacts` 只收玩家声明的源，若拿它来判，未声明源时所有 HQ 都会判成"断补"；
    *   ② 玩家声明的 12.6a① 源；③ 13.3c 派生的卸货格（12.6a②）。
    * 延补队由 `createSupplyFacts` 按在场单位自动收（12.6a③）。
@@ -13156,7 +13156,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           }),
         )
         .map((unit) => ({ ...unit.hex })),
-    // 2.1a：关停的源不再是补给源，故不能作落点
+    // 专规 2.1a：关停的源不再是补给源，故不能作落点
     edgeSupplySourceHexes: () => openSupplySourceHexes.value.map((hex) => ({ ...hex })),
     /*
      * 专规 2.1a：Entry L（19 July 起）与 Entry E 及以西南缘源（19 August 起）关闭。
@@ -13238,7 +13238,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       detrainableHexes: cargoDetrainableHexes.value,
       picked: freeRailPicked.value,
       // 余额的落点缺省取本剧本**本方的图边补给源格第一处**（原文只说"放图边补给源格"，不指定哪一处）
-      // 2.1a：余额只能落**当日仍开放**的图边补给源格
+      // 专规 2.1a：余额只能落**当日仍开放**的图边补给源格
       edgeHex: freeRailEdgeHex.value ?? openSupplySourceHexes.value[0] ?? null,
       edgeSourceHexes: openSupplySourceHexes.value,
       // 3.6 补给列车已拆成独立环节（点铁路格直接落 2 SP），不再并入免费铁运落账
@@ -13287,7 +13287,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 3.6：本回合本段本方是否已落（幂等键；重复点格不再叠加） */
   const supplyTrainPlacedKey = ref<string | null>(null)
-  /** 3.6：3.4b 生效时的归属（未选不落） */
+  /** 3.6：专规 3.4b 生效时的归属（未选不落） */
   const supplyTrainGroup = ref<PanzerGroup | null>(null)
 
   function supplyTrainTurnKey(): string {
@@ -13312,7 +13312,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 3.6：在点中的可卸货铁路格落 2 SP（不用 Rail Cap）
    *
-   * 判据与高亮同源（`supplyTrainPlacementHexes`），3.4b 生效时须先在本窗选归属；
+   * 判据与高亮同源（`supplyTrainPlacementHexes`），专规 3.4b 生效时须先在本窗选归属；
    * 幂等：同一回合/段/方只落一次，重复点格返回 false 并记日志。
    */
   function placeSupplyTrainSpNow(hex: HexRef): boolean {
@@ -13398,7 +13398,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** 3.6：3.4b 归属选择（null ⇒ 清除） */
+  /** 3.6：专规 3.4b 归属选择（null ⇒ 清除） */
   function setSupplyTrainGroup(group: PanzerGroup | null): void {
     supplyTrainGroup.value = group
   }
@@ -13410,7 +13410,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 3.4b：到货 SP 的逐格归属选择（**环节内瞬态，不写入存档**）
+   * 专规 3.4b：到货 SP 的逐格归属选择（**环节内瞬态，不写入存档**）
    *
    * 键为 `hexLabel(hex)`；落账成功、换回合、清空勾选时一并清掉。
    */
@@ -13426,7 +13426,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     fixed: boolean
   }
 
-  /** 3.4b：到货计划按格去重后的归属目标（供面板逐格选择） */
+  /** 专规 3.4b：到货计划按格去重后的归属目标（供面板逐格选择） */
   const arrivalSpGroupTargets = computed<ArrivalSpGroupTarget[]>(() => {
     const plan = freeRailPlan.value
     if (plan === null) return []
@@ -13459,7 +13459,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })
   })
 
-  /** 3.4b：为到货的某一落点选归属（null ⇒ 清除选择） */
+  /** 专规 3.4b：为到货的某一落点选归属（null ⇒ 清除选择） */
   function setArrivalSpGroup(hexText: string, group: PanzerGroup | null): void {
     const next = { ...arrivalSpGroups.value }
     if (group === null) delete next[hexText]
@@ -13467,7 +13467,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     arrivalSpGroups.value = next
   }
 
-  /** 3.4b：清空到货归属选择（换回合 / 落账成功 / 清空落点时调用） */
+  /** 专规 3.4b：清空到货归属选择（换回合 / 落账成功 / 清空落点时调用） */
   function clearArrivalSpGroups(): void {
     arrivalSpGroups.value = {}
   }
@@ -13514,7 +13514,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           ? '3.6 补给列车'
           : '图边补给源格'
     /*
-     * 3.4b：德军到货 SP「未选归属不得落账」。
+     * 专规 3.4b：德军到货 SP「未选归属不得落账」。
      * 以 `arrivalSpGroupTargets` 的有效归属为准（既有补给站已声明的优先）。
      */
     const groupByText = new Map(
@@ -13532,7 +13532,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         }
       }
       /*
-       * 3.4b 均分：Supply Table 到货须在两集群间均分，**奇数点归 Guderian**
+       * 专规 3.4b 均分：Supply Table 到货须在两集群间均分，**奇数点归 Guderian**
        *
        * 原文：「The Axis must evenly divide Supply Table arrivals between Guderian and Hoth,
        * with the odd point going to Guderian. … Example: If 7 SP are obtained, Hoth must be
@@ -13606,7 +13606,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** 13.6 / 1.6a：当日到达计划（含投放需求与强制移除） */
+  /** 13.6 / 专规 1.6a：当日到达计划（含投放需求与强制移除） */
   const arrivalPlan = computed<ArrivalPlan | null>(() => {
     const outcome = planArrivals({ side: activeSide.value, date: date.value })
     return outcome.ok ? outcome.data : null
@@ -13760,7 +13760,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /*
-   * 1.6a：**强制移除执行账本**（2026-11-11，第一段整改）
+   * 专规 1.6a：**强制移除执行账本**（2026-11-11，第一段整改）
    *
    * 原文次序是"先 Remove、再放到达算子"；修前移除清单与放置同屏、无先后记录，
    * 同一清单可被反复执行。这里按到达计划键记"本计划已执行过移除"，据此：
@@ -14116,8 +14116,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const rebuildCandidates = computed<DeadPileEntry[]>(() => {
     /*
-     * 1.6c 已登记的返场单位仍在死亡堆里（放置阶段才取出），但不能再进 13.5 的重建候选：
-     * 否则同一枚会被两处消费——玩家先花 Pax/Eq 把它重建出来，1.6c 手牌再点上去时
+     * 专规 1.6c 已登记的返场单位仍在死亡堆里（放置阶段才取出），但不能再进 13.5 的重建候选：
+     * 否则同一枚会被两处消费——玩家先花 Pax/Eq 把它重建出来，专规 1.6c 手牌再点上去时
      * `returnFromDeadPileNow` 已找不到单位，手牌照旧挂着（实测 C 段）。
      * 落位之后的 −1 军力单位走第二条（图上受损），仍可按原文「usual cost」再重建。
      */
@@ -14229,34 +14229,34 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const initialSetupInProgress = ref(false)
   const automaticPhaseKeys = ref<string[]>([])
 
-  // 1.6c：沿用已随盘面保存的阶段结算键，按回合和阵营记录一次掷表。
+  // 专规 1.6c：沿用已随盘面保存的阶段结算键，按回合和阵营记录一次掷表。
   function hasSpecialReplDraw(side: Side, round: number): boolean {
     return automaticPhaseKeys.value.includes(`specialRepl:${round}:${side}`)
   }
 
   function markSpecialReplDraw(side: Side, round: number): void {
     automaticPhaseKeys.value = [...automaticPhaseKeys.value, `specialRepl:${round}:${side}`]
-    // 用户 2026-11-18：1.6c 特殊补员是掷骰判定 ⇒ 本段撤回入口直接不可用
+    // 用户 2026-11-18：专规 1.6c 特殊补员是掷骰判定 ⇒ 本段撤回入口直接不可用
     sealUndo('1.6c 特殊补员已掷骰，本段不能撤回')
   }
 
   /**
-   * 1.6c：本回合本方的特殊补员**还欠着**（19 Aug 前每回合必掷）
+   * 专规 1.6c：本回合本方的特殊补员**还欠着**（19 Aug 前每回合必掷）
    *
-   * 进 B 段时引擎只在到达环自动掷 1.6b；1.6c 受时机闸限制，要到「补员表」这一环的
+   * 进 B 段时引擎只在到达环自动掷 专规 1.6b；专规 1.6c 受时机闸限制，要到「补员表」这一环的
    * 「掷骰检定」才掷。此判定给补员表那一环当 ack 前提——否则玩家可以先 ack 掉这一环，
-   * 之后手牌永久卡在"判定阶段还没走完：1.6c 特殊补员还没掷"（补给列车 2 SP 落不下去）。
+   * 之后手牌永久卡在"判定阶段还没走完：专规 1.6c 特殊补员还没掷"（补给列车 2 SP 落不下去）。
    */
   const specialReplDue = computed<boolean>(
     () => isSpecialReplAvailable(date.value) && !hasSpecialReplDraw(activeSide.value, turn.value),
   )
 
-  /** 1.6b：本回合本方的可变增援是否已经掷过（含补员表与补给表） */
+  /** 专规 1.6b：本回合本方的可变增援是否已经掷过（含补员表与补给表） */
   const variableReplRolled = computed<boolean>(() =>
     automaticPhaseKeys.value.includes(`${turn.value}|${activeSide.value}|reinforcement`),
   )
 
-  /** 「补员表」这一环能否完成：1.6b 已掷 **且** 1.6c 不欠（19 Aug 起不再欠） */
+  /** 「补员表」这一环能否完成：专规 1.6b 已掷 **且** 专规 1.6c 不欠（19 Aug 起不再欠） */
   const replTableAckReady = computed<boolean>(
     () => variableReplRolled.value && !specialReplDue.value,
   )
@@ -14288,7 +14288,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 第一段·到达：**结束本段**（唯一出口）
    *
    * v7.1 §2.2：到达块不再在"放完手牌"时自动关窗；改由本函数收束整段。
-   * - 1.6a 强制移除未执行 ⇒ 拒绝（先移除后放置）；
+   * - 专规 1.6a 强制移除未执行 ⇒ 拒绝（先移除后放置）；
    * - 手牌非空且未确认放弃 ⇒ 拒绝（由界面问一次"是否放弃上场"）；
    * - 确认放弃 ⇒ 未放上场的增援作废（不结转），并允许本回合不做慢动员；
    * - 苏方若还有按表 2-2 未解锁的师 ⇒ 留在本段等慢动员提交，否则推进到下一环节。
@@ -14315,7 +14315,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 第一段·慢动员：结束本段
    *
-   * 2.4 + 表 2-2：当日仍有"配额 > 0 且仍有锁定师"的集团军 ⇒ 必须先提交
+   * 专规 2.4 + 表 2-2：当日仍有"配额 > 0 且仍有锁定师"的集团军 ⇒ 必须先提交
    * （未用满不得提交）；2.3 的例外（本回合不上增援、到达已整段放弃）可跳过。
    */
   function endSlowMobilizationSegmentNow(): boolean {
@@ -14332,8 +14332,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 判定阶段是否已经全部走完（＝放置阶段的**唯一闸门**）
    *
    * 第二段是**两段式**：
-   *   ① 判定阶段：按序走完 1.6c 特殊补员 → 3.6 随机事件 → 3.6 补给列车 → 3.3c 可变撤离 →
-   *      1.6b 补员表 → 1.6b 补给表 → 2.3c 方面军预备队。这一阶段**不落子、不出地图落点**，
+   *   ① 判定阶段：按序走完 专规 1.6c 特殊补员 → 专规 3.6 随机事件 → 专规 3.6 补给列车 → 专规 3.3c 可变撤离 →
+   *      专规 1.6b 补员表 → 专规 1.6b 补给表 → 专规 2.3c 方面军预备队。这一阶段**不落子、不出地图落点**，
    *      只出判定结果与回执；
    *   ② 放置阶段：本轮拿到的全部单位与物资汇成**同一张手牌**，逐个点格落位。
    *
@@ -14358,11 +14358,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
   const rollPlacementOpen = computed<boolean>(() => rollPlacementBlockedReason.value === null)
 
-  /** 1.6c 特殊补员的**返场登记**：判定阶段只登记，放置阶段才从死亡堆取出 */
+  /** 专规 1.6c 特殊补员的**返场登记**：判定阶段只登记，放置阶段才从死亡堆取出 */
   interface SpecialReplReturn {
     instanceId: string
     name: string
-    /** 返场后的军力（1.6c：−1 军力）；null ⇒ 保持原值 */
+    /** 返场后的军力（专规 1.6c：−1 军力）；null ⇒ 保持原值 */
     steps: number | null
     /** 登记时的原军力（本段内收回时复原） */
     priorSteps: number
@@ -14370,7 +14370,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const specialReplPending = ref<SpecialReplReturn[]>([])
   const specialReplPlacedThisSegment = ref<SpecialReplReturn[]>([])
 
-  /** 2.3c 编制转化的**新单位登记**：判定阶段领取，放置阶段落位 */
+  /** 专规 2.3c 编制转化的**新单位登记**：判定阶段领取，放置阶段落位 */
   interface FrontalUnitEntry {
     recordId: string
     name: string
@@ -14381,16 +14381,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const frontalUnitPlacedThisSegment = ref<{ instanceId: string; entry: FrontalUnitEntry } | null>(
     null,
   )
-  /** 2.3c 并进到货 SP 池的那 2 SP（只用于手牌照面显示"来自哪一项"） */
+  /** 专规 2.3c 并进到货 SP 池的那 2 SP（只用于手牌照面显示"来自哪一项"） */
   const frontalReservesSpPending = ref<number>(0)
 
-  /** 2.1 的到货落点候选（补员 / 特殊补员返场 / 2.3c 新单位共用这一处判据） */
+  /** 2.1 的到货落点候选（补员 / 特殊补员返场 / 专规 2.3c 新单位共用这一处判据） */
   function handArrivalCandidates(): HexRef[] {
     return replInitialPlacementCandidatesFor('pax')
   }
 
   /**
-   * 1.6c：登记本次特殊补员的返场单位（**只登记，不落子**）
+   * 专规 1.6c：登记本次特殊补员的返场单位（**只登记，不落子**）
    *
    * 修前 `containers.drawSpecialRepl` 掷完就 `returnFromDeadPileNow` 直接返场，
    * 无合法格则整笔拒绝——那是"判完一项就立刻放置"。现在改由放置阶段统一手牌落位。
@@ -14422,7 +14422,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** 1.6c：点地图给某一条返场登记选落点（2.1 判据） */
+  /** 专规 1.6c：点地图给某一条返场登记选落点（2.1 判据） */
   function beginSpecialReplPlaceHexPickNow(index: number): boolean {
     if (!rollPlacementOpen.value) {
       pushLog(
@@ -14469,7 +14469,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** 1.6c：收回本段已返场的一枚（退回死亡堆与手牌） */
+  /** 专规 1.6c：收回本段已返场的一枚（退回死亡堆与手牌） */
   function withdrawSpecialReplReturnNow(instanceId: string): boolean {
     if (refuseWithdrawWhenSealed()) return false
     if (segmentStep.value?.id !== 'reinforcement.replRoll') return false
@@ -14491,7 +14491,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** 2.3c：点地图给编制转化的新单位选落点（与补员同一条 2.1 判据） */
+  /** 专规 2.3c：点地图给编制转化的新单位选落点（与补员同一条 2.1 判据） */
   function beginFrontalUnitPlaceHexPickNow(): boolean {
     if (!rollPlacementOpen.value) {
       pushLog(
@@ -14545,7 +14545,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** 2.3c：收回本段已落位的新单位（退回手牌） */
+  /** 专规 2.3c：收回本段已落位的新单位（退回手牌） */
   function withdrawFrontalUnitNow(): boolean {
     if (refuseWithdrawWhenSealed()) return false
     if (segmentStep.value?.id !== 'reinforcement.replRoll') return false
@@ -14650,8 +14650,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 第二段放置阶段 = **同一张手牌**（全部来源汇到一处）
    *
-   * 来源：1.6b 补员表（Pax / Eq）／1.6c 特殊补员返场／1.6b 补给表 SP（含 2.3c 并进来的 2 SP）／
-   * 3.6 补给列车 2 SP／2.3c 编制转化新单位。每条仍带来源标签，拒付判据各按原文。
+   * 来源：专规 1.6b 补员表（Pax / Eq）／ 专规 1.6c 特殊补员返场／ 专规 1.6b 补给表 SP（含 专规 2.3c 并进来的 2 SP）／
+   * 3.6 补给列车 2 SP／ 专规 2.3c 编制转化新单位。每条仍带来源标签，拒付判据各按原文。
    */
   const rollHandEntries = computed<RollHandEntry[]>(() => {
     const entries: RollHandEntry[] = []
@@ -14768,7 +14768,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 第二段（掷骰与统一放置）的**待放手牌**
    *
    * v7.1 §3.3：所有骰子判完才出手牌，产出汇进同一张手牌再统一落位。
-   * 手牌＝未落位的补员算子（Pax / Eq，每点一枚）＋1.6c 返场登记＋2.3c 新单位
+   * 手牌＝未落位的补员算子（Pax / Eq，每点一枚）＋ 专规 1.6c 返场登记＋ 专规 2.3c 新单位
    * ＋到货 SP（补给表 / 方面军预备队）＋未落位的补给列车 2 SP。
    * Ftr/Tac 不在手牌（13.5 不可保存，段末清零）。
    */
@@ -14783,10 +14783,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 第二段·结束本段（v7.1 §1.5 / §3.3：段内唯一出口）
    *
    * 前置（都是"该掷的没掷/该办的没办"，不替玩家跳过）：
-   *   · 1.6b 可变增援未掷 ⇒ 拒绝；
-   *   · 1.6c 特殊补员可掷而未掷 ⇒ 拒绝（原文「Each turn before 19 August … roll a die」）；
-   *   · 3.3c 撤离待选算子 ⇒ 拒绝；
-   *   · 2.3c 方面军预备队到批而未领 ⇒ 拒绝（原文「must be taken right away」）；
+   *   · 专规 1.6b 可变增援未掷 ⇒ 拒绝；
+   *   · 专规 1.6c 特殊补员可掷而未掷 ⇒ 拒绝（原文「Each turn before 19 August … roll a die」）；
+   *   · 专规 3.3c 撤离待选算子 ⇒ 拒绝；
+   *   · 专规 2.3c 方面军预备队到批而未领 ⇒ 拒绝（原文「must be taken right away」）；
    *   · 手牌非空且未确认放弃 ⇒ 拒绝（由界面问一次"是否放弃上场"）。
    *
    * 确认放弃 ⇒ 未落位的补员 / SP / 补给列车作废（不结转），随后进第三段。
@@ -14818,8 +14818,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     /*
-     * 放置阶段的收尾：手牌空了 ⇒ 把（1.6b 补给表 + 2.3c 方面军）的到货 SP 一次性落账。
-     * 3.4b 的归属/均分仍由 `applySupplyArrivalsNow` 校验，拒绝原因原样回给界面。
+     * 放置阶段的收尾：手牌空了 ⇒ 把（专规 1.6b 补给表 + 专规 2.3c 方面军）的到货 SP 一次性落账。
+     * 专规 3.4b 的归属/均分仍由 `applySupplyArrivalsNow` 校验，拒绝原因原样回给界面。
      */
     if (!abandonHand && supplyArrivalSp.value > 0) {
       if (!applySupplyArrivalsNow()) {
@@ -14882,7 +14882,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 第三段：Pax / Eq 两栏旁的「免费重建 N」提示标记（v7.1 §4.6）
    *
-   * **只是提示、不参与扣点**：1.6c（苏 2 / 轴 1，19 Aug 前且本回合已掷）与 2.3c（当日已领 +2）
+   * **只是提示、不参与扣点**：专规 1.6c（苏 2 / 轴 1，19 Aug 前且本回合已掷）与 专规 2.3c（当日已领 +2）
    * 都是「按单位点名、不扣 Pax/Eq」的免费重建；当期不用即作废、不结转。
    */
   const rebuildFreeHint = computed<number>(() => {
@@ -14914,11 +14914,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     /*
      * 第二段改用"先掷完、再统一放"的批量手牌 ⇒ 掷骰块不再以"已放置"为 ack 前提
      * （放置统一由 `reinforce:hand` 与 `endRollSegmentNow` 把关）；
-     * 但 1.6c 是**必须掷的表**，未掷不得 ack。
+     * 但 专规 1.6c 是**必须掷的表**，未掷不得 ack。
      *
-     * ★ 1.6c 的唯一入口已并入补员表的「掷骰检定」（`reinforce:specialRepl` 不再单列），
+     * ★ 专规 1.6c 的唯一入口已并入补员表的「掷骰检定」（`reinforce:specialRepl` 不再单列），
      *   所以闸门必须同时认 `reinforce:replTable`：否则玩家可以先 ack 掉补员表这一环，
-     *   之后 1.6c 入口随之消失，手牌永久卡在"判定阶段还没走完"（实测 turn 4 补给列车）。
+     *   之后 专规 1.6c 入口随之消失，手牌永久卡在"判定阶段还没走完"（实测 turn 4 补给列车）。
      */
     if (
       (itemId === 'reinforce:specialRepl' || itemId === 'reinforce:replTable') &&
@@ -15032,7 +15032,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 撤销封印的作用域键：初设单独一段；其余按「回合|方|段|环节」 */
   function undoScopeKeyOf(): string {
     if (initialSetupInProgress.value) return 'setup'
-    // 增援段按**整段**封：1.6b/1.6c 掷完骰后，本段后续（重建/整编）也不得再撤回
+    // 增援段按**整段**封：专规 1.6b/ 专规 1.6c 掷完骰后，本段后续（重建/整编）也不得再撤回
     if (phase.value === 'reinforcement') return `${turn.value}|${activeSide.value}|reinforcement`
     return `${turn.value}|${activeSide.value}|${phase.value}|${segmentStep.value?.id ?? 'none'}`
   }
@@ -15561,7 +15561,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 13.5 / 1.6b：补员入账
+   * 13.5 / 专规 1.6b：补员入账
    *
    * §5-D 后分两种去向：**Pax / Eq 进"待放置"**（SOP：「掷可变增援表，并将相应的结果放置在地图上」
    * ——落点由裁判选格，放置前不在盘面、也不能用于重建）；**Ftr / Tac 直接进账本**（专规 1.6）。
@@ -15599,7 +15599,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 修前这里是「全图 − 敌方占据」，于是可变增援高亮一整张地图；现改为与到达落点同一条引擎判据
    * `arrivalPlacementCandidates({kind:'hqOrEdgeSource'})`：
    *   · 有能**直接拖取追溯补给**的友方 HQ ⇒ 只落这些 HQ；
-   *   · 没有 HQ 才退到**本日仍开放的图边补给源格**（2.1a）。
+   *   · 没有 HQ 才退到**本日仍开放的图边补给源格**（专规 2.1a）。
    * 高亮与 `placePendingReplNow` 的校验共用本投影，不许两处各算。
    *
    * ★ 这条取代 2026-11-10「初次摆放不套 13.5a」的旧口径的**范围部分**：仍不套 13.5a 的
@@ -15775,7 +15775,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     () => {
       /*
        * 撤回只在本段内有效：离开第二段或换方/换回合即清空。
-       * ★ 1.6c 返场（`specialReplPlacedThisSegment`）与 2.3c 编制转化（`frontalUnitPlacedThisSegment`）
+       * ★ 专规 1.6c 返场（`specialReplPlacedThisSegment`）与 专规 2.3c 编制转化（`frontalUnitPlacedThisSegment`）
        *   同样只在第二段内可收回——两条 `withdraw` 都只按 `segmentStep.id` 把关、不看回合，
        *   修前这两个登记从不清零 ⇒ 下一回合的第二段还列着上一回合已落位的算子，能把已经
        *   上场（甚至已移动/参战）的算子"收回"死亡堆与手牌。与补员撤回同一时点清空。
@@ -15818,7 +15818,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * §5-D：把**某一族**待放置补员摆到指定格（每点一枚）
    *
-   * 落点按 2.1 到货条：能直接拖取追溯补给的友方 HQ，否则图边补给源格；不合法就**给出原因**
+   * 落点按 专规 2.1 到货条：能直接拖取追溯补给的友方 HQ，否则图边补给源格；不合法就**给出原因**
    * 并保留待放置态，而不是静默失败。另一族的待放置数不受影响。
    */
   function placePendingReplNow(hex: HexRef, kind: SavableReplKind): boolean {
@@ -15880,7 +15880,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * B18：掷可变增援（1.6b 补给表与补员表 / 1.6c 特殊补员 / 3.3c 可变撤离 / 3.6 随机事件）
+   * B18：掷可变增援（专规 1.6b 补给表与补员表 / 专规 1.6c 特殊补员 / 专规 3.3c 可变撤离 / 专规 3.6 随机事件）
    *
    * 骰面由 `variableReplInputs` 给出（`autoRoll` 时用种子化 RNG 现掷）；结论落 `lastVariableRepl`，
    * 补员立即入账（Ftr/Tac 仍需在阶段末清零）；SP 与免费重建按 2.1 的落点由裁判投放。
@@ -15890,7 +15890,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (session.session !== null && automaticPhaseKeys.value.includes(key)) return true
     // 3.6：重掷后重新给一次落点机会（上一掷若已落过，仍按新结果重置）
     resetSupplyTrainPlacement()
-    // 放置阶段的暂存（勾选 / 余额格 / 3.4b 归属）逐轮重置，避免把上一轮的落点带进这一轮
+    // 放置阶段的暂存（勾选 / 余额格 / 专规 3.4b 归属）逐轮重置，避免把上一轮的落点带进这一轮
     freeRailPicked.value = []
     freeRailEdgeHex.value = null
     clearArrivalSpGroups()
@@ -15921,7 +15921,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const drill = tutorialFixedReinforcement.value
     const supplyDice = drill ? 7 : inputs.autoRoll ? draw2d6() : inputs.supplyDice
     const replDice = drill ? 5 : inputs.autoRoll ? draw2d6() : inputs.replDice
-    // 1.6c 不在这一批：它在 `drawSpecialRepl` 执行时自己掷（原文「also get to roll a die」）
+    // 专规 1.6c 不在这一批：它在 `drawSpecialRepl` 执行时自己掷（原文「also get to roll a die」）
     const variableExitDie = drill ? 1 : inputs.autoRoll ? draw1d6() : inputs.variableExitDie
     const randomEventDice = drill ? 7 : inputs.autoRoll ? draw2d6() : inputs.randomEventDice
     // ⑭ 接线：按实际掷骰顺序复算骰面（补给 2d6 → 补员 2d6 → 可变撤离 1d6 → 随机事件 2d6）
@@ -15943,9 +15943,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         replDice,
         variableExitDie,
         randomEventDice,
-        // 3.3c：已了结则不再掷（「1 或 6 ⇒ 该单位移除，撤离判定结束」）
+        // 专规 3.3c：已了结则不再掷（「1 或 6 ⇒ 该单位移除，撤离判定结束」）
         variableExitResolved: variableExitResolved.value,
-        // 3.6 / 4.1b：4.0 逐条勾选里「4.1b 更多轴心补给」启用时，8 / 12 / 15 Jul 自动 Supply Train
+        // 专规 3.6 / 专规 4.1b：4.0 逐条勾选里「专规 4.1b 更多轴心补给」启用时，8 / 12 / 15 Jul 自动 Supply Train
         option4_1b: session.rule4On('moreAxisSupply'),
       }),
       '可变增援',
@@ -15953,18 +15953,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (data === null) return false
     /*
      * 教学局（用户 2026-11-19 改口径）：**不给免费补员/免费重建** ——
-     * 补员单位改从 1.6b 补员表发放（Pax ×1、Eq ×1），玩家在重建阶段花补员
+     * 补员单位改从 专规 1.6b 补员表发放（Pax ×1、Eq ×1），玩家在重建阶段花补员
      * 从死人堆拉回单位（13.5a：补员同格、战斗模式 HQ 两格内）。
      * 剧本卡 Variable Repls: None 的"零补员"对教学是障碍，故这里按教学局口径固定发放。
      */
     if (tutorialFixedReinforcement.value) {
       data.repl = { ...data.repl, ftr: 0, tac: 0, pax: 1, eq: 1, rowLabel: '教学发放' }
-      // 1.6c 在教学中整个跳过：随补员表发放一并标记「已掷」，闸门才不会卡段落收束
+      // 专规 1.6c 在教学中整个跳过：随补员表发放一并标记「已掷」，闸门才不会卡段落收束
       markSpecialReplDraw(activeSide.value, turn.value)
     }
     lastVariableRepl.value = data
     /*
-     * 1.6b 补给表所得 SP：按原文进**到货落账池**（专规 1.6b「place new units per 2.1 and 3.1」
+     * 专规 1.6b 补给表所得 SP：按原文进**到货落账池**（专规 1.6b「place new units per 2.1 and 3.1」
      * + 专规 2.1 / 3.1 的免费铁运）——每个可卸车城市格 1 SP（需标准/宽轨铁路连通），
      * 其余落地图边缘补给源格；玩家在统一手牌里逐格点，收束时由 `applySupplyArrivalsNow` 落账。
      *
@@ -15983,7 +15983,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 3.6：补给列车的落点须玩家选（任一可卸货格）；换掷即作废上一次的选择
     supplyTrainHex.value = null
     /*
-     * 3.3c：「until a division … is Removed」⇒ **只有真正移除时才了结**。
+     * 专规 3.3c：「until a division … is Removed」⇒ **只有真正移除时才了结**。
      * 修前这里对 2–5（`reroll`）也置真 ⇒ 掷出"下回合再掷"后再也不会掷，与原文相反。
      */
     if (data.variableExit !== null && data.variableExit !== undefined) {
@@ -16017,7 +16017,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
     }
     pushLog('success', data.detail, data.rule)
-    // ⑭ 接线：可变增援（1.6b 补给/补员表 / 1.6c 特殊补员 / 3.3c 可变撤离 / 3.6 随机事件）
+    // ⑭ 接线：可变增援（专规 1.6b 补给/补员表 / 专规 1.6c 特殊补员 / 专规 3.3c 可变撤离 / 专规 3.6 随机事件）
     // 入会话日志；rolls＝本笔真实掷出的五颗骰（autoRoll 关闭时为空，由裁判手填）
     recordSettlement({
       action: 'variableRepl',
@@ -16039,7 +16039,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         detail: data.detail,
       },
     })
-    // 1.6b 已掷：判定阶段以此为"补员/补给两表已过"的凭据（手牌闸门认这一条）
+    // 专规 1.6b 已掷：判定阶段以此为"补员/补给两表已过"的凭据（手牌闸门认这一条）
     const rolledKey = `${String(turn.value)}|${activeSide.value}|reinforcement`
     if (!automaticPhaseKeys.value.includes(rolledKey)) {
       automaticPhaseKeys.value = [...automaticPhaseKeys.value, rolledKey]
@@ -16048,14 +16048,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 3.3c：把撤离结果**真正落到盘面**（1.6a）
+   * 专规 3.3c：把撤离结果**真正落到盘面**（专规 1.6a）
    *
-   * - 目标编队在场（盘面 / 死亡堆）⇒ 逐个 `removeFromPlayEverywhere`（1.6a：「regardless of its
+   * - 目标编队在场（盘面 / 死亡堆）⇒ 逐个 `removeFromPlayEverywhere`（专规 1.6a：「regardless of its
    *   current situation, **even if in the dead pile**」）——撤离是"移出游戏"，**不是**进死亡堆；
-   * - 盘面与死亡堆都没有该编队算子 ⇒ 落一条 `mode: 'select'` 的结算，由玩家按 1.6a
+   * - 盘面与死亡堆都没有该编队算子 ⇒ 落一条 `mode: 'select'` 的结算，由玩家按 专规 1.6a
    *   「**it, or else a unit with identical factors**」挑一枚同印值算子顶替。
    *
-   * ★ 修前这里只置 `variableExitResolved = true` 并写日志，**一个算子都没移**（3.3c 从未落地）。
+   * ★ 修前这里只置 `variableExitResolved = true` 并写日志，**一个算子都没移**（专规 3.3c 从未落地）。
    */
   function resolveVariableExitNow(result: VariableExitResult): void {
     const removedUnit = result.removedUnit
@@ -16105,14 +16105,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 3.3c：剧本 7「开局即掷可变撤离」
+   * 专规 3.3c：剧本 7「开局即掷可变撤离」
    *
    * 原文：剧本 7 专规 `Roll for Variable Exit (3.3c).`；3.3c `On 19 August, start rolling during
    * every Axis Reinforcement Phase until a division, either SS Reich or 14th Motorized, is
-   * Removed (using the 1.6a procedure).` 本局首回合 26 Aug 已在 19 Aug 之后 ⇒ **建会话时先掷一次**：
-   *   · 1 → 移除 SS Reich 全部（1.6a：不论盘面/死亡堆；都不在场则改由玩家挑同印值算子）；
+   * Removed (using the 专规 1.6a procedure).` 本局首回合 26 Aug 已在 19 Aug 之后 ⇒ **建会话时先掷一次**：
+   *   · 1 → 移除 SS Reich 全部（专规 1.6a：不论盘面/死亡堆；都不在场则改由玩家挑同印值算子）；
    *   · 6 → 移除 14 Mtr 全部；
-   *   · 2–5 → 本次不了结，留到下个轴方增援阶段按 3.3c 续掷。
+   *   · 2–5 → 本次不了结，留到下个轴方增援阶段按 专规 3.3c 续掷。
    *
    * 记账：先落 `variableExit` 结算（`data.mode = 'setupRoll'`，带骰面），再执行移除 ⇒
    * 移除产生的 `direct`/`select` 结算仍是日志末条，替补选择态与增援窗同源；
@@ -16153,13 +16153,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** 3.3c：是否有待玩家选择的替补（= 日志里最后一条撤离结算是 `select`） */
+  /** 专规 3.3c：是否有待玩家选择的替补（= 日志里最后一条撤离结算是 `select`） */
   const variableExitSelectionOpen = computed<boolean>(
     () => variableExitPendingSelection.value !== null,
   )
 
   /**
-   * 3.3c 待选清单：**1.6a 的「identical factors」**＝战斗面印值 `attack/ar/ma` 三元组相等
+   * 专规 3.3c 待选清单：** 专规 1.6a 的「identical factors」**＝战斗面印值 `attack/ar/ma` 三元组相等
    *
    * 参考印值取自单位库中该编队的记录（目标编队此刻已无实例 ⇒ 不能从盘面取）；
    * 候选只从**盘面**算子中挑（界面按格高亮＋点选，死亡堆没有格可点）。
@@ -16197,7 +16197,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return buildUnitSelectionSet(candidates)
   })
 
-  /** 3.3c 待选的算子图阵列（只含可选者；`CounterPicker` 的纯投影数据） */
+  /** 专规 3.3c 待选的算子图阵列（只含可选者；`CounterPicker` 的纯投影数据） */
   const variableExitPickItems = computed(() => {
     const items: {
       id: string
@@ -16223,7 +16223,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
-   * 3.3c 待选时**有可选单位的格**（地图多格高亮的数据源）
+   * 专规 3.3c 待选时**有可选单位的格**（地图多格高亮的数据源）
    *
    * ★ 只在"当前是轴方增援阶段"时才给高亮：切换集团军 / 进入其它阶段 / 确认移除后
    *   （`pendingSelection` 归 null）一律清空，避免"格还亮着但已经不可点"的状态错位。
@@ -16235,7 +16235,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   /**
-   * 3.3c：玩家点选一枚同印值算子顶替撤离（1.6a）
+   * 专规 3.3c：玩家点选一枚同印值算子顶替撤离（专规 1.6a）
    *
    * 只接受 `variableExitSelectionSet.eligibleIds` 里的 id（不在清单内＝规则上不可选，直接拒绝）。
    */
@@ -16268,7 +16268,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** 3.3c：悬停待选清单里的一枚 ⇒ 同步地图高亮（`CounterPicker` 的 `hover` 事件） */
+  /** 专规 3.3c：悬停待选清单里的一枚 ⇒ 同步地图高亮（`CounterPicker` 的 `hover` 事件） */
   function setVariableExitHover(instanceId: string | null): void {
     if (instanceId === null) {
       hoverHex.value = null
@@ -16302,7 +16302,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 专规 1.4a / 13.6（U25）：把**飞机**到达条目直接投放到**图外空军盒**
    *
    * 「任意友方空军基地」按基地算 ⇒ 盒在内；盒无地图格号，故落点记在盒成员账本。
-   * 盒容量无限、整备免费（1.4a），故不执行 14.2a 的图上基地堆叠上限。
+   * 盒容量无限、整备免费（专规 1.4a），故不执行 14.2a 的图上基地堆叠上限。
    */
   function placeArrivalInAirBoxNow(index: number): boolean {
     if (!requireAction('rein.arrival', '到达投放')) return false
@@ -16370,14 +16370,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * B18：按到达卡投放一个条目（13.6 / 13.6b / 1.6a）
+   * B18：按到达卡投放一个条目（13.6 / 13.6b / 专规 1.6a）
    *
    * ★ **不做「到达卡条目 → 算子记录」的映射**：本作工程库未落该映射，故由裁判从单位库选算子
    *   （`recordId` 缺省时按 `unitChoices` 的显示名与到达卡 `name` 精确匹配，匹配不到即拒绝并提示）。
    */
   function placeArrivalNow(index: number, recordId?: string, hexText?: string): boolean {
     if (!requireAction('rein.arrival', '到达投放')) return false
-    // 1.6a：强制移除未执行前不得放置（与图外盒投放、结束本段同一道闸）
+    // 专规 1.6a：强制移除未执行前不得放置（与图外盒投放、结束本段同一道闸）
     if (arrivalRemovalsPending.value) {
       reinforcementError.value = { rule: '1.6a', reason: 'arrivalRemovalsFirst' }
       return false
@@ -16609,7 +16609,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * 整条交裁判手工逐枚摆入（`resolveArrivalFormation` 给出缺哪几枚）。
      */
     /*
-     * 3.4b（用户 2026-11-11）：**随运输队入场的 SP**
+     * 专规 3.4b（用户 2026-11-11）：**随运输队入场的 SP**
      *   · 编队单位随编队自然已有集群（算子自带 `panzerGroup`）⇒ 不再要求指定；
      *   · 非编队单位带来的 SP ⇒ 入场前必须选 Guderian / Hoth，未选就拒绝投放（不落未归属载货账）。
      */
@@ -17210,7 +17210,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const idSet = new Set(ids)
     units.value = units.value.filter((item) => !idSet.has(item.instanceId))
     airUnits.value = airUnits.value.filter((item) => !idSet.has(item.instanceId))
-    // 3.4b：随运输队入场时写下的载货 SP 归属随算子一起撤回，避免留下幽灵归属
+    // 专规 3.4b：随运输队入场时写下的载货 SP 归属随算子一起撤回，避免留下幽灵归属
     const staleGroupIds = ids.map((id) => `unit:${id}`)
     if (staleGroupIds.some((id) => spDumpPanzerGroups.value[id] !== undefined)) {
       const nextGroups = { ...spDumpPanzerGroups.value }
@@ -17251,7 +17251,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 1.6a：到达卡条目 → 该找哪些算子（**卡面写法**的三种形态，全部真实出现在到达卡里）
+   * 专规 1.6a：到达卡条目 → 该找哪些算子（**卡面写法**的三种形态，全部真实出现在到达卡里）
    *
    * - ① `12-2-2 Inf Div (186)` / `11-1-1 Inf Div (126, 214)` ⇒ 括号里是**番号**，
    *   与前面的兵种拼成算子名（`186 Rifle Div`）；多个番号＝多枚不同算子，各收 1 枚。
@@ -17368,21 +17368,21 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * B18：按到达卡执行强制移除（1.6a：立即移出**游戏**，不论处境）
+   * B18：按到达卡执行强制移除（专规 1.6a：立即移出**游戏**，不论处境）
    *
-   * ★ 1.6a 原文：「When a unit is called on to be 'Removed' by the arrival charts or else a unit with
+   * ★ 专规 1.6a 原文：「When a unit is called on to be 'Removed' by the arrival charts or else a unit with
    *   identical factors, is **immediately removed from play**, regardless of its current situation
    *   (even if in **the dead pile** or surrounded). Some of these units will return again, but most
    *   are gone for good.」
    *   ⇒ 被移除者**离开游戏**（盘面、空军、**死亡堆**都要清），而不是"进死亡堆"。
    *   修前这里把移除的算子 `push` 进 `deadPile` —— 于是「gone for good」的算子仍留在死亡堆里
-   *   可被 13.5 重建 / 1.6c 免费重建返场，与条文相反（且死亡堆计数、重建候选集都被污染）。
+   *   可被 13.5 重建 / 专规 1.6c 免费重建返场，与条文相反（且死亡堆计数、重建候选集都被污染）。
    *   ★ 也正因为如此，专规 2.3c 的编制转化「The old unit is a Removal (1.6a)」不走死亡堆。
    *   ★ 到达卡另有「To Dead Pile」列（`ArrivalRemoval.kind === 'deadPile'`）：那一列**进死亡堆**，
    *     与上面"移出游戏"方向相反，不能混为一谈。
    */
   function applyArrivalRemovalsNow(): void {
-    // 1.6a「When a unit is called on to be "Removed" by the arrival charts … is **immediately**
+    // 专规 1.6a「When a unit is called on to be "Removed" by the arrival charts … is **immediately**
     // removed from play」⇒ 这是**到达卡**的一部分（B 增援·到货落位）
     if (!requireAction('rein.arrival', '按到达卡移除')) return
     const plan = arrivalPlan.value
@@ -17391,7 +17391,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const targets = removalTargetsOf(removal)
       const side = activeSide.value
       /*
-       * 1.6a：不论处境 ⇒ 盘面（含空军）与**死亡堆**都要找一遍。
+       * 专规 1.6a：不论处境 ⇒ 盘面（含空军）与**死亡堆**都要找一遍。
        * 名字键取自算子显示名（`unitNameKey` 与 13.6 的卡面名同口径）。
        */
       const groundPool: ConsoleUnit[] = [
@@ -17436,7 +17436,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
       for (const unit of picked.values()) {
         if (removal.kind === 'deadPile') {
-          // 1.6a「To Dead Pile」：进死亡堆（13.5 可重建），**不是**移出游戏
+          // 专规 1.6a「To Dead Pile」：进死亡堆（13.5 可重建），**不是**移出游戏
           units.value = units.value.filter((item) => item.instanceId !== unit.instanceId)
           airUnits.value = airUnits.value.filter((item) => item.instanceId !== unit.instanceId)
           if (selectedId.value === unit.instanceId) selectedId.value = null
@@ -17450,16 +17450,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         }
       }
     }
-    // 记"本到达计划已执行过 1.6a"：未匹配的条目已在上面的警告里转手工，不再反复重跑
+    // 记"本到达计划已执行过 专规 1.6a"：未匹配的条目已在上面的警告里转手工，不再反复重跑
     arrivalRemovalsKey.value = arrivalPlanKey.value
     reinforcementError.value = null
   }
 
   /**
-   * 1.6a：把某算子**移出游戏**（盘面 / 空军 / **死亡堆**都清掉）
+   * 专规 1.6a：把某算子**移出游戏**（盘面 / 空军 / **死亡堆**都清掉）
    *
    * 与 13.5 的「淘汰进死亡堆」（`eliminateEntry`）相反：被 Removal 的算子**不留在死亡堆**，
-   * 故它不会出现在重建候选或 1.6c 的免费重建池里。
+   * 故它不会出现在重建候选或 专规 1.6c 的免费重建池里。
    */
   function removeFromPlayEverywhere(unit: { instanceId: string }): void {
     units.value = units.value.filter((item) => item.instanceId !== unit.instanceId)
@@ -17489,17 +17489,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * W7 C12：把死亡堆中的单位**放回图上**（1.6c 免费重建返场 / 编队抽签 B 组互换）
+   * W7 C12：把死亡堆中的单位**放回图上**（专规 1.6c 免费重建返场 / 编队抽签 B 组互换）
    *
    * 与 13.5 的常规重建（`rebuildUnitNow`：须付补员、且校验 HQ 2 格内）区分开：
    * 本动作只做「从死亡堆取出 → 落到指定格（可顺带改军力）」这一件事；
-   * **费用与合法性由调用方先用引擎计划判好**（1.6c 免费重建 −1 军力、S3 B 组互换等）。
+   * **费用与合法性由调用方先用引擎计划判好**（专规 1.6c 免费重建 −1 军力、S3 B 组互换等）。
    */
   function returnFromDeadPileNow(input: {
     instanceId: string
-    /** 落点格（列.行；1.6c 允许落在能直接拖取追溯补给的 HQ 或边缘补给源格） */
+    /** 落点格（列.行；专规 1.6c 允许落在能直接拖取追溯补给的 HQ 或边缘补给源格） */
     hexText: string
-    /** 返场后的军力（1.6c：−1 军力返场） */
+    /** 返场后的军力（专规 1.6c：−1 军力返场） */
     steps?: number
   }): boolean {
     const unit = deadPile.value.find((item) => item.instanceId === input.instanceId)
@@ -17562,7 +17562,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function removeForeverNow(instanceId: string): void {
     /*
      * 13.5c「永久移出」有两个入口：
-     *   · 到达卡侧（1.6a「is immediately removed from play」）—— 与 `applyArrivalRemovalsNow` 同闸；
+     *   · 到达卡侧（专规 1.6a「is immediately removed from play」）—— 与 `applyArrivalRemovalsNow` 同闸；
      *   · **B 段 13.5 重建环节**的死亡堆右键菜单「永久移除（13.5c）」。
      * ★ 修前只认 `rein.arrival`：而 13.5 的菜单项**一直列着**（`deadPileActionsOf` 无条件 push），
      *   点下去必然被拒「只能在 B 增援·到货落位进行（13.6）」——列出来却永远点不动。
@@ -17677,7 +17677,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         hasFriendlyAirBase: () =>
           input.airBox === true ? priorHex !== null : traceSuppliedFriendlyBase() !== null,
         friendlyAirBaseHex: () => {
-          // 子项 2：地图外空军盒**本身就是基地**（1.4a：盒内容量无限、免费整备），不另造格
+          // 子项 2：地图外空军盒**本身就是基地**（专规 1.4a：盒内容量无限、免费整备），不另造格
           if (input.airBox === true) return priorHex
           const base = traceSuppliedFriendlyBase()
           return base === null ? null : { ...base.hex }
@@ -17709,7 +17709,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     airBox?: boolean
   }): boolean {
     if (!requireAction('rein.rebuild', '重建')) return false
-    // 1.6c 的返场手牌已占用这枚死亡堆单位 ⇒ 13.5 不得再消费一次（同一枚只归一处）
+    // 专规 1.6c 的返场手牌已占用这枚死亡堆单位 ⇒ 13.5 不得再消费一次（同一枚只归一处）
     if (specialReplPending.value.some((item) => item.instanceId === input.unitId)) {
       pushLog(
         'warning',
@@ -18422,7 +18422,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 2.4：慢动员是**苏联专规**（只对到达卡标注 `30/28/24 Army HQ (see 2.4)` 的苏军集团军生效）
+   * 专规 2.4：慢动员是**苏联专规**（只对到达卡标注 `30/28/24 Army HQ (see 2.4)` 的苏军集团军生效）
    *
    * 用户 2026-11-07 ②：**轴方增援阶段不该出现慢动员 UI**，更不该把德军算子列进「锁定哪一枚」。
    * 故面板可见性只看「苏方 + 增援阶段」；候选列表另有"侧 + 编制（30/28/24 归属）"双重过滤。
@@ -18490,7 +18490,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 2.4：今日**应解锁数** = min(当日剩余配额, 仍锁定师数)
+   * 专规 2.4：今日**应解锁数** = min(当日剩余配额, 仍锁定师数)
    *
    * 「配额大于剩余则全部解锁」的界面口径：提交按钮只在选中数等于本值时可点。
    */
@@ -18627,10 +18627,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 2.3c：已领取的批次（键＝批次的**卡面日期**；「必须当即领取、不能保存」⇒ 每批一次） */
   const frontalReservesClaimed = ref<string[]>([])
 
-  /** 2.3c 的错误（统一形状） */
+  /** 专规 2.3c 的错误（统一形状） */
   const frontalReservesError = ref<{ rule: string; reason: string } | null>(null)
 
-  /** 2.3c 最近一次领取的结论（供面板回执） */
+  /** 专规 2.3c 最近一次领取的结论（供面板回执） */
   const lastFrontalReserves = ref<{
     /** 已在盘面上执行的编制转化（旧单位已移出游戏 / 新单位已摆放） */
     applied: string[]
@@ -18642,7 +18642,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   } | null>(null)
 
   /**
-   * 2.3c：把卡面的编制转化单位在**产物单位库**里对上号
+   * 专规 2.3c：把卡面的编制转化单位在**产物单位库**里对上号
    *
    * 卡面写法是「印值 + 类型 + (番号)」，如 `12-1-4 Mtr Div (69)` / `8-1-5 Tk Rgt (114)`；
    * 产物里叫 `Ru 69 Mot Div` / `Ru 114 Tk Rgt`（`Mtr`→`Mot`、`Inf Div`→`Rifle Div`）。
@@ -18674,7 +18674,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 专规 2.3c：**领取**本回合的方面军预备队
    *
    * 条文：「到货**必须立刻使用，不能保存**。每批方面军预备队包含：**2 SP** 与**一次编制转化**
-   * （旧单位按 1.6a Removal 处理，新单位随其它到达的 SP/补员一起摆放）＋**两次免费重建**
+   * （旧单位按 专规 1.6a Removal 处理，新单位随其它到达的 SP/补员一起摆放）＋**两次免费重建**
    * （一架 IL.2 ＋ 一个 HQ 或火炮单位，玩家择一）。」
    *
    * 本动作：判日（引擎 `claimFrontalReserves`）→ 落 2 SP → 能执行的编制转化就执行
@@ -18683,7 +18683,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   function claimFrontalReservesNow(): boolean {
     if (!requireAction('rein.frontalReserves', '领取方面军预备队')) return false
-    // 判日的**唯一权威**是引擎（`claimFrontalReserves` 内含 2.3c 的日程序列）
+    // 判日的**唯一权威**是引擎（`claimFrontalReserves` 内含 专规 2.3c 的日程序列）
     const batch = acceptReinforcement(claimFrontalReserves(date.value), '方面军预备队')
     if (batch === null) {
       frontalReservesError.value = { rule: '2.3c', reason: `noFrontalReservesAtDate:${date.value}` }
@@ -18716,7 +18716,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
     } else {
       /*
-       * 1.6a：「不论处境（**即使在死亡堆里**）」⇒ 盘面与死亡堆都要找一遍：
+       * 专规 1.6a：「不论处境（**即使在死亡堆里**）」⇒ 盘面与死亡堆都要找一遍：
        * 同一个算子不可能同时在场与在堆里，但**可能只在堆里**——修前只扫盘面，于是那一种情形完全漏掉。
        */
       const onMap = units.value.filter(
@@ -18791,7 +18791,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** 2.3c 的免费重建标签（`IL.2` / `HQ or artillery`）该不该收这个死亡堆算子 */
+  /** 专规 2.3c 的免费重建标签（`IL.2` / `HQ or artillery`）该不该收这个死亡堆算子 */
   function matchesFreeRebuildLabel(entry: DeadPileEntry, label: string): boolean {
     const name = entry.name
     if (/^IL\.2$/i.test(label)) return /IL\.2/i.test(name)
@@ -18802,12 +18802,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /* ────────── W6 B19：Smolensk 专规机制（1.2 / 1.7 / 2.1a / 2.2 / 3.3b / 3.4 / 3.5） ────────── */
 
-  /** 当前剧本的初设栏（`scenarios.setup`：3.5 建造标记 / 1.7 补给缓存等剧本级数值的唯一来源） */
+  /** 当前剧本的初设栏（`scenarios.setup`：专规 3.5 建造标记 / 专规 1.7 补给缓存等剧本级数值的唯一来源） */
   const scenarioSetup = computed(
     () => scenarios.scenarios.find((item) => item.id === scenarioId.value)?.setup,
   )
 
-  /** 3.4：装甲集群分界线（产品数据 `map-config.panzerGroupBoundary` 第一段：19.19 → 62.23） */
+  /** 专规 3.4：装甲集群分界线（产品数据 `map-config.panzerGroupBoundary` 第一段：19.19 → 62.23） */
   const panzerGroupBoundary = computed<PanzerGroupBoundary | null>(() => {
     const pair = mapConfig.panzerGroupBoundary?.[0]
     if (pair === undefined) return null
@@ -18833,7 +18833,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         }),
   )
 
-  /** 3.4：**带路径**的分界线（判据与渲染都读这一份；路径缺失时退回直线口径） */
+  /** 专规 3.4：**带路径**的分界线（判据与渲染都读这一份；路径缺失时退回直线口径） */
   const panzerGroupBoundaryWithPath = computed<PanzerGroupBoundary | null>(() => {
     const boundary = panzerGroupBoundary.value
     if (boundary === null) return null
@@ -18848,7 +18848,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
-   * 3.4：算子的装甲集群归属
+   * 专规 3.4：算子的装甲集群归属
    *
    * ★ 用户口径：「霍特或古德里安的编队不用玩家设置」——归属已由素材库的**编队目录**定死，
    * 由 `scripts/sync-units.mjs` 落到算子数据（`record.panzerGroup`）。
@@ -18856,25 +18856,25 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    */
   const panzerGroupAssignments = ref<Record<string, PanzerGroup>>({})
 
-  /** 3.4：算式子 → 装甲集群（玩家声明优先，否则用算子数据里的默认） */
+  /** 专规 3.4：算式子 → 装甲集群（玩家声明优先，否则用算子数据里的默认） */
   function groupOfUnit(unit: ConsoleUnit): PanzerGroup | null {
     return panzerGroupAssignments.value[unit.instanceId] ?? unit.panzerGroup ?? null
   }
 
-  /** 3.4：已归属装甲集群的算子数（默认取自素材编队目录 + 手工声明） */
+  /** 专规 3.4：已归属装甲集群的算子数（默认取自素材编队目录 + 手工声明） */
   const panzerGroupAssignedCount = computed(
     () => units.value.filter((unit) => groupOfUnit(unit) !== null).length,
   )
 
   /**
-   * 3.4：裁判声明的「属多单位编队」实例 id（3.4 只约束多单位编队，步兵师与独立单位不受限）
+   * 专规 3.4：裁判声明的「属多单位编队」实例 id（专规 3.4 只约束多单位编队，步兵师与独立单位不受限）
    *
    * 默认口径与编队数据一致：**凡属某装甲集群的算子即属多单位编队**（编队单位目录里的算子），
    * 故同样不必玩家逐个登记；此数组只用于显式补充。
    */
   const multiUnitFormationIds = ref<string[]>([])
 
-  /** 3.4a：分界线判据所需的单位视图 */
+  /** 专规 3.4a：分界线判据所需的单位视图 */
   const panzerGroupUnitViews = computed<PanzerGroupUnitView[]>(() =>
     units.value.map((unit) => ({
       id: unit.instanceId,
@@ -18886,7 +18886,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   /**
-   * 3.4a：相位末的分界线义务
+   * 专规 3.4a：相位末的分界线义务
    *
    * 逐编队给出「须投 DG」的结果（① 与另一集群同堆叠/相邻；② 错误一侧且 Orsha 以东）；
    * 19 August 起（`panzerGroupConstraintEnd`）自动失效。
@@ -18908,7 +18908,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
-   * 3.4a：**必须由玩家选一枚**的 DG 义务
+   * 专规 3.4a：**必须由玩家选一枚**的 DG 义务
    *
    * 原文「place a DG on **a unit** from a multi-unit formation **if it is** …」——
    * 命中单枚时没有可选空间（引擎可直接判定，见 `settlePanzerGroupDgAtPhaseEnd`）；
@@ -18924,7 +18924,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   /**
-   * B37 / 3.4a：**此刻是不是结算分界线义务的时候**（相位末）
+   * B37 / 专规 3.4a：**此刻是不是结算分界线义务的时候**（相位末）
    *
    * 用户 2026-11-09 裁定**读法 A**：原文「at the end of any phase」按字面执行 ——
    * 判据完全走闸门（`exclusive.panzerObligation`），闸门覆盖**所有玩家相位的最后一个环节**
@@ -18936,7 +18936,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   /**
-   * B37 / 3.4a：**错误一侧的格**（提示用）
+   * B37 / 专规 3.4a：**错误一侧的格**（提示用）
    *
    * 结论取自引擎的 `panzerGroupObligations`（它已经把"19 August 前才生效"与
    * `boundarySideOf` 的判断都做完了）——本处只把**触发条件是"错误一侧"**的那些单位
@@ -18956,7 +18956,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /**
-   * B37 / 3.4：分界线的**渲染投影**（线 + 提示格）
+   * B37 / 专规 3.4：分界线的**渲染投影**（线 + 提示格）
    *
    * ★ 批 F 切片 1：带上 `path`（多轨铁路折线，45 格）——渲染层画的就是它，与判据**同一条路径**。
    */
@@ -18990,18 +18990,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * B37 余项：**专规面板的分节置顶判据**（哪一节"本环节该做"）
    *
    * 每节的判据都写在这里（一处），面板只读结果：
-   *   · `panzer`（3.4）：段末的分界线义务可结算，**或**还有没登记集群归属的新到 SP（3.4b 要求立即归属）；
+   *   · `panzer`（专规 3.4）：段末的分界线义务可结算，**或**还有没登记集群归属的新到 SP（专规 3.4b 要求立即归属）；
    *   · `security`（3.3b）：有城要放标记，或（清理段）有标记要移除；
    *   · `hedgehog`（16.0b/c）、`constructionMarker`（专规 3.5）：本环节的闸门放行（后者还须有枚数）；
-   *   · `supplyCache`（1.7）：补给段的缓存台账提醒（Forage 入口已在补给阶段面板）；
-   *   · `airRestriction`（1.2 苏军空军限制）：**纯只读提示** ⇒ 不置顶。
+   *   · `supplyCache`（专规 1.7）：补给段的缓存台账提醒（Forage 入口已在补给阶段面板）；
+   *   · `airRestriction`（专规 1.2 苏军空军限制）：**纯只读提示** ⇒ 不置顶。
    */
   const exclusiveSectionPins = computed<Record<ExclusiveSection, boolean>>(() => {
     const allowed = allowedActionsOf(segmentGateQuery.value)
     const needs = securityNeeds.value
     return {
       /*
-       * 3.4a / 3.4b：只有**真有选择**时才置顶（＝会话才弹窗）。
+       * 专规 3.4a / 专规 3.4b：只有**真有选择**时才置顶（＝会话才弹窗）。
        * ★ 段末闸门（`exclusive.panzerObligation`）只说明"此刻是判定时机"，
        *   没有义务时它也放行 ⇒ 不能拿它当开关，否则每个相位末都弹一个空面板。
        */
@@ -19013,7 +19013,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         (removalAllowedNow(phase.value) && (needs?.removeAt.length ?? 0) > 0),
       hedgehog: allowed.has('move.hedgehog'),
       constructionMarker: allowed.has('move.construction') && constructionMarkers.value > 0,
-      // 1.7：补给段提醒看一眼缓存持仓（入口已迁到补给阶段面板，这里只保留台账）
+      // 专规 1.7：补给段提醒看一眼缓存持仓（入口已迁到补给阶段面板，这里只保留台账）
       supplyCache: allowed.has('exclusive.forage'),
       airRestriction: false,
     }
@@ -19024,7 +19024,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *
    * 用户 2026-11-09：「一个框不能装多件事」——会话按节逐件推进，每次只出第一节可做的。
    * 判据全部复用 `exclusiveSectionPins`（在上一处），不在这里另写规则；
-   * `airRestriction`（1.2 只读）不置顶 ⇒ 不进会话（仍留在右栏只读信息里）。
+   * `airRestriction`（专规 1.2 只读）不置顶 ⇒ 不进会话（仍留在右栏只读信息里）。
    */
   const exclusiveSectionsNow = computed<readonly ExclusiveSection[]>(() => {
     const pins = exclusiveSectionPins.value
@@ -19041,19 +19041,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /**
    * 专规会话**是否该自动出现**
    *
-   * 只有"真有选择"的两件事会开窗：3.4a 命中多枚（选哪枚投 DG）、3.4b 新到 SP 未归属（选集群）。
-   * 3.3b 治安 / 16.0b 工事 / 3.5 建造标记仍是**本环节可做**的动作（由各自的环节闸门与面板承载），
+   * 只有"真有选择"的两件事会开窗：专规 3.4a 命中多枚（选哪枚投 DG）、专规 3.4b 新到 SP 未归属（选集群）。
+   * 专规 3.3b 治安 / 16.0b 工事 / 专规 3.5 建造标记仍是**本环节可做**的动作（由各自的环节闸门与面板承载），
    * 不在这里抢地图；纯告知（单候选的 DG）由引擎段末自动判定 + 一行日志。
    */
   const exclusiveAutoOpen = computed<boolean>(() => exclusiveSectionPins.value.panzer)
 
-  /** 3.4b：Supply Table 到货点数（界面输入，用于展示均分结果） */
+  /** 专规 3.4b：Supply Table 到货点数（界面输入，用于展示均分结果） */
   const supplyTableSpInput = ref(7)
 
-  /** 3.4b：均分结果（平均分给 Guderian 与 Hoth，奇数点归 Guderian） */
+  /** 专规 3.4b：均分结果（平均分给 Guderian 与 Hoth，奇数点归 Guderian） */
   const panzerGroupSpSplit = computed(() => splitSupplyTableSp(supplyTableSpInput.value))
 
-  /** 1.7 / 21.10：补给缓存持有量（初值取剧本初设 `setup.supplyCache`，缺省回落专规 1.7 的规则值） */
+  /** 专规 1.7 / 21.10：补给缓存持有量（初值取剧本初设 `setup.supplyCache`，缺省回落专规 1.7 的规则值） */
   const supplyCacheHoldings = ref<SupplyCacheHoldings>(
     initialSupplyCacheHoldings(scenarioSetup.value?.supplyCache),
   )
@@ -19201,10 +19201,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return true
   }
 
-  /** 1.7：最近一次补给缓存用法结论（Forage 入口已迁到补给阶段面板） */
+  /** 专规 1.7：最近一次补给缓存用法结论（Forage 入口已迁到补给阶段面板） */
   const lastSupplyCacheUse = ref<string | null>(null)
 
-  /** 3.5：建造标记剩余枚数（初值取剧本初设 `setup.constructionMarkers`；剧本 1/2 = 3，其余 = 0） */
+  /** 专规 3.5：建造标记剩余枚数（初值取剧本初设 `setup.constructionMarkers`；剧本 1/2 = 3，其余 = 0） */
   const constructionMarkers = ref<number>(scenarioSetup.value?.constructionMarkers ?? 0)
 
   /** 3.3b：裁判声明的「轴心国控制城市」格键集合（键 = `col.row`；控制状态由裁判维护） */
@@ -19220,7 +19220,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       .map((hex) => ({ col: hex.col, row: hex.row })),
   )
 
-  /** 3.3b：治安检查的逐城事实（控制＝裁判声明；占据与 ZOC 由盘面推得） */
+  /** 专规 3.3b：治安检查的逐城事实（控制＝裁判声明；占据与 ZOC 由盘面推得） */
   const securityCityViews = computed<SecurityCheckCityView[]>(() =>
     mapCityHexes.value.map((hex) => {
       const name = mapLayers.hexes.find((item) => item.col === hex.col && item.row === hex.row)
@@ -19238,7 +19238,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }),
   )
 
-  /** 3.3b：治安需求结论（需求未满足且无标记 ⇒ 应放置；满足或转苏控 ⇒ 应移除） */
+  /** 专规 3.3b：治安需求结论（需求未满足且无标记 ⇒ 应放置；满足或转苏控 ⇒ 应移除） */
   const securityNeeds = computed<SecurityNeedsResult | null>(() => {
     const outcome = checkSecurityNeeds(securityCityViews.value)
     return outcome.ok ? outcome.data : null
@@ -19291,10 +19291,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return rows.sort((a, b) => rank[a.action] - rank[b.action])
   })
 
-  /** 2.1a：补给源关闭判据的地图事实（模块级常量；南缘＝没有图内南邻） */
+  /** 专规 2.1a：补给源关闭判据的地图事实（模块级常量；南缘＝没有图内南邻） */
   const supplyShutdownFacts = computed<SupplyShutdownFacts>(() => SHUTDOWN_FACTS)
 
-  /** 2.1a：己方补给源当日状态（Entry L 于 19 Jul、Entry E 及以西南缘于 19 Aug 永久关闭） */
+  /** 专规 2.1a：己方补给源当日状态（Entry L 于 19 Jul、Entry E 及以西南缘于 19 Aug 永久关闭） */
   const activeSupplySourceStatuses = computed<readonly SupplySourceStatus[]>(() =>
     supplySourceStatuses({
       side: activeSide.value,
@@ -19304,7 +19304,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }),
   )
 
-  /** 1.2：当日铁路容量（轴/苏；19 July 提升） */
+  /** 专规 1.2：当日铁路容量（轴/苏；19 July 提升） */
   const railCapToday = computed(() => railCapacitiesOn(date.value))
 
   /** 专规时点日历（1.2 / 1.6c / 2.1a / 2.3c / 2.3e / 2.4 / 3.3c / 3.4 / 3.6 / 5.0b） */
@@ -19330,7 +19330,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       phase: airPhase,
       weatherNormal: airInputs.value.weatherNormal,
       missionKind: airMissionKind.value,
-      // 2.2b：空投战斗单位属「需计划的任务」（14.10b）；补给空投从不需计划
+      // 专规 2.2b：空投战斗单位属「需计划的任务」（14.10b）；补给空投从不需计划
       requiresPlan: airMissionKind.value === 'air_drop' && airInputs.value.cargoUnitIds.length > 0,
     })
   })
@@ -19349,7 +19349,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return null
   }
 
-  /** 3.4：声明某算子的装甲集群归属（null ＝ 撤销声明，不受 3.4 约束） */
+  /** 专规 3.4：声明某算子的装甲集群归属（null ＝ 撤销声明，不受 专规 3.4 约束） */
   function setPanzerGroupNow(instanceId: string, group: PanzerGroup | null): void {
     const next = { ...panzerGroupAssignments.value }
     if (group === null) delete next[instanceId]
@@ -19357,40 +19357,40 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     panzerGroupAssignments.value = next
   }
 
-  /** 3.4：声明某算子是否属多单位编队（只有多单位编队受分界线约束） */
+  /** 专规 3.4：声明某算子是否属多单位编队（只有多单位编队受分界线约束） */
   function setMultiUnitFormationNow(instanceId: string, inFormation: boolean): void {
     multiUnitFormationIds.value = inFormation
       ? [...new Set([...multiUnitFormationIds.value, instanceId])]
       : multiUnitFormationIds.value.filter((id) => id !== instanceId)
   }
 
-  /* ────────── 3.4b：装甲集群的 **SP 归属**与付费限制 ────────── */
+  /* ────────── 专规 3.4b：装甲集群的 **SP 归属**与付费限制 ────────── */
 
   /**
-   * 3.4b：各补给站的装甲集群归属（键＝补给站 id）
+   * 专规 3.4b：各补给站的装甲集群归属（键＝补给站 id）
    *
    * 「**所有新到的轴心国 SP 必须立即归属某一装甲集群**」——故这是**补给站**的属性，
-   * 与算子的编队归属（`panzerGroupAssignments`，判 3.4a 分界线用）是两码事：
+   * 与算子的编队归属（`panzerGroupAssignments`，判 专规 3.4a 分界线用）是两码事：
    * 一处讲「这支部队属于谁」，一处讲「这堆弹药属于谁」。
    */
   const spDumpPanzerGroups = ref<Record<string, PanzerGroup>>({})
 
-  /** 3.4b：该补给站归属的集群（未登记 ⇒ null，即"尚未归属"） */
+  /** 专规 3.4b：该补给站归属的集群（未登记 ⇒ null，即"尚未归属"） */
   function panzerGroupOfDump(dumpId: string | null): PanzerGroup | null {
     if (dumpId === null) return null
     return spDumpPanzerGroups.value[dumpId] ?? null
   }
 
   /**
-   * 3.4b：**在局中新到、尚未归属**装甲集群的轴方补给站 id
+   * 专规 3.4b：**在局中新到、尚未归属**装甲集群的轴方补给站 id
    *
    * ★ 这一串的用途是把「新到的 SP」与「初设/裁判已久的 SP」区分开：
    *   `checkPanzerGroupSpPayment` 的 `unassigned` 分支是**绝对拦阻**（在"是否多单位编队"之前就判），
-   *   若把它套到**每一座**没登记归属的补给站上，步兵师的普通攻击也会被 3.4b 拦掉——
+   *   若把它套到**每一座**没登记归属的补给站上，步兵师的普通攻击也会被 专规 3.4b 拦掉——
    *   那条约束只管「新到的轴方 SP 必须立即归属」。故只有经 `addSpDump` 新落的轴方补给站才进这一串。
    */
   /**
-   * B50（用户 2026-09-17 口径）：**3.4b 在本局是否生效** —— 日期窗口 × 开局共识（4.1a 可选）
+   * B50（用户 2026-09-17 口径）：** 专规 3.4b 在本局是否生效** —— 日期窗口 × 开局共识（专规 4.1a 可选）
    *
    * 未采纳 ⇒ 不登记待办、不列未归属站、不因"未归属"拒付、专规面板也不出现归属界面
    * （规则不生效时给玩家一套用不上的按钮，比没有更糟）。
@@ -19409,7 +19409,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const pendingSpGroupAssignment = ref<string[]>([])
 
   /**
-   * 3.4b：**随运输队入场的 SP**（13.6c）的集群选择
+   * 专规 3.4b：**随运输队入场的 SP**（13.6c）的集群选择
    *
    * 编队单位随编队自然已有集群（取算子自身的 `panzerGroup`）；非编队单位带来的 SP
    * 入场前必须在这里选定 Guderian / Hoth——未选则拒绝投放，不落「未归属」的载货账。
@@ -19420,7 +19420,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     transportSpGroupDraft.value = group
   }
 
-  /** 3.4b：当前到达表里是否有「非编队运输点满载 SP」尚未投放（决定是否显示二选一） */
+  /** 专规 3.4b：当前到达表里是否有「非编队运输点满载 SP」尚未投放（决定是否显示二选一） */
   const arrivalTransportSpNeedsGroup = computed(() => {
     if (!panzerGroupRulesOn.value || activeSide.value !== 'axis') return false
     const plan = arrivalPlan.value
@@ -19434,7 +19434,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
   })
 
-  /** 3.4b：声明/撤销某补给站的装甲集群归属（null ⇒ 撤销声明） */
+  /** 专规 3.4b：声明/撤销某补给站的装甲集群归属（null ⇒ 撤销声明） */
   function setDumpPanzerGroupNow(dumpId: string, group: PanzerGroup | null): void {
     const next = { ...spDumpPanzerGroups.value }
     if (group === null) delete next[dumpId]
@@ -19455,16 +19455,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     )
   }
 
-  /** 3.4b：**尚未归属**装甲集群的轴方补给站（3.4b：新到的轴方 SP 必须立即归属） */
+  /** 专规 3.4b：**尚未归属**装甲集群的轴方补给站（专规 3.4b：新到的轴方 SP 必须立即归属） */
   const panzerGroupUnassignedDumps = computed<SpDump[]>(() =>
-    // B50：3.4b 未启用 ⇒ 这张表整体为空（面板据此也隐藏该块）
+    // B50：专规 3.4b 未启用 ⇒ 这张表整体为空（面板据此也隐藏该块）
     !panzerGroupRulesOn.value
       ? []
       : spDumps.value.filter((dump) => dump.side === 'axis' && panzerGroupOfDump(dump.id) === null),
   )
 
   /**
-   * 3.4b：这笔费用能否由该补给站的 SP 支付
+   * 专规 3.4b：这笔费用能否由该补给站的 SP 支付
    *
    * 「『错误』装甲集群的 SP **不能**用于支付多单位编队的**燃油、战斗或轰炸**成本；除此之外 SP 使用不限。」
    *
@@ -19476,11 +19476,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     /** 付款的补给站（null ＝ 无来源归属可查 ⇒ 不在此处判） */
     dumpId: string | null
     purpose: PanzerGroupSpPurpose
-    /** 这笔费用服务的单位（3.4b 的"多单位编队"按**受益方**判） */
+    /** 这笔费用服务的单位（专规 3.4b 的"多单位编队"按**受益方**判） */
     beneficiaryUnitIds: readonly string[]
   }): RuleFailure | null {
     const dump = spDumps.value.find((item) => item.id === input.dumpId) ?? null
-    // 3.4 / 3.4b 只约束**轴心国**的 SP 与编队（苏军无装甲集群）
+    // 专规 3.4 / 专规 3.4b 只约束**轴心国**的 SP 与编队（苏军无装甲集群）
     if (dump === null || dump.side !== 'axis') return null
 
     const beneficiaries = input.beneficiaryUnitIds
@@ -19506,7 +19506,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return outcome.ok ? null : fail(outcome.rule, outcome.reason)
   }
 
-  /** 3.4b 的拒付消息（把「去哪个界面声明」一并说清，免得只报一个错误码） */
+  /** 专规 3.4b 的拒付消息（把「去哪个界面声明」一并说清，免得只报一个错误码） */
   function panzerGroupSpRefusal(
     failure: RuleFailure,
     purpose: string,
@@ -19522,15 +19522,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 3.4a：把分界线义务落到盘面 —— 给义务编队内的单位投 **DG**
+   * 专规 3.4a：把分界线义务落到盘面 —— 给义务编队内的单位投 **DG**
    *
-   * 原文 3.4a：「At the end of any phase, place a DG on **a unit from a multi-unit formation
+   * 原文 专规 3.4a：「At the end of any phase, place a DG on **a unit from a multi-unit formation
    * **if it is** …」——"it" 指**命中条件的那枚单位**（不是"编队内任选一枚"）；义务本身由
    * `dividingLineObligations`（`panzerGroupObligations`）给出；本函数只做**落盘**：
    * 校验该单位确实在义务名单里，投 DG 走既有的 `applyDgToUnit`（5.10 的唯一落盘点），
-   * 记 3.4a 日志与结算事实。**不清空义务清单**：义务由盘面位置实时给出，
+   * 记 专规 3.4a 日志与结算事实。**不清空义务清单**：义务由盘面位置实时给出，
    * 触发窗口已由 `panzerObligationActive`（`exclusive.panzerObligation`）收在
-   * 「任一相位末」——原文 3.4a「at the end of any phase」。
+   * 「任一相位末」——原文 专规 3.4a「at the end of any phase」。
    */
   function applyPanzerGroupDgNow(unitId: string): boolean {
     const obligation = panzerGroupObligations.value.find((item) => item.unitIds.includes(unitId))
@@ -19568,7 +19568,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 3.4a：段末**自动**结清「命中单枚」的义务
+   * 专规 3.4a：段末**自动**结清「命中单枚」的义务
    *
    * 原文「place a DG on a unit … if it is …」——命中哪枚就投哪枚，没有可选空间；
    * 命中多枚才是玩家选择（`panzerDgChoiceObligations`）。已 DG 的义务视为已结清。
@@ -19600,7 +19600,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return applied
   }
 
-  /** 1.7：补给缓存 +1（专规 1.6c 特殊补员的结果之一） */
+  /** 专规 1.7：补给缓存 +1（专规 1.6c 特殊补员的结果之一） */
   function addSupplyCacheNow(side: 'axis' | 'soviet'): void {
     supplyCacheHoldings.value = addSupplyCache(supplyCacheHoldings.value, side)
     pushLog('info', `${side === 'axis' ? '轴心' : '苏军'}补给缓存 +1（专规 1.6c / 1.7）`, '1.7')
@@ -19618,7 +19618,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return `cm-airbase:${pieceId}`
   }
 
-  /** 该 id 是否来自建造标记的简易机场面（3.5：只可被摧毁，不参与 9.14f 夺取） */
+  /** 该 id 是否来自建造标记的简易机场面（专规 3.5：只可被摧毁，不参与 9.14f 夺取） */
   function isConstructionMarkerAirBaseId(id: string): boolean {
     return id.startsWith('cm-airbase:')
   }
@@ -19704,13 +19704,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     beginConstructionMarkerHexPickNow()
   }
 
-  /** 3.5：设置建造标记剩余枚数 */
+  /** 专规 3.5：设置建造标记剩余枚数 */
   function setConstructionMarkersNow(count: number): void {
     constructionMarkers.value = Math.max(0, Math.trunc(count))
   }
 
   /**
-   * 3.5：使用一枚建造标记（在**任一轴方移动阶段**、**单位移动之前**，放进有轴方战斗单位的格）
+   * 专规 3.5：使用一枚建造标记（在**任一轴方移动阶段**、**单位移动之前**，放进有轴方战斗单位的格）
    *
    * 「免费（不耗补给）」；桥按 13.8b 的 HQ 架桥、简易机场按 15.2 的标准简易机场处理。
    * ★ 本动作只做**规则闸门 + 记账**：桥/机场的盘面效果由其所属章节的机制落值。
@@ -19772,7 +19772,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 3.3b：执行治安检查
+   * 专规 3.3b：执行治安检查
    *
    * 口径（用户 2026-11-12 确认）：**轴心占领即轴心控制**；轴控城市既没有被可攻击的轴心单位占据、
    * **也没有**被轴心 ZOC 覆盖时才放游击队标记（两条都缺，不是「或」）。
@@ -19810,7 +19810,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           : `待移除 ${data.removeAt.length} 枚（须等到 H 清理段）`),
       data.rule,
     )
-    // ⑭ 接线：治安需求检查（3.3b）入会话日志（本笔不掷骰；移除须待 H 清理段者如实记录）
+    // ⑭ 接线：治安需求检查（专规 3.3b）入会话日志（本笔不掷骰；移除须待 H 清理段者如实记录）
     recordSettlement({
       action: 'securityNeeds',
       rule: data.rule,
@@ -19920,8 +19920,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       },
     })
     /*
-     * 5.0a：**末回合的 H 清理段收束**即「最终回合结束」的时点 ⇒ 在此做终局判定
-     * （非末回合时 `checkTurnEndVictory` 返回 `ongoing`，随后由 5.0b 的提前决胜兜住）。
+     * 专规 5.0a：**末回合的 H 清理段收束**即「最终回合结束」的时点 ⇒ 在此做终局判定
+     * （非末回合时 `checkTurnEndVictory` 返回 `ongoing`，随后由 专规 5.0b 的提前决胜兜住）。
      */
     if (atFinalTurn.value) {
       const assessment = assessTurnEndVictoryNow()
@@ -19989,9 +19989,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /* ────────── W6 B20：胜利判定（专规 5.0 / 5.0a / 5.0b / 5.0c） ────────── */
 
   /**
-   * 5.0c：**最后控制者**账本（键 = `col.row`）
+   * 专规 5.0c：**最后控制者**账本（键 = `col.row`）
    *
-   * 5.0c 的「空格由最后一个曾在该格的单位所属方控制」需要历史，操作台只摆当前算子，
+   * 专规 5.0c 的「空格由最后一个曾在该格的单位所属方控制」需要历史，操作台只摆当前算子，
    * 故由裁判在每次移动/战斗后点「按盘面刷新」（有可攻击单位者自动归该方），
    * 或直接指定某格归属；引擎侧只接收这一结论（`VictoryControlLookup`）。
    */
@@ -20024,9 +20024,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const setup = scenarios.scenarios.find((item) => item.id === id)?.setup
     // 13.6：裁判手改的到达落点（剧本换了，落点覆盖作废）
     arrivalHexOverrides.value = {}
-    // 1.7 补给缓存 / 3.5 建造标记（专规初设）
+    // 专规 1.7 补给缓存 / 专规 3.5 建造标记（专规初设）
     supplyCacheHoldings.value = initialSupplyCacheHoldings(setup?.supplyCache)
-    // 1.6b（裁定 2）：图外空军盒 SP 初设；剧本未给数 ⇒ 0
+    // 专规 1.6b（裁定 2）：图外空军盒 SP 初设；剧本未给数 ⇒ 0
     offMapSupplyStocks.value = {}
     const offMapSetupSp = setup?.offMapAirBoxSp
     if (offMapSetupSp !== undefined) {
@@ -20053,7 +20053,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       ax: breakdownPoolTotal('axis'),
       su: breakdownPoolTotal('soviet') - onMapSovietAr2,
     }
-    // 5.0c 胜利格控制账本：由**后面**那个 immediate watch 按剧本与战线播种（此处不能调：
+    // 专规 5.0c 胜利格控制账本：由**后面**那个 immediate watch 按剧本与战线播种（此处不能调：
     // `victoryHexes` 尚未声明 ⇒ 会踩 TDZ）
     victoryError.value = null
     // 9.14e 印刷工事归属（剧本 1 全属苏联，其余按德军推进线）
@@ -20070,11 +20070,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     flush: 'sync',
   })
 
-  /** 5.0c：本剧本胜利条件涉及的格（所列格按剧本号取 + 五城格 + 两城格；剧本 2/4 含 27.05、32.25） */
+  /** 专规 5.0c：本剧本胜利条件涉及的格（所列格按剧本号取 + 五城格 + 两城格；剧本 2/4 含 27.05、32.25） */
   const victoryHexes = computed<readonly HexRef[]>(() => allVictoryConditionHexes(scenarioId.value))
 
   /*
-   * B17-1（5.0c）：胜利格控制的**播种**必须排在 `victoryHexes` **之后**——它要用这份清单。
+   * B17-1（专规 5.0c）：胜利格控制的**播种**必须排在 `victoryHexes` **之后**——它要用这份清单。
    * ★ 教训：原先我把它塞进上面那个 `immediate: true` 的 watch 里，而那时 `victoryHexes`
    *   还在暂时性死区（TDZ）⇒ 建 store 这一步就抛错，全套用例一起红（660 条）。
    *   计算属性的依赖顺序只能靠"声明顺序"保证，故这里单开一个 watch（同样 immediate + sync）。
@@ -20082,7 +20082,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   watch(scenarioId, () => seedVictoryControlFromScenario(), { immediate: true, flush: 'sync' })
 
   /**
-   * 5.0c：当前控制查询（格内有**可攻击**单位 ⇒ 该方；空格 ⇒ 最后控制者账本；否则无人控制）
+   * 专规 5.0c：当前控制查询（格内有**可攻击**单位 ⇒ 该方；空格 ⇒ 最后控制者账本；否则无人控制）
    *
    * ★ 判据只有一处：引擎的 `controlOfHex`（本处只把盘面事实与账本拼成 `VictoryHexFacts`）。
    *   修前这里把「`attackCapableSide ?? lastControllingSide`」又写了一遍。
@@ -20096,7 +20096,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })
   })
 
-  /** 5.0c：控制汇总（所列格计数 + 五城/两城是否全部格控制） */
+  /** 专规 5.0c：控制汇总（所列格计数 + 五城/两城是否全部格控制） */
   const victorySummary = computed<VictoryControlSummary>(() =>
     summarizeVictoryControl({ scenarioId: scenarioId.value, controlOf: victoryControlOf.value }),
   )
@@ -20105,9 +20105,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const victoryTurnRange = computed<ScenarioTurnRange>(() => scenarioTurnRange(scenarioId.value))
 
   /**
-   * 5.0b：**回合开始**检查（任一回合开始、19 August 起；剧本 2/4 无此档）
+   * 专规 5.0b：**回合开始**检查（任一回合开始、19 August 起；剧本 2/4 无此档）
    *
-   * 取引擎的 `checkTurnStartVictory`（5.0b 的入口；修前直接调内部的 `evaluateDecisiveVictory`）。
+   * 取引擎的 `checkTurnStartVictory`（专规 5.0b 的入口；修前直接调内部的 `evaluateDecisiveVictory`）。
    */
   const decisiveVictory = computed<VictoryAssessment>(() =>
     checkTurnStartVictory({
@@ -20117,7 +20117,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }),
   )
 
-  /** 5.0a：最终评估（按当前态势，若此刻即为末回合的结果） */
+  /** 专规 5.0a：最终评估（按当前态势，若此刻即为末回合的结果） */
   const finalVictory = computed<VictoryAssessment>(() =>
     evaluateFinalVictory({
       scenarioId: scenarioId.value,
@@ -20128,7 +20128,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   /**
-   * 5.0a：**回合结束**检查（只在末回合结束时给出终局判定，否则 `ongoing`）
+   * 专规 5.0a：**回合结束**检查（只在末回合结束时给出终局判定，否则 `ongoing`）
    *
    * 取引擎的 `checkTurnEndVictory`；本项在 H 清理段收束时求值（见 `assessTurnEndVictoryNow`）。
    */
@@ -20142,10 +20142,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   /**
-   * 5.0a / 5.0b 的**流程入口**：回合结束时的判定（在 H 清理段收束时调用）
+   * 专规 5.0a / 专规 5.0b 的**流程入口**：回合结束时的判定（在 H 清理段收束时调用）
    *
-   * - 末回合 ⇒ `checkTurnEndVictory` 给出终局判定（5.0a）；
-   * - 非末回合 ⇒ 该函数返回 `ongoing`，此时再看 5.0b 的提前决胜是否达成（`checkTurnStartVictory`）。
+   * - 末回合 ⇒ `checkTurnEndVictory` 给出终局判定（专规 5.0a）；
+   * - 非末回合 ⇒ 该函数返回 `ongoing`，此时再看 专规 5.0b 的提前决胜是否达成（`checkTurnStartVictory`）。
    * 判定结论入会话（`pushVictoryToSessionNow`）与会话日志，供 D2 按规则号检索。
    */
   function assessTurnEndVictoryNow(): VictoryAssessment {
@@ -20172,19 +20172,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return assessment
   }
 
-  /** 当前回合计是否为该剧本的最终回合（5.0a 的检查时点） */
+  /** 当前回合计是否为该剧本的最终回合（专规 5.0a 的检查时点） */
   const atFinalTurn = computed<boolean>(() => isScenarioFinalTurn(scenarioId.value, turn.value))
 
   /**
-   * ⑬ 接线：把 **5.0c 的控制事实**与 **5.0a / 5.0b 的判定结论**推给会话
+   * ⑬ 接线：把 ** 专规 5.0c 的控制事实**与 ** 专规 5.0a / 专规 5.0b 的判定结论**推给会话
    *
    * 控制事实属于盘面（只有操作台摆着算子），判定由引擎 `victory.ts` 求值；会话层只接收结论。
    * 推过去之后：
    *   - `Records.victoryLocations` 不再是空档 ⇒ 引擎侧的 5.0 判定可直接消费它；
-   *   - 5.0b 的提前决胜由判定结论驱动（不再依赖手填开关）；
-   *   - 5.0a 的收束条目带上胜方 / Draw 与控制计数。
+   *   - 专规 5.0b 的提前决胜由判定结论驱动（不再依赖手填开关）；
+   *   - 专规 5.0a 的收束条目带上胜方 / Draw 与控制计数。
    *
-   * 只登记**当前有主**的胜利格（5.0c 的「最后控制者」账本口径）；无人控制的格不入账，
+   * 只登记**当前有主**的胜利格（专规 5.0c 的「最后控制者」账本口径）；无人控制的格不入账，
    * 消费方按「查不到 ⇒ 无人控制」处理（`VictoryLocationState.controlledBy` 不含 null）。
    */
   function pushVictoryToSessionNow(): void {
@@ -20206,10 +20206,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 5.0c：把盘面上由可攻击单位占据的胜利相关格写入「最后控制者」账本
+   * 专规 5.0c：把盘面上由可攻击单位占据的胜利相关格写入「最后控制者」账本
    *
    * 返回本次真的改了归属的格数（0 = 账本已是当前盘面的样子）。
-   * 判据仍是 5.0c 原文：**格内有可攻击单位 ⇒ 该方控制**；空格**不动**（保留最后控制者）。
+   * 判据仍是 专规 5.0c 原文：**格内有可攻击单位 ⇒ 该方控制**；空格**不动**（保留最后控制者）。
    */
   function syncVictoryControlFromBoard(): number {
     const next = { ...victoryLastControl.value }
@@ -20230,15 +20230,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     victoryError.value = null
     pushVictoryToSessionNow()
     /*
-     * 5.0c：**进入即记账**（用户 2026-09-16 口径）——「单位只要移动进入过该格就视为转换控制方」。
-     * 为什么要在**进入的那一刻**记而不是回合末扫一遍：5.0c 的空格判据是「**最后一个**曾在该格的
+     * 专规 5.0c：**进入即记账**（用户 2026-09-16 口径）——「单位只要移动进入过该格就视为转换控制方」。
+     * 为什么要在**进入的那一刻**记而不是回合末扫一遍：专规 5.0c 的空格判据是「**最后一个**曾在该格的
      * 单位所属方」⇒ 若等到回合末才记，"进过又走了"的格就丢了那次进入（正是最容易出错的一类）。
      */
     pushLog('success', `胜利格控制易手（5.0c）：${flipped.join('；')}`, '5.0c')
     return flipped.length
   }
 
-  /** 5.0c：裁判手动刷新（验证页用；对局台上由下面的**触发**自动做） */
+  /** 专规 5.0c：裁判手动刷新（验证页用；对局台上由下面的**触发**自动做） */
   function refreshVictoryControlNow(): void {
     const changed = syncVictoryControlFromBoard()
     pushLog(
@@ -20249,7 +20249,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 5.0c **触发**：盘面上任何一枚可攻击单位的**落格变化**都立刻核对胜利格
+   * 专规 5.0c **触发**：盘面上任何一枚可攻击单位的**落格变化**都立刻核对胜利格
    *
    * 键里带 `列.行`、`阵营` 与 `是否可攻击` 三项：任一变化（移动/撤退/推进/铁路运货/位移/
    * 初设落子/被消灭后的移除）都会让这个字符串变一次 ⇒ 触发一次核对。
@@ -20271,13 +20271,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       syncVictoryControlFromBoard()
     },
     // ★ `sync`：控制归属必须在**同一拍**就落账——否则同一 tick 里紧跟其后的判定/结算读到的
-    //   还是旧账本（而 5.0c 的"最后控制者"正是靠"进入的那一刻"记账的）。
+    //   还是旧账本（而 专规 5.0c 的"最后控制者"正是靠"进入的那一刻"记账的）。
     //   代价是每次位置变更都要重算一次key（O(单位数)）与扫一遍胜利格（十几格），可忽略。
     { flush: 'sync' },
   )
 
   /**
-   * 5.0c：**初设时胜利点在谁手里**（用户 2026-09-16：「由剧本和战线决定」）
+   * 专规 5.0c：**初设时胜利点在谁手里**（用户 2026-09-16：「由剧本和战线决定」）
    *
    * 数据来源（不臆造）：
    *   · **战线**：剧本 `setup.printedHedgehogOwners` 的 `axisOwned` 逐格清单——它是剧本页给德军
@@ -20306,7 +20306,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     victoryError.value = null
   }
 
-  /** 5.0c：裁判指定 / 清除某格的控制方（空格与历史格用；`side=null` 清除） */
+  /** 专规 5.0c：裁判指定 / 清除某格的控制方（空格与历史格用；`side=null` 清除） */
   function setVictoryControlNow(hexText: string, side: Side | null): void {
     const hex = parseHexPath(hexText)[0]
     if (hex === undefined) {
@@ -20329,9 +20329,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   }
 
   /**
-   * 5.0a / 5.0b：执行一次胜利检查并记日志
+   * 专规 5.0a / 专规 5.0b：执行一次胜利检查并记日志
    *
-   * `at: 'turnStart'` ⇒ 5.0b（任一回合开始、19 Aug 起）；`at: 'turnEnd'` ⇒ 5.0a（仅最终回合）。
+   * `at: 'turnStart'` ⇒ 专规 5.0b（任一回合开始、19 Aug 起）；`at: 'turnEnd'` ⇒ 专规 5.0a（仅最终回合）。
    * 两条规则都不写盘面状态，仅给出结论（引擎不写状态）；此处只负责取结论与提示。
    */
   function checkVictoryNow(at: 'turnStart' | 'turnEnd'): boolean {
@@ -20347,7 +20347,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     victoryError.value = null
-    // ⑬ 接线：判定结论推给会话（5.0b 的提前决胜 / 5.0a 的收束条目都取它）
+    // ⑬ 接线：判定结论推给会话（专规 5.0b 的提前决胜 / 专规 5.0a 的收束条目都取它）
     pushVictoryToSessionNow()
     const level =
       assessment.outcome === 'axis'
@@ -20362,7 +20362,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       `${label}：${level}｜${assessment.detail}`,
       assessment.rule,
     )
-    // ⑭ 接线：结论入会话日志（含「暂无结论」，可被 D2 按规则号 5.0a / 5.0b 检索）
+    // ⑭ 接线：结论入会话日志（含「暂无结论」，可被 D2 按规则号 专规 5.0a / 专规 5.0b 检索）
     recordSettlement({
       action: at === 'turnStart' ? 'decisiveVictory' : 'finalVictory',
       rule: assessment.rule,
@@ -20472,7 +20472,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     axisControlledCityKeys.value = []
     trainbustingMarks.value = []
     panzerGroupAssignments.value = {}
-    // 3.4b：补给站的装甲集群归属一并清空（新到 SP 的归属不可跨局残留）
+    // 专规 3.4b：补给站的装甲集群归属一并清空（新到 SP 的归属不可跨局残留）
     spDumpPanzerGroups.value = {}
     pendingSpGroupAssignment.value = []
     multiUnitFormationIds.value = []
@@ -20510,7 +20510,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 组件里的文本框留着只作**显示**（点完能看见点的是哪一格），主路径是"点地图选格"。
    *
    * ★ 候选口径：**store 有明确投影的**就铺候选（12.7a 的运输点数格、13.3f-B 的单位所在格、
-   *   3.3b 的地图城市格、13.7 的本方单位格）；**条件在引擎侧的**（13.5 补员格、1.6c 返场落点）
+   *   3.3b 的地图城市格、13.7 的本方单位格）；**条件在引擎侧的**（13.5 补员格、专规 1.6c 返场落点）
    *   用 `'any'`——只把"打格号"换成"点一下"，合法与否仍由引擎在提交时给规则号。
    */
   const rebuildReplHexText = ref('')
@@ -20933,7 +20933,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     })
   }
 
-  /** 1.6c：死亡堆返场落点（"能直接拖取追溯补给的 HQ 或边缘补给源格"⇒ 引擎在提交时判） */
+  /** 专规 1.6c：死亡堆返场落点（"能直接拖取追溯补给的 HQ 或边缘补给源格"⇒ 引擎在提交时判） */
   function beginDeadPileReturnHexPickNow(): void {
     beginHexPick({
       label: '死亡堆返场落点',
@@ -20975,7 +20975,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *
    * ## 顺序
    * 表里的次序即还原次序：**盘面实体在前、账本在中、"由盘面推导"的账本（`victoryLastControl`）在后**。
-   * `restoreBoard` 末尾还会按新盘面重播一次 5.0c 的控制账（幂等；见那里的注释）。
+   * `restoreBoard` 末尾还会按新盘面重播一次 专规 5.0c 的控制账（幂等；见那里的注释）。
    */
   const boardSnapshotFields = (): readonly (readonly [string, Ref<unknown>])[] => [
     ['segmentStepIndex', segmentStepIndex],
@@ -21090,9 +21090,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   不存则"离图盒装货→存档→读档"后已扣的库存复活（同时在途 SP 也还在）⇒ 凭空多出补给。
    *   旧档（6）缺该键 ⇒ 读成 `{}`；绝不回填 `spDumps`，不吞既有地图库存。
    */
-  // v8（1.4b）：盒内地面单位和入盒回合随盘面保存。
+  // v8（专规 1.4b）：盒内地面单位和入盒回合随盘面保存。
   // v9（2026-11-09）：手牌式增援的撤回账本 `arrivalPlacedUnitsRaw`（投放时新建的算子 id）。
-  // v10（2026-11-14）：1.6c 已掷骰面 `variableReplSpecialDie`（读档后「掷骰检定」复用同一颗）。
+  // v10（2026-11-14）：专规 1.6c 已掷骰面 `variableReplSpecialDie`（读档后「掷骰检定」复用同一颗）。
   // v11（2026-11-17）：逐枚点名多枚条目的投放进度 `arrivalPlacedSlotsRaw`（不存则读档后同一枚可再放一次）。
   const V11_FIELDS = ['arrivalPlacedSlotsRaw']
   const V10_FIELDS = ['variableReplSpecialDie', ...V11_FIELDS]
@@ -21194,9 +21194,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // v6（T16）：字段表新增图外补给库存；缺键按 {} 读，spDumps 原样保留。
     6: ['offMapSupplyStocks', ...V8_FIELDS, ...V9_FIELDS],
     7: [...V8_FIELDS, ...V9_FIELDS],
-    // v8（1.4b）：缺撤回账本 ⇒ 读成 {}（仅不能"回手"，不影响既有投放与规则）
+    // v8（专规 1.4b）：缺撤回账本 ⇒ 读成 {}（仅不能"回手"，不影响既有投放与规则）
     8: V9_FIELDS,
-    // v9：缺 1.6c 骰面 ⇒ 读成 null（按钮会现掷一颗，与升级前行为一致）
+    // v9：缺 专规 1.6c 骰面 ⇒ 读成 null（按钮会现掷一颗，与升级前行为一致）
     9: V10_FIELDS,
     // v10：缺逐枚点名条目的投放进度 ⇒ 读成 {}（升级前也放不出第二枚，不会更糟）
     10: V11_FIELDS,
@@ -21287,9 +21287,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      * U8（2026-11-13）：**旧档里没有编组归属的轴方 SP** 必须显式标出来。
      *
      * 修前：它们只是 `panzerGroupOfDump === null`，`panzerGroupUnassignedDumps` 能列出，
-     * 但不在 `pendingSpGroupAssignment` 里 ⇒ 不出 3.4b 置顶、付费被拒时还报「归属与受益编队
+     * 但不在 `pendingSpGroupAssignment` 里 ⇒ 不出 专规 3.4b 置顶、付费被拒时还报「归属与受益编队
      * 不符」（真实原因是"尚未归属"）。这里**只标未归属，不猜归属**：
-     *   · 3.4b 生效（日期窗口 × 开局共识）才标——失效期内的未归属是合法状态；
+     *   · 专规 3.4b 生效（日期窗口 × 开局共识）才标——失效期内的未归属是合法状态；
      *   · `setDumpPanzerGroupNow` 声明后照旧从待办移除，随档往返；
      *   · 不碰 `panzerGroupOfDump` 的 null 语义，也不猜测任何一方。
      */
@@ -21400,7 +21400,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     /*
-     * 3.4a：段末先自动结清「命中单枚」的义务（只有多枚才要玩家选，已由上面的 block 拦住）。
+     * 专规 3.4a：段末先自动结清「命中单枚」的义务（只有多枚才要玩家选，已由上面的 block 拦住）。
      * 放在这里而不是每个单位上单独问：原文的时机是相位末，且单枚没有可选空间。
      */
     settlePanzerGroupDgAtPhaseEnd()
@@ -21455,7 +21455,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
     }
     /*
-     * 3.4a：段末命中**多枚**时，玩家要从中选一枚投 DG（单枚由段末自动判定，不拦）。
+     * 专规 3.4a：段末命中**多枚**时，玩家要从中选一枚投 DG（单枚由段末自动判定，不拦）。
      * 只在段末（`panzerObligationActive`）拦：段中还没到判定时机。
      */
     const panzerChoice = panzerObligationActive.value
@@ -21489,7 +21489,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
     }
     /*
-     * 1.6b：第二段的待放项（Pax/Eq/SP/Ftr/Tac…）必须在本方「结束本段」时结清。
+     * 专规 1.6b：第二段的待放项（Pax/Eq/SP/Ftr/Tac…）必须在本方「结束本段」时结清。
      *
      * 没有这道闸，流程条可以直接绕过 `endRollSegmentNow` 离开第二段：
      * 上一方的待放补员会被带进**下一方**的手牌（`replPending` 只按当前方读），
@@ -21501,7 +21501,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       rollHandPending.value
     ) {
       /*
-       * 1.6c 未掷时「结束本段」整块**不出现**（`rollPlacementOpen === false`），
+       * 专规 1.6c 未掷时「结束本段」整块**不出现**（`rollPlacementOpen === false`），
        * 此时若照旧写「或在结束本段确认放弃上场」，就是让玩家去点一个不存在的按钮。
        * 判定阶段没走完 ⇒ 只报缺的那次掷骰（与面板里的 `rollPlacementBlockedReason` 同源）。
        */
@@ -22169,7 +22169,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     freeRailEdgeHex,
     pickFreeRailEdgeHex,
     beginFreeRailEdgeHexPickNow,
-    // 图边补给源格（2.1 / 3.1）：到货余额的落点候选，也是 1.1b 安全边缘格的来源
+    // 图边补给源格（专规 2.1 / 专规 3.1）：到货余额的落点候选，也是 专规 1.1b 安全边缘格的来源
     scenarioSupplySourceHexes,
     openSupplySourceHexes,
     supplyArrivalSp,
@@ -22222,7 +22222,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     arrivalRailEligible,
     arrivalRailOriginsOf,
     beginArrivalRailPickNow,
-    // 裁定 2：图外空军盒 SP（1.6b 补给只能空运）
+    // 裁定 2：图外空军盒 SP（专规 1.6b 补给只能空运）
     depositOffMapSupplyNow,
     airBoxSupply,
     railMovedUnitIdsThisPhase,
@@ -22321,7 +22321,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     reinforcementSegment,
     arrivalAbandoned,
     arrivalSegmentClosed,
-    // ⑦ 3.3c：撤离落盘与"可选单位清单"（待选状态从 session.log 反推，无存档字段）
+    // ⑦ 专规 3.3c：撤离落盘与"可选单位清单"（待选状态从 session.log 反推，无存档字段）
     variableExitPendingSelection,
     variableExitSelectionOpen,
     variableExitSelectionSet,
@@ -22479,7 +22479,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     panzerGroupOfDump,
     setDumpPanzerGroupNow,
     panzerGroupUnassignedDumps,
-    // 3.4b：随运输队入场的 SP（非编队）入场前必须选集群
+    // 专规 3.4b：随运输队入场的 SP（非编队）入场前必须选集群
     transportSpGroupDraft,
     setTransportSpGroupDraftNow,
     arrivalTransportSpNeedsGroup,

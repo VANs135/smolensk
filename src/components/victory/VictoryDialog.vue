@@ -9,7 +9,7 @@ import { terminationAssessment, victoryDialogView } from './victory-dialog'
 /**
  * **判定胜利窗**（用户 2026-11-15 实机试玩第 1 项）
  *
- * 对局终止（回合用尽 5.0a / 提前决胜 5.0b）后弹一次，显示胜负与判定依据事实；
+ * 对局终止（回合用尽 专规 5.0a / 提前决胜 专规 5.0b）后弹一次，显示胜负与判定依据事实；
  * 只读：结论全部来自 store 的引擎派生（`turnEndVictory` / `finalVictory` / `decisiveVictory`），
  * 本组件不重算规则。口径：一窗一事、窗内不放描述性文字、条款号只进 `?`。
  */

@@ -177,7 +177,7 @@ export function answerQuestion(session: GameSession, answer: SessionAnswer): Gam
 /**
  * 终止会话：任意形态 → terminated（已终止则原样返回，保证幂等）
  *
- * @param reason `turnsExhausted` 回合用尽（5.0a）/ `earlyDecision` 提前决胜（5.0b）
+ * @param reason `turnsExhausted` 回合用尽（专规 5.0a）/ `earlyDecision` 提前决胜（专规 5.0b）
  */
 export function terminateSession(session: GameSession, reason: TerminationReason): GameSession {
   if (session.status.form === 'terminated') return session

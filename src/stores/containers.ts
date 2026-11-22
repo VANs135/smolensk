@@ -90,12 +90,12 @@ import type { ConsoleAirUnit, ConsoleUnit, DeadPileEntry } from './workbench-mod
  * ## 权威值来自哪里
  *   · 回合 / 天气 / 铁路容量：有会话时取**会话记录**（整局流程的权威值），否则退回本 store 的标记账本；
  *   · 死亡堆：直接读操作台的 `deadPile`（C12 不另立一份）；
- *   · 拆分单位盒：盒内存量优先取操作台的 `breakdownPool` 账本（1.8a / 20.0g），
- *     没有账本时才退回「1.8a 上限 − 图上枚数」；
- *   · 抽取盒的**候选池**由引擎按数据给（1.6c 的 12-2-2/11-1-1/10-0-1、剧本抽签的池成员）。
+ *   · 拆分单位盒：盒内存量优先取操作台的 `breakdownPool` 账本（专规 1.8a / 20.0g），
+ *     没有账本时才退回「专规 1.8a 上限 − 图上枚数」；
+ *   · 抽取盒的**候选池**由引擎按数据给（专规 1.6c 的 12-2-2/11-1-1/10-0-1、剧本抽签的池成员）。
  *
  * ## 数据缺口（如实暴露，不猜）
- *   · 单位库未标注 2.3a 的 Alarm 单位（3× 2-1-3 / 5× 3-1-1 / 7× (2)-2-2）⇒
+ *   · 单位库未标注 专规 2.3a 的 Alarm 单位（3× 2-1-3 / 5× 3-1-1 / 7× (2)-2-2）⇒
  *     面板提供 `alarmUnitIds` 手输口，空即按规则「该项作废」；
  *   · `formations.json` 的下属标签与单位库命名不同口径 ⇒ 编队组成（哪个单位是某师的
  *     Mtr 团 / Aufk 营）由面板按算子选择注入。
@@ -233,7 +233,7 @@ export const useContainersStore = defineStore('containers', () => {
   const airBoxMembers = computed<readonly string[]>(() => workbench.airBoxMembers)
 
   /**
-   * 边缘盒内的单位（1.4b）
+   * 边缘盒内的单位（专规 1.4b）
    *
    * 单位在盒内即**不在图上**，故这里存**算子本体**（进入时从操作台 `units` 取出、离开时放回），
    * 与操作台的死亡堆同一思路：操作台只持盘面，盒内容由本 store 持。
@@ -279,7 +279,7 @@ export const useContainersStore = defineStore('containers', () => {
   >([])
 
   /**
-   * 2.3a 的警戒（Alarm）单位**配额**（来自单位库 `alarmLimit`：3 / 5 / 7）
+   * 专规 2.3a 的警戒（Alarm）单位**配额**（来自单位库 `alarmLimit`：3 / 5 / 7）
    *
    * 2026-09-16 起数据已标注（此前是「单位库未标注 ⇒ 由裁判手输」的缺口）⇒ 这里从数据自动取，
    * 面板不再需要手输 id 清单。
@@ -291,7 +291,7 @@ export const useContainersStore = defineStore('containers', () => {
   )
 
   /**
-   * 2.3a Alarm 单位清单（自动取自数据；保留可写是为了兼容裁判的临时覆盖）
+   * 专规 2.3a Alarm 单位清单（自动取自数据；保留可写是为了兼容裁判的临时覆盖）
    *
    * 空数组 = 「本局无可用 Alarm 单位」⇒ 按表 1-3 脚注第二项**作废**。
    */
@@ -303,10 +303,10 @@ export const useContainersStore = defineStore('containers', () => {
   )
 
   /**
-   * 2.3a 各型 Alarm 单位**目前的在场枚数**（地图 + 死亡堆；同型可多枚，故按实例计数）
+   * 专规 2.3a 各型 Alarm 单位**目前的在场枚数**（地图 + 死亡堆；同型可多枚，故按实例计数）
    *
    * 「在场」取盘面事实：算子在地图上、或在死亡堆里，都算这局里已经用掉的那一枚配额。
-   * （2.3a 的三种来源：开局在图上 / 开局在死亡堆 / 按到货表入场。）
+   * （专规 2.3a 的三种来源：开局在图上 / 开局在死亡堆 / 按到货表入场。）
    */
   const alarmInPlay = computed<Record<string, number>>(() => {
     const counts: Record<string, number> = {}
@@ -320,19 +320,19 @@ export const useContainersStore = defineStore('containers', () => {
     return counts
   })
 
-  /** 2.3a 混编核算（每型的上限 / 在场 / 余量 / 是否超编）——面板显示与测试断言用 */
+  /** 专规 2.3a 混编核算（每型的上限 / 在场 / 余量 / 是否超编）——面板显示与测试断言用 */
   const alarmMix = computed(() =>
     alarmMixRows({ quotas: alarmQuotas.value, inPlay: alarmInPlay.value }),
   )
 
-  /** 2.3a 的规则号（与引擎唯一出处同源；面板把它显示在混编核算旁，便于复核） */
+  /** 专规 2.3a 的规则号（与引擎唯一出处同源；面板把它显示在混编核算旁，便于复核） */
   const alarmMixRule = ALARM_MIX_RULE
 
   /** 最近一次操作结论（面板显示；带规则号） */
   const lastAction = ref<{ ok: boolean; rule: string; detail: string; scope: string } | null>(null)
 
   /**
-   * 1.6c 特殊补员的**骰面与查表结果**（用户 Q4：必须出骰面与结果）
+   * 专规 1.6c 特殊补员的**骰面与查表结果**（用户 Q4：必须出骰面与结果）
    *
    * `die` 是真实掷出的 1d6 面；`detail` 是 Special Repl Table 命中项与落位结论。
    * 拒绝时也留骰面（骰已掷出，只是结果不合法），骰面为 `null` 表示连掷骰都没发生
@@ -369,18 +369,18 @@ export const useContainersStore = defineStore('containers', () => {
       ...(record?.branch === undefined ? {} : { branch: record.branch }),
       steps: unit.steps,
       printedSteps: unit.printedSteps,
-      // 1.6c 的免费重建资格按**战斗面印值**判定（12-2-2 之类即战斗面的 A-AR-MA）
+      // 专规 1.6c 的免费重建资格按**战斗面印值**判定（12-2-2 之类即战斗面的 A-AR-MA）
       attack: unit.faces.combat.attack,
       ar: unit.faces.combat.ar,
       ma: unit.faces.combat.ma,
       ...(record?.rebuildable === undefined ? {} : { rebuildable: record.rebuildable }),
-      // 1.6c：轴方「任一 Aufk / Krd 营」与苏方 Alarm 单位是两批，按数据标记分
+      // 专规 1.6c：轴方「任一 Aufk / Krd 营」与苏方 Alarm 单位是两批，按数据标记分
       specialReplRebuild: record?.specialAbilities?.includes('special_repl_to_rebuild') === true,
       isBreakdown: unit.specialized.includes('breakdown'),
     }
   }
 
-  /** 拆分单位算子库（某方）：`branch: 'breakdown'` 的算子（1.8a / 20.0g） */
+  /** 拆分单位算子库（某方）：`branch: 'breakdown'` 的算子（专规 1.8a / 20.0g） */
   function breakdownLibOf(side: Side): BoxUnitView[] {
     const records = side === 'axis' ? unitsAxis.units : unitsSoviet.units
     return records
@@ -399,7 +399,7 @@ export const useContainersStore = defineStore('containers', () => {
       })
   }
 
-  /** 操作台的飞机 → 盒内单位视图（1.4a 的分栏用 airStatus） */
+  /** 操作台的飞机 → 盒内单位视图（专规 1.4a 的分栏用 airStatus） */
   function toBoxAirUnit(air: ConsoleAirUnit): BoxUnitView {
     return {
       id: air.instanceId,
@@ -451,7 +451,7 @@ export const useContainersStore = defineStore('containers', () => {
     return { axis: pick('axis'), soviet: pick('soviet') }
   })
 
-  /** 拆分单位算子库（双方；`branch: 'breakdown'`，1.8a / 20.0g） */
+  /** 拆分单位算子库（双方；`branch: 'breakdown'`，专规 1.8a / 20.0g） */
   const breakdownUnits = computed<Record<Side, BoxUnitView[]>>(() => ({
     axis: breakdownLibOf('axis'),
     soviet: breakdownLibOf('soviet'),
@@ -467,15 +467,15 @@ export const useContainersStore = defineStore('containers', () => {
       .map(toBoxUnit),
   }))
 
-  /** 拆分单位盒的账本（把操作台的 `breakdownPool` 总数按 1.8a 分档摊开；键 = 国籍前缀） */
+  /** 拆分单位盒的账本（把操作台的 `breakdownPool` 总数按 专规 1.8a 分档摊开；键 = 国籍前缀） */
   const breakdownLedger = computed<Record<Side, { ar: number; count: number }[]>>(() => {
     const prefix: Record<Side, string> = { axis: 'ax', soviet: 'su' }
     const build = (side: Side): { ar: number; count: number }[] => {
       const total = workbench.breakdownPool[prefix[side]] ?? 0
       const limits =
         rulesConstants.smolensk.counterLimits[side === 'axis' ? 'axisBreakdown' : 'sovietBreakdown']
-      // 账本只有总数（操作台的 `breakdownPool` 以国籍为键）⇒ 按 1.8a 各档上限**依次灌满**，
-      // 余数落在最后一档；这是账本口径下的如实摊派（面板上同时显示 1.8a 上限供核对）。
+      // 账本只有总数（操作台的 `breakdownPool` 以国籍为键）⇒ 按 专规 1.8a 各档上限**依次灌满**，
+      // 余数落在最后一档；这是账本口径下的如实摊派（面板上同时显示 专规 1.8a 上限供核对）。
       let rest = total
       return limits.map((entry) => {
         const count = Math.max(0, Math.min(entry.count, rest))
@@ -486,7 +486,7 @@ export const useContainersStore = defineStore('containers', () => {
     return { axis: build('axis'), soviet: build('soviet') }
   })
 
-  /** 地图外空军盒成员（1.4a） */
+  /** 地图外空军盒成员（专规 1.4a） */
   const aircraftInBox = computed<Record<Side, BoxUnitView[]>>(() => {
     const members = workbench.airUnits.filter((air) =>
       workbench.airBoxMembers.includes(air.instanceId),
@@ -497,7 +497,7 @@ export const useContainersStore = defineStore('containers', () => {
     }
   })
 
-  /** 边缘盒成员（1.4b；仅苏方地面单位） */
+  /** 边缘盒成员（专规 1.4b；仅苏方地面单位） */
   const edgeBoxUnits = computed<Record<EdgeBoxId, BoxUnitView[]>>(() => ({
     northeast: edgeBoxHeld.value.northeast.map(toBoxUnit),
     southeast: edgeBoxHeld.value.southeast.map(toBoxUnit),
@@ -569,7 +569,7 @@ export const useContainersStore = defineStore('containers', () => {
     return true
   }
 
-  /** 1.5：设定天气标记（受限 / 正常飞行） */
+  /** 专规 1.5：设定天气标记（受限 / 正常飞行） */
   function setWeatherMarker(air: 'normal' | 'limited'): void {
     weatherMarker.value = air
     const view = weatherTrackView({
@@ -727,8 +727,8 @@ export const useContainersStore = defineStore('containers', () => {
      *   面板 `showsBoxActions(kind)` 传的却是**引擎的盒名**（`BoxKind`：`deadPile` / `airBox` / …）
      *   ⇒ `['dead_pile'].includes('deadPile') === false`，**永不命中**。
      *   而对局台打开盒卡会话的唯一触发条件就是"展开着一张卡"（`map-view` 的 `containers` 会话），
-     *   于是展开任何盒卡后**所有盒内动作都不渲染**：1.4a 移出盒与免费整备、1.4b 边缘盒进出、
-     *   1.6c 特殊补员掷骰、13.7 收纳、20.0a 拆分取用、死亡堆返场——整个会话只剩只读清单。
+     *   于是展开任何盒卡后**所有盒内动作都不渲染**：专规 1.4a 移出盒与免费整备、专规 1.4b 边缘盒进出、
+     *   专规 1.6c 特殊补员掷骰、13.7 收纳、20.0a 拆分取用、死亡堆返场——整个会话只剩只读清单。
      *
      * 口径：**两种键都收**——归一后的引擎盒名（给 `showsBoxActions('deadPile')` 这类调用），
      *   以及原始分区名（给 `showsBoxActions('markers')` 这类"按分区"的调用；
@@ -1002,7 +1002,7 @@ export const useContainersStore = defineStore('containers', () => {
     return draw.value
   }
 
-  /* ────────────────────────────── 1.6c 特殊补员抽取 ────────────────────────────── */
+  /* ────────────────────────────── 专规 1.6c 特殊补员抽取 ────────────────────────────── */
 
   function specialReplRefusal(side: Side): string | null {
     if (!workbench.actionAllowedNow('rein.specialRepl')) return '在增援的特殊补员环节掷表'
@@ -1013,19 +1013,19 @@ export const useContainersStore = defineStore('containers', () => {
   }
 
   /**
-   * 1.6c：结算一次特殊补员（苏方两项 / 轴方一项）
+   * 专规 1.6c：结算一次特殊补员（苏方两项 / 轴方一项）
    *
    * 掷 1 骰 → 查特殊补员表 → 固定项「师随机重建」（在死亡堆的合格池里**用 rng 抽定**）
    * → 第二项（Supply Cache / 特种营）；无可用 ⇒ 作废。
    */
   function drawSpecialRepl(side: Side, fixedDie?: number): boolean {
     /*
-     * 教学局（用户 2026-11-19 改口径）：**不掷 1.6c 特殊补员**，也不给免费重建 ——
+     * 教学局（用户 2026-11-19 改口径）：**不掷 专规 1.6c 特殊补员**，也不给免费重建 ——
      * 重建演示改为「增援补员表发 Pax/Eq → 玩家在重建阶段花补员从死人堆重建」（13.5a）。
      * 只记一笔日志说明，不消耗骰子、不改任何状态。
      */
     if (fixedDie === undefined && tutorialFixedReinforcement.value) {
-      // 记「本回合已掷」把 1.6c 闸门清掉（不掷骰、不发任何东西），否则段落收束会卡住
+      // 记「本回合已掷」把 专规 1.6c 闸门清掉（不掷骰、不发任何东西），否则段落收束会卡住
       workbench.markSpecialReplDraw(side, workbench.turn)
       workbench.pushLog(
         'info',
@@ -1059,14 +1059,14 @@ export const useContainersStore = defineStore('containers', () => {
       return false
     }
     /*
-     * 1.6c 自掷自己的骰（原文「also get to roll a die on their Special Repl Table」）；
-     * 1.6b 的骰只归 1.6b。`fixedDie` 仅供测试/AI 复现，正常路径不传。
+     * 专规 1.6c 自掷自己的骰（原文「also get to roll a die on their Special Repl Table」）；
+     * 专规 1.6b 的骰只归 专规 1.6b。`fixedDie` 仅供测试/AI 复现，正常路径不传。
      */
     const roll = die0 === undefined ? roll1d6(workbench.rng) : null
     const die = die0 ?? roll!.value.total
     const afterDie = roll === null ? workbench.rng : roll.rng
     const dead = deadPileUnits.value[side]
-    // 苏方固定项「随机重建一个师」：候选池由引擎按 1.6c 判定，抽哪一个用 rng 决定
+    // 苏方固定项「随机重建一个师」：候选池由引擎按 专规 1.6c 判定，抽哪一个用 rng 决定
     const candidates = planSpecialReplDraw({
       side,
       date: workbench.date,
@@ -1123,7 +1123,7 @@ export const useContainersStore = defineStore('containers', () => {
     /*
      * v7.1 第二段（用户 2026-11-11 口径）：判定阶段**不落子、不出地图落点**。
      *
-     * 返场单位只登记进"统一手牌"；落点（2.1 注：能直接拖取追溯补给的 HQ，否则图边补给源格）
+     * 返场单位只登记进"统一手牌"；落点（专规 2.1 注：能直接拖取追溯补给的 HQ，否则图边补给源格）
      * 由放置阶段点格给出。修前这里是掷完就 `returnFromDeadPileNow` 直接返场、无合法格则整笔拒绝
      * ——那就是"判完一项就能立刻放置"。
      */
@@ -1160,14 +1160,14 @@ export const useContainersStore = defineStore('containers', () => {
           ? 'void'
           : 'unit'
     const divisionGranted = planned.data.division !== null
-    // 1.6c 自己的骰：留痕并单独记一笔台账（1.6b 的 variableRepl 条目不再携带它）
+    // 专规 1.6c 自己的骰：留痕并单独记一笔台账（专规 1.6b 的 variableRepl 条目不再携带它）
     workbench.variableReplSpecialDie = die
     workbench.recordSettlement({
       action: 'specialRepl',
       rule: '1.6c',
       side,
-      // 吃掉 rng setter 记下的真实掷骰：1.6c 的 1 骰（苏方随机选师时还有 1 颗选骰）。
-      // 不传 rolls / 不吃 pending 会让 1.6c 的骰被下一次结算（如 12.6 supplyTrace）记走，重放错位。
+      // 吃掉 rng setter 记下的真实掷骰：专规 1.6c 的 1 骰（苏方随机选师时还有 1 颗选骰）。
+      // 不传 rolls / 不吃 pending 会让 专规 1.6c 的骰被下一次结算（如 12.6 supplyTrace）记走，重放错位。
       data: { die, grant, divisionGranted, returns: returns.map((item) => item.instanceId) },
     })
     // 判定阶段只出回执：返场单位已进"统一手牌"，落点在放置阶段点格给出
@@ -1194,21 +1194,21 @@ export const useContainersStore = defineStore('containers', () => {
   }
 
   /**
-   * 增援段「一次检定」：1.6b 掷表 + 1.6c 结算登记（单入口，1.6c 一笔事务）
+   * 增援段「一次检定」：专规 1.6b 掷表 + 专规 1.6c 结算登记（单入口，专规 1.6c 一笔事务）
    *
-   * 次序照原文：1.6b 先掷（它带着 1.6c 那颗骰），再在同一颗骰上结算 1.6c。
-   * 1.6c 的骰、抽取、返场登记、Cache 入账在 `drawSpecialRepl` 内是全有或全无：
+   * 次序照原文：专规 1.6b 先掷（它带着 专规 1.6c 那颗骰），再在同一颗骰上结算 专规 1.6c。
+   * 专规 1.6c 的骰、抽取、返场登记、Cache 入账在 `drawSpecialRepl` 内是全有或全无：
    * 登记失败时 rng / drawCount / 死亡堆 / 待落位 / Cache 都不动，只留一条明确原因。
    */
   function runReinforcementCheckNow(): boolean {
     if (!workbench.variableReplRolled && !workbench.rollVariableReplNow()) return false
-    // 1.6c 独立一掷：不传 1.6b 的骰面
+    // 专规 1.6c 独立一掷：不传 专规 1.6b 的骰面
     const drew = drawSpecialRepl(workbench.activeSide)
     if (!drew) return false
     /*
-     * 1.6c 掷完即落位：登记完成后若已在放置态且有返场单位，直接把地图点亮（第一枚），
+     * 专规 1.6c 掷完即落位：登记完成后若已在放置态且有返场单位，直接把地图点亮（第一枚），
      * 不再要求玩家先点手牌或点「开始放置」。Cache 只入账，不进手牌，因此不会走到这里。
-     * 2.3c 尚未领取等闸门未开时保持手牌，闸门一开就按原手牌流程点格。
+     * 专规 2.3c 尚未领取等闸门未开时保持手牌，闸门一开就按原手牌流程点格。
      */
     if (workbench.rollPlacementOpen && workbench.specialReplPending.length > 0) {
       workbench.beginSpecialReplPlaceHexPickNow(0)
@@ -2465,9 +2465,9 @@ export const useContainersStore = defineStore('containers', () => {
     workbench.pushLog('info', `${unit.name} → Move Mode（剧本 Move-Mode 抽签）`, '5.4')
   }
 
-  /* ────────────────────────────── 地图外空军盒（1.4a） ────────────────────────────── */
+  /* ────────────────────────────── 地图外空军盒（专规 1.4a） ────────────────────────────── */
 
-  /** 1.4a：盒内免费整备（Inactive → Active） */
+  /** 专规 1.4a：盒内免费整备（Inactive → Active） */
   function activateAirBox(side: Side): boolean {
     const inBox = workbench.airUnits.filter(
       (air) => air.side === side && workbench.airBoxMembers.includes(air.instanceId),
@@ -2491,9 +2491,9 @@ export const useContainersStore = defineStore('containers', () => {
     return true
   }
 
-  /** 1.4a：把飞机移入 / 移出地图外空军盒 */
+  /** 专规 1.4a：把飞机移入 / 移出地图外空军盒 */
   /**
-   * 1.4a：飞机进出**地图外空军盒**
+   * 专规 1.4a：飞机进出**地图外空军盒**
    *
    * ★ 修（2026-10-30）：修前只改盒成员、再打一句"（航程 20/30 格）"——**没有任何裁断**，
    *   等于免费瞬移，而且文案还假装费用已扣。原文给的是固定航程代价：
@@ -2542,7 +2542,7 @@ export const useContainersStore = defineStore('containers', () => {
    * 14.11 + 专规 1.4a：**转场（基地 → 图外空军盒）**
    *
    * 盒按空军基地计（用户口径）⇒ 基地转移距离可增加一倍（14.11），
-   * 代价仍按 1.4a＝连接列 20/30 + 该基地到连接列的列差。
+   * 代价仍按 专规 1.4a＝连接列 20/30 + 该基地到连接列的列差。
    * 战斗机在正常航程内保持激活；超出正常航程（≤ 双倍）转非激活（14.11）。
    */
   function transferAirToBox(instanceId: string): boolean {
@@ -2638,7 +2638,7 @@ export const useContainersStore = defineStore('containers', () => {
     return true
   }
 
-  /* ────────────────────────────── 边缘盒（1.4b） ────────────────────────────── */
+  /* ────────────────────────────── 边缘盒（专规 1.4b） ────────────────────────────── */
 
   interface EdgeTransfer {
     box: EdgeBoxId
@@ -2659,7 +2659,7 @@ export const useContainersStore = defineStore('containers', () => {
     return workbench.openSupplySourceHexes.filter((hex) => edgeBoxConnectsHex(box, hex))
   }
 
-  /** 1.4b：候选预览和提交走同一判定；玩家只选单位、方式与出盒格。 */
+  /** 专规 1.4b：候选预览和提交走同一判定；玩家只选单位、方式与出盒格。 */
   function edgeTransferPlan(input: EdgeTransfer, target?: HexRef) {
     const reject = (reason: string, rule = '1.4b') => ({ ok: false as const, reason, rule })
     const entering = input.direction === 'enter'
@@ -2727,7 +2727,7 @@ export const useContainersStore = defineStore('containers', () => {
               }
             : null
       if (!cargo) return reject('该单位不能铁路运输', '13.3a')
-      // 1.4b 已指定唯一图内端点为本方开放源格；此格不另要求聚落或驻军。
+      // 专规 1.4b 已指定唯一图内端点为本方开放源格；此格不另要求聚落或驻军。
       // 路径没有图内轨段，只按该格的轨距、EZOC 与运输破坏区判铁路规则。
       const rail = validateRailMovement({
         phase: 'movement',

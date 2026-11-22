@@ -74,7 +74,7 @@ export function createAirMissionDerivedDomain(deps: AirMissionDerivedDeps) {
    * 专规 2.2d / 14.1g：**本阶段本方能否出击**（空军任务全链共用一条判据）
    *
    * 修前只有 `airMissionJoinChoices` 判这一条，`bombingEntryEligible` 只看环节闸 ⇒
-   * 苏军进击段右键敌方格仍出「轰炸」，点进去参战机阵列是空的、宣布时才被 2.2d 拒。
+   * 苏军进击段右键敌方格仍出「轰炸」，点进去参战机阵列是空的、宣布时才被 专规 2.2d 拒。
    */
   const airMissionAllowedInPhase = computed<boolean>(() => {
     const airPhase =
@@ -115,7 +115,7 @@ export function createAirMissionDerivedDomain(deps: AirMissionDerivedDeps) {
   const airMissionJoinChoices = computed<readonly AirMissionJoinChoice[]>(() => {
     /*
      * 专规 2.2d：苏军不得在本方反应 / 进击阶段出击（通规 14.1g 允许三段，专规覆盖苏联）。
-     * 不可用的机不就该列进「参战机」阵列 —— 修前它照列，点进窗口后才在宣布时被 2.2d 拒。
+     * 不可用的机不就该列进「参战机」阵列 —— 修前它照列，点进窗口后才在宣布时被 专规 2.2d 拒。
      * 引擎侧判据仍在 `beginAirMissionNow`（旁路直接写状态仍会被拒）。
      */
     if (!airMissionAllowedInPhase.value) return []

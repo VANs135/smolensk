@@ -9,7 +9,7 @@ import type { OutcomeData, RuleRef } from './result-types'
  *   1. `created`    未开局：已建会话、尚未开始推进
  *   2. `advancing`  步骤推进：无待答问题，可继续推进
  *   3. `awaiting`   待答问题：停下等「当前应答方」作答（question 内含 responder）
- *   4. `terminated` 终止判定：已结束（回合用尽 5.0a / 提前决胜 5.0b）
+ *   4. `terminated` 终止判定：已结束（回合用尽 专规 5.0a / 提前决胜 专规 5.0b）
  *
  * 另含**序列化**：四形态都可整体存档与读回（入口见 engine/session.ts）。
  *
@@ -30,8 +30,8 @@ export type SessionForm = (typeof SESSION_FORMS)[number]
 /**
  * 终止原因（终止判定）
  *
- * - `turnsExhausted` 回合用尽：剧本回合数（scenarios.json scenarios[].turns）走完（5.0a）
- * - `earlyDecision`  提前决胜：1941-08-19 起达成提前决胜条件（5.0b）
+ * - `turnsExhausted` 回合用尽：剧本回合数（scenarios.json scenarios[].turns）走完（专规 5.0a）
+ * - `earlyDecision`  提前决胜：1941-08-19 起达成提前决胜条件（专规 5.0b）
  */
 export const TERMINATION_REASONS = ['turnsExhausted', 'earlyDecision'] as const
 

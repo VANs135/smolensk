@@ -1441,7 +1441,7 @@ export interface SetupFlowStep {
  * 之后才轮到玩家处理自由项（`w/i X` / 任一指挥部 / 任意空军基地）。
  *
  * 依据：专规 Setup Notes A（剧本指定布设方与先动方）、ch10/ch11（编队抽签）、
- * 通规 IV-A（自由项）、13.2h（卡车）、12.1d + 3.4b（SP 归属）、IV-E/14.1a（飞机）。
+ * 通规 IV-A（自由项）、13.2h（卡车）、12.1d + 专规 3.4b（SP 归属）、IV-E/14.1a（飞机）。
  */
 export function setupFlowFor(scenarioId: string): readonly SetupFlowStep[] {
   const scenario = scenarios.scenarios.find((item) => item.id === scenarioId)

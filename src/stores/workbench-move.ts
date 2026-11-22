@@ -13,7 +13,7 @@
  * 切片顶部仍按原名从束里解构，函数体零改动；晚绑定项只在调用时读 `ports.x`。
  *
  * 序列上的特殊之处：**建域点就在原区间位置（7527）**，因为 `movePick`/`stackSelect`/`moveUnits` 等
- * 状态都声明在 1.1k–7.2k，若把域提前到 `groundMovement`(1110) 之前，就得为 18 项状态开 getter。
+ * 状态都声明在 专规 1.1k–7.2k，若把域提前到 `groundMovement`(1110) 之前，就得为 18 项状态开 getter。
  * 代价是 `nameOf`/`applyMovePatches`/`refuseWhileSettling`/`closeBreakdownWindows` 被**更早的域**
  * 当端口吃（1113/1115/1122/1567/2159/2222/7066），故 facade 侧保留 4 个一行薄转发。
  */
@@ -1297,7 +1297,7 @@ export function createMovementDomain(ports: MovementDomainPorts) {
     return true
   }
 
-  /** 1.4b：入盒已经落盘，旧移动的撤销不得把盒内单位拖回图上。 */
+  /** 专规 1.4b：入盒已经落盘，旧移动的撤销不得把盒内单位拖回图上。 */
   function sealEdgeBoxTransferNow(unitId: string): void {
     groundMovement.markIrreversible('边缘盒进出（1.4b）')
     const move = moveInteraction.value

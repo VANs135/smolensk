@@ -71,7 +71,7 @@ import { captureGameSnapshot, prepareGameSnapshot } from './game-snapshot'
  * ## 它是什么
  *   按 **2.2 流程表**逐步推进一个回合（Pre-Turn 2 步 → 先手方 A–H → 后手方 A–H → 回合结束，
  *   共 19 步），在规则要求玩家决策处（2.3 先手选择、开局共识开关）停下**待答**，
- *   在 5.0a（回合用尽）/ 5.0b（提前决胜）处分出**终止**结论。
+ *   在 专规 5.0a（回合用尽）/ 专规 5.0b（提前决胜）处分出**终止**结论。
  *
  * ## 与操作台的分工（为什么它是「独立」的）
  *   本 store 只驱动**流程**（段与回合），**不承载盘面算子**：移动、战斗、补给等算子动作仍在
@@ -79,7 +79,7 @@ import { captureGameSnapshot, prepareGameSnapshot } from './game-snapshot'
  *   反之操作台不做流程裁决（面板关闭与否只听这里的会话形态）。
  *
  * ## 盘面事实靠注入
- *   5.0b 的达成与否是**盘面事实**，由调用方用 B20 的 `victory.ts` 求值后经 `earlyDecisionMet` 注入；
+ *   专规 5.0b 的达成与否是**盘面事实**，由调用方用 B20 的 `victory.ts` 求值后经 `earlyDecisionMet` 注入；
  *   本 store 不自行判断控制区（引擎不持盘面）。
  */
 
@@ -100,7 +100,7 @@ export const SAVE_SLOT_KEY = 'smolensk-ocs.save.slot1'
  * 持久化错误的原因码前缀
  *
  * 存档/读档不是规则条款，故 `rule` 字段记**本工作项编号 `D1`**（可回溯到任务），
- * 便于与内核裁决（2.2 / 2.3 / 5.0a…）区分开。
+ * 便于与内核裁决（2.2 / 2.3 / 专规 5.0a…）区分开。
  */
 const SAVE_RULE = 'D1'
 
@@ -119,7 +119,7 @@ export type AdvanceStop =
   | 'question'
   /** 落在需要玩家的环节（A–G） */
   | 'player'
-  /** 会话终止（5.0a / 5.0b） */
+  /** 会话终止（专规 5.0a / 专规 5.0b） */
   | 'terminated'
   /** 被内核拒绝（原因在 `error` 里） */
   | 'refused'
@@ -191,7 +191,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
   const firstWeatherChoice = ref<'scenario' | 'normal'>('scenario')
 
   /**
-   * 5.0b 提前决胜是否达成（**注入的盘面事实**）
+   * 专规 5.0b 提前决胜是否达成（**注入的盘面事实**）
    *
    * 由调用方按 B20 的 `decisiveVictory` 结论写入（见 VictoryPanel）；本 store 只接收结论。
    */
@@ -202,8 +202,8 @@ export const useGameSessionStore = defineStore('gameSession', () => {
    *
    * 控制事实属于盘面（只有操作台摆着算子），胜负由引擎 `victory.ts` 求值；
    * 本 store 只接收结论、不重算（CODE_SPEC §3.1）：
-   *   - `decisive`：5.0b 的提前决胜结论（`ongoing` 即未达成）；
-   *   - `final`：5.0a 的最终评估结论，随末回合的收束条目一并写进日志。
+   *   - `decisive`：专规 5.0b 的提前决胜结论（`ongoing` 即未达成）；
+   *   - `final`：专规 5.0a 的最终评估结论，随末回合的收束条目一并写进日志。
    */
   const pushedVerdicts = ref<{
     decisive: VictoryAssessment | null
@@ -340,13 +340,13 @@ export const useGameSessionStore = defineStore('gameSession', () => {
   )
 
   /**
-   * 4.0：**某条共识本局是否采纳**（按**条目文本**查，不按序号 —— 清单增删不会串行）
+   * 专规 4.0：**某条共识本局是否采纳**（按**条目文本**查，不按序号 —— 清单增删不会串行）
    *
    * 两段口径，缺一不可：
    *   · 已写入日志的结论优先（`consensus`，读档后也成立）；
    *   · 尚未写入时退回**界面上的实时勾选**（`agreedAdopted` / `agreedChecks`）——
    *     初设（选剧本后的准备）发生在"开始游戏 / 推进第一回合"之前，那时日志里还没有结论，
-   *     而 3.4b 这类可选项**在初设就要用**（要不要逐一点名装甲集群）。
+   *     而 专规 3.4b 这类可选项**在初设就要用**（要不要逐一点名装甲集群）。
    *
    * 未开局（`session === null`）时勾选仍可读 ⇒ 初设面板据此决定默认归属与是否强制点名。
    */
@@ -378,12 +378,12 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     )
   })
 
-  /** 4.0：某条可选规则本局是否启用（按条码查；未启用＝原规则行为） */
+  /** 专规 4.0：某条可选规则本局是否启用（按条码查；未启用＝原规则行为） */
   const rule4On = computed(
     () => (code: OptionalRuleCode) => enabledOptionalRules.value.includes(code),
   )
 
-  /** 4.0：共识是否已冻结（开局后不再允许改） */
+  /** 专规 4.0：共识是否已冻结（开局后不再允许改） */
   const agreedLocked = computed(() => session.value !== null)
 
   /** 是否已把勾选写成日志结论（＝存档里已有共识结论） */
@@ -578,13 +578,13 @@ export const useGameSessionStore = defineStore('gameSession', () => {
   }
 
   /**
-   * ⑬ 接线：接收操作台推来的 **5.0c 控制事实**与 **5.0a/5.0b 判定结论**
+   * ⑬ 接线：接收操作台推来的 ** 专规 5.0c 控制事实**与 ** 专规 5.0a/ 专规 5.0b 判定结论**
    *
    * 三件事一次办完：
-   *   ① `locations` 落到 `Records.victoryLocations`（5.0c 的「最后控制者」账本）——
+   *   ① `locations` 落到 `Records.victoryLocations`（专规 5.0c 的「最后控制者」账本）——
    *      引擎侧的 5.0 判定从此可直接消费 `Records`，不再依赖盘面外账本；
-   *   ② `decisive` 的结论驱动 5.0b 的提前决胜（等价于勾选「已达成」）；
-   *   ③ `final` 存起来，供末回合的 5.0a 收束条目写入结论。
+   *   ② `decisive` 的结论驱动 专规 5.0b 的提前决胜（等价于勾选「已达成」）；
+   *   ③ `final` 存起来，供末回合的 专规 5.0a 收束条目写入结论。
    *
    * `undefined` 的字段表示「本次不更新」，避免单推一项时把另一项清空。
    */
@@ -625,7 +625,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       decisiveVictory: pushedVerdicts.value.decisive,
       finalVictory: pushedVerdicts.value.final,
       agreedOptionItems: agreedOptionItems.value,
-      // 4.0：逐条可选规则的启用结论（4.2a 的平局判胜在引擎里消费；其余条由操作台读取同一判据）
+      // 专规 4.0：逐条可选规则的启用结论（专规 4.2a 的平局判胜在引擎里消费；其余条由操作台读取同一判据）
       optionalRules: enabledOptionalRules.value,
     }
   })
@@ -640,7 +640,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     }
     scenarioId.value = next
     session.value = null
-    // 4.0：共识在**选剧本之前**勾定 ⇒ 换剧本不重置（勾定的是规则，不是某个剧本）
+    // 专规 4.0：共识在**选剧本之前**勾定 ⇒ 换剧本不重置（勾定的是规则，不是某个剧本）
     lastAdvanceKind.value = null
     error.value = null
     return true
@@ -721,7 +721,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     }
     session.value = startSession(created)
     /*
-     * 4.0（用户 2026-11-13 口径）：共识在**选剧本之前**勾定，开局即冻结并写入日志；
+     * 专规 4.0（用户 2026-11-13 口径）：共识在**选剧本之前**勾定，开局即冻结并写入日志；
      * 此后再改一律被拒，不存在局内第二个开关。
      */
     if (!confirmAgreedChecklist()) {
@@ -792,7 +792,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
    * 故本函数＝反复 `stepNow()`，直到：
    *   · **停下待答**（`awaiting`：2.3 先手选择 / 开局共识）——玩家先决定，决定完再点；
    *   · **落在玩家环节**（该步 `driver === 'player'`）——该环节的动作由玩家在盘面上做；
-   *   · **终止**（5.0a 回合用尽 / 5.0b 提前决胜）；
+   *   · **终止**（专规 5.0a 回合用尽 / 专规 5.0b 提前决胜）；
    *   · 被内核拒绝（把 `error` 留给界面，不吞）。
    *
    * ★ 判"要不要停"的是**运行时的 `awaiting`**，不是静态的 `driver`：标着 `question` 的步
@@ -991,7 +991,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
       const raw = deserializeSaveFile(text)
       /*
        * 专规 4.0（v2）：旧档的共识结论按「整章一条」记在 `agreedOption:3`；拆条后须改写成
-       * 逐条题号（八条 + 3.4b 末位），否则旧结论会错位、缺条还会在局中被当成"未作答"。
+       * 逐条题号（八条 + 专规 3.4b 末位），否则旧结论会错位、缺条还会在局中被当成"未作答"。
        * 迁移是纯函数（`migrateConsensusLogV1ToV2`，映射规则见其注释）。
        */
       const file = {
@@ -1036,7 +1036,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
         /*
          * 盘面还原**排在最后**：上面 `scenarioId.value = …` 触发的那两个同步 watch
          * （`refreshScenarioBoundLedgers` / `seedVictoryControlFromScenario`）会按**新剧本**重播
-         * 13.3f 换轨账本与 5.0c 胜利格控制账本；顺序反了，这两本账会被那次重播冲掉。
+         * 13.3f 换轨账本与 专规 5.0c 胜利格控制账本；顺序反了，这两本账会被那次重播冲掉。
          */
         if (boardCodec !== null && boardPayload !== undefined) boardCodec.restore(prepared.board)
         // 旧档没有初设快照时也通知所有者清理，不能保留读档前那一局的进度。
@@ -1136,11 +1136,11 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     agreedChecklistRows,
     agreedCheckedCount,
     agreedRecorded,
-    // 4.0：逐条可选规则的判据（按条码查）；开局后冻结
+    // 专规 4.0：逐条可选规则的判据（按条码查）；开局后冻结
     enabledOptionalRules,
     rule4On,
     agreedLocked,
-    // B50：按条目文本读共识结论（3.4b 可选项等）
+    // B50：按条目文本读共识结论（专规 3.4b 可选项等）
     agreedOptionAdoptedOf,
     setAgreedCheck,
     setAgreedAdopt,

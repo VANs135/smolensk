@@ -558,10 +558,10 @@ export const useTutorialStore = defineStore('tutorial', () => {
          * 2026-11-20（用户）：「高亮一个放一个」——增援段逐项指路：
          *   ① 未掷表 → 「掷骰检定」
          *   ② 补给表 SP 还没落 → 框住手牌里的「到货 SP」卡，并亮出它的落点格
-         *   ③ 补员 Pax 还没落 → 框「1.6b 补员表 · Pax」卡 + 落点格
-         *   ④ 补员 Eq 还没落 → 框「1.6b 补员表 · Eq」卡 + 落点格
+         *   ③ 补员 Pax 还没落 → 框「专规 1.6b 补员表 · Pax」卡 + 落点格
+         *   ④ 补员 Eq 还没落 → 框「专规 1.6b 补员表 · Eq」卡 + 落点格
          *   ⑤ 都放完 → 「结束本段」
-         * 手牌卡是 `<button title="到货 SP（1.6b 补给表）：…">`，按 title 里的短串框住整张卡。
+         * 手牌卡是 `<button title="到货 SP（专规 1.6b 补给表）：…">`，按 title 里的短串框住整张卡。
          */
         if (workbench.lastVariableRepl === null) {
           return { buttonTexts: ['掷骰检定'], texts: ['掷骰检定'] }

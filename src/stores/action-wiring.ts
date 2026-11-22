@@ -98,7 +98,7 @@ const BULK: readonly { kind: UngatedKind; why: string; names: readonly string[] 
       'placeAirInOffMapBoxNow',
       'beginSelfPlacement',
       'beginShiftPlacement',
-      // 3.4b：摆一个确认一个 / 已预摆 SP 的点选归属，都在初设期内完成
+      // 专规 3.4b：摆一个确认一个 / 已预摆 SP 的点选归属，都在初设期内完成
       'choosePendingSpGroup',
       'pickPendingOwnershipHex',
       'beginTruckPick',
@@ -319,7 +319,7 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     kind: 'playerStep',
     why: '第一段慢动员的收束按钮（2.3 提交后进第二段）：只记本段窗口标记并推进，不落盘',
   },
-  // 3.4b：到达投放前的集群草稿；真正落账在 placeArrivalNow（有环节闸）
+  // 专规 3.4b：到达投放前的集群草稿；真正落账在 placeArrivalNow（有环节闸）
   setTransportSpGroupDraftNow: {
     kind: 'draft',
     why: '只改"这批运输点带来的 SP 归哪个集群"的待提交选择，不落盘；落账发生在 placeArrivalNow',
@@ -358,7 +358,7 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
 
   /* ── 已加闸（原文给了明确时机）—— 本表用于**核对**，不是"未处理" ── */
 
-  // 1.6a：到达卡要求"移除"时立即移出（B 增援·到货落位）
+  // 专规 1.6a：到达卡要求"移除"时立即移出（B 增援·到货落位）
   applyArrivalRemovalsNow: {
     kind: 'gated',
     key: 'rein.arrival',
@@ -442,7 +442,7 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   },
   setPanzerGroupNow: { kind: 'referee', why: '3.4 集群归属的**手工覆盖**' },
   /*
-   * 3.4b：「**All new Axis SP must immediately be assigned to a panzer group**」——
+   * 专规 3.4b：「**All new Axis SP must immediately be assigned to a panzer group**」——
    * 这是**玩家的义务**（不归属就没法用那批 SP 支付多单位编队的燃油/战斗/轰炸），
    * 不是裁判订正 ⇒ `playerStep`（对局台必须留）。
    */
@@ -515,7 +515,7 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
     kind: 'playerStep',
     why: '第二段的撤回（v7.1 §1.1）：只允许收回**本段**刚落的补员并把点数退回手牌；函数内以宿主环为准，离开本段即失效',
   },
-  // v7.1 第二段统一手牌：1.6c 返场 / 2.3c 新单位的"落一枚 / 收一枚"同属本段放置阶段的撤回
+  // v7.1 第二段统一手牌：专规 1.6c 返场 / 专规 2.3c 新单位的"落一枚 / 收一枚"同属本段放置阶段的撤回
   withdrawSpecialReplReturnNow: {
     kind: 'playerStep',
     why: '统一手牌里 1.6c 返场枚的收回：只允许收回**本段**刚返场的那一枚（退回死亡堆与手牌）；函数内以宿主环为准',
@@ -668,7 +668,7 @@ export const UNGATED_ACTIONS: Readonly<Record<string, UngatedEntry>> = {
   moveEdgeBox: {
     kind: 'noTiming',
     /*
-     * ★ 修（2026-10-30）：这里原写「1.4b 边缘盒：原文未给时机」——**与原文相反**。
+     * ★ 修（2026-10-30）：这里原写「专规 1.4b 边缘盒：原文未给时机」——**与原文相反**。
      * 专规 1.4b：「During their **Movement Phase**, Soviet ground units (only) can move between …
      *   by spending 1 MP or by using Rail Cap. Note this is the only time that off-map movement is
      *   allowed by ground units (**no retreats and no entry/exit during the Reaction or Exploitation

@@ -32,8 +32,8 @@ export function setTutorialSovietFirstTurnFullMa(on: boolean): void {
  * 教学局的增援段**免掷骰**开关（用户 2026-11-19）
  *
  * 剧本卡 `Reinforcements: None` + `Variable Repls: None` ⇒ 增援段本就无部队、无可变补员；
- * 教学中不必让玩家掷 1.6b/1.6c 的骰子：引擎按固定结果直接发放教学所需
- * （补给表 7 SP；补员表零；1.6c 特殊补员固定抽 Aufk 营 —— 正是重建演示那辆侦察营）。
+ * 教学中不必让玩家掷 专规 1.6b/ 专规 1.6c 的骰子：引擎按固定结果直接发放教学所需
+ * （补给表 7 SP；补员表零；专规 1.6c 特殊补员固定抽 Aufk 营 —— 正是重建演示那辆侦察营）。
  * 只是"教学局的取数"，判定路径（planVariableReinforcement / planSpecialReplDraw）一条不改。
  */
 export const tutorialFixedReinforcement = ref(false)

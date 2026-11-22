@@ -147,7 +147,7 @@ export function createFuelDomain(ports: FuelDomainPorts) {
    *
    * ★ 12.3a/12.3b 是仅有的两条取补途径（用户裁定：「补给只能从**己方补给站**扣」）——
    *   与 12.4 的战斗补给同一条纪律：**没有来源就付不出**，不存在"手填一个数字就算付了"的池子。
-   *   原先这里从 `fuelPool` 扣：账本不变、同一份数字可反复"支付"，3.4b 也无从校验。
+   *   原先这里从 `fuelPool` 扣：账本不变、同一份数字可反复"支付"，专规 3.4b 也无从校验。
    */
   function payFuel(
     method: FuelMethod = fuelMethodEffective.value,
@@ -348,7 +348,7 @@ export function createFuelDomain(ports: FuelDomainPorts) {
       pushLog('danger', `燃料支付失败：${plan.reason}（${plan.rule}）`, plan.rule)
       return
     }
-    // 3.4b：错误集群的 SP 不得支付**多单位编队**的燃油成本
+    // 专规 3.4b：错误集群的 SP 不得支付**多单位编队**的燃油成本
     const restricted = panzerGroupSpGate({
       dumpId: dump.id,
       purpose: 'fuel',

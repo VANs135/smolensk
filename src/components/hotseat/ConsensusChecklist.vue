@@ -10,7 +10,7 @@ import { useGameSessionStore, useHotseatStore } from '@/stores'
  *
  * ## 规则依据
  *   `scenarios.agreedOptions`（专规 4.0 引出的条目：地图外盒是否隐藏 1.4 / 秘密掷骰 4.9e /
- *   同步操作回合 2.4 / 可选规则与房规 4.1a–4.3）原文要求「需双方一致同意才生效，必须写入存档」。
+ *   同步操作回合 2.4 / 可选规则与房规 专规 4.1a–4.3）原文要求「需双方一致同意才生效，必须写入存档」。
  *
  * ## 交互（★ 用户口径：只留一个勾选框）
  *   **勾 = 用这条，不勾 = 不用；默认全部不勾**。勾选结果由会话层写成人人对局结论（进日志＝存档的一部份）；
@@ -33,7 +33,7 @@ const checkedCount = computed(() => gameSession.agreedCheckedCount)
 /** 是否已把结论写进日志（＝存档已有共识） */
 const recorded = computed(() => gameSession.agreedRecorded)
 
-/** 由共识结论推导的信息纪律（1.4 / 4.9e / 2.4 / 4.1–4.3 的**实际效果**） */
+/** 由共识结论推导的信息纪律（专规 1.4 / 4.9e / 2.4 / 4.1–4.3 的**实际效果**） */
 const policy = computed(() => hotseat.policy)
 
 /** 已记录的结论标签 */

@@ -483,7 +483,7 @@ export function deadPileDispositionOf(unit: {
  * 单位记录的**显示名**（中文名 → 英文名 → **算子上的印刷名** → 主键）
  *
  * ★ 唯一实现：`toConsoleUnit` 的 `name`、到达卡的条目匹配、专规 2.3c 的编制转化对号都走这里，
- *   不得各处再写一遍（三处各写一遍时，2.3c 的对号就与显示名漂移了）。
+ *   不得各处再写一遍（三处各写一遍时，专规 2.3c 的对号就与显示名漂移了）。
  * ★ `vassalName` 是**算子上印的名字**（如 `Ru 107 Mot Div`）：本作绝大多数记录没有 nameZh/nameEn，
  *   故必须在退回主键**之前**用它——否则界面会显示主键（`su-motorized-ru-107-mot-div`）这种
  *   对玩家无意义的字符串（实测专规 2.3c 的面板文本即如此）。
@@ -744,7 +744,7 @@ export function toConsoleUnit(input: {
     rebuildable: record.rebuildable !== false,
     // 13.5e：卡车须「因敌方行动被摧毁/夺取」才可重建（由裁判在摧毁时置真）
     destroyedByEnemy: false,
-    // 3.4：装甲集群归属（取自素材库编队目录 ⇒ 落进单位数据；玩家不用设置）
+    // 专规 3.4：装甲集群归属（取自素材库编队目录 ⇒ 落进单位数据；玩家不用设置）
     panzerGroup: record.panzerGroup ?? null,
     /*
      * 13.5 / §5-D：补员算子标记。
@@ -1210,7 +1210,7 @@ export function targetHexFacts(
       // 9.11d：多步师按**当前 RE**（印刷 − 已损）计入 4.8 的 10 RE 上限
       if (unit.instanceId !== excludeInstanceId && unit.isCombat)
         friendlyCombatRe += currentReOf(unit)
-      // 4.8 的「每格 1 港口」只对 port 成立；★ 本作无港口（TTW 1.1c：无海运，港口仅作地形属性），
+      // 4.8 的「每格 1 港口」只对 port 成立；★ 本作无港口（TTW 专规 1.1c：无海运，港口仅作地形属性），
       //   故 ports 恒为 0；**不可**把补给点/运输点等非战斗单位算成港口（SP 本可任意堆叠）。
       if (unit.noncombatKind === 'port') ports += 1
       if (unit.noncombatKind === 'air_base') airBases += 1
@@ -2517,7 +2517,7 @@ export interface EarlyRailCorridor {
   unresolved: string | null
 }
 
-/** 4.1c 的两条走廊：单位记录 id →（入口字母, 目标城市） */
+/** 专规 4.1c 的两条走廊：单位记录 id →（入口字母, 目标城市） */
 const EARLY_RAIL_ROUTES = [
   { unitId: 'ax-engineer-ge-i-2-rr-bn', entry: 'H', city: 'Mogilev' },
   { unitId: 'ax-engineer-ge-ii-2-rr-bn', entry: 'J', city: 'Orsha' },
@@ -3042,7 +3042,7 @@ export interface ActionGateWhere {
    *
    * `'end'` ＝ 该动作只在「**本段的最后一个环节**」才交给玩家（查询方用
    * `ActionGateQuery.atSegmentEnd` 声明"此刻是不是段末"）。
-   * 为什么需要这一类：3.4a 的分界线义务原文是**相位末**结算的事 —— 它既不是"随时可做"，
+   * 为什么需要这一类：专规 3.4a 的分界线义务原文是**相位末**结算的事 —— 它既不是"随时可做"，
    * 也不是"整段都能做"，用现有的 (段, 环节) 二元组表达不出来。
    */
   at?: 'end'
@@ -3131,7 +3131,7 @@ export const ACTION_GATES: readonly ActionGate[] = [
     label: '特殊补员抽取',
     rule: '专规 1.6c',
     /*
-     * 1.6c 原文「Each turn **before 19 August**, **the players** also get to roll a die on their
+     * 专规 1.6c 原文「Each turn **before 19 August**, **the players** also get to roll a die on their
      * **Special Repl Table**… The Soviets always get two and the Axis one」⇒ **双方各有这一掷**，
      * 且**只在本方 B 增援段这一环**（修前写死 `sides: ['soviet']`，轴方那一掷无处安放）。
      */
@@ -3340,7 +3340,7 @@ export const ACTION_GATES: readonly ActionGate[] = [
     ],
   },
   {
-    // B37：1.7 / 21.10 补给缓存的 Forage —— 只在补给段（与引擎 forageOnlyInSupplyPhase 同口径）
+    // B37：专规 1.7 / 21.10 补给缓存的 Forage —— 只在补给段（与引擎 forageOnlyInSupplyPhase 同口径）
     key: 'exclusive.forage',
     label: '补给缓存：Forage（就地取给）',
     rule: '专规 1.7 / 21.10',
@@ -3350,13 +3350,13 @@ export const ACTION_GATES: readonly ActionGate[] = [
     ],
   },
   {
-    // B37：3.4a 分界线义务 —— **相位末**结算（对方在错误一侧/与他集群相邻 ⇒ 须投 DG）
+    // B37：专规 3.4a 分界线义务 —— **相位末**结算（对方在错误一侧/与他集群相邻 ⇒ 须投 DG）
     key: 'exclusive.panzerObligation',
     label: '3.4a 分界线义务（相位末结算）',
     rule: '专规 3.4a',
     where: [
       /*
-       * 3.4a 原文：「place a DG … **at the end of any phase**」——**读法 A**（用户 2026-11-09 裁定）：
+       * 专规 3.4a 原文：「place a DG … **at the end of any phase**」——**读法 A**（用户 2026-11-09 裁定）：
        * "any phase" 不限定轴方移动段，**所有相位末（含苏军相位）**都要检查轴方多单位编队的分界线义务。
        * 实现只挂到既有的**段末**判据（`at: 'end'` → `atSegmentEnd`，即本相位最后一个玩家环节），
        * 不在各段另写逻辑：把每段**最后一个玩家环节的候选**都列进来、不按方限定。
@@ -3364,8 +3364,8 @@ export const ACTION_GATES: readonly ActionGate[] = [
        * E 反应段由非行动方行动（role `nonActive`），故两环单列 role。
        */
       /*
-       * ★ 用户 2026-11-09 裁定：**A 段（飞机整备）只出整备动作**，不在这里挂 3.4a。
-       * 原文 3.4a「at the end of any phase」虽字面包含整备段，但 A 段没有玩家行动环节，
+       * ★ 用户 2026-11-09 裁定：**A 段（飞机整备）只出整备动作**，不在这里挂 专规 3.4a。
+       * 原文 专规 3.4a「at the end of any phase」虽字面包含整备段，但 A 段没有玩家行动环节，
        * 编队位置与上一回合末（cleanUp / turnEnd 已结算过同一局面）相同，重复展示不新增判据；
        * 义务仍在 B/C/D/E/F/G 各段末照常可结算（下列条目一条未减）。
        */

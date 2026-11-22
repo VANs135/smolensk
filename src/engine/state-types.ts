@@ -216,7 +216,7 @@ export interface WeatherState {
   ground: GroundWeather
 }
 
-/** 胜利格控制状态（5.0c：格内有无可攻击单位；空格取最后控制者） */
+/** 胜利格控制状态（专规 5.0c：格内有无可攻击单位；空格取最后控制者） */
 export interface VictoryLocationState {
   hex: HexRef
   /** 当前控制方 */
@@ -260,7 +260,7 @@ export interface Records {
   railCapacity: Record<Side, number>
   /** 标记在记录轨上的位置：标记实例 id → 轨位；不在轨上者不出现 */
   markerTracks: Record<string, number>
-  /** 胜利格控制状态（5.0c；清单来自 scenarios.json victory） */
+  /** 胜利格控制状态（专规 5.0c；清单来自 scenarios.json victory） */
   victoryLocations: VictoryLocationState[]
 }
 

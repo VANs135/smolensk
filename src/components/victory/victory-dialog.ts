@@ -32,8 +32,8 @@ export type TerminationReason = 'turnsExhausted' | 'earlyDecision' | null
 /**
  * 终止原因 → 该拿哪一份判定结论
  *
- * - 回合用尽（5.0a）：取回合末检查；它只在最终回合给结论，没结论时退回最终评估；
- * - 提前决胜（5.0b）：取提前决胜的结论；
+ * - 回合用尽（专规 5.0a）：取回合末检查；它只在最终回合给结论，没结论时退回最终评估；
+ * - 提前决胜（专规 5.0b）：取提前决胜的结论；
  * - 未终止：null（不弹窗）。
  */
 export function terminationAssessment(input: {
@@ -86,7 +86,7 @@ function introRows(assessment: VictoryAssessment): VictoryDialogRow[] {
   return rows
 }
 
-/** 5.0a / 5.0b：所列格读数（带阈值）与两城/五城的全控状态 */
+/** 专规 5.0a / 专规 5.0b：所列格读数（带阈值）与两城/五城的全控状态 */
 function standardRows(assessment: VictoryAssessment): VictoryDialogRow[] {
   const total = assessment.summary.listedTotal
   const tier = assessment.thresholds

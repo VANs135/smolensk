@@ -58,7 +58,7 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
    * K5：最后一步为什么不能撤（null＝可撤或没有可撤的步）
    *
    * 判据与 `refuseRollback` 同一处：一步可撤销 ⇔ 它只改动了 `before` 快照能还原的运行态。
-   * 快照之外的账一旦落盘（突袭战斗 9.5/9.2、9.14 特战、1.4b 入盒……），边界就被推到该步之后；
+   * 快照之外的账一旦落盘（突袭战斗 9.5/9.2、9.14 特战、专规 1.4b 入盒……），边界就被推到该步之后；
    * 此处只把同一判据投影成按钮态，避免 UI 留一个必被拒的「撤销一步」。
    */
   const undoBlockedReason = computed<string | null>(() => {
@@ -86,7 +86,7 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
   /**
    * 用户 2026-11-13 批：不可用项不出现 ⇒「放弃本次移动」同样按同源判据隐藏。
    * 口径比 `canUndoStep` 更严一档：放弃＝整次回滚 + 收起会话，所以「无步可锚」的
-   * 1.4b 入盒（`rollbackFloor >= 0` 而 `steps.length === 0`）也算不可放弃。
+   * 专规 1.4b 入盒（`rollbackFloor >= 0` 而 `steps.length === 0`）也算不可放弃。
    */
   const canAbortMove = computed<boolean>(() => {
     const interaction = moveInteraction.value
@@ -105,7 +105,7 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
     if (interaction === null) return true
     /*
      * 用户 2026-11-18：本段经过任何掷骰结算后，撤销一步与放弃整次移动都不再可用；
-     * 已结束（=已提交）的移动同样不可再还原。无步可锚的 1.4b 仍按原口径挡放弃。
+     * 已结束（=已提交）的移动同样不可再还原。无步可锚的 专规 1.4b 仍按原口径挡放弃。
      */
     if (interaction.finished) {
       moveBlocked.value = {
@@ -123,7 +123,7 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
     }
     const reason = undoBlockedReason.value
     const locked = reason?.startsWith('单位已承诺') === true
-    // 撤销一步：有挡因即拒；放弃整次移动：只要已越过任何不可逆边界（含无步可锚的 1.4b）即拒
+    // 撤销一步：有挡因即拒；放弃整次移动：只要已越过任何不可逆边界（含无步可锚的 专规 1.4b）即拒
     const hit = all ? locked || rollbackFloor.value >= 0 : reason !== null
     if (hit) {
       moveBlocked.value = {
@@ -276,7 +276,7 @@ export function createGroundMovementDomain(ports: GroundMovementPorts) {
     /** K5：撤销一步的可用性（UI 只读这一处；判据与 `refuseRollback` 同源） */
     canUndoStep,
     undoBlockedReason,
-    /** 用户 2026-11-13 批：「放弃本次移动」的可用性（整次回滚口径，含无步可锚的 1.4b） */
+    /** 用户 2026-11-13 批：「放弃本次移动」的可用性（整次回滚口径，含无步可锚的 专规 1.4b） */
     canAbortMove,
     mayMutate: ports.mayMutate,
   }

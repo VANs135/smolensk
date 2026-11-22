@@ -46,8 +46,8 @@ import {
  *   - **2.3 先手判定**：常规回合双方各掷 2d6、胜者**选择**先手或后手 ⇒ 待答问题（`initiativeQuestion`）；
  *     首回合由剧本指定、不掷骰；
  *   - **专规 1.5 天气判定**：掷 1 骰（1 受限飞行 / 2–6 正常飞行），首回合由剧本指定 ⇒ **自动结算**；
- *   - **5.0b 提前决胜**：任一回合**开始**（19 August 起）达成即**游戏立即结束**；
- *   - **5.0a 最终评估**：**最终回合结束**后收束（回合数用尽）；
+ *   - ** 专规 5.0b 提前决胜**：任一回合**开始**（19 August 起）达成即**游戏立即结束**；
+ *   - ** 专规 5.0a 最终评估**：**最终回合结束**后收束（回合数用尽）；
  *   - **共识开关**（`scenarios.agreedOptions`：地图外盒是否隐藏 / 秘密掷骰 / 同步操作回合 / 可选规则与房规）
  *     —— 原文「**需双方一致同意才生效，必须写入存档**」⇒ 开局前逐项**强制选择**（采纳 / 不采纳），
  *     答案经 `answerQuestion` 自动入日志（即存档的一部份）。
@@ -56,7 +56,7 @@ import {
  *   - **强制动作与自动后果不进待答**（见 session-types 文件头）：天气判定、段推进、回合推进、
  *     终止判定一律由本模块**直接结算**并经 `appendLog` 入账；
  *   - 只有**真正的玩家决策**才经 `askQuestion` 产生待答：先手/后手的选择（2.3）、开局共识开关（agreed options）；
- *   - 本模块**不持盘面**：控制区等盘面事实由调用方注入（如 5.0b 的达成结论来自 `victory.ts`）。
+ *   - 本模块**不持盘面**：控制区等盘面事实由调用方注入（如 专规 5.0b 的达成结论来自 `victory.ts`）。
  *
  * ## 用途声明
  *   - 本模块是**流程驾驶**：它只推进 SOP 段与回合，不承载算子动作（移动/战斗/补给仍在各自机制里做）。
@@ -96,7 +96,7 @@ export type {
 export interface SessionFlowContext {
   /** 本剧本首回合号（`scenarios` 的 firstTurn 经回合轨对齐；首回合先手/天气由剧本指定） */
   firstTurn: number
-  /** 本剧本末回合号（5.0a 的收束点；由 victory.ts 的 `scenarioLastTurn` 给出） */
+  /** 本剧本末回合号（专规 5.0a 的收束点；由 victory.ts 的 `scenarioLastTurn` 给出） */
   lastTurn: number
   /**
    * 本剧本只有**一个玩家回合**（剧本页 `1 player turn`，Intro: Vitebsk）
@@ -109,20 +109,20 @@ export interface SessionFlowContext {
   /** 剧本指定的首回合天气（专规 1.5） */
   firstTurnWeather: FlightWeather
   /**
-   * 本回合是否**已达成 5.0b 提前决胜**（由调用方用 `victory.ts` 对当前盘面求值）
+   * 本回合是否**已达成 专规 5.0b 提前决胜**（由调用方用 `victory.ts` 对当前盘面求值）
    *
    * 本模块只接收结论——控制事实属于盘面，不在这里重算。
    */
   earlyDecisionMet: boolean
   /**
-   * ⑬ 接线：**5.0b 提前决胜**的判定结论（由调用方用 `victory.ts` 对当前盘面求值）
+   * ⑬ 接线：** 专规 5.0b 提前决胜**的判定结论（由调用方用 `victory.ts` 对当前盘面求值）
    *
    * 给出后以它为准（`outcome` 为 `axis`/`soviet` 即已达成），`earlyDecisionMet` 退为
    * 「无盘面时的开关」；不给出（`undefined`）则只看 `earlyDecisionMet`。
    */
   decisiveVictory?: VictoryAssessment | null
   /**
-   * ⑬ 接线：**5.0a 最终评估**的结论（末回合收束时写进 `terminate` 条目）
+   * ⑬ 接线：** 专规 5.0a 最终评估**的结论（末回合收束时写进 `terminate` 条目）
    *
    * 未接线（`undefined`/`null`）时收束条目只记 `reason`（与既有行为一致）。
    */
@@ -132,13 +132,13 @@ export interface SessionFlowContext {
   /**
    * 专规 4.0 本局**已启用**的逐条可选规则（选剧本前勾定；未列出的按原文默认行为）
    *
-   * 引擎只消费这里列出的条目：4.2a（先手平局的判胜方）在本模块内生效；
+   * 引擎只消费这里列出的条目：专规 4.2a（先手平局的判胜方）在本模块内生效；
    * 其余各条由调用方（操作台）按同一个判据接到各自机制上。
    */
   optionalRules?: readonly OptionalRuleCode[]
 }
 
-/** 5.0b 是否已达成（结论优先，其次才是「无盘面时的开关」） */
+/** 专规 5.0b 是否已达成（结论优先，其次才是「无盘面时的开关」） */
 function decisiveMet(context: SessionFlowContext): boolean {
   const verdict = context.decisiveVictory
   if (verdict !== undefined && verdict !== null) {
@@ -148,7 +148,7 @@ function decisiveMet(context: SessionFlowContext): boolean {
 }
 
 /**
- * 把判定结论折成可入账的字段（5.0a/5.0b）
+ * 把判定结论折成可入账的字段（专规 5.0a/ 专规 5.0b）
  *
  * 只放「复算/检索需要的结论」，不搬整个 `summary`（控制事实属于盘面，`Records.victoryLocations`
  * 已是它的正式落点）：胜方 / 层级 / 阈值 / 控制计数 / 一行详述。
@@ -241,7 +241,7 @@ export function consensusDecisions(
 export interface AgreedChecklistRow {
   index: number
   item: string
-  /** 该行的规则依据（统一为 4.0：条目横跨 1.4 / 4.9e / 2.4 / 4.1–4.3） */
+  /** 该行的规则依据（统一为 4.0：条目横跨 专规 1.4 / 4.9e / 2.4 / 4.1–4.3） */
   rule: string
 }
 
@@ -251,7 +251,7 @@ export function agreedChecklist(items: readonly string[]): readonly AgreedCheckl
 }
 
 /**
- * 4.0：把勾选列表**一次性**写成人人对局共识（逐条结论进日志 —— 即存档的一部份）
+ * 专规 4.0：把勾选列表**一次性**写成人人对局共识（逐条结论进日志 —— 即存档的一部份）
  *
  * ## 为什么这样落地
  *   共识结论的**唯一权威记录**是会话日志里的 `answer` 条目（`consensusDecisions` 从日志反推），
@@ -330,10 +330,10 @@ export function applyAgreedChecklist(input: {
 export const SESSION_SCHEMA_VERSION = 2
 
 /**
- * 旧档（`schemaVersion < 2`）里整章条目的序号与 3.4b 条目的序号
+ * 旧档（`schemaVersion < 2`）里整章条目的序号与 专规 3.4b 条目的序号
  *
  * v1 的 `scenarios.agreedOptions.items` 固定为 5 条：
- * `[0] 1.4 地图外盒 / [1] 4.9e 秘密掷骰 / [2] 2.4 同步回合 / [3] 整章 4.1a–4.3 / [4] 3.4b`。
+ * `[0] 专规 1.4 地图外盒 / [1] 4.9e 秘密掷骰 / [2] 2.4 同步回合 / [3] 整章 专规 4.1a–4.3 / [4] 专规 3.4b`。
  */
 const LEGACY_OPTIONAL_CHAPTER_INDEX = 3
 const LEGACY_PANZER_GROUP_INDEX = 4
@@ -349,19 +349,19 @@ function withQuestionId(entry: SessionLogEntry, questionId: string): SessionLogE
  *
  * ## 为什么必须迁移
  *   共识结论按**题号**入日志（`agreedOption:<序号>`），而序号是清单下标。
- *   v2 把原来的「一条整章」拆成八条、3.4b 顺延到末位 ⇒ 旧档的题号会与新清单错位
- *   （旧 `agreedOption:4` 会读到新清单的「4.1c」，且 3..10 会被当成"未作答"再次提问）。
+ *   v2 把原来的「一条整章」拆成八条、专规 3.4b 顺延到末位 ⇒ 旧档的题号会与新清单错位
+ *   （旧 `agreedOption:4` 会读到新清单的「专规 4.1c」，且 3..10 会被当成"未作答"再次提问）。
  *
  * ## 映射规则（旧 5 条 → 新 12 条）
- *   - 旧 `0/1/2`（1.4 / 4.9e / 2.4）序号不变，原样保留；
- *   - 旧 `3`「可选规则与房规（4.1a…4.3）」＝ 整章一个勾 ⇒ **复制到新清单的八条**
+ *   - 旧 `0/1/2`（专规 1.4 / 4.9e / 2.4）序号不变，原样保留；
+ *   - 旧 `3`「可选规则与房规（专规 4.1a…4.3）」＝ 整章一个勾 ⇒ **复制到新清单的八条**
  *     （`OPTIONAL_RULE_ITEMS`）。原勾为「采纳」⇒ 八条全部采纳；「不采纳」⇒ 八条全部不采纳
  *     —— 即原文允许的部分全部视为启用、不允许的视为未启用；
- *   - 旧 `4`「3.4b …」＝ 独立勾，搬到新清单的**末位**（按文本定位 `PANZER_GROUP_OPTION_ITEM`）。
+ *   - 旧 `4`「专规 3.4b …」＝ 独立勾，搬到新清单的**末位**（按文本定位 `PANZER_GROUP_OPTION_ITEM`）。
  *
  * 新清单里找不到这些条目（数据未拆分）时**不做迁移**，避免把题号改成不存在的序号。
  *
- * @param items 新清单（`scenarios.agreedOptions.items`），用于定位八条与 3.4b 的新下标
+ * @param items 新清单（`scenarios.agreedOptions.items`），用于定位八条与 专规 3.4b 的新下标
  */
 export function migrateConsensusLogV1ToV2(
   session: GameSession,
@@ -429,7 +429,7 @@ export function applyAnswerToRecords(input: {
 
 /* ────────────────────────────── 步进 ────────────────────────────── */
 
-/** 该步是否为「回合开始」的第一帧（Pre-Turn 天气判定；5.0b 在此判定） */
+/** 该步是否为「回合开始」的第一帧（Pre-Turn 天气判定；专规 5.0b 在此判定） */
 function isTurnStart(records: Records): boolean {
   return records.phase === 'preTurn' && records.preTurnSegment === PRE_TURN_SEGMENTS[0]
 }
@@ -440,7 +440,7 @@ function isConsensusStage(records: Records, context: SessionFlowContext): boolea
 }
 
 /**
- * 从日志反推**某一回合的先手方**（4.2a 平局判胜的输入）
+ * 从日志反推**某一回合的先手方**（专规 4.2a 平局判胜的输入）
  *
  * `Records.firstPlayer` 在回合推进时被清空（2.2 / `advanceTurn`）⇒ 上一回合的先手方只能从日志取：
  *   - 常规回合：`initiative` 的**作答**条目 —— 选项 `first` ⇒ 作答方先手；`second` ⇒ 对方先手；
@@ -491,7 +491,7 @@ export function makeSessionStepper(context: SessionFlowContext): SessionStepper 
       }
     }
 
-    // ② 回合开始（5.0b）：达成提前决胜 ⇒ 立即终止（不掷天气、不进入玩家段）
+    // ② 回合开始（专规 5.0b）：达成提前决胜 ⇒ 立即终止（不掷天气、不进入玩家段）
     if (isTurnStart(records) && decisiveMet(context)) {
       const side = turnLevelLogSide(records, context.scenarioFirstPlayer)
       const verdict = context.decisiveVictory ?? null
@@ -619,7 +619,7 @@ export function makeSessionStepper(context: SessionFlowContext): SessionStepper 
       }
     }
 
-    // ⑥ 回合结束（2.2 Turn End）：到本剧本末回合 ⇒ 5.0a 收束；否则推进回合
+    // ⑥ 回合结束（2.2 Turn End）：到本剧本末回合 ⇒ 专规 5.0a 收束；否则推进回合
     if (records.turn >= context.lastTurn) {
       const side = turnLevelLogSide(records, context.scenarioFirstPlayer)
       const verdict = context.finalVictory ?? null
@@ -631,7 +631,7 @@ export function makeSessionStepper(context: SessionFlowContext): SessionStepper 
             reason: 'turnsExhausted',
             turn: records.turn,
             lastTurn: context.lastTurn,
-            // ⑬ 接线：5.0a 的最终评估结论（胜方 / Draw / 控制计数）随收束条目入账
+            // ⑬ 接线：专规 5.0a 的最终评估结论（胜方 / Draw / 控制计数）随收束条目入账
             ...(verdict === null ? {} : { victory: victoryLogData(verdict) }),
           }),
         ),

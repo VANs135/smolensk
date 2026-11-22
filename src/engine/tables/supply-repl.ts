@@ -7,16 +7,16 @@ import { matchRowIndex, TableLookupError } from './lookup'
  * 补给、补员与重建取数 API（A7.3）
  *
  * 数据源 charts-supply-repl.json（经管线冻结）：
- * - supplyTableRoll：1.6b 补给表，掷 2d6 → SP（19 Aug 起取 late 档）；
- * - replTableRoll：1.6b 补员表，掷 2d6 → Ftr/Tac/Pax/Eq（调用方按日期应用 -1 DRM）；
- * - specialReplRoll：1.6c 特殊补员表，掷 1 骰 → 事件；
- * - rebuildLookup / isFreeSpecialReplEligible：13.5c 重建费用与 1.6c 免费资格。
+ * - supplyTableRoll：专规 1.6b 补给表，掷 2d6 → SP（19 Aug 起取 late 档）；
+ * - replTableRoll：专规 1.6b 补员表，掷 2d6 → Ftr/Tac/Pax/Eq（调用方按日期应用 -1 DRM）；
+ * - specialReplRoll：专规 1.6c 特殊补员表，掷 1 骰 → 事件；
+ * - rebuildLookup / isFreeSpecialReplEligible：13.5c 重建费用与 专规 1.6c 免费资格。
  */
 
-/** 补员表 19 Aug 起掷骰修正（1.6b；轴/苏一致） */
+/** 补员表 19 Aug 起掷骰修正（专规 1.6b；轴/苏一致） */
 export const REPL_ROLL_DRM_FROM_19_AUG = chartsSupplyRepl.repl.axis.drmFrom19Aug
 
-/** 补给表：掷 2d6 → SP；from19Aug 决定取早/晚档（1.6b） */
+/** 补给表：掷 2d6 → SP；from19Aug 决定取早/晚档（专规 1.6b） */
 export function supplyTableRoll(side: Side, from19Aug: boolean, roll: number): number {
   const sideData = chartsSupplyRepl.supply[side]
   const rowIndex = matchRowIndex(sideData.rows, roll, 'supply')
@@ -35,7 +35,7 @@ export interface ReplRollResult {
   rowLabel: string
 }
 
-/** 补员表：掷 2d6（已含 19 Aug 起 -1 修正）→ 各资源点数（1.6b） */
+/** 补员表：掷 2d6（已含 19 Aug 起 -1 修正）→ 各资源点数（专规 1.6b） */
 export function replTableRoll(side: Side, roll: number): ReplRollResult {
   const sideData = chartsSupplyRepl.repl[side]
   const rowIndex = matchRowIndex(sideData.rows, roll, 'repl')
@@ -57,7 +57,7 @@ export interface SpecialReplResult {
   label: string
 }
 
-/** 特殊补员表：掷 1 骰 → 事件（1.6c；19 Aug 起停止，由调用方判断） */
+/** 特殊补员表：掷 1 骰 → 事件（专规 1.6c；19 Aug 起停止，由调用方判断） */
 export function specialReplRoll(side: Side, die: number): SpecialReplResult {
   const rows = chartsSupplyRepl.specialRepl[side]
   const row = rows.find((entry) => die >= entry.dieFrom && die <= entry.dieTo)
@@ -76,7 +76,7 @@ export function rebuildLookup(side: Side, unitType: string): DeepReadonly<Rebuil
 }
 
 /**
- * 1.6c 免费特殊补员资格判定：仅 12-2-2 / 11-1-1 / 10-0-1 型步兵/民兵师
+ * 专规 1.6c 免费特殊补员资格判定：仅 12-2-2 / 11-1-1 / 10-0-1 型步兵/民兵师
  * 可从死亡堆免费重建（以 -1 军力返回）；13-3-3 等其余型 "never rebuilt this way"
  * （规则原文），只能按 13.5c 正常费用重建。
  */

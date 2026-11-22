@@ -94,7 +94,7 @@ const aircraftItems = computed(() =>
     id: air.instanceId,
     name: air.name,
     imageUrl: counterImageUrlOf(air),
-    // 1.4a：激活态**画在算子本身**（未激活压暗），不再用算子下方那行 I/A 小字
+    // 专规 1.4a：激活态**画在算子本身**（未激活压暗），不再用算子下方那行 I/A 小字
     dimmed: air.airStatus !== 'active',
     selected: refit.value
       ? workbench.refitSelectedIds.includes(air.instanceId)

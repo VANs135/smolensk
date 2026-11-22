@@ -51,7 +51,7 @@ const props = withDefaults(
     /**
      * 形态（用户口径 #6）
      *
-     * · `panel`（缺省）：完整面板 —— 阶段灯 / 会话日志 / 重置 / 5.0b 勾选 / 共识提示全在（右栏与验证页用）；
+     * · `panel`（缺省）：完整面板 —— 阶段灯 / 会话日志 / 重置 / 专规 5.0b 勾选 / 共识提示全在（右栏与验证页用）；
      * · `bar`：**地图窗口上方的一条线** —— 只留「阶段名 + 环节名 + 推进按钮 + 一行该做什么」。
      */
     variant?: 'panel' | 'bar'
@@ -202,7 +202,7 @@ function onAdvance(): void {
 }
 
 /**
- * L0 常驻条的两个事实（U1-a）：回合号与 5.0a 所列格控制数
+ * L0 常驻条的两个事实（U1-a）：回合号与 专规 5.0a 所列格控制数
  * —— 数字全部取自既有只读派生（`workbench.turn` / `victorySummary`），本组件不计数。
  */
 const turnNow = computed<number>(() => gameSession.records?.turn ?? workbench.turn)

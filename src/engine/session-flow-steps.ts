@@ -204,44 +204,44 @@ export const AGREED_OPTION_QUESTION_KIND = 'agreedOption'
  * 共识开关的规则依据
  *
  * `scenarios.json → agreedOptions` 明确「需双方一致同意才生效，必须写入存档」，
- * 其条目跨 1.4（地图外盒）/ 4.9e（秘密掷骰）/ 2.4（同步操作回合）/ 4.1–4.3（可选规则与房规）
- * ⇒ 引用**可选规则章 4.0** 作为该组开关的出处。
+ * 其条目跨 专规 1.4（地图外盒）/ 4.9e（秘密掷骰）/ 2.4（同步操作回合）/ 专规 4.1–4.3（可选规则与房规）
+ * ⇒ 引用**可选规则章 专规 4.0** 作为该组开关的出处。
  */
 export const CONSENSUS_RULE = '4.0'
 
 /**
  * 专规 4.0 的**逐条**可选规则（共识清单里的条目文本，★ 唯一常量）
  *
- * 原文 4.0「Optional Rules（Use as desired）」⇒ 整章都是可选项，且 4.1a 明写
- * 「your choice to use one or both parts」⇒ 4.1a 拆成**两半**（忽略 2.3e / 忽略 3.4），
- * 与 4.1b / 4.1c / 4.2a / 4.2b / 4.2c / 4.3 各成一条，逐条勾定。
+ * 原文 专规 4.0「Optional Rules（Use as desired）」⇒ 整章都是可选项，且 专规 4.1a 明写
+ * 「your choice to use one or both parts」⇒ 专规 4.1a 拆成**两半**（忽略 专规 2.3e / 忽略 专规 3.4），
+ * 与 专规 4.1b / 专规 4.1c / 专规 4.2a / 专规 4.2b / 专规 4.2c / 4.3 各成一条，逐条勾定。
  *
  * ★ 数据侧 `scenarios.agreedOptions.items` 必须**原样包含**这八条（顺序即题号，
  *   见 `tests/data/scenarios.test.ts`）；改文本要两处同改，否则按文本查共识会静默失效。
  */
 export const OPTIONAL_RULE_ITEMS = {
-  /** 4.1a 前半：忽略 2.3e（苏军作战限制：8 月 1 日前的战略模式与环形工事禁令） */
+  /** 专规 4.1a 前半：忽略 专规 2.3e（苏军作战限制：8 月 1 日前的战略模式与环形工事禁令） */
   ignoreOperationalLimits: '4.1a 忽略 2.3e（苏军作战限制）',
-  /** 4.1a 后半：忽略 3.4（Guderian & Hoth 分界线与补给限制） */
+  /** 专规 4.1a 后半：忽略 专规 3.4（Guderian & Hoth 分界线与补给限制） */
   ignorePanzerGroupConstraints: '4.1a 忽略 3.4（Guderian & Hoth）',
-  /** 4.1b：8 / 12 / 15 July 三回合自动套用 Supply Train */
+  /** 专规 4.1b：8 / 12 / 15 July 三回合自动套用 Supply Train */
   moreAxisSupply: '4.1b 更多轴心补给（8/12/15 July Supply Train）',
-  /** 4.1c：两个 RR Repair 的早期路线限制 */
+  /** 专规 4.1c：两个 RR Repair 的早期路线限制 */
   rrRepairRestriction: '4.1c RR Repair 早期路线限制（H→Mogilev、J→Orsha）',
-  /** 4.2a：先手判定平局由上回合先手方判胜 */
+  /** 专规 4.2a：先手判定平局由上回合先手方判胜 */
   initiativeTieBreak: '4.2a 先手平局由上回合先手方判胜',
-  /** 4.2b：4 步轴心步兵师只剩最后一步时攻 ×1/4、守 ×1/2 */
+  /** 专规 4.2b：4 步轴心步兵师只剩最后一步时攻 ×1/4、守 ×1/2 */
   effectsOfLosses: '4.2b 减损效果（4 步步兵师末步攻 ×1/4、守 ×1/2）',
-  /** 4.2c：2T 供油换 MA ×1/4，燃油标记相位末移除 */
+  /** 专规 4.2c：2T 供油换 MA ×1/4，燃油标记相位末移除 */
   minimalFueling: '4.2c 最省供油（2T 换 MA ×1/4、相位末摘标记）',
-  /** 4.3：苏军初设微调（Setup Wiggle） */
+  /** 专规 4.3：苏军初设微调（Setup Wiggle） */
   setupWiggle: '4.3 苏军初设微调（Setup Wiggle）',
 } as const
 
-/** 4.0 逐条可选规则的键 */
+/** 专规 4.0 逐条可选规则的键 */
 export type OptionalRuleCode = keyof typeof OPTIONAL_RULE_ITEMS
 
-/** 4.0 逐条可选规则的键清单（顺序即勾选顺序） */
+/** 专规 4.0 逐条可选规则的键清单（顺序即勾选顺序） */
 export const OPTIONAL_RULE_CODES: readonly OptionalRuleCode[] = [
   'ignoreOperationalLimits',
   'ignorePanzerGroupConstraints',
@@ -256,7 +256,7 @@ export const OPTIONAL_RULE_CODES: readonly OptionalRuleCode[] = [
 /**
  * 旧档（`schemaVersion < 2`）里的**整章**共识条目原文 —— **仅供旧档识别与迁移**
  *
- * v1 的共识清单把 4.1a–4.3 收成一条整章勾选；v2 起拆成 `OPTIONAL_RULE_ITEMS` 的八条。
+ * v1 的共识清单把 专规 4.1a–4.3 收成一条整章勾选；v2 起拆成 `OPTIONAL_RULE_ITEMS` 的八条。
  * 新代码不再用它判断「某条是否启用」。
  */
 export const LEGACY_OPTIONAL_RULES_ITEM =

@@ -445,7 +445,7 @@ export function createAirDomain(ports: AirDomainPorts) {
    *
    * 专规 1.4a：驻在**地图外空军盒**的飞机不在图上任何一格 ⇒ 它们不投影巡逻区（14.4c）、
    * 不作基地在场机计数（15.x 的整备/堆叠），也不作为 14.5 的拦截候选。
-   * 需要"盒内也能出击"的地方（任务编成、1.4a 的入场航程）另走 `airMissionAirUnits` +
+   * 需要"盒内也能出击"的地方（任务编成、专规 1.4a 的入场航程）另走 `airMissionAirUnits` +
    * `toAirMissionAircraftView(plane, offMap)`，**不从这里取**。
    */
   const allAirViews = computed<AirMissionAircraftView[]>(() =>
@@ -574,7 +574,7 @@ export function createAirDomain(ports: AirDomainPorts) {
    * 14.1c / 专规 1.4a：返航三选一的**可用性**
    *
    * - `departureAvailable`：出发基地仍是**本方**空军基地；自图外盒起飞者恒可回盒。
-   * - `offMapBoxAvailable`：图上起飞的飞机，`目标格 → 盒`（1.4a：连接列 20/30 + 列距）
+   * - `offMapBoxAvailable`：图上起飞的飞机，`目标格 → 盒`（专规 1.4a：连接列 20/30 + 列距）
    *   ≤ 印刷航程（14.1c 返航用正常航程，不翻倍）。
    *   空运/空投任务只有**货全部卸完**才放行（14.9f：未卸载的货仍在机上，返盒没有入库规则）。
    * - `offMapBoxBlockedReason`：上一条被拒时给界面的原因（子项本身不出现）。
@@ -1618,7 +1618,7 @@ export function createAirDomain(ports: AirDomainPorts) {
    * 两个条件的交集，全部在引擎侧统一算（`airMissionTargetCandidates`）：
    *   ① 任务对象类型合法（14.6–14.10，见引擎 `airMissionTargetTypeAllowed`）；
    *   ② 至少一架可参战机从**当前位置/出发基地**够得到（14.2d / 专规 1.4a）。
-   * 输入只取地图格（`mapLayers.hexes`）—— 图外空军盒不是格，1.4 也禁止对盒内战斗，
+   * 输入只取地图格（`mapLayers.hexes`）—— 图外空军盒不是格，专规 1.4 也禁止对盒内战斗，
    * 故它永远不会出现在候选里，UI 只渲染这个结果。
    */
   const airMissionTargetCandidates = computed<HexRef[]>(() => {
@@ -2159,7 +2159,7 @@ export function createAirDomain(ports: AirDomainPorts) {
   /**
    * B29a：**任务格改成点地图选**（14.2f-B；第 12 处"待点格"）
    *
-   * 用户 2026-11-12：候选＝**任务对象类型合法**（14.6–14.10）∩ **参战机航程可达**（14.2d / 1.4a），
+   * 用户 2026-11-12：候选＝**任务对象类型合法**（14.6–14.10）∩ **参战机航程可达**（14.2d / 专规 1.4a），
    * 由引擎统一算（`airMissionTargetCandidates`）；不再允许手输格号。图外盒不在候选内。
    */
   function beginAirTargetHexPickNow(): void {

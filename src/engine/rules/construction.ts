@@ -69,7 +69,7 @@ import { selectMovementTerrain, type HexsideCrossing, type MobilityType } from '
 /**
  * 环形工事可建最高等级（专规 1.3b：**1**）
  *
- * 通规 16.0a 的刻度是「无 → Level-1 … Level-4」，但本作 1.3b 明令「任何一方都永远不能把环形工事改进到
+ * 通规 16.0a 的刻度是「无 → Level-1 … Level-4」，但本作 专规 1.3b 明令「任何一方都永远不能把环形工事改进到
  * 1 级以上」——故**生效上限**取专规值（数据在 rules-constants.json 的 construction.hedgehogMaxLevel，
  * 其注释记录了这次覆盖）。因此本作不会出现 Level-2/3/4 的工事（它们只出现在 10.0a 的通用判据里）。
  */

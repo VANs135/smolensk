@@ -17,7 +17,7 @@ import { hexLabel, useWorkbenchStore } from '@/stores'
  * 它们是**裁判工具**，故用 `referee` 属性把它们保留在**引擎验证页**（`WorkbenchView`）上——
  * 不能一边说"右栏只读"、一边把裁判的退路删掉。
  *
- * ## 5.0c 的账本何时写
+ * ## 专规 5.0c 的账本何时写
  * 「空格由**最后一个**曾在该格的单位所属方控制」⇒ 账本在**每个玩家回合的 H 清理段收束时自动刷新**
  * （`workbench` 的清理落盘里调 `refreshVictoryControlNow`），不需要玩家操心；
  * 裁判如需订正，用验证页上的那两个工具。
@@ -40,21 +40,21 @@ const showsReferee = computed(() => useRefereeTools() && props.referee)
 
 const workbench = useWorkbenchStore()
 
-/** 5.0c：控制账本的裁判输入（仅 `referee` 模式） */
+/** 专规 5.0c：控制账本的裁判输入（仅 `referee` 模式） */
 const controlHexText = ref('')
 const controlSide = ref<'axis' | 'soviet'>('axis')
 
-/** 5.0c 控制汇总 */
+/** 专规 5.0c 控制汇总 */
 const summary = computed(() => workbench.victorySummary)
 /** 回合区间（末回合 + 数据自检注记） */
 const turnRange = computed(() => workbench.victoryTurnRange)
-/** 5.0a / 5.0b 的当前结论 */
+/** 专规 5.0a / 专规 5.0b 的当前结论 */
 const final = computed(() => workbench.finalVictory)
 const decisive = computed(() => workbench.decisiveVictory)
-/** 5.0a 的回合末结论（末回合收束时才有终局） */
+/** 专规 5.0a 的回合末结论（末回合收束时才有终局） */
 const atEnd = computed(() => workbench.turnEndVictory)
 
-/** 入门剧本 Intro: Vitebsk：剧本页只判两格维捷布斯克，不走 5.0a 五城/所列格 */
+/** 入门剧本 Intro: Vitebsk：剧本页只判两格维捷布斯克，不走 专规 5.0a 五城/所列格 */
 const isIntro = computed(() => workbench.scenarioId === 'Intro')
 /** Intro 的胜利城（两格；取自控制汇总，不写死格号） */
 const introCity = computed(
@@ -81,7 +81,7 @@ function verdictLabel(kind: 'axis' | 'soviet' | 'draw' | 'ongoing'): string {
   return '未达成（游戏继续）'
 }
 
-/** 5.0a / 5.0b 的条件文字（数字来自引擎给的阈值，不在界面重述） */
+/** 专规 5.0a / 专规 5.0b 的条件文字（数字来自引擎给的阈值，不在界面重述） */
 function thresholdText(
   tier: { sovietListedHexes: number; axisListedHexes: number } | null,
 ): string {
@@ -127,7 +127,7 @@ const scoreRows = computed(() => {
   }))
 })
 
-/** 5.0c 的控制口径（只读说明；判据在引擎 `controlOfHex`） */
+/** 专规 5.0c 的控制口径（只读说明；判据在引擎 `controlOfHex`） */
 const CONTROL_RULE_TEXT =
   '5.0c：格内有**可攻击**单位 ⇒ 该方控制；空格 ⇒ 由**最后一个**曾在该格的单位所属方控制。'
 </script>

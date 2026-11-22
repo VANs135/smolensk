@@ -852,7 +852,7 @@ export function createBarrageDomain(deps: BarragePorts) {
         )
         return false
       }
-      // 3.4b：错误集群的 SP 不得支付多单位编队的轰炸成本（受益方＝本次参炸单位）
+      // 专规 3.4b：错误集群的 SP 不得支付多单位编队的轰炸成本（受益方＝本次参炸单位）
       const restricted = panzerGroupSpGate({
         dumpId: dump.id,
         purpose: 'barrage',

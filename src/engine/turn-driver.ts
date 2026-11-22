@@ -28,7 +28,7 @@ import type {
  *       首回合由剧本指定、不掷骰；此后每回合恢复常规掷骰。
  *       源库引擎注记明写：「引擎只负责掷骰与比较，先后手的选择必须由胜者输入」——
  *       故胜者的先后手选择在 B4 会话框架里以**待答问题**表达，不作为自动后果。
- *       可选房规 4.2a：上一回合先动的一方赢得平局骰。
+ *       可选房规 专规 4.2a：上一回合先动的一方赢得平局骰。
  *   - **专规 1.5 / 天气表**（源库 charts.json → tables.weather）：
  *       掷 1 骰，1 = 受限飞行（Exploitation/Reaction 禁飞、禁低空扫射），2–6 = 正常飞行；
  *       本作地面条件恒为良好。
@@ -85,17 +85,17 @@ export const SERVICE_PHASES = ['aircraftRefit', 'cleanUp'] as const
  *   · Pre-Turn 天气判定 ………………… 专规 1.5：掷 1 骰查天气表（1 受限 / 2–6 正常），地面恒良好
  *   · H 清理 ……………………………… 2.2 注：移除 DG 与进击标记、翻面燃料标记、移除敌方交通破坏标记
  *   · Turn End 推进回合标记 ………… 2.2：回合 +1，日期随回合轨
- *   · B 段内的子步骤 ………………… 1.6b：掷补员表与补给表（双方各自）；
- *                                     1.6a：被点名 Removed 的单位立即移除；
- *                                     3.3c：19 Aug 起轴方掷可变撤离（结果为整队移除，无选择）；
- *                                     3.6：轴方随机事件掷表（空军转非激活等后果自动）
+ *   · B 段内的子步骤 ………………… 专规 1.6b：掷补员表与补给表（双方各自）；
+ *                                     专规 1.6a：被点名 Removed 的单位立即移除；
+ *                                     专规 3.3c：19 Aug 起轴方掷可变撤离（结果为整队移除，无选择）；
+ *                                     专规 3.6：轴方随机事件掷表（空军转非激活等后果自动）
  *
  * 【玩家参与】需要输入；其中「引擎必须当场拿到的二选一/数值」才升级为待答问题（B4）：
  *   · Pre-Turn 先手判定 ……………… 2.3：引擎各掷 2d6、高者为胜者，**先/后手由胜者选择**
  *                                     （源库引擎注记：选择必须由胜者输入 → 待答）
  *   · A 飞机整备 ……………………… 15.1：玩家决定是否付费与整备哪些机（引擎自动算容量与限制）
- *   · B 增援 ……………………………… 2.1/3.1：到货单位的放置位置（可拖取补给的 HQ / 边补给源格）；
- *                                     13.5：Pax / Eq 的使用与留存；3.6 Supply Train 的落格
+ *   · B 增援 ……………………………… 专规 2.1/ 专规 3.1：到货单位的放置位置（可拖取补给的 HQ / 边补给源格）；
+ *                                     13.5：Pax / Eq 的使用与留存；专规 3.6 Supply Train 的落格
  *   · C 移动 ……………………………… 12.8e 突围（是否尝试）；5.x/6.x 模式与移动；10.0 空军轰炸
  *   · D 补给 ……………………………… 12.3–12.7：追溯 / 直接拖取、吃 SP、加油的分配（路径计算自动）
  *   · E 反应 ……………………………… 非行动方的反应移动 / 轰炸
@@ -225,7 +225,7 @@ export interface ResolveInitiativeInput {
   isFirstTurn: boolean
   /** 剧本指定的首回合先手（scenarios.json firstPlayer）；isFirstTurn 时必填 */
   scenarioFirstPlayer?: Side
-  /** 可选房规 4.2a：平局时判胜的一方（通常传上一回合先手） */
+  /** 可选房规 专规 4.2a：平局时判胜的一方（通常传上一回合先手） */
   tieBreaker?: Side
 }
 
@@ -241,7 +241,7 @@ export interface InitiativeDraw {
 /**
  * 先手判定（2.3）
  *
- * 常规回合双方各掷 2 骰，点数高者为 chooser；平局重掷（房规 4.2a 时由指定方判胜）。
+ * 常规回合双方各掷 2 骰，点数高者为 chooser；平局重掷（房规 专规 4.2a 时由指定方判胜）。
  * 引擎只掷骰与比较，**先后手的选择留给胜者输入**（源库引擎注记）。
  */
 export function resolveInitiative(rng: RngState, input: ResolveInitiativeInput): InitiativeDraw {
@@ -276,7 +276,7 @@ export function resolveInitiative(rng: RngState, input: ResolveInitiativeInput):
       return { rng: state, resolution: { kind: 'choice', chooser, rolls: pair, rerolls }, rolls }
     }
 
-    // 平局：房规 4.2a 直接判胜，否则重掷
+    // 平局：房规 专规 4.2a 直接判胜，否则重掷
     if (input.tieBreaker) {
       return {
         rng: state,
@@ -481,7 +481,7 @@ export function nextPhase(records: Records, options: NextPhaseOptions = {}): Rec
  * 天气沿用上一回合值，直到天气判定子步骤重新掷出后覆盖。
  *
  * @param lastTurn 本次对局的末回合（默认回合轨末回合 19）。短剧本（2/4/6）须传入
- *                 其剧本末回合（由剧本数据派生），到该回合即抛错——此时应由终止判定收束（5.0a）。
+ *                 其剧本末回合（由剧本数据派生），到该回合即抛错——此时应由终止判定收束（专规 5.0a）。
  */
 export function advanceTurn(records: Records, lastTurn: number = TOTAL_TURNS): Records {
   if (records.phase !== 'turnEnd') {

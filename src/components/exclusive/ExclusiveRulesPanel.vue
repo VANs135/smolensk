@@ -15,37 +15,37 @@ import { actsShown, infoShown, sectionShown, type ExclusiveOnly } from './sectio
  *
  * 覆盖用户要求的八件事（**全部走引擎判定**；本组件只画表、收输入、把输入写回 store）：
  *   · 动员分批解锁（2.4）：时点日历列出解锁日；
- *   · 装甲集群分界线与 SP 平分（3.4 / 3.4a / 3.4b）：声明编队归属 ⇒ 相位末分界线义务；Supply Table 均分；
- *   · 容量提升与补给关闭时点（1.2 / 2.1a）：铁路容量与补给源开放状态；
- *   · 治安需求（3.3b）：轴控城市未驻防、未盖 ZOC ⇒ 放苏军 Trainbusting；满足或转苏军 ⇒ H 清理段移除；
- *   · 可变撤离（3.3c）与随机事件（3.6，本作为 Supply Train / 地图外任务）：日历给时点，掷骰在 B18 面板；
+ *   · 装甲集群分界线与 SP 平分（专规 3.4 / 专规 3.4a / 专规 3.4b）：声明编队归属 ⇒ 相位末分界线义务；Supply Table 均分；
+ *   · 容量提升与补给关闭时点（专规 1.2 / 专规 2.1a）：铁路容量与补给源开放状态；
+ *   · 治安需求（专规 3.3b）：轴控城市未驻防、未盖 ZOC ⇒ 放苏军 Trainbusting；满足或转苏军 ⇒ H 清理段移除；
+ *   · 可变撤离（专规 3.3c）与随机事件（专规 3.6，本作为 Supply Train / 地图外任务）：日历给时点，掷骰在 B18 面板；
  *   · 建设标记（3.5）：剧本 1/2 各 3 枚，免费建桥（13.8b）或简易机场（15.2），一次性、不可重建；
- *   · 苏军空军限制（1.2 / 轴方 3.2a）：阵营层预检（权威否决在引擎 assignAirMission 内）。
+ *   · 苏军空军限制（专规 1.2 / 轴方 专规 3.2a）：阵营层预检（权威否决在引擎 assignAirMission 内）。
  *
  * 分层纪律（CODE_SPEC）：结论一律来自 store 对引擎的调用，这里不做任何规则计算。 */
 
 const workbench = useWorkbenchStore()
 
-/** 3.4：装甲集群声明表 */
+/** 专规 3.4：装甲集群声明表 */
 const panzerUnitId = ref('')
 /**
- * 3.4：该算子属 Guderian 还是 Hoth —— **必须显式选**
+ * 专规 3.4：该算子属 Guderian 还是 Hoth —— **必须显式选**
  *
  * 修前默认 `'guderian'`：不动下拉就点「手工覆盖归属」，会把任何一个算子静默判成 Guderian，
- * 连 3.4b 的分界线义务也随之算错。故默认空串，未选集群时按钮禁用。
+ * 连 专规 3.4b 的分界线义务也随之算错。故默认空串，未选集群时按钮禁用。
  */
 const panzerGroupChoice = ref<'' | 'guderian' | 'hoth'>('')
 const panzerMultiUnit = ref(true)
 
-/** 3.4b：Supply Table 到货点数（绑定 store，均分结果由引擎给出） */
+/** 专规 3.4b：Supply Table 到货点数（绑定 store，均分结果由引擎给出） */
 const spSplit = computed(() => workbench.panzerGroupSpSplit)
 
 /** 13.8d 的一格一任务额度：按**当前选中的施工者**分别记账（原文主语是"一个工程能力单位"） */
 const hedgehogLedger = computed(() => workbench.constructionLedgerOf(workbench.hedgehogEngineerId))
 
-/** 3.3b / 3.5 / 1.7：格输入与城市输入 */
+/** 3.3b / 3.5 / 专规 1.7：格输入与城市输入 */
 
-/** 3.3b：治安检查结果 */
+/** 专规 3.3b：治安检查结果 */
 /** 16.0b/c：勾选/取消施工小队（只有这批单位作业后本阶段不能再移动） */
 function toggleHedgehogWorker(unitId: string): void {
   const current = workbench.hedgehogInputs.workerIds
@@ -72,7 +72,7 @@ onBeforeUnmount(() => {
   workbench.hedgehogPayPick = false
 })
 
-/** 2.1a：已关闭的补给源（当日） */
+/** 专规 2.1a：已关闭的补给源（当日） */
 const closedSources = computed(() =>
   workbench.activeSupplySourceStatuses.filter((item) => !item.open),
 )
@@ -80,17 +80,17 @@ const closedSources = computed(() =>
 /** 2.2：空军限制预检 */
 const airAdvisory = computed(() => workbench.redAirForceAdvisory)
 
-/** 3.4a：义务对应的编队中文名 */
+/** 专规 3.4a：义务对应的编队中文名 */
 function groupLabel(group: 'guderian' | 'hoth'): string {
   return group === 'guderian' ? 'Guderian 2nd Panzer Group' : 'Hoth 3rd Panzer Group'
 }
 
-/** 3.4a：义务名单里的单位名（找不到就退回 instanceId，不静默改名） */
+/** 专规 3.4a：义务名单里的单位名（找不到就退回 instanceId，不静默改名） */
 function obligationUnitName(unitId: string): string {
   return workbench.units.find((unit) => unit.instanceId === unitId)?.name ?? unitId
 }
 
-/** 3.4a：该单位是否已带 DG（按钮文案与禁用态用；状态取自算子本身） */
+/** 专规 3.4a：该单位是否已带 DG（按钮文案与禁用态用；状态取自算子本身） */
 function obligationUnitDg(unitId: string): boolean {
   return workbench.units.find((unit) => unit.instanceId === unitId)?.mode.dg === true
 }
@@ -116,12 +116,12 @@ const orshaLabel = computed(() => {
   return hex === null ? '（未找到）' : hexLabel(hex)
 })
 
-/** 1.2：铁路容量提升日（从专规时点日历里按类别取，不写死日期） */
+/** 专规 1.2：铁路容量提升日（从专规时点日历里按类别取，不写死日期） */
 const railCapBoostDate = computed(
   () => workbench.exclusiveTimings.find((item) => item.kind === 'railCapBoost')?.date ?? '—',
 )
 
-/** 3.4：一次性写入「是否多单位编队」与「所属集群」两个声明（未选算子/未选集群即不动作） */
+/** 专规 3.4：一次性写入「是否多单位编队」与「所属集群」两个声明（未选算子/未选集群即不动作） */
 function declarePanzerGroup(): void {
   const group = panzerGroupChoice.value
   const unitId = panzerUnitId.value
@@ -156,17 +156,17 @@ const showsInfo = computed(() => infoShown(props.only))
  * ★ 用户 2026-10-25：**裁判工具统一按 `showsReferee` 收掉**（对局台不铺、验证页保留）。
  *
  * 本面板里的裁判工具（改值 / 订正 / 覆写）：
- *   · **3.4 装甲集群归属的手工覆盖**（`setPanzerGroupNow` / `setMultiUnitFormationNow`）——
+ *   · ** 专规 3.4 装甲集群归属的手工覆盖**（`setPanzerGroupNow` / `setMultiUnitFormationNow`）——
  *     集群由**算子上的白条**决定（原文「A thin white stripe differentiates Hoth's units」，
  *     本作落在 `units-axis.json` 的 `panzerGroup`），手改是订正；
- *   · **3.5 建造标记「手改枚数」**（`setConstructionMarkersNow`）—— 枚数由剧本初设给定；
+ *   · ** 专规 3.5 建造标记「手改枚数」**（`setConstructionMarkersNow`）—— 枚数由剧本初设给定；
  *   · **3.3b 轴控城市声明的切换**（`toggleAxisCityControlNow`）—— 面板自己写着"由裁判维护"；
- *   · **1.7 补给缓存「追加 1 枚」**（`addSupplyCacheNow`）—— 缓存来自开局 2 枚与 1.6c 掷表。
+ *   · ** 专规 1.7 补给缓存「追加 1 枚」**（`addSupplyCacheNow`）—— 缓存来自开局 2 枚与 专规 1.6c 掷表。
  *
  * ★ 明确**不**收的（原文要求玩家声明）：
- *   「SP 归属（3.4b）」——原文「All new Axis SP must **immediately** be assigned to a panzer group」，
+ *   「SP 归属（专规 3.4b）」——原文「All new Axis SP must **immediately** be assigned to a panzer group」，
  *   面板上的 `setDumpPanzerGroupNow` 是**玩家的义务**，收掉就没法付费；
- *   「治安检查 / 3.3b 放置 Trainbusting」——专规明说「可在**任意相位**放置」（`noTiming`，不是裁判件）。
+ *   「治安检查 / 专规 3.3b 放置 Trainbusting」——专规明说「可在**任意相位**放置」（`noTiming`，不是裁判件）。
  */
 const showsReferee = useRefereeTools()
 
@@ -833,8 +833,8 @@ const compactPanzer = computed(() => props.only === 'panzer')
       >
         <p class="muted">
           赤色空军限制（1.2）：**2.2a** 苏军不得低空扫射（轴方 3.2a：天气允许时可用）； **2.2b**
-          允许补给空投、不得需计划的空降（14.10b）；**2.2c** IL.2（Early Sturmovik）只有一步；
-          **2.2d** 苏军不得在本方**反应 / 进击阶段**出击。下列为**当前任务选择的预检**；
+          允许补给空投、不得需计划的空降（14.10b）；**2.2c** IL.2（Early Sturmovik）只有一步； **
+          专规 2.2d** 苏军不得在本方**反应 / 进击阶段**出击。下列为**当前任务选择的预检**；
           权威否决在引擎宣布任务时给出。
         </p>
       </RuleNote>

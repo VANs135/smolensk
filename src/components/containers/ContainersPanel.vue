@@ -25,9 +25,9 @@ import {
  *
  * 三件事：
  *   ① **记录轨**：回合轨（2.2 Turn End 推进标记）、天气标记（专规 1.5）、铁路容量轨（13.3b / 专规 1.2）；
- *   ② **盒的查看与操作**：死亡堆（13.5）、拆分单位盒（1.8a / 20.0g）、1.6c 特殊补员抽取盒、
- *      剧本抽取盒（ch10/ch11 编队抽签）、地图外空军盒（1.4a，Active/Inactive 两栏 + 免费整备）、
- *      边缘盒（1.4b）、编队收纳盒（13.7 / 3.6f，收纳下属作迷雾）；
+ *   ② **盒的查看与操作**：死亡堆（13.5）、拆分单位盒（专规 1.8a / 20.0g）、专规 1.6c 特殊补员抽取盒、
+ *      剧本抽取盒（ch10/ch11 编队抽签）、地图外空军盒（专规 1.4a，Active/Inactive 两栏 + 免费整备）、
+ *      边缘盒（专规 1.4b）、编队收纳盒（13.7 / 3.6f，收纳下属作迷雾）；
  *   ③ **盒的美工接口**：`box.artwork` 有图即渲染，无图渲染纯文字盒（接口已留，数据后续可补）。
  *
  * 分层纪律：本组件不做规则计算 —— 名册与判定全部来自 `@/engine/rules/containers`（经 store 调用），
@@ -54,7 +54,7 @@ const actingSide = computed(() =>
     : (workbench.segmentGateQuery.side ?? workbench.activeSide),
 )
 
-/** 返场落点（死亡堆 → 图；13.5a / 1.6c 的落点规则见 2.1 / 3.1） */
+/** 返场落点（死亡堆 → 图；13.5a / 专规 1.6c 的落点规则见 2.1 / 3.1） */
 /** 拆分单位取用：母单位与档位 */
 const breakdownParentId = ref('')
 const breakdownAr = ref(4)
@@ -73,7 +73,7 @@ const breakdownSlots = computed<readonly { ar: number; inBox: number }[]>(() => 
   return (box as { slots?: readonly { ar: number; inBox: number }[] } | undefined)?.slots ?? []
 })
 
-/** 2.3a：混编上限只有**超编**时才上屏（用户 2026-11-10：余量充足是背景信息） */
+/** 专规 2.3a：混编上限只有**超编**时才上屏（用户 2026-11-10：余量充足是背景信息） */
 const alarmMixOver = computed(() => containers.alarmMix.filter((row) => row.over))
 const breakdownArChoices = computed<number[]>(() => {
   const parent = breakdownParent.value
@@ -198,7 +198,7 @@ function sideName(side: Side | null): string {
   return '通用'
 }
 
-/** 裁定 2：图外空军盒内的 SP（1.6b 补给只能空运进图） */
+/** 裁定 2：图外空军盒内的 SP（专规 1.6b 补给只能空运进图） */
 function airBoxSupplyText(side: Side | null): string {
   if (side === null) return '0 SP'
   const holding = workbench.airBoxSupply(side)
@@ -213,7 +213,7 @@ function rangeHexesOf(box: BoxView): number | null {
   return view.rangeHexes ?? null
 }
 
-/** 空军盒：盒内是否可激活（1.4a：免费整备） */
+/** 空军盒：盒内是否可激活（专规 1.4a：免费整备） */
 function activatableOf(box: BoxView): boolean {
   const view = box as { activation?: { activatable: boolean } }
   return view.activation?.activatable === true
@@ -498,7 +498,7 @@ function runDeadPileAction(unitId: string, key: string): void {
 /**
  * ★ 记录轨上那三个"手动改表"的按钮是**裁判工具**，不是流程动作
  *
- * 2.2 的回合推进、1.5 的天气判定、专规 1.2 的铁路容量**都由系统按日期自动结算**
+ * 2.2 的回合推进、专规 1.5 的天气判定、专规 1.2 的铁路容量**都由系统按日期自动结算**
  * （见 `docs/阶段-环节-操作矩阵.md` 的"只有这 6 个环节是自动结算"）。它们的"改值"入口
  * 只该出现在**引擎验证页** —— 对局台的盒会话（`only="actions"`）不铺，
  * 免得"展开一张盒卡"就顺带看到改回合标记 / 改天气 / 改运力这些不属于本环节的东西。

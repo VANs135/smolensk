@@ -255,7 +255,7 @@ const attackerArItems = computed(() =>
   arItems(workbench.combatAttackerArOptions, workbench.combatInputs.attackerArUnitId),
 )
 
-/** 2.3b：NKVD 边防团在场时候选已收窄到它们，故阵列里出现的就是"唯一能选的那几个" */
+/** 专规 2.3b：NKVD 边防团在场时候选已收窄到它们，故阵列里出现的就是"唯一能选的那几个" */
 const defenderArItems = computed(() =>
   arItems(workbench.combatDefenderArChoices, workbench.combatInputs.defenderArUnitId),
 )

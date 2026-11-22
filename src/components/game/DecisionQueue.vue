@@ -84,7 +84,7 @@ const cursorWindowForViewer = computed(() => {
   return cursorSide.value === mine
 })
 const waitingSideName = computed(() => (cursorSide.value === 'axis' ? '轴心国' : '苏联'))
-/** 轴心专属义务（ch10 西移 / 3.4b SP 归属 / 13.2h 卡车满载）只在轴心窗口露出 */
+/** 轴心专属义务（ch10 西移 / 专规 3.4b SP 归属 / 13.2h 卡车满载）只在轴心窗口露出 */
 const axisWindow = computed(() => cursorSide.value === null || cursorSide.value === 'axis')
 /** 已完成项也按游标切方，避免苏联窗口里混着轴心的布置清单 */
 const viewerCompleted = computed(() =>
@@ -179,7 +179,7 @@ const airPickedChip = computed<AirChip | null>(() => {
   return null
 })
 
-/** 点「入盒」：把**玩家点的那一枚**直接放入地图外空军盒（1.4a），不再经过下拉 */
+/** 点「入盒」：把**玩家点的那一枚**直接放入地图外空军盒（专规 1.4a），不再经过下拉 */
 function sendAirToBox(chip: AirChip): void {
   setup.placeAirInOffMapBoxNow(chip.item.side, chip.item.entryIndex, chip.faceIndex)
 }

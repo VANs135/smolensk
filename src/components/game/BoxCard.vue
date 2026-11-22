@@ -254,7 +254,7 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
   color: var(--color-muted);
 }
 
-/* 空军盒：盒内补给（1.6b），原先在「盒内动作」窗里，随重复窗一起收掉后挪到卡头 */
+/* 空军盒：盒内补给（专规 1.6b），原先在「盒内动作」窗里，随重复窗一起收掉后挪到卡头 */
 .boxcard__supply {
   color: var(--color-muted);
   font-size: var(--text-xs);

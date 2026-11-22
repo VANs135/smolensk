@@ -1,5 +1,5 @@
 /**
- * workbench-supply-dumps.ts —— C8 的 SP 账本（12.1a / 12.1b / 3.4b / 12.6a / 9.14b）
+ * workbench-supply-dumps.ts —— C8 的 SP 账本（12.1a / 12.1b / 专规 3.4b / 12.6a / 9.14b）
  *
  * B3-2b11（2026-11-21）：`addSpAtHex`（SP 落账**唯一入口**，手工新增与空运卸载共用）及其余
  * 9 个账本动作整块搬出 facade（265 行）。函数体只改写 2 行（见下）。
@@ -9,9 +9,9 @@
  *   `setSpDumpHoldings` 也被紧随其后的一个域收走 ⇒ 本域**必须先于 air 域装配**。端口里除
  *   `panzerGroupRulesOn`（晚声明 computed）外都能按值传；那三个晚声明只读/写穿状态用下面三种招法：
  *
- *   1. `panzerGroupRulesOn`（facade 3.4b 段的 computed）：给 getter，切片内就地
+ *   1. `panzerGroupRulesOn`（facade 专规 3.4b 段的 computed）：给 getter，切片内就地
  *      `computed(() => deps.panzerGroupRulesOn())` ⇒ 函数体继续按 `.value` 读；
- *   2. `spDumpPanzerGroups`（3.4b 段的 `ref`，本块只**整体重置**）：给回调
+ *   2. `spDumpPanzerGroups`（专规 3.4b 段的 `ref`，本块只**整体重置**）：给回调
  *      `resetSpDumpPanzerGroups()`，切片里写 `spDumpPanzerGroups.value = {}` → 改调它；
  *   3. `pendingSpGroupAssignment`（同段的 `ref`，同样只整体重置）：同上。
  *
@@ -56,9 +56,9 @@ export interface SupplyDumpsDeps {
   acceptSupply: <T>(outcome: RuleOutcome<T>, action: string) => T | null
   /** 12.2b：持仓减少 ⇒ 释放本阶段接力锁 */
   releaseSpRelayLocks: (hex: HexRef, side: Side, t: number) => void
-  /** 3.4b：该站归属的集群（未登记 ⇒ null） */
+  /** 专规 3.4b：该站归属的集群（未登记 ⇒ null） */
   panzerGroupOfDump: (dumpId: string | null) => PanzerGroup | null
-  /** 3.4b：声明/撤销归属 */
+  /** 专规 3.4b：声明/撤销归属 */
   setDumpPanzerGroupNow: (dumpId: string, group: PanzerGroup | null) => void
   /** facade 21625 的 computed ⇒ getter */
   panzerGroupRulesOn: () => boolean
@@ -83,14 +83,14 @@ export function createSupplyDumpsDomain(deps: SupplyDumpsDeps) {
     resetPendingSpGroupAssignment,
   } = deps
 
-  /** 3.4b 是否生效（facade 21625 的 computed，晚声明 ⇒ 就地包一层保住 `.value`） */
+  /** 专规 3.4b 是否生效（facade 21625 的 computed，晚声明 ⇒ 就地包一层保住 `.value`） */
   const panzerGroupRulesOn = computed(() => deps.panzerGroupRulesOn())
 
   /**
    * 12.1b：在指定格落一条 SP 账本条目（**唯一入口**——手工添加与空运卸载共用同一套簿记）
    *
    * 「任何含有 SP 的位置……都被称为补给站」⇒ 无论 SP 是玩家手工摆的，还是空运卸下来的，
-   * 落盘形态与 3.4b 的装甲集群待办都要一致（否则同一批 SP 因来源不同而待遇不同）。
+   * 落盘形态与 专规 3.4b 的装甲集群待办都要一致（否则同一批 SP 因来源不同而待遇不同）。
    */
   function addSpAtHex(input: {
     hex: HexRef
@@ -99,7 +99,7 @@ export function createSupplyDumpsDomain(deps: SupplyDumpsDeps) {
     t: number
     /** 日志里说明来源（如「14.9f 空运卸载」）；缺省按手工新增 */
     source?: string
-    /** 3.4b：到货/初设时由玩家选定的装甲集群；带上即立刻归属，不再进待办 */
+    /** 专规 3.4b：到货/初设时由玩家选定的装甲集群；带上即立刻归属，不再进待办 */
     panzerGroup?: PanzerGroup
   }): string | null {
     const sp = Math.max(0, Math.trunc(input.sp))
@@ -111,11 +111,11 @@ export function createSupplyDumpsDomain(deps: SupplyDumpsDeps) {
      * 修前这里无条件 `createId('sp')` 再 push：同一格再落一次就多出**第二条**账本，
      * 而付款路径全是 `find(dump => dump.side===.. && sameHex(..))` 只取**第一条** ⇒
      * 第二条的 SP 变成"看得见、付不出"的死额（装载/整备/轰炸会误报"SP 不足"），
-     * 且 3.4b 的待归属与装甲集群归属挂在 id 上，同格两 id 会各记一半。
+     * 且 专规 3.4b 的待归属与装甲集群归属挂在 id 上，同格两 id 会各记一半。
      * 并入既有条（**沿用原 id**）可同时消掉这两件事：既有引用（`spDumpPanzerGroups` /
      * `pendingSpGroupAssignment` / `barrageSupplyDumpId`）不会悬空。
      *
-     * 3.4b（用户裁定）：**同格两集群的 SP 是两本账**——Guderian 与 Hoth 不能并成一条，
+     * 专规 3.4b（用户裁定）：**同格两集群的 SP 是两本账**——Guderian 与 Hoth 不能并成一条，
      * 否则两集群的余额会被合成一个数，之后既选不了、也扣不对。故并入条件还要加"集群相同"；
      * 未声明归属的站与"未带集群"的落账仍并入（12.1b：同格同方只有一条账本）。
      *
@@ -129,7 +129,7 @@ export function createSupplyDumpsDomain(deps: SupplyDumpsDeps) {
       (dump) => dump.side === input.side && sameHex(dump.hex, input.hex),
     )
     /*
-     * 3.4b（用户 2026-11-11）：**同格只有一个集群时也不自动继承**，仍须本次指定。
+     * 专规 3.4b（用户 2026-11-11）：**同格只有一个集群时也不自动继承**，仍须本次指定。
      * ⇒ 轴方带 SP 的落账只并入「集群相同」的那一本；没带选择时下面直接拒绝，不再从同格既有站继承归属。
      */
     const existing =
@@ -139,7 +139,7 @@ export function createSupplyDumpsDomain(deps: SupplyDumpsDeps) {
           : sameHexDumps.find((dump) => panzerGroupOfDump(dump.id) === inputGroup)
         : sameHexDumps[0]
     /*
-     * 3.4b（用户 2026-11-11 口径）：**解除日之前，任何德军 SP 到场都必须由玩家指定集群**——
+     * 专规 3.4b（用户 2026-11-11 口径）：**解除日之前，任何德军 SP 到场都必须由玩家指定集群**——
      * 不提供「不属任何集群」这个选项，也不从同格既有站自动继承。初设 / 增援 / 补给列车 /
      * 可变增援 / 手工新增共用本入口，判据只写在这一处：`sp > 0` 的轴方落账没带
      * `panzerGroup` ⇒ 整笔拒绝，不落盘、不建待办。解除日（19 August）之后闸门自动失效。
@@ -165,7 +165,7 @@ export function createSupplyDumpsDomain(deps: SupplyDumpsDeps) {
         '12.1a',
       )
       /*
-       * 3.4b：并进去之后这笔新到 SP 的归属，跟随该站已有的归属；
+       * 专规 3.4b：并进去之后这笔新到 SP 的归属，跟随该站已有的归属；
        * 未归属的站只可能走「本次带了玩家选择」这一支（无选择已在上面被闸拒绝）⇒ 立即补写。
        */
       if (axisGated && panzerGroupOfDump(existing.id) === null && input.panzerGroup !== undefined) {
@@ -176,9 +176,9 @@ export function createSupplyDumpsDomain(deps: SupplyDumpsDeps) {
     const id = createId('sp')
     spDumps.value = [...spDumps.value, { id, hex: input.hex, side: input.side, sp, t }]
     /*
-     * 3.4b：新落的轴方 SP 必须立即归属某一装甲集群。
+     * 专规 3.4b：新落的轴方 SP 必须立即归属某一装甲集群。
      * 无选择已被上面的闸拒绝 ⇒ 走到这里时 `panzerGroup` 必有值，直接写归属、不进待办。
-     * （B50：3.4b 未启用时 `axisGated` 为假，不写归属。）
+     * （B50：专规 3.4b 未启用时 `axisGated` 为假，不写归属。）
      */
     if (axisGated && input.panzerGroup !== undefined) {
       setDumpPanzerGroupNow(id, input.panzerGroup)
@@ -216,7 +216,7 @@ export function createSupplyDumpsDomain(deps: SupplyDumpsDeps) {
     )
   }
 
-  /** 3.4b：手工新增 SP 时选定装甲集群（无「不属任何集群」选项） */
+  /** 专规 3.4b：手工新增 SP 时选定装甲集群（无「不属任何集群」选项） */
   function setSpDumpDraftGroup(group: PanzerGroup | null): void {
     spDumpDraft.value = { ...spDumpDraft.value, panzerGroup: group }
   }

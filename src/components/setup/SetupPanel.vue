@@ -35,7 +35,7 @@ import {
  *
  * ## 分层纪律
  *   一切判据来自 `engine/rules/setup.ts`（通规 IV Set Up Notes / 专规 Setup Notes / 12.1d /
- *   3.4b / 13.2h / 14.1a），组件**不做任何规则计算**；落盘由 `stores/setup.ts` 做。
+ *   专规 3.4b / 13.2h / 14.1a），组件**不做任何规则计算**；落盘由 `stores/setup.ts` 做。
  */
 
 const setup = useSetupStore()
@@ -169,7 +169,7 @@ function airPolicy(side: Side) {
  * 该型减损机的**明示**：枚数、激活态与减损面印值
  *
  * 原文口径（剧本页）：`"*" = one unit begins reduced` —— 不是「Damaged」这一档；
- * 减损机翻到背面，空战 / 轰炸按背面印值（14.1b/14.4f），可用 Ftr/Tac Repls 补回（1.6b）。
+ * 减损机翻到背面，空战 / 轰炸按背面印值（14.1b/14.4f），可用 Ftr/Tac Repls 补回（专规 1.6b）。
  */
 function reducedLabelOf(row: AirSetupPlacement): string {
   const indexes = row.reduced.flatMap((flag, index) => (flag ? [index] : []))
@@ -237,7 +237,7 @@ function boxItems(category: SetupPlacingCategory): readonly SetupPlacing[] {
 function visibleBoxItems(category: SetupPlacingCategory): readonly SetupPlacing[] {
   return boxItems(category).filter(
     (item) =>
-      // 飞机即使基地未落位，也仍可「入盒」（1.4a 不需要图上基地）⇒ 不整项藏掉
+      // 飞机即使基地未落位，也仍可「入盒」（专规 1.4a 不需要图上基地）⇒ 不整项藏掉
       (item.blockedReason === null || (item.kind === 'air' && item.offMapAllowed === true)) &&
       // 卡车满载/空载在下方「编内卡车」单入口处理，不重复出卡
       item.kind !== 'truck' &&
@@ -368,7 +368,7 @@ function pickBoxItem(id: string): void {
 }
 
 /**
- * 飞机卡上方的「入盒」：把**玩家点中的那一枚**放进地图外空军盒（1.4a）
+ * 飞机卡上方的「入盒」：把**玩家点中的那一枚**放进地图外空军盒（专规 1.4a）
  *
  * 与点地图落位是两条互斥出口：入盒不需要地图候选，也不需要先落空军基地。
  */

@@ -501,7 +501,7 @@ export function weatherDerivation(input: {
 /**
  * 2.3 先手判定复核
  *
- * 常规回合双方各掷 2d6，点数高者为胜者并**选择**先手或后手（平局重掷；房规 4.2a 时判胜）。
+ * 常规回合双方各掷 2d6，点数高者为胜者并**选择**先手或后手（平局重掷；房规 专规 4.2a 时判胜）。
  * 首回合由剧本指定。
  */
 export function initiativeDerivation(input: {

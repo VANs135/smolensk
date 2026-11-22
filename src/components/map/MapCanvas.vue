@@ -136,13 +136,13 @@ const props = withDefaults(
      */
     hint?: MapHint | null
     /**
-     * 5.0c：**胜利格控制标记**（用户 2026-09-16 要求；由上层把"哪一格归谁"算好传进来）
+     * 专规 5.0c：**胜利格控制标记**（用户 2026-09-16 要求；由上层把"哪一格归谁"算好传进来）
      *
      * 与 `overlay` 分开：它是**地图事实**（不随会话开关变化），而且**不是算子**
      * ——不进命中测试、不可选中、不参与堆叠展开。
      */
     controlMarkers?: readonly ControlMarker[] | null
-    /** B37 / 3.4：装甲集群分界线（地图事实层；由上层算好传入） */
+    /** B37 / 专规 3.4：装甲集群分界线（地图事实层；由上层算好传入） */
     boundary?: BoundaryLine | null
     /**
      * 专规 3.5：**建造标记**（桥 / 简易机场）——玩家放在格里的那几枚（地图事实层）
@@ -1021,7 +1021,7 @@ onMounted(() => {
   }
   syncSize()
 
-  // 模式/状态贴图、工事等级贴图与 5.0c 控制标记：量小且与盘面无关，启动时一次预载
+  // 模式/状态贴图、工事等级贴图与 专规 5.0c 控制标记：量小且与盘面无关，启动时一次预载
   void counterImages
     .preload([...allMarkerTextureUrls(), ...allControlMarkerImageUrls()])
     .then(scheduleRender)

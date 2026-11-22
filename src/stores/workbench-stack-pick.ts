@@ -12,7 +12,7 @@
  *   · 走 `ports.X`（1 项）：`initialSetupInProgress`(19100) —— 声明在建域点之后，facade 用 `get` 访问器传，
  *     切片里写 `ports.initialSetupInProgress.value`。
  *
- * 建域点仍在原区间位置（7590）：`movePick`/`pausedTransportIds` 声明在 1.4k，若把域提前到
+ * 建域点仍在原区间位置（7590）：`movePick`/`pausedTransportIds` 声明在 专规 1.4k，若把域提前到
  * `groundMovement`(1130) 之前，就要给 `moveBlocked`(1151) / `movePick`(1403) / `pausedTransportIds`(1452) /
  * `beginMoveFor`(7575) / `initialSetupInProgress`(19100) 开 **5 个 getter**；
  * 原地建域只要 **1 个 getter**，代价是 4 个名字被**更早的域**当端口吃

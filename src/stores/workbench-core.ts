@@ -50,8 +50,8 @@ export interface SettlementRecordInput {
   pending?: PendingEffect[]
   data?: Record<string, unknown>
   /**
-   * 3.3c 的撤离结算是「同批骰子里的中间结算」，这批骰属于紧随其后的 `variableRepl`；
-   * 传 false 可避免它把 `pendingRolls` 吃掉、导致同一批骰被记两次（修 1.6b 重放错位）。
+   * 专规 3.3c 的撤离结算是「同批骰子里的中间结算」，这批骰属于紧随其后的 `variableRepl`；
+   * 传 false 可避免它把 `pendingRolls` 吃掉、导致同一批骰被记两次（修 专规 1.6b 重放错位）。
    * 默认 true，其他调用点行为不变。
    */
   consumePendingRolls?: boolean

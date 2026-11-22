@@ -122,7 +122,7 @@ const tecFootnotes = computed(() => tecLegend().map((item) => ({ key: item.key, 
 const tecTable = computed(() => tecTableView())
 
 /**
- * 到货表的**脚注**（1.6a 强制移除 / 2.1a 关闭 / 其它提示）
+ * 到货表的**脚注**（专规 1.6a 强制移除 / 专规 2.1a 关闭 / 其它提示）
  *
  * 这些正是 `arrivalNotesOf` 给的（原来挂在托盘的"到货"屏上；B35 把该屏归到增援窗后，
  * 脚注跟着投影表一起落到本页 —— 它仍是"照录数据"的只读说明，不是规则判断）。

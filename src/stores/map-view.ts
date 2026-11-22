@@ -714,7 +714,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       if (dump.side !== hotseat.viewerSide) continue
       if (dump.sp <= 0 && dump.t <= 0) continue
       /*
-       * 3.4b（用户裁定）：生效期内轴方同格 SP 按集群**拆成两个算子**显示（Guderian / Hoth）；
+       * 专规 3.4b（用户裁定）：生效期内轴方同格 SP 按集群**拆成两个算子**显示（Guderian / Hoth）；
        * 苏联 SP 与失效期仍是一枚（同一格就是一个补给站）。拆分只为显示，付款走同一格总量。
        */
       const split = workbench.panzerGroupRulesOn && dump.side === 'axis'
@@ -739,15 +739,15 @@ export const useMapViewStore = defineStore('mapView', () => {
     return [...merged.entries()].map(([key, m]) => {
       const hasSp = m.sp > 0
       /*
-       * 3.4b（用户 2026-11-09）：同格出现未归属 SP ⇒ **单独第三枚**，标 `?`（未归属）。
+       * 专规 3.4b（用户 2026-11-09）：同格出现未归属 SP ⇒ **单独第三枚**，标 `?`（未归属）。
        * 令牌只有 ~36px，`未归属` 三个汉字会溢出到邻格，故图上用 `?`，面板/日志仍写全称。
        */
       const tag = m.group === 'guderian' ? 'G ' : m.group === 'hoth' ? 'H ' : ''
-      // 只有"3.4b 拆分出来的未归属组"才打 `?`（未拆分时 key 不带 `:-`，不要误标）
+      // 只有" 专规 3.4b 拆分出来的未归属组"才打 `?`（未拆分时 key 不带 `:-`，不要误标）
       const unassigned = m.group === null && key.endsWith(':-')
       const prefix = unassigned ? '? ' : tag
       /*
-       * 3.4b：拆分出的三枚都带全称（用户 2026-11-09）——
+       * 专规 3.4b：拆分出的三枚都带全称（用户 2026-11-09）——
        * `G` / `H` 角标同样只有两个字，悬停与点开信息写清是哪一本账；普通 SP 不带。
        */
       const tip = unassigned
@@ -1095,7 +1095,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (workbench.phase === 'supply')
       return '补给（D）：本段没有移动 —— 用面板生成补给计划（12.1）、恢复部队储备（12.10e）、做补给检定（12.6）'
     /*
-     * B 增援（13.6 / 1.6b / 13.5）：本段没有移动与射击，动作全在右侧「增援」窗或盘面右键；
+     * B 增援（13.6 / 专规 1.6b / 13.5）：本段没有移动与射击，动作全在右侧「增援」窗或盘面右键；
      * 通用那句「点己方算子＝可移动范围」在这里同样是错的（与 A 整备、C 轰炸、D 补给、H 清理同类）。
      */
     if (workbench.phase === 'reinforcement') {
@@ -1111,7 +1111,7 @@ export const useMapViewStore = defineStore('mapView', () => {
   })
 
   /**
-   * 5.0c：**胜利格控制标记**（用户 2026-09-16 要求）
+   * 专规 5.0c：**胜利格控制标记**（用户 2026-09-16 要求）
    *
    * 「把这两个标记做到剧本用到的胜利格上……根据控制方显示对应面，且该标记**钉死**在胜利点
    * **无法选中**，标记更换为根据胜利点归属权变更**自动**进行」。
@@ -1123,7 +1123,7 @@ export const useMapViewStore = defineStore('mapView', () => {
    *   堆叠展开），也不随会话开关而变——故放在 `MapRenderOptions.controlMarkers` 而非 `overlay` 里。
    */
   /**
-   * B37 / 3.4：**装甲集群分界线**（用户口径 #14；地图事实层，与 `controlMarkers` 同族）
+   * B37 / 专规 3.4：**装甲集群分界线**（用户口径 #14；地图事实层，与 `controlMarkers` 同族）
    *
    * 只做转交：线两端与"站错一侧的格"都由 `workbench.boundaryView` 算好（引擎给的结论）。
    */
@@ -1696,7 +1696,7 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 炮击第 2 步的地图点选：点高亮的补给站即付款来源（12.3a / 10.1b）
    *
    * 判据取自 `barrageSupplyDumpChoices`（同一来源 + 每个参炸单位拖得到）；
-   * 同格多站（3.4b 拆分）时优先点中的那枚令牌对应的站，找不到就取第一座。
+   * 同格多站（专规 3.4b 拆分）时优先点中的那枚令牌对应的站，找不到就取第一座。
    */
   function pickOpsBarrageSupplyAt(hex: HexRef): boolean {
     const flow = opsFlow.value
@@ -2489,7 +2489,7 @@ export const useMapViewStore = defineStore('mapView', () => {
   /**
    * 空军单位（地图基地窗 / 图外盒贴图）的**共同菜单源**（用户 2026-11-18）
    *
-   * 口径：按当前环节与 10.0d / 14.x 的允许范围给任务；A 整备段按 15.1 / 1.4a 给整备。
+   * 口径：按当前环节与 10.0d / 14.x 的允许范围给任务；A 整备段按 15.1 / 专规 1.4a 给整备。
    * 判据全部取既有闸门与 store 投影（`airMissionKindChoices` / `actionAllowedNow` /
    * `canTransferAirToBaseNow` / `refitStartBases`），不另写一份规则。
    */
@@ -2538,7 +2538,7 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 图外盒贴图右键菜单（用户 2026-11-18）
    *
    * 只回答"这枚此刻在盒里能做什么"：死亡堆 ⇒ 重建 / 返场落点 / 永久移除（13.5 系列）；
-   * 空军盒 ⇒ 与地图空军菜单同源（只有任务 / 转场；整备唯一入口在盒内按钮）；边缘盒 ⇒ 出盒（1.4b）。
+   * 空军盒 ⇒ 与地图空军菜单同源（只有任务 / 转场；整备唯一入口在盒内按钮）；边缘盒 ⇒ 出盒（专规 1.4b）。
    */
   function boxUnitActions(cardId: string, unitId: string): BoxUnitAction[] {
     const card = containers.cardViews.find((item) => item.id === cardId)
@@ -2685,7 +2685,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     if (airHere !== undefined) return airUnitActions(airHere)
     const unit = ownCounterAt(hex, id)
     /*
-     * 3.4b 把同格轴方 SP 拆成两个算子（id 形如 `sp:c,r:guderian`）⇒ 这里按格前缀找那一条账本；
+     * 专规 3.4b 把同格轴方 SP 拆成两个算子（id 形如 `sp:c,r:guderian`）⇒ 这里按格前缀找那一条账本；
      * 未拆分时 id 仍是 `sp:c,r`（前缀匹配对两者都成立）。
      */
     const spPrefix = `sp:${hex.col},${hex.row}`
@@ -3101,7 +3101,7 @@ export const useMapViewStore = defineStore('mapView', () => {
   /**
    * 14.11 + 专规 1.4a：确认把已勾选的飞机移入图外空军盒
    *
-   * 进入盒不需要在图上点格（盒没有格）。航程（1.4a：20/30 + 列差，14.11 转移可用双倍）
+   * 进入盒不需要在图上点格（盒没有格）。航程（专规 1.4a：20/30 + 列差，14.11 转移可用双倍）
    * 已由 store 预检，这里对每架飞机走**转场**入口（同一份盒成员账本 + 14.11 激活态）。
    */
   function confirmTransferToBoxNow(): boolean {
@@ -3117,7 +3117,7 @@ export const useMapViewStore = defineStore('mapView', () => {
   /**
    * 14.11：**空军单位**开始一次转场（地图基地窗 / 图外盒贴图共用）
    *
-   * 盒内出发按 1.4a 盒代价（`fromBox=true`），图上基地出发按格距（`fromBox=false`）；
+   * 盒内出发按 专规 1.4a 盒代价（`fromBox=true`），图上基地出发按格距（`fromBox=false`）；
    * 目的地仍由玩家在地图上点选（候选＝航程内己方基地，引擎算）。
    */
   function startAirTransferNow(instanceId: string): boolean {
@@ -3163,7 +3163,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       }
       // 用户 2026-11-11：这一枚没有可执行项时也要出**它自己的**菜单（标题 + 空态），不留白窗
       const actions = counterActionsAt(hex, id)
-      // 3.4b：拆分出来的「未归属」补给站有全称（`? N SP` 是角标，写不下）⇒ 菜单标题写全称
+      // 专规 3.4b：拆分出来的「未归属」补给站有全称（`? N SP` 是角标，写不下）⇒ 菜单标题写全称
       const tip = stackTokensAt(hex).find((token) => token.id === id)?.tip ?? null
       const label = ownCounterAt(hex, id)?.name ?? enemyCounterAt(hex, id)?.name ?? tip ?? '补给站'
       return [{ id, label, actions }]
@@ -4013,7 +4013,7 @@ export const useMapViewStore = defineStore('mapView', () => {
      * B17a-3：**专规动作**的会话——由顶栏的「专规动作」按钮**显式**打开。
      *
      * 为什么不按环节触发：专规动作**跨多个段**（3.3b 治安检查在任意 H 清理段、16.0b 工事在移动段、
-     * 1.7 补给缓存在 D 段、3.4 装甲集群是随时可声明的归属）——没有哪一个环节名能代表它们，
+     * 专规 1.7 补给缓存在 D 段、专规 3.4 装甲集群是随时可声明的归属）——没有哪一个环节名能代表它们，
      * 硬挑一个环节只会让玩家在别处找不到入口。故用显式的工具按钮（与用户"能达成目的"的口径一致）。
      */
     /*
@@ -4022,9 +4022,9 @@ export const useMapViewStore = defineStore('mapView', () => {
      * 判据走闸门（`workbench.exclusiveActionsInStep`）：本环节一条可做的都没有 ⇒ 不弹。
      * 收起后在本环节内不再重现（与增援/盒内动作同一套 `collapsedSessionKey` 纪律）。
      *
-     * ★ 用户 2026-11-16：闸门只表达"时机到了"，**不能当开关** —— 3.4a 的段末闸门
+     * ★ 用户 2026-11-16：闸门只表达"时机到了"，**不能当开关** —— 专规 3.4a 的段末闸门
      *   在每个玩家相位末都放行，拿它开窗等于每次都弹一个"当前没有分界线义务"的空面板。
-     *   现在只认 `exclusiveAutoOpen`（真有选择：3.4a 命中多枚 / 3.4b 未归属 SP）；
+     *   现在只认 `exclusiveAutoOpen`（真有选择：专规 3.4a 命中多枚 / 专规 3.4b 未归属 SP）；
      *   单候选义务由引擎段末自动判定 + 一行日志。
      */
     if (
@@ -4061,7 +4061,7 @@ export const useMapViewStore = defineStore('mapView', () => {
   /**
    * 专规会话本环节可做的分节（顺序即会话步骤顺序；判据全来自 `exclusiveSectionPins`）
    *
-   * 修前：一个 `exclusive:actions` 把五节与 1.2 只读全塞进一个框（用户截图）。
+   * 修前：一个 `exclusive:actions` 把五节与 专规 1.2 只读全塞进一个框（用户截图）。
    * 现在按节拆开，`sessionStep` 一次只暴露一节，面板用 `only=<节>` 只画那一节。
    */
   const exclusiveSessionSections = computed<readonly ExclusiveSessionSection[]>(() => {
@@ -4174,12 +4174,12 @@ export const useMapViewStore = defineStore('mapView', () => {
               supplyTrainPending: workbench.activeSide === 'axis' && workbench.supplyTrainPending,
               panzerGroupRulesOn: workbench.panzerGroupRulesOn,
               variableExitPending: workbench.variableExitForActiveSide,
-              // 1.6b：补员表窗口每个 B 段都要出现；掷表与落位都办完才允许「本步完成」
+              // 专规 1.6b：补员表窗口每个 B 段都要出现；掷表与落位都办完才允许「本步完成」
               replTablePending: true,
               specialReplPending:
                 isSpecialReplAvailable(workbench.date) &&
                 !workbench.hasSpecialReplDraw(workbench.activeSide, workbench.turn),
-              // 1.6b：补给表窗口同理；SP 未落账时 acknowledge 会拒绝
+              // 专规 1.6b：补给表窗口同理；SP 未落账时 acknowledge 会拒绝
               supplyPlacePending: true,
               // v7.1 第二段：骰子产出汇进统一手牌，手牌非空才出「待放上手牌」窗
               handPending: workbench.rollHandPending,
@@ -4411,7 +4411,7 @@ export const useMapViewStore = defineStore('mapView', () => {
        *   **缺油那一路点 × 毫无反应**（用户报告 #4「堆叠会话框点 × 有时候关不掉」）。
        */
       if (workbench.moveInteraction !== null) {
-        // 用户 2026-11-13 批：放弃＝整次回滚；越过不可逆边界（突袭/9.14/1.4b）后改走
+        // 用户 2026-11-13 批：放弃＝整次回滚；越过不可逆边界（突袭/9.14/ 专规 1.4b）后改走
         // `finishMove()` 收束退出——不回滚、也不把会话留在「点了没反应」的状态。
         if (workbench.canAbortMove) workbench.abortMoveNow()
         else workbench.finishMove()
@@ -4714,7 +4714,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       closePopup()
       return
     }
-    // 3.4b：点地图上高亮的「已预摆、尚未指定」德军 SP ⇒ 选中它，等待 Guderian / Hoth 二选一
+    // 专规 3.4b：点地图上高亮的「已预摆、尚未指定」德军 SP ⇒ 选中它，等待 Guderian / Hoth 二选一
     if (setup.pickPendingOwnershipHex(hex)) {
       closePopup()
       return
@@ -5063,7 +5063,7 @@ export const useMapViewStore = defineStore('mapView', () => {
   return {
     // 画什么
     overlay,
-    // 5.0c：胜利格控制标记（地图事实层；不是交互覆盖层，也不可选中）
+    // 专规 5.0c：胜利格控制标记（地图事实层；不是交互覆盖层，也不可选中）
     boundary,
     controlMarkers,
     // 13.3d：铁路端头标记（`mk-38`；地图事实层，与 controlMarkers 并列）

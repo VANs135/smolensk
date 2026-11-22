@@ -77,9 +77,9 @@ export interface SessionStepFacts {
     acked: readonly string[]
     arrivalPending: boolean
     randomEventPending: boolean
-    /** 3.6：随机事件掷出 Supply Train 且尚未落 2 SP */
+    /** 专规 3.6：随机事件掷出 Supply Train 且尚未落 2 SP */
     supplyTrainPending: boolean
-    /** 3.4b 在本局是否生效（未启用 ⇒ 落点说明不提归属） */
+    /** 专规 3.4b 在本局是否生效（未启用 ⇒ 落点说明不提归属） */
     panzerGroupRulesOn: boolean
     variableExitPending: boolean
     replTablePending: boolean
@@ -484,7 +484,7 @@ function moveItems(facts: SessionStepFacts['move']): SessionStepItem[] {
  * 环节次序本身仍由 `sop-segments` 的 B 段给出；本表只回答"这一件事归哪一环"。
  */
 const REINFORCE_STEP_OF: Readonly<Record<string, string>> = {
-  // 13.6 / 1.6a 到达落位；2.4 慢动员在收到锁定师之后当场解锁
+  // 13.6 / 专规 1.6a 到达落位；专规 2.4 慢动员在收到锁定师之后当场解锁
   'reinforce:arrival': 'reinforcement.arrival',
   'reinforce:slow': 'reinforcement.arrival',
   // 专规 1.6c / 2.3c
@@ -499,7 +499,7 @@ const REINFORCE_STEP_OF: Readonly<Record<string, string>> = {
  * 第二段段内次序（v7.1 §3，按原文先后）
  *
  * 第二段已合并为「方面军预备队（必须先领）」＋「掷骰与落位」两件；
- * 1.6c / 3.6 / 3.3c / 1.6b 的骰与产出都在后者同一窗内（先掷、再放）。
+ * 专规 1.6c / 3.6 / 专规 3.3c / 专规 1.6b 的骰与产出都在后者同一窗内（先掷、再放）。
  */
 const REINFORCE_ROLL_ORDER: readonly string[] = ['reinforce:frontalReserves', 'reinforce:roll']
 
@@ -519,7 +519,7 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
     items.push(item(id, title, why, decision))
   }
 
-  // 13.6 / 1.6a：当日到达落位与强制移除
+  // 13.6 / 专规 1.6a：当日到达落位与强制移除
   if (facts.arrivalPending) {
     push(
       'reinforce:arrival',
@@ -528,7 +528,7 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
       '为每一条到达条目选定落点并投放；Remove 条目立即执行。',
     )
   }
-  // 2.4：苏方慢动员解锁（到达确认放完后、第二段之前；原文只给日期，不设硬闸）
+  // 专规 2.4：苏方慢动员解锁（到达确认放完后、第二段之前；原文只给日期，不设硬闸）
   if (facts.slowMobilizationVisible && !acked.has('reinforce:slow')) {
     push(
       'reinforce:slow',
@@ -537,7 +537,7 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
       '勾选当日应解锁的师并提交解锁；配额大于剩余时剩余全部解锁。',
     )
   }
-  // 2.3c：苏方三批方面军预备队，必须当即领取（领取物并入同一张手牌）
+  // 专规 2.3c：苏方三批方面军预备队，必须当即领取（领取物并入同一张手牌）
   if (facts.frontalReservesPending) {
     push(
       'reinforce:frontalReserves',
@@ -565,7 +565,7 @@ function reinforceItems(facts: NonNullable<SessionStepFacts['reinforce']>): Sess
    *
    * 掷骰全部是自动的（引擎用种子化 RNG 一次掷完），点一次「掷骰检定」即出结果；
    * 结果（SP / 补员点数与来源）与可落位的单位同屏，落完由「结束本段」收束。
-   * 修前 3.6 随机事件 / 1.6b 掷表 / 统一手牌 / 结束本段各占一个窗，玩家点了检定
+   * 修前 专规 3.6 随机事件 / 专规 1.6b 掷表 / 统一手牌 / 结束本段各占一个窗，玩家点了检定
    * 还要再点两次「本步完成 / 跳过」才看得到可放的算子。
    */
   if (facts.stepId === 'reinforcement.replRoll' && !acked.has('reinforce:roll')) {

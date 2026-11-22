@@ -114,7 +114,7 @@ export function createAirTransferDomain(deps: AirTransferDeps) {
       }),
   )
 
-  /** 14.11：基地→基地距离**可增加一倍**（`*2`）；图外盒按 1.4a 也是空军基地，盒→基地按 1.4a 盒代价 */
+  /** 14.11：基地→基地距离**可增加一倍**（`*2`）；图外盒按 专规 1.4a 也是空军基地，盒→基地按 专规 1.4a 盒代价 */
   const transferBaseCandidates = computed<HexRef[]>(() => {
     if (transferMode.value !== 'base' || transferSelectedIds.value.length === 0) return []
     const selected = transferSelectedIds.value
@@ -157,7 +157,7 @@ export function createAirTransferDomain(deps: AirTransferDeps) {
   /**
    * 14.11：**这一架**此刻是否有够得到的别的本方基地（右键菜单据此决定出不出「转移基地」）
    *
-   * 与 `transferBaseCandidates` 同源判据（图上按格距、盒内按 1.4a 盒代价，均可双倍航程），
+   * 与 `transferBaseCandidates` 同源判据（图上按格距、盒内按 专规 1.4a 盒代价，均可双倍航程），
    * 区别只是不要求先建转场中间态 —— 菜单要"能做的才出现"，不能在打开菜单时改状态。
    */
   function canTransferAirToBaseNow(instanceId: string): boolean {
@@ -226,7 +226,7 @@ export function createAirTransferDomain(deps: AirTransferDeps) {
     if (selected.length === 0) return false
     if (!transferBaseCandidates.value.some((hex) => sameHex(hex, dest))) return false
     for (const air of selected) {
-      // 14.11：盒→基地按 1.4a 盒代价（20/30 + 列距）；图上基地→基地按格距
+      // 14.11：盒→基地按 专规 1.4a 盒代价（20/30 + 列距）；图上基地→基地按格距
       const distance = transferFromBox.value
         ? airDistanceToOffMapBox(air.side, dest)
         : deps.airDistanceFromRealBase(air, dest)

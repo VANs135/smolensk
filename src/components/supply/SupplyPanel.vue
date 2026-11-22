@@ -422,7 +422,7 @@ const railFromDumpItems = computed<readonly CounterPickerItem[]>(() =>
 const payDumpItems = computed<readonly CounterPickerItem[]>(() =>
   workbench.supplyPayDumpCandidates.map((dump) => {
     const item = dumpItem(dump)
-    // 3.4b：同格两集群的两个算子要能分清（Guderian / Hoth / 未归属）
+    // 专规 3.4b：同格两集群的两个算子要能分清（Guderian / Hoth / 未归属）
     const group = workbench.panzerGroupOfDump(dump.id)
     const tag = group === 'guderian' ? 'Guderian' : group === 'hoth' ? 'Hoth' : '未归属'
     return {

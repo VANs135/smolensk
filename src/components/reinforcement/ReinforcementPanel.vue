@@ -17,9 +17,9 @@ import { useContainersStore, useWorkbenchStore, type UnitRecordView } from '@/st
  * 增援面板（W6 B18：OCS 13.5 / 13.6 / 13.9 / 20.0 + Smolensk 专规 1.6 / 2.1 / 2.3b / 2.4）
  *
  * 覆盖用户要求的五件事，全部走引擎判定（本组件**不做任何规则计算**）：
- *   · **到达表执行**（13.6 / 13.6b / 1.6a）：按当日到达卡列出投放需求与落点，逐条投放/强制执行移除；
- *   · **可变增援**（13.6b 补给表与补员表 / 1.6c 特殊补员 / 3.3c 可变撤离 / 3.6 随机事件）；
- *   · **特殊补员**（1.6c）：免费重建内容由引擎给出；
+ *   · **到达表执行**（13.6 / 13.6b / 专规 1.6a）：按当日到达卡列出投放需求与落点，逐条投放/强制执行移除；
+ *   · **可变增援**（13.6b 补给表与补员表 / 专规 1.6c 特殊补员 / 专规 3.3c 可变撤离 / 专规 3.6 随机事件）；
+ *   · **特殊补员**（专规 1.6c）：免费重建内容由引擎给出；
  *   · **重建与整编合并**（13.5 / 13.9）：补员账本、死亡堆重建、合并（拆分/吸收 20.0 走右键单位面板）；
  *   · **NKVD 强制担任行动值单位**（专规 2.3b）：战斗面板侧的裁定在本面板只做提示。
  *
@@ -49,7 +49,7 @@ const slowMobilizationCandidates = computed(() =>
 )
 
 /**
- * 2.4：手动「锁定哪一枚」阵列 —— **侧 + 编制双重过滤**
+ * 专规 2.4：手动「锁定哪一枚」阵列 —— **侧 + 编制双重过滤**
  *
  * 慢动员是苏联专规，只对到达卡标注 `30/28/24 Army HQ (see 2.4)` 的苏军集团军生效。
  * 修前这里直接用 `rebuildUnitItems`（＝图上**本方全部**算子），于是轴方增援阶段会列出德军
@@ -161,17 +161,17 @@ watchEffect(() => {
 const breakdownParentId = ref('')
 
 /**
- * 1.6c + 1.6b 的**一次掷骰检定**（用户 2026-11-13：判定只留一个入口）
+ * 专规 1.6c + 专规 1.6b 的**一次掷骰检定**（用户 2026-11-13：判定只留一个入口）
  *
- * 次序照原文：先 1.6b 可变增援/补给表，再用同一颗骰结算 1.6c 特殊补员。
- * 按钮在「还没掷过」或「1.6c 仍可掷」时出现；两者都不成立即不再出现。
+ * 次序照原文：先 专规 1.6b 可变增援/补给表，再用同一颗骰结算 专规 1.6c 特殊补员。
+ * 按钮在「还没掷过」或「专规 1.6c 仍可掷」时出现；两者都不成立即不再出现。
  */
 const replCheckVisible = computed(
   () => !workbench.variableReplRolled || specialReplRefusal.value === null,
 )
 
 function runReplCheck(): void {
-  // 单入口单笔事务：1.6b 掷表 + 1.6c 用**同一颗**骰结算登记（见 containers.runReinforcementCheckNow）。
+  // 单入口单笔事务：专规 1.6b 掷表 + 专规 1.6c 用**同一颗**骰结算登记（见 containers.runReinforcementCheckNow）。
   containers.runReinforcementCheckNow()
 }
 
@@ -182,7 +182,7 @@ function runReplCheck(): void {
  * v7.1 第二段起，落点统一在「待放上手牌」里点格给出（不再有块内表单）。
  */
 
-/** 3.4b：到货 SP 的逐格归属（空值 ⇒ 未选） */
+/** 专规 3.4b：到货 SP 的逐格归属（空值 ⇒ 未选） */
 function onArrivalSpGroupChange(text: string, value: string): void {
   workbench.setArrivalSpGroup(text, value === 'guderian' || value === 'hoth' ? value : null)
 }
@@ -420,7 +420,7 @@ const arrivalPlacedCards = computed<ArrivalHandCard[]>(() => {
 
 /**
  * 不可投放的卡是**待办状态**，不是可点动作（不可用项不出现）：
- * 1.6a 强制移除未执行、或本条目没有合法入场格 ⇒ 渲染成 div，不摆一个 disabled 按钮。
+ * 专规 1.6a 强制移除未执行、或本条目没有合法入场格 ⇒ 渲染成 div，不摆一个 disabled 按钮。
  */
 function arrivalCardBlocked(card: ArrivalHandCard): boolean {
   return card.noCandidates || workbench.arrivalRemovalsPending
@@ -647,7 +647,7 @@ function confirmAbandonArrival(): void {
  * 第二段·结束本段（v7.1 §1.5 / §3.3）
  *
  * 与第一段同一口径：段内唯一出口；手牌非空先问一次是否放弃上场。
- * 拒绝原因来自 store（未掷骰 / 1.6c 未掷 / 撤离待选 / 方面军预备队未领）。
+ * 拒绝原因来自 store（未掷骰 / 专规 1.6c 未掷 / 撤离待选 / 方面军预备队未领）。
  */
 const rollFinishConfirm = ref(false)
 const rollFinishError = ref('')
@@ -660,7 +660,7 @@ function rollErrorText(): string {
   if (reason === 'variableExitSelectionPending') return '3.3c 撤离还有待选算子，先选定再结束'
   if (reason === 'frontalReservesPending') return '2.3c 方面军预备队必须当即领取'
   if (reason === 'rollHandNotEmpty') return '手牌还没放完：要结束本段请先确认放弃上场'
-  // 到货 SP 落账计划被拒（免费铁运 2.1/3.1）：点名缺的是城市格、图边源格（补给站）还是归属
+  // 到货 SP 落账计划被拒（免费铁运 专规 2.1/ 专规 3.1）：点名缺的是城市格、图边源格（补给站）还是归属
   if (code === 'notDetrainableCityHex')
     return '这一格不是可卸货城市格（13.3c）：请改点有铁路连通的城市格，或把余额落到图边补给源格'
   if (code === 'notEdgeSupplySource' || code === 'edgeHexRequiredForRemainder')
@@ -722,7 +722,7 @@ watch(
 /**
  * 统一手牌的**可见条目**
  *
- * 3.4b 尚未选德军归属的补给列车卡：不渲染、不置灰、不放原因文字；
+ * 专规 3.4b 尚未选德军归属的补给列车卡：不渲染、不置灰、不放原因文字；
  * 玩家在同一窗内选完 Guderian / Hoth 后自动出现。
  * 其余挡因（没有可落位格等）同样**不进阵列**，原因在阵列下方单独成行。计数仍用 `rollHandEntries`。
  */
@@ -740,16 +740,16 @@ const placeableRollHandEntries = computed(() =>
  *
  * 骰面、公式、表名与条款号只在结算日志与 `?` 里（用户口径：过程不上屏）。
  * 每一项都必须能对到落点：SP 进图外盒 / Pax·Eq 进手牌 / Ftr·Tac 供重建飞机 /
- * 1.6c 的免费重建进手牌、无合格单位时明确写「作废」。
+ * 专规 1.6c 的免费重建进手牌、无合格单位时明确写「作废」。
  */
 const rollResultLines = computed<readonly string[]>(() => {
   const plan = workbench.lastVariableRepl
   if (plan === null) return []
   const lines: string[] = []
-  // ① 1.6b 补给表：按 2.1 / 3.1 走免费铁运落点（城市格每格 1 点，余额落图边补给源格）
+  // ① 专规 1.6b 补给表：按 专规 2.1 / 专规 3.1 走免费铁运落点（城市格每格 1 点，余额落图边补给源格）
   if (plan.sp > 0)
     lines.push(`补给表 +${String(plan.sp)} SP → 手牌（城市格每格 1 点，余额落图边补给源格）`)
-  // ② 1.6b 补员表：Pax / Eq 进手牌；Ftr / Tac 供飞机重建（13.5f）
+  // ② 专规 1.6b 补员表：Pax / Eq 进手牌；Ftr / Tac 供飞机重建（13.5f）
   const ground = [
     plan.repl.pax > 0 ? `Pax ${String(plan.repl.pax)}` : '',
     plan.repl.eq > 0 ? `Eq ${String(plan.repl.eq)}` : '',
@@ -762,8 +762,8 @@ const rollResultLines = computed<readonly string[]>(() => {
   if (air.length > 0) lines.push(`补员表 ${air.join(' / ')} → 重建飞机时用（13.5f，不可保存）`)
   if (ground.length === 0 && air.length === 0) lines.push('补员表：无')
   /*
-   * ③ 1.6c：只在**它自己掷过**之后列（独立一掷，不复用 1.6b 的骰面）。
-   *    逐项对账全部读 `specialReplLast`（1.6c 自己的骰面）与
+   * ③ 专规 1.6c：只在**它自己掷过**之后列（独立一掷，不复用 专规 1.6b 的骰面）。
+   *    逐项对账全部读 `specialReplLast`（专规 1.6c 自己的骰面）与
    *    `specialReplPending` / `specialReplPlacedThisSegment`，不另存判断。
    */
   if (workbench.hasSpecialReplDraw(workbench.activeSide, workbench.turn)) {
@@ -771,7 +771,7 @@ const rollResultLines = computed<readonly string[]>(() => {
     const axis = workbench.activeSide === 'axis'
     const kind = axis ? 'Aufk / Krd 营' : 'Alarm 单位'
     if (draw === null) {
-      // 教学局（用户 2026-11-19）：1.6c 不掷，补员由 1.6b 补员表发放
+      // 教学局（用户 2026-11-19）：专规 1.6c 不掷，补员由 专规 1.6b 补员表发放
       lines.push(
         tutorialFixedReinforcement.value
           ? '1.6c 特殊补员：教学不掷（补员已由补员表发放）'
@@ -807,7 +807,7 @@ const rollResultLines = computed<readonly string[]>(() => {
       )
     }
   }
-  // ④ 3.6 随机事件：补给列车进手牌；机型结果自动转非激活
+  // ④ 专规 3.6 随机事件：补给列车进手牌；机型结果自动转非激活
   const event = plan.randomEvent
   if (event !== null) {
     lines.push(
@@ -816,7 +816,7 @@ const rollResultLines = computed<readonly string[]>(() => {
         : `随机事件：${event.aircraftType ?? '飞机'}全部转非激活`,
     )
   }
-  // ⑤ 3.3c 可变撤离（轴方 19 Aug 起）
+  // ⑤ 专规 3.3c 可变撤离（轴方 19 Aug 起）
   if (plan.variableExit !== null && plan.variableExit !== undefined) {
     lines.push(`3.3c 可变撤离：${plan.variableExit.description}`)
   }
@@ -828,8 +828,8 @@ const rollResultLines = computed<readonly string[]>(() => {
  *
  * 与 B15d/B15e 的分段同一套做法，理由也一样（方案 §10①「右侧栏只读」）：
  * 本面板里混着两类东西——
- *   · **只读信息**（`info`）：当日到达卡的条目与落点、1.6a 移除清单、2.1a 关闭、
- *     可变增援/补员/重建/合并的**结果摘要**、补员账本当前值、死亡堆计数、3.3c 窗口、
+ *   · **只读信息**（`info`）：当日到达卡的条目与落点、专规 1.6a 移除清单、专规 2.1a 关闭、
+ *     可变增援/补员/重建/合并的**结果摘要**、补员账本当前值、死亡堆计数、专规 3.3c 窗口、
  *     方面军预备队当日批次、NKVD 提示、错误条 —— 这些是"随时想看一眼"的东西，留右栏；
  *   · **动作**（`actions`）：执行强制移除、逐条投放（含手改落点）、掷可变增援、清零不可保存、
  *     重建、创建/吸收拆分单位、合并、缓慢动员锁定、领取方面军预备队、补员账本订正 ——
@@ -1484,7 +1484,7 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
       >
         <p class="muted">
           方面军预备队（专规 2.3c）：**三个时点**（22 Jul / 1 Aug / 1 Sep ——
-          **印刷日程**）各到一批，每批 **2 SP、一次编制转化**（旧单位按 1.6a
+          **印刷日程**）各到一批，每批 **2 SP、一次编制转化**（旧单位按 专规 1.6a
           **移出游戏**、新单位随当日到达摆放）与**两次免费重建** （一支 IL.2 或一支 HQ
           或火炮单位，玩家择一，从**死亡堆**里挑）；**必须当即领取、不能保存**。
           归位口径＝「轨上第一个 ≥ 卡面日期的回合」（轨上第 8 回合＝1941-08-01、第 17
