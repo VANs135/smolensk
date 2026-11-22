@@ -3,12 +3,15 @@
  *
  * 引擎与操作台都按 `{ rule, reason }` 传拒绝：`reason` 是内部代码（可带 `:参数`）。
  * 界面只显示这里译出的人话，**不原样打印内部代码**；操作台自己写的中文原因原样返回。
- * 三张表放在同一处，避免各界面对同一代码各抄一份、改一处漏两处。
+ * 三张表放在同一处，避免各界面对同一代码各抄一份、改一处漏两处；
+ * 其余规则模块的码在 `rule-code-text.ts`（同样一句一码、句尾标真实条款号）。
  *
  * 条文索引（本文件与本仓库实现的对应）
  *   通规：10.0 / 9.1 / 13.4a / 14.7d
  *   专规：文案层专规引用：2.3b、1.4b——只影响提示语，不改判定
  */
+
+import { RULE_CODE_TEXT } from './rule-code-text'
 
 export interface RuleErrorLike {
   rule: string
@@ -213,7 +216,11 @@ export function ruleErrorTextOf(error: RuleErrorLike): string {
   if (/[\u4e00-\u9fa5]/.test(error.reason)) return error.reason
   const [head] = error.reason.split(':')
   const code = head ?? ''
-  const text = BARRAGE_ERROR_TEXT[code] ?? COMBAT_ERROR_TEXT[code] ?? AIR_ERROR_TEXT[code]
+  const text =
+    BARRAGE_ERROR_TEXT[code] ??
+    COMBAT_ERROR_TEXT[code] ??
+    AIR_ERROR_TEXT[code] ??
+    RULE_CODE_TEXT[code]
   if (text !== undefined) return text
   if (code.startsWith('wrongPhaseFor')) return '当前阶段不允许这项操作'
   if (code.startsWith('notAt')) return '当前不在这一步'
