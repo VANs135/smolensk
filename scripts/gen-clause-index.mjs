@@ -86,6 +86,10 @@ try {
 for (const add of MANUAL_ADD) (add.side === 'spec' ? spec : gen).add(add.num)
 /* 通规清洗版里仍有少量标题被行内正文顶掉（如 `10.1b补给消耗`），逐条注明出处补齐 */
 const GEN_MANUAL_ADD = [
+  {
+    num: '9.1a',
+    why: '通规 9.1a 战斗的限制（_ocs_v43_clean.txt L1082，标题前有“9.1战斗的限制 ”）',
+  },
   { num: '10.1b', why: '通规 10.1b 补给消耗（_ocs_v43_clean.txt L1643，标题前有正文）' },
   {
     num: '21.10',
