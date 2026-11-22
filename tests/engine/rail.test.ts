@@ -736,6 +736,16 @@ describe('13.3f：Railhead 端头从换轨账本 + 铁路连通推导（只显�
       converted: converted.map(hexOf),
       railNeighbors: railOf(edges),
     }).map(keyOf)
+  const headsWithRoots = (
+    converted: readonly string[],
+    edges: readonly string[],
+    roots: readonly string[],
+  ): string[] =>
+    deriveRailheads({
+      converted: converted.map(hexOf),
+      railNeighbors: railOf(edges),
+      roots: roots.map(hexOf),
+    }).map(keyOf)
 
   // 一条直线：1.1 — 1.2 — 1.3 — 1.4 …
   const LINE = ['1.1-1.2', '1.2-1.3', '1.3-1.4']
@@ -762,6 +772,17 @@ describe('13.3f：Railhead 端头从换轨账本 + 铁路连通推导（只显�
     expect(heads(['1.1', '1.2', '1.3'], edges)).toEqual(['1.3'])
     // 重复传入同一格也只出一个
     expect(heads(['1.1', '1.2', '1.2'], LINE)).toEqual(['1.2'])
+  })
+
+  it('★ 用户 2026-11-22 口径：端头只认「初设己方轨距的铁路补给源格」为根', () => {
+    // 主线 1.1—1.2—1.3 从根 1.1 起步；另有与主线**不连通**的已换轨段 5.1—5.2（尽头 5.3 未换轨）
+    const edges = [...LINE, '5.1-5.2', '5.2-5.3']
+    // 不给 roots：退回旧近似，两段各出端头
+    expect(heads(['1.1', '1.2', '1.3', '5.1', '5.2'], edges)).toEqual(['1.3', '5.2'])
+    // 给 roots：与补给源断开的 5.x 段不出端头
+    expect(headsWithRoots(['1.1', '1.2', '1.3', '5.1', '5.2'], edges, ['1.1'])).toEqual(['1.3'])
+    // 根全部落在账本外（该格还没换成己方轨距）⇒ 无可用根，退回旧近似而不是清空端头
+    expect(headsWithRoots(['1.1', '1.2', '1.3'], LINE, ['9.9'])).toEqual(['1.3'])
   })
 })
 

@@ -4407,6 +4407,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *
    * 原文（13.3f）只要求「用 Railhead 标记跟踪各路轨距的当前范围」，没有给端头取法，也没有让玩家摆：
    * 所以这里**由换轨账本 `convertedRailHexes` + 铁路连通推导**（`deriveRailheads`）：
+   *   - 用户 2026-11-22：换轨范围**自本方的铁路补给源格起步**（剧本 `supplySources` 的图边铁路源）
+   *     ⇒ 以轴方图边铁路源为根、取「账本可达的叶」为端头（快照语义＝标准轨，根取 axis 侧）；
    *   - 轴方换进 ⇒ 端头前移；苏方换回 ⇒ 端头后撤；
    *   - 一条线到尽头一个端头，分叉的每个尽头各一个，同一条线不重复；
    *   - 标记是**地图事实**：不参与命中测试、不改任何判定，也不提供手动摆放入口。
@@ -4416,7 +4418,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const converted = convertedRailHexes.value
       .map((key) => parseHexPath(key)[0])
       .filter((hex): hex is HexRef => hex !== undefined)
-    return deriveRailheads({ converted, railNeighbors: railNeighborHexes }).map((hex) => ({
+    return deriveRailheads({
+      converted,
+      railNeighbors: railNeighborHexes,
+      // 2026-11-22：根＝本方轨距的图边铁路补给源（见 `entryRailSeedsBySide`），端头只朝范围末端长
+      roots: entryRailSeedsBySide.value.axis,
+    }).map((hex) => ({
       id: `mk-38:${hex.col}.${hex.row}`,
       recordId: RAILHEAD_MARKER.recordId,
       // 统一取 markers.json 的 side（neutral），不在初设或渲染层另写一份
@@ -4558,6 +4565,43 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `轨距转换被拒：${reason}`, '13.3f')
       return false
     }
+    return applyRailConversion(unit, hex, 'manual')
+  }
+
+  /**
+   * 用户 2026-11-22：**走过即换轨**（自动入口）
+   *
+   * 13.3f-B 的「只需移动进入一个铁路格」在实体版里是玩家口头宣布、裁判代记；本作既然已有账本，
+   * 就不该再多一步「点按钮确认」。地面移动提交后由 `commitStep` 对每个 movedId 调用本函数。
+   * 13.3f/13.3g 的实质约束（阶段 / EZOC / 战斗模式 / 上限 / 不得接力）全部保留，
+   * 只去掉手动入口与 `requireAction` 闸门。
+   */
+  function autoRailConvertOnEntry(instanceId: string, hex: HexRef): void {
+    if (phase.value !== 'movement') return
+    if (!isRailRepairUnit(instanceId)) return
+    const unit = units.value.find((item) => item.instanceId === instanceId)
+    if (unit === undefined || !sameHex(unit.hex, hex)) return
+    applyRailConversion(unit, hex, 'auto')
+  }
+
+  /**
+   * 13.3f／13.3g：换轨的**共用核心**（手动入口 `convertRailGaugeNow` 与自动入口 `autoRailConvertOnEntry`）
+   *
+   * 前置（是否「刚进入该格」、是否走手动闸门）由两个入口各自负责；本函数只做实质判据与入账。
+   */
+  function applyRailConversion(unit: ConsoleUnit, hex: HexRef, source: 'manual' | 'auto'): boolean {
+    const key = hexLabel(hex)
+    /*
+     * 13.3g-A 的「同一格重复转换不重复记账」：本阶段已转换过该格**且该格现在就是本方轨距** ⇒ 幂等返回。
+     * 用户 2026-11-22 口径是「走过即换轨」，玩家若在自动换轨后又点一次（或测试里手动补一次），
+     * 不应重复入账、也不应把 13.3g-D 的 min(4, MA) 额度再吃一格。
+     * 只看「本阶段该格转换过」不够：轴方刚把某格换成标轨，苏方同阶段换回来是**另一件事**
+     * （双方各换各的，13.3f），必须仍能出账；故再叠加「该格现在已是本方可用轨距」。
+     */
+    if (convertedHexesThisPhase.value.includes(key) && isRailGaugeUsableAt(hex, unit.side)) {
+      pushLog('info', `${key} 本阶段已转换过轨距，不重复记账（13.3g-A）`, '13.3g')
+      return true
+    }
     const early = earlyRouteRestrictionOf(unit, hex)
     const outcome = validateGaugeConversion({
       phase: phase.value as GamePhase,
@@ -4565,13 +4609,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       targetHex: hex,
       ...(early === null ? {} : { earlyRouteRestriction: early }),
       convertedThisPhase:
-        gaugeConversionsThisPhase.value.find((item) => item.instanceId === instanceId)?.count ?? 0,
+        gaugeConversionsThisPhase.value.find((item) => item.instanceId === unit.instanceId)
+          ?.count ?? 0,
       mode: unit.mode.mode,
       orientation: unit.mode.orientation,
       dg: unit.mode.dg,
       currentMa: unit.raw.ma,
       usedNewlyConvertedRailThisPhase:
-        (railMovedNewTrackThisPhase.value.find((item) => item.instanceId === instanceId)?.hexes
+        (railMovedNewTrackThisPhase.value.find((item) => item.instanceId === unit.instanceId)?.hexes
           .length ?? 0) > 0,
       facts: {
         hasRail: (ref) => isRailHexAt(ref),
@@ -4584,7 +4629,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       pushLog('warning', `轨距转换被拒：${outcome.reason}（${outcome.rule}）`, outcome.rule)
       return false
     }
-    const key = hexLabel(hex)
     /*
      * 13.3f：双方**各换各的**轨距——账本的语义是「该格已换成标准轨（轴方可用）」，
      * 故轴方转换＝入账，苏方转换＝**出账**（恢复印刷宽轨）。
@@ -4598,17 +4642,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       convertedRailHexes.value = convertedRailHexes.value.filter((item) => item !== key)
     }
     const previous =
-      gaugeConversionsThisPhase.value.find((item) => item.instanceId === instanceId)?.count ?? 0
+      gaugeConversionsThisPhase.value.find((item) => item.instanceId === unit.instanceId)?.count ??
+      0
     gaugeConversionsThisPhase.value = [
-      ...gaugeConversionsThisPhase.value.filter((item) => item.instanceId !== instanceId),
-      { instanceId, count: previous + 1 },
+      ...gaugeConversionsThisPhase.value.filter((item) => item.instanceId !== unit.instanceId),
+      { instanceId: unit.instanceId, count: previous + 1 },
     ]
     // 13.3g-A：本阶段"刚换过轨的格"按格记账（同一格重复转换不重复记账）
     if (!convertedHexesThisPhase.value.includes(key))
       convertedHexesThisPhase.value = [...convertedHexesThisPhase.value, key]
     pushLog(
       'info',
-      `${outcome.data.detail}；` +
+      `${source === 'auto' ? '走过即换轨（自动）：' : ''}${outcome.data.detail}；` +
         (wasOwnGauge
           ? '该格原就是本方轨距，转换后仍供本方使用'
           : isRailGaugeUsableAt(hex, unit.side)
@@ -7702,6 +7747,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       revertTransportHandlingSinceBaseline,
       sealTransportHandlingForCommit,
       clearMoveInteraction,
+      // 2026-11-22：走过即换轨——地面移动提交后由 workbench-move 自动调用
+      autoRailConvertOnEntry,
     },
     board: {
       activeSide,

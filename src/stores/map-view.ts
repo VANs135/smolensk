@@ -2801,15 +2801,11 @@ export const useMapViewStore = defineStore('mapView', () => {
         group: '运输',
       })
     }
-    if (unit !== undefined && workbench.railRepairUnits.some((item) => item.instanceId === id)) {
-      add('move.railConversion', {
-        label: '转换轨距',
-        rule: '13.3f',
-        panel: 'supply',
-        only: 'railGauge',
-        group: '工程',
-      })
-    }
+    /*
+     * 2026-11-22（用户口径）：13.3f-B「铁路修理单位只需**移动进入**一个铁路格，就可转换该格轨距」
+     * ⇒ 换轨已改为**走过即自动**（`workbench-move#commitStep` → `autoRailConvertOnEntry`），
+     *   不再提供右键「转换轨距」入口；裁判补录仍走 `workbench.convertRailGaugeNow`。
+     */
     if (unit !== undefined && workbench.engineerChoices.some((item) => item.instanceId === id)) {
       add('move.construction', { ...FACILITY_ACTION_META['move.construction']!, group: '工程' })
       add('move.hedgehog', { ...FACILITY_ACTION_META['move.hedgehog']!, group: '工程' })

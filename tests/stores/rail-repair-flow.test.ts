@@ -102,7 +102,10 @@ function walkInto(store: Workbench, unitId: string, from: HexRef, to: HexRef): v
     store.clickHex(from)
     if (store.movePickHex !== null) {
       store.setMovePickOnly(unitId)
-      expect(store.confirmMovePick()).toBe(true)
+      expect(
+        store.confirmMovePick(),
+        `${store.moveBlocked?.rule ?? '-'}/${store.moveBlocked?.reason ?? '-'}`,
+      ).toBe(true)
     }
   }
   store.clickHex(to)
@@ -303,18 +306,45 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     )
   })
 
-  it('13.3g-D：移动模式不可转换（须战斗模式，或 DG 但朝向战斗面）', () => {
+  it('★ 用户 2026-11-22 口径：走过即自动换轨——走进铁路格就换，不需要再点确认', () => {
     const store = newStore()
     store.switchSide()
     store.setPhase('movement')
     store.setTurn(5)
     prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
+    rr.fuelled = true
 
     walkInto(store, rr.instanceId, FROM, NEXT)
-    // 进入后才切到移动面：换轨时不是战斗模式 ⇒ 13.3g-D 拒
-    rr.mode = { mode: 'move', orientation: 'move', dg: false, exploit: false }
-    rr.raw = rr.faces.move
+    // 没有调用 `convertRailGaugeNow`，13.3g-D 的额度已自动落账
+    //（苏方转换 = 换回宽轨 ⇒ 出账，故不入 `convertedRailHexes`；入账方向由轴方用例覆盖）
+    expect(store.convertedRailHexes).not.toContain(label(NEXT))
+    expect(store.gaugeConversionsThisPhase.find((x) => x.instanceId === rr.instanceId)?.count).toBe(
+      1,
+    )
+    expect(store.log.some((entry) => entry.text.includes('走过即换轨（自动）'))).toBe(true)
+
+    // 手动入口只作裁判补录：对同一格再点一次是幂等，不重复记账
+    expect(store.convertRailGaugeNow(rr.instanceId, label(NEXT))).toBe(true)
+    expect(store.gaugeConversionsThisPhase.find((x) => x.instanceId === rr.instanceId)?.count).toBe(
+      1,
+    )
+  })
+
+  it('13.3g-D：移动模式不可转换（须战斗模式，或 DG 但朝向战斗面）', () => {
+    const store = newStore()
+    store.switchSide()
+    store.setPhase('movement')
+    store.setTurn(5)
+    prepareRun(store)
+    /*
+     * 用户 2026-11-22：换轨已改为「走过即自动」。所以直接以**移动面**进场，
+     * 才能验证 13.3g-D 的模式判据——以战斗面进场的话自动换轨已经完成，再点只是幂等。
+     */
+    const rr = rrUnit(store, FROM, 'rr-1', 'move')
+    // 12.5a：开拔要耗 MP ⇒ 测试夹具显式给「已加注」（workbench-model 的注释就指这条）
+    rr.fuelled = true
+    walkInto(store, rr.instanceId, FROM, NEXT)
     expect(store.convertRailGaugeNow(rr.instanceId, label(NEXT))).toBe(false)
     expect(store.convertedRailHexes).not.toContain(label(NEXT))
     expect(store.log.some((entry) => entry.text.includes('mustBeCombatMode'))).toBe(true)
@@ -376,6 +406,11 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     store.setTurn(5)
     prepareRun(store)
     const rr = rrUnit(store, FROM, 'rr-1', 'combat')
+    /*
+     * 战斗面原 MA=3：走 3 格就把 MP 用光，额度满后**走不到第 4 格**，无法验证「超出即拒」。
+     * 这里把 MA 抬到 8（额度仍是 min(4, 8) = 4）——构造的是「MP 够走、额度不够换」的场景。
+     */
+    rr.raw = { ...rr.faces.combat, ma: 8 }
     const quota = Math.min(4, rr.raw.ma)
     // 13.3f-B：逐格走进、逐格换轨（换轨不是远程动作）
     const hexes = RUN.slice(1, quota + 1)
@@ -389,9 +424,16 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     expect(store.gaugeConversionsThisPhase.find((x) => x.instanceId === rr.instanceId)?.count).toBe(
       hexes.length,
     )
-    // 额度已满 ⇒ 对刚走进的最后一格再换一次也被拒（13.3g-D）
+    // 同一格再点一次不重复记账、也不再占额度（13.3g-A 的幂等；自动换轨后玩家再点就是这个场景）
     const last = hexes[hexes.length - 1]!
-    expect(store.convertRailGaugeNow(rr.instanceId, label(last))).toBe(false)
+    expect(store.convertRailGaugeNow(rr.instanceId, label(last))).toBe(true)
+    expect(store.gaugeConversionsThisPhase.find((x) => x.instanceId === rr.instanceId)?.count).toBe(
+      hexes.length,
+    )
+    // 额度已满 ⇒ 走进**下一格**再换（新格）被拒（13.3g-D）
+    const beyond = RUN[quota + 1]!
+    walkInto(store, rr.instanceId, RUN[quota]!, beyond)
+    expect(store.convertRailGaugeNow(rr.instanceId, label(beyond))).toBe(false)
     expect(store.log.some((entry) => entry.text.includes('conversionLimitReached'))).toBe(true)
   })
 

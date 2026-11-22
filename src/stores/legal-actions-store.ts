@@ -82,10 +82,11 @@ export const useLegalActionsStore = defineStore('legal-actions', () => {
       ref: unit.instanceId,
       label: unit.name,
     }))
-    candidates['move.railConversion'] = workbench.railRepairUnits.map((unit) => ({
-      ref: unit.instanceId,
-      label: unit.name,
-    }))
+    /*
+     * 2026-11-22（用户口径）：换轨改为**走过即自动**（13.3f-B「只需移动进入」），
+     * 故 `move.railConversion` 不再列玩家候选；裁判补录仍可调 `workbench.convertRailGaugeNow`。
+     */
+    candidates['move.railConversion'] = []
     candidates['move.construction'] = workbench.engineerChoices.map((unit) => ({
       ref: unit.instanceId,
       label: unit.name,

@@ -643,6 +643,11 @@ export interface RailheadFacts {
   converted: readonly HexRef[]
   /** 13.3a 铁路连通：以铁路格边相接的邻格 */
   railNeighbors(hex: HexRef): readonly HexRef[]
+  /**
+   * 本方轨距的**铁路补给源格**（用户 2026-11-22 口径：换轨范围一定自这里起步）。
+   * 给出时按「从根可达的叶」取端头；缺省时退回旧的两端近似（兼容既有调用点）。
+   */
+  roots?: readonly HexRef[]
 }
 
 /**
@@ -662,6 +667,58 @@ export interface RailheadFacts {
 export function deriveRailheads(facts: RailheadFacts): HexRef[] {
   const converted = new Map<string, HexRef>()
   for (const hex of facts.converted) converted.set(hexText(hex), hex)
+
+  /*
+   * 用户 2026-11-22 口径：换轨范围**自本方的铁路补给源格起步**
+   * （剧本 `supplySources` 的图边铁路源，store 侧取 `entryRailSeedsBySide` ∩ 铁路格）。
+   * ⇒ 端头 = 从这些根沿**已换轨**铁路多源 BFS 可达的**叶节点**，而不是「已换轨段的两端」。
+   * 只数 BFS 树里的真正子节点（`parent.get(子) === key`），分叉不会重复计数。
+   * 未提供 roots 时退回下面的旧近似，保证既有调用点行为不变。
+   */
+  const rootKeys = (facts.roots ?? [])
+    .map((hex) => hexText(hex))
+    .filter((key) => converted.has(key))
+  if (rootKeys.length > 0) {
+    const parent = new Map<string, string | null>()
+    const queue: string[] = []
+    for (const key of rootKeys) {
+      if (parent.has(key)) continue
+      parent.set(key, null)
+      queue.push(key)
+    }
+    for (let index = 0; index < queue.length; index += 1) {
+      const key = queue[index]!
+      const hex = converted.get(key)!
+      for (const neighbor of facts.railNeighbors(hex)) {
+        const neighborKey = hexText(neighbor)
+        if (neighborKey === key || !converted.has(neighborKey) || parent.has(neighborKey)) continue
+        parent.set(neighborKey, key)
+        queue.push(neighborKey)
+      }
+    }
+    /*
+     * 端头判据本身仍是下面那三条（未换轨邻格 ≥1、已换轨邻格 ≤1、不重复），
+     * 这里只加「根可达」过滤：与补给源断开的换轨段不出端头。
+     * 不能直接用「BFS 树里的叶子」——环形 / 交叉处被别的分支先认领的格会被误判成叶，
+     * 剧本 7 就是这样多出 16.15 / 17.16 两个假端头。
+     */
+    const headsFromRoots: HexRef[] = []
+    for (const [key, hex] of converted) {
+      if (!parent.has(key)) continue
+      let convertedNeighbors = 0
+      let openNeighbors = 0
+      for (const neighbor of facts.railNeighbors(hex)) {
+        const neighborKey = hexText(neighbor)
+        if (neighborKey === key) continue
+        if (converted.has(neighborKey)) convertedNeighbors += 1
+        else openNeighbors += 1
+      }
+      if (convertedNeighbors > 1) continue
+      if (openNeighbors === 0) continue
+      headsFromRoots.push(hex)
+    }
+    return headsFromRoots.sort((a, b) => a.col - b.col || a.row - b.row)
+  }
 
   const heads: HexRef[] = []
   for (const [key, hex] of converted) {

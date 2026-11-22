@@ -86,6 +86,11 @@ export interface MovementCore {
   revertTransportHandlingSinceBaseline: () => void
   sealTransportHandlingForCommit: () => void
   clearMoveInteraction: () => void
+  /**
+   * 2026-11-22（用户口径）：**走过即换轨**——13.3f-B「铁路修理单位只需移动进入一个铁路格」。
+   * 地面移动提交后由 `commitStep` 对每个 `movedIds` 调用；被拒时由 store 写日志，本切片不重复判。
+   */
+  autoRailConvertOnEntry: (unitId: string, hex: HexRef) => void
 }
 
 /** 端口束 2：板面状态 —— 所有地面交互域共读的 ref / computed 与查询函数 */
@@ -213,6 +218,7 @@ export function createMovementDomain(ports: MovementDomainPorts) {
     revertTransportHandlingSinceBaseline,
     sealTransportHandlingForCommit,
     clearMoveInteraction,
+    autoRailConvertOnEntry,
   } = ports.core
 
   /** 端口束 2：板面状态 */
@@ -766,6 +772,12 @@ export function createMovementDomain(ports: MovementDomainPorts) {
         const next = { ...lastGroundEntryByUnit.value }
         for (const id of step.movedIds) next[id] = hexTextOf(to)
         lastGroundEntryByUnit.value = next
+        /*
+         * 2026-11-22（用户口径）：13.3f-B「铁路修理单位只需**移动进入**一个铁路格，就可转换该格轨距」。
+         * ⇒ 走过即换，不再要求玩家再点一次 `move.railConversion`；实质判据（阶段 / EZOC / 战斗模式 /
+         *   min(4,MA) 上限 / 不得接力）仍由 store 侧的 `applyRailConversion` 统一裁定。
+         */
+        for (const id of step.movedIds) autoRailConvertOnEntry(id, to)
       }
       // 用户 2026-11-20：全局撤销账 —— 每一步都是一笔可撤操作
       noteUndoable('move.step', `移动一步 → ${hexLabel(to)}`)
