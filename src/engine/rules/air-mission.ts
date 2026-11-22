@@ -371,6 +371,10 @@ export interface RefitEligibilityInput extends RefitCapacityInput {
  *
  * 判定顺序：阶段 → 每基地一次 → ZOC → 容量 → T。任一条不满足即失败并给出原因码。
  * 15.1D：**天气条件从不会禁止整备**，也从不影响飞机保持激活——故本函数**没有天气入参**。
+ *
+ * ★ 编号约定：原文 15.1 把子项写成独立的 `A)`/`B)`/`C)`/`D)` 行（不带号前缀），
+ *   本仓库统一记作 `15.1A`…`15.1D`。因此 "15.1A" 在原文全文里检索不到字面串——
+ *   追溯时请按「15.1 的 A) 项」查（见 `_ocs_v43_clean.txt` 的「15.1飞机的整备」）。
  */
 export function refitEligibility(
   input: RefitEligibilityInput,

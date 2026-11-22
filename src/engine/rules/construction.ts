@@ -547,6 +547,9 @@ export function planAirBaseBuild(input: {
  * 15.2A：**修建**简易机场（1 T）
  *
  * 「按照 15.3 中的流程，它们的建造费用为 1T」⇒ 时机与执行者与 15.3 相同（移动阶段、具工程能力单位）。
+ *
+ * ★ 编号约定：原文 15.2 把子项写成独立的 `A)`…`F)` 行（不带号前缀），本仓库统一记作
+ *   `15.2A`…`15.2F`；追溯时请按「15.2 的 A) 项」查（`_ocs_v43_clean.txt` 的「15.2简易机场」）。
  */
 export function planAirstripBuild(input: {
   executor: Extract<ConstructionExecutor, { kind: 'engineer' }>
