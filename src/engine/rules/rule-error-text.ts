@@ -116,6 +116,7 @@ const COMBAT_ERROR_TEXT: Readonly<Record<string, string>> = {
   noUnitPaidCombatSupply: '没有付过战斗补给的攻方单位可以推进',
   chosenUnitDidNotPayCombatSupply: '所选的推进单位没有付战斗补给',
   notStackedAtPhaseStart: '突袭要求参战单位在阶段开始时同堆叠（8.1）',
+  notEnoughMp: '剩余 MP 不足 3，不能突袭（8.1a：每次突袭固定 3 MP）',
   arOrOddsMissingBeforeSurprise: '上一步结算还没有完成',
   arOrOddsMissingBeforeDice: '上一步结算还没有完成',
   diceOrArMissingBeforeLosses: '上一步结算还没有完成',

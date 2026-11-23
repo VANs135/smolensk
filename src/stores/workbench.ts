@@ -6840,6 +6840,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         )
         return false
       }
+      /*
+       * 8.1a：单位**确实仍在移动**（`overrunCandidateUnits` 里有它），缺的是 MP —— 每次突袭固定 3 MP。
+       *   修前这一路一律落到 6.1g「没有仍在移动中的单位可以突袭」：与事实相反，条款也指错了。
+       *   典型现场是 5.7b-B：反应段释放的预备只按**半个 MA** 移动（战斗面 MA 3 的坦克师只剩
+       *   1.5 MP ⇒ 规则上不能突袭；要用它突袭，必须在初设时以移动面（MA 8）进预备）。
+       */
+      const candidateMp = movingIds.map((id) => {
+        const unit = units.value.find((item) => item.instanceId === id)
+        return unit === undefined ? 0 : mpRemainingOf(unit)
+      })
+      if (candidateMp.length > 0 && candidateMp.every((mp) => mp < OVERRUN_COST_MP)) {
+        const tightest = Math.min(...candidateMp)
+        combatError.value = { rule: '8.1a', reason: 'notEnoughMp' }
+        pushLog(
+          'warning',
+          `不能突袭 ${hexLabel(hex)}：剩余 ${tightest} MP 不足 ${OVERRUN_COST_MP} MP` +
+            `（8.1a：每次突袭固定 ${OVERRUN_COST_MP} MP）`,
+          '8.1a',
+        )
+        return false
+      }
       pushLog('warning', '没有仍在移动中的单位可以突袭（6.1g）', '6.1g')
       return false
     }
