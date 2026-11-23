@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -318,5 +320,104 @@ describe('条 12（M2）：点非战斗单位开 unit 会话', () => {
      * 故"超航程灰显"的 TRUE 分支在此图不可达；逻辑已实现（airMissionJoinChoices 的 14.1 判据），
      * 更大图 / 更短航程机出现时即生效。这里只钉"航程内不误灰显"。
      */
+  })
+
+  /**
+   * ★ 用户 2026-11-23（UI 泄露）：空军任务结算 → 飞机返航收束后，左键点**别的格子**
+   *   不该再弹空军任务窗。
+   *
+   * 病灶（修前）：`onHexClick` 里「点目标格即定任务格」只问 `airActive && airMissionAirIds.length > 0`；
+   *   返航后编组残留没清，点任意格就 `setAirTargetFromText` 把 `finished` 的任务态复位成"未宣布"
+   *   （`canReplace()` 在 finished 时返 true），会话当场复活。
+   * 两道修法一起钉：① 返航收尾清任务编组；② 该分派只认 `airState === null`（任务尚未宣布）。
+   */
+  it('★ 低空扫射返航收束后点别的格子不再复现空军任务会话', () => {
+    const { workbench, mapView } = stores
+    placeNonCombat(workbench, 'air_base', START, 'base-1')
+    // 10.0b：低空扫射要「与目标格相邻的友方战斗单位」当正确观察员
+    workbench.units.push(
+      toConsoleUnit({
+        record: unitChoices('axis').find((record) => record.isCombat === true)!,
+        instanceId: 'spot-1',
+        hex: START,
+        side: 'axis',
+      }),
+    )
+    const target = HEX_DIRECTIONS.map((direction) => neighbor(START, direction)).find(
+      (hex) =>
+        isOnMap(hex) &&
+        mapLayers.hexes.some((item) => item.col === hex.col && item.row === hex.row) &&
+        !workbench.units.some((unit) => unit.hex.col === hex.col && unit.hex.row === hex.row),
+    )
+    expect(target, '应找到图内的空邻格当任务格').toBeDefined()
+    // 目标格上的苏军战斗单位（10.0a 的损失承受者）
+    workbench.units.push(
+      toConsoleUnit({
+        record: unitChoices('soviet').find((record) => record.isCombat === true)!,
+        instanceId: 'def-1',
+        hex: target!,
+        side: 'soviet',
+      }),
+    )
+    const stuka = aircraftChoices('axis').find(
+      (record) => record.aircraftId === 'ax-aircraft-ge-ju-87b',
+    )
+    expect(stuka, '轴方飞机库里应有 Ju.87b（14.7d 低空扫射机）').toBeDefined()
+    workbench.airUnits.push(
+      toConsoleAirUnit({
+        aircraft: stuka!,
+        instanceId: 'stuka-1',
+        hex: START,
+        side: 'axis',
+        airStatus: 'active',
+      }),
+    )
+    workbench.barrageInputs = { ...workbench.barrageInputs, hasSpotter: true }
+
+    expect(workbench.setAirTargetFromText(`${target!.col}.${target!.row}`)).toBe(true)
+    workbench.toggleAirMissionUnit('stuka-1')
+    expect(mapView.session?.kind).toBe('air') // 已选机待宣布 ⇒ 空军任务会话
+    workbench.setAirMissionKind('hip_shoot')
+    expect(workbench.runAirMissionNow()).toBe(true)
+    expect(workbench.settleAirMissionNow()).toBe(true)
+    // 干净扫射全自动到返航（条 13 / 14.1c）⇒ 任务 finished，会话收束
+    expect(workbench.airState?.finished).toBe(true)
+    expect(mapView.session).toBeNull()
+
+    expect(workbench.airMissionAirIds).toEqual([])
+    mapView.onHexClick(ELSEWHERE, { x: 40, y: 40 })
+
+    expect(mapView.session?.kind ?? null).not.toBe('air')
+    expect(workbench.airState?.finished).toBe(true)
+    expect(workbench.airState?.targetHex).toEqual(target)
+  })
+
+  /**
+   * ★ 用户 2026-11-23（同一批的第 2 条）：**任务类型只由右键菜单定**，引导不得再框面板里的
+   *   只读类型文字（否则读成"在空军任务窗口里再选一次"）。
+   */
+  it('★ 教学引导不框面板里的只读任务类型（还没定目标时只框地图格）', () => {
+    const tutorial = readFileSync('src/stores/tutorial.ts', 'utf8')
+    // 三类任务的"未定目标"阶段都不再用类型文字当控件（含「低空扫射 + 机型」这种合写）
+    expect(tutorial).not.toContain("texts: ['低空扫射")
+    expect(tutorial).not.toContain("texts: ['战机扫荡']")
+    expect(tutorial).not.toContain("texts: ['轰炸']")
+    // 只框地图格（右键入口），并在提示里交代右键路径
+    expect(tutorial).toContain('return { hex: TARGET_HEX }')
+    expect(tutorial).toContain('return { hex: BOMB_HEX }')
+    expect(tutorial).toContain('右键那格苏军')
+  })
+
+  /** 上面那条用例的行为版之外，再钉一道源码闸：泄露链路的两个可燃点都不许回来 */
+  it('★ 空军任务收束后不泄露会话（点击分派 + 返航清编组）', () => {
+    const mapView = readFileSync('src/stores/map-view.ts', 'utf8')
+    const air = readFileSync('src/stores/workbench-air.ts', 'utf8')
+    // ① 修前的泄露写法：只看「工具开着 + 编组里有飞机」，没有"任务未宣布"这道闸
+    expect(mapView).not.toContain(
+      'if (!consumed && workbench.airActive && workbench.airMissionAirIds.length > 0) {',
+    )
+    // ② 返航完成即清任务编组（残留 id 是会话复活的可燃物）
+    expect(air).toContain('const done = airMissionDomain.completeAirReturnNow()')
+    expect(air).toContain('airMissionAirIds.value = []')
   })
 })

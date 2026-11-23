@@ -2473,7 +2473,19 @@ export function createAirDomain(ports: AirDomainPorts) {
 
   /** C9 第 6 步（14.2f-G / 14.1c）：返航（逐机指定目的地，须是**本方**基地且在航程内） */
   function completeAirReturnNow(): boolean {
-    return airMissionDomain.completeAirReturnNow()
+    const done = airMissionDomain.completeAirReturnNow()
+    /*
+     * 用户 2026-11-23（UI 泄露）：返航完成＝本趟任务收束，**任务编组随之一并清空**。
+     *   修前只留 `finished` 的 `airState`，`airMissionAirIds` 仍是上一趟那几架；地图上
+     *   「点目标格即定任务格」的分派还认这串残留 id，于是玩家返航后随便点一格就能把
+     *   已结束的任务态复位成"未宣布"，空军任务会话凭空复活（点哪都弹窗）。
+     *   （`airState` 本身保留：面板"已完成"与结算日志还要读它，会话判据另有 `finished` 闸。）
+     */
+    if (done) {
+      airMissionAirIds.value = []
+      airMissionAbortPending.value = false
+    }
+    return done
   }
 
   /* ── B2-2d：放弃任务 / 简易机场 / 整备 / 转移 / 缩减 / 标签（2026-11-21 从 facade 迁入） ── */

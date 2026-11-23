@@ -4877,8 +4877,21 @@ export const useMapViewStore = defineStore('mapView', () => {
       workbench.advanceNow(hex)
       consumed = true
     }
-    if (!consumed && workbench.airActive && workbench.airMissionAirIds.length > 0) {
-      // 14.2f-B：已点选飞机 / 一组飞机后，点目标格即定任务格
+    /*
+     * 14.2f-B：已点选飞机 / 一组飞机后，点目标格即定任务格。
+     *
+     * ★ 用户 2026-11-23（UI 泄露）：这一击必须限定在**任务尚未宣布**（`airState === null`）的那一段。
+     *   修前只问「空军工具开着 + 编组里有飞机」：返航收束（`finished`）后编组还在，点别的格就
+     *   `setAirTargetFromText` 把任务态复位成"未宣布"（`canReplace()` 在 finished 时放行）⇒
+     *   空军任务会话凭空复活（结算完任务、飞机已返航，左键点哪都弹空军任务窗）。
+     *   运行中的任务同样不该被这一击改任务格（那一击会只落一句"已宣布不可改"的拒绝）。
+     */
+    if (
+      !consumed &&
+      workbench.airActive &&
+      workbench.airState === null &&
+      workbench.airMissionAirIds.length > 0
+    ) {
       workbench.setAirTargetFromText(`${hex.col}.${hex.row}`)
       consumed = true
     }

@@ -523,43 +523,51 @@ export const useTutorialStore = defineStore('tutorial', () => {
    */
   const reactionDefenseHex = computed<HexRef>(() => assaultHex.value)
 
-  /** 低空扫射：菜单 / 选机 / 发起 / 结算 按当前会话步给按钮 */
+  /**
+   * 低空扫射：右键该格 ⇒「射击」▸「低空扫射」→ 选机 → 发起 → 结算
+   *
+   * ★ 用户 2026-11-23：**任务类型在右键菜单里就定了**（`startTargetAirMission` / `openOpsFlow`），
+   *   面板上那行「任务类型：低空扫射」只是只读回显。故"还没定目标"时引导**只框地图格**，
+   *   不再拿「低空扫射」这个字去框面板里的只读文字 —— 那会被读成
+   *   "在空军任务窗口里再选一次类型"（返航残留态把它框出来时尤其像）。
+   *   上一趟已返航（`finished`）时同理：再扫一次也要从右键那一步重开。
+   */
   function strikeTarget(): TutorialTarget {
     const state = workbench.airState
-    if (state === null) {
-      if (workbench.airTargetHex === null) {
-        return { hex: TARGET_HEX, texts: ['低空扫射'], buttonTexts: ['低空扫射'] }
-      }
-      if (workbench.airMissionAirIds.length === 0) {
-        // 逐枚指到**未飞过任务**的斯图卡，不再靠同名文字猜（同名机有两枚）
-        return {
-          hex: TARGET_HEX,
-          ...(nextStrafePlaneId.value === null ? {} : { airInstanceId: nextStrafePlaneId.value }),
-          buttonTexts: ['Ge Ju.87b', 'Ju.87b'],
+    if (state === null || state.finished === true) {
+      if (state === null && workbench.airTargetHex !== null) {
+        if (workbench.airMissionAirIds.length === 0) {
+          // 逐枚指到**未飞过任务**的斯图卡，不再靠同名文字猜（同名机有两枚）
+          return {
+            hex: TARGET_HEX,
+            ...(nextStrafePlaneId.value === null ? {} : { airInstanceId: nextStrafePlaneId.value }),
+            buttonTexts: ['Ge Ju.87b', 'Ju.87b'],
+          }
         }
+        return { hex: TARGET_HEX, buttonTexts: ['发起任务'] }
       }
-      return { hex: TARGET_HEX, buttonTexts: ['发起任务'] }
+      return { hex: TARGET_HEX }
     }
     if (state.step === 'resolveMission') return { buttonTexts: ['结算任务'] }
     if (state.step === 'returnToBase') return { buttonTexts: ['⑥ 返航（14.2f-G）'] }
     return { buttonTexts: ['发起任务', '结算任务'] }
   }
 
-  /** 战机扫荡：右键 19.28 苏军基地 → 选**另一架** Bf110 → 结算 14.3e 空战 → 返航 */
+  /** 战机扫荡：右键 19.28 苏军基地 ⇒「空军任务」▸「战机扫荡」→ 选**另一架** Bf110 → 结算 14.3e 空战 → 返航 */
   function fighterSweepTarget(): TutorialTarget {
     const state = workbench.airState
-    if (state === null) {
-      if (workbench.airTargetHex === null) {
-        return { hex: BOMB_HEX, texts: ['战机扫荡'], buttonTexts: ['战机扫荡'] }
-      }
-      if (workbench.airMissionAirIds.length === 0) {
-        return {
-          hex: BOMB_HEX,
-          ...(sweepPlaneId.value === null ? {} : { airInstanceId: sweepPlaneId.value }),
-          buttonTexts: ['Ge Bf.110', 'Bf.110'],
+    if (state === null || state.finished === true) {
+      if (state === null && workbench.airTargetHex !== null) {
+        if (workbench.airMissionAirIds.length === 0) {
+          return {
+            hex: BOMB_HEX,
+            ...(sweepPlaneId.value === null ? {} : { airInstanceId: sweepPlaneId.value }),
+            buttonTexts: ['Ge Bf.110', 'Bf.110'],
+          }
         }
+        return { hex: BOMB_HEX, buttonTexts: ['发起任务'] }
       }
-      return { hex: BOMB_HEX, buttonTexts: ['发起任务'] }
+      return { hex: BOMB_HEX }
     }
     if (state.step === 'airCombat') return { buttonTexts: ['② 结算空战并继续（14.3）'] }
     if (state.step === 'resolveMission') return { buttonTexts: ['结算任务'] }
@@ -567,20 +575,26 @@ export const useTutorialStore = defineStore('tutorial', () => {
     return { buttonTexts: ['发起任务', '结算任务'] }
   }
 
-  /** 轰炸任务：两队 Ju.88 + 一队 Do.17z + 一队 Bf110 逐枚点；拦截应答由苏军 AI 给 */
+  /** 轰炸任务：右键 19.28 ⇒ 菜单「轰炸」→ 两队 Ju.88 + 一队 Do.17z + 一队 Bf110 逐枚点；拦截应答由苏军 AI 给 */
   function bombingTarget(): TutorialTarget {
     const state = workbench.airState
-    if (state === null) {
-      if (workbench.airTargetHex === null) {
-        return { hex: BOMB_HEX, texts: ['轰炸'], buttonTexts: ['轰炸'] }
+    /*
+     * ★ 用户 2026-11-23：类型由右键菜单定，引导不框面板里的只读类型文字（同 `strikeTarget`）；
+     *   已返航（`finished`）时也指回目标格，让玩家从右键那一步重开下一趟。
+     */
+    if (state === null || state.finished === true) {
+      if (state === null && workbench.airTargetHex !== null) {
+        // 14.2a：一次任务最多 4 机，逐枚高亮（同名机两枚 ⇒ 只认实例 id）
+        const pendingId = bombingPlaneIds.value.find(
+          (id) => !workbench.airMissionAirIds.includes(id),
+        )
+        if (pendingId !== undefined) {
+          const plane = workbench.airUnits.find((air) => air.instanceId === pendingId)
+          return { hex: BOMB_HEX, airInstanceId: pendingId, buttonTexts: [plane?.name ?? 'Ju.88'] }
+        }
+        return { hex: BOMB_HEX, buttonTexts: ['发起任务'] }
       }
-      // 14.2a：一次任务最多 4 机，逐枚高亮（同名机两枚 ⇒ 只认实例 id）
-      const pendingId = bombingPlaneIds.value.find((id) => !workbench.airMissionAirIds.includes(id))
-      if (pendingId !== undefined) {
-        const plane = workbench.airUnits.find((air) => air.instanceId === pendingId)
-        return { hex: BOMB_HEX, airInstanceId: pendingId, buttonTexts: [plane?.name ?? 'Ju.88'] }
-      }
-      return { hex: BOMB_HEX, buttonTexts: ['发起任务'] }
+      return { hex: BOMB_HEX }
     }
     if (state.step === 'interception') {
       /*
@@ -609,7 +623,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
       return { buttonTexts: ['结算任务'], texts: ['Ru I.153', 'Ju.88', 'Bf.110'] }
     }
     if (state.step === 'returnToBase') return { buttonTexts: ['⑥ 返航（14.2f-G）'] }
-    return { hex: BOMB_HEX, texts: ['轰炸'] }
+    return { hex: BOMB_HEX }
   }
 
   function targetOf(id: string): TutorialTarget {
@@ -687,8 +701,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
       case 'scout':
         return { hex: SCOUT_HEX, texts: ['开拔'] }
       case 'scout-supply':
-        // 断补是既成事实；这一步真正的"下一步动作"是叫斯图卡 ⇒ 环指向 18.27 的坦克师
-        return { hex: TARGET_HEX, texts: ['低空扫射', 'Ju.87b'] }
+        // 断补是既成事实；这一步真正的"下一步动作"是叫斯图卡扫那格苏军（类型由右键菜单定）
+        return strikeTarget()
       case 'strafe-1':
       case 'strafe-2':
         return strikeTarget()
@@ -923,7 +937,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
         id: 'scout-supply',
         title: '补给接不上',
         // 信息步也要写清"下一步做什么"，否则玩家以为卡住了（用户 2026-11-20）
-        hint: '霍特：它断补了——别管它，去叫斯图卡扫维捷布斯克城西的敌军。',
+        hint: '霍特：它断补了——别管它，右键那格苏军 →「射击」→「低空扫射」。',
         intro: '维捷布斯克西北与后方不连通，所以这枚侦察营本回合吃不到补给。',
         // 信息步：玩家叫第一轮斯图卡即视为看过、继续推进
         done: () => strafeCount.value >= 1,
@@ -931,14 +945,15 @@ export const useTutorialStore = defineStore('tutorial', () => {
       {
         id: 'strafe-1',
         title: '第一次低空扫射',
-        hint: '霍特：你呼叫，集群派斯图卡扫维捷布斯克城西的敌军。',
-        intro: '斯图卡低空扫射，专打暴露的坦克。',
+        // 2026-11-23（用户）：类型只在右键菜单里定 ⇒ 提示写清右键路径，窗口内不再选类型
+        hint: '霍特：右键那格苏军 → 展开「射击」→ 点「低空扫射」。',
+        intro: '斯图卡低空扫射，专打暴露的坦克。任务类型在菜单里就定了，窗口里只选机、发起。',
         done: () => strafeCount.value >= 1,
       },
       {
         id: 'strafe-2',
         title: '第二次低空扫射',
-        hint: '霍特：第二架斯图卡，照原目标再扫一次。',
+        hint: '霍特：右键那格 → 展开「射击」→ 点「低空扫射」。',
         intro: '换第二架斯图卡，同一目标再压一遍。',
         done: () => strafeCount.value >= 2,
       },
@@ -988,7 +1003,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
       {
         id: 'fighter-sweep',
         title: '战斗机扫荡敌机',
-        hint: '霍特：再派一架 Bf110，把城里的敌机扫下来。',
+        hint: '霍特：派 Bf110 扫城里敌机——右键那座敌机场，菜单点「战机扫荡」。',
         intro:
           '维捷布斯克城里停着敌军的 LaGG.3，正在我部截击机够得着的距离内。这是战斗机对战斗机的硬仗，双方都有风险；先把敌机压住，轰炸机才敢进去。空战一键结算：我方迎战机取空战值最高的那架，敌机由敌军自己挑，你不必替它点。',
         done: () => fighterSweepDone(),
@@ -996,7 +1011,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
       {
         id: 'bombing',
         title: '空军轰炸维捷布斯克',
-        hint: '霍特：战斗机护航轰炸机编队，轰炸敌方守军。',
+        hint: '霍特：护航轰炸机炸维捷布斯克——右键该城，菜单点「轰炸」。',
         intro:
           '两队 Ju.88 和一队 Do.17z 投弹，没去扫荡的那架 Bf.110 留下护航；敌 I.153 从拦截距离内起飞迎击。用战斗机给轰炸机护航，没有护航的轰炸机是脆弱的。拦截与空战都由敌军自己出机，你只等结果。',
         done: () => bombingDone(),
