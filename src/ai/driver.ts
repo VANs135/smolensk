@@ -42,11 +42,19 @@ import {
   type AiSnapshot,
   type AiSide,
 } from './policy'
+import { aiProfileOf, type AiProfile } from './scenario-posture'
 
 export interface AiContext {
   workbench: ReturnType<typeof useWorkbenchStore>
   session: ReturnType<typeof useGameSessionStore>
   setup: ReturnType<typeof useSetupStore>
+  /**
+   * 剧本 id 覆盖（测试用：快照按它取 `scenarioId`，不读会话）。
+   * 仅给测试钉"完整档 / 简化档"用；运行时一律取 `session.scenarioId`。
+   */
+  scenarioId?: string
+  /** 档位覆盖（仅测试用：规则覆盖回归要跑完整档；运行时取 `aiProfileOf(scenarioId)`） */
+  aiProfile?: AiProfile
 }
 
 export interface AiMemory {
@@ -632,12 +640,16 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
           .filter((hex) => !visitedHexKeys.has(hexKeyOf(hex)) && !currentHexKeys.has(hexKeyOf(hex)))
       : []
 
-  // 相邻的敌方守方格（仅作候选；合法性由 select/begin 入口判定）
-  const combatRelevant =
-    w.phase === 'combat' ||
-    w.phase === 'exploitation' ||
-    w.combatState !== null ||
-    w.battleTarget !== null
+  /*
+   * 相邻的敌方守方格（仅作候选；合法性由 select/begin 入口判定）
+   *
+   * 只给**会主动进攻**的档算：简化档（非 Intro）不宣战、不选攻击目标，
+   * 这一步的 O(敌×友) 扫描整段战斗/进击阶段都白算 —— 用户 2026-11-23「还卡」的主要来源之一。
+   */
+  const aiProfile = ctx.aiProfile ?? aiProfileOf(ctx.scenarioId ?? ctx.session.scenarioId)
+  const attackPlanRelevant =
+    aiProfile === 'full' && (w.phase === 'combat' || w.phase === 'exploitation')
+  const combatRelevant = attackPlanRelevant || w.combatState !== null || w.battleTarget !== null
   const adjacentDefenderHexes = combatRelevant
     ? dedupeSortedHexes(
         enemy
@@ -876,7 +888,8 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
 
   return {
     turn: w.turn,
-    scenarioId: ctx.session.scenarioId,
+    scenarioId: ctx.scenarioId ?? ctx.session.scenarioId,
+    aiProfile: ctx.aiProfile,
     phase: w.phase,
     segment: w.segmentStep?.id ?? '',
     segmentStepIndex: w.segmentStepIndex,
@@ -1027,21 +1040,26 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
               losses: w.combatRequirement.losses,
               options: w.combatRequirement.options,
             },
-      retreatPlans: combatRelevant
-        ? w.combatRetreatPlans.flatMap((plan) =>
-            plan.units.map((row) => ({
-              unitId: row.unitId,
-              role: plan.side,
-              chosen: row.chosen,
-              destinations: row.destinations.map((destination) => ({
-                hex: destination.hex,
-                forcedDestruction: destination.forcedDestruction,
-                inEnemyZoc: destination.inEnemyZoc,
-                path: destination.path,
+      /*
+       * 撤退计划只在一场战斗真正在走时才算（`combatState` / 已出需求）——
+       * 修前整段战斗/进击阶段每步都为所有堆叠预算落点，是「进战斗阶段就卡」的主因。
+       */
+      retreatPlans:
+        w.combatState !== null || w.combatRequirement !== null
+          ? w.combatRetreatPlans.flatMap((plan) =>
+              plan.units.map((row) => ({
+                unitId: row.unitId,
+                role: plan.side,
+                chosen: row.chosen,
+                destinations: row.destinations.map((destination) => ({
+                  hex: destination.hex,
+                  forcedDestruction: destination.forcedDestruction,
+                  inEnemyZoc: destination.inEnemyZoc,
+                  path: destination.path,
+                })),
               })),
-            })),
-          )
-        : [],
+            )
+          : [],
       triedDefenderHexes: memory.combatHexes,
     },
     supply: {

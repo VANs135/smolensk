@@ -5,6 +5,7 @@ import { scenarios } from '@/data'
 
 import { fresh } from './flow-harness'
 import { runAiSelfPlay, type AiSelfPlayReport } from '@/ai/driver'
+import type { AiProfile } from '@/ai/scenario-posture'
 
 const SEED = 20260913
 
@@ -83,7 +84,10 @@ function expectClean(id: string, report: AiSelfPlayReport): void {
   ).toBe(true)
 }
 
-async function runScenario(id: string): Promise<{
+async function runScenario(
+  id: string,
+  profile?: AiProfile,
+): Promise<{
   report: AiSelfPlayReport
   ctx: ReturnType<typeof fresh>
 }> {
@@ -103,7 +107,20 @@ async function runScenario(id: string): Promise<{
     expect(ctx.setup.drawSetupEffectsNow(), `剧本 ${id} 抽取编队`).toBe(true)
   expect(ctx.setup.startGameNow(), `剧本 ${id} 开局`).toBe(true)
   const report = await runAiSelfPlay({
-    ctx: { workbench: ctx.w, session: ctx.g, setup: ctx.setup },
+    /*
+     * 默认跑**运行时档位**（非 Intro 剧本＝baseline，用户 2026-11-23「简化别的剧本 AI」）。
+     * 完整档（Intro 那套动作链）另有单列用例覆盖，别在这里默认放开——
+     * 完整档八回合实测 9 分钟（iterations 896），对打回归会变成十几分钟的慢测。
+     */
+    ctx:
+      profile === undefined
+        ? { workbench: ctx.w, session: ctx.g, setup: ctx.setup }
+        : {
+            workbench: ctx.w,
+            session: ctx.g,
+            setup: ctx.setup,
+            aiProfile: profile,
+          },
     targetTurns: targetTurnsOf(id),
     scenarioId: id,
     limit: 1500,
@@ -120,14 +137,17 @@ describe('B3 AI 对打回归', () => {
       expectOnlyExpectedRefusals(id, report)
       /*
        * 剧本 1 的八回合是「行政流程」的主回归：增援落位、可变补员（1.6b/1.6c）、
-       * 跨回合的补给（12.6 / 12.10e / 12.8b）与整编（13.5）都得真的走到，
-       * 不能只把回合数推过去。规则号取自驱动累积（日志只留 60 条，不能读末态日志）。
+       * 跨回合的补给（12.6 / 12.10e）与整编（13.5）都得真的走到，不能只把回合数推过去。
+       * 规则号取自驱动累积（日志只留 60 条，不能读末态日志）。
+       *
+       * 12.8b（断补损耗）**不在本档要求内**：简化档不主动移动，剧本 1 不会自然产生断补堆叠；
+       * 该条款由「剧本 1 完整档」用例覆盖。
        */
       if (id === '1') {
         expect(report.targetTurn, `剧本 1 应跑 8 回合`).toBe(9)
         expect(report.reachedTarget, `剧本 1 未到达第 9 回合`).toBe(true)
         const rules = new Set(report.rules)
-        for (const rule of ['1.6b', '1.6c', '2.2', '13.5', '12.6', '12.10e', '12.8b'])
+        for (const rule of ['1.6b', '1.6c', '2.2', '13.5', '12.6', '12.10e'])
           expect(rules.has(rule), `剧本 1 八回合缺少 ${rule}；实际 ${[...rules].join(',')}`).toBe(
             true,
           )
@@ -135,12 +155,30 @@ describe('B3 AI 对打回归', () => {
       const replay = replaySessionLog(ctx.g.session!)
       expect(replay.ok, `${whereOf(id, report)} 会话日志复算：${replay.detail}`).toBe(true)
       /*
-       * 批 1 起 AI 会真的落实 B 段（到货逐条落位、到货 SP、补给列车、重建/整编）与 A 段整备，
-       * 单局动作数从 530 涨到 820+，盘面单位也更多 ⇒ 8 回合的实际耗时接近 10 分钟（实测）。
-       * 这里只放宽**时间预算**，判据（stalls / 白名单 / 条款覆盖 / 复算）一条不减。
+       * 批 1 起 AI 会真的落实 B 段（到货逐条落位、到货 SP、补给列车、重建/整编）与 A 段整备。
+       * 运行时档位已降级为 baseline（只有机械动作），八回合实测约 165 秒；
+       * 判据（stalls / 白名单 / 条款覆盖 / 复算）一条不减。
        */
     }, 1_500_000)
   }
+
+  /*
+   * 完整档单列：本用例的裁决是「完整动作链（移动/突袭/空袭/炮击）真的把规则走到」。
+   * 12.8b 断补损耗只有在 AI 自己移动、把单位拖出补给线时才出现，baseline 跑不出来。
+   * 完整档八回合实测约 9 分钟（iterations 896），所以单独放宽时间预算，不进默认对打。
+   */
+  it('剧本 1 完整档八回合（12.8b 断补损耗覆盖）', async () => {
+    const { report, ctx } = await runScenario('1', 'full')
+    describeReport('1(full)', report)
+    expectClean('1', report)
+    expectOnlyExpectedRefusals('1', report)
+    expect(report.reachedTarget, '完整档未到达第 9 回合').toBe(true)
+    const rules = new Set(report.rules)
+    for (const rule of ['1.6b', '1.6c', '2.2', '13.5', '12.6', '12.10e', '12.8b'])
+      expect(rules.has(rule), `完整档八回合缺少 ${rule}；实际 ${[...rules].join(',')}`).toBe(true)
+    const replay = replaySessionLog(ctx.g.session!)
+    expect(replay.ok, `完整档会话日志复算：${replay.detail}`).toBe(true)
+  }, 1_500_000)
 
   it('剧本 1 同种子两次 ⇒ 完全一致', async () => {
     const first = await runScenario('1')

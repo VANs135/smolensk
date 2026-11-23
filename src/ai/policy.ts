@@ -9,7 +9,7 @@
  *   快照里所有「需要挑一个」的列表都由驱动按「格号 + 型号」排好，本文件不再重排。
  */
 import { hexDistance } from '@/engine/hex-geometry'
-import { aiScenarioPostureOf } from './scenario-posture'
+import { aiProfileOf, aiScenarioPostureOf, type AiProfile } from './scenario-posture'
 
 export type AiSide = 'axis' | 'soviet'
 
@@ -256,6 +256,8 @@ export interface AiSnapshot {
   turn: number
   /** 剧本 id（剧本级 AI 姿态用；当前只有 Intro 带「撤退守城」偏好，见 `scenario-posture.ts`） */
   scenarioId: string
+  /** AI 档位覆盖（仅测试用：规则覆盖回归跑 `full`；运行时由 `aiProfileOf(scenarioId)` 决定） */
+  aiProfile?: AiProfile
   phase: string
   segment: string
   segmentStepIndex: number
@@ -923,8 +925,85 @@ function decideSupply(snapshot: AiSnapshot): AiAction | null {
  *
  * B4：每个分支先按 `snapshot.control` 判**该决定归谁**——玩家控制的决定一律返回 `wait`，
  * 纯流程（锁定推进 / 空环节推进 / 自动结算）不受控制权限制。
+ *
+ * 档位（用户 2026-11-23「先简化一下别的剧本AI逻辑」）：
+ * - `Intro`（教学/纯 PVE 剧本）＝ `full`，保留完整动作链（脚本教研过的那套）；
+ * - 其余剧本＝ `baseline`，**只做机械动作**（作答、结算战斗、补给/损耗、初设、推进环节），
+ *   不再自己发起移动/突袭/铁路/建造/空袭/弹幕/重建 ⇒ 不卡、也不会做出让人看不懂的"骚操作"。
  */
 export function decideAiAction(snapshot: AiSnapshot): AiAction {
+  const action = decideAiActionFull(snapshot)
+  const profile = snapshot.aiProfile ?? aiProfileOf(snapshot.scenarioId)
+  if (profile === 'full') return action
+  return simplifyAiAction(snapshot, action)
+}
+
+/** 基线档允许的动作（其余战术动作一律降级为「推进环节」或「收束进行中的交互」） */
+const AI_BASELINE_KINDS: ReadonlySet<string> = new Set([
+  'answer',
+  'advance',
+  'preset',
+  'setupPreset',
+  'setupDraw',
+  'setupConfirm',
+  'setupShiftPlace',
+  'specialConfirm',
+  'overstackDestroy',
+  'interceptAnswer',
+  'arrivalRemovals',
+  'arrivalPlace',
+  'arrivalSkip',
+  'supplyArrivalPick',
+  'supplyArrivalGroup',
+  'supplyArrivals',
+  'supplyTrainGroup',
+  'supplyTrainPlace',
+  'combatSupply',
+  'combatDeclareAr',
+  'combatAutoResolve',
+  'combatLosses',
+  'combatOptions',
+  'combatRetreatPaths',
+  'combatAdvance',
+  'combatSkip',
+  'supplyPlan',
+  'supplyRecovery',
+  'supplyFeeding',
+  'attritionRoll',
+  'attritionApply',
+  /*
+   * 行政链（A 整备 / B 重建整编）保留：这些不移动算子、不改变战线，
+   * 但跨回合的整备/重建要真的走（否则 13.5、15.1 这些流程整段不到账）。
+   */
+  'refitBase',
+  'rebuild',
+  'consolidate',
+])
+
+/** 进行中的弹幕/空袭只需要把它走完（这类是"收束"，不是新决策） */
+const AI_BASELINE_BARRAGE_STEPS: ReadonlySet<string> = new Set([
+  'barrageSupply',
+  'barrageShifts',
+  'barrageDice',
+  'barrageOutcome',
+  'barrageCancel',
+])
+
+function simplifyAiAction(snapshot: AiSnapshot, action: AiAction): AiAction {
+  if (action.kind === 'wait' || action.kind === 'none') return action
+  if (AI_BASELINE_KINDS.has(action.kind)) return action
+  // 已开始的移动必须收束（不移动也合法：结束本次移动），否则环节会卡在交互里
+  if (snapshot.move.active) return { kind: 'moveFinish' }
+  // 已在飞的空军任务同样要收束（驱动逐段推进），不能半途丢下
+  if (snapshot.air.inProgress && action.kind === 'airMission') return action
+  // 已在结算的弹幕走完剩余步骤；不再新发起
+  if (snapshot.barrage.state !== null && AI_BASELINE_BARRAGE_STEPS.has(action.kind)) return action
+  return { kind: 'advance' }
+}
+
+/** 完整档（Intro 专用）：原 B3 决策链原样保留 */
+function decideAiActionFull(snapshot: AiSnapshot): AiAction {
+  const profile = snapshot.aiProfile ?? aiProfileOf(snapshot.scenarioId)
   if (snapshot.terminated) return { kind: 'none' }
 
   // 1) 盘面提问：受控方才作答；否则明确告诉玩家在等什么
@@ -1037,6 +1116,19 @@ export function decideAiAction(snapshot: AiSnapshot): AiAction {
       target: snapshot.air.inProgress ? null : snapshot.air.target,
       aircraftId: snapshot.air.inProgress ? null : snapshot.air.aircraftId,
     }
+
+  /*
+   * 简化档（非 Intro）：机械动作（作答 / 初设 / 整备重建 / 到货 / 空袭收束 / 战斗结算 /
+   * 补给损耗 / 推进）走完就停，不再自己发起预备、移动、炮击、战斗、空袭、弹幕。
+   *
+   * 放在这里而不是在出口处改写动作：出口改写要先把后面的候选全部算出来再丢掉，
+   * 每步仍白扫一遍单位/敌格（用户 2026-11-23「还卡」）。规则判据一概不动，只是不主动做。
+   */
+  if (profile === 'baseline') {
+    const supply = decideSupply(snapshot)
+    if (supply !== null) return supply
+    return snapshot.advanceAvailable ? { kind: 'advance' } : { kind: 'none' }
+  }
 
   // 5) 预备 → 战斗（只在闸门放行的环节；每环节每单位只试一次）
   if (snapshot.can.has('move.modeChange')) {

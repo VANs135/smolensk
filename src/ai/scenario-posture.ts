@@ -24,3 +24,19 @@ export const AI_SCENARIO_POSTURES: Readonly<Record<string, AiScenarioPosture>> =
 export function aiScenarioPostureOf(scenarioId: string): AiScenarioPosture | null {
   return AI_SCENARIO_POSTURES[scenarioId] ?? null
 }
+
+/**
+ * AI 档位（用户 2026-11-23「先简化一下别的剧本AI逻辑，现在那些AI根本不堪使用，还卡」）
+ *
+ * - `Intro` ＝ `full`：教学/纯 PVE 剧本，只有反应式决策，保留完整动作链；
+ * - 其余剧本 ＝ `baseline`：只做机械动作（作答 / 战斗结算 / 补给损耗 / 初设 / 推进），
+ *   不再自己发起移动、突袭、铁路、建造、空袭、弹幕、重建 —— 目标是不卡、行为可预期。
+ *
+ * 该档位只影响 AI 自己的选点，不改任何规则判据；以后要给某个剧本放开某一类动作，
+ * 在这里加一条即可（不要在策略层写 `if scenarioId === ...`）。
+ */
+export type AiProfile = 'full' | 'baseline'
+
+export function aiProfileOf(scenarioId: string): AiProfile {
+  return scenarioId === 'Intro' ? 'full' : 'baseline'
+}

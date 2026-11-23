@@ -19,8 +19,8 @@ import { CORE_HEX, NEAR_HEX, groundRecord, newConsole, placeGround } from './sop
 function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
   return {
     turn: 1,
-    // 默认非 Intro ⇒ 无剧本姿态（现有用例的排序与原行为一致）；守城用例单列 `scenarioId: 'Intro'`
-    scenarioId: 'test',
+    // 默认按完整档（Intro）跑：这些用例钉的是原动作链，基线档行为另有一组用例
+    scenarioId: 'Intro',
     phase: 'movement',
     segment: 'movement.modeAndMovement',
     segmentStepIndex: 0,
@@ -136,7 +136,16 @@ function branch(over: Partial<AiSnapshot['branch']>): AiSnapshot['branch'] {
 }
 
 function aiCtx(w: ReturnType<typeof newConsole>) {
-  return { workbench: w, session: useGameSessionStore(), setup: useSetupStore() }
+  /*
+   * 这一组用例钉的是**完整档**的动作接线（与剧本数据无关）⇒ 用 context 覆盖走 Intro 档；
+   * 非 Intro 的简化档在下面「基线档」用例里单独钉。
+   */
+  return {
+    workbench: w,
+    session: useGameSessionStore(),
+    setup: useSetupStore(),
+    scenarioId: 'Intro',
+  }
 }
 
 /** 把操作台停在 C 段的「模式与移动」环节（移动支线都在这一环） */
@@ -529,5 +538,90 @@ describe('批 2 AI C 段支线：落到既有入口', () => {
     expect(result.ok, JSON.stringify({ err: w.combatError, log: w.log[0] })).toBe(true)
     expect(w.overrunContext).not.toBeNull()
     expect(w.combatState).not.toBeNull()
+  })
+})
+
+/*
+ * 用户 2026-11-23：「先简化一下别的剧本AI逻辑，现在那些AI根本不堪使用，还卡」
+ * ⇒ 非 Intro 剧本走 `baseline` 档：只做机械动作（作答/结算/补给损耗/初设/推进），
+ *   不再自己发起移动、突袭、铁路、建造、空袭、弹幕、重建。
+ */
+describe('简化档（非 Intro）：只做机械动作，不主动打仗', () => {
+  it('不再自己铺建造标记：动作降级为「推进环节」', () => {
+    const action = decideAiAction(
+      snap({
+        scenarioId: 'Smolensk',
+        can: new Set(['move.construction', 'move.order']),
+        branch: branch({ constructionMarker: { marker: 'bridge', hex: { col: 9, row: 9 } } }),
+      }),
+    )
+    expect(action).toEqual({ kind: 'advance' })
+  })
+
+  it('已在移动中 ⇒ 只收束本次移动（不突袭、不走格）', () => {
+    const action = decideAiAction(
+      snap({
+        scenarioId: 'Smolensk',
+        can: new Set(['move.order']),
+        move: { ...snap().move, active: true, hasStepped: false, selectedIds: ['a1'] },
+        branch: branch({ overrunTargets: [{ col: 3, row: 3 }] }),
+      }),
+    )
+    expect(action).toEqual({ kind: 'moveFinish' })
+  })
+
+  it('不自己发起空军任务（有目标也不飞）', () => {
+    const action = decideAiAction(
+      snap({
+        scenarioId: 'Smolensk',
+        can: new Set(['air.mission', 'move.order']),
+        air: {
+          inProgress: false,
+          flownThisPhase: false,
+          inMovementPhase: true,
+          weatherNormal: true,
+          target: { col: 3, row: 2 },
+          aircraftId: 'ac1',
+          missionSide: null,
+          driveable: true,
+        },
+      }),
+    )
+    expect(action).toEqual({ kind: 'advance' })
+  })
+
+  it('战斗结算仍然做：守方撤退照旧按落点排序提交', () => {
+    const action = decideAiAction(
+      snap({
+        scenarioId: 'Smolensk',
+        phase: 'combat',
+        segment: 'combat.resolve',
+        combat: {
+          ...snap().combat,
+          state: { step: 'retreat', finished: false },
+          defenderHex: { col: 18, row: 27 },
+          adjacentDefenderHexes: [{ col: 18, row: 26 }],
+          retreatPlans: [
+            {
+              unitId: 'd1',
+              role: 'defender',
+              chosen: null,
+              destinations: [
+                {
+                  hex: { col: 18, row: 31 },
+                  forcedDestruction: false,
+                  inEnemyZoc: false,
+                  path: [{ col: 18, row: 31 }],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    )
+    expect(action).toEqual({
+      kind: 'combatRetreatPaths',
+      paths: [{ unitId: 'd1', path: [{ col: 18, row: 31 }] }],
+    })
   })
 })

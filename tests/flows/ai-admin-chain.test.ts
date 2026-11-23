@@ -17,7 +17,8 @@ import { fresh } from './flow-harness'
 function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
   return {
     turn: 1,
-    scenarioId: 'test',
+    // 完整档（Intro）：这些用例钉的是行政链的原有顺序，基线档另有简化用例
+    scenarioId: 'Intro',
     phase: 'reinforcement',
     segment: 'reinforcement.arrival',
     segmentStepIndex: 0,
