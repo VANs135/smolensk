@@ -19,6 +19,8 @@ import { CORE_HEX, NEAR_HEX, groundRecord, newConsole, placeGround } from './sop
 function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
   return {
     turn: 1,
+    // 默认非 Intro ⇒ 无剧本姿态（现有用例的排序与原行为一致）；守城用例单列 `scenarioId: 'Intro'`
+    scenarioId: 'test',
     phase: 'movement',
     segment: 'movement.modeAndMovement',
     segmentStepIndex: 0,
@@ -386,6 +388,89 @@ describe('9.12 / 9.10：AI 的撤退落点与选项（2026-11-23 优化）', () 
       retreatHexes: 1,
       lossPoints: 0,
       ignoreOptions: false,
+    })
+  })
+
+  /*
+   * 用户 2026-11-23：「教学剧本苏军撤退方向优先守城」。
+   * Intro 的城＝19.27 / 19.28（剧本卡：轴方夺取两格⇒大胜）⇒ 守方撤退即使离敌军更近，
+   * 也先靠城；非 Intro 剧本没有 anchor，行为回到「离敌军最远」。
+   */
+  it('Intro：守方撤退先靠维捷布斯克（19.27/19.28），而不是一味远离敌军', () => {
+    const action = decideAiAction(
+      snap({
+        scenarioId: 'Intro',
+        phase: 'combat',
+        segment: 'combat.resolve',
+        combat: {
+          ...snap().combat,
+          state: { step: 'retreat', finished: false },
+          defenderHex: { col: 18, row: 27 },
+          adjacentDefenderHexes: [{ col: 18, row: 26 }],
+          retreatPlans: [
+            plan({
+              destinations: [
+                // 远离敌军（南边），但离城 4 格
+                {
+                  hex: { col: 18, row: 31 },
+                  forcedDestruction: false,
+                  inEnemyZoc: false,
+                  path: [{ col: 18, row: 31 }],
+                },
+                // 紧贴敌军邻格，但就在维捷布斯克城边（19.27 的邻格）
+                {
+                  hex: { col: 19, row: 26 },
+                  forcedDestruction: false,
+                  inEnemyZoc: false,
+                  path: [{ col: 19, row: 26 }],
+                },
+              ],
+            }),
+          ],
+        },
+      }),
+    )
+    expect(action).toEqual({
+      kind: 'combatRetreatPaths',
+      paths: [{ unitId: 'd1', path: [{ col: 19, row: 26 }] }],
+    })
+  })
+
+  it('非 Intro 剧本不带守城偏好：仍按「离敌军最远」选点', () => {
+    const action = decideAiAction(
+      snap({
+        scenarioId: 'Smolensk',
+        phase: 'combat',
+        segment: 'combat.resolve',
+        combat: {
+          ...snap().combat,
+          state: { step: 'retreat', finished: false },
+          defenderHex: { col: 18, row: 27 },
+          adjacentDefenderHexes: [{ col: 18, row: 26 }],
+          retreatPlans: [
+            plan({
+              destinations: [
+                {
+                  hex: { col: 18, row: 31 },
+                  forcedDestruction: false,
+                  inEnemyZoc: false,
+                  path: [{ col: 18, row: 31 }],
+                },
+                {
+                  hex: { col: 19, row: 26 },
+                  forcedDestruction: false,
+                  inEnemyZoc: false,
+                  path: [{ col: 19, row: 26 }],
+                },
+              ],
+            }),
+          ],
+        },
+      }),
+    )
+    expect(action).toEqual({
+      kind: 'combatRetreatPaths',
+      paths: [{ unitId: 'd1', path: [{ col: 18, row: 31 }] }],
     })
   })
 })

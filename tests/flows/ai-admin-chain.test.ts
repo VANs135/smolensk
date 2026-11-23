@@ -17,6 +17,7 @@ import { fresh } from './flow-harness'
 function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
   return {
     turn: 1,
+    scenarioId: 'test',
     phase: 'reinforcement',
     segment: 'reinforcement.arrival',
     segmentStepIndex: 0,

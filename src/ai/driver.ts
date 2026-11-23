@@ -876,6 +876,7 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
 
   return {
     turn: w.turn,
+    scenarioId: ctx.session.scenarioId,
     phase: w.phase,
     segment: w.segmentStep?.id ?? '',
     segmentStepIndex: w.segmentStepIndex,

@@ -9,6 +9,7 @@
  *   快照里所有「需要挑一个」的列表都由驱动按「格号 + 型号」排好，本文件不再重排。
  */
 import { hexDistance } from '@/engine/hex-geometry'
+import { aiScenarioPostureOf } from './scenario-posture'
 
 export type AiSide = 'axis' | 'soviet'
 
@@ -253,6 +254,8 @@ export interface AiRebuildSnapshot {
 
 export interface AiSnapshot {
   turn: number
+  /** 剧本 id（剧本级 AI 姿态用；当前只有 Intro 带「撤退守城」偏好，见 `scenario-posture.ts`） */
+  scenarioId: string
   phase: string
   segment: string
   segmentStepIndex: number
@@ -487,11 +490,13 @@ function pickMoveTarget(snapshot: AiSnapshot): AiHex | null {
 }
 
 /**
- * 撤退落点（9.12）：优先「不被消灭且不进敌方 ZOC」，其次「不被消灭」，
- * 再在同档里**朝远离敌军的方向退**（用户 2026-11-23「该剧本苏军能干的事情就是选择撤退的位置」）。
+ * 撤退落点（9.12）：优先「不被消灭且不进敌方 ZOC」，其次「不被消灭」；
+ * 同档里先看剧本姿态（`anchorHexes`：守城剧本先靠拢城格），再看「离最近敌军最远」。
  *
  * 修前第三档是 `path.length`——每枚单位的撤退距离是同一要求值，这一档恒等 ⇒ 最终退到哪一格
- * 只由格号决定（常常退到贴着攻方的那一格）。现在改用「离最近敌军最远」，同档仍按格号稳定排序。
+ * 只由格号决定（常常退到贴着攻方的那一格）。用户 2026-11-23 的两次口径：
+ * 「该剧本苏军能干的事情就是选择撤退的位置」（→ 先远离敌军）、
+ * 「教学剧本苏军撤退方向优先守城」（→ Intro 带 anchor 时先靠城）。
  */
 function pickRetreatDestination(
   destinations: readonly {
@@ -501,15 +506,30 @@ function pickRetreatDestination(
     path: readonly AiHex[]
   }[],
   enemyHexes: readonly AiHex[] = [],
+  anchorHexes: readonly AiHex[] = [],
 ): readonly AiHex[] | null {
   const rank = (item: { forcedDestruction: boolean; inEnemyZoc: boolean }): number =>
     item.forcedDestruction ? 2 : item.inEnemyZoc ? 1 : 0
+  /*
+   * 姿态档只在有 anchor 时参与比较：空 anchor 两边都是 Infinity，相减会得 NaN，
+   * 排序比较器返回 NaN 时顺序未定义（不能靠它"什么都不做"）。
+   */
+  const anchorRank = (a: AiHex, b: AiHex): number =>
+    anchorHexes.length === 0
+      ? 0
+      : nearestEnemyDistance(a, anchorHexes) - nearestEnemyDistance(b, anchorHexes)
+  // 同理：没有敌军事实时不做「远敌」比较（Infinity−Infinity＝NaN）
+  const enemyRank = (a: AiHex, b: AiHex): number =>
+    enemyHexes.length === 0
+      ? 0
+      : nearestEnemyDistance(b, enemyHexes) - nearestEnemyDistance(a, enemyHexes)
   const sorted = destinations
     .slice()
     .sort(
       (a, b) =>
         rank(a) - rank(b) ||
-        nearestEnemyDistance(b.hex, enemyHexes) - nearestEnemyDistance(a.hex, enemyHexes) ||
+        anchorRank(a.hex, b.hex) ||
+        enemyRank(a.hex, b.hex) ||
         a.path.length - b.path.length ||
         compareHex(a.hex, b.hex),
     )
@@ -786,6 +806,7 @@ function decideCombatSettlement(snapshot: AiSnapshot): AiAction | null {
         return waitForSide(role === 'attacker' ? attacker : opponent, '选择撤退落点（9.12）')
       }
       const paths: { unitId: string; path: readonly AiHex[] }[] = []
+      const posture = aiScenarioPostureOf(snapshot.scenarioId)
       for (const plan of snapshot.combat.retreatPlans) {
         /*
          * 「敌军」按撤退方的角色取：守方撤退 ⇒ 攻方所在的邻格（`adjacentDefenderHexes`）；
@@ -797,8 +818,15 @@ function decideCombatSettlement(snapshot: AiSnapshot): AiAction | null {
             : snapshot.combat.defenderHex === null
               ? []
               : [snapshot.combat.defenderHex]
+        /*
+         * 剧本姿态（用户 2026-11-23「教学剧本苏军撤退方向优先守城」）：只作用于**守方**；
+         * 当前仅 Intro 带 anchor（维捷布斯克两格），其余剧本为空 ⇒ 与上一版行为一致。
+         */
+        const anchorHexes = plan.role === 'defender' ? (posture?.retreatAnchorHexes ?? []) : []
         const path =
-          plan.chosen === null ? pickRetreatDestination(plan.destinations, enemyHexes) : null
+          plan.chosen === null
+            ? pickRetreatDestination(plan.destinations, enemyHexes, anchorHexes)
+            : null
         if (path !== null) paths.push({ unitId: plan.unitId, path })
       }
       return { kind: 'combatRetreatPaths', paths }
