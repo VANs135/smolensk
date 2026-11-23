@@ -426,6 +426,31 @@ describe('B14c：战后推进阵列（9.12g-A / 9.12b）', () => {
     expect(advanced).toEqual([second])
     expect(advanced).not.toContain(first)
   })
+
+  /*
+   * 用户 2026-11-23 第 6 批：「单位推进的时候直接在地图上点，不要搞单位名框的选择」
+   * 地图那一击＝`advanceNow`：第一次点防御格 ⇒ 全选；同格再点一次 ⇒ 全消（9.12g-D 的开关落在图上）。
+   */
+  it('地图点防御格即推进：`advanceNow` 一进一出（面板不再逐单位点选）', () => {
+    const store = newStore()
+    setupBattle(store, 2)
+    driveToAdvanceStep(store)
+
+    const hex = store.combatAdvanceHex
+    expect(hex).not.toBeNull()
+    const eligible = store.combatAdvanceChoices
+      .filter((choice) => choice.disabledReason === null)
+      .map((choice) => choice.unit.instanceId)
+    expect(eligible.length).toBeGreaterThan(0)
+
+    // 点地图：全选
+    expect(store.advanceNow(hex!)).toBe(true)
+    expect(store.combatInputs.advanceUnitIds).toEqual(eligible)
+
+    // 同格再点一次：全消（改成"结束战斗（不推进）"）
+    expect(store.advanceNow(hex!)).toBe(true)
+    expect(store.combatInputs.advanceUnitIds).toEqual([])
+  })
 })
 
 describe('B14c：战斗面板的替换（源码守卫）', () => {
@@ -484,24 +509,32 @@ describe('B14c：战斗面板的替换（源码守卫）', () => {
   })
 
   /*
-   * ★ 契约反转（用户 2026-11-12 第二批）：**推进入口唯一** ⇒ 逐单位勾选与确认从地图小窗
-   *   收回 `CombatPanel`（推进就是在面板里一屏一决策）。9.12g-D 的「由玩家选择哪些单位推进」
-   *   是规则要求，故只准搬、**不准删**。
+   * ★ 契约反转（用户 2026-11-12 第二批）：**推进入口唯一**。
+   * ★ 再反转（用户 2026-11-23 第 6 批）：「单位推进的时候直接在地图上点，不要搞单位名框的选择」
+   *   ⇒ 面板不再摆「单位名」按钮，推进/取消都在地图上点防御格（`advanceNow` 全选 ↔ 全消）。
    */
-  it('批 F·E4（反转）：推进勾选与确认的唯一入口在战斗面板', () => {
-    expect(panel).toContain('workbench.toggleAdvanceUnit(')
+  it('批 F·E4（再反转）：推进只在地图上点，面板不给单位名阵列', () => {
     expect(panel).toContain('@click="workbench.confirmCombatAdvance()"')
     expect(panel).toContain('workbench.combatAdvanceChoices')
+    expect(panel).toContain('advanceHexLabel')
+    // 面板不再逐个单位点选（那等于同一个决定做两遍）
+    expect(panel).not.toContain('workbench.toggleAdvanceUnit(')
+    expect(panel.match(/v-for="choice in advanceSelectable"/g) ?? []).toHaveLength(0)
 
+    // 地图那一击走 `advanceNow`（推进格的唯一入口）
+    const mapView = readFileSync('src/stores/map-view.ts', 'utf8')
+    expect(mapView).toContain('workbench.advanceNow(hex)')
+
+    // 小窗照旧不承载推进
     const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')
-    // 小窗不再承载推进：不列候选、不勾选、不确认
     expect(popover).not.toContain('workbench.combatAdvanceChoices')
     expect(popover).not.toContain('workbench.toggleAdvanceUnit(')
     expect(popover).not.toContain('workbench.confirmCombatAdvance()')
 
-    // 勾选动作仍在 store（面板与小窗共用一份，不各写一遍）
+    // 勾选动作仍在 store（地图一击与既有调用共用一份）
     const store = readStoreSource()
     expect(store).toContain('function toggleAdvanceUnit(')
+    expect(store).toContain('function advanceNow(')
   })
 
   it('候选与灰显原因取自 store（面板不自己筛「付过补给/不可移动」）', () => {

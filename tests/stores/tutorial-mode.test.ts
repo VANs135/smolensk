@@ -228,6 +228,14 @@ describe('教学模式：Vitebsk', () => {
     expect(lagg.airStatus).toBe('inactive')
     expect(sweepPlane.airStatus).toBe('inactive')
 
+    /*
+     * 用户 2026-11-23（第 6 批）：14.6 战机扫荡没有对地这一项 ⇒ 结算面板不得出现「对地」行。
+     * 上一趟扫射结算完的 `barrageState` 还留在 store 里（炮兵与空军共用那条链），
+     * 归属判据（`airMissionOwnsBarrage`）必须把它挡在外面。
+     */
+    expect(ctx.w.barrageState).not.toBeNull()
+    expect(ctx.w.airMissionOwnsBarrage).toBe(false)
+
     ctx.w.autoResolveAirMissionNow()
     if (ctx.w.airState?.step === 'resolveMission') ctx.w.settleAirMissionNow()
     if (ctx.w.airState?.step === 'returnToBase') ctx.w.completeAirReturnNow()

@@ -27,8 +27,6 @@ const ui = useUiStore()
 
 const modeOptions = computed(() => hotseat.MODE_LABELS)
 const choices = computed(() => setup.scenarioChoices)
-const selectedId = ref(setup.scenarioId)
-const selected = computed(() => choices.value.find((item) => item.id === selectedId.value) ?? null)
 
 /**
  * 剧本记录的完整字段
@@ -42,6 +40,20 @@ const fullScenarios = computed(() => new Map(scenarios.scenarios.map((item) => [
 function isTeachingScenario(id: string): boolean {
   return fullScenarios.value.get(id)?.singlePlayerTurn === true
 }
+
+/**
+ * 默认落在**常规剧本**上（教学是单独一栏，用户 2026-11-23）
+ *
+ * 修前默认选中＝`setup.scenarioId`（首剧本恰是教学的 Intro）⇒ 一页开出来就是一格"教学剧本"
+ * 被选中、却又没勾教学，两边都不像。现在：只剩教学剧本时也退回它的常规卡位，
+ * 玩家要教学就点上面那一栏。
+ */
+const selectedId = ref(
+  isTeachingScenario(setup.scenarioId)
+    ? (choices.value.find((item) => !isTeachingScenario(item.id))?.id ?? setup.scenarioId)
+    : setup.scenarioId,
+)
+const selected = computed(() => choices.value.find((item) => item.id === selectedId.value) ?? null)
 
 /** 首回合天气的中文名（`scenarios.json` 的 firstWeather） */
 function weatherLabelOf(id: string): string {
@@ -76,7 +88,17 @@ const briefingOpen = computed({
 
 /* ── 用户 2026-11-18 第 2 条：Vitebsk 教学模式的独立开局方式 ── */
 
-/** 教学开关（只对单回合教学剧本出现） */
+/**
+ * 剧本卡片分成两组（用户 2026-11-23 第 6 批：教学入口要**单列**）
+ *
+ * 教学剧本**单独成一栏**——点它即进入教学（PvE 外壳 + 逐步引导），
+ * 不再挤在「对局设置」里挂一个勾选框：教学是一种开局方式，
+ * 不是给普通剧本加的一个开关。
+ */
+const teachingChoices = computed(() => choices.value.filter((item) => isTeachingScenario(item.id)))
+const normalChoices = computed(() => choices.value.filter((item) => !isTeachingScenario(item.id)))
+
+/** 教学开关（选中教学剧本即开；换回常规剧本即关） */
 const tutorialMode = ref(false)
 /** 目标窗关掉前先记住这一局是不是教学，防止中途换剧本把标记带错 */
 const pendingTutorial = ref(false)
@@ -98,11 +120,18 @@ function onTutorialChange(on: boolean): void {
   tutorial.startFor()
 }
 
+/** 点一张剧本卡：选中；教学卡连教学开局一起落定，常规卡收起教学 */
+function chooseScenarioCard(id: string): void {
+  selectedId.value = id
+  const teaching = isTeachingScenario(id)
+  if (teaching && !tutorialMode.value) onTutorialChange(true)
+  if (!teaching && tutorialMode.value) onTutorialChange(false)
+}
+
 /** 换到非教学剧本就收起教学开局，避免把未激活空军/引导带到别的剧本 */
 watch(selectedId, (id) => {
   if (!isTeachingScenario(id) && tutorialMode.value) onTutorialChange(false)
 })
-
 /**
  * 进入初设（用户 2026-11-18 第 1 条）
  *
@@ -175,30 +204,67 @@ function onConfirmBriefing(): void {
             <h3 id="scenario-choice-title">选择剧本</h3>
             <span class="num">{{ choices.length }} 个剧本</span>
           </header>
-          <ul class="scenario__list">
-            <li v-for="item in choices" :key="item.id">
-              <button
-                type="button"
-                class="scenario__card"
-                :class="{ 'scenario__card--on': item.id === selectedId }"
-                :aria-pressed="item.id === selectedId"
-                @click="selectedId = item.id"
-              >
-                <span class="scenario__id num">{{ item.id.padStart(2, '0') }}</span>
-                <span class="scenario__entry">
-                  <strong class="scenario__name">{{ item.name }}</strong>
-                  <span class="scenario__date num">{{ item.firstTurn }} – {{ item.lastTurn }}</span>
-                  <span v-if="isTeachingScenario(item.id)" class="scenario__teach-tag num">
-                    教学 · 单回合
+          <!-- 教学模式**单列**：教学是一种开局方式，不是给剧本加的复选框（用户 2026-11-23） -->
+          <section v-if="teachingChoices.length > 0" class="scenario__group">
+            <header class="scenario__group-head">
+              <h4>教学模式</h4>
+              <span class="muted">逐步引导 · 苏军由脚本代演</span>
+            </header>
+            <ul class="scenario__list">
+              <li v-for="item in teachingChoices" :key="item.id">
+                <button
+                  type="button"
+                  class="scenario__card scenario__card--teach"
+                  :class="{ 'scenario__card--on': item.id === selectedId && tutorialMode }"
+                  :aria-pressed="item.id === selectedId && tutorialMode"
+                  @click="chooseScenarioCard(item.id)"
+                >
+                  <span class="scenario__id num">{{ item.id.padStart(2, '0') }}</span>
+                  <span class="scenario__entry">
+                    <strong class="scenario__name">{{ item.name }}</strong>
+                    <span class="scenario__date num"
+                      >{{ item.firstTurn }} – {{ item.lastTurn }}</span
+                    >
+                    <span class="scenario__teach-tag num"> 教学 · 单回合 · 逐步引导 </span>
                   </span>
-                </span>
-                <span class="scenario__meta num">{{ item.turns }} 回合</span>
-                <span class="scenario__mark" aria-hidden="true">
-                  {{ item.id === selectedId ? '✓' : '' }}
-                </span>
-              </button>
-            </li>
-          </ul>
+                  <span class="scenario__meta num">{{ item.turns }} 回合</span>
+                  <span class="scenario__mark" aria-hidden="true">
+                    {{ item.id === selectedId && tutorialMode ? '✓' : '' }}
+                  </span>
+                </button>
+              </li>
+            </ul>
+          </section>
+
+          <section class="scenario__group">
+            <header class="scenario__group-head">
+              <h4>常规剧本</h4>
+              <span class="muted">{{ normalChoices.length }} 个</span>
+            </header>
+            <ul class="scenario__list">
+              <li v-for="item in normalChoices" :key="item.id">
+                <button
+                  type="button"
+                  class="scenario__card"
+                  :class="{ 'scenario__card--on': item.id === selectedId && !tutorialMode }"
+                  :aria-pressed="item.id === selectedId && !tutorialMode"
+                  @click="chooseScenarioCard(item.id)"
+                >
+                  <span class="scenario__id num">{{ item.id.padStart(2, '0') }}</span>
+                  <span class="scenario__entry">
+                    <strong class="scenario__name">{{ item.name }}</strong>
+                    <span class="scenario__date num"
+                      >{{ item.firstTurn }} – {{ item.lastTurn }}</span
+                    >
+                  </span>
+                  <span class="scenario__meta num">{{ item.turns }} 回合</span>
+                  <span class="scenario__mark" aria-hidden="true">
+                    {{ item.id === selectedId && !tutorialMode ? '✓' : '' }}
+                  </span>
+                </button>
+              </li>
+            </ul>
+          </section>
         </section>
 
         <div class="scenario__side">
@@ -227,12 +293,8 @@ function onConfirmBriefing(): void {
               </div>
               <div>
                 <dt>天气</dt>
-                <!-- 开局天气可选（用户 2026-11-15 口径）：只教学剧本出现，一个入口、两档 -->
-                <!-- 传 `selected.id`：卡片选中尚未提交到会话 store，判据要按正在配置的剧本走 -->
-                <dd
-                  v-if="isTeachingScenario(selected.id) && tutorialMode"
-                  class="scenario__weather"
-                >
+                <!-- 教学剧本固定正常飞行（入口在「教学模式」那一栏，不再有勾选框） -->
+                <dd v-if="tutorialMode" class="scenario__weather">
                   <span>正常飞行（教学固定）</span>
                 </dd>
                 <dd v-else-if="isTeachingScenario(selected.id)" class="scenario__weather">
@@ -259,17 +321,10 @@ function onConfirmBriefing(): void {
                 </dd>
                 <dd v-else>{{ weatherLabelOf(selected.id) }}</dd>
               </div>
-              <div v-if="isTeachingScenario(selected.id)">
-                <dt>教学模式</dt>
+              <div v-if="tutorialMode">
+                <dt>教学</dt>
                 <dd class="scenario__weather">
-                  <label>
-                    <input
-                      type="checkbox"
-                      :checked="tutorialMode"
-                      @change="onTutorialChange(($event.target as HTMLInputElement).checked)"
-                    />
-                    <span>逐步引导 UI</span>
-                  </label>
+                  <span>玩家执轴心 · 苏军由脚本代演 · 逐步引导</span>
                 </dd>
               </div>
             </dl>
@@ -466,6 +521,34 @@ function onConfirmBriefing(): void {
   list-style: none;
 }
 
+/* 剧本分两栏（教学模式 / 常规剧本）：只用一条细线隔开，不再各套一张卡 */
+.scenario__group {
+  padding: var(--space-1) 0 var(--space-2);
+}
+
+.scenario__group + .scenario__group {
+  border-top: 1px solid var(--color-command-line);
+}
+
+.scenario__group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.scenario__group-head h4 {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-command-ink);
+}
+
+.scenario__group-head .muted {
+  font-size: var(--text-xs);
+  color: var(--color-command-muted);
+}
+
 .scenario__card {
   display: grid;
   grid-template-columns: var(--space-10) minmax(0, 1fr) auto var(--space-4);
@@ -492,6 +575,11 @@ function onConfirmBriefing(): void {
 .scenario__card--on:hover {
   border-color: var(--color-command-teal);
   background: var(--color-command-teal-bg);
+}
+
+/* 教学卡与常规卡同一形状，只靠左侧一道金边区分（不额外加字、不换版式） */
+.scenario__card--teach {
+  border-left: 2px solid var(--color-gold);
 }
 
 .scenario__entry {

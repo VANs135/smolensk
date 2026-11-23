@@ -237,3 +237,29 @@ describe('教学模式：苏军是人机对手（2026-11-19，源码守卫）', 
     expect(view).toContain('人机（苏军 AI · 教学固定）')
   })
 })
+
+describe('选剧本页：教学模式单列成栏（2026-11-23 第 6 批，源码守卫）', () => {
+  const view = readFileSync('src/views/ScenarioSetupView.vue', 'utf8')
+
+  it('教学剧本单独一栏，不再在「对局设置」里挂「逐步引导 UI」勾选框', () => {
+    // 单列：两栏各自成组，教学卡在自己的标题下
+    expect(view).toContain('teachingChoices')
+    expect(view).toContain('normalChoices')
+    expect(view).toContain('教学模式')
+    expect(view).toContain('常规剧本')
+    // 勾选框没了
+    expect(view).not.toContain('逐步引导 UI')
+    expect(view).not.toContain('type="checkbox"')
+    // 点教学卡即落教学开局（不是"再勾一下"）
+    expect(view).toContain('chooseScenarioCard')
+    expect(view).toContain('onTutorialChange(true)')
+  })
+
+  it('默认落在常规剧本上（教学剧本不再被默认选中）', () => {
+    // 投影里确有教学剧本（Intro）且它排在首位 —— 视图的初始选中不能是它
+    const teaching = scenarios.scenarios.filter((item) => item.singlePlayerTurn === true)
+    expect(teaching.length).toBeGreaterThan(0)
+    expect(view).toContain('isTeachingScenario(setup.scenarioId)')
+    expect(view).toContain('choices.value.find((item) => !isTeachingScenario(item.id))?.id')
+  })
+})

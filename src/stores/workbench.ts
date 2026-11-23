@@ -3638,6 +3638,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       return false
     }
+    /*
+     * 用户 2026-11-23（第 6 批）：「单位推进的时候直接在地图上点，不要搞单位名框的选择」。
+     * 面板已撤掉逐单位勾选 ⇒ 这一击＝**全选 / 全消的开关**（再点同格即取消），
+     * 规则语义仍是 9.12g-D 的「由拥有者决定哪些单位推进」，只是决定落在图上。
+     */
+    if (combatInputs.value.advanceUnitIds.length > 0) {
+      combatInputs.value = { ...combatInputs.value, advanceUnitIds: [] }
+      pushLog('info', '取消推进（9.12g）：本次战斗不推进', '9.12g')
+      return true
+    }
     combatInputs.value = { ...combatInputs.value, advanceUnitIds: eligible.map((item) => item.id) }
     pushLog('info', `准备推进（9.12g）：${eligible.map((item) => item.label).join('、')}`, '9.12g')
     return true

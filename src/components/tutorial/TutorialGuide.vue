@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import type { HexRef } from '@/data'
-import { useTutorialStore } from '@/stores'
+import { useTutorialStore, useUiStore } from '@/stores'
 
 /**
  * Vitebsk 教学模式的**指针层**（用户 2026-11-18 第 2 条）
@@ -18,6 +18,19 @@ const props = defineProps<{
 }>()
 
 const tutorial = useTutorialStore()
+const ui = useUiStore()
+
+/**
+ * 教学通关（用户 2026-11-23 第 6 批）
+ *
+ * 「教学模式结束后表示玩家胜利，然后去玩正常的剧本，不要写什么按 2.2 继续」——
+ * 这一天打完就是**通关**（不是"本回合告一段落、接着按 2.2 走"）：弹胜利卡，
+ * 唯一去向是退出教学并回选剧本页挑一个常规剧本。
+ */
+function finishTutorialAndPickScenario(): void {
+  tutorial.stop()
+  ui.navigate('scenario')
+}
 
 interface Ring {
   left: number
@@ -224,10 +237,15 @@ watch(
       aria-labelledby="tut-done-title"
     >
       <section class="tut__dialog">
-        <strong id="tut-done-title" class="tut__done-title">教程结束</strong>
-        <p class="tut__intro">维捷布斯克已由我部拿下，这一天的教学到此收束。</p>
-        <p class="tut__intro">本回合教学结束；后续回合按 2.2 流程继续。</p>
-        <button type="button" class="tut__done-close" @click="tutorial.stop()">关闭</button>
+        <strong id="tut-done-title" class="tut__done-title">教学通关 · 玩家胜利</strong>
+        <p class="tut__intro">维捷布斯克已由我部拿下 —— 这一天的目标是你的了。</p>
+        <p class="tut__intro">教学到此结束。接下来去选一个常规剧本，按正式规则开一局。</p>
+        <div class="tut__done-actions">
+          <button type="button" class="tut__done-close" @click="finishTutorialAndPickScenario()">
+            去玩正常剧本
+          </button>
+          <button type="button" class="tut__done-quit" @click="tutorial.stop()">留在此局</button>
+        </div>
       </section>
     </div>
   </div>
@@ -332,8 +350,9 @@ watch(
 }
 
 /*
- * 教学收束＝弹窗（用户 2026-11-22）：教学走完 25 步后不能只在小角标一张"完成"卡，
- * 玩家可能根本没注意到。遮罩 + 居中对话框把「教程结束」摆在盘面正中，关掉即退出教学。
+ * 教学收束＝弹窗（用户 2026-11-22）：教学走完最后一步后不能只在小角标一张"完成"卡，
+ * 玩家可能根本没注意到。遮罩 + 居中对话框把「通关 · 玩家胜利」摆在盘面正中（2026-11-23
+ * 改成胜利口径 + 直接去选常规剧本），关掉即退出教学。
  */
 .tut__modal {
   position: fixed;
@@ -363,12 +382,28 @@ watch(
   letter-spacing: 0.04em;
 }
 
-.tut__done-close {
+.tut__done-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
   margin-top: 14px;
+}
+
+.tut__done-close {
   padding: 7px 22px;
   color: var(--color-on-accent);
   background: var(--color-accent);
   border: 0;
+  border-radius: 8px;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.tut__done-quit {
+  padding: 7px 16px;
+  color: var(--color-muted);
+  background: transparent;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   font-size: var(--text-sm);
   cursor: pointer;

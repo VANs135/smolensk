@@ -91,6 +91,14 @@ const props = withDefaults(
      * 只对 `selected === true` 的那张出现（与 `pick` 分开：先选、再点动作）。
      */
     pickActionLabel?: string
+    /**
+     * **只读**（不给玩家点）：仍铺出阵列与选中高亮，但不收点击、不弹拒绝行
+     *
+     * 用途：PvE / 教学里「对手自己点名」的那一侧 —— 对方选不代表玩家看不见
+     * （用户 2026-11-23：「空战时是能看到对方单位的」）。可选的算子照旧由调用方算好，
+     * 本组件只把"这是谁"和"选的是哪一枚"摆出来。
+     */
+    readonly?: boolean
   }>(),
   {
     title: '',
@@ -99,6 +107,7 @@ const props = withDefaults(
     maxRows: 4,
     groupMode: 'select',
     pickActionLabel: '',
+    readonly: false,
   },
 )
 
@@ -162,6 +171,8 @@ function actionItem(id: string): void {
 const refusal = ref<string | null>(null)
 
 function pickItem(item: CounterPickerItem): void {
+  // 只读（对手自己点名的那一侧）：阵列照铺，但不收玩家的点击
+  if (props.readonly) return
   const reason = item.disabledReason ?? null
   if (reason !== null) {
     refusal.value = `${item.name}：${reason}`
@@ -173,6 +184,7 @@ function pickItem(item: CounterPickerItem): void {
 
 /** 右键（= 触摸长按）：只把"哪一枚"报给上层，动作由上层决定（与 `pick` 分开） */
 function contextItem(id: string): void {
+  if (props.readonly) return
   emit('context', id)
 }
 
@@ -234,21 +246,24 @@ const gridStyle = computed<Record<string, string>>(() => ({
           >
             {{ props.pickActionLabel }}
           </button>
-          <button
+          <component
+            :is="props.readonly ? 'div' : 'button'"
             v-long-press="() => contextItem(item.id)"
-            type="button"
+            :type="props.readonly ? undefined : 'button'"
             class="picker__cell"
             :data-air-instance-id="item.airInstanceId"
             :class="{
               'picker__cell--on': item.selected,
               'picker__cell--off': item.disabledReason != null,
               'picker__cell--dim': item.dimmed === true && item.disabledReason == null,
+              'picker__cell--readonly': props.readonly,
             }"
             :title="
               item.disabledReason == null ? item.name : `${item.name}（${item.disabledReason}）`
             "
             :aria-label="item.name"
-            :aria-pressed="item.selected"
+            :aria-pressed="props.readonly ? undefined : item.selected"
+            :aria-disabled="props.readonly ? true : undefined"
             @click="pickItem(item)"
             @contextmenu.prevent="contextItem(item.id)"
             @pointerenter="hoverItem(item)"
@@ -258,7 +273,7 @@ const gridStyle = computed<Record<string, string>>(() => ({
             <img v-if="item.imageUrl !== null" class="picker__img" :src="item.imageUrl" alt="" />
             <span v-else class="picker__img picker__img--none" aria-hidden="true" />
             <span v-if="item.badge !== undefined" class="picker__badge num">{{ item.badge }}</span>
-          </button>
+          </component>
         </div>
       </template>
     </div>
@@ -404,6 +419,19 @@ const gridStyle = computed<Record<string, string>>(() => ({
  */
 .picker__cell--dim {
   opacity: 0.45;
+}
+
+/* 只读（对手自己点名的那一侧）：不按下、不给手型，但选中金框照旧 */
+.picker__cell--readonly {
+  cursor: default;
+}
+
+.picker__cell--readonly:hover {
+  border-color: transparent;
+}
+
+.picker__cell--readonly.picker__cell--on:hover {
+  border-color: var(--color-gold);
 }
 
 .picker__img {

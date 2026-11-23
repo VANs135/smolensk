@@ -360,11 +360,21 @@ describe('B14a：空军面板的替换（源码守卫）', () => {
     expect(store).toContain('function airCombatPicksPayload()')
   })
 
-  it('★ 2026-11-23：守方由 AI / 脚本接管时，逐轮守方点名不给玩家（苏军自己选机）', () => {
-    // 面板：守方阵营 = AI / 脚本 ⇒ 收掉那列阵列，只留一句「由谁自选」
+  it('★ 2026-11-23：守方由 AI / 脚本接管时，玩家不代点，但对方派了哪一架看得见（只读）', () => {
+    // 面板：守方阵营 = AI / 脚本 ⇒ 可点的那列收掉（不给玩家代对手选机）
     expect(panel).toContain('aiChoosesDefenderPlanes')
     expect(panel).toContain('v-if="!aiChoosesDefenderPlanes"')
     expect(panel).toContain('守方点名：由')
+    /*
+     * 同一条口径的另一半（用户 2026-11-23：「空战时是能看到对方单位的，对方选不代表看不到」）：
+     * 对手自选时**照铺阵列**（`readonly` + `defenderDisplayItems`），选中金框＝对手派的那一架。
+     */
+    expect(panel).toContain('defenderDisplayItems(round - 1)')
+    expect(panel).toContain(':title="`守方点名（第 ${round} 轮：${defenderSideLabel}已选，只读）`"')
+    expect(panel).toContain('readonly')
+    const picker = readFileSync('src/components/game/CounterPicker.vue', 'utf8')
+    expect(picker).toContain('readonly?: boolean')
+    expect(picker).toContain('picker__cell--readonly')
     // 飞机只有空战值（ACV），没有行动值（AR）——这里不许写成「行动值最高」
     expect(panel).toContain('按空战值（ACV）最高的那一架迎战')
     expect(panel).not.toContain('按行动值最高的那一架')

@@ -7,6 +7,7 @@ import OpsLossPicker from '@/components/ops/OpsLossPicker.vue'
 import { SessionStep } from '@/components/session'
 import UiField from '@/components/UiField.vue'
 import { useRefereeTools } from '@/components/ui-mode'
+import { buildDefenderDisplayItems } from './defender-display'
 import {
   aircraftRecordImageUrlOf,
   counterImageUrlOf,
@@ -127,6 +128,13 @@ const airMissionKindText = computed(() => {
 
 /** 10.2：对地战果摘要（自动跑出的结果，面板 2 顶部只读一行） */
 const airBarrageOutcomeLine = computed(() => {
+  /*
+   * 只认**本趟任务自己的**轰炸会话（10.0/10.2）。
+   * 上一趟任务已结算的 `barrageState` 会留在 store 里，修前这里不辨归属 ⇒ 战机扫荡（14.6，
+   * 根本不对地）的结算面板上会窜出一行「对地：列 5 → 4；目标 DG」，读的还是上一趟扫射的战果
+   * （用户 2026-11-23 截图实拍）。
+   */
+  if (!workbench.airMissionOwnsBarrage) return null
   const barrage = workbench.barrageState
   if (barrage === null || barrage.outcome === undefined) return null
   return (
@@ -174,6 +182,7 @@ const interceptionPairLine = computed(() => {
 
 /** 10.0a：对地战果停在"目标方分配损失"（与炮击第 3 步同一块） */
 const airLossPickPending = computed(() => {
+  if (!workbench.airMissionOwnsBarrage) return false
   const barrage = workbench.barrageState
   return (
     barrage !== null &&
@@ -276,6 +285,16 @@ const defenderPickItems = computed(
           workbench.airInputs.airCombatPicks[roundIndex]?.defenderAircraftId === air.instanceId,
         hex: air.hex,
       })),
+)
+
+/** 对手自己点名的那一侧 ⇒ **只读**阵列（用户 2026-11-23）；投影在 `./defender-display.ts` */
+const defenderDisplayItems = computed(
+  () =>
+    (roundIndex: number): readonly CounterPickerItem[] =>
+      buildDefenderDisplayItems(
+        workbench.airCombatDefenderPlanes,
+        workbench.airInputs.airCombatPicks[roundIndex]?.defenderAircraftId ?? null,
+      ),
 )
 
 /** 14.3e-B：把某一轮的点名写回 store（按轮下标自动补行） */
@@ -955,9 +974,8 @@ const displayedBases = computed(() =>
             <!-- 14.3e-B：逐轮点名（每轮各点一架；不点即由引擎取 ACV 最高） -->
             <p v-if="aiChoosesDefenderPlanes" class="num">
               <BaseTag kind="neutral">由对手操作</BaseTag>
-              守方点名：由{{
-                defenderSideLabel
-              }}（AI）自选，按空战值（ACV）最高的那一架迎战，你只等结果。
+              守方点名：由{{ defenderSideLabel }}（AI）自选，按空战值（ACV）最高的那一架迎战 ——
+              对方选哪一架在这里看得见（只读）。
             </p>
             <div v-for="round in workbench.airCombatRoundBudget" :key="round" class="row">
               <span class="muted">第 {{ round }} 轮</span>
@@ -975,6 +993,15 @@ const displayedBases = computed(() =>
                 :size="28"
                 :max-rows="2"
                 @pick="setAirCombatPick(round - 1, 'defenderAircraftId', $event)"
+              />
+              <!-- 对手自选：阵列照铺、选中高亮照旧，只是不收点击（玩家看得见对手派了谁） -->
+              <CounterPicker
+                v-else
+                readonly
+                :title="`守方点名（第 ${round} 轮：${defenderSideLabel}已选，只读）`"
+                :items="defenderDisplayItems(round - 1)"
+                :size="28"
+                :max-rows="2"
               />
             </div>
             <div class="row">

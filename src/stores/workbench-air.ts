@@ -806,6 +806,19 @@ export function createAirDomain(ports: AirDomainPorts) {
       .filter((air): air is ConsoleAirUnit => air !== undefined)
   })
 
+  /**
+   * 当前的 `barrageState` 是不是**本趟空军任务自己的**轰炸（10.0 / 10.2）
+   *
+   * 上一趟任务结算完的轰炸会话会留在 `barrageState` 里（炮兵与空军共用那条链），
+   * 若不辨归属，空军面板的「对地」行与受损分配块会把**上一趟的战果**当成这一趟的
+   * （用户 2026-11-23 实拍：战机扫荡 14.6 的结算面板上窜出「对地：列 5 → 4；目标 DG」）。
+   * 归属判据只有一处：编成绑定时记下的 `units` 引用（`airMissionDomain.ownsBarrage`）。
+   */
+  const airMissionOwnsBarrage = computed<boolean>(() => {
+    const barrage = barrageState.value
+    return barrage !== null && airMissionDomain.ownsBarrage(barrage)
+  })
+
   /** C9：任务格的空军基地等级（14.4e 的 +# 项；简易机场为 0，15.2F） */
   const airTargetBaseLevel = computed<number>(() => {
     const hex = airTargetHex.value
@@ -2289,7 +2302,7 @@ export function createAirDomain(ports: AirDomainPorts) {
        * 14.2f-E 例外：任务机全被防空击落/中止 ⇒ 没有战果可结算，弹一块空面板没有意义，
        * 直接按"任务中止"收束（与修前一致）。
        */
-      if (airMissionFlyingUnits.value.length === 0 && barrageState.value === null) {
+      if (airMissionFlyingUnits.value.length === 0 && !airMissionOwnsBarrage.value) {
         return finishAbortedAirMission()
       }
       return true
@@ -2879,6 +2892,7 @@ export function createAirDomain(ports: AirDomainPorts) {
     capturableEnemyAirBases,
     airInterceptionResponse,
     airInterceptorCandidates,
+    airMissionOwnsBarrage,
     airPatrolZoneHexes,
     airEnemyPatrolZoneHexes,
     airInactiveAtBase,

@@ -105,12 +105,17 @@ const advanceSelectable = computed(() =>
 const advanceBlockedCount = computed(
   () => workbench.combatAdvanceChoices.filter((choice) => choice.disabledReason !== null).length,
 )
-/** 有选中且防御格已空 ⇒ 推进；否则就是按 9.13 结束（不推进） */
+/** 9.12g 有选中且防御格已空 ⇒ 推进；否则就是按 9.13 结束（不推进） */
 const advanceButtonLabel = computed(() =>
   workbench.combatDefendingHexCleared && workbench.combatInputs.advanceUnitIds.length > 0
     ? '推进并结束'
     : '结束战斗（不推进）',
 )
+/** 9.12g：推进的目标格（地图上那格；没算出来时退回文字） */
+const advanceHexLabel = computed(() => {
+  const hex = workbench.combatAdvanceHex
+  return hex === null ? '防御格' : `${String(hex.col)}.${String(hex.row)}`
+})
 
 /** 9.12e：撤退堆叠的额外损失由谁承受（候选＝撤退中的 DG 单位，与引擎确认同源） */
 const extraLossPreview = computed(() => workbench.combatExtraLossPreview)
@@ -832,21 +837,17 @@ const optionRetreatItems = computed<readonly CounterPickerItem[]>(() => {
           </RuleTip>
           <!--
             9.12g-D：「由拥有者玩家选择哪些攻击单位进行推进（如果有的话）」
-            ⇒ 入口是地图推进格（点它即预选）；这里只做同一张卡里的改选与确认。
+            ⇒ 入口**只有地图**：点防御格即按规则选定/取消推进（用户 2026-11-23：
+            「单位推进的时候直接在地图上点，不要搞单位名框的选择」）。
+            修前这里摆一排「单位名」按钮让玩家逐个点，同一个决定做了两遍。
           -->
-          <div v-if="advanceSelectable.length > 0" class="row">
-            <BaseButton
-              v-for="choice in advanceSelectable"
-              :key="choice.unit.instanceId"
-              :variant="choice.selected ? 'secondary' : 'ghost'"
-              size="sm"
-              @click="workbench.toggleAdvanceUnit(choice.unit.instanceId)"
-            >
-              {{ choice.selected ? '✓ ' : '' }}{{ choice.unit.name }}
-            </BaseButton>
-          </div>
-          <p v-if="advanceBlockedCount > 0" class="muted">
-            另有 {{ advanceBlockedCount }} 枚不可推进
+          <p v-if="advanceSelectable.length > 0" class="muted">
+            在地图上点防御格（{{ advanceHexLabel }}）即选定推进；再点一次即取消。 可推进
+            {{ advanceSelectable.length }} 枚（选中
+            {{ workbench.combatInputs.advanceUnitIds.length }} 枚）。
+          </p>
+          <p v-else-if="advanceBlockedCount > 0" class="muted">
+            没有可推进的单位（另有 {{ advanceBlockedCount }} 枚不可推进）
           </p>
           <div class="row">
             <BaseButton variant="primary" size="sm" @click="workbench.confirmCombatAdvance()">

@@ -54,6 +54,7 @@
   "airMissionKind",
   "airMissionKindChoices",
   "airMissionKindLabel",
+  "airMissionOwnsBarrage",
   "airMissionReturnChoices",
   "airMissionReturnOrigins",
   "airMissionSegment",

@@ -55,12 +55,19 @@ describe('教学模式后三步：只认真实事件，无跳过通道', () => {
     expect(guide).not.toContain('tut__skip')
   })
 
-  it('教学收束：完成态是居中弹窗「教程结束」，不再只是角标小卡', () => {
-    // 用户 2026-11-22：走完 25 步要弹窗告诉玩家教程结束，角标小卡玩家根本注意不到
+  it('教学收束：完成态是居中弹窗「教学通关 · 玩家胜利」，并直接去选常规剧本', () => {
+    // 用户 2026-11-22：走完全部步骤要弹窗，角标小卡玩家根本注意不到
     expect(guide).toContain('tut__modal')
     expect(guide).toContain('role="dialog"')
-    expect(guide).toContain('教程结束')
-    expect(guide).toContain('tut__done-close')
+    /*
+     * 用户 2026-11-23 第 6 批：「教学模式结束后表示玩家胜利，然后去玩正常的剧本，
+     * 不要写什么按 2.2 继续」⇒ 弹窗改胜利口径，去向是退出教学 + 选剧本页。
+     */
+    expect(guide).toContain('教学通关 · 玩家胜利')
+    expect(guide).toContain('去玩正常剧本')
+    expect(guide).toContain('finishTutorialAndPickScenario')
+    expect(guide).toContain("ui.navigate('scenario')")
+    expect(guide).not.toContain('按 2.2 流程继续')
     // 旧的小卡形态必须收掉，否则弹窗与小卡会同时出现
     expect(guide).not.toContain('tut__card--done')
   })
