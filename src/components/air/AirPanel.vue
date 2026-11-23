@@ -938,7 +938,9 @@ const displayedBases = computed(() =>
             <!-- 14.3e-B：逐轮点名（每轮各点一架；不点即由引擎取 ACV 最高） -->
             <p v-if="aiChoosesDefenderPlanes" class="num">
               <BaseTag kind="neutral">由对手操作</BaseTag>
-              守方点名：由{{ defenderSideLabel }}（AI）自选，按行动值最高的那一架迎战，你只等结果。
+              守方点名：由{{
+                defenderSideLabel
+              }}（AI）自选，按空战值（ACV）最高的那一架迎战，你只等结果。
             </p>
             <div v-for="round in workbench.airCombatRoundBudget" :key="round" class="row">
               <span class="muted">第 {{ round }} 轮</span>

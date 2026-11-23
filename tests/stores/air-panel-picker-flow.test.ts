@@ -364,7 +364,10 @@ describe('B14a：空军面板的替换（源码守卫）', () => {
     // 面板：守方阵营 = AI / 脚本 ⇒ 收掉那列阵列，只留一句「由谁自选」
     expect(panel).toContain('aiChoosesDefenderPlanes')
     expect(panel).toContain('v-if="!aiChoosesDefenderPlanes"')
-    expect(panel).toContain('由{{ defenderSideLabel }}（AI）自选')
+    expect(panel).toContain('守方点名：由')
+    // 飞机只有空战值（ACV），没有行动值（AR）——这里不许写成「行动值最高」
+    expect(panel).toContain('按空战值（ACV）最高的那一架迎战')
+    expect(panel).not.toContain('按行动值最高的那一架')
     // 脚本：苏军那一半由脚本按 ACV 最高替它点名（不点＝引擎缺省同口径）
     const tutorial = readFileSync('src/stores/tutorial.ts', 'utf8')
     expect(tutorial).toContain("air.side === 'soviet'")
