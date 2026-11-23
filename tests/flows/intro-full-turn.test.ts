@@ -35,12 +35,33 @@ function openIntro() {
   return ctx
 }
 
+/**
+ * 通规 5.7g：预备单位不得与环形工事同格跨过段末。
+ *
+ * 教学剧本把 18 Tk Div 预设在 19.26（有印刷工事），若一路只推阶段，段末就会被 5.7g 拒住。
+ * 规则给的出口之一是按 5.7b 释放预备（另一个是移出工事格），这里替测试玩家做这一个动作，
+ * 其余照旧不动手 —— 不放这一步，用例断言的「流程能走通」就不成立。
+ */
+function releaseReservesOnHedgehogs(w: ReturnType<typeof fresh>['w']): void {
+  // 5.7b 的释放闸门只在「非阶段玩家的反应段移动环节」开（`reserve.release`），别处不开口
+  if (w.phase !== 'reaction' || w.segmentStep?.id !== 'reaction.movement') return
+  for (const unit of w.units) {
+    if (unit.mode.mode !== 'reserve') continue
+    // 5.7b：已释放的仍保留 `mode: 'reserve'`，只把 `releasedFromReserve` 置真 —— 那批不用再管
+    if (unit.mode.releasedFromReserve === true) continue
+    if (w.hedgehogLevelOf(unit.hex) === 0) continue
+    w.selectedId = unit.instanceId
+    expect(w.releaseReserveNow(), `${unit.name} 释放预备失败`).toBe(true)
+  }
+}
+
 /** 只推阶段（不调 AI）；每步先替测试玩家答复面板义务，再推进 */
 async function runThroughSingleTurn(ctx: ReturnType<typeof fresh>, limit = 400): Promise<number> {
   const turn0 = ctx.w.turn
   let steps = 0
   while (steps < limit && !ctx.g.terminated && ctx.w.turn <= turn0) {
     answerBoardChoices(ctx)
+    releaseReservesOnHedgehogs(ctx.w)
     if (ctx.g.awaiting) expect(ctx.g.answerNow('first')).toBe(true)
     else ctx.w.advanceSegmentNow()
     steps += 1
