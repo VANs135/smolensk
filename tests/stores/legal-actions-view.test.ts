@@ -374,3 +374,23 @@ describe('P0-02c：候选 ref 必须是提交入口真正接收的参数', () =>
     expect(w.applySupplyArrivalsNow()).toBe(false)
   })
 })
+
+describe('候选覆盖：闸门表里每个族都有候选投影（不再标 unsupported）', () => {
+  it('missingCandidateKeys 为空', () => {
+    fresh()
+    const legal = useLegalActionsStore()
+    expect(legal.missingCandidateKeys).toEqual([])
+  })
+
+  it('air.baseReduce：候选是本方基地 id，reduceBaseNow 原样接受', () => {
+    const w = newConsole()
+    w.setActiveSide('axis')
+    w.setAirActive(true)
+    placeGround(w, airBaseRecord(), CORE_HEX, 'axis', 'base-1')
+    placeAir(w, fighterRecord('axis'), CORE_HEX, 'axis', 'air-1', 'inactive')
+
+    const legal = useLegalActionsStore()
+    const entry = entryOf(legal.view, 'air.baseReduce')
+    expect(entry.candidates.map((candidate) => candidate.ref)).toEqual(['base-1'])
+  })
+})

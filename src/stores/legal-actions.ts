@@ -99,8 +99,8 @@ const SUBMIT_ENTRY_OF: Readonly<Record<ActionKey, string>> = {
   'reserve.release': 'releaseReserveNow',
   'air.mission': 'beginAirMissionNow',
   'air.transfer': 'transferAircraftNow',
-  // 21.10b：Forage 入口在补给阶段面板（按 HQ 逐个使用），没有单键提交
-  'exclusive.forage': '',
+  // 21.10b：Forage 在补给阶段面板按 HQ 逐个使用（`useForageNow(hqId)`）
+  'exclusive.forage': 'useForageNow',
   // 专规 3.4a：段末义务由 `advanceSegmentNow` 的收束步骤结算，没有独立提交入口
   'exclusive.panzerObligation': '',
 }
