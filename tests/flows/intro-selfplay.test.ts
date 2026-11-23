@@ -62,7 +62,7 @@ describe('Intro 双 AI 自对打', () => {
     expect(report.terminated).toBe(true)
     expect(ctx.g.terminated).toBe(true)
     expect(
-      ctx.w.log.some((entry) => entry.text.includes('剧本终局：剧本页胜利（Intro: Vitebsk）')),
+      ctx.w.log.some((entry) => entry.text.includes('剧本终局：剧本页判定（Intro: Vitebsk）')),
     ).toBe(true)
   }, 300_000)
 

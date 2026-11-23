@@ -454,7 +454,7 @@ function evaluateIntroVictory(input: {
     thresholds: null,
     summary,
     detail:
-      `剧本页胜利（Intro: Vitebsk）：维捷布斯克 ${hexText} ` +
+      `剧本页判定（Intro: Vitebsk）：维捷布斯克 ${hexText} ` +
       (grade === 'major'
         ? '全部由轴方控制 ⇒ 轴心 Major Victory'
         : grade === 'minor'
