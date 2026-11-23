@@ -268,4 +268,25 @@ describe('选剧本页：教学模式单列成栏（2026-11-23 第 6 批，源�
     expect(view).toContain('const selectedId = ref(setup.scenarioId)')
     expect(view).not.toContain('choices.value.find((item) => !isTeachingScenario(item.id))?.id')
   })
+
+  /*
+   * 用户 2026-11-23：「维捷布斯克就仅限玩家扮演德军 PVE……苏军没有玩家回合，
+   * 只能和在德军玩家交互时有选择，所以是纯 PVE 剧本」。
+   * ⇒ 剧本页的 `singlePlayerTurn` 剧本必须**锁死**对局组织方式：玩家执先手方、另一方 AI，
+   * 不再给 PVP/solo/AI 控制方的选项；教学模式是同一外壳 + 引导。
+   */
+  it('纯 PVE 剧本锁死对局方式：玩家执先手方、另一方 AI，不给模式/AI 方单选', () => {
+    expect(view).toContain('soloPlayerScenario')
+    expect(view).toContain('applySoloPveShell')
+    // 点剧本卡 / 进初设都把外壳落定
+    expect(view).toContain('applySoloPveShell()')
+    expect(view).toContain("hotseat.setMode('pve')")
+    expect(view).toContain('hotseat.setAiSide(shell.aiSide)')
+    // 模式栏：纯 PVE 剧本走静态一行，不再给单选
+    expect(view).toContain('纯 PVE：玩家执')
+    expect(view).toContain('没有玩家回合')
+    expect(view).toContain('!soloPlayerScenario')
+    // 说明该剧本的苏军只在交互中作答（战斗选项 / 撤退落点 9.10 / 9.12）
+    expect(view).toContain('只在战斗时由 AI 作答 / 选撤退落点')
+  })
 })

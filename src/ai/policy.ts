@@ -486,7 +486,13 @@ function pickMoveTarget(snapshot: AiSnapshot): AiHex | null {
   return options[0] ?? null
 }
 
-/** 撤退落点：优先「不被消灭且不进敌方 ZOC」，其次「不被消灭」，最后才接受会被消灭的落点 */
+/**
+ * 撤退落点（9.12）：优先「不被消灭且不进敌方 ZOC」，其次「不被消灭」，
+ * 再在同档里**朝远离敌军的方向退**（用户 2026-11-23「该剧本苏军能干的事情就是选择撤退的位置」）。
+ *
+ * 修前第三档是 `path.length`——每枚单位的撤退距离是同一要求值，这一档恒等 ⇒ 最终退到哪一格
+ * 只由格号决定（常常退到贴着攻方的那一格）。现在改用「离最近敌军最远」，同档仍按格号稳定排序。
+ */
 function pickRetreatDestination(
   destinations: readonly {
     hex: AiHex
@@ -494,12 +500,19 @@ function pickRetreatDestination(
     inEnemyZoc: boolean
     path: readonly AiHex[]
   }[],
+  enemyHexes: readonly AiHex[] = [],
 ): readonly AiHex[] | null {
   const rank = (item: { forcedDestruction: boolean; inEnemyZoc: boolean }): number =>
     item.forcedDestruction ? 2 : item.inEnemyZoc ? 1 : 0
   const sorted = destinations
     .slice()
-    .sort((a, b) => rank(a) - rank(b) || a.path.length - b.path.length || compareHex(a.hex, b.hex))
+    .sort(
+      (a, b) =>
+        rank(a) - rank(b) ||
+        nearestEnemyDistance(b.hex, enemyHexes) - nearestEnemyDistance(a.hex, enemyHexes) ||
+        a.path.length - b.path.length ||
+        compareHex(a.hex, b.hex),
+    )
   return sorted[0]?.path ?? null
 }
 
@@ -747,10 +760,22 @@ function decideCombatSettlement(snapshot: AiSnapshot): AiAction | null {
       if (requirement === null) return null
       const owner = requirement.side === 'attacker' ? attacker : opponent
       if (!snapshot.control.requirement) return waitForSide(owner, '选择战斗选项（9.10）')
+      /*
+       * 9.10 / 9.12：选项可以「退 N 格」也可以「吃 N 点损失」。修前一律选撤退（0 损失），
+       * 哪怕这一方所有落点都会导致被消灭（9.12c/d）——那是把单位白送掉。
+       * 现在：该方存在「不会被消灭」的落点才退；否则把选项吃成损失（9.10a 仍是玩家的合法选择）。
+       */
+      const sidePlans = snapshot.combat.retreatPlans.filter(
+        (plan) => plan.role === requirement.side,
+      )
+      const canRetreatSafely =
+        sidePlans.length > 0 &&
+        sidePlans.every((plan) => plan.destinations.some((item) => !item.forcedDestruction))
+      const takeRetreat = requirement.options > 0 && canRetreatSafely
       return {
         kind: 'combatOptions',
-        retreatHexes: requirement.options,
-        lossPoints: 0,
+        retreatHexes: takeRetreat ? requirement.options : 0,
+        lossPoints: takeRetreat ? 0 : requirement.options,
         ignoreOptions: false,
       }
     }
@@ -762,7 +787,18 @@ function decideCombatSettlement(snapshot: AiSnapshot): AiAction | null {
       }
       const paths: { unitId: string; path: readonly AiHex[] }[] = []
       for (const plan of snapshot.combat.retreatPlans) {
-        const path = plan.chosen === null ? pickRetreatDestination(plan.destinations) : null
+        /*
+         * 「敌军」按撤退方的角色取：守方撤退 ⇒ 攻方所在的邻格（`adjacentDefenderHexes`）；
+         * 攻方撤退 ⇒ 守方那一格（`defenderHex`）。没有敌军事实时退回原排序（不编造目标）。
+         */
+        const enemyHexes =
+          plan.role === 'defender'
+            ? snapshot.combat.adjacentDefenderHexes
+            : snapshot.combat.defenderHex === null
+              ? []
+              : [snapshot.combat.defenderHex]
+        const path =
+          plan.chosen === null ? pickRetreatDestination(plan.destinations, enemyHexes) : null
         if (path !== null) paths.push({ unitId: plan.unitId, path })
       }
       return { kind: 'combatRetreatPaths', paths }

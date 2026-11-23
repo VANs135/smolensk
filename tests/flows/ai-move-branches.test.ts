@@ -276,6 +276,120 @@ describe('批 2 AI C 段支线：纯决策', () => {
   })
 })
 
+describe('9.12 / 9.10：AI 的撤退落点与选项（2026-11-23 优化）', () => {
+  const combatStep = (over: Partial<AiSnapshot['combat']>) =>
+    snap({
+      phase: 'combat',
+      segment: 'combat.resolve',
+      combat: { ...snap().combat, state: { step: 'retreat', finished: false }, ...over },
+    })
+
+  const plan = (over: Partial<AiSnapshot['combat']['retreatPlans'][number]>) => ({
+    unitId: 'd1',
+    role: 'defender' as const,
+    chosen: null,
+    destinations: [],
+    ...over,
+  })
+
+  it('同档落点里选「离最近敌军最远」的那一格（不再由格号决定）', () => {
+    const action = decideAiAction(
+      combatStep({
+        defenderHex: { col: 5, row: 5 },
+        // 敌军在 5.5 的邻格（守方撤退时的「敌军」＝攻方所在邻格）
+        adjacentDefenderHexes: [{ col: 5, row: 4 }],
+        retreatPlans: [
+          plan({
+            destinations: [
+              // 两格都安全、都不在敌军 ZOC：一个贴着敌军（4.4），一个离得远（9.9）
+              {
+                hex: { col: 4, row: 4 },
+                forcedDestruction: false,
+                inEnemyZoc: false,
+                path: [{ col: 4, row: 4 }],
+              },
+              {
+                hex: { col: 9, row: 9 },
+                forcedDestruction: false,
+                inEnemyZoc: false,
+                path: [{ col: 9, row: 9 }],
+              },
+            ],
+          }),
+        ],
+      }),
+    )
+    expect(action).toEqual({
+      kind: 'combatRetreatPaths',
+      paths: [{ unitId: 'd1', path: [{ col: 9, row: 9 }] }],
+    })
+  })
+
+  it('9.10：所有落点都会被消灭 ⇒ 不再白送，改写为选项损失', () => {
+    const action = decideAiAction(
+      snap({
+        phase: 'combat',
+        segment: 'combat.resolve',
+        combat: {
+          ...snap().combat,
+          state: { step: 'options', finished: false },
+          requirement: { side: 'defender', losses: 0, options: 1 },
+          retreatPlans: [
+            plan({
+              destinations: [
+                {
+                  hex: { col: 6, row: 6 },
+                  forcedDestruction: true,
+                  inEnemyZoc: true,
+                  path: [{ col: 6, row: 6 }],
+                },
+              ],
+            }),
+          ],
+        },
+      }),
+    )
+    expect(action).toEqual({
+      kind: 'combatOptions',
+      retreatHexes: 0,
+      lossPoints: 1,
+      ignoreOptions: false,
+    })
+  })
+
+  it('9.10：存在不会被消灭的落点 ⇒ 仍然选撤退（0 损失）', () => {
+    const action = decideAiAction(
+      snap({
+        phase: 'combat',
+        segment: 'combat.resolve',
+        combat: {
+          ...snap().combat,
+          state: { step: 'options', finished: false },
+          requirement: { side: 'defender', losses: 0, options: 1 },
+          retreatPlans: [
+            plan({
+              destinations: [
+                {
+                  hex: { col: 6, row: 6 },
+                  forcedDestruction: false,
+                  inEnemyZoc: false,
+                  path: [{ col: 6, row: 6 }],
+                },
+              ],
+            }),
+          ],
+        },
+      }),
+    )
+    expect(action).toEqual({
+      kind: 'combatOptions',
+      retreatHexes: 1,
+      lossPoints: 0,
+      ignoreOptions: false,
+    })
+  })
+})
+
 describe('批 2 AI C 段支线：落到既有入口', () => {
   it('专规 3.5：轴方移动开始时 AI 自己放下一枚建造标记', () => {
     const w = newConsole()

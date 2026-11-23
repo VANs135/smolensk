@@ -97,6 +97,31 @@ const normalChoices = computed(() => choices.value)
 
 /** 教学开关（选中教学剧本即开；换回常规剧本即关） */
 const tutorialMode = ref(false)
+
+/**
+ * 纯 PVE 剧本（剧本页 `1 player turn`，当前仅 Intro: Vitebsk）
+ *
+ * 用户 2026-11-23：「维捷布斯克就仅限玩家扮演德军 PVE……苏军没有玩家回合，
+ * 只能和在德军玩家交互时有选择」。⇒ 这一剧本的**对局组织方式不再可选**：
+ * 玩家执先手方（轴心）、另一方由 AI 代演；苏军的"行动"只发生在玩家攻击时的应答里
+ * （战斗选项/撤退落点，9.10 / 9.12）。教学模式只是同一外壳再加逐步引导。
+ */
+const soloPlayerScenario = computed(() => {
+  const info = fullScenarios.value.get(selectedId.value)
+  if (info?.singlePlayerTurn !== true) return null
+  return info.firstPlayer === 'soviet'
+    ? { playerLabel: '苏联', aiLabel: '轴心国', aiSide: 'axis' as const }
+    : { playerLabel: '轴心国', aiLabel: '苏联', aiSide: 'soviet' as const }
+})
+
+/** 把纯 PVE 剧本的外壳落定（玩家执先手方，另一方 AI）；初设已锁定就不再改模式 */
+function applySoloPveShell(): void {
+  const shell = soloPlayerScenario.value
+  if (shell === null || hotseat.setupLocked) return
+  if (hotseat.mode !== 'pve') hotseat.setMode('pve')
+  if (hotseat.aiSide !== shell.aiSide) hotseat.setAiSide(shell.aiSide)
+}
+applySoloPveShell()
 /** 目标窗关掉前先记住这一局是不是教学，防止中途换剧本把标记带错 */
 const pendingTutorial = ref(false)
 
@@ -127,6 +152,8 @@ function chooseScenarioCard(id: string, teaching = false): void {
   selectedId.value = id
   if (teaching && !tutorialMode.value) onTutorialChange(true)
   if (!teaching && tutorialMode.value) onTutorialChange(false)
+  // 纯 PVE 剧本（Intro）：点它就把外壳落成「玩家执轴心、苏军 AI」
+  applySoloPveShell()
 }
 
 /** 换到非教学剧本就收起教学开局，避免把未激活空军/引导带到别的剧本 */
@@ -145,6 +172,8 @@ function onEnterSetup(): void {
   pendingTutorial.value = teaching
   setTutorialAirAllInactive(teaching)
   setTutorialFixedReinforcement(teaching)
+  // 纯 PVE 剧本（Intro）在进初设前再把外壳落定一次（换剧本后可能被上一局组织方式带偏）
+  applySoloPveShell()
   if (teaching) {
     gameSession.setFirstWeatherChoice('normal', target.id)
     // 用户 2026-11-19：教学里的苏军是**人机对手**（AI 初设、AI 反应），玩家执轴心
@@ -330,10 +359,24 @@ function onConfirmBriefing(): void {
                   <span>玩家执轴心 · 苏军由脚本代演 · 逐步引导</span>
                 </dd>
               </div>
+              <div v-else-if="soloPlayerScenario">
+                <dt>对局</dt>
+                <dd class="scenario__weather">
+                  <span>
+                    纯 PVE：玩家执{{ soloPlayerScenario.playerLabel }}，{{
+                      soloPlayerScenario.aiLabel
+                    }}没有玩家回合（只在战斗时由 AI 作答 / 选撤退落点）
+                  </span>
+                </dd>
+              </div>
             </dl>
             <fieldset class="scenario__modes">
               <legend>对局模式</legend>
               <p v-if="tutorialMode" class="modes__locked">人机（苏军 AI · 教学固定）</p>
+              <p v-else-if="soloPlayerScenario" class="modes__locked">
+                人机（玩家执{{ soloPlayerScenario.playerLabel }} ·
+                {{ soloPlayerScenario.aiLabel }}由 AI 代演 · 剧本固定）
+              </p>
               <ul v-else-if="!hotseat.setupLocked" class="modes">
                 <li v-for="item in modeOptions" :key="item.key">
                   <label
@@ -353,7 +396,10 @@ function onConfirmBriefing(): void {
               </ul>
               <p v-else class="modes__locked">{{ modeLabel }}</p>
             </fieldset>
-            <fieldset v-if="hotseat.mode === 'pve' && !tutorialMode" class="scenario__modes">
+            <fieldset
+              v-if="hotseat.mode === 'pve' && !tutorialMode && !soloPlayerScenario"
+              class="scenario__modes"
+            >
               <legend>AI 控制方</legend>
               <ul v-if="!hotseat.setupLocked" class="modes">
                 <li v-for="item in aiSideChoices" :key="item.side">
