@@ -42,17 +42,13 @@ function isTeachingScenario(id: string): boolean {
 }
 
 /**
- * 默认落在**常规剧本**上（教学是单独一栏，用户 2026-11-23）
+ * 默认落在**上次选的剧本**上（用户 2026-11-23 第 7 批更正）
  *
- * 修前默认选中＝`setup.scenarioId`（首剧本恰是教学的 Intro）⇒ 一页开出来就是一格"教学剧本"
- * 被选中、却又没勾教学，两边都不像。现在：只剩教学剧本时也退回它的常规卡位，
- * 玩家要教学就点上面那一栏。
+ * 教学与常规是**两种开局方式**，剧本本身两边都能选：
+ * 修前把 Intro 从常规组剔掉、默认改动成"第一个非教学剧本"，等于玩家再也不能在正常 PvE 下打维捷布斯克。
+ * 现在剧本列表保持原样（含 Intro），教学只是上面那一栏的另一个入口。
  */
-const selectedId = ref(
-  isTeachingScenario(setup.scenarioId)
-    ? (choices.value.find((item) => !isTeachingScenario(item.id))?.id ?? setup.scenarioId)
-    : setup.scenarioId,
-)
+const selectedId = ref(setup.scenarioId)
 const selected = computed(() => choices.value.find((item) => item.id === selectedId.value) ?? null)
 
 /** 首回合天气的中文名（`scenarios.json` 的 firstWeather） */
@@ -89,14 +85,15 @@ const briefingOpen = computed({
 /* ── 用户 2026-11-18 第 2 条：Vitebsk 教学模式的独立开局方式 ── */
 
 /**
- * 剧本卡片分成两组（用户 2026-11-23 第 6 批：教学入口要**单列**）
+ * 剧本卡片分成两组（用户 2026-11-23：教学入口单列，但**不把教学剧本从常规组拿走**）
  *
- * 教学剧本**单独成一栏**——点它即进入教学（PvE 外壳 + 逐步引导），
- * 不再挤在「对局设置」里挂一个勾选框：教学是一种开局方式，
- * 不是给普通剧本加的一个开关。
+ * · 「教学模式」＝另一种开局方式（PvE 外壳 + 逐步引导 + 脚本代演苏军），只列能教学的剧本；
+ * · 「常规剧本」＝全部剧本原样保留 —— Intro 维捷布斯克同样能在正常 PvE 下打
+ *   （第 7 批更正：上一批把 Intro 从这一组剔掉是错的）。
+ * 同一剧本在两组各有一张卡，靠 `tutorialMode` 区分"现在选中的是哪一种开局"。
  */
 const teachingChoices = computed(() => choices.value.filter((item) => isTeachingScenario(item.id)))
-const normalChoices = computed(() => choices.value.filter((item) => !isTeachingScenario(item.id)))
+const normalChoices = computed(() => choices.value)
 
 /** 教学开关（选中教学剧本即开；换回常规剧本即关） */
 const tutorialMode = ref(false)
@@ -120,10 +117,14 @@ function onTutorialChange(on: boolean): void {
   tutorial.startFor()
 }
 
-/** 点一张剧本卡：选中；教学卡连教学开局一起落定，常规卡收起教学 */
-function chooseScenarioCard(id: string): void {
+/**
+ * 点一张剧本卡
+ *
+ * 同一剧本可能有两张卡：`teaching=true` 的那张（教学模式）与常规那张。
+ * 选哪张就决定开局方式，剧本 id 相同也不混淆；换到非教学剧本自然收起教学。
+ */
+function chooseScenarioCard(id: string, teaching = false): void {
   selectedId.value = id
-  const teaching = isTeachingScenario(id)
   if (teaching && !tutorialMode.value) onTutorialChange(true)
   if (!teaching && tutorialMode.value) onTutorialChange(false)
 }
@@ -208,16 +209,18 @@ function onConfirmBriefing(): void {
           <section v-if="teachingChoices.length > 0" class="scenario__group">
             <header class="scenario__group-head">
               <h4>教学模式</h4>
-              <span class="muted">逐步引导 · 苏军由脚本代演</span>
+              <span class="muted"
+                >逐步引导 · 苏军由脚本代演（下面常规组的同一剧本可正常 PvE 打）</span
+              >
             </header>
             <ul class="scenario__list">
-              <li v-for="item in teachingChoices" :key="item.id">
+              <li v-for="item in teachingChoices" :key="`teach-${item.id}`">
                 <button
                   type="button"
                   class="scenario__card scenario__card--teach"
                   :class="{ 'scenario__card--on': item.id === selectedId && tutorialMode }"
                   :aria-pressed="item.id === selectedId && tutorialMode"
-                  @click="chooseScenarioCard(item.id)"
+                  @click="chooseScenarioCard(item.id, true)"
                 >
                   <span class="scenario__id num">{{ item.id.padStart(2, '0') }}</span>
                   <span class="scenario__entry">
@@ -239,7 +242,7 @@ function onConfirmBriefing(): void {
           <section class="scenario__group">
             <header class="scenario__group-head">
               <h4>常规剧本</h4>
-              <span class="muted">{{ normalChoices.length }} 个</span>
+              <span class="muted">{{ normalChoices.length }} 个 · 全部可正常 PvE 打</span>
             </header>
             <ul class="scenario__list">
               <li v-for="item in normalChoices" :key="item.id">

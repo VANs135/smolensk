@@ -7,6 +7,8 @@ import { mapLayers } from '@/data'
 import type { HexRef } from '@/data'
 import { HEX_DIRECTIONS, hexDistance, isOnMap, neighbor } from '@/engine/hex-geometry'
 import { createMapFacts, selectMovementTerrain } from '@/engine/rules'
+import { stackFanLayout } from '@/render/stack-fan'
+import { stackFanOrder } from '@/render/token-layer'
 import {
   actionGateOf,
   defenseTerrainChoices,
@@ -428,10 +430,11 @@ describe('B14c：战后推进阵列（9.12g-A / 9.12b）', () => {
   })
 
   /*
-   * 用户 2026-11-23 第 6 批：「单位推进的时候直接在地图上点，不要搞单位名框的选择」
-   * 地图那一击＝`advanceNow`：第一次点防御格 ⇒ 全选；同格再点一次 ⇒ 全消（9.12g-D 的开关落在图上）。
+   * 用户 2026-11-23 第 7 批：「战后推进，要做出玩家有无选中单位的高亮边框，现在全高亮的分不出来」
+   * ⇒ 逐枚的选择落在**地图上点那一枚算子**（`toggleAdvanceUnit`）；点防御格只剩「一键全选」。
+   * 地图点击分派与选中环投影在 `tests/stores/advance-unit-select.test.ts` 里钉住。
    */
-  it('地图点防御格即推进：`advanceNow` 一进一出（面板不再逐单位点选）', () => {
+  it('地图点防御格＝一键全选（不再做全选/全消开关）', () => {
     const store = newStore()
     setupBattle(store, 2)
     driveToAdvanceStep(store)
@@ -447,8 +450,66 @@ describe('B14c：战后推进阵列（9.12g-A / 9.12b）', () => {
     expect(store.advanceNow(hex!)).toBe(true)
     expect(store.combatInputs.advanceUnitIds).toEqual(eligible)
 
-    // 同格再点一次：全消（改成"结束战斗（不推进）"）
+    // 手动退一枚后，再点格＝补齐全选（不把其余的全清掉）
+    store.toggleAdvanceUnit(eligible[0]!)
+    expect(store.combatInputs.advanceUnitIds.length).toBe(eligible.length - 1)
     expect(store.advanceNow(hex!)).toBe(true)
+    expect(store.combatInputs.advanceUnitIds).toEqual(eligible)
+  })
+
+  /*
+   * 用户 2026-11-23：「战后推进，要做出玩家有无选中单位的高亮边框，现在全高亮的分不出来」
+   * ⇒ ① 点攻方的**某一枚算子**＝只存/退这一枚（9.12g-D 逐单位选择）；
+   *    ② 选中环按 `advanceUnitIds` 逐枚投 —— 未选中的那几分没有环。
+   */
+  it('点攻方格里的某一枚算子＝只存/退这一枚；选中环逐枚投，未选中的不亮', () => {
+    const store = newStore()
+    const mapView = useMapViewStore()
+    const { attacker, extras } = setupBattle(store, 2)
+    const second = extras[0]!
+    driveToAdvanceStep(store)
+
+    const eligible = store.combatAdvanceChoices
+      .filter((choice) => choice.disabledReason === null)
+      .map((choice) => choice.unit.instanceId)
+    // 战果会把某一枚打空（steps=0 不再列入候选）⇒ 只钉"至少两枚可推、且含 a2"
+    expect(eligible.length).toBeGreaterThanOrEqual(2)
+    expect(eligible).toContain(second.instanceId)
+    void attacker
+    // 初始没有任何勾选 ⇒ 图上这一格一枚选中环都没有（修前整格全亮）
+    expect(store.combatInputs.advanceUnitIds).toEqual([])
+    const tokensAtAttackerHex = mapView.overlay.tokens.filter(
+      (token) => token.hex.col === ATTACKER_HEX.col && token.hex.row === ATTACKER_HEX.row,
+    )
+    expect(tokensAtAttackerHex.length).toBeGreaterThanOrEqual(2)
+    expect(tokensAtAttackerHex.every((token) => token.selected === false)).toBe(true)
+
+    // 点这一枚（命中点＝扇面里它自己的槽位中心，与绘制同源）
+    const fan = tokensAtAttackerHex.filter((token) => token.hiddenStack !== true)
+    const layout = stackFanLayout({
+      hex: ATTACKER_HEX,
+      total: fan.length,
+      order: stackFanOrder(fan),
+    })
+    const slot =
+      layout.slots.find((item) => fan[item.index]?.id === eligible[0]!) ?? layout.slots[0]!
+    const targetId = fan[slot.index]!.id
+    const point = { x: slot.x + slot.size / 2, y: slot.y + slot.size / 2 }
+    mapView.onHexClick(ATTACKER_HEX, point, point, 1)
+    const picked = store.combatInputs.advanceUnitIds
+    // 只存一枚（不是整格全选），且落在候选集里
+    expect(picked.length).toBe(1)
+    expect(eligible).toContain(picked[0])
+    void targetId
+
+    const afterPick = mapView.overlay.tokens.filter(
+      (token) => token.hex.col === ATTACKER_HEX.col && token.hex.row === ATTACKER_HEX.row,
+    )
+    expect(afterPick.filter((token) => token.selected).map((token) => token.id)).toEqual(picked)
+    expect(afterPick.length - afterPick.filter((token) => token.selected).length).toBeGreaterThan(0)
+
+    // 再点同一枚 ⇒ 退掉，选中环随之消失
+    mapView.onHexClick(ATTACKER_HEX, point, point, 1)
     expect(store.combatInputs.advanceUnitIds).toEqual([])
   })
 })
@@ -462,6 +523,21 @@ describe('B14c：战斗面板的替换（源码守卫）', () => {
     expect(mapView).toContain('workbench.syncCombatParticipants(hex, stackSelection.value)')
     expect(workbench).toContain('toggleCombatSupplyAttacker(unit.instanceId)')
     expect(panel).not.toContain('toggleCombatSupplyAttacker')
+  })
+
+  /*
+   * 用户 2026-11-23：推进要能"看出哪几枚被选中" —— ①地图点击落到 `toggleAdvanceUnit`；
+   * ②选中环按 `advanceUnitIds` 逐枚投（不再沿用 9.1 的堆叠选择，那一套会让整格全亮）。
+   */
+  it('9.12g-D 逐枚推进：地图点击走 `toggleAdvanceUnit`，选中环只认 `advanceUnitIds`', () => {
+    const mapViewSrc = readFileSync('src/stores/map-view.ts', 'utf8')
+    expect(mapViewSrc).toContain('function isAdvancingNow()')
+    expect(mapViewSrc).toContain('workbench.toggleAdvanceUnit(token.id)')
+    expect(mapViewSrc).toContain('advanceIds.includes(unit.instanceId)')
+    // 面板剩下的说明行要告诉玩家"带选中环的就是会推进的"
+    expect(panel).toContain('带选中环的就是会推进的')
+    // 不再有逐单位名字按钮（同一个决定不做两遍）
+    expect(panel).not.toContain('toggleAdvanceUnit(')
   })
 
   it('三处「选算子」都改走 `CounterPicker`，旧的复选框 / 下拉已删', () => {

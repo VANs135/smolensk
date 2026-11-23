@@ -255,11 +255,17 @@ describe('选剧本页：教学模式单列成栏（2026-11-23 第 6 批，源�
     expect(view).toContain('onTutorialChange(true)')
   })
 
-  it('默认落在常规剧本上（教学剧本不再被默认选中）', () => {
-    // 投影里确有教学剧本（Intro）且它排在首位 —— 视图的初始选中不能是它
-    const teaching = scenarios.scenarios.filter((item) => item.singlePlayerTurn === true)
-    expect(teaching.length).toBeGreaterThan(0)
-    expect(view).toContain('isTeachingScenario(setup.scenarioId)')
-    expect(view).toContain('choices.value.find((item) => !isTeachingScenario(item.id))?.id')
+  it('常规组保留全部剧本（含教学剧本），教学只是另一栏的开局入口（第 7 批更正）', () => {
+    // 用户 2026-11-23：「要分教学模式和教学剧本，不是让你把教学剧本删了」
+    // ⇒ 常规组不能再按 `!isTeachingScenario` 过滤掉 Intro。
+    expect(view).toContain('const normalChoices = computed(() => choices.value)')
+    expect(view).not.toContain('choices.value.filter((item) => !isTeachingScenario(item.id))')
+    // 常规卡的点击**不带** teaching 标记（同一剧本按正常 PvE 开局，不启动引导）
+    expect(view).toContain('@click="chooseScenarioCard(item.id)"')
+    // 教学卡带教学标记
+    expect(view).toContain('@click="chooseScenarioCard(item.id, true)"')
+    // 默认选中就是上次选的剧本，不再强行改落到"第一个非教学剧本"
+    expect(view).toContain('const selectedId = ref(setup.scenarioId)')
+    expect(view).not.toContain('choices.value.find((item) => !isTeachingScenario(item.id))?.id')
   })
 })

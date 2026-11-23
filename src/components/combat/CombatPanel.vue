@@ -126,8 +126,10 @@ const retreatWipeLabels = computed(() =>
 )
 
 /**
- * 9.12g 战后推进：**唯一入口是地图上的推进格** —— 点它即按规则预选参与推进的单位
- * （`advanceNow`），本面板只负责在同一张卡里改选与确认。不在这里另做一次默认全选。
+ * 9.12g 战后推进：**入口在地图上**（用户 2026-11-23）——
+ * · 点攻击格里的**某一枚**算子 ⇒ 存/退这一枚（9.12g-D「由拥有者选择哪些攻击单位推进」）；
+ * · 点防御格 ⇒ 一键全选可推进者（快捷方式）。
+ * 本面板只显示"选了几枚 / 可推几枚"与确认按钮，不再摆逐单位名字按钮。
  */
 
 /* ── 9.12 撤退：落点由**在地图上点格**选定（用户口径 2026-09-16） ──
@@ -837,13 +839,14 @@ const optionRetreatItems = computed<readonly CounterPickerItem[]>(() => {
           </RuleTip>
           <!--
             9.12g-D：「由拥有者玩家选择哪些攻击单位进行推进（如果有的话）」
-            ⇒ 入口**只有地图**：点防御格即按规则选定/取消推进（用户 2026-11-23：
-            「单位推进的时候直接在地图上点，不要搞单位名框的选择」）。
+            ⇒ 入口**只有地图**（用户 2026-11-23）：点攻击格里**某一枚**算子＝存/退这一枚
+            （选中的那一枚在图上带金色选中环）；点防御格＝一键全选。
             修前这里摆一排「单位名」按钮让玩家逐个点，同一个决定做了两遍。
           -->
           <p v-if="advanceSelectable.length > 0" class="muted">
-            在地图上点防御格（{{ advanceHexLabel }}）即选定推进；再点一次即取消。 可推进
-            {{ advanceSelectable.length }} 枚（选中
+            在图上点攻击格里的算子即存/退那一枚（带选中环的就是会推进的）；点防御格（{{
+              advanceHexLabel
+            }}）＝一键全选。可推进 {{ advanceSelectable.length }} 枚（选中
             {{ workbench.combatInputs.advanceUnitIds.length }} 枚）。
           </p>
           <p v-else-if="advanceBlockedCount > 0" class="muted">

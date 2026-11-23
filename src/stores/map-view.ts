@@ -383,6 +383,17 @@ export const useMapViewStore = defineStore('mapView', () => {
     return keys
   })
 
+  /**
+   * 9.12g-D：当前是否停在「战后推进」结算步。
+   *
+   * 这一小段由 D 段自述（9.12g-D「由拥有者玩家选择哪些攻击单位进行推进」），
+   * 故地图点击与选中环都要以它为准，而不是继续沿用 9.1 的选攻方口径。
+   */
+  function isAdvancingNow(): boolean {
+    const state = workbench.combatState
+    return state !== null && state.finished !== true && state.step === 'advance'
+  }
+
   function groundTokens(): UnitToken[] {
     const movingIds = workbench.moveInteraction?.unitIds ?? []
     /*
@@ -392,6 +403,13 @@ export const useMapViewStore = defineStore('mapView', () => {
     const combatNow = workbench.combatState
     const emphasis =
       combatNow === null || combatNow.finished === true ? null : combatEmphasisOf(combatNow)
+    /*
+     * 9.12g-D 战后推进（用户 2026-11-23 第 7 批）：选中环要**逐枚**区分。
+     * 修前这一步的 `selected` 仍旧来自堆叠选择 ⇒ 攻方整格全被圈上，玩家分不出"哪几枚真的会推进"。
+     * 推进步的选中环以 `combatInputs.advanceUnitIds` 为唯一口径（点哪一枚就圈哪一枚）。
+     */
+    const advancing = isAdvancingNow()
+    const advanceIds = advancing ? workbench.combatInputs.advanceUnitIds : []
     return (
       workbench.units
         /*
@@ -478,8 +496,10 @@ export const useMapViewStore = defineStore('mapView', () => {
             // 4.9a：只给本方 —— 敌方令牌不挂选中环（否则守方会看到"进攻方被选中"）
             selected:
               unit.side === hotseat.viewerSide &&
-              (movingIds.includes(unit.instanceId) ||
-                stackSelection.value.includes(unit.instanceId)),
+              (advancing
+                ? advanceIds.includes(unit.instanceId)
+                : movingIds.includes(unit.instanceId) ||
+                  stackSelection.value.includes(unit.instanceId)),
             // 9.x 战斗中段：本方参战枚的角色环（当前结算步强调的一侧加粗）
             combatRole: role,
             combatEmphasis: role !== null && role === emphasis,
@@ -2005,7 +2025,9 @@ export const useMapViewStore = defineStore('mapView', () => {
     const liveForStack =
       isIdleForStack() ||
       combatSelectionLive.value ||
-      (workbench.barrageActive && workbench.barrageState === null)
+      (workbench.barrageActive && workbench.barrageState === null) ||
+      // 9.12g-D 战后推进：逐枚点攻方算子即存退（见下面 advancing 分支）
+      isAdvancingNow()
     if (!liveForStack) return false
     /*
      * 2026-11-18：移动的合法落点**优先**——点在目标格里的己方令牌上也只能是「走到这一格」，
@@ -2046,6 +2068,29 @@ export const useMapViewStore = defineStore('mapView', () => {
       return true
     }
     if (token === null) return false
+    /*
+     * 9.12g-D 战后推进：**点哪一枚攻方算子就存/退哪一枚**。
+     *
+     * 修前只有「点防御格＝整格全选/全消」一条入口（用户 2026-11-23 实盘：整格全亮，分不出谁会被推进）。
+     * 推进与否本来就由 9.12g-D 逐单位选择，故这里落成单位级切换；点防御格仍保留「全选」的快捷方式。
+     * 不在候选里（未付补给 / 不可移动 / 已撤退）的算子按 9.12g-A / 9.12b 给一行原因，不静默吞掉。
+     */
+    if (isAdvancingNow()) {
+      const choice = workbench.combatAdvanceChoices.find(
+        (item) => item.unit.instanceId === token.id,
+      )
+      if (choice === undefined) return false
+      if (choice.disabledReason !== null) {
+        workbench.pushLog(
+          'warning',
+          `${choice.unit.name} 不能推进：${choice.disabledReason}`,
+          '9.12g',
+        )
+        return true
+      }
+      workbench.toggleAdvanceUnit(token.id)
+      return true
+    }
     /*
      * 初设 †：点堆叠里的这一枚 ⇒ 选中并把它的 ±1 候选铺到地图（拖/点散开）。
      * 这类单位不列进初设栏，只在盘面堆叠里操作。

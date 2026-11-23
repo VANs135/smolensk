@@ -3639,15 +3639,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       return false
     }
     /*
-     * 用户 2026-11-23（第 6 批）：「单位推进的时候直接在地图上点，不要搞单位名框的选择」。
-     * 面板已撤掉逐单位勾选 ⇒ 这一击＝**全选 / 全消的开关**（再点同格即取消），
-     * 规则语义仍是 9.12g-D 的「由拥有者决定哪些单位推进」，只是决定落在图上。
+     * 用户 2026-11-23：「单位推进的时候直接在地图上点，不要搞单位名框的选择」，
+     * 随后又指出「现在全高亮的分不出来」⇒ 逐枚的选择落在**地图上点那一枚算子**（`map-view.handleStackClick`
+     * 走 `toggleAdvanceUnit`），点防御格只保留「一键全选」的快捷方式，不再做全选/全消开关
+     * （否则玩家点掉一枚后再点格，会以为"恢复了"实际却全清）。
+     * 规则语义仍是 9.12g-D「由拥有者决定哪些单位推进」。
      */
-    if (combatInputs.value.advanceUnitIds.length > 0) {
-      combatInputs.value = { ...combatInputs.value, advanceUnitIds: [] }
-      pushLog('info', '取消推进（9.12g）：本次战斗不推进', '9.12g')
-      return true
-    }
     combatInputs.value = { ...combatInputs.value, advanceUnitIds: eligible.map((item) => item.id) }
     pushLog('info', `准备推进（9.12g）：${eligible.map((item) => item.label).join('、')}`, '9.12g')
     return true
