@@ -1675,7 +1675,7 @@
         },
         "reserveMarkers": {
           "axis": 5,
-          "soviet": 0
+          "soviet": 2
         },
         "supplyCache": 2,
         "constructionMarkers": 0,
@@ -1684,7 +1684,8 @@
           "note": "单人教学剧本：Reinforcements None；Variable Repls None；不引用任何 4.x 可选规则"
         },
         "source": [
-          "Smolensk_Vitebsk_Scenario.pdf 第 1 页（2026-11-15）；未列数值按 0 记（补给缓存除外：剧本卡未列，按通规 1.7「Both sides begin every scenario with two of Supply Cache markers」双方各 2）；编内卡车载荷按用户裁定为全部满载"
+          "Smolensk_Vitebsk_Scenario.pdf 第 1 页（2026-11-15）；未列数值按 0 记（补给缓存除外：剧本卡未列，按通规 1.7「Both sides begin every scenario with two of Supply Cache markers」双方各 2）；编内卡车载荷按用户裁定为全部满载",
+          "苏方 reserveMarkers = 2 为用户 2026-11-23 裁定：教学流程要求反应阶段苏军坦克师释放预备→突袭轴方摩步→失败；卡面苏方栏无 Reserve 行，此数为教学用途增设（不是卡面读数）"
         ],
         "panzerGroupSpAssignment": false,
         "optionalRulesForbidden": true,
@@ -1977,6 +1978,9 @@
           "Arty Markers": "1 available",
           "Reinforcements": "None",
           "Variable Repls": "None"
+        },
+        "soviet": {
+          "Reserve Markers": "2 available（用户 2026-11-23 裁定：教学流程需苏军坦克师在反应阶段释放预备；卡面苏方栏无此行）"
         }
       },
       "supplySources": {
