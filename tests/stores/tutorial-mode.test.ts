@@ -35,8 +35,8 @@ describe('教学模式：Vitebsk', () => {
 
     expect(ctx.setup.enterSetup('Intro')).toBe(true)
     expect(ctx.g.setFirstWeatherChoice('normal', 'Intro')).toBe(true)
-    expect(ctx.setup.presetSelfSetupNow().airPlaced).toBe(7)
-    expect(ctx.setup.startGameNow()).toBe(true)
+    await placeTutorialSetup(ctx)
+    expect(ctx.setup.startGameNow(), ctx.setup.lastAction?.detail).toBe(true)
     await nextTick()
 
     expect(ctx.g.firstWeatherChoice).toBe('normal')
@@ -56,6 +56,37 @@ describe('教学模式：Vitebsk', () => {
     expect(containers.activateAirBox('axis')).toBe(true)
     expect(boxed.every((air) => air.airStatus === 'active')).toBe(true)
     expect(tutorial.currentStep?.id).toBe('reinforce-sp')
+  }, 20_000)
+
+  it('苏方初设由脚本自动落完，轴心的飞机仍要玩家自己摆（用户 2026-11-23）', async () => {
+    const ctx = fresh()
+    const tutorial = useTutorialStore()
+    tutorial.stop()
+    setTutorialAirAllInactive(true)
+    tutorial.startFor()
+    expect(ctx.setup.enterSetup('Intro')).toBe(true)
+    for (let guard = 0; guard < 6 && ctx.setup.setupSideCursor === 'soviet'; guard += 1)
+      await nextTick()
+
+    // 不点「自动放置」也已换手到轴心，且苏方条目零待定
+    expect(ctx.setup.setupSideCursor).toBe('axis')
+    expect(ctx.setup.pendingPlacement.filter((item) => item.side === 'soviet')).toHaveLength(0)
+    expect(ctx.w.log.some((line) => line.text.includes('苏方初设自动布设未完成'))).toBe(false)
+    // 苏方算子按剧本数据落位（18 Tk Div 仍是「预备 + 移动面」）
+    const tank = ctx.w.units.find((unit) => unit.name === 'Ru 18 Tk Div')
+    expect(tank?.mode.mode).toBe('reserve')
+    expect(tank?.mode.orientation).toBe('move')
+    // 轴心 7 架飞机一枚都还没落：全在待落位队列里，盘上零架
+    expect(ctx.w.airUnits).toHaveLength(0)
+    const axisAirPending = ctx.setup.pendingPlacement.filter(
+      (item) => item.side === 'axis' && item.category === 'air',
+    )
+    expect(axisAirPending.length).toBeGreaterThan(0)
+    // 教学模式下不给「自动放置」入口（否则一键就把学员自己该摆的飞机也摆好了）
+    const queue = readFileSync('src/components/game/DecisionQueue.vue', 'utf8')
+    expect(queue).toContain('!tutorial.active')
+    // 此时引导停在「飞机先入盒」，而不是「敌军布设」
+    expect(tutorial.currentStep?.id).toBe('setup-air')
   }, 20_000)
 
   it('两次斯图卡扫射：脚本保证第二次命中并 DG，之后进突袭', async () => {
@@ -564,8 +595,8 @@ describe('教学模式：Vitebsk', () => {
     tutorial.startFor()
     expect(ctx.setup.enterSetup('Intro')).toBe(true)
     expect(ctx.g.setFirstWeatherChoice('normal', 'Intro')).toBe(true)
-    expect(ctx.setup.presetSelfSetupNow().airPlaced).toBe(7)
-    expect(ctx.setup.startGameNow()).toBe(true)
+    await placeTutorialSetup(ctx)
+    expect(ctx.setup.startGameNow(), ctx.setup.lastAction?.detail).toBe(true)
     await nextTick()
 
     const steps = tutorial.steps
@@ -650,6 +681,32 @@ describe('教学模式：Vitebsk', () => {
   }, 20_000)
 })
 
+/**
+ * 教学初设（用户 2026-11-23 口径）
+ *
+ * 苏方初设是**自动的**：`tutorial.ts` 的 `autoPlaceScriptedSetup` 在初设一落到苏方就把它落完并换手，
+ * 玩家不点「自动放置」；轴心的 7 架飞机仍要玩家自己逐枚放回图外空军盒（专规 1.4a），再确认本方布设。
+ */
+async function placeTutorialSetup(ctx: Ctx): Promise<void> {
+  // 自动布设挂在初设状态的 post 监听上：等它把游标交到轴心
+  for (let guard = 0; guard < 6 && ctx.setup.setupSideCursor === 'soviet'; guard += 1)
+    await nextTick()
+  expect(ctx.setup.setupSideCursor).toBe('axis')
+  // 苏方条目已落完（不再有苏方待定项），轴心的飞机一枚都没被代放
+  expect(ctx.setup.pendingPlacement.filter((item) => item.side === 'soviet')).toHaveLength(0)
+  const plan = ctx.setup.airPlanOf('axis')?.placements.filter((row) => row.count > 0)
+  expect(plan?.length ?? 0).toBeGreaterThan(0)
+  let placedAir = 0
+  for (const row of plan ?? [])
+    for (let copy = 0; copy < row.count; copy += 1) {
+      expect(ctx.setup.placeAirInOffMapBoxNow('axis', row.entryIndex)).toBe(true)
+      placedAir += 1
+    }
+  expect(placedAir).toBe(7)
+  expect(ctx.setup.currentSideSetupBlocker).toBeNull()
+  expect(ctx.setup.confirmSideSetup()).toBe(true)
+}
+
 type Ctx = ReturnType<typeof fresh>
 
 function tutorialStep(_ctx: Ctx) {
@@ -671,8 +728,8 @@ async function startTutorial(prepare?: (ctx: Ctx) => void): Promise<Ctx> {
 
   expect(ctx.setup.enterSetup('Intro')).toBe(true)
   expect(ctx.g.setFirstWeatherChoice('normal', 'Intro')).toBe(true)
-  expect(ctx.setup.presetSelfSetupNow().airPlaced).toBe(7)
-  expect(ctx.setup.startGameNow()).toBe(true)
+  await placeTutorialSetup(ctx)
+  expect(ctx.setup.startGameNow(), ctx.setup.lastAction?.detail).toBe(true)
   await nextTick()
 
   expect(tutorial.currentStep?.id).toBe('air-refit')

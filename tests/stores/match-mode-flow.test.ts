@@ -98,9 +98,9 @@ describe('界面接线：模式在选剧本页、顶栏只读、预设按 AI 方
     expect(source).toContain('data-testid="match-mode"')
   })
 
-  it('初设栏：非 PVE 不出现「一键预设初设」；PVE 点击走一键全落（无 onlySide）', () => {
+  it('初设栏：非 PVE（含教学模式）不出现「一键预设初设」；PVE 点击走一键全落（无 onlySide）', () => {
     const source = readSource('../../src/components/game/DecisionQueue.vue')
-    expect(source).toContain('v-if="hotseat.canPreset && !setup.finished"')
+    expect(source).toContain('v-if="hotseat.canPreset && !setup.finished && !tutorial.active"')
     // 2026-11-19（用户裁定）：一键预设改为全落双方，复用无参路径（轴心先手剧本不再空转）
     expect(source).toContain('setup.presetSelfSetupNow()')
     expect(source).not.toContain('presetSelfSetupNow({ onlySide: hotseat.presetSide })')
