@@ -355,6 +355,27 @@ describe('教学模式：Vitebsk', () => {
     )!
     ctx.w.toggleAirMissionUnit(sweepPlane.instanceId)
     expect(ctx.w.beginAirMissionNow()).toBe(true)
+    /*
+     * 用户 2026-11-23：14.3e-B 的守方逐轮点名归**苏军自己** ——
+     * 教学局苏军由脚本接管，脚本按缺省口径（该格 ACV 最高的苏军激活机）替它点名，
+     * 玩家那一侧只看见「由苏军自选」，攻方点位仍然空着（不在这一战替玩家预点）。
+     */
+    expect(ctx.w.airState?.step).toBe('airCombat')
+    /*
+     * 用户 2026-11-23：14.3e-B 的守方逐轮点名归**苏军自己** —— 教学局苏军由脚本接管，
+     * 脚本按缺省口径（任务格上 ACV 最高的苏军激活机）替它点名，玩家那一侧只看见
+     * 「由苏军自选」；攻方点位仍留空（不在这场空战里替玩家预点）。
+     */
+    const lagg = ctx.w.airUnits.find(
+      (air) =>
+        air.side === 'soviet' &&
+        air.airStatus === 'active' &&
+        air.hex.col === 19 &&
+        air.hex.row === 28,
+    )
+    expect(lagg?.name).toBe('Ru LaGG.3')
+    expect(ctx.w.airInputs.airCombatPicks[0]?.defenderAircraftId).toBe(lagg?.instanceId)
+    expect(ctx.w.airInputs.airCombatPicks[0]?.attackerAircraftId).toBeNull()
     expect(ctx.w.confirmAirCombatNow()).toBe(true)
     ctx.w.autoResolveAirMissionNow()
     if (ctx.w.airState?.step === 'resolveMission') ctx.w.settleAirMissionNow()

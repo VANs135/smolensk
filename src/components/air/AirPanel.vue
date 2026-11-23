@@ -57,6 +57,29 @@ function declareInterceptionAndContinue(): void {
   if (workbench.declareInterceptionNow()) workbench.autoResolveAirMissionNow()
 }
 
+/**
+ * 2026-11-23（用户口径）：14.3e-B 的**逐轮守方点名**是守方自己的选择
+ *
+ * PvE / 教学里守方由 AI（苏军）接管，把它的飞机摊在玩家面前让他代挑，等于玩家替对手打牌。
+ * 判「守方阵营」而不是判模式；14.3c 里由玩家发起任务 ⇒ 守方恒为对手，故 roles 还没算出来
+ * （`combat === null`）时同样按「对手是 AI / 脚本」收掉。
+ */
+const aiChoosesDefenderPlanes = computed(() => {
+  const defender = workbench.airState?.combat?.roles.defenderSide ?? null
+  if (hotseat.aiSide !== null && (defender === null || defender === hotseat.aiSide)) return true
+  if (hotseat.scriptedSide !== null && (defender === null || defender === hotseat.scriptedSide))
+    return true
+  return false
+})
+
+/** 守方阵营的中文名（只用于「由谁自选」那句话） */
+const defenderSideLabel = computed(() => {
+  const side = workbench.airState?.combat?.roles.defenderSide ?? null
+  if (side === 'soviet') return '苏军'
+  if (side === 'axis') return '轴心'
+  return hotseat.scriptedSide === 'soviet' || hotseat.aiSide === 'soviet' ? '苏军' : '轴心'
+})
+
 /** 14.2f-E：防空自动结算（敌方掷骰）⇒ 这里只把「拦截空战结算完」接上后续 F/G。 */
 function resolveInterceptionCombatAndContinue(): void {
   if (workbench.resolveInterceptionCombatNow()) workbench.autoResolveAirMissionNow()
@@ -913,6 +936,10 @@ const displayedBases = computed(() =>
               @pick="workbench.airInputs.namedDefenderId = $event"
             />
             <!-- 14.3e-B：逐轮点名（每轮各点一架；不点即由引擎取 ACV 最高） -->
+            <p v-if="aiChoosesDefenderPlanes" class="num">
+              <BaseTag kind="neutral">由对手操作</BaseTag>
+              守方点名：由{{ defenderSideLabel }}（AI）自选，按行动值最高的那一架迎战，你只等结果。
+            </p>
             <div v-for="round in workbench.airCombatRoundBudget" :key="round" class="row">
               <span class="muted">第 {{ round }} 轮</span>
               <CounterPicker
@@ -923,6 +950,7 @@ const displayedBases = computed(() =>
                 @pick="setAirCombatPick(round - 1, 'attackerAircraftId', $event)"
               />
               <CounterPicker
+                v-if="!aiChoosesDefenderPlanes"
                 :title="`守方点名（第 ${round} 轮：任选一架）`"
                 :items="defenderPickItems(round - 1)"
                 :size="28"

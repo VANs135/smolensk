@@ -990,7 +990,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
         title: '战斗机扫荡敌机',
         hint: '霍特：再派一架 Bf110，把城里的敌机扫下来。',
         intro:
-          '维捷布斯克城里停着敌军的 LaGG.3，正在我部截击机够得着的距离内。这是战斗机对战斗机的硬仗，双方都有风险；先把敌机压住，轰炸机才敢进去。',
+          '维捷布斯克城里停着敌军的 LaGG.3，正在我部截击机够得着的距离内。这是战斗机对战斗机的硬仗，双方都有风险；先把敌机压住，轰炸机才敢进去。空战一键结算：我方迎战机取行动值最高的那架，敌机由敌军自己挑，你不必替它点。',
         done: () => fighterSweepDone(),
       },
       {
@@ -998,7 +998,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
         title: '空军轰炸维捷布斯克',
         hint: '霍特：战斗机护航轰炸机编队，轰炸敌方守军。',
         intro:
-          '两队 Ju.88 和一队 Do.17z 投弹，没去扫荡的那架 Bf.110 留下护航；敌 I.153 从拦截距离内起飞迎击。用战斗机给轰炸机护航，没有护航的轰炸机是脆弱的。',
+          '两队 Ju.88 和一队 Do.17z 投弹，没去扫荡的那架 Bf.110 留下护航；敌 I.153 从拦截距离内起飞迎击。用战斗机给轰炸机护航，没有护航的轰炸机是脆弱的。拦截与空战都由敌军自己出机，你只等结果。',
         done: () => bombingDone(),
       },
       {
@@ -1334,6 +1334,69 @@ export const useTutorialStore = defineStore('tutorial', () => {
         return
       }
       workbench.airInputs.airCombatDice = [{ die: 6, lossDie: 5 }]
+    },
+    { flush: 'sync' },
+  )
+
+  /*
+   * 2026-11-23（用户口径）：14.3e-B 逐轮点名里**守方（苏军）那一半由苏军自选**
+   *
+   * 教学局苏军由脚本接管，它的飞机就不该摊在玩家面前让他代挑（`AirPanel` 里那一列
+   * 守方点名已经按「守方阵营 = AI/脚本」收掉）。脚本的选法照 14.3e-B 的缺省口径：
+   * 每轮取该格 ACV 最高的苏军激活机 —— 与引擎 `pickHighestAcv` 同口径，
+   * 所以空战表、骰链与「两败俱伤」的演出都不变，只是不再由玩家替对手点机。
+   *
+   * 不读 `state.combat.roles`：任务刚发起时它可能还是 null（实测），而 14.3c 里
+   * 由玩家发起任务 ⇒ 守方恒为苏军；按「任务格上的苏军激活机」取名更稳。
+   */
+  watch(
+    () => workbench.airState,
+    (state) => {
+      if (!active.value) return
+      const target = workbench.airTargetHex
+      const inAirCombat =
+        state !== null &&
+        state.finished !== true &&
+        state.step === 'airCombat' &&
+        target !== null &&
+        hotseat.scriptedSide === 'soviet' &&
+        state.combat?.roles.defenderSide !== 'axis'
+      if (!inAirCombat) {
+        if (workbench.airInputs.airCombatPicks.length > 0) workbench.airInputs.airCombatPicks = []
+        return
+      }
+      const defenders = workbench.airUnits.filter(
+        (air) =>
+          air.side === 'soviet' &&
+          air.airStatus === 'active' &&
+          air.steps > 0 &&
+          sameHex(air.hex, target),
+      )
+      const attackers = workbench.airUnits.filter(
+        (air) =>
+          air.side === 'axis' &&
+          air.airStatus === 'active' &&
+          air.steps > 0 &&
+          sameHex(air.hex, target),
+      )
+      const chosen =
+        [...defenders].sort((a, b) => b.airCombatRating - a.airCombatRating)[0]?.instanceId ?? null
+      if (chosen === null) return
+      // 轮数上界＝双方在场机数之和（与 `airCombatRoundBudget` 同口径）
+      const rounds = Math.max(1, defenders.length + attackers.length)
+      const rows = Array.from({ length: rounds }, () => ({
+        attackerAircraftId: null as string | null,
+        defenderAircraftId: chosen,
+      }))
+      const same =
+        rows.length === workbench.airInputs.airCombatPicks.length &&
+        rows.every(
+          (row, index) =>
+            workbench.airInputs.airCombatPicks[index]?.defenderAircraftId ===
+              row.defenderAircraftId &&
+            workbench.airInputs.airCombatPicks[index]?.attackerAircraftId === null,
+        )
+      if (!same) workbench.airInputs.airCombatPicks = rows
     },
     { flush: 'sync' },
   )

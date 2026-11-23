@@ -360,6 +360,17 @@ describe('B14a：空军面板的替换（源码守卫）', () => {
     expect(store).toContain('function airCombatPicksPayload()')
   })
 
+  it('★ 2026-11-23：守方由 AI / 脚本接管时，逐轮守方点名不给玩家（苏军自己选机）', () => {
+    // 面板：守方阵营 = AI / 脚本 ⇒ 收掉那列阵列，只留一句「由谁自选」
+    expect(panel).toContain('aiChoosesDefenderPlanes')
+    expect(panel).toContain('v-if="!aiChoosesDefenderPlanes"')
+    expect(panel).toContain('由{{ defenderSideLabel }}（AI）自选')
+    // 脚本：苏军那一半由脚本按 ACV 最高替它点名（不点＝引擎缺省同口径）
+    const tutorial = readFileSync('src/stores/tutorial.ts', 'utf8')
+    expect(tutorial).toContain("air.side === 'soviet'")
+    expect(tutorial).toContain('workbench.airInputs.airCombatPicks = rows')
+  })
+
   it('★ 14.9 / 14.10：载货区按任务类型门控，输入直连 airInputs', () => {
     // 空运：SP 与单位货物（14.9）；空投：SP 与计划/执行回合（14.10b）
     expect(panel).toContain("workbench.airMissionKind === 'air_transport'")
