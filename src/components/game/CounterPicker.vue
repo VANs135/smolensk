@@ -52,6 +52,13 @@ export interface CounterPickerItem {
    * 真不可用请走 `disabledReason`（降饱和 + not-allowed）。
    */
   dimmed?: boolean
+  /**
+   * 飞机实例 id（**仅飞机阵列给**）⇒ 画成 `data-air-instance-id`
+   *
+   * 同名机（两枚 Ju.88 / 两枚 Bf.110）在阵列里长得一模一样，教学引导只能靠实例 id
+   * 精确框住"该点的那一枚"（`TutorialGuide` 的 ⓪ 分支按此属性找控件）。
+   */
+  airInstanceId?: string
 }
 
 const props = withDefaults(
@@ -231,6 +238,7 @@ const gridStyle = computed<Record<string, string>>(() => ({
             v-long-press="() => contextItem(item.id)"
             type="button"
             class="picker__cell"
+            :data-air-instance-id="item.airInstanceId"
             :class="{
               'picker__cell--on': item.selected,
               'picker__cell--off': item.disabledReason != null,

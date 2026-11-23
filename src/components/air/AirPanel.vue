@@ -157,6 +157,21 @@ const interceptionCombatLine = computed(
   () => workbench.airState?.interception?.combat?.detail ?? null,
 )
 
+/**
+ * 14.5 / 14.3e-B：拦截机 ↔ 迎战机这一对（修正骰的两个加数）
+ *
+ * 未点名迎战机时显示的就是引擎会取的那一架（`airInterceptionDefender` 缺省＝ACV 最高）
+ * ⇒ 玩家在按下「结算拦截空战」之前就能看见"实际交手的是哪两架"。
+ */
+const interceptionPairLine = computed(() => {
+  const interceptorId = workbench.airState?.interception?.interceptorId ?? null
+  if (interceptorId === null) return null
+  const interceptor = workbench.airUnits.find((air) => air.instanceId === interceptorId)
+  const defender = workbench.airInterceptionDefender
+  if (interceptor === undefined || defender === null) return null
+  return `${interceptor.name}（ACV ${interceptor.airCombatRating}）vs ${defender.name}（ACV ${defender.airCombatRating}，${workbench.airInputs.namedDefenderId === null ? '未点名·引擎取 ACV 最高' : '你点名'}）`
+})
+
 /** 10.0a：对地战果停在"目标方分配损失"（与炮击第 3 步同一块） */
 const airLossPickPending = computed(() => {
   const barrage = workbench.barrageState
@@ -296,8 +311,10 @@ const interceptorItems = computed<readonly CounterPickerItem[]>(() =>
 const namedDefenderItems = computed<readonly CounterPickerItem[]>(() =>
   workbench.airMissionAirUnits.map((air) => ({
     id: air.instanceId,
+    airInstanceId: air.instanceId,
     imageUrl: counterImageUrlOf(air),
-    name: `${air.name}（ACV ${air.airCombatRating}）@ ${hexLabel(air.hex)}`,
+    // 机型代号进 title：被拦截时玩家要挑"战斗机"迎战，得先能从阵列里认出哪架是 F
+    name: `${air.name}（${air.aircraftType}｜ACV ${air.airCombatRating}）@ ${hexLabel(air.hex)}`,
     selected: workbench.airInputs.namedDefenderId === air.instanceId,
     hex: air.hex,
   })),
@@ -1024,10 +1041,28 @@ const displayedBases = computed(() =>
             item="air:interceptionCombat"
           >
             <p class="num">
-              <BaseTag kind="neutral">由对手操作</BaseTag>
+              <BaseTag kind="warning">迎战机由你点名</BaseTag>
               拦截空战（14.5 按空战结算）：修 2 骰 + 拦截机 ACV − 迎战机 ACV； 胜 ⇒
               拦截机保持激活（不算执行过任务），败/双方返航 ⇒ 非激活。
+              <RuleTip rule="14.3e-B">
+                被拦截由**任务方**（你）从参战机中指一架迎战，条文是「任意一架」——没有强制战斗机；
+                战斗机空战值最高，通常就是该点的那一架。
+              </RuleTip>
             </p>
+            <p v-if="interceptionPairLine !== null" class="num">
+              <BaseTag kind="neutral">交手</BaseTag>
+              {{ interceptionPairLine }}
+            </p>
+            <!-- 14.3e-B：迎战机＝任务方点名一架（缺省＝引擎取 ACV 最高） -->
+            <CounterPicker
+              v-if="workbench.airState.interception.combat === null"
+              title="迎战机（14.3e-B：任务方从参战机中指定一架迎战；不点即由引擎取 ACV 最高）"
+              hint="14.3e-B：被拦截的这一刻由你点名迎战的那一架——战斗机空战值最高"
+              :items="namedDefenderItems"
+              :size="32"
+              @pick="workbench.airInputs.namedDefenderId = $event"
+              @hover="hoverAir"
+            />
             <div class="row">
               <BaseButton
                 variant="secondary"

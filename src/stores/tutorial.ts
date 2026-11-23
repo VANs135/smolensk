@@ -12,7 +12,7 @@ import { useHotseatStore } from './hotseat'
 import { useSetupStore } from './setup'
 import { setTutorialSovietFirstTurnFullMa } from './tutorial-settings'
 import { useWorkbenchStore } from './workbench'
-import { toConsoleAirUnit, toConsoleUnit } from './workbench-model'
+import { toConsoleAirUnit, toConsoleUnit, isFighterAircraft } from './workbench-model'
 
 /**
  * Vitebsk 教学模式（用户 2026-11-18 第 2 条；2026-11-19 扩充）
@@ -46,6 +46,13 @@ export interface TutorialTarget {
   buttonTexts?: readonly string[]
   /** 任务选机面板里**这一枚**飞机（逐枚高亮，避免同名机误指到已选/已飞的那枚） */
   airInstanceId?: string
+  /**
+   * 卡片上的一行**当前该做什么**（比 `hint` 更细的子状态提示）
+   *
+   * `hint` 是这一步的总目标（例如"右键该城，菜单点轰炸"），走到半途（被拦截、等结算）
+   * 就不再适用；这一步内的临时指令由 `target.note` 给，卡片显示在最下面一行。
+   */
+  note?: string
 }
 
 export interface TutorialStepView {
@@ -603,7 +610,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
        * 2026-11-21（用户「教学模式独立，不要和普通 PVE 混」）：教学一律由脚本接管苏军，
        * 所以这里除 `aiSoviet` 外还要认 `scriptedSide === 'soviet'`，两种驱动者都不给玩家 UI。
        */
-      if (aiSoviet.value || hotseat.scriptedSide === 'soviet') return {}
+      if (aiSoviet.value || hotseat.scriptedSide === 'soviet')
+        return { note: '苏军已宣布拦截（14.5）：拦截机由对手自己派，你只等结果。' }
       if (!workbench.airInputs.interceptDeclared) {
         return { texts: ['拦截方宣布拦截（14.5：不强制）'] }
       }
@@ -612,8 +620,31 @@ export const useTutorialStore = defineStore('tutorial', () => {
       }
       return { buttonTexts: ['③ 记录拦截应答并继续'] }
     }
-    if (state.step === 'flak' && workbench.airInputs.interceptDeclared && !aiSoviet.value) {
-      return { buttonTexts: ['结算拦截空战（14.5）'] }
+    if (state.step === 'flak' && workbench.airInputs.interceptDeclared) {
+      /*
+       * 2026-11-23（用户"玩家被拦截的时候要提示玩家选战斗机出战"）：
+       * 14.5 的拦截由对手出机，但**迎战的那一架是任务方的选择**（14.3e-B：任意一架）。
+       * 修前这里直接指「结算拦截空战」，等于把这一架交给引擎的 ACV 最高缺省 ——
+       * 玩家没做过这次点名。现在先圈参战机里的战斗机（Bf.110，ACV 3），点过才指结算。
+       *
+       * ★ 判据不再用 `!aiSoviet`：教学局本身就是 PvE 外壳（`adoptTutorialShell` 落
+       *   `mode='pve' / aiSide='soviet'`）⇒ `aiSoviet` 恒 true ⇒ 这条分支在教学里永远走不到。
+       *   归 AI 的只是**拦截方**（出拦截机那一侧），迎战机归玩家，与本步无关。
+       */
+      if (workbench.airInputs.namedDefenderId === null) {
+        const fighter = workbench.airMissionAirUnits.find((air) =>
+          isFighterAircraft(air.aircraftType),
+        )
+        return {
+          ...(fighter === undefined ? {} : { airInstanceId: fighter.instanceId }),
+          buttonTexts: ['Ge Bf.110', 'Bf.110'],
+          note: '被拦截了：先在「迎战机」里点战斗机（Bf.110，ACV 3 最高），再结算拦截空战（14.5）。',
+        }
+      }
+      return {
+        buttonTexts: ['结算拦截空战（14.5）'],
+        note: '迎战机已定：点「结算拦截空战（14.5）」。',
+      }
     }
     if (state.step === 'airCombat') return { buttonTexts: ['② 结算空战并继续（14.3）'] }
     if (state.step === 'resolveMission') {
@@ -1013,7 +1044,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
         title: '空军轰炸维捷布斯克',
         hint: '霍特：护航轰炸机炸维捷布斯克——右键该城，菜单点「轰炸」。',
         intro:
-          '两队 Ju.88 和一队 Do.17z 投弹，没去扫荡的那架 Bf.110 留下护航；敌 I.153 从拦截距离内起飞迎击。用战斗机给轰炸机护航，没有护航的轰炸机是脆弱的。拦截与空战都由敌军自己出机，你只等结果。',
+          '两队 Ju.88 和一队 Do.17z 投弹，没去扫荡的那架 Bf.110 留下护航；敌 I.153 从拦截距离内起飞迎击。用战斗机给轰炸机护航，没有护航的轰炸机是脆弱的。拦截机由敌军自己派，挨拦的那一刻要你来点名哪一架迎战——挑战斗机。',
         done: () => bombingDone(),
       },
       {

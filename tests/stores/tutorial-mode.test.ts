@@ -104,6 +104,17 @@ describe('教学模式：Vitebsk', () => {
     expect(second).toBeDefined()
     expect(ctx.w.barrageState?.dice?.die).toBe(9)
     expect(target?.mode.dg).toBe(true)
+
+    /*
+     * 用户 2026-11-23（第 4 批）：核查「两次低空扫射是否都选斯图卡」。
+     * 引导逐枚点名 Ju.87b（`nextStrafePlaneId` 只取该机型且排除本阶段已飞过的）⇒
+     * 两次各用一架**不同的**斯图卡，第二架不会重复第一架。
+     */
+    expect(first?.aircraftId).toBe('ax-aircraft-ge-ju-87b')
+    expect(second?.aircraftId).toBe('ax-aircraft-ge-ju-87b')
+    expect(first?.instanceId).not.toBe(second?.instanceId)
+    expect(first?.missionsFlownThisPhase).toBeGreaterThan(0)
+    expect(second?.missionsFlownThisPhase).toBeGreaterThan(0)
   }, 20_000)
 
   it('完整教学线：扫射 → 突袭 → 战斗步（补给 / AR）；后续炮兵、空袭、反扑、夺城见步骤守卫', async () => {
@@ -264,6 +275,68 @@ describe('教学模式：Vitebsk', () => {
       ctx.w.toggleAirMissionUnit(id)
     }
     expect(tutorial.currentStep?.target.buttonTexts).toContain('发起任务')
+
+    /*
+     * 用户 2026-11-23（第 4 批）：「玩家被拦截的时候要提示玩家选战斗机出战」。
+     * 14.5 拦截由对手出机，但迎战的那一架是**任务方的点名**（14.3e-B：任意一架）⇒
+     * 引导不能在「拦截空战」处直接跳到结算按钮，先把参战机里的战斗机圈出来。
+     */
+    /*
+     * 19.28 的空战（14.3）会先把在场的苏军机打回非激活 ⇒ 14.5 拦截就无从发生。
+     * 这一步要观察的是**拦截**，故先按住 I.153（轰炸步的卡片会再把它升空，见 `currentStep`）。
+     */
+    i153.airStatus = 'inactive'
+    expect(ctx.w.beginAirMissionNow()).toBe(true)
+    await nextTick()
+    if (ctx.w.airState?.step === 'airCombat') expect(ctx.w.confirmAirCombatNow()).toBe(true)
+    await nextTick()
+    expect(ctx.w.airState?.step).toBe('interception')
+    // 教学脚本在轰炸步把 I.153 升空（`currentStep` 与 watch 的同一行）⇒ 此刻它是合格的拦截机
+    i153.airStatus = 'active'
+    await nextTick()
+    if (ctx.w.airState?.interception?.declared !== true) {
+      // 脚本在界面上由 `airState` 的 watch 宣布；watch 不因 airStatus 变化重跑，这里按同一口径补一次
+      ctx.w.airInputs = {
+        ...ctx.w.airInputs,
+        interceptDeclared: true,
+        interceptorId: i153.instanceId,
+      }
+      expect(ctx.w.declareInterceptionNow()).toBe(true)
+    }
+    expect(ctx.w.airState?.step).toBe('flak')
+    expect(ctx.w.airState?.interception?.declared).toBe(true)
+    expect(ctx.w.airState?.interception?.combat).toBeNull()
+
+    const bombingStep = (): {
+      airInstanceId?: string
+      note?: string
+      buttonTexts?: readonly string[]
+    } => tutorial.steps.find((step) => step.id === 'bombing')!.target
+    const missionFighter = ctx.w.airMissionAirUnits.find(
+      (air) => air.aircraftId === 'ax-aircraft-ge-bf-110',
+    )
+    expect(missionFighter).toBeDefined()
+    // 未点名：先圈战斗机（不是先圈结算按钮）
+    expect(bombingStep().airInstanceId).toBe(missionFighter?.instanceId)
+    expect(bombingStep().buttonTexts ?? []).not.toContain('结算拦截空战（14.5）')
+    expect(bombingStep().note).toContain('战斗机')
+
+    // 玩家点名战斗机迎战 ⇒ 引导才转到结算
+    ctx.w.airInputs.namedDefenderId = missionFighter!.instanceId
+    expect(bombingStep().buttonTexts).toContain('结算拦截空战（14.5）')
+    // 迎战机取点名的那一架（与引擎同口径），不是"名单第一架"
+    expect(ctx.w.airInterceptionDefender?.instanceId).toBe(missionFighter?.instanceId)
+    // 面板这块必须真的给选择器（否则玩家无从点名，只能吃 ACV 最高缺省）
+    const panelSource = readFileSync('src/components/air/AirPanel.vue', 'utf8')
+    const interceptionBlock = panelSource.slice(
+      panelSource.indexOf('拦截空战结算（14.5 + 14.3e）'),
+      panelSource.indexOf('④ 防空（14.2f-E / 14.4）'),
+    )
+    expect(interceptionBlock).toContain(':items="namedDefenderItems"')
+    expect(interceptionBlock).toContain('namedDefenderId')
+    // 同名/同型机要靠实例 id 精确框住
+    const pickerSource = readFileSync('src/components/game/CounterPicker.vue', 'utf8')
+    expect(pickerSource).toContain(':data-air-instance-id="item.airInstanceId"')
     tutorial.stop()
   }, 90_000)
 

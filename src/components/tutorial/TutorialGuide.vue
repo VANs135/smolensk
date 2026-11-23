@@ -211,6 +211,9 @@ watch(
         {{ tutorial.currentStep.intro }}
       </p>
       <p class="tut__hint">{{ tutorial.currentStep.hint }}</p>
+      <p v-if="tutorial.currentStep.target.note !== undefined" class="tut__note">
+        {{ tutorial.currentStep.target.note }}
+      </p>
     </aside>
 
     <div
@@ -308,6 +311,17 @@ watch(
 .tut__hint {
   margin: 5px 0 0;
   color: var(--color-muted);
+}
+
+/* 步内子指令（例如"被拦截了：先点战斗机迎战"）—— 比 hint 更该被看见，用金色压一句 */
+.tut__note {
+  margin: 5px 0 0;
+  padding: 4px 6px;
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-gold) 16%, transparent);
+  border-left: 2px solid var(--color-gold);
+  border-radius: 4px;
+  font-size: var(--text-xs);
 }
 
 .tut__intro {
