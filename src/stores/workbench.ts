@@ -336,6 +336,7 @@ import {
   FIRST_TURN_HALF_MA_MULT,
   stackingObligations,
   STACKING_LIMIT_RE,
+  canonicalMode,
   type UnitSupplyAssessment,
 } from '@/engine/rules'
 import { createGameSeed, createId } from '@/shared'
@@ -21502,11 +21503,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         units.value.some(
           (unit) =>
             unit.side === movingSide &&
-            unit.mode.mode === 'reserve' &&
+            // 通规 5.7b：已释放的预备只剩临时旗标，规范模式已是朝向那一面 ⇒ 不再受 5.7g 约束
+            canonicalMode(unit.mode) === 'reserve' &&
             hedgehogLevelOf(unit.hex) > 0,
         )
       ) {
-        return { rule: '5.7g', reason: '预备单位仍位于工事格，请先移出或依法切换模式后结束环节' }
+        return {
+          rule: '5.7g',
+          reason:
+            '预备单位仍位于工事格：请先移出工事格，或按 5.7b 释放预备后结束环节（5.7g：段末不得与环形工事同格）',
+        }
       }
     }
     /*

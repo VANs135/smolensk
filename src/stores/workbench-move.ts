@@ -1163,7 +1163,8 @@ export function createMovementDomain(ports: MovementDomainPorts) {
      */
     const reserveStuckInHedgehog = moveUnits.value
       .filter((unit) => !unit.movementEnded)
-      .some((unit) => unit.mode.mode === 'reserve' && hedgehogLevelOf(unit.hex) > 0)
+      // 判据取引擎的 `canStackWithHedgehog`：它按生效标记折算，已释放的预备不受 5.7g 约束
+      .some((unit) => !canStackWithHedgehog(unit.mode) && hedgehogLevelOf(unit.hex) > 0)
     if (reserveStuckInHedgehog) {
       moveBlocked.value = {
         rule: '5.7g',
