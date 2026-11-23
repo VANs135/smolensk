@@ -235,18 +235,22 @@ describe('教学模式：Vitebsk', () => {
     expect(ctx.w.airState?.finished).toBe(true)
     expect(tutorial.currentStep?.id).toBe('bombing')
 
-    // 进轰炸环节后 I.153 才升空；四机按 Ju.88 ×2 → Do.17z → 未扫荡的 Bf110 逐枚高亮
+    // 进轰炸环节后 I.153 仍留在基地里**未激活**（用户 2026-11-23：它要到拦截步才升空，
+    // 否则 19.28 会先打一场 14.3 空战、把它打回非激活，14.5 拦截就轮不到了）
     for (let guard = 0; guard < 8 && ctx.w.segmentStep?.id !== 'movement.barrage'; guard++)
       ctx.w.advanceSegmentNow()
     expect(ctx.w.segmentStep?.id).toBe('movement.barrage')
-    expect(i153.airStatus).toBe('active')
+    expect(i153.airStatus).toBe('inactive')
     // 上一波任务选机名单要清掉（真实 UI 从菜单重新发起时会重置）
     ctx.w.toggleAirMissionUnit(sweepPlane.instanceId)
     ctx.w.setAirMissionKind('barrage')
     expect(ctx.w.setAirTargetFromText('19.28')).toBe(true)
-    // 14.4c：I.153 的基地罩住 19.28 ⇒ 它才是轰炸的拦截机
-    expect(ctx.w.airTargetInEnemyPatrolZone).toBe(true)
-    expect(ctx.w.airInterceptionResponse?.eligibleFighterIds).toContain(i153.instanceId)
+    /*
+     * 发起时 I.153 仍未激活 ⇒ 目标格内没有敌方激活机 ⇒ 14.3 空战不成立
+     * （`airCombatOccursAt` 的三个条件缺一个）；它到 14.5 的 D 步才由脚本升空。
+     */
+    expect(ctx.w.airTargetInEnemyPatrolZone).toBe(false)
+    expect(ctx.w.airInterceptionResponse?.eligibleFighterIds).toEqual([])
     const availableOf = (aircraftId: string) =>
       ctx.w.airUnits.filter(
         (air) =>
@@ -280,31 +284,20 @@ describe('教学模式：Vitebsk', () => {
      * 用户 2026-11-23（第 4 批）：「玩家被拦截的时候要提示玩家选战斗机出战」。
      * 14.5 拦截由对手出机，但迎战的那一架是**任务方的点名**（14.3e-B：任意一架）⇒
      * 引导不能在「拦截空战」处直接跳到结算按钮，先把参战机里的战斗机圈出来。
+     *
+     * 同一条口径的另一半：I.153 到**拦截步**才升空 ⇒ 发起时目标格内没有敌方激活机，
+     * 14.3 空战不发生，14.5 拦截才真的会出现（脚本随即代苏军宣布）。
      */
-    /*
-     * 19.28 的空战（14.3）会先把在场的苏军机打回非激活 ⇒ 14.5 拦截就无从发生。
-     * 这一步要观察的是**拦截**，故先按住 I.153（轰炸步的卡片会再把它升空，见 `currentStep`）。
-     */
-    i153.airStatus = 'inactive'
     expect(ctx.w.beginAirMissionNow()).toBe(true)
     await nextTick()
     if (ctx.w.airState?.step === 'airCombat') expect(ctx.w.confirmAirCombatNow()).toBe(true)
     await nextTick()
-    expect(ctx.w.airState?.step).toBe('interception')
-    // 教学脚本在轰炸步把 I.153 升空（`currentStep` 与 watch 的同一行）⇒ 此刻它是合格的拦截机
-    i153.airStatus = 'active'
-    await nextTick()
-    if (ctx.w.airState?.interception?.declared !== true) {
-      // 脚本在界面上由 `airState` 的 watch 宣布；watch 不因 airStatus 变化重跑，这里按同一口径补一次
-      ctx.w.airInputs = {
-        ...ctx.w.airInputs,
-        interceptDeclared: true,
-        interceptorId: i153.instanceId,
-      }
-      expect(ctx.w.declareInterceptionNow()).toBe(true)
-    }
+    // 空战没有发生（格内无敌方激活机）：`combat.occurs === false`
+    expect(ctx.w.airState?.combat?.occurs).toBe(false)
     expect(ctx.w.airState?.step).toBe('flak')
+    expect(i153.airStatus).toBe('active')
     expect(ctx.w.airState?.interception?.declared).toBe(true)
+    expect(ctx.w.airState?.interception?.interceptorId).toBe(i153.instanceId)
     expect(ctx.w.airState?.interception?.combat).toBeNull()
 
     const bombingStep = (): {
@@ -455,9 +448,9 @@ describe('教学模式：Vitebsk', () => {
     if (ctx.w.airState?.step === 'returnToBase') ctx.w.completeAirReturnNow()
     expect(ctx.w.airState?.finished).toBe(true)
     expect(tutorial.currentStep?.id).toBe('bombing')
-    // 引导走到轰炸步 ⇒ 苏军 I.153 已升空（14.4c 巡逻区成立的前提）
+    // 引导走到轰炸步 ⇒ I.153 仍留在基地**未激活**（要到 14.5 的 D 步才升空，见下一段）
     const i153 = ctx.w.airUnits.find((air) => air.instanceId === 'tutorial-su-i153')!
-    expect(i153.airStatus).toBe('active')
+    expect(i153.airStatus).toBe('inactive')
 
     // 4) 轰炸：四机齐出 → 发起 → 结算（含 10.0a 的受损落盘）
     for (let guard = 0; guard < 8 && ctx.w.segmentStep?.id !== 'movement.barrage'; guard++)
@@ -490,6 +483,23 @@ describe('教学模式：Vitebsk', () => {
       }
       if (state.step === 'returnToBase') {
         ctx.w.completeAirReturnNow()
+        continue
+      }
+      /*
+       * 用户 2026-11-23（第 5 批）：I.153 现在**真的**会在这一趟里拦截（到 D 步才升空）；
+       * 拦截空战由面板那颗「结算拦截空战（14.5）」收拾，与界面同序：
+       * 先点名迎战机（这里点战斗值最高的那架），再结算拦截、继续防空与结算。
+       */
+      if (
+        state.step === 'flak' &&
+        state.interception?.declared === true &&
+        state.interception.combat === null
+      ) {
+        const fighter = ctx.w.airMissionAirUnits.reduce((best, air) =>
+          air.airCombatRating > best.airCombatRating ? air : best,
+        )
+        ctx.w.airInputs.namedDefenderId = fighter.instanceId
+        expect(ctx.w.resolveInterceptionCombatNow()).toBe(true)
         continue
       }
       ctx.w.autoResolveAirMissionNow()

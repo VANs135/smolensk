@@ -25,7 +25,9 @@ import { toConsoleAirUnit, toConsoleUnit, isFighterAircraft } from './workbench-
  * ## 教学脚本的边界（2026-11-20）
  *   只做开局数据 / 固定骰面这类“摆盘 + 裁判骰”的事，不改任何判定：
  *   · 在 19.28 苏军空军基地放一队 I.153 与一队 LaGG.3（Intro 无苏机），
- *     LaGG.3 在战机扫荡课激活、I.153 在轰炸课激活；
+ *     LaGG.3 在战机扫荡课激活；I.153 到轰炸的 **14.5 拦截步（D）** 才激活，
+ *     否则它作为基地内唯一激活的苏机会在任务发起时逼出 14.3 目标格空战，
+ *     打完返航转非激活，拦截课就整段丢失；
  *   · 额外摆一队 Ju.88 进图外盒（教学轰炸要求两队 Ju.88 + 一队 Do.17z + 一队 Bf110）；
  *   · 把苏军 18 Tk Div 置为预备并补足油（反应段才有合法反击对象）；
  *   · 扫射 / 扫荡 / 轰炸只钉既有裁判骰入口，空战与轰炸判定仍走 14.x / 10.0。
@@ -1268,26 +1270,13 @@ export const useTutorialStore = defineStore('tutorial', () => {
   )
 
   /*
-   * 苏军 I.153 升空待命（拦截走 14.5 既有判定）
+   * 苏军 I.153 的升空时机＝**拦截步**（见下方 `airState` 里 `step === 'interception'` 的说明）。
    *
-   * 2026-11-21：原来只绑「进入 `movement.barrage` 段」这一个时机会——若该段在扫荡课时
-   * 就已经是当前段，等真到轰炸时 watch 不再触发，I.153 仍是 inactive ⇒ 巡逻区不成立
-   * （`missionHexOutsidePatrolZone`）、拦截步被整段跳过，`interceptDeclared` 永远 false。
-   * 现在同时认「教学步骤到 bombing」这个可靠信号，段信号留作兜底。
+   * 2026-11-23（用户口径「I.153 就是要在教学玩家轰炸的时候拦截玩家」）：修前这里在
+   * 「教学步骤到 bombing / 进入 movement.barrage 段」就把它升空 ⇒ 它作为目标格上唯一的
+   * 苏军激活机，逼出 14.3 的空战；打完返航转非激活，14.5 拦截就永远轮不到。
+   * 现在不留任何提前升空点，只在 D 步落位。
    */
-  watch(
-    () =>
-      `${String(active.value)}|${steps.value[cursor.value]?.id ?? ''}|${workbench.segmentStep?.id ?? ''}`,
-    () => {
-      if (!active.value) return
-      const bombingStep = steps.value[cursor.value]?.id === 'bombing'
-      const inBarrageSegment = workbench.segmentStep?.id === 'movement.barrage'
-      if (!bombingStep && !inBarrageSegment) return
-      const i153 = workbench.airUnits.find((air) => air.instanceId === TUTORIAL_SU_I153_ID)
-      if (i153 !== undefined && i153.airStatus === 'inactive') i153.airStatus = 'active'
-    },
-    { flush: 'sync' },
-  )
 
   /* ────────────────────── 教学脚本的固定骰面（既有裁判入口） ────────────────────── */
 
@@ -1334,10 +1323,29 @@ export const useTutorialStore = defineStore('tutorial', () => {
         workbench.airInputs.interceptDie = 6
         workbench.airInputs.interceptLossDie = 1
         /*
-         * 2026-11-21：**脚本演苏军**。教学流程定死，苏军的拦截由脚本宣布并选机，
-         * 玩家是被拦截方（不再替对手勾「宣布拦截」、选机）。I.153 是教学里唯一的
-         * 苏军战斗机，找不到就退回引擎给的第一架候选（资格由 14.4c 判定）。
+         * 2026-11-23（用户口径）：**I.153 就是要在这一趟轰炸里拦截玩家**。
+         *
+         * 它停在 19.28 —— 那既是任务格、也是苏军空军基地，所以它只要在**任务发起时**
+         * 就是激活的，14.3 必定先在目标格打一场空战（`airCombatOccursAt`：格内有敌方基地
+         * 且双方都有激活机 ⇒ 必打，不是可选择项）；那一仗一打完它就返航转非激活，
+         * 14.5 的拦截再也发生不了（修前教学正是这样把拦截课整段丢掉的）。
+         * ⇒ 改成**进入 D 步这一刻**才让它升空：发起时格内没有敌方激活机 ⇒ 14.3 不发生；
+         *   到了 D 步它已可出击 ⇒ 14.5 合法，资格仍由 14.4c 现场判（`airInterceptionResponse`
+         *   是实时派生，先升空再取候选即可）。
+         *
+         * 2026-11-21：**脚本演苏军** —— 苏军的拦截由脚本宣布并选机，玩家是被拦截方
+         * （不替对手勾「宣布拦截」、选机）。I.153 是教学里唯一的苏军战斗机，
+         * 找不到就退回引擎给的第一架候选。
          */
+        const i153 = workbench.airUnits.find((air) => air.instanceId === TUTORIAL_SU_I153_ID)
+        if (
+          i153 !== undefined &&
+          i153.airStatus === 'inactive' &&
+          isBombingRun &&
+          state.targetHex !== null &&
+          sameHex(state.targetHex, BOMB_HEX)
+        )
+          i153.airStatus = 'active'
         if (workbench.airState?.interception?.declared !== true) {
           const candidates = workbench.airInterceptorCandidates
           const fixed =
@@ -1725,15 +1733,10 @@ export const useTutorialStore = defineStore('tutorial', () => {
     if (!active.value) return null
     const step = steps.value[cursor.value] ?? null
     /*
-     * 2026-11-21：苏军 I.153 必须**在轰炸任务发起前**升空，否则 14.4c 巡逻区不成立
-     * （`missionHexOutsidePatrolZone`）⇒ 引擎把拦截步整段跳过 ⇒ `interceptDeclared` 永远 false。
-     * 不能写在 `targetOf` 里：`steps` 会为**所有**步骤算 target，那等于第一步就把它升空、
-     * 扫射当场带上拦截。放在「当前步恰好是 bombing」这一处最准确；watch 保留作兜底。
+     * 2026-11-23：I.153 不在轰炸步升空（用户口径：它要在这一趟里拦截）——提前升空会逼出
+     * 14.3 目标格空战，打完它就返航转非激活，14.5 拦截反而永远发生不了。升空点在
+     * `airState` 的 `step === 'interception'` 那一处。
      */
-    if (step?.id === 'bombing') {
-      const i153 = workbench.airUnits.find((air) => air.instanceId === TUTORIAL_SU_I153_ID)
-      if (i153 !== undefined && i153.airStatus === 'inactive') i153.airStatus = 'active'
-    }
     /*
      * 2026-11-21：反扑同理——只在「当前步恰好是 reaction-attack」时驱动脚本一次。
      * watch 在无组件渲染（测试）环境下不保证触发，靠这里推一把才可靠；
