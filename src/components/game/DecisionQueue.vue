@@ -7,6 +7,7 @@ import { isAndroidPlatform } from '@/shared/platform'
 import {
   useHotseatStore,
   useSetupStore,
+  useTutorialStore,
   type DecisionStack,
   type PresetSetupResult,
   type SetupPlacing,
@@ -33,6 +34,11 @@ import {
 
 const setup = useSetupStore()
 const hotseat = useHotseatStore()
+/**
+ * 教学模式（用户 2026-11-23）：苏方初设由脚本自动落完，轴心的飞机要玩家自己入盒 ⇒
+ * 这一模式下不给「自动放置」按钮（否则一键就把自己的 7 架飞机也摆好了，那一步就白教）。
+ */
+const tutorial = useTutorialStore()
 /**
  * 一键预设初设（B2；2026-11-19 用户裁定改为**一键全落**）
  *
@@ -388,9 +394,10 @@ function sideMark(side: 'axis' | 'soviet'): string {
         2026-11-19（用户第 1 条）：一键预设改为**一键全落双方**，与确认/主入口同排常驻
         （安卓不再折进「更多」，避免"点了没反应"被藏起来）；撤回与结果提示仍属次要，收进折叠。
         2026-11-19（用户二次反馈）：文案「一键预设初设」→「自动放置」（更短、语义更直白）。
+        2026-11-23（用户）：教学模式不出现 —— 苏方初设已是自动的，轴心的 7 架飞机必须自己摆。
       -->
       <BaseButton
-        v-if="hotseat.canPreset && !setup.finished"
+        v-if="hotseat.canPreset && !setup.finished && !tutorial.active"
         variant="secondary"
         size="sm"
         @click="runPresetSetup()"

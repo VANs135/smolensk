@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import { combatFixedDie, combatFixedSurprise } from './fire-resolution'
 
 import type { HexRef } from '@/data'
-import { findAircraftRecord, findUnitRecord } from '@/engine/rules/setup'
+import { findAircraftRecord, findUnitRecord, SETUP_RULE } from '@/engine/rules/setup'
 import { hexDistance, sameHex } from '@/engine/hex-geometry'
 import { BATTLE_SEQUENCE } from '@/engine/rules/battle'
 
@@ -169,6 +169,42 @@ export const useTutorialStore = defineStore('tutorial', () => {
    */
   const reaction = ref<'idle' | 'running' | 'done'>('idle')
 
+  /** 苏方初设是否已由脚本自动落完（只试一次，失败就停在原地报因，不反复空转） */
+  const scriptedSetupDone = ref(false)
+
+  /**
+   * 教学模式的苏方初设是**自动的**（用户 2026-11-23 口径）
+   *
+   * 初设一落到「苏方布设」，脚本就按 `presetSelfSetupNow({ onlySide: 'soviet' })` 落完苏方的
+   * 自由项并确认换手 —— 玩家不需要点队列里的「自动放置」。轴心的 7 架飞机仍归玩家自己入盒
+   * （`setup-air` 步），这正是这一段的教学内容。
+   */
+  function autoPlaceScriptedSetup(): void {
+    if (!active.value || scriptedSetupDone.value) return
+    if (!setup.applied || setup.finished) return
+    if (setup.setupSideCursor !== 'soviet') return
+    scriptedSetupDone.value = true
+    const result = setup.presetSelfSetupNow({ onlySide: 'soviet' })
+    if (result.failures.length > 0) {
+      const first = result.failures[0]
+      workbench.pushLog(
+        'warning',
+        `教学：苏方初设自动布设未完成（${first?.label ?? ''}：${first?.reason ?? ''}）`,
+        SETUP_RULE,
+      )
+    }
+  }
+
+  /*
+   * 初设状态一变就试一次：`enterSetup` 落完固定项后游标才落到苏方，
+   * 因此这里按「已进入初设 + 游标在苏方」判定，而不挂在视图的某个按钮上。
+   */
+  watch(
+    () => `${String(setup.applied)}|${String(setup.setupSideCursor)}|${String(setup.finished)}`,
+    () => autoPlaceScriptedSetup(),
+    { flush: 'post' },
+  )
+
   /*
    * 2026-11-21：后三步（苏军反扑 / 弹幕轰城 / 夺城）的真实完成判据
    *
@@ -206,6 +242,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
     reaction.value = 'idle'
     reactionOutcome.value = null
     scriptApplied.value = false
+    scriptedSetupDone.value = false
     setTutorialSovietFirstTurnFullMa(true)
     /*
      * 2026-11-21（用户口径）：教学模式**入口是单独的**，玩家不必另选 PVE/PVP。
