@@ -223,10 +223,7 @@ watch(
       <section class="tut__dialog">
         <strong id="tut-done-title" class="tut__done-title">教程结束</strong>
         <p class="tut__intro">维捷布斯克已由我部拿下，这一天的教学到此收束。</p>
-        <p v-if="tutorial.reactionOutcome !== null" class="tut__intro">
-          苏军反击战果 {{ tutorial.reactionOutcome }}：攻方损失，进攻失败。
-        </p>
-        <p v-else class="tut__intro">苏军由 AI 指挥；本回合教学结束，后续按 2.2 流程继续。</p>
+        <p class="tut__intro">本回合教学结束；后续回合按 2.2 流程继续。</p>
         <button type="button" class="tut__done-close" @click="tutorial.stop()">关闭</button>
       </section>
     </div>

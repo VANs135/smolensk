@@ -29,8 +29,9 @@ import { toConsoleAirUnit, toConsoleUnit } from './workbench-model'
  *   · 额外摆一队 Ju.88 进图外盒（教学轰炸要求两队 Ju.88 + 一队 Do.17z + 一队 Bf110）；
  *   · 把苏军 18 Tk Div 置为预备并补足油（反应段才有合法反击对象）；
  *   · 扫射 / 扫荡 / 轰炸只钉既有裁判骰入口，空战与轰炸判定仍走 14.x / 10.0。
- *   反应段的反击由脚本按既有 `releaseReserveNow → move → overrun → 9.2` 走完，骰子照掷；
- *   结果落在 CRT 攻方损失列（苏军失败），不靠玩家操作运气。
+ *   反应段的苏军反扑：脚本只演**攻方那一半**（加油 → 移到城格 → 突袭 → 攻方补给 / 行动值 /
+ *   损失 / 选项 / 撤退落点 / 推进），守方的补给、行动值、防御地形与战果由玩家自己在战斗窗里做；
+ *   骰面按演出固定（9.8/9.9 的裁判骰入口），攻防比与结果照玩家选择的补给与地形实算。
  *
  * ## 为什么用「第一件没做完的事」而不是存 stepIndex
  *   读档、撤销、重开都不会把引导走岔：当前步＝按顺序扫到的第一个未完成项。
@@ -143,6 +144,7 @@ function phaseAtLeast(phase: string, target: ConsolePhaseName): boolean {
 const BATTLE_STEP_INDEX = new Map(BATTLE_SEQUENCE.map((item, index) => [item.step, index]))
 const SUPPLY_STEP = BATTLE_STEP_INDEX.get('combatSupply') ?? 1
 const AR_STEP = BATTLE_STEP_INDEX.get('declareAr') ?? 2
+const TERRAIN_STEP = BATTLE_STEP_INDEX.get('declareTerrain') ?? 3
 
 function battleStepIndex(step: string | undefined): number {
   if (step === undefined) return -1
@@ -162,12 +164,21 @@ export const useTutorialStore = defineStore('tutorial', () => {
   /** 已放行到第几步；只向前，不因后续动作（如再起飞一架又变未激活）回退 */
   const cursor = ref(0)
 
-  /** 反应段脚本的三态；`done` 后引导卡显示战果 */
-  /*
+  /**
+   * 反应段脚本的三态
+   *
    * 反扑的进行态：**没有 skipped** —— 教学不能跳过这一步（用户两次强调）。
    * 脚本失败时退回 idle 并报警，绝不把「没打完」记成「过」。
    */
   const reaction = ref<'idle' | 'running' | 'done'>('idle')
+
+  /**
+   * 反扑已经「交到玩家手里」（用户 2026-11-23）
+   *
+   * 打开后：战斗窗里攻方那半继续由脚本代点，守方的补给 / 行动值 / 防御地形 / 损失由玩家
+   * 自己点；战斗真正收束时关掉这个开关，并把 `reaction` 置 `done`。
+   */
+  const reactionHandover = ref(false)
 
   /** 苏方初设是否已由脚本自动落完（只试一次，失败就停在原地报因，不反复空转） */
   const scriptedSetupDone = ref(false)
@@ -213,7 +224,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
    * 全部完成（而 `cityBarraged()` / `cityTaken()` 的真实检查被 `||` 短路成永不生效）。
    *
    * 教学不能跳步：三步一律只认真实事件，既不由阶段推进代替，也不提供跳过入口。
-   * 苏军行动由脚本/AI 完成（反扑必输是脚本保证的），玩家行动按引导自己操作。
+   * 苏军行动由脚本代演（反扑里守方的补给 / 行动值 / 地形由玩家做，结果照实结算），
+   * 玩家行动按引导自己操作。
    */
   const reactionFought = ref(false)
 
@@ -230,7 +242,6 @@ export const useTutorialStore = defineStore('tutorial', () => {
     { flush: 'post' },
   )
 
-  const reactionOutcome = ref<string | null>(null)
   /** 开局脚本只落一次（读档 / 撤销不重放） */
   const scriptApplied = ref(false)
 
@@ -240,7 +251,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
     overrunLaunches.value = 0
     overrunOpen = false
     reaction.value = 'idle'
-    reactionOutcome.value = null
+    reactionHandover.value = false
     scriptApplied.value = false
     scriptedSetupDone.value = false
     setTutorialSovietFirstTurnFullMa(true)
@@ -255,6 +266,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
 
   function stop(): void {
     active.value = false
+    reactionHandover.value = false
     // 中途退出教学同样要收回演出固定骰（见 cursor 推进处的说明）
     combatFixedDie.value = null
     combatFixedSurprise.value = null
@@ -470,6 +482,39 @@ export const useTutorialStore = defineStore('tutorial', () => {
 
   function combatFinished(): boolean {
     return workbench.combatState?.finished === true
+  }
+
+  /**
+   * 反应段那一仗的当前步序号（战斗已收束 ⇒ 视为整段走完）
+   *
+   * 用户 2026-11-23：反扑从「脚本自演」改成「守方由玩家做」，所以它不再是一步，
+   * 而是按 9.2 的攻守次序拆成四步（守方补给 / 守方行动值 / 防御地形 / 战果），
+   * 每步的「做完」只看这一仗真的走到第几段。
+   */
+  function reactionBattleStepIndex(): number {
+    const state = workbench.combatState
+    if (state === null) return -1
+    if (state.finished === true) return Number.POSITIVE_INFINITY
+    return battleStepIndex(state.step)
+  }
+
+  /** 反应段：守方的补给决定是否已经提交（9.5：付不付由守方自己定） */
+  function reactionSupplyDone(): boolean {
+    return reaction.value === 'done' || reactionBattleStepIndex() > SUPPLY_STEP
+  }
+
+  /** 反应段：守方的行动值是否已经宣布（9.6：攻方先、守方后） */
+  function reactionArDone(): boolean {
+    const state = workbench.combatState
+    if (state !== null && state.ar !== undefined) return true
+    return reaction.value === 'done' || reactionBattleStepIndex() > AR_STEP
+  }
+
+  /** 反应段：守方的防御地形是否已经确认（9.4b/9.4c ⇒ 攻防比落地） */
+  function reactionTerrainDone(): boolean {
+    const state = workbench.combatState
+    if (state !== null && state.odds !== undefined) return true
+    return reaction.value === 'done' || reactionBattleStepIndex() > TERRAIN_STEP
   }
 
   /**
@@ -719,13 +764,56 @@ export const useTutorialStore = defineStore('tutorial', () => {
       }
       case 'reaction-attack':
         /*
-         * 2026-11-21：反扑**全程由脚本代打**（加油 → 19.27 → 突袭 18.27 → 补给 / AR /
-         * 骰面 / 损失 / 撤退），玩家一个按钮都不用点。所以这里只框战斗格并说明
-         * 「等苏军打完」，不再指向「确认强制作战损失 / 确认撤退」——那些按钮会被脚本
-         * 瞬间点掉，指过去反而让玩家找不到。脚本若失败会退回 idle 并 pushLog warning，
-         * 此时玩家可在同一格按既有按钮手动接手。
+         * 2026-11-23：反扑由**玩家当守方**打完（补给 / 行动值 / 防御地形 / 战果四步），
+         * 这一步只负责「苏军压上来、战斗窗弹开」——脚本已经在跑，没有按钮可点，
+         * 所以只框住它冲过来的那一格。
          */
-        return { hex: reactionDefenseHex.value, texts: ['苏军反扑（脚本自动）', '等结果'] }
+        return { hex: reactionDefenseHex.value }
+      case 'reaction-supply': {
+        const state = workbench.combatState
+        if (state !== null && state.step === 'combatSupply') {
+          if (!workbench.combatInputs.supplyConfirmed.defender) {
+            const dumps = workbench.combatSupplyDumps.find(
+              (item) => item.side === 'defender',
+            )?.dumps
+            /*
+             * 9.5 / 12.4：守方的付款来源是在**地图上点补给站**声明的（面板里没有下拉框）。
+             * 默认「守方支付」是勾上的 ⇒ 先框住离阵地最近的守方站；已经选过来源、或
+             * 玩家改选「不付」（以一半战斗值防御）时，才把环挪到「确认守方补给」按钮上。
+             */
+            const dump = dumps?.[0]
+            const picked = workbench.combatSupplyDumpIds.defender !== null
+            if (!picked && workbench.combatInputs.defenderProvides && dump !== undefined) {
+              return { hex: dump.hex, texts: ['守方支付'] }
+            }
+            return {
+              ...(dump === undefined ? {} : { hex: dump.hex }),
+              buttonTexts: ['确认守方补给'],
+              texts: ['守方支付', '确认守方补给'],
+            }
+          }
+          return { buttonTexts: ['进入行动值'], texts: ['进入行动值'] }
+        }
+        return { buttonTexts: ['确认守方补给'] }
+      }
+      case 'reaction-ar':
+        if (workbench.combatInputs.defenderArUnitId === null) {
+          return { texts: ['守方 AR 单位'] }
+        }
+        return { buttonTexts: ['守方宣布并继续'], texts: ['守方 AR 单位'] }
+      case 'reaction-terrain':
+        return {
+          buttonTexts: ['确认地形 ⇒ 自动结算到战果'],
+          texts: ['守方防御地形', '确认地形 ⇒ 自动结算到战果'],
+        }
+      case 'reaction-await': {
+        const step = workbench.combatState?.step
+        if (step === 'losses') return { buttonTexts: ['确认强制损失'], texts: ['确认强制损失'] }
+        if (step === 'options')
+          return { buttonTexts: ['提交选项', '忽略选项'], texts: ['提交选项', '忽略选项'] }
+        if (step === 'retreat') return { buttonTexts: ['确认撤退'], texts: ['确认撤退'] }
+        return { texts: ['战果'] }
+      }
       default:
         return {}
     }
@@ -915,11 +1003,45 @@ export const useTutorialStore = defineStore('tutorial', () => {
       },
       {
         id: 'reaction-attack',
-        title: '敌军坦克师反扑（只看）',
-        hint: '霍特：敌军坦克师反扑，我部顶上——看着，等结果。',
-        intro: '敌军放出预备队，按进攻流程打一轮。这一步不必动手，看着结果再往下走。',
-        // 教学不能跳步：苏军反扑必须真打完（脚本失败不放过，见 runReactionAttack）
-        done: () => reaction.value === 'done' || reactionFought.value,
+        title: '敌军坦克师反扑',
+        hint: '霍特：敌军把最后一支坦克师放出来了，正压向我部阵地。',
+        intro:
+          '预备用完了才轮到它。这一仗你是守方——弹药付不付、由哪一枚报行动值、按哪种地形挡，三个决定都由你来做。',
+        // 教学不能跳步：苏军反扑必须真打出来（脚本失败不放过，见 runReactionAttack）
+        done: () => reaction.value !== 'idle' || reactionFought.value,
+      },
+      {
+        id: 'reaction-supply',
+        title: '守方弹药',
+        hint: '霍特：我方掏不掏弹药，你说了算。',
+        intro: '不掏就按一半战力挡；掏了就从身后的补给站扣。掏不掏，最后差在敌人掷骰那一下上。',
+        // 9.5：守方的补给决定归守方玩家（两边都确认后战斗才往下走）
+        done: () => reactionSupplyDone(),
+      },
+      {
+        id: 'reaction-ar',
+        title: '谁来报行动值',
+        hint: '霍特：挑一枚守在阵地上的兵，由它替全堆报数。',
+        intro: '行动值高的那一枚替全堆报数；报得越高，敌人的骰子越难看。守方后宣布。',
+        // 9.6：守方行动值由玩家宣布（攻方那一侧脚本已代点）
+        done: () => reactionArDone(),
+      },
+      {
+        id: 'reaction-terrain',
+        title: '按哪种地形挡',
+        hint: '霍特：定下地形，敌人的骰子和战果就一起出。',
+        intro: '地形决定战斗表按哪一行结算；同一个攻防比，换一行就是另一种结果。',
+        // 9.4b/9.4c：守方选防御地形 ⇒ 攻防比落地
+        done: () => reactionTerrainDone(),
+      },
+      {
+        id: 'reaction-await',
+        title: '承受战果',
+        hint: '霍特：损失、撤退、推进，一屏一个决定。',
+        intro:
+          '敌人那一半由敌军自己结，你只管自己这一半：先认强制损失，再把选项点数分到单位或格子上去。',
+        // 教学不能跳步：这一仗不收束，引导不动
+        done: () => reaction.value === 'done',
       },
       {
         id: 'barrage-city',
@@ -1232,75 +1354,114 @@ export const useTutorialStore = defineStore('tutorial', () => {
     { flush: 'sync' },
   )
 
-  /* ────────────────────── 反应段：苏军反击（脚本按既有动作跑） ────────────────────── */
+  /* ── 反应段：苏军反击（脚本只演攻方那一半，守方决策交给玩家） ── */
 
-  function driveReactionCombat(attackerId: string): boolean {
-    for (let n = 0; n < 40; n++) {
+  /**
+   * 反应段那一仗里**只由脚本替苏军点**的那几段（用户 2026-11-23 口径）
+   *
+   * 这一仗苏军是攻方、玩家是守方。通规 9.2 九步里属于「攻方」的补给、行动值、强制损失、
+   * 选项、撤退落点、战后推进若没人点，战斗窗只会停在「对方正在…」的等待态（教学外壳把
+   * 攻方从玩家手里收走了）⇒ 脚本按既有入口替它点完；
+   * 属于「守方」的补给、行动值、防御地形、损失与选项**一律不碰**，留给玩家自己在窗里做。
+   *
+   * 返回「这次有没有替苏军推进一步」：false ＝ 当前正停在玩家该做的那一步。
+   */
+  function driveSovietCombatSide(): boolean {
+    let progressed = false
+    for (let n = 0; n < 12; n++) {
       const state = workbench.combatState
-      if (state === null) return false
-      if (state.finished) return true
+      if (state === null || state.finished === true) break
+      /* 通规 9.5：攻方那一份战斗补给（守方付不付、从哪座站付，由玩家定） */
       if (state.step === 'combatSupply') {
-        const attacker = workbench.combatSupplyDumps.find((item) => item.side === 'attacker')
-          ?.dumps[0]
-        if (attacker !== undefined) workbench.pickCombatSupplyDump('attacker', attacker.id)
-        if (!workbench.confirmCombatSupplySide('attacker')) return false
-        const defender = workbench.combatSupplyDumps.find((item) => item.side === 'defender')
-          ?.dumps[0]
-        if (defender !== undefined) workbench.pickCombatSupplyDump('defender', defender.id)
-        if (!workbench.confirmCombatSupplySide('defender')) return false
-        if (!workbench.confirmCombatSupply()) return false
+        if (workbench.combatInputs.supplyConfirmed.attacker) break
+        const dump = workbench.combatSupplyDumps.find((item) => item.side === 'attacker')?.dumps[0]
+        if (dump !== undefined && workbench.combatSupplyDumpIds.attacker === null)
+          workbench.pickCombatSupplyDump('attacker', dump.id)
+        if (!workbench.confirmCombatSupplySide('attacker')) break
+        progressed = true
         continue
       }
+      /* 通规 9.6：攻方先宣布行动值，守方后宣布 —— 守方这一侧留给玩家 */
       if (state.step === 'declareAr') {
-        if (workbench.combatInputs.attackerArUnitId === null) {
-          workbench.combatInputs.attackerArUnitId = attackerId
-        }
-        if (!workbench.declareCombatArStep('attacker')) return false
-        if (state.step !== 'declareAr') continue
-        if (workbench.combatInputs.defenderArUnitId === null) {
-          const defender = [...workbench.battleDefenders].sort((a, b) => b.raw.ar - a.raw.ar)[0]
-          if (defender !== undefined) workbench.combatInputs.defenderArUnitId = defender.instanceId
-        }
-        if (!workbench.declareCombatArStep('defender')) return false
+        if (state.declaredAttackerArUnitId !== null && state.declaredAttackerArUnitId !== undefined)
+          break
+        const attackerId = workbench.combatAttackers[0]?.instanceId
+        if (attackerId === undefined) break
+        workbench.combatInputs.attackerArUnitId = attackerId
+        if (!workbench.declareCombatArStep('attacker')) break
+        progressed = true
         continue
       }
-      if (state.step === 'declareTerrain') {
-        if (!workbench.declareCombatTerrainStep()) return false
+      /* 通规 9.10b：攻方先结算 —— 强制损失（9.11）由脚本按规范分配确认 */
+      if (state.step === 'losses' && state.resolution.stage.startsWith('attacker')) {
+        if (!workbench.confirmCombatLosses()) break
+        progressed = true
         continue
       }
-      if (state.step === 'surprise') {
-        if (!workbench.rollCombatSurprise()) return false
-        if (workbench.combatAwaitingShiftDie && !workbench.rollCombatShiftDie()) return false
-        continue
-      }
-      if (state.step === 'battleDice') {
-        if (!workbench.rollCombatDice()) return false
-        continue
-      }
-      if (state.step === 'losses') {
-        if (!workbench.confirmCombatLosses()) return false
-        continue
-      }
-      if (state.step === 'options') {
+      /* 通规 9.10a：攻方选项一律吃军力损失（不撤退、不挪盘面） */
+      if (state.step === 'options' && state.resolution.stage.startsWith('attacker')) {
         const requirement = workbench.combatRequirement
-        if (requirement === null) return false
-        // 苏军反扑要打到底：宁可吃损失也不撤退（不改变盘面位置）
+        if (requirement === null) break
         workbench.combatInputs.optionRetreatHexes = 0
         workbench.combatInputs.optionLossPoints = requirement.options
-        if (!workbench.confirmCombatOptions()) return false
+        if (!workbench.confirmCombatOptions()) {
+          workbench.combatInputs.optionRetreatHexes = requirement.options
+          workbench.combatInputs.optionLossPoints = 0
+          if (!workbench.confirmCombatOptions()) break
+        }
+        progressed = true
         continue
       }
+      /* 通规 9.12：攻方先撤 —— 落点仍由引擎给，脚本只按第一顺位替它选 */
       if (state.step === 'retreat') {
-        if (!workbench.confirmCombatRetreats()) return false
-        continue
+        const attackerPlans = workbench.combatRetreatPlans.filter(
+          (plan) => plan.side === 'attacker',
+        )
+        let filled = false
+        for (const plan of attackerPlans) {
+          for (const row of plan.units) {
+            if (row.chosen !== null) continue
+            const destination =
+              row.destinations.find((item) => !item.forcedDestruction) ?? row.destinations[0]
+            if (destination === undefined) continue
+            if (workbench.setRetreatDestinationNow(row.unitId, destination.hex)) filled = true
+          }
+        }
+        if (filled) {
+          progressed = true
+          continue
+        }
+        /*
+         * 守方撤不撤由玩家定 ⇒ 只要守方还有一份撤退计划，「确认撤退」就留给玩家点；
+         * 只有守方不需要撤（场上只剩攻方这一份且已选齐）时脚本才替它确认，
+         * 否则战斗窗永远停在「对方正在选择撤退落点…」。
+         */
+        const defenderPlans = workbench.combatRetreatPlans.filter(
+          (plan) => plan.side === 'defender',
+        )
+        const attackerSettled = attackerPlans.every((plan) => plan.complete)
+        if (defenderPlans.length === 0 && attackerSettled) {
+          if (!workbench.confirmCombatRetreats()) break
+          progressed = true
+          continue
+        }
+        break
       }
+      /* 通规 9.12g：战后推进属攻方（突袭成功后是强制的） */
       if (state.step === 'advance') {
-        if (!workbench.confirmCombatAdvance()) return false
+        const eligible = workbench.combatAdvanceChoices.filter(
+          (item) => item.disabledReason === null,
+        )
+        if (eligible.length > 0 && workbench.combatInputs.advanceUnitIds.length === 0)
+          workbench.combatInputs.advanceUnitIds = eligible.map((item) => item.unit.instanceId)
+        if (!workbench.confirmCombatAdvance()) break
+        progressed = true
         continue
       }
-      return false
+      // 奇袭 / 战斗骰 / 地形：都是玩家那一侧（守方选地形后「确认地形 ⇒ 自动结算到战果」）
+      break
     }
-    return workbench.combatState?.finished === true
+    return progressed
   }
 
   /**
@@ -1376,12 +1537,13 @@ export const useTutorialStore = defineStore('tutorial', () => {
     const path = [{ ...tk.hex }, { ...CITY_HEX }]
     if (!workbench.moveAlongDraggedPath(path)) return fail('沿路径移动到 19.27')
 
-    // ③ 战斗：对 19.27 上／相邻的轴心单位发起突袭，并走完 9.2 战斗序列
+    // ③ 战斗：对 19.27 上／相邻的轴心单位发起突袭（攻方＝苏军，脚本代点；守方＝玩家）
     const target = reactionTargetHex()
     if (target === null) return fail('19.27 附近没有轴心战斗单位')
     /*
      * 这段战斗是**教学演出**：9.9 的 2d6 必须固定，否则同一步每次结果都不同
-     * （实测随机骰打出 AL2 会把 18 Tk Div 直接抹掉，教学就断在这里了）。
+     * （实测随机骰会把 18 Tk Div 的结局换成另一种，教学讲不清）。固定骰只钉骰面，
+     * 攻防比仍由玩家的守方决定（付不付补给、按哪种地形挡）⇒ 结果照实结算。
      */
     combatFixedSurprise.value = { ...TUTORIAL_REACTION_SURPRISE }
     combatFixedDie.value = TUTORIAL_REACTION_COMBAT_DIE
@@ -1390,17 +1552,37 @@ export const useTutorialStore = defineStore('tutorial', () => {
       combatFixedSurprise.value = null
       return fail('发起突袭（overrunNow）')
     }
-    if (!driveReactionCombat(tk.instanceId)) {
-      combatFixedDie.value = null
-      combatFixedSurprise.value = null
-      return fail('走完 9.2 战斗序列')
-    }
-    combatFixedDie.value = null
-    combatFixedSurprise.value = null
-    const raw = workbench.combatState?.dice?.result.raw ?? null
-    reactionOutcome.value = raw
-    return raw !== null && raw.startsWith('A')
+    /*
+     * 用户 2026-11-23：**守方的三项决定（补给 / 行动值 / 防御地形）必须由玩家来做** ——
+     * 脚本只把攻方那一半点完就把战斗窗留在盘面上等玩家：
+     * 打开 `reactionHandover` 后由 combatState 的监听继续替苏军推进攻方那半，
+     * 战斗真正收束时监听关掉开关并把 `reaction` 置 `done`（不再有脚本写的"战果"文案）。
+     */
+    driveSovietCombatSide()
+    reactionHandover.value = true
+    return true
   }
+
+  /*
+   * 反扑打到一半交给玩家之后，攻方那半继续由脚本代点（守方那半留给玩家）。
+   * `reactionHandover` 关掉即不再插手；`pushLog` 只有真推进时才动，空转不写日志。
+   */
+  watch(
+    () => workbench.combatState,
+    (state) => {
+      if (!reactionHandover.value) return
+      if (state === null) return
+      if (state.finished === true) {
+        reactionHandover.value = false
+        combatFixedDie.value = null
+        combatFixedSurprise.value = null
+        reaction.value = 'done'
+        return
+      }
+      driveSovietCombatSide()
+    },
+    { flush: 'post' },
+  )
 
   watch(
     () => `${String(active.value)}|${workbench.phase}|${reaction.value}`,
@@ -1413,10 +1595,11 @@ export const useTutorialStore = defineStore('tutorial', () => {
        */
       if (hotseat.scriptedSide !== 'soviet') return
       reaction.value = 'running'
-      if (runReactionAttack()) {
-        reaction.value = 'done'
-        return
-      }
+      /*
+       * 成功 ＝ 苏军已经把这一仗打出来、并把战斗窗交到玩家手里（守方三项由玩家决定），
+       * 所以这里**不置 done**；`reaction` 要等战斗真正收束（上面的 combatState 监听）才落 done。
+       */
+      if (runReactionAttack()) return
       reaction.value = 'idle'
       workbench.pushLog(
         'warning',
@@ -1446,6 +1629,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
      * 2026-11-21：反扑同理——只在「当前步恰好是 reaction-attack」时驱动脚本一次。
      * watch 在无组件渲染（测试）环境下不保证触发，靠这里推一把才可靠；
      * 失败回 idle 并报警，不把没打完记成过（用户「每一步都不能跳过」）。
+     * 2026-11-23：成功只表示「战斗窗已交给玩家」，`done` 由战斗收束的监听来落。
      */
     if (
       step?.id === 'reaction-attack' &&
@@ -1454,8 +1638,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
       hotseat.scriptedSide === 'soviet'
     ) {
       reaction.value = 'running'
-      if (runReactionAttack()) reaction.value = 'done'
-      else {
+      if (!runReactionAttack()) {
         reaction.value = 'idle'
         workbench.pushLog(
           'warning',
@@ -1501,11 +1684,11 @@ export const useTutorialStore = defineStore('tutorial', () => {
     progressLabel,
     stackHex,
     reaction,
-    reactionOutcome,
     reactionFought,
     /**
      * 2026-11-21：把苏军反扑脚本单独暴露出来（教学里苏军由脚本行动）。
-     * 供调试/回归直接驱动：返回 false 表示脚本没跑通（补给、路径、目标格任一不满足）。
+     * 供调试/回归直接驱动：返回 false 表示脚本没跑通（补给、路径、目标格任一不满足）；
+     * 返回 true 只表示「这一仗已经打出来、战斗窗交给玩家」，守方的三项仍要玩家自己点。
      */
     driveReactionAttack: runReactionAttack,
   }

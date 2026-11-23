@@ -23,7 +23,16 @@ describe('教学模式后三步：只认真实事件，无跳过通道', () => {
   })
 
   it('反扑：只认「反应段真的打过」，且没有 skipped 旁路', () => {
-    expect(source).toContain("done: () => reaction.value === 'done' || reactionFought.value,")
+    /*
+     * 2026-11-23：反扑不再由脚本一口气打完 ⇒ 它拆成「宣布 → 守方补给 → 守方行动值 →
+     * 防御地形 → 战果」五步；第一步只认「脚本真的把这一仗打出来（reaction 已离开 idle）」，
+     * 末步只认「这一仗真的收束」。都不接受阶段推进代替，也不提供跳过入口。
+     */
+    expect(source).toContain("done: () => reaction.value !== 'idle' || reactionFought.value,")
+    expect(source).toContain('done: () => reactionSupplyDone(),')
+    expect(source).toContain('done: () => reactionArDone(),')
+    expect(source).toContain('done: () => reactionTerrainDone(),')
+    expect(source).toContain("done: () => reaction.value === 'done',")
     // 2026-11-21：教学不能跳过这一步 ⇒ 'skipped' 通道逐条清掉
     expect(source).not.toContain("reaction.value === 'skipped'")
     expect(source).not.toContain("'done' | 'skipped'")

@@ -403,15 +403,79 @@ describe('教学模式：Vitebsk', () => {
     expect(ctx.w.airState?.finished).toBe(true)
     expect(tutorial.currentStep?.id).toBe('reaction-attack')
 
-    // 5) 推到反应阶段：苏军 18 Tk Div 由脚本加油 → 19.27 → 突袭 18.27，自己打完
+    // 5) 推到反应阶段：苏军 18 Tk Div 由脚本加油 → 移到城格 → 突袭，战斗窗交给玩家
     for (let guard = 0; guard < 12 && ctx.w.phase !== 'reaction'; guard++) ctx.w.advanceSegmentNow()
     expect(ctx.w.phase).toBe('reaction')
     for (let guard = 0; guard < 24; guard++) await nextTick()
+    /*
+     * 用户 2026-11-23：反扑不再由脚本一口气打完 —— 脚本只演苏军（攻方）那一半，
+     * 战斗窗停在「守方补给」等玩家。苏军那一侧走完 ⇒ 引导从 reaction-attack 落到 reaction-supply。
+     */
+    expect(tutorial.reaction).toBe('running')
+    expect(ctx.w.combatState).not.toBeNull()
+    expect(ctx.w.combatState?.finished).not.toBe(true)
+    expect(tutorial.currentStep?.id).toBe('reaction-supply')
+    // 脚本只代点了攻方那一半：攻方补给已确认，守方补给还空着等玩家
+    expect(ctx.w.combatInputs.supplyConfirmed.attacker).toBe(true)
+    expect(ctx.w.combatInputs.supplyConfirmed.defender).toBe(false)
+    // 守方那一半整段没被代点：战斗仍停在补给步，守方行动值也没宣布
+    expect(ctx.w.combatState?.step).toBe('combatSupply')
+    expect(ctx.w.combatState?.ar).toBeUndefined()
+
+    // 5a) 守方补给（玩家）：付（从第一座可达的守方补给站扣，与修前脚本同一口径）
+    const defenderDump = ctx.w.combatSupplyDumps.find((item) => item.side === 'defender')?.dumps[0]
+    expect(defenderDump).toBeDefined()
+    expect(ctx.w.pickCombatSupplyDump('defender', defenderDump!.id)).toBe(true)
+    expect(ctx.w.confirmCombatSupplySide('defender')).toBe(true)
+    await nextTick()
+    expect(ctx.w.confirmCombatSupply()).toBe(true)
+    await nextTick()
+    expect(tutorial.currentStep?.id).toBe('reaction-ar')
+
+    // 5b) 守方行动值（玩家）：挑 AR 最高的那一枚宣布
+    const defenderAr = [...ctx.w.battleDefenders].sort((a, b) => b.raw.ar - a.raw.ar)[0]
+    expect(defenderAr).toBeDefined()
+    ctx.w.combatInputs.defenderArUnitId = defenderAr!.instanceId
+    expect(ctx.w.declareCombatArStep('defender')).toBe(true)
+    await nextTick()
+    expect(tutorial.currentStep?.id).toBe('reaction-terrain')
+
+    // 5c) 守方防御地形（玩家）：沿用默认地形，确认地形 ⇒ 自动结算到战果
+    expect(ctx.w.autoResolveCombatToOutcome()).toBe(true)
+    await nextTick()
+    /*
+     * 这一仗按当前数值守方没有损失：自动结算一到战果，攻方那半（全灭）由脚本收完就收束了
+     * ——所以「承受战果」这一步可能当场即过（引导直接落到弹幕）。守方真有损失时它才留下。
+     */
+    expect(['reaction-await', 'barrage-city']).toContain(tutorial.currentStep?.id)
+
+    /*
+     * 5d) 战果：攻方那半由脚本代点，守方这半由测试代玩家点（与界面同序）。
+     * 每轮先让 post 监听跑一次（脚本替苏军推进），再处理轮到守方的那一段。
+     */
+    for (let guard = 0; guard < 16 && ctx.w.combatState?.finished !== true; guard++) {
+      await nextTick()
+      const battle = ctx.w.combatState
+      if (battle === null || battle.finished === true) break
+      const stage = battle.resolution.stage
+      const score = ctx.w.combatRequirement
+      if (battle.step === 'losses' && stage.startsWith('defender')) {
+        expect(ctx.w.confirmCombatLosses()).toBe(true)
+        continue
+      }
+      if (battle.step === 'options' && stage.startsWith('defender')) {
+        ctx.w.combatInputs.optionRetreatHexes = 0
+        ctx.w.combatInputs.optionLossPoints = score?.options ?? 0
+        expect(ctx.w.confirmCombatOptions()).toBe(true)
+        continue
+      }
+    }
+    expect(ctx.w.combatState?.finished).toBe(true)
     expect(tutorial.reaction).toBe('done')
     const raw = ctx.w.combatState?.dice?.result.raw ?? null
     /*
      * 用户口径（2026-11-21）：反扑固定成「攻方被奇袭、取端列、进攻骰 2」的必败局，
-     * 城里的苏军守军不受影响 —— 玩家第 25 步照样有城可攻。
+     * 城里的苏军守军不受影响 —— 玩家后面的夺城步照样有城可攻。
      */
     const onCity = ctx.w.units.filter(
       (unit) => unit.hex.col === 19 && unit.hex.row === 27 && unit.isCombat,
@@ -419,7 +483,6 @@ describe('教学模式：Vitebsk', () => {
     expect(onCity.some((unit) => unit.side === 'soviet')).toBe(true)
     expect(onCity.some((unit) => unit.side === 'axis')).toBe(false)
     expect(raw?.startsWith('A')).toBe(true)
-    expect(ctx.w.combatState?.finished).toBe(true)
     expect(tutorial.currentStep?.id).toBe('barrage-city')
 
     // 6) 炮火压制维捷布斯克：10.0 全流程（教学固定骰，10.0a 炸出 DG）
@@ -626,6 +689,10 @@ describe('教学模式：Vitebsk', () => {
       'fighter-sweep',
       'bombing',
       'reaction-attack',
+      'reaction-supply',
+      'reaction-ar',
+      'reaction-terrain',
+      'reaction-await',
       'barrage-city',
       'capture-city',
     ])
