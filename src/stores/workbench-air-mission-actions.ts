@@ -89,7 +89,6 @@ export function createAirMissionActionsDomain(deps: AirMissionActionsDeps) {
     airMissionRosterNow,
     beginAirMissionNow,
     airCargoLossPending,
-    hasCargoOwnership,
     resolveAirCargoNow,
     confirmAirMissionNow,
     completeAirReturnNow,
@@ -264,13 +263,11 @@ export function createAirMissionActionsDomain(deps: AirMissionActionsDeps) {
        *
        * 14.9（T16）+ 专规 1.4a：离图盒起飞的机体同样可以途中部分返航——机体回盒、
        * 自载 SP 加回盒库存；其余机体**留场**继续任务（14.9e：各机按自身归宿分别处理）。
-       * 离图盒不载地面单位（14.9a 装载单元只认图上同格来源），故这里只需处理 SP。
+       *
+       * 2026-11-23（用户口径）：原本"无逐机货单 ⇒ 拒绝部分返航"。现在不再拒：
+       * 无货单时**不猜**哪件货在谁机上（14.9a 允许同基地多机合并容量运输），
+       * 返航机空机返回、货物仍随留场机继续任务；归属可判时照旧逐机带回。
        */
-      if (!hasCargoOwnership(state)) {
-        airError.value = { rule: '14.9a', reason: 'partialCargoReturnUnsupported' }
-        pushLog('warning', '载货任务请整组返航，或先完成卸载；当前货单无法归属部分返航', '14.9a')
-        return false
-      }
       const leavingOrigins = state.assignment.origins.filter((origin) =>
         leaving.some((air) => air.instanceId === origin.aircraftId),
       )

@@ -399,7 +399,6 @@ export const AIR_ROSTER_CODE_TEXT: Readonly<Record<string, string>> = {
   // ── 通规 14.9 / 14.9a 留存货物的退回 ──
   invalidRetainedCargo: '留存货物数据非法（当量为负或有重件，14.9）',
   retainedCargoHasNoCarrier: '没有可以带回留存货物的飞机（14.9）',
-  retainedCargoOffMapReturnUnsupported: '承运机在图外，暂不支持整组退回（14.9）',
   retainedCargoRequiresCommonReturnBase: '各承运机的返航基地不同，无法整组退到同一处（14.9）',
   duplicateRetainedCargoAssignment: '同一件留存货物被分配了两次（14.9a）',
   retainedCargoCarrierWithoutReturnBase: '承运机没有可用的返航基地（14.9a）',

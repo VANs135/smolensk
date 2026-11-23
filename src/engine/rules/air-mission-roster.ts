@@ -180,9 +180,9 @@ export function planRetainedCargoReturn(input: {
   if (input.carriers.length === 0) return fail('14.9', 'retainedCargoHasNoCarrier')
 
   // 无逐机货单时保留旧口径：整组退到同一实际基地，无法归属才拒绝。
+  // 2026-11-23（用户口径）：离图机不再另设限制——它的"基地格"就是离图起点格
+  // （`origin.baseHex`，专规 1.4a 的图边格）；单位货物落该格、机体回盒。
   if (input.cargoByAircraft === undefined || input.cargoByAircraft.length === 0) {
-    if (input.carriers.some((carrier) => carrier.offMap))
-      return fail('14.9', 'retainedCargoOffMapReturnUnsupported')
     const bases = input.carriers.map((carrier) =>
       input.stayedIds.includes(carrier.aircraftId)
         ? input.targetHex
@@ -237,10 +237,14 @@ export function planRetainedCargoReturn(input: {
     const returned = input.returns.find((item) => item.aircraftId === entry.aircraftId)
     const destination = stayed ? input.targetHex : (returned?.baseHex ?? carrier.baseHex)
     const offMap = !stayed && carrier.offMap
-    if (destination === undefined && !offMap)
-      return fail('14.9', `retainedCargoCarrierWithoutReturnBase:${entry.aircraftId}`)
     const unitIds = ids.filter((id) => cargoById.get(id)!.kind === 'unit')
-    if (offMap && unitIds.length > 0) return fail('14.9', 'retainedCargoOffMapReturnUnsupported')
+    /*
+     * 2026-11-23（用户口径）：离图机带单位货物返航不再拒绝 —— 单位货物落 `destination`
+     * （离图起点格 / 返航基地格），机体回盒；只有连落点都没有时才拒绝，不静默丢单位。
+     * 纯 SP 图外货仍可回盒库存，不要求图格落点。
+     */
+    if (destination === undefined && (!offMap || unitIds.length > 0))
+      return fail('14.9', `retainedCargoCarrierWithoutReturnBase:${entry.aircraftId}`)
     allocations.push({
       aircraftId: entry.aircraftId,
       destination: destination ?? null,

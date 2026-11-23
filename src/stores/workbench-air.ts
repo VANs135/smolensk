@@ -2416,6 +2416,17 @@ export function createAirDomain(ports: AirDomainPorts) {
         const spIds = spIdsOf(allocation.aircraftId)
         airSupply.returnRemaining(destination, spIds, allocation.box ?? state.side)
         spIds.forEach((id) => settledSp.add(id))
+        /*
+         * 2026-11-23（用户口径）：离图机也能把**单位货物**带回 —— 单位落离图起点格
+         * （`allocation.destination`，专规 1.4a 的图边格），机体回盒；
+         * `planRetainedCargoReturn` 已保证带单位时 destination 非空。
+         */
+        if (allocation.unitIds.length > 0 && destination !== null) {
+          const returning = allocation.unitIds.map((id) => airUnitTransit.find(id)!)
+          if (!airUnitTransit.land(allocation.unitIds, destination, 'returned')) return false
+          for (const unit of returning) noteUnitEnteredHex(unit, destination)
+          returnedUnits.push(...allocation.unitIds)
+        }
         continue
       }
       const spIds = spIdsOf(allocation.aircraftId)

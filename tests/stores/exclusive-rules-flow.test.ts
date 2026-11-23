@@ -232,7 +232,8 @@ describe('W6 B19：3.5 建造标记', () => {
       const all = store.match(/noteUnitEnteredHex\(/gu) ?? []
       const defs = store.match(/function noteUnitEnteredHex\(/gu) ?? []
       expect(defs).toHaveLength(1)
-      expect(all.length - defs.length).toBe(5)
+      // 至少 5 处（同一路径内可有多处，如空运退运的图上 / 离图两个分支）
+      expect(all.length - defs.length).toBeGreaterThanOrEqual(5)
       /*
        * 逐调用点**回看上游代码**，认它长在哪条路径里（不能按"离某个名字多远"往后找：
        * `applyMovePatches` 另有调用点，会先被撞上）。五个标记必须**都**出现 —— 少一个即说明
@@ -253,7 +254,13 @@ describe('W6 B19：3.5 建造标记', () => {
         // 跳过定义那一处（它前面紧跟 `function `）
         if (store.slice(Math.max(0, at - 12), at).includes('function ')) continue
         const window = store.slice(Math.max(0, at - 5000), at)
-        for (const marker of markers) if (window.includes(marker)) seen.add(marker)
+        const hits = markers.filter((marker) => window.includes(marker))
+        // 任何新增写点都必须落在已知进入路径内，不许冒出第五类以外的调用点
+        expect(
+          hits.length,
+          `调用点不在已知进入路径：…${store.slice(Math.max(0, at - 90), at + 20)}`,
+        ).toBeGreaterThan(0)
+        for (const marker of hits) seen.add(marker)
       }
       expect([...seen].sort()).toEqual([...markers].sort())
       // 面板：点地图选格 + 已放置清单都来自 store（不再留局部 ref）

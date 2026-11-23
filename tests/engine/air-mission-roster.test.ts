@@ -241,4 +241,62 @@ describe('14.1 / 14.9：任务存活名单与整组退运', () => {
       }),
     ).toMatchObject({ ok: false, reason: 'retainedCargoUnassigned:sp:2' })
   })
+
+  it('离图机带单位货物返航：单位落离图起点格、机体回盒（14.9 / 专规 1.4a）', () => {
+    const edge = { col: 1, row: 20 }
+    const cargo = [
+      {
+        id: 'unit:u1',
+        kind: 'unit' as const,
+        mobility: 'leg' as const,
+        re: 1,
+        ma: 6,
+      },
+      { id: 'sp:1', kind: 'sp' as const, t: 1 },
+    ]
+    const result = planRetainedCargoReturn({
+      cargo,
+      targetHex: hex,
+      carriers: [{ aircraftId: 'a', offMap: true, baseHex: edge, offMapBox: 'axis' }],
+      returns: [],
+      stayedIds: [],
+      cargoByAircraft: [{ aircraftId: 'a', cargoIds: ['unit:u1', 'sp:1'] }],
+    })
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        allocations: [
+          {
+            aircraftId: 'a',
+            destination: edge,
+            offMap: true,
+            box: 'axis',
+            unitIds: ['unit:u1'],
+            t: 3,
+          },
+        ],
+      },
+    })
+  })
+
+  it('离图机带单位货物却没有落点：仍拒绝，不静默丢单位', () => {
+    expect(
+      planRetainedCargoReturn({
+        cargo: [
+          {
+            id: 'unit:u1',
+            kind: 'unit' as const,
+            mobility: 'leg' as const,
+            re: 1,
+            ma: 6,
+          },
+        ],
+        targetHex: hex,
+        carriers: [{ aircraftId: 'a', offMap: true }],
+        returns: [],
+        stayedIds: [],
+        cargoByAircraft: [{ aircraftId: 'a', cargoIds: ['unit:u1'] }],
+      }),
+    ).toMatchObject({ ok: false, reason: 'retainedCargoCarrierWithoutReturnBase:a' })
+  })
 })

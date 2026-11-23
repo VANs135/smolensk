@@ -163,7 +163,6 @@ const AIR_ERROR_TEXT: Readonly<Record<string, string>> = {
   completePendingAirStepBeforeReturn: '先完成当前空中步骤再返航（14.2f）',
   completePendingSettlementBeforeAirMission: '先完成待结算再开新任务（14.2f）',
   noEligibleVoluntaryReturn: '没有可自愿返航的飞机（14.3d）',
-  partialCargoReturnUnsupported: '暂不支持只返航部分货物（14.9a）',
   cargoCarrierAllocationRequired: '需要先指定货物由哪架飞机运回（14.9a）',
   cargoUnitMissing: '货物单位不存在（14.9a）',
   cargoOutcomePending: '任务结果尚未确认（14.2f-F）',
