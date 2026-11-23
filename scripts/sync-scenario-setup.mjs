@@ -80,6 +80,7 @@ export function toSetupEntry(item) {
   if (item.step_penalty != null) out.stepPenalty = item.step_penalty
   if (item.step_penalty_note != null) out.stepPenaltyNote = item.step_penalty_note
   if (item.setup_mode != null) out.setupMode = item.setup_mode
+  if (item.setup_face != null) out.setupFace = item.setup_face
   if (item.errata_move_mode != null) out.errataMoveMode = item.errata_move_mode
   if (item.errata_ref != null) out.errataRef = item.errata_ref
   if (item.corrected != null) out.corrected = item.corrected

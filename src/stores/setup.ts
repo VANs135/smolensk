@@ -33,6 +33,8 @@ import {
   panzerGroupRulesActive,
   PANZER_GROUP_OPTION_ITEM,
   SP_TO_T,
+  // IV-B：初设即指定的模式（`setupMode: 'reserve'`）与右键「初设模式」用同一条模式构造
+  applyModeSwitch,
   setupEntryViews,
   setupCandidates,
   setupFlowFor,
@@ -3228,6 +3230,12 @@ export const useSetupStore = defineStore('setup', () => {
         ...(piece.face === 'move' ? { face: 'move' as const } : {}),
       })
       if (piece.steps !== null) unit.steps = piece.steps
+      /*
+       * IV-B / 5.7a：剧本明示「以预备模式初设」⇒ 落盘时把模式挂上（朝向取创建面，
+       * 即 `piece.face === 'move'` 时是移动面）。与初设右键「初设模式」同一条构造。
+       */
+      if (piece.mode === 'reserve')
+        unit.mode = applyModeSwitch(unit.mode, 'reserve', unit.mode.orientation)
       if (piece.toDeadPile) deadPileUnits.push(unit)
       else placedUnits.push(unit)
     }
@@ -3660,17 +3668,22 @@ export const useSetupStore = defineStore('setup', () => {
         const recordUnit = findUnitRecord(piece.unitId)
         if (recordUnit === undefined) continue
         const copies = copiesWanted ?? (entry.kind === 'formation' ? 1 : Math.max(entry.count, 1))
+        // 初设即指定的模式（与自动初设同一口径）：`'move'` 恒为移动面；`'reserve'` 的朝向取 `setupFace`
+        const reserveSetup = entry.setupMode === 'reserve'
+        const setupFace: 'combat' | 'move' = reserveSetup ? (entry.setupFace ?? 'move') : 'move'
         for (let copy = 0; copy < copies; copy += 1) {
           const unit = toConsoleUnit({
             record: recordUnit,
             instanceId: createId('u'),
             hex: { ...target },
             side: entry.side,
-            ...(entry.setupMode === 'move' ? { face: 'move' as const } : {}),
+            ...(setupFace === 'move' ? { face: 'move' as const } : {}),
           })
           // IV-G：剧本明示的**初设减损**（-N step）在此扣除（与 `runAutoSetup` 同一口径）
           const penalty = entry.stepPenalty ?? 0
           if (penalty > 0) unit.steps = Math.max(unit.steps - penalty, 0)
+          // IV-B / 5.7a：剧本明示「以预备模式初设」⇒ 把预备标记挂上（朝向＝创建面）
+          if (reserveSetup) unit.mode = applyModeSwitch(unit.mode, 'reserve', unit.mode.orientation)
           placed.push(unit)
         }
       }

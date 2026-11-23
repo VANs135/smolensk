@@ -110,8 +110,16 @@ export const SetupEntrySchema = z
     stepPenalty: z.number().nullish(),
     /** 减损注记原文（如 '剧本注记：该单位以减损状态设置（-1 step）'） */
     stepPenaltyNote: z.string().nullish(),
-    /** 以移动模式面初设（'move'） */
+    /**
+     * 初设即指定的模式（剧本明示）
+     *
+     * - `'move'`：原文 `in Move Mode`（5.6，朝向恒为移动面）；
+     * - `'reserve'`：以预备模式初设（5.7a 允许任意面，朝向见 `setupFace`）。
+     *   缺省 null ＝ 按印面（战斗模式）。教学剧本用它让苏军坦克师一开局就处于预备。
+     */
     setupMode: z.string().nullish(),
+    /** `setupMode: 'reserve'` 时的朝向（缺省 ＝ 移动面） */
+    setupFace: z.enum(['combat', 'move']).nullish(),
 
     /** 勘误：移动模式印值修正（如 '10-5-6'） */
     errataMoveMode: z.string().nullish(),

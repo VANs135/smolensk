@@ -275,8 +275,14 @@ export interface SetupEntryView {
   /** 初设减损军力数（IV-G 的例外：剧本明示 −N step） */
   stepPenalty: number | null
   stepPenaltyNote: string | null
-  /** 以移动模式面初设（剧本明示 'in Move Mode'） */
+  /**
+   * 初设即指定的模式（剧本明示）：`'move'`（原文 `in Move Mode`）或 `'reserve'`（教学/剧本明示的预备初设）
+   *
+   * 缺省 null ＝ 按印面（战斗模式）。
+   */
   setupMode: string | null
+  /** `setupMode: 'reserve'` 时的朝向（通规 5.7a 允许任意面；缺省 ＝ 移动面） */
+  setupFace: 'combat' | 'move' | null
   /** † 容差原文 */
   toleranceText: string | null
   /** 同格共存的条目类别（数量注记与所在格单位关联） */
@@ -355,6 +361,7 @@ function toEntryView(entry: EntryRow, index: number): SetupEntryView {
     stepPenalty: entry.stepPenalty ?? null,
     stepPenaltyNote: entry.stepPenaltyNote ?? null,
     setupMode: entry.setupMode ?? null,
+    setupFace: entry.setupFace ?? null,
     toleranceText: entry.placementTolerance ?? null,
     coLocated: entry.coLocated ?? [],
     pieces: piecesOf(entry),
@@ -695,6 +702,13 @@ export interface SetupPiecePlacement {
   steps: number | null
   /** 以移动模式面初设（剧本明示，或编队抽签的 Move-Mode 组） */
   face: 'move' | null
+  /**
+   * 以预备模式初设（剧本明示；通规 5.7a：进预备可翻任意面，故朝向另由 `face` 给）
+   *
+   * 落盘时由状态层按 `applyModeSwitch(state, 'reserve', 朝向)` 施加 —— 与初设右键
+   * 「初设模式」同一条模式构造，不另造一套。
+   */
+  mode: 'reserve' | null
   detail: string
   rule: string
 }
@@ -919,6 +933,22 @@ export function planAutoSetup(input: {
       continue
     }
     const copies = entry.kind === 'formation' ? 1 : Math.max(entry.count, 1)
+    /*
+     * 初设即指定的模式（剧本明示）：`'move'` / `'reserve'`。
+     * 预备初设的朝向取 `setupFace`（通规 5.7a 允许任意面），缺省按移动面 —— 与 `'move'` 同源，
+     * 免得「战斗面预备」和「移动面预备」在数据里各写一种；`'move'` 条目的朝向恒为移动面（通规 5.6）。
+     */
+    const reserveSetup = entry.setupMode === 'reserve'
+    const setupFace: 'move' | 'combat' | null = reserveSetup
+      ? (entry.setupFace ?? 'move')
+      : entry.setupMode === 'move'
+        ? 'move'
+        : null
+    const setupModeText = reserveSetup
+      ? `；以预备模式初设（剧本明示，${setupFace === 'move' ? '移动面' : '战斗面'}，5.7a）`
+      : entry.setupMode === 'move'
+        ? '；以移动模式面初设（剧本明示）'
+        : ''
     for (const target of resolvedTargets) {
       const hex = target as HexRef | null
       for (const piece of entry.pieces) {
@@ -939,10 +969,11 @@ export function planAutoSetup(input: {
             toDeadPile,
             side: entry.side,
             steps,
-            face: entry.setupMode === 'move' ? 'move' : null,
+            face: setupFace === 'move' ? 'move' : null,
+            mode: reserveSetup ? 'reserve' : null,
             detail: toDeadPile
               ? `${piece.name} ⇒ 死亡堆（${DEAD_PILE_RULE}）${penalty > 0 ? `；以减损状态入堆（−${penalty} step）` : ''}`
-              : `${piece.name} ⇒ ${hex === null ? '' : setupHexLabel(hex)}${penalty > 0 ? `；以减损状态初设（−${penalty} step，剧本明示）` : ''}${entry.setupMode === 'move' ? '；以移动模式面初设（剧本明示）' : ''}`,
+              : `${piece.name} ⇒ ${hex === null ? '' : setupHexLabel(hex)}${penalty > 0 ? `；以减损状态初设（−${penalty} step，剧本明示）` : ''}${setupModeText}`,
             rule: entry.rule,
           })
         }
