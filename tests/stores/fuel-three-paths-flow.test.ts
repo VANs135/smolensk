@@ -309,4 +309,31 @@ describe('批 B 切片 3：三条取油路径都能让单位开拔（12.3/12.5�
     expect(store.runCleanUpNow()).toBe(true)
     expect(store.hqFuelThrowOriginOf('hq-1')).toBeNull()
   })
+
+  it('★ 13.2g-B：HQ 法不得用**编内卡车**的 SP 给别的编队/独立单位加油', () => {
+    store.setPhase('movement')
+    goToFuelStep(store)
+    place(store, HQ_RECORD, 'hq-1', FIXTURE.hqHex)
+    place(store, INDEPENDENT_TANK, 'tk-1', FIXTURE.tankHex)
+    // 编内卡车停在 HQ 的相邻格（12.3c：HQ 「相邻即可」拖取），车上 1 SP
+    const truck = place(store, ORGANIC_TRUCK, 'tr-1', FIXTURE.dumpHex)
+    truck.loadedSpT = SP_TO_T
+    // 同格另有一份**地面**账本：12.1b 说它也是站，13.2g-B 管不到它（对照组）
+    const ground = putDump(store, FIXTURE.dumpHex, 2)
+
+    store.selectedId = 'hq-1'
+    store.fuelMethod = 'hq'
+    expect(store.fuelMethodChoices.find((item) => item.method === 'hq')?.available).toBe(true)
+    // 13.2g 末句：HQ 只能把编内卡车的 SP 投给**同一多单位编队内**的单位；HQ 法覆盖的是
+    // 「指挥部自己 + 独立单位（3.2f，无编队）」⇒ 这一支天然不满足 ⇒ 不作候选
+    expect(store.fuelDumpChoices.map((item) => item.id)).toContain(ground.id)
+    expect(store.fuelDumpChoices.map((item) => item.id)).not.toContain('unit:tr-1')
+
+    // 付款侧兜底：绕过候选直接把旧选择塞进 ref 也不能扣别的编队的 SP（账本一字不动）
+    store.fuelDumpId = 'unit:tr-1'
+    store.payFuel('hq')
+    expect(store.log.some((entry) => entry.rule === '13.2g')).toBe(true)
+    expect(store.units.find((unit) => unit.instanceId === 'tr-1')!.loadedSpT).toBe(SP_TO_T)
+    expect(store.units.filter((unit) => unit.fuelled).map((unit) => unit.instanceId)).toEqual([])
+  })
 })

@@ -56,7 +56,14 @@ import type { SpDump } from './supply-types'
 export interface AirFacilityDeps {
   activeSide: ComputedRef<Side>
   units: Ref<ConsoleUnit[]>
-  spDumps: Ref<SpDump[]>
+  /**
+   * 12.1b：按 id 取补给站（**地面账本 + 装载在运输点数上的 SP** 一视同仁）
+   *
+   * ★ 13.2g-A/B：编内卡车装的 SP 也是补给站，但只许同一多单位编队内的单位取用 ⇒
+   *   付款候选来自 `constructionPayDumps`（`deliverableDumpsFor` 已按编队过滤），
+   *   此处只需按 id 取回**同一份**持仓（修前读 `spDumps` ⇒ 装载来源取不到，施工被判"没有 SP"）。
+   */
+  dumpById: (dumpId: string) => SpDump | undefined
   constructionInputs: Ref<{ hexText: string; engineerId: string | null; payDumpId: string | null }>
   pushLog: (
     kind: WorkbenchLogEntry['kind'],
@@ -89,7 +96,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
   const {
     activeSide,
     units,
-    spDumps,
+    dumpById,
     constructionInputs,
     pushLog,
     requireAction,
@@ -237,8 +244,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
       )
       return false
     }
-    const dump =
-      spDumps.value.find((item) => item.id === constructionInputs.value.payDumpId) ?? null
+    const dump = dumpById(constructionInputs.value.payDumpId ?? '') ?? null
     const outcome = planAirBaseBuild({
       executor: engineerExecutorFor(engineer, hex),
       currentLevel: airBaseLevelAt(hex),
@@ -303,8 +309,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
       pushLog('warning', `修建简易机场被拒：${gate.reason}（${gate.rule}）`, gate.rule)
       return false
     }
-    const dump =
-      spDumps.value.find((item) => item.id === constructionInputs.value.payDumpId) ?? null
+    const dump = dumpById(constructionInputs.value.payDumpId ?? '') ?? null
     const outcome = planAirstripBuild({
       executor: engineerExecutorFor(engineer, hex),
       hexHasAirFacility: hexHasAirFacility(hex),
@@ -373,8 +378,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
       pushLog('warning', `简易机场升格被拒：${gate.reason}（${gate.rule}）`, gate.rule)
       return false
     }
-    const dump =
-      spDumps.value.find((item) => item.id === constructionInputs.value.payDumpId) ?? null
+    const dump = dumpById(constructionInputs.value.payDumpId ?? '') ?? null
     const outcome = planAirstripUpgrade({
       executor: engineerExecutorFor(engineer, base.hex),
       hexHasAirstrip: base.isAirstrip === true,

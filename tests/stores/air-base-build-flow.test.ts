@@ -526,3 +526,32 @@ describe('15.3 的费用预显与算子库一致性', () => {
     expect(unitChoices('soviet').some((record) => record.noncombatKind === 'air_base')).toBe(true)
   })
 })
+
+describe('12.1b：施工费可以由**装载在运输点数上**的 SP 支付', () => {
+  it('15.2A 简易机场：付款站是运输点数上的 1 SP ⇒ 修得起来（修前读 spDumps 判成"没有 SP"）', () => {
+    const store = newStore()
+    const engineer = placeEngineer(store, coreText)
+    // 同格摆一枚**常规**运输点数（13.2f：不是编内卡车），车上 1 SP（4 T）
+    const point = placeGround(
+      store,
+      groundRecord(
+        'axis',
+        (item) =>
+          item.noncombatKind === 'transport_point' && (item.noncombatDetails?.transport ?? 0) >= 2,
+      ),
+      CORE_HEX,
+      'axis',
+      'tp-1',
+    )
+    point.loadedSpT = SP_TO_T
+    prepare(store, {
+      hexText: coreText,
+      engineerId: engineer.instanceId,
+      payDumpId: `unit:${point.instanceId}`,
+    })
+    expect(store.buildAirstripNow()).toBe(true)
+    // 15.2A：建造 1T ⇒ 车上剩 3T（12.1a：1 SP = 4 T）
+    expect(point.loadedSpT).toBe(SP_TO_T - 1)
+    expect(point.loadedSpT).toBe(3)
+  })
+})

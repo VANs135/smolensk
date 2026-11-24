@@ -2219,7 +2219,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const airFacilityDomain = createAirFacilityDomain({
     activeSide,
     units,
-    spDumps,
+    // 12.1b：按 id 取站（地面账本 + 装载中的 SP）；`dumpById` 是 function 声明，可早于其位置按值传
+    dumpById,
     constructionInputs,
     pushLog,
     requireAction,
@@ -4970,7 +4971,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function transportDumpsAt(unit: ConsoleUnit): readonly SpDump[] {
     // 12.1c：已清空的条目不再算站 ⇒ 13.2f 的「同格有补给站」不能由空条目满足
     return stockedSpDumps.value.filter(
-      (item) => item.side === unit.side && sameHex(item.hex, unit.hex),
+      (item) =>
+        item.side === unit.side &&
+        sameHex(item.hex, unit.hex) &&
+        /*
+         * ★ 13.2g-A/B（用户 2026-11-24 口径）：编内卡车装载的 SP **只能被同一多单位编队内的单位
+         * 使用**，且**装载后不能卸载**。「被另一枚运输点数装走」等于把 SP 从这辆编内卡车上转走
+         * （此后谁都能拖），既不是「使用」，也绕开了 A/B 两条限制 ⇒ 不作装载来源。
+         */
+        item.carrierIsOrganicTruck !== true,
     )
   }
 

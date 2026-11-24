@@ -325,4 +325,28 @@ describe('B32 步骤 5：装载在运输点数上的 SP（12.1b / 13.2f）', () 
     expect(panel).toContain('dump.carriedBy')
     expect(panel).toContain('装载在')
   })
+
+  it('★ 源码守卫（13.2g-A/B）：燃料 HQ 法、施工付款、运输点数装载 Sources 三处都过编队/卸载判据', () => {
+    /*
+     * 13.2g-B 的判据只有一处（引擎 `canDrawFromCarrier`）⇒ 各取用路径只许"消费结论"，
+     * 不允许自己写一套"同格有编队单位即可"的近似。这里钉住三条**本轮补的**路径。
+     */
+    const fuel = readFileSync('src/stores/workbench-fuel.ts', 'utf8')
+    // ① 12.5c-B（HQ 法）：候选逐份过 13.2g-B（末句只许投给同一多单位编队内的单位）
+    expect(fuel).toContain('function fuelDumpAllowedForTargets(')
+    expect(fuel).toContain('canDrawFromCarrier({')
+    expect(fuel).toContain('fuelDumpAllowedForTargets(dump, targets)')
+    // 付款侧兜底（候选过滤之外，落账前再判一次）
+    expect(fuel).toContain('if (!fuelDumpAllowedForTargets(dump, targets)) {')
+
+    const facility = readFileSync('src/stores/workbench-air-facility.ts', 'utf8')
+    // ② 15.3/15.2A：付款站按 id 取**含装载来源**的那一份（修前读 `spDumps` ⇒ 施工被判"没有 SP"）
+    expect(facility).not.toContain('spDumps.value.find')
+    expect(facility).toContain("dumpById(constructionInputs.value.payDumpId ?? '')")
+
+    const store = readStoreSource()
+    // ③ 13.2f 装载：编内卡车装的 SP 不能当**别的运输点数**的装载来源（否则等于把 SP 转走）
+    expect(store).toContain('item.carrierIsOrganicTruck !== true,')
+    expect(store).toContain('function transportDumpsAt(unit: ConsoleUnit): readonly SpDump[]')
+  })
 })

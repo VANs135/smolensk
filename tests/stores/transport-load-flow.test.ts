@@ -369,3 +369,34 @@ describe('13.2f：装载—移动—卸载全流程（数量预填与阶段）',
     expect(src).not.toContain(':disabled="workbench.transportLoadInputs.pointId === null"')
   })
 })
+
+describe('13.2g-A/B：编内卡车装载的 SP 不能被别的运输点数装走', () => {
+  it('同格只有编内卡车的 SP ⇒ 不作装载来源（否则等于把 SP 从编内卡车上转走）', () => {
+    const store = newStore()
+    const organic = placeTransportPoint(store, 'ot-1', true, 'axis')
+    organic.loadedSpT = 4 // 1 SP（13.2h 满载面）
+    const point = placeTransportPoint(store, 'tp-1', false, 'axis')
+    point.hex = { ...HEX }
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 1,
+      unloadAmount: 1,
+    }
+    expect(store.loadTransportPointNow()).toBe(false)
+    // 13.2f「运输点数必须与补给站位于同一格才能装载」——该格此刻**没有**可用来源
+    expect(store.transportLoadError).toMatchObject({
+      rule: '13.2f',
+      reason: 'loadRequiresDumpInHex',
+    })
+    expect(organic.loadedSpT).toBe(4)
+    expect(point.loadedSpT).toBe(0)
+    expect(point.mpSpent).toBe(0)
+
+    // 对照：同格补一份**地面**账本 ⇒ 12.1b 的站成立，照常可装
+    store.spDumps.push({ id: 'd-ax', hex: { ...HEX }, side: 'axis', sp: 4, t: 0 })
+    expect(store.loadTransportPointNow()).toBe(true)
+    expect(point.loadedSpT).toBe(4)
+    expect(store.spDumps.find((item) => item.id === 'd-ax')!.sp).toBe(3)
+  })
+})

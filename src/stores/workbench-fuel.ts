@@ -16,6 +16,7 @@ import type { ComputedRef, Ref } from 'vue'
 
 import {
   SP_TO_T,
+  canDrawFromCarrier,
   canThrowViaHQ,
   countSupplyDistanceToUnitViaTable,
   drawableDumpsFor,
@@ -301,6 +302,20 @@ export function createFuelDomain(ports: FuelDomainPorts) {
         `12.3a：${hexLabel(dump.hex)} 的补给属于${dump.side === 'axis' ? '轴心国' : '苏联'}，` +
           `不能用来给${[...beneficiarySides].map((side) => (side === 'axis' ? '轴心国' : '苏联')).join('、')}的单位加油`,
         '12.3a',
+      )
+      return
+    }
+    /*
+     * 13.2g-B（用户 2026-11-24 口径）：编内卡车装载的 SP 只许**同一多单位编队内的单位**使用。
+     * 候选已按此过滤（`fuelDumpAllowedForTargets`），此处再兜一次：付款是落账动作，
+     * 不能让"候选里没列、但 id 还留在 ref 里"的旧选择把别的编队的 SP 扣掉。
+     */
+    if (!fuelDumpAllowedForTargets(dump, targets)) {
+      pushLog(
+        'danger',
+        `13.2g：${hexLabel(dump.hex)} 的 SP 装载在**编内卡车**上，只允许**同一多单位编队内**的单位取用` +
+          `（本次受益单位不在该编队内）⇒ 本次不改动任何账本`,
+        '13.2g',
       )
       return
     }
@@ -1020,6 +1035,24 @@ export function createFuelDomain(ports: FuelDomainPorts) {
     }
   })
 
+  /**
+   * ★ 13.2g-B（用户 2026-11-24 口径）：「只允许**同一多单位编队内的单位**拖取编内卡车的 SP」
+   *
+   * 原文 13.2g 末句另给一条出口——「玩家可以使用指挥部，将装载于编内卡车的补给，投递给**同一多单位
+   * 编队内**的单位」——故 HQ 法（12.5c-B）取用编内卡车的 SP 时，**全部受益单位**都得过这一条。
+   * 判据只有一处：引擎 `canDrawFromCarrier`（此处只消费结论，不另立规则）。
+   */
+  function fuelDumpAllowedForTargets(dump: SpDump, targets: readonly ConsoleUnit[]): boolean {
+    if (dump.carrierIsOrganicTruck !== true) return true
+    return targets.every((unit) =>
+      canDrawFromCarrier({
+        carrierIsOrganicTruck: true,
+        carrierFormation: dump.carrierFormation ?? null,
+        drawerFormation: unit.formation,
+      }),
+    )
+  }
+
   const fuelDumpChoices = computed<SpDump[]>(() => {
     const targets = fuelTargets.value
     if (targets.length === 0) return []
@@ -1100,7 +1133,9 @@ export function createFuelDomain(ports: FuelDomainPorts) {
           if (
             dump.side === side &&
             keys.has(hexLabel(dump.hex)) &&
-            holdingsToT({ sp: dump.sp, t: dump.t }) > 0
+            holdingsToT({ sp: dump.sp, t: dump.t }) > 0 &&
+            // 13.2g-B：编内卡车的 SP 只许同一多单位编队内的单位取用（HQ 法也受末句限制）
+            fuelDumpAllowedForTargets(dump, targets)
           )
             picked.set(dump.id, dump)
         }
