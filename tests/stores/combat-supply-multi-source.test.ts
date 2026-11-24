@@ -560,3 +560,72 @@ describe('3.4b：战斗补给被规则拒 ⇒ 面板必须出红字（不能只�
     expect(store.combatState?.step).toBe('combatSupply')
   })
 })
+
+describe('12.10a 括注例外的边界（13.2g-B 追加后）', () => {
+  /**
+   * 每次用**新 store**：编内卡车的编队是它在数据/实例上的固有属性，
+   * 而同一次会话里改 `formation` 不会让已算出的取补来源刷新（那是另一条链路的缓存），
+   * 所以两种编队各起一局，避免测到缓存而不是判据。
+   */
+  function fightWithOrganicTruck(formation: string) {
+    const store = newStore()
+    store.setActiveSide('soviet')
+    store.setPhase('combat')
+    goToActionStep(store, 'combat.declare')
+    store.setTool('battle')
+    const attacker = place(
+      store,
+      pickRecord(
+        'soviet',
+        (record) =>
+          record.isCombat === true &&
+          record.attackCapable === true &&
+          record.classes?.movementClass === 'leg' &&
+          (record.factors?.combat?.attack ?? 0) >= 2,
+      ),
+      ATTACKER_HEX,
+      'soviet',
+      'sa1',
+    )
+    // 德军守方：编队 10PZ（单位库里编内卡车全在德方，正好用来钉这条判据）
+    place(
+      store,
+      pickRecord('axis', (record) => record.isCombat === true && record.formation === '10PZ'),
+      DEFENDER_HEX,
+      'axis',
+      'ad1',
+    )
+    store.clickHex(DEFENDER_HEX)
+    ensureAttacker(store, attacker.instanceId)
+    expect(store.beginCombatNow()).toBe(true)
+    const truck = place(
+      store,
+      pickRecord(
+        'axis',
+        (record) => record.noncombatKind === 'organic_truck' && record.formation === formation,
+      ),
+      DEFENDER_HEX,
+      'axis',
+      'ot1',
+    )
+    truck.loadedSpT = 4 // 1 SP = 4 T ＞ 12.4 的守方整笔（2 T；≤1 RE 时 1 T）
+    return { store, truck }
+  }
+
+  it('★ 唯一够额的站是编内卡车的 SP：同编队拖得到 ⇒ 不算"取不到"；不同编队 ⇒ 才留储备行', () => {
+    // ① 同编队：守方按 13.2g-B 本来就拖得到 ⇒ 不是 12.10a 括注里的"唯一可用站取不到"
+    const same = fightWithOrganicTruck('10PZ')
+    const reachable =
+      same.store.combatSupplyDumps.find((item) => item.side === 'defender')?.dumps ?? []
+    expect(reachable.some((dump) => dump.id === 'unit:ot1')).toBe(true)
+    expect(same.store.combatDefenderStocksApplicable).toBe(false)
+
+    // ② 别的编队：守方拖不到 ⇒ 括注例外成立 ⇒ 储备行出现
+    const other = fightWithOrganicTruck('4PZ')
+    expect(other.store.combatDefenderStocksApplicable).toBe(true)
+
+    // ③ 同格再摆一份**地面**账本 ⇒ 与编队无关，一律算图上取得到
+    other.store.spDumps.push({ id: 'sd-d', side: 'axis', hex: { ...DEFENDER_HEX }, sp: 1, t: 0 })
+    expect(other.store.combatDefenderStocksApplicable).toBe(false)
+  })
+})

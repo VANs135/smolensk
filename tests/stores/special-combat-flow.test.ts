@@ -256,3 +256,44 @@ describe('9.14 特殊战斗流程（store 级）', () => {
     expect(moved === undefined ? null : moved.hex).toEqual(target)
   })
 })
+
+describe('13.2g-F：被夺取的编内卡车转换为常规运输点数', () => {
+  it('夺取后 noncombatKind 变成 transport_point、编队归属解除、载荷保留，13.2g 记一笔', () => {
+    const store = newStore()
+    // 德军编内卡车（单位库里 organic_truck 全是德方，运力 1 点），车上有 1 SP
+    const record = pickRecord('axis', (item) => item.noncombatKind === 'organic_truck')
+    const truck = place(store, record, HEX, 'axis', 'ot1')
+    truck.loadedSpT = 4
+    expect(record.formation).not.toBeNull()
+    // 苏军进入该格 ⇒ 9.14c 的「卡车」组只有这一枚 / 1 点 ⇒ 夺取表 50% 取整后＝夺取这 1 点
+    place(
+      store,
+      pickRecord('soviet', (item) => item.isCombat === true),
+      HEX,
+      'soviet',
+      'a1',
+    )
+    expect(store.resolveSpecialCombatAt(HEX, 'soviet')).toBe(true)
+    const pending = store.specialPending
+    expect(pending).not.toBeNull()
+    const split = pending!.splits[0]!
+    expect(split.group.group).toBe('trucks')
+    expect(split.capturedIds).toContain('ot1')
+
+    expect(store.confirmSpecialCombatNow()).toBe(true)
+    const after = store.units.find((item) => item.instanceId === 'ot1')!
+    expect(after.side).toBe('soviet')
+    // ★ 13.2g-F：转换为**常规运输点数**（13.2g-A 的"永不卸载"随之解除）
+    expect(after.noncombatKind).toBe('transport_point')
+    // 编队归属解除（3.1c 的编队来自数据；13.2g-B 的"只许同编队取用"不再拦新主人）
+    expect(after.formation).toBeNull()
+    // 载荷原样保留（9.14c 的夺取流程不拆载荷）
+    expect(after.loadedSpT).toBe(4)
+    // 扯上 12.1b：这 1 SP 现在是一枚**普通**运输点数上的装载补给（13.2g 的限制不再适用）
+    const dump = store.allSpDumps.find((item) => item.id === `unit:${after.instanceId}`)
+    expect(dump?.carrierIsOrganicTruck).toBe(false)
+    expect(
+      store.log.some((entry) => entry.rule === '13.2g' && entry.text.includes('常规运输点数')),
+    ).toBe(true)
+  })
+})

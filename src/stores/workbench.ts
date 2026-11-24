@@ -9839,10 +9839,26 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     const needT = combatDefenderRequiredT.value
     const reachable = combatSupplyDumps.value.find((item) => item.side === 'defender')?.dumps ?? []
-    const payableFromMap = reachable.some(
-      (dump) =>
-        dump.carrierIsOrganicTruck !== true && holdingsToT({ sp: dump.sp, t: dump.t }) >= needT,
+    const defenderFormations = combatDefenderViews.value.map(
+      (view) => units.value.find((unit) => unit.instanceId === view.id)?.formation ?? null,
     )
+    const payableFromMap = reachable.some((dump) => {
+      if (holdingsToT({ sp: dump.sp, t: dump.t }) < needT) return false
+      if (dump.carrierIsOrganicTruck !== true) return true
+      /*
+       * ★ 13.2g-B：编内卡车的 SP「只允许**同一多单位编队内**的单位拖取」⇒ 只有守方**全部**单位
+       * 都在该车编队内时，"图上取得"才成立；否则这一座就是 12.10a 括注里的
+       * 「唯一可用的补给站是装载在编内卡车上的 SP」⇒ 留出储备行。
+       * （现状是**无条件**排除编内卡车来源，同编队的守方本来拖得到却还能动储备，属放宽一侧。）
+       */
+      return defenderFormations.every((formation) =>
+        canDrawFromCarrier({
+          carrierIsOrganicTruck: true,
+          carrierFormation: dump.carrierFormation ?? null,
+          drawerFormation: formation,
+        }),
+      )
+    })
     return (
       !payableFromMap &&
       combatDefenderViews.value.some((unit) => unit.internalStocks !== 'exhausted')
@@ -12583,6 +12599,29 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
       unit.hex = { col: item.chosen.col, row: item.chosen.row }
       pushLog('success', `${item.label} 转移至 ${hexLabel(item.chosen)}（9.14c）`, '9.14c')
+    }
+    /*
+     * ★ 13.2g-F：「如果编内卡车被夺取，则它会**转换为常规运输点数**。」
+     *
+     * 落点只设在这一处（确认收束时一次性转，不在勾选来回翻，避免玩家改勾选留下半转换状态）：
+     *   · `noncombatKind`: `organic_truck` ⇒ `transport_point` ⇒ 13.2g-A 的「永不卸载」随之解除；
+     *   · `formation`: 清空（3.1c 的编队归属来自数据；被夺取后已不属于原编队，13.2g-B 的
+     *     「只许同编队取用」也不再拦着新主人 —— 它现在就是一枚普通运输点数）；
+     *   · 12.1a 的载荷 `loadedSpT` 原样保留：本作的 9.14c 夺取流程把组内每个算子的
+     *     `loadedT` 记成 0（不拆载荷），故转换时也只有"保留"这一种结果。
+     */
+    for (const split of pending.splits) {
+      for (const id of split.capturedIds) {
+        const target = units.value.find((item) => item.instanceId === id)
+        if (target === undefined || target.noncombatKind !== 'organic_truck') continue
+        target.noncombatKind = 'transport_point'
+        target.formation = null
+        pushLog(
+          'success',
+          `${target.name} 被夺取 ⇒ 按 13.2g 转换为常规运输点数（可卸载、编队归属解除、载荷原样保留）`,
+          '13.2g',
+        )
+      }
     }
     // ⑭ 接线：9.14 待决收束（位移落盘）入会话日志（本笔不掷骰；夺取表骰已在 specialCombat 记账）
     recordSettlement({
