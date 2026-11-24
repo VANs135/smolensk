@@ -4,23 +4,14 @@ import { storeToRefs } from 'pinia'
 
 import { BaseButton, ToastHost } from '@/components/base'
 import { SaveLoadDialog } from '@/components/save'
-import { useAppStore, useGameSessionStore, useUiStore } from '@/stores'
+import { useAppStore, useUiStore } from '@/stores'
 import { getView } from '@/views/registry'
 
 const app = useAppStore()
 const ui = useUiStore()
-const gameSession = useGameSessionStore()
 const { currentView } = storeToRefs(ui)
 
 const activeRoute = computed(() => getView(currentView.value))
-
-/** 顶栏按钮副标题：让玩家一眼看出槽里有没有档、当前会话什么形态 */
-const saveBadge = computed(() => {
-  const slot = gameSession.slot
-  if (slot !== null) return `有档 · 第 ${slot.turn} 回合`
-  if (gameSession.saveError !== null) return '槽不可读'
-  return gameSession.session === null ? '无档' : '可存'
-})
 
 /**
  * 用户 2026-11-10：拦掉 WebView 原生右键菜单
@@ -74,7 +65,7 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
           class="shell__save shell__save--disk"
           @click="ui.openSaveDialog()"
         >
-          存档 / 读档（{{ saveBadge }}）
+          存档
         </BaseButton>
       </div>
     </header>

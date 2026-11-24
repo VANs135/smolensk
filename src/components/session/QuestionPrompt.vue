@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 
 import { BaseButton, BaseTag } from '@/components/base'
-import { useGameSessionStore, useUiStore, useWorkbenchStore } from '@/stores'
+import { useGameSessionStore, useWorkbenchStore } from '@/stores'
 
 /**
  * 待答面板（W6 C10：由**会话驱动**的强制选择呈现）
@@ -21,7 +21,6 @@ import { useGameSessionStore, useUiStore, useWorkbenchStore } from '@/stores'
 
 const gameSession = useGameSessionStore()
 const workbench = useWorkbenchStore()
-const ui = useUiStore()
 
 /** 当前待答问题（null = 未待答，面板整体不渲染） */
 const question = computed(() => gameSession.question)
@@ -73,15 +72,6 @@ function answer(optionId?: string): void {
             {{ gameSession.error.reason }}
           </p>
         </div>
-
-        <footer class="prompt__footer">
-          <div class="prompt__actions">
-            <!-- W7 C15：待答时遮罩挡住了顶栏，故由面板自己给存档入口（与顶栏同一个对话框） -->
-            <BaseButton variant="ghost" size="sm" @click="ui.openSaveDialog()">
-              存档 / 读档
-            </BaseButton>
-          </div>
-        </footer>
       </div>
     </div>
   </Teleport>

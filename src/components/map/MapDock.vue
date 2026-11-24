@@ -210,7 +210,7 @@ function resetPosition(): void {
     ref="root"
     class="dock"
     :style="{
-      width: props.width ?? 'min(380px, 92%)',
+      width: props.width ?? 'min(430px, 92%)',
       transform: `translate(${offset.dx}px, ${offset.dy}px)`,
     }"
     @wheel.stop

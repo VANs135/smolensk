@@ -53,9 +53,6 @@ function onRestart(): void {
           >
             新建对局 <BaseIcon name="chevron-right" />
           </button>
-          <button class="home__action" type="button" @click="ui.openSaveDialog()">
-            读取存档 <BaseIcon name="external" />
-          </button>
         </div>
       </div>
     </section>

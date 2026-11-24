@@ -42,7 +42,7 @@ watch(
 </script>
 
 <template>
-  <BaseDialog v-if="view !== null" v-model:open="open" title="判定胜利" width="420px">
+  <BaseDialog v-if="view !== null" v-model:open="open" title="判定胜利" width="430px">
     <p class="vd__verdict">
       <BaseTag :kind="view.tone">{{ view.verdict }}</BaseTag>
       <RuleTip :rule="view.rule">{{ assessment?.detail ?? view.rule }}</RuleTip>

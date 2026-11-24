@@ -1132,7 +1132,13 @@ onBeforeUnmount(() => {
 }
 
 .gt__rail {
-  z-index: var(--layer-shell);
+  /*
+   * 用户 2026-11-25：地图页只留左栏这一枚存档入口，且「本来就该常用」⇒ 待答模态（`.prompt`，
+   * `--z-panel` 200）的遮罩必须盖不住它。故左栏抬到 200+10：仍低于模式闸门（250）与 toast（300），
+   * 只越过「待答」这一层，浮窗/会话框（20）不受影响。
+   */
+  position: relative;
+  z-index: calc(var(--z-panel) + 10);
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
