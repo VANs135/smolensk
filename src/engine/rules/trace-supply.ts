@@ -247,14 +247,57 @@ function enemySide(side: Side): Side {
 }
 
 /**
- * 12.3d：一步的补给计费
+ * 12.3d：**静态**地形成本的记忆（L0 层，S1）
+ *
+ * 一步的成本只依赖 `MapFacts`（格内地形 + 格边 + TEC）与机动类型，与阵营、盘面（单位/ZOC/断补标记）
+ * 全无关 —— 而默认数据源上的 `MapFacts` 是**单例**（`map-facts.ts:84` 只建一次），
+ * 补给事实对象却随盘面每次重建 ⇒ 把表挂在 `MapFacts` 身份（WeakMap）上，**一局只算一次**。
+ *
+ * 建事实处原先有一张按 facts 的表（facts 一换就全丢）；现在 facts 只负责把查询转到这里。
+ * 键仍含机动类型（12.3a 的轮式/步行/履带成本不同）；键值为 `null` 时表示"该方向不可通行"，
+ * 与"没有缓存"必须区分开（故判 `has` 而不是 `get`）。
+ * 自定义 `map` 源每次会建新的 `MapFacts` ⇒ 自然不复用，也读不到陈旧值。
+ */
+const stepCostCache = new WeakMap<MapFacts, Map<SupplyMobility, Map<number, number | null>>>()
+
+/**
+ * 12.3d：一步的补给计费（带静态记忆的入口）
+ *
+ * 见 `computeSupplyStepCost` 的条文口径；本函数只加"同一 `MapFacts` + 机动类型 + 格边方向
+ * 只算一次地形选择"的记忆，结论逐字不变。
+ */
+export function supplyStepCost(
+  map: MapFacts,
+  from: HexRef,
+  to: HexRef,
+  mobility: SupplyMobility,
+): number | null {
+  let tables = stepCostCache.get(map)
+  if (tables === undefined) {
+    tables = new Map()
+    stepCostCache.set(map, tables)
+  }
+  let table = tables.get(mobility)
+  if (table === undefined) {
+    table = new Map()
+    tables.set(mobility, table)
+  }
+  const key = hexId(from) * 16384 + hexId(to)
+  if (table.has(key)) return table.get(key) ?? null
+  const cost = computeSupplyStepCost(map, from, to, mobility)
+  table.set(key, cost)
+  return cost
+}
+
+/**
+ * 12.3d：一步的补给计费（无记忆的纯算法）
  *
  * 「始终按『正常』地形的 MP 消耗计算（以夏季/晴朗条件为准），忽略所有临时的恶劣地面条件
  *   以及通过运输破坏区域产生的额外 MP 消耗」——TEC 基础值即正常成本，故本函数只读 TEC，
  *   天气抬高与运输破坏的额外成本不在此处（17.0c/14.8 另行判定，且对补给路径一律忽略）。
  * 沿路照常享受 6.2a 的道路优先（那是地形属性，不是天气）。
  */
-function supplyStepCost(
+function computeSupplyStepCost(
   map: MapFacts,
   from: HexRef,
   to: HexRef,
@@ -337,7 +380,6 @@ export function createTraceSupplyFacts(source: TraceSupplyFactsSource = {}): Tra
     else list.push(item.hex)
   }
 
-  const stepCosts = new Map<SupplyMobility, Map<number, number | null>>()
   const facts: TraceSupplyFacts = {
     onMap: (hex) => isOnMap(hex),
     sourcesFor: (side) =>
@@ -361,18 +403,11 @@ export function createTraceSupplyFacts(source: TraceSupplyFactsSource = {}): Tra
       if (friendlies !== undefined && friendlies.includes(side)) return false
       return zocBySide.get(enemySide(side))?.has(id) === true
     },
-    stepCost: (from, to, mobility) => {
-      let table = stepCosts.get(mobility)
-      if (table === undefined) {
-        table = new Map<number, number | null>()
-        stepCosts.set(mobility, table)
-      }
-      const key = hexId(from) * 16384 + hexId(to)
-      if (table.has(key)) return table.get(key) ?? null
-      const cost = supplyStepCost(map, from, to, mobility)
-      table.set(key, cost)
-      return cost
-    },
+    /*
+     * ★ S1（L0）：静态地形成本表挂在 `MapFacts` 身份上（默认源单例 ⇒ 一局只算一次）；
+     *   修前这张表属于本 facts（盘面一变就整张丢掉，9000 次地形选择重跑一遍）。
+     */
+    stepCost: (from, to, mobility) => supplyStepCost(map, from, to, mobility),
   }
   traceSearchCache.set(facts, { reachable: new Map(), hq: new Map(), coverage: new Map() })
   return facts

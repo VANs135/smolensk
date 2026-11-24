@@ -3,12 +3,20 @@ import { describe, expect, it } from 'vitest'
 import type { HexRef, Side } from '@/data'
 import { areAdjacent, HEX_DIRECTIONS, isOnMap, neighbor, sameHex } from '@/engine/hex-geometry'
 import {
+  createMapFacts,
   createTraceSupplyFacts,
   countSupplyDistanceToAny,
   projectsZoc,
+  selectMovementTerrain,
   supplyReachableHexes,
+  supplyStepCost,
 } from '@/engine/rules'
-import type { TraceSupplyFactsSource, TraceSupplyUnitView } from '@/engine/rules'
+import type {
+  MapFacts,
+  SupplyMobility,
+  TraceSupplyFactsSource,
+  TraceSupplyUnitView,
+} from '@/engine/rules'
 
 /**
  * H③（12.3d）：**补给搜索的成本口径**守卫
@@ -168,6 +176,93 @@ describe('H③（12.3d）：补给搜索的成本口径', () => {
      *   （读取计数：确定性；耗时比：中位数比值 ≤ 3）。
      */
     expect(t).toBeLessThan(200)
+  })
+
+  it('★ S1：静态地形成本表按 MapFacts 身份记忆（第二次零地形选择）', () => {
+    /*
+     * 病灶（S1 前）：成本表挂在**补给事实**上 ⇒ 盘面一变（facts 重建）整张丢掉，
+     * 每次重算覆盖集都要重跑数千次地形选择（`crossingBetween` + `terrainsAt` +
+     * `selectMovementTerrain`）。成本只依赖 MapFacts + 机动 ⇒ 按 MapFacts 身份记忆。
+     *
+     * 测法边界（如实）：数的是"`MapFacts` 查询次数"（确定性、与机器无关），不测绝对耗时；
+     * 语义正确性由下一条"与 TEC 模型逐格一致"兜底。
+     */
+    const base = createMapFacts()
+    const counts = { terrains: 0, crossing: 0 }
+    const counting = (): MapFacts => ({
+      onMap: base.onMap,
+      terrainsAt: (hex) => {
+        counts.terrains += 1
+        return base.terrainsAt(hex)
+      },
+      crossingBetween: (a, b) => {
+        counts.crossing += 1
+        return base.crossingBetween(a, b)
+      },
+    })
+    const map = counting()
+    const to = neighbor(CORE_HEX, HEX_DIRECTIONS[0]!)
+    const first = supplyStepCost(map, CORE_HEX, to, 'truck')
+    expect({ ...counts }).toEqual({ terrains: 1, crossing: 1 })
+    // 同一 MapFacts / 同一方向 / 同一机动：完全命中，不再碰地图
+    expect(supplyStepCost(map, CORE_HEX, to, 'truck')).toBe(first)
+    expect({ ...counts }).toEqual({ terrains: 1, crossing: 1 })
+    // 机动类型是键的一部分（12.3a：轮式/步行/履带成本不同）
+    supplyStepCost(map, CORE_HEX, to, 'leg')
+    expect({ ...counts }).toEqual({ terrains: 2, crossing: 2 })
+    // 新的 MapFacts（自定义源）：不复用，也不得读到陈旧值
+    const other = counting()
+    supplyStepCost(other, CORE_HEX, to, 'truck')
+    expect({ ...counts }).toEqual({ terrains: 3, crossing: 3 })
+    // `null`（不可通行）也必须算作"已缓存"：否则每次都要重算
+    const blocked: HexRef = { col: 1, row: 0 }
+    expect(supplyStepCost(map, CORE_HEX, blocked, 'truck')).toBeNull()
+    const afterNull = { ...counts }
+    supplyStepCost(map, CORE_HEX, blocked, 'truck')
+    expect({ ...counts }).toEqual(afterNull)
+  })
+
+  it('★ S1：记忆后的成本与 TEC 模型逐格一致（两个 MapFacts × 三种机动）', () => {
+    /*
+     * 模型＝条文口径本身（`selectMovementTerrain`：6.2d 取最贵、6.2a 沿路忽略地形、6.2b 边费）：
+     * 本用例只经由 `MapFacts` 的两个查询独立算一遍，再与**带记忆**的 `supplyStepCost` 对照，
+     * 覆盖"同一 MapFacts 被多次建事实共享"这条新路径（第二次走的是缓存值）。
+     */
+    const mapA = createMapFacts()
+    // 空地图：任何方向都没有地形/格边 ⇒ 必须全部不可通行（反空转的另一半）
+    const mapB = createMapFacts({ hexes: [], edges: [] })
+    const model = (map: MapFacts, from: HexRef, to: HexRef, mobility: SupplyMobility) => {
+      const crossing = map.crossingBetween(from, to)
+      const result = selectMovementTerrain({
+        terrainsPresent: map.terrainsAt(to),
+        mobility,
+        crossing,
+        followingRoad: (crossing?.routes ?? []).length > 0,
+      })
+      return result.ok ? result.totalMp : null
+    }
+    let checked = 0
+    let passable = 0
+    for (let col = 2; col <= 58; col += 6) {
+      for (let row = 1; row <= 32; row += 5) {
+        const from: HexRef = { col, row }
+        for (const direction of HEX_DIRECTIONS) {
+          const to = neighbor(from, direction)
+          if (!isOnMap(to)) continue
+          for (const mobility of ['truck', 'leg', 'track'] as SupplyMobility[]) {
+            const got = supplyStepCost(mapA, from, to, mobility)
+            expect(got).toBe(model(mapA, from, to, mobility))
+            expect(supplyStepCost(mapA, from, to, mobility)).toBe(got)
+            expect(supplyStepCost(mapB, from, to, mobility)).toBeNull()
+            checked += 1
+            if (got !== null) passable += 1
+          }
+        }
+      }
+    }
+    // 反空转：抽样必须真的铺开，且必须既有可通行也有不可通行
+    expect(checked).toBeGreaterThan(300)
+    expect(passable).toBeGreaterThan(50)
   })
 
   it('★ 索引与原判据逐格一致（模型对照：全图每一格 × 两方）', () => {
