@@ -296,4 +296,38 @@ describe('13.2g-F：被夺取的编内卡车转换为常规运输点数', () => 
       store.log.some((entry) => entry.rule === '13.2g' && entry.text.includes('常规运输点数')),
     ).toBe(true)
   })
+
+  /*
+   * 回归（review P1，2026-11-24）：13.2g-F 原来只写在 `confirmSpecialCombatNow`。
+   * 9.14c 有一种**不产生待决**的收束：全部被夺取、且没有位移者、载荷拆分也恰好吻合
+   * （空载卡车 ⇒ 0 T 对 0 T）⇒ `resolveSpecialCombatAt` 直接把 `specialPending` 清空，
+   * 玩家没有"确认"这一步 ⇒ 不在这里当场转换的话，被夺取的编内卡车会留着 `organic_truck`
+   * 与原番号归新主人：13.2g-A 永不卸载、13.2g-B 只许原编队拖取 ⇒ 谁都用不了它。
+   */
+  it('无待决的结清出口（空载卡车 + 夺取表恰好全取）⇒ 当场转换，不依赖 confirm', () => {
+    const store = newStore()
+    const record = pickRecord('axis', (item) => item.noncombatKind === 'organic_truck')
+    const truck = place(store, record, HEX, 'axis', 'ot2')
+    // 12.1a：车上没有 SP ⇒ 9.14c 的载荷拆分（0 T）与计数器一致，本次不会挂位移待决
+    expect(truck.loadedSpT).toBe(0)
+    place(
+      store,
+      pickRecord('soviet', (item) => item.isCombat === true),
+      HEX,
+      'soviet',
+      'a2',
+    )
+    expect(store.resolveSpecialCombatAt(HEX, 'soviet')).toBe(true)
+    // 掷 5 → 卡车列 50%；本组只有 1 点 ⇒ 夺取这 1 点，没有位移者 ⇒ 无需确认
+    expect(store.specialPending).toBeNull()
+    expect(store.confirmSpecialCombatNow()).toBe(false)
+    const after = store.units.find((item) => item.instanceId === 'ot2')!
+    expect(after.side).toBe('soviet')
+    // ★ 13.2g-F：这条出口也必须转换（否则新主人永远拖不到、也永远卸不掉）
+    expect(after.noncombatKind).toBe('transport_point')
+    expect(after.formation).toBeNull()
+    expect(
+      store.log.some((entry) => entry.rule === '13.2g' && entry.text.includes('常规运输点数')),
+    ).toBe(true)
+  })
 })

@@ -12484,9 +12484,43 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (pending.items.length > 0 || pending.splits.some((item) => !item.exact)) {
       specialPending.value = pending
     } else {
+      /*
+       * ★ 13.2g-F：这条出口**没有**待决（全部被夺取、且载荷拆分恰好吻合），玩家不会再勾选、
+       *   也就不会走到 `confirmSpecialCombatNow` ⇒ 转换必须在这里当场做，否则被夺取的编内卡车
+       *   会带着原编队与 `organic_truck` 留在盘上（新主人永远拖不到、也永远卸不掉）。
+       */
+      for (const split of pending.splits) convertCapturedOrganicTrucks(split)
       specialPending.value = null
     }
     return true
+  }
+
+  /**
+   * 13.2g-F：把本次勾选**被夺取**的编内卡车转换成**常规运输点数**
+   *
+   * 两个收束出口共用（9.14c 无待决时当场结清 / 有待决时由 `confirmSpecialCombatNow` 收束）：
+   *   · `noncombatKind`: `organic_truck` ⇒ `transport_point` ⇒ 13.2g-A 的「永不卸载」随之解除；
+   *   · `formation`: 清空（3.1c 的编队归属来自数据；被夺取后已不属于原编队，13.2g-B 的
+   *     「只许同编队取用」也不再拦着新主人 —— 它现在就是一枚普通运输点数）；
+   *   · 12.1a 的载荷 `loadedSpT` 原样保留：本作的 9.14c 夺取流程把组内每个算子的
+   *     `loadedT` 记成 0（不拆载荷），故转换时也只有"保留"这一种结果。
+   *
+   * 幂等：已在勾选里来回翻过的算子只转一次（非编内卡车直接跳过）。
+   * ★ 只在**勾选定稿**时调用（无待决的结清 / 确认收束），不在 `toggleSpecialCaptured` 里转，
+   *   否则玩家改勾选会留下"已转换但又被勾回原主"的半转换状态。
+   */
+  function convertCapturedOrganicTrucks(split: SpecialTransportSplit): void {
+    for (const id of split.capturedIds) {
+      const target = units.value.find((item) => item.instanceId === id)
+      if (target === undefined || target.noncombatKind !== 'organic_truck') continue
+      target.noncombatKind = 'transport_point'
+      target.formation = null
+      pushLog(
+        'success',
+        `${target.name} 被夺取 ⇒ 按 13.2g 转换为常规运输点数（可卸载、编队归属解除、载荷原样保留）`,
+        '13.2g',
+      )
+    }
   }
 
   /** 9.14c：把当前勾选落到算子归属上（被夺取 ⇒ 归进入方；其余 ⇒ 归原主） */
@@ -12603,26 +12637,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     /*
      * ★ 13.2g-F：「如果编内卡车被夺取，则它会**转换为常规运输点数**。」
      *
-     * 落点只设在这一处（确认收束时一次性转，不在勾选来回翻，避免玩家改勾选留下半转换状态）：
-     *   · `noncombatKind`: `organic_truck` ⇒ `transport_point` ⇒ 13.2g-A 的「永不卸载」随之解除；
-     *   · `formation`: 清空（3.1c 的编队归属来自数据；被夺取后已不属于原编队，13.2g-B 的
-     *     「只许同编队取用」也不再拦着新主人 —— 它现在就是一枚普通运输点数）；
-     *   · 12.1a 的载荷 `loadedSpT` 原样保留：本作的 9.14c 夺取流程把组内每个算子的
-     *     `loadedT` 记成 0（不拆载荷），故转换时也只有"保留"这一种结果。
+     * 判据、落盘与日志只在 `convertCapturedOrganicTrucks` 一处（另一条无待决的结清出口在
+     * `resolveSpecialCombatAt` 末尾共用同一函数）；本处只在**勾选定稿**时调一次。
      */
-    for (const split of pending.splits) {
-      for (const id of split.capturedIds) {
-        const target = units.value.find((item) => item.instanceId === id)
-        if (target === undefined || target.noncombatKind !== 'organic_truck') continue
-        target.noncombatKind = 'transport_point'
-        target.formation = null
-        pushLog(
-          'success',
-          `${target.name} 被夺取 ⇒ 按 13.2g 转换为常规运输点数（可卸载、编队归属解除、载荷原样保留）`,
-          '13.2g',
-        )
-      }
-    }
+    for (const split of pending.splits) convertCapturedOrganicTrucks(split)
     // ⑭ 接线：9.14 待决收束（位移落盘）入会话日志（本笔不掷骰；夺取表骰已在 specialCombat 记账）
     recordSettlement({
       action: 'specialCombat',
