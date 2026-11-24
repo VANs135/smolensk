@@ -13,6 +13,7 @@ import { nextTick } from 'vue'
 import {
   activeStackingLimitOf,
   arrivalCopiesOf,
+  canonicalMode,
   holdingsToT,
   refitCapacity,
   SP_TO_T,
@@ -80,8 +81,10 @@ export interface AiMemory {
   rebuildUnitIds: string[]
   /** 批 1：本环节是否已做过一次整编 */
   consolidated: boolean
-  /** 批 2：本环节已试过的换模式单位 */
+  /** 批 2：本环节已试过换模式单位 */
   modeSwitchTried: string[]
+  /** 5.7b：本环节已试过释放的预备单位（避免同一枚反复被拒） */
+  reserveReleasedIds: string[]
   /** 批 2：本环节已试过的突袭目标格 */
   overrunTried: string[]
   /** 批 2：本环节已试过铁路运输的单位 / 起运站 */
@@ -114,6 +117,7 @@ export function createAiMemory(): AiMemory {
     rebuildUnitIds: [],
     consolidated: false,
     modeSwitchTried: [],
+    reserveReleasedIds: [],
     overrunTried: [],
     railTriedUnits: [],
     railTriedDumps: [],
@@ -205,6 +209,7 @@ function syncMemory(memory: AiMemory, w: ReturnType<typeof useWorkbenchStore>): 
   memory.rebuildUnitIds = []
   memory.consolidated = false
   memory.modeSwitchTried = []
+  memory.reserveReleasedIds = []
   memory.overrunTried = []
   memory.railTriedUnits = []
   memory.railTriedDumps = []
@@ -947,6 +952,16 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
       .sort(compareStableUnit)
       .map((unit) => unit.instanceId),
     reserveTriedUnitIds: memory.reserveUnitIds,
+    /*
+     * 5.7g：与 `segmentAdvanceBlock`（workbench.ts，段末闸门）**同一判据**——
+     * 「本方 + 规范模式仍是预备 + 所在格有环形工事」⇒ 段末必被拦。判据取 `canonicalMode`：
+     * 已按 5.7b 释放的预备只剩临时旗标，不再受约束，AI 也不该再去释放它。
+     */
+    reserveOnHedgehogIds: friendly
+      .filter((unit) => canonicalMode(unit.mode) === 'reserve' && w.hedgehogLevelOf(unit.hex) > 0)
+      .sort(compareStableUnit)
+      .map((unit) => unit.instanceId),
+    reserveReleasedUnitIds: memory.reserveReleasedIds,
     move: {
       active: moveActive,
       hasStepped,
@@ -1230,6 +1245,14 @@ function execute(
       w.switchUnitMode('combat')
       const unit = w.units.find((item) => item.instanceId === action.unitId)
       return unit !== undefined && unit.mode.mode === 'combat'
+    }
+    case 'reserveRelease': {
+      memory.reserveReleasedIds.push(action.unitId)
+      w.selectedId = action.unitId
+      // 5.7b：入口只认「选中的那一枚」（`releaseReserveNow` 取 `selectedUnit`）
+      if (!w.releaseReserveNow()) return false
+      const unit = w.units.find((item) => item.instanceId === action.unitId)
+      return unit !== undefined && canonicalMode(unit.mode) !== 'reserve'
     }
     case 'moveBegin': {
       memory.movedUnitIds.push(action.unitId)

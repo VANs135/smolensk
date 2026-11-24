@@ -297,6 +297,15 @@ export interface AiSnapshot {
   specialPending: boolean
   reserveUnitIds: readonly string[]
   reserveTriedUnitIds: readonly string[]
+  /**
+   * 5.7g：当前行动方里「仍在预备模式、且站在工事格」的单位（可推进与否的阻断源）
+   *
+   * 引擎在**任何移动环节结束时**拦这类堆叠（`segmentAdvanceBlock`，5.7g / 16.0f），
+   * AI 若没有释放入口就只能反复 `advance` 被拒 ⇒ 自对打/人机都会卡死（2026-11-24 Intro 实测）。
+   */
+  reserveOnHedgehogIds: readonly string[]
+  /** 5.7b：本环节已试过释放的预备单位（避免同一枚反复被拒） */
+  reserveReleasedUnitIds: readonly string[]
   move: AiMoveSnapshot
   /** 批 2：C 段支线（换模式 / 突袭 / 铁路 / 装卸 / 建造标记 / 换轨） */
   branch: AiMoveBranchSnapshot
@@ -322,6 +331,8 @@ export type AiAction =
   | { kind: 'advance' }
   | { kind: 'preset' }
   | { kind: 'modeChange'; unitId: string }
+  /** 5.7b：释放预备（AI 自己的反应 / 进击环节；唯一用途见 `decideReserveRelease`） */
+  | { kind: 'reserveRelease'; unitId: string }
   | { kind: 'moveBegin'; unitId: string }
   | { kind: 'moveClick'; hex: AiHex }
   | { kind: 'moveFinish' }
@@ -408,6 +419,8 @@ export function actionKeyOf(action: AiAction): string {
       return `answer:${action.optionId}`
     case 'modeChange':
       return `modeChange:${action.unitId}`
+    case 'reserveRelease':
+      return `reserveRelease:${action.unitId}`
     case 'moveBegin':
       return `moveBegin:${action.unitId}`
     case 'moveClick':
@@ -541,6 +554,28 @@ function pickRetreatDestination(
 /** B4：玩家侧的待办 ⇒ 返回 `wait`（不提交、不改盘面） */
 function waitForSide(side: AiSide, what: string): AiAction {
   return { kind: 'wait', reason: `等待玩家（${sideLabelOf(side)}）${what}` }
+}
+
+/**
+ * 5.7g / 5.7b：段末「预备单位与环形工事同格」的合规动作
+ *
+ * 通规 5.7g：「在任何移动环节结束时，处于预备模式内的单位都不可与环形工事堆叠在一起。」
+ * （16.0f 同旨：阶段结束时预备单位不可在环形工事内。）引擎据此在段末拦住推进
+ * （`segmentAdvanceBlock` ⇒ `settleSegmentObligations` 返回 false），而 5.7b 正是唯一的解法：
+ * 「被玩家『释放』的预备模式单位可在该玩家的反应阶段或进击阶段使用……只需移除它的预备标记」。
+ *
+ * 修前 AI 没有释放入口：Intro 反应段（苏方 18 Tk Div 停在 19.26 印刷工事格、仍挂预备）
+ * 反复 `advance` 被拒 ⇒ 双 AI 自对打与 PVE 都「连续 3 次无进展」卡死（2026-11-24 实测）。
+ *
+ * 只在**闸门放行释放**（`reserve.release`，即本方反应 / 进击环节）且确有阻断单位时行动：
+ * 这是段末合规的**必要**动作，不是战术选择（没有阻断源时不动任何预备，保留 5.7 的收益）。
+ */
+function decideReserveRelease(snapshot: AiSnapshot): AiAction | null {
+  if (!snapshot.can.has('reserve.release')) return null
+  const unitId = snapshot.reserveOnHedgehogIds.find(
+    (id) => !snapshot.reserveReleasedUnitIds.includes(id),
+  )
+  return unitId === undefined ? null : { kind: 'reserveRelease', unitId }
 }
 
 /**
@@ -1078,6 +1113,11 @@ function decideAiActionFull(snapshot: AiSnapshot): AiAction {
     if (snapshot.advanceAvailable && snapshot.can.size === 0) return { kind: 'advance' }
     return waitForSide(snapshot.activeSide, '行动：本环节尚有可做动作')
   }
+
+  // 5.7g：段末预备单位与环形工事同格 ⇒ 引擎必然拦住推进；按 5.7b 先释放（否则只能原地空转）
+  //      放在 `baseline` 判定之前：简化档同样会被这道闸卡住（它也只是照常点推进）
+  const release = decideReserveRelease(snapshot)
+  if (release !== null) return release
 
   // 3.5) 批 1：A 整备 / B 到货落位 / 到货 SP / 补给列车 / 重建整编
   //      （各分支内部只看 `can` 里的闸门与既有投影；闸门不放行时自然落到后面的主链）

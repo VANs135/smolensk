@@ -73,6 +73,8 @@ function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
     specialPending: false,
     reserveUnitIds: [],
     reserveTriedUnitIds: [],
+    reserveOnHedgehogIds: [],
+    reserveReleasedUnitIds: [],
     move: {
       active: false,
       hasStepped: false,

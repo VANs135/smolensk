@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 
+import { runAiStep } from '@/ai/driver'
+import { canonicalMode } from '@/engine/rules'
 import { actionGateOf } from '@/stores'
 
 import { fresh } from './flow-harness'
@@ -236,6 +238,33 @@ describe('Intro：反应阶段的苏军坦克师', () => {
     // 8.1a 的门槛：剩余不足 3 MP；单位其实还在移动，不能报成 6.1g
     expect(w.log[0]?.rule).toBe('8.1a')
     expect(w.log[0]?.text).toContain('1.5')
+  })
+
+  it('PVE：苏方归 AI 时，AI 在反应段自己按 5.7b 释放 18 Tk Div（否则 5.7g 永远拦住段末推进）', async () => {
+    const ctx = beginIntroSetup()
+    const w = ctx.w
+    startIntro(ctx)
+    await toSovietReactionMovement(w)
+
+    // 修前：段末 5.7g 拦住推进（19.26 是印刷工事格，坦克师仍挂预备）⇒ AI 只会反复 `advance` 被拒，
+    // 自对打/人机都「连续 3 次无进展」卡死
+    expect(w.currentAdvanceBlock?.rule).toBe('5.7g')
+
+    const step = runAiStep(
+      { workbench: w, session: ctx.g, setup: ctx.setup },
+      { control: 'soviet' },
+    )
+    const tank = unitNamed(w, 'Ru 18 Tk Div')
+    expect(step.intent).toBe(`reserveRelease:${tank.instanceId}`)
+    expect(step.ok).toBe(true)
+    // 5.7b：标记已摘 ⇒ 规范模式回到朝向那一面（引擎的表示是保留 `mode:'reserve'` +
+    // `releasedFromReserve`，由 `canonicalMode` 折回）；本阶段 MA ×0.5 由引擎照常算
+    expect(canonicalMode(tank.mode)).toBe('move')
+    expect(tank.mode.releasedFromReserve).toBe(true)
+    expect(tank.raw).toMatchObject({ attack: 10, ma: 8 })
+    expect(w.log.some((line) => line.text.includes('已释放预备（5.7b）'))).toBe(true)
+    // 阻断源已消失 ⇒ 下一步就能正常推进（不再是「3 次无进展」）
+    expect(w.currentAdvanceBlock).toBeNull()
   })
 
   it('全程：释放 → 加油 1T → 突袭轴方摩步 → 攻方 AL2 被打光、守方留格（「突袭然后失败」）', async () => {
