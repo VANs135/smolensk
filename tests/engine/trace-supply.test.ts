@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { HexRef, Side } from '@/data'
 import { unitsSoviet } from '@/data'
-import { neighbor } from '@/engine/hex-geometry'
+import { neighbor, HEX_DIRECTIONS } from '@/engine/hex-geometry'
 import { createMapFacts, selectMovementTerrain } from '@/engine/rules'
 import {
   DIRECT_DRAW_RANGE_MP,
@@ -298,6 +298,81 @@ describe('12.3b HQ 投递：战略模式不可、不可转投、须在印值投�
 })
 
 /* ────────────────────────────── 12.6a/12.6b 追溯补给 ────────────────────────────── */
+
+/*
+ * S2-a（2026-11-24）：HQ 投递区从"逐单位 × 逐 HQ 各跑一次搜索"改成"按 (facts, side) 建一次区域"。
+ * 语义闸门：把每一格的 hqThrow 源清单与**逐格独立算**的 `countSupplyDistanceToAny(hq → 单位或其相邻格)`
+ * 对照（同一预算、同一投递机动、同一 12.3c 膨胀），并混入战略模式 HQ 与"够不到任何 dump/源"的 HQ。
+ */
+it('★ S2-a：HQ 投递区一次建好 ⇔ 逐格「HQ→单位/相邻格」搜索（全走廊）', () => {
+  const hexes = corridor(0, 26)
+  const dumps = [0, 5, 12, 18].map((row) => ({ hex: at(row), side: 'axis' as Side }))
+  const hqs: ThrowHqView[] = [
+    {
+      hex: at(3),
+      side: 'axis',
+      mode: 'move',
+      mobility: 'truck',
+      throwRangeMp: 6,
+      throwMobility: 'truck',
+    },
+    {
+      hex: at(9),
+      side: 'axis',
+      mode: 'combat',
+      mobility: 'truck',
+      throwRangeMp: 3,
+      throwMobility: 'leg',
+    },
+    {
+      hex: at(15),
+      side: 'axis',
+      mode: 'strat',
+      mobility: 'truck',
+      throwRangeMp: 8,
+      throwMobility: 'truck',
+    },
+    // 距最近的 dump(18) 也有 7 MP > 5、且没有基础源 ⇒ 无投递资格（12.3b 的正面条件不成立）
+    {
+      hex: at(25),
+      side: 'axis',
+      mode: 'move',
+      mobility: 'truck',
+      throwRangeMp: 5,
+      throwMobility: 'truck',
+    },
+  ]
+  const facts = makeFacts({ hexes, dumps, throwHqs: hqs })
+  /** 由夹具构造直接可知的投递资格（strat 与被 12.3a 拒绝的那座为假） */
+  const eligible = [true, true, false, false]
+  const seenHqs = new Set<string>()
+  let checked = 0
+  for (const hex of hexes) {
+    const expected = hqs
+      .filter((_, index) => eligible[index])
+      .filter(
+        (hq) =>
+          countSupplyDistanceToAny(facts, {
+            from: hq.hex,
+            targets: [hex, ...HEX_DIRECTIONS.map((direction) => neighbor(hex, direction))],
+            side: 'axis',
+            mobility: hq.throwMobility,
+            maxMp: hq.throwRangeMp,
+          }).ok,
+      )
+      .map((hq) => ({ hex: hq.hex, kind: 'hqThrow' as const }))
+      .sort((a, b) => a.hex.col - b.hex.col || a.hex.row - b.hex.row)
+    const actual = traceSourcesFor(facts, { hex, side: 'axis', mobility: 'truck' })
+      .filter((item) => item.kind === 'hqThrow')
+      .sort((a, b) => a.hex.col - b.hex.col || a.hex.row - b.hex.row)
+    expect(actual).toEqual(expected)
+    checked += 1
+    for (const item of actual) seenHqs.add(`${item.hex.col}.${item.hex.row}`)
+  }
+  // 反空转：逐格比对要真的铺开，且三座合格 HQ 都必须至少覆盖过一格（含 12.3c 越界一格的情形）
+  expect(checked).toBeGreaterThan(20)
+  expect([...seenHqs].sort()).toEqual(['36.3', '36.9'])
+})
 
 describe('12.6a 三种补给源与 12.6b 源格阻断', () => {
   const hexes = corridor(0, 12)

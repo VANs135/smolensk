@@ -243,8 +243,16 @@ const traceSearchCache = new WeakMap<
     hq: Map<string, boolean>
     /** 覆盖集按阵营缓存（12.3d 不计 `mobility`，见 `traceCoverageHexes` 注释） */
     coverage: Map<Side, Set<string>>
+    /** 12.3b：各方每座可投递 HQ 的投递区（12.3c 已膨胀一格），见 `hqThrowRegions` */
+    hqRegions: Map<Side, HqThrowRegion[]>
   }
 >()
+
+/** 12.3b + 12.3c：一座 HQ 的投递区（键已含「单位格或其相邻格」） */
+interface HqThrowRegion {
+  hq: ThrowHqView
+  keys: Set<string>
+}
 
 /** 对方阵营 */
 function enemySide(side: Side): Side {
@@ -414,7 +422,12 @@ export function createTraceSupplyFacts(source: TraceSupplyFactsSource = {}): Tra
      */
     stepCost: (from, to, mobility) => supplyStepCost(map, from, to, mobility),
   }
-  traceSearchCache.set(facts, { reachable: new Map(), hq: new Map(), coverage: new Map() })
+  traceSearchCache.set(facts, {
+    reachable: new Map(),
+    hq: new Map(),
+    coverage: new Map(),
+    hqRegions: new Map(),
+  })
   return facts
 }
 
@@ -1254,6 +1267,52 @@ export function extenderConnectsBack(
 }
 
 /**
+ * 12.3b + 12.3c：该方**每一座能投递的 HQ** 的投递区域（按 (facts, side) 只建一次）
+ *
+ * 旧实现是「逐单位 × 逐 HQ 各跑一次 5–8 MP 搜索」：生产盘面 54 座 HQ 时，单枚单位的
+ * `traceSourcesFor` 实测 22–42 ms（临时基准：20 座 HQ 时 HQ 段合计约 4 ms/查询、≈0.2 ms/座）。
+ * 投递区只与 HQ 的格 / 印值投递距离 / 颜色机动有关，**与单位在哪无关** ⇒ 一次建好，逐单位只查集合。
+ *
+ * 与旧的逐单位 `countSupplyDistanceToAny(hq → 单位或其相邻格)` **逐格等价**：
+ * 同一预算、同一机动类型、同一 12.3c「单位格或其相邻格」膨胀；覆盖集原本就是按这套算的，现在两者共用。
+ */
+function hqThrowRegions(facts: TraceSupplyFacts, side: Side): HqThrowRegion[] {
+  const cache = traceSearchCache.get(facts)
+  const cached = cache?.hqRegions.get(side)
+  if (cached !== undefined) return cached
+  const regions: HqThrowRegion[] = []
+  for (const hq of facts.throwHqsFor(side)) {
+    if (!hqCanThrow(facts, hq)) continue
+    const region = supplyReachableHexes(facts, {
+      from: hq.hex,
+      side,
+      mobility: hq.throwMobility,
+      maxMp: hq.throwRangeMp,
+    })
+    const keys = new Set<string>()
+    for (const item of region) {
+      keys.add(hexKey(item.hex))
+      for (const direction of HEX_DIRECTIONS) {
+        const neighbour = neighbor(item.hex, direction)
+        if (facts.onMap(neighbour)) keys.add(hexKey(neighbour))
+      }
+    }
+    regions.push({ hq, keys })
+  }
+  cache?.hqRegions.set(side, regions)
+  return regions
+}
+
+/**
+ * 12.3b：「该格能否被这座 HQ 投递到」（键已含 12.3c 的「单位格或其相邻格」）
+ *
+ * 只读 `hqThrowRegions` 的集合，不再为单位跑任何 Dijkstra。
+ */
+function hqCoversHex(region: HqThrowRegion, hex: HexRef): boolean {
+  return region.keys.has(hexKey(hex))
+}
+
+/**
  * 12.6：该方**有追溯补给的格集合**（一次算好，之后每格 O(1) 成员判定）
  *
  * ## 为什么需要它
@@ -1304,23 +1363,9 @@ export function traceCoverageHexes(
   ]
   const covered = floodIncoming(facts, side, mobility, origins)
 
-  // 12.3b + 12.3c：HQ 投递覆盖（含「相邻即可」）
-  for (const hq of facts.throwHqsFor(side)) {
-    if (!hqCanThrow(facts, hq)) continue
-    const region = supplyReachableHexes(facts, {
-      from: hq.hex,
-      side,
-      mobility: hq.throwMobility,
-      maxMp: hq.throwRangeMp,
-    })
-    for (const item of region) {
-      covered.add(hexKey(item.hex))
-      // 12.3c「单位格**或其相邻格**」；相邻格同样只取图内（与逐格查询的 onMap 前置一致）
-      for (const direction of HEX_DIRECTIONS) {
-        const neighbour = neighbor(item.hex, direction)
-        if (facts.onMap(neighbour)) covered.add(hexKey(neighbour))
-      }
-    }
+  // 12.3b + 12.3c：HQ 投递覆盖（含「相邻即可」）——区域按 (facts, side) 只建一次，与逐格查询共用
+  for (const region of hqThrowRegions(facts, side)) {
+    for (const key of region.keys) covered.add(key)
   }
   cache?.coverage.set(side, covered)
   return covered
@@ -1388,18 +1433,9 @@ export function traceSourcesFor(
   if (!facts.onMap(hex)) return []
 
   const found: { hex: HexRef; kind: TraceSourceKind }[] = baseSourcesFor(facts, input)
-  // 12.3b：HQ 投递——终点取「单位格或其相邻格」（12.3c），距离用投递距离颜色所示机动类型
-  const targets = selfAndNeighbors(hex)
-  for (const hq of facts.throwHqsFor(side)) {
-    if (!hqCanThrow(facts, hq)) continue
-    const distance = countSupplyDistanceToAny(facts, {
-      from: hq.hex,
-      targets,
-      side,
-      mobility: hq.throwMobility,
-      maxMp: hq.throwRangeMp,
-    })
-    if (distance.ok) found.push({ hex: hq.hex, kind: 'hqThrow' })
+  // 12.3b：HQ 投递——终点取「单位格或其相邻格」（12.3c），区域一次算好、逐单位只查集合
+  for (const region of hqThrowRegions(facts, side)) {
+    if (hqCoversHex(region, hex)) found.push({ hex: region.hq.hex, kind: 'hqThrow' })
   }
   return found.sort(
     (a, b) => a.kind.localeCompare(b.kind) || a.hex.col - b.hex.col || a.hex.row - b.hex.row,
