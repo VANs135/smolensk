@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 
 import { BaseButton, BaseIcon, BasePanel, BaseTag } from '@/components/base'
 import { GAME_PHASES } from '@/engine/state-types'
+import { actionLabel } from '@/render/action-labels'
 import { useGameSessionStore } from '@/stores'
 
 import DerivationSteps from './DerivationSteps.vue'
@@ -157,7 +158,7 @@ function filterByRule(rule: string): void {
           >
             <option value="">（不限）</option>
             <option v-for="action in gameSession.logBook.actions" :key="action" :value="action">
-              {{ action }}
+              {{ actionLabel(action) }}
             </option>
           </select>
         </label>
@@ -213,7 +214,8 @@ function filterByRule(rule: string): void {
       </p>
       <p v-if="replay.firstDivergence !== null" class="warn">
         首个分歧：第 {{ replay.firstDivergence.index + 1 }} 条（T{{ replay.firstDivergence.turn }}
-        {{ replay.firstDivergence.action }}，规则 {{ replay.firstDivergence.rule }}，掷骰游标
+        {{ actionLabel(replay.firstDivergence.action) }}，规则
+        {{ replay.firstDivergence.rule }}，掷骰游标
         {{ replay.firstDivergence.drawCountBefore }}）｜日志
         {{ replay.firstDivergence.expected.faces.join('+') }} ≠ 重放
         {{ replay.firstDivergence.actual.faces.join('+') }}
@@ -234,7 +236,7 @@ function filterByRule(rule: string): void {
         <BaseTag :kind="entry.ok ? 'success' : 'danger'">{{
           entry.ok ? '已结算' : '被拒'
         }}</BaseTag>
-        <span class="entry__action num">{{ entry.action }}</span>
+        <span class="entry__action num">{{ actionLabel(entry.action) }}</span>
         <span v-if="entry.rolls.length > 0" class="entry__rolls num">
           {{ entry.rolls.map((roll) => `${roll.faces.join('+')}=${roll.total}`).join(' / ') }}
         </span>

@@ -141,17 +141,6 @@ function answer(optionId?: string): void {
   color: var(--color-danger);
 }
 
-.prompt__footer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-6);
-  border-top: 1px solid var(--color-rule);
-  background: var(--color-bg-2);
-  font-size: var(--text-sm);
-  color: var(--color-muted);
-}
-
 .prompt__actions {
   display: flex;
   flex-wrap: wrap;

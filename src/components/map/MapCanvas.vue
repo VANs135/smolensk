@@ -77,6 +77,13 @@ import {
 const props = withDefaults(
   defineProps<{
     fill?: boolean
+    /**
+     * 画布底板色（没有规则含义，只决定地图纸外围那一圈是什么颜色）
+     *
+     * 缺省走 `MAP_PALETTE.board`（米白纸）；浅色主题与桌面端不传 ⇒ 观感不变。
+     * 深色主题由对局台传深桌面色，免得地图四周留一圈白框（UI-5）。
+     */
+    boardColor?: string
     /** 图层开关（由上层持有，组件只读） */
     layers?: MapLayerVisibility
     /** 高亮格（如上层选中的格） */
@@ -161,6 +168,7 @@ const props = withDefaults(
   }>(),
   {
     fill: false,
+    boardColor: undefined,
     layers: () => ({ ...DEFAULT_MAP_LAYERS }),
     highlightHex: null,
     highlightHexes: () => [],
@@ -523,7 +531,8 @@ function render(): void {
     viewport: viewport.value,
     viewSize: size,
     // 安卓军事沙盘：画布底板 = 沙盘桌面深色（地图扫描图仍是浅色纸张，浮于其上）
-    boardColor: isAndroidPlatform() ? '#141712' : undefined,
+    // 2026-11-25（UI-5）：深色主题与安卓沙盘同一底色 ⇒ 地图外围不再出现一圈白板
+    boardColor: isAndroidPlatform() ? '#141712' : props.boardColor,
     pixelRatio: ratio,
     layers: props.layers,
     image: image.value,
@@ -1050,6 +1059,7 @@ onBeforeUnmount(() => {
 
 // 图层开关、高亮格、覆盖层变化 → 合并到下一帧重绘（deep watch 仍保留：覆盖层内部就地变更也不漏）
 watch(() => props.layers, scheduleRender, { deep: true })
+watch(() => props.boardColor, scheduleRender)
 watch(() => props.highlightHex, scheduleRender)
 watch(() => props.highlightHexes, scheduleRender)
 watch(() => props.hexLabels, scheduleRender)

@@ -610,6 +610,7 @@ onBeforeUnmount(() => {
         <MapCanvas
           ref="mapRef"
           fill
+          :board-color="theme.mode === 'dark' ? '#141712' : undefined"
           :layers="mapLayerToggles"
           :highlight-hex="workbench.hoverHex"
           :highlight-hexes="mapView.mapHighlightHexes"

@@ -27,7 +27,12 @@ function onDismiss(id: string): void {
 <style scoped>
 .toast-host {
   position: fixed;
-  top: var(--space-5);
+  /*
+   * UI-2（2026-11-25）：原来贴 `top: space-5`（20px）⇒ 正好压在顶栏右侧的存档按钮上，
+   * 而条目是 `pointer-events: auto`、层级 300，把按钮点击整片吃掉。
+   * 顶栏高 ≈ space-2*2 + space-8(=32) + 1px 线 ⇒ 落到 72px 才让开；右缘仍贴 20px。
+   */
+  top: 72px;
   right: var(--space-5);
   z-index: var(--z-toast);
   display: flex;

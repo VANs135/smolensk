@@ -1204,13 +1204,16 @@ function sideMark(side: 'axis' | 'soviet'): string {
 }
 
 .queue__air-pickbar .queue__hint {
-  flex: 1;
+  /*
+   * UI-3（2026-11-25）：修前 `nowrap + ellipsis + overflow:hidden` 把
+   * 「点下方一枚飞机——落基地格或「入盒」」硬裁成「点下方一枚飞…」（scrollWidth > clientWidth）。
+   * 提示本来就短，允许换行即可，别再裁字。
+   */
+  flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
+  white-space: normal;
   color: var(--color-command-muted);
   font-size: var(--text-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* 「入盒」未选中时的待命态：只压暗，不改变高度 */

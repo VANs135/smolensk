@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
  * 仓库无组件挂载测试 ⇒ 钉源码形态：
  *   · 沙盘原色 --ops-* 是唯一颜色来源，入口页 --color-command-* 与对局 HUD --glass-* 全量重映射；
  *   · 令牌块用 `html[data-platform='android']:root` 压过 tokens.css 深色主题；
- *   · 画布底板色由平台注入：安卓填深色桌面、桌面端保持地图纸米白（零影响）。
+ *   · 画布底板色由平台注入：安卓恒填深色桌面，桌面端按主题走（浅色保持地图纸米白）。
  */
 const css = readFileSync('src/styles/android.css', 'utf8')
 const render = readFileSync('src/render/map-render.ts', 'utf8')
@@ -70,8 +70,8 @@ describe('安卓军事沙盘复古视觉', () => {
     // 渲染层：新增可选 boardColor，缺省沿用地图纸米白
     expect(render).toContain('boardColor?: string')
     expect(render).toContain('ctx.fillStyle = options.boardColor ?? MAP_PALETTE.board')
-    // 组件：仅安卓传深色，桌面传 undefined ⇒ 原观感不变
+    // 组件：安卓恒深色；其它平台只认上层传值（2026-11-25 UI-5：深色主题也传深色，浅色不传）
     expect(canvas).toContain("import { isAndroidPlatform } from '@/shared/platform'")
-    expect(canvas).toContain("boardColor: isAndroidPlatform() ? '#141712' : undefined")
+    expect(canvas).toContain("boardColor: isAndroidPlatform() ? '#141712' : props.boardColor")
   })
 })

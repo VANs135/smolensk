@@ -597,8 +597,9 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
 
 .bar__track span[aria-current='step'] {
   border-color: var(--color-accent);
-  background: var(--color-accent-2);
-  color: var(--color-accent);
+  /* UI-1（2026-11-25）：当前步改「品牌红底 + 浅字」——绿底压红字只有 1.19:1，读不出 */
+  background: var(--color-accent);
+  color: var(--color-on-accent);
   font-weight: 700;
 }
 
