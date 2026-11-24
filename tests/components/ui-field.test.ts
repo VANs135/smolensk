@@ -21,9 +21,31 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).toMatch(/v-else-if="useStepper"/)
     expect(src).toMatch(/const useStepper = computed/)
     expect(src).toMatch(/props\.type === 'number'/)
-    expect(src).toMatch(/function step\(/)
+    expect(src).toMatch(/function stepBy\(/)
+    /*
+     * 12.1a / 13.2a（2026-11-24 修 review P2）：面额可以**不是整数**（0.25 SP = 1 T）⇒
+     * 步进必须按 `step` 的面额走，且 `max` 在步进分支同样夹取（修前 `max` 只绑在验证页
+     * 的 `<input>` 上，正式界面一路「＋」可越过上限）。
+     */
+    expect(src).toMatch(/const stride = computed/)
+    expect(src).toMatch(/const ceiling = computed/)
+    expect(src).toMatch(/delta \* stride\.value/)
+    expect(src).toMatch(/upper === null \? next : Math\.min\(next, upper\)/)
     expect(src).toMatch(/v-else[^>]*class="ui-field-readonly"/)
     expect(src).toMatch(/useUiMode\(\)/)
+  })
+
+  it('SupplyPanel：装卸量按 0.25 面额步进并带上限（13.2a / 13.2f 的"部分补给"）', () => {
+    const src = read('src/components/supply/SupplyPanel.vue')
+    /*
+     * 2026-11-24 修 review P2：引擎已接受「0.25 的整数倍」，若面板只把 label 改成
+     * "可填 0.25 的倍数"、而 UiField 收不到 `step`/`max`，正式界面仍只能 0.25 或整 SP 跳变。
+     * 这里钉两处数量框（装载量 / 卸载量）的面额与上限都真的送进去了。
+     */
+    expect(src.match(/min="0\.25"/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+    expect(src.match(/step="0\.25"/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+    expect(src).toMatch(/:max="transportLoadable"/)
+    expect(src).toMatch(/:max="transportUnloadable"/)
   })
 
   it('全局样式提供 .ui-field-readonly（各面板的只读 span 复用）', () => {

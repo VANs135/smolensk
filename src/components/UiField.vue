@@ -29,8 +29,21 @@ const props = withDefaults(
     readonly?: boolean
     /** 步进下限（默认 0；接受 number|string，兼容模板里的静态 `min="0"`） */
     min?: number | string
+    /** 步进间距（默认 1；接受 number|string，兼容模板里的静态 `step="0.25"`） */
+    step?: number | string
+    /** 步进上限（null / 空 = 不限；数字型步进同样夹取，避免越过后再被引擎拒） */
+    max?: number | string | null
   }>(),
-  { type: 'text', modelValue: '', placeholder: '', stepper: false, readonly: false, min: 0 },
+  {
+    type: 'text',
+    modelValue: '',
+    placeholder: '',
+    stepper: false,
+    readonly: false,
+    min: 0,
+    step: 1,
+    max: null,
+  },
 )
 
 const emit = defineEmits<{ (e: 'update:modelValue', v: string | number): void }>()
@@ -48,6 +61,23 @@ const floor = computed<number>(() =>
   typeof props.min === 'number' ? props.min : Number(props.min),
 )
 
+/** 步进间距（同上；非法/非正一律退回 1） */
+const stride = computed<number>(() => {
+  const value = typeof props.step === 'number' ? props.step : Number(props.step)
+  return Number.isFinite(value) && value > 0 ? value : 1
+})
+
+/** 步进上限（`null` / 空 = 不限） */
+const ceiling = computed<number | null>(() => {
+  const value = props.max
+  if (value === undefined || value === null || value === '') return null
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+})
+
+/** 浮点面额收敛（0.25 在二进制里精确，但 3 次加减后仍可能带 1e-16 的尾巴） */
+const round6 = (value: number): number => Math.round(value * 1e6) / 1e6
+
 /**
  * 正式界面是否用步进：
  *   · **数字型默认步进**（不手输但仍可操作；格号那种文本型仍是只读 + 点图）；
@@ -64,9 +94,20 @@ function onInput(event: Event): void {
   }
 }
 
-function step(delta: number): void {
-  const next = Math.max(floor.value, Math.trunc(numeric.value) + delta)
-  emit('update:modelValue', next)
+function stepBy(delta: number): void {
+  /*
+   * 12.1a / 13.2a（2026-11-24）：面额可以**不是整数** —— 补给量按 0.25 SP（= 1 T）记，
+   * 故步进必须按 `step` 的面额走；修前固定 `Math.trunc(numeric) + delta`，0.75 / 1.25 这类
+   * 面额在正式界面永远选不到，13.2a 的「使用它装载的**部分**补给」落不了地。
+   * 另外 `max` 修前只绑在验证页的 `<input>` 上（步进分支拿不到），一路 `+` 可越过上限。
+   */
+  const aligned = Math.trunc(numeric.value / stride.value) * stride.value
+  const next = round6(aligned + delta * stride.value)
+  const upper = ceiling.value
+  emit(
+    'update:modelValue',
+    round6(Math.max(floor.value, upper === null ? next : Math.min(next, upper))),
+  )
 }
 </script>
 
@@ -76,6 +117,9 @@ function step(delta: number): void {
     :type="type"
     :value="modelValue ?? ''"
     :placeholder="placeholder"
+    :min="min"
+    :max="max ?? undefined"
+    :step="step"
     v-bind="$attrs"
     @input="onInput"
   />
@@ -85,12 +129,17 @@ function step(delta: number): void {
       type="button"
       class="ui-field-stepper__btn"
       :disabled="numeric <= floor"
-      @click="step(-1)"
+      @click="stepBy(-1)"
     >
       <BaseIcon name="minus" />
     </button>
-    <span class="ui-field-readonly">{{ numeric }}</span>
-    <button type="button" class="ui-field-stepper__btn" @click="step(1)">
+    <span class="ui-field-readonly">{{ round6(numeric) }}</span>
+    <button
+      type="button"
+      class="ui-field-stepper__btn"
+      :disabled="ceiling !== null && numeric >= ceiling"
+      @click="stepBy(1)"
+    >
       <BaseIcon name="plus" />
     </button>
   </span>
