@@ -236,6 +236,8 @@ const traceSearchCache = new WeakMap<
   {
     reachable: Map<string, Set<string>>
     hq: Map<string, boolean>
+    /** 覆盖集按阵营缓存（12.3d 不计 `mobility`，见 `traceCoverageHexes` 注释） */
+    coverage: Map<Side, Set<string>>
   }
 >()
 
@@ -372,7 +374,7 @@ export function createTraceSupplyFacts(source: TraceSupplyFactsSource = {}): Tra
       return cost
     },
   }
-  traceSearchCache.set(facts, { reachable: new Map(), hq: new Map() })
+  traceSearchCache.set(facts, { reachable: new Map(), hq: new Map(), coverage: new Map() })
   return facts
 }
 
@@ -1247,6 +1249,11 @@ export function traceCoverageHexes(
   input: { side: Side; mobility: SupplyMobility },
 ): Set<string> {
   const { side, mobility } = input
+  // 同一份事实对象上覆盖集只算一次：12.3d 的 `mobility` 入参不改变覆盖集（见函数头注释），
+  // 故按阵营缓存即安全；盘面一变就是新的 `facts`，WeakMap 自动失效。
+  const cache = traceSearchCache.get(facts)
+  const cached = cache?.coverage.get(side)
+  if (cached !== undefined) return cached
   const origins: HexRef[] = [
     ...facts
       .sourcesFor(side)
@@ -1275,6 +1282,7 @@ export function traceCoverageHexes(
       }
     }
   }
+  cache?.coverage.set(side, covered)
   return covered
 }
 
