@@ -1,60 +1,41 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 
 import { BaseIcon, BaseTag } from '@/components/base'
 import { useRefereeTools } from '@/components/ui-mode'
-import { panelScansOf } from '@/render/charts-view'
-import { counterImages } from '@/render/token-images'
 import { isAndroidPlatform } from '@/shared/platform'
 import { useContainersStore, useHotseatStore } from '@/stores'
 import type { Side } from '@/data'
 
-import { panelScanImageUrl } from './aux-card-image'
 import { BoxCard } from './index'
 
 /**
- * **底部托盘**（B12 建托盘，B16 接真表格，B22 接印卡扫描图，**B35 只留卡图**；用户口径⑧①②）
+ * **盒托盘**（2026-11-25 第二版：只剩盒段，常驻地图窗口下方）
  *
- * ## 用户口径
- *   「盒与表格都和其中一场参考图一样显示在**地图窗口下方**，方便提醒玩家，但**每个也可以折叠**」；
- *   ④「盒也是折叠打开（**同时只展开一张**）」；②「**平时不用的表格默认折叠**」；
- *   2026-09-16 追加：「**盒还有表格可以直接用素材库里辅助卡图片**」；
- *   **同日追加（B35）**：「**辅助卡只放卡图（不要数据表那一面）**」。
+ * ## 为什么不再装表格
+ *   表格已搬到左栏「表」抽屉（`ChartTableDrawer.vue`：chip 选表 → 只画印卡）。
+ *   托盘因此只剩一段，不再需要"两段同时只展开一段"的纪律。
  *
- * ## 两段
- *   · **左「盒」**：辅助卡卡面（死人堆 / 地图外盒 / 空军盒 —— 见 `BoxCard.vue`，本来就是印卡图）；
- *   · **右「表格」**：**四屏**（CRT / 补给与补员 / TEC / 变量与事件），每屏**只画印卡原卡**
- *     （B22：版式、图例、脚注都是原卡的一部分）。
+ * ## 入口
+ *   盒入口＝**本托盘的头行（卡头）**：点一下展开盒卡，再点一下收起。
+ *   卡头本身带「N 张卡 / M 枚在盒」的计数，折叠时也看得见有多少没归位。
  *
- *   ★ 原先每屏还有第二面「**数据表**」（`render/charts-view.ts` 的行 × 列投影）——
- *     B35 按用户口径把它**从托盘移除**，挪到**引擎验证页**（`WorkbenchView`）保留可核对；
- *     投影表本身因此仍有调用点（架构门禁的零调用检查也照不到它）。
- *
- * ## 折叠纪律
- *   两段**默认都折叠为一行**，且**同时只展开一段**（否则地图会被挤掉）。
+ * ## 阵营隔离
+ *   只列**视角方**的卡（用户 2026-11-18）。solo（同一人操作双方，`fogDisabled`）
+ *   与裁判/验证页没有"对手" ⇒ 两方都列；共用盒（`side === null`）单列，不受视角影响。
  */
 
 const containers = useContainersStore()
 const hotseat = useHotseatStore()
 const showsReferee = useRefereeTools()
 
-/** 展开的那一段（null = 两段都折叠成一行）；
- *  2026-11-19（用户「一步到位」）：安卓默认展开盒段，顶栏盒标记才能直接弹卡 */
-const openSection = ref<'boxes' | 'tables' | null>(isAndroidPlatform() ? 'boxes' : null)
+/** 展开状态（默认折叠成一行；安卓保留旧口径：默认展开盒段，顶栏盒标记才能直接弹卡） */
+const open = ref<boolean>(isAndroidPlatform())
 
-function toggle(section: 'boxes' | 'tables'): void {
-  openSection.value = openSection.value === section ? null : section
+function toggle(): void {
+  open.value = !open.value
 }
 
-/**
- * 盒段：**只列视角方**的卡（用户 2026-11-18 阵营隔离）
- *
- * 实盘缺陷：修前轴心/苏联两列都渲染，苏军玩家先看到轴心盒，自己的盒被挤到裁切区里点不开，
- * 且能看到对方盒的条目与右键菜单。共用盒（`side === null`）另列，不受视角影响。
- *
- * 例外：solo（同一人操作双方，`fogDisabled`）与裁判/验证页**没有"对手"** ⇒ 两方都列，
- * 与盒面板同一口径（4.9a / 专规 1.4 的信息纪律只约束对手之间）。
- */
 const showsAllSides = computed<boolean>(() => hotseat.fogDisabled || showsReferee)
 const sideCards = computed<{ side: Side; cards: ReturnType<typeof containers.cardViewsOf> }[]>(
   () =>
@@ -71,125 +52,30 @@ const boxUnitTotal = computed(() =>
   ),
 )
 
-/* ── 表格段（B16 建屏 / B22 接印卡图 / **B35：只留卡图**） ── */
-
-/**
- * 屏标识（同时只显示一屏）
- *
- * ★ B35（用户口径 2026-09-16 #11「辅助卡只放卡图」）：托盘**不再有**"引擎投影表"那一面
- * —— 投影表挪到**引擎验证页**（`WorkbenchView` 的「引擎投影表」段）核对；原 `turn` 屏
- * （天气/回合与铁路海运容量）随投影表一起撤，`arrivals`（到货）屏归**增援窗**。
- */
-type ScreenKey = 'crt' | 'supply' | 'tec' | 'vars'
-
-/** 四屏的清单（顺序即切换条的次序） */
-const SCREENS: readonly { key: ScreenKey; label: string }[] = [
-  { key: 'crt', label: 'CRT' },
-  { key: 'supply', label: '补给与补员' },
-  { key: 'tec', label: 'TEC' },
-  { key: 'vars', label: '变量与事件' },
-]
-
-const screen = ref<ScreenKey>('crt')
-
-/** 当前屏的印卡扫描图（只画原卡；表的那一面在验证页） */
-const scans = computed(() => panelScansOf(screen.value))
-
-/** 图档名 → URL（与盒卡面同一套编码；这里只做转交，不自己拼路径） */
-function scanUrl(image: string): string {
-  return panelScanImageUrl(image)
-}
-
-/** 图是否已读进来（未就绪先画占位，避免一闪而过的破图） */
-function scanReady(image: string): boolean {
-  return counterImages.get(panelScanImageUrl(image)) !== null
-}
-
-/** 展开表格段时把当前屏的图读进来（懒加载：折叠着不拉图） */
-watch([openSection, screen], () => {
-  if (openSection.value !== 'tables') return
-  void counterImages.preload(scans.value.map((scan) => scanUrl(scan.image)))
-})
+/** 盒卡张数（卡头计数） */
+const boxCardTotal = computed(() => sideCards.value.reduce((n, g) => n + g.cards.length, 0))
 </script>
 
 <template>
-  <section class="tray" aria-label="底部托盘（盒 / 表格）">
-    <!-- 左：盒 -->
-    <div class="tray__section" :class="{ 'tray__section--open': openSection === 'boxes' }">
-      <button
-        type="button"
-        class="tray__head"
-        :aria-expanded="openSection === 'boxes'"
-        @click="toggle('boxes')"
-      >
-        <span class="tray__caret">
-          <BaseIcon :name="openSection === 'boxes' ? 'chevron-down' : 'chevron-right'" />
-        </span>
-        <span class="tray__title">盒</span>
-        <BaseTag kind="neutral"
-          >{{ sideCards.reduce((n, g) => n + g.cards.length, 0) }} 张卡</BaseTag
-        >
-        <span class="tray__meta num">{{ boxUnitTotal }} 枚在盒</span>
-      </button>
+  <section class="tray" :class="{ 'tray--open': open }" aria-label="盒">
+    <button type="button" class="tray__head" :aria-expanded="open" @click="toggle()">
+      <span class="tray__caret">
+        <BaseIcon :name="open ? 'chevron-down' : 'chevron-right'" />
+      </span>
+      <span class="tray__title">盒</span>
+      <BaseTag kind="neutral">{{ boxCardTotal === 0 ? '—' : `${boxCardTotal} 张卡` }}</BaseTag>
+      <span class="tray__meta num">{{ boxUnitTotal }} 枚在盒</span>
+    </button>
 
-      <div v-if="openSection === 'boxes'" class="tray__body">
-        <div v-for="group in sideCards" :key="group.side" class="tray__col">
-          <p class="tray__col-head num">{{ group.side === 'axis' ? '轴心国' : '苏联' }}</p>
-          <BoxCard v-for="card in group.cards" :key="card.id" :card="card" />
-        </div>
-        <!-- B31c：**双方共用**的卡（运力记录轨：一张卡上两组轨，标记按当前容量推格） -->
-        <div v-if="containers.sharedCardViews.length > 0" class="tray__col">
-          <p class="tray__col-head num">共用</p>
-          <BoxCard v-for="card in containers.sharedCardViews" :key="card.id" :card="card" />
-        </div>
+    <div v-if="open" class="tray__body">
+      <div v-for="group in sideCards" :key="group.side" class="tray__col">
+        <p class="tray__col-head num">{{ group.side === 'axis' ? '轴心国' : '苏联' }}</p>
+        <BoxCard v-for="card in group.cards" :key="card.id" :card="card" />
       </div>
-    </div>
-
-    <!-- 右：表格（B16：五屏，逐屏切换） -->
-    <div class="tray__section" :class="{ 'tray__section--open': openSection === 'tables' }">
-      <button
-        type="button"
-        class="tray__head"
-        :aria-expanded="openSection === 'tables'"
-        @click="toggle('tables')"
-      >
-        <span class="tray__caret">
-          <BaseIcon :name="openSection === 'tables' ? 'chevron-down' : 'chevron-right'" />
-        </span>
-        <span class="tray__title">表格</span>
-      </button>
-
-      <div v-if="openSection === 'tables'" class="tray__body tray__body--tables">
-        <!-- 屏切换（同时只显示一屏；屏内滚动） -->
-        <div class="tray__tabs">
-          <button
-            v-for="item in SCREENS"
-            :key="item.key"
-            type="button"
-            class="tray__tab"
-            :class="{ 'tray__tab--on': screen === item.key }"
-            @click="screen = item.key"
-          >
-            {{ item.label }}
-          </button>
-        </div>
-
-        <!-- 印卡图：直接画素材库的官方卡面（点图在新标签打开原尺寸）——B35：托盘**只留卡图** -->
-        <p v-if="scans.length === 0" class="tray__note">—</p>
-        <div v-for="scan in scans" :key="scan.id" class="tray__scan">
-          <p class="tray__scan-title">
-            {{ scan.title }}
-          </p>
-          <a class="tray__scan-link" :href="scanUrl(scan.image)" target="_blank" rel="noopener">
-            <img
-              v-if="scanReady(scan.image)"
-              class="tray__scan-img"
-              :src="scanUrl(scan.image)"
-              :alt="scan.title"
-            />
-            <span v-else class="tray__scan-img tray__scan-img--pending">正在读图…</span>
-          </a>
-        </div>
+      <!-- 双方共用的卡（运力记录轨：一张卡上两组轨，标记按当前容量推格） -->
+      <div v-if="containers.sharedCardViews.length > 0" class="tray__col">
+        <p class="tray__col-head num">共用</p>
+        <BoxCard v-for="card in containers.sharedCardViews" :key="card.id" :card="card" />
       </div>
     </div>
   </section>
@@ -199,28 +85,13 @@ watch([openSection, screen], () => {
 .tray {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  /* 地图窗口下方（用户口径⑧）；两段各自可折叠，默认都只有一行高 */
   align-items: stretch;
-}
-
-.tray__section {
-  flex: 1;
-  min-width: 0;
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-md);
   background: var(--color-panel);
-  overflow: hidden;
 }
 
-.tray__section--open {
-  /*
-   * 用户 2026-11-18：展开段必须按内容伸展。
-   * 修前 `flex: 1`（basis 0）+ `overflow: hidden` ⇒ 段高被压到 190px，下面的苏军卡落在裁切区里，
-   * 看得见却点不到（"苏军盒点不开"）。展开后不再参与收缩，整列由外层抽屉滚动。
-   */
-  flex: 0 0 auto;
-  box-shadow: var(--shadow-sm);
+.tray--open {
+  max-height: 44vh;
+  overflow: auto;
 }
 
 .tray__head {
@@ -257,13 +128,7 @@ watch([openSection, screen], () => {
   padding: var(--space-2);
 }
 
-.tray__body--tables {
-  flex-direction: column;
-}
-
 .tray__col {
-  flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -272,67 +137,5 @@ watch([openSection, screen], () => {
 .tray__col-head {
   margin: 0;
   color: var(--color-muted);
-}
-
-.tray__note {
-  margin: 0;
-  color: var(--color-muted);
-  font-size: var(--text-sm);
-}
-
-/* ── B16：表格屏 ── */
-
-.tray__tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-
-.tray__tab {
-  padding: 2px var(--space-2);
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-2);
-  color: var(--color-ink);
-  font-size: var(--text-xs);
-  cursor: pointer;
-}
-
-.tray__tab--on {
-  border-color: var(--color-gold);
-  color: var(--color-gold);
-}
-
-/* ── B22：印卡扫描图 ── */
-
-.tray__scan-title {
-  margin: 0 0 var(--space-1);
-  color: var(--color-gold);
-  font-size: var(--text-xs);
-  letter-spacing: 0.02em;
-}
-
-.tray__scan {
-  margin-bottom: var(--space-2);
-}
-
-.tray__scan-link {
-  display: block;
-  max-width: 100%;
-}
-
-.tray__scan-img {
-  max-width: 100%;
-  height: auto;
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-2);
-}
-
-.tray__scan-img--pending {
-  display: block;
-  padding: var(--space-3);
-  color: var(--color-muted);
-  font-size: var(--text-xs);
 }
 </style>

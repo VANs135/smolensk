@@ -59,7 +59,15 @@ describe('批 6：字号 / 数字 / 图标 / 设置分组 / 空态', () => {
     expect(read('src/components/game/DecisionQueue.vue')).toContain('<BaseIcon')
     expect(read('src/components/game/MapActionPopover.vue')).toContain('<BaseIcon')
     expect(read('src/components/map/MapCanvas.vue')).toContain('<BaseIcon name="minus"')
-    expect(read('src/views/HomeView.vue')).toContain('<BaseIcon name="external"')
+    // 2026-11-25：开始台的「读取存档」入口随存档两入口收敛一并删掉，
+    // 全仓已无外链入口 ⇒ 改为钉「不得再出现散装 ↗ 字形」。
+    for (const file of [
+      'src/views/HomeView.vue',
+      'src/views/GameTableView.vue',
+      'src/components/game/ChartTableDrawer.vue',
+    ]) {
+      expect(read(file), `${file} 仍有散装外链字形`).not.toContain('↗')
+    }
   })
 
   it('设置抽屉分「视图 / 对局控制 / 记录器」三组，记录器说明进 ?', () => {

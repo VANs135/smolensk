@@ -128,7 +128,8 @@ describe('战况抽屉挂载与一键预设初设唯一入口', () => {
   function statusDrawerSource(): string {
     const view = readFileSync('src/views/GameTableView.vue', 'utf8')
     const start = view.indexOf('id="table-drawer-status"')
-    const end = view.indexOf('id="table-drawer-cards"')
+    // 2026-11-25：战况之后的下一个抽屉是「表」（原「盒表」已拆成左栏表抽屉 + 托盘盒段）
+    const end = view.indexOf('id="table-drawer-charts"')
     expect(start).toBeGreaterThan(-1)
     expect(end).toBeGreaterThan(start)
     return view.slice(start, end)

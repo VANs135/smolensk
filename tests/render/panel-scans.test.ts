@@ -142,8 +142,8 @@ describe('B22：印卡扫描图清单（panel-scans.json）', () => {
   })
 })
 
-describe('B22：托盘的两种看法（源码守卫）', () => {
-  const tray = fs.readFileSync('src/components/game/BottomTray.vue', 'utf8')
+describe('B22：表抽屉的卡图看法（源码守卫；2026-11-25 由托盘搬到左栏）', () => {
+  const tray = fs.readFileSync('src/components/game/ChartTableDrawer.vue', 'utf8')
   it('★ B35：托盘**只留卡图**（"数据表"那一面已从托盘移除，挪到引擎验证页）', () => {
     // 托盘不再有"两种看法"的开关与表渲染
     expect(tray).not.toContain("ref<'scan' | 'table'>")

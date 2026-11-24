@@ -82,6 +82,9 @@ describe('盒表阵营隔离', () => {
 
   it('★ 展开段不再被裁切（打开段按内容伸展，点得到下面的卡）', () => {
     const tray = read('src/components/game/BottomTray.vue')
-    expect(tray).toMatch(/\.tray__section--open\s*\{[^}]*flex:\s*0 0 auto/)
+    // 2026-11-25：托盘常驻地图下方 ⇒ 展开态由自身限高并整段滚动（不再靠抽屉滚动兜住裁切）
+    expect(tray).toMatch(/\.tray--open\s*\{[^}]*max-height:[^}]*overflow:\s*auto/s)
+    // 展开的卡面不得再被压成 basis 0（那正是"苏军盒点不开"的旧根因）
+    expect(tray).not.toMatch(/\.tray__section--open/)
   })
 })

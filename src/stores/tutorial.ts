@@ -730,7 +730,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
         return { texts: ['开始游戏', '完成初设'] }
       case 'air-refit':
         // 用户 2026-11-19 第 1 条：框住空军盒里的「整备」按钮本身
-        return { buttonTexts: ['整备盒内飞机', '整备'], texts: ['Luftwaffe', '盒表'] }
+        return { buttonTexts: ['整备盒内飞机', '整备'], texts: ['Luftwaffe', '盒'] }
       case 'reinforce-sp': {
         if (!phaseAtLeast(workbench.phase, 'reinforcement'))
           return { buttonTexts: ['进入下一环节'] }
@@ -977,7 +977,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
       {
         id: 'rebuild-open',
         title: '拣出装甲侦察车',
-        hint: '霍特：盒表 → 死亡堆，点这辆侦察营；点中即自动进入落位。',
+        hint: '霍特：盒 → 死亡堆，点这辆侦察营；点中即自动进入落位。',
         intro:
           '先前那一仗，我部伤亡很重。后方预备队已经调上来，把缺额补回我部，花 1 Eq 就能重建建制。',
         done: () => workbench.deadPilePickId === TUTORIAL_RECON_ID,

@@ -30,10 +30,13 @@ describe('P6：折叠右栏回收列宽（源码守卫）', () => {
     expect(canvas).toContain('min-height: 360px')
   })
 
-  it('BottomTray：同时只展开一段（桌面默认折叠；安卓默认开盒段供盒标记直弹）', () => {
+  it('BottomTray：只剩盒段（桌面默认折叠；安卓默认展开供盒标记直弹）', () => {
     const tray = readFileSync('src/components/game/BottomTray.vue', 'utf8')
-    // 2026-11-19（用户「一步到位」）：安卓默认展开盒段，桌面保持折叠
-    expect(tray).toContain("ref<'boxes' | 'tables' | null>(isAndroidPlatform() ? 'boxes' : null)")
+    // 2026-11-25：表格搬去左栏，托盘不再有"两段同时只展开一段"的纪律
+    expect(tray).toContain('ref<boolean>(isAndroidPlatform())')
+    expect(tray).not.toContain("'tables'")
+    // 盒入口＝卡头：展开/收起只有这一枚按钮
+    expect(tray).toContain('@click="toggle()"')
   })
 
   it('无调试标识', () => {

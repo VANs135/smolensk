@@ -11,9 +11,10 @@ import { ExclusiveRulesPanel } from '@/components/exclusive'
 import {
   ActionFeedbackStrip,
   BottomTray,
+  BoxCard,
+  ChartTableDrawer,
   DecisionQueue,
   HotkeyHelpPanel,
-  BoxCard,
   MapActionPopover,
   OverstackPanel,
   UnitPanel,
@@ -48,7 +49,6 @@ import {
   useRecorderStore,
   useSetupStore,
   useThemeStore,
-  useTutorialStore,
   useUiStore,
   useWorkbenchStore,
 } from '@/stores'
@@ -114,7 +114,7 @@ const setup = useSetupStore()
 const gameSession = useGameSessionStore()
 const hotseat = useHotseatStore()
 const theme = useThemeStore()
-const tutorial = useTutorialStore()
+
 const ui = useUiStore()
 const app = useAppStore()
 const recorder = useRecorderStore()
@@ -199,11 +199,11 @@ interface MapBridge {
   hexToWindow: (hex: HexRef) => { x: number; y: number }
 }
 
-type TableDrawer = 'status' | 'cards' | 'log' | 'settings'
+type TableDrawer = 'status' | 'charts' | 'log' | 'settings'
 
 const drawers = [
   { id: 'status', label: '战况', icon: 'M3 12h4l3-7 4 14 3-7h4' },
-  { id: 'cards', label: '盒表', icon: 'M5 5h14v14H5z M5 10h14 M12 10v9' },
+  { id: 'charts', label: '表', icon: 'M4 4h16v16 M4 10h16 M10 4v16' },
   { id: 'log', label: '战报', icon: 'M6 3h9l3 3v15H6z M9 10h6 M9 14h6 M9 17h4' },
   { id: 'settings', label: '设置', icon: 'M4 7h16 M4 17h16 M9 4v6 M15 14v6' },
 ] as const
@@ -256,20 +256,10 @@ function openDrawer(next: TableDrawer): void {
 }
 
 /*
- * 2026-11-19：重建教学的**开盒/关盒**由引导代劳
- *
- * 玩家要先在盒表里选中死亡堆的侦察营（点中即自动进入选格），再回到地图点高亮格。
- * 让玩家自己在盒与地图之间来回切太琐碎 ⇒ 进入 `rebuild-open` 自动开盒表，
- * 进入 `rebuild-place` 自动收起，把注意力交回地图。
+/*
+ * 2026-11-25：盒面常驻地图下方（托盘只剩盒段），重建教学的「开盒 / 关盒」不再需要代劳——
+ * 引导只指卡头，玩家不必在抽屉与地图之间来回切。原 `openDrawer('cards')` 的自动开合已删。
  */
-watch(
-  () => tutorial.currentStep?.id,
-  (id) => {
-    if (id === 'rebuild-open') openDrawer('cards')
-    if (id === 'rebuild-place' && drawer.value === 'cards') hotkeys.panelCollapsed = true
-  },
-  { immediate: true },
-)
 
 function toggleDrawer(next: TableDrawer): void {
   if (!hotkeys.panelCollapsed && drawer.value === next) {
@@ -533,7 +523,7 @@ onBeforeUnmount(() => {
       </div>
       <div v-if="quickMenu" class="gt__quick-menu">
         <button type="button" @click="openQuickDrawer('status')">战况</button>
-        <button type="button" @click="openQuickDrawer('cards')">盒表</button>
+        <button type="button" @click="openQuickDrawer('charts')">表</button>
         <button type="button" @click="openQuickDrawer('log')">战报</button>
         <button type="button" @click="openQuickDrawer('settings')">设置</button>
         <button type="button" @click="openSaveFromMenu()">存读档</button>
@@ -767,12 +757,14 @@ onBeforeUnmount(() => {
           </template>
         </MapCanvas>
         <MapActionPopover />
+        <!-- 2026-11-25：托盘只剩盒段，常驻地图下方（盒入口＝托盘盒卡的卡头） -->
+        <BottomTray v-if="setup.applied" class="gt__tray-dock" />
       </div>
 
       <aside
         v-show="!hotkeys.panelCollapsed"
         class="gt__drawer"
-        :class="{ 'gt__drawer--wide': drawer === 'log' || drawer === 'cards' }"
+        :class="{ 'gt__drawer--wide': drawer === 'log' }"
         :aria-label="drawers.find((item) => item.id === drawer)?.label"
       >
         <header class="gt__drawer-head">
@@ -813,13 +805,17 @@ onBeforeUnmount(() => {
           <VictoryPanel />
         </div>
 
+        <!--
+          2026-11-25：表从托盘搬到左栏「表」抽屉（chip 选表 → 只画印卡）。
+          抽屉本身无默认选中，空态只有头 + chip 一行。
+        -->
         <div
-          v-if="openedDrawers.has('cards')"
-          v-show="drawer === 'cards'"
-          id="table-drawer-cards"
+          v-if="openedDrawers.has('charts')"
+          v-show="drawer === 'charts'"
+          id="table-drawer-charts"
           class="gt__drawer-body"
         >
-          <BottomTray />
+          <ChartTableDrawer />
         </div>
 
         <div
@@ -1202,9 +1198,25 @@ onBeforeUnmount(() => {
 }
 
 .gt__main {
+  /* 2026-11-25：地图 + 托盘上下排（托盘＝盒入口，常驻地图下方，默认只露卡头一行） */
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
+}
+
+.gt__main > .mapcanvas {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.gt__tray-dock {
+  flex: 0 0 auto;
+  max-height: 46vh;
+  overflow: auto;
+  border-top: 1px solid var(--color-rule);
+  background: var(--color-panel);
 }
 
 .gt__drawer {

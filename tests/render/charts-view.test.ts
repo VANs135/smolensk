@@ -211,10 +211,13 @@ describe('B16：托盘与右栏的接线（源码守卫）', () => {
     expect(verify).toContain('arrivalTableView(workbench.arrivalPlan)')
     expect(verify).toContain('ChartsTable')
 
+    const drawer = readFileSync('src/components/game/ChartTableDrawer.vue', 'utf8')
+    // 2026-11-25：表搬到左栏抽屉，仍**逐屏切换**，但只画卡图（不自己解析数据文件、不画表）
+    expect(drawer).toContain('screen = item.key')
+    expect(drawer).not.toContain('crtViews()')
+    // 托盘已只剩盒段：不再碰投影表的任何入口
     const tray = readFileSync('src/components/game/BottomTray.vue', 'utf8')
-    // 托盘仍在**逐屏切换**，但只画卡图（不自己解析数据文件、不画表）
-    expect(tray).toContain('screen = item.key')
-    expect(tray).not.toContain('crtViews()')
+    expect(tray).not.toContain('panelScansOf')
     expect(tray).not.toContain('tray__table')
   })
 
