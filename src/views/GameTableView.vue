@@ -1254,7 +1254,7 @@ onBeforeUnmount(() => {
 
 /*
  * 用户 2026-11-18：状态/提示栏内容一多就看不全且没法滚。
- * 根因：这里是一列 flex，直接子项（BasePanel / 盒表 tray）默认 `flex-shrink:1`，
+ * 根因：这里是一列 flex，直接子项（BasePanel / 表抽屉 / 战报面板）默认 `flex-shrink:1`，
  * 而它们自身 `overflow:hidden`（自动最小尺寸按 0 算）⇒ 内容一超就**被压扁到 0 高**，
  * 外层看起来「有滚动条但后面的内容永远滚不到」。子项一律不参与收缩，整列交给
  * 外层 `overflow:auto` 滚。
