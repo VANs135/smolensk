@@ -9,6 +9,8 @@ export interface AirSupplySource extends SpHoldings {
   hex?: HexRef
   side: Side
   carriedBy?: string
+  /** 13.2g-B：承运者是**编内卡车**（其 SP 只许同一多单位编队内的单位拖取） */
+  carrierIsOrganicTruck?: boolean
   /** 14.9（T16）：来源是图外空军盒，库存由 `offMapSupplyStocks` 记账。 */
   offMap?: boolean
   /** 14.9（T16）：离图盒标识（`${side}:${box}` 的 box 部分）。 */
@@ -96,8 +98,17 @@ export function planAirSupplyLoad(input: {
   const requestedT = merged.reduce((sum, entry) => sum + entry.requestedT, 0)
   if (requestedT === 0) return succeed('14.9a', { manifest: null, debits: [] })
 
+  /*
+   * 12.1b：补给站＝**任何含 SP 的位置**，含「装载在运输点数上的补给」，且「SP 使用前并不需要被卸载」
+   * ⇒ 承运中的 SP（`carriedBy` 有值）与地面账本**一视同仁**，只要它在本次装载起点格。
+   * （修前一律排除 `carriedBy !== undefined`，把载货卡车上的 SP 当成不存在。）
+   * ★ 唯一例外仍是 13.2g-B：编内卡车（organic truck）的 SP 只许**同一多单位编队**内的单位拖取，
+   *   飞机不属于地面编队 ⇒ 这类来源在空运装载里不成立，由调用方按 `carrierIsOrganicTruck` 标出。
+   */
   const eligible = input.sources.filter(
-    (source) => source.side === side && source.carriedBy === undefined,
+    (source) =>
+      source.side === side &&
+      (source.carriedBy === undefined || source.carrierIsOrganicTruck !== true),
   )
   if (new Set(eligible.map((source) => source.id)).size !== eligible.length)
     return fail('12.1a', 'duplicateAirSupplySource')

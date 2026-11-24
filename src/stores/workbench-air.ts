@@ -170,13 +170,16 @@ export interface AirDomainPorts {
   actionAllowedNow: (key: ActionKey) => boolean
   isConstructionMarkerAirBaseId: (id: string) => boolean
   /** ── 以下 2 项晚绑定（声明在 3849/3911，晚于建域点） ── */
+  /**
+   * 12.1b：**全部**含 SP 的位置（地面账本 + 装载在运输点数上的，`unit:` 前缀）
+   * ⇒ 一切"取用 SP"的候选（整备费、空运装载）都读这一份，不能只读 `spDumps`。
+   */
   allSpDumps: ComputedRef<SpDump[]>
   supplyFacts: ComputedRef<ReturnType<typeof createSupplyFacts>>
   /** ── 以下 13 项 B2-2a 新增（按值；声明早于或函数声明可提升） ── */
   turn: ComputedRef<number>
   groundMovement: ReturnType<typeof createGroundMovementDomain>
   moveInteraction: ReturnType<typeof createGroundMovementDomain>['moveInteraction']
-  spDumps: Ref<SpDump[]>
   supplyState: Ref<SupplyInteractionState | null>
   clearMoveInteraction: () => void
   refuseWhileSettling: (action: string) => boolean
@@ -247,7 +250,6 @@ export function createAirDomain(ports: AirDomainPorts) {
     turn,
     groundMovement,
     moveInteraction,
-    spDumps,
     supplyState,
     clearMoveInteraction,
     refuseWhileSettling,
@@ -1277,7 +1279,13 @@ export function createAirDomain(ports: AirDomainPorts) {
               side: airActingSide.value,
               requestedT: spCargoT,
               origins: [...supplyOrigins.values()],
-              sources: [...spDumps.value, ...offMapSources],
+              // 12.1b：装载在运输点数上的 SP 同样是站；12.1c：已清空（0 SP + 0 T）的不再是站
+              sources: [
+                ...ports.allSpDumps.value.filter(
+                  (dump) => holdingsToT({ sp: dump.sp, t: dump.t }) > 0,
+                ),
+                ...offMapSources,
+              ],
             }),
             '装载空运补给',
           )
@@ -1312,15 +1320,13 @@ export function createAirDomain(ports: AirDomainPorts) {
       clearMoveInteraction()
     airMissionDomain.start(data)
     // 引擎与库存校验全部成功后，一次性扣账；失败的宣布不会消耗库存。
-    const mapDebits = new Map(
-      supplyLoad.debits
-        .filter((debit) => debit.offMap !== true)
-        .map((debit) => [debit.id, debit.after]),
-    )
-    spDumps.value = spDumps.value.flatMap((dump) => {
-      const after = mapDebits.get(dump.id)
-      return after === undefined ? [dump] : after.sp + after.t === 0 ? [] : [{ ...dump, ...after }]
-    })
+    // ★ 12.1b：扣账可能落在**装载在运输点数上的 SP**（`unit:` 前缀）⇒ 一律走 `setSpDumpHoldings`，
+    //   由它按 id 前缀分流（地面账本改持仓、承运车改 `loadedSpT`）。修前这里直接改 `spDumps`，
+    //   载货来源根本写不回去。
+    for (const debit of supplyLoad.debits) {
+      if (debit.offMap === true) continue
+      setSpDumpHoldings(debit.id, debit.after)
+    }
     const offMapDebits = supplyLoad.debits.filter((debit) => debit.offMap === true)
     if (offMapDebits.length > 0) {
       const next = { ...offMapSupplyStocks.value }

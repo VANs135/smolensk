@@ -304,11 +304,22 @@ describe('B32 步骤 5：装载在运输点数上的 SP（12.1b / 13.2f）', () 
     expect(store).toContain(
       'function deliverableDumpsFor(side: Side, beneficiaries: readonly ConsoleUnit[])',
     )
-    expect(store).toContain('dump.carrierIsOrganicTruck !== true ||')
+    // 13.2g-B 的按算子判据收在 `dumpIsPayable` 一处，付款候选与「经 HQ 投递」清单共用它
+    expect(store).toContain(
+      'function dumpIsPayable(dump: SpDump, beneficiaries: readonly ConsoleUnit[])',
+    )
+    expect(store).toContain('if (dump.carrierIsOrganicTruck !== true) return true')
     expect(store).toContain('carrierIsOrganicTruck: true,')
     expect(store).toContain("if (id.startsWith('unit:'))")
-    // 12.5c-B：**HQ 法那一支**也必须从"含 SP 的位置"里取（修前只遍历 `spDumps` ⇒ 装在车上的油取不到）
+    /*
+     * 12.1b / 12.1c：**两处**候选都从「含 SP 的位置」里取，且都排掉已清空的条目——
+     * 修前 `barrageSupplyHqChoices` 读的是原始 `spDumps`，装载来源漏、空站多。
+     */
     expect(store).toContain('for (const dump of allSpDumps.value) {')
+    expect(store).toContain('const barrageSupplyHqChoices = computed<SpDump[]>(() =>')
+    expect(store).toContain('keys.has(hexLabel(dump.hex)) && dumpIsPayable(dump, firingUnits)')
+    // 空运装载同理（12.1b：不必先卸载；12.1c：空站不进候选）
+    expect(store).toContain('...ports.allSpDumps.value.filter(')
     // 加油窗（用户 2026-11-10：唯一入口＝右键）同样要显示"装载在 X 上"
     const panel = readFileSync('src/components/fuel/FuelPanel.vue', 'utf8')
     expect(panel).toContain('dump.carriedBy')

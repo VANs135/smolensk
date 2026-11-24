@@ -197,6 +197,39 @@ describe('G②：炮击经 HQ 投递取补给（10.1b-A / 12.3b）', () => {
     expect(store.confirmBarrageSupplyStep()).toBe(true)
   })
 
+  it('★ 12.1b：来源本身就是**装载在运输点数上**的 SP 时，HQ 支同样成立且声明 `fromSameHq`', () => {
+    const scenario = buildScenario()
+    const store = newStore()
+    // 地面上**不放**补给站：唯一的 SP 在 10PZ 编内卡车的运输点数上（仍在 scenario.dump 格）
+    armBarrage(store, { guns: scenario.guns, target: scenario.target, hq: scenario.hq }, true)
+    const truck = toConsoleUnit({
+      record: pzTruck(),
+      instanceId: 'truck-1',
+      hex: scenario.dump,
+      side: 'axis',
+    })
+    truck.loadedSpT = 4 // 1 SP
+    store.units.push(truck)
+    store.beginBarrageNow()
+
+    // 12.1b「装载在运输点数上的补给也是补给站」⇒ 该条子账本进候选，且经 HQ 投递到达两门炮
+    const carried = store.barrageSupplyDumpChoices.find(
+      (item) => item.id === `unit:${truck.instanceId}`,
+    )
+    expect(carried).toBeDefined()
+    expect(store.pickBarrageSupplyDump(`unit:${truck.instanceId}`)).toBe(true)
+    /*
+     * ★ 10.1b-A 的两支不能写反：这一座站只有 HQ 那条路能到（地面直拖距离 ≥6 ⇒ 拖不到），
+     *   故必须声明「来自同一指挥部」。修前 `barrageSupplyHqChoices` 读原始 `spDumps`，
+     *   装载来源不在其中 ⇒ `viaHq` 恒 false，会把这里误声明成「来自同一补给站」。
+     */
+    expect(store.barrageInputs.fromSameHq).toBe(true)
+    expect(store.confirmBarrageSupplyStep()).toBe(true)
+    // 12.1a：付款扣的是承运车的装载量（本次轰炸成本把这一枚 1 SP(=4T) 扣光），不是地面账本
+    expect(truck.loadedSpT).toBe(0)
+    expect(store.spDumps).toHaveLength(0)
+  })
+
   it('★ 对照组：同一现场**不摆 HQ** ⇒ 候选为空、付不出（不许凭空付款，12.3a）', () => {
     const scenario = buildScenario()
     const store = newStore()

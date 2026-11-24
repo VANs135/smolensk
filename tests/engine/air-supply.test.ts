@@ -31,7 +31,7 @@ describe('12.1a / 14.9：空运SP实物账本', () => {
       expect(plan(quantity)).toMatchObject({ ok: false, reason: 'invalidAirSupplyQuantity' })
     },
   )
-  it('库存不足不能借用异地、敌军或载货卡车的SP', () => {
+  it('库存不足不能借用异地、敌军或编内卡车的SP', () => {
     expect(
       planAirSupplyLoad({
         side: 'axis',
@@ -40,11 +40,32 @@ describe('12.1a / 14.9：空运SP实物账本', () => {
         sources: [
           { id: 'enemy', side: 'soviet', hex, sp: 9, t: 0 },
           { id: 'remote', side: 'axis', hex: { col: 21, row: 20 }, sp: 9, t: 0 },
-          { id: 'loaded', side: 'axis', hex, sp: 9, t: 0, carriedBy: 'truck' },
+          // 13.2g-B：编内卡车的 SP 只许同一多单位编队内的单位拖取 ⇒ 不能当空运装载来源
+          {
+            id: 'organic',
+            side: 'axis',
+            hex,
+            sp: 9,
+            t: 0,
+            carriedBy: 'truck',
+            carrierIsOrganicTruck: true,
+          },
         ],
       }),
     ).toMatchObject({ ok: false, reason: 'airSupplyStockInsufficient' })
     expect(plan(7)).toMatchObject({ ok: false, reason: 'airSupplyStockInsufficient' })
+  })
+  it('12.1b：装载在运输点数上的 SP 同样是补给站，可直接上空运（不必先卸载）', () => {
+    const result = planAirSupplyLoad({
+      side: 'axis',
+      requestedT: 1,
+      origins: [{ hex, offMap: false }],
+      sources: [{ id: 'unit:tr-1', hex, side: 'axis', sp: 1, t: 0, carriedBy: 'tr-1' }],
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // 承运车上的 1 SP（=4T）被扣 1T ⇒ 余 0 SP + 3 T，写回的是那枚车的 `loadedSpT`
+    expect(result.data.debits).toEqual([{ id: 'unit:tr-1', after: { sp: 0, t: 3 } }])
   })
   it('离图来源和跨基地分装不凭空生成库存', () => {
     for (const origins of [

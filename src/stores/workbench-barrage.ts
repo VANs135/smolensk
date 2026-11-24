@@ -96,7 +96,6 @@ export interface BarragePorts {
   airUnits: Ref<ConsoleAirUnit[]>
   airBoxMembers: Ref<string[]>
   barrageAirIds: Ref<string[]>
-  spDumps: Ref<SpDump[]>
   airMissionDomain: ReturnType<typeof createAirMissionDomain>
   combatAttackers: ComputedRef<ConsoleUnit[]>
   barrageUnits: ComputedRef<ConsoleUnit[]>
@@ -185,7 +184,6 @@ export function createBarrageDomain(deps: BarragePorts) {
     allSpDumps,
     combatAttackers,
     battleTarget,
-    spDumps,
     supplyCacheHoldings,
     dumpById,
     panzerGroupSpGate,
@@ -605,20 +603,29 @@ export function createBarrageDomain(deps: BarragePorts) {
     // ② 12.3b：HQ 投递（HQ 自己拖得到 + 覆盖每一个受益单位）
     for (const key of hqDeliveryDumpKeys(side, beneficiaries)) keys.add(key)
     // ③ 12.1b/13.2g-B：落到具体账本条目上，并对编内卡车来源逐个受益单位验编队资格
-    // 12.1c：已清空（0 SP + 0 T）的条目不再是站 ⇒ 不进付款候选
     return allSpDumps.value.filter(
       (dump) =>
-        dump.side === side &&
-        keys.has(hexLabel(dump.hex)) &&
-        holdingsToT({ sp: dump.sp, t: dump.t }) > 0 &&
-        (dump.carrierIsOrganicTruck !== true ||
-          beneficiaries.every((unit) =>
-            canDrawFromCarrier({
-              carrierIsOrganicTruck: true,
-              carrierFormation: dump.carrierFormation ?? null,
-              drawerFormation: unit.formation,
-            }),
-          )),
+        dump.side === side && keys.has(hexLabel(dump.hex)) && dumpIsPayable(dump, beneficiaries),
+    )
+  }
+
+  /**
+   * 12.1b / 12.1c / 13.2g-B：这一条账本**此刻能不能当作付款来源**
+   *
+   * · 12.1b「任何含有 SP 的位置……还是装载在运输点数上的补给，都被称为补给站」⇒ 装载中的条目
+   *   （`unit:` 前缀，在 `allSpDumps` 里）与地面条目**一视同仁**；
+   * · 12.1c「如果该补给站被清空，请移除此标记」⇒ 0 SP + 0 T 的条目不再是站，一律不进候选；
+   * · 13.2g-B 编内卡车的 SP 只许同一多单位编队内的受益单位拖取。
+   */
+  function dumpIsPayable(dump: SpDump, beneficiaries: readonly ConsoleUnit[]): boolean {
+    if (holdingsToT({ sp: dump.sp, t: dump.t }) <= 0) return false
+    if (dump.carrierIsOrganicTruck !== true) return true
+    return beneficiaries.every((unit) =>
+      canDrawFromCarrier({
+        carrierIsOrganicTruck: true,
+        carrierFormation: dump.carrierFormation ?? null,
+        drawerFormation: unit.formation,
+      }),
     )
   }
 
@@ -678,14 +685,22 @@ export function createBarrageDomain(deps: BarragePorts) {
   /**
    * 10.1b-A：这批来源里哪些是**经 HQ 投递**达成的（付款时据此声明 `fromSameHq`）
    *
-   * 判据与 `deliverableDumpsFor` 的 ② 支**同源**（同一个 `hqDeliveryDumpKeys`），故不会与候选漂移。
+   * ★ 必须与付款候选**同源**（`deliverableDumpsFor` 的 ② 支）：
+   *   修前这里读原始 `spDumps`，两个口径都对不上——
+   *   · **漏**装载在运输点数上的站（`unit:` 条目不在 `spDumps` 里）⇒ 选到这类站时 `viaHq` 判成 false，
+   *     会把"经指挥部投递"误声明成"来自同一补给站"（10.1b-A 的两支被写反）；
+   *   · **多**已清空的条目（12.1c 说不算站）。
    */
   const barrageSupplyHqChoices = computed<SpDump[]>(() => {
     if (barrageState.value?.kind !== 'artillery') return []
     const firingUnits = barrageUnits.value
     if (firingUnits.length === 0) return []
-    const keys = hqDeliveryDumpKeys(segmentGateQuery.value.side ?? activeSide.value, firingUnits)
-    return spDumps.value.filter((dump) => keys.has(hexLabel(dump.hex)))
+    const side = segmentGateQuery.value.side ?? activeSide.value
+    const keys = hqDeliveryDumpKeys(side, firingUnits)
+    return allSpDumps.value.filter(
+      (dump) =>
+        dump.side === side && keys.has(hexLabel(dump.hex)) && dumpIsPayable(dump, firingUnits),
+    )
   })
 
   /** 21.10：本次炮击计划花掉的 Shells 枚数（0 = 不用；按枚整花，最后一枚可溢出作废） */
