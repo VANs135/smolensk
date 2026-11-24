@@ -102,6 +102,18 @@ provide(PANEL_FLAT, true)
 
 defineEmits<{ (e: 'close'): void }>()
 
+/**
+ * 收起（`⌄`）：只把窗体折成标题栏一行，**会话状态一概保留**
+ *
+ * 与 `×` 的区别：`×` 走 `cancelSession`（引擎真的放弃这一手）；这里只是"先让开地图"，
+ * 再点一次原样展开。会话本身仍挂着，步进 / 待决事项都不动。
+ */
+const bodyCollapsed = ref(false)
+
+function toggleBody(): void {
+  bodyCollapsed.value = !bodyCollapsed.value
+}
+
 /** 关闭按钮的文案（三种语义各说各的，不再一律「取消本次操作」） */
 const closeLabel = computed<string>(() => {
   if (props.closePolicy === 'collapse') return '收起本次会话'
@@ -233,6 +245,18 @@ function resetPosition(): void {
     >
       <span class="dock__title">{{ title }}</span>
       <BaseTag v-if="props.rule !== undefined" kind="info">{{ props.rule }}</BaseTag>
+      <!-- 收起（状态保留）：只折体，不碰会话 -->
+      <button
+        class="dock__ico"
+        type="button"
+        :title="bodyCollapsed ? '展开' : '收起（状态保留）'"
+        :aria-expanded="!bodyCollapsed"
+        aria-label="收起或展开窗体"
+        @pointerdown.stop
+        @click="toggleBody()"
+      >
+        <BaseIcon :name="bodyCollapsed ? 'chevron-right' : 'chevron-down'" />
+      </button>
       <button
         v-if="props.closePolicy !== 'refused'"
         class="dock__close"
@@ -244,8 +268,12 @@ function resetPosition(): void {
       >
         <BaseIcon name="close" />
       </button>
+      <!-- refused：不给 ×（那会是个点了没反应的按钮），改一枚「▣ 不可关」 -->
+      <span v-else class="dock__ico dock__ico--locked" :title="closeLabel" aria-label="不可关">
+        ▣
+      </span>
     </header>
-    <div class="dock__body">
+    <div v-show="!bodyCollapsed" class="dock__body">
       <!--
         用户 2026-11-12：自动步（9.8 / 9.9）期间没有待决事项，`sessionStep` 为 null——
         此时**不要**回落成任何"流程结束"文案。会话真要收束时会自行卸载。
@@ -301,16 +329,24 @@ function resetPosition(): void {
   letter-spacing: 0.02em;
 }
 
-.dock__close {
+.dock__close,
+.dock__ico {
   flex: none;
+  display: grid;
   width: var(--control-height-sm);
   height: var(--control-height-sm);
+  place-items: center;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-muted);
   font-size: var(--text-sm);
   cursor: pointer;
+}
+
+.dock__ico--locked {
+  cursor: default;
+  opacity: 0.7;
 }
 
 .dock__close:hover {

@@ -161,6 +161,9 @@ const dragging = computed(() => drag.value !== null)
         :title="
           props.ruleNote === '' ? `规则 ${props.rule}` : `规则 ${props.rule} · ${props.ruleNote}`
         "
+        :aria-label="
+          props.ruleNote === '' ? `规则 ${props.rule}` : `规则 ${props.rule} · ${props.ruleNote}`
+        "
       >
         ?
       </BaseTag>

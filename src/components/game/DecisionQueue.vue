@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
 import { BaseButton, BaseIcon } from '@/components/base'
@@ -972,7 +972,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 24px;
+  min-height: 32px;
   padding: 2px 0;
   border: none;
   background: transparent;

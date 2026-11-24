@@ -1,43 +1,60 @@
 # 界面硬伤整改与打磨 — 任务分解
 
-日期：2026-11-20　状态：待批　配套：`spec.md`
+日期：2026-11-20　最后更新：2026-11-25　配套：`spec.md`
 
-> 门禁 `npm run check`（约 250s，不含 AI 套件）；每完成一条 commit 即 push，不攒到最后。
+> 门禁 `npm run check`（约 250s，不含 AI 套件）。2026-11-25 夜间口径：**先做完整套 UI 改动再 review**，
+> commit 按"可回滚的一组"切；push 待凭据确认后统一补。
 
 ## 0. 前置
 
-- [ ] `npm i -D playwright-core`，`ui-regression.mjs` 改成本地解析（去掉对 `OCS_PW_DIR` 外部目录的依赖）
-- [ ] 把回归脚本放 `scripts/ui-regression.mjs`，跑一次确认**基线为 6 项全 FAIL**
+- [x] `npm i -D playwright-core`（已进 `package.json`）
+- [ ] `scripts/ui-regression.mjs` 建脚本并跑基线（**仍未做**，见 §5）
 
-## 1. commit ①：对比度与遮挡
+## 1. commit ①：档位与入口收敛（`51f13b9`）
 
-- [ ] `styles/tokens.css` 核对两套皮肤语义色与 `accent-solid` 的配对（附实测值注释）
-- [ ] `FlowStrip.vue:598-603`：`aria-current` 前景改 `on-accent` 家族
-- [ ] 新增 `tests/styles/tokens-contrast.test.ts`：解析 `tokens.css`，断言「`accent-solid` 底上只允许 `on-accent`」与「`color-accent` on `color-accent-2` ≥ 4.5」
-- [ ] `ToastHost.vue`：`top: var(--toast-top, var(--space-5))`
-- [ ] 棋桌 `--toast-top: 112px`（挂 `document.documentElement`），剧本页/首页 `72px`
-- 验收：`ui-regression.mjs` → UI-1 / UI-2 PASS；浅深两套各截一张环节条
+- [x] 缺省窗宽 430：`MapDock` 缺省宽、`VictoryDialog` `width="430px"`
+- [x] 存档窗 620：`SaveLoadDialog` `width="620px"`
+- [x] 存档入口只留两处：对局台左栏最下、开始台顶栏；`HomeView` 主区「读取存档」删；待答面板 footer 删
+- [x] 左栏压在待答遮罩之上：`.gt__rail { z-index: calc(var(--z-panel) + 10) }`
+- 验收：`vue-tsc` / `eslint` / `prettier` 全绿
 
-## 2. commit ②：裁字、内部键、深色底板
+## 2. commit ②：表进左栏 + 托盘只剩盒段（`5e040db`）
 
-- [ ] `DecisionQueue.vue:666` `.queue__hint` 允许换行，父容器两行
-- [ ] `SettlementLogPanel.vue`：引入 `SETTLEMENT_ACTION_LABELS`（66 键），`:237` 与 `:159-160` 全部走映射，未知键→"未分类"
-- [ ] `map-render.ts` 导出 `DARK_BOARD_COLOR`；`MapCanvas.vue` 深色下传 boardColor（android 保持 `#141712`）
-- [ ] 守卫测试：`DARK_BOARD_COLOR === tokens.css` 深色 `--color-command-bg`
-- 验收：6 项全 PASS；深色 1600/1280/1024 三张 + 浅色回归一张
+- [x] 新增 `src/components/game/ChartTableDrawer.vue`：四 chip（CRT / 补给与补员 / TEC / 变量与事件）、初值 `null`、只画印卡
+- [x] `GameTableView`：抽屉 `cards`→`charts`（标签「表」）；安卓快捷菜单同步「表」
+- [x] `BottomTray`：删表段与两段互斥；只剩盒段，`setup.applied` 后常驻地图下方（`gt__tray-dock`）
+- [x] 重建教学不再代开抽屉；文案「盒表」→「盒」
+- [x] 守卫测试改靶（表抽屉 / 托盘盒段），判据不放松
 
-## 3. commit ③：七条打磨
+## 3. commit ③：五处硬伤（`d4e0bd6`）
 
-- [ ] P2-1 剧本列表：id 列与日期列定宽，行高统一
-- [ ] P2-2 `MapCanvas.vue:603-605`：`userAdjusted` 为真后不再自动 `fitToWindow()`
-- [ ] P2-3 `DecisionQueue.vue:963` `min-height` 抬到 ≥32px
-- [ ] P2-4 面板标题后 4 个裸 `?` 改为带 `aria-label` 的提示控件
-- [ ] P2-5 盒表抽屉空态文案 + 分组骨架
-- [ ] P2-6 首帧左侧黑带：首帧前先 `fitToWindow`，或等尺寸就绪再画
-- [ ] P2-7 深色主按钮提亮一档并复核文字对比
-- 验收：截图矩阵人工核对 + `ui-regression.mjs` 仍 6/6 PASS
+- [x] UI-1 `FlowStrip`：当前步 `accent` 底 + `on-accent` 字
+- [x] UI-2 `ToastHost`：`top: 72px`（顶栏约 64px），宿主 `pointer-events:none` 保留
+- [x] UI-3 `DecisionQueue`：空军选机提示去 `nowrap/ellipsis`
+- [x] UI-3b / UI-4：`src/render/action-labels.ts`（70 键），战报三处统一，未知键「未分类」
+- [x] UI-5：`MapCanvas` 可选 `boardColor`，深色传 `#141712`
+- [x] 删 `QuestionPrompt` 遗留 `.prompt__footer`
+- [x] 新增 `tests/render/action-labels.test.ts`
 
-## 4. 收尾
+## 4. 打磨（commit ④）
 
-- [ ] `docs/待办清单.md` 更新
-- [ ] 三个 commit 合并 `main`，PR 附 6/6 PASS 截图
+- [x] P2-3 `.queue__stack-btn` `min-height` 24→32
+- [x] P2-4 `MapPopover` 与增援面板三处 `?` 补 `aria-label`
+- [x] P2-7 深色 `accent-solid` `#244840`→`#2e5a4e`、hover `#3a6d5e`
+- [x] 会话窗 `MapDock`：补 `⌄` 收起（状态保留）与 `▣` 不可关
+- [x] `tests/render/ui-hardening.test.ts`：UI-1/2/3、P2-3、P2-7 源码守卫
+- [—] P2-1 已核：id 列 `space-10` 定宽、行高 `space-12`，无需改
+- [—] P2-2 已核：`sizeChanged && !userAdjusted` 闸门在位
+- [—] P2-5 废弃：右侧「盒表」抽屉已不存在
+- [ ] P2-6 首帧黑带：未复现，挂起
+
+## 5. 收尾（未做）
+
+- [ ] `scripts/ui-regression.mjs`：本机 Edge + `playwright-core` 跑 6 项判据（UI-1/2/3/3b/4/5）
+- [ ] 6 槽存档扩槽（用户口径：最后做、优先级低）
+- [ ] 安卓壳入口（齿轮菜单存读档、quickBox）随 PC 收口后再动
+- [ ] commit 统一 push（`git@github.com:VANs135/smolensk.git`，凭据待确认）
+
+## 6. 已知不动的项
+
+- `map-view.ts` 的 `unit` / `containers` 两个会话分支**保留**：分别是设施动作窗与盒卡"需要窗时"的唯一入口，删了会丢功能。

@@ -211,8 +211,8 @@
   --color-command-danger: #ffada8;
   --color-command-axis: #9bc8fc;
   --color-command-soviet: #ffb18c;
-  --color-command-accent-solid: #244840;
-  --color-command-accent-solid-hover: #3a5240;
+  --color-command-accent-solid: #2e5a4e; /* 2026-11-25 P2-7：深色主按钮提亮一档（原 #244840 与面板几乎同调） */
+  --color-command-accent-solid-hover: #3a6d5e;
   --color-command-danger-hover: #75271d;
   --color-command-on-accent: #eef5f6;
   --color-command-info-bg: #21323e;

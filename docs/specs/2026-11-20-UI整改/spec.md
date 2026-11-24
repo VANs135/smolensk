@@ -108,15 +108,15 @@ body[data-layout='board'] {
 
 ## 4. P2 七条打磨（可一批做完）
 
-| 编号 | 问题                                                                       | 改法                                                            |
-| ---- | -------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| P2-1 | 剧本列表 Intro 行 id 列 40px@x228–268 与日期贴字、行高 79px（其余约 60px） | 给 id 列与日期列定宽，行高统一                                  |
-| P2-2 | 开 498px「盒表」抽屉后地图 20%→17%                                         | 缩放只在用户未手动调过时 fit；`userAdjusted` 一旦为真不再自动缩 |
-| P2-3 | 抽屉「堆叠」按钮 `min-height:24px` 偏小（实测判据之一）                    | 抬到与其它次级按钮一致（≥32px）                                 |
-| P2-4 | 面板标题后 4 个裸 `?`                                                      | 统一为带 `aria-label` 的提示控件                                |
-| P2-5 | 盒表抽屉 90% 空白                                                          | 空态文案 + 分组骨架，不要空抽屉                                 |
-| P2-6 | 偶发首帧左侧 144px 黑带（重绘后消失，复现不稳定）                          | 首帧前先 `fitToWindow`，或首帧不画、等尺寸就绪                  |
-| P2-7 | 深色主按钮层级偏弱                                                         | 深色 `accent-solid` 对比底不够，提亮一档并复核文字对比          |
+| 编号 | 问题                                                                       | 改法                                                                                                                     |
+| ---- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| P2-1 | 剧本列表 Intro 行 id 列 40px@x228–268 与日期贴字、行高 79px（其余约 60px） | 给 id 列与日期列定宽，行高统一                                                                                           |
+| P2-2 | 开 498px「盒表」抽屉后地图 20%→17%                                         | 缩放只在用户未手动调过时 fit；`userAdjusted` 一旦为真不再自动缩                                                          |
+| P2-3 | 抽屉「堆叠」按钮 `min-height:24px` 偏小（实测判据之一）                    | 抬到与其它次级按钮一致（≥32px）                                                                                          |
+| P2-4 | 面板标题后 4 个裸 `?`                                                      | 统一为带 `aria-label` 的提示控件                                                                                         |
+| P2-5 | 盒表抽屉 90% 空白                                                          | **已废弃**：右侧「盒表」抽屉已拆（表→左栏「表」抽屉，盒→常驻托盘盒段）；空态改由表抽屉承担（无默认选中，只有 chip 一行） |
+| P2-6 | 偶发首帧左侧 144px 黑带（重绘后消失，复现不稳定）                          | 首帧前先 `fitToWindow`，或首帧不画、等尺寸就绪（**未复现，暂不动**）                                                     |
+| P2-7 | 深色主按钮层级偏弱                                                         | 深色 `accent-solid` 对比底不够，提亮一档并复核文字对比（**已做**：`#244840`→`#2e5a4e`，hover `#3a6d5e`）                 |
 
 ---
 
@@ -158,3 +158,42 @@ body[data-layout='board'] {
 ## 附录 A：66 个结算动作键
 
 `acceptOutOfSupply`、`airBaseCapture`、`airBaseReduce`、`airCargo`、`airCargoLoss`、`airCargoReturn`、`airCombat`、`airFlak`、`airIntercept`、`airInterceptCombat`、`airMission`、`airMissionResolve`、`airRefit`、`airReturn`、`airSupplyLoad`、`airSupplyReturn`、`airTransfer`、`airUnitLoad`、`answer`、`arrival`、`arrivalRail`、`attack`、`attritionRoll`、`barrageDeclare`、`barrageDice`、`barrageOutcome`、`barrageShifts`、`barrageSupply`、`breakdown`、`breakoutAttempt`、`cancel`、`cleanUp`、`combatAdvance`、`combatAr`、`combatDice`、`combatLosses`、`combatOptions`、`combatRetreat`、`combatSupply`、`combatSurprise`、`combatTerrain`、`consolidate`、`eatOffTheMap`、`engineer`、`frontalReserves`、`fuel`、`manualRoll`、`move`、`offMapSupplyDeposit`、`overrun`、`panzerObligationDg`、`place`、`railMove`、`rebuild`、`reserveRelease`、`securityNeeds`、`slowMobilizationUnlock`、`specialCombat`、`specialRepl`、`supplyArrival`、`supplyCache`、`supplyOos`、`supplyPickup`、`supplyTrace`、`supplyTrain`、`transportLoad`、`transportUnload`、`variableExit`、`variableRepl`（共 66 个，中文标签按规则书动作名逐条核定）。
+
+---
+
+## 8. 执行结果（2026-11-25）
+
+夜间按"最简 UI"（45 窗面 + 壳层 8 面）落地，与本文原稿的差异逐条记在这里，改代码的人以本节为准。
+
+### 8.1 已落地
+
+| 项               | commit        | 实际做法                                                                                                                   |
+| ---------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 档位收敛         | `51f13b9`     | 缺省窗宽 430（`MapDock` / 判定胜利）、存档窗 620；撤销 380 历史值                                                          |
+| 存档入口收敛     | `51f13b9`     | 只留两处：对局台左栏最下一枚、开始台顶栏一枚；`HomeView` 主区「读取存档」删；待答面板 footer 删；`Ctrl+S` 仅快捷键         |
+| 待答遮罩不盖左栏 | `51f13b9`     | `.gt__rail` `z-index: calc(var(--z-panel) + 10)`（200→210），仍低于模式闸门 250 与 toast 300                               |
+| 表迁左栏         | `5e040db`     | 新 `ChartTableDrawer.vue`：四 chip、初值 null、空态只有 chip；右栏抽屉 `cards`→`charts`（标签「表」）；`BottomTray` 删表段 |
+| 盒入口           | `5e040db`     | 托盘只剩盒段，`setup.applied` 后常驻地图下方（`gt__tray-dock`）；入口＝卡头，桌面默认折叠、安卓默认展开                    |
+| UI-1             | `d4e0bd6`     | 当前步改 `background: var(--color-accent)` + `color: var(--color-on-accent)`                                               |
+| UI-2             | `d4e0bd6`     | 选**右上 72px**（顶栏 ≈64px），不换左下：左下与常驻托盘/左栏起点相撞；宿主仍 `pointer-events:none`，条目 auto              |
+| UI-3             | `d4e0bd6`     | 仅空军选机条那一处去掉 `nowrap/ellipsis`（`.queue__hint` 本体本来就换行）                                                  |
+| UI-3b/4          | `d4e0bd6`     | 新增 `src/render/action-labels.ts`（70 键 + `actionLabel()`），战报行头 / 动作下拉 / 重放分歧三处统一；未知键「未分类」    |
+| UI-5             | `d4e0bd6`     | `MapCanvas` 新增可选 `boardColor`；深色主题传 `#141712`（与安卓沙盘同色），浅色不传                                        |
+| P2-3             | 未单独 commit | `.queue__stack-btn` `min-height` 24→32                                                                                     |
+| P2-4             | 未单独 commit | `MapPopover` 规则 `?` 补 `aria-label`；增援面板三处 `?` 同理（`RuleTip` 本就有）                                           |
+| P2-7             | 未单独 commit | 深色 `--color-command-accent-solid` `#244840`→`#2e5a4e`、hover `#3a6d5e`                                                   |
+| 会话窗壳         | 未单独 commit | `MapDock` 补 `⌄` 收起（只折体、会话保留）与 `▣` 不可关（`closePolicy='refused'`）                                          |
+
+### 8.2 与原稿不同的判断（已核实，不照原稿执行）
+
+1. **不换标识的位置**：原稿 UI-2 推荐左下；实际 72px 右上已让开顶栏，且左下会压住左栏存档/托盘入口。
+2. **`DARK_BOARD_COLOR` 未建常量**：直接复用安卓沙盘 `#141712`（同一视觉层），不新增镜像常量，守卫改为钉"深色时传深色、浅色传 undefined"。
+3. **两处旧会话（`unit` / `containers`）不删**：`map-view.ts` 里 `unit` 分支是设施动作（SP / 运输点 / 空军基地 / 工事）**唯一窗口入口**，`containers` 分支是盒卡"需要窗时"的唯一出口。删了会丢功能；保留并在文档更正。
+4. **P2-1 / P2-2 / P2-6**：P2-1 现状已是 id 列 40px 定宽、行高 `space-12`，无需改；P2-2 已有 `userAdjusted` 闸门；P2-6 未复现，不动。
+5. **P2-5 废弃**：右侧「盒表」抽屉已不存在。
+
+### 8.3 仍未做（明确挂起）
+
+- 6 槽存档扩槽（用户口径：优先级最低，最后做；`SaveLoadDialog` 仍单槽）。
+- `scripts/ui-regression.mjs` 未建：本机只有 `playwright-core`，需固定浏览器通道；先以 `tests/render/ui-hardening.test.ts` 的源码守卫兜住"改回去"，像素级回归待补。
+- 安卓壳（齿轮菜单存读档、quickBox）等 PC 收口后再动。

@@ -1158,7 +1158,9 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           @click="onArrivalCardClick(card)"
         >
           <img v-if="card.image !== null" :src="card.image" alt="" class="arrival-hand__img" />
-          <span v-else class="arrival-hand__fallback" :title="card.raw">?</span>
+          <span v-else class="arrival-hand__fallback" :title="card.raw" :aria-label="card.raw"
+            >?</span
+          >
           <span v-if="card.aircraft" class="arrival-hand__badge arrival-hand__badge--air">✈</span>
           <span
             v-if="card.remaining > 1"
@@ -1178,7 +1180,9 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
           @click="withdrawArrival(card.index)"
         >
           <img v-if="card.image !== null" :src="card.image" alt="" class="arrival-hand__img" />
-          <span v-else class="arrival-hand__fallback" :title="card.raw">?</span>
+          <span v-else class="arrival-hand__fallback" :title="card.raw" :aria-label="card.raw"
+            >?</span
+          >
           <span class="arrival-hand__undo">↩</span>
         </button>
       </div>
@@ -1273,10 +1277,11 @@ const showsRebuild = computed(() => props.only === null || props.only === 'rebui
         <BaseTag kind="danger">2.1a</BaseTag>
         当日生效的补给源关闭：{{ plan.shutdowns.join('、') }}
       </p>
-
       <!-- 说明、条款、原卡面、库中型号、卡面记账：一律收进 ? -->
       <details class="arrival-hand__more" data-testid="arrival-hand-more">
-        <summary title="到达卡原图、库中型号、卡面记账">?</summary>
+        <summary title="到达卡原图、库中型号、卡面记账" aria-label="到达卡原图、库中型号、卡面记账">
+          ?
+        </summary>
         <figure v-if="ooaCard !== null" class="ooa">
           <a v-if="ooaReady" :href="ooaImageUrl ?? undefined" target="_blank" rel="noreferrer">
             <img class="ooa__img" :src="ooaImageUrl ?? ''" :alt="ooaCard.title" />
