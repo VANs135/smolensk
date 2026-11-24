@@ -56,19 +56,21 @@ describe('12.6c/12.6d：喂食与断补标记的一键落盘', () => {
     expect(unfed.hasTraceSupply).toBe(false) // 未勾 ⇒ 仍置断补（12.6d mark）
   })
 
-  it('T 不够 ⇒ 不喂、整笔不扣款（12.3a/12.3b 只能从己方站取）', () => {
+  it('站里 T 不够 ⇒ 不喂、整笔不扣款（12.3a/12.3b 只能从己方站取）', () => {
     const store = newStore()
     store.setPhase('supply')
     const unit = placeGround(store, combatRecord('axis'), CORE_HEX, 'axis', 'u1')
-    store.spDumps.push({ id: 'd1', hex: { ...CORE_HEX }, side: 'axis', sp: 0, t: 0 }) // 没有 T
+    unit.re = 3 // 12.6c：ceil(3 / 2) = 2 T
+    store.spDumps.push({ id: 'd1', hex: { ...CORE_HEX }, side: 'axis', sp: 0, t: 1 }) // 只有 1 T
     store.supplyPhaseInputs = { availableT: 0, eatOffTheMap: { [unit.instanceId]: true } }
     sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     store.planSupplyPhaseNow()
-    // 有站但站里没 T ⇒ 引擎判 affordable=false ⇒ 不喂、不扣、仍断补
+    // 有站（12.1b），但该组只够 1 T、本次要 2 T ⇒ 引擎判 affordable=false ⇒ 不喂、不扣、仍断补
+    // （★ 不可再用「0 SP + 0 T 的条目」造这个情形：B1 / 12.1c 之后空条目已不是站，连吃图上的资格都没有）
     expect(store.supplyPhasePlan?.feeding[0]?.affordable).toBe(false)
     expect(store.applySupplyPhaseFeedingNow()).toBe(true)
     expect(unit.hasTraceSupply).toBe(false)
-    expect(holdingsToT(store.spDumps[0]!)).toBe(0)
+    expect(holdingsToT(store.spDumps[0]!)).toBe(1)
   })
 
   it('未载入计划就落盘 ⇒ 被拒（先算后落）', () => {

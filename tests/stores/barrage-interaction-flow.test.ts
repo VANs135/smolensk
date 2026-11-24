@@ -252,8 +252,10 @@ describe('C7 轰炸交互：10.0 通用流程端到端', () => {
     expect(store.confirmBarrageSupplyStep()).toBe(false)
     expect(store.barrageError).toMatchObject({ rule: '12.3a', reason: 'barrageSupplyNeedsADump' })
 
-    // 声明一座**空**站 ⇒ 可用量为 0，引擎给 10.1b 的 cannotAfford
-    const empty = withBarrageDump(store, { sp: 0, t: 0 })
+    // 声明一座**不够付**的站 ⇒ 可用量不足，引擎给 10.1b 的 cannotAfford
+    // ★ B1 / 12.1c：0 SP + 0 T 的条目已不是补给站（连付款来源都当不了），
+    //   故改以「1 T 站 vs ≥2 T 成本」测同一条拒绝，而不是用"空站"。
+    const short = withBarrageDump(store, { sp: 0, t: 1 })
     expect(store.confirmBarrageSupplyStep()).toBe(false)
     expect(store.barrageError).toMatchObject({ rule: '10.1b', reason: 'cannotAfford' })
     expect(store.barrageState?.step).toBe('supply')
@@ -263,7 +265,7 @@ describe('C7 轰炸交互：10.0 通用流程端到端', () => {
     expect(store.confirmBarrageSupplyStep()).toBe(false)
     expect(store.barrageError).toMatchObject({ rule: '10.1b-C', reason: 'internalStocksForbidden' })
     // 站上的 T 分文未动（拒付即不落盘）
-    expect(tonsOf(store, empty)).toBe(0)
+    expect(tonsOf(store, short)).toBe(1)
   })
 
   it('10.1b / 12.3a：火炮补给**真的从声明的补给站扣款**（原先只把状态标成"已付"）', () => {

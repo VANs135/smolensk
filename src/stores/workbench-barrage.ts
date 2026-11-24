@@ -605,10 +605,12 @@ export function createBarrageDomain(deps: BarragePorts) {
     // ② 12.3b：HQ 投递（HQ 自己拖得到 + 覆盖每一个受益单位）
     for (const key of hqDeliveryDumpKeys(side, beneficiaries)) keys.add(key)
     // ③ 12.1b/13.2g-B：落到具体账本条目上，并对编内卡车来源逐个受益单位验编队资格
+    // 12.1c：已清空（0 SP + 0 T）的条目不再是站 ⇒ 不进付款候选
     return allSpDumps.value.filter(
       (dump) =>
         dump.side === side &&
         keys.has(hexLabel(dump.hex)) &&
+        holdingsToT({ sp: dump.sp, t: dump.t }) > 0 &&
         (dump.carrierIsOrganicTruck !== true ||
           beneficiaries.every((unit) =>
             canDrawFromCarrier({

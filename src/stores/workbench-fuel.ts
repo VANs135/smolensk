@@ -1096,7 +1096,13 @@ export function createFuelDomain(ports: FuelDomainPorts) {
          * 若正装在编队卡车上，HQ 法**一分也取不到**（与单单位法那一支不一致）。
          */
         for (const dump of allSpDumps.value) {
-          if (dump.side === side && keys.has(hexLabel(dump.hex))) picked.set(dump.id, dump)
+          // 12.1c：清空（0 SP + 0 T）的条目已不是补给站 ⇒ 不作燃料来源
+          if (
+            dump.side === side &&
+            keys.has(hexLabel(dump.hex)) &&
+            holdingsToT({ sp: dump.sp, t: dump.t }) > 0
+          )
+            picked.set(dump.id, dump)
         }
       }
       return [...picked.values()]

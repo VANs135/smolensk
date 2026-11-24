@@ -120,7 +120,7 @@ describe('12.6c：D 段按实际付款来源分组取整，不跨来源借用已
     expect(tonsOf(store, 'shared')).toBe(0)
   })
 
-  it('另一组来源没有余额 ⇒ 该单位不喂、仍断补；不能靠前一组的 1T 免费续命', () => {
+  it('★ B1 12.1c：0/0 的条目不再是站 ⇒ b 连「吃图上补给」的资格都没有（12.6c 要求站在拖取/投递距离内）', () => {
     const store = newStore()
     store.setPhase('supply')
     const a = placeCombat(store, 'a', CORE_HEX)
@@ -129,17 +129,27 @@ describe('12.6c：D 段按实际付款来源分组取整，不跨来源借用已
     sealTraceSupplyByZoc(store, CORE_HEX, 'axis', true)
     sealTraceSupplyByZoc(store, FAR_HEX)
     store.spDumps.push({ id: 'near', hex: { ...CORE_HEX }, side: 'axis', sp: 0, t: 1 })
-    // 远站存在（12.6c 的距离前提成立）但分文没有 ⇒ 该组预算为 0
+    /*
+     * 12.1b / 12.1c（用户 2026-11-24 裁定）：**补给站用完后不能算站点**。
+     * 修前这里用「远站存在但分文没有（0 SP + 0 T）」造"该组预算为 0"；B1 之后这种情形不存在——
+     * 空条目不进 `supplyFacts`，`canEatOffTheMap`（12.6c：要求站落在拖取/投递距离内）随之否决，
+     * 故 b 不会得到 `affordable: false` 的供养行，而是**直接**承担损耗（12.8a）。
+     * 账本条目本身仍保留（退款/撤销/界面显示"已用尽"）。
+     */
     store.spDumps.push({ id: 'far', hex: { ...FAR_HEX }, side: 'axis', sp: 0, t: 0 })
     store.supplyPhaseInputs = {
       availableT: 0,
       eatOffTheMap: { [a.instanceId]: true, [b.instanceId]: true },
     }
 
+    // 空条目不是站：不进 12.6 的事实
+    expect(store.supplyFacts.dumpsFor('axis')).toEqual([CORE_HEX])
+
     expect(store.planSupplyPhaseNow()).toBe(true)
-    expect(store.supplyPhasePlan!.feeding.map((item) => item.affordable)).toEqual([true, false])
+    // 只有 a 有资格吃图上补给（b 没有可用的站）
+    expect(store.supplyPhasePlan!.feeding.map((item) => item.unitId)).toEqual([a.instanceId])
     expect(store.applySupplyPhaseFeedingNow()).toBe(true)
-    // a 被喂饱（续命，不写 hasTraceSupply）；b 没额度 ⇒ 仍断补
+    // a 被喂饱（续命，不写 hasTraceSupply）；b 没有站 ⇒ 仍断补
     expect(a.hasTraceSupply).toBe(false)
     expect(a.sustainedBySpecialSupplyTurn).toBe(store.turn)
     expect(b.hasTraceSupply).toBe(false)

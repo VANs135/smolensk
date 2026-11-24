@@ -287,7 +287,14 @@ describe('B32 步骤 5：装载在运输点数上的 SP（12.1b / 13.2f）', () 
   it('★ 源码守卫：facts / 候选 / 扣款三处都接了"装载来源"，且 id 前缀是 unit:', () => {
     const store = readStoreSource()
     expect(store).toContain('const carriedSpDumps = computed')
-    expect(store).toContain('allSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side }))')
+    /*
+     * 12.1b：事实里的 dumps 收的仍是「账本条目 + 装载在运输点数上的」这同一份；
+     * ★ B1 / 12.1c（用户 2026-11-24 裁定）：0 SP + 0 T 的条目**不再是站** ⇒ 只从 `stockedSpDumps` 收。
+     */
+    expect(store).toContain(
+      'dumps: stockedSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),',
+    )
+    expect(store).toContain('const stockedSpDumps = computed')
     /*
      * ★ 契约变更（G②，2026-09-19，**判据没放宽**）：战斗与炮击的来源候选**合并成一处**
      *   （`deliverableDumpsFor`：12.3a 直拖交集 ∪ 12.3b HQ 投递）—— 修前战斗侧那份 `sideDumps`

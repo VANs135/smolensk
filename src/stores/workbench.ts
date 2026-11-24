@@ -4078,9 +4078,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 12.1b：**全部**含 SP 的位置（账本条目 + 装载在运输点数上的）——取补与候选一律走这一份 */
   const allSpDumps = computed<SpDump[]>(() => [...spDumps.value, ...carriedSpDumps.value])
 
-  /** 12.1b：当前方的全部补给站（含装载中的 `unit:` 来源；付款/回退统一走这一份） */
-  const allSpDumpsOfSide = computed<SpDump[]>(() =>
-    allSpDumps.value.filter((dump) => dump.side === activeSide.value),
+  /**
+   * 12.1b / 12.1c：**此刻真正还算「补给站」的持仓**
+   *
+   * 原文：「Any location containing Supply Points ... is called a dump」＋「如果该补给站被清空，请移除此标记」
+   * ⇒ 0 SP 且 0 T 的条目**不再是站**（不进追溯事实、不进付款/装载候选），
+   * 但账本条目本身保留（退款、撤销、界面显示"已用尽"仍要靠它）。
+   */
+  const stockedSpDumps = computed<SpDump[]>(() =>
+    allSpDumps.value.filter((dump) => holdingsToT({ sp: dump.sp, t: dump.t }) > 0),
   )
 
   /** 12.1b：按 id 取补给站——地面账本与装载中来源一视同仁 */
@@ -4142,8 +4148,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     createSupplyFacts({
       units: units.value,
       turn: turn.value,
-      // 12.1b：含 SP 的位置 —— **账本条目 + 装载在运输点数上的**（B32 步骤 5）
-      dumps: allSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),
+      // 12.1b / 12.1c：含 SP 的位置（账本条目 + 装载在运输点数上）；清空（0 SP + 0 T）的条目不算站
+      dumps: stockedSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),
       sources: [
         // 专规 2.1 / 专规 3.1：图边补给源格（剧本清单 ∪ 入场铁路格；按方，含 1.26 这类非铁路源）
         ...(['axis', 'soviet'] as const).flatMap((side) =>
@@ -4175,8 +4181,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     createSupplyFacts({
       units: units.value,
       turn: turn.value,
-      // 12.1b：含 SP 的位置 —— **账本条目 + 装载在运输点数上的**（B32 步骤 5）
-      dumps: allSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),
+      // 12.1b / 12.1c：含 SP 的位置（账本条目 + 装载在运输点数上）；清空（0 SP + 0 T）的条目不算站
+      dumps: stockedSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),
       sources: [
         // 专规 2.1 / 专规 3.1：图边补给源格（与 `supplyFacts` 同一份判据）
         ...(['axis', 'soviet'] as const).flatMap((side) =>
@@ -4963,7 +4969,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * Transport Point, is called a dump.」⇒ 装载中的 SP 也能作为装载来源，不能再只看 `spDumps`。
    */
   function transportDumpsAt(unit: ConsoleUnit): readonly SpDump[] {
-    return allSpDumps.value.filter((item) => item.side === unit.side && sameHex(item.hex, unit.hex))
+    // 12.1c：已清空的条目不再算站 ⇒ 13.2f 的「同格有补给站」不能由空条目满足
+    return stockedSpDumps.value.filter(
+      (item) => item.side === unit.side && sameHex(item.hex, unit.hex),
+    )
   }
 
   /** 13.2f / 6.1a：本次费用是否会把该点数推过印刷 MA（>0 ⇒ 超支 MP） */
@@ -5139,8 +5148,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       (item) => item.side === unit.side && item.isCombat && sameHex(item.hex, unit.hex),
     )
     const hasFacility = airBases.value.some((base) => sameHex(base.hex, unit.hex))
+    // 13.2f「已经有**已卸载的补给站**」：只认**地面账本**里还有持仓的（12.1c 清空即撤标记）；
+    // 承运车自己装着的 SP 是 12.1b 的"含 SP 的位置"，但不属于"已卸载"⇒ 不能给自己充当卸载前提
     const hasDump = spDumps.value.some(
-      (item) => item.side === unit.side && sameHex(item.hex, unit.hex),
+      (item) =>
+        item.side === unit.side &&
+        sameHex(item.hex, unit.hex) &&
+        holdingsToT({ sp: item.sp, t: item.t }) > 0,
     )
     const outcome = validateTransportPointUnload({
       transportPoint: transportPointActorOf(unit),
@@ -5260,8 +5274,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       (item) => item.side === unit.side && item.isCombat && sameHex(item.hex, unit.hex),
     )
     const hasFacility = airBases.value.some((base) => sameHex(base.hex, unit.hex))
+    // 13.2f「已经有**已卸载的补给站**」：只认**地面账本**里还有持仓的（12.1c 清空即撤标记）；
+    // 承运车自己装着的 SP 是 12.1b 的"含 SP 的位置"，但不属于"已卸载"⇒ 不能给自己充当卸载前提
     const hasDump = spDumps.value.some(
-      (item) => item.side === unit.side && sameHex(item.hex, unit.hex),
+      (item) =>
+        item.side === unit.side &&
+        sameHex(item.hex, unit.hex) &&
+        holdingsToT({ sp: item.sp, t: item.t }) > 0,
     )
     const outcome = validateTransportPointUnload({
       transportPoint: transportPointActorOf(unit),
@@ -5815,7 +5834,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   ): SpDump[] {
     const keys = new Set(drawableDumpsAt(hex, side, mobility).map((dump) => hexLabel(dump.hex)))
     // 12.1b（B32 步骤 5）：**装载在运输点数上的 SP** 同样是可拖取的来源
-    return allSpDumps.value.filter(
+    // 12.1c：清空（0 SP + 0 T）的条目不再是站，付款候选里不出现
+    return stockedSpDumps.value.filter(
       (dump) =>
         dump.side === side &&
         keys.has(hexLabel(dump.hex)) &&
@@ -5901,7 +5921,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         : b,
     )
     return (
-      allSpDumps.value.find((dump) => dump.side === side && sameHex(dump.hex, nearest.hex)) ?? null
+      stockedSpDumps.value.find((dump) => dump.side === side && sameHex(dump.hex, nearest.hex)) ??
+      null
     )
   }
 
@@ -11188,7 +11209,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       // 12.1b / 13.2f：来源已按**每份持仓**展开 ⇒ 扣玩家选中的那一份（地面账本 or 装载在车上）
       if (source.stockId !== undefined) return dumpById(source.stockId) ?? null
       // 12.1b（用户 2026-11-13）：装载中的 SP 也是补给站 ⇒ 与地面账本一起参与解析
-      const sameHexDumps = allSpDumpsOfSide.value.filter((dump) => sameHex(dump.hex, hex))
+      const sameHexDumps = stockedSpDumps.value.filter(
+        (dump) => dump.side === activeSide.value && sameHex(dump.hex, hex),
+      )
       if (!panzerGroupRulesOn.value) return sameHexDumps[0] ?? null
       /*
        * 专规 3.4b（用户补充裁定）：
@@ -13109,7 +13132,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     createSupplyFacts({
       units: units.value,
       turn: turn.value,
-      dumps: allSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),
+      // 12.1b / 12.1c：清空的账本条目不再是补给站（B1），故这里只收还有持仓的
+      dumps: stockedSpDumps.value.map((dump) => ({ hex: dump.hex, side: dump.side })),
       sources: [
         ...supplySourceDecls.value
           .filter((decl) => decl.kind !== 'detrainable')

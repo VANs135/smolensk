@@ -123,9 +123,15 @@ function setup(store: ReturnType<typeof newStore>) {
   return { artillery, defender }
 }
 
-function withEmptyDump(store: ReturnType<typeof newStore>): string {
+/**
+ * 宣告一座**真实**付款站（12.1b / B1 12.1c：0 SP + 0 T 的条目已不是站，不能当付款来源）
+ *
+ * 21.10 的 Shells 先抵付、差额再由该站的 SP 补：给 1 T 便于"整笔付清 + 可撤销"的用例，
+ * 缺口降档的机制由 `tests/engine/supply-cache-shells.test.ts` 的 S5 覆盖。
+ */
+function withDump(store: ReturnType<typeof newStore>, t = 1): string {
   const id = `shells-dump-${store.spDumps.length}`
-  store.spDumps.push({ id, hex: FIRING_HEX, side: 'axis', sp: 0, t: 0 })
+  store.spDumps.push({ id, hex: FIRING_HEX, side: 'axis', sp: 0, t })
   expect(store.pickBarrageSupplyDump(id)).toBe(true)
   return id
 }
@@ -135,7 +141,7 @@ describe('21.10 Shells 付款接线（store）', () => {
     setActivePinia(createPinia())
   })
 
-  it('1 枚 Shells + 0 SP：额度 2T ⇒ 降档到 8–11 列，抵 2T、0 浪费、0 SP', () => {
+  it('1 枚 Shells + 1 T 站：满 3T 恰好付清（不降档），站扣 1T、Shells 抵 2T、0 浪费', () => {
     const store = newStore()
     setup(store)
     store.supplyCacheHoldings.axis = 1
@@ -143,20 +149,23 @@ describe('21.10 Shells 付款接线（store）', () => {
     const fullCost = store.barrageState!.table.costT
     expect(fullCost).toBeGreaterThanOrEqual(3)
 
-    withEmptyDump(store)
+    /*
+     * B1 / 12.1c：0 SP + 0 T 的条目已不是补给站 ⇒ 不能当付款来源（旧用例用"空站 + Shells 2T"
+     * 造缺口降档）。这里改成"1 T 站 + Shells 2T"恰好覆盖满表；缺口降档机制见
+     * `tests/engine/supply-cache-shells.test.ts` 的 S5。
+     */
+    withDump(store, 1)
     // 21.10 只允许「HQ 投递」的炮击；此处置位（真实流程由 pickBarrageSupplyDump 依 HQ 可达性推导）
     store.barrageInputs.fromSameHq = true
     store.barrageShellMarkers = 1
 
     expect(store.confirmBarrageSupplyStep()).toBe(true)
     expect(store.barrageState?.step).toBe('shifts')
-    // 成本取降档后的初始列，轰炸值压到列上界
-    expect(store.barrageState?.table.costT).toBe(2)
-    expect(store.barrageState?.table.columnLabel).toBe('8-11')
-    expect(store.barrageState?.totalValue).toBe(11)
+    // 付得起 ⇒ 保持原列，不降档
+    expect(store.barrageState?.table.costT).toBe(fullCost)
     expect(store.supplyCacheHoldings.axis).toBe(0)
     expect(store.spDumps[0]).toMatchObject({ sp: 0, t: 0 })
-    expect(store.barragePaidSupply).toMatchObject({ markers: 1, wasteT: 0, t: 0 })
+    expect(store.barragePaidSupply).toMatchObject({ markers: 1, wasteT: 0, t: 1 })
   })
 
   it('撤销：Shells 原数退回（尚未掷骰 ⇒ 视同未使用）', () => {
@@ -164,7 +173,7 @@ describe('21.10 Shells 付款接线（store）', () => {
     setup(store)
     store.supplyCacheHoldings.axis = 1
     expect(store.beginBarrageNow()).toBe(true)
-    withEmptyDump(store)
+    withDump(store)
     store.barrageInputs.fromSameHq = true
     store.barrageShellMarkers = 1
 
@@ -179,7 +188,7 @@ describe('21.10 Shells 付款接线（store）', () => {
     setup(store)
     store.supplyCacheHoldings.axis = 1
     expect(store.beginBarrageNow()).toBe(true)
-    withEmptyDump(store)
+    withDump(store)
     store.barrageInputs.fromSameHq = false
     store.barrageShellMarkers = 1
 
