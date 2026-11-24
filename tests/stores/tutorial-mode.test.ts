@@ -72,7 +72,8 @@ describe('教学模式：Vitebsk', () => {
     expect(ctx.setup.setupSideCursor).toBe('axis')
     expect(ctx.setup.pendingPlacement.filter((item) => item.side === 'soviet')).toHaveLength(0)
     expect(ctx.w.log.some((line) => line.text.includes('苏方初设自动布设未完成'))).toBe(false)
-    // 苏方算子按剧本数据落位（18 Tk Div 仍是「预备 + 移动面」）
+    // 苏方算子按剧本数据落位；18 Tk Div 的「预备 + 移动面」是**教学专用初设**补的
+    // （用户 2026-11-24：剧本数据按规则书留印面战斗面，教学模式单独一套）
     const tank = ctx.w.units.find((unit) => unit.name === 'Ru 18 Tk Div')
     expect(tank?.mode.mode).toBe('reserve')
     expect(tank?.mode.orientation).toBe('move')

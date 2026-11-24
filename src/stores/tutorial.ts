@@ -29,7 +29,8 @@ import { toConsoleAirUnit, toConsoleUnit, isFighterAircraft } from './workbench-
  *     否则它作为基地内唯一激活的苏机会在任务发起时逼出 14.3 目标格空战，
  *     打完返航转非激活，拦截课就整段丢失；
  *   · 额外摆一队 Ju.88 进图外盒（教学轰炸要求两队 Ju.88 + 一队 Do.17z + 一队 Bf110）；
- *   · 把苏军 18 Tk Div 置为预备并补足油（反应段才有合法反击对象）；
+ *   · 把苏军 18 Tk Div 置为预备并补足油（反应段才有合法反击对象；模式由教学初设脚本落，
+ *     苏方那 2 枚预备额度也只在本教学局，见 `applyTeachingSetup`）；
  *   · 扫射 / 扫荡 / 轰炸只钉既有裁判骰入口，空战与轰炸判定仍走 14.x / 10.0。
  *   反应段的苏军反扑：脚本只演**攻方那一半**（加油 → 移到城格 → 突袭 → 攻方补给 / 行动值 /
  *   损失 / 选项 / 撤退落点 / 推进），守方的补给、行动值、防御地形与战果由玩家自己在战斗窗里做；
@@ -192,6 +193,48 @@ export const useTutorialStore = defineStore('tutorial', () => {
   /** 苏方初设是否已由脚本自动落完（只试一次，失败就停在原地报因，不反复空转） */
   const scriptedSetupDone = ref(false)
 
+  /** 教学专用初设是否已落下（坦克师模式 + 苏方预备额度；与共享剧本数据分开） */
+  const teachingSetupDone = ref(false)
+
+  /**
+   * 教学专用初设（用户 2026-11-24 口径）
+   *
+   * 「教学模式是单独的初设，非教学模式的 Vitebsk 剧本要按照规则书放置，苏联没有飞机，
+   *   坦克师模式不要改，也不要放预备。」
+   *
+   * ⇒ 剧本数据只记卡面读数：`18 Tk Div` 印面**战斗面**、苏方 `reserveMarkers` 按卡面 **0**、
+   *   苏方没有飞机行（7 架德机全在轴方栏）。教学要的那一套在这里补：
+   *   · `18 Tk Div` ⇒ 预备 + 移动面。5.7a 允许进预备时翻任意面；教学反扑在反应段按 5.7b-B
+   *     只走半个 MA，战斗面 3 只有 1.5 MP，突袭（8.1a 每次 3 MP）根本发不出去，移动面 8 才有 4 MP。
+   *     走的是与玩家右键「初设模式」**同一条判定**（IV-B），不是直接改 `mode` 字段。
+   *   · 苏方预备额度 2 枚。卡面苏方栏没有 Reserve 行 ⇒ 规则书是 0；这个 2 是教学的会话覆盖
+   *     （`gameSession.setSetupOverride`），只在本局存在，换剧本即清空。
+   *
+   * 苏方的两架飞机不在这里：它们由开局脚本（`applyBoardScript`）在空军基地直接补实例，
+   * 与剧本数据的「苏联没有飞机」不冲突。
+   */
+  const TEACHING_SETUP = {
+    sovietReserveMarkers: 2,
+    tankUnitId: 'su-armor_tk-ru-18-tk-div',
+  } as const
+
+  function applyTeachingSetup(): void {
+    if (!active.value || teachingSetupDone.value) return
+    if (!setup.applied || setup.finished) return
+    const tank = workbench.units.find(
+      (unit) => unit.side === 'soviet' && unit.unitId === TEACHING_SETUP.tankUnitId,
+    )
+    // 固定项还没落完 ⇒ 不置「已完成」，等单位进盘后（watcher 带 units.length）再试
+    if (tank === undefined) return
+    teachingSetupDone.value = true
+    // ① 预备额度先立：`setUnitModeAtSetup` 的 5.4a 闸门读 `session.setupData` 的合并值
+    gameSession.setSetupOverride({
+      reserveMarkers: { soviet: TEACHING_SETUP.sovietReserveMarkers },
+    })
+    // ② 坦克师按 IV-B 落「预备 + 移动面」（日志由 setUnitModeAtSetup 自己落，不另记一笔）
+    workbench.setUnitModeAtSetup('reserve', 'move', [tank.instanceId])
+  }
+
   /**
    * 教学模式的苏方初设是**自动的**（用户 2026-11-23 口径）
    *
@@ -218,10 +261,17 @@ export const useTutorialStore = defineStore('tutorial', () => {
   /*
    * 初设状态一变就试一次：`enterSetup` 落完固定项后游标才落到苏方，
    * 因此这里按「已进入初设 + 游标在苏方」判定，而不挂在视图的某个按钮上。
+   * `units.length` 也进 key：教学初设要等坦克师真的进盘才落下（否则一次扑空就永远不再试）。
    */
   watch(
-    () => `${String(setup.applied)}|${String(setup.setupSideCursor)}|${String(setup.finished)}`,
-    () => autoPlaceScriptedSetup(),
+    () =>
+      `${String(setup.applied)}|${String(setup.setupSideCursor)}|${String(setup.finished)}|${String(
+        workbench.units.length,
+      )}`,
+    () => {
+      applyTeachingSetup()
+      autoPlaceScriptedSetup()
+    },
     { flush: 'post' },
   )
 
@@ -263,6 +313,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
     reactionHandover.value = false
     scriptApplied.value = false
     scriptedSetupDone.value = false
+    teachingSetupDone.value = false
     setTutorialSovietFirstTurnFullMa(true)
     /*
      * 2026-11-21（用户口径）：教学模式**入口是单独的**，玩家不必另选 PVE/PVP。
@@ -1204,15 +1255,19 @@ export const useTutorialStore = defineStore('tutorial', () => {
       }
     }
 
+    /*
+     * 18 Tk Div 的「预备 + 移动面」已由**初设脚本**（`applyTeachingSetup`）在初设阶段落下，
+     * 这里只补油：12.5a 的履带单位不加油不能消耗 MP（教学反扑要它走路 + 突袭）。
+     * 不再在这里改模式 —— 剧本数据按规则书放印面战斗面，教学那套只走初设那一处。
+     * 读档回来时初设早已结束（`applyTeachingSetup` 不会再跑）⇒ 顺手把教学的预备额度补回本局。
+     */
+    gameSession.setSetupOverride({
+      reserveMarkers: { soviet: TEACHING_SETUP.sovietReserveMarkers },
+    })
     const tk = workbench.units.find(
       (unit) => unit.side === 'soviet' && unit.unitId === 'su-armor_tk-ru-18-tk-div',
     )
-    if (tk !== undefined) {
-      tk.mode = { mode: 'reserve', orientation: 'move', dg: false, exploit: false }
-      // 与玩家切换模式同口径：预备标记盖在移动面上，raw 也要翻到移动面（否则只有战斗面的 3 MA）
-      tk.raw = tk.faces.move
-      tk.fuelled = true
-    }
+    if (tk !== undefined) tk.fuelled = true
 
     // 反应段的反击要付战斗补给：在 19.26 给苏军一处可用补给站（12.3a 相邻拖取）
     if (!workbench.spDumps.some((dump) => dump.id === 'tutorial-su-supply')) {

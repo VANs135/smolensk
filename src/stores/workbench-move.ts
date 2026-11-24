@@ -1453,7 +1453,7 @@ export function createMovementDomain(ports: MovementDomainPorts) {
       })
       if (!verdict.ok) continue
       if (to === 'reserve') {
-        const cap = session.scenarioInfo?.setup.reserveMarkers?.[unit.side] ?? 0
+        const cap = session.setupData?.reserveMarkers?.[unit.side] ?? 0
         const outcome = allowReserveEntryAtHex({
           side: unit.side,
           cap,
@@ -1488,7 +1488,7 @@ export function createMovementDomain(ports: MovementDomainPorts) {
     reserveCap: number
     reserveForbidden: boolean
   } {
-    const setup = session.scenarioInfo?.setup
+    const setup = session.setupData
     const constraints = setup?.modeConstraints
     return {
       allowed: constraints?.allowedSetupModes ?? SETUP_MODES_ALL,

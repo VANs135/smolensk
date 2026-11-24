@@ -167,6 +167,17 @@ export interface HotseatCodec {
   restore(saved: SaveHotseat | undefined): void
 }
 
+/**
+ * 会话级初设覆盖（教学模式的**专用初设**）
+ *
+ * 只覆盖「按剧本数据无法表达、但教学脚本必须给」的数值；目前唯一一项是苏方预备额度
+ * （卡面苏方栏没有 Reserve 行 ⇒ 规则书是 0，教学反扑要 2）。字段刻意保持最小：
+ * 不是"第二份剧本数据"，别往里加单位位置/模式（那些走初设 API，见 `tutorial.ts`）。
+ */
+export interface ScenarioSetupOverride {
+  reserveMarkers?: { axis?: number; soviet?: number }
+}
+
 /** 盘面动作仍调用纯规则函数；此处负责保证正式推进的所有入口经过相同生命周期。 */
 export interface PhaseHooks {
   started?(): void
@@ -261,6 +272,36 @@ export const useGameSessionStore = defineStore('gameSession', () => {
   const scenarioInfo = computed(() =>
     scenarios.scenarios.find((item) => item.id === scenarioId.value),
   )
+
+  /**
+   * 会话级初设覆盖（**教学模式专用**，用户 2026-11-24 口径）
+   *
+   * 「教学模式是单独的初设，非教学模式的 Vitebsk 剧本要按照规则书放置，苏联没有飞机，
+   *   坦克师模式不要改，也不要放预备。」⇒ 剧本数据（`scenarios.json` / `scenario-setup.json`）
+   * 只记卡面读数；教学那套（额外预备额度等）由 `stores/tutorial.ts` 的初设脚本在本局内给出，
+   * 不写进共享数据、也不会被普通模式读到。
+   *
+   * 换剧本＝新的一局 ⇒ `setScenarioId` 清空（教学覆盖不跨局残留）。
+   */
+  const setupOverride = ref<ScenarioSetupOverride | null>(null)
+
+  function setSetupOverride(next: ScenarioSetupOverride | null): void {
+    setupOverride.value = next
+  }
+
+  /** 初设数值（剧本数据 ⊕ 会话覆盖）：预备额度等派生读这里，不直接读 `scenarioInfo.setup` */
+  const setupData = computed(() => {
+    const base = scenarioInfo.value?.setup
+    const override = setupOverride.value
+    if (base === undefined || override?.reserveMarkers === undefined) return base
+    return {
+      ...base,
+      reserveMarkers: {
+        axis: override.reserveMarkers.axis ?? base.reserveMarkers.axis,
+        soviet: override.reserveMarkers.soviet ?? base.reserveMarkers.soviet,
+      },
+    }
+  })
 
   /** 共识开关条目（scenarios.agreedOptions：需双方一致同意才生效，必须写入存档） */
   const agreedOptionItems = computed<readonly string[]>(() => scenarios.agreedOptions.items)
@@ -640,6 +681,8 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     }
     scenarioId.value = next
     session.value = null
+    // 教学覆盖属于上一局 ⇒ 换剧本（新的一局）即清空
+    setupOverride.value = null
     // 专规 4.0：共识在**选剧本之前**勾定 ⇒ 换剧本不重置（勾定的是规则，不是某个剧本）
     lastAdvanceKind.value = null
     error.value = null
@@ -1121,6 +1164,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     lastAdvanceOutcome,
     // 派生
     scenarioInfo,
+    setupData,
     agreedOptionItems,
     form,
     question,
@@ -1165,6 +1209,7 @@ export const useGameSessionStore = defineStore('gameSession', () => {
     pushedVerdicts,
     // 动作
     setScenarioId,
+    setSetupOverride,
     firstWeatherChoice,
     setFirstWeatherChoice,
     startGame,

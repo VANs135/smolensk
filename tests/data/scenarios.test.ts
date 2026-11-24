@@ -292,15 +292,15 @@ describe('入门剧本 Intro: Vitebsk（教学/单人）', () => {
     expect(s.singlePlayerTurn).toBe(true)
   })
 
-  it('初设数值：铁路容量 0/0、Reserve 5/2、缓存各方 2（1.7）、建造 0；4 辆编内卡车全部满载', () => {
+  it('初设数值：铁路容量 0/0、Reserve 5/0（苏方卡面无此行）、缓存各方 2（1.7）、建造 0；4 辆编内卡车全部满载', () => {
     const s = intro()
     expect(s.setup.railCap).toEqual({ axis: 0, soviet: 0 })
     /*
-     * 轴方 5 枚是卡面读数；苏方 2 枚是用户 2026-11-23 的教学裁定（卡面苏方栏无 Reserve 行）：
-     * 入门剧本要让苏军两辆坦克师在反应阶段释放预备、突袭轴方摩步并失败（5.7b-B / 8.1a），
-     * 而 5.4a 的按格额度必须 ≥ 坦克师所在的两个格，故给 2。
+     * 只有轴方 5 枚是卡面读数（`Reserve Markers Available: 5`）；卡面苏方栏没有 Reserve 行
+     * ⇒ 苏方按规则书 0（用户 2026-11-24：教学模式是单独的初设，非教学模式的 Vitebsk 按规则书放置）。
+     * 教学反扑要的那 2 枚由 `src/stores/tutorial.ts` 的教学专用初设以会话覆盖给出，不进本数据。
      */
-    expect(s.setup.reserveMarkers).toEqual({ axis: 5, soviet: 2 })
+    expect(s.setup.reserveMarkers).toEqual({ axis: 5, soviet: 0 })
     // 剧本卡未列 Supply Cache，但 1.7：`Both sides begin every scenario with two`
     expect(s.setup.supplyCache).toBe(2)
     expect(s.setup.constructionMarkers).toBe(0)

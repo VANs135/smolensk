@@ -3,19 +3,24 @@ import { nextTick } from 'vue'
 
 import { createAiMemory, runAiStep } from '@/ai/driver'
 import { canonicalMode } from '@/engine/rules'
-import { actionGateOf } from '@/stores'
+import { actionGateOf, useTutorialStore } from '@/stores'
 
 import { fresh } from './flow-harness'
 
 /**
  * 通规 5.7b / 5.7b-B / 8.1 / 8.1a：**反应阶段苏军坦克师释放预备 → 突袭轴方摩步 → 失败**
  *
- * 口径来源（用户 2026-11-23 裁定）：教学剧本 `Intro: Vitebsk` 的苏联反应阶段应当这样走通，
- * 且教学模式的苏方初设是**一键预设**（`presetSelfSetupNow`）⇒ 坦克师的「预备 + 移动面」
- * 必须由剧本数据（`setupMode: 'reserve'` / `setupFace: 'move'`）在初设时就摆好，
- * 不能再依赖玩家右键两步。卡面本身没有这一行（`Smolensk_Vitebsk_Scenario.pdf` 的苏方栏无
- * Reserve，轴方栏才是 `Reserve Markers Available: 5`）⇒ `setup.reserveMarkers.soviet = 2`
- * 是教学用途增设，数值出处写在 `scenarios.json` 该剧本 `setup.source` 的第 2 条里。
+ * 口径来源（用户 2026-11-23 裁定 + 2026-11-24 分层）：
+ *   · **教学模式是单独的初设**：坦克师的「预备 + 移动面」与苏方 2 枚预备额度由
+ *     `src/stores/tutorial.ts` 的初设脚本（`applyTeachingSetup`，走 IV-B 同一判定 + 会话覆盖）
+ *     在本局给出；
+ *   · **非教学模式的 Vitebsk 按规则书放置**：`18 Tk Div` 留在印面的战斗面，苏方卡面无 Reserve
+ *     行 ⇒ `setup.reserveMarkers.soviet = 0`（数据里就是这两个值）；
+ *   · 苏联没有飞机：剧本数据只有轴方 7 架（`aircraft` 行全在 `side: axis`）。
+ *
+ * 本文件的反应链用例按「教学局的初设状态」摆盘（`beginIntroSetup` 用与脚本相同的两个公开入口：
+ * `setSetupOverride` + `setUnitModeAtSetup`）；真实的脚本路径由
+ * `tests/stores/tutorial-mode.test.ts` 与下面「教学模式：初设脚本」一条覆盖。
  *
  * 两条规则硬约束决定「坦克师必须**以移动面**进预备」：
  *   ① 5.7b-B：反应段释放的预备只按**半个 MA**移动，但突袭中拥有完整战斗值；
@@ -36,11 +41,15 @@ import { fresh } from './flow-harness'
 type Ctx = ReturnType<typeof fresh>
 type W = Ctx['w']
 
-/** 走到「初设已摆完、尚未开始游戏」——初设右键「初设模式」（IV-B）只在这段时间可用 */
+/** 教学局的初设状态：先按规则书进初设，再由教学的两个公开入口补上苏方额度与坦克师模式 */
 function beginIntroSetup(seed = 20261115): Ctx {
   const ctx = fresh()
   ctx.w.seed = seed
   expect(ctx.setup.enterSetup('Intro')).toBe(true)
+  // 与 `tutorial.applyTeachingSetup` 同一入口：额度先立（5.4a 闸门读 `session.setupData`）
+  ctx.g.setSetupOverride({ reserveMarkers: { soviet: 2 } })
+  const tank = unitNamed(ctx.w, 'Ru 18 Tk Div')
+  expect(ctx.w.setUnitModeAtSetup('reserve', 'move', [tank.instanceId])).toBe(true)
   expect(ctx.setup.presetSelfSetupNow().failures).toEqual([])
   expect(ctx.w.initialSetupInProgress).toBe(true)
   return ctx
@@ -62,12 +71,7 @@ function unitNamed(w: W, name: string) {
 /** 初设右键改模式（IV-B）：把坦克师改成指定朝向的预备，用来钉住「另一种摆法」的分支 */
 function setTankReserve(w: W, name: string, orientation: 'move' | 'combat'): void {
   const tank = unitNamed(w, name)
-  if (orientation === 'move') {
-    expect(w.setUnitModeAtSetup('move', 'move', [tank.instanceId])).toBe(true)
-  } else {
-    // 从数据里的「预备+移动面」改回战斗面：先退回战斗模式，再带 combat 朝向重新进预备
-    expect(w.setUnitModeAtSetup('combat', 'combat', [tank.instanceId])).toBe(true)
-  }
+  // 5.7a：进预备时可任选朝向 ⇒ 一次设定即可（不必先退回战斗模式再进）
   expect(w.setUnitModeAtSetup('reserve', orientation, [tank.instanceId])).toBe(true)
   expect(tank.mode.mode).toBe('reserve')
   expect(tank.mode.orientation).toBe(orientation)
@@ -191,11 +195,47 @@ function driveResolution(w: W): void {
 }
 
 describe('Intro：反应阶段的苏军坦克师', () => {
-  it('一键自动初设就把 18 Tk Div 摆成「预备 + 移动面」（剧本数据 setupMode/setupFace）', () => {
-    const ctx = beginIntroSetup()
+  it('非教学模式的 Vitebsk 按规则书放置：18 Tk Div 印面战斗面、苏方没有预备额度、苏方没有飞机', () => {
+    const ctx = fresh()
+    ctx.w.seed = 20261115
+    expect(ctx.setup.enterSetup('Intro')).toBe(true)
+    expect(ctx.setup.presetSelfSetupNow().failures).toEqual([])
+    expect(ctx.setup.startGameNow(), ctx.setup.lastAction?.detail).toBe(true)
     const w = ctx.w
 
-    // 教学模式的苏方初设是一键预设 ⇒ 不许玩家还要手动右键两步：坦克师落位即预备、移动面朝上
+    // 用户 2026-11-24：非教学模式的 Vitebsk 剧本要按照规则书放置 —— 坦克师模式不要改
+    const tank = unitNamed(w, 'Ru 18 Tk Div')
+    expect(tank.mode.mode).toBe('combat')
+    expect(tank.mode.orientation).toBe('combat')
+    expect(tank.raw).toMatchObject({ attack: 20, ar: 1, ma: 3 })
+    const tank14 = unitNamed(w, 'Ru 14 Tk Div')
+    expect(tank14.mode.mode).toBe('combat')
+    expect(tank14.raw).toMatchObject({ attack: 20, ar: 1, ma: 3 })
+    // 也不要放预备：卡面苏方栏没有 Reserve 行 ⇒ 额度 0，盘上一枚预备都没有
+    expect(w.reserveMarkerStatusOf('soviet')).toMatchObject({ cap: 0, used: 0 })
+    expect(w.reservedHexes('soviet')).toEqual([])
+    // 苏联没有飞机：剧本数据只有轴方 7 架
+    expect(w.airUnits).toHaveLength(7)
+    expect(w.airUnits.every((air) => air.side === 'axis')).toBe(true)
+  })
+
+  it('教学模式：初设脚本单独把 18 Tk Div 落成「预备 + 移动面」，苏方额度 2 只在本局（不写进剧本数据）', async () => {
+    const ctx = fresh()
+    const tutorial = useTutorialStore()
+    tutorial.stop()
+    tutorial.startFor()
+    expect(ctx.setup.enterSetup('Intro')).toBe(true)
+    // 初设脚本是 watcher（flush: post）⇒ 等它真的落下（坦克师进盘 + 模式转预备），不赌固定 tick 数
+    const tankOf = () => ctx.w.units.find((unit) => unit.name === 'Ru 18 Tk Div')
+    for (let guard = 0; guard < 10 && tankOf()?.mode.mode !== 'reserve'; guard += 1)
+      await nextTick()
+    expect(tankOf()?.mode.mode).toBe('reserve')
+    const w = ctx.w
+
+    // 剧本数据仍按规则书（0 枚），教学那 2 枚是会话覆盖
+    expect(ctx.g.scenarioInfo?.setup.reserveMarkers.soviet).toBe(0)
+    expect(ctx.g.setupData?.reserveMarkers.soviet).toBe(2)
+
     const tank = unitNamed(w, 'Ru 18 Tk Div')
     expect(tank.mode.mode).toBe('reserve')
     expect(tank.mode.orientation).toBe('move')
@@ -203,21 +243,23 @@ describe('Intro：反应阶段的苏军坦克师', () => {
     // 5.4a：印值随朝向取（移动面 10-0-8，战斗面 20-1-3）
     expect(tank.raw).toMatchObject({ attack: 10, ar: 0, ma: 8 })
     expect(tank.faces.combat).toMatchObject({ attack: 20, ar: 1, ma: 3 })
-    // 5.4a：按格计 —— 只占 19.26 一格
+    // 5.4a：按格计 —— 只占 19.26 一格；额度是教学的 2 枚
     expect(w.reservedHexes('soviet')).toEqual(['19.26'])
+    expect(w.reserveMarkerStatusOf('soviet')).toMatchObject({ cap: 2, used: 1 })
     // 14 Tk Div 是轴方开局突袭的目标，留在印面的战斗面（挂预备会被 5.7 减半防御）
     const tank14 = unitNamed(w, 'Ru 14 Tk Div')
     expect(tank14.mode.mode).toBe('combat')
     expect(tank14.raw).toMatchObject({ attack: 20, ar: 1, ma: 3 })
-    // IV-B：初设右键仍可改（数据只是给了一个合法初态，不是锁死）
-    expect(w.setupSwitchableModesOf(tank.instanceId)).toContain('move')
+    // IV-B：初设右键仍可改（脚本只是给了一个合法初态，不是锁死）
     expect(w.setupSwitchableModesOf(tank.instanceId)).toContain('combat')
+    tutorial.stop()
   })
 
   it('战斗面进预备：反应段只有 1.5 MP ⇒ 8.1a 拒突袭（不是 6.1g「没有单位在移动」）', async () => {
     const ctx = beginIntroSetup()
     const w = ctx.w
-    // 数据给的是移动面；这里按玩家的另一种摆法改回战斗面，钉住「战斗面在反应段不能突袭」
+    // 本组按教学局的摆法（坦克师已在 18.27 邻格）；这里按玩家的另一种摆法改成战斗面进预备，
+    // 钉住「战斗面在反应段不能突袭」
     setTankReserve(w, 'Ru 14 Tk Div', 'combat')
     expect(unitNamed(w, 'Ru 14 Tk Div').raw).toMatchObject({ attack: 20, ma: 3 })
     startIntro(ctx)
@@ -301,7 +343,7 @@ describe('Intro：反应阶段的苏军坦克师', () => {
   it('全程：释放 → 加油 1T → 突袭轴方摩步 → 攻方 AL2 被打光、守方留格（「突袭然后失败」）', async () => {
     const ctx = beginIntroSetup()
     const w = ctx.w
-    // 不做任何初设右键：坦克师由剧本数据带成「预备 + 移动面」，玩家一路走到反应段即可
+    // 不做任何初设右键：教学局的坦克师由初设脚本带成「预备 + 移动面」，玩家一路走到反应段即可
     startIntro(ctx)
 
     await toSovietReactionMovement(w)

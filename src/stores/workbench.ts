@@ -1412,7 +1412,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * 派生，`cap` 读剧本数据；标记盒卡与 `canEnterReserveMode` 都读本函数。
    */
   function reserveMarkerStatusOf(side: Side): { cap: number; used: number; remaining: number } {
-    const cap = session.scenarioInfo?.setup.reserveMarkers?.[side] ?? 0
+    // 读合并后的初设数值：教学模式由教学脚本给出的额度在 `session.setupData` 里合流（2026-11-24）
+    const cap = session.setupData?.reserveMarkers?.[side] ?? 0
     const used = reservedHexes(side).length
     return { cap, used, remaining: Math.max(0, cap - used) }
   }

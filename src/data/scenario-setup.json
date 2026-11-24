@@ -31945,8 +31945,6 @@
       "parentType": "Tk Div",
       "stepPenalty": 1,
       "stepPenaltyNote": "剧本注记：该单位以减损状态设置（-1 step）",
-      "setupMode": "reserve",
-      "setupFace": "move",
       "unitId": "su-armor_tk-ru-18-tk-div",
       "unitIdKind": "unit",
       "linkBasis": "by_name+side",
