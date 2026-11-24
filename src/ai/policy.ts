@@ -306,6 +306,11 @@ export interface AiSnapshot {
   reserveOnHedgehogIds: readonly string[]
   /** 5.7b：本环节已试过释放的预备单位（避免同一枚反复被拒） */
   reserveReleasedUnitIds: readonly string[]
+  /** 12.5a / 12.5c：本轮想开拔、但仍未加注燃料的单位；`triedUnitIds` 是已试过付费的（防空转） */
+  fuel: {
+    unfuelledUnitIds: readonly string[]
+    triedUnitIds: readonly string[]
+  }
   move: AiMoveSnapshot
   /** 批 2：C 段支线（换模式 / 突袭 / 铁路 / 装卸 / 建造标记 / 换轨） */
   branch: AiMoveBranchSnapshot
@@ -333,6 +338,8 @@ export type AiAction =
   | { kind: 'modeChange'; unitId: string }
   /** 5.7b：释放预备（AI 自己的反应 / 进击环节；唯一用途见 `decideReserveRelease`） */
   | { kind: 'reserveRelease'; unitId: string }
+  /** 12.5a / 12.5c-C：给即将开拔的单位付 1T 燃料（无图上来源时由驱动放弃，按 12.5a 拒绝） */
+  | { kind: 'fuelPay'; unitId: string }
   | { kind: 'moveBegin'; unitId: string }
   | { kind: 'moveClick'; hex: AiHex }
   | { kind: 'moveFinish' }
@@ -421,6 +428,8 @@ export function actionKeyOf(action: AiAction): string {
       return `modeChange:${action.unitId}`
     case 'reserveRelease':
       return `reserveRelease:${action.unitId}`
+    case 'fuelPay':
+      return `fuelPay:${action.unitId}`
     case 'moveBegin':
       return `moveBegin:${action.unitId}`
     case 'moveClick':
@@ -1180,7 +1189,22 @@ function decideAiActionFull(snapshot: AiSnapshot): AiAction {
   // 5) 移动：每环节最多 4 个单位；候选按「格号 + 型号」稳定排序（见 driver）
   if (snapshot.can.has('move.order') && snapshot.move.triedUnits.length < 4) {
     const unitId = snapshot.move.candidates.find((id) => !snapshot.move.triedUnits.includes(id))
-    if (unitId !== undefined) return { kind: 'moveBegin', unitId }
+    if (unitId !== undefined) {
+      /*
+       * 12.5a：轮式 / 履带 MP 的战斗单位「未加油，不能消耗 MP」。
+       * 修前 AI 从不付油 ⇒ 反应段释放出来的坦克师一枚也开拔不了（`moveBegin` 一律 12.5a 被拒），
+       * 教学剧本的「释放 → 加油 → 突袭」整条反扑链在 PVE 里跑不出来（2026-11-24 实测）。
+       * 只在**即将开拔的这枚**需要燃料时付 12.5c-C 的 1T；付不出（无图上来源 / 余额不足）
+       * 由驱动记一次 12.5a，AI 换下一枚候选，不会空转。
+       */
+      if (
+        snapshot.can.has('supply.fuel') &&
+        snapshot.fuel.unfuelledUnitIds.includes(unitId) &&
+        !snapshot.fuel.triedUnitIds.includes(unitId)
+      )
+        return { kind: 'fuelPay', unitId }
+      return { kind: 'moveBegin', unitId }
+    }
   }
 
   // 6) 炮击（有合法参炸单位时）

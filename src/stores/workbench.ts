@@ -15457,7 +15457,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
             unit,
             phase: query.phase,
             segment: query.segment,
-            activeSide: query.side ?? activeSide.value,
+            /*
+             * ★ 2026-11-24：`participatesIn` 的第 4 参是**阶段玩家**（`friendly` = unit.side === activeSide，
+             *   `canMoveInPhase` 里 reaction 分支判的是「unit.side === activeSide ⇒ 6.3a 拒」）。
+             *   修前这里传 `query.side ?? activeSide`（＝反应段的**行动方**，即非阶段玩家）⇒
+             *   E 段整段「本环节可参与」为空：非阶段玩家的已释放预备一枚也点不中，
+             *   反应移动/突袭在界面上无从下手（AI 的候选也因此恒空 ⇒ PVE 反扑永不发生）。
+             *   另两处调用（`map-view.participationVerdictOf` / `combatAttackerVerdict`）传的都是阶段玩家。
+             */
+            activeSide: activeSide.value,
             // 9.1c：本战斗环节已攻击过的单位不再可点（用户口径 9.17⑤「只列没攻击过的可攻击单位」）
             attackedUnitIds: attackedUnitIdsThisPhase.value,
           }).ok,

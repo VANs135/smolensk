@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 
-import { runAiStep } from '@/ai/driver'
+import { createAiMemory, runAiStep } from '@/ai/driver'
 import { canonicalMode } from '@/engine/rules'
 import { actionGateOf } from '@/stores'
 
@@ -257,6 +257,9 @@ describe('Intro：反应阶段的苏军坦克师', () => {
     const tank = unitNamed(w, 'Ru 18 Tk Div')
     expect(step.intent).toBe(`reserveRelease:${tank.instanceId}`)
     expect(step.ok).toBe(true)
+    // 7.0a：反应段「本环节可参与」只列**已释放的预备**。修前这里整段为空
+    // （`participant` 把行动方当阶段玩家喂给引擎 ⇒ 6.3a 一律拒）⇒ 非阶段玩家连点都点不中
+    expect(w.participatingUnitIds).toContain(tank.instanceId)
     // 5.7b：标记已摘 ⇒ 规范模式回到朝向那一面（引擎的表示是保留 `mode:'reserve'` +
     // `releasedFromReserve`，由 `canonicalMode` 折回）；本阶段 MA ×0.5 由引擎照常算
     expect(canonicalMode(tank.mode)).toBe('move')
@@ -265,6 +268,34 @@ describe('Intro：反应阶段的苏军坦克师', () => {
     expect(w.log.some((line) => line.text.includes('已释放预备（5.7b）'))).toBe(true)
     // 阻断源已消失 ⇒ 下一步就能正常推进（不再是「3 次无进展」）
     expect(w.currentAdvanceBlock).toBeNull()
+  })
+
+  it('PVE：释放后 AI 自己付 1T 燃料再开拔（12.5a / 12.5c-C），5.7b-B 的半 MA 才用得上', async () => {
+    const ctx = beginIntroSetup()
+    const w = ctx.w
+    startIntro(ctx)
+    await toSovietReactionMovement(w)
+    const aiCtx = { workbench: w, session: ctx.g, setup: ctx.setup }
+    const memory = createAiMemory()
+
+    // 修前：AI 没有付油入口 ⇒ 释放完的坦克师一枚也开拔不了（`12.5a 未加油`），教学反扑链断在这里
+    const first = runAiStep(aiCtx, { memory, control: 'soviet' })
+    const tankId = unitNamed(w, 'Ru 18 Tk Div').instanceId
+    expect(first.intent).toBe(`reserveRelease:${tankId}`)
+
+    const second = runAiStep(aiCtx, { memory, control: 'soviet' })
+    expect(second.intent).toBe(`fuelPay:${tankId}`)
+    expect(second.ok).toBe(true)
+    expect(unitNamed(w, 'Ru 18 Tk Div').fuelled).toBe(true)
+    expect(w.log.some((line) => line.text.includes('燃料已付') && line.rule === '12.5c-C')).toBe(
+      true,
+    )
+
+    const third = runAiStep(aiCtx, { memory, control: 'soviet' })
+    expect(third.intent).toBe(`moveBegin:${tankId}`)
+    expect(third.ok).toBe(true)
+    // 5.7b-B：反应段释放的预备只按半个 MA 移动（移动面 8 × 0.5 = 4），够 8.1a 的一次突袭
+    expect(w.moveMinRemainingMp).toBe(4)
   })
 
   it('全程：释放 → 加油 1T → 突袭轴方摩步 → 攻方 AL2 被打光、守方留格（「突袭然后失败」）', async () => {

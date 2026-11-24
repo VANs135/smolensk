@@ -21,7 +21,7 @@ import {
 } from '@/engine/rules'
 import { hexDistance } from '@/engine/hex-geometry'
 import { useContainersStore } from '@/stores/containers'
-import { formatHexPath } from '@/stores/workbench-model'
+import { formatHexPath, needsFuelOf } from '@/stores/workbench-model'
 import type { useGameSessionStore } from '@/stores/session'
 import type { useSetupStore } from '@/stores/setup'
 import type { useWorkbenchStore } from '@/stores/workbench'
@@ -85,6 +85,8 @@ export interface AiMemory {
   modeSwitchTried: string[]
   /** 5.7b：本环节已试过释放的预备单位（避免同一枚反复被拒） */
   reserveReleasedIds: string[]
+  /** 12.5a：本环节已试过付燃料的单位（无来源时不再反复被拒） */
+  fuelTriedIds: string[]
   /** 批 2：本环节已试过的突袭目标格 */
   overrunTried: string[]
   /** 批 2：本环节已试过铁路运输的单位 / 起运站 */
@@ -118,6 +120,7 @@ export function createAiMemory(): AiMemory {
     consolidated: false,
     modeSwitchTried: [],
     reserveReleasedIds: [],
+    fuelTriedIds: [],
     overrunTried: [],
     railTriedUnits: [],
     railTriedDumps: [],
@@ -210,6 +213,7 @@ function syncMemory(memory: AiMemory, w: ReturnType<typeof useWorkbenchStore>): 
   memory.consolidated = false
   memory.modeSwitchTried = []
   memory.reserveReleasedIds = []
+  memory.fuelTriedIds = []
   memory.overrunTried = []
   memory.railTriedUnits = []
   memory.railTriedDumps = []
@@ -962,6 +966,14 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
       .sort(compareStableUnit)
       .map((unit) => unit.instanceId),
     reserveReleasedUnitIds: memory.reserveReleasedIds,
+    // 12.5a：本方「需要燃料但仍未加注」的战斗单位（判据取引擎 `needsFuelOf`，不另立一套）
+    fuel: {
+      unfuelledUnitIds: friendly
+        .filter((unit) => needsFuelOf(unit) && !unit.fuelled)
+        .sort(compareStableUnit)
+        .map((unit) => unit.instanceId),
+      triedUnitIds: memory.fuelTriedIds,
+    },
     move: {
       active: moveActive,
       hasStepped,
@@ -1253,6 +1265,33 @@ function execute(
       if (!w.releaseReserveNow()) return false
       const unit = w.units.find((item) => item.instanceId === action.unitId)
       return unit !== undefined && canonicalMode(unit.mode) !== 'reserve'
+    }
+    case 'fuelPay': {
+      /*
+       * 12.5a / 12.5c-C：与玩家右键同一入口 —— `openFuelNow` 落**受注单位**（`fuelSubjectId`，
+       * `fuelTargets` 优先取它），再声明图上来源（`fuelDumpChoices` = 该单位此刻拖得到的站，
+       * 12.3a ∪ 12.1b 的运输点装载），按单独单位法付 1T。
+       *
+       * ★ 只给 `selectedId` 不行：`fuelTargets` 的优先级是「开拔中的堆叠 > 取子清单 > 选中那一枚」，
+       *   刚结束的一次移动若还留着 `moveUnits`，付款就会算到那叠（12.5a「选中的单位都不需要燃料」）——
+       *   2026-11-24 Intro 的 `Ge 12.Pz 22 MC` 就是这样白付不到的。
+       */
+      memory.fuelTriedIds.push(action.unitId)
+      if (!w.openFuelNow(action.unitId, 'singleUnit')) return false
+      const dump = w.fuelDumpChoices[0]
+      if (dump === undefined) {
+        w.closeFuelNow()
+        return false
+      }
+      if (!w.pickFuelDump(dump.id)) {
+        w.closeFuelNow()
+        return false
+      }
+      w.payFuel('singleUnit')
+      const unit = w.units.find((item) => item.instanceId === action.unitId)
+      const ok = unit !== undefined && unit.fuelled
+      w.closeFuelNow()
+      return ok
     }
     case 'moveBegin': {
       memory.movedUnitIds.push(action.unitId)
