@@ -985,4 +985,53 @@ describe('12.6：覆盖集与逐格查询等价（traceCoverageHexes）', () => 
     const coverage = traceCoverageHexes(facts, { side: 'axis', mobility: 'truck' })
     for (const hex of HEXES) expect(traceSupplyAt(hex, 'axis')).toBe(coverage.has(key(hex)))
   })
+
+  /*
+   * ★ S2-b：逐格查询改成「每源一次反向区域 + 集合判定」后，必须在**真实地形**上全格验证——
+   *   假事实的每步 1 MP 是**各向同性**的，恰好绕过了 `stepMp` 的方向不对称（沼泽/河：出得来进不去），
+   *   而那正是这条改写唯一的风险点。这里用真实地图的 1271 格 onMap 逐个比对，
+   *   且刻意带上延补队 + 敌方 ZOC + 敌方战斗单位（12.7 / 12.6b / 12.3d 三条路径同时生效）。
+   */
+  it('★ S2-b：真实地图全格扫描——覆盖集 ⇔ 逐格（含延补队、敌 ZOC、敌战斗单位）', () => {
+    const facts = createTraceSupplyFacts({
+      sources: [
+        { hex: { col: 36, row: 13 }, side: 'axis', kind: 'supplySourceHex' },
+        { hex: { col: 12, row: 4 }, side: 'axis', kind: 'detrainable' },
+        { hex: { col: 52, row: 30 }, side: 'axis', kind: 'edgeRail' },
+      ],
+      extenders: [
+        { hex: { col: 30, row: 20 }, side: 'axis', mobility: 'truck', rangeMp: 20 },
+        { hex: { col: 44, row: 8 }, side: 'axis', mobility: 'leg', rangeMp: 10 },
+      ],
+      units: [
+        // 敌方（苏军）战斗单位贴着源 36.13 的邻格 ⇒ 该源格落入敌 ZOC（12.6b）并阻断邻域（12.3d）
+        {
+          id: 'enemy-near-source',
+          side: 'soviet',
+          hex: { col: 36, row: 14 },
+          isCombat: true,
+          attackCapable: true,
+          inCombatMode: true,
+          hasTraceSupply: true,
+        },
+      ],
+    })
+    const coverage = traceCoverageHexes(facts, { side: 'axis', mobility: 'truck' })
+    const mismatches: string[] = []
+    let onMapCount = 0
+    for (let col = 1; col <= 62; col += 1) {
+      for (let row = 0; row <= 35; row += 1) {
+        const hex: HexRef = { col, row }
+        if (!facts.onMap(hex)) continue
+        onMapCount += 1
+        const perHex = hasTraceSupply(facts, { hex, side: 'axis', mobility: 'truck' }).ok
+        if (coverage.has(key(hex)) !== perHex)
+          mismatches.push(`${key(hex)}: set=${coverage.has(key(hex))} 逐格=${perHex}`)
+      }
+    }
+    expect(mismatches).toEqual([])
+    // 非空条件：被敌 ZOC 压住的源不算数，另两个源必须铺开（否则上面的相等是"两边都空"的假相等）
+    expect(onMapCount).toBeGreaterThan(1000)
+    expect(coverage.size).toBeGreaterThan(50)
+  })
 })

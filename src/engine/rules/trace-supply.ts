@@ -59,7 +59,7 @@ import { projectsZoc, type ZocSource } from './zoc'
  *     火车卸货格并入 `sources`（kind='detrainable'），本模块不臆造铁路连通性。
  *   - **追溯接收段（U23，用户 2026-11-12 裁定 D1=A）**：12.6 的「接收」复用 12.3a/12.3b 的距离——
  *     单位 → 12.6a 源 ≤ **5 轮式 MP**（道路只降费、不豁免；**源是终点**，不存在越过源继续沿路走；
- *     **路网不能当源**），经 HQ 则按 12.3b 印值投递。故 `reachableFrom` / `floodFrom` /
+ *     **路网不能当源**），经 HQ 则按 12.3b 印值投递。故 `baseSourceRegions` / `hqThrowRegions` /
  *     `floodIncoming` / `baseSourcesFor` 一律为**有界** Dijkstra，机动类型固定 `truck`。
  */
 
@@ -239,12 +239,17 @@ function hexId(hex: HexRef): number {
 const traceSearchCache = new WeakMap<
   TraceSupplyFacts,
   {
-    reachable: Map<string, Set<string>>
     hq: Map<string, boolean>
     /** 覆盖集按阵营缓存（12.3d 不计 `mobility`，见 `traceCoverageHexes` 注释） */
     coverage: Map<Side, Set<string>>
     /** 12.3b：各方每座可投递 HQ 的投递区（12.3c 已膨胀一格），见 `hqThrowRegions` */
     hqRegions: Map<Side, HqThrowRegion[]>
+    /** 12.6b：源格可用性按 `阵营|格` 记忆（纯函数，见 `sourceUsable`） */
+    sourceUsable: Map<string, boolean>
+    /** 12.7：可用延补队的**不动点**按阵营缓存（见 `usableExtenders`） */
+    extenders: Map<Side, ExtenderLink[]>
+    /** 12.6a：各方基础源的可达区（每源一次反向洪泛），见 `baseSourceRegions` */
+    baseRegions: Map<Side, BaseSourceRegion[]>
   }
 >()
 
@@ -252,6 +257,20 @@ const traceSearchCache = new WeakMap<
 interface HqThrowRegion {
   hq: ThrowHqView
   keys: Set<string>
+}
+
+/** 12.6a ①–③ / 12.7：一个基础源（或已连上的延补队）的反向可达区 */
+interface BaseSourceRegion {
+  hex: HexRef
+  kind: BaseSourceKind
+  keys: Set<string>
+}
+
+/** 12.7：回连所需的延补队视图（与 `ExtenderView` 同形，只取本模块要用的三项） */
+interface ExtenderLink {
+  hex: HexRef
+  mobility: SupplyMobility
+  rangeMp: number
 }
 
 /** 对方阵营 */
@@ -423,10 +442,12 @@ export function createTraceSupplyFacts(source: TraceSupplyFactsSource = {}): Tra
     stepCost: (from, to, mobility) => supplyStepCost(map, from, to, mobility),
   }
   traceSearchCache.set(facts, {
-    reachable: new Map(),
     hq: new Map(),
     coverage: new Map(),
     hqRegions: new Map(),
+    sourceUsable: new Map(),
+    extenders: new Map(),
+    baseRegions: new Map(),
   })
   return facts
 }
@@ -1053,8 +1074,25 @@ export function isOutOfSupplyNow(
   return !unit.hasTraceSupply && (unit.sustainedBySpecialSupplyTurn ?? null) !== turn
 }
 
-/** 该源格本身是否可用（12.6b：源格内有未抵消敌方 ZOC ⇒ 不可用；12.3d：敌战斗单位占格亦然） */
+/**
+ * 12.6b：源格是否可用（命中缓存）
+ *
+ * `sourceUsable` 是 facts 的纯函数（只读 `onMap` / `hasEnemyCombatUnit` / `inEnemyZoc`），
+ * 而每个查询格都要把它对**全部源与延补队**重算一遍（8 源 + 3 延补队 = 11 次/查询）
+ * ⇒ 按 `阵营|格` 记忆。盘面一变就是新的 facts，缓存自动失效。
+ */
 function sourceUsable(facts: TraceSupplyFacts, side: Side, hex: HexRef): boolean {
+  const cache = traceSearchCache.get(facts)?.sourceUsable
+  const key = `${side}|${hexKey(hex)}`
+  const previous = cache?.get(key)
+  if (previous !== undefined) return previous
+  const result = computeSourceUsable(facts, side, hex)
+  cache?.set(key, result)
+  return result
+}
+
+/** 该源格本身是否可用（12.6b：源格内有未抵消敌方 ZOC ⇒ 不可用；12.3d：敌战斗单位占格亦然） */
+function computeSourceUsable(facts: TraceSupplyFacts, side: Side, hex: HexRef): boolean {
   if (!facts.onMap(hex)) return false
   if (facts.hasEnemyCombatUnit(hex, side)) return false
   return !facts.inEnemyZoc(hex, side)
@@ -1095,18 +1133,30 @@ function connectsBack(
 }
 
 /**
- * 12.7 / 12.7c：该方可用的延补队
+ * 12.7 / 12.7c：该方可用的延补队（命中缓存）
+ *
+ * 不动点只依赖 facts（源 / 延补队位置、ZOC），而每个查询格都要重算一遍
+ * （单次 ≈「延补队 × 已知点」个 `connectsBack`，实测一次 20 MP 洪泛 0.54 ms）⇒ 按阵营缓存。
+ */
+function usableExtenders(facts: TraceSupplyFacts, side: Side): ExtenderLink[] {
+  const cache = traceSearchCache.get(facts)?.extenders
+  const previous = cache?.get(side)
+  if (previous !== undefined) return previous
+  const result = computeUsableExtenders(facts, side)
+  cache?.set(side, result)
+  return result
+}
+
+/**
+ * 12.7 / 12.7c：该方可用的延补队（不动点）
  *
  * 延补队只提供**新的 trace 取用点**（12.7a），其自身必须回连到「基础补给源」或**已可用的延补队**
  * （12.7a-A / 12.7c 的锁链），回连距离按其自身距离（12.7b）与机动类型计，且适用 12.7g 的「相邻即可」。
  * 迭代至不动点：每轮把能回连到已知可用点的延补队并入，直到不再增加。
  */
-function usableExtenders(
-  facts: TraceSupplyFacts,
-  side: Side,
-): { hex: HexRef; mobility: SupplyMobility; rangeMp: number }[] {
+function computeUsableExtenders(facts: TraceSupplyFacts, side: Side): ExtenderLink[] {
   const all = facts.extendersFor(side)
-  const usable: { hex: HexRef; mobility: SupplyMobility; rangeMp: number }[] = []
+  const usable: ExtenderLink[] = []
   let changed = true
   while (changed) {
     changed = false
@@ -1185,39 +1235,38 @@ function boundedFlood(
 }
 
 /**
- * 从起点出发的**有界**可达集合（12.6 + 12.3a：5 轮式 MP，U23）
+ * 12.6a ①–③ / 12.7：该方**每个基础源（含已连上的延补队）的反向可达区**（按 (facts, side) 只建一次）
  *
- * `mobility` 入参仅为保持调用方签名不变：12.3a 明言计数**始终用轮式 MP**，
- * 与本单位的机动类型无关（裁定 A 后不再有「徒步不受 5 点限制」的读法）。
- */
-function reachableFrom(
-  facts: TraceSupplyFacts,
-  side: Side,
-  _mobility: SupplyMobility,
-  start: HexRef,
-): Set<string> {
-  const cache = traceSearchCache.get(facts)?.reachable
-  const key = `${side}|${hexKey(start)}`
-  const previous = cache?.get(key)
-  if (previous !== undefined) return previous
-  const covered = floodFrom(facts, side, TRACE_RECEIVE_MOBILITY, [start])
-  cache?.set(key, covered)
-  return covered
-}
-
-/**
- * 从**多个起点**出发的有界洪泛（12.6：源集合到接收段的连通范围）
+ * ★ S2-b：旧实现是「逐单位从自身格做一次 5 轮式 MP 正向洪泛」（`reachableFrom`，按 `阵营|格` 缓存），
+ *   但单位格几乎每枚都不同 ⇒ 缓存命中率≈0，每个查询都要新洪泛一遍。源只有 8–20 个，
+ *   而单位有上百枚 ⇒ 方向反过来：**每源一次**反向洪泛，得到的集合与「该格沿正向 5 MP 能走到该源」
+ *   逐格等价（`floodIncoming` 的方向性说明见其函数头），查询退化为**集合成员判定**。
  *
- * 与 `reachableFrom` 同一套判据（`stepMp` + 5 轮式 MP），只是起点可以是整批源——
- * 这样「该格能否连到某源」变成**一次洪泛**而不是每个查询各洪泛一遍。
+ * 与 `traceCoverageHexes` 同源：后者的 `origins` 就是这批源，只是它用一次多源反向洪泛求并集；
+ * 两者的一致性由 `trace-supply.test.ts` 的全格等价用例把关（覆盖集 ↔ 逐格查询）。
  */
-function floodFrom(
-  facts: TraceSupplyFacts,
-  side: Side,
-  _mobility: SupplyMobility,
-  starts: readonly HexRef[],
-): Set<string> {
-  return boundedFlood(facts, side, starts, false)
+function baseSourceRegions(facts: TraceSupplyFacts, side: Side): BaseSourceRegion[] {
+  const cache = traceSearchCache.get(facts)?.baseRegions
+  const cached = cache?.get(side)
+  if (cached !== undefined) return cached
+  const regions: BaseSourceRegion[] = []
+  for (const source of facts.sourcesFor(side)) {
+    if (!sourceUsable(facts, side, source.hex)) continue
+    regions.push({
+      hex: source.hex,
+      kind: source.kind,
+      keys: floodIncoming(facts, side, TRACE_RECEIVE_MOBILITY, [source.hex]),
+    })
+  }
+  for (const extender of usableExtenders(facts, side)) {
+    regions.push({
+      hex: extender.hex,
+      kind: 'extender',
+      keys: floodIncoming(facts, side, TRACE_RECEIVE_MOBILITY, [extender.hex]),
+    })
+  }
+  cache?.set(side, regions)
+  return regions
 }
 
 /**
@@ -1322,7 +1371,8 @@ function hqCoversHex(region: HqThrowRegion, hex: HexRef): boolean {
  * 从**全部源**出发一次反向有界搜索即得整张集合。
  *
  * ## 与原逐格查询的等价性（★ 必须用**反向边**洪泛）
- * `baseSourcesFor` 的判据是 `reachableFrom(hex).has(source.hex)`，即「hex 沿**正向**能走到某源」。
+ * `baseSourcesFor` 的判据是「该格沿**正向** 5 轮式 MP 能走到该源」（S2-b 起由 `baseSourceRegions`
+ * 的**每源反向区域**给出，判据本身不变）。
  * ★ 而 `supplyStepCost` 的取费取决于**被进入格**的地形与判据，故该连通性**有方向**：
  *   轮式「从沼泽沿非道路离开」合法，却「从开阔进入沼泽」被禁入（与 6.1d 互逆性同族的问题）。
  *   所以覆盖集必须用 `floodIncoming`（判 `next → current` 可走）在**反向边**上洪泛，
@@ -1332,13 +1382,13 @@ function hqCoversHex(region: HqThrowRegion, hex: HexRef): boolean {
  * **测试须逐格断言本集合与 `hasTraceSupply` 结论一致**——那是防止两套口径漂移的闸门。
  *
  * ## 与逐格查询的一致性由测试把关
- * 逐格查询会把**起点无条件计入**（`reachableFrom` 先 seed 起点），反向洪泛则要求"存在一条能走到源的
- * 正向路径"。两者在「该格本身有敌方战斗单位」时也**一致**（那种格的单位走不出去，但按上述 seed 语义
- * 逐格查询同样报"有补给"；实战中该格不可能有己方单位，故无害）——
- * 该结论由 `trace-supply.test.ts` 的等价性用例（含敌占格变体）直接断言，不靠推理。
+ * 覆盖集是「全部源一次多源反向洪泛」，逐格查询是「每源各自的同向反向区域」——两者的并集口径相同
+ * （单位恰在源格上时，区域含源自身格即算有补给，与旧的「起点无条件计入」一致）。
+ * 真实地图上另有一组**全格扫描**用例（含延补队、敌 ZOC、敌战斗单位）直接断言两者逐格相等，不靠推理。
  *
  * ## 覆盖两类源
- *   - **基础源 ①②③ + 已连上的延补队（12.7）**：`floodIncoming`（源集合与 `baseSourcesFor` 同口径）；
+ *   - **基础源 ①②③ + 已连上的延补队（12.7）**：`floodIncoming`（源集合与 `baseSourcesFor` 同口径，
+ *     `baseSourceRegions` 就是这批源的单源版本）；
  *   - **12.3b 的 HQ 投递**：每个 HQ 一次**有界**搜索（预算＝其印值投递距离、机动类型按投递颜色），
  *     并按 **12.3c**「单位格**或其相邻格**」把该区域**膨胀一格**。
  *     （投递方向是「HQ → 单位」，与逐格查询同向，故直接用正向区域。）
@@ -1371,22 +1421,22 @@ export function traceCoverageHexes(
   return covered
 }
 
-/** 12.6a①②③：该格可达的**基础**补给源（不含 HQ 投递） */
+/**
+ * 12.6a①②③：该格可达的**基础**补给源（不含 HQ 投递）
+ *
+ * S2-b：只做集合成员判定（每源一次反向区域的缓存见 `baseSourceRegions`），不再为单位格洪泛。
+ * 顺序仍保持「基础源按 `sourcesFor` 序，其后延补队」，`traceSourcesFor` 末位再统一排序。
+ */
 function baseSourcesFor(
   facts: TraceSupplyFacts,
   input: { hex: HexRef; side: Side; mobility: SupplyMobility },
 ): { hex: HexRef; kind: BaseSourceKind }[] {
-  const { hex, side, mobility } = input
-  const reachable = reachableFrom(facts, side, mobility, hex)
+  const { hex, side } = input
+  const key = hexKey(hex)
   const found: { hex: HexRef; kind: BaseSourceKind }[] = []
-  for (const source of facts.sourcesFor(side)) {
-    if (!sourceUsable(facts, side, source.hex)) continue
-    if (!reachable.has(hexKey(source.hex))) continue
-    found.push({ hex: source.hex, kind: source.kind })
-  }
-  for (const extender of usableExtenders(facts, side)) {
-    if (!reachable.has(hexKey(extender.hex))) continue
-    found.push({ hex: extender.hex, kind: 'extender' })
+  for (const region of baseSourceRegions(facts, side)) {
+    if (!region.keys.has(key)) continue
+    found.push({ hex: region.hex, kind: region.kind })
   }
   return found
 }
