@@ -2343,6 +2343,11 @@ export function throwMobilityOf(unit: ConsoleUnit): SupplyMobility {
  * 操作台算子 → 可投递的指挥部视图（12.3b）
  *
  * 投递距离取 13.1b 印值（`throwRangeMpOf`，按当前面）；移动类型取 `throwMobilityOf`（缺省轮式）。
+ *
+ * ★ 12.3b-D（B2 定案 2026-11-24）：这里**不填 `receivedByThrow`**，也不由实时判定反推 —— 原文 D 项是
+ *   「来源」约束（不能把别人投给它的那份补给再投出），不是「回合取得方式台账」（无"当回合锁定"字样）；
+ *   常规后果已由 `trace-supply#computeHqCanThrow` 的结构判定覆盖（能直拖 dump 或自有基础源 ⇒ 可投，
+ *   都没有 ⇒ 只能靠投递供补给 ⇒ 不可投）。本字段只留给场景/专规显式声明；当前无写入者。
  */
 export function toThrowHqView(
   unit: ConsoleUnit,

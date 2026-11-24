@@ -239,6 +239,62 @@ describe('12.3b HQ 投递：战略模式不可、不可转投、须在印值投�
     const dryHq = makeFacts({ hexes, throwHqs: [hq] })
     expect(traceSourcesFor(dryHq, { hex: at(5), side: 'axis', mobility: 'truck' })).toEqual([])
   })
+
+  /*
+   * 12.3b-D 的正身场景（B2 定性，2026-11-24）：**不是**"回合取得方式台账"，而是**来源约束**——
+   * 「指挥部不能将**另一个指挥部投递给它的**补给再重新投递给其他单位」。
+   * 因此判据是"这座 HQ 能否**不经任何投递**取得补给"：
+   *   · 能（12.3a 直拖 dump，或有自己的基础源）⇒ 它投递的是自己的补给，合法；
+   *   · 不能（只能落在别的 HQ 投递距离内）⇒ 它投的是别人投给它的补给，禁止。
+   * 下面按这个口径钉三条：A 只能由 B 投递 ⇒ A 不得再投；B 投给 A 的补给可供 A **自用**（D 的第二句）；
+   * A 一旦有自己的 dump/source ⇒ 立刻获得投递资格（没有"当回合锁定"这回事）。
+   */
+  it('★ 12.3b-D：只能靠 B 投递取得补给的 A 不得再投；A 自己的补给可自用；无回合锁定', () => {
+    const hexes = corridor(0, 16)
+    const dump = { hex: at(0), side: 'axis' as Side }
+    const hqB: ThrowHqView = {
+      hex: at(2),
+      side: 'axis',
+      mode: 'combat',
+      mobility: 'truck',
+      throwRangeMp: 5,
+      throwMobility: 'truck',
+    }
+    const hqA: ThrowHqView = {
+      hex: at(7),
+      side: 'axis',
+      mode: 'combat',
+      mobility: 'truck',
+      throwRangeMp: 4,
+      throwMobility: 'truck',
+    }
+
+    /*
+     * A(7) 直拖 dump(0) 不成立：最近的相邻格 6 也要 6 MP > 5（12.3c 的"相邻即可"已算进去），
+     * 也没有自己的基础源 ⇒ A 自己**只能**由 B(2, 投递 5) 取得补给（正好 5 MP）。
+     */
+    const relayed = makeFacts({ hexes, dumps: [dump], throwHqs: [hqB, hqA] })
+    expect(traceSourcesFor(relayed, { hex: at(7), side: 'axis', mobility: 'truck' })).toEqual([
+      { hex: at(2), kind: 'hqThrow' },
+    ])
+    // D 第二句：这份投递来的补给**可以**满足 A 自己的需求（上面一条即证），但 A 不得用它再投
+    // ⇒ A 的投递区（A 在 7、投递 4 ⇒ 最远 11）里不能出现任何 hqThrow
+    expect(traceSourcesFor(relayed, { hex: at(11), side: 'axis', mobility: 'truck' })).toEqual([])
+    // 反空转：B 自己的投递区（B 在 2、投递 5 ⇒ 7，含 12.3c 相邻 8）必须真的成立
+    expect(traceSourcesFor(relayed, { hex: at(8), side: 'axis', mobility: 'truck' })).toEqual([
+      { hex: at(2), kind: 'hqThrow' },
+    ])
+
+    // A 有了自己的 dump（at(5)，距 A 2 MP ≤ 5）⇒ A 投递的是自己直拖的补给 ⇒ 许可（同一回合内立即生效）
+    const selfSupplied = makeFacts({
+      hexes,
+      dumps: [dump, { hex: at(5), side: 'axis' }],
+      throwHqs: [hqB, hqA],
+    })
+    expect(traceSourcesFor(selfSupplied, { hex: at(11), side: 'axis', mobility: 'truck' })).toEqual(
+      [{ hex: at(7), kind: 'hqThrow' }],
+    )
+  })
 })
 
 /* ────────────────────────────── 12.6a/12.6b 追溯补给 ────────────────────────────── */

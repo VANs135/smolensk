@@ -170,7 +170,12 @@ export interface ThrowHqView {
   throwRangeMp: number
   /** 投递距离的颜色所示机动类型（通规 3.1a/12.3b） */
   throwMobility: SupplyMobility
-  /** 该 HQ 是否由别的 HQ 投递获得补给（12.3b-D：不可转投） */
+  /**
+   * 12.3b-D：由别的 HQ 投递取得补给 ⇒ 不可再投
+   *
+   * ★ 只作场景/专规**显式声明**入口（B2 定案 2026-11-24）。D 项约束"被投递给它的那份补给"，属**来源**
+   *   约束而非回合台账；常规后果由 `computeHqCanThrow` 结构覆盖，勿实时反推（否则 facts↔判定成环）。
+   */
   receivedByThrow?: boolean
 }
 
@@ -993,7 +998,7 @@ export function canThrowViaHQ(input: {
   hqMode: BaseMode
   distanceMp: number
   throwRangeMp: number
-  /** 该 HQ 自身是否由别的 HQ 投递获得补给（12.3b-D：不可转投） */
+  /** 12.3b-D 的专规钩子（常规口径见 `ThrowHqView.receivedByThrow`；勿实时反推） */
   receivedByThrow?: boolean
 }): SupplyVerdict {
   if (input.hqMode === 'strat') return { ok: false, rule: '12.3b-C', reason: 'stratHqCannotThrow' }
@@ -1361,6 +1366,10 @@ function hqCanThrow(facts: TraceSupplyFacts, hq: ThrowHqView): boolean {
 function computeHqCanThrow(facts: TraceSupplyFacts, hq: ThrowHqView): boolean {
   if (hq.mode === 'strat') return false
   if (hq.receivedByThrow === true) return false
+  /*
+   * ★ 12.3b-D 的结构实现（B2 定案 2026-11-24，非回合台账）：能直拖 dump 或自有基础源 ⇒ 投自己的补给；
+   *   两者都没有 ⇒ 只能靠别的 HQ 投递供补给 ⇒ 不得再投。与调用顺序无关（用例见 `trace-supply.test.ts`）。
+   */
   if (canDrawFromDump(facts, { hex: hq.hex, side: hq.side, mobility: hq.throwMobility }).ok)
     return true
   return baseSourcesFor(facts, { hex: hq.hex, side: hq.side, mobility: hq.mobility }).length > 0
