@@ -1060,6 +1060,12 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
       defenderDumpIds,
       attackerSupplyConfirmed: w.combatInputs.supplyConfirmed.attacker,
       defenderSupplyConfirmed: w.combatInputs.supplyConfirmed.defender,
+      /*
+       * 12.10a：图上取得不到所需 SP 才可动储备（store 的同一个判据，不在 AI 另立口径）；
+       * 剧本页明禁攻方储备时 store 已恒 false。
+       */
+      attackerStocksApplicable: w.combatAttackerStocksApplicable,
+      defenderStocksApplicable: w.combatDefenderStocksApplicable,
       requirement:
         w.combatRequirement === null
           ? null
@@ -1528,21 +1534,100 @@ function execute(
       /*
        * 12.4 / 9.5b：AI 只落 `action.side` 这一侧；两侧都归 AI（自对打）才由 `advance` 推进。
        * 旧实现一次确认两侧 ⇒ PVE 里 AI 攻方连带代答人类守方的付款（自动扣 / 自动拒付）。
+       *
+       * 付款次序按原文：
+       *   ① 12.3a/12.3b —— 把该侧**可达的每一座站**逐座点上，直到图上 T 够整笔
+       *      （12.4 允许不同单位各取各站；需求＝攻方逐单位 steps 之和 / 守方整笔 2T）；
+       *   ② 12.10a —— **图上仍不够**才可动部队储备（图上够额时绝不动储备）；
+       *   ③ 两样都凑不出 —— 攻方弃攻（12.4「或者根本不攻击」）/ 守方拒付（9.5-B，半战斗值防御）。
+       * 12.10c：本侧只要有**耗尽**单位就不喂储备方案（引擎必拒，且退化为「整场开打不了」）。
        */
+      const attackerNeedT = w.combatAttackerViews
+        .filter((view) => w.combatAttackerIds.includes(view.id))
+        .reduce((sum, view) => sum + view.steps, 0)
+      const defenderNeedT = w.combatSupplyNeedT.defender
+      const hasExhausted = (side: 'attacker' | 'defender'): boolean =>
+        (side === 'attacker' ? w.combatAttackerViews : w.combatDefenderViews).some(
+          (view) => view.internalStocks === 'exhausted',
+        )
+      /** 把该侧可达站逐座点上，直到图上 T 够额；返回该侧当前的图上可用 T */
+      const coverWithMap = (
+        side: 'attacker' | 'defender',
+        needT: number,
+        firstId: string | null,
+      ): number => {
+        const entry = w.combatSupplyDumps.find((item) => item.side === side)
+        const dumps = [...(entry?.dumps ?? [])].sort((a, b) => a.id.localeCompare(b.id))
+        const picked = new Set(w.combatSupplyDumpPicks[side])
+        const availableT = (): number =>
+          side === 'attacker'
+            ? w.combatInputs.attackerAvailableT
+            : w.combatInputs.defenderAvailableT
+        const pick = (id: string): void => {
+          if (picked.has(id)) return
+          if (!w.pickCombatSupplyDump(side, id)) return
+          picked.add(id)
+        }
+        if (firstId !== null) pick(firstId)
+        for (const dump of dumps) {
+          if (availableT() >= needT) break
+          pick(dump.id)
+        }
+        return availableT()
+      }
+      /** 落一方的付款输入：图上次序在前，12.10a 判定后才允许动储备 */
+      const applySide = (
+        side: 'attacker' | 'defender',
+        dumpId: string | null,
+        wantStocks: boolean,
+        needT: number,
+      ): number => {
+        const availableT = coverWithMap(side, needT, dumpId)
+        const stocks = wantStocks && availableT < needT && !hasExhausted(side)
+        w.combatInputs =
+          side === 'attacker'
+            ? { ...w.combatInputs, attackerUsesInternalStocks: stocks }
+            : {
+                ...w.combatInputs,
+                /*
+                 * 9.5-B：守方"支付"与"拒付"是自己选的 —— 有来源（图上或储备）就付，
+                 * 两者都没有才是拒付（以一半战斗值防御），不留一份空账去撞 12.4。
+                 */
+                defenderProvides: dumpId !== null || stocks,
+                defenderUsesInternalStocks: stocks,
+              }
+        return availableT
+      }
       if (action.side === 'attacker') {
-        if (action.attackerDumpId !== null)
-          w.pickCombatSupplyDump('attacker', action.attackerDumpId)
+        applySide(
+          'attacker',
+          action.attackerDumpId,
+          action.attackerUsesInternalStocks === true,
+          attackerNeedT,
+        )
         return w.confirmCombatSupplySide('attacker')
       }
       if (action.side === 'defender') {
-        if (action.defenderDumpId !== null)
-          w.pickCombatSupplyDump('defender', action.defenderDumpId)
-        else w.combatInputs = { ...w.combatInputs, defenderProvides: false }
+        applySide(
+          'defender',
+          action.defenderDumpId,
+          action.defenderUsesInternalStocks === true,
+          defenderNeedT,
+        )
         return w.confirmCombatSupplySide('defender')
       }
-      if (action.attackerDumpId !== null) w.pickCombatSupplyDump('attacker', action.attackerDumpId)
-      if (action.defenderDumpId !== null) w.pickCombatSupplyDump('defender', action.defenderDumpId)
-      else w.combatInputs = { ...w.combatInputs, defenderProvides: false }
+      applySide(
+        'attacker',
+        action.attackerDumpId,
+        action.attackerUsesInternalStocks === true,
+        attackerNeedT,
+      )
+      applySide(
+        'defender',
+        action.defenderDumpId,
+        action.defenderUsesInternalStocks === true,
+        defenderNeedT,
+      )
       const ok = w.confirmCombatSupply()
       if (!ok && w.battleTarget !== null) {
         memory.combatHexes.push(hexKeyOf(w.battleTarget.hex))

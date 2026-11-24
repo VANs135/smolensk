@@ -214,7 +214,7 @@ describe('PVE 战斗补给：AI 只答自己那一侧（12.4 / 9.5b）', () => {
     expect(w.combatState?.step).toBe('declareAr')
   })
 
-  it('镜像：人类攻方先确认，AI 守方才落自己那一侧', () => {
+  it('镜像：人类攻方先确认，AI 守方才落自己那一侧；无站但储备可用 ⇒ 按 12.10a 付储备', () => {
     const { w, ctx } = mountBattle({
       activeSide: 'soviet',
       attackerSide: 'soviet',
@@ -231,15 +231,46 @@ describe('PVE 战斗补给：AI 只答自己那一侧（12.4 / 9.5b）', () => {
     expect(w.pickCombatSupplyDump('attacker', 'sd-att')).toBe(true)
     expect(w.confirmCombatSupplySide('attacker')).toBe(true)
 
-    // AI 守方这时才落自己一侧（无站 ⇒ 自己拒付）
+    // AI 守方这时才落自己一侧：图上无来源（12.10a 的前提）⇒ 用自己的部队储备
     const second = runAiStep(ctx, { memory: createAiMemory(), control: 'axis' })
     expect(second.intent).toContain('combatSupply:defender')
     expect(w.combatInputs.supplyConfirmed.defender).toBe(true)
-    expect(w.combatInputs.defenderProvides).toBe(false)
+    expect(w.combatInputs.defenderProvides).toBe(true)
+    expect(w.combatInputs.defenderUsesInternalStocks).toBe(true)
     expect(w.combatState?.step).toBe('combatSupply')
 
-    // 两侧齐 ⇒ 由玩家点「进入行动值」
+    // 两侧齐 ⇒ 玩家点「进入行动值」；12.10b：动用储备的单位标记为「低下」
     expect(w.confirmCombatSupply()).toBe(true)
     expect(w.combatState?.step).toBe('declareAr')
+    expect(w.units.find((unit) => unit.instanceId === 'd1')?.internalStocks).toBe('low')
+  })
+
+  it('12.10a：AI 攻方图上够额时不得动储备；图上无站时才用自己的储备', () => {
+    // ① 有站且够额（sd-att 4 SP = 16 T ≥ 攻方需求）⇒ 储备不置位
+    const withDump = mountBattle({
+      activeSide: 'axis',
+      attackerSide: 'axis',
+      defenderSide: 'soviet',
+      defenderDump: true,
+    })
+    runAiStep(withDump.ctx, { memory: createAiMemory(), control: 'axis' })
+    const attackerWithDump = withDump.w.units.find((unit) => unit.instanceId === 'a1')!
+    expect(withDump.w.combatInputs.attackerUsesInternalStocks).toBe(false)
+    expect(attackerWithDump.internalStocks).toBeNull()
+
+    // ② 图上无站 ⇒ 攻方改用自己的储备（不再是"根本不攻击"的 combatSkip）
+    const noDump = mountBattle({
+      activeSide: 'axis',
+      attackerSide: 'axis',
+      defenderSide: 'soviet',
+      defenderDump: true,
+    })
+    noDump.w.spDumps = noDump.w.spDumps.filter((dump) => dump.id !== 'sd-att')
+    const ai = runAiStep(noDump.ctx, { memory: createAiMemory(), control: 'axis' })
+    expect(ai.intent).toContain('combatSupply:attacker')
+    expect(ai.ok).toBe(true)
+    expect(noDump.w.combatInputs.supplyConfirmed.attacker).toBe(true)
+    expect(noDump.w.combatInputs.attackerUsesInternalStocks).toBe(true)
+    expect(noDump.w.combatState?.step).toBe('combatSupply')
   })
 })

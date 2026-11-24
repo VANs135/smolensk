@@ -99,6 +99,14 @@ export interface AiCombatSnapshot {
   /** 9.5/12.4：两侧已确认的付款（AI 只答自己控制的一方） */
   attackerSupplyConfirmed: boolean
   defenderSupplyConfirmed: boolean
+  /**
+   * 12.10a：该方**是否落在**"无法从图上补给取得所需 SP"的情形（＝储备可用）
+   *
+   * 与 store 的 `combatAttackerStocksApplicable` / `combatDefenderStocksApplicable` 同源：
+   * 图上够额 ⇒ false（储备禁止）；剧本页明令禁止攻方储备 ⇒ 恒 false。
+   */
+  attackerStocksApplicable: boolean
+  defenderStocksApplicable: boolean
   requirement: { side: 'attacker' | 'defender'; losses: number; options: number } | null
   retreatPlans: readonly {
     unitId: string
@@ -398,6 +406,14 @@ export type AiAction =
       side: 'attacker' | 'defender' | 'advance'
       attackerDumpId: string | null
       defenderDumpId: string | null
+      /**
+       * 12.10a / 12.10c：该侧图上不够额时**动用部队储备**（每枚各用自己的储备、各降一级）
+       *
+       * 只在 store 判定"图上取得不到所需 SP"时才可为 true；图上够额时置 true 也不会真花储备
+       * （引擎 `planCombatSupplyFunding` 逐单位先走图上），但界面会误显示勾选，故仍按判据置位。
+       */
+      attackerUsesInternalStocks?: boolean
+      defenderUsesInternalStocks?: boolean
     }
   | { kind: 'combatDeclareAr'; side: 'attacker' | 'defender' }
   | { kind: 'combatAutoResolve' }
@@ -762,30 +778,40 @@ function decideCombatSettlement(snapshot: AiSnapshot): AiAction | null {
        * 12.4 / 9.5b：付不付、从哪付由**该方自己**选（守方可拒付、改为半战斗值防御）。
        * 故 AI 只能答 `control` 归它的一侧；旧实现只看 `control.attacker` 就一票确认两侧，
        * PVE 里 AI 攻方会把人类守方的付款一并代答（自动扣/自动拒付），玩家再没有落点入口。
+       *
+       * 12.10a：图上取得不到所需 SP 时才可动用部队储备（`*StocksApplicable`）；守方同理，
+       * 但**是否支付**仍由守方自己定 —— 本侧 AI 有储备时就付（少挨一半战斗值），没有就拒付。
        */
       const attackerAi = snapshot.control.attacker
       const defenderAi = snapshot.control.defender
+      const attackerStocks = snapshot.combat.attackerStocksApplicable
+      const defenderStocks = snapshot.combat.defenderStocksApplicable
+      const attackerDump = snapshot.combat.attackerDumpIds[0] ?? null
+      const defenderDump = snapshot.combat.defenderDumpIds[0] ?? null
+      /** 12.4：图上付不出整笔又不能动储备 ⇒ 该方"根本不攻击" */
+      const attackerCanPay = attackerDump !== null || attackerStocks
       // 双方都归 AI（自对打）：一次落两侧并推进，保持旧行为与步数
       if (attackerAi && defenderAi) {
-        const attackerDumpId = snapshot.combat.attackerDumpIds[0]
-        if (attackerDumpId === undefined) return { kind: 'combatSkip' }
+        if (!attackerCanPay) return { kind: 'combatSkip' }
         return {
           kind: 'combatSupply',
           side: 'advance',
-          attackerDumpId,
-          defenderDumpId: snapshot.combat.defenderDumpIds[0] ?? null,
+          attackerDumpId: attackerDump,
+          defenderDumpId: defenderDump,
+          attackerUsesInternalStocks: attackerStocks,
+          defenderUsesInternalStocks: defenderStocks,
         }
       }
       // 攻方还没确认：AI 攻方先落攻方；攻方归玩家则停手
       if (!snapshot.combat.attackerSupplyConfirmed) {
         if (!attackerAi) return waitForSide(attacker, '选择战斗补给（9.5）')
-        const attackerDumpId = snapshot.combat.attackerDumpIds[0]
-        if (attackerDumpId === undefined) return { kind: 'combatSkip' }
+        if (!attackerCanPay) return { kind: 'combatSkip' }
         return {
           kind: 'combatSupply',
           side: 'attacker',
-          attackerDumpId,
+          attackerDumpId: attackerDump,
           defenderDumpId: null,
+          attackerUsesInternalStocks: attackerStocks,
         }
       }
       // 攻方已确认 ⇒ 守方归 AI 才落；归玩家则等玩家自己确认
@@ -794,7 +820,8 @@ function decideCombatSettlement(snapshot: AiSnapshot): AiAction | null {
           kind: 'combatSupply',
           side: 'defender',
           attackerDumpId: null,
-          defenderDumpId: snapshot.combat.defenderDumpIds[0] ?? null,
+          defenderDumpId: defenderDump,
+          defenderUsesInternalStocks: defenderStocks,
         }
       }
       if (!snapshot.combat.defenderSupplyConfirmed)

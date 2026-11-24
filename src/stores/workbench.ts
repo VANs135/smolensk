@@ -12396,7 +12396,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
             id: item.instanceId,
             label: item.name,
             points: Math.max(1, item.noncombatTransport),
-            loadedT: 0,
+            /*
+             * 9.14c「对运输点数和**所有装载在运输点数上的 SP** 都会产生同等的影响」
+             * ⇒ 每个算子把**自己车上的载荷**（T）带进分配：被夺取的那一枚，车上的 SP 随之易主。
+             * ★ 修前写死 0：组级 `capturedLoadedT` 与 `planTransportSplit` 的装载项全成空转，
+             *   永远拼不出表值（`exact` 恒假），车上的 SP 也不参与「同等影响」。
+             */
+            loadedT: item.loadedSpT,
           }))
         const plan = planTransportSplit({ group, counters })
         const split: SpecialTransportSplit = {
@@ -12415,7 +12421,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
             unitId: counter.id,
             label: counter.label,
             kind: 'transport',
-            detail: `9.14c：本组掷 ${group.die} → ${group.percent}%；被夺取 ${group.capturedPoints}/${group.totalPoints} 点，其余位移`,
+            detail: `9.14c：本组掷 ${group.die} → ${group.percent}%；被夺取 ${group.capturedPoints}/${group.totalPoints} 点与 ${group.capturedLoadedT}/${group.totalLoadedT} T 装载，其余位移`,
             candidates: transportDisplacementCandidates(hex, mapHexes),
             chosen: null,
           })
@@ -12503,8 +12509,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    *   · `noncombatKind`: `organic_truck` ⇒ `transport_point` ⇒ 13.2g-A 的「永不卸载」随之解除；
    *   · `formation`: 清空（3.1c 的编队归属来自数据；被夺取后已不属于原编队，13.2g-B 的
    *     「只许同编队取用」也不再拦着新主人 —— 它现在就是一枚普通运输点数）；
-   *   · 12.1a 的载荷 `loadedSpT` 原样保留：本作的 9.14c 夺取流程把组内每个算子的
-   *     `loadedT` 记成 0（不拆载荷），故转换时也只有"保留"这一种结果。
+   *   · 12.1a 的载荷 `loadedSpT` 原样保留：9.14c 只决定**哪些算子**被夺取，SP 装在车上随车易主
+   *     （规则「对所有装载在运输点数上的 SP 同等影响」＝被夺取的那一枚把车上 SP 一并带走）。
    *
    * 幂等：已在勾选里来回翻过的算子只转一次（非编内卡车直接跳过）。
    * ★ 只在**勾选定稿**时调用（无待决的结清 / 确认收束），不在 `toggleSpecialCaptured` 里转，
@@ -12550,12 +12556,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       const points = split.counters
         .filter((item) => chosen.has(item.id))
         .reduce((sum, item) => sum + item.points, 0)
+      // 9.14c：装载的 SP 与本算子同去同留 ⇒ 勾选变动也必须同时核 T
+      const loadedT = split.counters
+        .filter((item) => chosen.has(item.id))
+        .reduce((sum, item) => sum + item.loadedT, 0)
       const plan = planTransportSplit({ group: split.group, counters: split.counters })
       const next: SpecialTransportSplit = {
         ...split,
         capturedIds,
-        exact: points === split.group.capturedPoints,
-        detail: `当前勾选：夺取 ${points} 点（表值 ${split.group.capturedPoints} 点）；引擎建议：${plan.detail}`,
+        exact: points === split.group.capturedPoints && loadedT === split.group.capturedLoadedT,
+        detail:
+          `当前勾选：夺取 ${points} 点 / ${loadedT} T` +
+          `（表值 ${split.group.capturedPoints} 点 / ${split.group.capturedLoadedT} T）；` +
+          `引擎建议：${plan.detail}`,
       }
       // 归属随勾选即时翻面（9.14c 由拥有者决定哪些被夺取）
       applyTransportSplitSides(pending, next)
@@ -12593,11 +12606,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // 9.14c：原主的勾选若拼不出表值（算子规格所限），如实提示差额，由裁判据情处理
     for (const split of pending.splits) {
       if (split.exact) continue
+      const chosen = new Set(split.capturedIds)
+      const loadedT = split.counters
+        .filter((item) => chosen.has(item.id))
+        .reduce((sum, item) => sum + item.loadedT, 0)
       pushLog(
         'warning',
         `${hexLabel(pending.hex)} ${split.group.group === 'trucks' ? '卡车' : '马车'}组：` +
-          `夺取表 ${split.group.capturedPoints} 点，当前勾选 ${split.capturedIds.length} 个算子` +
-          `（受算子规格所限取最接近，9.14c）`,
+          `夺取表 ${split.group.capturedPoints} 点 / ${split.group.capturedLoadedT} T，` +
+          `当前勾选 ${split.capturedIds.length} 个算子（${loadedT} T 载荷）——` +
+          `受算子规格所限取最接近（9.14c：装载 SP 与点数同等影响）`,
         '9.14c',
       )
     }

@@ -171,6 +171,52 @@ describe('9.14 特殊战斗流程（store 级）', () => {
     expect(store.specialPending).toBeNull()
   })
 
+  it('9.14c：车上装载的 SP 与运输点数同受影响（分配按 T 对齐）', () => {
+    const store = newStore()
+    const records = transportRecords()
+    const units = records.map((record, index) => place(store, record, HEX, 'soviet', `tp${index}`))
+    // 12.1a：给每枚装到满载（T），9.14c「所有装载在运输点数上的 SP 同等影响」
+    const loads = units.map((unit) => unit.noncombatTransport * 4)
+    units.forEach((unit, index) => {
+      unit.loadedSpT = loads[index]!
+    })
+    const totalPoints = records.reduce(
+      (sum, record) => sum + (record.noncombatDetails?.transport ?? 0),
+      0,
+    )
+    const totalLoadedT = loads.reduce((sum, t) => sum + t, 0)
+    expect(totalLoadedT).toBe(totalPoints * 4)
+
+    place(store, attacker('axis'), HEX, 'axis', 'a1')
+    expect(store.resolveSpecialCombatAt(HEX, 'axis')).toBe(true)
+
+    const pending = store.specialPending
+    if (pending === null) return // 100% 全夺取 ⇒ 无待决（本节由另一用例覆盖）
+    const split = pending.splits[0]!
+    // 组级装载与算子级装载都来自**车上的实际载荷**（修前 store 侧恒写 0）
+    expect(split.group.totalLoadedT).toBe(totalLoadedT)
+    expect(split.counters.map((counter) => counter.loadedT)).toEqual(loads)
+    const percent = split.group.percent
+    expect(split.group.capturedLoadedT).toBe(Math.round((totalLoadedT * percent) / 100))
+    // 分配出的「被夺取」子集按 T 计，且＝其算子上实际装着的 SP
+    const captured = new Set(split.capturedIds)
+    const capturedT = split.counters
+      .filter((counter) => captured.has(counter.id))
+      .reduce((sum, counter) => sum + counter.loadedT, 0)
+    expect(capturedT).toBe(
+      units
+        .filter((unit) => captured.has(unit.instanceId))
+        .reduce((sum, unit) => sum + unit.loadedSpT, 0),
+    )
+    // 明细里如实报出「多少点 / 多少 T」（按算子规格分配，可能取最接近）
+    expect(split.detail).toContain(`${String(capturedT)} T`)
+    // 12.1a：被夺取的算子把车上的 SP 一并带走（载荷不落账、不蒸发）
+    for (const counter of split.counters) {
+      const unit = store.units.find((item) => item.instanceId === counter.id)
+      expect(unit?.loadedSpT).toBe(counter.loadedT)
+    }
+  })
+
   it('9.14c：非法落点被拒绝（不在候选中时不落盘）', () => {
     const store = newStore()
     const records = transportRecords()
