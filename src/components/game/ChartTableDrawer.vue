@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue'
 
 import { panelScansOf } from '@/render/charts-view'
 import { counterImages } from '@/render/token-images'
-import { useHotkeyStore } from '@/stores'
 
 import { panelScanImageUrl } from './aux-card-image'
 
@@ -21,8 +20,6 @@ import { panelScanImageUrl } from './aux-card-image'
  *   托盘只剩盒段（盒入口＝托盘卡头）；表格退出托盘，也不再是右侧「盒表」抽屉。
  *   投影表（`charts-view.ts` 的行 × 列）仍在引擎验证页保留核对，本抽屉不画那一面。
  */
-
-const hotkeys = useHotkeyStore()
 
 /** 屏标识（同时只显示一屏；不预选 ⇒ 初值 null） */
 type ScreenKey = 'crt' | 'supply' | 'tec' | 'vars'
@@ -46,9 +43,21 @@ function scanUrl(image: string): string {
   return panelScanImageUrl(image)
 }
 
-/** 图是否已读进来（未就绪先画占位，避免一闪而过的破图） */
+/**
+ * 已读进来的图（URL 列表）
+ *
+ * 修前用 `counterImages.get()` 判就绪、未就绪就**不挂 `<img>`** ⇒ 图永远没人请求，
+ * 四个屏全是「正在读图…」（2026-11-25 实机截到）。改成**始终挂 `<img>`**、由 `load`
+ * 事件把 URL 记进这份响应式清单：图一到位，占位字立刻换成图。
+ */
+const readyUrls = ref<string[]>([])
+
 function scanReady(image: string): boolean {
-  return counterImages.get(panelScanImageUrl(image)) !== null
+  return readyUrls.value.includes(scanUrl(image))
+}
+
+function markReady(url: string): void {
+  if (!readyUrls.value.includes(url)) readyUrls.value = [...readyUrls.value, url]
 }
 
 /** 选中某张表时把图读进来（懒加载：没选不拉图） */
@@ -56,11 +65,6 @@ watch(screen, () => {
   if (screen.value === null) return
   void counterImages.preload(scans.value.map((scan) => scanUrl(scan.image)))
 })
-
-/** 关抽屉（与右侧三抽屉同一条折叠语义：整体收起） */
-function close(): void {
-  hotkeys.panelCollapsed = true
-}
 </script>
 
 <template>
@@ -83,19 +87,18 @@ function close(): void {
     <p v-if="scans.length === 0" class="charts__blank" aria-hidden="true"></p>
     <div v-for="scan in scans" :key="scan.id" class="charts__scan">
       <a class="charts__link" :href="scanUrl(scan.image)" target="_blank" rel="noopener">
+        <span v-if="!scanReady(scan.image)" class="charts__img charts__img--pending"
+          >正在读图…</span
+        >
         <img
-          v-if="scanReady(scan.image)"
+          v-show="scanReady(scan.image)"
           class="charts__img"
           :src="scanUrl(scan.image)"
           :alt="scan.title"
+          @load="markReady(scanUrl(scan.image))"
         />
-        <span v-else class="charts__img charts__img--pending">正在读图…</span>
       </a>
     </div>
-
-    <p class="charts__hint">
-      <button type="button" class="charts__close" @click="close()">收起</button>
-    </p>
   </div>
 </template>
 
@@ -156,19 +159,5 @@ function close(): void {
   padding: var(--space-3);
   color: var(--color-muted);
   font-size: var(--text-xs);
-}
-
-.charts__hint {
-  display: flex;
-  justify-content: flex-end;
-  margin: 0;
-}
-
-.charts__close {
-  border: none;
-  background: transparent;
-  color: var(--color-muted);
-  font-size: var(--text-xs);
-  cursor: pointer;
 }
 </style>

@@ -600,7 +600,9 @@ function onConfirmBriefing(): void {
 
 .scenario__card {
   display: grid;
-  grid-template-columns: var(--space-10) minmax(0, 1fr) auto var(--space-4);
+  /* 2026-11-25 P2-1：id 列 40px 装不下教学剧本的「Intro」（5 字符），
+     会和日期挤成「Intro5 Jul 41」⇒ 统一放到 48px，各行星号对齐。 */
+  grid-template-columns: var(--space-12) minmax(0, 1fr) auto var(--space-4);
   align-items: center;
   gap: var(--space-2);
   width: 100%;
@@ -644,6 +646,8 @@ function onConfirmBriefing(): void {
 
 .scenario__id {
   font-weight: 700;
+  /* id 一律不折行（列宽 48px 已够「Intro」；本视图禁止 overflow:hidden，不设裁切） */
+  white-space: nowrap;
 }
 
 .scenario__meta {

@@ -601,6 +601,7 @@ function syncSize(): void {
    * 会被完整画两遍——首屏最贵的一笔。尺寸不变时 `clampViewport` 的结果也不变，故跳过等价。
    */
   if (fitted && viewSize.value.width === width && viewSize.value.height === height) return
+  const prevWidth = viewSize.value.width
   const sizeChanged = viewSize.value.width !== width || viewSize.value.height !== height
   viewSize.value = { width, height }
   if (!fitted && canDraw(viewSize.value)) {
@@ -608,8 +609,14 @@ function syncSize(): void {
     fitToWindow()
     return
   }
-  // 手机首屏布局会二次撑开（地址栏 / 流程条 / 底部导航）⇒ 未手动操作过就重新适配
-  if (sizeChanged && !userAdjusted) {
+  /*
+   * 2026-11-25：**只有宽度变化才重新适配**。
+   *
+   * 底部盒托盘展开/收起、右栏抽屉开合只改高度 —— 修前一律 `fitToWindow()`，
+   * 玩家点一下卡头，地图就跳一次缩放（实机从 17% 掉到 12%）。
+   * 手机首屏的高度变化（地址栏 / 底部导航）仍按旧口径重新适配。
+   */
+  if (sizeChanged && !userAdjusted && (prevWidth !== width || isAndroidPlatform())) {
     fitToWindow()
     return
   }

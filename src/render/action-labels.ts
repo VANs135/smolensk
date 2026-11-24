@@ -15,7 +15,6 @@ const ACTION_LABELS: Readonly<Record<string, string>> = {
   // 初设与流程
   place: '落子',
   remove: '撤回算子',
-  skip: '跳过',
   'skip+default': '跳过（采用缺省）',
   answer: '应答',
   cancel: '放弃选择',
@@ -90,7 +89,6 @@ const ACTION_LABELS: Readonly<Record<string, string>> = {
   arrival: '抵达',
   arrivalRail: '铁路抵达',
   eatOffTheMap: '地图外吃补',
-  rebuildPlace: '重建落位',
 
   // 盒与增援
   breakoutAttempt: '突围尝试',
