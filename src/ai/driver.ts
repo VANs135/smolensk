@@ -1557,7 +1557,16 @@ function execute(
         firstId: string | null,
       ): number => {
         const entry = w.combatSupplyDumps.find((item) => item.side === side)
-        const dumps = [...(entry?.dumps ?? [])].sort((a, b) => a.id.localeCompare(b.id))
+        /*
+         * 12.3a：每个单位只从**一座**站取满 ⇒ 先点**容量大**的站（同容量按 id 定序）。
+         * 若按 id 顺序点，可能先点掉几座小站、总额够了但某个大需求单位单座取不满，
+         * 落账时被判「付不清」。
+         */
+        const dumps = [...(entry?.dumps ?? [])].sort(
+          (a, b) =>
+            holdingsToT({ sp: b.sp, t: b.t }) - holdingsToT({ sp: a.sp, t: a.t }) ||
+            a.id.localeCompare(b.id),
+        )
         const picked = new Set(w.combatSupplyDumpPicks[side])
         const availableT = (): number =>
           side === 'attacker'
