@@ -42,6 +42,7 @@
 - [x] P2-4 `MapPopover` 与增援面板三处 `?` 补 `aria-label`
 - [x] P2-7 深色 `accent-solid` `#244840`→`#2e5a4e`、hover `#3a6d5e`
 - [x] 会话窗 `MapDock`：补 `⌄` 收起（状态保留）与 `▣` 不可关
+- [x] 存档窗：初设中不再铺整段操作说明，只留「初设未确认 · 暂不能存档」一行（`ui-field` 守卫反向钉住长句）
 - [x] `tests/render/ui-hardening.test.ts`：UI-1/2/3、P2-3、P2-7 源码守卫
 - [—] P2-1 已核：id 列 `space-10` 定宽、行高 `space-12`，无需改
 - [—] P2-2 已核：`sizeChanged && !userAdjusted` 闸门在位

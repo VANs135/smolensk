@@ -183,6 +183,7 @@ body[data-layout='board'] {
 | P2-4             | 未单独 commit | `MapPopover` 规则 `?` 补 `aria-label`；增援面板三处 `?` 同理（`RuleTip` 本就有）                                           |
 | P2-7             | 未单独 commit | 深色 `--color-command-accent-solid` `#244840`→`#2e5a4e`、hover `#3a6d5e`                                                   |
 | 会话窗壳         | 未单独 commit | `MapDock` 补 `⌄` 收起（只折体、会话保留）与 `▣` 不可关（`closePolicy='refused'`）                                          |
+| 实机复核 5 处    | `cabdde2`     | 表图不加载（`v-if` 掉 `<img>` ⇒ 没人请求）、表抽屉多余「收起」、剧本 id「Intro」撞列、开盒跳缩放、存档窗长说明             |
 
 ### 8.2 与原稿不同的判断（已核实，不照原稿执行）
 

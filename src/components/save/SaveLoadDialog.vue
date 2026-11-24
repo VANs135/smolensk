@@ -184,13 +184,9 @@ const canSave = computed(
         清空槽
       </BaseButton>
     </div>
-    <p
-      v-if="gameSession.session === null"
-      class="notice notice--info"
-      data-testid="save-setup-hint"
-    >
-      初设尚未确认，暂不能存档：先完成当前方初设并确认（建立会话）后，这里才会出现「保存到槽」。
-      初设中的布设可以继续操作，不会因为不能存档而丢失。
+    <!-- 2026-11-25：窗内不写操作说明句，只留一行状态（初设未确认时没有可存的会话） -->
+    <p v-if="gameSession.session === null" class="muted num" data-testid="save-setup-hint">
+      初设未确认 · 暂不能存档
     </p>
     <p v-if="gameSession.session !== null && !canSave" class="muted">
       暂不可保存：{{ workbench.saveBlockedReason ?? '本地存储不可用' }}

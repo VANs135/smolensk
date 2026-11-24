@@ -180,10 +180,13 @@ describe('条 24：正式/验证模式门控', () => {
     expect(src).toMatch(/断补处置/)
   })
 
-  it('SaveLoadDialog：初设中不能存档要说明原因与替代，不只写「未建会话」', () => {
+  it('SaveLoadDialog：初设中只写一行状态，不再铺操作说明', () => {
+    // 2026-11-25（最简 UI 拍板）：窗内禁操作说明 ⇒ 原「先完成…后才会出现…」整段撤掉，
+    // 留一行「初设未确认 · 暂不能存档」；判据反过来钉住长句不得回来。
     const src = read('src/components/save/SaveLoadDialog.vue')
     expect(src).toMatch(/初设中/)
-    expect(src).toMatch(/先完成.*初设.*确认/)
+    expect(src).toMatch(/初设未确认 · 暂不能存档/)
+    expect(src).not.toMatch(/先完成.*初设.*确认/)
   })
 
   it('ContainersPanel：编队收纳改「盒选」（正式界面点选图上单位、验证页保留文本框）', () => {
