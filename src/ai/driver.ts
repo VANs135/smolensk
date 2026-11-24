@@ -542,7 +542,7 @@ function moveBranchOf(
             .transportDumpsOf(point.instanceId)
             .map((dump) => Math.floor(holdingsToT({ sp: dump.sp, t: dump.t }) / SP_TO_T)),
         )
-        const amount = Math.min(load, perDump)
+        const amount = Math.min(Math.floor(load), perDump)
         if (amount > 0) {
           transport = { pointId: point.instanceId, mode: 'load', amount }
           break
@@ -550,8 +550,9 @@ function moveBranchOf(
       }
       const unload = w.transportUnloadableSpOf(point.instanceId)
       // 只在「本环节真的开过车」之后卸货；同格有补给站也不卸，避免原地装上又卸下
-      if (unload > 0 && point.movementEnded && w.transportDumpsOf(point.instanceId).length === 0) {
-        transport = { pointId: point.instanceId, mode: 'unload', amount: unload }
+      // 12.1a：余载按 T 记（可为 0.25 SP）⇒ AI 只提案整 SP 的卸载，不足 1 SP 的零头留给玩家
+      if (unload >= 1 && point.movementEnded && w.transportDumpsOf(point.instanceId).length === 0) {
+        transport = { pointId: point.instanceId, mode: 'unload', amount: Math.floor(unload) }
         break
       }
     }

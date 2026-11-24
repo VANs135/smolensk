@@ -4937,7 +4937,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     pointId: string | null
     /** P3：本次装载选定的补给站 id（地面账本或 `unit:` 装载来源） */
     dumpId: string | null
-    /** P6：装、卸各用自己的数量，互不串用 */
+    /**
+     * P6：装、卸各用自己的数量，互不串用
+     *
+     * 单位是 **SP**，但 12.1a 的 T 是最小面额 ⇒ 允许 0.25 的整数倍（0.25 SP = 1 T），
+     * 于是 13.2a 的「暂停移动并使用它装载的**部分**补给」与 13.2f 的「任意数量」都能表达。
+     */
     loadAmount: number
     unloadAmount: number
   }>({
@@ -4999,8 +5004,35 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const lockedT = spRelayLockedT(unit.hex, unit.side, 'transport')
     const groundT = dumps.reduce((sum, dump) => sum + holdingsToT({ sp: dump.sp, t: dump.t }), 0)
     const usableT = Math.max(0, groundT - lockedT)
-    const roomSp = unit.noncombatTransport - unit.loadedSpT / SP_TO_T
-    return Math.max(0, Math.min(Math.floor(roomSp), Math.floor(usableT / SP_TO_T)))
+    /*
+     * 13.2c 的运力「以 SP 为单位计算」，而 12.1a 把 SP 拆到最小面额 T（1 SP = 4 T）⇒
+     * 余量按 **T** 取整：3 点的卡车可以只装 1 T（13.2a「暂停移动并使用它装载的**部分**补给」）。
+     * 返回值仍是 **SP**（可为 0.25 的整数倍），供界面 `max` 与 AI 的 `> 0` 判定使用。
+     */
+    const roomT = Math.max(0, unit.noncombatTransport * SP_TO_T - unit.loadedSpT)
+    return Math.min(roomT, usableT) / SP_TO_T
+  }
+
+  /**
+   * 12.1a：把玩家输入的「装载 / 卸载量」（单位 **SP**）换成 **T**
+   *
+   * 13.2f：「运输点数在一个格内装载/卸载**任意数量**的 SP」；13.2a：「暂停移动并使用它装载的
+   * **部分**补给」；12.1a 又把 SP 拆到最小面额 T（1 SP = 4 T，即 1 T = 0.25 SP）⇒
+   * 面额只到整 T：0.25 的整数倍合法，其余（如 0.3 SP）拒绝而不是"悄悄取整"。
+   * 返回 null = 非法面额或非正数。
+   */
+  function transportAmountToT(value: number): number | null {
+    if (!Number.isFinite(value) || value <= 0) return null
+    const wantT = Math.round(value * SP_TO_T)
+    if (Math.abs(value * SP_TO_T - wantT) > 1e-6) return null
+    return wantT
+  }
+
+  /** 12.1a：把 T 写成「1 SP（4 T）」/「1 T（0.25 SP）」——日志、结算与撤销标签共用一处 */
+  function transportAmountText(wantT: number): string {
+    return wantT % SP_TO_T === 0
+      ? `${String(wantT / SP_TO_T)} SP（${String(wantT)} T）`
+      : `${String(wantT)} T（${String(wantT / SP_TO_T)} SP）`
   }
 
   /**
@@ -5057,13 +5089,27 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       return false
     }
-    const amount = Math.max(1, Math.trunc(transportLoadInputs.value.loadAmount))
-    // 13.2c/4.7c：运输点数的运载能力**不超过其规模**（以 SP 为单位）
-    if (unit.loadedSpT / SP_TO_T + amount > unit.noncombatTransport) {
+    /*
+     * 13.2f / 12.1a：装载量是「任意数量的 SP」⇒ 面额到整 T（0.25 SP 的整数倍）。
+     * 13.2a 明写"暂停移动并使用它装载的**部分**补给" ⇒ 也允许**装少于运力**。
+     */
+    const wantT = transportAmountToT(transportLoadInputs.value.loadAmount)
+    if (wantT === null) {
+      transportLoadError.value = { rule: '12.1a', reason: 'loadAmountNotWholeT' }
+      pushLog(
+        'warning',
+        `装载量须是 1 T（0.25 SP）的整数倍且大于 0（收到 ${String(transportLoadInputs.value.loadAmount)} SP；12.1a）`,
+        '12.1a',
+      )
+      return false
+    }
+    // 13.2c/4.7c：运输点数的运载能力**不超过其规模**（以 SP 为单位 ⇒ 按 T 折算成 规模×4）
+    if (unit.loadedSpT + wantT > unit.noncombatTransport * SP_TO_T) {
       transportLoadError.value = { rule: '13.2c', reason: 'loadExceedsCapacity' }
       pushLog(
         'warning',
-        `该运输点数运力 ${unit.noncombatTransport} SP，装不下 ${amount} SP（13.2c）`,
+        `该运输点数运力 ${String(unit.noncombatTransport)} SP（${String(unit.noncombatTransport * SP_TO_T)} T），` +
+          `已载 ${String(unit.loadedSpT)} T，装不下再 ${String(wantT)} T（13.2c）`,
         '13.2c',
       )
       return false
@@ -5073,7 +5119,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (lockedT > 0) {
       const availableT =
         dumps.reduce((sum, dump) => sum + holdingsToT({ sp: dump.sp, t: dump.t }), 0) - lockedT
-      if (amount * SP_TO_T > availableT) {
+      if (wantT > availableT) {
         transportLoadError.value = { rule: '12.2a', reason: 'relayLockedOtherMode' }
         pushLog(
           'warning',
@@ -5084,16 +5130,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }
     }
     // P3：同格多本账时选能**独自付清**本次数量的那本；选中的 id 落进输入，付款走同一扣账入口
-    const dump = transportLoadDumpFor(unit, amount * SP_TO_T)
+    const dump = transportLoadDumpFor(unit, wantT)
     const payment = planSpPayment({
       holdings: { sp: dump?.sp ?? 0, t: dump?.t ?? 0 },
-      wantT: amount * SP_TO_T,
+      wantT,
     })
     if (dump === null || !payment.ok) {
       transportLoadError.value = { rule: '13.2f', reason: 'loadNotPayable' }
       pushLog(
         'warning',
-        `该站的 SP 不足 ${amount} 点（装载不消耗 SP 之外的东西，但货得真的在站上；13.2f）`,
+        `该站的 SP 不足 ${transportAmountText(wantT)}（装载不消耗 SP 之外的东西，但货得真的在站上；13.2f）`,
         '13.2f',
       )
       return false
@@ -5103,13 +5149,13 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const mpBefore = unit.mpSpent
     const dumpHoldingsBefore: SpHoldings = { sp: dump.sp, t: dump.t }
     setSpDumpHoldings(dump.id, payment.data.holdingsAfter)
-    unit.loadedSpT += amount * SP_TO_T
+    unit.loadedSpT += wantT
     // 13.2f：装载要支付印刷 MA 的 10%（按 6.1a 计入本阶段已耗 MP）
     unit.mpSpent += outcome.data.cost
     transportLoadError.value = null
     pushLog(
       'success',
-      `${unit.name} 装载 ${amount} SP（${outcome.data.detail}）⇒ 已载 ${unit.loadedSpT / SP_TO_T} SP；付款站 ${hexLabel(dump.hex)}`,
+      `${unit.name} 装载 ${transportAmountText(wantT)}（${outcome.data.detail}）⇒ 已载 ${String(unit.loadedSpT)} T；付款站 ${hexLabel(dump.hex)}`,
       outcome.rule,
     )
     recordSettlement({
@@ -5117,7 +5163,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       rule: outcome.rule,
       data: {
         pointId: unit.instanceId,
-        sp: amount,
+        sp: wantT / SP_TO_T,
+        t: wantT,
         costMp: outcome.data.cost,
         dumpHex: { ...dump.hex },
       },
@@ -5135,7 +5182,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       },
     ]
     // 用户 2026-11-20：装卸也是一笔可撤操作（与移动步共用一个撤销栈，按发生顺序回退）
-    noteUndoable('transport', `装载 ${amount} SP：${unit.name}`)
+    noteUndoable('transport', `装载 ${transportAmountText(wantT)}：${unit.name}`)
     return true
   }
 
@@ -5187,14 +5234,26 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
       return false
     }
-    const amount = Math.max(1, Math.trunc(transportLoadInputs.value.unloadAmount))
-    const loaded = unit.loadedSpT / SP_TO_T
-    if (loaded < amount) {
+    const wantT = transportAmountToT(transportLoadInputs.value.unloadAmount)
+    if (wantT === null) {
+      transportLoadError.value = { rule: '12.1a', reason: 'unloadAmountNotWholeT' }
+      pushLog(
+        'warning',
+        `卸载量须是 1 T（0.25 SP）的整数倍且大于 0（收到 ${String(transportLoadInputs.value.unloadAmount)} SP；12.1a）`,
+        '12.1a',
+      )
+      return false
+    }
+    if (unit.loadedSpT < wantT) {
       transportLoadError.value = {
         rule: '13.2f',
-        reason: `unloadExceedsLoaded:${amount}>${loaded}`,
+        reason: `unloadExceedsLoaded:${String(wantT)}>${String(unit.loadedSpT)}`,
       }
-      pushLog('warning', `该点数只载了 ${loaded} SP，卸不出 ${amount} SP（13.2f）`, '13.2f')
+      pushLog(
+        'warning',
+        `该点数只载了 ${String(unit.loadedSpT)} T，卸不出 ${transportAmountText(wantT)}（13.2f）`,
+        '13.2f',
+      )
       return false
     }
     const loadedBefore = unit.loadedSpT
@@ -5202,15 +5261,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const dumpBefore =
       spDumps.value.find((item) => item.side === unit.side && sameHex(item.hex, unit.hex)) ?? null
     const relayLocksBefore = spRelayLocks.value.map((lock) => ({ ...lock }))
-    unit.loadedSpT -= amount * SP_TO_T
-    grantSpDumpT(unit.hex, unit.side, amount * SP_TO_T)
+    unit.loadedSpT -= wantT
+    grantSpDumpT(unit.hex, unit.side, wantT)
     // 12.2a：这批 T 本阶段已由「运输点数」卸下 ⇒ 之后不能再用铁路等其他方式运走
-    addSpRelayLock(unit.hex, unit.side, 'transport', amount * SP_TO_T)
+    addSpRelayLock(unit.hex, unit.side, 'transport', wantT)
     unit.mpSpent += outcome.data.cost
     transportLoadError.value = null
     pushLog(
       'success',
-      `${unit.name} 卸载 ${amount} SP（${outcome.data.detail}）⇒ 余载 ${unit.loadedSpT / SP_TO_T} SP；落 ${hexLabel(unit.hex)}`,
+      `${unit.name} 卸载 ${transportAmountText(wantT)}（${outcome.data.detail}）⇒ 余载 ${String(unit.loadedSpT)} T；落 ${hexLabel(unit.hex)}`,
       outcome.rule,
     )
     recordSettlement({
@@ -5218,7 +5277,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       rule: outcome.rule,
       data: {
         pointId: unit.instanceId,
-        sp: amount,
+        sp: wantT / SP_TO_T,
+        t: wantT,
         costMp: outcome.data.cost,
         hex: { ...unit.hex },
       },
@@ -5245,7 +5305,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       },
     ]
     // 用户 2026-11-20：装卸也是一笔可撤操作（与移动步共用一个撤销栈，按发生顺序回退）
-    noteUndoable('transport', `卸载 SP：${unit.name}`)
+    noteUndoable('transport', `卸载 ${transportAmountText(wantT)}：${unit.name}`)
     return true
   }
 
@@ -5389,11 +5449,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     return unit === undefined ? 0 : transportLoadableAt(unit)
   }
 
-  /** 13.2f：这一枚运输点数此刻最多能**卸**多少 SP（0 ⇒ 不能卸） */
+  /** 13.2f：这一枚运输点数此刻最多能**卸**多少 SP（0 ⇒ 不能卸；可为 0.25 的整数倍） */
   function transportUnloadableSpOf(instanceId: string): number {
     if (!transportUnloadReadyAt(instanceId)) return 0
     const unit = unitOfInstance(instanceId)
-    return unit === undefined ? 0 : Math.floor(unit.loadedSpT / SP_TO_T)
+    // 12.1a：余载按 T 记 ⇒ 折算回 SP（0.25 步长），允许"卸一部分"
+    return unit === undefined ? 0 : unit.loadedSpT / SP_TO_T
   }
 
   /** 12.1b：该运输点数所在格的补给站（地面 + 装载中）——装卸共用同一份事实 */
@@ -5408,8 +5469,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     transportLoadInputs.value.dumpId = null
     const load = transportLoadableSpOf(instanceId)
     const unload = transportUnloadableSpOf(instanceId)
-    transportLoadInputs.value.loadAmount = Math.max(1, load)
-    transportLoadInputs.value.unloadAmount = Math.max(1, unload)
+    // 12.1a：上限是 T 面额（0.25 的整数倍）⇒ 有货时预填满上限；都没有时给 1（入口本身不出现）
+    transportLoadInputs.value.loadAmount = load > 0 ? load : 1
+    transportLoadInputs.value.unloadAmount = unload > 0 ? unload : 1
   }
 
   /**

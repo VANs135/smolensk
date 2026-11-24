@@ -839,12 +839,13 @@ const showsLedger = computed(
             </p>
             <div v-if="transportLoadable > 0" class="row">
               <label class="field">
-                装载 SP（最多 {{ transportLoadable }}）
+                装载量（最多 {{ transportLoadable }} SP，可填 0.25 的倍数 = 1 T 面额）
                 <UiField
                   v-model="workbench.transportLoadInputs.loadAmount"
                   class="input num"
                   type="number"
-                  min="1"
+                  min="0.25"
+                  step="0.25"
                   :max="transportLoadable"
                   stepper
                 />
@@ -855,12 +856,13 @@ const showsLedger = computed(
             </div>
             <div v-if="transportUnloadable > 0" class="row">
               <label class="field">
-                卸载 SP（最多 {{ transportUnloadable }}）
+                卸载量（最多 {{ transportUnloadable }} SP，可填 0.25 的倍数 = 1 T 面额）
                 <UiField
                   v-model="workbench.transportLoadInputs.unloadAmount"
                   class="input num"
                   type="number"
-                  min="1"
+                  min="0.25"
+                  step="0.25"
                   :max="transportUnloadable"
                   stepper
                 />

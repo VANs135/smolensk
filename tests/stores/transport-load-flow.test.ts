@@ -3,6 +3,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { holdingsToT } from '@/engine/rules'
 import { useWorkbenchStore } from '@/stores'
 
 import { groundRecord, placeGround } from '../flows/sop-harness'
@@ -398,5 +399,91 @@ describe('13.2g-A/B：编内卡车装载的 SP 不能被别的运输点数装走
     expect(store.loadTransportPointNow()).toBe(true)
     expect(point.loadedSpT).toBe(4)
     expect(store.spDumps.find((item) => item.id === 'd-ax')!.sp).toBe(3)
+  })
+})
+
+describe('12.1a / 13.2a：装载与卸载都可以是**部分**补给（面额到整 T）', () => {
+  it('13.2a/13.2f：3 点运力的卡车可以只装 1 T（0.25 SP），不强制装满或整 SP', () => {
+    const store = newStore()
+    const point = placeTransportPoint(store)
+    expect(point.noncombatTransport).toBe(2) // 夹具取 2 点以上的常规卡车
+    const dump = dumpHere(store, 4)
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 0.25, // 1 T
+      unloadAmount: 0.25,
+    }
+    expect(store.transportLoadableSpOf(point.instanceId)).toBe(2)
+    expect(store.loadTransportPointNow()).toBe(true)
+    // 12.1a：1 T = 0.25 SP ⇒ 车上 1 T，站上 3 SP + 3 T（= 15 T）
+    expect(point.loadedSpT).toBe(1)
+    expect(holdingsToT(store.spDumps.find((item) => item.id === dump.id)!)).toBe(15)
+    // 13.2f：费用仍是"一次装卸 印刷 MA 的 10%"，与数量无关
+    const expected = Math.max(0, Math.ceil(point.raw.ma * 0.1 - 0.0001))
+    expect(point.mpSpent).toBe(expected)
+  })
+
+  it('13.2c：运力按 SP 计、货按 T 计 ⇒ 满 8 T 的 2 点卡车只差 1 T 时只能再装 1 T', () => {
+    const store = newStore()
+    const point = placeTransportPoint(store)
+    point.loadedSpT = 7 // 已载 7 T（差 1 T 满）
+    dumpHere(store, 4)
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 1, // 1 SP = 4 T > 余量 1 T
+      unloadAmount: 0.25,
+    }
+    expect(store.transportLoadableSpOf(point.instanceId)).toBe(0.25)
+    expect(store.loadTransportPointNow()).toBe(false)
+    expect(store.transportLoadError).toMatchObject({ rule: '13.2c', reason: 'loadExceedsCapacity' })
+    expect(point.loadedSpT).toBe(7)
+  })
+
+  it('12.1a：面额不合法的装载量（0.3 SP）⇒ 拒，不"悄悄取整"', () => {
+    const store = newStore()
+    const point = placeTransportPoint(store)
+    dumpHere(store, 4)
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 0.3,
+      unloadAmount: 1,
+    }
+    expect(store.loadTransportPointNow()).toBe(false)
+    expect(store.transportLoadError).toMatchObject({ rule: '12.1a', reason: 'loadAmountNotWholeT' })
+    expect(point.loadedSpT).toBe(0)
+    expect(point.mpSpent).toBe(0)
+  })
+
+  it('13.2a/13.2f：卸载同样可以只卸一部分（1 SP 的车只卸 1 T）', () => {
+    const store = newStore()
+    const point = placeTransportPoint(store)
+    const dump = dumpHere(store, 4)
+    // 先整装 1 SP（4 T）
+    store.transportLoadInputs = {
+      pointId: point.instanceId,
+      dumpId: null,
+      loadAmount: 1,
+      unloadAmount: 1,
+    }
+    expect(store.loadTransportPointNow()).toBe(true)
+    expect(point.loadedSpT).toBe(4)
+    // 满足 13.2f 的卸载条件（格内有友方战斗单位）
+    const guardRecord = groundRecord('soviet', (item) => item.isCombat === true)
+    placeGround(store, guardRecord, HEX, 'soviet', 'guard-1')
+    point.mpSpent = 0
+    store.transportLoadInputs = { ...store.transportLoadInputs, unloadAmount: 0.25 }
+    expect(store.transportUnloadableSpOf(point.instanceId)).toBe(1)
+    expect(store.unloadTransportPointNow()).toBe(true)
+    // 车上剩 3 T；该格地面账本增加 1 T（原 4 SP 被装走 1 SP ⇒ 3 SP，再落 1 T）
+    expect(point.loadedSpT).toBe(3)
+    const landed = store.spDumps.find(
+      (item) => item.side === 'soviet' && item.hex.col === HEX.col && item.hex.row === HEX.row,
+    )!
+    expect(holdingsToT(landed)).toBe(4 * 3 + 1)
+    expect(landed.id).toBe(dump.id)
+    // 12.2a 的接力锁由 `sp-relay-12-2a.test.ts` 从行为面覆盖（铁路再运即拒）
   })
 })

@@ -98,6 +98,8 @@ export const WORKBENCH_CODE_TEXT: Readonly<Record<string, string>> = {
   railMoveSpNotPayable: '起运站的 SP 不足，付不起这次的铁路运量（13.3a）',
   loadNotPayable: '付不起这次装载所需的运输点数（13.2f）',
   loadExceedsCapacity: '装载量超过该运输点数的容量（13.2f）',
+  loadAmountNotWholeT: '装载量必须是整 T 的面额（1 SP 可拆成 4 T，12.1a）',
+  unloadAmountNotWholeT: '卸载量必须是整 T 的面额（1 SP 可拆成 4 T，12.1a）',
   relayLockedOtherMode: '该格本阶段已有补给由别的运输方式卸下，这批不能再换方式（12.2a）',
   railRelayLockedOtherMode: '该格本阶段由其他方式卸下的补给不能再上铁路（12.2a）',
   // ── 通规 13.6 / 13.6b 到达落位 ──
