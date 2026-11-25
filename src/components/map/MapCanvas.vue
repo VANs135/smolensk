@@ -1171,10 +1171,44 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
       </span>
     </div>
 
-    <div class="mapcanvas__tools" aria-label="地图视口">
-      <span v-if="props.fill" class="mapcanvas__coord num">
-        {{ hoverHex === null ? '格 —' : '格 ' + hoverHex.col + '.' + hoverHex.row }}
-      </span>
+    <!--
+      fill 形态（对局台）：底部「格 —」视口条整条撤掉，缩放挪成贴地图右上角的竖排——
+      在视口之外、顶栏之下，既不压格号读数也不再给地图让出 40px 底边。
+    -->
+    <div v-if="props.fill" class="mapcanvas__zoomer" aria-label="地图缩放">
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        class="mapcanvas__zoomer-btn"
+        aria-label="放大"
+        title="放大 +"
+        @click="zoomByStep(1)"
+      >
+        <BaseIcon name="plus" />
+      </BaseButton>
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        class="mapcanvas__zoomer-btn"
+        aria-label="缩小"
+        title="缩小 −"
+        @click="zoomByStep(-1)"
+      >
+        <BaseIcon name="minus" />
+      </BaseButton>
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        class="mapcanvas__zoomer-btn mapcanvas__zoomer-fit"
+        title="适应窗口 0"
+        @click="fitToWindow"
+      >
+        全图
+      </BaseButton>
+      <span class="num mapcanvas__zoomer-pct">{{ scalePercent }}%</span>
+    </div>
+
+    <div v-if="!props.fill" class="mapcanvas__tools" aria-label="地图视口">
       <BaseButton
         variant="secondary"
         size="sm"
@@ -1183,7 +1217,7 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
         @click="zoomByStep(-1)"
       >
         <BaseIcon name="minus" />
-        <span v-if="!props.fill">缩小</span>
+        缩小
       </BaseButton>
       <BaseButton
         variant="secondary"
@@ -1193,13 +1227,13 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
         @click="zoomByStep(1)"
       >
         <BaseIcon name="plus" />
-        <span v-if="!props.fill">放大</span>
+        放大
       </BaseButton>
       <BaseButton variant="secondary" size="sm" title="适应窗口 0" @click="fitToWindow">
-        {{ props.fill ? '全图' : '适应窗口' }}
+        适应窗口
       </BaseButton>
       <span class="num mapcanvas__percent">{{ scalePercent }}%</span>
-      <span v-if="!props.fill" class="mapcanvas__legend">滚轮缩放 · 拖动平移 · 单击选格</span>
+      <span class="mapcanvas__legend">滚轮缩放 · 拖动平移 · 单击选格</span>
     </div>
   </div>
 </template>
@@ -1277,6 +1311,7 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
 }
 
 .mapcanvas--fill {
+  position: relative;
   height: 100%;
   gap: 0;
 }
@@ -1289,18 +1324,40 @@ const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
   border-radius: 0;
 }
 
-.mapcanvas--fill .mapcanvas__tools {
-  flex: none;
-  min-height: var(--space-10);
-  padding: var(--space-1) var(--space-3);
-  border-top: 1px solid var(--color-rule);
+/* 缩放簇：贴地图右上角（顶栏之下）竖排一列；不进视口事件面，点它不会顺带点中底下的格 */
+.mapcanvas__zoomer {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: var(--layer-map-popup);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: var(--space-1);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-md);
   background: var(--color-panel);
+  box-shadow: var(--shadow-md);
 }
 
-.mapcanvas__coord {
-  margin-right: auto;
+.mapcanvas__zoomer .btn {
+  justify-content: center;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.mapcanvas__zoomer-fit {
+  font-size: var(--text-xs);
+}
+
+.mapcanvas__zoomer-pct {
+  padding-top: 1px;
   color: var(--color-muted);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
+  text-align: center;
 }
 
 .mapcanvas__viewport {

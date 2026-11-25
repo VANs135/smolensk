@@ -31,7 +31,7 @@ describe('安卓触摸皮肤', () => {
     expect(css).toContain('--android-sheet-radius')
     expect(css).toContain('.gt__drawer::before')
     expect(css).toContain('.queue::before')
-    expect(css).toContain('.mapcanvas--fill .mapcanvas__tools')
+    expect(css).toContain('.mapcanvas--fill .mapcanvas__zoomer')
     expect(css).toContain('flex-direction: column')
   })
 
@@ -77,9 +77,9 @@ describe('安卓触摸皮肤', () => {
     expect(css).toContain('@media (max-width: 1024px), (orientation: landscape)')
     // 所有横屏覆盖仍锁在 android 平台，桌面/手机浏览器横屏不受影响
     expect(css).toContain('@media (orientation: landscape)')
-    // 横屏紧凑：导航降到 52px、FAB 44px、教学卡隐藏介绍段
+    // 横屏紧凑：导航降到 52px、导航钮 56px 高、教学卡隐藏介绍段
     expect(css).toContain('--android-nav-height: calc(52px + var(--safe-bottom))')
-    expect(css).toContain('width: 44px')
+    expect(css).toContain('min-height: 56px')
     expect(css).toContain('.tut__card .tut__intro')
     expect(css).toContain('display: none')
     // 竖屏专属的「教学卡下移 200px」已加 portrait 限定，横屏不再中招

@@ -309,42 +309,13 @@ html[data-platform='android'] .tray__body::-webkit-scrollbar {
   }
 }
 
-/* ────────────────────────────── 地图视口 → FAB 簇 ────────────────────────────── */
+/* ────────────────────────────── 地图视口 → 缩放簇 ────────────────────────────── */
 
 html[data-platform='android'] .mapcanvas {
   position: relative;
 }
 
-html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools {
-  position: absolute;
-  top: 12px;
-  right: calc(12px + var(--safe-right));
-  bottom: auto;
-  z-index: var(--layer-map-popup);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools .btn {
-  width: auto;
-  min-width: 52px;
-  height: 52px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 18px;
-  background: var(--color-command-panel);
-  color: var(--color-command-ink);
-  box-shadow: var(--shadow-md);
-}
-
-/* 视口内的坐标/百分比/图例在触屏上不占位（手指本来就点不到那么细的字） */
-html[data-platform='android'] .mapcanvas__coord,
+/* 视口内的百分比/图例在触屏上不占位（手指本来就点不到那么细的字） */
 html[data-platform='android'] .mapcanvas__percent,
 html[data-platform='android'] .mapcanvas__legend {
   display: none;
@@ -361,7 +332,7 @@ html[data-platform='android'] .gt__box-targets button {
 
 /*
  * 初设已有「逐枚入盒」（算子上方按钮）⇒ 右下角那个通用「地图外空军盒」按钮在触屏上多余，
- * 还会压住教学卡与 FAB。拖动进盒时仍保留（`.gt__box-targets--drag`），那是拖放的落点。
+ * 还会压住教学卡。拖动进盒时仍保留（`.gt__box-targets--drag`），那是拖放的落点。
  */
 html[data-platform='android'] .gt__box-targets:not(.gt__box-targets--drag) {
   display: none;
@@ -374,7 +345,7 @@ html[data-platform='android'] .gt__box-targets:not(.gt__box-targets--drag) {
     right: auto;
     bottom: auto;
     left: 8px;
-    /* 右侧给地图 FAB 留 88px：教学卡不能把 + / − / 全图 盖掉 */
+    /* 右侧留 88px：教学卡不顶到屏幕右缘，也避开触屏的边缘手势 */
     width: min(320px, calc(100% - 88px));
     border-radius: 18px;
     box-shadow: var(--shadow-lg);
@@ -464,23 +435,7 @@ html[data-platform='android'] .tray {
     padding: 12px 10px 8px;
   }
 
-  /* 地图工具 FAB 横屏缩小：44px 命中区、贴右上 */
-  html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools {
-    top: 6px;
-    right: calc(6px + var(--safe-right));
-    gap: 5px;
-  }
-
-  html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools .btn {
-    min-width: 44px;
-    width: 44px;
-    height: 44px;
-    padding: 0 6px;
-    border-radius: 14px;
-    font-size: var(--text-xs);
-  }
-
-  /* 教学卡横屏：限宽 260px，缩到地图左上，不压 FAB / 流程条 */
+  /* 教学卡横屏：限宽 260px，缩到地图左上，不压顶栏 / 流程条 */
   html[data-platform='android'] .tut__card {
     top: calc(var(--safe-top) + 4px);
     width: min(260px, calc(100% - 72px));
@@ -514,7 +469,6 @@ html[data-platform='android'] .queue,
 html[data-platform='android'] .tut__card,
 html[data-platform='android'] .bar,
 html[data-platform='android'] .gt__rail,
-html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools .btn,
 html[data-platform='android'] .gt__drawer,
 html[data-platform='android'] .queue__group,
 html[data-platform='android'] .queue__active {
@@ -534,11 +488,6 @@ html[data-platform='android'] .queue__active {
   border-color: transparent;
   box-shadow: 0 4px 20px rgb(0 0 0 / 0.32);
   backdrop-filter: blur(8px);
-}
-
-/* FAB 三键：玻璃圆钮、去白底 */
-html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools .btn {
-  border-color: transparent;
 }
 
 /* 流式导航当前项药丸：玻璃青底，别再用主题浅底 */
@@ -1294,14 +1243,14 @@ html[data-platform='android'] .shell__save {
   min-height: 26px;
 }
 
-/* ══════════ 开始页/剧本页去留白 + 隐藏地图缩放 FAB（用户 2026-11-19）══════════
+/* ══════════ 开始页/剧本页去留白 + 隐藏地图缩放簇（用户 2026-11-19）══════════
  * ① −/+/全图 缩放钮：触屏有双指捏合与拖动 ⇒ 安卓端整组隐藏；
  * ② 主页 hero：装饰图隐藏、内距收窄、不再撑 83svh ⇒ 开始页一屏看完，无需拖动；
  * ③ 剧本页：外层大内距收窄、卡片紧凑；
  * ④ 顶栏两栏感的真根因：初设条 max-content 超出视口把页面横向撑开（shell 头 756px）
  *    ⇒ 队列限宽视口内，内部横向滚动。
  * ══════════════════════════════════════════════════════════════════════════ */
-html[data-platform='android'] .mapcanvas--fill .mapcanvas__tools {
+html[data-platform='android'] .mapcanvas--fill .mapcanvas__zoomer {
   display: none;
 }
 
