@@ -1,0 +1,41 @@
+name: check
+
+# 仓库原本没有任何 CI：所有门禁靠人手动跑 `npm run check`。
+# 多人接手时（依次改渲染层、UI、引擎的人）没有合并闸，谁忘跑谁就把红带进分支。
+# 这里只做一件事：push / PR 跑**与本地完全相同**的那条命令，不额外加步骤。
+#
+# 口径（与 npm run check 一致，勿在此增删）：
+#   - 用 windows-latest：项目在 Windows 上开发，scripts/*.mjs、.bat、路径分隔符
+#     都按 Windows 口径测过；Linux 尚未验证，别在这里偷偷换平台。
+#   - 用 node 22：与 package.json 依赖（Vite 7 / Vitest 4）和本机版本对齐。
+#   - **不跑** tests/flows/ai-selfplay.test.ts（test:fast 已排除：单轮 4–5 分钟，
+#     且剧本 1 第 9 回合有既有红灯，见 docs/开发文档.md §7.3）。
+#   - 不跑 pack / 安卓构建：发布与签名依赖本机密钥，不入 CI。
+
+on:
+  push:
+    branches: [refactor/workbench-decouple, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖（按 lockfile）
+        run: npm ci
+
+      - name: 门禁（lint / format / typecheck / 审计 / TDZ / 计数器 / test:fast / 架构）
+        run: npm run check
