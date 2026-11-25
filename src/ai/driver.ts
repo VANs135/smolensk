@@ -32,6 +32,7 @@ import {
   compareHex,
   decideAiAction,
   hexKeyOf,
+  isAiAction,
   type AiAction,
   type AiArrivalEntry,
   type AiControlMode,
@@ -44,6 +45,7 @@ import {
   type AiSide,
 } from './policy'
 import { aiProfileOf, type AiProfile } from './scenario-posture'
+import type { AiStepRecord } from './trace'
 
 export interface AiContext {
   workbench: ReturnType<typeof useWorkbenchStore>
@@ -142,6 +144,12 @@ export interface AiStepResult {
   reason?: string
   /** B4：玩家控制的一方有待办 ⇒ 停下并给出等待文案（此时未提交任何动作） */
   waiting?: string
+  /**
+   * 外部策略（`decider`）给出的动作**结构非法**、已回退脚本策略
+   *
+   * 只表示"不是一个合法形状的 AiAction"（见 `isAiAction`）；引擎按规则拒绝不算此列。
+   */
+  fellBack?: boolean
 }
 
 export interface AiRefusal {
@@ -171,6 +179,8 @@ export interface AiSelfPlayReport {
   rules: string[]
   warnings: string[]
   noLegal: number
+  /** 外部策略给出的动作结构非法、回退脚本策略的次数（没有外部策略时恒为 0） */
+  aiIllegal: number
   awaiting: boolean
   /** B4：因玩家侧待办而停下时的文案（双 AI 模式下正常为 undefined） */
   waiting?: string
@@ -184,6 +194,15 @@ export interface AiSelfPlayOptions {
   memory?: AiMemory
   /** B4：控制方（默认 `both`，与 B3 行为一致） */
   control?: AiControlMode
+  /**
+   * 外部策略（训练/评估用；默认 `decideAiAction`）
+   *
+   * 结构非法/抛异常 ⇒ 该步回退脚本策略，并在报告里累计 `aiIllegal`；
+   * 引擎按规则拒绝仍按原有 `refusedByRule` 记账，两者不混。
+   */
+  decider?: AiDecider
+  /** 每步回调（采集用）：只读记录，不得改盘面；抛异常即整局失败（采集器应作废该局） */
+  onStep?: (record: AiStepRecord) => void
 }
 
 function tokenOf(w: ReturnType<typeof useWorkbenchStore>): string {
@@ -633,7 +652,20 @@ function moveBranchOf(
   }
 }
 
-function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode): AiSnapshot {
+/**
+ * 把 store 的既有只读投影拼成 `AiSnapshot`（**观测的唯一来源**）
+ *
+ * 对外开放（2026-11-25）：训练/采集侧必须用这一份快照当观测，不要从 store 自拼一套
+ * （自拼必然漏字段，规则改版后也不会跟着变）。写盘前请过 `serializeObservation`。
+ *
+ * ★ 副作用：会调用 `syncMemory`（跨环节时清空"本环节已试过 …"）。这是策略侧的过程状态，
+ *   重置本身与盘面无关；但**不要**在一步里对同一 `memory` 反复调用来"检视未来"。
+ */
+export function snapshotOf(
+  ctx: AiContext,
+  memory: AiMemory,
+  controlMode: AiControlMode,
+): AiSnapshot {
   const w = ctx.workbench
   const side = sideOf(w)
   syncMemory(memory, w)
@@ -1719,18 +1751,82 @@ function execute(
   }
 }
 
-export function runAiStep(
-  ctx: AiContext,
-  options?: { memory?: AiMemory; control?: AiControlMode },
-): AiStepResult {
+/**
+ * 外部策略：**只**把快照翻成一个动作
+ *
+ * 契约：不掷骰、不改盘面、不预判规则；结构非法/抛异常由驱动回退脚本策略。
+ */
+export type AiDecider = (snapshot: AiSnapshot) => AiAction
+
+export interface AiStepOptions {
+  memory?: AiMemory
+  control?: AiControlMode
+  decider?: AiDecider
+  onStep?: (record: AiStepRecord) => void
+}
+
+/**
+ * 单步记录（`onStep` 的回调载荷）
+ *
+ * ★ 与 `runAiStep` 一一对应：等待玩家时也会回调（`ok:false` + `reason`），便于采集器画轨迹边界。
+ */
+function stepRecordOf(
+  snapshot: AiSnapshot,
+  side: AiSide,
+  action: AiAction,
+  outcome: { ok: boolean; rule?: string; reason?: string; terminal: boolean; fellBack: boolean },
+): AiStepRecord {
+  return {
+    turn: snapshot.turn,
+    phase: snapshot.phase,
+    segment: snapshot.segment,
+    step: snapshot.segment,
+    side,
+    intent: actionKeyOf(action),
+    act: action,
+    obs: snapshot,
+    ok: outcome.ok,
+    ...(outcome.rule === undefined ? {} : { rule: outcome.rule }),
+    ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
+    terminal: outcome.terminal,
+    ...(outcome.fellBack ? { fellBack: true } : {}),
+  }
+}
+
+export function runAiStep(ctx: AiContext, options?: AiStepOptions): AiStepResult {
   const memory = options?.memory ?? createAiMemory()
   const control = options?.control ?? 'both'
   const w = ctx.workbench
   const snapshot = snapshotOf(ctx, memory, control)
-  const action = decideAiAction(snapshot)
+
+  /*
+   * 外部策略（可选）：先拿脚本策略兜底，再尝试外部动作。
+   * 只有**结构**非法才回退（`isAiAction`）；参数是否合规一律交给 store 入口判（唯一判据原则），
+   * 入口拒绝照旧记进 `refusedByRule`，不在这里预筛。
+   */
+  let action = decideAiAction(snapshot)
+  let fellBack = false
+  if (options?.decider !== undefined) {
+    try {
+      const picked: unknown = options.decider(snapshot)
+      if (isAiAction(picked)) action = picked
+      else fellBack = true
+    } catch {
+      fellBack = true
+    }
+  }
 
   // B4：玩家控制的一方有待办 ⇒ 不提交任何动作，只回报等待文案
   if (action.kind === 'wait') {
+    const waiting = action.reason
+    options?.onStep?.(
+      stepRecordOf(snapshot, sideOf(w), action, {
+        ok: false,
+        reason: waiting,
+        terminal: ctx.session.terminated,
+        fellBack,
+      }),
+    )
     return {
       turn: snapshot.turn,
       phase: snapshot.phase,
@@ -1738,8 +1834,9 @@ export function runAiStep(
       side: sideOf(w),
       intent: 'wait',
       ok: false,
-      reason: action.reason,
-      waiting: action.reason,
+      reason: waiting,
+      waiting,
+      ...(fellBack ? { fellBack: true } : {}),
     }
   }
 
@@ -1778,6 +1875,16 @@ export function runAiStep(
   const rule = ok ? undefined : (failureEntry?.rule ?? ruleFromStores(w) ?? 'unknown')
   const reason = ok ? undefined : (failureEntry?.text ?? `提交被拒：${action.kind}`)
 
+  options?.onStep?.(
+    stepRecordOf(snapshot, sideOf(w), action, {
+      ok,
+      rule,
+      reason,
+      terminal: ctx.session.terminated,
+      fellBack,
+    }),
+  )
+
   return {
     turn: snapshot.turn,
     phase: snapshot.phase,
@@ -1787,6 +1894,7 @@ export function runAiStep(
     ok,
     rule,
     reason,
+    ...(fellBack ? { fellBack: true } : {}),
   }
 }
 
@@ -1810,6 +1918,7 @@ export async function runAiSelfPlay(options: AiSelfPlayOptions): Promise<AiSelfP
   const rules: string[] = []
   let waiting: string | undefined
   let noLegal = 0
+  let aiIllegal = 0
   let iterations = 0
   let lastToken = ''
   let lastDecision = ''
@@ -1824,8 +1933,14 @@ export async function runAiSelfPlay(options: AiSelfPlayOptions): Promise<AiSelfP
     (w.turn < targetTurn || ctx.session.awaiting) &&
     iterations < limit
   ) {
-    const result = runAiStep(ctx, { memory, control })
+    const result = runAiStep(ctx, {
+      memory,
+      control,
+      ...(options.decider === undefined ? {} : { decider: options.decider }),
+      ...(options.onStep === undefined ? {} : { onStep: options.onStep }),
+    })
     iterations += 1
+    if (result.fellBack === true) aiIllegal += 1
 
     // B4：单侧控制时遇到玩家待办 ⇒ 停下（不是 stall，也不是拒绝）
     if (result.intent === 'wait') {
@@ -1907,6 +2022,7 @@ export async function runAiSelfPlay(options: AiSelfPlayOptions): Promise<AiSelfP
     rules,
     warnings,
     noLegal,
+    aiIllegal,
     awaiting: ctx.session.awaiting,
     waiting,
   }

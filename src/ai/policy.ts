@@ -515,6 +515,102 @@ export function actionKeyOf(action: AiAction): string {
   }
 }
 
+/**
+ * `AiAction` 的 kind 全集（**运行时判型**用）
+ *
+ * 为什么需要它：外部策略（神经网络 / 远程推理 / 训练采集器）只能返回一个 `AiAction`，
+ * 驱动必须能在**提交前**识别"这不是一个动作"，否则会把 `undefined.kind` 之类的东西
+ * 交给 store 入口去炸。这里只判结构（kind 是否属于全集），**不校验参数是否合法**——
+ * 参数合法性仍由 store 入口判（唯一判据原则）。
+ *
+ * 与联合类型对账：下面 `AI_ACTION_KINDS_COVERED` 是编译期断言，
+ * 联合新增 kind 而这里漏加 ⇒ `npm run typecheck` 直接红（不存在运行时才发现漂移）。
+ */
+export const AI_ACTION_KINDS = [
+  'answer',
+  'advance',
+  'preset',
+  'modeChange',
+  'reserveRelease',
+  'fuelPay',
+  'moveBegin',
+  'moveClick',
+  'moveFinish',
+  'modeChangeTo',
+  'overrun',
+  'railMove',
+  'railMoveSp',
+  'transportLoad',
+  'transportUnload',
+  'constructionMarker',
+  'gaugeConvert',
+  'specialConfirm',
+  'setupPreset',
+  'setupDraw',
+  'setupConfirm',
+  'setupShiftPlace',
+  'refitBase',
+  'arrivalRemovals',
+  'arrivalPlace',
+  'arrivalSkip',
+  'supplyArrivalPick',
+  'supplyArrivalGroup',
+  'supplyArrivals',
+  'supplyTrainGroup',
+  'supplyTrainPlace',
+  'rebuild',
+  'consolidate',
+  'overstackDestroy',
+  'interceptAnswer',
+  'airMission',
+  'barrageTarget',
+  'barrageToggleUnit',
+  'barrageBegin',
+  'barrageSupply',
+  'barrageShifts',
+  'barrageDice',
+  'barrageOutcome',
+  'barrageCancel',
+  'combatSelect',
+  'combatBegin',
+  'combatSupply',
+  'combatDeclareAr',
+  'combatAutoResolve',
+  'combatLosses',
+  'combatOptions',
+  'combatRetreatPaths',
+  'combatAdvance',
+  'combatSkip',
+  'supplyPlan',
+  'supplyRecovery',
+  'supplyFeeding',
+  'attritionRoll',
+  'attritionApply',
+  'wait',
+  'none',
+] as const
+
+export type AiActionKind = (typeof AI_ACTION_KINDS)[number]
+
+/** 编译期对账（`[X] extends [never]` 防条件类型分发）：漏列一个 kind ⇒ 本行赋值失败 */
+const aiActionKindsCovered: [Exclude<AiAction['kind'], AiActionKind>] extends [never] ? true : never =
+  true
+/** 上面那行的载体（导出以免被 `noUnusedLocals` 判为未使用；值恒为 `true`） */
+export const AI_ACTION_KINDS_COVERED = aiActionKindsCovered
+
+const AI_ACTION_KIND_SET: ReadonlySet<string> = new Set<string>(AI_ACTION_KINDS)
+
+/**
+ * 结构判型：`kind` 属于全集即认为是「一个动作」
+ *
+ * ★ 只做结构判断：返回 `true` 不代表规则上合法（参数、时机、额度仍由 store 入口判）。
+ */
+export function isAiAction(value: unknown): value is AiAction {
+  if (value === null || typeof value !== 'object') return false
+  const kind = (value as { kind?: unknown }).kind
+  return typeof kind === 'string' && AI_ACTION_KIND_SET.has(kind)
+}
+
 /** 距离最近敌格的格数（仅作为「往最近敌军方向走」的启发式，不是规则判据） */
 function nearestEnemyDistance(hex: AiHex, enemyHexes: readonly AiHex[]): number {
   let best = Number.POSITIVE_INFINITY
