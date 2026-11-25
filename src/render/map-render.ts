@@ -20,7 +20,6 @@ import {
   hedgehogTextureUrl,
   markerTextureUrl,
 } from './token-images'
-import { TOKEN_SIZE_PX } from './stack-fan'
 import {
   expandRect,
   visibleWorldRect,
@@ -28,8 +27,14 @@ import {
   type Size,
   type ViewportTransform,
 } from './viewport'
-import { drawMovementOverlay, overlayHexKey, type MovementOverlay } from './token-layer'
-
+import {
+  FACILITY_CORNER,
+  FACILITY_SLOT_STEP,
+  FACILITY_TOKEN_SIZE_RATIO,
+  drawMovementOverlay,
+  overlayHexKey,
+  type MovementOverlay,
+} from './token-layer'
 /**
  * 地图绘制（C2 地图渲染与视口）——Canvas 2D，纯绘制 + 只读数据
  *
@@ -88,22 +93,16 @@ export const HEDGEHOG_CORNER_OFFSET = 0.42
 export const HEDGEHOG_TEXTURE_ALPHA = 0.92
 
 /**
- * 专规 3.5：**建造标记**（桥 / 简易机场）画成算子，尺寸与空军基地算子一致
+ * 专规 3.5：**建造标记**（桥 / 简易机场）＝**设施贴片**的画法
  *
- * 2026-11-26 用户裁定：「建造标记要画对应的算子，大小和空军基地一样」。
- *   · 原实现是 0.42R 的左下小角标 —— 24% 缩放下约 10px，等于看不见；
- *   · 现按 `TOKEN_SIZE_PX`（＝算子原尺，空军基地算子也是这个尺）画在格心，
- *     图用素材库正式算子面 `Ge_Air_Strip-Bridge_F.png`（桥 / 简易机场共用一面）；
- *   · 同格已有算子（放置当回合常见：3.5 要求该格有轴方战斗单位）⇒ 缩到半尺并让到
- *     格的左下内沿，让驻军算子仍露头，不至于互相整块盖住。
+ * 2026-11-26 用户第二次裁定：「不要这么大，和设施一样小，并且放格子边缘位置」。
+ *   · 尺寸/落位直接复用 `token-layer` 的设施口径（`FACILITY_TOKEN_SIZE_RATIO`=0.28R、
+ *     `FACILITY_CORNER`=左下内沿、同格多枚沿 `FACILITY_SLOT_STEP` 向右排开）——
+ *     SP / 运输点 / 空军基地那些设施就是这个尺，建造标记属于同一类"格上事实"；
+ *   · 图仍用素材库正式算子面 `Ge_Air_Strip-Bridge_F.png`（桥 / 简易机场共用一面），
+ *     只是缩到设施尺；贴图未就绪时退回同尺寸方块 + 桥/机；
+ *   · 仍不进 `tokens`：不参与命中测试/堆叠展开/选中。
  */
-export const CONSTRUCTION_MARKER_SIZE_RATIO = 1
-
-/** 同格已有算子时的显示比例（相对算子原尺） */
-export const CONSTRUCTION_MARKER_OCCUPIED_RATIO = 0.5
-
-/** 同格已有算子时相对格心的偏移方向（左下 45°；单位＝R 的倍数） */
-export const CONSTRUCTION_MARKER_OCCUPIED_CORNER = { x: -0.3, y: 0.3 } as const
 
 /** 专规 3.5：地图上要画的**建造标记**（桥 / 简易机场；已放置的那几枚） */
 export interface ConstructionMarkerPiece {
@@ -111,16 +110,14 @@ export interface ConstructionMarkerPiece {
   hex: HexRef
 }
 
-/** 建造标记的**算子投影**（纯数据，供绘制与测试共用） */
-export interface ConstructionMarkerCounter {
+/** 建造标记贴片的落位（纯数据，供绘制与测试共用） */
+export interface ConstructionMarkerBadge {
   kind: 'bridge' | 'airStrip'
   hex: HexRef
-  /** 算子中心（世界＝画布坐标，与其它图层同口径） */
+  /** 贴片中心（世界＝画布坐标，与其它图层同口径） */
   center: { x: number; y: number }
-  /** 算子边长（世界单位） */
+  /** 贴片边长（世界单位） */
   side: number
-  /** 该格是否已驻有算子（true ⇒ 已缩到半尺让位） */
-  occupied: boolean
 }
 
 /**
@@ -872,60 +869,52 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
   }
 
   /*
-   * ⑪ 专规 3.5：**建造标记**（桥 / 简易机场）—— 压在最上层，按**算子原尺**画
+   * ⑪ 专规 3.5：**建造标记**（桥 / 简易机场）—— 压在最上层，按**设施贴片**画
    *
-   * 用户口径（2026-11-26）：「建造标记要画对应的算子，大小和空军基地一样」。
+   * 用户口径（2026-11-26 第二次）：「不要这么大，和设施一样小，并且放格子边缘位置」。
    *   · 图＝素材库正式算子面 `Ge_Air_Strip-Bridge_F.png`（桥与简易机场共用同一面）；
-   *   · 尺寸＝`TOKEN_SIZE_PX`（空军基地算子也是这个尺）—— 旧版 0.42R 小角标在 24% 缩放下看不见；
-   *   · 同格已有算子 ⇒ 缩半尺 + 左下偏移，驻军算子仍露头（见 `constructionMarkerCounters`）；
+   *   · 尺寸/落位＝**设施贴片**（`FACILITY_TOKEN_SIZE_RATIO`=0.28R、格左下内沿、
+   *     同格多枚沿 `FACILITY_SLOT_STEP` 向右排开）—— 与 SP / 运输点 / 空军基地那些贴片同尺；
    *   · 仍**不是算子**：不进 `tokens`，故不参与命中测试/堆叠展开/选中；
    *   · 贴图未就绪时退回「同尺寸方块 + 桥/机」，颜色语义由 `MAP_PALETTE` 给。
    */
   if (layers.constructionMarkers) {
-    /*
-     * 同格已驻算子 ⇒ 缩半尺让位（放置当回合必然如此：3.5 要求该格有轴方战斗单位）。
-     * 占用判定只读覆盖层给的 tokens，本层不做规则判断。
-     */
-    const occupied = new Set<string>()
-    for (const token of options.overlay?.tokens ?? []) occupied.add(overlayHexKey(token.hex))
-    const counters = constructionMarkerCounters(options.constructionMarkers ?? [], occupied)
+    const badges = constructionMarkerBadges(options.constructionMarkers ?? [])
     const url = constructionMarkerImageUrl()
     const texture = counterImages.get(url)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    for (const counter of counters) {
+    for (const badge of badges) {
       if (texture !== null) {
         ctx.drawImage(
           texture,
-          counter.center.x - counter.side / 2,
-          counter.center.y - counter.side / 2,
-          counter.side,
-          counter.side,
+          badge.center.x - badge.side / 2,
+          badge.center.y - badge.side / 2,
+          badge.side,
+          badge.side,
         )
         continue
       }
       // 图未就绪：同尺寸方块 + 「桥 / 机」，不让标记凭空消失
-      ctx.font = `${((counter.side * 0.4) / scale).toFixed(1)}px ui-monospace, monospace`
+      ctx.font = `${((badge.side * 0.66) / scale).toFixed(1)}px ui-monospace, monospace`
       ctx.fillStyle =
-        counter.kind === 'bridge'
-          ? MAP_PALETTE.constructionBridge
-          : MAP_PALETTE.constructionAirStrip
+        badge.kind === 'bridge' ? MAP_PALETTE.constructionBridge : MAP_PALETTE.constructionAirStrip
       ctx.fillRect(
-        counter.center.x - counter.side / 2,
-        counter.center.y - counter.side / 2,
-        counter.side,
-        counter.side,
+        badge.center.x - badge.side / 2,
+        badge.center.y - badge.side / 2,
+        badge.side,
+        badge.side,
       )
       ctx.strokeStyle = '#ffffff'
       ctx.lineWidth = 1 / scale
       ctx.strokeRect(
-        counter.center.x - counter.side / 2,
-        counter.center.y - counter.side / 2,
-        counter.side,
-        counter.side,
+        badge.center.x - badge.side / 2,
+        badge.center.y - badge.side / 2,
+        badge.side,
+        badge.side,
       )
       ctx.fillStyle = '#ffffff'
-      ctx.fillText(counter.kind === 'bridge' ? '桥' : '机', counter.center.x, counter.center.y)
+      ctx.fillText(badge.kind === 'bridge' ? '桥' : '机', badge.center.x, badge.center.y)
     }
   }
 
@@ -971,37 +960,34 @@ export function canDraw(viewSize: Size): boolean {
 }
 
 /**
- * 专规 3.5：建造标记 → 算子投影（**纯函数**，绘制与测试共用同一处口径）
+ * 专规 3.5：建造标记 → 设施贴片投影（**纯函数**，绘制与测试共用同一处口径）
  *
  * 只有落在**图内格**的标记才画（与工事/控制标记同一纪律）。
- *   · 空格：算子原尺（`TOKEN_SIZE_PX`，与空军基地算子同尺寸）画在格心；
- *   · 同格已有算子：缩到 `CONSTRUCTION_MARKER_OCCUPIED_RATIO` 并沿左下偏移，
- *     让驻军算子仍露头（`occupiedHexKeys` 由调用方按覆盖层里的 tokens 算）。
+ *   · 尺寸＝设施尺 `FACILITY_TOKEN_SIZE_RATIO × R`（SP / 运输点 / 空军基地那些贴片同尺）；
+ *   · 落位＝格的**左下内沿** `FACILITY_CORNER × R`（不压格心堆叠的印值）；
+ *   · 同格多枚沿 `FACILITY_SLOT_STEP` 向右依次排开（与设施同一条排布纪律）。
  */
-export function constructionMarkerCounters(
+export function constructionMarkerBadges(
   markers: readonly ConstructionMarkerPiece[],
-  occupiedHexKeys?: ReadonlySet<string>,
-): ConstructionMarkerCounter[] {
-  const counters: ConstructionMarkerCounter[] = []
+): ConstructionMarkerBadge[] {
+  const side = HEX_RADIUS_PX * FACILITY_TOKEN_SIZE_RATIO
+  const usedSlots = new Map<string, number>()
+  const badges: ConstructionMarkerBadge[] = []
   for (const marker of markers) {
     if (!isBoardHex(marker.hex)) continue
+    const key = overlayHexKey(marker.hex)
+    const slot = usedSlots.get(key) ?? 0
+    usedSlots.set(key, slot + 1)
     const hexCenter = hexCanvasPoint(marker.hex)
-    const occupied = occupiedHexKeys?.has(overlayHexKey(marker.hex)) ?? false
-    const side =
-      TOKEN_SIZE_PX *
-      (occupied ? CONSTRUCTION_MARKER_OCCUPIED_RATIO : CONSTRUCTION_MARKER_SIZE_RATIO)
-    counters.push({
+    badges.push({
       kind: marker.kind,
       hex: marker.hex,
-      center: occupied
-        ? {
-            x: hexCenter.x + HEX_RADIUS_PX * CONSTRUCTION_MARKER_OCCUPIED_CORNER.x,
-            y: hexCenter.y + HEX_RADIUS_PX * CONSTRUCTION_MARKER_OCCUPIED_CORNER.y,
-          }
-        : hexCenter,
+      center: {
+        x: hexCenter.x + HEX_RADIUS_PX * (FACILITY_CORNER.x + slot * FACILITY_SLOT_STEP),
+        y: hexCenter.y + HEX_RADIUS_PX * FACILITY_CORNER.y,
+      },
       side,
-      occupied,
     })
   }
-  return counters
+  return badges
 }
