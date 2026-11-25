@@ -231,7 +231,7 @@ describe('13.3g-A：不得「接力」（用铁路移动进入本阶段刚换过
     expect(store.railMovedNewTrackThisPhase).toEqual([{ instanceId: 'rr-2', hexes: [label(NEXT)] }])
     // ③ 该单位此后再换轨 ⇒ 13.3g-A 拒
     expect(store.convertRailGaugeNow(second.instanceId, label(TO))).toBe(false)
-    expect(store.log.some((entry) => entry.text.includes('noLeapfrogging'))).toBe(true)
+    expect(store.log.some((entry) => entry.text.includes('不能再换轨'))).toBe(true)
     // 账本没有因此改动：TO 仍未换轨
     expect(store.convertedHexesThisPhase).toEqual([label(NEXT)])
   })
@@ -347,7 +347,7 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     walkInto(store, rr.instanceId, FROM, NEXT)
     expect(store.convertRailGaugeNow(rr.instanceId, label(NEXT))).toBe(false)
     expect(store.convertedRailHexes).not.toContain(label(NEXT))
-    expect(store.log.some((entry) => entry.text.includes('mustBeCombatMode'))).toBe(true)
+    expect(store.log.some((entry) => entry.text.includes('须处于战斗模式'))).toBe(true)
   })
 
   it('13.3g：非铁路修理单位一律拒（notRailRepairUnit）', () => {
@@ -361,7 +361,7 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
 
     walkInto(store, rr.instanceId, FROM, NEXT)
     expect(store.convertRailGaugeNow(rr.instanceId, label(NEXT))).toBe(false)
-    expect(store.log.some((entry) => entry.text.includes('notRailRepairUnit'))).toBe(true)
+    expect(store.log.some((entry) => entry.text.includes('只有铁路修理单位'))).toBe(true)
   })
 
   it('13.3f-A：敌方 ZOC 内不可转换（且不可抵消）', () => {
@@ -378,7 +378,7 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
 
     walkInto(store, rr.instanceId, FROM, NEXT)
     expect(store.convertRailGaugeNow(rr.instanceId, label(NEXT))).toBe(false)
-    expect(store.log.some((entry) => entry.text.includes('enemyZocCannotConvert'))).toBe(true)
+    expect(store.log.some((entry) => entry.text.includes('不能在敌方 ZOC 内转换轨距'))).toBe(true)
   })
 
   it('13.3f-A：有本方战斗单位也不能抵消轨距转换的敌方 ZOC', () => {
@@ -396,7 +396,7 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     // 4.5a-E / 13.3f-A 明确规定轨距转换不能抵消 ZOC。
     walkInto(store, rr.instanceId, NEXT, FROM)
     expect(store.convertRailGaugeNow(rr.instanceId, label(FROM))).toBe(false)
-    expect(store.log.some((entry) => entry.text.includes('enemyZocCannotConvert'))).toBe(true)
+    expect(store.log.some((entry) => entry.text.includes('不能在敌方 ZOC 内转换轨距'))).toBe(true)
   })
 
   it('13.3g-D：每阶段至多 min(4, 当前 MA) 格，超出即拒', () => {
@@ -434,7 +434,7 @@ describe('13.3f：轨距转换（13.3g 的铁路修理单位专属动作）', ()
     const beyond = RUN[quota + 1]!
     walkInto(store, rr.instanceId, RUN[quota]!, beyond)
     expect(store.convertRailGaugeNow(rr.instanceId, label(beyond))).toBe(false)
-    expect(store.log.some((entry) => entry.text.includes('conversionLimitReached'))).toBe(true)
+    expect(store.log.some((entry) => entry.text.includes('换轨格数已到上限'))).toBe(true)
   })
 
   /* ── 13.3f-B：换轨必须是"移动进入"的副产品 ── */

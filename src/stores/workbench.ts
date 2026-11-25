@@ -4683,7 +4683,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       },
     })
     if (!outcome.ok) {
-      pushLog('warning', `轨距转换被拒：${outcome.reason}（${outcome.rule}）`, outcome.rule)
+      /*
+       * 界面只写人话：这道口是**自动换轨**的唯一出口，玩家看到的端头「没跟上」就是这里被拒 ⇒
+       * 必须把原因直接摆在战报里（不打印内部码，含条款号；用户 2026-11-26）。
+       */
+      pushLog(
+        'warning',
+        `轨距转换被拒（${key}）：${ruleErrorTextOf({ rule: outcome.rule, reason: outcome.reason })}`,
+        outcome.rule,
+      )
       return false
     }
     /*
