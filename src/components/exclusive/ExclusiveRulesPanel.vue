@@ -2,8 +2,9 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 
 import { BaseButton, BasePanel, BaseTag, RuleNote, RuleTip } from '@/components/base'
+import { CounterPicker, type CounterPickerItem } from '@/components/game'
 import UiField from '@/components/UiField.vue'
-import { hexLabel } from '@/stores'
+import { counterImageUrlOf, hexLabel } from '@/stores'
 import { useWorkbenchStore } from '@/stores'
 
 import { useRefereeTools } from '@/components/ui-mode'
@@ -58,6 +59,40 @@ function toggleHedgehogWorker(unitId: string): void {
 }
 
 const security = computed(() => workbench.securityNeeds)
+
+/**
+ * 16.0b：**目标格内**可被指定的施工小队（算子图阵列）
+ *
+ * 修前这里是「己方全部单位」的文字按钮（剧本 1 实测 95 枚）——既不是目标格内候选，
+ * 也不是算子图阵列（B14 / 用户口径⑪）。改为只列目标格内、就地给出不能选的原因。
+ */
+const hedgehogSquadItems = computed<readonly CounterPickerItem[]>(() => {
+  const hex = workbench.hedgehogTargetHex
+  if (hex === null) return []
+  const movedIds = new Set(
+    workbench.units
+      .filter((unit) => unit.mpSpent > 0 || unit.airTransportThisPhase != null)
+      .map((unit) => unit.instanceId),
+  )
+  return workbench.units
+    .filter(
+      (unit) =>
+        unit.side === workbench.activeSide && unit.hex.col === hex.col && unit.hex.row === hex.row,
+    )
+    .map((unit) => ({
+      id: unit.instanceId,
+      imageUrl: counterImageUrlOf(unit),
+      name: `${unit.name}（RE ${unit.re}${unit.engineerCapable ? '｜具工程能力' : ''}）@ ${hexLabel(unit.hex)}`,
+      selected: workbench.hedgehogInputs.workerIds.includes(unit.instanceId),
+      hex: unit.hex,
+      disabledReason:
+        unit.mode.mode !== 'combat'
+          ? '须处于战斗模式（16.0b）'
+          : movedIds.has(unit.instanceId)
+            ? '该单位本阶段已移动（16.0b）'
+            : null,
+    }))
+})
 
 /** 12.1b：已选的工事付款站（地图点选写入） */
 const hedgehogPayLabel = computed(() => {
@@ -655,6 +690,7 @@ const compactPanzer = computed(() => props.only === 'panzer')
         >
           修建/改进 +1 级（16.0b）
         </BaseButton>
+        <span v-else class="num">还差：付款补给站（16.0b：2 SP/级）</span>
         <BaseButton variant="secondary" size="sm" @click="workbench.reduceHedgehogNow()">
           缩减 −1 级（16.0c：免费）
         </BaseButton>
@@ -681,19 +717,17 @@ const compactPanzer = computed(() => props.only === 'panzer')
       </p>
       <div v-if="actsHedgehog && !workbench.hedgehogUsesEngineerRoute" class="row">
         <span class="muted">
-          施工小队（在目标格内勾选；只有这批单位作业后本阶段不能再移动，其余照常行动）：
+          施工小队（目标格内点算子；只有这批单位作业后本阶段不能再移动）：
         </span>
-        <BaseButton
-          v-for="unit in workbench.units.filter((item) => item.side === workbench.activeSide)"
-          :key="unit.instanceId"
-          variant="ghost"
-          size="sm"
-          @click="toggleHedgehogWorker(unit.instanceId)"
-        >
-          {{ unit.name }}（{{ unit.re }}RE @ {{ hexLabel(unit.hex) }}）{{
-            workbench.hedgehogInputs.workerIds.includes(unit.instanceId) ? ' ✓' : ''
-          }}
-        </BaseButton>
+        <CounterPicker
+          v-if="hedgehogSquadItems.length > 0"
+          title="施工小队（16.0b）"
+          hint="16.0b：目标格内被指定的这一小队——RE 合计 ≥1、逐员战斗模式、本阶段未移动"
+          :items="hedgehogSquadItems"
+          :size="32"
+          @pick="toggleHedgehogWorker($event)"
+        />
+        <span v-else class="num">还差：先「点地图选格」，格内己方单位会列在这里</span>
       </div>
       <p v-if="workbench.hedgehogError !== null" class="bad">
         <BaseTag kind="danger">{{ workbench.hedgehogError.rule }}</BaseTag>

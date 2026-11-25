@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { hasUnitMovementThisPhase } from '@/engine/rules/air-unit-movement'
 import { pendingRetreatPlan } from '@/engine/rules/engagement-progress'
 import { SP_TO_T } from '@/engine/rules/supply'
 import { holdingsToT } from '@/engine/rules/supply-interaction'
@@ -2370,18 +2371,15 @@ export const useMapViewStore = defineStore('mapView', () => {
         return ['move.extenderConvert']
       case 'air_base':
         /*
-         * ★ BUG 2（用户 2026-11-08）：**没有空军任务入口** ⇒ 移动环节的基地菜单只有
-         * 「修建 / 缩减」，玩家点基地/飞机这一侧**根本选不到机、交不了低空扫射**。
-         * 14.1a 的飞机停在本方空军基地格 ⇒ 基地格就是"点那几架飞机"的盘面把手；
-         * 14.2e 把任务类型分派到环节（低空扫射在移动环节、空军轰炸在轰炸环节），
-         * 故这一项与 15.3 / 15.4 并列，是否放行仍由闸门表（`air.mission` 的 where）判。
-         *
-         * ★ 2026-11-17 收口：15.1 整备只保留**堆叠窗基地卡**这一处入口，
-         *   基地右键不再另开「整备飞机」（否则与点基地、堆叠卡构成三条入口）。
+         * ★ 2026-11-26（用户裁定：工程作业按**由谁执行**分派入口）：
+         *   15.3 / 15.2A 只能由具工程能力的单位施工（13.8d），15.4 只能由**格内被指定单位**执行
+         *   ⇒ 两者都不是"对设施本身"的操作，入口一律在**单位**右键（工程单位 / 该格内单位）。
+         *   基地右键只保留转场（`transferMenuActions`）；左键仍出驻机名册（信息）。
          */
-        return ['move.construction', 'air.baseReduce']
+        return []
       case 'hedgehog':
-        return ['move.hedgehog']
+        // 16.0b/c 的执行者是格内被指定小队或 13.8d 工程兵 ⇒ 入口在单位右键，不在工事格上
+        return []
       default:
         return []
     }
@@ -2886,9 +2884,67 @@ export const useMapViewStore = defineStore('mapView', () => {
      * ⇒ 换轨已改为**走过即自动**（`workbench-move#commitStep` → `autoRailConvertOnEntry`），
      *   不再提供右键「转换轨距」入口；裁判补录仍走 `workbench.convertRailGaugeNow`。
      */
-    if (unit !== undefined && workbench.engineerChoices.some((item) => item.instanceId === id)) {
-      add('move.construction', { ...FACILITY_ACTION_META['move.construction']!, group: '工程' })
-      add('move.hedgehog', { ...FACILITY_ACTION_META['move.hedgehog']!, group: '工程' })
+    /*
+     * 2026-11-26（用户裁定：工程作业按**由谁执行**分派入口，设施只是目标）：
+     *   ① 13.8d 的工程作业（15.3 基地 / 15.2A 简易机场 / 16.0b·c 工事）⇒ 挂在**具工程能力单位**
+     *      （13.8a：只有 HQ 与工程兵）的「工程」组；
+     *   ② 16.0b/c 的**格内指定小队**途径、15.4 的**格内被指定单位**途径 ⇒ 挂在**该格内可执行单位**上。
+     * 闸门照旧（`actionAllowedNow`）；不满足就整项不出现（`add` 会给「限…」原因，不摆灰项之外的假入口）。
+     */
+    if (unit !== undefined && unit.side === actingSide.value) {
+      const engineerCapable = workbench.engineerChoices.some((item) => item.instanceId === id)
+      const movedThisPhase = hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase)
+      const squadEligible = unit.isCombat === true && unit.mode.mode === 'combat' && !movedThisPhase
+      const hedgehogLevel = workbench.hedgehogLevelOf(hex)
+      const hedgehogPrinted = workbench.isPrintedHedgehogAt(hex)
+      const baseHere = workbench.ownAirBases.find(
+        (base) => base.hex.col === hex.col && base.hex.row === hex.row,
+      )
+
+      if (engineerCapable && workbench.actionAllowedNow('move.construction')) {
+        add('move.construction', {
+          label: '修建 / 简易机场（15.3·15.2A）',
+          rule: '15.3·15.2A',
+          panel: 'air',
+          only: 'airstrip',
+          group: '工程',
+        })
+      }
+      if (engineerCapable && workbench.actionAllowedNow('move.hedgehog')) {
+        add('move.hedgehog', {
+          label: '修 / 缩工事（13.8d）',
+          rule: '16.0b·c / 13.8d',
+          panel: 'fort',
+          only: 'hedgehog',
+          group: '工程',
+        })
+      } else if (
+        squadEligible &&
+        workbench.actionAllowedNow('move.hedgehog') &&
+        (hedgehogLevel >= 1 || !hedgehogPrinted)
+      ) {
+        add('move.hedgehog', {
+          label: hedgehogLevel >= 1 ? '修 / 缩本格工事（16.0b·c）' : '修本格工事（16.0b）',
+          rule: '16.0b·c',
+          panel: 'fort',
+          only: 'hedgehog',
+          group: '工程',
+        })
+      }
+      if (
+        squadEligible &&
+        baseHere !== undefined &&
+        baseHere.level > 1 &&
+        workbench.actionAllowedNow('air.baseReduce')
+      ) {
+        add('air.baseReduce', {
+          label: '缩减本格基地（15.4）',
+          rule: '15.4',
+          panel: 'air',
+          only: 'reduce',
+          group: '工程',
+        })
+      }
     }
     /*
      * ④（用户 2026-11-09）：**按能力把次要动作收进右键**。
@@ -3752,6 +3808,23 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     if (option.only === 'airstrip' && unit?.noncombatKind !== 'air_base') {
       workbench.constructionInputs.engineerId = instanceId
+    }
+    /*
+     * 2026-11-26（工程入口改挂单位）：点进来时把"发起者"写进 store 的执行者字段，
+     * 窗里只剩目标格 / 付款站两步——与既有 15.3 / 16.0b / 15.4 的输入口径完全一致。
+     */
+    if (option.only === 'hedgehog' && unit !== undefined) {
+      const hexText = `${hex.col}.${hex.row}`
+      if (workbench.engineerChoices.some((item) => item.instanceId === instanceId)) {
+        workbench.hedgehogExecutorMode = 'engineer'
+        workbench.hedgehogEngineerId = instanceId
+      } else {
+        workbench.hedgehogExecutorMode = 'inPlace'
+        workbench.hedgehogInputs = { ...workbench.hedgehogInputs, hexText, workerIds: [instanceId] }
+      }
+    }
+    if (option.only === 'reduce' && unit !== undefined) {
+      workbench.airInputs.reductionUnitIds = [instanceId]
     }
     // 用户 2026-11-12：14.11 转场 —— 先开基地窗勾机，再按模式选盒/目的基地
     if (option.only === 'transferBox' || option.only === 'transferBase') {

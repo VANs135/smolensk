@@ -141,13 +141,14 @@ describe('条 12（M2）：点非战斗单位开 unit 会话', () => {
     expect(mapView.session?.title).toContain('空军基地')
   })
 
-  it('点工事（hedgehog）⇒ fort 会话（16.0b）', () => {
+  it('点工事（hedgehog）⇒ 不再开 fort 会话（16.0b 的动作入口在格内单位）', () => {
     const { workbench, mapView } = stores
     placeNonCombat(workbench, 'hedgehog', START, 'hg-1')
     mapView.onHexClick(START, { x: 40, y: 40 })
-    expect(mapView.session?.kind).toBe('unit')
-    expect(mapView.unitActionFamily).toBe('fort')
-    expect(mapView.session?.rule).toBe('16.0b')
+    expect(mapView.session?.kind).not.toBe('unit')
+    expect(mapView.unitActionFamily).toBeNull()
+    // 2026-11-26：工事格不再给"对它自己"的操作（执行者是单位）
+    expect(mapView.unitActionAvailableAt('hg-1')).toBe(false)
   })
 
   it('点别处（空格）⇒ 收掉单位会话', () => {
@@ -218,7 +219,8 @@ describe('条 12（M2）：点非战斗单位开 unit 会话', () => {
      */
     mapView.onHexClick(START, { x: 40, y: 40 })
     expect(mapView.session?.kind).not.toBe('unit')
-    expect(mapView.openUnitActionAt(START, 'base-1')).toBe(true)
+    // 基地算子走自己的选择路径（基地不靠"设施动作表"才可点）
+    expect(mapView.selectCounterAt(START, 'base-1')).toBe(true)
     expect(mapView.session?.kind).toBe('unit')
     expect(mapView.unitActionFamily).toBe('air')
 

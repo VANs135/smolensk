@@ -14,6 +14,7 @@ import {
   hexLabel,
   isFighterAircraft,
   useHotseatStore,
+  useMapViewStore,
   useWorkbenchStore,
 } from '@/stores'
 
@@ -41,6 +42,7 @@ const workbench = useWorkbenchStore()
  * 拦截应答完全交给 AI（hotseat 里的自动拦截），这里只显示「由苏军决定」。
  */
 const hotseat = useHotseatStore()
+const mapView = useMapViewStore()
 const aiChoosesInterception = computed(() => {
   // 拦截方由引擎定（候选机阵营＝enemySide）：判「拦截方阵营」而不是判 mode
   const intercepting = workbench.airInterceptorCandidates[0]?.side ?? null
@@ -369,7 +371,7 @@ function reductionItems(baseId: string): readonly CounterPickerItem[] {
 /** 12.1b：已选的建造付款站（地图点选写入；未选/失效时照实显示） */
 const selectedConstructionPayLabel = computed(() => {
   const id = workbench.constructionInputs.payDumpId
-  if (id === null) return '（未选）'
+  if (id === null) return '（未选：还差付款补给站）'
   const dump = workbench.spDumps.find((item) => item.id === id)
   return dump === undefined ? '（已失效）' : `${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T）`
 })
@@ -446,24 +448,30 @@ const showsAssign = computed(() => {
  * 点哪一项就只展开那一段（不再把摆放/整备/修建/缩减/夺取全铺开）。
  * 判据与 `mapView.facilityActionKeys('air_base')` 的动作族一一对应。
  */
-const showsPlace = computed(
-  () => props.only === null || props.only === 'admin' || props.only === 'place',
+const at = (only: string): boolean =>
+  props.only === null || props.only === 'admin' || props.only === only
+const showsPlace = computed(() => at('place'))
+const showsRefit = computed(() => at('refit'))
+const showsAirstrip = computed(() => at('airstrip'))
+const showsReduce = computed(() => at('reduce'))
+const showsCapture = computed(() => at('capture'))
+/**
+ * ★ 2026-11-26（实机：工程单位点「修建 / 简易机场」开出一张**空窗**）：
+ * 事务性动作（15.1 整备 / 15.3 修建 / 15.4 缩减）现在由**单位右键**挑段进来，
+ * 而「空军工具」开关默认是关的 ⇒ 整段被 `airActive` 挡掉、窗里什么都不画。
+ * 挑定了某一段（`only !== 'mission'`）时就不再看开关：开关只管 14.2f 任务链。
+ */
+const adminVisible = computed(
+  () => workbench.airActive || (props.only !== null && props.only !== 'mission'),
 )
-const showsRefit = computed(
-  () => props.only === null || props.only === 'admin' || props.only === 'refit',
-)
-const showsAirstrip = computed(
-  () => props.only === null || props.only === 'admin' || props.only === 'airstrip',
-)
-const showsReduce = computed(
-  () => props.only === null || props.only === 'admin' || props.only === 'reduce',
-)
-const showsCapture = computed(
-  () => props.only === null || props.only === 'admin' || props.only === 'capture',
-)
-const displayedBases = computed(() =>
-  workbench.ownAirBases.filter((base) => props.baseId === undefined || base.id === props.baseId),
-)
+// 2026-11-26：15.4 从单位右键进 ⇒ 只画该单位所在格的基地
+const displayedBases = computed(() => {
+  const list = workbench.ownAirBases.filter(
+    (base) => props.baseId === undefined || base.id === props.baseId,
+  )
+  const hex = props.only === 'reduce' ? mapView.unitActionHex : null
+  return hex === null ? list : list.filter((b) => b.hex.col === hex.col && b.hex.row === hex.row)
+})
 </script>
 
 <template>
@@ -486,7 +494,7 @@ const displayedBases = computed(() =>
       </p>
     </template>
 
-    <template v-if="workbench.airActive">
+    <template v-if="adminVisible">
       <!-- ══ 事务性动作（14.1a 摆放 / 15.1 整备 / 15.3 修建 / 15.4 缩减 / 9.14f 夺取）══
            B15d：这一段留在**侧栏**（地图会话挂 `only="mission"` ⇒ 这里不画） -->
       <template v-if="showsPlace">
@@ -1210,250 +1218,237 @@ const displayedBases = computed(() =>
             </div>
           </SessionStep>
         </template>
+      </template>
 
-        <template v-if="showsRefit">
-          <hr />
-          <!-- 批 C 切片 2（用户口径 #18「有标题即可」）：成段规则文字收成标题 + 折叠 -->
-          <RuleNote
-            title="整备：点地图上的机场格 ⇒ 小窗「整备（15.1）」⇒ 勾飞机 ⇒ 点金黄补给站付 1T"
-            rule="15.1"
-          >
-            <p class="muted">
-              整备（15.1）：只在**飞机整备阶段**（A 段）进行；每基地每阶段一次；费用
-              1T；容量＝基地等级×2 （简易机场 1 架）；未抵消的敌方 ZOC
-              内不可整备；天气从不禁止（15.1D）。 **在盘面上做**：点地图上的机场格 ⇒
-              小窗里点「整备（15.1）」⇒ 勾选要整备的飞机 ⇒ 点地图上金黄高亮的补给站付
-              1T（与其它补给消耗同一方式）。
-            </p>
-          </RuleNote>
-          <p v-if="workbench.ownAirBases.length === 0" class="muted">
-            当前方没有空军基地（15.0）。
+      <template v-if="showsRefit">
+        <hr />
+        <!-- 批 C 切片 2（用户口径 #18「有标题即可」）：成段规则文字收成标题 + 折叠 -->
+        <RuleNote
+          title="整备：点地图上的机场格 ⇒ 小窗「整备（15.1）」⇒ 勾飞机 ⇒ 点金黄补给站付 1T"
+          rule="15.1"
+        >
+          <p class="muted">
+            整备（15.1）：只在**飞机整备阶段**（A 段）进行；每基地每阶段一次；费用
+            1T；容量＝基地等级×2 （简易机场 1 架）；未抵消的敌方 ZOC
+            内不可整备；天气从不禁止（15.1D）。 **在盘面上做**：点地图上的机场格 ⇒
+            小窗里点「整备（15.1）」⇒ 勾选要整备的飞机 ⇒ 点地图上金黄高亮的补给站付
+            1T（与其它补给消耗同一方式）。
           </p>
-          <div v-for="base in displayedBases" :key="base.id" class="row">
-            <BaseTag :kind="base.isAirstrip === true ? 'warning' : 'info'">
-              {{ hexLabel(base.hex) }}
-              {{ base.isAirstrip === true ? '简易机场' : `${base.level} 级` }}
-            </BaseTag>
-            <span class="num">
-              非激活 {{ workbench.airInactiveAtBase(base.id).length }} 架｜整备容量
-              {{ base.isAirstrip === true ? 1 : base.level * 2 }}
-              <template v-if="workbench.refitDoneBases.some((item) => item.id === base.id)">
-                ｜本阶段已整备（15.1A）
-              </template>
-            </span>
-            <!-- 裁判工具：简易机场由 15.3 施工 / 3.5 建造标记产生，手拨是订正 -->
-            <BaseButton
-              v-if="showsReferee"
-              variant="ghost"
-              size="sm"
-              @click="workbench.toggleAirstripBase(base.id)"
-            >
-              {{ base.isAirstrip === true ? '改回空军基地' : '声明为简易机场（15.2）' }}
-            </BaseButton>
-          </div>
-          <p v-if="workbench.lastRefit !== null" class="ok">
-            <BaseTag kind="success">{{ workbench.lastRefit.rule }}</BaseTag>
-            {{ workbench.lastRefit.detail }}
-          </p>
-        </template>
-        <template v-if="showsAirstrip">
-          <!-- ── ②b 基地修建 / 简易机场（15.3 / 15.2A，走 13.8d 的工程兵施工） ── -->
-          <hr />
-          <RuleNote
-            title="修建空军基地 / 简易机场：选格 + 选工程兵 + 选付款站，一格一任务"
-            rule="15.3 / 13.8d"
+        </RuleNote>
+        <p v-if="workbench.ownAirBases.length === 0" class="muted">当前方没有空军基地（15.0）。</p>
+        <div v-for="base in displayedBases" :key="base.id" class="row">
+          <BaseTag :kind="base.isAirstrip === true ? 'warning' : 'info'">
+            {{ hexLabel(base.hex) }}
+            {{ base.isAirstrip === true ? '简易机场' : `${base.level} 级` }}
+          </BaseTag>
+          <span class="num">
+            非激活 {{ workbench.airInactiveAtBase(base.id).length }} 架｜整备容量
+            {{ base.isAirstrip === true ? 1 : base.level * 2 }}
+            <template v-if="workbench.refitDoneBases.some((item) => item.id === base.id)">
+              ｜本阶段已整备（15.1A）
+            </template>
+          </span>
+          <!-- 裁判工具：简易机场由 15.3 施工 / 3.5 建造标记产生，手拨是订正 -->
+          <BaseButton
+            v-if="showsReferee"
+            variant="ghost"
+            size="sm"
+            @click="workbench.toggleAirstripBase(base.id)"
           >
-            <p class="muted">
-              修建（15.3）：**只能在移动阶段**，且**只能由具工程能力的单位**执行（13.8d：战斗模式或
-              DG 朝战斗面、本阶段未移动、半径 2 格**步行 MP**内、**一格一任务**）。空军基地 **1
-              SP/级**、 每回合 +1 级、上限 3 级。简易机场按 15.2A：**修建 1 T**、**升格为一级基地 3
-              T**； 每格至多一个空中设施（4.8）。简易机场**永不缩减降级**（15.2E）。
-            </p>
-          </RuleNote>
-          <div class="row">
-            <label class="field">
-              目标格
-              <UiField
-                v-model="workbench.constructionInputs.hexText"
-                class="input"
-                placeholder="36.13"
-              />
-              <BaseButton variant="secondary" size="sm" @click="workbench.beginAirBaseHexPickNow()">
-                点地图选格
-              </BaseButton>
-            </label>
-            <label class="field"> 付款补给站 </label>
-          </div>
-          <!-- 用户 2026-11-12：付款站改为**地图点选**（与炮击同一套：高亮 → 格上见 SP → 点选） -->
-          <div class="row">
-            <BaseButton
-              variant="secondary"
-              size="sm"
-              @click="workbench.toggleConstructionPayPick()"
-            >
-              {{ workbench.constructionPayPick ? '取消地图选站' : '在地图上选付款补给站' }}
+            {{ base.isAirstrip === true ? '改回空军基地' : '声明为简易机场（15.2）' }}
+          </BaseButton>
+        </div>
+        <p v-if="workbench.lastRefit !== null" class="ok">
+          <BaseTag kind="success">{{ workbench.lastRefit.rule }}</BaseTag>
+          {{ workbench.lastRefit.detail }}
+        </p>
+      </template>
+      <template v-if="showsAirstrip">
+        <!-- ── ②b 基地修建 / 简易机场（15.3 / 15.2A，走 13.8d 的工程兵施工） ── -->
+        <hr />
+        <RuleNote
+          title="修建空军基地 / 简易机场：选格 + 选工程兵 + 选付款站，一格一任务"
+          rule="15.3 / 13.8d"
+        >
+          <p class="muted">
+            修建（15.3）：**只能在移动阶段**，且**只能由具工程能力的单位**执行（13.8d：战斗模式或 DG
+            朝战斗面、本阶段未移动、半径 2 格**步行 MP**内、**一格一任务**）。空军基地 **1 SP/级**、
+            每回合 +1 级、上限 3 级。简易机场按 15.2A：**修建 1 T**、**升格为一级基地 3 T**；
+            每格至多一个空中设施（4.8）。简易机场**永不缩减降级**（15.2E）。
+          </p>
+        </RuleNote>
+        <div class="row">
+          <label class="field">
+            目标格
+            <UiField
+              v-model="workbench.constructionInputs.hexText"
+              class="input"
+              placeholder="36.13"
+            />
+            <BaseButton variant="secondary" size="sm" @click="workbench.beginAirBaseHexPickNow()">
+              点地图选格
             </BaseButton>
-            <span class="num">
-              付款站：{{ selectedConstructionPayLabel }}
-              <template v-if="workbench.constructionPayPick">
-                （点地图上高亮的补给站；12.3a/12.3b）
-              </template>
-            </span>
-          </div>
-          <!-- B14：施工工程兵＝算子图阵列（原来是纯文字下拉） -->
-          <CounterPicker
-            title="施工工程兵（13.8d）"
-            hint="13.8d：须具工程能力、处于战斗模式（或 DG 朝战斗面）、本阶段未移动、在目标格 2 格步行 MP 内"
-            :items="engineerItems"
-            :size="40"
-            @pick="workbench.constructionInputs.engineerId = $event"
-            @hover="hoverUnit"
-          />
-          <div class="row">
-            <BaseButton
-              variant="primary"
-              size="sm"
-              :disabled="workbench.constructionInputs.payDumpId === null"
-              @click="workbench.buildAirBaseNow()"
-            >
+          </label>
+          <label class="field"> 付款补给站 </label>
+        </div>
+        <!-- 用户 2026-11-12：付款站改为**地图点选**（与炮击同一套：高亮 → 格上见 SP → 点选） -->
+        <div class="row">
+          <BaseButton variant="secondary" size="sm" @click="workbench.toggleConstructionPayPick()">
+            {{ workbench.constructionPayPick ? '取消地图选站' : '在地图上选付款补给站' }}
+          </BaseButton>
+          <span class="num">
+            付款站：{{ selectedConstructionPayLabel }}
+            <template v-if="workbench.constructionPayPick">
+              （点地图上高亮的补给站；12.3a/12.3b）
+            </template>
+          </span>
+        </div>
+        <!-- B14：施工工程兵＝算子图阵列（原来是纯文字下拉） -->
+        <CounterPicker
+          title="施工工程兵（13.8d）"
+          hint="13.8d：须具工程能力、处于战斗模式（或 DG 朝战斗面）、本阶段未移动、在目标格 2 格步行 MP 内"
+          :items="engineerItems"
+          :size="40"
+          @pick="workbench.constructionInputs.engineerId = $event"
+          @hover="hoverUnit"
+        />
+        <div class="row">
+          <template v-if="workbench.constructionInputs.payDumpId !== null">
+            <BaseButton variant="primary" size="sm" @click="workbench.buildAirBaseNow()">
               修建/改进空军基地 +1 级（15.3：{{ workbench.airBaseBuildCostSpPerLevel }} SP/级）
             </BaseButton>
-            <BaseButton
-              variant="secondary"
-              size="sm"
-              :disabled="workbench.constructionInputs.payDumpId === null"
-              @click="workbench.buildAirstripNow()"
-            >
+            <BaseButton variant="secondary" size="sm" @click="workbench.buildAirstripNow()">
               修建简易机场（15.2A：1 T）
             </BaseButton>
-            <span class="num">
-              本阶段已施工：{{ constructionLedger.hexes.join('、') || '无' }}｜任务
-              {{ constructionLedger.task ?? '无' }}（13.8d：一格一任务）
-            </span>
-          </div>
-          <p v-if="workbench.engineerChoices.length === 0" class="muted">—</p>
-          <p v-if="workbench.constructionError !== null" class="bad">
-            <BaseTag kind="danger">{{ workbench.constructionError.rule }}</BaseTag>
-            {{ workbench.constructionError.reason }}
-          </p>
-          <div
-            v-for="base in displayedBases.filter((item) => item.isAirstrip === true)"
-            :key="`upgrade-${base.id}`"
-            class="row"
+          </template>
+          <span v-else class="num">还差：付款补给站（15.3 / 15.2A）</span>
+          <span class="num">
+            本阶段已施工：{{ constructionLedger.hexes.join('、') || '无' }}｜任务
+            {{ constructionLedger.task ?? '无' }}（13.8d：一格一任务）
+          </span>
+        </div>
+        <p v-if="workbench.engineerChoices.length === 0" class="muted">—</p>
+        <p v-if="workbench.constructionError !== null" class="bad">
+          <BaseTag kind="danger">{{ workbench.constructionError.rule }}</BaseTag>
+          {{ workbench.constructionError.reason }}
+        </p>
+        <div
+          v-for="base in displayedBases.filter((item) => item.isAirstrip === true)"
+          :key="`upgrade-${base.id}`"
+          class="row"
+        >
+          <BaseTag kind="warning">{{ hexLabel(base.hex) }} 简易机场</BaseTag>
+          <BaseButton
+            v-if="workbench.constructionInputs.payDumpId !== null"
+            variant="primary"
+            size="sm"
+            @click="workbench.upgradeAirstripNow(base.id)"
           >
-            <BaseTag kind="warning">{{ hexLabel(base.hex) }} 简易机场</BaseTag>
-            <BaseButton
-              variant="primary"
-              size="sm"
-              :disabled="workbench.constructionInputs.payDumpId === null"
-              @click="workbench.upgradeAirstripNow(base.id)"
-            >
-              升格为一级空军基地（15.2A：3 T）
-            </BaseButton>
-          </div>
-        </template>
-        <template v-if="showsReduce">
-          <!-- ── ③ 基地缩减（15.4） ── -->
-          <hr />
-          <RuleNote
-            title="缩减基地：选格内被指定单位 ⇒ 点「缩减一级」；每基地每阶段一次、不耗 SP"
-            rule="15.4"
-          >
-            <p class="muted">
-              基地缩减（15.4）：只在**移动阶段**；由格内**被指定**的单位执行（RE 合计 ≥1
-              或具工程能力， 逐员战斗模式且本阶段未移动）；每基地每阶段一次；永不降到 1
-              级以下（15.0c）；不耗 SP。
-              **15.2E：简易机场在任何情况下都不可缩减降级**（伤害或自愿都不行；上表已把简易机场列出，
-              点它的「缩减一级」会被引擎按 15.2E 直接拒绝）。
-            </p>
-          </RuleNote>
-          <div v-for="base in displayedBases" :key="`reduce-${base.id}`" class="row">
-            <BaseTag kind="neutral">{{ hexLabel(base.hex) }}（{{ base.level }} 级）</BaseTag>
-            <BaseButton
-              variant="secondary"
-              size="sm"
-              @click="
-                workbench.airInputs.reductionUnitIds = workbench
-                  .airReductionCandidates(base.id)
-                  .map((unit) => unit.instanceId)
-              "
-            >
-              取全部候选
-            </BaseButton>
-            <BaseButton variant="primary" size="sm" @click="workbench.reduceBaseNow(base.id)">
-              缩减一级（15.4）
-            </BaseButton>
-            <!-- B14：被指定单位＝**算子图阵列**（点一枚即指定 / 再点取消；原来只是一行名字） -->
-            <CounterPicker
-              v-if="workbench.airReductionCandidates(base.id).length > 0"
-              title="被指定单位（15.4）"
-              hint="15.4：缩减由格内被指定的单位执行 —— RE 合计 ≥1 或具工程能力，逐员战斗模式且本阶段未移动"
-              :items="reductionItems(base.id)"
-              :size="32"
-              @pick="workbench.toggleAirReductionUnit($event)"
-              @hover="hoverUnit"
-            />
-          </div>
-          <p v-if="workbench.lastReduction !== null" class="ok">
-            <BaseTag kind="success">{{ workbench.lastReduction.rule }}</BaseTag>
-            {{ workbench.lastReduction.detail }}
+            升格为一级空军基地（15.2A：3 T）
+          </BaseButton>
+        </div>
+      </template>
+      <template v-if="showsReduce">
+        <!-- ── ③ 基地缩减（15.4） ── -->
+        <hr />
+        <RuleNote
+          title="缩减基地：选格内被指定单位 ⇒ 点「缩减一级」；每基地每阶段一次、不耗 SP"
+          rule="15.4"
+        >
+          <p class="muted">
+            基地缩减（15.4）：只在**移动阶段**；由格内**被指定**的单位执行（RE 合计 ≥1
+            或具工程能力， 逐员战斗模式且本阶段未移动）；每基地每阶段一次；永不降到 1
+            级以下（15.0c）；不耗 SP。
+            **15.2E：简易机场在任何情况下都不可缩减降级**（伤害或自愿都不行；上表已把简易机场列出，
+            点它的「缩减一级」会被引擎按 15.2E 直接拒绝）。
           </p>
-        </template>
-        <template v-if="showsCapture">
-          <!-- ── ④ 基地夺取（9.14f，表 17-6） ── -->
-          <hr />
-          <RuleNote title="夺取敌方基地：进入基地格即夺取，逐机掷夺取表（表 17-6）" rule="9.14f">
-            <p class="muted">
-              基地夺取（9.14f）：移动/进击阶段有**可攻击单位进入敌方基地格** ⇒
-              基地被夺取并**立即归夺取方使用**
-              （算子翻面）；无论天气都要为格内**每架**飞机掷夺取表（表 17-6）：+2 该机激活、+2
-              由**战后推进** 夺取；幸存者必须转移到**距离 2
-              倍内**的任意**友方**基地并转非激活，无处可转则摧毁。
-            </p>
-          </RuleNote>
-          <div class="row">
-            <label class="field">
-              <input v-model="workbench.airInputs.baseCaptureByAdvance" type="checkbox" />
-              由**战后推进**夺取（+2，9.14f）
-            </label>
-          </div>
-          <p v-if="workbench.capturableEnemyAirBases.length === 0" class="muted">
-            盘面上没有对手的空军基地。
-          </p>
-          <div
-            v-for="base in workbench.capturableEnemyAirBases"
-            :key="`capture-${base.id}`"
-            class="row"
+        </RuleNote>
+        <div v-for="base in displayedBases" :key="`reduce-${base.id}`" class="row">
+          <BaseTag kind="neutral">{{ hexLabel(base.hex) }}（{{ base.level }} 级）</BaseTag>
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            @click="
+              workbench.airInputs.reductionUnitIds = workbench
+                .airReductionCandidates(base.id)
+                .map((unit) => unit.instanceId)
+            "
           >
-            <BaseTag kind="warning">
-              {{ hexLabel(base.hex) }}
-              {{ base.isAirstrip === true ? '简易机场（15.2）' : `${base.level} 级` }}
-            </BaseTag>
-            <span class="num"
-              >格内飞机 {{ workbench.airUnitsAt(base.hex, base.side).length }} 架</span
-            >
-            <!-- 裁判工具：战后推进时 `advanceAfterCombat` 会自动结算 9.14f，手点是覆写 -->
-            <BaseButton
-              v-if="showsReferee"
-              variant="danger"
-              size="sm"
-              @click="workbench.captureAirBaseNow(base.id)"
-            >
-              夺取（9.14f，裁判覆写）
-            </BaseButton>
-          </div>
+            取全部候选
+          </BaseButton>
+          <BaseButton variant="primary" size="sm" @click="workbench.reduceBaseNow(base.id)">
+            缩减一级（15.4）
+          </BaseButton>
+          <!-- B14：被指定单位＝**算子图阵列**（点一枚即指定 / 再点取消；原来只是一行名字） -->
+          <CounterPicker
+            v-if="workbench.airReductionCandidates(base.id).length > 0"
+            title="被指定单位（15.4）"
+            hint="15.4：缩减由格内被指定的单位执行 —— RE 合计 ≥1 或具工程能力，逐员战斗模式且本阶段未移动"
+            :items="reductionItems(base.id)"
+            :size="32"
+            @pick="workbench.toggleAirReductionUnit($event)"
+            @hover="hoverUnit"
+          />
+        </div>
+        <p v-if="workbench.lastReduction !== null" class="ok">
+          <BaseTag kind="success">{{ workbench.lastReduction.rule }}</BaseTag>
+          {{ workbench.lastReduction.detail }}
+        </p>
+      </template>
+      <template v-if="showsCapture">
+        <!-- ── ④ 基地夺取（9.14f，表 17-6） ── -->
+        <hr />
+        <RuleNote title="夺取敌方基地：进入基地格即夺取，逐机掷夺取表（表 17-6）" rule="9.14f">
+          <p class="muted">
+            基地夺取（9.14f）：移动/进击阶段有**可攻击单位进入敌方基地格** ⇒
+            基地被夺取并**立即归夺取方使用**
+            （算子翻面）；无论天气都要为格内**每架**飞机掷夺取表（表 17-6）：+2 该机激活、+2
+            由**战后推进** 夺取；幸存者必须转移到**距离 2
+            倍内**的任意**友方**基地并转非激活，无处可转则摧毁。
+          </p>
+        </RuleNote>
+        <div class="row">
+          <label class="field">
+            <input v-model="workbench.airInputs.baseCaptureByAdvance" type="checkbox" />
+            由**战后推进**夺取（+2，9.14f）
+          </label>
+        </div>
+        <p v-if="workbench.capturableEnemyAirBases.length === 0" class="muted">
+          盘面上没有对手的空军基地。
+        </p>
+        <div
+          v-for="base in workbench.capturableEnemyAirBases"
+          :key="`capture-${base.id}`"
+          class="row"
+        >
+          <BaseTag kind="warning">
+            {{ hexLabel(base.hex) }}
+            {{ base.isAirstrip === true ? '简易机场（15.2）' : `${base.level} 级` }}
+          </BaseTag>
+          <span class="num"
+            >格内飞机 {{ workbench.airUnitsAt(base.hex, base.side).length }} 架</span
+          >
+          <!-- 裁判工具：战后推进时 `advanceAfterCombat` 会自动结算 9.14f，手点是覆写 -->
+          <BaseButton
+            v-if="showsReferee"
+            variant="danger"
+            size="sm"
+            @click="workbench.captureAirBaseNow(base.id)"
+          >
+            夺取（9.14f，裁判覆写）
+          </BaseButton>
+        </div>
 
-          <p v-if="workbench.airErrorLine !== null" class="warn">
-            <BaseTag kind="danger">{{ workbench.airError?.rule }}</BaseTag>
-            {{ workbench.airErrorLine }}
-          </p>
+        <p v-if="workbench.airErrorLine !== null" class="warn">
+          <BaseTag kind="danger">{{ workbench.airError?.rule }}</BaseTag>
+          {{ workbench.airErrorLine }}
+        </p>
 
-          <div class="row">
-            <BaseButton variant="secondary" size="sm" @click="workbench.cancelAir()">
-              放弃本次任务
-            </BaseButton>
-          </div>
-        </template>
+        <div class="row">
+          <BaseButton variant="secondary" size="sm" @click="workbench.cancelAir()">
+            放弃本次任务
+          </BaseButton>
+        </div>
       </template>
     </template>
   </BasePanel>

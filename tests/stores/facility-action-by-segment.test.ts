@@ -107,13 +107,33 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     expect(mapView.unitActionFamily).toBeNull()
   })
 
-  it('★ C 段移动环节：空军基地有操作（15.3 修建 / 15.4 缩减）；工事有（16.0b）', () => {
+  it('★ C 段移动环节：基地 / 工事**设施本身**不再有操作（入口改挂执行单位，2026-11-26）', () => {
     const { workbench, mapView } = s
     place(workbench, 'air_base', 'base-1')
     place(workbench, 'hedgehog', 'hog-1')
     enter(workbench, 'movement', 'movement.modeAndMovement')
-    expect(mapView.unitActionAvailableAt('base-1')).toBe(true)
-    expect(mapView.unitActionAvailableAt('hog-1')).toBe(true)
+    expect(mapView.unitActionAvailableAt('base-1')).toBe(false)
+    expect(mapView.unitActionAvailableAt('hog-1')).toBe(false)
+  })
+
+  it('★ C 段：工程项挂在**单位**右键——HQ 出「基地/简易机场」与「13.8d 工事」', () => {
+    const { workbench, mapView } = s
+    const hq = unitChoices('axis').find((record) => (record.specialized ?? []).includes('hq'))
+    if (hq === undefined) throw new Error('单位库里没有 HQ（13.8a 的工程能力单位）')
+    workbench.units.push(toConsoleUnit({ record: hq, instanceId: 'hq-1', hex: HEX, side: 'axis' }))
+    enter(workbench, 'movement', 'movement.modeAndMovement')
+    expect(mapView.openUnitContext(HEX, 'hq-1', { x: 0, y: 0 })).toBe(true)
+    const keys = mapView.contextOptions.flatMap((option) =>
+      option.actions.filter((action) => action.disabledReason === null).map((action) => action.key),
+    )
+    expect(keys).toContain('move.construction')
+    expect(keys).toContain('move.hedgehog')
+    // 15.4 缩减不在这份菜单里（它要"格内被指定单位"，HQ 自身不会因为"是 HQ"而获得该入口）
+    const only = mapView.contextOptions
+      .flatMap((option) => option.actions)
+      .filter((action) => action.key === 'move.construction')
+      .map((action) => action.only)
+    expect(only).toEqual(['airstrip'])
   })
 
   it('★ F 段战斗：补给站没有操作（战斗补给是"从它付款"，不是对它操作）', () => {
@@ -178,25 +198,18 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     expect(options[0]?.rule).toBe('12.11a')
   })
 
-  it('★ 工事：C 段一项，段名 hedgehog（不再整块铺开五节专规）', () => {
+  it('★ 工事格自身不再出菜单项（16.0b/c 的执行者是单位，不是工事格）', () => {
     const { workbench, mapView } = s
     place(workbench, 'hedgehog', 'hog-1')
     enter(workbench, 'movement', 'movement.modeAndMovement')
-    const options = mapView.unitActionOptions('hog-1')
-    expect(options.map((item) => item.key)).toEqual(['move.hedgehog'])
-    expect(options[0]?.panel).toBe('fort')
-    expect(options[0]?.only).toBe('hedgehog')
+    expect(mapView.unitActionOptions('hog-1')).toEqual([])
   })
 
-  it('★ 操作菜单：C 段基地只列「修建 / 缩减」两项（2026-11-10：基地不再下空军任务）', () => {
+  it('★ 操作菜单：基地不再出「修建 / 缩减」（15.3 / 15.4 的执行者在单位侧）', () => {
     const { workbench, mapView } = s
     place(workbench, 'air_base', 'base-1')
     enter(workbench, 'movement', 'movement.modeAndMovement')
-    const options = mapView.unitActionOptions('base-1')
-    expect(options.map((item) => item.key)).toEqual(['move.construction', 'air.baseReduce'])
-    // 每项都带规则号与"开哪一段"，界面据此只展开那一段
-    expect(options.map((item) => item.only)).toEqual(['airstrip', 'reduce'])
-    expect(options.every((item) => item.rule !== '' && item.label !== '')).toBe(true)
+    expect(mapView.unitActionOptions('base-1')).toEqual([])
   })
 
   it('★ 操作菜单：A 段基地右键不再单开「整备」（15.1 只从堆叠窗的基地卡进）', () => {
@@ -275,9 +288,9 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
       sp: ['dumpBlow'],
       tp: ['transport', 'loadUnload', 'extender'],
       ext: ['extender'],
-      // 2026-11-10：基地格不再当"选飞机"的把手（任务入口收敛到右键敌方目标）
-      base: ['airstrip', 'reduce'],
-      hog: ['hedgehog'],
+      // 2026-11-26：基地 / 工事的工程项移到**单位**菜单 ⇒ 设施格不再出项
+      base: [],
+      hog: [],
     })
     expect(menuOf(A)).toEqual({
       sp: [],
@@ -303,8 +316,9 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
   it('★ 设施动作表本身就是"规则书清单"（键与环节由闸门表给，不在这里另写一套）', () => {
     const { mapView } = s
     expect(mapView.facilityActionKeys('sp')).toEqual(['move.dumpBlow'])
-    expect(mapView.facilityActionKeys('air_base')).toEqual(['move.construction', 'air.baseReduce'])
-    expect(mapView.facilityActionKeys('hedgehog')).toEqual(['move.hedgehog'])
+    // 2026-11-26：工程项从设施表移除（15.3/15.2A 由工程单位、16.0b/c 与 15.4 由格内单位发起）
+    expect(mapView.facilityActionKeys('air_base')).toEqual([])
+    expect(mapView.facilityActionKeys('hedgehog')).toEqual([])
     expect(mapView.facilityActionKeys('transport_point')).toEqual([
       'move.transportMerge',
       'move.loadUnload',

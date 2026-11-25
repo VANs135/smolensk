@@ -87,7 +87,7 @@ describe('渐进交互：点格摊堆叠 ⇒ 点具体那一枚才进操作', ()
     place(workbench, 'air_base', 'base-1')
     place(workbench, 'sp', 'sp-1')
 
-    expect(mapView.openUnitActionAt(HEX, 'base-1')).toBe(true)
+    expect(mapView.selectCounterAt(HEX, 'base-1')).toBe(true)
     expect(mapView.session).toMatchObject({ kind: 'unit' })
     expect(mapView.unitActionFamily).toBe('air')
     expect(mapView.unitActionUnitId).toBe('base-1')
@@ -117,7 +117,7 @@ describe('渐进交互：点格摊堆叠 ⇒ 点具体那一枚才进操作', ()
   it('★ 收掉会话时"那一枚"的记账也清（不会带到下一格）', () => {
     const { workbench, mapView } = stores
     place(workbench, 'air_base', 'base-1')
-    expect(mapView.openUnitActionAt(HEX, 'base-1')).toBe(true)
+    expect(mapView.selectCounterAt(HEX, 'base-1')).toBe(true)
     expect(mapView.cancelSession()).toBe(true)
     expect(mapView.unitActionUnitId).toBeNull()
     expect(mapView.unitActionHex).toBeNull()
