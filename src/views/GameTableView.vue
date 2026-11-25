@@ -1183,7 +1183,8 @@ onBeforeUnmount(() => {
   z-index: calc(var(--z-panel) + 10);
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  /* 2026-11-26：13 枚纯图标比旧 6 枚高一截 ⇒ 行距从 4 收到 2，配合下面 44px 按钮把整条压回视口 */
+  gap: 2px;
   flex: 0 0 var(--command-rail);
   padding: var(--space-2) var(--space-1);
   border-right: 1px solid var(--color-rule);
@@ -1191,16 +1192,22 @@ onBeforeUnmount(() => {
   overflow: auto;
 }
 
+/* 栏底三枚贴底：窄屏（1366×768 等）整条仍会略有溢出，三枚必须常驻可见，不跟着滚动跑掉 */
 .gt__rail-end {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 2px;
   margin-top: auto;
+  padding-top: 2px;
+  background: var(--color-panel);
 }
 
 /* 盒组的分组字（轴 / 苏 / 共）：单字小标，不占按钮位；居中对齐图标列（左栏只有 62px，贴边难看） */
 .gt__rail-group {
-  margin: var(--space-1) 0 0;
+  margin: 2px 0 0;
   color: var(--color-muted);
   font-size: var(--text-xs);
   line-height: 1.2;
@@ -1225,7 +1232,8 @@ onBeforeUnmount(() => {
 .gt__rail-button {
   display: flex;
   width: 100%;
-  min-height: var(--command-rail-button);
+  /* 2026-11-26：52 → 44（13 枚纯图标要压进 767px 的栏；桌面是鼠标点，44 仍够） */
+  min-height: 44px;
   /* 2026-11-26（用户）：左栏一律纯图标 ⇒ 居中，不再带字 */
   align-items: center;
   justify-content: center;
@@ -1561,10 +1569,13 @@ onBeforeUnmount(() => {
   }
 
   .gt__rail-end {
+    position: static;
     display: flex;
     flex-direction: row;
     margin-top: 0;
     margin-left: auto;
+    padding-top: 0;
+    background: transparent;
   }
 
   /* 底部浮层：从下往上盖住地图一部分，地图仍然完整可平移/缩放 */

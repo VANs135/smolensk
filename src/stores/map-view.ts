@@ -4479,7 +4479,12 @@ export const useMapViewStore = defineStore('mapView', () => {
      *   本环节本来那张自动面板（13.5 重建段就是增援面板），否则一点 × 就把 B 段整段锁死。
      */
     else if (current.kind === 'containers') {
+      /*
+       * 2026-11-26：焦点卡现在可能来自**浮窗**（`popupCardId`，托盘删除后它就是"展开"）
+       * 而不是遗留的 `cardOpenId` ⇒ 两个都收，否则会话关了会立刻原地重生。
+       */
       containers.cardOpenId = null
+      containers.setPopupCard(null)
     }
     //
     // B17a-3 + B37：专规动作既是"想用时打开"的会话，也会**按闸门自动出现** ⇒

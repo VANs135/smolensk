@@ -271,18 +271,17 @@ describe('P3：关闭语义（cancel / collapse / refused）', () => {
     expect(mapView.session?.closePolicy).toBe('collapse')
 
     expect(mapView.cancelSession()).toBe(true)
-    // 2026-11-18：死亡堆/空军盒贴图已承载；地图外盒展开也不再自动开窗 ⇒ 用仍需批量动作窗的盒验证
-    const windowCard = containers.cardViews.find(
-      (card) =>
-        card.boxKind !== 'dead_pile' && card.boxKind !== 'air_box' && card.boxKind !== 'offboard',
-    )
+    // 2026-11-26（v5 左栏）：托盘删除后"展开"＝浮窗；盒内动作窗只给地图外盒的显式请求
+    const windowCard = containers.cardViews.find((card) => card.boxKind === 'offboard')
     expect(windowCard).toBeDefined()
-    containers.cardOpenId = windowCard!.id
+    containers.setPopupCard(windowCard!.id)
+    containers.requestCardWindow()
     expect(mapView.session?.kind).toBe('containers')
     expect(mapView.session?.closePolicy).toBe('collapse')
 
     expect(mapView.cancelSession()).toBe(true)
     expect(containers.cardOpenId).toBeNull()
+    expect(containers.popupCardId).toBeNull()
 
     // 显式打开会压过"上一环节已收起"（B37），所以这里不会受 containers 的收起态影响
     mapView.setExclusiveOpen(true)

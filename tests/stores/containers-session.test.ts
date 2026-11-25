@@ -45,33 +45,36 @@ function goToActionStep(
 }
 
 describe('B17a-2：盒卡展开 ⇒ 盒内动作会话', () => {
-  it('★ 没有展开盒卡时不出会话；展开一张即出现「盒内动作」', () => {
+  it('★ 没有焦点盒卡时不出会话；显式请求一张地图外盒即出现「盒内动作」', () => {
     const { mapView, containers } = newStores()
     expect(mapView.session).toBeNull()
 
-    // 2026-11-18：死亡堆/空军盒贴图右键已承载；地图外盒展开也不再自动开窗（贴图按钮显式请求）
-    // ⇒ 改用仍需"展开即开窗"的批量盒（边缘盒 / 记录轨 / 编队收纳…）
-    const card = containers.cardViews.find(
-      (item) =>
-        item.boxKind !== 'dead_pile' && item.boxKind !== 'air_box' && item.boxKind !== 'offboard',
-    )
-    expect(card, '本剧本应当有仍需盒内动作窗的盒卡').toBeDefined()
-    containers.toggleCardOpen(card!.id)
+    /*
+     * 2026-11-26（v5 左栏）：托盘删除后"展开"由**浮窗**承担（`setPopupCard`）。
+     * 死亡堆 / 空军盒的能力全在贴图上，运力记录轨的卡面本身就是那两条轨 ⇒ 都不开窗；
+     * 仍需多字段批量动作的是**地图外盒**（拆分池），且要贴图按钮显式请求。
+     */
+    const card = containers.cardViews.find((item) => item.boxKind === 'offboard')
+    expect(card, '本剧本应当有地图外盒卡（多字段批量动作走显式请求）').toBeDefined()
+    containers.setPopupCard(card!.id)
+    // 开浮窗本身不弹窗（否则就成了"同一件事两个入口"）
+    expect(mapView.session).toBeNull()
+    expect(containers.requestCardWindow()).toBe(true)
     expect(mapView.session).toMatchObject({ kind: 'containers' })
     expect(mapView.session?.title).toContain('盒内动作')
   })
 
   it('★ 收起（`Esc`/×）：会话消失、那张盒卡也合上', () => {
     const { mapView, containers } = newStores()
-    const card = containers.cardViews.find(
-      (item) =>
-        item.boxKind !== 'dead_pile' && item.boxKind !== 'air_box' && item.boxKind !== 'offboard',
-    )
-    containers.toggleCardOpen(card!.id)
+    const card = containers.cardViews.find((item) => item.boxKind === 'offboard')
+    containers.setPopupCard(card!.id)
+    containers.requestCardWindow()
     expect(mapView.session?.kind).toBe('containers')
 
     expect(mapView.cancelSession()).toBe(true)
     expect(containers.cardOpenId).toBeNull()
+    // 焦点卡（浮窗）也要收：只清 cardOpenId 的话，会话会立刻原地重生
+    expect(containers.popupCardId).toBeNull()
     expect(mapView.session).toBeNull()
   })
 
@@ -124,20 +127,19 @@ describe('B17a-2：盒卡展开 ⇒ 盒内动作会话', () => {
   it('换环节后收起态失效（会话不会被"上次的收起"永久压住）', () => {
     const { workbench, mapView, containers } = newStores()
     const cards = containers.cardViews
-    // 2026-11-18：死亡堆/空军盒/地图外盒都不再"展开即开窗" ⇒ 选一张仍需批量窗的盒
-    const windowCard = cards.find(
-      (card) =>
-        card.boxKind !== 'dead_pile' && card.boxKind !== 'air_box' && card.boxKind !== 'offboard',
-    )
-    expect(windowCard, '应当有仍需盒内动作窗的盒').toBeDefined()
-    containers.toggleCardOpen(windowCard!.id)
+    // 2026-11-26：改用地图外盒 + 显式请求（死亡堆/空军盒/记录轨都不再"开窗即弹"）
+    const windowCard = cards.find((card) => card.boxKind === 'offboard')
+    expect(windowCard, '应当有地图外盒卡（盒内动作窗的显式入口）').toBeDefined()
+    containers.setPopupCard(windowCard!.id)
+    containers.requestCardWindow()
     mapView.cancelSession()
     expect(mapView.session).toBeNull()
 
-    // 换一个**不同的**阶段 ⇒ 环节键变 ⇒ 收起失效；盒卡再展开即重现
+    // 换一个**不同的**阶段 ⇒ 环节键变 ⇒ 收起失效；盒卡再请求即重现
     //（★ 不能用 `setPhase('movement')`：新 store 的默认阶段就是它，环节键不会变）
     workbench.setPhase(workbench.phase === 'movement' ? 'combat' : 'movement')
-    containers.toggleCardOpen(windowCard!.id)
+    containers.setPopupCard(windowCard!.id)
+    containers.requestCardWindow()
     expect(mapView.session?.kind).toBe('containers')
   })
 })

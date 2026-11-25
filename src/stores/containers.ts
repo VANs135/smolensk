@@ -676,6 +676,35 @@ export const useContainersStore = defineStore('containers', () => {
    */
   const cardWindowRequested = ref(false)
 
+  /* ────────────────── C-2：盒卡**浮窗**（2026-11-26：托盘删除后，浮窗就是"展开"） ────────────────── */
+
+  /**
+   * 正在**浮窗**里看的那张卡（null＝没有浮窗）
+   *
+   * 用户 2026-11-26（v5 左栏）：底部托盘整条删除后，桌面端已经没有"点卡头展开"这条路
+   * （`BoxCard` 全挂在 `display:none` 的 `.gt__box-anchors` 里）⇒ 浮窗就是新的"展开"：
+   * 它一亮，等价于旧语义里"我在对这张盒做点什么"，盒内批量动作与拆分取用必须跟着它走。
+   */
+  const popupCardId = ref<string | null>(null)
+
+  /** 打开 / 收起某张卡的浮窗（与 `cardOpenId` 互斥：同时只看一张） */
+  function setPopupCard(id: string | null): void {
+    popupCardId.value = id
+    // 无论开还是关，上一次的显式请求都作废（关窗后再开，不该"记得"上次要开动作窗）
+    cardWindowRequested.value = false
+    if (id === null) return
+    cardOpenId.value = null
+  }
+
+  /**
+   * **当前焦点卡**（＝"展开"的那一张）
+   *
+   * 浮窗优先；没有浮窗时才认遗留的 `cardOpenId`（安卓盒面浮层仍会用它）。
+   * 下面所有"这张卡管哪些盒 / 要不要开盒内动作窗 / 能不能拆分取用"一律以它为准，
+   * 免得换了入口之后这些能力被悄悄带走。
+   */
+  const focusedCardId = computed<string | null>(() => popupCardId.value ?? cardOpenId.value)
+
   /** 展开/收起某一张卡（同时只展开一张） */
   function toggleCardOpen(id: string): void {
     cardOpenId.value = cardOpenId.value === id ? null : id
@@ -686,27 +715,12 @@ export const useContainersStore = defineStore('containers', () => {
 
   /** 贴图按钮显式请求打开当前卡的动作窗（只对需要多字段批量动作的卡有效） */
   function requestCardWindow(): boolean {
-    const id = cardOpenId.value
+    const id = focusedCardId.value
     if (id === null) return false
     const card = cardViews.value.find((item) => item.id === id)
     if (card === undefined || card.boxKind !== 'offboard') return false
     cardWindowRequested.value = true
     return true
-  }
-
-  /* ────────────────────────── C-2：盒卡**弹出为浮窗**（用户口径 / 方案 §3 B35 步骤 8） ────────────────────────── */
-
-  /**
-   * 正在**浮窗**里看的那张卡（null＝没有浮窗）
-   *
-   * 与 `cardOpenId`（托盘里的"展开哪一张"）分开记：浮窗是"把卡面放大看"的临时视图，
-   * 两者可以同时存在（托盘里展开着 A、浮窗里看 B），Esc 或点关闭只收浮窗。
-   */
-  const popupCardId = ref<string | null>(null)
-
-  /** 打开 / 收起某张卡的浮窗 */
-  function setPopupCard(id: string | null): void {
-    popupCardId.value = id
   }
 
   /**
@@ -717,7 +731,7 @@ export const useContainersStore = defineStore('containers', () => {
    * 没展开卡时返回 `null`（验证页/右栏那两份面板照旧全给，那是核对场景）。
    */
   const openCardBoxKinds = computed<readonly string[] | null>(() => {
-    const id = cardOpenId.value
+    const id = focusedCardId.value
     if (id === null) return null
     const card = cardViews.value.find((item) => item.id === id)
     if (card === undefined) return null
@@ -745,12 +759,12 @@ export const useContainersStore = defineStore('containers', () => {
 
   /** C-1：当前展开卡的名字（会话框标题用；没展开 ⇒ `null`） */
   const openCardName = computed<string | null>(() => {
-    const id = cardOpenId.value
+    const id = focusedCardId.value
     if (id === null) return null
     return cardViews.value.find((item) => item.id === id)?.name ?? null
   })
   const openCardSide = computed(
-    () => cardViews.value.find((card) => card.id === cardOpenId.value)?.side ?? null,
+    () => cardViews.value.find((card) => card.id === focusedCardId.value)?.side ?? null,
   )
 
   const cardViews = computed<readonly AuxCardView[]>(() =>
@@ -886,14 +900,18 @@ export const useContainersStore = defineStore('containers', () => {
    * 内容重复的会话窗就成了"同一件事两个入口"。
    * 地图外盒（`offboard`）：贴图已承载"选谁/看什么"，但拆分池的「母单位 + AR + 数量」
    * 多字段动作贴图做不到 ⇒ **只在贴图按钮显式请求时**开窗，展开本身不再弹。
+   * 运力记录轨（`capacity_track`）：卡面就是**两条轨的当前格**，动作是"推标记 / 改容量"，
+   * 由裁判面板与引擎按事件自动推，不是盒内批量动作 ⇒ **2026-11-26 起也不再开窗**
+   * （否则左栏点"共"那一枚就会顶出一个几乎空的会话框）。
    * 其余盒（边缘盒 / 编队收纳 / 剧本抽取）仍有多字段批量动作 ⇒ 保留展开即开窗。
    */
   const openCardNeedsWindow = computed<boolean>(() => {
-    const id = cardOpenId.value
+    const id = focusedCardId.value
     if (id === null) return false
     const card = cardViews.value.find((item) => item.id === id)
     if (card === undefined) return false
     if (card.boxKind === 'dead_pile' || card.boxKind === 'air_box') return false
+    if (card.boxKind === 'capacity_track') return false
     if (card.boxKind === 'offboard') return cardWindowRequested.value
     return true
   })
@@ -905,7 +923,7 @@ export const useContainersStore = defineStore('containers', () => {
    * 全部由 `canCreateBreakdownNow` 一处判）。不可用项不出现。
    */
   const breakdownFaceAvailable = computed<boolean>(() => {
-    const id = cardOpenId.value
+    const id = focusedCardId.value
     if (id === null) return false
     const card = cardViews.value.find((item) => item.id === id)
     if (card === undefined || card.boxKind !== 'offboard') return false

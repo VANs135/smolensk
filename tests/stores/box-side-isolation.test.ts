@@ -63,8 +63,10 @@ describe('盒表阵营隔离', () => {
     const { containers, hotseat } = stores()
     hotseat.setViewerSide('axis')
     containers.toggleCardOpen('axis-dead-pile')
-    containers.setPopupCard('axis-dead-pile')
     expect(containers.cardOpenId).toBe('axis-dead-pile')
+    // 2026-11-26：浮窗就是"展开"，两者互斥（开浮窗 ⇒ cardOpenId 归 null）
+    containers.setPopupCard('axis-dead-pile')
+    expect(containers.cardOpenId).toBeNull()
     expect(containers.popupCardId).toBe('axis-dead-pile')
 
     hotseat.setViewerSide('soviet')
@@ -90,5 +92,48 @@ describe('盒表阵营隔离', () => {
     // 浮窗必须居中锚定（只写 left:50% 会把 720 宽的窗推到视口外）
     expect(card).toContain('translateX(-50%)')
     expect(card).not.toMatch(/\.tray__section--open/)
+  })
+
+  it('★ 浮窗即"展开"：盒内动作判据认 popupCardId（托盘删掉后这些能力不能被带走）', () => {
+    const store = read('src/stores/containers.ts')
+    expect(store).toContain(
+      'const focusedCardId = computed<string | null>(() => popupCardId.value ?? cardOpenId.value)',
+    )
+    // 五处判据（管哪些盒 / 卡名 / 卡方 / 要不要开盒内动作窗 / 能否拆分取用）都改读焦点卡；
+    // 只剩切方清理那一处还直接读 `cardOpenId`
+    const rawReads = store.split('const id = cardOpenId.value').length - 1
+    expect(rawReads).toBe(1)
+  })
+
+  it('★ 浮窗打开地图外盒后，拆分取用那条"显式请求 → 盒内动作窗"仍可走通', () => {
+    const { containers } = stores()
+    expect(containers.openCardNeedsWindow).toBe(false)
+
+    containers.setPopupCard('axis-offboard')
+    expect(containers.openCardSide).toBe('axis')
+    // 地图外盒不"开浮窗就弹窗"，要贴图上那枚按钮显式请求
+    expect(containers.openCardNeedsWindow).toBe(false)
+    expect(containers.requestCardWindow()).toBe(true)
+    expect(containers.openCardNeedsWindow).toBe(true)
+
+    containers.setPopupCard(null)
+    expect(containers.openCardNeedsWindow).toBe(false)
+  })
+
+  it('★ 浮窗打开死亡堆 ⇒ 盒内动作只给死亡堆那几个盒（过滤跟着焦点卡走）', () => {
+    const { containers } = stores()
+    containers.setPopupCard('axis-dead-pile')
+    expect(containers.openCardBoxKinds).toContain('deadPile')
+    expect(containers.openCardName).toBe('轴心死人堆')
+    containers.setPopupCard(null)
+    expect(containers.openCardBoxKinds).toBeNull()
+  })
+
+  it('★ 共用运力记录轨：开浮窗不顶出会话框（卡面本身就是那两条轨）', () => {
+    const { containers } = stores()
+    containers.setPopupCard('rail-sea-cap')
+    expect(containers.openCardNeedsWindow).toBe(false)
+    containers.setPopupCard(null)
+    expect(containers.openCardNeedsWindow).toBe(false)
   })
 })

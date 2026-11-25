@@ -91,8 +91,13 @@ describe('界面硬伤：源码守卫', () => {
     expect(table).toContain('gt__rail-group')
     expect(table).toContain('boxRailGroups')
     expect(table).toContain('containers.setPopupCard(card.id)')
-    // 盒组必须排在抽屉列之前（「压在最上」）
-    expect(table.indexOf('boxRailGroups')).toBeLessThan(table.indexOf('gt__rail-main'))
+    // 盒组必须排在抽屉列之前（「压在最上」）—— 必须在**模板切片**里比，直接比全文会被
+    // script 里的解构（`useBoxRail()`）抢先命中，断言恒真等于没守
+    const railTemplate = table.slice(table.indexOf('<nav class="gt__rail"'))
+    expect(railTemplate).toContain('boxRailGroups')
+    expect(railTemplate.indexOf('boxRailGroups')).toBeLessThan(
+      railTemplate.indexOf('gt__rail-main'),
+    )
     // 抽屉列排除设置；栏底三枚按 存档 / 设置 / 撤销 排
     expect(table).toContain("drawers.filter((item) => item.id !== 'settings')")
     const save = table.indexOf('aria-label="存档 / 读档"')
