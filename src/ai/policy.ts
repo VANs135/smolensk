@@ -593,8 +593,9 @@ export const AI_ACTION_KINDS = [
 export type AiActionKind = (typeof AI_ACTION_KINDS)[number]
 
 /** 编译期对账（`[X] extends [never]` 防条件类型分发）：漏列一个 kind ⇒ 本行赋值失败 */
-const aiActionKindsCovered: [Exclude<AiAction['kind'], AiActionKind>] extends [never] ? true : never =
-  true
+const aiActionKindsCovered: [Exclude<AiAction['kind'], AiActionKind>] extends [never]
+  ? true
+  : never = true
 /** 上面那行的载体（导出以免被 `noUnusedLocals` 判为未使用；值恒为 `true`） */
 export const AI_ACTION_KINDS_COVERED = aiActionKindsCovered
 

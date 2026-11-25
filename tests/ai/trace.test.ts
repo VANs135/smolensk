@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { createAiMemory, runAiStep, snapshotOf, type AiContext } from '@/ai/driver'
-import {
-  AI_ACTION_KINDS,
-  AI_ACTION_KINDS_COVERED,
-  isAiAction,
-  type AiAction,
-} from '@/ai/policy'
+import { AI_ACTION_KINDS, AI_ACTION_KINDS_COVERED, isAiAction, type AiAction } from '@/ai/policy'
 import { AI_IO_VERSION, serializeObservation, type AiStepRecord } from '@/ai/trace'
 
 import { fresh } from '../flows/flow-harness'
@@ -79,9 +74,9 @@ describe('AI 动作全集与判型', () => {
 
   it('isAiAction 只判结构：未知 kind / 非对象一律拒绝', () => {
     expect(isAiAction({ kind: 'advance' })).toBe(true)
-    expect(isAiAction({ kind: 'combatOptions', retreatHexes: 1, lossPoints: 0, ignoreOptions: false })).toBe(
-      true,
-    )
+    expect(
+      isAiAction({ kind: 'combatOptions', retreatHexes: 1, lossPoints: 0, ignoreOptions: false }),
+    ).toBe(true)
     expect(isAiAction({ kind: 'bogus' })).toBe(false)
     expect(isAiAction({})).toBe(false)
     expect(isAiAction(null)).toBe(false)
