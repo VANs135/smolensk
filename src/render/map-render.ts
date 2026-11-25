@@ -13,6 +13,7 @@ import {
   hexsideCanvasSegment,
   isBoardHex,
 } from './map-layout'
+import { HEX_CHIP_ANCHORS, HEX_CHIP_SIZE_RATIO, HEX_CHIP_SLOT_STEP } from './hex-chips'
 import {
   counterImages,
   constructionMarkerImageUrl,
@@ -27,14 +28,7 @@ import {
   type Size,
   type ViewportTransform,
 } from './viewport'
-import {
-  FACILITY_CORNER,
-  FACILITY_SLOT_STEP,
-  FACILITY_TOKEN_SIZE_RATIO,
-  drawMovementOverlay,
-  overlayHexKey,
-  type MovementOverlay,
-} from './token-layer'
+import { drawMovementOverlay, overlayHexKey, type MovementOverlay } from './token-layer'
 /**
  * 地图绘制（C2 地图渲染与视口）——Canvas 2D，纯绘制 + 只读数据
  *
@@ -84,23 +78,23 @@ export const GRID_LINE_SCREEN_PX = 1
  * 用户 2026-09-16 #2：工事压在最上层 ⇒ 不能把堆叠盖死（盖住就点不到）。0.7 是「一眼看见」
  * 与「不挡印值」之间的取值（原 0.86 且居中，改后缩到 0.7 并移到右上角内沿）。
  */
-export const HEDGEHOG_TEXTURE_RATIO = 0.7
+export const HEDGEHOG_TEXTURE_RATIO = HEX_CHIP_SIZE_RATIO
 
-/** 工事贴图/角标相对格心偏移（沿右上 45° 方向，单位＝R 的倍数） */
-export const HEDGEHOG_CORNER_OFFSET = 0.42
+/** 印刷工事贴图相对格心的固定槽位（右下；单位＝R 的倍数，全表见 `hex-chips`） */
+export const HEDGEHOG_CORNER_OFFSET = HEX_CHIP_ANCHORS.printedHedgehog
 
 /** 工事贴图不透明度（半透明，让下面的算子轮廓仍可辨） */
 export const HEDGEHOG_TEXTURE_ALPHA = 0.92
 
 /**
- * 专规 3.5：**建造标记**（桥 / 简易机场）＝**设施贴片**的画法
+ * 专规 3.5：**建造标记**（桥 / 简易机场）＝格内小贴片之一
  *
- * 2026-11-26 用户第二次裁定：「不要这么大，和设施一样小，并且放格子边缘位置」。
- *   · 尺寸/落位直接复用 `token-layer` 的设施口径（`FACILITY_TOKEN_SIZE_RATIO`=0.28R、
- *     `FACILITY_CORNER`=左下内沿、同格多枚沿 `FACILITY_SLOT_STEP` 向右排开）——
- *     SP / 运输点 / 空军基地那些设施就是这个尺，建造标记属于同一类"格上事实"；
+ * 2026-11-26 用户裁定链：「和设施一样小、放格子边缘」→ 再「统一小贴图尺寸、每样固定位置」。
+ *   · 尺寸＝`HEX_CHIP_SIZE_RATIO`（0.28R，与 HQ / 设施 / 占领标记 / 通用标记同一枚尺）；
+ *   · 落位＝`HEX_CHIP_ANCHORS.construction`（**下中**内沿，不占设施用的左下）；
+ *   · 同格多枚沿 `HEX_CHIP_SLOT_STEP` 向右排开；
  *   · 图仍用素材库正式算子面 `Ge_Air_Strip-Bridge_F.png`（桥 / 简易机场共用一面），
- *     只是缩到设施尺；贴图未就绪时退回同尺寸方块 + 桥/机；
+ *     贴图未就绪时退回同尺寸方块 + 桥/机；
  *   · 仍不进 `tokens`：不参与命中测试/堆叠展开/选中。
  */
 
@@ -121,15 +115,21 @@ export interface ConstructionMarkerBadge {
 }
 
 /**
- * 5.0c：**控制标记**的显示比例（相对外接圆半径 R）
+ * 5.0c：**控制标记**（相对外接圆半径 R 的显示比例与固定槽位）
  *
- * 与工事同一套纪律（不盖住堆叠印值），但**位置相反**（工事在右上、它把在左上）⇒
- * 两枚标记可以同格共存而不打架。取值比工事略小：它是"归属"的提示，不必抢印值的位置。
+ * 2026-11-26 统一：尺寸并入格内小贴片统一尺 `HEX_CHIP_SIZE_RATIO`（原 0.6R 独自一档，
+ * 比设施大出一倍多，同格并排时明显参差）；落位＝`hex-chips` 的**左上**槽位，
+ * 与右下印刷工事、上中通用标记、左下设施各占一处，互不压盖。
  */
-export const CONTROL_MARKER_RATIO = 0.6
+export const CONTROL_MARKER_RATIO = HEX_CHIP_SIZE_RATIO
+export const CONTROL_CORNER = HEX_CHIP_ANCHORS.control
 
-/** 13.3d：通用地图标记的显示比例（相对外接圆半径 R；画在格心右下角内沿） */
-export const MAP_MARKER_RATIO = 0.5
+/** 13.3d：通用地图标记（铁路端头等）的显示比例与固定槽位（上中内沿） */
+export const MAP_MARKER_RATIO = HEX_CHIP_SIZE_RATIO
+export const MAP_MARKER_CORNER = HEX_CHIP_ANCHORS.mapMarker
+
+/** 专规 3.5：建造标记的固定槽位（下中内沿） */
+export const CONSTRUCTION_CORNER = HEX_CHIP_ANCHORS.construction
 
 /**
  * 地图绘制的**图层顺序**（自下而上）—— 唯一出处
@@ -754,7 +754,7 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
    */
   if (layers.hedgehogs) {
     const hedgehogs = visiblePrintedHedgehogs(viewport, viewSize)
-    const badgeRadius = HEX_RADIUS_PX * 0.24
+    const badgeRadius = (HEX_RADIUS_PX * HEX_CHIP_SIZE_RATIO) / 2
     const fontPx = badgeRadius / scale
     ctx.font = `${fontPx.toFixed(1)}px ui-monospace, monospace`
     ctx.textAlign = 'center'
@@ -764,8 +764,8 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
     for (const item of hedgehogs) {
       const hexCenter = hexCanvasPoint({ col: item.col, row: item.row })
       const center = {
-        x: hexCenter.x + HEX_RADIUS_PX * HEDGEHOG_CORNER_OFFSET,
-        y: hexCenter.y - HEX_RADIUS_PX * HEDGEHOG_CORNER_OFFSET,
+        x: hexCenter.x + HEX_RADIUS_PX * HEDGEHOG_CORNER_OFFSET.x,
+        y: hexCenter.y + HEX_RADIUS_PX * HEDGEHOG_CORNER_OFFSET.y,
       }
       const textureUrl = hedgehogTextureUrl(item.level)
       const texture = textureUrl === null ? null : counterImages.get(textureUrl)
@@ -789,14 +789,14 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
    *
    * 用户口径：「把这两个标记做到剧本用到的胜利格上，F 是苏联控制、B 是轴心控制，根据控制方
    * 显示对应面，且该标记**钉死**在胜利点**无法选中**，标记更换为根据胜利点归属权变更**自动**进行」。
-   *   · 画在格的**左上角内沿**（工事在右上角 ⇒ 两者同时出现也不打架）；
-   *   · 大小 0.6R、不透明（它是"这块地归谁"的规则事实，不该像工事那样半透明看不清）；
+   *   · 画在格的**左上角内沿**（工事在右下、通用标记在上中 ⇒ 同格并存也不打架）；
+   *   · 尺寸与设施 / HQ 同一枚尺（`HEX_CHIP_SIZE_RATIO`）、不透明（它是"这块地归谁"的规则事实）；
    *   · **不是算子**：它不进 `tokens`，故不参与命中测试、不参与堆叠展开、也永远不会被选中；
    *   · 贴图未就绪时退回「方块 + 攻/守首字」（苏/轴），颜色的语义与正式标记一致。
    */
   if (layers.control) {
     const markers = options.controlMarkers ?? []
-    const badgeSide = HEX_RADIUS_PX * 0.42
+    const badgeSide = HEX_RADIUS_PX * CONTROL_MARKER_RATIO
     const badgeFontPx = (badgeSide * 0.62) / scale
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -804,8 +804,8 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
       if (!isBoardHex(marker.hex)) continue
       const hexCenter = hexCanvasPoint(marker.hex)
       const center = {
-        x: hexCenter.x - HEX_RADIUS_PX * HEDGEHOG_CORNER_OFFSET,
-        y: hexCenter.y - HEX_RADIUS_PX * HEDGEHOG_CORNER_OFFSET,
+        x: hexCenter.x + HEX_RADIUS_PX * CONTROL_CORNER.x,
+        y: hexCenter.y + HEX_RADIUS_PX * CONTROL_CORNER.y,
       }
       const url = controlMarkerImageUrl(marker.side)
       const texture = counterImages.get(url)
@@ -828,7 +828,8 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
   /*
    * ⑩′ 13.3d：**通用地图标记**（铁路端头 `mk-38` 等）
    *
-   *   · 画在格的**右下角内沿**（右上工事、左上控制、左下建造 ⇒ 四角互不打架）；
+   *   · 画在格的**上中内沿**（左上控制、右下工事、左下建造 ⇒ 四处互不打架）；
+   *   · 尺寸与设施 / HQ / 控制标记同一枚尺（`HEX_CHIP_SIZE_RATIO`）；
    *   · 贴图就绪时直接画 `markers.json` 的图（如 `Neutral_Railhead.png`）；
    *   · 未就绪时退回「深灰方块 + 端」，不让标记凭空消失；
    *   · **不是算子**：不进 `tokens`，不参与命中测试与堆叠展开。
@@ -843,8 +844,8 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
       if (!isBoardHex(piece.hex)) continue
       const hexCenter = hexCanvasPoint(piece.hex)
       const center = {
-        x: hexCenter.x + HEX_RADIUS_PX * HEDGEHOG_CORNER_OFFSET,
-        y: hexCenter.y + HEX_RADIUS_PX * HEDGEHOG_CORNER_OFFSET,
+        x: hexCenter.x + HEX_RADIUS_PX * MAP_MARKER_CORNER.x,
+        y: hexCenter.y + HEX_RADIUS_PX * MAP_MARKER_CORNER.y,
       }
       const texture = counterImages.get(markerTextureUrl(piece.image))
       if (texture !== null) {
@@ -871,10 +872,11 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
   /*
    * ⑪ 专规 3.5：**建造标记**（桥 / 简易机场）—— 压在最上层，按**设施贴片**画
    *
-   * 用户口径（2026-11-26 第二次）：「不要这么大，和设施一样小，并且放格子边缘位置」。
+   * 用户口径（2026-11-26 第二次）：「不要这么大，和设施一样小，并且放格子边缘位置」；
+   * 2026-11-26 第三次：并入 `hex-chips` 的**统一尺 + 固定槽位**（下中）。
    *   · 图＝素材库正式算子面 `Ge_Air_Strip-Bridge_F.png`（桥与简易机场共用同一面）；
-   *   · 尺寸/落位＝**设施贴片**（`FACILITY_TOKEN_SIZE_RATIO`=0.28R、格左下内沿、
-   *     同格多枚沿 `FACILITY_SLOT_STEP` 向右排开）—— 与 SP / 运输点 / 空军基地那些贴片同尺；
+   *   · 尺寸＝`HEX_CHIP_SIZE_RATIO`（0.28R，与 HQ / 设施 / 占领标记 / 通用标记同一枚尺）；
+   *   · 落位＝`HEX_CHIP_ANCHORS.construction`（**右下**内沿，不占设施用的左下、不压格心），同格多枚沿 `HEX_CHIP_SLOT_STEP` 向右；
    *   · 仍**不是算子**：不进 `tokens`，故不参与命中测试/堆叠展开/选中；
    *   · 贴图未就绪时退回「同尺寸方块 + 桥/机」，颜色语义由 `MAP_PALETTE` 给。
    */
@@ -963,14 +965,14 @@ export function canDraw(viewSize: Size): boolean {
  * 专规 3.5：建造标记 → 设施贴片投影（**纯函数**，绘制与测试共用同一处口径）
  *
  * 只有落在**图内格**的标记才画（与工事/控制标记同一纪律）。
- *   · 尺寸＝设施尺 `FACILITY_TOKEN_SIZE_RATIO × R`（SP / 运输点 / 空军基地那些贴片同尺）；
- *   · 落位＝格的**左下内沿** `FACILITY_CORNER × R`（不压格心堆叠的印值）；
- *   · 同格多枚沿 `FACILITY_SLOT_STEP` 向右依次排开（与设施同一条排布纪律）。
+ *   · 尺寸＝`HEX_CHIP_SIZE_RATIO × R`（与 HQ / 设施 / 占领 / 通用标记同一枚尺）；
+ *   · 落位＝`HEX_CHIP_ANCHORS.construction × R`（**右下**内沿，不占设施用的左下、不压格心）；
+ *   · 同格多枚沿 `HEX_CHIP_SLOT_STEP` 向右依次排开。
  */
 export function constructionMarkerBadges(
   markers: readonly ConstructionMarkerPiece[],
 ): ConstructionMarkerBadge[] {
-  const side = HEX_RADIUS_PX * FACILITY_TOKEN_SIZE_RATIO
+  const side = HEX_RADIUS_PX * HEX_CHIP_SIZE_RATIO
   const usedSlots = new Map<string, number>()
   const badges: ConstructionMarkerBadge[] = []
   for (const marker of markers) {
@@ -983,8 +985,8 @@ export function constructionMarkerBadges(
       kind: marker.kind,
       hex: marker.hex,
       center: {
-        x: hexCenter.x + HEX_RADIUS_PX * (FACILITY_CORNER.x + slot * FACILITY_SLOT_STEP),
-        y: hexCenter.y + HEX_RADIUS_PX * FACILITY_CORNER.y,
+        x: hexCenter.x + HEX_RADIUS_PX * (CONSTRUCTION_CORNER.x + slot * HEX_CHIP_SLOT_STEP),
+        y: hexCenter.y + HEX_RADIUS_PX * CONSTRUCTION_CORNER.y,
       },
       side,
     })

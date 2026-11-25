@@ -1,6 +1,7 @@
 import type { HexRef, Side } from '@/data'
 
 import { HEX_COL_SPACING_PX, HEX_RADIUS_PX, hexCanvasCorners, hexCanvasPoint } from './map-layout'
+import { HEX_CHIP_ANCHORS, HEX_CHIP_SIZE_RATIO, HEX_CHIP_SLOT_STEP } from './hex-chips'
 import {
   counterHitSize,
   hitStackFan,
@@ -1482,24 +1483,26 @@ export function isFacilityToken(token: UnitToken): boolean {
 }
 
 /**
- * 批 E：**格子标记层的固定角位**（用户 2026-11-16）
+ * 格子标记层：**六处固定槽位**（用户 2026-11-16；2026-11-26 统一尺）
  *
- *   · **左下**＝设施（机场 / SP / 工事）：缩小常显，不参与扇面分页；
- *   · **左上**＝占领标记（在 `map-render` 的 `controlMarkers` 层，本模块不画）；
+ *   · **左下**＝设施（机场 / SP / 工事）：统一尺常显，不参与扇面分页；
+ *   · **左上**＝占领标记、**上中**＝通用地图标记、**右上**＝印刷工事、**右下**＝建造标记
+ *     （都在 `map-render` 的各层，本模块不画）；
  *   · **左中**＝HQ；
- *   · **右上**＝堆叠枚数角标（`drawStackBadge`）。
+ *   · 堆叠枚数角标钉在顶牌算子自己的右上角（随算子走，不占格子槽位）。
  *
- * 四处都用「外接圆半径 R 的倍数」定位，故缩放时相对关系不变；数值区间已由
- * `tests/render/ui-ux-batchE-hex-markers.test.ts` 钉死（四者矩形互不相交）。
+ * 尺寸与锚点全部来自 `hex-chips`（`HEX_CHIP_SIZE_RATIO` / `HEX_CHIP_ANCHORS`），
+ * 不在这里另立一套数值；数值区间已由 `tests/render/ui-ux-batchE-hex-markers.test.ts`
+ * 与 `tests/render/hex-chips.test.ts` 钉死（六者矩形互不相交）。
  */
-export const FACILITY_CORNER = { x: -0.42, y: 0.46 } as const
+export const FACILITY_CORNER = HEX_CHIP_ANCHORS.facility
 /** 同格多枚设施沿左下角**向右**依次排开（步长也是 R 的倍数） */
-export const FACILITY_SLOT_STEP = 0.22
-/** 设施边长（R 的倍数）——比算子（约 0.68R）小，常显也不挡印值 */
-export const FACILITY_TOKEN_SIZE_RATIO = 0.28
-/** HQ 标记中心（左中）与边长（R 的倍数） */
-export const HQ_BADGE_CORNER = { x: -0.52, y: 0 } as const
-export const HQ_BADGE_RATIO = 0.24
+export const FACILITY_SLOT_STEP = HEX_CHIP_SLOT_STEP
+/** 设施边长（R 的倍数）——与 HQ / 占领标记同一个尺 */
+export const FACILITY_TOKEN_SIZE_RATIO = HEX_CHIP_SIZE_RATIO
+/** HQ 标记中心（左中）与边长（R 的倍数，与设施同一个尺） */
+export const HQ_BADGE_CORNER = HEX_CHIP_ANCHORS.hq
+export const HQ_BADGE_RATIO = HEX_CHIP_SIZE_RATIO
 
 /**
  * 批 I（用户 2026-11-16 返修）：**扣兵力 / DG 是单位自身状态，锚定在各自算子身上**

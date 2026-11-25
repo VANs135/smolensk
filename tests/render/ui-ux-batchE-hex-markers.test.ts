@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { HexRef } from '@/data'
 import { HEX_RADIUS_PX, hexCanvasPoint } from '@/render/map-layout'
+import { CONTROL_CORNER, CONTROL_MARKER_RATIO } from '@/render/map-render'
 import {
   FACILITY_CORNER,
   FACILITY_SLOT_STEP,
@@ -102,10 +103,13 @@ describe('批 E：设施固定左下角、常显', () => {
       { x: facilityView.centerX, y: facilityView.centerY },
       HEX_RADIUS_PX * FACILITY_TOKEN_SIZE_RATIO,
     )
-    // 占领标记：与 map-render 的 CONTROL_MARKER_RATIO / HEDGEHOG_CORNER_OFFSET 同口径（0.6R、左上 0.42R）
+    // 占领标记：与 map-render 同口径（统一小贴片尺、`HEX_CHIP_ANCHORS.control` 左上）
     const control = rectOf(
-      { x: center.x - HEX_RADIUS_PX * 0.42, y: center.y - HEX_RADIUS_PX * 0.42 },
-      HEX_RADIUS_PX * 0.6,
+      {
+        x: center.x + HEX_RADIUS_PX * CONTROL_CORNER.x,
+        y: center.y + HEX_RADIUS_PX * CONTROL_CORNER.y,
+      },
+      HEX_RADIUS_PX * CONTROL_MARKER_RATIO,
     )
     const hqView = hqBadgeView(HEX)
     const hq = rectOf({ x: hqView.centerX, y: hqView.centerY }, HEX_RADIUS_PX * HQ_BADGE_RATIO)
