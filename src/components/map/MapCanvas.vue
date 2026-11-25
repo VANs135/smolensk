@@ -1082,6 +1082,19 @@ watch(
   { deep: true },
 )
 
+/*
+ * 标记层三个 prop（控制标记 / 工事 / 端头）在 `drawMap` 里也是每帧从 props 读的
+ * （见上方 `drawMap({ … controlMarkers, constructionMarkers, markers })`），但这三个
+ * 原先**没有** watch ⇒ 只有「标记账本变了、算子却没动」时不重绘：手工撤销换轨、
+ * 阶段回补额度、仅端头标记变化，画面都会停在旧的端头／工事位置。
+ * 用户 2026-11-26 报的「端头没跟上」经复现属 13.3g-D 额度（非本缺口），但这一层
+ * 刷新缺口是真的，补上以免下次以「端头卡住」的形式骗人。deep：标记数组由上层
+ * computed 重建，也有原地 push 的工事记录，两种都要接住。
+ */
+watch(() => props.markers, scheduleRender, { deep: true })
+watch(() => props.controlMarkers, scheduleRender, { deep: true })
+watch(() => props.constructionMarkers, scheduleRender, { deep: true })
+
 /** 缩放百分比（供工具条显示） */
 const scalePercent = computed(() => Math.round(viewport.value.scale * 100))
 </script>
