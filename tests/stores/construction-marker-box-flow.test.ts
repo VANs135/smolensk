@@ -132,6 +132,8 @@ describe('批 D 切片 2：建造标记（标记盒 → 二选一 → 点图落�
     expect(panel).toContain('v-model="workbench.constructionMarkerKind"')
     expect(panel).toContain('workbench.useConstructionMarkerNow(')
     expect(panel).toContain('workbench.constructionMarkerKind,')
+    // 只读右栏（only="info"）不得冒动作窗的错误行 ⇒ 错误行必须收在 actsMarker 内
+    expect(panel).toContain('v-if="actsMarker && workbench.constructionMarkerErrorLine !== null"')
     // 会话框那一段也走同一份状态
     const box = readFileSync('src/components/containers/ContainersPanel.vue', 'utf8')
     expect(box).toContain("workbench.armConstructionMarkerNow('bridge')")
@@ -179,6 +181,27 @@ describe('批 D 切片 2：建造标记（标记盒 → 二选一 → 点图落�
     })
     // 落位成功 ⇒ 收起"已拾起"的高亮
     expect(workbench.constructionMarkerPicked).toBe(false)
+  })
+
+  it('★ 预检与落盘同源：空格 / 已移动时先报“还差”，不再先给主按钮', () => {
+    const workbench = stores.workbench
+    const unit = place(workbench, 'a1', CORE_HEX)
+    workbench.setPhase('movement' as ConsolePhase)
+    goToActionStep(workbench, 'move.construction')
+
+    workbench.armConstructionMarkerNow('bridge')
+    expect(workbench.pickHexFor(CORE_HEX)).toBe(true)
+    expect(workbench.constructionMarkerPlaceMissing).toBeNull()
+
+    // 目标格只有格式合法、但没有轴方战斗单位 ⇒ 主按钮前应先说还差什么
+    const empty = neighbor(CORE_HEX, HEX_DIRECTIONS[0]!)
+    workbench.constructionMarkerHexText = `${empty.col}.${empty.row}`
+    expect(workbench.constructionMarkerPlaceMissing).toContain('目标格需有轴方战斗单位')
+
+    // 恢复目标格，但本阶段已有单位移动（3.5 要求单位移动之前）⇒ 也应先拦住
+    workbench.constructionMarkerHexText = `${CORE_HEX.col}.${CORE_HEX.row}`
+    unit.mpSpent = 1
+    expect(workbench.constructionMarkerPlaceMissing).toContain('本阶段已有单位移动')
   })
 
   it('★ 专用规则：桥与简易机场都能落（kind 逐次可改），且**枚数用尽后被拒**', () => {

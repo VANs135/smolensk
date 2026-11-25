@@ -390,6 +390,7 @@
   "constructionMarkerKind",
   "constructionMarkerPicked",
   "constructionMarkerPieces",
+  "constructionMarkerPlaceMissing",
   "constructionMarkerTargetHex",
   "constructionMarkers",
   "constructionPayDumps",

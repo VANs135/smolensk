@@ -20018,6 +20018,35 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   )
 
   /**
+   * 专规 3.5：主按钮出现前还差什么（与 `useConstructionMarkerNow` 的闸门同源）
+   *
+   * 修前只判"有枚数 + 目标格格式对"：空格/无轴方战斗单位、本阶段已移动、空运货物在途
+   * 都仍会先出现主按钮，点下去才被引擎拒。这里把窗口与标记盒共用的预检收进 store。
+   */
+  const constructionMarkerPlaceMissing = computed<string | null>(() => {
+    if (!actionAllowedNow('move.construction')) return '还差：当前环节不能放置建造标记（3.5）'
+    if (constructionMarkers.value <= 0) return '还差：标记盒里没有可用枚数（专规 3.5）'
+    const target = constructionMarkerTargetHex.value
+    if (target === null) return '还差：先「点地图选格」'
+    if (
+      units.value.some((unit) => hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase))
+    ) {
+      return '还差：本阶段已有单位移动（3.5）'
+    }
+    if (airUnitCargoManifest.value.some((item) => item.fate === 'aboard')) {
+      return '还差：空运货物在途（3.5）'
+    }
+    if (
+      !units.value.some(
+        (unit) => unit.side === 'axis' && unit.isCombat && sameHex(unit.hex, target),
+      )
+    ) {
+      return '还差：目标格需有轴方战斗单位（3.5）'
+    }
+    return null
+  })
+
+  /**
    * 专规 3.5：**苏方战斗单位进入**建造标记格 ⇒ 该标记被摧毁（**不可重建**：枚数不退）
    *
    * 「entered the hex」不限定进入方式 ⇒ 所有"把单位放到某格"的写点都调它：
@@ -22923,6 +22952,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     constructionMarkerError,
     constructionMarkerTargetHex,
     constructionMarkerErrorLine,
+    constructionMarkerPlaceMissing,
     // 批 D 切片 2（专规 3.5）：二选一与"已拾起"是 **store 字段**（盒内会话框与面板共用同一份）
     constructionMarkerKind,
     constructionMarkerPicked,

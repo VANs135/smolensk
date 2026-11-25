@@ -1104,7 +1104,7 @@ function boxAircraft(side: Side) {
         </BaseButton>
         <BaseButton
           v-if="
-            workbench.constructionMarkerPicked && workbench.constructionMarkerTargetHex !== null
+            workbench.constructionMarkerPicked && workbench.constructionMarkerPlaceMissing === null
           "
           variant="primary"
           size="sm"
@@ -1117,6 +1117,9 @@ function boxAircraft(side: Side) {
         >
           放置建设标记（3.5）
         </BaseButton>
+        <span v-else-if="workbench.constructionMarkerPicked" class="num">{{
+          workbench.constructionMarkerPlaceMissing
+        }}</span>
       </div>
       <p v-if="workbench.constructionMarkerErrorLine !== null" class="bad">
         <BaseTag kind="danger">{{ workbench.constructionMarkerError?.rule }}</BaseTag>

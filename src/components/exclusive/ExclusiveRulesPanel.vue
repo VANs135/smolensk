@@ -150,12 +150,8 @@ const showHedgehogReduce = computed(
 
 /** 专规 3.5：本面板是否是"右键开出来的落位窗"（窗里不再给二选一，操作已由菜单定死） */
 const markerWindow = computed(() => props.only === 'marker')
-/** 专规 3.5：落位主按钮出现前还差什么（null ＝ 可以出现） */
-const markerPlaceMissing = computed<string | null>(() => {
-  if (workbench.constructionMarkers <= 0) return '还差：标记盒里没有可用枚数（专规 3.5）'
-  if (workbench.constructionMarkerTargetHex === null) return '还差：先「点地图选格」'
-  return null
-})
+/** 专规 3.5：落位主按钮出现前还差什么（null ＝ 可以出现；与落盘闸门同源） */
+const markerPlaceMissing = computed<string | null>(() => workbench.constructionMarkerPlaceMissing)
 
 /** 专规 2.1a：已关闭的补给源（当日） */
 const closedSources = computed(() =>
@@ -891,7 +887,7 @@ const compactPanzer = computed(() => props.only === 'panzer')
           <span v-else class="num">{{ markerPlaceMissing }}</span>
         </template>
       </div>
-      <p v-if="workbench.constructionMarkerErrorLine !== null" class="bad">
+      <p v-if="actsMarker && workbench.constructionMarkerErrorLine !== null" class="bad">
         <BaseTag kind="danger">{{ workbench.constructionMarkerError?.rule }}</BaseTag>
         {{ workbench.constructionMarkerErrorLine }}
       </p>
