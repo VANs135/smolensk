@@ -27,7 +27,12 @@ import {
 
 import { useGameSessionStore } from './session'
 import { useWorkbenchStore } from './workbench'
-import { airCombatRatingOf, supplyStatusOf, type ConsoleUnit } from './workbench-model'
+import {
+  airCombatRatingOf,
+  supplyStatusOf,
+  type ConsoleAirUnit,
+  type ConsoleUnit,
+} from './workbench-model'
 
 /**
  * 切方与信息展示纪律（W7 C13）
@@ -239,27 +244,45 @@ export const useHotseatStore = defineStore('hotseat', () => {
     }
   }
 
-  /** 该格的空中算子（4.8b E / 4.9a 的「最上方激活飞机」） */
-  function fogAirUnitsAt(hex: HexRef): FogUnitView[] {
-    return workbench.onMapAirUnits
-      .filter((air) => sameHex(air.hex, hex))
-      .map((air) => ({
-        id: air.instanceId,
-        side: air.side,
-        name: air.name,
-        kind: 'air' as const,
-        isCombat: false,
-        attackCapable: false,
-        inCombatMode: false,
-        projectsZoc: false,
-        airStatus: air.airStatus,
-      }))
+  /** 一架飞机的战雾视图（4.8b E / 4.9a 的「最上方激活飞机」） */
+  function fogAirView(air: ConsoleAirUnit): FogUnitView {
+    return {
+      id: air.instanceId,
+      side: air.side,
+      name: air.name,
+      kind: 'air' as const,
+      isCombat: false,
+      attackCapable: false,
+      inCombatMode: false,
+      projectsZoc: false,
+      airStatus: air.airStatus,
+    }
   }
+
+  /**
+   * 档2性能：按格索引战雾视图
+   *
+   * `fogUnitsAt` 原实现每查一格都 `workbench.units.filter(...)` 全表扫描；`fogVisibleTokens`
+   * 对每一枚敌牌各查一次其所在格，347 枚/百格时单步约 18ms。
+   * 这里一次建 `格 -> 视图[]`，查询 O(1)；任一单位的战雾字段变化时 computed 整体重建，
+   * 仍是 347 次 `toFogUnit`，但不再有 O(枚数 × 格数) 的扫描。
+   */
+  const fogUnitsByHex = computed<ReadonlyMap<string, FogUnitView[]>>(() => {
+    const byHex = new Map<string, FogUnitView[]>()
+    const push = (hex: HexRef, view: FogUnitView): void => {
+      const key = `${hex.col}.${hex.row}`
+      const list = byHex.get(key)
+      if (list === undefined) byHex.set(key, [view])
+      else list.push(view)
+    }
+    for (const unit of workbench.units) push(unit.hex, toFogUnit(unit))
+    for (const air of workbench.onMapAirUnits) push(air.hex, fogAirView(air))
+    return byHex
+  })
 
   /** 该格的战雾视图序列（地面先、飞机后 —— 4.8b E 要求激活飞机在所有地面单位之上） */
   function fogUnitsAt(hex: HexRef): FogUnitView[] {
-    const ground = workbench.units.filter((unit) => sameHex(unit.hex, hex)).map(toFogUnit)
-    return [...ground, ...fogAirUnitsAt(hex)]
+    return fogUnitsByHex.value.get(`${hex.col}.${hex.row}`) ?? []
   }
 
   /** 图上全部有算子的格（渲染与提示遍历用） */

@@ -1028,6 +1028,7 @@ export function bridgedHexesBySide(
 /** 构造移动上下文（B7）；地图事实用产品数据的默认实现 */
 export function buildMoveContext(input: {
   units: readonly ConsoleUnit[]
+  unitViews?: readonly MoveUnitView[] // 档1性能：按单位缓存的视图；须与 units 一一对应（hex 仍由本函数克隆）
   activeSide: Side
   phase: MoveContext['phase']
   /** 专规 1.1b：双方的安全边缘格（作为补给源的地图边格）——敌方地面单位不得进入 */
@@ -1087,17 +1088,16 @@ export function buildMoveContext(input: {
    */
   playAreaHexes?: readonly HexRef[]
 }): MoveContext {
-  // 性能优化 A：上下文必须是**plain 快照**——原样搬运 Pinia 的 `hex` 引用会让 BFS 每一步读
-  // `hex.col/row` 都走 Vue 响应式 Proxy（实测占移动会话 362ms）。这里一律克隆为普通对象。
+  // 性能优化 A：上下文必须是 plain 快照——原样搬运 Pinia 的 `hex` 会让 BFS 每一步都走 Vue Proxy。
   const plain = (hex: HexRef): HexRef => ({ col: hex.col, row: hex.row })
+  const viewOf = (unit: ConsoleUnit) =>
+    toMoveUnitView(unit, { scenarioMaFactor: input.maFactorOf?.(unit) ?? 1 })
+  const unitViews = input.unitViews ?? input.units.map(viewOf)
   return {
     phase: input.phase,
     activeSide: input.activeSide,
     map: createMapFacts(),
-    units: input.units.map((unit) => {
-      const view = toMoveUnitView(unit, { scenarioMaFactor: input.maFactorOf?.(unit) ?? 1 })
-      return view.hex === null ? view : { ...view, hex: plain(view.hex) }
-    }),
+    units: unitViews.map((view) => (view.hex === null ? view : { ...view, hex: plain(view.hex) })),
     ...(input.safeEdgeHexesBySide === undefined
       ? {}
       : {

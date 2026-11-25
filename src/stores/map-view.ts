@@ -3,7 +3,7 @@ import { hasUnitMovementThisPhase } from '@/engine/rules/air-unit-movement'
 import { pendingRetreatPlan } from '@/engine/rules/engagement-progress'
 import { SP_TO_T } from '@/engine/rules/supply'
 import { holdingsToT } from '@/engine/rules/supply-interaction'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, type ComputedRef } from 'vue'
 
 import type { HexRef, Side } from '@/data'
 import { markers } from '@/data'
@@ -328,6 +328,14 @@ export const useMapViewStore = defineStore('mapView', () => {
   /* ────────────────────────────── 画什么 ────────────────────────────── */
 
   /**
+   * 档2性能：战雾裁剪的敌方 wrapper 也按 token 缓存
+   *
+   * 轴方视角下苏军单位是敌方，`fogVisibleTokens` 每换一格都会为每一枚可见敌牌展开新对象；
+   * token 本身由 `groundTokenBase` 稳定复用，故 wrapper 亦可按原 token 复用。
+   */
+  const fogTokenCache = new WeakMap<UnitToken, UnitToken>()
+
+  /**
    * W7 C13（4.9a）：把算子令牌按战雾纪律裁剪
    *
    * 敌方只保留现有投影准许的公开令牌，并清除内部行动状态。
@@ -348,14 +356,19 @@ export const useMapViewStore = defineStore('mapView', () => {
         allowedByHex.set(key, allowed)
       }
       if (!allowed.includes(token.id)) continue
-      visible.push({
-        ...token,
-        hiddenStack: true,
-        selected: false,
-        ended: false,
-        awaitingFuel: false,
-        fuelled: false,
-      })
+      let hidden = fogTokenCache.get(token)
+      if (hidden === undefined) {
+        hidden = {
+          ...token,
+          hiddenStack: true,
+          selected: false,
+          ended: false,
+          awaitingFuel: false,
+          fuelled: false,
+        }
+        fogTokenCache.set(token, hidden)
+      }
+      visible.push(hidden)
     }
     return visible
   }
@@ -390,6 +403,107 @@ export const useMapViewStore = defineStore('mapView', () => {
     return state !== null && state.finished !== true && state.step === 'advance'
   }
 
+  /**
+   * 档2性能：地面令牌的**单位级缓存**
+   *
+   * 换一格时 `overlay.tokens` 会重建，原实现为 284 枚令牌各拼一遍 `tip`/`projectsZoc`，
+   * 单步约 22 ms；且每个对象都是新的 ⇒ 视图层 284 个令牌组件全部重绘。
+   * 这里把只随单位/回合变化的字段做成按单位的 computed：未动过的单位命中缓存、对象引用不变，
+   * 视图可跳过；选中环/战斗角色/灰显这类**随交互变**的字段仍在外层按当前状态补，
+   * 不动 `moveInteraction`/`stackSelection` 等高频引用，避免一换格就把全部令牌打回重算。
+   */
+  const groundTokenBaseCache = new WeakMap<ConsoleUnit, ComputedRef<UnitToken>>()
+  /**
+   * 选中环/战斗角色/灰显的 wrapper 也按单位缓存：对方视角下本方算子整批 `disabled`，
+   * 若每次求值都重新展开，仍会把整批 token 换成新对象，视图照旧全量重绘。
+   */
+  const groundTokenDynamicCache = new WeakMap<
+    ConsoleUnit,
+    {
+      base: UnitToken
+      selected: boolean
+      role: 'attacker' | 'defender' | null
+      disabled: boolean
+      combatEmphasis: boolean
+      token: UnitToken
+    }
+  >()
+
+  function groundTokenBase(unit: ConsoleUnit): UnitToken {
+    const viewer = hotseat.viewerSide
+    const oos = supplyStatusOf(unit, workbench.turn).marked
+    const mode = MODE_LETTER[unit.mode.mode] ?? '?'
+    /*
+     * 2026-11-10（用户队列 #4）：悬停浮现全称与关键信息；角标只印 `A-AR-MA`。
+     * 12.6 的「实时线与标记不一致」行**不再烘进 tip**（2026-11-26 卡顿），
+     * 由 `supplyLineHintAt(hex)` 在悬停那一格现算；这里只留不读补给图的即时项。
+     */
+    const tip = [
+      unit.name,
+      `A ${unit.raw.attack} / AR ${unit.raw.ar} / MA ${unit.raw.ma}`,
+      `${unit.side === 'axis' ? '轴心' : '苏联'} · ${mode}`,
+      unit.mode.dg ? 'DG' : null,
+      oos ? '断补' : null,
+      unit.movementEnded ? '本回合移动已结束' : null,
+    ]
+      .filter((part): part is string => part !== null)
+      .join('｜')
+    return {
+      id: unit.instanceId,
+      hex: unit.hex,
+      side: unit.side,
+      combat: unit.isCombat,
+      projectsZoc: projectsZoc({
+        hex: unit.hex,
+        side: unit.side,
+        attackCapable: unit.attackCapable,
+        inCombatMode: exertsZoc(unit.mode),
+        hasTraceSupply: !oos,
+      }),
+      unitId: unit.unitId,
+      face: unit.mode.orientation,
+      images: unit.images,
+      noncombatKind: unit.noncombatKind ?? null,
+      replKind: unit.replKind ?? null,
+      spPoints: unit.noncombatSp,
+      noncombatLevel: unit.noncombatLevel,
+      loadedSpT: unit.loadedSpT,
+      carriedSp:
+        unit.side === viewer && unit.noncombatKind === 'transport_point' && unit.loadedSpT > 0
+          ? unit.loadedSpT / SP_TO_T
+          : null,
+      label: `${unit.raw.attack}-${unit.raw.ar}-${unit.raw.ma}`,
+      name: unit.name,
+      tip,
+      selected: false,
+      combatRole: null,
+      combatEmphasis: false,
+      disabled: false,
+      ended: unit.movementEnded,
+      modeLetter: mode,
+      dg: unit.mode.dg,
+      awaitingFuel: needsFuelOf(unit) && !unit.fuelled,
+      fuelled: unit.fuelled,
+      exploit: unit.mode.exploit === true,
+      strat: unit.mode.mode === 'strat',
+      outOfSupply: oos,
+      stepsLost:
+        unit.side === viewer && unit.printedSteps > 1
+          ? Math.max(0, unit.printedSteps - unit.steps)
+          : 0,
+      hq: unit.side === hotseat.viewerSide && isHqUnit(unit),
+    }
+  }
+
+  function groundTokenBaseOf(unit: ConsoleUnit): UnitToken {
+    let view = groundTokenBaseCache.get(unit)
+    if (view === undefined) {
+      view = computed(() => groundTokenBase(unit))
+      groundTokenBaseCache.set(unit, view)
+    }
+    return view.value
+  }
+
   function groundTokens(): UnitToken[] {
     const movingIds = workbench.moveInteraction?.unitIds ?? []
     /*
@@ -406,6 +520,9 @@ export const useMapViewStore = defineStore('mapView', () => {
      */
     const advancing = isAdvancingNow()
     const advanceIds = advancing ? workbench.combatInputs.advanceUnitIds : []
+    const viewer = hotseat.viewerSide
+    const participating = participatingIds.value
+    const stackIds = stackSelection.value
     return (
       workbench.units
         /*
@@ -421,118 +538,54 @@ export const useMapViewStore = defineStore('mapView', () => {
             !spDumpHexes.value.has(`${unit.side}:${unit.hex.col},${unit.hex.row}`),
         )
         .map((unit: ConsoleUnit) => {
-          const oos = supplyStatusOf(unit, workbench.turn).marked
-          const mode = MODE_LETTER[unit.mode.mode] ?? '?'
-          /*
-           * 2026-11-10（用户队列 #4）：**悬停浮现全称与关键信息**。
-           * 角标只印 `A-AR-MA`，看不出全称、模式与状态；把这几项拼进 `tip`，
-           * 地图悬停复用既有 `hoverTip`（`MapCanvas.tokenTipAt`），不另起浮层。
-           * 4.9a：敌方顶牌本来就允许看模式 / DG / 断补，印值也是盘面可见 ⇒ 不额外裁剪。
-           */
-          const tip = [
-            unit.name,
-            `A ${unit.raw.attack} / AR ${unit.raw.ar} / MA ${unit.raw.ma}`,
-            `${unit.side === 'axis' ? '轴心' : '苏联'} · ${mode}`,
-            unit.mode.dg ? 'DG' : null,
-            oos ? '断补' : null,
-            /*
-             * 12.6 的「实时线与标记不一致」一行**不再烘进 tip**（2026-11-26 卡顿）：
-             * 那是**悬停才需要**的信息，烘进 token 就等于每次盘面变化都替每一枚本方算子算一遍
-             * `supplyFacts`（含两侧 `railSupplyPath` 的铁路 BFS）⇒ 单步约 175 ms。
-             * 现在改由 `supplyLineHintAt(hex)` 在悬停那一格现算（见下方导出），
-             * tip 只留"不读补给图"的即时项。
-             */
-            unit.movementEnded ? '本回合移动已结束' : null,
-          ]
-            .filter((part): part is string => part !== null)
-            .join('｜')
+          const base = groundTokenBaseOf(unit)
           // 参与角色：只认"本方 ∧ 在构成里"；同格未参战者恒 null
           const role: 'attacker' | 'defender' | null =
-            combatNow === null || unit.side !== hotseat.viewerSide
+            combatNow === null || unit.side !== viewer
               ? null
               : combatNow.composition.attackerIds.includes(unit.instanceId)
                 ? 'attacker'
                 : combatNow.composition.defenderIds.includes(unit.instanceId)
                   ? 'defender'
                   : null
-          return {
-            id: unit.instanceId,
-            hex: unit.hex,
-            side: unit.side,
-            combat: unit.isCombat,
-            projectsZoc: projectsZoc({
-              hex: unit.hex,
-              side: unit.side,
-              attackCapable: unit.attackCapable,
-              inCombatMode: exertsZoc(unit.mode),
-              hasTraceSupply: !oos,
-            }),
-            // 算子图：按 unitId + 当前朝向取正面/背面（5.4a 图随朝向那一面）
-            unitId: unit.unitId,
-            face: unit.mode.orientation,
-            images: unit.images,
-            // 计数类非战斗算子的图**随当前数值走**（SP 点数 / 机场等级 / 工事等级）
-            noncombatKind: unit.noncombatKind ?? null,
-            // 13.5：补员算子（数据层写 `isCombat: true`，靠这一项与真正的战斗单位分开）
-            replKind: unit.replKind ?? null,
-            spPoints: unit.noncombatSp,
-            noncombatLevel: unit.noncombatLevel,
-            // 13.2f/h：编内卡车的面＝**装载**（满载 1F / 空载 1），与朝向无关（13.0：运输单位只有移动模式）
-            loadedSpT: unit.loadedSpT,
-            /*
-             * 用户 2026-11-15（实机试玩第 2 项）：运输点数载着补给时，令牌上沿挂「载 N SP」标记。
-             * 只给对方可见（4.9a：敌方顶牌不透露装载）；空载不出现 —— 不可用项不出现。
-             */
-            carriedSp:
-              unit.side === hotseat.viewerSide &&
-              unit.noncombatKind === 'transport_point' &&
-              unit.loadedSpT > 0
-                ? unit.loadedSpT / SP_TO_T
-                : null,
-            label: `${unit.raw.attack}-${unit.raw.ar}-${unit.raw.ma}`,
-            name: unit.name,
-            tip,
-            // 选中环：移动交互中的那些 + **就地展开里被选中的那些**（用户 2026-09-16 #1：点某一枚即切换）
-            // 4.9a：只给本方 —— 敌方令牌不挂选中环（否则守方会看到"进攻方被选中"）
-            selected:
-              unit.side === hotseat.viewerSide &&
-              (advancing
-                ? advanceIds.includes(unit.instanceId)
-                : movingIds.includes(unit.instanceId) ||
-                  stackSelection.value.includes(unit.instanceId)),
-            // 9.x 战斗中段：本方参战枚的角色环（当前结算步强调的一侧加粗）
+          const selected =
+            unit.side === viewer &&
+            (advancing
+              ? advanceIds.includes(unit.instanceId)
+              : movingIds.includes(unit.instanceId) || stackIds.includes(unit.instanceId))
+          const disabled = unit.side === viewer && !participating.has(unit.instanceId)
+          const combatEmphasis = role !== null && role === emphasis
+          /*
+           * 高频换格只改「选中环 / 战斗角色 / 灰显」三项；其余字段由 base 缓存。
+           * 三项都没变时直接复用同一对象 ⇒ 视图层不会把 284 枚令牌全部重绘。
+           */
+          if (!selected && role === null && !disabled) return base
+          const previous = groundTokenDynamicCache.get(unit)
+          if (
+            previous !== undefined &&
+            previous.base === base &&
+            previous.selected === selected &&
+            previous.role === role &&
+            previous.disabled === disabled &&
+            previous.combatEmphasis === combatEmphasis
+          )
+            return previous.token
+          const token = {
+            ...base,
+            selected,
             combatRole: role,
-            combatEmphasis: role !== null && role === emphasis,
-            /*
-             * B9：**本环节不参与的本方算子灰显**（用户口径「不参与环节的算子无法点击」的可视半边）。
-             * 判据是 store 里那条唯一谓词（participatingIds ← workbench.participatingUnitIds ← participatesIn），
-             * 本处只做"取集合 + 按敌我过滤"；敌方算子不标灰（4.9a 已把它限制成只读，再灰一层看不出敌我）。
-             */
-            disabled:
-              unit.side === hotseat.viewerSide && !participatingIds.value.has(unit.instanceId),
-            ended: unit.movementEnded,
-            modeLetter: mode,
-            dg: unit.mode.dg,
-            awaitingFuel: needsFuelOf(unit) && !unit.fuelled,
-            fuelled: unit.fuelled,
-            // 模式/状态贴图（5.8 战略 / 5.9 进击 / 12.8 断补）
-            exploit: unit.mode.exploit === true,
-            strat: unit.mode.mode === 'strat',
-            outOfSupply: oos,
-            /*
-             * 3.6e / 4.6：多军力单位的**军力损失**角标 `(-N)`（N ＝ 印值军力 − 当前军力）。
-             * ★ 4.9a 字段级裁剪：**敌方那一枚不给**（「无权获取部队储备或损失军力的情况」）⇒
-             *   非当前方的算子这里恒为 0 —— 可见顶牌只透露模式 / DG / 断补，**不透露**掉到几成。
-             *   「多军力」按**印值**判（3.2d：算子上印有 RE 数值），不是按当前军力判：
-             *   已经打残到 1 的师仍是多军力单位，照样要标 `(-N)`。
-             */
-            stepsLost:
-              unit.side === hotseat.viewerSide && unit.printedSteps > 1
-                ? Math.max(0, unit.printedSteps - unit.steps)
-                : 0,
-            // 批 E：指挥部标记（只给本方；4.9a 不额外透露敌方哪一格是 HQ）
-            hq: unit.side === hotseat.viewerSide && isHqUnit(unit),
+            combatEmphasis,
+            disabled,
           }
+          groundTokenDynamicCache.set(unit, {
+            base,
+            selected,
+            role,
+            disabled,
+            combatEmphasis,
+            token,
+          })
+          return token
         })
     )
   }
@@ -797,8 +850,12 @@ export const useMapViewStore = defineStore('mapView', () => {
     })
   }
 
-  const groundAndAir = computed(() => fogVisibleTokens([...groundTokens(), ...airTokens()]))
-  const visibleTokens = computed(() => [...spDumpTokens(), ...groundAndAir.value])
+  const airTokensCache = computed(() => airTokens())
+  const spDumpTokensCache = computed(() => spDumpTokens())
+  const groundAndAir = computed(() =>
+    fogVisibleTokens([...groundTokens(), ...airTokensCache.value]),
+  )
+  const visibleTokens = computed(() => [...spDumpTokensCache.value, ...groundAndAir.value])
 
   /**
    * 12.6：**悬停那一枚**的「实时补给线与标记不一致」提示（只给本方；敌方不泄）

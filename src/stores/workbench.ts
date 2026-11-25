@@ -449,6 +449,7 @@ import {
   type PendingHexPick,
 } from './workbench-model'
 import { actionFamilyRowsAt } from './action-families'
+import { createMoveUnitViewCache } from './move-unit-view-cache'
 /**
  * 骨架操作台（U0）状态
  *
@@ -2718,9 +2719,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   })
 
   /** 当前移动上下文（每次派生都重建，保证与摆子/切方一致） */
+  const moveUnitViewOf = createMoveUnitViewCache(sovietFirstTurnMaFactor)
   const moveContext = computed(() =>
     buildMoveContext({
       units: units.value,
+      unitViews: units.value.map((unit) => moveUnitViewOf(unit)),
       activeSide: activeSide.value,
       // F 战斗段与 A 整备段没有移动环节（2.2）：映射为 movement 只为给 computed 一个合法值，
       // 移动本身已在 moveOneStep 里按非移动段明确拦下。
@@ -2731,10 +2734,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       bridgedHexesBySide: bridgedHexes.value,
       // 13.8b 末句例外：因模式/朝向切换而失能的单位，可用**自己架的桥**离开该格
       ownBridgeHexByUnitId: ownBridgeHexByUnitId.value,
-      /*
-       * 5.8b：战略模式下属单位须停在有追溯补给的格；注入与 12.6 同一份事实。
-       * ★ 2026-11-26：`.value` 会立即建 supplyFacts（含铁路 BFS）；无战略单位时按需注入。
-       */
+      // 5.8b：战略模式须停在有追溯补给的格；仅盘上有战略单位时注入，避免普通换格白算 supplyFacts。
       ...(units.value.some((unit) => unit.mode.mode === 'strat')
         ? { traceSupplyAt: (hex: HexRef, side: Side) => traceSupplyAtForMove.value(hex, side) }
         : {}),
