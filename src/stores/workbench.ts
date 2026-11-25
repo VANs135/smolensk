@@ -20787,7 +20787,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (rebuildPickUnitId.value === unitId && rebuildPickRow.value !== '') {
       return rebuildPickRow.value
     }
-    return rebuildSuggestionFor(unitId) ?? ''
+    const suggested = rebuildSuggestionFor(unitId) ?? ''
+    if (suggested !== '') return suggested
+    /*
+     * 13.5f / 专规 1.6 Notes：飞机只经 Repl Table 重建，行键恒为 `Aircraft`。
+     * `rebuildCandidates` 按 13.5b/1.6c 的口径**不收**飞机条目（避免与专规 1.6c 手牌重复消费），
+     * 故这里补一条兜底——让「行键」对飞机与对地面单位给同一个答案，AI 训练侧不必再抄一份常量。
+     */
+    const entry =
+      deadPile.value.find((item) => item.instanceId === unitId) ??
+      units.value.find((item) => item.instanceId === unitId)
+    return entry !== undefined && isAirDeadPileEntry(entry) ? 'Aircraft' : ''
   }
 
   /**
@@ -22461,6 +22471,14 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     selectTransportLoadPointNow,
     convertRailGaugeNow,
     gaugeConversionsThisPhase,
+    /*
+     * 13.3f-B 的**读侧投影**（AI 训练 / 外部只读观察用）：返回该单位本阶段最近一次
+     * 「移动进入」且此刻仍停留的格（地面逐格或 13.3e 铁路抵达皆可），否则 null。
+     * ★ 只给事实、不给判断：换轨的完整判据（闸门 / 阶段 / 额度 / EZOC / 战斗模式）仍在
+     *   `convertRailGaugeNow` 与 `applyRailConversion` 里；拿到非 null 不等于可换轨。
+     */
+    justEnteredHexOf: justEnteredHexFor,
+
     // 13.3g-A：本阶段"刚换过轨的格"与"走过这些格的铁路修理单位"（"不能接力"的判据来源）
     convertedHexesThisPhase,
     railMovedNewTrackThisPhase,
@@ -22596,6 +22614,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ownUnitsOnMap,
     rebuildCandidates,
     rebuildCandidateHexes,
+    /*
+     * 13.5 / 13.5a 的**读侧投影**（AI 训练 / 外部只读观察用）：
+     *   · `rebuildRowOf`：该枚此刻该走重建表的哪一行（玩家已选优先，否则按算子类型自动映射；映射不出为 ''）
+     *   · `rebuildHqHexes`：可作重建圆心的友方 HQ 格（战斗模式，或 DG 朝战斗面）
+     * ★ 只给事实：能否重建仍由 `rebuildLegalHexes`（逐格引擎预演）与各 `rebuild*Now` 入口判。
+     */
+    rebuildRowOf: rebuildRowFor,
+    rebuildHqHexes,
+
     combatNkvdDefenders,
     combatNkvdForcedLosses,
     setScenarioId,

@@ -267,18 +267,36 @@ function rebuildSnapshotOf(
     if (memory.rebuildUnitIds.includes(unit.instanceId)) continue
     if ('aircraftId' in unit) {
       if (w.canRebuildAircraftIntoBoxNow(unit.instanceId))
-        return { unitId: unit.instanceId, kind: 'airBox', hex: null, consolidate: null }
+        return {
+          unitId: unit.instanceId,
+          kind: 'airBox',
+          hex: null,
+          consolidate: null,
+          rebuildRow: w.rebuildRowOf(unit.instanceId),
+        }
       memory.rebuildUnitIds.push(unit.instanceId)
       continue
     }
     if (w.canRebuildOnMapNow(unit.instanceId))
-      return { unitId: unit.instanceId, kind: 'onMap', hex: null, consolidate: null }
+      return {
+        unitId: unit.instanceId,
+        kind: 'onMap',
+        hex: null,
+        consolidate: null,
+        rebuildRow: w.rebuildRowOf(unit.instanceId),
+      }
     const legal = sortByLoad(
       w.rebuildLegalHexes(unit.instanceId).map((hex) => ({ col: hex.col, row: hex.row })),
       loadMapOf(w),
     )
     if (legal.length > 0 && legal[0] !== undefined)
-      return { unitId: unit.instanceId, kind: 'dead', hex: legal[0], consolidate: null }
+      return {
+        unitId: unit.instanceId,
+        kind: 'dead',
+        hex: legal[0],
+        consolidate: null,
+        rebuildRow: w.rebuildRowOf(unit.instanceId),
+      }
     memory.rebuildUnitIds.push(unit.instanceId)
   }
   if (!memory.consolidated) {
@@ -304,6 +322,7 @@ function rebuildSnapshotOf(
           kind: 'onMap',
           hex: null,
           consolidate: { keepId: first.instanceId, removeId: partners[0] },
+          rebuildRow: '',
         }
     }
   }
@@ -568,36 +587,29 @@ function moveBranchOf(
   }
 
   // 13.3f：本阶段刚走入非本方轨距格的铁路修理单位（换轨是「移动进入」的副产品）
+  // ★ 「刚进入」不在 AI 这边复刻 `steps`：改读 store 的只读投影 `justEnteredHexOf`
+  //   （地面逐格与 13.3e 铁路抵达同一份会计，且自动回退与交互收起都已在 store 里处理）。
   let gauge: AiMoveBranchSnapshot['gauge'] = null
   if (moveActive && hasStepped && can.has('move.railConversion')) {
-    const steps = w.moveInteraction?.steps ?? []
-    const last = steps
-      .slice()
-      .reverse()
-      .find((step) => step.kind === 'step')
-    if (last !== undefined) {
-      for (const id of w.moveInteraction?.unitIds ?? []) {
-        if (memory.gaugeTried.includes(id)) continue
-        const facts = w.railMoveFacts
-        if (!facts.isRailRepairUnit(id)) continue
-        // 13.3g-A「不能接力」：本阶段已用铁路走过刚换轨的格 ⇒ 不再换轨
-        if (
-          w.railMovedNewTrackThisPhase.some(
-            (item) => item.instanceId === id && item.hexes.length > 0,
-          )
-        )
-          continue
-        const unit = w.units.find((item) => item.instanceId === id)
-        if (unit === undefined || !last.movedIds.includes(id)) continue
-        if (unit.hex.col !== last.to.col || unit.hex.row !== last.to.row) continue
-        if (!facts.hasRail(unit.hex) || facts.railGaugeUsable(unit.hex, side)) continue
-        if (facts.inEnemyZoc(unit.hex, side)) continue
-        // 13.3g-D / 5.10e：须战斗模式，或 DG 但朝向战斗面
-        if (!(unit.mode.mode === 'combat' || (unit.mode.dg && unit.mode.orientation === 'combat')))
-          continue
-        gauge = { unitId: id, hex: { col: unit.hex.col, row: unit.hex.row } }
-        break
-      }
+    for (const id of w.moveInteraction?.unitIds ?? []) {
+      if (memory.gaugeTried.includes(id)) continue
+      const facts = w.railMoveFacts
+      if (!facts.isRailRepairUnit(id)) continue
+      // 13.3g-A「不能接力」：本阶段已用铁路走过刚换轨的格 ⇒ 不再换轨
+      if (
+        w.railMovedNewTrackThisPhase.some((item) => item.instanceId === id && item.hexes.length > 0)
+      )
+        continue
+      const unit = w.units.find((item) => item.instanceId === id)
+      if (unit === undefined) continue
+      if (w.justEnteredHexOf(id, unit.hex) === null) continue
+      if (!facts.hasRail(unit.hex) || facts.railGaugeUsable(unit.hex, side)) continue
+      if (facts.inEnemyZoc(unit.hex, side)) continue
+      // 13.3g-D / 5.10e：须战斗模式，或 DG 但朝向战斗面
+      if (!(unit.mode.mode === 'combat' || (unit.mode.dg && unit.mode.orientation === 'combat')))
+        continue
+      gauge = { unitId: id, hex: { col: unit.hex.col, row: unit.hex.row } }
+      break
     }
   }
 
@@ -924,6 +936,12 @@ function snapshotOf(ctx: AiContext, memory: AiMemory, controlMode: AiControlMode
     },
     overstack: { active: overstackActive },
     setupRemaining,
+    /*
+     * 13.5a：重建圆心（友方、战斗模式或 DG 朝战斗面）——**读侧投影直取 store**（`rebuildHqHexes`），
+     * 不在这里另算一份「2 格内」的圆心集合；距离判据由 `rebuildLegalHexes` 的引擎预演负责。
+     */
+    rebuildHqHexes: w.rebuildHqHexes.map((hex) => ({ col: hex.col, row: hex.row })),
+
     control: {
       // 反应段按 `acting`（非行进方）算控制权；其余阶段两者同值
       activeSide: aiControlsSide(controlMode, acting),

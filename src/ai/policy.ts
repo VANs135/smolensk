@@ -258,6 +258,11 @@ export interface AiRebuildSnapshot {
   /** 死亡堆重建的合法落点（`kind==='dead'` 时必有） */
   hex: AiHex | null
   consolidate: { keepId: string; removeId: string } | null
+  /**
+   * 13.5：该枚此刻该走的重建表行键（玩家已选优先，否则按类型自动映射；映射不出 / 整编为 `''`）
+   * ★ 只给事实（`rebuildRowOf`）；扣哪一行补员仍由 `rebuildUnitNow` 判。
+   */
+  rebuildRow: string
 }
 
 export interface AiSnapshot {
@@ -295,6 +300,11 @@ export interface AiSnapshot {
   overstack: { active: boolean }
   /** 初设还剩多少枚待落位（自由项 + 飞机） */
   setupRemaining: number
+  /**
+   * 13.5a：可作重建圆心的友方 HQ 格（战斗模式，或 DG 朝战斗面）——只给事实，不代替判据
+   * （合法格仍由 `rebuildLegalHexes` 的逐格引擎预演给出）
+   */
+  rebuildHqHexes: readonly AiHex[]
   /** B4：控制权（见 `AiControlSnapshot`） */
   control: AiControlSnapshot
   setupInProgress: boolean

@@ -56,6 +56,7 @@ function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
     },
     overstack: { active: false },
     setupRemaining: 0,
+    rebuildHqHexes: [],
     control: {
       activeSide: true,
       responder: true,

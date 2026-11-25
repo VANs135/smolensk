@@ -54,6 +54,7 @@ function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
     },
     overstack: { active: false },
     setupRemaining: 0,
+    rebuildHqHexes: [],
     control: {
       activeSide: true,
       responder: true,
@@ -317,7 +318,13 @@ describe('批 1 AI 行政链：纯决策', () => {
           ...rebuildBase,
           rein: {
             ...snap().rein,
-            rebuild: { unitId: 'u1', kind: 'dead', hex: { col: 7, row: 7 }, consolidate: null },
+            rebuild: {
+              unitId: 'u1',
+              kind: 'dead',
+              hex: { col: 7, row: 7 },
+              consolidate: null,
+              rebuildRow: 'Infantry',
+            },
           },
         }),
       ),
@@ -333,6 +340,7 @@ describe('批 1 AI 行政链：纯决策', () => {
               kind: 'onMap',
               hex: null,
               consolidate: { keepId: 'u2', removeId: 'u3' },
+              rebuildRow: '',
             },
           },
         }),
