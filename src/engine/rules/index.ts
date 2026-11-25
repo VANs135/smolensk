@@ -23,6 +23,8 @@ export * from './terrain'
 export * from './combat'
 export * from './battle'
 export * from './combat-interaction'
+// 9.10a / 9.12：「退 k 格 + 吃 N-k 点」的候选切分（AI 与提交兜底共用）
+export * from './combat-option-split'
 export * from './special-combat'
 export * from './barrage'
 export * from './barrage-interaction'
