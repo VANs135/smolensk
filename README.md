@@ -22,6 +22,16 @@ npm run pack
 npm run serve:dist
 ```
 
+改「看得见的东西」（贴图、标记、面板样式）时的实证入口——开生产包、进对局、按需操作并截图：
+
+```bash
+npx vite build --outDir dist
+npm run probe:ui -- --out shot.png            # 另见 --preset / --zoom / --steps
+```
+
+`npm run check` 是本地门禁；push / PR 上由 `.github/workflows/check.yml` 跑同一条命令。
+AI 对打回归（`tests/flows/ai-selfplay.test.ts`）当前有既有红灯、已从门禁排除，见 `docs/开发文档.md` §7.3。
+
 ## 安卓安装包（触摸屏）
 
 盘面是手机/平板上"摊开看"的东西，故提供安卓壳：Capacitor 包一层 WebView，
