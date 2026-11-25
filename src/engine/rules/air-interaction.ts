@@ -1783,6 +1783,7 @@ export function planAirBaseReduction(input: {
 
   const verdict = canReduceAirBase({
     phase: input.phase,
+    baseHex: input.base.hex,
     currentLevel: input.base.level,
     operatingUnits: input.operatingUnits,
     alreadyReducedThisPhase: input.base.reducedThisPhase === true,

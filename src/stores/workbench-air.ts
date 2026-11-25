@@ -55,6 +55,7 @@ import {
   type PendingHexPick,
   movementPhaseOf,
   engineerCapableNow,
+  constructionLegMpDistance,
 } from './workbench-model'
 import { mapLayers } from '@/data'
 import type { HexRef, Side } from '@/data'
@@ -118,6 +119,7 @@ import {
   planBaseRefit,
   planAirBaseReduction,
   planSpPayment,
+  CONSTRUCTION_RADIUS_HEXES,
   type RailFacts,
 } from '@/engine/rules'
 import type { createGroundMovementDomain } from './ground-movement'
@@ -932,21 +934,26 @@ export function createAirDomain(ports: AirDomainPorts) {
     )
   })
 
-  /** C9：某基地格内**可被指定**执行缩减的地面单位（15.4：战斗模式且本阶段未移动） */
+  /**
+   * C9：某基地**可被指定**执行缩减的地面单位
+   *
+   * 15.4 有两条资格：
+   *   · 1RE 路线：基地格内、战斗模式、本阶段未移动；
+   *   · 工程能力路线（13.8d）：具工程能力的单位可在基地格内，或 2 格步行 MP 内；DG 朝战斗面也算。
+   */
   const airReductionCandidates = computed<(baseId: string) => ConsoleUnit[]>(
     () => (baseId: string) => {
       const base = airBases.value.find((item) => item.id === baseId)
       if (base === undefined) return []
-      return units.value.filter(
-        (unit) =>
-          unit.side === base.side &&
-          unit.isCombat &&
-          // 15.4 原文要的是「**战斗模式**的单位」；只筛 `isCombat` 会把移动/预备模式也放进候选，
-          // 点下去必被引擎拒（实机踩过）。
-          unit.mode.mode === 'combat' &&
-          !hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase) &&
-          sameHex(unit.hex, base.hex),
-      )
+      return units.value.filter((unit) => {
+        if (unit.side !== base.side) return false
+        if (hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase)) return false
+        const inBaseHex = sameHex(unit.hex, base.hex)
+        if (inBaseHex && unit.mode.mode === 'combat') return true
+        if (!engineerCapableNow(unit)) return false
+        const legMp = constructionLegMpDistance(unit.hex, base.hex)
+        return legMp !== null && legMp <= CONSTRUCTION_RADIUS_HEXES
+      })
     },
   )
 
@@ -2800,7 +2807,14 @@ export function createAirDomain(ports: AirDomainPorts) {
     }
     const target = units.value.find((unit) => unit.instanceId === baseId)
     if (target === undefined) return false
-    const selected = airInputs.value.reductionUnitIds
+    /*
+     * 被指定名单可能跨基地残留（`reductionUnitIds` 是全局输入）；只取**本基地当前候选**，
+     * 防止 A 格单位缩减 B 格基地。工程兵 2 格路线由 `airReductionCandidates` 一并收进来。
+     */
+    const candidateIds = new Set(
+      airReductionCandidates.value(baseId).map((unit) => unit.instanceId),
+    )
+    const selected = airInputs.value.reductionUnitIds.filter((id) => candidateIds.has(id))
     const operatingUnits = selected
       .map((id) => units.value.find((unit) => unit.instanceId === id))
       .filter((unit): unit is ConsoleUnit => unit !== undefined)
@@ -2812,6 +2826,10 @@ export function createAirDomain(ports: AirDomainPorts) {
         engineerCapable: engineerCapableNow(unit),
         // 15.4「且不能移动」：空运也改变过位置，不能仅查地面MP。
         movedThisPhase: hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase),
+        hex: unit.hex,
+        // 13.8d：工程兵路线按步行 MP 量到目标基地的距离；非工程单位引擎只认同格。
+        legMpDistanceToBase:
+          constructionLegMpDistance(unit.hex, base.hex) ?? Number.POSITIVE_INFINITY,
       }))
     const data = acceptAir(
       planAirBaseReduction({

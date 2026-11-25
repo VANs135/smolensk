@@ -2,7 +2,7 @@ import { markers, rulesConstants } from '@/data'
 import type { HexRef, Side } from '@/data'
 
 import { fail, succeed, type RuleOutcome } from '../result-types'
-import { hexDistance } from '../hex-geometry'
+import { hexDistance, sameHex } from '../hex-geometry'
 import type { AirStatus, GamePhase, UnitMode } from '../state-types'
 import {
   AIR_MISSION_MAX_AIRCRAFT,
@@ -15,6 +15,7 @@ import {
   AIR_BASE_MIN_LEVEL,
   AIR_BASE_LEVELS_PER_TURN,
   CONSTRUCTION_MIN_BUILDER_RE,
+  CONSTRUCTION_RADIUS_HEXES,
 } from './construction'
 import { EDGE_BOX_ENTRY_MP } from './movement'
 import { AXIS_AIR_BOX_RANGE_HEXES, SOVIET_AIR_BOX_RANGE_HEXES } from './timing'
@@ -413,21 +414,31 @@ export interface AirBaseOperatingUnit {
   id: string
   /** 通规 4.6：团级当量（作业单位的 RE **合计**须 ≥ 1，除非其中有人具工程能力） */
   re: number
-  /** 15.4：该单位须处于**战斗模式** */
+  /** 15.4：该单位须处于**战斗模式**；工程能力单位按 13.8a 可 DG 朝战斗面 */
   mode: UnitMode
   /** 15.4：「且不能移动」——被指定的单位须**本阶段未移动** */
   movedThisPhase: boolean
   /** 13.8d：具工程能力者**替代**「RE 合计 ≥ 1」这条资格 */
   engineerCapable?: boolean
+  /** 单位所在格；生产路径必填。旧调用缺省时按目标格内处理（兼容既有测试/调用） */
+  hex?: HexRef
+  /**
+   * 13.8d：具工程能力单位到**目标基地**的步行 MP 距离（无视敌方 ZOC）
+   *
+   * 仅工程兵路线需要；非工程单位必须与基地同格。缺省/超 2 ⇒ 按超距拒绝。
+   */
+  legMpDistanceToBase?: number
 }
 
 export interface AirBaseReductionInput {
   /** 当前阶段（15.4：只能在移动阶段） */
   phase: GamePhase
+  /** 目标基地所在格；生产路径必填。旧调用缺省时视作所有单位均在目标格 */
+  baseHex?: HexRef
   /** 目标基地当前等级 */
   currentLevel: number
   /**
-   * 15.4：在目标格内**指定执行本次缩减的单位**（格内堆叠的一支分队）
+   * 15.4：**被指定执行本次缩减的单位**
    *
    * ★ 判读口径（用户 2026-09-13 裁定）：条文说的「1RE 的单位」＝**被指定执行作业的这些单位**（堆叠的
    *   子集），其 RE **合计 ≥ 1** 即可——不是整格全部单位、也不是要求某一个单位自身刚好 1 RE。
@@ -441,8 +452,9 @@ export interface AirBaseReductionInput {
 /**
  * 15.4 / 15.0c 空军基地缩减资格
  *
- * 条件：移动阶段；目标格内**指定的一小队单位**（RE **合计** ≥ 1，或其中有人具工程能力 13.8d）
- * **逐员**处于战斗模式且本阶段未移动；同一基地每阶段只能缩减一次；**永远不能降到低于 1 级**；缩减不耗 SP。
+ * 条件：移动阶段；**被指定的作业单位**（1RE 路线须在基地格内、逐员战斗模式且未移动，RE 合计 ≥ 1；
+ * 工程能力路线按 13.8d 可在基地格内或 2 格步行 MP 内，DG 朝战斗面也算）；同一基地每阶段只能缩减一次；
+ * **永远不能降到低于 1 级**；缩减不耗 SP。
  *
  * 成功时给出 `immobileUnitIds`：**只有这些被指定的单位**本阶段不能再移动（格内其余单位照常行动）。
  */
@@ -458,8 +470,30 @@ export function canReduceAirBase(
   // 「且不能移动」：被指定的单位逐员须本阶段未移动
   const moved = input.operatingUnits.find((unit) => unit.movedThisPhase)
   if (moved !== undefined) return fail('15.4', `reducingUnitAlreadyMoved:${moved.id}`)
-  const notCombat = input.operatingUnits.find((unit) => unit.mode !== 'combat')
-  if (notCombat !== undefined) return fail('15.4', `reducingUnitMustBeCombatMode:${notCombat.id}`)
+
+  /*
+   * 15.4 两条资格：
+   *   ① 1RE 单位：**目标基地格内**、战斗模式、未移动，RE 合计 ≥ 1；
+   *   ② 工程能力单位：按 13.8a/13.8d，可在基地格内，或在 2 格步行 MP 内；DG 朝战斗面也算。
+   * 指定名单里只要有一条不合格就整体拒绝，不静默剔人。
+   */
+  for (const unit of input.operatingUnits) {
+    const inBaseHex =
+      unit.hex === undefined || input.baseHex === undefined || sameHex(unit.hex, input.baseHex)
+    if (unit.engineerCapable === true) {
+      if (inBaseHex) continue
+      if (
+        unit.legMpDistanceToBase === undefined ||
+        unit.legMpDistanceToBase > CONSTRUCTION_RADIUS_HEXES
+      ) {
+        return fail('15.4', `reducingUnitTooFarFromBase:${unit.id}`)
+      }
+      continue
+    }
+    if (unit.mode !== 'combat') return fail('15.4', `reducingUnitMustBeCombatMode:${unit.id}`)
+    if (!inBaseHex) return fail('15.4', `reducingUnitNotInBaseHex:${unit.id}`)
+  }
+
   // 13.8d：有人具工程能力即可替代 RE 门槛；否则被指定单位的 RE 合计须 ≥ 1
   const hasEngineer = input.operatingUnits.some((unit) => unit.engineerCapable === true)
   if (!hasEngineer) {

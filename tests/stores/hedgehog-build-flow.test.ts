@@ -83,6 +83,27 @@ describe('16.0b：修建环形工事（+1 级、2 SP、被指定者本阶段不�
     expect(b!.movementEnded).toBe(true)
   })
 
+  it('改目标格后旧格 workerIds 不得继续施工（16.0b「自己所在格」）', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    store.setTurn(4)
+    const [a, b] = placeWorkers(store, `${CORE_HEX.col}.${CORE_HEX.row}`)
+    const target = neighbors(CORE_HEX)[0]!.hex
+    const dump = withDump(store, 4)
+    store.hedgehogInputs = {
+      hexText: `${target.col}.${target.row}`,
+      workerIds: [a!.instanceId, b!.instanceId],
+      payDumpId: dump.id,
+    }
+
+    expect(store.hedgehogBuildMissing).toContain('目标格勾选')
+    expect(store.buildHedgehogNow()).toBe(false)
+    expect(store.hedgehogError?.reason).toBe('noOperatingUnits')
+    expect(store.hedgehogLevelOf(target)).toBe(0)
+    expect(a!.movementEnded).toBe(false)
+    expect(b!.movementEnded).toBe(false)
+  })
+
   it('未指定任何单位 ⇒ 拒（RE 合计须 ≥ 1）', () => {
     const store = newStore()
     store.setPhase('movement')

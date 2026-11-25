@@ -353,6 +353,13 @@ function reductionItems(baseId: string): readonly CounterPickerItem[] {
   }))
 }
 
+/** 本基地选中的合法候选数（全局 reductionUnitIds 可能残留别基地的单位） */
+function reductionSelectedCount(baseId: string): number {
+  return workbench
+    .airReductionCandidates(baseId)
+    .filter((unit) => workbench.airInputs.reductionUnitIds.includes(unit.instanceId)).length
+}
+
 /**
  * B15d：**只渲染哪一段**（默认全渲染，引擎验证页照旧）
  *
@@ -436,15 +443,17 @@ const showsCapture = computed(() => at('capture'))
 const adminVisible = computed(
   () => workbench.airActive || (props.only !== null && props.only !== 'mission'),
 )
-// 2026-11-26：15.4 从单位右键进 ⇒ 只画该单位所在格的基地
+// 2026-11-26：15.4 的入口既可能来自基地格内单位（baseId＝基地），也可能来自 2 格内工程兵
+// （baseId＝目标基地、unitActionHex＝工程兵所在格）⇒ 有 baseId 时只按 baseId 过滤
 const displayedBases = computed(() => {
   const list = workbench.ownAirBases.filter(
     (base) =>
       (props.baseId === undefined || base.id === props.baseId) &&
       // 15.4「每基地每阶段一次」：本阶段已缩减的基地不再出现在缩减窗
-      (props.only !== 'reduce' || !workbench.reducedBases.some((item) => item.id === base.id)),
+      (props.only !== 'reduce' ||
+        (base.level > 1 && !workbench.reducedBases.some((item) => item.id === base.id))),
   )
-  const hex = props.only === 'reduce' ? mapView.unitActionHex : null
+  const hex = props.only === 'reduce' && props.baseId === undefined ? mapView.unitActionHex : null
   return hex === null ? list : list.filter((b) => b.hex.col === hex.col && b.hex.row === hex.row)
 })
 </script>
@@ -1278,7 +1287,7 @@ const displayedBases = computed(() => {
             <BaseButton
               v-if="
                 workbench.airReductionCandidates(base.id).length > 0 &&
-                workbench.airInputs.reductionUnitIds.length > 0
+                reductionSelectedCount(base.id) > 0
               "
               variant="primary"
               size="sm"

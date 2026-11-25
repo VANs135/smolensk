@@ -33,6 +33,7 @@
   "airCombatAttackerPlanes",
   "airCombatDefenderPlanes",
   "airCombatRoundBudget",
+  "airConstructionMissing",
   "airConstructionTask",
   "airEnemyAtTarget",
   "airEnemyPatrolZoneHexes",

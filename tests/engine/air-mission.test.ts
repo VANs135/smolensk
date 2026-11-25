@@ -378,6 +378,64 @@ describe('15.4 / 15.0c 空军基地缩减', () => {
     expect(r.ok).toBe(true)
     if (r.ok) expect(r.data.immobileUnitIds).toEqual(['eng'])
   })
+
+  it('15.4：工程兵 DG 朝战斗面、在基地格内 ⇒ 可按 13.8a/13.8d 缩减', () => {
+    const baseHex = { col: 2, row: 1 }
+    const r = canReduceAirBase({
+      ...ok,
+      baseHex,
+      operatingUnits: [
+        op({ id: 'eng-dg', re: 0.5, mode: 'combat', engineerCapable: true, hex: baseHex }),
+      ],
+    })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data.immobileUnitIds).toEqual(['eng-dg'])
+  })
+
+  it('15.4：工程兵在 2 格步行 MP 内（不必同格）⇒ 可缩减', () => {
+    const baseHex = { col: 2, row: 1 }
+    const r = canReduceAirBase({
+      ...ok,
+      baseHex,
+      operatingUnits: [
+        op({
+          id: 'eng-near',
+          re: 0.5,
+          mode: 'combat',
+          engineerCapable: true,
+          hex: { col: 2, row: 2 },
+          legMpDistanceToBase: 1,
+        }),
+      ],
+    })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data.immobileUnitIds).toEqual(['eng-near'])
+  })
+
+  it('15.4：非工程单位不在基地格内 ⇒ 拒；工程兵超 2 格 ⇒ 拒', () => {
+    const baseHex = { col: 2, row: 1 }
+    expect(
+      canReduceAirBase({
+        ...ok,
+        baseHex,
+        operatingUnits: [op({ id: 'far', hex: { col: 2, row: 2 } })],
+      }),
+    ).toMatchObject({ ok: false, reason: 'reducingUnitNotInBaseHex:far' })
+    expect(
+      canReduceAirBase({
+        ...ok,
+        baseHex,
+        operatingUnits: [
+          op({
+            id: 'eng-far',
+            engineerCapable: true,
+            hex: { col: 2, row: 3 },
+            legMpDistanceToBase: 3,
+          }),
+        ],
+      }),
+    ).toMatchObject({ ok: false, reason: 'reducingUnitTooFarFromBase:eng-far' })
+  })
 })
 
 describe('专规 1.4 地图外盒与边缘盒', () => {

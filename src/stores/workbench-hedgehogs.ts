@@ -223,6 +223,22 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
   }
 
   /**
+   * 16.0b/c 原地途径：只认**目标格内、本方**的被指定单位
+   *
+   * ★ `workerIds` 可能在改目标格后残留旧格单位（窗口只换 `hexText`）。这里按当前目标格与
+   *   当前行动方重新过滤，保证引擎收到的 `inPlaceUnits` 真的“在自己所在格”（16.0b）。
+   */
+  function hedgehogInPlaceUnitsAt(hex: HexRef | null): ConsoleUnit[] {
+    if (hex === null) return []
+    return hedgehogInputs.value.workerIds
+      .map((id) => units.value.find((unit) => unit.instanceId === id))
+      .filter(
+        (unit): unit is ConsoleUnit =>
+          unit !== undefined && unit.side === activeSide.value && sameHex(unit.hex, hex),
+      )
+  }
+
+  /**
    * 组装 16.0b/c 的执行者（两条途径，按 `hedgehogExecutorMode` 分派）
    *
    * `engineer` 途径需要目标格才能量 13.8d 的**步行 MP** 半径，故本函数收一个目标格。
@@ -231,9 +247,7 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     if (hedgehogExecutorMode.value === 'engineer') {
       return engineerExecutorFor(pickedHedgehogEngineer(), target)
     }
-    const workers = hedgehogInputs.value.workerIds
-      .map((id) => units.value.find((unit) => unit.instanceId === id))
-      .filter((unit): unit is ConsoleUnit => unit !== undefined)
+    const workers = hedgehogInPlaceUnitsAt(target)
     return {
       kind: 'inPlaceUnits',
       units: workers.map((unit) => ({
@@ -289,8 +303,40 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
   const hedgehogExecutorReady = computed<boolean>(() =>
     hedgehogUsesEngineerRoute.value
       ? pickedHedgehogEngineer() !== null
-      : hedgehogInputs.value.workerIds.length > 0,
+      : hedgehogInPlaceUnitsAt(hedgehogTargetHex.value).length > 0,
   )
+
+  /**
+   * 16.0b 预检：与 `buildHedgehogNow` 同一份引擎规则
+   *
+   * 只用于窗口的“还差”文案；不落盘、不写账本。缺目标格/执行者时返回 null，让上层给更具体的提示。
+   */
+  const hedgehogBuildPreflight = computed(() => {
+    const hex = hedgehogTargetHex.value
+    if (hex === null || !hedgehogExecutorReady.value) return null
+    const dump =
+      hedgehogInputs.value.payDumpId === null
+        ? null
+        : (dumpById(hedgehogInputs.value.payDumpId) ?? null)
+    return planHedgehogBuild({
+      side: activeSide.value,
+      date: date.value,
+      executor: constructionExecutor(hex),
+      hex: hedgehogHexState(hex),
+      availableSp: dump === null ? 0 : holdingsToT({ sp: dump.sp, t: dump.t }) / SP_TO_T,
+      ignoreOperationalLimits: session.rule4On('ignoreOperationalLimits'),
+    })
+  })
+
+  /** 16.0c 预检：与 `reduceHedgehogNow` 同一份引擎规则（缩减免费，不看付款站） */
+  const hedgehogReducePreflight = computed(() => {
+    const hex = hedgehogTargetHex.value
+    if (hex === null || !hedgehogExecutorReady.value) return null
+    return planHedgehogReduce({
+      executor: constructionExecutor(hex),
+      hex: hedgehogHexState(hex),
+    })
+  })
 
   /** 16.0b：还差什么（null ＝ 主按钮可以出现） */
   const hedgehogBuildMissing = computed<string | null>(() => {
@@ -306,6 +352,13 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
         ? '还差：指定 13.8d 的施工工程兵'
         : '还差：在目标格勾选施工小队'
     if (hedgehogInputs.value.payDumpId === null) return '还差：付款补给站（16.0b：2 SP）'
+    if (hedgehogUsesEngineerRoute.value) {
+      const gate = constructionGateNow('buildHedgehog', hedgehogEngineer.value)
+      if (gate !== null) return `还差：${ruleErrorTextOf(gate)}（${gate.rule}）`
+    }
+    const outcome = hedgehogBuildPreflight.value
+    if (outcome !== null && !outcome.ok)
+      return `还差：${ruleErrorTextOf(outcome)}（${outcome.rule}）`
     return null
   })
 
@@ -322,6 +375,13 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
       return hedgehogUsesEngineerRoute.value
         ? '还差：指定 13.8d 的施工工程兵'
         : '还差：在目标格勾选施工小队'
+    if (hedgehogUsesEngineerRoute.value) {
+      const gate = constructionGateNow('reduceHedgehog', hedgehogEngineer.value)
+      if (gate !== null) return `还差：${ruleErrorTextOf(gate)}（${gate.rule}）`
+    }
+    const outcome = hedgehogReducePreflight.value
+    if (outcome !== null && !outcome.ok)
+      return `还差：${ruleErrorTextOf(outcome)}（${outcome.rule}）`
     return null
   })
 

@@ -47,24 +47,14 @@ const selectedPayLabel = computed(() => {
   return dump === undefined ? '（已失效）' : `${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T）`
 })
 
-const targetReady = computed(() => workbench.constructionTargetHex !== null)
-const engineerReady = computed(() => workbench.constructionInputs.engineerId !== null)
-const payReady = computed(() => workbench.constructionInputs.payDumpId !== null)
-
-/** 15.3 主按钮出现前还差什么（null ＝ 可以出现） */
-const baseBuildMissing = computed<string | null>(() => {
-  if (!targetReady.value) return '还差：点地图选目标格（15.3）'
-  if (!engineerReady.value) return '还差：选施工工程兵（13.8d）'
-  if (!payReady.value) return '还差：付款补给站（15.3：1 SP/级）'
-  return null
-})
+/** 15.3 主按钮出现前还差什么（null ＝ 可以出现）；预检与落盘共用引擎判据 */
+const baseBuildMissing = computed(() => workbench.airConstructionMissing('baseBuild'))
 /** 15.2A 修建主按钮出现前还差什么 */
-const airstripBuildMissing = computed<string | null>(() => {
-  if (!targetReady.value) return '还差：点地图选目标格（15.2A）'
-  if (!engineerReady.value) return '还差：选施工工程兵（13.8d）'
-  if (!payReady.value) return '还差：付款补给站（15.2A：1 T）'
-  return null
-})
+const airstripBuildMissing = computed(() => workbench.airConstructionMissing('airstripBuild'))
+/** 15.2A 升格：逐基地问同一份预检（范围 / 一格一任务 / 付款 / 目标格都对） */
+function upgradeMissing(baseId: string): string | null {
+  return workbench.airConstructionMissing('airstripUpgrade', baseId)
+}
 /** 15.2A 升格：窗里只列指定工程兵 2 格步行 MP 内的本方简易机场；验证页列全部 */
 const upgradeCandidates = computed(() =>
   props.page
@@ -159,14 +149,14 @@ onBeforeUnmount(() => {
     <div v-for="base in upgradeCandidates" :key="`upgrade-${base.id}`" class="row">
       <BaseTag kind="warning">{{ hexLabel(base.hex) }} 简易机场</BaseTag>
       <BaseButton
-        v-if="payReady"
+        v-if="upgradeMissing(base.id) === null"
         variant="primary"
         size="sm"
         @click="workbench.upgradeAirstripNow(base.id)"
       >
         升格为一级空军基地（15.2A：3 T）
       </BaseButton>
-      <span v-else class="num">还差：付款补给站（15.2A：3 T）</span>
+      <span v-else class="num">{{ upgradeMissing(base.id) }}</span>
     </div>
   </template>
   <div class="row">

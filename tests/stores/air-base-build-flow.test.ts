@@ -11,7 +11,7 @@ import {
 } from '@/engine/rules'
 import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
 
-import { CORE_HEX, airBaseRecord, groundRecord, placeGround } from '../flows/sop-harness'
+import { CORE_HEX, NEAR_HEX, airBaseRecord, groundRecord, placeGround } from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
 
 /**
@@ -452,6 +452,59 @@ describe('15.2A / 15.2E：简易机场的修建、升格与「永不缩减」', 
     expect(store.isAirstripAt(CORE_HEX)).toBe(true)
     expect(store.lastReduction).toBeNull()
   })
+
+  it('15.4：非工程单位在别的基地格 ⇒ 不进该基地候选，不能跨格缩减', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    const worker = placePlainUnit(store, coreText, 'plain-1')
+    placeGround(store, airBaseRecord(2), CORE_HEX, 'axis', 'base-a')
+    const farBase = placeGround(store, airBaseRecord(2), NEAR_HEX, 'axis', 'base-b')
+
+    store.airInputs.reductionUnitIds = [worker.instanceId]
+    expect(
+      store
+        .airReductionCandidates(farBase.instanceId)
+        .some((unit) => unit.instanceId === worker.instanceId),
+    ).toBe(false)
+    expect(store.reduceBaseNow(farBase.instanceId)).toBe(false)
+    expect(farBase.noncombatLevel).toBe(2)
+    expect(store.lastReduction).toBeNull()
+  })
+
+  it('15.4：工程兵在相邻格（2 格步行 MP 内）⇒ 可缩减该基地', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    const engineer = placeEngineer(store, coreText, 'eng-near')
+    engineer.mode = { mode: 'combat', orientation: 'combat', dg: true, exploit: false }
+    const base = placeGround(store, airBaseRecord(2), NEAR_HEX, 'axis', 'base-near')
+
+    store.airInputs.reductionUnitIds = [engineer.instanceId]
+    expect(
+      store
+        .airReductionCandidates(base.instanceId)
+        .some((unit) => unit.instanceId === engineer.instanceId),
+    ).toBe(true)
+    expect(store.reduceBaseNow(base.instanceId)).toBe(true)
+    expect(base.noncombatLevel).toBe(1)
+    expect(engineer.movementEnded).toBe(true)
+  })
+
+  it('15.4：工程兵 DG 朝战斗面在基地格内 ⇒ 可缩减（13.8a）', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    const engineer = placeEngineer(store, coreText, 'eng-dg')
+    engineer.mode = { mode: 'combat', orientation: 'combat', dg: true, exploit: false }
+    const base = placeGround(store, airBaseRecord(2), CORE_HEX, 'axis', 'base-dg')
+
+    store.airInputs.reductionUnitIds = [engineer.instanceId]
+    expect(
+      store
+        .airReductionCandidates(base.instanceId)
+        .some((unit) => unit.instanceId === engineer.instanceId),
+    ).toBe(true)
+    expect(store.reduceBaseNow(base.instanceId)).toBe(true)
+    expect(base.noncombatLevel).toBe(1)
+  })
 })
 
 describe('13.8d / 15.3 的额度复位（换阶段 / 换回合 / 换方 / 重置）', () => {
@@ -553,5 +606,63 @@ describe('12.1b：施工费可以由**装载在运输点数上**的 SP 支付', 
     // 15.2A：建造 1T ⇒ 车上剩 3T（12.1a：1 SP = 4 T）
     expect(point.loadedSpT).toBe(SP_TO_T - 1)
     expect(point.loadedSpT).toBe(3)
+  })
+})
+
+describe('15.3 / 15.2A 主按钮预检（与落盘同一组引擎判据）', () => {
+  it('15.3：目标格是简易机场 ⇒ 预检直接指向 15.2A 的 3 T，不给 1 SP 主按钮', () => {
+    const store = newStore()
+    const engineer = placeEngineer(store, coreText)
+    const dump = withDump(store, { sp: 4, t: 1 })
+    prepare(store, { hexText: coreText, engineerId: engineer.instanceId, payDumpId: dump.id })
+    expect(store.buildAirstripNow()).toBe(true)
+    prepare(store, { hexText: coreText, engineerId: engineer.instanceId, payDumpId: dump.id })
+    expect(store.airConstructionMissing('baseBuild')).toContain('15.2A')
+    expect(store.airConstructionMissing('baseBuild')).toContain('简易机场')
+  })
+
+  it('15.3：三级基地 ⇒ 预检给出上限，不出现主按钮', () => {
+    const store = newStore()
+    const engineer = placeEngineer(store, coreText)
+    placeGround(store, airBaseRecord(AIR_BASE_MAX_LEVEL), CORE_HEX, 'axis', 'base-max')
+    const dump = withDump(store, { sp: 4 })
+    prepare(store, { hexText: coreText, engineerId: engineer.instanceId, payDumpId: dump.id })
+    expect(store.airConstructionMissing('baseBuild')).toContain('15.3')
+    expect(store.airConstructionMissing('baseBuild')).toContain(String(AIR_BASE_MAX_LEVEL))
+  })
+
+  it('15.3：目标超出 2 格步行 MP ⇒ 预检给出 13.8d 半径', () => {
+    const store = newStore()
+    const engineer = placeEngineer(store, coreText)
+    const dump = withDump(store, { sp: 4 })
+    const far = `${CORE_HEX.col + 4}.${CORE_HEX.row}`
+    prepare(store, { hexText: far, engineerId: engineer.instanceId, payDumpId: dump.id })
+    expect(store.airConstructionMissing('baseBuild')).toContain('13.8d')
+    expect(store.airConstructionMissing('baseBuild')).toContain('半径')
+  })
+
+  it('15.2A：目标格已有空中设施 ⇒ 预检给出 4.8，不覆盖原设施', () => {
+    const store = newStore()
+    const engineer = placeEngineer(store, coreText)
+    placeGround(store, airBaseRecord(2), CORE_HEX, 'axis', 'base-here')
+    const dump = withDump(store, { sp: 4, t: 8 })
+    prepare(store, { hexText: coreText, engineerId: engineer.instanceId, payDumpId: dump.id })
+    expect(store.airConstructionMissing('airstripBuild')).toContain('4.8')
+  })
+
+  it('15.2A：升格 T 不足 ⇒ 预检给出 T 不足，不出现升格按钮', () => {
+    const store = newStore()
+    const engineer = placeEngineer(store, coreText)
+    const dump = withDump(store, { sp: 0, t: AIRSTRIP_BUILD_T })
+    prepare(store, { hexText: coreText, engineerId: engineer.instanceId, payDumpId: dump.id })
+    expect(store.buildAirstripNow()).toBe(true)
+    // 换阶段清 13.8d 的一格一任务；同一工程兵可在新的移动阶段继续施工
+    store.setPhase('supply')
+    store.setPhase('movement')
+    engineer.movementEnded = false
+    engineer.mpSpent = 0
+    prepare(store, { hexText: coreText, engineerId: engineer.instanceId, payDumpId: dump.id })
+    const baseId = store.airBases[0]!.id
+    expect(store.airConstructionMissing('airstripUpgrade', baseId)).toContain('T')
   })
 })

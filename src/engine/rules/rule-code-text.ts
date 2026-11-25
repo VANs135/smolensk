@@ -531,6 +531,9 @@ export const AIR_MISSION_CODE_TEXT: Readonly<Record<string, string>> = {
   reducingUnitNotEligible: '该格没有指定执行缩减的作业单位（15.4）',
   reducingUnitAlreadyMoved: '被指定执行缩减的单位本阶段已经移动过，须不能移动（15.4）',
   reducingUnitMustBeCombatMode: '被指定执行缩减的单位须处于战斗模式（15.4）',
+  reducingUnitNotInBaseHex: '被指定执行缩减的单位不在目标基地格内（15.4）',
+  reducingUnitTooFarFromBase:
+    '具工程能力的单位距目标基地超过 2 格步行 MP，不能执行缩减（13.8d/15.4）',
   reducingUnitsReBelowMinimum: '被指定单位的 RE 合计不足 1，其中也没有具工程能力的单位（15.4）',
   // ── 专规 1.4a 图外空军盒 ──
   offMapBoxBeyondRange: '从图外空军盒出动的距离超出该盒的任务射程（专规 1.4a）',

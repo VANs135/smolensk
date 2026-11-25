@@ -2565,9 +2565,19 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
   })
 
+  const reduceTargetBaseId = ref<string | null>(null)
+
   const actionBase = computed(() => {
     const id = unitActionUnitId.value
-    return id === null ? null : (workbench.ownAirBases.find((base) => base.id === id) ?? null)
+    if (id !== null) {
+      const own = workbench.ownAirBases.find((base) => base.id === id)
+      if (own !== undefined) return own
+    }
+    // 15.4：工程兵从**相邻格**缩减基地时，目标基地不是点中的单位 id
+    const targetId = reduceTargetBaseId.value
+    return targetId === null
+      ? null
+      : (workbench.ownAirBases.find((base) => base.id === targetId) ?? null)
   })
 
   const actionBaseAircraft = computed(() => {
@@ -3028,6 +3038,29 @@ export const useMapViewStore = defineStore('mapView', () => {
       ) {
         pushEngineering('air.baseReduce', '缩减本格基地（15.4）', '15.4', 'air', 'reduce')
       }
+      /*
+       * 13.8d：工程兵可在基地格内或 2 格步行 MP 内缩减基地（15.4）。
+       * 同一格且走格内小队途径时，上面那条已经给了入口，不重复列。
+       * 这种入口的目标基地不是被点中的单位，`applyContextAction` 从 key 里取 base id。
+       */
+      if (engineerCapable && workbench.actionAllowedNow('air.baseReduce')) {
+        for (const base of workbench.ownAirBases) {
+          if (base.isAirstrip === true || base.level <= 1) continue
+          if (workbench.reducedBases.some((item) => item.id === base.id)) continue
+          if (squadEligible && baseHere?.id === base.id) continue
+          const leg = workbench.constructionLegRangeTo(unit, base.hex)
+          if (leg === null || leg > 2) continue
+          actions.push({
+            key: `air.baseReduce:${base.id}`,
+            label: `缩减 ${hexLabel(base.hex)} 基地（15.4）`,
+            rule: '15.4',
+            panel: 'air',
+            only: 'reduce',
+            group: '工程',
+            disabledReason: engBlocked,
+          })
+        }
+      }
     }
     /*
      * ④（用户 2026-11-09）：**按能力把次要动作收进右键**。
@@ -3104,6 +3137,7 @@ export const useMapViewStore = defineStore('mapView', () => {
       workbench.units.every(
         (item) => !hasUnitMovementThisPhase(item.mpSpent, item.airTransportThisPhase),
       ) &&
+      !workbench.airUnitCargoManifest.some((item) => item.fate === 'aboard') &&
       workbench.units.some((item) => item.side === 'axis' && item.isCombat === true)
     ) {
       const markerBlocked = moving ? '先结束移动' : null
@@ -3770,6 +3804,13 @@ export const useMapViewStore = defineStore('mapView', () => {
    * 逐个调用本函数，不具备的由调用方跳过。
    */
   function applyContextAction(hex: HexRef, instanceId: string, key: string): boolean {
+    /*
+     * 15.4：工程兵从相邻格缩减基地时，key 里带目标基地 id（见 `counterActionsAt` 的工程组）。
+     * 其余动作一律清空，免得上一轮的缩减目标污染下一次空军面板。
+     */
+    reduceTargetBaseId.value = key.startsWith('air.baseReduce:')
+      ? key.slice('air.baseReduce:'.length)
+      : null
     const option = counterActionsAt(hex, instanceId).find((item) => item.key === key)
     if (option === undefined || option.disabledReason !== null) return false
     /*

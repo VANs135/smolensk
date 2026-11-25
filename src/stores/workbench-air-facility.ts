@@ -213,6 +213,68 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     constructionError.value = null
   }
 
+  /**
+   * 15.3 / 15.2A 主按钮的预检：与 `buildAirBaseNow` / `buildAirstripNow` / `upgradeAirstripNow`
+   * 使用同一组引擎判据（13.8d 闸门 → 引擎 plan → 付款/目标格事实），只把失败翻成「还差」文案。
+   *
+   * 返回 null ＝ 主按钮可以出现。只读，不落盘、不写账本。
+   */
+  const airConstructionMissing = computed<
+    (task: 'baseBuild' | 'airstripBuild' | 'airstripUpgrade', baseId?: string) => string | null
+  >(() => (task, baseId) => {
+    const hex =
+      task === 'airstripUpgrade'
+        ? (deps.airBases.value.find((base) => base.id === baseId)?.hex ?? null)
+        : constructionTargetHex.value
+    if (hex === null) return '还差：点地图选目标格（15.2A / 15.3）'
+    if (task === 'airstripUpgrade' && baseId !== undefined && isConstructionMarkerAirBaseId(baseId))
+      return '还差：建造标记的简易机场不能按 15.2A 升格（专规 3.5）'
+    const engineer = pickedEngineer()
+    if (engineer === null) return '还差：选施工工程兵（13.8d）'
+    const gate = constructionGateNow(
+      task === 'baseBuild'
+        ? 'buildAirBase'
+        : task === 'airstripBuild'
+          ? 'buildAirstrip'
+          : 'upgradeAirstrip',
+      engineer,
+    )
+    if (gate !== null) return `还差：${ruleErrorTextOf(gate)}（${gate.rule}）`
+    if (constructionInputs.value.payDumpId === null) {
+      return task === 'baseBuild'
+        ? '还差：付款补给站（15.3：1 SP/级）'
+        : '还差：付款补给站（15.2A：1 T / 升格 3 T）'
+    }
+    const dump = dumpById(constructionInputs.value.payDumpId) ?? null
+    const availableT = dump === null ? 0 : holdingsToT({ sp: dump.sp, t: dump.t })
+    const executor = engineerExecutorFor(engineer, hex)
+    if (task === 'baseBuild') {
+      if (isAirstripAt(hex))
+        return '还差：该格是简易机场，升格须走 15.2A 的 3 T（不适用 15.3 的 1 SP）'
+      const outcome = planAirBaseBuild({
+        executor,
+        currentLevel: airBaseLevelAt(hex),
+        levelsBuiltThisTurn: airBaseTurnLedger.value[hexLabel(hex)] ?? 0,
+        availableSp: availableT / SP_TO_T,
+      })
+      return outcome.ok ? null : `还差：${ruleErrorTextOf(outcome)}（${outcome.rule}）`
+    }
+    if (task === 'airstripBuild') {
+      const outcome = planAirstripBuild({
+        executor,
+        hexHasAirFacility: hexHasAirFacility(hex),
+        availableT,
+      })
+      return outcome.ok ? null : `还差：${ruleErrorTextOf(outcome)}（${outcome.rule}）`
+    }
+    const outcome = planAirstripUpgrade({
+      executor,
+      hexHasAirstrip: isAirstripAt(hex),
+      availableT,
+    })
+    return outcome.ok ? null : `还差：${ruleErrorTextOf(outcome)}（${outcome.rule}）`
+  })
+
   /** 15.3：把该格的设施换成**该等级**的空军基地算子（升级＝换算子；无则新摆） */
   function placeAirBaseOperator(hex: HexRef, level: number): boolean {
     const record = airBaseRecordFor(level)
@@ -458,6 +520,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     airConstructionTask,
     constructionTargetHex,
     constructionErrorLine,
+    airConstructionMissing,
     buildAirBaseNow,
     buildAirstripNow,
     upgradeAirstripNow,
@@ -478,6 +541,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     airConstructionTask,
     constructionTargetHex,
     constructionErrorLine,
+    airConstructionMissing,
     buildAirBaseNow,
     buildAirstripNow,
     upgradeAirstripNow,
