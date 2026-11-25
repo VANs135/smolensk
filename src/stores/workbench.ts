@@ -2732,12 +2732,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       // 13.8b 末句例外：因模式/朝向切换而失能的单位，可用**自己架的桥**离开该格
       ownBridgeHexByUnitId: ownBridgeHexByUnitId.value,
       /*
-       * 5.8b：战略模式单位**必须**在有追溯补给的格上结束移动。
-       * 引擎的判据写在 `move.ts`，但要求调用方注入 `traceSupplyAt` —— 不注入则那条 if
-       * 永远进不去（修前实测：战略模式单位可以随便停在断补格）。
-       * 这里注入的是与 12.6 同一份事实（`createTraceSupplyAt(supplyFacts)`，见 C9 段）。
+       * 5.8b：战略模式下属单位须停在有追溯补给的格；注入与 12.6 同一份事实。
+       * ★ 2026-11-26：`.value` 会立即建 supplyFacts（含铁路 BFS）；无战略单位时按需注入。
        */
-      traceSupplyAt: (hex, side) => traceSupplyAtForMove.value(hex, side),
+      ...(units.value.some((unit) => unit.mode.mode === 'strat')
+        ? { traceSupplyAt: (hex: HexRef, side: Side) => traceSupplyAtForMove.value(hex, side) }
+        : {}),
       /*
        * 5.7g（用户 2026-11-01 口径）：预备单位**不能进工事格**。
        * 工事等级取与工事面板同一处（`hedgehogLevelOf`：印刷永久工事 + 本回合已建 − 已降）。

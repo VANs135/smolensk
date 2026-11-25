@@ -73,11 +73,15 @@ export const useLegalActionsStore = defineStore('legal-actions', () => {
     ]
 
     /* ── C 移动 ── */
-    table['move.breakout'] = workbench.breakoutCandidates.map((item) => ({
-      ref: item.unit.instanceId,
-      label: item.unit.name,
-      ...(item.ok || item.reason === null ? {} : { disabledReason: item.reason }),
-    }))
+    // 12.8e：突围候选要逐单位跑断补/路径判据（`hasLiveTraceSupply` 会触发首次追溯覆盖集）。
+    // 动作未放行时视图不会采用候选，故只在该动作真可用时求值，避免普通移动每换一格都为它付一次全盘代价。
+    table['move.breakout'] = workbench.segmentActionKeys.has('move.breakout')
+      ? workbench.breakoutCandidates.map((item) => ({
+          ref: item.unit.instanceId,
+          label: item.unit.name,
+          ...(item.ok || item.reason === null ? {} : { disabledReason: item.reason }),
+        }))
+      : []
     table['move.order'] = workbench.movePickChoices.map((unit) => ({
       ref: unit.instanceId,
       label: unit.name,
@@ -142,10 +146,16 @@ export const useLegalActionsStore = defineStore('legal-actions', () => {
       label: choice.air.name,
       ...(choice.disabledReason === null ? {} : { disabledReason: choice.disabledReason }),
     }))
-    table['exclusive.panzerObligation'] = workbench.panzerWrongSideHexes.map((hex) => {
-      const ref = `${hex.col}.${hex.row}`
-      return { ref, label: `错误一侧 ${ref}` }
-    })
+    // 专规 3.4a：义务清单只在段末闸门放行时才是可点候选；闸门未开时 `panzerWrongSideHexes`
+    // 每换一格都会重跑 `dividingLineObligations`，但视图根本不会采用它，故同样按闸门懒求值。
+    table['exclusive.panzerObligation'] = workbench.segmentActionKeys.has(
+      'exclusive.panzerObligation',
+    )
+      ? workbench.panzerWrongSideHexes.map((hex) => {
+          const ref = `${hex.col}.${hex.row}`
+          return { ref, label: `错误一侧 ${ref}` }
+        })
+      : []
 
     /* ── 其余族：一律搬运既有投影（本文件不新造判据） ── */
     // 15.4：缩减按基地提交（`reduceBaseNow` 取基地 id），候选即本方基地

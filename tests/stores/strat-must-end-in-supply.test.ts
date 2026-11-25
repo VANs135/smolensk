@@ -40,6 +40,16 @@ describe('5.8b：引擎合同（唯一判据来源）', () => {
 describe('5.8b：移动上下文必须注入 traceSupplyAt（与 12.6 同源）', () => {
   it('store 构造的上下文带 traceSupplyAt，且与 12.6 的逐格判定同源', () => {
     const store = newConsole()
+    const unit = toConsoleUnit({
+      record: unitChoices('axis')[0]!,
+      instanceId: 'u1',
+      hex: CORE_HEX,
+      side: 'axis',
+      face: 'move',
+    })
+    store.units.push(unit)
+    const live = store.units.find((item) => item.instanceId === 'u1')!
+    live.mode.mode = 'strat'
     const context = store.moveContext
     expect(typeof context.traceSupplyAt).toBe('function')
     const sameSource = createTraceSupplyAt(store.supplyFacts)
@@ -72,7 +82,9 @@ describe('5.8b：移动上下文必须注入 traceSupplyAt（与 12.6 同源）'
     expect(model).toMatch(/traceSupplyAt:\s*input\.traceSupplyAt/)
 
     const store = stripComments(readStoreSource())
-    expect(store).toMatch(/traceSupplyAt:\s*\(hex, side\)\s*=>/)
+    // 5.8b：只有盘上存在战略模式单位时才注入；无战略单位时不白算 supplyFacts（性能契约）。
+    expect(store).toContain("unit.mode.mode === 'strat'")
+    expect(store).toMatch(/traceSupplyAt:\s*\(hex: HexRef, side: Side\)\s*=>/)
     // 注入的事实必须来自 12.6 的同一份（`createTraceSupplyAt(supplyFacts)`）
     expect(store).toContain('createTraceSupplyAt(supplyFacts.value)')
   })
