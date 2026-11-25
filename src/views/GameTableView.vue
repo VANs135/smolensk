@@ -55,8 +55,8 @@ import {
   useWorkbenchStore,
 } from '@/stores'
 
-import { createAiMemory, runAiStep } from '@/ai/driver'
 import type { AiControlMode } from '@/ai/policy'
+import { createAiPlayLoop } from './ai-play'
 import { isAndroidPlatform } from '@/shared/platform'
 
 /** 安卓壳专用布局开关：教学卡内联顶栏（桌面保持悬浮独立卡） */
@@ -134,8 +134,12 @@ const aiControlMode = computed<AiControlMode>(() =>
   hotseat.mode === 'pve' && hotseat.aiSide !== null ? hotseat.aiSide : 'off',
 )
 const aiWaiting = ref('')
-let aiMemory = createAiMemory()
-let aiTimer: ReturnType<typeof setTimeout> | null = null
+const aiPlay = createAiPlayLoop({
+  context: () => ({ workbench, session: gameSession, setup }),
+  control: () => aiControlMode.value,
+  waiting: aiWaiting,
+  log: (text, rule) => workbench.pushLog('danger', text, rule),
+})
 
 const modeLabel = computed<string>(() => {
   if (hotseat.mode === null) return '未设置'
@@ -157,42 +161,8 @@ const gateSides = [
   { side: 'soviet', label: '苏联' },
 ] as const
 
-function stopAiPlay(): void {
-  if (aiTimer !== null) {
-    clearTimeout(aiTimer)
-    aiTimer = null
-  }
-}
-
-function scheduleAiStep(delayMs = 0): void {
-  aiTimer = setTimeout(() => {
-    aiTimer = null
-    if (aiControlMode.value === 'off') return
-    const result = runAiStep(
-      { workbench, session: gameSession, setup },
-      { memory: aiMemory, control: aiControlMode.value },
-    )
-    aiWaiting.value = result.waiting ?? ''
-    if (gameSession.terminated || result.intent === 'none') {
-      stopAiPlay()
-      return
-    }
-    // 玩家侧待办 ⇒ 保持开启、稍后再试；一旦玩家做完决定就自动续跑
-    scheduleAiStep(result.intent === 'wait' ? 600 : 0)
-  }, delayMs)
-}
-
 // 模式在选剧本页定下、进初设即锁定 ⇒ 进棋桌时按当前模式启动（PVE 才有 AI）
-watch(
-  aiControlMode,
-  () => {
-    stopAiPlay()
-    aiWaiting.value = ''
-    aiMemory = createAiMemory()
-    if (aiControlMode.value !== 'off') scheduleAiStep()
-  },
-  { immediate: true },
-)
+watch(aiControlMode, () => aiPlay.restart(), { immediate: true })
 
 interface MapBridge {
   zoomIn: () => void
@@ -502,7 +472,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  stopAiPlay()
+  aiPlay.stop()
   hotkeys.panelCollapsed = panelCollapsedOnEnter
   hotkeys.unbind()
   hotkeys.setViewBridge(null)
