@@ -27,4 +27,19 @@ describe('一键预设初设：飞机随本方布设一并落位', () => {
     expect(ctx.setup.startGameNow()).toBe(true)
     expect(ctx.w.airUnits).toHaveLength(7)
   })
+
+  /**
+   * 2026-11-26（用户裁定）：一键自动放置时**飞机一律先进地图外空军盒**，不许把每一枚
+   * 钉进"候选排序里的第一个基地格"（那样既占了基地，玩家事后也只能逐枚撤回）。
+   */
+  it('★ 预设后飞机全在地图外空军盒里（不占基地格）', () => {
+    const ctx = fresh()
+    expect(ctx.setup.enterSetup('Intro')).toBe(true)
+    expect(ctx.setup.presetSelfSetupNow().failures).toEqual([])
+    const ids = ctx.w.airUnits.map((air) => air.instanceId)
+    expect(ids.length).toBe(7)
+    expect(ids.every((id) => ctx.w.airBoxMembers.includes(id))).toBe(true)
+    // 没有一枚落在图上基地格（盒内飞机不占格）
+    expect(ctx.w.onMapAirUnits).toHaveLength(0)
+  })
 })

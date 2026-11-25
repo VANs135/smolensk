@@ -3870,17 +3870,14 @@ export const useSetupStore = defineStore('setup', () => {
       const airPlan = airPlanOf(side)
       if (airPlan === null) return
       for (const row of airPlan.placements) {
-        // 图上没有可用基地格（如 Intro 的德军：本图无轴方空军基地）⇒ 直接落图外空军盒（专规 1.4a）
-        if (row.candidates.length === 0) {
-          if (!row.offMapAllowed) {
-            failures.push({
-              entryIndex: row.entryIndex,
-              label: row.name,
-              reason: 'noAirBaseCandidate',
-              tried: 0,
-            })
-            continue
-          }
+        /*
+         * 2026-11-26（用户裁定）：一键自动放置时，**飞机一律先进地图外空军盒**（专规 1.4a 允许的行）。
+         *
+         * 理由：盒是飞机的常态驻地（任务从盒里飞、基地只管整备/落位），一键把每一枚钉进
+         * "候选排序里的第一个基地格"既占了别人的基地，也让玩家事后只能逐枚撤回。基地格留给
+         * 玩家在落位阶段自己挑。盒不允许（`offMapAllowed === false`）的行维持原逻辑。
+         */
+        if (row.offMapAllowed) {
           while (
             (placedAirInstances.value[airProgressKey(side, row.entryIndex)] ?? 0) < row.count
           ) {
@@ -3895,6 +3892,16 @@ export const useSetupStore = defineStore('setup', () => {
             }
             airPlaced += 1
           }
+          continue
+        }
+        // 图上没有可用基地格 ⇒ 本行不许入盒也无处可落，如实记失败（不硬塞）
+        if (row.candidates.length === 0) {
+          failures.push({
+            entryIndex: row.entryIndex,
+            label: row.name,
+            reason: 'noAirBaseCandidate',
+            tried: 0,
+          })
           continue
         }
         let tried = 0
