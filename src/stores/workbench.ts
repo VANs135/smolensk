@@ -8,6 +8,7 @@ import { ruleErrorTextOf } from '@/engine/rules/rule-error-text'
 import { createFireResolutionDomain } from './fire-resolution'
 import { createBarrageDomain } from './workbench-barrage'
 import { createAirDomain } from './workbench-air'
+import { createAirReductionLedgerGuard } from './workbench-air-reduction-ledger'
 import { createAirBarrageChainDomain } from './workbench-air-barrage-chain'
 import { createRootState } from './root-state'
 import { createMovementDomain } from './workbench-move'
@@ -32,7 +33,6 @@ import { createBarrageEntryDomain } from './workbench-barrage-entry'
 import { createCombatInputs } from './engagement-inputs'
 import { defineStore } from 'pinia'
 import { computed, ref, toRaw, watch, type Ref } from 'vue'
-
 import type { HexRef, MarkerSide, RailGauge, Side } from '@/data'
 import {
   DATA_VERSION,
@@ -353,12 +353,9 @@ import {
   planOptionSplits,
 } from '@/engine/rules'
 import { createGameSeed, createId } from '@/shared'
-
 import { opponentOf } from '@/engine/turn-driver'
-
 import { useGameSessionStore, type AdvanceOutcome as SessionAdvanceOutcome } from './session'
 import { useRecorderStore, type RecorderEventInput } from './recorder'
-
 import {
   TURN_TRACK,
   aircraftChoices,
@@ -452,7 +449,6 @@ import {
   type PendingHexPick,
 } from './workbench-model'
 import { actionFamilyRowsAt } from './action-families'
-
 /**
  * 骨架操作台（U0）状态
  *
@@ -464,7 +460,6 @@ import { actionFamilyRowsAt } from './action-families'
  * 纪律：本 store **不做规则计算**（CODE_SPEC：UI 无规则计算），只持状态、调引擎、记日志；
  * 种子与掷骰次数全部留在本 store，可复算（B2）。
  */
-
 /*
  * P2-1（2026-11-20）：原先在这四个位置声明的 `WorkbenchLogEntry` / `ConsolePhase` /
  * `SettlementLock` / `BattleTarget` 已迁进 `workbench-model.ts`（原因：三个域切片都要用，
@@ -477,10 +472,8 @@ export type {
   SettlementLock,
   WorkbenchLogEntry,
 } from './workbench-model'
-
 /** C5：一步移动的展示快照（全部来自引擎给出的步骤记录，界面不重算规则） */
 export type { MoveStepSnapshot } from './movement-types'
-
 /**
  * 2.2：**没有移动环节**的段（A 整备 / B 增援 / D 补给 / F 战斗 / H 清理）
  *
@@ -495,7 +488,6 @@ const NO_MOVEMENT_PHASES: readonly ConsolePhase[] = [
   'combat',
   'cleanUp',
 ]
-
 /**
  * 可突袭目标提示（与渲染层 `render/token-layer.ts` 的 `OverrunTargetHint` **同形**）
  *
@@ -507,7 +499,6 @@ export interface WorkbenchOverrunTarget {
   mpCost: number
   adjacentToPath: boolean
 }
-
 /**
  * W7 C16：**一名**需撤退单位的落点规划（9.12；地图优先交互）
  *
@@ -530,7 +521,6 @@ export interface CombatRetreatUnitPlan {
    */
   noLanding?: boolean
 }
-
 /**
  * W7 C16 + 9.12d：跟随撤退者（随其同格的主撤退单位一起撤）
  *
@@ -543,7 +533,6 @@ export interface CombatRetreatTagalongPlan {
   hostId: string
   hostLabel: string
 }
-
 /**
  * W7 C16：**一方**的撤退落点规划（9.12c：双方各自撤自己的单位；攻方先、守方后）
  *
@@ -564,7 +553,6 @@ export interface CombatRetreatSidePlan {
   /** 9.12 / 9.12b：选了会被消灭的落点（界面单独标注） */
   doomed: HexRef[]
 }
-
 /*
  * B2-2a（2026-11-20）：`SpecialTransportSplit` / `SpecialDisplacementItem` / `SpecialCombatPending`
  * 与 `movementPhaseOf` 已迁进 `workbench-model.ts`（原因同 P2-1：空军动作切片要用，留在 facade 会造回边）。
@@ -576,7 +564,6 @@ export type {
   SpecialTransportSplit,
 } from './workbench-model'
 export { movementPhaseOf } from './workbench-model'
-
 /**
  * 空军任务可发生的三个环节（14.1g：C 移动 / E 反应 / G 进击）
  *
@@ -586,7 +573,6 @@ export { movementPhaseOf } from './workbench-model'
 function airMissionPhaseOf(phase: ConsolePhase): AirMissionPhase | null {
   return phase === 'movement' || phase === 'reaction' || phase === 'exploitation' ? phase : null
 }
-
 /**
  * C6：一场战斗里的玩家输入（界面 v-model 绑定）
  *
@@ -2483,6 +2469,19 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       )
     },
   )
+
+  const airReductionGuard = createAirReductionLedgerGuard({
+    candidates: (baseId) => airDomain.airReductionCandidates.value(baseId),
+    selectedIds: () => airInputs.value.reductionUnitIds,
+    engineerCapableNow,
+    baseHexOf: (baseId) => airBases.value.find((item) => item.id === baseId)?.hex ?? null,
+    reduce: (baseId) => airDomain.reduceBaseNow(baseId),
+    missing: (baseId) => airDomain.airReductionMissing.value(baseId),
+    gate: (task, engineer) => constructionGateNow(task, engineer),
+    note: (task, hex, engineerId) => noteConstruction(task, hex, engineerId),
+    log: (kind, text, rule) => pushLog(kind, text, rule),
+    text: ruleErrorTextOf,
+  })
 
   /* ── B2-2c：轰炸结算链（air 的第三刀，独立切片） ── */
   const airBarrageChainDomain = createAirBarrageChainDomain({
@@ -22417,6 +22416,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     beginAirTransferHexPickNow,
     // ── air 域（P1-c：这一段键已由 workbench-air.ts 的 publicSurface 统一提供）──
     ...airDomain.publicSurface,
+    // 15.4 / 13.8d：engineering 缩减的施工额度在 facade 补闸；同名覆盖 air 域原实现
+    reduceBaseNow: airReductionGuard.reduceBaseNow,
+    airReductionMissing: airReductionGuard.airReductionMissing,
     // 批 C 切片 1：选任务类型即"宣布 + 自动结算到停返航"（一次动作，不再两次确认）
     beginAirReturnBasePickNow,
     chooseAirReturnDepartureNow,
@@ -22693,7 +22695,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      *   `convertRailGaugeNow` 与 `applyRailConversion` 里；拿到非 null 不等于可换轨。
      */
     justEnteredHexOf: justEnteredHexFor,
-
     // 13.3g-A：本阶段"刚换过轨的格"与"走过这些格的铁路修理单位"（"不能接力"的判据来源）
     convertedHexesThisPhase,
     railMovedNewTrackThisPhase,
@@ -22837,7 +22838,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
      */
     rebuildRowOf: rebuildRowFor,
     rebuildHqHexes,
-
     combatNkvdDefenders,
     combatNkvdForcedLosses,
     setScenarioId,

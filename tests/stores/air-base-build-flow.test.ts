@@ -489,8 +489,10 @@ describe('15.2A / 15.2E：简易机场的修建、升格与「永不缩减」', 
     expect(store.buildAirstripNow()).toBe(true)
     const baseId = store.airBases[0]!.id
 
-    // 15.4 的前提都摆好（格内有可指定单位），仍必须被 15.2E 拒
-    store.airInputs.reductionUnitIds = [engineer.instanceId]
+    // 15.4 的前提都摆好（另派一名未施工的 HQ 执行；原施工者已受 13.8d 额度约束），
+    // 仍必须被 15.2E 拒
+    const reducer = placeEngineer(store, coreText, 'eng-reducer')
+    store.airInputs.reductionUnitIds = [reducer.instanceId]
     expect(store.reduceBaseNow(baseId)).toBe(false)
     expect(store.airError).toMatchObject({ rule: '15.2E', reason: 'airstripCannotBeReduced' })
     // 设施仍在、仍是简易机场，且没落下任何缩减结算
@@ -532,6 +534,22 @@ describe('15.2A / 15.2E：简易机场的修建、升格与「永不缩减」', 
     expect(store.reduceBaseNow(base.instanceId)).toBe(true)
     expect(base.noncombatLevel).toBe(1)
     expect(engineer.movementEnded).toBe(true)
+  })
+
+  it('15.4 / 13.8d：工程兵本阶段已缩减一个基地 ⇒ 同一阶段不能再缩第二个', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    const engineer = placeEngineer(store, coreText, 'eng-ledger')
+    const baseA = placeGround(store, airBaseRecord(2), CORE_HEX, 'axis', 'base-ledger-a')
+    const baseB = placeGround(store, airBaseRecord(2), NEAR_HEX, 'axis', 'base-ledger-b')
+
+    store.airInputs.reductionUnitIds = [engineer.instanceId]
+    expect(store.airReductionMissing(baseA.instanceId)).toBeNull()
+    expect(store.reduceBaseNow(baseA.instanceId)).toBe(true)
+    expect(store.airReductionMissing(baseB.instanceId)).toContain('13.8d')
+    expect(store.reduceBaseNow(baseB.instanceId)).toBe(false)
+    // 第二个基地没被降级
+    expect(baseB.noncombatLevel).toBe(2)
   })
 
   it('15.4：单个 RE 0.5 单位 ⇒ 预检先报 RE 合计不足，主按钮不得出现；两枚 0.5 合计 1 才放行', () => {
