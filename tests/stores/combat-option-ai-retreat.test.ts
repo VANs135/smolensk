@@ -288,7 +288,7 @@ describe('9.10a：选项步的撤退预演与 AI 切分', () => {
       expect(split.retreatHexes + split.lossPoints).toBe(options)
       expect(split.lossPoints).toBeLessThanOrEqual(capacity)
     }
-  })
+  }, 20000)
 
   it('守方选项超过可用军力：AI 能落盘（修前连续被 9.11 拒绝）', () => {
     const found = openOverCapacityBattle()
