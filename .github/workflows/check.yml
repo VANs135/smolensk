@@ -1,16 +1,21 @@
 name: check
 
-# 仓库原本没有任何 CI：所有门禁靠人手动跑 `npm run check`。
-# 多人接手时（依次改渲染层、UI、引擎的人）没有合并闸，谁忘跑谁就把红带进分支。
-# 这里只做一件事：push / PR 跑**与本地完全相同**的那条命令，不额外加步骤。
+# 这条流水线只做一件事：push / PR 跑**与本地完全相同**的那条命令，不额外加步骤。
 #
 # 口径（与 npm run check 一致，勿在此增删）：
-#   - 用 windows-latest：项目在 Windows 上开发，scripts/*.mjs、.bat、路径分隔符
-#     都按 Windows 口径测过；Linux 尚未验证，别在这里偷偷换平台。
-#   - 用 node 22：与 package.json 依赖（Vite 7 / Vitest 4）和本机版本对齐。
+#   - 两路矩阵：windows-latest（开发机口径：.bat、路径分隔符、发版装配都在这一路测）
+#     与 ubuntu-latest（Linux 口径：给拿仓库做研究 / 训练 / 二次开发的人一个可复现入口）。
+#     两路跑的是同一条 `npm run check`，不为迁就某个平台删步骤或改用例。
+#   - 用 node 22：与 package.json 依赖（Vite 8 / Vitest 4）和本机版本对齐。
 #   - **不跑** tests/flows/ai-selfplay.test.ts（test:fast 已排除：单轮 4–5 分钟，
 #     且剧本 1 第 9 回合有既有红灯，见 docs/开发文档.md §7.3）。
 #   - 不跑 pack / 安卓构建：发布与签名依赖本机密钥，不入 CI。
+#
+# 平台依赖为什么删掉了 `@rolldown/binding-win32-x64-msvc`：
+#   它曾被写成 package.json 的**直依赖**，于是 Linux 上 `npm ci` 直接
+#   `EBADPLATFORM`（wanted os=win32）。rolldown 自己已把各平台 binding 声明为
+#   optionalDependencies（Linux 上会自动装 binding-linux-x64-gnu），该直依赖多余，
+#   2026-11-25 删除；删除后 Windows 与 Linux 的 `npm ci` 均实测通过。
 
 on:
   push:
@@ -24,8 +29,13 @@ concurrency:
 
 jobs:
   check:
-    runs-on: windows-latest
+    name: 门禁（${{ matrix.os }}）
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
 
