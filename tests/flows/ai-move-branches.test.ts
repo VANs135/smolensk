@@ -129,6 +129,8 @@ function snap(over: Partial<AiSnapshot> = {}): AiSnapshot {
       attackerStocksApplicable: false,
       defenderStocksApplicable: false,
       requirement: null,
+      optionLadder: [],
+      optionCapacity: 0,
       retreatPlans: [],
       triedDefenderHexes: [],
     },
@@ -351,6 +353,15 @@ describe('9.12 / 9.10：AI 的撤退落点与选项（2026-11-23 优化）', () 
           ...snap().combat,
           state: { step: 'options', finished: false },
           requirement: { side: 'defender', losses: 0, options: 1 },
+          optionCapacity: 1,
+          optionLadder: [
+            {
+              distance: 1,
+              units: [{ unitId: 'd1', landing: 'doomed' }],
+              allSafe: false,
+              allHaveLanding: true,
+            },
+          ],
           retreatPlans: [
             plan({
               destinations: [
@@ -383,6 +394,15 @@ describe('9.12 / 9.10：AI 的撤退落点与选项（2026-11-23 优化）', () 
           ...snap().combat,
           state: { step: 'options', finished: false },
           requirement: { side: 'defender', losses: 0, options: 1 },
+          optionCapacity: 1,
+          optionLadder: [
+            {
+              distance: 1,
+              units: [{ unitId: 'd1', landing: 'safe' }],
+              allSafe: true,
+              allHaveLanding: true,
+            },
+          ],
           retreatPlans: [
             plan({
               destinations: [

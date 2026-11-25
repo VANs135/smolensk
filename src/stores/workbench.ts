@@ -338,6 +338,12 @@ import {
   STACKING_LIMIT_RE,
   canonicalMode,
   type UnitSupplyAssessment,
+  // 9.10a / 9.12：选项切分（「退 k 格 + 吃 N-k 点」）
+  type OptionLanding,
+  type OptionLadderStep,
+  type OptionRetreatLadder,
+  type OptionSplit,
+  planOptionSplits,
 } from '@/engine/rules'
 import { createGameSeed, createId } from '@/shared'
 
@@ -3406,6 +3412,108 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       })
     }
     return plans
+  })
+
+  /**
+   * 9.10a / 9.12：**选项步**的撤退事实（「假设该方把本步选项全选成撤退」）
+   *
+   * `combatRetreatFacts` 的 `retreating` 名单来自 `needsRetreat`（＝选项已落盘），而选项面板上
+   * 恰恰还没落盘。这里按「本步选项全退」重算同一份事实：判据仍是 `createRetreatFacts`，
+   * 只把成员的归属换成「当前结算方一定在撤退集合里」。只预演，不落盘、不改 `combatInputs`。
+   */
+  const combatOptionRetreatFacts = computed<RetreatFacts | null>(() => {
+    const state = combatState.value
+    const requirement = combatRequirement.value
+    if (state === null || state.step !== 'options' || requirement === null) return null
+    if (requirement.options <= 0) return null
+    const liveIds = new Set(
+      units.value.filter((unit) => unit.steps > 0).map((unit) => unit.instanceId),
+    )
+    const retreating: string[] = []
+    for (const role of ['attacker', 'defender'] as const) {
+      // 9.10c：对手的选项可能已落盘（攻方先），据此判它是否也在撤退集合里
+      const retreats =
+        role === requirement.side ? true : (state.resolution[role].option?.retreatHexes ?? 0) > 0
+      if (!retreats) continue
+      const ids =
+        role === 'attacker' ? state.composition.attackerIds : state.composition.defenderIds
+      retreating.push(...ids.filter((id) => liveIds.has(id)))
+    }
+    retreating.push(...combatTagalongIds.value.filter((id) => liveIds.has(id)))
+    return createRetreatFacts({
+      units: units.value,
+      context: moveContext.value,
+      retreatingUnitIds: retreating,
+      combatStartSnapshot: combatStartSnapshot.value,
+    })
+  })
+
+  /**
+   * 9.10a / 9.12：选项步「退 k 格」的整侧预演（k = 1..选项数）
+   *
+   * 修前 AI 判断「能不能安全撤退」用的是 `combatRetreatPlans` —— 那份计划要等选项落盘后才建，
+   * 在选项面板上恒为空 ⇒ 判定退化成常量「一律吃损失」。这里在选项步就按单位预演落点，
+   * 落点判据与 9.12 撤退步同一出处（`planRetreatDestinations`，含 9.12b/5.8a/9.12f 三条否决）。
+   */
+  const combatOptionRetreatLadder = computed<OptionRetreatLadder>(() => {
+    const state = combatState.value
+    const requirement = combatRequirement.value
+    const facts = combatOptionRetreatFacts.value
+    if (state === null || state.step !== 'options' || requirement === null || facts === null)
+      return []
+    const sideUnits = (
+      requirement.side === 'attacker' ? combatAttackers.value : battleDefenders.value
+    ).filter((unit) => unit.steps > 0)
+    if (sideUnits.length === 0) return []
+    const ladder: OptionLadderStep[] = []
+    for (let distance = 1; distance <= requirement.options; distance += 1) {
+      const rows = sideUnits.map((unit) => {
+        const landings = planRetreatDestinations({
+          from: unit.hex,
+          distance,
+          mobility: effectiveMobilityOf(unit),
+          side: unit.side,
+          facts,
+          immobile: facts.immobile(unit.instanceId),
+          // 5.8a：战略模式撤退路径进入敌方 ZOC ⇒ 被摧毁
+          strat: unit.mode.mode === 'strat',
+        })
+        const landing: OptionLanding =
+          landings.length === 0
+            ? 'none'
+            : landings.some((item) => !item.forcedDestruction)
+              ? 'safe'
+              : 'doomed'
+        return { unitId: unit.instanceId, landing }
+      })
+      ladder.push({
+        distance,
+        units: rows,
+        allSafe: rows.every((row) => row.landing === 'safe'),
+        allHaveLanding: rows.every((row) => row.landing !== 'none'),
+      })
+    }
+    return ladder
+  })
+
+  /** 9.11：当前结算方的可用军力总量（选项损失不得超过它；「退 k + 吃 N-k」据此选 k） */
+  const combatOptionCapacity = computed<number>(() => {
+    const requirement = combatRequirement.value
+    if (requirement === null) return 0
+    const sideUnits =
+      requirement.side === 'attacker' ? combatAttackers.value : battleDefenders.value
+    return sideUnits.reduce((sum, unit) => sum + Math.max(0, unit.steps), 0)
+  })
+
+  /** 9.10a：选项的候选切分（AI 的首选与驱动兜底共用同一份顺序） */
+  const combatOptionAttempts = computed<OptionSplit[]>(() => {
+    const requirement = combatRequirement.value
+    if (requirement === null) return []
+    return planOptionSplits({
+      options: requirement.options,
+      capacity: combatOptionCapacity.value,
+      ladder: combatOptionRetreatLadder.value,
+    })
   })
 
   /**
@@ -22137,6 +22245,10 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     // W7 C16：战斗收尾的地图优先交互（9.12 撤退落点 / 9.12g 推进格 / 12.4 补给站）
     combatAdvanceHex,
     combatRetreatPlans,
+    // 9.10a / 9.12：选项步的「退 k 格」预演与候选切分（AI 判「能不能退」的唯一出处）
+    combatOptionRetreatLadder,
+    combatOptionCapacity,
+    combatOptionAttempts,
     // 9.12e：撤退堆叠额外损失的承受者候选（与确认共用一份引擎预演）
     combatExtraLossPreview,
     chooseExtraLossTaker,

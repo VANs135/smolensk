@@ -1125,6 +1125,12 @@ export function snapshotOf(
               options: w.combatRequirement.options,
             },
       /*
+       * 9.10a / 9.12：选项步的落点预演与可用军力（只在选项步取，避免每步都算路径）。
+       * 这是「能不能安全撤退」在选项面板上唯一的出处 —— `retreatPlans` 此时还没建。
+       */
+      optionLadder: w.combatState?.step === 'options' ? w.combatOptionRetreatLadder : [],
+      optionCapacity: w.combatState?.step === 'options' ? w.combatOptionCapacity : 0,
+      /*
        * 撤退计划只在一场战斗真正在走时才算（`combatState` / 已出需求）——
        * 修前整段战斗/进击阶段每步都为所有堆叠预算落点，是「进战斗阶段就卡」的主因。
        */
@@ -1717,6 +1723,16 @@ function execute(
         return w.confirmCombatOptions()
       }
       if (attempt(action.retreatHexes, action.lossPoints, action.ignoreOptions)) return true
+      /*
+       * 9.10a：修前兜底只有「全吃」与「守方忽略」两档 —— 当损失点数超过该方可用军力（9.11）
+       * 时两档都被拒，AI 每分钟几十次重试同一动作（0ms 重排），界面表现为卡死。
+       * 这里按 store 的候选切分（与策略层同一份 `planOptionSplits`）补上「退 k + 吃 N-k」。
+       */
+      for (const split of w.combatOptionAttempts) {
+        if (split.retreatHexes === action.retreatHexes && split.lossPoints === action.lossPoints)
+          continue
+        if (attempt(split.retreatHexes, split.lossPoints, false)) return true
+      }
       if (attempt(0, requirement.options, false)) return true
       if (requirement.side === 'defender' && attempt(requirement.options, 0, true)) return true
       return false

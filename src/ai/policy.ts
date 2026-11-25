@@ -9,6 +9,7 @@
  *   快照里所有「需要挑一个」的列表都由驱动按「格号 + 型号」排好，本文件不再重排。
  */
 import { hexDistance } from '@/engine/hex-geometry'
+import { chooseOptionSplit, type OptionRetreatLadder } from '@/engine/rules/combat-option-split'
 import { aiProfileOf, aiScenarioPostureOf, type AiProfile } from './scenario-posture'
 
 export type AiSide = 'axis' | 'soviet'
@@ -108,6 +109,16 @@ export interface AiCombatSnapshot {
   attackerStocksApplicable: boolean
   defenderStocksApplicable: boolean
   requirement: { side: 'attacker' | 'defender'; losses: number; options: number } | null
+  /**
+   * 9.10a / 9.12：该结算方在**选项步**的「退 k 格」预演（k = 1..选项数；无选项时为空）
+   *
+   * 与 `retreatPlans` 的区别：后者要等选项落盘后才建，在选项面板上恒为空（AI 修前据此
+   * 判断「能不能安全撤退」⇒ 恒判否）。本字段由 store 在选项步按单位预演落点，判据与
+   * 9.12 撤退步同源。
+   */
+  optionLadder: OptionRetreatLadder
+  /** 9.11：该结算方当前可用军力总量（选项损失不得超过它） */
+  optionCapacity: number
   retreatPlans: readonly {
     unitId: string
     /** 该撤退单位所属阵营角色（9.12：攻方先撤、守方后撤） */
@@ -961,21 +972,22 @@ function decideCombatSettlement(snapshot: AiSnapshot): AiAction | null {
       const owner = requirement.side === 'attacker' ? attacker : opponent
       if (!snapshot.control.requirement) return waitForSide(owner, '选择战斗选项（9.10）')
       /*
-       * 9.10 / 9.12：选项可以「退 N 格」也可以「吃 N 点损失」。修前一律选撤退（0 损失），
-       * 哪怕这一方所有落点都会导致被消灭（9.12c/d）——那是把单位白送掉。
-       * 现在：该方存在「不会被消灭」的落点才退；否则把选项吃成损失（9.10a 仍是玩家的合法选择）。
+       * 9.10a / 9.12：选项既可以是「退 N 格」，也可以是「吃 N 点损失」，还可以**任意混合**
+       * （原文只要求选项总数被完全满足）。修前读的是 `retreatPlans`——那份计划要等选项落盘
+       * 后才建，站在选项面板上恒为空 ⇒ 判定退化成常量「一律吃损失」。更糟的是当损失点数超过
+       * 该方可用军力（9.11）时，「全吃」被引擎拒、又从不试「退 k + 吃 N-k」⇒ 卡在原地。
+       * 现在按选项步的落点预演（`optionLadder`）与可用军力（`optionCapacity`）选切分：
+       * 全员有安全落点就退满，退不满就退到能退的格数，其余吃损失。
        */
-      const sidePlans = snapshot.combat.retreatPlans.filter(
-        (plan) => plan.role === requirement.side,
-      )
-      const canRetreatSafely =
-        sidePlans.length > 0 &&
-        sidePlans.every((plan) => plan.destinations.some((item) => !item.forcedDestruction))
-      const takeRetreat = requirement.options > 0 && canRetreatSafely
+      const split = chooseOptionSplit({
+        options: requirement.options,
+        capacity: snapshot.combat.optionCapacity,
+        ladder: snapshot.combat.optionLadder,
+      })
       return {
         kind: 'combatOptions',
-        retreatHexes: takeRetreat ? requirement.options : 0,
-        lossPoints: takeRetreat ? 0 : requirement.options,
+        retreatHexes: split.retreatHexes,
+        lossPoints: split.lossPoints,
         ignoreOptions: false,
       }
     }
