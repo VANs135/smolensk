@@ -62,7 +62,7 @@ const boxCardTotal = computed(() => sideCards.value.reduce((n, g) => n + g.cards
       <span class="tray__caret">
         <BaseIcon :name="open ? 'chevron-down' : 'chevron-right'" />
       </span>
-      <span class="tray__title">盒</span>
+      <!-- 2026-11-26（用户）：去掉「盒」这个单字标题，卡头只留角标 + 计数 -->
       <BaseTag kind="neutral">{{ boxCardTotal === 0 ? '—' : `${boxCardTotal} 张卡` }}</BaseTag>
       <span class="tray__meta num">{{ boxUnitTotal }} 枚在盒</span>
     </button>
@@ -106,12 +106,6 @@ const boxCardTotal = computed(() => sideCards.value.reduce((n, g) => n + g.cards
   cursor: pointer;
   text-align: left;
   font-size: var(--text-sm);
-}
-
-.tray__title {
-  font-family: var(--font-head);
-  font-weight: 700;
-  letter-spacing: 0.02em;
 }
 
 .tray__meta {

@@ -208,6 +208,9 @@ const drawers = [
   { id: 'settings', label: '设置', icon: 'M4 7h16 M4 17h16 M9 4v6 M15 14v6' },
 ] as const
 
+/** 左栏主列（抽屉开关）：2026-11-26（用户）「设置」不在此列，与存档、撤销一起收在栏底三枚相邻 */
+const railDrawers = drawers.filter((item) => item.id !== 'settings')
+
 const layers = [
   { key: 'image', label: '扫描图' },
   { key: 'grid', label: '网格' },
@@ -551,11 +554,11 @@ onBeforeUnmount(() => {
     <div class="gt__workspace">
       <nav class="gt__rail" aria-label="棋桌面板">
         <button
-          v-for="item in drawers"
+          v-for="item in railDrawers"
           :key="item.id"
           type="button"
           class="gt__rail-button"
-          :aria-label="item.id === 'settings' ? '设置' : item.label"
+          :aria-label="item.label"
           :aria-expanded="!hotkeys.panelCollapsed && drawer === item.id"
           :aria-controls="'table-drawer-' + item.id"
           @click="toggleDrawer(item.id)"
@@ -563,34 +566,18 @@ onBeforeUnmount(() => {
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path :d="item.icon" />
           </svg>
-          <span class="gt__rail-label">{{ item.label }}</span>
+          <!-- 2026-11-26（用户）：盒 / 表的单字标签去掉 ⇒「表」只留图标，语义交给 aria-label -->
+          <span v-if="item.id !== 'charts'" class="gt__rail-label">{{ item.label }}</span>
         </button>
 
         <!--
+          2026-11-26（用户）：栏底三枚相邻 —— 存档 / 设置 / 撤销。
           2026-11-20（用户）：初设的撤回改成图标，放在「设置」按钮下方，**常显**；
           无可撤操作时只压暗待命并标 aria-disabled，避免按钮出现/消失导致位置跳动。
           行为走**全局共用撤销入口** `workbench.undoLastOperationNow()`（c25cfc5），
           与移动步/装卸/初设落位等同一套「最近一笔」语义；无可撤时该入口会写一行原因日志，
           所以这里**无条件调用**，不要静默吞掉。批 3 纪律：不摆 `disabled` 灰按钮。
         -->
-        <button
-          type="button"
-          class="gt__rail-button gt__rail-undo"
-          :class="{ 'gt__rail-undo--idle': !workbench.canUndoOperation }"
-          :aria-disabled="!workbench.canUndoOperation"
-          :title="
-            workbench.canUndoOperation
-              ? `撤回上一步：${workbench.undoOperationLabel ?? ''}`
-              : (workbench.undoSealedReason ?? '没有可撤销的操作')
-          "
-          aria-label="撤回上一步"
-          @click="workbench.undoLastOperationNow()"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M9 14 4 9l5-5 M4 9h9a6 6 0 0 1 0 12h-3" />
-          </svg>
-        </button>
-
         <div class="gt__rail-end">
           <button
             type="button"
@@ -601,7 +588,40 @@ onBeforeUnmount(() => {
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 4h13l3 3v13H4z M8 4v6h8V4 M8 20v-6h8v6" />
             </svg>
-            <span class="gt__rail-label">存读档</span>
+            <!-- 2026-11-26（用户）：栏宽 62 装不下「存读档」三字（会折行）⇒ 标签压成两字「存档」，读档语义交给 aria -->
+            <span class="gt__rail-label">存档</span>
+          </button>
+
+          <button
+            type="button"
+            class="gt__rail-button"
+            aria-label="设置"
+            :aria-expanded="!hotkeys.panelCollapsed && drawer === 'settings'"
+            aria-controls="table-drawer-settings"
+            @click="toggleDrawer('settings')"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16 M4 17h16 M9 4v6 M15 14v6" />
+            </svg>
+            <span class="gt__rail-label">设置</span>
+          </button>
+
+          <button
+            type="button"
+            class="gt__rail-button gt__rail-undo"
+            :class="{ 'gt__rail-undo--idle': !workbench.canUndoOperation }"
+            :aria-disabled="!workbench.canUndoOperation"
+            :title="
+              workbench.canUndoOperation
+                ? `撤回上一步：${workbench.undoOperationLabel ?? ''}`
+                : (workbench.undoSealedReason ?? '没有可撤销的操作')
+            "
+            aria-label="撤回上一步"
+            @click="workbench.undoLastOperationNow()"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 14 4 9l5-5 M4 9h9a6 6 0 0 1 0 12h-3" />
+            </svg>
           </button>
         </div>
       </nav>
@@ -1147,6 +1167,9 @@ onBeforeUnmount(() => {
 }
 
 .gt__rail-end {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   margin-top: auto;
 }
 
@@ -1155,8 +1178,9 @@ onBeforeUnmount(() => {
   width: 100%;
   min-height: var(--command-rail-button);
   align-items: center;
-  justify-content: center;
-  flex-direction: column;
+  /* 2026-11-26（用户）：按钮全列左边 —— 图标与两字标签横向靠左，整列对齐 */
+  justify-content: flex-start;
+  flex-direction: row;
   gap: var(--space-1);
   padding: var(--space-1);
   border: 1px solid transparent;
@@ -1170,6 +1194,7 @@ onBeforeUnmount(() => {
 }
 
 .gt__rail-button svg {
+  flex: none;
   width: var(--space-5);
   height: var(--space-5);
   fill: none;
@@ -1177,6 +1202,10 @@ onBeforeUnmount(() => {
   stroke-width: 1.6;
   stroke-linejoin: round;
   stroke-linecap: round;
+}
+
+.gt__rail-label {
+  white-space: nowrap;
 }
 
 .gt__rail-button:hover,
@@ -1496,6 +1525,7 @@ onBeforeUnmount(() => {
 
   .gt__rail-end {
     display: flex;
+    flex-direction: row;
     margin-top: 0;
     margin-left: auto;
   }

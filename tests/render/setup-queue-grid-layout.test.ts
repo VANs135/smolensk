@@ -100,11 +100,15 @@ describe('初设队列：2026-11-20 手感与正确性', () => {
   it('★ 撤回图标常显：无可撤操作只压暗待命（aria-disabled），整枚不消失', () => {
     // 初设框动作列不再放撤回
     expect(queue).not.toContain('撤回上一步')
-    // 左栏：设置按钮（rail 的 aria-label 分支）之后紧跟图标按钮
-    const settings = table.indexOf("item.id === 'settings'")
+    // 2026-11-26（用户）：设置从主列移出，栏底三枚相邻 —— 存档 → 设置 → 撤销
+    const save = table.indexOf('aria-label="存档 / 读档"')
+    const settings = table.indexOf('table-drawer-settings')
     const undo = table.indexOf('gt__rail-undo')
-    expect(settings).toBeGreaterThanOrEqual(0)
+    expect(save).toBeGreaterThanOrEqual(0)
+    expect(settings).toBeGreaterThan(save)
     expect(undo).toBeGreaterThan(settings)
+    // 主列不再混入设置（主列＝战况 / 表 / 战报）
+    expect(table).toContain("drawers.filter((item) => item.id !== 'settings')")
     expect(table).toContain('workbench.undoLastOperationNow()')
     // 常显 + 压暗待命：用共用入口自己的 canUndoOperation，不按条件整枚隐藏，也不摆 disabled
     expect(table).toContain(':aria-disabled="!workbench.canUndoOperation"')

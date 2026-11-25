@@ -82,4 +82,30 @@ describe('界面硬伤：源码守卫', () => {
     expect(rule).toContain('var(--command-rail)')
     expect(rule).not.toMatch(/left:\s*12px/)
   })
+
+  // UI-7（2026-11-26 用户）：盒 / 表单字标签去掉；按钮整列靠左；设置与撤销挪到存档旁
+  it('UI-7 左栏：表单字不渲染、按钮横排靠左、栏底为存档→设置→撤销', () => {
+    const table = read('src/views/GameTableView.vue')
+    // 「表」只留图标，标签靠 v-if 跳过
+    expect(table).toContain(`v-if="item.id !== 'charts'"`)
+    // 主列排除设置；栏底三枚按 存档 / 设置 / 撤销 排
+    expect(table).toContain("drawers.filter((item) => item.id !== 'settings')")
+    const save = table.indexOf('aria-label="存档 / 读档"')
+    const settings = table.indexOf('table-drawer-settings')
+    const undo = table.indexOf('gt__rail-undo')
+    expect(save).toBeGreaterThan(0)
+    expect(settings).toBeGreaterThan(save)
+    expect(undo).toBeGreaterThan(settings)
+    // 按钮内部横排 + 靠左（不再 icon 上、字下、居中）
+    const rule = table.slice(
+      table.indexOf('.gt__rail-button {'),
+      table.indexOf('.gt__rail-button {' + 900),
+    )
+    expect(rule).toContain('flex-direction: row')
+    expect(rule).toContain('justify-content: flex-start')
+
+    // 托盘卡头不再挂「盒」这个单字标题
+    const tray = read('src/components/game/BottomTray.vue')
+    expect(tray).not.toContain('tray__title')
+  })
 })
