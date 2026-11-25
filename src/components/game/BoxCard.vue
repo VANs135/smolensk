@@ -38,9 +38,20 @@ const workbench = useWorkbenchStore()
 /** 托盘里的显示宽度（像素；卡面按原始比例缩放。窄屏用百分比由外层控制） */
 const displayWidth = ref(320)
 
-/** 浮窗里的显示宽度（更宽 ⇒ 看图舒服；窄屏靠 max-width 兜底） */
-/** 浮窗宽度：2026-11-26（用户「各宽度减小」）720 → 660 上限（v5 小样 ≤660），窄屏仍按 60% 视口收 */
-const popupWidth = computed(() => Math.min(660, Math.max(360, Math.round(window.innerWidth * 0.6))))
+/**
+ * 浮窗**基准高度**（v5 定稿 2026-11-26）：宽由卡面比例反推、高以此为基准。
+ * 苏外盒 888×1032 ⇒ 380×0.860 ≈ 327 宽（小样 326×380）；空军盒 906×700 ⇒ 492×380；
+ * 死人堆 731×344 ⇒ 触到 660 上限后自然压成 660×311。所以宽度**不按视口比例**，只按卡比例。
+ */
+const BOX_POPUP_HEIGHT = 380
+
+/** 浮窗宽度：`基准高 × 卡面宽高比`，再夹到 [240, 660] 与视口可用宽（右侧永远留给地图） */
+const popupWidth = computed(() => {
+  const { w, h } = props.card.imageSize
+  const natural = Math.round(BOX_POPUP_HEIGHT * (w / h))
+  const viewportCap = Math.max(240, window.innerWidth - 190)
+  return Math.min(660, viewportCap, Math.max(240, natural))
+})
 
 /** 是否展开卡面（托盘里那张；用户口径④：同时只展开一张） */
 const open = computed(() => containers.cardOpenId === props.card.id)
@@ -285,7 +296,9 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
   width: fit-content;
   /* v5 小样口径：≤660；右边缘永远留给地图（不让贴图顶到视口边） */
   max-width: min(660px, calc(100vw - 190px));
-  max-height: 88vh;
+  /* 2026-11-26（用户第 3 条）：高度上限 380。宽已按卡比例反推，故这是兜底而非裁切主力：
+     苏外盒自然落 327×380（小样 326×380）、空军盒 492×380、死人堆触 660 上限后 660×311。 */
+  max-height: min(380px, 88vh);
   overflow: auto;
   border: none;
   border-radius: 0;
