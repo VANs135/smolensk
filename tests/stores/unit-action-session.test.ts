@@ -104,26 +104,22 @@ describe('条 12（M2）：点非战斗单位开 unit 会话', () => {
   })
 
   /**
-   * 2026-11-26（用户报：会话窗里没有选项）：C 段的运输点有 13.2c / 12.7a·d 多项可做，
-   * `activeOnly` 取不到唯一一段 ⇒ 旧模板整窗空白。钉两件事：
-   *   ① 窗内选项清单与右键菜单同源、逐项给出（不是空数组）；
-   *   ② 点清单里某项后落到**那一段**（`unitActionIntent.only`），不新写规则。
+   * 2026-11-26（用户实测）：会话窗**不许再列一份与右键菜单同名的动作清单**
+   *   · 铁路运输（13.3）的窗里冒出「修建/改进基地(15.3)」「缩减基地(15.4)」——清单排在
+   *     "已选段"之前，把 13.3 的窗顶成了设施菜单；
+   *   · 定稿 §4.1：设施动作由右键菜单选段，选段后面板只画那一段。
+   * 本用例钉住 store 侧：多段设施照样只报"能做哪些段"，不再提供"从窗里点段"的第二条入口。
    */
-  it('★ 多选项设施：会话窗有可点选项，点哪项进哪段', () => {
+  it('多段设施：左键窗只画已选段，选项清单只由 facilityActionKeys 给出', () => {
     const { workbench, mapView } = stores
     placeNonCombat(workbench, 'transport_point', START, 'tp-1')
     mapView.onHexClick(START, { x: 40, y: 40 })
 
     const options = mapView.unitActionOptions('tp-1')
     expect(options.length).toBeGreaterThan(1)
-    expect(mapView.unitActionMenuAt('tp-1').map((item) => item.key)).toEqual(
-      options.map((item) => item.key),
-    )
-    // 左键直开（没有挑定哪一段）⇒ 旧实现这里会是空白窗
-    expect(mapView.unitActionIntent).toBeNull()
-
-    expect(mapView.openUnitActionSectionNow('tp-1', 'move.extenderConvert')).toBe(true)
-    expect(mapView.unitActionIntent?.only).toBe('extender')
+    // 窗里没有第二条入口（这两个入口已在 2026-11-26 撤回）
+    expect('unitActionMenuAt' in mapView).toBe(false)
+    expect('openUnitActionSectionNow' in mapView).toBe(false)
   })
 
   it('点延补队 ⇒ supply 会话（9.14d）', () => {

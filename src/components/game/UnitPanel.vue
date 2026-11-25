@@ -89,23 +89,18 @@ const showRoster = computed(
 )
 
 /**
- * 2026-11-26：**一步没挑定**时列在窗里的可点选项（修前这种情形整窗空白）
- *
- * 多选项设施（运输点 C 段的 13.2c / 13.2f / 12.7a·d 三项）左键开关话时 `activeOnly` 为 null，
- * 旧模板一路 `v-else-if` 落空 ⇒ 会话框里一个字都没有。清单与右键菜单同源
- * （`mapView.unitActionMenuAt` → `counterActionsAt`），判据仍只在 store 一处。
+ * 2026-11-26（用户实测：铁路运输（13.3）的窗里冒出「修建/改进基地(15.3)」「缩减基地(15.4)」）：
+ * 设施动作**由右键菜单选段**（定稿 §4.1），会话窗只画**已选的那一段**。此处不再列一份与菜单
+ * 同名的动作清单——清单既与菜单重复，也会因为排在"已选段"之前而把别的会话（如 13.3 铁路运输）
+ * 顶成设施菜单。剩下唯一要管的，是"点什么都没画"时别留一张空白窗。
  */
-const menuOptions = computed(() => {
-  const id = mapView.unitActionUnitId
-  return id === null ? [] : mapView.unitActionMenuAt(id)
-})
 
-/** 点清单里某一项 ⇒ 落到它那一段（执行入口与右键菜单同一条 `applyContextAction`） */
-function openSection(key: string): void {
-  const id = mapView.unitActionUnitId
-  if (id === null) return
-  mapView.openUnitActionSectionNow(id, key)
-}
+/** 空窗兜底的一行字（不给按钮，动作仍在右键菜单） */
+const emptyHint = computed(() =>
+  mapView.unitActionFamily === 'air'
+    ? '空军基地：左键只出驻机名册；整备 / 修建 / 缩减在右键菜单'
+    : '本设施的动作用右键菜单选段（会话窗只画选中的那一段）',
+)
 
 /**
  * U1-b：本会话自己的待决事项＝收窄后的**一段**（左键不再有"能做什么"的菜单）。
@@ -128,25 +123,6 @@ provide(
       :base-id="mapView.actionBase.id"
       :aircraft="mapView.actionBaseAircraft"
     />
-  </section>
-  <!-- 2026-11-26：多选项设施（一步没挑定）⇒ 窗里列可点选项，修前这里整窗空白 -->
-  <section v-else-if="menuOptions.length > 0" class="action-menu">
-    <p class="action-menu__hint">挑一项展开（与右键菜单同源）：</p>
-    <ul class="action-menu__list">
-      <li v-for="item in menuOptions" :key="item.key">
-        <button
-          type="button"
-          class="action-menu__item"
-          :disabled="item.disabledReason !== null"
-          @click="openSection(item.key)"
-        >
-          <span class="action-menu__label">{{ item.label }}</span>
-          <span v-if="item.disabledReason !== null" class="action-menu__why num">
-            {{ item.disabledReason }}
-          </span>
-        </button>
-      </li>
-    </ul>
   </section>
   <template v-else-if="activeOnly !== null">
     <CounterOrderPanel
@@ -172,7 +148,7 @@ provide(
     />
     <ExclusiveRulesPanel v-else-if="mapView.unitActionFamily === 'fort'" :only="fortOnly" />
   </template>
-  <p v-else class="action-menu__empty">这个设施本环节没有可执行的操作。</p>
+  <p v-else class="action-menu__empty">{{ emptyHint }}</p>
 </template>
 
 <style scoped>
@@ -187,42 +163,7 @@ provide(
   color: var(--color-ink);
   font-size: var(--text-sm);
 }
-/* 2026-11-26：多选项设施的选项清单（会话窗内唯一的落点，修前这里空白） */
-.action-menu__hint {
-  margin: 0 0 var(--space-1);
-  color: var(--color-muted);
-  font-size: var(--text-xs);
-}
-.action-menu__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: var(--space-1);
-}
-.action-menu__item {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-2);
-  color: var(--color-ink);
-  font-size: var(--text-sm);
-  text-align: left;
-  cursor: pointer;
-}
-.action-menu__item:disabled {
-  cursor: not-allowed;
-  color: var(--color-muted);
-}
-.action-menu__why {
-  color: var(--color-warning);
-  font-size: var(--text-xs);
-}
+/* 2026-11-26：一步没选段时的兜底提示（不给按钮：设施动作只在右键菜单里挑） */
 .action-menu__empty {
   margin: 0;
   color: var(--color-muted);
