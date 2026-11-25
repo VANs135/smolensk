@@ -9,6 +9,10 @@ import { DB_DIR, countersDirOfSide, selectCounterAssets } from '../../scripts/sy
 /** 仓库根（本文件在 tests/scripts/ 下） */
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
+/** 源库在位与否（`DB_DIR` 见 `scripts/sync-counters.mjs`；素材库不入库，CI 上不在位） */
+const SOURCE_DB_READY =
+  existsSync(join(DB_DIR, 'units.json')) && existsSync(join(DB_DIR, 'aircraft.json'))
+
 /**
  * 算子图档同步的**纯函数**部分（`scripts/sync-counters.mjs`）
  *
@@ -101,8 +105,12 @@ describe('sync-counters：图档落点与挑选', () => {
    * 实测 2026-09-15 —— 三支铁路修理单位推进到 `valued` 后忘跑 `sync-counters`，
    * `Ge_I-2_RR_Bn_F.png` / `Ru_West_RR_Rgt_F.png` 等 6 个文件根本不在盘上
    * （本用例即那次缺口的回归锚点：改数据不重跑同步脚本 ⇒ 这里先红）。
+   *
+   * ★ 前提：要枚举"库里引用了哪些图"，必须能读源库 `units.json` / `aircraft.json`；
+   *   素材库不在位（CI 的 runner）时跳过——那不是产品缺陷，是这台机器没有素材。
+   *   本机/发版机上素材库在位，这条照旧是最先红的那道。
    */
-  it('产物一致性：源库里每个可加载记录的图都在 public/counters 下', () => {
+  it.skipIf(!SOURCE_DB_READY)('产物一致性：源库里每个可加载记录的图都在 public/counters 下', () => {
     const groundItems = JSON.parse(readFileSync(join(DB_DIR, 'units.json'), 'utf8')).items
     const aircraftItems = JSON.parse(readFileSync(join(DB_DIR, 'aircraft.json'), 'utf8')).items
     const assets = selectCounterAssets(groundItems, aircraftItems)

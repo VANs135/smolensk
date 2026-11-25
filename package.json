@@ -33,7 +33,9 @@
     "audit:ports": "node scripts/port-tdz-audit.mjs",
     "audit:clauses": "node scripts/audit-clause-prefix.mjs --fail",
     "audit:error-text": "node scripts/audit-error-text.mjs --fail-unmapped",
-    "probe:ui": "node scripts/probe-ui.mjs"
+    "probe:ui": "node scripts/probe-ui.mjs",
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "prepare": "node scripts/install-hooks.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.10",

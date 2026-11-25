@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import { panelScans } from '@/data'
 import { chartSources, ooaScanOf, panelScansOf } from '@/render/charts-view'
+import { SOURCE_LIBRARY_ROOT, sourceLibraryAvailable } from '../shared/source-library'
 
 /**
  * B22：**表格屏的印卡扫描图**（用户口径 2026-09-16）
@@ -22,12 +23,14 @@ describe('B22：印卡扫描图清单（panel-scans.json）', () => {
    *
    * 用户 2026-09-16 把图整理进了 `地图及辅助卡\要放进游戏的\{需要的表格,需要的盒}\` 与 `增援\`，
    * 故按"候选目录"逐个找 —— 素材搬家时门禁仍能分清"图没了"与"目录变了"。
+   * 素材库根见 `tests/shared/source-library.ts`（可用 `OCS_SOURCE_DIR` 覆盖）。
    */
+  const CARDS_ROOT = path.join(SOURCE_LIBRARY_ROOT, '图片素材库', '地图及辅助卡')
   const SOURCE_DIRS = [
-    'D:\\OCS\\OCS斯摩棱斯克素材\\图片素材库\\地图及辅助卡',
-    'D:\\OCS\\OCS斯摩棱斯克素材\\图片素材库\\地图及辅助卡\\要放进游戏的\\需要的表格',
-    'D:\\OCS\\OCS斯摩棱斯克素材\\图片素材库\\地图及辅助卡\\要放进游戏的\\需要的盒',
-    'D:\\OCS\\OCS斯摩棱斯克素材\\图片素材库\\地图及辅助卡\\增援',
+    CARDS_ROOT,
+    path.join(CARDS_ROOT, '要放进游戏的', '需要的表格'),
+    path.join(CARDS_ROOT, '要放进游戏的', '需要的盒'),
+    path.join(CARDS_ROOT, '增援'),
   ]
   const PUBLIC_DIR = 'public/aux-cards'
 
@@ -47,8 +50,23 @@ describe('B22：印卡扫描图清单（panel-scans.json）', () => {
    */
   const SCREENS = ['crt', 'supply', 'tec', 'vars', 'ooa'] as const
 
-  it('每张图的 PNG 头尺寸与声明一致，且素材库与产物目录里都在', () => {
+  /**
+   * 产物目录那一份由 `scripts/sync-aux-card-images.mjs` 拷入（缺 ⇒ 运行期取不到图）。
+   *
+   * 这条**只查仓库内产物**，所以在任何机器上都跑（CI 也跑）。
+   * 素材库那侧另起一条，素材库不在位时跳过。
+   */
+  it('产物目录（public/aux-cards）里每张图都在', () => {
     expect(panelScans.scans.length).toBeGreaterThan(0)
+    for (const scan of panelScans.scans) {
+      expect(
+        fs.existsSync(path.join(PUBLIC_DIR, scan.image)),
+        `public/aux-cards 缺少 ${scan.image}：请跑 node scripts/sync-aux-card-images.mjs`,
+      ).toBe(true)
+    }
+  })
+
+  it.skipIf(!sourceLibraryAvailable)('素材库那张也在，且 PNG 头尺寸与声明一致', () => {
     for (const scan of panelScans.scans) {
       const source = findScan(scan.image)
       expect(source, `素材库缺少 ${scan.image}`).not.toBeNull()
@@ -57,11 +75,6 @@ describe('B22：印卡扫描图清单（panel-scans.json）', () => {
         { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) },
         `${scan.image} 声明尺寸与 PNG 头不一致`,
       ).toEqual(scan.imageSize)
-      // 产物目录那一份由 `scripts/sync-aux-card-images.mjs` 拷入（缺 ⇒ 运行期取不到图）
-      expect(
-        fs.existsSync(path.join(PUBLIC_DIR, scan.image)),
-        `public/aux-cards 缺少 ${scan.image}：请跑 node scripts/sync-aux-card-images.mjs`,
-      ).toBe(true)
     }
   })
 

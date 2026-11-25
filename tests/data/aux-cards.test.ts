@@ -4,6 +4,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { auxCards, mapConfig, mapLayers } from '@/data'
+import { SOURCE_LIBRARY_ROOT, sourceLibraryAvailable } from '../shared/source-library'
 
 /**
  * A10：辅助卡分区（用户 2026-09-16 交付标定）
@@ -18,12 +19,14 @@ describe('A10：辅助卡分区（aux-cards.json）', () => {
    * 用户 2026-09-16 把素材整理进了 `地图及辅助卡\要放进游戏的\{需要的表格,需要的盒}\`
    * 与 `增援\`，故这里按"候选目录"逐个找，而不是写死一个目录 ——
    * 否则素材一搬家，门禁就会红成"缺图"，看不出是"图没了"还是"目录变了"。
+   * 素材库根见 `tests/shared/source-library.ts`（可用 `OCS_SOURCE_DIR` 覆盖）。
    */
+  const CARDS_ROOT = path.join(SOURCE_LIBRARY_ROOT, '图片素材库', '地图及辅助卡')
   const CARDS_DIRS = [
-    'D:\\OCS\\OCS斯摩棱斯克素材\\图片素材库\\地图及辅助卡',
-    'D:\\OCS\\OCS斯摩棱斯克素材\\图片素材库\\地图及辅助卡\\要放进游戏的\\需要的盒',
-    'D:\\OCS\\OCS斯摩棱斯克素材\\图片素材库\\地图及辅助卡\\要放进游戏的\\需要的表格',
-    'D:\\OCS\\OCS斯摩棱斯克素材\\图片素材库\\地图及辅助卡\\增援',
+    CARDS_ROOT,
+    path.join(CARDS_ROOT, '要放进游戏的', '需要的盒'),
+    path.join(CARDS_ROOT, '要放进游戏的', '需要的表格'),
+    path.join(CARDS_ROOT, '增援'),
   ]
 
   /** 在候选目录里找这张图（找不到返回 null） */
@@ -69,7 +72,8 @@ describe('A10：辅助卡分区（aux-cards.json）', () => {
     }
   })
 
-  it('卡面图文件存在（资产门禁：卡面缺图即红）', () => {
+  // 素材库不在位（CI）时跳过：读不到源图不是产品缺陷，说不清"图没了"还是"这台机器没素材"
+  it.skipIf(!sourceLibraryAvailable)('卡面图文件存在（资产门禁：卡面缺图即红）', () => {
     for (const card of auxCards.cards) {
       const file = findCardImage(card.image)
       expect(file, `缺少卡面 ${card.image}`).not.toBeNull()

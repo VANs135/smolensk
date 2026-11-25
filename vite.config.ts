@@ -62,6 +62,13 @@ export default defineConfig(({ mode }) => {
       environment: 'node',
       globals: false,
       restoreMocks: true,
+      /*
+       * 并行度：CI 固定 4，本地交给 Vitest（本机 20 线程）。
+       * 原因：拉满并行时偶发单例 5s 超时（本机两次红在两个不同的 seed-search 用例，
+       * 单文件复跑均通过）；4 worker 跑 643 文件 / 6408 例全绿。
+       * 要在本地复现 CI 的并行度：VITEST_MAX_WORKERS=4 npm run check
+       */
+      maxWorkers: Number(process.env.VITEST_MAX_WORKERS ?? 0) || (process.env.CI ? 4 : undefined),
     },
   }
 })

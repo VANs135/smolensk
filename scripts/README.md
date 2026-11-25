@@ -4,23 +4,25 @@
 
 ## 1. 在役 · 构建与门禁（会被 `npm run check` 或发版调用）
 
-| 脚本                                      | 谁调用                                           | 干什么                                                                 |
-| ----------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
-| `check-arch.mjs`                          | `npm run arch` / `check`                         | 架构扫描：规则字面量、CSS 变量、零调用导出、白名单过期                 |
-| `arch-scan.mjs`                           | 被 `check-arch.mjs` 引用                         | 扫描实现（纯函数 + 白名单表）                                          |
-| `check-tdz.mjs`                           | `npm run tdz` / `check`                          | 模块顶层暂时性死区（跨模块常量互引）                                   |
-| `audit-clause-prefix.mjs`                 | `npm run audit:clauses`                          | 条款号前缀真实性（防编造规则号）                                       |
-| `audit-error-text.mjs`                    | `npm run audit:error-text`                       | 失败码 → 文案映射完整性                                                |
-| `port-tdz-audit.mjs`                      | `npm run audit:ports`                            | 端口/启动期依赖方向                                                    |
-| `gen-counter-data.mjs`                    | `npm run gen:counters`（`check` 里带 `--check`） | 算子图 → 打包期 data URI（产物须与源一致）                             |
-| `overwrite-guard.mjs`                     | 被 sync 脚本引用                                 | 挡「同步产物覆盖人手改过的文件」                                       |
-| `sync-*.mjs`                              | 人手（改权威源之后）                             | 权威源 → `src/data                                                     | public` 生成物（units/counters/scenarios/map/…） |
-| `pack-release.mjs`                        | `npm run pack`                                   | dist + 静态服务器 + 双击启动脚本 → `release/`                          |
-| `serve-dist.mjs`                          | `npm run serve:dist`                             | 单文件零依赖静态服务器（也供探针复用）                                 |
-| `probe-ui.mjs`                            | `npm run probe:ui`                               | UI 探针：开生产包、进对局、按需操作、截图（见 docs/开发文档.md §11.4） |
-| `android-apk.mjs`                         | `npm run android:apk`                            | Capacitor 同步 + Gradle 出 APK                                         |
-| `perf-compare.mjs`                        | `npm run perf:compare`                           | Web / 桌面壳同探针性能对照                                             |
-| `migration-report.mjs`、`port-report.mjs` | 人手                                             | 一次性报表，输出给人看                                                 |
+| 脚本                                      | 谁调用                                             | 干什么                                                                 |
+| ----------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
+| `check-arch.mjs`                          | `npm run arch` / `check`                           | 架构扫描：规则字面量、CSS 变量、零调用导出、白名单过期                 |
+| `arch-scan.mjs`                           | 被 `check-arch.mjs` 引用                           | 扫描实现（纯函数 + 白名单表）                                          |
+| `check-tdz.mjs`                           | `npm run tdz` / `check`                            | 模块顶层暂时性死区（跨模块常量互引）                                   |
+| `audit-clause-prefix.mjs`                 | `npm run audit:clauses`                            | 条款号前缀真实性（防编造规则号）                                       |
+| `audit-error-text.mjs`                    | `npm run audit:error-text`                         | 失败码 → 文案映射完整性                                                |
+| `port-tdz-audit.mjs`                      | `npm run audit:ports`                              | 端口/启动期依赖方向                                                    |
+| `gen-counter-data.mjs`                    | `npm run gen:counters`（`check` 里带 `--check`）   | 算子图 → 打包期 data URI（产物须与源一致）                             |
+| `overwrite-guard.mjs`                     | 被 sync 脚本引用                                   | 挡「同步产物覆盖人手改过的文件」                                       |
+| `sync-*.mjs`                              | 人手（改权威源之后）                               | 权威源 → `src/data                                                     | public` 生成物（units/counters/scenarios/map/…） |
+| `pack-release.mjs`                        | `npm run pack`                                     | dist + 静态服务器 + 双击启动脚本 → `release/`                          |
+| `serve-dist.mjs`                          | `npm run serve:dist`                               | 单文件零依赖静态服务器（也供探针复用）                                 |
+| `probe-ui.mjs`                            | `npm run probe:ui`                                 | UI 探针：开生产包、进对局、按需操作、截图（见 docs/开发文档.md §11.4） |
+| `android-apk.mjs`                         | `npm run android:apk`                              | Capacitor 同步 + Gradle 出 APK                                         |
+| `perf-compare.mjs`                        | `npm run perf:compare`                             | Web / 桌面壳同探针性能对照                                             |
+| `install-hooks.mjs`                       | `npm run hooks:install` / `npm install`（prepare） | 写 `.git/hooks/pre-push`（钩子内容存仓库，换机器能装回）               |
+| `pre-push-check.mjs`                      | 由 `pre-push` 钩子调用                             | push 前跑同一条 `npm run check`；急推 `SKIP_PRE_PUSH_CHECK=1`          |
+| `migration-report.mjs`、`port-report.mjs` | 人手                                               | 一次性报表，输出给人看                                                 |
 
 `*.d.mts` 是同名脚本的 TypeScript 声明（只为 `tests/scripts/*` 能类型化引用，模块本体是纯 JS）。
 

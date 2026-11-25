@@ -1,8 +1,10 @@
 import { readFileSync } from 'node:fs'
+import path from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
 import { unitsAxis, unitsSoviet } from '@/data'
+import { SOURCE_LIBRARY_ROOT, sourceLibraryAvailable } from '../shared/source-library'
 
 /**
  * B39 切片 B / D-4：应用数据带**源库的原始能力串**（`capabilitiesRaw`）
@@ -12,12 +14,13 @@ import { unitsAxis, unitsSoviet } from '@/data'
  * 本批把它导出为 `capabilitiesRaw`（可选字段，schema 已放开）。
  *
  * ★ 一条**测法边界（如实）**：本用例把**源库**当对照物 ⇒ 它只在**素材库在位**的机器上有效
- *   （与 `tests/data/setup-library-gap.test.ts` 等既有用例同一前提）；若素材库不在，源库读不到，
- *   用例会失败 —— 这是**有意**的：这两份数据必须成对核对，读不到就不该给绿灯。
+ *   （与 `tests/data/setup-library-gap.test.ts` 等既有用例同一前提）。素材库不在位（CI 的 runner）
+ *   时整块跳过并显示 skipped：读不到对照物不是产品缺陷，是这台机器没有素材；
+ *   素材库在位时照旧逐条核对，缺项仍然红。
  */
-const SOURCE_DB = 'D:/OCS/OCS斯摩棱斯克素材/斯摩棱斯克工程数据库/units.json'
+const SOURCE_DB = path.join(SOURCE_LIBRARY_ROOT, '斯摩棱斯克工程数据库', 'units.json')
 
-describe('B39 / D-4：capabilitiesRaw 与源库一致', () => {
+describe.skipIf(!sourceLibraryAvailable)('B39 / D-4：capabilitiesRaw 与源库一致', () => {
   /**
    * 2026-11-08 裁定：**番号 ≠ 能力**。
    *
