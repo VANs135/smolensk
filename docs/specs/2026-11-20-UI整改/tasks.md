@@ -71,3 +71,4 @@
 - [x] 守卫改靶不放松：p6 / charts-view / box-side-isolation / rail-cap-track / ui-diet-batch6 / ui-hardening(UI-7)
 - [x] `npm run check` 全绿（633 文件 / 6348 测试）；arch 组件 58 / 样式 62
 - [x] review 收尾（`4cceffa`）：浮窗＝「展开」（盒内动作 / 拆分取用判据改认 `popupCardId`）、记录轨不再弹空窗、关会话一并收浮窗、左栏 44px + 粘底（1400×900 与 1366×768 均一屏）
+- [x] 盒窗无留边（v5 小样原话「只有贴图本身，无标题栏、无边框、无留边」）：删标题栏，贴图即拖动把手，右上 26px 半透明圆 ×，透明底 + `drop-shadow`；卡面 `margin 0` / 图圆角 3px；安卓 `.boxpopup` `padding 0`、清掉与 `translateX(-50%)` 叠加的定位覆盖与失效 `.boxpopup__title`；`headerHeight 0` 让整张图夹在视口内

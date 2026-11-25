@@ -1580,12 +1580,10 @@ html[data-platform='android'] .queue__air-flag {
 
 /* ⑥ 撤回已挪到棋桌左栏「设置」下方（图标按钮见 GameTableView 的 rail），本处不再单列 */
 
-/* ⑦ 盒卡弹窗贴紧凑：限宽、去粗边 */
+/* ⑦ 盒卡弹窗：限宽即可 —— 2026-11-26 起盒窗「只有贴图本身」，桌面/安卓都不留边（padding 0） */
 html[data-platform='android'] .boxpopup {
   max-width: min(92vw, 340px);
-  border: 0;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
-  padding: 6px;
+  padding: 0;
 }
 
 /* ⑧ 增援等面板：描述行并入标题行后（缩小字号），窗口内只留单位与按钮 */
@@ -1717,16 +1715,10 @@ html[data-platform='android'] .gt__boxface .boxcard {
   display: none;
 }
 
-/* 盒内浮层去标题（贴图自带）；× 与计数保留；
-   定位改视口内居中（原 left:50% 在手机上右溢出，整备钮会被裁掉） */
+/*
+ * 盒内浮层：2026-11-26 起盒窗只有贴图本身（无标题栏），居中已由模板的 `translateX(-50%)` 负责 ⇒
+ * 这里只收左右安全宽度；旧的「left:4px + right:4px + margin-inline:auto」会和 -50% 叠加把窗推歪。
+ */
 html[data-platform='android'] .boxpopup {
-  left: 4px;
-  right: 4px;
-  margin-inline: auto;
-  width: fit-content;
   max-width: calc(100vw - 8px);
-}
-
-html[data-platform='android'] .boxpopup__title {
-  display: none;
 }

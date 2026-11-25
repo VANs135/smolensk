@@ -282,16 +282,20 @@ function regionStyle(rect: { x: number; y: number; w: number; h: number }): Reco
 </template>
 
 <style scoped>
+/*
+ * 2026-11-26（v5 定稿）：盒窗「只有贴图本身，无标题栏、无边框、无留边」⇒ 卡面不再留 4px 外边距；
+ * 圆角收到 3px（小样同口径），贴图直接贴到盒窗边缘。
+ */
 .face {
   position: relative;
-  margin: var(--space-1);
+  margin: 0;
 }
 
 .face__image {
   width: 100%;
   height: 100%;
   display: block;
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
 }
 
 .face__image--pending {

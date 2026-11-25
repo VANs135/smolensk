@@ -95,11 +95,13 @@ function closePopup(): void {
 
 function onPopupPointerDown(event: PointerEvent): void {
   /*
-   * 用户 2026-11-10：浮窗右上角 × 点不动。
-   * 根因：× 在标题栏内，标题栏这里 `setPointerCapture` ⇒ 后续 pointerup / click 改派给标题栏，
-   * 按钮自己的 click 收不到。这里对关闭按钮再挡一次（模板上的 `@pointerdown.stop` 是第二道）。
+   * 用户 2026-11-26（v5 定稿小样）：盒弹窗**只有贴图本身，无标题栏、无边框、无留边**
+   * ⇒ 拖动把手改成贴图本身。所以这里只挡按钮，不挡整条标题栏：
+   *   · 用户 2026-11-10 的旧坑仍在：`setPointerCapture` 会把 pointerup / click 改派给容器，
+   *     按钮自己的 click 就收不到（旧版「× 点不动」正是此因）；
+   *   · 现在浮窗里还有「整备」「拆分取用…」这些贴图按钮，一并排除，否则它们全点不动。
    */
-  if ((event.target as HTMLElement | null)?.closest('.boxpopup__close') != null) return
+  if ((event.target as HTMLElement | null)?.closest('button') != null) return
   drag.value = {
     startX: event.clientX,
     startY: event.clientY,
@@ -139,7 +141,8 @@ function onPopupPointerUp(): void {
       bottom: rect.bottom - offset.dy,
     },
     offset,
-    headerHeight: 28,
+    // 无标题栏 ⇒ 整张贴图都要留在视口内（旧值 28 是给标题栏留的拖拽余量）
+    headerHeight: 0,
   })
 }
 
@@ -179,30 +182,33 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
       <BoxCardFace :card="card" :width="displayWidth" />
     </template>
 
-    <!-- C-2：浮窗（Teleport 到 body，免得被托盘的 overflow 裁掉） -->
+    <!-- C-2：浮窗（Teleport 到 body）。2026-11-26 定稿：只有贴图本身 —— 无标题栏、无边框、无留边 -->
     <Teleport to="body">
       <div
         v-if="popped"
         ref="popupRef"
         class="boxpopup"
+        role="dialog"
+        :aria-label="card.name"
         :style="{
           transform: `translateX(-50%) translate(${popupOffset.dx}px, ${popupOffset.dy}px)`,
         }"
+        @pointerdown="onPopupPointerDown"
+        @pointermove="onPopupPointerMove"
+        @pointerup="onPopupPointerUp"
+        @pointercancel="onPopupPointerUp"
       >
-        <div
-          class="boxpopup__head"
-          @pointerdown="onPopupPointerDown"
-          @pointermove="onPopupPointerMove"
-          @pointerup="onPopupPointerUp"
-          @pointercancel="onPopupPointerUp"
-        >
-          <span class="boxpopup__title">{{ card.name }}</span>
-          <span class="num">{{ unitTotal }} 枚</span>
-          <button type="button" class="boxpopup__close" @pointerdown.stop @click="closePopup">
-            ×
-          </button>
-        </div>
         <BoxCardFace :card="card" :width="popupWidth" />
+        <button
+          type="button"
+          class="boxpopup__close"
+          :aria-label="`关闭 ${card.name}`"
+          title="关闭（Esc）"
+          @pointerdown.stop
+          @click="closePopup"
+        >
+          ×
+        </button>
       </div>
     </Teleport>
   </section>
@@ -263,47 +269,52 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
   white-space: nowrap;
 }
 
-/* ── C-2 浮窗（position: fixed；拖动范围由 clampDockOffset 夹住） ── */
+/* ── C-2 浮窗：2026-11-26 定稿小样口径「只有贴图本身，无标题栏、无边框、无留边」 ──
+   拖动手柄＝贴图（cursor: grab）；关闭是贴图右上角那枚悬浮圆 ×；Esc 仍然可关。 */
 .boxpopup {
   position: fixed;
   /*
-   * 2026-11-26：`left: 50%` 只把**左边缘**放到中线，而 transform 又被拖拽位移占用 ⇒
-   * 720 宽的浮窗会右溢出视口（1400 屏时标题栏「8 枚」被切）。居中交给模板里的
+   * `left: 50%` 只把**左边缘**放到中线，而 transform 又被拖拽位移占用 ⇒ 居中交给模板里的
    * `translateX(-50%)`（按自身宽度回半宽），这里只留锚点。
    */
   left: 50%;
-  top: 8%;
+  /* 顶栏两行之下再留 4px：贴图不压信息栏，也不落到视口外 */
+  top: 132px;
   z-index: 40;
+  width: fit-content;
   max-width: 94vw;
   max-height: 88vh;
   overflow: auto;
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-md);
-  background: var(--color-panel);
-  box-shadow: var(--shadow-md);
-}
-
-.boxpopup__head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--color-rule);
-  background: var(--color-bg-2);
-  cursor: move;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  /* 没有边框 ⇒ 用投影把贴图从底图上"抬起来"（小样同口径） */
+  filter: drop-shadow(0 10px 26px rgba(20, 18, 15, 0.34));
+  cursor: grab;
   touch-action: none;
 }
 
-.boxpopup__title {
-  flex: 1;
-  font-weight: 600;
+.boxpopup__close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(20, 18, 15, 0.62);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(2px);
 }
 
-.boxpopup__close {
-  border: none;
-  background: none;
-  color: var(--color-ink);
-  cursor: pointer;
-  font-size: var(--text-lg);
+.boxpopup__close:hover {
+  background: rgba(140, 47, 34, 0.9);
 }
 </style>

@@ -125,15 +125,15 @@ describe('⑤ 盒内单位：看得见、点得到', () => {
     expect(containers.deadPileUnits.soviet).toBeDefined()
   })
 
-  it('★ 浮窗右上角关闭 × 不会被标题栏拖拽吃掉点击（用户 2026-11-10）', () => {
+  it('★ 浮窗右上角关闭 × 不会被贴图拖拽吃掉点击（用户 2026-11-10，2026-11-26 改为整图当把手）', () => {
     /*
      * 现场：部分图外盒（浮窗形态）的关闭 × 点不动。
-     * 根因：× 在标题栏内，标题栏 `pointerdown` 里 `setPointerCapture` ⇒ 后续 pointerup/click
-     * 改派给标题栏，按钮自己的 click 永远收不到。修法：× 的 pointerdown 必须 `.stop`，
-     * 且拖拽入口对关闭按钮再挡一次（双保险，不靠 z-index）。
+     * 根因：× 在可拖区域里，`pointerdown` 里 `setPointerCapture` ⇒ 后续 pointerup/click
+     * 改派给容器，按钮自己的 click 永远收不到。修法：× 的 pointerdown 必须 `.stop`，
+     * 且拖拽入口把**所有按钮**挡一次（盒窗无标题栏后，整张贴图是把手，整备/拆分按钮同理）。
      */
     const card = readFileSync(join(ROOT, 'src/components/game/BoxCard.vue'), 'utf8')
     expect(card).toMatch(/boxpopup__close[^>]*@pointerdown\.stop/)
-    expect(card).toMatch(/onPopupPointerDown[\s\S]{0,400}boxpopup__close/)
+    expect(card).toMatch(/closest\('button'\)/)
   })
 })
