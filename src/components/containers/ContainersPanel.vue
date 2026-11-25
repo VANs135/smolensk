@@ -127,25 +127,16 @@ function pickBreakdownTarget(): void {
 }
 /** 编队抽签落盘的组成事实（编队 id → Mtr/Aufk/Krd 单位 id） */
 // ★ I②：组成由 store 自动推（containers.drawCompositionNoteOf），不再有玩家手输 unit id 的文本框
-/** 边缘盒进出：从可用单位中选，并决定用 MP 或铁路容量。 */
-const edgeUnitId = ref('')
+/**
+ * 边缘盒（专规 1.4b）
+ *
+ * 2026-11-26（用户第 2 条）：**入盒段删掉** —— 入盒改走地图外侧的「入盒带」
+ * （`containers.edgeBoxBandSeats` + 点带弹 1 MP／1 铁路），不再在这里选单位、勾铁路。
+ * 这里只留**出盒**（盒内点一枚 ⇒ 点地图选出盒格），并保留「用铁路运力」这一个开关。
+ */
 const edgeUseRailCap = ref(false)
 function edgeBoxOf(box: BoxView): EdgeBoxId {
   return box.id === 'edge-northeast' ? 'northeast' : 'southeast'
-}
-
-/** 批 D：边缘盒入盒单位改**算子图阵列**（每个盒各自的候选不同，故按盒算） */
-function edgeUnitPickerItems(box: BoxView): readonly CounterPickerItem[] {
-  return containers.edgeBoxEnterCandidates(edgeBoxOf(box), edgeUseRailCap.value).map((item) => {
-    const unit = workbench.units.find((candidate) => candidate.instanceId === item.id)
-    return {
-      id: item.id,
-      imageUrl: unit === undefined ? null : counterImageUrlOf(unit),
-      name: item.label,
-      selected: edgeUnitId.value === item.id,
-      hex: unit?.hex ?? null,
-    }
-  })
 }
 /** 编队收纳盒：编队、成员、图上成员、标记格、本次收纳 */
 const formationId = ref('')
@@ -792,6 +783,10 @@ function boxAircraft(side: Side) {
                 </template>
                 <!-- 边缘盒：离开（1.4b） -->
                 <template v-if="box.kind === 'edgeBox' && showsBoxActions('edgeBox')">
+                  <label class="field">
+                    <input v-model="edgeUseRailCap" type="checkbox" />
+                    用铁路运力
+                  </label>
                   <BaseButton
                     v-if="
                       containers.edgeBoxExitCandidates(
@@ -913,44 +908,6 @@ function boxAircraft(side: Side) {
         <p v-if="box.kind === 'specialReplBox'" class="muted num">
           抽取项：{{ itemsOf(box).join(' ／ ') }}
         </p>
-
-        <!-- 边缘盒（1.4b） -->
-        <div v-if="box.kind === 'edgeBox' && showsBoxActions('edgeBox')" class="row">
-          <CounterPicker
-            title="入盒单位"
-            :items="edgeUnitPickerItems(box)"
-            :size="32"
-            @pick="edgeUnitId = $event"
-            @hover="
-              workbench.setHoverHex(
-                edgeUnitPickerItems(box).find((item) => item.id === $event)?.hex ?? null,
-              )
-            "
-          />
-          <label class="field">
-            <input v-model="edgeUseRailCap" type="checkbox" />
-            进出改用铁路运力
-          </label>
-          <BaseButton
-            v-if="
-              containers
-                .edgeBoxEnterCandidates(edgeBoxOf(box), edgeUseRailCap)
-                .some((item) => item.id === edgeUnitId)
-            "
-            variant="primary"
-            size="sm"
-            @click="
-              containers.moveEdgeBox({
-                box: edgeBoxOf(box),
-                instanceId: edgeUnitId,
-                direction: 'enter',
-                useRailCap: edgeUseRailCap,
-              })
-            "
-          >
-            入盒（1.4b：进入即停）
-          </BaseButton>
-        </div>
 
         <!-- 编队收纳盒（13.7 / 3.6f） -->
         <div v-if="box.kind === 'formationBox' && showsBoxActions('formationBox')" class="row">

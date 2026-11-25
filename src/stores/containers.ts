@@ -12,7 +12,7 @@ import {
   unitsSoviet,
 } from '@/data'
 import type { HexRef, Side } from '@/data'
-import { hexsideOf, sameHex } from '@/engine/hex-geometry'
+import { HEX_BOUNDS, hexsideOf, sameHex } from '@/engine/hex-geometry'
 import { pickIndex, roll1d6 } from '@/engine/rng'
 import { SetupDrawSnapshotSchema } from '@/engine/setup-draw-snapshot'
 import { MARKER_TEXTURES, markerTextureUrl } from '@/render/token-images'
@@ -2665,6 +2665,20 @@ export const useContainersStore = defineStore('containers', () => {
     useRailCap?: boolean
   }
 
+  /**
+   * 1.4b 入盒带的一段（一格一段）
+   *
+   * · `side`：带长在这格的哪条边上 —— 东北盒接**北缘**、东南盒接**南缘**，两者都接**东缘**；
+   *   东缘优先（`col === HEX_BOUNDS.colEnd`）。
+   * · `units`：此刻站在该格且判得过的苏军地面算子（空 ⇒ 带只画灰虚线）。
+   */
+  interface EdgeBoxBandSeat {
+    box: EdgeBoxId
+    hex: HexRef
+    side: 'north' | 'south' | 'east'
+    units: readonly string[]
+  }
+
   const canUseEdgeBoxes = computed(
     () =>
       workbench.activeSide === 'soviet' &&
@@ -2788,6 +2802,71 @@ export const useContainersStore = defineStore('containers', () => {
 
   function canEnterEdgeBoxNow(box: EdgeBoxId, instanceId: string): boolean {
     return canUseEdgeBoxes.value && edgeTransferPlan({ box, instanceId, direction: 'enter' }).ok
+  }
+
+  /**
+   * **1.4b 入盒带**（2026-11-26 用户第 2 条：边缘盒改走地图外侧的带）
+   *
+   * 判据＝`edgeBoxConnectsHex(box, hex)` ∩ `workbench.openSupplySourceHexes`：
+   * 东北盒接**北缘＋东缘**、东南盒接**南缘＋东缘**（`edgeBoxConnection()`）。
+   * 带只长在合法格上；一格一段；段内只画方向箭头，不写字。
+   *
+   * `units` 是**此刻站在该格、且真能入盒**的苏军地面算子：空 ⇒ 带只画灰虚线，
+   * 不做"灰着不让点"以外的任何判据（点击仍会被 `moveEdgeBox` 用同一判定拒掉）。
+   */
+  const edgeBoxBandSeats = computed<readonly EdgeBoxBandSeat[]>(() => {
+    if (!canUseEdgeBoxes.value) return []
+    const seats: EdgeBoxBandSeat[] = []
+    for (const box of ['northeast', 'southeast'] as const) {
+      for (const hex of edgeBoxSources(box)) {
+        const side =
+          hex.col === HEX_BOUNDS.colEnd ? 'east' : box === 'northeast' ? 'north' : 'south'
+        const units = workbench.units
+          .filter(
+            (unit) =>
+              sameHex(unit.hex, hex) &&
+              edgeTransferPlan({ box, instanceId: unit.instanceId, direction: 'enter' }).ok,
+          )
+          .map((unit) => unit.instanceId)
+        seats.push({ box, hex: { ...hex }, side, units })
+      }
+    }
+    return seats
+  })
+
+  /**
+   * 点带入盒：把**站在该格的那一枚**送进盒，费用二选一（1 MP 默认 / 1 铁路运力）。
+   * 一格多枚时按实例 id 点名；没给 id 就取第一枚（带的状态已保证它们都判得过）。
+   */
+  function enterEdgeBoxAtHex(input: {
+    box: EdgeBoxId
+    hex: HexRef
+    instanceId?: string
+    useRailCap: boolean
+  }): boolean {
+    const seat = edgeBoxBandSeats.value.find(
+      (item) => item.box === input.box && sameHex(item.hex, input.hex),
+    )
+    if (seat === undefined) {
+      lastAction.value = { ok: false, rule: '1.4b', detail: '该格不接这个边缘盒', scope: '边缘盒' }
+      return false
+    }
+    const instanceId = input.instanceId ?? seat.units[0]
+    if (instanceId === undefined) {
+      lastAction.value = {
+        ok: false,
+        rule: '1.4b',
+        detail: '该格没有可入盒的单位',
+        scope: '边缘盒',
+      }
+      return false
+    }
+    return moveEdgeBox({
+      box: input.box,
+      instanceId,
+      direction: 'enter',
+      useRailCap: input.useRailCap,
+    })
   }
 
   function edgeBoxExitCandidates(box: EdgeBoxId, instanceId: string, useRailCap: boolean) {
@@ -3094,6 +3173,8 @@ export const useContainersStore = defineStore('containers', () => {
     canUseEdgeBoxes,
     edgeBoxEnterCandidates,
     canEnterEdgeBoxNow,
+    edgeBoxBandSeats,
+    enterEdgeBoxAtHex,
     edgeBoxExitCandidates,
     beginEdgeBoxExitHexPickNow,
     hideInFormationBox,

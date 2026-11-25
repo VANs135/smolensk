@@ -13,6 +13,7 @@ import {
   BoxCard,
   ChartTableDrawer,
   DecisionQueue,
+  EdgeBandTag,
   HotkeyHelpPanel,
   MapActionPopover,
   OverstackPanel,
@@ -37,8 +38,9 @@ import { provideUiMode } from '@/components/ui-mode'
 import { useBoxRail } from '@/components/game/box-rail'
 import { VictoryDialog, VictoryPanel } from '@/components/victory'
 import type { HexRef } from '@/data'
-import { COUNTER_BOX_LABELS, type CounterBoxTarget } from '@/stores/map-view'
-import { DEFAULT_MAP_LAYERS } from '@/render/map-render'
+import type { EdgeBoxId } from '@/engine/rules'
+import type { CounterBoxTarget } from '@/stores/map-view'
+import { DEFAULT_MAP_LAYERS, type EdgeBandPiece } from '@/render/map-render'
 import {
   useAppStore,
   useContainersStore,
@@ -342,22 +344,22 @@ function toggleRecording(): void {
 
 const mapCounterDrag = ref<string | null>(null)
 const airBoxMenu = ref<{ id: string; x: number; y: number } | null>(null)
-const setupBoxOpen = ref(false)
-const setupBoxSide = computed(() => (setup.finished ? null : setup.setupSideCursor))
-const setupBoxAircraft = computed(() =>
-  workbench.airUnits.filter(
-    (air) => air.side === setupBoxSide.value && workbench.airBoxMembers.includes(air.instanceId),
-  ),
+/*
+ * 2026-11-26（用户第 1 条）：地图右下的 `gt__box-targets` 整条删掉 —— 空军槽搬进
+ * `DecisionQueue` 底栏（面板内 40 槽 + 名册内联）。这里只留**拖放命中**：拖着一枚算子时
+ * 才需要知道能落进哪些盒（落点是面板里那枚 `data-counter-box="air"` 的槽）。
+ */
+const boxDropTargets = computed<readonly CounterBoxTarget[]>(() =>
+  mapCounterDrag.value === null ? [] : mapView.counterBoxTargets(mapCounterDrag.value),
 )
-const boxDropTargets = computed<readonly CounterBoxTarget[]>(() => {
-  if (mapCounterDrag.value !== null) return mapView.counterBoxTargets(mapCounterDrag.value)
-  return setupBoxSide.value === null ? [] : ['air']
-})
-watch([setupBoxSide, () => setup.scenarioId], () => {
-  airBoxMenu.value = null
-  mapCounterDrag.value = null
-  setupBoxOpen.value = false
-})
+watch(
+  () => setup.scenarioId,
+  () => {
+    airBoxMenu.value = null
+    mapCounterDrag.value = null
+    edgeBandChoice.value = null
+  },
+)
 
 function onMapContext(
   hex: HexRef | null,
@@ -400,20 +402,53 @@ function onCounterDrop(
   mapView.dropMovingCounterAt(id, hex, anchor, path)
 }
 
-function pickAirBox(): void {
-  const item = setup.placing
-  if (item?.kind === 'air' && setup.canPlaceAirInOffMapBox(item.side, item.entryIndex)) {
-    // 2026-11-19：放进盒的必须是玩家点中的那一枚（激活/未激活、完好/减损不能串）
-    setup.placeAirInOffMapBoxNow(item.side, item.entryIndex, item.faceIndex)
-    return
-  }
-  setupBoxOpen.value = !setupBoxOpen.value
-}
-
 function submitAirBoxMenu(): void {
   const menu = airBoxMenu.value
   airBoxMenu.value = null
   if (menu !== null) mapView.dropCounterInBox(menu.id, 'air')
+}
+
+/* ── 专规 1.4b：点地图外侧的入盒带 ⇒ 费用二选一（1 MP / 1 铁路运力） ── */
+
+const edgeBandChoice = ref<{
+  box: EdgeBoxId
+  hex: HexRef
+  hexText: string
+  label: string
+  x: number
+  y: number
+} | null>(null)
+
+/**
+ * 点带：只有**该格站着可入盒的算子**时才弹费用签（否则整条带只是灰虚线，
+ * 点了不该冒出「点了没反应」的小签）；小签落在带的右下方，不压住那条带。
+ */
+function onEdgeBandClick(piece: EdgeBandPiece): void {
+  const seat = containers.edgeBoxBandSeats.find(
+    (item) =>
+      item.box === piece.box && item.hex.col === piece.hex.col && item.hex.row === piece.hex.row,
+  )
+  if (seat === undefined || seat.units.length === 0) {
+    edgeBandChoice.value = null
+    return
+  }
+  const unit = workbench.units.find((item) => item.instanceId === seat.units[0])
+  const at = mapRef.value?.hexToWindow(piece.hex) ?? { x: 0, y: 0 }
+  edgeBandChoice.value = {
+    box: piece.box,
+    hex: { ...seat.hex },
+    hexText: `${seat.hex.col}.${seat.hex.row}`,
+    label: unit?.name ?? '',
+    x: Math.max(8, Math.min(at.x + 16, window.innerWidth - 230)),
+    y: Math.max(8, Math.min(at.y + 16, window.innerHeight - 96)),
+  }
+}
+
+function chooseEdgeBandCost(useRailCap: boolean): void {
+  const choice = edgeBandChoice.value
+  edgeBandChoice.value = null
+  if (choice === null) return
+  containers.enterEdgeBoxAtHex({ box: choice.box, hex: choice.hex, useRailCap })
 }
 
 function onHexClick(hex: HexRef, world: { x: number; y: number }, scale: number): void {
@@ -667,6 +702,7 @@ onBeforeUnmount(() => {
           :hover-preview="hoverPreviewText"
           :control-markers="mapView.controlMarkers"
           :markers="mapView.railheadMarkers"
+          :edge-bands="mapView.edgeBands"
           :boundary="mapView.boundary"
           :construction-markers="workbench.constructionMarkerPieces"
           :hint="workbench.mapHint"
@@ -678,6 +714,7 @@ onBeforeUnmount(() => {
           @counter-drag="mapCounterDrag = $event"
           @counter-drag-cancel="mapView.cancelCounterDragNow()"
           @counter-drop="onCounterDrop"
+          @edge-band-click="onEdgeBandClick"
         >
           <template #overlay>
             <DecisionQueue
@@ -685,31 +722,6 @@ onBeforeUnmount(() => {
               id="setup-queue"
               tabindex="-1"
             />
-            <div
-              v-if="boxDropTargets.length > 0"
-              class="gt__box-targets"
-              :class="{
-                'gt__box-targets--drag': mapCounterDrag !== null,
-              }"
-            >
-              <BaseButton
-                v-for="box in boxDropTargets"
-                :key="box"
-                :data-counter-box="box"
-                variant="secondary"
-                size="sm"
-                @click="box === 'air' && pickAirBox()"
-              >
-                {{ COUNTER_BOX_LABELS[box] }}
-                <span v-if="box === 'air'" class="num">{{ setupBoxAircraft.length }}</span>
-              </BaseButton>
-              <ul v-if="setupBoxOpen && boxDropTargets.includes('air')" class="gt__box-roster">
-                <li v-if="setupBoxAircraft.length === 0">空盒</li>
-                <li v-for="air in setupBoxAircraft" :key="air.instanceId">
-                  {{ air.name }} · {{ air.airStatus === 'active' ? '激活' : '非激活' }}
-                </li>
-              </ul>
-            </div>
             <div
               v-if="airBoxMenu !== null"
               class="gt__air-box-menu"
@@ -719,6 +731,15 @@ onBeforeUnmount(() => {
                 放入地图外空军盒 · 1.4a
               </BaseButton>
             </div>
+            <!-- 专规 1.4b：点带 ⇒ 费用二选一（1 MP 默认 / 1 铁路运力；小签不写规则解释） -->
+            <EdgeBandTag
+              v-if="edgeBandChoice !== null"
+              :x="edgeBandChoice.x"
+              :y="edgeBandChoice.y"
+              :label="edgeBandChoice.label"
+              :hex-text="edgeBandChoice.hexText"
+              @choose="chooseEdgeBandCost"
+            />
             <div
               v-if="workbench.pendingRailTransport !== null"
               class="gt__rail-confirm"
@@ -1054,21 +1075,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.gt__box-targets {
-  position: absolute;
-  right: var(--space-3);
-  bottom: var(--space-3);
-  z-index: var(--layer-map-popup);
-  display: flex;
-  gap: var(--space-2);
-}
-
-.gt__box-targets--drag {
-  outline: 2px solid var(--color-command-teal);
-  outline-offset: var(--space-1);
-  border-radius: var(--radius-sm);
-}
-
 .gt__air-box-menu {
   position: fixed;
   z-index: var(--layer-map-popup);
@@ -1111,22 +1117,6 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
-.gt__box-roster {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + var(--space-2));
-  max-height: 40vh;
-  min-width: 10rem;
-  overflow: auto;
-  margin: 0;
-  padding: var(--space-2);
-  list-style: none;
-  border: 1px solid var(--color-command-line);
-  border-radius: var(--radius-sm);
-  background: var(--color-command-panel);
-  color: var(--color-command-ink);
-  font-size: var(--text-xs);
-}
 /* 批 6：设置分组内一行（控件 + `?`），说明文字不铺在正排 */
 .gt__settings-row {
   display: flex;

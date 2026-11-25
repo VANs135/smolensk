@@ -27,6 +27,8 @@ import {
   type ControlMarker,
   type MapLayerVisibility,
   type MapMarkerPiece,
+  edgeBandRect,
+  type EdgeBandPiece,
 } from '@/render/map-render'
 import {
   allControlMarkerImageUrls,
@@ -165,6 +167,13 @@ const props = withDefaults(
      * `mapView.railheadMarkers` 传进来（画布不读 store）。
      */
     markers?: readonly MapMarkerPiece[] | null
+    /**
+     * 专规 1.4b：**边缘盒入盒带**（2026-11-26 用户第 2 条）
+     *
+     * 与 `markers` 同族的地图事实层（不是算子 ⇒ 不进 `tokens` 命中测试）；
+     * 点击由本组件按 `edgeBandRect`（与绘制同源）单独判，命中即 `emit('edgeBandClick', …)`。
+     */
+    edgeBands?: readonly EdgeBandPiece[] | null
   }>(),
   {
     fill: false,
@@ -183,6 +192,7 @@ const props = withDefaults(
     boundary: null,
     constructionMarkers: null,
     markers: null,
+    edgeBands: null,
   },
 )
 
@@ -216,6 +226,12 @@ const emit = defineEmits<{
   hexDblClick: [hex: HexRef, world: { x: number; y: number }, scale: number]
   /** 悬停格变化（离开画布为 null） */
   hexHover: [hex: HexRef | null]
+  /**
+   * 专规 1.4b：**点了某一格外的入盒带**（段身份原样带出：哪一盒 / 哪一格 / 哪条边）
+   *
+   * 费用二选一（1 MP / 1 铁路运力）由上层弹小签，本组件只管命中。
+   */
+  edgeBandClick: [piece: EdgeBandPiece]
 }>()
 
 const container = ref<HTMLDivElement | null>(null)
@@ -545,6 +561,7 @@ function render(): void {
     boundary: props.boundary,
     constructionMarkers: props.constructionMarkers,
     markers: props.markers,
+    edgeBands: props.edgeBands,
   })
 }
 
@@ -673,6 +690,29 @@ function tokenTipAt(hex: HexRef, world: { x: number; y: number }): string | null
     scale: viewport.value.scale,
   })
   return token?.tip ?? null
+}
+
+/**
+ * 视口内坐标 → 命中的**入盒带段**（专规 1.4b；与绘制同源：都用 `edgeBandRect` 的矩形）
+ *
+ * 带长在图幅外圈的留白里，所以它**不在**任何格的六边形内 —— 必须在 `hitTestHex` 之前判，
+ * 否则点带只会落成 `blankClick`。命中容差 2 世界像素（细带在小缩放下也好点）。
+ */
+function edgeBandAtLocal(point: { x: number; y: number }): EdgeBandPiece | null {
+  const bands = props.edgeBands
+  if (bands === null || bands === undefined || bands.length === 0) return null
+  const world = screenToWorld(point, viewport.value)
+  for (const piece of bands) {
+    const rect = edgeBandRect(piece)
+    if (
+      world.x >= rect.x - 2 &&
+      world.x <= rect.x + rect.w + 2 &&
+      world.y >= rect.y - 2 &&
+      world.y <= rect.y + rect.h + 2
+    )
+      return piece
+  }
+  return null
 }
 
 function onWheel(event: WheelEvent): void {
@@ -901,6 +941,12 @@ function onPointerUp(event: PointerEvent): void {
   if (!ended.clicked) return
   const local = toLocal(event)
   if (local === null) return
+  // 1.4b 入盒带：命中在格外留白里，先于格命中判（否则只会落到 blankClick）
+  const band = edgeBandAtLocal(local)
+  if (band !== null) {
+    emit('edgeBandClick', band)
+    return
+  }
   const hit = hitAtLocal(local)
   if (hit !== null) emit('hexClick', hit.hex, hit.world, viewport.value.scale)
   else emit('blankClick')
@@ -1092,6 +1138,7 @@ watch(
  * computed 重建，也有原地 push 的工事记录，两种都要接住。
  */
 watch(() => props.markers, scheduleRender, { deep: true })
+watch(() => props.edgeBands, scheduleRender, { deep: true })
 watch(() => props.controlMarkers, scheduleRender, { deep: true })
 watch(() => props.constructionMarkers, scheduleRender, { deep: true })
 

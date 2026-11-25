@@ -5,6 +5,7 @@ import {
   CALIBRATION_CANVAS_OFFSET,
   CALIBRATION_ORIGIN,
   HEX_COL_SPACING_PX,
+  HEX_INRADIUS_PX,
   HEX_RADIUS_PX,
   HEX_ROW_SPACING_PX,
   hexCanvasCorners,
@@ -188,6 +189,13 @@ export const MAP_PALETTE = {
   dragPath: '#2f7d4f',
   dragPathBlocked: '#b3261e',
 } as const
+
+/**
+ * 1.4b 入盒带的两种描边（§4.1b 状态口径）：
+ * 空闲＝`#b3aa93` 虚线；该格站着可入盒的算子＝teal 实线（1.5px）。
+ */
+export const EDGE_BAND_IDLE_STROKE = '#b3aa93'
+export const EDGE_BAND_ACTIVE_STROKE = '#2f6f5e'
 
 /** 图层开关 */
 export interface MapLayerVisibility {
@@ -391,6 +399,65 @@ export interface MapRenderOptions {
    * 不进命中测试。`image` 是 `public/counters/markers/` 下的文件名（如 `Neutral_Railhead.png`）。
    */
   markers?: readonly MapMarkerPiece[] | null
+  /**
+   * 专规 1.4b：**边缘盒「入盒带」**（2026-11-26 用户第 2 条）
+   *
+   * 与 `controlMarkers`/`constructionMarkers`/`markers` 同族：**地图事实**、不是算子 ⇒
+   * 不可选中、不进 `tokens` 命中测试（点击由画布单独判 `edgeBandRect`）。
+   * 带的合法格由状态层给（`containers.edgeBoxBandSeats`：`edgeBoxConnectsHex ∩ 开放补给源`）。
+   */
+  edgeBands?: readonly EdgeBandPiece[] | null
+}
+
+/**
+ * 1.4b 入盒带的一段（**一格一段**）
+ *
+ * · `side`：带长在该格的哪条边上 —— 东北盒接北缘、东南盒接南缘，两者都接东缘；
+ * · `occupied`：该格**此刻站着**可入盒的苏军地面算子 ⇒ 实线 teal 强调（否则灰虚线）。
+ */
+export interface EdgeBandPiece {
+  box: 'northeast' | 'southeast'
+  hex: HexRef
+  side: 'north' | 'south' | 'east'
+  occupied: boolean
+}
+
+/** 带宽（画布像素，18 与 §4.1b 同口径；随缩放同比） */
+export const EDGE_BAND_THICKNESS_PX = 18
+
+/**
+ * 一段带的画布矩形（纯函数：**绘制与命中同源**）
+ *
+ * 位置＝贴着该格朝外的那条边、落在图幅外圈留白里（`BOARD_MARGIN_PX = 24`）：
+ *   · 北：格心上方 `内切半径 + 带厚`，宽＝平顶边长（`R`）；
+ *   · 南：格心下方 `内切半径`，同宽；
+ *   · 东：格心右侧 `R`，18×18 的小段（flat-top 的东侧是两条斜边交出的顶点，不做长条）。
+ */
+export function edgeBandRect(piece: EdgeBandPiece): {
+  x: number
+  y: number
+  w: number
+  h: number
+} {
+  const center = hexCanvasPoint(piece.hex)
+  const thick = EDGE_BAND_THICKNESS_PX
+  if (piece.side === 'north') {
+    return {
+      x: center.x - HEX_RADIUS_PX / 2,
+      y: center.y - HEX_INRADIUS_PX - thick,
+      w: HEX_RADIUS_PX,
+      h: thick,
+    }
+  }
+  if (piece.side === 'south') {
+    return {
+      x: center.x - HEX_RADIUS_PX / 2,
+      y: center.y + HEX_INRADIUS_PX,
+      w: HEX_RADIUS_PX,
+      h: thick,
+    }
+  }
+  return { x: center.x + HEX_RADIUS_PX, y: center.y - thick / 2, w: thick, h: thick }
 }
 
 /** 13.3d：一枚地图标记（格 + 贴图文件名） */
@@ -827,6 +894,39 @@ export function drawMap(ctx: CanvasRenderingContext2D, options: MapRenderOptions
       )
       ctx.fillStyle = '#ffffff'
       ctx.fillText(badge.kind === 'bridge' ? '桥' : '机', badge.center.x, badge.center.y)
+    }
+  }
+
+  /*
+   * ⑫ 专规 1.4b：**边缘盒入盒带**（2026-11-26 用户第 2 条）
+   *
+   *   · 只在合法格上长：`containers.edgeBoxBandSeats` 已按 `edgeBoxConnectsHex ∩ 开放补给源` 筛过，
+   *     本层不判规则，只画；
+   *   · 一格一段：宽＝该格平顶边（`R`）或 18 小段、厚 18、虚线 1px `#b3aa93`、底 `#efe9dc` 半透明；
+   *   · 段内只有方向箭头（东北 ↗ / 东南 ↘），**不写字**；
+   *   · 该格站着可入盒的算子 ⇒ 1.5px teal 实边 + 底 `#e4efe9`（§4.1b 的状态②）；
+   *   · **不是算子**：不进 `tokens`；命中由画布按 `edgeBandRect` 单独判（同源）。
+   */
+  const edgeBands = options.edgeBands ?? null
+  if (edgeBands !== null && edgeBands.length > 0) {
+    const fontPx = 11 / scale
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.font = `${fontPx.toFixed(1)}px ui-monospace, monospace`
+    for (const piece of edgeBands) {
+      const rect = edgeBandRect(piece)
+      ctx.beginPath()
+      ctx.roundRect?.(rect.x, rect.y, rect.w, rect.h, 4)
+      if (ctx.roundRect === undefined) ctx.rect(rect.x, rect.y, rect.w, rect.h)
+      ctx.fillStyle = piece.occupied ? 'rgba(228, 239, 233, 0.94)' : 'rgba(239, 233, 220, 0.92)'
+      ctx.fill()
+      ctx.strokeStyle = piece.occupied ? EDGE_BAND_ACTIVE_STROKE : EDGE_BAND_IDLE_STROKE
+      ctx.lineWidth = (piece.occupied ? 1.5 : 1) / scale
+      ctx.setLineDash(piece.occupied ? [] : [4 / scale, 3 / scale])
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.fillStyle = piece.occupied ? EDGE_BAND_ACTIVE_STROKE : EDGE_BAND_IDLE_STROKE
+      ctx.fillText(piece.box === 'northeast' ? '↗' : '↘', rect.x + rect.w / 2, rect.y + rect.h / 2)
     }
   }
 

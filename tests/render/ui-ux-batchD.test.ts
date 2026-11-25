@@ -23,15 +23,19 @@ describe('批 D：主路径下拉改阵列 / 按钮组', () => {
     expect(panel).not.toContain("label: '燃料（12.5）'")
   })
 
-  it('拆分母单位 / 边缘盒单位：select 改 CounterPicker 算子图阵列', () => {
+  it('拆分母单位改 CounterPicker 阵列；边缘盒入盒改走「入盒带」（2026-11-26）', () => {
     const panel = read('src/components/containers/ContainersPanel.vue')
     expect(panel).not.toContain('v-model="breakdownParentId"')
+    // 2026-11-26（用户第 2 条）：ContainersPanel 的入盒段整段删掉 ⇒ 不再有按单位选的阵列与入盒按钮
     expect(panel).not.toContain('v-model="edgeUnitId"')
+    expect(panel).not.toContain('edgeBoxEnterCandidates')
     expect(panel).toContain('parentPickerItems')
-    expect(panel).toContain('edgeUnitPickerItems')
     expect(panel).toMatch(/import \{ CounterPicker/)
     // 阵列条目必须带算子图，不能退化成纯文字
     expect(panel).toContain('imageUrl: unit === undefined ? null : counterImageUrlOf(unit)')
+    // 入盒改走地图外侧的带：画布按 `edgeBandRect` 命中，点带弹 1 MP／1 铁路的小签
+    expect(read('src/components/map/MapCanvas.vue')).toContain('edgeBandRect')
+    expect(read('src/components/game/EdgeBandTag.vue')).toContain('1 铁路运力')
   })
 
   it('编队收纳：select 改按钮组', () => {

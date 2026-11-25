@@ -40,6 +40,7 @@ import {
   type UnitToken,
   type ZocOverlay,
 } from '@/render/token-layer'
+import type { EdgeBandPiece } from '@/render/map-render'
 import {
   defaultSelectionOf,
   hitStackFan,
@@ -106,12 +107,6 @@ const MODE_LETTER: Record<string, string> = {
 export type MapPopupVariant = 'content' | 'context'
 
 export type CounterBoxTarget = 'air' | 'northeast' | 'southeast'
-
-export const COUNTER_BOX_LABELS: Readonly<Record<CounterBoxTarget, string>> = {
-  air: '地图外空军盒',
-  northeast: '东北盒',
-  southeast: '东南盒',
-}
 
 type ContextPanel = 'air' | 'supply' | 'fort' | 'containers'
 type ContextGroup =
@@ -1176,6 +1171,22 @@ export const useMapViewStore = defineStore('mapView', () => {
     }
     return out
   })
+
+  /**
+   * 专规 1.4b：**边缘盒入盒带**（2026-11-26 用户第 2 条：改走地图外侧的带，不再拖槽）
+   *
+   * 只做投影：哪一盒 / 哪一格 / 哪条边 / 该格是否站着一枚可入盒的算子。
+   * 合法格与"站着的算子"全在 `containers.edgeBoxBandSeats`（判据 `edgeBoxConnectsHex ∩ 开放补给源`），
+   * 本层不判规则、不自己筛格。
+   */
+  const edgeBands = computed<readonly EdgeBandPiece[]>(() =>
+    containers.edgeBoxBandSeats.map((seat) => ({
+      box: seat.box,
+      hex: { ...seat.hex },
+      side: seat.side,
+      occupied: seat.units.length > 0,
+    })),
+  )
 
   /* ────────────── 9.14c/d 特殊战斗：位移落点由玩家在地图上选 ────────────── */
 
@@ -3288,15 +3299,18 @@ export const useMapViewStore = defineStore('mapView', () => {
     return true
   }
 
-  /** 拖放与右键共用候选。判定和落账仍由初设或容器命令处理。 */
+  /**
+   * 拖放与右键共用候选。判定和落账仍由初设或容器命令处理。
+   *
+   * 2026-11-26（用户第 2 条）：**边缘盒的东北 / 东南两支删掉** —— 1.4b 入盒改走
+   * 地图外侧的「入盒带」（`containers.edgeBoxBandSeats` + 点带弹 1 MP／1 铁路），
+   * 不再把算子拖到一枚槽上（槽与带判的是同一件事，槽是多余的第二套手）。
+   */
   function counterBoxTargets(instanceId: string): CounterBoxTarget[] {
     // H1：移动交互中的算子拖动＝"走到那一格"，不给盒入口（否则拖动时冒出图外盒）
     if (workbench.activeMoveUnits.some((unit) => unit.instanceId === instanceId)) return []
     if (!setup.finished) return setup.canMoveSetupAirToBox(instanceId) ? ['air'] : []
-    if (!canOpenCounterContext() || !containers.canUseEdgeBoxes) return []
-    return (['northeast', 'southeast'] as const).filter((box) =>
-      containers.canEnterEdgeBoxNow(box, instanceId),
-    )
+    return []
   }
 
   function counterForBoxAt(hex: HexRef, world: { x: number; y: number }, scale: number) {
@@ -5131,6 +5145,7 @@ export const useMapViewStore = defineStore('mapView', () => {
     controlMarkers,
     // 13.3d：铁路端头标记（`mk-38`；地图事实层，与 controlMarkers 并列）
     railheadMarkers,
+    edgeBands,
     // 用户口径：地图上方不放消息栏 ⇒ 这一行搬进流程条（方案 §4.5 的动作提示带）
     actionHint,
     // B17a-3：专规动作会话的开关（顶栏按钮打开）
