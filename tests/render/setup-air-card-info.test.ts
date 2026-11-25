@@ -12,7 +12,7 @@ describe('初设飞机：按四个面分栏', () => {
   const source = readFileSync('src/components/game/DecisionQueue.vue', 'utf8')
 
   it('飞机不再写「机型 · 激活态」文字行，改为四栏', () => {
-    expect(source).toContain("stack.key === 'air'")
+    expect(source).toContain("activeRow.key === 'air'")
     expect(source).toContain('queue__air')
     expect(source).toContain('airFaceSections')
     expect(source).not.toContain('airCardText')

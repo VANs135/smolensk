@@ -8,69 +8,115 @@ import {
   useHotseatStore,
   useSetupStore,
   useTutorialStore,
+  useWorkbenchStore,
   type DecisionStack,
   type PresetSetupResult,
   type SetupPlacing,
 } from '@/stores'
 
 /**
- * **待你决定的队列**（B11；地图左上角 · 四堆叠）
+ * **初设面板**（B11 → 2026-11-26 v5 合成面板）
  *
- * ## 用户口径⑨
- *   「地图窗口左上角的框（**地面 / 非战斗 / 飞机 / 卡车**各一堆叠，点开可多选）→ 选中单位时**高亮可放格** →
- *    点地图格**落一个**（**同型多枚时逐个落**，数量角标递减到 0 才关卡片）；
- *    飞机先高亮本方空军基地格；卡车卡片上直接选「满载 1F / 空载 1」（13.2h）」。
+ * ## 用户口径（2026-11-26 第 1 条）
+ *   「DecisionQueue 外部换成 460 面板（段条复用 SetupPanel.vue:225 CATEGORIES 的四类），
+ *    把 gt__box-targets 收成底栏 40 槽 + 名册内联，然后删掉地图右下那条。」
  *
- * ## 这一件东西修好了哪两条备忘
- *   · **#1**：放飞机后数量**真的减**（逐枚落位 + 进度来自 store），且基地未落位时提示「先落本方空军基地（14.1a）」
- *     ——不再冒出引擎那句"调用方未提供 airBaseHexes"；
- *   · **#2**：同型多枚**可落在不同格**（点一格落一枚，卡片留到落满）。
+ * ## 为什么是「一个面板」而不是四个窗
+ *   初设期玩家只做一件事——把这堆算子放到图上或盒里。段条替代四个窗（切段 ≠ 切任务）；
+ *   空军槽替代地图右下的那排槽（入盒只是落点的第二种）。整块只有 1 个头、1 个段条、
+ *   1 份当前段手牌、1 条底栏，避免同屏出现两个「完成初设」。
  *
  * ## 分层纪律
- *   本组件只画与收点击：四堆的分组、每堆还剩几枚、每张卡的 `remaining/total`、阻塞原因
- *   **全部来自 `setup.decisionQueue`**（store 侧投影）；本组件不解释规则、不自己数数。
- *   ★ 卡片内的算子图阵列（`CounterPicker`）属 B13，本批先用紧凑文字卡（算子上信息已够，故不加额外说明）。
+ *   本组件只画与收点击：每段还剩几枚、每张卡的 `remaining/total`、阻塞原因全部来自
+ *   `setup.decisionQueue` / `setup.sideQueue`（store 侧投影）；本组件不解释规则、不自己数数。
  */
 
 const setup = useSetupStore()
 const hotseat = useHotseatStore()
+const workbench = useWorkbenchStore()
 /**
  * 教学模式（用户 2026-11-23）：苏方初设由脚本自动落完，轴心的飞机要玩家自己入盒 ⇒
  * 这一模式下不给「自动放置」按钮（否则一键就把自己的 7 架飞机也摆好了，那一步就白教）。
  */
 const tutorial = useTutorialStore()
-/**
- * 一键预设初设（B2；2026-11-19 用户裁定改为**一键全落**）
- *
- * 修前只传 `onlySide: presetSide`（仅 AI 方）：轴心先手的剧本 3–7 游标还在玩家方，
- * `presetSelfSetupNow` 直接空转 ⇒ 按钮"点了没反应"。用户改为一键全落双方：
- * 复用既有无参路径（7 剧本测试全绿，`remaining=0`），教学/PVE 也走同一条，落完即可开局。
- * 入口与初设主入口同一处；不替玩家点开始游戏。
- */
+
+/** 一键预设初设（B2；2026-11-19 用户裁定改为**一键全落**） */
 const presetResult = ref<PresetSetupResult | null>(null)
 
 function runPresetSetup(): void {
   presetResult.value = setup.presetSelfSetupNow()
 }
 
-/** 展开的堆叠（默认全开：整批一眼看完，不必逐堆点开） */
-const closedKeys = ref<Set<DecisionStack['key']>>(new Set())
-
 /** 四堆（含枚数与卡片） */
 const stacks = computed(() => setup.sideQueue)
 
-/** 只摆有内容的堆：空格不占版面（整批一眼看完） */
-const visibleStacks = computed(() => stacks.value.filter((stack) => stack.items.length > 0))
-
 /**
- * 分区排布：有飞机且有地面/非战斗时，**左右两栏**（左＝地面/非战斗，右＝飞机），
- * 让整批在 960×571 的地图窗口内不用上下滚动；只有一类时单列铺满。
+ * 段条的四段：**直接复述** `SetupPanel.vue:225 CATEGORIES` 的三类 + 卡车单入口
+ * （地面单位与基地 / SP 与运输点 / 飞机 / 卡车）。段是手牌内部的分隔，不是第二个窗。
  */
-const sectionsLayout = computed(() =>
-  visibleStacks.value.some((stack) => stack.key === 'air') &&
-  visibleStacks.value.some((stack) => stack.key === 'ground' || stack.key === 'supply')
-    ? 'split'
-    : 'stack',
+const SEGMENTS: readonly { key: DecisionStack['key']; label: string; name: string }[] = [
+  { key: 'ground', label: '地面', name: '地面单位与基地' },
+  { key: 'supply', label: 'SP', name: 'SP 与运输点' },
+  { key: 'air', label: '飞机', name: '飞机' },
+  { key: 'truck', label: '卡车', name: '编内卡车' },
+]
+
+interface SegmentRow {
+  key: DecisionStack['key']
+  label: string
+  name: string
+  /** 该段还剩几枚（卡车按辆） */
+  count: number
+  items: readonly SetupPlacing[]
+}
+
+const segmentRows = computed<readonly SegmentRow[]>(() =>
+  SEGMENTS.map((segment) => {
+    const stack = stacks.value.find((item) => item.key === segment.key)
+    return {
+      key: segment.key,
+      label: segment.label,
+      name: segment.name,
+      count: stack?.count ?? 0,
+      items: stack?.items ?? [],
+    }
+  }),
+)
+
+/** 当前展开的段（只有它铺开手牌，其余收在段条里） */
+const activeSeg = ref<DecisionStack['key']>('ground')
+
+/** 当前段没有牌时，自动落到第一个有牌的段（切方 / 落满后都不留一个空面板） */
+const activeRow = computed<SegmentRow>(() => {
+  const current = segmentRows.value.find((row) => row.key === activeSeg.value)
+  if (current !== undefined && current.items.length > 0) return current
+  return segmentRows.value.find((row) => row.items.length > 0) ?? current ?? segmentRows.value[0]!
+})
+
+watch(
+  () => [setup.scenarioId, setup.setupSideCursor, activeRow.value.key] as const,
+  () => {
+    if (activeRow.value.key !== activeSeg.value) activeSeg.value = activeRow.value.key
+    omitConfirmed.value = false
+    presetResult.value = null
+  },
+  { immediate: true },
+)
+
+/** 头部的进度 chip（已落 / 应落）：来源＝各段卡片的 placed/total + 已完成项 */
+const progressTotal = computed(
+  () =>
+    stacks.value.reduce(
+      (total, stack) => total + stack.items.reduce((sum, item) => sum + item.total, 0),
+      0,
+    ) + setup.completedPlacements.reduce((total, item) => total + item.total, 0),
+)
+const progressDone = computed(
+  () =>
+    stacks.value.reduce(
+      (total, stack) => total + stack.items.reduce((sum, item) => sum + item.placed, 0),
+      0,
+    ) + setup.completedPlacements.reduce((total, item) => total + item.placed, 0),
 )
 
 /** 当前轮到哪一方布设（null = 不分方 / 两方都已确认） */
@@ -103,14 +149,8 @@ function sideName(side: 'axis' | 'soviet'): string {
   return side === 'axis' ? '轴心国' : '苏联'
 }
 
-/**
- * 批 G（用户 2026-11-16；2026-11-19 改版）：飞机按**四栏**分开
- *
- * 激活/未激活 × 完好/减损＝四个互斥的“面”。每栏只放该面的逐枚算子（同栏内跨机型平铺），
- * 计数与图档同源（`setup.pendingAirFaces` 读 `planAirSetup` 的三条并列数组）。
- * 2026-11-19：**不再用下拉选图外盒**——点某一枚 ⇒ 该枚上方出现「入盒」按钮；
- * 点算子本身则高亮地图上的合法基地格，点格落位。
- */
+/* ── 飞机段：四个「面」（激活/未激活 × 完好/减损） ── */
+
 interface AirChip {
   key: string
   item: SetupPlacing
@@ -137,7 +177,7 @@ const AIR_FACE_GROUPS = [
 ] as const
 
 const airFaceSections = computed<readonly AirFaceSection[]>(() => {
-  const items = (stacks.value.find((stack) => stack.key === 'air')?.items ?? []).filter(
+  const items = (activeRow.value.items ?? []).filter(
     (item) => item.kind === 'air' && !cardBlocked(item),
   )
   return AIR_FACE_GROUPS.map((group) => {
@@ -190,16 +230,40 @@ function sendAirToBox(chip: AirChip): void {
   setup.placeAirInOffMapBoxNow(chip.item.side, chip.item.entryIndex, chip.faceIndex)
 }
 
-/** 还没落位的**总枚数**（标题上的角标） */
+/* ── 底栏：空军槽 + 名册（从地图右下搬进来；2026-11-26 用户第 1 条） ── */
+
+const setupBoxSide = computed(() => (setup.finished ? null : setup.setupSideCursor))
+const setupBoxAircraft = computed(() =>
+  workbench.airUnits.filter(
+    (air) => air.side === setupBoxSide.value && workbench.airBoxMembers.includes(air.instanceId),
+  ),
+)
+const rosterOpen = ref(false)
+watch([setupBoxSide, () => setup.scenarioId], () => {
+  rosterOpen.value = false
+})
+
+/**
+ * 点空军槽（原 `GameTableView.pickAirBox` 同一套判据，搬到面板内）：
+ * ① 正在放的那一枚是飞机且可入盒 ⇒ 直接入盒（专规 1.4a）；② 否则展开/收起名册。
+ */
+function onSlotClick(): void {
+  const item = setup.placing
+  if (item?.kind === 'air' && setup.canPlaceAirInOffMapBox(item.side, item.entryIndex)) {
+    setup.placeAirInOffMapBoxNow(item.side, item.entryIndex, item.faceIndex)
+    return
+  }
+  rosterOpen.value = !rosterOpen.value
+}
+
+/* ── 未落位的总枚数 / 主入口 / 卡片 ── */
+
+/** 还没落位的**总枚数**（段条与头部共用） */
 const pendingTotal = computed(() => stacks.value.reduce((total, stack) => total + stack.count, 0))
 
 /** 当前正在地图上选落点的那一项（null = 没在放） */
 const placing = computed(() => setup.placing)
 const omitConfirmed = ref(false)
-watch([() => setup.scenarioId, () => setup.omittablePlacements], () => {
-  omitConfirmed.value = false
-  presetResult.value = null
-})
 
 /** 是否**全部落位完毕**（落满 ⇒ 队列收起列表、就地给「完成初设」） */
 const allPlaced = computed(() => setup.initialPlacementsComplete)
@@ -221,16 +285,46 @@ const setupPrimary = computed<{ label: string; run: () => void } | null>(() => {
   return null
 })
 
-function toggleStack(key: DecisionStack['key']): void {
-  const next = new Set(closedKeys.value)
-  if (next.has(key)) next.delete(key)
-  else next.add(key)
-  closedKeys.value = next
+/** 不可落位的卡片是「待办状态」，不是可点动作：渲染成 div，不摆 disabled 按钮 */
+function cardBlocked(item: SetupPlacing): boolean {
+  return item.kind === 'truck' || (item.blockedReason !== null && item.offMapAllowed !== true)
 }
 
-/** 该堆是否展开（默认展开） */
-function isOpen(key: DecisionStack['key']): boolean {
-  return !closedKeys.value.has(key)
+function onCardClick(item: SetupPlacing): void {
+  if (!cardBlocked(item)) pick(item)
+}
+
+/** 该卡是否是当前正在落位的那一项 */
+function isActive(item: SetupPlacing): boolean {
+  const current = placing.value
+  if (current === null) return false
+  return (
+    current.kind === item.kind &&
+    current.entryIndex === item.entryIndex &&
+    current.side === item.side &&
+    // §6-A：ch10 西移项没有 entryIndex ⇒ 按编队 id 比对
+    (item.kind !== 'shift' || current.formationId === item.formationId)
+  )
+}
+
+/** 点卡片：开始在地图上落位（飞机走空军基地格；卡车直接在卡上选满载） */
+function pick(item: SetupPlacing): void {
+  if (item.kind === 'truck') return
+  // 卡被挡时不再借右键旁路兜底：落盒由卡下的「放入地图外盒」按钮单独承担
+  // ★ 裁定 1：ch10 西移项的候选只是"按初设行算出的范围"；算不出来时玩家仍可点任意图上格
+  if (item.blockedReason !== null && item.kind !== 'shift') return
+  // §6-A：ch10 抽中西移的师（落点按原文算法（沿道路西移 3 格）得出，道路数据不全 ⇒ 由玩家点地图给）
+  if (item.kind === 'shift') {
+    if (item.formationId !== undefined) setup.beginShiftPlacement(item.formationId)
+    return
+  }
+  if (item.kind === 'self') setup.beginSelfPlacement(item.entryIndex)
+  else setup.beginAirPlacement(item.side, item.entryIndex)
+}
+
+/** 阵营标记（只作显示；不参与任何判定） */
+function sideMark(side: 'axis' | 'soviet'): string {
+  return side === 'axis' ? '轴' : '苏'
 }
 
 /* ── B38：拖动（与唯一会话框同一套几何；松手夹回容器内，至少留 8px 可见，拖不丢） ── */
@@ -289,49 +383,6 @@ function onPointerUp(): void {
     headerHeight: 28,
   })
 }
-
-/** 不可落位的卡片是「待办状态」，不是可点动作：渲染成 div，不摆 disabled 按钮 */
-function cardBlocked(item: SetupPlacing): boolean {
-  return item.kind === 'truck' || (item.blockedReason !== null && item.offMapAllowed !== true)
-}
-
-function onCardClick(item: SetupPlacing): void {
-  if (!cardBlocked(item)) pick(item)
-}
-
-/** 该卡是否是当前正在落位的那一项 */
-function isActive(item: SetupPlacing): boolean {
-  const current = placing.value
-  if (current === null) return false
-  return (
-    current.kind === item.kind &&
-    current.entryIndex === item.entryIndex &&
-    current.side === item.side &&
-    // §6-A：ch10 西移项没有 entryIndex ⇒ 按编队 id 比对
-    (item.kind !== 'shift' || current.formationId === item.formationId)
-  )
-}
-
-/** 点卡片：开始在地图上落位（飞机走空军基地格；卡车直接在卡上选满载） */
-function pick(item: SetupPlacing): void {
-  if (item.kind === 'truck') return
-  // 卡被挡时不再借右键旁路兜底：落盒由卡下的「放入地图外盒」按钮单独承担
-  // ★ 裁定 1：ch10 西移项的候选只是"按初设行算出的范围"；算不出来时玩家仍可点任意图上格
-  //   （`placeAtHex` 对 shift 只校验在图上）⇒ 不能因为 blockedReason 把整项锁死。
-  if (item.blockedReason !== null && item.kind !== 'shift') return
-  // §6-A：ch10 抽中西移的师（落点按原文算法（沿道路西移 3 格）得出，道路数据不全 ⇒ 由玩家点地图给）
-  if (item.kind === 'shift') {
-    if (item.formationId !== undefined) setup.beginShiftPlacement(item.formationId)
-    return
-  }
-  if (item.kind === 'self') setup.beginSelfPlacement(item.entryIndex)
-  else setup.beginAirPlacement(item.side, item.entryIndex)
-}
-
-/** 阵营标记（只作显示；不参与任何判定） */
-function sideMark(side: 'axis' | 'soviet'): string {
-  return side === 'axis' ? '轴' : '苏'
-}
 </script>
 
 <template>
@@ -344,7 +395,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
     @click.stop
     @wheel.stop
   >
-    <!-- B38：标题栏可拖（松手夹回地图窗口内；口径 #5「初设框不能拖」） -->
+    <!-- 头：初设 · 侧 · 当前段 + 进度 chip（段名跟段条同步，不另写"初设阶段三"） -->
     <header
       class="queue__head"
       @pointerdown="onPointerDown"
@@ -356,80 +407,77 @@ function sideMark(side: 'axis' | 'soviet'): string {
       <span v-if="cursorSide !== null" class="queue__current" :data-side="cursorSide">
         {{ sideName(cursorSide) }}
       </span>
-      <span class="queue__pending num">{{ pendingTotal }} 待处理</span>
+      <span class="queue__seg-name">{{ activeRow.name }}</span>
+      <span class="queue__progress num">{{ progressDone }} / {{ progressTotal }}</span>
     </header>
 
-    <!--
-      M3（用户 2026-11-16；2026-11-18 更正）：初设收束**单入口** —— 开始游戏 / 完成初设
-      由 `setupPrimary` 按状态合成一枚按钮；抽签已在「完成初设」时自动执行，不再单独给按钮。
-      B2：一键预设初设与主入口同一处（只落 AI 控制的一方）。
-      H5：落位可一步撤回。四类动作收进**同一行**，避免初设框被按钮堆高。
-    -->
-    <div class="queue__actions">
-      <!-- 主操作常驻：开始游戏 / 完成初设；分方游标下的「确认本方布设」也是推进主动作 -->
-      <BaseButton
-        v-if="setupPrimary !== null"
-        variant="primary"
-        size="sm"
-        @click="setupPrimary.run()"
+    <!-- 段条：一行四枚（地面 / SP / 飞机 / 卡车），点段头即切段，不弹第二个窗 -->
+    <nav class="queue__segs" aria-label="初设分段">
+      <button
+        v-for="stack in segmentRows"
+        :key="stack.key"
+        type="button"
+        class="queue__stack-btn"
+        :class="{
+          'queue__stack-btn--on': stack.key === activeRow.key,
+          'queue__stack-btn--done': stack.items.length === 0,
+        }"
+        :data-stack="stack.key"
+        :aria-pressed="stack.key === activeRow.key"
+        :title="stack.name"
+        @click="activeSeg = stack.key"
       >
-        {{ setupPrimary.label }}
-      </BaseButton>
-      <template v-if="cursorWindowForViewer">
-        <!--
-          第六批条 1（S1）：分方游标 —— 先布设方布设完按一下即换手；
-          本方还有必做项（SP 归属 / 卡车满载 / 编队西移）未落实时不出现。
-        -->
-        <BaseButton
-          v-if="cursorSide !== null && setup.currentSideSetupBlocker === null"
-          variant="primary"
-          size="sm"
-          @click="setup.confirmSideSetup()"
-        >
-          确认
-        </BaseButton>
-      </template>
-
-      <!--
-        2026-11-19（用户第 1 条）：一键预设改为**一键全落双方**，与确认/主入口同排常驻
-        （安卓不再折进「更多」，避免"点了没反应"被藏起来）；撤回与结果提示仍属次要，收进折叠。
-        2026-11-19（用户二次反馈）：文案「一键预设初设」→「自动放置」（更短、语义更直白）。
-        2026-11-23（用户）：教学模式不出现 —— 苏方初设已是自动的，轴心的 7 架飞机必须自己摆。
-      -->
-      <BaseButton
-        v-if="hotseat.canPreset && !setup.finished && !tutorial.active"
-        variant="secondary"
-        size="sm"
-        @click="runPresetSetup()"
-      >
-        自动放置
-      </BaseButton>
-
-      <!--
-        2026-11-19（用户「不需要箭头呼出和文字了」）：撤回 ↺ 直接平铺在动作列，
-        「更多」折叠整个去掉（桌面此前也恒展开，观感不变）；结果提示保留给读屏，
-        安卓由 android.css 隐藏文字。
-        2026-11-20（用户）：撤回改成图标、挪到棋桌左栏「设置」下方（`GameTableView` 的 rail），
-        本动作列不再放撤回，避免初设框多一行。
-      -->
-      <span v-if="presetResult !== null" class="queue__hint num">
-        已落 {{ presetResult.placed }} · 剩 {{ presetResult.remaining }} · 失败
-        {{ presetResult.failures.length }}
-      </span>
-    </div>
+        <span class="queue__stack-btn-label">{{ stack.label }}</span>
+        <span class="queue__stack-btn-count num">{{
+          stack.key === 'truck' && setup.truckFullDone ? '✓' : stack.count
+        }}</span>
+      </button>
+    </nav>
 
     <p v-if="!cursorWindowForViewer" class="queue__wait" role="status">
       {{ waitingSideName }}正在初设，等当前方完成后自动轮到你。
     </p>
     <template v-else>
-      <!-- M3：原来的「完成初设」已并入上面的唯一主入口（条件同 `allPlaced && 无游标 && 未确认`） -->
-      <!-- H5：撤回入口已并入上面的同一行 -->
+      <!-- 动作行：主入口（开始游戏 / 完成初设）· 分方确认 · 自动放置 -->
+      <div class="queue__actions">
+        <BaseButton
+          v-if="setupPrimary !== null"
+          variant="primary"
+          size="sm"
+          @click="setupPrimary.run()"
+        >
+          {{ setupPrimary.label }}
+        </BaseButton>
+        <template v-if="cursorWindowForViewer">
+          <!--
+            第六批条 1（S1）：分方游标 —— 先布设方布设完按一下即换手；
+            本方还有必做项（SP 归属 / 卡车满载 / 编队西移）未落实时不出现。
+          -->
+          <BaseButton
+            v-if="cursorSide !== null && setup.currentSideSetupBlocker === null"
+            variant="primary"
+            size="sm"
+            @click="setup.confirmSideSetup()"
+          >
+            确认
+          </BaseButton>
+        </template>
+        <span class="queue__pending num">{{ pendingTotal }} 待处理</span>
+        <BaseButton
+          v-if="hotseat.canPreset && !setup.finished && !tutorial.active"
+          variant="secondary"
+          size="sm"
+          @click="runPresetSetup()"
+        >
+          自动放置
+        </BaseButton>
+        <span v-if="presetResult !== null" class="queue__hint num">
+          已落 {{ presetResult.placed }} · 剩 {{ presetResult.remaining }} · 失败
+          {{ presetResult.failures.length }}
+        </span>
+      </div>
 
-      <!--
-        选中行（非飞机放置）：机型 · 剩 N · 取消选格。
-        2026-11-20（用户）：飞机的这排内容要在**飞机阵列上方**（原入盒条的位置）才好操作
-        ⇒ 飞机放置走下面 air 段里的合并行，这里只管地面单位 / SP。
-      -->
+      <!-- 选中行（非飞机放置）：机型 · 剩 N · 取消选格（飞机的这排在飞机阵列上方） -->
       <div v-if="placing !== null && placing.kind !== 'air'" class="queue__active">
         <strong class="queue__label" :title="placing.label">{{ placing.label }}</strong>
         <span class="queue__pending num">剩 {{ placing.remaining }}</span>
@@ -516,10 +564,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
         {{ setup.lastAction.detail }}
       </p>
 
-      <!--
-      P4 / UI1-b：三组只读分组（必做事项 / 可自主放弃项 / 已完成项）。
-      计数与条目全部来自 store 投影；四堆叠仍是下面可点图落位的操作区。
-    -->
+      <!-- P4 / UI1-b：三组只读分组（必做事项 / 可自主放弃项 / 已完成项） -->
       <details v-if="setup.sideSetupIssues.length > 0" class="queue__group">
         <summary class="queue__group-title">
           <span>必做事项</span>
@@ -594,176 +639,343 @@ function sideMark(side: 'axis' | 'soviet'): string {
         </ul>
       </details>
 
-      <div class="queue__sections" :class="`queue__sections--${sectionsLayout}`">
-        <div
-          v-for="stack in visibleStacks"
-          v-show="!allPlaced"
-          :key="stack.key"
-          class="queue__stack"
-          :class="{ 'queue__stack--wide': stack.key === 'air' }"
-          :data-stack="stack.key"
-        >
-          <button
-            type="button"
-            class="queue__stack-btn"
-            :aria-expanded="isOpen(stack.key)"
-            @click="toggleStack(stack.key)"
+      <!-- 当前段手牌：只有这一段铺开，其余段收在段条里 -->
+      <div v-show="!allPlaced" class="queue__hand" :data-hand="activeRow.key">
+        <!--
+          飞机：四个面分区（激活/未激活 × 完好/减损）。
+          点某一枚 ⇒ 地图高亮合法基地格，且该枚上方出现「入盒」；点格落位，点「入盒」进图外盒。
+        -->
+        <div v-if="activeRow.key === 'air'" class="queue__air">
+          <!--
+            合并行（2026-11-20 用户定稿）：**在飞机阵列上方** ——
+            入盒 · 取消选格 · 机型 · 剩 N · 说明文字，一路从左排到右；
+            两枚按钮固定在最左侧，文案在按钮右边。恒占位（"突变影响操作"）。
+          -->
+          <div
+            class="queue__air-pickbar"
+            :class="{ 'queue__air-pickbar--idle': airPickedChip === null }"
           >
-            <span class="queue__stack-name">{{ stack.label }}</span>
-            <span class="queue__stack-count num">{{ stack.count }}</span>
-            <span class="queue__caret">
-              <BaseIcon :name="isOpen(stack.key) ? 'chevron-down' : 'chevron-right'" />
-            </span>
-          </button>
-
-          <template v-if="isOpen(stack.key)">
-            <!--
-              飞机：四个面分区（激活/未激活 × 完好/减损）。
-              点某一枚 ⇒ 地图高亮合法基地格，且该枚上方出现「入盒」；点格落位，点「入盒」进图外盒。
-              2026-11-19：删掉原来的图外盒下拉——它把“哪一枚”藏在机型后面，
-              激活/未激活、完好/减损四类分不清。
-            -->
-            <div v-if="stack.key === 'air'" class="queue__air">
-              <!--
-                合并行（2026-11-20 用户定稿）：**在飞机阵列上方**（原入盒条位置，箭头所指）——
-                入盒 · 取消选格 · 机型 · 剩 N · 说明文字，一路从左排到右；
-                两枚按钮固定在最左侧（入盒最左、取消选格紧随其后），文案在按钮右边。
-                恒占位（2026-11-19「突变影响操作」）：未选中时空态同样列出两枚压暗按钮，行高与按钮位置都不挪。
-              -->
-              <div
-                class="queue__air-pickbar"
-                :class="{ 'queue__air-pickbar--idle': airPickedChip === null }"
+            <template v-if="airPickedChip !== null && placing !== null">
+              <BaseButton variant="primary" size="sm" @click="sendAirToBox(airPickedChip)">
+                入盒
+              </BaseButton>
+              <BaseButton variant="ghost" size="sm" @click="setup.cancelPlacement()">
+                取消选格
+              </BaseButton>
+              <strong class="queue__label" :title="placing.label">{{ placing.label }}</strong>
+              <span class="queue__pending num">剩 {{ placing.remaining }}</span>
+              <span
+                v-if="placing.candidates.length === 0"
+                class="queue__hint"
+                title="无基地格（14.1a）：入盒或点高亮的基地格"
               >
-                <template v-if="airPickedChip !== null && placing !== null">
-                  <BaseButton variant="primary" size="sm" @click="sendAirToBox(airPickedChip)">
-                    入盒
-                  </BaseButton>
-                  <BaseButton variant="ghost" size="sm" @click="setup.cancelPlacement()">
-                    取消选格
-                  </BaseButton>
-                  <strong class="queue__label" :title="placing.label">{{ placing.label }}</strong>
-                  <span class="queue__pending num">剩 {{ placing.remaining }}</span>
-                  <span
-                    v-if="placing.candidates.length === 0"
-                    class="queue__hint"
-                    title="无基地格（14.1a）：入盒或点高亮的基地格"
-                  >
-                    无基地格（14.1a）：点「入盒」
-                  </span>
-                </template>
-                <template v-else>
-                  <BaseButton
-                    variant="primary"
-                    size="sm"
-                    class="queue__air-pickbar-btn--idle"
-                    :aria-disabled="true"
-                    @click="airPickedChip !== null && sendAirToBox(airPickedChip)"
-                  >
-                    入盒
-                  </BaseButton>
-                  <BaseButton
-                    variant="ghost"
-                    size="sm"
-                    class="queue__air-pickbar-btn--idle"
-                    :aria-disabled="true"
-                    @click="placing !== null && setup.cancelPlacement()"
-                  >
-                    取消选格
-                  </BaseButton>
-                  <span class="queue__hint">点下方一枚飞机——落基地格或「入盒」</span>
-                </template>
-              </div>
-              <div
-                v-for="group in airFaceSections"
-                :key="group.key"
-                class="queue__air-col"
-                :data-face="group.key"
+                无基地格（14.1a）：点「入盒」
+              </span>
+            </template>
+            <template v-else>
+              <BaseButton
+                variant="primary"
+                size="sm"
+                class="queue__air-pickbar-btn--idle"
+                :aria-disabled="true"
+                @click="airPickedChip !== null && sendAirToBox(airPickedChip)"
               >
-                <div class="queue__air-col-head">
-                  <span>{{ group.label }}</span>
-                  <span class="num">{{ group.count }}</span>
-                </div>
-                <div class="queue__air-array">
-                  <div v-for="chip in group.chips" :key="chip.key" class="queue__air-slot">
-                    <button
-                      type="button"
-                      class="queue__air-chip"
-                      :class="{ 'queue__air-chip--on': isAirChipPicked(chip) }"
-                      :title="`${group.label} · ${chip.item.label}（${chip.item.placed}/${chip.item.total}）`"
-                      @click="pickAir(chip.item, chip)"
-                    >
-                      <img
-                        v-if="chip.imageUrl !== null"
-                        :src="chip.imageUrl"
-                        alt=""
-                        draggable="false"
-                      />
-                      <span v-if="chip.reduced" class="queue__air-flag num">减</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
+                入盒
+              </BaseButton>
+              <BaseButton
+                variant="ghost"
+                size="sm"
+                class="queue__air-pickbar-btn--idle"
+                :aria-disabled="true"
+                @click="placing !== null && setup.cancelPlacement()"
+              >
+                取消选格
+              </BaseButton>
+              <span class="queue__hint">点下方一枚飞机——落基地格或「入盒」</span>
+            </template>
+          </div>
+          <div
+            v-for="group in airFaceSections"
+            :key="group.key"
+            class="queue__air-col"
+            :data-face="group.key"
+          >
+            <div class="queue__air-col-head">
+              <span>{{ group.label }}</span>
+              <span class="num">{{ group.count }}</span>
             </div>
-
-            <!-- 地面 / 非战斗 / 卡车：算子网格（左右上下排列，不再一单位一行） -->
-            <div v-else class="queue__grid">
-              <component
-                :is="cardBlocked(item) ? 'div' : 'button'"
-                v-for="item in stack.items"
-                :key="`${item.kind}:${item.side}:${item.entryIndex}:${item.formationId ?? item.instanceId ?? ''}`"
-                :type="cardBlocked(item) ? undefined : 'button'"
-                class="queue__cell"
-                :class="{
-                  'queue__cell--on': isActive(item),
-                  'queue__cell--blocked': item.blockedReason !== null,
-                }"
-                :title="
-                  item.offMapAllowed === true
-                    ? '点卡后点基地放入；飞机另有逐枚「入盒」按钮'
-                    : (item.blockedReason ?? `${item.raw}（${sideName(item.side)}）`)
-                "
-                :aria-pressed="cardBlocked(item) ? undefined : isActive(item)"
-                :aria-disabled="cardBlocked(item) ? 'true' : undefined"
-                @click="onCardClick(item)"
-              >
-                <span class="queue__counter">
+            <div class="queue__air-array">
+              <div v-for="chip in group.chips" :key="chip.key" class="queue__air-slot">
+                <button
+                  type="button"
+                  class="queue__air-chip"
+                  :class="{ 'queue__air-chip--on': isAirChipPicked(chip) }"
+                  :title="`${group.label} · ${chip.item.label}（${chip.item.placed}/${chip.item.total}）`"
+                  @click="pickAir(chip.item, chip)"
+                >
                   <img
-                    v-if="item.imageUrl !== null"
-                    :src="item.imageUrl"
-                    :alt="item.label"
-                    class="queue__counter-img"
+                    v-if="chip.imageUrl !== null"
+                    :src="chip.imageUrl"
+                    alt=""
                     draggable="false"
                   />
-                  <!-- 用户 2026-11-11：有算子图就不再用文字重复名称；无图才退回文字 -->
-                  <span v-if="item.imageUrl === null" class="queue__label">{{ item.label }}</span>
-                  <span class="queue__side num">{{ sideMark(item.side) }}</span>
-                  <span class="queue__badge num">
-                    {{
-                      item.kind === 'truck'
-                        ? item.placed > 0
-                          ? '满载'
-                          : '空载'
-                        : `${item.placed}/${item.total}`
-                    }}
-                  </span>
-                </span>
-                <!-- 批 H（用户 2026-11-16）：地面单位卡补**番号**（编队 / 师属标识），不加描述 -->
-                <span v-if="item.formation" class="queue__formation num">{{ item.formation }}</span>
-              </component>
+                  <span v-if="chip.reduced" class="queue__air-flag num">减</span>
+                </button>
+              </div>
             </div>
-          </template>
+          </div>
         </div>
+
+        <!-- 地面 / SP / 卡车：算子网格（32px 可点） -->
+        <div v-else-if="activeRow.items.length > 0" class="queue__grid">
+          <component
+            :is="cardBlocked(item) ? 'div' : 'button'"
+            v-for="item in activeRow.items"
+            :key="`${item.kind}:${item.side}:${item.entryIndex}:${item.formationId ?? item.instanceId ?? ''}`"
+            :type="cardBlocked(item) ? undefined : 'button'"
+            class="queue__cell"
+            :class="{
+              'queue__cell--on': isActive(item),
+              'queue__cell--blocked': item.blockedReason !== null,
+            }"
+            :title="
+              item.offMapAllowed === true
+                ? '点卡后点基地放入；飞机另有逐枚「入盒」按钮'
+                : (item.blockedReason ?? `${item.raw}（${sideName(item.side)}）`)
+            "
+            :aria-pressed="cardBlocked(item) ? undefined : isActive(item)"
+            :aria-disabled="cardBlocked(item) ? 'true' : undefined"
+            @click="onCardClick(item)"
+          >
+            <span class="queue__counter">
+              <img
+                v-if="item.imageUrl !== null"
+                :src="item.imageUrl"
+                :alt="item.label"
+                class="queue__counter-img"
+                draggable="false"
+              />
+              <!-- 用户 2026-11-11：有算子图就不再用文字重复名称；无图才退回文字 -->
+              <span v-if="item.imageUrl === null" class="queue__label">{{ item.label }}</span>
+              <span class="queue__side num">{{ sideMark(item.side) }}</span>
+              <span class="queue__badge num">
+                {{
+                  item.kind === 'truck'
+                    ? item.placed > 0
+                      ? '满载'
+                      : '空载'
+                    : `${item.placed}/${item.total}`
+                }}
+              </span>
+            </span>
+            <!-- 批 H（用户 2026-11-16）：地面单位卡补**番号**（编队 / 师属标识），不加描述 -->
+            <span v-if="item.formation" class="queue__formation num">{{ item.formation }}</span>
+          </component>
+        </div>
+        <p v-else class="queue__empty">本段没有待落位的算子。</p>
       </div>
     </template>
+
+    <!--
+      底栏（2026-11-26 用户第 1 条「把 gt__box-targets 收成底栏 40 槽 + 名册内联」）：
+      名册在同一行左侧展开，槽在右；槽上方不再挂浮层，地图右下那条不再存在。
+    -->
+    <footer class="queue__foot">
+      <ul v-if="rosterOpen" class="queue__roster" aria-label="地图外空军盒名册">
+        <li v-if="setupBoxAircraft.length === 0">空盒</li>
+        <li v-for="air in setupBoxAircraft" :key="air.instanceId">
+          <span class="queue__roster-name">{{ air.name }}</span>
+          <span class="num">{{ air.airStatus === 'active' ? '激活' : '非激活' }}</span>
+        </li>
+      </ul>
+      <div class="queue__foot-spacer" />
+      <button
+        type="button"
+        class="queue__slot"
+        data-counter-box="air"
+        :aria-label="`地图外空军盒（${setupBoxAircraft.length} 枚）`"
+        :aria-expanded="rosterOpen"
+        title="地图外空军盒（专规 1.4a）：点已选中的飞机＝直接入盒；否则展开名册"
+        @click="onSlotClick()"
+      >
+        <BaseIcon name="plane" size="24px" />
+        <span class="queue__slot-count num">{{ setupBoxAircraft.length }}</span>
+      </button>
+    </footer>
   </section>
 </template>
 
 <style scoped>
-/* B38：标题栏是拖动抓手 */
+/* ── 面板本体（460；2026-11-26 用户第 1 条） ── */
+.queue {
+  /* 算子尺寸（v5 定稿：初设队列卡 32px；飞机同为 32px） */
+  --queue-counter: 32px;
+  --queue-air-counter: 32px;
+  --queue-cell: 38px;
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-3);
+  z-index: var(--layer-map-popup);
+  width: min(460px, calc(100% - 2 * var(--space-3)));
+  max-height: calc(100% - 2 * var(--space-3));
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-lg);
+  background: var(--color-panel);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+
+.queue:focus-visible {
+  outline-color: var(--color-command-amber);
+}
+
+/* 标题栏是拖动抓手 */
 .queue__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height-sm);
   cursor: move;
   touch-action: none;
   user-select: none;
+}
+
+.queue__title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: var(--text-lg);
+}
+
+.queue__current {
+  font-weight: 700;
+}
+
+.queue__current[data-side='axis'] {
+  color: var(--color-command-axis);
+}
+
+.queue__current[data-side='soviet'] {
+  color: var(--color-command-soviet);
+}
+
+/* 头部第三段（当前段名＝段条的复述，不另起标题行） */
+.queue__seg-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue__progress {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-bg-2);
+  color: var(--color-ink);
+  font-size: var(--text-xs);
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+/* ── 段条：一行四枚 chip（当前段 teal 实底 + 粗体；已清段虚线） ── */
+.queue__segs {
+  display: flex;
+  gap: 4px;
+  padding: 2px 0 var(--space-1);
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.queue__stack-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 4px;
+  /* 可点高度 ≥32px（ui-hardening UI-1 的同一口径） */
+  min-height: 32px;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-2);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.queue__stack-btn--done {
+  border-style: dashed;
+  color: var(--color-muted);
+}
+
+.queue__stack-btn--on {
+  border-color: var(--color-command-teal);
+  background: var(--color-command-teal);
+  color: var(--color-bg);
+  font-weight: 700;
+}
+
+.queue__stack-btn-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue__stack-btn-count {
+  opacity: 0.9;
+}
+
+.queue__pending {
+  color: var(--color-command-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.queue__row-actions,
+.queue__active {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+/* 初设动作收一行，把高度让给手牌 */
+.queue__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: 2px 0;
+}
+
+.queue__row-actions :deep(.btn) {
+  margin-left: auto;
+}
+
+.queue__active {
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-command-teal);
+  border-radius: var(--radius-md);
+  background: var(--color-command-teal-bg);
+}
+
+.queue__error {
+  margin: 0;
+  font-size: var(--text-xs);
+  padding: var(--space-2) 0;
+  color: var(--color-command-danger);
 }
 
 .queue__done {
@@ -828,172 +1040,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
   background: var(--color-bg-2);
 }
 
-.queue {
-  /* 算子尺寸（box 网格）：地面/补给 38px、飞机 34px；比旧的 26px 行明显大一档 */
-  --queue-counter: 38px;
-  --queue-air-counter: 34px;
-  --queue-cell: 46px;
-  position: absolute;
-  left: var(--space-3);
-  top: var(--space-3);
-  z-index: var(--layer-map-popup);
-  width: min(680px, calc(100% - 2 * var(--space-3)));
-  max-height: calc(100% - 2 * var(--space-3));
-  overflow: auto;
-  overscroll-behavior: contain;
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-lg);
-  background: var(--color-panel);
-  color: var(--color-ink);
-  box-shadow: var(--shadow-lg);
-  font-size: var(--text-sm);
-  line-height: 1.35;
-}
-
-.queue:focus-visible {
-  outline-color: var(--color-command-amber);
-}
-
-.queue__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: var(--control-height-sm);
-}
-
-.queue__title {
-  font-family: var(--font-head);
-  font-weight: 700;
-  font-size: var(--text-lg);
-}
-
-.queue__current {
-  font-weight: 700;
-}
-
-.queue__current[data-side='axis'] {
-  color: var(--color-command-axis);
-}
-
-.queue__current[data-side='soviet'] {
-  color: var(--color-command-soviet);
-}
-
-.queue__pending {
-  margin-left: auto;
-  color: var(--color-command-muted);
-  font-size: var(--text-xs);
-  white-space: nowrap;
-}
-
-.queue__row-actions,
-.queue__active {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  padding: var(--space-2) 0;
-}
-
-/* 初设动作收成一行（主入口 / 预设 / 确认布设 / 撤回），把高度让给算子网格 */
-.queue__actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  padding: 2px 0;
-}
-
-/* 2026-11-19（用户「不需要箭头呼出」）：「更多」折叠整体移除，撤回 ↺ 直接平铺在动作列 */
-
-.queue__row-actions :deep(.btn) {
-  margin-left: auto;
-}
-
-.queue__active {
-  margin-top: var(--space-2);
-  padding: var(--space-2);
-  border: 1px solid var(--color-command-teal);
-  border-radius: var(--radius-md);
-  background: var(--color-command-teal-bg);
-}
-
-.queue__error {
-  margin: 0;
-  font-size: var(--text-xs);
-  padding: var(--space-2) 0;
-  color: var(--color-command-danger);
-}
-
-/* 分区网格：默认单列；有飞机 + 地面/非战斗时左右两栏（飞机独占右栏） */
-.queue__sections {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 2px var(--space-2);
-  align-items: start;
-}
-
-.queue__sections--split {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.queue__sections--split [data-stack='ground'] {
-  grid-column: 1;
-  grid-row: 1 / span 2;
-}
-
-.queue__sections--split [data-stack='supply'] {
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.queue__sections--split [data-stack='air'] {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.queue__sections--split [data-stack='truck'] {
-  grid-column: 1 / -1;
-}
-
-.queue__stack {
-  border-top: 1px solid var(--color-rule);
-  min-width: 0;
-}
-
-.queue__stack--wide {
-  grid-column: 1 / -1;
-}
-
-.queue__stack-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 32px;
-  padding: 2px 0;
-  border: none;
-  background: transparent;
-  color: var(--color-ink);
-  font: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-
-.queue__stack-name {
-  flex: 1;
-}
-
-.queue__stack-count {
-  color: var(--color-muted);
-}
-
-.queue__caret {
-  color: var(--color-muted);
-}
-
 /* 「可自主放弃项」的只读清单（不是待落位网格） */
 .queue__cards {
   margin: 0;
@@ -1012,7 +1058,15 @@ function sideMark(side: 'axis' | 'soviet'): string {
   white-space: nowrap;
 }
 
-/* 待落位算子：box 网格（左右上下排列） */
+/* 当前段手牌（只有这一段铺开） */
+.queue__hand {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-1) 0 var(--space-2);
+  min-height: 0;
+}
+
+/* 待落位算子：box 网格（32px 卡） */
 .queue__grid {
   display: flex;
   flex-wrap: wrap;
@@ -1061,7 +1115,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
   color: var(--color-muted);
 }
 
-/* 第六批条 1（S1）：算子图（队列里的卡片按图认子，不再只靠行号） */
+/* 算子图（队列里的卡片按图认子，不再只靠行号） */
 .queue__counter {
   position: relative;
   display: block;
@@ -1134,7 +1188,7 @@ function sideMark(side: 'axis' | 'soviet'): string {
   color: var(--color-muted);
 }
 
-/* 批 G / 2026-11-19：飞机按四个“面”分区（激活/未激活 × 完好/减损） */
+/* 飞机：四个「面」分区 */
 .queue__air {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1176,9 +1230,8 @@ function sideMark(side: 'axis' | 'soviet'): string {
 }
 
 /*
- * 合并行（2026-11-20）：飞机阵列正上方，入盒 · 取消选格 · 机型 · 剩 N · 说明。
- * 横条而不是贴着算子边缘的浮标：底部 sheet 滚动时不会被裁掉半个；
- * 恒占位 ⇒ 未选中时空态两枚按钮只压暗，行高与按钮位置都不变（用户「突变不要挪按钮」）。
+ * 合并行：飞机阵列正上方，入盒 · 取消选格 · 机型 · 剩 N · 说明。
+ * 恒占位 ⇒ 未选中时空态两枚按钮只压暗，行高与按钮位置都不变。
  */
 .queue__air-pickbar {
   grid-column: 1 / -1;
@@ -1204,11 +1257,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
 }
 
 .queue__air-pickbar .queue__hint {
-  /*
-   * UI-3（2026-11-25）：修前 `nowrap + ellipsis + overflow:hidden` 把
-   * 「点下方一枚飞机——落基地格或「入盒」」硬裁成「点下方一枚飞…」（scrollWidth > clientWidth）。
-   * 提示本来就短，允许换行即可，别再裁字。
-   */
   flex: 1 1 auto;
   min-width: 0;
   white-space: normal;
@@ -1295,12 +1343,6 @@ function sideMark(side: 'axis' | 'soviet'): string {
   accent-color: var(--color-command-teal);
 }
 
-.queue__blocked {
-  padding-inline: var(--space-1);
-  font-size: var(--text-xs);
-  color: var(--color-warning);
-}
-
 .queue__empty {
   margin: 0 0 var(--space-1);
   color: var(--color-muted);
@@ -1341,5 +1383,80 @@ function sideMark(side: 'axis' | 'soviet'): string {
   background: var(--color-command-teal-bg);
   color: var(--color-command-teal);
   font-weight: 600;
+}
+
+/* ── 底栏：名册内联 + 空军槽 40（§4.5） ── */
+.queue__foot {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--color-rule);
+}
+
+.queue__foot-spacer {
+  flex: 1 1 auto;
+}
+
+.queue__roster {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 170px;
+  max-height: 132px;
+  overflow: auto;
+  font-size: var(--text-xs);
+  line-height: 1.35;
+}
+
+.queue__roster li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  /* 可点高度 ≥32px（ui-hardening UI-1 的同一口径） */
+  min-height: 32px;
+}
+
+.queue__roster-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 落点槽：40×40、虚线 1px、深底浅字；不是按钮形态（不写文字） */
+.queue__slot {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--color-rule);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-2);
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.queue__slot:hover {
+  border-color: var(--color-accent);
+}
+
+.queue__slot-count {
+  position: absolute;
+  right: -5px;
+  top: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--color-ink);
+  color: var(--color-bg);
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
 }
 </style>

@@ -24,19 +24,21 @@ describe('初设队列：box 网格布局', () => {
     expect(queue).not.toContain('<ul v-if="openKey === stack.key && stack.items.length > 0"')
   })
 
-  it('★ 算子放大（地面/补给 ≥ 36px、飞机 ≥ 32px），面板加宽', () => {
-    expect(queue).toMatch(/--queue-counter:\s*(3[6-9]|[4-9][0-9])px/)
-    expect(queue).toMatch(/--queue-air-counter:\s*(3[2-9]|[4-9][0-9])px/)
+  it('★ 算子 32px、面板 460（2026-11-26 合成面板口径；36/38 与 680 的旧口径已作废）', () => {
+    expect(queue).toMatch(/--queue-counter:\s*32px/)
+    expect(queue).toMatch(/--queue-air-counter:\s*32px/)
     expect(queue).toMatch(/\.queue__counter-img\s*\{[^}]*width:\s*100%/)
     expect(queue).toMatch(/\.queue__air-chip img\s*\{[^}]*width:\s*100%/)
-    // 面板不再固定 300px 宽（放不下多列网格）
+    // 面板宽 460（§4.5），不再固定 300px、也不是旧的 680
+    expect(queue).toMatch(/width:\s*min\(460px/)
     expect(queue).not.toContain('width: min(300px, 65%)')
+    expect(queue).not.toContain('width: min(680px')
   })
 
-  it('★ 飞机独立分区（与地面 / 非战斗分开），按四个面分栏', () => {
+  it('★ 段条四枚 chip + 只有当前段铺开手牌（合成一块，不再四堆平铺）', () => {
     expect(queue).toContain(':data-stack="stack.key"')
-    expect(queue).toContain("stack.key === 'air'")
-    expect(queue).toContain("'queue__stack--wide': stack.key === 'air'")
+    expect(queue).toContain('segmentRows')
+    expect(queue).toContain('activeRow.key')
     expect(queue).toContain('queue__air')
     expect(queue).toContain('airFaceSections')
     expect(queue).toContain('queue__air-col-head')
