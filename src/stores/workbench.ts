@@ -8780,6 +8780,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     const candidates = units.value.filter(
       (unit) => unit.side === activeSide.value && !hasLiveTraceSupply(unit),
     )
+    // 零候选时没有 verdict 要求值；建索引会扫两遍全 army，不能为它白付。
+    if (candidates.length === 0) return []
     // 档1/2：索引、地图事实、通行性与 ZOC 查询**每次求值建一份**，本次全部候选复用
     // （都只依赖静态 `mapLayers` 与本单位阵营，与候选无关）
     const shared: BreakoutSharedFacts = buildBreakoutSharedFacts()
@@ -19235,23 +19237,20 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     () => units.value.filter((unit) => groupOfUnit(unit) !== null).length,
   )
 
-  /**
-   * 专规 3.4：裁判声明的「属多单位编队」实例 id（专规 3.4 只约束多单位编队，步兵师与独立单位不受限）
-   *
-   * 默认口径与编队数据一致：**凡属某装甲集群的算子即属多单位编队**（编队单位目录里的算子），
-   * 故同样不必玩家逐个登记；此数组只用于显式补充。
-   */
+  /** 专规 3.4：裁判声明的「属多单位编队」实例 id（只约束多单位编队；默认编队归属见 `groupOfUnit`） */
   const multiUnitFormationIds = ref<string[]>([])
 
-  /** 专规 3.4a：分界线判据所需的单位视图 */
+  /** 专规 3.4a：分界线判据所需的单位视图（只收真属装甲集群的单位） */
   const panzerGroupUnitViews = computed<PanzerGroupUnitView[]>(() =>
-    units.value.map((unit) => ({
-      id: unit.instanceId,
-      group: groupOfUnit(unit),
-      inMultiUnitFormation:
-        multiUnitFormationIds.value.includes(unit.instanceId) || unit.panzerGroup != null,
-      hex: unit.hex,
-    })),
+    units.value
+      .filter((unit) => groupOfUnit(unit) !== null)
+      .map((unit) => ({
+        id: unit.instanceId,
+        group: groupOfUnit(unit),
+        inMultiUnitFormation:
+          multiUnitFormationIds.value.includes(unit.instanceId) || unit.panzerGroup != null,
+        hex: unit.hex,
+      })),
   )
 
   /**

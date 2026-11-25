@@ -250,6 +250,13 @@ const traceSearchCache = new WeakMap<
     extenders: Map<Side, ExtenderLink[]>
     /** 12.6a：各方基础源的可达区（每源一次反向洪泛），见 `baseSourceRegions` */
     baseRegions: Map<Side, BaseSourceRegion[]>
+    /**
+     * 12.7b：延补队的回连覆盖集（每个延补队一次反向洪泛）
+     *
+     * 键 = `阵营|延补队格|机动类型|印值 MA`；`railSupplyPath` 在每个铁路格上都要问
+     * `extenderConnectsBack`，不能让“铁路格 × 延补队”变成同样数量的 Dijkstra。
+     */
+    extenderBack: Map<string, Set<string>>
   }
 >()
 
@@ -448,6 +455,7 @@ export function createTraceSupplyFacts(source: TraceSupplyFactsSource = {}): Tra
     sourceUsable: new Map(),
     extenders: new Map(),
     baseRegions: new Map(),
+    extenderBack: new Map(),
   })
   return facts
 }
@@ -1112,24 +1120,43 @@ export function extenderRangeMpOf(unit: { ma: number }): number {
 }
 
 /**
- * 12.7g：延补队回连时同样适用「相邻即可」（12.3c）
+ * 12.7g / 12.7b：一个延补队的**回连覆盖集**（每个延补队一次反向有界洪泛）
  *
- * 「与所有其他与补给有关的功能相同，延补队可使用『相邻即可』规则」⇒ 从被连接格（补给源 /
- * 火车卸货格 / 已可用延补队）出发，能在延补队距离内到达**延补队格或其任一相邻格**即算连上。
+ * 12.7g 的「相邻即可」：终点是延补队格及其任一相邻格。`connectsBack` 原本对每个查询格
+ * 各跑一次「该格 → 延补队自邻格」的 Dijkstra；`railSupplyPath` 会在每个铁路可达格上问一次，
+ * 铁路格 × 延补队就是重复搜索。这里从这些终点出发沿反向边洪泛：取费仍按进入格算
+ * （`stepMp(next, current)`），因此得到的集合与逐格 `connectsBack` 的方向性口径一致。
+ *
+ * 缓存挂在 `facts` 身份上：事实不可变，盘面一变就换新 `facts`，旧覆盖集自然失效。
  */
+function extenderBackKeys(
+  facts: TraceSupplyFacts,
+  side: Side,
+  extender: ExtenderLink,
+): Set<string> {
+  const cache = traceSearchCache.get(facts)?.extenderBack
+  const key = `${side}|${hexKey(extender.hex)}|${extender.mobility}|${String(extender.rangeMp)}`
+  const previous = cache?.get(key)
+  if (previous !== undefined) return previous
+  const keys = boundedFlood(
+    facts,
+    side,
+    selfAndNeighbors(extender.hex),
+    true,
+    extender.rangeMp,
+    extender.mobility,
+  )
+  cache?.set(key, keys)
+  return keys
+}
+
 function connectsBack(
   facts: TraceSupplyFacts,
   side: Side,
   extender: { hex: HexRef; mobility: SupplyMobility; rangeMp: number },
   target: HexRef,
 ): boolean {
-  return countSupplyDistanceToAny(facts, {
-    from: target,
-    targets: selfAndNeighbors(extender.hex),
-    side,
-    mobility: extender.mobility,
-    maxMp: extender.rangeMp,
-  }).ok
+  return extenderBackKeys(facts, side, extender).has(hexKey(target))
 }
 
 /**
@@ -1185,7 +1212,7 @@ function computeUsableExtenders(facts: TraceSupplyFacts, side: Side): ExtenderLi
  *
  * 与 `searchFrom` 共用同一套 `stepMp`（12.3d 的可走性）；`reverse=true` 时沿**反向边**
  * （判 `next → current`）扩张，用于覆盖集——它逐格等价于「该格沿正向在预算内能走到源」。
- * 预算固定 `TRACE_RECEIVE_MAX_MP`、机动类型固定 `TRACE_RECEIVE_MOBILITY`（12.3a：始终轮式）。
+ * `maxMp` / `mobility` 默认仍为 U23 的 5 轮式 MP；12.7b 的延补队回连会传入自己的印值 MA 与机动类型。
  * 起点无条件计入（与原洪泛/逐格查询的 seed 语义一致）。
  */
 function boundedFlood(
@@ -1193,6 +1220,8 @@ function boundedFlood(
   side: Side,
   starts: readonly HexRef[],
   reverse: boolean,
+  maxMp = TRACE_RECEIVE_MAX_MP,
+  mobility: SupplyMobility = TRACE_RECEIVE_MOBILITY,
 ): Set<string> {
   const best = new Map<string, number>()
   const settled = new Set<string>()
@@ -1212,18 +1241,18 @@ function boundedFlood(
     const currentKey = hexKey(current.hex)
     if (settled.has(currentKey)) continue
     if (best.get(currentKey) !== current.mp) continue
-    if (current.mp > TRACE_RECEIVE_MAX_MP) continue
+    if (current.mp > maxMp) continue
     settled.add(currentKey)
     for (const direction of HEX_DIRECTIONS) {
       const next = neighbor(current.hex, direction)
       // 反向时 `next` 是**出发格**，`stepMp` 的 `onMap` 只看终点（＝current），故需自判
       if (reverse && !facts.onMap(next)) continue
       const step = reverse
-        ? stepMp(facts, side, TRACE_RECEIVE_MOBILITY, next, current.hex)
-        : stepMp(facts, side, TRACE_RECEIVE_MOBILITY, current.hex, next)
+        ? stepMp(facts, side, mobility, next, current.hex)
+        : stepMp(facts, side, mobility, current.hex, next)
       if (step === null) continue
       const candidate = current.mp + step
-      if (candidate > TRACE_RECEIVE_MAX_MP) continue
+      if (candidate > maxMp) continue
       const key = hexKey(next)
       const existing = best.get(key)
       if (existing !== undefined && candidate >= existing) continue

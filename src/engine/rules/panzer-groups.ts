@@ -245,13 +245,14 @@ export function dividingLineObligations(input: {
     if (list === undefined) formations.set(unit.group, [unit])
     else list.push(unit)
   }
+  // 已知编队之外的输入单位不参与两条触发条件，故“另一集群”只需从编队表取；
+  // 旧实现对每个编队各扫一遍 input.units（全体单位），在 300+ 枚算子时是纯浪费。
+  const formationUnits = [...formations.values()].flat()
 
   const obligations: DividingLineObligation[] = []
   for (const [group, members] of formations) {
     // 条件①：与**另一**装甲集群的单位同堆叠或相邻
-    const other = input.units.filter(
-      (unit) => unit.group !== null && unit.group !== group && unit.inMultiUnitFormation,
-    )
+    const other = formationUnits.filter((unit) => unit.group !== group)
     const crossGroupOffenders = members.filter((mine) =>
       other.some(
         (theirs) => input.sameHex(mine.hex, theirs.hex) || input.adjacent(mine.hex, theirs.hex),

@@ -17,6 +17,7 @@ import {
   createTraceSupplyAt,
   createTraceSupplyFacts,
   eatingOffTheMapCostT,
+  extenderConnectsBack,
   extenderRangeMpOf,
   formationTraceTradeoff,
   hasDirectDrawTraceSupply,
@@ -660,6 +661,46 @@ describe('12.7 延补队：生成、新的 trace 取用点、锁链', () => {
     expect(traceSourcesFor(chained, { hex: at(9), side: 'axis', mobility: 'truck' })).toEqual([
       { hex: at(8), kind: 'extender' },
     ])
+  })
+
+  it('12.7b：延补队回连覆盖集与逐格 Dijkstra 同值（方向性取费）', () => {
+    const hexes = corridor(0, 10)
+    const onMap = new Set(hexes.map(key))
+    const facts: TraceSupplyFacts = {
+      ...makeFacts({ hexes }),
+      /*
+       * 进入格的地形成本有方向：向下 1 MP、向上 3 MP。
+       * 这正是不能用“从延补队正向洪泛”替代 `target → extender` 的原因。
+       */
+      stepCost: (from, to) => {
+        if (!onMap.has(key(from)) || !onMap.has(key(to))) return null
+        if (from.col !== to.col || Math.abs(from.row - to.row) !== 1) return null
+        return to.row > from.row ? 1 : 3
+      },
+    }
+    const extender = { hex: at(4), mobility: 'truck' as const, rangeMp: 5 }
+    const targets = [
+      extender.hex,
+      ...HEX_DIRECTIONS.map((direction) => neighbor(extender.hex, direction)),
+    ]
+
+    for (const hex of hexes) {
+      const expected = countSupplyDistanceToAny(facts, {
+        from: hex,
+        targets,
+        side: 'axis',
+        mobility: 'truck',
+        maxMp: extender.rangeMp,
+      }).ok
+      const actual = extenderConnectsBack(facts, {
+        extenderHex: extender.hex,
+        hex,
+        side: 'axis',
+        mobility: extender.mobility,
+        rangeMp: extender.rangeMp,
+      })
+      expect(actual, `${key(hex)} 的回连判定`).toBe(expected)
+    }
   })
 })
 
