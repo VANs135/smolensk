@@ -72,4 +72,27 @@ describe('初设多选 † 单位', () => {
     const { setup, ids } = tolerantGroup()
     expect(setup.dispersableIdsAmong([...ids, 'not-a-unit'])).toEqual(ids)
   })
+
+  /**
+   * 用户 2026-11-26 实机：**移动阶段点堆叠**时地图又铺出 † 条的初设 ±1 范围
+   * （青柠虚线环 +「初设可放置」），等于把初设落位范围回放到对局里。
+   * 契约：初设收束后，† 散开判据与其候选一律失效。
+   */
+  it('★ 初设收束后：† 散开态与初设候选不再出现（点堆叠不泄露初设范围）', () => {
+    const { setup, ids } = tolerantGroup()
+    const mapView = useMapViewStore()
+    mapView.stackSelection = ids
+    expect(mapView.overlay.setupCandidates?.length ?? 0).toBeGreaterThan(0)
+
+    expect(setup.finishSetup()).toBe(false) // 剧本 3 还有必做西移未落，收束被拦
+    // 按收束后的状态断言（收束本身的流程由 setup-completion 系列覆盖）
+    setup.finished = true
+
+    // 同一选中的堆叠，收束后再点：既不认作散开单位，也不铺候选
+    mapView.stackSelection = [...ids]
+    expect(setup.isStackDisperseUnit(ids[0]!)).toBe(false)
+    expect(setup.dispersableIdsAmong(ids)).toEqual([])
+    expect(setup.disperseCandidatesFor(ids)).toEqual([])
+    expect(mapView.overlay.setupCandidates ?? []).toEqual([])
+  })
 })

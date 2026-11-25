@@ -655,7 +655,15 @@ export const useSetupStore = defineStore('setup', () => {
   }
 
   /** 这一枚是否属于 † 条目（＝可从盘面堆叠里拖出散开；换手期间只动当前布设方） */
+  /**
+   * 该算子是否属于「初设 † 条目、可散开」
+   *
+   * ★ 收束即失效：初设结束后这套判据只剩副作用——移动阶段点堆叠会把它当成
+   *   「初设多选散开」，`mapView` 于是把 † 条的**初设 ±1 范围**（青柠虚线环 +
+   *   「初设可放置」字样）重新铺到地图上，等于泄露初设落位范围（用户 2026-11-26）。
+   */
   function isStackDisperseUnit(instanceId: string): boolean {
+    if (finished.value) return false
     const unit = workbench.units.find((item) => item.instanceId === instanceId)
     if (unit === undefined) return false
     if (tolerantEntryOfUnit(unit) === undefined) return false
