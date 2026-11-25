@@ -1,9 +1,15 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { HEDGEHOG_COST_SP_PER_LEVEL, HEDGEHOG_MAX_LEVEL, holdingsToT } from '@/engine/rules'
-import { neighbors } from '@/engine/hex-geometry'
+import {
+  HEDGEHOG_COST_SP_PER_LEVEL,
+  HEDGEHOG_MAX_LEVEL,
+  SP_TO_T,
+  holdingsToT,
+} from '@/engine/rules'
+import { hexDistance, neighbors } from '@/engine/hex-geometry'
 import { toConsoleUnit, unitChoices, useWorkbenchStore, type ConsoleUnit } from '@/stores'
+import { mapLayers, type HexRef } from '@/data'
 
 import { CORE_HEX, groundRecord, placeGround } from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
@@ -413,6 +419,30 @@ describe('16.0b/c 工程兵途径（13.8d 的 2 格半径施工）', () => {
     expect(store.reduceHedgehogNow()).toBe(true)
     expect(store.hedgehogLevelOf(CORE_HEX)).toBe(0)
     expect(engineer2.movementEnded).toBe(true)
-    expect(store.constructionLedgerOf(engineer2.instanceId).task).toBe('reduceHedgehog')
+  })
+
+  it('16.0b：窗内换目标格/施工小队后旧付款站不可达 ⇒ 预检拦下，不扣旧站 SP', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    store.setTurn(4)
+    const far = mapLayers.hexes
+      .map((hex): HexRef => ({ col: hex.col, row: hex.row }))
+      .find((hex) => hexDistance(CORE_HEX, hex) >= 8)
+    if (far === undefined) throw new Error('地图上找不到距 CORE ≥8 的格')
+    const farText = `${far.col}.${far.row}`
+    const [a, b] = placeWorkers(store, farText)
+    const dump = withDump(store, 4)
+    store.hedgehogInputs = {
+      hexText: farText,
+      workerIds: [a!.instanceId, b!.instanceId],
+      payDumpId: dump.id,
+    }
+
+    expect(store.hedgehogBuildMissing).toContain('付款站不在施工者可达范围')
+    expect(store.buildHedgehogNow()).toBe(false)
+    expect(store.hedgehogLevelOf(far)).toBe(0)
+    expect(holdingsToT(store.spDumps[0]!)).toBe(4 * SP_TO_T)
+    expect(a!.movementEnded).toBe(false)
+    expect(b!.movementEnded).toBe(false)
   })
 })

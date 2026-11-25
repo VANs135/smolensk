@@ -55,7 +55,20 @@ function toggleHedgehogWorker(unitId: string): void {
     workerIds: current.includes(unitId)
       ? current.filter((id) => id !== unitId)
       : [...current, unitId],
+    // 换施工小队后旧付款站可能不再覆盖全体（12.3a/12.3b）⇒ 清空重选
+    payDumpId: null,
   }
+}
+
+/** 16.0b 的工程兵路线：换工程兵时旧付款站可能已不可达 ⇒ 清空 */
+function pickHedgehogEngineer(id: string | null): void {
+  workbench.hedgehogEngineerId = id
+  workbench.hedgehogInputs = { ...workbench.hedgehogInputs, payDumpId: null }
+}
+
+/** 16.0b 切换执行途径：旧的施工者与付款站不再对应 ⇒ 清空付款站 */
+function changeHedgehogMode(): void {
+  workbench.hedgehogInputs = { ...workbench.hedgehogInputs, payDumpId: null }
 }
 
 const security = computed(() => workbench.securityNeeds)
@@ -120,12 +133,13 @@ function hoverUnit(id: string | null): void {
   workbench.setHoverHex(unit?.hex ?? null)
 }
 
-/** 12.1b：已选的工事付款站（地图点选写入） */
+/** 12.1b：已选的工事付款站（地图点选写入；不在当前施工者可达范围时照实标出） */
 const hedgehogPayLabel = computed(() => {
   const id = workbench.hedgehogInputs.payDumpId
   if (id === null) return '（未选）'
-  const dump = workbench.spDumps.find((item) => item.id === id)
-  return dump === undefined ? '（已失效）' : `${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T）`
+  const dump = workbench.hedgehogPayDumps.find((item) => item.id === id)
+  if (dump === undefined) return '（当前施工者不可达）'
+  return `${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T）`
 })
 
 /** 面板关掉就退出地图选站模式，避免高亮残留、误吞地图点击 */
@@ -706,7 +720,11 @@ const compactPanzer = computed(() => props.only === 'panzer')
       <div v-if="actsHedgehog" class="row">
         <label class="field">
           执行途径
-          <select v-model="workbench.hedgehogExecutorMode" class="select">
+          <select
+            v-model="workbench.hedgehogExecutorMode"
+            class="select"
+            @change="changeHedgehogMode"
+          >
             <option value="inPlace">① 目标格内指定的小队（16.0b）</option>
             <option value="engineer">② 工程兵（2 格半径内，13.8d）</option>
           </select>
@@ -717,7 +735,7 @@ const compactPanzer = computed(() => props.only === 'panzer')
             hint="13.8d：须具工程能力、处于战斗模式（或 DG 朝战斗面）、本阶段未移动、在目标格 2 格步行 MP 内"
             :items="hedgehogEngineerItems"
             :size="40"
-            @pick="workbench.hedgehogEngineerId = $event"
+            @pick="pickHedgehogEngineer($event)"
             @hover="hoverUnit"
           />
         </div>

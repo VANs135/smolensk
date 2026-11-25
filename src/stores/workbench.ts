@@ -1754,7 +1754,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     pushLog,
     requireAction,
     deliverableDumpsFor,
-    dumpById,
     captureUndoSnapshot,
     dropUndoBySeq,
     // 这 4 项在 b16 之后搬到 C8g 切片、其解构晚于本装配点（1765 < 2,1xx），
@@ -2127,6 +2126,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     constructionGateNow,
     noteConstruction,
     constructionFeeT,
+    constructionPayDumpFor,
     payConstructionFee,
     constructionLegRangeTo,
   } = constructionDomain
@@ -2220,8 +2220,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const airFacilityDomain = createAirFacilityDomain({
     activeSide,
     units,
-    // 12.1b：按 id 取站（地面账本 + 装载中的 SP）；`dumpById` 是 function 声明，可早于其位置按值传
-    dumpById,
+    // 12.1b：按施工工程兵可达的付款站取站（窗内换人后旧站不得继续付款）
+    constructionPayDumpFor,
     constructionInputs,
     pushLog,
     requireAction,

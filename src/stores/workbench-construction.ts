@@ -220,6 +220,20 @@ export function createConstructionDomain(deps: ConstructionDeps) {
   }
 
   /**
+   * 12.3a/12.3b：当前输入的付款站是否真的能向这名施工者投送
+   *
+   * 窗口内换施工者时，`payDumpId` 不会自动清空；若这里只按 id 取站，会把旧站的 SP
+   * 付给新施工者（例如旧工程兵旁边的站、新工程兵隔了 8 格）。预检与落盘都必须先过这一关。
+   */
+  function constructionPayDumpFor(engineer: ConsoleUnit | null): SpDump | null {
+    const id = constructionInputs.value.payDumpId
+    if (id === null || engineer === null) return null
+    const dump = dumpById(id)
+    if (dump === undefined) return null
+    return deliverableDumpsFor(activeSide.value, [engineer]).find((item) => item.id === id) ?? null
+  }
+
+  /**
    * 15.3 / 15.2A 的**唯一**扣款入口
    *
    * 取「指定的己方补给站」付款（12.1b/12.3a：只能从己方补给站扣），必要时找零（12.1a）。
@@ -278,6 +292,7 @@ export function createConstructionDomain(deps: ConstructionDeps) {
     constructionGateNow,
     noteConstruction,
     constructionFeeT,
+    constructionPayDumpFor,
     payConstructionFee,
   }
 }

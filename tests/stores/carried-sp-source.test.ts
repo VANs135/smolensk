@@ -340,9 +340,12 @@ describe('B32 步骤 5：装载在运输点数上的 SP（12.1b / 13.2f）', () 
     expect(fuel).toContain('if (!fuelDumpAllowedForTargets(dump, targets)) {')
 
     const facility = readFileSync('src/stores/workbench-air-facility.ts', 'utf8')
-    // ② 15.3/15.2A：付款站按 id 取**含装载来源**的那一份（修前读 `spDumps` ⇒ 施工被判"没有 SP"）
+    const construction = readFileSync('src/stores/workbench-construction.ts', 'utf8')
+    // ② 15.3/15.2A：付款站按 id 取**含装载来源**的那一份，且必须过 12.3a/12.3b 的可达性
     expect(facility).not.toContain('spDumps.value.find')
-    expect(facility).toContain("dumpById(constructionInputs.value.payDumpId ?? '')")
+    expect(facility).toContain('constructionPayDumpFor(engineer)')
+    expect(construction).toContain('function constructionPayDumpFor(engineer')
+    expect(construction).toContain('deliverableDumpsFor(activeSide.value, [engineer])')
 
     const store = readStoreSource()
     // ③ 13.2f 装载：编内卡车装的 SP 不能当**别的运输点数**的装载来源（否则等于把 SP 转走）

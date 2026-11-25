@@ -39,12 +39,22 @@ const constructionLedger = computed(() =>
   workbench.constructionLedgerOf(workbench.constructionInputs.engineerId),
 )
 
-/** 12.1b：已选的建造付款站（地图点选写入；未选/失效时照实显示） */
+/** 换施工工程兵：旧付款站可能已不可达 ⇒ 一并清空，避免窗内显示旧站 */
+function pickEngineer(id: string | null): void {
+  workbench.constructionInputs = {
+    ...workbench.constructionInputs,
+    engineerId: id,
+    payDumpId: null,
+  }
+}
+
+/** 12.1b：已选的建造付款站（地图点选写入；不在当前施工者可达范围时照实标出） */
 const selectedPayLabel = computed(() => {
   const id = workbench.constructionInputs.payDumpId
   if (id === null) return '（未选：还差付款补给站）'
-  const dump = workbench.spDumps.find((item) => item.id === id)
-  return dump === undefined ? '（已失效）' : `${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T）`
+  const dump = workbench.constructionPayDumps.find((item) => item.id === id)
+  if (dump === undefined) return '（当前施工者不可达）'
+  return `${hexLabel(dump.hex)}（${dump.sp} SP + ${dump.t} T）`
 })
 
 /** 15.3 主按钮出现前还差什么（null ＝ 可以出现）；预检与落盘共用引擎判据 */
@@ -114,7 +124,7 @@ onBeforeUnmount(() => {
     hint="13.8d：须具工程能力、处于战斗模式（或 DG 朝战斗面）、本阶段未移动、在目标格 2 格步行 MP 内"
     :items="engineerItems"
     :size="40"
-    @pick="workbench.constructionInputs.engineerId = $event"
+    @pick="pickEngineer($event)"
     @hover="hoverUnit"
   />
   <!-- 15.3：一个操作一个按钮（与 15.2A 两段不共窗） -->

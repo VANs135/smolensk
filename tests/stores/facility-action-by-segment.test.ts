@@ -432,9 +432,9 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     const panel = readFileSync('src/components/exclusive/ExclusiveRulesPanel.vue', 'utf8')
     const air = readFileSync('src/components/air/AirConstructionSection.vue', 'utf8')
     expect(panel).toContain('const hedgehogEngineerItems')
-    expect(panel).toContain('@pick="workbench.hedgehogEngineerId = $event"')
+    expect(panel).toContain('@pick="pickHedgehogEngineer($event)"')
     expect(panel).not.toContain('v-model="workbench.hedgehogEngineerId"')
-    expect(air).toContain('@pick="workbench.constructionInputs.engineerId = $event"')
+    expect(air).toContain('@pick="pickEngineer($event)"')
   })
 
   it('★ 设施动作表本身就是"规则书清单"（键与环节由闸门表给，不在这里另写一套）', () => {

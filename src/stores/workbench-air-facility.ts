@@ -58,13 +58,13 @@ export interface AirFacilityDeps {
   activeSide: ComputedRef<Side>
   units: Ref<ConsoleUnit[]>
   /**
-   * 12.1b：按 id 取补给站（**地面账本 + 装载在运输点数上的 SP** 一视同仁）
+   * 12.1b：按施工工程兵**可达**的付款站取站
    *
-   * ★ 13.2g-A/B：编内卡车装的 SP 也是补给站，但只许同一多单位编队内的单位取用 ⇒
-   *   付款候选来自 `constructionPayDumps`（`deliverableDumpsFor` 已按编队过滤），
-   *   此处只需按 id 取回**同一份**持仓（修前读 `spDumps` ⇒ 装载来源取不到，施工被判"没有 SP"）。
+   * ★ 13.2g-A/B：编内卡车装的 SP 也是补给站，但只许同一多单位编队内的单位取用；
+   *   不能只按 id 取 `spDumps`：窗内换工程兵后旧付款站可能已不可达（12.3a/12.3b），
+   *   预检与落盘都要以这一份为准，避免把旧站的 SP 付给新施工者。
    */
-  dumpById: (dumpId: string) => SpDump | undefined
+  constructionPayDumpFor: (engineer: ConsoleUnit | null) => SpDump | null
   constructionInputs: Ref<{ hexText: string; engineerId: string | null; payDumpId: string | null }>
   pushLog: (
     kind: WorkbenchLogEntry['kind'],
@@ -97,7 +97,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
   const {
     activeSide,
     units,
-    dumpById,
+    constructionPayDumpFor,
     constructionInputs,
     pushLog,
     requireAction,
@@ -276,13 +276,15 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
       engineer,
     )
     if (gate !== null) return `还差：${ruleErrorTextOf(gate)}（${gate.rule}）`
-    if (constructionInputs.value.payDumpId === null) {
-      return task === 'baseBuild'
-        ? '还差：付款补给站（15.3：1 SP/级）'
-        : '还差：付款补给站（15.2A：1 T / 升格 3 T）'
+    const payDump = constructionPayDumpFor(engineer)
+    if (payDump === null) {
+      return constructionInputs.value.payDumpId === null
+        ? task === 'baseBuild'
+          ? '还差：付款补给站（15.3：1 SP/级）'
+          : '还差：付款补给站（15.2A：1 T / 升格 3 T）'
+        : '还差：付款站不在施工者可达范围（12.3a/12.3b）'
     }
-    const dump = dumpById(constructionInputs.value.payDumpId) ?? null
-    const availableT = dump === null ? 0 : holdingsToT({ sp: dump.sp, t: dump.t })
+    const availableT = holdingsToT({ sp: payDump.sp, t: payDump.t })
     const executor = engineerExecutorFor(engineer, hex)
     if (task === 'baseBuild') {
       if (isAirstripAt(hex))
@@ -394,7 +396,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
       )
       return false
     }
-    const dump = dumpById(constructionInputs.value.payDumpId ?? '') ?? null
+    const dump = constructionPayDumpFor(engineer)
     const outcome = planAirBaseBuild({
       executor: engineerExecutorFor(engineer, hex),
       currentLevel: airBaseLevelAt(hex),
@@ -408,7 +410,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     }
     const feeT = constructionFeeT('buildAirBase', outcome.data.costSp, 0)
     const undoSeq = captureUndoSnapshot(`修建空军基地 ${hexLabel(hex)}`)
-    if (!payConstructionFee(constructionInputs.value.payDumpId, feeT, '15.3')) {
+    if (!payConstructionFee(dump?.id ?? null, feeT, '15.3')) {
       if (undoSeq !== null) dropUndoBySeq(undoSeq)
       return false
     }
@@ -469,7 +471,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
       )
       return false
     }
-    const dump = dumpById(constructionInputs.value.payDumpId ?? '') ?? null
+    const dump = constructionPayDumpFor(engineer)
     const outcome = planAirstripBuild({
       executor: engineerExecutorFor(engineer, hex),
       hexHasAirFacility: hexHasAirFacility(hex),
@@ -483,7 +485,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     const undoSeq = captureUndoSnapshot(`修建简易机场 ${hexLabel(hex)}`)
     if (
       !payConstructionFee(
-        constructionInputs.value.payDumpId,
+        dump?.id ?? null,
         constructionFeeT('buildAirstrip', 0, outcome.data.costT),
         '15.2A',
       )
@@ -544,7 +546,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
       pushLog('warning', `简易机场升格被拒：${gate.reason}（${gate.rule}）`, gate.rule)
       return false
     }
-    const dump = dumpById(constructionInputs.value.payDumpId ?? '') ?? null
+    const dump = constructionPayDumpFor(engineer)
     const outcome = planAirstripUpgrade({
       executor: engineerExecutorFor(engineer, base.hex),
       hexHasAirstrip: base.isAirstrip === true,
@@ -557,7 +559,7 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     }
     if (
       !payConstructionFee(
-        constructionInputs.value.payDumpId,
+        dump?.id ?? null,
         constructionFeeT('upgradeAirstrip', 0, outcome.data.costT),
         '15.2A',
       )

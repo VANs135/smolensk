@@ -10,6 +10,8 @@ import {
   holdingsToT,
 } from '@/engine/rules'
 import { toConsoleUnit, unitChoices, useWorkbenchStore } from '@/stores'
+import { mapLayers, type HexRef } from '@/data'
+import { hexDistance } from '@/engine/hex-geometry'
 
 import { CORE_HEX, NEAR_HEX, airBaseRecord, groundRecord, placeGround } from '../flows/sop-harness'
 import type { Workbench } from '../flows/sop-harness'
@@ -427,13 +429,13 @@ describe('15.2A / 15.2E：简易机场的修建、升格与「永不缩减」', 
     expect(store.constructionError?.reason).toBe('airFacilityPerHexLimit')
   })
 
-  it('T 不足 ⇒ 拒（15.2A：修建 1 T）', () => {
+  it('空补给站（0 T）⇒ 12.1c 已不算站，主按钮不得出现', () => {
     const store = newStore()
     const engineer = placeEngineer(store, coreText)
     const dump = withDump(store, { sp: 0, t: 0 })
     prepare(store, { hexText: coreText, engineerId: engineer.instanceId, payDumpId: dump.id })
+    expect(store.airConstructionMissing('airstripBuild')).toContain('付款站')
     expect(store.buildAirstripNow()).toBe(false)
-    expect(store.constructionError?.reason).toBe(`insufficientTForAirstrip:${AIRSTRIP_BUILD_T}`)
   })
 
   it('15.2A：付 3 T 把简易机场升格为一级空军基地', () => {
@@ -730,10 +732,9 @@ describe('15.3 / 15.2A 主按钮预检（与落盘同一组引擎判据）', () 
   it('15.2A：升格 T 不足 ⇒ 预检给出 T 不足，不出现升格按钮', () => {
     const store = newStore()
     const engineer = placeEngineer(store, coreText)
-    const dump = withDump(store, { sp: 0, t: AIRSTRIP_BUILD_T })
+    const dump = withDump(store, { sp: 0, t: AIRSTRIP_BUILD_T + 1 })
     prepare(store, { hexText: coreText, engineerId: engineer.instanceId, payDumpId: dump.id })
     expect(store.buildAirstripNow()).toBe(true)
-    // 换阶段清 13.8d 的一格一任务；同一工程兵可在新的移动阶段继续施工
     store.setPhase('supply')
     store.setPhase('movement')
     engineer.movementEnded = false
@@ -741,5 +742,25 @@ describe('15.3 / 15.2A 主按钮预检（与落盘同一组引擎判据）', () 
     prepare(store, { hexText: coreText, engineerId: engineer.instanceId, payDumpId: dump.id })
     const baseId = store.airBases[0]!.id
     expect(store.airConstructionMissing('airstripUpgrade', baseId)).toContain('T')
+  })
+
+  it('15.3：窗内换工程兵后旧付款站已不可达 ⇒ 预检拦下，不得扣旧站 SP', () => {
+    const store = newStore()
+    // 旧站摆 CORE；换成 8 格外的工程兵与目标格后，旧站不再可达
+    const far = mapLayers.hexes
+      .map((hex): HexRef => ({ col: hex.col, row: hex.row }))
+      .find((hex) => hexDistance(CORE_HEX, hex) >= 8)
+    if (far === undefined) throw new Error('地图上找不到距 CORE ≥8 的格')
+    const farText = `${far.col}.${far.row}`
+    const oldEngineer = placeEngineer(store, coreText, 'eng-pay-old')
+    const dump = withDump(store, { sp: 4 })
+    placeEngineer(store, farText, 'eng-pay-new')
+    prepare(store, { hexText: farText, engineerId: 'eng-pay-new', payDumpId: dump.id })
+
+    expect(store.airConstructionMissing('baseBuild')).toContain('付款站不在施工者可达范围')
+    expect(store.buildAirBaseNow()).toBe(false)
+    expect(store.airBaseLevelAt(far)).toBe(0)
+    expect(holdingsToT(store.spDumps[0]!)).toBe(4 * SP_TO_T)
+    expect(oldEngineer.movementEnded).toBe(false)
   })
 })

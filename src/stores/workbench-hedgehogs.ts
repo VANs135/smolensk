@@ -20,7 +20,7 @@
  *   · `hedgehogInputs`：B27a 的 `beginHedgehogHexPickNow` 在点地图上写 `hexText`；
  *   · `hedgehogLevelOf` / `hedgehogHexState`：C5 的建域参数按值传（不是闭包延迟求值）。
  *   ⇒ 解构必须早于这些读点，否则 const 绑定在初始化期被读（TDZ／`check-tdz` 报）。
- *   deps 里的 `requireAction` / `pushLog` / `dumpById` / `captureUndoSnapshot` / `dropUndoBySeq` /
+ *   deps 里的 `requireAction` / `pushLog` / `captureUndoSnapshot` / `dropUndoBySeq` /
  *   `engineerExecutorFor` / `constructionGateNow` / `noteConstruction` / `payConstructionFee`
  *   全部是 `function` 声明（提升），晚于装配点也能按值传。
  *
@@ -77,8 +77,6 @@ export interface HedgehogsDeps {
   ) => void
   /** B8 环节闸门（`function` 声明 ⇒ 提升，可按值传） */
   requireAction: (key: ActionKey, action: string) => boolean
-  /** 12.1b：装载中的 SP 也能付工事费 */
-  dumpById: (dumpId: string) => SpDump | undefined
   captureUndoSnapshot: (label: string) => number | null
   dropUndoBySeq: (seq: number) => void
   /** 12.3a/12.3b：施工者可达的己方补给站（barrage 域的薄转发，`function` ⇒ 提升） */
@@ -102,7 +100,6 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     pushLog,
     requireAction,
     deliverableDumpsFor,
-    dumpById,
     captureUndoSnapshot,
     dropUndoBySeq,
     engineerExecutorFor,
@@ -310,6 +307,30 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
       : hedgehogInPlaceUnitsAt(hedgehogTargetHex.value).length > 0,
   )
 
+  /** 16.0b 付款的实际受益者：工程兵路线＝工程兵；原地路线＝目标格内被指定的施工小队 */
+  function hedgehogPayBeneficiaries(): ConsoleUnit[] {
+    if (hedgehogUsesEngineerRoute.value) {
+      const engineer = pickedHedgehogEngineer()
+      return engineer === null ? [] : [engineer]
+    }
+    return hedgehogInPlaceUnitsAt(hedgehogTargetHex.value)
+  }
+
+  /**
+   * 12.3a/12.3b：当前输入的付款站是否真的能向**当前施工者**投送
+   *
+   * 窗内换工程兵或换施工小队后，`payDumpId` 不会自动清空；若只按 id 取站，会把旧站的
+   * SP 付给新的施工者。预检与落盘都先过这一关。
+   */
+  function hedgehogPayDumpFor(): SpDump | null {
+    const id = hedgehogInputs.value.payDumpId
+    const beneficiaries = hedgehogPayBeneficiaries()
+    if (id === null || beneficiaries.length === 0) return null
+    return (
+      deliverableDumpsFor(activeSide.value, beneficiaries).find((item) => item.id === id) ?? null
+    )
+  }
+
   /**
    * 16.0b 预检：与 `buildHedgehogNow` 同一份引擎规则
    *
@@ -318,10 +339,7 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
   const hedgehogBuildPreflight = computed(() => {
     const hex = hedgehogTargetHex.value
     if (hex === null || !hedgehogExecutorReady.value) return null
-    const dump =
-      hedgehogInputs.value.payDumpId === null
-        ? null
-        : (dumpById(hedgehogInputs.value.payDumpId) ?? null)
+    const dump = hedgehogPayDumpFor()
     return planHedgehogBuild({
       side: activeSide.value,
       date: date.value,
@@ -356,6 +374,7 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
         ? '还差：指定 13.8d 的施工工程兵'
         : '还差：在目标格勾选施工小队'
     if (hedgehogInputs.value.payDumpId === null) return '还差：付款补给站（16.0b：2 SP）'
+    if (hedgehogPayDumpFor() === null) return '还差：付款站不在施工者可达范围（12.3a/12.3b）'
     if (hedgehogUsesEngineerRoute.value) {
       const gate = constructionGateNow('buildHedgehog', hedgehogEngineer.value)
       if (gate !== null) return `还差：${ruleErrorTextOf(gate)}（${gate.rule}）`
@@ -391,16 +410,7 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
 
   /** 16.0b/c：环形工事的付款站候选（施工小队或 13.8d 工程兵可达的来源） */
   const hedgehogPayDumps = computed<SpDump[]>(() => {
-    const beneficiaries: ConsoleUnit[] = []
-    if (hedgehogUsesEngineerRoute.value) {
-      const engineer = pickedHedgehogEngineer()
-      if (engineer !== null) beneficiaries.push(engineer)
-    } else {
-      for (const id of hedgehogInputs.value.workerIds) {
-        const unit = units.value.find((item) => item.instanceId === id)
-        if (unit !== undefined) beneficiaries.push(unit)
-      }
-    }
+    const beneficiaries = hedgehogPayBeneficiaries()
     if (beneficiaries.length === 0) return []
     return deliverableDumpsFor(activeSide.value, beneficiaries)
   })
@@ -513,11 +523,8 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
         return false
       }
     }
-    // 12.1b（用户 2026-11-13）：装载中的 SP 也能付工事费
-    const dump =
-      hedgehogInputs.value.payDumpId === null
-        ? null
-        : (dumpById(hedgehogInputs.value.payDumpId) ?? null)
+    // 12.1b（用户 2026-11-13）：装载中的 SP 也能付工事费；但必须是当前施工者可达的站
+    const dump = hedgehogPayDumpFor()
     const outcome = planHedgehogBuild({
       side: activeSide.value,
       date: date.value,
@@ -538,7 +545,7 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
       return false
     }
     const undoSeq = captureUndoSnapshot(`修建环形工事 ${hexLabel(hex)}`)
-    if (!paySpFromDump(hedgehogInputs.value.payDumpId, outcome.data.costSp)) {
+    if (!paySpFromDump(dump?.id ?? null, outcome.data.costSp)) {
       if (undoSeq !== null) dropUndoBySeq(undoSeq)
       return false
     }
