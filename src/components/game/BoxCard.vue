@@ -39,7 +39,8 @@ const workbench = useWorkbenchStore()
 const displayWidth = ref(320)
 
 /** 浮窗里的显示宽度（更宽 ⇒ 看图舒服；窄屏靠 max-width 兜底） */
-const popupWidth = computed(() => Math.min(720, Math.max(360, Math.round(window.innerWidth * 0.6))))
+/** 浮窗宽度：2026-11-26（用户「各宽度减小」）720 → 660 上限（v5 小样 ≤660），窄屏仍按 60% 视口收 */
+const popupWidth = computed(() => Math.min(660, Math.max(360, Math.round(window.innerWidth * 0.6))))
 
 /** 是否展开卡面（托盘里那张；用户口径④：同时只展开一张） */
 const open = computed(() => containers.cardOpenId === props.card.id)
@@ -282,7 +283,8 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
   top: 132px;
   z-index: 40;
   width: fit-content;
-  max-width: 94vw;
+  /* v5 小样口径：≤660；右边缘永远留给地图（不让贴图顶到视口边） */
+  max-width: min(660px, calc(100vw - 190px));
   max-height: 88vh;
   overflow: auto;
   border: none;

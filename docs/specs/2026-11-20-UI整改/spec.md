@@ -167,25 +167,27 @@ body[data-layout='board'] {
 
 ### 8.1 已落地
 
-| 项               | commit        | 实际做法                                                                                                                   |
-| ---------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| 档位收敛         | `51f13b9`     | 缺省窗宽 430（`MapDock` / 判定胜利）、存档窗 620；撤销 380 历史值                                                          |
-| 存档入口收敛     | `51f13b9`     | 只留两处：对局台左栏最下一枚、开始台顶栏一枚；`HomeView` 主区「读取存档」删；待答面板 footer 删；`Ctrl+S` 仅快捷键         |
-| 待答遮罩不盖左栏 | `51f13b9`     | `.gt__rail` `z-index: calc(var(--z-panel) + 10)`（200→210），仍低于模式闸门 250 与 toast 300                               |
-| 表迁左栏         | `5e040db`     | 新 `ChartTableDrawer.vue`：四 chip、初值 null、空态只有 chip；右栏抽屉 `cards`→`charts`（标签「表」）；`BottomTray` 删表段 |
-| 盒入口           | `5e040db`     | 托盘只剩盒段，`setup.applied` 后常驻地图下方（`gt__tray-dock`）；入口＝卡头，桌面默认折叠、安卓默认展开                    |
-| UI-1             | `d4e0bd6`     | 当前步改 `background: var(--color-accent)` + `color: var(--color-on-accent)`                                               |
-| UI-2             | `d4e0bd6`     | 选**右上 72px**（顶栏 ≈64px），不换左下：左下与常驻托盘/左栏起点相撞；宿主仍 `pointer-events:none`，条目 auto              |
-| UI-3             | `d4e0bd6`     | 仅空军选机条那一处去掉 `nowrap/ellipsis`（`.queue__hint` 本体本来就换行）                                                  |
-| UI-3b/4          | `d4e0bd6`     | 新增 `src/render/action-labels.ts`（70 键 + `actionLabel()`），战报行头 / 动作下拉 / 重放分歧三处统一；未知键「未分类」    |
-| UI-5             | `d4e0bd6`     | `MapCanvas` 新增可选 `boardColor`；深色主题传 `#141712`（与安卓沙盘同色），浅色不传                                        |
-| P2-3             | 未单独 commit | `.queue__stack-btn` `min-height` 24→32                                                                                     |
-| P2-4             | 未单独 commit | `MapPopover` 规则 `?` 补 `aria-label`；增援面板三处 `?` 同理（`RuleTip` 本就有）                                           |
-| P2-7             | 未单独 commit | 深色 `--color-command-accent-solid` `#244840`→`#2e5a4e`、hover `#3a6d5e`                                                   |
-| 会话窗壳         | 未单独 commit | `MapDock` 补 `⌄` 收起（只折体、会话保留）与 `▣` 不可关（`closePolicy='refused'`）                                          |
-| 实机复核 5 处    | `cabdde2`     | 表图不加载（`v-if` 掉 `<img>` ⇒ 没人请求）、表抽屉多余「收起」、剧本 id「Intro」撞列、开盒跳缩放、存档窗长说明             |
-| 左栏 v5          | `e256d25`     | 盒组压左栏最上（点开走 BoxCard 浮窗）、抽屉与系统项全纯图标、底部托盘整条删除；顶栏右上「☰ 主菜单」                       |
-| 盒窗无留边       | 本批          | 盒弹窗「只有贴图本身」：无标题栏／无边框／无留边，贴图即拖动把手，右上 26px 圆 ×（Esc 仍可关）                            |
+| 项               | commit        | 实际做法                                                                                                                                                                                                              |
+| ---------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 档位收敛         | `51f13b9`     | 缺省窗宽 430（`MapDock` / 判定胜利）、存档窗 620；撤销 380 历史值                                                                                                                                                     |
+| 存档入口收敛     | `51f13b9`     | 只留两处：对局台左栏最下一枚、开始台顶栏一枚；`HomeView` 主区「读取存档」删；待答面板 footer 删；`Ctrl+S` 仅快捷键                                                                                                    |
+| 待答遮罩不盖左栏 | `51f13b9`     | `.gt__rail` `z-index: calc(var(--z-panel) + 10)`（200→210），仍低于模式闸门 250 与 toast 300                                                                                                                          |
+| 表迁左栏         | `5e040db`     | 新 `ChartTableDrawer.vue`：四 chip、初值 null、空态只有 chip；右栏抽屉 `cards`→`charts`（标签「表」）；`BottomTray` 删表段                                                                                            |
+| 盒入口           | `5e040db`     | 托盘只剩盒段，`setup.applied` 后常驻地图下方（`gt__tray-dock`）；入口＝卡头，桌面默认折叠、安卓默认展开                                                                                                               |
+| UI-1             | `d4e0bd6`     | 当前步改 `background: var(--color-accent)` + `color: var(--color-on-accent)`                                                                                                                                          |
+| UI-2             | `d4e0bd6`     | 选**右上 72px**（顶栏 ≈64px），不换左下：左下与常驻托盘/左栏起点相撞；宿主仍 `pointer-events:none`，条目 auto                                                                                                         |
+| UI-3             | `d4e0bd6`     | 仅空军选机条那一处去掉 `nowrap/ellipsis`（`.queue__hint` 本体本来就换行）                                                                                                                                             |
+| UI-3b/4          | `d4e0bd6`     | 新增 `src/render/action-labels.ts`（70 键 + `actionLabel()`），战报行头 / 动作下拉 / 重放分歧三处统一；未知键「未分类」                                                                                               |
+| UI-5             | `d4e0bd6`     | `MapCanvas` 新增可选 `boardColor`；深色主题传 `#141712`（与安卓沙盘同色），浅色不传                                                                                                                                   |
+| P2-3             | 未单独 commit | `.queue__stack-btn` `min-height` 24→32                                                                                                                                                                                |
+| P2-4             | 未单独 commit | `MapPopover` 规则 `?` 补 `aria-label`；增援面板三处 `?` 同理（`RuleTip` 本就有）                                                                                                                                      |
+| P2-7             | 未单独 commit | 深色 `--color-command-accent-solid` `#244840`→`#2e5a4e`、hover `#3a6d5e`                                                                                                                                              |
+| 会话窗壳         | 未单独 commit | `MapDock` 补 `⌄` 收起（只折体、会话保留）与 `▣` 不可关（`closePolicy='refused'`）                                                                                                                                     |
+| 实机复核 5 处    | `cabdde2`     | 表图不加载（`v-if` 掉 `<img>` ⇒ 没人请求）、表抽屉多余「收起」、剧本 id「Intro」撞列、开盒跳缩放、存档窗长说明                                                                                                        |
+| 左栏 v5          | `e256d25`     | 盒组压左栏最上（点开走 BoxCard 浮窗）、抽屉与系统项全纯图标、底部托盘整条删除；顶栏右上「☰ 主菜单」                                                                                                                  |
+| 盒窗无留边       | 本批          | 盒弹窗「只有贴图本身」：无标题栏／无边框／无留边，贴图即拖动把手，右上 26px 圆 ×（Esc 仍可关）                                                                                                                        |
+| 顶栏一行         | 本批          | 对局页应用头整条隐藏（`.shell--board .shell__bar`），品牌＋「☰ 主菜单」并入 `FlowStrip` 的 **44px 单行**；回合／决策方／阶段轨＋环节／该做什么／分数／推进并排，窄屏按 日期→提示→分数 让位（133 → 44，地图多 ~90px） |
+| 宽度收小         | 本批          | 左栏 62 → **46**、按钮 44 → **34**、图标 22、gap 4、组标签 10px（13 枚在 1400×900 与 1366×768 均一屏无滚动）；盒窗 720 → **660**                                                                                      |
 
 ### 8.2 与原稿不同的判断（已核实，不照原稿执行）
 

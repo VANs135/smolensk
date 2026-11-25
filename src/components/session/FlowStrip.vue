@@ -7,6 +7,7 @@ import { buildFlowGuide, type FlowForm } from '@/engine/flow-model'
 import { SOP_STEPS, type SopStep } from '@/engine/session-flow'
 import IntroTurnGuide from './IntroTurnGuide.vue'
 import {
+  useAppStore,
   useGameSessionStore,
   useHotseatStore,
   useMapViewStore,
@@ -55,9 +56,18 @@ const props = withDefaults(
      * · `bar`：**地图窗口上方的一条线** —— 只留「阶段名 + 环节名 + 推进按钮 + 一行该做什么」。
      */
     variant?: 'panel' | 'bar'
+    /**
+     * 顶栏一行（2026-11-26 用户「顶栏收成一行」）：`bar` 形态在最左补「17 斯摩棱斯克 / 对局台」、
+     * 最右补「☰ 主菜单」。传真的页面（对局台）连同应用头（`.shell__bar`）一起隐藏，整条顶栏只剩这一行。
+     * 安卓单层顶栏（`gt__topbar`）另有自己的主页徽章 ⇒ 不传。
+     */
+    boardHead?: boolean
   }>(),
-  { stepwise: false, variant: 'panel' },
+  { stepwise: false, variant: 'panel', boardHead: false },
 )
+
+/** 主菜单（只有「顶栏一行」形态才需要） */
+const emit = defineEmits<{ menu: [] }>()
 
 /** 是不是"地图上方那一条" */
 const isBar = computed<boolean>(() => props.variant === 'bar')
@@ -66,6 +76,8 @@ const gameSession = useGameSessionStore()
 const workbench = useWorkbenchStore()
 const setup = useSetupStore()
 const hotseat = useHotseatStore()
+/** 品牌（顶栏一行形态从应用头搬进来，标题仍取 app store，别在两处写法名） */
+const app = useAppStore()
 // 批 E 切片 1：未开局时本按钮只做**视图引导**（开局唯一入口＝初设收束点）
 const ui = useUiStore()
 /** 动作提示带的来源（`mapView.actionHint`；用户口径：地图上方不放消息栏 ⇒ 搬到这里） */
@@ -268,6 +280,13 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
     初设浮窗（纯冗余），android.css 据此把它连 block 文案一起藏掉；桌面保留原行为。
   -->
   <div v-if="isBar" class="bar" :data-in-setup="inSetup ? '1' : undefined" aria-label="对局流程">
+    <!-- 一行顶栏（2026-11-26）：品牌 + 回合 + 决策方 + 阶段/流程 + 该做什么 + 分数 + 推进 + 主菜单 -->
+    <div v-if="boardHead" class="bar__brand">
+      <span class="bar__brand-mark" aria-hidden="true">17</span>
+      <strong class="bar__brand-title" :title="app.appTitle">{{ app.appTitle }}</strong>
+      <span class="bar__brand-route">对局台</span>
+    </div>
+
     <div class="bar__turn num">
       <span class="bar__label">回合</span>
       <!-- 用户 2026-11-19：不写「—」，统一「当前/总回合」格式（初设按第 1 回合展示） -->
@@ -299,6 +318,14 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
       </div>
     </div>
 
+    <!-- 该做什么：原来独占第二行，收进同一行右段（窄屏自动省略，title 里仍是全文） -->
+    <div class="bar__status" role="status">
+      <span v-if="notice !== null" class="bar__notice" :title="notice.rule">{{ notice.text }}</span>
+      <span v-else class="bar__hint" :title="flow.hint"
+        ><slot name="status">{{ flow.hint }}</slot></span
+      >
+    </div>
+
     <div v-if="!inSetup" class="bar__score num" title="所列格控制数 · 5.0a">
       <span class="bar__axis">轴 {{ score.listedBySide.axis }}</span>
       <span class="bar__soviet">苏 {{ score.listedBySide.soviet }}</span>
@@ -314,12 +341,15 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
       </span>
     </div>
 
-    <div class="bar__status" role="status">
-      <span v-if="notice !== null" class="bar__notice" :title="notice.rule">{{ notice.text }}</span>
-      <span v-else class="bar__hint" :title="flow.hint"
-        ><slot name="status">{{ flow.hint }}</slot></span
-      >
-    </div>
+    <BaseButton
+      v-if="boardHead"
+      variant="ghost"
+      size="sm"
+      class="bar__menu"
+      aria-label="主菜单 · 返回主页面"
+      @click="emit('menu')"
+      ><span class="bar__menu-mark" aria-hidden="true">☰</span>主菜单</BaseButton
+    >
   </div>
 
   <BasePanel v-else title="流程条（2.2 流程表）">
@@ -504,51 +534,86 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
   color: var(--color-muted);
 }
 
-/* B35：地图上方那一条（阶段性关键字，不占纵向空间） */
+/*
+ * B35：地图上方那一条（阶段性关键字，不占纵向空间）
+ *
+ * 2026-11-26（用户「顶栏收成一行」）：原来是「应用头 49 + 这条 84（两行：47 + 该做什么 24）」= 133px；
+ * 现在整条顶栏只有这一行 44px —— 品牌 / 回合 / 决策方 / 阶段轨 + 环节 / 该做什么 / 分数 / 推进 / 主菜单
+ * 全部并排，`nowrap` 一律不折行，窄屏靠隐藏次要件（日期 → 提示 → 分数）而不是长高。
+ */
 .bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  column-gap: var(--space-3);
-  row-gap: var(--space-1);
-  padding: var(--space-2) var(--space-3) 0;
+  flex-wrap: nowrap;
+  align-items: center;
+  column-gap: var(--space-2);
+  row-gap: 0;
+  height: 44px;
+  padding: 0 var(--space-3);
   border-bottom: 1px solid var(--color-rule);
   background: var(--color-panel);
-  font-size: var(--text-sm);
-  line-height: 1.25;
+  font-size: 13px;
+  line-height: 1.15;
+  overflow: hidden;
 }
 
-.bar__turn,
-.bar__identity {
-  display: grid;
-  align-content: center;
-  gap: var(--space-1);
-  padding-right: var(--space-3);
+/* 品牌（原来在应用头里，应用头在对局台隐藏后搬到这里） */
+.bar__brand {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding-right: var(--space-2);
   border-right: 1px solid var(--color-rule);
   white-space: nowrap;
 }
 
-.bar__turn {
-  grid-template-columns: auto auto;
-  align-items: center;
+.bar__brand-mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--color-command-teal);
+  border-radius: var(--radius-sm);
+  color: var(--color-command-teal);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.bar__brand-title {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+.bar__brand-route {
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--color-rule);
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.bar__turn,
+.bar__identity {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding-right: var(--space-2);
+  border-right: 1px solid var(--color-rule);
+  white-space: nowrap;
 }
 
 .bar__turn strong {
-  font-size: var(--text-xl);
+  font-size: 13px;
 }
 
 .bar__label,
 .bar__date {
   color: var(--color-muted);
-  font-size: var(--text-xs);
-}
-
-.bar__date {
-  grid-column: 1 / -1;
+  font-size: 10px;
 }
 
 .bar__identity strong {
-  font-size: var(--text-lg);
+  font-size: 13px;
 }
 
 .bar__identity[data-side='axis'] strong,
@@ -562,10 +627,10 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
 }
 
 .bar__phase {
-  display: grid;
-  align-content: center;
-  gap: var(--space-1);
-  flex: 1 1 260px;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -579,20 +644,21 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
 }
 
 .bar__track {
-  gap: var(--space-1);
+  flex: none;
+  gap: 2px;
 }
 
 .bar__track span {
   display: grid;
   place-items: center;
-  width: var(--space-5);
-  height: var(--space-5);
+  width: 18px;
+  height: 18px;
   background: var(--color-bg);
   border: 1px solid var(--color-rule);
   border-radius: var(--radius-sm);
   color: var(--color-muted);
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: 10px;
 }
 
 .bar__track span[aria-current='step'] {
@@ -603,7 +669,19 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
   font-weight: 700;
 }
 
+.bar__phase-label {
+  min-width: 0;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.bar__phase-label strong {
+  font-size: 12.5px;
+}
+
 .bar__phase-label > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--color-muted);
   min-width: 0;
 }
@@ -613,46 +691,16 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
   color: var(--color-accent);
 }
 
-.bar__score {
-  gap: var(--space-1);
-  white-space: nowrap;
-}
-
-.bar__score > span {
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg);
-}
-
-.bar__actions {
-  margin-left: auto;
-}
-
-.bar__advance {
-  white-space: nowrap;
-  min-height: var(--control-height);
-}
-
-.bar__advance:not(:disabled) {
-  background: var(--color-command-teal);
-  color: var(--color-command-bg);
-}
-
-.bar__advance:hover:not(:disabled) {
-  background: var(--color-command-ink);
-}
-
+/* 该做什么：原独占一行（24px），现在挤在同一行右段；放不下就省略（title 仍是全文） */
 .bar__status {
   display: flex;
+  flex: 0 1 300px;
   align-items: center;
-  flex: 1 0 100%;
-  min-height: var(--space-6);
   min-width: 0;
+  min-height: 0;
   gap: var(--space-2);
-  border-top: 1px solid var(--color-rule);
   color: var(--color-muted);
-  font-size: var(--text-xs);
+  font-size: 10px;
 }
 
 .bar__hint,
@@ -666,20 +714,81 @@ const logTail = computed(() => gameSession.log.slice(-6).reverse())
   color: var(--color-command-amber);
 }
 
+.bar__score {
+  flex: none;
+  gap: var(--space-1);
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.bar__score > span {
+  padding: 1px var(--space-1);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+}
+
+.bar__actions {
+  flex: none;
+}
+
+.bar__advance {
+  white-space: nowrap;
+  min-height: 0;
+  height: 28px;
+  padding: 0 var(--space-3);
+  font-size: 12.5px;
+}
+
+.bar__advance:not(:disabled) {
+  background: var(--color-command-teal);
+  color: var(--color-command-bg);
+}
+
+.bar__advance:hover:not(:disabled) {
+  background: var(--color-command-ink);
+}
+
+.bar__menu {
+  flex: none;
+  height: 26px;
+}
+
+.bar__menu-mark {
+  margin-right: var(--space-1);
+  font-size: 12px;
+  line-height: 1;
+}
+
 .bar__block {
-  max-width: min(520px, 60vw);
+  max-width: min(320px, 40vw);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--color-command-amber);
 }
 
-@media (max-width: 660px) {
-  .bar__phase {
-    flex-basis: 175px;
+/* 一行是有代价的：放不下时按「日期 → 该做什么 → 分数」的顺序让位，高度恒 44 */
+@media (max-width: 1240px) {
+  .bar__date {
+    display: none;
   }
+}
 
+@media (max-width: 1080px) {
+  .bar__status {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
   .bar__score {
+    display: none;
+  }
+}
+
+@media (max-width: 660px) {
+  .bar__brand-route {
     display: none;
   }
 }

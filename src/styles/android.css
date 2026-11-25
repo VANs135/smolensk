@@ -1078,11 +1078,6 @@ html[data-platform='android'] .shell__save {
   padding: 0 7px;
 }
 
-html[data-platform='android'] .shell__save--home::after {
-  content: '菜单';
-  font-size: var(--text-xs);
-}
-
 html[data-platform='android'] .shell__save--disk::after {
   content: '存读';
   font-size: var(--text-xs);
@@ -1094,6 +1089,10 @@ html[data-platform='android'] .bar {
   left: calc(var(--safe-left) + 8px);
   right: calc(var(--safe-right) + 270px);
   z-index: calc(var(--layer-shell) + 1);
+  /* 桌面 2026-11-26 起是「一行 44、不折行」；安卓这条是覆盖在 gt__topbar 上的窄条，
+     宽只有一小段 ⇒ 保留旧的可折行形态（安卓壳列入最低优先级，等 PC 收口后再统一） */
+  height: auto;
+  flex-wrap: wrap;
   min-height: 30px;
   padding: 2px 6px;
 }

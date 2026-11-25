@@ -46,22 +46,12 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
       </div>
       <div class="shell__right">
         <!--
-          2026-11-19（用户「不必要的字去掉」）：安卓壳把两枚按钮都缩成双字徽章
-          （主页 / 存读），文字由 android.css 的 ::after 提供、原文字 0 号字隐藏；
-          桌面端保持完整文字。
+          2026-11-19（用户「不必要的字去掉」）：安卓壳把按钮缩成双字徽章
+          （存读），文字由 android.css 的 ::after 提供、原文字 0 号字隐藏；桌面端保持完整文字。
+
+          2026-11-26（用户「顶栏收成一行」）：对局台右上「☰ 主菜单」已搬进 FlowStrip 单行顶栏，
+          应用头在对局台整条隐藏（`.shell--board .shell__bar`）⇒ 这里只剩非对局页的「存档」。
         -->
-        <!--
-          2026-11-26（用户）：对局页右上改成「☰ 主菜单」，点一下回主页面（行为仍是 navigate('home')）。
-        -->
-        <BaseButton
-          v-if="currentView === 'game'"
-          variant="ghost"
-          size="sm"
-          class="shell__save shell__save--home"
-          aria-label="主菜单 · 返回主页面"
-          @click="ui.navigate('home')"
-          ><span class="shell__menu-mark" aria-hidden="true">☰</span>主菜单</BaseButton
-        >
         <BaseButton
           v-if="currentView !== 'game'"
           variant="ghost"
@@ -103,6 +93,15 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
+}
+
+/*
+ * 2026-11-26（用户「顶栏收成一行」）：对局台的应用头整条隐藏 ——
+ * 品牌（17 / 斯摩棱斯克 / 对局台）与「☰ 主菜单」搬进 `FlowStrip` 的 44px 单行顶栏（见 `.bar`），
+ * 地图因此多出约 90px（旧形态＝应用头 49 + 流程条 84）。开始台 / 剧本页仍用应用头。
+ */
+.shell--board .shell__bar {
+  display: none;
 }
 
 .shell__bar {
@@ -175,13 +174,6 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
 .shell__bar .shell__save:hover {
   background: var(--color-command-raised);
   color: var(--color-command-ink);
-}
-
-/* 「☰ 主菜单」的图标与文字：图标略小、右留 6px，别让两行字挤在一起 */
-.shell__menu-mark {
-  margin-right: 6px;
-  font-size: 13px;
-  line-height: 1;
 }
 
 .shell__body {

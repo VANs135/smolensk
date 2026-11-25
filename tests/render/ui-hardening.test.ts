@@ -118,9 +118,15 @@ describe('界面硬伤：源码守卫', () => {
     // 下方不留栏：托盘整条删除（组件不再挂、样式也清掉）
     expect(table).not.toContain('BottomTray')
     expect(table).not.toContain('.gt__tray-dock')
-    // 顶栏右上回主页面的是「☰ 主菜单」
+    // 顶栏收成一行（2026-11-26 用户）：对局页的应用头整条隐藏，品牌与「☰ 主菜单」并进 `FlowStrip` 的
+    // 44px 单行顶栏 —— 于是整条顶栏只有一行，`nowrap` 不许折成两行
+    const flow = read('src/components/session/FlowStrip.vue')
+    expect(flow).toContain('主菜单')
+    expect(flow).toContain('bar__menu-mark')
+    expect(flow).toMatch(/\.bar\s*\{[^}]*height:\s*44px/s)
+    expect(flow).toMatch(/\.bar\s*\{[^}]*flex-wrap:\s*nowrap/s)
+    expect(table).toContain('board-head')
     const app = read('src/App.vue')
-    expect(app).toContain('主菜单')
-    expect(app).toContain('shell__menu-mark')
+    expect(app).toMatch(/\.shell--board \.shell__bar\s*\{[^}]*display:\s*none/s)
   })
 })

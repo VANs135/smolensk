@@ -467,10 +467,9 @@ onBeforeUnmount(() => {
 <template>
   <div class="gt">
     <!--
-      2026-11-19（用户口径「不要分层」）：安卓壳顶栏 = **一条真实容器**，
-      主页徽章 + 流程条 + 快捷标记（死人堆/空军盒/苏军盒）+ ⚙ 都是它的真实 flex 子元素，
-      不再有任何 fixed 浮层；应用头在游戏页由 CSS 隐藏（.shell--board .shell__bar）。
-      桌面沿用「应用头 + 桌面流程条」的原结构（下方 v-else 分支）。
+      2026-11-19（用户「不要分层」）：安卓壳顶栏 = 一条真实容器（主页徽章 + 流程条 + 快捷标记 + ⚙）。
+      2026-11-26（用户「顶栏收成一行」）：桌面同样是**一条** —— 游戏页应用头整条隐藏，品牌与「☰ 主菜单」
+      并进这条 44px 流程条（`board-head`），地图因此多出约 90px。
     -->
     <header v-if="androidUi" class="gt__topbar">
       <BaseButton variant="ghost" size="sm" class="gt__home" @click="ui.navigate('home')">
@@ -536,7 +535,7 @@ onBeforeUnmount(() => {
         <button type="button" @click="ui.navigate('home')">退出对局</button>
       </div>
     </header>
-    <FlowStrip v-else variant="bar">
+    <FlowStrip v-else variant="bar" board-head @menu="ui.navigate('home')">
       <template #trail>
         <BaseButton
           v-if="
@@ -1174,42 +1173,40 @@ onBeforeUnmount(() => {
 }
 
 .gt__rail {
-  /*
-   * 用户 2026-11-25：地图页只留左栏这一枚存档入口，且「本来就该常用」⇒ 待答模态（`.prompt`，
-   * `--z-panel` 200）的遮罩必须盖不住它。故左栏抬到 200+10：仍低于模式闸门（250）与 toast（300），
-   * 只越过「待答」这一层，浮窗/会话框（20）不受影响。
-   */
+  /* 2026-11-25：左栏的存档是常用入口 ⇒ 待答遮罩（`.prompt`，200）不得盖住它：抬到 210，
+     仍低于模式闸门 250 与 toast 300；浮窗/会话框（20）不受影响 */
   position: relative;
   z-index: calc(var(--z-panel) + 10);
   display: flex;
   flex-direction: column;
-  /* 2026-11-26：13 枚纯图标比旧 6 枚高一截 ⇒ 行距从 4 收到 2，配合下面 44px 按钮把整条压回视口 */
-  gap: 2px;
+  /* 2026-11-26（用户「各宽度减小」）：栏宽 62 → 46、按钮 44 → 34（回到 v5 小样 46/34/图标 22），
+     13 枚因此 767 与 768 高都一屏放下，不用再靠行距压缩 */
+  gap: var(--space-1);
   flex: 0 0 var(--command-rail);
-  padding: var(--space-2) var(--space-1);
+  padding: 6px var(--space-1);
   border-right: 1px solid var(--color-rule);
   background: var(--color-panel);
   overflow: auto;
 }
 
-/* 栏底三枚贴底：窄屏（1366×768 等）整条仍会略有溢出，三枚必须常驻可见，不跟着滚动跑掉 */
+/* 栏底三枚贴底：1366×768 等窄屏整条仍略溢出，三枚必须常驻可见、不跟滚动跑掉 */
 .gt__rail-end {
   position: sticky;
   bottom: 0;
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-1);
   margin-top: auto;
-  padding-top: 2px;
+  padding-top: var(--space-1);
   background: var(--color-panel);
 }
 
-/* 盒组的分组字（轴 / 苏 / 共）：单字小标，不占按钮位；居中对齐图标列（左栏只有 62px，贴边难看） */
+/* 盒组的分组字（轴 / 苏 / 共）：单字小标 10px（v5 小样同口径），不占按钮位 */
 .gt__rail-group {
   margin: 2px 0 0;
   color: var(--color-muted);
-  font-size: var(--text-xs);
+  font-size: 10px;
   line-height: 1.2;
   text-align: center;
 }
@@ -1232,8 +1229,8 @@ onBeforeUnmount(() => {
 .gt__rail-button {
   display: flex;
   width: 100%;
-  /* 2026-11-26：52 → 44（13 枚纯图标要压进 767px 的栏；桌面是鼠标点，44 仍够） */
-  min-height: 44px;
+  /* 2026-11-26（用户「各宽度减小」）：44 → 34，与 v5 小样一致；桌面鼠标点，34 仍够 */
+  min-height: 34px;
   /* 2026-11-26（用户）：左栏一律纯图标 ⇒ 居中，不再带字 */
   align-items: center;
   justify-content: center;
@@ -1252,8 +1249,9 @@ onBeforeUnmount(() => {
 
 .gt__rail-button svg {
   flex: none;
-  width: var(--space-5);
-  height: var(--space-5);
+  /* 图标 22px（v5 小样）；34 的按钮里上下各留 6px，点起来仍不挤 */
+  width: 22px;
+  height: 22px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.6;
@@ -1584,7 +1582,8 @@ onBeforeUnmount(() => {
     position: absolute;
     top: auto;
     right: var(--space-2);
-    bottom: calc(var(--command-rail-button) + 2 * var(--space-2) + var(--safe-bottom));
+    /* 让开底部那条横排栏（2026-11-26 起按钮 34：34 + 上下 4×2 + 1px 边 ≈ 43） */
+    bottom: calc(34px + 2 * var(--space-1) + var(--safe-bottom));
     left: var(--space-2);
     width: auto;
     max-height: 56%;
