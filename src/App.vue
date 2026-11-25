@@ -50,13 +50,17 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
           （主页 / 存读），文字由 android.css 的 ::after 提供、原文字 0 号字隐藏；
           桌面端保持完整文字。
         -->
+        <!--
+          2026-11-26（用户）：对局页右上改成「☰ 主菜单」，点一下回主页面（行为仍是 navigate('home')）。
+        -->
         <BaseButton
           v-if="currentView === 'game'"
           variant="ghost"
           size="sm"
           class="shell__save shell__save--home"
+          aria-label="主菜单 · 返回主页面"
           @click="ui.navigate('home')"
-          >开始台</BaseButton
+          ><span class="shell__menu-mark" aria-hidden="true">☰</span>主菜单</BaseButton
         >
         <BaseButton
           v-if="currentView !== 'game'"
@@ -171,6 +175,13 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeConte
 .shell__bar .shell__save:hover {
   background: var(--color-command-raised);
   color: var(--color-command-ink);
+}
+
+/* 「☰ 主菜单」的图标与文字：图标略小、右留 6px，别让两行字挤在一起 */
+.shell__menu-mark {
+  margin-right: 6px;
+  font-size: 13px;
+  line-height: 1;
 }
 
 .shell__body {

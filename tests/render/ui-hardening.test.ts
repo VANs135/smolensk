@@ -83,12 +83,17 @@ describe('界面硬伤：源码守卫', () => {
     expect(rule).not.toMatch(/left:\s*12px/)
   })
 
-  // UI-7（2026-11-26 用户）：盒 / 表单字标签去掉；按钮整列靠左；设置与撤销挪到存档旁
-  it('UI-7 左栏：表单字不渲染、按钮横排靠左、栏底为存档→设置→撤销', () => {
+  // UI-7（2026-11-26 用户，v5 口径）：左栏一律纯图标、盒组压在最上、栏底 存档→设置→撤销；
+  // 下方托盘整条删除（盒入口只有左栏这一处，不再有第二条）
+  it('UI-7 左栏：纯图标居中、盒组在最上、栏底存档→设置→撤销，且不再有底部托盘', () => {
     const table = read('src/views/GameTableView.vue')
-    // 「表」只留图标，标签靠 v-if 跳过
-    expect(table).toContain(`v-if="item.id !== 'charts'"`)
-    // 主列排除设置；栏底三枚按 存档 / 设置 / 撤销 排
+    // 盒组：单字分组（轴/苏/共）＋ 一盒一枚，点开走 BoxCard 浮窗（不另做抽屉式盒窗）
+    expect(table).toContain('gt__rail-group')
+    expect(table).toContain('boxRailGroups')
+    expect(table).toContain('containers.setPopupCard(card.id)')
+    // 盒组必须排在抽屉列之前（「压在最上」）
+    expect(table.indexOf('boxRailGroups')).toBeLessThan(table.indexOf('gt__rail-main'))
+    // 抽屉列排除设置；栏底三枚按 存档 / 设置 / 撤销 排
     expect(table).toContain("drawers.filter((item) => item.id !== 'settings')")
     const save = table.indexOf('aria-label="存档 / 读档"')
     const settings = table.indexOf('table-drawer-settings')
@@ -96,16 +101,21 @@ describe('界面硬伤：源码守卫', () => {
     expect(save).toBeGreaterThan(0)
     expect(settings).toBeGreaterThan(save)
     expect(undo).toBeGreaterThan(settings)
-    // 按钮内部横排 + 靠左（不再 icon 上、字下、居中）
+    // 一律纯图标 ⇒ 按钮居中（既不是 icon 上字下，也不再是左靠的文字列）
     const rule = table.slice(
       table.indexOf('.gt__rail-button {'),
       table.indexOf('.gt__rail-button {' + 900),
     )
     expect(rule).toContain('flex-direction: row')
-    expect(rule).toContain('justify-content: flex-start')
+    expect(rule).toContain('justify-content: center')
+    expect(rule).not.toContain('justify-content: flex-start')
 
-    // 托盘卡头不再挂「盒」这个单字标题
-    const tray = read('src/components/game/BottomTray.vue')
-    expect(tray).not.toContain('tray__title')
+    // 下方不留栏：托盘整条删除（组件不再挂、样式也清掉）
+    expect(table).not.toContain('BottomTray')
+    expect(table).not.toContain('.gt__tray-dock')
+    // 顶栏右上回主页面的是「☰ 主菜单」
+    const app = read('src/App.vue')
+    expect(app).toContain('主菜单')
+    expect(app).toContain('shell__menu-mark')
   })
 })

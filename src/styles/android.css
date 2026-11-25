@@ -1079,7 +1079,7 @@ html[data-platform='android'] .shell__save {
 }
 
 html[data-platform='android'] .shell__save--home::after {
-  content: '主页';
+  content: '菜单';
   font-size: var(--text-xs);
 }
 

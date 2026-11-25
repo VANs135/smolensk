@@ -10,7 +10,6 @@ import { ContainersPanel } from '@/components/containers'
 import { ExclusiveRulesPanel } from '@/components/exclusive'
 import {
   ActionFeedbackStrip,
-  BottomTray,
   BoxCard,
   ChartTableDrawer,
   DecisionQueue,
@@ -35,6 +34,7 @@ import { SupplyPanel } from '@/components/supply'
 import SupplyPhasePanel from '@/components/supply/SupplyPhasePanel.vue'
 import { TutorialGuide } from '@/components/tutorial'
 import { provideUiMode } from '@/components/ui-mode'
+import { useBoxRail } from '@/components/game/box-rail'
 import { VictoryDialog, VictoryPanel } from '@/components/victory'
 import type { HexRef } from '@/data'
 import { COUNTER_BOX_LABELS, type CounterBoxTarget } from '@/stores/map-view'
@@ -210,6 +210,9 @@ const drawers = [
 
 /** 左栏主列（抽屉开关）：2026-11-26（用户）「设置」不在此列，与存档、撤销一起收在栏底三枚相邻 */
 const railDrawers = drawers.filter((item) => item.id !== 'settings')
+
+/** 左栏盒组（2026-11-26）：分组逻辑与图标在 `components/game/box-rail.ts`（隔离口径单独守），这里只拿成品 */
+const { groups: boxRailGroups, anchorCards: boxAnchorCards, iconPath: boxIconPath } = useBoxRail()
 
 const layers = [
   { key: 'image', label: '扫描图' },
@@ -553,57 +556,72 @@ onBeforeUnmount(() => {
 
     <div class="gt__workspace">
       <nav class="gt__rail" aria-label="棋桌面板">
-        <button
-          v-for="item in railDrawers"
-          :key="item.id"
-          type="button"
-          class="gt__rail-button"
-          :aria-label="item.label"
-          :aria-expanded="!hotkeys.panelCollapsed && drawer === item.id"
-          :aria-controls="'table-drawer-' + item.id"
-          @click="toggleDrawer(item.id)"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path :d="item.icon" />
-          </svg>
-          <!-- 2026-11-26（用户）：盒 / 表的单字标签去掉 ⇒「表」只留图标，语义交给 aria-label -->
-          <span v-if="item.id !== 'charts'" class="gt__rail-label">{{ item.label }}</span>
-        </button>
+        <!-- 盒组（2026-11-26 用户）：一盒一枚压在左栏最上，点开就是该盒的贴图窗；分组字单字（轴/苏/共），不再挂「盒」标题 -->
+        <template v-for="group in boxRailGroups" :key="group.key">
+          <p class="gt__rail-group">{{ group.label }}</p>
+          <button
+            v-for="card in group.cards"
+            :key="card.id"
+            type="button"
+            class="gt__rail-button gt__rail-box"
+            :title="card.name"
+            :aria-label="card.name"
+            @click="containers.setPopupCard(card.id)"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path :d="boxIconPath(card.boxKind)" />
+            </svg>
+          </button>
+        </template>
 
-        <!--
-          2026-11-26（用户）：栏底三枚相邻 —— 存档 / 设置 / 撤销。
-          2026-11-20（用户）：初设的撤回改成图标，放在「设置」按钮下方，**常显**；
-          无可撤操作时只压暗待命并标 aria-disabled，避免按钮出现/消失导致位置跳动。
-          行为走**全局共用撤销入口** `workbench.undoLastOperationNow()`（c25cfc5），
-          与移动步/装卸/初设落位等同一套「最近一笔」语义；无可撤时该入口会写一行原因日志，
-          所以这里**无条件调用**，不要静默吞掉。批 3 纪律：不摆 `disabled` 灰按钮。
-        -->
+        <!-- 抽屉入口：战况 / 表 / 战报，纯图标（2026-11-26 起不再写字） -->
+        <div class="gt__rail-main">
+          <button
+            v-for="item in railDrawers"
+            :key="item.id"
+            type="button"
+            class="gt__rail-button"
+            :aria-label="item.label"
+            :aria-expanded="!hotkeys.panelCollapsed && drawer === item.id"
+            :aria-controls="'table-drawer-' + item.id"
+            @click="toggleDrawer(item.id)"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path :d="item.icon" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- 栏底三枚（2026-11-26 用户）：存档（磁盘）/ 设置（齿轮）/ 撤销（回转），一律纯图标；撤销常显，无可撤时压暗待命（批 3 纪律：不摆 disabled 灰按钮） -->
         <div class="gt__rail-end">
           <button
             type="button"
             class="gt__rail-button"
             aria-label="存档 / 读档"
+            title="存档 / 读档"
             @click="ui.openSaveDialog()"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 4h13l3 3v13H4z M8 4v6h8V4 M8 20v-6h8v6" />
             </svg>
-            <!-- 2026-11-26（用户）：栏宽 62 装不下「存读档」三字（会折行）⇒ 标签压成两字「存档」，读档语义交给 aria -->
-            <span class="gt__rail-label">存档</span>
           </button>
 
           <button
             type="button"
             class="gt__rail-button"
             aria-label="设置"
+            title="设置"
             :aria-expanded="!hotkeys.panelCollapsed && drawer === 'settings'"
             aria-controls="table-drawer-settings"
             @click="toggleDrawer('settings')"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h16 M4 17h16 M9 4v6 M15 14v6" />
+              <circle cx="12" cy="12" r="6.2" />
+              <circle cx="12" cy="12" r="2.6" />
+              <path
+                d="M9.6 2.6h4.8v3.2h-4.8z M9.6 18.2h4.8v3.2h-4.8z M2.6 9.6h3.2v4.8h-3.2z M18.2 9.6h3.2v4.8h-3.2z"
+              />
             </svg>
-            <span class="gt__rail-label">设置</span>
           </button>
 
           <button
@@ -625,6 +643,14 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </nav>
+
+      <!--
+        盒卡挂载点（2026-11-26：托盘删掉后改挂这里）。BoxCard 自己 Teleport 出浮窗，
+        所以这里整块隐藏：左栏点盒图标 ⇒ setPopupCard ⇒ 对应那张卡的浮窗出来。
+      -->
+      <div class="gt__box-anchors" aria-hidden="true">
+        <BoxCard v-for="card in boxAnchorCards" :key="card.id" :card="card" />
+      </div>
 
       <div class="gt__main" role="region" aria-label="对局地图">
         <MapCanvas
@@ -778,8 +804,7 @@ onBeforeUnmount(() => {
           </template>
         </MapCanvas>
         <MapActionPopover />
-        <!-- 2026-11-25：托盘只剩盒段，常驻地图下方（盒入口＝托盘盒卡的卡头） -->
-        <BottomTray v-if="setup.applied" class="gt__tray-dock" />
+        <!-- 2026-11-26：底部托盘整条删除（盒入口改到左栏盒组，卡挂载在 .gt__box-anchors） -->
       </div>
 
       <aside
@@ -1173,13 +1198,37 @@ onBeforeUnmount(() => {
   margin-top: auto;
 }
 
+/* 盒组的分组字（轴 / 苏 / 共）：单字小标，不占按钮位；居中对齐图标列（左栏只有 62px，贴边难看） */
+.gt__rail-group {
+  margin: var(--space-1) 0 0;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* 抽屉入口一段（战况 / 表 / 战报），与盒组之间用一条细规隔开 */
+.gt__rail-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-rule);
+}
+
+/* 盒卡挂载点：整块隐藏，BoxCard 自己 Teleport 出浮窗 */
+.gt__box-anchors {
+  display: none;
+}
+
 .gt__rail-button {
   display: flex;
   width: 100%;
   min-height: var(--command-rail-button);
+  /* 2026-11-26（用户）：左栏一律纯图标 ⇒ 居中，不再带字 */
   align-items: center;
-  /* 2026-11-26（用户）：按钮全列左边 —— 图标与两字标签横向靠左，整列对齐 */
-  justify-content: flex-start;
+  justify-content: center;
   flex-direction: row;
   gap: var(--space-1);
   padding: var(--space-1);
@@ -1204,10 +1253,6 @@ onBeforeUnmount(() => {
   stroke-linecap: round;
 }
 
-.gt__rail-label {
-  white-space: nowrap;
-}
-
 .gt__rail-button:hover,
 .gt__rail-button[aria-expanded='true'] {
   background: var(--color-bg-2);
@@ -1228,7 +1273,7 @@ onBeforeUnmount(() => {
 }
 
 .gt__main {
-  /* 2026-11-25：地图 + 托盘上下排（托盘＝盒入口，常驻地图下方，默认只露卡头一行） */
+  /* 2026-11-26：底部托盘删除后，这里只剩地图（地图自己 flex 撑满，不再让位给托盘） */
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -1239,14 +1284,6 @@ onBeforeUnmount(() => {
 .gt__main > .mapcanvas {
   flex: 1 1 auto;
   min-height: 0;
-}
-
-.gt__tray-dock {
-  flex: 0 0 auto;
-  max-height: 46vh;
-  overflow: auto;
-  border-top: 1px solid var(--color-rule);
-  background: var(--color-panel);
 }
 
 .gt__drawer {

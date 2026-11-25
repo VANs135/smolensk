@@ -215,10 +215,10 @@ describe('B16：托盘与右栏的接线（源码守卫）', () => {
     // 2026-11-25：表搬到左栏抽屉，仍**逐屏切换**，但只画卡图（不自己解析数据文件、不画表）
     expect(drawer).toContain('screen = item.key')
     expect(drawer).not.toContain('crtViews()')
-    // 托盘已只剩盒段：不再碰投影表的任何入口
-    const tray = readFileSync('src/components/game/BottomTray.vue', 'utf8')
-    expect(tray).not.toContain('panelScansOf')
-    expect(tray).not.toContain('tray__table')
+    // 2026-11-26：底部托盘已整条删除 ⇒ 表入口只在左栏那枚纯图标，棋桌页不碰投影表的任何入口
+    const game = readFileSync('src/views/GameTableView.vue', 'utf8')
+    expect(game).not.toContain('panelScansOf')
+    expect(game).not.toContain('tray__table')
   })
 
   it('★ 右栏只读：对局台的胜利面板**不带** `referee`，验证页那一份才带', () => {

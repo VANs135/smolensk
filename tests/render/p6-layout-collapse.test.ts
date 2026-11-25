@@ -30,13 +30,16 @@ describe('P6：折叠右栏回收列宽（源码守卫）', () => {
     expect(canvas).toContain('min-height: 360px')
   })
 
-  it('BottomTray：只剩盒段（桌面默认折叠；安卓默认展开供盒标记直弹）', () => {
-    const tray = readFileSync('src/components/game/BottomTray.vue', 'utf8')
-    // 2026-11-25：表格搬去左栏，托盘不再有"两段同时只展开一段"的纪律
-    expect(tray).toContain('ref<boolean>(isAndroidPlatform())')
-    expect(tray).not.toContain("'tables'")
-    // 盒入口＝卡头：展开/收起只有这一枚按钮
-    expect(tray).toContain('@click="toggle()"')
+  it('盒入口：左栏盒组是唯一入口，底部不再有托盘（也不再占地图高度）', () => {
+    const game = readFileSync('src/views/GameTableView.vue', 'utf8')
+    // 2026-11-26（用户 v5）：托盘整条删除 ⇒ 组件不再挂、样式不再留
+    expect(game).not.toContain('BottomTray')
+    expect(game).not.toContain('.gt__tray-dock')
+    // 盒入口＝左栏一盒一枚，点开走 BoxCard 浮窗
+    expect(game).toContain('gt__rail-box')
+    expect(game).toContain('containers.setPopupCard(card.id)')
+    // 地图不再让位给托盘：`.gt__main` 里只有地图这一件事
+    expect(game).not.toContain('gt__tray-dock')
   })
 
   it('无调试标识', () => {

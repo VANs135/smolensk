@@ -185,7 +185,9 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
         v-if="popped"
         ref="popupRef"
         class="boxpopup"
-        :style="{ transform: `translate(${popupOffset.dx}px, ${popupOffset.dy}px)` }"
+        :style="{
+          transform: `translateX(-50%) translate(${popupOffset.dx}px, ${popupOffset.dy}px)`,
+        }"
       >
         <div
           class="boxpopup__head"
@@ -264,6 +266,11 @@ onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
 /* ── C-2 浮窗（position: fixed；拖动范围由 clampDockOffset 夹住） ── */
 .boxpopup {
   position: fixed;
+  /*
+   * 2026-11-26：`left: 50%` 只把**左边缘**放到中线，而 transform 又被拖拽位移占用 ⇒
+   * 720 宽的浮窗会右溢出视口（1400 屏时标题栏「8 枚」被切）。居中交给模板里的
+   * `translateX(-50%)`（按自身宽度回半宽），这里只留锚点。
+   */
   left: 50%;
   top: 8%;
   z-index: 40;

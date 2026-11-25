@@ -52,9 +52,9 @@ describe('批 6：字号 / 数字 / 图标 / 设置分组 / 空态', () => {
     for (const name of ['chevron-right', 'chevron-down', 'close', 'plus', 'minus', 'external']) {
       expect(icon).toContain(name)
     }
-    // 关闭 / 折叠 / 缩放 / 外链 都走图标
+    // 关闭 / 折叠 / 缩放 / 外链 都走图标（2026-11-26：左栏图标改手绘 svg，托盘已删）
     expect(read('src/components/map/MapDock.vue')).toContain('<BaseIcon name="close"')
-    expect(read('src/components/game/BottomTray.vue')).toContain('<BaseIcon')
+    expect(read('src/views/GameTableView.vue')).toContain('<svg viewBox="0 0 24 24"')
     expect(read('src/components/game/BoxCard.vue')).toContain('<BaseIcon')
     expect(read('src/components/game/DecisionQueue.vue')).toContain('<BaseIcon')
     expect(read('src/components/game/MapActionPopover.vue')).toContain('<BaseIcon')
@@ -80,9 +80,9 @@ describe('批 6：字号 / 数字 / 图标 / 设置分组 / 空态', () => {
   })
 
   it('空态不铺解释句，用「—」', () => {
+    // 2026-11-26：底部托盘已删，不再列入清单
     for (const file of [
       'src/components/breakout/BreakoutPanel.vue',
-      'src/components/game/BottomTray.vue',
       'src/components/game/CounterPicker.vue',
       'src/components/ops/OpsLossPicker.vue',
       'src/components/session/SettlementLogPanel.vue',

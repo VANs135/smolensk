@@ -79,10 +79,11 @@ describe('B31c：运力记录轨（Rail-Sea-Cap）', () => {
     }
   })
 
-  it('★ 源码守卫：托盘把共用卡单列一行；活动格用金色标记画出来', () => {
-    const tray = readFileSync('src/components/game/BottomTray.vue', 'utf8')
-    expect(tray).toContain('containers.sharedCardViews')
-    expect(tray).toContain('共用')
+  it('★ 源码守卫：左栏盒组把共用卡单列一组；活动格用金色标记画出来', () => {
+    const rail = readFileSync('src/components/game/box-rail.ts', 'utf8')
+    expect(rail).toContain('containers.sharedCardViews')
+    // 2026-11-26：共用组的分组字只写单字「共」（左栏只有 62px，写「共用」会折行）
+    expect(rail).toContain("label: '共'")
     // B35 切片 C-2：卡面抽成 `BoxCardFace.vue` ⇒ 金色活动格画在那一件里（类名前缀随之变）
     const face = readFileSync('src/components/game/BoxCardFace.vue', 'utf8')
     expect(face).toContain("'face__region--active': region.active === true")
