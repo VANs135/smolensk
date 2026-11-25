@@ -184,6 +184,7 @@ body[data-layout='board'] {
 | P2-7             | 未单独 commit | 深色 `--color-command-accent-solid` `#244840`→`#2e5a4e`、hover `#3a6d5e`                                                   |
 | 会话窗壳         | 未单独 commit | `MapDock` 补 `⌄` 收起（只折体、会话保留）与 `▣` 不可关（`closePolicy='refused'`）                                          |
 | 实机复核 5 处    | `cabdde2`     | 表图不加载（`v-if` 掉 `<img>` ⇒ 没人请求）、表抽屉多余「收起」、剧本 id「Intro」撞列、开盒跳缩放、存档窗长说明             |
+| 左栏 v5          | `e256d25`     | 盒组压左栏最上（点开走 BoxCard 浮窗）、抽屉与系统项全纯图标、底部托盘整条删除；顶栏右上「☰ 主菜单」                     |
 
 ### 8.2 与原稿不同的判断（已核实，不照原稿执行）
 

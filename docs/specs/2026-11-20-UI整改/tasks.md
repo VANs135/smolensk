@@ -59,3 +59,14 @@
 ## 6. 已知不动的项
 
 - `map-view.ts` 的 `unit` / `containers` 两个会话分支**保留**：分别是设施动作窗与盒卡"需要窗时"的唯一入口，删了会丢功能。
+
+## 7. v5 左栏收口（`e256d25`，2026-11-26 用户定稿）
+
+- [x] 用户口径：V3 左侧盒按钮是对的；把「盒」「表」两个字去掉，表只留一枚无字图标排在盒组下面；下方不留栏
+- [x] 左栏＝盒组（轴/苏/共 单字小标，一盒一枚 → BoxCard 浮窗）＋ 战况/表/战报纯图标 ＋ 栏底 存档/设置/撤销纯图标（磁盘/齿轮/回转）
+- [x] 盒组逻辑与四枚可辨盒图标抽到 `src/components/game/box-rail.ts`（棋桌页触顶 `max-lines`；隔离口径单独守）
+- [x] `BottomTray.vue` 删除；`.gt__tray-dock` / `.gt__rail-label` 残留样式清掉；`game/index.ts` 出口同步
+- [x] 顶栏右上「开始台」→「☰ 主菜单」（回主页面）；回合 / 阶段 / 流程仍在第二行信息栏（`FlowStrip`）
+- [x] `BoxCard` 浮窗居中修正（`translateX(-50%)`）：720 宽不再右溢出视口
+- [x] 守卫改靶不放松：p6 / charts-view / box-side-isolation / rail-cap-track / ui-diet-batch6 / ui-hardening(UI-7)
+- [x] `npm run check` 全绿（633 文件 / 6348 测试）；arch 组件 58 / 样式 62
