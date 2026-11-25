@@ -569,6 +569,8 @@ export const CONSTRUCTION_CODE_TEXT: Readonly<Record<string, string>> = {
   airBaseAlreadyImprovedThisTurn: '该空军基地本回合已经提升过等级（每回合 +1 级，15.3）',
   insufficientSpForAirBase: '修建／改进空军基地需要 1 SP，可动用补给不足（15.3）',
   airFacilityPerHexLimit: '一格内只能有一个机场设施（4.8）',
+  airBaseTargetIsEnemy: '目标格是敌方空中设施，须先按 9.14f 夺取后才能使用（15.3 / 15.2A）',
+  airBaseTargetIsMarkerAirstrip: '目标格已有建造标记的简易机场（一格一设施，15.0a / 专规 3.5）',
   insufficientTForAirstrip: '修建简易机场需要 1 T，可动用运输点数不足（15.2 A）',
   insufficientTForAirstripUpgrade:
     '简易机场升级为一级空军基地需要 3 T，可动用运输点数不足（15.2 A）',

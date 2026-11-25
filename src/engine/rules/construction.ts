@@ -670,6 +670,12 @@ export function planConstructionMarkerUse(input: {
   hexHasAxisCombatUnit: boolean
   /** 专规 3.5：该枚标记尚未使用过 */
   markerAvailable: boolean
+  /**
+   * 通规 15.0a / 4.8：目标格已有空中设施（真实基地/简易机场，或已放的简易机场标记）
+   *
+   * 仅 `kind === 'airStrip'` 时生效；桥标记不占空中设施槽。缺省 false ＝ 兼容既有调用。
+   */
+  hexHasAirFacility?: boolean
 }): RuleOutcome<{ costSp: number; rule: string; detail: string }> {
   if (input.side !== 'axis') return fail('专规 3.5', 'constructionMarkerIsAxisOnly')
   if (input.phase !== 'movement') return fail('专规 3.5', 'constructionMarkerOnlyInMovementPhase')
@@ -677,6 +683,8 @@ export function planConstructionMarkerUse(input: {
   if (!input.markerAvailable) return fail('专规 3.5', 'constructionMarkerAlreadyUsed')
   if (!input.hexHasAxisCombatUnit)
     return fail('专规 3.5', 'constructionMarkerRequiresAxisCombatUnit')
+  if (input.kind === 'airStrip' && input.hexHasAirFacility === true)
+    return fail('4.8', 'airFacilityPerHexLimit')
   return succeed('专规 3.5', {
     // 专规 3.5：免费（不耗补给）
     costSp: 0,

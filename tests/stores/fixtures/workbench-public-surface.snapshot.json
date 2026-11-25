@@ -66,6 +66,7 @@
   "airPlacement",
   "airRebuildBaseHexes",
   "airReductionCandidates",
+  "airReductionMissing",
   "airRefitPayDumps",
   "airReturnChosen",
   "airReturnSelectionLabel",

@@ -216,6 +216,51 @@ describe('15.3：修建 / 改进空军基地（1 SP/级、每回合 +1、上限 
     expect(store.constructionError?.reason).toBe(`airBaseAtMaxLevel:${AIR_BASE_MAX_LEVEL}`)
   })
 
+  it('★ 15.3：目标格是**敌方**空军基地 ⇒ 预检先报 9.14f，落盘不得把敌方算子换成本方', () => {
+    const store = newStore()
+    const enemy = placeGround(store, airBaseRecord(2), CORE_HEX, 'soviet', 'enemy-base')
+    const engineer = placeEngineer(store, `${NEAR_HEX.col}.${NEAR_HEX.row}`, 'eng-near-enemy')
+    const dump = withDump(store, { sp: 8 })
+    prepare(store, {
+      hexText: coreText,
+      engineerId: engineer.instanceId,
+      payDumpId: dump.id,
+    })
+    expect(store.airConstructionMissing('baseBuild')).toContain('9.14f')
+    expect(store.buildAirBaseNow()).toBe(false)
+    expect(store.constructionError?.reason).toBe('airBaseTargetIsEnemy')
+    // 敌方基地原样保留（等级/归属都没被“改进”掉）
+    expect(store.airBaseUnitAt(CORE_HEX)?.side).toBe('soviet')
+    expect(enemy.noncombatLevel).toBe(2)
+    expect(store.airBases.filter((base) => base.side === 'axis')).toHaveLength(0)
+  })
+
+  it('★ 15.3 / 15.2A：目标格是建造标记的简易机场 ⇒ 预检与落盘都拒绝，不再叠第二座设施', () => {
+    const store = newStore()
+    store.setPhase('movement')
+    store.setTurn(4)
+    const worker = placePlainUnit(store, coreText, 'marker-worker')
+    worker.mode = { mode: 'combat', orientation: 'combat', dg: false, exploit: false }
+    const engineer = placeEngineer(store, `${NEAR_HEX.col}.${NEAR_HEX.row}`, 'eng-marker')
+    expect(store.useConstructionMarkerNow('airStrip', coreText)).toBe(true)
+    expect(store.airBases.some((base) => base.isAirstrip === true)).toBe(true)
+
+    const dump = withDump(store, { sp: 8, t: 4 })
+    prepare(store, {
+      hexText: coreText,
+      engineerId: engineer.instanceId,
+      payDumpId: dump.id,
+    })
+    expect(store.airConstructionMissing('baseBuild')).toContain('建造标记')
+    expect(store.buildAirBaseNow()).toBe(false)
+    expect(store.constructionError?.reason).toBe('airBaseTargetIsMarkerAirstrip')
+    expect(store.airConstructionMissing('airstripBuild')).toContain('建造标记')
+    expect(store.buildAirstripNow()).toBe(false)
+    // 标记仍在、盘面只有这一座简易机场
+    expect(store.airBases.filter((base) => base.isAirstrip === true)).toHaveLength(1)
+    expect(store.airBaseUnitAt(CORE_HEX)).toBeUndefined()
+  })
+
   it('★ B43（13.8 首段）：**Pioneer 与铁路修理单位不能施工** —— 候选里没有它们，点名施工也被拒', () => {
     const store = newStore()
     store.setPhase('movement')
@@ -489,21 +534,35 @@ describe('15.2A / 15.2E：简易机场的修建、升格与「永不缩减」', 
     expect(engineer.movementEnded).toBe(true)
   })
 
-  it('15.4：工程兵 DG 朝战斗面在基地格内 ⇒ 可缩减（13.8a）', () => {
+  it('15.4：单个 RE 0.5 单位 ⇒ 预检先报 RE 合计不足，主按钮不得出现；两枚 0.5 合计 1 才放行', () => {
     const store = newStore()
     store.setPhase('movement')
-    const engineer = placeEngineer(store, coreText, 'eng-dg')
-    engineer.mode = { mode: 'combat', orientation: 'combat', dg: true, exploit: false }
-    const base = placeGround(store, airBaseRecord(2), CORE_HEX, 'axis', 'base-dg')
+    const base = placeGround(store, airBaseRecord(2), CORE_HEX, 'axis', 'base-half')
+    const halfA = placePlainUnit(store, coreText, 'half-a')
+    const halfB = placePlainUnit(store, coreText, 'half-b')
+    halfA.re = 0.5
+    halfB.re = 0.5
 
-    store.airInputs.reductionUnitIds = [engineer.instanceId]
+    store.airInputs.reductionUnitIds = [halfA.instanceId]
+    // 候选只含两枚战斗单位；同格的空军基地算子（非战斗）不得混进 15.4 执行者名单
+    expect(store.airReductionCandidates(base.instanceId)).toHaveLength(2)
     expect(
       store
         .airReductionCandidates(base.instanceId)
-        .some((unit) => unit.instanceId === engineer.instanceId),
+        .some((unit) => unit.instanceId === halfA.instanceId),
     ).toBe(true)
+    expect(store.airReductionMissing(base.instanceId)).toContain('RE 合计')
+    expect(store.reduceBaseNow(base.instanceId)).toBe(false)
+    expect(base.noncombatLevel).toBe(2)
+    expect(store.lastReduction).toBeNull()
+
+    // 既有口径：被指定单位 RE **合计** ≥1；两枚 0.5 单位合计 1，合法。
+    store.airInputs.reductionUnitIds = [halfA.instanceId, halfB.instanceId]
+    expect(store.airReductionMissing(base.instanceId)).toBeNull()
     expect(store.reduceBaseNow(base.instanceId)).toBe(true)
     expect(base.noncombatLevel).toBe(1)
+    expect(halfA.movementEnded).toBe(true)
+    expect(halfB.movementEnded).toBe(true)
   })
 })
 

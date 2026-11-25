@@ -204,6 +204,31 @@ describe('批 D 切片 2：建造标记（标记盒 → 二选一 → 点图落�
     expect(workbench.constructionMarkerPlaceMissing).toContain('本阶段已有单位移动')
   })
 
+  it('★ 15.0a / 4.8：简易机场标记不能叠在已有空中设施上（预检与落盘同源）', () => {
+    const workbench = stores.workbench
+    place(workbench, 'a1', CORE_HEX)
+    const baseRecord = unitChoices('axis').find((record) => record.noncombatKind === 'air_base')
+    if (baseRecord === undefined) throw new Error('单位库里没有空军基地算子')
+    workbench.units.push(
+      toConsoleUnit({ record: baseRecord, instanceId: 'base-1', hex: CORE_HEX, side: 'axis' }),
+    )
+    workbench.setPhase('movement' as ConsolePhase)
+    goToActionStep(workbench, 'move.construction')
+    const before = workbench.constructionMarkers
+
+    workbench.armConstructionMarkerNow('airStrip')
+    expect(workbench.pickHexFor(CORE_HEX)).toBe(true)
+    expect(workbench.constructionMarkerPlaceMissing).toContain('已有空中设施')
+    expect(
+      workbench.useConstructionMarkerNow(
+        workbench.constructionMarkerKind,
+        workbench.constructionMarkerHexText,
+      ),
+    ).toBe(false)
+    expect(workbench.constructionMarkers).toBe(before)
+    expect(workbench.constructionMarkerPieces).toHaveLength(0)
+  })
+
   it('★ 专用规则：桥与简易机场都能落（kind 逐次可改），且**枚数用尽后被拒**', () => {
     const workbench = stores.workbench
     place(workbench, 'a1', CORE_HEX)

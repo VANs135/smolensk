@@ -353,11 +353,12 @@ function reductionItems(baseId: string): readonly CounterPickerItem[] {
   }))
 }
 
-/** 本基地选中的合法候选数（全局 reductionUnitIds 可能残留别基地的单位） */
-function reductionSelectedCount(baseId: string): number {
-  return workbench
-    .airReductionCandidates(baseId)
-    .filter((unit) => workbench.airInputs.reductionUnitIds.includes(unit.instanceId)).length
+/**
+ * 15.4 主按钮只问 store 的**同一份预检**（等级 / 简易机场 / 敌方基地 / 已缩减 /
+ * 单位已移动 / RE 合计不足都会变成“还差”），不再用“选中了几枚”冒充可执行。
+ */
+function reductionMissing(baseId: string): string | null {
+  return workbench.airReductionMissing(baseId)
 }
 
 /**
@@ -1255,13 +1256,13 @@ const displayedBases = computed(() => {
         <!-- ── ③ 基地缩减（15.4） ── -->
         <hr />
         <RuleNote
-          title="缩减基地：选格内被指定单位 ⇒ 点「缩减一级」；每基地每阶段一次、不耗 SP"
+          title="缩减基地：指定执行单位 ⇒ 点「缩减一级」；每基地每阶段一次、不耗 SP"
           rule="15.4"
         >
           <p class="muted">
-            基地缩减（15.4）：只在**移动阶段**；由格内**被指定**的单位执行（RE 合计 ≥1
-            或具工程能力， 逐员战斗模式且本阶段未移动）；每基地每阶段一次；永不降到 1
-            级以下（15.0c）；不耗 SP。
+            基地缩减（15.4）：只在**移动阶段**；由**基地格内的战斗单位**（被指定后 RE 合计 ≥1）
+            或**2 格步行 MP 内的具工程能力单位**执行，逐员战斗模式且本阶段未移动；每基地每阶段一次；
+            永不降到 1 级以下（15.0c）；不耗 SP。
             **15.2E：简易机场在任何情况下都不可缩减降级**（伤害或自愿都不行；上表已把简易机场列出，
             点它的「缩减一级」会被引擎按 15.2E 直接拒绝）。
           </p>
@@ -1285,22 +1286,19 @@ const displayedBases = computed(() => {
               取全部候选
             </BaseButton>
             <BaseButton
-              v-if="
-                workbench.airReductionCandidates(base.id).length > 0 &&
-                reductionSelectedCount(base.id) > 0
-              "
+              v-if="reductionMissing(base.id) === null"
               variant="primary"
               size="sm"
               @click="workbench.reduceBaseNow(base.id)"
             >
               缩减一级（15.4）
             </BaseButton>
-            <span v-else class="num">还差：先指定格内单位（15.4）</span>
+            <span v-else class="num">{{ reductionMissing(base.id) }}</span>
             <!-- B14：被指定单位＝**算子图阵列**（点一枚即指定 / 再点取消；原来只是一行名字） -->
             <CounterPicker
               v-if="workbench.airReductionCandidates(base.id).length > 0"
               title="被指定单位（15.4）"
-              hint="15.4：缩减由格内被指定的单位执行 —— RE 合计 ≥1 或具工程能力，逐员战斗模式且本阶段未移动"
+              hint="15.4：基地格内被指定的战斗单位 RE 合计 ≥1，或 2 格步行 MP 内的具工程能力单位；逐员战斗模式且本阶段未移动"
               :items="reductionItems(base.id)"
               :size="32"
               @pick="workbench.toggleAirReductionUnit($event)"

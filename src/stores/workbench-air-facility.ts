@@ -163,6 +163,30 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
   }
 
   /**
+   * 15.3 / 15.2A 目标格的两类**入口预检**缺口
+   *
+   *   · 专规 3.5 的**建造标记简易机场**不在 `airBaseUnitAt`（它不是算子）里，
+   *     修前 `isAirstripAt` / `hexHasAirFacility` 都看不见它 ⇒ 15.3 / 15.2A 会在同一格再建一座；
+   *   · 敌方空军基地虽在 `airBaseUnitAt` 里，但 `planAirBaseBuild` 只按等级判，
+   *     修前把「改进敌方基地」当成合法落盘，随后 `placeAirBaseOperator` 直接把敌方算子换成本方。
+   *
+   * 这里把两种目标格事实收成一处，窗口预检与三个落盘动作共用，避免「窗口能点、落盘另一套」。
+   */
+  function airFacilityTargetIssue(hex: HexRef): { rule: string; reason: string } | null {
+    const marker = deps.airBases.value.find(
+      (base) => sameHex(base.hex, hex) && isConstructionMarkerAirBaseId(base.id),
+    )
+    if (marker !== undefined) {
+      return { rule: '15.0a / 专规 3.5', reason: 'airBaseTargetIsMarkerAirstrip' }
+    }
+    const existing = airBaseUnitAt(hex)
+    if (existing !== undefined && existing.side !== activeSide.value) {
+      return { rule: '9.14f', reason: 'airBaseTargetIsEnemy' }
+    }
+    return null
+  }
+
+  /**
    * 15.3：**加一级**空军基地的 SP 费用（供界面预显；引擎口径）
    *
    * 「费用为 1SP」「等级每回合只能提升一级」⇒ 单次施工恒为一级的价钱，故直接取 1 级的费用。
@@ -222,13 +246,25 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
   const airConstructionMissing = computed<
     (task: 'baseBuild' | 'airstripBuild' | 'airstripUpgrade', baseId?: string) => string | null
   >(() => (task, baseId) => {
-    const hex =
+    const upgradeBase =
       task === 'airstripUpgrade'
-        ? (deps.airBases.value.find((base) => base.id === baseId)?.hex ?? null)
-        : constructionTargetHex.value
+        ? (deps.airBases.value.find((base) => base.id === baseId) ?? null)
+        : null
+    const hex =
+      task === 'airstripUpgrade' ? (upgradeBase?.hex ?? null) : constructionTargetHex.value
     if (hex === null) return '还差：点地图选目标格（15.2A / 15.3）'
+    if (task === 'airstripUpgrade' && upgradeBase === null) return '还差：找不到该空中设施（15.2A）'
     if (task === 'airstripUpgrade' && baseId !== undefined && isConstructionMarkerAirBaseId(baseId))
       return '还差：建造标记的简易机场不能按 15.2A 升格（专规 3.5）'
+    if (task === 'airstripUpgrade' && upgradeBase !== null && upgradeBase.side !== activeSide.value)
+      return '还差：只能升格本方简易机场（9.14f）'
+    /*
+     * 15.3 / 15.2A：目标格若已是**敌方空中设施**，或已有**建造标记的简易机场**，先由
+     * `airFacilityTargetIssue` 拦下；否则 15.3 会把敌方基地当成本方基地“改进”，
+     * 15.2A 也会在标记格上再摆一座设施。
+     */
+    const targetIssue = airFacilityTargetIssue(hex)
+    if (targetIssue !== null) return `还差：${ruleErrorTextOf(targetIssue)}（${targetIssue.rule}）`
     const engineer = pickedEngineer()
     if (engineer === null) return '还差：选施工工程兵（13.8d）'
     const gate = constructionGateNow(
@@ -282,6 +318,19 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
       pushLog('warning', `算子库没有 ${level} 级空军基地算子（15.0c）`, '15.3')
       return false
     }
+    /*
+     * 落盘前的最后一道目标格闸：窗口预检可能被绕过（旧输入、脚本、并发点击），
+     * 这里再按同一 `airFacilityTargetIssue` 拒一次，绝不允许“把敌方基地直接换成本方”。
+     */
+    const targetIssue = airFacilityTargetIssue(hex)
+    if (targetIssue !== null) {
+      pushLog(
+        'warning',
+        `摆放空军基地被拒：${ruleErrorTextOf(targetIssue)}（${targetIssue.rule}）`,
+        targetIssue.rule,
+      )
+      return false
+    }
     const existing = airBaseUnitAt(hex)
     if (existing !== undefined) {
       // 简易机场升格为空军基地：撤掉简易机场声明（15.2A）
@@ -324,6 +373,16 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     if (gate !== null) {
       constructionError.value = { rule: gate.rule, reason: gate.reason }
       pushLog('warning', `修建空军基地被拒：${gate.reason}（${gate.rule}）`, gate.rule)
+      return false
+    }
+    const targetIssue = airFacilityTargetIssue(hex)
+    if (targetIssue !== null) {
+      constructionError.value = targetIssue
+      pushLog(
+        'warning',
+        `修建空军基地被拒：${ruleErrorTextOf(targetIssue)}（${targetIssue.rule}）`,
+        targetIssue.rule,
+      )
       return false
     }
     if (isAirstripAt(hex)) {
@@ -400,6 +459,16 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
       pushLog('warning', `修建简易机场被拒：${gate.reason}（${gate.rule}）`, gate.rule)
       return false
     }
+    const targetIssue = airFacilityTargetIssue(hex)
+    if (targetIssue !== null) {
+      constructionError.value = targetIssue
+      pushLog(
+        'warning',
+        `修建简易机场被拒：${ruleErrorTextOf(targetIssue)}（${targetIssue.rule}）`,
+        targetIssue.rule,
+      )
+      return false
+    }
     const dump = dumpById(constructionInputs.value.payDumpId ?? '') ?? null
     const outcome = planAirstripBuild({
       executor: engineerExecutorFor(engineer, hex),
@@ -460,6 +529,12 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
         '建造标记的简易机场不能按 15.2A 升格（专规 3.5 的标记不可改作基地）',
         '专规 3.5',
       )
+      return false
+    }
+    if (base.side !== activeSide.value) {
+      const issue = { rule: '9.14f', reason: 'airBaseTargetIsEnemy' }
+      constructionError.value = issue
+      pushLog('warning', `简易机场升格被拒：${ruleErrorTextOf(issue)}（9.14f）`, '9.14f')
       return false
     }
     const engineer = pickedEngineer()

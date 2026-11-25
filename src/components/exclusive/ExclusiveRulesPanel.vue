@@ -77,7 +77,11 @@ const hedgehogSquadItems = computed<readonly CounterPickerItem[]>(() => {
   return workbench.units
     .filter(
       (unit) =>
-        unit.side === workbench.activeSide && unit.hex.col === hex.col && unit.hex.row === hex.row,
+        unit.isCombat === true &&
+        unit.re > 0 &&
+        unit.side === workbench.activeSide &&
+        unit.hex.col === hex.col &&
+        unit.hex.row === hex.row,
     )
     .map((unit) => ({
       id: unit.instanceId,

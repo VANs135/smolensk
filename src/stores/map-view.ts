@@ -2992,14 +2992,14 @@ export const useMapViewStore = defineStore('mapView', () => {
       if (engineerCapable && workbench.actionAllowedNow('move.hedgehog')) {
         pushEngineering(
           'move.hedgehog.build',
-          '修建 / 改进本格工事（16.0b：2 SP/级）',
+          '修建 / 改进环形工事（16.0b：2 SP/级，可在 2 格内）',
           '16.0b / 13.8d',
           'fort',
           'hedgehog',
         )
         pushEngineering(
           'move.hedgehog.reduce',
-          '缩减本格工事（16.0c：免费）',
+          '缩减环形工事（16.0c：免费，可在 2 格内）',
           '16.0c / 13.8d',
           'fort',
           'hedgehog',

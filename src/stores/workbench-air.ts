@@ -130,6 +130,7 @@ import {
   type AirUnitTransportState,
 } from '@/engine/rules/air-unit-movement'
 import { roll1d6, roll2d6 } from '@/engine/rng'
+import { ruleErrorTextOf } from '@/engine/rules/rule-error-text'
 
 /** © 空军的端口。60 项按值解构、16 项走 ports（见文件头）。 */
 export interface AirDomainPorts {
@@ -946,6 +947,8 @@ export function createAirDomain(ports: AirDomainPorts) {
       const base = airBases.value.find((item) => item.id === baseId)
       if (base === undefined) return []
       return units.value.filter((unit) => {
+        // 15.4 的 1RE 路线只认**有 RE 的战斗单位**；基地/工事/飞机等不能当执行者。
+        if (unit.isCombat !== true || unit.re <= 0) return false
         if (unit.side !== base.side) return false
         if (hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase)) return false
         const inBaseHex = sameHex(unit.hex, base.hex)
@@ -956,6 +959,37 @@ export function createAirDomain(ports: AirDomainPorts) {
       })
     },
   )
+
+  /**
+   * 15.4：从全局 `reductionUnitIds` 中只取**本基地当前合法候选**的已指定单位。
+   *
+   * 与 `reduceBaseNow` 和 `airReductionMissing` 共用，避免“按钮看候选数、落盘看另一份名单”。
+   */
+  function airReductionSelectedUnits(baseId: string): ConsoleUnit[] {
+    const candidateIds = new Set(
+      airReductionCandidates.value(baseId).map((unit) => unit.instanceId),
+    )
+    return airInputs.value.reductionUnitIds
+      .filter((id) => candidateIds.has(id))
+      .map((id) => units.value.find((unit) => unit.instanceId === id))
+      .filter((unit): unit is ConsoleUnit => unit !== undefined)
+  }
+
+  /** 15.4：把已指定的 ConsoleUnit 投影成引擎的 `AirBaseOperatingUnit` */
+  function toAirReductionOperatingUnit(unit: ConsoleUnit, baseHex: HexRef) {
+    return {
+      id: unit.instanceId,
+      re: unit.re,
+      mode: unit.mode.mode,
+      // 15.4：有人具工程能力时可免 RE≥1（13.8a 的印值适格 × 模式）
+      engineerCapable: engineerCapableNow(unit),
+      // 15.4「且不能移动」：空运也改变过位置，不能仅查地面MP。
+      movedThisPhase: hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase),
+      hex: unit.hex,
+      // 13.8d：工程兵路线按步行 MP 量到目标基地的距离；非工程单位引擎只认同格。
+      legMpDistanceToBase: constructionLegMpDistance(unit.hex, baseHex) ?? Number.POSITIVE_INFINITY,
+    }
+  }
 
   /** C9：本阶段已完成整备的基地（15.1A；视图用） */
   const refitDoneBases = computed(() =>
@@ -2787,6 +2821,28 @@ export function createAirDomain(ports: AirDomainPorts) {
   }
 
   /**
+   * C9 15.4：主按钮出现前的**只读预检**（与 `reduceBaseNow` 的落盘判据同源）
+   *
+   * 修前 `AirPanel` 只看“本基地候选里有没有选中项”；0.5 RE 单位单独被指定时主按钮照样出现，
+   * 点下去才被 `reducingUnitsReBelowMinimum` 拒。这里直接调用 `planAirBaseReduction`，
+   * 把“等级下限 / 简易机场 / 敌方基地 / 已缩减 / 单位已移动 / RE 合计不足”统一翻成“还差”。
+   */
+  const airReductionMissing = computed<(baseId: string) => string | null>(() => (baseId) => {
+    const base = airBases.value.find((item) => item.id === baseId)
+    if (base === undefined) return '还差：找不到该基地（15.4）'
+    const operatingUnits = airReductionSelectedUnits(baseId).map((unit) =>
+      toAirReductionOperatingUnit(unit, base.hex),
+    )
+    const outcome = planAirBaseReduction({
+      side: airActingSide.value,
+      base: { ...base, reducedThisPhase: reducedBaseIds.value.includes(baseId) },
+      phase: phase.value,
+      operatingUnits,
+    })
+    return outcome.ok ? null : `还差：${ruleErrorTextOf(outcome)}（${outcome.rule}）`
+  })
+
+  /**
    * C9 15.4：缩减某本方基地一级（不耗 SP；被指定单位本阶段不能再移动）
    *
    * ★ 15.2E（简易机场永不缩减）在这一条链里由引擎判：`planAirBaseReduction` 会返回
@@ -2811,26 +2867,9 @@ export function createAirDomain(ports: AirDomainPorts) {
      * 被指定名单可能跨基地残留（`reductionUnitIds` 是全局输入）；只取**本基地当前候选**，
      * 防止 A 格单位缩减 B 格基地。工程兵 2 格路线由 `airReductionCandidates` 一并收进来。
      */
-    const candidateIds = new Set(
-      airReductionCandidates.value(baseId).map((unit) => unit.instanceId),
+    const operatingUnits = airReductionSelectedUnits(baseId).map((unit) =>
+      toAirReductionOperatingUnit(unit, base.hex),
     )
-    const selected = airInputs.value.reductionUnitIds.filter((id) => candidateIds.has(id))
-    const operatingUnits = selected
-      .map((id) => units.value.find((unit) => unit.instanceId === id))
-      .filter((unit): unit is ConsoleUnit => unit !== undefined)
-      .map((unit) => ({
-        id: unit.instanceId,
-        re: unit.re,
-        mode: unit.mode.mode,
-        // 15.4：有人具工程能力时可免 RE≥1（13.8a 的印值适格 × 模式，此前该字段恒缺）
-        engineerCapable: engineerCapableNow(unit),
-        // 15.4「且不能移动」：空运也改变过位置，不能仅查地面MP。
-        movedThisPhase: hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase),
-        hex: unit.hex,
-        // 13.8d：工程兵路线按步行 MP 量到目标基地的距离；非工程单位引擎只认同格。
-        legMpDistanceToBase:
-          constructionLegMpDistance(unit.hex, base.hex) ?? Number.POSITIVE_INFINITY,
-      }))
     const data = acceptAir(
       planAirBaseReduction({
         side: airActingSide.value,
@@ -2949,6 +2988,7 @@ export function createAirDomain(ports: AirDomainPorts) {
     cancelTransferNow,
     completeTransferToBaseNow,
     airReductionCandidates,
+    airReductionMissing,
     refitDoneBases,
     reducedBases,
     airstripBaseIds,
@@ -3055,6 +3095,7 @@ export function createAirDomain(ports: AirDomainPorts) {
     airInactiveAtBase,
     airRefitPayDumps,
     airReductionCandidates,
+    airReductionMissing,
     refitDoneBases,
     refitBase,
     refitCandidates,

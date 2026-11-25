@@ -20017,12 +20017,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     constructionMarkerError.value === null ? null : ruleErrorTextOf(constructionMarkerError.value),
   )
 
-  /**
-   * 专规 3.5：主按钮出现前还差什么（与 `useConstructionMarkerNow` 的闸门同源）
-   *
-   * 修前只判"有枚数 + 目标格格式对"：空格/无轴方战斗单位、本阶段已移动、空运货物在途
-   * 都仍会先出现主按钮，点下去才被引擎拒。这里把窗口与标记盒共用的预检收进 store。
-   */
+  /** 通规 15.0a / 4.8：目标格已有真实基地或已放的简易机场标记 ⇒ 不能再叠第二座。 */
+  function markerAirstripSlotOccupiedAt(hex: HexRef): boolean {
+    return (
+      units.value.some((unit) => unit.noncombatKind === 'air_base' && sameHex(unit.hex, hex)) ||
+      constructionMarkerPieces.value.some(
+        (piece) => piece.kind === 'airStrip' && sameHex(piece.hex, hex),
+      )
+    )
+  }
+
+  /** 专规 3.5：主按钮出现前还差什么（与 `useConstructionMarkerNow` 的闸门同源）。 */
   const constructionMarkerPlaceMissing = computed<string | null>(() => {
     if (!actionAllowedNow('move.construction')) return '还差：当前环节不能放置建造标记（3.5）'
     if (constructionMarkers.value <= 0) return '还差：标记盒里没有可用枚数（专规 3.5）'
@@ -20043,6 +20048,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ) {
       return '还差：目标格需有轴方战斗单位（3.5）'
     }
+    if (constructionMarkerKind.value === 'airStrip' && markerAirstripSlotOccupiedAt(target))
+      return '还差：目标格已有空中设施（15.0a / 4.8）'
     return null
   })
 
@@ -20150,6 +20157,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           (unit) => unit.side === 'axis' && unit.isCombat && sameHex(unit.hex, hex),
         ),
         markerAvailable: constructionMarkers.value > 0,
+        // 通规 15.0a / 4.8：简易机场标记不能叠在已有空中设施上（基地或另一枚机场标记）
+        ...(kind === 'airStrip' ? { hexHasAirFacility: markerAirstripSlotOccupiedAt(hex) } : {}),
       }),
       '放置建造标记',
     )

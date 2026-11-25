@@ -234,7 +234,11 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
       .map((id) => units.value.find((unit) => unit.instanceId === id))
       .filter(
         (unit): unit is ConsoleUnit =>
-          unit !== undefined && unit.side === activeSide.value && sameHex(unit.hex, hex),
+          unit !== undefined &&
+          unit.isCombat === true &&
+          unit.re > 0 &&
+          unit.side === activeSide.value &&
+          sameHex(unit.hex, hex),
       )
   }
 

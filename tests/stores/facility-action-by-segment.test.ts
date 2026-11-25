@@ -131,12 +131,56 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     expect(keys).toContain('move.construction.airstripBuild')
     expect(keys).toContain('move.hedgehog.build')
     expect(keys).toContain('move.hedgehog.reduce')
-    // 15.4 缩减不在这份菜单里（它要"格内被指定单位"，HQ 自身不会因为"是 HQ"而获得该入口）
+    // 15.4 缩减不在这份菜单里：本局 HQ 周围没有可缩基地（有基地时另见下一条用例）
     const only = mapView.contextOptions
       .flatMap((option) => option.actions)
       .filter((action) => action.key.startsWith('move.construction.'))
       .map((action) => action.only)
     expect(only.every((item) => item === 'airstrip')).toBe(true)
+  })
+
+  it('★ C 段：HQ 2 格内有可缩基地 ⇒ 工程组出现「缩减 X 基地（15.4）」入口', () => {
+    const { workbench, mapView } = s
+    const hq = unitChoices('axis').find((record) => (record.specialized ?? []).includes('hq'))
+    if (hq === undefined) throw new Error('单位库里没有 HQ（13.8a 的工程能力单位）')
+    workbench.units.push(toConsoleUnit({ record: hq, instanceId: 'hq-1', hex: HEX, side: 'axis' }))
+    const base = toConsoleUnit({
+      record: recordOfKind('air_base'),
+      instanceId: 'base-reduce',
+      hex: { col: HEX.col + 1, row: HEX.row },
+      side: 'axis',
+    })
+    base.noncombatLevel = 2
+    workbench.units.push(base)
+    enter(workbench, 'movement', 'movement.modeAndMovement')
+    expect(mapView.openUnitContext(HEX, 'hq-1', { x: 0, y: 0 })).toBe(true)
+    const keys = mapView.contextOptions
+      .flatMap((option) => option.actions)
+      .filter((action) => action.disabledReason === null)
+      .map((action) => action.key)
+    expect(keys).toContain(`air.baseReduce:${base.instanceId}`)
+  })
+
+  it('★ C 段：轴方战斗单位右键出「建造标记：桥 / 简易机场」两项（专规 3.5）', () => {
+    const { workbench, mapView } = s
+    const combat = unitChoices('axis').find((record) => record.isCombat === true)
+    if (combat === undefined) throw new Error('单位库里没有轴方战斗单位')
+    workbench.units.push(
+      toConsoleUnit({ record: combat, instanceId: 'ax-combat', hex: HEX, side: 'axis' }),
+    )
+    enter(workbench, 'movement', 'movement.modeAndMovement')
+    expect(mapView.openUnitContext(HEX, 'ax-combat', { x: 0, y: 0 })).toBe(true)
+    const keys = mapView.contextOptions
+      .flatMap((option) => option.actions)
+      .filter((action) => action.disabledReason === null)
+      .map((action) => action.key)
+    // 2026-11-26 用户口径：3.5 也一操作一窗；修前只有整块标记盒，没有这两项
+    expect(keys).toContain('move.marker.bridge')
+    expect(keys).toContain('move.marker.airStrip')
+    const markers = mapView.contextOptions
+      .flatMap((option) => option.actions)
+      .filter((action) => action.key.startsWith('move.marker.'))
+    expect(markers.every((action) => action.only === 'marker')).toBe(true)
   })
 
   it('★ F 段战斗：补给站没有操作（战斗补给是"从它付款"，不是对它操作）', () => {
