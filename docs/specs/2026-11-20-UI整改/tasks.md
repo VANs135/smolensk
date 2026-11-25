@@ -70,3 +70,4 @@
 - [x] `BoxCard` 浮窗居中修正（`translateX(-50%)`）：720 宽不再右溢出视口
 - [x] 守卫改靶不放松：p6 / charts-view / box-side-isolation / rail-cap-track / ui-diet-batch6 / ui-hardening(UI-7)
 - [x] `npm run check` 全绿（633 文件 / 6348 测试）；arch 组件 58 / 样式 62
+- [x] review 收尾（`4cceffa`）：浮窗＝「展开」（盒内动作 / 拆分取用判据改认 `popupCardId`）、记录轨不再弹空窗、关会话一并收浮窗、左栏 44px + 粘底（1400×900 与 1366×768 均一屏）
