@@ -116,7 +116,7 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     expect(mapView.unitActionAvailableAt('hog-1')).toBe(false)
   })
 
-  it('★ C 段：工程项挂在**单位**右键——HQ 出「基地/简易机场」与「13.8d 工事」', () => {
+  it('★ C 段：工程项挂在**单位**右键——HQ 出「15.3 / 15.2A」与「16.0b/16.0c」各一项', () => {
     const { workbench, mapView } = s
     const hq = unitChoices('axis').find((record) => (record.specialized ?? []).includes('hq'))
     if (hq === undefined) throw new Error('单位库里没有 HQ（13.8a 的工程能力单位）')
@@ -126,14 +126,17 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
     const keys = mapView.contextOptions.flatMap((option) =>
       option.actions.filter((action) => action.disabledReason === null).map((action) => action.key),
     )
-    expect(keys).toContain('move.construction')
-    expect(keys).toContain('move.hedgehog')
+    // 2026-11-26 用户口径「一个操作一个窗口」：不再合并成「修建 / 简易机场」两项
+    expect(keys).toContain('move.construction.baseBuild')
+    expect(keys).toContain('move.construction.airstripBuild')
+    expect(keys).toContain('move.hedgehog.build')
+    expect(keys).toContain('move.hedgehog.reduce')
     // 15.4 缩减不在这份菜单里（它要"格内被指定单位"，HQ 自身不会因为"是 HQ"而获得该入口）
     const only = mapView.contextOptions
       .flatMap((option) => option.actions)
-      .filter((action) => action.key === 'move.construction')
+      .filter((action) => action.key.startsWith('move.construction.'))
       .map((action) => action.only)
-    expect(only).toEqual(['airstrip'])
+    expect(only.every((item) => item === 'airstrip')).toBe(true)
   })
 
   it('★ F 段战斗：补给站没有操作（战斗补给是"从它付款"，不是对它操作）', () => {
@@ -311,6 +314,83 @@ describe('设施 × 环节：能不能"对它操作"由规则书定', () => {
       base: [],
       hog: [],
     })
+  })
+
+  it('★ 16.0b/c：**印刷工事格**不再出「修 / 缩」死入口（专规 1.3a；2026-11-26 修 P2）', () => {
+    const { workbench, mapView } = s
+    const printed = workbench.printedHedgehogPositions[0]
+    if (printed === undefined) throw new Error('地图数据没有印刷工事')
+    const combat = unitChoices('axis').find((record) => record.isCombat === true)
+    if (combat === undefined) throw new Error('单位库里没有战斗单位')
+    workbench.units.push(
+      toConsoleUnit({ record: combat, instanceId: 'c-printed', hex: printed, side: 'axis' }),
+    )
+    enter(workbench, 'movement', 'movement.modeAndMovement')
+    expect(mapView.openUnitContext(printed, 'c-printed', { x: 0, y: 0 })).toBe(true)
+    const keys = mapView.contextOptions.flatMap((option) =>
+      option.actions.map((action) => action.key),
+    )
+    expect(keys).not.toContain('move.hedgehog.build')
+    expect(keys).not.toContain('move.hedgehog.reduce')
+  })
+
+  it('★ 专规 3.5：建造标记右键是**开窗**（only=marker），不再是 arm 后把确认留在侧栏', () => {
+    const { workbench, mapView } = s
+    const combat = unitChoices('axis').find((record) => record.isCombat === true)
+    if (combat === undefined) throw new Error('单位库里没有战斗单位')
+    workbench.units.push(
+      toConsoleUnit({ record: combat, instanceId: 'c-marker', hex: HEX, side: 'axis' }),
+    )
+    workbench.constructionMarkers = 3
+    enter(workbench, 'movement', 'movement.modeAndMovement')
+    expect(mapView.openUnitContext(HEX, 'c-marker', { x: 0, y: 0 })).toBe(true)
+    const markerOptions = mapView.contextOptions
+      .flatMap((option) => option.actions)
+      .filter((action) => action.key.startsWith('move.marker.'))
+    expect(markerOptions.map((action) => action.key)).toEqual([
+      'move.marker.bridge',
+      'move.marker.airStrip',
+    ])
+    expect(markerOptions.every((action) => action.only === 'marker')).toBe(true)
+    expect(mapView.openContextAction('c-marker', 'move.marker.bridge')).toBe(true)
+    expect(mapView.unitActionIntent?.only).toBe('marker')
+    expect(mapView.unitActionFamily).toBe('fort')
+    expect(workbench.constructionMarkerKind).toBe('bridge')
+    expect(workbench.constructionMarkerHexText).toBe('')
+  })
+
+  it('★ 15.3 / 15.2A：开窗时清掉上一轮的目标格与付款站（实机「付款站在、目标格空」）', () => {
+    const { workbench, mapView } = s
+    const hq = unitChoices('axis').find((record) => (record.specialized ?? []).includes('hq'))
+    if (hq === undefined) throw new Error('单位库里没有 HQ')
+    workbench.units.push(toConsoleUnit({ record: hq, instanceId: 'hq-2', hex: HEX, side: 'axis' }))
+    enter(workbench, 'movement', 'movement.modeAndMovement')
+    expect(mapView.openUnitContext(HEX, 'hq-2', { x: 0, y: 0 })).toBe(true)
+    workbench.constructionInputs = { hexText: '36.13', engineerId: 'old', payDumpId: 'd-old' }
+    expect(mapView.openContextAction('hq-2', 'move.construction.baseBuild')).toBe(true)
+    expect(workbench.airConstructionTask).toBe('baseBuild')
+    expect(workbench.constructionInputs).toEqual({
+      hexText: '',
+      engineerId: 'hq-2',
+      payDumpId: null,
+    })
+    expect(mapView.unitActionIntent?.only).toBe('airstrip')
+  })
+
+  it('★ 单节窗只画自己那一节：1.7 补给缓存 / 2.2 空军限制不得跟着夹带', () => {
+    const panel = readFileSync('src/components/exclusive/ExclusiveRulesPanel.vue', 'utf8')
+    // 这两段没有分节枚举，修前在任何 only='hedgehog'|'marker' 窗里都会渲染（实机：标记窗尾部挂 1.7）
+    expect(panel).toContain('const showsLoose = computed')
+    expect(panel.match(/v-if="showsLoose"/g)).toHaveLength(2)
+  })
+
+  it('★ 同类窗 UI 一致：工事窗与空军建造窗都用工程兵算子图阵列（不再是下拉）', () => {
+    const panel = readFileSync('src/components/exclusive/ExclusiveRulesPanel.vue', 'utf8')
+    const air = readFileSync('src/components/air/AirConstructionSection.vue', 'utf8')
+    expect(panel).toContain('const hedgehogEngineerItems')
+    expect(panel).toContain('@pick="workbench.hedgehogEngineerId = $event"')
+    expect(panel).not.toContain('v-model="workbench.hedgehogEngineerId"')
+    expect(air).toContain('@pick="workbench.constructionInputs.engineerId = $event"')
   })
 
   it('★ 设施动作表本身就是"规则书清单"（键与环节由闸门表给，不在这里另写一套）', () => {

@@ -360,7 +360,6 @@ describe('B15d/B15e：分段渲染与视图接线（源码守卫）', () => {
     const air = readFileSync('src/components/air/AirPanel.vue', 'utf8')
     for (const [panel, command] of [
       ['Place', 'addAirUnit'],
-      ['Airstrip', 'buildAirBaseNow'],
       ['Reduce', 'reduceBaseNow'],
       ['Capture', 'captureAirBaseNow'],
     ] as const) {
@@ -371,6 +370,17 @@ describe('B15d/B15e：分段渲染与视图接线（源码守卫）', () => {
       expect(start, `缺少 ${panel} 面板`).toBeGreaterThan(0)
       expect(air.slice(start, end)).toContain(`workbench.${command}(`)
     }
+    /*
+     * 2026-11-26：「一个操作一个窗口」后 15.3 / 15.2A 拆成三个菜单项、整段搬进
+     * `AirConstructionSection`（AirPanel 顶到 max-lines）；命令仍在自己的单项操作段里。
+     */
+    const airstripStart = air.indexOf('<AirConstructionSection')
+    expect(airstripStart, '缺少 Airstrip 面板').toBeGreaterThan(0)
+    expect(air.slice(airstripStart, airstripStart + 400)).toContain('v-if="showsAirstrip"')
+    const construction = readFileSync('src/components/air/AirConstructionSection.vue', 'utf8')
+    expect(construction).toContain('workbench.buildAirBaseNow(')
+    expect(construction).toContain('workbench.buildAirstripNow(')
+    expect(construction).toContain('workbench.upgradeAirstripNow(')
     // G3：15.1 整备的唯一发起入口＝点基地格（地图小窗），AirPanel 只列基地与容量
     expect(air).not.toContain('workbench.beginRefitNow(')
     const popover = readFileSync('src/components/game/MapActionPopover.vue', 'utf8')

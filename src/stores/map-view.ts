@@ -1782,11 +1782,40 @@ export const useMapViewStore = defineStore('mapView', () => {
     return workbench.barrageSupplyMapDumps.map((item) => item.dump.hex)
   })
 
-  /** 地图多格高亮 = 既有「待点格」＋ 炮击第 1 步的参炸炮兵格 */
+  /**
+   * 动作窗的**目标格**（2026-11-26 用户要求「地图上的格子要高亮」）
+   *
+   * 只画本窗此刻要落的那一格，不铺候选全集（候选另有 `pickCandidateHexes` 的角标机制）。
+   * 来源与窗口内「目标格」同一字段，避免窗里写 36.13、图上还亮着上一格。
+   */
+  const actionTargetHexes = computed<HexRef[]>(() => {
+    const intent = unitActionIntent.value
+    if (intent === null) return []
+    if (intent.only === 'hedgehog') {
+      const hex = workbench.hedgehogTargetHex
+      return hex === null ? [] : [hex]
+    }
+    if (intent.only === 'airstrip') {
+      const hex = workbench.constructionTargetHex
+      return hex === null ? [] : [hex]
+    }
+    if (intent.only === 'reduce') return unitActionHex.value === null ? [] : [unitActionHex.value]
+    if (intent.only === 'marker') {
+      const hex = workbench.constructionMarkerTargetHex
+      return hex === null ? [] : [hex]
+    }
+    return []
+  })
+
+  /** 地图多格高亮 = 既有「待点格」＋ 炮击第 1 步的参炸炮兵格 ＋ 动作窗目标格 */
   const mapHighlightHexes = computed<readonly HexRef[]>(() => {
     const seen = new Set<string>()
     const out: HexRef[] = []
-    for (const hex of [...workbench.variableExitPickHexes, ...opsBarrageUnitHexes.value]) {
+    for (const hex of [
+      ...workbench.variableExitPickHexes,
+      ...opsBarrageUnitHexes.value,
+      ...actionTargetHexes.value,
+    ]) {
       const key = `${hex.col}.${hex.row}`
       if (seen.has(key)) continue
       seen.add(key)
@@ -2900,50 +2929,104 @@ export const useMapViewStore = defineStore('mapView', () => {
       const baseHere = workbench.ownAirBases.find(
         (base) => base.hex.col === hex.col && base.hex.row === hex.row,
       )
-
-      if (engineerCapable && workbench.actionAllowedNow('move.construction')) {
-        add('move.construction', {
-          label: '修建 / 简易机场（15.3·15.2A）',
-          rule: '15.3·15.2A',
-          panel: 'air',
-          only: 'airstrip',
+      /** 工程项在"有移动路径正在进行"时只置灰（不藏项），其余情况都在环节闸门里判 */
+      const engBlocked = moving ? '先结束移动' : null
+      const pushEngineering = (
+        key: string,
+        label: string,
+        rule: string,
+        panel: 'air' | 'fort',
+        only: string,
+      ): void => {
+        actions.push({
+          key,
+          label,
+          rule,
+          panel,
+          only,
           group: '工程',
+          disabledReason: engBlocked,
         })
       }
+
+      /*
+       * 2026-11-26 用户口径「右键菜单一个操作一个窗口」：
+       *   15.3 / 15.2A 修建 / 15.2A 升格 / 16.0b / 16.0c 各是**一项**，不再合并成
+       *   「修建 / 简易机场」与「修 / 缩工事」两扇"什么都能干"的窗。
+       */
+      if (engineerCapable && workbench.actionAllowedNow('move.construction')) {
+        pushEngineering(
+          'move.construction.baseBuild',
+          '修建 / 改进空军基地（15.3：1 SP/级）',
+          '15.3',
+          'air',
+          'airstrip',
+        )
+        pushEngineering(
+          'move.construction.airstripBuild',
+          '修建简易机场（15.2A：1 T）',
+          '15.2A',
+          'air',
+          'airstrip',
+        )
+        if (workbench.upgradableAirstripsFor(id).length > 0) {
+          pushEngineering(
+            'move.construction.airstripUpgrade',
+            '升格简易机场为一级基地（15.2A：3 T）',
+            '15.2A',
+            'air',
+            'airstrip',
+          )
+        }
+      }
       if (engineerCapable && workbench.actionAllowedNow('move.hedgehog')) {
-        add('move.hedgehog', {
-          label: '修 / 缩工事（13.8d）',
-          rule: '16.0b·c / 13.8d',
-          panel: 'fort',
-          only: 'hedgehog',
-          group: '工程',
-        })
-      } else if (
-        squadEligible &&
-        workbench.actionAllowedNow('move.hedgehog') &&
-        (hedgehogLevel >= 1 || !hedgehogPrinted)
-      ) {
-        add('move.hedgehog', {
-          label: hedgehogLevel >= 1 ? '修 / 缩本格工事（16.0b·c）' : '修本格工事（16.0b）',
-          rule: '16.0b·c',
-          panel: 'fort',
-          only: 'hedgehog',
-          group: '工程',
-        })
+        pushEngineering(
+          'move.hedgehog.build',
+          '修建 / 改进本格工事（16.0b：2 SP/级）',
+          '16.0b / 13.8d',
+          'fort',
+          'hedgehog',
+        )
+        pushEngineering(
+          'move.hedgehog.reduce',
+          '缩减本格工事（16.0c：免费）',
+          '16.0c / 13.8d',
+          'fort',
+          'hedgehog',
+        )
+      } else if (squadEligible && workbench.actionAllowedNow('move.hedgehog')) {
+        /*
+         * 16.0b/c 的**格内小队**途径。2026-11-26 修 P2：修前判据是
+         * `level >= 1 || !printed`，印刷格（printed=true、level=1）恒真 ⇒ 印刷格也出「修 / 缩」，
+         * 点进去必被专规 1.3a 拒。现在按**本格实况**给项：
+         *   · 修建：只在本格**没有工事**且不是印刷工事时出现（16.0b 是 +1 级，上限 1）；
+         *   · 缩减：只在本格**有工事**且不是印刷工事时出现（16.0c）；印刷永久工事永不出现。
+         */
+        if (!hedgehogPrinted && hedgehogLevel === 0)
+          pushEngineering(
+            'move.hedgehog.build',
+            '修建本格工事（16.0b）',
+            '16.0b',
+            'fort',
+            'hedgehog',
+          )
+        if (!hedgehogPrinted && hedgehogLevel >= 1)
+          pushEngineering(
+            'move.hedgehog.reduce',
+            '缩减本格工事（16.0c：免费）',
+            '16.0c',
+            'fort',
+            'hedgehog',
+          )
       }
       if (
         squadEligible &&
         baseHere !== undefined &&
         baseHere.level > 1 &&
+        !workbench.reducedBases.some((base) => base.id === baseHere.id) &&
         workbench.actionAllowedNow('air.baseReduce')
       ) {
-        add('air.baseReduce', {
-          label: '缩减本格基地（15.4）',
-          rule: '15.4',
-          panel: 'air',
-          only: 'reduce',
-          group: '工程',
-        })
+        pushEngineering('air.baseReduce', '缩减本格基地（15.4）', '15.4', 'air', 'reduce')
       }
     }
     /*
@@ -3006,29 +3089,41 @@ export const useMapViewStore = defineStore('mapView', () => {
         pushMode('move.strat.toggle', '转入战略模式', '5.8')
       }
     }
+    /*
+     * 专规 3.5（2026-11-26 用户口径「一个操作一个窗口」）：
+     *   · 入口条件补齐原文前提——**本阶段尚无单位移动**（含空运）且盘面上**有轴方战斗单位**的格；
+     *   · 右键只负责**开窗**（`only='marker'`），桥 / 简易机场两个菜单项各开各的窗；
+     *     真正落位在窗里按「点地图选格 → 放置建设标记（3.5）」完成。
+     */
     if (
       unit !== undefined &&
+      unit.side === 'axis' &&
       workbench.activeSide === 'axis' &&
       workbench.constructionMarkers > 0 &&
-      workbench.actionAllowedNow('move.construction')
+      workbench.actionAllowedNow('move.construction') &&
+      workbench.units.every(
+        (item) => !hasUnitMovementThisPhase(item.mpSpent, item.airTransportThisPhase),
+      ) &&
+      workbench.units.some((item) => item.side === 'axis' && item.isCombat === true)
     ) {
+      const markerBlocked = moving ? '先结束移动' : null
       actions.push({
         key: 'move.marker.bridge',
-        label: '建造标记：桥',
+        label: '建造标记：桥（专规 3.5）',
         rule: '专规 3.5',
-        panel: 'unit',
-        only: 'markerBridge',
+        panel: 'fort',
+        only: 'marker',
         group: '工程',
-        disabledReason: null,
+        disabledReason: markerBlocked,
       })
       actions.push({
         key: 'move.marker.airStrip',
-        label: '建造标记：简易机场',
+        label: '建造标记：简易机场（专规 3.5）',
         rule: '专规 3.5',
-        panel: 'unit',
-        only: 'markerAirStrip',
+        panel: 'fort',
+        only: 'marker',
         group: '工程',
-        disabledReason: null,
+        disabledReason: markerBlocked,
       })
     }
     if (unit !== undefined && workbench.canCreateBreakdownNow(id)) {
@@ -3758,10 +3853,15 @@ export const useMapViewStore = defineStore('mapView', () => {
       closePopup()
       return true
     }
-    if (option.only === 'markerBridge' || option.only === 'markerAirStrip') {
-      workbench.armConstructionMarkerNow(option.only === 'markerBridge' ? 'bridge' : 'airStrip')
-      closePopup()
-      return true
+    /*
+     * 专规 3.5：右键只**开窗**。窗口里再点地图选格、按按钮落位（一个操作一个窗口）。
+     */
+    if (option.only === 'marker') {
+      workbench.constructionMarkerKind =
+        option.key === 'move.marker.airStrip' ? 'airStrip' : 'bridge'
+      workbench.constructionMarkerPicked = true
+      workbench.constructionMarkerError = null
+      workbench.constructionMarkerHexText = ''
     }
     /*
      * 13.5a 第 2) 项：图上打残单位 → 落点固定本格，不出高亮，点即扣点。
@@ -3806,25 +3906,33 @@ export const useMapViewStore = defineStore('mapView', () => {
           )?.id ?? null
       }
     }
-    if (option.only === 'airstrip' && unit?.noncombatKind !== 'air_base') {
-      workbench.constructionInputs.engineerId = instanceId
+    if (option.only === 'airstrip' && unit !== undefined) {
+      workbench.prepareAirConstructionWindowNow(
+        option.key === 'move.construction.airstripBuild'
+          ? 'airstripBuild'
+          : option.key === 'move.construction.airstripUpgrade'
+            ? 'airstripUpgrade'
+            : 'baseBuild',
+        instanceId,
+      )
     }
     /*
-     * 2026-11-26（工程入口改挂单位）：点进来时把"发起者"写进 store 的执行者字段，
-     * 窗里只剩目标格 / 付款站两步——与既有 15.3 / 16.0b / 15.4 的输入口径完全一致。
+     * 2026-11-26（工程入口改挂单位＋一个操作一个窗口）：
+     *   开窗时把任务、执行途径、执行者、目标格、付款站一次写清（不再沿用上一轮的残留）。
      */
     if (option.only === 'hedgehog' && unit !== undefined) {
-      const hexText = `${hex.col}.${hex.row}`
-      if (workbench.engineerChoices.some((item) => item.instanceId === instanceId)) {
-        workbench.hedgehogExecutorMode = 'engineer'
-        workbench.hedgehogEngineerId = instanceId
-      } else {
-        workbench.hedgehogExecutorMode = 'inPlace'
-        workbench.hedgehogInputs = { ...workbench.hedgehogInputs, hexText, workerIds: [instanceId] }
-      }
+      const task = option.key === 'move.hedgehog.reduce' ? 'reduce' : 'build'
+      const engineer = workbench.engineerChoices.some((item) => item.instanceId === instanceId)
+      workbench.prepareHedgehogWindowNow(
+        task,
+        engineer ? 'engineer' : 'inPlace',
+        instanceId,
+        engineer ? '' : `${hex.col}.${hex.row}`,
+      )
     }
     if (option.only === 'reduce' && unit !== undefined) {
       workbench.airInputs.reductionUnitIds = [instanceId]
+      workbench.airError = null
     }
     // 用户 2026-11-12：14.11 转场 —— 先开基地窗勾机，再按模式选盒/目的基地
     if (option.only === 'transferBox' || option.only === 'transferBase') {

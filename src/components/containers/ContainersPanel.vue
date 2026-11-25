@@ -1089,9 +1089,39 @@ function boxAircraft(side: Side) {
           拾起一枚 → 简易机场
         </BaseButton>
         <BaseTag v-if="workbench.constructionMarkerPicked" kind="success">
-          已拾起（点地图上有轴方战斗单位的格落位）
+          已拾起（{{ workbench.constructionMarkerKind === 'bridge' ? '桥' : '简易机场' }}）
         </BaseTag>
+        <span v-if="workbench.constructionMarkerPicked" class="num">
+          放置格：{{ workbench.constructionMarkerHexText || '（未选）' }}
+        </span>
+        <BaseButton
+          v-if="workbench.constructionMarkerPicked"
+          variant="secondary"
+          size="sm"
+          @click="workbench.beginConstructionMarkerHexPickNow()"
+        >
+          点地图选格
+        </BaseButton>
+        <BaseButton
+          v-if="
+            workbench.constructionMarkerPicked && workbench.constructionMarkerTargetHex !== null
+          "
+          variant="primary"
+          size="sm"
+          @click="
+            workbench.useConstructionMarkerNow(
+              workbench.constructionMarkerKind,
+              workbench.constructionMarkerHexText,
+            )
+          "
+        >
+          放置建设标记（3.5）
+        </BaseButton>
       </div>
+      <p v-if="workbench.constructionMarkerErrorLine !== null" class="bad">
+        <BaseTag kind="danger">{{ workbench.constructionMarkerError?.rule }}</BaseTag>
+        {{ workbench.constructionMarkerErrorLine }}
+      </p>
     </template>
 
     <!--

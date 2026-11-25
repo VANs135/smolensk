@@ -316,16 +316,18 @@ describe('B14a：15.4「被指定单位」的指定真的接线', () => {
 
 describe('B14a：空军面板的替换（源码守卫）', () => {
   const panel = readFileSync('src/components/air/AirPanel.vue', 'utf8')
+  // 2026-11-26：15.3 / 15.2A 整段拆到 AirConstructionSection（AirPanel 顶到 max-lines）
+  const construction = readFileSync('src/components/air/AirConstructionSection.vue', 'utf8')
 
   it('「选算子」都改走 `CounterPicker`，付款站改地图点选（不留两套控件）', () => {
     expect(panel.match(/<CounterPicker/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
     expect(panel).not.toContain('<select v-model="workbench.airPlacement.aircraftId"')
     expect(panel).not.toContain('<select v-model="workbench.airInputs.interceptorId"')
-    expect(panel).not.toContain('<select v-model="workbench.constructionInputs.engineerId"')
-    expect(panel).not.toContain('<select v-model="workbench.constructionInputs.payDumpId"')
+    expect(construction).not.toContain('<select v-model="workbench.constructionInputs.engineerId"')
+    expect(construction).not.toContain('<select v-model="workbench.constructionInputs.payDumpId"')
     // 用户 2026-11-12：付款站不再在面板选，改为地图高亮 + 点选
-    expect(panel).not.toContain(':items="dumpItems"')
-    expect(panel).toContain('workbench.toggleConstructionPayPick()')
+    expect(construction).not.toContain(':items="dumpItems"')
+    expect(construction).toContain('workbench.toggleConstructionPayPick()')
     // 被指定单位：点击直连 store 的动作（不是只改本地显示）
     expect(panel).toContain('@pick="workbench.toggleAirReductionUnit($event)"')
     /*
@@ -339,7 +341,7 @@ describe('B14a：空军面板的替换（源码守卫）', () => {
   it('悬停同步地图高亮：其余三类对象都走既有的 `setHoverHex`（不另立通道）', () => {
     expect(panel).toContain('workbench.setHoverHex')
     expect(panel).toContain('@hover="hoverAir"')
-    expect(panel).toContain('@hover="hoverUnit"')
+    expect(construction).toContain('@hover="hoverUnit"')
   })
 
   it('★ 14.3e-B：逐轮点名在面板上（攻方非括号机 / 守方任选），可选性仍由 store 给', () => {
@@ -402,7 +404,7 @@ describe('B14a：空军面板的替换（源码守卫）', () => {
     // 用户 2026-11-13：任务类型只读显示（类型由右键菜单定），取自 store 的选项投影
     expect(panel).toContain('workbench.airMissionKindChoices')
     expect(panel).toContain('workbench.airInterceptorCandidates')
-    expect(panel).toContain('workbench.engineerChoices')
+    expect(construction).toContain('workbench.engineerChoices')
     // 14.2f/14.2a/14.2e 的原因串只应出现在 store 里
     expect(panel).not.toContain('canJoinMission')
     expect(panel).not.toContain('canAddAircraftAtStep')

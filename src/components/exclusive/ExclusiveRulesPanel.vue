@@ -94,6 +94,28 @@ const hedgehogSquadItems = computed<readonly CounterPickerItem[]>(() => {
     }))
 })
 
+/**
+ * 16.0b/c 的第二条执行途径：具工程能力的单位（13.8d）
+ *
+ * 与空军建造窗（`AirConstructionSection`）用同一套算子图阵列 + 同一尺寸，
+ * 不再一个窗口下拉、另一个窗口点图（用户 2026-11-26「同类窗口 UI 样式一致」）。
+ */
+const hedgehogEngineerItems = computed<readonly CounterPickerItem[]>(() =>
+  workbench.engineerChoices.map((unit) => ({
+    id: unit.instanceId,
+    imageUrl: counterImageUrlOf(unit),
+    name: `${unit.name}（RE ${unit.re}）@ ${hexLabel(unit.hex)}`,
+    selected: workbench.hedgehogEngineerId === unit.instanceId,
+    hex: unit.hex,
+  })),
+)
+
+/** 悬停某枚地面算子 ⇒ 同步地图高亮（与空军建造窗一致） */
+function hoverUnit(id: string | null): void {
+  const unit = id === null ? null : (workbench.units.find((item) => item.instanceId === id) ?? null)
+  workbench.setHoverHex(unit?.hex ?? null)
+}
+
 /** 12.1b：已选的工事付款站（地图点选写入） */
 const hedgehogPayLabel = computed(() => {
   const id = workbench.hedgehogInputs.payDumpId
@@ -105,6 +127,34 @@ const hedgehogPayLabel = computed(() => {
 /** 面板关掉就退出地图选站模式，避免高亮残留、误吞地图点击 */
 onBeforeUnmount(() => {
   workbench.hedgehogPayPick = false
+})
+
+/*
+ * 2026-11-26 用户口径「右键菜单一个操作一个窗口」：
+ *   16.0b 修建与 16.0c 缩减是**两个菜单项**，共进 `only='hedgehog'` 窗；
+ *   窗口按 `hedgehogWindowTask` 只画选中的那一段（目标格 / 付款 / 主按钮 / 还差 的骨架两段一致）。
+ */
+const hedgehogTask = computed(() => workbench.hedgehogWindowTask)
+const showHedgehogBuild = computed(
+  () =>
+    props.only === null ||
+    props.only === 'actions' ||
+    (props.only === 'hedgehog' && hedgehogTask.value === 'build'),
+)
+const showHedgehogReduce = computed(
+  () =>
+    props.only === null ||
+    props.only === 'actions' ||
+    (props.only === 'hedgehog' && hedgehogTask.value === 'reduce'),
+)
+
+/** 专规 3.5：本面板是否是"右键开出来的落位窗"（窗里不再给二选一，操作已由菜单定死） */
+const markerWindow = computed(() => props.only === 'marker')
+/** 专规 3.5：落位主按钮出现前还差什么（null ＝ 可以出现） */
+const markerPlaceMissing = computed<string | null>(() => {
+  if (workbench.constructionMarkers <= 0) return '还差：标记盒里没有可用枚数（专规 3.5）'
+  if (workbench.constructionMarkerTargetHex === null) return '还差：先「点地图选格」'
+  return null
 })
 
 /** 专规 2.1a：已关闭的补给源（当日） */
@@ -215,6 +265,15 @@ const showsPanzer = computed(() => sectionShown(props.only, 'panzer'))
 const showsSecurity = computed(() => sectionShown(props.only, 'security'))
 const showsHedgehog = computed(() => sectionShown(props.only, 'hedgehog'))
 const showsMarker = computed(() => sectionShown(props.only, 'marker'))
+/**
+ * 2026-11-26：单节窗（`only='hedgehog'|'marker'|…`）只画自己那一节
+ *
+ * 1.7 补给缓存 / 专规 2.2 苏军空军限制没有分节枚举，修前在**任何**单节窗里都跟着渲染
+ * （实机：建造标记窗尾部挂着「1.7 补给缓存」）。它们只在整页 / 会话全动作 / 只读右栏出现。
+ */
+const showsLoose = computed(
+  () => props.only === null || props.only === 'actions' || props.only === 'info',
+)
 
 /** 各节的"动作可写"开关（模板里用，避免逐处写函数调用） */
 const actsPanzer = computed(() => actsShown(props.only, 'panzer'))
@@ -611,7 +670,15 @@ const compactPanzer = computed(() => props.only === 'panzer')
       :open="pins.hedgehog"
       :style="{ order: pins.hedgehog ? 2 : 102 }"
     >
-      <summary class="excl__title">16.0b/c 环形工事（修建 / 缩减）</summary>
+      <summary class="excl__title">
+        {{
+          props.only === 'hedgehog' && hedgehogTask === 'reduce'
+            ? '16.0c 环形工事（缩减）'
+            : props.only === 'hedgehog'
+              ? '16.0b 环形工事（修建 / 改进）'
+              : '16.0b/c 环形工事（修建 / 缩减）'
+        }}
+      </summary>
       <!-- ── 16.0b/c 环形工事的修建与缩减（＋专规 1.3a 印刷工事、1.3b 上限、2.3e 苏军禁建期） ── -->
       <RuleNote
         title="环形工事：移动阶段由格内指定小队修建（+1 级 2 SP）或缩减（−1 级免费）"
@@ -644,31 +711,28 @@ const compactPanzer = computed(() => props.only === 'panzer')
             <option value="engineer">② 工程兵（2 格半径内，13.8d）</option>
           </select>
         </label>
-        <label v-if="workbench.hedgehogUsesEngineerRoute" class="field">
-          施工工程兵（13.8d）
-          <select v-model="workbench.hedgehogEngineerId" class="select">
-            <option :value="null">（请选择）</option>
-            <option
-              v-for="unit in workbench.engineerChoices"
-              :key="unit.instanceId"
-              :value="unit.instanceId"
-            >
-              {{ unit.name }} @ {{ hexLabel(unit.hex) }}
-            </option>
-          </select>
-        </label>
+        <div v-if="workbench.hedgehogUsesEngineerRoute" class="field">
+          <CounterPicker
+            title="施工工程兵（13.8d）"
+            hint="13.8d：须具工程能力、处于战斗模式（或 DG 朝战斗面）、本阶段未移动、在目标格 2 格步行 MP 内"
+            :items="hedgehogEngineerItems"
+            :size="40"
+            @pick="workbench.hedgehogEngineerId = $event"
+            @hover="hoverUnit"
+          />
+        </div>
         <label class="field">
           目标格
           <UiField v-model="workbench.hedgehogInputs.hexText" class="input" placeholder="36.13" />
           <BaseButton
             variant="secondary"
             size="sm"
-            @click="workbench.beginHedgehogHexPickNow('build')"
+            @click="workbench.beginHedgehogHexPickNow(hedgehogTask)"
           >
-            点地图选格（修建）
+            点地图选格
           </BaseButton>
         </label>
-        <div class="field">
+        <div v-if="showHedgehogBuild" class="field">
           付款补给站（修建用；缩减免费）
           <div class="row">
             <BaseButton variant="secondary" size="sm" @click="workbench.toggleHedgehogPayPick()">
@@ -682,18 +746,30 @@ const compactPanzer = computed(() => props.only === 'panzer')
             </span>
           </div>
         </div>
-        <BaseButton
-          v-if="workbench.hedgehogInputs.payDumpId !== null"
-          variant="primary"
-          size="sm"
-          @click="workbench.buildHedgehogNow()"
-        >
-          修建/改进 +1 级（16.0b）
-        </BaseButton>
-        <span v-else class="num">还差：付款补给站（16.0b：2 SP/级）</span>
-        <BaseButton variant="secondary" size="sm" @click="workbench.reduceHedgehogNow()">
-          缩减 −1 级（16.0c：免费）
-        </BaseButton>
+        <!-- 16.0b：修建 +1 级（2 SP/级） -->
+        <template v-if="showHedgehogBuild">
+          <BaseButton
+            v-if="workbench.hedgehogBuildMissing === null"
+            variant="primary"
+            size="sm"
+            @click="workbench.buildHedgehogNow()"
+          >
+            修建 / 改进 +1 级（16.0b）
+          </BaseButton>
+          <span v-else class="num">{{ workbench.hedgehogBuildMissing }}</span>
+        </template>
+        <!-- 16.0c：缩减 −1 级（免费） -->
+        <template v-if="showHedgehogReduce">
+          <BaseButton
+            v-if="workbench.hedgehogReduceMissing === null"
+            variant="primary"
+            size="sm"
+            @click="workbench.reduceHedgehogNow()"
+          >
+            缩减 −1 级（16.0c：免费）
+          </BaseButton>
+          <span v-else class="num">{{ workbench.hedgehogReduceMissing }}</span>
+        </template>
       </div>
       <p v-if="workbench.hedgehogUsesEngineerRoute" class="num">
         13.8d 施工者：{{ workbench.hedgehogEngineer?.name ?? '（未选工程兵）' }} → 目标格
@@ -729,9 +805,9 @@ const compactPanzer = computed(() => props.only === 'panzer')
         />
         <span v-else class="num">还差：先「点地图选格」，格内己方单位会列在这里</span>
       </div>
-      <p v-if="workbench.hedgehogError !== null" class="bad">
-        <BaseTag kind="danger">{{ workbench.hedgehogError.rule }}</BaseTag>
-        {{ workbench.hedgehogError.reason }}
+      <p v-if="workbench.hedgehogErrorLine !== null" class="bad">
+        <BaseTag kind="danger">{{ workbench.hedgehogError?.rule }}</BaseTag>
+        {{ workbench.hedgehogErrorLine }}
       </p>
       <p class="num">
         本回合已提升/已降低的格：{{ Object.keys(workbench.hedgehogTurnLedger).length }} 格
@@ -762,8 +838,8 @@ const compactPanzer = computed(() => props.only === 'panzer')
           剩余 {{ workbench.constructionMarkers }} 枚
         </BaseTag>
         <template v-if="actsMarker">
-          <!-- 裁判工具：枚数由剧本初设给定（3.5「剧本 1/2 各 3 枚」），手改是订正 -->
-          <label v-if="showsReferee" class="field">
+          <!-- 裁判工具：枚数由剧本初设给定（3.5「剧本 1/2 各 3 枚」），手改是订正；对局窗里不铺 -->
+          <label v-if="showsReferee && !markerWindow" class="field">
             <UiField
               class="input num"
               type="number"
@@ -773,18 +849,17 @@ const compactPanzer = computed(() => props.only === 'panzer')
             />
             手改枚数
           </label>
-          <label class="field">
+          <!-- 菜单已定死二选一 ⇒ 窗口里只读显示；侧栏（验证页）仍可手选 -->
+          <label v-if="!markerWindow" class="field">
             →
-            <!--
-              ★ 批 D 切片 2（房规①：值要被 store 动作读、又被界面写 ⇒ 必须是 **store 字段**）：
-                这里原来是一个**组件局部 ref**（`markerKind`），而落盘动作在 store 里
-                ⇒ 界面之外的路径（标记盒会话框）拿不到它。现在两处**共用** `workbench.constructionMarkerKind`。
-            -->
             <select v-model="workbench.constructionMarkerKind" class="select">
               <option value="bridge">桥（13.8b）</option>
               <option value="airStrip">简易机场（15.2）</option>
             </select>
           </label>
+          <BaseTag v-else kind="warning">
+            {{ workbench.constructionMarkerKind === 'bridge' ? '桥（13.8b）' : '简易机场（15.2）' }}
+          </BaseTag>
           <label class="field">
             放置格
             <UiField
@@ -801,6 +876,7 @@ const compactPanzer = computed(() => props.only === 'panzer')
             </BaseButton>
           </label>
           <BaseButton
+            v-if="markerPlaceMissing === null"
             variant="primary"
             size="sm"
             @click="
@@ -812,8 +888,13 @@ const compactPanzer = computed(() => props.only === 'panzer')
           >
             放置建设标记（3.5）
           </BaseButton>
+          <span v-else class="num">{{ markerPlaceMissing }}</span>
         </template>
       </div>
+      <p v-if="workbench.constructionMarkerErrorLine !== null" class="bad">
+        <BaseTag kind="danger">{{ workbench.constructionMarkerError?.rule }}</BaseTag>
+        {{ workbench.constructionMarkerErrorLine }}
+      </p>
       <!-- 专规 3.5：已放置的标记（不可移动 / 不可重建；只有苏军战斗单位进入其格才会被毁） -->
       <p v-if="workbench.constructionMarkerPieces.length > 0" class="muted">
         已放置：
@@ -825,7 +906,12 @@ const compactPanzer = computed(() => props.only === 'panzer')
 
     <!-- ── · 补给缓存台账（B37：按本环节可做与否置顶/折叠；入口已迁补给阶段面板） ── -->
 
-    <details class="excl" :open="pins.supplyCache" :style="{ order: pins.supplyCache ? 4 : 104 }">
+    <details
+      v-if="showsLoose"
+      class="excl"
+      :open="pins.supplyCache"
+      :style="{ order: pins.supplyCache ? 4 : 104 }"
+    >
       <summary class="excl__title">1.7 补给缓存（持仓台账）</summary>
       <hr />
       <RuleNote title="补给缓存：Shells 在炮击面板付款 / Forage 在补给阶段面板" rule="1.7 / 21.10">
@@ -854,6 +940,7 @@ const compactPanzer = computed(() => props.only === 'panzer')
     <!-- ── · 苏军空军限制（专规 2.2 Red Air Force；B37：按本环节可做与否置顶/折叠） ── -->
 
     <details
+      v-if="showsLoose"
       class="excl"
       :open="pins.airRestriction"
       :style="{ order: pins.airRestriction ? 5 : 105 }"

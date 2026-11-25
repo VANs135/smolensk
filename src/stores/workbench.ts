@@ -69,7 +69,14 @@ import { createSupplyPhaseDomain } from './supply-phase'
 import type { SpDump } from './supply-types'
 // B37：分界线的渲染投影类型（渲染层只画被给的东西）
 import type { BoundaryLine } from '@/render/map-render'
-import { battleArOf, createRailFacts, createTraceSupplyAt, setupEntryViews } from '@/engine/rules'
+import {
+  CONSTRUCTION_RADIUS_HEXES,
+  battleArOf,
+  createRailFacts,
+  createTraceSupplyAt,
+  setupEntryViews,
+  type AirBaseView,
+} from '@/engine/rules'
 import { entryEdgeHexes } from '@/engine/rules/entry-edges'
 import { buildUnitSelectionSet, type UnitSelectionSet } from '@/engine/rules/unit-selection'
 // B8：环节链（当前环节由本文件的 `segmentStep` 从这张表推出）
@@ -2135,6 +2142,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     noteConstruction,
     constructionFeeT,
     payConstructionFee,
+    constructionLegRangeTo,
   } = constructionDomain
 
   /* ── C8b：D 段**补给阶段总计划**（12.1–12.2 / 12.6 / 12.8 / 12.10e） ── */
@@ -2450,6 +2458,31 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     airMissionKindLabel,
     airStatusLabel,
   } = airDomain
+
+  /**
+   * 15.2A「升格为一级空军基地 3 T」的候选：指定工程兵 2 格步行 MP 内的**本方简易机场**
+   *
+   * 放在 facade 而不是 air-facility 域：它要读 `constructionLegRangeTo`（13.8d 施工域），
+   * 走端口会加宽 `AirFacilityDeps`（门禁棘轮 16→17 不允许）；读公开面则不增端口。
+   * 专规 3.5 的建造标记简易机场没有对应基地算子可升格（`upgradeAirstripNow` 会拒），故先筛掉。
+   */
+  const upgradableAirstripsFor = computed<(engineerId: string | null) => AirBaseView[]>(
+    () => (engineerId) => {
+      const engineer =
+        engineerId === null
+          ? null
+          : (units.value.find((unit) => unit.instanceId === engineerId) ?? null)
+      if (engineer === null) return []
+      return airBases.value.filter(
+        (base) =>
+          base.side === activeSide.value &&
+          base.isAirstrip === true &&
+          !isConstructionMarkerAirBaseId(base.id) &&
+          (constructionLegRangeTo(engineer, base.hex) ?? Number.POSITIVE_INFINITY) <=
+            CONSTRUCTION_RADIUS_HEXES,
+      )
+    },
+  )
 
   /* ── B2-2c：轰炸结算链（air 的第三刀，独立切片） ── */
   const airBarrageChainDomain = createAirBarrageChainDomain({
@@ -19973,6 +20006,17 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   /** 专规 3.5：放置格（原先是组件局部 ref；点地图要写回，故搬进 store） */
   const constructionMarkerHexText = ref('')
 
+  /** 专规 3.5：落位错误（窗口内显示；与 `exclusiveError` 分开，免得右栏只读区也弹） */
+  const constructionMarkerError = ref<{ rule: string; reason: string } | null>(null)
+
+  /** 专规 3.5：窗口目标格（格式错/未填 ⇒ null）与中文错误行 */
+  const constructionMarkerTargetHex = computed<HexRef | null>(
+    () => parseHexPath(constructionMarkerHexText.value)[0] ?? null,
+  )
+  const constructionMarkerErrorLine = computed<string | null>(() =>
+    constructionMarkerError.value === null ? null : ruleErrorTextOf(constructionMarkerError.value),
+  )
+
   /**
    * 专规 3.5：**苏方战斗单位进入**建造标记格 ⇒ 该标记被摧毁（**不可重建**：枚数不退）
    *
@@ -20038,6 +20082,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   function armConstructionMarkerNow(kind: 'bridge' | 'airStrip'): void {
     constructionMarkerKind.value = kind
     constructionMarkerPicked.value = true
+    constructionMarkerError.value = null
+    constructionMarkerHexText.value = ''
     beginConstructionMarkerHexPickNow()
   }
 
@@ -20056,6 +20102,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     if (!requireAction('move.construction', '使用建造标记')) return false
     const hex = parseHexPath(hexText)[0]
     if (hex === undefined) {
+      constructionMarkerError.value = { rule: '专规 3.5', reason: `hexFormatInvalid:${hexText}` }
       exclusiveError.value = { rule: '专规 3.5', reason: `hexFormatInvalid:${hexText}` }
       pushLog('warning', `建造格格式应为「列.行」，收到「${hexText}」（专规 3.5）`, '专规 3.5')
       return false
@@ -20077,7 +20124,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
       }),
       '放置建造标记',
     )
-    if (data === null) return false
+    if (data === null) {
+      constructionMarkerError.value = exclusiveError.value
+      return false
+    }
+    constructionMarkerError.value = null
     captureUndoSnapshot(`放置建造标记（${kind === 'bridge' ? '桥' : '简易机场'}）${hexLabel(hex)}`)
     constructionMarkers.value -= 1
     // 专规 3.5：标记**落盘**（原来只减枚数、标记本身没记住 ⇒ 看不见也毁不掉）
@@ -22866,8 +22917,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     supplyCacheHoldings,
     lastSupplyCacheUse,
     constructionMarkers,
+    upgradableAirstripsFor,
     constructionMarkerPieces,
     constructionMarkerHexText,
+    constructionMarkerError,
+    constructionMarkerTargetHex,
+    constructionMarkerErrorLine,
     // 批 D 切片 2（专规 3.5）：二选一与"已拾起"是 **store 字段**（盒内会话框与面板共用同一份）
     constructionMarkerKind,
     constructionMarkerPicked,

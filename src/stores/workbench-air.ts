@@ -941,7 +941,10 @@ export function createAirDomain(ports: AirDomainPorts) {
         (unit) =>
           unit.side === base.side &&
           unit.isCombat &&
-          !unit.movementEnded &&
+          // 15.4 原文要的是「**战斗模式**的单位」；只筛 `isCombat` 会把移动/预备模式也放进候选，
+          // 点下去必被引擎拒（实机踩过）。
+          unit.mode.mode === 'combat' &&
+          !hasUnitMovementThisPhase(unit.mpSpent, unit.airTransportThisPhase) &&
           sameHex(unit.hex, base.hex),
       )
     },

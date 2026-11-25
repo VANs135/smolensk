@@ -33,6 +33,8 @@
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
 
 import {
+  HEDGEHOG_LEVELS_PER_TURN,
+  HEDGEHOG_MAX_LEVEL,
   SP_TO_T,
   holdingsToT,
   planHedgehogBuild,
@@ -41,6 +43,7 @@ import {
   type ConstructionExecutor,
   type ConstructionTask,
 } from '@/engine/rules'
+import { ruleErrorTextOf } from '@/engine/rules/rule-error-text'
 import { hasUnitMovementThisPhase } from '@/engine/rules/air-unit-movement'
 import { sameHex } from '@/engine/hex-geometry'
 import type { Derivation } from '@/engine/derivation'
@@ -142,6 +145,19 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
   const hedgehogEngineerId = ref<string | null>(null)
   /** 16.0b/c 的错误（统一形状：rule + reason） */
   const hedgehogError = ref<{ rule: string; reason: string } | null>(null)
+
+  /**
+   * 2026-11-26（用户口径「右键菜单一个操作一个窗口」）：本窗只做**一件事**
+   *
+   * 16.0b（修建 / 改进 +1 级，2 SP）与 16.0c（缩减 −1 级，免费）是两个菜单项、两个窗口；
+   * 同一个 `only='hedgehog'` 面板按本字段只画对应的一段，避免"开修建窗却把缩减按钮也摆上"。
+   */
+  const hedgehogWindowTask = ref<'build' | 'reduce'>('build')
+
+  /** 16.0b/c 错误的中文行（弹窗统一走 `ruleErrorTextOf`，英文码不再直出） */
+  const hedgehogErrorLine = computed<string | null>(() =>
+    hedgehogError.value === null ? null : ruleErrorTextOf(hedgehogError.value),
+  )
 
   /** 16.0 / 9.9：该格**当前**工事等级（印刷与摆出取高，与战斗路径同口径） */
   function hedgehogLevelOf(hex: HexRef): number {
@@ -246,6 +262,12 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     () => parseHexPath(hedgehogInputs.value.hexText)[0] ?? null,
   )
 
+  /** 目标格此刻的工事实况（未填/格式错 ⇒ null；供窗口显示等级与"本回合已施工"） */
+  const hedgehogTargetState = computed(() => {
+    const hex = hedgehogTargetHex.value
+    return hex === null ? null : hedgehogHexState(hex)
+  })
+
   /** 13.8d 途径下被派去施工的工程兵（未选或找不到 ⇒ null） */
   const hedgehogEngineer = computed<ConsoleUnit | null>(() => pickedHedgehogEngineer())
 
@@ -261,6 +283,46 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     const hex = hedgehogTargetHex.value
     if (engineer === null || hex === null) return null
     return constructionLegMpDistance(engineer.hex, hex)
+  })
+
+  /** 16.0b/c：执行者是否已就位（决定窗口给不给主按钮，免得点了才被告知"没有施工者"） */
+  const hedgehogExecutorReady = computed<boolean>(() =>
+    hedgehogUsesEngineerRoute.value
+      ? pickedHedgehogEngineer() !== null
+      : hedgehogInputs.value.workerIds.length > 0,
+  )
+
+  /** 16.0b：还差什么（null ＝ 主按钮可以出现） */
+  const hedgehogBuildMissing = computed<string | null>(() => {
+    const hex = hedgehogTargetHex.value
+    if (hex === null) return '还差：先「点地图选格」'
+    const state = hedgehogHexState(hex)
+    if (state.isPrintedPermanent) return '这一格是地图印刷永久工事：不可修建、不可降低（专规 1.3a）'
+    if (state.level >= HEDGEHOG_MAX_LEVEL) return '本作工事上限 1 级，该格已有工事（专规 1.3b）'
+    if (state.levelsBuiltThisTurn >= HEDGEHOG_LEVELS_PER_TURN)
+      return '该格本回合已经提升过（16.0b：每回合 +1 级）'
+    if (!hedgehogExecutorReady.value)
+      return hedgehogUsesEngineerRoute.value
+        ? '还差：指定 13.8d 的施工工程兵'
+        : '还差：在目标格勾选施工小队'
+    if (hedgehogInputs.value.payDumpId === null) return '还差：付款补给站（16.0b：2 SP）'
+    return null
+  })
+
+  /** 16.0c：还差什么（null ＝ 主按钮可以出现；缩减免费，不需要付款站） */
+  const hedgehogReduceMissing = computed<string | null>(() => {
+    const hex = hedgehogTargetHex.value
+    if (hex === null) return '还差：先「点地图选格」'
+    const state = hedgehogHexState(hex)
+    if (state.isPrintedPermanent) return '这一格是地图印刷永久工事：不可修建、不可降低（专规 1.3a）'
+    if (state.level < 1) return '该格没有环形工事（16.0c）'
+    if (state.levelsReducedThisTurn >= HEDGEHOG_LEVELS_PER_TURN)
+      return '该格本回合已经缩减过（16.0c：每回合 −1 级）'
+    if (!hedgehogExecutorReady.value)
+      return hedgehogUsesEngineerRoute.value
+        ? '还差：指定 13.8d 的施工工程兵'
+        : '还差：在目标格勾选施工小队'
+    return null
   })
 
   /** 16.0b/c：环形工事的付款站候选（施工小队或 13.8d 工程兵可达的来源） */
@@ -321,6 +383,29 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
       '12.1b',
     )
     return true
+  }
+
+  /**
+   * 2026-11-26：从右键菜单开**本任务的窗口**时统一清预填
+   *
+   * 以前开窗只写 `engineerId`，上一轮的 `hexText` / `payDumpId` 会跟过来（实机上出现
+   * "付款站 2.2 已在、目标格却是空的"）。这里一次写清：任务、途径、执行者、目标格、付款站、错误。
+   */
+  function prepareHedgehogWindowNow(
+    task: 'build' | 'reduce',
+    mode: 'inPlace' | 'engineer',
+    unitId: string,
+    hexText: string,
+  ): void {
+    hedgehogWindowTask.value = task
+    hedgehogExecutorMode.value = mode
+    hedgehogEngineerId.value = mode === 'engineer' ? unitId : null
+    hedgehogInputs.value =
+      mode === 'inPlace'
+        ? { hexText, workerIds: [unitId], payDumpId: null }
+        : { hexText, workerIds: [], payDumpId: null }
+    hedgehogPayPick.value = false
+    hedgehogError.value = null
   }
 
   /** 16.0b/c：把「本阶段不能再移动」落到被指定的单位上（仅这些单位受约束） */
@@ -482,10 +567,16 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     hedgehogEngineerId,
     hedgehogUsesEngineerRoute,
     hedgehogTargetHex,
+    hedgehogTargetState,
     hedgehogEngineer,
     hedgehogEngineerLegRange,
     pickedHedgehogEngineer,
+    hedgehogExecutorReady,
+    hedgehogBuildMissing,
+    hedgehogReduceMissing,
+    hedgehogWindowTask,
     hedgehogError,
+    hedgehogErrorLine,
     hedgehogTurnLedger,
     hedgehogLevelOf,
     isPrintedHedgehogAt,
@@ -496,6 +587,7 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     hedgehogPayPick,
     toggleHedgehogPayPick,
     pickHedgehogPayDumpNow,
+    prepareHedgehogWindowNow,
   }
   return {
     publicSurface,
@@ -504,10 +596,16 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     hedgehogEngineerId,
     hedgehogUsesEngineerRoute,
     hedgehogTargetHex,
+    hedgehogTargetState,
     hedgehogEngineer,
     hedgehogEngineerLegRange,
     pickedHedgehogEngineer,
+    hedgehogExecutorReady,
+    hedgehogBuildMissing,
+    hedgehogReduceMissing,
+    hedgehogWindowTask,
     hedgehogError,
+    hedgehogErrorLine,
     hedgehogTurnLedger,
     hedgehogLevelOf,
     hedgehogHexState,
@@ -519,5 +617,6 @@ export function createHedgehogsDomain(deps: HedgehogsDeps) {
     hedgehogPayPick,
     toggleHedgehogPayPick,
     pickHedgehogPayDumpNow,
+    prepareHedgehogWindowNow,
   }
 }

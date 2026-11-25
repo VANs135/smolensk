@@ -214,9 +214,10 @@ describe('B27：接线（源码守卫）', () => {
           'beginAirPlacementHexPickNow()',
           'beginAirTransferHexPickNow()',
           'beginAirReturnBasePickNow(choice.aircraftId)',
-          'beginAirBaseHexPickNow()',
         ],
       ],
+      // 2026-11-26：15.3 / 15.2A 的整段搬进子组件（AirPanel 顶到 max-lines）
+      ['src/components/air/AirConstructionSection.vue', ['beginAirBaseHexPickNow()']],
     ]
     for (const [file, calls] of files) {
       const text = readFileSync(file, 'utf8')

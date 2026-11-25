@@ -35,6 +35,7 @@ import {
   type ConstructionExecutor,
   type ConstructionTask,
 } from '@/engine/rules'
+import { ruleErrorTextOf } from '@/engine/rules/rule-error-text'
 import { sameHex } from '@/engine/hex-geometry'
 import type { Derivation } from '@/engine/derivation'
 import type { RuleFailure } from '@/engine/result-types'
@@ -182,6 +183,34 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     const id = constructionInputs.value.engineerId
     if (id === null) return null
     return units.value.find((unit) => unit.instanceId === id) ?? null
+  }
+
+  /**
+   * 2026-11-26（用户口径「右键菜单一个操作一个窗口」）：本窗只做**一件事**
+   *
+   * 15.3（空军基地 +1 级，1 SP）与 15.2A 的「修简易机场 1 T」「升格 3 T」是三个菜单项、三个窗口；
+   * `only='airstrip'` 面板按本字段只画对应的一段。
+   */
+  const airConstructionTask = ref<'baseBuild' | 'airstripBuild' | 'airstripUpgrade'>('baseBuild')
+
+  /** 目标格（未填或格式错 ⇒ null）：15.3 / 15.2A 的修建共用同一输入 */
+  const constructionTargetHex = computed<HexRef | null>(
+    () => parseHexPath(constructionInputs.value.hexText)[0] ?? null,
+  )
+
+  /** 施工错误的中文行（与炮击 / 战斗共用 `ruleErrorTextOf`） */
+  const constructionErrorLine = computed<string | null>(() =>
+    constructionError.value === null ? null : ruleErrorTextOf(constructionError.value),
+  )
+
+  /** 开 15.3 / 15.2A 窗口时统一清预填：任务、工程兵、目标格、付款站、错误 */
+  function prepareAirConstructionWindowNow(
+    task: 'baseBuild' | 'airstripBuild' | 'airstripUpgrade',
+    engineerId: string | null,
+  ): void {
+    airConstructionTask.value = task
+    constructionInputs.value = { hexText: '', engineerId, payDumpId: null }
+    constructionError.value = null
   }
 
   /** 15.3：把该格的设施换成**该等级**的空军基地算子（升级＝换算子；无则新摆） */
@@ -426,9 +455,13 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     airBaseBuildCostSpPerLevel,
     isAirstripAt,
     hexHasAirFacility,
+    airConstructionTask,
+    constructionTargetHex,
+    constructionErrorLine,
     buildAirBaseNow,
     buildAirstripNow,
     upgradeAirstripNow,
+    prepareAirConstructionWindowNow,
   }
   return {
     publicSurface,
@@ -442,8 +475,12 @@ export function createAirFacilityDomain(deps: AirFacilityDeps) {
     hexHasAirFacility,
     airBaseBuildCostSpPerLevel,
     pickedEngineer,
+    airConstructionTask,
+    constructionTargetHex,
+    constructionErrorLine,
     buildAirBaseNow,
     buildAirstripNow,
     upgradeAirstripNow,
+    prepareAirConstructionWindowNow,
   }
 }
