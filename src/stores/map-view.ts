@@ -434,9 +434,13 @@ export const useMapViewStore = defineStore('mapView', () => {
             `${unit.side === 'axis' ? '轴心' : '苏联'} · ${mode}`,
             unit.mode.dg ? 'DG' : null,
             oos ? '断补' : null,
-            // 12.6 提示：实时线与标记不一致时的一行文字（只读，不写标记、不染地图色）
-            // 4.9a：只给本方 —— 敌方的补给连线属未公开信息，不因悬停泄露
-            unit.side === hotseat.viewerSide ? workbench.supplyLineHintOf(unit) : null,
+            /*
+             * 12.6 的「实时线与标记不一致」一行**不再烘进 tip**（2026-11-26 卡顿）：
+             * 那是**悬停才需要**的信息，烘进 token 就等于每次盘面变化都替每一枚本方算子算一遍
+             * `supplyFacts`（含两侧 `railSupplyPath` 的铁路 BFS）⇒ 单步约 175 ms。
+             * 现在改由 `supplyLineHintAt(hex)` 在悬停那一格现算（见下方导出），
+             * tip 只留"不读补给图"的即时项。
+             */
             unit.movementEnded ? '本回合移动已结束' : null,
           ]
             .filter((part): part is string => part !== null)
@@ -794,6 +798,26 @@ export const useMapViewStore = defineStore('mapView', () => {
 
   const groundAndAir = computed(() => fogVisibleTokens([...groundTokens(), ...airTokens()]))
   const visibleTokens = computed(() => [...spDumpTokens(), ...groundAndAir.value])
+
+  /**
+   * 12.6：**悬停那一枚**的「实时补给线与标记不一致」提示（只给本方；敌方不泄）
+   *
+   * 从 token 的 `tip` 里搬出来的那一行（见 `groundTokens` 的注释）：
+   * 它要读 `supplyFacts`（全军追溯补给 + 两侧 `railSupplyPath` 铁路 BFS），
+   * 烘进每枚 token ⇒ 任意一枚换格都重算一遍（实测单步 ~175 ms）。
+   * 悬停是低频动作，且只有一格 ⇒ 在这里现算，盘面重绘只花 token 拼装的那点时间。
+   */
+  function supplyLineHintAt(hex: HexRef | null): string | null {
+    if (hex === null) return null
+    const viewer = hotseat.viewerSide
+    for (const unit of workbench.units) {
+      if (unit.side !== viewer) continue
+      if (unit.hex.col !== hex.col || unit.hex.row !== hex.row) continue
+      const hint = workbench.supplyLineHintOf(unit)
+      if (hint !== null) return hint
+    }
+    return null
+  }
 
   /** 当前覆盖层（地图要画的一切；视图直接把它交给 `MapCanvas`） */
   const overlay = computed<MovementOverlay>(() => {
@@ -5140,6 +5164,8 @@ export const useMapViewStore = defineStore('mapView', () => {
   return {
     // 画什么
     overlay,
+    // 12.6：悬停那一格的补给线提示（只在悬停时现算；不参与盘面重绘）
+    supplyLineHintAt,
     // 专规 5.0c：胜利格控制标记（地图事实层；不是交互覆盖层，也不可选中）
     boundary,
     controlMarkers,

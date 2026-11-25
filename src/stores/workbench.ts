@@ -4221,24 +4221,38 @@ export const useWorkbenchStore = defineStore('workbench', () => {
    * - zocAt（13.3c③）：复用追溯事实的 `inEnemyZoc`（已按 4.5b 处理「格内有己方战斗单位即抵消」）。
    * - railEdgeUsable（13.3f）：**逐边**轨距 —— 一条边两端都为本方可用轨距时，本方才能通过。
    */
-  const railSupplyFacts = computed(() =>
-    createRailSupplyFacts({
+  const railSupplyFacts = computed(() => {
+    // 性能（2026-11-25 走格卡顿）：`enemyOccupies` / `hasPortOrEngineerHqAt` 会被 BFS 逐格逐边调用，
+    // 原先每次都 `units.some(...)` 扫全场 ⇒ 327 枚算子时单步 ~18 ms 纯扫描。这里先建两份索引，
+    // 判据字节不变（同格敌方单位 / 同格本方具工程能力 HQ / 13.8c 卸货格）。
+    const occupancy = new Map<string, { axis: number; soviet: number }>()
+    const engineerHq = new Set<string>()
+    for (const unit of units.value) {
+      const key = hexLabel(unit.hex)
+      const cell = occupancy.get(key) ?? { axis: 0, soviet: 0 }
+      if (unit.side === 'axis') cell.axis += 1
+      else cell.soviet += 1
+      occupancy.set(key, cell)
+      if (engineerCapableHqAt([unit], unit.hex, unit.side)) engineerHq.add(`${key}|${unit.side}`)
+    }
+    for (const item of engineerHqDetrainableHexes.value)
+      engineerHq.add(`${hexLabel(item.hex)}|${item.side}`)
+    return createRailSupplyFacts({
       sources: [
         ...entryRailSeedsBySide.value.axis.map((hex) => ({ hex, side: 'axis' as Side })),
         ...entryRailSeedsBySide.value.soviet.map((hex) => ({ hex, side: 'soviet' as Side })),
       ],
       extenders: units.value.filter(isExtenderUnit).map(toExtenderView),
-      enemyOccupies: (hex, side) =>
-        units.value.some((unit) => unit.side !== side && sameHex(unit.hex, hex)),
+      enemyOccupies: (hex, side) => {
+        const cell = occupancy.get(hexLabel(hex))
+        if (cell === undefined) return false
+        return side === 'axis' ? cell.soviet > 0 : cell.axis > 0
+      },
       zocAt: (hex, side) => zocOnlySupplyFacts.value.inEnemyZoc(hex, side),
       // 13.3c①后半 / 13.8a / 5.5b：本方具工程能力的指挥部。
       // 港口分支恒 false 属预期：本作无港口地形与港口专规（用户裁定 2026-11-05），非遗漏。
-      hasPortOrEngineerHqAt: (hex, side) =>
-        engineerCapableHqAt(units.value, hex, side) ||
-        // 13.8c 例外：工程 HQ 卸车时生成的卸货格（与「当前占据的工程 HQ」分开记账）
-        engineerHqDetrainableHexes.value.some(
-          (item) => item.side === side && sameHex(item.hex, hex),
-        ),
+      // 13.8c 例外（工程 HQ 卸车时生成的卸货格）与「当前占据的工程 HQ」分开记账，此处合并查表。
+      hasPortOrEngineerHqAt: (hex, side) => engineerHq.has(`${hexLabel(hex)}|${side}`),
       // 13.3f／专规 1.2：轨距只回答「谁能用这条铁路」（与 13.3a 多轨的运量费用无关）
       railGaugeUsable: (hex, side) => isRailGaugeUsableAt(hex, side),
       // 13.3f：逐边查 gauge —— 两端都必须是本方可用轨距（混合边任一方都不通过）
@@ -4246,8 +4260,8 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         isRailGaugeUsableAt(from, side) && isRailGaugeUsableAt(to, side),
       // 12.7b：延补队回连距离用 trace-supply 的**同一实现**（MP 沿补给路径），不使用格数近似
       traceFacts: zocOnlySupplyFacts.value,
-    }),
-  )
+    })
+  })
 
   /** C9：铁路补给线与**火车卸货格**（13.3c / 12.7a-B/C；当前方视角） */
   const railSupplyBySide = computed(() => ({

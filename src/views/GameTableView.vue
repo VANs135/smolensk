@@ -461,8 +461,18 @@ function onHexHover(hex: HexRef | null): void {
   workbench.setHoverHex(hex)
 }
 
-/** H2：悬停预览文本（store 只读计算；画布不读 store） */
-const hoverPreviewText = computed(() => workbench.hoverPreviewAt(workbench.hoverHex))
+/**
+ * H2：悬停预览文本＝MP 预览 + 12.6「实时线与标记不一致」一行（原先烘在每枚 token 的 tip 里
+ * ⇒ 任意换格都重算全军补给 + 两侧铁路 BFS，单步 ~175 ms；现改为悬停这一格现算）。
+ */
+const hoverPreviewText = computed(() => {
+  const hex = workbench.hoverHex
+  if (hex === null) return null
+  const parts = [workbench.hoverPreviewAt(hex), mapView.supplyLineHintAt(hex)].filter(
+    (part): part is string => part !== null,
+  )
+  return parts.length === 0 ? null : parts.join('｜')
+})
 
 /** H3：双击算子 —— 常用动作全在 map-view 里判（本视图只转一手） */
 function onHexDoubleClick(hex: HexRef, world: { x: number; y: number }, scale: number): void {
