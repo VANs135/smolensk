@@ -2482,6 +2482,30 @@ export const useMapViewStore = defineStore('mapView', () => {
     })
   }
 
+  /**
+   * 会话窗里的**可选动作清单**（2026-11-26：多选项设施左键开窗不再空窗）
+   *
+   * 与右键菜单同源（`counterActionsAt`），只留设施动作那几键——转场 / 铁路运输 / 初设改模式
+   * 等不属于"对它自己"的设施动作，仍只从右键菜单进。带 `disabledReason`：不可用的项照样列出，
+   * 但按原因灰显（避免出现"点了没反应"的死按钮）。
+   */
+  function unitActionMenuAt(instanceId: string): readonly CounterAction[] {
+    const hex = unitActionHex.value
+    if (hex === null) return []
+    return counterActionsAt(hex, instanceId).filter((item) => item.key in FACILITY_ACTION_META)
+  }
+
+  /**
+   * 会话窗里点**某一项** ⇒ 落到它的那一段（与右键菜单同一执行入口）
+   *
+   * 不新写规则：`applyContextAction` 自己会挡掉 `disabledReason !== null` 的项。
+   */
+  function openUnitActionSectionNow(instanceId: string, key: string): boolean {
+    const hex = unitActionHex.value
+    if (hex === null) return false
+    return applyContextAction(hex, instanceId, key)
+  }
+
   const unitActionFamily = computed<ContextPanel | null>(() => {
     /*
      * ★ 2026-10-25（用户实测：给**苏联初设**时点空军基地格，弹出「空军基地整备（15.1）」的会话，
@@ -5255,6 +5279,8 @@ export const useMapViewStore = defineStore('mapView', () => {
     openUnitActionAt,
     unitActionAvailableAt,
     unitActionOptions,
+    unitActionMenuAt,
+    openUnitActionSectionNow,
     facilityActionKeys,
     unitActionFamily,
     airEntryTarget,

@@ -103,6 +103,29 @@ describe('条 12（M2）：点非战斗单位开 unit 会话', () => {
     expect(mapView.unitActionFamily).toBe('supply')
   })
 
+  /**
+   * 2026-11-26（用户报：会话窗里没有选项）：C 段的运输点有 13.2c / 12.7a·d 多项可做，
+   * `activeOnly` 取不到唯一一段 ⇒ 旧模板整窗空白。钉两件事：
+   *   ① 窗内选项清单与右键菜单同源、逐项给出（不是空数组）；
+   *   ② 点清单里某项后落到**那一段**（`unitActionIntent.only`），不新写规则。
+   */
+  it('★ 多选项设施：会话窗有可点选项，点哪项进哪段', () => {
+    const { workbench, mapView } = stores
+    placeNonCombat(workbench, 'transport_point', START, 'tp-1')
+    mapView.onHexClick(START, { x: 40, y: 40 })
+
+    const options = mapView.unitActionOptions('tp-1')
+    expect(options.length).toBeGreaterThan(1)
+    expect(mapView.unitActionMenuAt('tp-1').map((item) => item.key)).toEqual(
+      options.map((item) => item.key),
+    )
+    // 左键直开（没有挑定哪一段）⇒ 旧实现这里会是空白窗
+    expect(mapView.unitActionIntent).toBeNull()
+
+    expect(mapView.openUnitActionSectionNow('tp-1', 'move.extenderConvert')).toBe(true)
+    expect(mapView.unitActionIntent?.only).toBe('extender')
+  })
+
   it('点延补队 ⇒ supply 会话（9.14d）', () => {
     const { workbench, mapView } = stores
     placeNonCombat(workbench, 'supply_extender', START, 'se-1')
