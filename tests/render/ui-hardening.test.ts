@@ -72,4 +72,14 @@ describe('界面硬伤：源码守卫', () => {
     expect(onAccent).toBeTruthy()
     expect(ratio(solid!, onAccent!)).toBeGreaterThanOrEqual(4.5)
   })
+
+  // UI-6（2026-11-26 实机复核）：左栏 z 高于待答遮罩后，教学卡若还钉 left:12 会被栏背裁掉首字
+  it('UI-6 教学卡让开左栏宽度（不被左栏压掉首字）', () => {
+    const guide = read('src/components/tutorial/TutorialGuide.vue')
+    const block = guide.slice(guide.indexOf('.tut__card {'))
+    const rule = block.slice(0, block.indexOf('}')).replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(rule).toContain('left: calc(var(--command-rail) + 12px)')
+    expect(rule).toContain('var(--command-rail)')
+    expect(rule).not.toMatch(/left:\s*12px/)
+  })
 })

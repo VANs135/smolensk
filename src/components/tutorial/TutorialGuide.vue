@@ -281,9 +281,10 @@ watch(
 
 .tut__card {
   position: fixed;
-  left: 12px;
+  /* 左栏压在待答遮罩之上（z 210）：教学卡必须让开 62 的左栏，否则首字被栏背裁掉 */
+  left: calc(var(--command-rail) + 12px);
   bottom: 108px;
-  width: min(320px, calc(100vw - 24px));
+  width: min(320px, calc(100vw - var(--command-rail) - 24px));
   padding: 8px 10px 9px;
   color: var(--color-ink);
   background: var(--color-panel);
